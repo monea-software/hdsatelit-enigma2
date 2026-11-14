@@ -85,7 +85,8 @@
 # REFUZ_CICLURI_S una de alta sau dupa REFUZ_TARZIU_S) sau nu raspunde deloc (DECRIPTARE_FARA_RASPUNS_S; cu raspunsuri
 # nehotarate, cel mult DECRIPTARE_MAX_S; amandoua socotite dupa TERMENELE DECRIPTARII, de la zap-ul televizorului pe
 # canal, cu DECRIPTARE_MIN_S de la primele date; o sesiune criptata fara niciun octet nu se mai opreste ca "fara_date").
-# La "nu" sesiunea se opreste (cod "nedecriptat", TEXT_NEDECRIPTAT). Playerele
+# La "nu" sesiunea se opreste (cod "nedecriptat", textNedecriptat: TEXT_NEDECRIPTAT; cand camul a raspuns "found" si
+# imaginea a ramas totusi criptata, TEXT_GASIT_RELEU sau TEXT_GASIT, motivul adevarat). Playerele
 # externe primesc fluxul abia la "merge" (asteaptaDecriptarea); la "nu", refuzul cu textul.
 # Imaginea nu e "clara" nici cand bitii de criptare sunt 0, dar inceputurile PES ale imaginii nu au 00 00 01 (pachete
 # nedecriptate sau decriptate cu alta cheie; Chrome scrie atunci "packet_start_code_prefix"): RescrierePsi, CRIPTAT.
@@ -205,13 +206,32 @@ def N_(text):
 
 
 TEXT_NEDECRIPTAT = N_("Canalul e criptat și receptorul nu-l poate decripta acum (fără card sau fără drepturi pentru el).")
+# camul a raspuns "found", dar imaginea sesiunii a ramas criptata (WCR, 13.11.2026): nu e "fara card sau fara drepturi".
+# Cat releul modulului (Stream Relay) da acelasi canal altcuiva (televizorul pornit prin releu, alt aparat), modulul trimite
+# cuvintele canalului numai releului, nu si receptorului: TEXT_GASIT_RELEU. Altfel (de pilda prima cheie a venit abia dupa
+# pornirea sesiunii): TEXT_GASIT, cu butonul paginii "Pornește din nou".
+TEXT_GASIT_RELEU = N_("Canalul e transmis acum prin Stream Relay (pe televizor sau pe alt aparat), iar modulul de acces dă cheile lui numai acolo, așa că aici imaginea rămâne criptată. Încearcă din nou după ce televizorul trece pe alt canal sau după ce se oprește celălalt aparat.")
+TEXT_GASIT = N_("Modulul de acces a găsit cheia canalului, dar imaginea a rămas criptată în browser. Apasă \"Pornește din nou\".")
 
 
-def textNedecriptat(ref):
+def releulDaCanalul(ref):
+	"""Cate sesiuni ale serverului de flux al imaginii (Hds/DabT2/server8001.py) cerute de pe receptor (127.0.0.1 sau adresa
+	lui din retea: releul modulului de acces isi ia canalele de acolo) tin acum canalul `ref`. 0 cand nu se poate afla."""
+	try:
+		from Hds.DabT2 import server8001
+		return int(server8001.sesiuni_locale(ref) or 0)
+	except Exception as e:
+		_jurnal("sesiunile releului: %r" % (e,))
+		return 0
+
+
+def textNedecriptat(ref, raspuns=None):
 	"""Textul opririi unui canal care nu se descifreaza: TEXT_NEDECRIPTAT, sau, pentru un canal ICAM (Sky Deutschland)
 	cand SoftCSA nu e gata acum (modulul pornit nu il poate descifra), acelasi text ca pe televizor
 	(HdsSoftCsa.TEXT_ICAM_CANAL: ce modul sa aleaga omul). Canalul e ICAM dupa memoria nucleului sau dupa CAID-urile
-	din lamedb (HdsStreamRelay.citesteLamedb, numai aici, la oprire). Orice eroare: TEXT_NEDECRIPTAT."""
+	din lamedb (HdsStreamRelay.citesteLamedb, numai aici, la oprire). Camul a raspuns `raspuns` == "gasit" (JurnalCam),
+	dar imaginea a ramas criptata: TEXT_GASIT_RELEU cand releul da chiar acest canal (releulDaCanalul), altfel TEXT_GASIT.
+	Orice eroare: TEXT_NEDECRIPTAT."""
 	try:
 		from Components import HdsSoftCsa as S
 		from Components import HdsStreamRelay as SR
@@ -221,6 +241,8 @@ def textNedecriptat(ref):
 			return _(S.TEXT_ICAM_CANAL)
 	except Exception as e:
 		_jurnal("textul ICAM: %r" % (e,))
+	if raspuns == "gasit":
+		return _(TEXT_GASIT_RELEU) if releulDaCanalul(ref) else _(TEXT_GASIT)
 	return _(TEXT_NEDECRIPTAT)
 
 # tipul video din iServiceInformation.sVideoType (lib/dvb/decoder.h)
@@ -1750,7 +1772,7 @@ class Manager(object):
 				s.decriptare = DECRIPTARE_NU
 				_jurnal("sesiune %s %s: nedecriptata (%s, %.0f s, %.0f s de la zap)" % (s.id, s.ref,
 					raspuns or "fara raspuns", trecut, tot))
-				self._opresteAcum(s, textNedecriptat(s.ref), cod="nedecriptat")
+				self._opresteAcum(s, textNedecriptat(s.ref, raspuns), cod="nedecriptat")
 
 	def _bazaDecriptare(self, s, baza):
 		"""Ceasul monoton de la care se socotesc termenele decriptarii: `baza` (primele date ale sesiunii) sau zap-ul

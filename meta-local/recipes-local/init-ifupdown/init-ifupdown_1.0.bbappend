@@ -41,8 +41,11 @@ do_install:append:gbtrio4k() {
 # GigaBlue UHD TRIO 4K (gbtrio4k) o are deja prin randurile lui de mai sus, deci nu intra aici a doua oara.
 HDS_RETEA_FUNDAL = "0"
 HDS_RETEA_FUNDAL:vuduo4k = "1"
+HDS_RETEA_FUNDAL:vuduo4kse = "1"
 HDS_RETEA_FUNDAL:vuuno4kse = "1"
+HDS_RETEA_FUNDAL:vuzero4k = "1"
 HDS_RETEA_FUNDAL:vusolo4k = "1"
+HDS_RETEA_FUNDAL:vuultimo4k = "1"
 SRC_URI:append = " ${@'file://hds-networking' if d.getVar('HDS_RETEA_FUNDAL') == '1' else ''}"
 PR:append = "${@'.hds35' if d.getVar('HDS_RETEA_FUNDAL') == '1' else ''}"
 

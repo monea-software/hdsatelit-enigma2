@@ -47,6 +47,7 @@ BIBLIOTECI = {
 	"libssl.so.3": "openssl3-compat",
 	"libcrypt.so.1": "libxcrypt-compat",
 	"ld-linux.so.3": "ld-linux-compat",
+	"libcurl.so.4": "libcurl4",  # 13.11.2026: NCam_15.8 (RAED) cere si libcurl, pe care feedul extern il are (LIB)
 }
 OPKG_INFO = "/var/lib/opkg/info"
 INTARZIERE_PORNIRE_MS = 20000
@@ -236,6 +237,12 @@ def porneste(session):
 		HdsBibliotecaLipsa.verificaAlese()
 	except Exception as e:
 		_jurnal("verificaAlese: %r" % (e,))
+	try:
+		# 0.7.5: modulul ales oprit de altcineva la repornirea interfetei porneste din nou, ca la pornirea receptorului
+		from Components import HdsModuleAcces
+		HdsModuleAcces.dupa_pornirea_interfetei()
+	except Exception as e:
+		_jurnal("dupa_pornirea_interfetei: %r" % (e,))
 	if _coada:
 		_programeaza(INTARZIERE_PORNIRE_MS)
 

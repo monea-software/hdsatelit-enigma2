@@ -251,20 +251,44 @@ def citestePq(text):
 
 def televizorHdr(text_disp, text_sink):
 	"""Ce declara televizorul: {"stiut", "hdr10", "hlg"}. Intai /proc/msp/disp1 (bHdr10Support, bHlgSupport), apoi
-	sectiunea HdrCap din /proc/msp/hdmi0_sink; stiut = False fara un EDID valid."""
+	sectiunea HdrCap din /proc/msp/hdmi0_sink; stiut = False fara un EDID valid.
+	Afara de un caz: disp1 cu TOATE semnele HDR pe N (HDR10, HLG, BT2020: n-a citit televizorul) si un EDID valid care
+	declara HDR. Pe Viper 4K V20 cu un televizor HDR10/HLG (LG, 2023) disp1 a ramas asa (citit cand televizorul nu era
+	legat), iar imaginea scria none si iesea SDR; atunci se crede EDID-ul, iar platforma_vede = False (programul
+	platformei, care hotaraste dupa disp1, nu poate face auto: il face imaginea, hdrPentruCanal)."""
 	rez = {"stiut": False, "hdr10": False, "hlg": False}
 	h10 = _camp(text_disp, "bHdr10Support")
 	hlg = _camp(text_disp, "bHlgSupport")
+	b2020 = _camp(text_disp, "bBT2020Support")
 	if text_sink and (_camp(text_sink, "CapIsValid") or "").upper() not in ("YES", "Y", "TRUE", "1"):
+		return rez
+	s1 = _camp(text_sink, "HdrEotfSt2084")
+	s2 = _camp(text_sink, "HdrEotfHLG")
+	e10, ehlg = (s1 or "").upper() == "YES", (s2 or "").upper() == "YES"
+	disp_gol = h10 is not None and all((x or "N").upper() != "Y" for x in (h10, hlg, b2020))
+	if disp_gol and (e10 or ehlg):
+		rez.update(stiut=True, hdr10=e10, hlg=ehlg, platforma_vede=False)
 		return rez
 	if h10 is not None or hlg is not None:
 		rez.update(stiut=True, hdr10=(h10 or "").upper() == "Y", hlg=(hlg or "").upper() == "Y")
 		return rez
-	s1 = _camp(text_sink, "HdrEotfSt2084")
-	s2 = _camp(text_sink, "HdrEotfHLG")
 	if s1 is not None or s2 is not None:
-		rez.update(stiut=True, hdr10=(s1 or "").upper() == "YES", hlg=(s2 or "").upper() == "YES")
+		rez.update(stiut=True, hdr10=e10, hlg=ehlg)
 	return rez
+
+
+def hdrPentruCanal(gama, tv):
+	"""Automat facut de imagine: programul platformei hotaraste dupa bHdr10Support din disp1, care pe HiSilicon poate
+	ramane N cu un televizor HDR, deci auto scris in fisier dadea SDR. Aici, dupa gama canalului (0 SDR, 1 HDR,
+	2 HDR10, 3 HLG) si ce declara televizorul in EDID: hdr10, hlg sau none."""
+	if gama in (1, 2) and tv.get("hdr10"):
+		return "hdr10"
+	if gama == 3:
+		if tv.get("hlg"):
+			return "hlg"
+		if tv.get("hdr10"):
+			return "hdr10"
+	return "none"
 
 
 def alegeriHdr(tv):
@@ -281,14 +305,37 @@ def alegeriHdr(tv):
 	return rez
 
 
-def hdrDeScris(alegere, tv, mod_video):
+def hdrDeScris(alegere, tv, mod_video, gama=None):
 	"""Textul scris in hdmi_hdrtype: none pe modurile SD; alegerea, cand televizorul o primeste sau nu se stie ce
-	declara (televizor stins: ramane alegerea facuta pentru el); altfel none."""
+	declara (televizor stins: ramane alegerea facuta pentru el); altfel none. auto cu un televizor stiut, pe care
+	programul platformei nu-l vede (platforma_vede False), si gama canalului stiuta: textul concret, hdrPentruCanal."""
 	if (mod_video or "").strip() in MODURI_SD:
 		return "none"
 	if not tv.get("stiut"):
 		return alegere if alegere in dict(IESIRI_HDR) else "none"
+	if (alegere == "auto" and gama is not None and not tv.get("platforma_vede", True)
+			and (tv.get("hdr10") or tv.get("hlg"))):
+		return hdrPentruCanal(gama, tv)
 	return alegere if alegere in alegeriHdr(tv) else "none"
+
+
+CALE_CULORI = "/proc/stb/video/hdmi_colorimetry"
+CULORI_HDR = "bt2020ncl"   # HDR10/HLG cu BT.709 in AVI InfoFrame = culori spalacite; masurat: cu bt2020ncl iesirea e
+CULORI_SDR = "bt709"       # „Extended” (BT.2020), YCbCr 4:2:2 pe 12 biti; bt709 = ce scrie si VideoOutput.HdmiColors
+
+
+def culoriPentru(hdr_scris):
+	"""Colorimetria potrivita textului HDR scris: BT.2020 la HDR10/HLG, altfel None (ramane a „Culorilor pe HDMI”)."""
+	return CULORI_HDR if hdr_scris in ("hdr10", "hlg") else None
+
+
+_iesire = {"hdr": None}
+
+
+def iesireHdr():
+	"""Textul HDR scris acum (hdr10, hlg, none, auto) sau None: Components/VideoOutput.HdmiColors scrie BT.2020
+	in loc de BT.709 cat iese HDR."""
+	return _iesire["hdr"]
 
 
 def dinamica(scris, gama):
@@ -511,6 +558,11 @@ class Calitate(object):
 		self.incercat = False       # in driver sunt valori incercate, nesalvate
 		self.comparatie = None      # cheia reglajului cu comparatia pornita
 		self.hdrScris = None        # ultimul text scris in hdmi_hdrtype
+		self.gamaHdr = None         # gama canalului dupa care se scrie „Automat” (hdrDupaGama; None = nestiuta)
+		self.gamaStiuta = False
+		self.repornitPentruHdr = False   # urmatorul evStart e repornirea noastra pentru HDR
+		self.cerutPentruHdr = False     # pe zap-ul acesta s-a repornit deja o data
+		self.culoriScrise = None    # ce am scris in hdmi_colorimetry
 		self.latime = 0
 		self.inaltime = 0
 		self.gama = 0
@@ -722,7 +774,8 @@ class Calitate(object):
 		if alegere is None:
 			from Components.config import config
 			alegere = config.hds_calitate.iesire_hdr.value
-		text = hdrDeScris(alegere, self.tv() if tv is None else tv, self.modVideo() if mod is None else mod)
+		tv = self.tv() if tv is None else tv
+		text = hdrDeScris(alegere, tv, self.modVideo() if mod is None else mod, gama=self.gamaHdr)
 		with self.lacatHdr:
 			if text != self.hdrScris or forteaza:
 				if self.simulare:
@@ -734,7 +787,43 @@ class Calitate(object):
 					if text != self.hdrScris:
 						_jurnal("iesirea HDR: %s (alegerea %s)" % (text, alegere))
 					self.hdrScris = text
+					_iesire["hdr"] = text
+					self.scrieCulori(text)
 			return self.hdrScris
+
+	def scrieCulori(self, text):
+		"""BT.2020 pe HDMI cat iese HDR10/HLG, BT.709 inapoi la SDR (numai daca l-am schimbat noi)."""
+		culori = culoriPentru(text)
+		dorit = culori or (CULORI_SDR if self.culoriScrise == CULORI_HDR else None)
+		if dorit is None or dorit == self.culoriScrise or not os.path.exists(CALE_CULORI):
+			return
+		if self.simulare:
+			_jurnal("simulare: %s = %s" % (CALE_CULORI, dorit))
+			self.culoriScrise = dorit
+		elif self.scrieFisier(CALE_CULORI, dorit):
+			self.culoriScrise = dorit
+
+	def hdrDupaGama(self, nav=None):
+		"""La Automat: gama canalului a venit (evVideoGammaChanged). Daca cere alt text HDR decat cel scris la zap,
+		il scrie si porneste canalul din nou o singura data (programul platformei citeste fisierul numai la
+		pornirea canalului)."""
+		if not self.hdrOferit() or self.cerutPentruHdr or (self.tvMinte or {}).get("platforma_vede", True):
+			return False
+		from Components.config import config
+		if config.hds_calitate.iesire_hdr.value != "auto":
+			return False
+		self.gamaHdr = self.gama
+		inainte = self.hdrScris
+		if self.scrieHdr(tv=self.tvMinte, mod=self.modMinte) == inainte or nav is None:
+			return False
+		self.cerutPentruHdr = True       # o singura repornire pe zap
+		ref = nav.getCurrentlyPlayingServiceReference()
+		self.repornitPentruHdr = ref is not None
+		if ref is None:
+			return False
+		_jurnal("iesirea HDR %s -> %s dupa gama canalului: canalul porneste din nou" % (inainte, self.hdrScris))
+		nav.playService(ref, checkParentalControl=False, forceRestart=True)
+		return True
 
 	def hdrLaZap(self):
 		"""La evStart, inaintea acordarii: modul video citit acum (/proc/stb, direct si ieftin: o alegere noua in
@@ -754,7 +843,7 @@ class Calitate(object):
 	def citesteTvMaiTarziu(self):
 		"""Un singur fir: asteapta LINISTE_TV_S de la ultimul zap (zap-urile noi o prelungesc), apoi, daca citirea
 		de dinainte e mai veche de INTERVAL_TV_S, citeste televizorul si scrie un text nou (alt televizor) pe loc.
-		Pe .114 (SF8008) citirea pe fir chiar langa zap (0,2 s dupa evStart) a intarziat comanda catre tuner (7 din 22
+		Pe SF8008-ul de probe citirea pe fir langa zap (0,2 s dupa evStart) a intarziat comanda catre tuner (7 din 22
 		de zap-uri cu ~200 ms in plus): driverul nu suporta citirile din /proc/msp in timpul zap-ului."""
 		if self.firTv:
 			return
@@ -790,6 +879,13 @@ class Calitate(object):
 			return
 		if ev == iPlayableService.evStart:
 			self.latime = self.inaltime = 0
+			# la Automat textul de la zap urmeaza gama canalului de dinainte (de obicei aceeasi); hdrDupaGama il
+			# corecteaza
+			if self.repornitPentruHdr:
+				self.repornitPentruHdr = False      # pornirea noastra, dupa gama: textul scris ramane
+			else:
+				self.gamaHdr = self.gama if self.gamaStiuta else None
+				self.cerutPentruHdr = False
 			self.gama = 0
 			self.opresteComparatia()
 			self.hdrLaZap()
@@ -808,6 +904,9 @@ class Calitate(object):
 		if s_gama is not None:
 			g = info.getInfo(s_gama)
 			self.gama = g if g in (0, 1, 2, 3) else 0
+			self.gamaStiuta = True
+			if gama:
+				self.hdrDupaGama(nav)
 		if self.incercat:
 			self.renunta()
 		else:

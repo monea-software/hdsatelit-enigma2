@@ -585,13 +585,81 @@ class Controlor(object):
                     return '%s:%s' % (ref, x['nume']) if x['nume'] else ref
         return None
 
+    def _ref_din_t2mi_strain(self, text, doar_din_memorie=False):
+        """Canal DVB-T2 prin satelit dintr-o lista facuta in alta imagine (T2-MI in nucleu: o referinta DVB obisnuita
+        1:0:<tip>:<SID>:<TSID>:<ONID>:<NS>:0:0:0:, iar transponderul ei din lamedb are t2mi_plp_id:t2mi_pid) -> referinta
+        noastra (releul T2, acelasi program), daca feed-ul (pozitie, frecventa +-2 MHz, polarizare, PID, PLP) e in lista;
+        altfel None. Nucleul nostru nu foloseste campurile T2-MI, deci fara asta canalul ar ramane negru."""
+        parti = str(text or '').split(':')
+        if len(parti) < 10 or parti[0] != '1' or parti[1] != '0' or (len(parti) > 10 and parti[10]):
+            return None
+        from . import lamedb
+        t2mi = lamedb.transpondere_t2mi(doar_din_memorie=doar_din_memorie)
+        if not t2mi:
+            return None
+        try:
+            tip, sid, tsid, onid, ns = (int(parti[k], 16) for k in range(2, 7))
+        except ValueError:
+            return None
+        t = t2mi.get((ns, tsid, onid))
+        if t is None:
+            return None
+        pol = 'HVLR'[t['pol'] & 3]
+        for tp in self.lista().get('transpondere', []):
+            try:
+                if (int(tp.get('pozitie')) != t['poz'] or tp.get('pol') != pol
+                        or abs(int(tp.get('frecventa')) - t['khz']) > 2000):
+                    continue
+                if t['is_id'] >= 0 and tp.get('is_id') is not None and int(tp.get('is_id')) != t['is_id']:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            for f in tp.get('feeduri', []):
+                if (f.get('tip') == 't2' and str(f.get('fel') or '') == 't2mi' and f.get('pid') == t['pid']
+                        and int(f.get('plp') or 0) == t['plp']):
+                    ref = buchete.ref_t2(self.profil, f, {'sid': sid, 'tsid': tsid, 'onid': onid, 'tip': tip})
+                    nume = ':'.join(parti[11:]) if len(parti) > 11 else ''
+                    return '%s:%s' % (ref, nume) if nume else ref
+        if not doar_din_memorie:
+            jurnal.noteaza(self.et, 'canal T2-MI din alta lista (%d %d %s, PID %d, PLP %d) fara feed in lista noastra'
+                           % (t['poz'], t['khz'] // 1000, pol, t['pid'], t['plp']))
+        return None
+
+    def _ref_din_lista_altei_imagini(self, text):
+        """Post DAB+ (4115 dab://, dabstreamer pe 5237) sau DVB-T2 (decapsulator pe 9999) din lista altei imagini ->
+        referinta noastra pentru acelasi post (straine.py), daca feed-ul e in lista noastra; altfel None."""
+        from . import straine
+        if not straine.pare_strain(text, self.profil.tip):
+            return None
+        if self.profil.tip == 'dab':
+            x = straine.dab_din_ref(text, self.lista())
+            if x is None:
+                jurnal.noteaza(self.et, 'pare din lista altei imagini, fara potrivire: %s' % str(text)[:100])
+                return None
+            parti = str(text).split(':')
+            nume = parti[-1] if len(parti) > 11 and not parti[-1].isdigit() else ''
+            ref = buchete.ref_dab(self.profil, x[0].get('id'), x[1])
+            return '%s:%s' % (ref, nume) if nume else ref
+        servicii = {}
+        servicii.update(buchete.citeste_servicii_stb(self.profil))
+        servicii.update(buchete.citeste_servicii(self.profil))          # invatate pe acest receptor: inainte
+        x = straine.t2_din_ref(text, self.lista(), servicii)
+        if x is None:
+            jurnal.noteaza(self.et, 'pare din lista altei imagini, fara potrivire: %s' % str(text)[:100])
+            return None
+        ref = buchete.ref_t2(self.profil, x[0], x[1])
+        return '%s:%s' % (ref, x[1]['nume']) if x[1]['nume'] else ref
+
     def _zap_din_alt_fir(self, nav, playref):
         """Extensia chemata din alt fir: doar citiri de atribute Python, nimic din enigma2, nicio asteptare."""
         text = _ref_text(playref)
         al_nostru = buchete.desparte_ref(self.profil, text) is not None
         if not al_nostru and self.profil.tip == 't2':
             from . import abertis
-            al_nostru = abertis.pid_din_adresa_straina(text) is not None
+            al_nostru = abertis.pid_din_adresa_straina(text) is not None or                 self._ref_din_t2mi_strain(text, doar_din_memorie=True) is not None
+        if not al_nostru:
+            from . import straine
+            al_nostru = straine.pare_strain(text, self.profil.tip)
         tine_ceva = self.stare != 'oprit' or self.tuner.canal is not None or self.releu._container is not None
         if not al_nostru and not tine_ceva:
             return playref, False
@@ -641,6 +709,18 @@ class Controlor(object):
             # canal din lista altui automat pentru fluxurile de pe 30W: se reda prin desfacerea noastra, acelasi program
             jurnal.noteaza(self.et, 'adresa altui automat, redata prin releul nostru: %s' % strain[:100])
             playref, text = _ref_dupa_text(playref, strain), strain
+        elif self.profil.tip == 't2':
+            strain = self._ref_din_t2mi_strain(text)
+            if strain is not None:
+                # canal T2-MI din lista altei imagini (campurile T2-MI ale transponderului): tot prin releul nostru
+                jurnal.noteaza(self.et, 'canal T2-MI din alta lista, redat prin releul nostru: %s' % strain[:100])
+                playref, text = _ref_dupa_text(playref, strain), strain
+        if strain is None:
+            strain = self._ref_din_lista_altei_imagini(text)
+            if strain is not None:
+                # post DAB+ sau DVB-T2 dintr-o lista facuta in alta imagine: acelasi post, prin releul nostru
+                jurnal.noteaza(self.et, 'post din lista altei imagini, redat prin releul nostru: %s' % strain[:100])
+                playref, text = _ref_dupa_text(playref, strain), strain
         parti = buchete.desparte_ref(self.profil, text)
         protectie, self._protectie = self._protectie, None      # doar primul zap dupa pornirea sesiunii
         if (protectie is not None and parti is not None and buchete.cheie_ref(text) == protectie['cheie']
@@ -1563,7 +1643,7 @@ class Controlor(object):
                     and acum - getattr(self, '_player_la', acum) >= CRIPTAT_DUPA_S and self.latime_video() <= 0
                     and flux_criptat(prag=CRIPTATE_SIGUR)):
                 # B46 (Silviu, forum 683, Abertis 30W pe SF8008): un flux BISS fara cheia lui in modulul de acces lasa
-                # ecranul negru, fara niciun cuvant (masurat pe .114: 178935 de pachete criptate, 0 iesite). O data pe
+                # ecranul negru, fara niciun cuvant (masurat pe receptorul de probe SF8008: 178935 de pachete criptate, 0 iesite). O data pe
                 # pornire, aceeasi fraza ca la cautare; canalul ramane pornit (cheia poate veni din modulul de acces).
                 self._criptat_spus = True
                 nume = self.feed.get('nume') or self.feed.get('id') if self.feed else ''

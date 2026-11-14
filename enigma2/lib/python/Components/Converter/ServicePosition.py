@@ -3,6 +3,8 @@
 # ShowNoSeconds2), Summary ("MM:SS +Nm"), VFDLength / VFDPosition / VFDRemaining / VFDGauge / VFDSummary (ca fara VFD),
 # optiunile ShowNoSeconds2 (ca ShowNoSeconds), OnlyMinute (numai minutele) si 7segment (se trece cu vederea).
 # Cele de dinainte dau acelasi text.
+# Optiunea HDSatelit Compact (cererea unui tester): de la o ora in sus ore si minute („1:26”), sub o ora minute
+# si secunde („56:48”), fara secundele care se schimba mereu cand mai e mult. Fara Compact textul e cel de dinainte.
 from time import localtime, strftime, time as _acum
 from .Converter import Converter
 from .Poll import Poll
@@ -34,10 +36,11 @@ class ServicePosition(Poll, Converter, object):
 		self.showHours = 'ShowHours' in args
 		self.showNoSeconds = 'ShowNoSeconds' in args or 'ShowNoSeconds2' in args
 		self.onlyMinute = 'OnlyMinute' in args
+		self.compact = 'Compact' in args
 
 		self.type = self.TIPURI.get(type)
 		if self.type is None:
-			raise ElementError("type must be {Length|Position|Remaining|Gauge|Summary|EndTime} with optional arguments {Negate|Detailed|ShowHours|ShowNoSeconds|ShowNoSeconds2|OnlyMinute} for ServicePosition converter")
+			raise ElementError("type must be {Length|Position|Remaining|Gauge|Summary|EndTime} with optional arguments {Negate|Detailed|ShowHours|ShowNoSeconds|ShowNoSeconds2|OnlyMinute|Compact} for ServicePosition converter")
 
 		if self.detailed:
 			self.poll_interval = 100
@@ -113,6 +116,10 @@ class ServicePosition(Poll, Converter, object):
 
 			if self.onlyMinute and not self.detailed:
 				return sign + "%d" % (l // 60)
+			if self.compact and not self.detailed:
+				if l >= 3600:
+					return sign + "%d:%02d" % (l // 3600, l % 3600 // 60)
+				return sign + "%02d:%02d" % (l // 60, l % 60)
 			if not self.detailed:
 				if self.showHours:
 					if self.showNoSeconds:

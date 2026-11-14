@@ -919,7 +919,7 @@ void eDVBFrontend::timeout()
    O citire esuata nu hotaraste nimic. Zap-ul, inregistrarile si ratele mici (10-20 s) nu sunt atinse.
    ATENTIE: driverul Octagon SF8008 (Si2166) nu pune niciodata FE_HAS_SIGNAL si FE_HAS_CARRIER (11.11.2026: numai SYNC cat
    cauta, numai LOCK cand a prins, si SYNC pe transponderele moarte), deci acolo regula e un timp de asteptare mai scurt:
-   "neprins la 3 s = mort". Pe .114, 467 de acordari fara DiSEqC si motor au prins in cel mult 1,53 s de la tune() (mediana
+   "neprins la 3 s = mort". Pe receptorul de probe SF8008, 467 de acordari fara DiSEqC si motor au prins in cel mult 1,53 s de la tune() (mediana
    0,41 s), iar dupa comanda driverul prinde in ~0,23 s; pragul de 3 s lasa o marja de ~2x fata de cea mai lenta. */
 void eDVBFrontend::hdsScanVerifica()
 {
@@ -944,9 +944,22 @@ static inline uint32_t fe_udiv(uint32_t a, uint32_t b)
 }
 
 /* HDSatelit (lib/dvb/hdscitirifrontend.h): toti cititorii (Python, scanarea, convertoarele) trec prin memoria tunerului:
-   o citire a fiecarei valori pe secunda, impartita. Bucla SEC si timeout() citesc direct (hdsCiteste(..., true)). */
+   o citire a fiecarei valori pe secunda, impartita. Bucla SEC si timeout() citesc direct (hdsCiteste(..., true)).
+   HDSatelit (0.7.5, 13.11.2026, SEM): fara semnal prins (fara FE_HAS_LOCK) nivelul si calitatea sunt 0 pentru toti
+   cititorii (bara de informatii, a doua bara, lista, ecranul de semnal, web). Pe receptorul de probe (Amiko, tunerul DVB-C/T2 fara
+   cablu) driverul dadea 90% nivel si 2% calitate (zgomotul vazut de AGC), iar ecranul spunea "nu e semnal". Nivelul
+   brut ramane in getFrontendStatus ("tuner_signal_power_raw"), pentru cautarea semnalului (Components/HdsGasireSemnal.py:
+   nivelul tinut la plafon cu tunerul neprins). Starea vine din aceeasi memorie pe secunda (nicio citire in plus cat
+   tunerul e prins, fiindca "lock" se citeste oricum langa nivel). O calitate in dB fara formula (0x12345678) ramane asa. */
 int eDVBFrontend::readFrontendData(int type)
 {
+	if (!m_simulate && (type == signalPower || type == signalQuality || type == signalQualitydB)
+		&& !hdsCiteste(locked, false))
+	{
+		if (type == signalQualitydB && hdsCiteste(signalQualitydB, false) == 0x12345678)
+			return 0x12345678;
+		return 0;
+	}
 	return hdsCiteste(type, false);
 }
 
@@ -1652,6 +1665,8 @@ void eDVBFrontend::getFrontendStatus(ePyObject dest)
 		else
 			PutToDict(dest, "tuner_signal_quality_db", sigQualitydB);
 		PutToDict(dest, "tuner_signal_power", readFrontendData(signalPower));
+		/* SEM 0.7.5: nivelul asa cum il da driverul, si fara semnal prins (numai pentru cautarea semnalului) */
+		PutToDict(dest, "tuner_signal_power_raw", hdsCiteste(signalPower, false));
 	}
 }
 
@@ -2324,7 +2339,7 @@ bool eDVBFrontend::hdsZapRapid()
 }
 
 /* HDSatelit (0.7.4, viteza zap, 11.11.2026). tune() pornea secventa SEC numai prin m_tuneTimer (0 ms), adica dupa ce bucla
-   principala termina tot ce urmeaza dupa start() (Python-ul zap-ului, ceasurile ajunse la termen): pe .114 (Octagon SF8008)
+   principala termina tot ce urmeaza dupa start() (Python-ul zap-ului, ceasurile ajunse la termen): pe receptorul de probe (Octagon SF8008)
    38-321 ms intre inceputul zap-ului si primul pas al secventei, timp in care tunerul nu primea nimic. Acum, cand secventa
    pana la comanda (SET_FRONTEND) are numai pasi simpli (tensiunea si tonul LNB-ului, timpii, salturile dupa stare) si
    pauze de cel mult PAUZE_MS in total (10 + 10 ms din fabrica), toata bucata ruleaza pe loc, prin tuneLoopInt (ca din ceas),
@@ -2475,7 +2490,7 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 			bool flux = oparm.sat.needsStreamSelection();
 			if (flux && system == SYS_DVBS)
 				system = SYS_DVBS2;
-			struct dtv_property p[12];
+			struct dtv_property p[13];
 			struct dtv_properties cmdseq;
 			memset(p, 0, sizeof(p));
 			cmdseq.props = p;
@@ -2516,6 +2531,23 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 						hdsms::isiNormalizat(oparm.sat.is_id), oparm.sat.pls_mode, oparm.sat.pls_code, p[9].u.data,
 						m_dvb_api >> 8, m_dvb_api & 0xFF);
 				}
+#if defined DTV_ISDBT_SB_SEGMENT_IDX
+				// T2-MI catre driver, ca in OE-Alliance (acelasi camp nefolosit la satelit, aceeasi forma): driverele care stiu
+				// T2-MI (HiSilicon: SF8008 si familia, /proc/stb/frontend/N/t2mi) decapsuleaza in placa si dau fluxul DVB-T2
+				// din PLP-ul ales, deci o lista de canale cu T2-MI pe transponder merge ca pe alte imagini. 0 = fara T2-MI
+				// (scoate driverul din modul T2-MI dupa o acordare cu T2-MI); celelalte drivere ignora campul. Releul nostru
+				// (Hds/DabT2) nu e atins: purtatorii lui au transponderul propriu, fara campuri T2-MI.
+				p[n].cmd = DTV_ISDBT_SB_SEGMENT_IDX;
+				{
+					int t2plp = oparm.sat.t2mi_plp_id, t2pid = oparm.sat.t2mi_pid;
+					p[n].u.data = (t2plp >= 0 && t2plp <= 255 && t2pid > 0 && t2pid <= 0x1FFE) ?
+						(0x80000000u | ((unsigned int)t2pid << 16) | (unsigned int)t2plp) : 0;
+				}
+				if (p[n].u.data)
+					eDebug("frontend %d: T2-MI PLP %d PID %d -> 0x%x", m_dvbid, oparm.sat.t2mi_plp_id, oparm.sat.t2mi_pid,
+						p[n].u.data);
+				++n;
+#endif
 				p[n].cmd = DTV_TUNE;
 				cmdseq.num = n + 1;
 			}

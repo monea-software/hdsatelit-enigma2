@@ -19,7 +19,7 @@
 #               3. pista implicita a canalului: nu se schimba nimic, ramane ce a pornit nucleul
 #   subtitrare: 1. alegerea de mana tinuta minte pe canal: o subtitrare anume, sau „fara subtitrare"
 #               2. „Fara subtitrari niciodata" (din setari): nimic
-#               3. preferintele 1, 2, 3 (implicit: limba receptorului, apoi nimic)
+#               3. preferintele 1, 2, 3 (din fabrica, din 0.7.5: nimic; cu „Limba receptorului” aleasa: ea, apoi nimic)
 #               4. nimic
 #   Alegerea de mana are intaietate si fata de „niciodata": omul a pornit-o singur pe canalul acela.
 #
@@ -112,6 +112,12 @@ OPRIT = "oprit"        # alegerea de mana tinuta minte: fara subtitrare pe canal
 
 PREF_AUDIO_IMPLICITE = (PREF_RECEPTOR, "eng", PREF_CANAL)
 PREF_SUBTITRARE_IMPLICITE = (PREF_RECEPTOR, PREF_NIMIC, PREF_NIMIC)
+# setarile din fabrica (0.7.5; Eduard 13.11.2026 22:42: ca in celelalte imagini, unde nicio subtitrare nu e aleasa singura;
+# darog69, forum 479 #2242, si kegnkiwi): subtitrarile NU pornesc singure. Omul le porneste o data pe canal (tasta SUBT sau
+# meniul) si alegerea se tine minte; cine vrea sa porneasca singure isi alege limbile in setarile subtitrarilor.
+# PREF_SUBTITRARE_IMPLICITE ramane ordinea functiilor de alegere (probele), iar cine pune „Limba receptorului” la prima
+# alegere are comportarea de dinainte.
+PREF_SUBTITRARE_SETARI = (PREF_NIMIC, PREF_NIMIC, PREF_NIMIC)
 
 # motivele alegerii cu traducerea pornita (alegeSubtitrareTradusa)
 MOTIV_TRADUCERE_TINTA = "traducere-tinta"          # subtitrare in limba traducerii
@@ -1078,9 +1084,9 @@ def initConfig():
 	config.hds_piste.audio1 = ConfigSelection(choices=alegeriAudio, default=PREF_AUDIO_IMPLICITE[0])
 	config.hds_piste.audio2 = ConfigSelection(choices=alegeriAudio, default=PREF_AUDIO_IMPLICITE[1])
 	config.hds_piste.audio3 = ConfigSelection(choices=alegeriAudio, default=PREF_AUDIO_IMPLICITE[2])
-	config.hds_piste.sub1 = ConfigSelection(choices=alegeriSub, default=PREF_SUBTITRARE_IMPLICITE[0])
-	config.hds_piste.sub2 = ConfigSelection(choices=alegeriSub, default=PREF_SUBTITRARE_IMPLICITE[1])
-	config.hds_piste.sub3 = ConfigSelection(choices=alegeriSub, default=PREF_SUBTITRARE_IMPLICITE[2])
+	config.hds_piste.sub1 = ConfigSelection(choices=alegeriSub, default=PREF_SUBTITRARE_SETARI[0])
+	config.hds_piste.sub2 = ConfigSelection(choices=alegeriSub, default=PREF_SUBTITRARE_SETARI[1])
+	config.hds_piste.sub3 = ConfigSelection(choices=alegeriSub, default=PREF_SUBTITRARE_SETARI[2])
 	config.hds_piste.fara_subtitrari = ConfigYesNo(default=False)
 	# cu traducerea subtitrarilor pornita: Da = se alege si o subtitrare in alta limba (teletext, apoi DVB cu OCR), ca sa
 	# fie tradusa; Nu = numai una in limba traducerii, apoi preferintele de mai sus

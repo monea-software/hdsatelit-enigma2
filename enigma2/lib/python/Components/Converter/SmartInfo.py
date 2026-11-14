@@ -2,6 +2,7 @@
 # Luat din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e (12.11.2026), fisierul lib/python/Components/Converter/SmartInfo.py.
 # Licenta GPL-2.0 (ca enigma2); notele autorilor de mai jos raman neschimbate. Adus in imaginea HD Satelit (lotul TOT,
 # 12.11.2026) ca temele si pluginurile scrise pentru imaginile OE-Alliance sa-si gaseasca toate componentele.
+from os.path import isfile
 from xml.etree.ElementTree import parse
 
 from enigma import iServiceInformation
@@ -68,7 +69,8 @@ class SmartInfo(Poll, Converter):
 	text = property(getText)
 
 	def readSatXml(self):
-		satXml = parse("/etc/tuxbox/satellites.xml").getroot()
+		# HDSatelit: intai /etc/enigma2/satellites.xml, cand exista (ca nucleul, lib/dvb/db.cpp)
+		satXml = parse("/etc/enigma2/satellites.xml" if isfile("/etc/enigma2/satellites.xml") else "/etc/tuxbox/satellites.xml").getroot()
 		if satXml is not None:
 			for sat in satXml.findall("sat"):
 				name = sat.get("name") or None

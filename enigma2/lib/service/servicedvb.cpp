@@ -14,6 +14,9 @@
 #include <lib/dvb/db.h>
 #include <lib/dvb/decoder.h>
 #include <lib/dvb/hdsurmamotor.h>
+#if HAVE_HISILICON
+#include <lib/base/eenv.h>
+#endif
 
 #include <lib/components/file_eraser.h>
 #include <lib/service/servicedvbrecord.h>
@@ -1017,6 +1020,11 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 	m_hds_radio_de_la = 0;
 	m_hds_radio_eliberare = eTimer::create(eApp);
 	CONNECT(m_hds_radio_eliberare->timeout, eDVBServicePlay::hdsRadioEliberat);
+#if HAVE_HISILICON
+	m_hds_negru_incercari = 0;
+	m_hds_negru_timer = eTimer::create(eApp);
+	CONNECT(m_hds_negru_timer->timeout, eDVBServicePlay::hdsEcranNegru);
+#endif
 	/* jurnalul zap-ului: PTS-ul video al decodorului, citit de doua ori dupa evenimentul video (sau la FARA_IMAGINE_MS
 	   fara eveniment): numai un PTS care se misca inseamna imagine (11.11.2026: pe un canal nedescifrat evenimentul vine
 	   fara nicio imagine). Fara /proc/stb/video/zapmode (pe HiSilicon poate da Oops in nucleu). */
@@ -1046,6 +1054,9 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 eDVBServicePlay::~eDVBServicePlay()
 {
 	m_hds_radio_eliberare->stop();
+#if HAVE_HISILICON
+	m_hds_negru_timer->stop();
+#endif
 	if (m_is_primary && eHdsEgalizator::existent())
 		eHdsEgalizator::existent()->serviciuOprit(this);
 	if (m_is_pvr && !m_is_stream)
@@ -1138,6 +1149,10 @@ void eDVBServicePlay::serviceEvent(int event)
 	case eDVBServicePMTHandler::eventMisconfiguration:
 	{
 		eDebug("DVB service failed to tune - error %d", event);
+#if HAVE_HISILICON
+		m_hds_negru_incercari = 0;
+		hdsEcranNegru();
+#endif
 		m_event((iPlayableService*)this, evTuneFailed);
 		break;
 	}
@@ -1161,11 +1176,17 @@ void eDVBServicePlay::serviceEvent(int event)
 		}
 		if (!m_timeshift_active)
 		{
+			/* live: evUpdatedInfo and evNewProgramInfo come later, in hdsInfoLiveReady */
 			if (m_is_primary && !m_is_pvr && !m_is_stream && !m_timeshift_enabled)
 				m_service_handler.amanaInfoLive();
 			else
+			{
 				m_event((iPlayableService*)this, evUpdatedInfo);
+				m_event((iPlayableService*)this, evNewProgramInfo);
+			}
 		}
+		else /* as in OE-Alliance: the PMT is new even while the timeshift plays */
+			m_event((iPlayableService*)this, evNewProgramInfo);
 		break;
 	}
 	case eDVBServicePMTHandler::eventPreStart:
@@ -1196,6 +1217,12 @@ void eDVBServicePlay::hdsInfoLiveReady()
 				return;
 		}
 		m_event((iPlayableService*)this, evUpdatedInfo);
+		/* OE-Alliance order: evNewProgramInfo right after evUpdatedInfo (the themes reread the tuner data on it); a
+		   listener of evUpdatedInfo may have stopped the service */
+		eUsePtr<iDVBChannel> channel;
+		if (m_service_handler.getChannel(channel) || !channel)
+			return;
+		m_event((iPlayableService*)this, evNewProgramInfo);
 	}
 }
 
@@ -1365,6 +1392,9 @@ RESULT eDVBServicePlay::stop()
 	m_hds_ceas_imagine->stop();
 	m_hds_radio_eliberare->stop();
 	m_hds_radio_asteapta = m_hds_radio_decoder_amanat = m_hds_radio_seekable_amanat = false;
+#if HAVE_HISILICON
+	hdsEcranNegruOprit();
+#endif
 	m_hds_zap.oprire();
 	m_hds_amana_gui = m_hds_seekable_amana = false;
 
@@ -2313,6 +2343,52 @@ void eDVBServicePlay::hdsPozaRadio(int vpid)
 	}
 }
 
+#if HAVE_HISILICON
+/* What the screen shows when the new channel starts no decoder (measured on the Octagon SF8008 with grab -v captures). With the zap mode "hold" (the default of the image, Components/VideoOutput.py ZAP_DEFAULT) the
+   HiSilicon driver keeps the last picture until a new one is decoded, and neither VIDEO_STOP with blank (eDVBVideo::stop)
+   nor VIDEO_CLEAR_BUFFER (dvbvideosink at its stop) removes it. A channel that does not tune (no signal, no free tuner,
+   no PAT/PMT) makes no decoder at all, so under "Fără semnal" the last picture of the channel before stayed, from the
+   internet or from DVB alike. As the OE-Alliance enigma2 does (eDVBVideo::clearLastFrame: services without decodable video must not show
+   the picture of the channel before), the channel gets a still picture: black (black.mvi), on a radio channel the radio
+   picture, through the guarded path of the still pictures (eTSMPEGDecoder::showSinglePic: the memory of the driver is
+   checked, video0 has one holder, nothing is shown while another decoder has video). A still picture replaced the kept
+   picture on the Octagon (a DVB radio channel after an UHD channel). The picture stays until a decoder starts (setState
+   closes it; updateDecoder lets it go first) or until the service stops. Once per service, primary only. While a
+   GStreamer stop still holds video0 (eServiceMP3::asteaptaEliberareaImaginii) it is tried again every 250 ms, 3 s at most. */
+void eDVBServicePlay::hdsEcranNegru()
+{
+	if (!m_is_primary || m_decoder || m_hds_negru)
+		return;
+#if HAVE_GSTREAMER
+	if (eServiceMP3::asteaptaEliberareaImaginii())
+	{
+		if (++m_hds_negru_incercari <= 12)
+			m_hds_negru_timer->start(250, true);
+		else
+			eDebug("[eDVBServicePlay] channel without decoder: a stream still holds video0, no still picture");
+		return;
+	}
+#endif
+	int tip = m_reference.getData(0);
+	std::string poza;
+	if (tip == 2 || tip == 10)
+		ePythonConfigQuery::getConfigValue("config.misc.radiopic", poza);
+	if (poza.empty() || access(poza.c_str(), R_OK))
+		poza = eEnv::resolve("${datadir}/enigma2/black.mvi");
+	m_hds_negru = new eTSMPEGDecoder(NULL, 0);
+	eDebug("[eDVBServicePlay] channel without decoder: still picture %s", poza.c_str());
+	m_hds_negru->showSinglePic(poza.c_str());
+}
+
+void eDVBServicePlay::hdsEcranNegruOprit()
+{
+	m_hds_negru_timer->stop();
+	m_hds_negru_incercari = 0;
+	/* the destructor closes the picture: VIDEO_STOP on the picture player, source back to demux, video0 closed */
+	m_hds_negru = 0;
+}
+#endif
+
 int eDVBServicePlay::getCurrentChannel()
 {
 	return m_decoder ? m_decoder->getAudioChannel() : STEREO;
@@ -2916,6 +2992,10 @@ void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 
 	if (!m_decoder)
 	{
+#if HAVE_HISILICON
+		/* the tuning came back after a failure: the still picture gives video0 to the real decoder */
+		hdsEcranNegruOprit();
+#endif
 		/* SoftCSA: the decoder plays from the playback demux fed by the loop */
 		if (m_soft_active && m_soft_decoder && !m_timeshift_active)
 			m_decode_demux = m_soft_decoder->getDecodeDemux();

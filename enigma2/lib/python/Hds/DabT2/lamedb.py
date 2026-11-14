@@ -151,13 +151,43 @@ def tp_reali_din(text4):
                               'khz': int(c[0]), 'pol': int(c[2]), 'is_id': int(c[11]) if len(c) > 11 else -1})
         except (ValueError, IndexError):
             continue
+    rez['pid_uri'] = {}
     for b in sv:
         try:
             parti = b[0].split(':')
-            rez['sv'][tuple(int(parti[k], 16) for k in range(4))] = int(parti[4])
+            k = tuple(int(parti[k], 16) for k in range(4))
+            rez['sv'][k] = int(parti[4])
+            rez['pid_uri'].setdefault(k, set()).update(_pid_uri_tinute_minte(b[2]))
+            if _al_nostru_furnizor(b[2], (FURNIZOR_ABERTIS,)):
+                rez.setdefault('ale_noastre', set()).add(k)
         except (ValueError, IndexError):
             continue
     return rez
+
+
+def _pid_uri_tinute_minte(rand_p):
+    """PID-urile tinute minte de un serviciu („p:...,c:TTPPPP,...”; TT zecimal, PPPP hex), fara intrarile care nu
+    sunt PID-uri (5-8: tipul video, canalul de sunet, intarzierile)."""
+    rez = set()
+    for camp in str(rand_p or '').split(','):
+        if not camp.startswith('c:') or len(camp) < 5:
+            continue
+        try:
+            tip, pid = int(camp[2:4]), int(camp[4:], 16)
+        except ValueError:
+            continue
+        if tip not in (5, 6, 7, 8) and 0 < pid < 0x1FFF:
+            rez.add(pid)
+    return rez
+
+
+def _purtatorul_lor_merge(x, tp_reali):
+    """Purtatorul altui automat tine minte PID-ul de date (altfel serverul 8001 da numai PAT si PMT: ecran negru)."""
+    k = (x['sid'], x['ns'], x['tsid'], x['onid'])
+    tp_reali = tp_reali or {}
+    if k in (tp_reali.get('ale_noastre') or ()):
+        return False          # e purtatorul nostru, scris la o rulare de dinainte: se scrie din nou, nu se sterge
+    return x['pid'] in (tp_reali.get('pid_uri') or {}).get(k, ())
 
 
 def purtatori(lista, active=None, tip='t2', tp_reali=None, straine=None):
@@ -191,9 +221,13 @@ def purtatori(lista, active=None, tip='t2', tp_reali=None, straine=None):
                 activ = active is None or _curata_id(f.get('id')) in active
                 if straine is not None and abertis.e_strain(f, straine):
                     x = _purtator_strain(f, p, pid, cheie, tp_reali)
-                    if x is not None:
+                    if x is not None and _purtatorul_lor_merge(x, tp_reali):
                         rez.append(x)
-                    continue
+                        continue
+                    if x is None and not activ:
+                        continue
+                    # purtatorul lor nu tine minte PID-ul de date (o cautare l-a inlocuit cu serviciul scanat) sau
+                    # lipseste: fluxul e pornit de om, deci scriem purtatorul nostru adevarat, cu c:18 (ecran negru altfel)
                 real = _purtator_real(f, p, pid, cheie, tp_reali, doar_scanat=not activ)
                 if real is not None:
                     rez.append(real)
@@ -603,6 +637,7 @@ def transpondere_receptor(cale4=None):
     if _PRINSE.get('semn') == semn:
         return _PRINSE['tp']
     rez = set()
+    t2mi = {}
     text = _citeste(cale4)
     if text:
         randuri = text.replace('\r', '').split('\n')
@@ -621,10 +656,27 @@ def transpondere_receptor(cale4=None):
                     poz = int(c[4])
                     is_id = int(c[11]) if len(c) > 11 else -1
                     rez.add((poz + 3600 if poz < 0 else poz, int(c[0]), int(c[2]), is_id))
+                    # T2-MI scris de alte imagini (dupa pls_mode: t2mi_plp_id:t2mi_pid, ca in hdsmultistream.h)
+                    plp = int(c[14]) if len(c) > 14 else -1
+                    if 0 <= plp <= 255:
+                        pid_t2 = int(c[15]) if len(c) > 15 else 4096
+                        t2mi[tuple(int(x, 16) for x in parti_cheie[:3])] = {
+                            'poz': poz + 3600 if poz < 0 else poz, 'khz': int(c[0]), 'pol': int(c[2]), 'is_id': is_id,
+                            'plp': plp, 'pid': pid_t2 if 0 < pid_t2 < 0x1FFF else 4096}
                 except (ValueError, IndexError):
                     continue
-    _PRINSE['semn'], _PRINSE['tp'] = semn, rez
+    _PRINSE['semn'], _PRINSE['tp'], _PRINSE['t2mi'] = semn, rez, t2mi
     return rez
+
+
+def transpondere_t2mi(cale4=None, doar_din_memorie=False):
+    """Transponderele cu T2-MI scrise de listele altor imagini (campurile t2mi_plp_id:t2mi_pid din lamedb, pe care
+    nucleul nostru nu le foloseste): {(ns, tsid, onid): {poz, khz, pol, is_id, plp, pid}}. Acelasi citit si aceeasi
+    memorie ca transpondere_receptor (lamedb se reciteste numai cand s-a schimbat). doar_din_memorie: fara nicio
+    citire de disc (din alt fir decat cel principal); {} daca nu s-a citit inca."""
+    if not doar_din_memorie:
+        transpondere_receptor(cale4)
+    return _PRINSE.get('t2mi') or {}
 
 
 def refs_ale_noastre4(text, furnizor=FURNIZOR):

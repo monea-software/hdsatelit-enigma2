@@ -4,10 +4,17 @@
 
 #include <lib/driver/rc.h>
 
+struct input_event;
+
 class eRCDeviceInputDev: public eRCDevice
 {
 	int iskeyboard;
 	bool ismouse;	/* HDSatelit: relative pointer (REL_X, REL_Y, BTN_LEFT): a mouse, a touchpad, an air mouse */
+	/* HDSatelit: drumul tastei (greseala 1231), vezi masoaraTasta in rcinput.cpp */
+	long long m_ultimaApasare;
+	unsigned m_apasari, m_intarziate, m_lipite;
+	long long m_maxIntarziere;
+	void masoaraTasta(const struct input_event *ev);
 public:
 	void handleCode(long code);
 	eRCDeviceInputDev(eRCInputEventDriver *driver);

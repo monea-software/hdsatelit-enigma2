@@ -47,4 +47,5 @@ dvbciinclude_HEADERS = \
 	dvbci_resmgr.h \
 	dvbci_session.h \
 	dvbci_ui.h \
+	hdscica.h \
 	hdsdatetimeci.h

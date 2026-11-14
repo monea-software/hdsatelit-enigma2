@@ -41,6 +41,7 @@ class fontRenderClass
 	{
 		std::string filename, face;
 		int scale; // 100 is 1:1
+		int renderflags; // HDSatelit: FreeType load flags added to FT_LOAD_DEFAULT (addFont, fifth argument; 0 = none)
 		fontListEntry *next;
 		~fontListEntry();
 	} *font;
@@ -61,7 +62,7 @@ public:
 	float getLineHeight(const gFont& font);
 	static fontRenderClass *getInstance();
 #ifndef SWIG
-	std::string AddFont(const std::string &filename, const std::string &name, int scale);
+	std::string AddFont(const std::string &filename, const std::string &name, int scale, int renderflags = 0);
 	FT_Error FTC_Face_Requester(FTC_FaceID	face_id, FT_Face* aface);
 	int getFont(ePtr<Font> &font, const std::string &face, int size, int tabwidth=-1);
 	fontRenderClass();
@@ -146,9 +147,10 @@ public:
 	static void setReplacementFont(std::string font) { replacement_facename=font; }
 	static void setFallbackFont(std::string font) { fallback_facename=font; }
 	static void forceReplacementGlyph(int unicode) { forced_replaces.insert(unicode); }
-	/* HDSatelit: how many of the code points have no glyph in the font `face` nor in the replacement font, nor (for the
-	   symbols only) in the fallback font: the ones renderString leaves out (-1: no such font) */
-	static int missingGlyphs(const std::string &face, const std::vector<unsigned long> &codes);
+	/* HDSatelit: how many of the code points have no glyph in the font `face` nor in the replacement font, nor in the
+	   fallback font: the ones renderString leaves out (-1: no such font). own = true (the subtitles): a letter only the
+	   fallback font has counts as missing too, so the chosen font must write the text whole by itself (symbols excepted) */
+	static int missingGlyphs(const std::string &face, const std::vector<unsigned long> &codes, bool own = false);
 
 	void setFont(const gFont *font);
 	int renderString(const char *string, int flags=0);

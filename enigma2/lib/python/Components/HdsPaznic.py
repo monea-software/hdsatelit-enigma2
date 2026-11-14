@@ -63,6 +63,14 @@
 #      nu in asteptare si nu pe afisajele color (pe ele deseneaza tot firul principal). Prima bataie noua reface
 #      afisajul pe loc (HdsAfisaj.actualizeaza). Pluginurile stiute muta oricum lucrul greu pe un fir
 #      (Components/HdsFirPluginuri.py), deci la ele firul principal nu ajunge sa fie tinut.
+#  10. CINE TINE FIRUL PRINCIPAL (0.7.5, lotul PRN: blocajele din primele minute pe Viper 4K V10, SF8008, Trio, Ustym).
+#      Bataia de 10 s si pragul paznicului (120 s) nu vad tacerile de cateva secunde, cand tastele stau la coada si apare
+#      rotita. Un ceas de TIC_S pe firul principal (numai in memorie) si firul de supraveghere (la PAS_FIR_S) scriu un
+#      rand in jurnalul paznicului pentru orice tacere de ~PRAG_FIR_OCUPAT_S (masurata intre batai, +-1 s, deci de la ~2 s):
+#      cat, la cat timp de la pornire si locul
+#      din cod (FirOcupat). La prima bataie, un rand cu durata pornirii si pasii ei lenti (pasPornire, din
+#      PluginComponent si mytest.py), iar la orice TryQuitMainloop un rand cu codul si ecranele deschise (cerereIesire).
+#      Jurnalul paznicului pleaca mereu in pachetul beta testerului, deci urmatorul pachet spune singur cine a fost.
 #
 # Paznicul placii (watchdog-ul hardware, 60 s) si oprirea la un blocaj de nucleu (fir in stare D) raman mereu pornite;
 # setarea de aici priveste numai repornirea interfetei cand nu mai raspunde.
@@ -237,6 +245,9 @@ class Bataie(object):
 		self.lacat = threading.RLock()
 		self.ultimaBataie = None
 		self.supraveghetor = None
+		# punctul 10: ceasul de 1 s si firul de supraveghere care spune cine tine firul principal
+		self.firOcupat = None
+		self.timerTic = None
 		# memoria decodorului: cea mai mica masuratoare se tine numai in afara standby-ului
 		self.standby = standby if standby is not None else _inStandby
 
@@ -405,6 +416,12 @@ class Bataie(object):
 			self.timer.callback.append(self.pas)
 		self.pas()
 		self.timer.start(BATAIE_S * 1000, False)
+		if self.firOcupat is None:
+			self.firOcupat = FirOcupat(ceas=self.ceas)
+			self.timerTic = eTimer()
+			self.timerTic.callback.append(self.firOcupat.tic)
+		self.firOcupat.tic()
+		self.timerTic.start(TIC_S * 1000, False)
 		if self.supraveghetor is None:
 			self.supraveghetor = SupraveghetorPluginExtern(self)
 			self.supraveghetor.porneste()
@@ -412,6 +429,8 @@ class Bataie(object):
 	def opreste(self):
 		if self.timer is not None:
 			self.timer.stop()
+		if self.timerTic is not None:
+			self.timerTic.stop()
 		if self.supraveghetor is not None:
 			self.supraveghetor.opreste()
 			self.supraveghetor = None
@@ -630,7 +649,20 @@ class SupraveghetorPluginExtern(object):
 		return "asteapta:" + nume
 
 	def _bucla(self):
-		while not self.stop.wait(PAS_PLUGIN_EXTERN_S):
+		# la PAS_FIR_S: privirea punctului 10; la PAS_PLUGIN_EXTERN_S: pas() de mai sus, ca inainte
+		pas_s = min(PAS_FIR_S, PAS_PLUGIN_EXTERN_S)
+		trecut = 0.0
+		while not self.stop.wait(pas_s):
+			fir = getattr(self.b, "firOcupat", None)
+			if fir is not None:
+				try:
+					fir.privire()
+				except Exception as e:
+					_jurnal("cine tine firul principal: %r" % (e,))
+			trecut += pas_s
+			if trecut + 1e-6 < PAS_PLUGIN_EXTERN_S:
+				continue
+			trecut = 0.0
 			try:
 				self.pas()
 			except Exception as e:
@@ -645,6 +677,203 @@ class SupraveghetorPluginExtern(object):
 	def opreste(self):
 		self.stop.set()
 		self.fir = None
+
+
+# ---------------------------------------------------------------- punctul 10: cine tine firul principal (0.7.5, PRN)
+
+def jurnalPaznic(text, cale=None):
+	"""Un rand „enigma2: ...” in jurnalul paznicului (CALE_JURNAL), care pleaca mereu in pachetul beta testerului (fara
+	limita pe zi, Components/HdsBetaTester._randuriNoiPaznic), si acelasi text in jurnalul interfetei. Deschis, scris la
+	coada si inchis la fiecare rand (paznicul scrie si el la coada aceluiasi fisier). Nu arunca."""
+	_jurnal(text)
+	cale = cale or os.environ.get("HDS_WATCHDOG_LOG", CALE_JURNAL)
+	try:
+		with open(cale, "a") as f:
+			f.write("%s enigma2: %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), text))
+	except (OSError, IOError):
+		pass
+
+
+def _scurt(cale):
+	"""Calea fisierului fara dosarul de instalare: Components/HdsX.py, Plugins/Extensions/Y/plugin.py, python3.14/z.py."""
+	cale = cale or "?"
+	i = cale.rfind("/python/")
+	if i >= 0:
+		return cale[i + 8:]
+	i = cale.find("/python3")
+	return cale[i + 1:] if i >= 0 else cale
+
+
+_BUCLA = ("e2reactor.py", "mytest.py", "twisted/")
+
+
+def locDinCadru(cadru, adancime=200):
+	"""Unde e firul principal: (interior, intrare) ca texte „Fisier.py:rand functie” (interior = cadrul care lucreaza acum,
+	intrare = primul cadru de dupa bucla enigma2, adica cine a fost chemat din C++), sau None cand firul e in bucla C++
+	(cadrul de sus e e2reactor.py, poll: lucreaza cod C++ sau un driver) ori cadrul nu se stie."""
+	if cadru is None:
+		return None
+	cod = cadru.f_code
+	fisier = cod.co_filename or ""
+	if fisier.endswith("e2reactor.py"):
+		return None
+	interior = "%s:%d %s" % (_scurt(fisier), cadru.f_lineno, cod.co_name)
+	intrare = interior
+	c = cadru
+	while c is not None and adancime > 0:
+		f = c.f_code.co_filename or ""
+		if any(b in f for b in _BUCLA):
+			break
+		intrare = "%s:%d %s" % (_scurt(f), c.f_lineno, c.f_code.co_name)
+		c = c.f_back
+		adancime -= 1
+	return interior, intrare
+
+
+def _secundeDeLaPornire():
+	"""Cate secunde are procesul (/proc/self/stat campul 22 fata de /proc/uptime), sau None."""
+	try:
+		with open("/proc/self/stat") as f:
+			camp = f.read().rsplit(")", 1)[1].split()
+		with open("/proc/uptime") as f:
+			up = float(f.read().split()[0])
+		return max(0.0, up - int(camp[19]) / float(os.sysconf("SC_CLK_TCK")))
+	except Exception:
+		return None
+
+
+PRAG_FIR_OCUPAT_S = 3.0         # firul principal tace atat (ceasul de 1 s nu a batut): un rand in jurnalul paznicului
+INCA_OCUPAT_S = 60.0            # o tacere care tine atat primeste un rand pe loc (paznicul o poate opri la 120 s)
+TIC_S = 1                       # ceasul mic de pe firul principal (numai in memorie, nimic pe disc)
+PAS_FIR_S = 1                   # cat de des se uita firul de supraveghere la el
+RANDURI_FIR_MAX = 20            # cel mult atatea randuri „ocupat” pe proces
+PRAG_PAS_PORNIRE_S = 3.0        # un pas al pornirii (importul, AUTOSTART sau SESSIONSTART al unui plugin) mai lung intra in rand
+
+
+class FirOcupat(object):
+	"""Punctul 10. tic() pe firul principal (eTimer la TIC_S); privire() pe firul de supraveghere, la PAS_FIR_S. Cand
+	firul principal tace peste PRAG_FIR_OCUPAT_S, fiecare privire ia locul lui din stiva (locDinCadru); cand tacerea se
+	termina, un rand: cat a tinut, la cat timp de la pornire si locul vazut cel mai des. Daca nicio privire nu a prins
+	cod Python (firul principal tine lacatul Python in C++, deci firul de supraveghere nu poate rula), randul spune „in
+	C++”: atunci stivele paznicului (hds-watchdog.py, peste 120 s) au si firele vazute de nucleu. Nimic pe ecran."""
+
+	def __init__(self, ceas=None, cadru=None, scrie=None, varsta=None):
+		self.ceas = ceas or monotonic
+		self.cadru = cadru or _cadrulFiruluiPrincipal
+		self.scrie = scrie or jurnalPaznic
+		self.varsta = varsta or _secundeDeLaPornire
+		self.ultimTic = None
+		self.inceput = None     # ultimTic de dinaintea tacerii de acum
+		self.priviri = {}
+		self.anuntat = False    # randul „inca ocupat” al tacerii de acum
+		self.randuri = 0
+
+	def tic(self):
+		self.ultimTic = self.ceas()
+
+	def _loc(self):
+		"""(textul locului, priviri in el, priviri in total): intrarea (cine a fost chemat din bucla) vazuta cel mai des,
+		cu cadrul interior cel mai des vazut sub ea; C++ cand nu s-a prins niciun cadru Python."""
+		if not self.priviri:
+			return "in C++ (bucla enigma2 sau un apel in driver)", 0, 0
+		total = sum(self.priviri.values())
+		pe_intrare = {}
+		for loc, n in self.priviri.items():
+			cheie = loc[1] if loc is not None else None
+			pe_intrare[cheie] = pe_intrare.get(cheie, 0) + n
+		intrare, n = max(pe_intrare.items(), key=lambda x: x[1])
+		if intrare is None:
+			return "in C++ (bucla enigma2 sau un apel in driver)", n, total
+		interior = max(((loc[0], m) for loc, m in self.priviri.items() if loc is not None and loc[1] == intrare),
+			key=lambda x: x[1])[0]
+		return (interior if interior == intrare else "%s <- %s" % (interior, intrare)), n, total
+
+	def _rand(self, durata, inca=False):
+		loc, n, total = self._loc()
+		varsta = None
+		try:
+			varsta = self.varsta()
+		except Exception:
+			pass
+		la = (" la %d s dupa pornirea interfetei" % int(varsta)) if varsta is not None else ""
+		priviri = (" (%d din %d priviri)" % (n, total)) if total else ""
+		fel = "inca ocupat de" if inca else "ocupat"
+		return "firul principal %s %.1f s%s: %s%s" % (fel, durata, la, loc, priviri)
+
+	def _scrie(self, rand):
+		if self.randuri >= RANDURI_FIR_MAX:
+			return None
+		self.randuri += 1
+		if self.randuri == RANDURI_FIR_MAX:
+			rand += "; ultimul rand de acest fel pana la repornirea interfetei"
+		self.scrie(rand)
+		return rand
+
+	def privire(self):
+		"""O privire. -> randul scris acum, sau None."""
+		tic = self.ultimTic
+		if tic is None:
+			return None
+		acum = self.ceas()
+		if acum - tic >= PRAG_FIR_OCUPAT_S:
+			if self.inceput != tic:
+				self.inceput, self.priviri, self.anuntat = tic, {}, False
+			try:
+				loc = locDinCadru(self.cadru())
+			except Exception:
+				loc = None
+			self.priviri[loc] = self.priviri.get(loc, 0) + 1
+			if not self.anuntat and acum - tic >= INCA_OCUPAT_S:
+				self.anuntat = True
+				return self._scrie(self._rand(acum - tic, inca=True))
+			return None
+		if self.inceput is None:
+			return None
+		# tacerea s-a terminat: de la ultimul tic dinainte pana la primul de dupa, fara pasul ceasului
+		durata = max(0.0, tic - self.inceput - TIC_S)
+		rand = None
+		if durata >= PRAG_FIR_OCUPAT_S - TIC_S and not self.anuntat:
+			rand = self._scrie(self._rand(durata))
+		self.inceput, self.priviri, self.anuntat = None, {}, False
+		return rand
+
+
+# pasii lenti ai pornirii (inainte de prima bataie firul de supraveghere nu merge: bucla enigma2 inca nu ruleaza)
+_pasiPornire = []
+
+
+def pasPornire(fel, nume, secunde):
+	"""Din PluginComponent (import, autostart) si mytest.py (sessionstart), la prima pornire: un pas mai lung de
+	PRAG_PAS_PORNIRE_S se tine minte pentru randul pornirii (randPornire, la prima bataie). Nu arunca."""
+	try:
+		if secunde >= PRAG_PAS_PORNIRE_S and len(_pasiPornire) < 50:
+			_pasiPornire.append((float(secunde), str(nume), str(fel)))
+			_jurnal("pornirea: %s (%s) a tinut %.1f s" % (nume, fel, secunde))
+	except Exception:
+		pass
+
+
+def randPornire(varsta, pasi=None):
+	"""Textul randului pornirii, sau None cand pornirea a fost scurta si fara pasi lenti."""
+	pasi = sorted(_pasiPornire if pasi is None else pasi, reverse=True)
+	if not pasi and (varsta is None or varsta < 60):
+		return None
+	cat = ("pana la prima bataie %d s" % int(varsta)) if varsta is not None else "durata necunoscuta"
+	lenti = ", ".join("%s (%s) %.1f s" % (n, f, s) for s, n, f in pasi[:5]) or "niciun pas mai lung de %d s" % int(PRAG_PAS_PORNIRE_S)
+	return "pornirea interfetei: %s; pasii cei mai lenti: %s" % (cat, lenti)
+
+
+def cerereIesire(cod, ecrane):
+	"""Din mytest.py, cand se deschide TryQuitMainloop: un rand cu codul cerut si ecranele deschise (cine a cerut
+	repornirea). Iesirea merge mai departe neschimbata; daca omul raspunde Nu, randul paznicului „a iesit” nu urmeaza."""
+	try:
+		# aceleasi numere ca in tools/enigma2.sh.in si Screens/Standby.py (QUIT_*)
+		feluri = {0: "repornirea interfetei", 1: "oprire", 2: "repornirea receptorului", 3: "repornirea interfetei",
+			4: "actualizarea afisajului din fata", 5: "cadere"}
+		jurnalPaznic("cerere de iesire: cod %s (%s), ecranele: %s" % (cod, feluri.get(cod, "alt cod"),
+			" > ".join(ecrane) or "niciunul"))
+	except Exception:
+		pass
 
 
 _unic = [None]
@@ -673,6 +902,13 @@ def porneste():
 	initConfig()
 	bataie().porneste()
 	_jurnal("bataia pornita (%s, la %d s)" % (bataie().cale, BATAIE_S))
+	# punctul 10: cat a tinut pornirea si pasii ei lenti (pluginurile), un rand in jurnalul paznicului
+	try:
+		rand = randPornire(_secundeDeLaPornire())
+		if rand:
+			jurnalPaznic(rand)
+	except Exception as e:
+		_jurnal("randul pornirii: %r" % (e,))
 	# setarea repornirii de noapte si, dupa o repornire de noapte, intrarea in standby
 	try:
 		from Components import HdsMemorieDriver

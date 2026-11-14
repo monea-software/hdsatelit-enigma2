@@ -29,9 +29,16 @@ class SkinSelector(Screen):
 		self.setTitle(_("Aspectul ecranelor"))
 
 		self.previewPath = ""
-		self.skinlist = HdsSkinuri.lista(self.root)
+		# HDSatelit 0.7.5: la coada listei, temele incomplete (dosare ramase fara skin.xml, Components/HdsTemaStergere.py),
+		# cu semnul „incompletă”; se pot numai sterge
+		self.incomplete = {}
+		self.skinlist = self._lista()
 
-		self["key_red"] = StaticText(_("Închide"))
+		# HDSatelit 0.7.5: ROSU sterge tema selectata (ca in Extensii); inchiderea ramane pe EXIT. Eticheta e goala pe temele
+		# care nu se pot sterge (tema imaginii, cele de care depinde alt pachet); motivul se spune la apasare
+		# (Components/HdsTemaStergere.py, aceeasi hotarare ca pagina web /skin)
+		self["key_red"] = StaticText("")
+		self.planuriStergere = {}
 		# Actiuni explicite: OK/VERDE aplica acum; ALBASTRU pastreaza pentru pornirea urmatoare.
 		self["key_green"] = StaticText(_("Aplică acum"))
 		self["key_blue"] = StaticText(_("La următoarea pornire"))
@@ -55,7 +62,7 @@ class SkinSelector(Screen):
 			"green": self.ok,
 			"blue": self.laPornire,
 			"back": self.close,
-			"red": self.close,
+			"red": self.sterge,
 			"yellow": self.comutaAspectMeniu,
 			"up": self.up,
 			"down": self.down,
@@ -65,6 +72,26 @@ class SkinSelector(Screen):
 		}, -1)
 
 		self.onLayoutFinish.append(self.layoutFinished)
+
+	def _lista(self):
+		lista = HdsSkinuri.lista(self.root)
+		self.incomplete = {}
+		try:
+			from Components import HdsTemaStergere
+			for nume in HdsTemaStergere.incomplete(self.root):
+				eticheta = HdsTemaStergere.etichetaIncompleta(nume, _)
+				self.incomplete[eticheta] = nume
+				lista.append(eticheta)
+		except Exception as e:
+			print("[SkinSelector] temele incomplete: %s" % e)
+		return lista
+
+	def _curent(self):
+		"""(dosarul temei de pe randul ales, e incompleta)"""
+		x = self["SkinList"].getCurrent()
+		if x in self.incomplete:
+			return self.incomplete[x], True
+		return x, False
 
 	def _actualizeazaAspectMeniu(self):
 		eticheta = _("Dale") if HdsSkinuri.aspect(config) == "dale" else _("Listă")
@@ -84,7 +111,94 @@ class SkinSelector(Screen):
 				idx += 1
 			if idx < len(self.skinlist):
 				self["SkinList"].moveToIndex(idx)
+		self._planuriStergere()
 		self.loadPreview()
+
+	# ------------------------------------------------------------ stergerea temei (HDSatelit 0.7.5)
+
+	def _planuriStergere(self):
+		try:
+			from Components import HdsTemaStergere
+			self.planuriStergere = HdsTemaStergere.planuri([self.incomplete.get(x, x) for x in self.skinlist], self.root, "/",
+				HdsSkinuri.numeDinValoare(HdsSkinuri.skinPornit()) or HdsSkinuri.DOSAR_IMAGINE, HdsSkinuri.curent(config), _)
+		except Exception as e:
+			print("[SkinSelector] stergerea temelor: %s" % e)
+			self.planuriStergere = {}
+
+	def _actualizeazaRosu(self):
+		p = self.planuriStergere.get(self._curent()[0])
+		self["key_red"].setText(_("Șterge") if p and p["poate"] else "")
+
+	def sterge(self):
+		nume = self._curent()[0]
+		if not nume:
+			return
+		from Components import HdsTemaStergere
+		# planul se face din nou acum: intre timp tema poate fi fost stearsa sau aleasa din pagina web
+		p = HdsTemaStergere.planCurent(nume, config, self.root, _)
+		if not p["poate"]:
+			self["introduction"].setText(p["motiv"])
+			return
+		self.deSters = p
+		if p["fel"] == HdsTemaStergere.FEL_PACHET and not p["pe_ecran"]:
+			# tema din pachet: confirmarea si progresul Extensiilor (opkg remove), intr-o singura fereastra
+			from Components import HdsExtensiiLucru as L
+			from Components.Ipkg import opkgArguments
+			motiv = L.motivOcupat(None)
+			if motiv is not None:
+				self["introduction"].setText(motiv[0])
+				return
+			plan, eroare = HdsTemaStergere.planPachet(p, argumente=opkgArguments, traducere=_)
+			if plan is None:
+				self["introduction"].setText(eroare[0])
+				return
+			from Screens.HdsExtensii import HdsExtensiiActiune
+			plan.setdefault("titluri", L.titluri(L.catalogLaZi() or L.incarcaCatalog()))
+			self.session.openWithCallback(self._dupaPachet, HdsExtensiiActiune, plan)
+			return
+		text = "\n".join([p["intrebare"]] + p["detalii"])
+		self.session.openWithCallback(self._confirmaStergerea, MessageBox, text, MessageBox.TYPE_YESNO, default=False)
+
+	def _confirmaStergerea(self, da=False):
+		p = getattr(self, "deSters", None)
+		if da is not True or not p:
+			return
+		from Components import HdsTemaStergere
+		if p["pe_ecran"]:
+			# tema de pe ecran: interfata trece pe tema urmatoare, iar tema se sterge la pornire (HdsTemaStergere.laPornire)
+			if not HdsTemaStergere.programeaza(p, config):
+				self["introduction"].setText(HdsSkinuri.textMotiv(HdsSkinuri.MOTIV_SCRIERE, "", _))
+				return
+			configfile.save()
+			self.session.open(TryQuitMainloop, 3)
+			return
+		bun, mesaj = HdsTemaStergere.stergeDosarAles(p, config, self.root, _)
+		if bun:
+			configfile.save()
+		self._dupaStergere(mesaj)
+
+	def _dupaPachet(self, schimbat=False):
+		p = getattr(self, "deSters", None)
+		if not p:
+			return
+		from Components import HdsTemaStergere
+		if HdsTemaStergere.dupaPachet(p["nume"], config, self.root):
+			configfile.save()
+			self._dupaStergere(_("Tema %s a fost ștearsă.") % p["nume"])
+		elif schimbat:
+			self._dupaStergere("")
+
+	def _dupaStergere(self, mesaj):
+		"""lista se reface, selectia trece pe randul vecin"""
+		idx = self["SkinList"].getSelectionIndex()
+		self.skinlist = self._lista()
+		self["SkinList"].setList(self.skinlist)
+		if self.skinlist:
+			self["SkinList"].moveToIndex(max(0, min(idx, len(self.skinlist) - 1)))
+		self._planuriStergere()
+		self.loadPreview()
+		if mesaj:
+			self["introduction"].setText(mesaj)
 
 	def up(self):
 		self["SkinList"].up()
@@ -111,6 +225,11 @@ class SkinSelector(Screen):
 		nume = self["SkinList"].getCurrent()
 		if not nume:
 			return
+		incomplete = getattr(self, "incomplete", None) or {}
+		if nume in incomplete:
+			self["introduction"].setText(_("Tema %s e incompletă: lipsește skin.xml, deci nu se mai poate folosi. Tasta "
+				"roșie șterge ce a rămas din ea.") % incomplete[nume])
+			return
 		print("Skinselector: Selected Skin: " + self.root + HdsSkinuri.fisier(nume))
 		bun, mesaj, avertisment = HdsSkinuri.alege(nume, config, self.root, _)
 		if not bun:
@@ -126,7 +245,8 @@ class SkinSelector(Screen):
 		self.ok(acum=False)
 
 	def loadPreview(self):
-		pngpath = HdsSkinuri.previzualizare(self.root, self["SkinList"].getCurrent(),
+		self._actualizeazaRosu()
+		pngpath = HdsSkinuri.previzualizare(self.root, self._curent()[0],
 			resolveFilename(SCOPE_PLUGINS, HdsSkinuri.POZA_LIPSA))
 
 		if self.previewPath != pngpath:
@@ -164,6 +284,12 @@ class _Pornire(object):
 def _pornireReusita():
 	_Pornire.ceas = None
 	HdsSkinuri.pornireReusita()
+	# interfata 2K a temei HD Satelit a mers: semnul probei se sterge (Components/HdsRezolutieTv.py)
+	try:
+		from Components import HdsRezolutieTv
+		HdsRezolutieTv.pornireReusita()
+	except Exception as eroare:
+		print("[SkinSelector] proba 2K: %s" % eroare)
 	# tema externa: raportul si mesajul pentru ce nu s-a putut din ea, o singura data pe versiune de tema
 	try:
 		valoare = HdsSkinuri.skinPornit()
@@ -188,6 +314,12 @@ def laPornireaSesiunii(reason, session = None, **kwargs):
 		HdsTemeSuprascrise.laPornire()
 	except Exception as eroare:
 		print("[SkinSelector] fisierele imaginii suprascrise de teme: %s" % eroare)
+	# tema stearsa cand era pe ecran: interfata a pornit cu alta tema, acum se sterge (Components/HdsTemaStergere.py)
+	try:
+		from Components import HdsTemaStergere
+		HdsTemaStergere.laPornire(traducere=_)
+	except Exception as eroare:
+		print("[SkinSelector] stergerea temei la pornire: %s" % eroare)
 	try:
 		refuz = HdsSkinuri.deAratat()
 		if refuz:
@@ -198,6 +330,12 @@ def laPornireaSesiunii(reason, session = None, **kwargs):
 			HdsTemaExterna.dupaRefuz(refuz, HdsSkinuri.textRefuz(refuz, _))
 	except Exception as eroare:
 		print("[SkinSelector] mesajul skinului: %s" % eroare)
+	# interfata 2K intoarsa singura pe 1080p (placa a refuzat-o, driverul vechi, o oprire la pornire): o data, de ce
+	try:
+		from Components import HdsRezolutieTv
+		HdsRezolutieTv.laPornireaSesiunii(_)
+	except Exception as eroare:
+		print("[SkinSelector] mesajul rezolutiei: %s" % eroare)
 	try:
 		from enigma import eTimer
 		_Pornire.ceas = eTimer()

@@ -1,0 +1,27 @@
+From: HD Satelit <contact@hdsatelit.com>
+Subject: [PATCH] h265 writer: TS input without the extra zero byte, PES with DTS
+
+On HiSilicon (Viper 4K V20, 3798MV200) the DVB layer rejected every HEVC packet written from a TS source
+("pes start byte = 0 0 0" in the kernel log, the HEVC decoder opened but got no frame), while H.264 played.
+The H.264 writer puts the Annex B data right after the PES header, with the DTS; do the same for H.265.
+
+--- a/output/writer/mipsel/h265.c
++++ b/output/writer/mipsel/h265.c
+@@ -239,14 +239,13 @@
+             PacketLength     += call->private_size;
+         }
+ 
+-        iov[ic].iov_base = "";
+-        iov[ic++].iov_len = 1;
+-
++        /* no extra zero byte between the PES header and the Annex B data, and the DTS as for H.264: the HiSilicon
++           DVB layer rejected every packet ("pes start byte = 0 0 0") and the HEVC decoder got no frame */
+         iov[ic].iov_base  = call->data;
+         iov[ic++].iov_len = call->len;
+         PacketLength     += call->len;
+ 
+-        iov[0].iov_len = InsertPesHeader(PesHeader, -1, MPEG_VIDEO_PES_START_CODE, VideoPts, FakeStartCode);
++        iov[0].iov_len = InsertPesHeaderWithDts(PesHeader, -1, MPEG_VIDEO_PES_START_CODE, VideoPts, call->Dts, FakeStartCode);
+ 
+         return call->WriteV(call->fd, iov, ic);
+     }

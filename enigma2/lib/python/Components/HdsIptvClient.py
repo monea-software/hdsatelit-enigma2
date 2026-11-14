@@ -15,8 +15,10 @@
 #
 # Fisierul nu importa nimic din enigma2: probele de pe PC il folosesc ca atare, cu un server propriu pe 127.0.0.1.
 
+import base64
 import json
 import os
+import re
 import socket
 import ssl
 import subprocess
@@ -62,6 +64,7 @@ E_PAROLA = N_("Scrie parola primită de la furnizor.")
 E_FORMA_MAC = N_("Adresa MAC nu este bună. Se scrie așa: 00:1A:79:12:34:56.")
 E_PREA_MULTE = N_("Ai ajuns la numărul cel mai mare de surse. Șterge una ca să poți adăuga alta.")
 E_DEMO = N_("Lista demo nu s-a putut descărca. Verifică internetul și încearcă din nou.")
+E_DEMO_LIPSA = N_("Lista demo nu este încă în feedul imaginii. Încearcă din nou mai târziu.")
 E_CONEXIUNI = N_("Sunt prea multe conexiuni deschise pe acest abonament. Oprește redarea pe celălalt aparat și încearcă din nou.")
 E_CANAL_LIPSA = N_("Canalul nu mai este la această adresă. Furnizorul l-a scos sau l-a mutat.")
 E_PREA_MULTE_CERERI = N_("S-au făcut prea multe cereri către server. Mai încearcă peste puțin.")
@@ -539,6 +542,117 @@ def _stareCont(s):
 	return None
 
 
+# 0.7.5 (IPI): starea contului Xtream aratata omului (Screens/IptvSetup.py, web /api/iptv-cont). Se cere NUMAI cand omul deschide IPTV
+# pe televizor sau in web (config.usage.hds_iptv_cont), niciodata in fundal; raspunsul se tine minte un minut pe sursa.
+T_CONT_ACTIV = N_("Contul e activ până la %s (%s).")
+T_CONT_ACTIV_FARA_DATA = N_("Contul e activ, fără dată de expirare.")
+T_CONT_EXPIRAT = N_("Contul a expirat la %s.")
+T_CONT_OPRIT = N_("Contul e oprit la furnizor (%s).")
+T_CONT_REFUZAT = N_("Serverul nu mai primește utilizatorul și parola.")
+T_CONT_ZILE = N_("încă %d zile")
+T_CONT_ZILE_DE = N_("încă %d de zile")
+T_CONT_O_ZI_INTREAGA = N_("încă o zi")
+T_CONT_O_ZI = N_("mai puțin de o zi")
+T_CONT_CONEXIUNI = N_("Conexiuni: %d folosite acum din %d.")
+T_CONT_PROBA = N_("Cont de probă.")
+PASTRARE_CONT_S = 60
+_conturi = {}
+
+
+def stareContDinInfo(info, acum=None):
+	"""user_info (player_api.php) -> {"stare": activ|expirat|oprit|refuzat, "expira", "active", "maxim", "proba"}. Fara date de acces."""
+	acum = time.time() if acum is None else acum
+	if not isinstance(info, dict):
+		return {"stare": "necunoscut"}
+
+	def _int(cheie):
+		try:
+			return max(0, int(info.get(cheie) or 0))
+		except (TypeError, ValueError):
+			return 0
+	rez = {"expira": _int("exp_date"), "active": _int("active_cons"), "maxim": _int("max_connections"),
+		"proba": str(info.get("is_trial", "0")).strip() in ("1", "true", "True")}
+	stare = str(info.get("status") or "Active").strip().lower()
+	if str(info.get("auth", "1")) != "1":
+		rez["stare"] = "refuzat"
+	elif 0 < rez["expira"] <= acum or stare == "expired":
+		rez["stare"] = "expirat"
+	elif stare not in ("active", "activ"):
+		rez["stare"] = "oprit"
+		rez["stare_server"] = stare[:20]
+	else:
+		rez["stare"] = "activ"
+	return rez
+
+
+def textStareCont(d, acum=None):
+	"""Propozitia pentru om (o singura linie), din stareContDinInfo; "" cand nu se stie nimic."""
+	acum = time.time() if acum is None else acum
+	stare = (d or {}).get("stare")
+	data = time.strftime("%d.%m.%Y %H:%M", time.localtime(d["expira"])) if (d or {}).get("expira") else ""
+	if stare == "refuzat":
+		return _tradus(T_CONT_REFUZAT)
+	if stare == "expirat":
+		return _tradus(T_CONT_EXPIRAT) % (data or "?")
+	if stare == "oprit":
+		parti = [_tradus(T_CONT_OPRIT) % d.get("stare_server", "")]
+	elif stare == "activ":
+		if data:
+			zile = int((d["expira"] - acum) // 86400)
+			if zile < 1:
+				rest = _tradus(T_CONT_O_ZI)
+			elif zile == 1:
+				rest = _tradus(T_CONT_O_ZI_INTREAGA)
+			else:
+				# romana: 2-19 zile, 20 de zile, 101 zile, 120 de zile
+				rest = _tradus(T_CONT_ZILE_DE if zile % 100 >= 20 or (zile >= 100 and zile % 100 == 0) else T_CONT_ZILE) % zile
+			parti = [_tradus(T_CONT_ACTIV) % (data, rest)]
+		else:
+			parti = [_tradus(T_CONT_ACTIV_FARA_DATA)]
+	else:
+		return ""
+	if d.get("maxim"):
+		parti.append(_tradus(T_CONT_CONEXIUNI) % (d.get("active") or 0, d["maxim"]))
+	if d.get("proba"):
+		parti.append(_tradus(T_CONT_PROBA))
+	return " ".join(parti)
+
+
+def stareContXtream(s, proaspat=False):
+	"""Intreaba serverul (o cerere mica, 64 KB, termenul unei adrese de canal). -> dict de mai sus sau None (nu e Xtream, oprita,
+	serverul nu raspunde). Ruleaza pe un fir al apelantului, nu pe firul TV."""
+	if not isinstance(s, dict) or s.get("fel") != "xtream":
+		return None
+	try:
+		from Components.config import config
+		if not config.usage.hds_iptv_cont.value:
+			return None
+	except (AttributeError, KeyError, ImportError):
+		pass
+	sid = str(s.get("id") or "")
+	vechi = _conturi.get(sid)
+	if vechi and not proaspat and time.time() - vechi[0] < PASTRARE_CONT_S:
+		return vechi[1]
+	try:
+		date = _json(_apiXtream(s.get("baza") or _baze(s.get("server") or "")[0], s.get("utilizator") or "", s.get("parola") or "",
+			maxim=65536, termen=TERMEN_ADRESA_S, antete=anteteSursa(s)), E_NU_E_CONT)
+	except EroareIptv as e:
+		if e.mesaj == E_REFUZ:
+			rez = {"stare": "refuzat"}
+		else:
+			return None
+	except (OSError, ValueError, TypeError):
+		return None
+	else:
+		rez = stareContDinInfo(date.get("user_info") if isinstance(date, dict) else None)
+		if rez.get("stare") == "necunoscut":
+			return None
+	_conturi[sid] = (time.time(), rez)
+	if len(_conturi) > 32:
+		_conturi.pop(next(iter(_conturi)))
+	return rez
+
+
 def mesajRedare(s, mesaj):
 	if mesaj not in (E_REFUZ, E_NU_RASPUNDE):
 		return mesaj
@@ -665,8 +779,11 @@ def aduceXtream(s):
 		grupa = categorii.get(str(f.get("category_id")), "")
 		if not filtru.primeste(grupa, "l" + sid, len(canale) >= I.MAX_CANALE):
 			continue
-		canale.append(["l" + sid, nume, grupa, "",
-			{"tvg_id": str(f.get("epg_channel_id") or "")[:256], "logo": str(f.get("stream_icon") or "")[:I.MAX_ADRESA]}])
+		meta = {"tvg_id": str(f.get("epg_channel_id") or "")[:256], "logo": str(f.get("stream_icon") or "")[:I.MAX_ADRESA]}
+		zile = zileArhiva(f)
+		if zile:
+			meta["arhiva"] = zile  # 0.7.5 (IPI): emisiunile trecute (Screens/HdsIptvArhiva.py)
+		canale.append(["l" + sid, nume, grupa, "", meta])
 	if not canale and not filtru.grupe:
 		raise EroareIptv(E_FARA_CANALE)
 	del fluxuri
@@ -738,11 +855,133 @@ def xtreamAdresa(s, cheie):
 	cont = "%s/%s" % (quote(s.get("utilizator") or "", safe=""), quote(s.get("parola") or "", safe=""))
 	if cheie[0] == "l" and _idNumeric(cheie[1:]) is not None:
 		return "%s/live/%s/%s.%s" % (baza, cont, cheie[1:], s.get("format") or "ts")
+	arhiva = desparteArhiva(cheie)
+	if arhiva is not None:
+		# <baza>/timeshift/<utilizator>/<parola>/<minute>/<AAAA-LL-ZZ:HH-MM>/<id>.<format>; ora e cea scrisa de server (ora lui)
+		flux, (an, luna, zi, ora, minut), minute = arhiva
+		return "%s/timeshift/%s/%d/%s-%s-%s:%s-%s/%s.%s" % (baza, cont, minute, an, luna, zi, ora, minut, flux, s.get("format") or "ts")
 	if cheie[0] in ("v", "e"):
 		sid, _punct, ext = cheie[1:].partition(".")
 		if _idNumeric(sid) is not None and ext.isalnum() and len(ext) <= 5:
 			return "%s/%s/%s/%s.%s" % (baza, "series" if cheie[0] == "e" else "movie", cont, sid, ext)
 	return None
+
+
+# ------------------------------------------------------------------ arhiva (0.7.5, IPI): emisiunile trecute ale canalelor Xtream
+# Furnizorul tine o arhiva pe canalele cu tv_archive=1 (tv_archive_duration zile). Lista emisiunilor din arhiva se cere NUMAI cand omul
+# deschide „Emisiunile trecute” (Screens/HdsIptvArhiva.py, web /api/iptv-arhiva), pe un fir: get_simple_data_table da emisiunile cu
+# has_archive=1. O emisiune se reda prin releu (Components/HdsIptvAdrese.py) cu cheia a<id>-<AAAALLZZHHMM>-<minute>; adresa adevarata
+# (/timeshift/...) o face xtreamAdresa, cu ora de inceput SCRISA DE SERVER (campul „start”, ora lui), nu socotita pe receptor: altfel o
+# zona orara diferita muta emisiunea. Parola nu intra in referinta. Optional: config.usage.hds_iptv_arhiva (Da din fabrica).
+_CHEIE_ARHIVA = re.compile(r"^a(\d{1,12})-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})-(\d{1,4})$")
+_START_SERVER = re.compile(r"^\s*(\d{4})-\s?(\d{1,2})-(\d{1,2})[ T:\-](\d{1,2})[:\-](\d{1,2})")
+MAX_MINUTE_ARHIVA = 1440
+MAX_PROGRAME_ARHIVA = 400
+
+
+def zileArhiva(f):
+	"""Zilele de arhiva ale unui canal din get_live_streams (tv_archive=1 si tv_archive_duration > 0), altfel 0."""
+	if not isinstance(f, dict) or str(f.get("tv_archive") or "0").strip() != "1":
+		return 0
+	try:
+		return max(0, min(int(str(f.get("tv_archive_duration") or "0").strip() or 0), 60))
+	except (TypeError, ValueError):
+		return 0
+
+
+def cheieArhiva(flux, start_server, minute):
+	"""Cheia unei emisiuni din arhiva. flux: id-ul canalului (fara „l”); start_server: campul „start” al serverului
+	(„2026-11-13 19:00:00”); minute: cat tine. -> cheia sau None."""
+	m = _START_SERVER.match(str(start_server or ""))
+	if _idNumeric(flux) is None or m is None:
+		return None
+	an, luna, zi, ora, minut = (int(x) for x in m.groups())
+	if not (1 <= luna <= 12 and 1 <= zi <= 31 and 0 <= ora <= 23 and 0 <= minut <= 59):
+		return None
+	try:
+		minute = max(1, min(int(minute), MAX_MINUTE_ARHIVA))
+	except (TypeError, ValueError):
+		return None
+	return "a%s-%04d%02d%02d%02d%02d-%d" % (flux, an, luna, zi, ora, minut, minute)
+
+
+def desparteArhiva(cheie):
+	"""cheia a... -> (id, (an, luna, zi, ora, minut) ca text, minute) sau None."""
+	m = _CHEIE_ARHIVA.match(cheie or "")
+	if m is None:
+		return None
+	minute = int(m.group(7))
+	if not 1 <= minute <= MAX_MINUTE_ARHIVA:
+		return None
+	return m.group(1), m.group(2, 3, 4, 5, 6), minute
+
+
+def eArhiva(cheie):
+	return desparteArhiva(cheie) is not None
+
+
+def _text64(v):
+	"""Titlurile si descrierile din get_simple_data_table vin in base64; unele servere le dau direct."""
+	v = str(v or "").strip()
+	if not v:
+		return ""
+	try:
+		t = base64.b64decode(v, validate=True).decode("utf-8")
+		if t and "\x00" not in t:
+			v = t
+	except (ValueError, TypeError, UnicodeDecodeError):
+		pass
+	v = "".join(c if ord(c) >= 32 and ord(c) != 127 else " " for c in v)
+	return " ".join(v.split())[:600]
+
+
+def _ts(v):
+	try:
+		v = int(str(v or "").strip())
+		return v if v > 0 else None
+	except (TypeError, ValueError):
+		return None
+
+
+def programeDinTabel(date, flux, acum=None):
+	"""Raspunsul get_simple_data_table -> emisiunile din arhiva, cea mai noua intai: [{"inceput", "sfarsit" (secunde UTC), "titlu",
+	"descriere", "cheie", "acum" (emisiunea de acum, de la inceput)}]. Numai cele cu has_archive=1, inceput in trecut."""
+	acum = time.time() if acum is None else acum
+	lista = date.get("epg_listings") if isinstance(date, dict) else None
+	rez = []
+	for p in lista if isinstance(lista, list) else ():
+		if not isinstance(p, dict) or str(p.get("has_archive") or "0").strip() != "1":
+			continue
+		inceput, sfarsit = _ts(p.get("start_timestamp")), _ts(p.get("stop_timestamp"))
+		if inceput is None or sfarsit is None or sfarsit <= inceput or inceput >= acum:
+			continue
+		cheie = cheieArhiva(flux, p.get("start"), (sfarsit - inceput + 59) // 60)
+		if cheie is None:
+			continue
+		rez.append({"inceput": inceput, "sfarsit": sfarsit, "titlu": _text64(p.get("title")), "descriere": _text64(p.get("description")),
+			"cheie": cheie, "acum": sfarsit > acum})
+	rez.sort(key=lambda p: -p["inceput"])
+	return rez[:MAX_PROGRAME_ARHIVA]
+
+
+def arhivaActiva():
+	try:
+		from Components.config import config
+		return bool(config.usage.hds_iptv_arhiva.value)
+	except (AttributeError, KeyError, ImportError):
+		return True
+
+
+def programeArhiva(s, cheie_canal):
+	"""Emisiunile din arhiva ale unui canal Xtream (cheia l<id>). Cere serverul: numai pe un fir, numai cand omul a deschis lista.
+	-> lista de mai sus. Arunca EroareIptv (serverul nu raspunde, contul)."""
+	if not isinstance(s, dict) or s.get("fel") != "xtream" or not cheie_canal or cheie_canal[0] != "l":
+		return []
+	flux = _idNumeric(cheie_canal[1:])
+	if flux is None:
+		return []
+	date = dateXtream(dict(s, baza=s.get("baza") or _baze(s.get("server") or "")[0]), "get_simple_data_table", {"stream_id": flux})
+	return programeDinTabel(date, flux)
 
 
 # ------------------------------------------------------------------ Stalker
@@ -941,18 +1180,45 @@ PACHET_DEMO = "enigma2-plugin-extensions-hds-lista-demo"
 TERMEN_OPKG_S = 180
 
 
+# Grupele listei demo sunt tarile (si „Uniunea Europeană”), scrise in romana in pachet; aici sunt marcate pentru po, ca imaginea sa le
+# arate in limba receptorului (tarile au deja traducerea din HdsOperatoriSatelit.NUME_TARI). O grupa noua in lista = un rand aici.
+GRUPE_DEMO = (N_("Uniunea Europeană"),)
+TARI_DEMO = (N_("Spania"), N_("Danemarca"), N_("Islanda"), N_("Suedia"), N_("Finlanda"), N_("Letonia"), N_("Cehia"), N_("Croația"),
+	N_("Bulgaria"), N_("Luxemburg"), N_("Franța"), N_("Italia"), N_("Germania"), N_("Austria"), N_("Belgia"), N_("Țările de Jos"),
+	N_("Polonia"), N_("Ungaria"), N_("Grecia"), N_("Portugalia"), N_("Irlanda"), N_("România"))
+
+
+def _tradus(text):
+	try:
+		return _(text)  # noqa: F821 (gettext-ul pus de enigma2 in builtins)
+	except NameError:
+		return text
+
+
 def instaleazaDemo():
-	"""opkg update si install: pune pachetul sau il aduce la zi. O eroare lasa lista veche, daca e."""
+	"""opkg update si install: pune pachetul sau il aduce la zi. O eroare lasa lista veche, daca e.
+	-> None (instalat sau la zi), "lipsa" (opkg update a mers, dar pachetul nu e in feed) sau "internet" (celelalte)."""
+	coduri = []
 	for argumente in (["opkg", "update"], ["opkg", "install", PACHET_DEMO]):
 		try:
 			with open(os.devnull, "wb") as nimic:
-				subprocess.call(argumente, stdout=nimic, stderr=nimic, timeout=TERMEN_OPKG_S)
+				coduri.append(subprocess.call(argumente, stdout=nimic, stderr=nimic, timeout=TERMEN_OPKG_S))
 		except (OSError, subprocess.SubprocessError) as e:
 			_jurnal("lista demo: %s" % type(e).__name__)
+			coduri.append(None)
+	if coduri[-1] == 0:
+		return None
+	try:
+		with open(os.devnull, "wb") as nimic:
+			in_liste = bool(subprocess.check_output(["opkg", "list", PACHET_DEMO], stderr=nimic, timeout=60).strip())
+	except (OSError, subprocess.SubprocessError, ValueError):
+		in_liste = True
+	motiv = "lipsa" if coduri[0] == 0 and not in_liste else "internet"
+	_jurnal("lista demo: opkg update %s, install %s, %s" % (coduri[0], coduri[-1], motiv))
+	return motiv
 
 
-def citesteDemo(cale=None):
-	"""Lista demo din pachetul din feed: {"grupe": [{"nume", "canale": [{"nume", "adresa", "pagina", "citat", "atribuire"}]}]}."""
+def _citesteFisierDemo(cale=None):
 	try:
 		with open(cale or CALE_DEMO, encoding="utf-8") as f:
 			date = json.load(f)
@@ -961,23 +1227,43 @@ def citesteDemo(cale=None):
 		return None
 
 
+def citesteDemo(cale=None):
+	"""Lista demo din pachetul din feed, gata de aratat si de pus in buchete: {"versiune", "grupe": [{"nume" (tradus), "canale": [{"nume",
+	"adresa", "pagina", "citat", "atribuire", "antete"?}]}]}. In pachet: "grupe" (le citesc toate imaginile) si "grupe_cu_antete"
+	(canale care cer antetele lor, de pilda User-Agent; numai 0.7.5+), unite aici dupa numele grupei. -> dict sau None."""
+	date = _citesteFisierDemo(cale)
+	if date is None:
+		return None
+	grupe = {}  # ordinea punerii (Python 3.7+)
+	for cheie in ("grupe", "grupe_cu_antete"):
+		for g in date.get(cheie) if isinstance(date.get(cheie), list) else ():
+			if not isinstance(g, dict) or not isinstance(g.get("canale"), list):
+				continue
+			nume = I.numeCurat(g.get("nume"))
+			grupe.setdefault(nume, []).extend(c for c in g["canale"] if isinstance(c, dict))
+	# un nume gol nu se traduce: gettext ar intoarce antetul catalogului
+	return {"versiune": str(date.get("versiune") or ""), "grupe": [{"nume": I.numeCurat(_tradus(n)) if n else "", "canale": c}
+		for n, c in grupe.items()]}
+
+
 def aduceDemo(s, cale=None):
-	if cale is None:
-		instaleazaDemo()
+	motiv = instaleazaDemo() if cale is None else None
 	date = citesteDemo(cale)
 	if date is None:
-		raise EroareIptv(E_DEMO)
+		raise EroareIptv(E_DEMO_LIPSA if motiv == "lipsa" else E_DEMO)
 	canale = []
 	vazute = {}
 	for g in date["grupe"]:
-		if not isinstance(g, dict):
-			continue
-		grupa = I.numeCurat(g.get("nume"))
-		for c in g.get("canale") or ():
-			adresa = I.fluxBun(c.get("adresa")) if isinstance(c, dict) else None
-			nume = I.numeCurat(c.get("nume")) if isinstance(c, dict) else ""
+		grupa = g["nume"]
+		for c in g["canale"]:
+			adresa = I.fluxBun(c.get("adresa"))
+			nume = I.numeCurat(c.get("nume"))
 			if adresa and nume:
-				canale.append([I.cheieDinNume(c.get("id") or "", nume, vazute), nume, grupa, adresa])
+				rand = [I.cheieDinNume(c.get("id") or "", nume, vazute), nume, grupa, adresa]
+				antete = anteteCurate(c.get("antete"))
+				if antete:
+					rand.append({"antete": antete})
+				canale.append(rand)
 	if not canale:
 		raise EroareIptv(E_FARA_CANALE)
 	return canale, {"taiate": 0, "sarite": 0, "fara_https": False}

@@ -348,7 +348,12 @@ class ConfigListScreen:
 					self["VirtualKB"].setEnabled(True)
 					self["VKeyIcon"].boolean = True
 				if "HelpWindow" in self:
-					if self["config"].getCurrent()[1].help_window.instance is not None:
+					# sub o tema straina HelpWindow e pus de HdsNumeStandard si fara desen (instance None), iar unele campuri n-au help_window:
+					# altfel interfata cadea la deschiderea ecranelor cu camp de text (AGL, 13.11.2026: Setari navigator, Beta tester, IPTV);
+					# ConfigDirectory (un ConfigText) nu-si face niciodata help_window: setarile File Commander, randul "Default folder",
+					# cadeau si sub tema noastra (asistenta 946155, 14.11.2026; in OE-Alliance aceeasi garda, help_window and ...)
+					fereastra = getattr(self["config"].getCurrent()[1], "help_window", None)
+					if fereastra is not None and fereastra.instance is not None and self["HelpWindow"].instance is not None:
 						helpwindowpos = self["HelpWindow"].getPosition()
 						from enigma import ePoint
 						self["config"].getCurrent()[1].help_window.instance.move(ePoint(helpwindowpos[0],helpwindowpos[1]))

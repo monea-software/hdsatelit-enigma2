@@ -26,3 +26,14 @@ gMainDC::~gMainDC()
 	m_instance = 0;
 }
 
+
+// HD Satelit: marimea suprafetei de desen de acum (skin.py vede asa daca driverul a refuzat rezolutia temei)
+int gMainDC::resolutionX()
+{
+	return m_pixmap ? m_pixmap->size().width() : 0;
+}
+
+int gMainDC::resolutionY()
+{
+	return m_pixmap ? m_pixmap->size().height() : 0;
+}

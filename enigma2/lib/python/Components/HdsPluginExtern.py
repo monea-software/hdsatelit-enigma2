@@ -60,6 +60,7 @@ import json
 import os
 import platform
 import re
+import sys
 import tarfile
 import threading
 import time
@@ -124,6 +125,7 @@ PLUGINURI_IMAGINE = frozenset((
 	"SystemPlugins/DiseqcTester",
 	"SystemPlugins/HdsDvbI",
 	"SystemPlugins/Hotplug",
+	"SystemPlugins/Satfinder",
 	"SystemPlugins/SkinSelector",
 	"SystemPlugins/Videomode",
 ))
@@ -302,6 +304,29 @@ def trateaza(tip, valoare, stiva, apel=None, jurnal=None):
 		# ce urmeaza dupa decizie (jurnalul, raportul, mesajul) nu are voie sa duca la repornire
 		_jurnal("dupa eroarea pluginului %s: %r" % (nume, e))
 	return nume
+
+
+def ascultatorCazut(apel):
+	"""Din `except`-ul buclei care cheama ascultatorii serviciului (Navigation.dispatchEvent, ServiceEventTracker.event),
+	cu exceptia luata. Cand stiva trece printr-un plugin extern: raportul ca din C++ (trateaza), stiva in jurnal, True, iar
+	bucla merge mai departe cu ceilalti ascultatori. Inainte, eroarea urca pana in C++ si ascultatorii de dupa pluginul cazut
+	nu mai primeau evenimentul: la zap, alegerea pistei de sunet, iesirea AC3 automata sau volumul canalului puteau lipsi
+	(GigaBlue UHD TRIO 4K, sunetul pierdut la zap odata cu eroarea VFDControl, forumul 588). Altfel False: eroarea urca,
+	ca inainte (ecranul de cadere pentru codul imaginii). Nu arunca."""
+	try:
+		tip, valoare, stiva = sys.exc_info()
+		if tip is None:
+			return False
+		nume = trateaza(tip, valoare, stiva, apel, None)
+		if not nume:
+			return False
+		stiva_text = "".join(traceback.format_exception(tip, valoare, stiva)).rstrip()
+		print("[HdsPluginExtern] %s: eroare in pluginul extern %s, ceilalti ascultatori merg mai departe" % (apel, nume))
+		print(stiva_text)
+		return True
+	except Exception as e:
+		_jurnal("ascultatorul cazut: %r" % (e,))
+		return False
 
 
 def raporteazaIncarcare(fel, nume, tip, valoare, stiva, etapa="import"):

@@ -27,6 +27,11 @@
  * procesele WebKit (care il mostenesc) au prioritate mai mica (nice 10), ca descifrarea si decodarea canalului sa nu
  * sufere; in afara modului HbbTV si pictura pe un singur fir si cel mult 25 de cadre pe secunda.
  *
+ * Scurtaturile meniului Aplicatii (0.7.5, CRM): --agent inlocuieste User-Agent-ul intreg (agentul unui televizor
+ * pentru o aplicatie), iar --script pune un fisier JavaScript (harta tastelor aplicatiei) in toate cadrele, la inceputul
+ * fiecarui document, inaintea scripturilor sitului. Amandoua merg in orice mod; cu --agent-adaugat, adaosul vine dupa
+ * agentul dat cu --agent. Aceleasi doua argumente le are si hds-chromium (al doilea motor al scurtaturilor).
+ *
  * Marginile (--margine-x/-y, 0.7.4, NB): pe /dev/fb0, in afara modului HbbTV, pagina se aseaza in dreptunghiul din
  * interiorul marginilor (ca ecranele temei HD Satelit: 72 si 40 de puncte la 1920x1080); lansatorul nu scrie nimic in
  * margini, unde ramane fereastra enigma2 desenata inainte de „arata”. Tot ce scrie lansatorul (pagina, chenarul,
@@ -202,6 +207,8 @@ static struct {
     char *cache;
     gboolean hbbtv;
     char *agent_adaugat;
+    char *agent;
+    char *script;
     char *utilizator;
     gboolean chenar;
     char *chenar_culoare;
@@ -251,6 +258,8 @@ static GOptionEntry intrari_optiuni[] = {
     { "cache", 0, 0, G_OPTION_ARG_FILENAME, &opt.cache, "Dosarul cache-ului (implicit <date>/cache)", "CALE" },
     { "hbbtv", 0, 0, G_OPTION_ARG_NONE, &opt.hbbtv, "Modul HbbTV: fundal transparent, tastele HbbTV, constantele VK_*", NULL },
     { "agent-adaugat", 0, 0, G_OPTION_ARG_STRING, &opt.agent_adaugat, "Text adaugat la sfarsitul User-Agent-ului (partea HbbTV)", "TEXT" },
+    { "agent", 0, 0, G_OPTION_ARG_STRING, &opt.agent, "User-Agent-ul intreg, in locul celui WebKit (scurtaturile meniului Aplicatii)", "TEXT" },
+    { "script", 0, 0, G_OPTION_ARG_FILENAME, &opt.script, "Script JavaScript pus in toate cadrele la inceputul fiecarui document (harta tastelor unei aplicatii)", "CALE" },
     { "utilizator", 0, 0, G_OPTION_ARG_STRING, &opt.utilizator, "Dupa deschiderea dispozitivelor, ruleaza ca acest utilizator (nu root)", "NUME" },
     { "chenar", 0, 0, G_OPTION_ARG_NONE, &opt.chenar, "Chenarul pe elementul cu focalizare, desenat de lansator peste pagina", NULL },
     { "chenar-culoare", 0, 0, G_OPTION_ARG_STRING, &opt.chenar_culoare, "Culoarea chenarului: galben (implicit), alb, verde, albastru, portocaliu, rosu, auto", "NUME" },
@@ -3403,6 +3412,29 @@ static void hbbtv_mesaj(WebKitUserContentManager *m, JSCValue *v, gpointer d)
     g_free(t);
 }
 
+/* Scriptul unei scurtaturi din meniul Aplicatii (--script, 0.7.5): harta tastelor aplicatiei, in toate cadrele, la
+ * inceputul fiecarui document. Un fisier lipsa, gol, prea mare sau care nu e UTF-8 nu opreste navigatorul: pagina merge
+ * fara el si enigma2 vede randul „AVERTISMENT script”. */
+#define SCRIPT_APLICATIE_MAXIM (512 * 1024)
+static void script_aplicatie_incarca(WebKitUserContentManager *c)
+{
+    if (!opt.script || !*opt.script)
+        return;
+    gchar *text = NULL;
+    gsize n = 0;
+    if (!g_file_get_contents(opt.script, &text, &n, NULL) || n == 0 || n > SCRIPT_APLICATIE_MAXIM ||
+        !g_utf8_validate(text, (gssize)n, NULL)) {
+        g_free(text);
+        stare("AVERTISMENT script");
+        return;
+    }
+    WebKitUserScript *s = webkit_user_script_new(text, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL);
+    webkit_user_content_manager_add_script(c, s);
+    webkit_user_script_unref(s);
+    g_free(text);
+}
+
 /* Modul HbbTV, la pornire: scriptul obiectelor, starea data pe linia de comanda si puntea. */
 static void hbbtv_strat_incarca(WebKitUserContentManager *c)
 {
@@ -4342,6 +4374,16 @@ int main(int argc, char **argv)
     WebKitSettings *setari = webkit_settings_new();
     /* In modul HbbTV aplicatia isi muta singura focalizarea cu sagetile (navigarea spatiala ar muta-o si ea). */
     webkit_settings_set_enable_spatial_navigation(setari, !opt.hbbtv);
+    if (opt.agent && *opt.agent) {
+        /* agentul intreg al unei scurtaturi (de pilda al unui televizor); fara semne de control */
+        char *agent = g_strdup(opt.agent);
+        for (char *c = agent; *c; c++) {
+            if ((guchar)*c < 0x20 || (guchar)*c == 0x7F)
+                *c = ' ';
+        }
+        webkit_settings_set_user_agent(setari, agent);
+        g_free(agent);
+    }
     if (opt.agent_adaugat && *opt.agent_adaugat) {
         /* agentul WebKit ramane intreg (siturile il cer), partea HbbTV vine la sfarsit; fara semne de control */
         char *adaugat = g_strdup(opt.agent_adaugat);
@@ -4368,6 +4410,7 @@ int main(int argc, char **argv)
         WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL);
     webkit_user_content_manager_add_script(continut, script);
     webkit_user_script_unref(script);
+    script_aplicatie_incarca(continut);
     if (opt.hbbtv) {
         WebKitUserScript *vk = webkit_user_script_new(SCRIPT_HBBTV_TASTE, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
             WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL);
@@ -4395,13 +4438,19 @@ int main(int argc, char **argv)
         webkit_user_style_sheet_unref(fara_animatie);
     }
 
+    /* autoplay (H20-AUTOPLAY): in modul HbbTV filmele aplicatiilor pornesc si cu sunet, ca la televizoare (tastele vin de la
+     * enigma2, nu ca gesturi ale omului); regula implicita a WebKit-ului (fara sunet) le pune in pauza dupa pornire */
+    WebKitWebsitePolicies *politici = webkit_website_policies_new_with_policies("autoplay",
+        opt.hbbtv ? WEBKIT_AUTOPLAY_ALLOW : WEBKIT_AUTOPLAY_ALLOW_WITHOUT_SOUND, NULL);
     vedere = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
         "web-context", context,
         "network-session", sesiune,
         "settings", setari,
         "user-content-manager", continut,
         "display", afisaj,
+        "website-policies", politici,
         NULL));
+    g_object_unref(politici);
     g_object_unref(setari);
     if (!continut_pagina)
         g_object_unref(continut);   /* in modul HbbTV ramane tinut: scriptul se schimba cat ruleaza */

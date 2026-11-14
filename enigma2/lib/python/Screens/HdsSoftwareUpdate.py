@@ -1666,6 +1666,10 @@ class HdsSoftwareUpdate(Screen):
 		self._reincarca()
 		text = textDupaReparare(reusit)
 		if text:
+			# verificarea n-a mers, a fost oprita sau a trecut termenul (HdsDiscuri.opresteLucru): ce face omul mai departe
+			if reusit is False:
+				text += "\n" + _("Dacă stickul nu se repară, pune alt stick (sau formatează-l pe calculator, cu FAT32), "
+					"copiază din nou arhiva de pe site și încearcă iar.")
 			self["detaliu"].setText(text)
 
 	# -------------------------------------------------------------- faza 2: alegere si verificare directa
@@ -1990,6 +1994,14 @@ class HdsSoftwareUpdate(Screen):
 		comanda = "%s -n %s %s" % (CALE_OFGWRITE, argumente, shlex.quote(cale_pachet))
 		# fiecare simulare are numarul ei: raspunsul uneia oprite (EXIT sau prea lunga), venit tarziu, nu mai schimba nimic
 		self._simulareNr = getattr(self, "_simulareNr", 0) + 1
+		# si simularea isi pune fereastra peste interfata ("Check only, nothing is written", "Step 1 of 2"): textele ei in
+		# limba omului (greseala 1201). ePopen nu primeste mediul, deci ofgwrite citeste fisierul scris aici
+		# (/tmp/.ofgwrite-texte); la orice eroare fisierul e sters si fereastra ramane in engleza, ca inainte
+		try:
+			from Components.HdsTexteOfgwrite import scrieTexteOfgwrite
+			scrieTexteOfgwrite()
+		except Exception as eroare:
+			print("[HdsSoftwareUpdate] textele programului de instalare (verificarea): %s" % eroare)
 		self._ecranInainte = citesteEcranul()
 		self._pornestePas(PAS_SIMULARE)
 		self._console.ePopen(comanda, self._verificareGata, ("simulare", self._simulareNr))

@@ -63,6 +63,15 @@ dom_skins = [ ]
 _surseSkin = {}
 _xmlAfisaj = set()
 
+def _citesteXml(filename):
+	# HDSatelit: si fisierele temelor cu randuri salvate in codarea veche a limbii, nu in UTF-8 (MERCUS-FHD, forum 1342):
+	# Components/HdsSkinuri.citesteXml, numai dupa refuzul lui expat; un fisier bun se citeste ca pana acum
+	try:
+		from Components.HdsSkinuri import citesteXml
+	except ImportError:
+		return xml.etree.ElementTree.parse(filename).getroot()
+	return citesteXml(filename)
+
 def loadSkin(name = None, scope = SCOPE_SKIN, desktop = None, screenID = None, filename = None):
 	# read the skin. HDSatelit: si cu numele argumentelor OE-Alliance (filename=, desktop=, screenID=), ca la pluginurile
 	# scrise pentru acele imagini; desktop/screenID nu schimba nimic aici (datele se incarca in loadSkinData)
@@ -70,7 +79,7 @@ def loadSkin(name = None, scope = SCOPE_SKIN, desktop = None, screenID = None, f
 		name = filename
 	filename = resolveFilename(scope, name)
 	mpath = path.dirname(filename) + "/"
-	radacina = xml.etree.ElementTree.parse(filename).getroot()
+	radacina = _citesteXml(filename)
 	dom_skins.append((mpath, radacina))
 	_surseSkin[id(radacina)] = name
 	return radacina
@@ -89,6 +98,15 @@ def _Tema():
 		_modulTema.append(HdsTemaExterna)
 	return _modulTema[0]
 
+def rezolutiaPrimitaDePlaca(xres, yres):
+	"""R2K 0.7.5: cere placii interfata de xres x yres si intoarce ce a primit (latime, inaltime). Driverul poate refuza
+	(hi_fb.ko pe HiSilicon nu trece de 1920x1080): atunci gFBDC ramane pe modul vechi si intoarce marimea aceea. Cand
+	placa a primit-o, setResolution din loadSingleSkinData nu mai schimba nimic. None cand nu se poate intreba."""
+	from enigma import gMainDC
+	dc = gMainDC.getInstance()
+	dc.setResolution(xres, yres)
+	return dc.resolutionX(), dc.resolutionY()
+
 def pregatesteTemaExterna(name):
 	"""Dupa loadSkin pe tema aleasa de om: includerile puse la loc, rezolutia verificata, dosarul tinut minte. O tema stricata iese din
 	lista si arunca exceptie, iar skin.py revine la HDSatelit."""
@@ -97,6 +115,8 @@ def pregatesteTemaExterna(name):
 		if radacina.find("include") is not None:
 			_Tema().puneIncluderile(radacina, mpath, resolveFilename(SCOPE_SKIN, name), resolveFilename(SCOPE_SKIN, ""))
 		_Tema().verificaRezolutia(radacina)
+		# R2K: placa primeste rezolutia temei? (hi_fb pe HiSilicon refuza peste 1920x1080; Fury-FHD pe 2K)
+		_Tema().verificaRezolutiaPlacii(radacina, rezolutiaPrimitaDePlaca)
 	except Exception:
 		dom_skins.pop()
 		raise
@@ -200,7 +220,7 @@ def loadSkinTemplates(skinTemplatesFileNames):
 	if skinTemplatesFileNames:
 		for fileName in skinTemplatesFileNames:
 			try:
-				radacina = xml.etree.ElementTree.parse(fileName).getroot()
+				radacina = _citesteXml(fileName)
 			except Exception as err:
 				skinWarning("sabloanele din %s nu s-au citit: %s" % (fileName, err))
 				continue
@@ -301,7 +321,7 @@ def fisierAfisaj(nume):
 def citesteAfisaj(nume):
 	"""Citeste un XML LCD fara sa schimbe setarea salvata sau numele ecranelor."""
 	filename = fisierAfisaj(nume)
-	radacina = xml.etree.ElementTree.parse(filename).getroot()
+	radacina = _citesteXml(filename)
 	if radacina.tag != "skin" or not radacina.findall("screen"):
 		raise ValueError("fisierul nu contine ecrane de afisaj")
 	for tip in ("output", "windowstyle"):
@@ -411,6 +431,10 @@ config.skin.layout_meniu = ConfigSelection(default="lista", choices=[("lista", "
 # tema interfetei web (config.plugins.hdswebcontrol.tema_web). Valorile raman identificatori, ca layout_meniu.
 config.skin.tema_tv = ConfigSelection(default="clasic", choices=[("clasic", "clasic"), ("pro", "pro")])
 TEMA_PRO_FISIER = "HDSatelit/skin_pro.xml"
+# HDSatelit 0.7.5: rezolutia interfetei temei HD Satelit, 1080p sau 2K (2560x1440, numai unde placa poate). Tema ramane
+# scrisa pe 1920x1080; la 2K loadSkinData face ecranul final 2560x1440 si ScaraEcran o scaleaza. Logica, ecranul si
+# pagina: Components/HdsRezolutieTv.py. Valorile raman identificatori, ca layout_meniu.
+config.skin.rezolutie_tv = ConfigSelection(default="1080", choices=[("1080", "1080"), ("1440", "1440")])
 
 profile("LoadSkin")
 # HDSatelit: in the safe mode started by enigma2.sh (HDS_MOD_SIGUR=1, Components/HdsModSigur.py) the user additions in
@@ -447,7 +471,7 @@ try:
 except Exception as err:
 	skinAles, _skinRefuz = None, None
 	skinWarning("alegerea skinului nu s-a putut citi, ramane HDSatelit: %s" % err)
-if _skinRefuz:
+if _skinRefuz and not _HdsSkinuri.pastreazaAlegerea(_skinRefuz):
 	config.skin.primary_skin.value = _HdsSkinuri.SKIN_IMAGINE
 	config.skin.primary_skin.save()
 
@@ -504,9 +528,11 @@ if skinAles is not None:
 		for _mpath, _r in dom_skins[_inaintePartilor:]:
 			dosareSkinStraine.discard(_mpath)
 		del dom_skins[_inaintePartilor:]
-		_HdsSkinuri.incarcareCazuta(skinAles, err)
-		config.skin.primary_skin.value = _HdsSkinuri.SKIN_IMAGINE
-		config.skin.primary_skin.save()
+		_refuzTema = _HdsSkinuri.incarcareCazuta(skinAles, err)
+		# R2K: la rezolutia pe care placa n-o primeste tema ramane aleasa (revine singura cand isi schimba fisierul)
+		if not _HdsSkinuri.pastreazaAlegerea(_refuzTema):
+			config.skin.primary_skin.value = _HdsSkinuri.SKIN_IMAGINE
+			config.skin.primary_skin.save()
 		# omul revine la tema HD Satelit cu varianta aleasa de el (Clasic sau Pro), chiar de la pornirea asta
 		try:
 			if temaProDeIncarcat():
@@ -642,7 +668,8 @@ def _relativFataDeParinte(s, obiect, desktop, size):
 #   itemHeight si orice *Height: sy;  orice *Width (borderWidth...) si *Padding: sf;  colposition: sx;
 #   o marime sau o grosime mai mare ca 0 nu ajunge 0; rotunjirea e la cel mai apropiat intreg;
 #   pixmap, backgroundPixmap, selectionPixmap: imaginea se incarca la marimea ei inmultita ("#size=LxI" citit de
-#     loadPixmap, prin ePicLoad), deci si iconitele mai mici decat cutia lor raman proportionale;
+#     loadPixmap, prin ePicLoad), deci si iconitele mai mici decat cutia lor raman proportionale; o poza marita care
+#     are pereche in HDSatelit/2k/ (pictogramele desenate din vectori, la 4/3) se ia de acolo (imagine2k);
 #   TemplatedMultiContent: pos=(x, y), size=(l, i), gFont("Nume", marime), "itemHeight": n, "itemWidth": n,
 #     border_width=n si inaltimea sabloanelor cu nume ("nume": (n, [...])); font=, text=, png=, culorile si steagurile
 #     raman.
@@ -1106,6 +1133,42 @@ def marimeImagine(cale):
 _pixmapuriScalate = { }
 _incarcator = [ ]
 
+DOSAR_2K = "2k"
+
+def imagine2k(cale):
+	"""0.7.5: perechea 2K a unei poze din dosarul HDSatelit (HDSatelit/2k/<aceeasi cale>), sau None. Uneltele care
+	deseneaza pozele temei din vectori (receptor/skin/tools: pictogramele meniului si ale retelei, volumul, sigla Pro)
+	scriu si setul 2K, la 4/3 (marimea lui ScaraEcran la 2560x1440); celelalte poze nu au pereche si se maresc."""
+	if not _imagineDinHds(cale):
+		return None
+	try:
+		rel = path.relpath(path.normpath(cale), DOSAR_HDS)
+	except ValueError:
+		return None
+	if rel.split(path.sep, 1)[0] == DOSAR_2K:
+		return None
+	c = path.join(DOSAR_HDS, DOSAR_2K, rel)
+	return c if path.isfile(c) else None
+
+def caleLaEcran(cale):
+	"""calea unei poze HDSatelit de dat unui cod care o scaleaza singur la cutia lui (Picon: picon_default.png): cand
+	ecranele HDSatelit se maresc (tema la 2K), perechea din HDSatelit/2k/ daca exista, altfel `cale`"""
+	scara = _scaraHds[0]
+	if scara is not None and scara.scaleaza and scara.sx[0] > scara.sx[1]:
+		return imagine2k(cale) or cale
+	return cale
+
+def pozaHds(cale, desktop = None):
+	"""pixmapul unei poze HDSatelit incarcate din cod (fara skin, deci fara ScaraEcran.imagine), la marimea ecranelor
+	HDSatelit de acum: la 2K marita de 4/3 (din perechea 2K cand exista), la 1920x1080 asa cum e. None daca lipseste."""
+	scara = _scaraHds[0]
+	if scara is not None and scara.scaleaza and _imagineDinHds(cale):
+		m = marimeImagine(cale)
+		ptr = m and incarcaPixmapScalat(cale, _marime(m[0], scara.sx), _marime(m[1], scara.sy), desktop)
+		if ptr is not None:
+			return ptr
+	return LoadPixmap(cale, desktop, True) if fileExists(cale) else None
+
 def incarcaPixmapScalat(cale, w, h, desktop = None):
 	"""imaginea `cale` la marimea w x h (ePicLoad, pe loc), tinuta minte; None la orice eroare (atunci se ia imaginea
 	asa cum e). Aspectul dat lui setPara, (h * latime) / (inaltime * w), face ca resizePic sa umple exact w x h si cand
@@ -1115,6 +1178,12 @@ def incarcaPixmapScalat(cale, w, h, desktop = None):
 		return _pixmapuriScalate[cheie]
 	ptr = None
 	m = marimeImagine(cale)
+	# o poza a temei HDSatelit marita (tema la 2K): perechea desenata din vectori in HDSatelit/2k/, cand exista
+	if m is not None and (w > m[0] or h > m[1]):
+		c2k = imagine2k(cale)
+		m2k = c2k and marimeImagine(c2k)
+		if m2k and m2k[0] > m[0]:
+			cale, m = c2k, m2k
 	if m is not None and w > 0 and h > 0:
 		try:
 			if m == (w, h):
@@ -1855,8 +1924,21 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 					get_attr = res.attrib.get
 					xres = int(get_attr("xres") or 720)
 					yres = int(get_attr("yres") or 576)
+					# un fisier HDSatelit scalat (tema straina, sau 2K ales: rezolutiaTemeiHds) pune ecranul final, nu
+					# grila lui de 1920x1080; altfel l-ar strica pe cel cerut deja de loadSkinData
+					if scara is not None and dinHds:
+						xres, yres = scara.ecran
 					from enigma import gMainDC
-					gMainDC.getInstance().setResolution(xres, yres)
+					dc = gMainDC.getInstance()
+					dc.setResolution(xres, yres)
+					# R2K: desktopul ia marimea primita de placa (driverul poate refuza una mai mare: hi_fb pe HiSilicon)
+					try:
+						px, py = dc.resolutionX(), dc.resolutionY()
+						if px > 0 and py > 0 and (px, py) != (xres, yres):
+							skinWarning("%s: placa a refuzat %dx%d, interfata ramane %dx%d" % (path_prefix, xres, yres, px, py))
+							xres, yres = px, py
+					except AttributeError:
+						pass
 					desktop.resize(eSize(xres, yres))
 		except Exception as e:
 			skinWarning("%s: output: %s" % (path_prefix, e))
@@ -2016,6 +2098,26 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 		except Exception as e:
 			skinWarning("%s: window style: %s" % (path_prefix, e))
 
+def rezolutiaTemeiHds(final, poate=None):
+	"""Ecranul final al interfetei cu tema HD Satelit aleasa: 2560x1440 cand omul a ales 2K si placa l-a primit
+	(Components/HdsRezolutieTv.py), altfel `final` (rezolutia din <output>). Cu o tema straina aleasa nu se schimba
+	nimic: ea isi spune rezolutia. La refuz alegerea revine singura pe 1080p. Pune si SystemInfo["HdsRezolutie2K"]."""
+	from Components import HdsRezolutieTv as R
+	try:
+		if skinPornit == _HdsSkinuri.SKIN_IMAGINE and (final is None or final == bazaHds()):
+			cerut = R.deCerutLaPornire(True, config)
+			if cerut:
+				primit = (poate or rezolutiaPrimitaDePlaca)(cerut[0], cerut[1])
+				if R.dupaRaspunsPlaca(cerut, primit, config, intreaba=poate or rezolutiaPrimitaDePlaca):
+					skinNotice("tema HD Satelit la %dx%d (2K ales)" % cerut)
+					final = cerut
+		else:
+			R.deCerutLaPornire(False, config)
+	except Exception as e:
+		skinWarning("rezolutia 2K a temei HD Satelit: %s" % e)
+	R.actualizeazaSystemInfo(config)
+	return final
+
 def loadSkinData(desktop):
 	skins = dom_skins[:]
 	skins.reverse()
@@ -2024,6 +2126,7 @@ def loadSkinData(desktop):
 	final = None
 	for (p, dom_skin) in skins:
 		final = rezolutieOutput(dom_skin) or final
+	final = rezolutiaTemeiHds(final)
 	scara = None
 	if final is not None and final != bazaHds():
 		scara = ScaraEcran(bazaHds(), final)

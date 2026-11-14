@@ -1246,6 +1246,11 @@ eTSMPEGDecoder::eTSMPEGDecoder(eDVBDemux *demux, int decoder)
 		m_vpid(-1), m_vtype(-1), m_apid(-1), m_atype(-1), m_pcrpid(-1), m_textpid(-1),
 		m_changed(0), m_decoder(decoder), m_video_clip_fd(-1), m_showSinglePicTimer(eTimer::create(eApp))
 {
+#if HAVE_HISILICON
+	/* NULL: a decoder only for the still picture of a channel that starts no decoder (eDVBServicePlay::hdsEcranNegru,
+	   lib/service/servicedvb.cpp): it never gets a PID, so setState never makes a video, audio or PCR object on it */
+	if (demux)
+#endif
 	demux->connectEvent(sigc::mem_fun(*this, &eTSMPEGDecoder::demux_event), m_demux_event_conn);
 	CONNECT(m_showSinglePicTimer->timeout, eTSMPEGDecoder::finishShowSinglePic);
 	m_state = stateStop;

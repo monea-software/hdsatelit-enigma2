@@ -228,14 +228,19 @@ class _Pregatire(object):
 				b = P.baza()
 				self._lucru = self.index.aplica_treptat(masurari_curente(), b.trasaturi(), b.versiune,
 					P.limba_receptor(), P.nume_limba)
-				# feliile la cativa ms una de alta: intre ele bucla enigma2 ia tastele si deseneaza
-				self._ceas.start(4, False)
+				# 0.7.5 (PRN): feliile la cativa ms una de alta, fiecare pornita abia DUPA ce s-a terminat cea dinainte
+				# (ceas cu o singura bataie, pornit din nou mai jos). Un ceas repetat de 4 ms cu felii de 12 ms ramanea
+				# mereu in urma (lib/base/ebase.cpp, eTimer::activate: nextActivation += interval), iar bucla enigma2 il
+				# chema iar si iar fara sa mai citeasca tastele: cu 39120 de canale, 6,5 s fara telecomanda la
+				# 82 s dupa pornire, masurat de HdsPaznic punctul 10. Acum intre felii bucla ia tastele si deseneaza.
+				self._ceas.stop()
 			# cel putin o bucata pe bataie, apoi cat mai incape in FELIE_S
 			capat = _timp() + FELIE_S
 			while True:
 				next(self._lucru)
 				if _timp() >= capat:
 					break
+			self._ceas.start(4, True)
 		except StopIteration:
 			self._sfarsit(self.index)
 		except Exception as e:
@@ -264,8 +269,10 @@ _ceasIncalzire = []
 
 
 def _timp():
+	# 0.7.5 (PRN): ceasul monoton; ora de perete sare la NTP (SF8008 n-are ceas cu baterie) si o felie intinsa pe o
+	# sarire inapoi ar tine firul principal pana se termina tot indexul
 	import time
-	return time.time()
+	return time.monotonic()
 
 
 def _fir_implicit(functie):

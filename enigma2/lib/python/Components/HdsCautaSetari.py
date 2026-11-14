@@ -128,6 +128,8 @@ REGISTRU = {
 			N_("parolă aplicații telefon telecomandă")),
 		(N_("Acces din afara casei"), "config.plugins.hdswebcontrol.aplicatii_afara",
 			N_("internet router port parolă aplicații telefon")),
+		(N_("Actualizarea imaginii pe prima pagină web"), "config.plugins.hdswebcontrol.captura_interval",
+			N_("captură ecran secunde reîmprospătare")),
 	),
 	"time_setup": (        # Screens/Time.py
 		(N_("Fus orar"), "config.timezone.val", ""),
@@ -143,6 +145,7 @@ REGISTRU = {
 		(N_("Mărirea paginii"), "config.plugins.hdsnavigator.marire", ""),
 		(N_("Mărimea minimă a literelor"), "config.plugins.hdsnavigator.font_minim", ""),
 		(N_("Desenul paginii"), "config.plugins.hdsnavigator.desen", ""),
+		(N_("Televizorul pentru YouTube"), "config.plugins.hdsnavigator.agent_tv", ""),   # 0.7.5, APL
 		(N_("Chenarul pe selecție"), "config.plugins.hdsnavigator.chenar", ""),
 		# 0.2.7: stilul chenarului; pe ecran numai cu chenarul pornit (viteza numai cu pulsul pornit)
 		(N_("Culoarea chenarului"), "config.plugins.hdsnavigator.chenar_culoare", ""),
@@ -613,6 +616,11 @@ class Intrare(object):
 		"""Cheia dupa care doua rezultate sunt acelasi lucru (randurile aceluiasi ecran de setari sub doua intrari)."""
 		if self.fel == "rand" and self.setup:
 			return ("setup", self.setup, self.setare)
+		# copie="<entryID>" in menu.xml: aceeasi intrare pusa si in locul din meniul standard (Setări > Tunere și scanare,
+		# Control parental in Acces condiționat); se arata o singura data, cu drumul gasit primul
+		copie = self.nod.get("copie") if self.fel == "intrare" and self.nod is not None else None
+		if copie:
+			return ("cheie", "m:" + copie)
 		return ("cheie", self.cheie)
 
 	def drumText(self, tr=None):

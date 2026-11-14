@@ -36,6 +36,10 @@ from Components import HdsAsistentaControl as Control
 
 GRAB = "/usr/bin/grab"
 CAPTURA_TERMEN_S = 8
+# Cu navigatorul deschis (HbbTV sau web, WebKit desenat pe procesor, de pilda pe Solo4K) grab-ul poate dura mai mult:
+# pana la CAPTURA_TERMEN_NAVIGATOR_S, pe firul sesiunii asistentei, nu pe firul enigma2 (interfata si tastele
+# navigatorului nu stau dupa el). Hotararea coordonatorului (12.11.2026), dupa „captura nu s-a putut face acum” la olo.
+CAPTURA_TERMEN_NAVIGATOR_S = 15
 # captura: JPEG mic pentru a ramane sub plafonul brokerului
 CAPTURA_LATIME = 960
 CAPTURA_CALITATE = 70
@@ -274,10 +278,22 @@ def _stivaAcum():
 	return Control.stiva(s) if s is not None else []
 
 
+def _navigatorDeschis():
+	"""Randul navigatorului deschis peste ecran (HbbTV sau web), sau "": e un proces separat, stiva nu il vede."""
+	try:
+		from Plugins.Extensions.HdsNavigator import lansator
+		return lansator.textAsistenta()
+	except Exception as e:
+		_jurnal("navigatorul: %r" % (e,))
+		return ""
+
+
 def _ecranText():
-	"""Textul ecranului (op "ecran"), citit pe firul enigma2."""
+	"""Textul ecranului (op "ecran"), citit pe firul enigma2; cu navigatorul deschis, intai randul lui."""
 	def lucru(gata):
-		gata(Control.textEcran(_stivaAcum(), Control.modAscii()))
+		text = Control.textEcran(_stivaAcum(), Control.modAscii())
+		nav = _navigatorDeschis()
+		gata(nav + "\n" + text if nav else text)
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
@@ -336,30 +352,65 @@ def _text(text):
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
+def _grab(termen_s, navigator=""):
+	"""Octetii JPEG ai capturii (video si OSD), sau None; la esec scrie motivul in jurnalul interfetei
+	(hds-interfata.log): termenul depasit, iesirea goala (cu codul) sau eroarea pornirii."""
+	cu = " (navigatorul deschis)" if navigator else ""
+	try:
+		p = subprocess.Popen([GRAB, "-q", "-s", "-j", str(CAPTURA_CALITATE), "-r", str(CAPTURA_LATIME)],
+			stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+	except Exception as e:
+		_jurnal("captura nereusita%s: grab nu porneste: %r" % (cu, e))
+		return None
+	try:
+		rez, _err = p.communicate(timeout=termen_s)
+	except subprocess.TimeoutExpired:
+		p.kill()
+		p.communicate()
+		_jurnal("captura nereusita%s: grab a depasit %d s" % (cu, termen_s))
+		return None
+	if not rez:
+		_jurnal("captura nereusita%s: grab nu a dat nimic (cod %s)" % (cu, p.returncode))
+		return None
+	return rez
+
+
 def _captura():
-	"""Video si OSD, cu datele conturilor scoase numai din copia pentru echipa, pe firul enigma2."""
+	"""Video si OSD, cu datele conturilor scoase numai din copia pentru echipa. Fara navigator: totul pe firul enigma2,
+	ca pana acum (CAPTURA_TERMEN_S). Cu navigatorul deschis: grab-ul pe firul sesiunii, pana la
+	CAPTURA_TERMEN_NAVIGATOR_S, iar pe firul enigma2 numai curatarea (stiva ecranelor)."""
+	navigator = _navigatorDeschis()
+	if navigator:
+		if _session() is None:
+			return "(captura: interfata nu e gata)"
+		brut = _grab(CAPTURA_TERMEN_NAVIGATOR_S, navigator)
+		if not brut:
+			return None
+
+		def curata(gata):
+			from enigma import getDesktop
+			s = getDesktop(0).size()
+			# False (nu None) cand curatarea nu da nimic: None inseamna numai „firul nu a raspuns la timp”
+			gata(Control.curataCapturaEchipa(brut, _stivaAcum(), (s.width(), s.height())) or False)
+		rez = _peFir.cere(curata, TERMEN_FIR_S)
+		if rez is None:
+			_jurnal("captura nereusita (navigatorul deschis): firul interfetei nu a raspuns in %d s" % TERMEN_FIR_S)
+		return rez or None
+
 	def lucru(gata):
 		if _session() is None:
 			gata("(captura: interfata nu e gata)")
 			return
-		rez = None
-		try:
-			p = subprocess.Popen([GRAB, "-q", "-s", "-j", str(CAPTURA_CALITATE), "-r", str(CAPTURA_LATIME)],
-				stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-			try:
-				rez, _err = p.communicate(timeout=CAPTURA_TERMEN_S)
-			except subprocess.TimeoutExpired:
-				p.kill()
-				p.communicate()
-				rez = None
-		except Exception as e:
-			_jurnal("captura: %r" % (e,))
+		rez = _grab(CAPTURA_TERMEN_S)
 		if rez:
 			from enigma import getDesktop
 			s = getDesktop(0).size()
 			rez = Control.curataCapturaEchipa(rez, _stivaAcum(), (s.width(), s.height()))
-		gata(rez or None)
-	return _peFir.cere(lucru, TERMEN_FIR_S)
+		gata(rez or False)
+	rez = _peFir.cere(lucru, TERMEN_FIR_S)
+	if rez is None:
+		_jurnal("captura nereusita: firul interfetei nu a raspuns in %d s" % TERMEN_FIR_S)
+	return rez or None
 
 
 def _canal():

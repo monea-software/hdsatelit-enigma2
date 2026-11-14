@@ -1095,7 +1095,6 @@ __STIL_PAGINI__
   <section class="card ascuns" id="cardUsb">
     <h2>Adaptoare USB</h2>
     <p class="nota">Când bagi un stick Wi-Fi sau un adaptor de rețea USB al cărui driver nu e pe receptor, receptorul îl ia singur din feedul HD Satelit și îl pornește. Aici apar aceleași mesaje ca pe televizor.</p>
-    <p class="nota">Fără internet: descarcă de pe pagina imaginii fișierul cu completările pentru modelul tău, copiază-l pe un stick așa cum e și pune stickul în receptor.</p>
     <p class="linii" id="usbStare"></p>
     <div class="butoane ascuns" id="usbRepornire"><button type="button" class="rosu" id="usbReporneste">Repornește interfața</button></div>
   </section>
@@ -1642,8 +1641,6 @@ TEXTE_PAGINA = {
 		N_("Când bagi un stick Wi-Fi sau un adaptor de rețea USB al cărui driver nu e pe receptor, "
 			"receptorul îl ia singur din feedul HD Satelit și îl pornește. Aici apar aceleași mesaje ca pe "
 			"televizor."),
-		N_("Fără internet: descarcă de pe pagina imaginii fișierul cu completările pentru modelul tău, "
-			"copiază-l pe un stick așa cum e și pune stickul în receptor."),
 		N_("Repornește interfața"),
 	),
 	"js": (
@@ -1711,13 +1708,7 @@ TEXTE_PAGINA = {
 		N_("Adresa receptorului:"),
 		N_("Numele în rețea:"),
 		N_("Numele local nu este disponibil. Folosește adresa IP a receptorului."),
-		N_("Adaptoare USB"),
-		N_("Când bagi un stick Wi-Fi sau un adaptor de rețea USB al cărui driver nu e pe receptor, receptorul îl ia singur "
-			"din feedul HD Satelit și îl pornește. Aici apar aceleași mesaje ca pe televizor."),
-		N_("Fără internet: descarcă de pe pagina imaginii fișierul cu completările pentru modelul tău, copiază-l pe un "
-			"stick așa cum e și pune stickul în receptor."),
 		N_("Urmează:"),
-		N_("Repornește interfața"),
 		N_("Amânat:"),
 		N_("Ultima dată:"),
 		N_("Server DNS"),

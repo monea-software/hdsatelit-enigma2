@@ -18,6 +18,10 @@
 # Tastele (harta la prioritatea -1, inaintea hartilor barei, pornita numai cat se vede mesajul): OK = fapta, EXIT =
 # ascunde mesajul; amandoua numai cand prima bara e ascunsa, altfel trec la bara. Fara fapta, OK arata bara ca de obicei.
 #
+# Canalul TV numai cu sunet (verdictul NUMAI_SUNET, 0.7.5): legatura il spune ecranului radio al barei
+# (Screens/HdsEcranRadio.py, numaiSunet) si protectiei ecranului (bara, Screens/ScreenSaver.py, screenSaverTimerStart);
+# mesajul „Numai sunet” se vede numai cat ecranul radio nu il acopera (setarea „Protecția ecranului”).
+#
 # Asezarea: randurile goale nu lasa loc gol. Dupa layout se citesc pozitiile din skin; la fiecare mesaj nou randurile
 # vazute se aseaza unul sub altul cu distantele din skin, fereastra se scurteaza si ramane centrata pe acelasi mijloc.
 # Etichetele sistemelor si butonul faptei se centreaza pe latimea textului lor. Skinul HDSatelit are blocul
@@ -475,6 +479,15 @@ class HartaEcranNegru(ActionMap):
 # ---------------------------------------------------------------- legatura cu bara
 
 
+def _ecranRadioNumaiSunet():
+	"""Ecranul radio se vede ca fundal al canalului numai cu sunet (atunci mesajul nu mai trebuie)."""
+	try:
+		from Components.HdsRadioSetari import ecran_numai_sunet
+		return bool(ecran_numai_sunet())
+	except Exception:
+		return False
+
+
 class LegaturaEcranNegru(object):
 	"""Tine fereastra si urmaritorul, hotaraste cand se vede mesajul si face faptele (de pe televizor si din web)."""
 
@@ -485,6 +498,7 @@ class LegaturaEcranNegru(object):
 		self.ecran = self.session.instantiateDialog(HdsEcranNegru)
 		self.urm = E.Urmaritor(self.session, self._verdictNou, infobar)
 		self.verdict = None
+		self.numai_sunet = False
 		self.vizibil = False
 		self.in_fata = False
 		self.ascuns_de_om = None
@@ -532,6 +546,13 @@ class LegaturaEcranNegru(object):
 		_opresteAnaliza()
 		if self.analiza_auto is not None and self.analiza_auto != self._refRedata():
 			self.analiza_auto = None
+		if self.numai_sunet:
+			# ecranul radio s-a ascuns singur la evStart: verdictul canalului nou (si al aceluiasi canal pornit din nou)
+			# trebuie dat din nou, chiar daca iese la fel
+			self.numai_sunet = False
+			self.urm.verdict = None
+			self.verdict = None
+			self._actualizeaza()
 		self.urm.laStart()
 
 	def _refRedata(self):
@@ -577,10 +598,29 @@ class LegaturaEcranNegru(object):
 		if v is None or (self.ascuns_de_om is not None and v.get("cod") != self.ascuns_de_om):
 			self.ascuns_de_om = None
 		self.verdict = v
+		self._numaiSunet(v is not None and v.get("cod") == E.NUMAI_SUNET)
 		self._actualizeaza()
 		# cu mesajul oprit din setari nu se arata nimic pe televizor, deci nici citirea din demultiplexor nu porneste
 		if v is not None and (v.get("fapta") or {}).get("id") == E.F_ANALIZA and E.analiza_automata() and E.pornit():
 			self._analizaSingura(v)
+
+	def _numaiSunet(self, da):
+		"""Canalul TV trimite numai sunet (sau nu mai trimite): ecranul radio ca fundal si ceasul protectiei ecranului."""
+		if da == self.numai_sunet:
+			return
+		self.numai_sunet = da
+		radio = getattr(self.infobar, "hdsRadio", None)
+		if radio is not None:
+			try:
+				radio.numaiSunet(da)
+			except Exception as e:
+				print("[HdsEcranNegru] ecranul radio, numai sunet: %s" % e)
+		ceas = getattr(self.infobar, "screenSaverTimerStart", None)
+		if ceas is not None:
+			try:
+				ceas()
+			except Exception as e:
+				print("[HdsEcranNegru] protectia ecranului: %s" % e)
 
 	def _analizaSingura(self, v):
 		"""Setarea „automat”: analiza porneste o singura data pe serviciu, cand apare mesajul (nu dupa o eroare)."""
@@ -615,6 +655,8 @@ class LegaturaEcranNegru(object):
 
 	def _poateArata(self, v):
 		if v is None or not E.pornit() or not self.in_fata or self._inStandby():
+			return False
+		if v.get("cod") == E.NUMAI_SUNET and _ecranRadioNumaiSunet():
 			return False
 		if self._variantaUrmeaza(v):
 			return False

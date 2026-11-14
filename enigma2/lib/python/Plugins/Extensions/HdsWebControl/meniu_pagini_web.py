@@ -36,7 +36,7 @@
 MODULE = ("alimentare_web", "resetare_web", "parental_web", "disc_web", "jurnale_sistem_web", "canal_info_web",
 	"retea_web", "unelte_retea_web", "internet_web", "intrari_web", "media_web", "extensii_web", "diseqc_web", "vpn_web",
 	"vpn_furnizori_web",
-	"asistenta_web", "radio_online_web")
+	"asistenta_web", "radio_online_web", "filme_seriale_web")
 
 
 def _modul(nume):

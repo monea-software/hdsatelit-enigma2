@@ -1,0 +1,21 @@
+# HD Satelit: regulile garzii de model pentru Dreambox DM920 UHD (masina dm920, MACHINEBUILD dm920), NECONFIRMAT
+# (MDM, 12.11.2026). Aceleasi reguli ca dm900 (capul lui hdsatelit-modele/dm900: de unde vine fiecare valoare); difera
+# numai masina si tipul placii. Comparatia imaginilor publice OE-Alliance 6.0 dm900 si dm920 (STADIU-MDM.md): aceleasi
+# 865 de pachete si 60 de module, alte drivere (dreambox-dvb-modules-dm920 20200321) si alta versiune locala a nucleului
+# (3.14-1.17-dm920), deci modulele nu merg pe dm900 si imaginea e alta.
+# boxtype=dm920: NEMASURAT (/proc/stb/info/model; /proc/stb/info/mid = 23 in librecovery). FLASHSIZE 8192 (eMMC de 8 GB);
+# tabela GPT si linia de comanda ca la dm900, deci kernel_kib=31744 tot din cod. Fara tester inca.
+format=1
+distro=hdsatelit
+model=Dreambox DM920
+machine=dm920
+machinebuild=dm920
+chip=-
+boxtype=dm920
+hw=-
+partitions=-
+kernel_part=mmcblk0p1
+kernel_kib=31744
+rootfs_part=mmcblk0p2
+confirmat=nu
+familie=broadcom

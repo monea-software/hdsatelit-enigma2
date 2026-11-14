@@ -75,6 +75,14 @@
 # ECM-ul care nu spune „nu e CSA-ALT”), canalul porneste din nou prin releu, iar urmatoarele zapuri merg prin releu pana
 # se leaga din nou modulul. Invatarea la redare nu mai muta canalul pe releu cand modulul a dat cuvinte. Un rand in jurnal
 # la fiecare hotarare. Fara SoftCSA gata (modul vechi, modul fara protocolul 3), releul merge ca inainte.
+# PRIMUL ZAP DUPA PORNIRE (WCR, 13.11.2026, Octagon SF8008): modulul de acces deja pornit se leaga la soclul enigma2-ului nou
+# la 0-1 s DUPA ce startupService a pornit canalul; un canal ICAM din lista pleca atunci prin releu (SoftCSA inca negata) si
+# ramanea pe releu pana la urmatorul zap. Cat releul da un canal, modulul ii trimite cuvintele numai lui, nu si receptorului
+# (fara masca tipului de serviciu in CA PMT: set_dvbapi_cw = !stream_write_cw), deci pagina web /tv vedea canalul criptat.
+# De aceea, la primul zap dupa pornire (niciun modul legat inca, conexiune 0, SoftCSA in binar, releul local asculta, deci
+# modulul ruleaza), un canal ICAM asteapta legarea modulului cel mult ASTEPTARE_MODUL_S, o singura data pe pornire, apoi
+# merge pe drumul SoftCSA de mai sus. Modul nelegat in acest timp: prin releu, ca inainte; daca se leaga in TRECERE_TARZIE_S,
+# canalul trece o data singur pe direct (o repornire scurta). Un rand in jurnal la fiecare pas.
 #
 # Pentru pluginurile scrise pentru alte imagini, Screens/InfoBarGenerics.streamrelay da acelasi obiect (releu()):
 # checkService(ref) (din lista sau trecut singur), streamrelayChecker(ref) -> (ref, prin_releu), reload(),
@@ -113,6 +121,10 @@ ASTEAPTA_IMAGINE_MS = 6000          # simulcrypt: cat se asteapta imaginea direc
 SIMULCRYPT_FARA_IMAGINE = False
 FEREASTRA_ZAP_S = 20.0              # cat dupa zap se mai asculta PMT-ul canalului pornit direct
 INCERCARE_SOFTCSA_S = 10            # SoftCSA gata, modulul fara niciun cuvant inca: cat se incearca un canal direct
+ASTEPTARE_MODUL_S = 4.0             # primul zap dupa pornire: cat asteapta canalul ICAM legarea modulului (masurat 0-1 s)
+TRECERE_TARZIE_S = 60.0             # ... apoi, pornit prin releu, cat se mai asteapta modulul ca sa treaca o data pe direct
+PAS_MODUL_MS = 200                  # cat de des se intreaba starea SoftCSA cat canalul asteapta modulul
+PAS_TRECERE_MS = 1000               # ... si cat canalul merge prin releu
 MAX_LAMEDB_OCTETI = 32 * 1024 * 1024
 _CHEIE_SCURTA = re.compile(r"^[0-9A-F]{1,8}:[0-9A-F]{1,8}:[0-9A-F]{1,8}:[0-9A-F]{1,8}$")
 PORT_IMPLICIT = 17999
@@ -468,6 +480,10 @@ class Releu(object):
 		self._incercareSoft = None      # (nav, cheie, legatura): canal pornit direct pe incercare
 		self._softFaraCuvinte = None    # legatura modulului pe care incercarea n-a adus cuvinte
 		self._ceasSoft = None
+		# primul zap dupa pornire (WCR): [nav, playref, cheie, fel, termen asteptare, termen trecere, pe releu]
+		self._asteptareModul = None
+		self._modulAsteptat = False     # asteptarea s-a facut o data de la pornire (nu se mai face)
+		self._ceasModul = None
 		self.fisierAutomat = fisier_automat
 		self.lamedb = lamedb
 		self._monoton = monoton or time.monotonic
@@ -889,6 +905,7 @@ class Releu(object):
 		vechiRef, self._refReleu = self._refReleu, None
 		self._asteapta = None
 		self._eliberare = None
+		self._asteptareModul = None     # un zap nou: asteptarea modulului pentru canalul vechi nu mai conteaza
 		self._opresteUrmarirea()
 		k = cheie(playref)
 		fel = self.fel(k) if k else None
@@ -898,6 +915,8 @@ class Releu(object):
 			return self._direct(nav, playref, vechi, vechiRef)
 		if self._directPrinSoftCsa(nav, k, fel, playref):
 			return self._direct(nav, playref, vechi, vechiRef)
+		if not vechi and self._asteaptaModulul(nav, playref, k, fel):
+			return playref, True
 		text = self._textPentru(k, playref)
 		if text is None:
 			return self._direct(nav, playref, vechi, vechiRef)
@@ -920,7 +939,7 @@ class Releu(object):
 	def _direct(self, nav, playref, vechi, vechiRef):
 		"""Canalul porneste direct (pe tuner). Daca zap-ul vine de pe un canal redat prin releu, sesiunea 8001 a releului
 		inca tine tunerul cateva clipe: releul afla abia acum ca playerul a plecat si isi inchide cererea dupa aceea, iar
-		serviciul nou ar gasi tunerul ocupat („Tunerul este ocupat”, .114 cu un singur tuner de satelit, 11.11.2026). Pe alt
+		serviciul nou ar gasi tunerul ocupat („Tunerul este ocupat”, receptorul de probe SF8008 cu un singur tuner de satelit, 11.11.2026). Pe alt
 		transponder, pornirea se amana pana cand sesiunea il lasa (verificat la ELIBERARE_PAS_MS, cel mult ELIBERARE_MAX_S),
 		ca la plecarea de pe canalele DAB/T2 (Hds/DabT2/pornire.py). -> playref sau (playref, True) cand se amana."""
 		if not vechi or not vechiRef or _acelasiTransponder(cheie(playref) or "", vechiRef):
@@ -1100,6 +1119,122 @@ class Releu(object):
 			nav.playService(acum, checkParentalControl=False, forceRestart=True)
 		except Exception as e:
 			_jurnal("canalul nu s-a pornit din nou prin releu: %s" % e)
+
+	# ---- primul zap dupa pornire: modulul inca nelegat (WCR, PRIMUL ZAP DUPA PORNIRE, sus)
+	def _asteaptaModulul(self, nav, playref, k, fel):
+		"""SoftCSA e in binar, dar niciun modul nu s-a legat inca de la pornire (conexiune 0), iar releul local asculta, deci
+		modulul ruleaza si se leaga in clipa urmatoare: canalul ICAM nu porneste acum prin releu, ci asteapta legarea cel mult
+		ASTEPTARE_MODUL_S (o singura data pe pornire). -> True cand asteapta (zap-ul e asincron)."""
+		if self._modulAsteptat:
+			return False
+		s = self._softCsaStare()
+		if s.get("gata") or not s.get("receptor") or not s.get("biblioteca") or s.get("client"):
+			return False
+		try:
+			if int(s.get("conexiune") or 0):
+				return False            # un modul s-a mai legat de la pornire: nu e pornirea
+		except (TypeError, ValueError):
+			return False
+		if fel == "lista" and self._csaAltNucleu(playref) < 1 and not self._esteIcam(k):
+			return False
+		gazda, port, _intarziere = self.configurare()
+		gazda = "127.0.0.1" if gazda == "localhost" else gazda
+		if not releuPermis(gazda) or not self.asculta(gazda, port):
+			return False                # fara releu care asculta nu ruleaza niciun modul: nimic de asteptat
+		self._modulAsteptat = True
+		acum = self._monoton()
+		self._asteptareModul = [nav, playref, k, fel, acum + ASTEPTARE_MODUL_S, acum + TRECERE_TARZIE_S, False]
+		self._pornesteCeasModul(PAS_MODUL_MS)
+		_jurnal("SoftCSA: canalul %s (%s) asteapta legarea modulului de acces, cel mult %d s, inainte de releu" % (
+			cheieScurta(k) or k, fel, ASTEPTARE_MODUL_S))
+		return True
+
+	def _pornesteCeasModul(self, ms):
+		if self._ceasModul is None:
+			from enigma import eTimer
+			self._ceasModul = eTimer()
+			self._ceasModul.callback.append(self._pasModul)
+		self._ceasModul.start(ms, True)
+
+	def _pasModul(self):
+		"""Ceasul asteptarii: modulul legat -> drumul SoftCSA (direct); termenul trecut -> prin releu, ca inainte, apoi, daca
+		modulul se leaga pana la TRECERE_TARZIE_S, canalul porneste o data din nou (trece direct prin _peZap). Alt zap,
+		timeshift sau canalul plecat de pe releu: nimic."""
+		a = self._asteptareModul
+		if a is None:
+			return
+		nav, playref, k, fel, termen, termen_trecere, pe_releu = a
+		try:
+			acum_ref = nav.getCurrentlyPlayingServiceReference()
+		except Exception:
+			acum_ref = None
+		if acum_ref is None or cheie(acum_ref) != k:
+			self._asteptareModul = None
+			return
+		ks = cheieScurta(k) or k
+		s = self._softCsaStare()
+		gata = bool(s.get("gata"))
+		if not pe_releu:
+			if gata:
+				self._asteptareModul = None
+				_jurnal("SoftCSA: modulul s-a legat, canalul %s nu mai trece prin releu" % ks)
+				if self._directPrinSoftCsa(nav, k, fel, playref):
+					_pornesteDirect(nav, playref)
+				else:
+					self._pornestePrinReleu(nav, playref, k, fel)
+				return
+			if s.get("client"):
+				# legat, dar fara protocolul 3 si cuvintele extinse: SoftCSA nu va fi gata, releul pe loc, fara trecerea tarzie
+				self._asteptareModul = None
+				_jurnal("SoftCSA: modulul s-a legat fara protocolul 3 si cuvintele extinse: canalul %s porneste prin releu" % ks)
+				self._pornestePrinReleu(nav, playref, k, fel)
+				return
+			if self._monoton() < termen:
+				self._pornesteCeasModul(PAS_MODUL_MS)
+				return
+			_jurnal("SoftCSA: modulul nu s-a legat in %d s: canalul %s porneste prin releu" % (ASTEPTARE_MODUL_S, ks))
+			if self._pornestePrinReleu(nav, playref, k, fel):
+				a[6] = True
+				self._pornesteCeasModul(PAS_TRECERE_MS)
+			else:
+				self._asteptareModul = None
+			return
+		if not self._prinReleu or self._refReleu != k or _timeshiftActiv(nav):
+			self._asteptareModul = None
+			return
+		if gata:
+			self._asteptareModul = None
+			_jurnal("SoftCSA: modulul s-a legat tarziu: canalul %s trece direct, fara releu" % ks)
+			try:
+				nav.playService(acum_ref, checkParentalControl=False, forceRestart=True)
+			except Exception as e:
+				_jurnal("canalul nu s-a pornit din nou direct: %s" % e)
+			return
+		if self._monoton() >= termen_trecere:
+			self._asteptareModul = None
+			return
+		self._pornesteCeasModul(PAS_TRECERE_MS)
+
+	def _pornestePrinReleu(self, nav, playref, k, fel):
+		"""Partea releului din _peZap, pentru o pornire amanata: prin releu daca se poate, altfel direct (playerul de baza).
+		-> True cand canalul merge acum prin releu."""
+		text = self._textPentru(k, playref)
+		if text is None:
+			_pornesteDirect(nav, playref)
+			return False
+		gazda, port, _intarziere = self.configurare()
+		gazda = "127.0.0.1" if gazda == "localhost" else gazda
+		if not self.asculta(gazda, port):
+			_jurnal("releul nu raspunde la %s:%d: canalul porneste direct" % (gazda, port))
+			if fel == "lista":
+				self._mesajReleuOprit(gazda, port)
+			_pornesteDirect(nav, playref)
+			return False
+		if self._reda(nav, text):
+			self._prinReleu, self._refReleu = True, k
+			return True
+		_pornesteDirect(nav, playref)
+		return False
 
 	# ---- trecerea singura: invatarea la redare (0.7.4)
 	def _urmaresteZap(self, nav, k):

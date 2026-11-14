@@ -65,8 +65,9 @@ class HdsAnuntRetea(Screen):
 		cale = _cale_poza(cheie)
 		try:
 			if cale and self["pictograma"].instance is not None:
-				from Tools.LoadPixmap import LoadPixmap
-				poza = LoadPixmap(cale, cached=True)
+				# la marimea ecranelor HDSatelit (tema la 2K: din setul HDSatelit/2k/, ca fereastra marita de 4/3)
+				import skin
+				poza = skin.pozaHds(cale)
 				if poza is not None:
 					self["pictograma"].instance.setPixmap(poza)
 					self["pictograma"].show()

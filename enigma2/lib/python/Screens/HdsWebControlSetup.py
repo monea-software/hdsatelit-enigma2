@@ -20,6 +20,9 @@
 # vrea omul) se pune in Setari > Retea > Parola receptorului (Components/HdsParolaLocala.py); aici ghidul spune numai
 # daca e ceruta.
 #
+# randul „Actualizarea imaginii pe prima pagină web” (implicit 3 s): la cate secunde cere prima pagina web imaginea
+# ecranului, sau Oprită; aceeasi setare ca lista de langa imagine si /interfata-web (plugin.intervalCaptura).
+#
 # randul „Aplicații de telefon” (pornit din fabrica) tine pornite rutele pentru aplicatiile obisnuite ale receptoarelor
 # Enigma2 (canale, telecomanda, ghid, inregistrari, liste m3u); din casa merg fara parola (cu parola omului bifata la
 # interfata web, cu utilizatorul root si parola lui). Randul de sub el, „Acces din afara casei” (oprit din fabrica),
@@ -106,9 +109,12 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 				"blue": self._alteOptiuni,
 			}, -2)
 
+		# la cate secunde cere prima pagina web imaginea ecranului (Oprită, 1-10 s); se aplica pe loc, fara repornire.
+		# Lipseste numai fara ConfigSelection (Components.config inlocuit in probele de pe PC).
+		interval = config.plugins.hdswebcontrol.content.items.get("captura_interval")
 		self._campuri = [config.plugins.hdswebcontrol.activ, config.plugins.hdswebcontrol.port,
 			config.plugins.hdswebcontrol.aplicatii,
-			config.plugins.hdswebcontrol.aplicatii_afara]
+			config.plugins.hdswebcontrol.aplicatii_afara] + ([interval] if interval is not None else [])
 		self._initiale = [c.value for c in self._campuri]
 		self.list = [
 			getConfigListEntry(_("Activează HdsWebControl"), config.plugins.hdswebcontrol.activ),
@@ -116,6 +122,8 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 			getConfigListEntry(_("Aplicații de telefon"), config.plugins.hdswebcontrol.aplicatii),
 			getConfigListEntry(_("Acces din afara casei"), config.plugins.hdswebcontrol.aplicatii_afara),
 		]
+		if interval is not None:
+			self.list.append(getConfigListEntry(_("Actualizarea imaginii pe prima pagină web"), interval))
 		self["config"].list = self.list
 
 		self._actualizeazaGhid()

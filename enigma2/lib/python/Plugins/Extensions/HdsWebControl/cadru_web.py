@@ -782,6 +782,7 @@ ICONITE_MENIU = {
 	"/teletext": "teletext", "/cautare": "cautare",
 	"hds_scanare": "scanare", "hds_antena": "antena", "info_screen": "informatii", "setup_selection": "setari",
 	"hds_media": "media", "timer_edit": "temporizator", "plugin_selection": "aplicatii",
+	"hds_aplicatii": "canale",   # meniul „Aplicații” (0.7.5): televizorul cu semnul de redare
 }
 
 
@@ -1018,14 +1019,12 @@ html[data-tema="pro"] .hds-jos [aria-current="page"]{border-radius:12px;}
 html.hds-cadru[data-tema="pro"] .status-linie>span:first-child,html.hds-cadru[data-tema="pro"] .eticheta{
   color:var(--text-slab);}
 html.hds-cadru[data-tema="pro"] .captura-cutie{border:1px solid var(--bordura);border-radius:12px;}
-/* ecranele late: bara laterala mereu deschisa, ca in ecranele Stitch Pro */
+/* ecranele late: margini mai largi; meniul e bara de sus (STIL_BARA), ca in Clasic. Bara laterala mereu deschisa
+   s-a scos (Eduard, 13.11.2026 22:36: nu o vrea, nici deschisa); sertarul ramane la butonul „Meniu”. */
 @media (min-width:960px){
-  html.hds-cadru[data-tema="pro"]{--st:24px;--cadru-stanga:var(--lat-meniu);}
-  html.hds-cadru[data-tema="pro"] body{padding-left:calc(var(--lat-meniu) + var(--st));padding-right:24px;}
+  html.hds-cadru[data-tema="pro"]{--st:24px;}
+  html.hds-cadru[data-tema="pro"] body{padding-right:24px;}
   html.hds-cadru[data-tema="pro"] .hds-antet{margin-right:-24px;}
-  html[data-tema="pro"] .hds-meniu{transform:none;visibility:visible;transition:none;width:var(--lat-meniu);}
-  html[data-tema="pro"] .hds-buton-meniu,html[data-tema="pro"] .hds-meniu-inchide,
-  html[data-tema="pro"] .hds-umbra,html[data-tema="pro"] .hds-marca{display:none;}
 }
 """
 
@@ -1187,6 +1186,93 @@ html.hds-cadru[data-tema="clasic"] .tl .tl-dpad button.tl-ok{border:2px solid va
 html.hds-cadru[data-tema="clasic"] .tl .tl-comutator{border-radius:4px;}
 """
 
+# Randul de sub antet (randSusHtml): casuta „Caută în meniu”, butonul modulului de acces, bara sectiunilor (de la
+# LAT_BARA px, in ambele teme; Pro nu mai are bara laterala, WMN2 13.11.2026). Culorile numai din perechile
+# verificate (PERECHI): --text pe --buton si --panou, --ales-text pe --ales, --bine pe --bine-fond, --chihlimbar pe --panou.
+STIL_BARA = """
+.hds-rand-sus{position:relative;z-index:49;display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 8px;
+  margin:-20px -16px 20px calc(-1 * var(--st));padding:8px 16px 8px var(--st);background:var(--antet);
+  border-bottom:1px solid var(--bordura);color:var(--text);font-family:var(--font);}
+html[data-tema="clasic"] .hds-rand-sus{margin-right:calc(-1 * var(--st));padding-right:var(--st);}
+.hds-caut{position:relative;display:flex;align-items:center;flex:0 1 220px;min-width:170px;margin:0;}
+.hds-caut>.hds-ic{position:absolute;left:10px;width:18px;height:18px;color:var(--text-slab);pointer-events:none;}
+html.hds-cadru .hds-caut input{width:100%;min-height:40px;margin:0;padding:6px 10px 6px 34px;border-radius:4px;
+  border:1px solid var(--bordura);background:var(--camp);color:var(--text);font:inherit;font-size:.8rem;}
+html.hds-cadru .hds-caut input:focus{border-color:var(--chihlimbar);outline:none;}
+.hds-caut-lista{position:absolute;z-index:6;top:calc(100% + 4px);left:0;width:min(460px,calc(100vw - 24px));
+  max-height:60vh;overflow:auto;margin:0;padding:4px;list-style:none;background:var(--panou);
+  border:1px solid var(--bordura);border-radius:6px;box-shadow:0 14px 36px rgba(0,0,0,.45);}
+.hds-caut-lista[hidden]{display:none;}
+.hds-caut-lista li{padding:8px 10px;border-radius:4px;cursor:pointer;color:var(--text);font-size:.82rem;line-height:1.3;}
+.hds-caut-lista li small{display:block;margin-top:2px;color:var(--text-slab);font-size:.72rem;}
+.hds-caut-lista li.hds-caut-gol{cursor:default;color:var(--text-slab);}
+.hds-caut-lista li[aria-selected="true"],.hds-caut-lista li[role="option"]:hover{background:var(--ales);color:var(--ales-text);}
+.hds-caut-lista li[aria-selected="true"] small,.hds-caut-lista li[role="option"]:hover small{color:var(--ales-text);}
+html.hds-cadru .hds-modul{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;
+  border-radius:4px;border:1px solid var(--bordura);background:var(--bine-fond);color:var(--bine);font-size:.78rem;
+  font-weight:700;letter-spacing:.02em;text-decoration:none;white-space:nowrap;}
+html.hds-cadru .hds-modul:hover{text-decoration:underline;}
+.hds-modul[hidden]{display:none !important;}
+.hds-bara{display:none;flex:1 1 420px;min-width:0;font-family:var(--font);}
+.hds-bara-lista{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none;}
+.hds-bara-el{position:relative;margin:0;padding:0;}
+.hds-bara-el.hds-bara-lat{position:static;}
+html.hds-cadru .hds-bara-b{display:inline-flex;align-items:center;gap:6px;min-height:40px;margin:0;padding:0 10px;
+  border:1px solid var(--bordura);border-radius:4px;background:var(--buton);color:var(--text);font:inherit;
+  font-size:.7rem;font-weight:600;line-height:1.2;text-transform:uppercase;letter-spacing:.02em;text-decoration:none;
+  white-space:nowrap;cursor:pointer;box-shadow:none;filter:none;}
+html.hds-cadru .hds-bara-b:hover,html.hds-cadru .hds-bara-are:hover>.hds-bara-b,html.hds-cadru .hds-bara-are.deschis>.hds-bara-b{
+  background:var(--buton-peste);color:var(--text);}
+html.hds-cadru .hds-bara-b.hds-bara-aici,html.hds-cadru .hds-bara-are:hover>.hds-bara-b.hds-bara-aici{
+  background:var(--ales);color:var(--ales-text);border-color:var(--chihlimbar);box-shadow:inset 0 -3px 0 var(--chihlimbar);}
+.hds-bara-sag{flex:none;width:6px;height:6px;margin:-4px 0 0 1px;border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;transform:rotate(45deg);opacity:.75;}
+/* submeniul: deschis la mouse (cu 0,15 s de rabdare la iesire), la focusul tastaturii si la atingere (.deschis) */
+.hds-bara-sub{position:absolute;z-index:5;top:100%;left:0;padding-top:4px;visibility:hidden;opacity:0;
+  transition:visibility 0s linear .15s,opacity .12s ease .03s;}
+.hds-bara-lat>.hds-bara-sub{left:var(--st);right:var(--st);}
+.hds-bara-are:hover>.hds-bara-sub,.hds-bara-are.deschis>.hds-bara-sub,.hds-bara-are:focus-within>.hds-bara-sub{
+  visibility:visible;opacity:1;transition-delay:0s;}
+.hds-bara-are.inchis>.hds-bara-sub{visibility:hidden;opacity:0;transition:none;}
+.hds-bara-cutie{min-width:250px;max-width:min(380px,90vw);max-height:72vh;overflow:auto;padding:8px;
+  background:var(--panou);border:1px solid var(--bordura);border-radius:6px;box-shadow:0 16px 40px rgba(0,0,0,.45);}
+/* submeniul mare (Setări, Scanare): coloane echilibrate, toata inaltimea lui; daca e mai inalt decat ecranul, se
+   deruleaza pagina (mouse-ul ramane pe el) */
+.hds-bara-lat .hds-bara-cutie{max-width:none;max-height:none;overflow:visible;columns:200px auto;column-gap:12px;}
+html.hds-cadru .hds-bara-lat .hds-bara-leg{min-height:30px;padding:4px 10px;}
+html.hds-cadru .hds-bara-lat .hds-bara-leg.hds-bara-leg2{padding-left:24px;}
+.hds-bara-bloc{break-inside:avoid;-webkit-column-break-inside:avoid;padding:2px 0 10px;}
+html.hds-cadru .hds-bara-tit{display:block;margin:0 0 4px;padding:6px 10px;border-bottom:1px solid var(--bordura);
+  color:var(--chihlimbar);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  text-decoration:none;}
+html.hds-cadru a.hds-bara-tit:hover{text-decoration:underline;}
+html.hds-cadru .hds-bara-leg{display:flex;align-items:center;gap:8px;min-height:34px;margin:0;padding:5px 10px;
+  border-radius:4px;color:var(--text);font-size:.78rem;line-height:1.25;text-decoration:none;}
+html.hds-cadru .hds-bara-leg.hds-bara-acasa{font-weight:700;}
+html.hds-cadru .hds-bara-leg.hds-bara-leg2{padding-left:24px;color:var(--text-2);}
+.hds-bara-sub-tit{display:block;padding:6px 10px 2px;color:var(--text-slab);font-size:.7rem;font-weight:700;}
+html.hds-cadru .hds-bara-leg:hover,html.hds-cadru .hds-bara-leg[aria-current="page"]{background:var(--ales);
+  color:var(--ales-text);}
+@media (pointer:coarse){ html.hds-cadru .hds-bara-leg,html.hds-cadru .hds-bara-lat .hds-bara-leg{min-height:44px;}
+  html.hds-cadru .hds-bara-b{min-height:44px;} }
+/* de la 960 px bara si lista ei nu mai fac cutii: butoanele curg in acelasi rand cu casuta, si sub ea */
+@media (min-width:960px){ html.hds-cadru .hds-bara,html.hds-cadru .hds-bara-lista{display:contents;} }
+@media (min-width:960px){ html.hds-cadru[data-tema="pro"] .hds-rand-sus{margin-right:-24px;} }
+/* tableta culcata si laptopurile mici: fara majuscule si mai strans, ca bara sa ramana pe doua randuri */
+@media (min-width:960px) and (max-width:1279px){
+  .hds-rand-sus{column-gap:5px;}
+  html.hds-cadru .hds-bara-b{padding:0 6px;gap:4px;text-transform:none;letter-spacing:0;font-size:.7rem;}
+  .hds-caut{flex-basis:170px;min-width:140px;}
+}
+@media (max-width:759px){
+  .hds-caut{flex:1 1 200px;}
+  .hds-caut-lista{width:calc(100vw - 2 * var(--st) - 16px);}
+  html.hds-cadru .hds-caut input{min-height:44px;font-size:16px;}
+  html.hds-cadru .hds-modul{min-height:44px;}
+}
+@media (prefers-reduced-motion:reduce){ .hds-bara-sub{transition:none;} }
+"""
+
 _STIL = {}
 
 
@@ -1200,13 +1286,13 @@ def stil(c=None):
 	if text is None:
 		if len(_STIL) >= 16:
 			_STIL.clear()
-		text = "".join(_blocVariabile(t, c) for t in TEME) + STIL_COMUN + STIL_PRO + STIL_CLASIC
+		text = "".join(_blocVariabile(t, c) for t in TEME) + STIL_COMUN + STIL_PRO + STIL_CLASIC + STIL_BARA
 		_STIL[cheie] = text
 	return text
 
 
 # compatibil cu probele si paginile care citeau STIL_CADRU (asezarea, fara variabile)
-STIL_CADRU = STIL_COMUN + STIL_PRO + STIL_CLASIC
+STIL_CADRU = STIL_COMUN + STIL_PRO + STIL_CLASIC + STIL_BARA
 
 _RE_STIL = re.compile(r"(<style[^>]*>)(.*?)(</style>)", re.S | re.I)
 _RE_HEX = re.compile(r"(--[A-Za-z0-9_-]+\s*:\s*)?(#[0-9a-fA-F]{6})\b")
@@ -1447,6 +1533,133 @@ def baraJosHtml(cale, rute, jeton=""):
 	return u'<nav class="hds-jos" aria-label="%s">%s</nav>' % (_e(_t("Paginile principale")), u"".join(parti))
 
 
+# ------------------------------------------------------------------ bara de sus pe ecranele late (WMN, 13.11.2026)
+# Pe PC si pe tableta culcata (de la LAT_BARA px), sub antet: casuta „Caută în meniu”, butonul interfetei web a modulului
+# de acces care ruleaza (numai cand ruleaza unul), apoi sectiunile meniului ca butoane, pe unul sau doua randuri, toate
+# la vedere, ca pe situl HD Satelit. Sectiunile si submeniurile vin din aceleasi grupe ca sertarul (meniu(), adica
+# data/menu.xml dupa weight, prin meniu_web.arbore): o ordine noua pe televizor e singura si aici. Un buton cu
+# subsectiuni deschide in jos submeniul lui la mouse (CSS :hover), la tastatura (focusul in el) si la atingere (prima
+# atingere il deschide, a doua deschide pagina). Submeniul cu subgrupe (Setări, Scanare) e pe coloane: titlul subgrupei
+# si intrarile ei sub el. Pe telefon bara nu se vede (raman sertarul si bara de jos); casuta si butonul modulului raman
+# sus. Intrarea de sus spre /cauta-setari nu are buton: casuta e chiar ea.
+LAT_BARA = 960
+CALE_CAUTA = "/cauta-setari"
+
+
+def _baraLegatura(x, cale, jeton, clasa="hds-bara-leg"):
+	curent = not x.get("tv") and _cale(x["href"]) == cale
+	semn = ""
+	if x.get("tv"):
+		semn = (u'<span class="hds-semn-tv" aria-hidden="true">TV</span><span class="hds-ascuns"> (%s)</span>'
+			% _e(_t("se deschide pe televizor")))
+	return u'<a class="%s" href="%s"%s>%s%s</a>' % (clasa, _e(_cuJeton(x["href"], jeton)),
+		' aria-current="page"' if curent else "", _e(x["text"]), semn)
+
+
+def _baraFrunze(lista, cale, jeton, adanc, parti):
+	"""Intrarile unei subgrupe, in ordinea meniului; o subgrupa mai adanca: titlul ei (mai mic), apoi intrarile ei."""
+	for x in lista:
+		if "copii" in x:
+			if x.get("href"):
+				parti.append(_baraLegatura(x, cale, jeton, "hds-bara-leg hds-bara-sub-tit"))
+			else:
+				parti.append(u'<span class="hds-bara-sub-tit">%s</span>' % _e(x["text"]))
+			_baraFrunze(x.get("copii", []), cale, jeton, adanc + 1, parti)
+		else:
+			parti.append(_baraLegatura(x, cale, jeton, "hds-bara-leg" + (" hds-bara-leg2" if adanc > 1 else "")))
+
+
+def _baraSubHtml(g, cale, jeton):
+	"""Submeniul unei sectiuni: blocuri (o subgrupa cu titlul ei, sau intrarile de la rand dintre subgrupe)."""
+	blocuri = []
+	simple = []
+	if g.get("href"):
+		simple.append(_baraLegatura({"text": g["text"], "href": g["href"]}, cale, jeton, "hds-bara-leg hds-bara-acasa"))
+	for x in g.get("copii", []):
+		if "copii" in x:
+			if simple:
+				blocuri.append(u'<div class="hds-bara-bloc">%s</div>' % u"".join(simple))
+				simple = []
+			parti = []
+			if x.get("href"):
+				parti.append(_baraLegatura(x, cale, jeton, "hds-bara-tit"))
+			else:
+				parti.append(u'<span class="hds-bara-tit">%s</span>' % _e(x["text"]))
+			_baraFrunze(x.get("copii", []), cale, jeton, 1, parti)
+			blocuri.append(u'<div class="hds-bara-bloc">%s</div>' % u"".join(parti))
+		else:
+			simple.append(_baraLegatura(x, cale, jeton))
+	if simple:
+		blocuri.append(u'<div class="hds-bara-bloc">%s</div>' % u"".join(simple))
+	return u"".join(blocuri)
+
+
+def _numarFrunze(g):
+	return sum(_numarFrunze(x) if "copii" in x else 1 for x in g.get("copii", []))
+
+
+def baraHtml(grupe, cale, jeton=""):
+	"""Sectiunile meniului ca bara orizontala (vezi capul sectiunii), in ordinea grupelor."""
+	sectiuni = []
+	for g in grupe:
+		if g.get("fel") == "principal":
+			sectiuni.extend(g.get("copii", []))
+		else:
+			sectiuni.append(g)
+	parti = []
+	for g in sectiuni:
+		if _cale(g.get("href") or "") == CALE_CAUTA and not g.get("copii"):
+			continue
+		if not g.get("copii"):
+			if not g.get("href"):
+				continue
+			curent = not g.get("tv") and _cale(g["href"]) == cale
+			parti.append(u'<li class="hds-bara-el">%s</li>' % _baraLegatura(g, cale, jeton,
+				"hds-bara-b" + (" hds-bara-aici" if curent else "")))
+			continue
+		subgrupe = any("copii" in x for x in g["copii"])
+		clase = ["hds-bara-el", "hds-bara-are"]
+		if subgrupe or _numarFrunze(g) > 10:
+			clase.append("hds-bara-lat")
+		aici = _contine(g, cale)
+		buton_clasa = "hds-b hds-bara-b" + (" hds-bara-aici" if aici else "")
+		if g.get("href"):
+			cap = u'<a class="%s" href="%s" aria-haspopup="true" aria-expanded="false">%s<span class="hds-bara-sag" ' \
+				u'aria-hidden="true"></span></a>' % (buton_clasa, _e(_cuJeton(g["href"], jeton)), _e(g["text"]))
+		else:
+			cap = u'<button type="button" class="%s" aria-haspopup="true" aria-expanded="false">%s<span ' \
+				u'class="hds-bara-sag" aria-hidden="true"></span></button>' % (buton_clasa, _e(g["text"]))
+		parti.append(u'<li class="%s">%s<div class="hds-bara-sub"><div class="hds-bara-cutie">%s</div></div></li>'
+			% (u" ".join(clase), cap, _baraSubHtml(g, cale, jeton)))
+	if not parti:
+		return u""
+	return u'<nav class="hds-bara" id="hdsBara" aria-label="%s"><ul class="hds-bara-lista">%s</ul></nav>' % (
+		_e(_t("Secțiunile meniului")), u"".join(parti))
+
+
+def randSusHtml(ctx):
+	"""Randul de sub antet: casuta „Caută în meniu” (propunerile vin din /api/cauta-setari), butonul modulului de
+	acces care ruleaza (ascuns pana il gaseste scriptul) si bara sectiunilor (ctx["bara_html"])."""
+	jeton = ctx.get("jeton") or ""
+	jeton_formular = u'<input type="hidden" name="token" value="%s">' % _e(jeton) if jeton else u""
+	return u"".join((
+		u'<div class="hds-rand-sus" id="hdsRandSus" data-t-niciun="%s" data-t-tv="%s" data-t-modul="%s">' % (
+			_e(_t("Nimic găsit în meniu. Apasă Enter pentru căutarea completă.")),
+			_e(_t("se deschide pe televizor")), _e(_t("Interfața web a modulului de acces"))),
+		u'<form class="hds-caut" id="hdsCaut" action="%s" method="get" role="search">%s' % (CALE_CAUTA, _ic("cautare")),
+		u'<input type="search" id="hdsCautText" name="q" maxlength="60" placeholder="%s" aria-label="%s" '
+		u'autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="hdsCautLista">'
+		% (_e(_t("Caută în meniu")), _e(_t("Caută în meniu"))),
+		jeton_formular,
+		u'<ul class="hds-caut-lista" id="hdsCautLista" role="listbox" aria-label="%s" hidden></ul></form>'
+		% _e(_t("Găsite în meniu")),
+		u'<a class="hds-modul" id="hdsModul" target="_blank" rel="noopener noreferrer" hidden>'
+		u'<span class="hds-punct pornit" aria-hidden="true"></span><span id="hdsModulText"></span></a>',
+		ctx.get("bara_html") or u"",
+		u"</div>",
+	))
+
+
 # Derularea textului de un rand care nu incape (clasa hds-derulant), pereche cu stilul din STIL_COMUN: numai textul
 # care iese din cutie intra intr-un span interior (hds-derulant-in), mutat de un @keyframes facut aici pentru durata
 # lui (opririle raman de 2 s la orice lungime). Se masoara dupa incarcare, la schimbarea textului (MutationObserver), a
@@ -1589,6 +1802,179 @@ SCRIPT_DERULANT = u"""<script>
 </script>"""
 
 
+# Scriptul randului de sub antet (randSusHtml), lipit la inceputul lui SCRIPT_CADRU (in acelasi <script>): submeniurile
+# barei la atingere si la tastatura, propunerile casutei „Caută în meniu” (/api/cauta-setari) si butonul modulului de acces
+# care ruleaza (/api/acces-conditionat-interfete, la 30 s, oprit cat fila e ascunsa; un raspuns „ocupat” lasa butonul cum
+# era, numai o lista goala il ascunde). Textele vin traduse in atributele data-t-* ale randului.
+SCRIPT_BARA = u"""(function(){
+  var R = document.getElementById("hdsRandSus"), A = document.getElementById("hdsAntet");
+  if(!R){ return; }
+  var J = A ? (A.getAttribute("data-jeton") || "") : "", K = A ? (A.getAttribute("data-csrf") || "") : "";
+  function cuJeton(u){
+    if(!J){ return u; }
+    var f = "", i = u.indexOf("#");
+    if(i >= 0){ f = u.slice(i); u = u.slice(0, i); }
+    return u + (u.indexOf("?") < 0 ? "?" : "&") + "token=" + encodeURIComponent(J) + f;
+  }
+  function api(cale){
+    return fetch(cuJeton(cale), {cache: "no-store", credentials: "same-origin", headers: J ? {} : {"X-HDS-CSRF": K}})
+      .then(function(r){ return r.ok ? r.json() : null; });
+  }
+  function fiecare(lista, f){ Array.prototype.forEach.call(lista, f); }
+  // bara sectiunilor
+  var bara = document.getElementById("hdsBara");
+  if(bara){
+    var cu = bara.querySelectorAll(".hds-bara-are");
+    // submeniul pe toata latimea porneste chiar sub butonul lui (si cand bara are doua randuri)
+    var pune = function(li){
+      var b = li.firstElementChild, s = li.querySelector(".hds-bara-sub");
+      if(!b || !s){ return; }
+      if(li.classList.contains("hds-bara-lat")){ s.style.top = (b.offsetTop + b.offsetHeight) + "px"; return; }
+      // un submeniu ingust care ar iesi din ecran se aliniaza la marginea dreapta a butonului
+      s.style.left = ""; s.style.right = "";
+      var r = li.getBoundingClientRect(), c = s.firstElementChild;
+      if(c && r.left + c.offsetWidth > document.documentElement.clientWidth - 8){ s.style.left = "auto"; s.style.right = "0"; }
+    };
+    var inchide = function(afara){
+      fiecare(cu, function(li){
+        if(li === afara){ return; }
+        li.classList.remove("deschis");
+        li.firstElementChild.setAttribute("aria-expanded", "false");
+      });
+    };
+    fiecare(cu, function(li){
+      var b = li.firstElementChild, atins = false;
+      li.addEventListener("mouseenter", function(){ li.classList.remove("inchis"); pune(li); b.setAttribute("aria-expanded", "true"); });
+      li.addEventListener("mouseleave", function(){
+        if(li.classList.contains("deschis")){ return; }
+        b.setAttribute("aria-expanded", "false");
+        if(li.contains(document.activeElement)){ document.activeElement.blur(); }
+      });
+      li.addEventListener("focusin", function(){ li.classList.remove("inchis"); pune(li); });
+      b.addEventListener("pointerdown", function(e){ atins = e.pointerType === "touch" || e.pointerType === "pen"; });
+      b.addEventListener("click", function(e){
+        var legatura = b.tagName === "A", t = atins;
+        atins = false;
+        if(legatura && (!t || li.classList.contains("deschis"))){ return; }
+        e.preventDefault();
+        var da = !li.classList.contains("deschis");
+        inchide(li);
+        pune(li);
+        li.classList.toggle("deschis", da);
+        li.classList.toggle("inchis", !da);
+        b.setAttribute("aria-expanded", da ? "true" : "false");
+      });
+    });
+    document.addEventListener("click", function(e){ if(!bara.contains(e.target)){ inchide(null); } });
+    document.addEventListener("keydown", function(e){
+      if(e.key !== "Escape"){ return; }
+      inchide(null);
+      var f = document.activeElement;
+      if(f && bara.contains(f)){
+        var li = f.closest(".hds-bara-are");
+        // intai focusul pe buton (focusin scoate „inchis”), apoi submeniul inchis cat focusul ramane pe buton
+        if(li){ li.firstElementChild.focus(); li.classList.add("inchis"); }
+      }
+    });
+  }
+  // casuta „Caută în meniu”: propunerile sub ea; Enter sau clic deschide setarea, altfel cautarea completa
+  var F = document.getElementById("hdsCaut"), T = document.getElementById("hdsCautText"), L = document.getElementById("hdsCautLista");
+  if(F && T && L){
+    var rez = [], ales = -1, ceas = 0, nr = 0;
+    var inchideL = function(){
+      L.hidden = true; ales = -1;
+      T.setAttribute("aria-expanded", "false"); T.removeAttribute("aria-activedescendant");
+    };
+    var deschideRez = function(i){
+      var x = rez[i];
+      if(!x){ return; }
+      location.href = cuJeton(x.web || ("/cauta-setari?q=" + encodeURIComponent(T.value.trim() || x.titlu || "")));
+    };
+    var alege = function(i){
+      ales = i;
+      fiecare(L.children, function(li, k){ li.setAttribute("aria-selected", k === i ? "true" : "false"); });
+      var li = L.children[i];
+      if(li){ T.setAttribute("aria-activedescendant", li.id); if(li.scrollIntoView){ li.scrollIntoView({block: "nearest"}); } }
+    };
+    var arata = function(lista){
+      rez = (lista || []).slice(0, 8);
+      ales = -1;
+      L.textContent = "";
+      if(!rez.length){
+        var g = document.createElement("li"); g.className = "hds-caut-gol"; g.textContent = R.getAttribute("data-t-niciun");
+        L.appendChild(g);
+      }
+      rez.forEach(function(x, i){
+        var li = document.createElement("li");
+        li.id = "hdsCautR" + i; li.setAttribute("role", "option"); li.setAttribute("aria-selected", "false");
+        var t = document.createElement("span"); t.textContent = x.titlu || ""; li.appendChild(t);
+        var d = document.createElement("small");
+        d.textContent = (x.drum || "") + (!x.web && x.televizor ? " (" + R.getAttribute("data-t-tv") + ")" : "");
+        li.appendChild(d);
+        li.addEventListener("mousedown", function(e){ e.preventDefault(); deschideRez(i); });
+        L.appendChild(li);
+      });
+      L.hidden = false;
+      T.setAttribute("aria-expanded", "true");
+    };
+    T.addEventListener("input", function(){
+      clearTimeout(ceas);
+      var text = T.value.trim();
+      if(text.length < 2){ nr++; inchideL(); return; }
+      ceas = setTimeout(function(){
+        var eu = ++nr;
+        api("/api/cauta-setari?q=" + encodeURIComponent(text)).then(function(d){
+          if(eu === nr && d && d.result){ arata(d.rezultate); }
+        }).catch(function(){});
+      }, 220);
+    });
+    T.addEventListener("keydown", function(e){
+      if(e.key === "ArrowDown" || e.key === "ArrowUp"){
+        if(L.hidden || !rez.length){ return; }
+        e.preventDefault();
+        var n = rez.length;
+        alege(e.key === "ArrowDown" ? (ales + 1) % n : (ales <= 0 ? n - 1 : ales - 1));
+      } else if(e.key === "Escape" && !L.hidden){ e.stopPropagation(); inchideL(); }
+    });
+    T.addEventListener("blur", function(){ setTimeout(inchideL, 150); });
+    F.addEventListener("submit", function(e){
+      if(L.hidden || !rez.length){ return; }
+      var i = ales >= 0 ? ales : (rez[0].web ? 0 : -1);
+      if(i >= 0){ e.preventDefault(); deschideRez(i); }
+    });
+  }
+  // butonul interfetei web a modulului de acces care ruleaza
+  var Mo = document.getElementById("hdsModul"), MoT = document.getElementById("hdsModulText");
+  if(!Mo || !MoT){ return; }
+  var adresa = function(i){
+    if(!i || (i.protocol !== "http" && i.protocol !== "https")){ return null; }
+    var port = Number(i.port);
+    if(!(port >= 1 && port <= 65535 && Math.floor(port) === port)){ return null; }
+    var gazda = location.hostname;
+    if(gazda.indexOf(":") !== -1 && gazda.charAt(0) !== "["){ gazda = "[" + gazda + "]"; }
+    return i.protocol + "://" + gazda + ":" + port + "/";
+  };
+  var modul = function(){
+    if(document.hidden){ return; }
+    api("/api/acces-conditionat-interfete").then(function(d){
+      if(!d || !d.result){ return; }
+      var gasit = null;
+      (d.interfete || []).some(function(i){ var u = adresa(i); if(u){ gasit = {i: i, u: u}; } return !!u; });
+      if(!gasit){ Mo.hidden = true; return; }
+      var i = gasit.i, text = i.eticheta || ((i.sufix || "") + (i.versiune ? " " + i.versiune : ""));
+      MoT.textContent = text;
+      Mo.href = gasit.u;
+      Mo.title = R.getAttribute("data-t-modul") + ": " + text;
+      Mo.hidden = false;
+    }).catch(function(){});
+  };
+  modul();
+  setInterval(modul, 30000);
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden){ modul(); } });
+})();
+"""
+
+
 SCRIPT_CADRU = u"""<script>
 (function(){
   var h = document.documentElement, A = document.getElementById("hdsAntet"), M = document.getElementById("hdsMeniu");
@@ -1671,6 +2057,10 @@ SCRIPT_CADRU = u"""<script>
 </script>"""
 
 
+# scriptul randului de sus intra in acelasi <script> cu al antetului, la inceput (antetul are tot un singur script al
+# lui); sirul de mai sus ramane scriptul antetului singur, pentru probele care il citesc din sursa
+SCRIPT_CADRU = SCRIPT_CADRU.replace(u"<script>\n", u"<script>\n" + SCRIPT_BARA, 1)
+
 def _pictogramaRetea():
 	"""Pictograma retelei din antet (stare_retea_web.py), cu starea de acum; "" la orice eroare."""
 	try:
@@ -1682,7 +2072,7 @@ def _pictogramaRetea():
 
 
 def antetHtml(ctx):
-	"""Antetul, umbra, meniul (sertarul sau bara din stanga) si bara de jos de pe telefon, plus scriptul lor.
+	"""Antetul, umbra, meniul (sertarul) si bara de jos de pe telefon, plus scriptul lor.
 	`ctx` vine din context()."""
 	jeton = ctx.get("jeton") or ""
 	cale = ctx.get("cale") or "/"
@@ -1722,6 +2112,7 @@ def antetHtml(ctx):
 		_pictogramaRetea(),
 		u'<span class="hds-ceas" id="hdsCeas"></span></div>',
 		u"</div></header>",
+		randSusHtml(ctx),
 		u'<div class="hds-umbra" id="hdsUmbra" hidden></div>',
 		u'<nav class="hds-meniu" id="hdsMeniu" aria-label="%s">' % _e(_t("Meniul receptorului")),
 		u'<div class="hds-meniu-cap"><span class="hds-sigla">%s</span><div><strong>HD Satelit'
@@ -1730,7 +2121,7 @@ def antetHtml(ctx):
 		% (_e(_t("Închide meniul")), _ic("inchide")),
 		u'<form class="hds-cauta" action="/cauta-setari" method="get" role="search">'
 		u'<input type="search" name="q" maxlength="60" placeholder="%s" aria-label="%s" autocomplete="off">%s'
-		u'<button type="submit" class="hds-b">%s</button></form>' % (_e(_t("Caută setări")), _e(_t("Caută setări")), jeton_formular,
+		u'<button type="submit" class="hds-b">%s</button></form>' % (_e(_t("Caută în meniu")), _e(_t("Caută în meniu")), jeton_formular,
 			_e(_t("Caută"))),
 		ctx.get("meniu_html") or u"",
 		u'<p class="hds-meniu-jos">%s <a href="%s">%s</a></p>' % (_e(_t("Tema interfeței web: %s.") % nume_tema),
@@ -1941,6 +2332,7 @@ def context(request, html, P, jeton="", csrf=""):
 		"rute": rute,
 		"drum": drumPagina(grupe, cale, titluPagina(html)),
 		"meniu_html": meniuHtml(grupe, cale, jeton),
+		"bara_html": baraHtml(grupe, cale, jeton),
 		"nume": numeReceptor(),
 		"versiune": versiuneImagine(),
 		"stil": stil(c),

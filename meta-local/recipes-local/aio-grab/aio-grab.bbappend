@@ -20,8 +20,17 @@
 # Sursa vine de pe ramura master (AUTOREV), deci textul se poate schimba: hds_fara_nume (clasa hds-fara-nume) opreste
 # construirea daca programul instalat mai poarta un nume.
 # PR ".hds1": alt continut si alte metadate la aceeasi versiune, ca opkg sa ia pachetul din feed.
+# PR ".hds2" (0.7.5): peticul grab-ecran-mai-mare-decat-hd.patch, mai jos.
 MAINTAINER = "Monea Software pentru HD Satelit"
-PR:append = ".hds1"
+PR:append = ".hds2"
+
+# 0.7.5 (13.11.2026): grab cadea (Segmentation fault) cand interfata e mai mare decat 1920x1080 pe o placa fara e2egl:
+# tema la 2560x1440 pe HiSilicon, cu hi_fb peticit (clasa hisi-hifb-wqhd). Memoria capturii era fixa pentru 1920x1080
+# puncte, iar getosd() copia tot ecranul (14,7 MB in 8,3 MB). Peticul socoteste memoria si din ecranul de acum (fb0, cel
+# mult 3840x2160) si refuza curat un ecran mai mare decat ea. Fara el, la 2K nu merg captura din interfata web si
+# capturile din rapoartele beta testerilor si din asistenta. Peticul e scris pe comiterea fixata mai jos (aea30841).
+FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+SRC_URI:append = " file://grab-ecran-mai-mare-decat-hd.patch"
 
 # Sursa fixata la comiterea din imaginea 0.6.0 (pachetul aio-grab 2.0+git135+aea30840 din manifestul ei; lotul
 # imagine-060-v10): reteta OE-Alliance ia ultima comitere de pe master (AUTOREV), iar dupa 24.10.2026 master a primit

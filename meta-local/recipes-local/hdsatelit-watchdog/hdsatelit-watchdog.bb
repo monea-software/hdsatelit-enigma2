@@ -69,7 +69,7 @@ PV = "0.1.0"
 # Tot in r14: „memoria pozelor lipseste” citita din vmallocinfo se crede numai dupa doua citiri la rand fara mapare (o
 # citire falsa noaptea, V20, dadea anuntul si putea cere o repornire in standby de prisos). Tot cu r14 ajunge pe receptoare
 # si paznicul care merge fara /dev/watchdog (56a30f81a, ramas pe r13). Fara importuri noi, deci RDEPENDS neschimbat.
-PR = "r14"
+PR = "r15"
 
 SRC_URI = "file://hds-watchdog.py"
 S = "${UNPACKDIR}"

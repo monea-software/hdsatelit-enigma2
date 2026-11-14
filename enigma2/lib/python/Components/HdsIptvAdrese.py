@@ -37,6 +37,11 @@ from collections import OrderedDict
 from urllib.parse import urljoin
 
 try:
+	# IncompleteRead (flux „chunked” rupt de server sau de inchiderea legaturii) e HTTPException, nu OSError
+	from http.client import HTTPException
+except ImportError:
+	HTTPException = OSError
+try:
 	from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 except ImportError:  # Python 2: fara acest modul nu porneste nimic, fluxurile raman fara adresa locala
 	BaseHTTPRequestHandler = object
@@ -45,11 +50,12 @@ except ImportError:  # Python 2: fara acest modul nu porneste nimic, fluxurile r
 from Components import HdsIptvSurse as I
 from Components import HdsIptvClient as C
 
-_CALE = re.compile(r"^/tv/([0-9a-f]{8})/([A-Za-z0-9_.\-]{1,64})$")
+_CALE = re.compile(r"^/(tv|proba)/([0-9a-f]{8})/([A-Za-z0-9_.\-]{1,64})$")   # /proba/: Components/HdsIptv4K (nu e omul)
 _GAZDE = ("127.0.0.1:%d" % I.PORT, "localhost:%d" % I.PORT)
 
 ASCULTARE_S = 5       # cat asteapta bucla intre doua cereri: o cerere o trezeste pe loc, deci nu intarzie nimic
 TAMPON_MAX = 16 * 1024 * 1024       # octeti tinuti cel mult pentru un flux viu: cititorul asteapta peste atat
+SCRIERE_MAX = 512 * 1024            # cat se scrie playerului dintr-o data (iaTot)
 PREUMPLERE_OCTETI = 1500 * 1024     # inainte de primul octet catre player: atat, sau
 PREUMPLERE_S = 1.5                  # atat timp, ce vine intai (la inceput serverele trimit de obicei mai repede decat se reda)
 TERMEN_CITIRE_S = 10                # server care tace: legatura se reface
@@ -65,7 +71,14 @@ _canale = {}          # sursa -> (semnul fisierului, {cheie: a patra coloana})
 _surse = (None, [])   # (semnul fisierului, sursele)
 _server = None
 _fir = None
-_hls = OrderedDict()
+_hls = OrderedDict()   # jeton -> (sursa, cheie, adresa, ora): segmentele si cheile din listele media
+# Jetoanele sub-listelor (variantele si pistele din lista principala) stau separat: o lista media cu fereastra lunga (EBS: 903
+# segmente; Canal Parlamento: 4800) punea mii de jetoane la fiecare reimprospatare si le impingea afara din _hls pe cele ale
+# sub-listelor, iar playerul primea 404 la urmatoarea reimprospatare (canalul se oprea; DEM, 14.11.2026). Amandoua se scot dupa
+# folosire (o cerere muta jetonul la capat), nu dupa ordinea punerii.
+_hlsListe = OrderedDict()
+MAX_JETOANE = 8192
+MAX_JETOANE_LISTE = 1024
 _HLS = re.compile(r'^/hls/([0-9a-f]{8})/([A-Za-z0-9_.\-]{1,64})/([0-9a-f]{24})$')
 
 
@@ -163,6 +176,7 @@ class _Masura(object):
 		self.trimis = False
 		self.hls = False
 		self.eroare_sursa = False
+		self.motiv = ""            # de ce n-a pornit, dupa raspunsul serverului (motivEroare; HdsIptvSurse.MOTIVE)
 		self.piste_hls = []
 		self.pts0 = None
 
@@ -178,6 +192,22 @@ class _Masura(object):
 
 _masura = None
 PAUZA_HLS_S = 30
+# cate cereri ale omului (/tv/, nu /proba/) sunt deschise acum in releu, si cat se conecteaza, inainte de primul octet: cautarea
+# canalelor 4K (HdsIptv4K.omulSeUita) nu porneste o proba peste ele (contul are de obicei o singura conexiune)
+_deschise_omului = 0
+
+
+def motivEroare(e):
+	"""Codul scurt al motivului (HdsIptvSurse.MOTIVE) dintr-o EroareIptv a releului."""
+	cod = getattr(e, "cod", 0) or 0
+	mesaj = getattr(e, "mesaj", "")
+	if mesaj == C.E_CONEXIUNI or cod in C.COD_CONEXIUNI:
+		return "conexiuni"
+	if cod in (401, 403, 451) or mesaj == C.E_REFUZ:
+		return "refuz"
+	if cod in (404, 410):
+		return "adresa"
+	return "server"
 ASTEPTARE_MAX_S = 8
 
 
@@ -194,7 +224,7 @@ def stareFlux(sid=None, cheie=None):
 	tampon = m.tampon
 	tampon_s = round(tampon.octeti * 8.0 / viteza, 1) if tampon is not None and viteza > 0 and m.trimis else None
 	return {"viteza": viteza, "raspuns_ms": m.raspuns_ms, "tampon_s": tampon_s, "hls": m.hls, "eroare_sursa": m.eroare_sursa,
-		"preumplere": m.preumplere, "reconectari": m.reconectari, "trimis": m.trimis, "octeti": m.octeti}
+		"preumplere": m.preumplere, "reconectari": m.reconectari, "trimis": m.trimis, "octeti": m.octeti, "motiv": m.motiv}
 
 
 def primulPts(b):
@@ -312,7 +342,7 @@ class _Tampon(object):
 				return False
 			self.bucati.append(b)
 			self.octeti += len(b)
-			self.semnal.notify_all()
+			self.semnal.notify()     # un singur fir asteapta de partea cealalta (scriitorul gol sau cititorul plin)
 			return True
 
 	def ia(self, termen=None):
@@ -330,6 +360,29 @@ class _Tampon(object):
 			self.octeti -= len(b)
 			self.semnal.notify_all()
 			return b
+
+	def iaTot(self, termen=None, maxim=SCRIERE_MAX):
+		"""Tot ce s-a strans (cel mult `maxim` octeti, dar macar o bucata), lipit intr-o singura bucata, sau None la sfarsit sau
+		cand trece termenul. Un singur write spre player in loc de unul pe bucata: socket-ul catre player nu are tampon, iar
+		recv-ul de la server da bucati mici (masurat pe Viper 4K V20, Sky 4K 16,7 Mb/s: releul ~32% dintr-un nucleu)."""
+		with self.semnal:
+			limita = None if termen is None else time.monotonic() + termen
+			while not self.bucati and not self.sfarsit:
+				ramas = None if limita is None else limita - time.monotonic()
+				if ramas is not None and ramas <= 0:
+					return None
+				self.semnal.wait(ramas if ramas is not None else 1)
+			if not self.bucati:
+				return None
+			luate = [self.bucati.popleft()]
+			n = len(luate[0])
+			while self.bucati and n + len(self.bucati[0]) <= maxim:
+				b = self.bucati.popleft()
+				luate.append(b)
+				n += len(b)
+			self.octeti -= n
+			self.semnal.notify()
+			return luate[0] if len(luate) == 1 else b"".join(luate)
 
 	def inchide(self):
 		with self.semnal:
@@ -380,7 +433,8 @@ def _citesteViu(raspuns, tampon, legatura, tinta_fn, a, m, plecat):
 		while not legatura.inchisa and not plecat():
 			try:
 				b = raspuns.read1(65536)
-			except (OSError, ValueError, AttributeError):
+			except (OSError, ValueError, AttributeError, HTTPException):
+				# 13.11.2026, pe receptorul de probe: IncompleteRead scapa si oprea firul (fara refacerea legaturii, cu Traceback in jurnal)
 				b = b""
 			if b:
 				m.adauga(len(b))
@@ -414,25 +468,42 @@ def _citesteViu(raspuns, tampon, legatura, tinta_fn, a, m, plecat):
 		tampon.inchide()
 
 
-def _locHls(sid, cheie, url):
+def _locHls(sid, cheie, url, sublista=False):
 	if not I.fluxBun(url) or not url.lower().startswith(("http://", "https://")):
 		raise C.EroareIptv(C.E_ADRESA)
 	jeton = hashlib.sha256((sid + "/" + cheie + "|" + url).encode("utf-8")).hexdigest()[:24]
+	tabel, maxim = (_hlsListe, MAX_JETOANE_LISTE) if sublista else (_hls, MAX_JETOANE)
 	with _lacat:
-		_hls[jeton] = (sid, cheie, url, time.monotonic())
-		_hls.move_to_end(jeton)
-		while len(_hls) > 8192:
-			_hls.popitem(last=False)
+		tabel[jeton] = (sid, cheie, url, time.monotonic())
+		tabel.move_to_end(jeton)
+		while len(tabel) > maxim:
+			tabel.popitem(last=False)
 	return "/hls/%s/%s/%s" % (sid, cheie, jeton)
 
 
+def _jetonHls(jeton):
+	"""(sursa, cheie, adresa, ora) a jetonului, mutat la capat (folosit acum), sau None. O sub-lista folosita isi ia ora de acum: un
+	canal privit peste 24 de ore nu se opreste la termenul jetonului."""
+	with _lacat:
+		for tabel in (_hlsListe, _hls):
+			v = tabel.get(jeton)
+			if v is not None:
+				if tabel is _hlsListe and time.monotonic() - v[3] <= 24 * 3600:
+					v = tabel[jeton] = v[:3] + (time.monotonic(),)
+				tabel.move_to_end(jeton)
+				return v
+	return None
+
+
 def _listaHls(text, baza, sid, cheie):
+	# lista principala (variante, piste): adresele ei sunt sub-liste, cu jetoanele lor separate
+	principala = "#EXT-X-STREAM-INF" in text or "#EXT-X-MEDIA:" in text
 	rez = []
 	for rand in text.splitlines():
 		if rand.startswith("#"):
-			rand = re.sub(r'URI="([^"\r\n]+)"', lambda m: 'URI="%s"' % _locHls(sid, cheie, urljoin(baza, m.group(1))), rand)
+			rand = re.sub(r'URI="([^"\r\n]+)"', lambda m: 'URI="%s"' % _locHls(sid, cheie, urljoin(baza, m.group(1)), principala), rand)
 		elif rand.strip():
-			rand = _locHls(sid, cheie, urljoin(baza, rand.strip()))
+			rand = _locHls(sid, cheie, urljoin(baza, rand.strip()), principala)
 		rez.append(rand)
 	return ("\n".join(rez) + "\n").encode("utf-8")
 
@@ -465,8 +536,7 @@ class _Cerere(BaseHTTPRequestHandler):
 		m = _CALE.match(cale)
 		h = _HLS.match(cale)
 		if h:
-			with _lacat:
-				v = _hls.get(h.group(3))
+			v = _jetonHls(h.group(3))
 			if not v or v[:2] != h.group(1, 2) or time.monotonic() - v[3] > 24 * 3600:
 				self._raspunde(404)
 				return
@@ -474,20 +544,23 @@ class _Cerere(BaseHTTPRequestHandler):
 		if m is None:
 			self._raspunde(404)
 			return
-		self._canal(m.group(1), m.group(2))
+		self._canal(m.group(2), m.group(3), m.group(1) == "proba")
 
 	def _anunta(self, sid, e):
 		s = I.sursa(sid, _sursele()) or {}
 		mesaj, al_sursei = C.mesajEroareRedare(s, e) if isinstance(e, C.EroareIptv) else (C.mesajRedare(s, C.E_NU_RASPUNDE), True)
 		m = _masura
-		if al_sursei and m is not None and m.sid == sid:
-			m.eroare_sursa = True
+		if m is not None and m.sid == sid:
+			if isinstance(e, C.EroareIptv):
+				m.motiv = motivEroare(e)
+			if al_sursei:
+				m.eroare_sursa = True
 		from Components import HdsIptvLucru as L
 		L.eroareRedare(sid, mesaj, al_sursei)
 
-	def _canal(self, sid, cheie):
+	def _canal(self, sid, cheie, proba=False):
 		"""Cererea unui canal: legatura noua, cea veche a sursei se inchide, apoi flux viu prin tampon sau direct (film, lista HLS)."""
-		global _masura
+		global _masura, _deschise_omului
 		s = I.sursa(sid, _sursele())
 		if s is None or not I.cheieBuna(cheie):
 			self._raspunde(404)
@@ -498,7 +571,11 @@ class _Cerere(BaseHTTPRequestHandler):
 		else:
 			legatura, a_inchis = _ocupa(s, sid)
 			m = _Masura(sid, cheie)
-			_masura = m
+			if not proba:
+				# o proba (cautarea canalelor 4K) are masurarea ei: bara, lista si HdsIptv4K.omulSeUita vad numai canalul omului
+				_masura = m
+				with _lacat:
+					_deschise_omului += 1
 		raspuns = None
 		try:
 			a = antete(sid, cheie)
@@ -516,18 +593,24 @@ class _Cerere(BaseHTTPRequestHandler):
 		except (ConnectionError, socket.timeout):
 			pass
 		except C.EroareIptv as e:
-			self._anunta(sid, e)
+			if not proba:
+				self._anunta(sid, e)
 			self._raspunde(503)
 		except Exception as e:
 			# numai felul erorii: textul ei ar putea cuprinde adresa
 			print("[HdsIptvAdrese] %s/%s: %s" % (sid, cheie, type(e).__name__))
-			self._anunta(sid, e)
+			if not proba:
+				# o proba cazuta (cautarea 4K, canal mort) nu e a omului: fara fereastra pe ecran, fara eroare pe cartela sursei
+				self._anunta(sid, e)
 			if not self._trimis:
 				self._raspunde(503)
 		finally:
 			if not cap:
 				legatura.inchide()
 				_elibereaza(sid, legatura)
+				if not proba:
+					with _lacat:
+						_deschise_omului -= 1
 			self.close_connection = True
 
 	def _trimite(self, f, sid, cheie, a, tinta_fn, legatura, m):
@@ -545,7 +628,8 @@ class _Cerere(BaseHTTPRequestHandler):
 				from Components.HdsIptvSubtitrari import pisteDinLista
 				m.piste_hls = pisteDinLista(corp.decode("utf-8", "replace"))
 			return
-		viu = m is not None and not f.headers.get("Content-Length") and f.status == 200
+		# o emisiune din arhiva (cheia a..., 0.7.5 IPI) are sfarsit, ca un film: la sfarsit nu se reface legatura (ar lua-o de la capat)
+		viu = m is not None and not f.headers.get("Content-Length") and f.status == 200 and not C.eArhiva(cheie)
 		self._antete(f.status, tip, dict((k, f.headers[k]) for k in ("Content-Length", "Content-Range", "Accept-Ranges") if f.headers.get(k)))
 		if self.command == "HEAD":
 			return
@@ -572,7 +656,7 @@ class _Cerere(BaseHTTPRequestHandler):
 			m.preumplere = 100
 			m.trimis = True
 			while not legatura.inchisa:
-				b = tampon.ia(1.0)
+				b = tampon.iaTot(1.0)
 				if b is None:
 					if tampon.sfarsit and not tampon.octeti:
 						break
@@ -692,6 +776,7 @@ def opreste():
 	_fir = None
 	_canale.clear()
 	_hls.clear()
+	_hlsListe.clear()
 	with _lacat:
 		toate = [x for lista in _legaturi.values() for x in lista]
 		_legaturi.clear()

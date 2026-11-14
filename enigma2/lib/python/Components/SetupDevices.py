@@ -27,6 +27,14 @@ def InitSetupDevices():
 	
 	config.osd = ConfigSubsection()
 	config.osd.language = ConfigText(default = "ro_RO");
+	# limba asistentului de la prima pornire dupa tara (Components/HdsLimbaTara.py): aici, cand randul din settings
+	# tocmai a fost citit (inaintea lui HdsCopieSetari.fixeaza_setari, care il scrie la fiecare pornire); la prima pornire
+	# fara limba aleasa de om, tara se cauta pe un fir, fara sa intarzie pornirea
+	try:
+		from Components import HdsLimbaTara
+		HdsLimbaTara.laPornire(config.osd.language)
+	except Exception as e:
+		print("[SetupDevices] limba dupa tara: %r" % (e,))
 	config.osd.language.addNotifier(languageNotifier)
 
 	# marimea fonturilor (Screens/FontSetup.py, config.osd.fontscale) se pune de la pornire, inaintea primului ecran:

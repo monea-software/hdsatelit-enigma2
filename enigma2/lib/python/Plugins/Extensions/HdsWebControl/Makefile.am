@@ -16,6 +16,7 @@ install_PYTHON = \
 	antena_web.py \
 	aplicatii_web.py \
 	asociere.py \
+	montare_web.py \
 	aspect_web.py \
 	cadru_web.py \
 	captura_sigura.py \
@@ -39,6 +40,7 @@ install_PYTHON = \
 	ecran_negru_web.py \
 	ecran_pornire_web.py \
 	galerie_sigle_web.py \
+	screensaver_web.py \
 	egalizator_web.py \
 	filme_web.py \
 	font_interfata_web.py \
@@ -72,6 +74,7 @@ install_PYTHON = \
 	extensii_web.py \
 	diseqc_web.py \
 	navigator_web.py \
+	aplicatii_tv_web.py \
 	mod_sigur_web.py \
 	mouse_web.py \
 	ocr_limbi_web.py \
@@ -91,6 +94,7 @@ install_PYTHON = \
 	radio_web.py \
 	radio_live_web.py \
 	radio_online_web.py \
+	filme_seriale_web.py \
 	scanare_import_web.py \
 	scanare_liste_web.py \
 	scanare_web.py \

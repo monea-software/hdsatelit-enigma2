@@ -689,6 +689,36 @@ def sesiuni_deschise(ref=None):
     return s.deschise(ref) if s is not None else None
 
 
+ADRESE_LOCALE = ('127.0.0.1', '::1', '::ffff:127.0.0.1')
+
+
+def _de_pe_receptor(ses):
+    """Clientul sesiunii e chiar receptorul: 127.0.0.1, sau adresa lui din retea (atunci adresa clientului e aceeasi cu
+    adresa locala a legaturii). Releul modulului cere canalul de la 127.0.0.1 pentru televizor, dar de la adresa din
+    retea a receptorului pentru un aparat din casa (o ia din cererea aparatului; proba WCR pe receptorul de probe SF8008, 14.11.2026)."""
+    ip = ses.adresa[0] if ses.adresa else None
+    if not ip:
+        return False
+    if ip in ADRESE_LOCALE:
+        return True
+    try:
+        return ses.conn.getsockname()[0] == ip
+    except Exception:
+        return False
+
+
+def sesiuni_locale(ref):
+    """Firul principal. Cate sesiuni deschise ale serviciului `ref` (aceeasi cheie ca la deschise) au fost cerute de pe
+    receptor (_de_pe_receptor): asa isi ia canalul releul modulului de acces (Stream Relay). Cat releul da un canal,
+    modulul trimite cuvintele lui numai releului (Components/HdsTransmisie.py, TEXT_GASIT_RELEU). 0 fara server."""
+    s = obtine()
+    cheie = _cheie_ref(ref)
+    if s is None or not cheie:
+        return 0
+    return sum(1 for x in list(s.sesiuni) if not x.oprita.is_set() and _cheie_ref(x.ref) == cheie
+        and _de_pe_receptor(x))
+
+
 def opreste_sesiunile(ref):
     """Firul principal. Sesiunile de pe purtatorul `ref` se opresc pe loc (Server.opreste_sesiunile). -> numarul lor,
     0 daca serverul nu ruleaza."""

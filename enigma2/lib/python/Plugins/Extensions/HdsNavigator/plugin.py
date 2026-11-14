@@ -14,7 +14,8 @@
 #   - meniul: Media > „Navigator web” si Setari > Surse Internet > „Setări navigator web” (data/menu.xml, prin
 #     Screens/HdsNavigatorWeb.py): deschideNavigator, deschideSetari;
 #   - butonul din ecranul camului (Albastru): deschideInterfataCam;
-#   - interfata web (HdsWebControl/navigator_web.py, /navigator): „Deschide pe televizor”.
+#   - interfata web (HdsWebControl/navigator_web.py, /navigator): „Deschide pe televizor”;
+#   - meniul „Aplicații” (Screens/HdsAplicatii.py) si pagina web /aplicatii-tv: deschideAplicatie (0.7.5).
 
 from . import setari as S
 
@@ -34,6 +35,14 @@ def deschideInterfataCam(session, port=None, **kwargs):
 	from .ecrane import HdsNavigatorEcran
 	from . import lansator as L
 	return session.open(HdsNavigatorEcran, L.MOD_CAM, None, port)
+
+
+def deschideAplicatie(session, aplicatie, **kwargs):
+	"""O aplicatie din meniul „Aplicații” (scurtatura din Components/HdsAplicatii), pe tot ecranul; EXIT intoarce
+	ecranul de unde a fost deschisa."""
+	from .ecrane import HdsNavigatorEcran
+	from . import lansator as L
+	return session.open(HdsNavigatorEcran, L.MOD_APLICATIE, aplicatie["url"], None, aplicatie)
 
 
 def deschideSetari(session, **kwargs):

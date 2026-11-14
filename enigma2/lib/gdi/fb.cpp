@@ -138,6 +138,11 @@ int fbClass::SetMode(unsigned int nxRes, unsigned int nyRes, unsigned int nbpp)
 		{
 			perror("FBIOPUT_VSCREENINFO");
 			printf("fb failed\n");
+			// HD Satelit: driverul a refuzat modul (hi_fb pe HiSilicon nu trece de 1920x1080; tema Fury-FHD pe 2K,
+			// forum 948). Modul de pe placa a ramas cel vechi: xRes/yRes/stride/paginile se iau de pe placa, ca
+			// setOffset si gFBDC sa nu lucreze cu marimea ceruta si refuzata.
+			citesteModulPlacii();
+			eWarning("[fb] SetMode refused: wanted %dx%dx%d, the framebuffer stays at %dx%dx%d", nxRes, nyRes, nbpp, xRes, yRes, bpp);
 			return -1;
 		}
 		eDebug(" - double buffering not available.");
@@ -166,6 +171,19 @@ int fbClass::SetMode(unsigned int nxRes, unsigned int nyRes, unsigned int nbpp)
 	stride=fix.line_length;
 	memset(lfb, 0, stride*yRes);
 	return 0;
+}
+
+void fbClass::citesteModulPlacii()
+{
+	if (ioctl(fd, FBIOGET_VSCREENINFO, &screeninfo) < 0)
+		return;
+	xRes = screeninfo.xres;
+	yRes = screeninfo.yres;
+	bpp = screeninfo.bits_per_pixel;
+	m_number_of_pages = yRes ? screeninfo.yres_virtual / yRes : 1;
+	fb_fix_screeninfo fix;
+	if (ioctl(fd, FBIOGET_FSCREENINFO, &fix) == 0)
+		stride = fix.line_length;
 }
 
 int fbClass::setOffset(int off)

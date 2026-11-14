@@ -206,6 +206,12 @@ class Picon(Renderer):
 			if pngname == "":
 				tmp = resolveFilename(SCOPE_CURRENT_SKIN, "picon_default.png")
 				if fileExists(tmp):
+					# tema HDSatelit la 2K: picon_default desenat la 200x120 (HDSatelit/2k/), nu marit
+					try:
+						import skin
+						tmp = skin.caleLaEcran(tmp)
+					except Exception:
+						pass
 					pngname = tmp
 				else:
 					pngname = resolveFilename(SCOPE_SKIN_IMAGE, "skin_default/picon_default.png")

@@ -93,11 +93,19 @@ def fel_din(valoare):
 	return valoare if valoare in FELURI else "dab"
 
 
+def _numeFlux(f, D):
+	"""Numele multiplexului in limba receptorului (Hds/DabT2/nume.py: tara tradusa), ca pe ecran si in buchet."""
+	try:
+		return _text(D.nume.nume_feed(f))
+	except Exception:
+		return _text(f.get("nume") or f.get("id"))
+
+
 def _acum(ctrl, D):
 	"""Ca randul de jos al ferestrei la deschidere (EcranPrincipal._stare_curenta)."""
 	_ = D.limba._
 	if ctrl.stare == "canta" and ctrl.feed:
-		return _("Canta acum: %s pe %s") % (_text(ctrl.feed.get("nume") or ctrl.feed.get("id")),
+		return _("Canta acum: %s pe %s") % (_numeFlux(ctrl.feed, D),
 			_text(D.tuner.text_transponder(ctrl.tp)))
 	if ctrl.stare == "pregatire":
 		return _("Se pregateste un post.")
@@ -126,7 +134,7 @@ def fluxuri(ctrl, D):
 					"căutate încă."))
 			rez.append({
 				"id": D.buchete._curata_id(f.get("id")),
-				"nume": _text(f.get("nume") or f.get("id")),
+				"nume": _numeFlux(f, D),
 				"transponder": _text(D.tuner.text_transponder(tp)),
 				"numar": n,
 				"numar_text": _text(D.ecrane.text_numar(prof, n)) if n else "",
@@ -303,7 +311,7 @@ def actiune(fel, ce, flux="", D=None, sesiune=None):
 			return _cu_stare(fel, D, False, _t("Se șterg numai fluxurile adăugate de mână."))
 		D.ecrane.sterge_manual(prof, f.get("id"))
 		ctrl.lista(forteaza=True)
-		mesaj = _t("Am șters fluxul „%s”.") % _text(f.get("nume") or f.get("id"))
+		mesaj = _t("Am șters fluxul „%s”.") % _numeFlux(f, D)
 		_LUCRU[fel] = {"in_curs": False, "eroare": False, "mesaj": mesaj}
 		return _cu_stare(fel, D, True, mesaj)
 	# invata
@@ -319,7 +327,7 @@ def actiune(fel, ce, flux="", D=None, sesiune=None):
 	if getattr(ctrl, "sesiune", None) is None:
 		return _cu_stare(fel, D, False, _t("Receptorul nu a terminat pornirea. Încearcă din nou peste un minut."))
 	_LUCRU[fel] = {"in_curs": True, "eroare": False,
-		"mesaj": _text(D.ecrane.text_caut(ctrl.profil, _text(f.get("nume") or f.get("id"))))}
+		"mesaj": _text(D.ecrane.text_caut(ctrl.profil, _numeFlux(f, D)))}
 	ctrl.invata(f, tp, lambda ok, r: _invatat(fel, D, ok, r))
 	return _cu_stare(fel, D, True, _LUCRU[fel]["mesaj"])
 

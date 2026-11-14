@@ -1795,7 +1795,6 @@ TEXTE_PAGINA = {
 		N_("Cheia e opțională: numai dacă serverul cere cheie."),
 		N_("Valoarea antetului, de exemplu Bearer, un spațiu și cheia ta; pleacă numai dacă ai scris numele "
 			"antetului."),
-		N_("Salvează cheia"),
 		N_("Șterge cheia"),
 		N_("Cheia se păstrează pe receptor, criptată; nu se mai arată niciodată."),
 		N_("Adaugă încă o cheie"),
@@ -1819,7 +1818,6 @@ TEXTE_PAGINA = {
 		N_("Numele modelului de pe server, de exemplu gemma3:4b sau qwen2.5:7b."),
 		N_("ID-ul contului Cloudflare"),
 		N_("32 de litere și cifre, din panoul Cloudflare, la Account ID."),
-		N_("Regiunea, adresa, modelul și celelalte câmpuri se salvează când ieși din câmp (sau apeși Enter)."),
 		N_("Servicii de rezervă"),
 		N_("Când serviciul ales nu poate traduce (prea multe cereri, limita pe zi, cheie refuzată, fără "
 			"răspuns), cererea trece singură la următorul din listă care are câmpurile completate; primul "
@@ -1892,12 +1890,9 @@ TEXTE_PAGINA = {
 		N_("Pune contorul ghidului la zero"),
 		N_("Ce s-a tradus din teletext și HbbTV"),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
-		N_("http://192.168.1.50:5000/translate"),
 		N_("Authorization"),
 		N_("lipește cheia aici"),
 		N_("translatedText"),
-		N_("http://192.168.1.50:5000"),
-		N_("http://192.168.1.50:11434"),
 		N_("gemma3:4b"),
 	),
 	"js": (
@@ -1972,10 +1967,8 @@ TEXTE_PAGINA = {
 		N_("Traducerea stă în pauză după erori încă"),
 		N_("Se salvează..."),
 		N_("Receptorul nu răspunde."),
-		N_("Se salvează cheia..."),
 		N_("Serviciul nu a răspuns în"),
 		N_("secunde."),
-		N_("Scrie sau lipește întâi cheia."),
 		N_("Ștergi cheia acestui serviciu de pe receptor?"),
 		N_("Se trimite proba..."),
 		N_("Se pune contorul la zero..."),

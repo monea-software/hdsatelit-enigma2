@@ -6,7 +6,8 @@
 # web /editor-canale, modul avansat): citirea, satelit nou / schimbat / sters, transponder nou / schimbat / sters,
 # scrierea cu copie de siguranta si reincarcarea in NimManager.
 #
-# LOCUL: nucleul citeste numai /etc/tuxbox/satellites.xml (lib/dvb/db.cpp, eDVBDB::readSatellites, cale fixa), chemat
+# LOCUL: nucleul citeste /etc/enigma2/satellites.xml cand exista, altfel /etc/tuxbox/satellites.xml (lib/dvb/db.cpp,
+# eDVBDB::readSatellites; aceeasi regula in HdsEditorCanaleDate.cale_sateliti(), deci editorul scrie fisierul citit), chemat
 # din NimManager.readTransponders la pornire. Arborele e libxml2 strict (lib/base/xmltree.h: xmlReadFile fara RECOVER):
 # un fisier rau inseamna niciun satelit, deci nimic nu se scrie fara recitirea lui si fara verificarea formei (expat).
 # Nucleul ia ca satelit orice copil al radacinii cu name si position (vestul cu minus devine 3600 + x) si ca
@@ -55,7 +56,7 @@ try:
 except Exception:
 	_EroareEditor = None
 
-CALE = D.SATELITI                     # /etc/tuxbox/satellites.xml, singurul citit de nucleu
+CALE = D.SATELITI                     # /etc/tuxbox/satellites.xml; nucleul citeste D.cale_sateliti() (intai /etc/enigma2)
 DOSAR_COPII = "/etc/enigma2/hds-copii-canale"
 MAX_COPII = 5
 LOC_MINIM = 512 * 1024
@@ -845,7 +846,7 @@ class Sateliti(object):
 def citeste(cale=None):
 	"""Lista satelitilor din `cale` (implicit CALE, fisierul citit de nucleu). -> Sateliti; Eroare daca lipseste sau
 	e stricat."""
-	cale = cale or CALE
+	cale = cale or D.cale_sateliti()
 	try:
 		with open(cale, "rb") as f:
 			date = f.read()
@@ -910,7 +911,7 @@ def _bine_format(date):
 
 def dosar_copii(cale):
 	"""DOSAR_COPII pentru fisierul nucleului, altfel hds-copii-canale langa fisier."""
-	if os.path.abspath(cale) == os.path.abspath(CALE):
+	if os.path.abspath(cale) in (os.path.abspath(CALE), os.path.abspath(D.cale_sateliti())):
 		return DOSAR_COPII
 	return os.path.join(os.path.dirname(os.path.abspath(cale)), "hds-copii-canale")
 
@@ -967,7 +968,7 @@ def scrie(sateliti, cale=None, copie_in=None):
 	-> calea copiei; None cand nu era fisier vechi sau cand pe disc e deja exact aceeasi lista (nu se scrie nimic).
 	Eroare cu textul pentru om cand fisierul s-a schimbat pe disc de la citire, cand nu e loc sau cand scrierea nu
 	merge; fisierul vechi ramane atunci neatins."""
-	cale = cale or sateliti.cale or CALE
+	cale = cale or sateliti.cale or D.cale_sateliti()
 	date = sateliti.octeti()
 	# lista scrisa trebuie sa se citeasca inapoi la fel si sa fie XML bun (nucleul nu iarta nicio greseala)
 	try:

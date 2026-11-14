@@ -451,15 +451,28 @@ def eCanal(ref):
 	return ref_buna(ref) and not steaguri(ref) & (DOSAR | MARCAJ | MARCAJ_NUMEROTAT | ASCUNS)
 
 
+# Canalele de internet (Components/HdsIptvSurse.refCanal): 4097 cu calea releului local; ghidul lor sta in acelasi cache, sub SID/TSID/ONID
+_CALE_IPTV = "http%3a//127.0.0.1%3a8897/tv/"
+
+
+def _eIptv(campuri, cale):
+	return campuri[0] == 4097 and (not cale or cale.lower().startswith(_CALE_IPTV))
+
+
 def ref_epg(ref):
-	"""Referinta DVB fara nume si fara cale, cu hex mare (cum o scrie toString), pentru cache-ul EPG; None altfel."""
+	"""Referinta DVB fara nume si fara cale, cu hex mare (cum o scrie toString), pentru cache-ul EPG; la un canal de internet,
+	4097 fara cale (ghidul lui adus de Components/HdsIptvEpg); None altfel."""
 	c = _campuri(ref)
 	if c is None:
 		return None
 	campuri, cale = c
-	if campuri[0] != 1 or cale or campuri[1] & (DOSAR | MARCAJ):
+	if campuri[1] & (DOSAR | MARCAJ):
 		return None
-	return "1:0:" + ":".join("%X" % v for v in campuri[2:10]) + ":"
+	if campuri[0] == 1 and not cale:
+		return "1:0:" + ":".join("%X" % v for v in campuri[2:10]) + ":"
+	if _eIptv(campuri, cale):
+		return "4097:0:" + ":".join("%X" % v for v in campuri[2:10]) + ":"
+	return None
 
 
 def caleFisier(ref):
@@ -1814,7 +1827,7 @@ def h_powerstate(c):
 	se inchide fereastra. De aceea starea de dupa intrare se citeste din nou: in coada = "instandby" false,
 	"standbypending" true si mesajul (XML: e2instandby false). Iesirea se incheie la urmatorul pas al buclei
 	(Screen.close), deci acolo "instandby" false e spus dinainte, ca pana acum.
-	0.7.4 (.114, 11.11.2026: doua cereri ramase in coada, iar un OK dupa 12 minute a bagat receptorul in standby, desi
+	0.7.4 (receptorul de probe SF8008, 11.11.2026: doua cereri ramase in coada, iar un OK dupa 12 minute a bagat receptorul in standby, desi
 	intre timp se ceruse trezirea): trezirea (newstate=4) scoate cererile de standby din coada; comutarea (newstate=0)
 	cu o cerere in coada o anuleaza, nu mai pune inca una."""
 	M = c.M
@@ -2351,7 +2364,8 @@ class _CerereDinEveniment(_Cerere):
 
 def h_timeraddbyeventid(c):
 	ref = _sref(c)
-	epgref = ref_epg(ref) if ref else None
+	# canalele de internet au ghid, dar nu se pot inregistra (eServiceFactoryMP3::record): raspunsul ramane cel de dinainte
+	epgref = ref_epg(ref) if ref and not ref.startswith("4097:") else None
 	eventid = c.intreg("eventid")
 	if epgref is None or eventid is None or not 0 <= eventid <= 65535:
 		return _comanda(c, False, _t("Canalul sau identificatorul emisiunii nu este bun."))

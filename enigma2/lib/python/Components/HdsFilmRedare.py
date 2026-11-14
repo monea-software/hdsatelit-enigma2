@@ -35,6 +35,9 @@ import re
 TIP_FILM = 4097
 MAX_NUME = 20		# numele unui format in mesajul de pe televizor
 FLUXURI = ("http://", "https://", "udp://", "rtp://", "rtsp://", "rtspt://", "mms://")
+# schemele de adresa: servicemp3 le pune in „capuri” cand lipseste sursa de retea a GStreamer (de exemplu souphttpsrc
+# fara libsoup pe Vu+ Solo SE 0.7.4, asistenta 743444): nu formatul imaginii lipseste, ci o componenta de retea
+SCHEME = ("http", "https", "rtmp", "rtmps", "rtmpt", "rtsp", "rtspt", "mms", "mmsh", "udp", "rtp", "srt", "ftp", "hls")
 
 
 def N_(text):
@@ -151,6 +154,7 @@ TXT_RETEA = N_("Legătura cu serverul filmului s-a întrerupt. Verifică rețeau
 TXT_NEPORNIT = N_("Filmul nu a pornit în 30 de secunde, așa că a fost oprit. Încearcă încă o dată.")
 TXT_NIMIC = N_("Fișierul nu are imagine sau sunet pe care receptorul să le poată reda.")
 TXT_FARA_REDARE = N_("Redarea filmelor nu este pregătită: lipsește o componentă din programul receptorului.")
+TXT_FARA_RETEA = N_("Filmele de pe internet au nevoie de o componentă de rețea care lipsește din programul receptorului.")
 TXT_FORMATE = N_("Imagine: %s. Sunet: %s.")
 TXT_NU_ACUM = N_("Filmul nu poate porni acum.")
 # lipsa memoriei decodorului (felul "decodor"): receptorul o reface singur, deci pe ecran numai textul scurt, fara defect
@@ -164,6 +168,7 @@ TXT_CANAL_NEDESCHIS = N_("Fluxul canalului nu se poate desface: poate fi într-u
 TXT_CANAL_NIMIC = N_("Canalul nu trimite imagine sau sunet pe care receptorul să le poată reda.")
 TXT_CANAL_NU_ACUM = N_("Canalul nu poate porni acum.")
 TXT_CANAL_PORNESTE = N_("Canalul pornește imediat.")
+TXT_CANAL_FARA_RETEA = N_("Canalele de pe internet au nevoie de o componentă de rețea care lipsește din programul receptorului.")
 PENTRU_CANAL = {
 	TXT_REFUZ: TXT_CANAL_REFUZ,
 	TXT_FARA_IMAGINE: TXT_CANAL_REFUZ,
@@ -175,6 +180,7 @@ PENTRU_CANAL = {
 	TXT_NIMIC: TXT_CANAL_NIMIC,
 	TXT_NU_ACUM: TXT_CANAL_NU_ACUM,
 	TXT_PORNESTE: TXT_CANAL_PORNESTE,
+	TXT_FARA_RETEA: TXT_CANAL_FARA_RETEA,
 }
 
 
@@ -283,6 +289,11 @@ def _formateCunoscute(codec_video, codec_sunet):
 	return _t(TXT_FORMATE) % (v or "-", s or "-")
 
 
+def esteSchema(capuri):
+	"""„capuri” e schema unei adrese (http, https, rtmp...), nu un tip GStreamer (acelea au „/”)."""
+	return _fara_spatii(capuri).lower() in SCHEME
+
+
 def _are(nume, lista):
 	n = (nume or "").lower()
 	return bool(n) and any(x in n for x in lista)
@@ -315,6 +326,10 @@ def verdict(motiv, codec_video="", codec_sunet="", flux=False, canal=False):
 	container = numeContainer(capuri)
 	nume = numeFormat(capuri)
 	e_sunet = capuri.startswith("audio/")
+	if fel in ("lipsa", "componenta") and esteSchema(capuri):
+		# sursa de retea lipseste (elementul GStreamer pentru schema adresei): fluxul nu porneste deloc, oricare ar fi
+		# formatul imaginii; nu se spune „format necunoscut”
+		return Verdict(fel, True, _t(TXT_INCA_NU), _t(TXT_FARA_RETEA), capuri or detaliu)
 	if container and fel in ("lipsa", "componenta", "video", "sunet"):
 		# nu receptorul nu poate: lipseste o componenta din programul lui
 		return Verdict(fel, True, _t(TXT_INCA_NU), _t(TXT_CONTAINER) % container, capuri or detaliu)

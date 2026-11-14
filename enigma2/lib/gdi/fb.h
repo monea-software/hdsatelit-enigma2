@@ -29,6 +29,9 @@ public:
 	void disableManualBlit();
 	int showConsole(int state);
 	int SetMode(unsigned int xRes, unsigned int yRes, unsigned int bpp);
+	void citesteModulPlacii(); // HD Satelit: xRes/yRes/bpp/stride/paginile de pe placa (dupa un SetMode refuzat)
+	unsigned int getXRes() { return xRes; }
+	unsigned int getYRes() { return yRes; }
 	int Available() { return available; }
 	
 	int getNumPages() { return m_number_of_pages; }

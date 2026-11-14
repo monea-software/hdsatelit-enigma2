@@ -250,6 +250,10 @@ class IptvSetup(_EcranCartele):
 		self._surse = []
 		self._ceasStare = eTimer()
 		self._ceasStare.callback.append(self._arata)
+		# 0.7.5 (IPI): starea contului Xtream, ceruta pe un fir numai cat ecranul e deschis (config.usage.hds_iptv_cont)
+		self._conturi = {}
+		self._ceasCont = eTimer()
+		self._ceasCont.callback.append(self._ghid)
 		self.onLayoutFinish.append(self._pregatesteLista)
 		self.onLayoutFinish.append(self._arata)
 		L.asculta(self._laRezultat)
@@ -257,7 +261,32 @@ class IptvSetup(_EcranCartele):
 
 	def _laInchidere(self):
 		self._ceasStare.stop()
+		self._ceasCont.stop()
 		L.nuAsculta(self._laRezultat)
+
+	def _stareCont(self, p):
+		"""Starea contului sursei alese: din memoria ecranului, altfel cerere pe un fir (o data pe deschidere). -> dict sau None."""
+		if p is None or p.get("fel") != "xtream":
+			return None
+		sid = p["id"]
+		if sid in self._conturi:
+			return self._conturi[sid]
+		self._conturi[sid] = None
+		s = I.sursa(sid)
+		if s is None:
+			return None
+		import threading
+
+		def lucru():
+			rez = False             # False = cerut, nu se stie (serverul nu raspunde, functia oprita); None = inca se asteapta
+			try:
+				rez = C.stareContXtream(s) or False
+			except Exception as e:
+				print("[IptvSetup] starea contului: %s" % type(e).__name__)
+			self._conturi[sid] = rez
+		threading.Thread(target=lucru, name="IptvStareCont", daemon=True).start()
+		self._ceasCont.start(700, True)
+		return None
 
 	def _laRezultat(self, sursa_id, mesaj, schimbat):
 		self._arata()
@@ -298,7 +327,16 @@ class IptvSetup(_EcranCartele):
 				taste = _("OK: despre lista demo.")
 			else:
 				taste = _("OK: grupele. MENU: date de acces.")
-			self["ghid"].setText("%s %s: %s. %s" % (taste, p["nume"], detaliuSursa(p), mesajSursa(p)))
+			cont = self._stareCont(p)
+			text_cont = C.textStareCont(cont) if cont else ""
+			if text_cont:
+				# starea contului spune ea data expirarii: nu de doua ori
+				self["ghid"].setText("%s %s: %s. %s %s" % (taste, p["nume"], detaliuSursa(dict(p, expira=0)), text_cont,
+					mesajSursa(dict(p, expira=0))))
+			else:
+				self["ghid"].setText("%s %s: %s. %s" % (taste, p["nume"], detaliuSursa(p), mesajSursa(p)))
+			if p.get("fel") == "xtream" and self._conturi.get(p["id"], 0) is None and self._ceasCont is not None:
+				self._ceasCont.start(700, True)
 		elif self._surse:
 			self["ghid"].setText(_("Canalele apar în lista de canale, la Sateliți, pe rândul IPTV."))
 		else:
@@ -506,11 +544,12 @@ class IptvAlege(_EcranCartele):
 	</screen>
 	"""
 
+	# textele se traduc la afisare (_arata); N_ le arata lui xgettext
 	FELURI = (
-		("m3u", "Playlist", "O adresă de internet sau un fișier de pe stick."),
-		("xtream", "Cont", "Server, utilizator și parolă."),
-		("stalker", "Portal", "Adresa portalului și adresa MAC."),
-		("demo", "Listă demo", "Canale gratuite care permit asta, cu acordul lor la vedere."),
+		("m3u", N_("Playlist"), N_("O adresă de internet sau un fișier de pe stick.")),
+		("xtream", N_("Cont"), N_("Server, utilizator și parolă.")),
+		("stalker", N_("Portal"), N_("Adresa portalului și adresa MAC.")),
+		("demo", N_("Listă demo"), N_("Canale gratuite care permit asta, cu acordul lor la vedere.")),
 	)
 
 	def __init__(self, session):
@@ -552,17 +591,17 @@ class _ParolaNoua(ConfigPassword):
 		return ConfigPassword.getMulti(self, selected)
 
 
-# randurile fiecarui fel: (cheia sursei, numele randului, e parola)
+# randurile fiecarui fel: (cheia sursei, numele randului, e parola); numele, titlurile si ghidul se traduc la afisare (N_)
 _RANDURI = {
-	"m3u": (("adresa", "Adresa listei", False), ("nume", "Nume (opțional)", False)),
-	"xtream": (("server", "Server", False), ("utilizator", "Utilizator", False), ("parola", "Parolă", True), ("nume", "Nume (opțional)", False)),
-	"stalker": (("portal", "Adresa portalului", False), ("mac", "Adresa MAC", False), ("nume", "Nume (opțional)", False)),
+	"m3u": (("adresa", N_("Adresa listei"), False), ("nume", N_("Nume (opțional)"), False)),
+	"xtream": (("server", N_("Server"), False), ("utilizator", N_("Utilizator"), False), ("parola", N_("Parolă"), True), ("nume", N_("Nume (opțional)"), False)),
+	"stalker": (("portal", N_("Adresa portalului"), False), ("mac", N_("Adresa MAC"), False), ("nume", N_("Nume (opțional)"), False)),
 }
-_TITLURI = {"m3u": "Playlist", "xtream": "Cont", "stalker": "Portal"}
+_TITLURI = {"m3u": N_("Playlist"), "xtream": N_("Cont"), "stalker": N_("Portal")}
 _GHID = {
-	"m3u": "Scrie adresa listei sau alege fișierul de pe stick cu tasta galbenă. OK deschide tastatura.",
-	"xtream": "Scrie datele primite de la furnizor. OK deschide tastatura.",
-	"stalker": "Scrie adresa portalului și adresa MAC primite de la furnizor. OK deschide tastatura.",
+	"m3u": N_("Scrie adresa listei sau alege fișierul de pe stick cu tasta galbenă. OK deschide tastatura."),
+	"xtream": N_("Scrie datele primite de la furnizor. OK deschide tastatura."),
+	"stalker": N_("Scrie adresa portalului și adresa MAC primite de la furnizor. OK deschide tastatura."),
 }
 
 

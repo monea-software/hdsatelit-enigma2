@@ -1,0 +1,38 @@
+# HD Satelit: regulile garzii de model pentru AB-COM PULSe 4K (masina pulse4k, MACHINEBUILD pulse4k), NECONFIRMAT (MPU, 12.11.2026, imaginea
+# alfa). confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Masina pulse4k e stratul producatorului meta-abcom (OE-Alliance 6.0): nucleul linux-abcom 4.4.35 (defconfig-ul e acelasi la
+# pulse4k si pulse4kmini), driverele abcom-dvb-modules-pulse4k 20220504 (patru module monolitice pulse4k_1..4.ko, cu sirurile
+# ascunse, incarcate prin /etc/modules-load.d/_pulse4k.conf), fara libreader si fara hihalt. DOVEDITE din fisiere:
+#   partitions, kernel_part, rootfs_part, kernel_kib: bootargs.bin al producatorului (pulse4k-bootargs-20210329.zip,
+#            pulse4k/bootargs.bin, sha256 a14a4d3a1ddf8e24..., acelasi fisier in arhiva de recuperare publica OE-Alliance a
+#            masinii din 12.11.2026): blkdevparts=mmcblk0:1M(fastboot),1M(bootargs),18M(recovery),2M(bootoptions),
+#            2M(deviceinfo),4M(baseparam),4M(pqparam),4M(logo),40M(fastplay),20M(kernel),20M(trustedcore),4M(misc),
+#            1024M(system),150M(vendor),306M(e2tv),256M(cache),50M(private),8M(securestore),16M(linuxkernel1),
+#            16M(linuxkernel2),16M(linuxkernel3),16M(linuxkernel4),-(userdata) (aceeasi tabela ca la Zgemma H9 COMBO);
+#            STARTUP_LINUX_1 din abemmc-fastboot8gb_image.bbclass si din bootoptions.img-ul public: root=/dev/mmcblk0p23
+#            rootsubdir=linuxrootfs1 kernel=/dev/mmcblk0p19. ATENTIE: pulse4k.conf spune MTD_KERNEL p20 si MTD_ROOTFS p21
+#            (gresit); stratul nostru le pune p19/p23 in conf/distro/hdsatelit.conf.
+# NEDOVEDITE (de confirmat de un tester INAINTE de publicare, vezi STADIU-MPU.md): chip= si boxtype=. Driverele au sirurile
+# ascunse, iar imaginile publice nu arata ce scriu ele in /proc/msp/sys si /proc/stb/info/boxtype. Valorile de mai jos sunt
+# cele asteptate dupa familie (cip Hi3798MV200 ca la SF8008; tipul placii = numele masinii), nu masurate: o valoare gresita
+# opreste interfata cu ecranul „imagine pentru alt receptor”. boxtype= NU contine pulse4kmini: driverele celor doua masini difera
+# (pulse4k_4.ko), iar imaginea uneia pe cealalta ar porni fara tunere.
+# WireGuard e in nucleu (CONFIG_WIREGUARD=y), ca pe V20: fara modulul din afara nucleului.
+# hw=- : antetul fabricii din deviceinfo (p5) nu e cunoscut (nu se compara).
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=pulse4k.
+format=1
+distro=hdsatelit
+model=AB-COM PULSe 4K
+machine=pulse4k
+machinebuild=pulse4k
+chip=Hi3798MV200
+boxtype=pulse4k
+hw=-
+partitions=fastboot:1M,bootargs:1M,recovery:18M,bootoptions:2M,deviceinfo:2M,baseparam:4M,pqparam:4M,logo:4M,fastplay:40M,kernel:20M,trustedcore:20M,misc:4M,system:1024M,vendor:150M,e2tv:306M,cache:256M,private:50M,securestore:8M,linuxkernel1:16M,linuxkernel2:16M,linuxkernel3:16M,linuxkernel4:16M,userdata
+kernel_name=linuxkernel1
+rootfs_name=userdata
+kernel_part=mmcblk0p19
+kernel_kib=16384
+rootfs_part=mmcblk0p23
+confirmat=nu

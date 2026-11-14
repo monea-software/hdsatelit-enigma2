@@ -22,6 +22,13 @@ DEPENDS:append = " enigma2-hdsatelit"
 RDEPENDS:${PN}:remove = "enigma2"
 # gstplayer: ServiceApp porneste gstplayer_gst-1.0 pentru 5001 (legatura facuta de pachetul gstplayer la instalare);
 # reteta OE-A cere numai gstplayer2, care e alt program
-RDEPENDS:${PN}:append = " enigma2-hdsatelit gstplayer"
+# 14.11.2026 (SAP): enigma2-hdsatelit cel putin versiunea imaginii pentru care se construieste (serviceapp.so foloseste
+# simbolurile binarului enigma2: pe o baza mai veche opkg aduce intai enigma2-hdsatelit din feed), dar NU exact o
+# constructie: o republicare a lui enigma2-hdsatelit fara schimbari C++ (C74, c56b96f3f5) nu mai lasa ServiceApp
+# neinstalabil. Reteta OE-A cere "enigma2" fara versiune; `=` din feedul 0.7.4 (r7) l-a pus de mana pregateste_sva.py,
+# nu reteta. In feed e acum r7.1 (fa_feed_sap.py, `>=`), deci PR r8: o constructie noua trebuie sa fie mai noua pentru opkg.
+# Daca enigma2-hdsatelit se schimba in C++ in aceeasi versiune, ServiceApp se reconstruieste odata cu el (PR + 1).
+PR = "r8"
+RDEPENDS:${PN}:append = " enigma2-hdsatelit (>= ${DISTRO_VERSION}) gstplayer"
 CXXFLAGS:remove = "-std=c++11"
 PACKAGE_ARCH = "${MACHINE_ARCH}"

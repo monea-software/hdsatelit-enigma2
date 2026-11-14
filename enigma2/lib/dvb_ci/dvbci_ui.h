@@ -32,11 +32,14 @@ public:
 	/* slot pornit/oprit (ca setEnabled din enigma2 OE-Alliance, commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4) */
 	int setEnabled(int slot, bool enabled);
 	/* CI+ (din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4): managerul de
-	   continut spune cand slotul descifreaza; getCIPlusState: 0 = CI simplu, 1 = autentificare CI+, 2 = cheile primite */
+	   continut spune cand slotul descifreaza; getCIPlusState: 0 = CI simplu, 1 = autentificare CI+, 2 = cheile primite,
+	   3 = (HD Satelit) cheia CI+ refuzata de driver pe toate dispozitivele caN potrivite */
 	void setDecodingState(int slot, int state);
 	int getDecodingState(int slot);
 	int getCIPlusState(int slot);
 #ifndef SWIG
+	/* HD Satelit: starea CI+ a slotului s-a schimbat (cheia refuzata de driver / primita din nou) */
+	void anuntaStareCiplus(int slot) { stateChanged(slot); }
 private:
 	int m_decoding[4];
 #endif

@@ -1,0 +1,29 @@
+# HD Satelit: regulile garzii de model pentru GigaBlue UHD Quad 4K Pro (masina gb7252, MACHINEBUILD gbquad4kpro), NECONFIRMAT
+# (profilul alfa din 08.11.2026 pentru 0.7.1, ramura modele-noi-unelte-071 8d02d6da5, adus in 0.7.4 de agentul ALFA, 12.11.2026).
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom: receptor Broadcom (BCM7252S, aceeasi placa cu Vu+ Duo 4K Lite), fara /proc/msp/sys, fara blkdevparts
+# si fara partitia deviceinfo. Cipul din /proc/stb/info/chipset (garda il compara fara "bcm" in fata).
+# Masina gb7252 e a trei modele (MACHINEBUILDS gbquad4k gbquad4kpro gbue4k, meta-gigablue/conf/machine/gb7252.conf);
+# Quad 4K Pro are nucleul lui (linux-gigablue 4.1.20, sursa "pro" 20250410, defconfig_initrd), driverele gb7252pro si
+# incarcatorul BOLT 20250625. Tipul placii /proc/stb/info/boxtype = gigablue (driverul, acelasi pe toate GigaBlue), deci
+# modelul exact il cere model_id=gbquad4kpro: gigablue-ddbootup (meta-gigablue, S66 in rcS, adus de masina prin
+# MACHINE_ESSENTIAL_EXTRA_RDEPENDS) scrie la pornire MACHINEBUILD in /proc/stb/info/gbmodel.
+# kernel_part=mmcblk0p4, rootfs_part=mmcblk0p13: MTD_KERNEL si MTD_ROOTFS din gigablue-oem.inc (randurile gbquad4kpro;
+# locul de baza, partitia se alege la scrierea de pe stick). kernel_kib: nemasurat (0). Pe stick: dosarul gigablue/quad4kpro.
+# Fara aparat de proba, valorile raman de confirmat din fisa unui tester (STADIU-ALFA.md).
+format=1
+distro=hdsatelit
+model=GigaBlue UHD Quad 4K Pro
+machine=gb7252
+machinebuild=gbquad4kpro
+chip=7252s
+boxtype=gigablue
+hw=-
+partitions=-
+kernel_part=mmcblk0p4
+kernel_kib=0
+rootfs_part=mmcblk0p13
+confirmat=nu
+familie=broadcom
+model_id=gbquad4kpro

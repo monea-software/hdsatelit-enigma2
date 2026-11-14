@@ -125,7 +125,7 @@ def _traduAlegerileCuNumere():
 def _setariCerutePluginuri():
 	"""Setari pe care imaginea nu le foloseste, citite de pluginuri (config.usage.date...). Nu apar in niciun ecran al nostru;
 	un plugin le poate citi si salva. Ce exista deja nu se atinge."""
-	from Components.config import ConfigInteger, ConfigSubsection, ConfigText, ConfigYesNo, config
+	from Components.config import ConfigInteger, ConfigSelection, ConfigSubsection, ConfigText, ConfigYesNo, config
 
 	def pune(sectiune, nume, element):
 		if not hasattr(sectiune, nume):
@@ -146,6 +146,9 @@ def _setariCerutePluginuri():
 		pune(config.usage, nume, ConfigYesNo(default=False))
 	pune(config.usage, "servicelist_cursor_behavior", ConfigText(default="keep"))
 	pune(config.usage, "show_menupath", ConfigText(default="small"))
+	# randul cu modulul de acces din bara temelor facute pentru OE-Alliance (convertorul MercPliExtraInfo: int(valoare) > 0);
+	# ca in OE-Alliance: 0 oprit, 1 un rand, 2 doua randuri; fara texte: nu apare in niciun ecran al nostru
+	pune(config.usage, "show_cryptoinfo", ConfigSelection(default="2", choices=["0", "1", "2"]))
 	pune(config.usage, "pic_resolution", ConfigText(default=""))
 	pune(config.usage, "sleep_timer", ConfigText(default="0"))
 	pune(config.usage, "sleepTimer", ConfigInteger(default=0, limits=(0, 86400)))
@@ -174,6 +177,9 @@ def _setariCerutePluginuri():
 def InitUsageConfig():
 	global config
 	config.usage.showdish = ConfigYesNo(default = True)
+	# HDSatelit: desenul rotirii antenei (ecranele motorului si pagina web /motor) vazut din spatele antenei: estul in
+	# stanga, vestul in dreapta, sudul in varful curbei (Silviu, forum 683, 14.11.2026); Nu = ca pana acum
+	config.usage.hds_motor_din_spate = ConfigYesNo(default = False)
 	# HDSatelit: tasta albastra deschide lista buchetelor (Favorite primul), nu numai Favorite
 	config.usage.multibouquet = ConfigYesNo(default = True)
 	# OE-Alliance: semnele numerotate (randurile „-” puse de Fast Scan in locul numerelor nefolosite ale operatorului) nu se vad
@@ -267,6 +273,38 @@ def InitUsageConfig():
 		("stanga", N_("Stânga (înainte de nume)")), ("dreapta", N_("Dreapta (după nume)"))])
 	config.usage.hds_randuri_lista = ConfigSelection(default = "tema", choices = [
 		("tema", N_("După temă"))] + [(str(n), str(n)) for n in (8, 10, 12, 14, 16, 18, 20)])
+	# HDSatelit (0.7.5, tamiciav7, LinuxSat 164126): marimea textului in lista de canale, separata de randurile pe pagina.
+	# Fiecare pas = 10% din marimea temei (-3 = 70%, +5 = 150%) pentru nume, descriere, numar si bara de progres; cu
+	# „Rânduri pe pagină” După temă si randul creste sau scade cu textul, deci si sigla. Components/ServiceList.py (setMode)
+	config.usage.hds_marime_text_lista = ConfigSelection(default = "tema", choices = [
+		("tema", N_("După temă"))] + [(str(n), "%+d" % n) for n in (-3, -2, -1, 1, 2, 3, 4, 5)])
+
+	def _hdsListaCanaleReface(configElement):
+		# lista de canale deschisa o data (ecranul ramane in memorie) se potriveste pe loc, fara repornire
+		try:
+			from Screens.InfoBar import InfoBar
+			ecran = InfoBar.instance and InfoBar.instance.servicelist
+			lista = getattr(ecran, "servicelist", None)
+			if lista is not None and lista.instance is not None:
+				lista.setMode(lista.mode)
+		except Exception as e:
+			print("[UsageConfig] lista de canale: %s" % e)
+	config.usage.hds_marime_text_lista.addNotifier(_hdsListaCanaleReface, initial_call=False)
+	config.usage.hds_randuri_lista.addNotifier(_hdsListaCanaleReface, initial_call=False)
+	# HDSatelit (0.7.5, tamiciav7, LinuxSat; Eduard 13.11 22:27: optiune, nu din fabrica): aspectul listei de canale. „Obișnuit”
+	# = ecranele de pana acum ale temei; „Lista mare” = pe tot ecranul, lista pe ~2/3 in stanga, imaginea canalului si ghidul in
+	# dreapta, tastele colorate in dreapta jos (ecranele HdsListaCanaleMare* din tema). Se vede pe loc, fara repornire
+	# (Components/HdsAspectLista.py); marimea textului si randurile pe pagina se aplica si peste lista mare
+	config.usage.hds_aspect_lista = ConfigSelection(default = "obisnuit", choices = [
+		("obisnuit", N_("Obișnuit")), ("mare", N_("Lista mare"))])
+
+	def _hdsAspectLista(configElement):
+		try:
+			from Components.HdsAspectLista import laSchimbare
+			laSchimbare(configElement)
+		except Exception as e:
+			print("[UsageConfig] aspectul listei de canale: %s" % e)
+	config.usage.hds_aspect_lista.addNotifier(_hdsAspectLista, initial_call=False)
 	# HDSatelit: in lista 'Sateliți' (Screens/ChannelSelection.py, hdsUmpleSateliti) si randurile 'Furnizori' si 'Nou' ale
 	# fiecarui satelit, sub antetul lui; oprita din fabrica: un singur rand pe satelit (furnizorii pe tasta galbena)
 	config.usage.hds_lista_furnizori_nou = ConfigYesNo(default = False)
@@ -275,9 +313,46 @@ def InitUsageConfig():
 	# scanarea transponderului (canalele noi, numele la zi, deci si canalele sterse de om). Oprita: lista ramane cum a
 	# lasat-o omul. C++ o citeste la fiecare sfarsit de scanare (getResolvedKey: "True" / "False"), deci se aplica pe loc
 	config.usage.hds_actualizare_lista = ConfigYesNo(default = True)
+	# HDSatelit (0.7.5, sosozah, forum 588 #2055): buchetul "Last Scanned" cu canalele gasite de ultima scanare (lib/dvb/
+	# scan.cpp, hdsBuchetUltimaScanare), rescris la fiecare scanare, ca in OE-Alliance; pornita din fabrica. Oprita: nu se
+	# mai scrie si iese din lista buchetelor. C++ o citeste la fiecare sfarsit de scanare ("True" / "False")
+	config.usage.hds_ultima_scanare = ConfigYesNo(default = True)
 	# HDSatelit: siglele canalelor (Components/Renderer/Picon.py): oprita, nicio sigla nu se arata (caseta ramane goala,
 	# transparenta), iar pe bare textele raman la locul lor (Components/HdsPiconBare.py); se schimba pe loc
 	config.usage.hds_piconuri = ConfigYesNo(default = True)
+	# HDSatelit (0.7.5): functiile televiziunii prin internet, fiecare cu Da/Nu (setup.xml hds_iptv_functii, pereche web /setari).
+	# Oprita, functia nu mai face nimic in fundal: nicio cerere la furnizor, nicio scriere.
+	# ghidul TV cerut singur la ~90 s dupa pornirea interfetei (Components/HdsIptvLucru._zilnic)
+	config.usage.hds_iptv_ghid_pornire = ConfigYesNo(default = True)
+	# semnul canalelor care n-au pornit ultima data, cu motivul (Components/HdsIptvSurse.noteazaNefunctional)
+	config.usage.hds_iptv_semn = ConfigYesNo(default = True)
+	# timpul mediu de pornire la ultimele 5 porniri (Components/HdsIptvSurse.notaPornire), tinut in memorie si scris rar
+	config.usage.hds_iptv_timp_pornire = ConfigYesNo(default = True)
+	# cautarea canalelor 4K reale, in fundal, o data pe saptamana (Components/HdsIptv4K.py). Nu din fabrica (coordonatorul,
+	# 14.11.2026): o cautare intreaga deschide pe contul omului mii de canale, unul dupa altul, ore in sir (2.654 de canale, ~5 h
+	# pe receptorul de probe), iar unii furnizori blocheaza contul pentru asa ceva. Omul o porneste din meniu sau din web cand vrea.
+	config.usage.hds_iptv_4k = ConfigYesNo(default = False)
+	# „Filme și seriale” (Screens/HdsFilmeSeriale.py, Components/HdsVod*.py; VOD 0.7.5): posterele aduse din internet,
+	# pozitia tinuta minte pe film (scrisa pe flash cel mult o data la 5 minute) si „Adăugate recent” (lista intreaga, o data pe zi)
+	config.usage.hds_vod_poze = ConfigYesNo(default = True)
+	config.usage.hds_vod_continua = ConfigYesNo(default = True)
+	config.usage.hds_vod_recente = ConfigYesNo(default = True)
+	# categoriile tarii (dupa limba interfetei: germana -> DE, AT, CH) primele in „Filme și seriale”
+	config.usage.hds_vod_tara = ConfigYesNo(default = True)
+	# HDSatelit (0.7.5, IPI): canalul de internet care s-a oprit porneste singur din nou (Components/HdsIptvReconectare.py);
+	# siglele canalelor de internet aduse din lista furnizorului (Components/HdsIptvSigle.py); starea contului Xtream (expira,
+	# conexiunile) citita numai cand omul deschide IPTV pe televizor sau in web (HdsIptvClient.stareContXtream)
+	config.usage.hds_iptv_reconectare = ConfigYesNo(default = True)
+	config.usage.hds_iptv_sigle = ConfigYesNo(default = True)
+	config.usage.hds_iptv_cont = ConfigYesNo(default = True)
+	# emisiunile trecute (arhiva furnizorului Xtream), din MENU pe canal (Screens/HdsIptvArhiva.py); lista ceruta numai la deschidere
+	config.usage.hds_iptv_arhiva = ConfigYesNo(default = True)
+	# potrivirea larga a ghidului dupa numele canalului, pentru canalele fara tvg-id (Components/HdsIptvEpg._numeLarg)
+	config.usage.hds_iptv_epg_larg = ConfigYesNo(default = True)
+	# decalajul orelor din ghidul TV de internet (Components/HdsIptvEpg.decalaj), pentru furnizorii cu ora gresita; 0 = fara
+	config.usage.hds_iptv_decalaj_epg = ConfigSelection(default = "0", choices = [("0", _("Fără decalaj"))] +
+		[(str(h), ("+%g h" % h if h > 0 else "%g h" % h).replace(".", ",")) for h in
+		(-12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1.5, -1, -0.5, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)])
 
 	config.usage.blinking_display_clock_during_recording = ConfigYesNo(default = False)
 
@@ -447,6 +522,15 @@ def InitUsageConfig():
 		HdsEcranNegru.initConfig()
 	except Exception as eroare:
 		print("[UsageConfig] HdsEcranNegru: %s" % eroare)
+
+	# HDSatelit: protectia ecranului (Screens/ScreenSaver.py, numele OE-Alliance config.usage.screenSaverStartTimer,
+	# screenSaverMoveTimer, screenSaverMode). config.hds_radio (cu „La canalele numai cu sunet”) il face tot ecranul radio,
+	# la pornirea barei, cu limba activa (ecranul setarilor radio arata alegerile asa cum au fost facute)
+	try:
+		from Components import HdsRadioSetari
+		HdsRadioSetari.initProtectie()
+	except Exception as eroare:
+		print("[UsageConfig] HdsRadioSetari: %s" % eroare)
 
 def updateChoices(sel, choices):
 	if choices:

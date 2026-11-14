@@ -12,7 +12,10 @@ pachetelor), cu dependintele luate din indexuri, fara nicio intrebare. Reguli:
 - un pachet care nu e in feedul semnat, alta baza sau lipsa locului inseamna "gata pana la pornirea urmatoare", ca
   receptoarele sa nu intrebe serverul la nesfarsit;
 - un mesaj mic la inceput (numai cand chiar se instaleaza ceva) si unul la sfarsit.
-Fara internet (pasul 4d, 12.11.2026): de pe pagina imaginii omul descarca fisierul hdsatelit-<baza>-<model>-completari.zip
+De la 0.7.5 (Eduard 13.11.2026 11:44) toate completarile sunt in imagine pe modelele cu eMMC (HDS_COMPLETARI_IN_IMAGINE in
+strat), deci aici nu mai lipseste nimic dupa prima pornire; ramane lucrul pe receptoarele cu memorie mica (Solo SE).
+Fara internet (pasul 4d, 12.11.2026; fisierul nu mai e pe pagina imaginii din 13.11.2026, citirea lui ramane pentru cine il
+are): de pe pagina imaginii omul descarca fisierul hdsatelit-<baza>-<model>-completari.zip
 (o bucata din feedul semnat al bazei: stare.json, stare.json.sig, <arh>/Packages intregi si ipk-urile modelului: limbile,
 recunoasterea textului, driverele), il copiaza pe stick asa cum e (sau dezarhivat) si baga stickul. Regula: intai
 serverul; cand receptorul n-are retea sau serverul nu raspunde (retea fara internet in spatele routerului), fisierul de pe
@@ -644,8 +647,9 @@ class _Ceas:
 		if rez.get("sursa") == "stick" and rez.get("stick") and not puse and self.anuntat is not None:
 			# fisierul de pe stick e stricat, nesemnat, al altui model sau al altei versiuni: o data pe stick
 			self.anuntat = None
+			# 0.7.5: fisierul nu mai e pe pagina imaginii (Eduard 13.11.2026 11:44), deci nu trimitem omul acolo
 			_mesaj(_t("Fișierul cu completările de pe stick nu se potrivește cu acest receptor (alt model sau altă "
-				"versiune) sau este stricat. Descarcă-l din nou de pe pagina imaginii."))
+				"versiune) sau este stricat. Leagă receptorul la internet: completările se instalează singure."))
 			return
 		if self.anuntat is None or (rez.get("stare") == "amanat" and not puse):
 			return

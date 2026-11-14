@@ -15,8 +15,17 @@
 # PR ".hds1": alt continut la aceeasi versiune, ca opkg sa ia pachetul (4.0.5-r0.1.hds1 e mai mare decat 4.0.5-r0.1).
 # Constructia se opreste daca fisierul lipseste, daca are deja un rand kernel.sysrq activ (de lamurit de un om), daca
 # continutul de dinainte nu a ramas intreg sau daca randul nostru nu e ultimul.
+#
+# kernel.printk = 3 4 1 7 (.hds2, imaginea 0.7.5, 13.11.2026, agentul IPT2): consola nucleului (portul serial, 115200)
+# primea toate randurile pana la nivelul 7 (/proc/sys/kernel/printk 7 4 1 7 pe Viper 4K V20). Cand driverul decodorului
+# HiSilicon scrie potopul „audio/video cursize ... > ...” (kern.warn, pana la 482 de randuri pe secunda), fiecare rand se
+# scria sincron si pe portul serial (~11,5 KB/s, cel mult ~150 de randuri pe secunda). Acum pe consola ajung numai
+# emerg, alert si crit; dmesg si jurnalul sistemului (klogd citeste inelul nucleului, nu consola) le pastreaza pe toate.
+# E o MASURA (mai putina munca a nucleului in potop), nu reparatia blocarii din 13.11.2026 (pornirea unui film din internet
+# pe receptorul de probe). De la pornirea nucleului pana la bootmisc.sh (S55) consola ramane pe nivelul din nucleu. Randul sta dupa
+# kernel.sysrq; ultimul rand e kernel.printk. Perechea: peticul klogd din busybox_%.bbappend (randurile repetate).
 
-PR:append = ".hds1"
+PR:append = ".hds2"
 
 do_install:append() {
 	f=${D}${sysconfdir}/sysctl.conf
@@ -26,9 +35,14 @@ do_install:append() {
 	if grep -q '^[[:space:]]*kernel\.sysrq[[:space:]]*=' "$f"; then
 		bbfatal "procps: sysctl.conf are deja un rand kernel.sysrq activ; de lamurit inainte de a adauga altul"
 	fi
+	if grep -q '^[[:space:]]*kernel\.printk[[:space:]]*=' "$f"; then
+		bbfatal "procps: sysctl.conf are deja un rand kernel.printk activ; de lamurit inainte de a adauga altul"
+	fi
 	cp "$f" ${T}/sysctl.conf.inainte
 	c='# HD Satelit: no SysRq from a keyboard (root can still use /proc/sysrq-trigger)'
 	printf '\n%s\n%s\n' "$c" 'kernel.sysrq = 0' >> "$f"
+	c='# HD Satelit: only emerg, alert and crit on the serial console (dmesg and the system log keep everything)'
+	printf '%s\n%s\n' "$c" 'kernel.printk = 3 4 1 7' >> "$f"
 	n=$(wc -c < ${T}/sysctl.conf.inainte)
 	if ! cmp -s -n "$n" ${T}/sysctl.conf.inainte "$f"; then
 		bbfatal "procps: continutul de dinainte al lui sysctl.conf nu a ramas intreg"
@@ -36,8 +50,14 @@ do_install:append() {
 	if [ "$(grep -c '^[[:space:]]*kernel\.sysrq[[:space:]]*=' "$f")" != "1" ]; then
 		bbfatal "procps: sysctl.conf nu are exact un rand kernel.sysrq activ"
 	fi
-	if [ "$(tail -n 1 "$f")" != "kernel.sysrq = 0" ]; then
-		bbfatal "procps: kernel.sysrq = 0 nu e ultimul rand din sysctl.conf"
+	if [ "$(grep -c '^[[:space:]]*kernel\.printk[[:space:]]*=' "$f")" != "1" ]; then
+		bbfatal "procps: sysctl.conf nu are exact un rand kernel.printk activ"
+	fi
+	if [ "$(tail -n 3 "$f" | head -n 1)" != "kernel.sysrq = 0" ]; then
+		bbfatal "procps: kernel.sysrq = 0 nu e inaintea randurilor kernel.printk din sysctl.conf"
+	fi
+	if [ "$(tail -n 1 "$f")" != "kernel.printk = 3 4 1 7" ]; then
+		bbfatal "procps: kernel.printk = 3 4 1 7 nu e ultimul rand din sysctl.conf"
 	fi
 	if grep -q "$(printf '\r')" "$f"; then
 		bbfatal "procps: sysctl.conf are CR"

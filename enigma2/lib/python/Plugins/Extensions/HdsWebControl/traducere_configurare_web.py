@@ -1474,7 +1474,6 @@ TEXTE_PAGINA = {
 		N_("Lipește cheia oricărui serviciu: Gemini, DeepL, Azure, Google Cloud, Groq, OpenRouter sau "
 			"OpenAI. Receptorul recunoaște singur serviciul și o probează."),
 		N_("Lipește cheia"),
-		N_("Arată"),
 		N_("Regiunea resursei Azure"),
 		N_("Regiunea o găsești în portal, la resursa Translator: Overview › Location. Dacă nu știi, lasă "
 			"„Automat”."),
@@ -1607,8 +1606,6 @@ TEXTE_PAGINA = {
 		N_("Se trimite..."),
 		N_("Receptorul încă lucrează. Reîncarcă pagina peste puțin timp ca să vezi rezultatul."),
 		N_("Căutarea durează prea mult. Încearcă din nou."),
-		N_("Arată"),
-		N_("Ascunde"),
 		N_("Lipește întâi cheia."),
 		N_("Alege un model."),
 		N_("Se pornește căutarea..."),

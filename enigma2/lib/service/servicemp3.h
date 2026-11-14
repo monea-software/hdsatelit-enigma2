@@ -78,6 +78,8 @@ public:
 	struct FirFilm;
 	/* Oprirea unui radio GStreamer inca tine iesirea placii; numai citire atomica. */
 	static bool asteaptaEliberareaRadio();
+	/* O oprire GStreamer care inca poate tine video0 (pipeline-ul nu e inca in NULL); numai citire atomica. */
+	static bool asteaptaEliberareaImaginii();
 
 		// iPlayableService
 	RESULT connectEvent(const sigc::slot<void(iPlayableService*, int)> &event, ePtr<eConnection> &connection);
@@ -417,6 +419,8 @@ private:
 	void externalPictureTick(const externalSubtitle &s, int now_ms);
 
 	gint m_aspect, m_width, m_height, m_framerate, m_progressive, m_gamma;
+	int videoInfo(const char *name, bool hex, int din_sink);
+	void gammaDinDecodor();
 	std::string m_useragent;
 };
 

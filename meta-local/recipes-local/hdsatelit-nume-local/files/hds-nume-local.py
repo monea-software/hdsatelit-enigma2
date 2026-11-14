@@ -165,7 +165,7 @@ class Serviciu:
 			if not utilitar:
 				self.noteaza("Lipseste avahi-publish. Astept instalarea dependentei.", acum)
 			else:
-				nume = "hdsatelit%s.local" % ("-%d" % self.numar if self.numar > 1 else "")
+				nume = "hdsatelit%s.local" % (self.numar if self.numar > 1 else "")  # hdsatelit2.local, fara liniuta (Eduard, 14.11.2026)
 				env = dict(os.environ, LC_ALL="C")
 				try:
 					self.proc = subprocess.Popen([utilitar, "-a", "-R", "-v", nume, ip],
@@ -179,7 +179,7 @@ class Serviciu:
 			self.urmatoarea = acum + REINCERCARE
 		if self.proc is not None:
 			for mesaj in self.mesaje():
-				confirmat = re.fullmatch(r"Established under name '(hdsatelit(?:-[0-9]+)?\.local)'", mesaj)
+				confirmat = re.fullmatch(r"Established under name '(hdsatelit(?:[0-9]+)?\.local)'", mesaj)
 				if confirmat:
 					self.nume = confirmat.group(1)
 					self.noteaza("Numele %s este publicat pentru %s." % (self.nume, ip), acum)

@@ -47,6 +47,13 @@
  *   --felie KHZ                    latimea unei felii (implicit 150000, masurat pe un V20; 0 = trecerea intreaga)
  *   --timp-max S                   paznicul de timp: dupa atatea secunde se opreste curat (implicit 1200)
  *   --asteapta-frontend S          cat asteapta sa se elibereze frontend-ul (implicit 15)
+ *   --diseqc-port N                comutatorul DiSEqC 1.0 al satelitului cautat: 0..3 = A..D (AA, AB, BA, BB); inainte de
+ *                                  fiecare trecere programul trimite e01038(F0|N<<2|H<<1|banda inalta), la prima si reset
+ *                                  si power on, ca enigma2 la acordare (enigma2 a taiat tensiunea cand a inchis
+ *                                  frontend-ul, iar comutatorul ramas fara curent porneste pe A)
+ *   --diseqc-octet X               in loc de --diseqc-port: octetul comenzii (240..255), trimis asa cum e
+ *   --toneburst A|B                mini DiSEqC dupa comanda (sau singur, la un comutator toneburst)
+ *                                  (comutarea merge pe calea „hife”; pe calea bibliotecii se spune numai in JURNAL)
  *   --lib CALE                     alta cale pentru biblioteca platformei
  *   --sonda                        NU porneste nimic: verifica placa, biblioteca si simbolurile, tuner_used si cine tine
  *                                  frontend-ul; scrie PROFIL si SONDA. Nu deschide tunerul. Pe o placa „hife”: numai
@@ -375,6 +382,10 @@ static uint32_t lo_jos_mhz = 9750, lo_sus_mhz = 10600;
 static uint32_t felie_khz = 150000;
 static long port_tuner = 0;
 static const Profil *placa_aleasa = NULL;
+/* comutatorul satelitului cautat (--diseqc-port, --diseqc-octet, --toneburst); -1 = nimic de trimis */
+static int diseqc_port = -1;       /* 0..3 = A..D: comanda DiSEqC 1.0 „committed” AA, AB, BA, BB */
+static int diseqc_octet = -1;      /* 0xF0..0xFF: octetul comenzii scris de om, trimis asa cum e */
+static int toneburst = -1;         /* 0 = A, 1 = B (mini DiSEqC) */
 
 static struct {
 	uint32_t frecventa_khz, rata_ksym, polarizare;
@@ -496,6 +507,9 @@ static void *lucru(void *arg) {
 	if ((cod = B.setlnbconfig((uint32_t)port_tuner, &l)) != 0) { linie("EROARE %d lnb", cod); cod_lucru = 1; goto inchide; }
 	if ((cod = B.setlnbpower((uint32_t)port_tuner, 1)) != 0) { linie("EROARE %d alimentare-lnb", cod); cod_lucru = 1; goto inchide; }
 	linie("JURNAL pornire-tuner-ms %llu", (unsigned long long)(ms_acum() - t0));
+	/* pe calea bibliotecii (V20/V30/V40) comutatorul nu e inca pus: biblioteca are campul `comutator`, dar forma functiei
+	 * nu o stim; se spune in jurnal, ca sa se vada de ce o cautare cu comutator ramane pe portul A */
+	if (diseqc_port >= 0 || diseqc_octet >= 0 || toneburst >= 0) linie("JURNAL diseqc nesuportat-biblioteca");
 
 	linie("PORNIT %d %llu", nr_treceri, (unsigned long long)khz_total);
 	for (int i = 0; i < nr_treceri && !cerere_oprire; i++) {
@@ -623,6 +637,59 @@ static void tp_hife(const HifeTp *t, const Trecere *tr) {
 	linie("TP %u %u %d %c %u 0", f, rata, sis, "HVLR"[pol], t->frecventa_mhz * 1000u);
 }
 
+static void dormi_ms(long ms) {
+	struct timespec t = { ms / 1000, (ms % 1000) * 1000000L };
+	while (nanosleep(&t, &t) && errno == EINTR) { }
+}
+
+/* o comanda DiSEqC de 3 octeti (reset e00000, power on e00003) sau 4 (e01038xx); in jurnal: octetii si errno (0 = bine) */
+static void trimite_diseqc(int fe, const uint8_t *m, int n) {
+	struct dvb_diseqc_master_cmd cmd;
+	memset(&cmd, 0, sizeof cmd);
+	memcpy(cmd.msg, m, (size_t)n);
+	cmd.msg_len = (uint8_t)n;
+	int r = ioctl(fe, FE_DISEQC_SEND_MASTER_CMD, &cmd);
+	char hex[16] = "";
+	for (int k = 0; k < n; k++) snprintf(hex + 2 * k, sizeof hex - 2 * (size_t)k, "%02x", m[k]);
+	linie("JURNAL diseqc %s %d", hex, r < 0 ? errno : 0);
+}
+
+/* LNB-ul si comutatorul pentru o trecere, in ordinea si cu pauzele lui enigma2 (lib/dvb/sec.cpp, valorile din fabrica
+ * ale config.sec, aceleasi ca in jurnalul unei acordari pe V10): tonul oprit, tensiunea (18 V la H si L, 13 V la V si
+ * R, ca enigma2: (pol & 1) == 0), comenzile DiSEqC, toneburst, apoi tonul benzii. Frontend-ul l-a inchis enigma2 inainte
+ * (si i-a taiat tensiunea), deci la prima trecere comutatorul abia porneste: 200 ms, reset (e00000), power on (e00003),
+ * apoi comanda portului; la urmatoarele numai comanda (octetul are si polarizarea si banda). Fara --diseqc-* si
+ * --toneburst: numai tonul si tensiunea, ca inainte. */
+static void pune_lnb(int fe, const Trecere *t, int prima) {
+	int orizontal = (t->polarizare & 1u) == 0;
+	int diseqc = diseqc_port >= 0 || diseqc_octet >= 0;
+	ioctl(fe, FE_SET_TONE, SEC_TONE_OFF);
+	ioctl(fe, FE_SET_VOLTAGE, orizontal ? SEC_VOLTAGE_18 : SEC_VOLTAGE_13);
+	if (diseqc || toneburst >= 0) {
+		dormi_ms(prima ? 200 : 20);
+		if (diseqc) {
+			if (prima) {
+				static const uint8_t reset[3] = { 0xe0, 0x00, 0x00 }, pornire[3] = { 0xe0, 0x00, 0x03 };
+				trimite_diseqc(fe, reset, 3);
+				dormi_ms(50);
+				trimite_diseqc(fe, pornire, 3);
+				dormi_ms(150);
+			}
+			uint8_t port[4] = { 0xe0, 0x10, 0x38, diseqc_octet >= 0 ? (uint8_t)diseqc_octet :
+				(uint8_t)(0xf0 | (diseqc_port << 2) | (orizontal ? 2 : 0) | (t->ton22k ? 1 : 0)) };
+			trimite_diseqc(fe, port, 4);
+			dormi_ms(50);
+		}
+		if (toneburst >= 0) {
+			int r = ioctl(fe, FE_DISEQC_SEND_BURST, toneburst ? SEC_MINI_B : SEC_MINI_A);
+			linie("JURNAL toneburst %c %d", toneburst ? 'B' : 'A', r < 0 ? errno : 0);
+			dormi_ms(50);
+		}
+	}
+	ioctl(fe, FE_SET_TONE, t->ton22k ? SEC_TONE_ON : SEC_TONE_OFF);
+	dormi_ms(150);
+}
+
 static void *lucru_hife(void *arg) {
 	(void)arg;
 	char cale[64];
@@ -643,11 +710,7 @@ static void *lucru_hife(void *arg) {
 	for (int i = 0; i < nr_treceri && !cerere_oprire; i++) {
 		Trecere *t = &treceri[i];
 		trecere_curenta = i;
-		/* LNB-ul: 18 V la H si R, 13 V la V si L; tonul dupa banda */
-		ioctl(fe, FE_SET_TONE, t->ton22k ? SEC_TONE_ON : SEC_TONE_OFF);
-		ioctl(fe, FE_SET_VOLTAGE, (t->polarizare == 0 || t->polarizare == 3) ? SEC_VOLTAGE_18 : SEC_VOLTAGE_13);
-		struct timespec lnb = { 0, 150 * 1000 * 1000 };
-		nanosleep(&lnb, NULL);
+		pune_lnb(fe, t, i == 0);
 		linie("TRECERE %d %c %u %u %u", i + 1, t->eticheta, t->ton22k, t->if_start, t->if_stop);
 		uint64_t tt = ms_acum();
 		uint32_t pas = pas_felie(t);
@@ -738,8 +801,12 @@ int main(int argc, char **argv) {
 		else if (!strcmp(a, "--timp-max") && !numar(v, &x) && x > 0 && x < 86400) { timp_max = x; i++; }
 		else if (!strcmp(a, "--asteapta-frontend") && !numar(v, &x) && x >= 0 && x < 600) { asteapta_fe = x; i++; }
 		else if (!strcmp(a, "--lib") && v) { cale_lib = v; i++; }
+		else if (!strcmp(a, "--diseqc-port") && !numar(v, &x) && x >= 0 && x <= 3) { diseqc_port = (int)x; i++; }
+		else if (!strcmp(a, "--diseqc-octet") && !numar(v, &x) && x >= 0xf0 && x <= 0xff) { diseqc_octet = (int)x; i++; }
+		else if (!strcmp(a, "--toneburst") && v && (!strcmp(v, "A") || !strcmp(v, "B"))) { toneburst = v[0] == 'B'; i++; }
 		else { linie("EROARE 2 argument-gresit"); return 2; }
 	}
+	if (diseqc_port >= 0 && diseqc_octet >= 0) { linie("EROARE 2 diseqc-dublu"); return 2; }
 	if ((lo_jos_mhz < 7500) != (lo_sus_mhz < 7500)) { linie("EROARE 2 lo-amestecat"); return 2; }
 
 	RandProc r;

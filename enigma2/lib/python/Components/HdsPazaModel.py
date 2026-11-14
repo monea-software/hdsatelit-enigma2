@@ -146,8 +146,14 @@ FARA_ANTET = "-"
 # apar (confirmat()); valorile citite care difera raman randuri tehnice in mesaj si in pagina. Treapta DECIZIEI ramane cea din reguli (treapta()): pe V30 valorile hw, partitii si marimea
 # nucleului din reguli sunt inca cele de la V20, nemasurate pe un V30, iar treapta intai le-ar face hotaratoare si ar
 # putea opri interfata pe un V30 adevarat; garda din enigma2.sh (awk) le trateaza la fel. Regulile V30 primesc valorile
-# masurate (si fara confirmat=nu) in imaginea urmatoare. V40 ramane neconfirmat.
-MODELE_CONFIRMATE = ("viper4kv30",)
+# masurate (si fara confirmat=nu) in imaginea urmatoare. V40: confirmat din 0.7.5 (mai jos).
+# Vu+ Ultimo4K (vuultimo4k), din 0.7.5: 0.7.4 alfa probat de un tester pe un receptor adevarat (13.11.2026: cipul 7444s,
+# placa ultimo4k, modulele FBC, mai multe ore). Regulile lui raman cu confirmat=nu si kernel_kib=0 (nemasurat), deci
+# treapta a doua, din acelasi motiv ca la V30; aici pleaca numai nota.
+# AX HD51 (ax51, aceeasi imagine si placa la Mut@nt HD51), Vu+ Duo4K Lite (vuduo4klite) si Amiko Viper 4K V40 (viper4kv40),
+# din 0.7.5: 0.7.4 alfa pornit de beta testeri pe receptoare adevarate (13.11.2026: modelul recunoscut singur, canale
+# acordate; la V40 si cablul si motorul). Regulile lor raman cu confirmat=nu, ca la V30; aici pleaca numai nota.
+MODELE_CONFIRMATE = ("viper4kv30", "vuultimo4k", "ax51", "vuduo4klite", "viper4kv40")
 # cheile obligatorii ale fisierului de reguli si ale marcajului
 CHEI_REGULI = ("format", "distro", "model", "machinebuild", "chip", "boxtype", "hw", "partitions", "kernel_part",
 	"kernel_kib", "rootfs_part")
@@ -925,8 +931,8 @@ def treapta(reguli):
 
 
 def confirmat(reguli):
-	"""True pentru un model confirmat: regulile fara "confirmat=nu" sau un model din MODELE_CONFIRMATE (V30). Hotaraste
-	numai textele: nota de la pornire si mesajul ecranului si al paginii paza de model."""
+	"""True pentru un model confirmat: regulile fara "confirmat=nu" sau un model din MODELE_CONFIRMATE (V30,
+	Ultimo4K). Hotaraste numai textele: nota de la pornire si mesajul ecranului si al paginii paza de model."""
 	reguli = reguli or {}
 	return treapta(reguli) == 1 or reguli.get("machinebuild", "") in MODELE_CONFIRMATE
 

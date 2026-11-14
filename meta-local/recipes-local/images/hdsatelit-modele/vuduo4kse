@@ -1,0 +1,26 @@
+# HD Satelit: regulile garzii de model pentru Vu+ Duo 4K SE (masina vuduo4kse), NECONFIRMAT (MD4, 12.11.2026; Gpiupiu)
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom: receptor Broadcom (BCM7444S, ca Ultimo4K; NU BCM7278 ca Duo 4K), fara /proc/msp/sys, fara blkdevparts
+# si fara partitia deviceinfo, ca Duo 4K. Garda citeste cipul din /proc/stb/info/chipset si tipul placii din
+# /proc/stb/info/vumodel (nu exista boxtype).
+# chip= si boxtype= sunt valorile fixe din tabelul proc_rw_info al driverului dvb-bcm7444.ko (vuplus-dvb-proxy-vuduo4kse
+# 4.1.45-20250706.r2, citit cu vuplus4k/unelte/tabel_ko.py): chipset=7444s, vumodel=duo4kse (model=dm8000, comun).
+# Aceeasi metoda da pe dvb-bcm7278.ko al Duo 4K: 7278 si duo4k. Fata de Ultimo4K (acelasi cip) deosebeste vumodel.
+# kernel_part=mmcblk0p6, rootfs_part=mmcblk0p9: MTD_KERNEL si MTD_ROOTFS din vuduo4kse.conf (OE-Alliance 6.0), la fel ca
+# Duo 4K; root=/dev/mmcblk0p9 fortat in defconfig (CONFIG_CMDLINE_FORCE); nucleul linux-vuplus 4.1.45.
+# kernel_kib: nemasurat (0 = de completat din fisa unui tester). Pe stick: dosarul vuplus/duo4kse.
+format=1
+distro=hdsatelit
+model=Vu+ Duo 4K SE
+machine=vuduo4kse
+machinebuild=vuduo4kse
+chip=7444s
+boxtype=duo4kse
+hw=-
+partitions=-
+kernel_part=mmcblk0p6
+kernel_kib=0
+rootfs_part=mmcblk0p9
+confirmat=nu
+familie=broadcom

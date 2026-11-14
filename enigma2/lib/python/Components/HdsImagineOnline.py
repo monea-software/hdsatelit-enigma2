@@ -1090,10 +1090,27 @@ def comanda_simulare(tinta, dosar):
 	return [CALE_PROGRAM, "-n"] + tinta["argumente"] + [dosar]
 
 
+def mediu_simulare():
+	"""Mediul simularii cu textele ferestrei programului in limba omului (greseala 1201: si -n isi arata fereastra peste
+	interfata, "Check only, nothing is written"). None cand textele nu se pot pregati (puntea fara modul, catalog lipsa):
+	atunci simularea porneste ca inainte, in engleza."""
+	try:
+		mediu = _modul("HdsTexteOfgwrite").scrieTexteOfgwrite()
+	except Exception as e:
+		_jurnal("textele programului de instalare (simularea): %s" % e)
+		return None
+	return mediu if mediu and mediu.get("OFGWRITE_TEXTS") else None
+
+
 def simuleaza(tinta, dosar, ruleaza=None):
-	"""Iesirea simularii (-n: nu scrie nimic), cu aceleasi argumente ca scrierea."""
+	"""Iesirea simularii (-n: nu scrie nimic), cu aceleasi argumente ca scrierea. Textele ferestrei vin prin mediu, numai
+	cand exista (iesirea pe consola ramane in engleza: simulare_buna o citeste)."""
+	kw = {}
+	mediu = mediu_simulare()
+	if mediu:
+		kw["env"] = mediu
 	p = (ruleaza or subprocess.run)(comanda_simulare(tinta, dosar), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-		stderr=subprocess.STDOUT, timeout=120)
+		stderr=subprocess.STDOUT, timeout=120, **kw)
 	iesire = p.stdout
 	return iesire.decode("utf-8", "replace") if isinstance(iesire, bytes) else (iesire or "")
 
@@ -2135,8 +2152,9 @@ def _arata_restaurarea(fel):
 	try:
 		from Tools import Notifications
 		from Screens.MessageBox import MessageBox
-		Notifications.AddPopup(_t(T_COPIE_CERUTA if fel == "ceruta" else T_COPIE_LIPSA), MessageBox.TYPE_INFO,
-			10 if fel == "ceruta" else 30, "HdsImagineOnlineCopie")
+		# textul se alege inainte de _t: in argumentul lui _t, xgettext ar lua cheia "ceruta" drept text de tradus
+		text = T_COPIE_CERUTA if fel == "ceruta" else T_COPIE_LIPSA
+		Notifications.AddPopup(_t(text), MessageBox.TYPE_INFO, 10 if fel == "ceruta" else 30, "HdsImagineOnlineCopie")
 	except Exception as e:
 		_jurnal("mesajul restaurarii: %s" % e)
 

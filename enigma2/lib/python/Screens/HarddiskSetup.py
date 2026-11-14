@@ -126,15 +126,30 @@ class HdsDiscIntrebare(Screen):
 		self.close(bool(ales and ales[1]))
 
 
-class HarddiskWait(Screen):
-	# used only when the active skin has no HarddiskWait screen
-	skin = """
-		<screen name="HarddiskWait" resolution="1920,1080" position="center,center" size="900,140" flags="wfNoBorder">
-			<widget name="wait" position="30,20" size="840,100" font="Regular;34" halign="center" valign="center" transparent="1" />
-		</screen>"""
+# HDSatelit: ecranul de asteptare al formatarii si al verificarii. Lucrarea e pe firul ei (HdsDiscuri.pornesteFir); aici numai
+# ceasul de 1 s citeste starea. Verificarea: EXIT o opreste oricand si inchide fereastra (HdsDiscuri.opresteLucru), timpul scurs si
+# termenul stau pe ecran, iar dupa termen fereastra se inchide singura cu motivul, chiar daca fsck e prins in I/O-ul unui stick
+# mort (Wlad, Amiko Viper 4K V10, forum 948 #2103/#2105, 13.11.2026: ecranul vechi nu avea nicio tasta si astepta la nesfarsit).
+# Formatarea nu se opreste la jumatate (discul ar ramane fara sistem de fisiere): EXIT spune asta, timpul ramane pe ecran.
+# Skinul e al nostru (HdsDiscAsteptare), cu randul timpului: skinul implicit are HarddiskWait de un singur rand.
+SKIN_ASTEPTARE = """
+<screen name="HdsDiscAsteptare" position="center,center" size="900,200" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+	<widget name="wait" position="30,20" size="840,90" font="HdsBold;30" halign="center" valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" />
+	<widget name="timp" position="30,116" size="840,64" font="HdsRegular;22" halign="center" valign="center" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" />
+</screen>"""
 
+
+def textScurs(secunde):
+	"""m:ss"""
+	secunde = max(0, int(secunde))
+	return "%d:%02d" % (secunde // 60, secunde % 60)
+
+
+class HarddiskWait(Screen):
 	def __init__(self, session, hdd, type, sistem = None):
+		self.skin = scaledSkin(SKIN_ASTEPTARE)
 		Screen.__init__(self, session)
+		self.skinName = ["HdsDiscAsteptare"]
 		self.hdd = hdd
 		self.sistem = sistem
 		if type == HarddiskSetup.HARDDISK_INITIALIZE:
@@ -144,11 +159,41 @@ class HarddiskWait(Screen):
 			self.fel = HdsDiscuri.VERIFICARE
 			text = _("Checking Filesystem...")
 		self["wait"] = Label(text)
+		self["timp"] = Label("")
+		self["actions"] = ActionMap(["OkCancelActions"], {"cancel": self.renunta, "ok": self.nimic}, -1)
 		self.pornit = False
+		self.inceput = time.monotonic()
+		self.termen = 0
+		self.notaFormatare = False
 		self.timer = eTimer()
 		self.timer.callback.append(self.pas)
 		self.onClose.append(self.timer.stop)
 		self.timer.start(100, True)
+
+	def nimic(self):
+		pass
+
+	def renunta(self):
+		"""EXIT: verificarea se opreste si fereastra se inchide pe loc (starea spune deja "oprită"); formatarea nu."""
+		if self.fel != HdsDiscuri.VERIFICARE:
+			self.notaFormatare = True
+			self.arataTimp()
+			return
+		if not self.pornit:
+			return
+		HdsDiscuri.opresteLucru(HdsDiscuri.E_OPRIT)
+		self.timer.stop()
+		self.close(False)
+
+	def arataTimp(self):
+		scurs = textScurs(time.monotonic() - self.inceput)
+		if self.fel == HdsDiscuri.VERIFICARE:
+			text = _("Au trecut %s din cel mult %s. EXIT oprește verificarea.") % (scurs, textScurs(self.termen))
+		elif self.notaFormatare:
+			text = _("Au trecut %s. Formatarea nu se poate opri la jumătate; se termină singură.") % scurs
+		else:
+			text = _("Au trecut %s.") % scurs
+		self["timp"].setText(text)
 
 	def pas(self):
 		if not self.pornit:
@@ -157,10 +202,16 @@ class HarddiskWait(Screen):
 			if not bun:
 				self.close(None)
 				return
-			self.timer.start(500, False)
+			lucru = HdsDiscuri.stareLucru() or {}
+			self.termen = lucru.get("termen") or HdsDiscuri.termenVerificare(self.hdd)
+			self.inceput = time.monotonic()
+			self.arataTimp()
+			self.timer.start(1000, False)
 			return
+		# firul isi opreste singur fsck-ul la termen; daca procesul nu moare (I/O), stareLucru incheie verificarea dupa rezerva
 		lucru = HdsDiscuri.stareLucru()
 		if lucru is not None and lucru["stare"] == HdsDiscuri.LUCRU_IN_LUCRU:
+			self.arataTimp()
 			return
 		self.timer.stop()
 		self.close(lucru is not None and lucru["stare"] == HdsDiscuri.LUCRU_GATA)

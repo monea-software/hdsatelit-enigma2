@@ -1,0 +1,79 @@
+grab: memoria capturii dupa ecranul de acum (interfata mai mare decat 1920x1080)
+
+Memoria capturii (video x3, osd x4, output x4 octeti pe punct) se aloca pentru 1920x1080 puncte, afara de placile
+e2egl si cateva Broadcom UHD. getosd() copiaza insa tot ecranul din fb0 (xres x yres x 4): cu interfata la 2560x1440
+pe HiSilicon (driverul hi_fb peticit, clasa OE-Alliance hisi-hifb-wqhd) scrie 14,7 MB intr-o zona de 8,3 MB, iar grab
+cade cu Segmentation fault (si cu -o, si cu -r 1920). Acum memoria se socoteste si din ecranul de acum
+(FBIOGET_VSCREENINFO pe fb0, cel mult 3840x2160, ca la e2egl), iar getosd() refuza curat un ecran mai mare decat
+memoria alocata. La 1920x1080 si mai jos nu se schimba nimic.
+
+Upstream-Status: Pending
+Signed-off-by: Monea Software pentru HD Satelit <contact@moneasoftware.com>
+
+diff --git a/main.c b/main.c
+index 342a579..98d01d5 100644
+--- a/main.c
++++ b/main.c
+@@ -193,6 +193,28 @@ static int stb_supports_uhd_grab_buffers(void)
+ 	       stb_type == BRCM72604VU;
+ }
+ 
++/* HD Satelit: memoria alocata pentru OSD, in puncte; getosd() nu copiaza un ecran mai mare */
++static size_t osd_capacity_pixels = 0;
++
++/* HD Satelit: puncte pe ecranul de acum (xres x yres din fb0), 0 cand nu se poate citi. Interfata poate fi mai mare
++ * decat 1920x1080 si pe placi fara e2egl (2560x1440 pe HiSilicon cu driverul hi_fb peticit). */
++static size_t framebuffer_pixels(void)
++{
++	struct fb_var_screeninfo var;
++	int fd = open(stb_type == WETEK ? "/dev/fb/2" : "/dev/fb/0", O_RDONLY);
++	if (fd == -1)
++		fd = open(stb_type == WETEK ? "/dev/fb2" : "/dev/fb0", O_RDONLY);
++	if (fd == -1)
++		return 0;
++	if (ioctl(fd, FBIOGET_VSCREENINFO, &var) == -1)
++	{
++		close(fd);
++		return 0;
++	}
++	close(fd);
++	return (size_t)var.xres * (size_t)var.yres;
++}
++
+ static int e2egl_capture_available(void)
+ {
+ 	return access(E2EGL_CAPTURE_SOCKET, F_OK) == 0;
+@@ -2107,6 +2129,15 @@ int main(int argc, char **argv)
+ 	else if (stb_type == VULCAN || stb_type == PALLAS)
+ 		mallocsize = 720U * 576U;
+ 
++	/* HD Satelit: interfata mai mare decat 1920x1080 fara e2egl (2560x1440): memoria dupa ecranul de acum */
++	if (!video_only)
++	{
++		size_t fb_pixels = framebuffer_pixels();
++		if (fb_pixels > mallocsize && fb_pixels <= E2EGL_CAPTURE_MAX_PIXELS)
++			mallocsize = fb_pixels;
++	}
++	osd_capacity_pixels = mallocsize;
++
+ 	video = (unsigned char *)malloc(mallocsize * 3U);
+ 	osd = (unsigned char *)malloc(mallocsize * 4U);
+ 
+@@ -5155,6 +5186,17 @@ void getosd(unsigned char *osd, int *xres, int *yres)
+ 		return;
+ 	}
+ 
++	/* HD Satelit: un ecran mai mare decat memoria alocata nu se copiaza (inainte: memoria stricata, Segmentation fault) */
++	if (osd_capacity_pixels && (size_t)var_screeninfo.xres * (size_t)var_screeninfo.yres > osd_capacity_pixels)
++	{
++		fprintf(stderr, "Framebuffer: %ux%u is larger than the capture buffer\n", var_screeninfo.xres, var_screeninfo.yres);
++		munmap(lfb, fix_screeninfo.smem_len);
++		close(fb);
++		*xres = 0;
++		*yres = 0;
++		return;
++	}
++
+ 	unsigned char *fb_page = lfb + fb_offset;
+ 
+ 	if ( var_screeninfo.bits_per_pixel == 32 )

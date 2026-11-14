@@ -110,7 +110,8 @@ def _memorie(H, sistem, pid):
 
 
 def _modul(H, E, sistem, e):
-	m = {"sufix": e.sufix, "descriere": e.descriere or "", "ales": bool(e.ales), "ruleaza": bool(e.pids)}
+	m = {"sufix": e.sufix, "descriere": e.descriere or "", "ales": bool(e.ales), "ruleaza": bool(e.pids),
+		"versiune": getattr(e, "versiune", "") or ""}
 	if e.pids:
 		pid = E.pid_de_aratat(sistem, e.pids)
 		m["pid"] = pid
@@ -524,7 +525,7 @@ function detaliuDosar(f, m){
 function randModul(f, m){
   var rand = el("div", "modul");
   var stanga = el("div", "stanga");
-  var nume = el("div", "nume", m.sufix);
+  var nume = el("div", "nume", m.sufix + (m.versiune ? " " + m.versiune : ""));
   if(m.ales){ nume.appendChild(el("span", "semn ales", "ales")); }
   nume.appendChild(el("span", "semn" + (m.ruleaza ? " pornit" : ""), m.ruleaza ? "rulează" : "oprit"));
   stanga.appendChild(nume);

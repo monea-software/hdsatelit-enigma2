@@ -23,6 +23,12 @@ class CurrentService(PerServiceBase, Source):
 		ev_hbbtv = getattr(iPlayableService, "evHBBTVInfo", None)
 		if ev_hbbtv is not None:
 			evenimente[ev_hbbtv] = self.serviceEvent
+		# PMT-ul canalului citit din nou (lib/service/servicedvb.cpp, dupa evUpdatedInfo, ca in OE-Alliance): convertoarele
+		# temelor facute pentru OE-Alliance isi recitesc atunci datele tunerului (MercPliExtraInfo: updateFEdata).
+		# Numerele negative puse de HdsEnigmaCompat pe nucleele fara eveniment nu vin niciodata: nu se adauga.
+		ev_pmt = getattr(iPlayableService, "evNewProgramInfo", None)
+		if ev_pmt is not None and ev_pmt >= 0:
+			evenimente[ev_pmt] = self.serviceEvent
 		PerServiceBase.__init__(self, navcore, evenimente, with_event=True)
 		self.navcore = navcore
 

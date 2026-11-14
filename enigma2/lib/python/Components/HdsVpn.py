@@ -90,6 +90,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import zipfile
 
 # probele de pe PC: radacina in care se lucreaza (pe receptor goala), cine porneste programele si cine rezolva numele
@@ -166,6 +167,9 @@ RETEA_IPV6_INTERNET = "2000::/3"
 DNS_REZERVA = ("1.1.1.1", "9.9.9.9")
 # adresa IP vazuta pe internet si tara ei (cerute numai la conectare si la cerere)
 SERVICII_IP = ("https://ipinfo.io/json", "https://api.country.is/")
+# testul de viteza: servere publice de test, fara cont (Cloudflare, rezerva Hetzner); se descarca cel mult TIMP_VITEZA_S
+SERVICII_VITEZA = ("https://speed.cloudflare.com/__down?bytes=26214400", "https://fsn1-speed.hetzner.com/100MB.bin")
+TIMP_VITEZA_S = 10
 ADRESA_EXTENSII = "https://stb.hdsatelit.com/extensii"
 ARHITECTURI_EXTENSII = ("all", "cortexa15hf-neon-vfpv4", "u57", "viper4kv20")
 UA = "hdsatelit-receptor/1"
@@ -1145,6 +1149,123 @@ def titluDinNume(nume, proto=""):
 	return titlu[:80]
 
 
+# ---------------------------------------------------------------- tara serverului (numai din text, fara retea)
+# Numele tarilor si codurile vin din HdsVpnFurnizori.TARI (aceleasi in ecranul furnizorilor fara fisiere). Formele
+# cunoscute: ro50.nordvpn.com.udp.ovpn, nordvpn-ro50.conf, ro-buh-wg-001.conf, de-fra.prod.surfshark.com,
+# Romania.Bucharest.UDP.ovpn, united_kingdom.ovpn, uk-london.privacy.network. Un cod singur de doua litere (my.vpn.org)
+# nu se ia: ar fi prea des o potrivire falsa.
+_TARA_CU_CIFRE = re.compile(r"^([a-z]{2})\d+\Z")
+_ORAS_SCURT = re.compile(r"^(?:[a-z]{3}|\d+)\Z")
+
+
+def _furnizoriModul():
+	try:
+		from Components import HdsVpnFurnizori
+		return HdsVpnFurnizori
+	except Exception:
+		return None
+
+
+def _codBun(F, cod):
+	cod = F.codTara(cod)
+	return cod if cod in F._TARA else ""
+
+
+def _bucati(text):
+	"""Cuvintele unui nume de fisier sau titlu, mici si fara diacritice (Elveția -> elvetia)."""
+	text = unicodedata.normalize("NFKD", u"%s" % (text or ""))
+	text = "".join(c for c in text if not unicodedata.combining(c))
+	baza = os.path.basename(text.replace("\\", "/"))
+	baza = re.sub(r"(?i)\.(ovpn|conf|json)\Z", "", baza)
+	return [b for b in re.split(r"[^a-z0-9]+", baza.lower()) if b]
+
+
+_NUME_TARI = {"cheie": None, "nume": {}}
+
+
+def _numeTari(F):
+	"""{nume_tara: cod}: numele englezesti (fisierele PIA), cele romanesti si cele in limba receptorului (fisierele
+	facute de HdsVpnFurnizori: NordVPN.Germania.Berlin.ovpn)."""
+	cheie = F.numeTara("de")
+	if _NUME_TARI["cheie"] != cheie:
+		nume = dict(F._ENGLEZA)
+		for cod, _en, ro in F.TARI:
+			for n in (ro, F.numeTara(cod)):
+				b = "_".join(_bucati(n))
+				if b:
+					nume.setdefault(b, cod)
+		_NUME_TARI.update(cheie=cheie, nume=nume)
+	return _NUME_TARI["nume"]
+
+
+def _taraDinBucati(F, bucati, prima_singura=False):
+	nume = _numeTari(F)
+	for n in (3, 2, 1):
+		for i in range(len(bucati) - n + 1):
+			cod = nume.get("_".join(bucati[i:i + n]))
+			if cod and _codBun(F, cod):
+				return _codBun(F, cod)
+	for b in bucati:
+		m = _TARA_CU_CIFRE.match(b)
+		if m and _codBun(F, m.group(1)):
+			return _codBun(F, m.group(1))
+	# ro-buh-wg-001, us-nyc, de-fra: doua litere urmate de un oras scurt sau de un numar
+	if prima_singura and len(bucati) >= 2 and len(bucati[0]) == 2 and _ORAS_SCURT.match(bucati[1]):
+		return _codBun(F, bucati[0])
+	return ""
+
+
+def taraProfil(p):
+	"""Codul tarii serverului (ro, de, gb...) din adresa serverului, din numele fisierului sau din titlu; "" cand nu
+	se vede. Fara nicio cerere in retea."""
+	F = _furnizoriModul()
+	if F is None:
+		return ""
+	for g in p.get("gazde") or []:
+		gazda = str(g).rpartition(":")[0] or str(g)
+		if re.match(r"^[\d.]+\Z", gazda) or ":" in gazda:
+			continue
+		eticheta = gazda.lower().split(".")[0]
+		cod = _taraDinBucati(F, [b for b in re.split(r"[^a-z0-9]+", eticheta) if b], prima_singura=True)
+		if cod:
+			return cod
+	for t in (p.get("nume_fisier"), p.get("titlu")):
+		cod = _taraDinBucati(F, _bucati(t), prima_singura=True)
+		if cod:
+			return cod
+	return ""
+
+
+def numeTara(cod):
+	"""Numele tarii in limba receptorului; fara cod: "Alte servere"."""
+	F = _furnizoriModul()
+	if not cod or F is None:
+		return _("Alte servere")
+	return F.numeTara(cod)
+
+
+def ordineServere(lista):
+	"""Serverele pe tari (dupa numele tarii, cele fara tara la sfarsit), apoi dupa titlu."""
+	nume = {}
+	for p in lista:
+		c = p.get("tara") or ""
+		if c not in nume:
+			nume[c] = numeTara(c).lower()
+	return sorted(lista, key=lambda p: (not p.get("tara"), nume[p.get("tara") or ""], p.get("titlu", "").lower(), p["id"]))
+
+
+def tariServere(lista):
+	"""[{"cod", "nume", "nr", "primul"}] pentru serverele date (deja in ordineServere)."""
+	tari = []
+	for p in lista:
+		c = p.get("tara") or ""
+		if tari and tari[-1]["cod"] == c:
+			tari[-1]["nr"] += 1
+			continue
+		tari.append({"cod": c, "nume": numeTara(c), "nr": 1, "primul": p["id"]})
+	return tari
+
+
 _INDEX = {"semn": None, "lista": []}
 
 
@@ -1165,6 +1286,8 @@ def profiluri():
 		lista = [p for p in (date.get("profiluri") or []) if isinstance(p, dict) and re.match(r"^[0-9a-f]{12}\Z",
 			str(p.get("id", ""))) and p.get("fel") in FELURI and re.match(
 			r"^[0-9a-f]{12}\.(ovpn|conf|json)\Z", str(p.get("fisier", ""))) and isinstance(p.get("titlu"), str)]
+		for p in lista:
+			p["tara"] = taraProfil(p)
 		_INDEX["lista"] = lista
 		_INDEX["semn"] = semn
 	return list(_INDEX["lista"])
@@ -2766,7 +2889,8 @@ def _pornesteAcum():
 		if blocare:
 			curataRetea(dns=False)
 			aplicaBlocarea(plan)
-		_STARE.update(eroare="", eroare_cont=False, ip=None, neconectat_de=time.time(), ales_cand=time.time())
+		# viteza masurata inainte nu mai e a acestei legaturi (alt server sau alta tara): se masoara din nou la cerere
+		_STARE.update(eroare="", eroare_cont=False, ip=None, viteza=None, neconectat_de=time.time(), ales_cand=time.time())
 		if fel == "openvpn":
 			reusit, mesaj = _pornesteOpenvpn(p, servere, navigator)
 		elif fel == "wireguard":
@@ -3968,6 +4092,8 @@ LUCRARE_STICK = "stick"
 LUCRARE_IP = "ip"
 LUCRARE_INSTALEAZA = "instaleaza"
 LUCRARE_REPORNESTE = "reporneste"
+LUCRARE_REPORNESTE_ACUM = "reporneste-acum"
+LUCRARE_VITEZA = "viteza"
 
 
 def _jobPorneste():
@@ -4006,8 +4132,117 @@ def _jobReporneste():
 	return True, _("Setarea este salvată; VPN-ul a pornit din nou.")
 
 
+def _jobRepornesteAcum():
+	"""Butonul "Reporneste VPN-ul": acelasi server, legatura facuta din nou (tunelul, rutele si DNS-ul se scot intai,
+	in _pornesteAcum)."""
+	if not setari()["pornit"]:
+		return False, _("VPN-ul este oprit. Pornește-l întâi.")
+	reusit, mesaj = _pornesteAcum()
+	if not reusit:
+		salveazaSetari(pornit=False)
+		with _LACAT_RETEA:
+			_opresteTot()
+		return False, mesaj
+	mesaj = _("VPN-ul a pornit din nou.")
+	if _STARE.get("legatura") == "CONNECTED" or interfataExista(INTERFATA_WG) or wgInNetns():
+		ip = aflaIpVpn()
+		_STARE["ip"] = ip
+		if ip:
+			mesaj = "%s %s" % (mesaj, textIp(ip))
+	jurnal("VPN pornit din nou de om")
+	return True, mesaj
+
+
+# ---------------------------------------------------------------- testul de viteza
+
+_VITEZA_CURL = re.compile(r"(\d{3}) (\d+) ([\d.]+) ([\d.]+)")
+
+
+def _vitezaCurl(adresa, netns):
+	"""{"mbit", "ms", "mb"} descarcand de la `adresa` cel mult TIMP_VITEZA_S (curl; din NETNS in modul navigator)."""
+	argv = ([PROGRAM_IP, "netns", "exec", NETNS] if netns else []) + [PROGRAM_CURL, "-sS", "-o", "/dev/null", "-m",
+		str(TIMP_VITEZA_S), "-A", UA, "-w", "\n%{http_code} %{size_download} %{speed_download} %{time_connect}\n", adresa]
+	cod, text = _ruleaza(argv, TIMP_VITEZA_S + 10)
+	gasite = _VITEZA_CURL.findall(text or "")
+	# 28 = timpul s-a terminat: e felul obisnuit de oprire pe legaturile rapide, octetii primiti se numara
+	if cod not in (0, 28) or not gasite:
+		jurnal("viteza de la %s: cod %s %s" % (adresa, cod, (text or "").strip()[-200:]))
+		return None
+	http, marime, viteza, conectare = gasite[-1]
+	if http != "200" or int(marime) <= 0:
+		jurnal("viteza de la %s: HTTP %s, %s octeti" % (adresa, http, marime))
+		return None
+	return {"mbit": round(float(viteza) * 8 / 1e6, 1), "ms": int(round(float(conectare) * 1000)),
+		"mb": round(int(marime) / 1e6, 1)}
+
+
+def _vitezaPython(adresa):
+	"""Ca _vitezaCurl, fara curl (namespace-ul de baza)."""
+	try:
+		from urllib.request import Request, urlopen
+	except ImportError:
+		return None
+	try:
+		inceput = time.time()
+		r = urlopen(Request(adresa, headers={"User-Agent": UA}), timeout=TIMP_IP_S)
+		conectare = time.time() - inceput
+		if getattr(r, "status", 200) != 200:
+			return None
+		primit, start = 0, time.time()
+		while time.time() - start < TIMP_VITEZA_S:
+			bucata = r.read(65536)
+			if not bucata:
+				break
+			primit += len(bucata)
+		durata = max(time.time() - start, 0.001)
+	except Exception as eroare:
+		jurnal("viteza de la %s: %s" % (adresa, eroare))
+		return None
+	if primit <= 0:
+		return None
+	return {"mbit": round(primit * 8 / durata / 1e6, 1), "ms": int(round(conectare * 1000)), "mb": round(primit / 1e6, 1)}
+
+
+def testViteza():
+	"""Testul de viteza (pe firul lucrarilor): prin VPN cand e pornit si conectat, altfel direct. (reusit, mesaj)."""
+	s = setari()
+	plan = _citestePlan()
+	sus = _citesteJson(CALE_SUS) or {}
+	pornit = bool(s["pornit"] and vpnViu())
+	netns = pornit and bool(sus.get("netns") or plan.get("mod") == "navigator")
+	if not pornit:
+		cum = "fara"
+	elif plan.get("mod") == "ales":
+		cum = "direct"
+	else:
+		cum = "vpn"
+	rez = None
+	for adresa in SERVICII_VITEZA:
+		if netns or _executabil(PROGRAM_CURL):
+			rez = _vitezaCurl(adresa, netns)
+		else:
+			rez = _vitezaPython(adresa)
+		if rez:
+			break
+	if not rez:
+		return False, _("Testul de viteză nu a mers. Verifică legătura la internet.")
+	p = profil(s["profil"]) if pornit else None
+	rez.update(cum=cum, cand=int(time.time()), server=p["titlu"] if p else "")
+	_STARE["viteza"] = rez
+	jurnal("viteza: %s Mbit/s, %s ms (%s)" % (rez["mbit"], rez["ms"], cum))
+	return True, textViteza(rez)
+
+
 def pornesteVpn():
 	return LUCRARI.porneste(LUCRARE_PORNESTE, _jobPorneste)
+
+
+def pornesteRepornirea():
+	return LUCRARI.porneste(LUCRARE_REPORNESTE_ACUM, _jobRepornesteAcum)
+
+
+def pornesteViteza():
+	return LUCRARI.porneste(LUCRARE_VITEZA, testViteza)
 
 
 def opresteVpn():
@@ -4262,7 +4497,7 @@ def feluriAdauga():
 def stare():
 	"""Tot ce arata ecranul si pagina web, fara secrete."""
 	s = setari()
-	lista = profiluriGrup(s["furnizor"])
+	lista = ordineServere(profiluriGrup(s["furnizor"]))
 	p = profil(s["profil"])
 	if p is not None and p.get("grup") != s["furnizor"]:
 		p = None
@@ -4271,7 +4506,7 @@ def stare():
 	sus = _citesteJson(CALE_SUS) or {}
 	viu = vpnViu()
 	plan = _citestePlan()
-	if lucrare["lucreaza"] in (LUCRARE_PORNESTE, LUCRARE_REPORNESTE):
+	if lucrare["lucreaza"] in (LUCRARE_PORNESTE, LUCRARE_REPORNESTE, LUCRARE_REPORNESTE_ACUM):
 		legatura = "se_conecteaza"
 	elif not viu and not s["pornit"]:
 		legatura = "oprit"
@@ -4294,8 +4529,11 @@ def stare():
 		"oprire_totala": s["oprire_totala"], "la_pornire": s["la_pornire"], "pornit": s["pornit"], "iptv": s["iptv"],
 		"adrese": list(s["adrese"]),
 		"profil": ({"id": p["id"], "titlu": p["titlu"], "fel": p["fel"], "gazde": list(p.get("gazde") or []),
-			"plin": p.get("plin", True), "cere_cont": bool(p.get("cere_cont"))} if p else None),
-		"profiluri": [{"id": x["id"], "titlu": x["titlu"]} for x in lista],
+			"plin": p.get("plin", True), "cere_cont": bool(p.get("cere_cont")), "tara": p.get("tara") or "",
+			"nume_tara": numeTara(p.get("tara"))} if p else None),
+		"profiluri": [{"id": x["id"], "titlu": x["titlu"], "tara": x.get("tara") or ""} for x in lista],
+		"tari": tariServere(lista),
+		"viteza": dict(_STARE["viteza"]) if _STARE.get("viteza") else None,
 		"nr_profiluri": len(lista),
 		"cont": areCont() if fel == "openvpn" else bool(p) and not any(c in lipsa for c in ("nume", "parola")),
 		"campuri": campuri,
@@ -4395,6 +4633,20 @@ def textIp(ip):
 	return _("Adresa văzută pe internet: %s") % ip["ip"] + (" (%s)" % loc if loc else "")
 
 
+def textViteza(v, scurt=False):
+	"""Rezultatul testului de viteza: viteza de descarcare, timpul de raspuns si pe unde a trecut."""
+	if not v:
+		return ""
+	viteza = "%.1f Mbit/s" % v["mbit"]
+	if scurt:
+		return viteza
+	cum = {"vpn": _("prin VPN, serverul %s") % v.get("server", "") if v.get("server") else _("prin VPN"),
+		"direct": _("direct, nu prin VPN: prin VPN trec numai adresele alese"),
+		"fara": _("fără VPN")}.get(v.get("cum"), "")
+	text = _("Viteza de descărcare: %s, timpul de răspuns: %d ms") % (viteza, v["ms"])
+	return "%s (%s)" % (text, cum) if cum else text
+
+
 def textDetalii(s):
 	"""Randurile de sub starea mare: serverul, ce trece prin VPN, adresa vazuta pe internet sau motivul unei erori."""
 	r = []
@@ -4424,6 +4676,8 @@ def textLucrare(nume):
 		LUCRARE_IP: _("Se află adresa văzută pe internet..."),
 		LUCRARE_INSTALEAZA: _("Se instalează programele VPN (câteva minute)..."),
 		LUCRARE_REPORNESTE: _("VPN-ul pornește din nou cu setarea nouă..."),
+		LUCRARE_REPORNESTE_ACUM: _("VPN-ul pornește din nou..."),
+		LUCRARE_VITEZA: _("Se măsoară viteza (cel mult 10 secunde)..."),
 	}.get(nume, _("Se lucrează..."))
 
 

@@ -230,7 +230,7 @@ class HdsLoculEcran(Screen):
 				ales = i
 		lista = [("%s   (%s)" % (nume, L.textCoordonate(lat, lon)), nume) for nume, lat, lon in orase]
 		self.session.openWithCallback(lambda r: self._orasAles(cod, r), HdsLoculAlegere,
-			title=_("Alege orașul (%s)") % L.numeTara(cod), list=lista, keys=[], selection=ales)
+			title=_("Alege orașul (%s)") % _(L.numeTara(cod)), list=lista, keys=[], selection=ales)
 
 	def _orasAles(self, cod, rezultat):
 		if not rezultat:
@@ -262,11 +262,15 @@ class HdsLoculEcran(Screen):
 
 
 class HdsLoculDeMana(Screen, ConfigListScreen):
-	"""latitudinea si longitudinea in grade cu trei zecimale (cifrele telecomenzii), emisfera si partea de Greenwich"""
+	"""longitudinea si latitudinea in grade cu trei zecimale (cifrele telecomenzii), partea fata de Greenwich si fata de
+	ecuator. Ordinea randurilor e cea din Setarile tunerului OE-Alliance (Longitude, East/West, Latitude, North/South):
+	cine vine din alta imagine scrie numerele in ordinea cu care e obisnuit (asistenta 681415: 30 si 41 scrise invers).
+	Sub randuri, locul scris in cuvinte ("41,000 N, 30,000 E"), pus la zi la fiecare schimbare."""
 	SKIN = """
 	<screen name="HdsLoculDeMana" position="center,center" size="900,440" title="Coordonatele antenei">
 		<widget name="config" position="30,30" size="840,200" font="Regular;24" secondfont="Regular;16" itemHeight="48" scrollbarMode="showOnDemand" />
-		<widget source="nota" render="Label" position="30,250" size="840,110" font="Regular;20" />
+		<widget source="scris" render="Label" position="30,236" size="840,34" font="Regular;22" foregroundColor="#ffc250" />
+		<widget source="nota" render="Label" position="30,274" size="840,96" font="Regular;20" />
 		<widget source="key_red" render="Label" position="30,380" size="290,40" zPosition="1" font="Regular;21" halign="center" valign="center" backgroundColor="#9f1313" transparent="0" />
 		<widget source="key_green" render="Label" position="580,380" size="290,40" zPosition="1" font="Regular;21" halign="center" valign="center" backgroundColor="#1f771f" transparent="0" />
 	</screen>
@@ -283,12 +287,16 @@ class HdsLoculDeMana(Screen, ConfigListScreen):
 		self.lon = NoSave(ConfigFloat(default=[abs(lon) // 1000, abs(lon) % 1000], limits=[(0, 180), (0, 999)]))
 		self.est = NoSave(ConfigSelection([("east", _("Est")), ("west", _("Vest"))], "east" if lon >= 0 else "west"))
 		lista = [
-			getConfigListEntry(_("Latitudinea (grade)"), self.lat),
-			getConfigListEntry(_("Emisfera"), self.nord),
 			getConfigListEntry(_("Longitudinea (grade)"), self.lon),
 			getConfigListEntry(_("Față de Greenwich"), self.est),
+			getConfigListEntry(_("Latitudinea (grade)"), self.lat),
+			getConfigListEntry(_("Față de ecuator"), self.nord),
 		]
 		ConfigListScreen.__init__(self, lista, session=session)
+		self["scris"] = StaticText("")
+		for element in (self.lon, self.est, self.lat, self.nord):
+			element.addNotifier(self._arataScris, initial_call=False)
+		self._arataScris()
 		self["nota"] = StaticText(_("Cifrele se scriu cu tastele telecomenzii, cu trei zecimale (de exemplu 44.426 pentru 44,426 grade). România e la nord și la est de Greenwich."))
 		self["key_red"] = StaticText(_("Renunță"))
 		self["key_green"] = StaticText(_("Salvează"))
@@ -298,6 +306,16 @@ class HdsLoculDeMana(Screen, ConfigListScreen):
 			"red": self.renunta,
 			"cancel": self.renunta,
 		}, -2)
+
+	def _valori(self):
+		"""(lat_mii, lon_mii) cu semn, din randuri (nord si est pozitive)"""
+		lat = int(self.lat.value[0]) * 1000 + int(self.lat.value[1])
+		lon = int(self.lon.value[0]) * 1000 + int(self.lon.value[1])
+		return (-lat if self.nord.value == "south" else lat), (-lon if self.est.value == "west" else lon)
+
+	def _arataScris(self, *_a):
+		lat, lon = self._valori()
+		self["scris"].setText(_("Locul scris: %s") % L.textCoordonate(lat, lon, 3))
 
 	def renunta(self):
 		self.close(False)
@@ -312,6 +330,22 @@ class HdsLoculDeMana(Screen, ConfigListScreen):
 			lat = -lat
 		if self.est.value == "west":
 			lon = -lon
+		# departe de tara receptorului, dar cu emisferele schimbate (sau latitudinea cu longitudinea) aproape: intai
+		# intrebarea; "Da" (primul rand) scrie varianta, al doilea rand ce s-a scris, Iesire nu scrie nimic si lasa
+		# coordonatele pe ecran (Components/HdsLocul.py, intrebareDeparte; aceeasi intrebare in web)
+		intrebare, propus = L.intrebareDeparte(lat, lon)
+		if intrebare:
+			def raspuns(ales):
+				if ales == "propus":
+					self._scrie(propus[0], propus[1])
+				elif ales == "scris":
+					self._scrie(lat, lon)
+			self.session.openWithCallback(raspuns, MessageBox, intrebare, MessageBox.TYPE_YESNO,
+				list=[(_("Da"), "propus"), (_("Nu, păstrează ce am scris"), "scris")])
+			return
+		self._scrie(lat, lon)
+
+	def _scrie(self, lat, lon):
 		ok, text = L.seteaza(lat, lon, "", "", L.SURSA_MANA, actualizeaza_sec=self.actualizeaza_sec)
 		if not ok:
 			self.session.open(MessageBox, text, MessageBox.TYPE_ERROR)

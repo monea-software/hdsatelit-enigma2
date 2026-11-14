@@ -31,6 +31,7 @@ Reguli:
     terminat.
 Modulul se incarca si pe PC (probele): enigma se cere numai cand chiar se porneste un script sau un ceas."""
 import codecs
+import json
 import os
 import posixpath
 import re
@@ -54,6 +55,12 @@ ECM_MAXIM = 4096
 DESCRIERE_MAXIM = 120
 CONFIG_WEB_MAXIM = 256 * 1024
 SCRIPT_CONFIG_MAXIM = 64 * 1024
+VERSIUNE_MAXIM = 64
+INFORMATII_MAXIM = 4096
+# Pachetele modulelor din feedul nostru pun aici <sufix>.json, cu "versiune" = versiunea reala a autorului (ca la
+# „15.8+ (git 10909, 91d9ec1)” sau „2.26.11-11975”). Dosarul e al imaginii si al feedului ei, nu al vreunui
+# modul; un modul din alt feed nu are fisierul si versiunea se cauta in titlul scriptului lui.
+DOSAR_INFORMATII = '/usr/share/hdsatelit/cam'
 
 _SUFIX_BUN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$')
 _STERS = ' (deleted)'
@@ -99,7 +106,7 @@ def dosar_programe(fel):
 
 
 class Emulator(object):
-	__slots__ = ('fel', 'sufix', 'script', 'cale', 'descriere', 'ales', 'pids', 'verificabil')
+	__slots__ = ('fel', 'sufix', 'script', 'cale', 'descriere', 'versiune', 'ales', 'pids', 'verificabil')
 
 	def __init__(self, fel, script):
 		self.fel = fel
@@ -107,6 +114,7 @@ class Emulator(object):
 		self.script = script.nume        # <fel>.<x>
 		self.cale = script.cale          # /etc/init.d/<fel>.<x>
 		self.descriere = curata_nume(script.descriere, DESCRIERE_MAXIM)
+		self.versiune = ''               # versiunea reala a modulului (versiune_modul), aratata langa nume
 		self.ales = bool(script.ales)
 		self.pids = []
 		self.verificabil = bool(script.cai)  # scriptul scrie un executabil: se poate vedea daca ruleaza
@@ -230,6 +238,34 @@ def memorie(sistem, pid):
 	return [' '.join(r.split()) for r in text.splitlines() if r.startswith(('VmRSS:', 'Threads:'))]
 
 
+def _versiune_buna(text, sufix):
+	text = curata_nume(text, VERSIUNE_MAXIM)
+	if not text or not any(c.isdigit() for c in text) or text.lower() in sufix.lower():
+		return ''
+	return text
+
+
+def versiune_modul(sistem, sufix, descriere=''):
+	"""Versiunea reala a modulului, de aratat langa nume (ecranul si pagina web): "versiune" din
+	DOSAR_INFORMATII/<sufix>.json (pachetele noastre), altfel primul cuvant din titlul scriptului care incepe cu o cifra
+	(„Modul 2.26.11-11975” -> 2.26.11-11975). '' cand nu se afla sau cand numele o are deja (un script modul_15.8).
+	Numai citire, fara rularea modulului."""
+	if not _SUFIX_BUN.match(sufix or ''):
+		return ''
+	try:
+		date = json.loads(sistem.citeste('%s/%s.json' % (DOSAR_INFORMATII, sufix), INFORMATII_MAXIM))
+		v = date.get('versiune') if isinstance(date, dict) else None
+		if isinstance(v, str) and _versiune_buna(v, sufix):
+			return _versiune_buna(v, sufix)
+	except (OSError, IOError, ValueError):
+		pass
+	for cuvant in (descriere or '').split():
+		cuvant = cuvant.strip(',;:()[]')
+		if len(cuvant) >= 2 and re.match(r'^[vV]?[0-9]', cuvant):
+			return _versiune_buna(cuvant, sufix)
+	return ''
+
+
 def citeste(sistem=None, fel=None, procese=True):
 	"""Stare pentru un fel (fara fel: primul din feluri()). Rapid (cateva fisiere mici si /proc/*/exe), deci merge si
 	pe firul enigma2."""
@@ -252,6 +288,7 @@ def citeste(sistem=None, fel=None, procese=True):
 		e = Emulator(fel, s)
 		e.ales = st.legatura == 'legatura' and s.sufix == st.ales
 		e.pids = pids.get(s.nume, [])
+		e.versiune = versiune_modul(sistem, s.sufix, e.descriere)
 		st.emulatoare.append(e)
 	st.emulatoare.sort(key=lambda e: (e.sufix.lower(), e.sufix))
 	st.fara_script = programe_fara_script(sistem, citeste_scripturi(sistem).values(), fel) if fel else []
@@ -397,8 +434,19 @@ def _cuvinte_config_script(linie, valori):
 		return []
 
 
-def dosar_configurare_din_script(text):
-	"""Argumentele unei porniri directe sau start-stop-daemon, cu atribuiri simple. Ambiguu -> necunoscut."""
+# Scripturile modulelor din feedul nostru (din 13.11.2026) aleg dosarul abia la pornire, CONFDIR=$(choose_confdir):
+# dosarul pachetului (OWNDIR, unde instalarea pune configurarea de inceput) sau locul original in care omul isi tine
+# fisierele (unul din ORIGDIRS); pe cel ales la ultima pornire il scriu in LASTDIR. Fara rularea scriptului (aici se
+# pornesc numai start, stop si restart), cele trei se citesc ca atribuiri simple.
+_ALEGERE_LA_PORNIRE = re.compile(r'''^[ \t]*CONFDIR=["']?\$\([ \t]*choose_confdir[ \t]*\)["']?[ \t]*$''', re.M)
+
+
+def _dosar_bun(dosar):
+	return dosar_configurare_web(['--config-dir', dosar]) if isinstance(dosar, str) else None
+
+
+def _citeste_script_config(text):
+	"""(dosarele din pornirile scriptului, atribuirile simple de la nivelul de sus)"""
 	valori, dosare, nivel = {}, set(), 0
 	for linie in text[:SCRIPT_CONFIG_MAXIM].replace('\\\r\n', '').replace('\\\n', '').splitlines():
 		if re.match(r'^\s*(if|case|for|while|until)\b', linie):
@@ -455,7 +503,49 @@ def dosar_configurare_din_script(text):
 		dosar = dosar_configurare_web(cuvinte)
 		if dosar is not None:
 			dosare.add(dosar)
-	return next(iter(dosare)) if len(dosare) == 1 else None
+	return dosare, valori
+
+
+def dosare_alese_din_script(text):
+	"""Pentru un script care alege dosarul la pornire (_ALEGERE_LA_PORNIRE): (OWNDIR, [locurile permise], LASTDIR);
+	altfel None."""
+	text = text[:SCRIPT_CONFIG_MAXIM]
+	if not _ALEGERE_LA_PORNIRE.search(text):
+		return None
+	_dosare, valori = _citeste_script_config(text)
+	propriu = _dosar_bun(valori.get('OWNDIR'))
+	if propriu is None:
+		return None
+	locuri = [propriu] + [d for d in (_dosar_bun(x) for x in valori.get('ORIGDIRS', '').split()) if d]
+	ultimul = valori.get('LASTDIR')
+	ultimul = ultimul if isinstance(ultimul, str) and ultimul.startswith('/') else None
+	return propriu, locuri, ultimul
+
+
+def dosar_configurare_din_script(text):
+	"""Argumentele unei porniri directe sau start-stop-daemon, cu atribuiri simple. Ambiguu -> necunoscut. Un script
+	care alege dosarul la pornire da dosarul pachetului (OWNDIR)."""
+	dosare, _valori = _citeste_script_config(text)
+	if len(dosare) == 1:
+		return next(iter(dosare))
+	if not dosare:
+		ales = dosare_alese_din_script(text)
+		if ales:
+			return ales[0]
+	return None
+
+
+def dosar_ales_ultima_data(sistem, text):
+	"""Dosarul citit la ultima pornire de un script care alege dosarul la pornire (LASTDIR), numai daca e unul din
+	locurile scrise in script; altfel None."""
+	ales = dosare_alese_din_script(text)
+	if not ales or not ales[2]:
+		return None
+	try:
+		dosar = _dosar_bun(sistem.citeste(ales[2], 256).strip())
+	except (OSError, IOError, ValueError):
+		return None
+	return dosar if dosar in ales[1] else None
 
 
 def dosare_configurare(sistem=None, stari=None):
@@ -476,7 +566,8 @@ def dosare_configurare(sistem=None, stari=None):
 					break
 			if dosar is None:
 				try:
-					dosar = dosar_configurare_din_script(sistem.citeste(e.cale, SCRIPT_CONFIG_MAXIM))
+					text = sistem.citeste(e.cale, SCRIPT_CONFIG_MAXIM)
+					dosar = dosar_ales_ultima_data(sistem, text) or dosar_configurare_din_script(text)
 				except (OSError, IOError, ValueError):
 					pass
 			rez.append({'fel': st.fel, 'sufix': e.sufix, 'dosar': dosar.rstrip('/') + '/' if dosar else '',
@@ -528,8 +619,17 @@ def _port_web_configurare(sistem, cale):
 		return None
 
 
+def eticheta_modul(e):
+	"""Numele modulului de aratat: sufixul, cu versiunea reala langa el cand se stie
+	(„modul 15.8+ (git 10909, 91d9ec1)”)."""
+	return e.sufix + (' ' + e.versiune if e.versiune else '')
+
+
 def interfete_web(sistem=None, stari=None):
-	"""Numai portul/protocolul modulelor active din configurarea lor, fara conexiuni. Se cheama pe un fir separat."""
+	"""Modulele active care au interfata web: [{fel, sufix, versiune, eticheta, protocol, port}], portul/protocolul din
+	configurarea lor, fara conexiuni. Se cheama pe un fir separat. O singura sursa pentru ecran, pagina Acces
+	condiționat, prima pagina web si bara de sus (GET /api/acces-conditionat-interfete); adresa o face fiecare din
+	adresa receptorului: <protocol>://<gazda>:<port>/."""
 	sistem = sistem or SistemAcces()
 	stari = feluri_de_aratat(sistem) if stari is None else stari
 	rez = []
@@ -554,7 +654,8 @@ def interfete_web(sistem=None, stari=None):
 						continue
 					interfata = _port_web_configurare(sistem, cale)
 					if interfata:
-						rez.append(dict(interfata, fel=st.fel, sufix=e.sufix))
+						rez.append(dict(interfata, fel=st.fel, sufix=e.sufix, versiune=e.versiune,
+							eticheta=eticheta_modul(e)))
 					break
 				if rez and rez[-1]['fel'] == st.fel and rez[-1]['sufix'] == e.sufix:
 					break
@@ -918,6 +1019,7 @@ class Operatie(object):
 		self.rezultat.update(extra)
 		if _curenta[0] is self:
 			_curenta[0] = None
+		tine_minte_oprirea(self.rezultat, self.sistem)   # 0.7.5: Rosu pe modulul ales nu e pornit din nou dupa interfata
 		f = self.la_final
 		if f is not None:
 			f(self.rezultat)
@@ -948,3 +1050,181 @@ def _dupa_operatie(rezultat):
 		HdsPorturi.dupa_schimbare()
 	except Exception:
 		pass
+
+
+# ---------------------------------------------------------------- dupa repornirea interfetei (0.7.5)
+# darog69, forum 789 #2047 (Vu+ Duo 4K, 12.11.2026): modulul de acces ales si pornit din ecranul modulelor se oprea la fiecare repornire a
+# interfetei. Nu il oprea imaginea: un manager de module din Extensii, ramas instalat cu acelasi modul ales, face la oprirea
+# interfetei „killall” pe numele modulului (deci si pe al nostru), iar la pornire nu-l mai poate porni din caile lui. La pornirea
+# receptorului merge, fiindca rc porneste modulul ales inainte de interfata. Acum, la fel ca la pornirea receptorului: dupa
+# fiecare pornire a interfetei, modulul ales al fiecarui fel care nu ruleaza e pornit din nou, o data, prin scriptul lui (Operatie
+# „porneste”, la fel ca Verde), cu trei exceptii:
+#   - omul l-a oprit el insusi (Rosu, din ecran sau din web) de la ultima pornire a receptorului: semnul MARCAJ_OPRIT + <fel>,
+#     in /tmp, deci uitat la pornirea receptorului, cand rc il porneste oricum;
+#   - un proces cu numele unui program al felului ruleaza din alt loc decat programele noastre (acelasi modul pornit de alt
+#     manager, de pilda cu programul pe stick): nu pornim al doilea modul peste el;
+#   - un script care nu scrie niciun program (nu se poate vedea daca ruleaza).
+# Limita: daca omul tine doua managere pe acelasi modul, cu cai bune in amandoua, la pornirea receptorului castiga al imaginii, iar
+# dupa repornirea interfetei poate castiga celalalt (el se uita la 2 s dupa incarcare, noi la INTARZIERE_INTERFATA). Merge si asa;
+# raspunsul pentru om ramane „un singur manager”.
+MARCAJ_OPRIT = '/tmp/.hds-modul-oprit.'   # + fel
+INTARZIERE_INTERFATA = 5.0                # secunde: modulul oprit de la vechea interfata a avut timp sa iasa de tot
+_SUFIX_FEL = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$')
+_dupa_interfata = []                      # ceasurile in asteptare (tinute in viata)
+
+
+def _jurnal(text):
+	print("[HdsModuleAcces] %s" % text)
+
+
+def oprit_de_om(sistem, fel):
+	"""True cand omul a oprit modulul ales al felului de la ultima pornire a receptorului"""
+	return bool(_SUFIX_FEL.match(fel or '')) and sistem.exista(MARCAJ_OPRIT + fel)
+
+
+def tine_minte_oprirea(rezultat, sistem=None):
+	"""Din Operatie._termina: Rosu pe modulul ales pune semnul; orice alegere sau pornire reusita il sterge. Nu arunca."""
+	try:
+		if not rezultat.get('ok'):
+			return
+		fel = rezultat.get('fel') or ''
+		motiv = rezultat.get('motiv')
+		if not _SUFIX_FEL.match(fel):
+			return
+		if motiv == 'oprit':
+			if not rezultat.get('ramane_ales'):
+				return
+			oprit = True
+		elif motiv in ('ales', 'niciunul', 'pornit', 'repornit', 'ruleaza_deja'):
+			oprit = False
+		else:
+			return
+		cale = (sistem or SistemAcces()).cale(MARCAJ_OPRIT + fel)
+		if oprit:
+			with open(cale, 'w'):
+				pass
+		elif os.path.lexists(cale):
+			os.remove(cale)
+	except (OSError, IOError, AttributeError, ValueError):
+		pass
+
+
+def alt_program_pornit(sistem, fel, scripturi=None):
+	"""[pid] ale proceselor care poarta numele unui program al felului (din dosar_programe(fel), scris sau nu intr-un script),
+	dar nu ruleaza din programele noastre: acelasi modul pornit de altcineva. Numele vine din /proc/<pid>/comm (15 semne)."""
+	if scripturi is None:
+		scripturi = scripturile(sistem, fel)
+	dosar = dosar_programe(fel)
+	nume = set()
+	ale_noastre = set()
+	for s in scripturi:
+		for scris, tinta in s.cai.items():
+			if posixpath.dirname(scris) == dosar or posixpath.dirname(tinta) == dosar:
+				nume.add(posixpath.basename(scris)[:15])
+				nume.add(posixpath.basename(tinta)[:15])
+				ale_noastre.update((scris, tinta))
+	try:
+		for n in sorted(sistem.listeaza(dosar))[:PROGRAME_MAXIM]:
+			c = dosar + '/' + n
+			if sistem.executabil(c):
+				nume.add(n[:15])
+				ale_noastre.update((c, sistem.tinta(c)))
+	except OSError:
+		pass
+	nume.discard('')
+	rez = []
+	if not nume:
+		return rez
+	try:
+		pids = sorted(int(x) for x in sistem.listeaza('/proc') if x.isdigit())
+	except OSError:
+		return rez
+	for pid in pids[:PROCESE_MAXIM]:
+		if pid == 1 or pid == sistem.pid_propriu:
+			continue
+		baza = '/proc/%d' % pid
+		try:
+			comm = sistem.citeste(baza + '/comm', 256).strip()
+		except (OSError, IOError):
+			continue
+		if comm[:15] not in nume:
+			continue
+		try:
+			exe = sistem.legatura(baza + '/exe')
+		except (OSError, ValueError):
+			continue   # proces care iese chiar acum sau al nucleului
+		if exe.endswith(_STERS):
+			exe = exe[:-len(_STERS)]
+		if exe not in ale_noastre:
+			rez.append(pid)
+	return rez
+
+
+def de_pornit_dupa_interfata(sistem=None):
+	"""[(fel, sufix)]: modulul ales al fiecarui fel care nu ruleaza acum si trebuie pornit din nou (vezi mai sus)"""
+	sistem = sistem or SistemAcces()
+	rez = []
+	for fel in feluri(sistem):
+		st = citeste(sistem, fel)
+		e = st.ales_emulator()
+		if e is None or not e.verificabil or e.pids or oprit_de_om(sistem, fel):
+			continue
+		scripturi = scripturile(sistem, fel)
+		altele = alt_program_pornit(sistem, fel, scripturi)
+		if altele:
+			_jurnal("%s.%s nu ruleaza, dar acelasi program ruleaza din alt loc (pid %s): nu pornesc al doilea"
+				% (fel, e.sufix, ' '.join(str(p) for p in altele[:4])))
+			continue
+		rez.append((fel, e.sufix))
+	return rez
+
+
+def dupa_pornirea_interfetei(sistem=None, operatie=None, temporizator=None, intarziere=INTARZIERE_INTERFATA):
+	"""Din HdsModuleLipsa.porneste (dupa crearea sesiunii, la fiecare pornire a interfetei): peste `intarziere` secunde,
+	modulele alese care nu ruleaza pornesc din nou, unul dupa altul. Daca alta comanda a modulelor ruleaza chiar atunci
+	(„ocupat”, de pilda biblioteca lipsa adusa din feed), inca o incercare peste 10 s. `operatie` si `temporizator` sunt
+	pentru probe. Nu arunca."""
+	Op = operatie or Operatie
+	ceas = temporizator or Temporizator
+
+	def pune_ceas(secunde, functie):
+		loc = []
+
+		def bate():
+			if loc and loc[0] in _dupa_interfata:
+				_dupa_interfata.remove(loc[0])
+			functie()
+		loc.append(ceas(secunde, bate))
+		_dupa_interfata.append(loc[0])
+
+	def verifica(incercari):
+		try:
+			ramase = de_pornit_dupa_interfata(sistem)
+		except Exception as e:
+			_jurnal("dupa pornirea interfetei: %r" % (e,))
+			return
+
+		curent = ['']
+
+		def urmatorul(rezultat=None):
+			if rezultat is not None:
+				_jurnal("%s: %s" % (curent[0], rezultat.get('motiv')))
+				if rezultat.get('motiv') == 'ocupat' and incercari > 1:
+					pune_ceas(10.0, lambda: verifica(incercari - 1))
+					return
+			if not ramase:
+				return
+			fel, sufix = ramase.pop(0)
+			curent[0] = fel + '.' + sufix
+			_jurnal("%s.%s e ales, dar nu ruleaza dupa pornirea interfetei: il pornesc din nou" % (fel, sufix))
+			try:
+				Op('porneste', fel=fel, sufix=sufix, sistem=sistem, la_final=urmatorul).porneste()
+			except Exception as e:
+				_jurnal("pornirea %s.%s: %r" % (fel, sufix, e))
+				urmatorul()
+		urmatorul()
+
+	try:
+		pune_ceas(intarziere, lambda: verifica(2))
+	except Exception as e:
+		_jurnal("dupa pornirea interfetei: %r" % (e,))

@@ -54,6 +54,9 @@ class VolumeControl:
 
 		self.hideVolTimer = eTimer()
 		self.hideVolTimer.callback.append(self.volHide)
+		# HDSatelit: semnul de mut pleaca singur dupa setarea "Cât stă semnul de mut pe ecran" (0 = mereu)
+		self.hideMutTimer = eTimer()
+		self.hideMutTimer.callback.append(self.mutHide)
 
 		vol = config.audio.volume.value
 		self.volumeDialog.setValue(vol)
@@ -113,6 +116,25 @@ class VolumeControl:
 		except Exception:
 			return 3000
 
+	def afisareMutMs(self):
+		"""Cat sta semnul de mut pe ecran (aceeasi pagina), 0 = mereu; 5000 ms fara setare."""
+		s = _setariSunet()
+		try:
+			return s.afisareMutMs() if s is not None else 5000
+		except Exception:
+			return 5000
+
+	def arataMut(self):
+		"""Semnul de mut pe ecran, cu ceasul care il ascunde (afara de "Mereu")."""
+		self.muteDialog.show()
+		self.hideMutTimer.stop()
+		ms = self.afisareMutMs()
+		if ms > 0:
+			self.hideMutTimer.start(ms, True)
+
+	def mutHide(self):
+		self.muteDialog.hide()
+
 	def volUp(self):
 		self.setVolume(+1)
 
@@ -153,9 +175,10 @@ class VolumeControl:
 			self.volctrl.volumeToggleMute()
 			if self.volctrl.isMuted():
 				if showMuteSymbol:
-					self.muteDialog.show()
+					self.arataMut()
 				self.volumeDialog.setValue(0)
 			else:
+				self.hideMutTimer.stop()
 				self.muteDialog.hide()
 				self.volumeDialog.setValue(vol)
 			self.mutSave()

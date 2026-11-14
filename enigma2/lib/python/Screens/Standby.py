@@ -26,7 +26,7 @@ def stergeStandbyDinCoada():
 	"""HDSatelit 0.7.4: scoate din coada notificarilor cererile de standby inca nedeschise (cerute din web, de un
 	temporizator sau de un plugin cat o fereastra era deschisa pe televizor). Chemata la iesirea din standby, pe orice
 	cale, si de web la trezire: altfel o cerere veche porneste standby-ul mult mai tarziu, cand se inchide fereastra
-	(.114, 11.11.2026: un OK dupa 12 minute). Intoarce cate cereri a scos."""
+	(receptorul de probe SF8008, 11.11.2026: un OK dupa 12 minute). Intoarce cate cereri a scos."""
 	try:
 		from Tools import Notifications
 		vechi = [n for n in Notifications.notifications if n[1] is Standby]

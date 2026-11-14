@@ -43,6 +43,26 @@ def textRaspuns(ms):
 	return u"%d ms" % ms if ms is not None else u""
 
 
+def _eArhiva(cheie):
+	"""Cheia unei emisiuni din arhiva furnizorului (Components/HdsIptvClient.eArhiva, 0.7.5 IPI), nu a unui canal."""
+	try:
+		from Components import HdsIptvClient as C
+		return bool(getattr(C, "eArhiva", lambda c: False)(cheie))
+	except Exception:
+		return False
+
+
+def _motiv(f):
+	"""Motivul pe scurt (HdsIptvSurse.MOTIVE) din masuratorile releului: ce a spus serverul, altfel ce s-a vazut."""
+	if f.get("motiv"):
+		return f["motiv"]
+	if f.get("raspuns_ms") is None:
+		return "server"
+	if not f.get("octeti"):
+		return "gol"
+	return "format"           # fluxul a venit, dar imaginea n-a pornit
+
+
 class Stare(object):
 	"""Hotararile, fara nimic din enigma2. `ceas` si `flux` se dau in probe."""
 
@@ -90,10 +110,15 @@ class Stare(object):
 		return self._deNotat()
 
 	def _deNotat(self):
-		"""Canalul, ca n-a pornit; None cand vina e a sursei (internet, cont, server): nu se marcheaza mii de canale."""
-		if (self.flux(self.sid, self.cheie) or {}).get("eroare_sursa"):
+		"""(sid, cheie, motiv), ca n-a pornit; None cand vina e a sursei (internet, cont, server): nu se marcheaza mii de canale."""
+		f = self.flux(self.sid, self.cheie) or {}
+		if f.get("eroare_sursa"):
 			return None
-		return self.sid, self.cheie
+		return self.sid, self.cheie, _motiv(f)
+
+	def durata(self):
+		"""Secunde de la pornirea serviciului pana acum (la laPornit: cat a durat pornirea)."""
+		return self.ceas() - self.inceput
 
 	def laTampon(self, procent):
 		"""Numai pentru bara ferestrei: un flux venit exact in ritmul lui tine tamponul playerului jos, iar imaginea merge."""
@@ -221,6 +246,8 @@ class Legatura(object):
 		canal = self.stare.laPornit()
 		if canal:
 			I.stergeNefunctional(*canal)
+			if not _eArhiva(canal[1]):     # o emisiune din arhiva (cheia a..., IPI) nu e un canal: fara timp de pornire
+				I.notaPornire(canal[0], canal[1], self.stare.durata())
 			s = I.sursa(canal[0])
 			if s and s.get("eroare"):
 				# a pornit: ce scria pe cartela despre o redare nereusita nu mai e adevarat
@@ -229,10 +256,25 @@ class Legatura(object):
 				self.ceas.start(PAS_PORNIT_MS, False)
 		self._pas()
 
+	def _codec(self):
+		"""Codecul video spus de player (pentru motivul „format”), sau ""."""
+		try:
+			from enigma import iServiceInformation
+			service = self.session.nav.getCurrentService()
+			info = service and service.info()
+			return (info.getInfoString(iServiceInformation.sTagVideoCodec) or "") if info else ""
+		except Exception:
+			return ""
+
+	def _noteaza(self, canal):
+		if _eArhiva(canal[1]):
+			return                      # o emisiune din arhiva nu primeste semnul canalului
+		I.noteazaNefunctional(canal[0], canal[1], canal[2], self._codec() if canal[2] == "format" else "")
+
 	def laEsec(self):
 		canal = self.stare.laEsec()
 		if canal:
-			I.noteazaNefunctional(*canal)
+			self._noteaza(canal)
 			self._ascunde()
 
 	def laTampon(self):
@@ -275,7 +317,7 @@ class Legatura(object):
 				print("[HdsIptvRedare] subtitrarile: %s" % type(e).__name__)
 		text, procent, mic, esuat = self.stare.pas()
 		if esuat:
-			I.noteazaNefunctional(*esuat)
+			self._noteaza(esuat)
 		if text is None:
 			if self.ecran is not None:
 				self.ecran.ascunde()

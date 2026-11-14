@@ -3043,7 +3043,7 @@ TEXTE_PAGINA = {
 		N_("Se pregătește..."),
 		N_("Se păstrează alegerile..."),
 		N_("Alegerile au fost păstrate."),
-		N_("Alegerile nu s-au păstrat: "),
+		N_("Alegerile nu s-au păstrat:"),
 		N_("Alegerile nu s-au păstrat. Receptorul nu răspunde."),
 		N_("Receptorul nu răspunde."),
 		N_("Alege din listă"),

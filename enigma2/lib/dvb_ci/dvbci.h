@@ -89,6 +89,12 @@ class eDVBCISlot: public iObject, public sigc::trackable
 	int m_alt_ca_handling;
 	bool m_ciPlusRoutingDone;
 	bool m_ciplus_keys;  // cheile CI+ primite de la modul (dupa autentificare)
+	/* HD Satelit (CI+ pe AX HD51, forumul 479): demuxul decodorului canalului (-1 necunoscut), felul dispozitivului caN
+	   care a primit cheia CI+ ultima data (lib/dvb_ci/hdscica.h; tinut minte in /etc/enigma2/hdsatelit/ci<N>-dispozitiv-ca)
+	   si cheia CI+ refuzata de driver pe toate dispozitivele potrivite (getCIPlusState = 3, mesajul de pe ecran) */
+	int16_t m_ca_decode_demux_id;
+	int m_ca_ales;
+	bool m_ciplus_cheie_refuzata;
 	int m_ciplus_routing_tunernum;
 	std::string m_ciplus_routing_input;
 	std::string m_ciplus_routing_ci_input;
@@ -115,6 +121,10 @@ public:
 	int getAudioNumber() { return m_audio_number; }
 	int *getAudioPids() { return m_audio_pids; }
 	int getDescramblingOptions() { return m_alt_ca_handling; }
+	int16_t getCADecodeDemuxID() { return m_ca_decode_demux_id; }
+	int getCaAles() { return m_ca_ales; }
+	void setCaAles(int fel);
+	void setCheieCiplusRefuzata(bool refuzata);
 	bool getIsOperatorProfileDisabled() { return m_operator_profiles_disabled; }
 	bool ciplusRoutingDone() { return m_ciPlusRoutingDone; }
 	void setCIPlusRoutingDone() { m_ciPlusRoutingDone = true; }

@@ -2056,6 +2056,13 @@ def _cronometruMs(s):
 	return _hMin(s) if s >= 6000 else _minSec(s)
 
 
+def _ramasHmMs(s):
+	"""Cat mai e din film: ore si minute de la o ora in sus („1H26”), sub o ora minute si secunde („5648”, cu doua
+	puncte pe afisajul color: 56:48)."""
+	s = max(0, int(s))
+	return _hMin(s) if s >= 3600 else _minSec(s)
+
+
 def _debitMbit(v):
 	return _cuPunct(v, 1) if v < 100 else _mbit(v)
 
@@ -2524,6 +2531,8 @@ CATALOG = [
 		("ms", N_("minute și secunde"), lambda v: _minSec(v["poz"])),
 	], N_("Se arată numai când se redă un film sau o înregistrare.")),
 	D("redare.ramas", N_("Cât mai e din film"), GRATIS, 1, _redare, {"poz": 83 * 60.0, "lung": 7200.0}, [
+		# primul format e cel ales cand omul ia data (cererea unui tester: „1H26” peste o ora, „5648” = 56:48 sub o ora)
+		("hm_ms", N_("ore și minute, sub o oră minute și secunde"), lambda v: _ramasHmMs(v["lung"] - v["poz"])),
 		("minus", N_("minute, cu minus"), lambda v: _minus(_minute(max(0.0, v["lung"] - v["poz"])))),
 	]),
 	D("redare.procent", N_("Cât a trecut din film"), GRATIS, 5, _redare, {"poz": 2880.0, "lung": 7200.0}, [

@@ -28,6 +28,13 @@
 #
 # Starea pentru web (ultima_stare) si fapta ceruta din web (fapta_web) trec prin _STARE, pusa de fereastra de pe
 # televizor. Setarea: config.usage.hds_ecran_negru (setup.xml, sectiunea usage), SystemInfo["HdsEcranNegru"].
+# Canalele numai cu sunet (0.7.5): un canal TV care nu are nicio pista video, dar are sunet, primeste verdictul
+# NUMAI_SUNET, fara asteptare: la DVB (si la fluxurile IP prin servicedvb) dupa PMT (fara pista video, fara pista video
+# necunoscuta numita de nucleu, cu pista audio), la fluxurile prin GStreamer (4097 si celelalte) dupa numarul pistelor
+# video spus de servicemp3 (getInfo(sUser+17), -1 cat nu se stie) si pistele audio; fara numarul pistelor (alt serviciu
+# de redare), dupa PRAG_SUNET_FLUX secunde fara imagine si fara codec video. Verdictul il primeste Screens/HdsEcranNegru.py:
+# ecranul radio ca fundal (Screens/HdsEcranRadio.py, numaiSunet) si protectia ecranului (Screens/ScreenSaver.py), dupa
+# setarea „La canalele numai cu sunet” (Components/HdsRadioSetari.py); mesajul se vede numai fara ecranul radio.
 # Analiza fluxului (Components/HdsAnalizaFlux.py) se leaga la verdictele „date” si „format”: fapta F_ANALIZA, iar
 # fotografia primeste ce s-a aflat deja (d["analiza"]: ce trimite serviciul, tipul pistei video necunoscute), deci
 # analizeaza() ramane fara citiri. Pornirea singura a analizei: config.usage.hds_analiza_flux („automat”).
@@ -51,6 +58,8 @@ import time
 PRAG_SEMNAL = 4.0      # dupa evStart fara semnal prins: „Fără semnal” (acordarea normala ia sub o secunda)
 PRAG_IMAGINE = 6.0     # fara cadre noi atatea secunde (de la pornire sau de la ultimul cadru): ecran negru
 PRAG_CADRE = 3.0       # cadre noi in ultimele atatea secunde: imaginea vine
+PRAG_SUNET_FLUX = 8.0  # flux prin alt serviciu de redare, fara numarul pistelor video: numai sunet dupa atatea secunde
+URMARIRE_FLUX_S = 30.0 # fluxul prin GStreamer fara imagine si fara verdict se mai urmareste atatea secunde
 PAS_ASTEPTARE_MS = 1000
 PAS_IMAGINE_MS = 2000
 MAX_ETICHETE = 4
@@ -74,6 +83,9 @@ FARA_TUNER = "fara_tuner"
 TUNER_NESETAT = "tuner_nesetat"
 # zap pe un satelit pe care numai motorul USALS il prinde, cu locul antenei nestabilit (Components/HdsLocul.py)
 LOC_NESTABILIT = "loc_nestabilit"
+# zap pe un satelit USALS care e sub orizont din locul antenei stabilit (locul scris gresit, de pilda emisferele schimbate):
+# nucleul nu primeste satelitul (NimManager.SecConfigure, hdsSubOrizont), deci nicio comanda spre motor
+SUB_ORIZONT = "sub_orizont"
 ANTENA = "antena"
 FARA_SEMNAL = "fara_semnal"
 FRECVENTA_GOALA = "frecventa_goala"
@@ -83,8 +95,9 @@ FORMAT = "format"
 DATE = "date"
 CRIPTAT = "criptat"
 FARA_IMAGINE = "fara_imagine"
-CODURI = (BLOCAT, FARA_TUNER, TUNER_NESETAT, LOC_NESTABILIT, ANTENA, FARA_SEMNAL, FRECVENTA_GOALA, POST_MUTAT, FARA_PMT,
-	FORMAT, DATE, CRIPTAT, FARA_IMAGINE)
+NUMAI_SUNET = "numai_sunet"
+CODURI = (BLOCAT, FARA_TUNER, TUNER_NESETAT, LOC_NESTABILIT, SUB_ORIZONT, ANTENA, FARA_SEMNAL, FRECVENTA_GOALA, POST_MUTAT, FARA_PMT,
+	FORMAT, DATE, CRIPTAT, FARA_IMAGINE, NUMAI_SUNET)
 
 # faptele (butonul de pe televizor si din web)
 F_CAUTA_TP = "cauta_tp"          # cautarea din nou pe transponderul canalului
@@ -131,6 +144,7 @@ TITLURI = {
 	FARA_TUNER: N_("Tunerul este ocupat"),
 	TUNER_NESETAT: N_("Tunerul nu e setat pentru acest canal"),
 	LOC_NESTABILIT: N_("Locul antenei nu e stabilit"),
+	SUB_ORIZONT: N_("Satelitul nu se vede din locul antenei"),
 	ANTENA: N_("Antena se rotește"),
 	FARA_SEMNAL: N_("Fără semnal"),
 	FRECVENTA_GOALA: N_("Frecvența nu trimite nimic"),
@@ -140,6 +154,7 @@ TITLURI = {
 	DATE: N_("Serviciu de date"),
 	CRIPTAT: N_("Acces condiționat"),
 	FARA_IMAGINE: N_("Fără imagine"),
+	NUMAI_SUNET: N_("Numai sunet"),
 }
 
 TEXTE = {
@@ -147,6 +162,7 @@ TEXTE = {
 	FARA_TUNER: N_("Tunerul este folosit acum pe altă frecvență, pentru o înregistrare sau o transmisie în rețea, și nu poate porni acest canal."),
 	TUNER_NESETAT: N_("Niciun tuner nu e setat să primească acest canal. Verifică setările tunerului."),
 	LOC_NESTABILIT: N_("Acest satelit se recepționează numai cu motorul USALS, iar motorul nu știe unde ești, deci antena nu se rotește. Apasă OK și alege țara și orașul."),
+	SUB_ORIZONT: N_("Din locul antenei scris în setări, acest satelit e sub orizont, deci motorul nu rotește antena spre el. Probabil emisfera (Nord sau Sud) ori partea față de Greenwich (Est sau Vest) e aleasă greșit. Apasă OK și verifică locul antenei."),
 	# numai ce s-a masurat (un sfat despre cablu sau vreme poate fi gresit cand cauza nu se
 	# stie)
 	FARA_SEMNAL: N_("Receptorul nu recepționează semnalul acestui canal."),
@@ -157,6 +173,7 @@ TEXTE = {
 	DATE: N_("Acest serviciu nu are imagine și nici sunet. Trimite numai date, de exemplu actualizări sau ghidul programelor."),
 	CRIPTAT: N_("Canalul este criptat. Niciun modul de acces condiționat nu îl decriptează."),
 	FARA_IMAGINE: N_("Canalul nu trimite imagine acum. Emisia poate fi oprită sau canalul s-a mutat."),
+	NUMAI_SUNET: N_("Canalul trimite acum numai sunet, fără imagine."),
 }
 T_ANTENA_SPRE = N_("Antena se rotește spre %s. Imaginea apare după ce ajunge.")
 T_ANTENA = N_("Antena se rotește. Imaginea apare după ce ajunge.")
@@ -192,6 +209,7 @@ DETALII = {
 	FARA_TUNER: N_("niciun tuner liber"),
 	TUNER_NESETAT: N_("configurarea tunerului nu se potrivește canalului"),
 	LOC_NESTABILIT: N_("USALS fără locul antenei; nucleul nu primește satelitul"),
+	SUB_ORIZONT: N_("USALS: satelitul e sub orizont din locul antenei; nucleul nu primește satelitul"),
 	FRECVENTA_GOALA: N_("PAT necitit în timpul așteptat"),
 	POST_MUTAT: N_("SID negăsit în PAT"),
 	FARA_PMT: N_("PMT necitit în timpul așteptat"),
@@ -345,7 +363,10 @@ def analizeaza(d):
 	if d.get("radio"):
 		return None
 	if d.get("fel") == FEL_FLUX:
-		return _format_numit(d, analiza=False)
+		numit = _format_numit(d, analiza=False)
+		if numit is None and numai_sunet(d):
+			return _verdict(NUMAI_SUNET, d)
+		return numit
 	if d.get("fel") not in FEL_DVB:
 		return None
 	if d.get("imagine") is True:
@@ -358,6 +379,8 @@ def analizeaza(d):
 		if nume:
 			text = text + u"\n" + _t(T_INREGISTREAZA) % _lista_inregistrari(nume)
 		return _verdict(FARA_TUNER, d, text=text, fapta=F_INREGISTRARI, detaliu=_detaliu(_t(DETALII[FARA_TUNER])))
+	if eroare == E_CONFIGURARE and d.get("sub_orizont"):
+		return _verdict(SUB_ORIZONT, d, fapta=F_LOC, detaliu=_detaliu(_t(DETALII[SUB_ORIZONT])))
 	if eroare == E_CONFIGURARE and d.get("loc_nestabilit"):
 		return _verdict(LOC_NESTABILIT, d, fapta=F_LOC, detaliu=_detaliu(_t(DETALII[LOC_NESTABILIT])))
 	if eroare == E_CONFIGURARE:
@@ -394,6 +417,8 @@ def analizeaza(d):
 	numit = _format_numit(d)
 	if numit is not None:
 		return numit
+	if numai_sunet(d):
+		return _verdict(NUMAI_SUNET, d)
 	if d.get("imagine") is None or (d.get("negru_de") or 0.0) < PRAG_IMAGINE:
 		return None
 	if not d.get("pmt"):
@@ -436,6 +461,25 @@ def analizeaza(d):
 		detaliu=_detaliu(_t(D_PISTA_FARA_IMAGINE) % d["video_pid"]))
 
 
+def numai_sunet(d):
+	"""True cand canalul TV din fotografia `d` nu are nicio pista video, dar are sunet (vezi antetul)."""
+	if not d or d.get("radio") or d.get("pauza") or d.get("pip") or d.get("imagine") is True:
+		return False
+	if d.get("flux_gst"):
+		if (d.get("piste_audio") or 0) <= 0:
+			return False
+		n = d.get("piste_video")
+		if n is not None and n >= 0:
+			return n == 0
+		return not d.get("codec_video") and (d.get("secunde") or 0.0) >= PRAG_SUNET_FLUX
+	if not d.get("pmt") or d.get("video_necunoscut"):
+		return False
+	if (d.get("video_pid") or -1) > 0 or (d.get("audio_pid") or -1) <= 0:
+		return False
+	# analiza fluxului a gasit o pista video pe care decodorul nu o cunoaste: ramane „format necunoscut”
+	return not (d.get("analiza") or {}).get("codec")
+
+
 def _format_numit(d, analiza=True):
 	"""Verdictul FORMAT cu numele formatului, cand PMT-ul e citit, nu are nicio pista video pe care decodorul o
 	cunoaste si nucleul a numit una pe care nu o cunoaste (d["video_necunoscut"]: {"codec", "detaliu"}, din
@@ -459,8 +503,22 @@ def verdict_eroare(eroare, fel="s", canal=u""):
 	ecran e oprit; `canal` e numele serviciului redat (randul de sus al ferestrei). None pentru o eroare necunoscuta."""
 	if eroare not in (E_FARA_TUNER, E_CONFIGURARE, E_FARA_PAT, E_FARA_SID, E_FARA_PMT, E_ACORDARE):
 		return None
-	return analizeaza({"fel": fel if fel in FEL_DVB else "s", "eroare": eroare, "secunde": PRAG_SEMNAL, "lock": -1,
-		"canal": canal or u""})
+	d = {"fel": fel if fel in FEL_DVB else "s", "eroare": eroare, "secunde": PRAG_SEMNAL, "lock": -1, "canal": canal or u""}
+	if eroare == E_CONFIGURARE and d["fel"] == "s":
+		# ca la mesajul de pe ecran (fotografie): satelitul prins numai cu motorul USALS si locul antenei nestabilit spune
+		# „Locul antenei nu e stabilit” (OK = alege locul), nu „Tunerul nu e setat” (Quad 4K Pro cu motor)
+		d["loc_nestabilit"] = loc_nestabilit(_refRedata())
+		d["sub_orizont"] = sub_orizont(_refRedata())
+	return analizeaza(d)
+
+
+def _refRedata():
+	"""Referinta serviciului redat acum (pentru ferestrele de eroare, care primesc numai info), sau None."""
+	try:
+		import NavigationInstance
+		return NavigationInstance.instance.getCurrentlyPlayingServiceReference()
+	except Exception:
+		return None
 
 
 def nume_din_info(info):
@@ -877,6 +935,9 @@ class Urmaritor(object):
 		d = self.fotografie()
 		v = analizeaza(d)
 		urmarit = not d.get("nimic") and not d.get("radio") and (d.get("fel") in FEL_DVB or bool(d.get("flux_dvb")))
+		if d.get("flux_gst") and not d.get("nimic"):
+			# fluxul prin GStreamer: cat nu vine imaginea, cel mult URMARIRE_FLUX_S fara verdict (evenimentele il pornesc din nou)
+			urmarit = d.get("imagine") is not True and (v is not None or (d.get("secunde") or 0.0) < URMARIRE_FLUX_S)
 		return v, urmarit, d.get("imagine") is True
 
 	# ---- imaginea
@@ -930,6 +991,12 @@ class Urmaritor(object):
 		d = {"ref": sref, "tip_serviciu": pr["stype"], "fel": r.kind(), "secunde": acum - self.pornit_la,
 			"pauza": self.inPauza(), "pip": bool(getattr(self.session, "pipshown", False))}
 		d["radio"] = pr["stype"] in RADIO_STYPES or r.is_dab() or _radio_vizibil()
+		if not d["radio"] and d["fel"] == FEL_FLUX:
+			# un post de radio de pe internet (adresa de sunet, ca la bara: HdsInfo._radio_calc), si cu ecranul radio oprit
+			try:
+				d["radio"] = bool(C.is_audio_url(r.ref().get("path") or u""))
+			except Exception:
+				pass
 		info = r.info()
 		d["canal"] = _curat(info.getName() if info is not None else u"")
 		if d["fel"] == FEL_FLUX and not d["radio"] and r.ref().get("type") == 1:
@@ -947,6 +1014,17 @@ class Urmaritor(object):
 			if d["video_pid"] is None or d["video_pid"] <= 0:
 				d["video_necunoscut"] = video_necunoscut_din(r.gets("sPisteNecunoscute"))
 			return d
+		if d["fel"] == FEL_FLUX and not d["radio"]:
+			# fluxul prin GStreamer (4097, 5001, 5002): numai cat trebuie pentru „numai sunet”, fara tuner si fara PMT
+			d["flux_gst"] = True
+			_pasi_uita()
+			inaltime = r.geti("sVideoHeight")
+			vazut = self.video_ev or inaltime > 0
+			d["imagine"], d["negru_de"] = vazut, (0.0 if vazut else max(0.0, acum - self.pornit_la))
+			d["piste_video"] = _piste_video(info)
+			d["piste_audio"] = _piste_audio(service)
+			d["codec_video"] = bool(r.gets("sTagVideoCodec"))
+			return d
 		if d["radio"] or d["fel"] not in FEL_DVB:
 			_pasi_uita()
 			return d
@@ -955,6 +1033,7 @@ class Urmaritor(object):
 		d["eroare"] = eroare_acordare(stare_dvb)
 		if d["eroare"] == E_CONFIGURARE and d["fel"] == "s":
 			d["loc_nestabilit"] = loc_nestabilit(sref)
+			d["sub_orizont"] = sub_orizont(sref)
 		program = _TABEL["program"]
 		d["pmt"] = (program is not None and stare_dvb == program) or r.geti("sIsCrypted") in (0, 1)
 		d["video_pid"] = r.geti("sVideoPID")
@@ -1048,6 +1127,18 @@ def loc_nestabilit(sref):
 		return False
 
 
+def sub_orizont(sref):
+	"""True cand satelitul canalului se prinde numai cu motorul USALS si e sub orizont din locul antenei stabilit: nucleul
+	nu are satelitul (NimManager.SecConfigure, hdsSubOrizont), deci acordul cade ca la o configurare gresita"""
+	try:
+		from Components import HdsLocul
+		orbital = HdsLocul.orbitalDinReferinta(sref)
+		return orbital is not None and HdsLocul.blocatDeOrizont(orbital)
+	except Exception as e:
+		print("[HdsEcranNegru] satelitul sub orizont: %s" % e)
+		return False
+
+
 def _pasi_noteaza(r, C, d, t0, acum):
 	"""Randurile pasilor decriptarii pentru canalul DVB redat (HdsPasiDecriptare.noteaza_din), sau None cand setarea
 	lor e oprita (atunci nu se citeste nimic in plus)."""
@@ -1100,11 +1191,31 @@ def _in_standby():
 
 
 def _radio_vizibil():
+	"""Ecranul radio se vede pe un post de radio (nu ca fundal al unui canal TV numai cu sunet)."""
 	try:
-		from Components.HdsRadioSetari import ecran_radio_vizibil
-		return bool(ecran_radio_vizibil())
+		from Components.HdsRadioSetari import ecran_radio_vizibil, ecran_numai_sunet
+		return bool(ecran_radio_vizibil()) and not ecran_numai_sunet()
 	except Exception:
 		return False
+
+
+def _piste_video(info):
+	"""Numarul pistelor video ale fluxului redat prin GStreamer (lib/service/servicemp3.cpp, getInfo(sUser+17)); -1 cat
+	nu se stie (inainte de preroll, alt serviciu de redare, nucleu mai vechi)."""
+	try:
+		from enigma import iServiceInformation
+		v = info.getInfo(iServiceInformation.sUser + 17) if info is not None else -1
+		return int(v) if v is not None else -1
+	except Exception:
+		return -1
+
+
+def _piste_audio(service):
+	try:
+		a = service.audioTracks() if service is not None else None
+		return int(a.getNumberOfTracks()) if a is not None else 0
+	except Exception:
+		return 0
 
 
 def _inregistrari(nav):

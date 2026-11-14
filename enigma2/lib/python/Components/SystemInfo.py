@@ -310,6 +310,10 @@ except Exception as _e:
 	print("[SystemInfo] HdsBoxInfoModele: %r" % (_e,))
 
 # 3. Numele imaginii in forma standard: tot ale noastre.
+# imgversion: versiunea care ruleaza acum (/etc/image-version, schimbat de fiecare actualizare prin pachete), peste cea din
+# /usr/lib/enigma.info de la pasul 1, care pana in 0.7.5 ramanea pe imaginea scrisa (Octagon 13.11.2026: 0.7.1 cu 0.7.4 instalata)
+if SystemInfo.get("imageversion"):
+	SystemInfo["imgversion"] = SystemInfo["imageversion"]
 _oeaPune("imgversion", SystemInfo.get("imageversion", ""))
 _oeaPune("developername", SystemInfo.get("distro", ""))
 _oeaPune("imglanguage", "multilang")

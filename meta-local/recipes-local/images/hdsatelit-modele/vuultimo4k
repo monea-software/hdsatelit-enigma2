@@ -1,0 +1,24 @@
+# HD Satelit: regulile garzii de model pentru Vu+ Ultimo4K (masina vuultimo4k), NECONFIRMAT (ULT, 12.11.2026; adam59)
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom: receptor Broadcom (BCM7444S), fara /proc/msp/sys, fara blkdevparts si fara partitia deviceinfo, ca
+# Solo 4K. Garda citeste cipul din /proc/stb/info/chipset si tipul placii din /proc/stb/info/vumodel (nu exista boxtype).
+# chip= si boxtype= sunt valorile fixe din tabelul proc_rw_info al driverului dvb-bcm7444.ko (vuplus-dvb-proxy-vuultimo4k
+# 3.14.28-20250706.r2, citit cu vuplus4k/unelte/tabel_ko.py): chipset=7444s, vumodel=ultimo4k (model=dm8000, comun).
+# kernel_part=mmcblk0p1, rootfs_part=mmcblk0p4: MTD_KERNEL si MTD_ROOTFS din vuultimo4k.conf (OE-Alliance 6.0), la fel ca
+# Solo 4K si Uno 4K SE; nucleul linux-vuplus 3.14.28 (KV 3.14.28-1.12).
+# kernel_kib: nemasurat (0 = de completat din fisa unui tester). Pe stick: dosarul vuplus/ultimo4k.
+format=1
+distro=hdsatelit
+model=Vu+ Ultimo4K
+machine=vuultimo4k
+machinebuild=vuultimo4k
+chip=7444s
+boxtype=ultimo4k
+hw=-
+partitions=-
+kernel_part=mmcblk0p1
+kernel_kib=0
+rootfs_part=mmcblk0p4
+confirmat=nu
+familie=broadcom

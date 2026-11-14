@@ -1,0 +1,26 @@
+# HD Satelit: regulile garzii de model pentru Vu+ Zero 4K (masina vuzero4k), NECONFIRMAT (MZ0, 12.11.2026)
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom: receptor Broadcom (BCM72604), fara /proc/msp/sys, fara blkdevparts si fara partitia deviceinfo, ca
+# Vu+ Uno 4K SE (acelasi nucleu linux-vuplus 4.1.20, aceeasi reteta in OE-Alliance). Garda citeste cipul din
+# /proc/stb/info/chipset si tipul placii din /proc/stb/info/vumodel (driverul nu face /proc/stb/info/boxtype).
+# chip= si boxtype= din tabelul proc_rw_info al driverului (dvb-bcm72604.ko din
+# vuplus-dvb-proxy-vuzero4k-4.1.20-20210407.r1): chipset=72604, vumodel=zero4k (si model=dm8000, version=1500A0).
+# vumodel e unic (niciun alt model nu-l are), deci fara model_id=, ca la Uno 4K SE.
+# kernel_part=mmcblk0p4, rootfs_part=mmcblk0p7 din vuzero4k.conf (meta-vuplus); root=/dev/mmcblk0p7 fortat in
+# defconfig-ul nucleului (CONFIG_CMDLINE_FORCE=y).
+# kernel_kib: nemasurat (0, de completat din fisa unui tester). Pe stick: dosarul vuplus/zero4k.
+format=1
+distro=hdsatelit
+model=Vu+ Zero 4K
+machine=vuzero4k
+machinebuild=vuzero4k
+chip=72604
+boxtype=zero4k
+hw=-
+partitions=-
+kernel_part=mmcblk0p4
+kernel_kib=0
+rootfs_part=mmcblk0p7
+confirmat=nu
+familie=broadcom

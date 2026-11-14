@@ -1,5 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-AC_INIT([enigma2],[0.7.4],[https://hdsatelit.com])
+AC_INIT([enigma2],[0.7.5],[https://hdsatelit.com])
 AM_INIT_AUTOMAKE([dist-bzip2 no-define tar-pax -Wno-portability])
 AC_CONFIG_HEADERS([enigma2_config.h])
 
@@ -132,6 +132,20 @@ case "$BOXTYPE" in
 		;;
 esac
 
+dnl CI+ (HD Satelit, lib/dvb_ci/hdscica.h): the /dev/dvb/adapter0/caN tried first for the CI+ key on the board; the
+dnl receiver still tries the others by itself ("Auto") and keeps the one that takes the key. hd51 (AX HD51, Mut@nt HD51):
+dnl the driver refused the key and the PIDs on ca<demux> 5 times out of 5 (forum 479, 13.11.2026), so ca<demux+1> first.
+AC_MSG_CHECKING([which CA device boxtype $BOXTYPE tries first for the CI+ key])
+case "$BOXTYPE" in
+	hd51)
+		AC_DEFINE([HDS_CI_CA_INTAI],[1],[CI+ key: try ca<demux+1> first on this board])
+		AC_MSG_RESULT([ca<demux+1>])
+		;;
+	*)
+		AC_MSG_RESULT([ca<demux>])
+		;;
+esac
+
 AC_MSG_CHECKING([whether boxtype $BOXTYPE is a board with libreader])
 case "$BOXTYPE" in
 	viper4k|sf8008|sf8008m|ustym4kpro|gbmv200)
@@ -237,6 +251,7 @@ lib/python/Plugins/SystemPlugins/DiseqcTester/Makefile
 lib/python/Plugins/SystemPlugins/DiseqcTester/meta/Makefile
 lib/python/Plugins/SystemPlugins/Hotplug/Makefile
 lib/python/Plugins/SystemPlugins/HdsDvbI/Makefile
+lib/python/Plugins/SystemPlugins/Satfinder/Makefile
 lib/python/Plugins/SystemPlugins/Makefile
 lib/python/Plugins/SystemPlugins/SkinSelector/Makefile
 lib/python/Plugins/SystemPlugins/SkinSelector/meta/Makefile

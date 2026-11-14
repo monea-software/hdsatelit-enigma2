@@ -1,0 +1,42 @@
+# HD Satelit: regulile garzii de model pentru Zgemma Star S (masina sh1, MACHINEBUILD zgemmass, Broadcom BCM7358, MIPS),
+# NECONFIRMAT (agentul MSS, 12.11.2026, imaginea alfa; testerul rady1966). Masina sh1 din stratul meta-airdigital
+# (OE-Alliance 6.0) serveste si Star H1, Star H2 si Star 2S (MACHINEBUILD zgemmash1, zgemmash2, zgemmas2s): acelasi nucleu
+# linux-airdigital 4.10.12 (defconfig sh1), aceleasi drivere airdigital-dvb-modules-sh1 20180830 (sh1_1..4.ko), acelasi
+# dosar zgemma/sh1 pe stick. Imaginea e pentru Star S; celelalte trei nu sunt in boxtype= pana nu le confirma un tester.
+# Memoria NAND, ca la Vu+ Solo SE (stocare=nand): fara eMMC, fara deviceinfo, fara /proc/msp/sys, fara arbore de dispozitive
+# (CONFIG_OF nu e pus). Garda din enigma2.sh si Components/HdsPazaModel.py citesc cipul din /proc/stb/info/chipset, tipul
+# placii din /proc/stb/info/vumodel, altfel /proc/stb/info/boxtype, si partitiile din /proc/mtd.
+# DOVEDITE din fisiere:
+#   partitions, kernel_part, rootfs_part, kernel_kib: nucleul are CONFIG_BRCM_FIXED_MTD_PARTITIONS=y si nu are CONFIG_OF
+#            (defconfig sh1), deci tabela e cea fixa din drivers/brcmstb/board.c (sursa linux-4.10.12-mips.tar.gz a
+#            retetei linux-airdigital_4.10.12.bb): mtd0 „complete” (tot NAND-ul), mtd1 „kernel” 0x600000 = 6 MiB de la 0,
+#            mtd2 „rootfs” de la 6 MiB pana la capat. MTD_KERNEL=mtd1 si MTD_ROOTFS=mtd2 sunt si cele din
+#            airdigital-mipsel.inc. Marimile lui complete si rootfs depind de NAND-ul placii, deci nu se scriu.
+#   hw=- : placa nu are antet de fabrica de citit.
+# NEDOVEDITE (de confirmat din fisa testerului INAINTE de constructie si publicare, vezi STADIU-MSS.md):
+#   chip=- : driverul mare (sh1_4.ko, 9 MB) are sirurile impachetate, iar nicio sursa a nucleului nu face /proc/stb, deci
+#            nu stim daca exista /proc/stb/info/chipset si ce scrie; ca la AX HD51 (MHD), cipul nu se compara.
+#   boxtype= : valorile de mai jos sunt cele asteptate (numele masinii si al constructiei OE-Alliance), NU masurate. O valoare
+#            gresita opreste interfata cu ecranul „imagine pentru alt receptor”. ATENTIE: pe imaginile care pun modulul
+#            boxmodel.ko (trasatura „boxmodel” din airdigital-mipsel.inc), /proc/stb/info/vumodel arata „ultimo”, nu placa;
+#            imaginea noastra nu pune acel modul.
+# confirmat=nu: treapta a doua; hotarasc cipul (aici nu se compara), tipul placii si locul nucleului si al sistemului;
+# tabela partitiilor si marimea nucleului sunt numai avertismente pana cand un tester citeste /proc/mtd.
+# Fara upd_path: dosarul de pe stick (zgemma/sh1) il stie incarcatorul, nu un nod al driverului.
+# familie=broadcom: cipul si tipul placii din nodurile driverului, placa fara antet de fabrica, ca la Vu+ Solo SE.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=zgemmass.
+format=1
+distro=hdsatelit
+model=Zgemma Star S
+machine=sh1
+machinebuild=zgemmass
+chip=-
+boxtype=sh1,zgemmass
+hw=-
+partitions=complete,kernel:6M,rootfs
+kernel_part=mtd1
+kernel_kib=6144
+rootfs_part=mtd2
+stocare=nand
+confirmat=nu
+familie=broadcom

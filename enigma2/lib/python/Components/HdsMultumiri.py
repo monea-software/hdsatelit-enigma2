@@ -361,6 +361,7 @@ SURSE = (
 	("Material Symbols (Google)", N_("desenele fontului de pictograme")),
 	("fissix", N_("traducerea pluginurilor scrise pentru Python 2")),
 	("oZeta", N_("forma convertorului ReceiverInfo")),
+	("polywasm (Evan Wallace)", N_("WebAssembly pentru aplicațiile HbbTV pe receptoarele care nu-l au")),
 )
 
 

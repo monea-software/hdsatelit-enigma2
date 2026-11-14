@@ -13,6 +13,16 @@ except Exception:
 InfoBarCount = 0
 
 
+def _pluginCazut(functie, eveniment):
+	"""True cand eroarea luata acum vine dintr-un plugin extern (raportata si scrisa in jurnal): bucla merge mai departe."""
+	try:
+		from Components.HdsPluginExtern import ascultatorCazut
+	except Exception:
+		return False
+	return ascultatorCazut("ServiceEventTracker.event(%d) -> %s" % (eveniment, getattr(functie, "__qualname__", None) or
+		type(functie).__name__))
+
+
 class InfoBarBase:
 	# pluginurile care vor sa stie cand se deschide un ecran cu redare
 	onInfoBarOpened = []
@@ -84,12 +94,15 @@ class ServiceEventTracker:
 				if (func[0] or  # let pass all events to screens not derived from InfoBarBase
 					(not old_service_running and stack[ssize-1] == func[1]) or # let pass events from currently running service just to current active screen (derived from InfoBarBase)
 					(old_service_running and ssize > 1 and stack[ssize-2] == func[1])): # let pass events from old running service just to previous active screen (derived from InfoBarBase)
+					# un plugin extern cazut nu mai opreste ecranele de dupa el (HdsPluginExtern.ascultatorCazut)
+					a = _monoton() if activ else 0
+					try:
+						func[2]()
+					except Exception:
+						if not _pluginCazut(func[2], evt):
+							raise
 					if activ:
-						a = _monoton()
-						func[2]()
 						m.ascultator(evt, func[2], _monoton() - a, ecran=True)
-					else:
-						func[2]()
 
 	@staticmethod
 	def setActiveInfoBar(infobar, old_service, old_ref):

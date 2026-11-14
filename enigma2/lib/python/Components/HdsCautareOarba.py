@@ -16,8 +16,11 @@ scrie transponderele gasite cu frecventa reala pe satelit. Aici sunt:
   - transponderele cunoscute ale satelitului (satellites.xml): arata ce trebuie sa existe, iar la sfarsit a doua
     trecere cauta NUMAI in ferestre inguste in jurul celor cunoscute pe care prima nu le-a gasit (masurat pe Astra
     19,2E: 89 din 89 cunoscute + 4 noi in ~195 s); dublurile unite;
-  - satelitul pe care sta antena, aflat din ce s-a gasit (programul nu misca antena si nu trimite DiSEqC: cauta pe
-    unde stau antena si comutatorul);
+  - satelitul pe care sta antena, aflat din ce s-a gasit (programul nu misca motorul: cauta unde sta antena);
+  - comutatorul DiSEqC / toneburst al satelitului aratat (comutare_din_lnb), dat programului: dupa oprirea canalului
+    enigma2 inchide frontend-ul si taie tensiunea LNB-ului, iar comutatorul ramas fara curent porneste pe portul A
+    (Wlad, Viper 4K V10, asistenta 499376, 14.11.2026: arata 13E pe B, cauta 4,8E pe A); programul trimite deci
+    comanda portului inainte de fiecare trecere, ca enigma2 la acordare;
   - Cautare: o cautare (una singura pe receptor, pornita din ecran sau din web), cu programul pornit printr-un
     'pornitor' dat din afara (pe receptor eConsoleAppContainer, la probe un proces obisnuit);
   - partea de receptor (la sfarsitul fisierului, importurile enigma2 numai la folosire): antena, oprirea si repunerea
@@ -213,12 +216,50 @@ def treceri(cerere, osc=None):
     tuner = int(cerere.get('tuner') or 0)
     return {'treceri': lista, 'benzi': alese, 'polarizari': pol,
             'argv': argv_program(lista, osc, tuner, cerere.get('timp_max'), cerere.get('vuplus'),
-                                 cerere.get('rata_min'))}
+                                 cerere.get('rata_min'), cerere.get('comutare'))}
 
 
-def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=0):
+# commitedDiseqcCommand (NimManager): AA, AB, BA, BB = porturile A..D ale unui comutator DiSEqC 1.0; '240'..'255' = octetul
+# comenzii scris de om, trimis asa cum e
+PORT_DISEQC = {'AA': 0, 'AB': 1, 'BA': 2, 'BB': 3}
+
+
+def comutare_din_lnb(lnb):
+    """Comutarea LNB-ului unui satelit (Components/HdsLnb: modul simplu si cel avansat dau acelasi dictionar) ->
+    {'port': 0-3} sau {'octet': 0xF0-0xFF} si/sau {'toneburst': 'A'|'B'}; None cand nu e nimic de comutat (un singur
+    LNB, motor, DiSEqC 1.1 necomandat sau Unicable: acolo programul nu trimite nimic, ca pana acum)."""
+    if not lnb or lnb.get('diseqc') in (None, '', 'none', '1_2'):
+        return None
+    rez = {}
+    comanda = str(lnb.get('comanda') or 'none')
+    if comanda in PORT_DISEQC:
+        rez['port'] = PORT_DISEQC[comanda]
+    elif comanda.isdigit() and 0xF0 <= int(comanda) <= 0xFF:
+        rez['octet'] = int(comanda)
+    if lnb.get('toneburst') in ('A', 'B'):
+        rez['toneburst'] = lnb['toneburst']
+    return rez or None
+
+
+def argv_comutare(comutare):
+    """Argumentele comutarii pentru hds-blindscan (numai programul nostru, nu adaptorul Vu+)."""
+    if not comutare:
+        return []
+    argv = []
+    if comutare.get('port') in (0, 1, 2, 3):
+        argv += ['--diseqc-port', str(int(comutare['port']))]
+    elif isinstance(comutare.get('octet'), int) and 0xF0 <= comutare['octet'] <= 0xFF:
+        argv += ['--diseqc-octet', str(int(comutare['octet']))]
+    if comutare.get('toneburst') in ('A', 'B'):
+        argv += ['--toneburst', comutare['toneburst']]
+    return argv
+
+
+def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=0, comutare=None):
     """Chemarea programului pentru trecerile date: oscilatoarele in MHz, fiecare trecere 'POL,TON,START,STOP'.
-    vuplus: {'adaptor', 'program', 'i2c'} pe Vu+ Solo SE (vezi vuplus_pentru): acelasi protocol, prin HdsOarbaVuplus."""
+    vuplus: {'adaptor', 'program', 'i2c'} pe Vu+ Solo SE (vezi vuplus_pentru): acelasi protocol, prin HdsOarbaVuplus.
+    comutare: comutare_din_lnb() a satelitului aratat (portul DiSEqC / toneburst), trimisa de program inainte de
+    fiecare trecere."""
     jos, sus, _prag = (int(x) for x in (osc or LNB_UNIVERSAL))
     if vuplus:
         argv = [PYTHON, vuplus['adaptor'], '--program', vuplus['program'], '--i2c', str(int(vuplus['i2c'])),
@@ -227,6 +268,8 @@ def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=
         argv = [PROGRAM]
     argv += ['--tuner', str(int(tuner)), '--lo-jos', str(jos // 1000), '--lo-sus', str(sus // 1000),
              '--timp-max', str(int(timp_max or TIMP_MAX_S))]
+    if not vuplus:
+        argv += argv_comutare(comutare)
     for t in lista:
         argv += ['--trecere', '%s,%d,%d,%d' % (t['pol'], t['ton'], t['if_start'], t['if_stop'])]
     return argv
@@ -714,7 +757,7 @@ class Cautare(object):
         self.trecere = None
         self.nr_trecere = 0
         argv = argv_program(self._lot, self.osc, self.cerere.get('tuner') or 0, self.cerere.get('timp_max'),
-                            self.cerere.get('vuplus'), self.cerere.get('rata_min'))
+                            self.cerere.get('vuplus'), self.cerere.get('rata_min'), self.cerere.get('comutare'))
         try:
             self._proces = self._pornitor(argv, self._la_rand, self._la_iesire)
         except Exception as e:
@@ -1057,9 +1100,11 @@ def _repune_canalul():
 
 def antena(sesiune):
     """Ce stie receptorul despre antena tunerului de satelit: {"slot", "pozitie", "nume", "osc", "motor",
-    "sateliti", "motiv"}; motiv = de ce nu se poate cauta (text), altfel ''."""
+    "sateliti", "comutare", "motiv"}; motiv = de ce nu se poate cauta (text), altfel ''. comutare: portul DiSEqC /
+    toneburst al satelitului aratat (comutare_din_lnb), numai cand satelitul e stiut."""
     from Screens import ScanerSatelit as S
-    rez = {'slot': None, 'pozitie': None, 'nume': '', 'osc': None, 'motor': False, 'sateliti': [], 'motiv': ''}
+    rez = {'slot': None, 'pozitie': None, 'nume': '', 'osc': None, 'motor': False, 'sateliti': [], 'comutare': None,
+           'motiv': ''}
     nim = S._nimmanager()
     slot = S.slot_satelit(nim) if nim is not None else None
     if slot is None:
@@ -1087,6 +1132,8 @@ def antena(sesiune):
             if osc is None:
                 rez['motiv'] = _t('Căutarea oarbă nu merge printr-un LNB Unicable.')
                 return rez
+            if poz is not None:
+                rez['comutare'] = comutare_din_lnb(lnb)
     except Exception as e:
         print('[HdsCautareOarba] LNB-ul: %s' % e)
     rez['osc'] = osc
@@ -1120,6 +1167,8 @@ def porneste_pe_receptor(sesiune, cerere):
     cerere_omului = cerere
     cerere = dict(cerere)
     cerere['tuner'] = a['slot']
+    # satelitul aratat e si cel cautat: comutatorul lui se pune din nou (enigma2 a taiat tensiunea LNB-ului)
+    cerere['comutare'] = a.get('comutare')
     if pe_vuplus:
         vu = vuplus_pentru(a['slot'])
         if vu is None:

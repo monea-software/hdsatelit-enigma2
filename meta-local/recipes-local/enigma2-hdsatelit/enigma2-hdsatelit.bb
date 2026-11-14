@@ -46,7 +46,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.7.4+git${SRCPV}"
+PV = "0.7.5+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe
@@ -206,6 +206,17 @@ do_install:append() {
     fi
 }
 
+# /etc/image-version (in acest pachet, scris de Makefile.am din AC_INIT) si versiunea pachetului (PV, pusa de uneltele de
+# constructie in copia stratului) trebuie sa spuna aceeasi versiune: pe 11.11.2026 o constructie 0.7.4 facuta dintr-o comitere
+# cu AC_INIT inca 0.7.3 (49170cb328) a ajuns pe Octagon, iar receptorul a spus 0.7.3 (Despre, asistenta, CEC, uneltele) cu
+# pachetul 0.7.4 instalat (UPD, 13.11.2026). Constructia se opreste acum in loc sa faca un astfel de pachet.
+do_install:append() {
+    v=$(sed -n 's/^imageversion=//p' ${D}${sysconfdir}/image-version)
+    p=$(echo "${PV}" | sed 's/+.*//')
+    [ -n "$v" ] || bbfatal "enigma2-hdsatelit: /etc/image-version fara imageversion="
+    [ "$v" = "$p" ] || bbfatal "enigma2-hdsatelit: /etc/image-version spune $v (AC_INIT din configure.ac la ${SRCREV}), pachetul e ${PV}: AC_INIT si PV trebuie sa fie aceeasi versiune"
+}
+
 # t2mi_decap (decapsulatorul T2-MI) sta sub python/Hds/DabT2/t2/bin: .debug-ul lui, altfel QA debug-files
 FILES:${PN}-dbg += "${libdir}/enigma2/python/.debug ${libdir}/enigma2/python/*/.debug \
     ${libdir}/enigma2/python/Hds/DabT2/t2/bin/.debug"
@@ -281,6 +292,21 @@ elif [ -f ${datadir}/hdsatelit/softcsa ] && [ ! -f ${sysconfdir}/hds-softcsa-sem
 			sleep 2
 			i=$((i + 1))
 		done ) > /dev/null 2>&1 < /dev/null &
+	fi
+fi
+# /usr/lib/enigma.info (numele si versiunea imaginii pentru pluginurile OE-Alliance si pentru listele de pornire multipla ale
+# altor imagini) il scrie numai reteta imaginii, deci dupa o actualizare prin pachete ramanea pe versiunea imaginii scrise
+# (Octagon, 13.11.2026: imgversion='0.7.1' cu 0.7.4 instalata). La instalarea pe receptor se pun la zi NUMAI imgversion si
+# compiledate, din /etc/image-version al acestui pachet; restul cheilor raman, iar checksum se socoteste din nou, ca la reteta
+# imaginii (md5 al randurilor de deasupra). La constructia imaginii ($D plin) nu se face nimic: acolo il scrie reteta imaginii.
+if [ -z "$D" ] && [ -f ${libdir}/enigma.info ] && [ -f ${sysconfdir}/image-version ]; then
+	v=$(sed -n 's/^imageversion=//p' ${sysconfdir}/image-version | tr -cd '0-9.')
+	b=$(sed -n 's/^imagebuild=//p' ${sysconfdir}/image-version | tr -cd '0-9')
+	if [ -n "$v" ] && [ -n "$b" ]; then
+		( f=${libdir}/enigma.info
+		sed -e '/^checksum=/d' -e "s/^imgversion=.*/imgversion='$v'/" -e "s/^compiledate=.*/compiledate='$b'/" $f > $f.hds-nou &&
+			printf 'checksum=%s\n' "$(md5sum < $f.hds-nou | cut -d ' ' -f 1)" >> $f.hds-nou &&
+			chmod 0644 $f.hds-nou && mv -f $f.hds-nou $f ) || rm -f ${libdir}/enigma.info.hds-nou
 	fi
 fi
 true

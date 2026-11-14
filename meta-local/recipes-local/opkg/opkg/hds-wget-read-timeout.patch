@@ -1,0 +1,30 @@
+opkg: wget cu limita de timp la citire si 3 incercari
+
+Peticul timeout.patch al OE-Alliance da wget-ului --dns-timeout=10 si --connect-timeout=30, dar nu si o
+limita la citire: o descarcare care se agata dupa conectare (13.11.2026, feedul extern, de doua ori pe receptorul de probe:
+12 minute fara date) tine opkg la nesfarsit. --read-timeout=60 o opreste, --tries=3 o reia.
+Tabloul argv avea 8 locuri, deja plin cu timeout.patch (si depasit cu proxy): marit la 12.
+Se aplica dupa timeout.patch (stratul nostru are prioritatea mai mare). HD Satelit, 13.11.2026.
+
+Upstream-Status: Inappropriate [peste peticul OE-Alliance timeout.patch]
+
+--- a/libopkg/opkg_download_wget.c
++++ b/libopkg/opkg_download_wget.c
+@@ -40,7 +40,7 @@
+                           curl_progress_func cb, void *data, int use_cache)
+ {
+     int res;
+-    const char *argv[8];
++    const char *argv[12];
+     int i = 0;
+ 
+     /* Unused arguments. */
+@@ -58,6 +58,8 @@
+     }
+     argv[i++] = "--dns-timeout=10";
+     argv[i++] = "--connect-timeout=30";
++    argv[i++] = "--read-timeout=60";
++    argv[i++] = "--tries=3";
+     argv[i++] = "-O";
+     argv[i++] = dest;
+     argv[i++] = src;

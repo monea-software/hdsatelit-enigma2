@@ -134,6 +134,7 @@ def stare(B=None, b=None):
 			"pagini": [[cale, _t(nume)] for cale, nume, modul in PAGINI_ALTE if _paginaArata(cale, modul)],
 			"canal_testeri": canalTesteri(B),
 			"legare_forum": B.legareForum(),
+			"email_forum": B.emailForum(),
 		})
 	return rez
 
@@ -396,14 +397,14 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 		return {"result": False, "message": _t("Legarea cu un cont de pe forum nu e încă gata.")}
 	if ce == "profil":
 		nume = B.textNume(arg.get("nume_public", ""), B.NUME_PUBLIC_MAX)
-		email = B.textNume(arg.get("email", ""), B.EMAIL_MAX) if B.legareForum() else ""
+		email = B.textNume(arg.get("email", ""), B.EMAIL_MAX) if B.emailForum() else ""
 		if nume and not B.numePublicValid(nume):
 			return {"result": False, "message": _t("Numele public are 2-40 de semne: litere, cifre, spațiu, punct, "
 				"liniuță.")}
 		if not B.emailValid(email):
 			return {"result": False, "message": _t("Adresa de e-mail nu pare bună.")}
 		campuri = {"nume_public": nume or None}
-		if B.legareForum():
+		if B.emailForum():
 			campuri["email"] = email or None
 		return _lucrare(B.cerereProfil("profil", b, **campuri), "profil")
 	if ce == "leaga":
@@ -697,10 +698,10 @@ __STIL_PAGINI__
       <details class="rm" id="r-public"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><div class="t"><b>Apariția publică</b><span data-rand="public"></span></div><span class="valoare" id="valoarePublic"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="sageata"><path d="m9 6 6 6-6 6"/></svg></summary>
         <div class="corp">
           <p class="nota">Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la modelul tău. Fără parole pe receptor.</p>
-          <p class="nota forum ascuns">E-mailul (opțional) îți face un cont pe forum: primești o legătură și îți pui parola acolo, de pe orice aparat.</p>
+          <p class="nota emailcont ascuns">E-mailul (opțional) îți face un cont pe forum: primești o legătură și îți pui parola acolo, de pe orice aparat.</p>
           <p class="intrebare" id="profil"></p>
           <div class="rand"><label for="numePublic">Numele public</label><input type="text" id="numePublic" maxlength="40"></div>
-          <div class="rand forum ascuns"><label for="emailCont">E-mailul pentru cont (opțional)</label><input type="email" id="emailCont" maxlength="120"></div>
+          <div class="rand emailcont ascuns"><label for="emailCont">E-mailul pentru cont (opțional)</label><input type="email" id="emailCont" maxlength="120"></div>
           <div class="butoane"><button type="button" class="principal" id="salveazaProfil">Salvează</button><button type="button" id="nuPublic">Nu mai apar public</button></div>
           <div class="rand forum ascuns"><label for="cod6">Codul de 6 cifre de pe site</label><input type="text" id="cod6" maxlength="6" inputmode="numeric"></div>
           <div class="butoane forum ascuns"><button type="button" id="leaga">Leagă cu codul</button><button type="button" id="codLegare">Leagă de pe acest aparat</button></div>
@@ -828,6 +829,7 @@ function arata(d){
   $("automatUltima").textContent = d.automat_text || "";
   $("valoarePublic").textContent = d.public || "";
   document.querySelectorAll(".forum").forEach(function(e){ e.classList.toggle("ascuns", !d.legare_forum); });
+  document.querySelectorAll(".emailcont").forEach(function(e){ e.classList.toggle("ascuns", !d.email_forum); });
   var pagini = (d.pagini || []).map(function(p){ return p[0]; });
   $("r-probe").classList.toggle("ascuns", pagini.indexOf("/probe") === -1);
   var ct = d.canal_testeri;

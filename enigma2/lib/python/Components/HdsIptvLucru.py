@@ -21,6 +21,8 @@ from Components import HdsIptvClient as C
 INTERVAL_S = 24 * 3600
 PRIMA_DUPA_PORNIRE_S = 90
 PAS_S = 60              # de cat ori se uita ceasul zilnic daca a venit vremea, in secunde (ceasul receptorului poate sari)
+PAUZE_DUPA_ESEC_S = (15 * 60, 3600, 3 * 3600)   # o improspatare cazuta se reia dupa atat (prima, a doua, apoi mereu a treia), nu peste 24 h:
+                                                # serverele mari mai tac cateva zeci de secunde, iar lista si ghidul ramaneau vechi zile intregi
 _REFACERE = "*refacere"  # in coada: numai buchetele din nou, dupa o stergere
 
 _lacat = threading.Lock()
@@ -34,6 +36,8 @@ _ascultatori = []
 _ceas = None
 _ceas_zilnic = None
 _erori_redare = []
+_pornit = None          # time.monotonic() la porneste(): ghidul se cere o data dupa fiecare pornire a interfetei
+_ghid_cerut = set()     # sursele al caror ghid s-a cerut de la pornire (direct sau dupa lista)
 
 
 def eroareRedare(sid, mesaj, al_sursei=True):
@@ -71,7 +75,7 @@ def lucreaza(sursa_id):
 	catalog = info.pop("catalog", None)
 	if catalog is not None:
 		I.scrieCatalog(sursa_id, catalog)
-	I.actualizeazaSursa(sursa_id, eroare="", ora=I.acum(), ora_incercare=I.acum(), nou=False, **info)
+	I.actualizeazaSursa(sursa_id, eroare="", ora=I.acum(), ora_incercare=I.acum(), nou=False, esecuri=0, **info)
 	return "", I.scrieBuchete()
 
 
@@ -82,7 +86,10 @@ def _aEsuat(s, mesaj, expira=0):
 		I.stergeSursa(s["id"])
 		return mesaj, False
 	info = {"expira": expira} if expira else {}
-	I.actualizeazaSursa(s["id"], eroare=mesaj, ora_incercare=I.acum(), **info)
+	esecuri = int(s.get("esecuri") or 0) + 1
+	pauza = PAUZE_DUPA_ESEC_S[min(esecuri, len(PAUZE_DUPA_ESEC_S)) - 1]
+	# ceasul zilnic reia sursa cand ora_incercare are INTERVAL_S in urma; o punem asa incat sa vina dupa pauza
+	I.actualizeazaSursa(s["id"], eroare=mesaj, ora_incercare=I.acum() - INTERVAL_S + pauza, esecuri=esecuri, **info)
 	return mesaj, False
 
 
@@ -275,17 +282,40 @@ def aplicaAscunse(sursa_id, ascunse):
 
 
 def _zilnic():
-	"""Fiecare sursa o data pe zi, dupa ceasul receptorului (se uita o data pe minut)."""
+	"""Fiecare sursa o data pe zi, dupa ceasul receptorului (se uita o data pe minut). Ghidul TV sta in memoria interfetei si nu
+	trece de o repornire a ei, iar el vine numai dupa lista: cand lista nu e de adus, ghidul se cere singur, o data, la
+	PRIMA_DUPA_PORNIRE_S dupa pornire (altfel ramanea gol pana la improspatarea de a doua zi)."""
 	acum = time.time()
 	for s in I.citesteSurse():
 		ultima = s.get("ora_incercare") or 0
 		if not 0 <= acum - ultima < INTERVAL_S:
 			cere(s["id"])
+			_ghid_cerut.add(s["id"])
+		elif s["id"] not in _ghid_cerut and _pornit is not None and time.monotonic() - _pornit >= PRIMA_DUPA_PORNIRE_S:
+			_ghid_cerut.add(s["id"])
+			if not I.optiune("ghid_pornire"):
+				continue
+			try:
+				from Components import HdsIptvEpg
+				HdsIptvEpg.cere(s, None)
+			except Exception as e:
+				_jurnal("ghid: %s" % type(e).__name__)
+	# timpii de pornire tinuti in memorie: pe disc cel mult o data la HdsIptvSurse.SCRIERE_PORNIRI_S
+	I.scriePorniri()
+	# cautarea canalelor 4K reale, o data pe saptamana, cand omul nu se uita la un canal de internet (Components/HdsIptv4K.py)
+	if _pornit is not None and time.monotonic() - _pornit >= 2 * PRIMA_DUPA_PORNIRE_S:
+		try:
+			from Components import HdsIptv4K as K
+			if not _in_lucru and not _coada and K.deRulat() and not K.omulSeUita():
+				K.porneste()
+		except Exception as e:
+			_jurnal("4K: %s" % type(e).__name__)
 
 
 def porneste():
 	"""La pornirea receptorului, numai cu surse: adresa locala si ceasul zilnic. Fara surse nu costa nimic."""
-	global _ceas_zilnic
+	global _ceas_zilnic, _pornit
+	_pornit = time.monotonic()
 	try:
 		I.scoateSetarileVechi()
 	except Exception as e:

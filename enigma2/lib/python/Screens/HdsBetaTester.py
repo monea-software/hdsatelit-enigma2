@@ -1598,6 +1598,7 @@ class HdsBetaPublic(Screen, ConfigListScreen):
 
 	def __init__(self, session):
 		self.forum = B.legareForum()
+		self.emailCont = B.emailForum()
 		if not self.forum:
 			self.skin = HdsBetaPublic.skin_fara_forum
 		Screen.__init__(self, session)
@@ -1608,7 +1609,7 @@ class HdsBetaPublic(Screen, ConfigListScreen):
 		self.cod = ConfigText(default="", fixed_size=False)
 		self["text"] = Label(_("Opțional: apari cu un nume ales de tine pe pagina testerilor de pe site și la "
 			"modelul tău. Fără parole pe receptor.") + ((" " + _("E-mailul (opțional) îți face un cont pe forum: "
-			"primești o legătură și îți pui parola acolo, de pe orice aparat.")) if self.forum else ""))
+			"primești o legătură și îți pui parola acolo, de pe orice aparat.")) if self.emailCont else ""))
 		self["stare"] = Label(_("Se citește starea..."))
 		self["key_red"] = Button(_("Înapoi"))
 		self["key_green"] = Button(_("Salvează"))
@@ -1616,8 +1617,9 @@ class HdsBetaPublic(Screen, ConfigListScreen):
 			self["key_yellow"] = Button(_("Cod QR pentru telefon"))
 		self["key_blue"] = Button(_("Nu mai apar public"))
 		self.list = [getConfigListEntry(_("Numele public"), self.nume)]
-		if self.forum:
+		if self.emailCont:
 			self.list.append(getConfigListEntry(_("E-mailul pentru cont (opțional)"), self.email))
+		if self.forum:
 			self.list.append(getConfigListEntry(_("Codul de 6 cifre de pe site (OK după ce îl scrii)"), self.cod))
 		ConfigListScreen.__init__(self, self.list, session=session)
 		self["actiuni"] = ActionMap(["SetupActions", "ColorActions"], _cuSetup(self, _cuCulori({
@@ -1697,7 +1699,7 @@ class HdsBetaPublic(Screen, ConfigListScreen):
 			self["stare"].setText(_("Adresa de e-mail nu pare bună."))
 			return
 		campuri = {"nume_public": nume or None}
-		if self.forum:
+		if self.emailCont:
 			campuri["email"] = email or None
 		self._porneste("profil", self._dupaSalvare, **campuri)
 

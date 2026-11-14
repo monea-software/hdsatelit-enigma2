@@ -1,0 +1,39 @@
+# HD Satelit: regulile garzii de model pentru Novaler Multibox 4K SE (masina multiboxse, MACHINEBUILD novaler4kse),
+# NECONFIRMAT (MNS, 12.11.2026, imaginea alfa). Aceeasi masina OE au si ANADOL Multibox SE, AX Multibox SE si Maxytec
+# Multibox SE (MACHINEBUILDS din multiboxse.conf); imaginea noastra e numai novaler4kse.
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Masina multiboxse e stratul producatorului meta-maxytec (OE-Alliance 6.0): nucleul linux-maxytec 4.4.35 (defconfig
+# multiboxse), driverele maxytec-dvb-modules-multiboxse 20221213 (patru module monolitice multiboxse_1..4.ko, cu sirurile
+# ascunse, in blacklist), fara libreader si fara hihalt; aceeasi lume ca Zgemma H9 COMBO. DOVEDITE din fisiere:
+#   partitions, kernel_part, rootfs_part, kernel_kib: bootargs-ul producatorului (multiboxse-bootargs-20221130.zip, sha256
+#            107436ce, cel din reteta OE-A maxytec-bootargs-multiboxse; update_bootargs_multiboxse.bin si
+#            multiboxse/bootargs-8gb.bin): blkdevparts=mmcblk0:1M(fastboot),1M(bootargs),18M(recovery),2M(bootoptions),
+#            2M(deviceinfo),4M(baseparam),4M(pqparam),4M(logo),40M(fastplay),20M(boot),20M(trustedcore),4M(misc),
+#            1024M(system),150M(vendor),306M(e2tv),256M(cache),50M(dtbo),8M(securestore),16M(linuxkernel1),16M(linuxkernel2),
+#            16M(linuxkernel3),16M(linuxkernel4),-(userdata); modelname=multiboxse; STARTUP_LINUX_1 din
+#            maxytec-fastboot8gb_image.bbclass: root=/dev/mmcblk0p23 rootsubdir=linuxrootfs1 kernel=/dev/mmcblk0p19.
+#            ATENTIE: multiboxse.conf scrie MTD_ROOTFS = mmcblk0p20 (linuxkernel2); reteta imaginii il pune pe p23
+#            (MTD_ROOTFS:multiboxse), locul real al sistemului.
+# NEDOVEDITE (de confirmat din fisa testerului INAINTE de publicare, vezi STADIU-MNS.md): chip= si boxtype=. Pe Multibox
+# nimic din imaginile publice nu arata ce scriu driverele in /proc/msp/sys si /proc/stb/info/boxtype (modulele au sirurile
+# ascunse). Valorile de mai jos sunt cele asteptate dupa familie (cip Hi3798MV200 ca la SF8008 si H9; tipul placii = numele
+# masinii sau MACHINEBUILD), nu masurate: o valoare gresita opreste interfata cu ecranul „imagine pentru alt receptor”.
+# boxtype= e lista, disjuncta de Multibox 4K PRO (multiboxpro, novaler4kpro), ca o imagine SE sa nu treaca pe un PRO.
+# hw=- : antetul fabricii din deviceinfo (p5) nu e cunoscut pentru Multibox (nu se compara).
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=novaler4kse.
+format=1
+distro=hdsatelit
+model=Novaler Multibox 4K SE
+machine=multiboxse
+machinebuild=novaler4kse
+chip=Hi3798MV200
+boxtype=multiboxse,novaler4kse
+hw=-
+partitions=fastboot:1M,bootargs:1M,recovery:18M,bootoptions:2M,deviceinfo:2M,baseparam:4M,pqparam:4M,logo:4M,fastplay:40M,boot:20M,trustedcore:20M,misc:4M,system:1024M,vendor:150M,e2tv:306M,cache:256M,dtbo:50M,securestore:8M,linuxkernel1:16M,linuxkernel2:16M,linuxkernel3:16M,linuxkernel4:16M,userdata
+kernel_name=linuxkernel1
+rootfs_name=userdata
+kernel_part=mmcblk0p19
+kernel_kib=16384
+rootfs_part=mmcblk0p23
+confirmat=nu

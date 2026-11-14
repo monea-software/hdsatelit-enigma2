@@ -215,6 +215,12 @@ def citeste_semnal(cale):
         rez['semnal_la_suta'] = int(round(rez['agc'] * 100.0 / 65535.0))     # int si pe 2.7 (round da float)
     if 'snr' in rez:
         rez['calitate_la_suta'] = int(round(rez['snr'] * 100.0 / 65535.0))
+    # Fara semnal prins, procentele aratate sunt 0, ca in bara enigma2 (lib/dvb/frontend.cpp, readFrontendData):
+    # un tuner neprins da zgomotul vazut de AGC (90% fara cablu pe un tuner de cablu). agc/snr raman brute.
+    if rez.get('lock') is False:
+        for cheie in ('semnal_la_suta', 'calitate_la_suta'):
+            if cheie in rez:
+                rez[cheie] = 0
     return rez
 
 

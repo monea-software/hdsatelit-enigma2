@@ -12,7 +12,9 @@ if UPDATE_PO
 # _t: functia de traducere a modulelor care merg si fara enigma2 (probele de pe PC);
 # N_: marcaj fara efect pentru textele din tabele, traduse abia la afisare.
 # 0.3.2: si Components/HdsSubtitrariInternet (cu surse/), descarcarea subtitrarilor, mutata din dosarul de plugin.
-enigma2-py.pot: $(top_srcdir)/*.py $(top_srcdir)/lib/python/*/*.py $(top_srcdir)/lib/python/Hds/*/*.py $(top_srcdir)/lib/python/Plugins/*/*/*.py $(top_srcdir)/lib/python/Plugins/*/*/*/*.py $(top_srcdir)/lib/python/Components/HdsSubtitrariInternet/*.py $(top_srcdir)/lib/python/Components/HdsSubtitrariInternet/surse/*.py
+# 0.7.5: si lib/python/*/*/*.py (Components/Converter, Renderer, Sources, Addons), ca in enigma2 OE-Alliance: textele
+# date prin _() in convertoare si renderere ajung si ele in enigma2.pot.
+enigma2-py.pot: $(top_srcdir)/*.py $(top_srcdir)/lib/python/*/*.py $(top_srcdir)/lib/python/*/*/*.py $(top_srcdir)/lib/python/Hds/*/*.py $(top_srcdir)/lib/python/Plugins/*/*/*.py $(top_srcdir)/lib/python/Plugins/*/*/*/*.py $(top_srcdir)/lib/python/Components/HdsSubtitrariInternet/*.py $(top_srcdir)/lib/python/Components/HdsSubtitrariInternet/surse/*.py
 	$(XGETTEXT) -L Python --from-code=UTF-8 --add-comments="TRANSLATORS:" --keyword=_t --keyword=N_ -d @PACKAGE_NAME@ -s -o $@ $^
 
 enigma2-xml.pot: $(srcdir)/xml2po.py $(wildcard $(top_srcdir)/data/*.xml $(top_srcdir)/lib/python/Plugins/SystemPlugins/*/*.xml)

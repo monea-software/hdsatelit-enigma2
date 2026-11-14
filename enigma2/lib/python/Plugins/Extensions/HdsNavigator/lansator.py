@@ -57,6 +57,15 @@
 # iesirii de erori si ultimele stari HDS-NAV, curatate (curata_rand, stare_scurta), cu codul de iesire si motivul;
 # rotit in .1 peste JURNAL_OCTETI_MAX. Se vede in Jurnalele sistemului (televizor si web).
 #
+# MOD_APLICATIE (0.7.5, meniul „Aplicații”, Components/HdsAplicatii.py): o scurtatura pe tot ecranul (YouTube pentru
+# televizor si altele). Pagina vede LATIME_CSS (1280) de puncte pe tot ecranul, fara margini, fara chenar, fara mariri si
+# fara litere minime (siturile de televizor sunt facute pe 1280x720). Lansatorul NU primeste --intrare, deci nu apuca
+# telecomanda, iar enigma2 nu pune eRCInput.lock (numai lacatul pe fb0): toate tastele trec prin legatura de mai sus si
+# prin harta aplicatiei (HdsAplicatii.tastaPentruNavigator): Inapoi ajunge ca Escape, culorile si MENU nu ajung la
+# navigator, volumul ramane la enigma2, EXIT inchide. Agentul (--agent intreg sau --agent-adaugat) si scriptul tastelor
+# (--script) vin din scurtatura (aplicatie["argumente"]); programul poate fi alt motor (aplicatie["program"], de pilda
+# /usr/bin/hds-chromium, cu acelasi protocol). Profilul e al aplicatiei (dosar_date), separat de al navigatorului.
+#
 # Modulul nu importa enigma2 la incarcare: tot ce tine de enigma2 trece prin Mediu, inlocuit la probele de pe PC.
 
 import base64
@@ -119,6 +128,20 @@ JURNAL_RANDURI_STARI = 20
 JURNAL_RAND_MAX = 200
 JURNAL_PE_PORNIRE = 30
 _jurnal_scrise = [0]
+# Erorile paginii in modul HbbTV (0.7.5; HbbTV TVP „Trwa wczytywanie”, forum 1148, asistenta 937119): randurile
+# „hds-navigator: pagina: ...” (exceptiile JavaScript, promisiunile respinse, console.error, scripturile care nu s-au
+# incarcat) se scriu in jurnalul erorilor si cand aplicatia merge mai departe sau se inchide normal (EXIT), nu numai la o
+# oprire cu eroare: la ERORI_PAGINA_DUPA_MS dupa ultima eroare venita (randurile venite deodata intra in acelasi bloc),
+# cel mult ERORI_PAGINA_BLOCURI blocuri cat merge aplicatia, plus cele ramase la inchidere. Asa asistenta le vede cat
+# aplicatia e inca pe ecran. Blocul spune si aplicatia (schema, gazda si calea adresei de pornire, fara parametri).
+PREFIX_EROARE_PAGINA = "hds-navigator: pagina: "
+ERORI_PAGINA_DUPA_MS = 3000
+ERORI_PAGINA_BLOCURI = 3
+# Blocurile cu erorile paginii au contorul lor, mic, separat de JURNAL_PE_PORNIRE (hotararea coordonatorului,
+# 12.11.2026): fiecare ROSU porneste un navigator nou, cu pana la ERORI_PAGINA_BLOCURI + 1 blocuri, deci cateva apasari pe
+# o aplicatie stricata ar fi consumat bugetul, iar caderile adevarate nu s-ar mai fi scris pana la repornire.
+JURNAL_PAGINA_PE_PORNIRE = 12
+_jurnal_pagina_scrise = [0]
 
 _RE_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 _RE_ADRESA = re.compile(r"(?i)\b[a-z][a-z0-9+.-]{1,15}://\S*")
@@ -146,6 +169,31 @@ def curata_rand(rand, maxim=JURNAL_RAND_MAX):
 	r = _RE_SIR.sub("<sir>", r)
 	r = _RE_IP.sub("<ip>", r)
 	return r[:maxim]
+
+
+def aplicatie_scurta(adresa, maxim=120):
+	"""Schema, gazda si calea adresei aplicatiei, fara utilizator, parola, port, parametri si ancora (pentru jurnal):
+	adresa din AIT e publica (vine in emisie), dar parametrii pot purta jetoane. "-" pentru orice altceva."""
+	try:
+		from urllib.parse import urlsplit
+		u = urlsplit(str(adresa or ""))
+		if u.scheme not in ("http", "https", "dvb") or not u.hostname:
+			return "-"
+		return _RE_CONTROL.sub(" ", "%s://%s%s" % (u.scheme, u.hostname, u.path or "/"))[:maxim]
+	except Exception:
+		return "-"
+
+
+def textAsistenta(n=None, acum=None):
+	"""Randul pentru textul ecranului din asistenta (op "ecran"): navigatorul e un proces separat, peste enigma2, deci
+	stiva ecranelor arata numai ce e sub el (InfoBar). Gol cand niciun navigator nu e deschis."""
+	n = activ() if n is None else n
+	if n is None or n.stare == OPRIT:
+		return ""
+	durata = int((acum if acum is not None else time.time()) - n._pornit_la) if n._pornit_la else 0
+	return ("Navigator deschis peste ecran: mod=%s, stare=%s, de %d s, aplicatia=%s, desen=%s, pid=%s; erorile paginii: %s"
+		% (n.mod, n.stare, max(0, durata), aplicatie_scurta(n.adresa) if n.mod == MOD_HBBTV else "-", n.desen or "-",
+		n._pid or "-", JURNAL_ERORI))
 
 
 def stare_scurta(rand):
@@ -211,6 +259,9 @@ PRIORITATE_TASTE = -0x7FFFFFFF
 MOD_CAM = "cam"
 MOD_OBISNUIT = "obisnuit"
 MOD_HBBTV = "hbbtv"
+MOD_APLICATIE = "aplicatie"
+# randurile de volum ale motoarelor care apuca telecomanda (HDS-NAV TASTA ...): volumul il schimba enigma2
+TASTE_VOLUM = ("volum-sus", "volum-jos", "mut")
 
 # starile
 OPRIT = "oprit"
@@ -279,6 +330,15 @@ def _jurnal(text):
 	print("[HdsNavigator] %s" % text)
 
 
+def tastaAplicatie(harta, cod):
+	"""Modul aplicatie: ce face legatura cu tasta `cod` (Components/HdsAplicatii.tastaPentruNavigator)."""
+	try:
+		from Components.HdsAplicatii import tastaPentruNavigator
+	except ImportError:
+		return "navigator", cod
+	return tastaPentruNavigator(harta, cod)
+
+
 class Mediu(object):
 	"""Legatura cu enigma2 si cu sistemul; la probele de pe PC se inlocuieste."""
 
@@ -305,6 +365,18 @@ class Mediu(object):
 			return eRCInput.getInstance()
 		except Exception:
 			return None
+
+	def volum(self, fel):
+		"""Volumul enigma2 (Components/VolumeControl): volum-sus, volum-jos, mut. Bara de volum se deseneaza, dar se vede
+		abia cand enigma2 are iar ecranul (lacatul pe fb0 o tine ascunsa cat aplicatia e pe ecran)."""
+		try:
+			from Components.VolumeControl import VolumeControl
+			v = VolumeControl.instance
+			if v is None:
+				return
+			{"volum-sus": v.volUp, "volum-jos": v.volDown, "mut": v.volMute}[fel]()
+		except Exception as e:
+			_jurnal("volum: %s" % e.__class__.__name__)
 
 	def harta_taste(self):
 		from enigma import eActionMap
@@ -381,6 +453,14 @@ class Mediu(object):
 		if _jurnal_scrise[0] >= JURNAL_PE_PORNIRE:
 			return False
 		_jurnal_scrise[0] += 1
+		return scrie_jurnal_rotit(JURNAL_ERORI, bloc)
+
+	def jurnal_erori_pagina(self, bloc):
+		"""Un bloc cu erorile paginii (modul HbbTV) in acelasi jurnal, cu contorul lui: cel mult JURNAL_PAGINA_PE_PORNIRE
+		de la pornirea enigma2, fara sa ia din bugetul caderilor (JURNAL_PE_PORNIRE)."""
+		if _jurnal_pagina_scrise[0] >= JURNAL_PAGINA_PE_PORNIRE:
+			return False
+		_jurnal_pagina_scrise[0] += 1
 		return scrie_jurnal_rotit(JURNAL_ERORI, bloc)
 
 	def prefix_retea(self, mod):
@@ -535,7 +615,7 @@ class Navigator(object):
 	utilizatorului fara root, sau gol})."""
 
 	def __init__(self, ascultator, mod, adresa, mediu=None, setari=None, cam=None, dosar_date=None, dosar_cache=None,
-			hbbtv=None, stare_hbbtv=None):
+			hbbtv=None, stare_hbbtv=None, aplicatie=None):
 		self.a = ascultator
 		self.mod = mod
 		self.adresa = adresa
@@ -544,6 +624,8 @@ class Navigator(object):
 		self.cam = cam or {}            # modul cam: {"gazda", "port", "schema"}
 		self.hbbtv = hbbtv or {}        # modul HbbTV: {"agent", "utilizator", "marire_copiere" (numai cand e oprita)}
 		self.stare_hbbtv = stare_hbbtv or {}   # modul HbbTV: partile starii de pornire (app, canal, config, ...)
+		# modul aplicatie: {"program": calea motorului, "argumente": [agentul, scriptul], "taste": harta tastelor}
+		self.aplicatie = aplicatie or {}
 		self.strat_hbbtv = None         # stratul JS in pagina: None (nu se stie inca), True, False
 		self.dosar_date = dosar_date
 		self.dosar_cache = dosar_cache
@@ -556,6 +638,8 @@ class Navigator(object):
 		self.progres = -1
 		self.timpi = {}             # randurile „TIMP fel ms”: raspunsul la taste, rezumat in jurnal la inchidere
 		self._erori = collections.deque(maxlen=JURNAL_RANDURI_ERORI)   # iesirea de erori, curatata (jurnalul erorilor)
+		self._erori_pagina = []     # modul HbbTV: erorile paginii venite si nescrise inca (ERORI_PAGINA_DUPA_MS)
+		self._blocuri_pagina = 0    # cate blocuri cu erorile paginii s-au scris cat merge aplicatia
 		self._stari = collections.deque(maxlen=JURNAL_RANDURI_STARI)   # ultimele randuri HDS-NAV, scurtate
 		self.eroare_incarcare = None
 		self._c = None
@@ -578,6 +662,7 @@ class Navigator(object):
 		self._ceas_viu = self.m.ceas_nou(self._termenViu)
 		self._ceas_ascuns = self.m.ceas_nou(self._termenAscuns)
 		self._ceas_oprire = self.m.ceas_nou(self._treaptaOprire)
+		self._ceas_erori_pagina = self.m.ceas_nou(self._scrieEroriPagina)
 		self._treapta = 0
 		self._paze = set()
 		self._paza_pornire = False
@@ -589,8 +674,9 @@ class Navigator(object):
 		"""Argumentele lansatorului (fara program)."""
 		latime, inaltime = self.m.marime_ecran()
 		hbbtv = self.mod == MOD_HBBTV
+		aplicatie = self.mod == MOD_APLICATIE
 		margini = []
-		if hbbtv:
+		if hbbtv or aplicatie:
 			latime_css = LATIME_CSS
 			scara = latime / float(LATIME_CSS)
 		else:
@@ -607,23 +693,23 @@ class Navigator(object):
 			"--ascuns", "--oom", "1000", "--limba", self.m.limba()] + margini
 		if self.m.fb() is not None and self.m.exista("/dev/fb0"):
 			a += ["--fb", "/dev/fb0"]
-			# in modul HbbTV telecomanda ramane a enigma2: fara dispozitive de intrare, deci fara EVIOCGRAB
-			for i in [] if hbbtv else self.m.intrari():
+			# in modurile HbbTV si aplicatie telecomanda ramane a enigma2: fara dispozitive de intrare, deci fara EVIOCGRAB
+			for i in [] if (hbbtv or aplicatie) else self.m.intrari():
 				a += ["--intrare", i]
 		s = self.setari or {}
 		if s.get("desen") == "procesor" or _gl_cazut[0]:
 			a.append("--cpu")
-		if not hbbtv and s.get("chenar", True) is not False:
+		if not hbbtv and not aplicatie and s.get("chenar", True) is not False:
 			a.append("--chenar")  # chenarul pe selectie, desenat de lansator (in modul HbbTV il deseneaza aplicatia)
 			a += argumenteChenar(s)
 		if not hbbtv:
 			for cheie in sorted(TEXTE_STRAT):
 				a += ["--text", "%s=%s" % (cheie, b64(_traducere(TEXTE_STRAT[cheie])))]
 		font = str(s.get("font_minim", "14"))
-		if font.isdigit() and int(font) > 0 and not hbbtv:
+		if font.isdigit() and int(font) > 0 and not hbbtv and not aplicatie:
 			a += ["--font-minim", font]
 		marire = str(s.get("marire", "auto"))
-		if hbbtv:
+		if hbbtv or aplicatie:
 			pass
 		elif marire == "auto":
 			a.append("--marire-auto")
@@ -656,6 +742,11 @@ class Navigator(object):
 				for cheie in PARTI_LINIE:
 					if cheie in self.stare_hbbtv:
 						a += ["--hbbtv-parte", "%s=%s" % (cheie, jsonB64(self.stare_hbbtv[cheie]))]
+			if aplicatie:
+				for x in self.aplicatie.get("argumente") or []:
+					x = _text(x)
+					if x and not any(ch in x for ch in "\r\n"):
+						a.append(x)
 			if self.dosar_date:
 				a += ["--date", self.dosar_date]
 			if self.dosar_cache:
@@ -672,7 +763,7 @@ class Navigator(object):
 		if activ() is not None and activ() is not self:
 			_jurnal("un navigator e deja deschis")
 			return False
-		if not self.m.exista(CALE_LANSATOR):
+		if not self.m.exista(self.program()):
 			return self._nuAPornit("lipsa")
 		jpegBun()
 		mem = self.m.memorie_libera_kb()
@@ -691,7 +782,9 @@ class Navigator(object):
 		# programul, apoi argv[0] si argumentele: fara interpretor de comenzi. Cu VPN-ul pornit numai pentru navigator
 		# si HbbTV, in fata vine ip netns exec (acelasi proces, deci oprirea pe grup ramane la fel); altfel nimic.
 		prefix = self.m.prefix_retea(self.mod) if hasattr(self.m, "prefix_retea") else []
-		comanda = list(prefix) + [CALE_LANSATOR] + list(argv)
+		# <video> pe placa (HVA-075): mediul quirk-ului hdsdvb si calea serverului imprumutului, prin /usr/bin/env, in fata
+		# prefixului VPN (exec dupa exec: acelasi proces, mediul trece mai departe)
+		comanda = self._prefixDecodor() + list(prefix) + [self.program()] + list(argv)
 		if prefix:
 			_jurnal("prin VPN (namespace de retea)")
 		if c.execute(comanda[0], *comanda) != 0:
@@ -708,6 +801,25 @@ class Navigator(object):
 		self._ceas_viu.start(TERMEN_VIU_S * 1000, True)
 		self.a.laPas("pornire", -1)
 		return True
+
+	def program(self):
+		"""Programul pornit: hds-navigator, afara de modul aplicatie cu alt motor (aplicatie["program"])."""
+		if self.mod == MOD_APLICATIE and self.aplicatie.get("program"):
+			return self.aplicatie["program"]
+		return CALE_LANSATOR
+
+	def _prefixDecodor(self):
+		"""Modul HbbTV cu serverul imprumutului (hbbtv["decodor"]): ["/usr/bin/env", "HDS_DECODOR=...", ...]; altfel []."""
+		if self.mod != MOD_HBBTV:
+			return []
+		cale = _text(self.hbbtv.get("decodor"))
+		if not cale:
+			return []
+		try:
+			from Components import HdsDecodorWeb
+		except ImportError:
+			return []
+		return HdsDecodorWeb.mediu_navigator(cale)
 
 	def _nuAPornit(self, motiv):
 		self._motiv = motiv
@@ -863,6 +975,11 @@ class Navigator(object):
 		for rand in tampon.split("\n")[:-1]:
 			if rand.strip():
 				self._erori.append(curata_rand(rand))
+				if self.mod == MOD_HBBTV and rand.startswith(PREFIX_EROARE_PAGINA):
+					self._erori_pagina.append(curata_rand(rand[len(PREFIX_EROARE_PAGINA):]))
+					del self._erori_pagina[:-JURNAL_RANDURI_ERORI]
+					if self._blocuri_pagina < ERORI_PAGINA_BLOCURI:
+						self._ceas_erori_pagina.start(ERORI_PAGINA_DUPA_MS, True)
 		self._tampon_err = self._randuri(tampon)
 
 	def _randuri(self, tampon):
@@ -1001,6 +1118,9 @@ class Navigator(object):
 		if fel == "SCRIS":
 			_jurnal("TEXT: niciun camp de scris pe ecran")
 			return
+		if fel == "TASTA" and len(cuv) > 1 and cuv[1] in TASTE_VOLUM:
+			self.m.volum(cuv[1])
+			return
 		if fel == "TASTA" and len(cuv) > 1:
 			self._cere(cuv[1], {})
 			return
@@ -1062,7 +1182,7 @@ class Navigator(object):
 		fb = self.m.fb()
 		if fb is None:
 			return  # emulatorul (SDL): fara lacate, tastele trec prin legatura
-		if rc is not None and not self._rc_blocat and self.mod != MOD_HBBTV:
+		if rc is not None and not self._rc_blocat and self.mod not in (MOD_HBBTV, MOD_APLICATIE):
 			rc.lock()
 			self._rc_blocat = True
 		if not self._fb_blocat:
@@ -1099,6 +1219,13 @@ class Navigator(object):
 		"""Orice tasta ajunsa la enigma2 cat navigatorul e pe ecran merge la navigator (nu si la ecranele de sub el)."""
 		if self.stare != ARATAT:
 			return 0
+		if self.mod == MOD_APLICATIE:
+			fel, cod_nou = tastaAplicatie(self.aplicatie.get("taste"), cod)
+			if fel == "enigma2":
+				return 0      # volumul si sunetul oprit raman la enigma2
+			if fel == "oprita":
+				return 1
+			cod = cod_nou
 		valoare = _VALOARE_TASTA.get(flag)
 		if valoare is not None:
 			self.tasta(cod, valoare)
@@ -1297,7 +1424,8 @@ class Navigator(object):
 		for ceas in self._paze:
 			ceas.stop()
 		self._paze.clear()
-		for t in (self._ceas_pornire, self._ceas_incarcare, self._ceas_viu, self._ceas_ascuns, self._ceas_oprire):
+		for t in (self._ceas_pornire, self._ceas_incarcare, self._ceas_viu, self._ceas_ascuns, self._ceas_oprire,
+				self._ceas_erori_pagina):
 			t.stop()
 		self._legaTaste(False)
 		self._desprinde()
@@ -1311,7 +1439,29 @@ class Navigator(object):
 		_jurnal(rezumatTimpi(self.timpi, self.desen))
 		if motiv is not None:
 			self._scrieJurnalErori(cod, motiv)
+		else:
+			# inchiderea obisnuita (EXIT, alta aplicatie, zap): erorile paginii ramase nescrise
+			self._scrieEroriPagina(cod=cod)
 		self.a.laOprit(motiv)
+
+	def _scrieEroriPagina(self, cod=None):
+		"""Modul HbbTV: erorile paginii venite si nescrise inca, un bloc in jurnalul erorilor (ora, aplicatia, starea sau
+		codul de iesire, randurile). Chemata de ceas (cat merge aplicatia) si la inchiderea obisnuita. Nu arunca."""
+		try:
+			if not self._erori_pagina:
+				return
+			randuri, self._erori_pagina = self._erori_pagina, []
+			if cod is None:
+				self._blocuri_pagina += 1
+			f = getattr(self.m, "jurnal_erori_pagina", None) or getattr(self.m, "jurnal_erori", None)
+			if f is None:
+				return
+			cand = "inchisa cod=%s" % cod if cod is not None else "deschisa stare=%s" % self.stare
+			cap = "%s navigator mod=%s erori-pagina aplicatia=%s %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), self.mod,
+				aplicatie_scurta(self.adresa), cand)
+			f("\n".join([cap] + ["  pagina: " + r for r in randuri]) + "\n")
+		except Exception as e:
+			_jurnal("erorile paginii: %s" % e.__class__.__name__)
 
 	def _scrieJurnalErori(self, cod, motiv):
 		"""Oprirea cu eroare: un bloc in jurnalul erorilor (Mediu.jurnal_erori): ora, modul, motivul, codul de iesire,
@@ -1332,6 +1482,7 @@ class Navigator(object):
 				curata_rand(self.rezerva or "-", 60), durata, memorie if memorie is not None else "?")]
 			randuri += ["  stare: " + s for s in self._stari]
 			randuri += ["  erori: " + e for e in self._erori] or ["  erori: (nimic pe iesirea de erori)"]
+			self._erori_pagina = []
 			f("\n".join(randuri) + "\n")
 		except Exception as e:
 			_jurnal("jurnalul erorilor: %s" % e.__class__.__name__)

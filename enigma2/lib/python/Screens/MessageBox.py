@@ -85,6 +85,15 @@ def raspunsDinRand(valoare, dinApel=False):
 	return valoare
 
 
+def secundeAsteptare(timeout):
+	"""Timeout-ul dat de apelant -> secunde (int). Ce nu e numar (None, un text fara cifre, o functie) = fara numaratoare (-1):
+	in OE-Alliance ecranul cadea la `timeout > 0` (asistenta 743109, 12.11.2026)."""
+	try:
+		return int(timeout)
+	except (TypeError, ValueError, OverflowError):
+		return -1
+
+
 def inaltimeText(continut, rand, inaltimeSkin, inaltimeMaxima):
 	"""Inaltimea casetei de text a unei ferestre de mesaj, pentru `continut` px de text in randuri de `rand` px.
 	Textul care incape in caseta din skin primeste numai randurile lui. Unul mai lung primeste cel mult
@@ -181,6 +190,15 @@ class MessageBox(Screen):
 		self["InfoPixmap"] = Pixmap()
 		self["WarningPixmap"] = Pixmap()
 		self.timerRunning = False
+		# un plugin care voia openWithCallback pune functia raspunsului pe locul lui timeout (CI+ Helper:
+		# open(MessageBox, text, TYPE_YESNO, self.restart_gui)): fara numaratoare, iar functia primeste raspunsul ca la
+		# openWithCallback. Session.open pune callback = None dupa __init__, deci legatura se face la prima pornire.
+		if callable(timeout):
+			print("[MessageBox] functia raspunsului (%s) data pe locul lui timeout: primeste raspunsul" %
+				getattr(timeout, "__qualname__", type(timeout).__name__))
+			self.raspunsDinTimeout = timeout
+			self.onFirstExecBegin.append(self.__legaRaspunsul)
+			timeout = -1
 		self.initTimeout(timeout)
 
 		self.list = []
@@ -579,7 +597,13 @@ class MessageBox(Screen):
 		self.instance.resize(eSize(fereastra.width(), inaltimeNoua))
 		self.instance.move(ePoint(pozitie.x(), y))
 
+	def __legaRaspunsul(self):
+		# openWithCallback (dupa open) pune propria functie peste aceasta; altfel raspunsul merge la cea data ca timeout
+		if getattr(self, "callback", None) is None:
+			self.callback = self.raspunsDinTimeout
+
 	def initTimeout(self, timeout):
+		timeout = secundeAsteptare(timeout)
 		self.timeout = timeout
 		if timeout > 0:
 			self.timer = eTimer()

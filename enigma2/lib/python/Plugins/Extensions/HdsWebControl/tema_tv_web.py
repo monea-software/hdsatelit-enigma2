@@ -14,6 +14,9 @@
 #   POST /api/tema-tv-seteaza?tema=clasic|pro   alege tema (se vede pe televizor dupa repornirea interfetei)
 #   POST /api/tema-tv-reporneste             reporneste interfata (TryQuitMainloop 3)
 #   GET  /api/tema-tv-poza?id=clasic|pro     previzualizarea temei (JPEG din pachetul skinului)
+#   POST /api/tema-tv-rezolutie?rezolutie=1080|1440&aplicare=acum|pornire   0.7.5: rezolutia interfetei temei HD
+#                                            Satelit, 1080p sau 2K (Components/HdsRezolutieTv.py; perechea ecranului
+#                                            „Rezoluția interfeței”); in pagina numai unde placa poate 2K
 #   GET  /tema-tv                            pagina
 #
 # Modulul nu importa nimic din enigma2 la incarcare (probele de pe PC dau config si caile).
@@ -35,11 +38,65 @@ def _t(text):
 		return text
 
 
-def stare(T=None, **cai):
+def _rezolutie(R=None):
+	if R is not None:
+		return R
+	from Components import HdsRezolutieTv
+	return HdsRezolutieTv
+
+
+def _peEcran():
+	"""latimea interfetei de acum (1920 sau 2560), sau None pe PC"""
+	try:
+		from enigma import getDesktop
+		return getDesktop(0).size().width()
+	except Exception:
+		return None
+
+
+def stareRezolutie(R=None, config=None, latime=None, **cai):
+	"""partea „Rezoluția interfeței” din GET /api/tema-tv: se_alege (placa poate 2K sau e deja pe 2K), aleasa,
+	pe_ecran, motivul unei intoarceri pe 1080p"""
+	R = _rezolutie(R)
+	latime = _peEcran() if latime is None else latime
+	return {
+		"se_alege": bool(R.seAlege(config, **{k: v for k, v in cai.items() if k in ("hifb", "proc", "limita")})),
+		"aleasa": R.aleasa(config),
+		"pe_ecran": (R.R1440 if latime and latime >= R.MARIMI[R.R1440][0] else R.R1080) if latime else None,
+		"valori": [{"id": v, "nume": _t(R.NUME[v]), "descriere": _t(R.DESCRIERE[v])} for v in R.VALORI],
+		"refuz": R.textRefuz(R.citesteRefuz(cai.get("refuz")), _t),
+	}
+
+
+def stare(T=None, R=None, **cai):
 	"""GET /api/tema-tv."""
 	T = _tema(T)
-	rez = T.stare(traducere=_t, **cai)
+	rez = T.stare(traducere=_t, **{k: v for k, v in cai.items() if k not in ("hifb", "proc", "limita", "refuz", "latime")})
+	try:
+		rez["rezolutie"] = stareRezolutie(R, cai.get("config"), **{k: v for k, v in cai.items() if k in ("hifb", "proc",
+			"limita", "refuz", "latime")})
+	except Exception as eroare:
+		rez["rezolutie"] = {"se_alege": False, "eroare": str(eroare)}
 	rez["result"] = True
+	return rez
+
+
+def seteazaRezolutie(argumente, R=None, config=None, sesiune=None, **cai):
+	"""POST /api/tema-tv-rezolutie: aceeasi alegere ca pe televizor; aplicare=acum reporneste interfata."""
+	R = _rezolutie(R)
+	mod = argumente.get("aplicare", "pornire")
+	if mod not in ("acum", "pornire"):
+		return {"result": False, "message": _t("Alege Aplică acum sau La următoarea pornire.")}
+	valoare = argumente.get("rezolutie", "")
+	if valoare == R.R1440 and not R.seAlege(config, **{k: v for k, v in cai.items() if k in ("hifb", "proc", "limita")}):
+		return {"result": False, "message": _t("Receptorul acesta nu poate interfața 2K.")}
+	if mod == "acum" and sesiune is None:
+		return {"result": False, "message": _t("Interfața nu este gata pentru repornire.")}
+	schimbat, mesaj = R.alege(valoare, config)
+	rez = {"result": valoare in R.VALORI, "message": _t(mesaj), "rezolutie": stareRezolutie(R, config, **cai)}
+	if schimbat and mod == "acum":
+		rez.update(reporneste(sesiune))
+		rez["reporneste"] = bool(rez["result"])
 	return rez
 
 
@@ -111,7 +168,7 @@ def argumente(request):
 	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:6]:
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie not in ("tema", "id", "aplicare"):
+		if cheie not in ("tema", "id", "aplicare", "rezolutie"):
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
@@ -171,7 +228,8 @@ def rute(baza, resource, T=None):
 			return pagina(request)
 
 	return ({b"tema-tv": StareResource(), b"tema-tv-seteaza": _scrie(lambda a: seteaza(a, T, sesiune=_sesiune())),
-		b"tema-tv-reporneste": _scrie(lambda a: reporneste(_sesiune())), b"tema-tv-poza": PozaResource()},
+		b"tema-tv-reporneste": _scrie(lambda a: reporneste(_sesiune())), b"tema-tv-poza": PozaResource(),
+		b"tema-tv-rezolutie": _scrie(lambda a: seteazaRezolutie(a, sesiune=_sesiune()))},
 		{b"tema-tv": PaginaResource()})
 
 
@@ -236,6 +294,11 @@ PAGINA = """<!DOCTYPE html>
   .mesaj{margin:10px 0 0;line-height:1.45;font-size:.92rem;min-height:1.3em;}
   .eroare{color:#ffb4a8;}
   .ascuns{display:none;}
+  .rezolutie{margin:18px 0 0;}
+  .rezolutie h2{font-size:1.1rem;margin:0 0 6px;}
+  .alegeri{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 0;}
+  .alegeri button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:var(--panou);color:inherit;font:inherit;cursor:pointer;}
+  .alegeri button.aleasa{border-color:var(--albastru);box-shadow:0 0 0 1px var(--albastru);}
 </style>
 </head>
 <body>
@@ -252,6 +315,13 @@ PAGINA = """<!DOCTYPE html>
     <span id="repornire_text"></span>
     <button type="button" id="reporneste">Repornește interfața acum</button>
   </div>
+  <section class="card rezolutie ascuns" id="rezolutie">
+    <h2>Rezoluția interfeței</h2>
+    <p class="descriere" id="rezolutie_text"></p>
+    <p class="mesaj eroare ascuns" id="rezolutie_refuz"></p>
+    <div class="alegeri" id="rezolutie_alegeri"></div>
+    <p class="nota">Alegerea repornește interfața. La 2K animațiile ferestrelor pot fi puțin mai lente. Dacă 2K nu pornește, receptorul revine singur la 1080p.</p>
+  </section>
   <p class="mesaj" id="mesaj"></p>
   <p class="nota">Tema se vede pe televizor după repornirea interfeței: câteva secunde, receptorul nu se oprește și canalul pornește din nou. Culorile rămân cele alese la Setări skin. Același ecran e pe televizor, în __DRUM_MENIU__.</p>
 </div>
@@ -315,11 +385,37 @@ function arata(d){
     $("repornire_text").textContent = "Tema " + (ales ? ales.nume : "") + " se vede pe televizor după repornirea interfeței.";
   }
 }
+function arataRezolutie(r){
+  var s = $("rezolutie");
+  s.classList.toggle("ascuns", !(r && r.se_alege));
+  if(!r || !r.se_alege){ return; }
+  var c = $("rezolutie_alegeri"); c.textContent = "";
+  $("rezolutie_refuz").textContent = r.refuz || "";
+  $("rezolutie_refuz").classList.toggle("ascuns", !r.refuz);
+  r.valori.forEach(function(v){
+    if(v.id === "1440"){ $("rezolutie_text").textContent = v.descriere; }
+    var b = document.createElement("button"); b.type = "button";
+    b.textContent = v.nume + (v.id === r.aleasa ? " · " + (r.pe_ecran && r.pe_ecran !== r.aleasa ? "aleasă, după repornire" : "pe ecran acum") : "");
+    if(v.id === r.aleasa){ b.classList.add("aleasa"); }
+    b.addEventListener("click", function(){ alegeRezolutie(v.id); });
+    c.appendChild(b);
+  });
+}
+function alegeRezolutie(id){
+  var q = new URLSearchParams(); q.set("rezolutie", id); q.set("aplicare", "acum");
+  mesaj("Se salvează rezoluția...");
+  cerere("/api/tema-tv-rezolutie", "POST", q).then(function(d){
+    if(d.rezolutie){ arataRezolutie(d.rezolutie); } mesaj(d.message, !d.result);
+    if(d.result && d.reporneste){ setTimeout(function(){ location.reload(); }, 20000); }
+  }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
+}
 function citeste(){
   return cerere("/api/tema-tv").then(function(d){
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi tema."; return; }
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
     arata(d);
+    arataRezolutie(d.rezolutie);
+    if(location.hash === "#rezolutie" && d.rezolutie && d.rezolutie.se_alege){ $("rezolutie").scrollIntoView(); }
   }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
 }
 function alege(id, aplicare){
@@ -362,6 +458,9 @@ TEXTE_PAGINA = {
 			"paginilor web e o altă setare și rămâne cum e."),
 		N_("Se citește tema..."),
 		N_("Repornește interfața acum"),
+		N_("Rezoluția interfeței"),
+		N_("Alegerea repornește interfața. La 2K animațiile ferestrelor pot fi puțin mai lente. Dacă 2K nu pornește, receptorul "
+			"revine singur la 1080p."),
 		N_("Tema se vede pe televizor după repornirea interfeței: câteva secunde, receptorul nu se oprește "
 			"și canalul pornește din nou. Culorile rămân cele alese la Setări skin. Același ecran e pe "
 			"televizor, în __DRUM_MENIU__."),
@@ -376,8 +475,6 @@ TEXTE_PAGINA = {
 		N_("aleasă, după repornire"),
 		N_("pe ecran până la repornire"),
 		N_("Previzualizarea temei"),
-		N_("Aleasă"),
-		N_("Alege tema"),
 		N_("Tema"),
 		N_("se vede pe televizor după repornirea interfeței."),
 		N_("Receptorul nu a putut citi tema."),
@@ -385,6 +482,9 @@ TEXTE_PAGINA = {
 		N_("Se salvează tema..."),
 		N_("Receptorul nu răspunde."),
 		N_("Se repornește interfața..."),
+		N_("Se salvează rezoluția..."),
+		# 0.7.5 (PRB, 14.11.2026): textele sablonului care lipseau din lista
+		N_("pe ecran acum"),
 	),
 }
 

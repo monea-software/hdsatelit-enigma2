@@ -50,8 +50,7 @@ def rute(baza, resource, P=None):
 
 def pagina_text(stil, configurare):
 	from .meniu_comun_web import SCRIPT_COMUN, STIL_PAGINI
-	from .traducere_pagini import traduce
-	text = traduce(PAGINA, TEXTE_PAGINA)
+	text = _traducePagina(PAGINA)
 	return text.replace("__STIL__", stil + STIL_PAGINI).replace("__SCRIPT__", SCRIPT_COMUN).replace("__CONFIG__", configurare)
 
 
@@ -75,7 +74,7 @@ function arata(d){
   select.textContent="";
   (d.candidati || []).forEach(function(c){
     var o=document.createElement("option");o.value=c.punct;
-    o.textContent=c.punct+" ("+c.liber_mib+" MiB liberi)";select.appendChild(o);
+    o.textContent=c.punct+" ("+c.liber_mib+" "+"MiB liberi"+")";select.appendChild(o);
   });
   if(Array.from(select.options).some(function(o){return o.value===ales;})){select.value=ales;}
   select.hidden=!!d.legat || !d.descris || !!d.stick_unic;$("eticheta").hidden=select.hidden;
@@ -114,3 +113,12 @@ TEXTE_PAGINA = {
 		N_("Folosesc spațiu pe stickul %s pentru limbile suplimentare? Fișierele existente rămân."),
 	),
 }
+
+
+def _traducePagina(sablon, fel="pagina"):
+	"""Sablonul in limba receptorului; fara pachetul HdsWebControl (probele de pe PC), sablonul ca atare."""
+	try:
+		from .traducere_pagini import traduce
+	except ImportError:
+		return sablon
+	return traduce(sablon, TEXTE_PAGINA, fel)

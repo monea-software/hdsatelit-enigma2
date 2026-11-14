@@ -37,7 +37,7 @@ SUMMARY = "Driverele USB din feedul imaginii HDSatelit"
 DESCRIPTION = "Metapachet gol pentru constructia si culegerea driverelor USB care nu sunt in imagine; receptorul le instaleaza singur cand omul baga stickul."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
-PV = "0.1.2"
+PV = "0.1.3"
 
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 inherit packagegroup
@@ -60,8 +60,15 @@ RDEPENDS:${PN}:append:sf8008 = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r
 RDEPENDS:${PN}:append:sf8008m = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r8723au"
 RDEPENDS:${PN}:append:ustym4kpro = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r8723au"
 RDEPENDS:${PN}:append:gbtrio4k = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r8723au"
+# AB-COM PULSe 4K si PULSe 4K MINI (MPU, 12.11.2026; linux-abcom 4.4.35: R8723AU=m, MT7601U=m in imagine, fara AX88179); rtl8192eu
+# si rt8822cu nu sunt in imaginea lor (ca la Multibox SE), deci si HDS_DF_WIFI_OCTAGON
+RDEPENDS:${PN}:append:pulse4k = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} ax88179-178a kernel-module-r8723au"
+RDEPENDS:${PN}:append:pulse4kmini = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} ax88179-178a kernel-module-r8723au"
 # Amiko Viper 4K (V10): MT7601U in nucleu (in imagine), driverele Octagon nu
 RDEPENDS:${PN}:append:viper4k = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} ax88179-178a kernel-module-r8723au"
+# Novaler Multibox 4K SE (MNS, 12.11.2026; linux-maxytec 4.4.35): MT7601U si R8723AU =m in nucleu, AX88179 nu; rtl8192eu
+# si rt8822cu nu vin cu masina (la imaginea publica a masinii vin din packagegroup-oea-wifi)
+RDEPENDS:${PN}:append:multiboxse = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} ax88179-178a kernel-module-r8723au"
 # Amiko Viper 4K V20, V30, Protek 4K X2 (u57) si V40 (u571): AX88179 e in nucleu, MT7601U lipseste din nucleu (driverul
 # din afara); modulele din afara cu -mlong-calls (bbappend-urile din recipes-local/<reteta>)
 RDEPENDS:${PN}:append:u57 = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} mt7601u kernel-module-r8723au"
@@ -76,9 +83,44 @@ RDEPENDS:${PN}:append:u571 = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} mt7601u
 HDS_DF_TURBO = "enigma2-plugin-drivers-dvb-usb-turbo enigma2-plugin-drivers-dvb-usb-turbo2"
 HDS_DF_VU4K = "${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} mt7601u rt8723a ax88179-178a ${HDS_DF_TURBO}"
 RDEPENDS:${PN}:append:vusolo4k = " ${HDS_DF_VU4K}"
+RDEPENDS:${PN}:append:vuultimo4k = " ${HDS_DF_VU4K}"
 RDEPENDS:${PN}:append:vuuno4kse = " ${HDS_DF_VU4K}"
-RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_DF_VU4K}"
+RDEPENDS:${PN}:append:vuzero4k = " ${HDS_DF_VU4K}"
+# Vu+ Duo 4K Lite (ULT 13.11.2026): fara tunerele VU+ Turbo/Turbo2 (vuplus-tuner-turbo din meta-vuplusde are COMPATIBLE_MACHINE
+# numai vuuno4kse, vuzero4k; bitbake se oprea cu „Nothing RPROVIDES vuplus-tuner-turbo”)
+RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} mt7601u rt8723a ax88179-178a"
+# GigaBlue UHD Quad 4K Pro (ALFA, linux-gigablue 4.1.20: fara MT7601U, R8723AU si AX88179 in nucleu, ca la Vu+ 4K); fara
+# tunerele VU+ Turbo (driverul lor e in meta-vuplus, care nu e in straturile masinii)
+RDEPENDS:${PN}:append:gbquad4kpro = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} mt7601u rt8723a ax88179-178a"
+# GigaBlue UHD X3 4K (MGX): gb72604/defconfig nici el fara MT7601U, R8723AU si AX88179_178A
+RDEPENDS:${PN}:append:gbx34k = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} mt7601u rt8723a ax88179-178a"
+# AX HD51 (MHD, linux-gfutures 4.10.12, hd51/defconfig): MT7601U e in nucleu (si in imagine, hdsatelit-base.bbappend), R8723AU
+# si AX88179 lipsesc (driverele din afara); fara tunerele VU+ Turbo (meta-vuplus nu e in straturile masinii)
+RDEPENDS:${PN}:append:ax51 = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} rt8723a ax88179-178a"
+# Edision (MED, linux-edision 5.15): MT7601U si AX88179_178A sunt in nucleu (mt7601u in imagine; ax88179 ca modulul
+# nucleului, nu reteta din afara lui, scrisa pentru nucleele 4.x); R8723AU lipseste => rt8723a in feed. mt7610u din
+# HDS_DF_WIFI_NOI e scris pentru nucleele vechi; pe 5.15 nucleul are MT76x0U: de urmarit la prima constructie.
+RDEPENDS:${PN}:append:osmio4kplus = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} rt8723a kernel-module-ax88179-178a"
+RDEPENDS:${PN}:append:osmini4k = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} rt8723a kernel-module-ax88179-178a"
+RDEPENDS:${PN}:append:osmio4k = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} rt8723a kernel-module-ax88179-178a"
+# Novaler Multibox 4K PRO (MNP, linux-maxytec 4.4.35, multiboxpro/defconfig): MT7601U in nucleu (si in imagine), R8723AU
+# in nucleu (modulul staging, ca pe SF8008), AX88179 lipseste (driverul din afara); rtl8192eu si rt8822cu nu sunt in imagine
+RDEPENDS:${PN}:append:multiboxpro = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} ax88179-178a kernel-module-r8723au"
+# Zgemma H17 COMBO (MH7, linux-airdigital 4.10.12, h17/defconfig): ca la AX HD51, MT7601U e in nucleu, R8723AU si AX88179
+# lipsesc (driverele din afara); fara tunerele VU+ Turbo (meta-vuplus nu e in straturile masinii)
+RDEPENDS:${PN}:append:zgemmah17combo = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} rt8723a ax88179-178a"
 RDEPENDS:${PN}:append:vuduo4k = " ${HDS_DF_VU4K}"
+RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_DF_VU4K}"
+# Tunerul DVB-T/T2/C pe USB Xbox One Digital TV Tuner (045e:02d5) si stickurile DiBcom dib0700 (13.11.2026, agentul USB;
+# schmith, LinuxSat 164155, Uno 4K SE): invelisul OE-A cu bbappend-ul nostru (recipes-local/enigma2-plugin-drivers-dvb-usb-dib0700:
+# modulele dib0700, mn88472, tda18250 si firmware-ul linux-firmware-dib0700 prin RDEPENDS). Numai pe nucleele 4.1.20 si 4.1.45,
+# care au peticul Xbox (aliasul in dvb-usb-dib0700.ko); NU pe Solo4K, Ultimo4K (3.14.28) si Solo SE (3.13.5), deci nu in HDS_DF_VU4K.
+HDS_DF_XBOX = "enigma2-plugin-drivers-dvb-usb-dib0700"
+RDEPENDS:${PN}:append:vuuno4kse = " ${HDS_DF_XBOX}"
+RDEPENDS:${PN}:append:vuzero4k = " ${HDS_DF_XBOX}"
+RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_DF_XBOX}"
+RDEPENDS:${PN}:append:vuduo4k = " ${HDS_DF_XBOX}"
+RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_DF_XBOX}"
 # Vu+ Solo SE (3.13.5, mips): modulele nucleului si firmware-ul lor (in imagine nu e niciunul) si driverele din afara care
 # se compileaza pe 3.13.5 (toate, probat 11.11.2026). zd1211rw nu: firmware-ul lui (zd1211/zd1211_*) nu-l pune niciun pachet.
 # Firmware-ul RTL8188EUS din firmware-rtl8188eu, nu din linux-firmware-rtl8188 (acela pune si fisierul lui firmware-rt8188fu).
@@ -89,3 +131,12 @@ HDS_DF_SOLOSE_NUCLEU = "kernel-module-rt2800usb kernel-module-rt73usb kernel-mod
     kernel-module-smsc95xx kernel-module-dm9601 kernel-module-sr9700"
 HDS_DF_SOLOSE_AFARA = "${HDS_DF_WIFI_NOI} ${HDS_DF_VANDUTE_SOLOSE} ${HDS_DF_WIFI_OCTAGON} mt7601u rt8723a rt8188fu firmware-rt8188fu ax88179-178a rtl8192cu"
 RDEPENDS:${PN}:append:vusolose = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_SOLOSE_AFARA} ${HDS_DF_TURBO}"
+# Zgemma Star S (MSS, 12.11.2026; linux-airdigital 4.10.12, defconfig sh1): toate modulele din HDS_DF_SOLOSE_NUCLEU sunt =m
+# si in sh1 (verificat), MT7601U e in nucleu (modulul lui, cu firmware-ul, ca pe H17), R8723AU si AX88179 lipsesc (driverele
+# din afara, ca pe H17 si AX HD51, acelasi nucleu), rt8188fu merge pe 4.x; fara tunerele VU+ Turbo (numai Vu+)
+RDEPENDS:${PN}:append:sh1 = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_WIFI_NOI} ${HDS_DF_VANDUTE_SOLOSE} ${HDS_DF_WIFI_OCTAGON} kernel-module-mt7601u firmware-mt7601u rt8723a rt8188fu firmware-rt8188fu ax88179-178a"
+# Vu+ Solo2 (MS2, 12.11.2026): acelasi nucleu 3.13.5 (defconfig_proxy vusolo2: aceleasi module =m), aceleasi drivere
+RDEPENDS:${PN}:append:vusolo2 = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_SOLOSE_AFARA} ${HDS_DF_TURBO}"
+# Vu+ Zero (MVZ, 12.11.2026): acelasi nucleu 3.13.5 (defconfig vuzero, fara proxy: aceleasi module =m ca Solo SE;
+# in plus rtl8192cu.ko in nucleu, care nu se calca cu 8192cu.ko al driverului din afara), aceleasi drivere
+RDEPENDS:${PN}:append:vuzero = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_SOLOSE_AFARA} ${HDS_DF_TURBO}"

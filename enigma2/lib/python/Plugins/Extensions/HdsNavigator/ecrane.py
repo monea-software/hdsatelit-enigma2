@@ -11,6 +11,9 @@
 # utilizatorul si parola, alert/confirm/prompt, lista unui <select>, meniul navigatorului, favoritele, setarile. Dupa
 # fiecare, navigatorul primeste iar ecranul (Navigator.reia).
 #
+# Modul aplicatie (0.7.5, meniul „Aplicații”, Screens/HdsAplicatii.py): o scurtatura din Components/HdsAplicatii.py,
+# pe tot ecranul, cu profilul ei, agentul si harta tastelor (lansator.MOD_APLICATIE); EXIT o inchide si intoarce grila.
+#
 # Doua moduri: MOD_CAM (butonul din ecranul camului: numai adresa interfetei web a camului, gasita la rulare de
 # Components/HdsInterfeteCam.py, nimic pe disc) si MOD_OBISNUIT (meniul „Navigator web”: orice adresa, pagina de
 # pornire, favorite, profil).
@@ -189,7 +192,7 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 	"""mod: L.MOD_OBISNUIT (adresa sau pagina de pornire) sau L.MOD_CAM (cauta interfata camului; `port` o alege
 	dintre mai multe)."""
 
-	def __init__(self, session, mod=L.MOD_OBISNUIT, adresa=None, port=None):
+	def __init__(self, session, mod=L.MOD_OBISNUIT, adresa=None, port=None, aplicatie=None):
 		latime, inaltime = _desktop()
 		self.skin = skinEcran(latime, inaltime)
 		Screen.__init__(self, session)
@@ -204,7 +207,11 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		self.gata = False
 		self.interfata = None       # modul cam: interfata deschisa (portul, schema, gazda), din HdsInterfeteCam
 		self._intrare_incercata = False   # modul cam: datele de pe receptor s-au dat o data (intrare_cam.py)
-		titlu = _("Interfața web a modulului") if mod == L.MOD_CAM else _("Navigator web")
+		self.aplicatie = aplicatie or {}  # modul aplicatie: scurtatura (Components/HdsAplicatii)
+		if mod == L.MOD_APLICATIE:
+			titlu = self.aplicatie.get("titlu") or _("Aplicații")
+		else:
+			titlu = _("Interfața web a modulului") if mod == L.MOD_CAM else _("Navigator web")
 		self.setTitle(titlu)
 		self["titlu"] = StaticText(titlu)
 		self["pas"] = StaticText("")
@@ -255,6 +262,8 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		if self.mod == L.MOD_CAM:
 			# interfata web a modulului se deschide si cat merge asistenta (captura e refuzata cat navigatorul e pe ecran)
 			self._cautaCam()
+		elif self.mod == L.MOD_APLICATIE:
+			self._pornesteAplicatie()
 		else:
 			c = S.initConfig()
 			self._pornesteObisnuit(self.adresa or S.adresaBuna(c.pagina_pornire.value) or S.PAGINA_IMPLICITA)
@@ -326,13 +335,37 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 			dosar_date=S.DOSAR_DATE, dosar_cache=S.DOSAR_CACHE)
 		self.nav.porneste()
 
+	# ------------------------------------------------ aplicatia (meniul „Aplicații”)
+
+	def _pornesteAplicatie(self):
+		from Components import HdsAplicatii as A
+		s = self.aplicatie
+		motor, program = A.program(s)
+		date, cache = A.dosareProfil(s["id"])
+		try:
+			if not os.path.isdir(date):
+				os.makedirs(date, 0o700)
+		except OSError as e:
+			print("[HdsNavigator] dosarul aplicatiei: %s" % e)
+		if motor != (s.get("motor") or A.MOTOR_IMPLICIT):
+			print("[HdsNavigator] aplicatia %s: motorul %s lipseste, porneste pe %s" % (s["id"], s.get("motor"), motor))
+		aplicatie = {"program": program, "argumente": A.argumenteAplicatie(s, A.optiuniProgram(program),
+			agent_tv=S.initConfig().agent_tv.value),
+			"taste": s.get("taste") or "tv"}
+		self.nav = L.Navigator(self, L.MOD_APLICATIE, s["url"], setari=setariCurente(), dosar_date=date,
+			dosar_cache=cache, aplicatie=aplicatie)
+		self.nav.porneste()
+
 	# ------------------------------------------------ Ascultator
 
 	def laPas(self, pas, procent):
 		if self.inchis:
 			return
 		if pas == "pornire":
-			self._pas(_("Se pornește navigatorul..."), 30, _("Prima pornire poate dura aproximativ 10 secunde."))
+			if self.mod == L.MOD_APLICATIE:
+				self._pas(_("Se pornește aplicația..."), 30, _("Prima pornire poate dura aproximativ 10 secunde."))
+			else:
+				self._pas(_("Se pornește navigatorul..."), 30, _("Prima pornire poate dura aproximativ 10 secunde."))
 		elif procent >= 0:
 			self._pas(_("Se încarcă pagina... %d %%") % procent, 50 + procent // 2)
 		else:
@@ -802,6 +835,7 @@ class HdsNavigatorSetari(Screen, ConfigListScreen):
 			getConfigListEntry(_(S.ETICHETE["marire"]), self.c.marire, "marire"),
 			getConfigListEntry(_(S.ETICHETE["font_minim"]), self.c.font_minim, "font_minim"),
 			getConfigListEntry(_(S.ETICHETE["desen"]), self.c.desen, "desen"),
+			getConfigListEntry(_(S.ETICHETE["agent_tv"]), self.c.agent_tv, "agent_tv"),
 			getConfigListEntry(_(S.ETICHETE["chenar"]), self.c.chenar, "chenar"),
 		] + [
 			getConfigListEntry(_(S.ETICHETE[k]), getattr(self.c, k), k) for k in S.randuriChenar(self.c)

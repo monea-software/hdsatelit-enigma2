@@ -1238,7 +1238,7 @@ TEXTE_PAGINA = {
 }
 
 
-TEXTE_PAGINA["js"] += (N_("Scurt: "), N_("Lung: "))
+TEXTE_PAGINA["js"] += (N_("Scurt:"), N_("Lung:"))
 
 
 def _traducePagina(sablon, fel="pagina"):

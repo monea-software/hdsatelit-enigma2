@@ -33,7 +33,9 @@
 # instalat sau deja pe receptor) apare in Setari tunere dupa repornirea interfetei: receptorul spune asta si intreaba o
 # data pe sesiune "Repornesc interfata acum?" (Da: TryQuitMainloop 3, care intreaba singur daca o inregistrare e in curs;
 # in standby intrebarea vine la trezire); in pagina web, butonul din cardul "Adaptoare USB" (repornesteInterfata).
-# Fara internet, din fisierul de completari de pe stick (pasul 4d, 12.11.2026): cand listele nu se descarca sau pachetul
+# Fara internet, din fisierul de completari de pe stick (pasul 4d, 12.11.2026; din 13.11.2026 fisierul nu mai e pe pagina
+# imaginii, iar de la 0.7.5 driverele din feed sunt in imagine pe toate modelele cu eMMC; citirea ramane pentru cine il
+# are deja): cand listele nu se descarca sau pachetul
 # nu e in listele online, daca pe un stick e fisierul hdsatelit-<baza>-<model>-completari.zip (sau dosarul dezarhivat),
 # driverul stickului bagat (pachetul din harta si "cu") se ia din el, cu aceeasi verificare ca feedul online
 # (Components/HdsLimbaRestaurare.instaleazaDinStick: stare.json semnat, indexurile semnate, sumele); numai driverul
@@ -466,12 +468,11 @@ def listaCazuta():
 		_stare["liste"] = False
 		return
 	if primul is not None and _stare["esecuri_liste"] == 1:
+		# 0.7.5 (Eduard 13.11.2026 11:44): fisierul cu completarile nu mai e pe pagina imaginii, deci mesajul trimite numai la cablu
 		_mesaj(_cuNume(primul["nume"], _t("Driverul pentru %s se ia din feedul HD Satelit, dar receptorul nu are internet acum. "
-			"Leagă receptorul la internet prin cablu sau copiază pe un stick fișierul cu completările pentru receptorul tău, de "
-			"pe pagina imaginii, și pune stickul în receptor: driverul se instalează singur."),
+			"Leagă receptorul la internet prin cablu: driverul se instalează singur."),
 			_t("Driverul pentru adaptorul USB se ia din feedul HD Satelit, dar receptorul nu are internet acum. Leagă receptorul "
-			"la internet prin cablu sau copiază pe un stick fișierul cu completările pentru receptorul tău, de pe pagina "
-			"imaginii, și pune stickul în receptor: driverul se instalează singur.")), "asteapta")
+			"la internet prin cablu: driverul se instalează singur.")), "asteapta")
 	if _stare["esecuri_liste"] < MAX_ESECURI_LISTE:
 		_stare["liste"] = False
 		_programeaza(PAS_FARA_INTERNET_MS)

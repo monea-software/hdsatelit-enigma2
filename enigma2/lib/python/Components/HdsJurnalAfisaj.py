@@ -5,6 +5,15 @@
 
 Ceasul Enigma2 preia loturi complete, fara asteptare. Un lot blocat nu produce
 alte fire. Setarile si navigarea se ating numai pe firul Enigma2.
+
+TRECEREA PRIN FULL HD (greseala 1180, Viper 4K V20 cu televizor LG, 05.11.2026): dupa pornirea televizorului textul
+era neclar la 4K, desi valorile expuse de driver pareau bune, si se facea clar numai dupa Full HD si inapoi 4K din
+meniu. Scrierea aceluiasi mod nu schimba nimic in driver (masurat pe 23.09.2026: SetformatInTime neschimbat la
+acelasi format). De aceea, la o conectare HDMI cu modul ales 4K, paza face o data ce facea omul: scrie modul Full HD
+de aceeasi frecventa (VideoOutput.hdmiCycleMode), asteapta pana il arata disp1 (cel mult CICLU_MAX_S) si se intoarce
+pe modul ales, fara sa salveze nimic. Aceleasi limite (canal live, fara inregistrare, standby, scanare; cel mult trei
+pe ora, la 60 s). Intoarcerea se face oricum (si daca intre timp a venit standby sau o inregistrare), numai setarea
+sa fie aceeasi; o oprire a enigma2 la mijloc nu lasa nimic: la pornire se aplica modul salvat.
 """
 import re
 import time
@@ -21,6 +30,7 @@ STABILIZARE_S = 2.0
 PROBA_MAX_S = 2.0
 LIMITA_ORA = 3
 DISTANTA_S = 60.0
+CICLU_MAX_S = 8.0
 
 _ultimMod = [None]
 _paza = [None]
@@ -59,9 +69,9 @@ def _context():
 	return V.hdmiRecoveryContext(getattr(_sesiune[0], "nav", None), sesiune=_sesiune[0])
 
 
-def _reaplica(context):
+def _reaplica(context, mod=None, inapoi=False):
 	from Components import VideoOutput as V
-	return V.reapplyHdmi(getattr(_sesiune[0], "nav", None), asteptat=context, sesiune=_sesiune[0])
+	return V.reapplyHdmi(getattr(_sesiune[0], "nav", None), asteptat=context, sesiune=_sesiune[0], mod=mod, inapoi=inapoi)
 
 
 def _jurnal(nivel, modul, text):
@@ -124,6 +134,8 @@ class Paza:
 		self.identificator = 0
 		self.lentSpus = False
 		self.necunoscutSpus = False
+		self.ciclu = None  # (inceput, identificator, context, modul Full HD) cat timp trecerea asteapta driverul
+		self.ultimaProaspata = None  # (ora, proba) ultima proba proaspata, pentru trecere
 
 	def _contextSigur(self):
 		try:
@@ -165,6 +177,7 @@ class Paza:
 				self.dupa = None
 			return
 		self.lentSpus = False
+		self.ultimaProaspata = (acum, proba)
 		conectat = proba.get("conectat")
 		if conectat is None:
 			self.asteptare = None
@@ -236,7 +249,9 @@ class Paza:
 			self._decizie(context.get("motiv") or _("recuperare amânată pentru protejarea redării"))
 			return
 		bun, motiv = compara(proba, context)
-		if bun is True:
+		intermediar = context.get("intermediar")
+		# 1180: starea expusa poate parea coerenta si cu textul neclar, deci la 4K trecem oricum prin Full HD
+		if bun is True and not intermediar:
 			self._decizie(_("%s; fără reaplicare") % motiv)
 			return
 		self.incercari = [t for t in self.incercari if 0 <= acum - t < 3600]
@@ -245,21 +260,59 @@ class Paza:
 			return
 		self.incercari.append(acum)
 		self.ecouPana = acum + DISTANTA_S
+		if intermediar:
+			try:
+				rezultat = self.reaplica(context, intermediar) or {}
+			except Exception:
+				rezultat = {}
+			if rezultat.get("scris"):
+				self.ciclu = (acum, self.identificator, context, intermediar)
+				self._decizie(_("motiv=%s; trec prin %s și înapoi, ca din meniu (restart_cerut=%s)") % (
+					motiv, intermediar, _("da") if rezultat.get("restart_cerut") else _("nu")))
+				return
+			# Full HD nefacut (poate scris pe jumatate): modul ales se scrie din nou, ca intoarcere
+			self._decizie(_("trecerea prin %s nu s-a scris; scriu din nou modul ales") % intermediar)
 		self.dupa = (acum, self.identificator, context)
 		try:
-			rezultat = self.reaplica(context) or {}
+			rezultat = self.reaplica(context, None, bool(intermediar)) or {}
 		except Exception:
 			rezultat = {}
 		self._decizie(_("motiv=%s scris=%s restart_cerut=%s; aștept proba efectivă") % (
 			motiv, _("da") if rezultat.get("scris") else _("nu"),
 			_("da") if rezultat.get("restart_cerut") else _("nu")))
 
+	def urmeazaCiclu(self, fortat=False):
+		"""Intoarcerea pe modul ales: cand disp1 arata modul Full HD (driverul l-a aplicat), dupa CICLU_MAX_S sau
+		`fortat` (o eroare in paza). Nimic nu ramane pe Full HD."""
+		if self.ciclu is None:
+			return
+		inceput, identificator, tinta, intermediar = self.ciclu
+		acum = self.ceas()
+		ajuns = False
+		ultima = self.ultimaProaspata
+		if ultima is not None and ultima[0] > inceput:
+			mod, dorit = _format(ultima[1].get("disp")), _format(intermediar)
+			ajuns = mod is not None and dorit is not None and mod[1] == dorit[1]
+		if not (ajuns or fortat or acum - inceput >= CICLU_MAX_S):
+			return
+		self.ciclu = None
+		self.dupa = (acum, identificator, tinta)
+		try:
+			rezultat = self.reaplica(tinta, None, True) or {}
+		except Exception:
+			rezultat = {}
+		self.jurnal("info", "reaplicare", _("id=%d înapoi pe %s după %.1f s (%s %s) scris=%s restart_cerut=%s; aștept proba efectivă") % (
+			identificator, tinta.get("mod") or "-", max(0.0, acum - inceput), intermediar,
+			_("arătat de driver") if ajuns else _("neconfirmat"), _("da") if rezultat.get("scris") else _("nu"),
+			_("da") if rezultat.get("restart_cerut") else _("nu")))
+
 	def pas(self):
 		proba = self.cititor.preia()
 		if proba is not None:
 			self.primeste(proba)
-			if not self.asteptare and not self.dupa:
-				return PAUZA_S * 1000
+		self.urmeazaCiclu()
+		if proba is not None and not self.asteptare and not self.dupa and not self.ciclu:
+			return PAUZA_S * 1000
 		expirat = self.cititor.expirat(self.ceas())
 		if expirat:
 			self.asteptare = None
@@ -287,6 +340,11 @@ def _verifica():
 		control.asteptare = None
 		control.dupa = None
 		control.anterioara = None
+		try:
+			control.urmeazaCiclu(fortat=True)
+			control.dupa = None
+		except Exception:
+			control.ciclu = None
 		try:
 			_jurnal("avert", "stare-osd", _("paza HDMI nu a putut prelua proba; următoarea verificare rămâne programată"))
 		except Exception:

@@ -2,8 +2,8 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# cauta_setari_web.py: „Caută setări” in interfata web (HdsWebControl), perechea ecranului de pe televizor
-# (Screens/HdsCautaSetari.py: MENU > Setări > Caută setări, sau tasta TEXT in orice meniu).
+# cauta_setari_web.py: „Caută în meniu” (fost „Caută setări”) in interfata web (HdsWebControl), perechea ecranului de pe televizor
+# (Screens/HdsCautaSetari.py: pe televizor „Caută în meniu” e primul rand din orice pagina a meniului, lotul CTM).
 #
 # Acelasi index si aceleasi reguli ca pe televizor (Components/HdsCautaSetari.py): meniurile, intrarile si randurile de
 # setari pe care le arata acum meniul receptorului (level=, requires=, conditional=), cautate in limba meniului si in
@@ -16,7 +16,7 @@
 #   Cererea trimite numai cheia rezultatului din index; modulul, ecranul si setarea vin din index, adica din fisierele
 #   imaginii, nu din retea. Nu se deschid din web intrarile <code>, oprirea si repornirea receptorului si extensiile
 #   (ca la /meniu); pentru ele ramane telecomanda.
-# Campul „Caută setări” e si in capul panoului, al paginii /meniu si al paginii /setari (trimite la pagina aceasta).
+# Campul „Caută în meniu” e si in capul panoului, al paginii /meniu si al paginii /setari (trimite la pagina aceasta).
 #
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/cauta-setari?q=<text>                 rezultatele (cel mult 60, cele mai potrivite intai)
@@ -190,7 +190,7 @@ PAGINA = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Caută setări</title>
+<title>Caută în meniu</title>
 <style>__STIL_COMUN__
   main{max-width:880px;margin:0 auto;}
   h1{font-size:1.25rem;margin:0 0 14px;}
@@ -213,14 +213,14 @@ PAGINA = """<!DOCTYPE html>
 </head>
 <body>
 <main>
-<h1>Caută setări</h1>
+<h1>Caută în meniu</h1>
 <form class="cauta" id="forma" action="/cauta-setari" method="get" role="search">
-  <input type="search" id="text" name="q" maxlength="60" placeholder="Scrie un cuvânt, de exemplu subtitrări" aria-label="Caută setări" autocomplete="off" autofocus>
+  <input type="search" id="text" name="q" maxlength="60" placeholder="Scrie un cuvânt, de exemplu subtitrări" aria-label="Caută în meniu" autocomplete="off" autofocus>
 </form>
 <div class="stare"><span id="numar"></span><a id="meniu" href="/meniu">Tot meniul receptorului</a></div>
-<p class="mesaj" id="mesaj">Scrie câteva litere din numele setării.</p>
+<p class="mesaj" id="mesaj">Scrie câteva litere din numele meniului sau al setării.</p>
 <div id="rezultate"></div>
-<p class="nota">Aceleași rezultate ca pe televizor, în Meniu, „Setări”, „Caută setări” (sau tasta TEXT în orice meniu): meniurile și setările pe care le arată acum receptorul. Literele mari și diacriticele nu contează. La fiecare rezultat: pagina lui din interfața web, dacă are, sau „Deschide pe televizor”, cu rândul găsit deja ales.</p>
+<p class="nota">Aceleași rezultate ca pe televizor, la „Caută în meniu”, primul rând din orice pagină a meniului: meniurile și setările pe care le arată acum receptorul. Literele mari și diacriticele nu contează. La fiecare rezultat: pagina lui din interfața web, dacă are, sau „Deschide pe televizor”, cu rândul găsit deja ales.</p>
 </main>
 <script>
 var CFG = __CONFIG__;
@@ -267,14 +267,14 @@ function rezultat(r){
 function arata(d){
   var c = $("rezultate"); c.textContent = "";
   $("numar").textContent = "Rezultate: " + d.numar;
-  mesaj(d.numar ? "" : "Nicio setare nu se potrivește. Încearcă un alt cuvânt sau mai puține litere.");
+  mesaj(d.numar ? "" : "Nimic din meniu nu se potrivește. Încearcă un alt cuvânt sau mai puține litere.");
   d.rezultate.forEach(function(r){ c.appendChild(rezultat(r)); });
 }
 function cauta(){
   var text = $("text").value.trim();
   var nr = ++numarCerere;
   try { history.replaceState(null, "", adresa(location.pathname + (text ? "?q=" + encodeURIComponent(text) : ""))); } catch(e) {}
-  if(!text){ $("rezultate").textContent = ""; $("numar").textContent = ""; mesaj("Scrie câteva litere din numele setării."); return; }
+  if(!text){ $("rezultate").textContent = ""; $("numar").textContent = ""; mesaj("Scrie câteva litere din numele meniului sau al setării."); return; }
   cerere("/api/cauta-setari?q=" + encodeURIComponent(text)).then(function(d){
     if(nr !== numarCerere){ return; }
     if(!d.result){ mesaj(d.message, true); return; }
@@ -302,11 +302,11 @@ def N_(text):
 
 TEXTE_PAGINA = {
 	"html": (
-		N_("Caută setări"),
+		N_("Caută în meniu"),
 		N_("Tot meniul receptorului"),
-		N_("Scrie câteva litere din numele setării."),
-		N_("Aceleași rezultate ca pe televizor, în Meniu, „Setări”, „Caută setări” (sau tasta TEXT în orice "
-			"meniu): meniurile și setările pe care le arată acum receptorul. Literele mari și diacriticele "
+		N_("Scrie câteva litere din numele meniului sau al setării."),
+		N_("Aceleași rezultate ca pe televizor, la „Caută în meniu”, primul rând din orice pagină a meniului: "
+			"meniurile și setările pe care le arată acum receptorul. Literele mari și diacriticele "
 			"nu contează. La fiecare rezultat: pagina lui din interfața web, dacă are, sau „Deschide pe "
 			"televizor”, cu rândul găsit deja ales."),
 		N_("Scrie un cuvânt, de exemplu subtitrări"),
@@ -319,8 +319,8 @@ TEXTE_PAGINA = {
 		N_("Pagina web"),
 		N_("Deschide pe televizor"),
 		N_("Rezultate:"),
-		N_("Nicio setare nu se potrivește. Încearcă un alt cuvânt sau mai puține litere."),
-		N_("Scrie câteva litere din numele setării."),
+		N_("Nimic din meniu nu se potrivește. Încearcă un alt cuvânt sau mai puține litere."),
+		N_("Scrie câteva litere din numele meniului sau al setării."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 	),
 }

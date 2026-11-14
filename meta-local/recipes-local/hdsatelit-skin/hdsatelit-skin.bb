@@ -1,7 +1,11 @@
 SUMMARY = "Skinul HDSatelit"
 DESCRIPTION = "Skinul HDSatelit pentru enigma2 (1920x1080), cu fonturile si componentele lui Python. Monea Software pentru HD Satelit."
 LICENSE = "CLOSED"
-PV = "0.1.0"
+# Versiunea temei urca odata cu imaginea (0.7.5 si mai departe), ca o tema noua sa ajunga si prin actualizarea din meniu:
+# opkg ia numai o versiune mai mare, iar pana la 0.7.4 versiunea era fixa ("0.1.0"), deci receptoarele actualizate din meniu
+# pastrau tema veche. 0.7.5-r0 e mai nou decat 0.1.0-r0 si decat 0.1.0-r0.hdsN (actualizarile 0.6.x). Nimeni nu cere tema
+# cu o versiune anume (hdsatelit-base o cere fara versiune).
+PV = "${DISTRO_VERSION}"
 
 # arborele de instalare al skinului (dosarul skin/usr al sursei), pus sau montat doar-citire in /hds/skin;
 # o cale file:// absoluta se despacheteaza cu tot cu cale, deci sursa ajunge in skin/hds/skin

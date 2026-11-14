@@ -1,0 +1,37 @@
+# HD Satelit: regulile garzii de model pentru AX HD51 / AX 4K-BOX HD51 (masina hd51, MACHINEBUILD ax51), NECONFIRMAT
+# Aceeasi placa si acelasi driver ca Mut@nt HD51 (MACHINEBUILD mutant51): in OE-Alliance 6.0 cele doua imagini difera numai
+# prin desenul telecomenzii (oe-alliance-remote); comparatia din 12.11.2026 (STADIU-MHD.md) a gasit aceleasi 831 de pachete,
+# aceleasi 38 de module si acelasi nucleu. Deci o singura imagine ax51, pentru amandoua.
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom: receptor Broadcom (bcm7251s, SOC_FAMILY din hd51.conf), fara /proc/msp/sys, fara blkdevparts si fara
+# partitia deviceinfo. Garda citeste cipul din /proc/stb/info/chipset, tipul placii din /proc/stb/info/boxtype, sistemul din
+# root= si nucleul din kernel= al lui /proc/cmdline. hw= si partitions= sunt "-": pe aceasta familie nu se citesc.
+# chip=7251s si boxtype=hd51: MASURATE pe un AX HD51 al unui tester (darog69, forumul nostru 676 #2029, 12.11.2026, din
+# imaginea lui de atunci): /proc/stb/info/chipset = bcm7251s (garda scoate "bcm" din fata pe amandoua partile),
+# /proc/stb/info/boxtype = hd51, /proc/stb/info/model = hd51; /proc/stb/info are numai board_revision, boxtype, chipset,
+# model, release si version (fara vumodel, gbmodel, upd_path). Arborele dispozitivului: model BCM97251SSV, compatible
+# brcm,bcm7439b0 brcm,brcmstb (niciun nume de model cunoscut).
+# kernel_part si rootfs_part: MTD_KERNEL=mmcblk0p2 si MTD_ROOTFS=mmcblk0p3 (gfutures-oem.inc, randul ax51). Locul de baza
+# porneste cu "root=/dev/mmcblk0p3 rootsubdir=linuxrootfs1 kernel=/dev/mmcblk0p2" (fisierul STARTUP din partitia de
+# pornire, hdemmc_image_multiboot.bbclass); locurile 2-4 au nucleul pe p4, p5, p6 si sistemul in userdata (p8), deci
+# acolo garda vede pornirea din alt loc (multiboot) si nu hotaraste dupa partitii.
+# kernel_kib=8192: KERNEL_PARTITION_SIZE din hdemmc_image_multiboot.bbclass, MASURAT la tester: /proc/partitions are
+# mmcblk0 3817472 KiB, p1 3072, p2 8192, p3 1048576, p4-p6 8192, p7 262144, p8 2468864; /proc/cmdline la locul de baza
+# "... root=/dev/mmcblk0p3 rootsubdir=linuxrootfs1 kernel=/dev/mmcblk0p2 rw rootwait hd51_4.boxmode=12 ...".
+# confirmat=nu ramane pana porneste imaginea noastra pe aparat (fisa testerului).
+# Fara upd_path (nodul /proc/stb/info/upd_path nu exista pe aceasta placa, masurat).
+format=1
+distro=hdsatelit
+model=AX HD51
+machine=hd51
+machinebuild=ax51
+chip=7251s
+boxtype=hd51
+hw=-
+partitions=-
+kernel_part=mmcblk0p2
+kernel_kib=8192
+rootfs_part=mmcblk0p3
+confirmat=nu
+familie=broadcom

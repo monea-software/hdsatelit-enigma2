@@ -145,7 +145,7 @@ GRUPE = (
 			versiune="0.1.6", cuvant="peste o sută de alte date"),
 	)),
 	(N_("Setări și siguranță"), (
-		Functie(N_("Caută setări: scrii câteva litere cu cifrele telecomenzii și ajungi la setare."),
+		Functie(N_("Caută în meniu: câteva litere scrise cu telecomanda te duc la setare sau la meniu."),
 			meniu=("hds_cauta_setari",), cod=("lib/python/Screens/HdsCautaSetari.py",
 			"lib/python/Components/HdsCautaSetari.py"), versiune="0.2.4", cuvant="Caută setări"),
 		Functie(N_("Copia setărilor pe stick, pusă singură la loc după o actualizare."),

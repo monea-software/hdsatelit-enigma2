@@ -46,6 +46,7 @@
 # motorul raspunde, deci cablul e), titlul panoului (acelasi pe televizor si in web) spune o data pe
 # canal sa se verifice cablul (`indemn_cablu`), iar panoul ramane MILISECUNDE_INDEMN_CABLU ca sa se poata citi.
 
+import os
 import sys
 import time
 
@@ -163,6 +164,145 @@ def _semnalPrins():
 # lista satelitilor tunerului cu motor, pentru punctele de pe bolta (ecranul si pagina web); tinuta minte pe tuner
 SATELITI_TINUTI_S = 30.0
 _sateliti_tinuti = {}
+
+
+def desenDinSpate():
+	"""(din_spate, sud) pentru desenul rotirii (Screens/HdsDishMotor.py si pagina web /motor): setarea
+	config.usage.hds_motor_din_spate (Nu cand nu se poate citi) si longitudinea locului antenei in grade (Components/
+	HdsLocul.py; None cand locul nu e stabilit: atunci desenul e numai oglindit, fara sudul in varf)"""
+	try:
+		from Components.config import config
+		din_spate = bool(config.usage.hds_motor_din_spate.value)
+	except Exception:
+		din_spate = False
+	sud = None
+	if din_spate:
+		try:
+			from Components import HdsLocul
+			loc = HdsLocul.locul()
+			if loc is not None:
+				sud = loc[1] / 1000.0
+		except Exception:
+			sud = None
+	return din_spate, sud
+
+
+# ------------------------------------------------------------------ bolta intreaga (dorinelu, forum 795, 14.11.2026)
+# Cu locul antenei stabilit, desenul rotirii (televizor si web) arata tot arcul vazut din loc: capetele sunt orizontul din vest
+# si din est, sudul locului (unghiul motorului 0, "pozitia 0" USALS) e in varful curbei, iar punctele stau dupa unghiul motorului
+# (Components/HdsMotorViteza.unghiMotor), adica dupa cum se roteste antena. Marginile vin din Components/HdsMotorPlafon.margini
+# (acelasi calcul ca nucleul, DishMath). O limita a motorului pusa din "Rotirea antenei", cu pozitia stiuta (HdsMotorComenzi,
+# jurnalul limitelor), se marcheaza pe bolta; satelitii de dincolo de ea sau de sub orizont sunt "in afara".
+CALE_LAMEDB = "/etc/enigma2/lamedb"
+_pozitii_lamedb = {"cheie": None, "pozitii": frozenset()}
+
+
+def pozitiiCuCanale(cale=None):
+	"""Pozitiile orbitale (0..3599) care au transpondere in lista de canale (lamedb 4 sau 5), citite din nou numai cand
+	fisierul se schimba. Pe bolta intreaga se deseneaza numai satelitii folositi, nu tot satellites.xml."""
+	cale = cale or CALE_LAMEDB
+	try:
+		st = os.stat(cale)
+		cheie = (cale, st.st_mtime, st.st_size)
+	except OSError:
+		return frozenset()
+	if _pozitii_lamedb["cheie"] == cheie:
+		return _pozitii_lamedb["pozitii"]
+	pozitii = set()
+	try:
+		with open(cale, encoding="utf-8", errors="replace") as f:
+			in_transpondere = False
+			for rand in f:
+				rand = rand.strip()
+				if rand == "transponders":
+					in_transpondere = True
+					continue
+				if rand in ("end", "services"):
+					in_transpondere = False
+				if rand.startswith("t:"):
+					rand, in_transpondere = rand[2:], True
+				if not in_transpondere or len(rand) < 8 or rand[8:9] != ":":
+					continue
+				try:
+					orbital = int(rand[:8], 16) >> 16
+				except ValueError:
+					continue
+				if 0 <= orbital < 3600:
+					pozitii.add(orbital)
+	except (IOError, OSError):
+		pass
+	_pozitii_lamedb["cheie"], _pozitii_lamedb["pozitii"] = cheie, frozenset(pozitii)
+	return _pozitii_lamedb["pozitii"]
+
+
+def _capeteGrade(lat, lon):
+	"""(gradele satelitului de la orizontul din vest, din est), est pozitiv, din locul (lat, lon); None fara arc vizibil"""
+	from Components import HdsMotorPlafon as P
+	if not P.vizibil(lon, lat, lon):
+		return None
+	capete = []
+	for semn in (-1.0, 1.0):
+		jos, sus = 0.0, 90.0
+		for _i in range(40):
+			mijloc = (jos + sus) / 2.0
+			if P.vizibil(lon + semn * mijloc, lat, lon):
+				jos = mijloc
+			else:
+				sus = mijloc
+		g = lon + semn * jos
+		capete.append(((g + 180.0) % 360.0) - 180.0)
+	return capete[0], capete[1]
+
+
+def boltaVizibila(slot=None):
+	"""Bolta intreaga pentru locul stabilit, sau None (locul nestabilit, nimic vizibil, eroare): {"a": unghiul motorului la
+	capatul cel mai departat (scara desenului), "unghi_vest", "unghi_est", "grade_vest", "grade_est" (satelitul de la orizont),
+	"sud" (longitudinea locului = satelitul din sud), "lat", "limita_vest", "limita_est" (unghiul motorului al limitei puse, sau
+	None)}"""
+	try:
+		from Components import HdsLocul
+		from Components import HdsMotorPlafon as P
+		loc = HdsLocul.locul() if HdsLocul.stabilit() else None
+		if loc is None:
+			return None
+		lat, lon = loc[0] / 1000.0, loc[1] / 1000.0
+		margini = P.margini(lat, lon)
+		capete = _capeteGrade(lat, lon)
+		if margini is None or capete is None:
+			return None
+	except Exception:
+		return None
+	b = {"a": max(abs(margini[0]), abs(margini[1]), 1.0), "unghi_vest": margini[0], "unghi_est": margini[1],
+		"grade_vest": capete[0], "grade_est": capete[1], "sud": lon, "lat": lat, "limita_vest": None, "limita_est": None}
+	try:
+		from Components import HdsMotorComenzi as C
+		info = C.limiteInfo(slot)
+		if info.get("stare") != "oprite":
+			for parte in ("vest", "est"):
+				orbital = (info.get(parte) or {}).get("orbital", -1)
+				if orbital is not None and 0 <= int(orbital) < 3600:
+					b["limita_" + parte] = V.unghiMotor(orbitalToDegrees(int(orbital)), lat, lon)
+	except Exception:
+		pass
+	return b
+
+
+def unghiPeBolta(grade, bolta):
+	"""(unghiul motorului, in_afara) pentru satelitul de la `grade` (est pozitiv): in_afara = sub orizont sau dincolo de o
+	limita a motorului. Departe sub orizont (fara unghi in formula) unghiul e pus dincolo de capatul boltii, de partea lui."""
+	from Components import HdsMotorPlafon as P
+	unghi = V.unghiMotor(grade, bolta["lat"], bolta["sud"])
+	afara = unghi is None or not P.vizibil(grade, bolta["lat"], bolta["sud"])
+	if unghi is None:
+		# departe sub orizont (formula nu da unghi): dincolo de capatul boltii, de partea lui, ca sa fie totusi marcat
+		diferenta = ((grade - bolta["sud"] + 540.0) % 360.0) - 180.0
+		unghi = (bolta["a"] + 30.0) * (1.0 if diferenta >= 0 else -1.0)
+	if unghi is not None:
+		if bolta.get("limita_vest") is not None and unghi < bolta["limita_vest"] - 0.05:
+			afara = True
+		if bolta.get("limita_est") is not None and unghi > bolta["limita_est"] + 0.05:
+			afara = True
+	return unghi, afara
 
 
 def satelitiPeArc(slot):
@@ -639,6 +779,36 @@ def istoricTinta(stare):
 		return u""
 
 
+def boltaJson(stare):
+	"""bolta intreaga pentru pagina web /motor, sau None: scara, capetele (unghi si eticheta), sudul, limitele si unghiurile
+	plecarii, tintei, pozitiei de acum si ale satelitilor cu canale (cu "afara")"""
+	b = boltaVizibila(stare.get("slot"))
+	if b is None:
+		return None
+
+	def unghi(grade):
+		if grade is None:
+			return None
+		u, _afara = unghiPeBolta(grade, b)
+		return round(u, 2) if u is not None else None
+
+	cu_canale = pozitiiCuCanale()
+	sateliti = []
+	for orbital, grade in satelitiPeArc(stare.get("slot")):
+		if orbital not in cu_canale or orbital in (stare.get("de_la_orbital"), stare.get("la_orbital")):
+			continue
+		u, afara = unghiPeBolta(grade, b)
+		if u is not None:
+			sateliti.append({"orbital": orbital, "unghi": round(u, 2), "afara": bool(afara)})
+	return {"a": round(b["a"], 2), "unghi_vest": round(b["unghi_vest"], 2), "unghi_est": round(b["unghi_est"], 2),
+		"vest_scurt": HdsGrade.pozitie(b["grade_vest"]), "est_scurt": HdsGrade.pozitie(b["grade_est"]),
+		"sud_scurt": HdsGrade.pozitie(b["sud"]),
+		"limita_vest": round(b["limita_vest"], 2) if b["limita_vest"] is not None else None,
+		"limita_est": round(b["limita_est"], 2) if b["limita_est"] is not None else None,
+		"de_la": unghi(stare.get("de_la_grade")), "la": unghi(stare.get("la_grade")), "acum": unghi(stare.get("pozitie_grade")),
+		"sateliti": sateliti}
+
+
 def stareJson():
 	"""aceeasi stare, cu numere simple, pentru interfata web (fara obiecte enigma)"""
 	stare = stareMotor()
@@ -657,6 +827,11 @@ def stareJson():
 	iesire["la_scurt"] = HdsGrade.pozitie(stare["la_grade"]) if stare["la_grade"] is not None else ""
 	# satelitii tunerului, pentru punctele de pe bolta din desenul paginii (numai cifre, fara nume)
 	iesire["sateliti"] = [{"orbital": o, "grade": g} for o, g in satelitiPeArc(stare["slot"])] if stare["activ"] else []
+	# desenul vazut din spatele antenei (aceeasi setare ca pe televizor) si sudul (longitudinea locului) pentru varful curbei
+	iesire["din_spate"], iesire["sud_grade"] = desenDinSpate()
+	# bolta intreaga (aceeasi ca pe televizor, Screens/HdsDishMotor.py): unghiurile motorului, gata socotite, ca pagina sa nu
+	# repete formulele USALS
+	iesire["bolta"] = boltaJson(stare) if stare.get("activ") else None
 	# numai aici (pagina web a antenei), nu in stareMotor (televizorul)
 	iesire["readucere"] = _readucere()
 	# istoricul semnalului pe pozitia tinta, acelasi rand ca pe televizor (Screens/HdsDishMotor.py)

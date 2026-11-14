@@ -22,6 +22,8 @@
 #include <lib/dvb_ci/dvbci_appmgr.h>
 #include <lib/dvb_ci/dvbci_mmi.h>
 #include <lib/dvb_ci/dvbci_ccmgr.h>
+#include <lib/dvb_ci/hdscica.h>
+#include <sys/stat.h>
 #include <lib/dvb/frontend.h>
 
 #include <dvbsi++/ca_program_map_section.h>
@@ -1121,6 +1123,9 @@ int eDVBCIInterfaces::getCIPlusState(int slotid)
 	eDVBCISlot *slot = getSlot(slotid);
 	if (!slot || !slot->getCCManager())
 		return 0;
+	/* 3 = cheia CI+ a modulului refuzata de driver pe toate dispozitivele caN potrivite (imaginea s-ar opri) */
+	if (slot->m_ciplus_cheie_refuzata)
+		return 3;
 	return slot->m_ciplus_keys ? 2 : 1;
 }
 
@@ -1249,6 +1254,9 @@ eDVBCISlot::eDVBCISlot(eMainloop *context, int nr)
 	m_tunernum = -1;
 	m_ciPlusRoutingDone = false;
 	m_ciplus_keys = false;
+	m_ca_decode_demux_id = -1;
+	m_ca_ales = -1;
+	m_ciplus_cheie_refuzata = false;
 	m_ciplus_routing_tunernum = -1;
 	use_count = 0;
 	linked_next = 0;
@@ -1390,9 +1398,52 @@ void eDVBCISlot::readCIPlusSettings()
 	snprintf(cheie, sizeof(cheie), "config.ci.%d.disable_operator_profile", slotid);
 	m_operator_profiles_disabled = hdsSetareCi(cheie, "false") == "true";
 	snprintf(cheie, sizeof(cheie), "config.ci.%d.alternative_ca_handling", slotid);
-	m_alt_ca_handling = atoi(hdsSetareCi(cheie, "0").c_str());
-	if (m_alt_ca_handling < 0 || m_alt_ca_handling > 3)
-		m_alt_ca_handling = 0;
+	/* „auto” (implicit din 0.7.5) sau lipsa = dispozitivul il alege receptorul (lib/dvb_ci/hdscica.h); 0-3 alese de mana
+	   lucreaza exact ca in OE-Alliance */
+	m_alt_ca_handling = hdsCaOptiune(hdsSetareCi(cheie, "auto").c_str());
+	/* felul dispozitivului care a primit cheia ultima data */
+	m_ca_ales = -1;
+	m_ciplus_cheie_refuzata = false;
+	char cale[80];
+	snprintf(cale, sizeof(cale), HDS_CA_FISIER, slotid);
+	FILE *f = fopen(cale, "r");
+	if (f)
+	{
+		char text[8] = "";
+		if (fgets(text, sizeof(text), f))
+			m_ca_ales = hdsCaFel(text);
+		fclose(f);
+	}
+}
+
+/* HD Satelit: felul dispozitivului caN care a primit cheia CI+; scris pe disc numai cand se schimba, ca la urmatoarea
+   pornire sa fie incercat intai */
+void eDVBCISlot::setCaAles(int fel)
+{
+	if (fel < 0 || fel >= HDS_CA_FELURI || fel == m_ca_ales)
+		return;
+	m_ca_ales = fel;
+	mkdir("/etc/enigma2/hdsatelit", 0755);
+	char cale[80];
+	snprintf(cale, sizeof(cale), HDS_CA_FISIER, slotid);
+	FILE *f = fopen(cale, "w");
+	if (f)
+	{
+		fprintf(f, "%d\n", fel);
+		fclose(f);
+	}
+	hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d CI+: dispozitivul de descifrare tinut minte: felul %d (%s)", slotid, fel,
+		fel == HDS_CA_DATE ? "ca<demux>" : fel == HDS_CA_DATE_PLUS1 ? "ca<demux+1>" : "ca<demuxul decodorului>");
+}
+
+/* HD Satelit: cheia CI+ refuzata pe toate dispozitivele (sau primita din nou): starea CI+ a slotului se schimba, iar
+   ecranul (Screens/Ci.py, CiMessageHandler) si pagina web o afla prin ciStateChanged */
+void eDVBCISlot::setCheieCiplusRefuzata(bool refuzata)
+{
+	if (refuzata == m_ciplus_cheie_refuzata)
+		return;
+	m_ciplus_cheie_refuzata = refuzata;
+	eDVBCI_UI::getInstance()->anuntaStareCiplus(slotid);
 }
 
 void eDVBCISlot::setCIPlusRoutingParameter(int tunernum, const std::string &input, const std::string &ci_input)
@@ -1416,6 +1467,8 @@ int eDVBCISlot::setCaParameter(eDVBServicePMTHandler *pmthandler)
 	m_ca_demux_id = -1;
 	if (!pmthandler->getDataDemux(demux) && demux && !demux->getCADemuxID(dmx_id))
 		m_ca_demux_id = dmx_id;
+	/* demuxul decodorului, numai cand e deja aflat (fara sa ceara alt demux): al treilea dispozitiv de incercat */
+	m_ca_decode_demux_id = pmthandler->getDecodeDemuxNum();
 
 	pmthandler->getServiceReference(ref);
 	m_program_number = ref.getServiceID().get();
@@ -1444,7 +1497,7 @@ int eDVBCISlot::setCaParameter(eDVBServicePMTHandler *pmthandler)
 			m_tunernum = -1;
 #endif
 	}
-	eDebug("[CI%d] setCaParameter demux %d tuner %d program %04x", slotid, m_ca_demux_id, m_tunernum, m_program_number);
+	eDebug("[CI%d] setCaParameter demux %d (decodor %d) tuner %d program %04x", slotid, m_ca_demux_id, m_ca_decode_demux_id, m_tunernum, m_program_number);
 	return 0;
 }
 
@@ -1460,6 +1513,14 @@ int eDVBCISlot::reset()
 
 	if (fd < 0)  // slotul oprit sau inca neinceput (intarzierea pornirii)
 		return -1;
+
+	/* HD Satelit (CI+ pe AX HD51, forumul 479): dupa resetare modulul isi deschide sesiuni noi (transportul se reia de la
+	   zero); cele vechi se sterg aici, ca la scoaterea modulului. Altfel managerul CI+ vechi tinea deschis dispozitivul caN
+	   („can not open /dev/dvb/adapter0/ca0” la cel nou, darog69, 13.11.2026 21:11), iar optiunile CI+ schimbate din meniu
+	   (Screens/Ci.py reseteaza modulul dupa ele) nu ajungeau la nucleu: se citeau numai la introducerea modulului. */
+	eDVBCISession::deleteSessions(this);
+	m_ciplus_keys = false;
+	readCIPlusSettings();
 
 	if (state == stateInvalid)
 	{

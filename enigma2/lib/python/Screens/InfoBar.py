@@ -18,7 +18,7 @@ from Screens.InfoBarGenerics import InfoBarShowHide, \
 	InfoBarServiceNotifications, InfoBarPVRState, InfoBarCueSheetSupport, InfoBarSimpleEventView, \
 	InfoBarSummarySupport, InfoBarMoviePlayerSummarySupport, InfoBarTimeshiftState, InfoBarTeletextPlugin, InfoBarExtensions, \
 	InfoBarSubtitleSupport, InfoBarPiP, InfoBarPlugins, InfoBarServiceErrorPopupSupport, InfoBarJobman, \
-	InfoBarFilmRefuz
+	InfoBarFilmRefuz, InfoBarScreenSaver
 
 profile("LOAD:InitBar_Components")
 from Components.ActionMap import HelpableActionMap
@@ -267,6 +267,17 @@ def hdsFaActiuneaLunga(ecran, actiune):
 		ecran.openServiceList()
 	elif actiune == "favourites":
 		ecran.hdsFavorite()
+	elif actiune == "current_transponder":
+		# lista direct in "Transponder curent" (ChannelSelection.hdsDeschideTransponderul); EXIT urca in lista lui
+		lista = getattr(ecran, "servicelist", None)
+		deschide = getattr(lista, "hdsDeschideTransponderul", None)
+		if deschide is not None and deschide():
+			ecran.session.execDialog(lista)
+		else:
+			from Screens.MessageBox import MessageBox
+			ecran.session.open(MessageBox,
+				_("Canalul de acum nu vine de pe un transponder (de exemplu IPTV sau o înregistrare)."),
+				MessageBox.TYPE_INFO, timeout=6)
 	elif actiune == "movies":
 		ecran.showMovies()
 	elif actiune == "record":
@@ -342,7 +353,7 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 	InfoBarSubserviceSelection, InfoBarTimeshift, InfoBarSeek,
 	InfoBarSummarySupport, InfoBarTimeshiftState, InfoBarTeletextPlugin, InfoBarExtensions,
 	InfoBarPiP, InfoBarPlugins, InfoBarSubtitleSupport, InfoBarServiceErrorPopupSupport, InfoBarJobman,
-	InfoBarFilmRefuz, Screen):
+	InfoBarFilmRefuz, InfoBarScreenSaver, Screen):
 	
 	ALLOW_SUSPEND = True
 	instance = None
@@ -398,7 +409,7 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 				InfoBarAdditionalInfo, InfoBarNotifications, InfoBarDish, InfoBarSubserviceSelection, \
 				InfoBarTimeshift, InfoBarSeek, InfoBarSummarySupport, InfoBarTimeshiftState, \
 				InfoBarTeletextPlugin, InfoBarExtensions, InfoBarPiP, InfoBarSubtitleSupport, InfoBarJobman, \
-				InfoBarPlugins, InfoBarServiceErrorPopupSupport, InfoBarFilmRefuz:
+				InfoBarPlugins, InfoBarServiceErrorPopupSupport, InfoBarFilmRefuz, InfoBarScreenSaver:
 			x.__init__(self)
 
 		# Subcanalele raman accesibile si din lista extensiilor.
@@ -856,7 +867,8 @@ class MoviePlayer(InfoBarBase, InfoBarShowHide, \
 		InfoBarSeek, InfoBarShowMovies, InfoBarAudioSelection, InfoBarSubtitleSelection, HelpableScreen, InfoBarNotifications,
 		InfoBarServiceNotifications, InfoBarPVRState, InfoBarCueSheetSupport, InfoBarSimpleEventView,
 		InfoBarMoviePlayerSummarySupport, InfoBarSubtitleSupport, Screen, InfoBarTeletextPlugin,
-		InfoBarServiceErrorPopupSupport, InfoBarExtensions, InfoBarPlugins, InfoBarPiP, InfoBarFilmRefuz):
+		InfoBarServiceErrorPopupSupport, InfoBarExtensions, InfoBarPlugins, InfoBarPiP, InfoBarFilmRefuz,
+		InfoBarScreenSaver):
 
 	ENABLE_RESUME_SUPPORT = True
 	ALLOW_SUSPEND = True
@@ -883,7 +895,7 @@ class MoviePlayer(InfoBarBase, InfoBarShowHide, \
 				InfoBarServiceNotifications, InfoBarPVRState, InfoBarCueSheetSupport, \
 				InfoBarMoviePlayerSummarySupport, InfoBarSubtitleSupport, \
 				InfoBarTeletextPlugin, InfoBarServiceErrorPopupSupport, InfoBarExtensions, \
-				InfoBarPlugins, InfoBarPiP, InfoBarFilmRefuz:
+				InfoBarPlugins, InfoBarPiP, InfoBarFilmRefuz, InfoBarScreenSaver:
 			x.__init__(self)
 
 		# 0.2.6: editorul de marcaje (Plugins/Extensions/HdsCutListEditor) e al

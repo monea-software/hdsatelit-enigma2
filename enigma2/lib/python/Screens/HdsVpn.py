@@ -14,7 +14,13 @@
 # sagetile si OK: pornirea/oprirea, furnizorul, serverul (STANGA/DREAPTA trec la serverul de alaturi, OK deschide
 # lista), numele si parola (tastatura de pe ecran; dupa salvare nu se mai arata), importul de pe stick, ce trece prin
 # VPN, oprirea totala la caderea VPN-ului, pornirea odata cu receptorul, adresa vazuta pe internet, instalarea
-# programelor cand lipsesc, stergerile (cu "Nu" ales dinainte) si "Inchide". Sub lista, explicatia randului ales si
+# programelor cand lipsesc, stergerile (cu "Nu" ales dinainte) si "Inchide".
+# Cu servere din mai multe tari (tara se afla singura din numele fisierului sau adresa serverului, HdsVpn.taraProfil),
+# deasupra serverului e randul "Tara": STANGA/DREAPTA trec la tara de alaturi (primul ei server), OK deschide lista
+# tarilor; OK pe "Serverul" arata atunci numai serverele tarii alese, iar STANGA/DREAPTA pe el merg prin toate
+# serverele, in ordinea tarilor. Cu o singura tara ecranul ramane ca inainte.
+# "Reporneste VPN-ul" (numai cu VPN-ul pornit) face legatura din nou, cu acelasi server; "Testeaza viteza" descarca cel
+# mult 10 secunde de la un server public de test (prin VPN, cand e pornit) si arata rezultatul. Sub lista, explicatia randului ales si
 # rezultatul ultimei comenzi. VERDE porneste sau opreste VPN-ul, GALBEN afla adresa vazuta pe internet.
 #
 # Toata logica e in Components/HdsVpn.py (aceeasi in pagina web /vpn): ecranul citeste stare() la fiecare CITIRE_MS si
@@ -159,17 +165,42 @@ MOD = "mod"
 OPRIRE = "oprire"
 LA_PORNIRE = "la_pornire"
 IP = "ip"
+TARA = "tara"
+REPORNESTE = "reporneste"
+VITEZA = "viteza"
 STERGE = "sterge"
 STERGE_TOATE = "sterge_toate"
 STERGE_CONT = "sterge_cont"
 INCHIDE = "inchide"
 # randurile care pornesc o lucrare (cat merge alta, OK spune intai sa astepti)
-CU_LUCRARE = (COMUTA, INSTALEAZA, STICK, IP, ADAUGA)
-CU_SAGETI = (FURNIZOR, SERVER, MOD, OPRIRE, LA_PORNIRE)
+CU_LUCRARE = (COMUTA, INSTALEAZA, STICK, IP, ADAUGA, REPORNESTE, VITEZA)
+CU_SAGETI = (FURNIZOR, TARA, SERVER, MOD, OPRIRE, LA_PORNIRE)
 
 
 def _da(v):
 	return _("da") if v else _("nu")
+
+
+def tariMai(s):
+	"""Tarile serverelor, numai cand sunt cel putin doua (altfel randul "Tara" lipseste)."""
+	tari = s.get("tari") or []
+	return tari if len(tari) > 1 else []
+
+
+def taraAleasa(s):
+	"""Codul tarii serverului ales; fara server ales, prima tara."""
+	if s.get("profil"):
+		return s["profil"].get("tara") or ""
+	tari = s.get("tari") or []
+	return tari[0]["cod"] if tari else ""
+
+
+def serverePeTara(s):
+	"""Serverele aratate in lista si la STANGA/DREAPTA: ale tarii alese cand sunt mai multe tari, altfel toate."""
+	if not tariMai(s):
+		return list(s["profiluri"])
+	cod = taraAleasa(s)
+	return [p for p in s["profiluri"] if (p.get("tara") or "") == cod]
 
 
 def culoareStare(s):
@@ -186,15 +217,25 @@ def randuri(s):
 		r.append(("%s: %s" % (V.textFel(fel), _("nu merge pe acest receptor")), FURNIZOR, s.get("text_indisponibil", "")))
 	if s["pornit"] or s["legatura"] in ("conectat", "se_conecteaza", "blocat"):
 		r.append((_("VPN: pornit"), COMUTA, _("OK oprește VPN-ul. Internetul merge apoi direct, prin rețeaua ta.")))
+		if s["pornit"]:
+			r.append((_("Repornește VPN-ul"), REPORNESTE,
+				_("OK face legătura din nou, cu același server. Ajută când VPN-ul s-a blocat sau merge greu.")))
 	else:
 		r.append((_("VPN: oprit"), COMUTA, _("OK pornește VPN-ul cu serverul ales.")))
 	r.append(("%s: %s" % (_("Furnizorul"), V.textFurnizor(s["furnizor"])), FURNIZOR, V.textCumIeiFisierele(s["furnizor"])))
 	# ecranul furnizorilor fara fisiere (Screens/HdsVpnFurnizor.py): contul si tara, receptorul face restul
 	r.append((_("Alege furnizorul (fără fișiere)"), FARA_FISIERE,
 		_("NordVPN, Surfshark, PIA, Mullvad: scrii contul și alegi țara; receptorul face restul.")))
+	tari = tariMai(s)
+	if tari:
+		cod = taraAleasa(s)
+		t = [x for x in tari if x["cod"] == cod]
+		nume = t[0]["nume"] if t else V.numeTara(cod)
+		r.append(("%s: %s (%d)" % (_("Țara"), nume, len(serverePeTara(s))), TARA,
+			_("STÂNGA/DREAPTA: țara de alături, cu primul ei server. OK: lista țărilor (%d).") % len(tari)))
 	if s["profil"]:
 		r.append(("%s: %s" % (_("Serverul"), s["profil"]["titlu"]), SERVER,
-			_("STÂNGA/DREAPTA: serverul de alături. OK: lista serverelor (%d).") % s["nr_profiluri"]))
+			_("STÂNGA/DREAPTA: serverul de alături. OK: lista serverelor (%d).") % len(serverePeTara(s))))
 	else:
 		r.append((_("Serverul: niciunul ales"), SERVER, _("OK: lista serverelor (%d). Fără servere, importă întâi fișierele.")
 			% s["nr_profiluri"]))
@@ -219,6 +260,10 @@ def randuri(s):
 	r.append(("%s: %s" % (_("Pornește odată cu receptorul"), _da(s["la_pornire"])), LA_PORNIRE,
 		_("VPN-ul pornește singur după fiecare pornire a receptorului, dacă era pornit.")))
 	r.append((_("Verifică adresa văzută pe internet"), IP, _("Află adresa IP și țara pe care le văd site-urile acum.")))
+	v = s.get("viteza")
+	r.append(("%s: %s" % (_("Testează viteza"), V.textViteza(v, scurt=True)) if v else _("Testează viteza"), VITEZA,
+		V.textViteza(v) if v else _("Descarcă cel mult 10 secunde de la un server public de test și arată viteza. "
+			"Cu VPN-ul pornit, viteza se măsoară prin VPN.")))
 	if s["profil"]:
 		r.append((_("Șterge serverul ales"), STERGE, _("Șterge de pe receptor fișierul serverului %s.") % s["profil"]["titlu"]))
 	if s["nr_profiluri"]:
@@ -374,7 +419,14 @@ class HdsVpn(Screen):
 			lista = s.get("furnizori") or list(V.FURNIZORI)
 			i = lista.index(s["furnizor"]) if s["furnizor"] in lista else 0
 			self._schimba(furnizor=lista[(i + pas) % len(lista)])
+		elif a == TARA:
+			tari = tariMai(s)
+			coduri = [t["cod"] for t in tari]
+			cod = taraAleasa(s)
+			i = coduri.index(cod) if cod in coduri else -1
+			self._schimba(profil=tari[(i + pas) % len(tari)]["primul"])
 		elif a == SERVER:
+			# toate serverele, in ordinea tarilor: dupa ultimul server al unei tari vine primul al tarii urmatoare
 			lista = s["profiluri"]
 			if not lista:
 				self._mesaj(_("Nu sunt servere pentru acest furnizor. Importă întâi fișierele."))
@@ -423,12 +475,24 @@ class HdsVpn(Screen):
 			lista = [(V.textFurnizor(f), f) for f in chei]
 			self.session.openWithCallback(self._furnizorAles, ChoiceBox, title=_("Furnizorul VPN"), list=lista,
 				selection=chei.index(s["furnizor"]) if s["furnizor"] in chei else 0)
+		elif a == TARA:
+			tari = tariMai(s)
+			coduri = [t["cod"] for t in tari]
+			lista = [("%s (%d)" % (t["nume"], t["nr"]), t["primul"]) for t in tari]
+			cod = taraAleasa(s)
+			self.session.openWithCallback(self._serverAles, ChoiceBox, title=_("Țara"), list=lista,
+				selection=coduri.index(cod) if cod in coduri else 0)
+		elif a == REPORNESTE:
+			self._lucrare(V.pornesteRepornirea)
+		elif a == VITEZA:
+			self._lucrare(V.pornesteViteza)
 		elif a == SERVER:
-			if not s["profiluri"]:
+			servere = serverePeTara(s)
+			if not servere:
 				self._mesaj(_("Nu sunt servere pentru acest furnizor. Importă întâi fișierele."))
 				return
-			lista = [(p["titlu"], p["id"]) for p in s["profiluri"]]
-			ids = [p["id"] for p in s["profiluri"]]
+			lista = [(p["titlu"], p["id"]) for p in servere]
+			ids = [p["id"] for p in servere]
 			ales = ids.index(s["profil"]["id"]) if (s["profil"] and s["profil"]["id"] in ids) else 0
 			self.session.openWithCallback(self._serverAles, ChoiceBox, title=_("Serverul"), list=lista, selection=ales)
 		elif a == CONT:

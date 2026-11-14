@@ -47,6 +47,9 @@ PISTA_MAX = 250
 PAS_MIN, PAS_MAX, PAS_IMPLICIT = 1, 10, 5
 # cat sta bara volumului pe ecran dupa ultima apasare, in secunde (3 = cat statea mereu, Components/VolumeControl.py)
 AFISARE_MIN, AFISARE_MAX, AFISARE_IMPLICIT = 1, 10, 3
+# cat sta semnul de mut pe ecran, in secunde; "0" = mereu (cum statea inainte). tfrc, LinuxSat 164122 #970392: sa plece
+# singur, ca bara volumului. Afisajul din fata il arata mai departe (Components/HdsAfisaj.py asculta numai onShow).
+AFISARE_MUT_IMPLICIT = 5
 VOLUM_EGAL = ("oprit", "usor", "puternic")
 # atributele AVC pe trepte (limitele driverului: prag -40..-16 dB, castig 0..8 dB, limita -40..0 dB, atac si revenire
 # 20..2000 ms). Ordinea scrierii: fiecare comanda schimba un atribut si le verifica pe toate, deci timpii intai, apoi
@@ -101,6 +104,8 @@ RANDURI = (
 		N_("Cât crește sau scade volumul la o apăsare pe tastele de volum (volumul merge de la 0 la 100)."), None),
 	("afisare", "afisare_volum", N_("Cât stă volumul pe ecran"),
 		N_("Câte secunde rămâne bara volumului pe ecran după ultima apăsare pe tastele de volum."), None),
+	("mut", "afisare_mut", N_("Cât stă semnul de mut pe ecran"),
+		N_("Câte secunde rămâne semnul de mut pe ecran după apăsarea pe MUTE. Mereu: semnul stă până pornește din nou sunetul."), None),
 	("canal", "volum_pe_canal", N_("Volumul ținut minte pe canal"),
 		N_("Da: fiecare canal pornește cu volumul la care l-ai lăsat. Un canal la care nu ai schimbat volumul îl păstrează pe cel de acum."), None),
 	("egal", "volum_egal", N_("Volum egal între canale"),
@@ -144,6 +149,11 @@ def alegeriPas():
 def alegeriAfisare():
 	"""„1 s” ... „10 s”: simbolul secundei, ca „ms” la intarzieri, la fel in orice limba si fara plural."""
 	return [(str(v), "%d s" % v) for v in range(AFISARE_MIN, AFISARE_MAX + 1)]
+
+
+def alegeriAfisareMut():
+	"""Alegerile: Mereu, apoi 1 s ... 10 s (textul Mereu se traduce la afisare, ca celelalte alegeri)."""
+	return [("0", N_("Mereu"))] + alegeriAfisare()
 
 
 # ---------------------------------------------------------------- placa de sunet (curat, fara enigma)
@@ -499,6 +509,7 @@ def initConfig():
 		# textele alegerilor raman netraduse aici (limba nu e inca pusa); ConfigSelection si web-ul le traduc la afisare
 		c.pas_volum = ConfigSelection(choices=alegeriPas(), default=str(PAS_IMPLICIT))
 		c.afisare_volum = ConfigSelection(choices=alegeriAfisare(), default=str(AFISARE_IMPLICIT))
+		c.afisare_mut = ConfigSelection(choices=alegeriAfisareMut(), default=str(AFISARE_MUT_IMPLICIT))
 		c.volum_pe_canal = ConfigYesNo(default=False)
 		c.volum_egal = ConfigSelection(choices=[(k, NUME_VOLUM_EGAL[k]) for k in VOLUM_EGAL], default="oprit")
 		c.intarziere_hdmi = ConfigSelection(choices=alegeriIntarziere(), default="0")
@@ -527,6 +538,12 @@ def pasVolum():
 def afisareVolumMs():
 	"""Cat sta bara volumului pe ecran (Components/VolumeControl.py), in ms; 3000 fara setari."""
 	return 1000 * limiteaza(_valoare("afisare_volum", AFISARE_IMPLICIT), AFISARE_MIN, AFISARE_MAX)
+
+
+def afisareMutMs():
+	"""Cat sta semnul de mut pe ecran (Components/VolumeControl.py), in ms; 0 = mereu; 5000 fara setari."""
+	v = limiteaza(_valoare("afisare_mut", AFISARE_MUT_IMPLICIT), 0, AFISARE_MAX)
+	return 1000 * v
 
 
 def volumPeCanal():
@@ -788,7 +805,12 @@ def _aplicaVolum():
 			if inst is not None:
 				inst.volumeDialog.setValue(0 if vc.isMuted() else vc.getVolume())
 				if pune and semn:
-					inst.muteDialog.show()
+					# semnul pleaca singur dupa setarea "Cât stă semnul de mut pe ecran"
+					arata = getattr(inst, "arataMut", None)
+					if arata is not None:
+						arata()
+					else:
+						inst.muteDialog.show()
 		except Exception:
 			pass
 	except Exception as e:

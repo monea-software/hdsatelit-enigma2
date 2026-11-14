@@ -162,9 +162,18 @@ void gFBDC::setResolution(int xres, int yres)
 	if ((m_xres == xres) && (m_yres == yres))
 		return;
 
-	m_xres = xres; m_yres = yres;
+	if (fb->SetMode(xres, yres, 32) < 0)
+	{
+		// HD Satelit: driverul a refuzat marimea ceruta de tema (hi_fb pe HiSilicon nu trece de 1920x1080; Fury-FHD
+		// pe 2K, forum 948). Suprafata se face pe modul ramas pe placa, nu pe cel cerut (stride-ul ar fi fost al
+		// latimii vechi: randuri suprapuse). skin.py vede refuzul prin gMainDC.resolutionX()/resolutionY().
+		xres = fb->getXRes();
+		yres = fb->getYRes();
+		if (xres <= 0 || yres <= 0 || ((m_xres == xres) && (m_yres == yres) && m_pixmap))
+			return;
+	}
 
-	fb->SetMode(m_xres, m_yres, 32);
+	m_xres = xres; m_yres = yres;
 
 	for (int y=0; y<m_yres; y++)	// make whole screen transparent
 		memset(fb->lfb+y*fb->Stride(), 0x00, fb->Stride());
@@ -201,6 +210,10 @@ void gFBDC::setResolution(int xres, int yres)
 
 	eDebug("%dkB available for acceleration surfaces.", (fb->Available() - fb_size)/1024);
 	eDebug("resolution: %d x %d x %d (stride: %d)", surface.x, surface.y, surface.bpp, fb->Stride());
+	// HD Satelit (R2K 0.7.5): un rand pentru rapoartele testerilor (2K pe HiSilicon cere hi_fb.ko peticit si memorie video):
+	// marimea interfetei, paginile, memoria video a placii si cat ramane pentru accelerare
+	eDebug("[gFBDC] interfata %dx%d: %d pagini, memoria video %d kB, accelerare %d kB", surface.x, surface.y,
+		m_enable_double_buffering ? 2 : 1, fb->Available() / 1024, (fb->Available() - fb_size) / 1024);
 
 	if (gAccel::getInstance())
 		gAccel::getInstance()->setAccelMemorySpace(fb->lfb + fb_size, surface.data_phys + fb_size, fb->Available() - fb_size);

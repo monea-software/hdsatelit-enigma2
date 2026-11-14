@@ -69,6 +69,11 @@ MESAJ_MISCARE = N_("Antena se rotește acum. Locul se schimbă după ce se opre�
 MESAJ_INREGISTRARE = N_("O înregistrare folosește acum tunerul. Locul se schimbă după ce se termină.")
 MESAJ_LIMITE = N_("Latitudinea se scrie între 0 și 90 de grade, longitudinea între 0 și 180 de grade.")
 MESAJ_ORAS = N_("Orașul ales nu e în tabel.")
+# locul scris de mana departe de tara receptorului, cu o varianta apropiata (emisferele schimbate sau latitudinea cu
+# longitudinea inversate): intrebarea de pe televizor si din pagina web; "Da" scrie varianta, "Nu" scrie ce s-a scris
+# satelitul sub orizont din locul antenei (acelasi calcul ca nucleul, Components/DishMath.py): fara comanda USALS spre el
+MESAJ_SUB_ORIZONT = N_("Din locul antenei (%(loc)s), satelitul %(sat)s e sub orizont, deci motorul nu rotește antena spre el. Verifică Locul antenei: emisfera (Nord sau Sud) și partea față de Greenwich (Est sau Vest).")
+MESAJ_DEPARTE = N_("Locul scris (%(scris)s) e departe de %(tara)s. Probabil emisfera (Nord sau Sud) ori partea față de Greenwich (Est sau Vest) e aleasă greșit. Salvez %(propus)s?")
 TEXT_NESTABILIT = N_("nestabilit")
 TEXT_MANA = N_("scris de mână")
 TEXT_MIGRARE = N_("din setările tunerului de dinainte")
@@ -632,6 +637,85 @@ def seteaza(lat_mii, lon_mii, tara="", oras="", sursa=SURSA_MANA, actualizeaza_s
 	return True, ""
 
 
+# Locul scris de mana, judecat dupa tara receptorului (ROT, 14.11.2026, asistenta 681415, Turcia): omul alesese corect
+# Sultanbeyli din tabel, apoi a scris de mana "30,000 S, 41,000 V" si "41,000 S, 29,000 V" (numerele bune, emisferele
+# schimbate cu sagetile, prima data si latitudinea cu longitudinea inversate, ordinea din Setarile tunerului altor
+# imagini). USALS a trimis antena spre capatul cursei, iar ecranul spunea mereu ca se misca. Un loc mai departe de
+# PRAG_DEPARTE_KM de orice oras al tarii din tabel, cu o varianta apropiata, se intreaba inainte de scriere.
+PRAG_DEPARTE_KM = 800
+
+
+def _distantaKm(lat1, lon1, lat2, lon2):
+	"""distanta pe glob (formula haversinus, raza medie 6371 km), coordonatele in grade"""
+	import math
+	f1, f2 = math.radians(lat1), math.radians(lat2)
+	df, dl = f2 - f1, math.radians(lon2 - lon1)
+	a = math.sin(df / 2) ** 2 + math.cos(f1) * math.cos(f2) * math.sin(dl / 2) ** 2
+	return 2 * 6371.0 * math.asin(min(1.0, math.sqrt(a)))
+
+
+def taraVerificare():
+	"""Tara dupa care se judeca un loc scris de mana: cea aleasa ultima data din tabel, altfel tara limbii meniului
+	(NimManager.taraReceptorului); "" cand niciuna nu are orase in tabel."""
+	try:
+		tara = initConfig().tara.value
+		if tara and orase(tara):
+			return tara
+	except Exception:
+		pass
+	try:
+		from Components import NimManager
+		tara = NimManager.taraReceptorului()
+		if tara and orase(tara):
+			return tara
+	except Exception:
+		pass
+	return ""
+
+
+def variantaPotrivita(lat_mii, lon_mii, tara=None):
+	"""Pentru un loc scris de mana: (lat_mii, lon_mii) ale variantei cu emisferele schimbate sau cu latitudinea si
+	longitudinea inversate care e aproape de tara (cel mult PRAG_DEPARTE_KM de un oras al ei din tabel), cand locul scris
+	e departe de toate orasele ei; altfel None (locul pare bun, tara nu se stie sau nicio varianta nu se potriveste:
+	omul poate fi chiar in alta tara)."""
+	tara = taraVerificare() if tara is None else tara
+	lista = orase(tara) if tara else []
+	if not lista:
+		return None
+	lat_mii, lon_mii = int(lat_mii), int(lon_mii)
+
+	def departe(lat, lon):
+		return min(_distantaKm(lat / 1000.0, lon / 1000.0, o[1] / 1000.0, o[2] / 1000.0) for o in lista)
+
+	if departe(lat_mii, lon_mii) <= PRAG_DEPARTE_KM:
+		return None
+	variante = set()
+	for a, b in ((lat_mii, lon_mii), (lon_mii, lat_mii)):
+		if abs(a) > LAT_MAX or abs(b) > LON_MAX:
+			continue
+		for semn_a in (1, -1):
+			for semn_b in (1, -1):
+				variante.add((semn_a * abs(a), semn_b * abs(b)))
+	variante.discard((lat_mii, lon_mii))
+	cea = None
+	for v in sorted(variante):
+		d = departe(v[0], v[1])
+		if d <= PRAG_DEPARTE_KM and (cea is None or d < cea[0]):
+			cea = (d, v)
+	return cea[1] if cea else None
+
+
+def intrebareDeparte(lat_mii, lon_mii, tara=None):
+	"""(textul intrebarii, (lat_mii, lon_mii) propuse) pentru televizor si web, sau (None, None) cand nu e nimic de
+	intrebat"""
+	tara = taraVerificare() if tara is None else tara
+	v = variantaPotrivita(lat_mii, lon_mii, tara)
+	if v is None:
+		return None, None
+	return _t(MESAJ_DEPARTE) % {"scris": textCoordonate(lat_mii, lon_mii, 3), "tara": _t(numeTara(tara)),
+		"propus": textCoordonate(v[0], v[1], 3)}, v
+
+
 def seteazaOras(tara, oras):
 	"""locul din tabel: (True, "") sau (False, motivul)"""
 	loc = gasesteOras(tara, oras)
@@ -691,12 +775,81 @@ def cereLoc(slot, orbital=None):
 
 
 def refuzUsals(slot, orbital=None):
-	"""textul refuzului cand o miscare USALS ar porni cu locul nestabilit, altfel None"""
+	"""textul refuzului cand o miscare USALS ar porni cu locul nestabilit sau spre un satelit sub orizont din locul
+	antenei, altfel None"""
 	if stabilit():
+		if orbital is not None and not vizibilDinLoc(orbital) and cereLoc(slot, int(orbital)):
+			return textSubOrizont(orbital)
 		return None
 	if cereLoc(slot, orbital):
 		return _t(MESAJ_FARA_LOC)
 	return None
+
+
+def gradeOrbital(orbital):
+	"""pozitia orbitala (0..3599, vestul peste 1800) in grade, est pozitiv"""
+	orbital = int(orbital)
+	return (orbital - 3600) / 10.0 if orbital > 1800 else orbital / 10.0
+
+
+def elevatieDinLoc(orbital, loc=None):
+	"""elevatia satelitului `orbital` din locul antenei (grade, cu refractia, ca nucleul: Components/DishMath.py), sau
+	None cand locul nu e stabilit"""
+	loc = locul() if loc is None else loc
+	if loc is None:
+		return None
+	try:
+		from Components import DishMath
+	except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
+		import DishMath
+	try:
+		return DishMath.elevation(gradeOrbital(orbital) % 360.0, loc[0] / 1000.0, (loc[1] / 1000.0) % 360.0)
+	except (ValueError, ZeroDivisionError, TypeError):
+		return -99.0
+
+
+def vizibilDinLoc(orbital, loc=None):
+	"""True cand satelitul e deasupra orizontului din locul antenei sau cand locul nu se stie (atunci hotaraste regula
+	locului nestabilit); False numai cand locul e stabilit si satelitul e sub orizont (ar fi si peste arcul vizibil al
+	motorului, Components/HdsMotorPlafon.py)"""
+	e = elevatieDinLoc(orbital, loc)
+	return e is None or e >= 0.0
+
+
+def textSubOrizont(orbital, loc=None):
+	loc = locul() if loc is None else loc
+	try:
+		from Components import HdsGrade
+	except ImportError:
+		import HdsGrade
+	return _t(MESAJ_SUB_ORIZONT) % {"loc": textCoordonate(loc[0], loc[1], 3) if loc else u"",
+		"sat": HdsGrade.pozitie(gradeOrbital(orbital))}
+
+
+def blocatDeOrizont(orbital):
+	"""True daca satelitul `orbital` nu se poate prinde fiindca e sub orizont din locul stabilit: cel putin un tuner l-ar
+	prinde cu motorul USALS si niciun tuner nu il prinde fara USALS (antena fixa, pozitie memorata); ca blocatDeLoc."""
+	if not stabilit() or vizibilDinLoc(orbital):
+		return False
+	try:
+		from Components.NimManager import nimmanager
+		gasit = False
+		for nim in nimmanager.nim_slots:
+			try:
+				if not nim.isCompatible("DVB-S"):
+					continue
+				if int(orbital) not in [int(x[0]) for x in nimmanager.getSatListForNim(nim.slot)]:
+					continue
+			except Exception:
+				continue
+			if cereLoc(nim.slot, int(orbital)):
+				gasit = True
+			else:
+				return False
+		return gasit
+	except Exception as e:
+		jurnal("blocatDeOrizont(%s): %r" % (orbital, e))
+		return False
 
 
 def blocatDeLoc(orbital):

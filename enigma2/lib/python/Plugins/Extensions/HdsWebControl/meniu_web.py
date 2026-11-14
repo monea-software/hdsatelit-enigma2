@@ -380,7 +380,7 @@ PAGINA = """<!DOCTYPE html>
 <main>
 <h1>Meniul receptorului</h1>
 <p><a href="/skin">Listă sau dale pe televizor</a></p>
-<form class="cauta-setari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută setări" aria-label="Caută setări" autocomplete="off"><button type="submit">Caută</button></form>
+<form class="cauta-setari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută în meniu" aria-label="Caută în meniu" autocomplete="off"><button type="submit">Caută</button></form>
 <p class="nota">Același meniu ca la tasta MENU, cu aceleași intrări pentru nivelul ales pe receptor. La fiecare intrare: pagina ei din interfața web, dacă are, pagina de setări sau „Deschide pe televizor”.</p>
 <p class="mesaj" id="mesaj">Se citește meniul...</p>
 <div id="meniu"></div>
@@ -486,7 +486,7 @@ TEXTE_PAGINA = {
 		N_("Se citește meniul..."),
 		N_("Extensiile care se agață singure de meniu nu sunt în listă. Oprirea, repornirea și standby-ul "
 			"receptorului se dau din pagina Alimentare și repornire, cu confirmare, sau din telecomandă."),
-		N_("Caută setări"),
+		N_("Caută în meniu"),
 	),
 	"js": (
 		N_("browser deconectat"),

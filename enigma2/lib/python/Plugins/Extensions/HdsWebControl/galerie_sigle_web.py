@@ -126,8 +126,7 @@ def pagina(request):
 
 
 def pagina_text(stil, config):
-	from .traducere_pagini import traduce
-	return traduce(PAGINA, TEXTE_PAGINA).replace("__STIL_COMUN__", stil).replace("__CONFIG__", config)
+	return _traducePagina(PAGINA).replace("__STIL_COMUN__", stil).replace("__CONFIG__", config)
 
 
 PAGINA = """<!DOCTYPE html>
@@ -316,11 +315,20 @@ TEXTE_PAGINA = {"html": (
 	N_("Nu am putut termina. Încearcă din nou."),
 	N_("Receptorul nu răspunde. Verifică legătura și încearcă din nou."),
 	N_("Apasă poza pentru a pune sigla. Se vede la următoarea pornire."),
-	N_("Rezoluție aleasă automat: "), N_(" - Pune sigla"), N_("Se încarcă previzualizarea..."),
-	N_("Autor: "), N_("Previzualizarea nu poate fi citită."),
+	N_("Rezoluție aleasă automat:"), N_("- Pune sigla"), N_("Se încarcă previzualizarea..."),
+	N_("Autor:"), N_("Previzualizarea nu poate fi citită."),
 	N_("Previzualizarea nu este disponibilă."),
 	N_("Se descarcă și se pune sigla. Așteaptă câteva clipe..."),
 	N_("Sigla a fost pusă. Se vede la următoarea pornire."),
 	N_("Se pune înapoi sigla HD Satelit..."), N_("Sigla HD Satelit a fost pusă înapoi."),
 	N_("Se încarcă galeria de pe internet..."),
 )}
+
+
+def _traducePagina(sablon, fel="pagina"):
+	"""Sablonul in limba receptorului; fara pachetul HdsWebControl (probele de pe PC), sablonul ca atare."""
+	try:
+		from .traducere_pagini import traduce
+	except ImportError:
+		return sablon
+	return traduce(sablon, TEXTE_PAGINA, fel)

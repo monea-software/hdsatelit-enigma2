@@ -37,7 +37,15 @@ ANTET4 = "eDVB services /4/"
 SFARSIT = "Have a lot of bugs!"
 LUNGIME_MAXIMA = 250          # octeti pentru textul introdus explicit in editor
 DIRECTOR = "/etc/enigma2"
-SATELITI = "/etc/tuxbox/satellites.xml"
+SATELITI = "/etc/tuxbox/satellites.xml"           # locul obisnuit (numele vechi; ce citeste nucleul da cale_sateliti())
+SATELITI_ENIGMA2 = "/etc/enigma2/satellites.xml"   # lista pusa de om aici are intaietate, ca in OE-Alliance
+
+
+def cale_sateliti():
+	"""Fisierul satellites.xml citit de nucleu (lib/dvb/db.cpp, eDVBDB::readSatellites, aceeasi regula):
+	/etc/enigma2/satellites.xml cand exista si se poate citi, altfel /etc/tuxbox/satellites.xml. Se intreaba la fiecare
+	folosire (nu la import), ca editorul sa scrie fisierul pe care il citeste nucleul."""
+	return SATELITI_ENIGMA2 if os.access(SATELITI_ENIGMA2, os.R_OK) else SATELITI
 
 # steagurile referintei (eServiceReference)
 DOSAR = 1                     # isDirectory
@@ -877,7 +885,7 @@ def _citeste_fisier(cale):
 		return None
 
 
-def citeste_dosar(director=DIRECTOR, lamedb_memorie=None, sateliti=SATELITI, date=None):
+def citeste_dosar(director=DIRECTOR, lamedb_memorie=None, sateliti=None, date=None):
 	"""Dosarul -> Date. lamedb_memorie = octetii listei din memoria enigma2 (saveServicelist), folositi in locul celor
 	de pe disc cand se inteleg (au PID-urile invatate de la ultima scriere)."""
 	d = date or Date()
@@ -932,7 +940,7 @@ def citeste_dosar(director=DIRECTOR, lamedb_memorie=None, sateliti=SATELITI, dat
 				d.originale[f] = text
 	d.blacklist = _citeste_lista(os.path.join(director, "blacklist"))
 	d.whitelist = _citeste_lista(os.path.join(director, "whitelist"))
-	d.sateliti = citeste_sateliti(sateliti)
+	d.sateliti = citeste_sateliti(sateliti or cale_sateliti())
 	return d
 
 
@@ -947,8 +955,9 @@ _SAT = re.compile(r"<sat\b([^>]*)>", re.S)
 _ATR = re.compile(r'(\w+)="([^"]*)"')
 
 
-def citeste_sateliti(cale=SATELITI):
-	"""{pozitie 0..3599: nume} din satellites.xml (numai etichetele <sat>, fara transpondere)."""
+def citeste_sateliti(cale=None):
+	"""{pozitie 0..3599: nume} din satellites.xml (numai etichetele <sat>, fara transpondere); implicit cel citit de nucleu."""
+	cale = cale or cale_sateliti()
 	text = _citeste_fisier(cale)
 	if not text:
 		return {}

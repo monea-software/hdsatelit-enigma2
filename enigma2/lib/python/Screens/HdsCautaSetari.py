@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
-"""„Caută setări” pe televizor (MENU > Setări > Caută setări, sau tasta TEXT in orice meniu): cautarea in tot meniul
+"""„Caută în meniu” pe televizor (primul rand din orice meniu sau tasta TEXT in orice meniu): cautarea in tot meniul
 receptorului, ca la telefoanele Android. Doar in imaginea HDSatelit.
 
 Ecranul: randul de cautare (tastele 0-9 ca la SMS, 0 = spatiu; tastatura de pe ecran cu TEXT sau Verde; tastatura USB),
@@ -32,7 +32,7 @@ from Components import HdsCautaSetari as C
 from Tools.BoundFunction import boundFunction
 from Tools.NumericalTextInput import NumericalTextInput
 
-TITLU = 'Caută setări'
+TITLU = 'Caută în meniu'
 AMANARE_MS = 150           # cautarea dupa text, cel mult o data in atat; 0 = pe loc (probele de pe PC)
 # cifrele ca la telefon: 0 scrie intai un spatiu (cuvintele se cauta fiecare), apoi cifra; 1 scrie cifra
 LITERE_SMS = (' 0', '1', 'abc2', 'def3', 'ghi4', 'jkl5', 'mno6', 'pqrs7', 'tuv8', 'wxyz9')
@@ -92,7 +92,7 @@ def _font(alias, nume, marime, inaltime):
 class HdsCautaSetari(Screen, HelpableScreen):
 	# rezerva pentru un skin fara acest ecran (skinul HDSatelit il are, cu aliasurile HdsCautaSetari*)
 	skin = """
-	<screen name="HdsCautaSetari" position="center,center" size="1200,660" title="Caută setări">
+	<screen name="HdsCautaSetari" position="center,center" size="1200,660" title="Caută în meniu">
 		<widget name="cautare" position="10,10" size="1180,44" font="Regular;28" backgroundColor="#002A3350" valign="center" noWrap="1" zPosition="2" />
 		<widget name="indiciu" position="10,58" size="880,30" font="Regular;19" foregroundColor="#00AEB9CC" valign="center" noWrap="1" zPosition="2" />
 		<widget name="numar" position="890,58" size="300,30" font="Regular;22" foregroundColor="#00F5B83D" halign="right" valign="center" noWrap="1" zPosition="2" />

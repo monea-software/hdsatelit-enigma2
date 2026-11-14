@@ -21,6 +21,7 @@ MODELE = {"vusolo4k": (480, 320, 32), "vuuno4kse": (400, 240, 32),
 	# pozele personajului sunt cele 480x320 pana la un set 800x480
 	"vuultimo4k": (800, 480, 32)}
 LIVE = ("nu", "imagine", "osd")
+VERIFICA_S = 5.0          # cat de des recitim nodurile live ale driverului (doua citiri mici din /proc)
 PICON = ("nu", "singur", "nume_ora")
 
 
@@ -95,6 +96,8 @@ def textColor(pereche, secunde=0, id_data="", id_format=""):
 	if id_data in ("ceas.secunde", "ceas.minutar", "ceas.cronometru",
 			"redare.pozitie") and id_format == "ms":
 		doua_puncte = True
+	if id_data == "redare.ramas" and id_format == "hm_ms":
+		doua_puncte = True          # sub o ora „5648” devine 56:48; peste o ora „1H26” ramane cum e
 	if id_data == "asteptare.ora_data":
 		doua_puncte = int(secunde / 2) % 2 == 0
 	if text.strip().isdigit() and len(text.strip()) in (3, 4):
@@ -136,21 +139,38 @@ class IesireLive(object):
 		self.eroare = ""
 		self.mod = None
 		self.plan = {"nu": []}
+		# Driverul GigaBlue 7252 Pro (UHD Quad 4K Pro, Duo 4K Lite) are live_enable si mode FARA fisierele *_choices,
+		# iar dvb_init porneste singur imaginea live: fara choices, valorile cunoscute (OE-Alliance: config.lcd.modeminitv,
+		# 0 Normal, 1 MiniTV, 3 MiniTV cu OSD, scris la pornire si 0 la standby). Altfel afisajul ramanea copia
+		# televizorului, iar in standby gol.
 		live = os.path.join(radacina, "live_enable")
 		alegeri = _citeste(live + "_choices").split()
-		if os.path.exists(live) and {"enable", "disable"}.issubset(alegeri):
+		if os.path.exists(live) and (not alegeri or {"enable", "disable"}.issubset(alegeri)):
 			self.plan = {"nu": [(live, "disable")], "imagine": [(live, "enable")]}
 		# Unele drivere au un selector separat pentru video si OSD.
 		mode = os.path.join(radacina, "mode")
 		moduri = _citeste(mode + "_choices").split()
-		if os.path.exists(mode) and {"0", "1", "3"}.issubset(moduri):
-			self.plan = {"nu": [(mode, "0")], "imagine": [(mode, "1")],
-				"osd": [(mode, "3")]}
+		# fara mode_choices, numai cand nici live_enable nu are choices (GigaBlue); Vu+ 4K (live_enable_choices) raman ca inainte
+		if os.path.exists(mode) and ({"0", "1", "3"}.issubset(moduri) or (not moduri and not alegeri)):
+			# GigaBlue 7252 Pro (dvb.ko si dvb_init, citite din binarul 20261020): desenul enigma2 ajunge pe ecran numai
+			# cu live_enable=disable SI mode=0; cu live_enable=enable imaginea TV vine oricare ar fi mode, deci numai
+			# "echo 0 > mode" lasa ecranul sa sara intre ceas si imagine (un tester, 14.11.2026). Nucleul primeste numai
+			# "enable"/"disable" (0 si 1 sunt ignorate). Asa ca live_enable se opreste in toate cele trei alegeri, iar
+			# mode alege: 0 normal, 1 numai imaginea, 3 imaginea cu OSD.
+			inainte = [(live, "disable")] if os.path.exists(live) and not alegeri and not moduri else []
+			self.plan = {"nu": inainte + [(mode, "0")], "imagine": inainte + [(mode, "1")],
+				"osd": inainte + [(mode, "3")]}
+		self._verificatLa = 0.0
+		self._asteptat = {}     # ce arata driverul dupa scrierea noastra (unele drivere afiseaza alt format decat primesc)
 
 	def capabilitati(self):
 		return tuple(m for m in LIVE if m in self.plan)
 
-	def aplica(self, mod):
+	def potrivit(self, mod):
+		"""Nodurile driverului arata inca alegerea? (le poate schimba altcineva: un plugin, un script de pornire)"""
+		return all(_citeste(cale) in (valoare, self._asteptat.get((cale, valoare), valoare)) for cale, valoare in self.plan.get(mod, ()))
+
+	def aplica(self, mod, acum=None):
 		if not K.permite("live", color=True):
 			self.mod = None
 			return False
@@ -158,15 +178,25 @@ class IesireLive(object):
 			self.eroare = A._("Driverul nu ofera acest mod live pe afisaj.")
 			return False
 		if self.mod == mod:
-			return True
+			# alegerea e deja scrisa: o recitim cel mult o data la VERIFICA_S si o punem la loc daca a schimbat-o altcineva
+			acum = time.time() if acum is None else acum
+			if 0 <= acum - self._verificatLa < VERIFICA_S:
+				return True
+			self._verificatLa = acum
+			if self.potrivit(mod):
+				return True
 		vechi = []
 		try:
 			for cale, valoare in self.plan[mod]:
 				inainte = _citeste(cale)
-				if inainte != valoare:
+				if inainte not in (valoare, self._asteptat.get((cale, valoare), valoare)):
 					with open(cale, "w", encoding="ascii") as f:
 						f.write(valoare)
 					vechi.append((cale, inainte))
+					ecou = _citeste(cale)
+					if ecou != inainte:
+						# numai cand scrierea a schimbat ceva: o scriere ignorata nu face din valoarea veche o potrivire
+						self._asteptat[(cale, valoare)] = ecou
 		except OSError as eroare:
 			for cale, valoare in reversed(vechi):
 				try:

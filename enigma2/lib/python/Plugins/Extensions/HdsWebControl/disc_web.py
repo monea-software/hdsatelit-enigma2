@@ -35,6 +35,7 @@
 #   POST /api/locuri-inregistrari-scoate?lista=filme|timeshift&dosar=<dosar>&pas=intreaba | &cod= | &pas=renunta
 #   GET  /api/discuri                                   discurile oferite, partitiile, lucrarea de acum
 #   POST /api/discuri-lucru?disc=<sda>&fel=formatare|verificare[&sistem=ext4|vfat]&pas=intreaba | &cod= | &pas=renunta
+#   POST /api/discuri-lucru?pas=opreste                 opreste verificarea in lucru (ca EXIT pe televizor; formatarea nu)
 #   GET  /api/swap                                      discurile montate, swap-urile active, lucrarea de acum
 #   POST /api/swap-activeaza?punct=<punct de montare>&pas=intreaba | &cod= | &pas=renunta
 #   POST /api/swap-opreste?punct=<punct de montare>&pas=intreaba | &cod= | &pas=renunta
@@ -280,7 +281,8 @@ def _lucruDisc(D, acum=None):
 	if l["stare"] != D.LUCRU_IN_LUCRU and sfarsit and acum - sfarsit > VARSTA_LUCRU:
 		return None
 	return {"fel": l["fel"], "dispozitiv": l["dispozitiv"], "text_disc": l.get("text_disc", ""), "stare": l["stare"],
-		"text": D.textLucru(l), "secunde": int((sfarsit or acum) - (l.get("timp") or acum)), "timp": l.get("timp") or 0}
+		"text": D.textLucru(l), "secunde": int((sfarsit or acum) - (l.get("timp") or acum)), "timp": l.get("timp") or 0,
+		"termen": int(l.get("termen") or 0)}
 
 
 def stareDiscuri(D=None, hm=None, sys_block="/sys/block", mounts=None, inregistrare=None, unelte=None):
@@ -327,6 +329,11 @@ def lucruDisc(argumente, D=None, hm=None, sys_block="/sys/block", mounts=None, i
 	if argumente.get("pas") == "renunta":
 		C.uita("disc", tinta)
 		return {"result": True, "message": _t("Nu s-a făcut nimic.")}
+	if argumente.get("pas") == "opreste":
+		# ca EXIT pe ecranul de asteptare al televizorului (Wlad, forum 948, 13.11.2026): starea spune pe loc "oprită"
+		if not D.opresteLucru(D.E_OPRIT):
+			return {"result": False, "message": _t("Nicio verificare în lucru."), "lucru": _lucruDisc(D)}
+		return {"result": True, "message": _t("Verificarea a fost oprită."), "lucru": _lucruDisc(D)}
 	if fel not in FILE:
 		return {"result": False, "message": _t("Lucrare necunoscută.")}
 
@@ -931,6 +938,7 @@ PAGINA_DISCURI = """<!DOCTYPE html>
     <h2>Lucrarea de acum</h2>
     <p class="intrebare" id="lucruText"></p>
     <p class="nota" id="lucruTimp"></p>
+    <div class="butoane"><button type="button" class="rosu ascuns" id="opresteLucru">Oprește verificarea</button></div>
   </section>
   <section class="card">
     <h2>Hard diskurile și stick-urile USB</h2>
@@ -989,6 +997,7 @@ function arata(d){
     $("lucruText").classList.toggle("eroare", l.stare === "eroare");
     $("lucruTimp").textContent = ocupat ? ("În lucru de " + l.secunde + " s. Nu scoate discul și nu opri receptorul.") : ("A durat " + l.secunde + " s.");
   }
+  $("opresteLucru").classList.toggle("ascuns", !(ocupat && l.fel === "verificare"));
   if(d.prag_minute){ $("prag").textContent = String(d.prag_minute); }
   var corp = $("discuri"); corp.textContent = "";
   d.discuri.forEach(function(k){
@@ -1032,6 +1041,11 @@ function lucreaza(k){
   if(FILA === "formatare"){ q.set("sistem", ALES[k.dispozitiv] || ((k.sisteme || [["ext4"]])[0][0])); }
   cuConfirmare("/api/discuri-lucru", q, function(d){ if(d.discuri){ arata(d); } else { citeste(); } });
 }
+function opresteLucrul(){
+  var q = new URLSearchParams(); q.set("pas", "opreste");
+  cerere("/api/discuri-lucru", "POST", q).then(function(d){ mesaj(d.message, !d.result); citeste(); }).catch(nimicNuRaspunde);
+}
+$("opresteLucru").addEventListener("click", opresteLucrul);
 $("filaFormatare").addEventListener("click", function(){ alegeFila("formatare"); });
 $("filaVerificare").addEventListener("click", function(){ alegeFila("verificare"); });
 alegeFila(FILA);
@@ -1191,6 +1205,8 @@ TEXTE_PAGINA = {
 			"pornire."),
 		N_("Discurile conectate și locul înregistrărilor sunt în <a data-cale=\"/stocare\" "
 			"href=\"/stocare\">Locul înregistrărilor</a>."),
+		# 0.7.5 (traducerile TR5): butonul paginii; era in lista js, unde nu se folosea
+		N_("Oprește verificarea"),
 	),
 	"js": (
 		N_("Se salvează..."),

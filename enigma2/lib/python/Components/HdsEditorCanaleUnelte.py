@@ -719,13 +719,13 @@ def ce_are_arhiva(director):
 	return {"servicii": len(d.lamedb.servicii), "transpondere": len(d.lamedb.transpondere), "buchete": buchete}
 
 
-def arhiva_listei(s, fel="tar.gz", sateliti=D.SATELITI):
+def arhiva_listei(s, fel="tar.gz", sateliti=None):
 	"""Lista de acum (din editor, cu schimbarile nesalvate) ca arhiva cu etc/enigma2 si etc/tuxbox/satellites.xml,
 	cum o citesc programele de pe calculator. -> octeti."""
 	fisiere = s.text_fisiere()
 	extra = {}
 	try:
-		with open(sateliti, "rb") as f:
+		with open(sateliti or D.cale_sateliti(), "rb") as f:
 			extra["etc/tuxbox/satellites.xml"] = f.read()
 	except (IOError, OSError):
 		pass

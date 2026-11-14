@@ -22,7 +22,7 @@
       "fel": "citire",
       "text": "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), cu parolele ascunse",
       "args": [
-        {"nume": "cale", "tipar": "^/(proc|sys|etc|var/log|home/root/logs|tmp)(/[A-Za-z0-9._+@:,-]+)*/?\\Z", "cerut": true}
+        {"nume": "cale", "tipar": "^(/(proc|sys|etc|var/log|home/root/logs|tmp)(/[A-Za-z0-9._+@:,-]+)*/?|/home/root/epg\\.dat)\\Z", "cerut": true}
       ]
     },
     {

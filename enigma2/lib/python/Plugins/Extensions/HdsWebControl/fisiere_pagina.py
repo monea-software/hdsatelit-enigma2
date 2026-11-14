@@ -148,7 +148,7 @@ def pagina_text(stil, config_pagina):
 	text = PAGINA.replace("__STIL_COMUN__", stil).replace("__STIL_PAGINI__", STIL_PAGINI)
 	for cheie, valoare in texte.items():
 		text = text.replace("__T_%s__" % cheie, html.escape(valoare, quote=True))
-	return text.replace("__TEXTE__", _json(texte)).replace("__CONFIG__", _json(config or {}))
+	return _cuLimba(text.replace("__TEXTE__", _json(texte)).replace("__CONFIG__", _json(config or {})))
 
 
 PAGINA = r'''<!DOCTYPE html>
@@ -328,3 +328,14 @@ boot();
 </script>
 </body>
 </html>'''
+
+
+def _cuLimba(text):
+	"""<html lang> in limba receptorului: textele paginii vin deja traduse din Python (_()), deci traduce() din
+	traducere_pagini, care schimba lang, nu trece pe aici. Pe PC (fara pachet) si in romana pagina ramane lang="ro"."""
+	try:
+		from .traducere_pagini import limba
+	except ImportError:
+		return text
+	cod = limba()
+	return text if cod == "ro" else text.replace('<html lang="ro">', '<html lang="%s">' % cod, 1)

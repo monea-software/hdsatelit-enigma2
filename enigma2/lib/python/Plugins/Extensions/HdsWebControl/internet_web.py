@@ -24,8 +24,8 @@
 #                   panoul web cu confirmare: cheie noua si toate aparatele asociate deconectate, in afara de browserul
 #                   care cere, ca pe televizor, cheieNouaPanou). Parola pentru aplicatii la fel: nu se arata pana la butonul
 #                   Arata parola (?ce=parola); nici HTML-ul, nici GET-urile paginii nu au parola sau cheia.
-#                   Randurile aplicatii, aplicatii_afara si parola pentru aplicatii merg
-#                   prin rutele care exista deja (plugin.py: /api/interfata-web, /api/interfata-web-seteaza).
+#                   Randurile aplicatii, aplicatii_afara, captura_interval (la cate secunde cere prima pagina imaginea
+#                   ecranului) si parola pentru aplicatii merg prin rutele care exista deja (plugin.py: /api/interfata-web, /api/interfata-web-seteaza).
 #
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/dvb-i                 starea
@@ -37,7 +37,14 @@
 #   POST /api/mabr-seteaza          activ=0|1 | autodiscover=0|1 | adauga=<adresa:port>
 #   POST /api/mabr-sterge           index=N, in doi pasi
 #   POST /api/mabr-cauta            cautarea SAP (5 secunde, pe fir); rezultatul vine in GET
+#   GET  /api/iptv-4k               cautarea canalelor 4K reale (Components/HdsIptv4K.py): starea, textul de sus, canalele 4K
+#   POST /api/iptv-4k-porneste      porneste cautarea (toti candidatii); /api/iptv-4k-opreste o opreste. Pagina: /iptv-4k
 #   GET  /api/iptv                  sursele si starea lor (fara parole si fara adrese cu parola)
+#   GET  /api/iptv-cont             id=<sursa Xtream>: starea contului (expira, conexiunile, proba), ceruta pe un fir numai cand pagina
+#                                   e deschisa (0.7.5, IPI; config.usage.hds_iptv_cont); {"asteapta": true} cat se asteapta serverul
+#   GET  /api/iptv-arhiva           emisiunile trecute ale canalului de pe televizor, cand furnizorul tine arhiva (0.7.5, IPI;
+#                                   Screens/HdsIptvArhiva.py; config.usage.hds_iptv_arhiva): {"canal": ""} fara arhiva, {"asteapta": true}
+#   POST /api/iptv-arhiva-porneste  canal=<sursa/cheie>, i=<randul>: porneste emisiunea pe televizor (numai din lista data mai sus)
 #   GET  /api/iptv-grupe            id=<sursa>: tarile si grupele, cu ce se vede
 #   POST /api/iptv-grupe-schimba    id=<sursa>, cheie=<rand> sau tot=ascunde|arata
 #   POST /api/iptv-adauga           fel=m3u|xtream|stalker|demo, nume, adresa | server, utilizator, parola (numai din corp) |
@@ -474,6 +481,120 @@ def _textExpirare(ora):
 		return (_t(N_("Expiră la %s")) % time.strftime("%d.%m.%Y", time.localtime(int(ora)))) if ora else ""
 	except (TypeError, ValueError, OverflowError, OSError):
 		return ""
+
+
+_cont_web = {}       # sursa -> None (se asteapta serverul) | dict | False (nu se stie)
+
+
+def stareContIptv(arg, I=None, fir=None):
+	"""GET /api/iptv-cont: starea contului Xtream (HdsIptvClient.stareContXtream), fara date de acces. Cererea spre server merge pe
+	un fir (termen 8 s), ca serverul web sa nu stea: primul raspuns e {"asteapta": true}, pagina intreaba din nou."""
+	S, C, L = _iptv(I)
+	sid = arg.get("id", "")
+	s = S.sursa(sid)
+	if not s or s.get("fel") != "xtream":
+		return {"result": True, "text": ""}
+	if sid not in _cont_web:
+		_cont_web[sid] = None
+
+		def lucru():
+			rez = False
+			try:
+				rez = C.stareContXtream(s) or False
+			except Exception as e:
+				_jurnal("starea contului: %s" % type(e).__name__)
+			_cont_web[sid] = rez
+		if fir is not None:
+			fir(lucru)
+		else:
+			import threading
+			threading.Thread(target=lucru, name="IptvStareContWeb", daemon=True).start()
+		if _cont_web.get(sid) is None:
+			return {"result": True, "asteapta": True}
+	v = _cont_web.get(sid)
+	if v is None:
+		return {"result": True, "asteapta": True}
+	del _cont_web[sid]          # data viitoare se intreaba din nou (HdsIptvClient tine minte raspunsul un minut)
+	return {"result": True, "text": C.textStareCont(v) if v else "", "stare": v.get("stare", "") if v else ""}
+
+
+_arhiva_web = {}     # "sursa/cheie" -> [ora, None (se asteapta) | lista | text de eroare, canalul, referinta canalului]
+PASTRARE_ARHIVA_S = 120
+
+
+def _refTv():
+	try:
+		import NavigationInstance
+		nav = NavigationInstance.instance
+		ref = nav.getCurrentlyPlayingServiceReference() if nav is not None else None
+		return ref.toString() if ref is not None and ref.valid() else ""
+	except ImportError:
+		return ""
+
+
+def arhivaIptv(arg, ref_text=None, fir=None):
+	"""GET /api/iptv-arhiva: emisiunile trecute ale canalului de pe televizor (Screens/HdsIptvArhiva.py). Serverul se intreaba pe un fir,
+	numai cand pagina e deschisa; primul raspuns e {"asteapta": true}. Fara date de acces si fara adrese."""
+	from Screens import HdsIptvArhiva as H
+	from Components import HdsIptvClient as C
+	ref_text = _refTv() if ref_text is None else ref_text
+	canal = H.canalCuArhiva(ref_text)
+	if canal is None:
+		return {"result": True, "canal": ""}
+	s, sid, cheie, zile = canal
+	k = "%s/%s" % (sid, cheie)
+	v = _arhiva_web.get(k)
+	if v is None or (v[1] is not None and time.time() - v[0] > PASTRARE_ARHIVA_S):
+		_arhiva_web.clear()
+		v = _arhiva_web[k] = [time.time(), None, canal, ref_text]
+
+		def lucru():
+			try:
+				v[1] = C.programeArhiva(s, cheie) or []
+			except C.EroareIptv as e:
+				v[1] = e.pentruOm()
+			except Exception as e:
+				_jurnal("arhiva: %s" % type(e).__name__)
+				v[1] = C.E_NU_RASPUNDE
+		if fir is not None:
+			fir(lucru)
+		else:
+			import threading
+			threading.Thread(target=lucru, name="IptvArhivaWeb", daemon=True).start()
+	if v[1] is None:
+		return {"result": True, "asteapta": True}
+	nume = H.numeCanal(v[3], sid, cheie)
+	if not isinstance(v[1], list):
+		return {"result": True, "canal": nume, "id": k, "programe": [], "mesaj": _t(v[1])}
+	acum = time.time()
+	return {"result": True, "canal": nume, "id": k, "zile": zile, "mesaj": "" if v[1] else _t(H.T_GOL),
+		"programe": [{"text": H.randProgram(p, acum), "descriere": p.get("descriere") or ""} for p in v[1]]}
+
+
+def pornesteArhivaIptv(arg, nav=None):
+	"""POST /api/iptv-arhiva-porneste: emisiunea aleasa din lista data de /api/iptv-arhiva porneste pe televizor (fara sa fie tinuta minte
+	ca ultimul canal: dupa o repornire receptorul porneste pe canalul in direct)."""
+	from Screens import HdsIptvArhiva as H
+	v = _arhiva_web.get(arg.get("canal", ""))
+	try:
+		i = int(arg.get("i", ""))
+	except ValueError:
+		i = -1
+	if not v or not isinstance(v[1], list) or not 0 <= i < len(v[1]):
+		return {"result": False, "message": _t(N_("Lista emisiunilor s-a schimbat. Deschide din nou pagina."))}
+	p = v[1][i]
+	_s, sid, cheie, _zile = v[2]
+	ref = H.refArhiva(v[3], sid, p["cheie"], H.numeArhiva(H.numeCanal(v[3], sid, cheie), p))
+	try:
+		from enigma import eServiceReference
+		if nav is None:
+			import NavigationInstance
+			nav = NavigationInstance.instance
+		nav.playService(eServiceReference(ref))
+	except Exception as e:
+		_jurnal("arhiva, pornirea: %s" % type(e).__name__)
+		return {"result": False, "message": _t(N_("Emisiunea nu a pornit. Încearcă din nou."))}
+	return {"result": True, "message": _t(N_("Emisiunea pornește pe televizor."))}
 
 
 def stareIptv(I=None):
@@ -931,6 +1052,15 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 	def iptv_grupe(request):
 		return grupeIptv(_argumente(request, ("id",)), I)
 
+	def iptv_cont(request):
+		return stareContIptv(_argumente(request, ("id",)), I)
+
+	def iptv_arhiva(request):
+		return arhivaIptv({})
+
+	def iptv_arhiva_porneste(request):
+		return pornesteArhivaIptv(_argumente(request, ("canal", "i"), 64))
+
 	def iptv_grupe_schimba(request):
 		return schimbaGrupeIptv(_argumente(request, ("id", "cheie", "tot"), 512), I)
 
@@ -957,6 +1087,15 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 
 	def interfata_web(request):
 		return stareInterfataWeb(P)
+
+	def iptv_4k(request):
+		return stareIptv4k()
+
+	def iptv_4k_porneste(request):
+		return pornesteIptv4k()
+
+	def iptv_4k_opreste(request):
+		return opresteIptv4k()
 
 	def interfata_web_actiune(request):
 		# browserul asociat care cere (cookie-ul lui), nu cel intrat fara cod: numai el are o intrare de pastrat
@@ -990,6 +1129,12 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 		b"seriale": _citire(seriale),
 		b"seriale-reda": _schimbare(seriale_reda),
 		b"interfata-web-detalii": _citire(interfata_web),
+		b"iptv-4k": _citire(iptv_4k),
+		b"iptv-4k-porneste": _schimbare(iptv_4k_porneste),
+		b"iptv-4k-opreste": _schimbare(iptv_4k_opreste),
+		b"iptv-cont": _citire(iptv_cont),
+		b"iptv-arhiva": _citire(iptv_arhiva),
+		b"iptv-arhiva-porneste": _schimbare(iptv_arhiva_porneste),
 		b"interfata-web-actiune": _schimbare(interfata_web_actiune, True),
 	}
 
@@ -1007,6 +1152,7 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 		b"mabr": _pagina(pagina_mabr),
 		b"iptv": _pagina(pagina_iptv),
 		b"interfata-web": _pagina(pagina_interfata_web),
+		b"iptv-4k": _pagina(pagina_iptv_4k),
 	}
 	return api, pagini
 
@@ -1031,6 +1177,57 @@ def pagina_mabr(stil, config_pagina):
 
 def pagina_iptv(stil, config_pagina):
 	return _sablon(_traducePagina(PAGINA_IPTV), stil, config_pagina, "hds_iptv_setup")
+
+
+def pagina_iptv_4k(stil, config_pagina):
+	return _sablon(_traducePagina(PAGINA_IPTV_4K), stil, config_pagina, "hds_iptv_4k")
+
+
+# ------------------------------------------------------------------ cautarea canalelor 4K reale (pereche: Screens/HdsIptv4K.py)
+def stareIptv4k(K=None, I=None):
+	"""Starea cautarii, textul de sus (acelasi ca pe televizor) si canalele verificate, fara adrese (numai numele si ce trimit)."""
+	if K is None:
+		from Components import HdsIptv4K as K
+	if I is None:
+		from Components import HdsIptvSurse as I
+	st, rez = K.stare(), K.rezultate()
+	try:
+		from Screens.HdsIptv4K import textStare
+		text = textStare(st, rez)
+	except Exception:
+		text = ""
+	canale = []
+	for v in sorted(rez.values(), key=lambda v: (v[6] if len(v) > 6 else "")):
+		if len(v) > 6 and v[0]:
+			canale.append({"nume": v[6], "w": v[0], "h": v[1], "cod": v[2], "hdr": v[3], "e4k": v[0] >= K.LATIME_4K,
+				"eticheta": K.eticheta4k(v)})
+	return {"result": True, "stare": st, "text": text, "canale": canale, "surse": bool(I.areSurse()),
+		"pornita": I.optiune("4k"), "mesaj_stare": _(st["mesaj"]) if st.get("mesaj") else ""}
+
+
+def pornesteIptv4k(K=None, I=None):
+	if K is None:
+		from Components import HdsIptv4K as K
+	if I is None:
+		from Components import HdsIptvSurse as I
+	if not I.areSurse():
+		return {"result": False, "message": _("Nu ai nicio sursă de televiziune prin internet.")}
+	if K.omulSeUita():
+		return {"result": False, "message": _(K.T_OPRITA_PRIVIRE)}
+	# o cautare neterminata (oprita, pauza, repornire) continua de unde a ramas; altfel toate canalele de la capat
+	K.porneste(tot=not K.deContinuat())
+	rez = stareIptv4k(K, I)
+	rez["message"] = _("Căutarea a pornit.")
+	return rez
+
+
+def opresteIptv4k(K=None, I=None):
+	if K is None:
+		from Components import HdsIptv4K as K
+	K.opreste()
+	rez = stareIptv4k(K, I)
+	rez["message"] = _("Căutarea se oprește după canalul de acum.")
+	return rez
 
 
 def pagina_interfata_web(stil, config_pagina):
@@ -1460,6 +1657,13 @@ PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
     <p class="nota">Canalele apar singure în lista de canale, la Sateliți, pe rândul IPTV. Le poți pune în Favorite și în orice buchet, ca pe celelalte.</p>
     <div class="butoane"><button type="button" id="actualizeaza">Actualizează toate</button></div>
   </section>
+  <section class="card ascuns" id="cardArhiva">
+    <h2>Emisiunile trecute</h2>
+    <p class="nota" id="arhivaNota"></p>
+    <div id="arhivaLista" style="max-height:60vh;overflow:auto"></div>
+    <p class="nota">Pentru alt canal: pornește-l pe televizor, apoi apasă Reîncarcă. Pe televizor: MENU pe canal în lista de canale, apoi Emisiunile trecute.</p>
+    <div class="butoane"><button type="button" id="arhivaReincarca">Reîncarcă</button></div>
+  </section>
   <section class="card">
     <h2>Adaugă ce ți-a dat furnizorul</h2>
     <div class="rand"><label for="fel">Ce ai primit</label>
@@ -1539,6 +1743,20 @@ function stareSursa(x){
   if(x.taiate){ return "Lista are prea multe canale: au intrat primele " + String(DATE.plafon) + "."; }
   return "Merge.";
 }
+var CONT = {};
+function stareCont(id, incercari){
+  if(CONT[id] && incercari === 0){ return; }
+  CONT[id] = CONT[id] || {text: "", rau: false};
+  var q = new URLSearchParams(); q.set("id", id);
+  cerere("/api/iptv-cont?" + q.toString()).then(function(d){
+    if(d && d.asteapta && incercari < 12){ setTimeout(function(){ stareCont(id, incercari + 1); }, 1000); return; }
+    if(!d || !d.text){ return; }
+    CONT[id] = {text: d.text, rau: !!d.stare && d.stare !== "activ"};
+    document.querySelectorAll("[data-cont]").forEach(function(e){
+      if(e.getAttribute("data-cont") === id){ e.textContent = CONT[id].text; e.className = CONT[id].rau ? "rau" : ""; }
+    });
+  }).catch(function(){});
+}
 var DATE = null;
 function randSursa(x){
   var d = el("div", "lista-rand");
@@ -1546,6 +1764,7 @@ function randSursa(x){
   s.appendChild(document.createElement("br"));
   s.appendChild(el("small", x.eroare ? "rau" : "", stareSursa(x)));
   if(x.epg_text){ s.appendChild(document.createElement("br")); s.appendChild(el("small", "", x.epg_text)); }
+  if(x.fel === "xtream"){ var c = el("small", "", CONT[x.id] ? CONT[x.id].text : ""); c.setAttribute("data-cont", x.id); if(CONT[x.id] && CONT[x.id].rau){ c.className = "rau"; } s.appendChild(document.createElement("br")); s.appendChild(c); stareCont(x.id, 0); }
   d.appendChild(s);
   var b = el("span", "sursa-actiuni");
   if(x.fel === "xtream"){
@@ -1746,6 +1965,30 @@ $("serialeCauta").addEventListener("click", function(){ if(SR && !SR.ocupat){ SR
 $("serialeText").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); $("serialeCauta").click(); } });
 $("serialePrecedenta").addEventListener("click", function(){ if(SR && !SR.ocupat && SR.pagina){ --SR.pagina; incarcaSeriale(); } });
 $("serialeUrmatoarea").addEventListener("click", function(){ if(SR && !SR.ocupat && SR.altele){ ++SR.pagina; incarcaSeriale(); } });
+var ARHIVA = "";
+function arhiva(incercari){
+  cerere("/api/iptv-arhiva").then(function(d){
+    if(d.asteapta){ if(incercari < 20){ setTimeout(function(){ arhiva(incercari + 1); }, 1000); } return; }
+    var card = $("cardArhiva");
+    if(!d.canal){ card.classList.add("ascuns"); ARHIVA = ""; return; }
+    card.classList.remove("ascuns");
+    ARHIVA = d.id || "";
+    $("arhivaNota").textContent = d.canal + (d.mesaj ? ": " + d.mesaj : " (" + String(d.programe.length) + ")");
+    var randuri = (d.programe || []).map(function(p, i){
+      var r = el("div", "lista-rand");
+      var s = el("span", "", p.text);
+      if(p.descriere){ s.appendChild(document.createElement("br")); s.appendChild(el("small", "", p.descriere)); }
+      r.appendChild(s);
+      var b = el("button", "", "Pornește pe televizor"); b.type = "button";
+      b.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("canal", ARHIVA); q.set("i", String(i)); trimite("/api/iptv-arhiva-porneste", q); });
+      r.appendChild(b);
+      return r;
+    });
+    var l = $("arhivaLista"); l.textContent = ""; randuri.forEach(function(r){ l.appendChild(r); });
+  }).catch(function(){});
+}
+$("arhivaReincarca").addEventListener("click", function(){ arhiva(0); });
+arhiva(0);
 citeste();""" + _SFARSIT
 
 
@@ -1760,6 +2003,8 @@ PAGINA_INTERFATA_WEB = "<!DOCTYPE html>" + _CAP + "Interfața web" + _STIL + """
       <input type="number" id="port" min="80" max="65535" step="1" inputmode="numeric"></div>
     <div class="butoane"><button type="button" id="schimbaPort">Schimbă portul</button></div>
     <p class="nota" id="portNota"></p>
+    <div class="rand"><label for="capturaInterval">Actualizarea imaginii pe prima pagină web</label>
+      <select id="capturaInterval"><option value="0">Oprită</option><option value="1">1 s</option><option value="2">2 s</option><option value="3">3 s</option><option value="4">4 s</option><option value="5">5 s</option><option value="6">6 s</option><option value="7">7 s</option><option value="8">8 s</option><option value="9">9 s</option><option value="10">10 s</option></select></div>
   </section>
   <section class="card">
     <h2>Acces</h2>
@@ -1822,6 +2067,8 @@ function arataAcces(a){
   $("parolaLocala").textContent = a.parola_web ? "Ai pus parolă pentru interfața web: browserele și aplicațiile din casă o cer. O scoți sau o schimbi în Parola receptorului (/acces-ssh)." : "Din rețeaua de acasă nu se cere nici cod, nici parolă. O parolă (una singură, pentru tot) pui numai dacă vrei, în Parola receptorului (/acces-ssh).";
   $("aplicatii").value = a.aplicatii ? "1" : "0";
   $("aplicatiiAfara").value = a.aplicatii_afara ? "1" : "0";
+  // la cate secunde cere prima pagina imaginea ecranului (0 = oprita; plugin.intervalCaptura)
+  if(a.captura_interval !== undefined){ $("capturaInterval").value = String(a.captura_interval); }
   A = a;
   var p = PAROLA || NEARATATA, t = [];
   if(a.aplicatii){
@@ -1877,8 +2124,8 @@ $("activ").addEventListener("change", function(){
   }
 });
 $("schimbaPort").addEventListener("click", function(){ cuConfirmare("/api/interfata-web-actiune", actiune("port", $("port").value.trim()), dupa); });
-["aplicatii", "aplicatiiAfara"].forEach(function(id){
-  var cheie = {aplicatii: "aplicatii", aplicatiiAfara: "aplicatii_afara"}[id];
+["aplicatii", "aplicatiiAfara", "capturaInterval"].forEach(function(id){
+  var cheie = {aplicatii: "aplicatii", aplicatiiAfara: "aplicatii_afara", capturaInterval: "captura_interval"}[id];
   $(id).addEventListener("change", function(){
     var q = new URLSearchParams(); q.set(cheie, $(id).value);
     mesaj("Se salvează...");
@@ -1972,6 +2219,9 @@ TEXTE_PAGINA = {
 		N_("http://"),
 		N_("Listele și conturile tale"),
 		N_("Pe televizor, OK deschide grupele sursei. MENU arată datele de acces și serialele."),
+		N_("Emisiunile trecute"),
+		N_("Pentru alt canal: pornește-l pe televizor, apoi apasă Reîncarcă. Pe televizor: MENU pe canal în lista de canale, apoi Emisiunile trecute."),
+		N_("Reîncarcă"),
 		N_("Canalele apar singure în lista de canale, la Sateliți, pe rândul IPTV. Le poți pune în Favorite și în orice buchet, ca pe celelalte."),
 		N_("Actualizează toate"),
 		N_("Adaugă ce ți-a dat furnizorul"),
@@ -2015,11 +2265,10 @@ TEXTE_PAGINA = {
 		N_("Activează HdsWebControl"),
 		N_("Port TCP"),
 		N_("Schimbă portul"),
+		# 0.7.5 (SCR): la cate secunde cere prima pagina imaginea ecranului (1-10 s raman "N s")
+		N_("Actualizarea imaginii pe prima pagină web"),
+		N_("Oprită"),
 		N_("Acces"),
-		N_("Ai pus parolă pentru interfața web: browserele și aplicațiile din casă o cer. O scoți sau o schimbi în Parola receptorului (/acces-ssh)."),
-		N_("Din rețeaua de acasă nu se cere nici cod, nici parolă. O parolă (una singură, pentru tot) pui numai dacă vrei, în Parola receptorului (/acces-ssh)."),
-		N_("Aplicații de telefon: și acasă scrii utilizatorul root și parola ta (pusă în Parola receptorului)."),
-		N_("(se arată la buton)"),
 		N_("Aplicații de telefon"),
 		N_("Acces din afara casei"),
 		N_("Arată parola"),
@@ -2040,6 +2289,16 @@ TEXTE_PAGINA = {
 		N_("Cheie nouă pentru panoul web"),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__. Tema și culorile paginilor web sunt în "
 			"pagina Setări."),
+		# 0.7.5 (PRB, 14.11.2026): textele sablonului care lipseau din lista
+		N_("Găsește canalele 4K reale"),
+		N_("Se citește starea..."),
+		N_("Căutarea"),
+		N_("Pornește"),
+		N_("Oprește"),
+		N_("Receptorul citește câteva secunde din fiecare canal de internet care are 4K, UHD sau HDR în nume și află ce trimite de fapt, fără să-l arate pe ecran. Folosește o singură conexiune și se oprește singur când pornești un canal de internet. Canalele 4K adevărate intră în grupa \"4K adevărat\" din lista de canale. Căutarea săptămânală se pornește sau se oprește în Funcțiile televiziunii prin internet."),
+		N_("4K adevărat"),
+		N_("Cu 4K în nume, dar HD"),
+		N_("Aceeași căutare e pe televizor, în __DRUM_MENIU__."),
 	),
 	"js": (
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
@@ -2110,6 +2369,7 @@ TEXTE_PAGINA = {
 		N_("Se încarcă..."),
 		N_("Lista are prea multe canale: au intrat primele"),
 		N_("Merge."),
+		N_("Pornește pe televizor"),
 		N_("Actualizează"),
 		N_("Șterge"),
 		N_("Se trimite..."),
@@ -2121,7 +2381,6 @@ TEXTE_PAGINA = {
 		N_("Browser"),
 		N_(", din"),
 		N_("Niciun browser conectat cu cod."),
-		N_("Aplicații de telefon: și acasă scrii utilizatorul root și parola"),
 		N_("Aplicații de telefon: acasă scrii în aplicație numai adresa receptorului, fără utilizator și "
 			"parolă."),
 		N_("Din afara casei: utilizatorul root și parola"),
@@ -2143,8 +2402,65 @@ TEXTE_PAGINA = {
 			"numai dacă vrei, în Parola receptorului (/acces-ssh)."),
 		N_("Aplicații de telefon: și acasă scrii utilizatorul root și parola ta (pusă în Parola "
 			"receptorului)."),
+		# 0.7.5 (PRB, 14.11.2026): textele sablonului care lipseau din lista
+		N_("Niciunul încă."),
+		N_("Niciunul."),
+		N_("Receptorul nu a putut citi starea."),
 	),
 }
+
+
+PAGINA_IPTV_4K = "<!DOCTYPE html>" + _CAP + "Găsește canalele 4K reale" + _STIL + """<h1>Găsește canalele 4K reale</h1>
+<p class="mesaj" id="incarcare">Se citește starea...</p>
+<div id="continut" class="ascuns">
+  <section class="card">
+    <h2>Căutarea</h2>
+    <p id="text"></p>
+    <progress id="bara" max="100" value="0" style="width:100%"></progress>
+    <div class="butoane"><button type="button" class="principal" id="porneste">Pornește</button>
+      <button type="button" id="opreste">Oprește</button></div>
+    <p class="nota">Receptorul citește câteva secunde din fiecare canal de internet care are 4K, UHD sau HDR în nume și află ce trimite de fapt, fără să-l arate pe ecran. Folosește o singură conexiune și se oprește singur când pornești un canal de internet. Canalele 4K adevărate intră în grupa "4K adevărat" din lista de canale. Căutarea săptămânală se pornește sau se oprește în Funcțiile televiziunii prin internet.</p>
+  </section>
+  <section class="card">
+    <h2>4K adevărat</h2>
+    <div id="buni"></div>
+  </section>
+  <section class="card">
+    <h2>Cu 4K în nume, dar HD</h2>
+    <div id="fals"></div>
+  </section>
+  <p class="nota">Aceeași căutare e pe televizor, în __DRUM_MENIU__.</p>
+</div>
+""" + _COADA + """var CEAS = null;
+function arata(d){
+  $("text").textContent = d.text || "";
+  var st = d.stare || {};
+  $("bara").value = st.total ? Math.round(100 * (st.facute || 0) / st.total) : 0;
+  $("porneste").disabled = !!st.lucreaza || !d.surse;
+  $("opreste").disabled = !st.lucreaza;
+  var buni = [], fals = [];
+  (d.canale || []).forEach(function(c){
+    var t = c.nume + " · " + c.w + "x" + c.h + " " + c.cod + (c.hdr ? " · " + c.hdr : "");
+    (c.e4k ? buni : fals).push(rand(c.e4k ? t : c.nume + " · " + c.eticheta));
+  });
+  pune("buni", buni.length ? buni : [gol("Niciunul încă.")]);
+  pune("fals", fals.length ? fals : [gol("Niciunul.")]);
+  if(st.lucreaza && !CEAS){ CEAS = setInterval(citeste, 2000); }
+  if(!st.lucreaza && CEAS){ clearInterval(CEAS); CEAS = null; }
+}
+function trimite(cale){
+  mesaj("Se trimite...");
+  return cerere(cale, "POST", new URLSearchParams()).then(function(d){ mesaj(d.message, !d.result); if(d.stare){ arata(d); citeste(); } }).catch(nimicNuRaspunde);
+}
+function citeste(){
+  return cerere("/api/iptv-4k").then(function(d){
+    if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi starea."; return; }
+    arataPagina(); arata(d);
+  }).catch(faraRaspuns);
+}
+$("porneste").addEventListener("click", function(){ trimite("/api/iptv-4k-porneste"); });
+$("opreste").addEventListener("click", function(){ trimite("/api/iptv-4k-opreste"); });
+citeste();""" + _SFARSIT
 
 
 def _traducePagina(sablon, fel="pagina"):

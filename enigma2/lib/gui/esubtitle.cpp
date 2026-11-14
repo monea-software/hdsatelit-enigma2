@@ -1004,7 +1004,7 @@ void eSubtitleWidget::layoutText()
 		if (!a.font.empty())
 		{
 			puncteDeCod(e.text, coduri);
-			if (!coduri.empty() && eTextPara::missingGlyphs(al.familie, coduri) != 0)
+			if (!coduri.empty() && eTextPara::missingGlyphs(al.familie, coduri, true) != 0)
 				al = alege(e.face, false);
 		}
 		litere_element[i] = new gFont(al.familie, marime_fel[e.face]);

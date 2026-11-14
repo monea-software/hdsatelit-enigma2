@@ -4249,6 +4249,8 @@ TEXTE_PAGINA = {
 		N_("Root"),
 		N_("Gold"),
 		N_("Combo"),
+		# 0.7.5 (PRB, 14.11.2026): textele sablonului care lipseau din lista
+		N_("TV"),
 	),
 	"js": (
 	),

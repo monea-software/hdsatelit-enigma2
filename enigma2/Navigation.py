@@ -70,16 +70,25 @@ class Navigation:
 
 	def dispatchEvent(self, i):
 		m = _masura
+		# un plugin extern cazut intr-un ascultator nu mai opreste ceilalti ascultatori (HdsPluginExtern.ascultatorCazut)
 		if m is not None and m.activ():
 			t = _monoton()
 			for x in self.event:
 				a = _monoton()
-				x(i)
+				try:
+					x(i)
+				except Exception:
+					if not _pluginCazut(x, i):
+						raise
 				m.ascultator(i, x, _monoton() - a)
 			m.eveniment(i, t, _monoton() - t)
 		else:
 			for x in self.event:
-				x(i)
+				try:
+					x(i)
+				except Exception:
+					if not _pluginCazut(x, i):
+						raise
 		if i == iPlayableService.evEnd:
 			self.currentlyPlayingServiceReference = None
 			self.currentlyPlayingService = None
@@ -260,6 +269,16 @@ class Navigation:
 
 	def stopUserServices(self):
 		self.stopService()
+
+
+def _pluginCazut(ascultator, eveniment):
+	"""True cand eroarea luata acum vine dintr-un plugin extern (raportata si scrisa in jurnal): bucla merge mai departe."""
+	try:
+		from Components.HdsPluginExtern import ascultatorCazut
+	except Exception:
+		return False
+	return ascultatorCazut("Navigation.dispatchEvent(%d) -> %s" % (eveniment, getattr(ascultator, "__qualname__", None) or
+		type(ascultator).__name__))
 
 
 def _refText(ref):

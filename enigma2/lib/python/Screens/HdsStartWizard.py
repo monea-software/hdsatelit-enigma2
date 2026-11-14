@@ -717,8 +717,10 @@ def _listaAlegerilor():
 class HdsStartWizard(Screen, ConfigListScreen):
     """
     Asistentul HD Satelit de la prima pornire (Full HD 1080p nativ):
-    1. Configurare: sus limba (textele asistentului se schimba pe loc), jos rezolutia (numai modurile acceptate de
-       televizor, cand le anunta; un mod nou ramane numai dupa confirmare, altfel revine dupa 20 s). VERDE termina.
+    1. Configurare: sus limba (de la inceput limba tarii aflate la pornire, engleza cand tara nu se stie, romana numai
+       pentru Romania si Moldova: Components/HdsLimbaTara.py; textele asistentului se schimba pe loc), jos rezolutia
+       (numai modurile acceptate de televizor, cand le anunta; un mod nou ramane numai dupa confirmare, altfel revine
+       dupa 20 s). VERDE termina.
     2. Functiile principale ale receptorului (Components/HdsFunctii.py, aceeasi lista ca in "Despre imagine" si in web),
        optional pe ALBASTRU, pe grupe, derulate cu CH+/CH-, sus/jos sau stanga/dreapta.
        VERDE sau OK termina: config.misc.firstrun=False pe disc, asistentul se inchide si interfata deschide meniul
@@ -845,6 +847,10 @@ class HdsStartWizard(Screen, ConfigListScreen):
 
         # pagina curenta (inainte de initWizardConfigs: notificarea limbii o citeste)
         self.currentStep = self.STEP_CONFIG
+        # limba tarii venita dupa deschidere (verificaLimbaTarii) se pune numai cat omul nu a atins randul limbii
+        self._limbaAtinsa = False
+        self._limbaAutomata = False
+        self._ceasLimba = None
         self.initWizardConfigs()
 
         # Taste
@@ -920,6 +926,8 @@ class HdsStartWizard(Screen, ConfigListScreen):
         """notificarea lui cfg_lang (la STANGA / DREAPTA si la alegerea din lista): limba se aplica pe loc, iar pagina
         se scrie din nou in limba aleasa"""
         self.selected_lang = configElement.value
+        if not getattr(self, "_limbaAutomata", False):
+            self._limbaAtinsa = True
         try:
             language.activateLanguage(self.selected_lang)
         except Exception as e:
@@ -996,10 +1004,13 @@ class HdsStartWizard(Screen, ConfigListScreen):
         lang_choices.sort(key=lambda x: cheieSortare(x[1]))
         lang_choices.insert(0, ("ro_RO", native_map["ro_RO"]))
 
-        chosen_default = "ro_RO"
+        # limba de inceput: cea aleasa deja de om (setari), altfel limba tarii aflate la pornire, altfel engleza
+        # (Components/HdsLimbaTara.py; romana numai pentru Romania si Moldova); omul o schimba din randul ei
+        self._coduriLimbi = [c for c, _n in lang_choices]
+        chosen_default = self.limbaDeInceput(self._coduriLimbi)
         self.selected_lang = chosen_default
         try:
-            language.activateLanguage("ro_RO")
+            language.activateLanguage(chosen_default)
         except Exception:
             pass
         self.cfg_lang = ConfigSelection(default=chosen_default, choices=lang_choices)
@@ -1030,6 +1041,80 @@ class HdsStartWizard(Screen, ConfigListScreen):
     def startWizard(self):
         print("[HdsStartWizard] pagina 1: limba si rezolutia")
         self.setStep(self.STEP_CONFIG)
+        self.pornesteCeasulLimbii()
+
+    @staticmethod
+    def modulLimbaTara():
+        """Components/HdsLimbaTara.py, sau None (probele de pe PC fara el)"""
+        try:
+            from Components import HdsLimbaTara
+            return HdsLimbaTara
+        except ImportError:
+            return None
+
+    def limbaDeInceput(self, coduri):
+        """limba cu care se deschide pagina 1, dintre `coduri` (Components/HdsLimbaTara.limbaDeInceput)"""
+        M = self.modulLimbaTara()
+        if M is None:
+            return "en_EN" if "en_EN" in coduri else coduri[0]
+        return M.limbaDeInceput(coduri)
+
+    def pornesteCeasulLimbii(self):
+        """cat se cauta inca tara, un ceas la INTERVAL_MS (verificaLimbaTarii); fara eTimer (PC), nimic"""
+        M = self.modulLimbaTara()
+        if M is None or not M.inLucru() or self._ceasLimba is not None:
+            return
+        try:
+            from enigma import eTimer
+            self._ceasLimba = eTimer()
+            self._ceasLimba.callback.append(self.verificaLimbaTarii)
+            self._ceasLimba.start(M.INTERVAL_MS, False)
+        except Exception as e:
+            self._ceasLimba = None
+            print("[HdsStartWizard] ceasul limbii: %r" % (e,))
+            return
+        if getattr(self, "onClose", None) is not None:
+            self.onClose.append(self.opresteCeasulLimbii)
+
+    def opresteCeasulLimbii(self):
+        if self._ceasLimba is not None:
+            self._ceasLimba.stop()
+            self._ceasLimba = None
+
+    def verificaLimbaTarii(self):
+        """Dupa ce s-a aflat tara (Components/HdsLimbaTara.py), limba ei pe loc, cu un rand in jurnal, numai daca omul nu
+        a atins randul limbii si e inca pe pagina 1; altfel ramane limba lui."""
+        M = self.modulLimbaTara()
+        if M is not None and M.inLucru():
+            return
+        if not getattr(self, "execing", True):
+            # alt ecran deasupra (lista limbilor sau a rezolutiilor, intrebarea rezolutiei): ceasul se uita din nou
+            return
+        self.opresteCeasulLimbii()
+        limba = M.limbaDupaTara(self._coduriLimbi) if M is not None else None
+        if limba is None:
+            return
+        de_ce = M.deCe(self._coduriLimbi)
+        if self._limbaAtinsa or self.currentStep != self.STEP_CONFIG:
+            M.jurnal("%s; omul a ales sau a mers mai departe, ramane %s" % (de_ce, self.cfg_lang.value))
+            return
+        if limba == self.cfg_lang.value:
+            M.jurnal("limba ramane %s: %s" % (limba, de_ce))
+            return
+        M.jurnal("limba schimbata pe loc in %s: %s" % (limba, de_ce))
+        # notificarea lui cfg_lang (onLanguageChanged) aplica limba si rescrie pagina; nu se socoteste alegerea omului;
+        # randul pe care sta omul ramane luminat (setStep il muta pe primul)
+        try:
+            rand = self["config"].getCurrentIndex()
+        except Exception:
+            rand = None
+        self._limbaAutomata = True
+        try:
+            self.cfg_lang.value = limba
+        finally:
+            self._limbaAutomata = False
+        if rand and self["config"].instance is not None:
+            self["config"].instance.moveSelectionTo(rand)
 
     @staticmethod
     def valoareFixa(cfg):
@@ -1257,7 +1342,9 @@ class HdsStartWizard(Screen, ConfigListScreen):
             self["config"].instance.moveSelection(self["config"].instance.moveDown)
 
     def keyGreen(self):
-        # pagina 1: limba se salveaza oricum; o rezolutie noua numai dupa confirmare (continua in videoConfirmed)
+        # pagina 1: limba se salveaza oricum; o rezolutie noua numai dupa confirmare (continua in videoConfirmed). Cu
+        # VERDE omul a primit limba de pe ecran: limba tarii venita mai tarziu nu o mai schimba (verificaLimbaTarii)
+        self._limbaAtinsa = True
         self.salveazaLimba()
         if self.askVideoMode():
             return
@@ -1344,6 +1431,7 @@ class HdsStartWizard(Screen, ConfigListScreen):
         """Terminare: semnele de prima pornire pe disc (asistentul nu mai porneste: StartWizard.py il
         inregistreaza pe config.misc.firstrun), apoi asistentul se inchide si interfata deschide meniul principal"""
         print("[HdsStartWizard] asistent terminat: firstrun=False, se deschide meniul principal")
+        self.opresteCeasulLimbii()
         # ConfigSubsection.__getattr__ arunca KeyError pentru o cheie lipsa, deci se cauta in content.items
         for key in ("firstrun", "languageselected", "defaultchosen", "videowizardenabled"):
             item = config.misc.content.items.get(key)

@@ -1,0 +1,35 @@
+# HD Satelit: regulile garzii de model pentru Hitube 4K Combo Plus (masina u57, MACHINEBUILD hitube4kplus), NECONFIRMAT
+# (MU5, 12.11.2026: profilul alfa 0.7.4 al familiei u57; dovezile in paralel-1111b/STADIU-MU5.md, pasul 1).
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Aceeasi masina ca V20, V30 si Protek 4K X2 (u57.conf din meta-dinobot, OE-Alliance 6.0: MACHINEBUILDS dinobot4ktwin
+# hitube4kplus hitube4kpro iziboxelite4k iziboxx4 protek4kx2 viper4kv20 viper4kv30). Imaginea publica a altei echipe
+# pentru hitube4kplus (8.0.1, 12.11.2026) are, fata de cea V20 din aceeasi constructie, ACELASI kernel.bin (sha256),
+# aceleasi drivere (u57-drivers 20211209), aceleasi module, acelasi showiframe si aceleasi 821 de pachete: difera numai
+# numele, desenul telecomenzii (hitube2) si dosarul de pe stick. Cipul (Hi3798MV200) si tipul placii (u57, constanta din
+# hi-dvb.ko al driverelor u57) sunt deci aceleasi ca la V20.
+# kernel_part=mmcblk0p9, rootfs_part=mmcblk0p10: MTD_KERNEL si MTD_ROOTFS din dinobot-oem.inc (randurile hitube4kplus),
+# aceleasi ca la V20; reteta le compara cu constructia.
+# hw, partitions si kernel_kib sunt cele de la V20 (nemasurate pe un Hitube 4K Combo Plus): avertismente pana la fisa
+# unui tester, apoi se inlocuiesc cu cele masurate si randul confirmat=nu se scoate.
+# upd_path: dosarul in care Maintenance Mode cauta imaginea pe stick; enigma2.sh il scrie in /proc/stb/info/upd_path
+# inainte de showiframe. Tabelul fix de nume din showiframe-ul u57 nu are hitube4kplus (are numai hitube4k, alt receptor,
+# u55), deci fara upd_path eticheta ar iesi goala. /dinobot/u57 = IMAGEDIR din dinobot-oem.inc, pe care imaginile publice
+# pentru acest receptor il scriu la pornire in acelasi nod (/etc/init.d/loadmodules: "/$imagedir"): un receptor venit de
+# pe ele are deja eticheta /dinobot/u57, iar cu eticheta goala Maintenance Mode cauta tot in dinobot/u57.
+# emmc_min_kib nu se pune: memoria interna nu e masurata de nimeni pentru noi.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=hitube4kplus.
+format=1
+distro=hdsatelit
+model=Hitube 4K Combo Plus
+machine=u57
+machinebuild=hitube4kplus
+chip=Hi3798MV200
+boxtype=u57
+hw=U5SLIM
+partitions=boot:1M,bootargs:1M,baseparam:4M,pqparam:4M,logo:4M,deviceinfo:4M,loader:32M,trustedcore:8M,kernel:32M,rootfs
+kernel_part=mmcblk0p9
+kernel_kib=32768
+rootfs_part=mmcblk0p10
+upd_path=/dinobot/u57
+confirmat=nu

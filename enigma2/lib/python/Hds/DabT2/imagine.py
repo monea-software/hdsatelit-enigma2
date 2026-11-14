@@ -10,7 +10,9 @@ In imagine nu exista descriptori de plugin si nici steag de dezactivare:
                       captura se leaga de tasta (numai daca setarea e pornita). Nimic greu: releele pornesc abia la
                       zap pe un post al nostru; curatarea releelor ramase, buchetele puse prima data si rescrierea o
                       singura data a referintelor vechi din buchete (port, forma sunetului DAB; SEMN_PORT) si a
-                      marcajelor ansamblurilor („MUX DAB+: ...”; SEMN_MARCAJE) merg in fir de fundal.
+                      marcajelor ansamblurilor („MUX DAB+: ...”; SEMN_MARCAJE) merg in fir de fundal; la fel
+                      buchetele scrise in alta limba decat a interfetei (SEMN_LIMBA, retradu), si la fiecare
+                      schimbare a limbii (Components.Language).
   opreste()           chemat din mytest.py la iesirea enigma2: marcajele protectiei la pornire se sterg primele
                       (sterge_marcajele), apoi releele se opresc, tunerul se elibereaza.
   descarcarea zilnica a listelor (liste.Zilnic) porneste aici; merge numai cu setarea ei pornita.
@@ -27,6 +29,7 @@ import os
 
 from . import coordonator, jurnal
 from . import profil as _profil
+from .limba import _ as _tr
 
 AICI = os.path.dirname(os.path.abspath(__file__))
 CALE_DAB = os.path.join(AICI, 'dab')
@@ -49,6 +52,13 @@ SEMN_PORT_FORMA = 'port-%d-%s'
 # semnul (in dosarul de date al profilului) ca marcajele ansamblurilor din buchetul nostru au primit o data numele de
 # acum („MUX DAB+: <ansamblu>”, „MUX DVB-T2: <nume>”, buchete.redenumeste_marcajele)
 SEMN_MARCAJE = 'marcaje-mux'
+
+# semnul (in dosarul de date al profilului) cu limba in care s-a scris buchetul: numele lui si numele multiplexurilor
+# („MUX DVB-T2: Dasto Semtel (Bosna i Hercegovina)”, nume.nume_feed) sunt scrise in fisier in limba receptorului. La
+# pornire, daca limba e alta decat cea din semn (si la prima pornire a unei versiuni care scria numele in romana), si
+# la fiecare schimbare a limbii (Components.Language), buchetul se reface in fundal: numele noastre trec in limba noua,
+# referintele, ordinea si numele puse de om raman (buchete.compune)
+SEMN_LIMBA = 'limba-buchet'
 
 # DAB in imagine: sunetul ca TS cu un program pe tipul 1 (eHdsFluxHttp, decodorul placii: AAC-LATM si MP2). Pe
 # receptor 4097 nu poate suna: gstreamer nu are tsdemux si nici decodor AAC, iar dvbaudiosink refuza LOAS/LATM
@@ -192,7 +202,7 @@ def pune_buchetele(profiluri_, director_enigma2=None):
     for prof in profiluri_:
         cale = os.path.join(director, prof.buchet)
         if not os.path.exists(cale):
-            buchete.scrie_atomic(cale, ('#NAME %s\n' % prof.nume_buchet).encode('utf-8'))
+            buchete.scrie_atomic(cale, ('#NAME %s\n' % _tr(prof.nume_buchet)).encode('utf-8'))
             scris = True
         if buchete.asigura_index(prof, director):
             scris = True
@@ -326,6 +336,95 @@ def _buchete_puse(ok, rez):
         buchete.reincarca_buchete()
 
 
+def limba_acum():
+    """Limba interfetei („it_IT”), sau „” fara Components.Language."""
+    from . import limba
+    return limba.limba_enigma2() or ''
+
+
+def _limba_din_semn(prof):
+    """Limba din semn, sau None fara semn (scrierile raman in buchete.py: imagine.py nu deschide fisiere)."""
+    from . import buchete
+    text = buchete._citeste_text(os.path.join(prof.director, SEMN_LIMBA))
+    if text is None:
+        return None
+    if isinstance(text, bytes):
+        text = text.decode('utf-8', 'replace')
+    return text.strip()
+
+
+def de_tradus(limba_=None, director_enigma2=None):
+    """Profilurile al caror buchet exista si a fost scris in alta limba decat cea de acum (fara semn: scris de o
+    versiune care punea numele in romana). Cateva os.stat si un fisier mic, pe firul principal."""
+    from . import buchete
+    limba_ = limba_acum() if limba_ is None else limba_
+    if not limba_:
+        return []
+    director = director_enigma2 or buchete.DIRECTOR_ENIGMA2
+    rez = []
+    for prof, _cale in profiluri():
+        if not os.path.exists(os.path.join(director, prof.buchet)) or _limba_din_semn(prof) == limba_:
+            continue
+        # un buchet scos de om din lista (fisierul ramas, de pilda dupa un editor de canale pe PC) nu revine: refacerea
+        # l-ar pune iar in bouquets.* (buchete.asigura_index), ca la pornire (SEMN_BUCHET)
+        index = buchete._citeste_text(os.path.join(director, prof.index_buchete))
+        if isinstance(index, bytes):
+            index = index.decode('utf-8', 'replace')
+        if index and ('"%s"' % prof.buchet) in index:
+            rez.append(prof)
+    return rez
+
+
+def traduce_buchetele(lucrari, limba_, director_enigma2=None):
+    """In fir, sub zavorul scrierilor: lucrari = [(profil, lista unita)]; fiecare buchet refacut in limba de acum
+    (buchete.reface, fara reincarcare), apoi semnul limbii. Un profil cazut nu primeste semnul (se reia la pornirea
+    urmatoare). -> True daca s-a schimbat vreun buchet."""
+    from . import buchete
+    schimbat = False
+    for prof, lista in lucrari:
+        rez = buchete.reface(prof, lista, director_enigma2, reincarca=False)
+        if rez.get('eroare'):
+            continue
+        schimbat = schimbat or bool(rez.get('schimbat'))
+        buchete.scrie_atomic(os.path.join(prof.director, SEMN_LIMBA), limba_.encode('utf-8'))
+        jurnal.noteaza(prof.eticheta, 'buchetul scris in limba %s' % limba_)
+    return schimbat
+
+
+def _buchete_traduse(ok, rez):
+    if not ok:
+        jurnal.noteaza('imagine', 'buchetele nu s-au putut scrie in limba noua (se reia la pornirea urmatoare): %s' % rez)
+    if not ok or rez:
+        from . import buchete
+        buchete.reincarca_buchete()
+
+
+def retradu(*_a):
+    """Pe firul principal (la pornire si din Components.Language la schimbarea limbii): buchetele scrise in alta limba
+    se refac in fundal, cu lista unita a fiecarui controlor. Nimic de facut de om. Nu arunca."""
+    try:
+        from .intrare import _controlori
+        limba_ = limba_acum()
+        lucrari = []
+        for prof in de_tradus(limba_):
+            c = _controlori.get(prof.nume)
+            if c is not None:
+                lucrari.append((prof, c.lista(forteaza=True)))
+        if lucrari:
+            _sub_zavor_in_fundal(traduce_buchetele, _buchete_traduse, lucrari, limba_)
+    except Exception:
+        jurnal.eroare('imagine', 'buchetele in limba noua')
+
+
+def _leaga_limba():
+    """retradu() la fiecare schimbare a limbii interfetei (o singura legatura pe proces)."""
+    if _stare.get('limba_legata'):
+        return
+    from Components.Language import language
+    language.addCallback(retradu)
+    _stare['limba_legata'] = True
+
+
 def porneste(sesiune):
     """Extensiile de zap si de inregistrare pentru DAB si T2, apoi captura pe tasta. Nu arunca."""
     from .intrare import controlor
@@ -383,6 +482,12 @@ def porneste(sesiune):
             _sub_zavor_in_fundal(redenumeste_marcajele, _marcaje_redenumite, marcaje)
     except Exception:
         jurnal.eroare('imagine', 'marcajele buchetelor')
+    # numele buchetelor si ale multiplexurilor in limba receptorului (SEMN_LIMBA), acum si la schimbarea limbii
+    retradu()
+    try:
+        _leaga_limba()
+    except Exception:
+        jurnal.eroare('imagine', 'legatura cu limba interfetei')
 
 
 def _sub_zavor_in_fundal(functie, la_gata, *argumente):

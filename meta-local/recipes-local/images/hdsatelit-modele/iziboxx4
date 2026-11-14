@@ -1,0 +1,31 @@
+# HD Satelit: regulile garzii de model pentru Izibox X4 4K OTT (masina u57, MACHINEBUILD iziboxx4), NECONFIRMAT
+# (MU5, 12.11.2026: profilul alfa 0.7.4 al familiei u57; dovezile in paralel-1111b/STADIU-MU5.md, pasul 1).
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Aceeasi masina ca V20, V30 si Protek 4K X2 (u57.conf din meta-dinobot, OE-Alliance 6.0). Imaginea publica a altei
+# echipe pentru iziboxx4 (8.0.1, 12.11.2026) are, fata de cea V20, ACELASI kernel.bin (sha256), aceleasi drivere
+# (u57-drivers 20211209), aceleasi module si acelasi showiframe; difera numele, desenul telecomenzii (izibox1), dosarul
+# de pe stick si un plugin in plus (clientul de retea pus de OE-Alliance pe iziboxx3/iziboxx4). Cipul (Hi3798MV200) si
+# tipul placii (u57) sunt deci aceleasi ca la V20. „OTT” din nume: tunerele nu sunt dovedite (fisa testerului le cere).
+# kernel_part=mmcblk0p9, rootfs_part=mmcblk0p10: MTD_KERNEL si MTD_ROOTFS din dinobot-oem.inc (randurile iziboxx4).
+# hw, partitions si kernel_kib sunt cele de la V20 (nemasurate pe un Izibox X4): avertismente pana la fisa unui tester,
+# apoi se inlocuiesc cu cele masurate si randul confirmat=nu se scoate.
+# upd_path=/izibox/u57: IMAGEDIR din dinobot-oem.inc (randul iziboxx4: izibox/u57), scris de imaginile publice pentru
+# acest receptor in /proc/stb/info/upd_path; tabelul fix de nume din showiframe nu are iziboxx4, deci fara upd_path
+# eticheta ar iesi goala (explicatia intreaga in iziboxelite4k).
+# emmc_min_kib nu se pune: memoria interna nu e masurata de nimeni pentru noi.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=iziboxx4.
+format=1
+distro=hdsatelit
+model=Izibox X4 4K OTT
+machine=u57
+machinebuild=iziboxx4
+chip=Hi3798MV200
+boxtype=u57
+hw=U5SLIM
+partitions=boot:1M,bootargs:1M,baseparam:4M,pqparam:4M,logo:4M,deviceinfo:4M,loader:32M,trustedcore:8M,kernel:32M,rootfs
+kernel_part=mmcblk0p9
+kernel_kib=32768
+rootfs_part=mmcblk0p10
+upd_path=/izibox/u57
+confirmat=nu

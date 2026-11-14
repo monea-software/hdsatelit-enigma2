@@ -26,6 +26,9 @@ _COMMANDS = ('update', 'upgrade', 'install', 'remove', 'list', 'list_installed',
 # (Components/HdsExtensiiLucru.py, packages made only for Python 2)
 # --force-overwrite and --force-reinstall: only for skins (enigma2-plugin-skins-*), as in OE-Alliance (HdsExtensiiLucru.optiuniTema)
 _OPTIONS = ('--autoremove', '--noaction', '--force-depends', '--download-only', '--force-overwrite', '--force-reinstall')
+# HDSatelit 0.7.5: the packages of the image skin (HDSatelit) are never removed from the image (the skin list and the
+# web page /skin cannot delete it, and the receiver falls back to it when the skin on screen is deleted)
+PROTECTED_REMOVE = frozenset(('hdsatelit-skin', 'enigma2', 'enigma2-hdsatelit'))
 _PROGRAMS = ('/usr/bin/opkg', '/bin/opkg', '/usr/sbin/opkg', '/usr/local/bin/opkg')
 
 
@@ -80,6 +83,9 @@ def opkgArguments(command, packages = (), options = (), roots = PACKAGE_FILE_ROO
 			return None
 		arguments.append(option)
 	for package in packages:
+		if command == 'remove' and package in PROTECTED_REMOVE:
+			print("[Ipkg] package of the image refused for remove: %r" % (package,))
+			return None
 		argument = packageArgument(package, roots)
 		if argument is None:
 			print("[Ipkg] package refused: %r" % (package,))

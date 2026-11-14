@@ -118,6 +118,7 @@ _FELURI_INREGISTRARE = (
 
 # evenimentele pe care receptorul nostru nu le trimite; primesc numere negative, care nu vin niciodata
 _EVENIMENTE = {
+	# evNewProgramInfo: din 0.7.5 in nucleu (lib/service/iservice.h); ramane aici pentru nucleele mai vechi
 	"iPlayableService": ("evNewProgramInfo", "evGstreamerPlayStarted", "evFccFailed", "evUpdateTags", "evUpdateIDv3Cover",
 		"evGstreamerStart", "evResumed", "evStreamError", "evTimeshiftError"),
 	"iRecordableService": ("evTuneStart", "evPvrTuneStart", "evRecordAborted", "evGstRecordEnded", "evPvrEof",

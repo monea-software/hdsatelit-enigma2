@@ -54,6 +54,18 @@ HDS_COLOANE_DALE = HdsDale.COLOANE
 mdom = xml.etree.ElementTree.parse(resolveFilename(SCOPE_SKIN, 'menu.xml'))
 
 
+# HDSatelit: „Caută în meniu” e primul rand pe ORICE pagina de meniu (meniul principal, Setări, orice submeniu), pus aici,
+# in Menu.__init__, ca orice meniu nou sa-l primeasca singur (Eduard, 13.11.2026). Randul nu are cifra: cifrele 1-9
+# numara randurile de sub el, ca inainte (fara scurtatura 0: apasarea ar ajunge si in campul cautarii). Intrarile din
+# menu.xml care deschid acelasi ecran (Components/HdsCautaSetari.ID_PROPRII: prima din Setări, cea din meniul principal)
+# se sar pe televizor, ca sa nu apara de doua ori; raman in menu.xml pentru interfata web si index.
+ID_RAND_CAUTARE = "hds_cauta_meniu"
+try:
+	from Components.HdsCautaSetari import ID_PROPRII as _ID_CAUTARE_XML
+except ImportError:
+	_ID_CAUTARE_XML = frozenset(("hds_cauta_setari", "hds_cauta_setari_principal"))
+
+
 # coloanele randului de meniu dupa numele sabloanelor temelor (Components/Converter/XmlMultiContent.py); Number si Image nu
 # exista la noi (glif e numele pictogramei noastre, nu un caracter de font), deci raman goale
 INDEX_MENIU = {"Text": 0, "NumberText": 0}
@@ -344,6 +356,13 @@ class Menu(Screen):
 		destList.append(intrareMeniu(MenuTitle, a, entryID, weight, _(node.get("text") or "??"), _hdsStare(node),
 			_glifNod(node)))
 
+	def deschideMeniu(self, nod):
+		"""Submeniul `nod` (intrarile cu meniu=), ca o intrare <menu>: salveaza setarile la inchidere daca are flushConfigOnClose."""
+		if nod.get("flushConfigOnClose"):
+			self.session.openWithCallback(self.menuClosedWithConfigFlush, Menu, nod)
+		else:
+			self.session.openWithCallback(self.menuClosed, Menu, nod)
+
 	def menuClosedWithConfigFlush(self, *res):
 		configfile.save()
 		self.menuClosed(*res)
@@ -366,6 +385,15 @@ class Menu(Screen):
 		simplu = _(node.get("text") or "??")
 		stare = _hdsStare(node)
 		glif = _glifNod(node)
+		cheie = node.get("meniu")
+		if cheie:
+			# HDSatelit: meniu="<key>" deschide submeniul cu acel key din menu.xml (de pilda „Scanare” din Setări > Tunere
+			# și scanare, locul din meniul standard): același meniu, nimic dublat în fișier
+			nod = nodMeniu(cheie)
+			if nod is not None:
+				destList.append(intrareMeniu(_hdsTextNod(node, _), boundFunction(self.deschideMeniu, nod), entryID, weight,
+					simplu, stare, glif))
+			return
 		for x in node:
 			if x.tag == 'screen':
 				module = x.get("module")
@@ -463,7 +491,10 @@ class Menu(Screen):
 		self.skinName.append("Menu")
 
 		# Sort by Weight
+		list = [x for x in list if x[2] not in _ID_CAUTARE_XML]
 		list.sort(key=lambda x: int(x[3]))
+		# „Caută în meniu”, primul rand (vezi ID_RAND_CAUTARE)
+		list.insert(0, intrareMeniu(_("Caută în meniu"), self.cautaSetari, ID_RAND_CAUTARE, 0, glif="cauta"))
 
 		self._flatlist = list
 		self.list = list
@@ -473,6 +504,9 @@ class Menu(Screen):
 		self._dalaMut = False
 		self._dalaInstanta = None
 		self._alesInitial = self._indexDupaEntryID(alegere)
+		if self._alesInitial is None and len(list) > 1:
+			# cursorul pe primul rand de sub cautare, ca inainte: MENU, OK duce tot unde ducea
+			self._alesInitial = 1
 
 		self._surseJos()
 		self.onExecBegin.append(self._actualizeazaTasteMeniu)
@@ -718,8 +752,9 @@ class Menu(Screen):
 		glif = (x[6] if len(x) > 6 else None) or HdsDale.GLIF_INTRARE
 		maxim = g["nume_l"] - HdsDale.REZERVA_NUME
 		randuri, incape = HdsDale.rupeNume(simplu, lambda t: self._dalaLatime(t, g["nume_font"]), maxim)
+		# cifrele numara randurile de sub „Caută în meniu” (randul 0, fara cifra)
 		return {"simplu": simplu, "rupt": "\n".join(randuri), "incape": incape, "stare": stare, "glif": glif,
-			"cifra": str(i + 1) if i < 9 else None}
+			"cifra": str(i) if 0 < i <= 9 else None}
 
 	def _dalaPictograma(self, glif, aleasa):
 		g, s = self._dalaGeom, self._dalaScara
@@ -932,15 +967,14 @@ class Menu(Screen):
 	# ------------------------------------------------------------ tastele
 	def keyNumberGlobal(self, number):
 		print("menu keyNumber:", number)
+		# randul 0 e „Caută în meniu”: cifra 1 e randul de sub el (index 1), ca inainte
 		if self._modDale:
 			# cifra tinteste intrarea din lista plata (ca in modul lista), nu randul din grila
-			i = HdsDale.dupaCifra(number, len(self._flatlist))
+			i = HdsDale.dupaCifra(number, len(self._flatlist) - 1)
 			if i is not None:
-				self._dalaMuta(i)
+				self._dalaMuta(i + 1)
 				self.okbuttonClick()
 			return
-		# Calculate index
-		number -= 1
 		if len(self["menu"].list) > number:
 			self["menu"].setIndex(number)
 			self.okbuttonClick()
@@ -974,7 +1008,7 @@ class Menu(Screen):
 	def keyOptiuni(self):
 		"""Actiunile ecranului raman accesibile cu scurtaturile optionale oprite."""
 		from Screens.ChoiceBox import ChoiceBox
-		lista = [(_("Caută setări"), self.cautaSetari), (_("Listă sau dale"), self.comutaAspect),
+		lista = [(_("Caută în meniu"), self.cautaSetari), (_("Listă sau dale"), self.comutaAspect),
 			(_("Închide meniul"), self.closeRecursive)]
 		def ales(raspuns):
 			if raspuns is not None:
@@ -982,7 +1016,7 @@ class Menu(Screen):
 		self.session.openWithCallback(ales, ChoiceBox, title=_("Opțiunile ecranului"), list=lista)
 
 	def cautaSetari(self):
-		"""„Caută setări” (Screens/HdsCautaSetari.py); ecranul se incarca abia la apasare. Inchis cu MENU, inchide si
+		"""„Caută în meniu” (Screens/HdsCautaSetari.py); ecranul se incarca abia la apasare. Inchis cu MENU, inchide si
 		meniul, ca un submeniu."""
 		try:
 			from Screens.HdsCautaSetari import HdsCautaSetari
@@ -1013,6 +1047,14 @@ def _parinti():
 
 
 _PARINTI = {}
+
+
+def nodMeniu(cheie):
+	"""Nodul <menu> cu key-ul dat din menu.xml, sau None."""
+	for nod in mdom.getroot().iter("menu"):
+		if nod.get("key") == cheie:
+			return nod
+	return None
 
 
 def _titluNod(nod):

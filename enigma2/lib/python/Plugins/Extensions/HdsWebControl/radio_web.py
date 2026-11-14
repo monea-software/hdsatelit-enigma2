@@ -74,7 +74,7 @@ def _setari(S):
 	c = S.initConfig()
 	rez = {}
 	for nume in S.ORDINE:
-		element = getattr(c, nume)
+		element = S.element(nume, c)
 		d = {"eticheta": _t(S.ETICHETE[nume]), "descriere": _t(S.DESCRIERI[nume])}
 		if nume in S.DA_NU:
 			d["valoare"] = bool(element.value)
@@ -392,7 +392,7 @@ def seteaza(argumente, sesiune=None, S=None, RD=None, DES=None, E=None, configfi
 		rez.update({"result": False, "message": _t("Nu s-a trimis nicio setare.")})
 		return rez
 	for nume, v in noi.items():
-		element = getattr(c, nume)
+		element = S.element(nume, c)
 		element.value = v
 		element.save()
 	if configfile is None:
@@ -923,8 +923,6 @@ TEXTE_PAGINA = {
 		N_("Altă vizualizare"),
 		N_("Alte culori"),
 		N_("Egalizator"),
-		N_("Pe televizor, pe ecranul radio: tasta galbenă trece la altă vizualizare, tasta albastră la alte "
-			"culori. Alegerea se ține minte. Tasta verde deschide egalizatorul."),
 		N_("Barele urmăresc sunetul adevărat al postului, pe benzi de frecvență, oricare ar fi formatul "
 			"sunetului (MPEG, AAC, AC-3, E-AC-3, DTS, PCM), și când sunetul pleacă neschimbat spre bara de "
 			"sunet."),
@@ -954,7 +952,7 @@ TEXTE_PAGINA = {
 TEXTE_PAGINA["html"] += (
 	N_("Culorile urmează comenzile comune de vizionare. Preluarea lor de ecranul radio este opțională."),
 )
-TEXTE_PAGINA["js"] += (N_("Scurt: "), N_("Lung: "))
+TEXTE_PAGINA["js"] += (N_("Scurt:"), N_("Lung:"))
 
 
 def _traducePagina(sablon, fel="pagina"):

@@ -34,6 +34,16 @@
 # VERIFICAREA (verifica): fiecare partitie cu ext2, ext3 sau ext4 (fsck.ext4 -f -p) sau FAT (fsck.fat -a), apoi fiecare
 # montare de dinainte se pune la loc cum era (acelasi loc, acelasi tip, aceleasi optiuni; dupa o verificare reusita, pentru
 # scriere, si daca nucleul o pusese pe numai citire la o eroare), deci legaturile /media/hdd si /media/usb raman bune.
+# TERMENUL SI OPRIREA (Wlad, Amiko Viper 4K V10, forum 948 #2103/#2105, asistenta 272685, 13.11.2026): pe un stick cu tabela FAT
+# stricata rau (sute de "invalid access to FAT" cu valori la intamplare in dmesg) fsck.fat nu se mai termina, iar ecranul de
+# asteptare nu avea nicio tasta: omul a ramas blocat. Acum fiecare fsck are un termen (TERMEN_STICK_S la un stick, TERMEN_DISC_S la
+# un hard disk) si se poate opri oricand (opresteLucru: EXIT pe televizor, "Oprește verificarea" in web): intai SIGINT (fsck.ext4
+# se opreste curat; fsck.fat fara -w scrie reparatiile abia la sfarsit, deci oprit nu schimba nimic), dupa OPRIRE_BLANDA_S SIGKILL.
+# Tot asa cand memoria libera scade sub MEMORIE_MINIMA_KB (fsck.fat tine in memorie tabela si lanturile; V10 are 948 MB).
+# Starea trece pe loc in "eroare" cu motivul (oprit / a durat prea mult), chiar daca procesul e prins in I/O-ul unui stick mort si
+# nu moare; firul acela nu mai scrie peste starea noua, iar o lucrare noua asteapta pana se termina (_firViu). Iesirea lui fsck
+# merge in IESIRE_FSCK (/tmp), nu in jurnalul enigma2; jurnalul primeste comanda, durata, codul si ultimele randuri.
+# exFAT si NTFS (montate prin FUSE: fuseblk) nu se verifica aici: E_FARA_SISTEM, cu textul lui.
 #
 # INAINTE DE LUCRU (cu discul ales):
 #   - continut(): ce se pierde, spus pe nume: copiile setarilor HD Satelit (hdsatelit/copii-setari, citite de
@@ -104,7 +114,10 @@ MAX_LISTARE = 5000
 # Erorile, cu textele lui Harddisk.errorList (aceleasi coduri: rezultatul negativ e locul in lista)
 ERORI = ("Everything is fine", "Creating partition failed", "Mkfs failed", "Mount failed", "Create movie folder failed",
 	"Fsck failed", "Please Reboot", "Filesystem contains uncorrectable errors", "Unmount failed",
-	"Pe disc nu e niciun sistem de fișiere pe care receptorul îl poate verifica (ext2, ext3, ext4 sau FAT).")
+	"Pe disc nu e niciun sistem de fișiere pe care receptorul îl poate verifica (ext2, ext3, ext4 sau FAT).",
+	"Verificarea a fost oprită.",
+	"Verificarea a durat prea mult și a fost oprită.",
+	"Verificarea a fost oprită: receptorul rămânea fără memorie.")
 E_PARTITIE = -1
 E_MKFS = -2
 E_MONTARE = -3
@@ -114,8 +127,32 @@ E_REPORNIRE = -6
 E_NEREPARABIL = -7
 E_DEMONTARE = -8
 E_FARA_SISTEM = -9
+E_OPRIT = -10
+E_TERMEN = -11
+E_MEMORIE = -12
 
-_stare = {"lucru": None}
+# termenul unei verificari (masurat pe receptorul de probe, 13.11.2026: un FAT32 sanatos de 160 MB in 1 s, unul cu tabela stricata in 9 s, dar
+# unul de 4 GB cu tabela stricata nu se terminase nici dupa 7 minute); un hard disk mare cu ext4 cere cateva minute. Peste termen
+# verificarea se opreste (si pe ecran, si in web)
+TERMEN_STICK_S = 5 * 60
+TERMEN_DISC_S = 30 * 60
+OPRIRE_BLANDA_S = 5
+# ecranul de asteptare inchide singur dupa termen + atat, si daca procesul nu a murit (I/O-ul unui stick mort)
+REZERVA_ECRAN_S = 20
+IESIRE_FSCK = "/tmp/hds-verificare-disc.log"
+# /tmp e in RAM: pe un FAT stricat fsck.fat scrie un rand pe cluster (11 MB in 15 s pe receptorul de probe), deci fisierul se goleste cand trece
+# de atat si raman numai randurile de la urma
+IESIRE_MAX = 256 * 1024
+# codurile intoarse de Unelte.ruleaza cand procesul a fost oprit (codurile de iesire ale programelor sunt 0-255)
+COD_OPRIT = 1000
+COD_TERMEN = 1001
+COD_MEMORIE = 1002
+# masurat pe receptorul de probe (Viper 4K V20, 13.11.2026): pe un FAT32 de 4 GB cu tabela stricata fsck.fat -a nu se terminase dupa 7 minute si
+# ajunsese la 115 MB (pe 160 MB: 9 s, 36 MB); V10 are 948 MB, din care ~550 liberi. Sub atata memorie libera fsck se opreste.
+MEMORIE_MINIMA_KB = 64 * 1024
+MEMINFO = "/proc/meminfo"
+
+_stare = {"lucru": None, "fir": None, "oprire": None, "gen": 0}
 _lacat = threading.Lock()
 
 
@@ -133,6 +170,8 @@ def N_(text):
 
 # textele de mai jos se traduc la afisare
 N_("Pe disc nu e niciun sistem de fișiere pe care receptorul îl poate verifica (ext2, ext3, ext4 sau FAT).")
+N_("Verificarea a durat prea mult și a fost oprită.")
+N_("Verificarea a fost oprită: receptorul rămânea fără memorie.")
 
 
 def _jurnal(text):
@@ -159,16 +198,95 @@ class Unelte(object):
 	dosar_fd = "/proc/self/fd"
 	fstype = "/dev/fstype"
 
-	def ruleaza(self, argumente, date=None):
-		"""Codul de iesire al programului (127 cand nu porneste, ca /bin/sh)."""
+	def memorieLibera(self):
+		"""MemAvailable in kB (None cand nu se poate citi)."""
+		try:
+			with open(MEMINFO) as f:
+				for rand in f:
+					if rand.startswith("MemAvailable:"):
+						return int(rand.split()[1])
+		except (IOError, OSError, ValueError, IndexError):
+			pass
+		return None
+
+	def ruleaza(self, argumente, date=None, termen=None, oprire=None, iesire=None, memorie_minima=None):
+		"""Codul de iesire al programului (127 cand nu porneste, ca /bin/sh). Cu `termen` (secunde) sau `oprire` (un
+		threading.Event): procesul se urmareste la jumatate de secunda si se opreste (SIGINT, apoi SIGKILL) la termen
+		(COD_TERMEN), cand se cere oprirea (COD_OPRIT) sau cand memoria libera scade sub `memorie_minima` kB (COD_MEMORIE);
+		`iesire`: fisierul in care scrie programul (altfel nicaieri)."""
 		import subprocess
 		_jurnal("ruleaza: %s" % " ".join(argumente))
+		if termen is None and oprire is None:
+			try:
+				if date is None:
+					return subprocess.call(list(argumente), stdin=subprocess.DEVNULL)
+				return subprocess.run(list(argumente), input=date).returncode
+			except OSError:
+				return 127
+		f = None
 		try:
-			if date is None:
-				return subprocess.call(list(argumente), stdin=subprocess.DEVNULL)
-			return subprocess.run(list(argumente), input=date).returncode
-		except OSError:
-			return 127
+			if iesire:
+				try:
+					# O_APPEND: dupa golirea din bucla de mai jos programul scrie iar de la inceputul fisierului
+					f = open(iesire, "wb")
+					f.close()
+					f = open(iesire, "ab")
+				except (IOError, OSError):
+					f = None
+			tinta = f if f is not None else subprocess.DEVNULL
+			try:
+				p = subprocess.Popen(list(argumente), stdin=subprocess.DEVNULL, stdout=tinta, stderr=subprocess.STDOUT)
+			except OSError:
+				return 127
+			inceput = time.monotonic()
+			while True:
+				try:
+					return p.wait(timeout=0.5)
+				except subprocess.TimeoutExpired:
+					pass
+				if f is not None:
+					try:
+						if os.fstat(f.fileno()).st_size > IESIRE_MAX:
+							os.ftruncate(f.fileno(), 0)
+					except OSError:
+						pass
+				if oprire is not None and oprire.is_set():
+					self.opresteProces(p)
+					return COD_OPRIT
+				if termen is not None and time.monotonic() - inceput > termen:
+					self.opresteProces(p)
+					return COD_TERMEN
+				if memorie_minima:
+					libera = self.memorieLibera()
+					if libera is not None and libera < memorie_minima:
+						_jurnal("memorie libera %d kB, sub %d kB: opresc %s" % (libera, memorie_minima, argumente[0]))
+						self.opresteProces(p)
+						return COD_MEMORIE
+		finally:
+			if f is not None:
+				try:
+					f.close()
+				except (IOError, OSError):
+					pass
+				_pastreazaCoada(iesire, IESIRE_MAX)
+
+	def opresteProces(self, p):
+		"""SIGINT (fsck se opreste curat), apoi SIGKILL; nu asteapta la nesfarsit un proces prins in I/O (stare D)."""
+		import signal
+		import subprocess
+		for semnal, asteapta in ((signal.SIGINT, OPRIRE_BLANDA_S), (getattr(signal, "SIGKILL", signal.SIGTERM), OPRIRE_BLANDA_S)):
+			try:
+				p.send_signal(semnal)
+			except ValueError:
+				continue   # SIGINT nu exista pe Windows (probele de pe PC): trece la oprirea tare
+			except OSError:
+				return
+			try:
+				p.wait(timeout=asteapta)
+				return
+			except subprocess.TimeoutExpired:
+				pass
+		_jurnal("procesul %s nu s-a oprit (prins in I/O); merg mai departe" % p.pid)
 
 	def iesire(self, argumente):
 		"""Textul scris de program (gol la eroare)."""
@@ -251,6 +369,23 @@ class Unelte(object):
 		except (IOError, OSError):
 			pass
 		return self.iesire(("blkid", "-o", "value", "-s", "TYPE", _cale(self.dev, dispozitiv))).strip()
+
+
+def _pastreazaCoada(cale, maxim):
+	"""La sfarsit fisierul iesirii pastreaza numai ultimii `maxim` octeti (golirea din timpul rularii merge numai unde fisierul
+	e deschis cu O_APPEND si de program, pe Linux)."""
+	try:
+		with open(cale, "r+b") as f:
+			f.seek(0, 2)
+			if f.tell() <= maxim:
+				return
+			f.seek(-maxim, 2)
+			coada = f.read().lstrip(b"\0")
+			f.seek(0)
+			f.write(coada)
+			f.truncate()
+	except (IOError, OSError):
+		pass
 
 
 UNELTE = Unelte()
@@ -695,7 +830,14 @@ def intrebare(hdd, fel, sistem=None, inregistrari=None, unelte=None, acum=None):
 # ------------------------------------------------------------------ lucrarea
 
 def stareLucru():
-	return _stare["lucru"]
+	"""Lucrarea de acum. O verificare care a trecut de termen cu REZERVA_ECRAN_S (procesul nu s-a oprit, de pilda prins in
+	I/O-ul unui stick mort) se incheie aici cu motivul, ca televizorul si pagina web sa nu astepte dupa ea."""
+	l = _stare["lucru"]
+	if l is not None and l["stare"] == LUCRU_IN_LUCRU and l["fel"] == VERIFICARE and l.get("termen"):
+		if time.time() - (l.get("timp") or time.time()) > l["termen"] + REZERVA_ECRAN_S:
+			opresteLucru(E_TERMEN)
+			l = _stare["lucru"]
+	return l
 
 
 def inLucru():
@@ -703,19 +845,54 @@ def inLucru():
 	return l is not None and l["stare"] == LUCRU_IN_LUCRU
 
 
+def _firViu():
+	"""Firul unei lucrari oprite inca nu s-a terminat (de pilda fsck prins in I/O-ul unui stick mort, sau montarea la loc)."""
+	fir = _stare.get("fir")
+	return fir is not None and fir.is_alive()
+
+
+def termenVerificare(hdd):
+	"""Cate secunde poate tine verificarea discului: un stick mai putin decat un hard disk."""
+	return TERMEN_STICK_S if esteDetasabil(hdd) else TERMEN_DISC_S
+
+
 def _incepe(hdd, fel, sistem):
-	"""Pune starea "in lucru" pentru disc; False daca alta lucrare merge deja."""
+	"""Pune starea "in lucru" pentru disc; False daca alta lucrare merge deja (sau firul uneia oprite inca lucreaza)."""
 	try:
 		text = textDisc(hdd)
 	except Exception:
 		text = hdd.device
 	with _lacat:
-		if inLucru():
+		if inLucru() or _firViu():
 			return False
+		_stare["gen"] = _stare.get("gen", 0) + 1
+		_stare["oprire"] = threading.Event()
+		_stare["fir"] = None
 		_stare["lucru"] = {"fel": fel, "dispozitiv": hdd.device, "text_disc": text, "stare": LUCRU_IN_LUCRU,
 			"sistem": sistem or "", "rezultat": None, "eroare": "", "bine": "", "loc": "", "timp": time.time(),
-			"sfarsit": None}
+			"sfarsit": None, "gen": _stare["gen"], "termen": termenVerificare(hdd) if fel == VERIFICARE else 0}
 		return True
+
+
+def opresteLucru(motiv=E_OPRIT):
+	"""EXIT pe televizor, "Oprește verificarea" in web, sau termenul trecut (motiv E_TERMEN): opreste verificarea in lucru.
+	Starea trece PE LOC in "eroare" cu motivul, ca ecranul sa se poata inchide si cand procesul nu moare; firul opreste
+	fsck-ul si pune la loc montarile. Formatarea nu se opreste la jumatate (discul ar ramane fara sistem de fisiere).
+	True daca era o verificare in lucru."""
+	if motiv not in (E_OPRIT, E_TERMEN):
+		motiv = E_OPRIT
+	with _lacat:
+		l = _stare["lucru"]
+		if l is None or l["stare"] != LUCRU_IN_LUCRU or l["fel"] != VERIFICARE:
+			return False
+		oprire = _stare.get("oprire")
+		if oprire is not None:
+			oprire.set()
+		_stare["lucru"] = dict(l, stare=LUCRU_EROARE, rezultat=motiv, eroare=_(ERORI[-motiv]), sfarsit=time.time(),
+			oprit=True)
+	_jurnal("verificarea %s oprita (%s) dupa %d s" % (l["dispozitiv"], "termen" if motiv == E_TERMEN else "ceruta",
+		int(time.time() - (l.get("timp") or time.time()))))
+	return True
 
 
 def _demonteaza(montari, u):
@@ -823,9 +1000,38 @@ def _partitiiDeVerificat(disc, u, montari):
 	return rez
 
 
-def verifica(disc, unelte=None, verifica_nume=True):
-	"""Verificarea discului: fiecare partitie stiuta, apoi montarile de dinainte puse la loc. (rezultat, locul)."""
+def _ruleazaUrmarit(u, comanda, termen, oprire):
+	"""Comanda cu termen si oprire, cand uneltele le stiu (Unelte.ruleaza); falsurile mai vechi ale probelor primesc numai
+	comanda. (codul, urmarit)."""
+	try:
+		import inspect
+		parametri = inspect.signature(u.ruleaza).parameters
+	except (TypeError, ValueError):
+		parametri = {}
+	if "termen" not in parametri:
+		return u.ruleaza(comanda), False
+	return u.ruleaza(comanda, termen=termen, oprire=oprire, iesire=IESIRE_FSCK, memorie_minima=MEMORIE_MINIMA_KB), True
+
+
+def _jurnalIesire(cale, randuri=15):
+	"""Ultimele randuri scrise de fsck, in jurnalul enigma2 (raportul testerului le arata)."""
+	try:
+		with open(cale, "rb") as f:
+			f.seek(0, 2)
+			marime = f.tell()
+			f.seek(max(0, marime - 4096))
+			text = f.read().decode("utf-8", "replace")
+	except (IOError, OSError):
+		return
+	for rand in text.splitlines()[-randuri:]:
+		_jurnal("fsck: %s" % rand.rstrip())
+
+
+def verifica(disc, unelte=None, verifica_nume=True, termen=None, oprire=None):
+	"""Verificarea discului: fiecare partitie stiuta, apoi montarile de dinainte puse la loc. (rezultat, locul). `termen`:
+	secundele pentru toate partitiile (None: fara termen); `oprire`: threading.Event, setat de opresteLucru."""
 	u = _u(unelte)
+	pana = time.monotonic() + termen if termen else None
 	if verifica_nume and not _DISC_RX.match(disc or ""):
 		return E_FSCK, ""
 	montari = montariDisc(disc, u)
@@ -838,7 +1044,18 @@ def verifica(disc, unelte=None, verifica_nume=True):
 		return E_DEMONTARE, ""
 	rezultat = 0
 	for _p, comanda, fel in de_verificat:
-		res = u.ruleaza(comanda)
+		if oprire is not None and oprire.is_set():
+			rezultat = E_OPRIT
+			break
+		ramas = max(1, pana - time.monotonic()) if pana is not None else None
+		inceput = time.monotonic()
+		res, urmarit = _ruleazaUrmarit(u, comanda, ramas, oprire)
+		_jurnal("%s: cod %s dupa %.1f s" % (" ".join(comanda), res, time.monotonic() - inceput))
+		if urmarit:
+			_jurnalIesire(IESIRE_FSCK)
+		if res in (COD_OPRIT, COD_TERMEN, COD_MEMORIE):
+			rezultat = {COD_OPRIT: E_OPRIT, COD_TERMEN: E_TERMEN, COD_MEMORIE: E_MEMORIE}[res]
+			break
 		if fel == "ext":
 			if res & 2 == 2:
 				r = E_REPORNIRE
@@ -857,8 +1074,18 @@ def verifica(disc, unelte=None, verifica_nume=True):
 	return rezultat, (montari[0][1] if montari else "")
 
 
+def _alLucrarii(gen):
+	"""Starea de acum e tot a lucrarii `gen` si nu a fost deja incheiata de opresteLucru."""
+	l = _stare["lucru"]
+	return l is not None and l.get("gen") == gen and not l.get("oprit")
+
+
 def _fa(hdd, fel, sistem, unelte=None):
-	"""Formatarea sau verificarea si rezultatul in stare; o exceptie se tine minte si merge mai departe."""
+	"""Formatarea sau verificarea si rezultatul in stare; o exceptie se tine minte si merge mai departe. Dupa o oprire
+	(opresteLucru) starea ramane cea pusa acolo."""
+	gen = (_stare["lucru"] or {}).get("gen")
+	termen = (_stare["lucru"] or {}).get("termen") or None
+	oprire = _stare.get("oprire")
 	try:
 		if fel == INITIALIZARE:
 			if sistem not in sisteme(hdd):
@@ -869,16 +1096,22 @@ def _fa(hdd, fel, sistem, unelte=None):
 				marime = 0
 			rezultat, loc = formateaza(hdd.device, sistem, unelte, marime)
 		else:
-			rezultat, loc = verifica(hdd.device, unelte)
+			rezultat, loc = verifica(hdd.device, unelte, termen=termen, oprire=oprire)
 	except Exception as eroare:
 		_jurnal("%s %s: %s" % (fel, hdd.device, eroare))
-		_stare["lucru"] = dict(_stare["lucru"], stare=LUCRU_EROARE, eroare=str(eroare), sfarsit=time.time())
+		with _lacat:
+			if _alLucrarii(gen):
+				_stare["lucru"] = dict(_stare["lucru"], stare=LUCRU_EROARE, eroare=str(eroare), sfarsit=time.time())
 		raise
 	text_eroare = ""
 	if rezultat != 0 and isinstance(rezultat, int) and 0 < -rezultat < len(ERORI):
 		text_eroare = _(ERORI[-rezultat])
-	_stare["lucru"] = dict(_stare["lucru"], stare=LUCRU_GATA if rezultat == 0 else LUCRU_EROARE, rezultat=rezultat,
-		eroare=text_eroare, bine=_(ERORI[0]), loc=loc or "", sfarsit=time.time())
+	with _lacat:
+		if _alLucrarii(gen):
+			_stare["lucru"] = dict(_stare["lucru"], stare=LUCRU_GATA if rezultat == 0 else LUCRU_EROARE, rezultat=rezultat,
+				eroare=text_eroare, bine=_(ERORI[0]), loc=loc or "", sfarsit=time.time())
+		else:
+			_jurnal("%s %s s-a terminat dupa oprire (rezultat %s)" % (fel, hdd.device, rezultat))
 	return rezultat
 
 
@@ -907,6 +1140,7 @@ def pornesteFir(hdd, fel, porneste=None, sistem=None, unelte=None):
 	if porneste is None:
 		t = threading.Thread(target=lucru, name="HdsDiscuri")
 		t.daemon = True
+		_stare["fir"] = t
 		t.start()
 	else:
 		porneste(lucru)
@@ -921,6 +1155,8 @@ def textLucru(lucru):
 		return _("Initializing Harddisk...") if lucru["fel"] == INITIALIZARE else _("Checking Filesystem...")
 	if lucru["stare"] == LUCRU_GATA:
 		return lucru.get("bine") or _("Everything is fine")
+	if lucru.get("rezultat") in (E_OPRIT, E_TERMEN, E_MEMORIE):
+		return lucru.get("eroare") or _(ERORI[-lucru["rezultat"]])
 	if lucru["fel"] == INITIALIZARE:
 		inceput = _("Unable to initialize harddisk.\nError: ")
 	else:

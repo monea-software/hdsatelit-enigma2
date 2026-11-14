@@ -453,13 +453,46 @@ fi
 # hds_paza: potrivit (or no rules), nepotrivit (showiframe off) or afisare (another receiver, showiframe without writes)
 # showiframe starts without any proxy variable in its environment, so a proxy cannot carry its request around the null
 # route of hds-netguard. Only its own environment changes (a subshell); enigma2 and the rest keep theirs. When the
-# daemon is still up from the run before (it is kept across restarts of the interface, block after the exit), this
-# second copy only writes backdrop.mvi into /dev/play.file for the running daemon and exits.
-if [ "$hds_paza" != nepotrivit ] && [ -x @bindir@/showiframe -a -f @datadir@/backdrop.mvi ]; then
+# daemon is still up from the run before (it is kept across restarts of the interface, block after the exit), a
+# second copy only writes backdrop.mvi into /dev/play.file for the running daemon and exits; this script now does
+# that write itself and starts no copy, see below.
+# The running daemon is found by the pid it wrote in /dev/si.pid and its name in /proc. showiframe itself takes a new
+# copy for a second one only when the FIRST line of `ps -A` that names showiframe is that pid: once the pid numbers
+# have wrapped (pid_max 32768, hours on a box left on) the new copy has the lower pid, finds itself first and becomes
+# a second daemon beside the old one (two holders of the video decoder, 8-16% of a core more; Viper 4K V20 with two of
+# them: the death of a process holding hi_vdec oopsed the kernel). The variables are only for the tests on the PC.
+HDS_SF_PID=${HDS_SF_PID:-/dev/si.pid}
+HDS_SF_CERERE=${HDS_SF_CERERE:-/dev/play.file}
+HDS_SF_PROC=${HDS_SF_PROC:-/proc}
+hds_sf_viu=""
+hds_sf_p=""
+read -r hds_sf_p 2>/dev/null < "$HDS_SF_PID"
+case $hds_sf_p in
+	""|*[!0-9]*) ;;
+	*)
+		hds_n=""
+		read -r hds_n 2>/dev/null < "$HDS_SF_PROC/$hds_sf_p/comm"
+		[ "$hds_n" = showiframe ] && hds_sf_viu=$hds_sf_p
+		;;
+esac
+if [ "$hds_paza" != nepotrivit ] && [ -x @bindir@/showiframe -a -f @datadir@/backdrop.mvi ] && [ -z "$hds_sf_viu" ]; then
 	(
 		unset http_proxy HTTP_PROXY https_proxy HTTPS_PROXY all_proxy ALL_PROXY no_proxy NO_PROXY
-		exec @bindir@/showiframe @datadir@/backdrop.mvi
+		hds_sesiune=""
+		command -v setsid > /dev/null 2>&1 && hds_sesiune=setsid
+		exec $hds_sesiune @bindir@/showiframe @datadir@/backdrop.mvi
 	)
+fi
+# showiframe starts in a session of its own (setsid, when the box has it). The change to runlevel 4 sends SIGTERM to
+# the whole process group of this script, and on u5/u4 boxes the daemon started above was in that group: it was killed,
+# and when runlevel 3 came back in less than about a second (scripts and plugins that reload the settings that way)
+# the new copy started the video decoder while the dying daemon was still closing it, and the kernel oopsed in hi_vdec
+# (VDEC_DRV_FreeAll, NULL at 0xc74; the board watchdog then reboots; Viper 4K V20, 13.11.2026, 4 times out of 4). In a
+# session of its own the daemon outlives that change as it outlives Restart Interface. The subshell is not a group
+# leader, so setsid does not fork: this script still waits for showiframe as before.
+if [ -n "$hds_sf_viu" ] && [ "$hds_paza" != nepotrivit ] && [ -f @datadir@/backdrop.mvi ]; then
+	echo "[hds-showiframe] daemon $hds_sf_viu already up: backdrop.mvi handed to it, no second copy"
+	printf '%s' @datadir@/backdrop.mvi > "$HDS_SF_CERERE" 2>/dev/null
 fi
 
 # An update cut in the middle (tools/hds-actualizare-intrerupta.py, 0.7.4). opkg runs as a child of enigma2, and any end
@@ -987,6 +1020,7 @@ case $ret in
 	1) hds_iesire_fel=oprire ;;
 	2|4) hds_iesire_fel=receptor ;;
 	5) hds_iesire_fel=python ;;
+	15) hds_iesire_fel=kodi ;;
 	*) [ "$ret" -gt 128 ] && hds_iesire_fel=semnal ;;
 esac
 {
@@ -1278,7 +1312,7 @@ fi
 # settings back and enigma2 still ends before its interface. An end after the interface came up changes nothing.
 if [ -n "$hds_rz_t0" ]; then
 	case $ret in
-		0|1|2|3|4) ;;
+		0|1|2|3|4|15) ;;
 		*) HDS_MOD_SIGUR_SEMN=$HDS_MOD_SIGUR_SEMN HDS_MOD_SIGUR_PRAG2=$HDS_MOD_SIGUR_PRAG2 \
 			sh "$HDS_REZERVA" iesire "$ret" "$hds_rz_t0" "$$" "${cauza:-}" ;;
 	esac
@@ -1287,13 +1321,16 @@ fi
 # On u5/u4 boxes (HiSilicon, Amiko Viper 4K) showiframe is the platform daemon that holds HDMI and
 # the demux link; killing it while enigma2 runs turns HDMI off and can oops the kernel on the next zap.
 # It stays up across the restarts of the interface (codes 0 and 3: Restart Interface, an installed update and every
-# other restart of the interface): the next run of this script starts it again, the running daemon refuses a second
-# copy and only shows backdrop.mvi, and enigma2 finds HDMI, the remote and the shared video memory as they were. So
-# the 33 MB the daemon maps once in vmalloc (lib/dvb/hdspazavideo.h) are not asked for again at every restart and the
-# map of the kernel is not shuffled (Components/HdsMemorieDriver.py). It is stopped as before only after an unclean
-# end of enigma2 (a signal, a Python crash: the daemon may be stuck in the middle of a command) and before a reboot or
-# an update of the front panel (codes 2 and 4); never at halt (code 1).
-if [ "$ret" -ne "1" ] && [ "$ret" -ne "0" ] && [ "$ret" -ne "3" ] && [ -e /proc/stb/info/boxtype ]; then
+# other restart of the interface): the next run of this script finds the running daemon (/dev/si.pid, block before the
+# backdrop), starts no copy and only hands it backdrop.mvi, and enigma2 finds HDMI, the remote and the shared video
+# memory as they were. So the 33 MB the daemon maps once in vmalloc (lib/dvb/hdspazavideo.h) are not asked for again
+# at every restart and the map of the kernel is not shuffled (Components/HdsMemorieDriver.py). It is stopped as before
+# only after an unclean end of enigma2 (a signal, a Python crash: the daemon may be stuck in the middle of a command)
+# and before a reboot or an update of the front panel (codes 2 and 4); never at halt (code 1). Nor for Kodi (code 15,
+# block at the end): the Kodi of these receivers needs the daemon to keep HDMI up (its wrapper only asks it to let go
+# of the video decoder).
+if [ "$ret" -ne "1" ] && [ "$ret" -ne "0" ] && [ "$ret" -ne "3" ] && [ "$ret" -ne "15" ] &&
+	[ -e /proc/stb/info/boxtype ]; then
 	case $(cut -c1-2 /proc/stb/info/boxtype) in
 		u5|u4)
 			killall -9 showiframe 2>/dev/null; sleep 5
@@ -1303,9 +1340,43 @@ fi
 
 # Receivers with libreader (see the block before showiframe): after every end of enigma2 but halt (code 1) libreader
 # is stopped, as the images made for these receivers do; the next run of this script starts a fresh one before enigma2.
-if [ "$ret" -ne "1" ] && [ -x "$HDS_LIBREADER" ]; then
+# For Kodi (code 15) it stays up when Kodi has its HiSilicon reader (the sound of Kodi goes through the same vendor
+# service; without it the driver can read freed memory); an older Kodi without the reader gets the stop as before.
+HDS_KODI_CITITOR=${HDS_KODI_CITITOR:-/usr/lib/kodi/kodi-hisi-reader}
+if [ "$ret" -ne "1" ] && [ -x "$HDS_LIBREADER" ] && { [ "$ret" -ne "15" ] || [ ! -x "$HDS_KODI_CITITOR" ]; }; then
 	killall -9 libreader 2>/dev/null; sleep "$HDS_LIBREADER_PAUZA"
 fi
+
+# Kodi (code 15 = QUIT_KODI in Screens/Standby.py; asked by the Kodi card of the Applications menu, Components/
+# HdsAplicatii.py, or by the Kodi launcher plugin of OE-Alliance): the same path as the OE-Alliance images. enigma2 has
+# ended, Kodi runs in its place on the whole screen, and when Kodi ends this script ends too, so init starts it again:
+# back in enigma2, on the channel it had. The card writes the volume and the mute state for Kodi in /tmp before the exit
+# (/tmp/stb-kodi-e2-audio, read by the Kodi wrapper). Kodi keeps its whole profile in /media/hdd/.kodi (fixed in its
+# code). Where it really goes, simplest for the person first (13.11.2026, nothing to plug in when there is room):
+#   1. /media/hdd when a disc or stick is mounted there (the recording disc: its recordings stay visible in Kodi);
+#   2. the internal memory, HDS_KODI_INTERN (/home/root/.media-center), bound on /media/hdd while Kodi runs: a profile
+#      already there is kept while the memory has HDS_KODI_INTERN_MIN_KB free (512 MB), a new one needs
+#      HDS_KODI_INTERN_NOU_KB (2 GB), so the profile (thumbnails, add-ons) can never fill the partition the image starts
+#      from (with several images on one receiver it is shared by all of them);
+#   3. the first USB stick or disc (/media/usb...), bound on /media/hdd the same way.
+# The bind is undone after Kodi. Without a place (and when Kodi is not installed) enigma2 comes back at once and the
+# reason is in HDS_KODI_STARE, which the card reads: motiv=neinstalat|fara-disc|numai-citire, or cod=<exit code of Kodi>
+# with the uptime of the start and of the end. The video plane of enigma2 is cleared first (its last picture would stay under
+# Kodi) and the page cache dropped (Kodi needs the memory). Kodi starts with a clean environment, as the wrapper
+# expects. The variables are only for the tests on the PC; init sets none of them.
+HDS_KODI=${HDS_KODI:-/usr/bin/kodi}
+HDS_KODI_HDD=${HDS_KODI_HDD:-/media/hdd}
+HDS_KODI_INTERN=${HDS_KODI_INTERN:-/home/root/.media-center}
+HDS_KODI_INTERN_MIN_KB=${HDS_KODI_INTERN_MIN_KB:-524288}
+HDS_KODI_INTERN_NOU_KB=${HDS_KODI_INTERN_NOU_KB:-2097152}
+HDS_KODI_MONTARI=${HDS_KODI_MONTARI:-/proc/mounts}
+HDS_KODI_STARE=${HDS_KODI_STARE:-/tmp/hds-kodi.stare}
+HDS_KODI_JURNAL=${HDS_KODI_JURNAL:-/tmp/kodi-standalone.log}
+HDS_KODI_FB=${HDS_KODI_FB:-/dev/fb0}
+HDS_KODI_CACHE=${HDS_KODI_CACHE:-/proc/sys/vm/drop_caches}
+HDS_KODI_VIDEO_CERERE=${HDS_KODI_VIDEO_CERERE:-/tmp/hds-kodi.videomode}
+HDS_KODI_VIDEO=${HDS_KODI_VIDEO:-/proc/stb/video/videomode}
+HDS_KODI_VIDEO_ALEGERI=${HDS_KODI_VIDEO_ALEGERI:-/proc/stb/video/videomode_choices}
 
 case $ret in
 	1)
@@ -1321,6 +1392,72 @@ case $ret in
 		/sbin/rmmod fp
 		/sbin/modprobe fp
 		/sbin/reboot
+		;;
+	15)
+		hds_kodi_motiv=""
+		hds_kodi_cod=""
+		hds_kodi_legat=""
+		# the place (see above): /media/hdd mounted, else the internal memory with room, else the first USB stick or
+		# disc mounted below the same folder (/media/usb, /media/usb2...); the last two bound on /media/hdd for Kodi only
+		hds_kodi_disc=$(awk -v d="$HDS_KODI_HDD" '$2 == d { print d; exit }' "$HDS_KODI_MONTARI" 2>/dev/null)
+		if [ -z "$hds_kodi_disc" ]; then
+			hds_kodi_liber=${HDS_KODI_LIBER_KB:-$(df -Pk "${HDS_KODI_INTERN%/*}" 2>/dev/null | awk 'NR == 2 { print $4 }')}
+			case $hds_kodi_liber in ''|*[!0-9]*) hds_kodi_liber=0 ;; esac
+			if { [ -d "$HDS_KODI_INTERN/.kodi" ] && [ "$hds_kodi_liber" -ge "$HDS_KODI_INTERN_MIN_KB" ]; } ||
+				[ "$hds_kodi_liber" -ge "$HDS_KODI_INTERN_NOU_KB" ]; then
+				hds_kodi_disc=$HDS_KODI_INTERN
+			fi
+		fi
+		[ -n "$hds_kodi_disc" ] || hds_kodi_disc=$(awk -v d="$HDS_KODI_HDD" '
+			BEGIN { p = d; sub("/[^/]*$", "/", p) }
+			$1 ~ "^/dev/(sd|mmcblk[1-9])" && index($2, p "usb") == 1 && index(substr($2, length(p) + 1), "/") == 0 { print $2; exit }
+			' "$HDS_KODI_MONTARI" 2>/dev/null)
+		if [ ! -x "$HDS_KODI" ]; then
+			hds_kodi_motiv=neinstalat
+		elif [ -z "$hds_kodi_disc" ]; then
+			hds_kodi_motiv=fara-disc
+		elif ! { mkdir -p "$hds_kodi_disc/.kodi" 2>/dev/null && : > "$hds_kodi_disc/.kodi/.hds-scriere" 2>/dev/null; }; then
+			hds_kodi_motiv=numai-citire
+		elif [ "$hds_kodi_disc" != "$HDS_KODI_HDD" ]; then
+			if mkdir -p "$HDS_KODI_HDD" 2>/dev/null && mount --bind "$hds_kodi_disc" "$HDS_KODI_HDD" 2>/dev/null; then
+				hds_kodi_legat=1
+			else
+				hds_kodi_motiv=fara-disc
+			fi
+		fi
+		[ -z "$hds_kodi_disc" ] || rm -f "$hds_kodi_disc/.kodi/.hds-scriere" 2>/dev/null
+		hds_kodi_t0=$(cut -d. -f1 /proc/uptime 2>/dev/null)
+		if [ -z "$hds_kodi_motiv" ]; then
+			printf 'pornit=%s\n' "$hds_kodi_t0" > "$HDS_KODI_STARE" 2>/dev/null
+			# the HDMI mode asked by the plugin (2160p when the television prefers it): the Kodi of HiSilicon keeps
+			# the HDMI resolution it finds at its start (its GUI stays 1080p, the video goes through the decoder of
+			# the receiver); only a mode the receiver lists; enigma2 puts its own mode back when it starts again
+			if [ -r "$HDS_KODI_VIDEO_CERERE" ]; then
+				hds_kodi_vm=$(head -n 1 "$HDS_KODI_VIDEO_CERERE" 2>/dev/null | tr -cd 'a-z0-9')
+				rm -f "$HDS_KODI_VIDEO_CERERE"
+				if [ -n "$hds_kodi_vm" ] && tr ' ' '\n' < "$HDS_KODI_VIDEO_ALEGERI" 2>/dev/null | grep -qx "$hds_kodi_vm"; then
+					echo "$hds_kodi_vm" > "$HDS_KODI_VIDEO" 2>/dev/null && sleep 2
+				fi
+			fi
+			dd if=/dev/zero of="$HDS_KODI_FB" bs=1M count=16 2>/dev/null
+			sync
+			echo 3 > "$HDS_KODI_CACHE" 2>/dev/null
+			(
+				ulimit -n 16384 2>/dev/null || ulimit -n 8192 2>/dev/null
+				exec env -i HOME=/home/root USER=root PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+					MESA_EXTENSION_OVERRIDE='-GL_EXT_discard_framebuffer' "$HDS_KODI" --standalone
+			) > "$HDS_KODI_JURNAL" 2>&1
+			hds_kodi_cod=$?
+			echo "kodi exit code: $hds_kodi_cod" >> "$HDS_KODI_JURNAL"
+		fi
+		if [ -n "$hds_kodi_legat" ]; then
+			umount "$HDS_KODI_HDD" 2>/dev/null || umount -l "$HDS_KODI_HDD" 2>/dev/null
+			rmdir "$HDS_KODI_HDD" 2>/dev/null
+		fi
+		{
+			printf 'pornit=%s\nsfarsit=%s\n' "$hds_kodi_t0" "$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+			if [ -n "$hds_kodi_motiv" ]; then printf 'motiv=%s\n' "$hds_kodi_motiv"; else printf 'cod=%s\n' "$hds_kodi_cod"; fi
+		} > "$HDS_KODI_STARE.nou" 2>/dev/null && mv -f "$HDS_KODI_STARE.nou" "$HDS_KODI_STARE" 2>/dev/null
 		;;
 	*)
 		;;

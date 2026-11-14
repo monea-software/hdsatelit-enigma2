@@ -1,6 +1,6 @@
 {
 "format": 1,
-"facut": "2026-11-12",
+"facut": "2026-11-13",
 "drivere": {
 "ax88179-178a": {
 "nume": "ASIX AX88179 / AX88178A",
@@ -10,26 +10,38 @@
 "usb:v0DF6p0072d*dc*dsc*dp*ic*isc*ip*in*"
 ],
 "masini": [
+"gb7252",
 "gbmv200",
+"hd51",
 "sf8008",
 "sf8008m",
 "ustym4kpro",
 "viper4k",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
 "gbmv200": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
+"hd51": "4.10.12 SMP mod_unload modversions ARMv7 p2v8 ",
 "sf8008": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "sf8008m": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "ustym4kpro": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "viper4k": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },
@@ -40,15 +52,21 @@
 ],
 "masini": [
 "vuduo4k",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": [],
 "fel": "tuner"
@@ -60,15 +78,21 @@
 ],
 "masini": [
 "vuduo4k",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": [],
 "fel": "tuner"
@@ -991,20 +1015,30 @@
 "usb:v148Fp7650d*dc*dsc*dp*ic*isc*ip*in*"
 ],
 "masini": [
+"gb7252",
 "u57",
 "u571",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
 "u57": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "u571": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },
@@ -1020,7 +1054,9 @@
 "usb:v2001p3D02d*dc*dsc*dp*ic*isc*ip*in*"
 ],
 "masini": [
+"gb7252",
 "gbmv200",
+"hd51",
 "sf8008",
 "sf8008m",
 "u57",
@@ -1028,12 +1064,18 @@
 "ustym4kpro",
 "viper4k",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
 "gbmv200": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
+"hd51": "4.10.12 SMP mod_unload modversions ARMv7 p2v8 ",
 "sf8008": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "sf8008m": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "u57": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
@@ -1041,9 +1083,13 @@
 "ustym4kpro": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "viper4k": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },
@@ -1070,16 +1116,28 @@
 "usb:v0BDAp8724d*dc*dsc*dp*icFFiscFFipFFin*"
 ],
 "masini": [
+"gb7252",
+"hd51",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"hd51": "4.10.12 SMP mod_unload modversions ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },
@@ -1102,7 +1160,9 @@
 "usb:v7392pA834d*dc*dsc*dp*ic*isc*ip*in*"
 ],
 "masini": [
+"gb7252",
 "gbmv200",
+"hd51",
 "sf8008",
 "sf8008m",
 "u57",
@@ -1110,12 +1170,18 @@
 "ustym4kpro",
 "viper4k",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
 "gbmv200": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
+"hd51": "4.10.12 SMP mod_unload modversions ARMv7 p2v8 ",
 "sf8008": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "sf8008m": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "u57": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
@@ -1123,9 +1189,13 @@
 "ustym4kpro": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "viper4k": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },
@@ -1165,22 +1235,34 @@
 "usb:v0BDApD82Bd*dc*dsc*dp*icFFiscFFipFFin*"
 ],
 "masini": [
+"gb7252",
+"hd51",
 "u57",
 "u571",
 "viper4k",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"hd51": "4.10.12 SMP mod_unload modversions ARMv7 p2v8 ",
 "u57": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "u571": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "viper4k": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },
@@ -1290,22 +1372,34 @@
 "usb:v2C4Ep0104d*dc*dsc*dp*ic*isc*ip*in*"
 ],
 "masini": [
+"gb7252",
+"hd51",
 "u57",
 "u571",
 "viper4k",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"hd51": "4.10.12 SMP mod_unload modversions ARMv7 p2v8 ",
 "u57": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "u571": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "viper4k": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },
@@ -1316,7 +1410,9 @@
 "usb:v0BDApF192d*dc*dsc*dp*icFFiscFFipFFin*"
 ],
 "masini": [
+"gb7252",
 "gbmv200",
+"hd51",
 "sf8008",
 "sf8008m",
 "u57",
@@ -1324,12 +1420,18 @@
 "ustym4kpro",
 "viper4k",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
 "gbmv200": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
+"hd51": "4.10.12 SMP mod_unload modversions ARMv7 p2v8 ",
 "sf8008": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "sf8008m": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "u57": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
@@ -1337,9 +1439,13 @@
 "ustym4kpro": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "viper4k": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },
@@ -1364,7 +1470,9 @@
 "usb:v7392p6822d*dc*dsc*dp*icFFiscFFipFFin*"
 ],
 "masini": [
+"gb7252",
 "gbmv200",
+"hd51",
 "sf8008",
 "sf8008m",
 "u57",
@@ -1372,12 +1480,18 @@
 "ustym4kpro",
 "viper4k",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
 "gbmv200": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
+"hd51": "4.10.12 SMP mod_unload modversions ARMv7 p2v8 ",
 "sf8008": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "sf8008m": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "u57": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
@@ -1385,9 +1499,13 @@
 "ustym4kpro": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "viper4k": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },
@@ -1405,7 +1523,9 @@
 "usb:v35BCp0102d*dc*dsc*dp*icFFiscFFipFFin*"
 ],
 "masini": [
+"gb7252",
 "gbmv200",
+"hd51",
 "sf8008",
 "sf8008m",
 "u57",
@@ -1413,12 +1533,18 @@
 "ustym4kpro",
 "viper4k",
 "vuduo4k",
+"vuduo4klite",
+"vuduo4kse",
 "vusolo4k",
 "vusolose",
-"vuuno4kse"
+"vuultimo4k",
+"vuuno4kse",
+"vuzero4k"
 ],
 "vermagic": {
+"gb7252": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
 "gbmv200": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
+"hd51": "4.10.12 SMP mod_unload modversions ARMv7 p2v8 ",
 "sf8008": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "sf8008m": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "u57": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
@@ -1426,9 +1552,13 @@
 "ustym4kpro": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "viper4k": "4.4.35 SMP mod_unload ARMv7 p2v8 ",
 "vuduo4k": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4klite": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuduo4kse": "4.1.45-1.17 SMP mod_unload ARMv7 p2v8 ",
 "vusolo4k": "3.14.28-1.8 SMP mod_unload ARMv7 p2v8 ",
 "vusolose": "3.13.5 SMP mod_unload BMIPS 32BIT ",
-"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
+"vuultimo4k": "3.14.28-1.12 SMP mod_unload ARMv7 p2v8 ",
+"vuuno4kse": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 ",
+"vuzero4k": "4.1.20-1.9 SMP mod_unload ARMv7 p2v8 "
 },
 "cu": []
 },

@@ -22,6 +22,9 @@
 #include <lib/base/eerror.h>
 #include <lib/base/estring.h>
 #include <lib/python/python.h>
+#include <lib/base/nconfig.h>
+#include <lib/dvb/db.h>
+#include <algorithm>
 #include <errno.h>
 
 /* HDSatelit: steagurile NIT din lib/dvb/hdsretea.h au aceleasi valori ca ale scanarii */
@@ -1150,6 +1153,80 @@ void eDVBScan::start(const eSmartPtrList<iDVBFrontendParameters> &known_transpon
 	nextChannel();
 }
 
+/* HDSatelit (0.7.5, sosozah, forum 588 #2055): buchetul "Last Scanned" cu canalele gasite de ultima scanare, rescris la
+   fiecare scanare, TV si radio separat, la coada listei de buchete; ca in enigma2 OE-Alliance (din sursele GPL enigma2
+   (OE-Alliance), commitul 03eeb0ea5, lib/dvb/scan.cpp, eDVBScan::insertInto). Fisierele: userbouquet.LastScanned.tv si
+   .radio, aceleasi nume ca acolo (Components/HdsEditorCanale.py si HdsFavorite.py le stiu deja ca buchete automate).
+   Setarea config.usage.hds_ultima_scanare (Components/UsageConfig.py, data/setup.xml; in web /setari?id=usage),
+   pornita din fabrica: oprita, buchetul nu se mai scrie si iese din lista buchetelor (fisierul ramane, nefolosit).
+   O cheie lipsa sau necitita lasa buchetul pornit, ca din fabrica. */
+static void hdsBuchetUltimaScanare(iDVBChannelList *db,
+	const std::map<eServiceReferenceDVB, ePtr<eDVBService> > &gasite)
+{
+	std::string valoare;
+	bool pornit = ePythonConfigQuery::getConfigValue("config.usage.hds_ultima_scanare", valoare) != 0
+		|| valoare != "False";
+	for (int tip = 1; tip <= 2; ++tip)   /* tipul buchetului: 1 TV (bouquets.tv), 2 radio (bouquets.radio) */
+	{
+		bool radio = tip == 2;
+		std::string ext = radio ? "radio" : "tv";
+		std::string nume = "userbouquet.LastScanned." + ext;
+		eServiceReference ref(eServiceReference::idDVB, eServiceReference::flagDirectory,
+			"FROM BOUQUET \"" + nume + "\" ORDER BY bouquet");
+		ref.setData(0, tip);
+		eServiceReference radacina(eServiceReference::idDVB, eServiceReference::flagDirectory,
+			"FROM BOUQUET \"bouquets." + ext + "\" ORDER BY bouquet");
+		radacina.setData(0, tip);
+		eBouquet *lista = NULL;
+		if (db->getBouquet(radacina, lista) || !lista)
+		{
+			eDebug("[eDVBScan] Last Scanned: lista buchetelor %s lipseste", ext.c_str());
+			continue;
+		}
+		std::list<eServiceReference>::iterator loc = std::find(lista->m_services.begin(), lista->m_services.end(), ref);
+		if (!pornit)
+		{
+			if (loc != lista->m_services.end())
+			{
+				lista->m_services.erase(loc);
+				lista->flushChanges();
+			}
+			continue;
+		}
+		if (loc == lista->m_services.end())
+		{
+			lista->m_services.push_back(ref);
+			lista->flushChanges();
+		}
+		eBouquet *buchet = NULL;
+		if (db->getBouquet(ref, buchet) || !buchet)
+		{
+			/* incarcarea il trece si in baza de date, chiar daca fisierul nu exista inca */
+			eDVBDB *baza = eDVBDB::getInstance();
+			if (baza)
+				baza->loadBouquet(nume.c_str());
+			buchet = NULL;
+			db->getBouquet(ref, buchet);
+		}
+		if (!buchet)
+		{
+			eDebug("[eDVBScan] Last Scanned: %s nu se poate face", nume.c_str());
+			continue;
+		}
+		buchet->m_bouquet_name = "Last Scanned";
+		buchet->m_services.clear();
+		for (std::map<eServiceReferenceDVB, ePtr<eDVBService> >::const_iterator s(gasite.begin()); s != gasite.end(); ++s)
+		{
+			int t = s->first.getServiceType();
+			/* radio: 2 si 0x0A (radio AVC / HE-AAC), ca dRadio si dRadioAvc in OE-Alliance */
+			bool post_radio = t == 2 || t == 10;
+			if (post_radio == radio)
+				buchet->m_services.push_back(s->first);
+		}
+		buchet->flushChanges();
+	}
+}
+
 void eDVBScan::insertInto(iDVBChannelList *db, bool dontRemoveOldFlags)
 {
 	/* HDSatelit: how many of the found services were not in the channel list before this scan
@@ -1334,6 +1411,11 @@ void eDVBScan::insertInto(iDVBChannelList *db, bool dontRemoveOldFlags)
 				service->second->m_flags |= eDVBService::dxNewFound;
 		}
 	}
+
+	/* HDSatelit (0.7.5): "Last Scanned" numai dupa o scanare ceruta, nu la actualizarea listei din fundal (pmt.cpp,
+	   dontRemoveOldFlags = true), ca in OE-Alliance (!backgroundscanresult) */
+	if (!dontRemoveOldFlags)
+		hdsBuchetUltimaScanare(db, m_new_services);
 }
 
 RESULT eDVBScan::processSDT(eDVBNamespace dvbnamespace, const ServiceDescriptionSection &sdt)

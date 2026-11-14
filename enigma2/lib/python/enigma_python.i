@@ -566,12 +566,16 @@ extern void setAnimation_speed(int speed);
 extern void setAnimation_current_listbox(int a);
 /* HDSatelit: the detail level of the log (eerror.h debugLvl), under the name the plugins ask for */
 static int eGetEnigmaDebugLvl() { return debugLvl; }
-extern void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement);
+/* HDSatelit: renderflags (the FreeType load flags of the font), the fifth argument OE-Alliance plugins pass (OAWeather);
+   the default is here too: the wrapper SWIG makes for the 4-argument call calls addFont with 4 arguments (only this file
+   declares addFont for the compiler; font.cpp defines it with 5) */
+extern void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement, int renderflags = 0);
 extern const char *getEnigmaVersionString();
 extern void dump_malloc_stats(void);
 %}
 
-extern void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement);
+/* HDSatelit: renderflags optional (0 = as before), so addFont(file, alias, 100, False) and addFont(file, alias, 100, False, 0) both work */
+extern void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement, int renderflags = 0);
 extern int getPrevAsciiCode();
 extern void setPrevAsciiCode(int code);
 extern void setAnimation_current(int a);

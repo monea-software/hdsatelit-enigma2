@@ -85,6 +85,8 @@ NAMED_MODES = {"pal": ("576i", "50"), "ntsc": ("480i", "60")}
 # 24/25/30 Hz mode makes the menus and the 50 Hz channels judder, so it is not a choice for the first start)
 WIZARD_GROUPS = ("2160p", "1080p", "1080i", "720p")
 WIZARD_RATES = ("50", "60")
+# the rates the wizard offers for a resolution that the TV takes at none of WIZARD_RATES (see wizardModes)
+WIZARD_LOW_RATES = ("25", "30")
 # the wizard list when the video output is missing (tests on a PC), in the order of sortModes, and its default
 WIZARD_FALLBACK = ("2160p50", "2160p", "1080p50", "1080p", "1080i50", "1080i", "720p50", "720p")
 WIZARD_DEFAULT = DEFAULT_MODES[0]
@@ -110,6 +112,20 @@ ASPECT_43 = ("4_3_letterbox", "4_3_panscan")
 # the HDMI driver state files (HiSilicon /proc/msp) and the pid file of the platform daemon
 COLOR_FILE = "hdmi_colorimetry"
 COLOR_WRITE = "bt709"
+COLOR_WRITE_HDR = "bt2020ncl"
+
+
+def colorWrite():
+	"""COLOR_WRITE, or BT.2020 while the receiver sends HDR10/HLG (Components/HdsCalitateImagine.iesireHdr): HDR with BT.709
+	in the AVI InfoFrame gives washed out colours. Measured on a Viper 4K V20 with an LG HDR TV: bt2020ncl gives
+	colorimetry Extended (BT.2020), YCbCr 4:2:2 at 12 bits with HDR10 at 2160p60."""
+	try:
+		from Components.HdsCalitateImagine import iesireHdr
+		if iesireHdr() in ("hdr10", "hlg"):
+			return COLOR_WRITE_HDR
+	except Exception:
+		pass
+	return COLOR_WRITE
 COLOR_ATTR = "hds_hdmi_colors"
 COLOR_YCBCR = "ycbcr"
 COLOR_RGB = "rgb"
@@ -281,11 +297,20 @@ def rateChoices(modes, group, auto=False):
 
 def wizardModes(modes, keep=()):
 	"""the list of the start wizard: from `modes` (screenModes, what the TV accepts) the WIZARD_GROUPS at
-	WIZARD_RATES, plus the modes in `keep` (the saved one), all in the order of sortModes"""
+	WIZARD_RATES, plus the modes in `keep` (the saved one), all in the order of sortModes. A resolution the TV takes
+	only at lower rates (a 4K TV with HDMI 1.4: 2160p24/25/30, no 2160p50/2160p) keeps its WIZARD_LOW_RATES modes,
+	so 4K is still offered (AX HD51, darog69, forum 479 #2242: videomode_preferred had 2160p30/25/24 only and the
+	wizard had no 2160p at all)"""
+	modes = list(modes)
 	chosen = []
-	for mode in list(modes) + list(keep):
+	for mode in modes + list(keep):
 		group, rate = modeParts(mode)
 		if mode not in chosen and (mode in keep or (group in WIZARD_GROUPS and rate in WIZARD_RATES)):
+			chosen.append(mode)
+	groups = set(modeParts(mode)[0] for mode in chosen)
+	for mode in modes:
+		group, rate = modeParts(mode)
+		if group in WIZARD_GROUPS and group not in groups and rate in WIZARD_LOW_RATES and mode not in chosen:
 			chosen.append(mode)
 	return sortModes(chosen)
 
@@ -406,6 +431,15 @@ def edidKey(text):
 	return (mspField(text, "CapIsValid"), raw)
 
 
+def chipsetBroadcom(infoDir="/proc/stb/info"):
+	"""True for a Broadcom board that names its chipset "bcm..." in /proc/stb/info/chipset (bcm7251s on the HD51), not a Vu+"""
+	text = readText_direct(os.path.join(infoDir, "chipset"))
+	if os.path.exists(os.path.join(infoDir, "vumodel")):
+		# Vu+ boards (Broadcom too): no report of a mode not applied there, so their order stays as it was
+		return False
+	return bool(text) and text.strip().lower().startswith("bcm")
+
+
 def inStandby():
 	"""True while the Standby screen is open; Screens.Standby is looked up only once enigma2 has loaded it"""
 	module = sys.modules.get("Screens.Standby")
@@ -462,7 +496,7 @@ class VideoOutput:
 		self.choices = {}
 		for name, attr, current, choices in self.SETTINGS:
 			self.choices[name] = self.readChoices(choices)
-		self.preferred = self.readChoices("videomode_preferred")
+		self.preferred = self.readTvModes()
 		self.lastModeReached = None
 		self.colors = None         # HdmiColors, set by InitVideoOutput
 		self.simulation = not self.choices["videomode"]
@@ -478,6 +512,13 @@ class VideoOutput:
 			HdsPlacaVuplus.esteDuo4kLite(HdsPlacaVuplus.caleInfo(self.root))
 		self.rewriteTimer = None
 		self.rewriteSteps = []
+		# Broadcom boards with a "bcm" chipset (AX/Mut@nt HD51 bcm7251s and the other gfutures ones): the driver does not
+		# take the mode from videomode_50hz / videomode_60hz at the next video start, as the HiSilicon daemon does; the output
+		# stayed at the old videomode (720p50 with 1080p50 in both rate files, darog69, assistance 829694). There videomode
+		# gets the 50 Hz mode too, after the rate files, as OE-Alliance writes it (AVSwitch.setMode)
+		# (the Vu+ Duo 4K Lite keeps its own plan, rewriteLater, measured on the board)
+		self.mainToo = not self.simulation and not self.duo4kLite and chipsetBroadcom(os.path.join(os.path.dirname(os.path.normpath(self.root)),
+			"info"))
 		if self.duo4kLite:
 			self.choices["videomode"] = list(HdsPlacaVuplus.MODURI_DUO4KLITE)
 		# rate -> modes the driver accepts in that rate file; only for the files that exist
@@ -509,6 +550,19 @@ class VideoOutput:
 	def readChoices(self, name):
 		text = readText(self.root + name)
 		return text.split() if text else []
+
+	def readTvModes(self):
+		"""what the TV accepts, from its EDID: videomode_edid when the driver has it and it is not empty, else
+		videomode_preferred, in the order of OE-Alliance (lib/driver/avcontrol.cpp, getPreferredModes); names with an
+		"x" (1920x1080) are not modes and repeated names count once"""
+		for name in ("videomode_edid", "videomode_preferred"):
+			modes = []
+			for mode in self.readChoices(name):
+				if "x" not in mode and mode not in modes:
+					modes.append(mode)
+			if modes:
+				return modes
+		return []
 
 	def available(self, name):
 		return bool(self.choices.get(name))
@@ -590,7 +644,7 @@ class VideoOutput:
 		"""reads again what the TV accepts (videomode_preferred, from its EDID): the TV can be switched on or
 		changed after the receiver started"""
 		if not self.simulation:
-			self.preferred = self.readChoices("videomode_preferred")
+			self.preferred = self.readTvModes()
 		return self.preferred
 
 	def screenModes(self, keep=()):
@@ -629,6 +683,8 @@ class VideoOutput:
 			put("videomode", fallback)
 		if rates.get(24):
 			put(RATE_FILE[24], rates[24])
+		if success and fallback and getattr(self, "mainToo", False):
+			put("videomode", fallback)
 		return written
 
 	@staticmethod
@@ -901,13 +957,15 @@ class HdmiColors:
 			self.said = text
 
 	def write(self):
-		"""one write of COLOR_WRITE; True when this write got to the driver"""
+		"""one write of COLOR_WRITE (BT.2020 instead while HDR10/HLG goes out, colorWrite); True when this write got to
+		the driver"""
 		self.writes += 1
+		value = colorWrite()
 		if self.simulation:
-			print("[VideoOutput] simulation: %s would be set to %s" % (COLOR_FILE, COLOR_WRITE))
+			print("[VideoOutput] simulation: %s would be set to %s" % (COLOR_FILE, value))
 			done = True
 		else:
-			done = writeText(self.root + COLOR_FILE, COLOR_WRITE)
+			done = writeText(self.root + COLOR_FILE, value)
 		self.written = done or self.written
 		return done
 
@@ -1150,7 +1208,11 @@ def hdmiRecoveryContext(nav, output=None, sesiune=None):
 	context = {"mod": mod, "rate_by_channel": byChannel,
 		"moduri_asteptate": tuple(set(expected.values())) or (mod,),
 		"rate_asteptate": dict((RATE_FILE[hz], value) for hz, value in expected.items()),
-		"identitate": (mod, byChannel), "permis": False, "motiv": ""}
+		"identitate": (mod, byChannel), "permis": False, "motiv": "", "intermediar": None}
+	try:
+		context["intermediar"] = hdmiCycleMode(mod, output)
+	except Exception:
+		pass
 	try:
 		sectiuni = getattr(getattr(config, "content", None), "items", {})
 		osd = sectiuni.get("osd")
@@ -1184,14 +1246,33 @@ def hdmiRecoveryContext(nav, output=None, sesiune=None):
 	return context
 
 
-def reapplyHdmi(nav, output=None, asteptat=None, sesiune=None):
-	"""Reaplica numai modul curent si politica ratelor, fara schimbarea configuratiei."""
+def hdmiCycleMode(mod, output=None):
+	"""Modul Full HD prin care trece paza HDMI la pornirea televizorului (greseala 1180): aceeasi frecventa
+	(2160p50 -> 1080p50, 2160p -> 1080p), numai din lista driverului; None cand modul ales nu e 4K sau driverul nu
+	are niciun Full HD."""
+	output = output or videoOutput
+	match = re.match(r"2160p(\d*)$", mod or "")
+	if output is None or not match:
+		return None
+	alegeri = output.choices.get("videomode", [])
+	for mode in ("1080p" + match.group(1), "1080p", "1080i"):
+		if mode in alegeri:
+			return mode
+	return None
+
+
+def reapplyHdmi(nav, output=None, asteptat=None, sesiune=None, mod=None, inapoi=False):
+	"""Scrie modul ales (sau `mod`, modul Full HD al trecerii) si politica ratelor, fara schimbarea configuratiei.
+	`inapoi`: intoarcerea pe modul ales dupa trecere, facuta si cand reaplicarea nu mai e permisa acum (standby,
+	o inregistrare pornita intre timp), ca receptorul sa nu ramana pe Full HD; numai cand setarea e aceeasi."""
 	output = output or videoOutput
 	context = hdmiRecoveryContext(nav, output, sesiune)
 	rezultat = {"scris": False, "restart_cerut": False, "motiv": context["motiv"]}
-	if not context["permis"] or (asteptat is not None and context["identitate"] != asteptat.get("identitate")):
+	if asteptat is not None and context["identitate"] != asteptat.get("identitate"):
 		return rezultat
-	ok = output.apply({"videomode": context["mod"], "rate_by_channel": context["rate_by_channel"]})
+	if not context["permis"] and not (inapoi and context["mod"]):
+		return rezultat
+	ok = output.apply({"videomode": mod or context["mod"], "rate_by_channel": context["rate_by_channel"]})
 	rezultat["scris"] = bool(ok and output.lastModeReached)
 	if rezultat["scris"]:
 		# True inseamna cerere de restart, nu confirmare hardware. Urmeaza citirea MSP.

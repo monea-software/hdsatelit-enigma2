@@ -1,7 +1,7 @@
 SUMMARY = "HDSatelit: numele hdsatelit.local in reteaua de acasa"
 DESCRIPTION = "Pe langa numele receptorului (viper4kv20.local), avahi-daemon publica si hdsatelit.local cu adresa \
 IPv4 de acum, ca interfata web sa se deschida cu http://hdsatelit.local; al doilea receptor din casa primeste \
-hdsatelit-2.local. /etc/hostname nu se schimba. Monea Software pentru HD Satelit."
+hdsatelit2.local (fara liniuta, din 0.2.1). /etc/hostname nu se schimba. Monea Software pentru HD Satelit."
 LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6"
 # 0.2.0 (11.11.2026, imaginea 0.7.4, TODO randul 1397): serviciul nou din imagine (fisa 79, comiterea 41e79b38c din
@@ -12,7 +12,8 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171d
 # tools/hds-nume-local si tools/hds-nume-local.py din arborele imaginii (tools/Makefile.am le tine numai in EXTRA_DIST:
 # le instaleaza un singur pachet, acesta). O schimbare acolo se copiaza din nou aici, cu PV mai mare; proba
 # receptor/imagine-hdsatelit/teste/test_nume_local_reteta_074.py (hdsatelit-unelte) le compara.
-PV = "0.2.0"
+PV = "0.2.1"
+# 0.2.1 (14.11.2026, Eduard): al doilea receptor ia hdsatelit2.local, nu hdsatelit-2.local (mai usor de scris).
 
 SRC_URI = "file://hds-nume-local \
            file://hds-nume-local.py \
@@ -64,7 +65,7 @@ do_install() {
 
 # Actualizarea de pe 0.1.0: scriptul de pe disc (cel vechi) isi opreste paznicul shell si avahi-publish INAINTE de
 # inlocuirea fisierelor. Un paznic vechi ramas ar tine hdsatelit.local, iar serviciul nou nu l-ar vedea (nu are
-# .identitate) si ar lua hdsatelit-2.local. De obicei o face si prerm-ul pachetului vechi (update-rc.d); aici e si
+# .identitate) si ar lua hdsatelit2.local. De obicei o face si prerm-ul pachetului vechi (update-rc.d); aici e si
 # pentru cazul in care acela nu ruleaza. O oprire nereusita nu opreste actualizarea.
 pkg_preinst:${PN} () {
 	if [ -z "$D" ] && [ -x ${sysconfdir}/init.d/hds-nume-local ]; then

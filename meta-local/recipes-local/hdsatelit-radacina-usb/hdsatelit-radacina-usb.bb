@@ -4,7 +4,7 @@ PV = "0.1.0"
 SRC_URI = "file://hdsatelit-radacina-usb"
 S = "${UNPACKDIR}"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
-COMPATIBLE_MACHINE = "^(vusolose)$"
+COMPATIBLE_MACHINE = "^(vusolose|vusolo2|vuzero|sh1)$"
 
 inherit update-rc.d
 

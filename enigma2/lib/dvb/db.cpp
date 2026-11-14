@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <regex.h>
+#include <unistd.h>
 #include <lib/dvb/db.h>
 #include <lib/dvb/dvb.h>
 #include <lib/dvb/frontend.h>
@@ -1104,13 +1105,18 @@ PyObject *eDVBDB::readSatellites(ePyObject sat_list, ePyObject sat_dict, ePyObje
 			eDebug("arg 0 is not a python list");
 		return NULL;
 	}
+	/* HDSatelit: /etc/enigma2/satellites.xml first when it exists (a list the user put there, as in OE-Alliance), then
+	   /etc/tuxbox/satellites.xml; the same rule as HdsEditorCanaleDate.cale_sateliti() in Python, so the channel
+	   editor writes the file read here */
+	const char *satellitesFile = ::access("/etc/enigma2/satellites.xml", R_OK) == 0 ? "/etc/enigma2/satellites.xml" : "/etc/tuxbox/satellites.xml";
+	eDebug("[eDVBDB] reading %s", satellitesFile);
 	XMLTree tree;
-	tree.setFilename("/etc/tuxbox/satellites.xml");
+	tree.setFilename(satellitesFile);
 	tree.read();
 	Element *root = tree.getRoot();
 	if (!root)
 	{
-		eDebug("couldn't open /etc/tuxbox/satellites.xml!!");
+		eDebug("couldn't open %s!!", satellitesFile);
 		Py_INCREF(Py_False);
 		return Py_False;
 	}

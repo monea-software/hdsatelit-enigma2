@@ -694,7 +694,7 @@ PAGINA = """<!DOCTYPE html>
 <main>
 <p><a class="inapoi" id="inapoi" href="/meniu">Înapoi la meniu</a></p>
 <h1 id="titlu">Setări</h1>
-<form class="cauta-setari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută setări" aria-label="Caută setări" autocomplete="off"><button type="submit">Caută</button></form>
+<form class="cauta-setari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută în meniu: scrie un cuvânt, de exemplu subtitrări" aria-label="Caută în meniu" autocomplete="off"><button type="submit">Caută</button></form>
 <p class="mesaj" id="incarcare">Se citesc setările...</p>
 <section class="card ascuns" id="lista"><ul class="ecrane" id="ecrane"></ul></section>
 <section class="card ascuns" id="aspectWeb" aria-labelledby="aspectTitlu">
@@ -1183,7 +1183,9 @@ TEXTE_PAGINA = {
 		N_("Aceleași rânduri, cu aceleași alegeri, sunt pe televizor în ecranul cu același nume. Rândurile "
 			"care se văd depind de „__NIVEL__”, ales pe televizor în __DRUM_MENIU__. Setările fără listă de "
 			"alegeri se schimbă de pe televizor."),
-		N_("Caută setări"),
+		N_("Caută în meniu"),
+		# 0.7.5 (CST): textul din campul de cautare, acelasi ca in capul panoului (plugin.py), cu exemplul subtitrarilor
+		N_("Caută în meniu: scrie un cuvânt, de exemplu subtitrări"),
 		N_("Tema interfeței web"),
 	),
 	"js": (
@@ -1195,7 +1197,6 @@ TEXTE_PAGINA = {
 		N_("Din rețeaua de acasă nu se cere nici cod, nici parolă. O parolă (una singură, pentru tot) pui numai "
 			"dacă vrei, în Parola receptorului (/acces-ssh). Din afara rețelei locale receptorul nu răspunde."),
 		N_("(se arată la buton)"),
-		N_("Meniu"),
 		N_("Pornit: aplicațiile obișnuite de telefon pentru receptoare Enigma2 (canale, telecomandă, ghid, "
 			"înregistrări, liste m3u) intră și din casă cu utilizatorul root și parola ta (pusă în Parola receptorului)."),
 		N_("Pornit: aplicațiile obișnuite de telefon pentru receptoare Enigma2 (canale, telecomandă, ghid, "

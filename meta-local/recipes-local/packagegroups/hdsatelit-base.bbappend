@@ -57,6 +57,15 @@ HDS_FUNCTII_MIPS_PREGATITE ?= ""
 HDS_FUNCTII_MIPS_IN_ASTEPTARE = "hds-navigator hds-ocr hds-ocr-modele"
 RDEPENDS:${PN}:remove:vusolose = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
 RDEPENDS:${PN}:append:vusolose = " hdsatelit-radacina-usb"
+# Zgemma Star S (MSS, 12.11.2026; masina sh1, MIPS, NAND): aceeasi imagine mica si aceleasi limite ca Solo SE
+RDEPENDS:${PN}:remove:sh1 = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
+RDEPENDS:${PN}:append:sh1 = " hdsatelit-radacina-usb"
+# Vu+ Solo2 (MS2, 12.11.2026): aceeasi imagine mica, aceleasi limite (nucleul 3.13.5, MIPS)
+RDEPENDS:${PN}:remove:vusolo2 = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
+RDEPENDS:${PN}:append:vusolo2 = " hdsatelit-radacina-usb"
+# Vu+ Zero (MVZ, 12.11.2026): aceeasi imagine mica, aceleasi limite (nucleul 3.13.5, MIPS)
+RDEPENDS:${PN}:remove:vuzero = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
+RDEPENDS:${PN}:append:vuzero = " hdsatelit-radacina-usb"
 
 # Vu+ 4K (lotul a4-boot, 09.11.2026; lazcengiz, Uno4K SE, asistenta 742005): OpenMultiboot, luat de om din alt feed,
 # cere pachetul kernel-module-nandsim, iar feedul nostru nu il avea, deci opkg refuza instalarea. Pe Vu+ 4K (eMMC,
@@ -73,6 +82,10 @@ RDEPENDS:${PN}:append:vuduo4kse = " kernel-module-nandsim"
 RDEPENDS:${PN}:append:vuzero4k = " kernel-module-nandsim"
 # Vu+ Duo 4K Lite (VU1): defconfig_initrd al nucleului lui are CONFIG_MTD_NAND_NANDSIM=m
 RDEPENDS:${PN}:append:vuduo4klite = " kernel-module-nandsim"
+# GigaBlue UHD Quad 4K Pro (ALFA): defconfig_initrd gb7252 (linux-gigablue 4.1.20) are CONFIG_MTD_NAND_NANDSIM=m
+RDEPENDS:${PN}:append:gbquad4kpro = " kernel-module-nandsim"
+# GigaBlue UHD X3 4K (MGX): gb72604/defconfig (linux-gigablue 4.1.20) are CONFIG_MTD_NAND_NANDSIM=m
+RDEPENDS:${PN}:append:gbx34k = " kernel-module-nandsim"
 # Vu+ Duo 4K Lite (VU1): vuplus-ddbootup (meta-vuplusde, numai Recommends acolo) scrie la pornire boxtype, vumodel si
 # model (driverul nu le da) si porneste afisajul (lcd/mode 1, /dev/dbox/lcd0); garda de model si afisajul color au nevoie de el
 RDEPENDS:${PN}:append:vuduo4klite = " vuplus-ddbootup"
@@ -84,12 +97,19 @@ RDEPENDS:${PN}:append:vuduo4klite = " vuplus-ddbootup"
 # pachetele instalate cu versiune noua (HdsActualizari.planul), deci fara el cine actualizeaza nu primea nici driverul,
 # nici kernel-module-nandsim de mai sus.
 RDEPENDS:${PN}:append:vusolo4k = " kernel-module-rt2800usb linux-firmware-ralink"
+RDEPENDS:${PN}:append:vuultimo4k = " kernel-module-rt2800usb linux-firmware-ralink"
 RDEPENDS:${PN}:append:vuduo4k = " kernel-module-rt2800usb linux-firmware-ralink"
+RDEPENDS:${PN}:append:vuduo4kse = " kernel-module-rt2800usb linux-firmware-ralink"
 RDEPENDS:${PN}:append:vuuno4kse = " kernel-module-rt2800usb linux-firmware-ralink"
+RDEPENDS:${PN}:append:vuzero4k = " kernel-module-rt2800usb linux-firmware-ralink"
 RDEPENDS:${PN}:append:vuduo4klite = " kernel-module-rt2800usb linux-firmware-ralink"
+RDEPENDS:${PN}:append:gbquad4kpro = " kernel-module-rt2800usb linux-firmware-ralink"
 PR:append:vusolo4k = ".1"
+PR:append:vuultimo4k = ".1"
 PR:append:vuduo4k = ".1"
+PR:append:vuduo4kse = ".1"
 PR:append:vuuno4kse = ".1"
+PR:append:vuzero4k = ".1"
 PR:append:vuduo4klite = ".1"
 
 # Stickuri Wi-Fi USB cu driverul in nucleu si adaptoare de retea USB (cererea din 10.11.2026, treapta A1 din
@@ -121,10 +141,61 @@ RDEPENDS:${PN}:append:u57 = " ${HDS_WIFI_USB} kernel-module-r8152"
 RDEPENDS:${PN}:append:u571 = " ${HDS_WIFI_USB} kernel-module-r8152"
 # Vu+ 4K (nucleele Vu+ n-au MT7601U)
 RDEPENDS:${PN}:append:vusolo4k = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
+RDEPENDS:${PN}:append:vuultimo4k = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
 RDEPENDS:${PN}:append:vuduo4k = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
+RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
 RDEPENDS:${PN}:append:vuuno4kse = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
+RDEPENDS:${PN}:append:vuzero4k = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
 # Vu+ Duo 4K Lite (VU1): toate modulele din cele doua liste sunt =m in defconfig_initrd (meta-vuplusde, 12.11.2026)
 RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
+# GigaBlue UHD Quad 4K Pro (ALFA): toate modulele din cele doua liste sunt =m in defconfig_initrd gb7252 (12.11.2026)
+RDEPENDS:${PN}:append:gbquad4kpro = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
+# GigaBlue UHD X3 4K (MGX): toate modulele din cele doua liste sunt =m in gb72604/defconfig (12.11.2026)
+RDEPENDS:${PN}:append:gbx34k = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
+# Zgemma H9 COMBO si H9 TWIN (MH9, 12.11.2026; masina h9combo, linux-airdigital 4.4.35): toate modulele din cele doua liste
+# sunt =m in linux-airdigital-4.4.35/h9combo/defconfig (OE-Alliance 6.0), plus CONFIG_MT7601U=m, ca pe viper4k
+RDEPENDS:${PN}:append:h9combo = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u"
+# Novaler Multibox 4K PRO (MNP, 12.11.2026; masina multiboxpro, linux-maxytec 4.4.35): toate modulele din cele doua liste
+# sunt =m in linux-maxytec-4.4.35/multiboxpro/defconfig (OE-Alliance 6.0), plus CONFIG_MT7601U=m, ca pe viper4k si H9
+RDEPENDS:${PN}:append:multiboxpro = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u"
+# Novaler Multibox 4K SE (MNS, 12.11.2026; masina multiboxse, linux-maxytec 4.4.35): toate modulele din cele doua liste
+# sunt =m in linux-maxytec-4.4.35/multiboxse/defconfig (OE-Alliance 6.0; identic cu multiboxpro), plus CONFIG_MT7601U=m
+RDEPENDS:${PN}:append:multiboxse = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u"
+# AB-COM PULSe 4K si PULSe 4K MINI (MPU, 12.11.2026; linux-abcom 4.4.35): toate modulele din cele doua liste sunt =m in
+# linux-abcom-4.4.35/pulse4k/defconfig (acelasi fisier si la pulse4kmini, OE-Alliance 6.0), plus CONFIG_MT7601U=m
+RDEPENDS:${PN}:append:pulse4k = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u"
+RDEPENDS:${PN}:append:pulse4kmini = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u"
+# Zgemma H9 TWIN SE si H9 COMBO SE (MHS, 12.11.2026; masina h9combose): linux-airdigital-4.4.35/h9combose/defconfig e
+# identic cu cel h9combo (diff gol), deci aceleasi liste ca la h9combo
+RDEPENDS:${PN}:append:h9combose = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u"
+# AX HD51 (MHD, 12.11.2026; masina hd51, MACHINEBUILD ax51, linux-gfutures 4.10.12): toate modulele din cele doua liste sunt
+# =m in linux-gfutures-4.10.12/hd51/defconfig (OE-Alliance 6.0), plus CONFIG_MT7601U=m, deci mt7601u din nucleu, ca pe
+# viper4k. CONFIG_MTD_NAND_NANDSIM lipseste din defconfig: fara kernel-module-nandsim (ar opri constructia).
+RDEPENDS:${PN}:append:ax51 = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u"
+# Edision OS mio 4K+, OS mini 4K, OS mio 4K (MED, 13.11.2026; linux-edision 5.15): toate modulele din cele doua liste
+# sunt =m in defconfig-ul 5.15 (acelasi pe toate trei), plus MT7601U=m (in imagine, ca pe ax51). Firmware-ul
+# demodulatoarelor availink (avl62x1, avl68x2) e numai RRECOMMENDS in edision-dvb-modules-<masina>: il cerem
+# explicit, fara el tunerele nu pornesc.
+RDEPENDS:${PN}:append:osmio4kplus = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u linux-firmware-dvb-fe-avl62x1 linux-firmware-dvb-fe-avl68x2"
+RDEPENDS:${PN}:append:osmini4k = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u linux-firmware-dvb-fe-avl62x1 linux-firmware-dvb-fe-avl68x2"
+RDEPENDS:${PN}:append:osmio4k = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u linux-firmware-dvb-fe-avl62x1 linux-firmware-dvb-fe-avl68x2"
+# Wi-Fi-ul intern QCA6174 (OS mio 4K+ si OS mio 4K; OS mini 4K nu are): OE-Alliance il pune prin
+# packagegroup-oea-wifi (MACHINEBUILD), pe care nu-l folosim; pachetul lui are numai RRECOMMENDS, deci le cerem pe toate
+RDEPENDS:${PN}:append:osmio4kplus = " enigma2-plugin-drivers-network-usb-qca6174 wlan-qcacld-20 firmware-qca6174"
+RDEPENDS:${PN}:append:osmio4k = " enigma2-plugin-drivers-network-usb-qca6174 wlan-qcacld-20 firmware-qca6174"
+# Zgemma H17 COMBO (MH7, 12.11.2026; masina h17, linux-airdigital 4.10.12): defconfig-ul h17 difera de hd51 numai prin 5
+# module HID/serial; toate modulele din cele doua liste sunt =m, plus CONFIG_MT7601U=m (si imaginea publica a masinii are
+# mt7601u), fara CONFIG_MTD_NAND_NANDSIM
+RDEPENDS:${PN}:append:zgemmah17combo = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel-module-mt7601u firmware-mt7601u"
+# Dreambox DM900 si DM920 (MDM dm900 wifi, 12.11.2026; linux-dreambox-3.14/dm900/defconfig si dm920/defconfig, OE-Alliance
+# 6.0, la fel in afara de numele masinii): toate modulele din cele doua liste sunt =m (r8152 = CONFIG_USB_RTL8152, asix =
+# CONFIG_USB_NET_AX8817X), in afara de ath9k-htc (CONFIG_ATH9K_HTC nesetat), scos mai jos ca sa nu opreasca constructia.
+# Fara mt7601u (lipseste din nucleu) si fara HDS_WIFI_VANDUTE: driverele din afara nucleului nu sunt probate pe 3.14
+# (raman in feed; imaginile OE-Alliance dm900 au 8812au si 8821au, cu alte retete).
+RDEPENDS:${PN}:append:dm900 = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
+RDEPENDS:${PN}:append:dm920 = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
+RDEPENDS:${PN}:remove:dm900 = "kernel-module-ath9k-htc"
+RDEPENDS:${PN}:remove:dm920 = "kernel-module-ath9k-htc"
 # Vu+ Solo SE (NAND 256 MB, nucleu 3.13.5 fara rtl8192cu): nimic.
 # Cine actualizeaza din meniu primeste driverele numai prin pachetul de grup: actualizarea ia numai pachetele instalate
 # cu versiune noua (HdsActualizari.planul), iar opkg aduce apoi dependintele lui noi din feed. Deci PR-ul lui
@@ -134,12 +205,28 @@ PR:append:sf8008 = ".1"
 PR:append:sf8008m = ".1"
 PR:append:ustym4kpro = ".1"
 PR:append:gbtrio4k = ".1"
+PR:append:gbquad4kpro = ".1"
+PR:append:gbx34k = ".1"
+PR:append:h9combo = ".1"
+PR:append:multiboxpro = ".1"
+PR:append:multiboxse = ".1"
+PR:append:pulse4k = ".1"
+PR:append:pulse4kmini = ".1"
+PR:append:h9combose = ".1"
+PR:append:ax51 = ".1"
+PR:append:osmio4kplus = ".1"
+PR:append:osmini4k = ".1"
+PR:append:osmio4k = ".1"
+PR:append:zgemmah17combo = ".1"
 PR:append:viper4k = ".1"
 PR:append:u57 = ".1"
 PR:append:u571 = ".1"
 PR:append:vusolo4k = ".1"
+PR:append:vuultimo4k = ".1"
 PR:append:vuduo4k = ".1"
+PR:append:vuduo4kse = ".1"
 PR:append:vuuno4kse = ".1"
+PR:append:vuzero4k = ".1"
 PR:append:vuduo4klite = ".1"
 
 # Imaginea mica (0.7.4, 10.11.2026; PROIECT-IMAGINE-MICA.md, treapta T2, hotararea 3 a coordonatorului): recunoasterea
@@ -172,10 +259,29 @@ RDEPENDS:${PN}:append = " openssl3-compat"
 # (AAC cu cadre de 960, HE-AAC) decodat de releul DAB in receptor pe placile care nu-l stiu (Vu+ Broadcom); libfaad2 si twolame
 # (~0,38 MB) numai pe aceste masini. Pe HiSilicon decodeaza placa (Hds/DabT2/sunet_software.py, agentul DA).
 RDEPENDS:${PN}:append:vuuno4kse = " libfaad2 twolame"
+RDEPENDS:${PN}:append:vuzero4k = " libfaad2 twolame"
 RDEPENDS:${PN}:append:vuduo4klite = " libfaad2 twolame"
+RDEPENDS:${PN}:append:gbquad4kpro = " libfaad2 twolame"
+RDEPENDS:${PN}:append:gbx34k = " libfaad2 twolame"
+# AX HD51 (MHD): tot Broadcom (bcm7251s, Nexus), aceeasi cale de sunet ca Vu+ 4K
+RDEPENDS:${PN}:append:ax51 = " libfaad2 twolame"
+RDEPENDS:${PN}:append:osmio4kplus = " libfaad2 twolame"
+RDEPENDS:${PN}:append:osmini4k = " libfaad2 twolame"
+RDEPENDS:${PN}:append:osmio4k = " libfaad2 twolame"
+# Zgemma H17 COMBO (MH7): tot Broadcom (bcm7251s), aceeasi cale de sunet ca AX HD51
+RDEPENDS:${PN}:append:zgemmah17combo = " libfaad2 twolame"
+# Dreambox DM900 si DM920 (MDM dm900 sunet): tot Broadcom (bcm7252s), aceeasi cale de sunet DAB+ ca Vu+ 4K
+RDEPENDS:${PN}:append:dm900 = " libfaad2 twolame"
+RDEPENDS:${PN}:append:dm920 = " libfaad2 twolame"
 RDEPENDS:${PN}:append:vuduo4k = " libfaad2 twolame"
+RDEPENDS:${PN}:append:vuduo4kse = " libfaad2 twolame"
 RDEPENDS:${PN}:append:vusolo4k = " libfaad2 twolame"
+RDEPENDS:${PN}:append:vuultimo4k = " libfaad2 twolame"
 RDEPENDS:${PN}:append:vusolose = " libfaad2 twolame"
+# Zgemma Star S (MSS): tot Broadcom (BCM7358), aceeasi cale de sunet DAB+ ca Solo SE
+RDEPENDS:${PN}:append:sh1 = " libfaad2 twolame"
+RDEPENDS:${PN}:append:vusolo2 = " libfaad2 twolame"
+RDEPENDS:${PN}:append:vuzero = " libfaad2 twolame"
 
 # 0.7.4 (agentul WD, 11.11.2026): r8188eu e in imagine, dar fara firmware-ul lui stickurile RTL8188EUS (foarte raspandite) nu porneau;
 # firmware-ul (13 KB, recipes-local/firmware-rtl8188eu) intra acolo unde intra driverele Wi-Fi USB.
@@ -207,11 +313,37 @@ RDEPENDS:${PN}:append:viper4k = " ${HDS_WIFI_VANDUTE} rt8821cu"
 RDEPENDS:${PN}:append:u57 = " ${HDS_WIFI_VANDUTE} rt8821cu"
 RDEPENDS:${PN}:append:u571 = " ${HDS_WIFI_VANDUTE} rt8821cu"
 RDEPENDS:${PN}:append:vusolo4k = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:vuultimo4k = " ${HDS_WIFI_VANDUTE} rt8821cu"
 RDEPENDS:${PN}:append:vuduo4k = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_WIFI_VANDUTE} rt8821cu"
 RDEPENDS:${PN}:append:vuuno4kse = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:vuzero4k = " ${HDS_WIFI_VANDUTE} rt8821cu"
 RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:gbquad4kpro = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:gbx34k = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:h9combo = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:multiboxpro = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:multiboxse = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:pulse4k = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:pulse4kmini = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:h9combose = " ${HDS_WIFI_VANDUTE} rt8821cu"
+# AX HD51 (MHD): rtl8821au, rtl88x2bu si rtl88xxau se construiesc pe 4.10.12 (imaginea publica OE-Alliance 6.0 pentru ax51
+# are 8812au, 8821au si 8822bu din aceleasi retete, comparatia din STADIU-MHD.md); rt8821cu de probat la constructie
+RDEPENDS:${PN}:append:ax51 = " ${HDS_WIFI_VANDUTE} rt8821cu"
+# Edision (MED): driverele din afara nucleului pe 5.15 (imaginea publica OE-Alliance 6.0 pentru osmio4kplus are deja
+# 8812au si 8821au construite pe 5.15.0); rtl88x2bu si rt8821cu NEINCERCATE pe 5.15 la noi: de urmarit la constructie
+RDEPENDS:${PN}:append:osmio4kplus = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:osmini4k = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:osmio4k = " ${HDS_WIFI_VANDUTE} rt8821cu"
+# Zgemma H17 COMBO (MH7): acelasi nucleu 4.10.12 ca AX HD51 (imaginea publica OE-Alliance 6.0 a masinii are si
+# rtl8192fu, 8812au, 8821au si 8822bu); rt8821cu de probat la constructie
+RDEPENDS:${PN}:append:zgemmah17combo = " ${HDS_WIFI_VANDUTE} rt8821cu"
 # Vu+ Solo SE (NAND 256 MB, hotararea lui Eduard din 06.11: imaginea incape in NAND, ce e mare sta in feed; ~72 MiB raman
 # omului dupa instalare): numai primul, rtl8821au (Archer T2U Nano / T2U Plus, cele mai ieftine si mai vandute AC600; ~3,2 MB
 # necomprimat, mai putin in UBIFS). Celelalte trei ar lua inca ~11 MB din locul omului; raman in feed si in pachetul de
 # completari de pe stick. De confirmat de coordonator la constructia comuna (limita 150 MiB, verifica-model-nand-070.py).
 RDEPENDS:${PN}:append:vusolose = " rtl8821au"
+# Zgemma Star S (MSS): ca Solo SE, numai rtl8821au in imagine (se construieste pe 4.10.12, vezi randul ax51)
+RDEPENDS:${PN}:append:sh1 = " rtl8821au"
+RDEPENDS:${PN}:append:vusolo2 = " rtl8821au"
+RDEPENDS:${PN}:append:vuzero = " rtl8821au"

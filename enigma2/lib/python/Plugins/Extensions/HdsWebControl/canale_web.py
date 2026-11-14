@@ -145,16 +145,19 @@ _REF = re.compile(r"^\d{1,4}:\d{1,5}(:[0-9A-Fa-f]{1,8}){8}:")
 _NUME_SIGLA = re.compile(r"(?:[0-9A-Fa-f]{1,8}(?:_[0-9A-Fa-f]{1,8}){9}|[a-z0-9]+)\Z")
 _FISIER_BUCHET = re.compile(r'FROM BOUQUET "([A-Za-z0-9_.\-]{1,120})"')
 _ID_BUCHET = re.compile(r"^[A-Za-z0-9_.\-]{1,120}$")
+_ADRESA_IN_TEXT = re.compile(r"(?i)[a-z][a-z0-9+.-]*(?::|%3a)//")
 _CONTROL = re.compile(u"[\u0000-\u001f\u007f-\u009f\ud800-\udfff]")
 _SECRET_REF = os.urandom(32)
 _REF_PUBLIC = re.compile(r"^canal-[0-9a-f]{32}$")
 
 
-def ref_publica(ref):
+def ref_publica(ref, c=False):
 	"""Referintele cu o cale raman numai pe receptor; identificatorul nu permite recuperarea adresei.
 	Se calculeaza din flux fara numele de la coada si cu campurile scrise la fel (hex mic), ca acelasi canal din buchet si
-	de pe televizor (care il poate scrie cu alt nume) sa aiba acelasi identificator, deci sa fie marcat in lista."""
-	c = _campuri(ref)
+	de pe televizor (care il poate scrie cu alt nume) sa aiba acelasi identificator, deci sa fie marcat in lista.
+	`c`: campurile deja citite cu _campuri(ref) (Rand le citeste o singura data pentru toate trei)."""
+	if c is False:
+		c = _campuri(ref)
 	if c is not None and c[1]:
 		flux = "%d:%d:%x:%x:%x:%x:%x:%x:%x:%x:%s" % (tuple(c[0]) + (c[1],))
 		return "canal-" + hmac.new(_SECRET_REF, flux.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
@@ -193,7 +196,8 @@ def curat(text, maxim=MAX_NUME):
 	if isinstance(text, bytes):
 		text = text.decode("utf-8", "replace")
 	text = _CONTROL.sub("", str(text)).strip()
-	if re.search(r"(?i)[a-z][a-z0-9+.-]*(?::|%3a)//", text):
+	# o adresa are mereu „//”; fara el cautarea nu mai ruleaza (pe receptorul de probe era o treime din curatarea a 36 846 de nume)
+	if "//" in text and _ADRESA_IN_TEXT.search(text):
 		return "?"
 	return text[:maxim]
 
@@ -221,15 +225,47 @@ def steaguri(ref):
 	return c[0][1] if c else 0
 
 
-def ref_epg(ref):
-	"""Referinta DVB fara nume si fara cale, cu hex mare (cum o scrie toString), pentru EPG; None la fluxuri."""
-	c = _campuri(ref)
+# Canalele de internet (Components/HdsIptvSurse.refCanal): 4097 cu calea releului local; ghidul lor sta in acelasi cache, sub SID/TSID/ONID
+_CALE_IPTV = "http%3a//127.0.0.1%3a8897/tv/"
+
+
+def _eIptv(campuri, cale):
+	return campuri[0] == 4097 and (not cale or cale.lower().startswith(_CALE_IPTV))
+
+
+def ref_epg(ref, c=False):
+	"""Referinta DVB fara nume si fara cale, cu hex mare (cum o scrie toString), pentru EPG; la un canal de internet, 4097 fara
+	cale (ghidul lui adus de Components/HdsIptvEpg); None la celelalte fluxuri."""
+	if c is False:
+		c = _campuri(ref)
 	if c is None:
 		return None
 	campuri, cale = c
-	if campuri[0] != 1 or cale or campuri[1] & (MARCAJ | DOSAR):
+	if campuri[1] & (MARCAJ | DOSAR):
 		return None
-	return "1:0:" + ":".join("%X" % v for v in campuri[2:10]) + ":"
+	if campuri[0] == 1 and not cale:
+		return "1:0:" + ":".join("%X" % v for v in campuri[2:10]) + ":"
+	if _eIptv(campuri, cale):
+		return "4097:0:" + ":".join("%X" % v for v in campuri[2:10]) + ":"
+	return None
+
+
+def cheie_epg(c):
+	"""Aceeasi conditie ca ref_epg, dar ca un singur numar intreg (cele 8 campuri hex, fiecare sub 2**32 dupa _REF, puse
+	unul dupa altul; exact, fara formatarea textului si cat un text in memorie): ce tine lista minte pentru
+	/api/canale-epg (_refCunoscut). `c` = _campuri(ref)."""
+	if c is None:
+		return None
+	campuri, cale = c
+	if campuri[1] & (MARCAJ | DOSAR):
+		return None
+	iptv = _eIptv(campuri, cale)
+	if not iptv and (campuri[0] != 1 or cale):
+		return None
+	v = 1 if iptv else 0   # canalele de internet au cheia lor, chiar daca numerele ar semana cu ale unui canal DVB
+	for x in campuri[2:10]:
+		v = (v << 32) | (x & 0xFFFFFFFF)
+	return v
 
 
 def sigle_pornite():
@@ -267,9 +303,10 @@ def _sursa(c):
 	return _t(SURSE.get(poz, "Satelit")) if isinstance(poz, str) else _t("Satelit")
 
 
-def nume_sigla(ref):
+def nume_sigla(ref, c=False):
 	"""Numele local ca in Tools/PiconResolver.py, pentru DVB si referinte radio audio HTTP(S)."""
-	c = _campuri(ref)
+	if c is False:
+		c = _campuri(ref)
 	if c is None:
 		return None
 	campuri, cale = c
@@ -777,8 +814,14 @@ def gen_canale_index(index):
 # Fiecare bucla peste randuri cedeaza dupa cel mult UNITATE intrari: o felie se opreste la BUGET_S, dar un singur pas
 # nu se poate taia (pe receptor Python e de cateva ori mai incet decat pe PC).
 
+_NEFACUT = object()
+
+
 class Rand(object):
-	__slots__ = ("k", "ref", "nume", "cheie_nume", "n", "marcaj", "canal", "epg", "sigla")
+	"""Un rand al listei. Referinta se citeste o singura data (_campuri) pentru EPG si identificatorul public; numele
+	siglei se face abia cand e cerut (numai randurile aratate in pagina, playlisturile, aparatele): la 36 846 de canale
+	pe receptorul de probe, constructia „Toate canalele” tinea enigma2 ocupat 18 s, din care o treime erau aceste trei citiri."""
+	__slots__ = ("k", "ref", "nume", "cheie_nume", "n", "marcaj", "canal", "pub", "ek", "_sigla", "_epg")
 
 	def __init__(self, k, ref, nume, X, n=None, marcaj=False, canal=None):
 		self.k = k
@@ -788,8 +831,27 @@ class Rand(object):
 		self.n = n
 		self.marcaj = marcaj
 		self.canal = canal
-		self.epg = None if marcaj else ref_epg(ref)
-		self.sigla = None if marcaj else nume_sigla(ref)
+		if marcaj:
+			self.pub = self.ek = self._sigla = self._epg = None
+		else:
+			c = _campuri(ref)
+			self.pub = ref_publica(ref, c)
+			self.ek = cheie_epg(c)
+			self._sigla = self._epg = _NEFACUT
+
+	# textul EPG si numele siglei numai pentru randurile cerute: referinta se citeste din nou (campurile nu se tin minte pe
+	# rand, ar fi ~8 MB in plus la 36 846 de canale)
+	@property
+	def epg(self):
+		if self._epg is _NEFACUT:
+			self._epg = ref_epg(self.ref)
+		return self._epg
+
+	@property
+	def sigla(self):
+		if self._sigla is _NEFACUT:
+			self._sigla = nume_sigla(self.ref)
+		return self._sigla
 
 
 class Lista(object):
@@ -807,7 +869,7 @@ class Lista(object):
 		self.dupa_cheie = {}
 		self.poz_cheie = {}
 		self.canale = 0
-		self.refs_epg = set()
+		self.refs_epg = set()   # cheie_epg (numar) a fiecarui canal cu EPG
 		self.grupe = None       # [(cheia grupei, numele, [randuri])], facute o data (gen_grupe)
 		self.poz_grupe = {}     # cheia canalului -> (grupa, pozitia); salt direct la canalul de pe televizor
 		self.cautari = {}        # rezultate complete, comune tuturor paginilor aceleiasi cautari
@@ -825,12 +887,12 @@ class Lista(object):
 	def adauga(self, r):
 		if not r.marcaj:
 			self.dupa_ref.setdefault(r.ref, r)
-			self.dupa_public.setdefault(ref_publica(r.ref), r)
+			self.dupa_public.setdefault(r.pub, r)
 			self.dupa_cheie.setdefault(r.k, r)
 			self.poz_cheie.setdefault(r.k, len(self.randuri))
 			self.canale += 1
-			if r.epg:
-				self.refs_epg.add(r.epg)
+			if r.ek is not None:
+				self.refs_epg.add(r.ek)
 		self.randuri.append(r)
 
 
@@ -955,11 +1017,26 @@ def gen_lista(M, tip, id_, viata=VIATA_LISTA_S):
 	oricat de veche, cat timp fisierele nu s-au schimbat (paginile urmatoare ale aceleiasi liste)."""
 	index = yield from gen_index(M)
 	sem = (semnatura(M.director()), M.multibuchet(), id(index), versiune_variante(M) if id_ == TOATE else None)
+	if id_ == TOATE or (tip == "radio" and id_ in RADIO_LISTE):
+		# facuta numai din index (legat de fisiere prin id(index)) si din variante, ambele in semnatura: aceeasi lista cat
+		# timp nu se schimba nimic, oricat de veche. Limita de VIATA_LISTA_S ramane la buchete (editate pe televizor
+		# inainte sa fie scrise). Pe receptorul de probe, cu 35 552 de canale, refacerea la fiecare deschidere dupa un minut costa ~18 s.
+		sem = sem + (_limba(),)
+		viata = None
 	vechi = _MEMORIE["liste"].get((tip, id_))
 	if _proaspat(vechi, sem, M.acum(), viata):
 		return vechi[2]
 	return (yield from gen_unul_pe_fel(("lista", tip, id_),
 		lambda: _gen_construieste_lista(M, tip, id_, index, sem, viata)))
+
+
+def _limba():
+	"""Limba interfetei (numele „Fără nume · ...” din index e tradus la constructia listei)."""
+	try:
+		from .traducere_pagini import limba
+	except ImportError:
+		return None
+	return limba()
 
 
 def _nume_lista_radio(id_):
@@ -1803,7 +1880,7 @@ def _sigla_rand(r, sigle):
 def _rand_json(r, sigle, X, favorite=None, deosebire="", releu=None, variante=None):
 	if r.marcaj:
 		return {"m": 1, "nume": r.nume}
-	d = {"k": cheie_publica(r.ref, r.k), "ref": ref_publica(r.ref), "nume": r.nume}
+	d = {"k": r.pub if r.pub != r.ref else r.k, "ref": r.pub, "nume": r.nume}
 	if favorite and r.k in favorite:
 		d["f"] = 1
 	if releu is not None:
@@ -1828,6 +1905,9 @@ def _rand_json(r, sigle, X, favorite=None, deosebire="", releu=None, variante=No
 	dvbi = _eticheta_dvbi(r.ref)
 	if dvbi:
 		d["dvbi"] = dvbi
+	iptv = eticheta_iptv(r.ref)
+	if iptv:
+		d["iptv"], d["iptv_rau"] = iptv
 	if variante:
 		d["v"] = variante
 	return d
@@ -1840,6 +1920,53 @@ def N_(text):
 
 _ETICHETE_DVBI = {"oprit_tara": N_("oprit în țara ta"), "adresa_moarta": N_("adresă moartă"), "nu_raspunde": N_("nu "
 	"răspunde")}
+
+
+_IPTV_DATE = [0.0, None]
+VIATA_IPTV_S = 2.0
+
+
+def _date_iptv():
+	"""(HdsIptvSurse, HdsIptv4K, semnele, porniri sau None, rezultatele 4K) citite o data la VIATA_IPTV_S (lista are mii de randuri)."""
+	acum = time.monotonic()
+	if _IPTV_DATE[1] is not None and acum - _IPTV_DATE[0] < VIATA_IPTV_S:
+		return _IPTV_DATE[1]
+	try:
+		from Components import HdsIptvSurse as I
+		from Components import HdsIptv4K as K
+		date = (I, K, I.nefunctionale(), I.porniri() if I.optiune("timp_pornire") else None, K.rezultate())
+	except Exception:
+		date = (None, None, {}, None, {})
+	_IPTV_DATE[0], _IPTV_DATE[1] = acum, date
+	return date
+
+
+def eticheta_iptv(ref):
+	"""(text, rau) pentru un canal de internet al imaginii, ca in lista de pe televizor (Components/ServiceList.py): „n-a pornit:
+	<motivul>” (rau = 1) pana porneste din nou; altfel ce trimite canalul „4K” verificat si timpul mediu de pornire. None altfel."""
+	if not ref or not ref.startswith("4097:") or "8897" not in ref:   # numai canalele releului local (HdsIptvSurse.PORT)
+		return None
+	I, K, semne, porniri, rez4k = _date_iptv()
+	if I is None:
+		return None
+	sid, cheie = I.desparteCale(ref)
+	if sid is None:
+		return None
+	k = "%s/%s" % (sid, cheie)
+	if k in semne:
+		motiv, codec = I.motivNefunctional(ref)
+		text = (_t("n-a pornit: %s") % _t(I.MOTIVE[motiv])) if motiv else _t("IPTV: n-a pornit")
+		return (text + (" (%s)" % codec if codec else ""), 1)
+	parti = []
+	if rez4k and k in rez4k:
+		e = K.eticheta4k(rez4k[k])
+		if e:
+			parti.append(e)
+	if porniri and k in porniri:
+		tp = I.timpPornire(ref)
+		if tp is not None:
+			parti.append(_t("~%s s") % ("%.1f" % tp).replace(".", ","))
+	return (" · ".join(parti), 0) if parti else None
 
 
 def _eticheta_dvbi(ref):
@@ -2093,8 +2220,11 @@ def gen_antete(M, X, lista, tip, acum, grupuri, sel):
 
 def _refCunoscut(ref):
 	"""Referinta EPG apare intr-o lista data de server (cele din memorie)."""
+	e = cheie_epg(_campuri(ref))
+	if e is None:
+		return False
 	for _sem, _ora_, lista in _MEMORIE["liste"].values():
-		if ref in lista.refs_epg:
+		if e in lista.refs_epg:
 			return True
 	return False
 
@@ -3068,6 +3198,8 @@ PAGINA = """<!DOCTYPE html>
   .eticheta{background:var(--verde);color:#fff;border-radius:6px;padding:1px 7px;font-size:.78rem;white-space:nowrap;}
   .eticheta.transmis{background:#46cee2;color:#0b1020;font-weight:bold;}
   .eticheta.dvbi{background:#374ea1;color:#fff;}
+  .eticheta.iptv{background:#2a3350;color:#e6ebf5;}
+  .eticheta.iptv.rau{background:#9f1313;color:#fff;}
   .eticheta.transmis::before{content:"";display:inline-block;width:1.15em;height:1.15em;margin-right:4px;vertical-align:-.2em;background:linear-gradient(to bottom,#46cee2 0 30%,transparent 30% 70%,#46cee2 70%),radial-gradient(circle closest-side,#0b1020 0 22%,transparent 24% 44%,#0b1020 46% 60%,transparent 62% 78%,#0b1020 80% 94%,transparent 96%);}
   .em{display:flex;gap:8px;min-width:0;font-size:.9rem;line-height:1.35;margin-top:3px;}
   .em.urm{color:var(--text-slab);}
@@ -3212,15 +3344,30 @@ function cerere(cale, metoda, date){
 }
 // Fiecare raspuns vine imediat. Pregatirea intreaga ramane pe receptor intre doua intrebari, chiar la index rece;
 // un raspuns vechi nu poate porni alta intrebare dupa schimbarea cautarii, filei sau listei.
+// dupa 5 s de pregatire (prima deschidere dupa repornirea receptorului: indexul celor zeci de mii de canale se face o data,
+// ~40 s pe receptorul de probe cu 35 552 de canale), randul de sus spune ce se intampla si cat a trecut; la sfarsit revine textul de dinainte
+var PREGATIRE_LUNGA = "Receptorul pregătește lista de canale (%s s). Prima dată după o repornire durează mai mult; după aceea lista se deschide în câteva secunde.";
 function cerereLista(cale, activ){
   cale += (cale.indexOf("?") === -1 ? "?" : "&") + "progres=1";
+  var inceput = Date.now(), vechi = null, scris = "";
+  function inapoi(){
+    var n = $("numar");
+    if(vechi !== null && n && n.textContent === scris){ n.textContent = vechi; }
+    vechi = null;
+  }
   function pas(){
-    if(activ && !activ()){ return Promise.resolve(null); }
+    if(activ && !activ()){ inapoi(); return Promise.resolve(null); }
     return cerere(cale).then(function(d){
-      if(activ && !activ()){ return null; }
-      if(!d.pregatire && !d.ocupat){ return d; }
+      if(activ && !activ()){ inapoi(); return null; }
+      if(!d.pregatire && !d.ocupat){ inapoi(); return d; }
+      var sec = Math.round((Date.now() - inceput) / 1000), n = $("numar");
+      if(d.pregatire && sec >= 5 && n){
+        if(vechi === null){ vechi = n.textContent; }
+        scris = PREGATIRE_LUNGA.replace("%s", sec);
+        n.textContent = scris;
+      }
       return new Promise(function(resolve){ setTimeout(resolve, Math.max(100, Math.min(1000, d.dupa_ms || 200))); }).then(pas);
-    });
+    }, function(e){ inapoi(); throw e; });
   }
   return pas();
 }
@@ -3773,6 +3920,7 @@ function deseneaza(randuri, tinta){
     linie.appendChild(tr);
     // DVB-I: canalul de satelit are si varianta de internet; la un canal DVB-I, starea lui din casa
     if(r.dvbi){ linie.appendChild(el("span", "eticheta dvbi", r.dvbi)); }
+    if(r.iptv){ linie.appendChild(el("span", r.iptv_rau ? "eticheta iptv rau" : "eticheta iptv", r.iptv)); }
     var et = el("span", "eticheta ascuns", "Pe televizor");
     linie.appendChild(et);
     corp.appendChild(linie);
@@ -4088,11 +4236,14 @@ TEXTE_PAGINA = {
 		N_("Caută după nume"),
 		N_("Filtre"),
 		N_("Lista așa cum e aleasă și filtrată acum, pentru VLC, Kodi sau alt player din casă"),
+		# 0.7.5 (PRB, 14.11.2026): textele sablonului care lipseau din lista
+		N_("TV"),
 	),
 	"js": (
 		N_("browser deconectat"),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
 		N_("Se citește lista..."),
+		N_("Receptorul pregătește lista de canale (%s s). Prima dată după o repornire durează mai mult; după aceea lista se deschide în câteva secunde."),
 		N_("Listele nu s-au putut citi."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 		N_("Lista nu s-a putut citi."),

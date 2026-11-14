@@ -135,7 +135,9 @@ def _ciplus_slot(ui, slot, lipsa):
 		cod = ui.getCIPlusState(slot)
 	except Exception:
 		cod = 0
-	return {2: _t("CI+: autentificat, descifrare CI+"), 1: _t("CI+: autentificare în curs")}.get(
+	# 3 (HD Satelit 0.7.5): cheia CI+ a modulului refuzata de driver pe toate dispozitivele potrivite, ca pe televizor
+	return {3: _t("CI+: receptorul nu primește cheia CI+ a modulului (imaginea se oprește)"),
+		2: _t("CI+: autentificat, descifrare CI+"), 1: _t("CI+: autentificare în curs")}.get(
 		cod, _t("CI+: certificatele sunt puse; modulul lucrează ca CI simplu"))
 
 
@@ -509,8 +511,7 @@ def rute(baza, resource):
 
 def pagina_text(stil, config_pagina):
 	from .meniu_comun_web import sablon
-	from .traducere_pagini import traduce
-	return sablon(traduce(PAGINA, TEXTE_PAGINA), stil, config_pagina)
+	return sablon(_traducePagina(PAGINA), stil, config_pagina)
 
 
 PAGINA = """<!DOCTYPE html>
@@ -857,6 +858,15 @@ TEXTE_PAGINA = {
 		N_("Închide renunță numai la modificările nesalvate. Salvarea trimisă nu se anulează."),
 		N_("Salvează și aplică"), N_("Închide"), N_("Oprește slotul"), N_("Pornește slotul"), N_("modulul CI"),
 		N_("canalul pornit"), N_("Setări comune"), N_("Păstrează codul PIN"), N_("Codul PIN al cardului"),
-		N_("Șterge codul PIN păstrat"), N_("CI+"), N_("Alege fișierele param, root.pem, customer.pem și device.pem"),
+		N_("Șterge codul PIN păstrat"), N_("Alege fișierele param, root.pem, customer.pem și device.pem"),
 		N_("Pune certificatele"), N_("Șterge certificatele CI+")),
 }
+
+
+def _traducePagina(sablon, fel="pagina"):
+	"""Sablonul in limba receptorului; fara pachetul HdsWebControl (probele de pe PC), sablonul ca atare."""
+	try:
+		from .traducere_pagini import traduce
+	except ImportError:
+		return sablon
+	return traduce(sablon, TEXTE_PAGINA, fel)

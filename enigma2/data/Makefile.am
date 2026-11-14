@@ -18,6 +18,7 @@ hdsdisplaydir = $(pkgdatadir)/HDSatelit/display
 dist_hdsdisplay_DATA = $(top_srcdir)/HDSatelit/display/skin_display.xml
 
 dist_pkgdata_DATA = \
+	black.mvi \
 	cablu-romania.json \
 	defaultsatlists.xml \
 	defaultwizard.xml \
@@ -25,6 +26,7 @@ dist_pkgdata_DATA = \
 	encoding.conf \
 	hds-baza-pornire.jsonl.gz \
 	hds-cursor-mouse.png \
+	hds-protectie-sigla.png \
 	hds-drivere-pachete.json \
 	hds-module-pachete.json \
 	hds-producatori-mac.txt.gz \
@@ -50,7 +52,8 @@ dist_pkgdata_DATA = \
 	unicable.xml
 
 # catalogul Asistentei de la distanta (data/asistenta/catalog.json -> ${datadir}/enigma2/asistenta/catalog.json);
-# nobase pastreaza subdosarul (Components/HdsAsistentaCatalog.py il citeste de acolo)
+# nobase pastreaza subdosarul (Components/HdsAsistentaCatalog.py il citeste de acolo); pozele cardurilor din meniul
+# „Aplicații” (Components/HdsAplicatii.DOSAR_POSTERE, pkgdatadir/hds-aplicatii/<id>.png)
 nobase_dist_pkgdata_DATA = \
 	asistenta/catalog.json \
 	vremea/soare.png \
@@ -60,7 +63,13 @@ nobase_dist_pkgdata_DATA = \
 	vremea/ceata.png \
 	vremea/furtuna.png \
 	vremea/noapte.png \
-	vremea/surse.json
+	vremea/surse.json \
+	hds-aplicatii/navigator.png \
+	hds-aplicatii/hdsatelit-browser.png \
+	hds-aplicatii/media-center.png \
+	hds-aplicatii/hdsatelit.png \
+	hds-aplicatii/satbase.png \
+	hds-aplicatii/stb.png
 
 # Copia din pachet ramane disponibila pentru revenirea din galerie.
 sigleoriginaledir = $(pkgdatadir)/sigle-pornire

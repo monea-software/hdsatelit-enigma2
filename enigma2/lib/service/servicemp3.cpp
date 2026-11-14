@@ -72,6 +72,10 @@ static std::atomic<unsigned> radiouriInOprire(0);
 static const int ELIBERARE_RADIO_MS = 3000;
 
 bool eServiceMP3::asteaptaEliberareaRadio() { return radiouriInOprire.load() != 0; }
+/* pipelines asked to stop and not yet in NULL (their dvbvideosink may still hold video0); stop() waits for most of them,
+   a slow one goes on in its film thread. Read by eDVBServicePlay::hdsEcranNegru before it writes a still picture. */
+static std::atomic<unsigned> fluxuriInOprire(0);
+bool eServiceMP3::asteaptaEliberareaImaginii() { return fluxuriInOprire.load() != 0; }
 
 /* ------------------------------------------------------------------ the gate of the GStreamer callbacks */
 
@@ -133,6 +137,7 @@ struct eServiceMP3::FirFilm
 	GstElement *sunet_nou;
 	bool opreste, oprit;
 	bool radio_in_oprire = false;
+	bool in_oprire = false;			/* counted in fluxuriInOprire by stop(), until the pipeline is in NULL */
 	int ms_oprire;
 	bool scrie;				/* write (or remove, when empty) the cue file after the stop */
 	listaCues de_scris;
@@ -380,6 +385,8 @@ static void firFilm(std::shared_ptr<eServiceMP3::FirFilm> f)
 	}
 	if (f->radio_in_oprire)
 		--radiouriInOprire;
+	if (f->in_oprire)
+		--fluxuriInOprire;
 	int ms = (int)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
 	l.lock();
 	f->oprit = true;
@@ -1278,6 +1285,8 @@ RESULT eServiceMP3::stop()
 	m_fir->scrie = scrie;
 	m_fir->de_scris.swap(de_scris);
 	m_fir->opreste = true;
+	m_fir->in_oprire = true;
+	++fluxuriInOprire;
 	if (m_sourceinfo.is_streaming && m_ref.getData(0) == 2)
 	{
 		m_fir->radio_in_oprire = true;
@@ -1817,6 +1826,72 @@ RESULT eServiceMP3::getName(std::string &name)
 	return 0;
 }
 
+/* What the hardware decoder says about the picture playing now (/proc/stb/vmpeg/0, read as lib/dvb/decoder.cpp
+   readMpegProc does: hexadecimal, the frame rate decimal); -1 when the file is missing or unreadable. On HiSilicon
+   (Viper 4K V20, 13.11.2026) dvbvideosink reported 1920x1080 at 30 frames and no gamma for a 3840x2160 50p HDR10
+   HEVC stream from the internet, while vmpeg/0 had 3840x2160, 50000 and gamma 2: the bar showed 1080 and FHD, and
+   neither 16:9 nor HDR lit up. */
+static int vmpegProc(const char *name, bool hex)
+{
+	char path[64];
+	snprintf(path, sizeof(path), "/proc/stb/vmpeg/0/%s", name);
+	FILE *f = fopen(path, "r");
+	if (!f)
+		return -1;
+	int val = -1;
+	if (fscanf(f, hex ? "%x" : "%d", &val) != 1)
+		val = -1;
+	fclose(f);
+	return val;
+}
+
+/* the decoder's value once this service has a picture (the sink sent a size): a radio or audio file must not show the
+   size left in the decoder by the channel before; the sink's value otherwise */
+int eServiceMP3::videoInfo(const char *name, bool hex, int din_sink)
+{
+	if (m_width <= 0)
+		return din_sink;
+	int v = vmpegProc(name, hex);
+	return v > 0 || (v == 0 && !strcmp(name, "gamma")) ? v : din_sink;
+}
+
+/* gamma does not come from every sink (HiSilicon: never on streams): read with every picture event; a change is told
+   with evVideoGammaChanged, as the sink's eventGammaChanged does */
+void eServiceMP3::gammaDinDecodor()
+{
+	int g = videoInfo("gamma", true, -1);
+	if (g >= 0 && g != m_gamma)
+	{
+		m_gamma = g;
+		m_event((iPlayableService*)this, evVideoGammaChanged);
+	}
+}
+
+#if HAVE_HISILICON
+// ==== HDS_ASPECT_INCEPUT ====
+/* sAspect for the bar (the ETSI code: 2 4:3, 3 16:9, 4 2.21:1, as ServiceInfo IsWidescreen and HdsCommon ASPECT_WIDE / ASPECT_43
+   read it) from what the HiSilicon decoder writes in /proc/stb/vmpeg/0/aspect, as measured:
+   - the Octagon SF8008 (libreader) writes the ETSI code itself on every path: 2 for 4:3 and 3 for 16:9, on MPEG-2, on H.264 with
+     a SAR, on square pixels, on internet streams and on DVB; so 2 and above are kept as they are;
+   - the Viper 4K V20 (u57) wrote 1 on 16:9 internet streams with square pixels (3840x2160, 1920x1080): read as ETSI that is
+     "square samples", which the bar showed as 4:3 with the 16:9 sign grey. So 1 on a picture at least as wide as 14:9 is
+     16:9. What the u57 writes for 4:3 (0, or 1 on a narrow picture, or 2) is not measured yet: 0 and 1 on a narrow picture
+     give -1, and the caller keeps the value it had before (the sink's for 0, the decoder's for 1).
+   -1 when there is nothing to read again. Only plain arithmetic, so the tests build it alone. */
+namespace hdsaspect
+{
+inline int dinProc(int proc, int latime, int inaltime)
+{
+	if (proc >= 2)
+		return proc;
+	if (proc == 1 && latime > 0 && inaltime > 0 && latime * 9 >= inaltime * 14)
+		return 3;
+	return -1;
+}
+}
+// ==== HDS_ASPECT_SFARSIT ====
+#endif
+
 // The same reference supplies now/next in the InfoBar and the standard programme information.
 RESULT eServiceMP3::getEvent(ePtr<eServiceEvent> &evt, int nownext)
 {
@@ -1833,12 +1908,27 @@ int eServiceMP3::getInfo(int w)
 	switch (w)
 	{
 	case sServiceref: return m_ref;
-	case sVideoHeight: return m_height;
-	case sVideoWidth: return m_width;
-	case sFrameRate: return m_framerate;
+	/* HDSatelit: the number of video streams after the first async-done (-1 until then), for the channels that send only
+	   sound (lib/python/Components/HdsEcranNegru.py, NUMAI_SUNET) */
+	case sUser+17: return m_n_video;
+	case sVideoHeight: return videoInfo("yres", true, m_height);
+	case sVideoWidth: return videoInfo("xres", true, m_width);
+	case sFrameRate: return videoInfo("framerate", false, m_framerate);
 	case sProgressive: return m_progressive;
-	case sGamma: return m_gamma;
-	case sAspect: return m_aspect;
+	case sGamma: return videoInfo("gamma", true, m_gamma);
+	case sAspect:
+#if HAVE_HISILICON
+		/* the decoder's code read again where it is known (hdsaspect::dinProc); otherwise, and while this service has no
+		   picture, as before */
+		if (m_width > 0)
+		{
+			int a = hdsaspect::dinProc(vmpegProc("aspect", true), videoInfo("xres", true, m_width),
+				videoInfo("yres", true, m_height));
+			if (a > 0)
+				return a;
+		}
+#endif
+		return videoInfo("aspect", true, m_aspect);
 	case sTagTitle:
 	case sTagArtist:
 	case sTagAlbum:
@@ -2364,6 +2454,23 @@ subtype_t getSubtitleType(GstPad* pad, gchar *g_codec=NULL)
 	return type;
 }
 
+/* two tag lists equal once the bitrate tags are left out (the parsers resend them with every segment of a stream) */
+static bool tagsEqualButBitrate(const GstTagList *a, const GstTagList *b)
+{
+	static const char *const bitrate_tags[] = { GST_TAG_BITRATE, GST_TAG_NOMINAL_BITRATE, GST_TAG_MINIMUM_BITRATE, GST_TAG_MAXIMUM_BITRATE };
+	GstTagList *x = gst_tag_list_copy(a);
+	GstTagList *y = gst_tag_list_copy(b);
+	for (unsigned int i = 0; i < sizeof(bitrate_tags) / sizeof(bitrate_tags[0]); i++)
+	{
+		gst_tag_list_remove_tag(x, bitrate_tags[i]);
+		gst_tag_list_remove_tag(y, bitrate_tags[i]);
+	}
+	bool equal = gst_tag_list_is_equal(x, y);
+	gst_tag_list_unref(x);
+	gst_tag_list_unref(y);
+	return equal;
+}
+
 void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 {
 	if (!msg)
@@ -2560,6 +2667,11 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 			gst_message_parse_tag(msg, &tags);
 	
 			result = gst_tag_list_merge(m_stream_tags, tags, GST_TAG_MERGE_REPLACE);
+			/* evUpdatedInfo makes every converter of the bar and 4-6 listeners read the tracks and the subtitle list again (on the main
+			   thread); on IPTV the parsers resend the same tags, with only the bitrate changed, at every HLS segment: measured on a
+			   Viper 4K V20, 5 subtitle lists a second and the main thread at 16% of a core against 4.5% on satellite. Tags equal
+			   apart from the bitrate send nothing; the bitrate is still read from m_stream_tags when asked for. */
+			bool tags_changed = !(m_stream_tags && result && tagsEqualButBitrate(m_stream_tags, result));
 			if (result)
 			{
 				if (m_stream_tags)
@@ -2596,11 +2708,13 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 					if (!m_sourceinfo.is_streaming)
 						eDebug("eServiceMP3::audio stream from the tags, codec=%s", nume);
 					m_audioStreams.push_back(audio);
+					tags_changed = true;
 				}
 				g_free (nume);
 			}
 			gst_tag_list_unref(tags);
-			m_event((iPlayableService*)this, evUpdatedInfo);
+			if (tags_changed)
+				m_event((iPlayableService*)this, evUpdatedInfo);
 			break;
 		}
 		case GST_MESSAGE_ASYNC_DONE:
@@ -2805,18 +2919,21 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 							gst_structure_get_int (msgstruct, "height", &m_height);
 							if (strstr(eventname, "Changed"))
 								m_event((iPlayableService*)this, evVideoSizeChanged);
+							gammaDinDecodor();
 						}
 						else if (!strcmp(eventname, "eventFrameRateChanged") || !strcmp(eventname, "eventFrameRateAvail"))
 						{
 							gst_structure_get_int (msgstruct, "frame_rate", &m_framerate);
 							if (strstr(eventname, "Changed"))
 								m_event((iPlayableService*)this, evVideoFramerateChanged);
+							gammaDinDecodor();
 						}
 						else if (!strcmp(eventname, "eventProgressiveChanged") || !strcmp(eventname, "eventProgressiveAvail"))
 						{
 							gst_structure_get_int (msgstruct, "progressive", &m_progressive);
 							if (strstr(eventname, "Changed"))
 								m_event((iPlayableService*)this, evVideoProgressiveChanged);
+							gammaDinDecodor();
 						}
 						else if (!strcmp(eventname, "eventGammaChanged"))
 						{
@@ -4298,7 +4415,8 @@ PyObject *eServiceMP3::getSubtitleList()
 		PyList_Append(l, tuple);
 		Py_DECREF(tuple);
 	}
-	eDebug("eServiceMP3::getSubtitleList finished");
+	/* no line here: on HLS every new segment sends a tag, so evUpdatedInfo, and 4-6 listeners ask for the list again;
+	   the line grew the log by ~100 KB a minute on IPTV (assistance 252913, 12.11.2026) */
 	return l;
 }
 

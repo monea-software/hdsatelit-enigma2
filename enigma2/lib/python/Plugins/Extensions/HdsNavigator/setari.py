@@ -68,6 +68,7 @@ ETICHETE = {
 	"marire": N_("Mărirea paginii"),
 	"font_minim": N_("Mărimea minimă a literelor"),
 	"desen": N_("Desenul paginii"),
+	"agent_tv": N_("Televizorul pentru YouTube"),
 	"hbbtv": N_("HbbTV (aplicațiile canalelor)"),
 	"hbbtv_semn": N_("Semnul roșu HbbTV în bară"),
 	"hbbtv_autostart": N_("Pornirea automată a aplicațiilor HbbTV"),
@@ -86,6 +87,7 @@ DESCRIERI = {
 	"marire": N_("Automată: pagina mai lată decât ecranul se micșorează până încape. Galben, în navigator, mărește pagina și ține minte mărirea pe fiecare site."),
 	"font_minim": N_("Literele mai mici decât atât se măresc, ca textul să se citească de la distanță (puncte CSS)."),
 	"desen": N_("Automat: placa video, apoi procesorul, dacă placa video nu merge. Numai procesorul: mai încet, dar merge pe orice receptor."),
+	"agent_tv": N_("Cum se prezintă navigatorul la YouTube și la celelalte aplicații pentru televizor din meniul Aplicații. Schimbă numai dacă aplicația nu merge bine cu telecomanda."),
 	"hbbtv": N_("Nu: HbbTV se oprește de tot. Fără semnul roșu, ROȘU și Portal nu mai pornesc aplicațiile canalelor, iar receptorul nu mai citește tabela lor. Navigatorul web rămâne."),
 	"hbbtv_semn": N_("Pe canalele cu aplicație HbbTV, bara de informații arată semnul HbbTV pe roșu. Apasă ROȘU ca să pornești aplicația."),
 	"hbbtv_autostart": N_("Da: pe canalele cu HbbTV, aplicația canalului pornește singură, ascunsă, iar ROȘU o arată pe loc. Ține memorie ocupată cât privești canalul și nu pornește în timpul unei înregistrări, în timeshift sau cu memorie puțină. Nu: aplicația pornește numai la ROȘU."),
@@ -113,6 +115,15 @@ def alegeriMarire():
 
 def alegeriFont():
 	return [("0", _t("Fără"))] + [(v, v) for v in FONTURI[1:]]
+
+
+def alegeriAgentTv():
+	"""„implicit” si televizoarele din lista (Components/HdsAplicatii.alegeriAgentTv; fara modul, numai „implicit”)."""
+	try:
+		from Components.HdsAplicatii import alegeriAgentTv as alegeri
+	except ImportError:
+		return [("implicit", _t("Navigatorul imaginii (recomandat)"))]
+	return alegeri(_t)
 
 
 def alegeriDesen():
@@ -182,6 +193,8 @@ def initConfig(config=None):
 	c.marire = ConfigSelection(choices=alegeriMarire(), default="auto")
 	c.font_minim = ConfigSelection(choices=alegeriFont(), default="14")
 	c.desen = ConfigSelection(choices=alegeriDesen(), default="auto")
+	# 0.7.5 (APL): agentul televizorului pentru aplicatiile din meniul „Aplicații” (Components/HdsAplicatii)
+	c.agent_tv = ConfigSelection(choices=alegeriAgentTv(), default="implicit")
 	c.hbbtv = ConfigYesNo(default=True)
 	c.hbbtv_semn = ConfigYesNo(default=True)
 	c.hbbtv_autostart = ConfigYesNo(default=False)

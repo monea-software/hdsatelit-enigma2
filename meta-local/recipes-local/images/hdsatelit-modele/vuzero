@@ -1,0 +1,33 @@
+# HD Satelit: regulile garzii de model pentru Vu+ Zero (masina vuzero, Broadcom BCM7362 sau BCM73625, MIPS), NECONFIRMAT
+# Agentul MVZ, 12.11.2026 (tester rt5yjda1n). Acelasi fel ca Vu+ Solo SE (hdsatelit-modele/vusolose): memorie NAND de
+# 256 MB (stocare=nand), fara eMMC, fara partitia deviceinfo, fara /proc/msp/sys. Garda din enigma2.sh si
+# Components/HdsPazaModel.py citesc:
+# - tipul placii din /proc/stb/info/vumodel: driverele pachetului vuplus-dvb-modules-vuzero 3.13.5-20190715 (fara proxy)
+#   au sirurile „dm8000”, „1500A0”, „zero”, „7362” (dvb-bcm7362.ko) si „dm8000”, „1500A0”, „zero”, „73625”
+#   (dvb-bcm73625.ko), in aceeasi ordine ca la Solo SE („solose”, „7241”), deci vumodel e „zero” pe orice Vu+ Zero;
+# - cipul NU se compara (chip=-, ca hw=-; mecanismul din 3a250fe18): placa are doua variante, BCM7362 si BCM73625, iar
+#   /etc/init.d/vuplus-dvb-modules (S03) incarca bcm_chp, se uita la /proc/bcm_chp_73625 si pastreaza numai driverul
+#   potrivit; /proc/stb/info/chipset e deci „7362” SAU „73625”. Garda nu stie liste la chip= (numai la boxtype=);
+# - partitiile din /proc/mtd, in ordine, cu numele curatate.
+# hw=- : placa nu are antet de fabrica (HW=).
+# MTD_KERNEL=mtd2 si MTD_ROOTFS=mtd0 sunt cele din vuzero.conf (OE-A 6.0), la fel ca la Solo SE; ele hotarasc.
+# Tabela partitiilor si marimea nucleului de mai jos sunt cele ale unui Solo SE V1 (acelasi producator, acelasi NAND de
+# 256 MB, acelasi incarcator CFE si acelasi nucleu 3.13.5), NEVERIFICATE pe un Zero: cu confirmat=nu sunt numai
+# avertismente, pana cand testerul citeste /proc/mtd pe receptorul lui (fisa din STADIU-MVZ.md).
+# Fara upd_path: pe Vu+ dosarul de pe stick (vuplus/zero) il stie incarcatorul CFE.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=vuzero.
+format=1
+distro=hdsatelit
+model=Vu+ Zero
+machine=vuzero
+machinebuild=vuzero
+chip=-
+boxtype=zero
+hw=-
+partitions=rootfs,rootfs_redundant_,kernel:7M,mac:1M
+kernel_part=mtd2
+kernel_kib=7168
+rootfs_part=mtd0
+stocare=nand
+confirmat=nu
+familie=broadcom

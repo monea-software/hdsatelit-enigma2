@@ -10,7 +10,9 @@ PV = "0.1.0"
 # r3: Telnet din casa (inetd + hds-telnet-poarta) si regula „Fara parola in reteaua locala” pornita implicit (regula
 # veche, nealeasa de om, se inlocuieste o data, la pornire, de hds-ssh)
 # r4: regula FTP separata (hds-ftp-retea-locala.conf), parola omului fara conditii (orice text)
-PR = "r4"
+# r5: hds-ssh tine la fiecare pornire o copie a cheii RSA a gazdei (/etc/dropbear/.dropbear_rsa_host_key.pastrata);
+# postrm-ul pachetului dropbear de pana la 0.7.3 sterge cheia la actualizare, iar postinst-ul nou o pune la loc din copie
+PR = "r5"
 
 SRC_URI = "file://hds-ssh-parola \
            file://hds-ssh \

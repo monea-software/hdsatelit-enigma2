@@ -1211,6 +1211,8 @@ TEXTE_PAGINA = {
 		N_("Pe televizor poți alege și direct o emisiune din ghidul TV: acolo marginile de dinainte și de "
 			"după se pun singure."),
 		N_("Aceeași listă este pe televizor, la tasta TIMER sau în __DRUM_MENIU__."),
+		# 0.7.5 (PRB, 14.11.2026): textele sablonului care lipseau din lista
+		N_("TV"),
 	),
 	"js": (
 		N_("marți"),

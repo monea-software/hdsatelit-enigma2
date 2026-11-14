@@ -26,18 +26,29 @@
 #
 # jurnalul sistemului fara nivelul debug (.hds4, imaginea 0.7.4, 12.11.2026, agentul PERF): pe Octagon SF8008 driverul
 # video HiSilicon scrie „kern.debug kernel: video pts” la fiecare citire a PTS-ului; verificarea buclei SoftCSA il
-# citeste la 0,5 s, deci 2 randuri pe secunda in /home/root/logs/messages, pe memoria interna (masurat pe .114: 83% din
+# citeste la 0,5 s, deci 2 randuri pe secunda in /home/root/logs/messages, pe memoria interna (masurat pe receptorul de probe SF8008: 83% din
 # randuri, ~10 MB pe zi scrisi degeaba pe eMMC, iar cele 600 de randuri puse in raportul unei caderi acopereau numai
 # ~5 minute). LOGLEVEL=7 in /etc/syslog-startup.conf da syslogd -l 7: se scrie tot ce e mai urgent decat debug. In
-# jurnalele de pe .114 (SF8008) si .122 (Viper 4K V20) singurele randuri debug erau „video pts” si cateva randuri yaffs
+# jurnalele de pe receptoarele de probe SF8008 si Viper 4K V20 singurele randuri debug erau „video pts” si cateva randuri yaffs
 # de la pornire. Urma PTS pentru masurarea inghetarilor se ia la cerere din inelul nucleului (dmesg), de pe PC:
 # hdsatelit-unelte unelte/stb/urma_pts_receptor.py. Valoarea noua intra la urmatoarea pornire a lui syslogd; ca la
 # rotirea de mai sus (acelasi conffile), sigur ajunge cu o imagine noua.
-PR:append = ".hds4"
+#
+# klogd fara potop (.hds5, imaginea 0.7.5, 13.11.2026, agentul IPT2): files/hds-klogd-randuri-repetate.patch. Pe Viper 4K V20
+# (HiSilicon) driverul decodorului scrie „audio/video cursize ... > ...” (kern.warn) de sute de ori pe secunda cand un flux
+# umple decodorul (pana la 482 de randuri pe secunda, 7.178 intr-un minut, 13.11.2026); syslogd le scria pe toate in
+# /home/root/logs/messages, pe memoria interna, iar cele 4 fisiere de 1 MB tineau numai ~15 minute de istoric. Acum klogd lasa
+# fiecare fel de rand (textul fara cifre) de cel mult 20 de ori pe minut; err si mai grave trec mereu; cele sarite se numara
+# intr-un singur rand („klogd: N repeated lines ... left out”) la primul rand din minutul urmator; dmesg le are pe toate.
+# syslogd -D (DROPDUPLICATES) nu ajunge: potopul alterneaza doua randuri cu numere care se schimba. E o MASURA (mai putine
+# scrieri pe flash in potop), nu reparatia blocarii de la pornirea filmelor din internet. Perechea ei: kernel.printk
+# „3 4 1 7” (procps_%.bbappend). Ajunge si prin actualizare (pachetul busybox), nu numai cu imagine noua.
+# Proba: hdsatelit-unelte receptor/imagine-hdsatelit/teste/test_jurnal_potop_075.py.
+PR:append = ".hds5"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
-SRC_URI += "file://hds-udhcpc-50default file://hds-crond.cfg file://hds-crond"
+SRC_URI += "file://hds-udhcpc-50default file://hds-crond.cfg file://hds-crond file://hds-klogd-randuri-repetate.patch"
 
 PACKAGES =+ "${PN}-cron"
 FILES:${PN}-cron = "${sysconfdir}/init.d/crond ${sysconfdir}/cron"
@@ -116,5 +127,10 @@ do_install:append() {
     fi
     grep -q 'are_sarcini || return 0\|if ! are_sarcini' ${D}${sysconfdir}/init.d/crond || bbfatal "busybox: /etc/init.d/crond porneste fara sa caute sarcini"
     install -d -m 0700 ${D}${sysconfdir}/cron/crontabs
+    # klogd fara potop (0.7.5): klogd e cel din busybox, peticit, cu klogctl
+    grep -q '^CONFIG_KLOGD=y$' ${B}/.config || bbfatal "busybox: CONFIG_KLOGD nu e pus (peticul klogd n-ar ajunge in imagine)"
+    grep -q '^CONFIG_FEATURE_KLOGD_KLOGCTL=y$' ${B}/.config || bbfatal "busybox: klogd fara klogctl"
+    cat ${D}${sysconfdir}/busybox.links* | grep -qx '/sbin/klogd' || bbfatal "busybox: klogd lipseste din busybox.links"
+    grep -q 'hds_lasa(priority, start)' ${S}/sysklogd/klogd.c || bbfatal "busybox: peticul klogd (randuri repetate) nu e aplicat"
     true
 }

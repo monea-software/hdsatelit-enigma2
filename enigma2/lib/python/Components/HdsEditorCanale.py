@@ -422,7 +422,7 @@ def _citeste_tot(director, memorie, sateliti):
 	return D.citeste_dosar(director, memorie, sateliti)
 
 
-def deschide(cine=TV, nume="", id_client="", director=DIRECTOR, sateliti=D.SATELITI, preia=False):
+def deschide(cine=TV, nume="", id_client="", director=DIRECTOR, sateliti=None, preia=False):
 	"""Sesiunea, pe loc (probe si scripturi; pe 9000 de servicii tine firul o secunda)."""
 	if preia:
 		_ia_de_la_celalalt(cine, nume)
@@ -433,7 +433,7 @@ def deschide(cine=TV, nume="", id_client="", director=DIRECTOR, sateliti=D.SATEL
 
 
 def deschide_fundal(cine=TV, nume="", la_gata=None, la_eroare=None, id_client="", director=DIRECTOR,
-		sateliti=D.SATELITI, preia=False):
+		sateliti=None, preia=False):
 	"""Sesiunea, cu citirea pe un fir. Zavorul se ia pe loc (cine vine intre timp vede „lucreaza”)."""
 	if preia:
 		_ia_de_la_celalalt(cine, nume)
@@ -2536,7 +2536,7 @@ class Sesiune(object):
 			memorie2 = N.memorie_lamedb()
 
 			def citeste():
-				return D.citeste_dosar(director, memorie2, D.SATELITI)
+				return D.citeste_dosar(director, memorie2, D.cale_sateliti())
 
 			def citit(d):
 				self._lucru = None

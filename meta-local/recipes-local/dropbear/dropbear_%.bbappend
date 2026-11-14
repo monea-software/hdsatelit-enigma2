@@ -6,10 +6,14 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
 # fisierul PAM s-a schimbat (parola numai din reteaua de acasa): versiune noua a pachetului, pentru actualizari
-# Scripturile cheii gazdei (mai jos) NU schimba versiunea: intra in imaginile noi si pleaca spre receptoarele de acum
-# odata cu urmatoarea schimbare adevarata a pachetului dropbear (atunci preinst/postinst de mai jos o pazesc). O
-# versiune noua numai pentru ele ar aduce dropbear tuturor la actualizare: se face numai dupa o actualizare
-# adevarata .hds1 -> .hds2 probata pe un receptor, cu aceeasi amprenta RSA inainte si dupa.
+# Scripturile cheii gazdei (mai jos) NU schimba versiunea. Probat pe receptorul de probe (13.11.2026, 0.7.3, opkg 0.10.0): opkg ruleaza
+# la actualizare prerm-ul VECHI, postrm-ul VECHI („upgrade”) si abia apoi preinst-ul NOU, deci pe un receptor cu
+# pachetul de pana la 0.7.3 cheia RSA e stearsa inainte ca vreun script nou sa ruleze, iar preinst-ul nu are ce copia
+# (.hds1 -> .hds2 a dat o cheie RSA noua; ECDSA si ED25519 au ramas). De aceea copia o tine hds-ssh (pachetul
+# hdsatelit-ssh r5, la fiecare pornire: /etc/dropbear/.dropbear_rsa_host_key.pastrata), iar postinst-ul de mai jos o pune
+# la loc. O versiune noua a lui dropbear se face numai dupa ce hdsatelit-ssh r5 e instalat pe receptoare (postinst-ul
+# lui porneste hds-ssh, care face copia; fara r5 copia lipseste). Postrm-ul nou (din 0.7.4) pastreaza cheia la actualizare: probat pe receptorul de probe (.hds2 ->
+# .hds1, aceeasi amprenta RSA).
 PR:append = ".hds1"
 
 # Cheia gazdei SSH la actualizare. opkg 0.8 ruleaza la actualizare postrm-ul pachetului VECHI cu "upgrade <versiune>",

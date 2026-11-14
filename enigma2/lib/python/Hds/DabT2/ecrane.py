@@ -18,6 +18,7 @@ from Screens.Screen import Screen
 from . import aspect, buchete, captura, compat, fundal, jurnal, tuner
 from . import profil as profil_mod
 from .limba import IN_IMAGINE, _, ngettext
+from .nume import nume_feed     # numele multiplexului in limba receptorului (tara tradusa)
 from .versiune import VERSIUNE   # versiunea codului comun, aceeasi cu a pachetelor pentru alte imagini
 
 
@@ -296,7 +297,7 @@ class EcranPrincipal(Screen):
                 n = len(buchete.servicii_feed(self.profil, f, memorate, stb, tp, prinse))
                 scurt, lung = stari_rand(self.profil, tp, f, n)
                 # numele din JSON (unicode pe 2.7) langa textul tradus (octeti UTF-8 pe 2.7): aceeasi forma
-                nume = compat.text_nativ(f.get('nume') or f.get('id'))
+                nume = compat.text_nativ(nume_feed(f))
                 # numele intreg: randul ales deruleaza cand nu incape (lib/gui/elabel.h)
                 text = '   %s   %s' % (tuner.text_transponder(tp), nume)
                 if scurt:
@@ -330,7 +331,7 @@ class EcranPrincipal(Screen):
     def _stare_curenta(self):
         c = self.ctrl
         if c.stare == 'canta' and c.feed:
-            self['stare'].setText(_('Canta acum: %s pe %s') % (c.feed.get('nume') or c.feed.get('id'),
+            self['stare'].setText(_('Canta acum: %s pe %s') % (compat.text_nativ(nume_feed(c.feed)),
                                                             tuner.text_transponder(c.tp)))
         elif c.stare == 'pregatire':
             self['stare'].setText(_('Se pregateste un post.'))
@@ -498,7 +499,7 @@ class EcranPrincipal(Screen):
         dlg = self.session.openWithCallback(self._feed_ales_cb, ChoiceBox, title=text_ajutor_cauta(self.profil),
                                             list=variante)
         try:
-            dlg.setTitle(compat.text_nativ(f.get('nume') or f.get('id')))
+            dlg.setTitle(compat.text_nativ(nume_feed(f)))
         except Exception:
             pass                          # alte imagini: titlul general al ferestrei ramane
 
@@ -511,7 +512,7 @@ class EcranPrincipal(Screen):
             if tuner.multistream_neprins(tp):
                 self['stare'].setText(tuner.text_multistream())
                 return
-            self['stare'].setText(text_caut(self.profil, f.get('nume') or f.get('id')))
+            self['stare'].setText(text_caut(self.profil, compat.text_nativ(nume_feed(f))))
             self.ctrl.invata(f, tp, self._invatat)
         elif alegere[1] == 'sterge':
             sterge_manual(self.profil, f.get('id'))

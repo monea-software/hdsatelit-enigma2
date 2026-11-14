@@ -1094,7 +1094,8 @@ class FisiereCore:
             ("systemplugins", _("Pluginuri de sistem"), "/usr/lib/enigma2/python/Plugins/SystemPlugins"),
             ("tuxbox", _("Configurări module de acces"), "/etc/tuxbox/config"),
             ("softcams", _("Programele modulelor"), "/usr/softcams"),
-            ("satellites", _("satellites.xml"), "/etc/tuxbox/satellites.xml"),
+            # fisierul citit de nucleu: /etc/enigma2/satellites.xml cand exista (lib/dvb/db.cpp), altfel /etc/tuxbox
+            ("satellites", _("satellites.xml"), "/etc/enigma2/satellites.xml" if os.path.isfile("/etc/enigma2/satellites.xml") else "/etc/tuxbox/satellites.xml"),
             ("enigma2", _("Lista de canale și setările"), "/etc/enigma2"),
             ("skins", _("Teme"), "/usr/share/enigma2"),
             ("logs", _("Jurnale"), "/home/root/logs"),

@@ -950,6 +950,10 @@ public:
 			/* AIT-ul HbbTV al canalului redat s-a citit, s-a schimbat sau a disparut (sHBBTVAit); la coada */
 		evHBBTVInfo,
 
+			/* the PMT of the playing DVB channel was read again (OE-Alliance: after evUpdatedInfo); the themes made for
+			   OE-Alliance reread the tuner data on it (MercPliExtraInfo, VfdDisplay); at the tail */
+		evNewProgramInfo,
+
 		evUser = 0x100
 	};
 };

@@ -496,7 +496,8 @@ def group_caids(caids):
 
 _sat_names = {}
 _sat_xml = {"loaded": False, "names": {}}
-SAT_XML_PATHS = ("/etc/tuxbox/satellites.xml", "/etc/enigma2/satellites.xml", "/usr/share/tuxbox/satellites.xml")
+# intai /etc/enigma2 (lista pusa de om are intaietate, ca in nucleu: lib/dvb/db.cpp si HdsEditorCanaleDate.cale_sateliti)
+SAT_XML_PATHS = ("/etc/enigma2/satellites.xml", "/etc/tuxbox/satellites.xml", "/usr/share/tuxbox/satellites.xml")
 
 
 def _clean_sat(name):
@@ -1351,7 +1352,7 @@ def tp_releu(sref):
 def fe_releu(sref):
 	"""Canal redat prin Stream Relay (OSCam/NCam, http://127.0.0.1:<port>/<referinta DVB>): frontendInfo al tunerului
 	care il tine, prin sesiunea serverului local 8001 de la care releul ia fluxul; None pentru orice alt serviciu. Canalul
-	redat e un flux fara tuner al lui: fara asta, bara arata semnal 0 si calitate 0 (Eduard, .114, 11.11.2026)."""
+	redat e un flux fara tuner al lui: fara asta, bara arata semnal 0 si calitate 0 (Eduard, receptorul de probe SF8008, 11.11.2026)."""
 	if not ref_din_flux(sref):
 		return None
 	try:
@@ -1516,8 +1517,13 @@ def hbbtv_semnalat(r):
 	sAITPID din PMT (lib/dvb/pmt.cpp): 0 = fara AIT HbbTV, peste 0 = PID-ul AIT. Cat PMT-ul nu e citit (-1), si pe
 	imaginile fara sAITPID, raspunsul vine din baza pistelor (Components/HdsPisteCanale.py, citita din PMT); un canal
 	pe care baza nu-l stie e „nu se stie”, nu „nu”. Daca AIT-ul are si o aplicatie de pornit la ROSU: hbbtv_rosu."""
+	# Nucleul nostru are sHBBTVUrl in enum (din OE-Alliance), dar servicedvb nu-l completeaza (mereu ""): un URL gol nu
+	# inseamna „nu” cand nucleul da si sAITPID, care hotaraste mai jos (14.11.2026, Eduard: semnul rosu fara textul HbbTV).
 	if isi("sHBBTVUrl") is not None:
-		return bool(r.gets("sHBBTVUrl"))
+		if r.gets("sHBBTVUrl"):
+			return True
+		if isi("sAITPID") is None:
+			return False
 	# nucleul care da PID-ul AIT din PMT (sAITPID: -1 PMT necitit sau program din cache, 0 fara AIT, altfel PID-ul)
 	if isi("sAITPID") is not None:
 		v = r.geti("sAITPID")

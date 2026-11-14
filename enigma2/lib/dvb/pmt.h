@@ -302,6 +302,8 @@ public:
 	int getProgramInfo(program &program);
 	int getDataDemux(ePtr<iDVBDemux> &demux);
 	int getDecodeDemux(ePtr<iDVBDemux> &demux);
+	/* HD Satelit (CI+, lib/dvb_ci/hdscica.h): numarul CA al demuxului decodorului, daca a fost deja aflat (-1 altfel); nu cere demux */
+	int getDecodeDemuxNum() { return m_decode_demux_num == 0xFF ? -1 : (int)m_decode_demux_num; }
 	PyObject *getCaIds(bool pair=false); // caid / ecmpid pair
 	
 	int getPVRChannel(ePtr<iDVBPVRChannel> &pvr_channel);

@@ -22,15 +22,47 @@ from Components import HdsIptvSurse as I
 from Components import HdsIptvClient as C
 from Components.HdsIptvSurse import N_
 
-MAX_COMPRIMAT = 64 * 1024 * 1024
-MAX_XML = 128 * 1024 * 1024
-MAX_EVENIMENTE = 20000             # pe sursa si incercare, inclusiv copiile pentru acelasi tvg-id
+MAX_COMPRIMAT = 192 * 1024 * 1024  # intrarea se analizeaza din mers (SAX), deci marimea costa timp, nu memorie; termenul o margineste
+MAX_XML = 384 * 1024 * 1024
+# Cache-ul C++ primeste cel mult 40.000 de emisiuni IPTV si ~32 MB socotiti (eEPGCache::importIptvRows): pe un Viper 4K V20 au intrat 34.699.
+# Un abonament mare trimite ~110.000 de emisiuni pe ~5.500 de canale (~20 pe canal, o zi): fara impartire, primele ~1.700 de canale
+# aveau ghidul pe o zi, iar restul nimic. Plafonul se imparte pe canalele legate, ca fiecare sa aiba emisiunea de acum si urmatoarele.
+MAX_EVENIMENTE = 32000             # pe sursa si incercare, inclusiv copiile pentru acelasi tvg-id
 MAX_PE_CANAL = 128
+MIN_PE_CANAL = 4                   # acum si urmatoarele trei, si cand sunt foarte multe canale
+PE_CANAL_ALES = 48                 # canalele de internet puse de om in buchetele lui (Favorite si altele): ghid pe ~2 zile
+MAX_ALESE = 300                    # cel mult atatea canale alese primesc partea mare (restul raman in impartirea obisnuita)
+
+
+def canaleAlese(director=None):
+	"""Referintele (4097, releul local) ale canalelor de internet din buchetele omului (userbouquet.*, in afara de cele IPTV ale
+	imaginii): ele primesc ghidul intai, PE_CANAL_ALES emisiuni, iar restul isi imparte ce ramane din MAX_EVENIMENTE."""
+	import glob
+	import os
+	rez = set()
+	for f in glob.glob(os.path.join(director or I.DIRECTOR, "userbouquet.*.tv")):
+		if os.path.basename(f) == I.BUCHET_RADACINA:
+			continue
+		try:
+			with open(f, encoding="utf-8", errors="replace") as fis:
+				for r in fis:
+					if r.startswith("#SERVICE 4097") and "8897" in r:
+						sid, cheie = I.desparteCale(r)
+						if sid is not None:
+							rez.add(I.refCanal(sid, cheie))
+							if len(rez) >= MAX_ALESE:
+								return rez
+		except (IOError, OSError):
+			continue
+	return rez
 MAX_CANALE_XML = 60000
 MAX_TEXTE = 2048
 MAX_ADANCIME = 32
 ZILE = 7
-TERMEN_TOTAL_S = 180
+TERMEN_TOTAL_S = 300               # ghidul unui abonament mare: 52-110 s masurat pe receptor, server lent inclus
+TERMEN_CITIRE_S = 45               # serverul tace in mijlocul fisierului (il genereaza din mers)
+INCERCARI = 3                      # caderile de retea (termen, legatura rupta, 5xx) se reiau; un fisier stricat nu
+PAUZA_INCERCARE_S = 20
 BUCATA = 65536
 LOT = 16
 MAX_LOTURI = 32                    # cel mult 512 evenimente in asteptarea importului C++
@@ -68,6 +100,18 @@ def adresaEpg(s):
 	return None
 
 
+def decalaj():
+	"""Secundele adaugate la orele ghidului TV de internet (config.usage.hds_iptv_decalaj_epg, 0.7.5, IPI): pentru furnizorii care scriu
+	ora gresit in XMLTV (zona lipsa sau alta). 0 = fara decalaj (din fabrica); intre -12 si +12 ore."""
+	import sys
+	cfg = sys.modules.get("Components.config")    # pe receptor e mereu incarcat; aici nu se importa nimic (memoria firului EPG)
+	try:
+		ore = float(cfg.config.usage.hds_iptv_decalaj_epg.value)
+	except (AttributeError, KeyError, TypeError, ValueError):
+		return 0
+	return int(max(-12.0, min(12.0, ore)) * 3600)
+
+
 def _ora(text):
 	m = _DATA.match((text or "").strip())
 	if m is None:
@@ -84,6 +128,35 @@ def _ora(text):
 		return secunde
 	except (ValueError, OverflowError):
 		return None
+
+
+# 0.7.5 (IPI): potrivirea larga dupa nume, pentru canalele fara tvg-id (config.usage.hds_iptv_epg_larg): fara semnele de calitate
+# (HD, FHD, 4K, HEVC...), fara diacritice si semne, fara prefixul tarii. Doua tari diferite sub acelasi nume (RO: Sport 1, HU: Sport 1)
+# nu se potrivesc deloc; variantele de calitate ale aceluiasi canal (RO: PRO TV HD, RO: PRO TV FHD) primesc acelasi ghid (cel mult 8).
+_CALITATE = re.compile(r"(?<![a-z0-9])(?:u?hd|fhd|sd|4k|8k|uhd|hevc|h\.?26[45]|hdr(?:10)?|raw|backup|multi(?:sub|audio)?|\d{2,3}\s?fps|1080[pi]?|720[pi]?|2160p?)(?![a-z0-9])")
+_PREFIX = re.compile(r"^\s*(?:[\[(|]\s*)?([a-z]{2,3})\s*(?:[\])|:]|\s-\s|\s\|)\s*")
+MAX_LARG = 8
+
+
+def potrivireLarga():
+	import sys
+	cfg = sys.modules.get("Components.config")
+	try:
+		return bool(cfg.config.usage.hds_iptv_epg_larg.value)
+	except (AttributeError, KeyError):
+		return True
+
+
+def _numeLarg(text):
+	"""-> (prefixul tarii sau "", cheia larga) ; cheia "" cand nu ramane nimic."""
+	import unicodedata
+	t = unicodedata.normalize("NFKD", (text or "")[:256]).encode("ascii", "ignore").decode("ascii").casefold()
+	m = _PREFIX.match(t)
+	prefix = ""
+	if m:
+		prefix, t = m.group(1), t[m.end():]
+	t = _CALITATE.sub(" ", t)
+	return prefix, re.sub(r"[^a-z0-9]+", "", t)
 
 
 def _nume(text):
@@ -144,8 +217,16 @@ class _Xmltv:
 		self.sid, self.cache, self.acum = s["id"], cache, acum
 		self.iduri, self.nume, self.legate = {}, {}, {}
 		self.numar, self.loturi = {}, OrderedDict()
+		self.cu_canal = set()      # canalele din lista care au un <channel> in fisier (XMLTV le scrie inaintea emisiunilor)
+		self.pe_canal = None       # partea fiecarui canal din MAX_EVENIMENTE, socotita la prima emisiune
+		try:
+			self.alese = canaleAlese()
+		except Exception:
+			self.alese = set()
 		self.total = self.importate = self.canale_xml = 0
 		self.octeti = 0
+		self.decalaj = decalaj()
+		self.larg = {} if potrivireLarga() else None   # cheia larga -> (prefixele tarilor, canalele fara tvg-id)
 		self.stiva, self.canal, self.program, self.camp, self.text = [], None, None, None, ""
 		for c in canale[:I.MAX_CANALE]:
 			if not isinstance(c, (list, tuple)) or len(c) < 4 or not I.cheieBuna(c[0]):
@@ -161,13 +242,34 @@ class _Xmltv:
 			if nume:
 				# Numele ambiguu nu alege arbitrar alt canal; identificatorul explicit are prioritate.
 				self.nume[nume] = ref if nume not in self.nume else None
+			if self.larg is not None and not (isinstance(tvg, str) and tvg.strip()):
+				prefix, cheie = _numeLarg(c[1])
+				if cheie:
+					tari, refs = self.larg.setdefault(cheie, (set(), []))
+					tari.add(prefix)
+					if len(refs) < MAX_LARG:
+						refs.append(ref)
 		self.parser = expat.ParserCreate()
 		self.parser.StartElementHandler = self._incepe
 		self.parser.EndElementHandler = self._termina
 		self.parser.CharacterDataHandler = self._text
-		self.parser.StartDoctypeDeclHandler = self._dtd
+		self.parser.StartDoctypeDeclHandler = self._doctype
+		self.parser.EntityDeclHandler = self._dtd
 		self.parser.ExternalEntityRefHandler = self._dtd
 
+
+	def _largi(self, text):
+		"""Canalele fara tvg-id cu aceeasi cheie larga, numai dintr-o singura tara. -> lista (poate goala)."""
+		if not self.larg:
+			return []
+		exact = _nume(text)
+		if exact in self.nume and self.nume[exact] is None:
+			return []           # acelasi nume scris exact la doua canale: regula veche, niciun ghid ghicit
+		prefix, cheie = _numeLarg(text)
+		tari, refs = self.larg.get(cheie, (None, None)) if cheie else (None, None)
+		if not refs or len(tari) > 1 or (prefix and prefix not in tari and "" not in tari):
+			return []
+		return list(refs)
 
 	def citeste(self, b, gata=False):
 		self.octeti += len(b)
@@ -177,6 +279,12 @@ class _Xmltv:
 		if self.octeti - self.parser.CurrentByteIndex > BUCATA:
 			raise EroareEpg("jeton")
 
+
+	def _doctype(self, nume, sistem, public, are_subset):
+		# <!DOCTYPE tv SYSTEM "xmltv.dtd"> e capul obisnuit al fisierelor XMLTV (DTD-ul extern nu se citeste); un subset intern,
+		# locul entitatilor care se umfla, ramane refuzat, ca si orice entitate declarata
+		if are_subset:
+			raise EroareEpg("DTD")
 
 	def _dtd(self, *args):
 		raise EroareEpg("DTD")
@@ -215,6 +323,8 @@ class _Xmltv:
 				ref = self.nume.get(_nume(self.text))
 				if ref and self.canal["ref"] is None:
 					self.canal["ref"] = ref
+				elif self.canal["ref"] is None and self.canal.get("larg") is None:
+					self.canal["larg"] = self._largi(self.text)
 			elif self.program is not None and tag not in self.program:
 				self.program[tag] = self.text.strip()
 			self.camp, self.text = None, ""
@@ -223,6 +333,10 @@ class _Xmltv:
 				cid = self.canal["id"]
 				if cid and cid not in self.iduri and self.canal["ref"]:
 					self.legate[cid] = [self.canal["ref"]]
+				elif cid and cid not in self.iduri and self.canal.get("larg"):
+					self.legate[cid] = self.canal["larg"]
+				if self.cu_canal is not None and len(self.cu_canal) < I.MAX_CANALE:
+					self.cu_canal.update(self.iduri.get(cid) or self.legate.get(cid) or ())
 				self.canal = None
 			elif tag == "programme" and self.program is not None:
 				self._eveniment(self.program)
@@ -233,12 +347,20 @@ class _Xmltv:
 	def _eveniment(self, p):
 		if self.total >= MAX_EVENIMENTE:
 			return
+		if self.pe_canal is None:
+			alese = len(self.alese & self.cu_canal) if self.cu_canal else 0
+			rest = max(0, MAX_EVENIMENTE - alese * PE_CANAL_ALES)
+			altele = len(self.cu_canal) - alese if self.cu_canal else 0
+			self.pe_canal = max(MIN_PE_CANAL, min(MAX_PE_CANAL, rest // altele)) if altele > 0 else MAX_PE_CANAL
+			self.cu_canal = None
 		cid = p["id"]
 		refs = self.iduri.get(cid) or self.legate.get(cid)
 		if not refs:
 			ref = self.nume.get(_nume(cid))
-			refs = [ref] if ref else ()
+			refs = [ref] if ref else self._largi(cid)
 		start, stop = _ora(p["start"]), _ora(p["stop"])
+		if self.decalaj and start is not None and stop is not None:
+			start, stop = start + self.decalaj, stop + self.decalaj
 		if not refs or start is None or stop is None or stop <= start or stop - start > 24 * 3600:
 			return
 		if stop <= self.acum or start > self.acum + ZILE * 86400 or not p.get("title"):
@@ -246,7 +368,7 @@ class _Xmltv:
 		eid = zlib.crc32((cid + "/" + str(start)).encode("utf-8")) & 65535 or 1
 		eveniment = (start, stop - start, p["title"][:240], p.get("sub-title", "")[:240], p.get("desc", "")[:1800], eid)
 		for ref in refs:
-			if self.total >= MAX_EVENIMENTE or self.numar.get(ref, 0) >= MAX_PE_CANAL:
+			if self.total >= MAX_EVENIMENTE or self.numar.get(ref, 0) >= (PE_CANAL_ALES if ref in self.alese else self.pe_canal):
 				continue
 			self.total += 1
 			self.numar[ref] = self.numar.get(ref, 0) + 1
@@ -286,11 +408,35 @@ def lucreaza(s, canale, cache=None):
 	inceput = time.monotonic()
 	xml = _Xmltv(s, canale, cache, time.time())
 	canale = None  # dupa mapare eliberam lista citita din JSON, inclusiv toate adresele de flux
-	with C.deschide(adresa, C.anteteSursa(s)) as f:
+	with C.deschide(adresa, C.anteteSursa(s), termen=TERMEN_CITIRE_S) as f:
 		for b in _bucati(f, inceput):
 			xml.citeste(b)
 		xml.citeste(b"", True)
 	return xml.gata()
+
+
+def _deReluat(e):
+	"""Caderile de retea se reiau: legatura rupta, serverul care tace TERMEN_CITIRE_S, nu raspunde sau da 5xx. Nu: un fisier stricat
+	sau prea lent in total (EroareEpg), contul refuzat (401/403), certificatul, prea multe conexiuni."""
+	if isinstance(e, EroareEpg):
+		return False
+	if isinstance(e, C.EroareIptv):
+		cod = getattr(e, "cod", 0) or 0
+		return e.mesaj == C.E_NU_RASPUNDE and (cod == 0 or (cod >= 500 and cod not in C.COD_CONEXIUNI))
+	import http.client
+	return isinstance(e, (OSError, http.client.HTTPException))
+
+
+def _cuIncercari(s, canale, asteapta=time.sleep):
+	"""lucreaza() de cel mult INCERCARI ori. Emisiunile importate inainte de cadere raman; a doua trecere le scrie peste ele."""
+	for i in range(INCERCARI):
+		try:
+			return lucreaza(s, canale)
+		except Exception as e:
+			if i + 1 >= INCERCARI or not _deReluat(e):
+				raise
+			print("[HdsIptvEpg] sursa %s: %s, din nou peste %d s" % (s.get("id"), type(e).__name__, PAUZA_INCERCARE_S))
+			asteapta(PAUZA_INCERCARE_S)
 
 
 def _stare(sid, stare, n=0, mesaj=""):
@@ -310,12 +456,12 @@ def _bucla():
 			_in_lucru, (s, canale) = _coada.popitem(last=False)
 		_stare(_in_lucru, "lucreaza")
 		try:
-			n = lucreaza(s, canale)
+			n = _cuIncercari(s, canale)
 			mesaj = ""
 			_stare(_in_lucru, "gata", n, E_GATA if n else E_GOL)
 		except Exception as e:
 			n, mesaj = 0, E_NUCLEU if isinstance(e, EroareEpg) and e.mesaj == E_NUCLEU else E_ESUAT
-			print("[HdsIptvEpg] sursa %s: %s" % (_in_lucru, type(e).__name__))
+			print("[HdsIptvEpg] sursa %s: %s %s" % (_in_lucru, type(e).__name__, e.mesaj if isinstance(e, EroareEpg) else ""))
 			_stare(_in_lucru, "eroare", n, mesaj)
 		canale = None  # nu pastram lista sursei terminate cat timp incepe urmatoarea
 		with _lacat:

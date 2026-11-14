@@ -160,7 +160,9 @@ class ServiceList(HTMLComponent, GUIComponent):
 		elif attrib == "picServiceStreamed":
 			self.hdsPictogramaTransmis(resolveFilename(SCOPE_CURRENT_SKIN, value))
 		elif attrib == "progressbarHeight":
-			self.l.setProgressbarHeight(int(value))
+			# pastrata pentru marimea textului din lista (setMode, config.usage.hds_marime_text_lista)
+			self.hdsProgresInaltime = int(value)
+			self.l.setProgressbarHeight(self.hdsProgresInaltime)
 		elif attrib == "progressbarBorderWidth":
 			self.l.setProgressbarBorderWidth(int(value))
 		elif attrib == "serviceItemHeight":
@@ -277,14 +279,19 @@ class ServiceList(HTMLComponent, GUIComponent):
 			legaturi, urluri = {}, set()
 		noi = {}
 		# canalele de internet care n-au pornit ultima data (Components/HdsIptvSurse.py, un fisier mic): numai in buchete
+		# plus timpul de pornire al celor care merg si ce trimit de fapt canalele „4K” verificate (0.7.5, fiecare cu Da/Nu)
 		semne = {}
+		timpi = verificate = None
 		try:
 			if "FROM BOUQUET" in self.root.getPath():
 				from Components import HdsIptvSurse as I
 				semne = I.nefunctionale()
+				timpi = I.porniri() if I.optiune("timp_pornire") else None
+				from Components import HdsIptv4K as K
+				verificate = K.rezultate() or None
 		except Exception as e:
 			print("[ServiceList] semnele IPTV: %s" % e)
-		if legaturi or urluri or semne:
+		if legaturi or urluri or semne or timpi or verificate:
 			randuri = []
 			lista = eServiceCenter.getInstance().list(self.root)
 			while lista is not None:
@@ -301,7 +308,16 @@ class ServiceList(HTMLComponent, GUIComponent):
 					if cheie in legaturi:
 						noi[s.toString()] = (s, "DVB-I")
 				elif s.type == 4097 and semne and I.eNefunctional(s.getPath()):
-					noi[s.toString()] = (s, _("IPTV: n-a pornit"))
+					motiv, codec = I.motivNefunctional(s.getPath())
+					text = _("n-a pornit: %s") % _(I.MOTIVE[motiv]) if motiv else _("IPTV: n-a pornit")
+					noi[s.toString()] = (s, text + (" (%s)" % codec if codec else ""))
+				elif s.type == 4097 and (timpi or verificate) and I.desparteCale(s.getPath())[0] is not None:
+					eticheta = K.eticheta(s.getPath()) if verificate else ""
+					tp = I.timpPornire(s.getPath()) if timpi else None
+					if tp is not None:
+						eticheta = (eticheta + " · " if eticheta else "") + (_("~%s s") % ("%.1f" % tp).replace(".", ","))
+					if eticheta:
+						noi[s.toString()] = (s, eticheta)
 				elif s.type == 4097 and urluri:
 					url = s.getPath()
 					if url in urluri:
@@ -453,9 +469,11 @@ class ServiceList(HTMLComponent, GUIComponent):
 			self.l.FillFinished()
 			self.l.sort()
 			if in_plus:
-				# dupa sortare: randurile in plus raman la coada, in ordinea lor
+				# dupa sortare: "Transponder curent" (dosarul "(channelID ==") PRIMUL, inaintea buchetelor (sort() a dus
+				# cursorul pe primul rand, deci addService(..., True) il pune inaintea lui; tfrc, LinuxSat 164122 #970392);
+				# celelalte randuri in plus (listele retelelor) raman la coada, in ordinea lor
 				for s in in_plus:
-					self.l.addService(s)
+					self.l.addService(s, "(channelID ==" in (s.getPath() or ""))
 				self.l.FillFinished()
 			if acum.valid():
 				self.l.setCurrent(acum)
@@ -831,6 +849,13 @@ class ServiceList(HTMLComponent, GUIComponent):
 		randuri = getattr(getattr(config.usage, "hds_randuri_lista", None), "value", "tema")
 		font_nume, font_info, font_numar = self.ServiceNameFont, self.ServiceInfoFont, self.ServiceNumberFont
 		inaltime = self.ItemHeight
+		# HDSatelit 0.7.5: marimea textului (config.usage.hds_marime_text_lista), 10% pe pas fata de tema: 100 la
+		# „După temă”, 70..150 la -3..+5
+		marime = getattr(getattr(config.usage, "hds_marime_text_lista", None), "value", "tema")
+		try:
+			procent = 100 if marime == "tema" else min(150, max(70, 100 + 10 * int(marime)))
+		except ValueError:
+			procent = 100
 		if randuri in ("8", "10", "12", "14", "16", "18", "20"):
 			if inaltime_lista is None:
 				inaltime_lista = self.instance.size().height()
@@ -838,7 +863,17 @@ class ServiceList(HTMLComponent, GUIComponent):
 			inaltime_lista = inaltime * int(randuri)
 			# Loc pentru accente si literele care coboara sub rand, inclusiv chirilice.
 			limita_font = max(1, (inaltime - 4) * 7 // 10)
-			font_nume, font_info, font_numar = (gFont(f.family, min(f.pointSize, limita_font))
+			# randul e dat de numarul ales: textul creste numai cat incape in el
+			font_nume, font_info, font_numar = (gFont(f.family, max(1, min(f.pointSize * procent // 100, limita_font)))
+				for f in (font_nume, font_info, font_numar))
+		elif procent != 100:
+			# randurile dupa tema: randul creste sau scade cu textul (si sigla, care ia inaltimea randului); lista ramane in
+			# chenarul temei, cu cate randuri intregi incap
+			inaltime = max(1, inaltime * procent // 100)
+			if inaltime_lista is None:
+				inaltime_lista = self.instance.size().height()
+			inaltime_lista = max(inaltime, inaltime_lista // inaltime * inaltime)
+			font_nume, font_info, font_numar = (gFont(f.family, max(1, f.pointSize * procent // 100))
 				for f in (font_nume, font_info, font_numar))
 		if inaltime_lista is not None and self.instance.size().height() != inaltime_lista:
 			from enigma import eSize
@@ -855,7 +890,9 @@ class ServiceList(HTMLComponent, GUIComponent):
 		progres = config.usage.show_event_progress_in_servicelist.value
 		dreapta = progres and getattr(getattr(config.usage, "hds_progres_lista_pozitie", None),
 			"value", "stanga") == "dreapta"
-		bara = min(52, max(0, latime - inceput - 10)) if progres else 0
+		bara = min(52 * procent // 100, max(0, latime - inceput - 10)) if progres else 0
+		if hasattr(self.l, "setProgressbarHeight"):
+			self.l.setProgressbarHeight(max(1, getattr(self, "hdsProgresInaltime", 6) * procent // 100))
 		self.l.setElementPosition(self.l.celServiceEventProgressbar,
 			eRect(latime - bara if dreapta else inceput, 0, bara, inaltime) if bara else eRect(inceput, 0, 0, 0))
 		if mode != self.MODE_NORMAL:
@@ -866,6 +903,9 @@ class ServiceList(HTMLComponent, GUIComponent):
 			eRect(inceput, 0, max(0, latime - inceput - (bara + 10 if dreapta else 0)), inaltime))
 		self.l.setElementFont(self.l.celServiceInfo, font_info)
 		self.hdsSablonActualizeaza()
+
+	# inaltimea barei de progres a temei (progressbarHeight; 6 = cea a nucleului listei, cand tema n-o da)
+	hdsProgresInaltime = 6
 
 	# HDSatelit 0.7.4: randul desenat dupa sablonul listei de canale al temei (Components/HdsServiceListSablon), numai cand
 	# tema straina si setarile ei aleg un stil; altfel (si cu tema noastra) lista clasica, neschimbata

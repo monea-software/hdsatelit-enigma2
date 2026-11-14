@@ -45,9 +45,9 @@
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2; nimic nu asteapta (fisierul favoritelor e mic).
 
-SETARI = ("pagina_pornire", "marire", "font_minim", "desen", "chenar", "chenar_culoare", "chenar_forma", "chenar_grosime",
+SETARI = ("pagina_pornire", "marire", "font_minim", "desen", "agent_tv", "chenar", "chenar_culoare", "chenar_forma", "chenar_grosime",
 	"chenar_puls", "chenar_viteza")
-ALEGERI = ("marire", "font_minim", "desen", "chenar_culoare", "chenar_forma", "chenar_grosime", "chenar_viteza")
+ALEGERI = ("marire", "font_minim", "desen", "agent_tv", "chenar_culoare", "chenar_forma", "chenar_grosime", "chenar_viteza")
 DA_NU = ("chenar", "chenar_puls")
 CHENAR = ("chenar", "chenar_culoare", "chenar_forma", "chenar_grosime", "chenar_puls", "chenar_viteza")
 # randurile care se vad numai cand alte setari au o anumita valoare (ca pe televizor, setari.randuriChenar)

@@ -165,6 +165,20 @@ def _verificaDescriptor(p):
 		raise TypeError("weight must be a number: %r" % (p.weight,))
 
 
+def _pasPornire(fel, plugin, t0):
+	"""HDSatelit 0.7.5 (PRN): la prima citire (pornirea interfetei), un plugin care o tine mult intra in randul pornirii
+	din jurnalul paznicului (Components/HdsPaznic.pasPornire). plugin: numele dosarului sau descriptorul. Nu arunca."""
+	try:
+		secunde = monotonic() - t0
+		from Components import HdsPaznic
+		if secunde >= HdsPaznic.PRAG_PAS_PORNIRE_S:
+			nume = plugin if isinstance(plugin, str) else ((getattr(plugin, "path", None) or "").rstrip("/").rsplit("/", 1)[-1]
+				or getattr(plugin, "name", "?"))
+			HdsPaznic.pasPornire(fel, nume, secunde)
+	except Exception:
+		pass
+
+
 class _SemnRecitire:
 	"""HDSatelit: the plugin list read again while the interface runs (a plugin asks for it, the list after an install), on the main
 	thread. A plugin that was not imported yet can stay long in its import (a large file compiled for the first time, a disk enumerated
@@ -226,7 +240,10 @@ class PluginComponent:
 			for x in plugin.where:
 				self.plugins.setdefault(x, []).append(plugin)
 				if x == PluginDescriptor.WHERE_AUTOSTART:
+					t0 = monotonic()
 					plugin(reason=0)
+					if self.firstRun:
+						_pasPornire("autostart", plugin, t0)
 		else:
 			self.restartRequired = True
 			# numele aratat e al descriptorului cu ecran, cand pluginul are si altii (de fundal, de pilda)
@@ -327,6 +344,7 @@ class PluginComponent:
 						etapa = "import"
 						if semn is not None:
 							semn.plugin(c, pluginname)
+						t0 = monotonic()
 						try:
 							plugin = _importaPlugin(c, pluginname, path)
 
@@ -377,6 +395,8 @@ class PluginComponent:
 							continue
 
 						new_plugins.extend(plugins)
+						if self.firstRun:
+							_pasPornire("import", pluginname, t0)
 
 						if fileExists(path + "/keymap.xml"):
 							try:

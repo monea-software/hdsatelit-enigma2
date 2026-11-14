@@ -217,10 +217,10 @@ def _generator(sursa):
 
 
 # ritmul TS-ului (0.7.4, forumul 801 #1562: DAB+ din satelit pe Vu+ Uno4K SE, volum care urca si coboara). Sursa vine in
-# rafale (citirea grupata, superframe-ul de 120 ms: masurat pe .114 ~190 ms de plaja); fiecare PES pleaca deci cand
+# rafale (citirea grupata, superframe-ul de 120 ms: masurat pe receptorul de probe SF8008 ~190 ms de plaja); fiecare PES pleaca deci cand
 # ceasul monoton ajunge la el. Atentie: enigma2 NU da decodorului PID-ul PCR pentru fluxurile releului (servicedvb.cpp,
 # setSyncPCR(-1) cand m_is_pvr), deci decodorul nu se potriveste dupa PCR; ritmul conteaza numai prin cat de lin vin
-# datele si cat raman in rezerva playerului (eHdsFluxHttp, 400 ms de ceas). Masurat pe .114 (aceeasi sursa):
+# datele si cat raman in rezerva playerului (eHdsFluxHttp, 400 ms de ceas). Masurat pe receptorul de probe SF8008 (aceeasi sursa):
 # plaja sosire-PTS 424 ms in 0.7.3, 192 ms numai cu trezirea reparata, 20 ms cu ritmul; pe .122 (HiSilicon) nicio
 # golire la niciunul (lucru-sesiune/paralel-1111b/STADIU-F-DAB-SATELIT.md: acolo si proba care hotaraste daca rezerva
 # de pornire ajunge la decodor sau se pierde inainte de filtrul sunetului).

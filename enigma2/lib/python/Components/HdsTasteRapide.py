@@ -39,6 +39,11 @@ def _tr(text):
 	return text_tasta("", text)
 
 
+def N_(text):
+	"""Marcaj pentru xgettext (--keyword=N_), fara efect: textele date lui _tr se traduc la folosire."""
+	return text
+
+
 ACTIUNI_DISPONIBILE = [
 	("default", _("Funcția obișnuită")),
 	("none", _("Nimic")),
@@ -61,6 +66,9 @@ ACTIUNI_DISPONIBILE = [
 	("subtitle", _("Subtitrări")),
 	("channellist", _("Lista de canale")),
 	("favourites", _("Favorite")),
+	# lista deschisa direct in dosarul transponderului canalului de acum (tfrc, LinuxSat 164122 #970392); textul
+	# OE-Alliance al randului din lista, deja tradus in toate limbile
+	("current_transponder", _("Current Transponder")),
 	("movies", _("Înregistrări")),
 	("record", _("Înregistrare imediată")),
 	("timeshift", _("Pornește timeshift")),
@@ -175,11 +183,13 @@ PROFIL_SETARI = (
 	("hds_ch_privire", "device", _("CH+ și CH- la privit")),
 	("hds_exit_film", "hide", _("EXIT în timpul filmului")),
 )
-ALEGERI_CH = (("device", _("După telecomandă")),
-	("zap", _("Schimbă canalul")), ("list", _("Deschide lista de canale")))
+# alegerile se traduc la afisare (initConfigProfil, cand se deschide ecranul sau pagina /taste-rapide), nu la import:
+# atunci limba poate lipsi inca si alegerile ramaneau in romana (asistenta 946155, 14.11.2026)
+ALEGERI_CH = (("device", N_("După telecomandă")),
+	("zap", N_("Schimbă canalul")), ("list", N_("Deschide lista de canale")))
 ALEGERI_PROFIL = {"hds_ch_privire": ALEGERI_CH,
-	"hds_exit_film": (("hide", _("Ascunde bara de informații")), ("ask", _("Ask user")),
-		("movielist", _("Return to movie list")), ("quit", _("Return to previous service")))}
+	"hds_exit_film": (("hide", N_("Ascunde bara de informații")), ("ask", N_("Ask user")),
+		("movielist", N_("Return to movie list")), ("quit", N_("Return to previous service")))}
 
 
 def initConfigProfil(config=None):
@@ -189,9 +199,13 @@ def initConfigProfil(config=None):
 		config.usage = ConfigSubsection()
 	u = config.usage
 	for k, implicit, _text in PROFIL_SETARI:
+		# alegerile in limba de acum (la pornire poate inca fara limba; la ecran si in web se traduc din nou)
+		alegeri = None if isinstance(implicit, bool) else [(v, _tr(t)) for v, t in ALEGERI_PROFIL[k]]
 		if k not in u.content.items:
-			setattr(u, k, ConfigYesNo(default=implicit) if isinstance(implicit, bool)
-				else ConfigSelection(default=implicit, choices=list(ALEGERI_PROFIL[k])))
+			setattr(u, k, ConfigYesNo(default=implicit) if alegeri is None
+				else ConfigSelection(default=implicit, choices=alegeri))
+		elif alegeri is not None:
+			getattr(u, k).setChoices(alegeri, default=implicit)   # valoarea aleasa ramane
 	return u
 
 
@@ -220,7 +234,7 @@ TEXTE_ACTIUNI = {
 	"favorite_toggle": _("Adaugă sau scoate canalul din Favorite"),
 	"favorite_choose_bouquet": _("Alege buchetul pentru canal"),
 	"select_channel": _("Alege canalul de sub cursor"), "search_channels": _("Caută canale"),
-	"toggle_layout": _("Listă sau dale"), "search_settings": _("Caută setări"),
+	"toggle_layout": _("Listă sau dale"), "search_settings": _("Caută în meniu"),
 	"menu_options": _("Opțiunile ecranului"), "edit_value": _("Selectează sau schimbă valoarea"),
 	"choose_value": _("Lista valorilor setării"), "save": _("Save"), "cancel": _("Cancel"),
 	"back_unsaved": _("Înapoi, cu verificarea modificărilor"),
@@ -251,7 +265,7 @@ TEXTE_ACTIUNI = {
 def text_actiune(actiune):
 	if actiune.startswith("plugin:"):
 		p = pluginuri_alocabile().get(actiune)
-		return _tr("Plugin: %s") % p.name if p else _tr("Plugin indisponibil (%s)") % actiune[-8:]
+		return _tr(N_("Plugin: %s")) % p.name if p else _tr(N_("Plugin indisponibil (%s)")) % actiune[-8:]
 	return _tr(TEXTE_ACTIUNI.get(actiune, dict(ACTIUNI_DISPONIBILE).get(actiune, actiune)))
 
 
@@ -518,7 +532,7 @@ def actualizeaza_alegeri(config=None, pluginuri=None):
 	lista = pluginuri_alocabile(pluginuri)
 	# traduse acum: lista s-a facut la import, uneori inainte de limba aleasa (ar fi ramas in romana)
 	alegeri = [(k, _tr(text)) for k, text in ACTIUNI_DISPONIBILE] + [
-		(k, _tr("Plugin: %s") % p.name) for k, p in sorted(
+		(k, _tr(N_("Plugin: %s")) % p.name) for k, p in sorted(
 			lista.items(), key=lambda x: (str(x[1].name).lower(), x[0]))]
 	alegeri = _cu_indisponibile(alegeri,
 		[getattr(b, k).value for k, _text in SCURTE + BUTOANE])

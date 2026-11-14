@@ -328,8 +328,20 @@ def _pune(cheie, lucrare):
 			_fir.start()
 
 
+def activ():
+	"""Da/Nu config.usage.hds_iptv_sigle (0.7.5, IPI; setup.xml hds_iptv_functii). Oprita: nicio sigla adusa din internet,
+	niciun fir pornit; siglele aduse deja raman in cache pana le inlocuieste altceva."""
+	try:
+		from Components.config import config
+		return bool(config.usage.hds_iptv_sigle.value)
+	except (AttributeError, KeyError, ImportError):
+		return True
+
+
 def cere(s, canale):
 	"""Nu asteapta reteaua. Primele sigle sunt aduse pe rand; lista cere apoi viewportul."""
+	if not activ():
+		return
 	if not isinstance(s, dict) or not re.match(r"^[0-9a-f]{8}$", str(s.get("id", ""))):
 		return
 	n = 0
@@ -346,6 +358,8 @@ def cere(s, canale):
 
 def cereReferinte(refs):
 	"""Cel mult 64 de randuri vizibile; playlistul se citeste numai pe worker."""
+	if not activ():
+		return
 	for ref in islice(refs, MAX_COADA):
 		veche = cauta(ref)
 		try:

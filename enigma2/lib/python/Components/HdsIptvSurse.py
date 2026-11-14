@@ -671,11 +671,13 @@ def scrieBuchete():
 		pastrate = set()
 		corp = []
 		nr_marcaj = 1
+		o_singura = False
 		for s in surse:
 			canale = citesteCanale(s["id"])
 			ascunse = frozenset(s.get("ascunse") or ())
 			grupe = [g for g in _impartePeGrupe(s, canale) if not eAscunsa(ascunse, g[0])]
 			o_lista = len(surse) == 1 and len(grupe) == 1
+			o_singura = o_singura or o_lista
 			if len(surse) > 1 and grupe:
 				corp.append(_rand(_refMarcaj(nr_marcaj), numeSursa(s)))
 				nr_marcaj += 1
@@ -696,6 +698,22 @@ def scrieBuchete():
 				if _scrieDacaAltceva(os.path.join(DIRECTOR, fisier), "#NAME %s\r\n%s" % (nume, text)):
 					schimbat = True
 			del canale, grupe
+		# grupele "4K adevărat" si "HDR" (Components/HdsIptv4K.py), in capul radacinii, cand cautarea a gasit canale
+		if corp and not o_singura:      # o singura grupa: canalele stau direct in radacina, fara dosare
+			try:
+				from Components import HdsIptv4K
+				grupe_4k = HdsIptv4K.grupe()
+			except Exception as e:
+				print("[HdsIptvSurse] grupele 4K: %s" % type(e).__name__)
+				grupe_4k = []
+			sus = []
+			for fisier, nume, randuri in grupe_4k:
+				pastrate.add(fisier)
+				sus.append(_rand(_refGrupa(fisier), nume))
+				text = "".join(_rand(ref, n) for ref, n in randuri)
+				if _scrieDacaAltceva(os.path.join(DIRECTOR, fisier), "#NAME %s\r\n%s" % (nume, text)):
+					schimbat = True
+			corp = sus + corp
 		radacina = os.path.join(DIRECTOR, BUCHET_RADACINA)
 		if surse:
 			if _scrieDacaAltceva(radacina, "#NAME %s\r\n%s" % (NUME_RADACINA, "".join(corp))):
@@ -953,8 +971,31 @@ def acum():
 	return int(time.time())
 
 
+# ------------------------------------------------------------------ functiile cu Da/Nu (setup.xml hds_iptv_functii)
+
+def optiune(nume, implicit=True):
+	"""config.usage.hds_iptv_<nume> (ghid_pornire, semn, timp_pornire, 4k). Fara config (probele de pe PC): implicit."""
+	try:
+		from Components.config import config
+		return bool(getattr(config.usage, "hds_iptv_" + nume).value)
+	except Exception:
+		return implicit
+
+
 # ------------------------------------------------------------------ canalele care n-au pornit ultima data
-# Un fisier mic, separat de buchete si de lista canalelor: {"<sursa>/<cheie>": ora}. Lista de canale il citeste cand se schimba (un os.stat).
+# Un fisier mic, separat de buchete si de lista canalelor: {"<sursa>/<cheie>": ora} sau, cu motivul, {"<sursa>/<cheie>": [ora, motiv]}
+# (MOTIVE). Lista de canale il citeste cand se schimba (un os.stat). Se scrie numai la o cadere si la prima pornire dupa ea.
+
+# motivul pe scurt, din ce stiu releul si playerul (Components/HdsIptvRedare._motiv); textul il traduce lista la afisare
+MOTIVE = {
+	"server": N_("serverul nu răspunde"),
+	"adresa": N_("adresa canalului nu mai există"),
+	"refuz": N_("serverul a refuzat canalul (contul sau țara)"),
+	"conexiuni": N_("contul a atins limita de conexiuni"),
+	"format": N_("receptorul nu poate reda formatul"),
+	"gol": N_("de la server nu vine nimic"),
+	"retea": N_("fără internet"),
+}
 
 MAX_NEFUNCTIONALE = 5000
 _nefunctionale = (None, {})
@@ -992,6 +1033,38 @@ def eNefunctional(cale):
 	return sid is not None and ("%s/%s" % (sid, cheie)) in semne
 
 
+def numeDinBuchete(cale, director=None):
+	"""Numele canalului de internet din grupele lui (#DESCRIPTION), sau "". Pentru zap-urile venite fara nume (/api/zap al
+	aplicatiilor, canalul tinut minte): fara el, bara si /api/statusinfo aratau un nume gol."""
+	import glob
+	sid, cheie = desparteCale(cale)
+	if sid is None:
+		return ""
+	semn = "%s/%s" % (sid, cheie)
+	for f in glob.glob(os.path.join(director or DIRECTOR, PREFIX_GRUPA + "*.tv")):
+		try:
+			with open(f, encoding="utf-8", errors="replace") as fis:
+				gasit = False
+				for r in fis:
+					if not r.strip():
+						continue
+					if gasit and r.startswith("#DESCRIPTION "):
+						return r[13:].strip()
+					gasit = r.startswith("#SERVICE ") and semn in r.replace("%3a", ":").replace("%3A", ":")
+		except (IOError, OSError):
+			continue
+	return ""
+
+
+def motivNefunctional(cale):
+	"""(cod din MOTIVE sau "", textul codecului sau "") al canalului care n-a pornit; ("", "") daca a pornit sau nu se stie."""
+	sid, cheie = desparteCale(cale)
+	v = nefunctionale().get("%s/%s" % (sid, cheie)) if sid is not None else None
+	if isinstance(v, list) and len(v) > 1 and v[1] in MOTIVE:
+		return v[1], (v[2] if len(v) > 2 and isinstance(v[2], str) else "")
+	return "", ""
+
+
 def _scrieNefunctionale(date):
 	global _nefunctionale
 	with _LACAT:
@@ -1000,11 +1073,14 @@ def _scrieNefunctionale(date):
 		_nefunctionale = (None, {})
 
 
-def noteazaNefunctional(sid, cheie):
+def noteazaNefunctional(sid, cheie, motiv="", codec=""):
+	if not optiune("semn"):
+		return
 	date = dict(nefunctionale())
-	date["%s/%s" % (sid, cheie)] = acum()
+	date["%s/%s" % (sid, cheie)] = [acum(), motiv, codec[:40]] if motiv in MOTIVE else acum()
 	if len(date) > MAX_NEFUNCTIONALE:
-		for k in sorted(date, key=date.get)[:len(date) - MAX_NEFUNCTIONALE]:
+		# valorile sunt ora (fisierele vechi) sau [ora, motiv, codec]: in Python 3 int si list nu se compara
+		for k in sorted(date, key=lambda x: date[x][0] if isinstance(date[x], list) else date[x])[:len(date) - MAX_NEFUNCTIONALE]:
 			del date[k]
 	_scrieNefunctionale(date)
 
@@ -1016,6 +1092,79 @@ def stergeNefunctional(sid, cheie):
 		date = dict(date)
 		del date[k]
 		_scrieNefunctionale(date)
+
+
+# ------------------------------------------------------------------ timpul de pornire al canalelor care merg
+# {"<sursa>/<cheie>": [zecimi de secunda, ...]} (ultimele PORNIRI_TINUTE), tinut in memorie; pe disc (porniri.json) cel mult o data
+# la SCRIERE_PORNIRI_S si numai daca s-a schimbat ceva, deci nu la fiecare zap.
+
+PORNIRI_TINUTE = 5
+MAX_PORNIRI = 5000
+SCRIERE_PORNIRI_S = 600
+_porniri = None
+_porniri_schimbate = False
+_porniri_scrise = 0.0
+
+
+def _caleaPorniri():
+	return _cale("porniri.json")
+
+
+def porniri():
+	global _porniri
+	if _porniri is None:
+		try:
+			with open(_caleaPorniri(), encoding="utf-8") as f:
+				d = json.load(f)
+			_porniri = dict((k, [int(x) for x in v][-PORNIRI_TINUTE:]) for k, v in d.items()
+				if isinstance(k, str) and isinstance(v, list)) if isinstance(d, dict) else {}
+		except (IOError, OSError, ValueError, TypeError):
+			_porniri = {}
+	return _porniri
+
+
+def notaPornire(sid, cheie, secunde, ceas=time.monotonic):
+	"""Canalul a pornit in `secunde`. In memorie; pe disc rar (scriePorniri)."""
+	global _porniri_schimbate
+	if not optiune("timp_pornire") or secunde is None or not 0 <= secunde < 600:
+		return
+	d = porniri()
+	k = "%s/%s" % (sid, cheie)
+	lista = d.pop(k, [])[-(PORNIRI_TINUTE - 1):] + [int(round(secunde * 10))]
+	d[k] = lista               # la capat: cel mai nou; la plin se scot cele mai vechi
+	while len(d) > MAX_PORNIRI:
+		del d[next(iter(d))]
+	_porniri_schimbate = True
+	scriePorniri(ceas=ceas)
+
+
+def scriePorniri(tot=False, ceas=time.monotonic):
+	"""Pe disc daca s-a schimbat ceva si a trecut SCRIERE_PORNIRI_S de la ultima scriere (tot=True: acum, la iesire)."""
+	global _porniri_schimbate, _porniri_scrise
+	if not _porniri_schimbate or _porniri is None:
+		return False
+	acum_ = ceas()
+	if not tot and _porniri_scrise and acum_ - _porniri_scrise < SCRIERE_PORNIRI_S:
+		return False
+	try:
+		with _LACAT:
+			_asiguraDosar()
+			_scrie(_caleaPorniri(), json.dumps(_porniri, separators=(",", ":")).encode("utf-8"), 0o600)
+	except (IOError, OSError) as e:
+		print("[HdsIptvSurse] porniri: %s" % type(e).__name__)
+		return False
+	_porniri_schimbate = False
+	_porniri_scrise = acum_
+	return True
+
+
+def timpPornire(cale):
+	"""Media ultimelor porniri, in secunde (o zecimala), sau None."""
+	if not optiune("timp_pornire"):
+		return None
+	sid, cheie = desparteCale(cale)
+	v = porniri().get("%s/%s" % (sid, cheie)) if sid is not None else None
+	return round(sum(v) / 10.0 / len(v), 1) if v else None
 
 
 # ------------------------------------------------------------------ setarile vechi

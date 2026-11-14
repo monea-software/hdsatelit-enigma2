@@ -567,6 +567,7 @@ class Sincronizator(object):
 			"sursa_text": textSursa(cod, u),
 			"salvat": salvat or 0,
 			"sigura_salvata": citesteCeasSalvat(self.cale_sigura) or 0,
+			"esecuri": self.esecuri,
 		}
 
 

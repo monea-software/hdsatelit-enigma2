@@ -1,0 +1,113 @@
+klogd: a flood of identical kernel lines is not written line by line to the log file
+
+On HiSilicon receivers (measured on a Viper 4K V20) the decoder driver writes "audio cursize ... > 01048576" and
+"video cursize ... > 33554432" at kern.warn hundreds of times per second while a stream fills the decoder
+(up to 482 lines per second, 7,178 in one minute, measured on 13.11.2026). syslogd wrote every line to
+/home/root/logs/messages on the internal flash, and four rotated files of 1 MB held only ~15 minutes of history.
+klogd now passes each kind of line (its text with the digits left out) at most 20 times per 60 seconds;
+err and more urgent lines always pass. The lines left out are counted and reported in one line when the next
+window starts. The kernel ring (dmesg) keeps every line. syslogd -D is not enough: the flood alternates two
+lines whose numbers change, and -D only drops consecutive identical lines.
+
+Upstream-Status: Inappropriate [HD Satelit image policy]
+Signed-off-by: Monea Software pentru HD Satelit <contact@moneasoftware.com>
+
+--- a/sysklogd/klogd.c
++++ b/sysklogd/klogd.c
+@@ -166,6 +166,79 @@
+  * Should we open-code syslog() here to use correct facility?
+  */
+ 
++/* HD Satelit (0.7.5): a driver that floods the kernel log (HiSilicon "audio/video cursize ... > ..." hundreds of
++ * times per second while a stream fills the decoder) must not be written line by line to the log file on the
++ * internal flash. Each kind of line (its text with the digits left out) is passed at most HDS_PRAG times per
++ * HDS_FEREASTRA seconds; err and more urgent lines always pass. The lines left out are counted and reported
++ * in one line when the next window starts. The kernel ring itself (dmesg) still keeps every line. */
++enum {
++	HDS_FEREASTRA = 60,
++	HDS_PRAG = 20,
++	HDS_LOCURI = 64,
++};
++static struct {
++	unsigned h;
++	unsigned n;
++} hds_fel[HDS_LOCURI];
++static unsigned hds_inceput;
++static unsigned hds_sarite;
++static unsigned hds_feluri_sarite;
++
++static unsigned hds_sablon(const char *s)
++{
++	unsigned h = 2166136261u;
++	for (; *s; s++) {
++		unsigned char c = *s;
++		if (c >= '0' && c <= '9')
++			continue;
++		h = (h ^ c) * 16777619u;
++	}
++	return h ? h : 1;
++}
++
++/* 1 = log the line, 0 = leave it out */
++static int hds_lasa(int priority, const char *s)
++{
++	unsigned acum = monotonic_sec();
++	unsigned h, i, k;
++
++	if (acum - hds_inceput >= HDS_FEREASTRA) {
++		if (hds_sarite)
++			syslog(LOG_WARNING, "klogd: %u repeated lines of %u kinds left out in the last %u s"
++				" (at most %u of a kind per %u s; dmesg has them all)",
++				hds_sarite, hds_feluri_sarite, acum - hds_inceput, HDS_PRAG, HDS_FEREASTRA);
++		memset(hds_fel, 0, sizeof(hds_fel));
++		hds_sarite = 0;
++		hds_feluri_sarite = 0;
++		hds_inceput = acum;
++	}
++	if ((priority & LOG_PRIMASK) <= LOG_ERR)
++		return 1;
++	h = hds_sablon(s);
++	for (k = 0; k < HDS_LOCURI; k++) {
++		i = (h + k) % HDS_LOCURI;
++		if (hds_fel[i].h == 0) {
++			hds_fel[i].h = h;
++			hds_fel[i].n = 1;
++			return 1;
++		}
++		if (hds_fel[i].h == h) {
++			if (hds_fel[i].n < HDS_PRAG) {
++				hds_fel[i].n++;
++				return 1;
++			}
++			if (hds_fel[i].n == HDS_PRAG) {
++				hds_fel[i].n++;
++				hds_feluri_sarite++;
++			}
++			hds_sarite++;
++			return 0;
++		}
++	}
++	/* table full: more than HDS_LOCURI kinds in one window, nothing is left out */
++	return 1;
++}
++
+ int klogd_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+ int klogd_main(int argc UNUSED_PARAM, char **argv)
+ {
+@@ -229,6 +302,7 @@
+ 	bb_signals_norestart(BB_FATAL_SIGS, record_signo);
+ 
+ 	syslog(LOG_NOTICE, "klogd started: %s", bb_banner);
++	hds_inceput = monotonic_sec();
+ 
+ 	write_pidfile_std_path_and_ext("klogd");
+ 
+@@ -283,7 +357,7 @@
+ 				}
+ 			}
+ 			/* Log (only non-empty lines) */
+-			if (*start)
++			if (*start && hds_lasa(priority, start))
+ 				syslog(priority, "%s", start);
+ 
+ 			if (!newline)

@@ -231,6 +231,29 @@ def _redus(native, geodata, units):
 	}
 
 
+def _scrieEroarea(esec):
+	"""Motivul unei cereri cazute, in jurnalul interfetei: tipul, mesajul (scurtat, fara adresa cererii, care are
+	coordonatele orasului) si locul din cod. Pluginurile (OAWeather) tin numai numele tipului si nu-l scriu, asa ca fara
+	acest rand cauza nu se vedea nici in asistenta (darog69, AX HD51, forum 479 #2242: „paused 5 mins” la fiecare
+	cerere, fara motiv). O greseala de aici nu schimba rezultatul cererii."""
+	try:
+		import traceback
+		mesaj = " ".join(str(esec).split())
+		if "?" in mesaj:
+			mesaj = mesaj.split("?", 1)[0] + "?..."
+		if callable(getattr(esec, "read", None)):
+			# HTTPError: Open-Meteo spune motivul in corpul raspunsului ({"error": true, "reason": "..."})
+			try:
+				mesaj += " | " + " ".join(esec.read(300).decode("utf-8", "replace").split())
+			except Exception:
+				pass
+		loc = traceback.extract_tb(esec.__traceback__)[-1] if esec.__traceback__ else None
+		unde = " (%s:%s %s)" % (loc.filename.replace("\\", "/").rsplit("/", 1)[-1], loc.lineno, loc.name) if loc else ""
+		print("[Weatherinfo] eroare: %s: %s%s" % (type(esec).__name__, mesaj[:300], unde))
+	except Exception:
+		pass
+
+
 def _json(url):
 	cerere = Request(url, headers={"User-Agent": "HDSatelit-Weather/0.7.1"})
 	with urlopen(cerere, timeout=10) as raspuns:
@@ -239,7 +262,7 @@ def _json(url):
 		raise ValueError("raspuns prea mare")
 	date = json.loads(continut.decode("utf-8"))
 	if not isinstance(date, dict) or date.get("error"):
-		raise ValueError("raspuns meteo invalid")
+		raise ValueError("raspuns meteo invalid: %s" % (str(date.get("reason", ""))[:200] if isinstance(date, dict) else type(date).__name__))
 	return date
 
 
@@ -654,6 +677,7 @@ class Weatherinfo:
 				date, eroare = lucru(), None
 			except Exception as esec:
 				date, eroare = gol, type(esec).__name__
+				_scrieEroarea(esec)
 			try:
 				reactor.callFromThread(publica, date, eroare)
 			except Exception:

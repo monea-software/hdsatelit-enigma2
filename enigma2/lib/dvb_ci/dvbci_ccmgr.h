@@ -4,7 +4,9 @@
 #ifndef __dvbci_dvbci_ccmgr_h
 #define __dvbci_dvbci_ccmgr_h
 
+#include <map>
 #include <memory>
+#include <vector>
 #include <openssl/x509.h>
 #include <openssl/evp.h>
 #include <openssl/param_build.h>
@@ -247,6 +249,15 @@ class eDVBCICcSession : public eDVBCISession
 	bool m_descrambler_new_key;
 	uint8_t m_descrambler_key_iv[32];
 	uint8_t m_descrambler_odd_even;
+
+	/* HD Satelit (CI+ pe AX HD51, forumul 479): dispozitivul caN deschis si felul lui (lib/dvb_ci/hdscica.h), cheia CI+
+	   adevarata primita de la modul (nu cea goala de la primul ADD PROGRAM) si PID-urile programelor, ca sa se puna din
+	   nou pe dispozitivul ales dupa o schimbare */
+	int m_descrambler_ca;
+	int m_descrambler_fel;
+	bool m_cheie_primita;
+	std::map<uint16_t, std::vector<uint16_t> > m_programe;
+	void cheieRefuzata(int eroare);
 
 	int receivedAPDU(const unsigned char *tag, const void *data, int len);
 	int doAction();

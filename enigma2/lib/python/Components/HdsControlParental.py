@@ -141,9 +141,34 @@ def canale(eServiceCenter=None, eServiceReference=None, service_types_tv=None):
 	return _lista("%s ORDER BY name" % service_types_tv, eServiceCenter, eServiceReference)
 
 
-def buchete(eServiceCenter=None, eServiceReference=None):
-	"""Buchetele din bouquets.tv, ca ParentalControlBouquetEditor."""
-	return _lista('1:134:1:0:0:0:0:0:0:0:FROM BOUQUET "bouquets.tv" ORDER BY bouquet', eServiceCenter, eServiceReference)
+def buchete(eServiceCenter=None, eServiceReference=None, grupe=None):
+	"""Buchetele din bouquets.tv, ca ParentalControlBouquetEditor, apoi grupele canalelor de internet (grupeIptv)."""
+	rez = _lista('1:134:1:0:0:0:0:0:0:0:FROM BOUQUET "bouquets.tv" ORDER BY bouquet', eServiceCenter, eServiceReference)
+	vazute = set(r for r, _n in rez)
+	return rez + [g for g in (grupeIptv() if grupe is None else grupe) if g[0] not in vazute][:max(0, MAX_LISTA - len(rez))]
+
+
+# 0.7.5 (IPI, ideea 10 din cercetarea 90): grupele IPTV (subbouquet.hdsiptv_*, legate in IPTV, nu in bouquets.tv) se pot bloca cu PIN
+# ca orice buchet: ParentalControl.protectService pe 'FROM BOUQUET "<grupa>"' pune in lista fiecare canal al grupei, iar la fiecare
+# pornire a interfetei grupa se citeste din nou (canalele noi din lista furnizorului intra si ele). Fara alta setare: blocarea e a omului,
+# din editorul de buchete (televizor) sau din /control-parental (web), cu Control parental pornit.
+REF_GRUPA = '1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet'
+
+
+def grupeIptv(I=None):
+	"""[(referinta, "IPTV · sursa · grupa")] pentru grupele canalelor de internet; [] fara surse. Numai numele, fara conturi."""
+	try:
+		if I is None:
+			from Components import HdsIptvSurse as I
+		surse = I.citesteSurse()
+		rez = []
+		for fisier, _sid, sursa, grupa in I.grupeLista(surse):
+			if fisier.startswith(I.PREFIX_GRUPA):
+				rez.append((REF_GRUPA % fisier, "IPTV · %s · %s" % (sursa, grupa) if len(surse) > 1 else "IPTV · %s" % grupa))
+		return rez
+	except Exception as e:
+		print("[HdsControlParental] grupele IPTV: %s" % type(e).__name__)
+		return []
 
 
 SPECIAL = "#"

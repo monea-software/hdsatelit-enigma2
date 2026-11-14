@@ -74,7 +74,7 @@ void eDVBServicePMTHandler::pornesteTabele(bool rapid)
 	}
 	m_PAT.begin(eApp, eDVBPATSpec(), m_demux);
 	/* HDSatelit (0.7.4, viteza zap): PMT-ul nu mai asteapta PAT-ul (o repetare a lui, plus trecerea buclei principale pana
-	   la PATready, pe .114 parte din cele 400-760 ms intre semnal si PMT). Filtrul porneste pe PID-ul tinut minte; PATready
+	   la PATready, pe receptorul de probe SF8008 parte din cele 400-760 ms intre semnal si PMT). Filtrul porneste pe PID-ul tinut minte; PATready
 	   il lasa daca PAT-ul da acelasi PID si acelasi serviciu, altfel il porneste pe cel bun (sau il opreste, fara intrare in
 	   PAT), deci un PID schimbat de televiziune costa numai timpul de pana acum. Ajuta mai ales canalele criptate vazute
 	   prima oara de la pornire (CA PMT-ul, ECM-ul), modulele CI (primesc PMT-ul abia la PMTready) si canalele fara PID-uri

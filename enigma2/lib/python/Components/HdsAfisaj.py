@@ -131,6 +131,12 @@ def N_(text):
 	return text
 
 
+# mesajele lui skin.alegeAfisaj (in skin.py sunt siruri simple, nemarcate), traduse aici la afisare: _(mesaj_tema)
+N_("Tema de afisaj nu este instalata.")
+N_("Tema de afisaj nu poate fi citita.")
+N_("Tema de afisaj se aplica la repornirea interfetei.")
+
+
 # Numai controale cu valori cunoscute, sub cele doua directoare ale panoului. Nu se creeaza noduri.
 _LED_DESCRIERI = (
 	("ledpowercolor", N_("Culoarea LED-ului la funcționare"), "culoare"),
@@ -154,6 +160,20 @@ _LED_DATE = {"led_%s_%s" % (dosar, nume): (titlu, fel)
 	for dosar in ("fp", "lcd") for nume, titlu, fel in _LED_DESCRIERI}
 _LED_SCRISE = {}
 _LED_ERORI = set()
+# Familia „ledpowercolor” (driverul HiSilicon al producatorului: Amiko Viper 4K V10, hi-dvb.ko; Octagon SF8008 / MINI,
+# Uclan Ustym 4K PRO, Qviart DUAL 4K si placile lor): ledul din fata arata NUMAI culoarea din /proc/stb/fp/ledpowercolor;
+# ledstandbycolor nu e luata singura in standby, iar ledsuspendledcolor merge la oprirea completa (microcontrolerul).
+# Ca in OE-Alliance (aceleasi masini), in standby se scrie in ledpowercolor culoarea „în așteptare”, iar la iesire cea „la
+# funcționare” (Wlad, forum 948 #2172: pe V10 ledul nu-si schimba culoarea in standby). Culorile au nume (1 albastru,
+# 2 rosu, 3 violet; pe DUAL numai albastru), iar din fabrica, ca in OE-Alliance: albastru la functionare, violet in
+# asteptare, rosu la oprirea completa. Cu „Neschimbată” aleasa la functionare, culoarea citita la intrarea in standby se
+# pune la loc (tinuta in LED_PUTERE_SALVAT, tmpfs: si dupa o repornire a interfetei in standby).
+MASINI_LED_PUTERE = ("viper4k", "sf8008", "sf8008m", "ustym4kpro", "ustym4ks2ottx", "beyonwizv2", "dual", "dagsmv200",
+	"sfx6008", "sx88v2", "sx888")
+MASINI_LED_ALBASTRU = ("dual", "dagsmv200")     # panoul are numai albastru
+LED_IMPLICIT_FAMILIE = {"led_fp_ledpowercolor": "1", "led_fp_ledstandbycolor": "3", "led_fp_ledsuspendledcolor": "2"}
+LED_PUTERE_SALVAT = "/tmp/hds-led-putere"
+_LED_STANDBY_LEGAT = []
 
 
 def _(text):
@@ -314,6 +334,33 @@ def alegeriLuminozitateNoapte():
 		(str(i), _("Treapta %d din 7") % i) for i in range(1, 8)]
 
 
+def _masina():
+	"""Masina receptorului (SystemInfo machinebuild, din regulile imaginii: „viper4k”), sau „” cand nu se stie (PC-ul
+	probelor)."""
+	try:
+		from Components.SystemInfo import SystemInfo
+		m = SystemInfo.get("machinebuild")
+		if m and m != "unknown":
+			return str(m).lower()
+	except Exception:
+		pass
+	return ""
+
+
+def familieLedPutere():
+	"""True pe masinile la care ledul arata numai /proc/stb/fp/ledpowercolor (MASINI_LED_PUTERE)."""
+	return _masina() in MASINI_LED_PUTERE
+
+
+def ledImplicit(cheie):
+	"""Valoarea din fabrica a unui control LED: pe familia ledpowercolor albastru la functionare, violet in asteptare si
+	rosu la oprirea completa (ca in OE-Alliance), altfel „Neschimbată” (nimic scris)."""
+	m = _masina()
+	if m in MASINI_LED_PUTERE and m not in MASINI_LED_ALBASTRU:
+		return LED_IMPLICIT_FAMILIE.get(cheie, LUMINA_NESCHIMBATA)
+	return LUMINA_NESCHIMBATA
+
+
 def alegeriLed(cheie):
 	"""Valorile driverului, comune ecranului si paginii web. Culorile depind de panou."""
 	date = _LED_DATE.get(cheie)
@@ -321,7 +368,13 @@ def alegeriLed(cheie):
 		return []
 	alegeri = [(LUMINA_NESCHIMBATA, _("Neschimbată")), ("0", _("Oprit"))]
 	if date[1] == "culoare":
-		alegeri.extend((str(i), _("Culoarea %d") % i) for i in (1, 2, 3))
+		masina = _masina()
+		if masina in MASINI_LED_ALBASTRU:
+			alegeri.append(("1", _("Albastru")))
+		elif masina in MASINI_LED_PUTERE:
+			alegeri.extend((("1", _("Albastru")), ("2", _("Roșu")), ("3", _("Violet"))))
+		else:
+			alegeri.extend((str(i), _("Culoarea %d") % i) for i in (1, 2, 3))
 	else:
 		alegeri.append(("1", _("Pornit")))
 	return alegeri
@@ -445,7 +498,93 @@ def aplicaLeduri(forteaza=False):
 			if nod not in _LED_ERORI:
 				_jurnal("nu pot scrie LED-ul %s: %s" % (nod, eroare))
 			_LED_ERORI.add(nod)
+	if _inAsteptareAcum():
+		# setarile salvate din web cat receptorul e in standby: ledul ramane pe culoarea de asteptare
+		reusit = aplicaLedInAsteptare(True) is not False and reusit
 	return reusit
+
+
+def _inAsteptareAcum():
+	import sys
+	m = sys.modules.get("Screens.Standby")
+	return getattr(m, "inStandby", None) is not None
+
+
+def aplicaLedInAsteptare(inAsteptare):
+	"""Familia ledpowercolor (MASINI_LED_PUTERE): in standby culoarea „în așteptare” in ledpowercolor, la iesire cea „la
+	funcționare” (sau, cu „Neschimbată”, culoarea citita la intrare). Intoarce True daca a scris, None daca n-a avut ce
+	face, False la o scriere esuata. Alte masini: nimic (driverul lor isi schimba singur ledul, sau nu are noduri)."""
+	if not familieLedPutere():
+		return None
+	nod = LED_NODURI.get("led_fp_ledpowercolor")
+	if not nod or not os.path.exists(nod):
+		return None
+	from Components.HdsAfisajCompat import permite
+	if not permite("leduri"):
+		return None
+	c = _cfg()
+	putere = c.led_fp_ledpowercolor.value
+	asteptare = c.led_fp_ledstandbycolor.value if os.path.exists(LED_NODURI.get("led_fp_ledstandbycolor", "")) \
+		else LUMINA_NESCHIMBATA
+	try:
+		if inAsteptare:
+			if asteptare == LUMINA_NESCHIMBATA:
+				return None
+			if putere == LUMINA_NESCHIMBATA and not os.path.exists(LED_PUTERE_SALVAT):
+				inainte = _citesteNod(nod)
+				if inainte:
+					with open(LED_PUTERE_SALVAT, "w", encoding="ascii") as f:
+						f.write(inainte)
+			_scrieNod(nod, asteptare)
+			_LED_SCRISE.pop(nod, None)       # aplicaLeduri scrie din nou culoarea de functionare la iesire
+			return True
+		valoare = putere
+		if valoare == LUMINA_NESCHIMBATA:
+			valoare = None
+			if os.path.exists(LED_PUTERE_SALVAT):
+				with open(LED_PUTERE_SALVAT, "r", encoding="ascii") as f:
+					valoare = f.read(32).strip() or None
+		if os.path.exists(LED_PUTERE_SALVAT):
+			os.remove(LED_PUTERE_SALVAT)
+		if valoare is None:
+			return None
+		_scrieNod(nod, valoare)
+		if putere != LUMINA_NESCHIMBATA:
+			_LED_SCRISE[nod] = valoare
+		return True
+	except (IOError, OSError, UnicodeError) as eroare:
+		_jurnal("nu pot scrie LED-ul in asteptare %s: %s" % (nod, eroare))
+		return False
+
+
+def _laStandbyLed(element=None):
+	"""config.misc.standbyCounter: intrarea in standby (inStandby e deja pus); iesirea prin onClose."""
+	import sys
+	ecran = getattr(sys.modules.get("Screens.Standby"), "inStandby", None)
+	if ecran is None:
+		return
+	aplicaLedInAsteptare(True)
+	try:
+		if _laIesireStandbyLed not in ecran.onClose:
+			ecran.onClose.append(_laIesireStandbyLed)
+	except AttributeError:
+		pass
+
+
+def _laIesireStandbyLed():
+	aplicaLedInAsteptare(False)
+
+
+def legaLedInAsteptare():
+	"""O data, din porneste: ledul urmeaza standby-ul pe familia ledpowercolor (numai acolo)."""
+	if _LED_STANDBY_LEGAT or not familieLedPutere():
+		return False
+	from Components.config import config
+	config.misc.standbyCounter.addNotifier(_laStandbyLed, initial_call=False)
+	_LED_STANDBY_LEGAT.append(True)
+	if not _inAsteptareAcum() and os.path.exists(LED_PUTERE_SALVAT):
+		aplicaLedInAsteptare(False)      # interfata repornita in standby: culoarea de functionare la loc
+	return True
 
 
 def alegeriNoapteDeLa():
@@ -703,7 +842,7 @@ def initConfig():
 	c.color_bara = ConfigSelection(default="da", choices=alegeriColorBara())
 	c.color_animatii = ConfigSelection(default="nu", choices=alegeriColorAnimatii())
 	for cheie in LED_CONTROALE:
-		setattr(c, cheie, ConfigSelection(default=LUMINA_NESCHIMBATA, choices=alegeriLed(cheie)))
+		setattr(c, cheie, ConfigSelection(default=ledImplicit(cheie), choices=alegeriLed(cheie)))
 	try:
 		_migreaza(c)
 	except Exception as e:
@@ -1896,6 +2035,10 @@ def porneste(session):
 	global _afisaj
 	initConfig()
 	aplicaLeduri(forteaza=True)
+	try:
+		legaLedInAsteptare()
+	except Exception as e:
+		_jurnal("ledul in asteptare: %r" % (e,))
 	if _afisaj is not None or not disponibil():
 		return
 	info = colorInfo()

@@ -416,7 +416,7 @@ def _desenat():
 
 def _fisiereSync():
 	"""/proc/msp/sync00 si celelalte instante (11.11.2026: pe .122 redarea a mers pe sync03, iar sync00 a ramas neschimbat;
-	la fel a vazut B pe .114); cautate din nou la fiecare citire (se fac si se desfac la cerere)"""
+	la fel a vazut B pe receptorul de probe SF8008); cautate din nou la fiecare citire (se fac si se desfac la cerere)"""
 	baza = os.path.dirname(SYNC)
 	try:
 		return sorted(os.path.join(baza, n) for n in os.listdir(baza) if n.startswith("sync") and n[4:].isdigit()) or [SYNC]

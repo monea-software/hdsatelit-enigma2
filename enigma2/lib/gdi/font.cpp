@@ -120,7 +120,7 @@ FT_Error fontRenderClass::getGlyphBitmap(FTC_Image_Desc *font, FT_ULong glyph_in
 	return res;
 }
 
-std::string fontRenderClass::AddFont(const std::string &filename, const std::string &name, int scale)
+std::string fontRenderClass::AddFont(const std::string &filename, const std::string &name, int scale, int renderflags)
 {
 	eDebugNoNewLine("[FONT] adding font %s...", filename.c_str());
 	fflush(stdout);
@@ -128,6 +128,7 @@ std::string fontRenderClass::AddFont(const std::string &filename, const std::str
 	fontListEntry *n=new fontListEntry;
 
 	n->scale=scale;
+	n->renderflags=renderflags;
 	FT_Face face;
 	singleLock s(ftlock);
 
@@ -150,6 +151,7 @@ std::string fontRenderClass::AddFont(const std::string &filename, const std::str
 		}
 		n->filename = rezerva->filename;
 		n->scale = rezerva->scale;
+		n->renderflags = rezerva->renderflags;
 		n->face = name;
 		n->next = font;
 		font = n;
@@ -268,9 +270,9 @@ int fontRenderClass::getFont(ePtr<Font> &font, const std::string &face, int size
 	return 0;
 }
 
-void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement)
+void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement, int renderflags)
 {
-	fontRenderClass::getInstance()->AddFont(filename, alias, scale_factor);
+	fontRenderClass::getInstance()->AddFont(filename, alias, scale_factor, renderflags);
 	/* HDSatelit: -1 makes it the fallback font (the third one, for symbols): the value skin loaders use for fallback.font */
 	if (is_replacement == -1)
 		eTextPara::setFallbackFont(alias);
@@ -286,7 +288,8 @@ Font::Font(fontRenderClass *render, FTC_FaceID faceid, int isize, int tw): tabwi
 	font.face_id = faceid;
 	font.width = isize;
 	font.height = isize;
-	font.flags = FT_LOAD_DEFAULT;
+	/* HDSatelit: the load flags given to addFont for this face (fifth argument; 0 = FT_LOAD_DEFAULT, as before) */
+	font.flags = FT_LOAD_DEFAULT | ((fontRenderClass::fontListEntry*)faceid)->renderflags;
 	scaler.face_id = faceid;
 	scaler.width = isize;
 	scaler.height = isize;
@@ -477,16 +480,27 @@ std::string eTextPara::replacement_facename;
 std::string eTextPara::fallback_facename;
 std::set<int> eTextPara::forced_replaces;
 
-/* HDSatelit: the code points the fallback font is used for: the symbol blocks U+2190-2BFF (arrows, math, technical
-   signs, enclosed numbers, box lines, blocks, geometric shapes, dingbats, braille...) and U+1F000-1FAFF. Never letters,
-   punctuation, quotes, currency or superscripts (U+2000-218F): a text keeps the look of its own font. */
+/* HDSatelit: the symbol blocks U+2190-2BFF (arrows, math, technical signs, enclosed numbers, box lines, blocks, geometric
+   shapes, dingbats, braille...) and U+1F000-1FAFF. */
 static inline bool hdsFallbackSymbol(unsigned long chr)
 {
 	return (chr >= 0x2190 && chr < 0x2C00) || (chr >= 0x1F000 && chr < 0x1FB00);
 }
 
-/* HDSatelit: the fallback font of this paragraph, made at the first symbol the font of the text and the Replacement font
-   do not have, so normal text pays nothing. Called with ftlock held. One more face can push another one out of the
+/* HDSatelit: the code points the fallback font is used for when the font of the text and the Replacement font both lack
+   them: the symbols above and every letter of any script (as OE-Alliance, which takes the fallback font for any missing
+   code point). A letter neither font has (Cyrillic in a theme whose fonts are Arabic and Latin only: MohammedSkin with
+   the Ukrainian translation, LinuxSat 164119, 13.11.2026) was left out before and the text showed only its dots and
+   commas. Not the punctuation, quotes, currency and superscripts U+2000-218F (′ ″ ⁿ₂ that our fonts lack stay as they
+   were: from a monospaced font in the middle of a text they look worse than missing, R2F 11.11). A code point either font
+   has keeps the look of that font, as before. */
+static inline bool hdsFallbackAny(unsigned long chr)
+{
+	return chr < 0x2000 || chr >= 0x2190;
+}
+
+/* HDSatelit: the fallback font of this paragraph, made at the first code point the font of the text and the Replacement
+   font do not have, so normal text pays nothing. Called with ftlock held. One more face can push another one out of the
    FreeType cache, so after it the replacement face and the face of the text are looked up again (the text face last). */
 bool eTextPara::hdsFallbackFace()
 {
@@ -562,7 +576,7 @@ void eTextPara::setFont(Font *fnt, Font *replacement)
    them (they are skipped, with only a debug line); -1 if there is no font with that name. The subtitles use it to keep
    the skin font for a text the chosen font cannot draw whole (Tiresias has Latin-1 only: no ă, ș, ț).
    The faces are looked up one after the other: a face from the cache may be dropped by the next lookup. */
-int eTextPara::missingGlyphs(const std::string &face, const std::vector<unsigned long> &codes)
+int eTextPara::missingGlyphs(const std::string &face, const std::vector<unsigned long> &codes, bool own)
 {
 	fontRenderClass *render = fontRenderClass::getInstance();
 	if (!render)
@@ -590,14 +604,14 @@ int eTextPara::missingGlyphs(const std::string &face, const std::vector<unsigned
 				still.push_back(*i);
 		missing.swap(still);
 	}
-	/* HDSatelit: the symbols the fallback font draws are not missing (renderString takes them from it) */
+	/* HDSatelit: what the fallback font draws is not missing (renderString takes it from there); with own, only its symbols */
 	FTC_FaceID fallback_id = fallback_facename.empty() ? 0 : render->getFaceID(fallback_facename);
 	FT_Face ft_fallback = 0;
 	if (missing.empty() || !fallback_id || FTC_Manager_LookupFace(render->cacheManager, fallback_id, &ft_fallback) != 0 || !ft_fallback)
 		return missing.size();
 	int count = 0;
 	for (std::vector<unsigned long>::const_iterator i(missing.begin()); i != missing.end(); ++i)
-		if (!hdsFallbackSymbol(*i) || !FT_Get_Char_Index(ft_fallback, *i))
+		if (!(own ? hdsFallbackSymbol(*i) : hdsFallbackAny(*i)) || !FT_Get_Char_Index(ft_fallback, *i))
 			count++;
 	return count;
 }
@@ -810,8 +824,8 @@ nprint:	isprintable=0;
 
 				if (!index)
 				{
-					/* HDSatelit: a symbol neither font has comes from the fallback font; no kerning across fonts */
-					if (!(rflags&RS_DIRECT) && hdsFallbackSymbol(chr) && hdsFallbackFace())
+					/* HDSatelit: a symbol or letter neither font has comes from the fallback font; no kerning across fonts */
+					if (!(rflags&RS_DIRECT) && hdsFallbackAny(chr) && hdsFallbackFace())
 						index = FT_Get_Char_Index(fallback_face, chr);
 					if (!index)
 						eDebug("unicode U+%4lx not present", chr);

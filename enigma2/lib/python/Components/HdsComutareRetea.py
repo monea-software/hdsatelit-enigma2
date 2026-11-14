@@ -82,6 +82,7 @@ SYS_NET = "/sys/class/net/"
 CTRL_WPA = "/var/run/wpa_supplicant"
 NUME_LOCAL = "/etc/init.d/hds-nume-local"
 STARE_NUME_LOCAL = "/var/run/hds-nume-local.stare"
+SERVICIU_NUME_LOCAL = "/usr/bin/hds-nume-local.py"   # serviciul nou, din pachetul hdsatelit-nume-local 0.2.0
 VIRTUALE = ("lo", "tun", "tap", "wg", "ppp", "ipsec", "gre", "sit", "dummy", "docker", "veth", "br-")
 CONF_NUCLEU = "/proc/sys/net/ipv4/conf/"
 SETARI_NUCLEU = (("ignore_routes_with_linkdown", "1"), ("arp_ignore", "1"), ("arp_announce", "2"), ("rp_filter", "2"))
@@ -101,14 +102,15 @@ def _(text):
 		return text
 
 
-def nume_local_confirmat(cale=STARE_NUME_LOCAL, proc="/proc", acum=None, init=NUME_LOCAL):
+def nume_local_confirmat(cale=STARE_NUME_LOCAL, proc="/proc", acum=None, init=NUME_LOCAL,
+		serviciu_nou=SERVICIU_NUME_LOCAL):
 	"""Numele confirmat de avahi, cu ambele procese vii si o stare recenta.
-	10.11.2026 (0.7.3): serviciul nou care scrie starea (tools/hds-nume-local.py, fisa 79) nu e inca livrat; pachetul
-	hdsatelit-nume-local din strat are serviciul vechi, care nu scrie fisierul. Fara fisierul de stare, dar cu serviciul
-	vechi pe receptor, se arata hdsatelit.local ca in 0.7.2 (altfel pagina /retea si mesajele spuneau ca numele lipseste,
-	desi mergea). Cu serviciul nou, verificarea stricta de mai jos."""
+	Serviciul vechi (pachetul hdsatelit-nume-local 0.1.0, pana la 0.7.3) nu scrie fisierul de stare: cu el pe receptor
+	(initul, fara serviciul nou) se arata hdsatelit.local ca in 0.7.2. Serviciul nou (0.2.0, din 0.7.4) scrie starea cat
+	merge si o sterge la oprire: fara fisier inseamna ca numele nu e publicat (greseala 1218), deci nu se arata nimic.
+	Cu fisierul, verificarea stricta de mai jos."""
 	if not os.path.exists(cale):
-		return "hdsatelit.local" if os.path.exists(init) else ""
+		return "hdsatelit.local" if os.path.exists(init) and not os.path.exists(serviciu_nou) else ""
 	try:
 		with open(cale, encoding="utf-8") as f:
 			stare = json.loads(f.read(4096))
@@ -125,8 +127,9 @@ def nume_local_confirmat(cale=STARE_NUME_LOCAL, proc="/proc", acum=None, init=NU
 				return ""
 		nume = stare["nume"]
 		baza = nume[:-6] if nume.endswith(".local") else ""
-		if baza == "hdsatelit" or (baza.startswith("hdsatelit-") and
-			baza[10:].isascii() and baza[10:].isdigit()):
+		# hdsatelit2 din pachetul 0.2.1 (fara liniuta, Eduard 14.11.2026); hdsatelit-2 de la 0.2.0, pana se actualizeaza
+		coada = baza[10:] if baza.startswith("hdsatelit-") else baza[9:] if baza.startswith("hdsatelit") else None
+		if baza == "hdsatelit" or (coada and coada.isascii() and coada.isdigit()):
 			return nume
 	except (OSError, ValueError, OverflowError, KeyError, TypeError, IndexError, AttributeError):
 		pass

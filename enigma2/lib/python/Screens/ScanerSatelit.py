@@ -786,6 +786,15 @@ def pregateste(fel, valori, nim=None):
 
 
 # ---------------------------------------------------------------- DVB-T2 si DAB+ prin satelit
+def _nume_flux(feed, fid=''):
+    """Numele multiplexului gasit, in limba receptorului (Hds/DabT2/nume.py: tara tradusa), ca in buchet."""
+    try:
+        from Hds.DabT2.nume import nume_feed
+        return str(nume_feed(feed) or fid)
+    except Exception:
+        return str(feed.get('nume') or fid)
+
+
 def profil_hdscomun(tip):
     """(Profil, dosarul cu motor/ si date/) pentru DAB+ ('dab') sau DVB-T2, din Hds/DabT2 (codul imaginii)."""
     from Hds.DabT2 import imagine, profil
@@ -1416,7 +1425,7 @@ class CautareFluxuri(object):
             # referinta cu numele la capat, ca linia din buchet: un serviciu cu URL isi ia numele numai de aici
             # (fara el, bara si ecranul radio ar arata SID-ul)
             p['ref'] = '%s:%s' % (p['ref'], nume)
-        return {'id': fid, 'nume': str(feed.get('nume') or fid), 'posturi': lista, 'stare': 'gata', 'numar': len(lista),
+        return {'id': fid, 'nume': _nume_flux(feed, fid), 'posturi': lista, 'stare': 'gata', 'numar': len(lista),
                 'abertis': str(feed.get('fel') or '') == 'abertis'}
 
     def _invata_urmatorul(self):
@@ -1429,7 +1438,7 @@ class CautareFluxuri(object):
         feed, tp, adaugat = self._de_invatat.pop(0)
         profil, cale = profil_hdscomun(self.profil_tip)
         fid = buchete._curata_id(feed.get('id'))
-        nume = str(feed.get('nume') or fid)
+        nume = _nume_flux(feed, fid)
         self._invat = (feed, tp, adaugat, fid)
         self.gasite.append({'id': fid, 'nume': nume, 'posturi': [], 'stare': 'invat', 'numar': 0})
         if self.profil_tip == 'dab':
@@ -1455,7 +1464,7 @@ class CautareFluxuri(object):
             else:
                 if grupa is not None:
                     self.gasite.remove(grupa)
-                self.note.append('%s: %s' % (feed.get('nume') or fid, rez if not ok else _('nicio listă')))
+                self.note.append('%s: %s' % (_nume_flux(feed, fid), rez if not ok else _('nicio listă')))
                 if adaugat and self._disc is not None:
                     # candidatul pus in scanate.json inaintea invatarii nu a dat nimic: iese din lista
                     from Hds.DabT2 import liste, pornire

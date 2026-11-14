@@ -95,6 +95,11 @@ JURNALE_PE_ZI = 3
 # repornirea dura) si caderile enigma2 au limita lor pe zi si pleaca INAINTEA jurnalelor obisnuite: la 0.6.24, trei
 # jurnale hds-*.log mai noi le luau locul (pachetul 225, SF8008, doua blocaje moi fara nicio stiva)
 CADERI_PE_ZI = 6
+# jurnalele rare care spun ce au facut actualizarea, imaginea noua de pe internet si punerea la loc a copiei au si ele
+# limita lor pe zi, in afara celor obisnuite: altfel cele scrise des (hds-interfata, hds-zap, hds-tuner, hds-hdmi) le luau
+# locul si nu ajungeau niciodata la noi (greselile 1122 si 1123, Uclan Ustym 4K PRO, 09.11.2026)
+JURNALE_RARE = ("hds-actualizari", "hds-actualizare", "hds-imagine-online", "hds-restaurare")
+RARE_PE_ZI = 2
 PAZNIC_RANDURI = 1000
 ECRANE_MAX = 150
 MESAJE_PE_ZI = 10
@@ -1129,6 +1134,11 @@ def esteCadere(nume):
 		nume.startswith("enigma2-stive-") or nume.startswith("hds-blocaj-"))
 
 
+def esteRar(nume):
+	"""Jurnalele actualizarii, ale imaginii noi si ale punerii la loc (limita RARE_PE_ZI, langa cele obisnuite)."""
+	return nume.startswith(JURNALE_RARE)
+
+
 # stivele firelor Python ale enigma2 (faulthandler, scrise de paznic inainte sa opreasca o interfata care nu mai
 # raspunde): pleaca numai randurile formatului lui, ca in raportul pornirii (hds-raport.sh, rp_stive)
 _STIVA_FIR = re.compile(r"^(Current thread|Thread) 0x[0-9A-Fa-f]+ \(most recent call first\):$")
@@ -1177,8 +1187,10 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 		stare["jurnale_zi"] = zi
 		stare["jurnale_azi"] = 0
 		stare["caderi_azi"] = 0
+		stare["rare_azi"] = 0
 	ramase = max(0, maxim - int(stare.get("jurnale_azi", 0)))
 	ramase_caderi = max(0, CADERI_PE_ZI - int(stare.get("caderi_azi", 0)))
+	ramase_rare = max(0, RARE_PE_ZI - int(stare.get("rare_azi", 0)))
 	noi = []
 	try:
 		nume_fisiere = os.listdir(dosar_logs)
@@ -1201,10 +1213,11 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 	# intai caderile si blocajele (limita lor), apoi jurnalele obisnuite (limita lor); in fiecare grup, cele mai noi intai
 	noi.sort(key=lambda x: (not esteCadere(x[1]), -x[0]))
 	jurnale = []
-	obisnuite = caderi = 0
+	obisnuite = caderi = rare = 0
 	for mtime, nume, cale_fisier, semn in noi:
 		cadere = esteCadere(nume)
-		if (cadere and caderi >= ramase_caderi) or (not cadere and obisnuite >= ramase):
+		rar = not cadere and esteRar(nume)
+		if (cadere and caderi >= ramase_caderi) or (rar and rare >= ramase_rare) or 				(not cadere and not rar and obisnuite >= ramase):
 			continue
 		crash = nume.startswith("enigma2_crash_")
 		text = _citesteCadere(cale_fisier) if crash else _citesteCoada(cale_fisier, 4 * JURNAL_MAX)
@@ -1224,6 +1237,8 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 		vazute[nume] = semn
 		if cadere:
 			caderi += 1
+		elif rar:
+			rare += 1
 		else:
 			obisnuite += 1
 	# numele care nu mai exista ies din stare
@@ -1235,6 +1250,7 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 		return None
 	stare["jurnale_azi"] = int(stare.get("jurnale_azi", 0)) + obisnuite
 	stare["caderi_azi"] = int(stare.get("caderi_azi", 0)) + caderi
+	stare["rare_azi"] = int(stare.get("rare_azi", 0)) + rare
 	return {"jurnale": jurnale, "paznic": paznic}
 
 
@@ -2643,7 +2659,7 @@ def limba():
 _starea = {"contor": None, "es": None, "pornire_s": None, "model": None, "nume_model": "", "lucru": None,
 	"mai_tarziu_pana": 0.0, "pornit_mono": None, "ultim_esantion": None, "intrebare_pana": 0.0, "sesiune": None,
 	"timer": None, "activ": False, "abatere_s": 0, "auto_pana": 0.0, "jurnale_pornire": False, "numar": None,
-	"numar_cand": None, "cerere_numar": None, "fir_model": None, "legare_forum": False}
+	"numar_cand": None, "cerere_numar": None, "fir_model": None, "legare_forum": False, "email_forum": False}
 
 
 def _modelTinut():
@@ -2825,6 +2841,7 @@ def _culegeNumar():
 		_starea["numar"] = n
 	if 200 <= c.cod < 300 and isinstance(c.raspuns, dict):
 		_starea["legare_forum"] = c.raspuns.get("legare_forum") is True
+		_starea["email_forum"] = c.raspuns.get("email_forum") is True
 
 
 # TODO 1860 b (Eduard 29.10.2026 16:26: „«Nu ai internet? Trimite prin cod QR» ar trebui să apară doar dacă chiar nu
@@ -2864,9 +2881,17 @@ def serverFaraRaspuns():
 
 
 def legareForum():
-	"""Drumurile cu e-mail si cu contul de pe forum se arata numai cand serverul spune ca le are („legare_forum”:
-	true in raspunsul `stare`); pana atunci numai numele public."""
+	"""Drumurile cu contul de pe forum (codul QR, cele 6 cifre) se arata numai cand serverul spune ca le are
+	(„legare_forum”: true in raspunsul `stare`); pana atunci numai numele public."""
 	return bool(_starea.get("legare_forum"))
+
+
+def emailForum():
+	"""Campul „E-mailul pentru cont” (contul de forum facut prin e-mailul de confirmare) se arata numai cand serverul
+	spune si „email_forum”: true. Legarea poate merge fara partea de e-mail: atunci serverul lasa adresa deoparte, iar
+	omul ar astepta degeaba legatura de confirmare (greseala 1217). E-mailul din acord, pentru raspunsurile echipei,
+	ramane oricum."""
+	return legareForum() and bool(_starea.get("email_forum"))
 
 
 def _calculeazaModel():

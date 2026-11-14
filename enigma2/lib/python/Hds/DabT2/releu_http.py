@@ -441,7 +441,7 @@ class Server(object):
     def _goleste_trezirea(self):
         # intai se goleste soclul, abia apoi se sterge steagul (0.7.4). Invers, un trezeste() din firul de date venit
         # intre cele doua isi pierdea octetul in golire, steagul ramanea True cu soclul gol si nicio publicare nu mai
-        # trezea bucla: totul pleca numai la ticul de PAS_S (DAB+ din satelit in rafale de 250 ms, masurat pe .114).
+        # trezea bucla: totul pleca numai la ticul de PAS_S (DAB+ din satelit in rafale de 250 ms, masurat pe receptorul de probe SF8008).
         # Asa, un trezeste() sarit cat steagul e inca True e acoperit de _goleste_coada si _verifica_asteptari din
         # aceeasi tura (ruleaza dupa golire), iar unul venit dupa stergere scrie din nou.
         try:

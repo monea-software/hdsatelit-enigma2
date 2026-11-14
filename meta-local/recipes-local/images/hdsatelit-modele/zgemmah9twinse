@@ -1,0 +1,40 @@
+# HD Satelit: regulile garzii de model pentru Zgemma H9 TWIN SE (masina h9combose, MACHINEBUILD zgemmah9twinse), NECONFIRMAT
+# (MHS, 12.11.2026, imaginea alfa). Zgemma H9 COMBO SE (MACHINEBUILD zgemmah9combose) e aceeasi masina OE (h9combose.conf:
+# aceleasi drivere, acelasi nucleu, aceeasi tabela; diferenta e numai trasatura dvb-c, care la noi nu aduce nimic), deci
+# aceeasi arhiva h9combose si aceleasi reguli. confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul,
+# tipul placii si locul nucleului si al sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt avertismente.
+# Masina h9combose e stratul producatorului meta-airdigital (OE-Alliance 6.0): nucleul linux-airdigital 4.4.35 (defconfig
+# h9combose, identic cu h9combo), driverele airdigital-dvb-modules-h9combose 20210727 (patru module monolitice
+# h9combose_1..4.ko, cu sirurile ascunse), fara libreader si fara hihalt. DOVEDITE din fisiere:
+#   partitions, kernel_part, rootfs_part, kernel_kib: bootargs.bin al producatorului pentru h9combose (h9combose/bootargs.bin
+#            din arhiva de recuperare publica a masinii, modelname=h9combose), identic cu cel al H9 COMBO:
+#            blkdevparts=mmcblk0:1M(fastboot),1M(bootargs),18M(recovery),2M(bootoptions),2M(deviceinfo),4M(baseparam),
+#            4M(pqparam),4M(logo),40M(fastplay),20M(kernel),20M(trustedcore),4M(misc),1024M(system),150M(vendor),306M(e2tv),
+#            256M(cache),50M(private),8M(securestore),16M(linuxkernel1),16M(linuxkernel2),16M(linuxkernel3),16M(linuxkernel4),
+#            -(userdata); MTD_KERNEL mmcblk0p19 si MTD_ROOTFS mmcblk0p23 din h9combose.conf; pe un TWIN SE adevarat
+#            (jurnalul de pornire publicat pe forumul unei alte imagini, 10.01.2025) aceeasi lista blkdevparts si
+#            root=/dev/mmcblk0p23 rootsubdir=linuxrootfsN kernel=/dev/mmcblk0p19..22.
+# NEDOVEDITE (de confirmat din raspunsul testerului INAINTE de publicare, vezi STADIU-MHS.md):
+#   chip=: garda o citeste din CHIP_VERSION in /proc/msp/sys; nicio imagine publica nu arata ca driverele h9combose fac
+#          nodul. Pe un H9 TWIN (masina h9combo) /proc/stb/info/chipset arata hi3798mv200 (lista /proc/stb/info publicata pe
+#          acelasi forum, 12.01.2025).
+#   boxtype=: pe H9 TWIN /proc/stb/info/boxtype arata „H9Twin” (cu majuscule; aceeasi lista); pe TWIN SE jurnalele de cadere
+#          publicate arata stbmodel=H9TwinSE si stbmodel=h9combose. Garda compara exact (cu majusculele), deci lista are
+#          ambele forme; H9ComboSE e dedus prin analogie (nedovedit).
+# hw=- : antetul fabricii din deviceinfo (p5) nu e cunoscut pentru H9 (nu se compara).
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=zgemmah9twinse.
+format=1
+distro=hdsatelit
+model=Zgemma H9 TWIN SE
+machine=h9combose
+machinebuild=zgemmah9twinse
+chip=Hi3798MV200
+boxtype=H9TwinSE,H9ComboSE,h9combose,h9twinse,zgemmah9twinse,zgemmah9combose
+hw=-
+partitions=fastboot:1M,bootargs:1M,recovery:18M,bootoptions:2M,deviceinfo:2M,baseparam:4M,pqparam:4M,logo:4M,fastplay:40M,kernel:20M,trustedcore:20M,misc:4M,system:1024M,vendor:150M,e2tv:306M,cache:256M,private:50M,securestore:8M,linuxkernel1:16M,linuxkernel2:16M,linuxkernel3:16M,linuxkernel4:16M,userdata
+kernel_name=linuxkernel1
+rootfs_name=userdata
+kernel_part=mmcblk0p19
+kernel_kib=16384
+rootfs_part=mmcblk0p23
+confirmat=nu

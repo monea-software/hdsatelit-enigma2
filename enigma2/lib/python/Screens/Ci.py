@@ -6,6 +6,9 @@
 # CI+ (acelasi commit): „CI+ Helper” (config.cimisc.cihelperenabled, cand exista /usr/bin/ciplushelper), „Disable operator
 # profiles” si „Descrambling options” (config.ci[n].disable_operator_profile, alternative_ca_handling; le citeste nucleul,
 # lib/dvb_ci/dvbci.cpp). Certificatele aparatului (/etc/ciplus) NU vin cu imaginea: le pune omul (FTP sau pagina web).
+# HD Satelit 0.7.5: „Opțiunile de decriptare” au si „Automat” (implicit): receptorul alege singur dispozitivul caN care
+# primeste cheia CI+ (lib/dvb_ci/hdscica.h); cand driverul o refuza pe toate, starea CI+ 3 si un mesaj pe ecran in locul
+# imaginii oprite fara explicatie (AX HD51, forumul 479, 13.11.2026).
 import os
 import time
 
@@ -37,6 +40,47 @@ def ciplusFisiereLipsa(dosar=None):
 	"""Numele fisierelor CI+ care lipsesc (sau nu se pot citi) din /etc/ciplus; lista goala = CI+ poate porni."""
 	dosar = dosar or CIPLUS_DOSAR
 	return [nume for nume in CIPLUS_FISIERE if not os.access(os.path.join(dosar, nume), os.R_OK)]
+
+
+# getCIPlusState: 3 = cheia CI+ a modulului refuzata de driver pe toate dispozitivele potrivite (lib/dvb_ci/dvbci.cpp)
+CIPLUS_CHEIE_REFUZATA = 3
+# mesajul pe ecran cel mult o data in acest rastimp pe slot (cheia se reia la fiecare canal schimbat)
+CIPLUS_ANUNT_SECUNDE = 600
+_anuntCheieLa = {}
+
+
+def ciplusTextCheieRefuzata():
+	"""Randul starii CI+ cand driverul refuza cheia (ecranul CI si pagina web)."""
+	return _("CI+: receptorul nu primește cheia CI+ a modulului (imaginea se oprește)")
+
+
+def ciplusMesajCheieRefuzata(slot):
+	"""Mesajul de pe ecran in locul imaginii oprite fara explicatie."""
+	return _("Modulul CI+ din slotul %d funcționează, dar receptorul nu poate folosi cheia lui de protecție, așa că pe canalele protejate CI+ imaginea se oprește după câteva secunde. Receptorul a încercat singur toate dispozitivele de descifrare potrivite. Scrieți-ne pe forum modelul receptorului și canalul.") % (slot + 1)
+
+
+def anuntaCheieRefuzata(slot, acum=None, standby=None):
+	"""Mesajul pe ecran cand starea CI+ a slotului e „cheia refuzata”; True cand l-a aratat."""
+	try:
+		if eDVBCI_UI.getInstance().getCIPlusState(slot) != CIPLUS_CHEIE_REFUZATA:
+			return False
+	except Exception:
+		return False
+	if (_inStandby() if standby is None else standby):
+		return False
+	acum = time.time() if acum is None else acum
+	if acum - _anuntCheieLa.get(slot, -CIPLUS_ANUNT_SECUNDE) < CIPLUS_ANUNT_SECUNDE:
+		return False
+	_anuntCheieLa[slot] = acum
+	print("[Ci] slotul %d: cheia CI+ refuzata de driver, mesajul pe ecran" % slot)
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(ciplusMesajCheieRefuzata(slot), MessageBox.TYPE_ERROR, 20, id="CiCheieRefuzata%d" % slot)
+	except Exception as e:
+		print("[Ci] mesajul cheii refuzate: %r" % (e,))
+		return False
+	return True
 
 
 def ciplusTextLipsa(lipsa=None):
@@ -153,7 +197,9 @@ def InitCiConfig():
 		config.ci[slot].disable_operator_profile = ConfigYesNo(default=False)
 		config.ci[slot].disable_operator_profile.slotid = slot
 		config.ci[slot].disable_operator_profile.addNotifier(setCIPlusOption, initial_call=False)
-		config.ci[slot].alternative_ca_handling = ConfigSelection(default="0", choices=[
+		# „Automat” (HD Satelit): receptorul alege singur dispozitivul CA care primeste cheia CI+; 0-3 ca in OE-Alliance
+		config.ci[slot].alternative_ca_handling = ConfigSelection(default="auto", choices=[
+			("auto", _("Automat")),
 			("0", _("Off")), ("1", _("Închide dispozitivul CA la sfârșitul programului")),
 			("2", _("Indexul dispozitivului CA decalat")), ("3", _("Decalat și închis la sfârșit"))])
 		config.ci[slot].alternative_ca_handling.slotid = slot
@@ -486,6 +532,8 @@ class CiMessageHandler:
 		self.session = session
 
 	def ciStateChanged(self, slot):
+		# cheia CI+ refuzata de driver (starea 3): mesajul pe ecran, si cu ecranul CI deschis
+		anuntaCheieRefuzata(slot)
 		if slot in self.ci:
 			self.ci[slot](slot)
 		else:
@@ -658,6 +706,8 @@ class CiSelection(Screen):
 			stare = eDVBCI_UI.getInstance().getCIPlusState(slot)
 		except Exception:
 			stare = 0
+		if stare == CIPLUS_CHEIE_REFUZATA:
+			return ciplusTextCheieRefuzata()
 		if stare == 2:
 			return _("CI+: autentificat, descifrare CI+")
 		if stare == 1:

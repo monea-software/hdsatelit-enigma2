@@ -3,13 +3,19 @@
 # Se trimit toate evenimentele. Discurile lente nu tin prima pornire.
 HDS_UDEV_FUNDAL = "0"
 HDS_UDEV_FUNDAL:vuduo4k = "1"
+HDS_UDEV_FUNDAL:vuduo4kse = "1"
 HDS_UDEV_FUNDAL:vuuno4kse = "1"
+HDS_UDEV_FUNDAL:vuzero4k = "1"
 HDS_UDEV_FUNDAL:vusolo4k = "1"
+HDS_UDEV_FUNDAL:vuultimo4k = "1"
 HDS_UDEV_FUNDAL:gbtrio4k = "1"
 PR:append = "${@'.hds35' if d.getVar('HDS_UDEV_FUNDAL') == '1' else ''}"
 PACKAGE_ARCH:vuduo4k = "${MACHINE_ARCH}"
+PACKAGE_ARCH:vuduo4kse = "${MACHINE_ARCH}"
 PACKAGE_ARCH:vuuno4kse = "${MACHINE_ARCH}"
+PACKAGE_ARCH:vuzero4k = "${MACHINE_ARCH}"
 PACKAGE_ARCH:vusolo4k = "${MACHINE_ARCH}"
+PACKAGE_ARCH:vuultimo4k = "${MACHINE_ARCH}"
 PACKAGE_ARCH:gbtrio4k = "${MACHINE_ARCH}"
 
 python hds_udev_fara_asteptare() {

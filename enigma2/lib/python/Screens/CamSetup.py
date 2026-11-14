@@ -314,7 +314,9 @@ class CamSetup(Screen):
 					semne.append(_("rulează"))
 				elif e.ales:
 					semne.append(_("oprit"))
-				texte.append(_eticheta(st.fel, e.sufix, principal) + ("  (%s)" % ", ".join(semne) if semne else ""))
+				# numele cu versiunea reala a modulului langa el (HdsModuleAcces.versiune_modul)
+				texte.append(_eticheta(st.fel, HdsModuleAcces.eticheta_modul(e), principal) +
+					("  (%s)" % ", ".join(semne) if semne else ""))
 				randuri.append((st.fel, e.sufix))
 		if texte != self.texte or randuri != self.randuri:
 			self.randuri, self.texte = randuri, texte

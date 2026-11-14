@@ -240,15 +240,20 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 		     tot meniul, ca la telefoanele Android; OK deschide ecranul cu randul gasit ales. Prima intrare din Setări; tasta
 		     TEXT o deschide din orice meniu (Screens/Menu.py); a doua intrare, hds_cauta_setari_principal, e jos in meniul
 		     principal (singura pereche spre acelasi ecran, hotarata anume). In web: /cauta-setari. -->
-		<item level="0" text="Caută setări" entryID="hds_cauta_setari" pictograma="cauta" weight="1" web="/cauta-setari">
+		<!-- 0.7.5 (CTM): pe televizor intrarea nu se mai arata, fiindca „Caută în meniu” e primul rand din orice meniu (Screens/Menu.py); ramane aici pentru interfata web si pentru index. -->
+		<item level="0" text="Caută în meniu" entryID="hds_cauta_setari" pictograma="cauta" weight="1" web="/cauta-setari">
 			<screen module="HdsCautaSetari" screen="HdsCautaSetari" />
 		</item>
 
-		<!-- „Recepție și scanare” nu mai stă aici. Scanarea și antena sunt primele două intrări din
-		     meniul principal (mai sus). Nu se pun înapoi în Setări: o singură cale spre fiecare ecran. -->
+		<!-- Scanarea și antena sunt primele două intrări din meniul principal (mai sus), cu toate ecranele lor. În Setări
+		     stă numai submeniul scurt „Tunere și scanare” (mai jos, între Interfață și Acces condiționat, locul din
+		     meniul standard OE-Alliance), cu intrări care duc la aceleași ecrane și meniuri: nimic dublat, nimic mutat. -->
 
-		<!-- Surse Internet: DVB-I, HbbTV, DVB-MABR -->
-		<menu key="internet_sources" weight="15" level="0" text="Internet Sources" entryID="internet_sources_selection" pictograma="surse-internet">
+		<!-- Surse Internet: DVB-I, HbbTV, DVB-MABR. Imediat după Rețea și internet (weight 95, înainte de Sistem): Setări au
+		     ordinea din meniul standard OE-Alliance (Imagine, Sunet, Înregistrări, Interfață, Tunere, Acces condiționat,
+		     Programe, Rețea, Sistem), iar ale noastre stau lângă cele înrudite; cifrele 7, 8, 9 rămân la Acces condiționat,
+		     Programe și Rețea. -->
+		<menu key="internet_sources" weight="95" level="0" text="Internet Sources" entryID="internet_sources_selection" pictograma="surse-internet">
 			<id val="internet_sources" />
 			<item level="0" text="Radio online" entryID="hds_radio_online" pictograma="radio" web="/radio-online" weight="5">
 				<screen module="HdsRadioOnline" screen="HdsRadioOnline" />
@@ -266,6 +271,19 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			</item>
 			<item level="0" text="IPTV (M3U / Stalker / Xtream)" entryID="hds_iptv_setup" pictograma="lista-redare" web="/iptv" weight="50" stare="netestat">
 				<screen module="IptvSetup" screen="IptvSetup" />
+			</item>
+			<!-- 0.7.5: functiile televiziunii prin internet, fiecare cu Da/Nu (setup.xml hds_iptv_functii); cautarea canalelor 4K
+			     reale (Screens/HdsIptv4K.py, Components/HdsIptv4K.py), pereche web /iptv-4k (internet_web.py) -->
+			<item level="0" text="Funcțiile televiziunii prin internet" entryID="hds_iptv_functii" pictograma="lista-redare" web="/setari?id=hds_iptv_functii" weight="51">
+				<setup id="hds_iptv_functii" />
+			</item>
+			<item level="0" text="Găsește canalele 4K reale" entryID="hds_iptv_4k" pictograma="lista-redare" web="/iptv-4k" weight="52">
+				<screen module="HdsIptv4K" screen="HdsIptv4K" />
+			</item>
+			<!-- 0.7.5 (VOD): filmele si serialele contului IPTV, cu postere (Screens/HdsFilmeSeriale.py), pereche web /filme-seriale;
+			     dupa randurile IPTV (Eduard 13.11 19:25: nu primul) -->
+			<item level="0" text="Filme și seriale" entryID="hds_filme_seriale" pictograma="lista-redare" web="/filme-seriale" weight="53">
+				<screen module="HdsFilmeSeriale" screen="HdsFilmeSeriale" />
 			</item>
 			<item level="0" text="HdsWebControl (Web Interface)" entryID="hds_webcontrol_setup" pictograma="interfata-web" web="/interfata-web" weight="60">
 				<screen module="HdsWebControlSetup" screen="HdsWebControlSetup" />
@@ -368,6 +386,11 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="0" text="Recording Locations" entryID="RecordPaths" pictograma="dosare" web="/locuri-inregistrari" weight="10">
 				<screen module="RecordPaths" screen="RecordPathsSettings" />
 			</item>
+			<!-- 0.7.5 (MNT, tamiciav7 LinuxSat 164125): locul fiecarui disc in /media (hdd, usb, usb2.., mmc, eticheta), demontarea
+			     ca sa-l scoti in siguranta si montarea la loc (Screens/HdsMontareDiscuri.py); in web: /montare-discuri -->
+			<item level="0" text="Montarea discurilor" entryID="hds_montare_discuri" pictograma="disc" weight="15" web="/montare-discuri" stare="netestat">
+				<screen module="HdsMontareDiscuri" screen="HdsMontareDiscuri" />
+			</item>
 			<item level="0" text="Format Hard Drive" entryID="harddisk_init" pictograma="formatare" web="/discuri?f=formatare" weight="20">
 				<screen module="HarddiskSetup" screen="HarddiskSelection" />
 			</item>
@@ -395,6 +418,11 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			     repornirea interfetei. Separata de tema interfetei web (/setari). In web: /tema-tv. -->
 			<item level="0" text="Tema interfeței" entryID="hds_tema_interfata" pictograma="tema" weight="11" web="/tema-tv">
 				<screen module="HdsTemaInterfata" screen="HdsTemaInterfata" />
+			</item>
+			<!-- 0.7.5: rezolutia interfetei temei HD Satelit, 1080p sau 2K (2560x1440); numai unde placa poate (driverul
+			     grafic peticit, SystemInfo HdsRezolutie2K din Components/HdsRezolutieTv.py). In web: /tema-tv. -->
+			<item level="0" text="Rezoluția interfeței" entryID="hds_rezolutie_tv" pictograma="calitate-imagine" weight="11" requires="HdsRezolutie2K" web="/tema-tv#rezolutie">
+				<screen module="HdsRezolutieTv" screen="HdsRezolutieTv" />
 			</item>
 			<!-- 0.2.6: panoul skinului HDSatelit (paleta, pagina tehnică), din pachetul
 			     hdsatelit-skin (Plugins/Extensions/HdsSkinSetari, numit în Screens/HdsSkinSetari.py). Pluginul vede
@@ -447,6 +475,24 @@ deschide(self.session, "afisaj")
 			<item level="0" text="Ecran de pornire" entryID="hds_ecran_pornire" pictograma="ecran-pornire" weight="47" web="/ecrane">
 				<screen module="HdsEcranPornire" screen="HdsEcranPornire" />
 			</item>
+			<!-- screensaverul ales: lista cu previzualizare, OK il alege, galben il probeaza (Screens/HdsScreensaver.py,
+			     datele in Components/HdsScreensavere.py); in web: /screensaver (screensaver_web.py) -->
+			<item level="0" text="Screensaver" entryID="hds_screensaver" pictograma="ceas" weight="48" web="/screensaver">
+				<screen module="HdsScreensaver" screen="HdsScreensaverAlegere" />
+			</item>
+		</menu>
+
+		<!-- Tunere și scanare: locul din meniul standard OE-Alliance (Setări > Tunere, scanare și recepție), pentru cine îl caută
+		     aici. Intrările duc la aceleași ecrane și meniuri ca primele două dale ale meniului principal: meniu="<key>" deschide
+		     submeniul acela (Screens/Menu.py, addItem), copie="<entryID>" spune căutării în setări că e aceeași intrare
+		     (Components/HdsCautaSetari.py, Intrare.dublura). În web: aceleași pagini (/antena/tuner, /scanare, /antena). -->
+		<menu key="hds_tunere_scanare" weight="60" level="0" text="Tunere și scanare" entryID="hds_tunere_scanare" pictograma="tuner">
+			<id val="hds_tunere_scanare" />
+			<item level="0" text="Setări tuner" entryID="hds_tunere_setari_tuner" copie="hds_antena_tuner" pictograma="tuner" web="/antena/tuner" weight="10">
+				<screen module="Satconfig" screen="NimSelection" />
+			</item>
+			<item level="0" text="Scanare" entryID="hds_tunere_scanare_canale" meniu="scan" copie="hds_scanare" pictograma="scanare" web="/scanare" weight="20" />
+			<item level="0" text="Orientarea și setarea antenei" entryID="hds_tunere_antena" meniu="hds_antena" copie="hds_antena" pictograma="antena-orientare" web="/antena" weight="30" />
 		</menu>
 
 		<!-- Categoria 7: Acces condiționat (modulele de acces, serverele de carduri, CI). Pagina web /acces-conditionat
@@ -471,6 +517,11 @@ deschide(self.session, "afisaj")
 			<item level="0" text="Common Interface" entryID="ci_setup" web="/common-interface"
 			      requires="CommonInterface" pictograma="modul-ci" weight="40">
 				<screen module="Ci" screen="CiSelection" />
+			</item>
+			<!-- Control parental: și aici, ca în meniul standard OE-Alliance (Decriptare și control parental); locul nostru
+			     rămâne în Sistem și dispozitive. Același ecran, aceeași pagină web. -->
+			<item level="0" text="Parental Lock" entryID="hds_cam_control_parental" copie="parental_setup" pictograma="control-parental" web="/control-parental" weight="200">
+				<screen module="ParentalControlSetup" screen="ParentalControlSetup" />
 			</item>
 		</menu>
 
@@ -665,8 +716,11 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 	</menu>
 
 	<!-- 5. Alimentare & Repornire. In web: /alimentare (alimentare_web.py), fiecare actiune cu confirmare in doi pasi;
-	     ?f= aduce in fata cardul intrarii. -->
-	<menu key="shutdown" text="Power &amp; Restart" entryID="standby_restart_list" pictograma="pornire" web="/alimentare" weight="25">
+	     ?f= aduce in fata cardul intrarii. Din 0.7.5 (JAKITAKI, Satedu 190487) ULTIMA intrare a meniului principal, sub
+	     „Caută setări”, ca la alte imagini: greutatea 90 trece si de extensiile agatate de meniul principal (fara
+	     greutatea lor primesc 50, Screens/Menu.py). In web ordinea vine tot de aici (meniu_web.py). Tasta POWER lunga
+	     gaseste meniul dupa key="shutdown", nu dupa loc (Components/HdsTasteRapide.py). -->
+	<menu key="shutdown" text="Power &amp; Restart" entryID="standby_restart_list" pictograma="pornire" web="/alimentare" weight="90">
 		<id val="shutdown" />
 		<item text="Sleep Timer" entryID="sleep" pictograma="oprire-programata" web="/alimentare?f=somn" weight="10">
 			<screen module="SleepTimerEdit" screen="SleepTimerEdit" />
@@ -693,9 +747,9 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 
 	<!-- 6. Media (din 0.2.6): playerul de fișiere (video, muzică) și pozele, de pe stick,
 	     disc sau din rețea. Înainte playerul se agăța singur de meniul principal cu greutatea 45, iar pozele erau numai
-	     în lista de extensii. „Media” are tot greutatea 45 (după „Alimentare”), deci tastele 1-7 ale meniului principal
-	     rămân aceleași. Ecranele: Plugins/Extensions/MediaPlayer și PicturePlayer, numite în Screens/MediaPlayer.py și
-	     Screens/PicturePlayer.py. In web: /player (alegi fisierul de pe receptor sau din telefon, porneste pe televizor)
+	     în lista de extensii. „Media” are tot greutatea 45; din 0.7.5 vine imediat după „Setări” (tasta 7), fiindcă
+	     „Alimentare” s-a mutat la coadă. Ecranele: Plugins/Extensions/MediaPlayer și PicturePlayer, numite în
+	     Screens/MediaPlayer.py și Screens/PicturePlayer.py. In web: /player (alegi fisierul de pe receptor sau din telefon, porneste pe televizor)
 	     si /poze (galeria in browser), din media_web.py. Tasta Mplay deschide tot playerul. -->
 	<menu key="hds_media" weight="45" level="0" text="Media" entryID="hds_media" pictograma="media">
 		<id val="hds_media" />
@@ -720,12 +774,21 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		</item>
 	</menu>
 
-	<!-- 7. „Caută setări” jos în meniul principal, ultima intrare (tastele 1-8 de mai sus rămân aceleași): același ecran
+	<!-- 6b. „Aplicații” (0.7.5, Eduard 31.10.2026 și 13.11.2026: „ca pe televizoarele smart”, YouTube ca aplicație,
+	     scurtătură prin navigator): grila de carduri (Screens/HdsAplicatii.py, Components/HdsAplicatii.py), la vedere în
+	     meniul principal, după Media (tasta 8). „Caută setări” rămâne pe tasta TEXT și prima în Setări.
+	     Pereche web: /aplicatii-tv (aplicatii_tv_web.py). -->
+	<item level="0" text="Aplicații" entryID="hds_aplicatii" pictograma="tv-internet" weight="47" web="/aplicatii-tv">
+		<screen module="HdsAplicatii" screen="HdsAplicatii" />
+	</item>
+
+	<!-- 7. „Caută setări” jos în meniul principal, penultima intrare (tasta 9), chiar deasupra „Alimentare”: același ecran
 	     ca prima intrare din Setări și tasta TEXT (Screens/HdsCautaSetari.py), pus și aici ca să se găsească ușor, în
 	     lista simplă și ca dală cu pictograma căutării. Singura pereche spre același ecran din meniu, hotărâtă anume;
 	     cautarea nu se gaseste pe ea insasi (Components/HdsCautaSetari.ID_PROPRIU). In web: /cauta-setari si campul de
 	     cautare din capul paginilor. -->
-	<item level="0" text="Caută setări" entryID="hds_cauta_setari_principal" pictograma="cauta" weight="50" web="/cauta-setari">
+	<!-- 0.7.5 (CTM): pe televizor intrarea nu se mai arata, fiindca „Caută în meniu” e primul rand din orice meniu (Screens/Menu.py); ramane aici pentru interfata web si pentru index. -->
+	<item level="0" text="Caută în meniu" entryID="hds_cauta_setari_principal" pictograma="cauta" weight="50" web="/cauta-setari">
 		<screen module="HdsCautaSetari" screen="HdsCautaSetari" />
 	</item>
 </menu>

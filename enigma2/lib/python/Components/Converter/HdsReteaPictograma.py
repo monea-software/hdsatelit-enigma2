@@ -207,9 +207,10 @@ class HdsReteaPictograma(Poll, Converter):
 			self._citeste()
 		try:
 			from Tools.Directories import resolveFilename, SCOPE_CURRENT_SKIN
-			from Tools.LoadPixmap import LoadPixmap
 			nume = DOSAR + self._cheie + ("@2x" if self._tip == "Pictograma2x" else "") + ".png"
-			return LoadPixmap(resolveFilename(SCOPE_CURRENT_SKIN, nume), cached=True)
+			# la marimea ecranelor HDSatelit (tema la 2K: marita de 4/3, din setul HDSatelit/2k/ cand exista)
+			import skin
+			return skin.pozaHds(resolveFilename(SCOPE_CURRENT_SKIN, nume))
 		except Exception as e:
 			if C is not None:
 				C.log_once("HdsReteaPictograma poza", e)

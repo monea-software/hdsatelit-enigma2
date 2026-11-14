@@ -1,4 +1,6 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+import os
+
 from Tools.HardwareInfo import HardwareInfo
 from Tools.BoundFunction import boundFunction
 
@@ -179,6 +181,26 @@ def inputPowerSlotForNim(nim):
 	"""
 	return int(nim)
 
+
+def canMeasureInputPowerForNim(slotid, nimmgr=None):
+	"""Masurarea curentului motorului (rotirea vazuta dupa curentul LNB) se foloseste numai pe aparatele care il pot citi
+	pentru tunerul acesta. Idee din OE-Alliance enigma2 (NimManager.canMeasureInputPowerForNim, GPL-2.0), cod nou: aceleasi
+	surse ca eDVBFrontend::readInputpower (lib/dvb/frontend.cpp): /proc/stb/frontend/N/lnb_sense, /proc/stb/fp/lnb_senseN
+	sau procesorul din fata /dev/dbox/fp0 (cand nucleul il poate citi). Fara ele readInputpower da -1, pornirea motorului nu
+	se vede, iar secventa sare peste asteptare: primul acord pleaca cu antena inca in drum si cade fara semnal (Octagon
+	SF8008, 14.11.2026: 19,2E -> 39,0E fara semnal dupa 7,7 s). Implicitul lui powerMeasurement e Da si ramane nescris
+	cand motorul e pus din web, din asistent sau din setarile altei imagini, deci poarta sta aici, nu numai in Satconfig."""
+	slot = inputPowerSlotForNim(slotid)
+	for cale in ("/proc/stb/frontend/%d/lnb_sense" % slot, "/proc/stb/fp/lnb_sense%d" % slot):
+		if os.path.exists(cale):
+			return True
+	if os.path.exists("/dev/dbox/fp0"):
+		try:
+			return bool(eDVBResourceManager.getInstance().canMeasureFrontendInputPower())
+		except Exception:
+			return False
+	return False
+
 class SecConfigure:
 	def getConfiguredSats(self):
 		return self.configuredSatellites
@@ -204,6 +226,36 @@ class SecConfigure:
 		if slotid not in self.hdsFaraLocSloturi:
 			self.hdsFaraLocSloturi.append(slotid)
 			print("[NimManager] locul antenei nu e stabilit: satelitii USALS ai tunerului %s nu se dau nucleului (antena nu se roteste)" % chr(ord("A") + slotid))
+
+	def hdsLocCitit(self):
+		"""(lat_mii, lon_mii) ale locului antenei (Components/HdsLocul.py) cand e stabilit, altfel None"""
+		try:
+			from Components import HdsLocul
+			return HdsLocul.locul() if HdsLocul.stabilit() else None
+		except Exception as e:
+			print("[NimManager] locul antenei nu se poate citi: %r" % (e,))
+			return None
+
+	def hdsVizibil(self, orbital):
+		"""False numai cand locul e stabilit si satelitul e sub orizont din el (Components/HdsLocul.vizibilDinLoc, acelasi
+		calcul ca nucleul): spre el comanda USALS ar trimite antena spre capatul cursei (asistenta 681415, locul scris cu
+		emisferele schimbate: "se misca mereu", fara semnal)"""
+		if self.hdsLoc is None:
+			return True
+		try:
+			from Components import HdsLocul
+			return HdsLocul.vizibilDinLoc(orbital, self.hdsLoc)
+		except Exception as e:
+			print("[NimManager] vizibilitatea satelitului %s: %r" % (orbital, e))
+			return True
+
+	def hdsSubOrizont(self, slotid, orbitale):
+		"""Satelitii USALS sub orizont din locul stabilit: nu ajung la nucleu (nicio comanda spre ei), dar raman in satelitii
+		configurati (canalele lor nu se propun spre stergere); zap-ul pe ei spune de ce (Components/HdsEcranNegru.py)."""
+		for orbital in orbitale:
+			self.configuredSatellites.add(orbital)
+		lista = self.hdsSubOrizontSloturi.setdefault(slotid, [])
+		lista.extend(o for o in orbitale if o not in lista)
 
 	def addLNBSimple(self, sec, slotid, diseqcmode, toneburstmode = diseqcParam.NO, diseqcpos = diseqcParam.SENDNO, orbpos = 0, longitude = 0, latitude = 0, loDirection = 0, laDirection = 0, turningSpeed = rotorParam.FAST, useInputPower=True, inputPowerDelta=50, fastDiSEqC = False, setVoltageTone = True, diseqc13V = False):
 		if orbpos is None or orbpos == 3601:
@@ -259,6 +311,11 @@ class SecConfigure:
 			sec.setRotorTurningSpeed(turningSpeed)
 
 			for x in self.NimManager.satList:
+				if not self.hdsVizibil(int(x[0])):
+					# sub orizont din locul antenei: fara comanda USALS spre el (hdsSubOrizont); continue inaintea setarilor
+					# de mai jos, care se aplica satelitului pus ultimul in nucleu
+					self.hdsSubOrizont(slotid, [int(x[0])])
+					continue
 				print("Add sat " + str(x[0]))
 				self.addSatellite(sec, int(x[0]))
 				if diseqc13V:
@@ -306,6 +363,8 @@ class SecConfigure:
 		self.configuredSatellites = set()
 		self.hdsLocStabilit = self.hdsLocStabilitCitit()
 		self.hdsFaraLocSloturi = []
+		self.hdsLoc = self.hdsLocCitit() if self.hdsLocStabilit else None
+		self.hdsSubOrizontSloturi = {}
 		for slotid in self.NimManager.getNimListOfType("DVB-S"):
 			if self.NimManager.nimInternallyConnectableTo(slotid) is not None:
 				self.NimManager.nimRemoveInternalLink(slotid)
@@ -407,7 +466,7 @@ class SecConfigure:
 							inputPowerDelta=nim.powerThreshold.value
 							useInputPower=False
 							turning_speed=0
-							if nim.powerMeasurement.value:
+							if nim.powerMeasurement.value and canMeasureInputPowerForNim(x, self.NimManager):
 								useInputPower=True
 								turn_speed_dict = { "fast": rotorParam.FAST, "slow": rotorParam.SLOW }
 								if nim.turningSpeed.value in turn_speed_dict:
@@ -435,6 +494,9 @@ class SecConfigure:
 			HdsJurnalTuner.configurare(self.NimManager)
 		except Exception:
 			pass
+		for slotid, orbitale in sorted(self.hdsSubOrizontSloturi.items()):
+			print("[NimManager] tunerul %s: %d sateliti USALS sub orizont din locul antenei nu se dau nucleului (%s)" % (
+				chr(ord("A") + slotid), len(orbitale), " ".join(str(o) for o in sorted(orbitale)[:40])))
 		print("sec config completed")
 
 	def updateAdvanced(self, sec, slotid):
@@ -593,7 +655,7 @@ class SecConfigure:
 					else:
 						sec.setLoDirection(rotorParam.WEST)
 
-					if currLnb.powerMeasurement.value:
+					if currLnb.powerMeasurement.value and canMeasureInputPowerForNim(slotid, self.NimManager):
 						sec.setUseInputpower(True)
 						sec.setInputpowerDelta(currLnb.powerThreshold.value)
 						turn_speed_dict = { "fast": rotorParam.FAST, "slow": rotorParam.SLOW }
@@ -624,6 +686,10 @@ class SecConfigure:
 						# jos: LNB 33 fara usals si satelitii fara usals merg pe pozitia memorata). continue inaintea
 						# setarilor de mai jos: ele se aplica satelitului pus ultimul in nucleu (sec.cpp, m_curSat), adica altuia
 						self.hdsFaraLoc(slotid, [y])
+						continue
+					if dm == "1_2" and (currSat.usals.value or x >= 34) and not self.hdsVizibil(y):
+						# sub orizont din locul stabilit: fara comanda USALS spre el (hdsSubOrizont), ca mai sus
+						self.hdsSubOrizont(slotid, [y])
 						continue
 					self.addSatellite(sec, y)
 					if currSat.voltage.value == "polarization":

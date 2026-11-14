@@ -55,6 +55,13 @@
 # opreste cand ecranul nu se vede (dupa 5 s) si nu l-a cerut nici pagina web in ultimele 5 s. Pe disc nu se scrie nimic
 # in timpul ascultarii; setarile se scriu numai cand omul le schimba.
 #
+# Canalele TV numai cu sunet (0.7.5): cand urmaritorul ecranului negru (Components/HdsEcranNegru.py, verdictul
+# NUMAI_SUNET) afla ca un canal TV (DVB sau IPTV) nu are pista video, dar are sunet, Screens/HdsEcranNegru.py cheama
+# numaiSunet(True) si, cu setarea „La canalele numai cu sunet” pe „Ecranul radio” sau „amandoua”, fereastra radio se
+# arata ca fundal al canalului, cu aceleasi date. Tastele raman ale barei de TV (harta radio ramane oprita, randul
+# tastelor de sub bare nu se arata, OK nu deschide lista radio). Cand vine imaginea sau porneste alt canal,
+# numaiSunet(False) o ascunde. Protectia ecranului de dupa ea o porneste bara (Screens/ScreenSaver.py).
+#
 # Skinul: blocurile HdsEcranRadio, HdsEcranRadioOdihna si HdsEcranRadioSetari din skinul HDSatelit; pentru alte
 # skinuri, skinurile de rezerva de mai jos, facute la 1920x1080 si scalate la marimea ecranului, numai cu fontul
 # „Regular” si culori scrise direct.
@@ -765,7 +772,15 @@ class HdsEcranRadio(Screen):
 
 	def arataTasteViz(self, da):
 		"""Randul tastelor: GALBEN / ALBASTRU numai cand barele se pot arata (altfel ar schimba o vizualizare care nu se
-		vede); fara ele randul incepe cu VERDE (egalizatorul nu depinde de bare), apoi OK, la stanga."""
+		vede); fara ele randul incepe cu VERDE (egalizatorul nu depinde de bare), apoi OK, la stanga. Pe un canal TV
+		numai cu sunet tastele sunt ale televizorului, deci randul nu se arata deloc."""
+		if getattr(self.leg, "numai_sunet", False):
+			for nume in ("tastaVerde", "tastaVerdeText", "tastaGalbena", "tastaGalbenaText",
+				"tastaAlbastra", "tastaAlbastraText", "tastaOk"):
+				self[nume].hide()
+			self.taste_viz = None
+			return
+		self["tastaOk"].show()
 		if not S.valoare("taste_colorate"):
 			for nume in ("tastaVerde", "tastaVerdeText", "tastaGalbena", "tastaGalbenaText",
 				"tastaAlbastra", "tastaAlbastraText"):
@@ -936,7 +951,7 @@ class HdsEcranRadioSetari(Screen, ConfigListScreen):
 		self._initiale = {}
 		lista = []
 		for n in S.ORDINE:
-			element = getattr(self.setari, n)
+			element = S.element(n, self.setari)
 			self._nume[id(element)] = n
 			self._initiale[n] = element.value
 			lista.append(getConfigListEntry(_(S.ETICHETE[n]), element))
@@ -1082,6 +1097,7 @@ class LegaturaRadio(object):
 		self.session = infobar.session
 		S.initConfig()
 		self.radio = False            # merge un post de radio (si ecranul e pornit din setari)
+		self.numai_sunet = False      # merge un canal TV care trimite numai sunet (radio e atunci tot True)
 		self.ascuns_de_om = False     # EXIT: ascuns pana la urmatorul post sau pana la OK
 		self.vizibil = False
 		self.in_odihna = False
@@ -1159,6 +1175,8 @@ class LegaturaRadio(object):
 	# ---- starea
 
 	def pornit(self):
+		if self.numai_sunet:
+			return S.numai_sunet_radio()
 		return S.ecran_pornit()
 
 	def _hartaActiva(self, da):
@@ -1208,6 +1226,7 @@ class LegaturaRadio(object):
 
 	def _laStart(self):
 		self.flux_cazut = False
+		self.numai_sunet = False
 		self.tSfarsit.stop()
 		ref, ref_text = RD.ref_curenta(self.session)
 		try:
@@ -1243,10 +1262,56 @@ class LegaturaRadio(object):
 			self.arata()
 			self.actualizeaza(tot=True)
 
+	def numaiSunet(self, da):
+		"""Urmaritorul ecranului negru (Screens/HdsEcranNegru.py) a aflat ca acest canal TV trimite numai sunet (True)
+		sau ca nu mai e asa (False: a venit imaginea, alt canal, standby). Un post de radio adevarat nu se atinge."""
+		try:
+			self._numaiSunet(bool(da))
+		except Exception as e:
+			_jurnal("canal numai cu sunet: %s: %s" % (type(e).__name__, e))
+
+	def _numaiSunet(self, da):
+		if da:
+			if self.numai_sunet or (self.radio and not self.numai_sunet) or not self._barPrincipala():
+				return
+			ref_text = RD.ref_curenta(self.session)[1]
+			if not ref_text:
+				return
+			_jurnal("canal numai cu sunet: ecranul radio %s" % ("da" if S.numai_sunet_radio() else "nu"))
+			self.numai_sunet = True
+			self.radio = True
+			self.ascuns_de_om = False
+			self.analiza_pid = None
+			self.fara_pid = False
+			self.d = {}
+			self.epg_la = 0.0
+			self.asezare_ref = ref_text
+			self.post_pornit_la = time.time()
+			self.date_vazute = False
+			self._hartaActiva(False)
+			if self.pornit():
+				self.ecran.arataTasteViz(False)
+				self.arata()
+				self.actualizeaza(tot=True)
+				self.tAnaliza.start(PORNIRE_ANALIZA_MS, True)
+			return
+		if not self.numai_sunet:
+			return
+		_jurnal("canal numai cu sunet: gata (imagine, alt canal sau oprit)")
+		self.numai_sunet = False
+		self.radio = False
+		self.tAnaliza.stop()
+		self._opresteAnaliza()
+		self.ascunde()
+		self._hartaActiva(False)
+
 	def dupaListaRadio(self):
 		"""Lista radio separata s-a inchis (Screens/InfoBar.py, ChannelSelectionRadioClosed). Starea se reface numai
 		cand nu se potriveste cu serviciul care merge; altfel analizorul ar porni din nou si barele ar clipi."""
 		try:
+			if self.numai_sunet:
+				# canalul TV numai cu sunet: starea o tine verdictul ecranului negru (numaiSunet)
+				return
 			este = self.refRadioCurenta() is not None and self._barPrincipala()
 			if este != self.radio:
 				self._laStart()
@@ -1331,7 +1396,7 @@ class LegaturaRadio(object):
 			self.ultima_tasta = time.time()
 			self.mutat_la = time.time()
 			self.ecran.show()
-			S.pune_vizibil(True)
+			S.pune_vizibil(True, self.numai_sunet)
 			self._legaTasta(True)
 			self._rdsBara(False)
 		self.tSecunda.start(MS_SECUNDA)
@@ -1390,7 +1455,7 @@ class LegaturaRadio(object):
 			self._iesiDinOdihna()
 		if tasta in TASTE_OK:
 			if steag == STEAG_APASAT:
-				self._ok_armat = self.radio and self.vizibil and self.pornit() and self._inFata()
+				self._ok_armat = self.radio and not self.numai_sunet and self.vizibil and self.pornit() and self._inFata()
 				self._ok_lung = False
 				if self._ok_armat:
 					self.tOkLung.start(OK_LUNG_MS, True)
@@ -1868,7 +1933,7 @@ class LegaturaRadio(object):
 		self.ok()
 
 	def ok(self):
-		if not self.radio or not self.pornit():
+		if not self.radio or self.numai_sunet or not self.pornit():
 			return 0
 		if self.ascuns_de_om or not self.vizibil:
 			self.ascuns_de_om = False
@@ -2133,7 +2198,7 @@ class LegaturaRadio(object):
 
 	def setariSchimbate(self):
 		"""Setarile s-au schimbat (din web sau din ecranul setarilor): ecranul, tastele si analizorul dupa ele."""
-		self._hartaActiva(self.radio and self.pornit())
+		self._hartaActiva(self.radio and not self.numai_sunet and self.pornit())
 		if not self.radio:
 			return
 		if not self.pornit():
@@ -2164,7 +2229,7 @@ class LegaturaRadio(object):
 		care porneste. Tot de aici intreaba si InfoBar.hdsDupaListaRadio, la inchiderea listei radio separate
 		(ChannelSelectionRadio, care primeste ea evStart-ul posturilor alese in ea), si InfoBar.__eventInfoChanged, la
 		prima emisiune a unui post pornit pe alta cale fara serviceStarted la bara."""
-		if not self.pornit() or S.valoare("bara_la_zap"):
+		if not S.ecran_pornit() or S.valoare("bara_la_zap"):
 			return False
 		ref, ref_text = RD.ref_curenta(self.session)
 		try:

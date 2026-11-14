@@ -58,10 +58,11 @@ def stare(A=None):
 	# televizor (Components/HdsActualizari.noutati); un feed vechi da numai versiunea de pe server
 	rez["noutati"] = [{"versiune": v, "titlu": _t("Ce e nou în %s:") % v, "randuri": randuri}
 		for v, randuri in A.noutati(r.get("server") or {})]
-	# "Un pachet", "2 pachete", "20 pachete": pluralul dupa numar, cu formele limbii (ca Screens/HdsActualizari
-	# text_pachete); %s ramane pentru marime, pe care o scrie pagina
+	# "Un pachet, 14 MB", "2 pachete, 14 MB": pluralul dupa numar, cu formele limbii, si marimea scrisa ca pe televizor
+	# (Screens/HdsActualizari text_pachete, HdsPachete.marime_text); textul vine gata, fara %s ramas (13.11.2026: cine citea
+	# raspunsul direct vedea „3 pachete, %s”; pagina inlocuia %s, acum nu mai are ce inlocui)
 	n = len(r.get("pachete") or [])
-	rez["text_pachete"] = _pachete(n) if n else ""
+	rez["text_pachete"] = _pachete(n, _marime(r.get("marime"))) if n else ""
 	# intrebarea de repornire (TryQuitMainloop) e pe televizor: pagina o spune cand repornirea rapida nu se face
 	rez["intrebare_pe_tv"] = _intrebare_pe_tv()
 	# 0.7.4: o repornire (sau oprire) ceruta cat ruleaza opkg asteapta pe televizor sfarsitul instalarii
@@ -88,13 +89,24 @@ def _asteapta_instalarea():
 		return False
 
 
-def _pachete(n):
+def _marime(octeti):
+	"""marimea ca pe televizor („27,6 MB”), „?” cand nu se stie"""
+	try:
+		from Components.HdsPachete import marime_text
+		return marime_text(octeti) or "?"
+	except Exception:
+		return "?"
+
+
+def _pachete(n, marime=None):
+	"""„3 pachete, 27,6 MB”; fara marime (None) ramane %s in locul ei"""
 	try:
 		from Components.HdsImportSurse import ngettext
 	except ImportError:
 		def ngettext(unu, multe, k):
 			return unu if k == 1 else multe
-	return ngettext("%d pachet, %s", "%d pachete, %s", n).replace("%d", str(n), 1)
+	text = ngettext("%d pachet, %s", "%d pachete, %s", n).replace("%d", str(n), 1)
+	return text if marime is None else text.replace("%s", marime, 1)
 
 
 def argumente(request):

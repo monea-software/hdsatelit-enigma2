@@ -191,12 +191,7 @@ def pagina(request):
 
 
 def pagina_text(stil, config_pagina):
-	try:
-		from .traducere_pagini import traduce
-		sablon = traduce(PAGINA, TEXTE_PAGINA, 'pagina')
-	except ImportError:
-		sablon = PAGINA
-	return sablon.replace('__STIL_COMUN__', stil).replace('__CONFIG__', config_pagina)
+	return _traducePagina(PAGINA).replace('__STIL_COMUN__', stil).replace('__CONFIG__', config_pagina)
 
 
 PAGINA = '''<!DOCTYPE html>
@@ -354,7 +349,16 @@ TEXTE_PAGINA = {
 		N_('Setările receptorului'), N_('browser deconectat'),
 		N_('Receptorul nu răspunde.'), N_('Se aplică...'),
 		N_('Deschide editorul pe televizor'), N_('Deschide setările pe televizor'),
-		N_('Închide'), N_('Anulează'), N_('Poziția curentă: '), N_('Niciun marcaj încă.'),
+		N_('Închide'), N_('Anulează'), N_("Poziția curentă:"), N_('Niciun marcaj încă.'),
 		N_('Sari aici'), N_('Șterge'),
 	),
 }
+
+
+def _traducePagina(sablon, fel="pagina"):
+	"""Sablonul in limba receptorului; fara pachetul HdsWebControl (probele de pe PC), sablonul ca atare."""
+	try:
+		from .traducere_pagini import traduce
+	except ImportError:
+		return sablon
+	return traduce(sablon, TEXTE_PAGINA, fel)

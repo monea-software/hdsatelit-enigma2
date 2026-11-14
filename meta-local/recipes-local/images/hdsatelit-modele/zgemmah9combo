@@ -1,0 +1,44 @@
+# HD Satelit: regulile garzii de model pentru Zgemma H9 COMBO (masina h9combo, MACHINEBUILD zgemmah9combo), CONFIRMATE din
+# surse publice (MH9, 12.11.2026, 22:30; Eduard 21:59: „cauta pe net”). Zgemma H9 TWIN (MACHINEBUILD zgemmah9twin) e aceeasi
+# masina OE (h9combo.conf: aceleasi drivere airdigital-dvb-modules-h9combo 20201118, acelasi nucleu, aceeasi tabela), deci
+# aceeasi arhiva h9combo si aceleasi reguli; boxtype= le primeste pe amandoua.
+# familie=broadcom: NU e un receptor Broadcom, ci Hi3798MV200 din stratul meta-airdigital, dar amprenta lui se citeste pe aceeasi
+# ramura a garzii: cipul din /proc/stb/info/chipset, tipul placii din /proc/stb/info/boxtype, locul nucleului si al sistemului
+# din kernel= si root= ale lui /proc/cmdline. /proc/msp/sys (citit pe ramura HiSilicon eMMC) NU apare in nicio iesire publica de
+# pe H9 si nici in modulele lui (h9combo_1..4.ko au sirurile ascunse), deci nu se foloseste. hw= nu se compara pe aceasta ramura.
+# Valorile si sursele lor:
+#   chip=hi3798mv200 (comparat fara majuscule): iesirea `grep "" /proc/stb/info/ -r` pe un Zgemma H9 TWIN (model h9combo):
+#            „/proc/stb/info/chipset:hi3798mv200” (un forum public Enigma2, 12.01.2025, post #18 al subiectului
+#            „Zgemma H9 Twin SE enigma.info”); a doua, de cod: aio-grab (unealta de
+#            capturi a imaginilor OE-Alliance, in imaginea publica zgemmah9combo 8.0.1) recunoaste placile HiSilicon dupa
+#            /proc/stb/info/chipset cu „hi3798”/„3798mv200”; fisa producatorului: Hi3798MV200 (https://www.zgemma.org/zgemma-h9-combo.html).
+#   boxtype: driverul scrie „H9 Combo” pe H9 COMBO (`cat /proc/stb/info/boxtype`, acelasi forum public, 02.01.2021, post #1223 al subiectului
+#            „backupsuite”, pagina 62) si „H9Twin” pe H9 TWIN (post #18 de mai sus); garda
+#            pastreaza numai literele, cifrele si _.- (spatiul cade), deci H9Combo si H9Twin. A doua sursa, de cod: pluginul de
+#            interfata web din E2OpenPlugins (owibranding.py, getAllInfo) citeste /proc/stb/info/boxtype, il face cu litere mici
+#            si asteapta „h9 combo” sau „h9combo”, respectiv „h9 twin” sau „h9twin” (depozitul pluginului la E2OpenPlugins,
+#            plugin/controllers/models/owibranding.py). Formele cu litere mici intra si ele, pentru alte versiuni ale driverului.
+#            Driverul e acelasi din 2020 (20201118) in toate imaginile de azi, deci valoarea nu s-a schimbat.
+#   partitions, kernel_part, rootfs_part, kernel_kib: bootargs.bin al producatorului (h9combo/bootargs.bin din arhiva de
+#            recuperare publica) si /proc/cmdline de pe H9 TWIN SE (aceeasi tabela; post #1 si #20 din subiectul de mai sus):
+#            blkdevparts=mmcblk0:...,16M(linuxkernel1),...,-(userdata), root=/dev/mmcblk0p23 rootsubdir=linuxrootfsN
+#            kernel=/dev/mmcblk0p19..22; locul de baza (linux1): kernel=/dev/mmcblk0p19 (16 MB), root=/dev/mmcblk0p23
+#            (airdigital-fastboot8gb_image.bbclass, STARTUP_LINUX_1; MTD_KERNEL si MTD_ROOTFS din h9combo.conf). Pe ramura
+#            broadcom tabela nu se compara; ramane scrisa pentru citire si pentru pornirea din alt loc.
+# Nu are „confirmat=nu”: valorile hotaratoare (cip, tip, locul si marimea nucleului) sunt dovedite de doua surse fiecare.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=zgemmah9combo.
+format=1
+distro=hdsatelit
+model=Zgemma H9 COMBO
+machine=h9combo
+machinebuild=zgemmah9combo
+chip=hi3798mv200
+boxtype=H9Combo,H9Twin,h9combo,h9twin
+hw=-
+partitions=fastboot:1M,bootargs:1M,recovery:18M,bootoptions:2M,deviceinfo:2M,baseparam:4M,pqparam:4M,logo:4M,fastplay:40M,kernel:20M,trustedcore:20M,misc:4M,system:1024M,vendor:150M,e2tv:306M,cache:256M,private:50M,securestore:8M,linuxkernel1:16M,linuxkernel2:16M,linuxkernel3:16M,linuxkernel4:16M,userdata
+kernel_name=linuxkernel1
+rootfs_name=userdata
+kernel_part=mmcblk0p19
+kernel_kib=16384
+rootfs_part=mmcblk0p23
+familie=broadcom

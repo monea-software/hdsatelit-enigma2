@@ -146,7 +146,7 @@ def pagina_text(stil, config_pagina, eroare=""):
 		text = text.replace(cheie, escape(valoare, quote=True))
 	text = text.replace("__CONFIG__", config_pagina)
 	text = text.replace("__TEXTE__", json.dumps(texte(), ensure_ascii=True).replace("</", "<\\/"))
-	return text.replace("__BLOCAT__", "true" if eroare else "false")
+	return _cuLimba(text.replace("__BLOCAT__", "true" if eroare else "false"))
 
 
 PAGINA = """<!doctype html>
@@ -220,3 +220,14 @@ $("incearca").addEventListener("click",intreaba);
 if(!blocat){citeste();setInterval(function(){if(!ocupat&&!document.hidden)citeste()},700)}
 </script></body></html>
 """
+
+
+def _cuLimba(text):
+	"""<html lang> in limba receptorului: textele paginii vin deja traduse din Python (_()), deci traduce() din
+	traducere_pagini, care schimba lang, nu trece pe aici. Pe PC (fara pachet) si in romana pagina ramane lang="ro"."""
+	try:
+		from .traducere_pagini import limba
+	except ImportError:
+		return text
+	cod = limba()
+	return text if cod == "ro" else text.replace('<html lang="ro">', '<html lang="%s">' % cod, 1)

@@ -29,6 +29,10 @@
 #   (hds-ftp-retea-locala.conf); cine ceruse parola si in casa (regula SSH fara "-") si nu a ales inca nimic in ecranul
 #   nou (fara /etc/hdsatelit-ssh/parola-locala.json) o pastreaza si la FTP, ca inainte (acelasi text ca
 #   Components/HdsParolaLocala.textRegula, ca ecranul sa o recunoasca).
+# - copia cheii RSA a gazdei SSH (/etc/dropbear/.dropbear_rsa_host_key.pastrata, 0600), facuta sau adusa la zi la
+#   fiecare pornire: postrm-ul pachetului dropbear de pana la 0.7.3 sterge cheia la orice actualizare a lui dropbear, iar
+#   opkg 0.10 il ruleaza inaintea scripturilor noi; postinst-ul nou (dropbear_%.bbappend) o pune la loc din copie, ca
+#   omul sa nu vada „host key changed”. Copia nu pleaca nicaieri (ramane in /etc/dropbear).
 # Parola nu trece niciodata prin acest script.
 
 PAROLA=/usr/sbin/hds-ssh-parola
@@ -42,6 +46,8 @@ SEMN_FTP=/etc/hdsatelit-ssh/regula-ftp
 ALEGERE=/etc/hdsatelit-ssh/parola-locala.json
 INETD_CONF=/etc/hds-telnet-inetd.conf
 INETD_PID=/var/run/hds-telnet-inetd.pid
+CHEIE_GAZDA=/etc/dropbear/dropbear_rsa_host_key
+COPIE_GAZDA=/etc/dropbear/.dropbear_rsa_host_key.pastrata
 
 # regula din pachetele de pana la r2, oprita; numai aceasta, octet cu octet, se inlocuieste
 regula_veche() {
@@ -69,6 +75,14 @@ regula_ftp() {
 	mkdir -p /etc/hdsatelit-ssh && : > "$SEMN_FTP"
 }
 
+cheie_gazda() {
+	[ -s "$CHEIE_GAZDA" ] && [ ! -L "$CHEIE_GAZDA" ] || return 0
+	cmp -s "$CHEIE_GAZDA" "$COPIE_GAZDA" && return 0
+	( umask 077; cp -f "$CHEIE_GAZDA" "$COPIE_GAZDA.nou" && chmod 600 "$COPIE_GAZDA.nou" && \
+		mv -f "$COPIE_GAZDA.nou" "$COPIE_GAZDA" ) 2>/dev/null
+	return 0
+}
+
 telnet_porneste() {
 	[ -f "$INETD_CONF" ] && [ -x /usr/sbin/hds-telnet-poarta ] || return 0
 	if [ -f "$INETD_PID" ] && kill -0 "$(cat "$INETD_PID" 2>/dev/null)" 2>/dev/null; then
@@ -86,6 +100,7 @@ telnet)
 start|"")
 	regula_implicita
 	regula_ftp
+	cheie_gazda
 	telnet_porneste
 	if [ -d "$SSH" ]; then
 		chown root:root "$SSH" 2>/dev/null

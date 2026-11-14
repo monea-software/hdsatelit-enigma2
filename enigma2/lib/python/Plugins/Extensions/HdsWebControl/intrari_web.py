@@ -39,6 +39,8 @@
 #   POST /api/skin-alege?nume=<skin>                 ca OK pe ecran (se vede dupa repornirea interfetei)
 #   POST /api/skin-aspect?aspect=lista|dale          ca tasta galbena
 #   POST /api/skin-reporneste                        (+ pas / cod) repornirea interfetei
+#   POST /api/skin-sterge?nume=<skin>                (+ pas / cod) ca ROSU pe ecran: stergerea temei (Components/HdsTemaStergere.py);
+#                                                    tema de pe ecran se sterge dupa repornirea interfetei cu tema HD Satelit
 #   GET  /dispozitive-intrare, /taste-rapide, /skin  paginile
 #
 # FIRUL: totul pe firul enigma2 si scurt, afara de cautarea skinurilor (os.walk prin tot dosarul, pe un fir:
@@ -93,6 +95,11 @@ def _dep(nume):
 		return _dep("HdsSkinuri").skinPornit
 	if nume == "refuz":
 		return None      # fisierul din RAM al lui HdsSkinuri (REFUZ)
+	if nume in ("HdsTemaStergere", "HdsExtensiiLucru"):
+		return __import__("Components." + nume, fromlist=[nume])
+	if nume == "plugins":
+		from Components.PluginComponent import plugins
+		return plugins
 	raise KeyError(nume)
 
 
@@ -257,15 +264,64 @@ def seteazaTaste(request):
 
 # ------------------------------------------------------------------ skinul
 
-def stareSkin(skinuri, ales, aspect, aspecte, activ=None, refuz=None, stare_tema=""):
-	"""Corpul raspunsului GET /api/skin, din lista citita pe fir si din setarile citite pe firul enigma2."""
+def _stergere(p):
+	"""ce vede pagina din planul stergerii unei teme (HdsTemaStergere.plan)"""
+	if not p:
+		return {"poate": False, "motiv": ""}
+	return {"poate": bool(p["poate"]), "motiv": p["motiv"] if not p["poate"] else "", "pe_ecran": bool(p.get("pe_ecran"))}
+
+
+def _lucrareTema():
+	"""lucrarea opkg din Extensii, cand sterge o tema (pagina se uita la ea pana se termina), sau None"""
+	try:
+		l = _dep("HdsExtensiiLucru").STARE["lucrare"]
+	except Exception:
+		return None
+	if l is None or not l.plan.get("tema"):
+		return None
+	r = l.rezultat or {}
+	return {"faza": l.faza, "tema": l.plan.get("tema"), "titlu": l.titluLucru() if l.faza == "lucru" else r.get("titlu", ""),
+		"stare": r.get("stare", ""), "reusit": bool(r.get("reusit"))}
+
+
+def stareSkin(skinuri, ales, aspect, aspecte, activ=None, refuz=None, stare_tema="", planuri=None, lucrare=None,
+		incomplete=()):
+	"""Corpul raspunsului GET /api/skin, din lista citita pe fir si din setarile citite pe firul enigma2. `incomplete`:
+	temele ramase fara skin.xml (HdsTemaStergere.incomplete), la coada listei, numai cu Sterge"""
 	S = _dep("HdsSkinuri")
 	activ = activ or S.DOSAR_IMAGINE
+	planuri = planuri or {}
+	incomplete = [x for x in incomplete if x not in skinuri]
 	return {"result": True,
 		"skinuri": [{"nume": x, "eticheta": _t("Skinul implicit") if x == S.IMPLICIT else x,
-			"ales": x == ales or (ales is None and x == S.IMPLICIT), "activ": x == activ,
-			"imaginii": x == S.DOSAR_IMAGINE} for x in skinuri],
-		"aspect": aspect, "aspecte": aspecte, "activ": activ, "refuz": refuz or "", "stare_tema": stare_tema or ""}
+			"ales": x not in incomplete and (x == ales or (ales is None and x == S.IMPLICIT)), "activ": x == activ,
+			"imaginii": x == S.DOSAR_IMAGINE, "incompleta": x in incomplete, "stergere": _stergere(planuri.get(x))}
+			for x in list(skinuri) + incomplete],
+		"aspect": aspect, "aspecte": aspecte, "activ": activ, "refuz": refuz or "", "stare_tema": stare_tema or "",
+		"lucrare": lucrare}
+
+
+def _planuri(skinuri, radacina, activ, ales):
+	try:
+		return _dep("HdsTemaStergere").planuri(skinuri, radacina, "/", activ, ales, _t)
+	except Exception as eroare:
+		_mc().jurnal("skin: stergerea temelor: %r" % eroare)
+		return {}
+
+
+def _incomplete(radacina):
+	try:
+		return _dep("HdsTemaStergere").incomplete(radacina)
+	except Exception as eroare:
+		_mc().jurnal("skin: temele incomplete: %r" % eroare)
+		return []
+
+
+def _listaSkin(radacina, ales, aspect, aspecte, activ, refuz, stare_tema, lucrare):
+	skinuri = _dep("HdsSkinuri").lista(radacina)
+	incomplete = _incomplete(radacina)
+	return stareSkin(skinuri, ales, aspect, aspecte, activ, refuz, stare_tema,
+		_planuri(skinuri + [x for x in incomplete if x not in skinuri], radacina, activ, ales), lucrare, incomplete)
 
 
 def _aspecte(config):
@@ -286,7 +342,8 @@ def cereSkin(request):
 	activ = S.numeDinValoare(_dep("skinPornit")()) or S.DOSAR_IMAGINE
 	refuz = S.textRefuz(S.refuzDeSpus(_dep("refuz")), _t)
 	stare_tema = S.textStareTema(_t)
-	return _dep("peFir")(request, lambda: stareSkin(S.lista(radacina), ales, aspect, aspecte, activ, refuz, stare_tema),
+	lucrare = _lucrareTema()
+	return _dep("peFir")(request, lambda: _listaSkin(radacina, ales, aspect, aspecte, activ, refuz, stare_tema, lucrare),
 		_STEAG_SKIN, 20)
 
 
@@ -344,6 +401,69 @@ def alegeSkin(request):
 		mesaj += " " + _t("Interfața nu este gata pentru repornire.")
 	return {"result": mod != "acum" or bool(pornita), "message": (avertisment + " " + mesaj) if avertisment else mesaj, "avertisment": avertisment,
 		"reporneste": bool(pornita)}
+
+
+def stergeSkin(request):
+	"""POST /api/skin-sterge: ca ROSU pe ecran, in doi pasi (intrebarea, apoi codul). Aceeasi hotarare ca pe televizor
+	(HdsTemaStergere.plan); tema din pachet prin lucrarea opkg a Extensiilor, tema de pe ecran dupa repornirea interfetei."""
+	S = _dep("HdsSkinuri")
+	T = _dep("HdsTemaStergere")
+	config = _dep("config")
+	a = _mc().argumente(request, ("nume", "pas", "cod"), 120)
+	nume = a.get("nume", "")
+	radacina = _dep("radacina")
+
+	def planAcum():
+		activ = S.numeDinValoare(_dep("skinPornit")()) or S.DOSAR_IMAGINE
+		return T.plan(nume, radacina, "/", activ, S.curent(config), _t)
+
+	if not T.numeBun(nume):
+		return {"result": False, "message": _t("Tema nu există.")}
+	if a.get("pas") == "renunta":
+		return _doiPasi(request, a, "skin-sterge", nume, "", "", None, None)
+	p = planAcum()
+	if not p["poate"]:
+		return {"result": False, "message": p["motiv"]}
+
+	def fapta():
+		p = planAcum()
+		if not p["poate"]:
+			return {"result": False, "message": p["motiv"]}
+		if p["pe_ecran"]:
+			sesiune = _dep("sesiune")
+			if sesiune is None:
+				return {"result": False, "message": _t("Interfața nu este gata pentru repornire.")}
+			if not T.programeaza(p, config):
+				return {"result": False, "message": S.textMotiv(S.MOTIV_SCRIERE, "", _t)}
+			_dep("configfile").save()
+			if not _dep("HdsAlimentare").deschide(sesiune, "interfata", dupa_ms=1500):
+				return {"result": False, "message": _t("Interfața nu este gata pentru repornire.")}
+			return {"result": True, "reporneste": True, "message": _t("Interfața se repornește cu tema %s, apoi tema %s se "
+				"șterge. Pagina se reîncarcă singură în câteva secunde.") % (T.titluTema(p["urmatoarea"]), nume)}
+		if p["fel"] == T.FEL_PACHET:
+			L = _dep("HdsExtensiiLucru")
+			motiv = L.motivOcupat(None)
+			if motiv is not None:
+				return {"result": False, "message": motiv[0]}
+			plan, eroare = T.planPachet(p, traducere=_t)
+			if plan is None:
+				return {"result": False, "message": eroare[0]}
+			plan.setdefault("titluri", L.titluri(L.catalogLaZi() or L.incarcaCatalog()))
+			l = L.pornesteLucrarea(plan, plugins=_dep("plugins"), din_web=True)
+
+			def gata(fel, *date):
+				if fel == "gata":
+					l.lasa(gata)
+					if T.dupaPachet(nume, config, radacina):
+						_dep("configfile").save()
+			l.asculta(gata)
+			return {"result": True, "message": _t("A pornit ștergerea temei %s.") % nume, "lucrare": _lucrareTema()}
+		bun, mesaj = T.stergeDosarAles(p, config, radacina, _t)
+		if bun:
+			_dep("configfile").save()
+		return {"result": bun, "message": mesaj}
+
+	return _doiPasi(request, a, "skin-sterge", nume, p["intrebare"], _t("Șterge"), p["detalii"], fapta)
 
 
 def aspectMeniu(request):
@@ -447,6 +567,7 @@ def rute(baza, resource):
 		b"skin-alege": _scriere(alegeSkin),
 		b"skin-aspect": _scriere(aspectMeniu),
 		b"skin-reporneste": _scriere(reporneste),
+		b"skin-sterge": _scriere(stergeSkin),
 	}
 	pagini = {
 		b"dispozitive-intrare": _pagina(pagina_dispozitive),
@@ -692,6 +813,7 @@ __STIL_PAGINI__
 <h1>Aspectul ecranelor</h1>
 <p class="sub">Skinurile instalate pe receptor. Skinul ales se vede pe televizor după repornirea interfeței.</p>
 <p class="nota">Aplică acum repornește interfața. La următoarea pornire păstrează alegerea fără repornire.</p>
+<p class="nota">Șterge scoate tema de pe receptor. Tema HD Satelit nu se șterge; tema de pe ecran se șterge după ce interfața repornește cu tema HD Satelit.</p>
 <p class="mesaj" id="incarcare">Se caută skinurile...</p>
 <div id="continut" class="ascuns">
   <p class="mesaj eroare ascuns" id="refuz"></p>
@@ -726,21 +848,39 @@ function arata(d){
     var cap = document.createElement("div"); cap.className = "cap";
     var h = document.createElement("h2"); h.textContent = x.eticheta; cap.appendChild(h);
     var e = document.createElement("span"); e.className = "eticheta";
-    e.textContent = x.ales && x.activ ? "ales, pe ecran acum" : (x.ales ? "ales, după repornire" : (x.activ ? "pe ecran până la repornire" : ""));
+    e.textContent = x.incompleta ? "incompletă" : (x.ales && x.activ ? "ales, pe ecran acum" : (x.ales ? "ales, după repornire" : (x.activ ? "pe ecran până la repornire" : "")));
     cap.appendChild(e);
     card.appendChild(cap);
     var img = document.createElement("img"); img.className = "poza"; img.alt = "Previzualizarea skinului " + x.eticheta;
     img.src = adresa("/api/skin-poza?nume=" + encodeURIComponent(x.nume));
     img.addEventListener("error", function(){ img.classList.add("ascuns"); });
     card.appendChild(img);
-    var b = document.createElement("button"); b.type = "button"; b.className = x.ales ? "" : "principal";
-    b.textContent = "Aplică acum";
-    b.addEventListener("click", function(){ alege(x.nume, "acum"); });
-    var bs = document.createElement("div"); bs.className = "butoane"; bs.appendChild(b);
-    var maiTarziu = document.createElement("button"); maiTarziu.type = "button";
-    maiTarziu.textContent = "La următoarea pornire";
-    maiTarziu.addEventListener("click", function(){ alege(x.nume, "pornire"); });
-    bs.appendChild(maiTarziu); card.appendChild(bs);
+    var bs = document.createElement("div"); bs.className = "butoane";
+    if(x.incompleta){
+      var ni = document.createElement("p"); ni.className = "nota";
+      ni.textContent = "Tema e incompletă: lipsește skin.xml, deci nu se mai poate folosi. Șterge scoate ce a rămas din ea.";
+      card.appendChild(ni);
+    } else {
+      var b = document.createElement("button"); b.type = "button"; b.className = x.ales ? "" : "principal";
+      b.textContent = "Aplică acum";
+      b.addEventListener("click", function(){ alege(x.nume, "acum"); });
+      bs.appendChild(b);
+      var maiTarziu = document.createElement("button"); maiTarziu.type = "button";
+      maiTarziu.textContent = "La următoarea pornire";
+      maiTarziu.addEventListener("click", function(){ alege(x.nume, "pornire"); });
+      bs.appendChild(maiTarziu);
+    }
+    var st = x.stergere || {};
+    if(st.poate){
+      var sterge = document.createElement("button"); sterge.type = "button"; sterge.className = "rosu";
+      sterge.textContent = "Șterge";
+      sterge.addEventListener("click", function(){ stergeTema(x.nume); });
+      bs.appendChild(sterge);
+    }
+    card.appendChild(bs);
+    if(!st.poate && st.motiv && !x.imaginii){
+      var m = document.createElement("p"); m.className = "nota"; m.textContent = st.motiv; card.appendChild(m);
+    }
     c.appendChild(card);
   });
   $("refuz").textContent = d.refuz || "";
@@ -754,11 +894,18 @@ function arata(d){
     s.value = d.aspect;
   }
 }
+var urmaresteLucrarea = false;
+function lucrarea(l){
+  if(l && l.faza === "lucru"){ urmaresteLucrarea = true; mesaj(l.titlu); setTimeout(citeste, 2000); return; }
+  if(l && urmaresteLucrarea){ urmaresteLucrarea = false; mesaj((l.titlu + " " + (l.stare || "")).trim(), !l.reusit); }
+}
 function citeste(){
   return cerere("/api/skin").then(function(d){
+    if(!d.result && urmaresteLucrarea){ setTimeout(citeste, 2000); return; }
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi skinurile."; return; }
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
     arata(d);
+    lucrarea(d.lucrare);
   }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
 }
 function alege(nume, aplicare){
@@ -770,6 +917,15 @@ function alege(nume, aplicare){
     citeste();
     if(d.reporneste){ setTimeout(function(){ location.reload(); }, 15000); }
   }).catch(nimicNuRaspunde);
+}
+function stergeTema(nume){
+  var q = new URLSearchParams(); q.set("nume", nume);
+  cuConfirmare("/api/skin-sterge", q, function(d){
+    if(!d.result){ return; }
+    if(d.reporneste){ setTimeout(function(){ location.reload(); }, 20000); return; }
+    if(d.lucrare){ urmaresteLucrarea = true; }
+    citeste();
+  });
 }
 $("aspect").addEventListener("change", function(){
   var q = new URLSearchParams(); q.set("aspect", $("aspect").value);
@@ -806,8 +962,6 @@ TEXTE_PAGINA = {
 		N_("Deschide Telecomenzi"),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
 		N_("Butoane colorate și taste rapide"),
-		N_("Alege o funcție pentru fiecare tastă, cât te uiți la televizor. Funcția obișnuită păstrează "
-			"comportamentul de acum. Cifrele lungi se alocă în afara timeshiftului."),
 		N_("Valori implicite"),
 		N_("Se citesc butoanele..."),
 		N_("Apăsarea scurtă"),
@@ -824,6 +978,8 @@ TEXTE_PAGINA = {
 		N_("Tema skinului HD Satelit (Clasic sau Pro) și culorile lui au paginile lor."),
 		N_("Tema interfeței"),
 		N_("Culorile skinului"),
+		N_("Șterge scoate tema de pe receptor. Tema HD Satelit nu se șterge; tema de pe ecran se șterge după ce interfața "
+			"repornește cu tema HD Satelit."),
 		N_("Skinul ales se încarcă la pornirea interfeței. Ecranele pe care skinul ales nu le are (cele ale "
 			"receptorului HD Satelit) vin din skinul HD Satelit, potrivite la rezoluția skinului ales, deci "
 			"încap întregi, cu culorile și literele lor; pe un skin mai îngust de 1024 de puncte (720x576) "
@@ -856,9 +1012,10 @@ TEXTE_PAGINA = {
 		N_("ales, după repornire"),
 		N_("pe ecran până la repornire"),
 		N_("Previzualizarea skinului"),
-		N_("Alege din nou"),
-		N_("Alege acest skin"),
 		N_("Receptorul nu a putut citi skinurile."),
+		N_("Șterge"),
+		N_("incompletă"),
+		N_("Tema e incompletă: lipsește skin.xml, deci nu se mai poate folosi. Șterge scoate ce a rămas din ea."),
 	),
 }
 
@@ -869,7 +1026,7 @@ TEXTE_PAGINA["html"] += (
 	N_("Tastele acestui ecran"), N_("Context"), N_("TV"), N_("Radio"), N_("Lista de canale"),
 	N_("Lista de filme"), N_("Film"), N_("Timeshift"), N_("Meniu"), N_("Setări"),
 )
-TEXTE_PAGINA["js"] += (N_("Scurt: "), N_("Lung: "))
+TEXTE_PAGINA["js"] += (N_("Scurt:"), N_("Lung:"))
 
 
 def _traducePagina(sablon, fel="pagina"):

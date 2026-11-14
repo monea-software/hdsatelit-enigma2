@@ -879,10 +879,10 @@ TEXTE_PAGINA = {
 		N_("Ordine"), N_("Implicită"),
 		N_("Cele mai apreciate"), N_("Cele mai descărcate"),
 		N_("Contributor"), N_("Toți"), N_("Clasamentul contributorilor"),
-		N_("Sigle aprobate"), N_("Aprecieri primite"), N_("XP"),
+		N_("Sigle aprobate"), N_("Aprecieri primite"),
 	),
 	"js": (
-		N_("Aprecieri: "), N_("Descărcări: "),
+		N_("Aprecieri:"), N_("Descărcări:"),
 		N_("Siglele comunității apar când există rețea."),
 		N_("Toți"),
 		N_("Clasamentul contributorilor apare când există rețea."),

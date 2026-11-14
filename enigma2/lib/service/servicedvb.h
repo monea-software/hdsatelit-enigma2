@@ -258,6 +258,15 @@ protected:
 	enum { HDS_RADIO_ELIBERARE_MS = 3000 };
 	bool hdsAmanaDupaRadio(bool decoder, bool seekable = false);
 	void hdsRadioEliberat();
+#if HAVE_HISILICON
+		/* a channel that starts no decoder (the tuning failed) shows a black still picture (a radio channel its radio
+		   picture) instead of the last picture of the channel before; hdsEcranNegru in servicedvb.cpp */
+	ePtr<iTSMPEGDecoder> m_hds_negru;
+	ePtr<eTimer> m_hds_negru_timer;
+	int m_hds_negru_incercari;
+	void hdsEcranNegru();
+	void hdsEcranNegruOprit();
+#endif
 		/* egalizatorul la canalele TV: PTS-ul imaginii trimis motorului la 100 ms (hdsCeasImagine) */
 	ePtr<eTimer> m_hds_ceas_imagine;
 	int m_hds_ceas_erori;

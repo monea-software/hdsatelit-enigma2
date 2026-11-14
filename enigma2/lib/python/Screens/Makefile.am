@@ -25,23 +25,23 @@ install_PYTHON = \
 	Information.py Time.py CamSetup.py CamInfo.py LogManager.py HdsStartWizard.py \
 	SkinSelector.py Satfinder.py ConfigLNB.py HdsDvbI.py HdsDvbMABR.py \
 	ScanerSatelit.py HdsScanareFluxuri.py ScanerTerestru.py FontSetup.py OSDCalibration.py PositionerSetup.py \
-	ButtonSetup.py IptvSetup.py HdsIptvIncarcare.py SwapManager.py HdsWebControlSetup.py \
+	ButtonSetup.py IptvSetup.py HdsIptvIncarcare.py HdsIptv4K.py HdsIptvArhiva.py HdsFilmeSeriale.py SwapManager.py HdsWebControlSetup.py \
 	HdsSoftwareUpdate.py TempFanControl.py CleanupWizard.py \
 	HdsCrashlogAutoSubmit.py HdsCautareCanale.py HdsCautaSetari.py HdsHdmiInfo.py HdsExtensii.py HdsDishMotor.py HdsDabUsb.py \
 	HdsEditorCanale.py HdsEditorCanaleLegatura.py HdsEditorCanaleLogica.py HdsEditorCanaleUnelte.py \
-	HdsJurnalVersiuni.py HdsFonturi.py HdsEcranPornire.py HdsGalerieSigle.py HdsComunPrincipal.py \
+	HdsJurnalVersiuni.py HdsFonturi.py HdsEcranPornire.py HdsGalerieSigle.py HdsScreensaver.py HdsComunPrincipal.py \
 	HdsAjutor.py \
 	ScanerMaiMultiSateliti.py ScanerCablu.py ScanerOarba.py \
 	HdsPisteLimbi.py HdsTelecomenzi.py HdsSubtitrariAspect.py HdsOcrLimbi.py HdsTraducereSubtitrari.py \
-	HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsProcesor.py HdsLocInregistrari.py HdsLicente.py HdsListeImplicite.py \
+	HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsProcesor.py HdsLocInregistrari.py HdsMontareDiscuri.py HdsLicente.py HdsListeImplicite.py \
 	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py HdsVpnFurnizor.py \
 	HdsAsistenta.py HdsAsistentaSemn.py \
-	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py HdsAfisaj.py \
+	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py ScreenSaver.py HdsAfisaj.py \
 	HdsAfisajColor.py \
 	HdsCopieSetari.py HdsCopieImagine.py HdsCulegereTotala.py HdsActualizari.py HdsImagineOnline.py HdsDescarcareSubtitrari.py \
-	HdsLocul.py HdsCalitateImagine.py \
+	HdsLocul.py HdsCalitateImagine.py HdsRezolutieTv.py \
 	HdsImportSetari.py MediaPlayer.py PicturePlayer.py HdsSkinSetari.py \
-	HdsNavigatorWeb.py HdsTemaInterfata.py HdsVremea.py HdsAnuntRetea.py HdsUnelteRetea.py \
+	HdsAplicatii.py HdsNavigatorWeb.py HdsTemaInterfata.py HdsVremea.py HdsAnuntRetea.py HdsUnelteRetea.py \
 	HdsLocuriRetea.py HdsReteaStandard.py HdsBetaTester.py HdsQrRapoarte.py HdsForumReceptor.py \
 	Opkg.py NetworkServices.py DVD.py \
 	TaskList.py Toast.py

@@ -18,6 +18,10 @@
 # pe televizor (fostul nivel "asociat" numai cu cod) s-a scos; in casa nu se cere nimic.
 #   GET  /api/vpn                         starea (fara nume, parola sau chei)
 #   POST /api/vpn-porneste, /api/vpn-opreste, /api/vpn-ip, /api/vpn-stick
+#   POST /api/vpn-reporneste              aceeasi legatura facuta din nou (numai cu VPN-ul pornit)
+#   POST /api/vpn-viteza                  testul de viteza (cel mult 10 secunde; prin VPN cand e pornit)
+# Cu servere din mai multe tari, pagina arata si alegerea tarii (valoarea = primul server al tarii), iar lista
+# serverelor numai pe cele ale tarii alese, ca pe televizor.
 #   POST /api/vpn-setari                  furnizor=, profil=, mod=tot|ales, oprire_totala=0|1, la_pornire=0|1,
 #                                         iptv=0|1, adrese= (numai cheile date se schimba)
 #   POST /api/vpn-cont  (corp: nume=, parola=)   /api/vpn-cont-sterge?confirmat=1
@@ -137,6 +141,7 @@ def stare(V=None, nivel_cerere="asociat"):
 		text_cont_nota=V.textExplicatieCont(s["furnizor"]),
 		text_programe=V.textProgrameLipsa(s["fel"]) if s["lipsesc"] else (s.get("text_indisponibil") or (_t(
 			V.TEXT_WG_INDISPONIBIL) if s.get("wg_indisponibil") else "")),
+		text_viteza=V.textViteza(s.get("viteza")),
 		text_lucreaza=V.textLucrare(l["lucreaza"]) if l["lucreaza"] else "")
 
 
@@ -159,6 +164,16 @@ def opreste(request, V=None):
 def ip(request, V=None):
 	V = _v(V)
 	return _pornit(V.pornesteIp(), V.textLucrare(V.LUCRARE_IP))
+
+
+def reporneste(request, V=None):
+	V = _v(V)
+	return _pornit(V.pornesteRepornirea(), V.textLucrare(V.LUCRARE_REPORNESTE_ACUM))
+
+
+def viteza(request, V=None):
+	V = _v(V)
+	return _pornit(V.pornesteViteza(), V.textLucrare(V.LUCRARE_VITEZA))
 
 
 def stick(request, V=None):
@@ -364,6 +379,8 @@ def rute(baza, resource, V=None, sesiune_cerere=None):
 		b"vpn-porneste": comanda(porneste),
 		b"vpn-opreste": comanda(opreste),
 		b"vpn-ip": comanda(ip),
+		b"vpn-reporneste": comanda(reporneste),
+		b"vpn-viteza": comanda(viteza),
 		b"vpn-stick": comanda(stick),
 		b"vpn-setari": comanda(setari),
 		b"vpn-cont": comanda(cont),
@@ -399,6 +416,9 @@ ETICHETE = {
 	"STARE": N_("Starea"),
 	"PORNESTE": N_("Pornește"),
 	"VERIFICA_IP": N_("Verifică adresa văzută pe internet"),
+	"REPORNESTE": N_("Repornește VPN-ul"),
+	"VITEZA": N_("Testează viteza"),
+	"ETICHETA_TARA": N_("Țara"),
 	"PROGRAME": N_("Programele VPN"),
 	"INSTALEAZA": N_("Instalează programele VPN"),
 	"FURNIZOR": N_("Furnizorul și serverul"),
@@ -524,7 +544,10 @@ __STIL_PAGINI__
     <div class="butoane">
       <button type="button" class="principal" id="comuta">__T_PORNESTE__</button>
       <button type="button" id="verificaIp">__T_VERIFICA_IP__</button>
+      <button type="button" class="ascuns" id="reporneste">__T_REPORNESTE__</button>
+      <button type="button" id="viteza">__T_VITEZA__</button>
     </div>
+    <p class="nota" id="rezViteza"></p>
     <p class="mesaj" id="mesaj"></p>
   </section>
   <section class="card ascuns" id="cardPrograme">
@@ -535,6 +558,7 @@ __STIL_PAGINI__
   <section class="card">
     <h2>__T_FURNIZOR__</h2>
     <div class="rand"><label for="furnizor">__T_ETICHETA_FURNIZOR__</label><select id="furnizor"></select></div>
+    <div class="rand ascuns" id="randTara"><label for="tara">__T_ETICHETA_TARA__</label><select id="tara"></select></div>
     <div class="rand"><label for="server">__T_ETICHETA_SERVER__</label><select id="server"></select></div>
     <p class="nota" id="cumIei"></p>
     <p><a href="/vpn-furnizor">__T_FARA_FISIERE__</a></p>
@@ -638,7 +662,16 @@ function arata(d){
   $("cardPrograme").classList.toggle("ascuns", !d.lipsesc && !d.indisponibil && !d.wg_indisponibil); pune("textPrograme", d.text_programe);
   $("instaleaza").classList.toggle("ascuns", !d.lipsesc);
   optiuni($("furnizor"), d.furnizori, d.furnizor);
-  var servere = (d.profiluri || []).map(function(p){ return [p.id, p.titlu]; });
+  var tari = d.tari || [], multe = tari.length > 1;
+  var codTara = d.profil ? (d.profil.tara || "") : (tari.length ? tari[0].cod : "");
+  $("randTara").classList.toggle("ascuns", !multe);
+  if(multe){
+    var taraAleasa = tari.filter(function(t){ return t.cod === codTara; })[0];
+    optiuni($("tara"), tari.map(function(t){ return [t.primul, t.nume + " (" + t.nr + ")"]; }), taraAleasa ? taraAleasa.primul : "");
+  }
+  $("reporneste").classList.toggle("ascuns", !d.pornit);
+  pune("rezViteza", d.text_viteza);
+  var servere = (d.profiluri || []).filter(function(p){ return !multe || (p.tara || "") === codTara; }).map(function(p){ return [p.id, p.titlu]; });
   if(!servere.length){ servere = [["", TXT.niciunServer]]; } else if(!d.profil){ servere.unshift(["", "-"]); }
   optiuni($("server"), servere, d.profil ? d.profil.id : "");
   $("stergeServer").disabled = !d.profil; $("stergeToate").disabled = !d.nr_profiluri;
@@ -720,6 +753,9 @@ $("comuta").addEventListener("click", function(){
   trimite(pornit ? "/api/vpn-opreste" : "/api/vpn-porneste", {});
 });
 $("verificaIp").addEventListener("click", function(){ trimite("/api/vpn-ip", {}); });
+$("reporneste").addEventListener("click", function(){ trimite("/api/vpn-reporneste", {}); });
+$("viteza").addEventListener("click", function(){ trimite("/api/vpn-viteza", {}); });
+$("tara").addEventListener("change", function(){ if(this.value){ trimite("/api/vpn-setari", {profil: this.value}); } });
 $("instaleaza").addEventListener("click", function(){ if(confirm(TXT.intrebareInstaleaza)){ trimite("/api/vpn-instaleaza", {confirmat: "1"}); } });
 $("furnizor").addEventListener("change", function(){ trimite("/api/vpn-setari", {furnizor: this.value}); });
 $("server").addEventListener("change", function(){ if(this.value){ trimite("/api/vpn-setari", {profil: this.value}); } });

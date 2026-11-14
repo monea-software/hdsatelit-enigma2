@@ -2,11 +2,13 @@
 #include <lib/driver/rcinput.h>
 
 #include <lib/base/eerror.h>
+#include <lib/base/hdsjurnal.h>
 
 #include <sys/ioctl.h>
 #include <linux/input.h>
 #include <sys/stat.h>
 #include <sys/inotify.h>
+#include <time.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -50,6 +52,8 @@ void eRCDeviceInputDev::handleCode(long rccode)
 	}
 	if (ev->type!=EV_KEY)
 		return;
+
+	masoaraTasta(ev);
 
 //	eDebug("%x %x %x", ev->value, ev->code, ev->type);
 
@@ -107,8 +111,69 @@ void eRCDeviceInputDev::handleCode(long rccode)
 	}
 }
 
+/*
+ * HDSatelit: drumul tastei, in hds-taste.log (greseala 1231: pe Viper 4K V20 unele apasari ajungeau tarziu si apoi
+ * toate deodata). Nucleul pune in fiecare input_event ora la care driverul a dat evenimentul (CLOCK_REALTIME, ceasul
+ * implicit al evdev); aici o comparam cu ora la care enigma2 il citeste. Enigma2 tine telecomanda exclusiv (EVIOCGRAB),
+ * deci numai aici se poate masura. Doua feluri de randuri, cu frana (cel mult unul la 2 s, cu cate s-au sarit):
+ *  - [intarziere]: ora nucleului e buna, dar evenimentul a fost citit cu cel putin INTARZIERE_MS mai tarziu: firul
+ *    principal al enigma2 a fost ocupat (tastele stau in coada nucleului si vin apoi toate deodata);
+ *  - [lipite]: doua apasari (make) ale aceluiasi dispozitiv la mai putin de LIPITE_MS dupa ora nucleului: nimeni nu
+ *    apasa asa repede, iar un cadru IR dureaza mai mult; driverul (sau receptorul IR) le-a tinut si le-a dat deodata,
+ *    adica in afara enigma2 (driverul, bateriile sau ledul telecomenzii). Nu pentru tastaturi (se scrie repede).
+ * La fiecare REZUMAT apasari ale unui dispozitiv, un rand INFO [rezumat] (apasari, intarziate, lipite, cea mai mare
+ * intarziere), ca un pachet de tester sa arate si ca drumul e curat. Diferente sub 0 sau peste MAX_MS (ceasul mutat
+ * de NTP sau de ora din satelit) nu se socotesc. Numai codul tastei, fara ce face omul.
+ */
+static const long long INTARZIERE_MS = 300, LIPITE_MS = 60, MAX_MS = 30000;
+static const unsigned REZUMAT = 100;
+
+void eRCDeviceInputDev::masoaraTasta(const struct input_event *ev)
+{
+	static hdsjurnal::Frana franaIntarziere(2000), franaLipite(2000);
+	struct timespec acum;
+	if (clock_gettime(CLOCK_REALTIME, &acum))
+		return;
+#ifdef input_event_sec
+	// anteturile noi (timp pe 64 de biti pe 32 de biti, ca la Hi3798MV200/u57) n-au campul time, numai input_event_sec/usec
+	long long nucleu = (long long)ev->input_event_sec * 1000 + ev->input_event_usec / 1000;
+#else
+	long long nucleu = (long long)ev->time.tv_sec * 1000 + ev->time.tv_usec / 1000;
+#endif
+	long long intarziere = (long long)acum.tv_sec * 1000 + acum.tv_nsec / 1000000 - nucleu;
+	bool masurabil = intarziere >= 0 && intarziere <= MAX_MS;
+	unsigned long sarite = 0;
+	if (masurabil && intarziere >= INTARZIERE_MS)
+	{
+		++m_intarziate;
+		if (franaIntarziere.lasa(sarite))
+			hdsjurnal::scrief("taste", hdsjurnal::AVERT, "intarziere", "cod=%d val=%d intarziere=%lld ms (firul principal "
+				"ocupat; sarite=%lu) dispozitiv=%s", ev->code, ev->value, intarziere, sarite, id.c_str());
+	}
+	if (masurabil && intarziere > m_maxIntarziere)
+		m_maxIntarziere = intarziere;
+	if (ev->value != 1)
+		return;
+	long long distanta = nucleu - m_ultimaApasare;
+	if (!iskeyboard && m_ultimaApasare && distanta >= 0 && distanta < LIPITE_MS)
+	{
+		++m_lipite;
+		if (franaLipite.lasa(sarite))
+			hdsjurnal::scrief("taste", hdsjurnal::AVERT, "lipite", "cod=%d la %lld ms dupa apasarea dinainte, dupa ora "
+				"nucleului (driverul le-a dat deodata; sarite=%lu) dispozitiv=%s", ev->code, distanta, sarite, id.c_str());
+	}
+	m_ultimaApasare = nucleu;
+	if (++m_apasari % REZUMAT == 0)
+	{
+		hdsjurnal::scrief("taste", hdsjurnal::INFO, "rezumat", "apasari=%u intarziate=%u lipite=%u max=%lld ms "
+			"dispozitiv=%s", m_apasari, m_intarziate, m_lipite, m_maxIntarziere, id.c_str());
+		m_maxIntarziere = 0;
+	}
+}
+
 eRCDeviceInputDev::eRCDeviceInputDev(eRCInputEventDriver *driver)
-	:eRCDevice(driver->getDeviceName(), driver), iskeyboard(false), ismouse(false)
+	:eRCDevice(driver->getDeviceName(), driver), iskeyboard(false), ismouse(false), m_ultimaApasare(0), m_apasari(0),
+	m_intarziate(0), m_lipite(0), m_maxIntarziere(0)
 {
 	if (strcasestr(id.c_str(), "keyboard") != NULL)
 		iskeyboard = true;

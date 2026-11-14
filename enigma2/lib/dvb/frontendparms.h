@@ -44,7 +44,8 @@ struct eDVBFrontendParametersSatellite
 	};
 
 	// multistream DVB-S2 (lib/dvb/hdsmultistream.h): is_id 0..255 sau No_Stream_Id_Filter, pls_mode, pls_code pe 18 biti;
-	// t2mi_plp_id / t2mi_pid sunt numai date (lamedb, satellites.xml, afisare), nu se trimit driverului
+	// t2mi_plp_id / t2mi_pid: din lamedb si satellites.xml; la acordarea DVB-S2 merg la driver ca in OE-Alliance
+	// (frontend.cpp, DTV_ISDBT_SB_SEGMENT_IDX), iar driverele care stiu T2-MI decapsuleaza in placa
 	enum {
 		No_Stream_Id_Filter = -1
 	};

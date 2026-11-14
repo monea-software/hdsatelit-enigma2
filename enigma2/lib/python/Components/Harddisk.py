@@ -73,6 +73,18 @@ def findMountpoint(device, mounts = None):
 # Storage devices get stable names under /media, in this order: /media/hdd is where recordings and timeshift go
 # (SCOPE_HDD is /hdd/movie/, /hdd -> media/hdd), the others are for more sticks and cards.
 MEDIA_NAMES = ("hdd", "usb", "usb2", "usb3", "usb4", "usb5", "usb6", "usb7", "usb8")
+# 0.7.5 (MNT): the old name a stick or disk may also be given by hand in Montarea discurilor (as in the OE-Alliance images)
+CHOSEN_EXTRA = "mmc"
+# HDSatelit 0.7.5 (forum 789, darog69): /media/mmc is the stable name of an SD card in the card slot of the receiver (never the
+# eMMC the image runs from). The old names (MEDIA_NAMES and mmc) of a partition the system mounted in /run/media are real
+# mountpoints, a bind of that mount, as in the OE-Alliance images where /media/hdd is the mountpoint: the converters and plugins
+# of themes written for those images look for /media/hdd in /proc/mounts or with os.path.ismount, and a link is neither.
+# The label names and the names chosen by the user stay links. When the bind cannot be made, the old link is made.
+MMC_NAME = "mmc"
+BIND_NAMES = MEDIA_NAMES + (MMC_NAME,)
+# hidden switch: "0" makes links again for the old names (as before 0.7.5)
+MEDIA_BIND_ENV = "HDS_MEDIA_BIND"
+BIND_TIMEOUT = 10
 SYSTEM_MOUNT_BASE = "/run/media/"
 # The base system mounts USB partitions itself before enigma2 starts: the generic udev-extraconf mount.sh of
 # openembedded-core, in /run/media/<LABEL>-<device> (/run is on the internal flash). That mount stays where it is
@@ -129,7 +141,18 @@ def isUnder(p, base):
 def isMediaName(p):
 	"""/media/hdd, /media/usb, ... (with or without the last /)"""
 	p = (p or "").rstrip("/")
-	return p.startswith(MEDIA_ROOT) and p[len(MEDIA_ROOT):] in MEDIA_NAMES
+	return p.startswith(MEDIA_ROOT) and p[len(MEDIA_ROOT):] in BIND_NAMES
+
+def isSdCard(device):
+	"""a partition of an SD card in the card slot (/sys/block/mmcblkN/device/type is SD), not the eMMC (MMC) the image runs
+	from, not an eMMC boot area"""
+	m = re.match(r"^(mmcblk[0-9]+)(p[0-9]+)?$", device or "")
+	if not m or isSpecialMmcArea(device):
+		return False
+	try:
+		return readFile("/sys/block/%s/device/type" % m.group(1)) == "SD"
+	except (IOError, OSError):
+		return False
 
 def isAliasOf(alias, mountpoint):
 	"""alias is a link that leads to mountpoint"""
@@ -212,7 +235,7 @@ def deviceLabel(device):
 def mediaLabelName(label):
 	"""A single safe path component; reserved names stay with their existing owners."""
 	name = "".join(c if c.isalnum() or c in "-_" else "_" for c in label)[:32]
-	if not name or name.casefold() in set(MEDIA_NAMES) | {"net", "autofs"}:
+	if not name or name.casefold() in set(BIND_NAMES) | {"net", "autofs"}:
 		return ""
 	return name
 
@@ -466,8 +489,8 @@ class Harddisk:
 				continue                                                                    
 			try:                                                                                
 				if MajorMinor(real_path) == MajorMinor(self.partitionPath(real_path[-1])):
+					# every mount of the partition (since 0.7.5 /media/hdd can be a bind of the system's mount)
 					cmd.append(unescapeMountPath(parts[1]))
-					break
 			except OSError:
 				pass
 
@@ -707,11 +730,14 @@ class Partition:
 			mounts = readMounts()
 		if self.device and self.is_hotplug:
 			# hotplug partitions: the mountpoint is whatever /proc/mounts says now, unless the partition is shown under
-			# its stable name (/media/hdd, a link to where the system mounted it)
+			# its stable name (/media/hdd, a link to where the system mounted it, or since 0.7.5 a bind of that mount: one of
+			# the mountpoints found)
 			found = _mountpointsIn(self.device, mounts)
 			mountpoint = found[0] if found else None
 			if mountpoint is None:
 				return False
+			if (self.mountpoint or "").rstrip("/") in [m.rstrip("/") for m in found]:
+				return True
 			if self.mountpoint != mountpoint and not isAliasOf(self.mountpoint, mountpoint):
 				self.mountpoint = mountpoint
 			return True
@@ -1108,10 +1134,12 @@ class HarddiskManager:
 					p.is_cdrom = is_cdrom
 					p.usb = usb
 					p.sata = sata
+					# an SD card the system mounted gets /media/mmc (a bind of the system's mount), like the sticks
+					p.sd = not usb and not sata and not is_cdrom and isSdCard(device)
 					p.removable = removable
 					p.notify_mount = not getattr(self, "_initializing", False)
 					stable = None
-					if mountpoints and not (usb or sata):
+					if mountpoints and not (usb or sata or p.sd):
 						# not USB or SATA (fstab, the system), or already on its stable name (enigma2 started again)
 						self.announceMounted(device, stable or mountpoints[0], p)
 					else:
@@ -1304,6 +1332,9 @@ class HarddiskManager:
 				return False
 			self.media_alias_targets.setdefault(device, {})[alias] = value
 			return True
+		if alias.rstrip("/") in [m.rstrip("/") for m in findMountpoints(device)]:
+			# already the bind of this partition (an old name, BIND_NAMES)
+			return True
 		if not self.mediaPlaceFree(alias, device):
 			return False
 		if not alive():
@@ -1313,7 +1344,9 @@ class HarddiskManager:
 				if not alive():
 					return False
 				unlink(alias)
-			elif path.isdir(alias):
+			if path.basename(alias.rstrip("/")) in BIND_NAMES and self.bindName(target, alias):
+				return alive()
+			if path.isdir(alias):
 				if not alive():
 					return False
 				rmdir(alias)
@@ -1397,7 +1430,9 @@ class HarddiskManager:
 		if uuid and UUID_RX.fullmatch(uuid):
 			choices = [["", _("Automat")]]
 			label = path.basename(self.label_aliases.get(device, "")) or mediaLabelName(deviceLabel(device))
-			for name in list(MEDIA_NAMES[:2]) + ([label] if label else []):
+			# 0.7.5 (MNT, tamiciav7 LinuxSat 164125): toate numele vechi, ca la Montarea discurilor (hdd, usb, usb2..usb8,
+			# mmc) si eticheta; freeMediaName il ia apoi intai pe cel ales, deci discul nu mai primeste si /media/hdd
+			for name in list(MEDIA_NAMES) + [CHOSEN_EXTRA] + ([label] if label else []):
 				if name == value or self.mediaAssignmentFree(name, uuid):
 					choices.append([name, MEDIA_ROOT + name])
 			if value and value not in [c[0] for c in choices]:
@@ -1450,7 +1485,13 @@ class HarddiskManager:
 		reserved.update(MEDIA_ROOT + n for u, n in self.media_names.items() if u != uuid)
 		# 09.11.2026: numele traditional ramane ca alias de compatibilitate;
 		# preferinta se adauga numai cand se anunta noua montare.
-		for name in MEDIA_NAMES:
+		# 0.7.5 (MNT): un nume vechi ales de om (hdd, usb, usb2..usb8, mmc) e primul incercat, cu aceleasi verificari; asa
+		# un stick ales „usb” nu mai ia intai /media/hdd. Un nume dupa eticheta ramane numai legatura (announceMounted).
+		chosen = self.media_names.get(uuid, "") if uuid else ""
+		names = list(MEDIA_NAMES)
+		if chosen in names or chosen == CHOSEN_EXTRA:
+			names = [chosen] + [n for n in names if n != chosen]
+		for name in names:
 			place = MEDIA_ROOT + name
 			if place in mounted or place in reserved:
 				continue
@@ -1475,7 +1516,7 @@ class HarddiskManager:
 	def stableMountpoint(self, device, mountpoints):
 		"""the stable name a partition already has: mounted on it, or a link to its mount (after enigma2 restarts)"""
 		preferred = self.media_names.get(deviceUuid(device), "")
-		names = list(MEDIA_NAMES)
+		names = list(BIND_NAMES)
 		if preferred and preferred not in names:
 			names.append(preferred)
 		for name in names:
@@ -1492,9 +1533,39 @@ class HarddiskManager:
 				return alias
 		return None
 
-	def makeAlias(self, device, mountpoint):
-		"""/media/<name> as a link to where the base system mounted the partition; None if no name is free"""
-		name = self.freeMediaName(deviceUuid(device))
+	def bindName(self, source, alias):
+		"""an old name (BIND_NAMES) as a real mountpoint: a bind of where the system mounted the partition. The place is free
+		(no link, an empty folder or nothing); True only when /proc/mounts shows the bind, otherwise the folder made here is
+		removed again and the caller makes the link"""
+		if environ.get(MEDIA_BIND_ENV) == "0" or path.basename(alias.rstrip("/")) not in BIND_NAMES:
+			return False
+		try:
+			if not path.isdir(alias):
+				makedirs(alias)
+			elif listdir(alias):
+				# a real folder with files in it is never covered
+				return False
+			subprocess.run(["mount", "--bind", source, alias], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+				timeout=BIND_TIMEOUT)
+		except (OSError, ValueError, subprocess.SubprocessError) as err:
+			print("[Harddisk] bind of %s on %s: %s" % (source, alias, err))
+		if alias.rstrip("/") in [m.rstrip("/") for s, m in readMounts()]:
+			return True
+		print("[Harddisk] bind of %s on %s not made, a link instead" % (source, alias))
+		try:
+			if path.isdir(alias) and not path.islink(alias) and not listdir(alias):
+				rmdir(alias)
+		except OSError:
+			pass
+		return False
+
+	def makeAlias(self, device, mountpoint, name=None):
+		"""/media/<name> where the base system mounted the partition: a bind (old names, BIND_NAMES) or a link; None if no
+		name is free. `name`: only this name (mmc for an SD card), if it is free"""
+		if name is None:
+			name = self.freeMediaName(deviceUuid(device))
+		elif not self.mediaPlaceFree(MEDIA_ROOT + name, device):
+			name = None
 		if name is None:
 			print("[Harddisk] no free name under %s for %s" % (MEDIA_ROOT, device))
 			return None
@@ -1505,7 +1576,14 @@ class HarddiskManager:
 		try:
 			if path.islink(alias):
 				unlink(alias)
-			elif path.isdir(alias):
+			if self.bindName(mountpoint, alias):
+				if not inTermen():
+					# removed meanwhile: removeHotplugPartition and stalePlan unmount what is under /media
+					return None
+				self.aliases[device] = alias
+				print("[Harddisk] %s (mounted on %s) is also mounted on %s" % (device, mountpoint, alias))
+				return alias
+			if path.isdir(alias):
 				rmdir(alias)
 			symlink(mountpoint, alias)
 		except OSError as err:
@@ -1646,6 +1724,8 @@ class HarddiskManager:
 			stable = None
 			if getattr(p, "usb", False) or getattr(p, "sata", False):
 				stable = self.stableMountpoint(device, mountpoints) or self.makeAlias(device, mountpoints[0])
+			elif getattr(p, "sd", False):
+				stable = self.stableMountpoint(device, mountpoints) or self.makeAlias(device, mountpoints[0], MMC_NAME)
 			return {"mounted": stable or mountpoints[0]}
 		if mountedOnly or p.has_partitions or p.is_cdrom:
 			return

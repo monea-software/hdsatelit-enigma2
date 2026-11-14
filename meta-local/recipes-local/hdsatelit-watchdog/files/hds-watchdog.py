@@ -271,6 +271,14 @@ STIVE_FARA_BATAIE_S = 180    # prima copie a stivelor, de la pornirea procesului
 STIVE_FARA_BATAIE_DIN_NOU_S = 600  # a doua si ultima copie pentru acelasi proces fara nicio bataie
 
 _viata_enigma2 = None        # pid, parinte, pornit_la (/proc/uptime), prima_bataie (intarziere), stive (0..2)
+# 0.7.5 (PRN): uptime-ul primei treceri a acestui paznic. Un enigma2 pornit inainte de el (paznicul repornit de
+# actualizarea pachetului lui, pkg_postinst, de obicei la cateva minute dupa pornirea receptorului) care bate deja nu
+# are prima bataie masurabila: bataia din fisier e ultima, nu prima (pachetele SF8008 1185, 753: „prima bataie dupa
+# 199/193 s” false). Atunci prima_bataie = PRIMA_BATAIE_NECUNOSCUTA si niciun rand. Pus numai de main() (probele
+# care cheama direct pas_viata_enigma2 il lasa None: regula nu se aplica).
+_paznic_pornit_la = None
+PRIMA_BATAIE_NECUNOSCUTA = -1
+_ultimul_nucleu = ""         # rezumatul firului principal enigma2 vazut de nucleu la ultima cerere de stive
 
 # ---- nivelul 5, decodorul video fara memorie (lotul paza-cadere-023, 05.10.2026) ----
 KMSG_PATH = os.environ.get("HDS_WATCHDOG_KMSG", "/dev/kmsg")
@@ -963,8 +971,11 @@ def cere_stivele(pid, anunta=True):
     """La diagnostic sau inainte de SIGTERM: enigma2 scrie stivele tuturor firelor Python in STIVE_PATH (din semnal,
     merge si cu firul principal blocat); partea noua se copiaza in CRASH_LOG_DIR/enigma2-stive-<data>.txt, cu ultimele
     CRASH_LOG_PASTRATE pastrate. -> calea copiei sau None. anunta=False: apelantul scrie randul cu motivul. Nu arunca."""
+    global _ultimul_nucleu
     if not _prinde_semnalul(pid, STIVE_SEMNAL):
         return None
+    # inainte de semnal (semnalul scoate firele din apelul in care stau): ce vede nucleul la fiecare fir
+    nucleu, _ultimul_nucleu = fire_in_nucleu(pid)
     inainte = max(_marime(STIVE_PATH), 0)
     try:
         os.kill(pid, STIVE_SEMNAL)
@@ -990,6 +1001,9 @@ def cere_stivele(pid, anunta=True):
         os.makedirs(CRASH_LOG_DIR, exist_ok=True)
         cale = os.path.join(CRASH_LOG_DIR, "%s%s-%d.txt" % (STIVE_PREFIX, time.strftime("%Y%m%d-%H%M%S"), pid))
         with open(cale, "wb") as f:
+            if nucleu:
+                f.write(("== firele enigma2 vazute de nucleu (inainte de semnal)\n%s\n== stivele Python\n" % nucleu)
+                        .encode("utf-8", "replace"))
             f.write(date)
         vechi = sorted(n for n in os.listdir(CRASH_LOG_DIR) if n.startswith(STIVE_PREFIX) and n.endswith(".txt"))
         for n in vechi[:-CRASH_LOG_PASTRATE]:
@@ -1001,8 +1015,79 @@ def cere_stivele(pid, anunta=True):
         log("stivele enigma2 nu s-au putut pastra: %s" % e)
         return None
     if anunta:
-        log("stivele firelor Python ale enigma2 pid=%d pastrate in %s" % (pid, cale))
+        log("stivele firelor Python ale enigma2 pid=%d pastrate in %s%s" % (pid, cale,
+            ("; firul principal in nucleu: %s" % _ultimul_nucleu) if _ultimul_nucleu else ""))
     return cale
+
+
+# 0.7.5 (PRN): numerele apelurilor de sistem care spun unde sta un fir (ARM EABI si MIPS o32), pentru stivele de mai sus.
+# Pachetul 1433 (SF8008, 12.11): firul principal sta in C++ (stiva Python arata numai e2reactor.py poll), deci numai
+# nucleul mai poate spune in ce apel si pe ce dispozitiv.
+APELURI_SISTEM = {
+    3: "read", 4: "write", 5: "open", 54: "ioctl", 142: "select", 162: "nanosleep", 168: "poll", 240: "futex",
+    252: "epoll_wait", 322: "openat", 335: "pselect6", 336: "ppoll", 265: "clock_nanosleep",
+    4003: "read", 4004: "write", 4005: "open", 4054: "ioctl", 4142: "select", 4166: "nanosleep", 4188: "poll",
+    4238: "futex", 4250: "epoll_wait", 4288: "openat", 4301: "pselect6", 4302: "ppoll", 4265: "clock_nanosleep",
+}
+APELURI_CU_FD = ("read", "write", "ioctl")
+
+
+def _citeste_scurt(cale, maxim=256):
+    try:
+        with open(cale) as f:
+            return f.read(maxim).strip()
+    except (OSError, ValueError):
+        return ""
+
+
+def apel_din_syscall(text, pid, citeste_legatura=None):
+    """Randul din /proc/<pid>/task/<tid>/syscall -> text scurt: „ioctl /dev/dvb/adapter0/frontend0 cerere 0x...”, „in
+    lucru (cod obisnuit, nu in nucleu)”, „futex” etc. Nu arunca."""
+    citeste_legatura = citeste_legatura or os.readlink
+    campuri = (text or "").split()
+    if not campuri:
+        return "necunoscut"
+    if campuri[0] == "running":
+        return "in lucru (cod obisnuit, nu in nucleu)"
+    try:
+        nr = int(campuri[0])
+    except ValueError:
+        return "necunoscut"
+    if nr < 0:
+        return "in nucleu, fara apel de sistem"
+    nume = APELURI_SISTEM.get(nr, "apelul %d" % nr)
+    if nume in APELURI_CU_FD and len(campuri) > 1:
+        try:
+            fd = int(campuri[1], 16)
+            tinta = citeste_legatura("/proc/%d/fd/%d" % (pid, fd))
+        except (ValueError, OSError):
+            tinta = "fd ?"
+        nume = "%s %s" % (nume, tinta)
+        if nume.startswith("ioctl") and len(campuri) > 2:
+            nume += " cerere %s" % campuri[2]
+    return nume
+
+
+def fire_in_nucleu(pid, radacina="/proc"):
+    """(textul tuturor firelor: fir nume stare wchan apel, rezumatul firului principal) pentru enigma2 pid. Nu arunca;
+    fara /proc -> ("", "")."""
+    randuri = []
+    principal = ""
+    try:
+        firele = sorted(int(t) for t in os.listdir("%s/%d/task" % (radacina, pid)) if t.isdigit())
+    except (OSError, ValueError):
+        return "", ""
+    for tid in firele[:64]:
+        baza = "%s/%d/task/%d/" % (radacina, pid, tid)
+        nume = _citeste_scurt(baza + "comm", 64)
+        stat = _citeste_scurt(baza + "stat", 512)
+        stare = stat.rsplit(")", 1)[1].split()[0] if ")" in stat and stat.rsplit(")", 1)[1].split() else "?"
+        wchan = _citeste_scurt(baza + "wchan", 128) or "0"
+        apel = apel_din_syscall(_citeste_scurt(baza + "syscall", 256), pid)
+        randuri.append("fir=%d nume=%s stare=%s wchan=%s apel=%s" % (tid, nume, stare, wchan, apel))
+        if tid == pid:
+            principal = "stare=%s wchan=%s apel=%s" % (stare, wchan, apel)
+    return "\n".join(randuri), principal
 
 
 def uptime_secunde():
@@ -1083,8 +1168,11 @@ def jurnal_iesire_enigma2(proces, uptime_acum):
     sfarsit = iesire["uptime"] if iesire is not None else uptime_acum
     durata = ("%d s" % max(0, int(sfarsit - proces["pornit_la"]))
               if sfarsit is not None and proces["pornit_la"] is not None else "necunoscut")
-    prima = ("prima bataie dupa %d s" % proces["prima_bataie"]
-             if proces["prima_bataie"] is not None else "fara nicio bataie")
+    if proces["prima_bataie"] == PRIMA_BATAIE_NECUNOSCUTA:
+        prima = "prima bataie inainte de pornirea paznicului"
+    else:
+        prima = ("prima bataie dupa %d s" % proces["prima_bataie"]
+                 if proces["prima_bataie"] is not None else "fara nicio bataie")
     log("enigma2 pid=%d a iesit: %s, a mers %s, %s" %
         (proces["pid"], descrie_iesirea_enigma2(iesire), durata, prima))
 
@@ -1114,6 +1202,13 @@ def pas_viata_enigma2(acum, pid_enigma2, bataie, diagnostic=True):
     if up is None or proces["pornit_la"] is None:
         return
     varsta = up - proces["pornit_la"]
+    if (proces["prima_bataie"] is None and bataie is not None and bataie["pid"] == pid_enigma2
+            and _paznic_pornit_la is not None and proces["pornit_la"] < _paznic_pornit_la
+            and not proces.get("vazut_fara_bataie")):
+        # pornit inainte de acest paznic si bate deja la prima privire: prima bataie nu se poate sti
+        proces["prima_bataie"] = PRIMA_BATAIE_NECUNOSCUTA
+    if proces["prima_bataie"] is None and (bataie is None or bataie["pid"] != pid_enigma2):
+        proces["vazut_fara_bataie"] = True
     if proces["prima_bataie"] is None and bataie is not None and bataie["pid"] == pid_enigma2:
         intarziere = varsta - (acum - bataie["bataie"])
         if 0 <= intarziere <= varsta and bataie["bataie"] <= acum:
@@ -1128,7 +1223,8 @@ def pas_viata_enigma2(acum, pid_enigma2, bataie, diagnostic=True):
         cale = cere_stivele(pid_enigma2, anunta=False)
         rezultat = ("stivele firelor Python pastrate in %s" % cale if cale else
                     "stivele firelor Python nu s-au putut pastra")
-        log("enigma2 pid=%d fara nicio bataie de %d s de la pornire: %s" % (pid_enigma2, int(varsta), rezultat))
+        log("enigma2 pid=%d fara nicio bataie de %d s de la pornire: %s%s" % (pid_enigma2, int(varsta), rezultat,
+            ("; firul principal in nucleu: %s" % _ultimul_nucleu) if cale and _ultimul_nucleu else ""))
 
 
 def parinte(pid):
@@ -2425,6 +2521,8 @@ def un_pas(fd, confirmed, urmatoarea_netguard):
 
 
 def main():
+    global _paznic_pornit_la
+    _paznic_pornit_la = uptime_precis()  # 0.7.5 (PRN): vezi PRIMA_BATAIE_NECUNOSCUTA
     log("pornire hds-watchdog.py (tinta=%s, interval=%ds, prag confirmare=%d verificari, %d cand e ocupat, "
         "jurnal=%s)" % (TARGET_PROCESS, PET_INTERVAL_S, CONFIRM_HANG_CHECKS, CONFIRM_HANG_CHECKS_OCUPAT, LOG_PATH))
 

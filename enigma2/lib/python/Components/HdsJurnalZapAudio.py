@@ -10,6 +10,16 @@ asteptare pe firul principal. Un lucrator blocat nu este inlocuit cu altul.
 Virsta formatului ramane necunoscuta: cache-ul HdsSunet nu are timestamp.
 Stabilizarea observata inseamna ultima schimbare urmata de probe egale;
 iesire_stabila_ms ramane ?, fara dovada unor achizitii noi ale formatului.
+
+Randurile ajung la noi in pachetul beta testerului numai daca trec curatarea
+lui (HdsBetaTester.curata scoate tot randul cu un cuvant despre accesul
+conditionat sau cu „pass...”, HdsDiagnostic.faraDatePersonale la fel). Pana in
+0.7.4 fiecare proba avea campul „criptat” si, cu bara de sunet, valoarea
+„passthrough”: soseau numai randurile „intrerupt” (GigaBlue UHD TRIO 4K,
+sunetul pierdut la zap si dupa stand-by, forumul 588). De aceea: codat=, iar
+AC3/DTS trimis neschimbat se scrie „direct”. Campul dupa= spune ce a fost
+inaintea zap-ului: zap (alt canal), standby (iesirea din stand-by) sau flux
+(un post sau un canal pe internet, de pilda Radio online).
 """
 
 from collections import deque
@@ -35,6 +45,11 @@ def _alege(v, permise):
 	return v if isinstance(v, str) and v in permise else None
 
 
+def _iesireAudio(v):
+	"""AC3/DTS: downmix sau direct (trimis neschimbat). Nu „passthrough”: curatarea jurnalelor scoate randul (vezi sus)."""
+	return {"downmix": "downmix", "passthrough": "direct"}.get(v) if isinstance(v, str) else None
+
+
 def _sigur(f):
 	def apel(self, *args, **kwargs):
 		try:
@@ -54,6 +69,7 @@ class JurnalZapAudio:
 		self._driver = None
 		self._motor = (None, None)
 		self._motor_legat = False
+		self._dinainte = None  # "standby" / "flux" pana la prima serie DVB de dupa
 
 	def _curataLimita(self, acum):
 		while self.randuri and acum - self.randuri[0] >= 3600:
@@ -121,12 +137,16 @@ class JurnalZapAudio:
 		if len(self.randuri) + len(TIMPI_MS) + 1 > MAX_RANDURI_ORA:
 			return
 		if self._principal(nav) is None:
+			# un post sau un canal pe internet (4097, 5001...); fisierele si timeshift-ul nu schimba ce a fost inainte
+			if self._eFlux(nav):
+				self._dinainte = "flux"
 			return
 		self.seq += 1
 		self._driver = None
 		self.serie = {"nav": nav, "t0": acum, "i": 0, "pista": None,
 			"format": None, "intarziere": None, "schimbari": [None, None, None],
-			"stabil": None, "repetari": 0, "lipsa_format": True}
+			"stabil": None, "repetari": 0, "lipsa_format": True, "dupa": self._dinainte or "zap"}
+		self._dinainte = None
 		if self.ceas is None:
 			from enigma import eTimer
 			self.ceas = eTimer()
@@ -143,7 +163,24 @@ class JurnalZapAudio:
 	def inchide(self, motiv="standby"):
 		if self.serie is not None:
 			self._scrie("intrerupt", (("motiv", "standby" if motiv == "standby" else "zap-nou"),))
+		if motiv == "standby":
+			self._dinainte = "standby"
 		self._opreste()
+
+	def _eFlux(self, nav):
+		"""True cand serviciul pornit acum e un flux de pe internet (adresa http/https in referinta)."""
+		try:
+			ref = nav.getCurrentlyPlayingServiceReference()
+			if ref is None:
+				from enigma import eServiceReference, iServiceInformation
+				service = nav.getCurrentService()
+				info = service and service.info()
+				text = info.getInfoString(iServiceInformation.sServiceref) if info else None
+				ref = eServiceReference(text) if text else None
+			cale = (ref.getPath() or "").lower() if ref is not None else ""
+		except Exception:
+			return False
+		return cale.startswith(("http", "rtsp", "rtmp", "udp", "rtp", "mms"))
 
 	@_sigur
 	def _laMotor(self, cod):
@@ -215,11 +252,11 @@ class JurnalZapAudio:
 		eq = _numar(getattr(getattr(c, "pornit", None), "value", None), maxim=1)
 		redare, lock = self._ui(nav)
 		fel = ref.getData(0)
-		campuri = [("serviciu", ("radio" if fel in (2, 10) else "tv") if _numar(fel, minim=1) else None), ("criptat", criptat),
+		campuri = [("serviciu", ("radio" if fel in (2, 10) else "tv") if _numar(fel, minim=1) else None), ("codat", criptat),
 			("index", index), ("codec", codec), ("pid", "0x%x" % pid if pid is not None else None),
 			("redare", redare), ("lock", lock),
-			("ac3_comandat", _alege(AVSwitch.AUDIO_SCRIS.get("ac3"), ("downmix", "passthrough"))),
-			("dts_comandat", _alege(AVSwitch.AUDIO_SCRIS.get("dts"), ("downmix", "passthrough"))),
+			("ac3_comandat", _iesireAudio(AVSwitch.AUDIO_SCRIS.get("ac3"))),
+			("dts_comandat", _iesireAudio(AVSwitch.AUDIO_SCRIS.get("dts"))),
 			("intarziere_dorita_ms", _numar(dorite.get("HDMI0"), maxim=500)),
 			("intarziere_optic_dorita_ms", _numar(dorite.get("SPDIF0"), maxim=500)),
 			("volum", volum), ("mut", mut), ("avc", avc),
@@ -302,6 +339,8 @@ class JurnalZapAudio:
 		p = self._schimbari(pista, formate, intarzieri, dt)
 		final = dt >= TIMPI_MS[-1]
 		faza = "final" if final else ("start" if s["i"] == 0 else "proba")
+		if s["i"] == 0 or final:
+			campuri.insert(0, ("dupa", s["dupa"]))
 		campuri.append(("pista", p))
 		campuri.extend(driver)
 		if final:

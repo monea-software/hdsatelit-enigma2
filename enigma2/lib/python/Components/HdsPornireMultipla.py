@@ -33,8 +33,10 @@
 #   nucleul imaginii alese va gasi discurile in aceeasi ordine;
 # - cu nucleu intern, sistemul poate sta pe o partitie USB ext4, in linuxrootfsN;
 #   tinta si kernel trebuie sa numeasca aceeasi partitie interna;
-# - root=UUID se rezolva fara cache si trebuie sa fie unic. Suportul UUID se
-#   dovedeste prin nucleul pornit acum, nu printr-un fisier din imaginea aleasa;
+# - root=UUID se rezolva fara cache si trebuie sa fie unic. Suportul UUID se dovedeste prin nucleul locului, nu printr-un
+#   fisier din imaginea aleasa: e nucleul pornit acum (cu root=UUID sau /dev/.newMB-uuid), sau nucleul din partitia
+#   locului contine initramfs-ul care pune /dev/.newMB-uuid (nucleuCuUuid; sloturile de pe disc ale altor imagini folosesc
+#   nucleul comun din linuxkernel1, deci imaginea pornita din alt slot din memorie nu-l ruleaza);
 # - alta forma se arata cu motivul, nu se alege;
 # - partitiile cardului sau ale stickului se citesc de unde le-a montat deja sistemul; altfel se monteaza numai pentru
 #   citit (ro,noload: fara reluarea jurnalului ext4) si se demonteaza imediat. Nu se scrie nimic pe ele;
@@ -55,6 +57,20 @@
 #   nucleu sau un disc negasit la pornire il duce inapoi in Recovery, nu il lasa fara imagine.
 # Locul pornit se recunoaste dupa partitie (UUID-ul rezolvat), subdosar si nucleu, nu dupa textul din root=.
 #
+# Qviart DUAL 4K UHD (masina dagsmv200, MACHINEBUILD=dual OEM=dags in linia de comanda; 0.7.5): alta schema, NUMAI aici.
+# - Incarcatorul porneste locul scris in PRIMUL OCTET al partitiei „flag” (mmcblk0p22 in blkdevparts): 0 = Android
+#   (nucleul in partitia boot), 1-4 = Linux. bootargs.bin al producatorului are pentru fiecare loc K comanda lui
+#   (bootcmd_enigmaK: nucleul din linuxkernelK, p26-p29) si linia de comanda (bootargs_enigmaK: root=rootfs (p30),
+#   rootsubdir=linuxrootfsK). Imaginea OE-Alliance pentru acest model citeste locul de acum din acest octet si il scrie
+#   la alegere (Tools/MultiBoot.py: DUAL_BOOT_FILE = /dev/block/by-name/flag, pack("B", loc)).
+# - Lista se face din blkdevparts (nu din fisierele STARTUP): locurile 1-4 cu nucleu valid si sistem cu sbin/init in
+#   rootfs/linuxrootfsK (aceeasi verificare ca la SF8008), plus Android (locul 0) cand partitia boot are un nucleu uImage
+#   valid. Locul de acum se ia din linia de comanda (rootsubdir si kernel), ca la celelalte modele.
+# - Alegerea scrie UN SINGUR OCTET (0-4) la inceputul partitiei flag, si nimic altceva: fara STARTUP, fara alte partitii.
+#   Inainte: dispozitivul e chiar partitia flag din blkdevparts (si /dev/block/by-name/flag, daca exista, duce la ea),
+#   e un dispozitiv bloc de 1 MiB in /proc/partitions; deschis fara O_CREAT si fara O_TRUNC; dupa: fsync, citit inapoi
+#   si comparat; la o nepotrivire se pune la loc octetul vechi. „Nu” la intrebarea de repornire pune la loc octetul vechi.
+#
 # Citirea listei poate monta multe partitii, deci ecranul si pagina web o fac pe un fir separat. Alegerea verifica din nou
 # numai locul ales (locuri(numai=...)), deci ramane scurta pe firul enigma2.
 #
@@ -63,6 +79,7 @@
 
 import os
 import re
+import stat
 import struct
 import subprocess
 import zlib
@@ -77,6 +94,8 @@ ABSENT = b"HDS-FARA-STARTUP\n"
 MAXIM_STARTUP = 4096
 UIMAGE_MAGIC = 0x27051956
 TINTA_EMMC = re.compile(r"^boot emmcflash0\.linuxkernel([1-9])$")
+# GigaBlue UHD Quad 4K Pro: opt locuri, tinta cu „:” (boot.bin al producatorului)
+TINTA_GPT_SUBDOSAR = re.compile(r"emmcflash0\.linuxkernel([1-9][0-9]?):?")
 TINTA_DISC = re.compile(r"^usb0\.sda([1-9][0-9]*)$")
 PARTITIE_SDA = re.compile(r"^/dev/sda[1-9][0-9]*$")
 PARTITIE_SCOASA = re.compile(r"^/dev/((?:sd[a-z]+|mmcblk[1-9][0-9]*p)[1-9][0-9]*)$")
@@ -88,6 +107,14 @@ SUBDOSAR_DISC = re.compile(r"^linuxrootfs[1-9][0-9]*$")
 SUBDOSAR_KEXEC = re.compile(r"^(?:[A-Za-z0-9_-]+/)?linuxrootfs[1-9][0-9]*$")
 LINIE = re.compile(r"^boot (\S+) '([ -&(-~]*)'\n?$")
 OPTIUNI_CITIRE = "ro,noload"
+# Qviart DUAL 4K (schema „flag”, mai sus)
+FLAG_PARTITIE = "flag"
+FLAG_LEGATURA = "dev/block/by-name/flag"
+FLAG_MARIME = 1024 * 1024
+FLAG_LOCURI = (1, 2, 3, 4)
+LOC_ANDROID = 0
+ANDROID = "Android"
+_flagVechi = []   # [(dispozitivul, octetul de dinainte)]: ultima alegere, pentru inapoi()
 
 
 def N_(text):
@@ -208,12 +235,17 @@ def linieComanda(radacina=None):
 def disponibil(radacina=None):
 	"""Capacitatea receptorului: bootoptions sau pornire kexec deja instalata.
 	Nu instaleaza si nu initializeaza pornirea multipla."""
+	if _dual(radacina):
+		return True
 	dev, _m = dispozitivPartitie(parametri(linieComanda(radacina)).get("blkdevparts", ""), "bootoptions")
 	if dev or _dosarKexec(radacina) or os.path.exists(_cale(radacina, "dev/block/by-name/bootoptions")):
 		return True
 	boot = dosarBoot(radacina)
-	return bool(boot and any(_verificaNativ(citesteStartup(date), {}, radacina)
-		for _n, _fisier, date in startupuri(boot)))
+	if boot and any(_verificaNativ(citesteStartup(date), {}, radacina) for _n, _fisier, date in startupuri(boot)):
+		return True
+	# GigaBlue UHD Quad 4K Pro (0.7.5): partitia boot (FAT, STARTUP_1..8 ale producatorului) poate sta
+	# nemontata; cu locurile numite in GPT (linuxkernel1 si userdata) lista o monteaza la cerere (_deschideBoot)
+	return bool(not boot and _gptSubdosare(radacina))
 
 
 # ------------------------------------------------------------------ fisierele STARTUP
@@ -398,20 +430,31 @@ def _radacinaDisc(referinta, radacina=None):
 
 
 def _uuidDovedit(st, cmd, radacina):
-	"""Capacitatea apartine nucleului, care trebuie sa fie cel pornit acum. PARTUUID nu e dovedit pentru initramfs-ul
-	locurilor din bootoptions (el cauta numai UUID-ul), deci un asemenea loc se arata, dar nu se alege."""
-	if PARTUUID_DISC.fullmatch(st["p"].get("root", "")):
+	"""Capacitatea apartine nucleului locului. Dovezile: (1) e chiar nucleul pornit acum, iar acum radacina e UUID= sau
+	initramfs-ul lui a pus /dev/.newMB-uuid; (2) nucleul din partitia locului contine el insusi initramfs-ul care pune
+	/dev/.newMB-uuid (nucleuCuUuid). A doua e pentru locurile de pe disc ale altor imagini, care folosesc toate nucleul
+	comun din linuxkernel1, cand imaginea de acum ruleaza cu alt nucleu (Wlad, Amiko Viper 4K V10, asistenta 366732,
+	13.11.2026: din slotul 3 toate cele 14 imagini de pe disc erau refuzate, desi pornesc). PARTUUID nu e dovedit pentru
+	initramfs-ul locurilor din bootoptions (el cauta numai UUID-ul), deci un asemenea loc se arata, dar nu se alege."""
+	p = st["p"]
+	if PARTUUID_DISC.fullmatch(p.get("root", "")):
 		return False
-	if not UUID_DISC.fullmatch(st["p"].get("root", "")):
+	if not UUID_DISC.fullmatch(p.get("root", "")):
 		return True
-	return st["p"].get("kernel") == cmd.get("kernel") and (
+	if p.get("kernel") == cmd.get("kernel") and (
 		bool(UUID_DISC.fullmatch(cmd.get("root", ""))) or
-		os.path.exists(_cale(radacina, "dev/.newMB-uuid")))
+		os.path.exists(_cale(radacina, "dev/.newMB-uuid"))):
+		return True
+	nucleu = p.get("kernel", "")
+	if not PARTITIE_NUCLEU.fullmatch(nucleu):
+		return False
+	return nucleuCuUuid(_cale(radacina, nucleu), _marimePartitie(nucleu, radacina))
 
 
-def verificaDisc(st, cmd, radacina=None):
+def verificaDisc(st, cmd, radacina=None, cuUuid=True):
 	"""Nucleu USB separat sau nucleu intern cu sistem USB in linuxrootfsN.
-	Intoarce (nucleu, radacina); fara rootwait sau cu alte partitii, None."""
+	Intoarce (nucleu, radacina); fara rootwait sau cu alte partitii, None. `cuUuid=False`: numai forma, fara dovada
+	suportului UUID (ca un loc gol cu forma stiuta sa nu se arate, oricare ar fi nucleul pornit acum)."""
 	if not st or st.get("repetate"):
 		return None
 	p = st["p"]
@@ -431,7 +474,7 @@ def verificaDisc(st, cmd, radacina=None):
 			return None
 		if p.get("userdataroot", p["root"]) != p["root"]:
 			return None
-		return (nucleu, rad) if _uuidDovedit(st, cmd, radacina) else None
+		return (nucleu, rad) if not cuUuid or _uuidDovedit(st, cmd, radacina) else None
 	m = TINTA_DISC.match(st["tinta"])
 	if not m:
 		return None
@@ -478,6 +521,116 @@ def nucleuValid(cale, marime_partitie):
 	if zlib.crc32(antet[:4] + b"\0\0\0\0" + antet[8:]) & 0xffffffff != hcrc:
 		return False
 	return marime_partitie is None or marime + 64 <= marime_partitie
+
+
+# Dovada suportului UUID in nucleul unui loc (nu in cel pornit acum). Initramfs-ul de pornire multipla din OE-Alliance
+# (/init: resolve_root_device pentru root=UUID=, apoi mark_new_multiboot cu `touch /dev/.newMB-uuid`) sta in nucleu:
+# uImage -> zImage -> Image comprimat gzip -> in Image arhiva cpio newc (comprimata gzip sau nu). Masurat pe kernel.bin
+# Amiko Viper 4K al nostru (0.7.3): Image 14,6 MB, initramfs gzip de 3,6 MB cu 596 de fisiere. Acelasi semn il crede
+# deja codul pentru nucleul pornit acum, iar managerul altei imagini scrie sloturile UUID numai dupa el. Semnul se cauta
+# NUMAI in fisierul init al unei arhive cpio, fluxurile trebuie sa fie intregi (gzip cu CRC bun), iar orice eroare
+# inseamna „nedovedit”. Alt fel de comprimare (xz, lzo, lz4) ramane nedovedit: locul se arata, dar nu se alege.
+PARTITIE_NUCLEU = re.compile(r"^/dev/mmcblk0p[1-9][0-9]*$")
+SEMN_UUID = b"/dev/.newMB-uuid"
+NUCLEU_MAXIM = 32 * 1024 * 1024
+DECOMPRIMAT_MAXIM = 64 * 1024 * 1024
+INCERCARI_GZIP = 64
+INCERCARI_CPIO = 256
+INTRARI_CPIO = 100000
+_nucleeUuid = {}   # (cale, hcrc, dcrc, marime) -> True/False; alegerea reverifica fara sa mai decomprime
+
+
+def _gzipuri(buf, maxim=DECOMPRIMAT_MAXIM, incercari=INCERCARI_GZIP):
+	"""Fluxurile gzip intregi din `buf` (fiecare cel mult `maxim` octeti decomprimat), in ordine. Un inceput fals sau un
+	flux taiat (fara sfarsit sau cu CRC gresit) se sare."""
+	vedere = memoryview(buf)
+	i, n = 0, 0
+	while n < incercari:
+		i = buf.find(b"\x1f\x8b\x08", i)
+		if i < 0:
+			return
+		n += 1
+		d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+		try:
+			iesire = d.decompress(vedere[i:], maxim)
+		except zlib.error:
+			iesire = None
+		if iesire is not None and d.eof:
+			yield iesire
+			i = len(buf) - len(d.unused_data)
+		else:
+			i += 3
+
+
+def _initCuSemn(buf):
+	"""Exista in `buf` o arhiva cpio newc al carei fisier init (obisnuit) contine SEMN_UUID?"""
+	i, n = 0, 0
+	while n < INCERCARI_CPIO:
+		i = buf.find(b"070701", i)
+		if i < 0:
+			return False
+		n += 1
+		j = i
+		for _k in range(INTRARI_CPIO):
+			antet = buf[j:j + 110]
+			if len(antet) < 110 or antet[:6] != b"070701" or not re.fullmatch(rb"[0-9A-Fa-f]{104}", antet[6:]):
+				break
+			mod, marime, nume_lung = int(antet[14:22], 16), int(antet[54:62], 16), int(antet[94:102], 16)
+			if nume_lung < 1 or j + 110 + nume_lung > len(buf):
+				break
+			nume = buf[j + 110:j + 110 + nume_lung - 1]
+			inceput = (j + 110 + nume_lung + 3) & ~3
+			if inceput + marime > len(buf):
+				break
+			if nume == b"TRAILER!!!":
+				break
+			if nume.lstrip(b"./") == b"init" and mod & 0o170000 == 0o100000 and SEMN_UUID in buf[inceput:inceput + marime]:
+				return True
+			j = (inceput + marime + 3) & ~3
+		i += 6
+	return False
+
+
+def _initramfsCuSemn(continut):
+	"""Continutul unui uImage (fara antet): Image necomprimat, zImage cu Image gzip, initramfs gzip sau necomprimat."""
+	if _initCuSemn(continut):
+		return True
+	for imagine in _gzipuri(continut):
+		if _initCuSemn(imagine):
+			return True
+		for arhiva in _gzipuri(imagine):
+			if _initCuSemn(arhiva):
+				return True
+	return False
+
+
+def nucleuCuUuid(cale, marime_partitie):
+	"""Nucleul uImage din `cale` (antet si CRC-ul datelor bune, cat incape in partitie) are initramfs-ul de pornire
+	multipla care rezolva root=UUID= si pune /dev/.newMB-uuid. Rezultatul se tine minte dupa antet (CRC-urile si
+	marimea), deci a doua intrebare (alegerea, pe firul enigma2) citeste numai cei 64 de octeti ai antetului."""
+	if not marime_partitie or not nucleuValid(cale, marime_partitie):
+		return False
+	antet = _citeste(cale, 64)
+	_magie, hcrc, _t, marime, _inc, _intr, dcrc = struct.unpack(">7I", antet[:28])
+	if marime > NUCLEU_MAXIM:
+		return False
+	cheie = (cale, hcrc, dcrc, marime)
+	if cheie in _nucleeUuid:
+		return _nucleeUuid[cheie]
+	date = _citeste(cale, 64 + marime)
+	if not date or len(date) != 64 + marime:
+		return False
+	rez = False
+	continut = date[64:]   # o singura copie (7-8 MB pe receptor)
+	del date
+	if zlib.crc32(continut) & 0xffffffff == dcrc:
+		try:
+			rez = _initramfsCuSemn(continut)
+		except (MemoryError, ValueError, zlib.error) as e:
+			_log("nucleul %s: %r" % (cale, e))
+	_nucleeUuid[cheie] = rez
+	_log("nucleul %s: suportul UUID %s" % (cale, "dovedit (initramfs cu /dev/.newMB-uuid)" if rez else "nedovedit"))
+	return rez
 
 
 def radacinaValida(dosar):
@@ -583,11 +736,57 @@ def _dispozitivBoot(radacina=None):
 	return _partitieNume("boot", radacina)
 
 
+def _marimePartitie(dispozitiv, radacina=None):
+	"""Marimea in octeti a partitiei /dev/<nume> din /proc/partitions, sau None."""
+	for rand in _text(_cale(radacina, "proc/partitions")).splitlines():
+		c = rand.split()
+		if len(c) == 4 and c[3] == dispozitiv[5:] and c[2].isdigit():
+			return int(c[2]) * 1024
+	return None
+
+
+def _gptSubdosare(radacina=None):
+	"""Schema GigaBlue UHD Quad 4K Pro: fara blkdevparts in linia de comanda, cu partitiile GPT boot, linuxkernel1 si
+	userdata (nucleele in linuxkernelK, sistemele in userdata/linuxrootfsK)."""
+	if parametri(linieComanda(radacina)).get("blkdevparts"):
+		return False
+	return bool(_partitieNume("boot", radacina) and _partitieNume("linuxkernel1", radacina) and
+		_partitieNume("userdata", radacina))
+
+
+def verificaGptSubdosar(st, cmd, radacina=None):
+	"""Locul K al schemei GigaBlue UHD Quad 4K Pro (boot.bin din initrd_gbquad4kpro_20260508r0 al producatorului, si
+	linia de comanda a unui Quad 4K Pro real): `boot emmcflash0.linuxkernelK: 'root=/dev/mmcblk0p13
+	rootsubdir=linuxrootfsK kernel=/dev/mmcblk0p<K+3> rootwait rw ...'`, cu „:” dupa tinta si fara blkdevparts. Nucleul
+	si radacina se verifica dupa numele GPT (linuxkernelK, userdata), nu dupa numere. -> (K, nucleu, marime, radacina,
+	subdosar) sau None."""
+	if not st or st.get("repetate"):
+		return None
+	p = st["p"]
+	if p.get("blkdevparts") or cmd.get("blkdevparts"):
+		return None
+	m = TINTA_GPT_SUBDOSAR.fullmatch(st["tinta"])
+	if not m or p.get("rootfstype", "ext4") != "ext4":
+		return None
+	k = m.group(1)
+	if p.get("rootsubdir") != "linuxrootfs" + k:
+		return None
+	nucleu, rad = _partitieNume("linuxkernel" + k, radacina), _partitieNume("userdata", radacina)
+	if not nucleu or not rad or p.get("kernel") != nucleu or p.get("root") != rad:
+		return None
+	marime = _marimePartitie(nucleu, radacina)
+	return (k, nucleu, marime, rad, p["rootsubdir"]) if marime else None
+
+
 def _verificaNativ(st, cmd, radacina=None):
-	"""Schema bootoptions existenta sau kernelN/rootfsN numite in GPT."""
+	"""Schema bootoptions existenta, kernelN/rootfsN numite in GPT sau linuxkernelK cu userdata/linuxrootfsK numite in
+	GPT (GigaBlue UHD Quad 4K Pro)."""
 	emmc = verificaEmmc(st, cmd)
 	if emmc:
 		return emmc
+	gpt = verificaGptSubdosar(st, cmd, radacina)
+	if gpt:
+		return gpt
 	if not st or st.get("repetate") or st["p"].get("rootsubdir"):
 		return None
 	m = re.fullmatch(r"emmcflash0\.kernel([1-9][0-9]*):?", st["tinta"])
@@ -597,11 +796,7 @@ def _verificaNativ(st, cmd, radacina=None):
 	nucleu, rad = _partitieNume("kernel" + n, radacina), _partitieNume("rootfs" + n, radacina)
 	if not nucleu or not rad or st["p"].get("root") != rad or st["p"].get("kernel", nucleu) != nucleu:
 		return None
-	marime = None
-	for rand in _text(_cale(radacina, "proc/partitions")).splitlines():
-		c = rand.split()
-		if len(c) == 4 and c[3] == nucleu[5:] and c[2].isdigit():
-			marime = int(c[2]) * 1024
+	marime = _marimePartitie(nucleu, radacina)
 	return (n, nucleu, marime, rad, "") if marime else None
 
 
@@ -740,12 +935,16 @@ def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacin
 		baza, real = os.path.realpath(dosar), os.path.realpath(sistem)
 		if real != baza and not real.startswith(baza + os.sep):
 			return _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_FORMA)
-		forma = verificaDisc(st, cmd, radacina)
+		# Intai numai forma: un loc gol cu forma stiuta nu se arata, chiar daca suportul UUID al nucleului lui nu e inca
+		# dovedit (din slotul 3 al lui Wlad, locurile goale 19..28 apareau ca „Imagine fara nume”).
+		forma = verificaDisc(st, cmd, radacina, cuUuid=False)
 		if forma and forma[1] != dev:
 			return _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_PARTITIE)
 		if not os.path.isdir(os.path.join(sistem, "etc")):
 			return None if forma else _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_FORMA)
 		imagine = numeImagine(sistem)
+		if forma and not _uuidDovedit(st, cmd, radacina):
+			forma = None
 		if not forma:
 			motiv = MOTIV_UUID if st and not _uuidDovedit(st, cmd, radacina) else MOTIV_FORMA
 			return _rand(n, nume_fisier, date, imagine, motiv=motiv)
@@ -815,6 +1014,9 @@ def locuri(radacina=None, monteaza=None, numai=None):
 	"""{"locuri": [...], "pe_stick": bool, "eroare": bool}. Fiecare loc: loc, imagine, acum, alegere (se poate scrie),
 	fel (emmc / stick, adica orice nu e din memorie), strica, motiv (de ce nu se alege). Locurile goale (fara radacina) nu
 	apar. `numai`: numai locul acela (alegerea il verifica din nou)."""
+	dual = _dual(radacina)
+	if dual:
+		return _locuriFlag(dual, radacina, monteaza, numai)
 	cmd = parametri(linieComanda(radacina))
 	rez = {"locuri": [], "pe_stick": False, "eroare": False}
 	pe_stick = bool(_radacinaDisc(cmd.get("root", ""), radacina))
@@ -901,8 +1103,10 @@ def _locuriEmmc(rez, emmc, cmd, montate, radacina, monteaza):
 				continue  # loc gol
 			acum = (cmd.get("root") == rad and cmd.get("rootsubdir", "") == sub and
 				(cmd.get("kernel") == nucleu or not sub and not cmd.get("kernel")))
+			# zImage: kernelN/rootfsN fara subdosar si schema GPT fara blkdevparts (Quad 4K Pro, linuxrootfsK); cu
+			# blkdevparts (SF8008 si inruditele) numai uImage, ca pana acum
 			bun = radacinaValida(sistem) and (nucleuValid(_cale(radacina, nucleu), marime) or (
-				not sub and _nucleuKexec(_cale(radacina, nucleu), marime)))
+				(not sub or not cmd.get("blkdevparts")) and _nucleuKexec(_cale(radacina, nucleu), marime)))
 			rez["locuri"].append({"loc": n, "fel": "emmc", "imagine": numeImagine(sistem), "acum": acum,
 				"alegere": bool(bun and not acum), "strica": not bun, "fisier": nume_fisier, "date": date})
 	finally:
@@ -1028,6 +1232,149 @@ def _restaureazaStartup(boot, vechi):
 	return not os.path.exists(os.path.join(boot, FISIER_STARTUP))
 
 
+# ------------------------------------------------------------------ Qviart DUAL 4K: partitia flag
+
+def _dual(radacina=None):
+	"""(linia de comanda, dispozitivul partitiei flag) pe Qviart DUAL 4K: MACHINEBUILD=dual si OEM=dags in linia de
+	comanda, iar in blkdevparts flag (1 MiB), linuxkernel1-4 si rootfs. None pe orice alt receptor."""
+	cmd = parametri(linieComanda(radacina))
+	if cmd.get("MACHINEBUILD") != "dual" or cmd.get("OEM") != "dags":
+		return None
+	blk = cmd.get("blkdevparts", "")
+	dev, marime = dispozitivPartitie(blk, FLAG_PARTITIE)
+	if not dev or marime != FLAG_MARIME or not dispozitivPartitie(blk, "rootfs")[0]:
+		return None
+	if not all(dispozitivPartitie(blk, "linuxkernel%d" % k)[0] for k in FLAG_LOCURI):
+		return None
+	return cmd, dev
+
+
+def _flagSigur(dev, radacina=None):
+	"""Calea de scris a partitiei flag, numai daca e chiar ea: /dev/mmcblk0pN, in /proc/partitions cu 1 MiB,
+	/dev/block/by-name/flag (cand exista) duce la ea si e un dispozitiv bloc (pe receptorul fals al probelor: un fisier
+	obisnuit). None altfel."""
+	if not re.fullmatch(r"/dev/mmcblk0p[1-9][0-9]*", dev or ""):
+		return None
+	if not any(len(c) == 4 and c[3] == dev[5:] and c[2] == str(FLAG_MARIME // 1024)
+		for c in (rand.split() for rand in _text(_cale(radacina, "proc/partitions")).splitlines())):
+		return None
+	cale = _cale(radacina, dev)
+	legatura = _cale(radacina, FLAG_LEGATURA)
+	if os.path.lexists(legatura) and os.path.realpath(legatura) != os.path.realpath(cale):
+		return None
+	try:
+		mod = os.stat(cale).st_mode
+	except OSError:
+		return None
+	bun = stat.S_ISREG(mod) if radacina else stat.S_ISBLK(mod)
+	return cale if bun else None
+
+
+def _citesteFlag(cale):
+	"""Primul octet al partitiei flag (0-255) sau None."""
+	d = _citeste(cale, 1)
+	return d[0] if d and len(d) == 1 else None
+
+
+def _scrieFlag(cale, valoare):
+	"""Un singur octet la inceputul partitiei: fara O_CREAT (o cale gresita nu devine fisier nou) si fara O_TRUNC; fsync,
+	apoi citit inapoi. True daca e la fel."""
+	if isinstance(valoare, bool) or not isinstance(valoare, int) or not 0 <= valoare <= 255:
+		return False
+	fd = os.open(cale, os.O_WRONLY | getattr(os, "O_BINARY", 0))
+	try:
+		if os.lseek(fd, 0, os.SEEK_SET) != 0 or os.write(fd, bytes((valoare,))) != 1:
+			return False
+		os.fsync(fd)
+	finally:
+		os.close(fd)
+	try:
+		fd = os.open(cale, os.O_RDONLY)
+		try:
+			os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+		finally:
+			os.close(fd)
+	except (AttributeError, OSError):
+		pass
+	return _citesteFlag(cale) == valoare
+
+
+def _locuriFlag(dual, radacina=None, monteaza=None, numai=None):
+	"""Locurile DUAL 4K din blkdevparts: 1-4 in rootfs/linuxrootfsK (ca locurile SF8008), apoi Android (locul 0) cand
+	partitia boot are un nucleu uImage valid. Fara fisierele STARTUP."""
+	cmd = dual[0]
+	blk = cmd["blkdevparts"]
+	rad, _m = dispozitivPartitie(blk, "rootfs")
+	rez = {"locuri": [], "pe_stick": False, "eroare": False}
+	emmc = []
+	for k in FLAG_LOCURI:
+		if numai is not None and str(numai) != str(k):
+			continue
+		nucleu, marime = dispozitivPartitie(blk, "linuxkernel%d" % k)
+		emmc.append((str(k), FLAG_PARTITIE, b"flag=%d\n" % k, (str(k), nucleu, marime, rad, "linuxrootfs%d" % k)))
+	_locuriEmmc(rez, emmc, cmd, _montate(radacina), radacina, monteaza)
+	for l in rez["locuri"]:
+		l["fel"] = "flag"
+	if numai is None or str(numai) == str(LOC_ANDROID):
+		nucleu, marime = dispozitivPartitie(blk, "boot")
+		if nucleu and dispozitivPartitie(blk, "system")[0] and nucleuValid(_cale(radacina, nucleu), marime):
+			rez["locuri"].append({"loc": str(LOC_ANDROID), "fel": "flag", "imagine": ANDROID, "acum": False,
+				"alegere": True, "strica": False, "fisier": FLAG_PARTITIE, "date": b"flag=0\n"})
+	rez["locuri"].sort(key=lambda l: int(l["loc"]))
+	return rez
+
+
+def _alegeFlag(l, radacina=None):
+	"""Scrie numarul locului (0-4) in primul octet al partitiei flag. (True, imaginea) sau (False, motivul)."""
+	dual = _dual(radacina)
+	loc = str(l.get("loc", ""))
+	valoare = int(loc) if loc.isdigit() and len(loc) == 1 else -1
+	if not dual or not (valoare == LOC_ANDROID or valoare in FLAG_LOCURI):
+		return False, _(EROARE)
+	cale = _flagSigur(dual[1], radacina)
+	if not cale:
+		return False, _(EROARE)
+	vechi = None
+	try:
+		vechi = _citesteFlag(cale)
+		if vechi is None:
+			return False, _(EROARE)
+		if not _scrieFlag(cale, valoare):
+			_scrieFlag(cale, vechi)
+			return False, _(EROARE)
+	except (IOError, OSError) as e:
+		_log("flag: %r" % e)
+		if vechi is not None:
+			try:
+				_scrieFlag(cale, vechi)
+			except (IOError, OSError):
+				pass
+		return False, _(EROARE)
+	del _flagVechi[:]
+	_flagVechi.append((dual[1], vechi))
+	_log("flag = %d (%s), inainte %d" % (valoare, l["imagine"], vechi))
+	return True, l["imagine"]
+
+
+def _inapoiFlag(radacina=None):
+	"""Octetul flag de dinainte de ultima alegere, pus la loc. True daca s-a pus."""
+	dual = _dual(radacina)
+	if not dual or not _flagVechi or _flagVechi[0][0] != dual[1]:
+		return False
+	cale = _flagSigur(dual[1], radacina)
+	if not cale:
+		return False
+	try:
+		ok = _scrieFlag(cale, _flagVechi[0][1])
+	except (IOError, OSError) as e:
+		_log("flag inapoi: %r" % e)
+		return False
+	if ok:
+		del _flagVechi[:]
+	_log("flag pus inapoi: %s" % ok)
+	return ok
+
+
 def alege(loc, radacina=None, monteaza=None, asteptat=None):
 	"""Scrie STARTUP din STARTUP_<loc> dupa o verificare din nou a locului. (True, imaginea) sau (False, motivul)."""
 	stare = locuri(radacina, monteaza, numai=loc)
@@ -1041,6 +1388,8 @@ def alege(loc, radacina=None, monteaza=None, asteptat=None):
 		return False, _(DEJA)
 	if not l["alegere"]:
 		return False, textRefuz(l)
+	if l["fel"] == "flag":
+		return _alegeFlag(l, radacina)
 	boot, demonteaza = _deschideBoot(radacina, monteaza)
 	if not boot:
 		return False, _(EROARE)
@@ -1091,7 +1440,10 @@ def alege(loc, radacina=None, monteaza=None, asteptat=None):
 
 
 def inapoi(radacina=None, monteaza=None):
-	"""STARTUP inapoi din STARTUP.hds-inainte (repornirea a fost oprita pe ecran). True daca s-a pus la loc."""
+	"""STARTUP inapoi din STARTUP.hds-inainte (repornirea a fost oprita pe ecran). True daca s-a pus la loc.
+	Pe DUAL 4K: octetul flag de dinainte de alegere."""
+	if _dual(radacina):
+		return _inapoiFlag(radacina)
 	boot, demonteaza = _deschideBoot(radacina, monteaza)
 	if not boot:
 		return False

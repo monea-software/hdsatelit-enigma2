@@ -1264,7 +1264,16 @@ def loculSeteaza(cerere):
 		lat, lon = _grade(cerere.get("lat"), 90), _grade(cerere.get("lon"), 180)
 		if lat is None or lon is None:
 			return {"result": False, "message": _t(MESAJ_COORDONATE), "locul": L.stare()}
-		ok, text = L.seteaza(int(round(lat * 1000)), int(round(lon * 1000)), "", "", L.SURSA_MANA)
+		lat_mii, lon_mii = int(round(lat * 1000)), int(round(lon * 1000))
+		# aceeasi intrebare ca pe televizor (Screens/HdsLocul.py): departe de tara receptorului, cu o varianta apropiata;
+		# pagina o arata si trimite din nou cu varianta=propus (scrie varianta) sau varianta=scris (scrie ce s-a scris)
+		varianta = cerere.get("varianta", "")
+		intrebare, propus = L.intrebareDeparte(lat_mii, lon_mii)
+		if intrebare and varianta not in ("propus", "scris"):
+			return {"result": False, "message": "", "intrebare": intrebare, "locul": L.stare()}
+		if intrebare and varianta == "propus":
+			lat_mii, lon_mii = propus
+		ok, text = L.seteaza(lat_mii, lon_mii, "", "", L.SURSA_MANA)
 	if ok:
 		text = _t("Locul antenei este acum: %s") % L.textLoc()
 	return {"result": bool(ok), "message": text or "", "locul": L.stare()}
@@ -1773,11 +1782,12 @@ PAGINA_LOCUL = """<!DOCTYPE html>
 <div class="card">
   <h2>Coordonatele scrise de mână</h2>
   <div class="doua">
-    <div><label class="eticheta" for="lat">Latitudinea (grade, nord +)</label><input class="text" id="lat" inputmode="decimal"></div>
     <div><label class="eticheta" for="lon">Longitudinea (grade, est +)</label><input class="text" id="lon" inputmode="decimal"></div>
+    <div><label class="eticheta" for="lat">Latitudinea (grade, nord +)</label><input class="text" id="lat" inputmode="decimal"></div>
   </div>
-  <p class="nota">Cu virgulă sau punct, de exemplu 44,426 și 26,103. Sudul și vestul se scriu cu minus.</p>
+  <p class="nota">Cu virgulă sau punct, de exemplu 26,103 și 44,426 (ordinea din Setările tunerului: întâi longitudinea). Vestul și sudul se scriu cu minus.</p>
   <div class="butoane"><button type="button" class="buton secundar" id="salveazaMana">Salvează coordonatele</button></div>
+  <div class="intrebare ascuns" id="intrebareMana"></div>
 </div>
 <p class="mesaj" id="mesaj" role="status"></p>
 <p class="nota" id="sursa"></p>
@@ -1805,6 +1815,14 @@ function incarcaOrase(tara, ales){
 function trimite(p){
   mesaj($("mesaj"), "Se salvează...");
   cerere("/api/locul-seteaza", "POST", p).then(function(d){
+    if (d.intrebare){
+      // coordonatele scrise departe de tara receptorului, cu emisferele (sau ordinea) probabil gresite: ca pe televizor
+      mesaj($("mesaj"), "");
+      intreaba($("intrebareMana"), d.intrebare, "Da", "Nu, păstrează ce am scris",
+        function(){ p.set("varianta", "propus"); trimite(p); },
+        function(){ p.set("varianta", "scris"); trimite(p); });
+      return;
+    }
     mesaj($("mesaj"), d.message, !d.result);
     if (d.locul) arataLocul(d.locul);
   }).catch(function(){ mesaj($("mesaj"), "Receptorul nu răspunde.", true); });
@@ -2853,23 +2871,50 @@ function antenaSvg(unghi){
   s += cercSvg([CX, CY], 8, C.antena) + `<circle cx="${CX}" cy="${CY}" r="11.5" fill="none" stroke="${C.facut}" stroke-width="2"/>`;
   return s;
 }
+// capetele boltii in grade; vazut din spatele antenei (setarea config.usage.hds_motor_din_spate) cu locul stiut, simetric
+// fata de sud (longitudinea locului), ca sudul sa fie in varful curbei: aceeasi regula ca pe televizor (HdsDishMotor.capeteBolta)
+function capeteBolta(de_la, la, dinSpate, sud){
+  let jos = Math.min(de_la, la) - MARGINE, sus = Math.max(de_la, la) + MARGINE;
+  if (dinSpate && sud !== null && sud !== undefined){
+    const dd = Math.max(Math.abs(jos - sud), Math.abs(sus - sud));
+    jos = sud - dd; sus = sud + dd;
+  }
+  return [jos, sus];
+}
+// bolta intreaga (locul stabilit, d.bolta din HdsMotorStare.boltaJson): unghiul motorului 0 (sudul) sus, orizontul din vest in
+// stanga si cel din est in dreapta (oglindit vazut din spate); satelitii din afara sub linia orizontului, ca pe televizor
+// (HdsDishMotor.unghiEcranBolta si unghiEcranAfara)
+function unghiBolta(unghi, a, dinSpate){
+  const p = a ? Math.max(-1, Math.min(1, unghi / a)) : 0;
+  return 270 + 90 * (dinSpate ? -p : p);
+}
+function unghiAfara(unghi, a, dinSpate){
+  if (Math.abs(unghi) <= a) return unghiBolta(unghi, a, dinSpate);
+  const jos = Math.min(8, 2 + (Math.abs(unghi) - a) * 0.5);
+  return ((unghi > 0) !== !!dinSpate) ? 360 + jos : 180 - jos;
+}
 function deseneaza(d){
   let s = `<rect width="860" height="250" rx="8" fill="${C.fond}"/>`;
   if (d.la_grade === null) {
     // tinta nu se stie (pas, miscare fara oprire): bolta goala si sageata directiei; nicio antena, niciun satelit
     s += arcSvg(CX, CY, RAZA, 180, 360, C.arc, 4);
     if (d.directie === "est" || d.directie === "vest") {
-      const semn = d.directie === "est" ? 1 : -1, r = RAZA * 0.62, inceput = 270 - semn * 32, capat = 270 + semn * 32;
+      // estul in dreapta, ca pe bolta; in stanga cand desenul e vazut din spatele antenei
+      const semn = (d.directie === "est" ? 1 : -1) * (d.din_spate ? -1 : 1), r = RAZA * 0.62, inceput = 270 - semn * 32, capat = 270 + semn * 32;
       s += arcSvg(CX, CY, r, Math.min(inceput, capat), Math.max(inceput, capat), C.facut, 7);
       s += poligonSvg([pe(capat + semn * 9, r), pe(capat - semn, r - 12), pe(capat - semn, r + 12)], C.facut);
     }
     return `<svg viewBox="0 0 860 250" role="img" aria-label="Antena și drumul ei">${s}</svg>`;
   }
   const plecare = d.de_la_grade !== null, de_la = plecare ? d.de_la_grade : d.la_grade, la = d.la_grade;
-  const jos = Math.min(de_la, la) - MARGINE, sus = Math.max(de_la, la) + MARGINE;
-  const u = g => 180 + 180 * Math.min(1, Math.max(0, sus <= jos ? 0.5 : (g - jos) / (sus - jos)));
+  const [jos, sus] = capeteBolta(de_la, la, d.din_spate, d.sud_grade);
+  // 180 = stanga, 360 = dreapta; vazut din spate, oglinda (estul in stanga), ca HdsDishMotor._unghi
+  const u = g => { const p = Math.min(1, Math.max(0, sus <= jos ? 0.5 : (g - jos) / (sus - jos))); return 180 + 180 * (d.din_spate ? 1 - p : p); };
+  const B = (d.bolta && d.bolta.la !== null && d.bolta.de_la !== null) ? d.bolta : null;
   // pozitia nu se stie (o mutare de mana, o oprire pe drum, plecarea necunoscuta): antena si raza nu se deseneaza
-  const stiuta = d.pozitie_grade !== null, uDeLa = u(de_la), uLa = u(la), uAcum = u(stiuta ? d.pozitie_grade : de_la);
+  const stiuta = d.pozitie_grade !== null;
+  const uDeLa = B ? unghiBolta(B.de_la, B.a, d.din_spate) : u(de_la), uLa = B ? unghiBolta(B.la, B.a, d.din_spate) : u(la);
+  const uAcum = !stiuta ? uDeLa : (B && B.acum !== null ? unghiBolta(B.acum, B.a, d.din_spate) : u(d.pozitie_grade));
   if (stiuta) {
     // raza semnalului: varful pe bolta, unde e indreptata antena, baza pe gura talerului; aurie cand a ajuns pe tinta
     const f = pe(uAcum, TALER_DEPARTE + TALER_RAZA), varf = pe(uAcum, RAZA);
@@ -2884,7 +2929,21 @@ function deseneaza(d){
   const mic = Math.min(uDeLa, uAcum), mare = Math.max(uDeLa, uAcum);
   if (stiuta && plecare && mare - mic > 0.05) s += arcSvg(CX, CY, RAZA, mic, mare, C.facut, 6);
   // ceilalti sateliti ai tunerului: puncte de alta culoare decat bolta, putin mai groase decat ea
-  for (const sat of (d.sateliti || []))
+  if (B) {
+    // sudul (unghiul motorului 0) si limitele motorului: semne scurte pe dinafara boltii; satelitii cu canale: pe bolta sau,
+    // din afara, inele rosii (sub orizont: sub linia orizontului)
+    [[0, C.arc], [B.limita_vest, "#ffa040"], [B.limita_est, "#ffa040"]].forEach(function(x){
+      if (x[0] === null || x[0] === undefined) return;
+      const ua = unghiBolta(x[0], B.a, d.din_spate), p0 = pe(ua, RAZA + 4), p1 = pe(ua, RAZA + 13);
+      s += `<line x1="${z(p0[0])}" y1="${z(p0[1])}" x2="${z(p1[0])}" y2="${z(p1[1])}" stroke="${x[1]}" stroke-width="2.5" stroke-linecap="round"/>`;
+    });
+    for (const sat of (B.sateliti || [])) {
+      if (sat.afara) {
+        const p = pe(unghiAfara(sat.unghi, B.a, d.din_spate), RAZA);
+        s += `<circle cx="${z(p[0])}" cy="${z(p[1])}" r="5.5" fill="none" stroke="#ff6b6b" stroke-width="1.8"/>`;
+      } else s += cercSvg(pe(unghiBolta(sat.unghi, B.a, d.din_spate), RAZA), 4.5, C.satelit);
+    }
+  } else for (const sat of (d.sateliti || []))
     if (sat.orbital !== d.de_la_orbital && sat.orbital !== d.la_orbital && sat.grade >= jos && sat.grade <= sus)
       s += cercSvg(pe(u(sat.grade), RAZA), 4.5, C.satelit);
   // plecarea (violet) si tinta (aurie, cu un inel in jur), mai mari decat punctele obisnuite
@@ -2895,9 +2954,17 @@ function deseneaza(d){
   // gradele plecarii si ale tintei; cand plecarea e prea aproape de tinta ramane numai eticheta tintei
   const cutieLa = cutieEticheta(uLa);
   s += etichetaSvg(cutieLa, C.tinta, scapat(d.la_scurt));
+  const puse = [cutieLa];
   if (plecare) {
     const cutieDeLa = cutieEticheta(uDeLa);
-    if (!seSuprapun(cutieDeLa, cutieLa)) s += etichetaSvg(cutieDeLa, C.plecare, scapat(d.de_la_scurt));
+    if (!seSuprapun(cutieDeLa, cutieLa)) { s += etichetaSvg(cutieDeLa, C.plecare, scapat(d.de_la_scurt)); puse.push(cutieDeLa); }
+  }
+  if (B) {
+    // capetele boltii (satelitul de la orizont) si sudul, cand nu se suprapun cu plecarea si tinta
+    [[-B.a, B.vest_scurt], [B.a, B.est_scurt], [0, B.sud_scurt]].forEach(function(x){
+      const cutie = cutieEticheta(unghiBolta(x[0], B.a, d.din_spate));
+      if (x[1] && !puse.some(function(c){ return seSuprapun(cutie, c); })) { s += etichetaSvg(cutie, "#8aa2b8", scapat(x[1])); puse.push(cutie); }
+    });
   }
   return `<svg viewBox="0 0 860 250" role="img" aria-label="Antena și drumul ei">${s}</svg>`;
 }
@@ -3171,9 +3238,9 @@ TEXTE_PAGINA = {
 		N_("Coordonatele scrise de mână"),
 		N_("Latitudinea (grade, nord +)"),
 		N_("Longitudinea (grade, est +)"),
-		N_("Cu virgulă sau punct, de exemplu 44,426 și 26,103. Sudul și vestul se scriu cu minus."),
+		N_("Cu virgulă sau punct, de exemplu 26,103 și 44,426 (ordinea din Setările tunerului: întâi longitudinea). "
+			"Vestul și sudul se scriu cu minus."),
 		N_("Salvează coordonatele"),
-		N_("Orientarea și setarea antenei"),
 		N_("Configurare LNB"),
 		N_("Rotirea antenei"),
 		N_("Găsire semnal"),
@@ -3242,6 +3309,7 @@ TEXTE_PAGINA = {
 		N_("Receptorul a răspuns neașteptat (HTTP"),
 		N_("Nu"),
 		N_("Da"),
+		N_("Nu, păstrează ce am scris"),
 		N_("Nestabilit. Până îl alegi, motorul USALS nu rotește antena spre niciun satelit; pașii, "
 			"pozițiile memorate și limitele merg."),
 		N_("Receptorul nu răspunde."),

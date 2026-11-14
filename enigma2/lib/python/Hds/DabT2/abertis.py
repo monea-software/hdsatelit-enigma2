@@ -14,7 +14,9 @@ de hdsatelit.com.
    un receptor de proba: 17 fluxuri decodate fara nicio regula scrisa de noi.
 3. Automatizarile altora: desfacerea o face mereu imaginea, si cu un alt automat instalat. Unde s-ar dubla scrierile
    imaginea se da la o parte pe fluxurile de care se ocupa ei (/etc/astra/astra.conf cu blocurile lor, purtatorii lor
-   din lamedb cu furnizorul ABERTIS): purtatorul lor ramane neatins (releul nostru cere chiar referinta lui). Adresele canalelor din listele lor (pid_din_adresa_straina) se redau prin desfacerea
+   din lamedb cu furnizorul ABERTIS): purtatorul lor ramane neatins (releul nostru cere chiar referinta lui), daca
+   tine minte PID-ul de date; altfel (o cautare l-a inlocuit cu serviciul scanat, fara PID-ul de date: ecran negru)
+   imaginea scrie purtatorul ei peste el. Adresele canalelor din listele lor (pid_din_adresa_straina) se redau prin desfacerea
    noastra (pornire.Controlor._extensie_zap); decapsulatorul lor nu e pornit de noi si, daca asculta deja, nu e oprit.
    Fara mesaje.
 
@@ -30,10 +32,15 @@ CAID_BISS = 0x2600
 # decapsulatorului lor si purtatorii lor din lamedb
 ASTRA_CONF = 'etc/astra/astra.conf'
 FURNIZOR_STRAIN = 'ABERTIS'
-_PID_ASTRA = re.compile(r'(?:abertis\s+|abertis/pid|Abertis PID\s+)(\d{1,4})\b', re.I)
+# PID-urile din astra.conf: „scripts/abertis 301” (comanda), „abertis/pid301” (iesirea), „Abertis PID 301” (numele).
+# „abertis 301” fara „/” in fata NU: asa incep numele purtatorilor nostri („Abertis 801 Asturias TDT (BISS)”), care nu
+# sunt ale altui automat
+_PID_ASTRA = re.compile(r'(?:/abertis\s+|abertis/pid|Abertis PID\s+)(\d{1,4})(?!\d)', re.I)
 # adresele canalelor din listele altor automate: iesirea decapsulatorului lor (portul 9999) sau forma scrisa uneori cu
-# 8001 (intrarea lor); 127.0.0.1 sau localhost
-_ADRESA_STRAINA = re.compile(r'^https?://(?:127\.0\.0\.1|localhost)(?::(?:9999|8001))?/abertis/pid(\d{1,4})/?$', re.I)
+# 8001 (intrarea lor); 127.0.0.1, localhost sau 0.0.0.0 (listele care scriu adresa pe care asculta decapsulatorul)
+_ADRESA_STRAINA = re.compile(r'^https?://(?:127\.0\.0\.1|localhost|0\.0\.0\.0)(?::(?:9999|8001))?/abertis/'
+                             r'(?:aber\d+_)?pid(\d{1,4})(?:plp\d{1,3})?/?$',
+                             re.I)
 
 
 def _cale(radacina, rel):
@@ -77,7 +84,8 @@ def fluxuri_straine(radacina='/', lamedb_text=None):
     randuri = lamedb_text.split('\n')
     for i in range(1, len(randuri) - 1):
         if randuri[i + 1].startswith('p:%s' % FURNIZOR_STRAIN):
-            m = re.match(r'Abertis PID\s+(\d{1,4})', randuri[i].strip(), re.I)
+            # „Abertis PID 301” sau „Abertis@12631V30000 PID 8002” (frecventa, polarizarea si SR in nume)
+            m = re.match(r'Abertis(?:@\S*)?\s+PID\s+(\d{1,4})', randuri[i].strip(), re.I)
             if m:
                 exista = True
                 pid_uri.add(int(m.group(1)))
@@ -85,7 +93,9 @@ def fluxuri_straine(radacina='/', lamedb_text=None):
 
 
 def e_strain(feed, straine):
-    """Fluxul e al altui automat (nu ne atingem de el)."""
+    """Fluxul e pomenit de alt automat. Purtatorul lor se lasa neatins numai daca tine minte PID-ul de date
+    (lamedb.purtatori); unul fara el (serviciul scanat, „DVB-S2 8PSK ...”) da ecran negru si la ei, si la noi, deci
+    imaginea scrie peste el purtatorul ei, cu c:18."""
     _exista, pid_uri = straine
     try:
         return int(feed.get('pid') or -1) in pid_uri

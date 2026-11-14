@@ -1,6 +1,7 @@
 /* Din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4, lib/dvb_ci/dvbci_ccmgr.cpp;
-   licenta GPLv2 a enigma2. Modificat de moneasoftware.com si hdsatelit.com, 2026: numai legarea de slotul si
-   jurnalul nostru (dvbci_hds_compat.h). */
+   licenta GPLv2 a enigma2. Modificat de moneasoftware.com si hdsatelit.com, 2026: legarea de slotul si jurnalul nostru
+   (dvbci_hds_compat.h); cheia CI+ refuzata de driver: celelalte dispozitive caN potrivite canalului, cel bun pastrat,
+   iar cand niciunul nu o primeste, starea 3 si mesajul pe ecran (set_descrambler_key, cheieRefuzata; AX HD51, forumul 479). */
 #include <lib/dvb_ci/dvbci_hds_compat.h>
 /* DVB CI Content Control Manager */
 
@@ -11,6 +12,9 @@
 #include <lib/dvb_ci/descrambler.h>
 #include <lib/dvb_ci/dvbci_ccmgr_helper.h>
 #include <lib/dvb_ci/dvbci_ui.h>
+#include <lib/dvb_ci/hdscica.h>
+#include <lib/base/hdsjurnal.h>
+#include <string.h>
 
 #include <openssl/aes.h>
 #include <openssl/err.h>
@@ -27,6 +31,11 @@ eDVBCICcSession::eDVBCICcSession(eDVBCISlot *slot, int version) : m_slot(slot), 
 	m_descrambler_fd = -1;
 	m_current_ca_demux_id = 0;
 	m_descrambler_new_key = false;
+	memset(m_descrambler_key_iv, 0, sizeof(m_descrambler_key_iv));
+	m_descrambler_odd_even = 0;
+	m_descrambler_ca = -1;
+	m_descrambler_fel = -1;
+	m_cheie_primita = false;
 
 	parameter_init(m_slot->getSlotID(), m_dh_p, m_dh_g, m_dh_q, m_s_key, m_key_data, m_iv);
 
@@ -61,9 +70,14 @@ eDVBCICcSession::eDVBCICcSession(eDVBCISlot *slot, int version) : m_slot(slot), 
 
 eDVBCICcSession::~eDVBCICcSession()
 {
-	m_slot->setCCManager(0);
-	if (m_slot->getDescramblingOptions() != 1 && m_slot->getDescramblingOptions() != 3)
-		descrambler_deinit(m_descrambler_fd);
+	/* HD Satelit: numai daca slotul inca il are pe acesta (un manager nou, dupa resetare, ramane legat) */
+	if (m_slot->getCCManager() == this)
+		m_slot->setCCManager(0);
+	/* HD Satelit: dispozitivul se inchide mereu. In OE-Alliance, cu optiunile 1/3, ramanea deschis aici (descriptorul era
+	   socotit inchis la sfarsitul programului, desi nu se punea -1); acum removeProgram pune -1 dupa inchidere, deci un
+	   descriptor diferit de -1 e chiar deschis si al nostru. Ramas deschis, cel nou nu-l mai putea deschide (AX HD51). */
+	descrambler_deinit(m_descrambler_fd);
+	m_descrambler_fd = -1;
 
 	if (m_root_ca_store)
 		X509_STORE_free(m_root_ca_store);
@@ -150,6 +164,7 @@ void eDVBCICcSession::addProgram(uint16_t program_number, std::vector<uint16_t> 
 
 	for (std::vector<uint16_t>::iterator it = pids.begin(); it != pids.end(); ++it)
 		descrambler_set_pid(m_descrambler_fd, m_slot, 1, *it);
+	m_programe[program_number] = pids;
 }
 
 void eDVBCICcSession::removeProgram(uint16_t program_number, std::vector<uint16_t> &pids)
@@ -161,9 +176,15 @@ void eDVBCICcSession::removeProgram(uint16_t program_number, std::vector<uint16_
 
 	for (std::vector<uint16_t>::iterator it = pids.begin(); it != pids.end(); ++it)
 		descrambler_set_pid(m_descrambler_fd, m_slot, 0, *it);
+	m_programe.erase(program_number);
 
 	if (m_slot->getDescramblingOptions() == 1 || m_slot->getDescramblingOptions() == 3)
+	{
 		descrambler_deinit(m_descrambler_fd);
+		/* HD Satelit: descrambler_deinit nu schimba variabila celui care cheama; fara asta urmatorul program ar folosi un
+		   descriptor inchis (sau al altcuiva), iar dispozitivul nu s-ar mai deschide */
+		m_descrambler_fd = -1;
+	}
 
 	// removing program means probably decoding on this slot is ending. So mark this slot as not descrambling
 	eDVBCI_UI::getInstance()->setDecodingState(m_slot->getSlotID(), 0);
@@ -828,6 +849,7 @@ void eDVBCICcSession::check_new_key()
 	memcpy(m_descrambler_key_iv, dec, 32);
 	m_descrambler_odd_even = slot;
 	m_descrambler_new_key = true;
+	m_cheie_primita = true;
 
 	eDVBCIInterfaces::getInstance()->revertCIPlusRouting(m_slot->getSlotID());
 
@@ -846,25 +868,70 @@ void eDVBCICcSession::set_descrambler_key()
 	if (m_descrambler_fd != -1 && m_current_ca_demux_id != m_slot->getCADemuxID())
 	{
 		descrambler_deinit(m_descrambler_fd);
-		m_descrambler_fd = descrambler_init(m_slot, m_slot->getCADemuxID());
+		m_descrambler_fd = descrambler_init(m_slot, m_slot->getCADemuxID(), &m_descrambler_ca, &m_descrambler_fel);
 		m_current_ca_demux_id = m_slot->getCADemuxID();
 	}
 
 	if (m_descrambler_fd == -1 && m_slot->getCADemuxID() > -1)
 	{
-		m_descrambler_fd = descrambler_init(m_slot, m_slot->getCADemuxID());
+		m_descrambler_fd = descrambler_init(m_slot, m_slot->getCADemuxID(), &m_descrambler_ca, &m_descrambler_fel);
 		m_current_ca_demux_id = m_slot->getCADemuxID();
+		/* HD Satelit: dispozitivul redeschis (dupa „inchis la sfarsitul programului”) primeste din nou cheia modulului */
+		if (m_descrambler_fd != -1 && m_cheie_primita)
+			set_key = true;
 	}
 
 	if (m_descrambler_fd != -1 && (set_key || m_descrambler_new_key))
 	{
 		eDebug("[CI%d RCC] setting key: new ca device: %d, new key: %d", m_slot->getSlotID(), set_key, m_descrambler_new_key);
-		descrambler_set_key(m_descrambler_fd, m_slot, m_descrambler_odd_even, m_descrambler_key_iv);
+		int rezultat = descrambler_set_key(m_descrambler_fd, m_slot, m_descrambler_odd_even, m_descrambler_key_iv);
+		if (rezultat < 0)
+			cheieRefuzata(rezultat);
+		else if (m_cheie_primita)
+		{
+			/* cheia adevarata a modulului a intrat: dispozitivul ramane cel tinut minte */
+			m_slot->setCaAles(m_descrambler_fel);
+			m_slot->setCheieCiplusRefuzata(false);
+		}
 		if (m_descrambler_new_key)
 		{
 			m_descrambler_new_key = false;
 		}
 	}
+}
+
+/* HD Satelit: driverul a refuzat cheia CI+ pe dispozitivul deschis. Pe AX HD51 (forumul 479, 13.11.2026) asa se oprea
+   imaginea dupa ~2 s pe TivuSat: „set key failed” pe ca0 la fiecare cheie. Cu „Automat”, numai pentru cheia adevarata a
+   modulului (nu pentru cea goala de la primul ADD PROGRAM): celelalte dispozitive potrivite canalului (hdsCaCandidati),
+   cel care primeste cheia ramane deschis, PID-urile programelor se pun pe el si felul lui se tine minte. Cand niciunul
+   nu o primeste: starea CI+ 3 si mesajul de pe ecran (Screens/Ci.py), cu erorile driverului in hds-ci.log. */
+void eDVBCICcSession::cheieRefuzata(int eroare)
+{
+	if (!m_cheie_primita)
+		return;
+	char incercate[256];
+	snprintf(incercate, sizeof(incercate), "ca%d: %s", m_descrambler_ca, strerror(-eroare));
+	int fd = -1, ca = -1, fel = -1;
+	if (descrambler_set_key_alt(m_slot, m_descrambler_ca, m_descrambler_odd_even, m_descrambler_key_iv, &fd, &ca, &fel,
+		incercate, sizeof(incercate)))
+	{
+		int vechi = m_descrambler_ca;
+		descrambler_deinit(m_descrambler_fd);
+		m_descrambler_fd = fd;
+		m_descrambler_ca = ca;
+		m_descrambler_fel = fel;
+		for (std::map<uint16_t, std::vector<uint16_t> >::iterator p = m_programe.begin(); p != m_programe.end(); ++p)
+			for (std::vector<uint16_t>::iterator it = p->second.begin(); it != p->second.end(); ++it)
+				descrambler_set_pid(m_descrambler_fd, m_slot, 1, *it);
+		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d CI+: cheia primita pe ca%d, ales singur (ca%d o refuza: %s)",
+			m_slot->getSlotID(), ca, vechi, strerror(-eroare));
+		m_slot->setCaAles(fel);
+		m_slot->setCheieCiplusRefuzata(false);
+		return;
+	}
+	hdsjurnal::scrief("ci", hdsjurnal::AVERT, "slot", "CI%d CI+: cheia modulului refuzata de driver pe toate dispozitivele "
+		"incercate (%s); optiunile de decriptare: %d", m_slot->getSlotID(), incercate, m_slot->getDescramblingOptions());
+	m_slot->setCheieCiplusRefuzata(true);
 }
 
 void eDVBCICcSession::generate_key_seed()

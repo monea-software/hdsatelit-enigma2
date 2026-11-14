@@ -7,7 +7,8 @@
 #
 # Cum merge:
 #   - numai cand omul alege "Afla locul dupa internet" (ecranul Screens/HdsLocul.py sau pagina web /antena/locul); la
-#     pornire, la zap sau in fundal nu se intreaba nimic;
+#     pornire, la zap sau in fundal nu se intreaba nimic pentru loc (alt modul, Components/HdsLimbaTara.py, intreaba
+#     aceeasi adresa o singura data, la prima pornire, si ia din raspuns numai codul tarii, pentru limba asistentului);
 #   - fara ruta spre internet (citita local din /proc/net/route si /proc/net/ipv6_route, nicio conexiune) nu pleaca
 #     nicio cerere: omul afla ca receptorul nu are internet si primeste lista tarilor si oraselor, ca inainte;
 #   - cu ruta: o singura cerere HTTPS GET spre serverul nostru (ADRESA), fara parametri si fara nimic despre receptor.

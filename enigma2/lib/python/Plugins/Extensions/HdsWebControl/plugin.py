@@ -123,7 +123,7 @@ PORT_IMPLICIT = 80
 PORT_REZERVA = 8080
 # portul pe care asculta interfata acum (pentru paznicul receptorului, hds-watchdog.py)
 CALE_PORT_ACUM = "/var/run/hdswebcontrol.port"
-# numele din reteaua de acasa publicat de avahi (/etc/init.d/hds-nume-local): „hdsatelit”, sau „hdsatelit-2” cand
+# numele din reteaua de acasa publicat de avahi (/etc/init.d/hds-nume-local): „hdsatelit”, sau „hdsatelit2” cand
 # alt receptor din casa il are deja
 CALE_NUME_LOCAL = "/var/run/hds-nume-local.nume"
 NUME_LOCAL_IMPLICIT = "hdsatelit"
@@ -528,7 +528,7 @@ def _numeProprii():
 		nume_retea = ()
 	else:
 		nume_retea = (nume, nume + ".local")
-	# numele publicat de avahi pe langa numele receptorului (hdsatelit.local, sau hdsatelit-2.local)
+	# numele publicat de avahi pe langa numele receptorului (hdsatelit.local, sau hdsatelit2.local)
 	local = NUME_LOCAL_IMPLICIT
 	try:
 		with open(CALE_NUME_LOCAL, encoding="utf-8", errors="replace") as f:
@@ -695,6 +695,44 @@ def adresaWeb():
 	return "http://%s:%d" % (ip, port)
 
 
+# Imaginea ecranului de pe prima pagina web: la cate secunde o cere pagina (1-10) sau 0 = oprita (o captura numai la
+# deschiderea paginii si dupa o tasta a telecomenzii de pe ea). Receptorul nu face capturi singur: le cere numai pagina,
+# cat e deschisa, vazuta (nu intr-o fila ascunsa) si fara imaginea live pornita (scriptul _PAGINA_PANOU, planificaCaptura).
+# Aceeasi setare pe televizor (Interfata web, Screens/HdsWebControlSetup.py), in /interfata-web si in lista de langa
+# imagine (POST /api/interfata-web-seteaza?captura_interval=N).
+INTERVAL_CAPTURA_IMPLICIT = 3
+INTERVAL_CAPTURA_MAX = 10
+
+
+def alegeriIntervalCaptura():
+	return [("0", _t("Oprită"))] + [(str(n), "%d s" % n) for n in range(1, INTERVAL_CAPTURA_MAX + 1)]
+
+
+def intervalCaptura():
+	"""Secundele dintre doua capturi ale primei pagini (0 = oprite); fara setare citibila, cele implicite."""
+	try:
+		initConfigHdsWebControl()
+		n = int(config.plugins.hdswebcontrol.captura_interval.value)
+	except Exception:
+		return INTERVAL_CAPTURA_IMPLICIT
+	return n if 0 <= n <= INTERVAL_CAPTURA_MAX else INTERVAL_CAPTURA_IMPLICIT
+
+
+def seteazaIntervalCaptura(valoare):
+	"""POST /api/interfata-web-seteaza?captura_interval=0..10. Salvat pe disc; prima pagina il ia pe loc (lista ei) sau
+	la urmatoarea deschidere."""
+	if isinstance(valoare, bytes):
+		valoare = valoare.decode("ascii", "replace")
+	valoare = (valoare or "").strip()
+	if not valoare.isdigit() or int(valoare) > INTERVAL_CAPTURA_MAX:
+		return {"result": False, "message": _t("Se alege cu captura_interval de la 0 (oprită) la 10.")}
+	initConfigHdsWebControl()
+	config.plugins.hdswebcontrol.captura_interval.value = str(int(valoare))
+	config.plugins.hdswebcontrol.captura_interval.save()
+	configfile.save()
+	return {"result": True, "message": _t("Salvat."), "captura_interval": intervalCaptura()}
+
+
 def initConfigHdsWebControl():
 	# NU folosim hasattr(config.plugins, ...): ConfigSubsection.__getattr__ arunca
 	# KeyError (nu AttributeError) pentru o cheie lipsa, iar hasattr() din Python 3
@@ -719,6 +757,16 @@ def initConfigHdsWebControl():
 	if "fisiere_afara" not in config.plugins.hdswebcontrol.content.items:
 		# Separat de aplicatii; se poate porni doar local, dupa parola root.
 		config.plugins.hdswebcontrol.fisiere_afara = ConfigYesNo(default=False)
+	if "captura_interval" not in config.plugins.hdswebcontrol.content.items:
+		# la cate secunde cere prima pagina imaginea ecranului (0 = oprita); vezi intervalCaptura(). Importul aici: un
+		# Components.config fara alegeri (cel inlocuit din probele de pe PC) lasa setarea deoparte, cu cele 3 s implicite
+		try:
+			from Components.config import ConfigSelection
+		except ImportError:
+			ConfigSelection = None
+		if ConfigSelection is not None:
+			config.plugins.hdswebcontrol.captura_interval = ConfigSelection(default=str(INTERVAL_CAPTURA_IMPLICIT),
+				choices=alegeriIntervalCaptura())
 	if not config.plugins.hdswebcontrol.token.value:
 		# generat o singura data, salvat imediat pe disc -- ramane stabil intre reporniri chiar daca
 		# userul nu deschide niciodata ecranul de configurare (HdsWebControlSetup) sa-l vada/salveze
@@ -1036,7 +1084,6 @@ _TEXTE_REGISTRU = (
 	N_("Fișiere"),
 	N_("Canale"), N_("Ce e nou"), N_("Licențe"), N_("Scanare"), N_("Orientarea și setarea antenei"),
 	N_("Configurare LNB"), N_("Rotirea antenei"), N_("Găsire semnal"), N_("Ecranul de pornire"),
-	N_("Sigle de pornire"),
 	N_("Acces condiționat"), N_("Sunet și subtitrări"), N_("Aspectul subtitrărilor"), N_("Traducerea subtitrărilor"),
 	N_("Traducerea subtitrărilor: configurare pas cu pas"), N_("Accelerare 2D pe placa video"), N_("Căutare canale"),
 	N_("Data și ora"), N_("Paznicul receptorului"), N_("Forumul receptorului"), N_("TV în browser"),
@@ -1255,6 +1302,7 @@ _PAGINA_PANOU = """<!DOCTYPE html>
   .captura-butoane button:active{background:var(--accent);}
   .captura-butoane button:disabled{opacity:.5;cursor:default;}
   .captura-nota{font-size:.75rem;color:var(--text-slab);margin-top:8px;line-height:1.35;}
+  .captura-interval{background:#242a33;color:var(--text);border:1px solid var(--bordura);border-radius:6px;padding:2px 4px;margin-left:6px;font-size:.8rem;min-height:28px;}
   /* imaginea live in caseta ecranului (TV in browser, tv_web.py), pornita de butonul de sub capturi (Eduard, 12.10.2026) */
   .captura-butoane.live{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));}
   .ascuns-live{display:none;}
@@ -1326,7 +1374,7 @@ _PAGINA_PANOU = """<!DOCTYPE html>
 </head>
 <body>
 <h1>Panou de control HD Satelit</h1>
-<form class="cauta-setari" id="cautaSetari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută setări: scrie un cuvânt, de exemplu subtitrări" aria-label="Caută setări" autocomplete="off"><button type="submit">Caută</button></form>
+<form class="cauta-setari" id="cautaSetari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută în meniu: scrie un cuvânt, de exemplu subtitrări" aria-label="Caută în meniu" autocomplete="off"><button type="submit">Caută</button></form>
 <p id="bandaModSigur" style="display:none;max-width:1360px;margin:0 auto 12px;padding:10px 14px;border:1px solid #f5b83d;border-radius:8px;background:#2b2107;line-height:1.45"><a href="/mod-sigur" id="bandaModSigurText" style="color:#f5b83d"></a></p>
 <p id="bandaAltaImagine" style="display:none;max-width:1360px;margin:0 auto 12px;padding:10px 14px;border:1px solid #f5b83d;border-radius:8px;background:#2b2107;line-height:1.45"><a href="/import" id="bandaAltaImagineText" style="color:#f5b83d"></a></p>
 <div class="card card-ecran">
@@ -1338,7 +1386,7 @@ _PAGINA_PANOU = """<!DOCTYPE html>
           <img id="captura" alt="Imaginea de pe ecranul receptorului" onerror="capturaIndisponibila()" onload="capturaDisponibila()">
         </div>
         <div id="playerPanou" class="ascuns-live"></div>
-        <div class="stare" id="notaCaptura">Imaginea se actualizează la fiecare 3 secunde.</div>
+        <div class="stare" id="notaCaptura"><span id="textCaptura">Imaginea se actualizează la fiecare 3 secunde.</span><select class="captura-interval" id="intervalCaptura" aria-label="La câte secunde se actualizează imaginea" onchange="alegeIntervalCaptura(this.value)"><option value="0">Oprită</option><option value="1">1 s</option><option value="2">2 s</option><option value="3">3 s</option><option value="4">4 s</option><option value="5">5 s</option><option value="6">6 s</option><option value="7">7 s</option><option value="8">8 s</option><option value="9">9 s</option><option value="10">10 s</option></select></div>
       </div>
       <div class="ecran-jos">
         <div class="captura-butoane">
@@ -1429,7 +1477,7 @@ function arataInterfeteModule(interfete){
     var rand = document.createElement("div"); rand.className = "status-linie";
     var a = document.createElement("a");
     a.className = "hds-derulant";
-    a.textContent = i.sufix + ": interfața web a modulului";
+    a.textContent = (i.eticheta || i.sufix) + ": interfața web a modulului";
     a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
     rand.appendChild(a); loc.appendChild(rand);
   });
@@ -1594,11 +1642,11 @@ function capturaDisponibila(){
   planificaCaptura();
 }
 function actualizeazaCaptura(){
-  // cat merge imaginea live in caseta, capturile stau; le reporneste opresteLive
-  if(live.pornit){ return; }
+  // cat merge imaginea live in caseta, capturile stau; le reporneste opresteLive. Nici cu fila ascunsa: vine una la intoarcere
+  if(live.pornit || filaAscunsa()){ return; }
   // cat se descarca o captura, caseta asteapta: receptorul face o singura captura odata
   if(descarcareInCurs){ setTimeout(actualizeazaCaptura, 1000); return; }
-  capturaInLucru = true;
+  capturaInLucru = true; capturaFacuta = true;
   document.getElementById("captura").src = adresa("/api/screenshot?format=jpg&quality=70&width=960&_=" + Date.now());
 }
 var descarcareInCurs = false;
@@ -1773,13 +1821,52 @@ function descarcaCaptura(mod){
   }
   incearca();
 }
+// Capturile ecranului le cere NUMAI aceasta pagina (receptorul nu face capturi singur), si numai cat e vazuta: fila
+// ascunsa (alta fila, fereastra micsorata, ecranul telefonului stins) nu cere nimic, iar la intoarcere vine una pe loc;
+// cat merge imaginea live, niciuna. Intervalul e setarea receptorului (CFG.captura_interval: 1-10 s, 0 = oprita, implicit
+// 3), aceeasi ca pe televizor (Interfata web) si in /interfata-web; lista de langa imagine o schimba pe receptor. Oprita:
+// o captura la deschiderea paginii si dupa fiecare tasta a telecomenzii de aici; descarcarile merg ca inainte.
+// Bifa de dinainte (cheia hdsCapturiAuto din browser): „nu” = Oprita, trecuta o data pe receptor, apoi cheia se sterge.
+var intervalCapturaS = (CFG.captura_interval >= 0 && CFG.captura_interval <= 10) ? CFG.captura_interval : 3;
+var capturaFacuta = false;
+function filaAscunsa(){ return !!document.hidden; }
+function arataIntervalCaptura(){
+  var text = intervalCapturaS === 0 ? "Actualizarea imaginii e oprită." : (intervalCapturaS === 1 ?
+    "Imaginea se actualizează în fiecare secundă." : "Imaginea se actualizează la fiecare %d secunde.".replace("%d", intervalCapturaS));
+  var s = document.getElementById("textCaptura"), l = document.getElementById("intervalCaptura");
+  if(s){ s.textContent = text; }
+  if(l){ l.value = String(intervalCapturaS); }
+}
+function alegeIntervalCaptura(v){
+  var n = parseInt(v, 10);
+  if(!(n >= 0 && n <= 10)){ return; }
+  intervalCapturaS = n;
+  arataIntervalCaptura();
+  try { localStorage.removeItem("hdsCapturiAuto"); } catch(e) {}
+  cerere("/api/interfata-web-seteaza?captura_interval=" + n, "POST").catch(function(){});
+  if(!n){ clearTimeout(ceasCaptura); } else if(!capturaInLucru){ planificaCaptura(); }
+}
 function planificaCaptura(){
   // urmatoarea cerere DOAR dupa ce cea curenta s-a terminat (onload/onerror), niciodata pe un cronometru
   // fix: altfel mai multe procese 'grab' concurente pe receptor daca o captura intarzie. Serverul are si
   // el bariera lui (`_captura_in_curs`, 503 daca e deja una in curs).
   clearTimeout(ceasCaptura);
-  ceasCaptura = setTimeout(actualizeazaCaptura, capturaGrabita ? 500 : 3000);
+  // fila ascunsa sau imaginea live: niciun ceas (la intoarcere, visibilitychange cere una)
+  if(live.pornit || filaAscunsa()){ capturaGrabita = false; return; }
+  // cu actualizarea oprita, numai captura grabita de o tasta apasata cat se facea cea de acum
+  if(!capturaGrabita && !intervalCapturaS){ return; }
+  ceasCaptura = setTimeout(actualizeazaCaptura, capturaGrabita ? 500 : intervalCapturaS * 1000);
   capturaGrabita = false;
+}
+// fila ascunsa: ceasul se opreste; vazuta din nou: o captura pe loc (cu actualizarea oprita, numai daca nu s-a facut
+// inca niciuna, de pilda pagina deschisa intr-o fila din spate)
+if(document.addEventListener){
+  document.addEventListener("visibilitychange", function(){
+    if(filaAscunsa()){ clearTimeout(ceasCaptura); return; }
+    if(live.pornit || capturaInLucru || (!intervalCapturaS && capturaFacuta)){ return; }
+    clearTimeout(ceasCaptura);
+    actualizeazaCaptura();
+  });
 }
 // dupa o tasta a telecomenzii: captura urmatoare vine dupa o jumatate de secunda, nu dupa 3, ca efectul sa se vada pe
 // loc; tot una singura odata (cu una in curs sau cu o descarcare, cea de dupa ea vine mai repede)
@@ -1855,6 +1942,12 @@ function actualizeazaStare(){
     if(!confirm("Deconectezi acest browser? Cu parola pusă, o va cere din nou.")){ return; }
     cerere("/deconectare", "POST").catch(function(){}).then(function(){ location.replace("/"); });
   });
+})();
+arataIntervalCaptura();
+(function(){
+  var vechi = null;
+  try { vechi = localStorage.getItem("hdsCapturiAuto"); localStorage.removeItem("hdsCapturiAuto"); } catch(e) {}
+  if(vechi === "nu" && intervalCapturaS){ alegeIntervalCaptura(0); }
 })();
 actualizeazaCaptura();
 actualizeazaStare();
@@ -2036,6 +2129,8 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/lnb-aplica</code>: aplică planul văzut (<code>semn=</code>), verifică semnalul și așteaptă răspunsul 60 de secunde</li>
   <li><code>POST /api/lnb-raspuns?raspuns=pastrez|revin</code>: răspunsul la „Păstrezi noile setări?”</li>
   <li><code>GET /api/lnb-stare</code>: verificarea semnalului, întrebarea și secundele rămase</li>
+  <li><code>GET /api/unicable</code>: LNB-urile Unicable (I și II, JESS) ale tunerelor, cu rândurile lor: produsul, banda de utilizator și frecvențele (numai citire)</li>
+  <li><code>POST /api/unicable-seteaza?slot=N&amp;lnb=L&amp;camp=&lt;câmp&gt;&amp;valoare=&lt;valoare&gt;</code>: schimbă un rând Unicable; canalul se oprește pentru aplicare și se reia singur</li>
   <li><code>GET /api/gasire-semnal</code>: tunerele, sateliții, transponderul de la care pornește măsurarea și starea ei</li>
   <li><code>GET /api/gasire-semnal-transpondere?slot=N&amp;poz=P</code>: transponderele unui satelit</li>
   <li><code>GET /api/gasire-semnal-stare</code>: nivelul, calitatea, BER-ul și verdictul măsurării</li>
@@ -2064,7 +2159,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>GET /api/meniu</code>: tot meniul receptorului (tasta MENU), cu aceleași intrări ca pe televizor pentru nivelul ales</li>
   <li><code>POST /api/meniu-televizor?id=&lt;entryID&gt;</code>: deschide pe televizor ecranul unei intrări (nu oprirea sau repornirea)</li>
   <li><code>GET /api/setari</code>: ecranele de setări din meniu; cu <code>id=&lt;cheie&gt;</code>, rândurile lor (aceleași ca pe televizor, cu alegerile)</li>
-  <li><code>GET /api/cauta-setari?q=&lt;text&gt;</code>: „Caută setări”: meniurile și setările care au textul în nume (fără diacritice), cu drumul din meniu, valoarea de acum și pagina web</li>
+  <li><code>GET /api/cauta-setari?q=&lt;text&gt;</code>: „Caută în meniu”: meniurile și setările care au textul în nume (fără diacritice), cu drumul din meniu, valoarea de acum și pagina web</li>
   <li><code>POST /api/cauta-setari-televizor?cheie=&lt;cheie&gt;</code>: deschide pe televizor un rezultat al căutării, cu rândul găsit ales</li>
   <li><code>POST /api/setari-seteaza?id=&lt;cheie&gt;&amp;r&lt;N&gt;=&lt;valoare&gt;</code>: schimbă și salvează rândurile trimise (o valoare greșită nu schimbă nimic; la o alegere multiplă, ca vitezele de derulare, alegerile despărțite prin virgulă, de pildă <code>r20=2,8,16</code>; gol = nicio alegere)</li>
   <li><code>GET /api/informatii?pagina=despre|receptor|tunere|memorie|stocare|retea|hdmi</code>: ecranele „System Information”, cu aceleași texte ca pe televizor</li>
@@ -2151,6 +2246,7 @@ def stareInterfataWeb(browser=None):
 	# /api/interfata-web-secrete, la butonul "Arată")
 	from . import aplicatii_web
 	rez.update(aplicatii_web.stareSetari(aplicatiiPornite(), aplicatiiAfara()))
+	rez["captura_interval"] = intervalCaptura()
 	return rez
 
 
@@ -2187,6 +2283,8 @@ def seteazaAplicatii(argumente):
 	(aplicatii_web.py). Salvat pe disc; se aplica de la cererea urmatoare."""
 	from . import aplicatii_web
 	initConfigHdsWebControl()
+	if b"captura_interval" in argumente:
+		return seteazaIntervalCaptura((argumente[b"captura_interval"] or [b""])[0])
 	if b"parola_aplicatii_noua" in argumente:
 		if argumente[b"parola_aplicatii_noua"][:1] != [b"1"]:
 			return {"result": False, "message": _t("Se cere cu parola_aplicatii_noua=1.")}
@@ -2202,7 +2300,8 @@ def seteazaAplicatii(argumente):
 def _configPanou(csrf, jeton, browser):
 	"""Obiectul __CONFIG__ al panoului, ca JSON sigur in interiorul unui <script>. `parola_web`: daca in reteaua
 	locala se cere parola omului (pagina /setari arata starea, discret)."""
-	text = json.dumps({"csrf": csrf, "jeton": jeton, "browser": browser, "parola_web": parolaWebCeruta()})
+	text = json.dumps({"csrf": csrf, "jeton": jeton, "browser": browser, "parola_web": parolaWebCeruta(),
+		"captura_interval": intervalCaptura()})
 	return text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 
@@ -2967,6 +3066,15 @@ def zapReferinta(sref_text):
 		ref = eServiceReference(sref_text)
 		if not ref.valid():
 			return False, "referinta de serviciu invalida: %s" % sref_text, 400
+		if ref.type == 4097 and not ref.getName():
+			# un canal de internet al imaginii venit fara nume: numele din grupa lui, ca bara sa nu ramana goala
+			try:
+				from Components import HdsIptvSurse
+				nume = HdsIptvSurse.numeDinBuchete(ref.getPath())
+				if nume:
+					ref.setName(nume)
+			except Exception as eroare:
+				_jurnal("zap: numele canalului de internet: %s" % eroare)
 		nav.playService(ref)
 	except Exception as eroare:
 		return False, "zap esuat: %s" % eroare, 500
@@ -3476,13 +3584,14 @@ def _construiesteResurse():
 			return self._raspunde(request, stareInterfataWeb(browser=browser))
 
 	class InterfataWebSeteazaResource(HdsJsonResource):
-		"""POST /api/interfata-web-seteaza?aplicatii=0|1, aplicatii_afara=0|1, parola_aplicatii_noua=1. Poarta comuna
+		"""POST /api/interfata-web-seteaza?aplicatii=0|1, aplicatii_afara=0|1, parola_aplicatii_noua=1,
+		captura_interval=0..10 (imaginea ecranului de pe prima pagina; 0 = oprita). Poarta comuna
 		(schimbaCeva): din browser cer POST, aceeasi origine si antetul CSRF. Parola din reteaua de acasa se pune in
 		/acces-ssh (Parola receptorului), nu aici."""
 		schimbaCeva = True
 
 		def render_POST(self, request):
-			if set(request.args) & {b"aplicatii", b"aplicatii_afara", b"parola_aplicatii_noua"}:
+			if set(request.args) & {b"aplicatii", b"aplicatii_afara", b"parola_aplicatii_noua", b"captura_interval"}:
 				rezultat = seteazaAplicatii(request.args)
 				return self._raspunde(request, rezultat, 200 if rezultat["result"] else 400)
 			return self._raspunde(request, {"result": False, "message": _t("Se alege cu aplicatii=0|1, aplicatii_afara=0|1 "
@@ -3869,6 +3978,9 @@ def _construiesteResurse():
 	_ECRANE, _ECRANE_PAGINA = ecran_pornire_web.rute(HdsJsonResource, resource)
 	from . import galerie_sigle_web
 	_SIGLE, _SIGLE_PAGINA = galerie_sigle_web.rute(HdsJsonResource, resource)
+	# screensaverele la alegere (screensaver_web.py: aceleasi date ca ecranul HdsScreensaverAlegere)
+	from . import screensaver_web
+	_SSV, _SSV_PAGINA = screensaver_web.rute(HdsJsonResource, resource)
 	_JURNAL, _JURNAL_PAGINA = jurnal_web.rute(HdsJsonResource, resource)
 
 	# ---------------------------------------------------------------- Data si ora, paznicul receptorului
@@ -3960,6 +4072,10 @@ def _construiesteResurse():
 	# ---------------------------------------------------------------- navigatorul web (navigator_web.py)
 	from . import navigator_web
 	_NAVIGATOR, _NAVIGATOR_PAGINA = navigator_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
+	# ---------------------------------------------------------------- meniul „Aplicații” (aplicatii_tv_web.py, 0.7.5)
+	# Perechea ecranului Screens/HdsAplicatii.py (cardurile, „Deschide pe televizor”, ordinea, ascunderea).
+	from . import aplicatii_tv_web
+	_APLICATII_TV, _APLICATII_TV_PAGINA = aplicatii_tv_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
 	# ---------------------------------------------------------------- DAB+ si DVB-T2 din satelit (dabt2_web.py)
 	# Fereastra „Fluxuri și setări” (Hds/DabT2/ecrane.EcranPrincipal): fluxurile, actiunile, setarile, Despre.
 	from . import dabt2_web
@@ -4016,6 +4132,10 @@ def _construiesteResurse():
 	# si „Folosește pentru înregistrări”.
 	from . import stocare_web
 	_STOCARE, _STOCARE_PAGINA = stocare_web.rute(HdsJsonResource, resource)
+	# ---------------------------------------------------------------- montarea discurilor (montare_web.py, 0.7.5)
+	# Perechea ecranului „Montarea discurilor” (Screens/HdsMontareDiscuri.py): locul in /media, demontarea, montarea la loc.
+	from . import montare_web
+	_MONTARE, _MONTARE_PAGINA = montare_web.rute(HdsJsonResource, resource)
 	# ---------------------------------------------------------------- locurile din retea (locuri_retea_web.py)
 	# Perechea ecranelor Media > Locuri din retea (Screens/HdsLocuriRetea.py, Components/HdsStocareRetea.py): SMB, NFS,
 	# FTP, WebDAV, DLNA; parolele nu se arata niciodata, filmul porneste pe televizor.
@@ -4195,6 +4315,8 @@ def _construiesteResurse():
 			self.putChild(b"ecran-la-loc", _ECRANE[b"ecran-la-loc"])
 			for nume, resursa in _SIGLE.items():
 				self.putChild(nume, resursa)
+			for nume, resursa in _SSV.items():
+				self.putChild(nume, resursa)
 			self.putChild(b"interfete-cam", InterfeteCamResource())
 			# modulele de acces conditionat (acces_conditionat_web.py)
 			for nume_ruta, resursa in _ACCES.items():
@@ -4345,7 +4467,7 @@ def _construiesteResurse():
 			for nume_ruta, resursa in _IMAGINE_ONLINE.items():
 				self.putChild(nume_ruta, resursa)
 			# limbile, telecomenzile, meniul, setarile din setup.xml, informatiile
-			for rute_lot in (_LIMBI, _LIMBA_INTERFATA, _STOCARE, _LOCURI_RETEA, _TELECOMENZI, _MENIU, _SETARI, _INFORMATII, _CANALE, _EDITOR_CANALE, _TEMPORIZATOARE, _SUBTITRARI_FILM, _FILME, _DESCARCARE, _RADIO, _PAZA_MODEL, _ACTUALIZARE, _ACTUALIZARI, _PARTEA_DOUA, _LICENTE, _OCR_LIMBI, _EGALIZATOR, _ACCES_SSH, _DABT2, _STANDBY_TV, _CULEGERE_CANALE, _CAUTA_SETARI, _NAVIGATOR, _OARBA):
+			for rute_lot in (_LIMBI, _LIMBA_INTERFATA, _STOCARE, _MONTARE, _LOCURI_RETEA, _TELECOMENZI, _MENIU, _SETARI, _INFORMATII, _CANALE, _EDITOR_CANALE, _TEMPORIZATOARE, _SUBTITRARI_FILM, _FILME, _DESCARCARE, _RADIO, _PAZA_MODEL, _ACTUALIZARE, _ACTUALIZARI, _PARTEA_DOUA, _LICENTE, _OCR_LIMBI, _EGALIZATOR, _ACCES_SSH, _DABT2, _STANDBY_TV, _CULEGERE_CANALE, _CAUTA_SETARI, _NAVIGATOR, _APLICATII_TV, _OARBA):
 				for nume_ruta, resursa in rute_lot.items():
 					self.putChild(nume_ruta, resursa)
 			self.putChild(b"portal", _PORTAL[b"portal"])
@@ -4402,6 +4524,7 @@ def _construiesteResurse():
 			self.putChild(b"fonturi", FonturiPaginaResource())
 			self.putChild(b"ecrane", _ECRANE_PAGINA)
 			self.putChild(b"sigle-pornire", _ECRANE_PAGINA)
+			self.putChild(b"screensaver", _SSV_PAGINA)
 			self.putChild(b"interfete-cam", InterfeteCamPaginaResource())
 			self.putChild(b"acces-conditionat", _ACCES_PAGINA)
 			# aceeasi pagina pentru amandoua sectiunile; restul adresei alege grupul si felul (/scanare/satelit/operator)
@@ -4439,6 +4562,7 @@ def _construiesteResurse():
 			self.putChild(b"liste-implicite", _LISTE_IMPLICITE_PAGINA)
 			self.putChild(b"limbi", _LIMBI_PAGINA)
 			self.putChild(b"navigator", _NAVIGATOR_PAGINA)
+			self.putChild(b"aplicatii-tv", _APLICATII_TV_PAGINA)
 			self.putChild(b"acces-ssh", _ACCES_SSH_PAGINA)
 			self.putChild(b"egalizator", _EGALIZATOR_PAGINA)
 			self.putChild(b"calitate-imagine", _CALITATE_PAGINA)
@@ -4447,6 +4571,7 @@ def _construiesteResurse():
 			self.putChild(b"cadru", _CADRU)
 			self.putChild(b"limba-interfata", _LIMBA_INTERFATA_PAGINA)
 			self.putChild(b"stocare", _STOCARE_PAGINA)
+			self.putChild(b"montare-discuri", _MONTARE_PAGINA)
 			self.putChild(b"locuri-retea", _LOCURI_RETEA_PAGINA)
 			self.putChild(b"telecomenzi", _TELECOMENZI_PAGINA)
 			self.putChild(b"telecomanda-tv", _TELECOMANDA_TV_PAGINA)
@@ -4854,6 +4979,9 @@ TEXTE_PAGINA = {
 		N_("Caută"),
 		N_("Ecranul receptorului"),
 		N_("Imaginea se actualizează la fiecare 3 secunde."),
+		# 0.7.5 (SCR): lista de langa imagine (la cate secunde se cere captura; 1-10 s raman „N s”)
+		N_("La câte secunde se actualizează imaginea"),
+		N_("Oprită"),
 		N_("Descarcă captura cu afișaj OSD"),
 		N_("Descarcă captura fără afișaj OSD"),
 		N_("<span aria-hidden=\"true\">&#9654;</span> Privește live aici"),
@@ -4875,8 +5003,8 @@ TEXTE_PAGINA = {
 		N_("Scrie mesajul pentru televizor"),
 		N_("Trimite"),
 		N_("Deconectează acest browser"),
-		N_("Caută setări: scrie un cuvânt, de exemplu subtitrări"),
-		N_("Caută setări"),
+		N_("Caută în meniu: scrie un cuvânt, de exemplu subtitrări"),
+		N_("Caută în meniu"),
 		N_("Imaginea de pe ecranul receptorului"),
 		N_("Canalul de acum de pe televizor, pentru VLC, Kodi sau alt player din casă"),
 		N_("Parola receptorului"),
@@ -5159,6 +5287,10 @@ TEXTE_PAGINA = {
 			"și așteaptă răspunsul 60 de secunde"),
 		N_("<code>POST /api/lnb-raspuns?raspuns=pastrez|revin</code>: răspunsul la „Păstrezi noile setări?”"),
 		N_("<code>GET /api/lnb-stare</code>: verificarea semnalului, întrebarea și secundele rămase"),
+		N_("<code>GET /api/unicable</code>: LNB-urile Unicable (I și II, JESS) ale tunerelor, cu rândurile lor: "
+			"produsul, banda de utilizator și frecvențele (numai citire)"),
+		N_("<code>POST /api/unicable-seteaza?slot=N&amp;lnb=L&amp;camp=&lt;câmp&gt;&amp;valoare=&lt;valoare&gt;</code>: "
+			"schimbă un rând Unicable; canalul se oprește pentru aplicare și se reia singur"),
 		N_("<code>GET /api/gasire-semnal</code>: tunerele, sateliții, transponderul de la care pornește "
 			"măsurarea și starea ei"),
 		N_("<code>GET /api/gasire-semnal-transpondere?slot=N&amp;poz=P</code>: transponderele unui satelit"),
@@ -5219,7 +5351,7 @@ TEXTE_PAGINA = {
 			"intrări (nu oprirea sau repornirea)"),
 		N_("<code>GET /api/setari</code>: ecranele de setări din meniu; cu <code>id=&lt;cheie&gt;</code>, "
 			"rândurile lor (aceleași ca pe televizor, cu alegerile)"),
-		N_("<code>GET /api/cauta-setari?q=&lt;text&gt;</code>: „Caută setări”: meniurile și setările care "
+		N_("<code>GET /api/cauta-setari?q=&lt;text&gt;</code>: „Caută în meniu”: meniurile și setările care "
 			"au textul în nume (fără diacritice), cu drumul din meniu, valoarea de acum și pagina web"),
 		N_("<code>POST /api/cauta-setari-televizor?cheie=&lt;cheie&gt;</code>: deschide pe televizor un "
 			"rezultat al căutării, cu rândul găsit ales"),
@@ -5399,6 +5531,10 @@ TEXTE_PAGINA = {
 		N_("(apăsare lungă)"),
 		N_("Tasta nu a ajuns la receptor ("),
 		N_("Imaginea ecranului nu este disponibilă acum."),
+		# 0.7.5 (SCR): textul de sub imagine dupa intervalul ales
+		N_("Actualizarea imaginii e oprită."),
+		N_("Imaginea se actualizează în fiecare secundă."),
+		N_("Imaginea se actualizează la fiecare %d secunde."),
 		N_("Playerul nu s-a încărcat de pe receptor."),
 		N_("Imaginea live merge numai cu browserul conectat: deschide panoul fără cheia din adresă."),
 		N_("Înapoi la captură"),
@@ -5412,7 +5548,6 @@ TEXTE_PAGINA = {
 		N_("Playlistul nu s-a putut descărca."),
 		N_("Se pregătește captura..."),
 		N_("Captura s-a descărcat."),
-		N_("captura nu este JPG sau PNG"),
 		N_("Răspunsul nu este o captură JPG sau PNG."),
 		N_("receptorul nu a răspuns"),
 		N_("Captura nu s-a putut descărca ("),
@@ -5487,7 +5622,7 @@ TEXTE_PAGINA = {
 }
 
 
-TEXTE_PAGINA["js"] += (N_("Scurt: "), N_("Lung: "))
+TEXTE_PAGINA["js"] += (N_("Scurt:"), N_("Lung:"))
 
 
 def _traducePagina(sablon, fel="pagina"):

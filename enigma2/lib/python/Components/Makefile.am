@@ -8,13 +8,13 @@ install_PYTHON = \
 	HdsListeText.py \
 	Genres.py QRCode.py HdsFunctiiImagine.py \
 	International.py \
-	HdsParteaDoua.py HdsRadacinaUsb.py HdsLimbaRestaurare.py HdsLimbaEpg.py \
+	HdsParteaDoua.py HdsRadacinaUsb.py HdsLimbaRestaurare.py HdsLimbaEpg.py HdsLimbaTara.py \
 	ActionMap.py GUISkin.py PerServiceDisplay.py components.py              \
 	HdsTransmisie.py HdsTunerB.py HdsLocuriLista.py HdsPluginuriImagine.py HdsDabUsb.py \
-	HdsRadioOnline.py \
+	HdsRadioOnline.py HdsAplicatii.py HdsWidevine.py HdsWidevineGoogle.py HdsChromeOS.py \
 	HdsJurnal.py HdsJurnalTuner.py HdsJurnalAfisaj.py HdsJurnalInregistrari.py HdsJurnalSistem.py HdsRaportCanal.py \
 	HdsJurnalZapAudio.py HdsLimiteTuner.py \
-	HdsAlimentare.py HdsResetareFabrica.py HdsCuratenie.py HdsJurnale.py HdsSwap.py HdsDiscuri.py HdsDosareInregistrari.py HdsRetea.py HdsWlan.py HdsDispozitiveIntrare.py HdsTasteRapide.py HdsSkinuri.py HdsDvbISetari.py HdsDvbIIncercare.py HdsDvbIRegistru.py HdsDvbILegare.py HdsDvbIDate.py HdsDvbIRezerva.py HdsMabrSetari.py HdsIptvSurse.py HdsIptvClient.py HdsIptvAdrese.py HdsIptvRedare.py HdsIptvSubtitrari.py HdsIptvLucru.py HdsIptvFisier.py HdsIptvCitire.py HdsIptvSigle.py HdsIptvEpg.py HdsIptvSeriale.py HdsControlParental.py HdsInformatiiCanal.py HdsMedia.py HdsExtensiiLucru.py \
+	HdsAlimentare.py HdsResetareFabrica.py HdsCuratenie.py HdsJurnale.py HdsSwap.py HdsDiscuri.py HdsDosareInregistrari.py HdsRetea.py HdsWlan.py HdsDispozitiveIntrare.py HdsTasteRapide.py HdsSkinuri.py HdsDvbISetari.py HdsDvbIIncercare.py HdsDvbIRegistru.py HdsDvbILegare.py HdsDvbIDate.py HdsDvbIRezerva.py HdsMabrSetari.py HdsIptvSurse.py HdsIptvClient.py HdsIptvAdrese.py HdsIptvRedare.py HdsIptvReconectare.py HdsIptvSubtitrari.py HdsIptvLucru.py HdsIptvFisier.py HdsIptvCitire.py HdsIptvSigle.py HdsIptvEpg.py HdsIptvSeriale.py HdsIptv4K.py HdsVod.py HdsVodPoze.py HdsVodPozitii.py HdsControlParental.py HdsInformatiiCanal.py HdsMedia.py HdsExtensiiLucru.py \
 	Button.py HTMLComponent.py ProgressBar.py TimerList.py config.py        \
 	HTMLSkin.py ServiceList.py VariableText.py                              \
 	ConfigList.py VariableValue.py                                          \
@@ -33,16 +33,17 @@ install_PYTHON = \
 	Keyboard.py Sensors.py FanControl.py VideoOutput.py WlanTools.py WlanControl.py DishMath.py \
 	HdsIndexCanale.py HdsSemneBaza.py HdsPisteCanale.py HdsIstoricSemnal.py HdsHdmiDate.py HdsStareOsd.py HdsJurnalVersiuni.py HdsMotorStare.py HdsNavigator.py HdsPachete.py HdsPython2.py HdsPython2Traducere.py HdsPython2Compat.py HdsPluginuriExterne.py HdsSursaPachet.py HdsRecuperare.py HdsActualizari.py HdsImagineOnline.py \
 	HdsAjutor.py \
-	HdsTemaExterna.py HdsTemeSuprascrise.py \
+	HdsAspectLista.py \
+	HdsTemaExterna.py HdsTemeSuprascrise.py HdsTemaStergere.py \
 	HdsSemnatura.py \
-	HdsFonturiGoogle.py HdsPacheteDTH.py HdsEcranePornire.py HdsGalerieSigle.py HdsCodorMpeg2.py HdsSemnaturaPornire.py \
+	HdsFonturiGoogle.py HdsPacheteDTH.py HdsEcranePornire.py HdsGalerieSigle.py HdsScreensavere.py HdsCodorMpeg2.py HdsSemnaturaPornire.py \
 	HdsOperatoriSatelit.py HdsListeCabluTerestru.py HdsInterfeteCam.py HdsModuleAcces.py HdsPorturi.py HdsMutareSetari.py \
 	HdsLnb.py HdsLnbAplicare.py HdsGasireSemnal.py HdsMotorComenzi.py HdsMotorPozitie.py HdsMotorPlafon.py HdsMotorTuner.py HdsMotorViteza.py HdsTimpCautare.py HdsScanareUltima.py HdsRetele.py \
 	HdsPisteLimbi.py HdsTelecomenziDate.py HdsSubtitrariAspect.py HdsAccel2D.py HdsOcrSubtitrari.py HdsOcrModele.py HdsOcrLimbaGhicita.py \
 	HdsTraducereSubtitrari.py HdsStandbyTv.py HdsQr.py HdsConfigurareTraducere.py HdsTraducereEpg.py \
 	HdsTraducereTexte.py HdsTraducereTeletext.py \
-	HdsCeas.py HdsCeasHttps.py HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsMemorieDriver.py HdsStocare.py HdsPazaModel.py HdsDiagnostic.py HdsPlatforma.py HdsPlacaVuplus.py HdsCautareOarba.py HdsOarbaVuplus.py \
-	HdsStareMeniu.py HdsDale.py HdsCautaSetari.py HdsAccesCanale.py HdsBazaCanale.py HdsBazaPornire.py HdsFisierSigur.py \
+	HdsCeas.py HdsCeasHttps.py HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsMemorieDriver.py HdsDecodorWeb.py HdsStocare.py HdsPazaModel.py HdsDiagnostic.py HdsPlatforma.py HdsPlacaVuplus.py HdsCautareOarba.py HdsOarbaVuplus.py \
+	HdsStareMeniu.py HdsDale.py HdsCautaSetari.py HdsCautaSetariAnunt.py HdsAccesCanale.py HdsBazaCanale.py HdsBazaPornire.py HdsFisierSigur.py \
 	HdsSetariDinCopie.py HdsCopieSetari.py HdsCopieImagine.py HdsReinstalare.py HdsCulegereCanale.py HdsCulegereTotala.py HdsCapLista.py HdsImportSurse.py HdsImportAltaImagine.py HdsImportExtra.py HdsImportRetea.py HdsLatimeText.py HdsModSigur.py HdsPluginExtern.py HdsPazaBara.py HdsEnigmaCompat.py HdsNumeStandard.py HdsModuleLipsa.py HdsBibliotecaLipsa.py HdsDriverLipsa.py HdsAltPython.py \
 	HdsTwistedCompat.py \
 	HdsCursorLista.py HdsServiceListSablon.py HdsSageti.py \
@@ -65,12 +66,13 @@ install_PYTHON = \
 	HdsLocul.py HdsLocuriDate.py HdsLoculInternet.py HdsGrade.py HdsCalitateImagine.py HdsFurnizori.py \
 	HdsVarianteCanal.py \
 	HdsEpgSalvare.py \
+	HdsEpgDatLimbi.py \
 	HdsLamedbSalvare.py \
 	HdsMasuraZap.py HdsUltimaImagine.py HdsPrimaImagine.py HdsAnimatiiFerestre.py \
 	HdsFavorite.py HdsFirPluginuri.py \
 	HdsFunctii.py HdsMarimeText.py HdsMargini.py HdsFontInterfata.py HdsInformatiiTabel.py HdsMultumiri.py \
-	HdsTemaTv.py \
-	HdsStocareDisc.py HdsStocareMontare.py HdsStocareRetea.py HdsReteaProtocoale.py HdsReteaUnealta.py HdsReteaSmb.py \
+	HdsTemaTv.py HdsRezolutieTv.py \
+	HdsStocareDisc.py HdsStocareMontare.py HdsMontareDiscuri.py HdsStocareRetea.py HdsReteaProtocoale.py HdsReteaUnealta.py HdsReteaSmb.py \
 	HdsEditorCanale.py HdsEditorCanaleDate.py HdsEditorCanaleUnelte.py HdsEditorSateliti.py HdsEditorSigle.py \
 	HdsStreamRelay.py HdsSoftCsa.py \
 	Opkg.py

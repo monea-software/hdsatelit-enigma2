@@ -3,7 +3,9 @@ installdir = $(pkglibdir)/python/Plugins/SystemPlugins
 
 # 0.2.6: EmulatorMouse scos din imagine: e numai pentru emulatorul de pe PC, care isi
 # pune copia lui; pe receptor nu face nimic.
-SUBDIRS = SkinSelector DiseqcTester Hotplug HdsDvbI
+# 0.7.5: Satfinder = ecranul cautat de pluginurile de feeduri scrise pentru OE-Alliance (FuryBiss, LiveFeed etc.),
+# fara rand in meniu; Gasire semnal al imaginii ramane Screens/Satfinder.py.
+SUBDIRS = SkinSelector DiseqcTester Hotplug HdsDvbI Satfinder
 
 install_PYTHON =	\
 	__init__.py

@@ -7,20 +7,20 @@
 #
 # Driverul de sincronizare (hi_sync.ko) are pe fiecare instanta /proc/msp/syncNN campul bQuickOutput: cu 1, primul cadru
 # decodat se arata pe loc (si sta pe loc pana porneste miscarea); cu 0, cadrul gata decodat asteapta sa-l prinda ceasul
-# canalului (PCR). Pe .114 (SF8008, 11.11.2026) libreader pune instanta canalului viu pe 0 la FIECARE pornire a
+# canalului (PCR). Pe receptorul de probe (SF8008, 11.11.2026) libreader pune instanta canalului viu pe 0 la FIECARE pornire a
 # decodorului, iar primul cadru decodat a stat 269-815 ms (mediana ~550) pana a fost aratat; scris inapoi pe 1 dupa ce
 # decodorul a pornit, cadrul apare cum e decodat. Pe Viper 4K V20/V30/V40 (fara libreader) e deja 1. zapmode nu il
-# schimba (probat cu toate cele patru valori). Masurat pe .114 (12.11.2026, ms de la comanda de zap, mediane): canale
+# schimba (probat cu toate cele patru valori). Masurat pe receptorul de probe SF8008 (12.11.2026, ms de la comanda de zap, mediane): canale
 # fara criptare 2105 -> 1711 si 2489 -> 1791, OSCam (SAT.1 HD) 2451 -> 2186, SoftCSA 2889 -> 2496, zap-uri repezi (~1 s
 # intre ele) 1948 -> 1440; decodarea la fel, ErrFrame 0, tasta -> tuner fara schimbare constanta.
 #
 # Cum (numai SCRIERI, niciodata citiri din /proc/msp in timpul zap-ului: driverul SF8008 nu suporta citiri atunci):
 # - instantele syncNN se afla din lista dosarului /proc/msp (nu din continutul lor) la pornire si din nou dupa
-#   LINISTE_S fara zap; libreader le face la pornirea lui (pe .114 sync00-03 de la inceput);
+#   LINISTE_S fara zap; libreader le face la pornirea lui (pe receptorul de probe SF8008 sync00-03 de la inceput);
 # - de la evTunedIn (semnal prins; decodorul porneste dupa el, din PID-urile tinute minte sau dupa PMT) pana la primul
 #   eveniment video (primul cadru decodat; si evStart, evEnd, evTuneFailed opresc), cel mult TIMP_MAX_S, un fir scrie
 #   „bQuickOutput = true” in TOATE instantele la PAS_S: cea a canalului viu e singura pe 0, celelalte sunt deja 1, deci
-#   nu e nevoie sa aflam care e (asta ar cere o citire); o scriere poate astepta dupa driver (pe .114 uneori ~200 ms),
+#   nu e nevoie sa aflam care e (asta ar cere o citire); o scriere poate astepta dupa driver (pe receptorul de probe SF8008 uneori ~200 ms),
 #   de aceea putine scrieri, rare (la SoftCSA primul eveniment video vine abia cu imaginea, deci firul merge pana la
 #   termen);
 # - o instanta care nu (mai) exista e sarita la acest zap; alta eroare de scriere = zap cu eroare; dupa
@@ -42,7 +42,7 @@ LIBREADER = "/usr/bin/libreader"
 ZAP_VECHI = "/tmp/hds-zap-vechi"
 PROBA_OPRITA = "/tmp/hds-prima-imagine-veche"    # numai pentru proba A/B a acestui modul
 COMANDA = b"bQuickOutput = true\n"
-PAS_S = 0.1          # .114, 12.11.2026: acelasi castig ca la 25 ms / 3 s, cu 24-56 de scrieri pe zap in loc de 80-380
+PAS_S = 0.1          # receptorul de probe SF8008, 12.11.2026: acelasi castig ca la 25 ms / 3 s, cu 24-56 de scrieri pe zap in loc de 80-380
 TIMP_MAX_S = 1.5     # de la evTunedIn; decodorul porneste la 10-250 ms dupa blocare
 LINISTE_S = 10.0
 MAX_ZAPURI_EROARE = 3
@@ -102,7 +102,7 @@ def config():
 		return None
 
 
-# pornita din fabrica numai unde masurarea a aratat castigul (SF8008 pe .114; SF8008 MINI e aceeasi placa si acelasi
+# pornita din fabrica numai unde masurarea a aratat castigul (SF8008 pe receptorul de probe; SF8008 MINI e aceeasi placa si acelasi
 # driver); pe celelalte receptoare cu libreader randul exista, dar e oprit pana sunt masurate (coordonatorul, 12.11.2026)
 MODELE_PORNITE = ("sf8008", "sf8008m")
 

@@ -1,0 +1,34 @@
+# HD Satelit: regulile garzii de model pentru Edision OS mio 4K+ (masina osmio4kplus, MACHINEBUILD osmio4kplus), NECONFIRMAT
+# (agentul MED, 13.11.2026, alfa 0.7.4; tester lme, LinuxSat 164121).
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom: Broadcom BCM72604 (SOC_FAMILY din meta-edision/conf/machine/osmio4kplus.conf, OE-Alliance 6.0), nucleul
+# linux-edision 5.15, fara /proc/msp/sys, fara blkdevparts si fara partitia deviceinfo.
+# Valorile din /proc/stb/info, DOVEDITE din driverul placii brcmstb-osmio4kplus.ko (edision-dvb-modules 5.15.0+20211228, din
+# imaginea publica OE-Alliance 8.0.1; proc_info_show si init_module citite cu unelte/elf_proc_stb_info.py):
+#   boxtype = din proprietatea „model” a radacinii arborelui de dispozitive: OSMINI4KTYP2 sau OSMINI4K => osmini4k,
+#   OSMIO4KPLUS => osmio4kplus, OSMIO4K => osmio4k; orice alt arbore => driverul NU se incarca. Deci boxtype deosebeste
+#   singur cele trei modele (si de orice alt receptor): fara model_id, fara petic in garda.
+#   chipset = „BCM%x” din productId BCHP („BCM7251S”/„BCM7252S” numai la 0x72511/0x72521); pentru 72604 asteptat
+#   „BCM72604”, NEMASURAT. chip=- (ca la MHD): cipul nu hotaraste; il trecem dupa citirea testerului.
+#   model = „dm8000” (constant, fara folos pentru garda).
+# kernel_part=mmcblk1p2, rootfs_part=mmcblk1p3: MTD_KERNEL si MTD_ROOTFS din osmio4kplus.conf; memoria interna e mmcblk1
+# (MTD_BLACK). Locul de baza porneste cu „root=/dev/mmcblk1p3 rootfstype=ext4 rootwait” (STARTUP_1 din
+# osmio4k-emmcimg.bbclass), FARA kernel= in /proc/cmdline: garda ia nucleul din kernel_part= cand /proc/partitions il are.
+# Locurile 2-4: nucleul pe p4/p6/p8, sistemul pe p5/p7/p9; acolo garda vede pornirea din alt loc (multiboot).
+# kernel_kib=8192: KERNEL_PARTITION_SIZE din osmio4k-emmcimg.bbclass (nemasurat pe aparat).
+# Pe stick / in meniul de scriere: dosarul osmio4kplus.
+format=1
+distro=hdsatelit
+model=Edision OS mio 4K+
+machine=osmio4kplus
+machinebuild=osmio4kplus
+chip=-
+boxtype=osmio4kplus
+hw=-
+partitions=-
+kernel_part=mmcblk1p2
+kernel_kib=8192
+rootfs_part=mmcblk1p3
+confirmat=nu
+familie=broadcom

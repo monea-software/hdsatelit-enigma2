@@ -733,6 +733,7 @@ class Masurare(object):
 	# ---- valori
 	def _goleste(self, si_varful=True):
 		self.nivel = None
+		self.nivel_afisat = None
 		self.calitate = None
 		self.ber = None
 		self.blocat = False
@@ -1042,7 +1043,10 @@ class Masurare(object):
 		# SET_FRONTEND (cu motorul, aproape o secundă după acord). Starea nucleului iese din TUNING numai prin
 		# evenimentul noului acord (frontend.cpp, feEvent), deci în TUNING blocarea citită nu se crede.
 		self.blocat = bool(d.get("tuner_locked")) and self.stare_tuner != "TUNING"
-		self.nivel = d.get("tuner_signal_power")
+		# SEM 0.7.5: frontend.cpp da 0 la nivel si la calitate fara semnal prins; nivelul brut (cu tunerul neprins) ramane
+		# numai pentru semnul de semnal prea puternic (plafon_din). Pe imaginile fara cheia noua: nivelul de pana acum.
+		self.nivel_afisat = d.get("tuner_signal_power")
+		self.nivel = d.get("tuner_signal_power_raw", self.nivel_afisat)
 		self.calitate = d.get("tuner_signal_quality")
 		self.ber = d.get("tuner_bit_error_rate")
 		self._motor = self._stare_motor()
@@ -1382,9 +1386,10 @@ class Masurare(object):
 			"tp": dict(self.tp) if self.tp else None,
 			"tp_text": text_transponder(self.tp) if self.tp else "",
 			"pozitie_text": self._text_antena(),
-			"nivel_brut": self.nivel if citeste else None,
+			# pe ecran si in web: 0 fara semnal prins, ca in bara de informatii (SEM 0.7.5)
+			"nivel_brut": self.nivel_afisat if citeste else None,
 			"calitate_bruta": self.calitate if citeste else None,
-			"nivel_la_suta": la_suta(self.nivel) if citeste else None,
+			"nivel_la_suta": la_suta(self.nivel_afisat) if citeste else None,
 			"calitate_la_suta": la_suta(self.calitate) if citeste else None,
 			"calitate_db": None,   # nucleul nu are formula pentru tunerul nostru (frontend.cpp, 0x12345678)
 			"ber": self.ber if citeste else None,

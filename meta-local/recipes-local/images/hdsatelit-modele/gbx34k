@@ -1,0 +1,36 @@
+# HD Satelit: regulile garzii de model pentru GigaBlue UHD X3 4K (masina gb72604, MACHINEBUILD gbx34k), NECONFIRMAT
+# (agentul MGX, 12.11.2026, alfa 0.7.4; tester jalil).
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii, modelul si locul nucleului si
+# al sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom: receptor Broadcom BCM72604 pe platforma NEXUS (aceeasi familie de cip ca Vu+ Zero4K), fara /proc/msp/sys,
+# fara blkdevparts si fara partitia deviceinfo. Masina gb72604 are un singur model (MACHINEBUILDS gbx34k,
+# meta-gigablue/conf/machine/gb72604.conf); nucleul linux-gigablue 4.1.20 (gb72604/defconfig), driverele
+# gigablue-platform-util-gb72604 (nexus.ko, dvb.ko, nxserver, mutate la prima pornire in /usr/share/platform de
+# /etc/init.d/gigablue-platform-util, S65).
+# Valorile din /proc/stb/info, citite din codul driverului dvb.ko (functia proc_stb_info_init, platform-util 20261105):
+#   boxtype = gigablue (constant, acelasi pe toate GigaBlue) => modelul exact il cere model_id=gbx34k: /proc/stb/info/gbmodel
+#   = gbx34k, scris de driver si inca o data de gigablue-ddbootup (/etc/init.d/ddbootup, S39); bolt/board din arborele
+#   dispozitivului tot gbx34k. model_id=gbx34k cere peticul garzii din imagine (MGX/petic_garda_gbx34k.py: lista din
+#   enigma2.sh si MODELE_PLACI).
+#   chipset = sprintf("bcm%x", chipId), chipId = registrul PRODUCT_ID al cipului (nexus.ko, BCHP_P_Open: >>16 la cipurile
+#   cu 4 cifre, >>8 la cele cu 5 cifre). chip=72604: ASTEPTAT, NEMASURAT pe X3 (cipul cu 5 cifre; pe Vu+ Zero4K, acelasi
+#   SoC, un raport real a dat chipset=72604). Daca testerul citeste „bcm7260”, se pune chip=7260 (nu chip=-: fara cip,
+#   boxtype=gigablue si p4/p5 ar lasa imaginea sa treaca si pe Quad 4K / UE 4K).
+# kernel_part=mmcblk0p4, rootfs_part=mmcblk0p5: MTD_KERNEL si MTD_ROOTFS din gigablue-oem.inc (randurile gbx34k; locul de baza;
+# enigma.info al imaginilor OE-Alliance publice: mtdkernel mmcblk0p4, mtdrootfs mmcblk0p5). kernel_kib: nemasurat (0).
+# Pe stick: dosarul gigablue/x34k.
+format=1
+distro=hdsatelit
+model=GigaBlue UHD X3 4K
+machine=gb72604
+machinebuild=gbx34k
+chip=72604
+boxtype=gigablue
+hw=-
+partitions=-
+kernel_part=mmcblk0p4
+kernel_kib=0
+rootfs_part=mmcblk0p5
+confirmat=nu
+familie=broadcom
+model_id=gbx34k

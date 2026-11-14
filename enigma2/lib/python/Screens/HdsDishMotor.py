@@ -50,7 +50,7 @@ from Components.Input import Input
 from Components.Sources.CanvasSource import CanvasSource
 from Components.Sources.StaticText import StaticText
 from Components.Label import Label
-from Components.HdsMotorStare import gradeText, secundeText, stareMotor, panou_automat_oprit, panouAutomatAscuns, satelitiPeArc, istoricTinta
+from Components.HdsMotorStare import gradeText, secundeText, stareMotor, panou_automat_oprit, panouAutomatAscuns, satelitiPeArc, istoricTinta, desenDinSpate, boltaVizibila, unghiPeBolta, pozitiiCuCanale
 from Components import HdsGrade
 from Components import HdsMarireText as MT
 from Tools.ScaledSkin import LAYOUT_WIDTH, scaledSkin
@@ -114,6 +114,13 @@ BARA_GATA = 0x4ad991
 # ingust, mai aprins, pana in mijlocul lui. Albastra cat merge antena, aurie cand a ajuns pe tinta.
 CON_MERS = (0xc038b6ff, 0x9038b6ff)
 CON_SOSIT = (0xb8ffc250, 0x80ffc250)
+# bolta intreaga (locul stabilit; HdsMotorStare.boltaVizibila): satelitii din afara (sub orizont sau dincolo de o limita a
+# motorului) sunt inele rosii; cei sub orizont stau sub linia orizontului, de partea lor, cel mult SUB_ORIZONT_MAX grade pe
+# cerc (deasupra barei de jos); capetele boltii au gradele satelitului de la orizont, sudul si limitele cate un semn scurt
+AFARA = 0xff6b6b
+CAPAT = 0x8aa2b8
+LIMITA = 0xffa040
+SUB_ORIZONT_MAX = 8.0
 
 
 def _parte(jos, sus, grade):
@@ -122,10 +129,42 @@ def _parte(jos, sus, grade):
 	return min(1.0, max(0.0, parte))
 
 
-def _unghi(parte):
+def _unghi(parte, din_spate=False):
 	"""unghiul pe ecran, in grade, ca la eCanvas si ca in SVG (0 = dreapta, pozitiv in sensul acelor de ceas cu y in
-	jos): 180 = vest (stanga), 270 = sus, 360 = est (dreapta)"""
-	return 180.0 + 180.0 * parte
+	jos): 180 = vest (stanga), 270 = sus, 360 = est (dreapta). `din_spate` (setarea "Desenul rotirii vazut din spatele
+	antenei", config.usage.hds_motor_din_spate): oglinda pe orizontala, estul in stanga si vestul in dreapta, ca atunci
+	cand stai in spatele antenei cu fata spre sud"""
+	return 180.0 + 180.0 * ((1.0 - parte) if din_spate else parte)
+
+
+def unghiEcranBolta(unghi_motor, a, din_spate=False):
+	"""Bolta intreaga: unghiul pe ecran (180..360) pentru unghiul motorului `unghi_motor` (est pozitiv): 0 = sudul, sus
+	(270); -a = orizontul din vest, in stanga (180); +a = orizontul din est, in dreapta (360); vazut din spate, oglinda.
+	Aceeasi regula are pagina web /motor (antena_web.py, unghiBolta)."""
+	parte = max(-1.0, min(1.0, unghi_motor / a)) if a else 0.0
+	return 270.0 + 90.0 * (-parte if din_spate else parte)
+
+
+def unghiEcranAfara(unghi_motor, a, din_spate=False):
+	"""Satelitul din afara boltii: deasupra orizontului (dincolo de o limita a motorului) la locul lui; sub orizont, sub linia
+	orizontului de partea lui, cu atat mai jos cu cat e mai departe (cel mult SUB_ORIZONT_MAX)"""
+	if abs(unghi_motor) <= a:
+		return unghiEcranBolta(unghi_motor, a, din_spate)
+	jos = min(SUB_ORIZONT_MAX, 2.0 + (abs(unghi_motor) - a) * 0.5)
+	spre_est = (unghi_motor > 0) != bool(din_spate)
+	return 360.0 + jos if spre_est else 180.0 - jos
+
+
+def capeteBolta(de_la, la, din_spate=False, sud=None):
+	"""(jos, sus) in grade: capetele drumului cu MARGINE_GRADE de o parte si de alta. Vazut din spatele antenei, cu locul
+	stiut (`sud` = longitudinea locului, satelitul din sud), capetele se pun simetric fata de sud, ca sudul sa fie in
+	varful curbei. Aceeasi regula are desenul SVG din pagina web /motor (antena_web.py, capeteBolta)."""
+	jos = min(de_la, la) - MARGINE_GRADE
+	sus = max(de_la, la) + MARGINE_GRADE
+	if din_spate and sud is not None:
+		d = max(abs(jos - sud), abs(sus - sud))
+		jos, sus = sud - d, sud + d
+	return jos, sus
 
 
 def _pe(unghi, raza, x, y):
@@ -158,7 +197,7 @@ def seSuprapun(a, b, spatiu=4):
 
 
 def deseneazaRotirea(panza, factor, de_la, la, acum, procent, a_ajuns, secunde_trecute, sateliti=(), antena=True,
-		plecare=True, sosit=False, eticheta=None):
+		plecare=True, sosit=False, eticheta=None, din_spate=False, sud=None, bolta=None):
 	"""Panza unei miscari cu tinta stiuta, cu formele netezite din nucleu (CanvasSource.drawLine/drawArc/drawRing/
 	fillCircle/fillPolygon, desenate in C++ de lib/gdi/desennetezit.cpp), dupa fondul pus de ecran. Ordinea: raza
 	semnalului, bolta, drumul facut, ceilalti sateliti, plecarea si tinta, antena, etichetele, bara.
@@ -167,12 +206,22 @@ def deseneazaRotirea(panza, factor, de_la, la, acum, procent, a_ajuns, secunde_t
 	antena, nici raza. `plecare` = False cand plecarea nu se stie (nu se pune niciun punct violet). `sosit` = antena a
 	ajuns cu adevarat pe tinta (raza se face aurie). `sateliti` = gradele celorlalti sateliti din lista tunerului.
 	`eticheta(x, y, latime, inaltime, culoare, text, aliniere)` scrie un text (None = fara etichete).
+	`din_spate`, `sud`: desenul vazut din spatele antenei (estul in stanga, sudul in varful curbei; capeteBolta, _unghi).
+	`bolta` (locul stabilit): bolta intreaga, {"a", "de_la", "la", "acum" (unghiurile motorului), "sateliti" [(unghi, afara)],
+	"capete" (eticheta vest, eticheta est), "sud" (eticheta), "limite" (unghi vest sau None, unghi est sau None)}; atunci
+	`sateliti` si `sud` nu se folosesc, iar `din_spate` numai oglindeste.
 	Intoarce cate forme s-au pus in coada."""
 	g = lambda v: v * factor
 	cx, cy = g(CENTRU_X), g(CENTRU_Y)
-	jos = min(de_la, la) - MARGINE_GRADE
-	sus = max(de_la, la) + MARGINE_GRADE
-	u_de_la, u_la, u_acum = _unghi(_parte(jos, sus, de_la)), _unghi(_parte(jos, sus, la)), _unghi(_parte(jos, sus, acum))
+	if bolta is not None:
+		a = bolta["a"]
+		u_de_la, u_la, u_acum = (unghiEcranBolta(bolta["de_la"], a, din_spate), unghiEcranBolta(bolta["la"], a, din_spate),
+			unghiEcranBolta(bolta["acum"], a, din_spate))
+		jos = sus = None
+	else:
+		jos, sus = capeteBolta(de_la, la, din_spate, sud)
+		u_de_la, u_la, u_acum = (_unghi(_parte(jos, sus, de_la), din_spate), _unghi(_parte(jos, sus, la), din_spate),
+			_unghi(_parte(jos, sus, acum), din_spate))
 	n = 0
 
 	# raza semnalului: varful pe bolta, acolo unde e indreptata antena; baza pe gura talerului. Inaintea boltii, ca bolta
@@ -194,9 +243,26 @@ def deseneazaRotirea(panza, factor, de_la, la, acum, procent, a_ajuns, secunde_t
 		n += 1
 
 	# ceilalti sateliti din lista tunerului: puncte de alta culoare decat bolta, putin mai groase decat ea
-	for grade in sateliti:
+	if bolta is not None:
+		# sudul (unghiul motorului 0) si limitele motorului: semne scurte pe dinafara boltii
+		semne = [(unghiEcranBolta(0.0, bolta["a"], din_spate), ARC)]
+		for limita in bolta.get("limite") or ():
+			if limita is not None:
+				semne.append((unghiEcranBolta(limita, bolta["a"], din_spate), LIMITA))
+		for u, culoare in semne:
+			panza.drawLine(*(_pe(u, g(RAZA + 4), cx, cy) + _pe(u, g(RAZA + 13), cx, cy) + (g(2.5), culoare)))
+			n += 1
+		for unghi, afara in bolta.get("sateliti") or ():
+			if afara:
+				x, y = _pe(unghiEcranAfara(unghi, bolta["a"], din_spate), g(RAZA), cx, cy)
+				panza.drawRing(x, y, g(PUNCT_SATELIT + 1), g(1.8), AFARA)
+			else:
+				x, y = _pe(unghiEcranBolta(unghi, bolta["a"], din_spate), g(RAZA), cx, cy)
+				panza.fillCircle(x, y, g(PUNCT_SATELIT), SATELIT)
+			n += 1
+	for grade in (sateliti if bolta is None else ()):
 		if jos <= grade <= sus:
-			x, y = _pe(_unghi(_parte(jos, sus, grade)), g(RAZA), cx, cy)
+			x, y = _pe(_unghi(_parte(jos, sus, grade), din_spate), g(RAZA), cx, cy)
 			panza.fillCircle(x, y, g(PUNCT_SATELIT), SATELIT)
 			n += 1
 	# plecarea (violet) si tinta (aurie, cu un inel in jur): mai mari decat punctele obisnuite
@@ -221,6 +287,15 @@ def deseneazaRotirea(panza, factor, de_la, la, acum, procent, a_ajuns, secunde_t
 			cutie_de_la = cutieEticheta(u_de_la)
 			if not seSuprapun(cutie_de_la, cutie_la):
 				cutii.append((cutie_de_la, PLECARE, gradeScurt(de_la)))
+		if bolta is not None:
+			# capetele boltii (satelitul de la orizont) si sudul, cand nu se suprapun cu plecarea si tinta
+			text_vest, text_est = bolta.get("capete") or ("", "")
+			for u, text in ((unghiEcranBolta(-bolta["a"], bolta["a"], din_spate), text_vest),
+					(unghiEcranBolta(bolta["a"], bolta["a"], din_spate), text_est),
+					(unghiEcranBolta(0.0, bolta["a"], din_spate), bolta.get("sud") or "")):
+				cutie = cutieEticheta(u)
+				if text and not any(seSuprapun(cutie, c[0]) for c in cutii):
+					cutii.append((cutie, CAPAT, text))
 		for (stanga, sus_e, aliniere), culoare, text in cutii:
 			eticheta(g(stanga), g(sus_e), g(ETICHETA_L), g(ETICHETA_I), culoare, text, aliniere)
 			n += 1
@@ -262,15 +337,18 @@ def _deseneazaAntena(panza, factor, unghi):
 	return 10
 
 
-def deseneazaFaraTinta(panza, factor, directie, procent, a_ajuns, secunde_trecute):
+def deseneazaFaraTinta(panza, factor, directie, procent, a_ajuns, secunde_trecute, din_spate=False):
 	"""Tinta nu se stie (pas, miscare fara oprire, pozitie memorata fara satelit legat): bolta goala si, daca se stie, o
-	sageata curbata pe directia miscarii (estul in dreapta, ca pe bolta). Nicio antena si niciun satelit inventat."""
+	sageata curbata pe directia miscarii (estul in dreapta, ca pe bolta; in stanga cand desenul e vazut din spatele
+	antenei, `din_spate`). Nicio antena si niciun satelit inventat."""
 	g = lambda v: v * factor
 	cx, cy = g(CENTRU_X), g(CENTRU_Y)
 	panza.drawArc(cx, cy, g(RAZA), g(4), 180.0, 180.0, ARC, 1)
 	n = 1
 	if directie in ("est", "vest"):
 		semn = 1.0 if directie == "est" else -1.0
+		if din_spate:
+			semn = -semn
 		r = g(RAZA * 0.62)
 		inceput, capat = 270.0 - semn * 32.0, 270.0 + semn * 32.0
 		panza.drawArc(cx, cy, r, g(7), inceput, capat - inceput, ARC_FACUT, 1)
@@ -633,19 +711,21 @@ class HdsDishMotor(Screen):
 		if acum is None:
 			acum = de_la
 
+		din_spate, sud = desenDinSpate()
+		bolta = self._bolta(stare, de_la, la, acum)
 		panza.clear()
 		panza.fill(0, 0, self._s(PANZA_L), self._s(PANZA_I), FOND)
 		deseneazaRotirea(panza, self._factor, de_la, la, acum, stare["procent"], stare["a_ajuns"],
 			stare["secunde_trecute"], sateliti=self._satelitiPeArc(stare), antena=not fara_antena, plecare=plecare,
 			sosit=bool(stare["a_ajuns"]) and not stare.get("manual") and not stare.get("fara_semnal_la_sosire"),
-			eticheta=self._eticheta if self._font is not None else None)
+			eticheta=self._eticheta if self._font is not None else None, din_spate=din_spate, sud=sud, bolta=bolta)
 		panza.flush()
 
 	def _deseneazaFaraTinta(self, panza, stare):
 		panza.clear()
 		panza.fill(0, 0, self._s(PANZA_L), self._s(PANZA_I), FOND)
 		deseneazaFaraTinta(panza, self._factor, stare.get("directie"), stare["procent"], stare["a_ajuns"],
-			stare["secunde_trecute"])
+			stare["secunde_trecute"], din_spate=desenDinSpate()[0])
 		panza.flush()
 
 	def _eticheta(self, x, y, latime, inaltime, culoare, text, aliniere):
@@ -665,6 +745,33 @@ class HdsDishMotor(Screen):
 			latime, inaltime = l2, i2
 		self["canvas"].writeText(int(round(x)), int(round(y)), int(round(latime)), int(round(inaltime)), culoare, FOND,
 			self._font, text, orizontal | RT_VALIGN_CENTER)
+
+	def _bolta(self, stare, de_la, la, acum):
+		"""bolta intreaga pentru deseneazaRotirea (locul stabilit), sau None: geometria (HdsMotorStare.boltaVizibila) si
+		satelitii cu canale se iau o data pe miscare, unghiurile plecarii, tintei si pozitiei la fiecare cadru"""
+		cheie = (stare["slot"], stare["de_la_orbital"], stare["la_orbital"])
+		if getattr(self, "_bolta_cheie", None) != cheie:
+			self._bolta_cheie = cheie
+			b = boltaVizibila(stare["slot"])
+			self._bolta_baza = None
+			if b is not None:
+				cu_canale = pozitiiCuCanale()
+				sateliti = []
+				for orbital, grade in satelitiPeArc(stare["slot"]):
+					if orbital in cu_canale and orbital not in (stare["de_la_orbital"], stare["la_orbital"]):
+						unghi, afara = unghiPeBolta(grade, b)
+						if unghi is not None:
+							sateliti.append((unghi, afara))
+				self._bolta_baza = (b, sateliti)
+		if self._bolta_baza is None:
+			return None
+		b, sateliti = self._bolta_baza
+		unghiuri = [unghiPeBolta(grade, b)[0] for grade in (de_la, la, acum)]
+		if None in unghiuri:
+			return None
+		return {"a": b["a"], "de_la": unghiuri[0], "la": unghiuri[1], "acum": unghiuri[2], "sateliti": sateliti,
+			"capete": (gradeScurt(b["grade_vest"]), gradeScurt(b["grade_est"])), "sud": gradeScurt(b["sud"]),
+			"limite": (b["limita_vest"], b["limita_est"])}
 
 	def _satelitiPeArc(self, stare):
 		"""gradele celorlalti sateliti din lista tunerului (fara plecare si tinta). Lista se ia o data pe miscare, nu de

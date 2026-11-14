@@ -1264,6 +1264,65 @@ class Mediu(object):
 			InfoBar.instance.zapUp()
 		return True
 
+	# ------------------------------------------------ <video> HTML5: imprumutul decodorului (Components/HdsDecodorWeb.py)
+
+	def _notificator(self, fd, functie):
+		from enigma import eSocketNotifier
+		n = eSocketNotifier(fd, 1)       # POLLIN
+		n.callback.append(lambda *_: functie())
+		return n
+
+	def decodor_porneste(self, asculta):
+		"""Serverul imprumutului -> calea socketului, sau None (imaginea fara hdsnav sau serverul nu porneste)."""
+		self.decodor_opreste()
+		u = self.utilizator()
+		if u is None:
+			return None
+		from Components import HdsDecodorWeb as D
+		if not D.webkit_cu_video(numai_stiut=True):
+			return None                  # WebKit-ul fara video (sau fara /usr/bin/env): navigatorul porneste ca pana acum
+		s = D.Server(asculta, self._notificator, u[1], u[2])
+		cale = s.porneste()
+		self._decodor = s if cale else None
+		return cale
+
+	def decodor_opreste(self):
+		"""Serverul oprit, dispozitivele inapoi la root, procesele hdsnav ramase cu ele deschise oprite."""
+		s, self._decodor = getattr(self, "_decodor", None), None
+		if s is not None:
+			s.opreste()
+		from Components import HdsDecodorWeb as D
+		u = self.utilizator()
+		D.ia_inapoi(u[1] if u else None)
+
+	def decodor_drept(self, da):
+		u = self.utilizator()
+		if u is None:
+			return False
+		from Components import HdsDecodorWeb as D
+		if da:
+			return D.da_drept(True, u[2])
+		D.ia_inapoi(u[1])
+		return True
+
+	def decodor_memorie_ok(self):
+		"""Pe placile HiSilicon cu showiframe (lib/dvb/hdspazavideo.h): False numai cand vmallocinfo arata ca lipseste
+		maparea memoriei ES (prima scriere in video0/audio0 ar fi un Oops). Pe celelalte placi: True."""
+		if not os.path.isdir("/proc/hisi/msp"):        # HdsEcranNegru.HISI_DIR: nu e HiSilicon
+			return True
+		from Components import HdsPlatforma, HdsMemorieDriver
+		if not HdsPlatforma.cuMemorieEs():
+			return True
+		return HdsMemorieDriver.mapareEs() != 0
+
+	def decodor_la_pornire(self):
+		"""La pornirea enigma2 (dupa o cadere a interfetei): video0/audio0 inapoi la root; WebKit-ul cu video se cauta pe
+		un fir separat (~0,9 s), ca la prima aplicatie raspunsul sa fie gata."""
+		from Components import HdsDecodorWeb as D
+		u = self.utilizator()
+		D.ia_inapoi(u[1] if u else None)
+		D.cauta_in_fundal()
+
 	def opreste_serviciu(self):
 		"""video/broadcast stop(), setChannel(null), o aplicatie independenta de canal: canalul se opreste. -> referinta."""
 		ref = self.ref_curent()
@@ -1454,6 +1513,10 @@ class Controlor(object):
 		self._av_fereastra = None      # pozitia si marimea obiectului A/V (puncte CSS 1280x720)
 		self._av_ecran_intreg = False
 		self._av_piste = None          # ultimele piste de sunet trimise paginii
+		# <video> HTML5 (HVA-075): decodorul dat cu imprumut lui WebKit, vezi laDecodorCere
+		self._decodor_imprumutat = False
+		self._dec_fereastra = None     # dreptunghiul elementului <video> (puncte CSS 1280x720)
+		self._canal_dupa_decodor = False  # release() venit cat <video> tinea decodorul: canalul porneste la "gata"
 
 	def _din_mediu(self, nume, implicit, *argumente):
 		"""O metoda a Mediului care poate lipsi (Mediile de proba din H2 nu au partea H3)."""
@@ -1706,6 +1769,9 @@ class Controlor(object):
 			# "HbbTV clar": WebKit deseneaza la marimea intreaga, fara marirea la copiere; oprita, nimic nu se schimba
 			# (lansatorul ramane la HBBTV_MARIRE_LA_COPIERE)
 			hbbtv["marire_copiere"] = False
+		cale_decodor = self._decodorPorneste()
+		if cale_decodor:
+			hbbtv["decodor"] = cale_decodor   # <video> pe placa (HVA-075): calea serverului, in mediul navigatorului
 		self.nav = L.Navigator(self, L.MOD_HBBTV, url, setari=setari, dosar_date=date,
 			dosar_cache=cache, hbbtv=hbbtv, stare_hbbtv=self._parti(lista=False))
 		_jurnal("pornire (%s%s, prioritatea %s)" % ("AUTOSTART" if self.autostart else "PRESENT",
@@ -1956,6 +2022,11 @@ class Controlor(object):
 			self._aplicaFereastra()
 
 	def _avPorneste(self, ident, url, tip):
+		if self._decodor_imprumutat:
+			# ETSI TS 102 796 A.2.1: decodorul e al elementului <video>, deci obiectul A/V primeste playState 6, error 3
+			_jurnal("film cerut prin obiectul A/V cat <video> tine decodorul: refuzat")
+			self._ev({"ev": "av", "id": ident, "joc": AV_EROARE, "eroare": AV_E_RESURSE, "poz": 0, "lung": 0, "viteza": 0})
+			return
 		t = av_tip(tip)
 		if self._avActiv():
 			self._avOpreste(anunta=True)
@@ -2093,6 +2164,77 @@ class Controlor(object):
 			self._avPisteTrimise()
 		return True                            # AIT-ul si EIT-ul serviciului filmului nu sunt ale aplicatiei
 
+	# ------------------------------------------------ <video> HTML5: decodorul dat cu imprumut lui WebKit (HVA-075)
+	#
+	# Components/HdsDecodorWeb.py: serverul imprumutului porneste odata cu aplicatia (calea lui merge in mediul navigatorului,
+	# lansator.py) si se opreste la iesirea ei. La "cere" (WebKit creeaza primul sink al placii): filmul obiectului A/V se
+	# opreste, canalul se opreste (ca la obiectul A/V), dreptul pe video0/audio0 se da, "ok". Cat tine imprumutul (ETSI TS 102
+	# 796 A.2.1): bindToCurrentChannel, setChannel si zap-ul cerut de aplicatie primesc onChannelChangeError 11, obiectul A/V
+	# playState 6 cu error 3. La "gata" (sau legatura inchisa): dreptul inapoi; canalul NU porneste singur (hotararea
+	# video HTML5), ci la un release() venit intre timp, la bindToCurrentChannel sau la iesire. Abatere stiuta: A.2.1 nu
+	# lasa <video> sa ia decodorul cat ruleaza canalul; aici il ia si opreste canalul, ca obiectul A/V si ca televizoarele.
+
+	def _decodorPorneste(self):
+		"""Serverul imprumutului pentru aplicatia de acum -> calea socketului (pentru mediul navigatorului) sau None."""
+		self._decodorOpreste()
+		return self._din_mediu("decodor_porneste", None, self)
+
+	def _decodorOpreste(self):
+		self._din_mediu("decodor_opreste", None)
+		self._decodor_imprumutat = False
+		self._dec_fereastra = None
+		self._canal_dupa_decodor = False
+
+	def _decodorLaCanal(self):
+		"""Canalul cerut de aplicatie cat <video> tine decodorul: onChannelChangeError 11 (A.2.1). True = refuzat."""
+		if not self._decodor_imprumutat:
+			return False
+		_jurnal("canal cerut de aplicatie cat <video> tine decodorul: refuzat (11)")
+		self._ev({"ev": "canal-eroare", "cod": 11})
+		return True
+
+	def laDecodorCere(self):
+		"""HdsDecodorWeb.Ascultator: True (decodorul e al navigatorului) sau motivul refuzului (un cuvant)."""
+		if self.nav is None or not self.pornita:
+			return "aplicatie"
+		if self._decodor_imprumutat:
+			return "ocupat"
+		if not self._din_mediu("decodor_memorie_ok", True):
+			_jurnal("<video>: memoria decodorului lipseste (pozele si filmele), refuzat")
+			return "memorie"
+		self._avOpreste(anunta=True)
+		oprit_acum = not self.serviciu_oprit
+		self._opresteServiciu()
+		if not self._din_mediu("decodor_drept", False, True):
+			_jurnal("<video>: dreptul pe decodor nu s-a putut da")
+			if oprit_acum:
+				self._pornesteServiciu()
+			return "drept"
+		self._decodor_imprumutat = True
+		self._dec_fereastra = None
+		self._aplicaFereastra()
+		_jurnal("decodorul dat navigatorului (<video>)")
+		return True
+
+	def laDecodorFereastra(self, argumente):
+		v = fereastra_valida(list(argumente))
+		if v is None or not self._decodor_imprumutat or v == self._dec_fereastra:
+			return
+		self._dec_fereastra = v
+		self._aplicaFereastra()
+
+	def laDecodorGata(self):
+		if not self._decodor_imprumutat:
+			return
+		self._decodor_imprumutat = False
+		self._dec_fereastra = None
+		self._din_mediu("decodor_drept", False, False)
+		_jurnal("decodorul inapoi de la navigator")
+		if self._canal_dupa_decodor:
+			self._canal_dupa_decodor = False
+			self._pornesteServiciu()
+		self._aplicaFereastra()
+
 	# ------------------------------------------------ fereastra video
 
 	def _fereastraDorita(self):
@@ -2100,6 +2242,8 @@ class Controlor(object):
 		fara setFullScreen si fara canal oprit de aplicatie. Cat merge un film al aplicatiei: fereastra obiectului A/V."""
 		if self.nav is None or self._inchidere or not self.aratat or self.fundal:
 			return None
+		if self._decodor_imprumutat:
+			return fereastra_vmpeg(self._dec_fereastra) if self._dec_fereastra else None
 		if self._avActiv():
 			return None if self._av_ecran_intreg else fereastra_vmpeg(self._av_fereastra)
 		if self.ecran_intreg:
@@ -2249,12 +2393,17 @@ class Controlor(object):
 			self._aplicatieNoua(self.m.lansator().din_b64(a[0]) if a else "")
 		elif comanda == "leaga":
 			self.video_legat = True
+			if self._decodorLaCanal():
+				return
 			self._pornesteServiciu()
 			self._aplicaFereastra()
 		elif comanda == "elibereaza":
 			self.video_legat = False
 			if self._avActiv():
 				return                         # release() pe video/broadcast nu opreste filmul (canalul porneste dupa el)
+			if self._decodor_imprumutat:
+				self._canal_dupa_decodor = True   # canalul porneste cand <video> da decodorul inapoi
+				return
 			self._pornesteServiciu()
 			self._aplicaFereastra()
 		elif comanda == "opreste":
@@ -2489,6 +2638,8 @@ class Controlor(object):
 	def _zapAplicatie(self, functie):
 		"""Zap cerut de aplicatie: nu o inchide; ramane numai daca e semnalata in canalul nou (_verificaZap)."""
 		if self.nav is None:
+			return
+		if self._decodorLaCanal():
 			return
 		self.serviciu_oprit = None
 		self._zap = {"inceput": self._timp()}
@@ -2848,6 +2999,7 @@ class Controlor(object):
 		motiv_jurnal, self._motiv = getattr(self, "_motiv", None), None
 		url, agent = self._url, self._agent
 		self._avOpreste()                      # filmul aplicatiei se opreste odata cu ea
+		self._decodorOpreste()                 # <video>: dreptul pe decodor inapoi, procesele ramase cu el oprite
 		self._aplicaFereastra()                # imaginea canalului pe tot ecranul la orice inchidere (si la cadere)
 		self._pornesteServiciu()
 		self._gol()
@@ -2967,6 +3119,10 @@ def porneste(session):
 	cadere a interfetei se pune pe tot ecranul, dosarul caruselului ramas se sterge, iar controlorul asculta canalul redat pentru pornirea automata
 	(nu face nimic cat setarea e oprita)."""
 	video_intreg_la_pornire()
+	try:
+		Mediu(session).decodor_la_pornire()   # <video> (HVA-075): dupa o cadere, video0/audio0 inapoi la root
+	except Exception as e:
+		_jurnal("decodorul la pornire: %s" % e)
 	try:
 		_server().curata()                 # caruselul ramas de la o cadere a interfetei
 	except Exception as e:

@@ -52,7 +52,9 @@ import threading
 import time
 
 from . import compat, jurnal
+from . import nume as _nume
 from . import profil as _profil
+from .limba import _ as _tr     # `_` e folosit aici si ca nume de variabila (compune)
 
 GAZDA = '127.0.0.1'
 DIRECTOR_ENIGMA2 = '/etc/enigma2'
@@ -149,7 +151,9 @@ def ref_marcaj(feed_id):
 
 
 # numele marcajului fiecarui ansamblu (multiplex) din buchet: „MUX DAB+: DR Deutschland”, „MUX DVB-T2: Zeonbud mux 1”.
-# Nu se traduce: e scris in fisierul buchetului, iar „MUX”, „DAB+” si „DVB-T2” sunt nume tehnice, aceleasi in orice limba
+# Prefixul nu se traduce („MUX”, „DAB+” si „DVB-T2” sunt nume tehnice, aceleasi in orice limba, si Components/HdsIndexCanale.py
+# il cauta); numele de dupa el e in limba receptorului (nume.nume_feed: tara si numele cu cuvinte romanesti), scris
+# in buchet la refacere, iar la schimbarea limbii buchetul se reface (imagine.py, SEMN_LIMBA)
 PREFIX_MARCAJ = {'dab': u'MUX DAB+: ', 't2': u'MUX DVB-T2: '}
 
 
@@ -725,7 +729,7 @@ def intrari_noi(profil, lista, memorate, stb=None, prinse=None, abertis=None):
     rez = []
     for _tp, feed, servicii in _feeduri_de_pus(profil, lista, memorate, stb, prinse, abertis):
         fid = _curata_id(feed.get('id'))
-        nume_feed = nume_marcaj(profil, feed.get('nume') or fid)
+        nume_feed = nume_marcaj(profil, _nume.nume_feed(feed) or fid)
         ref = ref_marcaj(fid)
         rez.append((fid, _cheie('#SERVICE ' + ref), '#SERVICE %s%s' % (ref, nume_feed), nume_feed))
         for s, nume in zip(servicii, nume_afisate(servicii)):
@@ -771,7 +775,8 @@ def compune(profil, text_vechi, noi, nume_buchet=None):
                 loc = i + 1
                 break
         rez.insert(loc, (fid, linie, '#DESCRIPTION %s' % nume))
-    linii = ['#NAME %s' % (nume_buchet or profil.nume_buchet)]
+    # numele buchetului in limba receptorului (la schimbarea limbii buchetul se reface: imagine.py, SEMN_LIMBA)
+    linii = ['#NAME %s' % (nume_buchet or _tr(profil.nume_buchet))]
     for _, linie, desc in rez:
         linii.append(linie)
         if desc:

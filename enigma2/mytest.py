@@ -139,6 +139,13 @@ except Exception as e:
 	print("[mytest] ghidul:", e)
 	HdsEpgSalvare = None
 config.misc.epgcache_filename = ConfigText(default = HdsEpgSalvare.CALE if HdsEpgSalvare else "/home/root/epg.dat")
+# HDSatelit 0.7.5: locul ghidului ales de om (memoria interna sau un stick/disc din /media), inainte de pluginuri,
+# ca ele sa vada calea efectiva (Components/HdsEpgSalvare.py)
+if HdsEpgSalvare:
+	try:
+		HdsEpgSalvare.creeaza_setarea(config.misc.epgcache_filename)
+	except Exception as e:
+		print("[mytest] locul ghidului:", e)
 # HDSatelit: programul de beta testeri (Components/HdsBetaTester.py): contorul orei, intrebarea, trimiterea
 try:
 	from Components import HdsBetaTester
@@ -147,7 +154,11 @@ except Exception as e:
 	HdsBetaTester = None
 
 def setEPGCachePath(configElement):
-	# un ghid scris de versiunea dinainte pe /hdd/epg.dat trece pe calea noua inainte sa-l citeasca firul ghidului
+	# HDSatelit: locul il alege setarea „Unde se păstrează ghidul TV” (config.misc.hds_epg_loc); prima chemare pune
+	# ghidul acolo (cu mutarea celui vechi de pe /hdd/epg.dat), apoi o cale schimbata de un plugin trece in setare
+	if HdsEpgSalvare and hasattr(config.misc, "hds_epg_loc"):
+		HdsEpgSalvare.la_calea_ghidului(configElement)
+		return
 	if HdsEpgSalvare:
 		HdsEpgSalvare.muta_vechiul(configElement.value)
 	eEPGCache.getInstance().setCacheFile(configElement.value)
@@ -283,8 +294,17 @@ class Session:
 
 		self.screen = SessionGlobals(self)
 
+		# HDSatelit 0.7.5 (PRN): un plugin care tine pornirea (o actualizare din retea la sessionstart) intra in randul
+		# pornirii din jurnalul paznicului (Components/HdsPaznic.pasPornire)
+		from time import monotonic as _ceas
 		for p in plugins.getPlugins(PluginDescriptor.WHERE_SESSIONSTART):
+			t0 = _ceas()
 			p(reason=0, session=self)
+			try:
+				from Components import HdsPaznic
+				HdsPaznic.pasPornire("sessionstart", (p.path or "").rstrip("/").rsplit("/", 1)[-1] or p.name, _ceas() - t0)
+			except Exception:
+				pass
 
 	def processDelay(self):
 		try:
@@ -402,6 +422,13 @@ class Session:
 				self.screen_error_count = 0
 				return
 			print("[HDS-SAFE] 3 erori consecutive in 30 de secunde. Se reporneste interfata GUI...")
+			# HDSatelit 0.7.5 (PRN): repornirea ceruta de aici apare si in jurnalul paznicului, cu ecranul cazut
+			try:
+				from Components import HdsPaznic
+				HdsPaznic.jurnalPaznic("cerere de iesire: cod 3 (repornirea interfetei), 3 ecrane cazute in 30 s, ultimul %s"
+					% getattr(screen, "__name__", str(screen)))
+			except Exception:
+				pass
 			# cu o tema externa, tema se retrage inainte de repornire: omul revine la tema HD Satelit, fara bucla (Components/HdsSkinuri.py)
 			try:
 				from Components import HdsSkinuri
@@ -526,6 +553,17 @@ class Session:
 		if self.dialog_stack and not self.in_exec:
 			raise RuntimeError("modal open are allowed only from a screen which is modal!")
 			# ...unless it's the very first screen.
+
+		# HDSatelit 0.7.5 (PRN): cine cere repornirea; codul si ecranele deschise intra in jurnalul paznicului
+		if getattr(screen, "__name__", "") == "TryQuitMainloop":
+			try:
+				from Components import HdsPaznic
+				ecrane = [d[0].__class__.__name__ for d in self.dialog_stack if d and d[0] is not None]
+				if self.current_dialog is not None:
+					ecrane.append(self.current_dialog.__class__.__name__)
+				HdsPaznic.cerereIesire(kwargs.get("retvalue", arguments[0] if arguments else 1), ecrane)
+			except Exception as e:
+				print("[mytest] cererea de iesire:", e)
 
 		self.pushCurrent()
 		try:
@@ -803,6 +841,15 @@ def runScreenTest():
 		arata_la_pornire(session)
 	except Exception as e:
 		print("[mytest] jurnalul de versiuni:", e)
+
+	# HDSatelit 0.7.5: o singura data (prima pornire dupa asistent sau dupa actualizarea la 0.7.5), un mesaj scurt ca
+	# setarile se pot cauta dupa nume (Components/HdsCautaSetariAnunt.py). Intra in coada DUPA „Ce e nou”; inchis cu OK
+	# nu mai apare. Pornirea receptorului nu depinde de el: orice eroare ramane doar in jurnal.
+	try:
+		from Components import HdsCautaSetariAnunt
+		HdsCautaSetariAnunt.porneste(session)
+	except Exception as e:
+		print("[mytest] mesajul despre Caută setări:", e)
 
 	# HDSatelit: tasta HELP pe orice ecran deschide pagina lui de ajutor, fara internet (Components/HdsAjutor.py; datele
 	# in pachetul hdsatelit-ajutor). Numai legarea tastei: nimic citit de pe disc pana la prima apasare.

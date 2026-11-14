@@ -1,0 +1,35 @@
+# HD Satelit: regulile garzii de model pentru Zgemma H17 COMBO (masina h17, MACHINEBUILD zgemmah17combo), NECONFIRMAT
+# MH7, 12.11.2026. Zgemma H17 TWIN e aceeasi masina h17 in OE-Alliance 6.0, dar alt MACHINEBUILD (zgemmah17twin), alt pachet
+# de drivere (MACHINE_DRIVER h17twin) si alt dosar pe stick (zgemma/h17twin), deci NU e acoperit aici: are regulile lui.
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# familie=broadcom: placa Broadcom (SOC_FAMILY bcm7251s in meta-airdigital/conf/machine/h17.conf, ca AX HD51), nucleu
+# linux-airdigital 4.10.12 (defconfig-ul h17 difera de hd51 numai prin 5 module HID/serial), fara /proc/msp/sys, fara
+# blkdevparts si fara partitia deviceinfo. Garda citeste cipul din /proc/stb/info/chipset, tipul placii din
+# /proc/stb/info/boxtype, sistemul din root= si nucleul din kernel= al lui /proc/cmdline. hw= si partitions= sunt "-".
+# kernel_part, rootfs_part si kernel_kib: DOVEDITE din imaginea publica OE-Alliance 6.0 pentru zgemmah17combo
+# (_recovery_emmc.zip, disk.img citit ca date, 12.11.2026): GPT p1 boot 3 MiB, p2 rescue 32 MiB, p3-p10 linuxkernel1-8
+# cate 8192 KiB, p11 swap 256 MiB, p12 userdata; fisierul STARTUP din p1: "root=/dev/mmcblk0p12 rootsubdir=linuxrootfs1
+# kernel=/dev/mmcblk0p3 rw rootwait coherent_pool=2M h17_4.boxmode=1"; locurile 2-8 au acelasi root=/dev/mmcblk0p12 cu
+# rootsubdir=linuxrootfs2..8 si nucleul pe p4..p10 (garda vede atunci pornirea din alt loc). Acelasi lucru in
+# airdigital-emmc_image_multiboot16gb.bbclass si h17.conf (MTD_KERNEL mmcblk0p3, MTD_ROOTFS mmcblk0p12).
+# chip=7251s si boxtype=h17: ASTEPTATE, NEMASURATE pe un H17. Driverele h17_1..4.ko sunt ofuscate (niciun sir boxtype sau
+# chipset, ca hd51_4.ko); imaginile publice nu citesc nodul cipului pe h17 (pun constanta 7251S). Tiparul masurat: pe AX HD51
+# (aceeasi familie, driver de aceeasi marime) chipset = bcm7251s si boxtype = numele masinii (hd51). De inlocuit cu valorile
+# citite de tester (intrebarea din STADIU-MH7.md) INAINTE de constructie; daca nodul chipset lipseste, chip=- (garda nu
+# compara cipul pe broadcom, peticul MHD 3a250fe18).
+# confirmat=nu ramane pana porneste imaginea noastra pe aparat (fisa testerului).
+format=1
+distro=hdsatelit
+model=Zgemma H17 COMBO
+machine=h17
+machinebuild=zgemmah17combo
+chip=7251s
+boxtype=h17
+hw=-
+partitions=-
+kernel_part=mmcblk0p3
+kernel_kib=8192
+rootfs_part=mmcblk0p12
+confirmat=nu
+familie=broadcom

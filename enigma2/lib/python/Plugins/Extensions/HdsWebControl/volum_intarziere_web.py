@@ -16,7 +16,7 @@
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat; ce schimba
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/volum-intarziere                       setarile, placa, canalul si pista de acum
-#   POST /api/volum-intarziere-seteaza?pas=1..10&afisare=1..10&canal=da|nu&egal=oprit|usor|puternic&hdmi=0..500&optic=0..500
+#   POST /api/volum-intarziere-seteaza?pas=1..10&afisare=1..10&mut=0..10&canal=da|nu&egal=oprit|usor|puternic&hdmi=0..500&optic=0..500
 #                                 &pista=-250..250&uita=volume
 #                                                oricare dintre ele; toate verificate inainte de orice schimbare
 #   GET  /volum-intarziere                           pagina
@@ -26,7 +26,7 @@
 # cateva comenzi in /proc/msp/sound0. Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul
 # lor (S = Components.HdsSetariSunet), config-ul, SystemInfo, sesiunea si fisierul de setari.
 
-ARGUMENTE = ("pas", "afisare", "canal", "egal", "hdmi", "optic", "pista", "uita")
+ARGUMENTE = ("pas", "afisare", "mut", "canal", "egal", "hdmi", "optic", "pista", "uita")
 MAX_VALOARE = 12
 ECRANE_OCUPATE = ("AudioSelection",)
 SETUP_OCUPAT = "hds_setari_sunet"
@@ -446,7 +446,7 @@ function trimite(q){
 }
 $("salveaza").addEventListener("click", function(){
   var q = new URLSearchParams();
-  ["pas", "afisare", "canal", "egal", "hdmi", "optic"].forEach(function(n){ if(valoare(n) !== null){ q.set(n, valoare(n)); } });
+  ["pas", "afisare", "mut", "canal", "egal", "hdmi", "optic"].forEach(function(n){ if(valoare(n) !== null){ q.set(n, valoare(n)); } });
   trimite(q);
 });
 $("r_pista").addEventListener("change", function(){ var q = new URLSearchParams(); q.set("pista", $("r_pista").value); trimite(q); });

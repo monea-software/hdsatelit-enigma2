@@ -140,9 +140,62 @@ def op_info(ctx, args):
 	cod, disc = _ruleaza(["df", "-h"], limita=16384)
 	parti.append("Disc:\n" + disc.strip())
 	parti.append("Temperaturi:\n" + _temperaturi(ctx))
+	parti.append("Ceas:\n" + _ceas(ctx))
 	# ce operatii stie receptorul acesta (unealta echipei alege dupa ele, de pilda "concluzii" din 0.6.13)
 	parti.append("Operatii asistenta: " + " ".join(sorted(TABEL)))
 	return Rezultat(0, text="\n\n".join(p for p in parti if p))
+
+
+def _stareCeas():
+	"""Starea ceasului din enigma2 (Components.HdsCeas), numai daca sincronizatorul e deja pornit (mytest.py). Operatiile
+	ruleaza pe firul asistentei: nimic din C++ (nici timere, nici eDVBLocalTimeHandler), numai ce tine sincronizatorul in
+	Python (starea orei vazuta ultima data pe firul enigma2, stare_vazuta)."""
+	from Components import HdsCeas as C
+	s = C._unic[0]
+	if s is None:
+		return None
+	cod = s.stare_vazuta
+	return {"mod": s.mod(), "server": s.server(), "in_curs": s.proces is not None,
+		"transponder_pornit": bool(s.dvb_pornit),
+		"stare_ceas": C.NUME_STARI[cod] if isinstance(cod, int) and 0 <= cod < len(C.NUME_STARI) else "",
+		"ultima": dict(s.ultima), "esecuri": s.esecuri, "salvat": C.citesteCeasSalvat(s.cale_ceas) or 0,
+		"sigura_salvata": C.citesteCeasSalvat(s.cale_sigura) or 0}
+
+
+def _ceas(ctx):
+	"""De unde are receptorul ora (greseala 1265: un receptor fara ceas cu baterie ramasese ore in urma): ora UTC de acum,
+	sursa aleasa, starea (salvata, provizorie, sigura), ultima incercare NTP cu motivul, esecurile la rand, ora salvata
+	si programele NTP din imagine. Numai citiri."""
+	import time
+	fmt = "%Y-%m-%d %H:%M:%S"
+	randuri = ["Ora receptorului (UTC): " + time.strftime(fmt, time.gmtime())]
+	try:
+		s = (ctx.get("ceas") or _stareCeas)()
+	except Exception as e:
+		s = False
+		randuri.append("Starea: necitita (%s)" % e.__class__.__name__)
+	if s:
+		u = s.get("ultima") or {}
+		randuri.append("Sursa: %s, server %s; ora din transponder %s" % (s.get("mod", "?"), s.get("server", "?"),
+			"pornita" if s.get("transponder_pornit") else "oprita"))
+		randuri.append("Starea: %s%s" % (s.get("stare_ceas") or "?", ", sincronizare in curs" if s.get("in_curs") else ""))
+		if u.get("rezultat") in ("reusit", "esuat"):
+			randuri.append("Ultima incercare NTP: %s la %s UTC (%s, %s)%s" % (u["rezultat"],
+				time.strftime(fmt, time.gmtime(u.get("ora") or 0)), u.get("server", ""), u.get("program", "") or "-",
+				(": " + u["motiv"]) if u.get("motiv") else ""))
+		else:
+			randuri.append("Ultima incercare NTP: niciuna de la pornire")
+		randuri.append("Esecuri NTP la rand: %s" % s.get("esecuri", "?"))
+		for nume, cheie in (("Ora salvata (fake-hwclock)", "salvat"), ("Ultima ora sigura salvata", "sigura_salvata")):
+			v = s.get(cheie) or 0
+			randuri.append("%s: %s" % (nume, time.strftime(fmt, time.gmtime(v)) if v else "lipseste"))
+	elif s is None:
+		randuri.append("Starea: sincronizatorul nu e pornit")
+	rad = ctx.get("radacina") or "/"
+	programe = [c for c in ("/usr/bin/ntpdate", "/usr/sbin/ntpdate", "/usr/sbin/ntpd", "/usr/bin/ntpd", "/sbin/ntpd",
+		"/bin/ntpd") if os.access(os.path.join(rad, c.lstrip("/")), os.X_OK)]
+	randuri.append("Programe NTP: " + (" ".join(programe) or "niciunul"))
+	return "\n".join(randuri)
 
 
 def _temperaturi(ctx):
@@ -283,11 +336,44 @@ def _sub(cale, radacini):
 	return any(cale == r or cale.startswith(r + "/") for r in radacini)
 
 
+# Ghidul tinut minte (Components/HdsEpgSalvare.CALE) e binar, de 7-50 MB: in loc de octeti, op citeste da pe el limbile
+# ghidului pe fiecare canal (Components/HdsEpgDatLimbi.py; asistenta 615583, 12.11.2026: ghidul numai in maghiara). Numai
+# citire, intr-un proces separat cu termen, ca interfata si asistenta sa nu astepte dupa un fisier mare.
+EPG_DAT = "/home/root/epg.dat"
+TERMEN_EPG_S = 50          # sub ASTEPTARE_IMPLICITA_S (60 s) a panoului echipei (unelte/asistenta/panou_client.py)
+
+
+def _citesteEpgDat(ctx, radacina):
+	"""Rezumatul limbilor din epg.dat; calea reala poate fi o legatura (pe un disc), dar tot un epg.dat obisnuit."""
+	plin = os.path.realpath(radacina + EPG_DAT)
+	if os.path.basename(plin) != "epg.dat" or _oprit(plin):
+		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
+	try:
+		st = os.stat(plin)
+	except Exception:
+		return Rezultat(1, text="(nu exista: %s; ghidul nu a fost inca salvat)" % EPG_DAT)
+	import stat as S
+	if not S.S_ISREG(st.st_mode):
+		return Rezultat(1, text="(nu e un fisier obisnuit: %s)" % EPG_DAT)
+	python = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+	program = ("import sys; sys.path.insert(0, %r); from Components.HdsEpgDatLimbi import main; "
+		"sys.exit(main(sys.argv[1:]))" % python)
+	ruleaza = ctx.get("ruleaza", _ruleaza)
+	# prioritate mica: interfata nu simte citirea; memoria o plafoneaza procesul insusi (HdsEpgDatLimbi.PLAFON_MEMORIE)
+	argv = list(ctx.get("prioritate", ("nice", "-n", "19"))) + [ctx.get("python", "python3"), "-c", program, plin]
+	cod, text = ruleaza(argv, termen=TERMEN_EPG_S)
+	if cod == 124:
+		return Rezultat(1, text="(%s nu s-a putut citi in %d s)" % (EPG_DAT, TERMEN_EPG_S))
+	return Rezultat(cod, text=text)
+
+
 def op_citeste(ctx, args):
 	"""Un fisier (continutul, cel mult RASPUNS_MAX) sau un dosar (lista: felul, marimea, numele) de sub
-	RADACINI_CITIRE; ctx["radacina"] muta totul intr-un dosar de proba."""
+	RADACINI_CITIRE; ctx["radacina"] muta totul intr-un dosar de proba. EPG_DAT: limbile ghidului, nu octetii."""
 	radacina = ctx.get("radacina", "").rstrip("/")
 	cerut = "/" + (args[0] if args else "").strip("/")
+	if cerut == EPG_DAT:
+		return _citesteEpgDat(ctx, radacina)
 	if not _sub(cerut, RADACINI_CITIRE) or _oprit(cerut):
 		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
 	hisilicon = _hisilicon(ctx)

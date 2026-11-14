@@ -665,6 +665,23 @@ class InfoBarChannelSelection:
 		# parseaza corect ca eServiceReference, NU ca serviciul chiar mai exista in lamedb/
 		# bouquet-urile curente (ex. dupa o rescanare care a sters transponderul respectiv).
 		# Cerere statica de informatii (fara acordare): un serviciu disparut nu are nume real.
+		# Un flux (canalul de internet: 4097/5001/5002 sau 1:...:http, cu adresa in referinta) nu are nume in
+		# referinta salvata, iar eStaticServiceMP3Info::getName da gol pentru o adresa „://”: era socotit disparut si,
+		# cu un canal de internet ultimul urmarit, pornirea deschidea lista pe sateliti fara sa porneasca nimic
+		# (receptorul de probe, 13.11.2026). Un flux se porneste: daca adresa nu mai raspunde, spune redarea. Numai canalul releului
+		# local (127.0.0.1:8897) al unei surse sterse de om e disparut: stergeSursa scoate si canale-<sursa>.json
+		# (Components/HdsIptvSurse.py), releul nu-l mai are, iar pornirea trece mai departe pe lant, ca la un canal DVB
+		# disparut. Un singur stat, fara citirea surselor.
+		cale = ref.getPath() or ""
+		if "://" in cale:
+			try:
+				from Components import HdsIptvSurse
+				sid = HdsIptvSurse.desparteCale(cale)[0]
+				if sid is not None:
+					return fileExists(HdsIptvSurse._caleCanale(sid))
+			except Exception as e:
+				print("[InfoBar] canalul de internet: %r" % (e,))
+			return True
 		try:
 			info = eServiceCenter.getInstance().info(ref)
 			if info is None:
@@ -1563,6 +1580,9 @@ class InfoBarSeek:
 			c(self.seekstate)
 
 		self.checkSkipShowHideLock()
+		# protectia ecranului (Screens/ScreenSaver.py): pauza o cere, reluarea o opreste
+		if hasattr(self, "screenSaverTimerStart"):
+			self.screenSaverTimerStart()
 
 		return True
 
@@ -3008,7 +3028,26 @@ def _hdsLeagaIptvPe(infobar):
 	except Exception as e:
 		print("[InfoBarGenerics] IPTV:", e)
 		return None
-	return leg, ServiceEventTracker(screen=infobar, eventmap=
+	# 0.7.5: canalul de internet care mergea si s-a oprit porneste singur din nou (Components/HdsIptvReconectare.py, Da/Nu
+	# config.usage.hds_iptv_reconectare); un al doilea urmaritor, ca fereastra de incarcare sa ramana neatinsa
+	try:
+		from Components import HdsIptvReconectare
+		rec = HdsIptvReconectare.Legatura(infobar)
+		urm_rec = ServiceEventTracker(screen=infobar, eventmap=
+			{
+				iPlayableService.evStart: rec.laStart,
+				iPlayableService.evVideoSizeChanged: rec.laPornit,
+				iPlayableService.evUser + 17: rec.laPornit,
+				iPlayableService.evEOF: rec.laEsec,
+				iPlayableService.evUser + 10: rec.laEsec,
+				iPlayableService.evUser + 11: rec.laEsec,
+				iPlayableService.evUser + 12: rec.laEsec,
+				iPlayableService.evUser + 16: rec.laEsec,
+			})
+	except Exception as e:
+		print("[InfoBarGenerics] IPTV, reconectarea:", e)
+		rec = urm_rec = None
+	return leg, rec, urm_rec, ServiceEventTracker(screen=infobar, eventmap=
 		{
 			iPlayableService.evStart: leg.laStart,
 			iPlayableService.evEnd: leg.laEnd,
@@ -3287,10 +3326,23 @@ class InfoBarSubtitleSupport(object):
 			except Exception as eroare:
 				print("[InfoBar] actiunea subtitrarii %s: %s" % (actiune, eroare))
 
+	def hdsNoteazaAlegerea(self, pista):
+		"""Tasta SUBT e o alegere de mana, ca in meniul Sunet si subtitrari: pista pornita (sau None = oprita) se tine
+		minte pe canal (Components/HdsPisteLimbi.noteazaSubtitrare), si dupa zap si dupa repornirea interfetei.
+		Inainte (pana la 0.7.4) oprirea cu SUBT tinea numai pana la urmatoarea alegere automata, iar subtitrarea
+		in limba receptorului pornea din nou dupa repornirea interfetei (darog69, forum 479 #2242). O greseala de
+		aici nu atinge subtitrarea."""
+		try:
+			from Components import HdsPisteLimbi
+			HdsPisteLimbi.noteazaSubtitrare(self.session, tuple(pista) if pista else None)
+		except Exception as e:
+			print("[InfoBarSubtitleSupport] alegerea tastei SUBT nu s-a tinut minte: %s" % e)
+
 	def hdsComutaSubtitrarea(self):
 		"""Ultima pista a acestui serviciu, inclusiv subtitrarile unui film."""
 		if self.subtitles_enabled:
 			self.setSubtitlesEnable(False)
+			self.hdsNoteazaAlegerea(None)
 			return
 		ref = self.session.nav.getCurrentlyPlayingServiceReference()
 		cheie = ref.toString() if ref is not None else ""
@@ -3305,6 +3357,7 @@ class InfoBarSubtitleSupport(object):
 			return
 		self.setSelectedSubtitle(pista)
 		self.setSubtitlesEnable(True)
+		self.hdsNoteazaAlegerea(pista)
 
 	def __serviceStopped(self):
 		self.cached_subtitle_checked = False
@@ -3650,12 +3703,6 @@ class InfoBarAspectSelection:
 		self.aspectSelection()
 
 
-class InfoBarScreenSaver:
-	"""Mixin cerut de playerul extern; protectia de ecran ramane oprita.
-	Nu porneste cronometre si nu leaga taste in lipsa unei protectii a imaginii.
-	"""
-	def __init__(self):
-		pass
-
-	def ScreenSaverTimerStart(self):
-		return None
+# Protectia ecranului (screensaverul): mixinul e in Screens/ScreenSaver.py, aici ramane numele pe care il importa
+# playerele pluginurilor (from Screens.InfoBarGenerics import InfoBarScreenSaver), ca in enigma2 OE-Alliance.
+from Screens.ScreenSaver import InfoBarScreenSaver  # noqa: E402,F401

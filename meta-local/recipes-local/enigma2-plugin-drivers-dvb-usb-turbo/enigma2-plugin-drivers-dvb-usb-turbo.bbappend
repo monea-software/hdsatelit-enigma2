@@ -8,7 +8,12 @@
 # imagine nu sunt) driverul nu se incarca. Numai pe masinile Vu+ ale noastre, unde e stratul meta-vuplus.
 HDS_TURBO_DEP = "kernel-module-dvb-usb kernel-module-dvb-usb-v2 ${DVB_CYPRESS}-cypress-firmware vuplus-tuner-turbo"
 RDEPENDS:${PN}:append:vusolo4k = " ${HDS_TURBO_DEP}"
+RDEPENDS:${PN}:append:vuultimo4k = " ${HDS_TURBO_DEP}"
 RDEPENDS:${PN}:append:vuuno4kse = " ${HDS_TURBO_DEP}"
-RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_TURBO_DEP}"
+RDEPENDS:${PN}:append:vuzero4k = " ${HDS_TURBO_DEP}"
+# fara vuduo4klite (ULT 13.11.2026): vuplus-tuner-turbo/-turbo2 din meta-vuplusde au COMPATIBLE_MACHINE numai vuuno4kse, vuzero4k
 RDEPENDS:${PN}:append:vuduo4k = " ${HDS_TURBO_DEP}"
+RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_TURBO_DEP}"
 RDEPENDS:${PN}:append:vusolose = " ${HDS_TURBO_DEP}"
+RDEPENDS:${PN}:append:vusolo2 = " ${HDS_TURBO_DEP}"
+RDEPENDS:${PN}:append:vuzero = " ${HDS_TURBO_DEP}"

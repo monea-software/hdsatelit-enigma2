@@ -332,6 +332,10 @@ class ParentalControlBouquetEditor(Screen):
 		list = serviceHandler.list(bouquetroot)
 		if list is not None:
 			self.bouquetlist = list.getContent("CN", True)
+		# 0.7.5: si grupele canalelor de internet (HdsControlParental.grupeIptv), ca in pagina web /control-parental
+		vazute = set(x[0] for x in self.bouquetlist or ())
+		self.bouquetlist = [tuple(x) for x in (self.bouquetlist or ())]
+		self.bouquetlist += [g for g in HdsControlParental.grupeIptv() if g[0] not in vazute]
 	
 	def selectBouquet(self):
 		from Components.ParentalControl import parentalControl

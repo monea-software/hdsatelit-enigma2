@@ -3,8 +3,9 @@ DESCRIPTION = "Program mic care porneste WPE WebKit cu o platforma WPE proprie p
 vin in memorie partajata si se copiaza pe /dev/fb0, telecomanda se citeste din evdev, comenzile vin pe \
 intrarea standard (o comanda pe rand), starea iese pe iesirea standard (randuri HDS-NAV). Proces separat \
 de enigma2, pornit la cerere; intra in imagine prin hdsatelit-base. Monea Software pentru HD Satelit."
-LICENSE = "GPL-2.0-only"
-LIC_FILES_CHKSUM = "file://hds-navigator.c;beginline=2;endline=3;md5=fb87bc14f85a0e8e73d2e038b3c2f7e1"
+LICENSE = "GPL-2.0-only & MIT"
+LIC_FILES_CHKSUM = "file://hds-navigator.c;beginline=2;endline=3;md5=fb87bc14f85a0e8e73d2e038b3c2f7e1 \
+                    file://hds-hbbtv.js;beginline=2515;endline=2533;md5=a27e35cdfe59b078f9273144a89e57db"
 PV = "0.7.0"
 # r1: la repornirea pe procesor (GL cazut) procesele WebKit ale incercarii cu GL se culeg inainte de execv (nu mai raman
 # zombi pana la inchiderea aplicatiei)
@@ -16,7 +17,14 @@ PV = "0.7.0"
 # r4 (0.7.4, NB): EXIT inchide de pe orice pagina, Inapoi/RECALL (KEY_BACK, KEY_LAST) si „<” merg o pagina inapoi si
 # ies de pe prima; marginile paginii (--margine-x/-y); pe procesor nice 10 (si, in afara HbbTV, un fir de pictura si
 # 25 de cadre pe secunda)
-PR = "r4"
+# r5 (0.7.5, HBB): adaptarile pe situri in hds-hbbtv.js; hub-ul TVP cu sectiunea lipsa la post trece pe pagina
+# lui principala (#mainpage) in loc sa ramana la "Trwa wczytywanie"
+# r6 (0.7.5, CRM): scurtaturile meniului Aplicatii: --agent (User-Agent-ul intreg) si --script (harta tastelor
+# aplicatiei, pusa in fiecare document); aceleasi argumente ca hds-chromium
+# r7 (0.7.5, H20-AUTOPLAY): in modul HbbTV autoplay permis si cu sunet (website-policies), pentru <video> HTML5
+# r8 (0.7.5, WAS): hds-hbbtv.js da aplicatiilor HbbTV WebAssembly scris in JavaScript (polywasm 0.2.0, MIT,
+# https://github.com/evanw/polywasm) cand WebKit nu-l are (ARMv7); de aici si MIT in LICENSE
+PR = "r8"
 
 SRC_URI = "file://hds-navigator.c file://hds-hbbtv.js"
 S = "${UNPACKDIR}"

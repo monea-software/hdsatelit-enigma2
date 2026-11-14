@@ -90,6 +90,9 @@ class EroareTema(Exception):
 MOTIV_XML = "xml"
 MOTIV_INCLUDE = "include"
 MOTIV_REZOLUTIE = "rezolutie"
+# placa nu primeste rezolutia temei (hi_fb pe HiSilicon: cel mult 1920x1080; Fury-FHD pe 2K = 2560x1440, forum 948);
+# detaliul: "<ce a ramas pe placa>|<ce cere tema>", de pilda "1920x1080|2560x1440"
+MOTIV_REZOLUTIE_PLACA = "rezolutie_placa"
 MOTIV_SCRIERE = "scriere"
 MOTIV_CADERE = "cadere"
 MOTIV_ECRANE = "ecrane"
@@ -179,6 +182,98 @@ def verificaRezolutia(radacina):
 				raise EroareTema(MOTIV_REZOLUTIE, "%s x %s" % (r.attrib.get("xres"), r.attrib.get("yres")))
 
 
+# REZOLUTIA PE PLACA (R2K, 0.7.5): o tema poate cere o interfata mai mare decat primeste driverul placii (Fury-FHD cu
+# „Skin Resolution” 2K cere 2560x1440; hi_fb.ko al receptoarelor HiSilicon refuza orice latime peste 1920, masurat pe
+# Viper 4K V20 pe 13.11.2026). La pornire, inainte sa se incarce tema, skin.py cere placii rezolutia temei
+# (verificaRezolutiaPlacii, prin gMainDC); daca driverul o refuza, tema nu se incarca (ar fi desenata pe o suprafata mai
+# mica: ecran stricat), interfata ramane pe tema HD Satelit si omul afla de ce. Alegerea temei ramane: cand tema isi
+# schimba fisierul (omul pune FHD in setarile ei), porneste singura la repornirea urmatoare. Ce a ramas pe placa se tine
+# minte in REZOLUTIE_PLACA, ca selectorul si pagina web sa spuna inainte de repornire (verifica, textAvertisment).
+REZOLUTIE_PLACA = "/etc/enigma2/hds-rezolutie-placa.json"
+LATIME_HDS, INALTIME_HDS = 1920, 1080
+
+
+def rezolutieCeruta(radacina):
+	"""(latime, inaltime) din <output id="0"><resolution> al temei, sau None."""
+	for c in radacina.findall("output"):
+		if str(c.attrib.get("id") or "0") != "0":
+			continue
+		for r in c.findall("resolution"):
+			try:
+				return int(r.attrib.get("xres") or 720), int(r.attrib.get("yres") or 576)
+			except ValueError:
+				return None
+	return None
+
+
+def _rez(t):
+	return "%dx%d" % (t[0], t[1])
+
+
+def citesteRezolutiaPlacii(cale=None):
+	"""(latime, inaltime) cea mai mare pe care a tinut-o placa la un refuz, sau None (niciun refuz pana acum)."""
+	try:
+		with open(cale or REZOLUTIE_PLACA, encoding="utf-8") as f:
+			d = json.load(f)
+		m = d.get("maxim")
+		return int(m[0]), int(m[1])
+	except Exception:
+		return None
+
+
+def verificaRezolutiaPlacii(radacina, puneRezolutia, cale=None):
+	"""skin.py, inainte sa incarce tema aleasa: puneRezolutia(latime, inaltime) cere placii rezolutia temei si intoarce ce
+	a primit (gMainDC.resolutionX/Y). EroareTema(MOTIV_REZOLUTIE_PLACA) cand driverul a refuzat-o. Fara <output> sau cand
+	placa nu se poate intreba (puneRezolutia cade, intoarce None sau 0), tema merge mai departe ca pana acum."""
+	cerut = rezolutieCeruta(radacina)
+	if cerut is None:
+		return
+	try:
+		primit = puneRezolutia(cerut[0], cerut[1])
+	except Exception as e:
+		_jurnal("rezolutia %s nu s-a putut cere placii: %s" % (_rez(cerut), e))
+		return
+	if not primit or not primit[0] or not primit[1]:
+		return
+	primit = (int(primit[0]), int(primit[1]))
+	cale = cale or REZOLUTIE_PLACA
+	if primit == cerut:
+		# placa a primit-o: o limita tinuta minte mai mica nu mai e adevarata (driver nou)
+		m = citesteRezolutiaPlacii(cale)
+		if m and (cerut[0] > m[0] or cerut[1] > m[1]):
+			try:
+				os.remove(cale)
+			except OSError:
+				pass
+		return
+	# la pornire placa sta inca pe modul de inceput al lui gFBDC (720x576), nu pe cel mai mare pe care il poate: se
+	# intreaba si de 1920x1080 (interfata HD Satelit, pusa oricum imediat dupa, de loadSkinData), ca omul sa afle cat poate
+	if primit[0] < LATIME_HDS or primit[1] < INALTIME_HDS:
+		try:
+			p = puneRezolutia(LATIME_HDS, INALTIME_HDS)
+			if p and p[0] and p[1]:
+				primit = (int(p[0]), int(p[1]))
+		except Exception:
+			pass
+	_jurnal("placa a refuzat %s (driverul interfetei), poate %s: tema nu se incarca" % (_rez(cerut), _rez(primit)))
+	if _areUndeScrie(cale):
+		try:
+			with open(cale, "w", encoding="utf-8") as f:
+				json.dump({"maxim": list(primit), "refuzat": list(cerut), "ora": int(time.time())}, f)
+		except (IOError, OSError):
+			pass
+	raise EroareTema(MOTIV_REZOLUTIE_PLACA, "%s|%s" % (_rez(primit), _rez(cerut)))
+
+
+def depasestePlaca(latime, inaltime, cale=None):
+	"""Detaliul refuzului ("1920x1080|2560x1440") cand o tema de latime x inaltime trece de ce a tinut placa la un refuz
+	de dinainte, altfel "". Numai un avertisment: la pornire decide placa (verificaRezolutiaPlacii)."""
+	m = citesteRezolutiaPlacii(cale)
+	if not m or not latime or not inaltime or (latime <= m[0] and inaltime <= m[1]):
+		return ""
+	return "%s|%s" % (_rez(m), _rez((latime, inaltime)))
+
+
 def caleInclus(fisier, dosare, dosar_teme=None):
 	"""Calea fisierului inclus sau None. `dosare`: langa cel care il include, apoi langa tema; apoi dosarul temelor."""
 	if fisier.startswith("/"):
@@ -189,6 +284,16 @@ def caleInclus(fisier, dosare, dosar_teme=None):
 			if os.path.isfile(cale):
 				return cale
 	return None
+
+
+def _citesteXml(cale):
+	"""ET.parse; un fisier al temei cu randuri in codarea veche a limbii (nu UTF-8) se citeste si el, ca in skin.py
+	(HdsSkinuri.citesteXml); fara modul (probe cu fisierul singur), ET.parse ca pana acum."""
+	try:
+		from Components.HdsSkinuri import citesteXml
+	except ImportError:
+		return ET.parse(cale).getroot()
+	return citesteXml(cale)
 
 
 def puneIncluderile(radacina, dosar_tema, fisier_tema, dosar_teme=None, cutie=None, _lant=None, _vazute=None, _dosar=None):
@@ -214,7 +319,7 @@ def puneIncluderile(radacina, dosar_tema, fisier_tema, dosar_teme=None, cutie=No
 		if len(lant) > MAX_ADANCIME:
 			raise EroareTema(MOTIV_INCLUDE, "%s (prea adanc)" % fisier)
 		try:
-			inclus = ET.parse(cale).getroot()
+			inclus = _citesteXml(cale)
 		except Exception as e:
 			raise EroareTema(MOTIV_INCLUDE, "%s: %s" % (fisier, str(e)[:160]))
 		vazute.add(real)
@@ -966,10 +1071,11 @@ def _unFont(filename, dosar_tema, dosar_fonturi):
 def verifica(cale, root=None, dosar_fonturi=None, dosar_python=None, cutie=None):
 	"""{"bun", "motiv", "detaliu", "latime", "inaltime", "fonturi": [lipsa sau stricate], "componente": [lipsa pe ecranele
 	esentiale], "ecrane": n}. Nu ruleaza nimic din tema. Numai ce face tema de nefolosit o refuza."""
-	rez = {"bun": False, "motiv": "", "detaliu": "", "latime": 0, "inaltime": 0, "fonturi": [], "componente": [], "ecrane": 0}
+	rez = {"bun": False, "motiv": "", "detaliu": "", "latime": 0, "inaltime": 0, "fonturi": [], "componente": [], "ecrane": 0,
+		"placa": ""}
 	dosar = os.path.dirname(cale)
 	try:
-		radacina = ET.parse(cale).getroot()
+		radacina = _citesteXml(cale)
 	except Exception as e:
 		rez["motiv"], rez["detaliu"] = MOTIV_XML, str(e)[:200]
 		return rez
@@ -990,6 +1096,8 @@ def verifica(cale, root=None, dosar_fonturi=None, dosar_python=None, cutie=None)
 		if str(c.attrib.get("id") or "0") == "0":
 			for r in c.findall("resolution"):
 				rez["latime"], rez["inaltime"] = int(r.attrib.get("xres") or 720), int(r.attrib.get("yres") or 576)
+	# R2K: mai mare decat a tinut placa la un refuz de dinainte (numai avertisment; la pornire decide placa)
+	rez["placa"] = depasestePlaca(rez["latime"], rez["inaltime"])
 	fonturi = dosar_fonturi or DOSAR_FONTURI
 	for c in radacina.findall("fonts"):
 		for font in c.findall("font"):
@@ -1016,10 +1124,20 @@ def verifica(cale, root=None, dosar_fonturi=None, dosar_python=None, cutie=None)
 
 def textAvertisment(v, traducere=None):
 	"""Ce nu opreste tema, dar omul trebuie sa stie, sau ""."""
+	texte = []
+	if v.get("placa"):
+		texte.append(textPlaca(v["placa"], traducere))
 	if v.get("componente"):
-		return _t("Tema nu e completă: lipsesc componentele %s. Ecranele care au nevoie de ele vin de la HD Satelit.",
-			traducere) % ", ".join(v["componente"][:6])
-	return ""
+		texte.append(_t("Tema nu e completă: lipsesc componentele %s. Ecranele care au nevoie de ele vin de la HD Satelit.",
+			traducere) % ", ".join(v["componente"][:6]))
+	return " ".join(texte)
+
+
+def textPlaca(detaliu, traducere=None):
+	"""Avertismentul din selector si din pagina web pentru o tema mai mare decat primeste placa ("1920x1080|2560x1440")."""
+	p = (detaliu.split("|") + ["", ""])[:2]
+	return _t("Receptorul acesta arată interfața până la %s, iar tema cere %s: la repornire rămâne tema HD Satelit. "
+		"Alege FHD (1920x1080) în setările temei.", traducere) % (p[0], p[1])
 
 
 # ------------------------------------------------------------------ jurnalul activarii
@@ -1313,6 +1431,13 @@ def dupaRefuz(refuz, text):
 	"""La pornirea sesiunii, dupa ce o tema a fost retrasa: raportul, apoi un singur mesaj cu motivul si fraza despre echipa, dupa raspunsul
 	serverului. Mesajul ajunge la om si fara raport. Nu arunca."""
 	lucru = None
+	if refuz.get("motiv") == MOTIV_REZOLUTIE_PLACA:
+		# R2K: o limita cunoscuta a placii (driverul), nu o greseala a temei: fara raport si fara fraza despre echipa
+		try:
+			_mesajRefuz(text)
+		except Exception as e:
+			_jurnal("mesajul rezolutiei: %r" % (e,))
+		return
 	try:
 		nume = (refuz.get("skin") or "").split("/")[0] or "tema"
 		lucru = trimiteRaport(nume, "refuzata: %s %s" % (refuz.get("motiv", ""), refuz.get("detaliu", "")))
