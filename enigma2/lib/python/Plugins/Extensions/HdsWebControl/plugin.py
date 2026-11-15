@@ -106,6 +106,9 @@ from Plugins.Plugin import PluginDescriptor
 from .asociere import (Asociere, NUME_COOKIE, ANTET_CSRF, DURATA_SESIUNE_S, TIP_BROWSER, TIP_APLICATIE,
 	acelasiOrigin, csrfPentru, formatSecretValid, gazdaPermisa)
 
+# cookie-ul sesiunii pe HTTPS (https_web.py, panoul calculatorului din /fisiere): alt nume si Secure, vezi _numeCookie
+NUME_COOKIE_HTTPS = NUME_COOKIE + "_s"
+
 def _t(text):
 	"""Traducerea enigma2 (functia _ din builtins), sau textul insusi daca nu exista (probele de pe PC)."""
 	if not text:
@@ -339,6 +342,9 @@ TERMEN_URCARE_S = 60
 # conexiunii. Pagina afla de la /api/media-player cat de mare poate fi bucata ei (media_web.marimeBucata).
 MAX_CORP_MEDIA = 4 * 1024 * 1024
 CALE_URCARE_MEDIA = b"/api/media-urca"
+# arhiva de sigle trimisa din calculator (piconuri_web.py, POST /api/piconuri-urca): aceleasi bucati de cel mult 4 MiB
+# (Components/HdsPiconInstalare.MAX_BUCATA), aceeasi conditie (corpMareMedia)
+CALE_URCARE_PICON = b"/api/piconuri-urca"
 # playlistul M3U al listei filtrate din /canale (tv_web.py, POST /api/tv-m3u): pana la acces_extern.MAX_CANALE referinte
 # in corp (~54 de octeti fiecare, cu ":" si "," codate); aceeasi conditie ca la urcari (corpMareMedia)
 CALE_M3U = b"/api/tv-m3u"
@@ -356,7 +362,15 @@ CALE_URCARE_CAPTURA = b"/api/captura-urca"
 MAX_CORP_CAPTURA = 4 * 1024 * 1024
 # Extensiile trimise din browser se pastreaza in /tmp; acelasi plafon si in extensii_web.MAX_IPK.
 CALE_URCARE_IPK = b"/api/extensii-urca"
+# 0.7.5 (MA9): arhiva de copie a altei imagini trimisa din calculator la /import (scanare_import_web.py), cat
+# HdsImportSurse.MAX_ARHIVA
+CALE_IMPORT_INCARCA = b"/api/import-incarca"
+MAX_CORP_IMPORT = 32 * 1024 * 1024
 MAX_CORP_IPK = 16 * 1024 * 1024
+# Adauga VPN din pagina (vpn_web.adauga): toate fisierele unui furnizor sau arhiva lui .zip intr-o cerere, in base64;
+# vpn_web.MAX_URCARE (6 MiB de fisiere) creste cu 4/3 la base64 si inca putin la codarea corpului
+CALE_VPN_ADAUGA = b"/api/vpn-adauga"
+MAX_CORP_VPN = 10 * 1024 * 1024
 
 
 def corpMareMedia(are_cookie, adresa, aceeasi_origine):
@@ -438,15 +452,21 @@ def _antet(request, nume):
 
 
 def _secretDinCookie(request):
-	try:
-		valoare = request.getCookie(NUME_COOKIE.encode("ascii"))
-	except Exception:
-		return None
-	if not valoare:
-		return None
-	if isinstance(valoare, bytes):
-		valoare = valoare.decode("ascii", "replace")
-	return valoare if formatSecretValid(valoare) else None
+	"""Secretul din cookie-ul sesiunii. Pe https intai cookie-ul de https (hds_sesiune_s), apoi cel de http, daca
+	browserul il trimite si acolo."""
+	nume = [NUME_COOKIE_HTTPS, NUME_COOKIE] if _cerereSigura(request) else [NUME_COOKIE]
+	for n in nume:
+		try:
+			valoare = request.getCookie(n.encode("ascii"))
+		except Exception:
+			continue
+		if not valoare:
+			continue
+		if isinstance(valoare, bytes):
+			valoare = valoare.decode("ascii", "replace")
+		if formatSecretValid(valoare):
+			return valoare
+	return None
 
 
 def _secretLiber():
@@ -514,7 +534,16 @@ def fisiereAfara():
 
 
 def _acelasiOriginCerere(request):
-	return acelasiOrigin(_antet(request, b"host"), _antet(request, b"origin"), _antet(request, b"referer"))
+	return acelasiOrigin(_antet(request, b"host"), _antet(request, b"origin"), _antet(request, b"referer"),
+		"https" if _cerereSigura(request) else "http")
+
+
+def _cerereSigura(request):
+	"""True pentru o cerere venita pe portul HTTPS al receptorului (https_web.py)."""
+	try:
+		return bool(request.isSecure())
+	except Exception:
+		return False
 
 
 def _numeProprii():
@@ -628,15 +657,25 @@ def _verificaAcces(request, schimba_ceva=False):
 	return "browser", None
 
 
+def _numeCookie(request):
+	"""Numele cookie-ului sesiunii pentru cererea data: pe HTTPS (portul 443, https_web.py) cookie-ul are alt nume si
+	Secure. Cu acelasi nume, cookie-ul Secure l-ar inlocui pe cel de http in browser si paginile http ar pierde
+	sesiunea; iar un cookie facut pe http poate sa nu mai plece spre https cand browserul leaga cookie-urile de schema."""
+	return NUME_COOKIE_HTTPS if _cerereSigura(request) else NUME_COOKIE
+
+
 def _puneCookie(request, valoare, max_age):
 	"""Cookie-ul sesiunii: HttpOnly (JavaScript nu il poate citi), SameSite=Strict (nu pleaca din alt sit),
-	Path=/, fara Secure (serverul e HTTP simplu, in reteaua locala)."""
+	Path=/; pe http fara Secure (serverul e HTTP simplu, in reteaua locala), pe https cu Secure si numele lui."""
+	sigur = _cerereSigura(request)
+	nume = _numeCookie(request)
 	try:
-		request.addCookie(NUME_COOKIE.encode("ascii"), valoare.encode("ascii"), path=b"/",
-			max_age=str(max_age).encode("ascii"), httpOnly=True, sameSite="strict")
+		request.addCookie(nume.encode("ascii"), valoare.encode("ascii"), path=b"/",
+			max_age=str(max_age).encode("ascii"), httpOnly=True, sameSite="strict", secure=sigur)
 	except TypeError:
 		# Twisted vechi, fara parametrul sameSite: acelasi antet, scris de mana
-		request.cookies.append(("%s=%s; Max-Age=%d; Path=/; HttpOnly; SameSite=Strict" % (NUME_COOKIE, valoare, max_age)).encode("ascii"))
+		request.cookies.append(("%s=%s; Max-Age=%d; Path=/; HttpOnly; SameSite=Strict%s" % (nume, valoare, max_age,
+			"; Secure" if sigur else "")).encode("ascii"))
 
 
 def _stareTelevizor():
@@ -1895,6 +1934,8 @@ function arataSemnal(s){
   var parti = [];
   if(s.putere !== null && s.putere !== undefined){ parti.push(s.putere + "%"); }
   if(s.calitate !== null && s.calitate !== undefined){ parti.push("calitate " + s.calitate + "%"); }
+  // SNR-ul in dB, ca pe bara intai de pe televizor, numai cand placa da valoarea adevarata (radio_web.semnal_panou)
+  if(s.db_text){ parti.push(s.db_text); }
   var v = document.getElementById("stSemnal");
   v.textContent = parti.length ? parti.join(" · ") : "-";
   v.style.color = s.slab ? "#ff6b5e" : "";
@@ -3978,6 +4019,22 @@ def _construiesteResurse():
 	_ECRANE, _ECRANE_PAGINA = ecran_pornire_web.rute(HdsJsonResource, resource)
 	from . import galerie_sigle_web
 	_SIGLE, _SIGLE_PAGINA = galerie_sigle_web.rute(HdsJsonResource, resource)
+	# siglele canalelor puse fara FTP (piconuri_web.py: aceleasi functii ca ecranul Screens/HdsPiconuri.py)
+	from . import piconuri_web
+	_PICONURI, _PICONURI_PAGINA = piconuri_web.rute(HdsJsonResource, resource)
+	# mozaicul: canalele transponderului pe 2, 4 sau 9 celule (mozaic_web.py, perechea ecranului Screens/HdsMozaic.py)
+	from . import mozaic_web
+	_MOZAIC, _MOZAIC_PAGINA = mozaic_web.rute(HdsJsonResource, resource)
+	# Despre film: afisul, descrierea si notele filmului (despre_film_web.py, perechea ecranului Screens/HdsDespreFilm.py)
+	from . import despre_film_web
+	_DESPRE_FILM, _DESPRE_FILM_PAGINA = despre_film_web.rute(HdsJsonResource, resource)
+	# Sport azi: meciurile si cursele de azi din ghid (sport_azi_web.py, perechea ecranului Screens/HdsSportAzi.py)
+	from . import sport_azi_web
+	_SPORT_AZI, _SPORT_AZI_PAGINA = sport_azi_web.rute(HdsJsonResource, resource)
+	# Ghidul TV din internet: EPG Import cu sursele tarii intr-un pas (ghid_internet_web.py, perechea ecranului
+	# Screens/HdsGhidInternet.py)
+	from . import ghid_internet_web
+	_GHID_INTERNET, _GHID_INTERNET_PAGINA = ghid_internet_web.rute(HdsJsonResource, resource)
 	# screensaverele la alegere (screensaver_web.py: aceleasi date ca ecranul HdsScreensaverAlegere)
 	from . import screensaver_web
 	_SSV, _SSV_PAGINA = screensaver_web.rute(HdsJsonResource, resource)
@@ -4315,6 +4372,16 @@ def _construiesteResurse():
 			self.putChild(b"ecran-la-loc", _ECRANE[b"ecran-la-loc"])
 			for nume, resursa in _SIGLE.items():
 				self.putChild(nume, resursa)
+			for nume, resursa in _PICONURI.items():
+				self.putChild(nume, resursa)
+			for nume, resursa in _MOZAIC.items():
+				self.putChild(nume, resursa)
+			for nume, resursa in _DESPRE_FILM.items():
+				self.putChild(nume, resursa)
+			for nume, resursa in _SPORT_AZI.items():
+				self.putChild(nume, resursa)
+			for nume, resursa in _GHID_INTERNET.items():
+				self.putChild(nume, resursa)
 			for nume, resursa in _SSV.items():
 				self.putChild(nume, resursa)
 			self.putChild(b"interfete-cam", InterfeteCamResource())
@@ -4524,6 +4591,11 @@ def _construiesteResurse():
 			self.putChild(b"fonturi", FonturiPaginaResource())
 			self.putChild(b"ecrane", _ECRANE_PAGINA)
 			self.putChild(b"sigle-pornire", _ECRANE_PAGINA)
+			self.putChild(b"piconuri", _PICONURI_PAGINA)
+			self.putChild(b"mozaic", _MOZAIC_PAGINA)
+			self.putChild(b"despre-film", _DESPRE_FILM_PAGINA)
+			self.putChild(b"sport-azi", _SPORT_AZI_PAGINA)
+			self.putChild(b"ghid-internet", _GHID_INTERNET_PAGINA)
 			self.putChild(b"screensaver", _SSV_PAGINA)
 			self.putChild(b"interfete-cam", InterfeteCamPaginaResource())
 			self.putChild(b"acces-conditionat", _ACCES_PAGINA)
@@ -4576,6 +4648,8 @@ def _construiesteResurse():
 			self.putChild(b"telecomenzi", _TELECOMENZI_PAGINA)
 			self.putChild(b"telecomanda-tv", _TELECOMANDA_TV_PAGINA)
 			self.putChild(b"meniu", _MENIU_PAGINA)
+			# MNH: aceeasi pagina, deschisa pe fila Aranjeaza (ordinea si ascunderea intrarilor din meniu)
+			self.putChild(b"meniuri", _MENIU_PAGINA)
 			self.putChild(b"setari", _SETARI_PAGINA)
 			self.putChild(b"cauta-setari", _CAUTA_SETARI_PAGINA)
 			self.putChild(b"informatii", _INFORMATII_PAGINA)
@@ -4653,7 +4727,7 @@ def _construiesteServer(radacina):
 				cale = cale.split(b"?", 1)[0]
 				if len(cale) > 1 and cale.endswith(b"/"):
 					cale = cale[:-1]
-				if cale in (CALE_URCARE_POZA, CALE_URCARE_MEDIA) and corpMareMedia(self._areCookieDeSesiune(),
+				if cale in (CALE_URCARE_POZA, CALE_URCARE_MEDIA, CALE_URCARE_PICON) and corpMareMedia(self._areCookieDeSesiune(),
 						self._adresaCanal(), _acelasiOriginCerere(self)):
 					return MAX_CORP_POZA if cale == CALE_URCARE_POZA else MAX_CORP_MEDIA
 				if cale in (CALE_EDITOR_OP, CALE_EDITOR_IMPORT) and corpMareMedia(self._areCookieDeSesiune(),
@@ -4669,6 +4743,13 @@ def _construiesteServer(radacina):
 						corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
 						_acelasiOriginCerere(self))):
 					return MAX_CORP_IPK
+				if (cale == CALE_IMPORT_INCARCA and self.getHeader("content-type") == "application/octet-stream" and
+						corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
+						_acelasiOriginCerere(self))):
+					return MAX_CORP_IMPORT
+				if cale == CALE_VPN_ADAUGA and corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
+						_acelasiOriginCerere(self)):
+					return MAX_CORP_VPN
 				# Numai editorul (limitat la 1 MiB de fisier) are JSON mai mare.
 				# Urcarile folosesc bucati <=64 KiB si bugetul comun de RAM.
 				if cale == b"/api/fisiere-save" and corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
@@ -4694,12 +4775,12 @@ def _construiesteServer(radacina):
 			Bugetul comun de memorie se aplica si unui cookie inventat. Accesul si CSRF-ul se verifica in ruta."""
 			try:
 				antete = self.requestHeaders.getRawHeaders(b"cookie") or []
-				cautat = (NUME_COOKIE + "=").encode("ascii")
+				cautate = ((NUME_COOKIE + "=").encode("ascii"), (NUME_COOKIE_HTTPS + "=").encode("ascii"))
 				for antet in antete:
 					if not isinstance(antet, bytes):
 						antet = str(antet).encode("latin-1", "replace")
 					for bucata in antet.split(b";"):
-						if bucata.strip().startswith(cautat):
+						if bucata.strip().startswith(cautate):
 							return True
 			except Exception as eroare:
 				_jurnal("nu am putut citi cookie-ul pentru limita corpului: %s" % eroare)
@@ -4906,6 +4987,12 @@ def porneste(reason, session=None, **kwargs):
 		_scriePortulAcum(port)
 		if port == PORT_IMPLICIT:
 			_pornesteTrimitereaDin8080()
+		# aceeasi interfata si pe HTTPS 443, cu certificatul facut de receptor (panoul calculatorului din /fisiere)
+		try:
+			from . import https_web
+			https_web.porneste(reactor, lambda: _construiesteServer(radacina))
+		except Exception as eroare:
+			_jurnal("https nu porneste: %s" % eroare)
 	except Exception as eroare:
 		_jurnal("nu am putut porni: %s" % eroare)
 

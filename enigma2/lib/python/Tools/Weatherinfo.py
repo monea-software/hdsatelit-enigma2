@@ -11,6 +11,7 @@ from gettext import gettext
 import json
 import math
 import threading
+import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -65,6 +66,29 @@ _WMO_TEXT = {
 	96: "Thunderstorm with hail", 97: "Heavy thunderstorm",
 	99: "Thunderstorm with hail",
 }
+
+
+# Memoria vremii pe loc (latitudine, longitudine, unitati), comuna tuturor pluginurilor care folosesc acest modul.
+# De ce: un plugin cu pauza 0 intre cereri (OAWeather cu "Refresh interval" 0, darog69, AX HD51, forum 479, 14.11.2026)
+# cerea vremea pentru acelasi oras de cateva ori pe secunda, pana cand serviciul meteo a refuzat adresa omului si vremea
+# a disparut pentru toata ziua. Acum, oricat de des ar cere un plugin:
+# - doua raspunsuri pentru acelasi loc vin la cel putin _SPATIERE_S secunde unul de altul (firul de lucru asteapta);
+# - un raspuns bun se da din memorie timp de _PROASPAT_S secunde (Open-Meteo isi innoieste datele la 15 minute);
+# - cand cererea cade, se da raspunsul bun cel mai nou, daca nu e mai vechi de _VECHI_S secunde; altfel cade ca inainte.
+# Un loc nou (alt oras, alte unitati) se cere imediat.
+_PROASPAT_S = 10 * 60
+_SPATIERE_S = 60
+_VECHI_S = 6 * 60 * 60
+_MEMORIE = {}
+_LACATE = {}
+_LACAT_MEMORIE = threading.Lock()
+_ceas = time.monotonic
+_dormi = time.sleep
+
+
+def _lacatLoc(cheie):
+	with _LACAT_MEMORIE:
+		return _LACATE.setdefault(cheie, threading.Lock())
 
 
 def _sir(valoare):
@@ -614,7 +638,34 @@ class Weatherinfo:
 			return []
 
 	def _weather(self, latitude, longitude, units="metric"):
+		"""Vremea pentru un loc, prin memoria de mai sus (_MEMORIE): cel mult o cerere spre serviciu la _SPATIERE_S
+		secunde si niciuna cat raspunsul bun e mai nou de _PROASPAT_S. Ruleaza pe firul de lucru (poate astepta)."""
 		lat, lon = _coordonate(latitude, longitude)
+		cheie = (round(lat, 4), round(lon, 4), units)
+		with _lacatLoc(cheie):
+			intrare = _MEMORIE.setdefault(cheie, {"date": None, "primit": 0.0, "raspuns": None})
+			if intrare["raspuns"] is not None:
+				asteapta = intrare["raspuns"] + _SPATIERE_S - _ceas()
+				if asteapta > 0:
+					_dormi(min(asteapta, _SPATIERE_S))
+			acum = _ceas()
+			intrare["raspuns"] = acum
+			if intrare["date"] is not None and acum - intrare["primit"] < _PROASPAT_S:
+				return copy.deepcopy(intrare["date"])
+			try:
+				rezultat = self._cereVremea(lat, lon, units)
+			except Exception as esec:
+				intrare["raspuns"] = _ceas()
+				if intrare["date"] is not None and _ceas() - intrare["primit"] < _VECHI_S:
+					_scrieEroarea(esec)
+					print("[Weatherinfo] raspunsul de acum %d minute, din memorie" % ((_ceas() - intrare["primit"]) // 60))
+					return copy.deepcopy(intrare["date"])
+				raise
+			intrare["date"], intrare["primit"] = rezultat, _ceas()
+			intrare["raspuns"] = intrare["primit"]
+			return copy.deepcopy(rezultat)
+
+	def _cereVremea(self, lat, lon, units="metric"):
 		url = _PROGNOZA + "?" + urlencode({
 			"latitude": lat, "longitude": lon, "timezone": "auto",
 			"current": ",".join(_CURENT), "daily": ",".join(_ZILNIC),

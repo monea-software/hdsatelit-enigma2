@@ -54,6 +54,9 @@ def stare(A=None):
 	r = rez.get("rezultat") or {}
 	rez["texte_motive"] = [_t(x) for x in r.get("texte_motive") or []]
 	rez["text_imagine_noua"] = _t(A.TEXT_IMAGINE_NOUA) if r.get("stare") == A.IMAGINE_NOUA else ""
+	# 0.7.5 (JAK): actualizarea de dinainte ramasa la jumatate se termina prin aceasta instalare, ca pe televizor
+	rez["text_reinstalare"] = _t(getattr(A, "TEXT_REINSTALARE", "")) if r.get("reinstalare") and \
+		r.get("stare") == A.DISPONIBILA else ""
 	# "Ce e nou" grupat pe versiuni (de la cea instalata pana la cea de pe server), in limba receptorului, ca pe
 	# televizor (Components/HdsActualizari.noutati); un feed vechi da numai versiunea de pe server
 	rez["noutati"] = [{"versiune": v, "titlu": _t("Ce e nou în %s:") % v, "randuri": randuri}
@@ -579,6 +582,7 @@ function arata(d){
   if(x.stare === "imagine-noua"){ jos = jos.concat(d.texte_motive || []); jos.push(d.text_imagine_noua); }
   else if(x.stare === "disponibila" || x.stare === "instalata"){
     if((x.nepotrivite || []).length){ jos.push(T.nepotrivite); }
+    if(d.text_reinstalare){ jos.push(d.text_reinstalare); }
   } else if(d.text_stare){ jos.push(d.text_stare); if(x.eroare){ jos.push(x.eroare); } }
   // ce spune cardul actualizarii rapide nu se mai scrie si aici (nici mesajul receptorului cat merge, nici starea
   // "necautat" dupa repornire)

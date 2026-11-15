@@ -73174,3 +73174,2435 @@ msgstr "Toujours"
 #: lib/python/Screens/InfoBar.py
 msgid "Canalul de acum nu vine de pe un transponder (de exemplu IPTV sau o înregistrare)."
 msgstr "La chaîne actuelle ne vient pas d'un transpondeur (par exemple IPTV ou un enregistrement)."
+
+#: lib/python/Components/HdsEcranNegru.py:149
+msgid "Tunerul nu poate alege fluxul"
+msgstr "Le tuner ne peut pas choisir le flux"
+
+#: lib/python/Components/HdsEcranNegru.py:168
+msgid "Satelitul e setat corect, dar acest canal emite în multistream (mai multe fluxuri pe aceeași frecvență), iar tunerul setat pe acest satelit nu poate alege fluxul. Canalul merge pe un tuner cu multistream."
+msgstr "Le satellite est bien réglé, mais cette chaîne émet en multistream (plusieurs flux sur la même fréquence), et le tuner configuré sur ce satellite ne peut pas choisir le flux. La chaîne fonctionne sur un tuner avec multistream."
+
+#: lib/python/Components/HdsEcranNegru.py:216
+#, python-format
+msgid "transponder multistream (%s); tunerele setate pe satelit (%s) nu au multistream"
+msgstr "transpondeur multistream (%s) ; les tuners configurés sur le satellite (%s) n'ont pas le multistream"
+
+#: lib/python/Components/HdsHbbtvPornire.py:336
+msgid "Certificatul de securitate al aplicației HbbTV a acestui canal a expirat, deci pagina nu se poate deschide în siguranță. Postul trebuie să îl reînnoiască; televizoarele o refuză la fel."
+msgstr "Le certificat de sécurité de l'application HbbTV de cette chaîne a expiré, la page ne peut donc pas s'ouvrir en toute sécurité. La chaîne doit le renouveler ; les téléviseurs le refusent aussi."
+
+#: lib/python/Components/HdsHbbtvPornire.py:337
+msgid "Certificatul de securitate al aplicației HbbTV a acestui canal nu este valid, deci pagina nu se poate deschide în siguranță. Postul trebuie să îl repare."
+msgstr "Le certificat de sécurité de l'application HbbTV de cette chaîne n'est pas valide, la page ne peut donc pas s'ouvrir en toute sécurité. La chaîne doit le réparer."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_core.py:73
+msgid "Fișierul are parole sau chei ale sistemului și nu se deschide din browser."
+msgstr "Le fichier contient des mots de passe ou des clés du système et ne s'ouvre pas depuis le navigateur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:36
+msgid "Navigatorul cu două panouri: calculatorul în stânga, receptorul în dreapta."
+msgstr "Navigateur à deux panneaux : l'ordinateur à gauche, le récepteur à droite."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:46
+msgid "Calculatorul"
+msgstr "L'ordinateur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:50
+#, python-format
+msgid "Redeschide %s"
+msgstr "Rouvrir %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:51
+msgid "Alege fișiere"
+msgstr "Choisir des fichiers"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:52
+msgid "Alege un dosar"
+msgstr "Choisir un dossier"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:53
+msgid "Alege un dosar de pe calculator. Apoi copiezi, muți, ștergi și editezi în ambele sensuri."
+msgstr "Choisis un dossier de l'ordinateur. Ensuite, tu copies, déplaces, supprimes et modifies dans les deux sens."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:54
+msgid "Alege fișiere sau un dosar de pe calculator ori trage-le aici din Explorer. Le copiezi pe receptor cu Copiază →; de pe receptor copiezi pe calculator prin descărcare."
+msgstr "Choisis des fichiers ou un dossier de l'ordinateur ou glisse-les ici depuis l'Explorateur de fichiers. Tu les copies sur le récepteur avec Copier → ; depuis le récepteur, tu copies sur l'ordinateur par téléchargement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:55
+msgid "Pe această adresă browserul nu dă voie paginii să lucreze cu dosarele calculatorului. Pe adresa criptată a receptorului merg toate: copiere, mutare, ștergere, redenumire, creare și editare."
+msgstr "Sur cette adresse, le navigateur ne permet pas à la page de travailler avec les dossiers de l'ordinateur. Sur l'adresse chiffrée du récepteur, tout fonctionne : copie, déplacement, suppression, renommage, création et modification."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:56
+msgid "Deschide cu panoul calculatorului"
+msgstr "Ouvrir avec le panneau de l'ordinateur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:57
+msgid "Prima dată Chrome arată Conexiunea nu este privată: apasă Avansate, apoi Accesați hdsatelit.local (nesigur). Certificatul e făcut de receptorul tău, nu de o firmă, de aceea întreabă."
+msgstr "La première fois, Chrome affiche Votre connexion n'est pas privée : appuie sur Paramètres avancés, puis sur Continuer vers le site hdsatelit.local (dangereux). Le certificat est créé par ton récepteur, pas par une entreprise, c'est pourquoi il te le demande."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:58
+#, python-format
+msgid "Adresa criptată a receptorului nu merge acum: %s"
+msgstr "L'adresse chiffrée du récepteur ne fonctionne pas actuellement : %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:59
+msgid "Acest browser nu are alegerea dosarului. Pentru panoul calculatorului întreg folosește Chrome sau Edge pe calculator."
+msgstr "Ce navigateur ne permet pas de choisir un dossier. Pour le panneau complet de l'ordinateur, utilise Chrome ou Edge sur l'ordinateur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:60
+msgid "Pe telefon poți alege fișiere și le poți copia pe receptor; de pe receptor le copiezi pe telefon prin descărcare."
+msgstr "Sur le téléphone, tu peux choisir des fichiers et les copier sur le récepteur ; depuis le récepteur, tu les copies sur le téléphone en les téléchargeant."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:61
+msgid "Pe calculator asta merge numai în Chrome sau Edge, pe adresa criptată a receptorului (butonul Deschide cu panoul calculatorului)."
+msgstr "Sur l'ordinateur, cela ne fonctionne que dans Chrome ou Edge, à l'adresse chiffrée du récepteur (bouton Ouvrir avec le panneau de l'ordinateur)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:62
+msgid "Dosarele receptorului se copiază pe calculator numai în Chrome sau Edge, pe adresa criptată a receptorului. Aici poți descărca fișiere."
+msgstr "Les dossiers du récepteur ne peuvent être copiés sur l'ordinateur que dans Chrome ou Edge, à l'adresse chiffrée du récepteur. Ici, tu peux télécharger des fichiers."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:63
+msgid "Browserul nu mai are voie la dosarul ales. Apasă Alege dosarul."
+msgstr "Le navigateur n'a plus accès au dossier choisi. Appuie sur Choisis le dossier."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:65
+#, python-format
+msgid "Elimini scurtătura %s? Dosarul rămâne pe receptor."
+msgstr "Veux-tu supprimer le raccourci %s ? Le dossier reste sur le récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:75
+#, python-format
+msgid "Selectate: %s din %s · %s"
+msgstr "Sélection : %s sur %s · %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:77
+msgid "sistem"
+msgstr "système"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:84
+msgid "Copiază →"
+msgstr "Copier →"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:85
+msgid "← Copiază"
+msgstr "← Copier"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:96
+#, python-format
+msgid "Copiezi %s în %s?"
+msgstr "Veux-tu copier %s dans %s ?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:97
+#, python-format
+msgid "Muți %s în %s?"
+msgstr "Déplacer %s vers %s ?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:98
+#, python-format
+msgid "Ștergi definitiv de pe calculator %s?"
+msgstr "Supprimer définitivement de l'ordinateur %s ?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:99
+#, python-format
+msgid "%s elemente"
+msgstr "%s éléments"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:100
+#, python-format
+msgid "Din: %s"
+msgstr "De : %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:103
+#, python-format
+msgid "%s există deja în destinație. Îl înlocuiești?"
+msgstr "%s existe déjà dans la destination. Le remplacer ?"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:104
+msgid "Permisiunile în format octal, de exemplu 0644 pentru un fișier sau 0755 pentru un dosar."
+msgstr "Les autorisations en format octal, par exemple 0644 pour un fichier ou 0755 pour un dossier."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:106
+msgid "Scrie un nume fără / și diferit de . și .."
+msgstr "Écris un nom sans / et différent de . et .."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:115
+msgid "Operațiune oprită. Ce s-a prelucrat deja rămâne."
+msgstr "Opération arrêtée. Ce qui a déjà été traité reste."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:116
+msgid "Operațiuni"
+msgstr "Opérations"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:122
+#, python-format
+msgid "Fișiere sărite, cu parole ale sistemului: %s."
+msgstr "Fichiers ignorés, avec mots de passe du système : %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:125
+msgid "Alege un fișier, nu un dosar."
+msgstr "Choisis un fichier, pas un dossier."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:126
+msgid "Sursa și destinația sunt același dosar."
+msgstr "La source et la destination sont le même dossier."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:129
+#, python-format
+msgid "Se copiază pe %s: %s"
+msgstr "Copie vers %s : %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:130
+#, python-format
+msgid "%s din %s fișiere"
+msgstr "%s sur %s fichiers"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:132
+msgid "Vezi fișierul"
+msgstr "Voir le fichier"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:135
+msgid "Browserul descarcă versiunea nouă; pune-o în locul celei vechi."
+msgstr "Le navigateur télécharge la nouvelle version ; mets-la à la place de l'ancienne."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:138
+msgid "Fișierul se salvează cu codarea și sfârșiturile de linie pe care le avea. Pe receptor versiunea de dinainte rămâne în dosarul .copii."
+msgstr "Le fichier est enregistré avec l'encodage et les fins de ligne qu'il avait. Sur le récepteur, la version précédente reste dans le dossier .copii."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:140
+msgid "Fișierul conține date binare și nu poate fi deschis ca text."
+msgstr "Le fichier contient des données binaires et ne peut pas être ouvert comme texte."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:141
+msgid "Editorul deschide fișiere de cel mult 1 MiB."
+msgstr "L'éditeur ouvre des fichiers de 1 MiB au maximum."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:142
+msgid "Fișierul nu e scris în UTF-8; se poate citi aici, dar se salvează numai din editorul receptorului."
+msgstr "Le fichier n'est pas écrit en UTF-8 ; il peut être lu ici, mais ne peut être enregistré que depuis l'éditeur du récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:143
+msgid "Fișierul are sfârșituri de linie amestecate; se poate citi, dar nu se salvează de aici."
+msgstr "Le fichier a des fins de ligne mélangées ; il peut être lu, mais ne peut pas être enregistré d'ici."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_pagina.py:148
+msgid "Tab schimbă panoul, Insert bifează, Enter deschide, Backspace urcă. Tragerea copiază, cu Shift mută."
+msgstr "Tab change de panneau, Insert coche, Enter ouvre, Backspace remonte. Glisser copie, avec Shift déplace."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:146
+msgid "Sunt prea multe deschideri în așteptare. Încearcă din nou peste un minut."
+msgstr "Il y a trop d'ouvertures en attente. Réessaie dans une minute."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:563
+msgid "Pagina e deja pe adresa criptată."
+msgstr "La page est déjà sur l'adresse chiffrée."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/fisiere_web.py:567
+msgid "Conexiunea criptată a receptorului nu a pornit."
+msgstr "La connexion chiffrée du récepteur n'a pas démarré."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/https_web.py:243
+msgid "Portul 443 al receptorului e folosit de alt program."
+msgstr "Le port 443 du récepteur est utilisé par un autre programme."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/https_web.py:245
+msgid "Receptorului îi lipsește biblioteca pentru conexiunea criptată."
+msgstr "Il manque au récepteur la bibliothèque pour la connexion chiffrée."
+
+#: lib/python/Screens/ServiceScan.py:330
+msgid "Citește pistele"
+msgstr "Lire les pistes"
+
+#: data/setup.xml:157
+msgid "Ce face tasta 0 cât PiP e pornit. Schimbare: canalul din PiP trece pe ecranul mare, iar cel de pe ecranul mare intră în PiP. Standard: canalul de dinainte, ca fără PiP."
+msgstr "Ce que fait la touche 0 pendant que PiP est actif. Changement : la chaîne en PiP passe sur le grand écran, et celle du grand écran entre en PiP. Standard : la chaîne précédente, comme sans PiP."
+
+#: data/skin_default.xml:256
+msgid "Canale recente"
+msgstr "Chaînes récentes"
+
+#: lib/python/Components/HdsAsistenta.py:225
+msgid "Roșu: oprești asistența acum."
+msgstr "Rouge : tu arrêtes l'assistance maintenant."
+
+#: lib/python/Components/HdsAsistenta.py:226
+msgid "Asistența s-a oprit. Nu mai ai nimic de făcut."
+msgstr "L'assistance s'est arrêtée. Tu n'as plus rien à faire."
+
+#: lib/python/Components/HdsAsistenta.py:228
+msgid "Echipa HD Satelit a terminat și a închis asistența. Nu mai ai nimic de făcut."
+msgstr "L'équipe HD Satelit a terminé et a fermé l'assistance. Tu n'as plus rien à faire."
+
+#: lib/python/Components/HdsAsistenta.py:229
+msgid "Asistența s-a oprit singură: s-a terminat timpul ales. Nu mai ai nimic de făcut."
+msgstr "L'assistance s'est arrêtée toute seule : le temps choisi est écoulé. Tu n'as plus rien à faire."
+
+#: lib/python/Components/HdsAsistenta.py:1009
+#, python-format
+msgid "(de la octetul %s)"
+msgstr "(à partir de l'octet %s)"
+
+#: lib/python/Components/HdsCautareOarba.py:660
+msgid "Progres"
+msgstr "Progression"
+
+#: lib/python/Components/HdsCopieImagine.py:206
+msgid "Imaginea rulează dintr-un loc de pornire multiplă al cărui nucleu nu stă într-o partiție, deci copia ei nu s-ar putea pune înapoi. Pornește imaginea HD Satelit din memoria receptorului și fă copia de acolo."
+msgstr "L'image tourne depuis un emplacement de démarrage multiple dont le noyau ne se trouve pas dans une partition, donc sa copie ne pourrait pas être remise. Démarre l'image HD Satelit depuis la mémoire du récepteur et fais la copie à partir de là."
+
+#: lib/python/Components/HdsCopieImagine.py:752
+#, python-format
+msgid "Copia e gata: %s (%d MB), făcută în %s. Se pune înapoi ca imaginea Vu+ de pe site: dezarhivezi fișierul pe un stick FAT32 (dosarul vuplus ajunge în rădăcina stickului), oprești receptorul, pui stickul și îl pornești."
+msgstr "La copie est prête : %s (%d Mo), faite en %s. Elle se remet comme l'image Vu+ du site : tu décompresses le fichier sur une clé FAT32 (le dossier vuplus arrive à la racine de la clé), tu éteins le récepteur, tu insères la clé et tu le démarres."
+
+#: lib/python/Components/HdsCopieImagine.py:769
+msgid "Pe Vu+ copia se pune înapoi ca imaginea de pe site: dezarhivezi fișierul pe un stick FAT32, oprești receptorul, pui stickul și îl pornești."
+msgstr "Sur Vu+, la copie se remet comme l'image du site : tu décompresses le fichier sur une clé FAT32, tu éteins le récepteur, tu insères la clé et tu le démarres."
+
+#: lib/python/Components/HdsCopieSetari.py:1333
+msgid "pluginurile au prea multe fișiere pentru copie"
+msgstr "les plugins ont trop de fichiers pour la copie"
+
+#: lib/python/Components/HdsCopieSetari.py:1335
+msgid "un fișier s-a schimbat în timpul copiei"
+msgstr "un fichier a changé pendant la copie"
+
+#: lib/python/Components/HdsCopieSetari.py:1337
+msgid "un fișier e prea mare pentru copie"
+msgstr "un fichier est trop volumineux pour la copie"
+
+#: lib/python/Components/HdsEcranNegru.py:238
+msgid "Antena pare îndreptată spre alt satelit"
+msgstr "L'antenne semble pointée vers un autre satellite"
+
+#: lib/python/Components/HdsEcranNegru.py:239
+#, python-format
+msgid "Tunerul %s prinde semnal, dar nu de la %s: pe frecvențele lui vin alte emisiuni decât cele din lista de canale. Antena legată la tunerul %s pare îndreptată spre alt satelit sau cablul ei e în altă mufă. Verifică antena și cablul, cu receptorul oprit."
+msgstr "Le tuner %s reçoit un signal, mais pas de %s : sur ses fréquences arrivent d'autres émissions que celles de la liste des chaînes. L'antenne reliée au tuner %s semble pointée vers un autre satellite ou son câble est branché sur une autre prise. Vérifie l'antenne et le câble, récepteur éteint."
+
+#: lib/python/Components/HdsEcranNegru.py:240
+#, python-format
+msgid "tunerul %s: SID negăsit în PAT pe %s"
+msgstr "le tuner %s : SID introuvable dans la PAT sur %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py:566
+#, python-format
+msgid "%s nu are ecran propriu; îl folosesc alte extensii: %s."
+msgstr "%s n'a pas d'écran dédié ; d'autres extensions l'utilisent : %s."
+
+#: lib/python/Components/HdsExtensiiLucru.py:567
+#, python-format
+msgid "%s nu are ecran propriu."
+msgstr "%s n'a pas d'écran dédié."
+
+#: lib/python/Components/HdsExtensiiLucru.py:575
+#, python-format
+msgid "Nu are rând în lista pluginurilor; se deschide din %s."
+msgstr "Il n'a pas de ligne dans la liste des plugins ; il s'ouvre depuis %s."
+
+#: lib/python/Components/HdsExtensiiLucru.py:577
+#, python-format
+msgid "Modul de acces: se pornește, se oprește și se repornește din %s."
+msgstr "Module d'accès : il se démarre, s'arrête et se redémarre depuis %s."
+
+#: lib/python/Components/HdsImportSurse.py:899
+msgid "nu e o arhivă tar sau tar.gz (poate e alt fel de arhivă, cu nume schimbat)"
+msgstr "ce n'est pas une archive tar ou tar.gz (peut-être un autre type d'archive, avec un nom modifié)"
+
+#: lib/python/Components/HdsImportSurse.py:900
+msgid "e ruptă: copiată sau descărcată pe jumătate"
+msgstr "elle est cassée : copiée ou téléchargée à moitié"
+
+#: lib/python/Components/HdsImportSurse.py:901
+msgid "nu se poate citi de pe stick sau disc"
+msgstr "ne peut pas être lue depuis la clé ou le disque"
+
+#: lib/python/Components/HdsImportSurse.py:902
+msgid "e prea mare pentru căutare (peste 32 MB sau peste 2000 de fișiere)"
+msgstr "est trop volumineuse pour la recherche (plus de 32 Mo ou plus de 2000 fichiers)"
+
+#: lib/python/Components/HdsImportSurse.py:906
+#, python-format
+msgid "Arhiva %s nu apare în listă: %s."
+msgstr "L'archive %s n'apparaît pas dans la liste : %s."
+
+#: lib/python/Components/HdsPiconInstalare.py:140
+#, python-format
+msgid "Disc sau stick: %s"
+msgstr "Disque ou clé USB : %s"
+
+#: lib/python/Components/HdsPiconInstalare.py:351
+msgid "Pachetul nu are siglele în el (lipsește data.tar)."
+msgstr "Le paquet ne contient pas les logos (data.tar manque)."
+
+#: lib/python/Components/HdsPiconInstalare.py:416
+#, python-format
+msgid "Arhiva nu poate fi citită: %s"
+msgstr "L'archive ne peut pas être lue : %s"
+
+#: lib/python/Components/HdsPiconInstalare.py:536
+msgid "Fișierul nu e o arhivă cunoscută (zip, tar, tar.gz, tar.xz, ipk)."
+msgstr "Le fichier n'est pas une archive connue (zip, tar, tar.gz, tar.xz, ipk)."
+
+#: lib/python/Components/HdsPiconInstalare.py:578
+msgid "Nu găsesc fișierul sau dosarul ales."
+msgstr "Je ne trouve pas le fichier ou le dossier choisi."
+
+#: lib/python/Components/HdsPiconInstalare.py:580
+msgid "Ai ales chiar dosarul siglelor. Alege alt dosar sau o arhivă."
+msgstr "Tu as choisi le dossier des logos lui-même. Choisis un autre dossier ou une archive."
+
+#: lib/python/Components/HdsPiconInstalare.py:581
+msgid "Se citește arhiva..."
+msgstr "Lecture de l'archive..."
+
+#: lib/python/Components/HdsPiconInstalare.py:591
+msgid "În arhivă nu e nicio siglă (fișiere .png)."
+msgstr "Il n'y a aucun logo dans l'archive (fichiers .png)."
+
+#: lib/python/Components/HdsPiconInstalare.py:596
+msgid "Lista ta de canale e goală. Caută întâi canalele sau scoate bifa Numai canalele din lista mea."
+msgstr "Ta liste de chaînes est vide. Recherche d'abord les chaînes ou décoche la case « Uniquement les chaînes de ma liste »."
+
+#: lib/python/Components/HdsPiconInstalare.py:602
+#, python-format
+msgid "Arhiva are %d sigle, dar niciuna nu se potrivește cu canalele din lista ta."
+msgstr "L'archive contient %d logos, mais aucun ne correspond aux chaînes de ta liste."
+
+#: lib/python/Components/HdsPiconInstalare.py:611
+#, python-format
+msgid "Nu pot face dosarul siglelor: %s"
+msgstr "Je ne peux pas créer le dossier des logos : %s"
+
+#: lib/python/Components/HdsPiconInstalare.py:613
+#, python-format
+msgid "Nu e destul loc: trebuie %s, sunt liberi %s. Alege un disc sau numai canalele din lista ta."
+msgstr "Pas assez de place : il faut %s, %s sont libres. Choisis un disque ou uniquement les chaînes de ta liste."
+
+#: lib/python/Components/HdsPiconInstalare.py:662
+#, python-format
+msgid "Nu pot scrie în dosarul siglelor: %s"
+msgstr "Je ne peux pas écrire dans le dossier des logos : %s"
+
+#: lib/python/Components/HdsPiconInstalare.py:667
+#, python-format
+msgid "Se scriu siglele: %d din %d"
+msgstr "Écriture des logos : %d sur %d"
+
+#: lib/python/Components/HdsPiconInstalare.py:691
+#, python-format
+msgid "Gata: %d sigle puse."
+msgstr "Terminé : %d logos installés."
+
+#: lib/python/Components/HdsPiconInstalare.py:693
+#, python-format
+msgid "%d sărite (nu erau PNG bune sau nu s-au putut scrie)."
+msgstr "%d ignorés (n'étaient pas des PNG valides ou n'ont pas pu être écrits)."
+
+#: lib/python/Components/HdsPiconInstalare.py:695
+#, python-format
+msgid "Oprit. %d sigle puse până acum."
+msgstr "Arrêté. %d logos installés jusqu'à présent."
+
+#: lib/python/Components/HdsPiconInstalare.py:729
+#, python-format
+msgid "Nu am putut descărca de la adresa dată: %s"
+msgstr "Je n'ai pas pu télécharger depuis l'adresse indiquée : %s"
+
+#: lib/python/Components/HdsPiconInstalare.py:739
+#, python-format
+msgid "Arhiva e prea mare (%s)."
+msgstr "L'archive est trop volumineuse (%s)."
+
+#: lib/python/Components/HdsPiconInstalare.py:743
+#, python-format
+msgid "Nu e destul loc pentru descărcare: trebuie %s."
+msgstr "Pas assez de place pour le téléchargement : il faut %s."
+
+#: lib/python/Components/HdsPiconInstalare.py:759
+msgid "Nu e destul loc pentru descărcare."
+msgstr "Pas assez de place pour le téléchargement."
+
+#: lib/python/Components/HdsPiconInstalare.py:763
+msgid "La adresa dată nu e niciun fișier."
+msgstr "Il n'y a aucun fichier à l'adresse indiquée."
+
+#: lib/python/Components/HdsPiconInstalare.py:787
+msgid "Aici nu sunt sigle puse din acest ecran. Instalează întâi un set."
+msgstr "Aucun logo n'a été installé depuis cet écran. Installe d'abord un pack."
+
+#: lib/python/Components/HdsPiconInstalare.py:791
+msgid "Setul a fost trimis din calculator. Trimite din nou arhiva ca să-l actualizezi."
+msgstr "Le pack a été envoyé depuis l'ordinateur. Envoie à nouveau l'archive pour le mettre à jour."
+
+#: lib/python/Components/HdsPiconInstalare.py:800
+msgid "Aici nu sunt sigle puse din acest ecran."
+msgstr "Aucun logo n'a été installé depuis cet écran."
+
+#: lib/python/Components/HdsPiconInstalare.py:865
+msgid "Nu ai încă sigle. Apasă OK ca să instalezi un set."
+msgstr "Tu n'as pas encore de logos. Appuie sur OK pour installer un pack."
+
+#: lib/python/Components/HdsPiconInstalare.py:914
+#, python-format
+msgid "Nu am putut termina: %s"
+msgstr "Je n'ai pas pu terminer : %s"
+
+#: lib/python/Components/HdsTasteRapide.py:99
+msgid "Canalul anterior < (apăsare lungă)"
+msgstr "Chaîne précédente < (appui long)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:2315
+msgid "Canalul nu e bun."
+msgstr "La chaîne n'est pas valable."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:2318
+msgid "Canalul nu mai e în istoric."
+msgstr "La chaîne n'est plus dans l'historique."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3111
+msgid "Antena are motor: sateliții bifați se caută pe rând, antena se rotește spre fiecare și îl termină înainte de următorul."
+msgstr "L'antenne a un moteur : les satellites cochés sont recherchés l'un après l'autre, l'antenne tourne vers chacun et le termine avant le suivant."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py:1166
+msgid "Aceleași rânduri, cu aceleași alegeri, sunt pe televizor în ecranul cu același nume. Setările fără listă de alegeri se schimbă de pe televizor."
+msgstr "Les mêmes lignes, avec les mêmes choix, sont sur le téléviseur dans l'écran du même nom. Les paramètres sans liste de choix se modifient depuis le téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py:1176
+msgid "Niciun rând de arătat."
+msgstr "Aucune ligne à afficher."
+
+#: lib/python/Screens/HdsIstoricCanale.py:26
+msgid "OK pornește canalul · EXIT închide"
+msgstr "OK lance la chaîne · EXIT ferme"
+
+#: lib/python/Screens/HdsIstoricCanale.py:52
+msgid "Încă nu ai schimbat canalul. Canalele văzute apar aici."
+msgstr "Tu n'as pas encore changé de chaîne. Les chaînes vues apparaissent ici."
+
+#: lib/python/Screens/ScanerMaiMultiSateliti.py:98
+msgid "Bifează sateliții de căutat cu stânga sau dreapta, apoi apasă OK. Antena se rotește pe rând spre fiecare satelit bifat."
+msgstr "Coche les satellites à rechercher avec les touches gauche ou droite, puis appuie sur OK. L'antenne tourne tour à tour vers chaque satellite coché."
+
+#: lib/python/Screens/ScanerMaiMultiSateliti.py:141
+msgid "Toți sateliții motorului, bifați, pe rând"
+msgstr "Tous les satellites du moteur, cochés, un par un"
+
+#: lib/python/Screens/ScanerSatelit.py:768
+#, python-format
+msgid "Căutare pe %d sateliți, pe rând: antena se rotește spre fiecare și îl termină înainte de următorul. %d transpondere din lista receptorului, plus cele anunțate în semnal."
+msgstr "Recherche sur %d satellites, l'un après l'autre : l'antenne tourne vers chacun et le termine avant le suivant. %d transpondeurs de la liste du récepteur, plus ceux annoncés dans le signal."
+
+#: data/menu.xml:424
+msgid "Sigle canale (piconuri)"
+msgstr "Logos des chaînes (picons)"
+
+#: lib/python/Components/HdsAsistenta.py:224
+#, python-format
+msgid "HD Satelit a terminat. Se oprește la %s"
+msgstr "HD Satelit a terminé. Arrêt à %s"
+
+#: lib/python/Components/HdsAsistenta.py:225
+msgid "HD Satelit a terminat. Oprește când vrei"
+msgstr "HD Satelit a terminé. Arrête quand tu veux"
+
+#: lib/python/Components/HdsPiconInstalare.py:807
+msgid "Trimiterea nu are un nume bun. Încearcă din nou."
+msgstr "L'envoi n'a pas de nom valable. Réessaie."
+
+#: lib/python/Components/HdsPiconInstalare.py:826
+msgid "Trimiterea s-a întrerupt. Încearcă din nou."
+msgstr "L'envoi a été interrompu. Réessaie."
+
+#: lib/python/Components/HdsPiconInstalare.py:835
+msgid "Se instalează deja. Așteaptă să se termine."
+msgstr "Installation déjà en cours. Attends qu'elle se termine."
+
+#: lib/python/Components/HdsPiconInstalare.py:852
+msgid "Locul ales nu mai există. Reîncarcă pagina."
+msgstr "L'emplacement choisi n'existe plus. Recharge la page."
+
+#: lib/python/Components/HdsTasteRapide.py:272
+msgid "Mozaic: toate canalele transponderului"
+msgstr "Mosaïque : toutes les chaînes du transpondeur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/mozaic_web.py:62
+msgid "Canalul de pe televizor nu e pe un transponder din listă (fișier, IPTV sau niciun canal)."
+msgstr "La chaîne sur le téléviseur n'est pas sur un transpondeur de la liste (fichier, IPTV ou aucune chaîne)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/mozaic_web.py:88
+msgid "Se trimite cu POST."
+msgstr "Envoi par POST."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/mozaic_web.py:130
+msgid "Canalul nu e pe transponderul de pe televizor."
+msgstr "La chaîne n'est pas sur le transpondeur du téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/mozaic_web.py:142
+msgid "Așezarea poate fi 2, 4 sau 9."
+msgstr "La disposition peut être 2, 4 ou 9."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/mozaic_web.py:281
+msgid "Mozaic"
+msgstr "Mosaïque"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/mozaic_web.py:282
+msgid "Toate canalele de pe transponderul canalului de pe televizor. Apasă pe un canal ca să-l pornești pe televizor."
+msgstr "Toutes les chaînes du transpondeur de la chaîne sur le téléviseur. Appuie sur une chaîne pour la lancer sur le téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/mozaic_web.py:288
+msgid "Imaginea apare după ce deschizi mozaicul pe televizor."
+msgstr "L'image apparaît une fois que tu as ouvert le Mosaïque sur le téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/mozaic_web.py:288
+msgid "Mozaicul e deschis pe televizor."
+msgstr "Le Mosaïque est ouvert sur le téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:106
+#, python-format
+msgid "Am șters %d sigle."
+msgstr "Logos supprimés : %d."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:122
+msgid "Se scrie încă bucata de dinainte. Încearcă din nou."
+msgstr "Le morceau précédent est encore en cours d'écriture. Réessaie."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:133
+#, python-format
+msgid "Nu am putut citi bucata: %s"
+msgstr "Je n'ai pas pu lire le morceau : %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:319
+msgid "Pune pe receptor un set de sigle ales de tine, fără FTP. Imaginea nu are seturi proprii."
+msgstr "Installe sur le récepteur un pack de logos de ton choix, sans FTP. L'image n'a pas de packs intégrés."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:320
+msgid "Se citește receptorul..."
+msgstr "Lecture du récepteur..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:320
+msgid "Unde se pun siglele"
+msgstr "Où placer les logos"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:320
+msgid "Numai canalele din lista mea"
+msgstr "Uniquement les chaînes de ma liste"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:321
+msgid "De la o adresă"
+msgstr "Depuis une adresse"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:321
+msgid "Adresa arhivei (zip, tar.gz, tar.xz, ipk)"
+msgstr "Adresse de l'archive (zip, tar.gz, tar.xz, ipk)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:322
+msgid "Din calculator"
+msgstr "Depuis l'ordinateur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:322
+msgid "Arhiva cu sigle"
+msgstr "Archive de logos"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:322
+msgid "Trimite și instalează"
+msgstr "Envoyer et installer"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:323
+msgid "Actualizează siglele (aceeași sursă)"
+msgstr "Mettre à jour les logos (même source)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:323
+msgid "Dezinstalează siglele puse aici"
+msgstr "Désinstaller les logos installés ici"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:328
+msgid "Sigle aici:"
+msgstr "Logos ici :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:328
+msgid "Liberi:"
+msgstr "Libres :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:328
+msgid "Puse de aici:"
+msgstr "Installés depuis ici :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:328
+msgid "de la"
+msgstr "depuis"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:328
+msgid "liberi"
+msgstr "libres"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:329
+msgid "Scrie adresa unei arhive sau trimite una din calculator. Se scriu numai siglele canalelor tale."
+msgstr "Écris l'adresse d'une archive ou envoie-en une depuis l'ordinateur. Seuls les logos de tes chaînes sont écrits."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:330
+msgid "Scrie întâi adresa arhivei."
+msgstr "Écris d'abord l'adresse de l'archive."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:330
+msgid "Alege întâi arhiva."
+msgstr "Choisis d'abord l'archive."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:330
+msgid "Se trimite arhiva:"
+msgstr "Envoi de l'archive :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:331
+msgid "Ștergi siglele puse de aici? Siglele tale de dinainte rămân."
+msgstr "Veux-tu supprimer les logos installés depuis ici ? Tes logos précédents restent."
+
+#: lib/python/Screens/HdsMozaic.py:113
+msgid "Săgeți: alege · CH+/CH-: pagina · ROȘU 2 · VERDE 4 · GALBEN 9 · OK: pe tot ecranul · EXIT: înapoi"
+msgstr "Flèches : choisir · CH+/CH- : page · ROUGE 2 · VERT 4 · JAUNE 9 · OK : plein écran · EXIT : retour"
+
+#: lib/python/Screens/HdsMozaic.py:158
+msgid "Canalul de acum nu e pe un transponder din listă (fișier, IPTV sau niciun canal)."
+msgstr "La chaîne actuelle n'est pas sur un transpondeur de la liste (fichier, IPTV ou aucune chaîne)."
+
+#: lib/python/Screens/HdsMozaic.py:172
+#, python-format
+msgid "Mozaic: %d canale pe transponder"
+msgstr "Mosaïque : %d chaînes sur le transpondeur"
+
+#: lib/python/Screens/HdsMozaic.py:173
+#, python-format
+msgid "Pagina %d din %d"
+msgstr "Page %d sur %d"
+
+#: lib/python/Screens/HdsMozaic.py:208
+msgid "imaginea apare în câteva secunde"
+msgstr "l'image apparaît dans quelques secondes"
+
+#: lib/python/Screens/HdsPiconuri.py:74
+msgid "Alege arhiva sau dosarul cu sigle"
+msgstr "Choisis l'archive ou le dossier contenant les logos"
+
+#: lib/python/Screens/HdsPiconuri.py:79
+msgid "OK: intră în dosar sau alege arhiva (zip, tar, tar.gz, tar.xz, ipk). VERDE: alege dosarul în care ești (siglele .png din el și din dosarele lui). EXIT: înapoi."
+msgstr "OK : entre dans le dossier ou choisis l'archive (zip, tar, tar.gz, tar.xz, ipk). Vert : choisis le dossier dans lequel tu es (les logos .png qu'il contient et ceux de ses sous-dossiers). EXIT : retour."
+
+#: lib/python/Screens/HdsPiconuri.py:120
+msgid "Imaginea nu are seturi proprii: alegi tu de unde le iei (o adresă sau un stick). Siglele se văd pe loc. Dezinstalarea șterge numai ce s-a pus de aici."
+msgstr "L'image n'a pas ses propres packs : tu choisis toi-même d'où les prendre (une adresse ou une clé USB). Les logos sont visibles immédiatement. La désinstallation supprime uniquement ce qui a été installé depuis ici."
+
+#: lib/python/Screens/HdsPiconuri.py:123
+msgid "De pe stick sau disc"
+msgstr "Depuis une clé USB ou un disque"
+
+#: lib/python/Screens/HdsPiconuri.py:160
+#, python-format
+msgid "Numai canalele din lista mea: %s"
+msgstr "Uniquement les chaînes de ma liste : %s"
+
+#: lib/python/Screens/HdsPiconuri.py:161
+msgid "Instalează de la o adresă"
+msgstr "Installer depuis une adresse"
+
+#: lib/python/Screens/HdsPiconuri.py:162
+msgid "Instalează de pe stick sau disc"
+msgstr "Installer depuis une clé USB ou un disque"
+
+#: lib/python/Screens/HdsPiconuri.py:187
+msgid "Încă nicio siglă aici"
+msgstr "Encore aucun logo ici"
+
+#: lib/python/Screens/HdsPiconuri.py:217
+#, python-format
+msgid "Sigle aici: %d"
+msgstr "Logos ici : %d"
+
+#: lib/python/Screens/HdsPiconuri.py:219
+#, python-format
+msgid "Puse din acest ecran: %d, de la %s"
+msgstr "Installés depuis cet écran : %d, depuis %s"
+
+#: lib/python/Screens/HdsPiconuri.py:221
+msgid "Alege o adresă sau o arhivă de pe stick. Se scriu numai siglele canalelor tale."
+msgstr "Choisis une adresse ou une archive depuis une clé USB. Seuls les logos de tes chaînes sont écrits."
+
+#: lib/python/Screens/HdsPiconuri.py:234
+msgid "sigle"
+msgstr "logos"
+
+#: lib/python/Screens/HdsPiconuri.py:236
+msgid "Unde se pun siglele?"
+msgstr "Où installer les logos ?"
+
+#: lib/python/Screens/HdsPiconuri.py:243
+msgid "Adresa arhivei cu sigle (zip, tar.gz, tar.xz, ipk)"
+msgstr "Adresse de l'archive de logos (zip, tar.gz, tar.xz, ipk)"
+
+#: lib/python/Screens/HdsPiconuri.py:252
+msgid "Ștergi siglele puse din acest ecran? Siglele tale de dinainte rămân."
+msgstr "Supprimes-tu les logos installés depuis cet écran ? Tes logos d'avant restent."
+
+#: data/menu.xml:782
+msgid "Sport azi"
+msgstr "Sport aujourd'hui"
+
+#: lib/python/Components/HdsDespreFilm.py:312
+msgid "Emisiunea nu are titlu în ghid."
+msgstr "L'émission n'a pas de titre dans le guide."
+
+#: lib/python/Components/HdsDespreFilm.py:349
+#, python-format
+msgid "Fișa filmului nu s-a putut aduce: %s"
+msgstr "La fiche du film n'a pas pu être récupérée : %s"
+
+#: lib/python/Components/HdsDespreFilm.py:387
+msgid "Wikipedia nu are încă o descriere pentru acest film."
+msgstr "Wikipédia n'a pas encore de description pour ce film."
+
+#: lib/python/Components/HdsDespreFilm.py:391
+#, python-format
+msgid "Cu: %s"
+msgstr "Avec : %s"
+
+#: lib/python/Components/HdsExtensiiLucru.py:800
+msgid "Ascunde extensia"
+msgstr "Masque l'extension"
+
+#: lib/python/Components/HdsExtensiiLucru.py:839
+#, python-format
+msgid "Arată toate extensiile (%d ascunse)"
+msgstr "Affiche toutes les extensions (%d masquées)"
+
+#: lib/python/Components/HdsExtensiiLucru.py:893
+msgid "Din alte surse"
+msgstr "Autres sources"
+
+#: lib/python/Components/HdsExtensiiLucru.py:894
+#, python-format
+msgid "Pachetele din feedurile adăugate de alte programe sau de tine: %s. Nu sunt verificate de HD Satelit."
+msgstr "Les paquets provenant des flux ajoutés par d'autres programmes ou par toi : %s. Ils ne sont pas vérifiés par HD Satelit."
+
+#: lib/python/Components/HdsExtensiiLucru.py:1012
+msgid "OK închide dosarul"
+msgstr "OK ferme le dossier"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1012
+msgid "OK deschide dosarul"
+msgstr "OK ouvre le dossier"
+
+#: lib/python/Components/HdsSportAzi.py:149
+msgid "ACUM"
+msgstr "MAINTENANT"
+
+#: lib/python/Components/HdsSportAzi.py:150
+msgid "în direct"
+msgstr "en direct"
+
+#: lib/python/Components/HdsVod.py:236
+msgid "Furnizor IPTV"
+msgstr "Fournisseur IPTV"
+
+#: lib/python/Components/HdsVod.py:236
+msgid "Pe disc"
+msgstr "Sur le disque"
+
+#: lib/python/Components/HdsVod.py:236
+msgid "Emby"
+msgstr "Emby"
+
+#: lib/python/Components/HdsVod.py:236
+msgid "Jellyfin"
+msgstr "Jellyfin"
+
+#: lib/python/Components/HdsVodDisc.py:53
+msgid "Toate serialele"
+msgstr "Toutes les séries"
+
+#: lib/python/Components/HdsVodDisc.py:55
+#, python-format
+msgid "Rețea: %s"
+msgstr "Réseau : %s"
+
+#: lib/python/Components/HdsVodDisc.py:56
+msgid "Nu am găsit filme pe discuri, stick-uri sau în locurile din rețea."
+msgstr "Je n'ai pas trouvé de films sur les disques, les clés USB ou dans les emplacements du réseau."
+
+#: lib/python/Components/HdsVodServere.py:51
+msgid "Serverul nu a primit utilizatorul sau parola. Scrie-le din nou în Filme și seriale > MENU > Schimbă utilizatorul sau parola."
+msgstr "Le serveur n'a pas reçu l'utilisateur ou le mot de passe. Écris-les à nouveau dans Films et séries > MENU > Changer l'utilisateur ou le mot de passe."
+
+#: lib/python/Components/HdsVodServere.py:52
+msgid "Serverul nu răspunde. Verifică dacă este pornit și în aceeași rețea."
+msgstr "Le serveur ne répond pas. Vérifie qu'il est allumé et sur le même réseau."
+
+#: lib/python/Components/HdsVodServere.py:53
+msgid "Adresa serverului nu este bună (de exemplu http://192.168.1.10:8096)."
+msgstr "L'adresse du serveur n'est pas correcte (par exemple http://192.168.1.10:8096)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/cadru_web.py:200
+msgid "Despre film"
+msgstr "À propos du film"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:109
+msgid "Canalul de pe televizor nu are acum o emisiune în ghid."
+msgstr "La chaîne actuellement regardée n'a pas d'émission dans le guide en ce moment."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:127
+msgid "Filmul ales nu e bun."
+msgstr "Le film choisi n'est pas correct."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:284
+msgid "Afișul, descrierea, notele și actorii filmului de pe televizor sau ai unui titlu scris de tine. Datele vin din Wikidata și Wikipedia."
+msgstr "L'affiche, la description, les notes et les acteurs du film à la télévision ou d'un titre saisi par toi. Les données proviennent de Wikidata et Wikipedia."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:285
+msgid "Filmul de acum de pe televizor"
+msgstr "Le film actuellement à la télévision"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:285
+msgid "Titlul filmului"
+msgstr "Titre du film"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:289
+msgid "Nu e sigur care film este. Alege din listă."
+msgstr "Il n'est pas certain de quel film il s'agit. Choisis dans la liste."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:289
+msgid "Filmul nu s-a găsit."
+msgstr "Le film n'a pas été trouvé."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:290
+msgid "Regia: "
+msgstr "Réalisation : "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:290
+msgid "Cu: "
+msgstr "Acteurs : "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:290
+msgid "Sursa: "
+msgstr "Source : "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:291
+msgid "Caut filmul în Wikidata și Wikipedia..."
+msgstr "Recherche le film dans Wikidata et Wikipedia..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1071
+msgid "Extensiile ascunse se văd din nou, și pe televizor."
+msgstr "Les extensions masquées sont à nouveau visibles, et sur le téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1073
+msgid "Extensia nu se poate muta."
+msgstr "L'extension ne peut pas être déplacée."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1078
+msgid "Extensia e ascunsă din Extensii, și pe televizor. Căutarea o găsește mai departe."
+msgstr "L'extension est masquée depuis Extensions, et sur le téléviseur. La recherche la trouve toujours."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1079
+msgid "Extensia s-a mutat, și pe televizor."
+msgstr "L'extension a été déplacée, et sur le téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/filme_seriale_web.py:393
+#, python-format
+msgid "Nu ai încă un server %s. Îl caut în rețea; scrii apoi utilizatorul și parola."
+msgstr "Tu n'as pas encore de serveur %s. Je le cherche sur le réseau ; tu saisiras ensuite l'utilisateur et le mot de passe."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/filme_seriale_web.py:394
+#, python-format
+msgid "Caut serverul %s în rețea..."
+msgstr "Recherche du serveur %s sur le réseau..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/filme_seriale_web.py:394
+msgid "Nu l-am găsit în rețea. Scrie adresa lui mai jos."
+msgstr "Je ne l'ai pas trouvé sur le réseau. Écris son adresse ci-dessous."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/filme_seriale_web.py:395
+msgid "Utilizatorul"
+msgstr "Utilisateur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/filme_seriale_web.py:396
+msgid "Adaugă serverul"
+msgstr "Ajoute le serveur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/filme_seriale_web.py:396
+msgid "Scoate serverul"
+msgstr "Retire le serveur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/filme_seriale_web.py:396
+msgid "Mă conectez la server..."
+msgstr "Connexion au serveur..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/filme_seriale_web.py:397
+#, python-format
+msgid "Gata: serverul %s este adăugat."
+msgstr "Terminé : le serveur %s a été ajouté."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piconuri_web.py:355
+msgid "Se văd pe bare, în lista de canale și în ghid. Aceeași setare e în Setări generale."
+msgstr "Ils sont visibles sur les barres, dans la liste des chaînes et dans le guide. Le même réglage se trouve dans Réglages généraux."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:536
+#, python-format
+msgid "Bifați din oficiu: numai sateliții care au deja canale în listă (%d din %d); pe ceilalți îi poți bifa tu."
+msgstr "Coche par défaut : uniquement les satellites qui ont déjà des chaînes dans la liste (%d sur %d) ; tu peux cocher les autres toi-même."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3178
+msgid "Bifează pe cei cu canale"
+msgstr "Coche ceux qui ont des chaînes"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3179
+msgid "Motorul USALS are nevoie de locul antenei ca să știe încotro să rotească antena. Alege țara și orașul sau scrie coordonatele."
+msgstr "Le moteur USALS a besoin de l'emplacement de l'antenne pour savoir dans quelle direction orienter l'antenne. Choisis le pays et la ville ou saisis les coordonnées."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/sport_azi_web.py:56
+msgid "Canalul nu e în listele tale."
+msgstr "La chaîne n'est pas dans tes listes."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/sport_azi_web.py:171
+msgid "Meciurile, cursele și galele de azi din ghidul canalelor tale, cu ora și canalul."
+msgstr "Les matchs, les courses et les galas d'aujourd'hui du guide TV de tes chaînes, avec l'heure et la chaîne."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/sport_azi_web.py:172
+msgid "Numai în direct"
+msgstr "Uniquement en direct"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/sport_azi_web.py:176
+msgid "Ghidul nu are sport azi pe canalele din listele tale."
+msgstr "Le guide TV n'a pas de sport aujourd'hui sur les chaînes de tes listes."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/sport_azi_web.py:176
+msgid "Și pe: "
+msgstr "Aussi sur : "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/sport_azi_web.py:177
+msgid "Canalul e pe televizor."
+msgstr "La chaîne est sur le téléviseur."
+
+#: lib/python/Screens/EventView.py:182
+msgid "TEXT: despre film (afiș, note, actori)."
+msgstr "TEXT : à propos du film (affiche, notes, acteurs)."
+
+#: lib/python/Screens/HdsDespreFilm.py:77
+msgid "Datele vin din Wikidata și Wikipedia, după titlul și anul din ghid. Unele emisiuni nu sunt filme sau nu au încă pagină."
+msgstr "Les données proviennent de Wikidata et de Wikipedia, d'après le titre et l'année du guide. Certaines émissions ne sont pas des films ou n'ont pas encore de page."
+
+#: lib/python/Screens/HdsDespreFilm.py:87
+msgid "Alt film"
+msgstr "Autre film"
+
+#: lib/python/Screens/HdsDespreFilm.py:88
+msgid "Care film?"
+msgstr "Quel film ?"
+
+#: lib/python/Screens/HdsDespreFilm.py:93
+msgid "Niciun film ales. Verde: lista din nou."
+msgstr "Aucun film choisi. Vert : liste à nouveau."
+
+#: lib/python/Screens/HdsDespreFilm.py:95
+msgid "Aduc fișa filmului..."
+msgstr "Chargement de la fiche du film..."
+
+#: lib/python/Screens/HdsExtensii.py:1018
+msgid "MENU mută sau ascunde"
+msgstr "MENU déplacer ou masquer"
+
+#: lib/python/Screens/HdsExtensii.py:1237
+msgid "una ascunsă, MENU o arată"
+msgstr "une masquée, MENU l'affiche"
+
+#: lib/python/Screens/HdsExtensii.py:1237
+#, python-format
+msgid "%d ascunse, MENU le arată"
+msgstr "%d masquées, MENU les affiche"
+
+#: lib/python/Screens/HdsExtensii.py:1643
+msgid "Extensia e ascunsă. MENU: arată-le din nou."
+msgstr "L'extension est masquée. MENU : les réafficher."
+
+#: lib/python/Screens/HdsFilmeSeriale.py:46
+#, python-format
+msgid "Nu ai încă un server %s. Apasă OK: îl caut în rețea, apoi scrii utilizatorul și parola."
+msgstr "Tu n'as pas encore de serveur %s. Appuie sur OK : je le cherche sur le réseau, puis tu saisis l'utilisateur et le mot de passe."
+
+#: lib/python/Screens/HdsFilmeSeriale.py:48
+msgid "Scriu adresa de mână"
+msgstr "Je saisis l'adresse à la main"
+
+#: lib/python/Screens/HdsFilmeSeriale.py:49
+#, python-format
+msgid "Adresa serverului %s (de exemplu 192.168.1.10:8096)"
+msgstr "Adresse du serveur %s (par exemple 192.168.1.10:8096)"
+
+#: lib/python/Screens/HdsFilmeSeriale.py:50
+#, python-format
+msgid "Utilizatorul de pe serverul %s"
+msgstr "Utilisateur du serveur %s"
+
+#: lib/python/Screens/HdsFilmeSeriale.py:51
+msgid "Parola utilizatorului (poate fi goală)"
+msgstr "Mot de passe de l'utilisateur (peut être vide)"
+
+#: lib/python/Screens/HdsFilmeSeriale.py:54
+#, python-format
+msgid "Adaugă un server %s"
+msgstr "Ajoute un serveur %s"
+
+#: lib/python/Screens/HdsFilmeSeriale.py:55
+#, python-format
+msgid "Scoate serverul %s"
+msgstr "Retire le serveur %s"
+
+#: lib/python/Screens/HdsFilmeSeriale.py:56
+msgid "Schimbă utilizatorul sau parola"
+msgstr "Change l'utilisateur ou le mot de passe"
+
+#: lib/python/Screens/HdsFilmeSeriale.py:57
+msgid "Caută din nou pe discuri"
+msgstr "Recherche à nouveau sur les disques"
+
+#: lib/python/Screens/HdsFilmeSeriale.py:214
+msgid "OK Deschide   ·   Verde Redă   ·   Galben Caută   ·   Albastru Favorite   ·   MENU Sursa   ·   EXIT Ieșire"
+msgstr "OK Ouvrir   ·   Vert Lire   ·   Jaune Rechercher   ·   Bleu Favoris   ·   MENU Source   ·   EXIT Sortie"
+
+#: lib/python/Screens/HdsPiconuri.py:227
+msgid "Siglele sunt oprite. OK pe primul rând le pornește."
+msgstr "Les logos sont désactivés. OK sur la première ligne les active."
+
+#: lib/python/Screens/HdsSportAzi.py:55
+msgid "Ghidul nu are sport azi pe canalele din listele tale. Ghidul unui canal se umple după ce stai câteva secunde pe el."
+msgstr "Le guide TV n'a pas de sport aujourd'hui sur les chaînes de tes listes. Le guide d'une chaîne se remplit après que tu restes quelques secondes dessus."
+
+#: lib/python/Screens/HdsSportAzi.py:68
+#, python-format
+msgid "Și pe: %s"
+msgstr "Et sur : %s"
+
+#: lib/python/Screens/PositionerSetup.py:80
+msgid "N"
+msgstr "N"
+
+#: lib/python/Screens/PositionerSetup.py:80
+msgid "nord"
+msgstr "nord"
+
+#: lib/python/Screens/PositionerSetup.py:80
+msgid "NNE"
+msgstr "NNE"
+
+#: lib/python/Screens/PositionerSetup.py:80
+msgid "nord-nord-est"
+msgstr "nord-nord-est"
+
+#: lib/python/Screens/PositionerSetup.py:80
+msgid "NE"
+msgstr "NE"
+
+#: lib/python/Screens/PositionerSetup.py:80
+msgid "nord-est"
+msgstr "nord-est"
+
+#: lib/python/Screens/PositionerSetup.py:80
+msgid "ENE"
+msgstr "ENE"
+
+#: lib/python/Screens/PositionerSetup.py:80
+msgid "est-nord-est"
+msgstr "est-nord-est"
+
+#: lib/python/Screens/PositionerSetup.py:81
+msgid "est"
+msgstr "est"
+
+#: lib/python/Screens/PositionerSetup.py:81
+msgid "ESE"
+msgstr "ESE"
+
+#: lib/python/Screens/PositionerSetup.py:81
+msgid "est-sud-est"
+msgstr "est-sud-est"
+
+#: lib/python/Screens/PositionerSetup.py:81
+msgid "SE"
+msgstr "SE"
+
+#: lib/python/Screens/PositionerSetup.py:81
+msgid "sud-est"
+msgstr "sud-est"
+
+#: lib/python/Screens/PositionerSetup.py:81
+msgid "SSE"
+msgstr "SSE"
+
+#: lib/python/Screens/PositionerSetup.py:81
+msgid "sud-sud-est"
+msgstr "sud-sud-est"
+
+#: lib/python/Screens/PositionerSetup.py:82
+msgid "S"
+msgstr "S"
+
+#: lib/python/Screens/PositionerSetup.py:82
+msgid "sud"
+msgstr "sud"
+
+#: lib/python/Screens/PositionerSetup.py:82
+msgid "SSV"
+msgstr "SSO"
+
+#: lib/python/Screens/PositionerSetup.py:82
+msgid "sud-sud-vest"
+msgstr "sud-sud-ouest"
+
+#: lib/python/Screens/PositionerSetup.py:82
+msgid "SV"
+msgstr "SO"
+
+#: lib/python/Screens/PositionerSetup.py:82
+msgid "sud-vest"
+msgstr "sud-ouest"
+
+#: lib/python/Screens/PositionerSetup.py:82
+msgid "VSV"
+msgstr "OSO"
+
+#: lib/python/Screens/PositionerSetup.py:82
+msgid "vest-sud-vest"
+msgstr "ouest-sud-ouest"
+
+#: lib/python/Screens/PositionerSetup.py:83
+msgid "V"
+msgstr "O"
+
+#: lib/python/Screens/PositionerSetup.py:83
+msgid "vest"
+msgstr "ouest"
+
+#: lib/python/Screens/PositionerSetup.py:83
+msgid "VNV"
+msgstr "ONO"
+
+#: lib/python/Screens/PositionerSetup.py:83
+msgid "vest-nord-vest"
+msgstr "ouest-nord-ouest"
+
+#: lib/python/Screens/PositionerSetup.py:83
+msgid "NV"
+msgstr "NO"
+
+#: lib/python/Screens/PositionerSetup.py:83
+msgid "nord-vest"
+msgstr "nord-ouest"
+
+#: lib/python/Screens/PositionerSetup.py:83
+msgid "NNV"
+msgstr "NNO"
+
+#: lib/python/Screens/PositionerSetup.py:83
+msgid "nord-nord-vest"
+msgstr "nord-nord-ouest"
+
+#: lib/python/Screens/PositionerSetup.py:102
+msgid "Satelitul e sub orizont din locul acesta: nu se poate prinde."
+msgstr "Le satellite est sous l'horizon depuis cet endroit : impossible de le capter."
+
+#: lib/python/Screens/PositionerSetup.py:105
+#, python-format
+msgid "Îndreaptă antena spre %s (%s, %s°), la %s° deasupra orizontului."
+msgstr "Oriente l'antenne vers %s (%s, %s°), à %s° au-dessus de l'horizon."
+
+#: lib/python/Components/HdsActualizari.py:1660
+msgid "Lista pachetelor se schimbă chiar acum pe server. Se reîncearcă în mai puțin de un minut..."
+msgstr "La liste des paquets change en ce moment sur le serveur. Nouvel essai dans moins d'une minute..."
+
+#: lib/python/Components/HdsAsistentaCatalog.py:72
+msgid "fluxul prins acum de tunerul canalului deschis: TSID, ONID, rețeaua și poziția satelitului din tabelele primite, numai citire"
+msgstr "le flux actuellement capté par le tuner de la chaîne ouverte : TSID, ONID, le réseau et la position du satellite d'après les tables reçues, lecture seule"
+
+#: lib/python/Components/HdsBucheteOrfane.py:331
+msgid "înainte de punerea înapoi a listelor"
+msgstr "avant la remise en place des listes"
+
+#: lib/python/Components/HdsBucheteOrfane.py:341
+msgid "Liste regăsite"
+msgstr "Listes retrouvées"
+
+#: lib/python/Components/HdsBucheteOrfane.py:353
+msgid "Liste de canale care nu se văd"
+msgstr "Listes de chaînes qui ne sont pas visibles"
+
+#: lib/python/Components/HdsBucheteOrfane.py:432
+#, python-format
+msgid "Listele nu s-au putut pune înapoi: %s"
+msgstr "Les listes n'ont pas pu être remises : %s"
+
+#: lib/python/Components/HdsCautaSetari.py:136
+msgid "Fus orar după internet"
+msgstr "Fuseau horaire par Internet"
+
+#: lib/python/Components/HdsCautaSetari.py:136
+msgid "fus orar automat țară"
+msgstr "fuseau horaire automatique pays"
+
+#: lib/python/Components/HdsCeas.py:733
+msgid "Alegerea pentru fusul orar după internet nu este una din cele permise."
+msgstr "Le choix pour le fuseau horaire par Internet n'est pas l'une des valeurs autorisées."
+
+#: lib/python/Components/HdsEgalizator.py:158
+msgid "Canal TV: sunetul pornește pe placa de sunet, fără întârziere, și trece în egalizator după o clipă."
+msgstr "Chaîne TV : le son démarre sur la carte son, sans retard, et passe dans l'égaliseur après un instant."
+
+#: lib/python/Components/HdsFusTara.py:64
+msgid "Fusul orar se află singur după internet, de la serverul HD Satelit, la fiecare pornire."
+msgstr "Le fuseau horaire est déterminé automatiquement via Internet, depuis le serveur HD Satelit, à chaque démarrage."
+
+#: lib/python/Components/HdsFusTara.py:65
+msgid "Fusul orar l-ai ales tu și rămâne așa. Pentru cel aflat după internet, pune Da la Fus orar după internet."
+msgstr "Tu as choisi le fuseau horaire et il reste ainsi. Pour celui déterminé via Internet, mets Oui à Fuseau horaire par Internet."
+
+#: lib/python/Components/HdsIptvFisier.py:56
+#, python-format
+msgid "Fișierul %s e o listă de canale fără nicio adresă de internet, deci nu am ce pune în IPTV."
+msgstr "Le fichier %s est une liste de chaînes sans aucune adresse Internet, donc il n'y a rien à ajouter dans IPTV."
+
+#: lib/python/Components/HdsIptvFisier.py:57
+#, python-format
+msgid "Liste de canale găsite și puse în IPTV: %(nume)s. Canalele apar în lista de canale, la Sateliți, pe rândul IPTV."
+msgstr "Listes de chaînes trouvées et ajoutées dans IPTV : %(nume)s. Les chaînes apparaissent dans la liste des chaînes, sous Satellites, sur la ligne IPTV."
+
+#: lib/python/Components/HdsIptvFisier.py:58
+#, python-format
+msgid "Lista de canale %s e prea mare pentru memoria receptorului. Pune-o pe un stick."
+msgstr "La liste de chaînes %s est trop volumineuse pour la mémoire du récepteur. Mets-la sur une clé USB."
+
+#: lib/python/Components/HdsLocInregistrari.py:1993
+msgid "Este discul cel mare legat acum; până acum înregistrările nu aveau un loc ales de tine."
+msgstr "C'est le disque dur branché maintenant ; jusqu'à présent, les enregistrements n'avaient pas d'emplacement choisi par toi."
+
+#: lib/python/Components/HdsVpn.py:2398
+#, python-format
+msgid "Am găsit %(n)d servere VPN pe stick (%(unde)s). Le adaug pe toate?"
+msgstr "J'ai trouvé %(n)d serveurs VPN sur la clé USB (%(unde)s). Les ajouter tous ?"
+
+#: lib/python/Components/HdsVpn.py:2404
+msgid "Nu văd niciun stick sau disc. Pune stickul în receptor și încearcă din nou."
+msgstr "Je ne vois aucune clé USB ni aucun disque. Insère la clé USB dans le récepteur et réessaie."
+
+#: lib/python/Components/HdsVpn.py:2405
+msgid "Pe stick nu am găsit fișiere VPN. Pune fișierele .conf, .ovpn sau arhiva .zip a furnizorului în rădăcina stickului (sau în dosarul hdsatelit/vpn)."
+msgstr "Sur la clé USB, je n'ai trouvé aucun fichier VPN. Place les fichiers .conf, .ovpn ou l'archive .zip du fournisseur à la racine de la clé (ou dans le dossier hdsatelit/vpn)."
+
+#: lib/python/Components/NimManager.py:1635
+#, python-format
+msgid "%s (lipsește din lista sateliților)"
+msgstr "%s (manque dans la liste des satellites)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py:865
+msgid "Codul PIN păstrat: pus"
+msgstr "Code PIN enregistré : présent"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ci_web.py:865
+msgid "Codul PIN păstrat: nepus"
+msgstr "Code PIN enregistré : absent"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4123
+msgid "Pune înapoi toate"
+msgstr "Tout remettre"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2290
+msgid "O listă de canale (fișier .m3u sau .m3u8) copiată prin FTP în /etc/enigma2/ sau pusă pe un stick sau disc USB apare singură în IPTV, în cel mult un minut."
+msgstr "Une liste des chaînes (fichier .m3u ou .m3u8) copiée par FTP dans /etc/enigma2/ ou placée sur une clé ou un disque USB apparaît automatiquement dans IPTV, en moins d'une minute."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/stocare_web.py:605
+msgid "Când legi un hard disk și înregistrările stau încă pe un stick sau pe un card, într-un loc pe care nu l-ai ales tu, receptorul le mută singur pe hard disk și îți spune o dată. După ce alegi tu un loc, aici sau pe televizor, nu mai mută nimic singur."
+msgstr "Quand tu branches un disque dur et que les enregistrements sont encore sur une clé ou sur une carte, à un endroit que tu n'as pas choisi, le récepteur les déplace tout seul sur le disque dur et te le dit une fois. Après que tu as choisi un emplacement, ici ou sur le téléviseur, il ne déplace plus rien tout seul."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py:468
+msgid "De pe stick, toate deodată: fișierele .conf sau .ovpn ori arhiva .zip a furnizorului, din rădăcina stickului, din dosarul lor sau din dosarul hdsatelit/vpn."
+msgstr "Depuis la clé USB, tout à la fois : les fichiers .conf ou .ovpn ou l'archive .zip du fournisseur, depuis la racine de la clé, depuis leur dossier ou depuis le dossier hdsatelit/vpn."
+
+#: lib/python/Screens/CamSetup.py:57
+msgid "modul pregătit"
+msgstr "module prêt"
+
+#: lib/python/Screens/CamSetup.py:59
+msgid "se pornește"
+msgstr "démarre"
+
+#: lib/python/Screens/CamSetup.py:61
+msgid "slot oprit"
+msgstr "slot arrêté"
+
+#: lib/python/Screens/CamSetup.py:62
+#, python-format
+msgid "Modul CI în slotul %d: %s"
+msgstr "Module CI dans le slot %d : %s"
+
+#: lib/python/Screens/CamSetup.py:67
+#, python-format
+msgid "Rulează acum: %s (pornit de alt program)"
+msgstr "En marche actuellement : %s (démarré par un autre programme)"
+
+#: lib/python/Screens/CamSetup.py:72
+#, python-format
+msgid "Programul: %s (PID %s)."
+msgstr "Programme : %s (PID %s)."
+
+#: lib/python/Screens/CamSetup.py:73
+msgid "L-a pornit alt program (alt manager de module sau o comandă), nu lista de aici. Se oprește și se repornește din programul care l-a pornit."
+msgstr "Un autre programme l'a démarré (un autre gestionnaire de modules ou une commande), pas la liste d'ici. Il s'arrête et se redémarre depuis le programme qui l'a démarré."
+
+#: lib/python/Screens/CamSetup.py:435
+#, python-format
+msgid "Apasă OK sau INFO: %s"
+msgstr "Appuie sur OK ou INFO : %s"
+
+#: lib/python/Screens/CamSetup.py:443
+#, python-format
+msgid "Modulul CI din slot are ecranul lui: %s (meniul Acces condiționat)."
+msgstr "Le module CI du slot a son écran : %s (le menu Accès conditionnel)."
+
+#: lib/python/Screens/CamSetup.py:444
+msgid "Apasă OK pentru el."
+msgstr "Appuie sur OK pour l’ouvrir."
+
+#: lib/python/Screens/CamSetup.py:496
+#, python-format
+msgid "Rulează totuși un modul pornit de alt program: %s (rândul lui e mai jos)."
+msgstr "Un module démarré par un autre programme est quand même en marche : %s (sa ligne est plus bas)."
+
+#: lib/python/Screens/CamSetup.py:608
+msgid "L-a pornit alt program: se oprește și se repornește din programul acela."
+msgstr "Un autre programme l'a démarré : il s'arrête et se redémarre depuis ce programme."
+
+#: lib/python/Screens/Ci.py:282
+msgid "pus"
+msgstr "présent"
+
+#: lib/python/Screens/Ci.py:282
+msgid "nepus"
+msgstr "absent"
+
+#: lib/python/Screens/HdsEditorCanale.py:2847
+#, python-format
+msgid "Pune înapoi toate (%d)"
+msgstr "Remettre tout (%d)"
+
+#: lib/python/Screens/HdsEgalizator.py:442
+msgid "Da: egalizatorul lucrează și la canalele TV cu sunet MPEG (MP2); la schimbarea canalului sunetul pornește pe placa de sunet și trece în egalizator după o clipă. Nu: numai la radio."
+msgstr "Oui : l'égaliseur fonctionne aussi pour les chaînes TV avec son MPEG (MP2) ; lors du changement de chaîne, le son démarre sur la carte son et passe dans l'égaliseur après un instant. Non : uniquement pour la radio."
+
+#: lib/python/Screens/HdsVpn.py:254
+msgid "De pe stick sau disc, toate deodată: fișierele furnizorului (.conf, .ovpn, .sswan, .mobileconfig sau arhiva .zip, din rădăcină sau din dosarul lor), ori datele scrise de mână. Felul se recunoaște singur. Din telefon, în interfața web."
+msgstr "Depuis une clé USB ou un disque, tout à la fois : les fichiers du fournisseur (.conf, .ovpn, .sswan, .mobileconfig ou l'archive .zip, depuis la racine ou depuis leur dossier), ou les données saisies manuellement. Le type est reconnu automatiquement. Depuis le téléphone, dans l'interface web."
+
+#: lib/python/Components/HdsBucheteOrfane.py:354
+#, python-format
+msgid "Am găsit %d listă de canale care nu se vede. O pun înapoi?"
+msgid_plural "Am găsit %d liste de canale care nu se văd. Le pun înapoi?"
+msgstr[0] "J'ai trouvé %d liste de chaînes qui ne se voit pas. Dois-je la remettre ?"
+msgstr[1] "J'ai trouvé %d listes de chaînes qui ne se voient pas. Dois-je les remettre ?"
+
+#: lib/python/Components/HdsBucheteOrfane.py:423
+#, python-format
+msgid "Am pus înapoi %d listă de canale."
+msgid_plural "Am pus înapoi %d liste de canale."
+msgstr[0] "J'ai remis %d liste de chaînes."
+msgstr[1] "J'ai remis %d listes de chaînes."
+
+#: lib/python/Components/HdsEditorCanale.py:1504
+#, python-format
+msgid "%d buchet pus înapoi în listă"
+msgid_plural "%d buchete puse înapoi în listă"
+msgstr[0] "%d bouquet remis dans la liste"
+msgstr[1] "%d bouquets remis dans la liste"
+
+#: lib/python/Screens/HdsEditorCanale.py:3066
+#, python-format
+msgid "Pus înapoi %d buchet"
+msgid_plural "Puse înapoi %d buchete"
+msgstr[0] "Remis %d bouquet"
+msgstr[1] "Remis %d bouquets"
+
+#: data/menu.xml:448
+msgid "Setări listă de canale"
+msgstr "Paramètres de la liste des chaînes"
+
+#: data/setup.xml:53
+msgid "Ce pornește receptorul după o repornire. Ultimul canal urmărit, o listă de canale sau Un canal ales: canalul pe care l-ai ales în lista de canale cu MENU > Pornește pe acest canal (sau din interfața web, în lista de canale)."
+msgstr "Ce que le récepteur lance après un redémarrage. Dernière chaîne regardée, une liste de chaînes ou Une chaîne choisie : la chaîne que tu as choisie dans la liste des chaînes avec MENU > Démarre sur cette chaîne (ou depuis l'interface web, dans la liste des chaînes)."
+
+#: data/setup.xml:177
+msgid "Mărimea numelui canalului"
+msgstr "Taille du nom de la chaîne"
+
+#: data/setup.xml:177
+msgid "Numai numele canalului, mai mic sau mai mare decât restul textului din listă, câte 10% pe pas. Ca textul listei: urmează rândul de mai sus."
+msgstr "Seulement le nom de la chaîne, plus petit ou plus grand que le reste du texte dans la liste, par pas de 10 %. Comme le texte de la liste : suit la ligne au-dessus."
+
+#: data/setup.xml:178
+msgid "Mărimea descrierii"
+msgstr "Taille de la description"
+
+#: data/setup.xml:178
+msgid "Numai descrierea de după nume (emisiunea de acum) și semnele din dreapta rândului, câte 10% pe pas. Ca textul listei: urmează mărimea textului."
+msgstr "Seulement la description après le nom (l'émission en cours) et les repères à droite de la ligne, par pas de 10 %. Comme le texte de la liste : suit la taille du texte."
+
+#: data/setup.xml:179
+msgid "Numerele canalelor"
+msgstr "Numéros des chaînes"
+
+#: data/setup.xml:179
+msgid "Da: numărul fiecărui canal în stânga rândului. Nu: fără numere, numele începe la marginea listei. Tastele cu cifre schimbă canalul la fel."
+msgstr "Oui : le numéro de chaque chaîne à gauche de la ligne. Non : sans numéros, le nom commence au bord de la liste. Les touches numériques changent de chaîne de la même manière."
+
+#: data/setup.xml:181
+msgid "Siglă pentru canalele fără siglă"
+msgstr "Logo pour les chaînes sans logo"
+
+#: data/setup.xml:181
+msgid "Da: în lista de canale, canalele fără siglă primesc o siglă simplă (televizor sau radio), ca numele lor să stea în rând cu ale celorlalte. Nu: rândul fără siglă începe cu numele."
+msgstr "Oui : dans la liste des chaînes, les chaînes sans logo reçoivent un logo simple (téléviseur ou radio), pour que leur nom soit aligné avec ceux des autres. Non : la ligne sans logo commence par le nom."
+
+#: data/setup.xml:182
+msgid "Mărimea siglelor"
+msgstr "Taille des logos"
+
+#: data/setup.xml:182
+msgid "Cât de mari sunt siglele în lista de canale. După temă: cât rândul. Mică: mai mică, cu loc mai mic, deci și numele începe mai la stânga. Mare și Foarte mare: sigla ia tot rândul și poate fi mai lată; ca să fie și mai înaltă, mărește textul listei sau alege mai puține rânduri pe pagină."
+msgstr "Quelle est la taille des logos dans la liste des chaînes. Selon le thème : comme la ligne. Petite : plus petite, avec un espace plus petit, donc le nom commence aussi plus à gauche. Grande et Très grande : le logo occupe toute la ligne et peut être plus large ; pour qu'il soit aussi plus haut, agrandis le texte de la liste ou choisis moins de lignes par page."
+
+#: data/setup.xml:184
+msgid "Tipul criptării"
+msgstr "Type de cryptage"
+
+#: data/setup.xml:184
+msgid "La canalele codate: semnul „$” sau numele sistemului de acces (Viaccess, Nagravision, Irdeto, Conax, Videoguard și altele), aflat din canal la căutare sau după ce l-ai privit o dată. Cer semnele „$” pornite mai sus."
+msgstr "Pour les chaînes cryptées : le signe « $ » ou le nom du système d'accès (Viaccess, Nagravision, Irdeto, Conax, Videoguard et autres), obtenu à partir de la chaîne lors de la recherche ou après l'avoir regardée une fois. Nécessite les repères « $ » activés ci-dessus."
+
+#: data/setup.xml:185
+msgid "Da: în dreapta rândului scrie SD, HD, UHD, Radio sau Date, după tipul trimis de canal."
+msgstr "Oui : à droite de la ligne est écrit SD, HD, UHD, Radio ou Données, selon le type envoyé par la chaîne."
+
+#: data/setup.xml:188
+msgid "Bară sau procent"
+msgstr "Barre ou pourcentage"
+
+#: data/setup.xml:188
+msgid "Bară: cât a trecut din emisiune, desenat. Procent: același lucru scris, de pildă 45%."
+msgstr "Barre : la part écoulée de l'émission, dessinée. Pourcentage : la même chose écrite, par exemple 45 %."
+
+#: data/setup.xml:189
+msgid "Mărimea barei de progres"
+msgstr "Taille de la barre de progression"
+
+#: data/setup.xml:189
+msgid "Lățimea și grosimea barei de progres, câte 10% pe pas. Ca textul listei: urmează mărimea textului."
+msgstr "La largeur et l'épaisseur de la barre de progression, par pas de 10 %. Comme le texte de la liste : suit la taille du texte."
+
+#: data/setup.xml:191
+msgid "Emisiunea pe coloană separată"
+msgstr "Émission sur une colonne séparée"
+
+#: data/setup.xml:191
+msgid "Da: numele canalului în stânga, emisiunea de acum într-o coloană a ei, care începe în același loc pe toate rândurile. Nu: emisiunea vine imediat după nume."
+msgstr "Oui : le nom de la chaîne à gauche, l'émission en cours dans sa propre colonne, qui commence au même endroit sur toutes les lignes. Non : l'émission vient immédiatement après le nom."
+
+#: lib/python/Components/HdsListaSetari.py:40
+msgid "Ca textul listei"
+msgstr "Comme le texte de la liste"
+
+#: lib/python/Components/HdsListaSetari.py:42
+msgid "Mică"
+msgstr "Petit"
+
+#: lib/python/Components/HdsListaSetari.py:42
+msgid "Mare"
+msgstr "Grand"
+
+#: lib/python/Components/HdsListaSetari.py:43
+msgid "Foarte mare"
+msgstr "Très grand"
+
+#: lib/python/Components/HdsListaSetari.py:55
+msgid "Bară"
+msgstr "Barre"
+
+#: lib/python/Components/HdsListaSetari.py:55
+msgid "Procent (de pildă 45%)"
+msgstr "Pourcentage (par exemple 45%)"
+
+#: lib/python/Components/HdsListaSetari.py:59
+msgid "Semnul „$”"
+msgstr "Signe « $ »"
+
+#: lib/python/Components/HdsListaSetari.py:59
+msgid "Sistemul de acces (Viaccess, Nagravision...)"
+msgstr "Système d'accès (Viaccess, Nagravision...)"
+
+#: lib/python/Components/ServiceList.py:807
+msgid "UHD"
+msgstr "UHD"
+
+#: lib/python/Components/ServiceList.py:807
+msgid "Serviciu date"
+msgstr "Service de données"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:2487
+msgid "Canalul de pornire nu se poate alege pe acest receptor."
+msgstr "La chaîne de démarrage ne peut pas être choisie sur ce récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:2492
+msgid "Receptorul va porni pe acest canal după o repornire."
+msgstr "Le récepteur démarrera sur cette chaîne après un redémarrage."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:2493
+msgid "Receptorul va porni pe ultimul canal urmărit."
+msgstr "Le récepteur démarrera sur la dernière chaîne regardée."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:4525
+msgid "Receptorul pornește pe acest canal. Apasă ca să pornească pe ultimul canal urmărit."
+msgstr "Le récepteur démarre sur cette chaîne. Appuie pour démarrer sur la dernière chaîne regardée."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:4526
+msgid "Pornește pe acest canal după o repornire"
+msgstr "Démarre sur cette chaîne après un redémarrage"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:4527
+msgid "Canalul de pornire:"
+msgstr "Chaîne de démarrage :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:4528
+msgid "Pornește pe acest canal:"
+msgstr "Démarre sur cette chaîne :"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:4529
+msgid "Canalul de pornire nu s-a schimbat."
+msgstr "La chaîne de démarrage n'a pas changé."
+
+#: lib/python/Screens/ChannelSelection.py:220
+msgid "Nu mai porni pe acest canal"
+msgstr "Ne démarre plus sur cette chaîne"
+
+#: lib/python/Screens/ChannelSelection.py:222
+msgid "Pornește pe acest canal"
+msgstr "Démarre sur cette chaîne"
+
+#: lib/python/Screens/InfoBarGenerics.py:578
+msgid "Un canal ales"
+msgstr "Une chaîne choisie"
+
+#: lib/python/Components/HdsJurnalZapFlux.py:80
+msgid "Canalul nu a putut fi deschis."
+msgstr "La chaîne n'a pas pu être ouverte."
+
+#: lib/python/Components/HdsJurnalZapFlux.py:81
+msgid "Canalul s-a oprit singur."
+msgstr "La chaîne s'est arrêtée toute seule."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:187
+msgid "Ordinea meniului nu se poate schimba pe acest receptor."
+msgstr "L'ordre du menu ne peut pas être modifié sur ce récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:191
+msgid "Toate meniurile au ordinea din fabrică."
+msgstr "Tous les menus ont l'ordre d'usine."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:197
+msgid "Meniul nu e pe receptor."
+msgstr "Le menu n'est pas sur le récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:201
+msgid "Meniul are ordinea din fabrică."
+msgstr "Le menu a l'ordre d'usine."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:208
+msgid "Ordinea s-a schimbat și pe televizor."
+msgstr "L'ordre a aussi changé sur le téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:211
+msgid "Intrarea e ascunsă pe televizor."
+msgstr "L'entrée est masquée sur le téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:211
+msgid "Intrarea se vede din nou pe televizor."
+msgstr "L'entrée est de nouveau visible sur le téléviseur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:215
+msgid "Intrarea e deja la capăt."
+msgstr "L'entrée est déjà à une extrémité."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:706
+msgid "Aranjează meniul"
+msgstr "Organiser le menu"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:707
+msgid "Ordinea din fabrică pentru tot meniul"
+msgstr "Ordre d'usine pour tout le menu"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:708
+msgid "Mută intrările cu săgețile și bifează ce nu vrei să vezi în meniul de pe televizor. Se salvează pe loc; intrările ascunse rămân aici și în căutare. Pe televizor: MENU pe o intrare."
+msgstr "Déplace les entrées avec les flèches et coche ce que tu ne veux pas voir dans le menu du téléviseur. C'est enregistré immédiatement ; les entrées masquées restent ici et dans la recherche. Sur le téléviseur : MENU sur une entrée."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:712
+msgid "ascunsă pe televizor"
+msgstr "masquée sur le téléviseur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:714
+msgid "Mai sus"
+msgstr "Plus haut"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:715
+msgid "Mai jos"
+msgstr "Plus bas"
+
+#: lib/python/Screens/Menu.py:84
+#, python-format
+msgid "%s (ascunsă)"
+msgstr "%s (masquée)"
+
+#: lib/python/Screens/Menu.py:672
+#, python-format
+msgid "Mută mai sus „%s”"
+msgstr "Déplacer plus haut « %s »"
+
+#: lib/python/Screens/Menu.py:674
+#, python-format
+msgid "Mută mai jos „%s”"
+msgstr "Déplacer plus bas « %s »"
+
+#: lib/python/Screens/Menu.py:680
+#, python-format
+msgid "Arată din nou „%s”"
+msgstr "Affiche de nouveau « %s »"
+
+#: lib/python/Screens/Menu.py:682
+#, python-format
+msgid "Ascunde „%s”"
+msgstr "Masque « %s »"
+
+#: lib/python/Screens/Menu.py:686
+msgid "Nu mai arăta intrările ascunse"
+msgstr "N'affiche plus les entrées masquées"
+
+#: lib/python/Screens/Menu.py:688
+#, python-format
+msgid "Arată intrările ascunse (%d)"
+msgstr "Affiche les entrées masquées (%d)"
+
+#: lib/python/Screens/Menu.py:690
+msgid "Ordinea din fabrică a acestui meniu"
+msgstr "Ordre d'usine de ce menu"
+
+#: lib/python/Tools/HdsNumeData.py:40
+msgid "January (after the day number)"
+msgstr "janvier"
+
+#: lib/python/Tools/HdsNumeData.py:40
+msgid "February (after the day number)"
+msgstr "février"
+
+#: lib/python/Tools/HdsNumeData.py:41
+msgid "March (after the day number)"
+msgstr "mars"
+
+#: lib/python/Tools/HdsNumeData.py:41
+msgid "April (after the day number)"
+msgstr "avril"
+
+#: lib/python/Tools/HdsNumeData.py:41
+msgid "May (after the day number)"
+msgstr "mai"
+
+#: lib/python/Tools/HdsNumeData.py:42
+msgid "June (after the day number)"
+msgstr "juin"
+
+#: lib/python/Tools/HdsNumeData.py:42
+msgid "July (after the day number)"
+msgstr "juillet"
+
+#: lib/python/Tools/HdsNumeData.py:42
+msgid "August (after the day number)"
+msgstr "août"
+
+#: lib/python/Tools/HdsNumeData.py:43
+msgid "September (after the day number)"
+msgstr "septembre"
+
+#: lib/python/Tools/HdsNumeData.py:43
+msgid "October (after the day number)"
+msgstr "octobre"
+
+#: lib/python/Tools/HdsNumeData.py:43
+msgid "November (after the day number)"
+msgstr "novembre"
+
+#: lib/python/Tools/HdsNumeData.py:44
+msgid "December (after the day number)"
+msgstr "décembre"
+
+#: data/menu.xml:754
+msgid "Pornire multiplă Vu+ (Kexec)"
+msgstr "Démarrage multiple Vu+ (Kexec)"
+
+#: data/menu.xml:796
+msgid "Ghidul TV din internet"
+msgstr "Guide TV depuis Internet"
+
+#: lib/python/Components/HdsActualizari.py:227
+msgid "Actualizarea de dinainte a rămas neterminată. La instalare pachetele ei se pun din nou, din feedul HD Satelit."
+msgstr "La mise à jour précédente est restée inachevée. Lors de l'installation, ses paquets sont réinstallés depuis le dépôt HD Satelit."
+
+#: lib/python/Components/HdsAsistentaCatalog.py:72
+msgid "fluxul prins acum de tunerul canalului deschis sau, cu un transponder dat, de un tuner liber, fără să schimbe canalul: TSID, ONID, rețeaua și poziția satelitului din tabelele primite, numai citire"
+msgstr "le flux actuellement capté par le tuner de la chaîne ouverte ou, avec un transpondeur donné, par un tuner libre, sans changer de chaîne : TSID, ONID, le réseau et la position du satellite d'après les tables reçues, lecture seule"
+
+#: lib/python/Components/HdsAsistentaCatalog.py:82
+msgid "termină o actualizare rămasă la jumătate: caută în feedul HD Satelit, pune din nou pachetele imaginii rămase neterminate și repornește interfața (numai cu Control complet)"
+msgstr "termine une mise à jour restée à moitié : cherche dans le dépôt HD Satelit, réinstalle les paquets de l'image restés inachevés et redémarre l'interface (uniquement avec Contrôle total)"
+
+#: lib/python/Components/HdsCautareOarba.py:299
+msgid "Și sub 1 MSym/s (mai lent)"
+msgstr "Et en dessous de 1 MSym/s (plus lent)"
+
+#: lib/python/Components/HdsDespreFilm.py:369
+msgid "Cheia TMDB nu mai e pusă."
+msgstr "La clé TMDB n'est plus saisie."
+
+#: lib/python/Components/HdsDespreFilm.py:405
+msgid "TMDB nu primește cheia: verific-o pe themoviedb.org."
+msgstr "TMDB n'accepte pas la clé : vérifie-la sur themoviedb.org."
+
+#: lib/python/Components/HdsDespreFilm.py:406
+msgid "TMDB nu răspunde acum."
+msgstr "TMDB ne répond pas maintenant."
+
+#: lib/python/Components/HdsDespreFilm.py:448
+msgid "Cheia TMDB nu s-a putut șterge."
+msgstr "La clé TMDB n'a pas pu être supprimée."
+
+#: lib/python/Components/HdsDespreFilm.py:450
+msgid "Cheia TMDB a fost ștearsă. Datele vin numai din Wikidata și Wikipedia."
+msgstr "La clé TMDB a été supprimée. Les données proviennent uniquement de Wikidata et Wikipedia."
+
+#: lib/python/Components/HdsDespreFilm.py:453
+msgid "Nu pare o cheie TMDB: pune cheia API (32 de semne) sau tokenul de citire din contul tău de pe themoviedb.org."
+msgstr "Cela ne ressemble pas à une clé TMDB : saisis la clé API (32 caractères) ou le jeton de lecture depuis ton compte themoviedb.org."
+
+#: lib/python/Components/HdsDespreFilm.py:465
+msgid "Cheia TMDB nu s-a putut scrie pe receptor."
+msgstr "La clé TMDB n'a pas pu être écrite sur le récepteur."
+
+#: lib/python/Components/HdsDespreFilm.py:467
+msgid "Cheia TMDB e pusă."
+msgstr "La clé TMDB est saisie."
+
+#: lib/python/Components/HdsDespreFilm.py:474
+#, python-format
+msgid "Cheia ta TMDB e pusă (se termină în %s): ce lipsește din Wikidata (afișul, descrierea, notele) vine din TMDB."
+msgstr "Ta clé TMDB est enregistrée (se termine par %s) : ce qui manque de Wikidata (l'affiche, la description, les notes) vient de TMDB."
+
+#: lib/python/Components/HdsDespreFilm.py:475
+msgid "Fără cheie TMDB: datele vin numai din Wikidata și Wikipedia. Cheia ta gratuită de pe themoviedb.org adaugă afișul și notele care lipsesc."
+msgstr "Sans clé TMDB : les données proviennent uniquement de Wikidata et Wikipedia. Ta clé gratuite sur themoviedb.org ajoute l'affiche et les notes manquantes."
+
+#: lib/python/Components/HdsDespreFilm.py:512
+msgid "TMDB primește cheia."
+msgstr "TMDB reçoit la clé."
+
+#: lib/python/Components/HdsDespreFilm.py:528
+msgid "TMDB nu răspunde acum; o încerc la următorul film."
+msgstr "TMDB ne répond pas maintenant ; je réessaie au prochain film."
+
+#: lib/python/Components/HdsDespreFilm.py:729
+msgid "Acest produs folosește API-ul TMDB, dar nu este aprobat sau certificat de TMDB."
+msgstr "Ce produit utilise l'API TMDB, mais n'est ni approuvé ni certifié par TMDB."
+
+#: lib/python/Components/HdsEditorSateliti.py:666
+msgid "Satelitul nu are nume sau poziție."
+msgstr "Le satellite n'a ni nom ni position."
+
+#: lib/python/Components/HdsExtensiiLucru.py:1781
+#, python-format
+msgid "%s este făcut pentru alt Python"
+msgstr "%s est conçu pour un autre Python"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1782
+#, python-format
+msgid "%(nume)s nu se instalează: e făcut pentru Python %(alt)s, iar imaginea are Python %(acum)s. Cere autorului varianta pentru Python %(acum)s."
+msgstr "%(nume)s ne s'installe pas : il est conçu pour Python %(alt)s, alors que l'image utilise Python %(acum)s. Demande à l'auteur la version pour Python %(acum)s."
+
+#: lib/python/Components/HdsGhidInternet.py:107
+msgid "Vatican"
+msgstr "Vatican"
+
+#: lib/python/Components/HdsGhidInternet.py:109
+msgid "Marea Britanie"
+msgstr "Royaume-Uni"
+
+#: lib/python/Components/HdsGhidInternet.py:117
+#, python-format
+msgid "Pentru %s nu avem încă o sursă liberă de ghid din internet. Poți alege altă țară."
+msgstr "Pour %s, nous n'avons pas encore de source gratuite de guide sur Internet. Tu peux choisir un autre pays."
+
+#: lib/python/Components/HdsGhidInternet.py:118
+msgid "Nu știu încă în ce țară ești. Alege țara ta."
+msgstr "Je ne sais pas encore dans quel pays tu es. Choisis ton pays."
+
+#: lib/python/Components/HdsGhidInternet.py:119
+#, python-format
+msgid "Alege țara ghidului: %s sau %s."
+msgstr "Choisis le pays du guide : %s ou %s."
+
+#: lib/python/Components/HdsGhidInternet.py:398
+#, python-format
+msgid "Țara: %s"
+msgstr "Pays : %s"
+
+#: lib/python/Components/HdsGhidInternet.py:406
+#, python-format
+msgid "Sursele: %s"
+msgstr "Les sources : %s"
+
+#: lib/python/Components/HdsGhidInternet.py:408
+#, python-format
+msgid "Importul se face zilnic la %s."
+msgstr "L'importation se fait chaque jour à %s."
+
+#: lib/python/Components/HdsGhidInternet.py:410
+#, python-format
+msgid "Ultimul import: %s"
+msgstr "Dernier import : %s"
+
+#: lib/python/Components/HdsGhidInternet.py:421
+msgid "Ghidul TV din internet se pregătește deja. Așteaptă puțin."
+msgstr "Le guide TV Internet se prépare déjà. Attends un peu."
+
+#: lib/python/Components/HdsGhidInternet.py:443
+msgid "Alt program instalează acum pachete. Încearcă din nou peste un minut."
+msgstr "Un autre programme installe des paquets en ce moment. Réessaie dans une minute."
+
+#: lib/python/Components/HdsGhidInternet.py:474
+msgid "EPG Import nu se poate instala."
+msgstr "EPG Import ne peut pas être installé."
+
+#: lib/python/Components/HdsGhidInternet.py:478
+msgid "Se instalează EPG Import..."
+msgstr "Installation d'EPG Import..."
+
+#: lib/python/Components/HdsGhidInternet.py:486
+#, python-format
+msgid "EPG Import nu s-a instalat: %s"
+msgstr "EPG Import ne s'est pas installé : %s"
+
+#: lib/python/Components/HdsGhidInternet.py:507
+msgid "Se bifează sursele..."
+msgstr "Cochage des sources..."
+
+#: lib/python/Components/HdsGhidInternet.py:510
+#, python-format
+msgid "Lista surselor EPG Import nu are încă surse pentru %s."
+msgstr "La liste des sources d'EPG Import n'a pas encore de sources pour %s."
+
+#: lib/python/Components/HdsGhidInternet.py:515
+#, python-format
+msgid "Alegerea surselor nu s-a putut scrie: %s"
+msgstr "Le choix des sources n'a pas pu être écrit : %s"
+
+#: lib/python/Components/HdsGhidInternet.py:531
+msgid "Sursele sunt bifate; importul pornește după repornirea interfeței."
+msgstr "Les sources sont cochées ; l'importation démarre après le redémarrage de l'interface."
+
+#: lib/python/Components/HdsGhidInternet.py:536
+msgid "Importul era deja în lucru."
+msgstr "L'importation était déjà en cours."
+
+#: lib/python/Components/HdsGhidInternet.py:539
+msgid "Importul a început."
+msgstr "L'importation a commencé."
+
+#: lib/python/Components/HdsGhidInternet.py:542
+#, python-format
+msgid "Sursele sunt bifate, dar importul nu a pornit: %s"
+msgstr "Les sources sont cochées, mais l'importation n'a pas démarré : %s"
+
+#: lib/python/Components/HdsGhidInternet.py:545
+#, python-format
+msgid "Ghidul TV din internet pentru %s e pornit. %s Se repetă zilnic la %s."
+msgstr "Le guide TV Internet pour %s est activé. %s Il se répète chaque jour à %s."
+
+#: lib/python/Components/HdsImportSurse.py:411
+msgid "Trimisă din calculator"
+msgstr "Envoyée depuis l'ordinateur"
+
+#: lib/python/Components/HdsImportSurse.py:823
+msgid "Alege o arhivă de copie: .tar.gz, .tgz, .tar, .tar.bz2 sau .tar.xz."
+msgstr "Choisis une archive de sauvegarde : .tar.gz, .tgz, .tar, .tar.bz2 ou .tar.xz."
+
+#: lib/python/Components/HdsImportSurse.py:825
+msgid "Fișierul trimis e gol."
+msgstr "Le fichier envoyé est vide."
+
+#: lib/python/Components/HdsImportSurse.py:827
+#, python-format
+msgid "Arhiva e prea mare: cel mult %d MB."
+msgstr "L'archive est trop volumineuse : au maximum %d Mo."
+
+#: lib/python/Components/HdsImportSurse.py:829
+msgid "Arhiva nu se poate scrie pe receptor."
+msgstr "L'archive ne peut pas être écrite sur le récepteur."
+
+#: lib/python/Components/HdsImportSurse.py:856
+msgid "În arhivă nu am găsit o listă de canale sau setări."
+msgstr "Dans l'archive, je n'ai trouvé ni liste de chaînes ni réglages."
+
+#: lib/python/Components/HdsMultumiri.py:367
+msgid "pluginul YouTube din feedul nostru"
+msgstr "le plugin YouTube de notre dépôt"
+
+#: lib/python/Components/HdsMultumiri.py:368
+msgid "pluginul MovieCut din feedul nostru"
+msgstr "le plugin MovieCut de notre dépôt"
+
+#: lib/python/Components/HdsMultumiri.py:369
+msgid "pluginul SubsSupport din feedul nostru"
+msgstr "le plugin SubsSupport de notre dépôt"
+
+#: lib/python/Components/HdsMultumiri.py:370
+msgid "pluginul Enhanced Movie Center din feedul nostru"
+msgstr "le plugin Enhanced Movie Center de notre dépôt"
+
+#: lib/python/Components/HdsMultumiri.py:371
+msgid "pluginurile XStreamity și Jedi EPG XStream din feedul nostru"
+msgstr "les plugins XStreamity et Jedi EPG XStream de notre dépôt"
+
+#: lib/python/Components/HdsMultumiri.py:372
+msgid "pluginurile Command Center, TV Garden, freearhey, Smart TV Channel List, RSS Reader, Filmon și mmPicons din feedul nostru"
+msgstr "les plugins Command Center, TV Garden, freearhey, Smart TV Channel List, RSS Reader, Filmon et mmPicons de notre dépôt"
+
+#: lib/python/Components/HdsMultumiri.py:373
+msgid "piconurile și temele pe care le descarcă mmPicons"
+msgstr "les picons et les thèmes que mmPicons télécharge"
+
+#: lib/python/Components/HdsMultumiri.py:374
+msgid "pluginul KidsSafe Bouquets din feedul nostru"
+msgstr "le plugin KidsSafe Bouquets de notre dépôt"
+
+#: lib/python/Components/HdsMultumiri.py:375
+msgid "pluginul GT IPTV Player Pro din feedul nostru"
+msgstr "le plugin GT IPTV Player Pro de notre dépôt"
+
+#: lib/python/Components/HdsPornireMultipla.py:1586
+msgid "Pornirea multiplă Kexec ține mai multe imagini pe receptor. Imaginea de acum rămâne în memorie ca Recovery, iar în locurile 1, 2 și 3 (și pe stick sau HDD) poți pune alte imagini. Alegi imaginea din Repornește în altă imagine sau din meniul de la pornire (tasta MENU). Instalarea descarcă fișierele, scrie încărcătorul Kexec în partiția nucleului (nucleul de acum rămâne păstrat pentru Recovery) și repornește receptorul."
+msgstr "Le démarrage multiple Kexec conserve plusieurs images sur le récepteur. L'image actuelle reste en mémoire comme Recovery, et dans les emplacements 1, 2 et 3 (et sur clé USB ou HDD) tu peux installer d'autres images. Tu choisis l'image depuis Redémarrer sur une autre image ou depuis le menu de démarrage (touche MENU). L'installation télécharge les fichiers, écrit le chargeur Kexec dans la partition du noyau (le noyau actuel reste conservé pour Recovery) et redémarre le récepteur."
+
+#: lib/python/Components/HdsPornireMultipla.py:1591
+msgid "Instalez pornirea multiplă Kexec? Receptorul scrie încărcătorul Kexec în partiția nucleului și repornește. Nu-l opri în timpul instalării. Continui?"
+msgstr "Installer le démarrage multiple Kexec ? Le récepteur écrit le chargeur Kexec dans la partition du noyau et redémarre. Ne l'éteins pas pendant l'installation. Tu continues ?"
+
+#: lib/python/Components/HdsPornireMultipla.py:1593
+msgid "Descarc fișierele pornirii multiple..."
+msgstr "Je télécharge les fichiers du démarrage multiple..."
+
+#: lib/python/Components/HdsPornireMultipla.py:1594
+msgid "Instalez pornirea multiplă. Nu opri receptorul..."
+msgstr "J'installe le démarrage multiple. N'éteins pas le récepteur..."
+
+#: lib/python/Components/HdsPornireMultipla.py:1595
+msgid "Pornirea multiplă Kexec e instalată. Receptorul repornește."
+msgstr "Le démarrage multiple Kexec est installé. Le récepteur redémarre."
+
+#: lib/python/Components/HdsPornireMultipla.py:1596
+msgid "Pornirea multiplă Kexec e deja instalată pe acest receptor."
+msgstr "Le démarrage multiple Kexec est déjà installé sur ce récepteur."
+
+#: lib/python/Components/HdsPornireMultipla.py:1597
+msgid "Receptorul nu pornește acum direct din memoria lui, deci nu instalez pornirea multiplă."
+msgstr "Le récepteur ne démarre pas actuellement directement depuis sa mémoire, donc je n'installe pas le démarrage multiple."
+
+#: lib/python/Components/HdsPornireMultipla.py:1598
+msgid "Pornirea multiplă Kexec se instalează numai pe receptoarele Vu+ 4K."
+msgstr "Le démarrage multiple Kexec s'installe uniquement sur les récepteurs Vu+ 4K."
+
+#: lib/python/Components/HdsPornireMultipla.py:1599
+msgid "Nu am putut descărca fișierele pornirii multiple. Verifică internetul și încearcă din nou."
+msgstr "Je n'ai pas pu télécharger les fichiers du démarrage multiple. Vérifie Internet et réessaie."
+
+#: lib/python/Components/HdsPornireMultipla.py:1600
+msgid "Fișierele pornirii multiple sunt pentru alt receptor, deci nu le scriu."
+msgstr "Les fichiers du démarrage multiple sont pour un autre récepteur, donc je ne les écris pas."
+
+#: lib/python/Components/HdsPornireMultipla.py:1601
+msgid "Fișierele pornirii multiple nu sunt bune, deci nu le scriu."
+msgstr "Les fichiers du démarrage multiple ne sont pas bons, donc je ne les écris pas."
+
+#: lib/python/Components/HdsPornireMultipla.py:1602
+msgid "Nu recunosc nucleul din partiția receptorului, deci nu scriu nimic."
+msgstr "Je ne reconnais pas le noyau de la partition du récepteur, donc je n'écris rien."
+
+#: lib/python/Components/HdsPornireMultipla.py:1603
+msgid "Nu e destul loc liber în memoria receptorului pentru copia nucleului."
+msgstr "Il n'y a pas assez d'espace libre dans la mémoire du récepteur pour la copie du noyau."
+
+#: lib/python/Components/HdsPornireMultipla.py:1604
+msgid "Instalarea nu a reușit. Receptorul rămâne cum era."
+msgstr "L'installation a échoué. Le récepteur reste comme il était."
+
+#: lib/python/Components/HdsPornireMultipla.py:1605
+msgid "Scrierea nucleului a eșuat și nucleul vechi nu s-a putut pune la loc. Nu reporni receptorul: pune imaginea Vu+ pe un stick USB și pornește receptorul de pe el."
+msgstr "L'écriture du noyau a échoué et l'ancien noyau n'a pas pu être remis en place. Ne redémarre pas le récepteur : mets l'image Vu+ sur une clé USB et démarre le récepteur depuis celle-ci."
+
+#: lib/python/Components/HdsTraducereSubtitrari.py:1266
+#, python-format
+msgid "Poți folosi și subtitrări gata făcute în %s: tasta SUB, apoi „Caută subtitrări pe internet”."
+msgstr "Tu peux aussi utiliser des sous-titres prêts à l'emploi en %s : touche SUB, puis « Chercher des sous-titres sur Internet »."
+
+#: lib/python/Components/HdsTransmisie.py:582
+msgid "Acest canal trimite imaginea în H.264, iar acest browser nu o poate decoda (de pildă Opera sau Chromium pe Linux, fără codecurile video ale sistemului). Încearcă Chrome, Edge sau Firefox, sau un player din casă."
+msgstr "Cette chaîne envoie l'image en H.264, et ce navigateur ne peut pas la décoder (par exemple Opera ou Chromium sur Linux, sans les codecs vidéo du système). Essaie Chrome, Edge ou Firefox, ou un lecteur vidéo installé sur l'ordinateur."
+
+#: lib/python/Components/VideoOutput.py:387
+msgid "Întregi, cu benzi negre sus și jos"
+msgstr "Entiers, avec bandes noires en haut et en bas"
+
+#: lib/python/Components/VideoOutput.py:388
+msgid "Mărite, tăiate în lateral"
+msgstr "Agrandis, coupés sur les côtés"
+
+#: lib/python/Components/VideoOutput.py:389
+msgid "Întinse pe tot ecranul"
+msgstr "Étirés sur tout l'écran"
+
+#: lib/python/Components/VideoOutput.py:395
+msgid "Filmele mai late de 16:9"
+msgstr "Les films plus larges que 16:9"
+
+#: lib/python/Components/VideoOutput.py:400
+msgid "Cum se văd filmele mai late decât ecranul (2,35:1, 2,39:1). Întregi: cu benzi negre sus și jos, fără deformare."
+msgstr "Comment s'affichent les films plus larges que l'écran (2,35:1, 2,39:1). Entiers : avec bandes noires en haut et en bas, sans déformation."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/alimentare_web.py:891
+msgid "Pe televizor: __DRUM_KEXEC__."
+msgstr "Sur le téléviseur : __DRUM_KEXEC__."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:362
+msgid "Cheia ta TMDB (opțional)"
+msgstr "Ta clé TMDB (facultative)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:362
+msgid "Cheia API sau tokenul de citire de pe themoviedb.org"
+msgstr "Clé API ou jeton de lecture de themoviedb.org"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:362
+msgid "Cheia TMDB"
+msgstr "Clé TMDB"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:364
+msgid "Cu cheia ta gratuită, afișul, descrierea și notele care lipsesc din Wikidata vin din TMDB. Fără cheie nu se trimite nimic la TMDB."
+msgstr "Avec ta clé gratuite, l’affiche, la description et les notes qui manquent dans Wikidata viennent de TMDB. Sans clé, rien n’est envoyé à TMDB."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/despre_film_web.py:371
+msgid "Scrie cheia sau apasă Șterge cheia."
+msgstr "Saisis la clé ou appuie sur Supprimer la clé."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4255
+msgid "Pune la loc sateliții din imagine"
+msgstr "Restaurer les satellites de l'image"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4256
+msgid "Lista sateliților e mai scurtă decât cea a imaginii (de obicei o aduce o listă de canale din alt panou). Sateliții lipsă se adaugă din lista imaginii; ce ai în listă rămâne. Sateliții pe care ai canale se pun singuri la pornire."
+msgstr "La liste des satellites est plus courte que celle de l’image (en général, elle provient d’une liste de chaînes d’un autre panneau). Les satellites manquants sont ajoutés depuis la liste de l’image ; ce que tu as dans la liste reste. Les satellites sur lesquels tu as des chaînes sont ajoutés automatiquement au démarrage."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:182
+msgid "Programul canalelor din internet, pentru țara ta, cu un singur buton: EPG Import se instalează dacă lipsește, se bifează sursele țării, iar importul pornește acum și apoi zilnic."
+msgstr "Le programme des chaînes sur Internet, pour ton pays, en un seul bouton : EPG Import s’installe s’il manque, les sources du pays sont cochées, et l’import démarre maintenant puis quotidiennement."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:187
+msgid "Țara: "
+msgstr "Le pays : "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:187
+msgid "Pentru această țară nu avem încă o sursă liberă de ghid din internet. Poți alege altă țară."
+msgstr "Pour ce pays, nous n’avons pas encore de source libre de guide sur Internet. Tu peux choisir un autre pays."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:188
+msgid "Alege țara ghidului: "
+msgstr "Choisis le pays du guide : "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:188
+msgid " sau "
+msgstr " ou "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:188
+msgid "Sursele: "
+msgstr "Sources : "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:189
+msgid "EPG Import este instalat."
+msgstr "EPG Import est installé."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:189
+msgid "EPG Import se instalează la pornire."
+msgstr "EPG Import s’installe au démarrage."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:189
+msgid "Importul se face zilnic la "
+msgstr "L’import se fait quotidiennement à "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:190
+msgid "Ultimul import: "
+msgstr "Dernier import : "
+
+#: lib/python/Plugins/Extensions/HdsWebControl/ghid_internet_web.py:190
+msgid "Alege țara ta."
+msgstr "Choisis ton pays."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py:218
+#, python-format
+msgid "Arhiva %s a ajuns pe receptor. Alege ce se importă, apoi Importă."
+msgstr "L'archive %s est arrivée sur le récepteur. Choisis ce qui est importé, puis Importer."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py:267
+msgid "Se scrie încă arhiva de dinainte. Încearcă din nou."
+msgstr "L'archive précédente est encore en cours d'écriture. Réessaie."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py:273
+#, python-format
+msgid "Nu am putut citi arhiva: %s"
+msgstr "Je n'ai pas pu lire l'archive : %s"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py:637
+msgid "Trimite o copie din calculator"
+msgstr "Envoie une copie depuis l'ordinateur"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py:638
+msgid "Copia făcută pe altă imagine (arhiva .tar.gz cu lista de canale și setările) se poate trimite și din calculator, fără stick."
+msgstr "La copie faite sur une autre image (l'archive .tar.gz avec la liste des chaînes et les réglages) peut aussi être envoyée depuis l'ordinateur, sans clé USB."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py:652
+msgid "Arhiva e prea mare: cel mult 32 MB."
+msgstr "L'archive est trop volumineuse : 32 Mo maximum."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py:653
+msgid "Se trimite arhiva..."
+msgstr "Envoi de l'archive..."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:124
+msgid "Acest browser nu poate decoda imaginea H.264 a acestui canal (de pildă Opera sau Chromium pe Linux, fără codecurile video ale sistemului). Încearcă Chrome, Edge sau Firefox, sau un player din casă."
+msgstr "Ce navigateur ne peut pas décoder l'image H.264 de cette chaîne (par exemple Opera ou Chromium sur Linux, sans les codecs vidéo du système). Essaie Chrome, Edge ou Firefox, ou un lecteur vidéo local."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/tv_web.py:125
+msgid "Acest browser nu poate decoda imaginea H.264 a acestui canal (de pildă Opera sau Chromium pe Linux, fără codecurile video ale sistemului). Deschide-l în Chrome, Edge sau Firefox, sau într-un player din casă cu playlistul de mai jos."
+msgstr "Ce navigateur ne peut pas décoder l'image H.264 de cette chaîne (par exemple Opera ou Chromium sur Linux, sans les codecs vidéo du système). Ouvre-le dans Chrome, Edge ou Firefox, ou dans un lecteur vidéo local avec la playlist ci-dessous."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py:451
+msgid "Fișierul WireGuard (.conf) are totul înăuntru: nu cere cont, nume, parolă sau token."
+msgstr "Le fichier WireGuard (.conf) contient tout : il ne demande ni compte, ni nom, ni mot de passe, ni token."
+
+#: lib/python/Screens/HdsDespreFilm.py:135
+msgid "Lipește sau scrie cheia API sau tokenul de citire; gol = șterge cheia."
+msgstr "Colle ou saisis la clé API ou le token de lecture ; vide = supprime la clé."
+
+#: lib/python/Screens/HdsDespreFilm.py:143
+msgid "Verific cheia la TMDB..."
+msgstr "Vérification de la clé sur TMDB..."
+
+#: lib/python/Screens/HdsEditorCanale.py:2978
+#, python-format
+msgid "Pune la loc sateliții din imagine (%d)"
+msgstr "Restaurer les satellites de l'image (%d)"
+
+#: lib/python/Screens/HdsGhidInternet.py:30
+msgid "Altă țară"
+msgstr "Autre pays"
+
+#: lib/python/Screens/HdsGhidInternet.py:66
+msgid "Țara ghidului TV din internet"
+msgstr "Le pays du guide TV Internet"
+
+#: lib/python/Screens/PositionerSetup.py:201
+msgid "privit din spatele antenei"
+msgstr "vu depuis l'arrière de l'antenne"
+
+#: lib/python/Screens/HdsEditorCanale.py:2157
+#, python-format
+msgid "Pus la loc %d satelit din lista imaginii. Se vede după repornirea interfeței."
+msgid_plural "Puși la loc %d sateliți din lista imaginii. Se văd după repornirea interfeței."
+msgstr[0] "%d satellite restauré de la liste de l'image. Cela se voit après le redémarrage de l'interface."
+msgstr[1] "%d satellites restaurés de la liste de l'image. Cela se voit après le redémarrage de l'interface."
+
+#: data/menu.xml:605
+msgid "Partajare în rețea (Samba)"
+msgstr "Partage en réseau (Samba)"
+
+#: data/setup.xml:298
+msgid "Da: dosarele receptorului se văd din calculatorul sau telefonul din casă (Windows, Mac, VLC, Kodi), ca dosar de rețea. Dacă serverul Samba lipsește, se instalează singur din feedul imaginii. Din afara casei nu intră nimeni. Nu: serverul se oprește."
+msgstr "Oui : les dossiers du récepteur se voient depuis l'ordinateur ou le téléphone de la maison (Windows, Mac, VLC, Kodi), comme un dossier réseau. Si le serveur Samba manque, il s'installe tout seul depuis le flux de l'image. De l'extérieur de la maison, personne n'entre. Non : le serveur s'arrête."
+
+#: data/setup.xml:299
+msgid "Dosarul din rețea"
+msgstr "Dossier réseau"
+
+#: data/setup.xml:299
+msgid "Ce dosar se vede în rețea. Dacă discul nu e montat, se vede /media, cu toate stickurile și discurile."
+msgstr "Quel dossier est visible sur le réseau. Si le disque n'est pas monté, /media est visible, avec toutes les clés USB et les disques."
+
+#: lib/python/Components/HdsCautaSetari.py:180
+msgid "Samba SMB partajare dosare rețea Windows Explorer NAS"
+msgstr "Samba SMB partage dossiers réseau Windows Explorer NAS"
+
+#: lib/python/Components/HdsEgalizator.py:125
+msgid "La acest post (HE-AAC) egalizatorul nu e disponibil din motive de licențiere a brevetelor HE-AAC."
+msgstr "Sur cette station (HE-AAC), l'égaliseur n'est pas disponible pour des raisons de licence des brevets HE-AAC."
+
+#: lib/python/Components/HdsEgalizator.py:146
+msgid "postul folosește HE-AAC"
+msgstr "la station utilise HE-AAC"
+
+#: lib/python/Components/HdsImportSurse.py:933
+msgid "Alege o arhivă de copie: .tar.gz, .tgz, .tar, .tar.bz2, .tar.xz sau .zip."
+msgstr "Choisis une archive de sauvegarde : .tar.gz, .tgz, .tar, .tar.bz2, .tar.xz ou .zip."
+
+#: lib/python/Components/HdsImportSurse.py:1088
+msgid "Nu am găsit nicio copie a canalelor. Pune în receptor un stick USB care are o copie: dosarul etc/enigma2 al altei imagini, un dosar cu lamedb și bouquets.tv sau o arhivă de copie (.tar.gz sau .zip), apoi alege „Caută din nou”."
+msgstr "Je n'ai trouvé aucune copie des chaînes. Mets dans le récepteur une clé USB qui contient une copie : le dossier etc/enigma2 d'une autre image, un dossier avec lamedb et bouquets.tv ou une archive de sauvegarde (.tar.gz ou .zip), puis choisis « Chercher à nouveau »."
+
+#: lib/python/Components/HdsParolaLocala.py:448
+msgid "FTP și Samba"
+msgstr "FTP et Samba"
+
+#: lib/python/Components/HdsSamba.py:81
+msgid "Discul (/media/hdd)"
+msgstr "Disque (/media/hdd)"
+
+#: lib/python/Components/HdsSamba.py:82
+msgid "Toate stickurile și discurile (/media)"
+msgstr "Toutes les clés USB et tous les disques (/media)"
+
+#: lib/python/Components/HdsSamba.py:83
+msgid "Tot receptorul (/)"
+msgstr "Tout le récepteur (/)"
+
+#: lib/python/Components/HdsSamba.py:88
+msgid "Oprită: dosarele receptorului nu se văd în rețea."
+msgstr "Désactivé : les dossiers du récepteur ne sont pas visibles sur le réseau."
+
+#: lib/python/Components/HdsSamba.py:89
+msgid "Se instalează Samba din feedul imaginii..."
+msgstr "Installation de Samba depuis le flux de l'image..."
+
+#: lib/python/Components/HdsSamba.py:91
+#, python-format
+msgid "Pornită. În Windows scrie în bara de adrese din Explorer: %s"
+msgstr "Activée. Sous Windows, écris dans la barre d'adresse d'Explorer : %s"
+
+#: lib/python/Components/HdsSamba.py:92
+#, python-format
+msgid "Pe telefon sau televizor (VLC, Kodi) și pe Mac: %s"
+msgstr "Sur le téléphone ou le téléviseur (VLC, Kodi) et sur Mac : %s"
+
+#: lib/python/Components/HdsSamba.py:93
+msgid "Utilizator: root. Parola: lasă câmpul gol."
+msgstr "Utilisateur : root. Mot de passe : laisse le champ vide."
+
+#: lib/python/Components/HdsSamba.py:94
+msgid "Utilizator: root. Parola: parola receptorului (Setări > Rețea > Parola receptorului)."
+msgstr "Utilisateur : root. Mot de passe : le mot de passe du récepteur (Paramètres > Réseau > Mot de passe du récepteur)."
+
+#: lib/python/Components/HdsSamba.py:95
+msgid "Discul nu e montat: se partajează /media, cu toate stickurile și discurile."
+msgstr "Le disque n'est pas monté : on partage /media, avec toutes les clés USB et tous les disques."
+
+#: lib/python/Components/HdsSamba.py:96
+msgid "Setarea e pornită, dar serverul Samba nu rulează."
+msgstr "Le réglage est activé, mais le serveur Samba ne fonctionne pas."
+
+#: lib/python/Components/HdsSamba.py:97
+msgid "Samba nu e încă în feedul acestei imagini. Încearcă după următoarea actualizare."
+msgstr "Samba n'est pas encore dans le flux de cette image. Réessaie après la prochaine mise à jour."
+
+#: lib/python/Components/HdsSamba.py:98
+msgid "Samba nu s-a instalat. Verifică legătura la internet, apoi alege din nou Da."
+msgstr "Samba ne s'est pas installé. Vérifie la connexion Internet, puis choisis de nouveau Oui."
+
+#: lib/python/Components/HdsSamba.py:99
+msgid "Altă instalare rulează acum. Samba se instalează la următoarea alegere sau pornire."
+msgstr "Une autre installation est en cours. Samba s'installera à la prochaine sélection ou au prochain démarrage."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:818
+msgid "Extensiile instalate care se agață de meniu apar la locul lor, ca pe televizor, și se mută sau se ascund la fel. Oprirea, repornirea și standby-ul receptorului se dau din pagina Alimentare și repornire, cu confirmare, sau din telecomandă."
+msgstr "Les extensions installées qui s'accrochent au menu apparaissent à leur place, comme sur le téléviseur, et se déplacent ou se masquent de la même manière. L'arrêt, le redémarrage et la mise en veille du récepteur se font depuis la page Alimentation et redémarrage, avec confirmation, ou depuis la télécommande."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/meniu_web.py:846
+msgid "extensie instalată"
+msgstr "extension installée"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/retea_web.py:1645
+msgid "Da: dosarele receptorului se văd din calculatorul sau telefonul din casă (Windows, Mac, VLC, Kodi), ca dosar de rețea. Dacă serverul Samba lipsește, se instalează singur din feedul imaginii. Din afara casei nu intră nimeni. Parola e cea de la FTP (Parola receptorului). Aceeași setare pe televizor: Meniu &gt; Setări &gt; Rețea și Internet &gt; Partajare în rețea (Samba)."
+msgstr "Oui : les dossiers du récepteur sont visibles depuis l'ordinateur ou le téléphone de la maison (Windows, Mac, VLC, Kodi), comme dossier réseau. Si le serveur Samba manque, il s'installe tout seul depuis le flux de l'image. Personne ne peut entrer depuis l'extérieur de la maison. Le mot de passe est celui du FTP (Mot de passe du récepteur). Le même réglage sur le téléviseur : Menu &gt; Paramètres &gt; Réseau et Internet &gt; Partage en réseau (Samba)."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_import_web.py:638
+msgid "Copia făcută pe altă imagine (arhiva .tar.gz sau .zip cu lista de canale și setările) se poate trimite și din calculator, fără stick."
+msgstr "La copie faite sur une autre image (archive .tar.gz ou .zip avec la liste des chaînes et les réglages) peut aussi être envoyée depuis l'ordinateur, sans clé USB."
+
+#: lib/python/Components/HdsSamba.py:96
+msgid "Serverul Samba rulează, pornit și făcut în afara acestei setări. Alege Da ca să-l facă receptorul."
+msgstr "Le serveur Samba est en cours d'exécution, démarré et configuré en dehors de ce réglage. Choisis Oui pour que le récepteur le prenne en charge."
+
+#: lib/python/Components/HdsSatelitiImagine.py:401
+msgid "Lista sateliților imaginii nu se găsește pe receptor."
+msgstr "La liste des satellites de l'image ne se trouve pas sur le récepteur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4271
+msgid "Înapoi la lista sateliților imaginii"
+msgstr "Revenir à la liste des satellites de l'image"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/editor_canale_web.py:4272
+msgid "Lista ta de sateliți nu e lista imaginii. Transponderele noi ale imaginii se adaugă singure la sateliții tăi, la pornire. Dacă vrei lista imaginii întreagă în locul celei a ta: sateliții și transponderele puse de tine se pierd (rămân în copia de siguranță). Se scrie când salvezi satellites.xml."
+msgstr "Ta liste de satellites n'est pas la liste de l'image. Les nouveaux transpondeurs de l'image s'ajoutent automatiquement à tes satellites, au démarrage. Si tu veux la liste complète de l'image à la place de la tienne : les satellites et les transpondeurs que tu as ajoutés sont perdus (ils restent dans la sauvegarde). Cela s'écrit quand tu enregistres satellites.xml."
+
+#: lib/python/Screens/HdsEditorCanale.py:2174
+msgid "Lista sateliților se înlocuiește cu lista imaginii. Sateliții și transponderele puse de tine se pierd; rămân în copia de siguranță."
+msgstr "La liste des satellites est remplacée par la liste de l'image. Les satellites et les transpondeurs que tu as ajoutés sont perdus ; ils restent dans la sauvegarde."
+
+#: lib/python/Screens/HdsEditorCanale.py:2176
+msgid "Pui lista imaginii?"
+msgstr "Tu mets la liste de l'image ?"
+
+#: lib/python/Screens/HdsEditorCanale.py:2187
+msgid "Lista sateliților imaginii e pusă la loc. Se vede după repornirea interfeței."
+msgstr "La liste des satellites de l'image est remise en place. Elle sera visible après le redémarrage de l'interface."
+
+#: lib/python/Components/HdsActualizari.py:185
+#, python-format
+msgid "Interfața nu mai pornea: pachetele Python ale imaginii fuseseră înlocuite de un pachet străin (%s). Le-am pus la loc din actualizările HD Satelit. Pachetul străin a rămas instalat; dacă îl folosești, cere autorului varianta pentru imaginea aceasta."
+msgstr "L'interface ne démarrait plus : les paquets Python de l'image avaient été remplacés par un paquet étranger (%s). Je les ai remis en place à partir des mises à jour HD Satelit. Le paquet étranger est resté installé ; si tu l'utilises, demande à l'auteur la version pour cette image."
+
+#: lib/python/Components/HdsActualizari.py:188
+#, python-format
+msgid "Interfața nu pornea: pachetele Python ale imaginii fuseseră înlocuite de un pachet străin (%s), iar punerea lor la loc nu a reușit. Detaliile sunt în jurnalul actualizărilor."
+msgstr "L'interface ne démarrait pas : les paquets Python de l'image avaient été remplacés par un paquet étranger (%s), et leur remise en place n'a pas réussi. Les détails sont dans le journal des mises à jour."
+
+#: lib/python/Components/HdsExtensiiLucru.py:1794
+#, python-format
+msgid "%s ar opri pornirea interfeței"
+msgstr "%s empêcherait le démarrage de l'interface"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1795
+#, python-format
+msgid "%(nume)s nu se instalează: ar înlocui %(pachet)s al imaginii (%(motiv)s), iar fără el interfața nu mai pornește. Pachetele Python ale imaginii vin numai din actualizările HD Satelit."
+msgstr "%(nume)s ne s'installe pas : il remplacerait %(pachet)s de l'image (%(motiv)s), et sans lui l'interface ne démarre plus. Les paquets Python de l'image proviennent uniquement des mises à jour HD Satelit."
+
+#: lib/python/Components/HdsExtensiiLucru.py:1798
+#, python-format
+msgid "versiunea %(versiune)s în locul celei din imagine, %(instalata)s"
+msgstr "la version %(versiune)s au lieu de celle de l'image, %(instalata)s"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1799
+msgid "pachetul spune că îl înlocuiește"
+msgstr "le paquet dit qu'il le remplace"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1800
+#, python-format
+msgid "are fișierul lui %(fisier)s"
+msgstr "a son fichier %(fisier)s"

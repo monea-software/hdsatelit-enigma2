@@ -7,7 +7,7 @@
 # marginile, ajutorul si tastele. OK alege latura (toate, sus, dreapta, jos, stanga), sagetile o muta, Verde salveaza,
 # Galben pune marginile din fabrica (0), Rosu renunta si pune inapoi ce era.
 # Logica (marginile, limitele, scrierea in driver) e in Components/HdsMargini.py, aceeasi cu pagina web /margini-ecran.
-# Cand receptorul are driverul (/proc/stb/fb/dst_apply), afisajul se micsoreaza pe loc si cadrul se deseneaza la
+# Cand receptorul are driverul (/proc/stb/fb/dst_left), afisajul se micsoreaza pe loc si cadrul se deseneaza la
 # marginea ecranului (il muta driverul); fara driver (alte receptoare, emulatorul) cadrul se deseneaza intre margini,
 # ca sa se vada unde ar ajunge.
 #

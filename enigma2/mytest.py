@@ -44,7 +44,8 @@ except Exception as e:
 # semnalul 6 lasa numai registrele, fara functia care a chemat C++-ul (rapoartele 898941 Ustym 4K PRO si 503916 SF8008, 0.7.3).
 # SIGSEGV, SIGBUS si SIGILL raman numai la bsod.cpp, neschimbate: dupa faulthandler semnalul se trimite din nou din libc, iar
 # bsod.cpp ar vedea PC-ul in libc, nu in biblioteca cazuta (enigma2.sh ia din el dovada caderilor placii 2D, „hiaccel”).
-# Raportul pornirii ia fisierul daca e din ultimele 10 minute (tools/hds-raport.sh). Fisierul se goleste la fiecare pornire.
+# Raportul pornirii ia fisierul daca e din ultimele 10 minute (tools/hds-raport.sh). Fisierul se goleste la fiecare pornire,
+# dupa ce o stiva ramasa de la caderea de dinainte e mutata in enigma2-stiva-semnal.1.txt (pe care raportul il ia la fel).
 try:
 	import ctypes as _hdsC
 	import faulthandler
@@ -58,6 +59,15 @@ try:
 			raise OSError("sigaction %d" % int(_hdsS))
 		_hdsManere.append((int(_hdsS), _hdsB))
 	_hdsOs.makedirs("/home/root/logs", exist_ok=True)
+	# 0.7.5: stiva scrisa la caderea de dinainte nu se mai pierde la pornirea urmatoare. Paznicul reporneste interfata in
+	# cateva secunde, iar raportul trimis dupa caderile repetate gasea mereu fisierul gol (rapoartele 0.7.4 de pe Ustym 4K PRO
+	# si SF8008, CER 1082): o stiva nevida se muta in enigma2-stiva-semnal.1.txt, cu ora ei, inainte de golire.
+	try:
+		_hdsCaleStiva = "/home/root/logs/enigma2-stiva-semnal.txt"
+		if not _hdsOs.path.islink(_hdsCaleStiva) and _hdsOs.path.getsize(_hdsCaleStiva) > 0:
+			_hdsOs.replace(_hdsCaleStiva, "/home/root/logs/enigma2-stiva-semnal.1.txt")
+	except OSError:
+		pass
 	_hdsStivaSemnal = open("/home/root/logs/enigma2-stiva-semnal.txt", "w")
 	faulthandler.enable(file=_hdsStivaSemnal, all_threads=True)
 	for _hdsS, _hdsB in _hdsManere:
@@ -700,7 +710,9 @@ class PowerKey:
 			if x is not None:
 				self.session.infobar = self
 				menu_screen = self.session.openWithCallback(self.MenuClosed, MainMenu, x)
-				menu_screen.setTitle(_("Standby / Restart"))
+				# acelasi nume ca intrarea din meniul principal (menu.xml key="shutdown", text="Power & Restart" = Standby si repornire),
+				# ca omul sa recunoasca lista deschisa cu POWER tinut apasat
+				menu_screen.setTitle(_("Power & Restart"))
 				return
 			print("[PowerKey] meniul shutdown lipseste din menu.xml")
 		elif action == "standby":
@@ -850,6 +862,15 @@ def runScreenTest():
 		HdsCautaSetariAnunt.porneste(session)
 	except Exception as e:
 		print("[mytest] mesajul despre Caută setări:", e)
+
+	# HDSatelit 0.7.5: lista de canale orfana (asistenta 289712). Cand bouquets.tv are numai buchetele imaginii, dar pe
+	# disc sunt buchetele omului nelegate (bouquets.tv refacut gol de nucleu), o singura intrebare cu OK le pune inapoi
+	# (Components/HdsBucheteOrfane.py). Pe un receptor sanatos citeste numai cele doua radacini; orice eroare, in jurnal.
+	try:
+		from Components import HdsBucheteOrfane
+		HdsBucheteOrfane.porneste(session)
+	except Exception as e:
+		print("[mytest] listele de canale nelegate:", e)
 
 	# HDSatelit: tasta HELP pe orice ecran deschide pagina lui de ajutor, fara internet (Components/HdsAjutor.py; datele
 	# in pachetul hdsatelit-ajutor). Numai legarea tastei: nimic citit de pe disc pana la prima apasare.

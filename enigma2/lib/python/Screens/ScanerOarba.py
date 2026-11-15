@@ -24,6 +24,15 @@ from Components import HdsCautareOarba as O
 from Components.HdsCursorLista import pune_randurile
 
 RAND_CAUTA = '_cauta'
+# DSG2: casetele cautarii, in ordinea din skin (HdsCautareOarba.casete)
+CASETE = ('transp', 'progres', 'durata')
+
+
+def _vede(eticheta, da):
+    """Arata sau ascunde o eticheta (casetele DSG2)."""
+    f = getattr(eticheta, 'show' if da else 'hide', None)
+    if f is not None:
+        f()
 
 
 def _nume_valoare(lista, cod):
@@ -65,6 +74,12 @@ class ScanerOarba(Screen):
         self['key_green'] = StaticText('')
         self['key_yellow'] = StaticText('')
         self['key_blue'] = StaticText('')
+        # DSG2: casetele cautarii (skinul HDSatelit: blocul DSG2 din ecranul ScanerOarba); pe alt skin ramane preview
+        for k in CASETE:
+            for parte in ('box', 'lin', 'cap', 'num', 'sub'):
+                self['oarba_%s_%s' % (parte, k)] = Label('')
+                _vede(self['oarba_%s_%s' % (parte, k)], False)
+        self['oarba_loc'] = Label('')
         self['tastatura'] = ActionMap(['ColorActions', 'OkCancelActions', 'DirectionActions'], {
             'red': self.inapoi, 'cancel': self.inapoi, 'green': self.verde, 'yellow': self.galben, 'ok': self.ok,
             'up': self._sus, 'down': self._jos, 'left': lambda: self._cicleaza(-1), 'right': lambda: self._cicleaza(1),
@@ -74,6 +89,9 @@ class ScanerOarba(Screen):
         self.onClose.append(self._la_inchidere)
         self.setTitle(_('Căutare oarbă pe satelit'))
         self._arata()
+        # casetele se stiu numai dupa ce skinul s-a pus (hdsAreCasete)
+        if hasattr(self, 'onLayoutFinish'):
+            self.onLayoutFinish.append(self._arata)
 
     # ---------------------------------------------------------------- ce se arata
     def _fata_lista(self):
@@ -104,6 +122,7 @@ class ScanerOarba(Screen):
             randuri.append((eticheta, cheie, valoare, self._culoare_valorii))
         randuri.append((_('Caută acum'), RAND_CAUTA, '', self._culoare_valorii))
         pune_randurile(self['lista'], randuri)
+        self.hdsArataCasetele(None)
         self['preview'].setText(self._preview())
         self['stare'].setText(self._mesaj or _('Sus/Jos alege rândul, Stânga/Dreapta sau OK schimbă, Verde pornește, '
                                                'EXIT oprește.'))
@@ -123,9 +142,11 @@ class ScanerOarba(Screen):
         pune_randurile(self['lista'], randuri)
         satelit = c.nume_satelit or self._text_satelit()
         if c.satelit_schimbat:
-            self['preview'].setText(_('Transponderele găsite arată că antena stă pe %s.') % satelit)
+            loc = _('Transponderele găsite arată că antena stă pe %s.') % satelit
         else:
-            self['preview'].setText(_('Satelit: %s') % satelit)
+            loc = _('Satelit: %s') % satelit
+        # cu casete, randul satelitului sta sub ele (oarba_loc), iar preview ramane gol; altfel, ca inainte
+        self['preview'].setText('' if self.hdsArataCasetele(c.stare(), loc) else loc)
         self['stare'].setText(c.text_stare())
         if c.in_curs():
             self['key_red'].setText(_('Oprește') if c.faza != O.OPRESTE else '')
@@ -135,6 +156,33 @@ class ScanerOarba(Screen):
             self['key_red'].setText(_('Înapoi'))
             self['key_green'].setText(_('Scanează canalele') if c.stare()['poate_scana'] else '')
             self['key_yellow'].setText(_('Caută din nou'))
+
+    def hdsAreCasete(self):
+        """True cand skinul are casetele (blocul DSG2 din ecranul ScanerOarba al skinului HDSatelit)."""
+        return bool(getattr(self['oarba_num_transp'], 'skinAttributes', None))
+
+    def hdsArataCasetele(self, st, loc=''):
+        """DSG2: casetele cautarii din HdsCautareOarba.casete(st); st None (fata alegerilor) sau fara casete in skin: le
+        ascunde. In tema Pro se vede fundalul casetei, in Clasic linia subtire de sus. True cand le-a aratat."""
+        lista = O.casete(st) if st is not None and self.hdsAreCasete() else []
+        pro = False
+        if lista:
+            try:
+                from Components import HdsTemaTv
+                pro = HdsTemaTv.activa() == 'pro'
+            except Exception:
+                pro = False
+        texte = dict((k, (num, cap, sub)) for k, num, cap, sub in lista)
+        for k in CASETE:
+            t = texte.get(k)
+            for parte, text in zip(('num', 'cap', 'sub'), t or ('', '', '')):
+                self['oarba_%s_%s' % (parte, k)].setText(text)
+            for parte in ('num', 'cap', 'sub'):
+                _vede(self['oarba_%s_%s' % (parte, k)], t)
+            _vede(self['oarba_box_%s' % k], t and pro)
+            _vede(self['oarba_lin_%s' % k], t and not pro)
+        self['oarba_loc'].setText(loc if lista else '')
+        return bool(lista)
 
     def _schimbare(self, _c):
         try:

@@ -5,14 +5,15 @@
 # HdsEgalizator.py: ecranul „Egalizator”. Meniu > Audio & Sound Tracks > Egalizator (si, dupa legare, tasta VERDE pe
 # ecranul radio). Setarile si motorul sunt in Components/HdsEgalizator.py; pagina web /egalizator e perechea lui.
 #
-# Doua zone: cinci casete sus, separat cele 10 benzi si Nivel. OK/Jos pe Reglaj manual intra la 31 Hz.
+# Doua zone: sase casete sus (ultima, La canalele TV: egalizatorul si la canalele TV, perechea setarii din pagina web),
+# separat cele 10 benzi si Nivel. OK/Jos pe Reglaj manual intra la 31 Hz.
 # In coloane, stanga/dreapta aleg, sus/jos schimba cu 1 dB, OK salveaza Manual fara inchidere, EXIT renunta.
 # Tastele colorate: ROSU renunta, VERDE pastreaza, GALBEN presetarea urmatoare, ALBASTRU pornit/oprit.
 # Cat reglezi, sunetul se schimba pe loc (HdsEgalizator.incearca). OK sau VERDE salveaza (HdsEgalizator.seteaza); ROSU
 # pune inapoi ce era; EXIT renunta la schimbarile nepastrate, la fel ca ROSU.
 # „Pentru acest post” pe Nu arata din acel moment reglajele obisnuite (HdsEgalizator.comutaPePost).
 #
-# Desenul (Canvas, marimea din skin; asezarea din HdsEgalizator.geometriePanzei): sus 5 casete pentru alegeri, jos cate
+# Desenul (Canvas, marimea din skin; asezarea din HdsEgalizator.geometriePanzei): sus 6 casete pentru alegeri, jos cate
 # o coloana pe banda: sina, linia de 0 dB, bara de la 0 la valoare, butonul, valoarea deasupra si frecventa dedesubt;
 # in spatele sinei, nivelul sunetului care iese pe banda aceea (spectrul din motor, -60..0 dBFS), iar peste butoane
 # curba egalizatorului. Cu egalizatorul oprit desenul e stins. Fonturile HdsRegular / HdsBold numai pe skinul care are
@@ -49,8 +50,8 @@ TEXT = 0x00F2F4F8
 TEXT_SLAB = 0x00AEB9CC
 
 # alegerile in ordinea de pe ecran
-POZ_PORNIT, POZ_PRESETARE, POZ_MANUAL, POZ_POST, POZ_EFECTE = 0, 1, 2, 3, 4
-POZ_BANDA0 = 5
+POZ_PORNIT, POZ_PRESETARE, POZ_MANUAL, POZ_POST, POZ_EFECTE, POZ_TV = 0, 1, 2, 3, 4, 5
+POZ_BANDA0 = 6
 POZ_NIVEL = POZ_BANDA0 + E.BENZI
 
 
@@ -108,12 +109,13 @@ def _font(fata, marime, hds=True):
 		return gFont(nume, marime)
 
 
-def _fontCaseta(text, latime, marime, obisnuit, hds=True):
-	"""Valoarea dintr-o caseta: pe panza nu exista derulare, iar numele lungi (mai ales traduse) ar intra in caseta vecina.
-	Un text prea lung se scrie cu un font mai mic. 0.56 = latimea unei litere fata de marime, masurata pe HdsBold pe textele lungi."""
+def _fontCaseta(text, latime, marime, obisnuit, hds=True, fata="HdsBold"):
+	"""Valoarea (si eticheta) dintr-o caseta: pe panza nu exista derulare, iar numele lungi (mai ales traduse) ar intra in
+	caseta vecina. Un text prea lung se scrie cu un font mai mic. 0.56 = latimea unei litere fata de marime, masurata pe
+	HdsBold pe textele lungi (HdsRegular e mai ingust, deci ajunge si lui)."""
 	if 0.56 * len(text) * marime <= latime:
 		return obisnuit
-	return _font("HdsBold", max(12, int(latime / (0.56 * len(text)))), hds)
+	return _font(fata, max(12, int(latime / (0.56 * len(text)))), hds)
 
 
 class HdsEgalizator(Screen):
@@ -163,7 +165,8 @@ class HdsEgalizator(Screen):
 		s = E.stareCompleta()
 		self.post = s["post"]
 		self.v = {"pornit": s["pornit"], "presetare": s["presetare"], "benzi": list(s["benzi"]),
-			"noapte": s["noapte"], "nivel": s["nivel"], "pe_post": s["pe_post"], "efect": s.get("efect", "fara")}
+			"noapte": s["noapte"], "nivel": s["nivel"], "pe_post": s["pe_post"], "efect": s.get("efect", "fara"),
+			"tv": bool(s.get("tv", True))}
 		self.orig = dict(self.v, benzi=list(s["benzi"]))
 		self.poz = POZ_PRESETARE if s["pornit"] else POZ_PORNIT
 		self.salvat = False
@@ -273,7 +276,7 @@ class HdsEgalizator(Screen):
 	def ok(self):
 		if self.poz == POZ_MANUAL:
 			self.intraInColoane()
-		elif self.poz in (POZ_PORNIT, POZ_POST):
+		elif self.poz in (POZ_PORNIT, POZ_POST, POZ_TV):
 			self.schimba(1)
 		elif self.poz == POZ_PRESETARE:
 			self.schimba(1)
@@ -303,6 +306,8 @@ class HdsEgalizator(Screen):
 				return
 			# pe Nu se vad (si se aud) reglajele obisnuite; pe Da cele de acum raman si devin ale postului
 			self.v = E.comutaPePost(self.v, not self.v["pe_post"])
+		elif p == POZ_TV:
+			self.v["tv"] = not self.v["tv"]
 		elif p == POZ_NIVEL:
 			self.v["nivel"] = E.limiteaza(self.v["nivel"] + pas, E.NIVEL_MIN, E.NIVEL_MAX)
 			self.v["presetare"], self.v["noapte"] = E.MANUAL, False
@@ -365,7 +370,7 @@ class HdsEgalizator(Screen):
 			self.v = self.inainteEfecte
 			self.salvat = self.salvatInainteEfecte
 			E.incearca(benzi=self.v["benzi"], noapte=self.v["noapte"], nivel=self.v["nivel"],
-				pornit=self.v["pornit"], efect=self.v["efect"])
+				pornit=self.v["pornit"], efect=self.v["efect"], tv=self.v["tv"])
 		else:
 			self._ascultaEfect(alegere[1])
 		del self.inainteEfecte, self.salvatInainteEfecte
@@ -374,23 +379,24 @@ class HdsEgalizator(Screen):
 	def _pornit(self, pornit):
 		self.v["pornit"] = bool(pornit)
 		E.incearca(benzi=self.v["benzi"], noapte=self.v["noapte"], nivel=self.v["nivel"], pornit=self.v["pornit"],
-			efect=self.v["efect"])
+			efect=self.v["efect"], tv=self.v["tv"])
 
 	def _dupaSchimbare(self):
 		self.salvat = False
-		E.incearca(benzi=self.v["benzi"], noapte=self.v["noapte"], nivel=self.v["nivel"], efect=self.v["efect"])
+		E.incearca(benzi=self.v["benzi"], noapte=self.v["noapte"], nivel=self.v["nivel"], efect=self.v["efect"],
+			tv=self.v["tv"])
 		self.arataDescrierea()
 		self.deseneaza()
 
 	def _schimbat(self):
 		o = self.orig
-		return any(self.v[k] != o[k] for k in ("pornit", "noapte", "nivel", "presetare", "pe_post", "efect")) or \
+		return any(self.v[k] != o[k] for k in ("pornit", "noapte", "nivel", "presetare", "pe_post", "efect", "tv")) or \
 			self.v["benzi"] != o["benzi"]
 
 	def pastreaza(self, inchide=True):
 		manual = self.poz >= POZ_BANDA0
 		s = E.seteaza(pornit=self.v["pornit"], presetare_=self.v["presetare"], benzi=self.v["benzi"],
-			noapte=self.v["noapte"], nivel=self.v["nivel"], efect=self.v["efect"], salveazaManual=manual,
+			noapte=self.v["noapte"], nivel=self.v["nivel"], efect=self.v["efect"], salveazaManual=manual, tv=self.v["tv"],
 			pePost=self.v["pe_post"] if self.post.get("cheie") else None)
 		self.v.update(presetare=s["presetare"])
 		self.orig = dict(self.v, benzi=list(self.v["benzi"]))
@@ -432,6 +438,8 @@ class HdsEgalizator(Screen):
 				t = _("Nu merge niciun post acum, deci reglajele se păstrează pentru toate posturile.")
 		elif p == POZ_NIVEL:
 			t = _("Nivel: potrivești tăria sunetului cu egalizator față de sunetul obișnuit, între −12 și +12 dB.")
+		elif p == POZ_TV:
+			t = _("Da: egalizatorul lucrează și la canalele TV cu sunet MPEG (MP2); la schimbarea canalului sunetul pornește pe placa de sunet și trece în egalizator după o clipă. Nu: numai la radio.")
 		elif p == POZ_EFECTE:
 			t = _("OK: deschizi lista de efecte. Sus și jos în listă: asculți pe loc. OK păstrează alegerea, EXIT revine la efectul anterior.")
 		else:
@@ -449,7 +457,7 @@ class HdsEgalizator(Screen):
 			t = _("Stânga și dreapta: alegi. Sus, jos sau OK: presetarea următoare. EXIT: ieși.")
 		elif p == POZ_MANUAL:
 			t = _("OK sau Jos: reglezi coloanele. EXIT: ieși.")
-		elif p == POZ_POST:
+		elif p in (POZ_POST, POZ_TV):
 			t = _("Stânga și dreapta: alegi. OK: da sau nu. EXIT: ieși.")
 		elif p == POZ_EFECTE:
 			t = _("OK: alegi un efect special. EXIT: ieși.")
@@ -463,7 +471,7 @@ class HdsEgalizator(Screen):
 		if self.geom is None:
 			return
 		cheie = (self.poz, self.v["pornit"], self.v["presetare"], tuple(self.v["benzi"]), self.v["noapte"],
-			self.v["nivel"], self.v["pe_post"], self.v["efect"], self.spectru, self.geom)
+			self.v["nivel"], self.v["pe_post"], self.v["efect"], self.v["tv"], self.spectru, self.geom)
 		if not fortat and cheie == self.desenat:
 			return
 		self.desenat = cheie
@@ -487,13 +495,16 @@ class HdsEgalizator(Screen):
 			(POZ_MANUAL, _("Reglaj manual"), _("Comprimare activă") if self.v["noapte"] else _("OK / Jos")),
 			(POZ_POST, _("Pentru acest post"), (_("Da") if self.v["pe_post"] else _("Nu")) if self.post.get("cheie") else _("Fără post")),
 			(POZ_EFECTE, _("Efecte speciale"), E.numeEfect(self.v["efect"])),
+			(POZ_TV, _("La canalele TV"), _("Da") if self.v["tv"] else _("Nu")),
 		)
 		for k, (poz, eticheta, valoare) in enumerate(casete):
 			x = k * (w_caseta + g["spatiu"])
 			ales = poz == self.poz
 			fond = CASETA_ALEASA if ales else CASETA
 			c.fill(x, 0, w_caseta, h_caseta, fond)
-			c.writeText(x + 12, 0, w_caseta - 24, h_caseta // 2 - 4, TEXT if ales else TEXT_SLAB, fond, f_mic, eticheta,
+			# sase casete: pe panza mica o eticheta lunga (tradusa) se scrie cu un font mai mic
+			font_eticheta = _fontCaseta(eticheta, w_caseta - 24, g["f_mic"], f_mic, self.hds, "HdsRegular")
+			c.writeText(x + 12, 0, w_caseta - 24, h_caseta // 2 - 4, TEXT if ales else TEXT_SLAB, fond, font_eticheta, eticheta,
 				RT_HALIGN_LEFT | RT_VALIGN_CENTER)
 			font_valoare = _fontCaseta(valoare, w_caseta - 24, 28 if g["mare"] else 19, f_val, self.hds)
 			c.writeText(x + 12, h_caseta // 2 - 4, w_caseta - 24, h_caseta // 2, TEXT, fond, font_valoare, valoare,

@@ -18,6 +18,13 @@ try:
 except Exception:
 	_masura = None
 
+# fluxurile de pe internet (4097, 5001, 5002: Radio online, IPTV) in hds-zap.log, pornirea si oprirea cu motivul
+# (Components/HdsJurnalZapFlux.py; TODO 12.11 20:36); fara modul (probele de pe PC), nimic
+try:
+	from Components.HdsJurnalZapFlux import eveniment as _jurnalFlux
+except Exception:
+	_jurnalFlux = None
+
 # ce a spus driverul la pornire ramane pentru pluginuri (Tools/StbHardware.py); fara modul (probele de pe PC), nimic
 try:
 	from Tools.StbHardware import rememberFPWasTimerWakeup
@@ -89,6 +96,8 @@ class Navigation:
 				except Exception:
 					if not _pluginCazut(x, i):
 						raise
+		if _jurnalFlux is not None:
+			_jurnalFlux(self, i)
 		if i == iPlayableService.evEnd:
 			self.currentlyPlayingServiceReference = None
 			self.currentlyPlayingService = None
@@ -149,6 +158,7 @@ class Navigation:
 					_masura.pas("pnav.playService", t, _monoton() - t)
 				if not rez:
 					self.currentlyPlayingServiceReference = playref
+					self._hdsNumarCanal(ref)
 					return 0
 			if extensii:
 				# pornirea a cazut: referinta ceruta pusa inaintea extensiilor nu mai e valabila
@@ -156,6 +166,20 @@ class Navigation:
 		else:
 			self.stopService()
 		return 1
+
+	def _hdsNumarCanal(self, ref):
+		"""Numarul canalului ca in lista de canale (HdsInfo.numar_in_lista: buchetul, reteaua de cablu, locul unei
+		extensii), pus in referinta ceruta (getChannelNum), pe care temele facute pentru OE-Alliance o citesc prin
+		session.CurrentService.serviceref (numarul dinaintea numelui, convertoarele ServiceNumber). Cand lista nu stie
+		canalul (zap din ghid, din alt buchet) ramane numarul dat de nucleu la incarcarea buchetelor
+		(eDVBDB::renumberBouquet). Niciodata o exceptie: zap-ul nu depinde de numar."""
+		try:
+			from Components.Converter.HdsInfo import numar_in_lista
+			n = numar_in_lista(ref)
+			if n > 0 and n != ref.getChannelNum():
+				ref.setChannelNum(n)
+		except Exception as e:
+			print("[Navigation] numarul canalului:", e)
 
 	def _extensiiZap(self, playref):
 		"""Serviciul vechi se opreste, referinta curenta devine cea ceruta (extensiile care pornesc singure serviciul o
@@ -200,7 +224,9 @@ class Navigation:
 		return self.currentlyPlayingServiceReference
 
 	def getCurrentServiceReferenceOriginal(self):
-		return self.currentlyPlayingServiceReference
+		# ca in OE-Alliance: referinta ceruta (grupul, cu numarul canalului din buchet), pusa la inceputul lui playService,
+		# deci buna si la evStart; altfel cea redata
+		return self.originalPlayingServiceReference or self.currentlyPlayingServiceReference
 
 	def wasTimerWakeup(self):
 		# ce a spus driverul la pornire, retinut inainte ca __init__ sa stearga semnul (Tools/StbHardware.py)

@@ -12,7 +12,8 @@
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat; ce schimba
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/ceas                                    ora receptorului, setarile cu alegerile lor si starea
-#   POST /api/ceas-seteaza?sursa=..&server=..&fus=..  schimba si salveaza (oricare dintre ele)
+#   POST /api/ceas-seteaza?sursa=..&server=..&fus=..  schimba si salveaza (oricare dintre ele); fus_automat=1|0: fusul
+#                                                     dupa internet (Components/HdsFusTara.py); un fus ales il trece pe 0
 #   POST /api/ceas-sincronizeaza                      o sincronizare prin Internet acum
 #   GET  /ceas                                        pagina
 #
@@ -49,6 +50,10 @@ def stare(C=None, acum=None):
 		"ora_utc": int(acum),
 		"fus": C.fusCurent(),
 		"fusuri": C.fusuri(),
+		# fusul dupa internet (Da) sau ales de om (Nu), ca randul de pe televizor
+		"fus_automat": bool(getattr(C, "fusAutomat", lambda: True)()),
+		"fus_automat_alegeri": [["1", _t("Da")], ["0", _t("Nu")]],
+		"fus_text": getattr(C, "textFus", lambda: "")(),
 		"sursa": s["mod"],
 		"surse": [[m, C.textMod(m)] for m in C.MODURI],
 		"server": s["server"],
@@ -71,11 +76,16 @@ def seteaza(argumente, C=None):
 	sursa = argumente.get("sursa")
 	server = argumente.get("server")
 	fus = argumente.get("fus")
-	if sursa is None and server is None and fus is None:
+	fus_automat = argumente.get("fus_automat")
+	if sursa is None and server is None and fus is None and fus_automat is None:
 		rez = stare(C)
 		rez.update({"result": False, "message": _t("Nu s-a trimis nimic de schimbat (sursa, server sau fus).")})
 		return rez
-	reusit, mesaj = C.seteaza(mod=sursa, server=server, fus=fus)
+	extra = {}
+	if fus_automat is not None:
+		# numai 1 sau 0; altceva ajunge ca text si e refuzat de HdsCeas.seteaza (fara nicio schimbare)
+		extra["fus_automat"] = {"1": True, "0": False}.get(fus_automat, fus_automat)
+	reusit, mesaj = C.seteaza(mod=sursa, server=server, fus=fus, **extra)
 	rez = stare(C)
 	rez.update({"result": bool(reusit), "message": mesaj})
 	return rez
@@ -232,6 +242,11 @@ PAGINA = """<!DOCTYPE html>
       <select id="fus"></select>
     </div>
     <div class="rand">
+      <label for="fusAuto">Fus orar după internet</label>
+      <select id="fusAuto"></select>
+    </div>
+    <p class="nota" id="fusText"></p>
+    <div class="rand">
       <label for="sursa">Sursa orei</label>
       <select id="sursa"></select>
     </div>
@@ -277,6 +292,8 @@ function umple(sel, alegeri, ales){
 }
 function arata(d){
   if(document.activeElement !== $("fus")){ umple($("fus"), d.fusuri || [], d.fus); }
+  if(document.activeElement !== $("fusAuto")){ umple($("fusAuto"), d.fus_automat_alegeri || [], d.fus_automat ? "1" : "0"); }
+  $("fusText").textContent = d.fus_text || "";
   if(document.activeElement !== $("sursa")){ umple($("sursa"), d.surse || [], d.sursa); }
   if(document.activeElement !== $("server")){ umple($("server"), d.servere || [], d.server); }
   $("randServer").classList.toggle("ascuns", d.sursa === "dvb");
@@ -300,6 +317,7 @@ function trimite(cheie, valoare){
     .catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 }
 $("fus").addEventListener("change", function(){ trimite("fus", $("fus").value); });
+$("fusAuto").addEventListener("change", function(){ trimite("fus_automat", $("fusAuto").value); });
 $("sursa").addEventListener("change", function(){ trimite("sursa", $("sursa").value); });
 $("server").addEventListener("change", function(){ trimite("server", $("server").value); });
 $("sincronizeaza").addEventListener("click", function(){
@@ -329,6 +347,7 @@ TEXTE_PAGINA = {
 		N_("Data și ora"),
 		N_("Se citește ora receptorului..."),
 		N_("Fus orar"),
+		N_("Fus orar după internet"),
 		N_("Sursa orei"),
 		N_("Server NTP"),
 		N_("Sincronizează acum"),

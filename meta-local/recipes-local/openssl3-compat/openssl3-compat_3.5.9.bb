@@ -8,10 +8,10 @@
 # De ce: pachetul altora enigma2-plugin-softcams-oscam-emu-pcsc-levi45 (OSCam 11968) are un preinst care cauta in
 # /var/lib/opkg/status „Package: libssl3” si „Package: libcrypto3” (sau /usr/lib/libssl.so.3, libcrypto.so.3), altfel
 # le cere din feed si iese cu „The libsslx.x.x file could not be loaded from the repository” (forumul nostru 768 #1564,
-# A04 din lucru-sesiune/paralel-1111b; proba pe .122: STADIU-P3-LIBSSL3.md). Binarele lui ssl310 cer libssl.so.3.
+# A04 din lucru-sesiune/paralel-1111b; proba pe receptorul de proba: STADIU-P3-LIBSSL3.md). Binarele lui ssl310 cer libssl.so.3.
 #
 # Aceeasi reteta (de la SUMMARY in jos, identica) sta si in meta-pluginuri-externe/recipes-compat/openssl3-compat (depozitul
-# hdsatelit-unelte, main), pentru feedul extern al receptoarelor ramase pe 0.7.3; acelasi nume, aceeasi versiune 3.5.9-r0.
+# uneltelor, main), pentru feedul extern al receptoarelor ramase pe 0.7.3; acelasi nume, aceeasi versiune 3.5.9-r0.
 # NUMAI pentru stratul 6.0 (pregateste-strat-60.sh): pe 5.6 recipes-local/openssl/openssl_3.6.5.bb face deja libssl3 si
 # libcrypto3 (doua retete cu aceleasi pachete); pe 6.0 aceea e scoasa (oe-core 6.0 are OpenSSL 4), iar numele
 # openssl3-compat nu exista in 6.0, deci pasul 2 al lui pregateste-strat-60.sh o lasa in strat.

@@ -21,6 +21,10 @@
 #                                          instalate apoi prin /api/extensii-instaleaza, ca la Extensii și aplicații)
 #   POST /api/import-alta-imagine?raspuns=da|nu|ascunde   răspunsul la întrebarea primei porniri (copia altei imagini,
 #                                          Components/HdsImportAltaImagine.py) sau ascunderea rezumatului ei
+#   POST /api/import-incarca?nume=<fisier>  arhiva de copie trimisa din calculator, octeti bruti in corp
+#                                          (application/octet-stream, cel mult 32 MB, plugin.py CALE_IMPORT_INCARCA): scrisa in
+#                                          /tmp (HdsImportSurse.salveaza_din_calculator, pe un fir separat), verificata, apoi
+#                                          apare in lista surselor, pe televizor si aici (Bogdanici13, forum 795; TODO 09.11 16:54)
 #   GET  /import                           pagina
 #
 # Întrebarea primei porniri (Components/HdsImportAltaImagine.py): pe televizor e o casetă Da/Nu; aici aceeași
@@ -148,6 +152,8 @@ def surse(a, M=None, texte_setari=None, A=None):
 		"cautat": bool(st["cand"]),
 		"surse": lista,
 		"fara": M.text_fara_surse() if not lista and not st["cauta"] else "",
+		# arhivele de copie sărite (nu se pot citi), aceleași rânduri ca pe televizor
+		"necitite": M.text_necitite(st.get("necitite")) if hasattr(M, "text_necitite") and not st["cauta"] else [],
 		"alegeri": [c for c, _camp in M.ALEGERI],
 		"campuri": dict(M.ALEGERI),
 		"etichete": dict((c, M.eticheta_alegere(c)) for c, _camp in M.ALEGERI),
@@ -191,7 +197,28 @@ def porneste(a, M=None):
 	return {"result": True, "message": _t("Importul a pornit.")}
 
 
-def rute(baza, resource, M=None, A=None):
+class _Incarcare(object):
+	scrie = [False]      # o singura arhiva scrisa odata
+
+
+def incarca(a, octeti, M=None):
+	"""Lucrul rutei POST /api/import-incarca (pe un fir separat): arhiva scrisa si verificata; id-ul sursei ei, ca pagina
+	sa o aleaga singura dupa cautarea noua."""
+	import time
+	M = _m(M)
+	if M.ocupat():
+		return {"result": False, "message": _t("Un import e deja în curs. Așteaptă să se termine.")}
+	try:
+		cale = M.salveaza_din_calculator(a.get("nume", ""), octeti)
+	except ValueError as eroare:
+		return {"result": False, "message": str(eroare)}
+	gasite = M.copii_calculator(time.time() + M.TERMEN_S)
+	import posixpath
+	return {"result": True, "id": gasite[0]["id"] if gasite else "",
+		"message": _t("Arhiva %s a ajuns pe receptor. Alege ce se importă, apoi Importă.") % posixpath.basename(cale)}
+
+
+def rute(baza, resource, M=None, A=None, fabrica_ceas=None):
 	"""Resursele: ({nume: resursa de sub /api}, resursa paginii). `baza` e HdsJsonResource din plugin.py."""
 
 	class SurseResource(baza):
@@ -227,6 +254,29 @@ def rute(baza, resource, M=None, A=None):
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class IncarcaResource(baza):
+		"""POST /api/import-incarca: arhiva din calculator, octeti bruti in corp."""
+		schimbaCeva = True
+
+		def render_GET(self, request):
+			return self._eroare(request, _t("Se trimite cu POST."), 405)
+
+		def render_POST(self, request):
+			MM = _m(M)
+			if _Incarcare.scrie[0]:
+				return self._eroare(request, _t("Se scrie încă arhiva de dinainte. Încearcă din nou."), 503)
+			try:
+				request.content.seek(0)
+				octeti = request.content.read(MM.MAX_ARHIVA + 1)
+				a = argumente(request)
+			except Exception as eroare:
+				return self._eroare(request, _t("Nu am putut citi arhiva: %s") % eroare, 400)
+			if len(octeti) > MM.MAX_ARHIVA:
+				return self._eroare(request, _t("Arhiva e prea mare: cel mult %d MB.") % (MM.MAX_ARHIVA // (1024 * 1024)), 413)
+			from .ecran_pornire_web import porneste_pe_fir
+			_Incarcare.scrie[0] = True
+			return porneste_pe_fir(request, lambda: incarca(a, octeti, MM), _Incarcare.scrie, 120, fabrica_ceas)
+
 	class PaginaResource(resource.Resource):
 		"""GET /import: pagina „Import canale și setări”."""
 		isLeaf = True
@@ -238,6 +288,7 @@ def rute(baza, resource, M=None, A=None):
 		b"import-surse": SurseResource(),
 		b"import": ImportResource(),
 		b"import-alta-imagine": AltaImagineResource(),
+		b"import-incarca": IncarcaResource(),
 	}
 	return api, PaginaResource()
 
@@ -325,7 +376,9 @@ PAGINA = """<!DOCTYPE html>
 <section class="card">
   <h2>Copia din care se importă</h2>
   <div id="surse"><p class="mesaj">Se caută copiile...</p></div>
-  <div class="butoane"><button type="button" id="cauta">Caută din nou</button></div>
+  <div class="butoane"><button type="button" id="cauta">Caută din nou</button><button type="button" id="din-calculator">Trimite o copie din calculator</button></div>
+  <input type="file" id="fisier-calculator" class="ascuns" accept=".gz,.tgz,.tar,.bz2,.tbz2,.xz,.txz,.zip">
+  <p class="nota">Copia făcută pe altă imagine (arhiva .tar.gz sau .zip cu lista de canale și setările) se poate trimite și din calculator, fără stick.</p>
 </section>
 <section class="card">
   <h2>Ce se importă</h2>
@@ -383,13 +436,16 @@ function desenAlegeri(){
   });
   $("importa").disabled = !s || asteapta === "import";
 }
+function desenNecitite(c, d){
+  (d.necitite || []).forEach(function(t){ var p = document.createElement("p"); p.className = "nota"; p.textContent = t; c.appendChild(p); });
+}
 function desenSurse(d){
   var c = $("surse"); c.textContent = "";
   surseAcum = d.surse || [];
   if(!surseAcum.length){
     var p = document.createElement("p"); p.className = "mesaj";
     p.textContent = d.cauta ? "Se caută copiile pe stick-uri, discuri și în memoria receptorului..." : (d.fara || "");
-    c.appendChild(p); ales = null; desenAlegeri(); return;
+    c.appendChild(p); desenNecitite(c, d); ales = null; desenAlegeri(); return;
   }
   if(!sursaAleasa()){ ales = surseAcum[0].id; }
   var ultim = null;
@@ -405,6 +461,7 @@ function desenSurse(d){
     var ds = document.createElement("span"); ds.className = "desc"; ds.textContent = s.descriere;
     t.appendChild(ds); l.appendChild(i); l.appendChild(t); c.appendChild(l);
   });
+  desenNecitite(c, d);
   desenAlegeri();
 }
 function desenSetari(texte){
@@ -530,6 +587,24 @@ $("importa").addEventListener("click", function(){
     asteapta = "import"; mesaj(d.message); programeaza(800);
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); desenAlegeri(); });
 });
+$("din-calculator").addEventListener("click", function(){ $("fisier-calculator").click(); });
+$("fisier-calculator").addEventListener("change", function(){
+  var f = this.files && this.files[0];
+  if(!f){ return; }
+  if(f.size > 32 * 1024 * 1024){ mesaj("Arhiva e prea mare: cel mult 32 MB.", true); this.value = ""; return; }
+  var b = $("din-calculator"), intrare = this;
+  b.disabled = true; mesaj("Se trimite arhiva...");
+  var optiuni = {method: "POST", cache: "no-store", credentials: "same-origin", headers: {"Content-Type": "application/octet-stream"}, body: f};
+  if(CFG.csrf){ optiuni.headers["X-HDS-CSRF"] = CFG.csrf; }
+  fetch(adresa("/api/import-incarca?nume=" + encodeURIComponent(f.name)), optiuni).then(function(r){
+    return r.json().catch(function(){ return {result: false, message: "Receptorul a răspuns neașteptat (HTTP " + r.status + ")."}; });
+  }).then(function(d){
+    b.disabled = false; intrare.value = "";
+    if(!d.result){ mesaj(d.message, true); return; }
+    if(d.id){ ales = d.id; }
+    mesaj(d.message); asteapta = "cauta"; citeste(true);
+  }).catch(function(){ b.disabled = false; intrare.value = ""; mesaj("Receptorul nu răspunde.", true); });
+});
 citeste(false);
 </script>
 </body>
@@ -559,6 +634,8 @@ TEXTE_PAGINA = {
 		N_("Copia din care se importă"),
 		N_("Se caută copiile..."),
 		N_("Caută din nou"),
+		N_("Trimite o copie din calculator"),
+		N_("Copia făcută pe altă imagine (arhiva .tar.gz sau .zip cu lista de canale și setările) se poate trimite și din calculator, fără stick."),
 		N_("Ce se importă"),
 		N_("Importă"),
 		N_("Setările importate"),
@@ -572,6 +649,8 @@ TEXTE_PAGINA = {
 	),
 	"js": (
 		N_("browser deconectat"),
+		N_("Arhiva e prea mare: cel mult 32 MB."),
+		N_("Se trimite arhiva..."),
 		N_("Instalează"),
 		N_("Rețeaua se schimbă: legătura poate cădea câteva secunde."),
 		N_("Modulele de acces vin din copie; fișierele lor de acum se păstrează."),

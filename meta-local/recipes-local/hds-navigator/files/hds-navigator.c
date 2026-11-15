@@ -22,7 +22,7 @@
  * Pe Mali-450 (GLES 2.0: SF8008, V20, Ustym) desenul GL nu merge in WebKit 2.54: compunerea prin Skia (functia interna
  * UseSkiaForComposition, implicita) cade pe loc (ThreadedCompositor, pointer nul in threadSafeProxy(); core + simboluri,
  * lotul h4-h6), iar cu ea oprita (TextureMapper) procesul web nu mai cade, dar fiecare cadru citit inapoi e negru
- * (proba NB pe .122, 12.11.2026). Ramane rezerva pe procesor; enigma2 (lansator.py) tine minte caderea si porneste
+ * (proba NB pe receptorul de proba, 12.11.2026). Ramane rezerva pe procesor; enigma2 (lansator.py) tine minte caderea si porneste
  * urmatoarele navigatoare direct cu --cpu. Pe procesor (--cpu, rezerva) lansatorul si
  * procesele WebKit (care il mostenesc) au prioritate mai mica (nice 10), ca descifrarea si decodarea canalului sa nu
  * sufere; in afara modului HbbTV si pictura pe un singur fir si cel mult 25 de cadre pe secunda.

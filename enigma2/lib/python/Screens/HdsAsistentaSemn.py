@@ -35,11 +35,21 @@ from Components import HdsAsistenta as A
 from Components import HdsAsistentaControl as Control
 
 GRAB = "/usr/bin/grab"
+# grab ruleaza pe firul sesiunii asistentei, niciodata pe firul enigma2: pe receptorul nostru de probe (HiSilicon, ca Trio 4K
+# si SF8008) grab dura 1,2 s din ssh, dar pornit pe firul enigma2, cu bucla oprita cat asteapta, trecea de termen (8 s), deci
+# nicio captura prin asistenta n-a mers din 09.11 pana in 0.7.5 (2) (TRI, TODO 09.11 07:10, FAA7MED). Interfata web il
+# rula deja in fir separat. Pe firul enigma2 raman numai stiva ecranelor (inainte si dupa) si curatarea copiei.
 CAPTURA_TERMEN_S = 8
 # Cu navigatorul deschis (HbbTV sau web, WebKit desenat pe procesor, de pilda pe Solo4K) grab-ul poate dura mai mult:
 # pana la CAPTURA_TERMEN_NAVIGATOR_S, pe firul sesiunii asistentei, nu pe firul enigma2 (interfata si tastele
 # navigatorului nu stau dupa el). Hotararea coordonatorului (12.11.2026), dupa „captura nu s-a putut face acum” la olo.
 CAPTURA_TERMEN_NAVIGATOR_S = 15
+# Dupa termen grab e oprit cu kill(); firul sesiunii mai asteapta iesirea lui cel mult CAPTURA_OPRIRE_S. Un grab blocat
+# in driver (starea D, nu moare la SIGKILL) ramane in _grabRamase si nicio captura noua nu porneste cat traieste, ca
+# ASTEPTARE_OPRIRE_S si _grabRamasInViata din HdsWebControl/plugin.py (0.7.5 FIR, TODO 15.11 06:15 (TRI, grab
+# marginit): inainte communicate() fara termen dupa kill() tinea firul sesiunii pe loc).
+CAPTURA_OPRIRE_S = 2
+_grabRamase = []
 # captura: JPEG mic pentru a ramane sub plafonul brokerului
 CAPTURA_LATIME = 960
 CAPTURA_CALITATE = 70
@@ -174,6 +184,9 @@ class Controler(object):
 			c = A.ultimeleConcluzii()
 			if c and c.get("id") == id_:
 				self._arataConcluzii(c, la_sfarsit=True)
+			# si un anunt scurt, nemodal, cand s-a oprit fara om (echipa a inchis-o, a trecut timpul): omul afla ca
+			# s-a terminat si cand fereastra concluziilor e deja deschisa sau a fost inchisa (orion_bilo, 14.11.2026)
+			self._anuntaSfarsit(id_)
 		if not activa:
 			if self.banda is not None:
 				self.banda.hide()
@@ -193,12 +206,20 @@ class Controler(object):
 			if self._ecranAsistenta():
 				self.banda.hide()
 				return
-			# mereu: ca e pornita si pana cand ("până la ZZ.LL, HH:MM" / "fără sfârșit") si de unde se opreste
-			if _lucreazaAcum():
-				self.banda.pune(_(A.TEXT_LUCREAZA), _(TEXT_OPRESTI) % A.drumMeniu(scurt=True))
-			else:
-				self.banda.pune(A.textPana(ses, banda=True), _(TEXT_OPRESTI) % A.drumMeniu(scurt=True))
+			# mereu de unde se opreste; in stanga ce face echipa ("lucrează acum" dupa orice cerere, "a terminat..." dupa
+			# concluzii), altfel ca e pornita si pana cand ("până la ZZ.LL, HH:MM" / "fără sfârșit")
+			activitate = _activitate(ses)
+			self.banda.pune(activitate or A.textPana(ses, banda=True), _(TEXT_OPRESTI) % A.drumMeniu(scurt=True))
 			self.banda.show()
+
+	def _anuntaSfarsit(self, id_):
+		try:
+			text = A.textSfarsit(id_)
+			if text:
+				from Screens import HdsAnuntRetea
+				HdsAnuntRetea.arata(self.session, text, "info")
+		except Exception as e:
+			_jurnal("anuntul de sfarsit: %r" % (e,))
 
 	def _ecranAsistenta(self):
 		"""Ecranul asistentei e deasupra (arata el starea si timpul): banda nu se arata peste el."""
@@ -228,7 +249,7 @@ class Controler(object):
 			if la_sfarsit and HdsAsistentaConcluzii.deschise:
 				return
 			from Tools import Notifications
-			Notifications.AddNotification(HdsAsistentaConcluzii, intrare)
+			Notifications.AddNotification(HdsAsistentaConcluzii, dict(intrare, sfarsit=True) if la_sfarsit else intrare)
 		except Exception as e:
 			_jurnal("concluzii: %r" % (e,))
 
@@ -252,6 +273,14 @@ def _lucreazaAcum():
 		return A.lucreazaAcum()
 	except Exception:
 		return False
+
+
+def _activitate(ses):
+	"""Textul benzii despre ce face echipa (A.textActivitate), sau "" la orice greseala."""
+	try:
+		return A.textActivitate(ses)
+	except Exception:
+		return ""
 
 
 def _trezeste(functie):
@@ -356,6 +385,11 @@ def _grab(termen_s, navigator=""):
 	"""Octetii JPEG ai capturii (video si OSD), sau None; la esec scrie motivul in jurnalul interfetei
 	(hds-interfata.log): termenul depasit, iesirea goala (cu codul) sau eroarea pornirii."""
 	cu = " (navigatorul deschis)" if navigator else ""
+	# un grab oprit cu kill() care n-a iesit (blocat in driver): altul s-ar bloca la fel (poll() il si culege cand iese)
+	_grabRamase[:] = [x for x in _grabRamase if x.poll() is None]
+	if _grabRamase:
+		_jurnal("captura nereusita%s: grab-ul de dinainte, oprit dupa termen, n-a iesit inca" % cu)
+		return None
 	try:
 		p = subprocess.Popen([GRAB, "-q", "-s", "-j", str(CAPTURA_CALITATE), "-r", str(CAPTURA_LATIME)],
 			stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -365,8 +399,19 @@ def _grab(termen_s, navigator=""):
 	try:
 		rez, _err = p.communicate(timeout=termen_s)
 	except subprocess.TimeoutExpired:
-		p.kill()
-		p.communicate()
+		try:
+			p.kill()
+		except OSError:
+			pass
+		try:
+			# dupa kill() asteptarea e marginita: un grab in starea D nu moare la SIGKILL si ar tine firul sesiunii
+			p.communicate(timeout=CAPTURA_OPRIRE_S)
+		except subprocess.TimeoutExpired:
+			_grabRamase.append(p)
+			try:
+				p.stdout.close()
+			except Exception:
+				pass
 		_jurnal("captura nereusita%s: grab a depasit %d s" % (cu, termen_s))
 		return None
 	if not rez:
@@ -375,42 +420,75 @@ def _grab(termen_s, navigator=""):
 	return rez
 
 
+def _refuzText():
+	"""Textul pentru echipa cand curatarea a refuzat captura (motivul din Control.motivCaptura), sau False cand nu se
+	stie motivul (raspunsul ramane "captura nu s-a putut face acum"). 0.7.5 JRN, TODO 12.11 20:36 (EventView pe Trio)."""
+	motiv = Control.motivCaptura()
+	return "(captura oprita: %s)" % motiv if motiv else False
+
+
 def _captura():
-	"""Video si OSD, cu datele conturilor scoase numai din copia pentru echipa. Fara navigator: totul pe firul enigma2,
-	ca pana acum (CAPTURA_TERMEN_S). Cu navigatorul deschis: grab-ul pe firul sesiunii, pana la
-	CAPTURA_TERMEN_NAVIGATOR_S, iar pe firul enigma2 numai curatarea (stiva ecranelor)."""
+	"""Video si OSD, cu datele conturilor scoase numai din copia pentru echipa. grab-ul ruleaza aici, pe firul sesiunii
+	(CAPTURA_TERMEN_S, cu navigatorul deschis CAPTURA_TERMEN_NAVIGATOR_S), cu bucla enigma2 libera (vezi GRAB); pe firul
+	enigma2 numai stiva ecranelor inainte de grab, apoi compararea ei si curatarea. Un ecran deschis sau inchis in timpul
+	grab-ului refuza captura cu motiv (curatarea ar acoperi zonele altui ecran decat cel din poza); se compara numai
+	ecranele (id), nu textele lor: ecranul Asistenta isi scrie jurnalul la fiecare cerere (bucla din 0.7.2)."""
 	navigator = _navigatorDeschis()
-	if navigator:
-		if _session() is None:
-			return "(captura: interfata nu e gata)"
-		brut = _grab(CAPTURA_TERMEN_NAVIGATOR_S, navigator)
-		if not brut:
-			return None
+	cu = " (navigatorul deschis)" if navigator else ""
+	if _session() is None:
+		return "(captura: interfata nu e gata)"
+	inainte = _peFir.cere(lambda gata: gata([id(e) for e in _stivaAcum()]), TERMEN_FIR_S)
+	if inainte is None:
+		_jurnal("captura nereusita%s: firul interfetei nu a raspuns in %d s" % (cu, TERMEN_FIR_S))
+		return None
+	brut = _grab(CAPTURA_TERMEN_NAVIGATOR_S if navigator else CAPTURA_TERMEN_S, navigator)
+	if not brut:
+		return None
 
-		def curata(gata):
-			from enigma import getDesktop
-			s = getDesktop(0).size()
-			# False (nu None) cand curatarea nu da nimic: None inseamna numai „firul nu a raspuns la timp”
-			gata(Control.curataCapturaEchipa(brut, _stivaAcum(), (s.width(), s.height())) or False)
-		rez = _peFir.cere(curata, TERMEN_FIR_S)
-		if rez is None:
-			_jurnal("captura nereusita (navigatorul deschis): firul interfetei nu a raspuns in %d s" % TERMEN_FIR_S)
-		return rez or None
-
-	def lucru(gata):
-		if _session() is None:
-			gata("(captura: interfata nu e gata)")
+	def curata(gata):
+		ecrane = _stivaAcum()
+		if [id(e) for e in ecrane] != inainte:
+			_jurnal("captura refuzata: ecranele s-au schimbat in timpul capturii")
+			gata("(captura oprita: ecranul s-a schimbat in timpul capturii, cere din nou)")
 			return
-		rez = _grab(CAPTURA_TERMEN_S)
-		if rez:
-			from enigma import getDesktop
-			s = getDesktop(0).size()
-			rez = Control.curataCapturaEchipa(rez, _stivaAcum(), (s.width(), s.height()))
-		gata(rez or False)
-	rez = _peFir.cere(lucru, TERMEN_FIR_S)
+		from enigma import getDesktop
+		s = getDesktop(0).size()
+		# False (nu None) cand curatarea nu da nimic: None inseamna numai "firul nu a raspuns la timp"
+		gata(Control.curataCapturaEchipa(brut, ecrane, (s.width(), s.height())) or _refuzText() or False)
+	rez = _peFir.cere(curata, TERMEN_FIR_S)
 	if rez is None:
-		_jurnal("captura nereusita: firul interfetei nu a raspuns in %d s" % TERMEN_FIR_S)
+		_jurnal("captura nereusita%s: firul interfetei nu a raspuns in %d s" % (cu, TERMEN_FIR_S))
 	return rez or None
+
+
+def _pisteCanal():
+	"""Randurile cu pistele canalului deschis, pentru op "canal" (0.7.5, TC308, canalele fara sunet de pe 101W): pistele de
+	sunet asa cum le-a inteles nucleul (PID, descriere, limba) si pistele din PMT pe care nucleul nu le cunoaste
+	(iServiceInformation.sPisteNecunoscute, "pid:stream_type:inregistrare" in hex). Asa se vede din prima de ce un canal
+	n-are sunet, fara taste pe ecranul omului. Numai citire; la orice lipsa, randul spune ce lipseste."""
+	randuri = ["[piste]"]
+	try:
+		import NavigationInstance
+		from enigma import iServiceInformation
+		nav = NavigationInstance.instance
+		serviciu = nav.getCurrentService() if nav else None
+		info = serviciu and serviciu.info()
+		if not info:
+			randuri.append("  (fara canal deschis)")
+			return randuri
+		sunete = []
+		piste = serviciu.audioTracks()
+		n = piste.getNumberOfTracks() if piste else 0
+		for i in range(n):
+			t = piste.getTrackInfo(i)
+			if t is None:
+				continue
+			sunete.append("%04x %s %s" % (t.getPID() & 0x1FFF, t.getDescription() or "?", t.getLanguage() or "-"))
+		randuri.append("  Piste de sunet = %s" % (", ".join(sunete) if sunete else "niciuna"))
+		randuri.append("  Piste necunoscute (PMT) = %s" % (info.getInfoString(iServiceInformation.sPisteNecunoscute) or "niciuna"))
+	except Exception as e:
+		randuri.append("  (pistele nu se pot citi: %r)" % (e,))
+	return randuri
 
 
 def _canal():
@@ -424,7 +502,104 @@ def _canal():
 			for r in p.get("randuri") or []:
 				if len(r) >= 2 and (str(r[0]).strip() or str(r[1]).strip()):
 					randuri.append("  %s = %s" % (r[0], r[1]))
+		randuri.extend(_pisteCanal())
 		gata("\n".join(randuri))
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
+def _flux():
+	"""Op "flux": de pe firul enigma2 numai referinta canalului deschis si demuxul lui (HdsAnalizaFlux.parametri, numere
+	simple); filtrele de sectiune le citeste apoi broker-ul, pe firul sesiunii (Components/HdsAsistentaFlux)."""
+	def lucru(gata):
+		import NavigationInstance
+		from Components.HdsAnalizaFlux import parametri
+		nav = NavigationInstance.instance
+		serviciu = nav.getCurrentService() if nav is not None else None
+		ref = nav.getCurrentlyPlayingServiceReference() if nav is not None else None
+		if serviciu is None or ref is None:
+			gata({})
+			return
+		sref = ref.toString()
+		canal = ""
+		try:
+			info = serviciu.info()
+			canal = (info.getName() if info else "") or ""
+		except Exception:
+			pass
+		# la televiziunea prin internet (4097, 5001, 5002...) referinta are adresa: nu pleaca, iar demuxul nu exista
+		if not sref.startswith("1:"):
+			gata({"ref": "iptv", "demux": None})
+			return
+		p = parametri(serviciu, sref, canal)
+		try:
+			# o inregistrare sau un flux TS din retea (1:...:cale): demuxul e al redarii, nu al antenei
+			p["din_cale"] = bool(ref.getPath())
+		except Exception:
+			pass
+		gata(p)
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
+# Op "flux" pe un transponder ales (TODO 15.11 01:55): canalul brut al tunerului liber, tinut numai cat il citeste
+# broker-ul. Referinta se lasa NUMAI pe firul enigma2 (atunci tunerul se elibereaza), dupa citire sau, daca sesiunea
+# se rupe la mijloc, singura dupa HdsAsistentaFlux.PAZA_S.
+_fluxTp = {"canal": None, "paza": None}
+
+
+def _lasaTunerulFlux():
+	"""Pe firul enigma2: elibereaza tunerul luat de op-ul flux (referinta canalului brut lasata) si opreste paza."""
+	_fluxTp["canal"] = None
+	paza = _fluxTp["paza"]
+	_fluxTp["paza"] = None
+	if paza is not None:
+		try:
+			paza.stop()
+		except Exception:
+			pass
+
+
+def _pozitieMotor(slot):
+	"""Unde e antena tunerului cu motor, dupa nucleu (hdsKnownRotorPosition; -1 = nestiut), sau None."""
+	try:
+		from enigma import eDVBSatelliteEquipmentControl
+		return int(eDVBSatelliteEquipmentControl.getInstance().hdsKnownRotorPosition(slot))
+	except Exception:
+		return None
+
+
+def _fluxTransponder(cerut):
+	"""Op "flux" cu transponder: pe firul enigma2 un tuner liber setat pentru pozitie, acordat pe transponderul cerut, cu
+	demuxul luat (Components/HdsAsistentaFlux.ia_tuner_liber); canalul omului nu se schimba. Filtrele le citeste apoi
+	broker-ul, pe firul sesiunii, si cheama _elibereazaFluxTp. -> dict (cu "eroare" cand nu se poate) sau None."""
+	def lucru(gata):
+		import time
+		from enigma import eDVBResourceManager
+		from Components import HdsAsistentaFlux as F
+		from Components import HdsGasireSemnal as G
+		_lasaTunerulFlux()
+
+		def aloca(slot):
+			return eDVBResourceManager.getInstance().allocateRawChannel(slot)
+		urm = G.urmatoarea_inregistrare()
+		curand = urm is not None and urm - time.time() < F.FARA_INREGISTRARE_S
+		rez, canal = F.ia_tuner_liber(cerut, G.tunere(), G.transpondere, aloca, G.acordeaza,
+			motiv_refuz=G._reguli().motiv_refuz, pozitie_motor=_pozitieMotor, inregistrare_curand=curand)
+		if canal is not None:
+			_fluxTp["canal"] = canal
+			paza = eTimer()
+			paza.callback.append(_lasaTunerulFlux)
+			paza.start(int(F.PAZA_S * 1000), True)
+			_fluxTp["paza"] = paza
+			_jurnal("flux: tunerul %s luat pentru %s (demux %s)" % (rez.get("litera"), F.text_cerut(cerut), rez.get("demux")))
+		gata(rez)
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
+def _elibereazaFluxTp():
+	"""Din firul sesiunii, dupa citirea op-ului flux: tunerul liber se elibereaza pe firul enigma2."""
+	def lucru(gata):
+		_lasaTunerulFlux()
+		gata(True)
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
@@ -490,6 +665,33 @@ def _reporneste(ce):
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
+TEXT_REPARA_PORNITA = ("pornit: cautarea in feedul HD Satelit, apoi instalarea (si pachetele imaginii ramase la jumatate, cu "
+	"--force-reinstall) si repornirea interfetei; pasii in jurnalul hds-actualizari.log, asistenta continua dupa repornire")
+
+
+def _reparaActualizarea():
+	"""Op "repara-actualizarea" (0.7.5, JAK, TODO 13.11 11:20): actualizarea rapida din meniu (HdsActualizari.actualizeazaRapid:
+	cautarea semnata, planul cu pachetele imaginii ramase la jumatate, instalarea si repornirea interfetei), pornita pe
+	firul enigma2, ca "Da" la o versiune din feed (HdsImagineOnline.porneste_feed). Omul nu tasteaza nimic, iar echipa nu
+	da nicio comanda opkg: numai pachete din feedul semnat. -> (cod, text) imediat; restul il spune jurnalul."""
+	def lucru(gata):
+		from Components import HdsActualizari as Act
+		a = Act.actualizari
+		if a.ocupat():
+			gata((1, "(actualizarile lucreaza acum: %s; incearca peste un minut)" % a.faza))
+			return
+		try:
+			from Plugins.Extensions.HdsWebControl.actualizari_web import reporneste_rapid
+		except ImportError as e:
+			gata((1, "(repornirea dupa actualizare lipseste: %s)" % e))
+			return
+		if not a.actualizeazaRapid(reporneste_rapid(_session)):
+			gata((1, "(actualizarea nu a pornit: %s)" % (a.mesaj or a.poate_porni() or "?")))
+			return
+		gata((0, TEXT_REPARA_PORNITA))
+	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
 def _setare(cheie, valoare):
 	"""O setare scrisa direct (op "setare-scrie"), pe firul enigma2, cu efectele ei; la tunere, actualizarea lor ca din
 	meniu. -> (cod, text)."""
@@ -523,9 +725,13 @@ def ctxReceptor(session):
 	ctx["taste"] = _taste
 	ctx["text"] = _text
 	ctx["canal"] = _canal
+	ctx["flux"] = _flux
+	ctx["flux_tp"] = _fluxTransponder
+	ctx["flux_tp_elibereaza"] = _elibereazaFluxTp
 	ctx["zap"] = _zap
 	ctx["reporneste"] = _reporneste
 	ctx["setare"] = _setare
+	ctx["repara_actualizarea"] = _reparaActualizarea
 	if _controler[0] is not None:
 		ctx["mesaj"] = _controler[0].cereMesaj
 		ctx["concluzii"] = _controler[0].cereConcluzii

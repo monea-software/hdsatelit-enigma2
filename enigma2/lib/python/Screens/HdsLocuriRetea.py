@@ -208,7 +208,9 @@ class HdsLocuriRetea(_Lista):
 		self.citeste()
 		if not self.locuri and not self.cautare_initiala:
 			self.cautare_initiala = True
-			self.cauta()
+			# pornit() vine din onLayoutFinish, inainte de executie: cautarea (alt ecran) se deschide la prima executie,
+			# altfel Session.open o refuza (eroarea "modal open are allowed only from a screen which is modal")
+			self.onFirstExecBegin.append(self.cauta)
 
 	def citeste(self):
 		ales = self.curent()

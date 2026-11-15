@@ -48,7 +48,8 @@ class HdsMontareDiscuri(Screen):
 		self.onClose.append(self.ceas.stop)
 		self.citind = False
 		self.deAratat = None
-		self.onLayoutFinish.append(self.citeste)
+		# citirea e alta fereastra: se deschide la prima executie, nu din onLayoutFinish (Session.open ar refuza-o)
+		self.onFirstExecBegin.append(self.citeste)
 		try:
 			from Components.Harddisk import harddiskmanager
 			harddiskmanager.on_partition_list_change.append(self.discuriSchimbate)

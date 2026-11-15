@@ -119,8 +119,10 @@ TEXTE_POST = {
 	"inregistrare": N_("La înregistrări și la pauza cu reluare (timeshift) egalizatorul nu lucrează. Sunetul merge prin placa de sunet."),
 	"format": N_("Postul acesta are sunet %s. Egalizatorul lucrează la posturile cu sunet MPEG (MP2)."),
 	"trecere": N_("Sunetul pleacă neschimbat spre bara de sunet: egalizatorul, volumul și modul de noapte le reglezi din bara de sunet."),
-	# posturile AAC: decodorul AAC nu e in imagine din cauza brevetelor; sunetul merge prin placa
+	# posturile AAC pe receptoarele fara decodorul AAC (faad, numai unde e libfaad2 pentru DAB+); sunetul merge prin placa
 	"fara-decodor-aac": N_("La acest post (AAC) egalizatorul nu e disponibil din motive de licențiere a brevetelor AAC."),
+	# posturile cu HE-AAC semnalat (SBR/PS): decodorul din imagine e aprobat numai pentru AAC-LC; sunetul merge prin placa
+	"aac-he": N_("La acest post (HE-AAC) egalizatorul nu e disponibil din motive de licențiere a brevetelor HE-AAC."),
 	"fara-decodor-mpeg": N_("Egalizatorul nu poate porni: receptorul nu are decodorul MPEG audio."),
 	"fara-gstreamer": N_("Egalizatorul nu poate porni: lipsește decodarea sunetului în procesor (GStreamer)."),
 	"fara-alsa": N_("Egalizatorul nu poate porni: placa de sunet nu se poate folosi din procesor."),
@@ -141,6 +143,7 @@ TEXTE_MOTIV = {
 	"fara-gstreamer": N_("lipsește decodarea sunetului în procesor"),
 	"fara-alsa": N_("placa de sunet nu se poate folosi din procesor"),
 	"latm-nesuportat": N_("felul acesta de AAC nu se poate decoda încă"),
+	"aac-he": N_("postul folosește HE-AAC"),
 	"format-necunoscut": N_("felul sunetului nu s-a recunoscut"),
 	"fisier-lipsa": N_("fișierul probei nu există"),
 	"wav-refuzat": N_("fișierul probei nu s-a putut scrie"),
@@ -154,6 +157,8 @@ TEXT_PROBA = N_("Probă din fișier, cu egalizator: %s.")
 TEXT_PROBA_OPRIT = N_("Probă din fișier, cu egalizator: %s. Proba merge și cu egalizatorul oprit.")
 TEXT_DEBIT_CAM = N_("cam %d kbit/s")
 TEXT_PORNESTE = N_("Pornește egalizatorul la acest post...")
+# canal TV: placa canta sunetul din primul cadru pana preia egalizatorul (stare: preluat 0; lib/service/hdsegalizator.h)
+TEXT_TV_PE_PLACA = N_("Canal TV: sunetul pornește pe placa de sunet, fără întârziere, și trece în egalizator după o clipă.")
 TEXT_FARA_DATE = N_("Postul nu mai trimite sunet. Egalizatorul așteaptă.")
 
 _STARE = {"memorie": None, "nav": None, "ceas": None, "incercari": 0, "pornit": False, "ascultatori": [],
@@ -492,7 +497,9 @@ def trimiteLaMotor(setari, m=None):
 	if hasattr(m, "setPotrivireTv"):
 		m.setPotrivireTv(limiteaza(c.potrivire_tv.value, POTRIVIRE_TV_MIN, POTRIVIRE_TV_MAX))
 	if hasattr(m, "setTv"):
-		m.setTv(1 if c.tv.value else 0)
+		# setari["tv"]: proba de pe ecran (incearca), altfel setarea salvata
+		tv = setari.get("tv")
+		m.setTv(1 if (c.tv.value if tv is None else tv) else 0)
 	return True
 
 
@@ -601,8 +608,9 @@ def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, p
 	return rez
 
 
-def incearca(benzi=None, noapte=None, nivel=None, presetare_=None, pornit=None, pePost=None, efect=None):
-	"""Numai pentru ascultare (ecranul si web-ul, cat reglezi): motorul primeste valorile, nimic nu se salveaza."""
+def incearca(benzi=None, noapte=None, nivel=None, presetare_=None, pornit=None, pePost=None, efect=None, tv=None):
+	"""Numai pentru ascultare (ecranul si web-ul, cat reglezi): motorul primeste valorile, nimic nu se salveaza.
+	tv: egalizatorul si la canalele TV (caseta La canalele TV de pe ecran), tot numai pentru ascultare."""
 	m = motor()
 	if m is None:
 		return
@@ -622,6 +630,8 @@ def incearca(benzi=None, noapte=None, nivel=None, presetare_=None, pornit=None, 
 		s["nivel"] = nivel
 	if efect is not None:
 		s["efect"] = curataEfect(efect)
+	if tv is not None:
+		s["tv"] = bool(tv)
 	trimiteLaMotor(s, m)
 	if pornit is not None:
 		m.setPornit(1 if pornit else 0)
@@ -709,8 +719,13 @@ def _textStare(st=None, format_pistei=None, trimis=None):
 	# incercare veche langa starea „merge” nu il aduce
 	if post == "fara-decodor-aac" or (st.get("motiv") == "fara-decodor-aac" and (post == "esuat" or st.get("stare") == "eroare")):
 		return _t(TEXTE_POST["fara-decodor-aac"]), False, u""
+	# HE-AAC semnalat (motorul il refuza inainte de decodare sau cand postul trece pe el): textul lui, la fel
+	if st.get("motiv") == "aac-he" and (post == "esuat" or st.get("stare") == "eroare"):
+		return _t(TEXTE_POST["aac-he"]), False, u""
 	stare = st.get("stare") or "oprit"
 	if post in ("da", "proba"):
+		if stare == "merge" and st.get("sesiune_tv") and st.get("preluat") == 0:
+			return _t(TEXT_TV_PE_PLACA), None, detaliuTehnic(st)
 		if stare == "merge":
 			sunet = st.get("codec") or u"MPEG"
 			if st.get("debit"):
@@ -875,6 +890,9 @@ def stareCompleta():
 	}
 
 
+CASETE = 6
+
+
 def geometriePanzei(W, H):
 	"""Asezarea desenului din ecranul Egalizator (Screens/HdsEgalizator.py) pe o panza W x H: casetele de sus, coloanele,
 	randul valorilor (sus .. sus + h_text) si al etichetelor (y_eticheta .. H). Butonul rotund (raza) sta intre ele si
@@ -883,7 +901,8 @@ def geometriePanzei(W, H):
 	g = {"mare": mare, "f_mic": 24 if mare else 17, "f_val": 30 if mare else 20, "f_eticheta": 26 if mare else 18,
 		"f_bold": 26 if mare else 18, "h_caseta": 84 if mare else 60, "spatiu": 16, "raza": 17 if mare else 12,
 		"w_scala": 84 if mare else 56, "h_text": 40 if mare else 28}
-	g["w_caseta"] = (W - 4 * g["spatiu"]) // 5
+	# sase casete: Egalizator, Presetare, Reglaj manual, Pentru acest post, Efecte speciale, La canalele TV
+	g["w_caseta"] = (W - (CASETE - 1) * g["spatiu"]) // CASETE
 	g["sus"] = g["h_caseta"] + (24 if mare else 14)
 	g["w_col"] = (W - g["w_scala"]) // (BENZI + 1)
 	g["y_sus"] = g["sus"] + g["h_text"] + g["raza"] + 4
@@ -898,7 +917,8 @@ def geometriePanzei(W, H):
 # ---------------------------------------------------------------- pornirea si evenimentele
 
 def asculta(functie):
-	"""functie(cod) la fiecare schimbare de stare a motorului (1 merge, 2 oprit, 3 inapoi pe placa, 4 fara date)."""
+	"""functie(cod) la fiecare schimbare de stare a motorului (1 merge, 2 oprit, 3 inapoi pe placa, 4 fara date, 5 proba gata,
+	6 canal TV: sunetul a trecut de pe placa in egalizator)."""
 	if functie not in _STARE["ascultatori"]:
 		_STARE["ascultatori"].append(functie)
 

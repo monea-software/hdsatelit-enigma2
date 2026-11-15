@@ -270,6 +270,21 @@ def _pastreazaPin(slot, pin):
 	except Exception as e:
 		print("[Ci] PIN-ul pastrat %d: %r" % (slot, e))
 
+class _StarePin(ConfigNothing):
+	"""Randul PIN-ului pastrat (CRF, forum 1286): in dreapta numai pus / nepus, niciodata cifrele (regula a5-local, 6b3a0cac8).
+	E un ConfigNothing: VERDE (keySave) nu-l salveaza, stanga/dreapta nu schimba nimic, OK deschide scrierea PIN-ului."""
+
+	def __init__(self, pus):
+		ConfigNothing.__init__(self)
+		self.hdsPus = pus
+
+	def getText(self):
+		return _("pus") if self.hdsPus else _("nepus")
+
+	def getMulti(self, selected):
+		return ("text", self.getText())
+
+
 def raspundeCuPinPastrat(slot, screen, handler):
 	"""Cererea de PIN a modulului primeste singura PIN-ul pastrat. Nu cand PIN-ul are alta lungime decat cere modulul si
 	nici cand modulul il cere iar la scurt timp dupa ce l-am trimis (probabil gresit): atunci se intreaba omul."""
@@ -583,6 +598,16 @@ class CiSelection(Screen):
 				"ok": self.okbuttonClick,
 				"cancel": self.cancel
 			},-1)
+		# tastele colorate ca la celelalte ecrane de setari (darog69, AX HD51, forumul 479 #2317: "Opțiunile de decriptare"
+		# fara ROSU / VERDE). Fiecare alegere se pastreaza deja cand se schimba (keyConfigEntry); VERDE le scrie pe disc si
+		# inchide, ROSU inchide ca EXIT. Tema HD Satelit le arata din HdsCadru1240 (key_red / key_green ca Label).
+		self["key_red"] = Label(_("Închide"))
+		self["key_green"] = Label(_("Save"))
+		self["culori"] = ActionMap(["ColorActions"],
+			{
+				"red": self.cancel,
+				"green": self.keySave,
+			}, -1)
 
 		self.dlg = None
 		self.state = { }
@@ -677,7 +702,7 @@ class CiSelection(Screen):
 		setari = config.ci[slot]
 		self.list.append((_("Păstrează codul PIN"), setari.use_static_pin, None, slot))
 		if setari.use_static_pin.value:
-			self.list.append((_("Introdu codul PIN păstrat"), ConfigNothing(), "pin", slot))
+			self.list.append((_("Introdu codul PIN păstrat"), _StarePin(bool(_pinPastrat(slot))), "pin", slot))
 			if _pinPastrat(slot):
 				self.list.append((_("Șterge codul PIN păstrat"), ConfigNothing(), "pinsterge", slot))
 		self.list.append((_("Arată mesajele CI"), setari.show_ci_messages, None, slot))
@@ -797,6 +822,22 @@ class CiSelection(Screen):
 		_pinTrimisLa.pop(slot, None)
 		self.updateState()
 		self["text"].setText(_("Codul PIN a fost păstrat."))
+
+	def keySave(self):
+		"""VERDE: toate setarile din lista (comune si ale sloturilor) pastrate si scrise pe disc, apoi ecranul se inchide."""
+		for rand in self.list:
+			element = rand[1] if len(rand) > 1 else None
+			if element is not None and not isinstance(element, ConfigNothing):
+				try:
+					element.save()
+				except Exception as e:
+					print("[Ci] salvarea setarii %r: %r" % (rand[0], e))
+		try:
+			from Components.config import configfile
+			configfile.save()
+		except Exception as e:
+			print("[Ci] scrierea setarilor CI: %r" % (e,))
+		self.cancel()
 
 	def cancel(self):
 		for slot in range(MAX_NUM_CI):

@@ -12,6 +12,13 @@
  */
 static long hdsNumar(PyObject *o)
 {
+	/* HDSatelit 0.7.5: NULL (an index past the plugin's data tuple, IndexError set) counts as 0; PyFloat_Check(NULL)
+	   read address 4 and took the whole interface down (AS17, Vu+ Uno 4K SE, 13.11.2026). */
+	if (!o)
+	{
+		PyErr_Clear();
+		return 0;
+	}
 	if (PyFloat_Check(o))
 		return (long)PyFloat_AsDouble(o);
 	long v = PyLong_AsLong(o);
@@ -914,12 +921,22 @@ static ePyObject lookupColor(ePyObject color, ePyObject data)
 	unsigned int icolor = PyLong_AsUnsignedLongMask(color);
 
 		/* check if we have the "magic" template color */
-	if ((icolor & 0xFF000000) == 0xFF000000)
+	/* HDSatelit 0.7.5: only with a template (data), as in OE-Alliance. A list without a template that gives a colour
+	   with alpha 0xFF (0xFFFFFFFF, -1 = transparent) called PyTuple_GetItem(NULL, ...): signal 11 at address 4 and the
+	   whole interface down (AS17, Vu+ Uno 4K SE, 13.11.2026). An index past the tuple means no colour, not an IndexError
+	   left for the next Python call. */
+	if (data && (icolor & 0xFF000000) == 0xFF000000)
 	{
 		int index = icolor & 0xFFFFFF;
-		if (PyTuple_GetItem(data, index) == Py_None)
+		ePyObject templ = PyTuple_GetItem(data, index);
+		if (!templ)
+		{
+			PyErr_Clear();
 			return ePyObject();
-		return PyTuple_GetItem(data, index);
+		}
+		if (templ == Py_None)
+			return ePyObject();
+		return templ;
 	}
 
 	if (color == Py_None)

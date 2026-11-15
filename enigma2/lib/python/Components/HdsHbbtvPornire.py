@@ -34,11 +34,15 @@ ROSU-UL URMARIT (VK_RED trimis de receptor cu stratul, aplicatia pe ecran si ecr
       cu ceva pe ecran: o reactie e ecranul schimbat; nimic schimbat in ROSU_REACTIE_MS -> inca un VK_RED;
       ecranul gol: o reactie e un continut mare (ROSU_SEMN_MARE din ecran: un meniu, un portal); un continut mic
                    (semnul aplicatiei, macar ROSU_DESEN_MINIM puncte) vazut de doua ori la rand -> inca un VK_RED, acum
-                   ca aplicatia s-a aratat gata; nimic in ROSU_SEMN_MAXIM_MS -> nimic de facut;
+                   ca aplicatia s-a aratat gata; nimic in ROSU_SEMN_MAXIM_MS -> inca un VK_RED (aplicatia s-a aratat
+                   inainte sa-si puna ascultatorii de taste si a pierdut primul VK_RED: masurat pe receptor, o
+                   aplicatie a raspuns abia la a doua apasare, la 6 s si la 9 s dupa prima);
     oricand, reactii sunt si o pagina noua (lansatorul spune INCARCARE: laIncarcare), alta masca de taste (ARD trece
     din 13 in 63 la ROSU), arata, ascunde, distruge, aplicatie, canal, urmator, anterior. Legarea video/broadcast,
     fereastra si o masca pusa din nou cu aceeasi valoare vin si singure, cat aplicatia se pregateste, deci nu sunt
     reactii. Al doilea VK_RED pleaca o singura data; orice tasta trimisa aplicatiei de om opreste urmarirea;
+  - tasta de pornire: aplicatiile care se deschid cu ALBASTRU (HdsHbbtvAplicatii.tasta_pornire, lista "albastru")
+    primesc VK_BLUE in locul lui VK_RED, cu aceleasi reguli (masca, urmarirea, a doua trimitere);
   - ecranul: pagina afisata a /dev/fb0 (cat aplicatia e pe ecran numai navigatorul deseneaza acolo, enigma2 are
     lacatul), un rand din SEMN_PAS si un punct din SEMN_PAS pe rand (alfa > 0) si crc32 al randurilor citite
     (semn_ecran, ca stratul web Plugins/Extensions/HdsWebControl/osd_strat.py; ~14 ms pe Amiko Viper 4K V20);
@@ -219,7 +223,7 @@ ROSU_PAS_MS = 250            # cat de des se citeste ecranul dupa VK_RED trimis 
 ROSU_DESEN_MINIM = 20        # puncte opace (din esantion) de la care pe ecran "e ceva"
 ROSU_SEMN_MARE = 0.25        # de atat din ecran incolo e un meniu deschis (o reactie), nu semnul de ROSU
 ROSU_REACTIE_MS = 2500       # ecranul avea ceva: neschimbat atat dupa VK_RED -> inca un VK_RED
-ROSU_SEMN_MAXIM_MS = 8000    # ecranul era gol: cat se asteapta semnul aplicatiei
+ROSU_SEMN_MAXIM_MS = 8000    # ecranul era gol: cat se asteapta semnul aplicatiei, apoi inca un VK_RED (o data)
 SEMN_PAS = 8                 # semn_ecran: un rand din atatea si un punct din atatea pe rand
 CURAT_MS = 150
 TERMEN_ARATA_MS = 10000      # de la prima pagina pana la Application.show()
@@ -329,6 +333,8 @@ TEXTE = {
 	"motiv-albastru": N_("Aplicația HbbTV a acestui canal pornește cu tasta ALBASTRU. Apasă ALBASTRU."),
 	"motiv-consimtamant": N_("Aplicația HbbTV a acestui canal începe cu o întrebare de consimțământ care nu se vede pe ecran. De obicei trece singură în jumătate de minut."),
 	"motiv-criptat": N_("Canalul e criptat și receptorul nu îl poate decripta acum, iar aplicația lui HbbTV nu s-a deschis."),
+	"motiv-certificat-expirat": N_("Certificatul de securitate al aplicației HbbTV a acestui canal a expirat, deci pagina nu se poate deschide în siguranță. Postul trebuie să îl reînnoiască; televizoarele o refuză la fel."),
+	"motiv-certificat": N_("Certificatul de securitate al aplicației HbbTV a acestui canal nu este valid, deci pagina nu se poate deschide în siguranță. Postul trebuie să îl repare."),
 }
 
 # cat asteapta mesajul cercetarea motivului (pe firul ei); apoi se arata ce se stie, iar restul ajunge numai in web
@@ -800,7 +806,7 @@ def urmare_rosu(gol, semn0, semn, vazut, trecut_ms):
 	if vazut >= 2:
 		return REPETA, vazut
 	if trecut_ms >= ROSU_SEMN_MAXIM_MS:
-		return RENUNTA, vazut
+		return REPETA, vazut
 	return ASTEAPTA, vazut
 
 
@@ -941,6 +947,11 @@ class Mediu(object):
 
 	def date_aplicatii(self):
 		return _aplicatii().citeste_date()
+
+	def tasta_pornire(self, url):
+		"""HdsHbbtvAplicatii.TASTA_ROSU sau TASTA_ALBASTRU: tasta trimisa aplicatiei de la url la ROSU-ul omului."""
+		A = _aplicatii()
+		return A.tasta_pornire(url, A.citeste_date())
 
 	def agent_pentru(self, url):
 		"""(partea HbbTV a User-Agent-ului, profilul sau None) pentru aplicatia de la url."""
@@ -1502,6 +1513,7 @@ class Controlor(object):
 		self._programe = None
 		self._ccid = {}
 		self._url = ""                 # adresa de pornire (pentru incarcarea din nou fara VK_RED)
+		self._tasta_pornire, self._masca_tasta = KEY_RED, MASCA_RED   # tasta de pornire trimisa de receptor (tasta_pornire)
 		self._rosu_trimis_la = None    # cand a plecat VK_RED trimis de receptor (nu de om)
 		self._aplicatie_noua_la = None # cand a pornit createApplication() o aplicatie noua, pana la documentul ei
 		self._reluata = False         # incarcata din nou fara VK_RED (o singura data)
@@ -1755,6 +1767,8 @@ class Controlor(object):
 		self._cheie_trad = secrets.token_urlsafe(18)
 		_asculta_traducerea(self)
 		self._agent, self._profil = self._agentPentru(url)
+		albastru = self._din_mediu("tasta_pornire", "rosu", url) == "albastru"
+		self._tasta_pornire, self._masca_tasta = (KEY_BLUE, MASCA_BLUE) if albastru else (KEY_RED, MASCA_RED)
 		self.autostart = bool(rez.get("autostart"))
 		self.aratat = False
 		self._mesaj = None
@@ -2382,7 +2396,7 @@ class Controlor(object):
 					self._reactieRosu("masca")
 				self.masca = v & MASCA_MAXIM
 				self._trimite("taste")
-				if self._rosu_in_asteptare and self.masca & MASCA_RED:
+				if self._rosu_in_asteptare and self.masca & self._masca_tasta:
 					self._rosu_in_asteptare = False
 					self._trimiteRosu()
 		elif comanda == "distruge":
@@ -2767,22 +2781,23 @@ class Controlor(object):
 		if self.strat:
 			if not self.pornita or not self._rosu_de_trimis:
 				return
-			if not (self.masca or 0) & MASCA_RED:
-				self._rosu_in_asteptare = True   # trimis cand aplicatia isi pune ROSU in masca
+			if not (self.masca or 0) & self._masca_tasta:
+				self._rosu_in_asteptare = True   # trimis cand aplicatia isi pune tasta in masca
 				return
 			self._rosu_de_trimis = False
 		elif not self.aratat:
 			return
 		semn = self._din_mediu("semn_ecran", None) if self.strat and self.aratat else None
 		self._rosu_trimis_la = self._timp()
-		self.nav.tasta(KEY_RED, 1)
-		self.nav.tasta(KEY_RED, 0)
+		self.nav.tasta(self._tasta_pornire, 1)
+		self.nav.tasta(self._tasta_pornire, 0)
 		if semn is not None:
 			# ROSU-ul urmarit: o aplicatie care inca nu era gata il primeste din nou (o data), vezi urmare_rosu
 			gol = semn[0] < ROSU_DESEN_MINIM
 			self._rosu_urmarit = {"gol": gol, "semn": semn, "pasi": 0, "vazut": 0}
 			self._ceas_rosu_urma.start(ROSU_PAS_MS, False)
-			_jurnal("VK_RED trimis, urmarit (ecranul %s)" % ("gol" if gol else "cu ceva"))
+			_jurnal("%s trimis, urmarit (ecranul %s)" % ("VK_BLUE" if self._tasta_pornire == KEY_BLUE else "VK_RED",
+				"gol" if gol else "cu ceva"))
 
 	def _opresteUrmarirea(self):
 		self._rosu_urmarit = None
@@ -2808,11 +2823,12 @@ class Controlor(object):
 		if fapta == REACTIE:
 			_jurnal("VK_RED primit de aplicatie (ecranul)")
 		elif fapta == REPETA:
-			_jurnal("VK_RED trimis din nou dupa %d ms (%s)" % (u["pasi"] * ROSU_PAS_MS,
-				"semnul aplicatiei aparut" if u["gol"] else "ecranul neschimbat"))
+			_jurnal("%s trimis din nou dupa %d ms (%s)" % ("VK_BLUE" if self._tasta_pornire == KEY_BLUE else "VK_RED",
+				u["pasi"] * ROSU_PAS_MS, ("semnul aplicatiei aparut" if u["vazut"] >= 2 else "nimic desenat") if u["gol"]
+				else "ecranul neschimbat"))
 			self._rosu_trimis_la = self._timp()
-			self.nav.tasta(KEY_RED, 1)
-			self.nav.tasta(KEY_RED, 0)
+			self.nav.tasta(self._tasta_pornire, 1)
+			self.nav.tasta(self._tasta_pornire, 0)
 
 	def laIncarcare(self):
 		"""Lansatorul incepe o pagina noua (INCARCARE): dupa VK_RED, aplicatia l-a primit si merge mai departe. Filmul

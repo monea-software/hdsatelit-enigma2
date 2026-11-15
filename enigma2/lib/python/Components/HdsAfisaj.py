@@ -808,6 +808,37 @@ def _migreaza(c):
 	if vechi is not None:
 		c.functionare.value = FUNCTIONARE_IMPLICIT
 		c.functionare.save()
+	_treceRamasPeHm(c)
+
+
+# HDSatelit 0.7.5: data redare.ramas (cat mai e din film) avea numai formatul "minus" (-89). Cine o alesese trece o
+# singura data pe "hm_ms" (1H26 peste o ora, 5648 = 56:48 sub o ora; cererea unui tester), cu durata si eticheta
+# pastrate. Semnul din "trecute" se pune si cand nu era nimic de trecut, ca o alegere facuta dupa actualizare sa ramana.
+TRECERE_RAMAS = "ramas_hm"
+
+
+def _treceRamasPeHm(c):
+	trecute = [t for t in (c.trecute.value or "").split(",") if t]
+	if TRECERE_RAMAS in trecute:
+		return
+	vechi = "redare.ramas:minus"
+	parti = (c.lista.value or "").split(",")
+	noi = []
+	for parte in parti:
+		p = parte.strip()
+		if p == vechi or p.startswith(vechi + "@") or p.startswith(vechi + "+"):
+			p = "redare.ramas:hm_ms" + p[len(vechi):]
+			noi.append(p)
+		else:
+			noi.append(parte)
+	nou = ",".join(noi)
+	if nou != (c.lista.value or ""):
+		c.lista.value = nou
+		c.lista.save()
+		_jurnal("cat mai e din film: formatul cu minus trece pe ore si minute: %s" % nou)
+	trecute.append(TRECERE_RAMAS)
+	c.trecute.value = ",".join(trecute)
+	c.trecute.save()
 
 
 def initConfig():
@@ -843,6 +874,8 @@ def initConfig():
 	c.color_animatii = ConfigSelection(default="nu", choices=alegeriColorAnimatii())
 	for cheie in LED_CONTROALE:
 		setattr(c, cheie, ConfigSelection(default=ledImplicit(cheie), choices=alegeriLed(cheie)))
+	# trecerile facute o singura data (_migreaza), despartite prin virgula; nu se arata nicaieri
+	c.trecute = ConfigText(default="", fixed_size=False)
 	try:
 		_migreaza(c)
 	except Exception as e:

@@ -84,6 +84,8 @@
     sunet_m3u: "Browserul nu poate reda sunetul acestui canal. Încearcă din nou sau deschide-l într-un player din casă cu playlistul de mai jos.",
     hevc: "Acest browser nu poate decoda imaginea HEVC (H.265) a acestui canal, de pildă 4K pe 10 biți. Încearcă alt browser sau un player din casă.",
     hevc_m3u: "Acest browser nu poate decoda imaginea HEVC (H.265) a acestui canal, de pildă 4K pe 10 biți. Deschide-l într-un player din casă cu playlistul de mai jos.",
+    h264: "Acest browser nu poate decoda imaginea H.264 a acestui canal (de pildă Opera sau Chromium pe Linux, fără codecurile video ale sistemului). Încearcă Chrome, Edge sau Firefox, sau un player din casă.",
+    h264_m3u: "Acest browser nu poate decoda imaginea H.264 a acestui canal (de pildă Opera sau Chromium pe Linux, fără codecurile video ale sistemului). Deschide-l în Chrome, Edge sau Firefox, sau într-un player din casă cu playlistul de mai jos.",
     detalii: "Detalii",
     din_nou: "Pornește din nou",
     incearca: "Încearcă din nou",
@@ -419,6 +421,11 @@
     if(!POATE){
       var nativ = suporta('audio/mp4; codecs="ac-3"'), wasm = suportaWasm();
       POATE = {
+        // MediaSource fara H.264 (Opera sau Chromium pe Linux fara codecurile sistemului, missile 10.11): mpegts.js cere
+        // H.264 si AAC impreuna (getFeatureList), iar pagina spunea gresit ca lipseste MediaSource
+        mse: !!(window.ManagedMediaSource || window.MediaSource),
+        h264: suporta('video/mp4; codecs="avc1.640028"') || suporta('video/mp4; codecs="avc1.4D401F"') ||
+          suporta('video/mp4; codecs="avc1.42E01E"'),
         hevc: suporta('video/mp4; codecs="hvc1.1.6.L93.B0"') || suporta('video/mp4; codecs="hev1.1.6.L93.B0"'),
         // AC-3: nativ (MediaSource il ia), sau decodat in pagina (hds-sunet.js: decodorul wasm, apoi FLAC in MediaSource)
         ac3nativ: nativ,
@@ -1100,18 +1107,29 @@
     // mpegts.js (MediaSource) reda H.264 / HEVC; imaginea MPEG-2 merge si fara el, prin playerul wasm
     var mse = false, eroareMse = null;
     function faraMse(){
-      return eroareMse || new Error(tx("fara_mse"));
+      // MediaSource exista, dar fara decodorul H.264 / HEVC: cauza adevarata, nu "ii lipseste MediaSource"
+      return eroareMse || new Error(pt.mse ? tx(self.o.m3u ? "h264_m3u" : "h264") : tx("fara_mse"));
+    }
+    // imaginea H.264 pe care MediaSource (care exista) nu o decodeaza; playerul wasm are numai MPEG-2 / MPEG-1
+    function faraH264(video){
+      return !self.cuWasm && String(video || "").toLowerCase() === "h264" && pt.mse && !pt.h264;
     }
     function q0(){
       var q = new URLSearchParams();
-      q.set("hevc", pt.hevc ? "1" : "0"); q.set("ac3", pt.ac3 ? "1" : "0"); q.set("wasm", pt.wasm ? "1" : "0");
+      q.set("hevc", pt.hevc ? "1" : "0");
+      // h264=0 numai cand MediaSource nu decodeaza H.264 (fara parametru receptorul presupune ca da)
+      if(pt.mse && !pt.h264){ q.set("h264", "0"); }
+      q.set("ac3", pt.ac3 ? "1" : "0"); q.set("wasm", pt.wasm ? "1" : "0");
       if(preia){ q.set("preia", "1"); }
       return q;
     }
     function incarcaRedarea(){
       return Promise.all([incarcaMpegts().catch(function(e){ eroareMse = e; }), incarcaSunet()]).then(function(){
         verificaViu();
-        mse = !!(window.mpegts && mpegts.getFeatureList && mpegts.getFeatureList().mseLivePlayback);
+        // mpegts.js (getFeatureList().mseLivePlayback) cere H.264 SI AAC; ajunge si MediaSource cu H.264 sau HEVC si
+        // fluxul citit pe bucati (sunetul MP2 / AC-3 nu cere AAC)
+        var fl = (window.mpegts && mpegts.getFeatureList) ? mpegts.getFeatureList() : null;
+        mse = !!(fl && (fl.mseLivePlayback || (fl.networkStreamIO && pt.mse && (pt.h264 || pt.hevc))));
         if(!mse && !pt.wasm){ throw faraMse(); }
       });
     }
@@ -1164,6 +1182,7 @@
         return incarcaRedarea().then(function(){
           self.cuWasm = pt.wasm && imagineWasm(v.video);
           if(!self.cuWasm && !mse){ throw faraMse(); }
+          if(faraH264(v.video)){ throw new Error(tx(self.o.m3u ? "h264_m3u" : "h264")); }
           var q = q0(); q.set("ref", self.ref);
           return self._cerere("/api/tv-porneste?" + q.toString(), "POST").then(function(d){ d._verificare = v; return d; });
         });
@@ -1191,6 +1210,7 @@
         self.peTv = true;
         self.cuWasm = pt.wasm && imagineWasm(d.video);
         if(!self.cuWasm && !mse){ throw faraMse(); }
+        if(faraH264(d.video)){ throw new Error(tx(self.o.m3u ? "h264_m3u" : "h264")); }
       }
       self.sesiune = d;
       self._repede = 0;
@@ -1871,6 +1891,8 @@
       if(/audio packet/i.test(msg)){ cauza = self.o.m3u ? tx("sunet_m3u") : tx("sunet"); }
       else if(/^(hvc1|hev1)\./.test(cImg) && !suporta('video/mp4; codecs="' + cImg + '"')){
         cauza = self.o.m3u ? tx("hevc_m3u") : tx("hevc");
+      } else if(/^avc1\./.test(cImg) && !suporta('video/mp4; codecs="' + cImg + '"')){
+        cauza = self.o.m3u ? tx("h264_m3u") : tx("h264");
       } else { cauza = self.o.m3u ? tx("decodare_m3u") : tx("decodare"); }
     } else if(detaliu === "HttpStatusCodeInvalid"){
       cauza = cod === 409 ? tx("preluata") : (cod === 404 ? tx("nu_transmite") : txs("refuzat", cod));
@@ -1880,6 +1902,8 @@
         (detaliu === "ConnectingTimeout" ? tx("nu_raspunde") : tx("legatura"));
     } else if(tip === "MediaError"){
       if(detaliu === "DecodorWasm"){ cauza = tx("wasm_oprit"); }
+      else if((detaliu === "FormatUnsupported" || detaliu === "CodecUnsupported") && /^avc1\./.test(self._codecImagine || "") &&
+        !poate().h264){ cauza = self.o.m3u ? tx("h264_m3u") : tx("h264"); }
       else if(detaliu === "FormatUnsupported" || detaliu === "CodecUnsupported"){ cauza = tx("format"); }
       else if(detaliu === "FormatError"){ cauza = tx("forma"); }
       else if(cod === 4){ cauza = tx("cod4"); }

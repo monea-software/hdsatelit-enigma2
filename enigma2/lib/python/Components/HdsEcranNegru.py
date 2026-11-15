@@ -81,6 +81,9 @@ RADIO_STYPES = (2, 10)
 BLOCAT = "blocat"
 FARA_TUNER = "fara_tuner"
 TUNER_NESETAT = "tuner_nesetat"
+# satelitul canalului e setat pe un tuner, dar transponderul cere un tuner care alege fluxul (multistream: flux 1..255 sau o
+# secventa PLS aleasa) si niciun tuner setat pe satelit nu stie (lib/dvb/hdsmultistream.h, cereTunerMultistream)
+MULTISTREAM_FARA_TUNER = "multistream_fara_tuner"
 # zap pe un satelit pe care numai motorul USALS il prinde, cu locul antenei nestabilit (Components/HdsLocul.py)
 LOC_NESTABILIT = "loc_nestabilit"
 # zap pe un satelit USALS care e sub orizont din locul antenei stabilit (locul scris gresit, de pilda emisferele schimbate):
@@ -96,7 +99,7 @@ DATE = "date"
 CRIPTAT = "criptat"
 FARA_IMAGINE = "fara_imagine"
 NUMAI_SUNET = "numai_sunet"
-CODURI = (BLOCAT, FARA_TUNER, TUNER_NESETAT, LOC_NESTABILIT, SUB_ORIZONT, ANTENA, FARA_SEMNAL, FRECVENTA_GOALA, POST_MUTAT, FARA_PMT,
+CODURI = (BLOCAT, FARA_TUNER, TUNER_NESETAT, MULTISTREAM_FARA_TUNER, LOC_NESTABILIT, SUB_ORIZONT, ANTENA, FARA_SEMNAL, FRECVENTA_GOALA, POST_MUTAT, FARA_PMT,
 	FORMAT, DATE, CRIPTAT, FARA_IMAGINE, NUMAI_SUNET)
 
 # faptele (butonul de pe televizor si din web)
@@ -143,6 +146,7 @@ TITLURI = {
 	BLOCAT: N_("Canal blocat"),
 	FARA_TUNER: N_("Tunerul este ocupat"),
 	TUNER_NESETAT: N_("Tunerul nu e setat pentru acest canal"),
+	MULTISTREAM_FARA_TUNER: N_("Tunerul nu poate alege fluxul"),
 	LOC_NESTABILIT: N_("Locul antenei nu e stabilit"),
 	SUB_ORIZONT: N_("Satelitul nu se vede din locul antenei"),
 	ANTENA: N_("Antena se rotește"),
@@ -161,6 +165,7 @@ TEXTE = {
 	BLOCAT: N_("Canalul este blocat cu codul pentru părinți."),
 	FARA_TUNER: N_("Tunerul este folosit acum pe altă frecvență, pentru o înregistrare sau o transmisie în rețea, și nu poate porni acest canal."),
 	TUNER_NESETAT: N_("Niciun tuner nu e setat să primească acest canal. Verifică setările tunerului."),
+	MULTISTREAM_FARA_TUNER: N_("Satelitul e setat corect, dar acest canal emite în multistream (mai multe fluxuri pe aceeași frecvență), iar tunerul setat pe acest satelit nu poate alege fluxul. Canalul merge pe un tuner cu multistream."),
 	LOC_NESTABILIT: N_("Acest satelit se recepționează numai cu motorul USALS, iar motorul nu știe unde ești, deci antena nu se rotește. Apasă OK și alege țara și orașul."),
 	SUB_ORIZONT: N_("Din locul antenei scris în setări, acest satelit e sub orizont, deci motorul nu rotește antena spre el. Probabil emisfera (Nord sau Sud) ori partea față de Greenwich (Est sau Vest) e aleasă greșit. Apasă OK și verifică locul antenei."),
 	# numai ce s-a masurat (un sfat despre cablu sau vreme poate fi gresit cand cauza nu se
@@ -208,6 +213,7 @@ T_DETALIU = N_("Detaliu tehnic: %s")
 DETALII = {
 	FARA_TUNER: N_("niciun tuner liber"),
 	TUNER_NESETAT: N_("configurarea tunerului nu se potrivește canalului"),
+	MULTISTREAM_FARA_TUNER: N_("transponder multistream (%s); tunerele setate pe satelit (%s) nu au multistream"),
 	LOC_NESTABILIT: N_("USALS fără locul antenei; nucleul nu primește satelitul"),
 	SUB_ORIZONT: N_("USALS: satelitul e sub orizont din locul antenei; nucleul nu primește satelitul"),
 	FRECVENTA_GOALA: N_("PAT necitit în timpul așteptat"),
@@ -227,6 +233,11 @@ T_INDEMN = N_("EXIT ascunde mesajul")
 # antena cu motor e la locul ei (alt transponder al satelitului se prinde), dar transponderul canalului nu emite
 T_TP_NU_EMITE = N_("Transponderul acestui canal nu emite acum. Antena e la locul ei: alt transponder al aceluiași satelit se recepționează.")
 D_TP_PRINS = N_("alt transponder se recepționează: %s")
+# antena pe alt satelit (AS26, asistenta la un GigaBlue UHD Quad 4K Pro): tunerul prinde semnal pe doua sau mai multe frecvente ale satelitului,
+# dar fluxurile prinse nu au canalele din lista (SID negasit in PAT); vezi flux_strain_noteaza si _alt_satelit
+T_ALT_SAT_TITLU = N_("Antena pare îndreptată spre alt satelit")
+T_ALT_SAT = N_("Tunerul %s prinde semnal, dar nu de la %s: pe frecvențele lui vin alte emisiuni decât cele din lista de canale. Antena legată la tunerul %s pare îndreptată spre alt satelit sau cablul ei e în altă mufă. Verifică antena și cablul, cu receptorul oprit.")
+D_ALT_SAT = N_("tunerul %s: SID negăsit în PAT pe %s")
 
 
 def _curat(text, n=120):
@@ -383,6 +394,11 @@ def analizeaza(d):
 		return _verdict(SUB_ORIZONT, d, fapta=F_LOC, detaliu=_detaliu(_t(DETALII[SUB_ORIZONT])))
 	if eroare == E_CONFIGURARE and d.get("loc_nestabilit"):
 		return _verdict(LOC_NESTABILIT, d, fapta=F_LOC, detaliu=_detaliu(_t(DETALII[LOC_NESTABILIT])))
+	if eroare == E_CONFIGURARE and d.get("multistream_fara_tuner"):
+		m = d["multistream_fara_tuner"]
+		detaliu = _detaliu(_t(DETALII[MULTISTREAM_FARA_TUNER]) % (m.get("flux") or u"?", m.get("tunere") or u"?"))
+		# setarile tunerului ajuta numai cand receptorul are un tuner cu multistream (satelitul se poate pune pe el)
+		return _verdict(MULTISTREAM_FARA_TUNER, d, fapta=F_TUNER if m.get("alt_tuner") else None, detaliu=detaliu)
 	if eroare == E_CONFIGURARE:
 		return _verdict(TUNER_NESETAT, d, fapta=F_TUNER, detaliu=_detaliu(_t(DETALII[TUNER_NESETAT])))
 	if d.get("rotor") and d.get("fel") == "s":
@@ -393,15 +409,24 @@ def analizeaza(d):
 			return _verdict(ANTENA, d, text=text, titlu=_t(T_COMANDA_TITLU))
 		text = _t(T_ANTENA_SPRE) % spre if spre else _t(T_ANTENA)
 		return _verdict(ANTENA, d, text=text)
+	if eroare == E_FARA_PAT and d.get("t2_criptat"):
+		# canalul DVB-T2 din satelit prin releul local cu fluxul numai criptat (BISS fara cheie, Abertis 30W): frecventa
+		# trimite, dar releul nu are ce desface; nu "Frecventa nu trimite nimic" cu o cautare noua
+		return _verdict(CRIPTAT, d, text=_t(TEXTE[CRIPTAT]))
 	if eroare == E_FARA_PAT:
 		return _verdict(FRECVENTA_GOALA, d, fapta=F_CAUTA, detaliu=_detaliu(_t(DETALII[FRECVENTA_GOALA])))
 	if eroare == E_FARA_SID:
+		if d.get("alt_satelit"):
+			return _verdict_alt_satelit(POST_MUTAT, d)
 		return _verdict(POST_MUTAT, d, fapta=_fapta_cautare(d), detaliu=_detaliu(_t(DETALII[POST_MUTAT])))
 	if eroare == E_FARA_PMT:
 		return _verdict(FARA_PMT, d, fapta=_fapta_cautare(d), detaliu=_detaliu(_t(DETALII[FARA_PMT])))
 	prins = semnal_prins(d.get("lock", -1), d.get("stare_tuner"))
 	if (eroare == E_ACORDARE or prins is False) and secunde >= PRAG_SEMNAL:
 		# numai faptele masurate (nivelul si calitatea in bare, tunerul si frecventa in detaliu), fara cauze presupuse
+		if d.get("alt_satelit") and not d.get("tp_nu_emite"):
+			# alte frecvente ale satelitului s-au prins pe acest tuner cu fluxuri straine: antena pare pe alt satelit
+			return _verdict_alt_satelit(FARA_SEMNAL, d, bare=True)
 		text = _t(TEXTE[FARA_SEMNAL])
 		parti = []
 		if d.get("tp_text"):
@@ -509,7 +534,28 @@ def verdict_eroare(eroare, fel="s", canal=u""):
 		# „Locul antenei nu e stabilit” (OK = alege locul), nu „Tunerul nu e setat” (Quad 4K Pro cu motor)
 		d["loc_nestabilit"] = loc_nestabilit(_refRedata())
 		d["sub_orizont"] = sub_orizont(_refRedata())
+		d["multistream_fara_tuner"] = multistream_fara_tuner(_refRedata())
+	if eroare == E_FARA_PAT:
+		d["t2_criptat"] = t2_releu_criptat(_refRedata())
 	return analizeaza(d)
+
+
+def t2_releu_criptat(ref):
+	"""True cand serviciul e un canal DVB-T2 din satelit redat prin releul local (http://127.0.0.1:8889/t2/...) si
+	binarul T2 primeste fluxul numai criptat, fara nimic iesit (Hds/DabT2/pornire.flux_criptat). Fara releu pornit
+	(modulul neincarcat), alt serviciu sau o eroare: False. Nu importa nimic: controlorul T2 e deja incarcat cand canta."""
+	try:
+		s = ref.toString() if hasattr(ref, "toString") else str(ref or "")
+	except Exception:
+		return False
+	if "127.0.0.1%3a8889/t2/" not in s and "127.0.0.1:8889/t2/" not in s:
+		return False
+	import sys
+	pornire = sys.modules.get("Hds.DabT2.pornire")
+	try:
+		return bool(pornire is not None and pornire.flux_criptat())
+	except Exception:
+		return False
 
 
 def _refRedata():
@@ -1031,9 +1077,12 @@ class Urmaritor(object):
 		d["furnizor"] = r.gets("sProvider")
 		stare_dvb = r.geti("sDVBState")
 		d["eroare"] = eroare_acordare(stare_dvb)
+		if d["eroare"] == E_FARA_PAT:
+			d["t2_criptat"] = t2_releu_criptat(sref)
 		if d["eroare"] == E_CONFIGURARE and d["fel"] == "s":
 			d["loc_nestabilit"] = loc_nestabilit(sref)
 			d["sub_orizont"] = sub_orizont(sref)
+			d["multistream_fara_tuner"] = multistream_fara_tuner(sref, r.tp())
 		program = _TABEL["program"]
 		d["pmt"] = (program is not None and stare_dvb == program) or r.geti("sIsCrypted") in (0, 1)
 		d["video_pid"] = r.geti("sVideoPID")
@@ -1067,6 +1116,7 @@ class Urmaritor(object):
 				d["rotor_spre"] = C.sat_full(poz) if poz >= 0 else u""
 				d["rotor_plecare_nestiuta"] = plecare_nestiuta()
 			d["tp_nu_emite"] = transponder_nu_emite()
+			d["alt_satelit"] = _alt_satelit(d, tp, C, acum)
 		if d["eroare"] == E_FARA_TUNER:
 			d["inregistrari"] = _inregistrari(nav)
 		if d["video_pid"] is None or d["video_pid"] <= 0:
@@ -1115,6 +1165,79 @@ def transponder_nu_emite():
 		return u""
 
 
+# ---------------------------------------------------------------- antena pe alt satelit
+# AS26 (asistenta de la distanta, GigaBlue UHD Quad 4K Pro): tunerul A setat corect pe 42,0E prindea doua
+# frecvente (12207 H si 12245 H, SNR 55-57 %), dar fluxurile nu aveau canalele din lista (eventNoPATEntry), iar celelalte nu
+# aveau purtatoare: antena din mufa A era pe alt satelit. Ecranul spunea "Postul nu mai emite pe aceasta frecventa" si "Fara
+# semnal", deci omul n-avea de unde sti. Un singur transponder cu SID negasit poate fi un post mutat; doua sau mai multe
+# transpondere diferite ale aceluiasi satelit, pe acelasi tuner, prinse cu fluxuri fara canalele din lista, in STRAIN_S
+# secunde si fara nicio imagine pe acel satelit intre timp, arata antena (sau cablul) pe alt satelit. Atunci mesajul de
+# SID negasit si cel de fara semnal pentru canalele acelui satelit pe acel tuner spun asta. Codul verdictului ramane cel
+# vechi (POST_MUTAT, FARA_SEMNAL): rezerva DVB-I (Components/HdsDvbIRezerva.py) si web-ul il folosesc neschimbat; fapta
+# trece pe setarile tunerului, fiindca o cautare pe transponder cu antena pe alt satelit ar baga in lista canale straine.
+STRAIN_S = 15 * 60      # cat se tine minte un transponder prins cu flux strain
+STRAIN_MIN = 2          # de la cate transpondere diferite se spune ca antena e pe alt satelit
+MAX_STRAINE_DETALIU = 3
+POLARIZARI = (u"H", u"V", u"L", u"R")   # eDVBFrontendParametersSatellite.Polarisation_*
+_STRAINE = {}           # (orbital, tuner) -> {cheia transponderului: (moment, textul transponderului)}
+
+
+def flux_strain_noteaza(orbital, tuner, cheie, text, acum):
+	"""Transponderul `cheie` al satelitului `orbital`, pe tunerul `tuner`, s-a prins cu un flux fara canalul cerut."""
+	_STRAINE.setdefault((orbital, tuner or u""), {})[cheie] = (acum, text or u"")
+
+
+def flux_strain_uita(orbital):
+	"""O imagine pe satelitul `orbital`: antena e la locul ei, deci nimic din ce s-a notat pentru el nu mai conteaza."""
+	for k in [k for k in _STRAINE if k[0] == orbital]:
+		del _STRAINE[k]
+
+
+def flux_strain(orbital, tuner, acum):
+	"""Textele transponderelor straine ale satelitului pe tuner, cele mai vechi intai, cand sunt cel putin STRAIN_MIN in
+	ultimele STRAIN_S secunde; altfel lista goala."""
+	tp = _STRAINE.get((orbital, tuner or u""))
+	if not tp:
+		return []
+	for cheie in [c for c, (t, _x) in tp.items() if acum - t > STRAIN_S or acum < t]:
+		del tp[cheie]
+	if len(tp) < STRAIN_MIN:
+		return []
+	return [x for _t0, x in sorted(tp.values())]
+
+
+def _alt_satelit(d, tp, C, acum):
+	"""{"sat", "tuner", "tp"} cand antena tunerului pare pe alt satelit (vezi mai sus), altfel None. Noteaza fotografia."""
+	if d.get("fel") != "s" or not tp:
+		return None
+	poz = C.ival(tp, "orbital_position")
+	if poz < 0:
+		return None
+	if d.get("imagine") is True:
+		flux_strain_uita(poz)
+		return None
+	tuner = d.get("tuner") or u""
+	if d.get("eroare") == E_FARA_SID and semnal_prins(d.get("lock", -1), d.get("stare_tuner")) is True:
+		frecventa = C.ival(tp, "frequency")
+		if frecventa > 0:
+			mhz, pol = int(round(frecventa / 1000.0)), C.ival(tp, "polarization")
+			text = u"%d %s" % (mhz, POLARIZARI[pol]) if 0 <= pol < len(POLARIZARI) else u"%d" % mhz
+			flux_strain_noteaza(poz, tuner, "%d:%d" % (mhz, pol), text, acum)
+	straine = flux_strain(poz, tuner, acum)
+	if not straine:
+		return None
+	return {"sat": C.sat_full(poz), "tuner": tuner, "tp": straine}
+
+
+def _verdict_alt_satelit(cod, d, bare=False):
+	a = d["alt_satelit"]
+	tuner = _curat(a.get("tuner") or u"A", 4)
+	sat = _curat(a.get("sat") or u"", 60)
+	tp = u", ".join(_curat(x, 48) for x in (a.get("tp") or [])[:MAX_STRAINE_DETALIU])
+	return _verdict(cod, d, text=_t(T_ALT_SAT) % (tuner, sat, tuner), titlu=_t(T_ALT_SAT_TITLU), fapta=F_TUNER,
+		detaliu=_detaliu(_t(D_ALT_SAT) % (tuner, tp)), bare=bare)
+
+
 def loc_nestabilit(sref):
 	"""True cand satelitul canalului se prinde numai cu motorul USALS si locul antenei nu e stabilit: nucleul nu are
 	satelitul (NimManager.SecConfigure), deci acordul cade ca la o configurare gresita (eventMisconfiguration)"""
@@ -1137,6 +1260,89 @@ def sub_orizont(sref):
 	except Exception as e:
 		print("[HdsEcranNegru] satelitul sub orizont: %s" % e)
 		return False
+
+
+ISI_MAX = 255
+
+
+def _int(v, implicit):
+	try:
+		return int(v)
+	except (TypeError, ValueError):
+		return implicit
+
+
+def cere_tuner_multistream(tp):
+	"""True cand transponderul (datele din lamedb: is_id, pls_mode, pls_code) are nevoie de un tuner care alege fluxul:
+	un flux 1..255, sau o secventa PLS aleasa. Fluxul 0 cu secventa implicita (coada ":0:0:1" scrisa de listele facute pe
+	alte imagini) nu cere asa ceva. Aceeasi regula ca nucleul (lib/dvb/hdsmultistream.h, cereTunerMultistream)."""
+	if not isinstance(tp, dict):
+		return False
+	isi = _int(tp.get("is_id"), -1)
+	if not 0 <= isi <= ISI_MAX:
+		isi = -1
+	mod, cod = _int(tp.get("pls_mode"), 1) & 3, _int(tp.get("pls_code"), 0) & 0x3FFFF
+	if mod == 0:
+		implicit = cod in (0, 1)
+	elif mod in (1, 2):
+		implicit = cod == 0
+	else:
+		implicit = False
+	if isi == -1:
+		return not implicit
+	return not (isi == 0 and implicit)
+
+
+def _text_flux(tp):
+	"""flux 5, "flux 0, PLS Gold 8", "PLS Root 262141": ce cere transponderul, pentru detaliul tehnic."""
+	parti = []
+	isi = _int(tp.get("is_id"), -1)
+	if 0 <= isi <= ISI_MAX:
+		parti.append(u"flux %d" % isi)
+	mod, cod = _int(tp.get("pls_mode"), 1) & 3, _int(tp.get("pls_code"), 0) & 0x3FFFF
+	if not ((mod == 0 and cod in (0, 1)) or (mod in (1, 2) and cod == 0)):
+		parti.append(u"PLS %s %d" % ({0: u"Root", 1: u"Gold", 2: u"Combo"}.get(mod, u"?"), cod))
+	return u", ".join(parti)
+
+
+def _tp_din_referinta(sref):
+	"""Datele transponderului din lamedb pentru referinta (fara tuner: eStaticServiceDVBInformation), sau {}."""
+	try:
+		from enigma import eServiceCenter, iServiceInformation
+		info = eServiceCenter.getInstance().info(sref)
+		tp = info.getInfoObject(sref, iServiceInformation.sTransponderData) if info else None
+		return tp if isinstance(tp, dict) else {}
+	except Exception:
+		return {}
+
+
+def multistream_fara_tuner(sref, tp=None, nim=None):
+	"""La o configurare gresita (eventMisconfiguration) pe satelit: {"flux", "tunere", "alt_tuner"} cand satelitul canalului
+	e setat pe cel putin un tuner, transponderul cere un tuner care alege fluxul si niciunul din tunerele setate pe satelit
+	nu are multistream (lib/dvb/frontend.cpp, isCompatibleWith, il refuza); "alt_tuner" = receptorul are totusi un tuner
+	cu multistream, nesetat pe satelit. Altfel None (mesajul ramane "Tunerul nu e setat pentru acest canal")."""
+	try:
+		from Components import HdsLocul
+		orbital = HdsLocul.orbitalDinReferinta(sref)
+		if orbital is None:
+			return None
+		if not tp:
+			tp = _tp_din_referinta(sref)
+		if not cere_tuner_multistream(tp):
+			return None
+		if nim is None:
+			from Components.NimManager import nimmanager as nim
+		setate = nim.getNimListForSat(orbital)
+		if not setate:
+			return None
+		if any(nim.nim_slots[s].isMultistream() for s in setate):
+			return None
+		alt = any(t.isMultistream() for t in nim.nim_slots if t.slot not in setate)
+		litere = u", ".join(u"%c" % (65 + s) if 0 <= s <= 25 else u"%d" % s for s in setate)
+		return {"flux": _text_flux(tp), "tunere": litere, "alt_tuner": bool(alt)}
+	except Exception as e:
+		print("[HdsEcranNegru] multistream fara tuner: %s" % e)
+		return None
 
 
 def _pasi_noteaza(r, C, d, t0, acum):

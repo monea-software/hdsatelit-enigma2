@@ -20,6 +20,15 @@
 # receptorul trece singur, dupa INAPOI_LA_DIRECT_S, pe canalul ei in direct (numai daca omul n-a schimbat intre timp; cu arhiva oprita
 # in setari, nu). Fara asta ecranul ramanea pe ultimul cadru.
 #
+# Canalele de internet care NU sunt din sursele noastre (IRC, 15.11.2026): liste .m3u puse in buchete, buchetele facute de
+# XStreamity sau Bouquet Maker, orice referinta 4097/5001/5002 cu adresa unui flux. Inainte reconectarea le ocolea (eCanalViu cere
+# o cale a releului nostru), iar un flux care a mers si s-a oprit ramanea pe ultimul cadru. Acum se pornesc din nou la fel, cu
+# aceleasi conditii: au mers, nu sunt film (lungime cunoscuta, extensia unui fisier, /movie/ sau /series/ din Xtream), nu vin de pe
+# receptor (127.0.0.1: Radio online si releele locale au reconectarea lor). Fara releul nostru nu exista numaratoarea octetilor:
+# imaginea pe loc se judeca numai dupa pozitia data de player. Cu ServiceApp (exteplayer3, gstplayer) pornirea se vede din
+# evUpdatedInfo (ServiceApp nu trimite evUser+17), numai cand chiar ServiceApp reda (5001/5002, sau 4097 cu "inlocuieste
+# servicemp3"). Playerul propriu al unui plugin (ecranul de redare din XStreamity) nu e bara canalelor: acolo nu ajungem.
+#
 # Optional: config.usage.hds_iptv_reconectare (Da din fabrica; setup.xml hds_iptv_functii, web /setari?id=hds_iptv_functii). Oprita:
 # niciun ceas pornit, nimic urmarit. Partea de sus (Decizie) nu cere enigma2: se probeaza pe PC
 # (depozitul de unelte, teste/test_iptv_ipi_075.py).
@@ -45,6 +54,82 @@ def eCanalViu(cale):
 	if sid is None or not cheie or cheie.startswith("v") or _ARHIVA.match(cheie):
 		return None
 	return sid, cheie
+
+
+SCHEME_FLUX = ("http", "https", "rtsp", "rtmp", "rtmps", "rtp", "udp", "mms", "hls")
+# extensiile unui fisier (film, serial, muzica): acolo sfarsitul e firesc, nu o cadere
+_EXT_FISIER = re.compile(r"\.(mkv|mp4|m4v|avi|mov|wmv|webm|mpg|mpeg|vob|iso|divx|xvid|3gp|ogv|flv|mp3|flac|ogg|m4a|wav|wma|aac)$", re.I)
+# filmele si serialele din Xtream (http://gazda/movie/u/p/1.mkv, /series/...): film, chiar si fara extensie
+_VOD_XTREAM = re.compile(r"/(movie|series)/", re.I)
+SERVICEAPP_TIPURI = (5001, 5002)            # referintele redate numai de ServiceApp (gstplayer, exteplayer3)
+SERVICEAPP_SO = "/usr/lib/enigma2/python/Plugins/SystemPlugins/ServiceApp/serviceapp.so"
+SERVICEAPP_INLOCUIESTE = "/etc/enigma2/serviceapp_replaceservicemp3"   # ServiceApp reda si 4097 (citit la pornirea interfetei)
+
+
+def eFluxDinAfara(cale):
+	"""True pentru adresa unui flux viu de pe internet care nu e din sursele noastre (o lista .m3u din buchete, XStreamity,
+	Bouquet Maker). Nu: caile releului nostru (eCanalViu), adresele de pe receptor (127.0.0.1, localhost: Radio online si
+	releele locale au reconectarea lor), fisierele (extensia unui film sau a unei melodii, /movie/ si /series/ din Xtream)."""
+	cale = (cale or "").replace("%3a", ":").replace("%3A", ":").strip()
+	if "://" not in cale:
+		return False
+	schema, rest = cale.split("://", 1)
+	if schema.lower() not in SCHEME_FLUX:
+		return False
+	if I.desparteCale(cale)[0] is not None:
+		return False
+	# antetele dupa # (servicemp3, ServiceApp: adresa#User-Agent=...) si dupa | (adresa|User-Agent=...) nu fac parte din adresa
+	adresa = rest.split("#", 1)[0].split("|", 1)[0]
+	gazda = adresa.split("/", 1)[0].rsplit("@", 1)[-1]
+	if gazda.startswith("["):
+		gazda = gazda[1:].split("]", 1)[0]
+	else:
+		gazda = gazda.split(":", 1)[0]
+	gazda = gazda.lower()
+	if not gazda or gazda == "localhost" or gazda.startswith("127.") or gazda == "::1":
+		return False
+	drum = "/" + adresa.split("/", 1)[1] if "/" in adresa else "/"
+	drum = drum.split("?", 1)[0]
+	if _EXT_FISIER.search(drum) or _VOD_XTREAM.search(drum):
+		return False
+	return True
+
+
+def felCanal(ref):
+	"""Ce reconectam pentru o referinta: ("canal", (sid, cheie)) pentru canalele surselor noastre, ("afara", None) pentru un flux
+	viu din afara lor, None pentru restul (satelit, cablu, filme, arhiva, adrese de pe receptor)."""
+	if ref is None:
+		return None
+	tip = getattr(ref, "type", 1)
+	canal = eCanalViu(ref.getPath()) if tip != 1 else None
+	if canal is None:
+		canal = eCanalViu(ref.toString())
+	if canal is not None:
+		return "canal", canal
+	if tip != 1 and eFluxDinAfara(ref.getPath()):
+		return "afara", None
+	return None
+
+
+def seReconecteaza(ref):
+	"""Canalul pe care il pornim singuri din nou cand se opreste (cu optiunea pornita). Components/HdsJurnalZapFlux nu mai pune
+	atunci mesajul "Canalul s-a oprit singur." peste fereastra de incarcare."""
+	try:
+		return _activ() and felCanal(ref) is not None
+	except Exception:
+		return False
+
+
+def redaServiceApp(tip, exista=None):
+	"""True cand referinta de tipul `tip` e redata de ServiceApp (playerul extern). Pentru 4097 numai cand ServiceApp e instalat
+	si "inlocuieste servicemp3" e pus; altfel servicemp3 (GStreamer) trimite evUpdatedInfo si cand nu reda nimic inca."""
+	if tip in SERVICEAPP_TIPURI:
+		return True
+	if tip != 4097:
+		return False
+	import os
+	exista = exista or os.path.exists
+	return bool(exista(SERVICEAPP_SO) and exista(SERVICEAPP_INLOCUIESTE))
 
 
 def refInDirect(ref_text):
@@ -176,6 +261,7 @@ class Legatura(object):
 		self.decizie = Decizie()
 		self.serviciu = None        # eServiceReference de pornit din nou
 		self.cheie = None
+		self.serviceapp = False     # canalul urmarit e redat de ServiceApp (evUpdatedInfo = a pornit)
 		self.ceas_repornire = None
 		self.ceas_veghe = None
 		self.arhiva = None          # (referinta emisiunii din arhiva, a mers) cat se reda una
@@ -217,18 +303,26 @@ class Legatura(object):
 			self.decizie.laStart(None, False)
 			self._veghe(False)
 			return
-		canal = eCanalViu(ref.getPath()) if ref is not None and ref.type != 1 else None
-		if canal is None and ref is not None:
-			canal = eCanalViu(ref.toString())
-		if canal is None:
+		fel = felCanal(ref)
+		if fel is None:
 			self.decizie.laStart(None, False)
 			self.serviciu = None
 			self._veghe(False)
 			return
 		from enigma import eServiceReference
 		self.serviciu = eServiceReference(ref.toString())
-		self.cheie = canal
+		# un flux din afara surselor noastre nu trece prin releu: fara numaratoarea octetilor (stareFlux)
+		self.cheie = fel[1]
+		self.serviceapp = redaServiceApp(getattr(ref, "type", 0))
 		self.decizie.laStart(ref.toString(), True)
+
+	def laInfo(self):
+		"""evUpdatedInfo. ServiceApp nu trimite evUser+17 si nici evVideoSizeChanged la orice flux: evUpdatedInfo vine la ~1 s dupa
+		ce playerul extern a pornit redarea, deci inseamna "a pornit". Cu servicemp3 nu (acolo vine si din etichetele fluxului,
+		inainte de prima imagine)."""
+		if self.decizie.ref is None or self.decizie.pornit or self.decizie.asteapta or not self.serviceapp:
+			return
+		self.laPornit()
 
 	def laPornit(self):
 		if self.arhiva is not None:

@@ -444,12 +444,17 @@ rp_cauze() {
 	done
 	# 0.7.4: stiva Python (si C) scrisa de enigma2 la semnalul fatal (mytest.py, faulthandler.enable), numai cand nu e goala si
 	# e din ultimele 10 minute: arata functia care a chemat codul C++ cazut (rapoartele 898941 si 503916 aveau numai registrele)
+	# 0.7.5: si enigma2-stiva-semnal.1.txt, stiva caderii de dinainte, mutata de mytest.py la pornirea urmatoare (paznicul
+	# reporneste interfata inainte de raport, iar fisierul de acum ramanea gol)
+	# (randul de mai jos ramane pentru proba test_stiva_semnal_pl_074, care cauta calea; bucla il inlocuieste)
 	rp_cs="$L/enigma2-stiva-semnal.txt"
-	if [ -f "$rp_cs" ] && [ ! -L "$rp_cs" ] && [ -s "$rp_cs" ] && [ -n "$(find "$rp_cs" -mmin -10 2>/dev/null)" ]; then
-		echo "-- ${rp_cs##*/}"
-		head -c 16384 "$rp_cs"
-		echo
-	fi
+	for rp_cs in "$L/enigma2-stiva-semnal.txt" "$L/enigma2-stiva-semnal.1.txt"; do
+		if [ -f "$rp_cs" ] && [ ! -L "$rp_cs" ] && [ -s "$rp_cs" ] && [ -n "$(find "$rp_cs" -mmin -10 2>/dev/null)" ]; then
+			echo "-- ${rp_cs##*/}"
+			head -c 16384 "$rp_cs"
+			echo
+		fi
+	done
 }
 
 rp_oom() {

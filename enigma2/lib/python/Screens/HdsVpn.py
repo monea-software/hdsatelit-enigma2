@@ -5,8 +5,9 @@
 # HdsVpn.py: ecranul "VPN" (Setari > Retea & Internet > VPN): VPN-ul receptorului prin HMA (HideMyAss) sau alt
 # furnizor OpenVPN, prin WireGuard, IKEv2/IPsec, OpenConnect (Cisco AnyConnect si altele), Shadowsocks sau L2TP/IPsec.
 #
-# "Adauga VPN" (un singur rand): de pe stick (dosarul hdsatelit/vpn, felul recunoscut singur dupa continut) sau datele
-# scrise de mana (felul, serverul, apoi numele, parola, cheia comuna). Dupa adaugare serverul e ales si, daca lipseste
+# "Adauga VPN" (un singur rand): de pe stick sau disc (dosarul hdsatelit/vpn sau, fara el, radacina si dosarele ei;
+# toate fisierele furnizorului deodata, cu o singura intrebare "Am gasit N servere VPN..."; felul recunoscut singur
+# dupa continut) sau datele scrise de mana (felul, serverul, apoi numele, parola, cheia comuna). Dupa adaugare serverul e ales si, daca lipseste
 # ceva, tastatura se deschide singura pentru el. Din telefon (fisier sau text lipit) merge in interfata web.
 #
 # Sus: titlul si starea mare (Conectat, Oprit, Se conecteaza..., Fara legatura cu internetul oprit), cu culoarea ei;
@@ -250,8 +251,10 @@ def randuri(s):
 	if s.get("pin_propus"):
 		r.append((_("Ai încredere în certificatul serverului?"), CERTIFICAT,
 			_("Serverul are un certificat pe care receptorul nu îl cunoaște. OK, dacă e serverul tău sau al firmei tale.")))
-	r.append((_("Adaugă VPN"), ADAUGA, _("De pe stick (dosarul hdsatelit/vpn: .ovpn, .conf, .sswan, .mobileconfig, "
-		"ss://, .zip) sau datele scrise de mână. Felul se recunoaște singur. Din telefon, în interfața web.")))
+	r.append((_("Adaugă VPN"), ADAUGA, _("De pe stick sau disc, toate deodată: fișierele furnizorului (.conf, .ovpn, "
+		".sswan, .mobileconfig sau arhiva .zip, din rădăcină sau din dosarul lor), ori datele scrise de mână. Felul se "
+		"recunoaște singur. Din telefon, în interfața web.") + " " +
+		_("Fișierul WireGuard (.conf) are totul înăuntru: nu cere cont, nume, parolă sau token.")))
 	r.append(("%s: %s" % (_("Ce trece prin VPN"), V.textMod(s["mod"])), MOD, textExplicatieMod(s)))
 	# in modul navigator oprirea totala e mereu (navigatorul n-are alta iesire decat tunelul), deci randul lipseste
 	if s["mod"] != "navigator":
@@ -503,7 +506,7 @@ class HdsVpn(Screen):
 			from .HdsVpnFurnizor import HdsVpnFurnizor
 			self.session.openWithCallback(lambda *x: self._citeste(), HdsVpnFurnizor, s["furnizor"])
 		elif a == ADAUGA:
-			lista = [(_("De pe stick (dosarul hdsatelit/vpn)"), "stick"), (_("Scriu datele de mână"), "mana")]
+			lista = [(_("De pe stick sau disc"), "stick"), (_("Scriu datele de mână"), "mana")]
 			self.session.openWithCallback(self._adaugaAles, ChoiceBox, title=_("Adaugă VPN"), list=lista)
 		elif a == DATE_ACCES:
 			self._cereCampuri(list(s.get("campuri") or []))
@@ -527,14 +530,32 @@ class HdsVpn(Screen):
 		if not ales:
 			return
 		if ales[1] == "stick":
-			self._asteptCampuri = True
-			self._lucrare(V.pornesteStick)
+			# toate fisierele furnizorului deodata (tamiciav7, 14.11.2026): o singura intrebare cand sunt mai multe
+			try:
+				g = V.cautaStick()
+			except Exception as eroare:
+				print("[HdsVpn] stickul: %r" % (eroare,))
+				g = {"servere": 0, "stick": True}
+			if g["servere"] > 1:
+				self.session.openWithCallback(self._stickConfirmat, MessageBox, V.textIntrebareStick(g),
+					MessageBox.TYPE_YESNO, default=True)
+			elif g["servere"] == 1:
+				self._stickConfirmat(True)
+			else:
+				self._mesaj(V.textNimicPeStick(g))
 			return
 		feluri = (self._stare or {}).get("feluri_adauga") or []
 		if not feluri:
 			self._mesaj(_("Pe acest receptor nu merge niciun VPN care se scrie de mână."))
 			return
 		self.session.openWithCallback(self._felAles, ChoiceBox, title=_("Felul VPN-ului"), list=[(t, f) for f, t in feluri])
+
+	def _stickConfirmat(self, da):
+		if not da:
+			V.uitaStick()
+			return
+		self._asteptCampuri = True
+		self._lucrare(V.pornesteStick)
 
 	def _felAles(self, ales):
 		if not ales:

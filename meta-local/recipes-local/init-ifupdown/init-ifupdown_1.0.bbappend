@@ -10,8 +10,14 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 SRC_URI:append:sf8008 = " file://hds-networking"
 SRC_URI:append:sf8008m = " file://hds-networking"
+# Octagon SX88V2 si SX988 (V19): scriptul masinii din OE-Alliance (meta-oe/recipes-core/init-ifupdown/<masina>/init) e
+# identic cu cel SF8008 (md5 016779d9...), deci acelasi hds-networking.
+SRC_URI:append:sx88v2 = " file://hds-networking"
+SRC_URI:append:sx988 = " file://hds-networking"
 PR:append:sf8008 = ".hds1"
 PR:append:sf8008m = ".hds1"
+PR:append:sx88v2 = ".hds1"
+PR:append:sx988 = ".hds1"
 # Uclan Ustym 4K PRO (ustym4kpro): scriptul masinii din OE-Alliance (meta-oe/recipes-core/init-ifupdown/ustym4kpro/init)
 # e identic cu cel SF8008, deci acelasi hds-networking.
 SRC_URI:append:ustym4kpro = " file://hds-networking"
@@ -33,6 +39,13 @@ do_install:append:ustym4kpro() {
 	install -m 0755 ${UNPACKDIR}/hds-networking ${D}${sysconfdir}/init.d/networking
 }
 
+do_install:append:sx88v2() {
+	install -m 0755 ${UNPACKDIR}/hds-networking ${D}${sysconfdir}/init.d/networking
+}
+
+do_install:append:sx988() {
+	install -m 0755 ${UNPACKDIR}/hds-networking ${D}${sysconfdir}/init.d/networking
+}
 do_install:append:gbtrio4k() {
 	install -m 0755 ${UNPACKDIR}/hds-networking ${D}${sysconfdir}/init.d/networking
 }

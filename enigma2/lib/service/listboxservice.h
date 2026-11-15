@@ -155,9 +155,20 @@ public:
 		   text `crypted` on a scrambled service (CAIDs known in lamedb or the dxIsScrambledPMT flag of the scan), and
 		   markSource, where the service comes from by its namespace (`satellite`, `cable`, `terrestrial`). The texts
 		   are given translated from Python (Components/ServiceList.py, config.usage.hds_semne_lista); 0 = no marks */
-	enum { markCrypted = 1, markSource = 2 };
+		/* HDSatelit 0.7.5 (LCS): markCaSystem = the name of the conditional access system (Viaccess, Nagravision, ...,
+		   from the CAIDs in lamedb) instead of `crypted`, when known; markServiceType = SD, HD, UHD, Radio or Data by the
+		   service type of the reference, texts given translated with setServiceTypeLabels (config.usage.hds_lista_*) */
+	enum { markCrypted = 1, markSource = 2, markCaSystem = 4, markServiceType = 8 };
 	void setServiceMarks(int marks, const std::string &crypted, const std::string &satellite, const std::string &cable,
 		const std::string &terrestrial);
+	void setServiceTypeLabels(const std::string &sd, const std::string &hd, const std::string &uhd,
+		const std::string &radio, const std::string &data);
+		/* HDSatelit 0.7.5 (LCS): the event progress written as a percent ("45%") in the place of the bar; the size of
+		   the picons in percent of their usual place (70..160); the column where the event begins on every row (0 =
+		   right after the name, as before) */
+	void setProgressPercent(bool percent);
+	void setPiconScale(int percent);
+	void setInfoColumn(int x);
 		/* HDSatelit 0.7.4: the row drawn from the serviceList template of the skin (themes written for the OE-Alliance
 		   standard, when the theme's settings choose a style: Components/HdsServiceListSablon.py). For every row that is
 		   painted, func(service, flags, number) gives the row as a MultiContent entry ([None, tuple, ...], the tuples of
@@ -239,6 +250,10 @@ private:
 	std::map<eServiceReference, int> m_ref_numbers;
 	int m_service_marks;
 	std::string m_mark_crypted, m_mark_satellite, m_mark_cable, m_mark_terrestrial;
+	std::string m_type_sd, m_type_hd, m_type_uhd, m_type_radio, m_type_data;
+	bool m_progress_percent;
+	int m_picon_scale, m_info_column;
+	std::string serviceTypeLabel(const eServiceReference &ref) const;
 	std::string serviceMarks(const eServiceReference &ref) const;
 	bool m_picons_enabled;
 	std::vector<std::string> m_picon_paths;

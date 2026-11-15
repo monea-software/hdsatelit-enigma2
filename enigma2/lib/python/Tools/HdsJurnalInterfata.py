@@ -37,7 +37,7 @@ INTERVAL = 5.0
 # Bugetul filtrelor: cat timp de filtrare se aduna pe secunda (0.03 = 3% dintr-un nucleu), cat se poate strange cand
 # jurnalul e linistit (o rafala: pornirea, un zap, o scanare scurta) si cat mai pot lua, peste el, randurile de eroare.
 # Rafala de 3 s: pe receptor (Viper 4K V20, acelasi cip ca SF8008) un rand costa ~3,6 ms, de 40-50 de ori cel de pe PC
-# (masurat pe .122: modulul vechi lua 36,5% dintr-un nucleu la 100 de randuri pe secunda). Reluate cu filtrele de 50 de
+# (masurat pe receptorul de proba: modulul vechi lua 36,5% dintr-un nucleu la 100 de randuri pe secunda). Reluate cu filtrele de 50 de
 # ori mai scumpe, jurnalele reale (si cu o pornire) trec cu 3 s fara niciun rand sarit; cu 2 s sareau 12-280 de randuri.
 BUGET_PROCENT = 0.03
 BUGET_RAFALA = 3.0

@@ -107,6 +107,10 @@ class Time(Screen, ConfigListScreen):
 		self.list = []
 		if "timezone" in config.content.items:
 			self.list.append(getConfigListEntry(_("Fus orar"), config.timezone.val))
+			# Da = fusul se afla dupa internet la fiecare pornire; un fus ales aici il trece singur pe Nu (Components/HdsFusTara.py)
+			automat = config.timezone.content.items.get("automat")
+			if automat is not None:
+				self.list.append(getConfigListEntry(_("Fus orar după internet"), automat))
 		self.list.append(getConfigListEntry(_("De unde se ia ora"), config.hds_time.sync_mode))
 		if config.hds_time.sync_mode.value in ("auto", "ntp"):
 			self.list.append(getConfigListEntry(_("Server NTP"), config.hds_time.ntp_server))
@@ -118,6 +122,7 @@ class Time(Screen, ConfigListScreen):
 		try:
 			s = HdsCeas.stare()
 			randuri = [s["sursa_text"], s["ultima_text"]]
+			randuri.append(HdsCeas.textFus())
 			if s["in_curs"]:
 				randuri.append(_("Se sincronizează acum prin Internet."))
 		except Exception as e:
@@ -127,12 +132,23 @@ class Time(Screen, ConfigListScreen):
 			randuri.append(self.mesaj)
 		self["stare"].setText("\n".join(r for r in randuri if r))
 
+	def _fusAlesPeLoc(self):
+		"""omul a schimbat fusul in lista: randul Fus orar dupa internet trece pe loc pe Nu (se vede inainte de Salveaza)"""
+		if "timezone" not in config.content.items:
+			return
+		cur = self["config"].getCurrent()
+		automat = config.timezone.content.items.get("automat")
+		if cur is not None and cur[1] is config.timezone.val and automat is not None and automat.value:
+			automat.value = False
+
 	def keyLeft(self):
 		ConfigListScreen.keyLeft(self)
+		self._fusAlesPeLoc()
 		self.createSetup()
 
 	def keyRight(self):
 		ConfigListScreen.keyRight(self)
+		self._fusAlesPeLoc()
 		self.createSetup()
 
 	def syncNow(self):
@@ -145,9 +161,19 @@ class Time(Screen, ConfigListScreen):
 		self.updateCurrentTime()
 
 	def keySave(self):
+		# fusul ales de om ramane (config.timezone.automat Nu); Da pus acum porneste aflarea dupa internet
+		afla = False
+		automat = config.timezone.content.items.get("automat") if "timezone" in config.content.items else None
+		if automat is not None:
+			afla = bool(automat.value) and automat.isChanged()
+			if config.timezone.val.isChanged() and not afla:
+				automat.value = False
 		for x in self["config"].list:
 			x[1].save()
 		configfile.save()
+		if afla:
+			from Components import HdsFusTara
+			HdsFusTara.porneste()
 		if "timezone" in config.content.items:
 			from Components.Timezones import timezones
 			timezones.activateTimezone(config.timezone.val.index)

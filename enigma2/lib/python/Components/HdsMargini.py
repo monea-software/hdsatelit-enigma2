@@ -9,7 +9,7 @@
 # si 5% din latura ei. Se tin in aceleasi setari ca pana acum: config.osd.cal_left = stanga, cal_top = sus,
 # cal_width = -(stanga + dreapta), cal_height = -(sus + jos); deci valorile salvate raman.
 #
-# Driverul receptorului (/proc/stb/fb/dst_left, dst_top, dst_width, dst_height si dst_apply) citeste numerele in baza 16,
+# Driverul receptorului (/proc/stb/fb/dst_left, dst_top, dst_width, dst_height si, unde exista, dst_apply) citeste numerele in baza 16,
 # in spatiul 720 x 576, si cere afisajului o micsorare pe tot ecranul (imaginea TV si meniurile): stanga = left * W /
 # 720, sus = top * H / 576, dreapta = (720 - left - width) * W / 720, jos = (576 - top - height) * H / 576, cel mult 200
 # de puncte pe latura. Pe un receptor fara aceste fisiere (si in
@@ -110,12 +110,16 @@ def valori_driver(margini, latime, inaltime):
 
 
 def areDriver(cale=CALE_FB):
-	return os.path.isfile(os.path.join(cale, "dst_apply"))
+	"""Receptorul poate muta afisajul: are /proc/stb/fb/dst_left (ca CanChangeOsdPosition din SystemInfo si din
+	OE-Alliance). dst_apply NU se cere: driverele Vu+ vechi (Vu+ Solo SE, 0.7.4 si 0.7.5) au numai dst_left, dst_top,
+	dst_width si dst_height si aplica singure ce se scrie acolo; cu dst_apply cerut nu se scria nimic pe ele, iar marginile
+	salvate nu ajungeau in driver (Ozgur, e-mailul 6322; driverul ramanea pe 0, 0, 2D0, 240; TODO 14.11 23:45)."""
+	return os.path.isfile(os.path.join(cale, "dst_left"))
 
 
 def aplica(margini, latime, inaltime, cale=CALE_FB, la_pornire=False):
-	"""Scrie marginile in driver (in baza 16, cum le citeste el). La pornire, cu toate marginile 0, nu scrie nimic
-	(afisajul porneste oricum fara micsorare). True daca s-a scris."""
+	"""Scrie marginile in driver (in baza 16, cum le citeste el), apoi dst_apply numai unde exista (ca OE-Alliance).
+	La pornire, cu toate marginile 0, nu scrie nimic (afisajul porneste oricum fara micsorare). True daca s-a scris."""
 	if not areDriver(cale):
 		return False
 	m = limiteaza(margini, latime, inaltime)
@@ -126,8 +130,9 @@ def aplica(margini, latime, inaltime, cale=CALE_FB, la_pornire=False):
 		for nume, v in (("dst_left", stanga), ("dst_top", sus), ("dst_width", w), ("dst_height", h)):
 			with open(os.path.join(cale, nume), "w", encoding="ascii") as f:
 				f.write("%08x\n" % v)
-		with open(os.path.join(cale, "dst_apply"), "w", encoding="ascii") as f:
-			f.write("1\n")
+		if os.path.isfile(os.path.join(cale, "dst_apply")):
+			with open(os.path.join(cale, "dst_apply"), "w", encoding="ascii") as f:
+				f.write("1\n")
 	except (IOError, OSError) as e:
 		print("[HdsMargini] nu s-a putut scrie in %s: %s" % (cale, e))
 		return False

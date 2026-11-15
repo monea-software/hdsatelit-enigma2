@@ -65,6 +65,9 @@ RECONECTARI_MAX = 6                 # consecutive, fara date intre ele
 SANATOS_S = 30                      # dupa atatea secunde cu date, numaratoarea reconectarilor o ia de la capat
 FEREASTRA_VITEZA_S = 2.0
 TERMEN_SCRIERE_S = 120              # player care nu mai citeste deloc
+# filmele serverelor media de acasa (/media/ si segmentele lor): primul segment al unei transcodari asteapta pornirea ffmpeg pe
+# server (secunde bune pentru 4K HEVC -> H.264 pe un NAS); 10 s ar opri filmul inainte sa inceapa (EMT, 15.11.2026)
+TERMEN_TRANSCODARE_S = 30
 
 _lacat = threading.Lock()
 _canale = {}          # sursa -> (semnul fisierului, {cheie: a patra coloana})
@@ -80,6 +83,11 @@ _hlsListe = OrderedDict()
 MAX_JETOANE = 8192
 MAX_JETOANE_LISTE = 1024
 _HLS = re.compile(r'^/hls/([0-9a-f]{8})/([A-Za-z0-9_.\-]{1,64})/([0-9a-f]{24})$')
+# /media/: filmele serverelor media de acasa (Emby, Jellyfin; Components/HdsVodServere). Jetonul serverului merge in antet, nu in
+# referinta filmului: nici bara, nici jurnalul nu-l vad.
+_MEDIA = re.compile(r"^/media/([0-9a-f]{8})/([A-Za-z0-9_.\-]{1,64})$")
+# sid -> obiect cu adresaFlux(cheie) -> adresa sau None si anteteFlux(cheie) -> dict (inregistrate de HdsVodServere)
+ALTE_SURSE = {}
 
 
 def _semn(cale):
@@ -149,6 +157,9 @@ def adresa(sursa_id, cheie):
 
 
 def antete(sursa_id, cheie):
+	o = ALTE_SURSE.get(sursa_id)
+	if o is not None:
+		return dict(o.anteteFlux(cheie))
 	s = I.sursa(sursa_id, _sursele()) or {}
 	a = C.anteteSursa(s)
 	if s.get("fel") == "stalker":
@@ -541,6 +552,14 @@ class _Cerere(BaseHTTPRequestHandler):
 				self._raspunde(404)
 				return
 			return self._direct(v[2], v[0], v[1])
+		md = _MEDIA.match(cale) if m is None else None
+		if md:
+			o = ALTE_SURSE.get(md.group(1))
+			tinta = o.adresaFlux(md.group(2)) if o is not None else None
+			if not tinta:
+				self._raspunde(404)
+				return
+			return self._direct(tinta, md.group(1), md.group(2))
 		if m is None:
 			self._raspunde(404)
 			return
@@ -708,7 +727,8 @@ class _Cerere(BaseHTTPRequestHandler):
 			a = antete(sid, cheie)
 			if self.headers.get("Range"):
 				a["Range"] = self.headers["Range"][:128]
-			with C.deschide(tinta, a, TERMEN_CITIRE_S, "HEAD" if self.command == "HEAD" else None) as f:
+			termen = TERMEN_TRANSCODARE_S if sid in ALTE_SURSE else TERMEN_CITIRE_S
+			with C.deschide(tinta, a, termen, "HEAD" if self.command == "HEAD" else None) as f:
 				tip = f.headers.get("Content-Type", "application/octet-stream")
 				lista = "mpegurl" in tip.lower() or f.geturl().split("?", 1)[0].lower().endswith(".m3u8")
 				if lista and self.command != "HEAD":

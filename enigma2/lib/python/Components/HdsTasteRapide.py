@@ -69,6 +69,11 @@ ACTIUNI_DISPONIBILE = [
 	# lista deschisa direct in dosarul transponderului canalului de acum (tfrc, LinuxSat 164122 #970392); textul
 	# OE-Alliance al randului din lista, deja tradus in toate limbile
 	("current_transponder", _("Current Transponder")),
+	# lista ultimelor canale vazute, din care alegi direct (Screens/HdsIstoricCanale.py); din fabrica pe < tinut apasat
+	("channel_history", _("Canale recente")),
+	# toate canalele TV ale transponderului canalului de acum pe 2, 4 sau 9 celule (Screens/HdsMozaic.py); din fabrica pe
+	# 0 tinut apasat (Eduard 14.11.2026 21:06: o tasta cand esti pe canal)
+	("mozaic", _("Mozaic: toate canalele transponderului")),
 	("movies", _("Înregistrări")),
 	("record", _("Înregistrare imediată")),
 	("timeshift", _("Pornește timeshift")),
@@ -94,6 +99,7 @@ BUTOANE = [
 	("subtitle_long", _("SUBTITLE (apăsare lungă)")),
 	("audio_long", _("AUDIO (apăsare lungă)")),
 	("fav_long", _("FAV (apăsare lungă)")),
+	("previous_long", _("Canalul anterior < (apăsare lungă)")),
 ]
 BUTOANE += [("number_%d_long" % n, _("%d (apăsare lungă)") % n)
 	for n in range(10)]
@@ -144,6 +150,11 @@ FUNCTII_OBISNUITE = {
 	"subtitle_short": "subtitle_toggle", "subtitle_long": "subtitle",
 	"green_short": "subservices", "yellow_short": "audio", "blue_short": "extensions",
 	"red": "none", "green": "none", "yellow": "none", "blue": "none",
+	# < tinut apasat: lista canalelor recente; < scurt ramane canalul de dinainte din istoric, la eliberare
+	"previous_long": "channel_history",
+	# 0 tinut apasat: mozaicul canalelor transponderului (Eduard 14.11.2026 21:06: o tasta cand esti pe canal); 0 scurt
+	# ramane canalul de dinainte, la eliberare. Culorile lungi raman fara alocare din fabrica (fisa 73, P7).
+	"number_0_long": "mozaic",
 }
 
 # Tasta fizica, setarea scurta, setarea lunga, scurta la eliberare.
@@ -158,6 +169,7 @@ LEGATURI_TASTE = [
 	("subtitle", "subtitle_short", "subtitle_long", True),
 	("audio", "audio_short", "audio_long", True),
 	("fav", "fav_short", "fav_long", True),
+	("previous", "previous_short", "previous_long", True),
 ]
 LEGATURI_TASTE += [(k[:-6], k, None, False) for k, _text in SCURTE
 	if k not in [x[1] for x in LEGATURI_TASTE]]
@@ -259,6 +271,8 @@ TEXTE_ACTIUNI = {
 	"epg_previous": _("Emisiunile anterioare"), "epg_next": _("Emisiunile următoare"),
 	"epg_timer": _("Adaugă sau șterge programarea"), "epg_zap": _("Pornește canalul ales"),
 	"back": _("Înapoi"),
+	"channel_history": _("Canale recente"),
+	"mozaic": _("Mozaic: toate canalele transponderului"),
 }
 
 
@@ -433,6 +447,12 @@ def taste_ajutor(context, config=None, **stare):
 		are_scurta = row["short"] != "default" or (row["key"] == "red" and context in ("live", "radio", "timeshift"))
 		if are_scurta and row["long"] != "default" and row["key"] in ("info", "epg", "subtitle", "red", "green", "yellow", "blue", "fav", "ok", "power", "menu"):
 			rez.append([key + " " + _("(apăsare lungă)"), row["text_long"], -1])
+	if context == "live":
+		# < tinut apasat (lista canalelor recente, Screens/HdsIstoricCanale.py): < nu e in TASTE_PROFIL (profilele), deci
+		# randul de ajutor se pune aici, numai pe bara
+		lunga = actiune_efectiva("previous_long", config)
+		if lunga not in ("default", "none"):
+			rez.append(["< " + _("(apăsare lungă)"), text_actiune(lunga), -1])
 	return rez
 
 

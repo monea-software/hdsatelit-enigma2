@@ -46,7 +46,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.7.5+git${SRCPV}"
+PV = "0.7.6+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe
@@ -95,6 +95,24 @@ do_configure:append:sf8008() {
 		bbfatal "lib/dvb/hdspazavideo.h nu stie HDS_FARA_MEMORIE_ES (codul V10 e de la 0.6.3): pe ${MACHINE} filmele ar fi refuzate"
 	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || \
 		bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure"
+}
+# Octagon SX88V2 4K DUAL OS si SX988 4K DUAL OS (V19, 14.11.2026; masinile sx88v2 si sx988): aceeasi platforma ca SF8008
+# (libreader: octagon-reader-<masina>; showiframe: octagon-showiframe-hisi3798mv300 si -hisi3798mv200advca au EXACT arhiva
+# lui SF8008, sha256 8c691126...: programul care numai afiseaza un cadru), deci aceeasi paza oprita si aceeasi verificare.
+# configure.ac pune sx88v2 si sx988 in HAVE_HISILICON; HAVE_HISILICON_LIBREADER le cere randul din V19/configure-ac-v19.patch.
+CXXFLAGS:append:sx88v2 = " -DHDS_FARA_MEMORIE_ES=1"
+CXXFLAGS:append:sx988 = " -DHDS_FARA_MEMORIE_ES=1"
+do_configure:append:sx88v2() {
+	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure"
+	grep -q '^#define HAVE_HISILICON_LIBREADER 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON_LIBREADER pe ${MACHINE}: lipseste randul V19 din configure.ac"
+}
+do_configure:append:sx988() {
+	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure"
+	grep -q '^#define HAVE_HISILICON_LIBREADER 1' ${B}/enigma2_config.h || \
+		bbfatal "enigma2_config.h fara HAVE_HISILICON_LIBREADER pe ${MACHINE}: lipseste randul V19 din configure.ac"
 }
 # Octagon SF8008 MINI 4K (masina sf8008m, lotul imagine-060-sf8008m): aceeasi platforma ca SF8008 (libreader,
 # showiframe care numai afiseaza un cadru), deci aceeasi paza oprita si aceeasi verificare; configure.ac pune sf8008m in
@@ -261,6 +279,10 @@ do_install:append() {
 # dinobot-libs-u57 20210604-r2)
 RRECOMMENDS:${PN} += "${@bb.utils.contains("MACHINE_FEATURES", "hiaccel", "dinobot-libs-${MACHINE}", "", d)}"
 
+# cheia aplicatiei OpenSubtitles (reteta hdsatelit-opensubtitles; SBR 15.11.2026): fisierul din care citeste
+# Components/HdsSubtitrariInternet/surse/opensubtitles.py; pachet gol cand constructia nu are cheia
+RRECOMMENDS:${PN} += "hdsatelit-opensubtitles"
+
 # Urmarirea pornirii (tools/hds-rezerva.sh) priveste ca pornire in dubiu orice pornire fara semnul
 # /etc/hds-interfata-pornita. O instalare prin actualizare din meniu inseamna ca interfata a mers pe receptor, deci
 # semnul se pune atunci (numai pe receptor: la constructia imaginii $D e plin si nu se face nimic).
@@ -307,6 +329,72 @@ if [ -z "$D" ] && [ -f ${libdir}/enigma.info ] && [ -f ${sysconfdir}/image-versi
 		sed -e '/^checksum=/d' -e "s/^imgversion=.*/imgversion='$v'/" -e "s/^compiledate=.*/compiledate='$b'/" $f > $f.hds-nou &&
 			printf 'checksum=%s\n' "$(md5sum < $f.hds-nou | cut -d ' ' -f 1)" >> $f.hds-nou &&
 			chmod 0644 $f.hds-nou && mv -f $f.hds-nou $f ) || rm -f ${libdir}/enigma.info.hds-nou
+	fi
+fi
+# 0.7.6 (NVK, 15.11.2026; SVA, poarta 0.7.6; TODO 15.11 07:00 (agent_tv)): instalat pe alta cale decat Actualizari (o
+# extensie din Extensii care il cere, ca ServiceApp "enigma2-hdsatelit (>= versiunea)", "Actualizeaza toate", opkg scris de
+# mana), pachetul venea singur, fara tema si fara restul setului, si lasa interfata veche pornita peste fisierele noi:
+# modulele Python incarcate la pornire raman vechi, cele incarcate mai tarziu sunt noi, si un ecran cade (Vu+ Solo 4K,
+# 15.11.2026: KeyError 'agent_tv' in Setari navigator). Postinst-ul e codul NOU care ruleaza pe orice cale, si cand opkg e
+# pornit de Extensii vechi (0.7.5 -> 0.7.6), deci de aici se termina actualizarea. Actualizari reporneste singura interfata
+# (semnul ei /etc/enigma2/hds-actualizare.in-curs sau pachetele din /tmp/hds-actualizare in linia de comanda a lui opkg):
+# atunci nimic. Altfel, pe fundal, dupa ce nu mai ruleaza niciun opkg (cel mult 20 de minute) si daca merge inca acelasi
+# enigma2: i se cere interfetei pornite actualizarea rapida a paginii web (POST /api/actualizari-rapid, si in 0.7.5: cauta in
+# feedul semnat, pune tema si restul setului, apoi reporneste interfata pe calea sigura; pe o inregistrare in curs asteapta
+# sau intreaba pe televizor). Se urmareste cat lucreaza ea (GET /api/actualizari, "rapid": true, cel mult 30 de minute); daca
+# s-a oprit fara repornire (nimic de pus, alta lucrare in curs), se cere numai repornirea interfetei
+# (POST /api/accel-reporneste = TryQuitMainloop 3), afara de cazul in care omul a raspuns Nu pe televizor. Portul si cheia
+# paginii, din setarile receptorului; nimic nu se scrie in jurnal.
+if [ -z "$D" ] && [ -f ${sysconfdir}/hdsatelit-model ]; then
+	vechi=$(pidof enigma2 || true)
+	prin_actualizari=
+	[ -f ${sysconfdir}/enigma2/hds-actualizare.in-curs ] && prin_actualizari=1
+	for p in $(pidof opkg || true); do
+		grep -q hds-actualizare /proc/$p/cmdline 2>/dev/null && prin_actualizari=1
+	done
+	if [ -n "$vechi" ] && [ -z "$prin_actualizari" ]; then
+		( sleep 5
+		# opkg liber si dupa inca 5 s (Extensii poate porni mai multe opkg unul dupa altul); actualizarea rapida nu porneste
+		# cat tine altul lacatul lui opkg
+		i=0
+		while [ $i -lt 600 ]; do
+			if pidof opkg > /dev/null; then
+				sleep 2
+			else
+				sleep 5
+				pidof opkg > /dev/null || break
+			fi
+			i=$((i + 1))
+		done
+		[ "$(pidof enigma2 || true)" = "$vechi" ] || exit 0
+		[ -f ${sysconfdir}/enigma2/hds-actualizare.in-curs ] && exit 0
+		port=$(sed -n 's/^config\.plugins\.hdswebcontrol\.port=//p' ${sysconfdir}/enigma2/settings | tr -cd '0-9')
+		cheie=$(sed -n 's/^config\.plugins\.hdswebcontrol\.token=//p' ${sysconfdir}/enigma2/settings | tr -cd 'A-Za-z0-9_-')
+		gazda=127.0.0.1
+		[ -n "$port" ] && [ "$port" != 80 ] && gazda=127.0.0.1:$port
+		# Origin ca o pagina a receptorului (paza cererilor straine din HdsWebControl/asociere.py)
+		wget -q -O /dev/null --header "Origin: http://$gazda" --post-data= "http://$gazda/api/actualizari-rapid?token=$cheie" || true
+		s=
+		i=0
+		while [ $i -lt 180 ]; do
+			sleep 10
+			[ "$(pidof enigma2 || true)" = "$vechi" ] || exit 0
+			s=$(wget -q -O - --header "Origin: http://$gazda" "http://$gazda/api/actualizari?token=$cheie" 2>/dev/null || true)
+			# fara raspuns (pagina ocupata o clipa) se mai asteapta; numai "rapid": false opreste urmarirea
+			case "$s" in
+			''|*'"rapid": true'*|*'"rapid":true'*) ;;
+			*) break ;;
+			esac
+			i=$((i + 1))
+		done
+		[ $i -lt 180 ] || exit 0
+		[ "$(pidof enigma2 || true)" = "$vechi" ] || exit 0
+		[ -f ${sysconfdir}/enigma2/hds-actualizare.in-curs ] && exit 0
+		case "$s" in
+		*'"rapid_pas": "refuzata"'*|*'"rapid_pas":"refuzata"'*) exit 0 ;;
+		esac
+		wget -q -O /dev/null --header "Origin: http://$gazda" --post-data= "http://$gazda/api/accel-reporneste?token=$cheie"
+		) > /dev/null 2>&1 < /dev/null &
 	fi
 fi
 true

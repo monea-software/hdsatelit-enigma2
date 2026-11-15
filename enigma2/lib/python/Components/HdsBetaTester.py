@@ -100,6 +100,11 @@ CADERI_PE_ZI = 6
 # locul si nu ajungeau niciodata la noi (greselile 1122 si 1123, Uclan Ustym 4K PRO, 09.11.2026)
 JURNALE_RARE = ("hds-actualizari", "hds-actualizare", "hds-imagine-online", "hds-restaurare")
 RARE_PE_ZI = 2
+# urma comenzilor de motor (lib/dvb/hdsurmamotor.cpp) are si ea locul ei pe zi: fara ea nu se vede cine a mutat antena si cand
+# a ajuns (Viper 4K V40, pachetul 1719: o cautare cu motorul cu "fara semnal" in rafala, iar hds-motor.log pierdea cele 3
+# locuri in fata lui hds-interfata, hds-zap si hds-tuner). Separat de cele rare: pe un receptor cu motor se schimba des.
+JURNALE_MOTOR = ("hds-motor.log",)
+MOTOR_PE_ZI = 2
 PAZNIC_RANDURI = 1000
 ECRANE_MAX = 150
 MESAJE_PE_ZI = 10
@@ -1139,6 +1144,11 @@ def esteRar(nume):
 	return nume.startswith(JURNALE_RARE)
 
 
+def esteMotor(nume):
+	"""Urma comenzilor de motor (limita MOTOR_PE_ZI, langa cele obisnuite si cele rare)."""
+	return nume in JURNALE_MOTOR
+
+
 # stivele firelor Python ale enigma2 (faulthandler, scrise de paznic inainte sa opreasca o interfata care nu mai
 # raspunde): pleaca numai randurile formatului lui, ca in raportul pornirii (hds-raport.sh, rp_stive)
 _STIVA_FIR = re.compile(r"^(Current thread|Thread) 0x[0-9A-Fa-f]+ \(most recent call first\):$")
@@ -1188,9 +1198,11 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 		stare["jurnale_azi"] = 0
 		stare["caderi_azi"] = 0
 		stare["rare_azi"] = 0
+		stare["motor_azi"] = 0
 	ramase = max(0, maxim - int(stare.get("jurnale_azi", 0)))
 	ramase_caderi = max(0, CADERI_PE_ZI - int(stare.get("caderi_azi", 0)))
 	ramase_rare = max(0, RARE_PE_ZI - int(stare.get("rare_azi", 0)))
+	ramase_motor = max(0, MOTOR_PE_ZI - int(stare.get("motor_azi", 0)))
 	noi = []
 	try:
 		nume_fisiere = os.listdir(dosar_logs)
@@ -1213,11 +1225,12 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 	# intai caderile si blocajele (limita lor), apoi jurnalele obisnuite (limita lor); in fiecare grup, cele mai noi intai
 	noi.sort(key=lambda x: (not esteCadere(x[1]), -x[0]))
 	jurnale = []
-	obisnuite = caderi = rare = 0
+	obisnuite = caderi = rare = motor = 0
 	for mtime, nume, cale_fisier, semn in noi:
 		cadere = esteCadere(nume)
 		rar = not cadere and esteRar(nume)
-		if (cadere and caderi >= ramase_caderi) or (rar and rare >= ramase_rare) or 				(not cadere and not rar and obisnuite >= ramase):
+		de_motor = not cadere and not rar and esteMotor(nume)
+		if (cadere and caderi >= ramase_caderi) or (rar and rare >= ramase_rare) or 				(de_motor and motor >= ramase_motor) or (not cadere and not rar and not de_motor and obisnuite >= ramase):
 			continue
 		crash = nume.startswith("enigma2_crash_")
 		text = _citesteCadere(cale_fisier) if crash else _citesteCoada(cale_fisier, 4 * JURNAL_MAX)
@@ -1239,6 +1252,8 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 			caderi += 1
 		elif rar:
 			rare += 1
+		elif de_motor:
+			motor += 1
 		else:
 			obisnuite += 1
 	# numele care nu mai exista ies din stare
@@ -1251,6 +1266,7 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 	stare["jurnale_azi"] = int(stare.get("jurnale_azi", 0)) + obisnuite
 	stare["caderi_azi"] = int(stare.get("caderi_azi", 0)) + caderi
 	stare["rare_azi"] = int(stare.get("rare_azi", 0)) + rare
+	stare["motor_azi"] = int(stare.get("motor_azi", 0)) + motor
 	return {"jurnale": jurnale, "paznic": paznic}
 
 
@@ -2476,12 +2492,46 @@ def mesaj(fel, text, ecran="", cu_jurnal=False, captura=None, b=None, contor=Non
 	return True, _t("Mesajul a intrat în coadă și pleacă îndată ce receptorul are internet.")
 
 
+# grab-ul capturii pentru raport: cel mult atat, apoi oprit, cu asteptarea marginita (HdsCapturi.ruleazaGrab); o
+# captura reala dureaza sub 2 s. Cele doua incercari (80/960, apoi 60/640) incap in asteptarea paginii web (30 s).
+CAPTURA_GRAB_S = 8
+# LucrareFundal-urile capturilor in curs (capturaOsdInFundal), tinute in viata pana la sfarsit
+_capturiInLucru = []
+
+
+def _grabOsd(calitate, lat):
+	"""Octetii JPEG ai lui grab -o (numai meniurile), sau None. Niciodata pe firul enigma2: pe HiSilicon grab pornit de
+	acolo, cu bucla oprita cat asteapta, trece de termen (vezi Screens/HdsAsistentaSemn.GRAB)."""
+	from Components import HdsCapturi
+	stare, cod, date = HdsCapturi.ruleazaGrab(["grab", "-q", "-s", "-o", "-j", str(calitate), "-r", str(lat)],
+		CAPTURA_GRAB_S)
+	if stare != "ok" or cod != 0 or date[:2] != b"\xff\xd8":
+		return None
+	return date
+
+
+def _pentruRaport(date, ecrane, marime, calitate):
+	"""Copia curatata pentru echipa (fara valorile conturilor), JPEG, sau None la refuz. Pe firul enigma2: curatarea
+	citeste ecranele deschise."""
+	from Components import HdsAsistentaControl as Control
+	date = Control.curataCapturaEchipa(date, ecrane, marime)
+	if not date:
+		return None
+	if date[:2] != b"\xff\xd8":
+		# Raportul primeste in continuare JPEG; PNG-ul cu zonele acoperite ramane numai in RAM.
+		from PIL import Image
+		with Image.open(io.BytesIO(date)) as imagine:
+			iesire = io.BytesIO()
+			imagine.convert("RGB").save(iesire, format="JPEG", quality=calitate)
+			date = iesire.getvalue()
+	return date
+
+
 def capturaOsd(latime=CAPTURA_LATIME, ecrane=None, marime=None):
-	"""Captura pentru raportul echipei, fara valorile conturilor. Pe firul enigma2, TV sau web; fara context, None.
-	Nu modifica fotografia omului. `ecrane` si `marime` explicite sunt pentru probele pe PC."""
+	"""Captura pentru raportul echipei, fara valorile conturilor; fara context, None. Nu modifica fotografia omului.
+	Asteapta grab-ul pe loc: de pe firul enigma2 (ecranul TV, pagina web) se cheama capturaOsdInFundal. `ecrane` si
+	`marime` explicite sunt pentru probele pe PC."""
 	try:
-		import subprocess
-		from Components import HdsAsistentaControl as Control
 		if ecrane is None:
 			from Screens import HdsAsistentaSemn as Semn
 			if Semn._session() is None:
@@ -2492,25 +2542,75 @@ def capturaOsd(latime=CAPTURA_LATIME, ecrane=None, marime=None):
 			s = getDesktop(0).size()
 			marime = s.width(), s.height()
 		for calitate, lat in ((80, latime), (60, 640)):
-			p = subprocess.run(["grab", "-q", "-s", "-o", "-j", str(calitate), "-r", str(lat)], stdout=subprocess.PIPE,
-				stderr=subprocess.DEVNULL, timeout=20)
-			if p.returncode != 0 or p.stdout[:2] != b"\xff\xd8":
+			brut = _grabOsd(calitate, lat)
+			if brut is None:
 				return None
-			date = Control.curataCapturaEchipa(p.stdout, ecrane, marime)
+			date = _pentruRaport(brut, ecrane, marime, calitate)
 			if not date:
 				return None
-			if date[:2] != b"\xff\xd8":
-				# Raportul primeste in continuare JPEG; PNG-ul cu zonele acoperite ramane numai in RAM.
-				from PIL import Image
-				with Image.open(io.BytesIO(date)) as imagine:
-					iesire = io.BytesIO()
-					imagine.convert("RGB").save(iesire, format="JPEG", quality=calitate)
-					date = iesire.getvalue()
 			if len(date) <= CAPTURA_MAX:
 				return date
 	except Exception as e:
 		_jurnal("captura: %s" % e.__class__.__name__)
 	return None
+
+
+def capturaOsdInFundal(gata, latime=CAPTURA_LATIME):
+	"""capturaOsd pentru firul enigma2 (ecranul TV si pagina web; 0.7.5 FIR, TODO 15.11 06:15 (TRI, captura in fir)):
+	grab-ul pe un fir separat (LucrareFundal), iar stiva ecranelor, compararea ei si curatarea copiei pe firul enigma2,
+	ca la asistenta (Screens/HdsAsistentaSemn._captura). gata(octeti sau None) vine pe firul enigma2, o singura data.
+	Un ecran deschis sau inchis in timpul grab-ului: fara captura (zonele acoperite ar fi ale altui ecran)."""
+	def raspunde(date):
+		try:
+			gata(date)
+		except Exception as e:
+			_jurnal("captura, dupa: %s" % e.__class__.__name__)
+	try:
+		from Screens import HdsAsistentaSemn as Semn
+		if Semn._session() is None:
+			raspunde(None)
+			return
+		inainte = [id(e) for e in Semn._stivaAcum()]
+		from enigma import getDesktop
+		s = getDesktop(0).size()
+		marime = s.width(), s.height()
+		from Components.HdsPazaModel import LucrareFundal
+	except Exception as e:
+		_jurnal("captura: %s" % e.__class__.__name__)
+		raspunde(None)
+		return
+	trepte = ((80, latime), (60, 640))
+
+	def incearca(i):
+		calitate, lat = trepte[i]
+		stare = {"gata": False, "lucrare": None}
+
+		def dupa(brut, eroare):
+			stare["gata"] = True
+			if stare["lucrare"] in _capturiInLucru:
+				_capturiInLucru.remove(stare["lucrare"])
+			date = None
+			try:
+				if brut and not eroare:
+					ecrane = Semn._stivaAcum()
+					if [id(e) for e in ecrane] != inainte:
+						_jurnal("captura: ecranele s-au schimbat in timpul capturii")
+					else:
+						date = _pentruRaport(brut, ecrane, marime, calitate)
+						if date and len(date) > CAPTURA_MAX:
+							date = None
+							if i + 1 < len(trepte):
+								incearca(i + 1)
+								return
+			except Exception as e:
+				_jurnal("captura: %s" % e.__class__.__name__)
+				date = None
+			raspunde(date)
+		lucrare = LucrareFundal(lambda: _grabOsd(calitate, lat), dupa)
+		if not stare["gata"]:
+			stare["lucrare"] = lucrare
+			_capturiInLucru.append(lucrare)
+	incearca(0)
 
 
 def citesteRaspunsuri():

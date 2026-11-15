@@ -177,6 +177,19 @@ class SablonListaCanale(object):
 		except Exception:
 			return True
 
+	@staticmethod
+	def _numereLista():
+		"""Numerele canalelor din Setari lista de canale (config.usage.hds_lista_numere, Components/HdsListaSetari): cu Nu,
+		coloana Number a sablonului ramane goala, ca la showNumber al temei. Locul ei din sablon ramane (numele nu se
+		muta: asezarea e a temei). Coloana separata a emisiunii (hds_lista_coloane) nu se aplica aici: sablonul temei isi
+		pune singur emisiunea (Title1) unde vrea. Fara setare: da."""
+		try:
+			from Components.config import config
+			s = getattr(config.usage, "hds_lista_numere", None)
+			return True if s is None else s.value is not False
+		except Exception:
+			return True
+
 	def date(self, ref, steaguri, numar, nume=None):
 		"""randul virtual al canalului (COLOANE valori, in ordinea din INDEX)"""
 		r = [None] * COLOANE
@@ -197,7 +210,7 @@ class SablonListaCanale(object):
 		if dosar:
 			r[INDEX["FolderName"]] = nume
 			r[INDEX["FolderImage"]] = self._poza("skin_default/icons/folder.png")
-		r[INDEX["Number"]] = (numar or "") if self._arata("showNumber") else ""
+		r[INDEX["Number"]] = (numar or "") if self._arata("showNumber") and self._numereLista() else ""
 		if steaguri & CANAL:
 			sigla = self._sigla(ref) if self._arata("showPicon") else None
 			r[INDEX["Picon"]] = sigla

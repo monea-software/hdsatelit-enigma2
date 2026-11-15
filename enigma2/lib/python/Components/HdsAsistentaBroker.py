@@ -38,7 +38,7 @@ RASPUNS_MAX = 1024 * 1024           # 1 MB de raspuns (text sau captura)
 COADA_MAX = RASPUNS_MAX - 16 * 1024
 CAPTURA_MAX = 2 * 1024 * 1024       # o captura (JPEG mic de la 0.6.15; PNG inainte) se plafoneaza aparte
 # op-urile de control: numai la nivelul B (omul a lasat bifat "Control complet")
-CONTROL = ("taste", "text", "zap", "reporneste", "setare-scrie", "instaleaza", "dezinstaleaza")
+CONTROL = ("taste", "text", "zap", "reporneste", "setare-scrie", "instaleaza", "dezinstaleaza", "repara-actualizarea")
 TERMEN_S = 20                       # cat asteapta un extern
 MAX_RANDURI_JURNAL = 2000
 
@@ -67,8 +67,9 @@ class Rezultat(object):
 # ---------------------------------------------------------------- filtre si plafoane
 
 def mascheaza(text):
-	"""Iesirea spre echipa: numai parolele devin *** (Eduard, 12.11.2026 19:19). Randurile modulelor de acces, numele de
-	utilizator, gazdele, porturile si adresele MAC raman."""
+	"""Iesirea spre echipa: numai parolele devin *** (Eduard, 12.11.2026 19:19), plus utilizatorul din adresele de flux
+	IPTV, care e contul liniei (DSP 14.11.2026). Randurile modulelor de acces, numele de utilizator din afara adreselor,
+	gazdele, porturile si adresele MAC raman. Trece aici orice raspuns text, al oricarei operatii (ruleaza)."""
 	return mascheazaParole(text or "")
 
 
@@ -105,6 +106,56 @@ def _citesteCoada(cale, maxim=RASPUNS_MAX):
 		return text
 	except Exception as e:
 		return "(nu se poate citi %s: %s)" % (os.path.basename(cale), type(e).__name__)
+
+
+BUCATA_CITIRE = 16384     # cat cere o citire din fisier (o citire de 16 KiB din /proc/bus/nim_sockets merge pe Vu+ 4K)
+
+
+def _citesteBucati(cale, de_la=0, maxim=RASPUNS_MAX, termen=10):
+	"""Octetii unui fisier de la `de_la`, cel mult `maxim`, cititi in Python cu citiri de BUCATA_CITIRE, pe un fir cu
+	termen (un disc care nu raspunde nu tine sesiunea). -> (cod, octeti, eroare): cod 0 bun, 1 eroare (octetii de pana
+	atunci raman: un driver care da eroare la a doua citire lasa totusi textul primei), 124 dupa termen.
+	Asistenta 636002 (Vu+ Ultimo 4K, 14.11.2026): head pe /proc/bus/nim_sockets da Input/output error, iar citirea din
+	Python a aceluiasi fisier (op tunere) merge."""
+	import threading
+	stare = {"bucati": [], "eroare": None, "gata": False}
+
+	def lucru():
+		try:
+			fd = os.open(cale, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0))
+			try:
+				ramas = maxim
+				if de_la:
+					try:
+						os.lseek(fd, de_la, os.SEEK_SET)
+					except OSError:
+						# fisierele din /proc fara cautare: octetii de dinainte se citesc si se arunca
+						sari = de_la
+						while sari > 0:
+							b = os.read(fd, min(BUCATA_CITIRE, sari))
+							if not b:
+								break
+							sari -= len(b)
+				while ramas > 0:
+					b = os.read(fd, min(BUCATA_CITIRE, ramas))
+					if not b:
+						break
+					stare["bucati"].append(b)
+					ramas -= len(b)
+			finally:
+				os.close(fd)
+		except Exception as e:
+			stare["eroare"] = "%s: %s" % (type(e).__name__, getattr(e, "strerror", None) or e)
+		stare["gata"] = True
+
+	fir = threading.Thread(target=lucru, name="hds-asistenta-citire")
+	fir.daemon = True
+	fir.start()
+	fir.join(termen)
+	octeti = b"".join(stare["bucati"])
+	if not stare["gata"]:
+		return 124, octeti, "termen"
+	return (1 if stare["eroare"] else 0), octeti, stare["eroare"]
 
 
 def _ruleaza(argv, termen=TERMEN_S, limita=RASPUNS_MAX):
@@ -212,30 +263,80 @@ def _temperaturi(ctx):
 	return "\n".join(randuri) or "(fara senzori)"
 
 
+# Fisierele de pornire ale tuturor formelor OE-Alliance: STARTUP, STARTUP_<cifre>, STARTUP_RECOVERY, STARTUP_ONCE si
+# STARTUP_LINUX_<loc>_BOXMODE_<mod> (hdemmc, AX HD51; asistenta 801539, darog69, 14.11.2026: op placa arata numai STARTUP)
+STARTUP_NUME = re.compile(r"^STARTUP(_[A-Z0-9_]{1,40})?$")
+MAX_ALTE_BOOT = 100
+TEXT_BOOT_NUMAI_STARTUP = "(pe /boot se citesc numai fisierele de pornire STARTUP*; restul numai ca nume, cu citeste /boot)"
+
+
+def _textStartup(cale):
+	"""Textul unui fisier de pornire, sau None cand nu e un fisier obisnuit (legatura, dosar) sau nu se poate citi:
+	numai text ASCII de cel mult 4 KiB, altfel "(alt continut, N octeti)". Fisierele STARTUP nu au date de acces."""
+	if os.path.islink(cale) or not os.path.isfile(cale):
+		return None
+	try:
+		with open(cale, "rb") as f:
+			date = f.read(4097)
+	except (IOError, OSError):
+		return None
+	if len(date) > 4096 or not re.match(rb"^[\t\r\n -~]*$", date):
+		return "(alt continut, %d octeti)" % len(date)
+	return date.decode("ascii").strip()
+
+
 def _textePornire(ctx):
-	"""Textele fisierelor de pornire (STARTUP, STARTUP_<cifre>, STARTUP_RECOVERY) de pe partitia de pornire, ca sa se vada
-	forma locurilor de pe card fara niciun pas al omului. Nimic altceva din dosar: nici alte fisiere, nici subdosare, nici
-	legaturi; numai text ASCII de cel mult 4 KiB pe fisier."""
+	"""Textele fisierelor de pornire (STARTUP_NUME) de pe partitia de pornire, ca sa se vada forma locurilor de pe card
+	fara niciun pas al omului, si dedesubt NUMAI numele celorlalte intrari din dosar (fara continut), ca sa se vada forma
+	oricarui incarcator."""
 	baza = ctx.get("boot", "/boot")
 	randuri = []
+	alte = []
 	try:
 		nume = sorted(os.listdir(baza))
 	except OSError:
 		return "(nu se poate citi)"
 	for n in nume:
-		cale = os.path.join(baza, n)
-		if not re.match(r"^STARTUP(_[0-9]{1,3}|_RECOVERY)?$", n) or os.path.islink(cale) or not os.path.isfile(cale):
-			continue
-		try:
-			with open(cale, "rb") as f:
-				date = f.read(4097)
-		except (IOError, OSError):
-			continue
-		if len(date) > 4096 or not re.match(rb"^[\t\r\n -~]*$", date):
-			randuri.append("%s: (alt continut, %d octeti)" % (n, len(date)))
+		text = _textStartup(os.path.join(baza, n)) if STARTUP_NUME.match(n) else None
+		if text is None:
+			alte.append(n)
 		else:
-			randuri.append("%s: %s" % (n, date.decode("ascii").strip()))
-	return "\n".join(randuri) or "(niciun fisier)"
+			randuri.append("%s: %s" % (n, text))
+	text = "\n".join(randuri) or "(niciun fisier)"
+	if alte:
+		text += "\nAlte fisiere pe /boot: " + " ".join(alte[:MAX_ALTE_BOOT])
+		if len(alte) > MAX_ALTE_BOOT:
+			text += " ... inca %d" % (len(alte) - MAX_ALTE_BOOT)
+	return text
+
+
+def _citesteBoot(ctx, cerut):
+	"""op citeste pe /boot: dosarul da numai numele intrarilor (felul, marimea, numele, fara continut), iar un fisier se
+	citeste numai daca e un fisier de pornire (STARTUP_NUME, _textStartup). /boot nu e o radacina de citire: restul
+	partitiei de pornire (nucleul, arborele placii, imaginile de rezerva) ramane necitit."""
+	baza = ctx.get("boot", "/boot")
+	if cerut.rstrip("/") == "/boot":
+		import stat as S
+		try:
+			nume = sorted(os.listdir(baza))
+		except OSError as e:
+			return Rezultat(1, text="(nu se poate citi /boot: %s)" % type(e).__name__)
+		randuri = []
+		for n in nume[:MAX_INTRARI_DOSAR]:
+			try:
+				st = os.lstat(os.path.join(baza, n))
+			except OSError:
+				continue
+			fel = "d" if S.S_ISDIR(st.st_mode) else ("l" if S.S_ISLNK(st.st_mode) else ("f" if S.S_ISREG(st.st_mode) else "c"))
+			randuri.append("%s %10s  %s" % (fel, st.st_size if fel == "f" else "-", n + ("/" if fel == "d" else "")))
+		return Rezultat(0, text="/boot:\n" + ("\n".join(randuri) or "(dosar gol)"))
+	n = cerut[len("/boot/"):]
+	if "/" in n or not STARTUP_NUME.match(n):
+		return Rezultat(1, text=TEXT_BOOT_NUMAI_STARTUP)
+	text = _textStartup(os.path.join(baza, n))
+	if text is None:
+		return Rezultat(1, text="(nu exista: %s)" % cerut)
+	return Rezultat(0, text=text)
 
 
 def op_placa(ctx, args):
@@ -243,10 +344,37 @@ def op_placa(ctx, args):
 		"Procesor:\n" + _citeste("/proc/cpuinfo", 16384).strip(),
 		"Linia de comanda: " + _citeste("/proc/cmdline", 4096).strip(),
 		"Partitii:\n" + _citeste("/proc/partitions", 8192).strip(),
+		"UUID si tipul partitiilor (blkid):\n" + _textBlkid(ctx),
+		"/dev/.newMB-uuid:\n" + _textNewMbUuid(ctx),
 		"Fisierele de pornire:\n" + _textePornire(ctx),
 		"Module:\n" + _citeste("/proc/modules", 32768).strip(),
 	]
 	return Rezultat(0, text="\n\n".join(parti))
+
+
+# Legatura UUID -> disc a locurilor de pe disc (root=UUID=... din STARTUP, Components/HdsMultiBoot; Wlad, asistenta 366732):
+# fara blkid si fara /dev/.newMB-uuid (scris de initramfs-ul nucleului comun, AS11 8342a0ff3) echipa nu vede ce disc are
+# UUID-ul din linia de comanda si nici daca nucleul pornit stie root=UUID (TODO 14.11 00:20). Numai citire, cu termen.
+NEWMB_UUID = "/dev/.newMB-uuid"
+
+
+def _textBlkid(ctx):
+	ruleaza = ctx.get("ruleaza", _ruleaza)
+	cod, text = ruleaza(["blkid"], termen=TERMEN_CITIRE_S, limita=16384)
+	text = (text or "").strip()
+	if cod == 124:
+		return "(blkid nu a raspuns in %d s)" % TERMEN_CITIRE_S
+	if cod != 0 and not text:
+		return "(blkid nu e disponibil sau nu a gasit nicio partitie, cod %s)" % cod
+	return text or "(blkid nu a gasit nicio partitie)"
+
+
+def _textNewMbUuid(ctx):
+	cale = ctx.get("newmb_uuid", NEWMB_UUID)
+	if not os.path.lexists(cale):
+		return "(nu exista: initramfs-ul nucleului pornit nu l-a scris)"
+	text = _citeste(cale, 512).strip().replace("\x00", " ")
+	return "exista: " + (text or "(gol)")
 
 
 def op_pachete(ctx, args):
@@ -272,11 +400,22 @@ def op_retea(ctx, args):
 
 
 def op_tunere(ctx, args):
-	nim = _citeste(ctx.get("nim_sockets", "/proc/bus/nim_sockets"), 16384).strip()
+	# fisierul intreg, cu toate campurile scrise de driver (Type, Name, Frontend_Device, I2C_Device, Mode, Has_Outputs,
+	# Internally_Connectable...; unele drivere, de pilda Vu+ 4K, scriu numai primele trei), cu citiri mici, ca un driver
+	# care refuza citirile mari sau a doua citire sa dea totusi textul (randul TODO 14.11 17:41)
+	cod, octeti, eroare = _citesteBucati(ctx.get("nim_sockets", "/proc/bus/nim_sockets"), 0, 65536, TERMEN_CITIRE_S)
+	nim = octeti.decode("utf-8", "replace").strip()
+	if eroare and not nim:
+		nim = "(nu se poate citi nim_sockets: %s)" % eroare
 	parti = ["Tunere:\n" + (nim or "(fara)")]
 	stari = _stari_frontend(ctx)
 	if stari:
 		parti.append("Stare frontend:\n" + stari)
+	# ce alte fisiere are fiecare tuner in /proc/stb/frontend (fbc_connect, fbc_link, mode...): numai numele, de citit
+	# cu "citeste" (unele noduri nu se citesc pe toate placile)
+	numele = _numeFrontend(ctx)
+	if numele:
+		parti.append("/proc/stb/frontend (cu citeste):\n" + numele)
 	# placile HiSilicon (V20, V30, V40, SF8008): randul portului din /proc/msp/tuner (i2c, demodulatorul si tunerul,
 	# cu adresele lor; dupa el recunoaste placa hds-blindscan) si numele celorlalte fisiere, de citit cu "citeste"
 	msp = ctx.get("msp", "/proc/msp")
@@ -300,9 +439,19 @@ def op_tunere(ctx, args):
 # raspunsul trece prin mascheaza (numai parolele ca stelute). Din 12.11.2026 19:19 (Eduard: „FARA PAROLE, ATAT”) se citesc
 # si fisierele modulelor de acces (jurnalele din /tmp si /var/log, /etc/init.d, /etc/tuxbox/config, oscam.server,
 # CCcam.cfg), setarile intregi, Wi-Fi-ul, IPTV-ul, linia de comanda a proceselor: toate cu parolele mascate.
-RADACINI_CITIRE = ("/proc", "/sys", "/etc", "/var/log", "/home/root/logs", "/tmp")
+# Din 0.7.5 si pluginurile si fisierele interfetei (asistenta 423813, NeoBoot: .location si codul unui plugin strain
+# care cade; TODO 14.11 17:55), numai citire: /usr/lib/enigma2/python/Plugins si /usr/share/enigma2. Restul lui /usr nu.
+RADACINI_USR = ("/usr/lib/enigma2/python/Plugins", "/usr/share/enigma2")
+RADACINI_CITIRE = ("/proc", "/sys", "/etc", "/var/log", "/home/root/logs", "/tmp") + RADACINI_USR
 # unde duc pe receptor (OE: /var/log -> /var/volatile/log, /tmp -> /var/volatile/tmp)
 RADACINI_REALE = RADACINI_CITIRE + ("/var/volatile/log", "/var/volatile/tmp")
+# sub RADACINI_USR, in plus: cheile modulelor de acces lasate de unele pluginuri (constant.cw, dosarele keys; fisierele
+# *.key sunt inchise oricum, din LOCURI_OPRITE)
+LOCURI_OPRITE_USR = re.compile(r"(?i)\.cw$|(?:^|/)keys?(?:/|$)")
+# o cale (sau tinta unei legaturi, ori locul dupa "..") din afara radacinilor: spus ca atare, nu ca fisier de parole (tinta nu
+# se scrie: poate fi numele unui film sau al unui fisier personal de pe disc)
+TEXT_IN_AFARA = ("(in afara cailor permise: calea sau tinta legaturii nu e sub /proc, /sys, /etc, /var/log, "
+	"/home/root/logs, /tmp, /usr/lib/enigma2/python/Plugins sau /usr/share/enigma2; discurile nu se citesc)")
 # Inchise raman numai fisierele care sunt ele insele parole sau chei private (formatul lor nu are o eticheta dupa care
 # sa se mascheze parola): parolele sistemului (shadow, smbpasswd, htpasswd, .netrc, chap-secrets), cheile SSH si TLS,
 # VPN-ul si WireGuard (numele, parola si cheia privata), fisierele *.key (cheile TLS si listele de chei), jetoanele si
@@ -324,7 +473,9 @@ TEXT_NOD_OPRIT = "(necitit: pe aceasta placa citirea poate opri nucleul sau poat
 
 def _oprit(cale):
 	c = (cale or "").lower()
-	return bool(LOCURI_OPRITE.search(c) or LOCURI_NESIGURE.search(c))
+	if LOCURI_OPRITE.search(c) or LOCURI_NESIGURE.search(c):
+		return True
+	return _sub(cale or "", RADACINI_USR) and bool(LOCURI_OPRITE_USR.search(c))
 
 
 def _hisilicon(ctx):
@@ -343,18 +494,37 @@ EPG_DAT = "/home/root/epg.dat"
 TERMEN_EPG_S = 50          # sub ASTEPTARE_IMPLICITA_S (60 s) a panoului echipei (unelte/asistenta/panou_client.py)
 
 
+def _caleGhid(ctx):
+	"""Unde e ghidul acum: din 0.7.5 locul se alege (memoria sau un stick/disc, Components/HdsEpgSalvare), iar calea
+	efectiva sta in config.misc.epgcache_filename (EPS, TODO 13.11 21:40: cu ghidul pe stick raspunsul era "nu exista").
+	Probele dau ctx["epg_cale"]; fara setare (sau goala), EPG_DAT."""
+	if "epg_cale" in ctx:
+		cale = ctx.get("epg_cale")
+	else:
+		cale = None
+		try:
+			from Components.config import config
+			cale = config.misc.epgcache_filename.value
+		except Exception:
+			cale = None
+	cale = str(cale or "").strip()
+	return cale if cale.startswith("/") else EPG_DAT
+
+
 def _citesteEpgDat(ctx, radacina):
-	"""Rezumatul limbilor din epg.dat; calea reala poate fi o legatura (pe un disc), dar tot un epg.dat obisnuit."""
-	plin = os.path.realpath(radacina + EPG_DAT)
+	"""Rezumatul limbilor din ghidul tinut minte (EPG_DAT sau locul ales, _caleGhid); calea reala poate fi o legatura
+	(pe un disc), dar tot un epg.dat obisnuit. Raspunsul spune ce fisier s-a citit."""
+	ghid = _caleGhid(ctx)
+	plin = os.path.realpath(radacina + ghid)
 	if os.path.basename(plin) != "epg.dat" or _oprit(plin):
 		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
 	try:
 		st = os.stat(plin)
 	except Exception:
-		return Rezultat(1, text="(nu exista: %s; ghidul nu a fost inca salvat)" % EPG_DAT)
+		return Rezultat(1, text="(nu exista: %s; ghidul nu a fost inca salvat)" % ghid)
 	import stat as S
 	if not S.S_ISREG(st.st_mode):
-		return Rezultat(1, text="(nu e un fisier obisnuit: %s)" % EPG_DAT)
+		return Rezultat(1, text="(nu e un fisier obisnuit: %s)" % ghid)
 	python = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 	program = ("import sys; sys.path.insert(0, %r); from Components.HdsEpgDatLimbi import main; "
 		"sys.exit(main(sys.argv[1:]))" % python)
@@ -363,7 +533,9 @@ def _citesteEpgDat(ctx, radacina):
 	argv = list(ctx.get("prioritate", ("nice", "-n", "19"))) + [ctx.get("python", "python3"), "-c", program, plin]
 	cod, text = ruleaza(argv, termen=TERMEN_EPG_S)
 	if cod == 124:
-		return Rezultat(1, text="(%s nu s-a putut citi in %d s)" % (EPG_DAT, TERMEN_EPG_S))
+		return Rezultat(1, text="(%s nu s-a putut citi in %d s)" % (ghid, TERMEN_EPG_S))
+	if ghid != EPG_DAT:
+		text = "(ghidul e in locul ales: %s)\n%s" % (ghid, text)
 	return Rezultat(cod, text=text)
 
 
@@ -372,10 +544,15 @@ def op_citeste(ctx, args):
 	RADACINI_CITIRE; ctx["radacina"] muta totul intr-un dosar de proba. EPG_DAT: limbile ghidului, nu octetii."""
 	radacina = ctx.get("radacina", "").rstrip("/")
 	cerut = "/" + (args[0] if args else "").strip("/")
+	de_la = _deLa(args, 1)
 	if cerut == EPG_DAT:
 		return _citesteEpgDat(ctx, radacina)
-	if not _sub(cerut, RADACINI_CITIRE) or _oprit(cerut):
+	if _sub(cerut, ("/boot",)):
+		return _citesteBoot(ctx, cerut)
+	if _oprit(cerut):
 		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
+	if not _sub(cerut, RADACINI_CITIRE):
+		return Rezultat(1, text=TEXT_IN_AFARA)
 	hisilicon = _hisilicon(ctx)
 	if nodOprit(cerut, hisilicon):
 		return Rezultat(1, text=TEXT_NOD_OPRIT)
@@ -394,8 +571,11 @@ def op_citeste(ctx, args):
 	except Exception:
 		return Rezultat(1, text="(cale necunoscuta)")
 	reale = RADACINI_REALE + ((rad_real,) if rad_real and rad_real != "/" else ())
-	if real is None or not _sub(real, reale) or _oprit(real):
+	if real is not None and _oprit(real):
 		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
+	if real is None or not _sub(real, reale):
+		# o legatura din /etc/rcS.d spre /usr/bin, o legatura spre disc: nu e un fisier de parole (asistenta 423813)
+		return Rezultat(1, text=TEXT_IN_AFARA)
 	# dupa legaturi si dupa "..": tot acelasi fisier
 	if nodOprit(real, hisilicon):
 		return Rezultat(1, text=TEXT_NOD_OPRIT)
@@ -408,6 +588,9 @@ def op_citeste(ctx, args):
 		return Rezultat(0, text=_dosar(real_plin, real, hisilicon))
 	if not S.S_ISREG(st.st_mode):
 		return Rezultat(1, text="(nu e un fisier obisnuit: %s)" % cerut)
+	if de_la is not None:
+		# "de la octetul" (randurile AS16, TODO 14.11 13:27 si 17:30): orice bucata a unui fisier mai mare decat plafonul
+		return _bucataDeLa(real_plin, cerut, de_la, st.st_size)
 	ruleaza = ctx.get("ruleaza", _ruleaza)
 	# un fisier mai mare decat plafonul (un jurnal care creste): ultimul MB, unde e ce s-a intamplat acum, nu primul
 	# (asistenta 252913); fisierele din /proc si /sys au marimea 0 si raman pe head
@@ -417,11 +600,52 @@ def op_citeste(ctx, args):
 		termen=TERMEN_CITIRE_S)
 	if cod == 124:
 		return Rezultat(1, text="(%s nu s-a putut citi in %d s)" % (cerut, TERMEN_CITIRE_S))
+	if cod != 0 and st.st_size == 0 and _sub(real, ("/proc", "/sys")):
+		# un driver care refuza citirea lui head (Input/output error la /proc/bus/nim_sockets pe Vu+ 4K, asistenta
+		# 636002): inca o data, cu citirile mici din Python, ca op tunere; dupa un termen (124) nu se mai incearca
+		cod2, octeti, eroare = _citesteBucati(real_plin, 0, RASPUNS_MAX + 1, TERMEN_CITIRE_S)
+		if octeti or cod2 == 0:
+			text = octeti.decode("utf-8", "replace")
+			if eroare:
+				text += "\n(citirea s-a oprit dupa %d octeti: %s)" % (len(octeti), eroare)
+			cod = 0
 	text = text.replace("\x00", " ")
 	if coada and cod == 0:
 		# primul rand poate fi taiat la jumatate
 		text = "(fisierul are %d octeti: se arata ultimii %d)\n%s" % (st.st_size, COADA_MAX, text.split("\n", 1)[-1])
 	return Rezultat(cod, text=text)
+
+
+def _deLa(args, i):
+	"""Argumentul "de la octetul" (cifre, verificate de catalog) de pe locul i, sau None cand lipseste."""
+	if len(args) > i and args[i] not in (None, ""):
+		try:
+			return max(0, int(args[i]))
+		except (TypeError, ValueError):
+			return None
+	return None
+
+
+def _capBucata(de_la, lungime, marime):
+	"""Randul de sus al unei bucati citite "de la octetul": ce octeti sunt si de unde continua cererea urmatoare."""
+	sfarsit = de_la + lungime
+	if sfarsit < marime:
+		return "(fisierul are %d octeti: se arata octetii %d-%d; urmatorul: de la %d)" % (marime, de_la, sfarsit, sfarsit)
+	return "(fisierul are %d octeti: se arata octetii %d-%d, pana la sfarsit)" % (marime, de_la, sfarsit)
+
+
+def _bucataDeLa(real_plin, cerut, de_la, marime):
+	"""Bucata de cel mult COADA_MAX octeti a unui fisier, de la octetul de_la, cu randul de sus (_capBucata)."""
+	if marime and de_la >= marime:
+		return Rezultat(1, text="(fisierul are %d octeti: de la %d nu mai e nimic)" % (marime, de_la))
+	cod, octeti, eroare = _citesteBucati(real_plin, de_la, COADA_MAX, TERMEN_CITIRE_S)
+	if cod == 124 and not octeti:
+		return Rezultat(1, text="(%s nu s-a putut citi in %d s)" % (cerut, TERMEN_CITIRE_S))
+	text = octeti.decode("utf-8", "replace").replace("\x00", " ")
+	if eroare:
+		text += "\n(citirea s-a oprit dupa %d octeti: %s)" % (len(octeti), eroare)
+	return Rezultat(0 if octeti else cod, text="%s\n%s" % (_capBucata(de_la, len(octeti), max(marime, de_la + len(octeti))),
+		text))
 
 
 def _dosar(real_plin, real, hisilicon=False):
@@ -472,6 +696,19 @@ def _stari_frontend(ctx):
 	except Exception:
 		pass
 	return "\n".join(randuri)
+
+
+def _numeFrontend(ctx):
+	baza = ctx.get("dvb", "/proc/stb/frontend")
+	randuri = []
+	try:
+		for nume in sorted(os.listdir(baza)):
+			cale = os.path.join(baza, nume)
+			if os.path.isdir(cale):
+				randuri.append("%s: %s" % (nume, " ".join(sorted(os.listdir(cale)))))
+	except Exception:
+		pass
+	return "\n".join(randuri[:64])
 
 
 def op_decodor(ctx, args):
@@ -545,6 +782,23 @@ def op_jurnal(ctx, args):
 			return Rezultat(1, text="(jurnal necunoscut)")
 	except Exception:
 		return Rezultat(1, text="(jurnal necunoscut)")
+	de_la = _deLa(args, 2)
+	if de_la is not None:
+		# "de la octetul" (randul AS16): primele `randuri` randuri de acolo (fara numar: toate, cel mult
+		# MAX_RANDURI_JURNAL), cu randul de sus care spune de unde continua cererea urmatoare
+		if not (len(args) > 1 and args[1]):
+			randuri = MAX_RANDURI_JURNAL
+		marime = os.path.getsize(real)
+		rez = _bucataDeLa(real, nume, de_la, marime)
+		if rez.cod_iesire != 0:
+			return rez
+		cap, _sep, text = rez.text.partition("\n")
+		primele = text.split("\n")[:randuri]
+		lungime = len("\n".join(primele).encode("utf-8", "replace"))
+		if len(primele) < len(text.split("\n")):
+			lungime += 1
+			cap = _capBucata(de_la, lungime, marime)
+		return Rezultat(0, text="%s\n%s" % (cap, "\n".join(primele)))
 	# coada fisierului, nu inceputul (asistenta 252913: hds-interfata.log are 1,5 MB pe SF8008 si se intorcea mijlocul)
 	text = _citesteCoada(real, COADA_MAX)
 	ultimele = text.splitlines()[-randuri:]
@@ -577,8 +831,10 @@ def op_procese(ctx, args):
 # scrierea isi pastreaza lista separata din Control.
 SETARI_PERMISE = ("config.",)
 # o setare care tine o parola, un PIN (al controlului parental) sau cheia cu care receptorul trimite ca tester
-# (config.hds_beta.id, tine loc de parola la serverul nostru): valoarea intreaga devine ***
+# (config.hds_beta.id, tine loc de parola la serverul nostru): valoarea intreaga devine ***; la fel cheile care se termina
+# in token (config.plugins.hdswebcontrol.token e cheia de acces a interfetei web pentru scripturi; AS12, TODO 14.11 01:25)
 _CHEIE_PAROLA = re.compile(r"(?i)(?:password|passwd|passphrase|pwd|parol|wep_key|(?:^|[._-])(?:pass|psk)[0-9]*$|pin(?:[._]?[0-9]+)?$|"
+	r"(?:^|[._-])token$|"
 	r"^config\.hds_beta\.(?:id|cod)$)")
 
 
@@ -709,6 +965,44 @@ def op_canal(ctx, args):
 	return Rezultat(0, text=text)
 
 
+def op_flux(ctx, args):
+	"""Fluxul prins acum pe tunerul canalului deschis, din tabelele receptionate (PAT, SDT actual, NIT actual), nu din
+	lamedb: TSID, ONID, reteaua, pozitia orbitala din descriptorul de livrare, primele servicii (Components/HdsAsistentaFlux;
+	TODO 14.11 19:42). Numai citire: canalul omului nu se schimba. De pe firul enigma2 vin numai demuxul si referinta
+	(ctx["flux"]); citirea filtrelor (cel mult HdsAsistentaFlux.TERMEN_S) se face aici, pe firul sesiunii.
+	Cu argumente (POZITIE FRECVENTA POL [RATA]; TODO 15.11 01:55): pe un tuner LIBER acordat pe transponderul cerut
+	(ctx["flux_tp"], pe firul enigma2), fara sa se schimbe canalul omului; tunerul se elibereaza dupa citire
+	(ctx["flux_tp_elibereaza"]) si singur, dupa HdsAsistentaFlux.PAZA_S. Fara tuner liber: raspuns clar, nimic schimbat."""
+	from Components import HdsAsistentaFlux as F
+	cerut, motiv = F.cerere_din_argumente(args)
+	if motiv:
+		return Rezultat(1, text=motiv)
+	if cerut is not None:
+		ia_tp = ctx.get("flux_tp")
+		if ia_tp is None:
+			return Rezultat(1, text="(fluxul pe un transponder ales nu se poate citi pe acest receptor)")
+		param = ia_tp(cerut)
+		try:
+			if param is None:
+				return Rezultat(1, text="(receptorul nu a raspuns la timp)")
+			if param.get("eroare"):
+				return Rezultat(1, text=param["eroare"])
+			cod, text = F.citesteText(param, sursa=ctx.get("flux_sursa"), termen=ctx.get("flux_termen", F.TERMEN_S))
+		finally:
+			elibereaza = ctx.get("flux_tp_elibereaza")
+			if elibereaza is not None:
+				elibereaza()
+		return Rezultat(cod, text=text)
+	ia = ctx.get("flux")
+	if ia is None:
+		return Rezultat(1, text="(fluxul nu se poate citi pe acest receptor)")
+	param = ia()
+	if param is None:
+		return Rezultat(1, text="(receptorul nu a raspuns la timp)")
+	cod, text = F.citesteText(param, sursa=ctx.get("flux_sursa"), termen=ctx.get("flux_termen", F.TERMEN_S))
+	return Rezultat(cod, text=text)
+
+
 def op_transpondere(ctx, args):
 	"""Transponderele din lista de canale (lamedb), numai sectiunea lor, eventual ale unui singur satelit (namespace)."""
 	from Components import HdsAsistentaControl as C
@@ -810,6 +1104,14 @@ def op_dezinstaleaza(ctx, args):
 	return _opkg(ctx, "remove", args[0])
 
 
+def op_repara_actualizarea(ctx, args):
+	"""Termina o actualizare ramasa la jumatate (0.7.5, JAK, TODO 13.11 11:20): actualizarea rapida a meniului pe firul
+	enigma2 (Screens/HdsAsistentaSemn._reparaActualizarea): cautarea semnata pune in plan si pachetele imaginii ramase
+	half-installed (enigma2-hdsatelit, hdsatelit-*), pe care opkg le primeste cu --force-reinstall; apoi repornirea
+	interfetei. Nicio comanda opkg data de echipa si nimic tastat de om."""
+	return _cuControl(ctx, "repara_actualizarea")
+
+
 TABEL = {
 	"info": op_info,
 	"placa": op_placa,
@@ -831,12 +1133,14 @@ TABEL = {
 	"taste": op_taste,
 	"text": op_text,
 	"canal": op_canal,
+	"flux": op_flux,
 	"transpondere": op_transpondere,
 	"zap": op_zap,
 	"reporneste": op_reporneste,
 	"setare-scrie": op_setare_scrie,
 	"instaleaza": op_instaleaza,
 	"dezinstaleaza": op_dezinstaleaza,
+	"repara-actualizarea": op_repara_actualizarea,
 }
 
 
@@ -852,6 +1156,7 @@ def ruleaza(op, args, ctx=None):
 	except Exception as e:
 		_jurnal("%s: %s" % (op, e))
 		return Rezultat(1, text="(eroare la %s: %s)" % (op, type(e).__name__))
-	if rez.text is not None and rez.tip == "text":
+	if rez.text is not None:
+		# orice text, si cel al unui raspuns cu alt tip: _trimite_raspuns il trimite cand lipsesc octetii
 		rez.text = _taie(mascheaza(rez.text))
 	return rez

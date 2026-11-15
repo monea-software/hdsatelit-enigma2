@@ -1,0 +1,34 @@
+# HD Satelit: regulile garzii de model pentru Octagon SX988 4K DUAL OS (masina sx988), NECONFIRMAT (V19, 14.11.2026)
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
+# sistemului; placa (hw), tabela partitiilor si marimea nucleului sunt numai avertismente, aratate de interfata.
+# Masina sx988 e stratul producatorului meta-octagon: HiSilicon Hi3798MV200 cu pornire securizata (SOC_FAMILY
+# hisi3798mv200advca: fbl, sbl semnat, trustedcore criptat), nucleul linux-octagon 4.4.176 (defconfig sx988), pachetul de
+# drivere sx988-hiko 20221027. Valorile vin din pachetele publice ale producatorului din oglinda OE-Alliance, verificate
+# pe SHA-256 fata de retetele meta-octagon:
+#   boxtype  /proc/stb/info/boxtype din hi-dvb.ko (sx988-hiko-20221027) = "sx988" (singurul nume de model din modul);
+#   chip     hi_common.ko scrie in /proc/msp/sys "CHIP_VERSION: %sV%x": advca e varianta cu CA a lui Hi3798MV200, deci
+#            Hi3798MV200 (ca SF8008). NEMASURAT pe un aparat; de inlocuit cu iesirea unui tester;
+#   hw       antetul deviceinfo.bin din sx988-partitions-20220113: MAGICNUM=deviceinfo OUI=00000003 HW=00000001;
+#   partitions, kernel_part, rootfs_part: bootargs.bin si bootoptions (boot.img) din acelasi pachet (blkdevparts,
+#            root=/dev/mmcblk0p19 rootsubdir=linuxrootfs1, kernel=/dev/mmcblk0p15); MTD_KERNEL si MTD_ROOTFS din sx988.conf;
+#   kernel_kib 16384: linuxkernel1 are 16 MB.
+# DUAL OS: din fabrica locul 1 are Enigma2 al producatorului si locul 2 OCTAGON Define OS, in aceeasi schema de patru
+# locuri (linuxkernel1-4 = p15-p18, sistemele in userdata p19); HD Satelit merge in locul 3 sau 4.
+# upd_path lipseste dinadins: recuperarea e meniul producatorului (usb_update.bin), nu Maintenance Mode.
+# Se inlocuiesc cu cele din fisa unui tester, iar dupa confirmare randul confirmat=nu se scoate.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=sx988.
+format=1
+distro=hdsatelit
+model=Octagon SX988 4K DUAL OS
+machine=sx988
+machinebuild=sx988
+chip=Hi3798MV200
+boxtype=sx988
+hw=00000001
+partitions=fastboot:1M,fbldata:1M,trustedcore:16M,trustedcorebak:16M,sbl:1M,bootargs:1M,bootoptions:1M,baseparam:1M,pqparam:1M,logo:1M,deviceinfo:1M,softwareinfo:1M,loaderdb:4M,loader:32M,linuxkernel1:16M,linuxkernel2:16M,linuxkernel3:16M,linuxkernel4:16M,userdata
+kernel_name=linuxkernel1
+rootfs_name=userdata
+kernel_part=mmcblk0p15
+kernel_kib=16384
+rootfs_part=mmcblk0p19
+confirmat=nu

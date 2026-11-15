@@ -24,7 +24,9 @@ PV = "0.7.0"
 # r7 (0.7.5, H20-AUTOPLAY): in modul HbbTV autoplay permis si cu sunet (website-policies), pentru <video> HTML5
 # r8 (0.7.5, WAS): hds-hbbtv.js da aplicatiilor HbbTV WebAssembly scris in JavaScript (polywasm 0.2.0, MIT,
 # https://github.com/evanw/polywasm) cand WebKit nu-l are (ARMv7); de aici si MIT in LICENSE
-PR = "r8"
+# r9 (0.7.5, HBX): functiile de eveniment puse pe <object> inainte de type ajung la evenimente (aplicatia TVP de pe
+# DVB-T afla ca filmul merge si scoate "Trwa wczytywanie"); acelasi numar de randuri, nota MIT neatinsa.
+PR = "r9"
 
 SRC_URI = "file://hds-navigator.c file://hds-hbbtv.js"
 S = "${UNPACKDIR}"

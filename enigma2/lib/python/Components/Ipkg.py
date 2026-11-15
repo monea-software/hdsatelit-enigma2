@@ -106,6 +106,25 @@ def splitPackages(package):
 	return package.split()
 
 
+def _pycInainte(arguments):
+	"""HDSatelit 0.7.5: before an opkg remove, the .py files of the packages (Components/HdsPycRamase.py)"""
+	try:
+		from Components import HdsPycRamase
+		return HdsPycRamase.instantaneu(arguments)
+	except Exception as e:
+		print("[Ipkg] HdsPycRamase:", e)
+		return None
+
+
+def _pycDupa(stare):
+	"""after opkg: the .pyc written at runtime and the empty directories of the removed packages are deleted"""
+	try:
+		from Components import HdsPycRamase
+		HdsPycRamase.curata(stare)
+	except Exception as e:
+		print("[Ipkg] HdsPycRamase:", e)
+
+
 def _reap(pid):
 	"""waitpid for a child just killed with SIGKILL, at most ~0.2 s (a child stuck in the kernel is left alone)"""
 	if pid is None or pid <= 0:
@@ -148,6 +167,8 @@ class IpkgComponent:
 		self.fetchedList = []
 		# the output of opkg comes as bytes; decoded as it comes (a character cut between two reads waits for its end)
 		self._decoder = None
+		# HDSatelit 0.7.5: what opkg remove leaves behind (.pyc, __pycache__) is cleaned at the end, before EVENT_DONE
+		self._pycRamase = None
 		self.setCurrentCommand()
 
 	def setCurrentCommand(self, command = None):
@@ -165,6 +186,7 @@ class IpkgComponent:
 			self.callCallbacks(self.EVENT_DONE, -1)
 			return
 		print("[Ipkg] executing", program, arguments)
+		self._pycRamase = _pycInainte(arguments)
 		self._decoder = codecs.getincrementaldecoder('utf-8')('replace')
 		self.cmd.appClosed.append(self.cmdFinished)
 		self.cmd.dataAvail.append(self.cmdData)
@@ -204,6 +226,10 @@ class IpkgComponent:
 			rest, self.cache = self.cache, None
 			self.parseLine(rest)
 		self.retval = retval
+		# before EVENT_DONE: the callers reload the plugin list then (a plugin.pyc left behind would still be a plugin)
+		stare, self._pycRamase = getattr(self, '_pycRamase', None), None
+		if stare:
+			_pycDupa(stare)
 		self.callCallbacks(self.EVENT_DONE, retval)
 
 	def cmdData(self, data):

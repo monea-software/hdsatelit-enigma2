@@ -89,6 +89,9 @@ def _dep(nume):
 	if nume == "HdsIpv6":
 		from Components import HdsIpv6
 		return HdsIpv6
+	if nume == "HdsSamba":
+		from Components import HdsSamba
+		return HdsSamba
 	if nume == "WlanTools":
 		from Components import WlanTools
 		return WlanTools
@@ -241,6 +244,17 @@ def _ipv6():
 		return None
 
 
+def _samba():
+	"""Starea partajarii in retea (Components/HdsSamba.stare: pornita, adresa, randurile traduse), sau None."""
+	try:
+		s = _dep("HdsSamba").stare()
+		return {"pornita": bool(s["pornita"]), "ruleaza": bool(s["ruleaza"]), "adresa": s["adresa"],
+			"linii": list(s["linii"])}
+	except Exception as eroare:
+		print("[HdsWebControl] retea: starea Samba: %s" % eroare)
+		return None
+
+
 def _numeLocal():
 	from Components.HdsComutareRetea import nume_local_confirmat
 	return nume_local_confirmat()
@@ -282,6 +296,7 @@ def stare(gazda=None):
 		"conectare": _copie(_STARE["conectare"], ("pornit",)),
 		"securitati_ascunse": [[s, W.securityText(s)] for s in W.HIDDEN_SECURITY],
 		"ipv6": _ipv6(),
+		"samba": _samba(),
 		"nume_local": _numeLocal(),
 		"drivere_usb": _drivereUsb(),
 	}
@@ -1000,6 +1015,20 @@ __STIL_PAGINI__
     </div>
   </section>
 
+  <section class="card" id="cardSamba">
+    <h2>Partajare în rețea (Samba)</h2>
+    <p class="linii" id="sambaStare">Se citește...</p>
+    <div class="rand">
+      <label for="sambaPornit">Partajare în rețea (Samba)</label>
+      <select id="sambaPornit"></select>
+    </div>
+    <div class="rand">
+      <label for="sambaDosar">Dosarul din rețea</label>
+      <select id="sambaDosar"></select>
+      <p class="ajutor nota">Da: dosarele receptorului se văd din calculatorul sau telefonul din casă (Windows, Mac, VLC, Kodi), ca dosar de rețea. Dacă serverul Samba lipsește, se instalează singur din feedul imaginii. Din afara casei nu intră nimeni. Parola e cea de la FTP (Parola receptorului). Aceeași setare pe televizor: Meniu &gt; Setări &gt; Rețea și Internet &gt; Partajare în rețea (Samba).</p>
+    </div>
+  </section>
+
   <section class="card">
     <h2>Plăcile de rețea</h2>
     <div id="placi"></div>
@@ -1275,7 +1304,7 @@ function arata(){
   $("cardSetari").classList.toggle("ascuns", !ALEASA);
   var p = placa(ALEASA);
   if(p && FORMULAR !== p.nume){ umpleFormular(p); } else { vizibile(); }
-  arataAcum(); arataProba(); arataWifi(); arataIpv6(); arataUsb();
+  arataAcum(); arataProba(); arataWifi(); arataIpv6(); arataSamba(); arataUsb();
   scrie($("numeLocal"), D.nume_local ? "Numele în rețea: " + D.nume_local : "Numele local nu este disponibil. Folosește adresa IP a receptorului.");
   if(D.lucrare && !D.lucrare.gata){ mesaj("Se lucrează la rețea (" + D.lucrare.secunde + " s)..."); }
 }
@@ -1450,6 +1479,28 @@ $("ipv6Pornit").addEventListener("change", function(){
 });
 citesteIpv6();
 if(new URLSearchParams(location.search).get("f") === "ipv6" && $("cardIpv6").scrollIntoView){ $("cardIpv6").scrollIntoView(); }
+// cardul Samba (Components/HdsSamba.py): starea si adresa vin cu /api/retea (samba.linii, aceleasi randuri ca pe televizor),
+// setarile prin pagina generica a setarilor (setup.xml hds_samba: randul 0 Da/Nu, randul 1 dosarul); receptorul le aplica
+// singur (instalarea din feed poate dura un minut, starea se citeste din nou)
+function arataSamba(){
+  if(D && D.samba && D.samba.linii){ scrie($("sambaStare"), D.samba.linii.join("\\n")); }
+}
+function citesteSamba(){
+  cerere("/api/setari?id=hds_samba").then(function(d){
+    if(d && d.result && d.randuri){ umpleAlegeri($("sambaPornit"), d.randuri[0]); if(d.randuri[1]){ umpleAlegeri($("sambaDosar"), d.randuri[1]); } }
+  }).catch(function(){});
+}
+function seteazaSamba(rand, valoare){
+  var q = new URLSearchParams(); q.set("id", "hds_samba"); q.set(rand, valoare);
+  cerere("/api/setari-seteaza", "POST", q).then(function(d){
+    mesaj(d.message, !d.result); citesteSamba(); citeste();
+    setTimeout(citeste, 5000); setTimeout(citeste, 30000);
+  }).catch(nimicNuRaspunde);
+}
+$("sambaPornit").addEventListener("change", function(){ seteazaSamba("r0", $("sambaPornit").value); });
+$("sambaDosar").addEventListener("change", function(){ seteazaSamba("r1", $("sambaDosar").value); });
+citesteSamba();
+if(new URLSearchParams(location.search).get("f") === "samba" && $("cardSamba").scrollIntoView){ $("cardSamba").scrollIntoView(); }
 setInterval(function(){ if(!document.hidden){ citesteComutarea(); } }, 10000);
 citeste();
 setInterval(function(){ if(!document.hidden){ citeste(); } }, 3000);
@@ -1589,6 +1640,12 @@ TEXTE_PAGINA = {
 		N_("Nu (din fabrică): plăcile de rețea nu au adrese IPv6, iar clientul IPv6 nu pornește; rețeaua merge pe "
 			"IPv4, ca până acum. Da: receptorul primește și adrese IPv6, dacă rețeaua ta le dă. Se aplică pe loc. "
 			"Aceeași setare pe televizor: Meniu &gt; Setări &gt; Rețea și Internet &gt; IPv6."),
+		N_("Partajare în rețea (Samba)"),
+		N_("Dosarul din rețea"),
+		N_("Da: dosarele receptorului se văd din calculatorul sau telefonul din casă (Windows, Mac, VLC, Kodi), ca "
+			"dosar de rețea. Dacă serverul Samba lipsește, se instalează singur din feedul imaginii. Din afara casei nu "
+			"intră nimeni. Parola e cea de la FTP (Parola receptorului). Aceeași setare pe televizor: Meniu &gt; Setări "
+			"&gt; Rețea și Internet &gt; Partajare în rețea (Samba)."),
 		N_("Plăcile de rețea"),
 		N_("Setările plăcii"),
 		N_("Folosește placa"),

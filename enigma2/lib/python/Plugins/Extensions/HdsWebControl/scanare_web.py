@@ -507,13 +507,34 @@ def _campuriSatelit(S, fel, v):
 					text = S._nume_valoare(lista, S._int(valoare, valoare))
 				optiuni.insert(0, {"cod": valoare, "text": text})
 			campuri.append(_camp(cheie, eticheta, "lista", optiuni, valoare))
-	elif fel == "mai_multi":
+	toti_permis = False
+	bife = None
+	if fel == "mai_multi":
+		# aceeasi lista si aceleasi bife "Bifeaza toti" ca ecranul (ScanerSatelit.sateliti_si_bife): cu motorul peste
+		# tot satellites.xml lista are satelitii de deasupra orizontului din locul antenei, iar "Bifeaza toti" ii bifeaza
+		# numai pe cei care au deja canale in lista (hotararea DSP 14.11 20:49)
+		if nim is not None and slot is not None and hasattr(S, "sateliti_si_bife"):
+			sateliti, bife = S.sateliti_si_bife(nim, slot)
+			toti_permis = bool(bife)
+		elif nim is not None and slot is not None and hasattr(S, "sateliti_de_bifat"):
+			sateliti, toti_permis = S.sateliti_de_bifat(nim, slot)
+		else:
+			toti_permis = bool(sateliti) and not motor
+		pozitii = [p for p, _n in sateliti]
 		alese = [str(p) for p in v.get("pozitii") or []]
 		camp = _camp("pozitii", _t("Sateliți"), "bife",
 			[{"cod": str(p), "text": nume or S.text_pozitie(p)} for p, nume in sateliti],
 			[p for p in alese if p in [str(x) for x in pozitii]])
 		campuri.append(camp)
-	return campuri, {"motor": motor, "slot": slot, "are_tuner": slot is not None}
+	info = {"motor": motor, "slot": slot, "are_tuner": slot is not None, "toti_permis": toti_permis}
+	if bife is not None and toti_permis:
+		# pozitiile bifate de "Bifeaza toti"; mai putine decat lista = numai cele cu canale (motorul USALS peste tot)
+		info["bife"] = sorted(str(p) for p in bife)
+		info["bife_cu_canale"] = len(bife) < len(sateliti)
+		if info["bife_cu_canale"]:
+			# acelasi text ca pe televizor (Screens/ScanerMaiMultiSateliti.py)
+			info["nota_bife"] = _t("Bifați din oficiu: numai sateliții care au deja canale în listă (%d din %d); pe ceilalți îi poți bifa tu.") % (len(bife), len(sateliti))
+	return campuri, info
 
 
 def _valoriPregateste(S, fel, v):
@@ -621,7 +642,12 @@ def campuri(scaner, fel, cerere=None):
 			_jurnal("previzualizarea %s/%s: %s" % (scaner, fel, eroare))
 			rez = {"eroare": _t("Previzualizarea nu a mers: %s") % eroare}
 	raspuns = {"result": True, "scaner": scaner, "fel": fel, "titlu": _numeFel(scaner, fel), "campuri": randuri,
-		"previzualizare": _previzualizare(rez), "motor": bool(info.get("motor")), "stare": stare()}
+		"previzualizare": _previzualizare(rez), "motor": bool(info.get("motor")), "stare": stare(),
+		"toti_permis": bool(info.get("toti_permis"))}
+	if info.get("bife") is not None:
+		raspuns["bife"] = info["bife"]
+		raspuns["bife_cu_canale"] = bool(info.get("bife_cu_canale"))
+		raspuns["nota_bife"] = info.get("nota_bife") or ""
 	if scaner == "satelit" and "hdscomun" in rez:
 		raspuns["plan"] = _planFluxuri(M, rez)
 	# felurile cu „(în lucru)” in menu.xml: de ce (ScanerSatelit.text_in_lucru, acelasi text ca pe televizor)
@@ -780,6 +806,13 @@ def _citesteDialog(dlg):
 	}
 	rezultat = _textEticheta(dlg, "scan_result")
 	st["rezultat"] = [r for r in rezultat.split("\n") if r.strip()] if rezultat else []
+	# televizorul cu casete (skinul HDSatelit) tine in scan_result numai restul: tot textul si casetele vin din ecran
+	try:
+		if hasattr(dlg, "hdsRezultatPentruWeb"):
+			st["rezultat"] = dlg.hdsRezultatPentruWeb()
+		st["casete"] = dlg.hdsCifrePentruWeb() if hasattr(dlg, "hdsCifrePentruWeb") else None
+	except Exception:
+		st["casete"] = None
 	try:
 		lista = dlg.get("servicelist")
 		st["ultimele"] = [str(x) for x in (getattr(lista, "list", None) or [])][-10:]
@@ -1196,6 +1229,11 @@ def porneste(scaner, fel, cerere=None, confirmat=False):
 			from enigma import eDVBFrontendParametersSatellite
 			lista = [{"transponders": [M.in_parametri(eDVBFrontendParametersSatellite, tp) for tp in rez["transpondere"]],
 				"feid": rez["slot"], "flags": rez["flags"], "hds_fel": "satelit/%s" % fel}]   # felul, pentru /api/scanare-ultima
+			# cu motor, mai multi sateliti pe rand: cate o trecere pe satelit, ca pe televizor (ScanerMaiMultiSateliti)
+			if fel == "mai_multi" and hasattr(M, "treceri_pe_satelit") and M.roteste(M._nimmanager(), rez["slot"]):
+				treceri = M.treceri_pe_satelit(lista[0]["transponders"], rez["slot"], rez["flags"], lista[0]["hds_fel"])
+				if len(treceri) > 1:
+					lista = treceri
 		else:
 			lista = M.cerere_scanare(rez)
 		from Screens.ServiceScan import ServiceScan
@@ -1459,12 +1497,22 @@ def _tunere():
 				cfg = None
 			if cfg is not None:
 				t["diseqc"] = _valoareConfig(cfg, "diseqcMode", "") if t["mod"] == "simple" else ""
+				if t["mod"] in ("equal", "loopthrough", "satposdepends"):
+					# litera tunerului legat, pentru oricate tunere (Vu+ Ultimo 4K: E..H), ca Satconfig.literaTunerLegat
+					try:
+						spre = int(_valoareConfig(cfg, "connectedTo", ""))
+					except Exception:
+						spre = -1
+					t["legat_de"] = chr(ord("A") + spre) if 0 <= spre < len(getattr(nimmanager, "nim_slots", []) or []) else "?"
 				if t["mod"] == "simple" and t["diseqc"] == "positioner" and _locStabilit():
 					t["usals"] = _coordonateUsals(cfg)
 					if t["usals"]:
 						# scris de receptor, ca pe televizor (Components/HdsGrade.py): „45,300 N, 23,270 E”
 						from Components import HdsGrade
 						t["usals_text"] = HdsGrade.coordonate(t["usals"]["latitudine"], t["usals"]["longitudine"], 3)
+				if _cereLoculAcum(n.slot):
+					# perechea ferestrei din Setari tuner (Satconfig.hdsCereLocul): motorul USALS fara locul antenei
+					t["loc_nestabilit"] = True
 				t["lnb"] = _lnbTuner(cfg, t["mod"], [p for p, _n in sateliti], n.slot)
 		tunere.append(t)
 	# tunerul B porneste singur daca are semnal (Components/HdsTunerB.py): aceeasi stare ca randul din Setari tuner
@@ -1593,6 +1641,15 @@ def _numarDinText(text, minim, maxim):
 	return x
 
 
+def _cereLoculAcum(slot):
+	"""True cand tunerul roteste antena cu USALS (dupa loc) si locul antenei nu e stabilit (ca Satconfig.hdsCereLocul)."""
+	try:
+		from Components import HdsLocul
+		return not HdsLocul.stabilit() and bool(HdsLocul.cereLoc(slot))
+	except Exception:
+		return False
+
+
 def _locStabilit():
 	"""locul antenei (Components/HdsLocul.py): fara el copiile din Setari tuner sunt neutre si nu se arata"""
 	try:
@@ -1606,7 +1663,8 @@ def _calculator(lat=None, lon=None):
 	"""Unghiurile antenei spre fiecare satelit din satellites.xml, cu formula calculatorului de pe televizor
 	(Screens/PositionerSetup.py). Locul: cel dat in cerere, altfel locul antenei (Components/HdsLocul.py, acelasi ca
 	pe televizor si ca la motorul USALS). Numai citire: locul din cerere nu se salveaza."""
-	from Screens.PositionerSetup import calculeazaUnghiuri, orbpozToGrade, initConfigPositioner
+	from Screens.PositionerSetup import calculeazaUnghiuri, orbpozToGrade, initConfigPositioner, directieInCuvinte, \
+		puncteCardinale
 	from Components.NimManager import nimmanager
 	from Components.config import config
 	from Screens.ScanerSatelit import text_pozitie
@@ -1638,9 +1696,13 @@ def _calculator(lat=None, lon=None):
 		sateliti.append({"pozitie": pozitie, "text": text_pozitie(pozitie), "nume": nume, "azimut": round(az, 1),
 			"elevatie": round(el, 1), "skew": round(skew, 1), "vizibil": el > 0,
 			"azimut_text": HdsGrade.numar(az, 1) + u"°", "elevatie_text": HdsGrade.numar(el, 1) + u"°",
-			"skew_text": HdsGrade.numar(skew, 1) + u"°"})
+			"skew_text": HdsGrade.numar(skew, 1) + u"°",
+			# directia in cuvinte, aceeasi fraza ca pe televizor (Screens/PositionerSetup.directieInCuvinte)
+			"directie_text": directieInCuvinte(az, el, HdsGrade.numar)})
 	sateliti.sort(key=lambda s: orbpozToGrade(s["pozitie"]))
 	rez["sateliti"] = sateliti
+	# literele busolei din pagina (N, E, S, V in limba meniului)
+	rez["puncte"] = puncteCardinale()
 	return rez
 
 
@@ -2003,6 +2065,15 @@ PAGINA = """<!DOCTYPE html>
   .linie span:first-child{color:var(--text-slab);flex:none;}
   .linie span:last-child{text-align:right;overflow-wrap:anywhere;}
   ul.rezultat{margin:8px 0 0;padding-left:20px;line-height:1.5;}
+  .casete{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:12px 0 4px;}
+  .caseta{grid-column:span 2;background:rgba(255,255,255,.06);border-radius:4px;padding:10px 14px;min-width:0;}
+  .caseta.lata{grid-column:span 3;}
+  .caseta small{display:block;color:#AEB9CC;font-size:.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .caseta b{display:block;font-size:2.2em;line-height:1.15;color:#9FB4FF;font-variant-numeric:tabular-nums;}
+  .caseta span{display:block;color:#C9D2E3;font-size:.9em;}
+  .caseta.canale span{color:#4FD18B;}
+  .casete .loc{grid-column:1/-1;background:rgba(255,255,255,.06);border-radius:4px;padding:10px 14px;font-weight:600;}
+  @media (max-width:560px){.caseta,.caseta.lata{grid-column:span 3;}}
   .retea{margin:12px 0 0;padding:12px 14px;border:1px solid var(--bordura);border-radius:10px;line-height:1.5;}
   .retea small{display:block;color:var(--text-slab);font-size:.8rem;letter-spacing:.04em;}
   .retea b{display:block;font-size:1.3rem;margin:2px 0 4px;overflow-wrap:anywhere;}
@@ -2032,6 +2103,7 @@ PAGINA = """<!DOCTYPE html>
   .subtitlu{margin:14px 0 2px;font-weight:600;}
   .subtitlu:first-of-type{margin-top:0;}
   .doua{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .busola{width:220px;max-width:100%;display:block;margin:10px auto 0;color:var(--text);}
   .ascuns{display:none !important;}
   footer{margin:16px 0 0;color:var(--text-slab);font-size:.85rem;display:flex;flex-wrap:wrap;gap:8px 18px;}
 </style>
@@ -2072,6 +2144,7 @@ PAGINA = """<!DOCTYPE html>
   <h2 id="titluStare">Căutarea de pe televizor</h2>
   <div class="bara"><div id="bara"></div></div>
   <div id="liniiStare"></div>
+  <div class="casete ascuns" id="casete"></div>
   <ul class="rezultat" id="rezultat"></ul>
   <div class="retea ascuns" id="reteaGasita"><small id="reteaTitlu"></small><b id="reteaNume"></b><div id="reteaDate"></div><p class="nota" id="reteaIndiciu"></p><details id="reteaFrecvente"><summary id="reteaFrecventeTitlu"></summary><div class="tabel"><table><thead><tr id="reteaFrecventeCap"></tr></thead><tbody id="reteaFrecventeRanduri"></tbody></table></div></details></div>
   <div class="posturi ascuns" id="posturiGasite"></div>
@@ -2388,10 +2461,12 @@ function deseneazaCampuri(d){
       });
       f.appendChild(cutie);
       var lista = [];
-      if(!d.motor){ lista.push(buton("Bifează toți", true, function(){ bifeaza(cutie, true, c.cheie); })); }
+      if(d.toti_permis){ lista.push(buton(d.bife_cu_canale ? "Bifează pe cei cu canale" : "Bifează toți", true, function(){ bifeaza(cutie, true, c.cheie, d.bife); })); }
       lista.push(buton("Niciunul", true, function(){ bifeaza(cutie, false, c.cheie); }));
       f.appendChild(butoane(lista));
-      if(d.motor){ f.appendChild(el("p", "nota", "Antena are motor: bifează numai sateliții pe care vrei să îi cauți, antena se rotește spre fiecare.")); }
+      if(d.motor && d.toti_permis){ f.appendChild(el("p", "nota", "Antena are motor: sateliții bifați se caută pe rând, antena se rotește spre fiecare și îl termină înainte de următorul.")); }
+      if(d.nota_bife){ f.appendChild(el("p", "nota", d.nota_bife)); }
+      else if(d.motor){ f.appendChild(el("p", "nota", "Antena are motor: bifează numai sateliții pe care vrei să îi cauți, antena se rotește spre fiecare.")); }
       if(derulari[id]){ cutie.scrollTop = derulari[id]; }
       S.valori[c.cheie] = alese.slice();
     } else {
@@ -2418,8 +2493,9 @@ function bifate(cutie){
   return Array.prototype.filter.call(cutie.querySelectorAll("input"), function(b){ return b.checked; })
     .map(function(b){ return b.value; });
 }
-function bifeaza(cutie, da, cheie){
-  Array.prototype.forEach.call(cutie.querySelectorAll("input"), function(b){ b.checked = da; });
+function bifeaza(cutie, da, cheie, numai){
+  // numai: pozitiile de bifat (motorul USALS peste tot: cele cu canale); fara ea, toate
+  Array.prototype.forEach.call(cutie.querySelectorAll("input"), function(b){ b.checked = da && (!numai || numai.indexOf(b.value) !== -1); });
   S.valori[cheie] = bifate(cutie);
   schimbaParametrii();
 }
@@ -2619,7 +2695,21 @@ function deseneazaStarea(d){
   }
   var rez = $("rezultat");
   goleste(rez);
-  (d.rezultat || []).forEach(function(r){ rez.appendChild(el("li", "", r)); });
+  // casetele cifrelor, ca pe televizor; atunci lista are numai restul randurilor
+  var cs = d.casete, cutie = $("casete");
+  goleste(cutie);
+  arata(cutie, !!(cs && cs.casete && cs.casete.length));
+  if(cs && cs.casete && cs.casete.length){
+    cs.casete.forEach(function(c){
+      var k = el("div", "caseta " + c.cheie + (c.cheie === "transp" || c.cheie === "durata" ? " lata" : ""), "");
+      k.appendChild(el("small", "", c.eticheta));
+      k.appendChild(el("b", "", c.cifra));
+      if(c.sub){ k.appendChild(el("span", "", c.sub)); }
+      cutie.appendChild(k);
+    });
+    if(cs.loc){ cutie.appendChild(el("div", "loc", cs.loc)); }
+  }
+  ((cs && cs.casete && cs.casete.length) ? (cs.rest || []) : (d.rezultat || [])).forEach(function(r){ rez.appendChild(el("li", "", r)); });
   deseneazaReteaua(d.retea_gasita);
   // Oferta sta in rezultat, ca pe televizor; nu porneste citirea pistelor.
   arata($("pisteDupa"), !!(d.gata && d.canale > 0 && d.fel_lucru !== "fluxuri"));
@@ -2802,6 +2892,13 @@ function cartelaTunere(c){
       if(t.diseqc){ linie(c, "Comutare", DISEQC[t.diseqc] || t.diseqc); }
       linie(c, "Motor", t.motor ? "da" : "nu");
       if(t.usals){ linie(c, "Locul pentru USALS", t.usals_text); }
+      if(t.loc_nestabilit){
+        var fara = el("p", "nota eroare", "Motorul USALS are nevoie de locul antenei ca să știe încotro să rotească antena. Alege țara și orașul sau scrie coordonatele.");
+        c.appendChild(fara);
+        var alege = el("a", "buton", "Alege locul antenei");
+        alege.href = adresa("/antena/locul");
+        c.appendChild(alege);
+      }
       if(t.sateliti && t.sateliti.length){
         linie(c, "Sateliți", t.motor ? t.sateliti.length + " (toți din lista motorului)" :
           t.sateliti.map(function(s){ return s.text; }).join(", "));
@@ -2859,7 +2956,10 @@ function cartelaLnb(c){
   if(!tunere.length){ c.appendChild(el("p", "nota", "Receptorul nu are tuner de satelit.")); return; }
   tunere.forEach(function(t){
     var lnb = t.lnb || [];
-    if(!lnb.length){ linie(c, "Tuner " + t.litera, MODURI[t.mod] || t.mod || "-"); return; }
+    if(!lnb.length){
+      linie(c, "Tuner " + t.litera, (MODURI[t.mod] || t.mod || "-") + (t.legat_de ? " (Tuner " + t.legat_de + ")" : ""));
+      return;
+    }
     lnb.forEach(function(l){
       var nume = "Tuner " + t.litera + (l.numar ? ", LNB " + l.numar : "");
       var text = LNB[l.fel] || l.fel || "-";
@@ -2872,6 +2972,27 @@ function cartelaLnb(c){
     if(t.mod === "simple"){ c.appendChild(el("p", "nota", "În modul simplu receptorul folosește LNB-ul universal de mai sus.")); }
   });
   c.appendChild(el("p", "nota", "Tipul, oscilatoarele, tensiunea, tonul și portul se schimbă pe pagina Configurare LNB, cu verificarea semnalului înainte de păstrare."));
+}
+function busola(az, puncte, eticheta){
+  var NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg");
+  s.setAttribute("viewBox", "0 0 220 220"); s.setAttribute("class", "busola"); s.setAttribute("role", "img");
+  s.setAttribute("aria-label", eticheta || "");
+  function n(tip, a){ var e = document.createElementNS(NS, tip); Object.keys(a).forEach(function(k){ e.setAttribute(k, a[k]); }); s.appendChild(e); return e; }
+  function x(u, r){ return 110 + Math.sin(u * Math.PI / 180) * r; }
+  function y(u, r){ return 110 - Math.cos(u * Math.PI / 180) * r; }
+  n("circle", {cx: 110, cy: 110, r: 96, fill: "none", stroke: "currentColor", "stroke-opacity": ".35", "stroke-width": 2});
+  for(var i = 0; i < 16; i++){
+    var l = i % 4 ? 6 : 12;
+    n("line", {x1: x(i * 22.5, 96 - l), y1: y(i * 22.5, 96 - l), x2: x(i * 22.5, 96), y2: y(i * 22.5, 96), stroke: "currentColor", "stroke-opacity": ".5"});
+  }
+  (puncte && puncte.length === 4 ? puncte : ["N", "E", "S", "V"]).forEach(function(t, i){
+    var e = n("text", {x: x(i * 90, 76), y: y(i * 90, 76) + 6, "text-anchor": "middle", "font-size": 18, "font-weight": i ? 400 : 700, fill: "currentColor"});
+    e.textContent = t;
+  });
+  n("line", {x1: 110, y1: 110, x2: x(az, 66), y2: y(az, 66), stroke: "#2e8bff", "stroke-width": 5, "stroke-linecap": "round"});
+  n("circle", {cx: x(az, 66), cy: y(az, 66), r: 8, fill: "#2e8bff"});
+  n("circle", {cx: 110, cy: 110, r: 5, fill: "currentColor"});
+  return s;
 }
 function cartelaCalculator(c, satelitAles){
   var k = (S.antena && S.antena.calculator) || {sateliti: []};
@@ -2925,6 +3046,11 @@ function cartelaCalculator(c, satelitAles){
       linie(rez, "Elevație", x.elevatie_text);
       linie(rez, "Rotirea LNB-ului (skew)", x.skew_text);
       if(!x.vizibil){ rez.appendChild(el("p", "nota eroare", "Satelitul e sub orizont din locul acesta.")); }
+      else if(x.directie_text){
+        // directia in cuvinte (aceeasi fraza ca pe televizor) si busola: sageata spre satelit, nordul sus
+        rez.appendChild(el("p", "mesaj", x.directie_text));
+        rez.appendChild(busola(x.azimut, k.puncte, x.directie_text));
+      }
     });
   }
   s.addEventListener("change", arataUnghiurile);
@@ -3049,9 +3175,15 @@ TEXTE_PAGINA = {
 		N_("Alege din listă"),
 		N_("Lista e goală"),
 		N_("Bifează toți"),
+		N_("Bifează pe cei cu canale"),
+		N_("Motorul USALS are nevoie de locul antenei ca să știe încotro să rotească antena. Alege țara și orașul sau "
+			"scrie coordonatele."),
+		N_("Alege locul antenei"),
 		N_("Niciunul"),
 		N_("Antena are motor: bifează numai sateliții pe care vrei să îi cauți, antena se rotește spre "
 			"fiecare."),
+		N_("Antena are motor: sateliții bifați se caută pe rând, antena se rotește spre fiecare și îl termină "
+			"înainte de următorul."),
 		N_("Gata de căutare."),
 		N_("Lista fluxurilor, adăugarea de mână și setările:"),
 		N_("Fluxuri și setări"),

@@ -321,3 +321,47 @@ def latime_eticheta(latime, inaltime=42):
 def retras(inaltime=42):
 	"""Cat de la dreapta incepe continuarea unui text rupt (jumatate de rand), ca sa se vada ca nu e un rand nou."""
 	return max(8, int(inaltime) // 2)
+
+
+# DSG2 (Eduard, 14.11.2026): ecranele de informatii ca niste casete, ca in designul Stitch al temei
+# (ecranul Receptor si procesor). Aceleasi randuri ca pana acum, aceleasi pagini: nicio
+# informatie in plus sau in minus, se schimba numai desenul. Tema Pro: fiecare sectiune are fundalul ei (hdsCell),
+# marginea dinauntru, un patratel colorat la titlu si linii subtiri intre randuri; tema Clasic (aerisita): fara fundal,
+# cu patratelul si liniile; alt skin: ca inainte (None).
+TIPURI_RAND = ("rand", "urmare", "bara", "rand_bucati", "urmare_bucati")
+
+
+def stil_caseta(tema):
+	"""Stilul casetelor pentru tema activa ("pro", "clasic"); None pentru alt skin (desenul de dinainte)."""
+	if tema == "pro":
+		return {"fond": True, "patrat": True, "linii": True, "dreapta": True}
+	if tema == "clasic":
+		return {"fond": False, "patrat": True, "linii": True, "dreapta": True}
+	return None
+
+
+def margine_caseta(stil, inaltime=42):
+	"""Marginea dinauntru a casetei (stanga si dreapta), in puncte: numai cand caseta are fundal."""
+	return max(8, int(inaltime * 0.4)) if stil and stil.get("fond") else 0
+
+
+def patrat_caseta(inaltime=42):
+	"""(latura, golul de dupa) patratelului de la titlul casetei."""
+	return max(6, int(inaltime) * 3 // 10), max(6, int(inaltime) * 3 // 10)
+
+
+def linii_caseta(randuri_col, n=0):
+	"""Indicii randurilor care primesc o linie subtire deasupra: un rand nou eticheta / valoare (sau fara valoare)
+	care urmeaza dupa alt rand al aceleiasi sectiuni. Fara linie dupa titlu (titlul are linia lui), la inceputul unei
+	pagini de `n` randuri, la continuarea unui text rupt (eticheta goala, "urmare") si la bara de sub valoare."""
+	rez = set()
+	for j, r in enumerate(randuri_col):
+		if j == 0 or (n and j % n == 0):
+			continue
+		if r[0] not in ("rand", "rand_bucati"):
+			continue
+		if r[0] == "rand" and not r[1]:
+			continue
+		if randuri_col[j - 1][0] in TIPURI_RAND:
+			rez.add(j)
+	return rez

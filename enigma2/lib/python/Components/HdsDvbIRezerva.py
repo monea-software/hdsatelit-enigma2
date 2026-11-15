@@ -166,6 +166,24 @@ class Mediu(object):
 		except Exception:
 			return -1, None
 
+	def nivelZero(self):
+		"""True cand tunerul programului de acum nu vede nicio purtatoare (nivel si calitate 0, neblocat): satelitul nu
+		ajunge deloc la receptor (cablul, LNB-ul fara curent, intrarea tunerului), deci nicio alta varianta de pe el nu
+		poate merge; None cand nu se poate citi"""
+		try:
+			from Components import HdsMotorTuner as T
+			serviciu = self._nav().getCurrentService()
+			info = serviciu and serviciu.frontendInfo()
+			if not info:
+				return None
+			st = T._stareServiciu(info)
+			nivel, calitate = st.get("tuner_signal_power"), st.get("tuner_signal_quality")
+			if nivel is None or calitate is None:
+				return None
+			return int(nivel) == 0 and int(calitate) == 0 and not st.get("tuner_locked")
+		except Exception:
+			return None
+
 	def transponder(self, slot):
 		"""transponderul programului de acum (forma acordului fara motor), citit cat merge"""
 		try:
@@ -612,10 +630,22 @@ class Paznic(object):
 		de pe acelasi transponder"""
 		if not hasattr(self.m, "variante"):
 			return []   # un mediu fara variante (alte probe, alte module): ca inainte
+		if cod == "fara_semnal" and self._faraPurtatoare():
+			# tunerul la 0% (nicio purtatoare): variantele sunt toate pe acelasi satelit, deci nici una nu poate merge;
+			# omul nu mai asteapta ~40 s la fiecare zap (asistenta 921501), iar trecerea pe internet vine dupa PRAG_S
+			return []
 		l = self.lant
 		incercate = l["incercate"] if l is not None else ()
 		tp = transponderRef(ref) if cod in CODURI_TRANSPONDER else ""
 		return [(r, tpv) for r, tpv in self.m.variante(ref) if cheie(r) not in incercate and not (tp and tpv == tp)]
+
+	def _faraPurtatoare(self):
+		"""tunerul programului de acum la 0% (Mediu.nivelZero); False cand mediul nu stie sau nu se poate citi"""
+		f = getattr(self.m, "nivelZero", None)
+		try:
+			return bool(f is not None and f())
+		except Exception:
+			return False
 
 	def variantaUrmeaza(self, ref, cod=None):
 		"""True cand programul `ref` mai are o varianta de incercat (mesajul ecranului negru asteapta)"""
@@ -675,6 +705,10 @@ class Paznic(object):
 				self.nu_merge = None
 				return False
 		alt = self._candidati(ref, cod)
+		if not alt and cod == "fara_semnal" and getattr(self, "nota_purtatoare", "") != ref and self._faraPurtatoare():
+			self.nota_purtatoare = ref
+			self._noteaza("fara purtatoare pe tuner (nivel 0%%) pentru %s: variantele de pe acelasi satelit nu se incearca"
+				% ref)
 		if not alt and l is None:
 			return False
 		if self.nu_merge is None or not acelasi(self.nu_merge[0], ref) or self.nu_merge[1] != cod:

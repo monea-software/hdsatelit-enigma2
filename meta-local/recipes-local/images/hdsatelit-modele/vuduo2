@@ -1,0 +1,35 @@
+# HD Satelit: regulile garzii de model pentru Vu+ Duo2 (masina vuduo2, Broadcom BCM7424/BCM7425, MIPS), NECONFIRMAT
+# Agentul V22, 14.11.2026 (runda zilnica; fara tester inca). Acelasi fel ca Vu+ Solo2 si Solo SE (hdsatelit-modele/vusolo2,
+# vusolose): memorie NAND (stocare=nand), fara eMMC, fara partitia deviceinfo, fara /proc/msp/sys. DIFERENTA: NAND-ul are
+# 1 GB (vuduo2.conf, OE-Alliance 6.0: FLASHSIZE 1024), deci masina NU e in HDS_MASINI_FLASH_MIC, ci in HDS_MASINI_NAND_MARE
+# (conf/distro/hdsatelit.conf): imaginea pastreaza limbile si completarile. Garda din enigma2.sh si
+# Components/HdsPazaModel.py citesc:
+# - cipul din /proc/stb/info/chipset: driverul dvb-bcm7424.ko al pachetului vuplus-dvb-proxy-vuduo2 20190429 face nodul,
+#   iar sirurile lui stau in aceeasi ordine ca la Solo2 si Solo SE („dm8000”, „1500A0”, „duo2”, „7424”; la Solo2 „solo2”,
+#   „7356”), deci cipul e „7424” (OE-Alliance zice SOC_FAMILY bcm7425, dupa procesor; nodul il da driverul tunerelor);
+#   comparat fara „bcm” in fata;
+# - tipul placii din /proc/stb/info/vumodel (acelasi driver, sirul „duo2”), altfel /proc/stb/info/boxtype;
+# - partitiile din /proc/mtd, in ordine, cu numele curatate.
+# hw=- : placa nu are antet de fabrica (HW=).
+# MTD_KERNEL=mtd2 si MTD_ROOTFS=mtd0 sunt cele din vuduo2.conf (OE-A 6.0), la fel ca la Solo2 si Solo SE; ele hotarasc.
+# Tabela partitiilor si marimea nucleului de mai jos sunt cele ale unui Solo SE V1 (acelasi producator, acelasi incarcator
+# CFE, acelasi nucleu 3.13.5), NEVERIFICATE pe un Duo2: NAND-ul de 1 GB face alte marimi pentru rootfs; cu confirmat=nu sunt
+# numai avertismente, pana cand testerul citeste /proc/mtd pe receptorul lui (fisa din STADIU-V22.md).
+# Fara upd_path: pe Vu+ dosarul de pe stick (vuplus/duo2) il stie incarcatorul CFE.
+# Fara model_id: garda 0.7.5 il primeste numai pentru placile din MODELE_PLACI (Components/HdsPazaModel.py).
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=vuduo2.
+format=1
+distro=hdsatelit
+model=Vu+ Duo2
+machine=vuduo2
+machinebuild=vuduo2
+chip=7424
+boxtype=duo2
+hw=-
+partitions=rootfs,rootfs_redundant_,kernel:7M,mac:1M
+kernel_part=mtd2
+kernel_kib=7168
+rootfs_part=mtd0
+stocare=nand
+confirmat=nu
+familie=broadcom

@@ -20,6 +20,8 @@
 # schimbare” (Components/HdsUltimaImagine.py, config.av.hds_zap_poza, poza_canal=1|0), numai cand receptorul are grab.
 # La fel „Prima imagine rapidă” (Components/HdsPrimaImagine.py, config.av.hds_prima_imagine, prima_imagine=1|0), numai pe
 # receptoarele HiSilicon cu libreader.
+# La fel randul Filmele mai late de 16:9 (VideoOutput.policy169Element, config.av.policy_169, fisierul policy2 al
+# driverului, imagine169=letterbox|panscan|scale), numai cand driverul are policy2 cu lista lui.
 # „Culorile pe HDMI” (VideoOutput.HdmiColors): YCbCr se scrie pe loc si trece prin aceeasi intrebare (singur sau
 # impreuna cu un mod nou); fara „Da” nu se salveaza, dar iesirea ramane YCbCr pana la urmatoarea pornire (driverul nu
 # are drum inapoi). RGB se salveaza direct si se aplica la urmatoarea pornire. In ambele cazuri, cand iesirea e YCbCr
@@ -32,7 +34,7 @@
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat; ce schimba
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/video                                        randurile, valorile, alegerile, incercarea in curs
-#   POST /api/video-seteaza?rezolutie=..&frecventa=..&colorspace=..&colordepth=..&hdrtype=..&zapmode=..&imagine43=..&culori_hdmi=..&poza_canal=1|0&prima_imagine=1|0
+#   POST /api/video-seteaza?rezolutie=..&frecventa=..&colorspace=..&colordepth=..&hdrtype=..&zapmode=..&imagine43=..&imagine169=..&culori_hdmi=..&poza_canal=1|0&prima_imagine=1|0
 #                                                          oricare dintre ele; un mod video nou sau YCbCr pornesc
 #                                                          incercarea
 #   POST /api/video-confirma                               pastreaza setarea incercata (ca „Da” pe televizor)
@@ -47,8 +49,8 @@
 import time
 
 # ce se poate trimite si cat de lung
-ARGUMENTE = ("rezolutie", "frecventa", "colorspace", "colordepth", "hdrtype", "zapmode", "imagine43", "culori_hdmi",
-	"poza_canal", "prima_imagine")
+ARGUMENTE = ("rezolutie", "frecventa", "colorspace", "colordepth", "hdrtype", "zapmode", "imagine43", "imagine169",
+	"culori_hdmi", "poza_canal", "prima_imagine")
 CULORI = (("colorspace", "HDMI color space"), ("colordepth", "Color depth"), ("hdrtype", "HDR type"))
 MAX_VALOARE = 40
 # ceasul de rezerva: atatea secunde dupa termenul intrebarii, modul revine si daca intrebarea nu s-a inchis singura
@@ -216,6 +218,7 @@ def stare(V=None, S=None, sesiune=None, acum=None, reciteste=True):
 			culori.append({"nume": nume, "eticheta": _t(text), "valoare": str(el.value), "alegeri": _alegeri(el)})
 	zap = V.configElement(V.ZAP_ATTR)
 	imagine43 = V.policyElement()
+	imagine169 = V.policy169Element()
 	culori_hdmi = None
 	el = V.colorElement()
 	if el is not None:
@@ -239,6 +242,8 @@ def stare(V=None, S=None, sesiune=None, acum=None, reciteste=True):
 			"alegeri": _alegeri(zap), "descriere": V.zapDescription()},
 		"imagine43": None if imagine43 is None else {"eticheta": V.policyRowText(), "valoare": imagine43.value,
 			"alegeri": _alegeri(imagine43), "descriere": V.policyDescription()},
+		"imagine169": None if imagine169 is None else {"eticheta": V.policy169RowText(), "valoare": imagine169.value,
+			"alegeri": _alegeri(imagine169), "descriere": V.policy169Description()},
 		"culori_hdmi": culori_hdmi,
 		"poza_canal": _pozaStare(),
 		"prima_imagine": _primaStare(),
@@ -349,6 +354,12 @@ def seteaza(argumente, V=None, S=None, sesiune=None, configfile=None, acum=None,
 		imagine43_nou = _alegeValoare(imagine43, argumente["imagine43"]) if imagine43 is not None else None
 		if imagine43_nou is None:
 			return _cuMesaj(baza, False, _t("Alegerea „%s” nu există pentru „%s”.") % (argumente["imagine43"][:MAX_VALOARE], V.policyRowText()))
+	imagine169 = V.policy169Element()
+	imagine169_nou = None
+	if "imagine169" in argumente:
+		imagine169_nou = _alegeValoare(imagine169, argumente["imagine169"]) if imagine169 is not None else None
+		if imagine169_nou is None:
+			return _cuMesaj(baza, False, _t("Alegerea „%s” nu există pentru „%s”.") % (argumente["imagine169"][:MAX_VALOARE], V.policy169RowText()))
 	poza = _pozaElement()
 	poza_nou = None
 	if "poza_canal" in argumente:
@@ -383,6 +394,10 @@ def seteaza(argumente, V=None, S=None, sesiune=None, configfile=None, acum=None,
 	if imagine43_nou is not None and imagine43_nou != imagine43.value:
 		imagine43.value = imagine43_nou   # notificatorul il scrie in driver (policy); nu schimba formatul HDMI
 		imagine43.save()
+		fisier.save()
+	if imagine169_nou is not None and imagine169_nou != imagine169.value:
+		imagine169.value = imagine169_nou   # notificatorul il scrie in driver (policy2); se vede la urmatorul film sau canal
+		imagine169.save()
 		fisier.save()
 	for atribut, valoare in noi.items():
 		el = V.configElement(atribut)
@@ -419,7 +434,7 @@ def seteaza(argumente, V=None, S=None, sesiune=None, configfile=None, acum=None,
 			_noteaza(mesaj, True, acum, culori_repornire)
 			return _cuMesaj(stare(V, S, sesiune, acum, reciteste=False), True, mesaj)
 		rez = stare(V, S, sesiune, acum, reciteste=False)
-		return _cuMesaj(rez, True, _t("Salvat.") if (zap_nou is not None or imagine43_nou is not None or poza_nou is not None or prima_nou is not None) else _t("Setarea era deja aceasta."))
+		return _cuMesaj(rez, True, _t("Salvat.") if (zap_nou is not None or imagine43_nou is not None or imagine169_nou is not None or poza_nou is not None or prima_nou is not None) else _t("Setarea era deja aceasta."))
 	inainte, pe_ecran = V.tryVideo(sesiune.nav)
 	if pe_ecran is None:
 		if culori_schimbate:
@@ -782,6 +797,13 @@ PAGINA = """<!DOCTYPE html>
     </div>
     <p class="nota" id="imagine43Descriere"></p>
   </section>
+  <section class="card ascuns" id="cardImagine169">
+    <div class="rand lat">
+      <label for="imagine169" id="imagine169Eticheta">Filmele mai late de 16:9</label>
+      <select id="imagine169"></select>
+    </div>
+    <p class="nota" id="imagine169Descriere"></p>
+  </section>
   <section class="card ascuns" id="cardZap">
     <div class="rand lat">
       <label for="zapmode" id="zapEticheta">La schimbarea canalului</label>
@@ -879,7 +901,7 @@ function arata(d){
   }
   $("avertisment").textContent = d.avertisment || "";
   var blocat = !!(inc.activa || d.ocupat);
-  ["rezolutie", "frecventa", "incearca", "zapmode", "imagine43", "culoriHdmi", "pozaCanal", "primaImagine"].forEach(function(id){ $(id).disabled = blocat; });
+  ["rezolutie", "frecventa", "incearca", "zapmode", "imagine43", "imagine169", "culoriHdmi", "pozaCanal", "primaImagine"].forEach(function(id){ $(id).disabled = blocat; });
   if(d.culori_hdmi){
     $("cardCulori").classList.remove("ascuns");
     $("culoriEticheta").textContent = d.culori_hdmi.eticheta;
@@ -895,6 +917,14 @@ function arata(d){
     $("imagine43Descriere").textContent = d.imagine43.descriere || "";
   } else {
     $("cardImagine43").classList.add("ascuns");
+  }
+  if(d.imagine169){
+    $("cardImagine169").classList.remove("ascuns");
+    $("imagine169Eticheta").textContent = d.imagine169.eticheta;
+    if(document.activeElement !== $("imagine169")){ umple($("imagine169"), d.imagine169.alegeri, d.imagine169.valoare); }
+    $("imagine169Descriere").textContent = d.imagine169.descriere || "";
+  } else {
+    $("cardImagine169").classList.add("ascuns");
   }
   if(d.zapmode){
     $("cardZap").classList.remove("ascuns");
@@ -981,6 +1011,10 @@ $("imagine43").addEventListener("change", function(){
   var q = new URLSearchParams(); q.set("imagine43", $("imagine43").value);
   trimite("/api/video-seteaza", q);
 });
+$("imagine169").addEventListener("change", function(){
+  var q = new URLSearchParams(); q.set("imagine169", $("imagine169").value);
+  trimite("/api/video-seteaza", q);
+});
 $("culoriHdmi").addEventListener("change", function(){
   var q = new URLSearchParams(); q.set("culori_hdmi", $("culoriHdmi").value);
   trimite("/api/video-seteaza", q);
@@ -1032,6 +1066,8 @@ TEXTE_PAGINA = {
 		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
 		N_("Prima imagine rapidă"),
 		N_("Poza canalului la schimbare"),
+		# 0.7.5 (FTF): filmele mai late de 16:9 (policy2)
+		N_("Filmele mai late de 16:9"),
 	),
 	"js": (
 		N_("browser deconectat"),

@@ -527,6 +527,10 @@ class SecConfigure:
 					lnbSat[lnb].append(x[0])
 
 		for x in self.NimManager.satList:
+			if x[0] not in config.Nims[slotid].advanced.sat:
+				# satelit nou in satellites.xml fara intrare in setarile tunerului (reincarcare de pe PC): sarit, nu KeyError
+				print("[NimManager] tunerul %s: pozitia %d nu are setari avansate, sarita" % (chr(ord("A") + slotid), x[0]))
+				continue
 			lnb = int(config.Nims[slotid].advanced.sat[x[0]].lnb.value)
 			if lnb != 0:
 				print("add", x[0], "to", lnb)
@@ -771,6 +775,23 @@ def numeTunerUsb(nume, tip, sisteme):
 		tip = "DVB-C/T"
 	return nume, tip
 
+def hdsLegaturaImplicita(nimmgr, slot):
+	"""Implicitul lui connectedTo ("equal to", "loopthrough to", "second cable of") pentru tunerul `slot`: la un tuner FBC,
+	prima radacina a NIM-ului lui (acelasi fbc_set_id). Vu+ Ultimo 4K cu doua NIM-uri FBC de cate 8: J..P primesc I, nu A,
+	care e pe alt NIM si alt cablu (legatura interna FBC e numai in acelasi NIM). Prima radacina insasi, tunerele obisnuite
+	si cele FBC fara fbc_set_id raman cu None: primul tuner din lista, ca pana acum (pe primul NIM acela e chiar A)."""
+	try:
+		if not slot.isFBCTuner() or slot.fbc_set_id is None:
+			return None
+		radacini = sorted(t.slot for t in nimmgr.nim_slots
+			if t.isFBCRoot() and t.fbc_set_id == slot.fbc_set_id and t.isCompatible("DVB-S"))
+		if radacini and radacini[0] != slot.slot:
+			return str(radacini[0])
+	except Exception as e:
+		print("[NimManager] legatura implicita %s: %s" % (getattr(slot, "slot", "?"), e))
+	return None
+
+
 class NIM(object):
 	def isFBCLink(self):
 		return self.fbc_role == 2
@@ -988,6 +1009,13 @@ class NimManager:
 		self.transpondersterrestrial = { }
 		db = eDVBDB.getInstance()
 		if self.hasNimType("DVB-S"):
+			# HDSatelit (SXP): un satellites.xml scurtat de o lista de canale straina primeste inapoi, din lista imaginii,
+			# satelitii pe care omul are canale sau ii are la tunere (unire, nimic sters; Components/HdsSatelitiImagine.py)
+			try:
+				from Components.HdsSatelitiImagine import uneste_la_pornire
+				uneste_la_pornire()
+			except Exception as e:
+				print("[NimManager] unirea cu lista satelitilor imaginii: %s" % e)
 			print("Reading satellites.xml")
 			db.readSatellites(self.satList, self.satellites, self.transponders)
 			self.satList.sort(key = self.sortFunc) # sort by orbpos
@@ -1542,6 +1570,92 @@ def satelitiReceptorului(satlist, limba=None):
 	return (a, b)
 
 
+# HDSatelit (0.7.5, 15.11.2026, TNB): satelitii salvati la tunere si lipsa din satellites.xml. Alegerile lui diseqcA..D
+# (si intrarile modului avansat) se fac din nimmgr.satList; o pozitie salvata care nu e acolo la pornire era inlocuita tacut
+# cu implicitul (ConfigSelection.setValue), iar la prima salvare disparea si din settings. kegnkiwi (GigaBlue Quad 4K Pro,
+# SatWorld 3925 #5697): tunerul B fix pe 28,2E a ajuns sa arate numai 19,2E si 13,0E. Acum pozitia intra in satList cu un
+# nume care spune ca lipseste din lista satelitilor: valoarea omului ramane si nucleul primeste satelitul.
+def _hdsPozitie(valoare):
+	try:
+		pozitie = int(str(valoare).strip())
+	except (TypeError, ValueError):
+		return None
+	return pozitie if 0 <= pozitie < 3600 else None
+
+
+def _hdsNumeSatelit(pozitie):
+	if pozitie > 1800:
+		return "%d.%dW" % ((3600 - pozitie) // 10, (3600 - pozitie) % 10)
+	return "%d.%dE" % (pozitie // 10, pozitie % 10)
+
+
+def hdsPozitiiSalvate(salvate):
+	"""Pozitiile din valorile salvate ale unui tuner (stored_values din config.Nims[N]): DiSEqC A-D din modul simplu si
+	satelitii cu LNB ales din modul avansat. Valorile rele si "nimic conectat" (3601) nu conteaza."""
+	rez = set()
+	if not isinstance(salvate, dict):
+		return rez
+	for cheie in ("diseqcA", "diseqcB", "diseqcC", "diseqcD"):
+		pozitie = _hdsPozitie(salvate.get(cheie))
+		if pozitie is not None:
+			rez.add(pozitie)
+	avansat = salvate.get("advanced")
+	sateliti = avansat.get("sat") if isinstance(avansat, dict) else None
+	if isinstance(sateliti, dict):
+		for cheie, valori in sateliti.items():
+			pozitie = _hdsPozitie(cheie)
+			if pozitie is None or not isinstance(valori, dict):
+				continue
+			if str(valori.get("lnb", "0")).strip() not in ("", "0"):
+				rez.add(pozitie)
+	return rez
+
+
+def hdsSatelitiSalvatiLipsa(nimmgr):
+	"""Pune in nimmgr.satList pozitiile salvate la tunerele de satelit care lipsesc din satellites.xml. Inaintea
+	alegerilor din InitNimManager. Intoarce pozitiile adaugate."""
+	try:
+		nims = config.Nims
+	except Exception:
+		return []
+	cunoscute = set(x[0] for x in nimmgr.satList)
+	lipsa = set()
+	for slot in nimmgr.nim_slots:
+		try:
+			if not slot.isCompatible("DVB-S"):
+				continue
+			lipsa |= hdsPozitiiSalvate(nims[slot.slot].content.stored_values) - cunoscute
+		except Exception as e:
+			print("[NimManager] satelitii salvati ai tunerului %s: %s" % (getattr(slot, "slot", "?"), e))
+	pastrate = set(getattr(nimmgr, "hdsPozitiiPastrate", None) or ())
+	nimmgr.hdsPozitiiPastrate = sorted(pastrate | lipsa)
+	_hdsPunePozitii(nimmgr, lipsa)
+	return sorted(lipsa)
+
+
+def _hdsPunePozitii(nimmgr, pozitii):
+	"""Pozitiile date, care nu sunt in satList, intra in satList (ordonat) si in nimmgr.satellites (getSatDescription)."""
+	cunoscute = set(x[0] for x in nimmgr.satList)
+	puse = [p for p in sorted(pozitii) if p not in cunoscute]
+	descrieri = getattr(nimmgr, "satellites", None)
+	for pozitie in puse:
+		nume = _("%s (lipsește din lista sateliților)") % _hdsNumeSatelit(pozitie)
+		nimmgr.satList.append((pozitie, nume, 0))
+		if isinstance(descrieri, dict):
+			descrieri.setdefault(pozitie, nume)
+		print("[NimManager] satelitul %d e salvat la un tuner, dar lipseste din satellites.xml: pastrat" % pozitie)
+	if puse:
+		nimmgr.satList.sort(key=nimmgr.sortFunc)
+	return puse
+
+
+def hdsPunePozitiilePastrate(nimmgr):
+	"""Dupa o recitire a satellites.xml pe loc (aplicatii_web, /web/servicelistreload?mode=3, prin
+	hdsCompleteazaSatelitiAvansati): pozitiile pastrate la pornire se pun la loc. Alegerile tunerelor (facute la pornire)
+	si getSatListForNim (dupa index in satList) raman potrivite."""
+	return _hdsPunePozitii(nimmgr, getattr(nimmgr, "hdsPozitiiPastrate", None) or ())
+
+
 def _limbaActiva():
 	"""Limba tocmai aleasa (Components.Language), sau None."""
 	try:
@@ -1625,6 +1739,8 @@ def InitNimManager(nimmgr):
 
 	positioner_mode_choices = [("usals", _("USALS")), ("manual", _("manual"))]
 
+	# HDSatelit: un satelit salvat la un tuner ramane si cand lipseste din satellites.xml (hdsSatelitiSalvatiLipsa)
+	hdsSatelitiSalvatiLipsa(nimmgr)
 	diseqc_satlist_choices = [(3601, _('nothing connected'), 1)] + nimmgr.satList
 	
 	longitude_orientation_choices = [("east", _("East")), ("west", _("West"))]
@@ -1740,6 +1856,46 @@ def InitNimManager(nimmgr):
 			tmp.addNotifier(configLOFChanged, initial_call = False)
 			section.lof = tmp
 
+	def hdsSatAvansat(slot_id):
+		"""intrarea unui satelit in setarile avansate ale tunerului `slot_id` (aceeasi la crearea setarilor avansate si la
+		satelitii adaugati dupa pornire, hdsCompleteazaSatelitiAvansati)"""
+		tmp = ConfigSubsection()
+		tmp.voltage = ConfigSelection(advanced_voltage_choices, "polarization")
+		tmp.tonemode = ConfigSelection(advanced_tonemode_choices, "band")
+		tmp.usals = ConfigYesNo(True)
+		tmp.rotorposition = ConfigInteger(default=1, limits=(1, 255))
+		lnb = ConfigSelection(advanced_lnb_choices, "0")
+		lnb.slot_id = slot_id
+		lnb.addNotifier(configLNBChanged, initial_call = False)
+		tmp.lnb = lnb
+		return tmp
+
+	def hdsCompleteazaSatelitiAvansati():
+		"""Dupa o reincarcare a satellites.xml cu pozitii noi (o lista de canale trimisa de pe PC si /web/servicelistreload?
+		mode=3, HdsWebControl/aplicatii_web.py) fiecare tuner cu setari avansate primeste intrarea pozitiilor noi, ca Setari
+		tuner (VERDE) si SecConfigure.updateAdvanced sa nu mai cada cu KeyError (asistenta 866218, Ustym 4K PRO, 14.11.2026:
+		2310 = 129.0W din satellites.xml-ul adus de pe PC). Valorile scrise in settings pentru ele se iau ca la pornire.
+		Intoarce cate intrari s-au adaugat."""
+		# TNB: satelitii pastrati la pornire (salvati la tunere, lipsa din satellites.xml) se pun la loc dupa recitire
+		hdsPunePozitiilePastrate(nimmgr)
+		adaugate = 0
+		for slot_id in range(len(nimmgr.nim_slots)):
+			try:
+				avansat = config.Nims[slot_id].advanced
+			except Exception:
+				continue
+			if isinstance(avansat, ConfigNothing) or not hasattr(avansat, "sat"):
+				continue
+			for x in nimmgr.satList:
+				if x[0] not in avansat.sat:
+					avansat.sat[x[0]] = hdsSatAvansat(slot_id)
+					adaugate += 1
+		if adaugate:
+			print("[NimManager] %d intrari noi in setarile avansate ale tunerelor (sateliti noi in satellites.xml)" % adaugate)
+		return adaugate
+
+	nimmgr.hdsCompleteazaSatelitiAvansati = hdsCompleteazaSatelitiAvansati
+
 	def configModeChanged(configMode):
 		slot_id = configMode.slot_id
 		nim = config.Nims[slot_id]
@@ -1751,16 +1907,7 @@ def InitNimManager(nimmgr):
 			nim.advanced.lnb = ConfigSubDict()
 			nim.advanced.lnb[0] = ConfigNothing()
 			for x in nimmgr.satList:
-				tmp = ConfigSubsection()
-				tmp.voltage = ConfigSelection(advanced_voltage_choices, "polarization")
-				tmp.tonemode = ConfigSelection(advanced_tonemode_choices, "band")
-				tmp.usals = ConfigYesNo(True)
-				tmp.rotorposition = ConfigInteger(default=1, limits=(1, 255))
-				lnb = ConfigSelection(advanced_lnb_choices, "0")
-				lnb.slot_id = slot_id
-				lnb.addNotifier(configLNBChanged, initial_call = False)
-				tmp.lnb = lnb
-				nim.advanced.sat[x[0]] = tmp
+				nim.advanced.sat[x[0]] = hdsSatAvansat(slot_id)
 			for x in range(3601, 3605):
 				tmp = ConfigSubsection()
 				tmp.voltage = ConfigSelection(advanced_voltage_choices, "polarization")
@@ -1855,7 +2002,8 @@ def InitNimManager(nimmgr):
 			nim.toneAmplitude.addNotifier(toneAmplitudeChanged)
 			nim.diseqc13V = ConfigYesNo(False)
 			nim.diseqcMode = ConfigSelection(diseqc_mode_choices, "diseqc_a_b")
-			nim.connectedTo = ConfigSelection([(str(id), nimmgr.getNimDescription(id)) for id in nimmgr.getNimListOfType("DVB-S") if id != x])
+			nim.connectedTo = ConfigSelection([(str(id), nimmgr.getNimDescription(id)) for id in nimmgr.getNimListOfType("DVB-S") if id != x],
+				hdsLegaturaImplicita(nimmgr, slot))
 			nim.simpleSingleSendDiSEqC = ConfigYesNo(False)
 			nim.simpleDiSEqCSetVoltageTone = ConfigYesNo(True)
 			nim.simpleDiSEqCOnlyOnSatChange = ConfigYesNo(False)

@@ -1611,12 +1611,12 @@
         var P = window.HTMLObjectElement && window.HTMLObjectElement.prototype;
         if (!P)
             return;
-        var nume = {};
+        var nume = {}, evNume = {};   /* evNume: numele functiilor de eveniment, ale oricarui tip OIPF */
         Object.keys(TIPURI).forEach(function (t) {
             var d = TIPURI[t];
             Object.keys(d.proprietati || {}).forEach(function (n) { nume[n] = 1; });
             Object.keys(d.metode || {}).forEach(function (n) { nume[n] = 1; });
-            (d.evenimente || []).forEach(function (n) { nume[n] = 1; });
+            (d.evenimente || []).forEach(function (n) { nume[n] = 1; evNume[n] = 1; });
         });
         Object.keys(nume).forEach(function (n) {
             if (Object.prototype.hasOwnProperty.call(P, n))
@@ -1635,12 +1635,12 @@
                         if (d.evenimente && d.evenimente.indexOf(n) >= 0)
                             return s.h[n] === undefined ? null : s.h[n];
                     }
-                    return s.x[n];
+                    return d || !evNume[n] ? s.x[n] : s.h[n];   /* fara tip inca: functia pusa inainte (TVP) */
                 },
                 set: function (v) {
                     var d = TIPURI[tipul(this)];
                     var s = stare(this);
-                    if (d && d.evenimente && d.evenimente.indexOf(n) >= 0) {
+                    if (d ? d.evenimente && d.evenimente.indexOf(n) >= 0 : evNume[n]) {   /* si inainte de type (TVP) */
                         s.h[n] = v;
                         return;
                     }

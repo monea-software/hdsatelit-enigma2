@@ -1166,7 +1166,7 @@ def punEcranulLaLoc(salvat, cale=CALE_FB):
 
 def redeseneazaTotEcranul():
 	"""Tot ecranul se redeseneaza la urmatoarea pictare (ca la schimbarea rezolutiei): fereastra lui ofgwrite oprit
-	ramane altfel desenata peste interfata, unde ecranul nostru nu acopera (proba pe .122, 11.11.2026)."""
+	ramane altfel desenata peste interfata, unde ecranul nostru nu acopera (proba pe receptorul de proba, 11.11.2026)."""
 	try:
 		from enigma import getDesktop
 		desktop = getDesktop(0)

@@ -6,4 +6,13 @@
 # Porneste ntfs-3g cu big_writes (scrieri mari prin FUSE pe nucleul 4.4) si noatime. Optiunile noastre stau primele:
 # ntfs-3g lipeste mai multe -o cu virgula si o optiune data mai tarziu o inlocuieste pe cea de dinainte, deci cine
 # cheama ajutorul poate cere altceva (de exemplu atime).
-exec @BINDIR@/ntfs-3g -o big_writes,noatime "$@"
+#
+# Un volum lasat de Windows in hibernare (Pornire rapida sau Hibernare) nu se poate scrie fara sa se piarda ce a ramas
+# deschis in Windows: ntfs-3g refuza montarea si iese cu 14 (NTFS_VOLUME_HIBERNATED, codurile din ntfs-3g.probe(8)).
+# Atunci ajutorul il monteaza numai pentru citire (-o ro la urma castiga), ca filmele si fisierele sa se vada; nimic nu
+# se sterge si nimic nu se formateaza. Scrierea revine dupa ce Windows e oprit complet. Celelalte erori raman erori.
+@BINDIR@/ntfs-3g -o big_writes,noatime "$@"
+rc=$?
+[ "$rc" = 14 ] || exit "$rc"
+echo "mount.ntfs-3g: volumul NTFS e in hibernare (Windows), se monteaza numai pentru citire: $*" >&2
+exec @BINDIR@/ntfs-3g -o big_writes,noatime "$@" -o ro

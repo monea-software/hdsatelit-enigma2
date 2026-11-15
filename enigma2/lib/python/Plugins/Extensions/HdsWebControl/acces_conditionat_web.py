@@ -137,7 +137,8 @@ def stare(H=None, E=None, SR=None, SC=None):
 	feluri = []
 	decripteaza = False
 	ruleaza = False
-	for i, st in enumerate(H.feluri_de_aratat(sistem)):
+	stari = H.feluri_de_aratat(sistem)
+	for i, st in enumerate(stari):
 		feluri.append({
 			"fel": st.fel,
 			"eticheta": _t(ETICHETA_PRINCIPAL if i == 0 else ETICHETA_ALTE),
@@ -148,8 +149,24 @@ def stare(H=None, E=None, SR=None, SC=None):
 		})
 		decripteaza = decripteaza or bool(st.ecm)
 		ruleaza = ruleaza or any(e.pids for e in st.emulatoare)
-	return {"result": True, "feluri": feluri, "sufix_gol": H.SUFIX_GOL, "decripteaza_acum": decripteaza,
+	rez = {"result": True, "feluri": feluri, "sufix_gol": H.SUFIX_GOL, "decripteaza_acum": decripteaza,
 		"comanda": _comanda(H), "stream_relay": _streamRelay(H, SR), "icam": _icam(ruleaza, SC)}
+	rez.update(_inAfaraListei(H, E, sistem, stari))
+	return rez
+
+
+def _inAfaraListei(H, E, sistem, stari):
+	"""MDA (darog69, forum 479 #2447): ce ruleaza in afara listei, cu textele ecranului (Screens/CamSetup.text_alt,
+	detalii_alt, text_ci): modulele pornite de alt program si modulul CI din fiecare slot. Numai citire."""
+	rez = {"alte": [], "ci": []}
+	try:
+		for a in H.pornite_de_alt_program(sistem, stari):
+			rez["alte"].append({"text": E.text_alt(a), "detalii": E.detalii_alt(a), "pid": a["pids"][0]})
+		for slot, cod, nume in H.sloturi_ci():
+			rez["ci"].append({"slot": slot, "stare": cod, "text": E.text_ci(slot, cod, nume)})
+	except Exception as e:
+		_jurnal("in afara listei: %r" % (e,))
+	return rez
 
 
 def _icam(ruleaza, SC=None):
@@ -411,6 +428,7 @@ PAGINA = """<!DOCTYPE html>
     <p class="acum" id="decriptare"></p>
     <p class="nota" id="comanda"></p>
     <p class="nota ascuns" id="icam"></p>
+    <div id="inafara"></div>
   </section>
   <div id="feluri"></div>
   <section class="card ascuns" id="releu">
@@ -584,6 +602,16 @@ function arata(d){
   // modulul pornit nu descifreaza canalele ICAM (textul vine tradus, "" cand nu e cazul)
   $("icam").textContent = d.icam || "";
   $("icam").classList.toggle("ascuns", !d.icam);
+  // MDA: modulul pornit de alt program si modulul CI din slot (textele vin traduse), cu legatura spre pagina CI
+  var afara = $("inafara"); afara.textContent = "";
+  (d.alte || []).forEach(function(a){
+    afara.appendChild(el("p", "acum", a.text));
+    (a.detalii || []).forEach(function(t){ afara.appendChild(el("p", "nota", t)); });
+  });
+  (d.ci || []).forEach(function(c){
+    var p = el("p", "acum"), a = el("a", "", c.text);
+    a.href = adresa("/common-interface"); p.appendChild(a); afara.appendChild(p);
+  });
   var c = d.comanda || {};
   ocupat = !!c.in_curs;
   if(c.in_curs){ $("comanda").textContent = c.text || ""; }
@@ -627,7 +655,8 @@ function arata(d){
   }
   Array.prototype.forEach.call(document.querySelectorAll("#feluri button"), function(b){ b.disabled = ocupat; });
   // pagina web a modulului pe televizor: numai cand ruleaza un modul
-  var ruleaza = (d.feluri || []).some(function(f){ return (f.module || []).some(function(m){ return m.ruleaza; }); });
+  var ruleaza = (d.feluri || []).some(function(f){ return (f.module || []).some(function(m){ return m.ruleaza; }); })
+    || !!(d.alte && d.alte.length);
   $("camTv").disabled = !ruleaza;
   $("camFara").classList.toggle("ascuns", ruleaza);
   // Stream Relay: cate canale are lista, de unde se adauga, daca releul raspunde si de ce nu (textele vin traduse)

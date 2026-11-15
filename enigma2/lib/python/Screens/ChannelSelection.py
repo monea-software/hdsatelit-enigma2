@@ -211,6 +211,19 @@ class ChannelContextMenu(Screen):
 						menu.append(ChoiceEntryComponent(text = (_("Emisiunile trecute"), boundFunction(self.hdsArhiva, current))))
 				except Exception as e:
 					print("[ChannelContextMenu] arhiva: %s" % type(e).__name__)
+			# 0.7.5 (LCS, orion_bilo, peretele LinuxSat 7480): canalul de pornire ales cu o apasare, pe canalul de sub cursor
+			# (Components/HdsListaSetari.py; in web: /canale); pe canalul ales deja, randul il scoate
+			if current.valid() and not current.flags & (eServiceReference.isDirectory | eServiceReference.isMarker):
+				try:
+					from Components.HdsListaSetari import e_canal_pornire
+					if e_canal_pornire(current.toString()):
+						menu.append(ChoiceEntryComponent(text = (_("Nu mai porni pe acest canal"), boundFunction(self.hdsPornire, ""))))
+					else:
+						menu.append(ChoiceEntryComponent(text = (_("Pornește pe acest canal"), boundFunction(self.hdsPornire, current.toString()))))
+				except Exception as e:
+					print("[ChannelContextMenu] canalul de pornire: %s" % type(e).__name__)
+			# 0.7.5 (LCS, Ozgur e-mailul 6323): tot aspectul listei intr-un ecran, la vedere (data/setup.xml hds_lista_canale)
+			menu.append(ChoiceEntryComponent(text = (_("Setări"), self.hdsSetari)))
 
 		if not (current_sel_path or current_sel_flags & (eServiceReference.isDirectory|eServiceReference.isMarker)):
 			append_when_current_valid(current, menu, (_("show transponder info"), self.showServiceInformations), level = 2)
@@ -354,6 +367,22 @@ class ChannelContextMenu(Screen):
 	def hdsVariante(self):
 		# la fel: alegerea variantei se deschide din lista, dupa ce meniul s-a inchis
 		self.close(("hdsVariante",))
+
+	def hdsSetari(self):
+		"""0.7.5 (LCS): Setari lista de canale (data/setup.xml hds_lista_canale). Schimbarile se vad pe loc in lista
+		(Components/HdsListaSetari.reface); la iesirea din setari meniul se inchide si ramane lista."""
+		from Screens.Setup import Setup
+		self.session.openWithCallback(lambda *a: self.close(False), Setup, "hds_lista_canale")
+
+	def hdsPornire(self, ref_text):
+		"""0.7.5 (LCS): receptorul porneste de acum pe canalul `ref_text` ("" = inapoi la ultimul canal urmarit)."""
+		from Components.HdsListaSetari import alege_canal_pornire
+		alege_canal_pornire(ref_text)
+		if ref_text:
+			text = _("Receptorul va porni pe acest canal după o repornire.")
+		else:
+			text = _("Receptorul va porni pe ultimul canal urmărit.")
+		self.session.openWithCallback(lambda *a: self.close(False), MessageBox, text, MessageBox.TYPE_INFO, timeout=3)
 
 	def hdsArhiva(self, service):
 		"""0.7.5: emisiunile trecute ale canalului (Screens/HdsIptvArhiva.py). O emisiune pornita inchide meniul si lista (ca un zap, exitContext hdsArhiva);
@@ -535,6 +564,10 @@ class SelectionEventInfo:
 		self["ServiceEvent"] = ServiceEvent()
 		self["Service"] = ServiceEvent()
 		self["Event"] = ServiceEvent()
+		# 0.7.5 (LCF, baderwabas LinuxSat 164126): satelitul, frecventa, polarizarea, rata de simboli, FEC si sistemul
+		# canalului ALES in lista (nu al celui pornit), din lista de canale, fara tuner (HdsCommon.rand_transponder_ales);
+		# gol pe dosare, marcaje si canale de internet; tema il pune sub panoul din dreapta (hdsTpAles)
+		self["hdsTpAles"] = StaticText("")
 		self.servicelist.connectSelChanged(self.__selectionChanged)
 		self.timer = eTimer()
 		self.timer.callback.append(self.updateEventInfo)
@@ -552,10 +585,25 @@ class SelectionEventInfo:
 		self["ServiceEvent"].newService(panou)
 		self["Service"].newService(panou)
 		self["Event"].newService(panou)
+		self.hdsPuneTransponderul(cur)
 		if getattr(self, "hdsCapPornit", False):
 			self.hdsPuneFelul(cur)
 		if getattr(self, "hdsFavPornit", False):
 			self.hdsFavEticheta(cur)
+
+	def hdsPuneTransponderul(self, ref):
+		"""Randul transponderului canalului ales (sursa hdsTpAles); o eroare lasa randul gol, lista merge mai departe."""
+		sursa = self.get("hdsTpAles")
+		if sursa is None:
+			return
+		try:
+			from Components.Converter.HdsCommon import rand_transponder_ales
+			text = rand_transponder_ales(ref)
+		except Exception as eroare:
+			print("[ChannelSelection] transponderul canalului ales: %s" % eroare)
+			text = ""
+		if sursa.getText() != text:
+			sursa.setText(text)
 
 class ChannelSelectionEPG:
 	def __init__(self):
@@ -1017,6 +1065,71 @@ HDS_POZ_TERESTRU = 0xEEEE
 # 'IPTV' in lista pe sateliti, ca un loc: nu vine din nucleu (canalele lui stau numai in buchete, Components/HdsIptvSurse.py)
 HDS_POZ_IPTV = 0xFFFE
 HDS_CALE_IPTV = 'hdsiptv'
+
+
+def hds_numar_canale(serviceHandler, ref):
+	"""HDSatelit 0.7.6 (FRZ): cate canale numerotate are buchetul ref (fara dosare si semne; semnele numerotate din Fast Scan
+	se numara, ca in OE-Alliance). O singura lista din C++ (getContent "S": referintele ca text, al doilea camp e flags), nu un
+	apel getNext/valid/flags pe fiecare canal: la buchetele mari de internet (zeci de mii de randuri) bucla veche tinea firul
+	interfetei 10 s (raportul 2136)."""
+	lista = serviceHandler.list(ref)
+	if lista is None:
+		return 0
+	fara = eServiceReference.isDirectory | eServiceReference.isMarker
+	numerotat = eServiceReference.isNumberedMarker
+	try:
+		texte = lista.getContent("S", False)
+	except Exception:
+		texte = None
+	if texte is None:
+		n = 0
+		while True:
+			r = lista.getNext()
+			if not r.valid():
+				break
+			if not (r.flags & fara) or (r.flags & numerotat):
+				n += 1
+		return n
+	n = 0
+	for t in texte:
+		try:
+			f = int(t.split(":", 2)[1])
+		except (ValueError, IndexError, AttributeError):
+			f = 0
+		if not (f & fara) or (f & numerotat):
+			n += 1
+	return n
+
+
+def hds_numerotare_pana_la(cache, serviceHandler, radacina, tinta):
+	"""HDSatelit 0.7.6 (FRZ): completeaza cache (ChannelSelection.bouquetNumOffsetCache: textul buchetului -> cate canale sunt
+	inaintea lui) pana la buchetul tinta. Buchetele se numara in ordine si numai pana la tinta; unde s-a oprit se tine in cache,
+	sub cheia None (golirea cache-ului, la orice editare, o ia de la capat). O tinta care nu e in lista buchetelor primeste
+	numarul tuturor canalelor, ca inainte, si ramane in cache (inainte se numara din nou la fiecare cerere)."""
+	stare = cache.get(None)
+	if stare is None:
+		buchete = []
+		lista = serviceHandler.list(radacina)
+		if lista is not None:
+			while True:
+				r = lista.getNext()
+				if not r.valid():
+					break
+				buchete.append(r)
+		stare = cache[None] = {"buchete": buchete, "i": 0, "n": 0}
+	buchete = stare["buchete"]
+	while tinta not in cache and stare["i"] < len(buchete):
+		r = buchete[stare["i"]]
+		text = r.toString()
+		cache.setdefault(text, stare["n"])
+		if text == tinta:
+			break           # canalele lui se numara abia cand se cere un buchet de dupa el
+		stare["i"] += 1
+		if r.flags & eServiceReference.isDirectory:
+			stare["n"] += hds_numar_canale(serviceHandler, r)
+	if tinta not in cache:
+		cache[tinta] = stare["n"]
+	return cache[tinta]
 
 
 def hds_e_dosar_iptv(cale):
@@ -1556,29 +1669,12 @@ class ChannelSelectionBase(Screen):
 		if hds_e_dosar_loc(bouquet.getPath()):
 			return 0
 		str = bouquet.toString()
-		offsetCount = 0
 		if str not in self.bouquetNumOffsetCache:
-			serviceHandler = eServiceCenter.getInstance()
-			bouquetlist = serviceHandler.list(self.bouquet_root)
-			if not bouquetlist is None:
-				while True:
-					bouquetIterator = bouquetlist.getNext()
-					if not bouquetIterator.valid(): #end of list
-						break
-					self.bouquetNumOffsetCache[bouquetIterator.toString()]=offsetCount
-					if not (bouquetIterator.flags & eServiceReference.isDirectory):
-						continue
-					servicelist = serviceHandler.list(bouquetIterator)
-					if not servicelist is None:
-						while True:
-							serviceIterator = servicelist.getNext()
-							if not serviceIterator.valid(): #check if end of list
-								break
-							# semnele numerotate (Fast Scan) se numara, ca in OE-Alliance
-							playable = not (serviceIterator.flags & (eServiceReference.isDirectory|eServiceReference.isMarker)) or (serviceIterator.flags & eServiceReference.isNumberedMarker)
-							if playable:
-								offsetCount += 1
-		return self.bouquetNumOffsetCache.get(str, offsetCount)
+			# HDSatelit 0.7.6 (FRZ, raportul 2136, SF8008 0.7.5, TODO 15.11 08:55): firul interfetei a stat 10,2 s aici la o tasta;
+			# buchetele se numara numai pana la cel cerut (restul la cererile urmatoare, de unde a ramas), fiecare dintr-o singura
+			# lista (hds_numar_canale), iar o grupa care nu e in lista buchetelor (sub-buchet, grupele omului) se tine minte si ea
+			hds_numerotare_pana_la(self.bouquetNumOffsetCache, eServiceCenter.getInstance(), self.bouquet_root, str)
+		return self.bouquetNumOffsetCache.get(str, 0)
 
 	def recallBouquetMode(self):
 		if self.mode == MODE_TV:
@@ -1733,6 +1829,19 @@ class ChannelSelectionBase(Screen):
 				return
 		self.servicePath.append(ref)
 		self.setRoot(ref, justSet)
+
+	def enterUserbouquet(self, root, save_root=True):
+		"""Lista se muta in buchetul `root`, pornind de la radacina buchetelor; ca in OE-Alliance, aceeasi semnatura. O
+		cheama pluginurile de cautare rapida la sfarsit (PFastScan, Scan.py), ca lista sa arate buchetul facut de ele;
+		save_root=True tine buchetul si dupa repornire (saveRoot, numai la listele care il au)."""
+		self.clearPath()
+		self.recallBouquetMode()
+		if self.bouquet_root:
+			self.enterPath(self.bouquet_root)
+		self.enterPath(root)
+		self.startRoot = None
+		if save_root and hasattr(self, "saveRoot"):
+			self.saveRoot()
 
 	def pathUp(self, justSet=False):
 		prev = self.servicePath.pop()
@@ -2089,7 +2198,8 @@ class ChannelSelectionBase(Screen):
 	def hdsNumarIptv(self):
 		try:
 			from Components import HdsIptvSurse as I
-			return I.numarCanale()
+			# si canalele din buchetele de internet ale omului, aratate sub antet (I.bucheteOm)
+			return I.numarCanale() + I.numarCanaleOm()
 		except Exception as e:
 			print("[ChannelSelection] IPTV: %s" % e)
 			return 0
@@ -2097,24 +2207,26 @@ class ChannelSelectionBase(Screen):
 	def hdsSemnIptv(self):
 		try:
 			from Components import HdsIptvSurse as I
-			return I.semnaturaRadacina()
+			return (I.semnaturaRadacina(), I.semnaturaOm())
 		except Exception:
 			return None
 
 	def hdsIptvAreSurse(self):
 		try:
 			from Components import HdsIptvSurse as I
-			return I.areSurse()
+			return I.areSurse() or bool(I.bucheteOm())
 		except Exception:
 			return False
 
 	def hdsRanduriIptv(self, antet):
 		"""Randurile de sub antet, in ordinea furnizorului: grupele, cu numarul lor de canale, marcajele surselor (cand sunt mai
-		multe) sau canalele unei liste fara grupe."""
+		multe) sau canalele unei liste fara grupe; apoi buchetele de internet ale omului (facute pe PC, Bouquet Maker), ca grupe cu
+		numele buchetului (Gpiupiu, forum 801 #2537; I.bucheteOm)."""
 		try:
 			from Components import HdsIptvSurse as I
 			lista = eServiceCenter.getInstance().list(antet)
 			randuri = (lista.getContent("R", False) or [ ]) if lista is not None else [ ]
+			randuri = list(randuri) + self.hdsRanduriIptvOm()
 			numere = I.numarDupaFisier()
 			for r in randuri:
 				if r.flags & eServiceReference.isDirectory:
@@ -2127,6 +2239,20 @@ class ChannelSelectionBase(Screen):
 			return randuri
 		except Exception as e:
 			print("[ChannelSelection] randurile IPTV: %s" % e)
+			return [ ]
+
+	def hdsRanduriIptvOm(self):
+		"""Dosarele buchetelor de internet ale omului de sub antetul 'IPTV' (fara numar; il pune hdsRanduriIptv)."""
+		try:
+			from Components import HdsIptvSurse as I
+			randuri = [ ]
+			for fisier, nume, n in I.bucheteOm():
+				r = eServiceReference(I.refBuchetOm(fisier))
+				r.setName(u"%s · %s" % (nume, self.hdsTextNumar(n)))
+				randuri.append(r)
+			return randuri
+		except Exception as e:
+			print("[ChannelSelection] buchetele IPTV ale omului: %s" % e)
 			return [ ]
 
 	def hdsDosarIptv(self, canal):
@@ -3690,6 +3816,31 @@ class ChannelSelectionBase(Screen):
 			rez.insert(0, tp)
 		return rez
 
+	def hdsBucheteAscunse(self, root):
+		"""Fisierele buchetelor din bouquets.tv / bouquets.radio care nu se arata in lista buchetelor `root`
+		(Components/ServiceList.hdsNumeleBuchetelor): radacina "IPTV" si radacinile locurilor adaugate de extensii
+		(Components/HdsLocuriLista.py). Ele sunt locuri in "Sateliți" (antetul IPTV, antetele locurilor), cu grupele sub
+		ele, deci aici dublau fila (JAKITAKI, forumul 768 #2186; pagina web /canale le sare la fel). Raman legate din
+		index, ca nucleul sa le incarce. Aceleasi conditii ca randurile in plus: numai listele imaginii, cu "mai multe
+		buchete", nu in mutare sau in editare (acolo se vede tot ce e in fisier)."""
+		if not getattr(self, "hdsCapPornit", False) or root is None or root != self.bouquet_root:
+			return frozenset()
+		if self.hdsDosareInSateliti() or getattr(self, "movemode", False) or getattr(self, "bouquet_mark_edit", OFF) != OFF:
+			return frozenset()
+		rez = set()
+		if self.hdsAntetIptv() is not None:
+			try:
+				from Components import HdsIptvSurse as I
+				rez.add(I.BUCHET_RADACINA)
+			except Exception as e:
+				print("[ChannelSelection] radacina IPTV: %s" % e)
+		try:
+			for _poz, d in self.hdsLocuri():
+				rez.add(d["buchet"])
+		except Exception as e:
+			print("[ChannelSelection] radacinile locurilor: %s" % e)
+		return frozenset(rez)
+
 	def hdsDeschideTransponderul(self):
 		"""Actiunea "Current Transponder" a tastelor (Components/HdsTasteRapide.py, Screens/InfoBar.hdsFaActiuneaLunga):
 		lista intra direct in dosarul transponderului canalului de acum. Calea e cea a randului: lista buchetelor cu "mai
@@ -5047,10 +5198,11 @@ class SimpleChannelSelection(ChannelSelectionBase, SelectionEventInfo):
 	# HDSatelit: in alegerea simpla (canalul pentru modulul CI, pentru un timer) tastele care schimba lista (culorile,
 	# CH+ / CH-, TV / RADIO) aduc focusul in lista si cand lista ramane pe loc (VERDE pe „Sateliți” o reface fara
 	# setRoot): altfel focusul ramanea in capul listei, cu selectia stinsa, si OK apasa fila (TV <-> Radio) sau o
-	# grupa in loc sa aleaga canalul (darog69, Vu+ Duo4K, 0.7.3). Comutarea ceruta din fila pastreaza focusul pe fila.
+	# grupa in loc sa aleaga canalul (darog69, Vu+ Duo4K, 0.7.3). La fel dupa OK pe fila TV | Radio: alegerea simpla e
+	# o singura alegere, deci dupa comutare cursorul e pe un canal si urmatorul OK il alege (pana in 0.7.5 focusul
+	# ramanea pe fila, ca in lista principala, iar al doilea OK intorcea lista pe TV; TODO 10.11 17:33).
 	def hdsListaCeruta(self):
-		if not getattr(self, "hdsComutare", False):
-			hdsCapLaLista(self)
+		hdsCapLaLista(self)
 
 	def showAllServices(self):
 		ChannelSelectionBase.showAllServices(self)
@@ -5069,7 +5221,7 @@ class SimpleChannelSelection(ChannelSelectionBase, SelectionEventInfo):
 				not self.preEnterPath(self.bouquet_rootstr):
 			# prima umplere: lista n-are inca radacina, iar getRoot() da radacina buchetelor (pentru pluginuri), deci
 			# showFavourites ar crede ca lista e deja pe buchete si ar lasa-o goala; cu buchete care au canale nici
-			# hdsFaraListaGoala nu deschidea „Sateliți”: alegerea canalului se deschidea goala (0.7.3, .122 si darog69)
+			# hdsFaraListaGoala nu deschidea lista Sateliti: alegerea canalului se deschidea goala (0.7.3, receptorul de proba si darog69)
 			self.hdsAlesDeOm = time.time()
 			self.clearPath()
 			self.enterPath(self.bouquet_root)

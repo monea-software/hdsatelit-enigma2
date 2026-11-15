@@ -95,7 +95,7 @@ def aplica(*_argumente):
 	prima = pentruNucleu(s.hds_epg_limba.value, meniu)
 	a_doua = s.hds_epg_limba2.value
 	if not prima:
-		# la pornire, inainte ca limba meniului sa fie activa (masurat pe .122): limba de acum a nucleului ramane pana la
+		# la pornire, inainte ca limba meniului sa fie activa (masurat pe receptorul de proba): limba de acum a nucleului ramane pana la
 		# chemarea din Language.addCallback
 		return
 	print("language set to", meniu, "- ghidul:", prima, "/", a_doua)

@@ -959,6 +959,7 @@ class HdsStartWizard(Screen, ConfigListScreen):
             "sr_YU": "Srpski (Srbija)",
             "bg_BG": "Български (България)",
             "uk_UA": "Українська (Україна)",
+            "uz_UZ": "O‘zbekcha (O‘zbekiston)",
             "pt_PT": "Português (Portugal)",
             "da_DK": "Dansk (Danmark)",
             "sv_SE": "Svenska (Sverige)",

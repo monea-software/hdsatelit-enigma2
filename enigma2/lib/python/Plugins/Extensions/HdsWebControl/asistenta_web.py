@@ -64,6 +64,8 @@ def stare(request=None, A=None, B=None):
 		"durata_implicita": s.get("durata_implicita"),
 		# pana cand e pornita, tradus ("Pornită până la ZZ.LL, HH:MM." / "Pornită, fără sfârșit; ...")
 		"permanent": bool(s.get("permanent")), "pana_text": s.get("pana_text") or "",
+		# ce face echipa acum, ca pe banda de pe televizor ("lucrează acum" / "a terminat..." / "")
+		"activitate": s.get("activitate") or "",
 		"concluzii": _concluzii(A),
 		# copia pentru "Pune înapoi cum era" ({"data_text", "text", "intrebare"}) sau None
 		"copie": s.get("copie")}
@@ -323,6 +325,11 @@ def bandaWeb(A=None):
 		if ses is None or not ses.activa():
 			return ""
 		text = A.textPana(ses, banda=True)
+		try:
+			# ce face echipa acum, ca pe banda de pe televizor (un modul vechi fara textActivitate: numai pana cand)
+			text = A.textActivitate(ses) or text
+		except Exception:
+			pass
 	except Exception:
 		return ""
 	return ('<div role="status" style="background:#c0392b;color:#fff;padding:8px 14px;text-align:center;'
@@ -486,6 +493,7 @@ PAGINA = """<!DOCTYPE html>
   <p class="ascuns" id="internet"><a id="setariInternet" href="/retea">Setările de internet</a></p>
 </section>
 <section class="card ascuns" id="pornita">
+  <p class="pana" id="activitate" role="status"></p>
   <p class="pana" id="stare"></p>
   <button class="rosu" id="opreste">Oprește</button>
   <p class="mesaj" id="mesajOprire"></p>
@@ -548,6 +556,8 @@ function arata(d){
   $("internet").classList.toggle("ascuns", !d.eroare_pornire);
   $("setariInternet").href = adresa("/retea");
   $("stare").textContent = d.pana_text || "";
+  $("activitate").textContent = d.activitate || "";
+  $("activitate").classList.toggle("ascuns", !d.activitate);
   $("asteptare").classList.toggle("ascuns", d.stare!=="asteapta");
   $("asteptareNuOpri").classList.toggle("ascuns", d.stare!=="asteapta");
   $("jurnal").textContent = (d.jurnal||[]).join("\\n") || "Jurnalul e gol.";

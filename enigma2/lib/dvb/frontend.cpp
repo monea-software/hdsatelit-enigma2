@@ -2,6 +2,7 @@
 #include <lib/dvb/dvb.h>
 #include <lib/dvb/frontendparms.h>
 #include <lib/dvb/hdsmultistream.h>
+#include <lib/dvb/hdst2mi.h>
 #include <lib/dvb/hdsterestru.h>
 #include <lib/dvb/hdscalitate.h>
 #include <lib/base/eerror.h>
@@ -2488,6 +2489,9 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 			};
 			// multistream exista numai in DVB-S2: un transponder cu flux sau PLS se acordeaza ca DVB-S2
 			bool flux = oparm.sat.needsStreamSelection();
+			// un tuner fara multistream primeste numai fluxul 0 cu secventa implicita (isCompatibleWith): acord fara DTV_STREAM_ID
+			if (flux && !hdsms::trimiteFlux(oparm.sat.is_id, oparm.sat.pls_mode, oparm.sat.pls_code, m_multistream))
+				flux = false;
 			if (flux && system == SYS_DVBS)
 				system = SYS_DVBS2;
 			struct dtv_property p[13];
@@ -3182,9 +3186,14 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 		if (res)
 			goto tune_error;
 		/* cautarea (scan.cpp pune motivul "scanare"), numai la asteptarea de 5 s (rata peste 20000): zigzagul ratelor
-		   mici ramane cu timpul lui; o acordare cu motorul pornit (sec.cpp a pus o comanda noua) asteapta ca inainte */
+		   mici ramane cu timpul lui; o acordare cu motorul pornit (sec.cpp a pus o comanda noua) asteapta ca inainte.
+		   DVB-S cu FEC auto asteapta tot 5 s (SCV, 15.11.2026): acolo demodulatorul incearca pe rand ratele de cod (la
+		   DVB-S2 FEC-ul vine in antetul cadrului), iar SF8008 a prins asa in 1,9-4,9 s (jurnalele testerilor, 30W:
+		   12246 H 31428 auto in 4931 ms, 11342 V 34285 auto in 2131 ms); cu regula de 3 s se pierdeau la cautare */
 		m_hds_e_scanare = !m_simulate && timeout == 5000 && !strcmp(m_hds_acordare.motiv, "scanare") &&
-			!(m_hds_acordare.rotor_cmd != -1 && m_hds_acordare.rotor_cmd != m_hds_acordare.rotor_cmd_vechi) && hdsZapRapid();
+			!(m_hds_acordare.rotor_cmd != -1 && m_hds_acordare.rotor_cmd != m_hds_acordare.rotor_cmd_vechi) &&
+			!(feparm.system == eDVBFrontendParametersSatellite::System_DVB_S &&
+				feparm.fec == eDVBFrontendParametersSatellite::FEC_Auto) && hdsZapRapid();
 
 		break;
 	}
@@ -3587,13 +3596,22 @@ int eDVBFrontend::isCompatibleWith(ePtr<iDVBFrontendParameters> &feparm)
 		ASSERT(!ret);
 		if (sat_parm.system == eDVBFrontendParametersSatellite::System_DVB_S2 && !m_can_handle_dvbs2)
 			return 0;
-		// un tuner fara FE_CAN_MULTISTREAM ar prinde alt flux sau nimic
-		if (sat_parm.needsStreamSelection() && (!m_multistream || !m_can_handle_dvbs2))
+		// un tuner fara FE_CAN_MULTISTREAM ar prinde alt flux sau nimic; fluxul 0 cu secventa implicita (coada ":0:0:1"
+		// din listele facute pe alte imagini) e insa un transponder obisnuit, ca la OE-Alliance: tunerul il prinde acordat
+		// fara filtru, iar un tuner multistream liber e ales intai (lib/dvb/hdsmultistream.h, tunerPrimeste si scorTuner)
+		bool tuner_multistream = m_multistream && m_can_handle_dvbs2;
+		if (!hdsms::tunerPrimeste(sat_parm.is_id, sat_parm.pls_mode, sat_parm.pls_code, tuner_multistream))
+			return 0;
+		// transponderul cu T2-MI (liste facute pe alte imagini) merge direct numai pe tunerul care decapsuleaza T2-MI in
+		// driver; la tunere amestecate nu se da celui fara, iar Hds/DabT2 duce canalul prin releu cand tunerul cu T2-MI e
+		// ocupat sau nu prinde satelitul (lib/dvb/hdst2mi.h)
+		if (!hdst2mi::tunerPrimeste(hdst2mi::areT2mi(sat_parm.system == eDVBFrontendParametersSatellite::System_DVB_S2,
+				sat_parm.t2mi_plp_id, sat_parm.t2mi_pid), hdst2mi::tunerCuT2mi(m_dvbid), hdst2mi::receptorCuT2mi()))
 			return 0;
 		ret = m_sec->canTune(sat_parm, this, 1 << m_slotid);
 		if (ret > 1 && sat_parm.system == eDVBFrontendParametersSatellite::System_DVB_S && m_can_handle_dvbs2)
 			ret -= 1;
-		return ret;
+		return hdsms::scorTuner(ret, sat_parm.is_id, sat_parm.pls_mode, sat_parm.pls_code, tuner_multistream);
 	}
 	else if (type == eDVBFrontend::feCable)
 		return 2;  // more prio for cable frontends

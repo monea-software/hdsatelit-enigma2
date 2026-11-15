@@ -703,6 +703,12 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	m_start_timer = eTimer::create(eApp);
 	m_epg_timer = eTimer::create(eApp);
 	m_n_video = -1;
+	m_hds_marime_timer = eTimer::create(eApp);
+	m_hds_marime_pasi = 0;
+	m_hds_x0 = m_hds_y0 = -1;
+	m_hds_aspect_spus = m_hds_aspect_nou = -1;
+	m_hds_info_timer = eTimer::create(eApp);
+	m_hds_info_ultim_ms = -1;
 	m_poarta = std::make_shared<Poarta>(this);
 	m_subs_to_pull_handler_id = 0;
 	m_subtitle_sync_timer = eTimer::create(eApp);
@@ -734,6 +740,8 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	CONNECT(m_cues_timer->timeout, eServiceMP3::cuesPoll);
 	CONNECT(m_start_timer->timeout, eServiceMP3::startTimeout);
 	CONNECT(m_epg_timer->timeout, eServiceMP3::epgTick);
+	CONNECT(m_hds_marime_timer->timeout, eServiceMP3::hdsMarimeDinDecodor);
+	CONNECT(m_hds_info_timer->timeout, eServiceMP3::hdsInfoAmanat);
 	CONNECT(m_subtitle_sync_timer->timeout, eServiceMP3::pushSubtitles);
 	CONNECT(m_external_timer->timeout, eServiceMP3::externalTick);
 	CONNECT(m_pump.recv_msg, eServiceMP3::gstPoll);
@@ -970,11 +978,18 @@ RESULT eServiceMP3::connectEvent(const sigc::slot<void(iPlayableService*, int)> 
 	return 0;
 }
 
+static int vmpegProc(const char *name, bool hex);
+
 RESULT eServiceMP3::start()
 {
 	ASSERT(m_state == stIdle);
 
 	m_state = stRunning;
+#if HAVE_HISILICON
+	/* what the decoder still holds from the channel before (hdsmarime) */
+	m_hds_x0 = vmpegProc("xres", true);
+	m_hds_y0 = vmpegProc("yres", true);
+#endif
 	if (m_gst_playbin)
 	{
 		if (m_sourceinfo.is_streaming && m_ref.getData(0) == 2)
@@ -1234,6 +1249,8 @@ RESULT eServiceMP3::stop()
 	m_epg_timer->stop();
 	m_subtitle_sync_timer->stop();
 	m_external_timer->stop();
+	m_hds_marime_timer->stop();
+	m_hds_info_timer->stop();
 
 	/* the last position of a film (a file with a picture); written by the film thread after the stop */
 	bool scrie = false;
@@ -1673,7 +1690,7 @@ RESULT eServiceMP3::getPlayPosition(pts_t &pts)
 RESULT eServiceMP3::realPlayPosition(pts_t &pts)
 {
 	GstFormat fmt = GST_FORMAT_TIME;
-	gint64 pos;
+	gint64 pos = -1;
 	GstElement *sink;
 	pts = 0;
 
@@ -1696,7 +1713,17 @@ RESULT eServiceMP3::realPlayPosition(pts_t &pts)
 
 	gboolean gasit = TRUE;
 	if (use_get_decoder_time)
+	{
 		g_signal_emit_by_name(sink, "get-decoder-time", &pos);
+		/* The sink answers GST_CLOCK_TIME_NONE (-1) while its decoder does not play: after a flush (a jump) and when the
+		   sound codec changes (another sound track: AUDIO_STOP, bypass), and a negative time right after a jump.
+		   -1 / 11111 gave 0 as a valid position: the subtitle timer then waited for the whole time of the next line
+		   (minutes) and the subtitles stayed away until a jump or a pause; stop() kept 0 as the last position. Some
+		   sound decoders also keep answering 0 while they play. The position of the same sink is asked instead
+		   (OE-Alliance trusts only a valid time above 0 and falls back the same way). */
+		if (!GST_CLOCK_TIME_IS_VALID((GstClockTime)pos) || pos <= 0)
+			gasit = gst_element_query_position(sink, fmt, &pos);
+	}
 	else
 		/* the position of the sound (or picture) sink, not of the whole playbin: a bin answers with the largest
 		   position of its sinks, and the subtitle appsink (sync=FALSE) is always ahead, by as much as the demuxer
@@ -1705,7 +1732,7 @@ RESULT eServiceMP3::realPlayPosition(pts_t &pts)
 
 	gst_object_unref(sink);
 
-	if (!gasit) {
+	if (!gasit || pos < 0) {
 		eDebug("gst_element_query_position failed in getPlayPosition");
 		return -1;
 	}
@@ -1891,6 +1918,88 @@ inline int dinProc(int proc, int latime, int inaltime)
 }
 // ==== HDS_ASPECT_SFARSIT ====
 #endif
+#if HAVE_HISILICON
+// ==== HDS_MARIME_INCEPUT ====
+/* The size of the picture when the sink tells none. dvbvideosink posts eventSizeChanged only when the driver raises a
+   video event while it writes (and eventSizeAvail only on Dreambox), so on the Octagon SF8008 TS streams over HTTP
+   (MPEG-2 and H.264) played 40 s with no size from the sink: the bar stayed empty, while vmpeg/0 had the
+   size of every piece (and the sink of an HLS stream told it). After the first ASYNC_DONE of a service with a video
+   stream, vmpeg/0 is read once every PAS_MS: xres and yres become the size of this service when they differ from what
+   the decoder held from the channel before, or after PASI_ACEEASI ticks (a channel of the same size); the aspect goes
+   through hdsaspect::dinProc and is left alone when that gives nothing. No video stream (radio, music): never.
+   Once the service has a size (from the sink or from here), a new sAspect read the same on two ticks in a row is told
+   as evVideoSizeChanged: the driver tells no change of the aspect alone (16:9 -> 4:3 adverts at the same size).
+   Only plain arithmetic in the namespace, so the tests can read it alone. */
+namespace hdsmarime
+{
+enum { PAS_MS = 1000, PASI_PRIMA = 2, PASI_ACEEASI = 4, PASI_MAX = 30 };
+/* true when xres x yres seen now can be taken as the size of this service */
+inline bool ia(int n_video, int latime_sink, int x, int y, int x0, int y0, int pasi)
+{
+	if (n_video <= 0 || latime_sink > 0 || x <= 0 || y <= 0 || pasi < PASI_PRIMA)
+		return false;
+	return x != x0 || y != y0 || pasi >= PASI_ACEEASI;
+}
+/* the sAspect to tell now, or -1; nou keeps a new value seen once (-1 when there is none) */
+inline int aspectSpus(int spus, int acum, int &nou)
+{
+	if (acum <= 0 || acum == spus)
+	{
+		nou = -1;
+		return -1;
+	}
+	if (nou != acum)
+	{
+		nou = acum;
+		return -1;
+	}
+	nou = -1;
+	return acum;
+}
+}
+// ==== HDS_MARIME_SFARSIT ====
+#endif
+
+/* the size timer (HDS_MARIME above); it is started only on HiSilicon */
+void eServiceMP3::hdsMarimeDinDecodor()
+{
+#if HAVE_HISILICON
+	if (m_state != stRunning)
+	{
+		m_hds_marime_timer->stop();
+		return;
+	}
+	m_hds_marime_pasi++;
+	if (m_width <= 0)
+	{
+		int x = vmpegProc("xres", true), y = vmpegProc("yres", true);
+		if (hdsmarime::ia(m_n_video, m_width, x, y, m_hds_x0, m_hds_y0, m_hds_marime_pasi))
+		{
+			m_width = x;
+			m_height = y;
+			int a = hdsaspect::dinProc(vmpegProc("aspect", true), x, y);
+			if (a > 0)
+				m_aspect = a;
+			m_hds_aspect_spus = getInfo(sAspect);
+			m_hds_aspect_nou = -1;
+			eDebug("eServiceMP3::size %dx%d aspect %d from /proc/stb/vmpeg/0, the sink told none", x, y, m_hds_aspect_spus);
+			m_event((iPlayableService*)this, evVideoSizeChanged);
+			gammaDinDecodor();
+		}
+		else if (m_hds_marime_pasi >= hdsmarime::PASI_MAX)
+			m_hds_marime_timer->stop();
+		return;
+	}
+	if (m_currentTrickRatio)
+		return;
+	int a = hdsmarime::aspectSpus(m_hds_aspect_spus, getInfo(sAspect), m_hds_aspect_nou);
+	if (a > 0)
+	{
+		m_hds_aspect_spus = a;
+		m_event((iPlayableService*)this, evVideoSizeChanged);
+	}
+#endif
+}
 
 // The same reference supplies now/next in the InfoBar and the standard programme information.
 RESULT eServiceMP3::getEvent(ePtr<eServiceEvent> &evt, int nownext)
@@ -2300,8 +2409,10 @@ int eServiceMP3::getCurrentTrack()
 
 RESULT eServiceMP3::selectTrack(unsigned int i)
 {
-	pts_t ppos;
-	getPlayPosition(ppos);
+	pts_t ppos = 0;
+	/* no clock now (the sound sink does not play): the last good position, not the start of the film */
+	if (getPlayPosition(ppos) < 0)
+		ppos = m_last_position;
 	ppos -= 90000;
 	if (ppos < 0)
 		ppos = 0;
@@ -2469,6 +2580,40 @@ static bool tagsEqualButBitrate(const GstTagList *a, const GstTagList *b)
 	gst_tag_list_unref(x);
 	gst_tag_list_unref(y);
 	return equal;
+}
+
+namespace hdsinfo
+{
+	/* evUpdatedInfo from the tags at most this often. Every one makes the converters of the bar and the Python listeners
+	   read the tracks and the subtitle list again, on the main thread; tags that differ in more than the bitrate (two
+	   audio tracks merged in turn into m_stream_tags, codec and language posted by each sink, per segment metadata) still
+	   came 24-37 times a second for ~8 s when an HTTP MPEG-TS stream started (Vu+ Solo SE, 0.7.4, the processor at
+	   56-79 %; TODO 14.11 22:37). The first change is sent at once, the ones inside the step once at its end. */
+	const int PAS_MS = 500;
+
+	static long long acumMs()
+	{
+		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+	}
+}
+
+void eServiceMP3::hdsInfoDinEtichete()
+{
+	long long acum = hdsinfo::acumMs();
+	if (m_hds_info_ultim_ms < 0 || acum - m_hds_info_ultim_ms >= hdsinfo::PAS_MS)
+	{
+		m_hds_info_timer->stop();
+		m_hds_info_ultim_ms = acum;
+		m_event((iPlayableService*)this, evUpdatedInfo);
+	}
+	else if (!m_hds_info_timer->isActive())
+		m_hds_info_timer->start(hdsinfo::PAS_MS - (int)(acum - m_hds_info_ultim_ms), true);
+}
+
+void eServiceMP3::hdsInfoAmanat()
+{
+	m_hds_info_ultim_ms = hdsinfo::acumMs();
+	m_event((iPlayableService*)this, evUpdatedInfo);
 }
 
 void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
@@ -2714,7 +2859,7 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 			}
 			gst_tag_list_unref(tags);
 			if (tags_changed)
-				m_event((iPlayableService*)this, evUpdatedInfo);
+				hdsInfoDinEtichete();
 			break;
 		}
 		case GST_MESSAGE_ASYNC_DONE:
@@ -2741,6 +2886,13 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 			m_n_video = n_video;
 
 			eDebug("eServiceMP3::async-done - %d video, %d audio, %d subtitle", n_video, n_audio, n_text);
+#if HAVE_HISILICON
+			if ( primul && n_video > 0 && m_state == stRunning )
+			{
+				m_hds_marime_pasi = 0;
+				m_hds_marime_timer->start(hdsmarime::PAS_MS, false);
+			}
+#endif
 
 			/* nothing that can be played: the player is told (the old stop() here left eNavigation with a stopped
 			   service it still counted as running) */
@@ -2917,6 +3069,9 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 							gst_structure_get_int (msgstruct, "aspect_ratio", &m_aspect);
 							gst_structure_get_int (msgstruct, "width", &m_width);
 							gst_structure_get_int (msgstruct, "height", &m_height);
+							/* the aspect told now (the size timer tells only a later change of it) */
+							m_hds_aspect_spus = getInfo(sAspect);
+							m_hds_aspect_nou = -1;
 							if (strstr(eventname, "Changed"))
 								m_event((iPlayableService*)this, evVideoSizeChanged);
 							gammaDinDecodor();
@@ -3714,32 +3869,42 @@ void eServiceMP3::pagesIntoQueue(const std::vector<SubtitlePage> &noi)
 	}
 }
 
+/* the longest the subtitle timer waits before the clock is read again (ms) */
+static const int MAX_ASTEPTARE_SUB_MS = 1000;
+
 void eServiceMP3::pushSubtitles()
 {
 	while ( !m_subtitle_pages.empty() )
 	{
 		SubtitlePage &frontpage = m_subtitle_pages.front();
-		pts_t running_pts;
+		pts_t running_pts = 0;
 		gint64 diff_ms = 0;
 		gint64 show_pts = 0;
 
-		getPlayPosition(running_pts);
+		/* No clock (the sink does not play yet, a jump or a change of sound track is under way): the pages wait and
+		   the clock is checked again in 100 ms. Before, the result was not looked at: a reading of 0 started the timer
+		   for the whole time of the next line (minutes) and the subtitles of a film came only now and then. */
+		if (getPlayPosition(running_pts) < 0 || running_pts <= 0)
+		{
+			m_decoder_time_valid_state = 0;
+			if (!m_paused)
+				m_subtitle_sync_timer->start(100, true);
+			break;
+		}
 
-		/* while paused the position stands still: it would look "not valid" for ever and the 25 ms timer would run
-		   without end */
+		/* After a start, a jump or a pause the clock must have moved between two readings 100 ms apart (a time of the
+		   board that stands still is the one from before the jump). The old test asked for 4 readings in a row 25 ms
+		   apart, each one different, while the time of the board moves in steps (an AC3 frame is 32 ms): it started
+		   over and over and the subtitles came late or not at all. OE-Alliance waits one step of 100 ms as well.
+		   While paused the position stands still and is not checked (unpause starts the check again). */
 		if (m_decoder_time_valid_state < 4 && !m_paused) {
-			++m_decoder_time_valid_state;
-			if (m_prev_decoder_time == running_pts)
-				m_decoder_time_valid_state = 0;
-			if (m_decoder_time_valid_state < 4) {
-//				if (m_decoder_time_valid_state)
-//					eDebug("%d: decoder time not valid! prev %lld, now %lld\n", m_decoder_time_valid_state, m_prev_decoder_time/90, running_pts/90);
-//				else
-//					eDebug("%d: decoder time not valid! now %lld\n", m_decoder_time_valid_state, running_pts/90);
-				m_subtitle_sync_timer->start(25, true);
+			if (m_decoder_time_valid_state == 0 || m_prev_decoder_time == running_pts) {
+				m_decoder_time_valid_state = 2;
 				m_prev_decoder_time = running_pts;
+				m_subtitle_sync_timer->start(100, true);
 				break;
 			}
+			m_decoder_time_valid_state = 4;
 		}
 
 		int durata_ms = 0;
@@ -3761,7 +3926,8 @@ void eServiceMP3::pushSubtitles()
 		gint64 end_pts = show_pts + (gint64)(durata_ms > 0 ? durata_ms : 5000) * 90;
 
 		diff_ms = ( show_pts - running_pts ) / 90;
-		eDebug("check subtitle: decoder: %lld, show_pts: %lld, diff: %lld ms", (long long)(running_pts/90), (long long)(show_pts/90), (long long)diff_ms);
+		if (diff_ms <= MAX_ASTEPTARE_SUB_MS)
+			eDebug("check subtitle: decoder: %lld, show_pts: %lld, diff: %lld ms", (long long)(running_pts/90), (long long)(show_pts/90), (long long)diff_ms);
 
 		if ( running_pts >= end_pts )
 		{
@@ -3773,8 +3939,9 @@ void eServiceMP3::pushSubtitles()
 			/* paused: the page waits without a timer, unpause() looks again */
 			if (m_paused)
 				break;
-			eDebug("start timer");
-			m_subtitle_sync_timer->start(diff_ms, true);
+			/* at most a second: the clock is read again then, so a wrong reading (or a clock that jumped) cannot keep
+			   the next line away for long */
+			m_subtitle_sync_timer->start(diff_ms > MAX_ASTEPTARE_SUB_MS ? MAX_ASTEPTARE_SUB_MS : (int)diff_ms, true);
 			break;
 		}
 		else // immediate show

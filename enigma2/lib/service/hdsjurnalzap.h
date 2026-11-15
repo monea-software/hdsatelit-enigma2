@@ -30,6 +30,15 @@
  * Exemplu: "2026-10-29T08:14:04Z [INFO] [zap] A reusit: acordare 118 ms, program 302 ms, imagine 846 ms | video H264
  *   1920x1080 | sunet AAC | criptat nu"
  *
+ * PLACILE FARA EVENIMENT VIDEO (15.11.2026, Vu+ Solo SE, driverul Vu+ vechi): decodorul nu trimite niciodata evenimentul
+ * video, deci fara masura de mai jos fiecare zap scria "imagine fara eveniment de la decodor (merge la 6000 ms)" (timpul
+ * pana la imagine lipsea) si, la zap-ul facut intre 3 si 6 s, "oprit fara imagine" fals. Dupa INVATAT_DUPA zap-uri la
+ * rand cu imagine (PTS miscat) si fara eveniment, placa e tinuta minte ca fara eveniment (pana la repornirea enigma2;
+ * orice eveniment video venit sterge semnul): atunci PTS-ul se citeste de la program() (decodorul pornit), la PAS_PTS_MS,
+ * si imaginea e prima din doua citiri la rand cu PTS-ul miscat (o citire singura poate fi PTS-ul canalului dinainte
+ * inlocuit de cel nou). Randul: "imagine N ms (din PTS, fara eveniment video)". Primele zap-uri dupa pornire raman ca
+ * inainte (randul de la 6 s e corect, numai fara timp).
+ *
  * Scris de la zero pentru imaginea HD Satelit.
  */
 #ifndef __lib_service_hdsjurnalzap_h
@@ -43,7 +52,7 @@
 namespace hdsjzap
 {
 
-enum { FARA_IMAGINE_MS = 6000, PRAG_OPRIRE_MS = 3000, PAS_PTS_MS = 350, MAX_CITIRI_RATATE = 6 };
+enum { FARA_IMAGINE_MS = 6000, PRAG_OPRIRE_MS = 3000, PAS_PTS_MS = 350, MAX_CITIRI_RATATE = 6, INVATAT_DUPA = 2 };
 
 class Zap: public sigc::trackable
 {
@@ -82,7 +91,16 @@ private:
 	ePtr<eTimer> m_ceas_pts;
 	void citestePts();
 	void pornesteCitiri(long long termen);
-	void scrieImagine(long long t, bool fara_eveniment);
+	/* cum s-a aflat imaginea: evenimentul video (cu cadre), PTS-ul la FARA_IMAGINE_MS fara eveniment, PTS-ul citit de la
+	   program() pe o placa fara eveniment video */
+	enum { CU_EVENIMENT, FARA_EVENIMENT, DIN_PTS };
+	void scrieImagine(long long t, int cum);
+	/* placa fara eveniment video: m_din_pts = citirile pornite de la program(); m_t_miscare = prima citire cu PTS miscat,
+	   inca neconfirmata de a doua; s_fara_eveniment = zap-uri la rand cu imagine si fara eveniment (pe tot procesul,
+	   eDVBServicePlay si deci Zap se fac din nou la fiecare canal) */
+	bool m_din_pts;
+	long long m_t_miscare;
+	static int s_fara_eveniment;
 	long long m_marcaje[NR_MARCAJE], m_t_comanda, m_t_blocare;
 	long m_sec_ms;
 	int m_slot, m_vpid, m_vtip, m_apid, m_atip, m_criptat, m_sid;

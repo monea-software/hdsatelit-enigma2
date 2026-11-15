@@ -61,7 +61,7 @@ NEGASIT = "adresa fara loc in baza serverului"
 STRICAT = "raspunsul serverului nu se poate folosi"
 TERMEN = "serverul nu a raspuns la timp"
 
-# Tara (ISO 3166-1, doua litere) -> limba din cele 30 ale imaginii (Components/Language.py, LIMBI_COMPLETE): limba
+# Tara (ISO 3166-1, doua litere) -> limba din cele 31 ale imaginii (Components/Language.py, LIMBI_COMPLETE): limba
 # oficiala sau a majoritatii. O tara care nu e aici primeste engleza. Frizona (fy_x-FY) nu are tara a ei.
 LIMBA_TARII = {
 	"RO": "ro_RO", "MD": "ro_RO",
@@ -94,12 +94,15 @@ LIMBA_TARII = {
 	"AD": "ca_AD",
 	"IS": "is_IS",
 	"UA": "uk_UA",
+	"UZ": "uz_UZ",
 	"AE": "ar_AE", "SA": "ar_AE", "EG": "ar_AE", "IQ": "ar_AE", "JO": "ar_AE", "KW": "ar_AE", "LB": "ar_AE",
 	"LY": "ar_AE", "OM": "ar_AE", "QA": "ar_AE", "SY": "ar_AE", "YE": "ar_AE", "BH": "ar_AE", "PS": "ar_AE",
 	"SD": "ar_AE", "DZ": "ar_AE", "MA": "ar_AE", "TN": "ar_AE", "MR": "ar_AE",
 }
 
-_STARE = {"stare": NIMIC, "tara": "", "motiv": "", "limba_om": "", "pornit": 0.0}
+# cod si corp: raspunsul serverului (HTTP 200 sau 404), pastrat pentru fusul orar (Components/HdsFusTara.py), ca la
+# prima pornire sa plece o singura cerere pentru limba si fus
+_STARE = {"stare": NIMIC, "tara": "", "motiv": "", "limba_om": "", "pornit": 0.0, "cod": None, "corp": b""}
 _ZAVOR = threading.Lock()
 
 
@@ -204,6 +207,8 @@ def cautaTara(retea_=None, citeste_url=None, ceas=None, dormi=None, adresa=None)
 				return "", motiv
 			dormi(PAUZA_S)
 			continue
+		if cod in (200, 404):
+			_pune(cod=cod, corp=bytes(corp or b"")[:4096] if cod == 200 else b"")
 		if ceas() - inceput > TERMEN_S:
 			return "", TERMEN
 		if cod == 404:
@@ -254,7 +259,7 @@ def laPornire(element, prima=None, **k):
 	try:
 		if prima is None:
 			prima = _primaPornire()
-		_pune(stare=NIMIC, tara="", motiv="", limba_om="")
+		_pune(stare=NIMIC, tara="", motiv="", limba_om="", cod=None, corp=b"")
 		if not prima:
 			return
 		om = aleasaDeOm(element)

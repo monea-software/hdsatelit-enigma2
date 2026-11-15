@@ -419,6 +419,11 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="0" text="Tema interfeței" entryID="hds_tema_interfata" pictograma="tema" weight="11" web="/tema-tv">
 				<screen module="HdsTemaInterfata" screen="HdsTemaInterfata" />
 			</item>
+			<!-- 0.7.5: siglele canalelor puse fara FTP, de la o adresa sau de pe stick (Screens/HdsPiconuri.py, logica in
+			     Components/HdsPiconInstalare.py; dorinelu, forumul 795). In web: /piconuri. -->
+			<item level="0" text="Sigle canale (piconuri)" entryID="hds_piconuri" pictograma="canal-info" weight="11" web="/piconuri">
+				<screen module="HdsPiconuri" screen="HdsPiconuri" />
+			</item>
 			<!-- 0.7.5: rezolutia interfetei temei HD Satelit, 1080p sau 2K (2560x1440); numai unde placa poate (driverul
 			     grafic peticit, SystemInfo HdsRezolutie2K din Components/HdsRezolutieTv.py). In web: /tema-tv. -->
 			<item level="0" text="Rezoluția interfeței" entryID="hds_rezolutie_tv" pictograma="calitate-imagine" weight="11" requires="HdsRezolutie2K" web="/tema-tv#rezolutie">
@@ -437,6 +442,11 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			</item>
 			<item level="0" text="OSD Preferences" entryID="usage_setup" pictograma="setari-generale" web="/setari?id=usage" weight="30">
 				<setup id="usage" />
+			</item>
+			<!-- 0.7.5 (LCS, Ozgur e-mailul 6323): tot aspectul listei de canale intr-un ecran (data/setup.xml hds_lista_canale), la
+			     vedere si in meniul listei (MENU > Setări); in web: /setari?id=hds_lista_canale -->
+			<item level="0" text="Setări listă de canale" entryID="hds_lista_canale_setup" pictograma="editor-canale" web="/setari?id=hds_lista_canale" weight="31">
+				<setup id="hds_lista_canale" />
 			</item>
 			<item level="1" text="Front Panel Display" requires="HdsAfisajSimplu" entryID="lcd_setup" pictograma="afisaj-luminozitate" web="/setari?id=lcd" weight="40">
 				<setup id="lcd" />
@@ -589,6 +599,12 @@ deschide(self.session, "afisaj")
 			<item level="0" text="IPv6" entryID="hds_ipv6" pictograma="retea" web="/retea?f=ipv6" weight="19" stare="netestat">
 				<setup id="hds_ipv6" />
 			</item>
+			<!-- partajarea in retea (Samba, 0.7.5/0.7.6; Components/HdsSamba.py): Da/Nu si dosarul, aplicate singure (instalarea
+			     din feed, dosarul, parola ca la FTP); randurile arata starea si adresa (hdsStare, Screens/Setup.py). In web:
+			     cardul Samba din /retea. -->
+			<item level="0" text="Partajare în rețea (Samba)" entryID="hds_samba" pictograma="retea" web="/retea?f=samba" weight="19" stare="netestat">
+				<setup id="hds_samba" />
+			</item>
 			<item level="1" text="DNS Server Settings" entryID="dns_setup" pictograma="dns" web="/dns" weight="20">
 				<screen module="NetworkSetup" screen="NameserverSetup" />
 			</item>
@@ -740,6 +756,10 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		<item text="Repornește în altă imagine" entryID="return_to_flash" pictograma="memoria-interna" web="/alimentare?f=flash" weight="50" requires="HdsMultiboot">
 			<screen module="HdsPornireMultipla" screen="HdsPornireMultipla" />
 		</item>
+		<!-- Vu+ 4K fara pornire multipla: instalarea Kexec (pachetul kexec-multiboot-<masina> din feedul extern). -->
+		<item text="Pornire multiplă Vu+ (Kexec)" entryID="kexec_multiboot" pictograma="memoria-interna" web="/alimentare?f=kexec" weight="55" requires="HdsKexecInstalabil">
+			<screen module="HdsPornireMultipla" screen="HdsKexecInstalare" />
+		</item>
 		<item text="Deep Standby (Power Off)" entryID="deep_standby" pictograma="oprire" web="/alimentare?f=oprire" weight="60">
 			<screen module="Standby" screen="TryQuitMainloop">1</screen>
 		</item>
@@ -771,6 +791,16 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		     (locuri_retea_web.py). Și din meniul Media player-ului. -->
 		<item level="0" text="Locuri din rețea" entryID="hds_locuri_retea" pictograma="aparate-retea" weight="40" web="/locuri-retea" stare="netestat">
 			<screen module="HdsLocuriRetea" screen="HdsLocuriRetea" />
+		</item>
+		<!-- Sport azi: meciurile si cursele de azi din ghid, cu canalul (Screens/HdsSportAzi.py, web /sport-azi); la coada,
+		     ca tastele intrarilor de mai sus si cifrele meniului principal sa ramana aceleasi -->
+		<item level="0" text="Sport azi" entryID="hds_sport_azi" pictograma="programe" weight="50" web="/sport-azi">
+			<screen module="HdsSportAzi" screen="HdsSportAzi" />
+		</item>
+		<!-- Ghidul TV din internet: EPG Import cu sursele tarii omului intr-un pas (Screens/HdsGhidInternet.py, logica in
+		     Components/HdsGhidInternet.py, web /ghid-internet; TODO 14.11 22:14); si din MENU in ghid -->
+		<item level="0" text="Ghidul TV din internet" entryID="hds_ghid_internet" pictograma="programe" weight="55" web="/ghid-internet">
+			<screen module="HdsGhidInternet" screen="HdsGhidInternet" />
 		</item>
 	</menu>
 

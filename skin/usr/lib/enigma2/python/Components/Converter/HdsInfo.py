@@ -200,6 +200,122 @@ def _la_ceas_amanare():
 			if C is not None:
 				C.log_once("evEnd amanat", e)
 
+
+# ---------------------------------------------------------------- marimea imaginii pe fluxurile de internet (0.7.5, IPV)
+# Pe canalele IPTV bara arata uneori rezolutia canalului de dinainte, iar pagina de stare (citita mai tarziu) pe cea buna (Gpiupiu,
+# Vu+ Uno4K SE, forum 801 #2514): un player de fluxuri poate raspunde la pornire cu marimea lasata in decodor de canalul vechi si nu
+# mai anunta marimea noua (evVideoSizeChanged). Ca hdsmarime::ia din lib/service/servicemp3.cpp: marimea citita la evStart pe un flux
+# e "a canalului de dinainte"; pana nu se schimba (sau PAZA_ACEEASI pasi la rand, un canal de aceeasi marime) bara nu arata nicio
+# rezolutie. Apoi marimea se reciteste la PAZA_PAS_MS cel mult PAZA_MAX pasi: o schimbare se trimite ca evVideoSizeChanged prin sursa
+# (session.CurrentService), deci o primesc toate convertoarele legate de ea. DVB si fisierele raman neatinse.
+PAZA_PAS_MS = 1000
+PAZA_ACEEASI = 4
+PAZA_MAX = 30
+
+try:
+	_EV_START = iPlayableService.evStart if iPlayableService is not None else None
+	_EV_MARIME = iPlayableService.evVideoSizeChanged if iPlayableService is not None else None
+except Exception:
+	_EV_START = _EV_MARIME = None
+
+
+class _PazaMarime(object):
+	def __init__(self):
+		self.ref = None         # fluxul pazit (referinta ca text), None cand nu e niciunul
+		self.x0 = self.y0 = -1  # marimea citita la evStart: a canalului de dinainte, pana se dovedeste altfel
+		self.acceptat = True
+		self.pasi = 0
+		self.ultima = None
+		self.sursa = None
+		self.ceas = None
+		self._what = None
+
+	def la_start(self, sursa, what):
+		"""evStart (o singura data pe eveniment, oricate convertoare il primesc)."""
+		if what is self._what:
+			return
+		self._what = what
+		self.opreste()
+		try:
+			r = C.Reader(sursa, what)
+			if r.kind() != "ip":
+				return
+			self.ref = r.sref()
+			self.x0, self.y0 = r.geti("sVideoWidth"), r.geti("sVideoHeight")
+		except Exception as e:
+			C.log_once("paza marime", e)
+			self.ref = None
+			return
+		# nimic tinut in decodor: orice marime venita apoi e a fluxului
+		self.acceptat = self.x0 <= 0 or self.y0 <= 0
+		self.ultima = (self.x0, self.y0)
+		self.pasi = 0
+		self.sursa = sursa
+		self._porneste()
+
+	def _porneste(self):
+		ceas = self.ceas
+		if ceas is None:
+			try:
+				from enigma import eTimer
+				ceas = eTimer()
+				ceas.callback.append(self.la_ceas)
+			except Exception:
+				return
+			self.ceas = ceas
+		ceas.start(PAZA_PAS_MS, False)
+
+	def opreste(self):
+		self.ref = None
+		self.sursa = None
+		self.acceptat = True
+		if self.ceas is not None:
+			self.ceas.stop()
+
+	def marime(self, r):
+		"""(latime, inaltime) de aratat; (-1, -1) cat marimea fluxului de acum e inca a canalului de dinainte."""
+		w, h = r.geti("sVideoWidth"), r.geti("sVideoHeight")
+		if self.acceptat or self.ref is None:
+			return w, h
+		if (w, h) != (self.x0, self.y0) or r.sref() != self.ref:
+			if r.sref() == self.ref:
+				self.acceptat = True
+			return w, h
+		return -1, -1
+
+	def la_ceas(self):
+		sursa = self.sursa
+		if sursa is None or self.ref is None:
+			self.opreste()
+			return
+		self.pasi += 1
+		try:
+			r = C.Reader(sursa, None)
+			if r.sref() != self.ref:
+				self.opreste()
+				return
+			acum = (r.geti("sVideoWidth"), r.geti("sVideoHeight"))
+		except Exception as e:
+			C.log_once("paza marime", e)
+			self.opreste()
+			return
+		schimbat = acum != self.ultima
+		self.ultima = acum
+		if not self.acceptat and acum[0] > 0 and acum[1] > 0 and (acum != (self.x0, self.y0) or self.pasi >= PAZA_ACEEASI):
+			self.acceptat = True
+			schimbat = True
+		if self.pasi >= PAZA_MAX:
+			self.ceas.stop()
+		if schimbat and _EV_MARIME is not None:
+			try:
+				sursa.changed((sursa.CHANGED_SPECIFIC, _EV_MARIME))
+			except Exception as e:
+				C.log_once("paza marime", e)
+
+
+_PAZA = _PazaMarime()
+
+
 M_BASE = EV_ALL | EV_INFO
 M_VIDEO = M_BASE | EV_VIDEO
 M_HBB = M_BASE | EV_HBB
@@ -700,9 +816,12 @@ def numar_canal(source, sref):
 	fn = getattr(ref, "getChannelNum", None)
 	if fn is not None:
 		try:
-			return max(int(fn() or 0), 0)
+			n = int(fn() or 0)
 		except Exception:
-			return 0
+			n = 0
+		# 0 = referinta fara numar (nucleul de dinainte de TCN, lista Sateliti / Toate): numarul din lista, ca inainte
+		if n > 0:
+			return n
 	return numar_in_lista(sref)
 
 
@@ -887,6 +1006,8 @@ class HdsInfo(Converter):
 					return
 				if bits & EV_START and C is not None:
 					C.refresh_lang()
+					if what[1] == _EV_START and _EV_START is not None:
+						_PAZA.la_start(self.source, what)
 				if bits & EV_EPG and C is not None:
 					C.epg_changed(what)
 				if self._cam and C is not None and what[1] in _CAMEV:
@@ -1174,7 +1295,7 @@ class HdsInfo(Converter):
 	def _height(self, r):
 		if self._radio(r):
 			return -1
-		return r.geti("sVideoHeight")
+		return _PAZA.marime(r)[1]
 
 	def _dab_name(self, r):
 		d = r.rj()
@@ -1461,8 +1582,7 @@ class HdsInfo(Converter):
 	def _resolution(self, r):
 		if self._radio(r):
 			return u""
-		w = r.geti("sVideoWidth")
-		h = r.geti("sVideoHeight")
+		w, h = _PAZA.marime(r)
 		if w <= 0 or h <= 0:
 			return u""
 		fps = cadre_miimi(r.geti("sFrameRate"))
@@ -1481,7 +1601,7 @@ class HdsInfo(Converter):
 		return C.join([self._video_codec(r), self._resolution(r)])
 
 	def _format(self, r):
-		if self._radio(r) or r.geti("sVideoWidth") <= 0:
+		if self._radio(r) or _PAZA.marime(r)[0] <= 0:
 			return u""
 		a = r.geti("sAspect")
 		aspect = u"16:9" if a in C.ASPECT_WIDE else (u"4:3" if a in C.ASPECT_43 else u"")
@@ -2105,17 +2225,22 @@ class HdsInfo(Converter):
 	def _epg_sel_times(self, r):
 		return C.event_line(C.epg_event(r))
 
-	def _epg_sel_short(self, r):
+	def _epg_sel_texts(self, r):
+		"""(randul scurt, zona mare) din HdsCommon.epg_descrieri: o singura decizie pentru amandoua (0.7.5, EPI: textul
+		scurt care nu incape pe randul lui trece in zona mare cand descrierea lunga lipseste)"""
 		ev = C.epg_event(r)
-		if not ev or ev["short"] == ev["name"]:
-			return u""
-		return self._tr("scurta", C.epg_short_line(ev) if hasattr(C, "epg_short_line") else ev["short"])
+		if hasattr(C, "epg_descrieri"):
+			return C.epg_descrieri(ev)
+		if not ev:
+			return u"", u""
+		scurt = u"" if ev["short"] == ev["name"] else (C.epg_short_line(ev) if hasattr(C, "epg_short_line") else ev["short"])
+		return scurt, (u"" if ev["ext"] in (ev["short"], ev["name"]) else ev["ext"])
+
+	def _epg_sel_short(self, r):
+		return self._tr("scurta", self._epg_sel_texts(r)[0])
 
 	def _epg_sel_long(self, r):
-		ev = C.epg_event(r)
-		if not ev or ev["ext"] in (ev["short"], ev["name"]):
-			return u""
-		return self._tr("lunga", ev["ext"])
+		return self._tr("lunga", self._epg_sel_texts(r)[1])
 
 	def _epg_help(self, r):
 		return C.epg_help_text(r) if hasattr(C, "epg_help_text") else u""

@@ -34,7 +34,7 @@
 # - pe celelalte: la primul eveniment video (evVideoSizeChanged, evVideoFramerateChanged, evVideoProgressiveChanged);
 # - oricum: dupa TIMP_MAX_S, la evTuneFailed, la evEnd/evStopped si la zap-ul urmator.
 # Fisierul /tmp/hds-poza-fisiere (numai pentru probe, nu-l pune nimic din imagine) lasa si redarea fisierelor .ts sa
-# primeasca poza, ca pe .122 fara antena sa se poata masura cu o inregistrare.
+# primeasca poza, ca pe receptorul de proba fara antena sa se poata masura cu o inregistrare.
 # Timpii fiecarei aratari (evStart -> decodat -> aratat -> desenat -> imaginea vie -> ascuns) se scriu in JURNAL
 # (/tmp, ultimele PASTRATE randuri), pentru masuratori.
 #
@@ -56,7 +56,7 @@ MIN_OCTETI = 2500
 DUPA_IMAGINE_S = 10
 REFACERE_S = 600
 TIMP_MAX_S = 4.0
-SONDA_MS = 50     # citirea instantelor pe fir; o citire a luat pe .122 2-157 ms
+SONDA_MS = 50     # citirea instantelor pe fir; o citire a luat pe receptorul de proba 2-157 ms
 PRAG_INAINTE_MS = 1500   # imaginea vie aratata cu atat inainte de evStart = a acestui zap (instantaVie)
 TIMP_GRAB_S = 8
 PASTRATE = 200
@@ -188,7 +188,7 @@ def stareInstanta(text):
 
 def instantaVie(stari, ms_de_la_start, prag_ms=PRAG_INAINTE_MS):
 	"""-> numele instantei syncNN care a ARATAT primul cadru al zap-ului de acum: VidFirstPlay 1 si VidFirstPlayTime cel
-	mult prag_ms inainte de evStart (Systime din aceeasi citire minus ms_de_la_start; acelasi ceas, ms). Pragul: pe .122
+	mult prag_ms inainte de evStart (Systime din aceeasi citire minus ms_de_la_start; acelasi ceas, ms). Pragul: pe receptorul de proba
 	(11.11.2026) la redarea unui fisier primul cadru a venit cu 150-380 ms INAINTEA ascultatorilor Python ai lui evStart.
 	O instanta ramasa de la un canal privit mai demult nu conteaza. "" cand niciuna; None cand nicio instanta nu are
 	campul. stari = {nume: (VidFirstPlay, VidFirstPlayTime, Systime)}."""
@@ -341,7 +341,7 @@ def _picload():
 		from enigma import ePicLoad
 		_S.picload = ePicLoad()
 		_S.picload.PictureData.get().append(_decodat)
-		# poza se decodeaza la marimea ei (LATIME x 16:9), fara redimensionare in program: pe .122 (11.11.2026) decodarea
+		# poza se decodeaza la marimea ei (LATIME x 16:9), fara redimensionare in program: pe receptorul de proba (11.11.2026) decodarea
 		# cu redimensionare la 1920x1080 a luat 330-550 ms, mai mult decat prima imagine vie; intinderea pe tot ecranul o
 		# face desenul elementului (scale="1" in skin)
 		# latimea, inaltimea, aspectul, cache, redimensionarea (0 = simpla), fondul
@@ -415,7 +415,7 @@ def _desenat():
 
 
 def _fisiereSync():
-	"""/proc/msp/sync00 si celelalte instante (11.11.2026: pe .122 redarea a mers pe sync03, iar sync00 a ramas neschimbat;
+	"""/proc/msp/sync00 si celelalte instante (11.11.2026: pe receptorul de proba redarea a mers pe sync03, iar sync00 a ramas neschimbat;
 	la fel a vazut B pe receptorul de probe SF8008); cautate din nou la fiecare citire (se fac si se desfac la cerere)"""
 	baza = os.path.dirname(SYNC)
 	try:
@@ -440,8 +440,8 @@ def _stari():
 def _pornesteSonda():
 	"""HiSilicon, la evStart, numai cand canalul are poza: un fir citeste instantele la SONDA_MS pana cand una a aratat
 	primul cadru al acestui zap (instantaVie) sau pana la TIMP_MAX_S. Pe firul enigma2 nu se citeste nimic din /proc
-	(pe .122 citirea instantelor a luat 2-157 ms la zap), numai rezultatul, pe ceasul _verificaSonda. Nu se asteapta
-	evenimentul video: pe .122 el a venit la 1,0-1,2 s dupa evStart, dupa cadrul aratat de driver."""
+	(pe receptorul de proba citirea instantelor a luat 2-157 ms la zap), numai rezultatul, pe ceasul _verificaSonda. Nu se asteapta
+	evenimentul video: pe receptorul de proba el a venit la 1,0-1,2 s dupa evStart, dupa cadrul aratat de driver."""
 	zap = _S.zap
 	start = _S.tStart
 	pana = start + TIMP_MAX_S
@@ -452,7 +452,7 @@ def _pornesteSonda():
 		try:
 			# pana la imaginea vie, la zap-ul urmator, la ascunderea pozei (oprire, timp) sau la TIMP_MAX_S
 			while _S.zap == zap and not _S.viu and (_S.aratat or _S.decodare is not None) and _T0() < pana:
-				# intai pauza: firul nu ia GIL-ul cat ruleaza inca ascultatorii lui evStart (pe .122, cu citirea pe loc,
+				# intai pauza: firul nu ia GIL-ul cat ruleaza inca ascultatorii lui evStart (pe receptorul de proba, cu citirea pe loc,
 				# ascultatorul meu a urcat la 23-28 ms)
 				time.sleep(SONDA_MS / 1000.0)
 				r = instantaVie(_stari(), int((_T0() - start) * 1000))

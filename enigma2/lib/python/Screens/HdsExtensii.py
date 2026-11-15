@@ -447,6 +447,9 @@ class HdsExtensii(Screen, HelpableScreen):
 		self.culoareStare = 'eticheta'
 		# filtrul listelor (0.6.7): feedul si felul aratate, tinut cat sta ecranul deschis (HdsExtensiiLucru, randul filtru)
 		self.filtru = L.filtruGol()
+		# dosarele din Disponibile (0.7.5) deschise sau inchise cu OK in sesiunea ecranului: {cheie: deschis}; celelalte
+		# sunt cum vin din fabrica (L.dosareDeschiseImplicit)
+		self.dosare = {}
 
 		self['file'] = MenuList([], content=eListboxPythonMultiContent)
 		self['lista'] = MenuList([], content=eListboxPythonMultiContent)
@@ -621,6 +624,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		_jurnal('catalog: %d pachete, %d surse (%d cu lista), %d pluginuri, %.0f ms' % (len(self.catalog.pachete),
 			len(self.catalog.configurare.surse), len(self.catalog.surse_cu_lista), len(self.pluginuri), (time.time() - t) * 1000))
 		self.semnCatalog = self._semnCatalog()
+		self.semnOrdine = L.ordineExtensii()
 		self._construiesteFile()
 
 	def _semnCatalog(self):
@@ -645,6 +649,12 @@ class HdsExtensii(Screen, HelpableScreen):
 		if self.semnCatalog is None or getattr(self.session, 'current_dialog', self) is not self:
 			return
 		self._verificaLocuriFisiere()
+		# ordinea sau pluginurile ascunse schimbate din pagina web (0.7.5): lista se reface, fila si randul raman
+		ordine = L.ordineExtensii()
+		if ordine != getattr(self, 'semnOrdine', ordine):
+			self.semnOrdine = ordine
+			self._construiesteFile()
+			self._arataFila()
 		if self.descarca is not None or L.lucrareInCurs() or L.descarcareInCurs() or L.rezervaAsteapta():
 			return
 		semn = self._semnCatalog()
@@ -691,9 +701,12 @@ class HdsExtensii(Screen, HelpableScreen):
 			if self.locuriRetea:
 				rez.append(('retea', None, None))
 			return rez
-		# randul filtrului primul, apoi randurile care trec de el (0.6.7)
-		return L.cuRandFiltru(self.catalog, L.randuri(self.catalog, fila, self.pluginuri, plugins, self.cautare),
+		# randurile care trec de filtru (0.6.7), apoi, in Disponibile, numai cele din dosarele deschise (0.7.5)
+		rez = L.cuRandFiltru(self.catalog, L.randuri(self.catalog, fila, self.pluginuri, plugins, self.cautare),
 			self.filtru, fila)
+		if fila == 'disponibile':
+			rez = L.strangeDosare(rez, self.dosare, L.dosareDeschiseImplicit(rez, self.filtru, fila))
+		return rez
 
 	def _dupaRepornire(self):
 		"""pachetele instalate cu un plugin amanat pana la repornirea interfetei"""
@@ -1000,6 +1013,9 @@ class HdsExtensii(Screen, HelpableScreen):
 				'folosi între timp.'))
 		else:
 			d = L.detalii(self.catalog, fel, obj, extra)
+			if fel == 'plugin' and self._idFila() == 'instalate':
+				# ordinea si ascunderea (0.7.5), numai in fila Instalate
+				d['indiciu'] = ' · '.join(x for x in (d['indiciu'], _t('MENU mută sau ascunde')) if x)
 		ptr = icoanaRand(fel, obj, d['icoana'], 160) if d['icoana'] else None
 		try:
 			if ptr is not None:
@@ -1214,6 +1230,11 @@ class HdsExtensii(Screen, HelpableScreen):
 			parti.append(_t('%d feeduri') % n if n != 1 else _t('un feed'))
 		elif fid == 'cautare':
 			parti.append(_t('Rezultatele căutării'))
+		elif fid == 'instalate':
+			# pluginurile ascunse cu MENU (0.7.5): cate sunt si cum se aduc inapoi
+			ascunse = L.nrAscunse(self.pluginuri, plugins)
+			if ascunse:
+				parti.append(_t('%d ascunse, MENU le arată') % ascunse if ascunse != 1 else _t('una ascunsă, MENU o arată'))
 		if fid not in ('fisiere',):
 			if not conf.surse:
 				parti.append(_t('niciun feed'))
@@ -1449,7 +1470,7 @@ class HdsExtensii(Screen, HelpableScreen):
 				elif motiv is not None:
 					self._arataMotiv(motiv)
 				else:
-					self._mesaj(_t('%s este instalat și la zi.') % obj.titlu, 'bun')
+					self._deschideFaraPlugin(obj)
 		elif fel == 'fisier':
 			self._planFisier(obj)
 		elif fel == 'retea':
@@ -1469,6 +1490,17 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._descarcaLista()
 		elif fel == 'filtru':
 			self._alegeFiltru()
+		elif fel == 'dosar':
+			self._comutaDosar(obj)
+
+	def _comutaDosar(self, d):
+		"""OK pe un dosar din Disponibile: il deschide sau il inchide; cursorul ramane pe randul dosarului"""
+		fid = self._idFila()
+		self.dosare[d.cheie] = not d.deschis
+		randuri = self._randuriFila(fid)
+		i = next((k for k, r in enumerate(randuri) if r[0] == 'dosar' and r[1].cheie == d.cheie), 0)
+		self.pozitii[fid] = i
+		self._arataFila()
 
 	def _alegeFiltru(self):
 		"""Fereastra de alegere a filtrului (feedurile si, in filele amestecate, felurile, cu numarul pachetelor), aceeasi
@@ -1485,6 +1517,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		if not rand or rand[1] is None:
 			return
 		self.filtru = L.aplicaAlegere(self.filtru, rand[1])
+		self.dosare = {}
 		self.pozitii[self._idFila()] = 0
 		self._arataFila(pastreaza=False)
 
@@ -1552,12 +1585,63 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._stergeSursa(obj[0])
 		elif L.filtruActiv(self.filtru, self._idFila()):
 			self.filtru = L.filtruGol()
+			self.dosare = {}
 			self._arataFila()
 		elif self._idFila() == 'instalate' and self.catalog.actualizari():
 			self._actualizeazaTot()
 
 	def keyMeniu(self):
-		self._actualizeazaTot()
+		"""MENU (0.7.5): in Instalate, pe randul unui plugin, mutarea si ascunderea lui, ca in meniul Aplicatii; "Arată toate
+		extensiile" cand sunt ascunse; din orice fila, Actualizează toate, cand sunt actualizari. Cand ramane numai
+		actualizarea, porneste direct, ca inainte."""
+		fel, obj, extra = self._selectat()
+		lista = []
+		titlu = _t(TITLU)
+		if self._idFila() == 'instalate' and not self.cautare:
+			if fel == 'plugin':
+				titlu = obj.name or titlu
+				id_ = L.idPlugin(getattr(obj, 'path', ''))
+				lista += [(_t(L.TEXTE_ORDINE[pas]), (pas, id_)) for pas in L.pasiPosibili(self._toateInstalate(), id_)]
+			n = L.nrAscunse(self.pluginuri, plugins)
+			if n:
+				lista.append((L.textArataToate(n), ('arata', None)))
+		actualizari = self.catalog.actualizari()
+		if actualizari:
+			lista.append(('%s (%d)' % (_t(N_('Actualizează toate')), len(actualizari)), ('tot', None)))
+		if not lista or [a[1][0] for a in lista] == ['tot']:
+			self._actualizeazaTot()
+			return
+		from Screens.ChoiceBox import ChoiceBox
+		self.session.openWithCallback(self._dupaMeniu, ChoiceBox, title=titlu, list=lista)
+
+	def _toateInstalate(self):
+		# toate randurile din Instalate, nu numai cele lasate de filtru: mutarea e intre toate pluginurile
+		return L.randuri(self.catalog, 'instalate', self.pluginuri, plugins)
+
+	def _dupaMeniu(self, ales=None):
+		if not ales or not ales[1]:
+			return
+		pas, id_ = ales[1]
+		if pas == 'tot':
+			self._actualizeazaTot()
+			return
+		fid = self._idFila()
+		if pas == 'arata':
+			schimbat = L.arataToateExtensiile()
+		else:
+			schimbat = L.schimbaOrdinea(self._toateInstalate(), id_, pas)
+		if not schimbat:
+			return
+		self.semnOrdine = L.ordineExtensii()
+		self._construiesteFile()
+		randuri = self._randuriFila(fid)
+		if pas != 'ascunde':
+			# cursorul merge dupa pluginul mutat
+			i = next((k for k, r in enumerate(randuri) if L.idRand(r) == id_), None) if id_ else None
+			if i is not None:
+				self.pozitii[fid] = i
+		self.mesajStare = _t('Extensia e ascunsă. MENU: arată-le din nou.') if pas == 'ascunde' else ''
+		self._arataFila()
 
 	def _deschideFila(self, fid):
 		if self._idFila() != 'surse':
@@ -1682,6 +1766,30 @@ class HdsExtensii(Screen, HelpableScreen):
 				type=MessageBox.TYPE_ERROR)
 		# randul arata motivul unei deschideri cazute, iar cea reusita il sterge
 		self._arataFila()
+
+	def _deschideFaraPlugin(self, p):
+		"""OK pe un pachet instalat fara rand in lista pluginurilor (tamiciav7, 14.11.2026): intrarea lui din meniu (EPGImport
+		cu "Show in plugins" = Nu), ecranul modulelor de acces sau, la un pachet fara ecran, la ce foloseste"""
+		d = L.deschidereFaraPlugin(self.catalog, p, plugins)
+		if d is None:
+			self._mesaj(_t('%s este instalat și la zi.') % p.titlu, 'bun')
+			return
+		try:
+			if d['fel'] == 'meniu':
+				d['functie'](self.session)
+			elif d['fel'] == 'acces':
+				from Screens.CamSetup import CamSetup
+				self.session.open(CamSetup)
+			else:
+				self.session.open(MessageBox, d['text'], type=MessageBox.TYPE_INFO)
+		except Exception as e:
+			import traceback
+			traceback.print_exc()
+			# intrarea n-a pornit: macar unde e
+			nota = L.notaFaraPlugin(d)
+			self.session.open(MessageBox, '\n'.join(x for x in (
+				_t('Extensia %s nu a putut porni.\n%s') % (p.titlu, P._curat(str(e), 200)), nota) if x),
+				type=MessageBox.TYPE_ERROR)
 
 	def _arataMotiv(self, e):
 		"""OK pe un plugin care nu se poate deschide: repornirea, cand asteapta numai atat, altfel motivul intreg"""

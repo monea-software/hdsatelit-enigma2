@@ -345,6 +345,18 @@ def _lucrare(cerere, ruta):
 	return {"result": True, "lucrare": n, "message": _t("Se trimite...")}
 
 
+class _MesajCuCaptura(object):
+	"""Mesajul cu captura (0.7.5 FIR, TODO 15.11 06:15 (TRI, captura in fir)): grab-ul merge pe un fir separat
+	(B.capturaOsdInFundal), mesajul intra in coada la intoarcere, pe firul enigma2, iar pagina afla rezultatul prin
+	/api/beta-tester-lucrare, ca la profil. Inainte grab-ul rula aici, in cererea web, pe firul enigma2."""
+
+	def __init__(self):
+		self.gata, self.ok, self.mesaj = False, False, ""
+
+	def termina(self, ok, mesaj):
+		self.ok, self.mesaj, self.gata = ok, mesaj, True
+
+
 def fa(arg, B=None, b=None, mc=None, captura=None):
 	"""POST /api/beta-tester-fa."""
 	B = _b(B)
@@ -385,14 +397,20 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 		ok, mesaj = HdsRaportCanal.trimite(None, arg.get("text", ""), B)
 		return {"result": ok, "message": mesaj}
 	if ce == "mesaj":
-		poza = None
-		if arg.get("captura") == "1":
-			poza = (captura or B.capturaOsd)()
-		ok, mesaj = B.mesaj(arg.get("fel", ""), arg.get("text", ""), arg.get("ecran", ""), arg.get("jurnal") == "1",
-			poza, b)
-		if ok and arg.get("captura") == "1" and poza is None:
-			mesaj += " " + _t("Captura nu s-a putut face; mesajul pleacă fără ea.")
-		return {"result": ok, "message": mesaj}
+		fel, text, ecran, jurnal = arg.get("fel", ""), arg.get("text", ""), arg.get("ecran", ""), arg.get("jurnal") == "1"
+		if arg.get("captura") != "1":
+			ok, mesaj = B.mesaj(fel, text, ecran, jurnal, None, b)
+			return {"result": ok, "message": mesaj}
+		lucrare_ = _MesajCuCaptura()
+
+		def trimite(poza):
+			ok, mesaj = B.mesaj(fel, text, ecran, jurnal, poza, b)
+			if ok and poza is None:
+				mesaj += " " + _t("Captura nu s-a putut face; mesajul pleacă fără ea.")
+			lucrare_.termina(ok, mesaj)
+		# `captura` (probele): functia care face captura si cheama trimite(octeti sau None)
+		(captura or B.capturaOsdInFundal)(trimite)
+		return _lucrare(lucrare_, "mesaj")
 	if ce in ("leaga", "cod-legare") and not B.legareForum():
 		return {"result": False, "message": _t("Legarea cu un cont de pe forum nu e încă gata.")}
 	if ce == "profil":
@@ -452,6 +470,8 @@ def lucrare(arg, B=None, b=None):
 	if not c.gata:
 		return {"result": True, "gata": False}
 	_LUCRARI.pop(n, None)
+	if ruta == "mesaj":
+		return {"result": c.ok, "gata": True, "message": c.mesaj}
 	ok, mesaj = B.mesajRaspunsProfil(c)
 	rez = {"result": ok, "gata": True, "message": mesaj}
 	if not ok:

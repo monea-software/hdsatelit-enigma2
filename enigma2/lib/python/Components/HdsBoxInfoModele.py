@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # HdsBoxInfoModele.py: valorile placii pe fiecare receptor al imaginii, in forma ceruta de pluginuri prin
 # BoxInfo.getItem(...) / SystemInfo[...] (platform, mediaservice, socfamily, rcname, displaytype, mtd*, kernelfile...).
-# GENERAT de hdsatelit-unelte/receptor/imagine-hdsatelit/unelte/genereaza_boxinfo_modele.py din conf-urile masinilor
+# GENERAT de unealta noastra genereaza_boxinfo_modele.py din conf-urile masinilor
 # mediului nostru de constructie; nu se scrie de mana. Components/SystemInfo.py le pune numai unde nu avem deja o valoare.
 # Numele imaginii (distro, displaydistro, imageversion) nu sunt aici.
 # machine_features: lista masinii, pentru verificari; nu e o cheie ceruta de pluginuri.

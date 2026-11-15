@@ -366,7 +366,10 @@
 		     schimba canalul ca stanga si dreapta; la liste, lista deschisa ia oricum tastele care urmeaza -->
 		<key id="KEY_UP" mapto="switchChannelUp" flags="m" />
 		<key id="KEY_DOWN" mapto="switchChannelDown" flags="m" />
-		<key id="KEY_PREVIOUS" mapto="historyBack" flags="mr" />
+		<!-- HDSatelit 0.7.5: < la eliberare (canalul de dinainte din istoric), fiindca < tinut apasat deschide lista canalelor
+		     recente (HdsAlocareTasteActions previous_l, Components/HdsTasteRapide.py previous_long); tinut, < nu mai sare
+		     prin istoric -->
+		<key id="KEY_PREVIOUS" mapto="historyBack" flags="b" />
 		<key id="KEY_NEXT" mapto="historyNext" flags="mr" />
 		<key id="KEY_BACK" mapto="historyBack" flags="mr" />
 		<!-- HDSatelit 0.7.4: Uclan Ustym 4K PRO trimite KEY_LAST (405) de la tasta scrisa BACK (telecomanda uclan1 din

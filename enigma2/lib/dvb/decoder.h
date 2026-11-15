@@ -49,6 +49,12 @@ private:
 	void video_event(int what);
 	sigc::signal<void(struct iTSMPEGDecoder::videoEvent)> m_event;
 	int m_width, m_height, m_framerate, m_aspect, m_progressive, m_gamma;
+#if HAVE_HISILICON_LIBREADER
+	/* the aspect of the picture followed from /proc/stb/vmpeg/N/aspect (decoder.cpp, hdsaspectdvb) */
+	ePtr<eTimer> m_hds_aspect_timer;
+	int m_hds_aspect_pending;
+	void hdsFollowAspect();
+#endif
 public:
 	/* numerotarea driverului (VIDEO_SET_STREAMTYPE), egala cu videoStream din pmt.h si cu valorile VIDEO_STREAMTYPE_* din decoder.cpp */
 	enum { MPEG2, MPEG4_H264, VC1 = 3, MPEG4_Part2, VC1_SM, MPEG1, H265_HEVC, CAVS = 16 };

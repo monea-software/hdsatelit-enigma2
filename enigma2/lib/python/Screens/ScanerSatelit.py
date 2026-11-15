@@ -166,9 +166,9 @@ ROLLOFF_VALIDE = [0, 1, 2]               # 0.35, 0.25, 0.20
 COMBINATII_DVBS2 = ([(2, f) for f in (7, 2, 3, 4, 6, 9)] + [(1, f) for f in (1, 7, 2, 3, 8, 4, 6, 9)]
                     + [(m, f) for m in (4, 5) for f in FEC_APSK[m]])
 TOLERANTA_KHZ = 3000                     # cat se poate abate frecventa introdusa de cea din satellites.xml
-# Limitele reale vin din FE_GET_INFO, citit in fundal de HdsLimiteTuner, pe fiecare
-# frontend. O margine necunoscuta nu refuza scanarea. Numele vechi raman pentru compatibilitate.
-SR_MIN, SR_MAX = 1000000, 60000000
+# Rata de simbol: limitele sunt ale fiecarui tuner, din FE_GET_INFO (symbol_rate_min/max), citit in fundal de
+# Components/HdsLimiteTuner; le foloseste _rata_refuzata. O margine necunoscuta nu refuza scanarea. Nu exista o limita
+# fixa a imaginii (SF8008 Si2166D declara 100-80000 kSymb/s, Viper 4K V20 1000-60000).
 # Multistream DVB-S2 (lib/dvb/hdsmultistream.h): fluxul (ISI) e un octet, codul PLS are 18 biti
 ISI_MAX = 255
 PLS_COD_MAX = 262143
@@ -514,10 +514,11 @@ def transponder_manual(c, transpondere_xml, slot=None):
     return tp, note, None, None
 
 
-def text_manual(tp, nume, note):
+def text_manual(tp, nume, note, cu_retea=False):
     """Ce se cauta la „Cu date introduse manual": previzualizare si stare, inainte si dupa pornire (P11)."""
+    # cu randul "Cautare in retea" pe Da se spune, ca la "Dupa transponder", ca se adauga si transponderele din semnal
     text = _('Căutare pe transponderul %s, satelitul %s.') % (_descriere_tp(tp), nume) + ' ' + \
-        _('Numai acest transponder.')
+        (_('Se adaugă și transponderele anunțate în semnal.') if cu_retea else _('Numai acest transponder.'))
     if note:
         text += ' ' + ' '.join(note)
     return text
@@ -568,6 +569,123 @@ def are_motor(nim, slot):
         return False
 
 
+def lista_toata(nim, slot):
+    """True cand lista satelitilor tunerului e tot satellites.xml (modul simplu cu motor, un LNB pe "toti satelitii"
+    in modul avansat, sau un tuner pus "la fel ca" unul din acestea): lista nu spune atunci ce vede antena."""
+    try:
+        return len(nim.getSatListForNim(slot) or []) >= len(nim.satList or []) > 0
+    except Exception:
+        return False
+
+
+def roteste(nim, slot):
+    """Antena acestui tuner se roteste (motor DiSEqC 1.2 sau USALS, si tunerele puse "la fel ca" unul cu motor)."""
+    return are_motor(nim, slot) or lista_toata(nim, slot)
+
+
+def pozitii_cu_canale(cale_lamedb=None):
+    """Pozitiile care au deja transpondere in lista de canale (Components/HdsMotorStare.pozitiiCuCanale, lamedb citit
+    din nou numai cand se schimba). Gol daca lista nu se poate citi."""
+    try:
+        from Components import HdsMotorStare
+        return HdsMotorStare.pozitiiCuCanale(cale_lamedb)
+    except Exception as e:
+        print('[ScanerSatelit] pozitiile cu canale: %s' % e)
+        return frozenset()
+
+
+def sateliti_si_bife(nim, slot, cale_lamedb=None):
+    """(sateliti, bife) la "Mai multi sateliti": [(pozitie, nume)] din lista de bife si multimea pozitiilor pe care le
+    bifeaza alegerea "toti bifati" (Gpiupiu, forum 801 #2502); bife goala = alegerea nu se ofera.
+      - antena fixa, sau motor cu satelitii pusi unul cate unul in modul avansat (pozitiile salvate in motorul DiSEqC
+        1.2, USALS pe satelit): lista tunerului, toti bifati; se scot satelitii USALS spre care nucleul nu primeste
+        comanda: cei opriti de locul nestabilit (HdsLocul.blocatDeLoc) si cei sub orizont din loc (blocatDeOrizont);
+      - motor peste tot satellites.xml, cu locul antenei stabilit: lista are satelitii deasupra orizontului din loc
+        (aceeasi socoteala ca nucleul, HdsLocul.vizibilDinLoc), dar "toti bifati" bifeaza numai pe cei care au deja
+        canale in lista (pozitii_cu_canale; din Bucuresti ar fi 115 sateliti, adica ore de scanare). Ceilalti raman in
+        lista, nebifati, ca omul sa-i poata bifa. Fara niciun canal pe ei: nimic bifat din oficiu, alegerea nu se ofera
+        (hotararea DSP 14.11 20:49);
+      - motor peste tot satellites.xml, fara loc: lista intreaga si fara "toti bifati" (o pornire ar plimba antena si
+        pe pozitii pe care nu le vede, iar nucleul nu roteste antena fara loc)."""
+    sateliti = sateliti_tuner(nim, slot)
+    toata = lista_toata(nim, slot)
+    if not toata and not are_motor(nim, slot):
+        return sateliti, set(p for p, _n in sateliti)
+    try:
+        from Components import HdsLocul
+        if not toata:
+            alese = [(p, n) for p, n in sateliti if not HdsLocul.blocatDeLoc(p) and not HdsLocul.blocatDeOrizont(p)]
+            return alese, set(p for p, _n in alese)
+        loc = HdsLocul.locul()
+        if loc is None:
+            return sateliti, set()
+        alese = [(p, n) for p, n in sateliti if HdsLocul.vizibilDinLoc(p, loc)]
+    except Exception as e:
+        print('[ScanerSatelit] satelitii de bifat: %s' % e)
+        return sateliti, set()
+    cu_canale = pozitii_cu_canale(cale_lamedb)
+    return alese, set(p for p, _n in alese if p in cu_canale)
+
+
+def sateliti_de_bifat(nim, slot, cale_lamedb=None):
+    """(sateliti, toti_permis): ca sateliti_si_bife, cu bifele spuse numai prin "se poate oferi toti bifati"."""
+    sateliti, bife = sateliti_si_bife(nim, slot, cale_lamedb)
+    return sateliti, bool(bife)
+
+
+def refuz_loc(orbpos):
+    """Textul (tradus) cand nucleul nu roteste antena spre satelitul orbpos: motorul USALS cu locul antenei nestabilit
+    (asistenta 289712) sau satelitul sub orizont din locul stabilit (asistenta AS12, 14.11 01:25); altfel None. Aceeasi poarta
+    ca la zap (Components/HdsEcranNegru.py) si ca in NimManager (satelitii acestia nu ajung la nucleu)."""
+    try:
+        from Components import HdsLocul
+        if HdsLocul.blocatDeLoc(orbpos):
+            return _(HdsLocul.MESAJ_FARA_LOC)
+        if HdsLocul.blocatDeOrizont(orbpos):
+            return HdsLocul.textSubOrizont(orbpos)
+    except Exception as e:
+        print('[ScanerSatelit] locul antenei nu se poate citi: %s' % e)
+    return None
+
+
+def refuz_pozitii(pozitii):
+    """(pozitia, textul) pentru primul satelit din pozitii (de la vest la est) spre care antena nu se roteste, sau
+    (None, None)."""
+    for p in sorted(set(pozitii), key=lambda p: p - 3600 if p > 1800 else p):
+        text = refuz_loc(p)
+        if text:
+            return p, text
+    return None, None
+
+
+def _pozitie_tp(tp):
+    return tp['orbital_position'] if isinstance(tp, dict) else tp.orbital_position
+
+
+def treceri_pe_satelit(tps, feid, flags, hds_fel=None):
+    """Lista pentru ServiceScan cu cate o trecere pe satelit, de la vest la est: cu motor, antena termina un satelit
+    (si transponderele anuntate in semnalul lui) inainte sa se roteasca spre urmatorul, o singura data spre fiecare.
+    Intr-o singura trecere, transponderele gasite in semnal se adauga la coada listei, deci antena s-ar fi intors la
+    fiecare satelit dupa ultimul. Components/ServiceScan.CScan ia trecerile pe rand; stergerea dinainte
+    (scanRemoveServices) se face in nucleu numai pe pozitiile trecerii (lib/dvb/scan.cpp), deci o trecere nu sterge
+    ce a gasit cea de dinainte. tps: dict-uri (pregateste) sau eDVBFrontendParametersSatellite."""
+    grupe, ordine = {}, []
+    for tp in tps:
+        p = _pozitie_tp(tp)
+        if p not in grupe:
+            grupe[p] = []
+            ordine.append(p)
+        grupe[p].append(tp)
+    ordine.sort(key=lambda p: p - 3600 if p > 1800 else p)
+    lista = []
+    for p in ordine:
+        trecere = {"transponders": grupe[p], "feid": feid, "flags": flags}
+        if hds_fel:
+            trecere["hds_fel"] = hds_fel
+        lista.append(trecere)
+    return lista
+
+
 def _text_motor(motor, orbpos):
     return (' ' + _('Antena se rotește singură spre %s.') % text_pozitie(orbpos)) if motor else ''
 
@@ -579,13 +697,11 @@ def _pozitie_nevazuta(orbpos, sateliti, motor, ce, fel_json=None, multistream=Fa
     pozitii = [p for p, n in sateliti]
     if orbpos in pozitii:
         if motor:
-            # cu motorul USALS antena se roteste dupa locul antenei (Components/HdsLocul.py); nestabilit = refuz clar
-            try:
-                from Components import HdsLocul
-                if HdsLocul.blocatDeLoc(orbpos):
-                    return _(HdsLocul.MESAJ_FARA_LOC)
-            except Exception as e:
-                print('[ScanerSatelit] locul antenei nu se poate citi: %s' % e)
+            # cu motorul USALS antena se roteste dupa locul antenei (Components/HdsLocul.py): locul nestabilit sau
+            # satelitul sub orizont din loc = refuz clar, fara comanda spre el
+            text = refuz_loc(orbpos)
+            if text:
+                return text
         return None
     if not pozitii:
         return _('Tunerul de satelit nu are niciun satelit configurat. Configurează antena în „Setări tuner”, '
@@ -692,8 +808,13 @@ def pregateste(fel, valori, nim=None):
         if not tps:
             return {'eroare': _('Sateliții aleși nu au în lista receptorului niciun transponder pe care tunerul '
                                 'să-l primească.')}
-        text = _('Căutare pe %d sateliți: %d transpondere din lista receptorului, plus cele anunțate în semnal.') % (
-            len(pozitii), len(tps))
+        if len(pozitii) > 1 and (motor or lista_toata(nim, slot)):
+            text = _('Căutare pe %d sateliți, pe rând: antena se rotește spre fiecare și îl termină înainte de '
+                     'următorul. %d transpondere din lista receptorului, plus cele anunțate în semnal.') % (
+                len(pozitii), len(tps))
+        else:
+            text = _('Căutare pe %d sateliți: %d transpondere din lista receptorului, plus cele anunțate în '
+                     'semnal.') % (len(pozitii), len(tps))
         if sarite:
             text += ' ' + _('Sărite %d, cu parametri pe care tunerul nu îi primește.') % sarite
         return dict(baza, transpondere=tps, flags=retea, text=text)
@@ -749,8 +870,10 @@ def pregateste(fel, valori, nim=None):
                      'modulația și FEC-ul.') % ('%d %s %d' % (tp['frequency'] // 1000, 'HVLR'[tp['polarisation']],
                                                            tp['symbol_rate'] // 1000))
             return dict(baza, de_ales=de_ales, transponder=tp, note=note, text=text)
-        text = text_manual(tp, nume, note)
-        return dict(baza, transpondere=[tp], flags=0, note=note, text=text + _text_motor(motor, orbpos))
+        cu_retea = _da(valori.get('retea'))
+        text = text_manual(tp, nume, note, cu_retea)
+        return dict(baza, transpondere=[tp], flags=retea if cu_retea else 0, note=note,
+                    text=text + _text_motor(motor, orbpos))
 
     # operator, dvbt2, dab: un operator din data/operatori-satelit.json
     fel_json = FEL_JSON[fel]
@@ -1799,6 +1922,9 @@ class ScanerSatelit(Screen):
         campuri = list(cls._CAMPURI_MANUAL)
         if _da((c or {}).get('multistream')):
             campuri += cls._CAMPURI_MULTISTREAM
+        # dorinelu (forum 795 #2462): un transponder nou, care nu e inca in satellites.xml, aduce si restul retelei
+        # din NIT, ca la "Dupa transponder"; aceeasi cheie "retea" in fisierul de parametri
+        campuri.append(('retea', _('Căutare în rețea'), 'lista', DA_NU))
         return campuri
 
     def __init__(self, session, fel=None, config_initial=None):
@@ -2273,7 +2399,8 @@ class ScanerSatelit(Screen):
                 self._porneste_fluxuri(rez)
                 return
             if fel == 'manual':
-                self._porneste_manual(rez['transpondere'][0], rez.get('note') or [], rez['slot'], rez['text'])
+                self._porneste_manual(rez['transpondere'][0], rez.get('note') or [], rez['slot'], rez['text'],
+                                      rez['flags'])
                 return
             self._porneste(rez['transpondere'], rez['slot'], rez['flags'], rez['text'])
         except Exception as e:
@@ -2297,7 +2424,7 @@ class ScanerSatelit(Screen):
         self._config['mod'], self._config['fec'] = str(tp['modulation']), str(tp['fec'])
         _scrie_config(self._config)
         self._reactualizeaza()
-        self._porneste_manual(tp, note, slot_sat)
+        self._porneste_manual(tp, note, slot_sat, flags=self._flags_manual())
 
     def _porneste(self, lista_tp, slot_sat, flags, text):
         """Poarta finala: niciun transponder nu pleaca spre nucleu daca motiv_refuz gaseste ceva."""
@@ -2314,15 +2441,25 @@ class ScanerSatelit(Screen):
         self.session.open(ServiceScan, [{"transponders": parametri, "feid": slot_sat, "flags": flags,
                                          "hds_fel": "satelit/%s" % self._fel()}])
 
-    def _porneste_manual(self, tp, note, slot_sat, text=None):
-        """Un singur transponder, fara cautare in retea. IS-ID, codul PLS si T2-MI PLP-ID nu se trimit: nu exista in
-        eDVBFrontendParametersSatellite (lib/dvb/frontendparms.h)."""
+    def _flags_manual(self):
+        """Steagurile cautarii manuale dupa randul "Cautare in retea" (ca pregateste, ramura manual)."""
+        if not _da(self._config.get('retea')):
+            return 0
+        try:
+            from enigma import eComponentScan
+            return eComponentScan.scanNetworkSearch
+        except Exception:
+            return 1                                   # lib/dvb/scan.h: scanNetworkSearch = 1
+
+    def _porneste_manual(self, tp, note, slot_sat, text=None, flags=0):
+        """Un singur transponder; cu "Cautare in retea" pe Da (flags) si transponderele din NIT-ul lui. IS-ID, codul
+        PLS si T2-MI PLP-ID nu se trimit: nu exista in eDVBFrontendParametersSatellite (lib/dvb/frontendparms.h)."""
         try:
             if text is None:
                 orbpos = tp['orbital_position']
                 nume = dict(self._lista_sateliti).get(orbpos) or text_pozitie(orbpos)
-                text = text_manual(tp, nume, note) + _text_motor(self._motor, orbpos)
-            self._porneste([tp], slot_sat, 0, text)
+                text = text_manual(tp, nume, note, bool(flags)) + _text_motor(self._motor, orbpos)
+            self._porneste([tp], slot_sat, flags, text)
         except Exception as e:
             print('[ScanerSatelit] pornirea cautarii manuale: %s' % e)
             self.scrie_stare(_('Căutarea nu a putut porni. %s') % motiv_eroare(e))

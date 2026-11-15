@@ -143,3 +143,91 @@ class HdsPornireMultipla(Screen):
 			from Screens.MessageBox import MessageBox
 			self.session.open(MessageBox, text, MessageBox.TYPE_ERROR, timeout=10)
 			self.citeste()
+
+
+class HdsKexecInstalare(Screen):
+	"""Pornire multipla Vu+ (Kexec), din meniul Putere numai pe Vu+ 4K pornit direct din flash, fara pornire multipla
+	(SystemInfo["HdsKexecInstalabil"]). VERDE: aduce pachetul kexec-multiboot-<masina> din feedul extern (daca nu e deja),
+	o singura intrebare, apoi Components/HdsPornireMultipla.kexecInstaleaza (verificarile si scrierea, acolo) si
+	repornirea. Aceeasi instalare in web: cardul kexec din /alimentare (HdsWebControl/alimentare_web.py)."""
+	skin = """
+	<screen name="HdsKexecInstalare" resolution="1920,1080" position="center,center" size="1240,560" title="Pornire multiplă Vu+ (Kexec)">
+		<widget source="nota" render="Label" position="30,25" size="1180,450" font="Regular;28" halign="left" valign="top" />
+		<widget source="key_red" render="Label" position="30,505" size="260,40" zPosition="1" font="Regular;22" halign="center" valign="center" backgroundColor="#9f1313" transparent="0" />
+		<widget source="key_green" render="Label" position="310,505" size="260,40" zPosition="1" font="Regular;22" halign="center" valign="center" backgroundColor="#1f771f" transparent="0" />
+	</screen>
+	"""
+
+	def __init__(self, session):
+		Screen.__init__(self, session)
+		self.setTitle(_(P.KEXEC_TITLU))
+		self["key_red"] = StaticText(_("Close"))
+		self["key_green"] = StaticText("")
+		self["nota"] = StaticText("")
+		self["actions"] = ActionMap(["SetupActions", "ColorActions"], {
+			"ok": self.instaleaza,
+			"green": self.instaleaza,
+			"cancel": self.inchide,
+			"red": self.inchide,
+		}, -2)
+		self.lucreaza = False
+		self.arata()
+
+	def arata(self):
+		st = P.kexecStare()
+		self.stare = st
+		if st["instalabil"]:
+			self["nota"].setText(_(P.KEXEC_DESPRE))
+			self["key_green"].setText(_(P.KEXEC_BUTON))
+		else:
+			self["nota"].setText(_(st["motiv"]))
+			self["key_green"].setText("")
+
+	def inchide(self):
+		if not self.lucreaza:
+			self.close()
+
+	def instaleaza(self):
+		from Screens.MessageBox import MessageBox
+		if self.lucreaza or not self.stare.get("instalabil"):
+			return
+		self.session.openWithCallback(self.confirmat, MessageBox, _(P.KEXEC_INTREBARE), MessageBox.TYPE_YESNO,
+			default=False)
+
+	def confirmat(self, da):
+		if not da:
+			return
+		self.lucreaza = True
+		self["key_green"].setText("")
+		if P.kexecStare()["fisiere"]:
+			self.scrie()
+			return
+		self["nota"].setText(_(P.KEXEC_DESCARC))
+		from Components.Console import Console
+		self.consola = Console()
+		self.consola.ePopen(P.kexecComandaPachet(self.stare["masina"]), self.descarcat)
+
+	def descarcat(self, rezultat, cod, *_a):
+		print("[HdsKexecInstalare] opkg: %r" % (cod,))
+		if not P.kexecStare()["fisiere"]:
+			self.lucreaza = False
+			self.arata()
+			self["nota"].setText(_(P.KEXEC_FARA_PACHET))
+			return
+		self.scrie()
+
+	def scrie(self):
+		self["nota"].setText(_(P.KEXEC_SCRIU))
+		from enigma import eTimer
+		self.ceas = eTimer()
+		self.ceas.callback.append(self.scrieAcum)
+		self.ceas.start(300, True)   # textul apare inainte de scrierea partitiei (o secunda sau doua)
+
+	def scrieAcum(self):
+		ok, text = P.kexecInstaleaza()
+		self["nota"].setText(text)
+		if not ok:
+			self.lucreaza = False
+			return
+		from Screens.Standby import TryQuitMainloop
+		self.session.open(TryQuitMainloop, 2)

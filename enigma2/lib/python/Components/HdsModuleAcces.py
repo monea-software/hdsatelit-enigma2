@@ -15,7 +15,8 @@ Conventia pachetelor de module din feedurile enigma2 (OE-A): fiecare modul insta
 (al modulelor obisnuite, al serverelor de carduri) se afla dupa forma, la rulare (HdsInterfeteCam.feluri), iar
 programele unui fel stau in /usr/<fel>s (dosar_programe). Numele felurilor, ale modulelor si caile lor le dau
 receptorul si scripturile, la rulare: in fisierul acesta nu e scris niciun nume de fel sau de modul, nicio cale si
-niciun port al vreunuia.
+niciun port al vreunuia. Singura exceptie, voita: NUME_MODULE_CUNOSCUTE (MDA, 14.11.2026, la coada fisierului), ca sa se
+vada modulul pornit de alt manager; numele modulelor sunt permise din nou in imagine (Eduard, 12.11.2026 05:18).
 
 Reguli:
   - singurul lucru pornit vreodata e un script <fel>.<x> (fel din feluri()) din /etc/init.d, cu unul din cuvintele
@@ -35,13 +36,16 @@ import json
 import os
 import posixpath
 import re
+import time
 
 try:
 	from Components.HdsInterfeteCam import DOSAR_SCRIPTURI, FISIER_ECM, PROCESE_MAXIM, SUFIX_GOL, \
-		Proces, Sistem, _scriptul_porneste, citeste_scripturi, curata_nume, e_script_modul, feluri as _feluri
+		Proces, Sistem, _scriptul_porneste, citeste_scripturi, curata_nume, e_script_modul, feluri as _feluri, \
+		_CA, _CITITOR_CARD, _FRONTEND, citeste_proces, inode_decriptare
 except ImportError:  # probe pe PC: modulul incarcat din dosarul Components
 	from HdsInterfeteCam import DOSAR_SCRIPTURI, FISIER_ECM, PROCESE_MAXIM, SUFIX_GOL, \
-		Proces, Sistem, _scriptul_porneste, citeste_scripturi, curata_nume, e_script_modul, feluri as _feluri
+		Proces, Sistem, _scriptul_porneste, citeste_scripturi, curata_nume, e_script_modul, feluri as _feluri, \
+		_CA, _CITITOR_CARD, _FRONTEND, citeste_proces, inode_decriptare
 
 ACTIUNI = ('start', 'stop', 'restart')
 CERERI = ('alege', 'porneste', 'opreste', 'reporneste')
@@ -1228,3 +1232,121 @@ def dupa_pornirea_interfetei(sistem=None, operatie=None, temporizator=None, inta
 		pune_ceas(intarziere, lambda: verifica(2))
 	except Exception as e:
 		_jurnal("dupa pornirea interfetei: %r" % (e,))
+
+
+# ---------------------------------------------------------------- ce ruleaza in afara listei (MDA, 14.11.2026)
+# darog69 (forum 479 #2447, AX HD51): OSCam pornit de alt manager de module, cu programul pe stick, si un modul CI in
+# slot. Lista arata numai scripturile din /etc/init.d, deci ecranul spunea "Niciunul (ales)" si "Nu este instalat niciun
+# modul", desi un modul decripta. Ecranul si pagina web spun acum ce ruleaza: numele procesului (comm), executabilul si
+# PID-ul, nimic altceva (nici argumentele, unde stau dosarele setarilor, nici configurarea). Semnele, ca la
+# HdsInterfeteCam.cauta: numele unui modul de acces cunoscut (merge si cu modulele legate ca client la soclul enigma2, cu
+# protocolul 3, care nu tin nicio cale vazuta in /proc/net/unix); altfel, numai cand nu ruleaza niciun modul din lista
+# si ceva decripteaza (soclul de decriptare sau FISIER_ECM), procesul care tine soclul (S1) ori un cititor de carduri /
+# un dispozitiv CA fara tuner (S2). Nimic nu se porneste, nu se opreste si nu se trimite procesului.
+NUME_MODULE_CUNOSCUTE = re.compile(r'^(oscam|ncam|cccam|mgcamd|wicardd|gbox|doscam|newcs|camd3|evocamd|rqcamd|mbox|'
+	r'softcam)', re.I)
+ALTE_MAXIM = 4
+# Citirea descriptorilor (cazul rar, fara nume cunoscut) se tine minte atat: /tmp/ecm.info ramane si dupa oprirea
+# modulului, iar ecranul si pagina web intreaba din 5 in 5 secunde.
+TINUT_DESCRIPTORI_S = 60.0
+_descriptori = {'t': None, 'sistem': None, 'rez': {}}
+
+
+def _exe_proces(sistem, pid):
+	try:
+		exe = sistem.legatura('/proc/%d' % pid + '/exe')
+	except (OSError, ValueError):
+		return ''
+	return exe[:-len(_STERS)] if exe.endswith(_STERS) else exe
+
+
+def _pare_modul(p, decriptare):
+	"""S1 sau S2 din HdsInterfeteCam.cauta"""
+	if p.socketuri & decriptare:
+		return True
+	return any(_CITITOR_CARD.match(d) or _CA.match(d) for d in p.dispozitive) and \
+		not any(_FRONTEND.match(d) for d in p.dispozitive)
+
+
+def pornite_de_alt_program(sistem=None, stari=None):
+	"""[{'nume', 'cale', 'pids'}]: modulele de acces care ruleaza, dar nu din scripturile din lista (pornite de alt manager
+	de module sau de mana, de pilda cu programul pe stick). Procesul propriu, pid 1 si procesele scripturilor din `stari`
+	nu intra; procesele cu acelasi executabil (paznicul si copilul) sunt un singur rand. Rapid: comm si exe la toate
+	procesele; descriptorii se citesc numai in cazul rar de mai sus. Nu arunca."""
+	try:
+		sistem = sistem or SistemAcces()
+		if stari is None:
+			stari = feluri_de_aratat(sistem)
+		ale_noastre = set()
+		for st in stari:
+			for e in st.emulatoare:
+				ale_noastre.update(e.pids)
+		pids = sorted(int(x) for x in sistem.listeaza('/proc') if x.isdigit())[:PROCESE_MAXIM]
+	except Exception:
+		return []
+	pids = [pid for pid in pids if pid != 1 and pid != sistem.pid_propriu and pid not in ale_noastre]
+	gasite = {}
+	for pid in pids:
+		try:
+			comm = sistem.citeste('/proc/%d' % pid + '/comm', 256).strip()
+		except (OSError, IOError):
+			continue
+		if not NUME_MODULE_CUNOSCUTE.match(comm):
+			continue
+		exe = _exe_proces(sistem, pid)
+		if exe:
+			gasite.setdefault(exe, {'nume': curata_nume(comm), 'cale': curata_nume(exe, DESCRIERE_MAXIM), 'pids': []})
+			gasite[exe]['pids'].append(pid)
+	if not gasite and not ale_noastre:
+		gasite = _dupa_descriptori(sistem, pids)
+	return sorted(gasite.values(), key=lambda a: (a['pids'][0], a['cale']))[:ALTE_MAXIM]
+
+
+def _dupa_descriptori(sistem, pids):
+	"""{exe: rand} dupa semnele S1 / S2, numai cand ceva decripteaza; tinut minte TINUT_DESCRIPTORI_S pentru acelasi
+	sistem (fiecare proces cu toti descriptorii lui e citirea cea mai scumpa de aici)."""
+	acum = time.time()
+	t = _descriptori['t']
+	if _descriptori['sistem'] is sistem and t is not None and 0 <= acum - t < TINUT_DESCRIPTORI_S:
+		return dict(_descriptori['rez'])
+	gasite = {}
+	try:
+		decriptare = inode_decriptare(sistem)
+		semne = bool(decriptare) or sistem.exista(FISIER_ECM)
+	except Exception:
+		decriptare, semne = set(), False
+	for pid in pids if semne else []:
+		try:
+			p = citeste_proces(sistem, pid)
+		except Exception:
+			p = None
+		if p is None or not p.exe or not _pare_modul(p, decriptare):
+			continue
+		gasite.setdefault(p.exe, {'nume': curata_nume(p.comm or posixpath.basename(p.exe)),
+			'cale': curata_nume(p.exe, DESCRIERE_MAXIM), 'pids': []})
+		gasite[p.exe]['pids'].append(pid)
+	_descriptori.update(t=acum, sistem=sistem, rez=dict(gasite))
+	return gasite
+
+
+def sloturi_ci(ui=None, interfete=None):
+	"""[(slot, stare, nume)] pentru sloturile CI cu un modul introdus: stare 1 = se porneste, 2 = gata (cu numele dat de
+	modul), 3 = slot oprit din ecranul Common Interface. Sloturile goale (0) si cele care nu exista (-1) nu intra.
+	`ui` = eDVBCI_UI, `interfete` = eDVBCIInterfaces (probele dau unele false). Fara enigma (PC): []. Nu arunca."""
+	try:
+		if ui is None or interfete is None:
+			from enigma import eDVBCI_UI, eDVBCIInterfaces
+			ui = ui or eDVBCI_UI.getInstance()
+			interfete = interfete or eDVBCIInterfaces.getInstance()
+		n = int(interfete.getNumOfSlots() or 0)
+	except Exception:
+		return []
+	rez = []
+	for slot in range(n):
+		try:
+			cod = int(ui.getState(slot))
+			if cod in (1, 2, 3):
+				rez.append((slot, cod, curata_nume(ui.getAppName(slot) or '') if cod == 2 else ''))
+		except Exception:
+			continue
+	return rez

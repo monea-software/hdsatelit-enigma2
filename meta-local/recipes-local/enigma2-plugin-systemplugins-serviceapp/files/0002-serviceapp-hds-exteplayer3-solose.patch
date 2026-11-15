@@ -1,0 +1,76 @@
+ServiceApp pe Vu+ Solo SE: IPTV implicit prin exteplayer3 (HD Satelit, 15.11.2026, TODO 14.11 22:37)
+
+Pe vusolose (mips, procesor slab), cu exteplayer3 instalat si fara nicio alegere a omului in ServiceApp: la prima
+pornire se pune "inlocuieste servicemp3" (fisierul serviceapp_replaceservicemp3, inainte de incarcarea serviceapp.so,
+deci merge de la aceeasi pornire) si playerul implicit e exteplayer3. Masurat pe Solo SE: 7-36 % procesor la pornirea
+unui canal de internet, fata de 56-79 % prin servicemp3. O singura data (semnul serviceapp_hds_implicit); ce alege
+omul apoi in ecranul ServiceApp ramane. Celelalte receptoare: nimic schimbat.
+
+--- a/src/plugin/plugin.py
++++ b/src/plugin/plugin.py
+@@ -20,6 +20,56 @@
+ from enigma import eEnv, eServiceReference
+ 
+ from . import _
++# HDS-IMPLICIT inceput (HD Satelit, 15.11.2026, TODO 14.11 22:37): pe Vu+ Solo SE (vusolose, mips, procesor slab) IPTV
++# merge implicit prin exteplayer3. Masurat pe un Solo SE: procesorul 7-36 % la pornirea unui canal de internet, fata de
++# 56-79 % prin servicemp3 (GStreamer). "Inlocuieste servicemp3" e fisierul serviceapp_replaceservicemp3, citit o singura
++# data, cand se incarca serviceapp.so (la importul serviceapp_client de mai jos); de aceea se pune aici, inainte, si merge
++# de la aceeasi pornire. Se face o singura data (semnul serviceapp_hds_implicit) si numai daca omul nu a ales nimic in
++# ServiceApp (niciun rand config.plugins.serviceapp.servicemp3.* in settings); ce alege apoi in ecranul ServiceApp ramane.
++def _hds_masina():
++    try:
++        from Components.SystemInfo import BoxInfo
++        return BoxInfo.getItem("machinebuild") or BoxInfo.getItem("model") or ""
++    except Exception:
++        return ""
++
++
++def _hds_implicit_exteplayer3(masina, etc, exteplayer3):
++    """True cand playerul implicit al lui ServiceApp e exteplayer3: pe Solo SE, cu exteplayer3 instalat, daca la prima
++    pornire omul nu alesese nimic. Atunci pune si fisierul de inlocuire a lui servicemp3."""
++    if masina != "vusolose" or not os.path.isfile(exteplayer3):
++        return False
++    semn = os.path.join(etc, "serviceapp_hds_implicit")
++    try:
++        with open(semn) as f:
++            return f.read().strip() == "exteplayer3"
++    except (IOError, OSError):
++        pass
++    try:
++        # binar: un octet care nu e UTF-8 in settings nu are voie sa opreasca importul pluginului
++        with open(os.path.join(etc, "settings"), "rb") as f:
++            ales = any(r.startswith(b"config.plugins.serviceapp.servicemp3.") for r in f)
++    except (IOError, OSError):
++        ales = False
++    try:
++        if not ales:
++            open(os.path.join(etc, "serviceapp_replaceservicemp3"), "a").close()
++        with open(semn, "w") as f:
++            f.write("omul\n" if ales else "exteplayer3\n")
++    except (IOError, OSError) as e:
++        print("[ServiceApp] HDS: implicitul pentru Solo SE nu s-a putut pune: %s" % e)
++        return False
++    return not ales
++
++
++try:
++    HDS_EXTEPLAYER3_IMPLICIT = _hds_implicit_exteplayer3(_hds_masina(), eEnv.resolve("$sysconfdir/enigma2"),
++            eEnv.resolve("$bindir/exteplayer3"))
++except Exception as e:
++    # nimic de aici nu opreste ServiceApp: fara implicit, pluginul merge ca inainte
++    print("[ServiceApp] HDS: implicitul pentru Solo SE a cazut: %s" % e)
++    HDS_EXTEPLAYER3_IMPLICIT = False
++# HDS-IMPLICIT sfarsit
+ from . import serviceapp_client
+ 
+ try:
+@@ -50,7 +100,7 @@
+ config_serviceapp.servicemp3 = ConfigSubsection()
+ config_serviceapp.servicemp3.replace = ConfigBoolean(default=False, descriptions={0: _("original"), 1: _("serviceapp")})
+ config_serviceapp.servicemp3.replace.value = serviceapp_client.isServiceMP3Replaced()
+-config_serviceapp.servicemp3.player = ConfigSelection(default="gstplayer", choices=player_choices)
++config_serviceapp.servicemp3.player = ConfigSelection(default="exteplayer3" if HDS_EXTEPLAYER3_IMPLICIT else "gstplayer", choices=player_choices)
+ 
+ config_serviceapp.options = ConfigSubDict()
+ config_serviceapp.options["servicemp3"] = ConfigSubsection()

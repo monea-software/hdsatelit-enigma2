@@ -62,6 +62,11 @@ SCHEME_FLUX = ("http", "https", "rtsp", "rtmp", "mms", "udp")
 SCHEME_REDIRECT = ("http", "https")           # numai de aici se poate urma o redirectionare HTTP
 RADACINI_STICK = ("/media/", "/mnt/", "/autofs/", "/hdd/")
 EXTENSII_LISTA = (".m3u", ".m3u8", ".tv")   # .tv: o lista Enigma2 de la furnizor
+# Listele de canale puse prin FTP (Components/HdsIptvFisier, CRF, forum 1274): numai fisiere .m3u / .m3u8 asezate direct in aceste
+# dosare (fara .tv: in /etc/enigma2 stau buchetele receptorului) si in dosarul copiilor, DOSAR/liste/ (copiile din /tmp si din web).
+LOCURI_LISTE_FTP = ("/etc/enigma2/",)
+SUBDOSAR_LISTE = "liste"
+EXTENSII_PLAYLIST = (".m3u", ".m3u8")
 
 _MAC = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
 _GAZDA = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9\-.]{0,251}[A-Za-z0-9])?$")
@@ -243,15 +248,27 @@ def adresaListaBuna(text):
 	if text.startswith("/"):
 		if ".." in text.split("/") or not text.lower().endswith(EXTENSII_LISTA):
 			return None
-		if not text.startswith(RADACINI_STICK):
-			return None
-		return text
+		if text.startswith(RADACINI_STICK):
+			return text
+		if text.lower().endswith(EXTENSII_PLAYLIST) and os.path.dirname(text) + "/" in locuriListeLocale():
+			return text
+		return None
 	if not _fara_spatii(text):
 		return None
 	p = _desparteAdresa(text)
 	if p is None or p.scheme not in SCHEME_SURSA or not p.hostname:
 		return None
 	return text
+
+
+def dosarListe():
+	"""Unde stau copiile listelor de canale venite din /tmp sau din pagina web (CRF, forum 1274)."""
+	return DOSAR.rstrip("/") + "/" + SUBDOSAR_LISTE
+
+
+def locuriListeLocale():
+	"""Dosarele din memoria receptorului din care se poate citi o lista de canale (fiecare cu / la sfarsit)."""
+	return tuple(LOCURI_LISTE_FTP) + (dosarListe().rstrip("/") + "/",)
 
 
 def _desparteAdresa(text):
@@ -1232,3 +1249,198 @@ def scoateSetarileVechi(config=None):
 		except ImportError:
 			pass
 	return mutate
+
+
+# ------------------------------------------------------------------ fluxul de internet in direct (0.7.5, IPV)
+# Stanga/dreapta la privit cu setarea "volum" (Screens/InfoBarGenerics._hdsVolumPrivit): pe un flux de internet care se poate derula
+# (IPTV 4097/5001/5002 din liste sau din buchetele omului) tastele raman la volum cat fluxul e in direct. Filmele, serialele,
+# emisiunile din arhiva si fisierele raman la derulare (Ozgur, Vu+ Solo SE, e-mail 6318).
+
+REF_DVB = 1
+EXTENSII_FILM = (".mp4", ".mkv", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".mpg", ".mpeg", ".webm", ".divx", ".vob", ".3gp")
+SEMNE_NE_DIRECT = ("/movie/", "/series/", "/timeshift/", "/vod/", "catchup", "utc=", "lutc=", "archive=", "timeshift=")
+
+
+def _schemaFlux(cale):
+	c = (cale or "").lower()
+	return any(c.startswith(s + "://") for s in SCHEME_FLUX)
+
+
+def fluxInDirect(tip_ref, cale):
+	"""-> True cand referinta (tipul si calea decodata) e un flux de internet in direct: nu DVB, adresa de flux, fara semnele unui film, al
+	unui serial sau al unei emisiuni din arhiva (cheile v/e/a ale releului nostru, /movie/, /series/, /timeshift/, catchup, extensiile de
+	film). Lungimea fluxului o verifica cel care cheama (un film are lungime, un flux in direct nu)."""
+	c = (cale or "").replace("%3a", ":").replace("%3A", ":")
+	if tip_ref == REF_DVB or not _schemaFlux(c):
+		return False
+	sid, cheie = desparteCale(c)
+	if cheie:
+		if cheie[0] in ("v", "e") and "." in cheie:
+			return False
+		try:
+			from Components.HdsIptvClient import eArhiva
+			if eArhiva(cheie):
+				return False
+		except Exception:
+			if re.match(r"^a\d{1,12}-\d{12}-\d{1,4}$", cheie):
+				return False
+		return True
+	jos = c.lower()
+	if any(s in jos for s in SEMNE_NE_DIRECT):
+		return False
+	drum = jos.split("?", 1)[0].split("#", 1)[0]
+	return not drum.endswith(EXTENSII_FILM)
+
+
+# ------------------------------------------------------------------ buchetele IP ale omului sub "IPTV" (0.7.5, IPV)
+# Intrarea "IPTV" din fila Sateliti arata si buchetele facute de om (editoare de pe PC, Bouquet Maker) care au numai canale de internet
+# (4097/5001/5002 si celelalte playere, adrese http/https/rtsp...), ca grupe cu numele buchetului (Gpiupiu, forum 801 #2537). Fara dubluri:
+# buchetele noastre (radacina, grupele) si cele care au numai canale din sursele de aici nu intra; un buchet trecut de doua ori in index
+# apare o data. Un buchet amestecat (si canale de satelit) ramane numai in Buchete: nucleul nu poate arata numai o parte dintr-un buchet.
+# Nimic nu se scrie: randurile sunt dosarele buchetelor omului, deja incarcate prin bouquets.tv.
+
+_MEMORIE_OM = {}       # fisier -> ((mtime, marime), rezultatul citirii)
+_GAZDE_LOCALE = ("127.0.0.1", "localhost", "[::1]")
+
+
+def _fisiereIndex(director=None):
+	"""Buchetele din bouquets.tv, in ordine, fara repetari: [nume fisier]."""
+	cale = os.path.join(director or DIRECTOR, "bouquets.tv")
+	try:
+		with open(cale, encoding="utf-8", errors="replace") as f:
+			text = f.read()
+	except (IOError, OSError):
+		return []
+	rez = []
+	for rand in text.splitlines():
+		if rand.startswith("#SERVICE") and 'FROM BOUQUET "' in rand:
+			nume = rand.split('FROM BOUQUET "', 1)[1].split('"', 1)[0]
+			if nume and "/" not in nume and "\\" not in nume and nume not in rez:
+				rez.append(nume)
+	return rez
+
+
+def _caleDinRand(rest):
+	"""(tip, steaguri, cale decodata) din textul de dupa "#SERVICE ", sau None."""
+	parti = rest.strip().split(":", 10)
+	if len(parti) < 10:
+		return None
+	try:
+		tip = int(parti[0])
+		steaguri = int(parti[1])
+	except ValueError:
+		return None
+	cale = parti[10].split(":", 1)[0] if len(parti) > 10 else ""
+	try:
+		cale = unquote(cale)
+	except Exception:
+		pass
+	return tip, steaguri, cale
+
+
+def _gazdaLocala(cale):
+	try:
+		gazda = (urlsplit(cale).netloc or "").rsplit("@", 1)[-1].lower()
+	except Exception:
+		return False
+	gazda = gazda.rsplit(":", 1)[0] if not gazda.startswith("[") else gazda.split("]", 1)[0] + "]"
+	return gazda in _GAZDE_LOCALE or gazda.startswith("127.")
+
+
+def citesteBuchetOm(cale):
+	"""-> (numele buchetului, [caile canalelor de internet din afara], amestecat) dintr-un buchet al omului. amestecat: are si alte
+	servicii (satelit, cablu, terestru, fisiere, releele locale, dosare); canalele din sursele de aici (releul 8897) nu se numara, dar nici
+	nu fac buchetul amestecat."""
+	nume = ""
+	cai = []
+	amestecat = False
+	try:
+		with open(cale, encoding="utf-8", errors="replace") as f:
+			for rand in f:
+				if rand.startswith("#NAME"):
+					nume = rand[5:].strip()
+					continue
+				if not rand.startswith("#SERVICE"):
+					continue
+				d = _caleDinRand(rand[8:])
+				if d is None:
+					continue
+				tip, steaguri, c = d
+				if steaguri & 64:      # marcaj
+					continue
+				if steaguri & 1 or tip == REF_DVB or not _schemaFlux(c) or _gazdaLocala(c):
+					if not e_cale_iptv(c):
+						amestecat = True
+					continue
+				cai.append(c)
+	except (IOError, OSError):
+		return nume, [], True
+	return nume, cai, amestecat
+
+
+def _citireOm(director, fisier):
+	cale = os.path.join(director, fisier)
+	try:
+		st = os.stat(cale)
+	except OSError:
+		return None, None
+	semn = (st.st_mtime, st.st_size)
+	vechi = _MEMORIE_OM.get(cale)
+	if vechi is not None and vechi[0] == semn:
+		return semn, vechi[1]
+	rez = citesteBuchetOm(cale)
+	_MEMORIE_OM[cale] = (semn, rez)
+	return semn, rez
+
+
+def bucheteOm(director=None):
+	"""Buchetele omului de aratat sub "IPTV", in ordinea din bouquets.tv: [(fisier, nume, cate canale)]. Recitite numai cand se schimba
+	fisierul (data si marimea)."""
+	director = director or DIRECTOR
+	rez = []
+	for fisier in _fisiereIndex(director):
+		if fisier == BUCHET_RADACINA or fisier.startswith(PREFIX_GRUPA) or not fisier.endswith(".tv"):
+			continue
+		semn, citit = _citireOm(director, fisier)
+		if citit is None:
+			continue
+		nume, cai, amestecat = citit
+		if amestecat or not cai:
+			continue
+		rez.append((fisier, nume or fisier, len(cai)))
+	return rez
+
+
+def refBuchetOm(fisier):
+	return _refGrupa(fisier)
+
+
+def numarCanaleOm(director=None):
+	return sum(n for _f, _nume, n in bucheteOm(director))
+
+
+def semnaturaOm(director=None):
+	"""Se schimba cand se schimba bouquets.tv sau un buchet aratat sub "IPTV": lista pe sateliti se reface atunci."""
+	director = director or DIRECTOR
+	semne = []
+	for fisier in ["bouquets.tv"] + [b[0] for b in bucheteOm(director)]:
+		try:
+			st = os.stat(os.path.join(director, fisier))
+			semne.append((fisier, st.st_mtime, st.st_size))
+		except OSError:
+			semne.append((fisier, None, None))
+	return tuple(semne)
+
+
+def harteOm(director=None):
+	"""{calea decodata a canalului: (fisier, numele buchetului)} pentru canalele din buchetele omului aratate sub "IPTV"; un canal din mai
+	multe buchete ramane la primul (fara dubluri). Pentru pagina web a listei (grupele dupa buchet); se cheama o data pe lista."""
+	director = director or DIRECTOR
+	rez = {}
+	for fisier, nume, _n in bucheteOm(director):
+		citit = _MEMORIE_OM.get(os.path.join(director, fisier))
+		if citit is None:
+			continue
+		for c in citit[1][1]:
+			rez.setdefault(c, (fisier, nume))
+	return rez

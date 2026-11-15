@@ -113,7 +113,7 @@ class Verdict(object):
 	cand pachetul nu are nimic pentru Python 3 (sursa care nu se compileaza, importurile): un pachet construit pentru
 	Python 3 poate avea scripturi vechi pe langa (masurat pe pachete reale, unelte/recunoastere.py)."""
 	__slots__ = ('python2', 'motive', 'dosare', 'taiat', 'python3', 'alt3', 'fisiere', 'slabe', 'altpy', 'nativ', 'traducere',
-		'dependinte')
+		'dependinte', 'py_acum')
 
 	def __init__(self):
 		self.python2 = None
@@ -125,6 +125,7 @@ class Verdict(object):
 		self.fisiere = 0
 		self.slabe = []
 		self.altpy = None            # (fisierul, "3.7"): un .so legat de alta versiune de Python 3 decat a imaginii
+		self.py_acum = False         # 0.7.5: s-a vazut si un .so pentru Python-ul imaginii (dupa nume sau dupa libpython)
 		self.nativ = ''              # primul program sau biblioteca (ELF) din pachet
 		self.traducere = False       # numai semne slabe (sursa de Python 2): se instaleaza si se traduce la incarcare
 		self.dependinte = []         # pachetele Python 2 cerute in Depends (0.7.4: inlocuite la instalare cu perechile python3)
@@ -278,9 +279,16 @@ class _Importuri(ast.NodeVisitor):
 def din_sursa(date, nume='plugin.py'):
 	"""(cod, detaliu) cand sursa .py (octeti) e numai pentru Python 2, altfel None. Numai se compileaza (in arbore, fara
 	sa ruleze nimic); o eroare care nu e de sintaxa (octeti nuli, recursie prea adanca) nu spune nimic."""
+	return din_sursa_arbore(date, nume)[0]
+
+
+def din_sursa_arbore(date, nume='plugin.py'):
+	"""(rezultatul lui din_sursa, arborele ast sau None). HDSatelit 0.7.6 (FRZ, raportul 2150): cine mai cerceteaza arborele
+	(Components/HdsPython2Traducere.semneStatice, importurile relative implicite) il ia de aici, fara a doua analiza a aceluiasi
+	fisier (pe ARM analiza e partea scumpa: 20 s pe firul interfetei la un plugin mare)."""
 	if (b'\x00' if isinstance(date, bytes) else '\x00') in date:
 		# octetii nuli dau SyntaxError de la Python 3.12 (inainte ValueError): un fisier stricat, nu cod Python 2
-		return None
+		return None, None
 	try:
 		with warnings.catch_warnings():
 			warnings.simplefilter('ignore')
@@ -288,17 +296,17 @@ def din_sursa(date, nume='plugin.py'):
 			# "except A, B:" fara paranteze (ca un tuplu), deci vechiul "except X, e:" din Python 2 nu mai e greseala
 			arbore = ast.parse(date, nume, 'exec', feature_version=GRAMATICA)
 	except SyntaxError as e:
-		return SURSA, '%s:%s' % (os.path.basename(nume), getattr(e, 'lineno', '') or '?')
+		return (SURSA, '%s:%s' % (os.path.basename(nume), getattr(e, 'lineno', '') or '?')), None
 	except (ValueError, TypeError, RecursionError, MemoryError, UnicodeError):
-		return None
+		return None, None
 	try:
 		v = _Importuri()
 		v.visit(arbore)
 	except RecursionError:
-		return None
+		return None, arbore
 	if v.gasite:
-		return MODULE, v.gasite[0]
-	return None
+		return (MODULE, v.gasite[0]), arbore
+	return None, arbore
 
 
 # ---------------------------------------------------------------- fisierul .ipk
@@ -347,6 +355,33 @@ def _alt_libpython3(date):
 	return ''
 
 
+def _libpython3_acum(date):
+	"""True cand un .so cere libpython-ul chiar al imaginii"""
+	import sys
+	return sys.version_info[0] == 3 and any(int(m.group(1)) == sys.version_info[1] for m in _LIBPY3.finditer(date))
+
+
+# 0.7.5 (MA9, TODO 06.11 05:30): un modul de extensie poarta in nume versiunea pentru care e facut
+# (modul.cpython-37m-arm-linux-gnueabihf.so, modul.cpython-314-arm-linux-gnueabihf.so). Modulele facute de Cython nu cer
+# libpython in antet, deci numele e singurul semn citit fara sa ruleze ceva; .abi3.so (ABI-ul stabil) merge pe orice 3.x.
+_ETICHETA_SO = re.compile(r'\.cpython-3([0-9]{1,3})[a-z]*(?:-[^/]*)?\.so$')
+
+
+def _eticheta_so(nume):
+	"""minorul din eticheta .cpython-3X a numelui unui .so ("37m" -> 7), altfel None"""
+	m = _ETICHETA_SO.search(nume)
+	return int(m.group(1)) if m else None
+
+
+def alt_python(v):
+	""""3.7" cand pachetul are module .so facute numai pentru alt Python 3 decat al imaginii (nici unul pentru Python-ul
+	de acum, citirea neoprita la o limita), altfel ''. Un pachet cu module pentru mai multe versiuni, unul langa altul,
+	trece: la incarcare Python il alege pe al lui. Ce nu se stie nu opreste nimic."""
+	if v is None or v.python2 or v.taiat or v.py_acum or not v.altpy:
+		return ''
+	return v.altpy[1]
+
+
 def _din_data_tar(sursa, v, inceput, timp_maxim):
 	"""parcurge data.tar (flux) si completeaza verdictul; se opreste la primul semn sigur sau la o limita"""
 	py = 0
@@ -378,6 +413,13 @@ def _din_data_tar(sursa, v, inceput, timp_maxim):
 					if magic and cap[:4] != magic and not v.alt3:
 						v.alt3 = nume
 			elif nume.endswith('.so') or '.so.' in nume:
+				minor = _eticheta_so(nume)
+				if minor is not None:
+					import sys
+					if minor == sys.version_info[1]:
+						v.py_acum = True
+					elif v.altpy is None:
+						v.altpy = (nume, '3.%d' % minor)
 				if m.size <= _SO_OCTETI:
 					date = _citeste(t, m, _SO_OCTETI)
 					if b'libpython2.' in date:
@@ -388,6 +430,8 @@ def _din_data_tar(sursa, v, inceput, timp_maxim):
 						alt = _alt_libpython3(date)
 						if alt and v.altpy is None:
 							v.altpy = (nume, alt)
+						if _libpython3_acum(date):
+							v.py_acum = True
 					if date[:4] == _ELF and not v.nativ:
 						v.nativ = nume
 				elif not v.nativ and _citeste(t, m, 4) == _ELF:

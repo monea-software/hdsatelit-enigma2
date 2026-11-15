@@ -772,7 +772,8 @@ def feedSemnat(A, adresa, server, surse, pc, credentiale=None, deschide=None):
 		x = (server.get("indexuri") or {}).get(arh) or {}
 		corp, e = A._cere(adresa + "/" + arh + "/Packages", credentiale,
 			deschide=deschide, maxim=32 * 1024 * 1024, accept="text/plain")
-		if e or not corp or len(corp) != x.get("marime") or hashlib.sha256(corp).hexdigest() != x.get("sha256"):
+		# 0.7.5 (REL, TODO 13.11 03:05): un index gol (0 octeti, arhitectura fara pachete) e bun daca stare.json il semneaza asa
+		if e or corp is None or len(corp) != x.get("marime") or hashlib.sha256(corp).hexdigest() != x.get("sha256"):
 			raise ValueError(_t("Indexul pachetelor nu este cel semnat: ") + arh)
 		for s in A.P.strofe_din_text(corp.decode("utf-8")):
 			n = s.get("package", "")

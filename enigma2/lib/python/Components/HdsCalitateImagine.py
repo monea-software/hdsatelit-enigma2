@@ -39,7 +39,7 @@
 # INTERVAL_TV_S): un text nou (alt televizor) se scrie de acolo si se vede de la canalul urmator; ecranele si pagina
 # (alegeriHdr) il citesc oricum pe loc.
 # Inainte, cele doua citiri pe firul enigma2 (prin HdsProcFundal, cel mult 0,2 s fiecare) au tinut ascultatorul
-# 56-611 ms pe .122.
+# 56-611 ms pe receptorul de proba.
 #
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC il incarca fara receptor.
 

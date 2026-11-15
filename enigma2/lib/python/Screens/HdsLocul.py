@@ -282,9 +282,10 @@ class HdsLoculDeMana(Screen, ConfigListScreen):
 		self.setTitle(_("Coordonatele antenei"))
 		self.actualizeaza_sec = actualizeaza_sec
 		lat, lon = L.locul() or (0, 0)
-		self.lat = NoSave(ConfigFloat(default=[abs(lat) // 1000, abs(lat) % 1000], limits=[(0, 90), (0, 999)]))
+		# gradele tastate ca la calculator: "30" si "030" dau 30 (Components/HdsLocul.py, campGrade; orion_bilo)
+		self.lat = NoSave(L.campGrade(L.LAT_MAX // 1000, lat))
 		self.nord = NoSave(ConfigSelection([("north", _("Nord")), ("south", _("Sud"))], "north" if lat >= 0 else "south"))
-		self.lon = NoSave(ConfigFloat(default=[abs(lon) // 1000, abs(lon) % 1000], limits=[(0, 180), (0, 999)]))
+		self.lon = NoSave(L.campGrade(L.LON_MAX // 1000, lon))
 		self.est = NoSave(ConfigSelection([("east", _("Est")), ("west", _("Vest"))], "east" if lon >= 0 else "west"))
 		lista = [
 			getConfigListEntry(_("Longitudinea (grade)"), self.lon),

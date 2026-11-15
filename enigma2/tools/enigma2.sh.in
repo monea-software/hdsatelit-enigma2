@@ -450,6 +450,39 @@ if [ -x "$HDS_LIBREADER" ]; then
 	killall -9 showiframe 2>/dev/null && sleep 1
 fi
 
+# More than one showiframe daemon left from before. The search in the next block keeps this script from starting a NEW
+# second copy, but a pair that already runs stays: the restarts of the interface (codes 0 and 3, so also the update to
+# this version) keep the daemon, and the pair lives on until the receiver is restarted (Viper 4K V20, 15.11.2026: pids
+# 29259 and 9054, both started by an older enigma2.sh without that search, after the pid numbers had wrapped; two
+# holders of the video decoder and their time on the processor). On u5/u4 boxes, when more than one process named
+# showiframe runs here (enigma2 is not running yet), all of them are stopped the way the block after the exit already
+# does after an unclean end of enigma2: kill -9, then HDS_SF_PAUZA seconds for the driver to let go of the video decoder
+# (a new copy that opened it while another was still closing it oopsed the kernel), and the start below finds none and
+# starts one. A single daemon is left alone, and nothing is stopped with nepotrivit (no copy starts after it). The
+# processes are found by their name in /proc, as for libreader above. The variables are only for the tests on the PC.
+HDS_SF_PROC=${HDS_SF_PROC:-/proc}
+HDS_SF_PAUZA=${HDS_SF_PAUZA:-5}
+case "$hds_paza:$(cut -c1-2 "$HDS_SF_PROC/stb/info/boxtype" 2>/dev/null)" in
+	nepotrivit:*) ;;
+	*:u5|*:u4)
+		hds_sf_toate=""
+		hds_sf_cate=0
+		for hds_c in "$HDS_SF_PROC"/[0-9]*/comm; do
+			hds_n=""
+			read -r hds_n 2>/dev/null < "$hds_c"
+			[ "$hds_n" = showiframe ] || continue
+			hds_c=${hds_c%/comm}
+			hds_sf_toate="$hds_sf_toate ${hds_c##*/}"
+			hds_sf_cate=$((hds_sf_cate + 1))
+		done
+		if [ "$hds_sf_cate" -gt 1 ]; then
+			echo "[hds-showiframe] $hds_sf_cate daemons up ($hds_sf_toate ): all stopped, one started again after ${HDS_SF_PAUZA} s"
+			kill -9 $hds_sf_toate 2>/dev/null
+			sleep "$HDS_SF_PAUZA"
+		fi
+		;;
+esac
+
 # hds_paza: potrivit (or no rules), nepotrivit (showiframe off) or afisare (another receiver, showiframe without writes)
 # showiframe starts without any proxy variable in its environment, so a proxy cannot carry its request around the null
 # route of hds-netguard. Only its own environment changes (a subshell); enigma2 and the rest keep theirs. When the
@@ -463,7 +496,6 @@ fi
 # them: the death of a process holding hi_vdec oopsed the kernel). The variables are only for the tests on the PC.
 HDS_SF_PID=${HDS_SF_PID:-/dev/si.pid}
 HDS_SF_CERERE=${HDS_SF_CERERE:-/dev/play.file}
-HDS_SF_PROC=${HDS_SF_PROC:-/proc}
 hds_sf_viu=""
 hds_sf_p=""
 read -r hds_sf_p 2>/dev/null < "$HDS_SF_PID"
@@ -538,6 +570,30 @@ fi
 if [ -n "$hds_act" ] && [ "$hds_paza" = potrivit ] && [ -f "$HDS_ACT_PROGRAM" ] && command -v python3 > /dev/null 2>&1; then
 	echo "[hds-actualizare] an update may have been cut ($hds_act): $HDS_ACT_PROGRAM pornire"
 	python3 -I -S -B "$HDS_ACT_PROGRAM" pornire > /dev/null 2>&1
+fi
+
+# 0.7.5 (CTU, TODO 15.11 07:08; Ustym 4K PRO, report 340957): a foreign package installed with opkg replaced python3-attrs and
+# twisted of the image, and enigma2 ended at every start in the twisted import of mytest.py (UnannotatedAttributeError), safe
+# mode too (it ends before the plugins). The block after the exit writes one line in HDS_PORNIRE_CADERI for every Python crash
+# whose traceback went through the base imports (hds_baza_python); from the HDS_PORNIRE_PRAG-th in 10 minutes the program
+# above puts the Python packages of the image back from the signed lists of the HD Satelit feed (mode pachete-pornire, once
+# per boot of the receiver), the reason in the small log and in the log of the updates; nothing for the person to do.
+# The variables are only for the tests on the PC; init sets none of them.
+HDS_PORNIRE_CADERI=${HDS_PORNIRE_CADERI:-/tmp/hds-pornire-baza.caderi}
+HDS_PORNIRE_PRAG=${HDS_PORNIRE_PRAG:-2}
+if [ -f "$HDS_PORNIRE_CADERI" ] && [ "$hds_paza" = potrivit ] && [ -f "$HDS_ACT_PROGRAM" ] &&
+	command -v python3 > /dev/null 2>&1; then
+	hds_pb_acum=$(cut -d. -f1 /proc/uptime 2>/dev/null)
+	hds_pb_n=$(awk -v a="${hds_pb_acum:-0}" '$1 + 600 >= a' "$HDS_PORNIRE_CADERI" 2>/dev/null | wc -l)
+	if [ "$((hds_pb_n + 0))" -ge "$HDS_PORNIRE_PRAG" ]; then
+		rm -f "$HDS_PORNIRE_CADERI"
+		hds_pb_jurnal=${HDS_CADERI_JURNAL:-/home/root/logs/hds-caderi.log}
+		mkdir -p "${hds_pb_jurnal%/*}" 2>/dev/null
+		echo "$(date '+%Y-%m-%d %H:%M:%S') interfata a cazut de $hds_pb_n ori la pornire in importurile de baza (twisted, attr): pachetele Python ale imaginii se pun la loc din feedul HD Satelit (jurnalul actualizarilor)" \
+			>> "$hds_pb_jurnal"
+		echo "[hds-pachete-pornire] $hds_pb_n crashes in the base imports: $HDS_ACT_PROGRAM pachete-pornire"
+		python3 -I -S -B "$HDS_ACT_PROGRAM" pachete-pornire > /dev/null 2>&1
+	fi
 fi
 
 # Settings put back while enigma2 was running (Components/HdsSetariDinCopie.py) wait in settings.din-copie, one
@@ -1071,6 +1127,16 @@ esac
 # The variables are only for the tests on the PC; init sets none of them.
 HDS_CADERI=${HDS_CADERI:-/tmp/hds-enigma2.caderi}
 HDS_CADERI_JURNAL=${HDS_CADERI_JURNAL:-/home/root/logs/hds-caderi.log}
+# 0.7.5 (CTU): a traceback through the base imports of mytest.py: a frame of mytest.py at module level and an import-time
+# frame (in <module>) of e2reactor or of a base package in site-packages, and no frame of a plugin (see the block of
+# HDS_PORNIRE_CADERI before the start)
+hds_baza_python() {
+	awk '/Traceback \(most recent call last\)/ { m = 0; b = 0; p = 0 }
+		/File "[^"]*\/mytest\.pyc?", line [0-9]+, in <module>/ { m = 1 }
+		/File "[^"]*(\/e2reactor\.pyc?"|\/site-packages\/(attr|attrs|twisted|zope|automat|constantly|hyperlink|incremental|typing_extensions|idna|six)[\/.]).*in <module>/ { b = 1 }
+		/File "[^"]*\/Plugins\// { p = 1 }
+		END { if (m && b && !p) exit 0; exit 1 }' "$1" 2>/dev/null
+}
 HDS_ACCEL_STARE=${HDS_ACCEL_STARE:-/tmp/hds-accel.stare}
 HDS_ACCEL_ACTIV=${HDS_ACCEL_ACTIV:-/tmp/hds-accel.activ}
 HDS_ACCEL_OPRIT=${HDS_ACCEL_OPRIT:-/etc/enigma2/hds-fara-accel}
@@ -1108,6 +1174,7 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	fi
 	# the cause (see above): the file of bsodFatal, read once and removed
 	motiv_fel=""; motiv_semnal=""; motiv_pc=""; motiv_lr=""; motiv_tde=""; motiv_jurnal=""
+	motiv_cod=""; motiv_de_la=""; motiv_de_la_uid=""; motiv_de_la_nume=""; motiv_parinte=""; motiv_parinte_nume=""
 	if [ -f "$HDS_CADERE_MOTIV" ]; then
 		motiv_fel=$(sed -n 's/^fel=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd 'a-z')
 		motiv_semnal=$(sed -n 's/^semnal=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd '0-9')
@@ -1115,12 +1182,40 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		motiv_lr=$(sed -n 's/^lr=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd 'A-Za-z0-9._+/-' | cut -c1-160)
 		motiv_tde=$(sed -n 's/^tde=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd '0-9')
 		motiv_jurnal=$(sed -n 's/^jurnal=//p' "$HDS_CADERE_MOTIV" | head -n 1)
+		# 0.7.5 (TODO 14.11 09:40): fel=extern, a signal enigma2 does not handle, sent from outside (main/bsod.cpp,
+		# hdsSemnalDinAfara): who sent it, read by enigma2 itself at that instant (the shell cannot see it)
+		motiv_cod=$(sed -n 's/^cod=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd '0-9-' | cut -c1-12)
+		motiv_de_la=$(sed -n 's/^de_la_pid=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd '0-9' | cut -c1-10)
+		motiv_de_la_uid=$(sed -n 's/^de_la_uid=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd '0-9' | cut -c1-10)
+		motiv_de_la_nume=$(sed -n 's/^de_la_comm=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd 'A-Za-z0-9._+:/?-' | cut -c1-32)
+		motiv_parinte=$(sed -n 's/^de_la_parinte=//p' "$HDS_CADERE_MOTIV" | head -n 1 | tr -cd '0-9' | cut -c1-10)
+		motiv_parinte_nume=$(sed -n 's/^de_la_parinte_comm=//p' "$HDS_CADERE_MOTIV" | head -n 1 |
+			tr -cd 'A-Za-z0-9._+:/?-' | cut -c1-32)
 	fi
 	dovada=""
 	cauza_rand=""
 	plugin_extern=""
 	if [ -n "$paznic" ]; then
 		cauza="paznic"
+	elif [ "$motiv_fel" = "extern" ]; then
+		# Sent from outside, not a crash of enigma2: the word "extern" in the count (counted like the unexplained ends
+		# before, so safe mode works as before, but never put on the account of the 2D acceleration) and the sender in
+		# the line of the small log. Without a sender process (si_code not from kill) the kernel sent it, which for
+		# SIGHUP means the hangup of a terminal.
+		# The line says "cauza: extern: <what>", in the form of "c++: ..." and "python: ..." (Components/HdsModSigur.py, CAUZA).
+		case $motiv_semnal in
+			1) motiv_nume_semnal=SIGHUP ;;
+			*) motiv_nume_semnal="semnalul ${motiv_semnal:-?}" ;;
+		esac
+		cauza="extern"
+		if [ -n "$motiv_de_la" ]; then
+			cauza_rand="extern: $motiv_nume_semnal din afara, de la ${motiv_de_la_nume:-un proces iesit deja} (pid $motiv_de_la"
+			[ -n "$motiv_de_la_uid" ] && [ "$motiv_de_la_uid" != 0 ] && cauza_rand="$cauza_rand, uid $motiv_de_la_uid"
+			[ -n "$motiv_parinte" ] && cauza_rand="$cauza_rand; pornit de ${motiv_parinte_nume:-?}, pid $motiv_parinte"
+			cauza_rand="$cauza_rand)"
+		else
+			cauza_rand="extern: $motiv_nume_semnal trimis de nucleu (cod ${motiv_cod:-?}; de obicei un terminal inchis)"
+		fi
 	elif [ "$motiv_fel" = "semnal" ]; then
 		# the library keeps its folder when it is not one of the system folders (a plugin, a stick, /tmp): the report
 		# then says where a foreign library came from (report 919342: libpython3.7m in an image with Python 3.14)
@@ -1160,6 +1255,10 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 					grep -qsF "/Plugins/$hds_pl/" "$HDS_OPKG_INFO/enigma2-hdsatelit.list" "$HDS_OPKG_INFO/hdsatelit-skin.list" ||
 						plugin_extern=1
 				done
+			fi
+			# 0.7.5 (CTU): a crash in the base imports counts for the packages of the image (block HDS_PORNIRE_CADERI)
+			if [ -z "$plugin_extern" ] && hds_baza_python "$motiv_proba"; then
+				echo "$acum" >> "${HDS_PORNIRE_CADERI:-/tmp/hds-pornire-baza.caderi}"
 			fi
 		fi
 	elif [ "$motiv_fel" = "eroare" ]; then

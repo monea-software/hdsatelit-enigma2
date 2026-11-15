@@ -37,7 +37,7 @@ LIB_FAAD = 'libfaad.so.2'
 LIB_TWOLAME = 'libtwolame.so.0'
 ENV_DOSAR = 'HDS_SUNET_LIB'
 
-# HiSilicon: decodorul AAC al placii stie cadrele de 960 (proba D pe .122; lucru-sesiune/pilot-26-09/dab-2/dab-2-progres.md)
+# HiSilicon: decodorul AAC al placii stie cadrele de 960 (proba D pe receptorul de proba; lucru-sesiune/pilot-26-09/dab-2/dab-2-progres.md)
 DOSARE_HISILICON = ('proc/hisi/msp', 'proc/msp')
 
 FAAD_FMT_16BIT = 1

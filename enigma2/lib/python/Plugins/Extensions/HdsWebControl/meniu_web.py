@@ -17,16 +17,21 @@
 # sunt in /alimentare, resetarea in /resetare-fabrica, proba DiSEqC in /proba-diseqc, fiecare actiune cu confirmare in
 # doi pasi (meniu_comun_web.py), ca orice
 # ecran sa aiba pereche in web; butonul de aici ramane fara ele, deci nimic nu se opreste fara confirmare.
-# Extensiile puse de om care se agata de un meniu prin cod (WHERE_MENU) nu sunt in menu.xml si nu apar aici; ale
-# imaginii au intrarea lor in menu.xml din 0.2.6 (de exemplu importul de canale, Media, setarile skinului).
+# Extensiile puse de om care se agata de un meniu prin cod (WHERE_MENU) nu sunt in menu.xml; din 0.7.5 (MLW) apar si
+# aici, la locul lor de pe televizor, cu aceleasi chei de ordine si ascundere (vezi _cuExtensii mai jos), iar
+# "Deschide pe televizor" le porneste ca OK in meniu. Ale imaginii au intrarea lor in menu.xml din 0.2.6 (de exemplu
+# importul de canale, Media, setarile skinului).
 #
 # Motorul de meniu e cel din scanare_web.py (acelasi fisier citit, aceleasi reguli de vizibilitate); acolo se deschid
 # pe televizor numai intrarile din sectiunile Scanare si Antena, aici oricare dintre cele de mai sus.
 #
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/meniu                        arborele meniului, cum il vede televizorul acum
-#   POST /api/meniu-televizor?id=<entryID> deschide intrarea pe televizor
-#   GET  /meniu                            pagina
+#   POST /api/meniu-televizor?id=<entryID> deschide intrarea pe televizor (o extensie: id=ext.<cheie>&meniu=<cheie>)
+#   POST /api/meniu-ordine?meniu=&id=&fel= ordinea si ascunderea intrarilor (Components/HdsMeniuOrdine, ca MENU pe
+#                                          televizor): fel = sus, jos, inceput, sfarsit, ascunde, arata, fabrica (un
+#                                          meniu), fabrica-tot
+#   GET  /meniu                            pagina; /meniuri e aceeasi pagina, deschisa pe fila Aranjeaza
 #
 # Fiecare intrare are in pagina ancora i-<entryID>: meniul de sus al paginilor (cadru_web.py) duce acolo la intrarile care
 # se deschid numai pe televizor; grupa ei se deschide si randul e ales.
@@ -93,6 +98,7 @@ def _intrare(nod):
 		"text": W._cuSemn(nod),
 		"web": nod.get("web") or "",
 		"pictograma": nod.get("pictograma") or "",
+		"ordine_id": _cheieIntrare(nod),
 		"setup": tinta["id"] if tinta is not None and tinta["fel"] == "setup" else "",
 		"televizor": merge,
 		# un text gol nu trece prin _(): gettext ar da antetul fisierului .po; o intrare cu pagina web nu are motiv (pagina
@@ -104,14 +110,234 @@ def _intrare(nod):
 def _grup(nod, nivel, adancime):
 	W = _sw()
 	copii = []
+	cheie = _cheieMeniu(nod)
 	if adancime < MAX_ADANCIME:
 		for x in W._copiiVizibili(nod, nivel):
 			if x.tag == "item":
-				copii.append(_intrare(x))
+				copii.append((W._greutate(x), _intrare(x)))
 			elif x.tag == "menu":
-				copii.append(_grup(x, nivel, adancime + 1))
+				copii.append((W._greutate(x), _grup(x, nivel, adancime + 1)))
+		copii = _cuExtensii(nod, cheie, copii)
+	copii = [c for _g, c in copii]
 	return {"tip": "grup", "id": nod.get("entryID") or nod.get("key") or "", "text": W._cuSemn(nod),
-		"web": nod.get("web") or "", "pictograma": nod.get("pictograma") or "", "copii": copii}
+		"web": nod.get("web") or "", "pictograma": nod.get("pictograma") or "", "cheie": cheie,
+		"ordine_id": _cheieIntrare(nod), "copii": _ordineaOmului(cheie, copii)}
+
+
+# ---------------------------------------------------------------- extensiile agatate de meniu (WHERE_MENU)
+# MLW (0.7.5): extensiile puse de om care se agata de un meniu prin cod (PluginDescriptor.WHERE_MENU) apar si aici, la
+# locul lor, ca pe televizor (Screens/Menu.py, Menu.__init__): aceleasi intrari (Components/HdsPluginuriImagine,
+# meniuriUtilizator, dupa <id val> al meniului), intrarea din menu.xml cu acelasi id inlocuita de extensie, greutatea
+# extensiei (50 fara ea) si aceeasi sortare stabila dupa greutate, apoi ordinea omului cu aceleasi chei
+# (HdsMeniuOrdine.cheieIntrare(id-ul extensiei, numele ei)). Mutarea si ascunderea de aici se vad deci si pe televizor,
+# iar "Deschide pe televizor" cheama functia extensiei, ca OK pe televizor. O extensie care cade nu strica pagina.
+
+ID_EXTENSIE = "ext."
+_EXTENSII_SCRISE = set()
+
+
+def _idMeniu(nod):
+	"""<id val> al meniului (cu el cer extensiile intrarile lor, ca pe televizor), sau None."""
+	i = nod.find("id") if hasattr(nod, "find") else None
+	return (i.get("val") or None) if i is not None else None
+
+
+def _intrariExtensii(nod):
+	"""[(nume, functie, id, greutate)] date de extensiile omului pentru meniul `nod`; [] fara <id> sau la o eroare."""
+	id_meniu = _idMeniu(nod)
+	if not id_meniu:
+		return []
+	try:
+		from Components.PluginComponent import plugins
+		from Components.HdsPluginuriImagine import meniuriUtilizator
+		return [x for x in (meniuriUtilizator(plugins, id_meniu) or []) if len(x) > 1]
+	except Exception as eroare:
+		# o singura data pe meniu si fel de eroare: arborele se face la multe pagini (bara de sus, setarile)
+		cheie = (id_meniu, type(eroare).__name__)
+		if cheie not in _EXTENSII_SCRISE:
+			_EXTENSII_SCRISE.add(cheie)
+			_jurnal("extensiile meniului %s: %s" % (id_meniu, eroare))
+		return []
+
+
+def _cheieExtensie(x):
+	"""Cheia de ordine a unei extensii, aceeasi ca pe televizor (Menu.py: intrareMeniu(nume, ..., id) -> cheieTuplu)."""
+	O = _ordine()
+	id_ = x[2] if len(x) > 2 else None
+	nume = x[0] if x[0] is not None else ""
+	if O is None:
+		return str(id_ or nume)
+	return O.cheieIntrare(id_, nume)
+
+
+def _idAncora(cheie):
+	"""Id-ul intrarii unei extensii in pagina (ancora i-<id>, cererea de deschidere): numai litere, cifre, _ . -"""
+	import re
+	return (ID_EXTENSIE + re.sub(r"[^A-Za-z0-9_.-]", "_", cheie))[:64]
+
+
+def _greutateExtensie(x):
+	try:
+		return int((x[3] if len(x) > 3 else None) or 50)
+	except (TypeError, ValueError):
+		return 50
+
+
+def _cuExtensii(nod, cheie, copii):
+	"""copii = [(greutate, intrare)] din menu.xml; intoarce lista cu extensiile meniului puse ca pe televizor."""
+	for x in _intrariExtensii(nod):
+		id_ext = x[2] if len(x) > 2 else None
+		# ca pe televizor: o extensie cu id-ul unei intrari de-a noastre ii ia locul
+		for i, (_g, c) in enumerate(copii):
+			if id_ext and c.get("id") == id_ext:
+				del copii[i]
+				break
+		k = _cheieExtensie(x)
+		copii.append((_greutateExtensie(x), {
+			"tip": "intrare", "id": _idAncora(k), "text": str(x[0] or ""), "web": "", "pictograma": "extensie",
+			"ordine_id": k, "setup": "", "televizor": True, "motiv": "", "extensie": True}))
+	copii.sort(key=lambda t: t[0])
+	return copii
+
+
+def _nodMeniuVizibil(nod, cheie, nivel, adancime=0):
+	"""Nodul <menu> vizibil acum cu cheia de ordine `cheie` (HdsMeniuOrdine.cheieMeniu), sau None."""
+	if _cheieMeniu(nod) == cheie:
+		return nod
+	if adancime >= MAX_ADANCIME:
+		return None
+	W = _sw()
+	for x in W._copiiVizibili(nod, nivel):
+		if x.tag == "menu":
+			gasit = _nodMeniuVizibil(x, cheie, nivel, adancime + 1)
+			if gasit is not None:
+				return gasit
+	return None
+
+
+def deschideExtensie(meniu, id_intrare, sesiune=None):
+	"""POST /api/meniu-televizor?meniu=<cheie>&id=ext.<cheie>: extensia din meniul dat, gasita din nou prin extensiile
+	instalate (nimic din cerere nu se ruleaza), pornita pe televizor ca OK in meniu: functia ei cu sesiunea."""
+	W = _sw()
+	radacina = W._radacinaMeniu()
+	principal = radacina.find("menu") if radacina is not None else None
+	nod = _nodMeniuVizibil(principal, meniu, W._nivelUtilizator()) if principal is not None and meniu else None
+	if nod is None:
+		return {"result": False, "message": _t("Meniul nu e pe receptor.")}
+	gasita = None
+	for x in _intrariExtensii(nod):
+		if _idAncora(_cheieExtensie(x)) == id_intrare:
+			gasita = x
+			break
+	if gasita is None or not callable(gasita[1]):
+		return {"result": False, "message": _t("Intrarea nu e în meniu.")}
+	if sesiune is None:
+		sesiune = W._sesiune()
+	refuz = W._ocupat(sesiune)
+	if refuz:
+		return {"result": False, "message": refuz}
+	try:
+		gasita[1](sesiune)
+	except Exception as eroare:
+		_jurnal("extensia %s pe televizor: %s" % (id_intrare, eroare))
+		return {"result": False, "message": _t("Ecranul nu s-a deschis pe televizor (%s).") % eroare}
+	return {"result": True, "message": _t("S-a deschis pe televizor: %s.") % str(gasita[0] or "")}
+
+
+# ---------------------------------------------------------------- ordinea si ascunderea (MENU pe televizor)
+# Aceeasi ordine ca pe televizor (Components/HdsMeniuOrdine): copiii fiecarui grup in ordinea omului, iar cei ascunsi
+# pe televizor raman in arbore cu "ascuns": true (paginile lor de setari si drumurile spre ele raman), pagina ii arata
+# cu semnul lor. Fara modul (probele vechi), ordinea din fabrica.
+
+def _ordine():
+	try:
+		from Components import HdsMeniuOrdine
+		return HdsMeniuOrdine
+	except ImportError:
+		return None
+
+
+def _cheieMeniu(nod):
+	O = _ordine()
+	return O.cheieMeniu(nod) if O is not None else (nod.get("key") or "")
+
+
+def _cheieIntrare(nod):
+	"""Cheia intrarii ca pe televizor: entryID, sau "t:" + numele tradus fara semne (Menu.addItem)."""
+	O = _ordine()
+	if O is None:
+		return nod.get("entryID") or ""
+	return O.cheieIntrare(nod.get("entryID"), _t(nod.get("text") or "??"))
+
+
+def _ordineaOmului(cheie, copii):
+	O = _ordine()
+	if O is None:
+		return copii
+	try:
+		chei = [c.get("ordine_id") or "" for c in copii]
+		ordinea = O.ordoneaza(chei, O.ordine(cheie))
+		ascunse = O.ascunse(cheie)
+	except Exception as eroare:
+		_jurnal("ordinea omului in %s: %s" % (cheie, eroare))
+		return copii
+	rez = []
+	for i in ordinea:
+		c = copii[i]
+		c["ascuns"] = bool(chei[i]) and chei[i] in ascunse
+		rez.append(c)
+	return rez
+
+
+_PASI = {"sus": -1, "jos": 1, "inceput": -1000, "sfarsit": 1000}
+
+
+def _grupDupaCheie(g, cheie):
+	if g.get("cheie") == cheie:
+		return g
+	for c in g.get("copii", []):
+		if c.get("tip") == "grup":
+			gasit = _grupDupaCheie(c, cheie)
+			if gasit is not None:
+				return gasit
+	return None
+
+
+def schimbaOrdinea(arg):
+	"""POST /api/meniu-ordine: {"result", "message", "meniu": arborele nou}. Meniul si intrarea trebuie sa fie in
+	arborele de acum (nimic scris pentru chei necunoscute)."""
+	O = _ordine()
+	if O is None or O.setari() is None:
+		return {"result": False, "message": _t("Ordinea meniului nu se poate schimba pe acest receptor.")}
+	fel = arg.get("fel", "")
+	if fel == "fabrica-tot":
+		O.fabrica()
+		return dict(arbore(), message=_t("Toate meniurile au ordinea din fabrică."))
+	a = arbore()
+	if not a.get("result"):
+		return a
+	g = _grupDupaCheie(a["meniu"], arg.get("meniu", ""))
+	if g is None:
+		return {"result": False, "message": _t("Meniul nu e pe receptor.")}
+	cheie = g["cheie"]
+	if fel == "fabrica":
+		O.fabrica(cheie)
+		return dict(arbore(), message=_t("Meniul are ordinea din fabrică."))
+	chei = [c.get("ordine_id") or "" for c in g["copii"]]
+	id_ = arg.get("id", "")
+	if not id_ or id_ not in chei:
+		return {"result": False, "message": _t("Intrarea nu e în meniu.")}
+	if fel in _PASI:
+		gata = O.muta(cheie, chei, id_, _PASI[fel]) is not None
+		mesaj = _t("Ordinea s-a schimbat și pe televizor.")
+	elif fel in ("ascunde", "arata"):
+		gata = O.ascunde(cheie, id_, fel == "ascunde")
+		mesaj = _t("Intrarea e ascunsă pe televizor.") if fel == "ascunde" else _t("Intrarea se vede din nou pe televizor.")
+	else:
+		return {"result": False, "message": _t("Comandă necunoscută.")}
+	if not gata:
+		return dict(arbore(), message=_t("Intrarea e deja la capăt."))
+	return dict(arbore(), message=mesaj)
 
 
 def arbore():
@@ -281,12 +507,28 @@ def argumente(request):
 	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:4]:
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie != "id":
+		# meniu: cheia meniului unei extensii (MLW), langa id-ul ei (ext.<cheie>)
+		if cheie not in ("id", "meniu"):
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:64].strip()
+		rez[cheie] = str(v)[:64 if cheie == "id" else 120].strip()
+	return rez
+
+
+def argumenteOrdine(request):
+	"""meniu, id, fel din cerere (cel mult 120 de caractere fiecare)."""
+	rez = {}
+	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:8]:
+		if isinstance(cheie, bytes):
+			cheie = cheie.decode("utf-8", "replace")
+		if cheie not in ("meniu", "id", "fel"):
+			continue
+		v = (valori or [b""])[0]
+		if isinstance(v, bytes):
+			v = v.decode("utf-8", "replace")
+		rez[cheie] = str(v)[:120].strip()
 	return rez
 
 
@@ -303,12 +545,25 @@ def rute(baza, resource):
 
 		def render_POST(self, request):
 			try:
-				return self._raspunde(request, deschide(argumente(request).get("id", "")))
+				arg = argumente(request)
+				id_ = arg.get("id", "")
+				if id_.startswith(ID_EXTENSIE):
+					return self._raspunde(request, deschideExtensie(arg.get("meniu", ""), id_))
+				return self._raspunde(request, deschide(id_))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
 		def render_GET(self, request):
 			return self.render_POST(request)
+
+	class OrdineResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				return self._raspunde(request, schimbaOrdinea(argumenteOrdine(request)))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
 	class PaginaResource(resource.Resource):
 		isLeaf = True
@@ -316,7 +571,7 @@ def rute(baza, resource):
 		def render_GET(self, request):
 			return pagina(request)
 
-	api = {b"meniu": ArboreResource(), b"meniu-televizor": TelevizorResource()}
+	api = {b"meniu": ArboreResource(), b"meniu-televizor": TelevizorResource(), b"meniu-ordine": OrdineResource()}
 	return api, PaginaResource()
 
 
@@ -374,6 +629,16 @@ PAGINA = """<!DOCTYPE html>
   form.cauta-setari{display:flex;gap:8px;margin:0 0 14px;}
   form.cauta-setari input{flex:1;min-height:44px;padding:8px 12px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;}
   form.cauta-setari button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
+  .fila{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px;}
+  .ascuns-semn{color:var(--text-slab);font-size:.8rem;border:1px solid var(--bordura);border-radius:6px;padding:1px 6px;}
+  .ascuns > .nume, summary.ascuns{opacity:.6;}
+  .aranjare{display:none;gap:6px;align-items:center;flex-wrap:wrap;}
+  body.aranjeaza .aranjare{display:inline-flex;}
+  body.aranjeaza .actiuni-normale{display:none;}
+  .aranjare button{min-width:44px;font-size:1rem;}
+  .aranjare label{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;min-height:44px;}
+  #fabrica-tot{display:none;}
+  body.aranjeaza #fabrica-tot{display:inline-block;}
 </style>
 </head>
 <body>
@@ -382,9 +647,11 @@ PAGINA = """<!DOCTYPE html>
 <p><a href="/skin">Listă sau dale pe televizor</a></p>
 <form class="cauta-setari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută în meniu" aria-label="Caută în meniu" autocomplete="off"><button type="submit">Caută</button></form>
 <p class="nota">Același meniu ca la tasta MENU, cu aceleași intrări pentru nivelul ales pe receptor. La fiecare intrare: pagina ei din interfața web, dacă are, pagina de setări sau „Deschide pe televizor”.</p>
+<div class="fila"><button type="button" id="aranjeaza">Aranjează meniul</button><button type="button" id="fabrica-tot">Ordinea din fabrică pentru tot meniul</button></div>
+<p class="nota" id="nota-aranjare" hidden>Mută intrările cu săgețile și bifează ce nu vrei să vezi în meniul de pe televizor. Se salvează pe loc; intrările ascunse rămân aici și în căutare. Pe televizor: MENU pe o intrare.</p>
 <p class="mesaj" id="mesaj">Se citește meniul...</p>
 <div id="meniu"></div>
-<p class="nota">Extensiile care se agață singure de meniu nu sunt în listă. Oprirea, repornirea și standby-ul receptorului se dau din pagina Alimentare și repornire, cu confirmare, sau din telecomandă.</p>
+<p class="nota">Extensiile instalate care se agață de meniu apar la locul lor, ca pe televizor, și se mută sau se ascund la fel. Oprirea, repornirea și standby-ul receptorului se dau din pagina Alimentare și repornire, cu confirmare, sau din telecomandă.</p>
 </main>
 <script>
 var CFG = __CONFIG__;
@@ -414,36 +681,102 @@ function pictograma(nume, parinte){
   p.style.setProperty("--pictograma", "url(/cadru/meniu-" + nume + ".png)");
   parinte.insertBefore(p, parinte.firstChild);
 }
-function deschide(id){
+function deschide(id, meniu){
   var q = new URLSearchParams(); q.set("id", id);
+  if(meniu){ q.set("meniu", meniu); }
   mesaj("Se deschide pe televizor...");
   cerere("/api/meniu-televizor", "POST", q).then(function(d){ mesaj(d.message, !d.result); }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 }
-function intrare(c){
-  var div = document.createElement("div"); div.className = "intrare";
+function semnAscuns(c, parinte){
+  if(!c.ascuns){ return; }
+  var s = document.createElement("span"); s.className = "ascuns-semn"; s.textContent = "ascunsă pe televizor";
+  parinte.appendChild(s);
+}
+function schimba(meniu, id, fel){
+  var q = new URLSearchParams(); q.set("meniu", meniu || ""); q.set("id", id || ""); q.set("fel", fel);
+  mesaj("Se salvează...");
+  cerere("/api/meniu-ordine", "POST", q).then(function(d){
+    mesaj(d.message, !d.result);
+    if(d.meniu){ deseneaza(d.meniu, id); }
+  }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
+}
+function butonAranjare(text, eticheta, lucru){
+  var b = document.createElement("button"); b.type = "button"; b.textContent = text;
+  b.title = eticheta; b.setAttribute("aria-label", eticheta);
+  b.addEventListener("click", function(e){ e.preventDefault(); e.stopPropagation(); lucru(); });
+  return b;
+}
+function aranjare(c, meniu, i, n){
+  var a = document.createElement("span"); a.className = "aranjare";
+  var sus = butonAranjare("↑", "Mai sus", function(){ schimba(meniu, c.ordine_id, "sus"); });
+  var jos = butonAranjare("↓", "Mai jos", function(){ schimba(meniu, c.ordine_id, "jos"); });
+  sus.disabled = i === 0; jos.disabled = i === n - 1;
+  a.appendChild(sus); a.appendChild(jos);
+  var l = document.createElement("label"); var x = document.createElement("input"); x.type = "checkbox"; x.checked = !!c.ascuns;
+  x.addEventListener("change", function(){ schimba(meniu, c.ordine_id, x.checked ? "ascunde" : "arata"); });
+  l.addEventListener("click", function(e){ e.stopPropagation(); });
+  l.appendChild(x); l.appendChild(document.createTextNode("Ascunsă pe televizor"));
+  a.appendChild(l);
+  return a;
+}
+function intrare(c, meniu, i, n){
+  var div = document.createElement("div"); div.className = "intrare" + (c.ascuns ? " ascuns" : "");
   if(c.id){ div.id = "i-" + c.id; }
-  var n = document.createElement("span"); n.className = "nume"; n.textContent = c.text;
-  pictograma(c.pictograma, n); div.appendChild(n);
-  var a = document.createElement("span"); a.className = "actiuni";
+  div.setAttribute("data-ordine", c.ordine_id || "");
+  var nume = document.createElement("span"); nume.className = "nume"; nume.textContent = c.text;
+  pictograma(c.pictograma, nume); semnAscuns(c, nume);
+  if(c.extensie){ var e = document.createElement("span"); e.className = "ascuns-semn"; e.textContent = "extensie instalată"; nume.appendChild(e); }
+  div.appendChild(nume);
+  if(c.ordine_id && meniu){ div.appendChild(aranjare(c, meniu, i, n)); }
+  var a = document.createElement("span"); a.className = "actiuni actiuni-normale";
   if(c.web){ a.appendChild(legatura(c.web, "Pagina web")); }
   if(c.setup){ a.appendChild(legatura("/setari?id=" + encodeURIComponent(c.setup), "Setări în web")); }
-  if(c.televizor){ var b = document.createElement("button"); b.type = "button"; b.textContent = "Deschide pe televizor"; b.addEventListener("click", function(){ deschide(c.id); }); a.appendChild(b); }
+  if(c.televizor){ var b = document.createElement("button"); b.type = "button"; b.textContent = "Deschide pe televizor"; b.addEventListener("click", function(){ deschide(c.id, c.extensie ? meniu : ""); }); a.appendChild(b); }
   else if(c.motiv){ var m = document.createElement("span"); m.className = "motiv"; m.textContent = c.motiv; a.appendChild(m); }
   div.appendChild(a);
   return div;
 }
-function grup(g, deschis){
+function grup(g, deschis, meniu, i, n){
   var d = document.createElement("details"); if(deschis){ d.open = true; }
   if(g.id){ d.id = "g-" + g.id; }
+  d.setAttribute("data-ordine", g.ordine_id || "");
   var s = document.createElement("summary"); s.appendChild(document.createTextNode(g.text));
-  pictograma(g.pictograma, s);
-  if(g.web){ s.appendChild(legatura(g.web, "Pagina web")); }
+  if(g.ascuns){ s.className = "ascuns"; }
+  pictograma(g.pictograma, s); semnAscuns(g, s);
+  if(g.web){ var w = legatura(g.web, "Pagina web"); w.className = "actiuni-normale"; s.appendChild(w); }
+  if(g.ordine_id && meniu){ s.appendChild(aranjare(g, meniu, i, n)); }
   d.appendChild(s);
   var c = document.createElement("div"); c.className = "copii";
-  g.copii.forEach(function(x){ c.appendChild(x.tip === "grup" ? grup(x, false) : intrare(x)); });
+  var k = g.copii.length;
+  g.copii.forEach(function(x, j){ c.appendChild(x.tip === "grup" ? grup(x, false, g.cheie, j, k) : intrare(x, g.cheie, j, k)); });
   d.appendChild(c);
   return d;
 }
+// tot meniul din nou (dupa o schimbare), cu aceleasi grupe deschise si intrarea mutata in vedere
+function deseneaza(principal, ales){
+  var m = $("meniu");
+  var deschise = {};
+  Array.prototype.forEach.call(m.querySelectorAll("details[open]"), function(d){ deschise[d.id] = true; });
+  m.textContent = "";
+  var n = principal.copii.length;
+  principal.copii.forEach(function(x, i){
+    if(x.tip === "grup"){ m.appendChild(grup(x, false, principal.cheie, i, n)); return; }
+    var u = document.createElement("div"); u.className = "unic"; u.appendChild(intrare(x, principal.cheie, i, n)); m.appendChild(u);
+  });
+  Array.prototype.forEach.call(m.querySelectorAll("details"), function(d){ if(deschise[d.id]){ d.open = true; } });
+  if(ales){
+    Array.prototype.forEach.call(m.querySelectorAll("[data-ordine]"), function(x){
+      if(x.getAttribute("data-ordine") === ales){ x.scrollIntoView({block: "nearest"}); }
+    });
+  }
+}
+function aranjeaza(da){
+  document.body.classList.toggle("aranjeaza", da);
+  $("aranjeaza").textContent = da ? "Gata" : "Aranjează meniul";
+  $("nota-aranjare").hidden = !da;
+}
+$("aranjeaza").addEventListener("click", function(){ aranjeaza(!document.body.classList.contains("aranjeaza")); });
+$("fabrica-tot").addEventListener("click", function(){ schimba("", "", "fabrica-tot"); });
 // /meniu#i-<entryID> (din meniul de sus, la intrarile care se deschid numai pe televizor): grupa intrarii se
 // deschide, iar randul ei e ales si adus in fata. /meniu#g-<id> (o treapta din calea paginii, grupa fara pagina ei,
 // cadru_web._hrefGrupa): grupa se deschide, cu cele de deasupra ei, si vine sus
@@ -461,11 +794,9 @@ window.addEventListener("hashchange", arataDinAdresa);
 cerere("/api/meniu").then(function(d){
   if(!d.result){ mesaj(d.message, true); return; }
   mesaj("");
-  var m = $("meniu");
-  d.meniu.copii.forEach(function(x){
-    if(x.tip === "grup"){ m.appendChild(grup(x, false)); return; }
-    var u = document.createElement("div"); u.className = "unic"; u.appendChild(intrare(x)); m.appendChild(u);
-  });
+  deseneaza(d.meniu);
+  // /meniuri: aceeasi pagina, direct pe fila Aranjeaza
+  if(location.pathname.split("/")[1] === "meniuri" || location.hash === "#aranjeaza"){ aranjeaza(true); }
   arataDinAdresa();
 }).catch(function(){ mesaj("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.", true); });
 </script>
@@ -484,8 +815,9 @@ TEXTE_PAGINA = {
 		N_("Același meniu ca la tasta MENU, cu aceleași intrări pentru nivelul ales pe receptor. La fiecare "
 			"intrare: pagina ei din interfața web, dacă are, pagina de setări sau „Deschide pe televizor”."),
 		N_("Se citește meniul..."),
-		N_("Extensiile care se agață singure de meniu nu sunt în listă. Oprirea, repornirea și standby-ul "
-			"receptorului se dau din pagina Alimentare și repornire, cu confirmare, sau din telecomandă."),
+		N_("Extensiile instalate care se agață de meniu apar la locul lor, ca pe televizor, și se mută sau se ascund "
+			"la fel. Oprirea, repornirea și standby-ul receptorului se dau din pagina Alimentare și repornire, cu "
+			"confirmare, sau din telecomandă."),
 		N_("Caută în meniu"),
 	),
 	"js": (
@@ -502,6 +834,24 @@ TEXTE_PAGINA = {
 
 
 TEXTE_PAGINA["html"] += (N_("Listă sau dale pe televizor"),)
+# MNH (0.7.5): fila Aranjeaza (ordinea si ascunderea intrarilor, ca MENU pe televizor)
+TEXTE_PAGINA["html"] += (
+	N_("Aranjează meniul"),
+	N_("Ordinea din fabrică pentru tot meniul"),
+	N_("Mută intrările cu săgețile și bifează ce nu vrei să vezi în meniul de pe televizor. Se salvează pe loc; "
+		"intrările ascunse rămân aici și în căutare. Pe televizor: MENU pe o intrare."),
+)
+TEXTE_PAGINA["js"] += (
+	# MLW (0.7.5): semnul extensiilor agatate de meniu
+	N_("extensie instalată"),
+	N_("ascunsă pe televizor"),
+	N_("Se salvează..."),
+	N_("Mai sus"),
+	N_("Mai jos"),
+	N_("Ascunsă pe televizor"),
+	N_("Gata"),
+	N_("Aranjează meniul"),
+)
 
 
 def _traducePagina(sablon, fel="pagina"):

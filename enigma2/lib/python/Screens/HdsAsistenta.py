@@ -325,17 +325,19 @@ class HdsAsistentaConcluzii(Screen):
 		self.setTitle(_("Asistență de la distanță"))
 		intrare = intrare or A.ultimeleConcluzii() or {}
 		ora = intrare.get("ora") or 0
+		self.intrare = intrare
 		self["antet"] = StaticText(_(A.TEXT_CONCLUZII))
 		self["cod"] = StaticText("")
-		self["text"] = ScrollLabel(A.textConcluzii(intrare))
+		self["text"] = ScrollLabel(A.textConcluzii(intrare, sfarsit=bool(intrare.get("sfarsit"))))
 		self["ajutor"] = StaticText(("%s  ·  %s" % (A.oraSfarsit(ora), _("Sus/Jos: tot textul"))) if ora else
 			_("Sus/Jos: tot textul"))
-		self["key_red"] = StaticText("")
+		# concluziile sesiunii care merge acum: Rosu o opreste chiar de aici (omul nu mai cauta drumul prin meniu)
+		self["key_red"] = StaticText(_("Oprește") if A.concluziiDeAcum(intrare) and not intrare.get("sfarsit") else "")
 		self["key_green"] = StaticText(_("OK"))
 		actiuni = {
 			"ok": self.close,
 			"cancel": self.close,
-			"red": _nimic,
+			"red": self._rosu,
 			"green": self.close,
 			"yellow": _nimic,
 			"blue": _nimic,
@@ -350,6 +352,12 @@ class HdsAsistentaConcluzii(Screen):
 
 	def _inchisa(self):
 		HdsAsistentaConcluzii.deschise = max(0, HdsAsistentaConcluzii.deschise - 1)
+
+	def _rosu(self):
+		"""Oprirea pe loc, fara intrebare (ca Rosu pe ecranul asistentei), numai pentru concluziile sesiunii de acum."""
+		if self["key_red"].getText() and A.concluziiDeAcum(self.intrare):
+			A.opreste("de om")
+			self.close()
 
 
 class HdsAsistentaTermeni(Screen):

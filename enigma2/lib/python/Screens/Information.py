@@ -106,7 +106,8 @@ def _dinTotal(folosit, total):
 # #FFFFFF, contrast 6,4:1; fundalul alb ramane alb pe tema inchisa)
 _CULORI = {"titlu": ("hdsBrandLight", 0x9FB4FF), "eticheta": ("hdsLabel", 0xAEB9CC), "valoare": ("hdsText", 0xF2F4F8),
 	"sina": ("hdsTrack", 0x2A3350), "umplere": ("hdsBrandLight", 0x9FB4FF), "linie": ("hdsTrack", 0x2A3350),
-	"albastru": ("hdsTesterTrimis", 0x0A5BC4), "albastru_fond": ("hdsTesterTrimisFond", 0xFFFFFF)}
+	"albastru": ("hdsTesterTrimis", 0x0A5BC4), "albastru_fond": ("hdsTesterTrimisFond", 0xFFFFFF),
+	"caseta": ("hdsCell", 0x282D3F), "caseta_linie": ("hdsPanelSolid", 0x10162A)}
 
 
 def _culoare(cheie):
@@ -251,6 +252,17 @@ class InformationBase(Screen):
 			except Exception:
 				self.masura[i] = (nume, int(marime * f * 1.3))
 		self.c = dict((k, _culoare(k)) for k in _CULORI)
+		# DSG2: casetele (HdsInformatiiTabel.stil_caseta): Pro cu fundal, Clasic numai cu patratel si linii, alt skin ca
+		# inainte; in Pro casetele celor doua coloane sunt despartite de golul dintre ele, fara linia din mijloc
+		self.stilCaseta = None
+		try:
+			from Components import HdsTemaTv, HdsInformatiiTabel as T
+			if HdsTemaTv.skinImaginii():
+				self.stilCaseta = T.stil_caseta(HdsTemaTv.activa())
+		except Exception as e:
+			print("[Information] casetele: %r" % (e,))
+		if self.stilCaseta and self.stilCaseta.get("fond"):
+			self["despartitor"].hide()
 		for i in range(2):
 			lista = self["coloana%d" % (i + 1)]
 			lista.l.setFont(0, self.fontTitlu)
@@ -307,8 +319,11 @@ class InformationBase(Screen):
 			self.bucati = {}
 			print("[Information] albastrul: %r" % (e,))
 		coloane = T.coloane(T.sectiuni(text), self.COLOANE)
+		# DSG2: in caseta textele se rup la latimea dinauntru (fara marginile casetei); liniile dintre randuri
+		stil = getattr(self, "stilCaseta", None)
+		margine = T.margine_caseta(stil, self.inaltime)
 		for i in range(2):
-			col = self._incapute(coloane[i] if i < len(coloane) else [], self.latimi[i])
+			col = self._incapute(coloane[i] if i < len(coloane) else [], self.latimi[i] - 2 * margine)
 			# pe pagini: titlul sectiunii sus pe o pagina care incepe in mijlocul ei, niciun titlu singur jos
 			col = T.pe_pagini(col, self.perPagina)
 			if col == self.randuriDesenate[i]:
@@ -319,30 +334,57 @@ class InformationBase(Screen):
 				idx = lista.getSelectionIndex() or 0
 			except Exception:
 				idx = 0
-			lista.setList([self._intrare(r, self.latimi[i]) for r in col])
+			linii = T.linii_caseta(col, self.perPagina) if stil and stil.get("linii") else set()
+			lista.setList([self._intrare(r, self.latimi[i], j in linii) for j, r in enumerate(col)])
 			if idx and col:
 				lista.moveToIndex(min(idx, len(col) - 1))
 		self._arataPagina()
 
-	def _intrare(self, r, w):
+	def _intrare(self, r, w, linie=False):
 		# primul element e randul insusi, nu None: eListbox muta pagina numai pe randuri selectabile (antetul fisierului);
 		# selectia nu se vede (selectionEnabled(False))
+		# DSG2: cu casete (stilCaseta, HdsInformatiiTabel.stil_caseta) randul are fundalul casetei pe toata latimea si
+		# textele in interior (marginea m), titlul are un patratel colorat, valorile stau la dreapta, iar `linie` pune o
+		# linie subtire deasupra (HdsInformatiiTabel.linii_caseta); fara casete (alt skin) desenul e cel de dinainte
+		import enigma
 		from Components.MultiContent import MultiContentEntryText
 		from Components import HdsInformatiiTabel as T
 		from enigma import RT_HALIGN_LEFT, RT_VALIGN_CENTER
 		c, h = self.c, self.inaltime
 		if r[0] == "gol":
 			return [r]
+		stil = getattr(self, "stilCaseta", None) or {}
+		m = T.margine_caseta(stil, h)
+		fond = stil.get("fond")
+		cul_linie = c.get("caseta_linie", c["linie"]) if fond else c["linie"]
+		al_valoare = getattr(enigma, "RT_HALIGN_RIGHT", 2) if stil.get("dreapta") else RT_HALIGN_LEFT
+		intrare = [r]
+		if fond:
+			intrare.append(MultiContentEntryText(pos=(0, 0), size=(w, h), font=0, text="", backcolor=c["caseta"],
+				backcolor_sel=c["caseta"]))
+		w = w - 2 * m
+		if linie:
+			gros = max(1, h // 28)
+			intrare.append(MultiContentEntryText(pos=(m, 0), size=(w, gros), font=0, text="", backcolor=cul_linie,
+				backcolor_sel=cul_linie))
 		if r[0] in ("titlu", "titlu_sus", "subtitlu"):
 			# "titlu_sus": randurile de deasupra ale unui titlu rupt (_incapute), fara linia de sub titlu
 			culoare = c["valoare"] if r[0] == "subtitlu" else c["titlu"]
-			intrare = [r, MultiContentEntryText(pos=(0, 0), size=(w, h), font=2 if r[0] == "subtitlu" else 0,
-				flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=self._s(r[1], w, 2 if r[0] == "subtitlu" else 0), color=culoare,
-				color_sel=culoare)]
+			x = 0
+			if stil.get("patrat") and r[0] == "titlu":
+				latura, gol = T.patrat_caseta(h)
+				intrare.append(MultiContentEntryText(pos=(m, (h - latura) // 2), size=(latura, latura), font=0, text="",
+					backcolor=c["titlu"], backcolor_sel=c["titlu"]))
+				x = latura + gol
+			elif stil.get("patrat") and r[0] == "titlu_sus":
+				x = sum(T.patrat_caseta(h))
+			intrare.append(MultiContentEntryText(pos=(m + x, 0), size=(w - x, h), font=2 if r[0] == "subtitlu" else 0,
+				flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=self._s(r[1], w - x, 2 if r[0] == "subtitlu" else 0), color=culoare,
+				color_sel=culoare))
 			if r[0] == "titlu":
-				linie = max(2, h // 20)
-				intrare.append(MultiContentEntryText(pos=(0, h - 2 * linie), size=(w, linie), font=0, text="",
-					backcolor=c["linie"], backcolor_sel=c["linie"]))
+				gros = max(2, h // 20)
+				intrare.append(MultiContentEntryText(pos=(m, h - 2 * gros), size=(w, gros), font=0, text="",
+					backcolor=cul_linie, backcolor_sel=cul_linie))
 			return intrare
 		if r[0] in ("rand_bucati", "urmare_bucati"):
 			# un rand fara valoare desenat pe bucati (_albastre): fiecare bucata la locul ei, dupa latimea masurata a celor
@@ -353,26 +395,26 @@ class InformationBase(Screen):
 			x = T.retras(h) if r[0] == "urmare_bucati" else 0
 			nume, marime = self.masura.get(2, ("HdsCond", 36))
 			margine, gol, sus = T.eticheta_margini(h)
-			intrare = [r]
 			for i, (bucata, albastru) in enumerate(r[1]):
 				lat = T.latime_text(bucata, nume, marime)
 				if albastru:
 					cat = max(1, min(w - x, lat + 2 * margine))
-					intrare.append(MultiContentEntryText(pos=(x, sus), size=(cat, max(1, h - 2 * sus)), font=2,
+					intrare.append(MultiContentEntryText(pos=(m + x, sus), size=(cat, max(1, h - 2 * sus)), font=2,
 						flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, text=bucata, color=c["albastru"], color_sel=c["albastru"],
 						backcolor=c["albastru_fond"], backcolor_sel=c["albastru_fond"]))
 					x += cat + gol
 					continue
 				cat = (w - x) if i == len(r[1]) - 1 else min(w - x, lat + max(4, h // 4))
-				intrare.append(MultiContentEntryText(pos=(x, 0), size=(max(1, cat), h), font=2,
+				intrare.append(MultiContentEntryText(pos=(m + x, 0), size=(max(1, cat), h), font=2,
 					flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=bucata, color=c["valoare"], color_sel=c["valoare"]))
 				x += lat
 			return intrare
 		if r[0] == "urmare":
 			# continuarea unui text rupt (_incapute), putin mai la dreapta
 			x = T.retras(h)
-			return [r, MultiContentEntryText(pos=(x, 0), size=(w - x, h), font=2, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER,
-				text=self._s(r[1], w - x, 2), color=c["valoare"], color_sel=c["valoare"])]
+			intrare.append(MultiContentEntryText(pos=(m + x, 0), size=(w - x, h), font=2, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER,
+				text=self._s(r[1], w - x, 2), color=c["valoare"], color_sel=c["valoare"]))
+			return intrare
 		# eticheta: 44% din coloana; pe toata latimea (o coloana, peste 1100 de puncte la 1920) 30%
 		le = T.latime_eticheta(w, h)
 		if r[0] == "bara":
@@ -380,18 +422,21 @@ class InformationBase(Screen):
 			gros = max(6, h // 5)
 			y = (h - gros) // 2
 			plin = int((w - le) * procent / 100)
-			return [r,
-				MultiContentEntryText(pos=(le, y), size=(w - le, gros), font=0, text="", backcolor=c["sina"], backcolor_sel=c["sina"]),
-				MultiContentEntryText(pos=(le, y), size=(max(1, plin), gros), font=0, text="", backcolor=c["umplere"], backcolor_sel=c["umplere"])]
+			intrare.append(MultiContentEntryText(pos=(m + le, y), size=(w - le, gros), font=0, text="", backcolor=c["sina"],
+				backcolor_sel=c["sina"]))
+			intrare.append(MultiContentEntryText(pos=(m + le, y), size=(max(1, plin), gros), font=0, text="",
+				backcolor=c["umplere"], backcolor_sel=c["umplere"]))
+			return intrare
 		_t, eticheta, valoare = r
 		if not valoare:
-			return [r, MultiContentEntryText(pos=(0, 0), size=(w, h), font=2, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER,
-				text=self._s(eticheta, w, 2), color=c["valoare"], color_sel=c["valoare"])]
-		return [r,
-			MultiContentEntryText(pos=(0, 0), size=(le - 8, h), font=1, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER,
-				text=self._s(eticheta, le - 8, 1), color=c["eticheta"], color_sel=c["eticheta"]),
-			MultiContentEntryText(pos=(le, 0), size=(w - le, h), font=2, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER,
-				text=self._s(valoare, w - le, 2), color=c["valoare"], color_sel=c["valoare"])]
+			intrare.append(MultiContentEntryText(pos=(m, 0), size=(w, h), font=2, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER,
+				text=self._s(eticheta, w, 2), color=c["valoare"], color_sel=c["valoare"]))
+			return intrare
+		intrare.append(MultiContentEntryText(pos=(m, 0), size=(le - 8, h), font=1, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER,
+			text=self._s(eticheta, le - 8, 1), color=c["eticheta"], color_sel=c["eticheta"]))
+		intrare.append(MultiContentEntryText(pos=(m + le, 0), size=(w - le, h), font=2, flags=al_valoare | RT_VALIGN_CENTER,
+			text=self._s(valoare, w - le, 2), color=c["valoare"], color_sel=c["valoare"]))
+		return intrare
 
 	def _s(self, text, latime, font):
 		"""Textul unei celule, intreg: titlurile, etichetele si valorile prea lungi sunt rupte pe mai multe randuri de
@@ -412,9 +457,12 @@ class InformationBase(Screen):
 		x = T.retras(self.inaltime)
 		le = T.latime_eticheta(w, self.inaltime)
 		rez = []
+		# DSG2: titlul casetei incepe dupa patratel, deci se rupe la latimea ramasa
+		patrat = sum(T.patrat_caseta(self.inaltime)) if (getattr(self, "stilCaseta", None) or {}).get("patrat") else 0
 		for r in col:
 			if r[0] in ("titlu", "subtitlu") and len(r) == 2 and r[1]:
-				rez.extend(T.rupt_titlu(r[0], r[1], w, f_titlu if r[0] == "titlu" else (nume, marime)))
+				rez.extend(T.rupt_titlu(r[0], r[1], w - (patrat if r[0] == "titlu" else 0),
+					f_titlu if r[0] == "titlu" else (nume, marime)))
 				continue
 			if r[0] != "rand":
 				rez.append(r)

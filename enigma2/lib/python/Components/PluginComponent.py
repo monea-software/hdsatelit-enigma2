@@ -307,6 +307,13 @@ class PluginComponent:
 			HdsPython2Traducere.incepeCitirea()
 		except Exception as exc:
 			print("[PluginComponent] HdsPython2Traducere:", exc)
+		# HDSatelit: NeoBoot (si orice plugin cu o traducere stricata) nu mai cade la import; mountpoint.sh gol facut pe 0.7.4
+		# se reface (Components/HdsNeoBoot.py)
+		try:
+			from Components import HdsNeoBoot
+			HdsNeoBoot.pregateste()
+		except Exception as exc:
+			print("[PluginComponent] HdsNeoBoot:", exc)
 		# the first read is the start of the interface, before the first heartbeat
 		semn = None if self.firstRun else _SemnRecitire()
 		try:

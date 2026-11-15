@@ -14,7 +14,8 @@
 # nothing playing the question says the mode is used when a channel starts. With "Automat dupa canal" a line
 # under the list says the TV resynchronizes at every channel with another frame rate. The zapmode row is written
 # to the driver at every change; alone it is saved without the question (it cannot leave the TV black). The same for
-# the "Imaginea 4:3" row (VideoOutput.policyElement, the driver file policy): it does not change the HDMI format.
+# the "Imaginea 4:3" row (VideoOutput.policyElement, the driver file policy): it does not change the HDMI format; and for
+# the "Filmele mai late de 16:9" row (VideoOutput.policy169Element, config.av.policy_169, the driver file policy2).
 # OK saves like Green, so the whole screen works with the arrows and OK. The web page /video (HdsWebControl
 # video_web.py) has the same rows and tries a setting the same way (VideoOutput.tryVideo).
 # The HDMI colours row (VideoOutput.HdmiColors: YCbCr or RGB) is written only on OK. YCbCr is applied at once, so
@@ -152,6 +153,7 @@ class VideoSetup(ConfigListScreen, Screen):
 		self.syncing = False
 		self.resolution = self.rate = None
 		self.rateEntry = self.zapEntry = self.colorEntry = self.policyEntry = None
+		self.policy169Entry = None
 		self.pozaEntry = None          # HDSatelit: poza canalului la schimbare (Components/HdsUltimaImagine.py)
 		self.primaEntry = None         # HDSatelit: prima imagine rapida (Components/HdsPrimaImagine.py)
 		self.colorTried = False        # YCbCr written on this OK (the question covers it)
@@ -214,6 +216,10 @@ class VideoSetup(ConfigListScreen, Screen):
 		if policy is not None:
 			self.policyEntry = getConfigListEntry(_("Imaginea 4:3"), policy)
 			entries.append(self.policyEntry)
+		policy169 = VideoOutput.policy169Element()
+		if policy169 is not None:
+			self.policy169Entry = getConfigListEntry(VideoOutput.policy169RowText(), policy169)
+			entries.append(self.policy169Entry)
 		zap = self.zapElement()
 		if zap is not None:
 			self.zapEntry = getConfigListEntry(_("La schimbarea canalului"), zap)
@@ -329,6 +335,9 @@ class VideoSetup(ConfigListScreen, Screen):
 		if current is not None and self.policyEntry is not None and current[1] is self.policyEntry[1]:
 			self.showDescription(VideoOutput.policyDescription())
 			return
+		if current is not None and self.policy169Entry is not None and current[1] is self.policy169Entry[1]:
+			self.showDescription(VideoOutput.policy169Description())
+			return
 		if current is not None and self.colorEntry is not None and current[1] is self.colorEntry[1]:
 			colors = VideoOutput.hdmiColors()
 			self.showDescription(VideoOutput.colorDescription(colors.tvAccepts() if colors is not None else None))
@@ -375,10 +384,10 @@ class VideoSetup(ConfigListScreen, Screen):
 		pass
 
 	def otherElements(self):
-		"""the settings saved with the video mode, without a question of their own: zapmode, the 4:3 picture and the HDMI
-		colours"""
+		"""the settings saved with the video mode, without a question of their own: zapmode, the 4:3 picture, the pictures
+		wider than 16:9 and the HDMI colours"""
 		return [element for element in (self.zapElement(), self.pozaElement(), self.primaElement(),
-			VideoOutput.policyElement(), VideoOutput.colorElement()) if element is not None]
+			VideoOutput.policyElement(), VideoOutput.policy169Element(), VideoOutput.colorElement()) if element is not None]
 
 	def keySave(self):
 		output = VideoOutput.videoOutput

@@ -160,6 +160,9 @@ class HdsCopieImagineScreen(Screen):
 		if self._mesaj:
 			return self._mesaj
 		despre = C.textDespre() + "\n" + C.textParole() + "\n"
+		punere = C.textPunere()
+		if punere:
+			despre += punere + "\n"
 		if self.mediu() is None:
 			return despre + _("Bagă un stick sau un disc USB în receptor. Lista se reface singură.")
 		return despre + _("Copia merge pe %s.") % self.mediu()["nume"]

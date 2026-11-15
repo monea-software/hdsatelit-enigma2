@@ -31,7 +31,7 @@
 # ~5 minute). LOGLEVEL=7 in /etc/syslog-startup.conf da syslogd -l 7: se scrie tot ce e mai urgent decat debug. In
 # jurnalele de pe receptoarele de probe SF8008 si Viper 4K V20 singurele randuri debug erau „video pts” si cateva randuri yaffs
 # de la pornire. Urma PTS pentru masurarea inghetarilor se ia la cerere din inelul nucleului (dmesg), de pe PC:
-# hdsatelit-unelte unelte/stb/urma_pts_receptor.py. Valoarea noua intra la urmatoarea pornire a lui syslogd; ca la
+# unealta noastra urma_pts_receptor.py. Valoarea noua intra la urmatoarea pornire a lui syslogd; ca la
 # rotirea de mai sus (acelasi conffile), sigur ajunge cu o imagine noua.
 #
 # klogd fara potop (.hds5, imaginea 0.7.5, 13.11.2026, agentul IPT2): files/hds-klogd-randuri-repetate.patch. Pe Viper 4K V20
@@ -43,7 +43,7 @@
 # syslogd -D (DROPDUPLICATES) nu ajunge: potopul alterneaza doua randuri cu numere care se schimba. E o MASURA (mai putine
 # scrieri pe flash in potop), nu reparatia blocarii de la pornirea filmelor din internet. Perechea ei: kernel.printk
 # „3 4 1 7” (procps_%.bbappend). Ajunge si prin actualizare (pachetul busybox), nu numai cu imagine noua.
-# Proba: hdsatelit-unelte receptor/imagine-hdsatelit/teste/test_jurnal_potop_075.py.
+# Proba: test_jurnal_potop_075.py (uneltele noastre).
 PR:append = ".hds5"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"

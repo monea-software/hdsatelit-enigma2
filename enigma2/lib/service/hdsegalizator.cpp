@@ -602,7 +602,9 @@ namespace
 	const char *NUME_STARE[] = { "oprit", "porneste", "merge", "fara-date", "eroare", "proba-gata" };
 
 	/* mesajele catre firul enigma2 (acelasi numar ca semnalul schimbare) */
-	enum { MESAJ_MERGE = 1, MESAJ_OPRIT = 2, MESAJ_INAPOI_PE_PLACA = 3, MESAJ_FARA_DATE = 4, MESAJ_PROBA_GATA = 5 };
+	enum { MESAJ_MERGE = 1, MESAJ_OPRIT = 2, MESAJ_INAPOI_PE_PLACA = 3, MESAJ_FARA_DATE = 4, MESAJ_PROBA_GATA = 5,
+		/* canal TV: drumul din procesor preia sunetul de la placa (Preluare, hdsegalizator_dsp.h) */
+		MESAJ_PRELUARE = 6 };
 }
 
 /* ======================================================================== motorul (firele) */
@@ -633,6 +635,7 @@ public:
 		LatmLaAdts latm;
 		bool reimpacheteaza;            /* LATM: cadrele merg ca ADTS spre decodorul ADTS */
 		std::atomic<bool> latm_rau;     /* configuratia LATM a devenit una care nu se poate spune in ADTS */
+		std::atomic<bool> latm_he;      /* configuratia LATM a trecut pe HE-AAC (SBR/PS semnalat): inapoi pe placa */
 		std::atomic<int> debit_antet;   /* kbit/s din antetul cadrelor MPEG (0: nu se stie) */
 		uint64_t ultim_debit_ms;        /* firul cititor: ultima citire a antetului */
 		std::vector<uint8_t> inceput;   /* octetii cititi inainte de pornirea decodorului */
@@ -658,16 +661,23 @@ public:
 		uint64_t pts_baza;           /* firul cititor: primul PTS al sesiunii (timpul 0 in GStreamer) */
 		std::atomic<bool> pts_baza_ok;
 		int fd_audio0;               /* numai o sesiune de flux, cu setFluxAudio0 */
+		/* TV: placa canta sunetul pana la preluare (Preluare in hdsegalizator_dsp.h); firul placii: clipa mesajului (0 inca nu);
+		   intentia = numarul alegerii de pe firul enigma2 pentru care s-a deschis sesiunea */
+		std::atomic<bool> umbra;
+		uint64_t preluare_la;
+		bool rampa_preluare;
+		unsigned long long intentie;
 
 		Sesiune(): motor(0),
 #if HAVE_GSTREAMER
 			pipe(0), appsrc(0), appsink(0), decodor(0),
 #endif
-			gata(false), fd(-1), pcm(0), reimpacheteaza(false), latm_rau(false), debit_antet(0), ultim_debit_ms(0),
+			gata(false), fd(-1), pcm(0), reimpacheteaza(false), latm_rau(false), latm_he(false), debit_antet(0), ultim_debit_ms(0),
 			ns_cit(0), ns_dec(0), ns_ies(0), ultim_ns_dec(0), octeti_es(0), cadre(0),
 			ultima_data_ms(0), caderi_alsa(0), eos(false), rampaJos(false), pregain_db(0.0), abatere_ppm(0.0),
 			benzi_active(0), limitari(0), versiune(0), pornit_ms(0), info_decodor(false),
-			esantionare(0), canale(0), coboara(false), pts_baza(0), pts_baza_ok(false), fd_audio0(-1)
+			esantionare(0), canale(0), coboara(false), pts_baza(0), pts_baza_ok(false), fd_audio0(-1), umbra(false), preluare_la(0),
+			rampa_preluare(false), intentie(0)
 		{
 		}
 	};
@@ -695,7 +705,8 @@ public:
 		std::lock_guard<std::mutex> l(m_lacatComenzi);
 		if (!s.flux.empty())
 			++m_flux_porniri;
-		m_comenzi.push_back(Comanda(Comanda::PORNESTE, s));
+		/* canal TV: sesiunea tine minte alegerea pentru care porneste (preluarea de la placa se potriveste numai cu ea) */
+		m_comenzi.push_back(Comanda(Comanda::PORNESTE, s, s.tv ? m_flux_intentie.load() : 0));
 		m_cv.notify_one();
 	}
 
@@ -809,6 +820,20 @@ public:
 	{
 		std::lock_guard<std::mutex> l(m_lacat);
 		return m_sursa_dorita.valida();
+	}
+
+	/* canal TV dorit acum (sesiunea porneste, e in umbra sau a preluat): servicedvb trimite ceasul imaginii */
+	bool tvDorit()
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		return m_sursa_dorita.valida() && m_sursa_dorita.tv;
+	}
+
+	/* sesiunea alegerii de acum a preluat sunetul de la placa (Preluare, hdsegalizator_dsp.h) */
+	bool preluata() const
+	{
+		const unsigned long long p = m_preluat_intentie.load();
+		return p != 0 && p == m_flux_intentie.load();
 	}
 
 	bool proba()
@@ -969,6 +994,7 @@ private:
 				if (c.fel == Comanda::PORNESTE)
 				{
 					inchideSesiunea();
+					m_intentie_deschidere = c.flux_token;
 					if (!c.flux_token || c.flux_token == m_flux_intentie.load())
 						deschideSesiunea(c.sursa);
 					if (!c.sursa.flux.empty())
@@ -1071,6 +1097,10 @@ private:
 	std::atomic<unsigned> m_flux_porniri{0};
 	std::atomic<bool> m_flux_deschis{false};
 	std::atomic<unsigned long long> m_flux_intentie{1};
+	/* canal TV: intentia comenzii care deschide sesiunea (firul de control) si a sesiunii care a preluat sunetul de la placa
+	   (0: niciuna; firul placii o pune, inchideSesiunea o sterge) */
+	unsigned long long m_intentie_deschidere = 0;
+	std::atomic<unsigned long long> m_preluat_intentie{0};
 };
 
 /* ------------------------------------------------------------------------ decodoarele din GStreamer */
@@ -1211,6 +1241,9 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 	s->cerut = cerut;
 	s->pornit_ms = acumMs();
 	s->sincron.porneste(s->pornit_ms);
+	/* canal TV: placa canta sunetul pana la preluare (Preluare, hdsegalizator_dsp.h) */
+	s->umbra = sursa.tv && sursa.fisier.empty();
+	s->intentie = m_intentie_deschidere;
 	if (!sursa.fisier.empty() || !sursa.flux.empty())
 		s->potrivire.faraPotrivire();
 	else if (sursa.tv)
@@ -1340,6 +1373,13 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 		if (!proba.cadreFacute() && proba.nesuportat())
 		{
 			esec(cerut, "latm-nesuportat");
+			return;
+		}
+		/* HE-AAC semnalat in configuratie (SBR sau PS, obiectul 5/29): decodorul din imagine e aprobat numai pentru AAC-LC,
+		   deci postul ramane pe placa (care il canta ca de obicei). SBR-ul nesemnalat (implicit) nu se vede din antete. */
+		if (proba.cadreFacute() && proba.config().sbr)
+		{
+			esec(cerut, "aac-he");
 			return;
 		}
 		s->reimpacheteaza = true;
@@ -1535,6 +1575,7 @@ void eHdsEgalizatorMotor::inchideSesiunea()
 		std::lock_guard<std::mutex> l(m_lacat);
 		m_sesiune = 0;
 	}
+	m_preluat_intentie = 0;
 	/* iesirea coboara in 20 ms, scrie doua perioade de liniste, le lasa sa se auda si se opreste singura */
 	if (s->iesire.joinable())
 	{
@@ -1615,11 +1656,16 @@ void eHdsEgalizatorMotor::impinge(Sesiune *s, const std::vector<uint8_t> &es, bo
 		if (s->reimpacheteaza)
 		{
 			std::vector<uint8_t> adts;
-			for (size_t i = 0; i < cadre.size(); i++)
+			for (size_t i = 0; i < cadre.size() && !s->latm_he.load(); i++)
+			{
 				s->latm.cadru(cadre[i].data(), cadre[i].size(), adts);
+				/* postul a trecut pe HE-AAC: nimic din bucata asta nu mai pleaca spre decodor */
+				if (s->latm.areConfig() && s->latm.config().sbr)
+					s->latm_he = true;
+			}
 			if (s->latm.nesuportat())
 				s->latm_rau = true;
-			if (!adts.empty())
+			if (!adts.empty() && !s->latm_he.load())
 				impingeBucata(s, adts);
 		}
 		else
@@ -1845,6 +1891,24 @@ void eHdsEgalizatorMotor::firIesire(Sesiune *s)
 		/* TV: fara ceas, inainte de sincron sau fara PTS perioada e tacere; cu sunetul devreme, tacerea hotarata de sincron
 		   (exact), apoi sunetul */
 		int tacere = (s->sursa.tv && !s->rampaJos) ? sincronTv(s) : 0;
+		/* canal TV in umbra: placa a cantat pana acum; sunetul de aici urca in rampa de preluare, iar mesajul care opreste
+		   sunetul placii pleaca sa cada in rampa (Preluare, hdsegalizator_dsp.h) */
+		if (s->umbra && s->preluare_la)
+		{
+			if (!s->rampa_preluare)
+			{
+				rampa.urcareaUrmatoare(Preluare::RAMPA_S);
+				s->rampa_preluare = true;
+			}
+			const uint64_t acum = acumMs();
+			if (acum >= s->preluare_la)
+			{
+				s->umbra = false;
+				m_preluat_intentie = s->intentie;
+				eDebug("[HdsEgalizator] TV: sunetul trece de pe placa in egalizator dupa %llu ms", (unsigned long long)(acum - s->pornit_ms));
+				trimite(MESAJ_PRELUARE);
+			}
+		}
 		const bool coboara = s->coboara;
 		s->coboara = false;
 		int produse = 0;
@@ -1940,6 +2004,8 @@ int eHdsEgalizatorMotor::sincronTv(Sesiune *s)
 	SincronTv::Eveniment ev = SincronTv::NIMIC;
 	int tacere = s->sincron.pas(acum, ok_v, pts_v, alsa_s, m_potrivire_tv_ms.load() / 1000.0, s->potrivire, s->marcaje,
 		s->coboara, ev);
+	if (ev == SincronTv::PORNIT && s->umbra)
+		s->preluare_la = Preluare::clipaMesajului(acum, s->sincron.pana_auzit_s);
 	if (ev == SincronTv::PORNIT)
 		eDebug("[HdsEgalizator] TV: sunetul porneste potrivit cu imaginea (abatere %.0f ms, ceasul imaginii %s, dupa %llu ms)",
 			s->sincron.eroare_ms.load(), m_ceas_placa ? "din sincronul placii" : (unitate == 1 ? "de la decodor, in ms" :
@@ -2183,6 +2249,11 @@ void eHdsEgalizatorMotor::verifica()
 		esec(s->cerut, "latm-nesuportat");
 		return;
 	}
+	if (s->latm_he.load())
+	{
+		esec(s->cerut, "aac-he");
+		return;
+	}
 	if (s->sursa.tv && s->sincron.stare.load() == SincronTv::FARA_CEAS)
 	{
 		esec(s->cerut, "tv-fara-ceas");
@@ -2378,6 +2449,8 @@ PyObject *eHdsEgalizatorMotor::stare(const std::string &post)
 				puneReal(d, "ceas_decodor_fata_de_placa_ms", (double)diferentaPts(p_dec, p) / 90.0);
 		}
 		puneInt(d, "sesiune_tv", 1);
+		/* 0: placa canta inca sunetul, pana se potriveste drumul din procesor; 1: sunetul trece prin egalizator */
+		puneInt(d, "preluat", s->umbra.load() ? 0 : 1);
 		puneReal(d, "sincron_tv_ms", s->sincron.eroare_ms.load());
 		puneInt(d, "ceas_imagine", unitate);
 		puneInt(d, "taceri_tv", (long)s->sincron.taceri.load());
@@ -2756,13 +2829,20 @@ bool eHdsEgalizator::preiaSunetul(const void *proprietar, int demux, int pid, in
 		return false;
 	}
 	fata.post = "da";
+	/* canal TV: placa canta sunetul din primul cadru, ca fara egalizator, pana preia drumul din procesor (MESAJ_PRELUARE,
+	   Preluare in hdsegalizator_dsp.h); pana atunci raspunsul e false, iar decodorul placii pastreaza PID-ul */
 	if (m_motor->mergeCu(s))
-		return true;
+		return !s.tv || m_motor->preluata();
 	if (s.tv)
 		m_motor->reseteazaCeasImagine();    /* alt canal: ceasul imaginii se invata din nou */
 	m_motor->noteazaDorita(s);
 	m_motor->porneste(s);
-	return true;
+	return !s.tv;
+}
+
+bool eHdsEgalizator::vreaCeasImagine(const void *proprietar)
+{
+	return proprietar && proprietar == m_proprietar && m_motor->tvDorit();
 }
 
 void eHdsEgalizator::serviciuOprit(const void *proprietar)
@@ -2809,6 +2889,13 @@ void eHdsEgalizator::mesaj(const int &cod)
 	{
 		fata.post = "esuat";
 		if (!m_reaplica.empty())
+			m_reaplica();
+	}
+	else if (cod == MESAJ_PRELUARE)
+	{
+		/* pista aleasa din nou: preiaSunetul raspunde acum true, decodorul placii primeste PID-ul -1; un mesaj ramas de la
+		   canalul de dinainte (alta alegere intre timp) nu mai schimba nimic */
+		if (m_motor->preluata() && !m_reaplica.empty())
 			m_reaplica();
 	}
 	/*emit*/ schimbare(cod);

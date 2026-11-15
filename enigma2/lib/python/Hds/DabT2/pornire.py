@@ -585,11 +585,84 @@ class Controlor(object):
                     return '%s:%s' % (ref, x['nume']) if x['nume'] else ref
         return None
 
-    def _ref_din_t2mi_strain(self, text, doar_din_memorie=False):
+    def _ref_din_t2mi_strain(self, text, doar_din_memorie=False, nav=None):
         """Canal DVB-T2 prin satelit dintr-o lista facuta in alta imagine (T2-MI in nucleu: o referinta DVB obisnuita
         1:0:<tip>:<SID>:<TSID>:<ONID>:<NS>:0:0:0:, iar transponderul ei din lamedb are t2mi_plp_id:t2mi_pid) -> referinta
         noastra (releul T2, acelasi program), daca feed-ul (pozitie, frecventa +-2 MHz, polarizare, PID, PLP) e in lista;
-        altfel None. Nucleul nostru nu foloseste campurile T2-MI, deci fara asta canalul ar ramane negru."""
+        altfel None. Pe placile al caror driver nu decapsuleaza T2-MI (straine.driver_decapsuleaza_t2mi) un feed care
+        lipseste din lista se face singur din lamedb (straine.feed_din_t2mi, pus in scanate.json); acolo unde driverul
+        decapsuleaza, canalul fara feed in lista merge direct (frontend.cpp trimite PID-ul si PLP-ul driverului).
+        Tunere amestecate (straine.tunere_amestecate: unul cu T2-MI in driver, altul fara): direct numai cand enigma2 il
+        poate porni acum (_t2mi_direct_acum: frontend.cpp il da numai tunerului cu T2-MI, deci acela e liber si prinde
+        satelitul), altfel prin releu, pe orice tuner; un feed facut asa (id lista_...) nu tine canalul pe releu cand
+        tunerul cu T2-MI s-a eliberat. nav: Navigation (canalul de acum se socoteste liber, zap-ul il inlocuieste)."""
+        x = self._t2mi_strain(text, doar_din_memorie)
+        if x is None:
+            return None
+        parti, (tip, sid, tsid, onid, _ns), t = x
+        from . import straine
+        pol = 'HVLR'[t['pol'] & 3]
+        desc = '%d %d %s, PID %d, PLP %d' % (t['poz'], t['khz'] // 1000, pol, t['pid'], t['plp'])
+        ref = self._ref_t2mi_in_lista(parti, t, tip, sid, tsid, onid)
+        if ref is not None:
+            if (not doar_din_memorie and str(self._feed_t2mi_in_lista(t).get('id') or '').startswith('lista_')
+                    and straine.tunere_amestecate() and self._t2mi_direct_acum(text, nav)):
+                jurnal.noteaza(self.et, 'canal T2-MI din alta lista (%s): tunerul cu T2-MI in driver e liber si prinde '
+                               'satelitul, merge direct (nu prin feed-ul facut din lamedb)' % desc)
+                return None
+            return ref
+        if doar_din_memorie:
+            return None
+        if straine.driver_decapsuleaza_t2mi():
+            if not straine.tunere_amestecate():
+                jurnal.noteaza(self.et, 'canal T2-MI din alta lista (%s) fara feed in lista noastra; driverul decapsuleaza '
+                               'T2-MI, merge direct' % desc)
+                return None
+            if self._t2mi_direct_acum(text, nav):
+                jurnal.noteaza(self.et, 'canal T2-MI din alta lista (%s) fara feed in lista noastra; tunere amestecate, '
+                               'cel cu T2-MI in driver e liber si prinde satelitul: merge direct' % desc)
+                return None
+            jurnal.noteaza(self.et, 'canal T2-MI din alta lista (%s): tunere amestecate, cel cu T2-MI in driver e ocupat '
+                           'sau nu prinde satelitul, prin releul nostru' % desc)
+        facut = straine.feed_din_t2mi(t)
+        if facut is not None:
+            try:
+                from . import liste
+                liste.adauga_scanat(self.profil.tip, facut[0], [facut[1]], self.profil.director)
+                self.lista(forteaza=True)
+                ref = self._ref_t2mi_in_lista(parti, t, tip, sid, tsid, onid)
+            except Exception:
+                jurnal.eroare(self.et, 'feed-ul facut din lamedb')
+                ref = None
+            if ref is not None:
+                jurnal.noteaza(self.et, 'canal T2-MI din alta lista: feed %s facut din lamedb (driverul nu decapsuleaza '
+                               'T2-MI), redat prin releul nostru' % facut[1]['id'])
+                return ref
+        jurnal.noteaza(self.et, 'canal T2-MI din alta lista (%s) fara feed in lista noastra' % desc)
+        return None
+
+    def _t2mi_direct_acum(self, text, nav=None):
+        """Tunere amestecate: enigma2 poate porni canalul T2-MI `text` direct, acum (isPlayable, managerul de tunere; cu
+        frontend.cpp numai tunerul cu T2-MI in driver primeste transponderul). Canalul de pe televizor se socoteste
+        liber (zap-ul il inlocuieste). Daca enigma2 nu raspunde: True (direct, ca inainte)."""
+        try:
+            from enigma import eServiceCenter, eServiceReference
+        except ImportError:
+            return True
+        try:
+            sref = eServiceReference(text)
+            ignora = nav.getCurrentlyPlayingServiceReference() if nav is not None else None
+            if ignora is None:
+                ignora = eServiceReference()
+            info = eServiceCenter.getInstance().info(sref)
+            return bool(info and info.isPlayable(sref, ignora))
+        except Exception:
+            jurnal.eroare(self.et, 'tunerul cu T2-MI (isPlayable)')
+            return True
+
+    def _t2mi_strain(self, text, doar_din_memorie=False):
+        """Referinta DVB obisnuita al carei transponder din lamedb are campurile T2-MI -> (parti, (tip, sid, tsid, onid,
+        ns), transponderul din lamedb.transpondere_t2mi), altfel None. doar_din_memorie: fara citire de disc."""
         parti = str(text or '').split(':')
         if len(parti) < 10 or parti[0] != '1' or parti[1] != '0' or (len(parti) > 10 and parti[10]):
             return None
@@ -598,12 +671,27 @@ class Controlor(object):
         if not t2mi:
             return None
         try:
-            tip, sid, tsid, onid, ns = (int(parti[k], 16) for k in range(2, 7))
+            chei = tuple(int(parti[k], 16) for k in range(2, 7))
         except ValueError:
             return None
-        t = t2mi.get((ns, tsid, onid))
+        t = t2mi.get((chei[4], chei[2], chei[3]))
         if t is None:
             return None
+        return parti, chei, t
+
+    def _ref_t2mi_in_lista(self, parti, t, tip, sid, tsid, onid):
+        """Referinta releului pentru transponderul T2-MI t, daca feed-ul (pozitie, frecventa +-2 MHz, polarizare, flux,
+        PID, PLP) e in lista noastra; altfel None."""
+        f = self._feed_t2mi_in_lista(t)
+        if not f:
+            return None
+        ref = buchete.ref_t2(self.profil, f, {'sid': sid, 'tsid': tsid, 'onid': onid, 'tip': tip})
+        nume = ':'.join(parti[11:]) if len(parti) > 11 else ''
+        return '%s:%s' % (ref, nume) if nume else ref
+
+    def _feed_t2mi_in_lista(self, t):
+        """Feed-ul din lista noastra pentru transponderul T2-MI t (pozitie, frecventa +-2 MHz, polarizare, flux, PID,
+        PLP); altfel {}."""
         pol = 'HVLR'[t['pol'] & 3]
         for tp in self.lista().get('transpondere', []):
             try:
@@ -617,13 +705,8 @@ class Controlor(object):
             for f in tp.get('feeduri', []):
                 if (f.get('tip') == 't2' and str(f.get('fel') or '') == 't2mi' and f.get('pid') == t['pid']
                         and int(f.get('plp') or 0) == t['plp']):
-                    ref = buchete.ref_t2(self.profil, f, {'sid': sid, 'tsid': tsid, 'onid': onid, 'tip': tip})
-                    nume = ':'.join(parti[11:]) if len(parti) > 11 else ''
-                    return '%s:%s' % (ref, nume) if nume else ref
-        if not doar_din_memorie:
-            jurnal.noteaza(self.et, 'canal T2-MI din alta lista (%d %d %s, PID %d, PLP %d) fara feed in lista noastra'
-                           % (t['poz'], t['khz'] // 1000, pol, t['pid'], t['plp']))
-        return None
+                    return f
+        return {}
 
     def _ref_din_lista_altei_imagini(self, text):
         """Post DAB+ (4115 dab://, dabstreamer pe 5237) sau DVB-T2 (decapsulator pe 9999) din lista altei imagini ->
@@ -657,6 +740,13 @@ class Controlor(object):
         if not al_nostru and self.profil.tip == 't2':
             from . import abertis
             al_nostru = abertis.pid_din_adresa_straina(text) is not None or                 self._ref_din_t2mi_strain(text, doar_din_memorie=True) is not None
+            if not al_nostru and self._t2mi_strain(text, doar_din_memorie=True) is not None:
+                # T2-MI pe transponder fara feed in lista: pe placile fara T2-MI in driver feed-ul se face in firul
+                # principal (scriere pe disc), deci zap-ul se muta acolo; la tunere amestecate alegerea (direct sau
+                # releu) intreaba enigma2, deci tot acolo. driver_decapsuleaza_t2mi si tunere_amestecate sunt tinute
+                # minte (prima chemare cauta o data in /proc: procfs, fara asteptare si fara nimic din enigma2)
+                from . import straine
+                al_nostru = not straine.driver_decapsuleaza_t2mi() or straine.tunere_amestecate()
         if not al_nostru:
             from . import straine
             al_nostru = straine.pare_strain(text, self.profil.tip)
@@ -710,7 +800,7 @@ class Controlor(object):
             jurnal.noteaza(self.et, 'adresa altui automat, redata prin releul nostru: %s' % strain[:100])
             playref, text = _ref_dupa_text(playref, strain), strain
         elif self.profil.tip == 't2':
-            strain = self._ref_din_t2mi_strain(text)
+            strain = self._ref_din_t2mi_strain(text, nav=nav)
             if strain is not None:
                 # canal T2-MI din lista altei imagini (campurile T2-MI ale transponderului): tot prin releul nostru
                 jurnal.noteaza(self.et, 'canal T2-MI din alta lista, redat prin releul nostru: %s' % strain[:100])

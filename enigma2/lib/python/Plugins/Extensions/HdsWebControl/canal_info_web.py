@@ -98,6 +98,48 @@ class Mediu(object):
 			return False
 
 
+def casete_semnal(feinfo, C=None):
+	"""DSG2 (14.11.2026): casetele semnalului de deasupra paginilor, aceleasi ca pe televizor (Informatii canal: calitatea,
+	nivelul, SNR, BER, starea tunerului), din starea tunerului canalului de acum. Etichetele sunt cele ale televizorului
+	(HdsCommon.tr, deja traduse in limba receptorului), deci pagina nu are texte noi. [] fara tuner (fisier redat, IPTV,
+	standby, nimic redat): atunci pagina nu arata casete."""
+	try:
+		st = (feinfo.getFrontendStatus() if feinfo is not None else None) or {}
+	except Exception:
+		st = {}
+	if not st:
+		return []
+	if C is None:
+		from Components.Converter import HdsCommon as C
+
+	def procent(cheie):
+		try:
+			return max(0, min(100, int(st.get(cheie)) * 100 // 65536))
+		except (TypeError, ValueError):
+			return None
+
+	rez = []
+	calitate, nivel = procent("tuner_signal_quality"), procent("tuner_signal_power")
+	if calitate is not None:
+		rez.append({"id": "calitate", "eticheta": C.tr("quality"), "valoare": "%d%%" % calitate, "procent": calitate})
+	if nivel is not None:
+		rez.append({"id": "nivel", "eticheta": C.tr("signal"), "valoare": "%d%%" % nivel, "procent": nivel})
+	try:
+		db = int(st.get("tuner_signal_quality_db"))
+	except (TypeError, ValueError):
+		db = None
+	if db is not None and db != 0x12345678:
+		rez.append({"id": "snr", "eticheta": C.tr("snr"), "valoare": ("%.1f dB" % (db / 100.0)).replace(".", ",")})
+	try:
+		rez.append({"id": "ber", "eticheta": C.tr("ber"), "valoare": "%d" % int(st.get("tuner_bit_error_rate"))})
+	except (TypeError, ValueError):
+		pass
+	cheie = C.TUNER_STATES.get(str(st.get("tuner_state") or ""))
+	if cheie:
+		rez.append({"id": "stare", "eticheta": C.tr("state"), "valoare": C.tr(cheie)})
+	return rez
+
+
 def stare(mediu=None, H=None):
 	"""GET /api/informatii-canal: cele patru pagini ale ecranului, pentru canalul de acum."""
 	H = _h(H)
@@ -132,7 +174,13 @@ def stare(mediu=None, H=None):
 			# o pagina care nu se poate citi (pe televizor ecranul ar cadea) nu le ascunde pe celelalte
 			_jurnal("%s: %r" % (id_pagina, eroare))
 			pagini.append({"id": id_pagina, "randuri": [], "eroare": _t("Pagina aceasta nu s-a putut citi acum.")})
-	return {"result": True, "are_canal": bool(ref), "standby": m.standby(), "pagini": pagini}
+	in_standby = m.standby()
+	try:
+		semnal = [] if in_standby else casete_semnal(feinfo)
+	except Exception as eroare:
+		_jurnal("casetele semnalului: %r" % eroare)
+		semnal = []
+	return {"result": True, "are_canal": bool(ref), "standby": in_standby, "pagini": pagini, "semnal": semnal}
 
 
 def rute(baza, resource, mediu=None, H=None):
@@ -173,6 +221,17 @@ __STIL_PAGINI__
   .status-linie>span:first-child{flex:0 0 auto;max-width:55%;}
   .rand-plin{padding:8px 0;border-bottom:1px solid var(--bordura);font-size:.9rem;overflow-wrap:anywhere;}
   .rand-plin:last-child{border-bottom:0;}
+  /* DSG2: casetele semnalului, ca pe televizor; titlurile paginilor cu patratelul casetelor */
+  .casete{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:12px;margin:0 0 12px;}
+  .caseta{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;padding:10px 14px;}
+  .caseta .e{color:var(--text-slab);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;}
+  .caseta .v{font-size:1.6rem;font-weight:700;margin:2px 0 4px;overflow-wrap:anywhere;}
+  .caseta#c_stare .v{font-size:1.05rem;}
+  .caseta .bara{height:8px;border-radius:4px;background:#2a3350;overflow:hidden;}
+  .caseta .bara i{display:block;height:100%;background:#5dde96;}
+  .caseta#c_nivel .bara i{background:#9fb4ff;}
+  .pagini h2{display:flex;align-items:center;gap:8px;}
+  .pagini h2::before{content:"";flex:none;width:10px;height:10px;background:#9fb4ff;}
 </style>
 </head>
 <body>
@@ -181,6 +240,7 @@ __STIL_PAGINI__
 <p class="mesaj" id="incarcare">Se citesc informațiile...</p>
 <div id="continut" class="ascuns">
   <p class="nota ascuns" id="standby">Receptorul e în standby: nu redă niciun canal, deci rândurile arată ca pe televizor fără canal.</p>
+  <div class="casete ascuns" id="semnal"></div>
   <div class="pagini">
     <section class="card"><h2>Serviciu</h2><div id="p_serviciu"></div></section>
     <section class="card"><h2>PID-uri</h2><div id="p_pid"></div></section>
@@ -194,6 +254,17 @@ __STIL_PAGINI__
 </main>
 <script>
 __SCRIPT_COMUN__
+function arataSemnal(lista){
+  var c = $("semnal"); c.textContent = "";
+  (lista || []).forEach(function(s){
+    var d = document.createElement("div"); d.className = "caseta"; d.id = "c_" + s.id;
+    var e = document.createElement("div"); e.className = "e"; e.textContent = s.eticheta; d.appendChild(e);
+    var v = document.createElement("div"); v.className = "v"; v.textContent = s.valoare; d.appendChild(v);
+    if(typeof s.procent === "number"){ var b = document.createElement("div"); b.className = "bara"; var i = document.createElement("i"); i.style.width = Math.max(0, Math.min(100, s.procent)) + "%"; b.appendChild(i); d.appendChild(b); }
+    c.appendChild(d);
+  });
+  c.classList.toggle("ascuns", !(lista || []).length);
+}
 function arataPagina(p){
   var c = $("p_" + p.id); if(!c){ return; }
   c.textContent = "";
@@ -213,6 +284,7 @@ function citeste(){
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi informațiile."; return; }
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
     $("standby").classList.toggle("ascuns", !d.standby);
+    arataSemnal(d.semnal);
     (d.pagini || []).forEach(arataPagina);
     mesaj("");
   }).catch(function(){

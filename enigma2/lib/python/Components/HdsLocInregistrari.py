@@ -1150,6 +1150,7 @@ def culege(config=None, configfile=None, realpath=None):
 		if gata:
 			_lucru["aplicat"] = True
 		punct, rez, scop, ident = _lucru["punct"], _lucru["rez"], _lucru["scop"], _lucru.get("id")
+		de_ce = _lucru.get("de_ce")
 	if stare != LUCRU_IN_LUCRU:
 		# numai oprit: culege() poate rula chiar din acest eTimer, iar obiectul lui nu se sterge in timpul chemarii;
 		# se inlocuieste la pregatirea urmatoare
@@ -1159,8 +1160,12 @@ def culege(config=None, configfile=None, realpath=None):
 			except Exception:
 				pass
 	if gata:
+		# CRF (forum 1276): cine a ales locul, citit inainte (notificarea locului il face "om" la save) si pus dupa
+		s_cine = setareCine(config)
+		cine_inainte = (s_cine.value or "") if s_cine is not None else ""
 		try:
 			schimbate = aplicaLoc(punct, rez, scop, config, configfile, realpath, ident=ident)
+			noteazaDupaAlegere(de_ce, cine_inainte, config, configfile)
 		except Exception as eroare:
 			print("[HdsLocInregistrari] setarile pentru %s: %s" % (punct, eroare))
 			with _zavor:
@@ -1958,3 +1963,284 @@ def laProgramare(dirname=None, justplay=False):
 		print("[HdsLocInregistrari] locul inregistrarii programate: %s" % eroare)
 		return False
 	return alegeInFundal(cale, SCOP_PROGRAMARE)
+
+
+# ------------------------------------------------------------------ discul mare, ales singur (CRF, forum 1276, TODO 12.11 15:44)
+#
+# Cand se leaga primul hard disk (sau un disc mare) si locul inregistrarilor e inca pe un stick, pe un card sau nicaieri, iar omul
+# n-a ales el locul, inregistrarile trec singure pe discul cel mare, cu un mesaj scurt, o singura data: dupa mutare locul e chiar pe
+# discul mare, deci nu se mai muta nimic; daca omul alege apoi alt loc (ecranul, pagina web, Dosarele inregistrarilor), semnul
+# config.usage.hds_loc_ales_de devine "om" si receptorul nu mai muta nimic singur. Semnul: "" (nimic stiut, receptor adus la zi:
+# numai locul din fabrica e socotit neales), "receptor" (ales singur) sau "om". Nimic de confirmat (regula 1f): mutarea e pe un
+# disc mai bun, iar drumul din meniu pentru alt loc e in mesaj.
+#
+# Pornirea: Components/Harddisk.py cheama pazesteDiscMare(harddiskmanager) dupa ce face managerul; o privire la PRIMA_MARE_S dupa
+# pornire (discurile legate de la inceput) si una la INTARZIERE_MARE_S dupa fiecare disc pus. Citirea discurilor merge pe fir
+# (cereStare), pregatirea la fel (foloseste, culege), ca la alegerea in fundal.
+
+DE_CE_MARE = "mare"         # discul mare legat acum, locul era pe stick, pe card sau nicaieri, omul n-a ales altul
+SETARE_CINE = "hds_loc_ales_de"
+CINE_OM = "om"
+CINE_RECEPTOR = "receptor"
+DE_CE_SINGURE = (DE_CE_SINGUR, DE_CE_LIBER, DE_CE_PORNIRE, DE_CE_MARE)
+# un stick sau un card mai mare de atat e si el loc bun pentru inregistrari lungi
+MARIME_DISC_MARE = 250 * 1000 ** 3
+PRIMA_MARE_S = 60
+INTARZIERE_MARE_S = 10
+PAS_MARE_MS = 250
+TERMEN_MARE_S = 90
+
+DE_CE_TEXT[DE_CE_MARE] = N_("Este discul cel mare legat acum; până acum înregistrările nu aveau un loc ales de tine.")
+
+
+def setareCine(config=None):
+	"""config.usage.hds_loc_ales_de, definita la prima folosire (ca setareDisc); None fara Components.config."""
+	if config is None:
+		config = getattr(_modulSetari(), "config", None)
+		if config is None:
+			return None
+	u = getattr(config, "usage", None)
+	if u is None:
+		return None
+	try:
+		return getattr(u, SETARE_CINE)
+	except (AttributeError, KeyError):
+		pass
+	ConfigText = getattr(_modulSetari(), "ConfigText", None)
+	if ConfigText is None:
+		return None
+	try:
+		setattr(u, SETARE_CINE, ConfigText(default=""))
+		return getattr(u, SETARE_CINE)
+	except Exception as eroare:
+		print("[HdsLocInregistrari] setarea alegerii: %s" % eroare)
+		return None
+
+
+def _scrieCine(valoare, config=None, configfile=None):
+	s = setareCine(config)
+	if s is None or s.value == valoare:
+		return False
+	s.value = valoare
+	s.save()
+	try:
+		if configfile is None:
+			from Components.config import configfile
+		configfile.save()
+	except Exception:
+		pass
+	return True
+
+
+def alesDeOm(config=None):
+	"""True cand locul inregistrarilor l-a ales omul (semnul om), sau cand semnul lipseste si locul nu mai e cel din fabrica."""
+	if config is None:
+		config = getattr(_modulSetari(), "config", None)
+		if config is None:
+			return True
+	s = setareCine(config)
+	cine = (s.value or "") if s is not None else ""
+	if cine == CINE_OM:
+		return True
+	if cine == CINE_RECEPTOR:
+		return False
+	el = config.usage.default_path
+	return (el.value or "").rstrip("/") != (getattr(el, "default", "") or "").rstrip("/")
+
+
+def cineDupaAlegere(de_ce, inainte):
+	"""Semnul dupa o pregatire reusita: discul tinut minte pastreaza semnul de dinainte; alegerile singure dau receptor, restul
+	(meniul, pagina web, raspunsul la intrebare) om."""
+	if de_ce == DE_CE_RETINUT:
+		return inainte
+	return CINE_RECEPTOR if de_ce in DE_CE_SINGURE else CINE_OM
+
+
+def eDiscMare(d):
+	return d.get("tip") == TIP_DISC or (d.get("total") or 0) >= MARIME_DISC_MARE
+
+
+def decizieDiscMare(stare, ales_de_om):
+	"""Dupa o citire (cereStare): {fel: DEC_DISC, disc, discuri: [], de_ce: DE_CE_MARE} cand locul trebuie sa treaca singur pe
+	discul cel mare, altfel None. Nu cand omul a ales locul, nu cand locul e deja pe un disc mare sau intr-un loc bun din afara
+	discurilor (retea, alt dosar), nu pe un disc cu mai putin de LIBER_MINIM_RETINUT liber."""
+	if not stare or ales_de_om:
+		return None
+	loc = stare.get("loc") or {}
+	discuri = stare.get("discuri") or []
+	if loc.get("bun"):
+		folosit = [d for d in discuri if d.get("folosit")]
+		if not folosit or eDiscMare(folosit[0]):
+			return None
+	mari = [d for d in discuri if d.get("bun") and not d.get("folosit") and d.get("tip") != TIP_RETEA and
+		not str(d.get("id") or "").startswith("retea:") and eDiscMare(d) and
+		(d.get("liber") is None or d["liber"] >= LIBER_MINIM_RETINUT)]
+	if not mari:
+		return None
+	cel_mare = sorted(mari, key=lambda d: (d.get("total") or 0, _liber(d)), reverse=True)[0]
+	return {"fel": DEC_DISC, "disc": cel_mare, "discuri": [], "de_ce": DE_CE_MARE}
+
+
+_mare = {"pas": None, "cand": [], "timp": 0.0, "punct": None, "cale": "", "ultima_cale": None, "legat": False}
+_ceasMare = []      # [ceasul programarii, ceasul pasilor] (tinute aici, altfel GC-ul le-ar culege)
+
+
+def _omSchimbaLocul(element=None):
+	"""Notificarea lui config.usage.default_path (si la save: Dosarele inregistrarilor, RecordPaths, web): o cale noua e alegerea
+	omului. culege() pune apoi semnul adevarat dupa o pregatire (cineDupaAlegere)."""
+	try:
+		valoare = element.value if element is not None else None
+	except Exception:
+		return
+	if valoare is None or valoare == _mare["ultima_cale"]:
+		return
+	_mare["ultima_cale"] = valoare
+	_scrieCine(CINE_OM)
+
+
+def _leagaNotificarea(config=None):
+	if _mare["legat"]:
+		return
+	if config is None:
+		config = getattr(_modulSetari(), "config", None)
+		if config is None:
+			return
+	try:
+		el = config.usage.default_path
+	except (AttributeError, KeyError):
+		return
+	_mare["ultima_cale"] = el.value
+	try:
+		el.callNotifiersOnSaveAndCancel = True
+		el.addNotifier(_omSchimbaLocul, initial_call=False)
+		_mare["legat"] = True
+	except Exception as eroare:
+		print("[HdsLocInregistrari] notificarea locului: %s" % eroare)
+
+
+def noteazaDupaAlegere(de_ce, inainte, config=None, configfile=None):
+	"""Din culege(), dupa setarile puse: semnul cine a ales (cineDupaAlegere) si calea tinuta de notificare. Nu arunca: o
+	greseala aici nu strica alegerea facuta."""
+	try:
+		_scrieCine(cineDupaAlegere(de_ce, inainte), config, configfile)
+		if config is None:
+			from Components.config import config
+		_mare["ultima_cale"] = config.usage.default_path.value
+	except Exception as eroare:
+		print("[HdsLocInregistrari] semnul alegerii: %s" % eroare)
+
+
+def pazesteDiscMare(hm, ceas=None):
+	"""Din Components/Harddisk.py, dupa ce face managerul: discurile puse si o privire dupa pornire. False pe PC (fara eTimer)."""
+	try:
+		hm.on_partition_list_change.append(_laSchimbareDiscuri)
+	except Exception as eroare:
+		print("[HdsLocInregistrari] discul mare: %s" % eroare)
+		return False
+	return _programeazaMare(PRIMA_MARE_S, ceas)
+
+
+def _laSchimbareDiscuri(actiune, partitie=None):
+	if actiune == "add":
+		_programeazaMare(INTARZIERE_MARE_S)
+
+
+def _programeazaMare(secunde, ceas=None):
+	try:
+		if not _ceasMare:
+			_ceasMare.append((ceas or _ceasEnigma)(pornesteDiscMare))
+		_ceasMare[0].start(int(secunde * 1000), True)
+		return True
+	except Exception as eroare:
+		print("[HdsLocInregistrari] ceasul discului mare: %s" % eroare)
+		return False
+
+
+def pornesteDiscMare(acum=None, config=None, ceas=None):
+	"""Din eTimer-ul programarii: citirea discurilor pe fir, apoi pasii din pasDiscMare. False cand nu e nimic de facut."""
+	acum = time.time() if acum is None else acum
+	_leagaNotificarea(config)
+	if _mare["pas"] is not None and 0 <= acum - _mare["timp"] < TERMEN_MARE_S:
+		return False
+	if inFundal() is not None or alesDeOm(config):
+		return False
+	if config is None:
+		from Components.config import config
+	cale = config.usage.default_path.value
+	_mare.update({"pas": FUNDAL_CITIRE, "cand": candidati(), "timp": acum, "punct": None, "cale": cale})
+	cereStare(_mare["cand"], cale, din_nou=True)
+	try:
+		while len(_ceasMare) < 2:
+			_ceasMare.append((ceas or _ceasEnigma)(pasDiscMare))
+		_ceasMare[1].start(PAS_MARE_MS, False)
+	except Exception as eroare:
+		print("[HdsLocInregistrari] pasii discului mare: %s" % eroare)
+		_mare["pas"] = None
+		return False
+	return True
+
+
+def _gataMare():
+	_mare["pas"] = None
+	for c in _ceasMare[1:]:
+		try:
+			c.stop()
+		except Exception:
+			pass
+
+
+def pasDiscMare(acum=None, anunta=None, config=None):
+	"""Un pas (din eTimer-ul pasilor, pe firul enigma2). -> pasul in care a ramas, None cand s-a terminat."""
+	try:
+		return _pasDiscMare(acum, anunta, config)
+	except Exception as eroare:
+		print("[HdsLocInregistrari] the large disk: %s" % eroare)
+		_gataMare()
+		return None
+
+
+def _pasDiscMare(acum, anunta, config):
+	acum = time.time() if acum is None else acum
+	pas = _mare["pas"]
+	if pas is None or not 0 <= acum - _mare["timp"] < TERMEN_MARE_S:
+		_gataMare()
+		return None
+	if pas == FUNDAL_CITIRE:
+		stare, se_citeste = cereStare(_mare["cand"], _mare["cale"])
+		if stare is None or se_citeste:
+			return pas
+		if stare.get("termen"):
+			_gataMare()
+			return None
+		if "cand" in stare:
+			_mare["cand"] = stare["cand"]
+		dec = decizieDiscMare(stare, alesDeOm(config))
+		if dec is None:
+			_gataMare()
+			return None
+		pornit, _mesaj = foloseste(dec["disc"]["punct"], _mare["cand"], SCOP_INREGISTRARE, config=config, de_ce=DE_CE_MARE)
+		if not pornit:
+			# alt disc se pregateste chiar acum: la discul urmator pus sau la repornire se priveste din nou
+			_gataMare()
+			return None
+		_mare["pas"] = FUNDAL_PREGATIRE
+		_mare["punct"] = dec["disc"]["punct"]
+		return FUNDAL_PREGATIRE
+	lucru = culege(config)
+	al_meu = lucru is not None and lucru.get("punct") == _mare["punct"] and lucru.get("de_ce") == DE_CE_MARE
+	if al_meu and (lucru["stare"] == LUCRU_IN_LUCRU or (lucru["stare"] == LUCRU_GATA and not lucru.get("aplicat"))):
+		return pas
+	_gataMare()
+	if al_meu and lucru["stare"] == LUCRU_GATA:
+		text, detaliu = textAutomat(lucru)
+		if anunta is not None:
+			anunta(text, detaliu)
+		else:
+			anuntaScurt(text, detaliu, SCOP_INREGISTRARE)
+	return None
+
+
+def uitaDiscMare():
+	"""Pentru probe."""
+	_mare.update({"pas": None, "cand": [], "timp": 0.0, "punct": None, "cale": "", "ultima_cale": None, "legat": False})
+	del _ceasMare[:]

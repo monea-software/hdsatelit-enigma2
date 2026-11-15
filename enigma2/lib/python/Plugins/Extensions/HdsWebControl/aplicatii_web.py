@@ -47,7 +47,9 @@
 #    Host strain cere parola fiindca o pagina re-legata prin DNS (DNS rebinding) trimite Host-ul ei, iar Origin /
 #    Referer sunt tot ale ei: fara parola, numai Host-ul o deosebeste de o aplicatie (paza fata de internet);
 # 6. comenzile (canal, taste, volum, standby, mesaj, temporizatoare) sunt sub aceeasi bariera; oprirea completa si
-#    repornirea (powerstate 1, 2, 3) nu se fac de aici deloc.
+#    repornirea receptorului (powerstate 1, 2) nu se fac de aici deloc. Repornirea interfetei (powerstate 3) da, din
+#    0.7.6, ca pe portul 8081: pluginurile si uneltele care o cer pe portul 80 credeau ca s-a facut (TODO 13.11 11:02);
+#    se face pe calea meniului (TryQuitMainloop 3, cu intrebarea de pe televizor la o inregistrare in curs).
 # Prima cerere buna a unei aplicatii noi (adresa + felul aplicatiei, dintr-un vocabular fix), cu parola sau fara, pune
 # pe televizor „Aplicație conectată”. Parola si aplicatiile vazute stau in CALE_PAROLA (0600, in afara fisierului
 # settings); copia setarilor (Components/HdsCopieSetari.py) il ia in setari.tar.gz si il pune la loc numai pe acelasi
@@ -66,7 +68,7 @@
 #   /web/deviceinfo, /web/about, /web/currenttime, /web/signal, /web/tunersignal, /web/settings
 #   /web/getservices[?sRef=], /web/getallservices[?type=tv|radio]
 #   /web/zap?sRef=, /web/remotecontrol?command=[&type=long], /web/vol?set=state|up|down|mute|setNN,
-#   /web/powerstate[?newstate=0|4|5], /web/message?text=[&type=&timeout=]
+#   /web/powerstate[?newstate=0|3|4|5], /web/message?text=[&type=&timeout=]
 #   /web/epgservice?sRef=[&time=&endTime=], /web/epgservicenow?sRef=, /web/epgservicenext?sRef=,
 #   /web/epgnow?bRef=, /web/epgnext?bRef=, /web/epgnownext?bRef=, /web/getcurrent
 #   /web/epgbouquet?bRef=[&time=&endTime=], /web/epgmulti?bRef=[&time=&endTime=], /web/epgsearch?search=
@@ -195,6 +197,8 @@ MAX_ADRESE = 256
 MAX_VAZUTE = 20
 PORT_FLUX = 8001
 MAX_REF = 600
+# powerstate 3: TryQuitMainloop dupa atatea milisecunde, ca raspunsul catre aplicatie sa plece inainte (ca /alimentare)
+DUPA_REPORNIRE_MS = 1500
 MAX_ARG = 2048
 MAX_NUME = 200
 MAX_DESCRIERE = 4000
@@ -808,7 +812,11 @@ def _dinPagina(request, L):
 	referer = L.antet(request, b"referer")
 	if origin or referer:
 		from .asociere import acelasiOrigin
-		return not acelasiOrigin(L.antet(request, b"host"), origin, referer)
+		try:
+			schema = "https" if request.isSecure() else "http"
+		except Exception:
+			schema = "http"
+		return not acelasiOrigin(L.antet(request, b"host"), origin, referer, schema)
 	return False
 
 
@@ -1042,6 +1050,11 @@ class _Furnizor(object):
 				for n, valori in date.items():
 					setattr(nimmanager, n, valori)
 				raise
+			# satelitii noi din fisierul adus de pe PC primesc si intrarea lor in setarile avansate ale tunerelor; altfel VERDE in
+			# Setari tuner cadea cu KeyError (NimManager.hdsCompleteazaSatelitiAvansati, asistenta 866218)
+			completeaza = getattr(nimmanager, "hdsCompleteazaSatelitiAvansati", None)
+			if completeaza is not None:
+				completeaza()
 		else:
 			from Components.ParentalControl import parentalControl
 			parentalControl.open()
@@ -1127,6 +1140,23 @@ class _Furnizor(object):
 		import Screens.Standby
 		if Screens.Standby.inStandby is not None:
 			Screens.Standby.inStandby.Power()
+
+	def repornesteInterfata(self):
+		"""powerstate 3 (0.7.6, TODO 13.11 11:02): repornirea interfetei, ca Meniu > Standby si repornire > Reporneste
+		interfata si ca pagina /alimentare (Components/HdsAlimentare.deschide: TryQuitMainloop 3 peste DUPA_REPORNIRE_MS,
+		ca raspunsul sa plece inainte). Intoarce (facut, intreaba): intreaba = True cand televizorul cere intai Da (o
+		inregistrare in curs sau aproape, o lucrare in fundal); facut = False cand o intrebare de oprire sau repornire
+		asteapta deja pe televizor sau nu e sesiune."""
+		import Screens.Standby
+		from Components import HdsAlimentare
+		from . import meniu_comun_web
+		if getattr(Screens.Standby, "inTryQuitMainloop", False):
+			return False, True
+		sesiune = meniu_comun_web.sesiune()
+		intreaba = HdsAlimentare.vaIntreba(sesiune)
+		if not HdsAlimentare.deschide(sesiune, "interfata", dupa_ms=DUPA_REPORNIRE_MS):
+			return False, False
+		return True, bool(intreaba)
 
 	def _vc(self):
 		try:
@@ -1245,6 +1275,16 @@ class _Furnizor(object):
 				rez[cheie] = ""
 		model = getModelName()
 		rez["boxtype"] = "" if model == "unknown" else model
+		# 0.7.5 (TODO 06.11 17:35, punctul 5): versiunea bazei OE-Alliance si a afisajului din fata, valorile reale in
+		# loc de campuri goale. "oe" e cheia citita si de pluginuri (SystemInfo: 6.0 sau oe= din /usr/lib/enigma.info);
+		# versiunea afisajului din /proc/stb/fp/version, numai cand placa o are (citita direct: getFPVersion scrie
+		# "failed" in jurnal la fiecare cerere pe placile fara ea)
+		try:
+			from Components.SystemInfo import SystemInfo
+			rez["oe"] = str(SystemInfo.get("oe") or "")
+		except Exception:
+			rez["oe"] = ""
+		rez["afisaj"] = _citesteMic("/proc/stb/fp/version")
 		return rez
 
 	def retea(self):
@@ -1540,7 +1580,14 @@ def _info(M):
 	return {"nume": nume, "brand": brand or NUME_IMAGINE, "model": model or nume, "boxtype": curat(d.get("boxtype"), 40),
 		"imagine": curat(d.get("imagine"), 60) or NUME_IMAGINE, "enigma": curat(d.get("enigma"), 60) or NUME_IMAGINE,
 		"nucleu": curat(d.get("nucleu"), 60), "cip": curat(d.get("cip"), 60), "pornit": curat(d.get("pornit"), 40),
+		"oe": curat(d.get("oe"), 40), "afisaj": _versiuneAfisaj(d.get("afisaj")),
 		"retea": M.retea(), "tunere": M.tunere(), "discuri": M.discuri()}
+
+
+def _versiuneAfisaj(text):
+	"""Versiunea afisajului din fata (/proc/stb/fp/version): numarul ca text, "" cand placa nu o are sau nu e numar."""
+	text = curat(text, 20)
+	return str(int(text)) if text.isascii() and text.isdigit() else ""
 
 
 def _prefix(masca):
@@ -1558,7 +1605,7 @@ def h_deviceinfo(c):
 		("e2enigmaversion", i["enigma"]),
 		("e2imageversion", i["imagine"]),
 		("e2webifversion", VERSIUNE_WEBIF),
-		("e2fpversion", ""),
+		("e2fpversion", i["afisaj"]),
 		("e2devicename", i["nume"]),
 		("e2distroversion", NUME_IMAGINE),
 		("e2frontends", [("e2frontend", [("e2name", t["name"]), ("e2model", t["type"] or "DVB")]) for t in i["tunere"]]),
@@ -1573,7 +1620,7 @@ def _infoJson(i):
 	return {"brand": i["brand"], "model": i["model"], "boxtype": i["boxtype"] or i["model"],
 		"machinebuild": i["boxtype"] or i["model"], "chipset": i["cip"], "friendlychipsetdescription": i["cip"],
 		"webifver": VERSIUNE_WEBIF, "imagedistro": NUME_IMAGINE, "imagever": i["imagine"], "enigmaver": i["enigma"],
-		"kernelver": i["nucleu"], "oever": "", "driverdate": "", "fp_version": 0, "uptime": i["pornit"],
+		"kernelver": i["nucleu"], "oever": i["oe"], "driverdate": "", "fp_version": int(i["afisaj"] or 0), "uptime": i["pornit"],
 		"mem1": "", "mem2": "", "transcoding": False,
 		"ifaces": [{"name": n["name"], "friendlynic": n["name"], "mac": n["mac"], "ip": n["ip"], "mask": n["mask"],
 			"gw": n["gw"], "dhcp": n["dhcp"], "v4prefix": _prefix(n["mask"]), "ipv6": ""} for n in i["retea"]],
@@ -1600,13 +1647,13 @@ def h_about(c):
 	prima = i["retea"][0] if i["retea"] else {"mac": "", "dhcp": False, "ip": "", "mask": "", "gw": ""}
 	disc = i["discuri"][0] if i["discuri"] else {"model": "", "capacity": "", "free": ""}
 	return _xml(c.r, "e2abouts", [("e2about", [
-		# interfata web obisnuita a receptoarelor lasa gol ce nu stie; textul „None” ajungea in clienti (proba pe Supreme, 06.11)
-		("e2oeversion", ""),
+		# valorile reale (TODO 06.11 17:35, punctul 5); ce nu se stie ramane gol, niciodata textul None (proba pe Supreme, 06.11)
+		("e2oeversion", i["oe"]),
 		("e2enigmaversion", i["enigma"]),
 		("e2distroversion", NUME_IMAGINE),
 		("e2imageversion", i["imagine"]),
 		("e2webifversion", VERSIUNE_WEBIF),
-		("e2fpversion", ""),
+		("e2fpversion", i["afisaj"]),
 		("e2model", i["nume"]),
 		("e2lanmac", prima["mac"]),
 		("e2landhcp", prima["dhcp"]),
@@ -1821,6 +1868,23 @@ def _anuleazaStandby(M):
 		return 0
 
 
+def _repornesteInterfata(M):
+	"""(bun, text) pentru powerstate 3. Furnizorul fara repornesteInterfata (cel de proba vechi) refuza ca inainte."""
+	f = getattr(M, "repornesteInterfata", None)
+	if f is None:
+		return False, _t("Oprirea completă și repornirea nu se fac din aplicații. Folosește telecomanda.")
+	facut, intreaba = f()
+	if not facut:
+		if intreaba:
+			return False, _t("Pe televizor așteaptă deja o întrebare de oprire sau de repornire. Răspunde acolo.")
+		return False, _t("Interfața web nu are încă legătura cu ecranul receptorului. Așteaptă pornirea completă a "
+			"receptorului sau repornește-l, apoi încearcă din nou.")
+	if intreaba:
+		return True, _t("Pe televizor se cere o confirmare: o înregistrare e în curs sau începe curând, sau lucrează ceva "
+			"în fundal. Se face numai dacă răspunzi Da acolo.")
+	return True, _t("Interfața repornește...")
+
+
 def h_powerstate(c):
 	"""Standby-ul din aplicatii. Intrarea se face pe loc cand InfoBar e deasupra (notificarea deschide ecranul Standby
 	in acelasi apel); cu o fereastra deschisa pe televizor (un meniu, lista de canale, "Ce e nou") ea sta in coada pana
@@ -1858,7 +1922,9 @@ def h_powerstate(c):
 			if not inainte:
 				M.intraStandby()
 				intrare, dupa = True, bool(M.standby())
-		elif stare in (1, 2, 3):
+		elif stare == 3:
+			bun, text = _repornesteInterfata(M)
+		elif stare in (1, 2):
 			bun, text = False, _t("Oprirea completă și repornirea nu se fac din aplicații. Folosește telecomanda.")
 		else:
 			bun, text = False, _t("Starea cerută nu e cunoscută.")

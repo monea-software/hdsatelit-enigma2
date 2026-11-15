@@ -2136,6 +2136,57 @@ class HdsEditorCanale(Screen, HelpableScreen):
 
 	# ------------------------------------------------------------ operatiile
 
+	def _satelitiImagineLipsa(self):
+		"""Cati sateliti ai listei imaginii lipsesc din satellites.xml (0 cand nu e lista imaginii)."""
+		try:
+			from Components import HdsSatelitiImagine
+			return len(HdsSatelitiImagine.lipsa_din_imagine())
+		except Exception as e:
+			_jurnal('satelitii imaginii: %r' % (e,))
+			return 0
+
+	def _puneSatelitiImagine(self):
+		"""Toti satelitii lipsa ai imaginii scrisi in satellites.xml (unire, copie de siguranta inainte); pozitiile noi
+		intra in setarile tunerelor dupa repornirea interfetei, ca la editorul de sateliti din pagina web."""
+		try:
+			from Components import HdsSatelitiImagine
+			n = HdsSatelitiImagine.pune_la_loc_si_scrie()
+		except Exception as e:
+			self.session.open(MessageBox, e.mesaj() if hasattr(e, 'mesaj') else '%s' % e, MessageBox.TYPE_ERROR)
+			return
+		self.session.open(MessageBox, L.ngettext('Pus la loc %d satelit din lista imaginii. Se vede după repornirea '
+			'interfeței.', 'Puși la loc %d sateliți din lista imaginii. Se văd după repornirea interfeței.', n) % n,
+			MessageBox.TYPE_INFO, timeout=10)
+
+	def _listaSatelitiProprie(self):
+		"""True cand satellites.xml nu e lista imaginii (randul Inapoi la lista imaginii)."""
+		try:
+			from Components import HdsSatelitiImagine
+			return HdsSatelitiImagine.diferita_de_imagine()
+		except Exception as e:
+			_jurnal('lista imaginii: %r' % (e,))
+			return False
+
+	def _inapoiLaListaImaginii(self):
+		"""SXE (0.7.5): lista intreaga a imaginii in locul celei a omului; o intrebare, fiindca satelitii si
+		transponderele puse de om se pierd (raman in copia de siguranta). Transponderele noi ale imaginii vin oricum
+		singure la pornire (Components/HdsSatelitiImagine.py)."""
+		self.session.openWithCallback(self._raspunsInapoiImagine, MessageBox, _('Lista sateliților se înlocuiește cu '
+			'lista imaginii. Sateliții și transponderele puse de tine se pierd; rămân în copia de siguranță.') + '\n' +
+			_('Pui lista imaginii?'), MessageBox.TYPE_YESNO, default=False)
+
+	def _raspunsInapoiImagine(self, da):
+		if not da or self.inchis:
+			return
+		try:
+			from Components import HdsSatelitiImagine
+			HdsSatelitiImagine.inapoi_la_imagine()
+		except Exception as e:
+			self.session.open(MessageBox, e.mesaj() if hasattr(e, 'mesaj') else '%s' % e, MessageBox.TYPE_ERROR)
+			return
+		self.session.open(MessageBox, _('Lista sateliților imaginii e pusă la loc. Se vede după repornirea interfeței.'),
+			MessageBox.TYPE_INFO, timeout=10)
+
 	def _fa(self, functie, *a, **k):
 		"""O operatie a partii comune; o eroare pentru om apare in indiciu. -> rezultatul sau None (si False la eroare)."""
 		try:
@@ -2833,8 +2884,20 @@ class HdsEditorCanale(Screen, HelpableScreen):
 					lista.append((_('Șterge buchetul'), 'sterge'))
 				if len(self.bife[L.BUCHET]) and are('sorteaza_buchete'):
 					lista.append((_('Sortează buchetele alese'), 'sorteaza_buchete'))
-				# buchetele gasite pe disc, care nu sunt in lista: puse inapoi in lista, sau sterse de pe disc
-				for nb in self._nelegate():
+				# buchetele gasite pe disc, care nu sunt in lista: toate odata (lista orfana, Components/HdsBucheteOrfane.py:
+				# sute de buchete dupa un bouquets.tv refacut gol), apoi, cand sunt putine, fiecare pus inapoi sau sters
+				nelegate = self._nelegate()
+				de_pus = []
+				if nelegate and are('leaga_toate'):
+					try:
+						from Components import HdsBucheteOrfane
+						de_pus = HdsBucheteOrfane.ale_omului([_g(nb, 'id') for nb in nelegate])
+					except Exception as e:
+						_jurnal('nelegate de pus: %r' % (e,))
+				if de_pus:
+					lista.append((_('Pune înapoi toate (%d)') % len(de_pus), ('leaga_toate', tuple(de_pus))))
+				# peste 20 de buchete gasite pe disc ramane numai randul Pune inapoi toate (nu cate doua randuri de fiecare)
+				for nb in (nelegate if len(nelegate) <= 20 else ()):
 					nume = _g(nb, 'nume') or _g(nb, 'id')
 					lista.append((u'%s: %s' % (_('Pune în listă'), nume), ('leaga', _g(nb, 'id'))))
 					if are('sterge_nelegat'):
@@ -2937,13 +3000,21 @@ class HdsEditorCanale(Screen, HelpableScreen):
 			if self.focus == L.BUCHET and not self._laRadacina() and are('exporta_m3u'):
 				lista.append((_('Scrie buchetul ca m3u pe stick…'), 'exporta_m3u'))
 		lista.append((_('Copii de siguranță'), 'copii'))
+		# SXP (0.7.5): satelitii listei imaginii care lipsesc din satellites.xml (scurtat de o lista de canale straina);
+		# cei cu canale sau la tunere se pun singuri la pornire (Components/HdsSatelitiImagine.py), aici toti
+		lipsa_imagine = self._satelitiImagineLipsa()
+		if lipsa_imagine:
+			lista.append((_('Pune la loc sateliții din imagine (%d)') % lipsa_imagine, 'sateliti_imagine'))
+		# SXE (0.7.5): lista intreaga a imaginii in locul celei a omului (transponderele noi vin singure la pornire)
+		if self._listaSatelitiProprie():
+			lista.append((_('Înapoi la lista sateliților imaginii'), 'inapoi_imagine'))
 		lista.append((_('Lista radio') if not self.radio else _('Lista TV'), 'lista'))
 		lista.append((_('Ajutorul editorului'), 'ajutor'))
 		# Uneltele folosite rar au un singur loc. Mutarea si lucrul cu buchetele raman direct in meniu.
 		rare = frozenset(('test', 'dubluri', 'moarte', 'verifica', 'goale', 'transpondere', 'fluxuri', 'sigle',
 			'curatenie', 'importa', 'exporta', 'exporta_m3u', 'copii', 'alt_noi', 'alt_desface', 'alt_pune',
 			'editeaza_flux', 'flux', 'sterge_sateliti', 'pastreaza_sateliti', 'sterge_tp_bifate', 'sterge_dosar',
-			'sterge_receptor', 'scoate_nou', 'sterge_nelegat', 'leaga'))
+			'sterge_receptor', 'scoate_nou', 'sterge_nelegat', 'leaga', 'sateliti_imagine', 'inapoi_imagine'))
 		def actiune(rand):
 			return rand[1][0] if isinstance(rand[1], tuple) else rand[1]
 		self._meniuAvansat = [rand for rand in lista if actiune(rand) in rare]
@@ -3041,11 +3112,26 @@ class HdsEditorCanale(Screen, HelpableScreen):
 					self._fa(self.s.ascunde_buchet, _g(r[1], 'id'), a == 'ascunde_b') is not False:
 				self._incarcaBuchet()
 				self._dupaSchimbare()
+		elif isinstance(a, tuple) and a[0] == 'leaga_toate':
+			de_pus = list(a[1])
+			try:
+				from Components import HdsBucheteOrfane
+				de_pus = HdsBucheteOrfane.ordine(de_pus)     # ordinea din copia listei, citita numai acum
+			except Exception as e:
+				_jurnal('ordinea buchetelor: %r' % (e,))
+			n = self._fa(self.s.leaga_toate, de_pus)
+			if n is not False:
+				self._incarcaBuchet()
+				self._dupaSchimbare(L.ngettext('Pus înapoi %d buchet', 'Puse înapoi %d buchete', n or 0) % (n or 0))
 		elif isinstance(a, tuple) and a[0] == 'leaga':
 			if self._fa(self.s.leaga_buchet, a[1]) is not False:
 				self._incarcaBuchet()
 				self._laCheieBuchet(a[1])
 				self._dupaSchimbare()
+		elif a == 'sateliti_imagine':
+			self._puneSatelitiImagine()
+		elif a == 'inapoi_imagine':
+			self._inapoiLaListaImaginii()
 		elif a == 'scoate_toate':
 			self._scoateDinToate(self._refsCanale(self.focus))
 		elif a == 'debifeaza_tot':

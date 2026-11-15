@@ -382,10 +382,25 @@ static const char *const COMPONENTA = "scanare";
 /* peste atat, o citire de semnal nu mai e neglijabila fata de citirea tabelelor: scanarea nu mai citeste semnalul */
 static const long CITIRE_MAX_MS = 100;
 
+/* ceasul tabelelor pe transponderul de acum, gol (SC2) */
+static void golesteTabele(Stare &s)
+{
+	s.semnal_ms = -1;
+	for (int i = 0; i < NR_TABELE; ++i)
+	{
+		s.tabel_ms[i] = -1;
+		s.tabel_err[i] = 0;
+	}
+	s.nit_prima_ms = -1;
+	s.nit_retea = s.nit_versiune = s.nit_sectiuni = -1;
+	s.pmt_lipsa = 0;
+}
+
 Stare::Stare()
 	: pornit_ms(0), tp_ms(0), servicii_inainte(0), fara_citiri(0)
 {
 	tp[0] = 0;
+	golesteTabele(*this);
 }
 
 void pornita(Stare &s, size_t transpondere, int steaguri)
@@ -406,6 +421,7 @@ void transponder(Stare &s, iDVBFrontendParameters *p, size_t servicii)
 	}
 	s.tp_ms = hdsjurnal::monotonMs();
 	s.servicii_inainte = servicii;
+	golesteTabele(s);
 	hdsjtuner::textParametri(s.tp, sizeof(s.tp), p);
 }
 
@@ -414,11 +430,41 @@ bool citesteSemnal(const Stare &s)
 	return s.tp_ms && !s.fara_citiri;
 }
 
+/* coada randului "prins": ", pe tabele: semnal X ms, PAT ... ms, SDT ... ms, PMT ... ms, NIT ... ms (prima sectiune la
+   ... ms, retea N v V, S sectiuni)". Timpii sunt de la acordare, ca "tabele citite in". Gol cand ceasul n-a pornit. */
+static void textTabele(char *buf, size_t n, const Stare &s)
+{
+	static const char *const NUME[NR_TABELE] = { "PAT", "SDT", "PMT", "NIT", "BAT" };
+	buf[0] = 0;
+	if (s.semnal_ms < 0 || n < 64)
+		return;
+	size_t f = (size_t)snprintf(buf, n, ", pe tabele: semnal %ld ms", s.semnal_ms);
+	for (int i = 0; i < NR_TABELE && f < n; ++i)
+	{
+		if (s.tabel_ms[i] < 0)
+			continue;
+		if (i == TABEL_PMT)
+		{
+			f += (size_t)snprintf(buf + f, n - f, ", PMT %ld ms", s.tabel_ms[i]);
+			if (s.pmt_lipsa > 0 && f < n)
+				f += (size_t)snprintf(buf + f, n - f, " (%d fara)", s.pmt_lipsa);
+			continue;
+		}
+		f += (size_t)snprintf(buf + f, n - f, ", %s %ld ms%s", NUME[i], s.tabel_ms[i], s.tabel_err[i] ? " fara" : "");
+		if (i == TABEL_NIT && s.nit_prima_ms >= 0 && f < n)
+			f += (size_t)snprintf(buf + f, n - f, " (prima sectiune la %ld ms, retea %d v%d, %d sectiuni)", s.nit_prima_ms,
+				s.nit_retea, s.nit_versiune, s.nit_sectiuni);
+	}
+	if (s.tabel_ms[TABEL_NIT] < 0 && s.nit_prima_ms >= 0 && f < n)
+		snprintf(buf + f, n - f, ", NIT prima sectiune la %ld ms", s.nit_prima_ms);
+}
+
 void prins(Stare &s, size_t servicii, int snr_db100, int nivel, long citire_ms)
 {
 	if (!s.tp_ms)
 		return;
-	char semnal[96] = "";
+	/* coada randului: semnalul (SNR, nivel, cat a durat citirea) si ceasul tabelelor (textTabele) */
+	char semnal[352] = "";
 	if (citire_ms >= 0)
 	{
 		char snr[32] = "", niv[24];
@@ -429,10 +475,44 @@ void prins(Stare &s, size_t servicii, int snr_db100, int nivel, long citire_ms)
 		if (citire_ms > CITIRE_MAX_MS)
 			s.fara_citiri = 1;
 	}
+	size_t lung = strlen(semnal);
+	textTabele(semnal + lung, sizeof(semnal) - lung, s);
 	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "transponder", "%s prins, tabele citite in %ld ms, %zu servicii noi%s",
 		s.tp, (long)(hdsjurnal::monotonMs() - s.tp_ms), servicii >= s.servicii_inainte ? servicii - s.servicii_inainte : 0,
 		semnal);
 	s.tp_ms = 0;
+	golesteTabele(s);
+}
+
+void semnalPrins(Stare &s)
+{
+	if (s.tp_ms && s.semnal_ms < 0)
+		s.semnal_ms = (long)(hdsjurnal::monotonMs() - s.tp_ms);
+}
+
+void tabel(Stare &s, Tabel t, int err)
+{
+	if (!s.tp_ms || (int)t < 0 || (int)t >= NR_TABELE)
+		return;
+	/* ultimul cuvant al tabelului: SDT-ul reluat fara TSID sau PMT-ul se pot termina de mai multe ori */
+	s.tabel_ms[t] = (long)(hdsjurnal::monotonMs() - s.tp_ms);
+	s.tabel_err[t] = err;
+}
+
+void pmtLipsa(Stare &s)
+{
+	if (s.tp_ms)
+		s.pmt_lipsa++;
+}
+
+void sectiuneNit(Stare &s, int retea, int versiune, int sectiuni)
+{
+	if (!s.tp_ms || s.nit_prima_ms >= 0)
+		return;
+	s.nit_prima_ms = (long)(hdsjurnal::monotonMs() - s.tp_ms);
+	s.nit_retea = retea;
+	s.nit_versiune = versiune;
+	s.nit_sectiuni = sectiuni;
 }
 
 void faraSemnal(Stare &s)
@@ -442,6 +522,16 @@ void faraSemnal(Stare &s)
 	hdsjurnal::scrief(COMPONENTA, hdsjurnal::AVERT, "transponder", "%s fara semnal dupa %ld ms", s.tp,
 		(long)(hdsjurnal::monotonMs() - s.tp_ms));
 	s.tp_ms = 0;
+}
+
+void variantaSarita(Stare &s, iDVBFrontendParameters *sarit, iDVBFrontendParameters *prins)
+{
+	if (!s.pornit_ms)
+		return;  /* cautarea din fundal: nimic scris */
+	char a[160], b[160];
+	hdsjtuner::textParametri(a, sizeof(a), sarit);
+	hdsjtuner::textParametri(b, sizeof(b), prins);
+	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "transponder", "%s sarit: aceeasi purtatoare e prinsa ca %s", a, b);
 }
 
 void gata(Stare &s, size_t cercetate, size_t fara_semnal, size_t servicii)

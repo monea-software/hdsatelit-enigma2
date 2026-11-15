@@ -252,6 +252,14 @@
 		<widget name="list" position="0,45" size="560,252" scrollbarMode="showOnDemand" />
 	</screen>
 	<!-- Choice box -->
+	<!-- Canale recente (Screens/HdsIstoricCanale.py), pentru temele fara ecranul lor; randul (cheie, numar, nume, emisiune, "acum") -->
+	<screen name="HdsIstoricCanale" position="60,80" size="560,560" title="Canale recente">
+		<widget source="list" render="Listbox" position="10,10" size="540,500" scrollbarMode="showOnDemand">
+			<convert type="TemplatedMultiContent">{"template": [MultiContentEntryText(pos=(5, 0), size=(30, 50), font=1, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=1), MultiContentEntryText(pos=(45, 2), size=(400, 26), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=2), MultiContentEntryText(pos=(45, 28), size=(490, 20), font=1, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=3), MultiContentEntryText(pos=(450, 2), size=(85, 26), font=1, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=4)], "fonts": [gFont("Regular", 22), gFont("Regular", 17)], "itemHeight": 50}</convert>
+		</widget>
+		<widget source="gol" render="Label" position="10,10" size="540,100" font="Regular;20" />
+		<widget source="hint" render="Label" position="10,520" size="540,30" font="Regular;18" />
+	</screen>
 	<screen name="ChoiceBox" position="center,center" size="550,400" title="Input">
 		<widget name="text" position="10,10" size="550,25" font="Regular;20" />
 		<widget name="list" position="0,30" size="550,335" scrollbarMode="showOnDemand" />
@@ -302,9 +310,11 @@ self.instance.move(ePoint((720-wsizex)//2, (576-wsizey)//(count &gt; 7 and 2 or 
 		<widget name="bottom" position="10,230" size="430,25" font="Regular;23" />
 	</screen>
 	<!-- Common interface - selection -->
-	<screen name="CiSelection" position="center,center" size="440,185" title="Common Interface">
+	<screen name="CiSelection" position="center,center" size="440,235" title="Common Interface">
 		<widget name="text" position="10,10" size="430,25" font="Regular;23" />
 		<widget name="entries" position="10,55" size="420,125" scrollbarMode="showOnDemand" />
+		<widget name="key_red" position="10,195" size="200,30" font="Regular;20" halign="center" valign="center" backgroundColor="#9f1313" />
+		<widget name="key_green" position="230,195" size="200,30" font="Regular;20" halign="center" valign="center" backgroundColor="#1f771f" />
 	</screen>
 	<!-- Console -->
 	<screen name="Console" position="center,center" size="560,430" title="Command execution...">

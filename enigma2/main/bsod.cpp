@@ -1,7 +1,9 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <fstream>
 #include <pthread.h>
 #include <sstream>
@@ -594,8 +596,164 @@ void handleFatalSignal(int signum, siginfo_t *si, void *ctx)
 	bsodFatal("enigma2, signal");
 }
 
+/*
+ * HDSatelit, 0.7.5 (TODO 14.11 09:40, SIGHUP la pornire): who stopped enigma2 with SIGHUP. enigma2 does not catch SIGHUP,
+ * so it dies of it (exit code 129) and tools/enigma2.sh could only write "cod 129, cauza necunoscuta" (Octagon SF8008,
+ * 13.11.2026, 3.5 minutes after the start): a shell cannot see who signalled its child, and the sender (a kill or
+ * killall from a script or a plugin) was gone by then. Only the process that receives the signal can know it, from
+ * siginfo: si_code SI_USER / SI_QUEUE / SI_TKILL = sent by a process (si_pid, si_uid), anything else = the kernel (a
+ * hangup of a terminal). Here, at that instant, while the sender usually still runs, its name and its parent are read
+ * from /proc and written as the cause file for tools/enigma2.sh (fel=extern; the same file, .nou and rename, as
+ * hdsScrieMotiv), which puts the sender in hds-caderi.log and in the archive of the cause. Then the default action is
+ * put back and the same signal raised again: enigma2 still ends with 129, as before (nothing is hidden or ignored).
+ * Only async-signal-safe calls (open, read, write, close, rename, sigaction, raise); no stdio, no eDebug, no malloc.
+ */
+static size_t hdsAdaugaText(char *buf, size_t n, size_t marime, const char *text)
+{
+	while (*text && n + 1 < marime)
+		buf[n++] = *text++;
+	buf[n] = 0;
+	return n;
+}
+
+static size_t hdsAdaugaNumar(char *buf, size_t n, size_t marime, long valoare)
+{
+	char cifre[24];
+	int k = 0;
+	unsigned long v = valoare < 0 ? (unsigned long)(-(valoare + 1)) + 1 : (unsigned long)valoare;
+	do
+	{
+		cifre[k++] = '0' + (char)(v % 10);
+		v /= 10;
+	} while (v && k < (int)sizeof(cifre));
+	if (valoare < 0 && n + 1 < marime)
+		buf[n++] = '-';
+	while (k > 0 && n + 1 < marime)
+		buf[n++] = cifre[--k];
+	buf[n] = 0;
+	return n;
+}
+
+/* /proc/<pid>/<fisier> into text (at most marime - 1 bytes); the length read, 0 when the process is gone */
+static size_t hdsCitesteProc(long pid, const char *fisier, char *text, size_t marime)
+{
+	char cale[64];
+	size_t n = hdsAdaugaText(cale, 0, sizeof(cale), "/proc/");
+	n = hdsAdaugaNumar(cale, n, sizeof(cale), pid);
+	n = hdsAdaugaText(cale, n, sizeof(cale), "/");
+	hdsAdaugaText(cale, n, sizeof(cale), fisier);
+	text[0] = 0;
+	int fd = open(cale, O_RDONLY);
+	if (fd < 0)
+		return 0;
+	ssize_t r = read(fd, text, marime - 1);
+	close(fd);
+	if (r <= 0)
+		return 0;
+	text[r] = 0;
+	return (size_t)r;
+}
+
+/* the name of a process (comm): one line, only plain characters (a comm may hold anything) */
+static size_t hdsAdaugaNume(char *buf, size_t n, size_t marime, long pid)
+{
+	char comm[32];
+	size_t r = hdsCitesteProc(pid, "comm", comm, sizeof(comm));
+	for (size_t i = 0; i < r && comm[i] != '\n' && n + 1 < marime; ++i)
+	{
+		char c = comm[i];
+		bool bun = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' ||
+			c == '_' || c == '-' || c == '+' || c == ':' || c == '/';
+		buf[n++] = bun ? c : '?';
+	}
+	buf[n] = 0;
+	return n;
+}
+
+/* the parent of a process, from /proc/<pid>/stat ("pid (comm) S ppid ..."; comm may hold spaces and parentheses) */
+static long hdsParinte(long pid)
+{
+	char linie[512];
+	size_t r = hdsCitesteProc(pid, "stat", linie, sizeof(linie));
+	size_t inchis = 0;
+	for (size_t i = 0; i < r; ++i)
+		if (linie[i] == ')')
+			inchis = i;
+	if (!inchis || inchis + 4 >= r)
+		return -1;
+	size_t i = inchis + 4; /* ") S " */
+	long ppid = 0;
+	bool cifre = false;
+	while (i < r && linie[i] >= '0' && linie[i] <= '9')
+	{
+		ppid = ppid * 10 + (linie[i++] - '0');
+		cifre = true;
+	}
+	return cifre ? ppid : -1;
+}
+
+static void hdsSemnalDinAfara(int signum, siginfo_t *si, void *)
+{
+	int pastrat = errno;
+	char buf[512];
+	size_t n = hdsAdaugaText(buf, 0, sizeof(buf), "fel=extern\nsemnal=");
+	n = hdsAdaugaNumar(buf, n, sizeof(buf), signum);
+	n = hdsAdaugaText(buf, n, sizeof(buf), "\ncod=");
+	n = hdsAdaugaNumar(buf, n, sizeof(buf), si ? si->si_code : 0x80);
+	n = hdsAdaugaText(buf, n, sizeof(buf), "\n");
+	if (si && (si->si_code == SI_USER || si->si_code == SI_QUEUE || si->si_code == SI_TKILL) && si->si_pid > 0)
+	{
+		long pid = si->si_pid;
+		long ppid = hdsParinte(pid);
+		n = hdsAdaugaText(buf, n, sizeof(buf), "de_la_pid=");
+		n = hdsAdaugaNumar(buf, n, sizeof(buf), pid);
+		n = hdsAdaugaText(buf, n, sizeof(buf), "\nde_la_uid=");
+		n = hdsAdaugaNumar(buf, n, sizeof(buf), (long)si->si_uid);
+		n = hdsAdaugaText(buf, n, sizeof(buf), "\nde_la_comm=");
+		n = hdsAdaugaNume(buf, n, sizeof(buf), pid);
+		n = hdsAdaugaText(buf, n, sizeof(buf), "\n");
+		if (ppid > 0)
+		{
+			n = hdsAdaugaText(buf, n, sizeof(buf), "de_la_parinte=");
+			n = hdsAdaugaNumar(buf, n, sizeof(buf), ppid);
+			n = hdsAdaugaText(buf, n, sizeof(buf), "\nde_la_parinte_comm=");
+			n = hdsAdaugaNume(buf, n, sizeof(buf), ppid);
+			n = hdsAdaugaText(buf, n, sizeof(buf), "\n");
+		}
+	}
+	int fd = open(HDS_CADERE_MOTIV ".nou", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (fd >= 0)
+	{
+		ssize_t scris = write(fd, buf, n);
+		close(fd);
+		if (scris == (ssize_t)n)
+			rename(HDS_CADERE_MOTIV ".nou", HDS_CADERE_MOTIV);
+	}
+	/* the same lines in the output of enigma2 (the debug log, when it is on) */
+	static const char antet[] = "[bsod] oprita din afara:\n";
+	ssize_t ignorat = write(2, antet, sizeof(antet) - 1);
+	ignorat = write(2, buf, n);
+	(void)ignorat; /* nothing to do when it fails: the cause file above is what counts */
+	/* the default action again and the same signal: it stays blocked until this handler returns, then ends enigma2
+	   with the same code as without this handler */
+	struct sigaction implicit;
+	implicit.sa_handler = SIG_DFL;
+	implicit.sa_flags = 0;
+	sigemptyset(&implicit.sa_mask);
+	sigaction(signum, &implicit, 0);
+	errno = pastrat;
+	raise(signum);
+}
+
 void bsodCatchSignals()
 {
+	/* HDSatelit: who sent SIGHUP (see hdsSemnalDinAfara) */
+	struct sigaction act_hup;
+	act_hup.sa_sigaction = hdsSemnalDinAfara;
+	act_hup.sa_flags = SA_SIGINFO;
+	sigemptyset(&act_hup.sa_mask);
+	sigaction(SIGHUP, &act_hup, 0);
+
 	struct sigaction act;
 	act.sa_sigaction = handleFatalSignal;
 	act.sa_flags = SA_RESTART | SA_SIGINFO;

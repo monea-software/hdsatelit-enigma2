@@ -1389,8 +1389,9 @@ def importa(fisiere, grup):
 			continue
 		id_p = hashlib.sha1(("%s\n%s" % (grup, a["curat"])).encode("utf-8")).hexdigest()[:12]
 		if id_p in ids:
-			la_fel += 1
+			# acelasi server de doua ori (in arhiva si alaturi, sau adaugat inainte) se numara o data
 			if id_p not in ids_rez:
+				la_fel += 1
 				ids_rez.append(id_p)
 			continue
 		if len(lista) >= MAX_PROFILURI:
@@ -2234,13 +2235,193 @@ def importaDePeStick(grup):
 	return reusit, mesaj
 
 
+# Toate fisierele unui furnizor deodata (tamiciav7, LinuxSat 164122 #970264, 14.11.2026): fara dosarul hdsatelit/vpn,
+# cautarea merge si in radacina stickului (sau a discului) si in doua niveluri de dosare (arhiva furnizorului
+# despachetata pe calculator: Furnizor/WireGuard/*.conf), numai dupa fisierele recunoscute ca VPN: setarile altui program, o
+# poza sau o arhiva cu altceva nu se numara si nu ajung in jurnal. Ecranul si pagina intreaba o data: "Am gasit N
+# servere VPN... Le adaug pe toate?", apoi adaugaDePeStick ia exact fisierele numarate.
+ADANCIME_RADACINA = 2
+MAX_VIZITATE = 5000
+EXT_VPN = (".ovpn", ".conf", ".sswan", ".mobileconfig")
+DOSARE_SARITE = ("system volume information", "$recycle.bin", "lost+found", "movie", "timeshift")
+TERMEN_GASITE_S = 600
+_GASITE_STICK = {}
+
+
+def _radaciniStick():
+	gasite = []
+	for punct, fel in _montari():
+		if fel in FS_FARA_DISC or not any(punct.startswith(loc) for loc in LOCURI_MONTARE):
+			continue
+		if os.path.isdir(_cale(punct)) and punct not in gasite:
+			gasite.append(punct)
+	return gasite
+
+
+def _faraRadacina(cale):
+	return cale[len(RADACINA):] if RADACINA and cale.startswith(RADACINA) else cale
+
+
+def _citesteMic(cale, maxim):
+	"""Octetii fisierului, numai daca are cel mult `maxim` (marimea se afla inainte, fara citire)."""
+	try:
+		if os.path.getsize(cale) > maxim:
+			return None
+		with open(cale, "rb") as f:
+			return f.read(maxim + 1)[:maxim]
+	except (OSError, IOError):
+		return None
+
+
+def _serverePrincipale(nume, date):
+	"""Amprentele (sha1 ale continutului) fisierelor VPN din `date`: unul pentru un fisier recunoscut, cate unul pentru
+	fiecare membru recunoscut al unei arhive .zip; lista goala pentru orice altceva."""
+	n = nume.replace("\\", "/").rsplit("/", 1)[-1]
+	if n.lower().endswith(".zip"):
+		rez = []
+		for nm, d in _membriArhiva(n, date, []):
+			rez += _serverePrincipale(nm, d)
+		return rez
+	if recunoaste(date.decode("utf-8", "replace"), n):
+		return [hashlib.sha1(date).hexdigest()]
+	return []
+
+
+def _amprenteArhivaPeDisc(cale):
+	"""Ca _serverePrincipale pentru o arhiva .zip de pe stick, fara s-o citeasca intreaga: intai cuprinsul (numai
+	membrii .conf/.ovpn/.sswan/.mobileconfig mici se citesc), deci o arhiva cu poze sau o imagine nu costa nimic."""
+	rez = []
+	try:
+		if os.path.getsize(cale) > MAX_ARHIVA:
+			return rez
+		with zipfile.ZipFile(cale) as z:
+			total = 0
+			for info in z.infolist()[:MAX_MEMBRI]:
+				n = info.filename.replace("\\", "/")
+				if info.is_dir() or info.file_size > MAX_FISIER or not n.lower().endswith(EXT_VPN) or "/." in "/" + n:
+					continue
+				total += info.file_size
+				if total > MAX_ARHIVA:
+					break
+				date = z.read(info)
+				if recunoaste(date.decode("utf-8", "replace"), n.rsplit("/", 1)[-1]):
+					rez.append(hashlib.sha1(date).hexdigest())
+	except (zipfile.BadZipFile, OSError, IOError, ValueError, RuntimeError, NotImplementedError):
+		return []
+	return rez
+
+
+def _candidatiRadacina(punct):
+	"""(calea, numele relativ) ale fisierelor care pot fi VPN din radacina unui stick si din ADANCIME_RADACINA niveluri
+	de dosare, cel mult MAX_VIZITATE intrari vizitate (un disc cu inregistrari nu se citeste intreg)."""
+	rez = []
+	vizitate = 0
+	baza = _cale(punct)
+	for radacina, dosare, fisiere in os.walk(baza):
+		adancime = radacina[len(baza):].count(os.sep)
+		dosare[:] = [] if adancime >= ADANCIME_RADACINA else sorted(d for d in dosare if not d.startswith((".", "$")) and
+			d.lower() not in DOSARE_SARITE)
+		for n in sorted(fisiere):
+			vizitate += 1
+			if vizitate > MAX_VIZITATE:
+				return rez
+			if n.startswith(".") or not n.lower().endswith(EXT_VPN + (".zip",) + EXT_ALATURI):
+				continue
+			cale = os.path.join(radacina, n)
+			rez.append((cale, os.path.relpath(cale, baza).replace(os.sep, "/")))
+		vizitate += len(dosare)
+		if vizitate > MAX_VIZITATE:
+			return rez
+	return rez
+
+
+def cautaStick():
+	"""Cauta fisierele VPN pe stickuri si discuri: {"servere": cate servere diferite, "unde": locurile (fara radacina),
+	"cai": [(calea, numele relativ)]}. Dosarul hdsatelit/vpn are intaietate (tot ce e in el, ca pana acum); fara el,
+	radacina si dosarele ei (_candidatiRadacina), numai fisierele recunoscute ca VPN si certificatele de alaturi.
+	Rezultatul ramane pentru adaugaDePeStick (TERMEN_GASITE_S)."""
+	cai, unde, amprente = [], [], set()
+	dosare = dosareStick()
+	if dosare:
+		for dosar in dosare:
+			for radacina, subdosare, fisiere in os.walk(dosar):
+				if radacina[len(dosar):].count(os.sep) >= 1:
+					subdosare[:] = []
+				subdosare[:] = sorted(d for d in subdosare if not d.startswith("."))
+				for n in sorted(fisiere):
+					if len(cai) < MAX_MEMBRI and not n.startswith("."):
+						cale = os.path.join(radacina, n)
+						cai.append((cale, os.path.relpath(cale, dosar).replace(os.sep, "/")))
+			unde.append(_faraRadacina(dosar).replace(os.sep, "/"))
+	else:
+		for punct in _radaciniStick():
+			# certificatele si cheile de alaturi (.crt, .key, .pem...) se iau NUMAI cand un .ovpn recunoscut din acelasi
+			# dosar le pomeneste numele: radacina stickului poate avea fisiere cu chei ale altor programe, care nu se citesc
+			alaturi, gasite, texte_ovpn = [], False, {}
+			for cale, rel in _candidatiRadacina(punct):
+				if rel.lower().endswith(EXT_ALATURI):
+					alaturi.append((cale, rel))
+					continue
+				date = None
+				if rel.lower().endswith(".zip"):
+					servere = _amprenteArhivaPeDisc(cale)
+				else:
+					date = _citesteMic(cale, MAX_FISIER)
+					servere = _serverePrincipale(rel, date) if date else []
+				if servere and len(cai) < MAX_MEMBRI:
+					cai.append((cale, rel))
+					amprente.update(servere)
+					gasite = True
+					if date is not None and recunoaste(date.decode("utf-8", "replace"), rel) == "openvpn":
+						d = os.path.dirname(cale)
+						texte_ovpn[d] = texte_ovpn.get(d, "") + date.decode("utf-8", "replace").lower()
+			if gasite:
+				cai += [(c, r) for c, r in alaturi if r.rsplit("/", 1)[-1].lower() in texte_ovpn.get(
+					os.path.dirname(c), "")][:64]
+				unde.append(punct)
+	if dosare:
+		for cale, rel in cai:
+			date = _citesteMic(cale, MAX_ARHIVA if rel.lower().endswith(".zip") else MAX_FISIER)
+			if date:
+				amprente.update(_serverePrincipale(rel, date))
+	_GASITE_STICK.clear()
+	_GASITE_STICK.update(servere=len(amprente), unde=", ".join(unde), cai=cai, ora=time.time(), stick=bool(
+		dosare or _radaciniStick()))
+	return {"servere": len(amprente), "unde": ", ".join(unde), "cai": list(cai), "stick": _GASITE_STICK["stick"]}
+
+
+def uitaStick():
+	_GASITE_STICK.clear()
+
+
+def textIntrebareStick(g):
+	return _("Am găsit %(n)d servere VPN pe stick (%(unde)s). Le adaug pe toate?") % {"n": g["servere"],
+		"unde": g["unde"]}
+
+
+def textNimicPeStick(g=None):
+	if g is not None and not g.get("stick"):
+		return _("Nu văd niciun stick sau disc. Pune stickul în receptor și încearcă din nou.")
+	return _("Pe stick nu am găsit fișiere VPN. Pune fișierele .conf, .ovpn sau arhiva .zip a furnizorului în "
+		"rădăcina stickului (sau în dosarul hdsatelit/vpn).")
+
+
 def adaugaDePeStick(grup=None):
-	"""Adauga VPN de pe stick: tot ce e in hdsatelit/vpn, recunoscut dupa continut (adaugaVpn)."""
-	if not dosareStick():
-		return False, _("Pe stick nu am găsit dosarul hdsatelit/vpn. Pune în el fișierele .ovpn, .conf sau arhiva .zip.")
-	fisiere = fisiereStick()
+	"""Adauga VPN de pe stick: fisierele gasite de cautaStick (cele numarate in intrebare, daca s-a intrebat de curand),
+	toate deodata, recunoscute dupa continut (adaugaVpn); dublurile nu se adauga a doua oara."""
+	g = dict(_GASITE_STICK)
+	if not g or time.time() - g.get("ora", 0) > TERMEN_GASITE_S:
+		g = cautaStick()
+	_GASITE_STICK.clear()
+	if not g["servere"]:
+		return False, textNimicPeStick(g)
+	fisiere = []
+	for cale, rel in g["cai"]:
+		date = _citesteMic(cale, MAX_ARHIVA if rel.lower().endswith(".zip") else MAX_FISIER)
+		if date is not None:
+			fisiere.append((rel, date))
 	if not fisiere:
-		return False, _("Dosarul hdsatelit/vpn de pe stick este gol.")
+		return False, textNimicPeStick(g)
 	reusit, mesaj, _d = adaugaVpn(fisiere, grup=grup)
 	return reusit, mesaj
 

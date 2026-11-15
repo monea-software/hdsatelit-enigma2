@@ -657,6 +657,26 @@ class Sateliti(object):
 		self.schimbari += 1
 		return s
 
+	def adauga_satelit_din(self, alt):
+		"""Un <sat> din alta lista (lista imaginii, HdsSatelitiImagine), cu toate atributele si transponderele lui, pus la
+		locul lui de la vest la est. Elementele se fac din nou (niciunul nu ramane al celeilalte liste), in codarea si cu
+		spatiile listei acesteia; satelitii de aici raman neatinsi. Eroare cand pozitia e deja ocupata. -> Satelit"""
+		p = alt.position
+		if p is None or alt.get("name") is None:
+			raise Eroare(_t("Satelitul nu are nume sau poziție."))
+		self._ocupata(p)
+		s = Satelit("sat", [[n, v, None] for n, v in alt.atribute])
+		s._sfarsit = "</sat>"
+		spatiu, spatiu_tp, coada = self._spatiu_sat(), self._spatiu_tp(), self._coada_tp()
+		copii = []
+		for tp in alt.transpondere:
+			copii.extend([spatiu_tp, Transponder("transponder", [[n, v, None] for n, v in tp.atribute], True, None, coada)])
+		copii.append(spatiu)
+		s.copii = copii
+		self._pune_in(self._radacina, s, self._locul_satelitului(p), spatiu, self._nl)
+		self.schimbari += 1
+		return s
+
 	def schimba_satelit(self, poz, nume=None, pozitie_noua=None, flags=None):
 		"""Numele, pozitia si/sau flags (None = ramane). La alta pozitie satelitul se muta la locul ei. -> Satelit"""
 		s = self.satelit(poz)
@@ -746,17 +766,26 @@ class Sateliti(object):
 			raise Eroare(_t("La DVB-S FEC-ul e Auto (0), 1/2, 2/3, 3/4, 5/6 sau 7/8 (1-5)."))
 
 	@staticmethod
-	def _verifica_dublura(s, tp, exclus):
+	def _dublura(s, tp, exclus=None):
+		"""Transponderul lui `s` care e acelasi cu `tp` dupa regula dublurilor (vezi antetul), sau None."""
 		ident = tp._identitate()
 		if ident is None:
-			return
+			return None
 		for alt in s.transpondere:
 			if alt is exclus:
 				continue
 			a = alt._identitate()
 			if a is not None and a[0] == ident[0] and a[2:] == ident[2:] and abs(a[1] - ident[1]) <= DOI_MHZ:
-				raise Eroare(_t("Pe %s există deja transponderul %s, cu aceeași polarizare, la cel mult 2 MHz.") %
-					(D.text_pozitie(s.poz), "%s %s" % (_text_frecventa(a[1]), LITERA_POL.get(a[0], "%d" % a[0]))))
+				return alt
+		return None
+
+	@staticmethod
+	def _verifica_dublura(s, tp, exclus):
+		alt = Sateliti._dublura(s, tp, exclus)
+		if alt is not None:
+			a = alt._identitate()
+			raise Eroare(_t("Pe %s există deja transponderul %s, cu aceeași polarizare, la cel mult 2 MHz.") %
+				(D.text_pozitie(s.poz), "%s %s" % (_text_frecventa(a[1]), LITERA_POL.get(a[0], "%d" % a[0]))))
 
 	@staticmethod
 	def _locul_transponderului(s, tp):
@@ -788,6 +817,22 @@ class Sateliti(object):
 		self._verifica_dvbs(atr, set(curate))
 		tp = Transponder("transponder", atr, True, None, self._coada_tp())
 		self._verifica_dublura(s, tp, None)
+		self._pune_in(s, tp, self._locul_transponderului(s, tp), self._spatiu_tp(), self._spatiu_sat())
+		self.schimbari += 1
+		return tp
+
+	def adauga_transponder_din(self, poz, alt):
+		"""Un <transponder> din alta lista (lista imaginii, HdsSatelitiImagine: transponderele noi) pus pe satelitul de pe
+		`poz`, in ordinea frecventelor, cu toate atributele lui, facut din nou in spatiile listei acesteia; transponderele
+		de aici raman neatinse. Fara nimic (None) cand satelitul are deja acelasi transponder dupa regula dublurilor
+		(cel al omului ramane, chiar cu alta rata sau alt FEC) sau cand `alt` nu are frecventa, rata sau polarizarea.
+		Eroare cand satelitul nu exista. -> Transponder sau None"""
+		s = self.satelit(poz)
+		if any(alt.get(n) in (None, "") for n in OBLIGATORII) or alt._identitate() is None:
+			return None
+		tp = Transponder("transponder", [[n, v, None] for n, v in alt.atribute], True, None, self._coada_tp())
+		if self._dublura(s, tp) is not None:
+			return None
 		self._pune_in(s, tp, self._locul_transponderului(s, tp), self._spatiu_tp(), self._spatiu_sat())
 		self.schimbari += 1
 		return tp
@@ -1028,9 +1073,21 @@ def _reincarca_in(nimmanager, db):
 	if not db.readSatellites(lista, nume, transpondere):
 		return False
 	lista.sort(key=nimmanager.sortFunc)
-	if [x[0] for x in lista] != [x[0] for x in nimmanager.satList]:
+	# SXP (15.11.2026): pozitiile pastrate de NimManager la pornire (salvate la un tuner, lipsa din fisier: TNB,
+	# hdsPozitiiPastrate) stau in satList fara sa fie in fisier; nu inseamna alte pozitii. Dupa recitire se pun la loc,
+	# cu numele lor, altfel ar disparea din satList la prima salvare a listei.
+	din_fisier = set(x[0] for x in lista)
+	pastrate = [x for x in nimmanager.satList if x[0] in set(getattr(nimmanager, "hdsPozitiiPastrate", None) or ())
+		and x[0] not in din_fisier]
+	fara_pastrate = [x[0] for x in nimmanager.satList if x not in pastrate]
+	if [x[0] for x in lista] != fara_pastrate:
 		_jurnal("alte pozitii in satellites.xml: se folosesc dupa repornirea interfetei")
 		return False
+	for x in pastrate:
+		lista.append(x)
+		nume.setdefault(x[0], x[1])
+	if pastrate:
+		lista.sort(key=nimmanager.sortFunc)
 	nimmanager.satList[:] = lista
 	nimmanager.satellites = nume
 	nimmanager.transponders = transpondere

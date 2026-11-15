@@ -82,7 +82,16 @@ def stare(sesiune=None, O=None, argumente=None):
 	c = O.cautare()
 	return {"result": True, "satelit": O.text_satelit(a), "motiv": a.get("motiv") or "", "motor": bool(a.get("motor")),
 		"campuri": campuri, "valori": valori, "previzualizare": O.text_previzualizare(a, valori),
-		"standby": _in_standby(), "cautare": c.stare()}
+		"standby": _in_standby(), "cautare": c.stare(), "casete": _casete(O, c)}
+
+
+def _casete(O, c):
+	"""DSG2: casetele cautarii, aceleasi ca pe televizor (HdsCautareOarba.casete): [{cheie, cifra, eticheta, sub}]."""
+	try:
+		return [{"cheie": k, "cifra": num, "eticheta": cap, "sub": sub} for k, num, cap, sub in O.casete(c.stare())]
+	except Exception as eroare:
+		_jurnal("casetele: %r" % (eroare,))
+		return []
 
 
 def _alta_scanare(sesiune):
@@ -327,6 +336,12 @@ PAGINA = """<!DOCTYPE html>
   .mesaj{margin:10px 0 0;line-height:1.45;font-size:.92rem;min-height:1.3em;}
   .eroare{color:#ffb4a8;}
   .ascuns{display:none;}
+  /* DSG2: casetele cautarii, ca pe televizor */
+  .casete{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:10px;margin:0 0 12px;}
+  .caseta{background:rgba(255,255,255,.04);border:1px solid var(--bordura);border-radius:10px;padding:10px 14px;}
+  .caseta .e{color:var(--text-slab);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;}
+  .caseta .v{font-size:1.7rem;font-weight:700;color:#9fb4ff;font-variant-numeric:tabular-nums;}
+  .caseta .s{color:#5dde96;font-size:.88rem;}
   @media (max-width:560px){ .rand{grid-template-columns:1fr;} }
 </style>
 </head>
@@ -348,6 +363,7 @@ PAGINA = """<!DOCTYPE html>
     <p class="nota">Pe televizor: <span>__DRUM__</span>.</p>
   </section>
   <section class="card">
+    <div class="casete ascuns" id="casete"></div>
     <p class="acum" id="stare" role="status"></p>
     <div class="bara"><div id="progres"></div></div>
     <table id="tabel" class="ascuns">
@@ -404,6 +420,14 @@ function deseneaza(d){
   $("previzualizare").textContent = d.previzualizare;
   var c = d.cautare;
   $("stare").textContent = c.text || "";
+  var cs = $("casete"); cs.textContent = "";
+  (d.casete || []).forEach(function(k){
+    var x = el("div", "caseta"); x.id = "c_" + k.cheie;
+    x.appendChild(el("div", "e", k.eticheta)); x.appendChild(el("div", "v", k.cifra));
+    if(k.sub){ x.appendChild(el("div", "s", k.sub)); }
+    cs.appendChild(x);
+  });
+  arata(cs, (d.casete || []).length > 0);
   $("progres").style.width = (c.faza === "nimic" ? 0 : c.procent) + "%";
   $("cauta").disabled = c.in_curs || !!d.motiv;
   $("opreste").disabled = !c.in_curs || c.faza === "opreste";

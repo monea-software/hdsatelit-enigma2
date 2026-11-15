@@ -69,6 +69,8 @@ class EventViewBase:
 		self.hdsTradus = False
 		self["hdsTraducereActions"] = ActionMap(["EventViewActions"], {"cancel": self.hdsInfo}, -1)
 		self["hdsTimerActions"] = ActionMap(["MenuActions"], {"menu": self.timerEdit})
+		# Despre film (Screens/HdsDespreFilm.py): TEXT in toate ecranele de informatii, albastru unde e liber
+		self["hdsDespreFilmActions"] = ActionMap(["InfobarTeletextActions"], {"startTeletext": self.hdsDespreFilm}, -1)
 		self.onShown.append(self.onCreate)
 		self.onClose.append(self.hdsLaInchidere)
 
@@ -78,6 +80,11 @@ class EventViewBase:
 			self.setEvent(self.event)
 			return
 		self.close()
+
+	def hdsDespreFilm(self):
+		if self.event is not None:
+			from Screens.HdsDespreFilm import deschide
+			deschide(self.session, event=self.event)
 
 	def hdsLaInchidere(self):
 		self._ghidInchis = True
@@ -168,6 +175,13 @@ class EventViewBase:
 		if note:
 			# the line about the translation at the top: a long description would hide it at the end
 			text += '\n' + note
+		# a film (year or the word film in the guide): the TEXT key opens Despre film (Screens/HdsDespreFilm.py)
+		try:
+			from Components.HdsDespreFilm import pareFilm
+			if pareFilm(name, short, ext):
+				text += '\n' + _("TEXT: despre film (afiș, note, actori).")
+		except Exception:
+			pass
 		if short and short != name:
 			text += '\n\n' + short
 		if ext:
@@ -235,6 +249,9 @@ class EventViewSimple(Screen, EventViewBase):
 		Screen.__init__(self, session)
 		self.skinName = "EventView"
 		EventViewBase.__init__(self, Event, Ref, callback, similarEPGCB)
+		# the blue key is free here (list of recordings, similar broadcasts): Despre film
+		self["key_blue"].setText(_("Despre film"))
+		self["hdsDespreFilmCuloare"] = ActionMap(["ColorActions"], {"blue": self.hdsDespreFilm}, -1)
 
 class EventViewEPGSelect(Screen, EventViewBase):
 	def __init__(self, session, Event, Ref, callback=None, singleEPGCB=None, multiEPGCB=None, similarEPGCB=None):

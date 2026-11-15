@@ -5,7 +5,7 @@ DESCRIPTION = "Fisierul /etc/opkg/hdsatelit-feed.conf: canalul public al feedulu
 stb.hdsatelit.com, legat de versiunea imaginii (DISTRO_VERSION). Monea Software pentru HD Satelit."
 LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6"
-PV = "0.1.0"
+PV = "0.1.1"
 
 # Cate o sursa src/gz pe fiecare arhitectura a imaginii (all, procesorul, masina, numele receptorului), toate sub
 #   ${DISTRO_FEED_URI}/<arh>   = https://stb.hdsatelit.com/feed/public/<versiunea imaginii>/<arh>
@@ -39,13 +39,21 @@ do_compile() {
 		echo "src/gz hdsatelit-$arh ${DISTRO_FEED_URI}/$arh" >> "$f"
 	done
 	grep -q '@' "$f" && bbfatal "hdsatelit-feed: o adresa are nume sau parola"
+	# Fisierul cu numele procesorului (0.7.5, TODO 13.11 19:15): imaginile OE-Alliance au /etc/opkg/<procesor>-feed.conf, iar
+	# unele scripturi de instalare ale pluginurilor (IPAudioPro: ls /etc/opkg/ | grep cortexa15hf-neon-vfpv4) aleg pachetul dupa
+	# numele lui. La noi sursa procesorului e in hdsatelit-feed.conf, deci fisierul are numai comentarii: opkg si uneltele
+	# imaginii (HdsPachete, HdsPluginExtern, HdsAsistentaControl) citesc numai randurile src, nimic nu se dubleaza.
+	printf '%s\n' "# HD Satelit: procesorul acestui receptor este ${TUNE_PKGARCH}." \
+		"# Sursele de pachete sunt in hdsatelit-feed.conf; fisierul acesta are numai numele, pentru scripturile de instalare." \
+		> ${B}/${TUNE_PKGARCH}-feed.conf
 	true
 }
 
 do_install() {
 	install -d ${D}${sysconfdir}/opkg
 	install -m 0644 ${B}/hdsatelit-feed.conf ${D}${sysconfdir}/opkg/hdsatelit-feed.conf
+	install -m 0644 ${B}/${TUNE_PKGARCH}-feed.conf ${D}${sysconfdir}/opkg/${TUNE_PKGARCH}-feed.conf
 }
 
-FILES:${PN} = "${sysconfdir}/opkg/hdsatelit-feed.conf"
+FILES:${PN} = "${sysconfdir}/opkg/hdsatelit-feed.conf ${sysconfdir}/opkg/${TUNE_PKGARCH}-feed.conf"
 CONFFILES:${PN} = "${sysconfdir}/opkg/hdsatelit-feed.conf"

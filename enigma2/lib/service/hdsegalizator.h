@@ -21,7 +21,12 @@
  * hotaraste pe primul esantion; orice tacere, gol sau corectie trece prin rampa iesirii (RampaIesire). Numai sunetul
  * MPEG (MP2); setarea „tv” il opreste, „potrivire” il muta fata de imagine. Fara ceasul imaginii in
  * SincronTv::FARA_CEAS_MS, fara primul sunet potrivit in SincronTv::NEPOTRIVIT_MS sau cu prea multe corectii mari la rand,
- * sunetul se intoarce pe placa (stare(): „tv-fara-ceas”, „tv-nepotrivit”), in liniste. Cu setarea „tv” oprita, la
+ * sunetul se intoarce pe placa (stare(): „tv-fara-ceas”, „tv-nepotrivit”), in liniste.
+ * Pornirea la canalele TV (0.7.5, sunetul MP2 aparea abia la 2-3 s dupa schimbarea canalului): placa canta sunetul din
+ * primul cadru, ca fara egalizator, iar drumul din procesor porneste alaturi, tacut (in umbra); cand sincronul hotaraste
+ * primul esantion, sunetul de aici urca intr-o rampa si firul placii trimite MESAJ_PRELUARE, care alege din nou pista:
+ * preiaSunetul() raspunde atunci true si decodorul placii primeste PID-ul -1 (Preluare in hdsegalizator_dsp.h). O cadere
+ * inainte de preluare lasa placa sa cante, fara nicio schimbare auzita. stare(): preluat 0/1. Cu setarea „tv” oprita, la
  * canalele TV motorul citeste o data ceasul demultiplexorului (numai citire) si spune in stare() („ceas_tv”) daca driverul
  * il da.
  *
@@ -123,7 +128,7 @@ public:
 	void setFluxAudio0(int da);
 
 	/* starea s-a schimbat (pe firul enigma2): 1 merge, 2 oprit, 3 eroare (sunetul s-a intors pe placa), 4 fara date,
-	   5 proba din fisier gata */
+	   5 proba din fisier gata, 6 canal TV: sunetul a trecut de pe placa in egalizator */
 	PSignal1<void, int> schimbare;
 
 #ifndef SWIG
@@ -132,8 +137,12 @@ public:
 	static bool asteaptaEliberareaFluxului();
 	/* din servicedvb.cpp (firul enigma2), la fiecare alegere a pistei de sunet a serviciului principal: demux = numarul
 	   demultiplexorului de date (-1 la inregistrari, timeshift, fisiere), radio = serviciul nu are imagine.
-	   -> true cand sunetul trece prin procesor (decodorul placii nu-l mai porneste). */
+	   -> true cand sunetul trece prin procesor (decodorul placii nu-l mai porneste). La un canal TV raspunsul e false
+	   pana preia drumul din procesor (placa canta intre timp), apoi, la reaplicarea din MESAJ_PRELUARE, true. */
 	bool preiaSunetul(const void *proprietar, int demux, int pid, int fel, bool radio, const sigc::slot<void()> &reaplica);
+	/* canal TV al serviciului `proprietar` pe drumul din procesor (si cat placa mai canta, inainte de preluare):
+	   servicedvb trimite ceasul imaginii (ceasImagine) */
+	bool vreaCeasImagine(const void *proprietar);
 	/* din servicemp3.cpp (firul enigma2), la pornirea unui post de radio pe flux si la fiecare reaplicare.
 	   -> true cand sunetul trece prin procesor: atunci serviciul pune sinkFlux() in loc de sink-ul placii. */
 	bool preiaFlux(const void *proprietar, const std::string &adresa, const sigc::slot<void()> &reaplica,

@@ -161,6 +161,12 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			if self.nimConfig.configMode.value == "simple":			#simple setup
 				self.diseqcModeEntry = getConfigListEntry(_("Mode"), self.nimConfig.diseqcMode)
 				self.list.append(self.diseqcModeEntry)
+				# HDSatelit (LOC, 14.11.2026, orion_bilo): in modul simplu nucleul foloseste MEREU LNB-ul universal
+				# (NimManager.py, SecConfigure: 9750/10600, prag 11700); randul il arata, doar citit, ca omul sa nu-l
+				# caute (alt tip: Configurare LNB sau modul avansat). In web: pagina scanarii, cartela tunerului.
+				from Components import HdsLnb
+				self.list.append(getConfigListEntry(_("LNB"), NoSave(ConfigSelection(
+					[("universal", HdsLnb.textTip(HdsLnb.TIP_UNIVERSAL))], "universal"))))
 				if self.nimConfig.diseqcMode.value in ("single", "toneburst_a_b", "diseqc_a_b", "diseqc_a_b_c_d"):
 					self.createSimpleSetup(self.list, self.nimConfig.diseqcMode.value)
 				if self.nimConfig.diseqcMode.value == "positioner":
@@ -400,6 +406,26 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		new_configured_sats = nimmanager.getConfiguredSats()
 		self.unconfed_sats = old_configured_sats - new_configured_sats
 		self.satpos_to_remove = None
+		if self.hdsCereLocul():
+			# HDSatelit (asistenta 289712, kegnkiwi 13.11): motorul USALS salvat fara locul antenei nu se roteste deloc
+			# (NimManager nu da satelitii nucleului); alegerea locului se deschide singura, OK = alege
+			from Screens.HdsLocul import deschide
+			deschide(self.session, self.hdsLocDupaSalvare, mesaj=_("Motorul USALS are nevoie de locul antenei ca să "
+				"știe încotro să rotească antena. Alege țara și orașul sau scrie coordonatele."))
+			return
+		self.deleteConfirmed((None, "no"))
+
+	def hdsCereLocul(self):
+		"""True cand tunerul salvat roteste antena cu USALS (dupa loc) si locul antenei nu e stabilit."""
+		try:
+			from Components import HdsLocul
+			return not HdsLocul.stabilit() and bool(HdsLocul.cereLoc(self.slotid))
+		except Exception as e:
+			print("[Satconfig] locul antenei: %r" % (e,))
+			return False
+
+	def hdsLocDupaSalvare(self, schimbat):
+		# locul ales a ajuns deja la nucleu (deschide cu actualizeaza_sec); se merge mai departe ca dupa salvare
 		self.deleteConfirmed((None, "no"))
 
 	def deleteConfirmed(self, confirmed):
@@ -555,6 +581,23 @@ def _tunerB(functie, *argumente):
 		print("[Satconfig] tunerul B, %s: %r" % (functie, e))
 	return None
 
+def literaTunerLegat(nimConfig):
+	"""HDSatelit: litera tunerului de care e legat acest tuner (equal / loopthrough / satposdepends), pentru oricate
+	tunere, ca OE-Alliance (NIM.getSlotID: chr(ord("A") + slot)). Inainte lista fixa ["A", "B", "C", "D"] cadea cu
+	IndexError la o legatura spre E, F, G, H (Vu+ Ultimo 4K cu FBC, marci70, 14.11.2026). O valoare veche sau goala
+	(tunerul nu mai exista) da "?", nu oprirea listei."""
+	try:
+		n = int(nimConfig.connectedTo.value)
+	except Exception:
+		return "?"
+	if 0 <= n < nimmanager.getSlotCount():
+		try:
+			return nimmanager.getNim(n).getSlotID()
+		except Exception:
+			pass
+	return "?"
+
+
 def textNim(x):
 	"""HDSatelit: textul randului unui tuner in alegerea tunerului (felul legaturii, satelitii), scos din
 	NimSelection.updateList neschimbat, ca pagina web a probei DiSEqC sa arate aceleasi randuri ca televizorul."""
@@ -565,7 +608,7 @@ def textNim(x):
 			text = { "loopthrough": _("loopthrough to"),
 					 "equal": _("equal to"),
 					 "satposdepends": _("second cable of motorized LNB") } [nimConfig.configMode.value]
-			text += " " + _("Tuner") + " " + ["A", "B", "C", "D"][int(nimConfig.connectedTo.value)]
+			text += " " + _("Tuner") + " " + literaTunerLegat(nimConfig)
 		elif nimConfig.configMode.value == "nothing":
 			text = _("not configured")
 		elif nimConfig.configMode.value == "simple":

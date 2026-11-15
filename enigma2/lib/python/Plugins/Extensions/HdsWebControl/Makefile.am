@@ -40,6 +40,11 @@ install_PYTHON = \
 	ecran_negru_web.py \
 	ecran_pornire_web.py \
 	galerie_sigle_web.py \
+	piconuri_web.py \
+	mozaic_web.py \
+	despre_film_web.py \
+	sport_azi_web.py \
+	ghid_internet_web.py \
 	screensaver_web.py \
 	egalizator_web.py \
 	filme_web.py \
@@ -69,6 +74,7 @@ install_PYTHON = \
 	intrari_web.py \
 	fisiere_core.py \
 	fisiere_web.py \
+	https_web.py \
 	fisiere_pagina.py \
 	media_web.py \
 	extensii_web.py \

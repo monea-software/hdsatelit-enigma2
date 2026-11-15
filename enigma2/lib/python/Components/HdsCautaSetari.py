@@ -133,6 +133,7 @@ REGISTRU = {
 	),
 	"time_setup": (        # Screens/Time.py
 		(N_("Fus orar"), "config.timezone.val", ""),
+		(N_("Fus orar după internet"), "config.timezone.automat", N_("fus orar automat țară")),
 		(N_("De unde se ia ora"), "config.hds_time.sync_mode", ""),
 		(N_("Server NTP"), "config.hds_time.ntp_server", ""),
 	),
@@ -176,6 +177,7 @@ CUVINTE = {
 	"hds_scanare": N_("căutare canale noi"),
 	"hds_antena_rotire": N_("motor DiSEqC USALS"),
 	"hds_ipv6": N_("adresa IPv6 odhcp6c DHCPv6"),
+	"hds_samba": N_("Samba SMB partajare dosare rețea Windows Explorer NAS"),
 	"hds_antena_locul": N_("oraș țară latitudine longitudine coordonate USALS motor"),
 	"audio_setup": N_("sunet AC3 DTS 5.1"),
 	"time_setup": N_("ceas oră"),

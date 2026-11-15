@@ -557,12 +557,14 @@ def pozitieSatelit(ref):
 
 # ---------------------------------------------------------------- ce merge in browser
 
-def potrivire(video, audio, hevc=False, ac3=False, wasm=False):
+def potrivire(video, audio, hevc=False, ac3=False, wasm=False, h264=True):
 	"""Ce se poate reda in browser fara recodare. `video` = 'h264' | 'h265' | 'mpeg2' | ... | '' (nu se stie),
 	`audio` = felurile pistelor ('MPEG', 'AAC', 'AAC-HE', 'AC3', 'AC3+', ...), `hevc` / `ac3` = browserul le decodeaza
 	(MediaSource.isTypeSupported in pagina; ac3 si cand pagina decodeaza singura AC-3 cu decodorul wasm, hds-sunet.js),
 	`wasm` = pagina are playerul wasm (imaginea MPEG-2 / MPEG-1 si sunetul MP2 / MP3 / AC-3 se decodeaza in browser;
-	E-AC-3, AAC si HE-AAC nu sunt in decodorul lui). Cu ac3 si wasm sunetul AC-3 merge sigur. -> (merge, text):
+	E-AC-3, AAC si HE-AAC nu sunt in decodorul lui). Cu ac3 si wasm sunetul AC-3 merge sigur.
+	`h264` = browserul decodeaza H.264 prin MediaSource (pagina trimite h264=0 cand nu: Opera sau Chromium pe Linux fara
+	codecurile sistemului, missile, LinuxSat 163972 #969322; fara parametru, ca inainte, se presupune ca da). -> (merge, text):
 	merge False = refuz, cu motivul; True cu text = merge, cu avertizarea de spus."""
 	video = (video or "").lower()
 	felurile = [str(a or "").upper() for a in (audio or [])]
@@ -576,6 +578,8 @@ def potrivire(video, audio, hevc=False, ac3=False, wasm=False):
 		return True, _("Imaginea acestui canal (MPEG-2) se decodează în browser, pe procesorul calculatorului.")
 	if video == "h265" and not hevc:
 		return False, _("Acest canal trimite imaginea în HEVC, iar acest browser nu o poate reda. Încearcă Chrome sau Edge pe un calculator cu placă video nouă, sau Safari.")
+	if video == "h264" and not h264:
+		return False, _("Acest canal trimite imaginea în H.264, iar acest browser nu o poate decoda (de pildă Opera sau Chromium pe Linux, fără codecurile video ale sistemului). Încearcă Chrome, Edge sau Firefox, sau un player din casă.")
 	if video in ("vc1", "mpeg4"):
 		return False, _("Acest canal trimite imaginea într-un format pe care browserele nu îl redau.")
 	# aceleasi alegeri ca RescrierePsi: MP2 / MP3, AAC ADTS ("AAC"), AC-3 numai daca browserul il reda; HE-AAC LATM

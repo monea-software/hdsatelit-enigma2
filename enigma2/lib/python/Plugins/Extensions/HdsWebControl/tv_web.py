@@ -9,8 +9,8 @@
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi cookie-ul browserului asociat sau browserul "liber" din
 # casa; ce schimba ceva cere POST, aceeasi origine si antetul X-HDS-CSRF al paginii):
 #   GET  /api/tv-stare                         sesiunile, setarile, memoria driverului, sesiunea acestui browser
-#   GET  /api/tv-canale?hevc=&ac3=&wasm=       canalele de pe frecventa televizorului si din lista lui, cu ce merge
-#   POST /api/tv-porneste?ref=&hevc=0|1&ac3=0|1&wasm=0|1  porneste (sau reia) transmisia acestui browser
+#   GET  /api/tv-canale?hevc=&h264=&ac3=&wasm= canalele de pe frecventa televizorului si din lista lui, cu ce merge
+#   POST /api/tv-porneste?ref=&hevc=0|1&h264=0|1&ac3=0|1&wasm=0|1  porneste (sau reia) transmisia acestui browser
 #   POST /api/tv-opreste?id=                   opreste o transmisie (fara id: a acestui browser)
 #   POST /api/tv-seteaza?permis=0|1&standby=0|1&sesiuni_max=1|2&asteptare=10|20|60
 #   GET  /api/tv-flux                          TS-ul sesiunii acestui browser (video/mp2t), cu antetul X-HDS-CSRF
@@ -27,7 +27,7 @@
 #                                              in procente din ecran ("0,0,100,100" = ecran intreg; lista de canale o
 #                                              micsoreaza), ca pagina sa puna imaginea din browser in acelasi loc
 #   POST /api/tv-pista?pid=                    pista audio a fluxului acestui browser (se aplica la reconectare)
-#   GET  /api/tv-verifica?ref=&hevc=&ac3=&wasm=  merge canalul acum in browser? (fara sa porneasca nimic) si in VLC?
+#   GET  /api/tv-verifica?ref=&hevc=&h264=&ac3=&wasm=  merge canalul acum in browser? (fara sa porneasca nimic) si in VLC?
 #                                              muta_tv: televizorul poate trece pe canal ("Vezi live", motor / un tuner)
 #   GET  /api/tv-urmeaza?ref=&standby=0|1      cererea lunga a paginii care urmeaza televizorul: raspunde cand
 #                                              televizorul nu mai e pe `ref` / `standby` sau dupa URMEAZA_S
@@ -121,6 +121,8 @@ TEXTE_PLAYER = {
 	"sunet_m3u": N_("Browserul nu poate reda sunetul acestui canal. Încearcă din nou sau deschide-l într-un player din casă cu playlistul de mai jos."),
 	"hevc": N_("Acest browser nu poate decoda imaginea HEVC (H.265) a acestui canal, de pildă 4K pe 10 biți. Încearcă alt browser sau un player din casă."),
 	"hevc_m3u": N_("Acest browser nu poate decoda imaginea HEVC (H.265) a acestui canal, de pildă 4K pe 10 biți. Deschide-l într-un player din casă cu playlistul de mai jos."),
+	"h264": N_("Acest browser nu poate decoda imaginea H.264 a acestui canal (de pildă Opera sau Chromium pe Linux, fără codecurile video ale sistemului). Încearcă Chrome, Edge sau Firefox, sau un player din casă."),
+	"h264_m3u": N_("Acest browser nu poate decoda imaginea H.264 a acestui canal (de pildă Opera sau Chromium pe Linux, fără codecurile video ale sistemului). Deschide-l în Chrome, Edge sau Firefox, sau într-un player din casă cu playlistul de mai jos."),
 	"detalii": N_("Detalii"),
 	"din_nou": N_("Pornește din nou"),
 	"incearca": N_("Încearcă din nou"),
@@ -297,7 +299,7 @@ def _m(H=None, M=None):
 	return _T(H).manager()
 
 
-def argumente(request, chei=("ref", "id", "hevc", "ac3", "wasm", "permis", "standby", "sesiuni_max", "asteptare", "preia",
+def argumente(request, chei=("ref", "id", "hevc", "h264", "ac3", "wasm", "permis", "standby", "sesiuni_max", "asteptare", "preia",
 		"pid", "l", "grup", "nume", "urmeaza")):
 	"""Argumentele cererii ca text scurt: {cheie: text}, numai cheile stiute, fara token."""
 	rez = {}
@@ -419,10 +421,10 @@ def interogareTransponder(ref, T):
 
 
 def canale(H=None, M=None, ref_tv=None, continut=None, radacina=None, hevc=False, ac3=False, serviciu=None, baza=None,
-		wasm=False):
+		wasm=False, h264=True):
 	"""Pentru GET /api/tv-canale: intai canalele de pe frecventa televizorului (merg mereu, tunerul e impartit),
 	apoi cele din lista de pe televizor, fiecare cu merge acum sau motivul. Codecul numai la cele care merg.
-	`wasm` = browserul are playerul wasm (canalele MPEG-2 merg)."""
+	`wasm` = browserul are playerul wasm (canalele MPEG-2 merg); `h264` False = browserul nu decodeaza H.264 (h264=0)."""
 	T = _T(H)
 	m = _m(H, M)
 	continut = continut or _continut
@@ -461,7 +463,7 @@ def canale(H=None, M=None, ref_tv=None, continut=None, radacina=None, hevc=False
 		ok, motiv = m.verificaCanal(c["ref"]) if c["sursa"] != "frecventa" else (True, None)
 		if ok:
 			info = T.infoCanal(c["ref"], serviciu, ref_tv, baza=baza)
-			merge, text = T.potrivire(info["video"], info["audio"], hevc, ac3, wasm)
+			merge, text = T.potrivire(info["video"], info["audio"], hevc, ac3, wasm, h264)
 			if c["radio"] and not info["video"]:
 				merge, text = True, ""
 			c.update({"merge": bool(merge), "motiv": "" if merge else text, "avertizare": text if merge else "",
@@ -499,10 +501,11 @@ def porneste(argumente_, cine, browser_nume, adresa, H=None, M=None, ref_tv=None
 	hevc = argumente_.get("hevc") == "1"
 	ac3 = argumente_.get("ac3") == "1"
 	wasm = argumente_.get("wasm") == "1"
+	h264 = argumente_.get("h264") != "0"   # pagina veche, fara parametru: ca inainte
 	if serviciu is None:
 		serviciu = T.serviciuTv()
 	info = T.infoCanal(ref, serviciu, ref_tv, baza=baza)
-	merge, text = T.potrivire(info["video"], info["audio"], hevc, ac3, wasm)
+	merge, text = T.potrivire(info["video"], info["audio"], hevc, ac3, wasm, h264)
 	nume = numeCanal(ref) or ref
 	if not merge:
 		return {"result": False, "message": text, "nume": nume, "ref": ref}
@@ -605,7 +608,7 @@ def verifica(argumente_, cine, H=None, M=None, ref_tv=None, serviciu=None, baza=
 	mutare = m.mutareTv(ref, cine) if (not ok and hasattr(m, "mutareTv")) else None
 	info = T.infoCanal(ref, serviciu, ref_tv, baza=baza)
 	merge, text = T.potrivire(info["video"], info["audio"], argumente_.get("hevc") == "1", argumente_.get("ac3") == "1",
-		argumente_.get("wasm") == "1")
+		argumente_.get("wasm") == "1", argumente_.get("h264") != "0")
 	rez = {"result": True, "ref": ref, "nume": numeCanal(ref) or ref, "video": info["video"], "audio": info["audio"],
 		"pe_tv": bool(ref_tv) and T.refCurata(ref_tv) == ref, "extern": bool(ok), "extern_motiv": "" if ok else motiv}
 	if not ok and mutare is not None and not mutare[0]:
@@ -1227,7 +1230,7 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 			try:
 				a = argumente(request)
 				return self._raspunde(request, canale(H, M, hevc=a.get("hevc") == "1", ac3=a.get("ac3") == "1",
-					wasm=a.get("wasm") == "1"))
+					wasm=a.get("wasm") == "1", h264=a.get("h264") != "0"))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -1763,9 +1766,9 @@ function randCanal(c){
 }
 function citesteCanalele(){
   // ce poate browserul: aceleasi verificari ca playerul comun (HEVC prin MediaSource, AC-3 prin MediaSource sau prin
-  // decodorul wasm al paginii, MPEG-2 prin playerul wasm)
-  var pt = (window.HdsPlayer && HdsPlayer.poate) ? HdsPlayer.poate() : {hevc: false, ac3: false, wasm: false};
-  return cerere("/api/tv-canale?hevc=" + (pt.hevc ? "1" : "0") + "&ac3=" + (pt.ac3 ? "1" : "0") + "&wasm=" + (pt.wasm ? "1" : "0")).then(function(d){
+  // decodorul wasm al paginii, MPEG-2 prin playerul wasm, H.264 prin MediaSource: Opera pe Linux nu-l are)
+  var pt = (window.HdsPlayer && HdsPlayer.poate) ? HdsPlayer.poate() : {hevc: false, h264: true, ac3: false, wasm: false};
+  return cerere("/api/tv-canale?hevc=" + (pt.hevc ? "1" : "0") + "&h264=" + (pt.h264 === false ? "0" : "1") + "&ac3=" + (pt.ac3 ? "1" : "0") + "&wasm=" + (pt.wasm ? "1" : "0")).then(function(d){
     var merg = $("merg"), nu = $("nuMergLista"); merg.textContent = ""; nu.textContent = "";
     var nr_nu = 0;
     (d.canale || []).forEach(function(c){ if(c.merge){ merg.appendChild(randCanal(c)); } else { nu.appendChild(randCanal(c)); nr_nu++; } });

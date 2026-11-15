@@ -63,6 +63,7 @@ ECRANE_MENIU = ("Menu", "ChoiceBox", "MessageBox", "FixedMenu", "ChannelContextM
 # setarile: doi pasi, ca in liste (clic = alege, clic pe randul ales = OK); au intaietate fata de meniuri si de numele
 # "menu" al listei. Aici intra si listele ConfigList (Components/ConfigList.py) din orice ecran.
 ECRANE_SETARI = ("ConfigListScreen", "Setup")
+ECRANE_FILECOMMANDER = ("FileCommanderScreen", "FileCommanderScreenFileSelect")   # HdsMouseFileCommander
 LISTE_SETARI = ("ConfigList",)
 DUBLU_CLIC_S = 1.0     # al doilea clic al unui dublu clic, venit pe alt ecran in atat timp, nu mai apasa nimic
 PAS_PAGINA = 3         # rotita: atatia pasi deodata (o rotire mare) = o pagina
@@ -299,6 +300,7 @@ class MouseEcran(object):
 		self._moduleAscii = module_ascii
 		self._ultim = (-1000.0, None)
 		self._tras = None
+		self._fc = None   # adaptorul File Commander (HdsMouseFileCommander), facut la prima nevoie
 
 	# ---------------------------------------------------------------- intrarea comuna
 	def gest(self, fel, x=None, y=None, clicuri=1, pasi=0, x0=None, y0=None, nou=False, text="", mod=None):
@@ -308,9 +310,13 @@ class MouseEcran(object):
 		mod: tastele tinute la gest in pagina web (multimea "ctrl" / "shift"), None = nestiute (mouse-ul USB: ecranul
 		le citeste singur de la tastatura pusa in receptor).
 		Un ecran cu metoda hdsGestMouse (editorul de canale: clicul schimba si coloana, Ctrl / Shift + clic, trasul pe
-		randuri) primeste gestul intai; daca intoarce un dictionar, acela e raspunsul, iar None = gestul merge ca mai jos."""
+		randuri) primeste gestul intai; daca intoarce un dictionar, acela e raspunsul, iar None = gestul merge ca mai jos.
+		Ecranele pluginului File Commander n-au metoda: adaptorul din HdsMouseFileCommander ii tine locul (clicul in
+		celalalt panou il face activ, tragerea dintre panouri copiaza, cu Shift muta)."""
 		ecran = self._ecran()
 		propriu = getattr(ecran, "hdsGestMouse", None) if ecran is not None else None
+		if propriu is None and ecran is not None:
+			propriu = self._adaptor(ecran)
 		if propriu is not None:
 			try:
 				extra = {"mod": frozenset(mod)} if mod is not None else {}
@@ -343,6 +349,19 @@ class MouseEcran(object):
 		if fel == "text":
 			return self.text(text)
 		raise ValueError("gest necunoscut: %r" % (fel,))
+
+	def _adaptor(self, ecran):
+		if type(ecran).__name__ not in ECRANE_FILECOMMANDER or self._fc is False:
+			return None
+		try:
+			if self._fc is None:
+				from Components.HdsMouseFileCommander import AdaptorFileCommander
+				self._fc = AdaptorFileCommander()
+			return self._fc.pentru(ecran)
+		except Exception as e:
+			jurnal("adaptorul File Commander: %r" % (e,))
+			self._fc = False
+			return None
 
 	def _ecran(self):
 		ecran = self._ecran_curent()

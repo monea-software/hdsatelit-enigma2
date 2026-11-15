@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <regex.h>
 #include <unistd.h>
+#include <set>
 #include <lib/dvb/db.h>
 #include <lib/dvb/dvb.h>
 #include <lib/dvb/frontend.h>
@@ -22,6 +23,11 @@
 
 DEFINE_REF(eDVBService);
 
+/* HDSatelit: a bouquet changed since the channel numbers were given (eDVBDB::renumberBouquet). The numbers are given
+   again at the next reading of a bouquet (eDVBDB::startQuery), not at every change: a plugin that adds thousands of
+   channels one by one does not renumber all the bouquets thousands of times. */
+static bool hdsRenumberPending = false;
+
 RESULT eBouquet::addService(const eServiceReference &ref, eServiceReference before)
 {
 	list::iterator it =
@@ -35,6 +41,7 @@ RESULT eBouquet::addService(const eServiceReference &ref, eServiceReference befo
 	}
 	else
 		m_services.push_back(ref);
+	hdsRenumberPending = true;
 	return 0;
 }
 
@@ -45,6 +52,7 @@ RESULT eBouquet::removeService(const eServiceReference &ref)
 	if ( it == m_services.end() )
 		return -1;
 	m_services.erase(it);
+	hdsRenumberPending = true;
 	return 0;
 }
 
@@ -77,11 +85,15 @@ RESULT eBouquet::moveService(const eServiceReference &ref, unsigned int pos)
 		else
 			std::iter_swap(source--, source);
 	}
+	hdsRenumberPending = true;
 	return 0;
 }
 
 RESULT eBouquet::flushChanges()
 {
+	/* the bouquet calls of the plugins (addOrUpdateBouquet, appendServicesToBouquet, removeBouquet) change the lists
+	   and then write them here */
+	hdsRenumberPending = true;
 	FILE *f=fopen(eEnv::resolve("${sysconfdir}/enigma2/" + m_filename).c_str(), "w");
 	if (!f)
 		return -1;
@@ -879,6 +891,93 @@ void eDVBDB::reloadBouquets()
 		eBouquet &parent = m_bouquets["bouquets.radio"];
 		parent.m_services.push_back(ref);
 		parent.flushChanges();
+	}
+	renumberBouquet();
+}
+
+/* HDSatelit: the bouquet file named by a reference that opens a bouquet ('FROM BOUQUET "name" ...'), or "" */
+static std::string hdsBouquetFile(const eServiceReference &ref)
+{
+	if (!(ref.flags & eServiceReference::canDescent))
+		return "";
+	size_t pos = ref.path.find("FROM BOUQUET \"");
+	if (pos == std::string::npos)
+		return "";
+	pos += 14;
+	size_t end = ref.path.find('"', pos);
+	if (end == std::string::npos)
+		return "";
+	return ref.path.substr(pos, end - pos);
+}
+
+/* a channel has a number, folders and markers do not, the numbered markers (Fast Scan) do, as in the channel list */
+static bool hdsHasNumber(const eServiceReference &ref)
+{
+	return !(ref.flags & (eServiceReference::isMarker | eServiceReference::isDirectory)) || (ref.flags & eServiceReference::isNumberedMarker);
+}
+
+/* the channels of one bouquet numbered after `count`; the new count */
+static int hdsNumberChannels(eBouquet &bouquet, int count)
+{
+	for (std::list<eServiceReference>::iterator it = bouquet.m_services.begin(); it != bouquet.m_services.end(); ++it)
+		it->setChannelNum(hdsHasNumber(*it) ? ++count : 0);
+	return count;
+}
+
+/* HDSatelit: the channel numbers in the references of the bouquets (getChannelNum), as in OE-Alliance, but counted the
+   way our channel list shows them (Screens/ChannelSelection.py getBouquetNumOffset): the channels of the bouquets of
+   bouquets.tv one bouquet after the other (1, 2, ...), the same for bouquets.radio; a bouquet inside a bouquet starts
+   after all of them (offset = all the channels), the alternatives from 1. A bouquet that is not loaded is not created
+   here (find, not []): the internet groups read on demand (isLazyBouquet) get their numbers when they are read. */
+void eDVBDB::renumberBouquet()
+{
+	hdsRenumberPending = false;
+	std::set<std::string> numbered;
+	static const char *roots[] = { "bouquets.tv", "bouquets.radio" };
+	for (int r = 0; r < 2; ++r)
+	{
+		std::map<std::string, eBouquet>::iterator root = m_bouquets.find(roots[r]);
+		if (root == m_bouquets.end())
+			continue;
+		numbered.insert(roots[r]);
+		int count = 0;
+		std::list<std::string> nested;
+		for (std::list<eServiceReference>::iterator it = root->second.m_services.begin(); it != root->second.m_services.end(); ++it)
+		{
+			it->setChannelNum(0); /* the bouquets of the root list have no number */
+			std::string file = hdsBouquetFile(*it);
+			if (file.empty() || numbered.count(file))
+				continue;
+			std::map<std::string, eBouquet>::iterator b = m_bouquets.find(file);
+			if (b == m_bouquets.end())
+				continue;
+			numbered.insert(file);
+			count = hdsNumberChannels(b->second, count);
+			for (std::list<eServiceReference>::iterator s = b->second.m_services.begin(); s != b->second.m_services.end(); ++s)
+			{
+				std::string sub = hdsBouquetFile(*s);
+				if (!sub.empty())
+					nested.push_back(sub);
+			}
+		}
+		while (!nested.empty())
+		{
+			std::string file = nested.front();
+			nested.pop_front();
+			if (numbered.count(file))
+				continue;
+			std::map<std::string, eBouquet>::iterator b = m_bouquets.find(file);
+			if (b == m_bouquets.end())
+				continue;
+			numbered.insert(file);
+			hdsNumberChannels(b->second, file.compare(0, 13, "alternatives.") == 0 ? 0 : count);
+			for (std::list<eServiceReference>::iterator s = b->second.m_services.begin(); s != b->second.m_services.end(); ++s)
+			{
+				std::string sub = hdsBouquetFile(*s);
+				if (!sub.empty())
+					nested.push_back(sub);
+			}
+		}
 	}
 }
 
@@ -1827,6 +1926,7 @@ RESULT eDVBDB::getBouquet(const eServiceReference &ref, eBouquet* &bouquet)
 	if (i == m_bouquets.end() && isLazyBouquet(str))
 	{
 		loadBouquet(str.c_str());
+		renumberBouquet(); /* the group read now gets its channel numbers */
 		i = m_bouquets.find(str);
 	}
 	if (i == m_bouquets.end())
@@ -1845,7 +1945,13 @@ RESULT eDVBDB::startQuery(ePtr<iDVBChannelListQuery> &query, eDVBChannelQuery *q
 		if ( source.path.find("BOUQUET") != std::string::npos )
 		{
 			if (isLazyBouquet(q->m_bouquet_name) && m_bouquets.find(q->m_bouquet_name) == m_bouquets.end())
+			{
 				loadBouquet(q->m_bouquet_name.c_str());
+				hdsRenumberPending = true;
+			}
+			/* a bouquet changed (or was read now) since the numbers were given: given again before it is read */
+			if (hdsRenumberPending)
+				renumberBouquet();
 			query = new eDVBDBBouquetQuery(this, source, q);
 		}
 		else if ( source.path.find("SATELLITES") != std::string::npos )

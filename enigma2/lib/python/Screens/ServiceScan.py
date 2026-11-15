@@ -3,6 +3,7 @@ from .Screen import Screen
 from Components.ServiceScan import ServiceScan as CScan
 from Components.ProgressBar import ProgressBar
 from Components.Label import Label
+from Components.Sources.StaticText import StaticText
 from Components.ActionMap import ActionMap
 from Components.FIFOList import FIFOList
 from Components.Sources.FrontendInfo import FrontendInfo
@@ -80,6 +81,18 @@ class ServiceScan(Screen):
 		self["scan_network_facts"] = Label("")
 		self["scan_network_hint"] = Label("")
 		self.onLayoutFinish.append(self.hdsAscundeReteaua)
+		# HDSatelit: rezumatul de la sfarsit in casete (cifra mare, eticheta si randul mic), cand skinul le are;
+		# scan_result ramane pentru ce nu intra in casete (erori, pozitii fara TV, indicii) si pentru alte skinuri
+		for k in self.HDS_CIFRE:
+			for parte in ("box", "num", "cap", "sub"):
+				self["scan_%s_%s" % (parte, k)] = Label("")
+		self["scan_place"] = Label("")
+		self["scan_box_place"] = Label("")
+		self["scan_hint_ok"] = Label("")
+		# tasta albastra ca in celelalte ecrane (HdsCadru1240): semnul colorat apare numai cand are text
+		self["key_blue"] = StaticText("")
+		self.hdsRezultatWeb = None
+		self.onLayoutFinish.append(self.hdsAscundeCifrele)
 
 		self["pass"] = Label("")
 		self["servicelist"] = FIFOList(len=10)
@@ -101,6 +114,7 @@ class ServiceScan(Screen):
 
 		self.onFirstExecBegin.append(self.doServiceScan)
 
+	HDS_CIFRE = ("canale", "tv", "radio", "transp", "durata")
 	HDS_CASETA = ("scan_network_card", "scan_network_heading", "scan_network_name", "scan_network_facts", "scan_network_hint")
 	HDS_CASETA_JOS = 912      # sub ea linia de jos a ferestrei (HdsCadru1240)
 	HDS_CASETA_SPATIU = 16    # intre rezumat si caseta, si marginea de sus/jos a casetei
@@ -146,6 +160,97 @@ class ServiceScan(Screen):
 			card.resize(eSize(w, max(1, min(y + pad - 4, self.HDS_CASETA_JOS) - y0)))
 		self["scan_network_card"].show()
 
+	def hdsAreCifre(self):
+		"""Skinul are casetele cifrelor (atribute din skin pe cifra canalelor); altfel rezumatul ramane text."""
+		return bool(getattr(self["scan_num_canale"], "skinAttributes", None))
+
+	def hdsElementeCifre(self):
+		for k in self.HDS_CIFRE:
+			for parte in ("box", "num", "cap", "sub"):
+				yield "scan_%s_%s" % (parte, k)
+		yield "scan_place"
+		yield "scan_box_place"
+		yield "scan_hint_ok"
+
+	def hdsAscundeCifrele(self):
+		rez = self["scan_result"].instance
+		if rez is not None:
+			self.hdsRezultatLoc = (rez.position().x(), rez.position().y(), rez.size().width(), rez.size().height())
+		for nume in self.hdsElementeCifre():
+			self[nume].hide()
+
+	@staticmethod
+	def hdsTexteCifre(cifre):
+		"""Textele casetelor, din cifrele rezumatului: {cheie: (cifra, eticheta, randul mic)}; None la o caseta fara
+		valoare (nucleul nu da felurile canalelor, durata necunoscuta). Aceleasi pentru televizor si pagina web."""
+		def numar(v):
+			return "%d" % v if v is not None else "?"
+		subtv = []
+		if cifre["hd"] is not None:
+			subtv.append(_("HD: %d") % cifre["hd"])
+		if cifre["uhd"] is not None:
+			subtv.append(_("4K: %d") % cifre["uhd"])
+		texte = {
+			"canale": (numar(cifre["canale"]), _("Canale găsite"), _("new: %d") % cifre["noi"] if cifre["noi"] is not None else ""),
+			"tv": (numar(cifre["tv"]), _("TV"), u" · ".join(subtv)),
+			"radio": (numar(cifre["radio"]), _("Radio"), _("other services: %d") % cifre["alte"] if cifre["alte"] else ""),
+			"transp": (numar(cifre["transpondere"]), _("Transpondere"),
+				_("without signal: %d") % cifre["fara_semnal"] if cifre["fara_semnal"] is not None else ""),
+			"durata": (cifre["durata"], _("Durata"), ""),
+		}
+		if cifre["tv"] is None:
+			texte["tv"] = texte["radio"] = None
+		if not cifre["durata"]:
+			texte["durata"] = None
+		return texte
+
+	def hdsArataCifrele(self):
+		"""La sfarsit, cand s-a gasit ceva si skinul are casetele: cifrele in casete, locul cautat pe randul lui, iar in
+		scan_result numai randurile care nu se vad in casete, mutat sub ele. Pagina web primeste tot textul (hdsRezultatWeb)."""
+		scan = self.get("scan")
+		if scan is None or getattr(self, "hdsCifrePuse", False):
+			return False
+		self.hdsCifrePuse = True
+		self.hdsRezultatWeb = [r for r in self["scan_result"].getText().split("\n") if r.strip()]
+		self.hdsRezultatBaza = len(self.hdsRezultatWeb)
+		cifre = scan.hdsCifre() if hasattr(scan, "hdsCifre") else None
+		if cifre is None or not self.hdsAreCifre():
+			return False
+
+		texte = self.hdsTexteCifre(cifre)
+		jos = None
+		for k in self.HDS_CIFRE:
+			t = texte.get(k)
+			for parte, text in zip(("num", "cap", "sub"), t or ("", "", "")):
+				self["scan_%s_%s" % (parte, k)].setText(text)
+			if not t:
+				continue
+			for parte in ("box", "num", "cap", "sub"):
+				self["scan_%s_%s" % (parte, k)].show()
+			for parte in ("box", "num", "sub"):
+				inst = self["scan_%s_%s" % (parte, k)].instance
+				if inst is not None:
+					jos = max(jos or 0, inst.position().y() + inst.size().height())
+		self["scan_place"].setText(cifre["loc"])
+		loc = self["scan_place"].instance
+		if cifre["loc"] and loc is not None:
+			self["scan_place"].show()
+			self["scan_box_place"].show()
+			jos = max(jos or 0, loc.position().y() + loc.size().height())
+		# restul randurilor, sub casete
+		rest = scan.resultLines(faraCifre=True)
+		self["scan_result"].setText("\n".join(rest))
+		rez = self["scan_result"].instance
+		loc0 = getattr(self, "hdsRezultatLoc", None)
+		if rez is not None and loc0 is not None and jos is not None:
+			# fara rest, eticheta goala sta lipita de casete, ca loc sa ramana casetei retelei (cablu)
+			y = jos + self.HDS_CASETA_SPATIU if rest else jos
+			rez.move(ePoint(loc0[0], y))
+			rez.resize(eSize(loc0[2], max(1, loc0[1] + loc0[3] - y) if rest else 1))
+		# caseta retelei se aseaza din nou sub rezumatul mutat (si in asistent, unde hdsOfertaPiste nu ajunge)
+		self.hdsAseazaReteaua(bool(getattr(scan, "hdsRetele", None)))
+		return True
+
 	def doServiceScan(self):
 		caseta = {"titlu": self["scan_network_heading"], "nume": self["scan_network_name"], "date": self["scan_network_facts"],
 			"indiciu": self["scan_network_hint"], "aseaza": self.hdsAseazaReteaua}
@@ -165,6 +270,7 @@ class ServiceScan(Screen):
 			done = False
 		if done:
 			self.stopActivity()
+			self.hdsArataCifrele()
 			self.hdsOfertaPiste()
 			self.hdsIndiciuT2()
 			self.alignResult()
@@ -218,8 +324,16 @@ class ServiceScan(Screen):
 			return
 		self.hdsOfertaPusa = True
 		self.hdsPisteDupaScanare()
-		label = self["scan_result"]
-		label.setText(label.getText() + "\n" + _("ALBASTRU: citește pistele canalelor găsite. OK sau EXIT: revino la vizionare."))
+		indiciu = _("ALBASTRU: citește pistele canalelor găsite. OK sau EXIT: revino la vizionare.")
+		if self.hdsAreCifre() and self["scan_num_canale"].getText():
+			# skinul cu casete: tasta albastra jos, ca buton, si OK/EXIT langa ea; pagina web pastreaza randul intreg
+			self["key_blue"].setText(_("Citește pistele"))
+			self["scan_hint_ok"].setText(_("OK sau EXIT: închide"))
+			self["scan_hint_ok"].show()
+		else:
+			label = self["scan_result"]
+			label.setText("\n".join([t for t in (label.getText(), indiciu) if t]))
+		self.hdsAdaugaWeb([indiciu])
 		self.hdsAseazaReteaua(bool(getattr(scan, "hdsRetele", None)))
 
 	def hdsIndiciuT2(self):
@@ -249,8 +363,40 @@ class ServiceScan(Screen):
 			if randuri:
 				label = self["scan_result"]
 				label.setText("\n".join([t for t in [label.getText()] + randuri if t]))
+				self.hdsAdaugaWeb(randuri)
 		except Exception as e:
 			print("[ServiceScan] randul DVB-T2 prin satelit: %s" % e)
+
+	def hdsAdaugaWeb(self, randuri):
+		if self.hdsRezultatWeb is not None:
+			self.hdsRezultatWeb.extend(randuri)
+
+	def hdsRezultatPentruWeb(self):
+		"""Toate randurile rezumatului, ca text (pagina web, /api/scanare-stare), si cand televizorul le arata in casete."""
+		if self.hdsRezultatWeb is not None:
+			return list(self.hdsRezultatWeb)
+		return [r for r in self["scan_result"].getText().split("\n") if r.strip()]
+
+	def hdsCifrePentruWeb(self):
+		"""Casetele rezumatului pentru pagina web, cu textele televizorului: {"casete": [{"cifra", "eticheta", "sub"}],
+		"loc": randul satelitului, "rest": randurile care nu intra in casete}; None pana la sfarsit sau fara canale."""
+		scan = self.get("scan")
+		try:
+			cifre = scan.hdsCifre() if scan is not None and scan.isDone() else None
+		except AttributeError:
+			return None
+		if cifre is None:
+			return None
+		texte = self.hdsTexteCifre(cifre)
+		casete = [{"cheie": k, "cifra": texte[k][0], "eticheta": texte[k][1], "sub": texte[k][2]}
+			for k in self.HDS_CIFRE if texte.get(k)]
+		toate = self.hdsRezultatPentruWeb()
+		rest = scan.resultLines(faraCifre=True)
+		# randurile adaugate de ecran (indiciul DVB-T2, tasta albastra) dupa rezumat
+		baza = getattr(self, "hdsRezultatBaza", None)
+		if baza is not None:
+			rest = rest + toate[baza:]
+		return {"casete": casete, "loc": cifre["loc"], "rest": rest}
 
 	def hdsCitestePiste(self):
 		scan = self.get("scan")

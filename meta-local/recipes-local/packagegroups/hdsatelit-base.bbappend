@@ -22,6 +22,13 @@ RDEPENDS:${PN}:append:sf8008 = " firmware-rtk8822cbtusb"
 HDS_WIFI_OCTAGON = "rt8821cu linux-firmware-8821cu rtl8192eu firmware-rtl8192eu kernel-module-mt7601u firmware-mt7601u rt8822cu"
 RDEPENDS:${PN}:append:sf8008 = " ${HDS_WIFI_OCTAGON}"
 RDEPENDS:${PN}:append:sf8008m = " ${HDS_WIFI_OCTAGON} firmware-rtk8822cbtusb"
+# Octagon SX88V2 4K DUAL OS si SX988 4K DUAL OS (V19, 14.11.2026; nucleul linux-octagon 4.4.176, CONFIG_TUN=m: kernel-module-tun
+# din hdsatelit-base.bb ramane). Wi-Fi USB ca pe familia Octagon (oe-alliance-wifi.bb le da aceleasi drivere). SX88V2 are in
+# plus Wi-Fi/Bluetooth intern UNISOC UWE5621 pe SDIO: driverul vine cu pachetul placii (uwe5621_bsp_sdio.ko, uwe5621_wifi.ko,
+# incarcate de `load`), iar firmware-ul (wcnmodem.bin, uwewifi/*.ini) e numai RECOMANDAT de masina (firmware-uwe5621 in
+# MACHINE_EXTRA_RRECOMMENDS): il cerem aici, altfel Wi-Fi-ul intern nu porneste.
+RDEPENDS:${PN}:append:sx88v2 = " ${HDS_WIFI_OCTAGON} firmware-uwe5621"
+RDEPENDS:${PN}:append:sx988 = " ${HDS_WIFI_OCTAGON}"
 #
 # Uclan Ustym 4K PRO (ustym4kpro, geamanul lui SF8008): nucleul linux-uclan are CONFIG_TUN=m (defconfig ustym4kpro), deci
 # kernel-module-tun din hdsatelit-base.bb ramane (ca pe V20). Wi-Fi USB ca pe SF8008 MINI: imaginile facute pentru
@@ -63,6 +70,8 @@ RDEPENDS:${PN}:append:sh1 = " hdsatelit-radacina-usb"
 # Vu+ Solo2 (MS2, 12.11.2026): aceeasi imagine mica, aceleasi limite (nucleul 3.13.5, MIPS)
 RDEPENDS:${PN}:remove:vusolo2 = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
 RDEPENDS:${PN}:append:vusolo2 = " hdsatelit-radacina-usb"
+# Vu+ Duo2 (V22, 14.11.2026): aceleasi limite MIPS (nucleul 3.13.5); FARA radacina-usb si partea a doua (nu e memorie mica)
+RDEPENDS:${PN}:remove:vuduo2 = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
 # Vu+ Zero (MVZ, 12.11.2026): aceeasi imagine mica, aceleasi limite (nucleul 3.13.5, MIPS)
 RDEPENDS:${PN}:remove:vuzero = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
 RDEPENDS:${PN}:append:vuzero = " hdsatelit-radacina-usb"
@@ -281,6 +290,7 @@ RDEPENDS:${PN}:append:vusolose = " libfaad2 twolame"
 # Zgemma Star S (MSS): tot Broadcom (BCM7358), aceeasi cale de sunet DAB+ ca Solo SE
 RDEPENDS:${PN}:append:sh1 = " libfaad2 twolame"
 RDEPENDS:${PN}:append:vusolo2 = " libfaad2 twolame"
+RDEPENDS:${PN}:append:vuduo2 = " libfaad2 twolame"
 RDEPENDS:${PN}:append:vuzero = " libfaad2 twolame"
 
 # 0.7.4 (agentul WD, 11.11.2026): r8188eu e in imagine, dar fara firmware-ul lui stickurile RTL8188EUS (foarte raspandite) nu porneau;
@@ -346,4 +356,84 @@ RDEPENDS:${PN}:append:vusolose = " rtl8821au"
 # Zgemma Star S (MSS): ca Solo SE, numai rtl8821au in imagine (se construieste pe 4.10.12, vezi randul ax51)
 RDEPENDS:${PN}:append:sh1 = " rtl8821au"
 RDEPENDS:${PN}:append:vusolo2 = " rtl8821au"
+RDEPENDS:${PN}:append:vuduo2 = " rtl8821au"
 RDEPENDS:${PN}:append:vuzero = " rtl8821au"
+
+# 0.7.5 (DSK, 14.11.2026): ntfs-3g a intrat in hdsatelit-base pe toate masinile (comentariul din hdsatelit-base.bb). Revizia
+# urca dupa ".3" din 0.7.4, ca receptoarele cu 0.7.4 sa ia noul hdsatelit-base prin actualizarea din meniu, iar opkg sa aduca
+# ntfs-3g si libntfs-3g91 din feed in aceeasi tranzactie (culegerea feedului 0.7.5 ia hdsatelit-base cu dependintele, ca la
+# openssl3-compat). Pe masinile cu ".1" propriu (mai sus) revizia devine r0.1.3.1, pe celelalte r0.3.1: amandoua mai noi.
+PR:append = ".1"
+
+# 0.7.5 (SER, 15.11.2026; dorinelu, forumul nostru 795, Vu+ Solo4K: "modprobe: FATAL: Module ftdi_sio not found in directory
+# /lib/modules/3.14.28-1.8", deci nici /dev/ttyUSB0): adaptoarele seriale USB (FTDI, Prolific PL2303, Silicon Labs CP210x,
+# WCH CH340/CH341) si placile CDC-ACM (Arduino Uno/Mega, /dev/ttyACM0) pornesc singure in imagine, fara internet.
+# Modulele sunt deja construite de nucleul fiecarei masini de mai jos (=m: modules.order din rootfs-ul imaginilor 0.7.5
+# publicate, citit cu unelte/stb/module_nucleu_imagini.py; tabelul in runda-0013/STADIU-SER.md), numai ca nu intrau in imagine;
+# nucleul nu se schimba. udev le incarca singur dupa ID-ul USB cand omul baga adaptorul (80-drivers.rules, modules.alias),
+# S05modload.sh la pornire, iar 60-serial.rules (eudev, deja in imagine) face /dev/serial/by-id si by-path. usbserial vine
+# si singur, ca dependinta, aici e scris pentru claritate. ~0,2 MB instalati. Masinile sunt numite una cate una, ca mai sus:
+# o masina noua primeste lista numai dupa module_nucleu_imagini.py pe prima ei imagine (pe cele neconstruite inca, ca
+# h9combo, multiboxpro, sh1, vusolo2, vuduo2, vuzero, dm900, nu e verificat).
+HDS_SERIAL_USB = "kernel-module-usbserial kernel-module-ftdi-sio kernel-module-pl2303 kernel-module-cp210x \
+    kernel-module-ch341 kernel-module-cdc-acm"
+RDEPENDS:${PN}:append:sf8008 = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:sf8008m = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:ustym4kpro = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:gbtrio4k = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:viper4k = " ${HDS_SERIAL_USB}"
+# Viper 4K V20, V30, Protek 4K X2 (u57) si V40 (u571): verificat pe toate patru
+RDEPENDS:${PN}:append:u57 = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:u571 = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:vusolo4k = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:vuultimo4k = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:vuduo4k = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:vuuno4kse = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:vuzero4k = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:gbquad4kpro = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:ax51 = " ${HDS_SERIAL_USB}"
+# Vu+ Solo SE (3.13.5, NAND): ~0,2 MB din ~9 MiB ramasi sub limita de 150 MiB (root_cfe_auto.bin 0.7.5: 141 MiB)
+RDEPENDS:${PN}:append:vusolose = " ${HDS_SERIAL_USB}"
+
+# 0.7.5 (SER, 15.11.2026; JAKITAKI, forumul nostru 787, Vu+ Zero4K): comanda blockdev (util-linux-blockdev, ~30 KB), ceruta de
+# pluginurile de pornire multipla (MOH Boot o cere ca dependinta). util-linux 2.42.4 e deja construit pe toate arhitecturile
+# (util-linux-blkid, -sfdisk, -flock sunt in imagine), deci pe toate masinile, fara override. busybox nu are blockdev la noi.
+RDEPENDS:${PN}:append = " util-linux-blockdev"
+
+# Revizia urca dupa ".1" de la DSK (0.7.5), ca receptoarele cu 0.7.4 si 0.7.5 sa ia noul hdsatelit-base prin actualizarea din meniu,
+# iar opkg sa aduca modulele seriale si util-linux-blockdev din feed in aceeasi tranzactie (culegerea ia hdsatelit-base cu
+# dependintele lui). Pe masinile cu ".1" propriu devine r0.1.3.1.1, pe celelalte r0.3.1.1: amandoua mai noi.
+PR:append = ".1"
+
+
+# 0.7.5 (MA8, 15.11.2026; TODO 05.11 14:43): egalizatorul (lib/service/hdsegalizator.cpp) decodeaza posturile AAC prin elementul
+# GStreamer faad, care nu era in imagine: la orice post AAC egalizatorul spunea ca nu e disponibil si sunetul ramanea pe placa.
+# gstreamer1.0-plugins-bad-faad (~30 KB, GPL-2.0, recipes-local/gstreamer/gstreamer1.0-plugins-bad_%.bbappend) intra NUMAI pe
+# masinile care au deja libfaad2 pentru DAB+ (aceeasi lista ca mai sus), deci nicio biblioteca noua de decodare pe receptor.
+# Posturile cu HE-AAC semnalat (SBR/PS in configuratia LATM) le refuza motorul si raman pe placa (aprobarea din 28.09.2026 e numai
+# pentru AAC-LC); restul masinilor (HiSilicon) raman fara faad pana hotaraste Eduard (runda-0013/STADIU-MA8.md).
+RDEPENDS:${PN}:append:vuuno4kse = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vuzero4k = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vuduo4klite = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:gbquad4kpro = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:gbx34k = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:ax51 = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:osmio4kplus = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:osmini4k = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:osmio4k = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:zgemmah17combo = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:dm900 = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:dm920 = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vuduo4k = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vuduo4kse = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vusolo4k = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vuultimo4k = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vusolose = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:sh1 = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vusolo2 = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vuduo2 = " gstreamer1.0-plugins-bad-faad"
+RDEPENDS:${PN}:append:vuzero = " gstreamer1.0-plugins-bad-faad"
+# Revizia urca peste ".1" de la SER, ca receptoarele de mai sus sa ia pluginul prin actualizarea din meniu.
+PR:append = ".1"

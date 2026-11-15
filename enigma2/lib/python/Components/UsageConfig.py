@@ -147,8 +147,14 @@ def _setariCerutePluginuri():
 	pune(config.usage, "servicelist_cursor_behavior", ConfigText(default="keep"))
 	pune(config.usage, "show_menupath", ConfigText(default="small"))
 	# randul cu modulul de acces din bara temelor facute pentru OE-Alliance (convertorul MercPliExtraInfo: int(valoare) > 0);
-	# ca in OE-Alliance: 0 oprit, 1 un rand, 2 doua randuri; fara texte: nu apare in niciun ecran al nostru
-	pune(config.usage, "show_cryptoinfo", ConfigSelection(default="2", choices=["0", "1", "2"]))
+	# ca in OE-Alliance: 0 oprit, 1 un rand, 2 doua randuri; fara texte: nu apare in niciun ecran al nostru.
+	# Valorile sunt numere, ca in OE-Alliance: PliExtraInfo de acum face `config.usage.show_cryptoinfo.value > 0`, care cu
+	# textul "2" cadea (TypeError) si lasa goala bara de codare a temei (darog69, forum 1455, TCN 15.11.2026); textul
+	# salvat ("1") se citeste inapoi ca numar (ConfigSelection.fromstring).
+	pune(config.usage, "show_cryptoinfo", ConfigSelection(default=2, choices=[(0, "0"), (1, "1"), (2, "2")]))
+	# de unde iau temele OE-Alliance datele transponderului din bara (feinfo.getAll(valoare == "settings")): ca in OE-Alliance,
+	# implicit "tuner"; tema BlueAccents-HD cadea la fiecare canal fara ea (asistenta 821342, 14.11.2026). Fara rand in meniu.
+	pune(config.usage, "infobar_frontend_source", ConfigSelection(default="tuner", choices=["settings", "tuner"]))
 	pune(config.usage, "pic_resolution", ConfigText(default=""))
 	pune(config.usage, "sleep_timer", ConfigText(default="0"))
 	pune(config.usage, "sleepTimer", ConfigInteger(default=0, limits=(0, 86400)))
@@ -172,6 +178,20 @@ def _setariCerutePluginuri():
 	pune(config.recording, "zap_margin_after", ConfigInteger(default=0, limits=(0, 999)))
 	pune(config.recording, "zap_margin_before", ConfigInteger(default=0, limits=(0, 999)))
 	pune(config.subtitles, "show", ConfigYesNo(default=True))
+
+
+class NivelMereuExpert(ConfigSelection):
+	"""config.usage.setup_level din 0.7.5 (LVL, Eduard 14.11.2026): toate setarile se vad mereu, fara Simplu /
+	Intermediar / Expert. Valoarea ramane "expert" orice i s-ar da: din /etc/enigma2/settings ramas din 0.7.4
+	(simple, intermediate), dintr-o copie de setari pusa la loc fara repornire sau dintr-un plugin. Alegerile raman
+	toate trei, ca .index sa fie 2: filtrele de nivel (Setup, Menu, ChannelSelection, cautarea setarilor, paginile
+	web) si pluginurile din feed care compara .index sau .value lucreaza mai departe si nu mai ascund nimic.
+	Valoarea egala cu cea implicita nu se mai scrie in settings, deci randul vechi dispare la prima salvare."""
+
+	def setValue(self, value):
+		ConfigSelection.setValue(self, "expert")
+
+	value = property(ConfigSelection.getValue, setValue)
 
 
 def InitUsageConfig():
@@ -227,7 +247,9 @@ def InitUsageConfig():
 	config.usage.output_12V = ConfigSelection(default = "do not change", choices = [
 		("do not change", _("do not change")), ("off", _("off")), ("on", _("on")) ])
 
-	config.usage.pip_zero_button = ConfigSelection(default = "standard", choices = [
+	# HDSatelit 0.7.5 (cererea unui tester, forum 795, probat pe Vu+ Solo4K): 0 cu PiP pornit schimba din fabrica imaginile
+	# intre ele (ecranul mare si PiP); "standard" (canalul de dinainte) ramane de ales in Setari, la Comportamentul tastei 0
+	config.usage.pip_zero_button = ConfigSelection(default = "swap", choices = [
 		("standard", _("standard")), ("swap", _("swap PiP and main picture")),
 		("swapstop", _("move PiP to main picture")), ("stop", _("stop PiP")) ])
 
@@ -244,7 +266,8 @@ def InitUsageConfig():
 	config.usage.on_movie_eof = ConfigSelection(default = "ask", choices = [
 		("ask", _("Ask user")), ("movielist", _("Return to movie list")), ("quit", _("Return to previous service")), ("pause", _("Pause movie at end")) ])
 
-	config.usage.setup_level = ConfigSelection(default = "intermediate", choices = [
+	# 0.7.5 (LVL): toate setarile la vedere, mereu (vezi NivelMereuExpert); randul "Setup Mode" nu mai e in setup.xml
+	config.usage.setup_level = NivelMereuExpert(default = "expert", choices = [
 		("simple", _("Simple")),
 		("intermediate", _("Intermediate")),
 		("expert", _("Expert")) ])
@@ -320,6 +343,12 @@ def InitUsageConfig():
 	# HDSatelit: siglele canalelor (Components/Renderer/Picon.py): oprita, nicio sigla nu se arata (caseta ramane goala,
 	# transparenta), iar pe bare textele raman la locul lor (Components/HdsPiconBare.py); se schimba pe loc
 	config.usage.hds_piconuri = ConfigYesNo(default = True)
+	# fara nicio sigla: in Setari se vede "Nu ai inca sigle" si OK deschide instalarea (Components/HdsPiconInstalare.py)
+	try:
+		from Components.HdsPiconInstalare import leaga_setarea
+		leaga_setarea(config.usage.hds_piconuri)
+	except Exception as e:
+		print("[UsageConfig] instalarea siglelor: %s" % e)
 	# HDSatelit (0.7.5): functiile televiziunii prin internet, fiecare cu Da/Nu (setup.xml hds_iptv_functii, pereche web /setari).
 	# Oprita, functia nu mai face nimic in fundal: nicio cerere la furnizor, nicio scriere.
 	# ghidul TV cerut singur la ~90 s dupa pornirea interfetei (Components/HdsIptvLucru._zilnic)
@@ -473,6 +502,14 @@ def InitUsageConfig():
 		HdsIpv6.initConfig()
 	except Exception as eroare:
 		print("[UsageConfig] HdsIpv6: %s" % eroare)
+
+	# HDSatelit 0.7.5/0.7.6: partajarea in retea (Samba), oprita din fabrica; pornita, se instaleaza din feed daca lipseste
+	# si se aplica singura; la pornire alegerea salvata se aduce la zi (Components/HdsSamba.py)
+	try:
+		from Components import HdsSamba
+		HdsSamba.initConfig()
+	except Exception as eroare:
+		print("[UsageConfig] HdsSamba: %s" % eroare)
 
 	# HDSatelit: culegerea pistelor la vizionare (oprita / numai canalul privit /
 	# tot transponderul, netestat), randul din setup.xml si pagina web /cautare (Components/HdsPisteCanale.py)

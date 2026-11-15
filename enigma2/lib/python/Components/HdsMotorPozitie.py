@@ -1152,6 +1152,12 @@ class PozitieMotor(object):
 		except Exception as ex:
 			T.jurnal("readucerea antenei a dat eroare: %r" % (ex,))
 			cod = -9
+		if cod == 0 and e["fel"] == "transmisie" and _transmisieDinNou(sec, slot):
+			# tunerul releului e liber acum (nucleul: m_inuse 0, intre doua cereri sau in pauza canalului): pozitia e
+			# uitata, iar cererea urmatoare a releului acordeaza pe loc si trimite comanda; se judeca la fel
+			T.jurnal("tunerul %s: releul modulului de acces fara semnal pe %s: pozitia se uita, acordul cererii lui "
+				"urmatoare trimite comanda de motor (incercarea %d)" % (T.numeTuner(slot), _gradeText(e["sat"]), n))
+			cod = 1
 		urmatoarea = int(round(e["urmatoarea_la"] - acum))
 		if cod != 1:
 			e["ultima"] = {"faza": "refuzata", "cod": cod}
@@ -1345,6 +1351,8 @@ class PozitieMotor(object):
 			return None, "o inregistrare porneste peste %d s" % max(0, int(secunde))
 		if _transmisieInRetea():
 			return None, "o transmisie in retea foloseste tunerul"
+		if _transmisiePeSlot(slot):
+			return None, "releul modulului de acces (serverul de flux) foloseste tunerul"
 		for nume in ("hdsForgetRotorPosition", "hdsRotorMovingSlot", "hdsRotorArrived"):
 			if not hasattr(sec, nume):
 				return None, "nucleul nu are %s" % nume
@@ -1623,6 +1631,8 @@ class PozitieMotor(object):
 			return None, "o inregistrare porneste peste %d s" % max(0, int(secunde))
 		if _transmisieInRetea():
 			return None, "o transmisie in retea foloseste tunerul"
+		if _transmisiePeSlot(slot):
+			return None, "releul modulului de acces (serverul de flux) foloseste tunerul"
 		try:
 			_gasire()
 		except Exception as ex:
@@ -2102,11 +2112,67 @@ def _utilizator(slot, pe_slot=None, semnal=False):
 			return "inregistrare", bool(T._stareServiciu(info).get("tuner_locked")), orbital
 		except Exception:
 			continue
+	# sesiunile serverului de flux al imaginii (Hds/DabT2/server8001.py, eServiceCenter.record, deci nu in getRecordings):
+	# releul modulului de acces tine asa tunerul cu motor cand programul televizorului n-a primit tuner (tune failed);
+	# si canalul fara date pe care releul il cere inca, in pauza dintre doua cereri (fara inregistrare acum)
+	for t in _tunereServer8001():
+		try:
+			if int(t.get("slot", -1)) == slot and int(t.get("orbital", -1)) >= 0:
+				return "transmisie", bool(t.get("blocat")), int(t["orbital"])
+		except (TypeError, ValueError):
+			continue
 	# canalul de satelit fara semnal, inlocuit acum de internet (HdsDvbIRezerva): tot programul televizorului
 	orbital = _rezervaOrbital(slot)
 	if orbital is not None:
 		return "televizor", False, orbital
 	return None
+
+
+def _tunereServer8001():
+	"""Tunerele sesiunilor serverului de flux al imaginii (Hds/DabT2/server8001.tunere): [{'slot', 'orbital', 'blocat',
+	'ref', 'in_pauza'}]. Fara import (modulul il incarca imaginea la pornire); [] daca lipseste sau nu se poate citi."""
+	m = sys.modules.get("Hds.DabT2.server8001")
+	f = getattr(m, "tunere", None) if m is not None else None
+	if f is None:
+		return []
+	try:
+		return list(f() or [])
+	except Exception:
+		return []
+
+
+def _transmisiePeSlot(slot):
+	"""True cat o sesiune a serverului de flux (releul modulului de acces) tine sau cere tunerul `slot`"""
+	for t in _tunereServer8001():
+		try:
+			if int(t.get("slot", -1)) == slot:
+				return True
+		except (TypeError, ValueError):
+			continue
+	return False
+
+
+def _transmisieDinNou(sec, slot):
+	"""Readucerea pentru releul modulului de acces cand tunerul e liber intre doua cereri ale lui (pauza canalului fara
+	date): pozitia se uita, iar pauza canalului se sterge, deci acordul cererii urmatoare trimite comanda de motor.
+	-> True daca pozitia s-a uitat."""
+	uita = getattr(sec, "hdsForgetRotorPosition", None)
+	if uita is None:
+		return False
+	try:
+		uita(slot)
+	except Exception as ex:
+		T.jurnal("readucerea releului: pozitia nu s-a uitat (%r)" % (ex,))
+		return False
+	m = sys.modules.get("Hds.DabT2.server8001")
+	fara = getattr(m, "fara_pauza", None) if m is not None else None
+	for t in _tunereServer8001():
+		try:
+			if fara is not None and int(t.get("slot", -1)) == slot:
+				fara(t.get("ref"))
+		except Exception:
+			continue
+	return True
 
 
 def _gasire():

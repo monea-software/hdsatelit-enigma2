@@ -946,8 +946,10 @@ def fontDinImagine(nume, skinuri):
 # ------------------------------------------------------------------ rezerva unui ecran
 
 def strangeCopii(element, cautaPanou, copii, _vazute=None):
-	"""Elementele unui ecran, cu panourile puse la loc, in `copii`. Intoarce numele primului panou care lipseste, sau None."""
+	"""Elementele unui ecran, cu panourile puse la loc, in `copii`. Un panou care lipseste se sare, ca la expandPanels si in
+	OE-Alliance, iar strangerea merge mai departe. Intoarce numele primului panou care lipseste, sau None."""
 	vazute = _vazute or frozenset()
+	primul = None
 	for copil in element:
 		if copil.tag != "panel":
 			copii.append(copil)
@@ -956,18 +958,17 @@ def strangeCopii(element, cautaPanou, copii, _vazute=None):
 		if not nume:
 			# cadru: se uita la copiii lui
 			lipsa = strangeCopii(copil, cautaPanou, copii, vazute)
-			if lipsa is not None:
-				return lipsa
+			primul = primul or lipsa
 			continue
 		if nume in vazute:
 			continue
 		panou = cautaPanou(nume)
 		if panou is None:
-			return nume
+			primul = primul or nume
+			continue
 		lipsa = strangeCopii(panou, cautaPanou, copii, vazute | {nume})
-		if lipsa is not None:
-			return lipsa
-	return None
+		primul = primul or lipsa
+	return primul
 
 
 _moduleVazute = {}
@@ -1016,12 +1017,15 @@ def esteLista(cheie, componenta):
 
 def motivEcran(ecran, element, cautaPanou, dosar=None):
 	"""De ce ecranul temei nu se poate folosi: ("panou", nume), ("lista", cheie), ("componente", [nume]) sau None. Fara sa se
-	construiasca nimic, deci fara nimic de desfacut."""
+	construiasca nimic, deci fara nimic de desfacut.
+
+	Un panou lipsa se sare, ca in OE-Alliance (Nacht: sigla 'ncht' si vremea de pe bara stau in partile la alegere ale temei,
+	cerute de aproape toate ecranele). Ecranul trece pe rezerva din cauza lui numai cand o lista a ecranului ramane fara
+	element care s-o arate (nume sau sursa pe un randator de lista): panoul lipsa era chiar lista (menu_mainmenu fara menulist,
+	intr-o varianta a temei Maxy-FHD)."""
 	copii = []
 	panou = strangeCopii(element, cautaPanou, copii)
-	if panou is not None:
-		return "panou", panou
-	nume, surse = set(), set()
+	nume, surse, surseLista = set(), set(), set()
 	lipsa = []
 	cuSursa = 0
 	for w in copii:
@@ -1033,14 +1037,20 @@ def motivEcran(ecran, element, cautaPanou, dosar=None):
 		elif s:
 			cuSursa += 1
 			surse.add(s)
+			if "list" in (w.attrib.get("render") or "").lower():
+				surseLista.add(s)
 			l = componenteLipsa(w, dosar)
 			if l:
 				lipsa += l
 				if w.attrib.get("render") == "Listbox":
 					return "componente", sorted(set(l))
 	for cheie in ecran:
-		if cheie not in nume and cheie not in surse and esteLista(cheie, ecran[cheie]):
+		if cheie in nume or not esteLista(cheie, ecran[cheie]):
+			continue
+		if cheie not in surse:
 			return "lista", cheie
+		if panou is not None and cheie not in surseLista:
+			return "panou", panou
 	if lipsa and cuSursa and len(lipsa) * FRACTIE_LIPSA >= cuSursa:
 		return "componente", sorted(set(lipsa))
 	return None

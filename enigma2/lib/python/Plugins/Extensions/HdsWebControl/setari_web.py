@@ -567,26 +567,8 @@ def pagina(request):
 	return pagina_text(P._STIL_COMUN, config_pagina).encode("utf-8", "replace")
 
 
-def _drumMeniu(id_intrare):
-	"""Drumul de pe televizor spre ecran (meniu_web.drumHtml); modulul incarcat singur, fara pachet (probele de pe
-	PC), nu are meniul, deci ramane „Meniu”."""
-	try:
-		from .meniu_web import drumHtml
-	except ImportError:
-		return "Meniu"
-	return drumHtml(id_intrare)
-
-
-def _nivelHtml():
-	"""Numele setarii nivelului (config.usage.setup_level) cum il arata televizorul."""
-	import html
-	return html.escape(_t("Setup Mode"), quote=False)
-
-
 def pagina_text(stil, config_pagina):
-	return _traducePagina(PAGINA).replace("__STIL_COMUN__", stil).replace("__CONFIG__",
-		config_pagina).replace("__NIVEL__",
-		_nivelHtml()).replace("__DRUM_MENIU__", _drumMeniu("usage_setup"))
+	return _traducePagina(PAGINA).replace("__STIL_COMUN__", stil).replace("__CONFIG__", config_pagina)
 
 
 PAGINA = """<!DOCTYPE html>
@@ -739,7 +721,7 @@ PAGINA = """<!DOCTYPE html>
   <section class="card"><div id="stare" class="ascuns"></div><div id="randuri"></div>
     <div class="butoane"><button type="button" class="verde" id="salveaza">Salvează</button><button type="button" class="rosu" id="renunta">Renunță</button></div>
   </section>
-  <p class="nota">Aceleași rânduri, cu aceleași alegeri, sunt pe televizor în ecranul cu același nume. Rândurile care se văd depind de „__NIVEL__”, ales pe televizor în __DRUM_MENIU__. Setările fără listă de alegeri se schimbă de pe televizor.</p>
+  <p class="nota">Aceleași rânduri, cu aceleași alegeri, sunt pe televizor în ecranul cu același nume. Setările fără listă de alegeri se schimbă de pe televizor.</p>
 </div>
 <p class="mesaj" id="mesaj"></p>
 </main>
@@ -843,7 +825,7 @@ function arata(d){
     if(r.ajutor){ var p = document.createElement("p"); p.className = "ajutor"; p.textContent = r.ajutor; div.appendChild(p); }
     c.appendChild(div);
   });
-  if(!d.randuri.length){ var n = document.createElement("p"); n.className = "nota"; n.textContent = "Niciun rând de arătat la nivelul ales."; c.appendChild(n); }
+  if(!d.randuri.length){ var n = document.createElement("p"); n.className = "nota"; n.textContent = "Niciun rând de arătat."; c.appendChild(n); }
   if(ales && !SETARE_ARATATA){
     SETARE_ARATATA = true;
     ales.scrollIntoView({block: "center"});
@@ -1180,9 +1162,9 @@ TEXTE_PAGINA = {
 		N_("Salvează"),
 		N_("Fă altă parolă pentru aplicații"),
 		N_("Arată parola"),
-		N_("Aceleași rânduri, cu aceleași alegeri, sunt pe televizor în ecranul cu același nume. Rândurile "
-			"care se văd depind de „__NIVEL__”, ales pe televizor în __DRUM_MENIU__. Setările fără listă de "
-			"alegeri se schimbă de pe televizor."),
+		# 0.7.5 (LVL): toate setarile se vad mereu, nota nu mai trimite la Modul de configurare
+		N_("Aceleași rânduri, cu aceleași alegeri, sunt pe televizor în ecranul cu același nume. Setările fără "
+			"listă de alegeri se schimbă de pe televizor."),
 		N_("Caută în meniu"),
 		# 0.7.5 (CST): textul din campul de cautare, acelasi ca in capul panoului (plugin.py), cu exemplul subtitrarilor
 		N_("Caută în meniu: scrie un cuvânt, de exemplu subtitrări"),
@@ -1191,7 +1173,7 @@ TEXTE_PAGINA = {
 	"js": (
 		N_("browser deconectat"),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
-		N_("Niciun rând de arătat la nivelul ales."),
+		N_("Niciun rând de arătat."),
 		N_("Ai pus parolă pentru interfața web: browserele și aplicațiile din casă o cer. O scoți sau o schimbi în "
 			"Parola receptorului (/acces-ssh)."),
 		N_("Din rețeaua de acasă nu se cere nici cod, nici parolă. O parolă (una singură, pentru tot) pui numai "

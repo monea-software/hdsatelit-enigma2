@@ -25,7 +25,9 @@
 #                             brute, cu drepturile lor (pe FAT drepturile nu se pastreaza, in arhiva da);
 #   machine-id                /etc/machine-id (fisierul cheilor de traducere pus sub 0.1.9 e legat de el);
 #   authorized_keys           /home/root/.ssh/authorized_keys;
-#   sistem.json               setarile omului din afara /etc/enigma2 (stare_sistem): regulile parolei pentru SSH si FTP,
+#   chei-gazda-dropbear.tar.gz     cheile gazdei SSH (/etc/dropbear/dropbear_{rsa,ecdsa,ed25519}_host_key, 0600), puse la loc
+#                             numai pe acelasi receptor, ca dupa o imagine noua clientii SSH sa nu vada "host key changed";
+#   sistem.json             setarile omului din afara /etc/enigma2 (stare_sistem): regulile parolei pentru SSH si FTP,
 #                             sursele de pachete adaugate de om, interfata implicita cand sunt doua
 #                             configurate (/etc/default_gw); numai valori verificate, fara parole; scris cand e ceva;
 #   parola-locala.json        alegerea parolei din casa si bifele; numai cand e pusa, textul si hash-ul root (0600).
@@ -122,8 +124,18 @@ FIS_MASINA = "machine-id"
 FIS_CHEI = "authorized_keys"
 FIS_SISTEM = "sistem.json"
 FIS_PAROLA = "parola-locala.json"
+# Cheile gazdei SSH (TODO 09.11 05:05): actualizarile din feed le pastreaza (dropbear_%.bbappend, hdsatelit-ssh r5), dar o
+# imagine noua (flash, alt loc de pornire) porneste cu /etc/dropbear gol si dropbear face chei noi; oricine intrase prin SSH
+# primea "REMOTE HOST IDENTIFICATION HAS CHANGED". DSS nu: e scos din dropbear 2026. Valorile nu intra in jurnale.
+ARH_CHEI_GAZDA = "chei-gazda-dropbear.tar.gz"
+CHEI_GAZDA = ("etc/dropbear/dropbear_rsa_host_key", "etc/dropbear/dropbear_ecdsa_host_key",
+	"etc/dropbear/dropbear_ed25519_host_key")
+# copia RSA tinuta de hds-ssh (hdsatelit-ssh r5) pentru postrm-ul vechi al lui dropbear: adusa la zi odata cu cheia
+COPIE_RSA_GAZDA = "etc/dropbear/.dropbear_rsa_host_key.pastrata"
+MAX_CHEIE_GAZDA = 16 * 1024
 # o imagine mai veche sare randul md5 al unui fisier pe care nu-l stie (citeste_descriere): copia ramane buna acolo
-FISIERE_COPIE = (ARH_SETARI, ARH_RETEA, ARH_ACCES, ARH_PLUGINURI, FIS_MASINA, FIS_CHEI, FIS_SISTEM, FIS_PAROLA)
+FISIERE_COPIE = (ARH_SETARI, ARH_RETEA, ARH_ACCES, ARH_PLUGINURI, FIS_MASINA, FIS_CHEI, FIS_SISTEM, FIS_PAROLA,
+	ARH_CHEI_GAZDA)
 SETTINGS_COPIE = "etc/enigma2/settings-fara-token"
 
 DOSAR_RESTAURARE = "home/root/hds-restaurare"
@@ -159,9 +171,12 @@ SEMNE_PORNIRE = ("hds-accel.pornire", "hds-accel.lucru", "hds-gpu.pornire", "hds
 # pe niciun receptor (nici din copiile mai vechi): SEMNE_PORNIRE, oprirea automata a placilor (hds-fara-accel,
 # hds-fara-gpu), vechiul comutator al accelerarii, lacatul de proba al motorului (hds-fara-motor,
 # Components/HdsMotorTuner.py) si evenimentul paznicului (hds-paznic.eveniment, aratat o data la pornirea sesiunii,
-# Hds/DabT2/bataie.py): spun ce s-a intamplat pe imaginea veche, nu ce a ales omul
+# Hds/DabT2/bataie.py): spun ce s-a intamplat pe imaginea veche, nu ce a ales omul. La fel amprentele listelor feedului
+# (hds-indexuri-semnate.json, Components/HdsActualizari.tine_minte_indexurile): sunt ale canalului si bazei de atunci;
+# puse la loc pe alta baza, paza listelor stergea toate listele HD Satelit dupa fiecare opkg update (Wlad, Amiko V10,
+# 11.11.2026). Fara ele, prima paza sau prima cautare le ia din nou din stare.json semnat.
 FISIERE_NEPUSE = SEMNE_PORNIRE + ("hds-fara-accel", "hds-cu-accel", "hds-fara-gpu", "hds-fara-motor",
-	"hds-paznic.eveniment")
+	"hds-paznic.eveniment", "hds-indexuri-semnate.json")
 FISIERE_RETEA = ("etc/network/interfaces", "etc/resolv.conf", "etc/wpa_supplicant.conf")
 # setarile omului din afara /etc/enigma2 (sistem.json): regula „Fără parolă în rețeaua locală” (Components/HdsAccesSsh.py),
 # sursele de pachete adaugate (Components/HdsPachete.py), interfata implicita (Screens/NetworkSetup.py, fara rand nou)
@@ -572,7 +587,7 @@ def _adauga_fisier(tf, cale, nume, st=None, maxim=None):
 	with open(cale, "rb") as f:
 		date = f.read() if maxim is None else f.read(maxim + 1)
 	if maxim is not None and len(date) > maxim:
-		raise IOError("fisier prea mare")
+		raise LimitaCopie("fisier prea mare")
 	ti.size = len(date)
 	tf.addfile(ti, io.BytesIO(date))
 	return len(date)
@@ -1264,8 +1279,16 @@ def _date_pluginuri(rad, nume_pluginuri, punct, reface_pachete=False):
 					if r not in livrate and _cale_plugin(r):
 						candidati.add(r)
 				if len(candidati) > MAX_MEMBRI:
-					raise IOError("prea multe date ale extensiei")
+					break
+			if len(candidati) > MAX_MEMBRI:
+				break
 		intrare = {"nume": nume, "fisiere": [], "ipk": None, "fara_lista": not bool(livrate), "sarite": 0}
+		if len(candidati) > MAX_MEMBRI:
+			# 14.11.2026 (asistenta 423813, IPTVPlayer): o extensie care si-a scris singura mii de fisiere nu mai opreste
+			# toata copia; fisierele ei se sar (mesajul "fisiere sarite"), iar extensia ramane in lista de pus din nou
+			_jurnal("extensia %s: peste %d fisiere scrise dupa instalare; copia le sare" % (nume, MAX_MEMBRI))
+			intrare["sarite"] = len(candidati)
+			candidati = set()
 		for rel in sorted(candidati):
 			cale = _c(rad, rel)
 			if not _fara_legaturi(rad, rel):
@@ -1313,12 +1336,30 @@ def _date_pluginuri(rad, nume_pluginuri, punct, reface_pachete=False):
 	return meta, surse
 
 
+class LimitaCopie(IOError):
+	"""O limita a copiei, fara errno (str = motivul, pentru jurnal; textMotiv da textul pentru om). Pana pe 14.11.2026
+	erau IOError simple: omul vedea numai "(OSError)" (asistenta 423813)."""
+
+
+def textMotiv(eroare):
+	"""Motivul unei erori de scriere a copiei, pentru om: textul limitei, strerror, altfel numele erorii."""
+	motiv = str(eroare) if isinstance(eroare, LimitaCopie) else ""
+	if motiv in ("inventar prea mare", "arhiva prea mare", "limitele arhivei pluginurilor"):
+		return _("pluginurile au prea multe fișiere pentru copie")
+	if motiv == "fisier schimbat in timpul copiei":
+		return _("un fișier s-a schimbat în timpul copiei")
+	if motiv == "fisier prea mare":
+		return _("un fișier e prea mare pentru copie")
+	return getattr(eroare, "strerror", None) or motiv or eroare.__class__.__name__
+
+
 def _scrie_pluginuri(cale, meta, surse):
 	if not meta:
 		return
 	date = json.dumps({"format": 1, "pluginuri": meta}, ensure_ascii=True).encode("ascii")
 	if len(date) > MAX_DESCRIERE:
-		raise IOError("inventar prea mare")
+		# limita citirii (_permis_pluginuri, si pe imaginile mai vechi): nu se mareste, se scot fisiere (_scoate_cel_mai_mare)
+		raise LimitaCopie("inventar prea mare")
 	f, tf = _deschide_tar_scriere(cale)
 	try:
 		_adauga_date(tf, META_PLUGINURI, date, 0o600)
@@ -1326,14 +1367,44 @@ def _scrie_pluginuri(cale, meta, surse):
 			limita = MAX_ARHIVA if rel.startswith("hds-ipk/") else MAX_FISIER_PLUGIN
 			st = os.lstat(sursa)
 			if not stat.S_ISREG(st.st_mode) or st.st_size > limita:
-				raise IOError("fisier schimbat in timpul copiei")
+				raise LimitaCopie("fisier schimbat in timpul copiei")
 			_adauga_fisier(tf, sursa, rel, st, limita)
 	finally:
 		_inchide_tar_scriere(f, tf)
 	if os.path.getsize(cale) > MAX_ARHIVA:
-		raise IOError("arhiva prea mare")
+		raise LimitaCopie("arhiva prea mare")
 	if _parcurge(cale, _permis_pluginuri):
-		raise IOError("limitele arhivei pluginurilor")
+		raise LimitaCopie("limitele arhivei pluginurilor")
+
+
+def _scoate_cel_mai_mare(meta, surse):
+	"""Arhiva pluginurilor trece de o limita: scoate fisierele extensiei cu cele mai multe fisiere (sau, cand nu mai are
+	nimeni fisiere, pachetul .ipk cel mai mare). Extensia ramane in inventar si in randul pluginuri= (se pune din nou din
+	feed), iar fisierele scoase se numara la "sarite". Intoarce numele ei, sau None cand nu mai e nimic de scos."""
+	cu_fisiere = [p for p in meta if p.get("fisiere")]
+	if cu_fisiere:
+		p = max(cu_fisiere, key=lambda x: len(x["fisiere"]))
+		folosite = set(r for q in meta if q is not p for r in (q.get("fisiere") or ()))
+		for rel in p["fisiere"]:
+			if rel not in folosite:
+				surse.pop(rel, None)
+		p["sarite"] = p.get("sarite", 0) + len(p["fisiere"])
+		p["fisiere"] = []
+		return p["nume"]
+
+	def marime(p):
+		try:
+			return os.path.getsize(surse[p["ipk"]])
+		except (OSError, TypeError):
+			return 0
+	cu_ipk = [p for p in meta if p.get("ipk") and p["ipk"] in surse]
+	if cu_ipk:
+		p = max(cu_ipk, key=marime)
+		surse.pop(p["ipk"], None)
+		p["ipk"] = None
+		p["sarite"] = p.get("sarite", 0) + 1
+		return p["nume"]
+	return None
 
 
 def _permis_pluginuri(nume, m):
@@ -1629,20 +1700,30 @@ def _fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, refac
 		if chei and len(chei) <= MAX_CHEI and chei_bune(chei):
 			_scrie_atomic(os.path.join(part, FIS_CHEI), chei)
 			are.append("chei")
+		if _scrie_chei_gazda(rad, os.path.join(part, ARH_CHEI_GAZDA)) and "chei" not in are:
+			are.append("chei")
 		nr_acces, nr_pachete = _scrie_acces(rad, os.path.join(part, ARH_ACCES), module)
 		if nr_acces:
 			are.append("acces")
 		elif os.path.exists(os.path.join(part, ARH_ACCES)):
 			os.remove(os.path.join(part, ARH_ACCES))
-		try:
-			_scrie_pluginuri(os.path.join(part, ARH_PLUGINURI), meta_pluginuri, surse_pluginuri)
-		except Exception:
-			# 0.7.4: cu pachetele refacute arhiva pluginurilor a trecut de limite; fara ele copia iese cum ar fi iesit
-			# inainte (o copie cazuta ar opri scrierea imaginii)
-			if not _scoate_refacute(meta_pluginuri, surse_pluginuri, punct):
-				raise
-			_jurnal("arhiva pluginurilor prea mare cu pachetele refacute; o scriu fara ele")
-			_scrie_pluginuri(os.path.join(part, ARH_PLUGINURI), meta_pluginuri, surse_pluginuri)
+		while True:
+			try:
+				_scrie_pluginuri(os.path.join(part, ARH_PLUGINURI), meta_pluginuri, surse_pluginuri)
+				break
+			except Exception as eroare:
+				# 0.7.4: cu pachetele refacute arhiva pluginurilor a trecut de limite; fara ele copia iese cum ar fi iesit
+				# inainte (o copie cazuta ar opri scrierea imaginii)
+				if _scoate_refacute(meta_pluginuri, surse_pluginuri, punct):
+					_jurnal("arhiva pluginurilor (%s) prea mare cu pachetele refacute; o scriu fara ele" % eroare)
+					continue
+				# 14.11.2026 (asistenta 423813): o extensie cu mii de fisiere (IPTVPlayer) trecea de limita inventarului si
+				# toata copia cadea cu "OSError"; acum iese fara fisierele ei (mesajul "fisiere sarite" de mai jos)
+				nume_scos = _scoate_cel_mai_mare(meta_pluginuri, surse_pluginuri) \
+					if isinstance(eroare, LimitaCopie) else None
+				if not nume_scos:
+					raise
+				_jurnal("arhiva pluginurilor: %s; o scriu fara fisierele extensiei %s" % (eroare, nume_scos))
 		if meta_pluginuri:
 			are.append("pluginuri")
 			for p in meta_pluginuri:
@@ -1690,9 +1771,10 @@ def _fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, refac
 		_sincronizeaza()
 	except Exception as eroare:
 		shutil.rmtree(part, ignore_errors=True)
-		_jurnal("copia: %s" % eroare.__class__.__name__)
+		# motivul intreg in jurnal (limita copiei sau errno cu fisierul), nu numai numele erorii (asistenta 423813)
+		_jurnal("copia: %s: %s" % (eroare.__class__.__name__, str(eroare)[:300]))
 		mesaje.append(_("Copia nu s-a putut scrie pe mediu (%s). Pe receptor nu s-a schimbat nimic.")
-			% (getattr(eroare, "strerror", None) or eroare.__class__.__name__))
+			% textMotiv(eroare))
 		return rez
 	marime = 0
 	for n, _h in md5:
@@ -1703,6 +1785,54 @@ def _fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, refac
 	rez.update(ok=True, cale=final, nume=nume, marime=marime, are=are)
 	mesaje.insert(0, _("Copia e gata: %s.") % _data_text(acum))
 	return rez
+
+
+def _scrie_chei_gazda(rad, cale):
+	"""Arhiva cheilor gazdei SSH: numai fisierele obisnuite care exista, nu sunt goale si au cel mult MAX_CHEIE_GAZDA
+	(fara legaturi), 0600 in arhiva. Intoarce cate chei au intrat; fara nicio cheie arhiva nu se scrie."""
+	gasite = []
+	for rel in CHEI_GAZDA:
+		try:
+			st = os.lstat(_c(rad, rel))
+		except OSError:
+			continue
+		if stat.S_ISREG(st.st_mode) and 0 < st.st_size <= MAX_CHEIE_GAZDA:
+			gasite.append((rel, st))
+	if not gasite:
+		return 0
+	n = 0
+	f, tf = _deschide_tar_scriere(cale)
+	try:
+		for rel, _st in gasite:
+			with open(_c(rad, rel), "rb") as fc:
+				date = fc.read(MAX_CHEIE_GAZDA + 1)
+			if date and len(date) <= MAX_CHEIE_GAZDA:
+				_adauga_date(tf, rel, date, 0o600)
+				n += 1
+	finally:
+		_inchide_tar_scriere(f, tf)
+	if not n:
+		os.remove(cale)
+	return n
+
+
+def _permis_chei_gazda(nume, m):
+	return m.isreg() and nume in CHEI_GAZDA and 0 < m.size <= MAX_CHEIE_GAZDA
+
+
+def _reporneste_ssh(rad):
+	"""Dupa cheile gazdei puse la loc: dropbear pornise deja cu cheile proaspete ale imaginii; restartul il face sa le
+	citeasca pe cele puse (sesiunile deschise raman: dropbear tine un proces pe legatura). Numai pe receptor."""
+	script = "/etc/init.d/dropbear"
+	if rad != "/" or not os.path.isfile(script):
+		return False
+	try:
+		import subprocess
+		subprocess.run([script, "restart"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+		return True
+	except Exception as eroare:
+		_jurnal("SSH: restartul lui dropbear: %s" % eroare.__class__.__name__)
+		return False
 
 
 def chei_bune(date):
@@ -2098,7 +2228,7 @@ def verifica_copia(dosar, d=None):
 		if not os.path.isfile(cale) or os.path.islink(cale):
 			return _("lipsește %s din copie") % n
 		maxim = {ARH_RETEA: MAX_RETEA, FIS_MASINA: 64, FIS_CHEI: MAX_CHEI, FIS_SISTEM: MAX_SISTEM,
-			FIS_PAROLA: MAX_PAROLA_COPIE}.get(n, MAX_ARHIVA)
+			FIS_PAROLA: MAX_PAROLA_COPIE, ARH_CHEI_GAZDA: 8 * MAX_CHEIE_GAZDA}.get(n, MAX_ARHIVA)
 		if os.path.getsize(cale) > maxim:
 			return _("%s e prea mare") % n
 		if _md5(cale) != h:
@@ -2445,6 +2575,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 	retea_puse = []
 	masina = False
 	chei_noi = 0
+	gazda_puse = 0
 	nou_settings = None
 	sistem_puse = []
 	# ce nu s-a pus, pentru rezumatul din jurnal: etc/tuxbox (ca trusa, raman cele din imagine), semnele, fisierele
@@ -2574,6 +2705,24 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 					chei_noi = len(noi)
 			else:
 				note.append(_("Cheile SSH din copie nu au forma obișnuită; nu s-au pus la loc."))
+		# cheile gazdei SSH: o arhiva rea nu opreste restul (cheile proaspete ale imaginii raman)
+		if acest and ARH_CHEI_GAZDA in d["md5"]:
+			gazda, eroare = _citeste_arhiva(os.path.join(dosar, ARH_CHEI_GAZDA), _permis_chei_gazda,
+				8 * MAX_CHEIE_GAZDA)
+			if gazda is None:
+				_jurnal("cheile gazdei SSH din copie nu se pot citi; raman cele ale imaginii")
+				note.append(_("Cheile SSH din copie nu au forma obișnuită; nu s-au pus la loc."))
+			else:
+				for nume, _m, date in gazda:
+					tinta = _c(rad, nume)
+					if not date or len(date) > MAX_CHEIE_GAZDA or os.path.islink(tinta):
+						continue
+					if _citeste_mic(tinta, MAX_CHEIE_GAZDA + 1) != date:
+						rest.scrie(tinta, date, 0o600)
+						gazda_puse += 1
+					copie_rsa = _c(rad, COPIE_RSA_GAZDA)
+					if nume == CHEI_GAZDA[0] and os.path.isfile(copie_rsa) and not os.path.islink(copie_rsa) 							and _citeste_mic(copie_rsa, MAX_CHEIE_GAZDA + 1) != date:
+						rest.scrie(copie_rsa, date, 0o600)
 		# 5. setarile omului din afara /etc/enigma2 (numai pe acest receptor; sursele de pachete dupa mutare, prin
 		# scrierea lui HdsPachete)
 		if parola_locala is not None:
@@ -2657,6 +2806,12 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		if chei_noi:
 			pus.append("chei")
 			_jurnal("cheile SSH: %d puse la loc" % chei_noi)
+		if gazda_puse:
+			if "chei" not in pus:
+				pus.append("chei")
+			_jurnal("cheile gazdei SSH: %d puse la loc (acelasi receptor)" % gazda_puse)
+			if _reporneste_ssh(rad):
+				_jurnal("SSH: dropbear repornit cu cheile din copie")
 		if "ssh" in sistem_puse:
 			_jurnal("SSH: regula 'Fara parola in reteaua locala' pusa la loc: %s" % ("PORNITA (din reteaua de acasa se intra "
 				"ca root fara parola)" if sistem["ssh_fara_parola"] else "oprita"))

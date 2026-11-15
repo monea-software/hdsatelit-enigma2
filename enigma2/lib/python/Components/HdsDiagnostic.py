@@ -740,7 +740,7 @@ def jurnale(dosar=None, cale_caderi=None, cu_nucleu=True):
 
 CALE_SETARI = "/etc/enigma2/settings"
 DOSAR_PO = "/usr/share/enigma2/po"
-LIMBI = ('ar', 'ca', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'fy', 'hr', 'hu', 'is', 'it', 'lt', 'lv', 'nl', 'no', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sr', 'sv', 'tr', 'uk')
+LIMBI = ('ar', 'ca', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'fy', 'hr', 'hu', 'is', 'it', 'lt', 'lv', 'nl', 'no', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sr', 'sv', 'tr', 'uk', 'uz')
 
 
 def _codLimba(valoare):

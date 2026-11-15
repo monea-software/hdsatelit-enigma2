@@ -5,7 +5,7 @@ installdir = $(datadir)/fonts
 # tuxtxt.ttf (Bitstream Vera Sans Mono Bold 1.10, neschimbat) ramane pentru teletext, cu licenta Vera langa el
 # enigma2icons.ttf: fontul nostru de pictograme cu codurile asteptate de temele si pluginurile OE-Alliance (alias "enigma2icons",
 # inregistrat in skin_default.xml); desenele din Material Symbols (Apache 2.0), licenta langa el; refacut de
-# hdsatelit-unelte/receptor/imagine-hdsatelit/unelte/font_pictograme/fa_font.py
+# unealta noastra font_pictograme/fa_font.py
 dist_install_DATA = \
 	ae_AlMateen.ttf \
 	AtkinsonHyperlegible-Regular.ttf \

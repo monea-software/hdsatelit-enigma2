@@ -1,0 +1,19 @@
+HDSatelit (14.11.2026, NEO, TODO 14.11 18:37): pornita din NeoBoot, imaginea sta intr-un dosar pe disc (NeoBoot pune
+/.multinfo in radacina ei), iar memoria interna si /proc/cmdline sunt ale imaginii gazda. O actualizare a imaginii facuta de
+aici ar scrie peste gazda si peste NeoBoot. Scriptul refuza inainte de orice montare sau copiere.
+
+--- a/ofgwrite
++++ b/ofgwrite
+@@ -1,5 +1,12 @@
+ #!/bin/sh
+ 
++# HDSatelit: imaginea pornita din NeoBoot (/.multinfo) nu scrie memoria interna, care e a imaginii gazda
++if [ -e /.multinfo ]; then
++	echo "ofgwrite: the image runs from NeoBoot (/.multinfo); the internal flash belongs to the host image, nothing is written" >&2
++	echo "ofgwrite: update this image from NeoBoot, or boot the image in the internal flash" >&2
++	exit 1
++fi
++
+ mkdir -p /newroot || exit 1
+ if ! awk '$2 == "/newroot" && $3 == "tmpfs" { found=1 } END { exit found ? 0 : 1 }' /proc/mounts; then
+ 	mount -t tmpfs tmpfs /newroot || exit 1

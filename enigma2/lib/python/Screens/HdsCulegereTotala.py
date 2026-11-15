@@ -50,11 +50,35 @@ def porneste_pe_televizor(session, optiuni, de_la_capat=False):
 	"""Din web: ecranul de progres pe televizor, cu aceleasi alegeri. -> None sau textul pentru om (tradus)."""
 	if session is None:
 		return _("Receptorul nu e gata.")
-	motiv = C.motiv_refuz(C.Receptor(session.nav))
+	receptor = C.Receptor(session.nav)
+	motiv = C.motiv_refuz(receptor)
 	if motiv:
 		return _(motiv)
+	refuz = refuz_motor(receptor, optiuni, de_la_capat)[1]
+	if refuz:
+		return refuz
 	session.open(HdsCulegereTotalaMers, optiuni, de_la_capat)
 	return None
+
+
+def refuz_motor(receptor, optiuni, de_la_capat=False, rest=None):
+	"""(fel, text) cand planul are sateliti spre care antena nu se roteste (Components/HdsCulegereTotala.poarta_motor):
+	"loc" = motorul USALS cu locul antenei nestabilit, nu porneste; "orizont" = toti satelitii planului sub orizont.
+	Altfel (None, None)."""
+	try:
+		if rest is None:
+			rest = C.plan_receptor(optiuni, de_la_capat, receptor)["rest"]
+		_rest, text = C.poarta_motor(rest, receptor.refuz_pozitie)
+	except Exception as e:
+		print("[HdsCulegereTotala] locul antenei: %r" % (e,))
+		return None, None
+	if not text:
+		return None, None
+	try:
+		from Components import HdsLocul
+		return ("orizont" if HdsLocul.stabilit() else "loc"), text
+	except Exception:
+		return "orizont", text
 
 
 def opreste_de_oriunde():
@@ -227,7 +251,25 @@ class HdsCulegereTotala(Screen, ConfigListScreen):
 		if motiv:
 			self.session.open(MessageBox, _(motiv), MessageBox.TYPE_INFO, timeout=10)
 			return
+		fel, refuz = refuz_motor(self.receptor, self.optiuni(), de_la_capat,
+			None if de_la_capat else self.info["rest"])
+		if fel == "loc":
+			# motorul USALS fara locul antenei (asistenta 289712): OK deschide direct alegerea locului (regula 1f)
+			self.session.openWithCallback(self._alegeLocul, MessageBox, refuz, MessageBox.TYPE_INFO)
+			return
+		if refuz:
+			self.session.open(MessageBox, refuz, MessageBox.TYPE_ERROR)
+			return
 		self.session.openWithCallback(self._dupa, HdsCulegereTotalaMers, self.optiuni(), de_la_capat)
+
+	def _alegeLocul(self, rezultat=True):
+		if rezultat is False:
+			return
+		try:
+			from Screens.HdsLocul import deschide
+			deschide(self.session, lambda schimbat: self.ceasPlan.start(100, True))
+		except Exception as e:
+			print("[HdsCulegereTotala] alegerea locului: %r" % (e,))
 
 	def _dupa(self, *rezultat):
 		self.intors = time.time()

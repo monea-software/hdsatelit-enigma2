@@ -77,7 +77,13 @@ class MultiBootClass:
 		return ""
 
 	def getStartupFile(self, slotCode=None):
-		return "STARTUP_%s" % (slotCode or self.getCurrentSlotCode())
+		"""Numele real al fisierului locului (STARTUP_N sau, pe AX HD51, STARTUP_LINUX_N_BOXMODE_M)."""
+		loc = str(slotCode or self.getCurrentSlotCode())
+		dosar, lista = self._startupuri()
+		for (n, nume, date) in lista:
+			if n == loc:
+				return nume
+		return "STARTUP_%s" % loc
 
 	def hasRootSubdir(self, slotCode=None):
 		return False

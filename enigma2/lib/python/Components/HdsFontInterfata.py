@@ -42,25 +42,25 @@ FAMILII = (
 	{"id": "opensans", "nume": "Open Sans", "autor": "The Open Sans Project Authors",
 	 "fisiere": {"regular": "HdsRegular.ttf", "bold": "HdsBold.ttf", "cond": "HdsCond.ttf"}, "licenta": "OFL.txt",
 	 "descriere": N_("Fontul din fabrică: rotund și liniștit, cu toate literele imaginii, latine, chirilice și grecești."),
-	 "limbi": "ca cs da de el en es et fi fr fy hr hu is it lt lv nl no pl pt ro ru sk sl sr sv tr uk"},
+	 "limbi": "ca cs da de el en es et fi fr fy hr hu is it lt lv nl no pl pt ro ru sk sl sr sv tr uk uz"},
 	{"id": "atkinson", "nume": "Atkinson Hyperlegible", "autor": "Braille Institute of America",
 	 "fisiere": {"regular": "AtkinsonHyperlegible-Regular.ttf", "bold": "AtkinsonHyperlegible-Bold.ttf", "cond": None},
 	 "licenta": "AtkinsonHyperlegible-OFL.txt",
 	 "descriere": N_("Desenat ca literele să nu se încurce (I, l și 1, O și 0): cel mai ușor de citit de departe. "
 		"Numai litere latine; textele mici rămân cu Open Sans îngust."),
-	 "limbi": "ca cs da de en es et fi fr fy hr hu is it lt lv nl no pl pt ro sl sv"},
+	 "limbi": "ca cs da de en es et fi fr fy hr hu is it lt lv nl no pl pt ro sl sv uz"},
 	{"id": "barlow", "nume": "Barlow", "autor": "The Barlow Project Authors",
 	 "fisiere": {"regular": "Barlow-Regular.ttf", "bold": "Barlow-Bold.ttf", "cond": "BarlowSemiCondensed-Regular.ttf"},
 	 "licenta": "Barlow-OFL.txt",
 	 "descriere": N_("Litere înguste, cu colțuri rotunjite, ca pe indicatoarele rutiere: încape mult text pe un rând. "
 		"Numai litere latine."),
-	 "limbi": "ca cs da de en es et fi fr fy hr hu is it lt lv nl no pl pt ro sk sl sv tr"},
+	 "limbi": "ca cs da de en es et fi fr fy hr hu is it lt lv nl no pl pt ro sk sl sv tr uz"},
 	{"id": "ptsans", "nume": "PT Sans", "autor": "ParaType",
 	 "fisiere": {"regular": "PT_Sans-Web-Regular.ttf", "bold": "PT_Sans-Web-Bold.ttf", "cond": "PT_Sans-Narrow-Web-Regular.ttf"},
 	 "licenta": "PT_Sans-OFL.txt",
 	 "descriere": N_("Litere calde, ușor de citit, cu toate literele chirilice: potrivit și pentru meniurile în rusă, "
 		"ucraineană și sârbă."),
-	 "limbi": "ca cs da de en es et fi fr fy hr hu is it lt lv nl no pl pt ro ru sk sl sr sv tr uk"},
+	 "limbi": "ca cs da de en es et fi fr fy hr hu is it lt lv nl no pl pt ro ru sk sl sr sv tr uk uz"},
 )
 LIMBI_FARA_LITERE_PROPRII = ("ar",)
 

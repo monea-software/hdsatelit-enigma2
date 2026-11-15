@@ -10,6 +10,7 @@ from Components.PluginComponent import plugins
 from Components.config import config
 from Components.SystemInfo import SystemInfo
 from Components import HdsDale
+from Components import HdsMeniuOrdine
 from Components.HdsTasteRapide import sens_tasta
 
 from Tools.Directories import resolveFilename, SCOPE_SKIN
@@ -75,6 +76,17 @@ def intrareMeniu(titlu, functie, entryID, greutate, simplu=None, stare=None, gli
 	"""Tuplul unei intrari de meniu, cu aceeasi forma pentru toate (vezi mai sus)."""
 	return (titlu, functie, entryID, greutate, titlu if simplu is None else simplu, stare,
 		HdsDale.glifCurat(glif) or HdsDale.GLIF_INTRARE)
+
+
+def _cuSemnAscuns(x):
+	"""Intrarea ascunsa de om, aratata (Arata intrarile ascunse sau din cautare): numele cu semnul ei, in lista si in
+	dale; functia, cheia si restul raman."""
+	semn = _("%s (ascunsă)")
+	if semn.count("%s") != 1:
+		semn = "%s (ascunsă)"
+	# a opta valoare: cheia intrarii (HdsMeniuOrdine.cheieTuplu), luata inainte ca numele sa primeasca semnul
+	return ((semn % x[0], x[1], x[2], x[3], semn % (x[4] if len(x) > 4 else x[0])) + tuple(x[5:7]) +
+		(HdsMeniuOrdine.cheieTuplu(x),))
 
 
 def _glifNod(nod):
@@ -493,8 +505,13 @@ class Menu(Screen):
 		# Sort by Weight
 		list = [x for x in list if x[2] not in _ID_CAUTARE_XML]
 		list.sort(key=lambda x: int(x[3]))
-		# „Caută în meniu”, primul rand (vezi ID_RAND_CAUTARE)
-		list.insert(0, intrareMeniu(_("Caută în meniu"), self.cautaSetari, ID_RAND_CAUTARE, 0, glif="cauta"))
+		# HDSatelit: ordinea si intrarile ascunse de om (Components/HdsMeniuOrdine, aceleasi si in web), apoi randul
+		# cautarii deasupra (_listaVazuta)
+		self._cheieMeniu = HdsMeniuOrdine.cheieMeniu(parent)
+		self._listaToata = list
+		# intrarea ceruta la deschidere (cautarea, comutarea lista / dale) se vede si cand e ascunsa
+		self._aratate = set([HdsMeniuOrdine.cheieIntrare(alegere)]) if alegere else set()
+		list = self._listaVazuta()
 
 		self._flatlist = list
 		self.list = list
@@ -598,9 +615,123 @@ class Menu(Screen):
 				return i
 		return None
 
+	# ------------------------------------------------------------ ordinea si ascunderea (HdsMeniuOrdine)
+	def _listaVazuta(self):
+		"""Randurile de pe ecran: randul cautarii, apoi intrarile in ordinea omului, fara cele ascunse (sau cu semnul lor,
+		cand sunt aratate: "Arata intrarile ascunse" sau alese din cautare)."""
+		try:
+			vazute, semne = HdsMeniuOrdine.aplica(self._cheieMeniu, self._listaToata, aratate=self._aratate)
+		except Exception as e:
+			print("[Menu] ordinea omului: %s" % e)
+			vazute, semne = self._listaToata, [False] * len(self._listaToata)
+		list = [_cuSemnAscuns(x) if ascunsa else x for x, ascunsa in zip(vazute, semne)]
+		# "Cauta in meniu", primul rand (vezi ID_RAND_CAUTARE)
+		list.insert(0, intrareMeniu(_("Caută în meniu"), self.cautaSetari, ID_RAND_CAUTARE, 0, glif="cauta"))
+		return list
+
+	def _refaLista(self, cheie=None):
+		"""Randurile din nou, pe loc (dupa o mutare, o ascundere, Arata intrarile ascunse, Ordinea din fabrica), cu
+		cursorul pe intrarea `cheie` (sau pe primul rand de sub cautare)."""
+		lista = self._listaVazuta()
+		self._flatlist = self.list = lista
+		i = 1 if len(lista) > 1 else 0
+		if cheie is not None:
+			for k in range(1, len(lista)):
+				if HdsMeniuOrdine.cheieTuplu(lista[k]) == cheie:
+					i = k
+					break
+		if self._modDale:
+			if not self._dalaGata:
+				self._dalaAles = i
+				return
+			self._dalaIntrari = [self._dalaDescriere(k, x) for k, x in enumerate(lista)]
+			self._dalaAles = i
+			self._dalaInceput = HdsDale.fereastra(i // HdsDale.COLOANE, self._dalaInceput, HdsDale.randuri(len(lista)))
+			self._dalaRefa()
+		else:
+			self["menu"].list = lista
+			self["menu"].setIndex(i)
+
+	def _cheiVazute(self):
+		return [HdsMeniuOrdine.cheieTuplu(x) for x in self._flatlist[1:]]
+
+	def _optiuniOrdine(self):
+		"""Randurile din MENU pentru intrarea aleasa: muta, ascunde sau arata, apoi cele pentru tot meniul."""
+		rez = []
+		# getCurrent da False fara lista desenata (o tema straina fara ea): nimic ales
+		curent = self._intrareCurenta() or None
+		chei = self._cheiVazute()
+		cheie = HdsMeniuOrdine.cheieTuplu(curent) if curent is not None and curent[2] != ID_RAND_CAUTARE else None
+		if cheie is not None and cheie in chei:
+			# numele fara semnul "(ascunsa)": din intrarea neschimbata
+			original = [x for x in self._listaToata if HdsMeniuOrdine.cheieTuplu(x) == cheie]
+			x = original[0] if original else curent
+			nume = x[4] if len(x) > 4 else x[0]
+			i = chei.index(cheie)
+			if i > 0:
+				rez.append((_("Mută mai sus „%s”") % nume, boundFunction(self.mutaIntrarea, cheie, -1)))
+			if i < len(chei) - 1:
+				rez.append((_("Mută mai jos „%s”") % nume, boundFunction(self.mutaIntrarea, cheie, 1)))
+			if i > 1:
+				rez.append((_("Mută la început"), boundFunction(self.mutaIntrarea, cheie, -len(chei))))
+			if i < len(chei) - 2:
+				rez.append((_("Mută la sfârșit"), boundFunction(self.mutaIntrarea, cheie, len(chei))))
+			if cheie in HdsMeniuOrdine.ascunse(self._cheieMeniu):
+				rez.append((_("Arată din nou „%s”") % nume, boundFunction(self.ascundeIntrarea, cheie, False)))
+			else:
+				rez.append((_("Ascunde „%s”") % nume, boundFunction(self.ascundeIntrarea, cheie, True)))
+		toate = [HdsMeniuOrdine.cheieTuplu(x) for x in self._listaToata]
+		n = HdsMeniuOrdine.nrAscunse(self._cheieMeniu, toate)
+		if HdsMeniuOrdine.aratAscunse():
+			rez.append((_("Nu mai arăta intrările ascunse"), self.comutaAscunse))
+		elif n:
+			rez.append((_("Arată intrările ascunse (%d)") % n, self.comutaAscunse))
+		if HdsMeniuOrdine.personalizat(self._cheieMeniu):
+			rez.append((_("Ordinea din fabrică a acestui meniu"), self.ordineaDinFabrica))
+		return rez
+
+	def mutaIntrarea(self, cheie, pas):
+		if HdsMeniuOrdine.muta(self._cheieMeniu, self._cheiVazute(), cheie, pas) is not None:
+			self._refaLista(cheie)
+
+	def ascundeIntrarea(self, cheie, da=True):
+		chei = self._cheiVazute()
+		if not HdsMeniuOrdine.ascunde(self._cheieMeniu, cheie, da):
+			return
+		if not da:
+			self._aratate.discard(cheie)
+			self._refaLista(cheie)
+			return
+		# cursorul pe vecina de dupa (sau de dinainte, la capat); cu intrarile ascunse aratate, ramane pe ea
+		vecina = cheie
+		if not HdsMeniuOrdine.aratAscunse() and cheie in chei:
+			i = chei.index(cheie)
+			rest = chei[i + 1:] + chei[:i][::-1]
+			vecina = rest[0] if rest else None
+		self._aratate.discard(cheie)
+		self._refaLista(vecina)
+
+	def comutaAscunse(self):
+		curent = self._intrareCurenta() or None
+		HdsMeniuOrdine.comutaAratAscunse()
+		self._refaLista(HdsMeniuOrdine.cheieTuplu(curent) if curent is not None else None)
+
+	def ordineaDinFabrica(self):
+		curent = self._intrareCurenta() or None
+		HdsMeniuOrdine.fabrica(self._cheieMeniu)
+		self._aratate.clear()
+		self._refaLista(HdsMeniuOrdine.cheieTuplu(curent) if curent is not None else None)
+
 	def alegeIntrarea(self, entryID):
-		"""Cursorul pe intrarea cu entryID-ul dat (Caută setări, comutarea lista / dale), in ambele moduri."""
+		"""Cursorul pe intrarea cu entryID-ul dat (Caută setări, comutarea lista / dale), in ambele moduri. O intrare
+		ascunsa de om, cautata, se arata in acest meniu (cu semnul ei), ca sa poata fi deschisa."""
 		i = self._indexDupaEntryID(entryID)
+		if i is None and entryID:
+			cheie = HdsMeniuOrdine.cheieIntrare(entryID)
+			if any(x[2] == entryID for x in self._listaToata):
+				self._aratate.add(cheie)
+				self._refaLista(cheie)
+				i = self._indexDupaEntryID(entryID)
 		if i is None:
 			return False
 		if self._modDale:
@@ -1010,6 +1141,11 @@ class Menu(Screen):
 		from Screens.ChoiceBox import ChoiceBox
 		lista = [(_("Caută în meniu"), self.cautaSetari), (_("Listă sau dale"), self.comutaAspect),
 			(_("Închide meniul"), self.closeRecursive)]
+		# HDSatelit: mutarea si ascunderea intrarii alese, dupa cautare (meniul ramane bun si daca ordinea nu merge)
+		try:
+			lista[1:1] = self._optiuniOrdine()
+		except Exception as e:
+			print("[Menu] optiunile ordinii: %s" % e)
 		def ales(raspuns):
 			if raspuns is not None:
 				raspuns[1]()

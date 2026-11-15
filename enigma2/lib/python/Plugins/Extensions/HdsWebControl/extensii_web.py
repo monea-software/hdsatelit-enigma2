@@ -33,6 +33,8 @@
 #   POST /api/extensii-cauta-fisiere?retea=0|1          cauta fisiere .ipk pe stick, disc, memorie (sau in retea)
 #   POST /api/extensii-urca?nume=<nume>.ipk             fisier din browser in /tmp, cel mult 16 MiB, octeti bruti
 #   POST /api/extensii-deschide?plugin=<n>&nume=<nume>  extensia instalata se deschide pe televizor (ca OK)
+#   POST /api/extensii-ordine?pas=sus|jos|inceput|ascunde&id=<Extensions/Dosar>   muta sau ascunde un plugin in Instalate
+#   POST /api/extensii-ordine?pas=arata                 arata din nou pluginurile ascunse (ca MENU pe televizor, 0.7.5)
 #   GET  /extensii                                      pagina
 #
 # FIRUL: totul ruleaza pe firul enigma2 si e scurt; singurul lucru lung, citirea catalogului (fisierele opkg, cu
@@ -49,8 +51,8 @@ DOSARE_PLUGINURI = ("Extensions", "SystemPlugins")
 DOSAR_PROPRIU = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
 
 ARGUMENTE = ("fila", "cauta", "pachet", "tot", "cale", "retea", "nume", "adresa", "plugin", "pas", "cod", "feed", "fel",
-	"icoana", "rezerva")
-LUNGIMI = {"cale": 1024, "adresa": 300, "cauta": 120, "nume": 120, "feed": 80, "icoana": 1024}
+	"icoana", "rezerva", "id")
+LUNGIMI = {"cale": 1024, "adresa": 300, "cauta": 120, "nume": 120, "feed": 80, "icoana": 1024, "id": 160}
 _INCARCARE = [False]      # citirea catalogului pe fir: una singura odata
 _FISIERE = {"local": None, "retea": None}   # ultimele cautari terminate, ca ecranul: lista ramane pana vine alta
 _SEMN_FISIERE = [None]
@@ -313,8 +315,15 @@ def _actiuni(L, catalog, fel, obj, extra, pluginuri):
 				"principal": True})
 		elif verde == "Deschide":
 			pl = L.pluginPentru(pluginuri, obj)
-			rez.append({"f": "deschide", "text": _t("Deschide pe televizor"), "plugin": _indice(pluginuri, pl),
-				"nume": pl.name or ""})
+			if pl is not None:
+				rez.append({"f": "deschide", "text": _t("Deschide pe televizor"), "plugin": _indice(pluginuri, pl),
+					"nume": pl.name or ""})
+			elif (L.deschidereFaraPlugin(catalog, obj, texte=False) or {}).get("fel") == "acces":
+				# modulul de acces: pagina modulelor (pornire, oprire, repornire), perechea ecranului de pe televizor
+				rez.append({"f": "pagina", "text": _t("Module de acces"), "href": "/acces-conditionat", "principal": True})
+			else:
+				# intrarea pluginului din meniu (fara rand in lista pluginurilor), pe televizor
+				rez.append({"f": "deschide-pachet", "text": _t("Deschide pe televizor"), "pachet": obj.nume})
 		if rosu:
 			rez.append({"f": "sterge", "text": _t(rosu), "pachet": obj.nume, "rosu": True})
 	elif fel == "fisier":
@@ -362,6 +371,13 @@ def _rand(M, catalog, fel, obj, extra, pluginuri):
 	from urllib.parse import urlencode
 	if fel == "sectiune":
 		return {"fel": fel, "titlu": P._curat(obj, 200), "numar": extra}
+	if fel == "dosar":
+		# dosarul din Disponibile (0.7.5): scriptul il deschide si il inchide in pagina, fara cerere la receptor
+		numar = _t("un pachet") if obj.numar == 1 else _t("%d pachete") % obj.numar
+		sub = L.cuSursa(", ".join(L.surseAlte(catalog)), numar) if obj.cheie == L.DOSAR_ALTE else numar
+		return {"fel": fel, "cheie": "dosar:" + obj.cheie, "titlu": L.numeDosar(obj.cheie), "subtitlu": P._curat(sub, 300),
+			"numar": obj.numar, "alte": obj.cheie == L.DOSAR_ALTE,
+			"descriere": P._curat(L.descriereDosar(catalog, obj), 1500)}
 	_ic, titlu, sub, insigna, culoare, mic = L.descriereRand(catalog, fel, obj, extra)
 	d = L.detalii(catalog, fel, obj, extra)
 	return {"fel": fel, "cheie": _cheie(fel, obj, pluginuri), "titlu": P._curat(titlu, 200),
@@ -467,6 +483,7 @@ def stare(arg, M, catalog, date=None):
 		fila = "cautare" if cauta else "instalate"
 	filtru = _filtruCerut(arg)
 	filtruWeb = None
+	toateRandurile = []
 	if fila == "fisiere":
 		randuri = [("fisier", f, None) for f in fisiere]
 	else:
@@ -495,7 +512,10 @@ def stare(arg, M, catalog, date=None):
 		"file": [{"id": i, "eticheta": e, "numar": n} for i, e, n in file],
 		"fila": fila,
 		"cauta": cauta,
-		"randuri": [_rand(M, catalog, fel, o, x, pluginuri) for fel, o, x in randuri],
+		"randuri": _randuriWeb(M, catalog, fila, cauta, randuri, toateRandurile if fila != "fisiere" else [], pluginuri),
+		# pluginurile ascunse din Instalate (0.7.5): butonul care le arata din nou
+		"text_arata": L.textArataToate(L.nrAscunse(pluginuri, M.plugins)) if fila == "instalate" and not cauta and
+			L.nrAscunse(pluginuri, M.plugins) else "",
 		# toate actualizarile, si cand filtrul arata numai o parte (butonul spune "toate", ca MENU pe televizor)
 		"tot": [o.nume for o in catalog.actualizari()] if fila in ("instalate", "actualizari") else [],
 		"filtru": filtruWeb,
@@ -520,6 +540,21 @@ def stare(arg, M, catalog, date=None):
 		"lucreaza": descarcare or cf["in_curs"] or cf["retea_in_curs"] or bool(lucrare and lucrare["faza"] == "lucru") or
 			bool(sursa and sursa["faza"] in ("marime", "lucru")),
 	}
+
+
+def _randuriWeb(M, catalog, fila, cauta, randuri, toate, pluginuri):
+	"""Randurile paginii; in Instalate, randurile pluginurilor au si butoanele de mutare si ascundere (0.7.5), aceleasi ca
+	MENU pe televizor, fata de toate randurile filei (nu numai cele lasate de filtru)."""
+	L = M.L
+	rez = []
+	for fel, o, x in randuri:
+		r = _rand(M, catalog, fel, o, x, pluginuri)
+		if fila == "instalate" and not cauta and fel == "plugin":
+			id_ = L.idPlugin(getattr(o, "path", ""))
+			r["actiuni"] = r["actiuni"] + [{"f": "ordine", "pas": pas, "id": id_, "text": _t(L.TEXTE_ORDINE[pas])}
+				for pas in L.pasiPosibili(toate, id_)]
+		rez.append(r)
+	return rez
 
 
 def _filtruCerut(arg):
@@ -980,8 +1015,30 @@ def cautaFisiere(arg, request, M):
 	return {"result": True, "message": _t("Se caută fișiere .ipk pe stick, pe disc și în /tmp.")}
 
 
+def deschidePachet(arg, M):
+	"""OK pe un pachet instalat fara rand in lista pluginurilor: intrarea lui din meniu se deschide pe televizor (ca pe
+	televizor, Screens/HdsExtensii._deschideFaraPlugin)"""
+	nume = arg.get("pachet", "")
+	catalog = _catalog(M)
+	p = catalog.pachete.get(nume) if catalog is not None else None
+	d = M.L.deschidereFaraPlugin(catalog, p, M.plugins) if p is not None else None
+	if d is None or d["fel"] != "meniu":
+		return _refuz(_t("Lista extensiilor s-a schimbat. Reîncarcă pagina."))
+	s = M.sesiune()
+	motiv = M.ocupat(s)
+	if motiv:
+		return _refuz(motiv)
+	try:
+		d["functie"](s)
+	except Exception as eroare:
+		return _refuz(_t("Extensia %s nu a putut porni: %s") % (p.titlu, M.P._curat(str(eroare), 200)))
+	return {"result": True, "message": _t("Extensia %s s-a deschis pe televizor.") % p.titlu}
+
+
 def deschide(arg, request, M):
 	"""OK pe o extensie instalata: ecranul ei se deschide pe televizor"""
+	if arg.get("pachet") and not arg.get("plugin"):
+		return deschidePachet(arg, M)
 	try:
 		i = int(arg.get("plugin", ""))
 	except ValueError:
@@ -1003,6 +1060,23 @@ def deschide(arg, request, M):
 		motiv = M.L.motivDeschidere(plugin)
 		return _refuz("%s: %s" % (plugin.name, motiv) if motiv else _t("Extensia %s nu a putut porni. Mesajul e pe televizor.") % plugin.name)
 	return {"result": True, "message": _t("Extensia %s s-a deschis pe televizor.") % plugin.name}
+
+
+def ordine(arg, request, M):
+	"""Mutarea sau ascunderea unui plugin in Instalate, ori aratarea din nou a celor ascunse (MENU pe televizor, 0.7.5)"""
+	L = M.L
+	pas = arg.get("pas", "")
+	if pas == "arata":
+		L.arataToateExtensiile()
+		return {"result": True, "message": _t("Extensiile ascunse se văd din nou, și pe televizor.")}
+	if pas not in L.PASI_ORDINE:
+		return _refuz(_t("Extensia nu se poate muta."))
+	randuri = L.randuri(_catalog(M), "instalate", M.pluginuri(), M.plugins)
+	if not L.schimbaOrdinea(randuri, arg.get("id", ""), pas):
+		return _refuz(_t("Lista extensiilor s-a schimbat. Reîncarcă pagina."))
+	if pas == "ascunde":
+		return {"result": True, "message": _t("Extensia e ascunsă din Extensii, și pe televizor. Căutarea o găsește mai departe.")}
+	return {"result": True, "message": _t("Extensia s-a mutat, și pe televizor.")}
 
 
 # ------------------------------------------------------------------ rutele
@@ -1146,6 +1220,7 @@ def rute(baza, resource, mediu=None):
 		b"extensii-descarca-lista": actiune(descarcaLista),
 		b"extensii-cauta-fisiere": actiune(cautaFisiere),
 		b"extensii-deschide": actiune(deschide),
+		b"extensii-ordine": actiune(ordine),
 		b"extensii-sursa-afla": actiune(sursaAfla),
 		b"extensii-sursa-descarca": actiune(sursaDescarca),
 		b"extensii-sursa-opreste": actiune(sursaOpreste),
@@ -1184,6 +1259,8 @@ __STIL_PAGINI__
   .insigna.chihlimbar{color:var(--chihlimbar);}
   .insigna.rau{color:var(--eroare);}
   .detalii{padding:6px 0 14px;}
+  .dosar .titlu::before{content:"\25B8\00A0";display:inline-block;}
+  .dosar[aria-expanded="true"] .titlu::before{content:"\25BE\00A0";}
   .detalii th{width:34%;}
   .descriere{white-space:pre-line;line-height:1.45;overflow-wrap:anywhere;margin:8px 0 0;}
   .jurnal{list-style:none;margin:8px 0 0;padding:0;font-size:.85rem;line-height:1.45;}
@@ -1262,6 +1339,7 @@ __STIL_PAGINI__
 </main>
 <script>
 __SCRIPT_COMUN__
+var DOSARE = {};
 var D = null, FILA = "instalate", CAUTA = "", FILA_DINAINTE = "instalate", DESCHIS = "", REDAT = "", CEAS = null, CERERE = 0, SURSA = "", LISTA_CERUTA = false, FEED = "", FEL = "", URCAT = "", URCA = false;
 function el(tip, clasa, text){ var e = document.createElement(tip); if(clasa){ e.className = clasa; } if(text !== undefined && text !== null){ e.textContent = text; } return e; }
 function programeaza(ms){ if(CEAS){ clearTimeout(CEAS); CEAS = null; } if(ms){ CEAS = setTimeout(citeste, ms); } }
@@ -1395,13 +1473,13 @@ function arataFiltru(d, c){
   function lista(eticheta, alegeri, valoare, pune){
     var l = el("label", null, eticheta); var s = el("select");
     alegeri.forEach(function(a){ var o = el("option", null, a[1]); o.value = a[0]; if(a[0] === valoare){ o.selected = true; } s.appendChild(o); });
-    s.addEventListener("change", function(){ pune(s.value); DESCHIS = ""; citeste(); });
+    s.addEventListener("change", function(){ pune(s.value); DESCHIS = ""; DOSARE = {}; citeste(); });
     l.appendChild(s); b.appendChild(l);
   }
   lista(f.eticheta_feed, f.feeduri, f.feed, function(v){ FEED = v; });
   if(f.feluri.length){ lista(f.eticheta_fel, f.feluri, f.fel, function(v){ FEL = v; }); }
   b.appendChild(el("span", "nota", f.aratate));
-  if(f.activ){ var t = el("button", null, f.text_tot); t.type = "button"; t.addEventListener("click", function(){ FEED = ""; FEL = ""; DESCHIS = ""; citeste(); }); b.appendChild(t); }
+  if(f.activ){ var t = el("button", null, f.text_tot); t.type = "button"; t.addEventListener("click", function(){ FEED = ""; FEL = ""; DESCHIS = ""; DOSARE = {}; citeste(); }); b.appendChild(t); }
   c.appendChild(b);
 }
 function arataRanduri(d){
@@ -1412,11 +1490,34 @@ function arataRanduri(d){
     bt.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("tot", "1"); cuConfirmare("/api/extensii-actualizeaza", q, dupa); });
     var bb = el("div", "butoane"); bb.appendChild(bt); c.appendChild(bb);
   }
+  if(d.text_arata){
+    var ba = el("button", null, d.text_arata); ba.type = "button";
+    ba.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("pas", "arata"); trimite("/api/extensii-ordine", q); });
+    var bba = el("div", "butoane"); bba.appendChild(ba); c.appendChild(bba);
+  }
   if(!d.randuri.length){
     d.gol.split("\n").forEach(function(t){ c.appendChild(el("p", "nota", t)); });
     return;
   }
+  var nrDosare = d.randuri.filter(function(r){ return r.fel === "dosar"; }).length;
+  var implicit = nrDosare <= 1 || !!(d.filtru && d.filtru.activ), inchis = false;
   d.randuri.forEach(function(r){
+    if(r.fel === "dosar"){
+      var dd = DOSARE.hasOwnProperty(r.cheie) ? DOSARE[r.cheie] : implicit;
+      inchis = !dd;
+      var rd = el("div", "rand element dosar" + (dd ? " ales" : ""));
+      rd.tabIndex = 0; rd.setAttribute("role", "button"); rd.setAttribute("aria-expanded", dd ? "true" : "false");
+      if(r.descriere){ rd.title = r.descriere; }
+      var sd = el("div", "stanga"); sd.appendChild(el("strong", "titlu", r.titlu)); sd.appendChild(el("span", "nota", r.subtitlu));
+      var dr2 = el("div", "dreapta"); dr2.appendChild(el("span", "insigna" + (r.alte ? " chihlimbar" : ""), String(r.numar)));
+      rd.appendChild(sd); rd.appendChild(dr2);
+      function comutaDosar(){ DOSARE[r.cheie] = !dd; arata(D); }
+      rd.addEventListener("click", comutaDosar);
+      rd.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); comutaDosar(); } });
+      c.appendChild(rd);
+      return;
+    }
+    if(inchis){ return; }
     if(r.fel === "sectiune"){ c.appendChild(el("h3", "sectiune", r.titlu + " (" + r.numar + ")")); return; }
     var deschis = DESCHIS === r.cheie;
     var rnd = el("div", "rand element" + (deschis ? " ales" : ""));
@@ -1452,6 +1553,9 @@ function actiune(a){
   else if(a.f === "reporneste"){ cuConfirmare("/api/extensii-reporneste", q, dupaRepornire); }
   else if(a.f === "sursa-sterge"){ q.set("nume", a.nume); cuConfirmare("/api/extensii-sursa-sterge", q, dupa); }
   else if(a.f === "deschide"){ q.set("plugin", String(a.plugin)); q.set("nume", a.nume); trimite("/api/extensii-deschide", q); }
+  else if(a.f === "deschide-pachet"){ q.set("pachet", a.pachet); trimite("/api/extensii-deschide", q); }
+  else if(a.f === "ordine"){ q.set("pas", a.pas); q.set("id", a.id); if(a.pas === "ascunde"){ DESCHIS = ""; } trimite("/api/extensii-ordine", q); }
+  else if(a.f === "pagina"){ location.href = a.href; }
   else if(a.f === "descarca"){ LISTA_CERUTA = true; trimite("/api/extensii-descarca-lista", q); }
   else if(a.f === "sursa"){ q.set("pachet", a.pachet); SURSA = a.pachet; trimite("/api/extensii-sursa-afla", q); }
   else if(a.f === "pluginsurse"){ $("cauta").value = a.nume; CAUTA = a.nume; FILA = "cautare"; DESCHIS = ""; citeste(); }

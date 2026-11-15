@@ -15,7 +15,14 @@
 #     fara dlopen. Pluginul primeste eroarea ca pe orice import cazut: incarcatorul il trece in lista celor care nu se
 #     pot deschide, iar o eroare la folosire merge la Components/HdsPluginExtern (mesajul pe ecran si raportul);
 #   - ctypes: dlopen-ul din _ctypes (deci CDLL, cdll.LoadLibrary) refuza, cu OSError, o biblioteca libpythonX.Y a altui
-#     Python si un fisier (cale cu /) legat de una.
+#     Python si un fisier (cale cu /) legat de una;
+#   - Cython: un modul facut de Cython pentru alt Python nu cere libpython in antet (ia functiile din programul care il
+#     incarca), deci antetul nu-l arata. La incarcare Cython compara versiunea cu care a fost facut cu cea de acum si,
+#     cand difera, da numai un avertisment (RuntimeWarning "compile time Python version 3.13 of module ... does not match
+#     runtime version 3.14"), apoi merge mai departe cu structurile celuilalt Python si poate cadea cu semnalul 11
+#     (Satelliweb Live Feeds 3.0, facut pentru 3.13: toate cele sase module cad la import pe 3.14). Paza face din acest
+#     avertisment o eroare (primul filtru din warnings, numai pentru textul lui Cython), deci modulul se opreste chiar
+#     la verificare, inainte de orice altceva, iar eroarea devine AltPython, ca mai sus.
 # Un fisier care nu se poate citi, sau care nu e ELF, trece ca inainte: ce nu se stie nu opreste niciodata nimic.
 # Antetul se citeste in Python (program headers, segmentul dinamic, tabela de nume), cateva citiri mici pe fisier;
 # rezultatul se tine minte dupa cale, marime si ora.
@@ -337,6 +344,42 @@ def _pazesteCtypes():
 		c._dlopen = dlopenPazit(c._dlopen)
 
 
+# Avertismentul Cython pentru alt Python: Cython 3 ("compile time Python version 3.13 of module 'x' does not match
+# runtime version 3.14") si Cython 0.29 ("compiletime version 3.13 of module 'x' does not match runtime version 3.14").
+# FILTRU_CYTHON se potriveste de la inceputul textului, fara litere mari sau mici (cum citeste warnings filtrele).
+FILTRU_CYTHON = r"compile ?time (?:python )?version \d+\.\d+ of module "
+_CYTHON_ALT = re.compile(r"compile ?time (?:Python )?version (\d+)\.(\d+) of module '([^']*)'", re.I)
+
+
+def _filtruCython():
+	"""Avertismentul Cython pentru alt Python devine eroare: filtrul nostru e primul din warnings.filters (un plugin
+	care pune simplefilter("ignore") il impinge in jos; se pune din nou inaintea fiecarui modul de extensie). Nu arunca."""
+	try:
+		import warnings
+		f = warnings.filters
+		if f:
+			a, m, c = f[0][0], f[0][1], f[0][2]
+			if a == "error" and c is RuntimeWarning and getattr(m, "pattern", m) == FILTRU_CYTHON:
+				return
+		warnings.filterwarnings("error", message=FILTRU_CYTHON, category=RuntimeWarning)
+	except Exception:
+		pass
+
+
+def altPythonCython(exc, cale=None, nume=None):
+	"""AltPython pentru eroarea facuta din avertismentul Cython (modulul e facut pentru alt Python), altfel None."""
+	if not isinstance(exc, RuntimeWarning):
+		return None
+	m = _CYTHON_ALT.search(str(exc))
+	if m is None:
+		return None
+	v = (int(m.group(1)), int(m.group(2)))
+	if v == ACUM:
+		return None
+	print("[HdsAltPython] %s nu se incarca: modulul Cython %s e facut pentru Python %s" % (cale, m.group(3), textVersiune(v)))
+	return AltPython(cale or m.group(3), textVersiune(v), nume)
+
+
 def pazeste():
 	"""Pune paza o singura data. True daca e pusa (acum sau inainte)."""
 	if _pazit[0]:
@@ -346,11 +389,26 @@ def pazeste():
 	creeaza, executa = L.create_module, L.exec_module
 
 	def create_module(self, spec):
-		verificaModul(getattr(spec, "origin", None) or getattr(self, "path", None), getattr(spec, "name", None))
-		return creeaza(self, spec)
+		cale, nume = getattr(spec, "origin", None) or getattr(self, "path", None), getattr(spec, "name", None)
+		verificaModul(cale, nume)
+		_filtruCython()
+		try:
+			return creeaza(self, spec)
+		except RuntimeWarning as e:
+			alt = altPythonCython(e, cale, nume)
+			if alt is None:
+				raise
+			raise alt from e
 
 	def exec_module(self, module):
-		executa(self, module)
+		_filtruCython()
+		try:
+			executa(self, module)
+		except RuntimeWarning as e:
+			alt = altPythonCython(e, getattr(self, "path", None), getattr(module, "__name__", None))
+			if alt is None:
+				raise
+			raise alt from e
 		if getattr(module, "__name__", "") == "_ctypes":
 			_pazesteCtypes()
 

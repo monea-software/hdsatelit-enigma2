@@ -43,6 +43,19 @@ T_SERIALE = N_("Seriale")
 T_CAUTA = N_("Caută")
 T_INCARCA = N_("Se încarcă...")
 T_GOL = N_("Nimic aici încă.")
+T_FARA_SERVER = N_("Nu ai încă un server %s. Apasă OK: îl caut în rețea, apoi scrii utilizatorul și parola.")
+T_CAUT_SERVER = N_("Caut serverul %s în rețea...")
+T_SCRIU_ADRESA = N_("Scriu adresa de mână")
+T_ADRESA = N_("Adresa serverului %s (de exemplu 192.168.1.10:8096)")
+T_UTILIZATOR = N_("Utilizatorul de pe serverul %s")
+T_PAROLA = N_("Parola utilizatorului (poate fi goală)")
+T_MA_LEG = N_("Mă conectez la server...")
+T_LEGAT = N_("Gata: serverul %s este adăugat.")
+T_ADAUGA_SERVER = N_("Adaugă un server %s")
+T_SCOATE_SERVER = N_("Scoate serverul %s")
+T_SCHIMBA_SERVER = N_("Schimbă utilizatorul sau parola")
+T_CAUTA_DIN_NOU = N_("Caută din nou pe discuri")
+T_SURSA = N_("Sursa")
 
 C_FOND = 0x0B1020
 C_PANOU = 0x1A2340
@@ -156,8 +169,9 @@ class HdsFilmeSeriale(Screen):
 	skin = """
 	<screen name="HdsFilmeSeriale" position="0,0" size="1920,1080" resolution="1920,1080" flags="wfNoBorder" backgroundColor="#000b1020" title="Filme și seriale">
 		<widget name="fundal" position="0,0" size="1920,1080" scale="1" zPosition="0" />
-		<eLabel text="HD SATELIT  ›  Filme și seriale" position="96,40" size="900,50" font="Bold;32" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
-		<widget name="sursa" position="1000,40" size="560,50" font="Regular;24" halign="right" valign="center" foregroundColor="#00aeb9cc" transparent="1" zPosition="2" />
+		<eLabel text="HD SATELIT  ›  Filme și seriale" position="96,40" size="520,50" font="Bold;32" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
+		<widget name="surse" position="624,38" size="940,54" zPosition="2" listOrientation="horizontal" itemWidth="235" backgroundColor="#ff000000" transparent="1" scrollbarMode="showNever" />
+		<widget name="sursa" position="96,92" size="1500,28" font="Regular;22" noWrap="1" foregroundColor="#00aeb9cc" transparent="1" zPosition="2" />
 		<widget source="global.CurrentTime" render="Label" position="1580,36" size="244,58" font="Bold;40" halign="right" valign="center" foregroundColor="#00f2f4f8" backgroundColor="#0010162a" zPosition="2">
 			<convert type="ClockToText">Default</convert>
 		</widget>
@@ -180,6 +194,8 @@ class HdsFilmeSeriale(Screen):
 		self.setTitle(_("Filme și seriale"))
 		self.surse = V.surse()
 		self.src = next((s for s in self.surse if s.id == sursa_id), self.surse[0] if self.surse else None)
+		self.grupa = self.src.grupa if self.src else V.GRUPE[0][0]
+		self._server = None          # adaugarea unui server: {"fel", "faza", "fir", "rez", ...}
 		self.tip = tip
 		self.randuri = []
 		self.ales = 0                # randul ales; -1 = filele de sus
@@ -190,11 +206,12 @@ class HdsFilmeSeriale(Screen):
 		self._deDetaliat = None
 		self["fundal"] = Pixmap()
 		self["file"] = MenuList([], content=eListboxPythonMultiContent)
+		self["surse"] = MenuList([], content=eListboxPythonMultiContent)
 		for n in ("sursa", "titlu", "meta", "descriere", "eticheta0", "eticheta1", "stare", "legenda"):
 			self[n] = Label("")
 		self["rand0"] = MenuList([], content=eListboxPythonMultiContent)
 		self["rand1"] = MenuList([], content=eListboxPythonMultiContent)
-		self["legenda"].setText(_("OK Deschide   ·   Verde Redă   ·   Galben Caută   ·   Albastru Favorite   ·   MENU Contul   ·   EXIT Ieșire"))
+		self["legenda"].setText(_("OK Deschide   ·   Verde Redă   ·   Galben Caută   ·   Albastru Favorite   ·   MENU Sursa   ·   EXIT Ieșire"))
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions", "MenuActions"], {
 			"ok": self._ok, "cancel": self._iesi, "red": self._iesi, "green": self._reda, "yellow": self._cauta,
 			"blue": self._favorit, "left": self._stanga, "right": self._dreapta, "up": self._sus, "down": self._jos,
@@ -220,10 +237,16 @@ class HdsFilmeSeriale(Screen):
 		f = self["file"].l
 		f.setFont(0, gFont(_fontNume(True), int(28 * self.scara)))
 		f.setItemHeight(int(52 * self.scara))
+		g = self["surse"].l
+		g.setFont(0, gFont(_fontNume(True), int(24 * self.scara)))
+		g.setItemHeight(int(50 * self.scara))
+		self._surseRand()
 		self._file()
 		if self.src is None:
-			self["titlu"].setText(_("Filme și seriale"))
-			self["descriere"].setText(_(V.E_FARA_SURSA))
+			self.ales = -2
+			self._ceas.start(300, False)
+			self._grupaGoala()
+			self._arata()
 			return
 		self._pornesteTip()
 		self._masura("ecranul desenat")
@@ -239,8 +262,56 @@ class HdsFilmeSeriale(Screen):
 				backcolor_sel=C_ALES)])
 		self["file"].setList(intrari)
 		self["file"].moveToIndex(0 if self.tip == V.FILME else 1)
-		self["file"].instance.setSelectionEnable(self.ales < 0)
-		self["sursa"].setText(self.src.nume if self.src and len(self.surse) > 1 else "")
+		self["file"].instance.setSelectionEnable(self.ales == -1)
+		din_grupa = V.surseGrupa(self.grupa, self.surse)
+		self["sursa"].setText(self.src.nume if self.src and len(din_grupa) > 1 else "")
+
+	def _surseRand(self):
+		"""Randul de sus: Furnizor IPTV / Pe disc / Emby / Jellyfin (SUS din file il alege, STANGA/DREAPTA schimba sursa)."""
+		s = self.scara
+		lat = int(235 * s)
+		intrari = []
+		for grupa, text in V.GRUPE:
+			intrari.append([grupa, MultiContentEntryText(pos=(0, 0), size=(lat - int(10 * s), int(50 * s)), font=0,
+				flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, text=_(text), color=C_ETICHETA, color_sel=C_TEXT, backcolor=C_FOND,
+				backcolor_sel=C_ALES)])
+		self["surse"].setList(intrari)
+		self["surse"].moveToIndex(next((i for i, g in enumerate(V.GRUPE) if g[0] == self.grupa), 0))
+		self["surse"].instance.setSelectionEnable(self.ales == -2)
+
+	def _schimbaGrupa(self):
+		i = self["surse"].getSelectionIndex()
+		grupa = V.GRUPE[i][0] if 0 <= i < len(V.GRUPE) else self.grupa
+		if grupa == self.grupa and self.src is not None:
+			return
+		self.grupa = grupa
+		lista = V.surseGrupa(grupa, self.surse)
+		for r in self.randuri:
+			if r.lucrare:
+				V.renunta(r.lucrare)
+		self.src = lista[0] if lista else None
+		self._detalii = {}
+		self["stare"].setText("")
+		self._file()
+		if self.src is None:
+			self._grupaGoala()
+		else:
+			self._pornesteTip()
+		self.ales, self.sus = -2, 0
+		self._arata()
+
+	def _grupaGoala(self):
+		"""O sursa fara cont sau server: ce are omul de facut, scris pe ecran (la Emby/Jellyfin, OK incepe adaugarea)."""
+		self.randuri = []
+		self._categorii = _Rand("categorii", "")
+		nume = dict(V.GRUPE).get(self.grupa, "")
+		self["titlu"].setText(_(nume))
+		self["meta"].setText("")
+		if self.grupa in ("emby", "jellyfin"):
+			self["descriere"].setText(_(T_FARA_SERVER) % _(nume))
+		else:
+			self["descriere"].setText(_(V.E_FARA_SURSA))
+		self["fundal"].hide()
 
 	def _pornesteTip(self):
 		"""Randurile de pe ecran pentru filme sau seriale: cele locale (fara retea) imediat, apoi recente si categoriile."""
@@ -250,7 +321,7 @@ class HdsFilmeSeriale(Screen):
 		self.randuri = []
 		sid = self.src.id
 		cont = [self._dinPozitii(k, r) for k, r in Z.continua(sid) if (r.get("tip") or V.FILME) == self.tip]
-		if cont:
+		if cont and not self.src.continuaPeServer:
 			self.randuri.append(_Rand("continua", _(T_CONTINUA), titluri=cont))
 		fav = [self._dinPozitii(k, r) for k, r in Z.favorite(sid) if (r.get("tip") or V.FILME) == self.tip]
 		if fav:
@@ -287,6 +358,10 @@ class HdsFilmeSeriale(Screen):
 			print("[HdsFilmeSeriale] %s dupa %d ms" % (ce, (time.monotonic() - self._inceput) * 1000))
 
 	def _pas(self):
+		if self._server and self._server.get("gata"):
+			self._serverPas()
+		if self.src is None:
+			return
 		schimbat = False
 		if self._categorii.lucrare:
 			rez = V.rezultat(self._categorii.lucrare)
@@ -296,6 +371,9 @@ class HdsFilmeSeriale(Screen):
 				if rez.get("result"):
 					for c in rez.get("categorii", []):
 						self.randuri.append(_Rand("categorie", c["nume"], cat=c["id"]))
+					if not rez.get("categorii") and self.src.grupa == "disc":
+						from Components import HdsVodDisc
+						self["stare"].setText(_(HdsVodDisc.E_GOL))
 				else:
 					self["stare"].setText(_(rez.get("message") or V.E_NU_RASPUNDE))
 				schimbat = True
@@ -367,8 +445,10 @@ class HdsFilmeSeriale(Screen):
 			else:
 				d.pune(r.titluri, r.i, self._progres if r.fel in ("continua", "favorite", "recente", "categorie", "cautare") else None)
 			self["rand%d" % n].instance.setSelectionEnable(self.ales >= 0 and self.sus + n == self.ales)
-		self["file"].instance.setSelectionEnable(self.ales < 0)
-		self._info()
+		self["file"].instance.setSelectionEnable(self.ales == -1)
+		self["surse"].instance.setSelectionEnable(self.ales == -2)
+		if self.src is not None:
+			self._info()
 
 	def _forma(self, n, d, lat):
 		"""Placi late la „Continuă să vizionezi”, postere inalte in rest: latimea elementului se schimba pe loc."""
@@ -432,6 +512,10 @@ class HdsFilmeSeriale(Screen):
 	# ------------------------------------------------------------ tastele
 
 	def _stanga(self):
+		if self.ales == -2:
+			self["surse"].instance.moveSelection(self["surse"].instance.moveLeft)
+			self._schimbaGrupa()
+			return
 		if self.ales < 0:
 			self["file"].instance.moveSelection(self["file"].instance.moveLeft)
 			self._schimbaFila()
@@ -439,6 +523,10 @@ class HdsFilmeSeriale(Screen):
 		self._muta(-1)
 
 	def _dreapta(self):
+		if self.ales == -2:
+			self["surse"].instance.moveSelection(self["surse"].instance.moveRight)
+			self._schimbaGrupa()
+			return
 		if self.ales < 0:
 			self["file"].instance.moveSelection(self["file"].instance.moveRight)
 			self._schimbaFila()
@@ -466,19 +554,31 @@ class HdsFilmeSeriale(Screen):
 
 	def _sus(self):
 		if self.ales < 0:
+			if self.ales == -1:
+				self.ales = -2
+				self._arata()
 			return
 		self.ales -= 1
 		self.sus = max(0, self.ales)
 		self._arata()
 
 	def _jos(self):
+		if self.src is None:
+			return
 		if self.ales + 1 >= len(self.randuri):
 			return
 		self.ales += 1
-		self.sus = self.ales            # randul ales sta sus, ca in bibliotecile media; dedesubt se vede urmatorul
+		self.sus = max(0, self.ales)    # randul ales sta sus, ca in bibliotecile media; dedesubt se vede urmatorul
 		self._arata()
 
 	def _ok(self):
+		if self.ales == -2 or self.src is None:
+			if self.src is None and self.grupa in ("emby", "jellyfin"):
+				self._adaugaServer(self.grupa)
+			elif self.src is not None:
+				self.ales = 0 if self.randuri else -1
+				self._arata()
+			return
 		if self.ales < 0:
 			if self["file"].getSelectionIndex() == 2:
 				self._cauta()
@@ -500,7 +600,7 @@ class HdsFilmeSeriale(Screen):
 		ales = self.randuri[self.ales] if 0 <= self.ales < len(self.randuri) else None
 		locale = []
 		cont = [self._dinPozitii(k, r) for k, r in Z.continua(sid) if (r.get("tip") or V.FILME) == self.tip]
-		if cont:
+		if cont and not self.src.continuaPeServer:
 			locale.append(_Rand("continua", _(T_CONTINUA), titluri=cont))
 		fav = [self._dinPozitii(k, r) for k, r in Z.favorite(sid) if (r.get("tip") or V.FILME) == self.tip]
 		if fav:
@@ -515,11 +615,13 @@ class HdsFilmeSeriale(Screen):
 			self.ales = gasit[0] if gasit else 0
 			if gasit:
 				self.randuri[self.ales].i = min(ales.i, max(0, len(self.randuri[self.ales].titluri or []) - 1))
-		self.ales = max(0 if self.ales >= 0 else -1, min(self.ales, len(self.randuri) - 1))
+		self.ales = max(0 if self.ales >= 0 else self.ales, min(self.ales, len(self.randuri) - 1))
 		self.sus = max(0, self.ales)
 		self._arata()
 
 	def _reda(self):
+		if self.src is None:
+			return
 		t = self._titluAles()
 		if t is None:
 			return
@@ -529,9 +631,11 @@ class HdsFilmeSeriale(Screen):
 		cheie = t.get("cheie")
 		if cheie:
 			reda(self.session, self.src, cheie, {"nume": t["nume"], "poza": t.get("poza", ""), "tip": V.FILME},
-				Z.pozitie(Z.cheie(self.src.id, cheie)), self._dupaPagina)
+				pozitieTitlu(self.src, Z.cheie(self.src.id, cheie)), self._dupaPagina)
 
 	def _cauta(self):
+		if self.src is None:
+			return
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
 		self.session.openWithCallback(self._dupaCautare, VirtualKeyBoard, title=_("Caută filme și seriale"), text="")
 
@@ -551,6 +655,8 @@ class HdsFilmeSeriale(Screen):
 		self._arata()
 
 	def _favorit(self):
+		if self.src is None:
+			return
 		t = self._titluAles()
 		if t is None:
 			return
@@ -563,16 +669,149 @@ class HdsFilmeSeriale(Screen):
 		self._dupaPagina()
 
 	def _alegeSursa(self):
-		if len(self.surse) < 2:
+		lista = [(s.nume, s) for s in V.surseGrupa(self.grupa, self.surse)] if len(V.surseGrupa(self.grupa, self.surse)) > 1 else []
+		nume = _(dict(V.GRUPE).get(self.grupa, ""))
+		if self.grupa in ("emby", "jellyfin"):
+			lista.append((_(T_ADAUGA_SERVER) % nume, "adauga"))
+			if self.src is not None:
+				lista.append((_(T_SCHIMBA_SERVER), "schimba"))
+				lista.append((_(T_SCOATE_SERVER) % self.src.nume, "scoate"))
+		elif self.grupa == "disc" and self.src is not None:
+			lista.append((_(T_CAUTA_DIN_NOU), "disc"))
+		if not lista:
 			return
 		from Screens.ChoiceBox import ChoiceBox
-		self.session.openWithCallback(self._sursaAleasa, ChoiceBox, title=_("Alege contul"), list=[(s.nume, s) for s in self.surse])
+		self.session.openWithCallback(self._sursaAleasa, ChoiceBox, title=_(T_SURSA), list=lista)
 
 	def _sursaAleasa(self, ales=None):
-		if ales and ales[1] is not self.src:
+		if not ales:
+			return
+		if ales[1] == "adauga":
+			self._adaugaServer(self.grupa)
+		elif ales[1] == "schimba":
+			# aceeasi adresa, utilizatorul si parola scrise din nou (logarea noua inlocuieste serverul vechi daca merge)
+			self._server = {"fel": self.grupa, "faza": "caut", "vechi": self.src.id}
+			self._serverAdresa(self.src.adresa)
+		elif ales[1] == "scoate":
+			from Components import HdsVodServere
+			HdsVodServere.scoate(self.src.id)
+			self._reiaSursele()
+		elif ales[1] == "disc":
+			# indexul se reface pe firul de lucru, la cererea categoriilor (ecranul nu asteapta)
+			self.src._index = None
+			V.golesteMemoria()
+			self._pornesteTip()
+		elif ales[1] is not self.src:
 			self.src = ales[1]
 			self._file()
 			self._pornesteTip()
+
+	def _reiaSursele(self, sid=None):
+		self.surse = V.surse()
+		lista = V.surseGrupa(self.grupa, self.surse)
+		self.src = next((x for x in lista if x.id == sid), lista[0] if lista else None)
+		self._file()
+		if self.src is None:
+			self._grupaGoala()
+		else:
+			self._pornesteTip()
+		self._arata()
+
+	# ------------------------------------------------------------ adaugarea serverului Emby / Jellyfin
+
+	def _inFundal(self, functie, *argumente):
+		import threading
+		self._server["gata"] = False
+
+		def lucru():
+			try:
+				self._server["rez"] = functie(*argumente)
+			except Exception as e:
+				print("[HdsFilmeSeriale] server: %s" % type(e).__name__)
+				self._server["rez"] = None
+			self._server["gata"] = True
+		fir = threading.Thread(target=lucru, name="HdsVodServer")
+		fir.daemon = True
+		fir.start()
+
+	def _adaugaServer(self, fel):
+		"""Regula 'cat mai simplu': serverul se cauta singur in retea (UDP 7359); omul scrie numai utilizatorul si parola."""
+		from Components import HdsVodServere
+		nume = HdsVodServere.NUME_FEL[fel]
+		self._server = {"fel": fel, "faza": "caut"}
+		self["stare"].setText(_(T_CAUT_SERVER) % nume)
+		self._inFundal(HdsVodServere.descopera, 2.0, (fel,))
+
+	def _serverPas(self):
+		from Components import HdsVodServere
+		from Screens.ChoiceBox import ChoiceBox
+		from Screens.VirtualKeyBoard import VirtualKeyBoard
+		srv = self._server
+		srv["gata"] = None
+		nume = HdsVodServere.NUME_FEL[srv["fel"]]
+		if srv["faza"] == "caut":
+			self["stare"].setText("")
+			gasite = srv.get("rez") or []
+			if len(gasite) == 1:
+				self._serverAles((gasite[0]["nume"], gasite[0]["adresa"]))
+				return
+			lista = [("%s  ·  %s" % (g["nume"], g["adresa"].split("://", 1)[-1]), g["adresa"]) for g in gasite]
+			lista.append((_(T_SCRIU_ADRESA), ""))
+			self.session.openWithCallback(self._serverAles, ChoiceBox, title=_(T_CAUT_SERVER) % nume, list=lista)
+		elif srv["faza"] == "leg":
+			ok, mesaj, sid = srv.get("rez") or (False, HdsVodServere.E_SERVER, "")
+			self._server = None
+			if ok:
+				if srv.get("vechi") and srv["vechi"] != sid:
+					HdsVodServere.scoate(srv["vechi"])          # alt utilizator pe acelasi server: cel vechi iese
+				self["stare"].setText(_(T_LEGAT) % nume)
+				self._reiaSursele(sid)
+			else:
+				self["stare"].setText(_(mesaj))
+
+	def _serverAles(self, ales=None):
+		from Components import HdsVodServere
+		from Screens.VirtualKeyBoard import VirtualKeyBoard
+		if not ales or self._server is None:
+			self._server = None
+			return
+		nume = HdsVodServere.NUME_FEL[self._server["fel"]]
+		if not ales[1]:
+			self.session.openWithCallback(self._serverAdresa, VirtualKeyBoard, title=_(T_ADRESA) % nume, text="")
+			return
+		self._serverAdresa(ales[1])
+
+	def _serverAdresa(self, adresa=None):
+		from Components import HdsVodServere
+		from Screens.VirtualKeyBoard import VirtualKeyBoard
+		if not adresa or self._server is None:
+			self._server = None
+			return
+		if not HdsVodServere.adresaBuna(adresa):
+			self["stare"].setText(_(HdsVodServere.E_ADRESA))
+			self._server = None
+			return
+		self._server["adresa"] = adresa
+		nume = HdsVodServere.NUME_FEL[self._server["fel"]]
+		self.session.openWithCallback(self._serverUtilizator, VirtualKeyBoard, title=_(T_UTILIZATOR) % nume, text="")
+
+	def _serverUtilizator(self, utilizator=None):
+		from Screens.VirtualKeyBoard import VirtualKeyBoard
+		if not utilizator or self._server is None:
+			self._server = None
+			return
+		self._server["utilizator"] = utilizator.strip()
+		self.session.openWithCallback(self._serverParola, VirtualKeyBoard, title=_(T_PAROLA), text="")
+
+	def _serverParola(self, parola=None):
+		from Components import HdsVodServere
+		if parola is None or self._server is None:
+			self._server = None
+			return
+		srv = self._server
+		srv["faza"] = "leg"
+		self["stare"].setText(_(T_MA_LEG))
+		self._inFundal(HdsVodServere.adauga, srv["fel"], srv["adresa"], srv["utilizator"], parola)
 
 	def _iesi(self):
 		if self.ales >= 0 and any(r.fel == "cautare" for r in self.randuri):
@@ -701,7 +940,7 @@ class HdsFilmPagina(Screen):
 		s = self.scara
 		lat = int(430 * s)
 		k = self._k()
-		poz = Z.pozitie(k) if k else 0
+		poz = pozitieTitlu(self.src, k)
 		self._actiuni = []
 		if poz:
 			self._actiuni.append(("continua", _("Continuă de la %s") % textOra(poz)))
@@ -739,7 +978,7 @@ class HdsFilmPagina(Screen):
 			self._porneste(fel == "continua")
 
 	def _reda(self):
-		self._porneste(bool(Z.pozitie(self._k())) if self._k() else False)
+		self._porneste(bool(pozitieTitlu(self.src, self._k())))
 
 	def _porneste(self, de_unde_ai_ramas):
 		cheie = (self.d or {}).get("cheie") or self.t.get("cheie")
@@ -749,7 +988,7 @@ class HdsFilmPagina(Screen):
 		k = Z.cheie(self.src.id, cheie)
 		reda(self.session, self.src, cheie, {"nume": (self.d or {}).get("nume") or self.t.get("nume", ""),
 			"poza": self.t.get("poza") or (self.d or {}).get("poster", ""), "fundal": (self.d or {}).get("fundal", ""), "tip": V.FILME},
-			Z.pozitie(k) if de_unde_ai_ramas else 0, lambda *a: self._arata())
+			pozitieTitlu(self.src, k) if de_unde_ai_ramas else 0, lambda *a: self._arata())
 
 	def _favorit(self):
 		k = self._k()
@@ -893,7 +1132,7 @@ class HdsSerialPagina(Screen):
 		if 0 <= i < len(ep):
 			e = ep[i]
 			self["episod"].setText(("%s. " % e["numar"] if e.get("numar") else "") + e["nume"])
-			poz = Z.pozitie(Z.cheie(self.src.id, e["cheie"]))
+			poz = pozitieTitlu(self.src, Z.cheie(self.src.id, e["cheie"]))
 			self["episodText"].setText(((_("Continuă de la %s.") % textOra(poz) + " ") if poz else "") + (e.get("descriere") or ""))
 		else:
 			self["episod"].setText("")
@@ -952,7 +1191,7 @@ class HdsSerialPagina(Screen):
 		meta = {"nume": e["nume"], "poza": e.get("poza") or self.t.get("poza", ""), "tip": V.SERIALE, "serial": self.t["id"],
 			"serial_nume": d.get("nume") or self.t.get("nume", ""), "sezon": sz["numar"], "numar": e.get("numar", "")}
 		urmatoare = [(x["cheie"], dict(meta, nume=x["nume"], numar=x.get("numar", ""))) for x in ep[i + 1:i + 30]]
-		reda(self.session, self.src, e["cheie"], meta, Z.pozitie(Z.cheie(self.src.id, e["cheie"])), lambda *a: self._arata(), urmatoare)
+		reda(self.session, self.src, e["cheie"], meta, pozitieTitlu(self.src, Z.cheie(self.src.id, e["cheie"])), lambda *a: self._arata(), urmatoare)
 
 	def _favorit(self):
 		k = Z.cheie(self.src.id, "s" + self.t["id"])
@@ -961,6 +1200,17 @@ class HdsSerialPagina(Screen):
 
 
 # ------------------------------------------------------------------ redarea
+
+def pozitieTitlu(src, k):
+	"""De unde continua titlul: pozitia de pe server (Emby/Jellyfin, vazut si pe alt aparat), altfel cea tinuta aici."""
+	if not k:
+		return 0
+	if src is not None and src.continuaPeServer:
+		p = src.pozitieServer(k.split("/", 1)[1])
+		if p is not None:
+			return p
+	return Z.pozitie(k)
+
 
 def reda(session, src, cheie, meta, de_la_s=0, dupa=None, urmatoare=None):
 	ref = src.referinta(cheie)
@@ -1027,9 +1277,36 @@ class HdsVodPlayer(MoviePlayer):
 			return
 		if poz is not None and self.hdsIncercari % 30 == 0:
 			Z.noteaza(self.hdsK, poz, lung, self.hdsMeta)
+			self.hdsServer(poz, lung, "progres" if getattr(self, "hdsPornitServer", False) else "start")
 		self.hdsIncercari += 1
 		if poz is not None:
 			self.hdsUltima = (poz, lung)
+
+	def hdsServer(self, poz, lung, fel):
+		"""Sursa afla unde ai ajuns: serverele Emby/Jellyfin tin pozitia (pe firul lor), discul face imaginea din film."""
+		src = self.hdsSrc
+		if src is None:
+			return
+		cheie = self.hdsK.split("/", 1)[1]
+		if fel == "start":
+			self.hdsPornitServer = True
+		elif fel == "oprit":
+			if not getattr(self, "hdsPornitServer", False):
+				# iesire inainte de primul anunt: serverul tot opreste transcodarea pornita de releu (fara pozitie trimisa)
+				inchisa = getattr(src, "redareInchisa", None)
+				if inchisa is not None:
+					try:
+						inchisa(cheie)
+					except Exception as e:
+						print("[HdsVodPlayer] sursa: %s" % type(e).__name__)
+				return
+			self.hdsPornitServer = False
+		try:
+			src.progres(cheie, poz, lung, fel)
+			if fel != "oprit":
+				src.inRedare(cheie, poz, lung)
+		except Exception as e:
+			print("[HdsVodPlayer] sursa: %s" % type(e).__name__)
 
 	def hdsPiste(self):
 		s = self.session.nav.getCurrentService()
@@ -1061,6 +1338,7 @@ class HdsVodPlayer(MoviePlayer):
 			return
 		sub, aud = self.hdsPiste()
 		Z.noteaza(self.hdsK, poz, lung, self.hdsMeta, subtitrari=sub or None, audio=aud or None, forteaza=True)
+		self.hdsServer(poz, lung, "oprit")
 
 	def leavePlayer(self):
 		self.hdsSalveaza()
@@ -1088,6 +1366,7 @@ class HdsVodPlayer(MoviePlayer):
 			return
 		poz, lung = self.hdsPozitie()
 		Z.noteaza(self.hdsK, lung or poz or 0, lung, self.hdsMeta, forteaza=True)
+		self.hdsServer(lung or poz or 0, lung, "oprit")
 		if self.hdsUrmatoare and self.hdsSrc is not None:
 			cheie, meta = self.hdsUrmatoare.pop(0)
 			ref = self.hdsSrc.referinta(cheie)

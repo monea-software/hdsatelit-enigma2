@@ -5,10 +5,14 @@
 """Data cu numele zilelor si lunilor in limba meniului.
 
 Imaginea nu are datele de limba ale glibc (reteta: IMAGE_LINGUAS = "") si nu cheama setlocale nicaieri, deci
-time.strftime da %A, %a, %B, %b si %c in engleza in ORICE limba (testerul JAKITAKI, meniul in polona, 0.7.3: „Tuesday,
-November” intr-o tema din afara). Aici numele vin din cataloagele noastre (_), care le au deja in toate cele 30 de limbi:
+time.strftime da %A, %a, %B, %b si %c in engleza in ORICE limba (testerul JAKITAKI, meniul in polona, 0.7.3: "Tuesday,
+November" intr-o tema din afara). Aici numele vin din cataloagele noastre (_), care le au deja in toate cele 31 de limbi:
 zilele („Monday”, „Mon”) si lunile intregi (msgid-urile romanesti „ianuarie” ... „decembrie”, din HdsAfisajDate). Restul
 formatului trece neschimbat prin time.strftime. Fara catalog sau fara traducere, textul ramane ca inainte (engleza).
+
+0.7.5: luna scrisa dupa numarul zilei ("%d %B") ia forma ceruta de limba acolo, ca %B din datele de limba ale glibc
+(polona "10 listopada", rusa "10 ноября", ceha "10. listopadu"); singura ("%B %Y") sau cu %OB ramane forma de dictionar
+("listopad 2026"). Pana la traducerea textelor noi, forma de dictionar, ca in 0.7.4.
 """
 
 import re
@@ -30,6 +34,14 @@ LUNI = (N_("ianuarie"), N_("februarie"), N_("martie"), N_("aprilie"), N_("mai"),
 # (Polish "lis", German "Nov"). "May" here is the short form of the month May.
 LUNI_SCURT = (N_("Jan"), N_("Feb"), N_("Mar"), N_("Apr"), N_("May"), N_("Jun"), N_("Jul"), N_("Aug"), N_("Sep"),
 	N_("Oct"), N_("Nov"), N_("Dec"))
+# TRANSLATORS: the month name as it stands right after the day number in a date ("10 November"), in the grammatical
+# case your language uses there (Polish "listopada", Russian "ноября", Czech "listopadu", Greek "Νοεμβρίου", Finnish
+# "marraskuuta"), without prepositions (Spanish "noviembre", not "de noviembre"). Most languages: the month name alone.
+LUNI_DUPA_ZI = (N_("January (after the day number)"), N_("February (after the day number)"),
+	N_("March (after the day number)"), N_("April (after the day number)"), N_("May (after the day number)"),
+	N_("June (after the day number)"), N_("July (after the day number)"), N_("August (after the day number)"),
+	N_("September (after the day number)"), N_("October (after the day number)"), N_("November (after the day number)"),
+	N_("December (after the day number)"))
 # numele englezesti ale lunilor intregi (ce da en.po pentru LUNI): cand numele scurt nu e tradus inca, se foloseste
 # numele intreg tradus, daca limba nu e engleza (un nume intreg in limba meniului e mai bun decat unul scurt in engleza)
 _LUNI_ENGLEZA = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
@@ -53,9 +65,13 @@ def numeZi(t, scurt=False):
 	return _traducere((ZILE_SCURT if scurt else ZILE)[t.tm_wday])
 
 
-def numeLuna(t, scurt=False):
-	"""Numele lunii din time.struct_time, in limba meniului."""
+def numeLuna(t, scurt=False, dupaZi=False):
+	"""Numele lunii din time.struct_time, in limba meniului. dupaZi: luna sta dupa numarul zilei ("10 listopada")."""
 	i = t.tm_mon - 1
+	if dupaZi and not scurt:
+		forma = _traducere(LUNI_DUPA_ZI[i])
+		if forma and forma != LUNI_DUPA_ZI[i]:
+			return forma
 	lung = _traducere(LUNI[i])
 	if lung == LUNI[i] and _traducere(ZILE[0]) == ZILE[0]:
 		# niciun catalog activ (nici zilele nu sunt traduse): engleza, ca inainte, nu msgid-ul romanesc
@@ -79,10 +95,14 @@ def dataText(format, t=None):
 	# LC_CTYPE si de felul cum e construit Python); fiecare alt cod („%d”, „%H”...) trece singur prin time.strftime.
 	parti = []
 	poz = 0
+	inainte = None  # codul de dinainte, pentru luna scrisa dupa numarul zilei
 	for m in _COD.finditer(format):
-		parti.append(format[poz:m.start()])
+		intre = format[poz:m.start()]
+		parti.append(intre)
 		poz = m.end()
 		semne, cod = m.group(1), m.group(4)
+		dupaZi = inainte in ("d", "e") and m.group(3) != "O" and not any(c.isalpha() for c in intre)
+		inainte = cod
 		if cod == "%":
 			parti.append("%")
 			continue
@@ -93,7 +113,7 @@ def dataText(format, t=None):
 		elif cod == "a":
 			nume = numeZi(t, True)
 		elif cod == "B":
-			nume = numeLuna(t)
+			nume = numeLuna(t, dupaZi=dupaZi)
 		elif cod in ("b", "h"):
 			nume = numeLuna(t, True)
 		else:

@@ -41,6 +41,16 @@ class CurrentService(PerServiceBase, Source):
 
 	service = property(getCurrentService)
 
+	@cached
+	def getCurrentServiceRef(self):
+		"""Referinta canalului cerut (cu numarul lui din lista, getChannelNum), ca in OE-Alliance: temele si convertoarele
+		facute pentru OE-Alliance citesc session.CurrentService.serviceref (numarul canalului inaintea numelui,
+		ServiceNumber, VfdDisplay). Fara ea numarul lipsea din tema (darog69, forum 1455, TCN 15.11.2026)."""
+		citeste = getattr(self.navcore, "getCurrentServiceReferenceOriginal", None) or getattr(self.navcore, "getCurrentlyPlayingServiceReference", None)
+		return citeste() if citeste is not None else None
+
+	serviceref = property(getCurrentServiceRef)
+
 	def destroy(self):
 		PerServiceBase.destroy(self)
 		Source.destroy(self)

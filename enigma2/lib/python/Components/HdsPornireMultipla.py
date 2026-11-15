@@ -71,6 +71,14 @@
 #   e un dispozitiv bloc de 1 MiB in /proc/partitions; deschis fara O_CREAT si fara O_TRUNC; dupa: fsync, citit inapoi
 #   si comparat; la o nepotrivire se pune la loc octetul vechi. „Nu” la intrebarea de repornire pune la loc octetul vechi.
 #
+# AX HD51 / Mut@nt HD51 si inruditele cu partitia boot FAT (0.7.5, darog69, asistenta 801539): GPT fara blkdevparts,
+# p1 boot, p2 linuxkernel + p3 linuxrootfs = locul 1 (rootsubdir=linuxrootfs1), p4-p6 linuxkernel2-4 + p8 userdata =
+# locurile 2-4 (rootsubdir=linuxrootfsK). Fisierele puse de clasa hdemmc OE-Alliance: STARTUP_LINUX_<loc>_BOXMODE_<mod>
+# (mod 1 si 12 = doua impartiri ale memoriei video); imagini mai vechi pun STARTUP_<loc>. Ca in Tools/MultiBoot.py
+# OE-Alliance: locul = parts[1], modul = parts[3] din rsplit("_", 3); alegerea copiaza fisierul locului peste STARTUP.
+# Din fiecare loc se arata un singur fisier: cel cu modul din linia de comanda de acum (boxmode=N), altfel STARTUP_<loc>;
+# un loc care are numai fisierul celuilalt mod nu se arata (alegerea lui ar schimba pe ascuns impartirea memoriei).
+#
 # Citirea listei poate monta multe partitii, deci ecranul si pagina web o fac pe un fir separat. Alegerea verifica din nou
 # numai locul ales (locuri(numai=...)), deci ramane scurta pe firul enigma2.
 #
@@ -94,8 +102,13 @@ ABSENT = b"HDS-FARA-STARTUP\n"
 MAXIM_STARTUP = 4096
 UIMAGE_MAGIC = 0x27051956
 TINTA_EMMC = re.compile(r"^boot emmcflash0\.linuxkernel([1-9])$")
-# GigaBlue UHD Quad 4K Pro: opt locuri, tinta cu „:” (boot.bin al producatorului)
-TINTA_GPT_SUBDOSAR = re.compile(r"emmcflash0\.linuxkernel([1-9][0-9]?):?")
+# GigaBlue UHD Quad 4K Pro: opt locuri, tinta cu „:” (boot.bin al producatorului); AX HD51: locul 1 fara cifra
+# (emmcflash0.linuxkernel, nucleul in linuxkernel, sistemul in linuxrootfs/linuxrootfs1)
+TINTA_GPT_SUBDOSAR = re.compile(r"emmcflash0\.linuxkernel([1-9][0-9]?)?:?")
+# STARTUP_<loc> si STARTUP_LINUX_<loc>_BOXMODE_<mod> (clasa hdemmc OE-Alliance, AX HD51)
+NUME_STARTUP = re.compile(r"^STARTUP_([0-9]+)$", re.I)
+NUME_STARTUP_MOD = re.compile(r"^STARTUP_LINUX_([0-9]+)_BOXMODE_([0-9]+)$", re.I)
+MOD_CMDLINE = re.compile(r"\bboxmode=([0-9]{1,3})\b")
 TINTA_DISC = re.compile(r"^usb0\.sda([1-9][0-9]*)$")
 PARTITIE_SDA = re.compile(r"^/dev/sda[1-9][0-9]*$")
 PARTITIE_SCOASA = re.compile(r"^/dev/((?:sd[a-z]+|mmcblk[1-9][0-9]*p)[1-9][0-9]*)$")
@@ -241,10 +254,11 @@ def disponibil(radacina=None):
 	if dev or _dosarKexec(radacina) or os.path.exists(_cale(radacina, "dev/block/by-name/bootoptions")):
 		return True
 	boot = dosarBoot(radacina)
-	if boot and any(_verificaNativ(citesteStartup(date), {}, radacina) for _n, _fisier, date in startupuri(boot)):
+	if boot and any(_verificaNativ(citesteStartup(date), {}, radacina) for _n, _fisier, date in startupuri(boot, radacina)):
 		return True
 	# GigaBlue UHD Quad 4K Pro (0.7.5): partitia boot (FAT, STARTUP_1..8 ale producatorului) poate sta
-	# nemontata; cu locurile numite in GPT (linuxkernel1 si userdata) lista o monteaza la cerere (_deschideBoot)
+	# nemontata; cu locurile numite in GPT (linuxkernel1 si userdata; la AX HD51 linuxkernel si linuxrootfs) lista o
+	# monteaza la cerere (_deschideBoot)
 	return bool(not boot and _gptSubdosare(radacina))
 
 
@@ -747,11 +761,13 @@ def _marimePartitie(dispozitiv, radacina=None):
 
 def _gptSubdosare(radacina=None):
 	"""Schema GigaBlue UHD Quad 4K Pro: fara blkdevparts in linia de comanda, cu partitiile GPT boot, linuxkernel1 si
-	userdata (nucleele in linuxkernelK, sistemele in userdata/linuxrootfsK)."""
+	userdata (nucleele in linuxkernelK, sistemele in userdata/linuxrootfsK). AX HD51: locul 1 in linuxkernel si
+	linuxrootfs (fara cifra), locurile 2-4 in linuxkernel2-4 si userdata."""
 	if parametri(linieComanda(radacina)).get("blkdevparts"):
 		return False
-	return bool(_partitieNume("boot", radacina) and _partitieNume("linuxkernel1", radacina) and
-		_partitieNume("userdata", radacina))
+	primul = _partitieNume("linuxkernel1", radacina) or (
+		_partitieNume("linuxkernel", radacina) and _partitieNume("linuxrootfs", radacina))
+	return bool(_partitieNume("boot", radacina) and primul and _partitieNume("userdata", radacina))
 
 
 def verificaGptSubdosar(st, cmd, radacina=None):
@@ -759,7 +775,10 @@ def verificaGptSubdosar(st, cmd, radacina=None):
 	linia de comanda a unui Quad 4K Pro real): `boot emmcflash0.linuxkernelK: 'root=/dev/mmcblk0p13
 	rootsubdir=linuxrootfsK kernel=/dev/mmcblk0p<K+3> rootwait rw ...'`, cu „:” dupa tinta si fara blkdevparts. Nucleul
 	si radacina se verifica dupa numele GPT (linuxkernelK, userdata), nu dupa numere. -> (K, nucleu, marime, radacina,
-	subdosar) sau None."""
+	subdosar) sau None.
+	AX HD51 (clasa hdemmc OE-Alliance): locul 1 e `boot emmcflash0.linuxkernel 'root=/dev/mmcblk0p3
+	rootsubdir=linuxrootfs1 kernel=/dev/mmcblk0p2 ...'`, deci tinta fara cifra = locul 1, cu nucleul in partitia GPT
+	linuxkernel si sistemul in partitia GPT linuxrootfs (nu in userdata)."""
 	if not st or st.get("repetate"):
 		return None
 	p = st["p"]
@@ -768,10 +787,13 @@ def verificaGptSubdosar(st, cmd, radacina=None):
 	m = TINTA_GPT_SUBDOSAR.fullmatch(st["tinta"])
 	if not m or p.get("rootfstype", "ext4") != "ext4":
 		return None
-	k = m.group(1)
+	k = m.group(1) or "1"
 	if p.get("rootsubdir") != "linuxrootfs" + k:
 		return None
-	nucleu, rad = _partitieNume("linuxkernel" + k, radacina), _partitieNume("userdata", radacina)
+	if m.group(1):
+		nucleu, rad = _partitieNume("linuxkernel" + k, radacina), _partitieNume("userdata", radacina)
+	else:
+		nucleu, rad = _partitieNume("linuxkernel", radacina), _partitieNume("linuxrootfs", radacina)
 	if not nucleu or not rad or p.get("kernel") != nucleu or p.get("root") != rad:
 		return None
 	marime = _marimePartitie(nucleu, radacina)
@@ -851,18 +873,42 @@ def _deschideBoot(radacina, monteaza):
 	return (monteaza or _monteazaReal)(dev, "vfat")
 
 
-def startupuri(dosar):
-	"""[(N, octetii)] pentru STARTUP_<cifre>, in ordinea numerelor."""
-	rez = []
+def modPornire(radacina=None):
+	"""Modul memoriei din linia de comanda de acum (hd51_4.boxmode=N pe AX HD51) sau "" cand nu e."""
+	m = MOD_CMDLINE.search(linieComanda(radacina))
+	return str(int(m.group(1))) if m else ""
+
+
+def startupuri(dosar, radacina=None):
+	"""[(N, numele fisierului, octetii)], un fisier pentru fiecare loc N, in ordinea numerelor: STARTUP_<N> sau
+	STARTUP_LINUX_<N>_BOXMODE_<mod> (AX HD51). Cu fisiere pe moduri: cel cu modul din linia de comanda de acum
+	(fara boxmode in linia de comanda: modul 1, cel din fabrica); altfel STARTUP_<N>; un loc numai cu alt mod nu intra.
+	STARTUP_RECOVERY, STARTUP_ONCE, STARTUP_ANDROID si numele cu DISABLE nu sunt locuri."""
 	try:
 		nume = os.listdir(dosar)
 	except OSError:
-		return rez
+		return []
+	mod = None
+	simple, pe_mod = {}, {}
 	for n in nume:
-		if n.upper().startswith("STARTUP_") and n[8:].isdigit():
-			date = _citeste(os.path.join(dosar, n), MAXIM_STARTUP + 1)
-			if date is not None:
-				rez.append((n[8:], n, date))
+		if "DISABLE" in n.upper():
+			continue
+		m = NUME_STARTUP.match(n)
+		if m:
+			simple.setdefault(str(int(m.group(1))), n)
+			continue
+		m = NUME_STARTUP_MOD.match(n)
+		if m:
+			if mod is None:
+				mod = modPornire(radacina) or "1"
+			if str(int(m.group(2))) == mod:
+				pe_mod.setdefault(str(int(m.group(1))), n)
+	rez = []
+	for loc in set(simple) | set(pe_mod):
+		n = pe_mod.get(loc) or simple[loc]
+		date = _citeste(os.path.join(dosar, n), MAXIM_STARTUP + 1)
+		if date is not None:
+			rez.append((loc, n, date))
 	rez.sort(key=lambda x: int(x[0]))
 	return rez
 
@@ -1027,7 +1073,7 @@ def locuri(radacina=None, monteaza=None, numai=None):
 	kexec = boot == _dosarKexec(radacina)
 	try:
 		# Recovery (locul 0) numai la kexec: acolo e o imagine in radacina flash; la bootoptions e meniul fabricii.
-		fisiere = _sabloane(boot) if kexec else startupuri(boot)
+		fisiere = _sabloane(boot) if kexec else startupuri(boot, radacina)
 		o_data = kexec and os.path.lexists(os.path.join(boot, O_DATA))
 	finally:
 		if demonteazaBoot:
@@ -1491,3 +1537,241 @@ def reporneste(sesiune, loc, dupa_ms=0, fabrica_ceas=None, radacina=None, montea
 		from Components import HdsAlimentare
 		HdsAlimentare.programeaza(acum, dupa_ms, fabrica_ceas, nume="pornire-multipla")
 	return True, text
+
+# ------------------------------------------------------------------ instalarea pornirii multiple kexec pe Vu+ 4K
+# (KXC, 15.11.2026; forum 1269 si doi testeri Vu+ 4K). Fisierele vin din pachetul kexec-multiboot-<masina> al feedului
+# extern (reteta oe-build/meta-pluginuri-externe/recipes-kernel/kexec-multiboot, din github.com/oe-alliance/
+# kexec-multiboot, GPL-2.0 si MIT): /usr/bin/kernel_auto.bin
+# (nucleul placii cu initramfs-ul de prima etapa si meniul de pornire), /usr/bin/STARTUP.cpio.gz (a doua etapa) si
+# /usr/share/kexec-multiboot/model (masina pentru care sunt).
+# Forma: ca managerul OE-Alliance (KexecInit). Imaginea de acum ramane in radacina flash ca Recovery (locul 0,
+# rootsubdir=linuxrootfs0, nucleul ei copiat in /zImage); locurile 1-3 (linuxrootfsN in radacina flash) raman goale pentru
+# imagini noi (Imagini online le scrie acolo), iar locurile de pe USB sau HDD le pun alte imagini. Nimic nu se copiaza.
+# Pasii, fiecare verificat inainte de urmatorul; scrierea partitiei nucleului e ULTIMA:
+#  1. placa din /proc/device-tree/bolt/board e un Vu+ 4K cunoscut (partitiile din tabelul de mai jos, aceleasi ca in
+#     scriptul kexec-multiboot-recovery al autorilor), iar fisierul model al pachetului spune aceeasi masina;
+#  2. receptorul porneste direct din flash (root= din linia de comanda e partitia radacinii placii si / e montat ext4 rw
+#     din ea), fara kexec=1 si fara rootsubdir, fara STARTUP* in / si in /boot: o pornire multipla pusa deja nu se atinge;
+#  3. kernel_auto.bin e un zImage ARM care incape in partitia nucleului, STARTUP.cpio.gz e gzip, iar in partitia nucleului
+#     e acum un zImage ARM (dovada ca e chiar partitia nucleului); destul loc in / pentru copie;
+#  4. /zImage = partitia nucleului de acum, citita inapoi si comparata; /STARTUP.cpio.gz copiat si comparat;
+#  5. STARTUP_RECOVERY, STARTUP_1..3 si STARTUP scrise atomic (_scrieAtomic);
+#  6. kernel_auto.bin scris in partitia nucleului, fsync, citit inapoi si comparat; la o nepotrivire se scrie la loc
+#     nucleul vechi si se sterg fisierele puse de noi (receptorul ramane cum era).
+# Dupa repornire, Reporneste in alta imagine arata Recovery (imaginea de acum); locurile goale nu apar.
+KEXEC_PLACI = {   # placa BOLT -> (masina, partitia nucleului, partitia radacinii)
+	"solo4k": ("vusolo4k", "mmcblk0p1", "mmcblk0p4"),
+	"uno4k": ("vuuno4k", "mmcblk0p1", "mmcblk0p4"),
+	"uno4kse": ("vuuno4kse", "mmcblk0p1", "mmcblk0p4"),
+	"ultimo4k": ("vuultimo4k", "mmcblk0p1", "mmcblk0p4"),
+	"zero4k": ("vuzero4k", "mmcblk0p4", "mmcblk0p7"),
+	"duo4k": ("vuduo4k", "mmcblk0p6", "mmcblk0p9"),
+	"duo4kse": ("vuduo4kse", "mmcblk0p6", "mmcblk0p9"),
+}
+KEXEC_NUCLEU = "usr/bin/kernel_auto.bin"
+KEXEC_INITRD = "usr/bin/STARTUP.cpio.gz"
+KEXEC_MODEL = "usr/share/kexec-multiboot/model"
+KEXEC_PACHET = "kexec-multiboot-%s"
+KEXEC_COPIE = "zImage"
+# Fisierul-semn pus de tester: pana la prima proba pe un Vu+ 4K adevarat intrarea (meniul Putere, cardul din
+# /alimentare) apare numai cu el sau cu pachetul masinii instalat deja (KXH 15.11.2026).
+KEXEC_SEMN_PROBA = "etc/enigma2/hds-kexec-proba"
+KEXEC_MARGINE = 4 * 1024 * 1024        # loc ramas liber in / dupa copii
+KEXEC_NUCLEU_MAXIM = 64 * 1024 * 1024  # nicio partitie de nucleu Vu+ 4K nu e mai mare
+KEXEC_SABLOANE = (
+	(RECOVERY, "kernel=/zImage root=/dev/%(rad)s rootsubdir=linuxrootfs0"),
+	("STARTUP_1", "kernel=/linuxrootfs1/zImage root=/dev/%(rad)s rootsubdir=linuxrootfs1"),
+	("STARTUP_2", "kernel=/linuxrootfs2/zImage root=/dev/%(rad)s rootsubdir=linuxrootfs2"),
+	("STARTUP_3", "kernel=/linuxrootfs3/zImage root=/dev/%(rad)s rootsubdir=linuxrootfs3"),
+	(FISIER_STARTUP, "kernel=/zImage root=/dev/%(rad)s rootsubdir=linuxrootfs0"),
+)
+KEXEC_TITLU = N_("Pornire multiplă Vu+ (Kexec)")
+KEXEC_DESPRE = N_("Pornirea multiplă Kexec ține mai multe imagini pe receptor. Imaginea de acum rămâne în memorie ca "
+	"Recovery, iar în locurile 1, 2 și 3 (și pe stick sau HDD) poți pune alte imagini. Alegi imaginea din Repornește în "
+	"altă imagine sau din meniul de la pornire (tasta MENU). Instalarea descarcă fișierele, scrie încărcătorul Kexec în "
+	"partiția nucleului (nucleul de acum rămâne păstrat pentru Recovery) și repornește receptorul.")
+KEXEC_BUTON = N_("Instalează")
+KEXEC_INTREBARE = N_("Instalez pornirea multiplă Kexec? Receptorul scrie încărcătorul Kexec în partiția nucleului și "
+	"repornește. Nu-l opri în timpul instalării. Continui?")
+KEXEC_DESCARC = N_("Descarc fișierele pornirii multiple...")
+KEXEC_SCRIU = N_("Instalez pornirea multiplă. Nu opri receptorul...")
+KEXEC_GATA = N_("Pornirea multiplă Kexec e instalată. Receptorul repornește.")
+KEXEC_DEJA = N_("Pornirea multiplă Kexec e deja instalată pe acest receptor.")
+KEXEC_NU_FLASH = N_("Receptorul nu pornește acum direct din memoria lui, deci nu instalez pornirea multiplă.")
+KEXEC_NU_VU = N_("Pornirea multiplă Kexec se instalează numai pe receptoarele Vu+ 4K.")
+KEXEC_FARA_PACHET = N_("Nu am putut descărca fișierele pornirii multiple. Verifică internetul și încearcă din nou.")
+KEXEC_ALT_MODEL = N_("Fișierele pornirii multiple sunt pentru alt receptor, deci nu le scriu.")
+KEXEC_FISIERE_RELE = N_("Fișierele pornirii multiple nu sunt bune, deci nu le scriu.")
+KEXEC_NUCLEU_NECUNOSCUT = N_("Nu recunosc nucleul din partiția receptorului, deci nu scriu nimic.")
+KEXEC_LOC = N_("Nu e destul loc liber în memoria receptorului pentru copia nucleului.")
+KEXEC_EROARE = N_("Instalarea nu a reușit. Receptorul rămâne cum era.")
+KEXEC_NEREPUS = N_("Scrierea nucleului a eșuat și nucleul vechi nu s-a putut pune la loc. Nu reporni receptorul: pune "
+	"imaginea Vu+ pe un stick USB și pornește receptorul de pe el.")
+
+
+def kexecPlaca(radacina=None):
+	"""(masina, partitia nucleului, partitia radacinii) pentru un Vu+ 4K cunoscut, altfel None."""
+	placa = _text(_cale(radacina, "proc/device-tree/bolt/board"), 64).replace("\0", "").strip().lower()
+	return KEXEC_PLACI.get(placa)
+
+
+def _kexecDinFlash(rad, radacina=None):
+	"""Pornit direct din partitia radacinii placii: root= din linia de comanda si / montat ext4 rw din ea (sau /dev/root)."""
+	cmd = parametri(linieComanda(radacina))
+	if cmd.get("root") != "/dev/" + rad or cmd.get("rootsubdir") or cmd.get("kexec"):
+		return False
+	for rand in _text(_cale(radacina, "proc/mounts")).splitlines():
+		c = rand.split()
+		if len(c) >= 4 and c[1] == "/" and c[0] in ("/dev/" + rad, "/dev/root") and c[2] == "ext4" and \
+			"rw" in c[3].split(","):
+			return True
+	return False
+
+
+def _kexecPusDeja(radacina=None):
+	if parametri(linieComanda(radacina)).get("kexec") == "1" or _dosarKexec(radacina):
+		return True
+	nume = (FISIER_STARTUP, RECOVERY, O_DATA, "STARTUP_1", "STARTUP.cpio.gz")
+	return any(os.path.lexists(_cale(radacina, os.path.join(d, n))) for d in ("", "boot") for n in nume)
+
+
+def kexecStare(radacina=None):
+	"""{"vu4k", "instalabil", "masina", "pachet", "fisiere", "aratat", "motiv"}. instalabil: Vu+ 4K cunoscut, pornit
+	direct din flash, fara pornire multipla. fisiere: pachetul e instalat si e pentru aceasta masina. aratat: instalabil si
+	(fisiere sau semnul testerului KEXEC_SEMN_PROBA): intrarea din meniu si cardul din web. motiv: de ce nu se instaleaza."""
+	p = kexecPlaca(radacina)
+	if not p:
+		return {"vu4k": False, "instalabil": False, "masina": "", "pachet": "", "fisiere": False, "aratat": False,
+			"motiv": KEXEC_NU_VU}
+	masina, _nucleu, rad = p
+	rez = {"vu4k": True, "instalabil": False, "masina": masina, "pachet": KEXEC_PACHET % masina, "fisiere": False,
+		"motiv": ""}
+	if _kexecPusDeja(radacina):
+		rez["motiv"] = KEXEC_DEJA
+	elif not _kexecDinFlash(rad, radacina):
+		rez["motiv"] = KEXEC_NU_FLASH
+	else:
+		rez["instalabil"] = True
+	rez["fisiere"] = (_text(_cale(radacina, KEXEC_MODEL), 64).strip() == masina and
+		os.path.isfile(_cale(radacina, KEXEC_NUCLEU)) and os.path.isfile(_cale(radacina, KEXEC_INITRD)))
+	rez["aratat"] = rez["instalabil"] and (rez["fisiere"] or os.path.isfile(_cale(radacina, KEXEC_SEMN_PROBA)))
+	return rez
+
+
+def kexecInstalabil(radacina=None):
+	"""Pentru SystemInfo["HdsKexecInstalabil"] (intrarea din meniul Putere si cardul din web): numai cu pachetul
+	instalat sau cu semnul testerului (kexecStare, aratat)."""
+	try:
+		return kexecStare(radacina)["aratat"]
+	except Exception as e:
+		_log("kexec: %r" % (e,))
+		return False
+
+
+def kexecComandaPachet(masina):
+	"""Comanda care aduce pachetul masinii din feedul extern (rulata de ecran sau de web, nu aici)."""
+	if masina not in [v[0] for v in KEXEC_PLACI.values()]:
+		raise ValueError(masina)
+	return "opkg update; opkg install %s" % (KEXEC_PACHET % masina)
+
+
+def _kexecDispozitiv(cale, radacina):
+	"""Partitia nucleului e un dispozitiv bloc (pe PC, in probe, un fisier obisnuit sub `radacina`)."""
+	try:
+		m = os.stat(cale).st_mode
+	except OSError:
+		return False
+	return stat.S_ISBLK(m) or (radacina is not None and stat.S_ISREG(m))
+
+
+def _kexecScrieFisier(cale, date):
+	with open(cale + ".nou", "wb") as f:
+		f.write(date)
+		f.flush()
+		os.fsync(f.fileno())
+	os.replace(cale + ".nou", cale)
+	return _citeste(cale, len(date) + 1) == date
+
+
+def _kexecScriePartitie(cale, date):
+	"""Fara O_CREAT si fara O_TRUNC; fsync, apoi citit inapoi si comparat."""
+	fd = os.open(cale, os.O_RDWR)
+	try:
+		os.lseek(fd, 0, os.SEEK_SET)
+		scris = 0
+		while scris < len(date):
+			scris += os.write(fd, date[scris:])
+		os.fsync(fd)
+	finally:
+		os.close(fd)
+	if hasattr(os, "sync"):
+		os.sync()
+	return _citeste(cale, len(date)) == date
+
+
+def kexecInstaleaza(radacina=None):
+	"""Pasii din antetul sectiunii. (True, text) sau (False, motivul); la False receptorul ramane cum era."""
+	st = kexecStare(radacina)
+	if not st["instalabil"]:
+		return False, _(st["motiv"] or KEXEC_EROARE)
+	masina, nucleu, rad = kexecPlaca(radacina)
+	if _text(_cale(radacina, KEXEC_MODEL), 64).strip() != masina:
+		return False, _(KEXEC_ALT_MODEL if os.path.isfile(_cale(radacina, KEXEC_MODEL)) else KEXEC_FARA_PACHET)
+	nou = _citeste(_cale(radacina, KEXEC_NUCLEU), KEXEC_NUCLEU_MAXIM + 1)
+	initrd = _citeste(_cale(radacina, KEXEC_INITRD), KEXEC_NUCLEU_MAXIM + 1)
+	dispozitiv = _cale(radacina, "dev/" + nucleu)
+	marime = _marimePartitie("/dev/" + nucleu, radacina)
+	if not nou or not initrd or initrd[:2] != b"\x1f\x8b" or not _nucleuKexec(_cale(radacina, KEXEC_NUCLEU)) or \
+		not marime or len(nou) > marime:
+		return False, _(KEXEC_FISIERE_RELE)
+	if marime > KEXEC_NUCLEU_MAXIM or not _kexecDispozitiv(dispozitiv, radacina) or \
+		not _nucleuKexec(dispozitiv, marime):
+		return False, _(KEXEC_NUCLEU_NECUNOSCUT)
+	vechi = _citeste(dispozitiv, marime)
+	if not vechi or len(vechi) != marime:
+		return False, _(KEXEC_NUCLEU_NECUNOSCUT)
+	dosar = _cale(radacina, "/")
+	try:
+		sv = os.statvfs(dosar)
+		if sv.f_bavail * sv.f_frsize < marime + len(initrd) + KEXEC_MARGINE:
+			return False, _(KEXEC_LOC)
+	except (AttributeError, OSError):
+		pass
+	puse = []
+	try:
+		for nume, date in ((KEXEC_COPIE, vechi), ("STARTUP.cpio.gz", initrd)):
+			puse.append(nume)
+			if not _kexecScrieFisier(os.path.join(dosar, nume), date):
+				raise IOError("%s nu se citeste inapoi la fel" % nume)
+		for nume, sablon in KEXEC_SABLOANE:
+			puse.append(nume)
+			if not _scrieAtomic(dosar, nume, (sablon % {"rad": rad} + "\n").encode("ascii")):
+				raise IOError("%s nu se citeste inapoi la fel" % nume)
+		try:
+			bun = _kexecScriePartitie(dispozitiv, nou)
+		except (IOError, OSError) as e:
+			_log("kexec: scrierea partitiei nucleului: %r" % (e,))
+			bun = False
+		if not bun:
+			_log("kexec: partitia nucleului nu se citeste inapoi la fel; pun la loc nucleul vechi")
+			try:
+				restaurat = _kexecScriePartitie(dispozitiv, vechi)
+			except (IOError, OSError):
+				restaurat = False
+			if not restaurat:
+				# /zImage si STARTUP* raman: cu ele receptorul se poate repara de pe stick
+				_log("kexec: NUCLEUL VECHI NU S-A PUTUT PUNE LA LOC; raman /%s si STARTUP*" % KEXEC_COPIE)
+				return False, _(KEXEC_NEREPUS)
+			raise IOError("partitia nucleului")
+	except (IOError, OSError) as e:
+		_log("kexec: %r" % (e,))
+		for nume in puse:
+			for n in (nume, nume + ".nou", NOU if nume == FISIER_STARTUP else None):
+				if n:
+					try:
+						os.remove(os.path.join(dosar, n))
+					except OSError:
+						pass
+		return False, _(KEXEC_EROARE)
+	_log("kexec instalat pe %s: %s in %s (%d o), nucleul vechi in /%s" % (masina, KEXEC_NUCLEU, nucleu, len(nou), KEXEC_COPIE))
+	return True, _(KEXEC_GATA)

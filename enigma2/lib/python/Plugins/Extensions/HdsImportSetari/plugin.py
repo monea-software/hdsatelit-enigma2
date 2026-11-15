@@ -254,6 +254,15 @@ class HdsImportSetariScreen(Screen):
 			text = _("Se caută copiile pe stick-uri, discuri și în memoria receptorului…")
 		else:
 			text = surse_import.text_fara_surse()
+		if not self._cauta:
+			# arhivele de copie sărite la căutare (nu se pot citi): omul află de ce copia lui nu apare în listă
+			try:
+				necitite = surse_import.text_necitite(surse_import.stare().get("necitite"))
+			except Exception as eroare:
+				print("[HdsImportSetari] arhivele necitite: %s" % eroare)
+				necitite = []
+			if necitite:
+				text = "\n".join([text] + necitite)
 		try:
 			randuri = HdsSetariDinCopie.texteStare(self._stare_setari) if self._stare_setari else []
 		except Exception as eroare:

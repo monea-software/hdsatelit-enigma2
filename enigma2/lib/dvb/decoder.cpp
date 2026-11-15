@@ -350,6 +350,40 @@ static int hisiVideoCount = 0; /* live eDVBVideo objects, on all decoders */
 static std::string hisiPictureFile; /* file of the open picture, kept while hisiPictureOwner is set */
 
 #endif
+#if HAVE_HISILICON_LIBREADER
+// ==== HDS_ASPECT_DVB_INCEPUT ====
+/* The aspect of a DVB picture that changes only its aspect (an SD channel at 720x576 going from 16:9 to 4:3 for the
+   adverts and back): the driver of these boards sends no new VIDEO_EVENT_SIZE_CHANGED, so m_aspect, and with it sAspect
+   and the 16:9 / 4:3 sign of the bar, stayed on the first event. /proc/stb/vmpeg/N/aspect follows the picture, as
+   measured on the Octagon SF8008 on DVB (MPEG-2 and H.264 with a SAR, 16:9 -> 4:3 -> 16:9): it writes the ETSI code
+   itself, 2 for 4:3 and 3 for 16:9, while xres and yres stay the same. So, after the first size event of the decoder,
+   the file is read once every INTERVAL_MS and a change between 2 and 3, read the same twice in a row (a value read
+   while the driver is still changing it is not told), is told as a size event with the size already known; anything
+   else is left alone (the event of the driver stays the source of the size). Only plain arithmetic here, so the tests
+   can read it alone. */
+namespace hdsaspectdvb
+{
+enum { INTERVAL_MS = 1000 };
+/* the new aspect to tell, or -1: only a change between the two ETSI codes this driver writes, seen on two reads in a
+   row (pending keeps the first of them, -1 when there is none) */
+inline int changed(int held, int proc, int &pending)
+{
+	if (!(held == 2 || held == 3) || !(proc == 2 || proc == 3) || proc == held)
+	{
+		pending = -1;
+		return -1;
+	}
+	if (pending != proc)
+	{
+		pending = proc;
+		return -1;
+	}
+	pending = -1;
+	return proc;
+}
+}
+// ==== HDS_ASPECT_DVB_SFARSIT ====
+#endif
 eDVBVideo::eDVBVideo(eDVBDemux *demux, int dev)
 	: m_demux(demux), m_dev(dev),
 	m_width(-1), m_height(-1), m_framerate(-1), m_aspect(-1), m_progressive(-1), m_gamma(-1)
@@ -388,6 +422,11 @@ eDVBVideo::eDVBVideo(eDVBDemux *demux, int dev)
 		}
 		else
 			hdsjdecodor::sursaDemux("video", dev);
+		/* the aspect followed from /proc (hdsaspectdvb): started by the first size event of this decoder (video_event),
+		   stopped in stop() */
+		m_hds_aspect_pending = -1;
+		m_hds_aspect_timer = eTimer::create(eApp);
+		CONNECT(m_hds_aspect_timer->timeout, eDVBVideo::hdsFollowAspect);
 #endif
 	}
 	eDebug("Video Device: %s", filename);
@@ -570,6 +609,11 @@ void eDVBVideo::stop()
 		eDebug("failed (%m)");
 	else
 		eDebug("ok");
+#if HAVE_HISILICON_LIBREADER
+	if (m_hds_aspect_timer)
+		m_hds_aspect_timer->stop();
+	m_hds_aspect_pending = -1;
+#endif
 }
 
 void eDVBVideo::flush()
@@ -671,6 +715,10 @@ void eDVBVideo::video_event(int)
 			m_width = event.width = evt.u.size.w;
 			hdsjdecodor::evenimentVideo(m_dev, 1, m_width, m_height, m_aspect);
 			/* emit */ m_event(event);
+#if HAVE_HISILICON_LIBREADER
+			if (m_hds_aspect_timer && !m_hds_aspect_timer->isActive())
+				m_hds_aspect_timer->start(hdsaspectdvb::INTERVAL_MS, false);
+#endif
 		}
 		else if (evt.type == VIDEO_EVENT_FRAME_RATE_CHANGED)
 		{
@@ -738,6 +786,29 @@ static int readMpegProc(const char *str, int decoder)
 	return val;
 }
 
+#if HAVE_HISILICON_LIBREADER
+/* the timer of hdsaspectdvb: a decoder without the file (no vmpeg/N for it) stops reading it */
+void eDVBVideo::hdsFollowAspect()
+{
+	int proc = readMpegProc("aspect", m_dev);
+	if (proc < 0)
+	{
+		m_hds_aspect_timer->stop();
+		return;
+	}
+	int aspect = hdsaspectdvb::changed(m_aspect, proc, m_hds_aspect_pending);
+	if (aspect < 0)
+		return;
+	struct iTSMPEGDecoder::videoEvent event;
+	event.type = iTSMPEGDecoder::videoEvent::eventSizeChanged;
+	m_aspect = event.aspect = aspect;
+	event.width = m_width;
+	event.height = m_height;
+	eDebug("[eDVBVideo] aspect %d from /proc/stb/vmpeg/%d/aspect, no driver event", m_aspect, m_dev);
+	hdsjdecodor::evenimentVideo(m_dev, 1, m_width, m_height, m_aspect);
+	/* emit */ m_event(event);
+}
+#endif
 static int readApiSize(int fd, int &xres, int &yres, int &aspect)
 {
 #if HAVE_DVB_API_VERSION >= 3

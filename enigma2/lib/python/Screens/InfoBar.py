@@ -278,6 +278,14 @@ def hdsFaActiuneaLunga(ecran, actiune):
 			ecran.session.open(MessageBox,
 				_("Canalul de acum nu vine de pe un transponder (de exemplu IPTV sau o înregistrare)."),
 				MessageBox.TYPE_INFO, timeout=6)
+	elif actiune == "channel_history":
+		# lista canalelor recente (Screens/HdsIstoricCanale.py); OK porneste canalul ales
+		from Screens.HdsIstoricCanale import HdsIstoricCanale
+		ecran.session.open(HdsIstoricCanale, ecran)
+	elif actiune == "mozaic":
+		# toate canalele TV ale transponderului canalului de acum, pe 2, 4 sau 9 celule (Screens/HdsMozaic.py)
+		from Screens.HdsMozaic import HdsMozaic
+		ecran.session.open(HdsMozaic, ecran)
 	elif actiune == "movies":
 		ecran.showMovies()
 	elif actiune == "record":
@@ -775,11 +783,11 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		if tasta.startswith("number_") and self.timeshift_enabled:
 			return False
 		# Volumul sau canalul pe STANGA/DREAPTA lasa sagetile derularii (timeshift, pauza) si celei de-a doua bare, ca
-		# setarea "Stanga si dreapta la privit" (_hdsTastePrivitActive).
+		# setarea "Stanga si dreapta la privit" (_hdsTastePrivitActive); un flux de internet in direct nu e derulare (_hdsFluxInDirect).
 		if tasta in ("left", "right"):
 			from Components.HdsTasteRapide import actiune_aleasa
 			if actiune_aleasa(tasta + "_short") in ("volume_up", "volume_down", "zap_next", "zap_previous") and \
-					not self._hdsTastePrivitActive():
+					not self._hdsTastePrivitActive() and not getattr(self, "_hdsFluxInDirect", lambda: False)():
 				return False
 		return True
 

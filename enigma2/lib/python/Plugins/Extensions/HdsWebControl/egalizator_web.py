@@ -335,6 +335,7 @@ PAGINA = """<!DOCTYPE html>
       <button type="button" id="manual">Reglaj manual</button>
       <label class="comutator" id="rand_post"><input type="checkbox" id="pe_post"> <span id="text_post">Pentru acest post</span></label>
       <label class="comutator">Efecte speciale <select id="efecte"></select></label>
+      <label class="comutator">La canalele TV <select id="tv"><option value="1">Da</option><option value="0">Nu</option></select></label>
     </div>
     <p class="nota">Oprit din fabrică. Lucrează numai la posturile cu sunet MPEG (MP2), radio și TV. Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l.</p>
     <p class="nota ascuns" id="comprimare">Comprimare activă. Alegi altă presetare sau modifici o coloană pentru a o opri.</p>
@@ -355,7 +356,6 @@ PAGINA = """<!DOCTYPE html>
       <table>
         <tr><td class="e">Volumul telecomenzii</td><td><select id="volum"></select></td></tr>
         <tr><td class="e">Placa de sunet (ALSA)</td><td><input type="text" id="placa" maxlength="64"> <button type="button" id="pune_placa">Pune</button></td></tr>
-        <tr><td class="e">La canalele TV</td><td><select id="tv"><option value="1">Da</option><option value="0">Nu</option></select></td></tr>
         <tr><td class="e">Potrivirea cu imaginea la TV</td><td><select id="potrivire_tv"></select></td></tr>
       </table>
       <p class="nota">Automat: receptorul vede singur dacă volumul telecomenzii se aplică și sunetului cu egalizator. Placa de sunet rămâne „default”, afară de probe.</p>

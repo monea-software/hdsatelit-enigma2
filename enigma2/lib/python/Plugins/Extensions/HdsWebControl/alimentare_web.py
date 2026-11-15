@@ -37,6 +37,12 @@
 #   POST /api/alimentare-fa?ce=flash&loc=<N>&pas=intreaba / &cod=<cod>   alegerea imaginii din locul N (cifre; Recovery
 #                                                          kexec e locul 0, din STARTUP_RECOVERY): STARTUP scris
 #                                                          (HdsPornireMultipla.reporneste), apoi TryQuitMainloop 2
+#   GET  /api/pornire-multipla-kexec                       Vu+ 4K fara pornire multipla: se poate instala Kexec, de ce nu
+#                                                          (instalabil = kexecStare aratat, ca HdsKexecInstalabil: KXH)
+#                                                          si comenzile de mai jos refuza fara aratat (acelasi motiv)
+#   POST /api/pornire-multipla-kexec-fa  ce=pachet         pe un fir: pachetul kexec-multiboot-<masina> din feedul extern
+#                                        ce=instaleaza     verificarile si scrierea (HdsPornireMultipla.kexecInstaleaza),
+#                                                          apoi TryQuitMainloop 2 (cardul kexec, ca ecranul HdsKexecInstalare)
 #   GET  /alimentare[?f=...]                                pagina
 #
 # FIRUL: pe firul enigma2 si scurt (cateva atribute, o cautare in ghidul TV), in afara de lista imaginilor, citita pe un
@@ -50,10 +56,12 @@ CHEI_FA = ("ce", "pas", "cod", "loc")
 CACHE_IMAGINI_S = 15
 TIMP_FIR_IMAGINI_S = 60
 # ?f= din meniul web -> cardul paginii (aceleasi chei ca HdsAlimentare.ACTIUNI, plus somn)
-CARDURI = ("somn", "standby", "interfata", "receptor", "flash", "oprire")
+CARDURI = ("somn", "standby", "interfata", "receptor", "flash", "kexec", "oprire")
 # entryID-urile din data/menu.xml, pentru drumul de pe televizor al fiecarui card
 INTRARI = {"somn": "sleep", "standby": "standby", "interfata": "restart_enigma", "receptor": "restart",
-	"flash": "return_to_flash", "oprire": "deep_standby"}
+	"flash": "return_to_flash", "kexec": "kexec_multiboot", "oprire": "deep_standby"}
+TIMP_FIR_KEXEC_S = 600
+CHEI_KEXEC = ("ce",)
 
 
 def _mc():
@@ -213,6 +221,70 @@ def _faraSesiune():
 		"apoi încearcă din nou.")
 
 
+def _cardVizibil(ce, SI):
+	if ce == "flash":
+		return bool(SI.get("HdsMultiboot"))
+	if ce == "kexec":
+		return bool(SI.get("HdsKexecInstalabil"))
+	return True
+
+
+_descarcareKexec = [False]
+
+
+def _kexecRefuz(PM, st):
+	"""De ce nu se arata (si nu se face) instalarea Kexec: motivul garzilor, altfel KEXEC_EROARE (poarta KXH: fara
+	pachetul masinii si fara semnul testerului). Acelasi text in GET si in comanda directa."""
+	return _t(st["motiv"] or PM.KEXEC_EROARE)
+
+
+def kexec(PM=None):
+	"""Pentru GET /api/pornire-multipla-kexec: se poate instala pornirea multipla Kexec (si de ce nu)."""
+	PM = _pm(PM)
+	st = PM.kexecStare()
+	return {"result": True, "instalabil": st["aratat"], "masina": st["masina"], "fisiere": st["fisiere"],
+		"motiv": "" if st["aratat"] else _kexecRefuz(PM, st), "despre": _t(PM.KEXEC_DESPRE),
+		"intrebare": _t(PM.KEXEC_INTREBARE)}
+
+
+def kexecPachet(PM=None, ruleaza=None):
+	"""Pe un fir: aduce pachetul masinii din feedul extern, daca nu e deja (opkg poate dura)."""
+	PM = _pm(PM)
+	st = PM.kexecStare()
+	if not st["aratat"]:   # poarta KXH: comanda directa fara pachet si fara semn nu descarca nimic
+		return {"result": False, "message": _kexecRefuz(PM, st)}
+	if not st["fisiere"]:
+		if ruleaza is None:
+			import subprocess
+
+			def ruleaza(comanda):
+				return subprocess.call(comanda, shell=True)
+		ruleaza(PM.kexecComandaPachet(st["masina"]))
+		if not PM.kexecStare()["fisiere"]:
+			return {"result": False, "message": _t(PM.KEXEC_FARA_PACHET)}
+	return {"result": True, "fisiere": True, "message": _t(PM.KEXEC_SCRIU)}
+
+
+def kexecInstaleaza(sesiune, PM=None, Standby=None, fabrica_ceas=None, A=None):
+	"""Pe firul enigma2: verificarile si scrierea (o secunda sau doua), apoi repornirea dupa DUPA_MS."""
+	PM = _pm(PM)
+	if sesiune is None:
+		return {"result": False, "message": _faraSesiune()}
+	st = PM.kexecStare()
+	if not st["aratat"]:   # poarta KXH, ca in kexecPachet: nimic scris
+		return {"result": False, "message": _kexecRefuz(PM, st)}
+	ok, text = PM.kexecInstaleaza()
+	if not ok:
+		return {"result": False, "message": text}
+	S = _standby(Standby)
+
+	def acum():
+		sesiune.open(S.TryQuitMainloop, 2)
+
+	_a(A).programeaza(acum, DUPA_MS, fabrica_ceas, nume="kexec")
+	return {"result": True, "message": text}
+
+
 def stare(A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_manager=None):
 	"""Pentru GET /api/alimentare."""
 	A = _a(A)
@@ -240,7 +312,7 @@ def stare(A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_
 		"minute_min": minim,
 		"minute_max": maxim,
 		"durate_uzuale": list(A.DURATE_UZUALE),
-		"carduri": [{"ce": c, "vizibil": c != "flash" or bool(SI.get("HdsMultiboot"))} for c in CARDURI],
+		"carduri": [{"ce": c, "vizibil": _cardVizibil(c, SI)} for c in CARDURI],
 	}
 
 
@@ -464,6 +536,36 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
+	class KexecResource(baza):
+		"""GET /api/pornire-multipla-kexec: numai citire."""
+
+		def render_GET(self, request):
+			try:
+				return self._raspunde(request, kexec(PM))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+	class KexecFaResource(baza):
+		"""POST ce=pachet (pe un fir) sau ce=instaleaza (pe firul enigma2), numai din browser."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			refuz = MC.numaiBrowser(request)
+			if refuz:
+				return self._eroare(request, refuz, 403)
+			try:
+				ce = MC.argumente(request, CHEI_KEXEC, 16).get("ce", "")
+				if ce == "pachet":
+					return MC.peFir(request, lambda: kexecPachet(PM), _descarcareKexec, TIMP_FIR_KEXEC_S, fabrica_ceas)
+				if ce == "instaleaza":
+					return self._raspunde(request, kexecInstaleaza(_ses(), PM, Standby, fabrica_ceas, A))
+				return self._eroare(request, _t("Eroare pe receptor: %s") % ce, 400)
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # cu ?token= refuzat; din browser poarta cere POST
+
 	class PaginaResource(resource.Resource):
 		"""GET /alimentare: pagina Standby si repornire."""
 		isLeaf = True
@@ -476,6 +578,8 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 		b"alimentare-somn": SomnResource(),
 		b"alimentare-fa": FaResource(),
 		b"pornire-multipla": ImaginiResource(),
+		b"pornire-multipla-kexec": KexecResource(),
+		b"pornire-multipla-kexec-fa": KexecFaResource(),
 	}
 	return api, {b"alimentare": PaginaResource()}
 
@@ -564,6 +668,12 @@ __STIL_PAGINI__
       <div id="imaginiLista"></div>
       <p class="nota">Receptorul repornește în imaginea aleasă, din memoria lui sau de pe card ori stick. Pe receptor: __DRUM_FLASH__.</p>
     </section>
+    <section class="card ascuns" id="card-kexec">
+      <h2>Pornire multiplă Vu+ (Kexec)</h2>
+      <p class="nota" id="kexecNota">Se citește starea...</p>
+      <div class="butoane"><button type="button" class="rosu ascuns" id="kexecInstaleaza">Instalează</button></div>
+      <p class="nota">Pe televizor: __DRUM_KEXEC__.</p>
+    </section>
     <section class="card" id="card-oprire">
       <h2>Oprire completă</h2>
       <p class="nota">Receptorul se oprește de tot și se pornește din nou din butonul de pornire al telecomenzii. Pe televizor: __DRUM_OPRIRE__.</p>
@@ -615,6 +725,7 @@ function arata(d){
   }
   (d.carduri || []).forEach(function(c){ var e = $("card-" + c.ce); if(e){ e.classList.toggle("ascuns", !c.vizibil); } });
   if(!imaginiCitite && !$("card-flash").classList.contains("ascuns")){ citesteImagini(); }
+  if(!kexecCitit && !$("card-kexec").classList.contains("ascuns")){ citesteKexec(); }
   var b = document.querySelector("button[data-fa=standby]"); if(b){ b.disabled = !!r.standby; }
 }
 var imaginiCitite = false;
@@ -637,6 +748,34 @@ function citesteImagini(){
     });
   }).catch(function(){ $("imaginiNota").textContent = "Receptorul nu a putut citi starea."; });
 }
+var kexecCitit = false, kexecIntrebare = "";
+function citesteKexec(){
+  kexecCitit = true;
+  cerere("/api/pornire-multipla-kexec").then(function(d){
+    scrie("kexecNota", d.result ? (d.instalabil ? d.despre : d.motiv) : (d.message || ""));
+    kexecIntrebare = d.intrebare || "";
+    $("kexecInstaleaza").classList.toggle("ascuns", !(d.result && d.instalabil));
+  }).catch(function(){ scrie("kexecNota", "Receptorul nu a putut citi starea."); });
+}
+function instaleazaKexec(){
+  if(!window.confirm(kexecIntrebare)){ return; }
+  $("kexecInstaleaza").disabled = true;
+  scrie("kexecNota", "Descarc fișierele pornirii multiple...");
+  var q = new URLSearchParams(); q.set("ce", "pachet");
+  cerere("/api/pornire-multipla-kexec-fa", "POST", q).then(function(d){
+    if(!d.result){ throw d; }
+    scrie("kexecNota", d.message);
+    var q2 = new URLSearchParams(); q2.set("ce", "instaleaza");
+    return cerere("/api/pornire-multipla-kexec-fa", "POST", q2);
+  }).then(function(d){
+    if(!d.result){ throw d; }
+    scrie("kexecNota", d.message); asteaptaRevenirea();
+  }).catch(function(d){
+    $("kexecInstaleaza").disabled = false;
+    scrie("kexecNota", (d && d.message) || "Receptorul nu a putut citi starea.");
+  });
+}
+$("kexecInstaleaza").addEventListener("click", instaleazaKexec);
 function faImagine(loc){
   var q = new URLSearchParams(); q.set("ce", "flash"); q.set("loc", loc);
   cuConfirmare("/api/alimentare-fa", q, function(d){
@@ -757,6 +896,10 @@ TEXTE_PAGINA = {
 		N_("Receptorul se oprește de tot și se pornește din nou din butonul de pornire al telecomenzii. Pe "
 			"televizor: __DRUM_OPRIRE__."),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
+		N_("Pornire multiplă Vu+ (Kexec)"),
+		N_("Se citește starea..."),
+		N_("Instalează"),
+		N_("Pe televizor: __DRUM_KEXEC__."),
 	),
 	"js": (
 		N_("Dezactivat"),
@@ -772,6 +915,7 @@ TEXTE_PAGINA = {
 		N_("Se trimite..."),
 		N_("Nu se poate afla sfârșitul emisiunii sau al filmului. Alege o durată."),
 		N_("Pornește"),
+		N_("Descarc fișierele pornirii multiple..."),
 	),
 }
 

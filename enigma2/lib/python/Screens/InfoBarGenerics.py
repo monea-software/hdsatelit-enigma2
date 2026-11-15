@@ -573,7 +573,17 @@ config.usage.hds_pornire = ConfigSelection(default="last", choices=[
 	("favorite", N_("Favorite")),
 	("radio", N_("Radio")),
 	("toate", N_("Toate canalele")),
+	# 0.7.5 (LCS, orion_bilo, peretele LinuxSat 7480): canalul ales in lista de canale cu MENU > Pornește pe acest canal
+	# (config.usage.hds_pornire_canal, Components/HdsListaSetari.py) sau din web (/canale)
+	("canal", N_("Un canal ales")),
 ])
+# MLW (0.7.5): cu Un canal ales, randul arata si numele canalului (starea setarii, deasupra ajutorului, pe televizor si in
+# web; Components/HdsListaSetari.stare_pornire)
+try:
+	from Components.HdsListaSetari import stare_pornire as _hdsStarePornire
+	config.usage.hds_pornire.hdsStare = _hdsStarePornire
+except ImportError:
+	pass
 
 
 class InfoBarChannelSelection:
@@ -724,6 +734,9 @@ class InfoBarChannelSelection:
 		# se trece la urmatoarea optiune din lant, pana una chiar are continut. Lantul incepe cu
 		# optiunea aleasa, apoi restul, in ordinea din meniul de Setari (fara repetare).
 		self._hdsLantPornire = [alegere] + [o for o in ("last", "allsat", "toate", "favorite", "radio") if o != alegere]
+		if alegere == "canal":
+			# canalul ales lipseste (sters, alta lista): ca inainte, ultimul canal urmarit si restul lantului
+			self._hdsLantPornire = ["canal", "last", "allsat", "toate", "favorite", "radio"]
 		self._hdsIncercarePornire(0)
 
 	def _hdsIncercarePornire(self, index):
@@ -747,6 +760,23 @@ class InfoBarChannelSelection:
 				MessageBox, _("Niciun canal găsit. Mergi la Scanare canale din Meniu."), MessageBox.TYPE_INFO, timeout=10)
 			return
 		incercare = lant[index]
+		if incercare == "canal":
+			ref_text = getattr(config.usage, "hds_pornire_canal", None) and config.usage.hds_pornire_canal.value
+			if ref_text:
+				ref = eServiceReference(ref_text)
+				if ref.valid() and self._hdsServiciulExista(ref):
+					try:
+						from Components.HdsCanalTinut import e_radio
+						radio = e_radio(ref)
+					except ImportError:
+						radio = False
+					if radio:
+						# un post de radio: lista radio, ca la zap-ul din lista, apoi postul
+						self.servicelist.setModeRadio()
+					self.session.nav.playService(ref)
+					return
+			self._hdsIncercarePornire(index + 1)
+			return
 		if incercare == "last":
 			ref_text = config.tv.lastservice.value
 			if ref_text:
@@ -826,7 +856,55 @@ class InfoBarChannelSelection:
 		radio = getattr(self, "hdsRadio", None)
 		if radio is not None and radio.radio:
 			return True
+		separat = getattr(self, "_hdsRadioSeparat", None)
+		if separat is not None and separat():
+			return True
 		return getattr(self.servicelist, "mode", 0) == 1
+
+	def _hdsRadioSeparat(self):
+		"""Merge un post de radio (tip de serviciu 2 sau 0x0A in referinta: radio prin satelit, DAB+ din satelit, radio
+		online), iar radioul are lista lui (ChannelSelectionRadio, "mod radio separat" oprit), deci lista barei e pe TV.
+		Numai dupa referinta, nu dupa starea ecranului radio: cu ecranul radio oprit din setari (sau cat harta lui nu
+		e pornita) tastele ajung aici, iar lista barei le-ar duce pe un canal TV (rafejo, Vu+ Uno 4K SE, forumul 801
+		#2183: in lista radio DAB, schimbarea postului ducea in lista TV). Un canal TV numai cu sunet nu e post de radio."""
+		if config.usage.e1like_radio_mode.value or getattr(self.servicelist, "mode", 0) == 1:
+			return False
+		radio = getattr(self, "hdsRadio", None)
+		if radio is not None and getattr(radio, "numai_sunet", False):
+			return False
+		try:
+			from Components import HdsRadioDate as RD
+			ref_text = RD.ref_curenta(self.session)[1]
+			return bool(ref_text) and RD.este_radio_ref(ref_text) and not RD.este_fisier(ref_text)
+		except Exception as e:
+			print("[InfoBarGenerics] postul de radio de acum: %s" % e)
+			return False
+
+	def _hdsZapRadio(self, directie):
+		"""P+ / P- (si stanga / dreapta) pe un post de radio cu lista radio separata: postul urmator (1) sau anterior (-1)
+		din lista radio aleasa ultima data (HdsRadioDate.vecin, ca ecranul radio), nu un canal din lista TV a barii.
+		-> True cand tasta e a radioului (si cand nu exista inca o lista radio aleasa: atunci nu face nimic)."""
+		if not self._hdsRadioSeparat():
+			return False
+		try:
+			from Components import HdsRadioDate as RD
+			nou = RD.vecin(RD.ref_curenta(self.session)[1], directie)
+			if nou is not None:
+				self.session.nav.playService(nou)
+				config.radio.lastservice.value = nou.toString()
+				config.radio.lastservice.save()
+		except Exception as e:
+			print("[InfoBarGenerics] postul de radio urmator: %s" % e)
+		return True
+
+	def _hdsListaRadioSeparata(self):
+		"""Lista de canale ceruta pe un post de radio cu lista radio separata (CH+ / CH- pe telecomenzile care deschid
+		lista, OK cu "lista" la privit): lista radio, cu postul care merge, nu lista TV. -> True daca a deschis-o."""
+		arata_radio = getattr(self, "showRadio", None)
+		if arata_radio is None or not self._hdsRadioSeparat():
+			return False
+		arata_radio()
+		return True
 
 	def _hdsTastePrivitActive(self):
 		"""Doar pe bara activa, fara a doua bara si fara tastele de derulare ale unui film sau timeshift."""
@@ -837,9 +915,40 @@ class InfoBarChannelSelection:
 		derulare = self.get("SeekActions")
 		return not (derulare is not None and derulare.enabled)
 
+	def _hdsFluxInDirect(self):
+		"""Pe bara activa merge un flux de internet in direct (IPTV 4097/5001/5002 din liste sau din buchetele omului), redat normal: cu
+		setarea "volum", stanga/dreapta raman la volum si cand fluxul se poate derula (Ozgur, Vu+ Solo SE, e-mail 6318). Filmele, serialele,
+		emisiunile din arhiva, fisierele, pauza, derularea pornita si timeshift-ul raman la derulare (Components/HdsIptvSurse.fluxInDirect)."""
+		if not self.execing or self.session.current_dialog is not self or self._hdsSecondaVizibila():
+			return False
+		joc = getattr(self, "SEEK_STATE_PLAY", None)
+		if joc is not None and getattr(self, "seekstate", joc) != joc:
+			return False
+		if getattr(self, "timeshift_enabled", False):
+			return False
+		ref = self.session.nav.getCurrentlyPlayingServiceReference()
+		if ref is None:
+			return False
+		try:
+			from Components.HdsIptvSurse import fluxInDirect
+			if not fluxInDirect(ref.type, ref.getPath()):
+				return False
+			serviciu = self.session.nav.getCurrentService()
+			cautare = serviciu and serviciu.seek()
+			lungime = cautare.getLength() if cautare else None
+			# un film sau o emisiune din arhiva are lungime; un flux in direct nu (0 sau eroare)
+			return not (lungime and not lungime[0] and lungime[1] > 0)
+		except Exception as e:
+			print("[InfoBarGenerics] fluxul in direct: %s" % e)
+			return False
+
 	def _hdsVolumPrivit(self, maiTare):
 		alegere = getattr(config.usage, "hds_stanga_dreapta_privire", None)
-		if getattr(alegere, "value", "actual") != "volum" or not self._hdsTastePrivitActive():
+		if getattr(alegere, "value", "actual") != "volum":
+			return 0
+		# getattr: probele de pe PC copiaza numai unele metode pe o bara de proba
+		flux = getattr(self, "_hdsFluxInDirect", None)
+		if not self._hdsTastePrivitActive() and not (flux is not None and flux()):
 			return 0
 		from Components.VolumeControl import VolumeControl
 		volum = VolumeControl.instance
@@ -907,9 +1016,16 @@ class InfoBarChannelSelection:
 		self._hdsSageata(False)
 
 	def openServiceList(self):
+		# getattr: probele de pe PC copiaza numai metodele de aici pe o bara de proba
+		lista_radio = getattr(self, "_hdsListaRadioSeparata", None)
+		if lista_radio is not None and lista_radio():
+			return
 		self.session.execDialog(self.servicelist)
 
 	def zapUp(self):
+		zap_radio = getattr(self, "_hdsZapRadio", None)
+		if zap_radio is not None and zap_radio(-1):
+			return
 		if self.servicelist.inBouquet():
 			prev = self.servicelist.getCurrentSelection()
 			if prev:
@@ -927,6 +1043,9 @@ class InfoBarChannelSelection:
 		self.servicelist.zap()
 
 	def zapDown(self):
+		zap_radio = getattr(self, "_hdsZapRadio", None)
+		if zap_radio is not None and zap_radio(1):
+			return
 		if self.servicelist.inBouquet():
 			prev = self.servicelist.getCurrentSelection()
 			if prev:
@@ -1796,7 +1915,11 @@ class InfoBarPVRState:
 		playstateString = state[3]
 		# ">", "||", ">> 8x" sunt semne; sfarsitul filmului se spune in cuvinte
 		self.pvrStateDialog["state"].setText(_("Sfârșit") if playstateString == "END" else playstateString)
-		
+		# temele straine: pictograma starii si viteza (PVRState.stareTema, MOH 0.7.5)
+		stareTema = getattr(self.pvrStateDialog, "stareTema", None)
+		if stareTema is not None:
+			stareTema(playstateString)
+
 		# if we return into "PLAY" state, ensure that the dialog gets hidden if there will be no infobar displayed
 		if not config.usage.show_infobar_on_skip.value and self.seekstate == self.SEEK_STATE_PLAY and not self.force_show:
 			self.pvrStateDialog.hide()
@@ -2269,8 +2392,12 @@ class InfoBarPiP:
 		swapservice = self.session.nav.getCurrentlyPlayingServiceReference()
 		if self.session.pip.servicePath:
 			servicepath = self.servicelist.getCurrentServicePath()
-			ref=servicepath[len(servicepath)-1]
 			pipref=self.session.pip.getCurrentService()
+			# HDSatelit 0.7.5: 0 schimba din fabrica imaginile (pip_zero_button "swap"); fara istoric pe ecranul mare
+			# (inainte de primul zap) sau fara serviciu in PiP nu e nimic de schimbat, deci nicio cadere
+			if not servicepath or pipref is None:
+				return
+			ref=servicepath[len(servicepath)-1]
 			self.session.pip.playService(swapservice)
 			self.servicelist.setCurrentServicePath(self.session.pip.servicePath)
 			if pipref.toString() != ref.toString(): # is a subservice ?
@@ -3038,6 +3165,8 @@ def _hdsLeagaIptvPe(infobar):
 				iPlayableService.evStart: rec.laStart,
 				iPlayableService.evVideoSizeChanged: rec.laPornit,
 				iPlayableService.evUser + 17: rec.laPornit,
+				# ServiceApp (exteplayer3, gstplayer) nu da evUser+17: evUpdatedInfo = a pornit, numai cand reda chiar el (IRC)
+				iPlayableService.evUpdatedInfo: rec.laInfo,
 				iPlayableService.evEOF: rec.laEsec,
 				iPlayableService.evUser + 10: rec.laEsec,
 				iPlayableService.evUser + 11: rec.laEsec,

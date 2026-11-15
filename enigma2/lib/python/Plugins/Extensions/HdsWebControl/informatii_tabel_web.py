@@ -139,13 +139,17 @@ PAGINA = """<!DOCTYPE html>
   nav.file a[aria-current]{background:var(--albastru);border-color:var(--albastru);color:#fff;}
   .unelte{display:flex;justify-content:flex-end;margin:0 0 8px;}
   .card{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;padding:16px;margin:0 0 12px;}
-  .coloane{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:4px 28px;}
-  .sect{break-inside:avoid;margin:0 0 10px;}
-  .sect h3{font-size:.95rem;margin:8px 0 4px;color:#9fb4ff;border-bottom:2px solid #2a3350;padding-bottom:4px;}
+  .coloane{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:14px 16px;align-items:start;}
+  /* DSG2: fiecare sectiune e o caseta, ca pe televizor (patratel colorat la titlu, linii subtiri, valoarea la dreapta) */
+  .sect{break-inside:avoid;margin:0;background:rgba(255,255,255,.04);border:1px solid var(--bordura);border-radius:10px;padding:4px 14px 8px;}
+  .sect h3{display:flex;align-items:center;gap:8px;font-size:.95rem;margin:8px 0 4px;color:#9fb4ff;border-bottom:2px solid #2a3350;padding-bottom:6px;}
+  .sect h3::before{content:"";flex:none;width:10px;height:10px;background:#9fb4ff;}
   .sect h4{font-size:.88rem;margin:8px 0 2px;}
   .r{display:grid;grid-template-columns:minmax(0,44%) minmax(0,1fr);gap:10px;padding:4px 0;border-bottom:1px solid var(--bordura);font-size:.88rem;}
   .r .e{color:var(--text-slab);overflow-wrap:anywhere;}
-  .r .v{word-break:break-word;overflow-wrap:anywhere;}
+  .r .v{word-break:break-word;overflow-wrap:anywhere;text-align:right;font-weight:600;}
+  .r.lat .v{text-align:left;font-weight:400;}
+  .r:last-child{border-bottom:0;}
   .r.lat{grid-template-columns:minmax(0,1fr);}
   .bara{grid-column:2;height:8px;border-radius:4px;background:#2a3350;overflow:hidden;margin:2px 0 4px;}
   .bara i{display:block;height:100%;background:#9fb4ff;}

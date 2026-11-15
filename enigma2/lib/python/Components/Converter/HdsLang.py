@@ -408,11 +408,12 @@ LANG_ALIAS = {
 	"sr": "srp",
 	"tr": "tur",
 	"uk": "ukr",
+	"uz": "uzb",
 }
 
 # Limbile care au modul HdsLang_<cod>.py. Engleza e aici, completa, si tine loc
 # pentru orice cheie care lipseste dintr-o limba.
-LANGS = ("en", "ar", "bg", "ca", "cs", "da", "de", "el", "es", "et", "fa", "fi", "fr", "fy", "gl", "he", "hr", "hu", "id", "is", "it", "ku", "lt", "lv", "mk", "nb", "nl", "nn", "pl", "pt", "pt_br", "ro", "ru", "sk", "sl", "sq", "sr", "sv", "th", "tr", "uk", "vi", "zh_cn", "zh_hk")
+LANGS = ("en", "ar", "bg", "ca", "cs", "da", "de", "el", "es", "et", "fa", "fi", "fr", "fy", "gl", "he", "hr", "hu", "id", "is", "it", "ku", "lt", "lv", "mk", "nb", "nl", "nn", "pl", "pt", "pt_br", "ro", "ru", "sk", "sl", "sq", "sr", "sv", "th", "tr", "uk", "uz", "vi", "zh_cn", "zh_hk")
 
 # config.osd.language (dupa curatare) -> cod de modul
 _ALIAS = {"hk": "zh_hk", "hk_hk": "zh_hk", "nb_no": "nb", "nn_no": "nn", "no": "nb", "pt_br": "pt_br", "zh": "zh_cn", "zh_cn": "zh_cn", "zh_hk": "zh_hk", "zh_mo": "zh_hk", "zh_sg": "zh_cn", "zh_tw": "zh_hk"}

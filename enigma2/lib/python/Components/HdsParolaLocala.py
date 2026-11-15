@@ -15,7 +15,8 @@
 #
 # Unde se aplica (SERVICII):
 #   web        interfata web a receptorului, aplicatiile de telefon (rutele /web, /api ale lor) si fisierele din web
-#   ftp        serverul FTP (vsftpd): /etc/security/hds-ftp-retea-locala.conf, citit de /etc/pam.d/vsftpd
+#   ftp        serverul FTP (vsftpd): /etc/security/hds-ftp-retea-locala.conf, citit de /etc/pam.d/vsftpd; si partajarea
+#              in retea (Samba, Components/HdsSamba.py): root cu parola omului in smbpasswd, altfel cu parola goala
 #   ssh        SSH, SFTP si Telnet: /etc/security/hds-ssh-retea-locala.conf, citit de /etc/pam.d/dropbear si de
 #              /usr/sbin/hds-telnet-poarta
 #   module     interfetele web ale modulelor de acces (sectiunea [webif] din configurarea lor: httpuser, httppwd)
@@ -371,6 +372,12 @@ def aplicaTot(a=None):
 	bine = aplicaReguli(a)
 	aplicaModule(a)
 	aplicaPluginuri(a)
+	# partajarea in retea (Samba) cere parola odata cu FTP: smbpasswd si dosarul rescrise (Components/HdsSamba.py)
+	try:
+		from Components import HdsSamba
+		HdsSamba.aplicaParola()
+	except Exception as eroare:
+		print("[HdsParolaLocala] Samba: %s" % eroare)
 	return bine
 
 
@@ -438,7 +445,7 @@ def stergeParola():
 
 TXT_SERVICII = (
 	(WEB, N_("Interfața web și aplicațiile de telefon")),
-	(FTP, N_("FTP")),
+	(FTP, N_("FTP și Samba")),
 	(SSH, N_("Telnet și SSH")),
 	(MODULE, N_("Interfețele web ale modulelor de acces")),
 	(PLUGINURI, N_("Alte interfețe web (pluginuri)")),
@@ -448,7 +455,7 @@ TXT_SERVICII = (
 # numele scurte ale locurilor, pentru randul de sub parola (doua randuri si la litere de 130 %)
 TXT_SERVICII_SCURT = (
 	(WEB, N_("interfața web")),
-	(FTP, N_("FTP")),
+	(FTP, N_("FTP și Samba")),
 	(SSH, N_("Telnet și SSH")),
 	(MODULE, N_("modulele de acces")),
 	(PLUGINURI, N_("pluginuri")),

@@ -42,10 +42,15 @@
 #        browserul intreaba din nou dupa dupa_ms, fara sa reporneasca lucrul sau sa tina o conexiune lunga
 #   GET  /api/canale-epg?refs=r1,r2,...             emisiunea de acum si urmatoarea, cel mult MAX_EPG canale
 #   GET  /api/canale-acum                           canalul de pe televizor
+#   GET  /api/canale-istoric                        canalele vazute de curand (Components/HdsIstoricCanale.py), ca pe televizor
+#   POST /api/canale-istoric-porneste?cheie=        porneste un canal din istoric, ca OK in fereastra Canale recente
 #   POST /api/canale-exporta?fila=&buchet=&text=&<grup>=v1,v2  playlistul intregii selectii, pregatit pe felii si fir
 #   POST /api/canale-porneste?fila=&buchet=&ref=[&varianta=1]  porneste canalul pe televizor (varianta=1: aleasa la
 #        "Alte variante", ramane cea aratata)
 #   POST /api/canale-favorit?fila=&buchet=&ref=&vrea=1|0  canalul in Favorite (1) sau scos (0): steluta randului
+#   POST /api/canale-pornire?fila=&buchet=&ref=&vrea=1|0  receptorul porneste pe acest canal (1) sau pe ultimul canal
+#                                                   urmarit (0): butonul Pornire al randului, ca MENU > Pornește pe acest
+#                                                   canal pe televizor (0.7.5, LCS; Components/HdsListaSetari.py)
 #   POST /api/canale-stream-relay?fila=&buchet=&ref=&vrea=1|0  canalul trece prin Stream Relay (1) sau nu (0): butonul SR
 #        al randului (0.7.0, Components/HdsStreamRelay.py; aceeasi lista ca meniul listei de pe televizor)
 #   GET  /api/canale-sigla?p=<nume>                 sigla (PNG), numai un nume gasit pe disc
@@ -1487,8 +1492,32 @@ def gen_grupe(lista, X):
 	return (yield from gen_unul_pe_fel(("grupe", id(lista)), lambda: _gen_grupe(lista, X)))
 
 
+def _harta_om():
+	"""{calea decodata: (fisier, numele buchetului)} pentru canalele din buchetele de internet ale omului, aratate pe televizor sub
+	"IPTV" in fila Sateliti (Components/HdsIptvSurse.harteOm); {} fara ele sau la orice eroare."""
+	try:
+		from Components import HdsIptvSurse as I
+		return I.harteOm()
+	except Exception as e:
+		_jurnal("buchetele de internet ale omului: %s" % type(e).__name__)
+		return {}
+
+
+def _cale_ref(ref):
+	"""Calea decodata a unei referinte scrise ca text ("" fara cale)."""
+	parti = (ref or "").split(":")
+	if len(parti) < 11 or not parti[10]:
+		return ""
+	try:
+		from urllib.parse import unquote
+		return unquote(parti[10])
+	except Exception:
+		return parti[10]
+
+
 def _gen_grupe(lista, X):
 	# O pregatire intrerupta se poate relua, fara numere ramase de la incercarea abandonata.
+	om = _harta_om()
 	lista.parinti_grupe = {}
 	lista.poz_grupe = {}
 	pe_cheie = {}
@@ -1537,6 +1566,12 @@ def _gen_grupe(lista, X):
 				# O lista veche fara metadate ramane online; numele grupei este cel din buchet.
 				k = "g-" + hashlib.sha256((c.buchet or c.ansamblu or "iptv").encode("utf-8")).hexdigest()[:24]
 				lista.nume_grupe[k] = curat(c.ansamblu) or _t("Online")
+			elif om and k in (GRUPA_ALTE, GRUPA_ONLINE):
+				# un canal din buchetele de internet ale omului: grupa cu numele buchetului, ca pe televizor sub "IPTV"
+				b = om.get(_cale_ref(r.ref))
+				if b is not None:
+					k = "b-" + hashlib.sha256(b[0].encode("utf-8")).hexdigest()[:24]
+					lista.nume_grupe[k] = curat(b[1]) or b[0]
 		randuri = pe_cheie.setdefault(k, [])
 		lista.poz_grupe.setdefault(r.k, (k, len(randuri)))
 		randuri.append(r)
@@ -1855,6 +1890,19 @@ def _semne(c, X):
 	return " · ".join(curat(x) for x in ("" if c.radio else c.rez_eticheta, c.eticheta_acces(), sursa, fel, getattr(c, "ansamblu", "")) if x)
 
 
+def _transponder_rand(c, X):
+	"""Pozitia si transponderul canalului (de pilda 19,2°E · 11538 H, Cablu · 346 MHz), din indexul canalelor (lamedb),
+	fara nicio citire in plus; perechea randului de sub lista de pe televizor (LCF 0.7.5, sursa hdsTpAles). "" pentru
+	randurile fara canal in index (internet, marcaje) sau fara transponder."""
+	if c is None or not getattr(c, "tp", ""):
+		return ""
+	try:
+		poz = X.text_pozitie(c.poz) if c.poz is not None else ""
+	except Exception:
+		poz = ""
+	return curat(" · ".join(x for x in (poz, c.tp) if x))
+
+
 def _cheiReleu(M):
 	"""(functia cheii, cheile) din lista Stream Relay, sau None (o eroare: randurile fara butonul SR)."""
 	try:
@@ -1902,6 +1950,13 @@ def _rand_json(r, sigle, X, favorite=None, deosebire="", releu=None, variante=No
 		d["semne"] = semne
 	if deosebire:
 		d["d"] = curat(deosebire)
+	tp = _transponder_rand(r.canal, X)
+	if tp:
+		# 0.7.5 (LCS, tfrc LinuxSat 164126): si SID-ul, ca randul de sub lista de pe televizor
+		sid = _sid_rand(r.ref)
+		d["tp"] = curat(tp + " · " + sid) if sid else tp
+	if _e_pornire(r.ref):
+		d["pn"] = 1
 	dvbi = _eticheta_dvbi(r.ref)
 	if dvbi:
 		d["dvbi"] = dvbi
@@ -2295,6 +2350,28 @@ def stare_acum(M=None):
 	return 200, a
 
 
+def stare_istoric():
+	"""GET /api/canale-istoric -> (cod, corp): randurile ferestrei Canale recente (cel mai nou intai), aceleasi ca pe
+	televizor (Components/HdsIstoricCanale.randuri); cheia e referinta canalului, pentru canale-istoric-porneste."""
+	from Components import HdsIstoricCanale as I
+	randuri = []
+	for r in I.randuri():
+		randuri.append({"cheie": r["cheie"], "nume": curat(r.get("nume") or u""), "emisiune": curat(r.get("emisiune") or u""),
+			"acum": bool(r.get("acum"))})
+	return 200, {"result": True, "randuri": randuri}
+
+
+def porneste_istoric(argumente_):
+	"""POST /api/canale-istoric-porneste?cheie= -> (cod, corp): canalul ales din istoric, ca un zap nou (alege)."""
+	cheie = argumente_.get("cheie") or ""
+	if not ref_buna(cheie):
+		return 400, {"result": False, "message": _t("Canalul nu e bun.")}
+	from Components import HdsIstoricCanale as I
+	if not I.porneste(cheie):
+		return 404, {"result": False, "message": _t("Canalul nu mai e în istoric.")}
+	return 200, {"result": True}
+
+
 def gen_porneste(argumente_, M=None):
 	"""POST /api/canale-porneste -> (cod, corp). Canalul trebuie sa fie in lista din care a fost ales."""
 	M = _m(M)
@@ -2356,6 +2433,64 @@ def alege_varianta(M, ref):
 			R.alesDeOm(ref)
 	except Exception as e:
 		_jurnal("varianta aleasa: %s" % e)
+
+
+def _sid_rand(ref):
+	"""SID-ul unui canal DVB din referinta lui (al patrulea camp, hex), "SID 11110 (0x2B66)"; "" pentru restul."""
+	try:
+		campuri = (ref or "").split(":")
+		if len(campuri) < 10 or campuri[0] != "1" or campuri[10:] and campuri[10]:
+			return ""
+		sid = int(campuri[3], 16)
+		return "SID %d (0x%04X)" % (sid, sid) if sid else ""
+	except (ValueError, IndexError):
+		return ""
+
+
+def _e_pornire(ref):
+	"""Canalul randului e canalul de pornire ales (Components/HdsListaSetari.py)."""
+	try:
+		from Components.HdsListaSetari import e_canal_pornire
+	except ImportError:
+		return False
+	return e_canal_pornire(ref or "")
+
+
+def gen_pornire(argumente_, M=None):
+	"""POST /api/canale-pornire -> (cod, corp): receptorul porneste de acum pe canalul randului (vrea=1) sau pe ultimul
+	canal urmarit (vrea=0), ca MENU > Pornește pe acest canal pe televizor. Canalul trebuie sa fie in lista din care a
+	fost ales; se foloseste referinta DIN LISTA, nu textul primit."""
+	M = _m(M)
+	tip = _tip(argumente_)
+	if tip is None:
+		return 400, {"result": False, "message": _t("Fila se alege cu tv sau radio.")}
+	ref = argumente_.get("ref") or ""
+	if not ref_buna(ref):
+		return 400, {"result": False, "message": _t("Canalul nu are o referință bună."), "camp": "ref"}
+	id_ = argumente_.get("buchet") or TOATE
+	if id_ != TOATE and not _ID_BUCHET.match(id_):
+		return 400, {"result": False, "message": _t("Lista aleasă nu există pe receptor."), "camp": "buchet"}
+	vrea = argumente_.get("vrea")
+	if vrea not in ("0", "1"):
+		return 400, {"result": False, "message": _t("Nu s-a cerut ce să se facă."), "camp": "vrea"}
+	gasit = yield from gen_gaseste(M, tip, id_, ref)
+	if gasit is None:
+		return 404, {"result": False, "message": _t("Lista aleasă nu există pe receptor. Reîncarcă pagina."),
+			"camp": "buchet"}
+	if not gasit:
+		return 400, {"result": False, "message": _t("Canalul nu e în lista aleasă. Reîncarcă pagina."), "camp": "ref"}
+	ref_lista = gasit[0]
+	text = ref_lista.toString() if hasattr(ref_lista, "toString") else str(ref_lista)
+	try:
+		from Components.HdsListaSetari import alege_canal_pornire
+	except ImportError:
+		return 409, {"result": False, "message": _t("Canalul de pornire nu se poate alege pe acest receptor.")}
+	alege_canal_pornire(text if vrea == "1" else "")
+	uita_listele()
+	_jurnal("canalul de pornire din web: %s" % ("ales" if vrea == "1" else "ultimul urmarit"))
+	if vrea == "1":
+		return 200, {"result": True, "pn": 1, "message": _t("Receptorul va porni pe acest canal după o repornire.")}
+	return 200, {"result": True, "pn": 0, "message": _t("Receptorul va porni pe ultimul canal urmărit.")}
 
 
 def gen_favorit(argumente_, M=None):
@@ -2922,6 +3057,20 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 		def render_GET(self, request):
 			return self._porneste(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class PornireResource(_PeFelii):
+		"""POST /api/canale-pornire: canalul de pornire (0.7.5, LCS)."""
+		schimbaCeva = True
+		primul = True
+
+		def fa(self, a, Mx):
+			return gen_pornire(a, Mx)
+
+		def render_POST(self, request):
+			return self._porneste(request)
+
+		def render_GET(self, request):
+			return self._porneste(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
 	class StreamRelayResource(_PeFelii):
 		"""POST /api/canale-stream-relay: schimba lista Stream Relay pe receptor; trece inaintea listelor in lucru."""
 		schimbaCeva = True
@@ -2963,6 +3112,29 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 				return self._eroare(request, _t("Eroare pe receptor."), 500)
 			finally:
 				_masoaraDirect("acum", inceput)
+
+	class IstoricResource(baza):
+		"""GET /api/canale-istoric: numai citire."""
+
+		def render_GET(self, request):
+			try:
+				cod, corp = stare_istoric()
+				return self._raspunde(request, corp, cod)
+			except Exception as e:
+				_jurnal("istoric: %s" % type(e).__name__)
+				return self._eroare(request, _t("Eroare pe receptor."), 500)
+
+	class IstoricPornesteResource(baza):
+		"""POST /api/canale-istoric-porneste: schimba canalul pe televizor."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				cod, corp = porneste_istoric(argumente(request))
+				return self._raspunde(request, corp, cod)
+			except Exception as e:
+				_jurnal("istoric porneste: %s" % type(e).__name__)
+				return self._eroare(request, _t("Eroare pe receptor."), 500)
 
 	class SiglaResource(baza):
 		"""GET /api/canale-sigla?p=<nume>: PNG-ul unei sigle gasite pe disc; citirea pe fir."""
@@ -3013,9 +3185,12 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 		b"canale-lista": ListaResource(),
 		b"canale-epg": EpgResource(),
 		b"canale-acum": AcumResource(),
+		b"canale-istoric": IstoricResource(),
+		b"canale-istoric-porneste": IstoricPornesteResource(),
 		b"canale-porneste": PornesteResource(),
 		b"canale-exporta": ExportaResource(),
 		b"canale-favorit": FavoritResource(),
+		b"canale-pornire": PornireResource(),
 		b"canale-stream-relay": StreamRelayResource(),
 		b"canale-sigla": SiglaResource(),
 	}
@@ -3114,6 +3289,11 @@ PAGINA = """<!DOCTYPE html>
   .sus{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;margin:0 0 12px;}
   h1{font-size:1.25rem;margin:0;}
   .leg-editor{margin-left:auto;color:#7fb8ff;min-height:44px;display:inline-flex;align-items:center;}
+  .recente{flex:1 1 100%;font-size:.92rem;}
+  .recente summary{cursor:pointer;color:var(--text-slab);}
+  .recente ol{list-style:none;margin:.4rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem;}
+  .recente button{font:inherit;text-align:left;cursor:pointer;border-radius:8px;padding:.35rem .6rem;max-width:22rem;}
+  .recente button small{display:block;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .pe-tv{flex:1 1 260px;min-width:0;color:var(--text-slab);font-size:.92rem;line-height:1.4;overflow-wrap:anywhere;}
   .pe-tv b{color:var(--text);}
   /* bara de sus (filele, lista, cautarea, „Filtre” si randul filtrelor deschis) ramane lipita sub antetul cadrului
@@ -3160,6 +3340,8 @@ PAGINA = """<!DOCTYPE html>
 .lista li.cu-ghid .canal{flex:1;min-width:0;}
 .stea{display:flex;align-items:center;justify-content:center;min-width:52px;min-height:44px;padding:0 10px;border:1px solid var(--bordura);border-radius:10px;background:#242a33;color:var(--text-slab);font:inherit;font-size:1.5rem;line-height:1;cursor:pointer;}
 .stea[aria-pressed=true]{color:#f5b83d;border-color:#f5b83d;}
+.stea.pornire{font-size:.85rem;}
+.stea.pornire[aria-pressed=true]{color:#7fd88a;border-color:#7fd88a;}
 .variante{min-height:44px;padding:0 12px;border:1px solid var(--bordura);border-radius:10px;background:#242a33;color:var(--text);font:inherit;font-size:.9rem;cursor:pointer;}
 .variante:focus-visible,.varianta:focus-visible{outline:2px solid #7fb8ff;outline-offset:2px;}
 .lista-variante{display:flex;flex-direction:column;gap:4px;flex:1 1 100%;}
@@ -3195,6 +3377,9 @@ PAGINA = """<!DOCTYPE html>
   .nume{flex:1 1 100%;font-weight:bold;min-width:0;overflow-wrap:break-word;}
   .semne{color:var(--text-slab);font-size:.8rem;white-space:nowrap;}
   .semne.deosebire{color:#f5b83d;font-weight:bold;}
+  /* transponderul canalului (LCF 0.7.5), ca randul de sub lista de pe televizor: mic si gri, ca celelalte semne, pe
+     fiecare rand (nimic numai la trecerea mouse-ului, telefonul nu are cursor) */
+  .semne.tp{font-variant-numeric:tabular-nums;}
   .eticheta{background:var(--verde);color:#fff;border-radius:6px;padding:1px 7px;font-size:.78rem;white-space:nowrap;}
   .eticheta.transmis{background:#46cee2;color:#0b1020;font-weight:bold;}
   .eticheta.dvbi{background:#374ea1;color:#fff;}
@@ -3251,6 +3436,7 @@ __LIVE_STIL__
 <div class="sus">
   <h1>Canale</h1>
   <div class="pe-tv" id="peTv" aria-live="polite"></div>
+  <details class="recente" id="recente"><summary>Canale recente</summary><ol id="recenteLista"></ol></details>
   <a class="leg-editor" href="/editor-canale#buchet-nou">Creează buchet nou</a>
   <a class="leg-editor" href="/editor-canale">Editează lista de canale</a>
 </div>
@@ -3914,6 +4100,8 @@ function deseneaza(randuri, tinta){
     if(r.semne){ linie.appendChild(el("span", "semne", r.semne)); }
     // ce il deosebeste de randurile care arata la fel (frecventa si polarizarea, furnizorul sau SID-ul)
     if(r.d){ linie.appendChild(el("span", "semne deosebire", r.d)); }
+    // transponderul (pozitia, frecventa si polarizarea), ca randul de sub lista de pe televizor
+    if(r.tp){ linie.appendChild(el("span", "semne tp", r.tp)); b.title = r.tp; }
     // semnul canalelor transmise acum in retea (TV in browser, player extern), ca in lista de pe televizor
     var tr = el("span", "eticheta transmis ascuns", "În rețea");
     tr.title = "Canalul e transmis acum în rețea (TV în browser sau un player extern)";
@@ -3937,6 +4125,11 @@ function deseneaza(randuri, tinta){
       st = el("button", "stea"); st.type = "button";
       st.addEventListener("click", function(){ favorit(r, st, li); });
       li.appendChild(st);
+      // canalul de pornire (0.7.5): ca MENU > Pornește pe acest canal pe televizor
+      var pn = el("button", "stea pornire", "Pornire"); pn.type = "button";
+      puneButonPornire(pn, r);
+      pn.addEventListener("click", function(){ pornire(r, pn); });
+      li.appendChild(pn);
       // Stream Relay (0.7.0): numai la canalele DVB; aceeasi lista ca meniul listei de pe televizor
       if(r.srp){
         sr = el("button", "sr", "SR"); sr.type = "button";
@@ -4075,6 +4268,31 @@ function porneste(r, b, varianta){
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); })
     .then(function(){ S.pornire = false; b.classList.remove("trimis"); });
 }
+function puneButonPornire(pn, r){
+  pn.setAttribute("aria-pressed", r.pn ? "true" : "false");
+  pn.title = r.pn ? "Receptorul pornește pe acest canal. Apasă ca să pornească pe ultimul canal urmărit." : "Pornește pe acest canal după o repornire";
+  pn.setAttribute("aria-label", (r.pn ? "Canalul de pornire: " : "Pornește pe acest canal: ") + (r.nume || ""));
+}
+function pornire(r, pn){
+  if(pn.disabled){ return; }
+  var vrea = r.pn ? 0 : 1;
+  pn.disabled = true;
+  var q = new URLSearchParams();
+  q.set("fila", S.tip); q.set("buchet", buchetActiv()); q.set("ref", r.ref); q.set("vrea", String(vrea));
+  cerere("/api/canale-pornire", "POST", q).then(function(d){
+    mesaj(d.message || (d.result ? "Gata." : "Canalul de pornire nu s-a schimbat."), !d.result);
+    if(!d.result){ return; }
+    // un singur canal de pornire: butoanele celorlalte randuri se sting
+    MEMORIE = {};
+    Array.prototype.forEach.call(document.querySelectorAll(".stea.pornire[aria-pressed=true]"), function(b){
+      b.setAttribute("aria-pressed", "false");
+    });
+    Object.keys(S.el).forEach(function(k){ (S.el[k] || []).forEach(function(o){ if(o.r){ o.r.pn = 0; } }); });
+    r.pn = d.pn ? 1 : 0;
+    puneButonPornire(pn, r);
+  }).catch(function(){ mesaj("Receptorul nu răspunde.", true); })
+    .then(function(){ pn.disabled = false; });
+}
 function puneStea(o, f){
   o.r.f = f ? 1 : 0;
   o.st.textContent = f ? "\\u2605" : "\\u2606";
@@ -4136,6 +4354,26 @@ function puneStilProgres(colorat){
   var stil = $("stilProgres");
   var text = colorat ? "" : ".progres i{background:var(--atentie-plin,#f5b83d);}";
   if(stil && stil.textContent !== text){ stil.textContent = text; }
+}
+// Canale recente: aceeasi lista ca fereastra de pe televizor (< tinut apasat); se citeste cand caseta e deschisa
+function citesteRecente(){
+  var cutie = $("recente");
+  if(!cutie || !cutie.open){ return Promise.resolve(); }
+  return cerere("/api/canale-istoric").then(function(d){
+    var ol = $("recenteLista"); gol(ol);
+    if(!d.result){ return; }
+    if(!d.randuri.length){ ol.appendChild(el("li", "", "Încă nu ai schimbat canalul. Canalele văzute apar aici.")); return; }
+    d.randuri.forEach(function(r){
+      var li = el("li", ""), b = el("button", "", r.nume + (r.acum ? " (acum)" : ""));
+      b.type = "button"; b.disabled = r.acum;
+      if(r.emisiune){ b.appendChild(el("small", "", r.emisiune)); }
+      b.addEventListener("click", function(){
+        var q = new URLSearchParams(); q.set("cheie", r.cheie);
+        cerere("/api/canale-istoric-porneste", "POST", q).then(function(){ citesteAcum(); citesteRecente(); }).catch(function(){});
+      });
+      li.appendChild(b); ol.appendChild(li);
+    });
+  }).catch(function(){});
 }
 function citesteAcum(){
   return cerere("/api/canale-acum").then(function(d){
@@ -4209,6 +4447,7 @@ aseazaBara();
 if(window.ResizeObserver && document.querySelector(".hds-antet")){ new ResizeObserver(aseazaBara).observe(document.querySelector(".hds-antet")); }
 incarcaBuchete();
 citesteAcum();
+if($("recente")){ $("recente").addEventListener("toggle", citesteRecente); }
 </script>
 </body>
 </html>
@@ -4238,6 +4477,8 @@ TEXTE_PAGINA = {
 		N_("Lista așa cum e aleasă și filtrată acum, pentru VLC, Kodi sau alt player din casă"),
 		# 0.7.5 (PRB, 14.11.2026): textele sablonului care lipseau din lista
 		N_("TV"),
+		# 0.7.5 (TRD, 14.11.2026): caseta Canale recente (UXP)
+		N_("Canale recente"),
 	),
 	"js": (
 		N_("browser deconectat"),
@@ -4280,8 +4521,15 @@ TEXTE_PAGINA = {
 		N_("Scoate din Stream Relay:"),
 		N_("Adaugă la Stream Relay:"),
 		N_("Stream Relay nu s-a schimbat."),
+		N_("Pornire"),
+		N_("Receptorul pornește pe acest canal. Apasă ca să pornească pe ultimul canal urmărit."),
+		N_("Pornește pe acest canal după o repornire"),
+		N_("Canalul de pornire:"),
+		N_("Pornește pe acest canal:"),
+		N_("Canalul de pornire nu s-a schimbat."),
 		N_("Pe televizor:"),
 		N_("· în standby"),
+		N_("Încă nu ai schimbat canalul. Canalele văzute apar aici."),
 	),
 }
 

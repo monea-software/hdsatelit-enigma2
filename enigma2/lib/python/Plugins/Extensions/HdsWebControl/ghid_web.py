@@ -111,6 +111,16 @@ def curat(text, n=MAX_TEXT):
 	return _CONTROL.sub(u" ", t)[:n].strip()
 
 
+def _curat_randuri(text, n=MAX_TEXT):
+	"""Ca `curat`, dar randurile raman (textul scurt mutat la descriere, 0.7.5 EPI)."""
+	try:
+		t = text if isinstance(text, str) else str(text)
+	except Exception:
+		return ""
+	randuri = [_CONTROL.sub(u" ", x).strip() for x in t.replace(u"\r", u"\n").split(u"\n")]
+	return u"\n".join(x for x in randuri if x)[:n].strip()
+
+
 def _ref_valid(ref):
 	return bool(ref) and len(ref) <= MAX_REF and bool(_REF.match(ref))
 
@@ -292,13 +302,26 @@ def emisiune(argumente_, C=None, nav=None, E=None):
 	ev = _emisiunea(C, nav, ref, eid)
 	if not ev:
 		return 404, {"result": False, "message": _t("Emisiunea nu mai e în ghid.")}
-	texte = {"titlu": curat(ev["name"], 200), "scurta": _scurta(C, ev),
-		"lunga": curat(ev["ext"]) if ev["ext"] not in (ev["short"], ev["name"]) else ""}
+	fn = getattr(C, "epg_descrieri", None)
+	if fn is not None:
+		# aceeasi decizie ca pe televizor (0.7.5, EPI): textul scurt care nu incape pe randul lui trece la descriere cand
+		# descrierea lunga lipseste; randurile lui din EIT raman (pagina le arata cu pre-wrap)
+		scurta, lunga = fn(ev)
+		din_scurt = bool(lunga) and lunga != ev["ext"]
+		texte = {"titlu": curat(ev["name"], 200), "scurta": curat(scurta),
+			"lunga": _curat_randuri(lunga) if din_scurt else curat(lunga)}
+	else:
+		din_scurt = False
+		texte = {"titlu": curat(ev["name"], 200), "scurta": _scurta(C, ev),
+			"lunga": curat(ev["ext"]) if ev["ext"] not in (ev["short"], ev["name"]) else ""}
 	traduse = {}
 	in_lucru = 0
 	for camp, fel in (("titlu", "titlu"), ("scurta", "scurta"), ("lunga", "lunga")):
 		arata, tradus, lucru = _tradus(E, fel, texte[camp])
-		traduse[camp] = curat(arata, 200 if camp == "titlu" else MAX_TEXT)
+		if camp == "lunga" and din_scurt:
+			traduse[camp] = _curat_randuri(arata)
+		else:
+			traduse[camp] = curat(arata, 200 if camp == "titlu" else MAX_TEXT)
 		traduse[camp + "_original"] = texte[camp] if tradus else ""
 		in_lucru += 1 if lucru else 0
 	return 200, {"result": True, "ref": ref, "in_lucru": in_lucru, "emisiune": {

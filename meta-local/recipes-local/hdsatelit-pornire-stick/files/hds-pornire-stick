@@ -1,0 +1,264 @@
+#!/bin/sh
+# HD Satelit: pornirea mica din memoria interna a Dreambox DM8000HD si DM800SE (V21B, 14.11.2026).
+#
+# Este /sbin/init al imaginii mici scrise in memoria interna (.nfi, modul de salvare Dreambox). Sistemul HD Satelit
+# intreg sta pe un stick FAT32, in dosarul hdsatelit-<masina>/, iar acest script il porneste:
+#   1. cauta stickul (orice partitie vfat sau ext2/3/4, si discul fara partitii) cu hdsatelit-<masina>/;
+#   2. la prima pornire face SINGUR, in acel dosar, radacina.ext4 (fisier-disc ext4, 2 GiB, sub limita FAT32 de 4 GiB)
+#      si swap.img (512 MiB), apoi desface rootfs.tar.bz2 in fisierul-disc; nimic formatat pe stick, nimic de confirmat;
+#   3. porneste swap-ul direct din fisier (fara loop) si intra in sistem: radacina.ext4 montat prin loop, pivot_root,
+#      apoi /sbin/init al sistemului de pe stick. Memoria interna ramane montata numai citire, sub /mnt/memorie-interna.
+# Fara stick: poza de pornire (bootlogo, desenata de incarcator) ramane pe televizor cu instructiunile, pagina web
+# (portul 80) arata starea, iar scriptul cauta stickul la 5 secunde; cand omul il pune, pornirea continua singura.
+#
+# PID 1: scriptul NU are voie sa se termine (nucleul s-ar opri). Totul sta intr-o bucla; exec numai catre un init
+# verificat. Nu scrie NICIODATA in memoria interna (o remonteaza numai citire la inceput) si nu atinge /dev/mtd*.
+#
+# Pe DM8000 nucleul are initramfs-ul OE-Alliance: el monteaza /dev/mtdblock3 si face switch_root aici, cu /proc, /sys,
+# /dev deja montate; pe DM800SE nucleul porneste direct acest fisier si nu e nimic montat. Se verifica inainte de montare.
+#
+# Proba pe PC (teste/test_v21b_dreambox_stick_075.py): HDS_RAD=<radacina falsa>, HDS_PROBA=1 (comenzile care ating
+# discuri sau procese se scriu in $HDS_RAD/proba-comenzi.txt in loc sa ruleze), HDS_O_TURA=1 (o singura trecere).
+
+R=${HDS_RAD:-}
+P=$R/usr/share/hds-pornire-stick
+MASINA=$(cat "$R/etc/hds-pornire-masina" 2>/dev/null)
+[ -n "$MASINA" ] || MASINA=necunoscuta
+DOSAR=hdsatelit-$MASINA
+STICK=$R/media/stick
+RAD=$R/mnt/rad
+STARE=$R/run/hds-pornire-stare
+RADACINA_MIB=${HDS_RADACINA_MIB:-2048}
+SWAP_MIB=${HDS_SWAP_MIB:-512}
+# radacina + swap + 64 MiB rezerva
+NEVOIE_MIB=$((RADACINA_MIB + SWAP_MIB + 64))
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+
+# --- comenzile cu efect (in proba: numai scrise) ---
+fa() {
+	if [ "${HDS_PROBA:-0}" = 1 ]; then
+		echo "$*" >> "$R/proba-comenzi.txt"
+		case "$1" in
+			mount) [ -n "$HDS_PROBA_MOUNT_CADE" ] && echo "$*" | grep -q -- "$HDS_PROBA_MOUNT_CADE" && return 1 ;;
+		esac
+		return 0
+	fi
+	"$@"
+}
+
+jurnal() {
+	echo "[hds-pornire] $*" > "$R/dev/console" 2>/dev/null
+	echo "$(date +%H:%M:%S 2>/dev/null) $*" >> "$R/run/hds-pornire.log" 2>/dev/null
+}
+
+# stare: cod (citit de pagina web si de proba) + textul pentru om
+stare() {
+	printf '%s\n%s\n' "$1" "$2" > "$STARE.nou" 2>/dev/null && mv "$STARE.nou" "$STARE" 2>/dev/null
+	jurnal "$1: $2"
+}
+
+montat() {
+	grep -q " $1 " "$R/proc/mounts" 2>/dev/null
+}
+
+pregateste_baza() {
+	# remontare numai citire: memoria interna nu se scrie niciodata din pornirea mica
+	montat "/proc" || fa mount -t proc proc "$R/proc"
+	montat "/sys" || fa mount -t sysfs sysfs "$R/sys"
+	montat "/dev" || fa mount -t devtmpfs devtmpfs "$R/dev"
+	fa mount -o remount,ro /
+	montat "/run" || fa mount -t tmpfs -o mode=0755,size=2m tmpfs "$R/run"
+	montat "/tmp" || fa mount -t tmpfs -o size=4m tmpfs "$R/tmp"
+	mkdir -p "$R/run" 2>/dev/null
+}
+
+porneste_reteaua() {
+	# placa de retea e in nucleu (BCMEMAC); adresa prin DHCP, in fundal, ca sa nu intarzie pornirea
+	fa ifconfig lo 127.0.0.1 up
+	fa ifconfig eth0 up
+	fa udhcpc -b -S -i eth0 -p "$R/run/udhcpc.pid"
+	fa nc -ll -p 80 -e /usr/sbin/hds-pagina-stare &
+	echo $! > "$R/run/hds-pagina.pid"
+}
+
+opreste_reteaua() {
+	for f in "$R/run/hds-pagina.pid" "$R/run/udhcpc.pid"; do
+		[ -s "$f" ] && fa kill "$(cat "$f")"
+	done
+}
+
+# discurile USB/SATA: sdX1..sdX15, apoi discul intreg (stick fara tabela de partitii)
+lista_volume() {
+	for d in "$R"/sys/block/sd*; do
+		[ -d "$d" ] || continue
+		n=${d##*/}
+		for p in "$d"/"$n"[0-9]*; do
+			[ -d "$p" ] && echo "${p##*/}"
+		done
+		echo "$n"
+	done
+}
+
+# monteaza primul volum care are hdsatelit-<masina>/; 0 = gasit (montat in $STICK)
+gaseste_stick() {
+	mkdir -p "$STICK" 2>/dev/null
+	montat "/media/stick" && fa umount "$STICK"
+	for v in $(lista_volume); do
+		[ -e "$R/dev/$v" ] || continue
+		for t in vfat ext4; do
+			# numai citire la cautare: discul de inregistrari al omului (DM8000 are des un HDD intern) nu se atinge
+			fa mount -t "$t" -o ro,noatime "/dev/$v" "$STICK" || continue
+			if [ -d "$STICK/$DOSAR" ]; then
+				fa mount -o remount,rw,noatime "$STICK" || { fa umount "$STICK"; continue; }
+				VOLUM=$v
+				FEL=$t
+				return 0
+			fi
+			fa umount "$STICK"
+		done
+	done
+	return 1
+}
+
+liber_mib() {
+	# df -m: a patra coloana e locul liber; o linie pentru dosarul cerut
+	df -m "$STICK" 2>/dev/null | awk 'NR == 2 { print $4 }'
+}
+
+# fisierul plin de zero, cu stare la fiecare 128 MiB (USB 2.0: cateva minute)
+umple() {
+	f=$1
+	mib=$2
+	text=$3
+	: > "$f" || return 1
+	scris=0
+	while [ "$scris" -lt "$mib" ]; do
+		bucata=128
+		[ $((mib - scris)) -lt 128 ] && bucata=$((mib - scris))
+		fa dd if=/dev/zero of="$f" bs=1M count="$bucata" seek="$scris" conv=notrunc 2>/dev/null || return 1
+		scris=$((scris + bucata))
+		stare pregatire "$text: $scris din $mib MiB"
+	done
+	return 0
+}
+
+pregateste_swap() {
+	s=$STICK/$DOSAR/swap.img
+	m=$(($(stat -c %s "$s" 2>/dev/null || echo 0) / 1048576))
+	if [ "$m" -ne "$SWAP_MIB" ]; then
+		rm -f "$s"
+		umple "$s" "$SWAP_MIB" "Fișierul de memorie (swap)" || return 1
+		fa mkswap "$s" || return 1
+	fi
+	grep -q "/$DOSAR/swap.img" "$R/proc/swaps" 2>/dev/null || fa swapon "$s"
+	return 0
+}
+
+instaleaza() {
+	d=$STICK/$DOSAR
+	if [ ! -s "$d/rootfs.tar.bz2" ]; then
+		stare lipsa_arhiva "Pe stick lipsește $DOSAR/rootfs.tar.bz2. Dezarhivează din nou arhiva HD Satelit pe stick."
+		return 1
+	fi
+	if [ "$FEL" = vfat ]; then
+		# FAT32: fisierul cel mai mare are 4 GiB minus 1 octet
+		[ "$RADACINA_MIB" -lt 4096 ] || RADACINA_MIB=4095
+	fi
+	l=$(liber_mib)
+	[ -n "$l" ] || l=0
+	if [ "$l" -lt "$NEVOIE_MIB" ]; then
+		stare stick_mic "Pe stick sunt liberi $l MiB; trebuie cel puțin $NEVOIE_MIB MiB. Folosește un stick mai mare (de la 4 GB)."
+		return 1
+	fi
+	n=$d/radacina.ext4.nou
+	rm -f "$n"
+	umple "$n" "$RADACINA_MIB" "Prima pornire, pregătesc stickul" || { stare eroare "Nu pot scrie pe stick (plin sau protejat la scriere)."; return 1; }
+	stare pregatire "Prima pornire: formatez fișierul sistemului (nu stickul)"
+	# nucleul 3.2 nu cunoaste trasaturile noi pe care mke2fs (e2fsprogs 1.47) le pune implicit: fara ele fisierul nu s-ar monta
+	fa mke2fs -F -q -t ext4 -L hdsradacina -m 0 -O ^metadata_csum,^metadata_csum_seed,^orphan_file,^64bit "$n" || { stare eroare "Nu pot pregăti fișierul sistemului pe stick."; return 1; }
+	mkdir -p "$RAD"
+	fa mount -t ext4 -o loop,noatime "$n" "$RAD" || { stare eroare "Nu pot monta fișierul sistemului."; return 1; }
+	stare pregatire "Prima pornire: desfac sistemul HD Satelit (5-15 minute pe acest procesor)"
+	if [ "${HDS_PROBA:-0}" = 1 ]; then
+		fa tar-bz2 "$d/rootfs.tar.bz2" "$RAD"
+		[ -n "$HDS_PROBA_SISTEM" ] && mkdir -p "$RAD/sbin" && printf '#!/bin/sh
+' > "$RAD/sbin/init" && chmod 0755 "$RAD/sbin/init"
+	else
+		bzip2 -dc "$d/rootfs.tar.bz2" | tar -x -C "$RAD"
+	fi
+	if [ ! -L "$RAD/sbin/init" ] && [ ! -x "$RAD/sbin/init" ]; then
+		fa umount "$RAD"
+		rm -f "$n"
+		stare eroare "Arhiva de pe stick e stricată (lipsește /sbin/init). Descarc-o și dezarhiveaz-o din nou."
+		return 1
+	fi
+	sync
+	fa umount "$RAD"
+	# redenumirea e semnul ca fisierul e intreg: o pana de curent pana aici lasa numai .nou, refacut la pornirea urmatoare
+	mv "$n" "$d/radacina.ext4" || return 1
+	sync
+	return 0
+}
+
+intra_in_sistem() {
+	d=$STICK/$DOSAR
+	mkdir -p "$RAD"
+	fa mount -t ext4 -o loop,noatime "$d/radacina.ext4" "$RAD" || { stare eroare "Nu pot monta $DOSAR/radacina.ext4. Șterge-l de pe stick ca să fie refăcut."; return 1; }
+	if [ ! -L "$RAD/sbin/init" ] && [ ! -x "$RAD/sbin/init" ]; then
+		fa umount "$RAD"
+		stare eroare "Sistemul de pe stick nu are /sbin/init. Șterge $DOSAR/radacina.ext4 ca să fie refăcut."
+		return 1
+	fi
+	# unde sta sistemul: citit de imaginea de pe stick (manager de discuri: nu formata stickul radacinii)
+	mkdir -p "$RAD/etc"
+	printf 'volum=%s\nfel=%s\ndosar=%s\nmontat=/media/hdsstick\n' "$VOLUM" "$FEL" "$DOSAR" > "$RAD/etc/hdsatelit-stick" 2>/dev/null
+	stare porneste "Pornesc HD Satelit de pe stick"
+	opreste_reteaua
+	mkdir -p "$RAD/media/hdsstick" "$RAD/mnt/memorie-interna" "$RAD/proc" "$RAD/sys" "$RAD/dev"
+	fa mount --move "$STICK" "$RAD/media/hdsstick"
+	for x in proc sys dev; do
+		fa mount --move "$R/$x" "$RAD/$x"
+	done
+	montat "/run" && fa umount -l "$R/run"
+	montat "/tmp" && fa umount -l "$R/tmp"
+	cd "$RAD" || return 1
+	fa pivot_root . mnt/memorie-interna || return 1
+	if [ "${HDS_PROBA:-0}" = 1 ]; then
+		echo "exec chroot . /sbin/init" >> "$R/proba-comenzi.txt"
+		exit 0
+	fi
+	exec chroot . /sbin/init < dev/console > dev/console 2>&1
+}
+
+# --- bucla principala ---
+pregateste_baza
+stare cauta "Caut stickul HD Satelit"
+porneste_reteaua
+GRESIT=
+while :; do
+	if gaseste_stick; then
+		if [ ! -s "$STICK/$DOSAR/radacina.ext4" ]; then
+			instaleaza || GRESIT=1
+		fi
+		if [ -z "$GRESIT" ]; then
+			pregateste_swap || stare eroare_swap "Nu pot face fișierul de memorie pe stick; pornesc fără el (meniuri mai încete)."
+			intra_in_sistem || GRESIT=1
+		fi
+		montat "/media/stick" && fa umount "$STICK"
+	else
+		stare fara_stick "Pune stickul cu HD Satelit (FAT32, dosarul $DOSAR). Pornirea continuă singură."
+	fi
+	[ "${HDS_O_TURA:-0}" = 1 ] && exit 0
+	if [ -n "$GRESIT" ]; then
+		# dupa o eroare asteptam ca omul sa schimbe ceva (scoate sau pune un stick), ca sa nu refacem la nesfarsit acelasi
+		# lucru; un HDD intern ramas in receptor nu tine bucla pe loc
+		VOLUME_LA_EROARE=$(lista_volume)
+		while [ "$(lista_volume)" = "$VOLUME_LA_EROARE" ]; do
+			sleep 5
+		done
+		GRESIT=
+	fi
+	sleep 5
+done

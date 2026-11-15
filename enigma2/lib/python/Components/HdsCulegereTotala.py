@@ -846,6 +846,20 @@ class Receptor(object):
 		except Exception:
 			return False
 
+	def refuz_pozitie(self, poz):
+		"""(fel, text tradus) pentru satelitul poz spre care antena nu se roteste acum: ("loc", ...) motorul USALS cu
+		locul antenei nestabilit, ("orizont", ...) satelitul sub orizont din locul stabilit; altfel (None, None). Aceeasi
+		poarta ca NimManager (satelitii acestia nu ajung la nucleu) si ca ecranul negru (Components/HdsEcranNegru.py)."""
+		try:
+			from Components import HdsLocul
+			if HdsLocul.blocatDeLoc(poz):
+				return "loc", _(HdsLocul.MESAJ_FARA_LOC)
+			if HdsLocul.blocatDeOrizont(poz):
+				return "orizont", HdsLocul.textSubOrizont(poz)
+		except Exception as e:
+			_jurnal("locul antenei: %s" % e)
+		return None, None
+
 	def model_motor(self):
 		try:
 			from Components import HdsMotorViteza
@@ -908,6 +922,27 @@ def plan_receptor(optiuni, de_la_capat=False, receptor=None, cale_stare=None, ca
 	return p
 
 
+def poarta_motor(servicii, refuz_pozitie):
+	"""(serviciile de incercat, textul refuzului sau None) pentru planul `servicii`, inainte de pornire (asistenta
+	289712: Scanare detaliata de 1 h 40 min, toate "fara semnal", cu motorul USALS si locul nestabilit; asistenta AS12, 14.11
+	01:25: satelitii sub orizont din loc). refuz_pozitie(poz) -> (fel, text), ca Receptor.refuz_pozitie:
+	  - un satelit al planului cere locul antenei, nestabilit: nu porneste deloc (textul locului, OK = alegerea lui);
+	  - satelitii sub orizont din locul stabilit se scot din plan (nucleul nu roteste antena spre ei); daca nu ramane
+	    nimic, nu porneste (textul primului).
+	Fara motor, refuz_pozitie da (None, None) peste tot si planul ramane intreg."""
+	refuzuri = {}
+	for s in servicii:
+		if s.poz not in refuzuri:
+			refuzuri[s.poz] = refuz_pozitie(s.poz) or (None, None)
+	for poz in sorted(refuzuri, key=lambda p: p - 3600 if p > 1800 else p):
+		if refuzuri[poz][0] == "loc":
+			return [], refuzuri[poz][1]
+	rest = [s for s in servicii if refuzuri[s.poz][0] is None]
+	if servicii and not rest:
+		return [], refuzuri[servicii[0].poz][1]
+	return rest, None
+
+
 def motiv_refuz(receptor):
 	"""Textul (netradus) pentru care trecerea nu poate porni acum, sau None."""
 	if _RULARE["trecere"] is not None:
@@ -935,6 +970,12 @@ def porneste(nav, optiuni, de_la_capat=False, la_pas=None, la_sfarsit=None, rece
 		return None, _(T_FARA_LAMEDB)
 	if not info["rest"]:
 		return None, _(T_NIMIC)
+	rest, refuz = poarta_motor(info["rest"], getattr(receptor, "refuz_pozitie", lambda poz: (None, None)))
+	if refuz:
+		return None, refuz
+	if len(rest) != len(info["rest"]):
+		_jurnal("scosi %d de canale de pe satelitii sub orizont din locul antenei" % (len(info["rest"]) - len(rest)))
+		info["rest"] = rest
 	t = Trecere(receptor, info, optiuni, la_pas, la_sfarsit, cale_stare)
 	_RULARE["trecere"] = t
 	t.porneste()

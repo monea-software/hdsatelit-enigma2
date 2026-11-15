@@ -16,7 +16,8 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
 # PAM-ul FTP citeste comutatorul lui (hds-ftp-retea-locala.conf), separat de cel al SSH
-PR:append = ".hds1"
+# .hds2: quiet_log pe comutatorul FTP, fara access denied in syslog la intrarea din casa
+PR:append = ".hds2"
 
 SRC_URI += "file://hds-vsftpd.conf \
             file://hds-vsftpd.pam \
@@ -60,6 +61,7 @@ do_install:append() {
 		bbfatal "vsftpd: /etc/pam.d/vsftpd nu incepe cu reteaua de acasa"
 	grep -q '^auth[[:space:]]*include[[:space:]]*common-auth' "$p" || bbfatal "vsftpd: /etc/pam.d/vsftpd fara common-auth"
 	grep -q 'accessfile=/etc/security/hds-ftp-retea-locala.conf' "$p" || bbfatal "vsftpd: /etc/pam.d/vsftpd fara comutatorul FTP"
+	grep -q 'hds-ftp-retea-locala.conf nodefgroup quiet_log' "$p" || bbfatal "vsftpd: comutatorul FTP fara quiet_log"
 	if grep -q 'nullok' "$p"; then
 		bbfatal "vsftpd: /etc/pam.d/vsftpd primeste parola goala (nullok)"
 	fi

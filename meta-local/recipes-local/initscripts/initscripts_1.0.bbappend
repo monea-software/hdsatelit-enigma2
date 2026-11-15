@@ -60,7 +60,7 @@ FILES:${PN}:append = " ${@d.getVar('base_sbindir') + '/hds-mountall' if d.getVar
 # cu `read` fara -r si il dadea nedecodat lui umount. mount.sh pune eticheta stickului in loc (/run/media/<ETICHETA>-sdb1);
 # o eticheta cu spatiu ("USB DISK") apare in /proc/mounts ca \040, umount nu gaseste locul si stickul ramane montat pentru
 # scriere pana la oprire: la pornire FAT spune "Volume was not properly unmounted" (wlad-sat, stickul FAT32). Masurat pe
-# .122 (FAT prin loop in /tmp, paralel-1111b/M2/proba_umountfs_spatiu.sh): inainte cod 1 si stickul ramas "rw"; cu
+# receptorul de proba (FAT prin loop in /tmp, paralel-1111b/M2/proba_umountfs_spatiu.sh): inainte cod 1 si stickul ramas "rw"; cu
 # read -r si printf %b: demontat, FAT curat. Pentru toate modelele.
 PR:append = ".hdsu1"
 

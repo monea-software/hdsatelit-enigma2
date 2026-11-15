@@ -114,6 +114,14 @@ def _S():
 	return S
 
 
+def _SI():
+	try:
+		from Components import HdsSatelitiImagine as SI
+	except ImportError:
+		import HdsSatelitiImagine as SI
+	return SI
+
+
 def _G():
 	try:
 		from Components import HdsEditorSigle as G
@@ -357,7 +365,20 @@ def buchete(s, a):
 	arbore = [[b.id, b.nume, b.n, adancime, b.parinte, 1 if b.favorite else 0, 1 if b.blocat else 0,
 		1 if _de_internet(s, b.id) else 0] for b, adancime in s.toate_buchetele(radio)]
 	nelegate = [[b.id, b.nume, b.n] for b in s.nelegate(radio)]
-	return 200, {"result": True, "radacina": s.radacina(radio), "arbore": arbore, "nelegate": nelegate}
+	return 200, {"result": True, "radacina": s.radacina(radio), "arbore": arbore, "nelegate": nelegate,
+		"de_pus": len(_nelegate_de_pus(s, radio, False))}
+
+
+def _nelegate_de_pus(s, radio, ordonat=True):
+	"""Lista orfana (Components/HdsBucheteOrfane.py): buchetele omului gasite pe disc, nelegate; fara ale imaginii (DAB+,
+	DVB-I, IPTV) si fara sub-buchete. Se socoteste aici, nu din ce trimite pagina. Ordinea din copia listei (copiile se
+	citesc) numai la punere; pentru numarul de pe buton, nu."""
+	try:
+		from Components import HdsBucheteOrfane as O
+	except ImportError:
+		import HdsBucheteOrfane as O
+	ids = [b.id for b in s.nelegate(radio)]
+	return O.din_editor(ids, s.director) if ordonat else O.ale_omului(ids, s.director)
 
 
 def intrari(s, a):
@@ -579,6 +600,8 @@ def fa_operatia(s, o):
 		rez["facut"] = s.leaga_buchet(_bid(o))
 	elif op == "sterge_nelegat":
 		rez["facut"] = s.sterge_nelegat(_bid(o))
+	elif op == "leaga_toate":
+		rez["n"] = s.leaga_toate(_nelegate_de_pus(s, bool(o.get("radio"))))
 	elif op == "sorteaza":
 		bid = _bid(o)
 		dupa = o.get("dupa") if o.get("dupa") in ORDINI else "nume"
@@ -986,6 +1009,10 @@ def rute(baza, resource, NOT_DONE_YET=None):
 				sat = _SATELITI.get("s") or S.citeste()
 				_SATELITI["s"] = sat
 				r = {"result": True, "nesalvat": bool(_SATELITI.get("schimbat"))}
+				# SXP: cati sateliti ai listei imaginii lipsesc (butonul Pune la loc satelitii din imagine)
+				r["lipsa_imagine"] = len(_SI().lipsa_din_imagine(sat))
+				# SXE: lista omului nu e lista imaginii (butonul Inapoi la lista imaginii)
+				r["proprie"] = bool(_SI().diferita_de_imagine(sateliti=sat))
 				if a.get("poz", "") != "":
 					r["satelit"] = S.json_satelit(sat, a.get("poz"))
 				else:
@@ -1036,6 +1063,15 @@ def rute(baza, resource, NOT_DONE_YET=None):
 					sat.schimba_transponder(poz, _text(o, "cheie", 200), v)
 				elif op == "sterge_transponder":
 					sat.sterge_transponder(poz, _text(o, "cheie", 200))
+				elif op == "pune_la_loc_imagine":
+					# SXP: toti satelitii lipsa ai listei imaginii, adaugati (nimic sters); se scriu la Salveaza
+					rez["puse"] = len(_SI().pune_la_loc_toti(sat))
+					if not rez["puse"]:
+						return 200, {"result": True, "nesalvat": bool(_SATELITI.get("schimbat")), "puse": 0}
+				elif op == "inapoi_la_imagine":
+					# SXE: lista intreaga a imaginii in locul celei a omului; se scrie la Salveaza (copia listei omului),
+					# Renunta o lasa cum era
+					_SATELITI["s"] = _SI().lista_imaginii(sat.cale)
 				else:
 					raise _E().Eroare(_t("Operația nu e cunoscută."))
 				_SATELITI["schimbat"] = True
@@ -1789,6 +1825,7 @@ PAGINA = r"""<!DOCTYPE html>
   <span data-k="probleme">Am găsit în listă: </span>
   <span data-k="vezi">Vezi</span>
   <span data-k="lega">Pune în listă</span>
+  <span data-k="leaga_toate">Pune înapoi toate</span>
   <span data-k="filtre_baza">Filtrele bazei de canale</span>
   <span data-k="filtre_nota">În aceeași grupă opțiunile bifate se adună cu «sau», între grupe cu «și». Numărul arată câte canale au opțiunea.</span>
   <span data-k="sterge_filtrele">Șterge filtrele</span>
@@ -1890,6 +1927,10 @@ PAGINA = r"""<!DOCTYPE html>
   <span data-k="sateliti_nota">Schimbările se scriu în satellites.xml numai la „Salvează satellites.xml”, cu o copie înainte. Nu intră în „Anulează”.</span>
   <span data-k="sateliti_reincarcat">satellites.xml e salvat și receptorul îl folosește.</span>
   <span data-k="sateliti_repornire">satellites.xml e salvat; se vede după repornirea interfeței.</span>
+  <span data-k="sateliti_imagine">Pune la loc sateliții din imagine</span>
+  <span data-k="inapoi_imagine">Înapoi la lista sateliților imaginii</span>
+  <span data-k="inapoi_imagine_nota">Lista ta de sateliți nu e lista imaginii. Transponderele noi ale imaginii se adaugă singure la sateliții tăi, la pornire. Dacă vrei lista imaginii întreagă în locul celei a ta: sateliții și transponderele puse de tine se pierd (rămân în copia de siguranță). Se scrie când salvezi satellites.xml.</span>
+  <span data-k="sateliti_imagine_nota">Lista sateliților e mai scurtă decât cea a imaginii (de obicei o aduce o listă de canale din alt panou). Sateliții lipsă se adaugă din lista imaginii; ce ai în listă rămâne. Sateliții pe care ai canale se pun singuri la pornire.</span>
   <span data-k="transpondere_btn">Transpondere</span>
   <span data-k="transponder_nou">Transponder nou</span>
   <span data-k="editeaza">Editează</span>
@@ -1941,7 +1982,7 @@ PAGINA = r"""<!DOCTYPE html>
 </div>
 <script>
 var CFG = __CONFIG__;
-var H = 56, LATIME_DOUA = 900, MAX_PAGINA = 3000;
+var H = 56, LATIME_DOUA = 900, MAX_PAGINA = 3000, MAX_NELEGATE_RANDURI = 20;
 function $(id){ return document.getElementById(id); }
 var TX = {};
 (function(){ var l = document.querySelectorAll("#texte span"); for(var i = 0; i < l.length; i++){ TX[l[i].getAttribute("data-k")] = l[i].textContent; } })();
@@ -2216,7 +2257,7 @@ $("listaSursa").addEventListener("scroll", function(){
 
 function incarcaArbore(){
   return cerere("/api/editor-canale-buchete?radio=" + (S.radio ? 1 : 0)).then(function(r){
-    if(r.result){ S.arbore = r.arbore; S.nelegate = r.nelegate; r.arbore.forEach(function(b){ S.numeDrum[b[0]] = b[1]; }); }
+    if(r.result){ S.arbore = r.arbore; S.nelegate = r.nelegate; S.dePus = r.de_pus || 0; r.arbore.forEach(function(b){ S.numeDrum[b[0]] = b[1]; }); }
     return r;
   });
 }
@@ -2387,7 +2428,10 @@ function deseneazaBaraBuchet(){
     b.appendChild(buton(L("sterge"), stergeAlese, "rosu"));
     b.appendChild(buton(L("mai_mult"), meniuBuchet));
   } else {
-    if(laRadacina()){
+    if(laRadacina() && S.dePus){
+      b.appendChild(buton(L("leaga_toate") + " (" + S.dePus + ")", puneInapoiToate, "principal"));
+      b.appendChild(buton(L("buchet_nou"), function(){ buchetNou(null); }));
+    } else if(laRadacina()){
       b.appendChild(buton(L("buchet_nou"), function(){ buchetNou(null); }, "principal"));
     } else if(ingust()){
       b.appendChild(buton(L("adauga_canale"), function(){ comutaPanou("sursa"); }, "principal"));
@@ -2397,6 +2441,13 @@ function deseneazaBaraBuchet(){
     b.appendChild(buton(L("sorteaza"), function(){ sortare(false); }));
     b.appendChild(buton(L("mai_mult"), meniuBuchet));
   }
+}
+function puneInapoiToate(){
+  // lista orfana: buchetele de pe disc care nu sunt in lista, puse inapoi si salvate dintr-o apasare
+  op({op: "leaga_toate", radio: S.radio ? 1 : 0}).then(function(r){
+    if(!r){ return; }
+    incarcaArbore().then(function(){ deseneazaBaraBuchet(); salveaza(); });
+  });
 }
 function stergeAlese(){
   var a = alesele();
@@ -2457,7 +2508,8 @@ function meniuBuchet(){
   } else {
     if(laRadacina()){
       act.push({text: L("buchet_nou"), fa: function(){ buchetNou(null); }});
-      (S.nelegate || []).forEach(function(n){
+      if(S.dePus){ act.push({text: L("leaga_toate") + " (" + S.dePus + ")", clasa: "principal", fa: puneInapoiToate}); }
+      ((S.nelegate || []).length <= MAX_NELEGATE_RANDURI ? S.nelegate || [] : []).forEach(function(n){
         act.push({text: L("lega") + ": " + n[1], fa: function(){ op({op: "leaga_buchet", buchet: n[0]}).then(function(){ incarcaArbore(); }); }});
         act.push({text: L("sterge_nelegat") + ": " + n[1], clasa: "rosu", fa: function(){
           intreaba(n[1] + ". " + L("q_sterge_nelegat"), L("sterge_nelegat"), function(){ op({op: "sterge_nelegat", buchet: n[0]}).then(function(){ incarcaArbore(); }); }, true);
@@ -2885,6 +2937,18 @@ function satelitiXml(){
       bara.appendChild(buton(L("renunta_sateliti"), function(){ cerere("/api/editor-canale-sateliti-op", "POST", {op: "renunta"}).then(satelitiXml); }));
     }
     $("vedere").appendChild(bara);
+    if(r.lipsa_imagine > 0){
+      var gi = el("div", "grupa");
+      gi.appendChild(el("p", "expl", L("sateliti_imagine_nota")));
+      gi.appendChild(buton(L("sateliti_imagine") + " (" + r.lipsa_imagine + ")", function(){ opSateliti({op: "pune_la_loc_imagine"}, satelitiXml); }, "principal"));
+      $("vedere").appendChild(gi);
+    }
+    if(r.proprie){
+      var gp = el("div", "grupa");
+      gp.appendChild(el("p", "expl", L("inapoi_imagine_nota")));
+      gp.appendChild(buton(L("inapoi_imagine"), function(){ opSateliti({op: "inapoi_la_imagine"}, satelitiXml); }));
+      $("vedere").appendChild(gp);
+    }
     r.sateliti.forEach(function(s){
       var g = el("div", "grupa");
       g.appendChild(el("h3", "", s.text + (s.nume ? "  " + s.nume : "")));
@@ -4093,6 +4157,7 @@ TEXTE_PAGINA = {
 		N_("Am găsit în listă:"),
 		N_("Vezi"),
 		N_("Pune în listă"),
+		N_("Pune înapoi toate"),
 		N_("Filtrele bazei de canale"),
 		N_("În aceeași grupă opțiunile bifate se adună cu «sau», între grupe cu «și». Numărul arată câte canale au opțiunea."),
 		N_("Șterge filtrele"),
@@ -4201,6 +4266,10 @@ TEXTE_PAGINA = {
 		N_("Schimbările se scriu în satellites.xml numai la „Salvează satellites.xml”, cu o copie înainte. Nu intră în „Anulează”."),
 		N_("satellites.xml e salvat și receptorul îl folosește."),
 		N_("satellites.xml e salvat; se vede după repornirea interfeței."),
+		N_("Pune la loc sateliții din imagine"),
+		N_("Lista sateliților e mai scurtă decât cea a imaginii (de obicei o aduce o listă de canale din alt panou). Sateliții lipsă se adaugă din lista imaginii; ce ai în listă rămâne. Sateliții pe care ai canale se pun singuri la pornire."),
+		N_("Înapoi la lista sateliților imaginii"),
+		N_("Lista ta de sateliți nu e lista imaginii. Transponderele noi ale imaginii se adaugă singure la sateliții tăi, la pornire. Dacă vrei lista imaginii întreagă în locul celei a ta: sateliții și transponderele puse de tine se pierd (rămân în copia de siguranță). Se scrie când salvezi satellites.xml."),
 		N_("Transpondere"),
 		N_("Transponder nou"),
 		N_("Editează"),

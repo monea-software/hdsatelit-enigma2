@@ -212,10 +212,23 @@ def textInformare():
 # Pagina de pornire (pe receptor si in web): numai randul scurt TEXT_SCURT, randul bifat dinainte TEXT_ACCEPT si Start.
 # Termenii si conditiile intregi (textTermeni) se deschid la cerere: OK pe rand (receptor) sau legatura din fraza (web).
 TEXT_SCURT = TEXT_CUM_MERGE
-# banda de sus cat echipa apasa taste sau scrie (op-urile de control)
+# banda de sus (si pagina web) cat echipa lucreaza: dupa ORICE cerere, nu numai dupa taste (orion_bilo, LinuxSat,
+# 14.11.2026: a asteptat 20 de minute fara sa stie ca lucram, fiindca echipa numai citea)
 TEXT_LUCREAZA = N_("HD Satelit lucrează acum pe receptorul tău")
-# cat ramane banda "lucrează acum" dupa ultimul op de control (secunde)
-LUCREAZA_S = 20
+# cat ramane banda "lucrează acum" dupa ultima cerere (secunde): echipa citeste un raspuns si trimite urmatoarea cerere
+# in cateva minute; 3 minute acopera citirea fara sa ramana "lucrează" mult dupa ce echipa s-a oprit
+LUCREAZA_S = 180
+# dupa concluziile echipei (op "concluzii"), pana la alta cerere: omul afla ca am terminat si ce urmeaza; pe banda de
+# un rand (centrata, fara rupere), deci nu mai lungi decat TEXT_BANDA_PANA / TEXT_BANDA_PERMANENT (altfel se taie
+# capetele, adica tocmai calea spre oprire); propozitia intreaga e in fereastra concluziilor
+TEXT_TERMINAT_PANA = N_("HD Satelit a terminat. Se oprește la %s")
+TEXT_TERMINAT_PERMANENT = N_("HD Satelit a terminat. Oprește când vrei")
+# in fereastra concluziilor, cat sesiunea merge inca (Rosu o opreste chiar de acolo) si dupa ce s-a oprit
+TEXT_ROSU_OPRESTE = N_("Roșu: oprești asistența acum.")
+TEXT_OPRITA_GATA = N_("Asistența s-a oprit. Nu mai ai nimic de făcut.")
+# anuntul de pe ecran cand sesiunea se opreste fara om (echipa a inchis-o sau a trecut timpul), dupa ce echipa a intrat
+TEXT_SFARSIT_ECHIPA = N_("Echipa HD Satelit a terminat și a închis asistența. Nu mai ai nimic de făcut.")
+TEXT_SFARSIT_TIMP = N_("Asistența s-a oprit singură: s-a terminat timpul ales. Nu mai ai nimic de făcut.")
 TEXT_ACCEPT = N_("Accept termenii și condițiile")
 TEXT_TERMENI = N_("Termenii și condițiile")
 TEXT_FARA_BIFA = N_("Fără bifă, asistența nu pornește.")
@@ -364,6 +377,15 @@ def disponibil():
 
 # ---------------------------------------------------------------- cererea semnata
 
+# Cel mai mare corp semnat primit (octetii canonici, dupa base64). Octetii sunt JSON numai ASCII: o litera greceasca,
+# ruseasca sau araba ajunge \uXXXX (6 octeti), una din afara planului de baza (emoji) doua astfel de grupuri (12 octeti).
+# Pana in 0.7.4 plafonul era 4096: concluziile de ~600 de litere ne-latine erau refuzate "forma", desi catalogul
+# (data/asistenta/catalog.json, op concluzii) si unealta (CONCLUZII_MAX) primesc 2000 de semne (asistenta 289712,
+# Vu+ Duo 4K SE, Grecia). 2000 x 12 plus antetul JSON incap in 32768. Unealta de pe PC (unelte/asistenta/asistenta_lib.py,
+# cerere_max) stie plafonul fiecarei versiuni si opreste inainte de trimitere o cerere prea mare.
+CERERE_MAX = 32768
+
+
 def octetiCerere(id_sesiune, seq, op, args):
 	"""Octetii canonici care se semneaza/verifica: JSON cu chei sortate, fara spatii, numai ASCII. Aceeasi functie e
 	si in unealta de pe PC (unelte/asistenta/asistenta_lib.py); o proba verifica potrivirea octet cu octet."""
@@ -387,7 +409,7 @@ def verificaCerere(exterior, id_sesiune, ultim_seq, chei=None, revocate=None):
 		octeti = base64.b64decode(b64.encode("ascii"), validate=True)
 	except Exception:
 		return False, None, "forma"
-	if len(octeti) > 4096:
+	if len(octeti) > CERERE_MAX:
 		return False, None, "forma"
 	chei = CHEI_ASISTENTA if chei is None else chei
 	revocate = REVOCATE_ASISTENTA if revocate is None else revocate
@@ -779,6 +801,8 @@ class Sesiune(object):
 
 	def opreste(self, motiv="de om"):
 		self.motiv_oprire = motiv
+		# inainte ca starea sa iasa din cele active: banda (pe firul enigma2) vede oprirea si citeste imediat cum a fost
+		_ultimaOprire[0] = {"id": self.id, "motiv": motiv, "cu_echipa": self.ultim_seq > 0}
 		self._stop.set()
 		self._pune_stare(SE_OPRESTE)
 
@@ -840,6 +864,8 @@ class Sesiune(object):
 				self.opreste("eroare: %s" % type(e).__name__)
 		finally:
 			self.jurnal.adauga(_t("oprită (%s)") % textMotiv(self.motiv_oprire) if self.motiv_oprire else _t("oprită"))
+			# pentru anuntul de sfarsit (textSfarsit): cum s-a oprit si daca echipa a intrat (a trimis macar o cerere)
+			_ultimaOprire[0] = {"id": self.id, "motiv": self.motiv_oprire, "cu_echipa": self.ultim_seq > 0}
 			self._pune_stare(OPRIT)
 			self._curata()
 			_uita(self)
@@ -989,21 +1015,29 @@ class Sesiune(object):
 		elif op == "citeste" and args:
 			# omul vede ce fisier sau dosar citeste echipa
 			eticheta = "%s: %s" % (eticheta, args[0])
+		if op in ("citeste", "jurnal") and len(args) > (1 if op == "citeste" else 2) and args[-1]:
+			# "de la octetul": si omul vede de unde
+			eticheta = "%s %s" % (eticheta, _t("(de la octetul %s)") % args[-1])
 		if fel_cat == "control" and self.nivel != "B":
 			self.jurnal.adauga(_t("cerere refuzată: %s") % _t("control oprit"))
 			rez = Broker.Rezultat(1, text=Broker.TEXT_FARA_CONTROL)
 		else:
 			self.jurnal.adauga("%s: %s" % (fel, eticheta))
-			if fel_cat == "control":
-				_ultimControl[0] = _acum()
+			# orice cerere (si citirile): banda spune ca echipa lucreaza
+			_ultimControl[0] = _acum()
 			if op == "reporneste":
 				# seq-ul se scrie INAINTE de repornire: sesiunea reluata dupa ea nu trebuie sa reporneasca din nou
 				self.ultim_seq = seq
 				self._scrie_stare()
 			_anunta()
 			rez = Broker.ruleaza(op, args, dict(self.ctx, nivel=self.nivel))
-			if fel_cat == "control":
-				_ultimControl[0] = _acum()
+			_ultimControl[0] = _acum()
+			if op == "concluzii":
+				# echipa a trimis concluziile: a terminat, pana la o alta cerere
+				if rez.cod_iesire == 0:
+					_terminat[0] = self.id
+			elif op != "mesaj":
+				_terminat[0] = None
 		self.jurnal.adauga(_t("    răspuns: cod %d, %d octeți") % (rez.cod_iesire, rez.marime()))
 		self._trimite_raspuns(seq, op, rez)
 		self.ultim_seq = seq
@@ -1035,14 +1069,54 @@ class Sesiune(object):
 		self._stop.wait(s)
 
 
-# cand a rulat ultimul op de control (ceasul monoton): banda de sus arata TEXT_LUCREAZA cat timp e proaspat
+# cand a rulat ultima cerere (ceasul monoton; orice op, din 0.7.5, nu numai cele de control): banda de sus arata
+# TEXT_LUCREAZA cat timp e proaspata
 _ultimControl = [None]
+# id-ul sesiunii in care echipa a trimis concluziile si n-a mai cerut altceva dupa ele (None: nu a terminat)
+_terminat = [None]
+# cum s-a oprit ultima sesiune: {"id", "motiv", "cu_echipa"} (textSfarsit)
+_ultimaOprire = [None]
+
+
+def terminatAcum(ses=None):
+	"""True cand echipa a trimis concluziile in sesiunea activa si n-a mai cerut nimic dupa ele."""
+	ses = ses if ses is not None else _sesiune
+	return ses is not None and ses.activa() and bool(getattr(ses, "id", None)) and _terminat[0] == ses.id
 
 
 def lucreazaAcum():
-	"""True cat echipa lucreaza pe receptor (un op de control in ultimele LUCREAZA_S secunde)."""
+	"""True cat echipa lucreaza pe receptor (o cerere in ultimele LUCREAZA_S secunde), dar nu dupa concluzii."""
 	t = _ultimControl[0]
-	return t is not None and _acum() - t < LUCREAZA_S
+	return t is not None and _acum() - t < LUCREAZA_S and not terminatAcum()
+
+
+def textActivitate(ses=None):
+	"""Ce face echipa acum, pentru banda de sus si pagina web: "HD Satelit a terminat..." dupa concluzii, "HD Satelit
+	lucrează acum..." cat cererile sunt proaspete, altfel "" (banda arata atunci pana cand e pornita)."""
+	ses = ses if ses is not None else _sesiune
+	if ses is None or not ses.activa():
+		return ""
+	if terminatAcum(ses):
+		if ses.permanenta():
+			return _t(TEXT_TERMINAT_PERMANENT)
+		pana = ses.pana_la_ora if ses.pana_la_ora is not None else _oraPerete() + ses.durata_min * 60
+		return _t(TEXT_TERMINAT_PANA) % oraSfarsit(pana)
+	if lucreazaAcum():
+		return _t(TEXT_LUCREAZA)
+	return ""
+
+
+def textSfarsit(id_sesiune):
+	"""Anuntul de pe ecran la sfarsitul sesiunii id_sesiune, cand s-a oprit fara om (echipa a inchis-o, a trecut timpul)
+	si echipa intrase; altfel "" (omul care o opreste stie, iar o sesiune fara echipa nu are ce anunta)."""
+	o = _ultimaOprire[0]
+	if not o or not id_sesiune or o.get("id") != id_sesiune or not o.get("cu_echipa"):
+		return ""
+	if o.get("motiv") == "inchis":
+		return _t(TEXT_SFARSIT_ECHIPA)
+	if o.get("motiv") in ("termen", "expirat"):
+		return _t(TEXT_SFARSIT_TIMP)
+	return ""
 
 
 def _seq_din(exterior):
@@ -1197,11 +1271,23 @@ def ultimeleConcluzii():
 	return {"text": curataConcluzii(o["text"]), "ora": ora, "id": o.get("id")}
 
 
-def textConcluzii(intrare):
-	"""Textul ferestrei: concluziile, apoi multumirile."""
+def textConcluzii(intrare, sfarsit=False):
+	"""Textul ferestrei: concluziile, apoi multumirile; pentru concluziile sesiunii de acum, si cum se termina: pana
+	cand merge si ca Rosu o opreste; la sfarsitul ei (sfarsit=True), ca s-a oprit si nu mai e nimic de facut."""
 	if not intrare:
 		return ""
-	return "%s\n\n%s" % (intrare.get("text") or "", _t(TEXT_MULTUMIM))
+	text = "%s\n\n%s" % (intrare.get("text") or "", _t(TEXT_MULTUMIM))
+	if sfarsit:
+		text += "\n" + _t(TEXT_OPRITA_GATA)
+	elif concluziiDeAcum(intrare):
+		text += "\n%s %s" % (textPana(_sesiune), _t(TEXT_ROSU_OPRESTE))
+	return text
+
+
+def concluziiDeAcum(intrare):
+	"""True cand concluziile sunt ale sesiunii care merge acum (Rosu din fereastra lor o opreste)."""
+	ses = _sesiune
+	return bool(intrare) and ses is not None and ses.activa() and bool(getattr(ses, "id", None)) and 		intrare.get("id") == ses.id
 
 
 def stareConcluzii():
@@ -1343,6 +1429,8 @@ def stare():
 		"permanent": ses.permanenta(),
 		"pana_la": ses.pana_la_ora,
 		"pana_text": textPana(ses),
+		# ce face echipa acum ("lucrează acum" / "a terminat..." / ""), ca pe banda de sus
+		"activitate": textActivitate(ses),
 		"jurnal": ses.jurnal.ultimele(40) if ses.jurnal else [],
 		"durate": list(DURATE_MIN),
 		"durata_implicita": DURATA_IMPLICITA_MIN,

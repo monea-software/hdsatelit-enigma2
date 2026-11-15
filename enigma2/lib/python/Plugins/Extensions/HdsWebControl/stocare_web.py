@@ -356,6 +356,7 @@ PAGINA = """<!DOCTYPE html>
     <h2>Cum alege receptorul</h2>
     <p class="nota">La prima înregistrare (tasta roșie, pauză, o emisiune programată din ghid sau de aici), receptorul caută singur stick-urile și hard diskurile. Dacă e unul singur, îl folosește și face pe el dosarul movie. Dacă sunt mai multe, te întreabă o dată pe care și ține minte alegerea; dacă nu răspunzi până pornește o înregistrare programată, ia singur discul cu cel mai mult loc liber. Memoria internă a receptorului nu se folosește niciodată: e prea mică.</p>
     <p class="nota">Când imaginea pornește de pe un disc mare, el apare aici ca Discul de pornire și receptorul îl alege singur, dacă nu ai ales alt disc. Dosarul movie stă în afara imaginii, deci înregistrările rămân și după o actualizare.</p>
+    <p class="nota">Când legi un hard disk și înregistrările stau încă pe un stick sau pe un card, într-un loc pe care nu l-ai ales tu, receptorul le mută singur pe hard disk și îți spune o dată. După ce alegi tu un loc, aici sau pe televizor, nu mai mută nimic singur.</p>
   </section>
   <section class="card ascuns" id="cardNecitite">
     <h2>Discuri pe care receptorul nu le poate citi</h2>
@@ -601,6 +602,9 @@ TEXTE_PAGINA = {
 		N_("Când imaginea pornește de pe un disc mare, el apare aici ca Discul de pornire și receptorul îl "
 			"alege singur, dacă nu ai ales alt disc. Dosarul movie stă în afara imaginii, deci înregistrările "
 			"rămân și după o actualizare."),
+		N_("Când legi un hard disk și înregistrările stau încă pe un stick sau pe un card, într-un loc pe care nu l-ai ales tu, "
+			"receptorul le mută singur pe hard disk și îți spune o dată. După ce alegi tu un loc, aici sau pe televizor, nu mai "
+			"mută nimic singur."),
 		N_("Discuri pe care receptorul nu le poate citi"),
 		N_("Verifică mai întâi mesajul discului. Pentru un disc fără sistem de fișiere, poți folosi Formatează din pagina Discurile. Formatarea șterge tot de pe el."),
 		N_("Locul fiecărui fel de înregistrare (programate, imediate, timeshift) se alege în <a "

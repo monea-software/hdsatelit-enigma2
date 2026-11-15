@@ -30,6 +30,9 @@
 #      ramas in /tmp se foloseste numai daca suma lui e SHA256sum din aceste liste; altfel opkg il descarca dupa nume,
 #      cu o configurare proprie care are numai sursele verificate (opkg verifica SHA256sum la descarcare); inainte de o
 #      descarcare se asteapta o ruta implicita (IPv4 sau IPv6), cel mult RETEA_ASTEPTARE_S;
+#      Un pachet tinta ramas in status cu chiar versiunea ceruta, dar half-installed sau unpacked (o ciocnire de fisiere
+#      cu un pachet strain), se instaleaza cu --force-reinstall --force-overwrite (0.7.5, JAK); pachetele hdsatelit-*
+#      ramase asa sunt si ele tinte, cu versiunea din status, cand listele semnate o au;
 #   4. fiecare pachet tinta se verifica apoi in status: versiunea ceruta si "installed". Un pachet ramas pe versiunea veche
 #      cu cod 0 (opkg cu libsolv il poate tine pe loc fara eroare) e tot esec;
 #   5. rezultatul (REZULTAT, in /tmp) il arata enigma2 pe televizor si in pagina web (HdsActualizari.porneste); randurile
@@ -38,6 +41,17 @@
 # fara sa le schimbe) se numara in SEMN; dupa MAX_INCERCARI semnul ramane cu renuntat=1 (nu se mai incearca, nu se mai
 # arata nimic) pana la o actualizare reusita din meniu. O descarcare cazuta (fara retea, ceasul in urma dupa o repornire
 # dura) nu se numara.
+#
+# Al doilea mod, `pachete-pornire` (0.7.5, CTU, TODO 15.11 07:08; Ustym 4K PRO, raportul 340957): un pachet strain instalat cu
+# opkg a inlocuit python3-attrs si twisted ale imaginii, iar enigma2 cadea la fiecare pornire in importul lui twisted din
+# mytest.py (attr.exceptions.UnannotatedAttributeError), si in modul sigur. tools/enigma2.sh numara caderile cu stiva in
+# importurile de baza (mytest.py, e2reactor, twisted, attr, zope, fara niciun plugin) si, de la a doua in 10 minute, porneste
+# acest mod, o data pe pornirea receptorului (PE_PORNIRE_BAZA): pachetele pornirii (PACHETE_PORNIRE, aceeasi lista ca in
+# Components/HdsPachetePornire.py) se instaleaza din nou numai din listele semnate ale feedului HD Satelit (acelasi lant ca
+# mai sus), cu --force-reinstall --force-overwrite si, cand pachetul strain avea versiunea mai mare, --force-downgrade.
+# Pachetele straine care au fisierele lor sau le inlocuiesc NU se sterg (sunt ale omului): numele lor merg in jurnal si in
+# rezultat (stare pornire-reparata sau pornire-nereparata), pe care enigma2 il arata o data, pe televizor si in pagina web.
+# Daca chiar python3-core e stricat, programul nu poate porni: ramane modul sigur.
 #
 # Numai biblioteca standard Python (fara module enigma2 si fara alte module HD Satelit: acelea pot fi chiar fisierele
 # amestecate). Variabilele HDS_AI_* sunt numai pentru probele de pe PC (teste/test_actualizare_intrerupta_074.py).
@@ -70,7 +84,7 @@ MARIME_JURNAL = 128 * 1024
 REZULTAT = '/tmp/hds-actualizare-intrerupta.rezultat'
 RULEAZA = '/tmp/hds-actualizare-intrerupta.ruleaza'
 PE_PORNIRE = '/tmp/hds-actualizare-intrerupta.incercata'
-# lacatul lui opkg 0.10 din imagine: /run/opkg.lock (vazut pe .122 in timpul unei instalari); /var/run e alt dosar
+# lacatul lui opkg 0.10 din imagine: /run/opkg.lock (vazut pe receptorul de proba in timpul unei instalari); /var/run e alt dosar
 # (/var/volatile/run). Calea veche ramane a doua.
 LACAT = '/run/opkg.lock'
 LACATE = (LACAT, '/var/run/opkg.lock')
@@ -78,6 +92,10 @@ LUCRU = '/tmp/hds-reparare-opkg'
 LISTE_IMPLICIT = '/var/lib/opkg/lists'
 STATUS_IMPLICIT = '/var/lib/opkg/status'
 PACHET_PRINCIPAL = 'enigma2-hdsatelit'
+# 0.7.5 (JAK, TODO 13.11 11:20): si celelalte pachete ale imaginii (hdsatelit-*) ramase la jumatate in status se termina
+# aici, cu pachetul principal; starile de status care inseamna "dezarhivat, dar neterminat"
+PREFIX_IMAGINE = 'hdsatelit-'
+STARI_NETERMINATE = ('half-installed', 'unpacked', 'half-configured')
 # partea a doua pe stick (Components/HdsParteaDoua.py, receptoarele cu NAND): legaturile din /usr spre stick se scot pe
 # durata lui opkg, ca baza sa nu se scrie pe stick prin ele (ca detaseazaPentruBaza din meniu), si se pun la loc dupa
 # cu motorul ei (aceeasi comanda ca scriptul de pornire rc3 S05)
@@ -98,6 +116,20 @@ _ADRESA = re.compile(r'^https://stb\.hdsatelit\.com/feed/(proba|public)/([0-9]{1
 	r'([a-z0-9][a-z0-9_\-]{0,63})/?\Z')
 _NUME = re.compile(r'^[a-z0-9][a-z0-9+.\-]{0,127}\Z')
 _PAROLA_IN_ADRESA = re.compile(r'(?i)\b((?:https?|ftps?)://)[^/\s@]+@')
+# 0.7.5 (CTU): pachetele de care porneste interfata (aceeasi lista ca Components/HdsPachetePornire.py; test_ctu_* le compara)
+PACHETE_PORNIRE = frozenset((
+	'python3', 'python3-core', 'python3-attrs', 'python3-automat', 'python3-cffi', 'python3-constantly',
+	'python3-cryptography', 'python3-hyperlink', 'python3-idna', 'python3-incremental', 'python3-pyasn1',
+	'python3-pyasn1-modules', 'python3-pyopenssl', 'python3-service-identity', 'python3-six', 'python3-typing-extensions',
+	'python3-zopeinterface',
+))
+PREFIXE_PORNIRE = ('python3-twisted', 'libpython3')
+# fara ele mytest.py nu trece de twisted: se pun la loc si cand pachetul strain le-a scos (Replaces)
+PORNIRE_NEAPARAT = ('python3-attrs', 'python3-twisted', 'python3-twisted-core', 'python3-zopeinterface',
+	'python3-automat', 'python3-constantly', 'python3-hyperlink', 'python3-incremental', 'python3-typing-extensions')
+PE_PORNIRE_BAZA = '/tmp/hds-pachete-pornire.incercata'
+INFO = '/var/lib/opkg/info'
+
 # randurile lui opkg care arata ca a ajuns la pachete (nu numai la descarcare): numai atunci se numara incercarea
 _A_LUCRAT = re.compile(r'^(Upgrading|Installing|Configuring|Removing obsolete) ')
 
@@ -222,6 +254,24 @@ def instalate(optiuni):
 			continue
 		st = s.get('status', '').split()
 		rez[nume] = (s.get('version', ''), 'installed' in st and 'not-installed' not in st)
+	return rez
+
+
+def al_imaginii(nume):
+	return nume == PACHET_PRINCIPAL or nume.startswith(PREFIX_IMAGINE)
+
+
+def neterminate_imagine(optiuni):
+	"""{nume: versiune} ale pachetelor imaginii (al_imaginii) cerute la instalare ("install ...") si ramase in status
+	half-installed, unpacked sau half-configured: o instalare oprita la jumatate sau cazuta pe o ciocnire de fisiere. Un
+	pachet scos (deinstall, config-files) nu intra."""
+	rez = {}
+	for s in strofe(c(optiuni.get('status_file', STATUS_IMPLICIT))):
+		nume = s.get('package')
+		st = s.get('status', '').split()
+		if nume and al_imaginii(nume) and st[:1] == ['install'] and st[-1:] and st[-1] in STARI_NETERMINATE and \
+				s.get('version'):
+			rez[nume] = s['version']
 	return rez
 
 
@@ -375,7 +425,7 @@ def neterminata(semn, ramase, inst, img):
 	return ''
 
 
-def tinte(semn, ramase_verificate, inst, img, intrari):
+def tinte(semn, ramase_verificate, inst, img, intrari, neterminate=None):
 	"""{nume: versiune} de instalat: din semn, din pachetele ramase si verificate, iar fara ele pachetul principal cu
 	versiunea din /etc/image-version (cea mai mare intrare verificata cu partea scurta egala)"""
 	rez = {}
@@ -384,6 +434,12 @@ def tinte(semn, ramase_verificate, inst, img, intrari):
 			rez[nume] = versiune
 	for _cale, x in ramase_verificate:
 		rez.setdefault(x['nume'], x['versiune'])
+	# 0.7.5 (JAK): un pachet hdsatelit-* ramas la jumatate (neterminate_imagine) se termina cu versiunea din status cand
+	# listele semnate o au (opkg nu-l mai socoteste de instalat: reinstalare, _optiuni_reinstalare)
+	for nume, versiune in sorted((neterminate or {}).items()):
+		if nume != PACHET_PRINCIPAL and nume not in rez and \
+				any(x['nume'] == nume and x['versiune'] == versiune for x in intrari):
+			rez[nume] = versiune
 	principal = inst.get(PACHET_PRINCIPAL)
 	if PACHET_PRINCIPAL not in rez and img and principal is not None and \
 			(not principal[1] or versiune_scurta(principal[0]) != img):
@@ -399,6 +455,18 @@ def tinte(semn, ramase_verificate, inst, img, intrari):
 
 def nesatisfacute(tinta, inst):
 	return sorted(n for n, v in tinta.items() if inst.get(n) != (v, True))
+
+
+def _optiuni_reinstalare(lipsa, tinta, inst):
+	"""Optiunile opkg cand un pachet de terminat are in status chiar versiunea ceruta, dar neinstalat (half-installed dupa
+	o ciocnire de fisiere, unpacked): opkg 0.10 cu libsolv il socoteste instalat si nu face nimic, dupa nume sau din
+	cale ("Refusing to load file ... as it matches the installed version", proba AJU pe receptorul de proba, 15.11.2026). Atunci
+	--force-reinstall, plus --force-overwrite: fisierul luat de un pachet strain (JAKITAKI, OAWeather strain) se ia
+	inapoi, ca la instalarea din meniu (HdsActualizari.argumente_instalare). Numai pachete din listele semnate ajung
+	aici. [] in rest (actualizarea obisnuita, ca inainte)."""
+	if any((inst.get(n) or ('', False))[0] == tinta[n] for n in lipsa):
+		return ['--force-reinstall', '--force-overwrite']
+	return []
 
 
 def principal_coerent(inst, img):
@@ -716,7 +784,7 @@ def _termina_opkg(optiuni, randuri, arh, semn, ramase, inst, img):
 			jurnal('%s nu e in listele semnate; nu se foloseste' % os.path.basename(cale))
 		else:
 			verificate.append((cale, x))
-	tinta = tinte(semn, verificate, inst, img, intrari)
+	tinta = tinte(semn, verificate, inst, img, intrari, neterminate_imagine(optiuni))
 	lipsa = nesatisfacute(tinta, inst)
 	if not lipsa and principal_coerent(inst, img):
 		if nesatisfacute(tinta, inainte) or not principal_coerent(inainte, img):
@@ -754,9 +822,14 @@ def _termina_opkg(optiuni, randuri, arh, semn, ramase, inst, img):
 		return 0
 	if nume:
 		asteapta_reteaua()
-	cod, a_lucrat = ruleaza_opkg(['-f', conf, 'install'] + fisiere + nume)
+	cod, a_lucrat = ruleaza_opkg(['-f', conf, 'install'] + _optiuni_reinstalare(lipsa, tinta, inst) + fisiere + nume)
 	inst = instalate(optiuni)
 	lipsa = nesatisfacute(tinta, inst)
+	if lipsa and all((inst.get(n) or ('', False))[0] == tinta[n] for n in lipsa):
+		# pachetele au versiunea ceruta, dar au ramas dezarhivate (configurarea unui pachet a cazut): inca o configurare
+		ruleaza_opkg(['configure'])
+		inst = instalate(optiuni)
+		lipsa = nesatisfacute(tinta, inst)
 	jurnal('instalare la pornire: cod %s, ramase %s' % (cod, lipsa))
 	if not lipsa and principal_coerent(inst, img):
 		return _gata(semn, versiune, tinta, 'opkg install')
@@ -788,9 +861,128 @@ def _gata(semn, versiune, tinta, cum):
 	return 0
 
 
+# ---------------------------------------------------------------- pachetele pornirii (0.7.5, CTU)
+
+def al_pornirii(nume):
+	return nume in PACHETE_PORNIRE or nume.startswith(PREFIXE_PORNIRE)
+
+
+def _lista(nume):
+	try:
+		with open(c('%s/%s.list' % (INFO, nume)), 'r', encoding='utf-8', errors='replace') as f:
+			return [r.strip() for r in f if r.strip().startswith('/')]
+	except (IOError, OSError):
+		return []
+
+
+def straini_peste_pornire(optiuni, inst):
+	"""{pachet strain: ce atinge} pentru pachetele instalate care nu sunt ale pornirii, dar le inlocuiesc (Replaces, Provides,
+	Conflicts) sau au fisiere ale lor (dupa listele din INFO; un fisier luat cu --force-overwrite trece in lista celui nou)"""
+	rez = {}
+	for s in strofe(c(optiuni.get('status_file', STATUS_IMPLICIT))):
+		nume = s.get('package', '')
+		if not nume or al_pornirii(nume):
+			continue
+		for camp in ('replaces', 'provides', 'conflicts'):
+			for parte in s.get(camp, '').replace('|', ',').split(','):
+				n = parte.strip().split(' ', 1)[0].split('(', 1)[0]
+				if n and al_pornirii(n):
+					rez.setdefault(nume, n)
+	ale_lor = set()
+	for n in inst:
+		if al_pornirii(n):
+			ale_lor.update(_lista(n))
+	# un fisier de-al lor luat de alt pachet nu mai e in lista lor: se cauta dosarele lor in listele celorlalte pachete
+	dosare = set(os.path.dirname(f) for f in ale_lor if '/site-packages/' in f)
+	for n in sorted(inst):
+		if al_pornirii(n) or n in rez:
+			continue
+		for f in _lista(n):
+			if f in ale_lor or os.path.dirname(f) in dosare:
+				rez[n] = f
+				break
+	return rez
+
+
+def scrie_rezultat_pornire(stare, versiune, straine, ramase=()):
+	try:
+		scrie_atomic(c(REZULTAT), 'stare=%s\nversiune=%s\nramase=%s\nstraine=%s\ndetaliu=%s\nora=%d\n' % (stare, versiune,
+			' '.join(ramase), ' '.join(sorted(straine))[:300], 'pachetele pornirii', int(time.time())), sincron=False)
+	except (IOError, OSError) as e:
+		jurnal('rezultatul nu se poate scrie: %s' % e)
+
+
+def pachete_pornire():
+	"""Pune la loc pachetele pornirii din listele semnate (vezi antetul); o data pe pornirea receptorului"""
+	if os.path.exists(c(PE_PORNIRE_BAZA)):
+		return 0
+	try:
+		scrie_atomic(c(PE_PORNIRE_BAZA), '%d\n' % int(time.time()), sincron=False)
+	except (IOError, OSError):
+		pass
+	optiuni, randuri, arh = configurarea()
+	inst = instalate(optiuni)
+	img = versiunea_imaginii()
+	jurnal('interfata cade la pornire in importurile de baza (twisted, attr): pun la loc pachetele Python ale imaginii')
+	afisaj('PY3')
+	straine = straini_peste_pornire(optiuni, inst)
+	for n, ce in sorted(straine.items()):
+		jurnal('pachet strain peste pachetele pornirii: %s (%s); nu-l sterg' % (n, ce))
+	t = 0
+	while opkg_ocupat() and t < ASTEPTARE_LACAT_S:
+		time.sleep(5)
+		t += 5
+	if opkg_ocupat():
+		jurnal('alt opkg ruleaza de %d s; nu ating nimic acum' % t)
+		return 0
+	surse, greseli = surse_verificate(optiuni)
+	for g in greseli:
+		jurnal(g)
+	feed = {}
+	for x in intrari_verificate(surse):
+		if al_pornirii(x['nume']) and (x['nume'] not in feed or compara_versiuni(x['versiune'], feed[x['nume']]) > 0):
+			feed[x['nume']] = x['versiune']
+	tinta = dict((n, feed[n]) for n in feed if n in inst or n in PORNIRE_NEAPARAT)
+	if not tinta:
+		jurnal('listele semnate nu au pachetele pornirii; nu se pot pune la loc aici')
+		scrie_rezultat_pornire('pornire-nereparata', img, straine)
+		return 0
+	optiuni_opkg = ['--force-reinstall', '--force-overwrite']
+	if any(n in inst and inst[n][0] and compara_versiuni(inst[n][0], v) > 0 for n, v in tinta.items()):
+		optiuni_opkg.append('--force-downgrade')
+	try:
+		conf = configurare_proprie(randuri, arh, surse)
+	except (IOError, OSError) as e:
+		jurnal('configurarea opkg nu se poate scrie: %s' % e)
+		return 0
+	asteapta_reteaua()
+	detasat = detaseaza_partea_doua()
+	try:
+		cod, _a_lucrat = ruleaza_opkg(['-f', conf, 'install'] + optiuni_opkg + sorted(tinta))
+		inst = instalate(optiuni)
+		lipsa = nesatisfacute(tinta, inst)
+		if lipsa and all((inst.get(n) or ('', False))[0] == tinta[n] for n in lipsa):
+			ruleaza_opkg(['configure'])
+			inst = instalate(optiuni)
+			lipsa = nesatisfacute(tinta, inst)
+	finally:
+		if detasat:
+			reataseaza_partea_doua()
+		goleste_lucrul()
+	jurnal('pachetele pornirii: cod %s, ramase %s' % (cod, lipsa))
+	scrie_rezultat_pornire('pornire-nereparata' if lipsa else 'pornire-reparata', img, straine, lipsa)
+	return 0
+
+
 def main(argv):
+	if argv[1:2] == ['pachete-pornire']:
+		try:
+			return pachete_pornire() or 0
+		except Exception as e:  # pornirea interfetei nu depinde de acest program
+			jurnal('eroare neprevazuta (pachetele pornirii): %r' % (e,))
+			return 0
 	if argv[1:2] != ['pornire']:
-		sys.stderr.write('folosire: hds-actualizare-intrerupta.py pornire\n')
+		sys.stderr.write('folosire: hds-actualizare-intrerupta.py pornire | pachete-pornire\n')
 		return 0
 	try:
 		return pornire() or 0

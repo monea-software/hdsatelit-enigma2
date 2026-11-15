@@ -399,29 +399,56 @@ def _ruleaza(comanda):
 	f = _proba.get("grab")
 	if f is not None:
 		return f(comanda)
+	stare, cod, iesire = ruleazaGrab(comanda, TIMP_GRAB_S)
+	return (cod, iesire) if stare == "ok" else (None, b"")
+
+
+# procesele grab oprite cu kill() care n-au iesit (blocate in driver, starea D): cat traieste unul, ruleazaGrab nu
+# porneste altul (s-ar bloca la fel)
+_grabRamase = []
+_lacatGrab = threading.Lock()
+
+
+def grabRamasInViata():
+	"""True cat un grab oprit cu kill() n-a iesit inca; poll() il si culege cand a iesit."""
+	with _lacatGrab:
+		_grabRamase[:] = [p for p in _grabRamase if p.poll() is None]
+		return bool(_grabRamase)
+
+
+def ruleazaGrab(comanda, termen_s, oprire_s=OPRIRE_GRAB_S):
+	"""grab cu asteptarea marginita, pe un fir separat (niciodata pe firul enigma2: pe HiSilicon grab pornit de acolo,
+	cu bucla oprita cat asteapta, trece de termen). -> (stare, cod, octeti): ("ok", cod, iesire); ("lipsa", None, b"")
+	cand nu porneste; ("termen", None, b"") cand nu termina in termen_s (oprit cu kill(), apoi asteptat cel mult
+	oprire_s; daca tot nu iese ramane in _grabRamase); ("ramas", None, b"") cand un grab de dinainte n-a iesit.
+	Folosit de capturile de aici si de raportul beta testerului (Components/HdsBetaTester, 0.7.5 FIR)."""
+	if grabRamasInViata():
+		_jurnal("grab: cel de dinainte, oprit dupa termen, n-a iesit inca")
+		return "ramas", None, b""
 	try:
 		p = subprocess.Popen(comanda, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 	except (OSError, ValueError) as e:
 		_jurnal("grab: %s" % e)
-		return None, b""
+		return "lipsa", None, b""
 	try:
-		iesire, _erori = p.communicate(timeout=TIMP_GRAB_S)
-		return p.returncode, iesire or b""
+		iesire, _erori = p.communicate(timeout=termen_s)
+		return "ok", p.returncode, iesire or b""
 	except subprocess.TimeoutExpired:
-		_jurnal("grab nu a terminat in %d s" % TIMP_GRAB_S)
+		_jurnal("grab nu a terminat in %d s" % termen_s)
 		try:
 			p.kill()
 		except OSError:
 			pass
 		try:
-			p.communicate(timeout=OPRIRE_GRAB_S)
+			p.communicate(timeout=oprire_s)
 		except subprocess.TimeoutExpired:
-			for flux in (p.stdout,):
-				try:
-					flux.close()
-				except Exception:
-					pass
-		return None, b""
+			with _lacatGrab:
+				_grabRamase.append(p)
+			try:
+				p.stdout.close()
+			except Exception:
+				pass
+		return "termen", None, b""
 
 
 def _fa(cu_imagine=None, loc=None, paza=None):

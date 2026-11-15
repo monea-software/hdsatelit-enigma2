@@ -730,6 +730,65 @@ def locDinCadru(cadru, adancime=200):
 	return interior, intrare
 
 
+# HDSatelit 0.7.6 (FRZ, rapoartele 2150, 2149, 2096): „isdir <- Screen.py execBegin” nu spunea cine a chemat isdir, iar
+# „os.stat <- ActionMap.action” cu 2 priviri in 11 s nu spunea ca firul principal astepta lacatul Python tinut de alt fir (stat pe
+# /tmp nu tine 11 s; paznicul e si el un fir Python si n-a putut privi decat de doua ori). Randul are acum cadrul de mijloc
+# (primul cadru din codul imaginii sau al unui plugin de deasupra celui interior) si, cand privirile sunt mult mai putine decat
+# secundele, locul cel mai des vazut al celorlalte fire Python care lucreaza.
+_ASTEAPTA = ("wait", "_wait_for_tstate_lock", "select", "poll", "accept", "recv", "recv_into", "readline", "sleep",
+	"_worker", "join")
+
+
+def _bibliotecaPython(scurt):
+	return scurt.startswith("python3") or scurt.startswith("<frozen") or "/python3." in scurt or "twisted/" in scurt
+
+
+def mijlocDinCadru(cadru, adancime=200):
+	"""Cadrul de mijloc ca text „Fisier.py:rand functie”: deasupra celui interior, primul din codul imaginii sau al unui plugin,
+	altul decat intrarea; None cand stiva n-are asa ceva (doua cadre, numai biblioteca)."""
+	loc = locDinCadru(cadru)
+	if loc is None:
+		return None
+	interior, intrare = loc
+	c = cadru.f_back
+	while c is not None and adancime > 0:
+		f = c.f_code.co_filename or ""
+		if any(b in f for b in _BUCLA):
+			return None
+		text = "%s:%d %s" % (_scurt(f), c.f_lineno, c.f_code.co_name)
+		if text == intrare:
+			return None
+		if not _bibliotecaPython(_scurt(f)) and text != interior:
+			return text
+		c = c.f_back
+		adancime -= 1
+	return None
+
+
+def _cadreleAltorFire():
+	"""[(numele firului, cadrul de sus)] pentru firele Python in afara de cel principal si cel care priveste"""
+	try:
+		cadre = sys._current_frames()
+		nume = dict((t.ident, t.name) for t in threading.enumerate())
+		eu, principal = threading.get_ident(), threading.main_thread().ident
+		return [(nume.get(i, "fir %s" % i), c) for i, c in cadre.items() if i not in (eu, principal)]
+	except Exception:
+		return []
+
+
+def locAltFir(cadru):
+	"""Locul de sus al altui fir, sau None cand firul asteapta (wait, get, select, sleep ...) ori e in bucla."""
+	if cadru is None:
+		return None
+	cod = cadru.f_code
+	if cod.co_name in _ASTEAPTA:
+		return None
+	f = cod.co_filename or ""
+	if any(b in f for b in _BUCLA):
+		return None
+	return "%s:%d %s" % (_scurt(f), cadru.f_lineno, cod.co_name)
+
+
 def _secundeDeLaPornire():
 	"""Cate secunde are procesul (/proc/self/stat campul 22 fata de /proc/uptime), sau None."""
 	try:
@@ -757,14 +816,17 @@ class FirOcupat(object):
 	cod Python (firul principal tine lacatul Python in C++, deci firul de supraveghere nu poate rula), randul spune „in
 	C++”: atunci stivele paznicului (hds-watchdog.py, peste 120 s) au si firele vazute de nucleu. Nimic pe ecran."""
 
-	def __init__(self, ceas=None, cadru=None, scrie=None, varsta=None):
+	def __init__(self, ceas=None, cadru=None, scrie=None, varsta=None, alteFire=None):
 		self.ceas = ceas or monotonic
 		self.cadru = cadru or _cadrulFiruluiPrincipal
 		self.scrie = scrie or jurnalPaznic
 		self.varsta = varsta or _secundeDeLaPornire
+		self.alteFire = alteFire or _cadreleAltorFire
 		self.ultimTic = None
 		self.inceput = None     # ultimTic de dinaintea tacerii de acum
 		self.priviri = {}
+		self.mijloace = {}      # (interior, intrare) -> {mijloc: priviri}
+		self.altele = {}        # „numele firului locul” -> priviri (celelalte fire Python care lucrau)
 		self.anuntat = False    # randul „inca ocupat” al tacerii de acum
 		self.randuri = 0
 
@@ -786,7 +848,21 @@ class FirOcupat(object):
 			return "in C++ (bucla enigma2 sau un apel in driver)", n, total
 		interior = max(((loc[0], m) for loc, m in self.priviri.items() if loc is not None and loc[1] == intrare),
 			key=lambda x: x[1])[0]
-		return (interior if interior == intrare else "%s <- %s" % (interior, intrare)), n, total
+		if interior == intrare:
+			return interior, n, total
+		mijloace = self.mijloace.get((interior, intrare)) or {}
+		mijloc = max(mijloace.items(), key=lambda x: x[1])[0] if mijloace else None
+		if mijloc:
+			return "%s <- %s <- %s" % (interior, mijloc, intrare), n, total
+		return "%s <- %s" % (interior, intrare), n, total
+
+	def _lacat(self, durata, total):
+		"""„; lacatul Python ...” cand paznicul a privit mult mai rar decat o data pe secunda si alt fir lucra; altfel ''"""
+		asteptate = max(1.0, (durata - PRAG_FIR_OCUPAT_S + TIC_S) / float(PAS_FIR_S or 1))
+		if total * 2 >= asteptate or not self.altele:
+			return ""
+		loc, n = max(self.altele.items(), key=lambda x: x[1])
+		return "; lacatul Python tinut de alt fir (%d priviri in loc de ~%d): %s (%d)" % (total, int(asteptate), loc, n)
 
 	def _rand(self, durata, inca=False):
 		loc, n, total = self._loc()
@@ -798,7 +874,7 @@ class FirOcupat(object):
 		la = (" la %d s dupa pornirea interfetei" % int(varsta)) if varsta is not None else ""
 		priviri = (" (%d din %d priviri)" % (n, total)) if total else ""
 		fel = "inca ocupat de" if inca else "ocupat"
-		return "firul principal %s %.1f s%s: %s%s" % (fel, durata, la, loc, priviri)
+		return "firul principal %s %.1f s%s: %s%s%s" % (fel, durata, la, loc, priviri, self._lacat(durata, total))
 
 	def _scrie(self, rand):
 		if self.randuri >= RANDURI_FIR_MAX:
@@ -818,11 +894,25 @@ class FirOcupat(object):
 		if acum - tic >= PRAG_FIR_OCUPAT_S:
 			if self.inceput != tic:
 				self.inceput, self.priviri, self.anuntat = tic, {}, False
+				self.mijloace, self.altele = {}, {}
 			try:
-				loc = locDinCadru(self.cadru())
+				cadru = self.cadru()
+				loc = locDinCadru(cadru)
+				mijloc = mijlocDinCadru(cadru) if loc is not None else None
 			except Exception:
-				loc = None
+				loc, mijloc = None, None
 			self.priviri[loc] = self.priviri.get(loc, 0) + 1
+			if mijloc:
+				m = self.mijloace.setdefault(loc, {})
+				m[mijloc] = m.get(mijloc, 0) + 1
+			try:
+				for nume, c in self.alteFire():
+					a = locAltFir(c)
+					if a:
+						cheie = "%s %s" % (nume, a)
+						self.altele[cheie] = self.altele.get(cheie, 0) + 1
+			except Exception:
+				pass
 			if not self.anuntat and acum - tic >= INCA_OCUPAT_S:
 				self.anuntat = True
 				return self._scrie(self._rand(acum - tic, inca=True))
@@ -835,6 +925,7 @@ class FirOcupat(object):
 		if durata >= PRAG_FIR_OCUPAT_S - TIC_S and not self.anuntat:
 			rand = self._scrie(self._rand(durata))
 		self.inceput, self.priviri, self.anuntat = None, {}, False
+		self.mijloace, self.altele = {}, {}
 		return rand
 
 

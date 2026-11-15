@@ -160,6 +160,14 @@ try:
 except Exception as _e:
 	print("[SystemInfo] HdsMultiboot: %r" % (_e,))
 	SystemInfo["HdsMultiboot"] = False
+# Vu+ 4K pornit direct din flash, fara pornire multipla: intrarea Pornire multipla Vu+ (Kexec) din meniul Putere si
+# cardul ei din /alimentare (Components/HdsPornireMultipla.py, kexecInstalabil; KXC 15.11.2026); pana la prima
+# proba a unui tester numai cu pachetul kexec-multiboot al masinii instalat sau cu /etc/enigma2/hds-kexec-proba (KXH).
+try:
+	SystemInfo["HdsKexecInstalabil"] = _pornireMultipla.kexecInstalabil()
+except Exception as _e:
+	print("[SystemInfo] HdsKexecInstalabil: %r" % (_e,))
+	SystemInfo["HdsKexecInstalabil"] = False
 
 
 class BoxInfoClass:

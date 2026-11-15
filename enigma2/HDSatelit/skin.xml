@@ -161,6 +161,13 @@
 		<parameter name="FileListMultiLock" value="12,11,32,32" />
 		<parameter name="FileListMultiIcon" value="56,7,40,40" />
 		<parameter name="FileListMultiName" value="108,0,1560,54" />
+		<!-- randul listei de fisiere desenat de pluginul File Commander (FcFileList*: cutia numelui si a iconitei;
+		     panoul are 840 px, randul 54) -->
+		<parameter name="FcFileListIcon" value="16,11,32,32" />
+		<parameter name="FcFileListName" value="60,0,740,54" />
+		<parameter name="FcFileListMultiLock" value="12,11,32,32" />
+		<parameter name="FcFileListMultiIcon" value="52,11,32,32" />
+		<parameter name="FcFileListMultiName" value="96,0,704,54" />
 		<!-- bifele (SelectionList), pluginurile (PluginList), ajutorul tastelor (HelpMenuList) -->
 		<parameter name="SelectionListDescr" value="56,0,1600,54" />
 		<parameter name="SelectionListLock" value="12,15,25,24" />
@@ -385,9 +392,11 @@
 		<widget source="session.CurrentService" render="Label" position="600,192" size="112,28" font="HdsBold;22" foregroundColor="hdsBrandLight" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,signal,Upper</convert></widget>
 		<widget source="session.CurrentService" render="Progress" position="716,202" size="60,8" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" zPosition="2"><convert type="HdsSignal">Signal</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="780,190" size="58,30" font="HdsCond;24" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Signal</convert></widget>
-		<widget source="session.CurrentService" render="Label" position="848,192" size="148,28" font="HdsBold;22" foregroundColor="hdsGood" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,quality,Upper</convert></widget>
-		<widget source="session.CurrentService" render="Progress" position="1000,202" size="60,8" foregroundColor="hdsGood" backgroundColor="hdsTrack" zPosition="2"><convert type="HdsSignal">Quality</convert></widget>
-		<widget source="session.CurrentService" render="Label" position="1064,190" size="58,30" font="HdsCond;24" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Quality</convert></widget>
+		<!-- 0.7.5 (LCF, baderwabas): langa CALITATE, SNR-ul in dB cand placa da valoarea adevarata (HdsSignal QualityDb), altfel
+		     procentele; bara ramane in procente -->
+		<widget source="session.CurrentService" render="Label" position="848,192" size="130,28" font="HdsBold;22" foregroundColor="hdsGood" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,quality,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Progress" position="982,202" size="60,8" foregroundColor="hdsGood" backgroundColor="hdsTrack" zPosition="2"><convert type="HdsSignal">Quality</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1046,190" size="80,30" font="HdsCond;24" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">QualityDb</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="1130,190" size="262,32" font="HdsCond;26" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">TechRight,Short,NoAccess,Fit=HdsCond:26:262</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="1400,190" size="152,32" font="HdsCond;26" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">AccessRest,Box,Max11</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="1400,190" size="352,32" font="HdsCond;26" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">AccessRest,NoBox</convert></widget>
@@ -1473,7 +1482,7 @@
 		<widget name="state" conditional="state" position="16,6" size="180,60" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<widget name="speed" conditional="speed" position="204,6" size="110,60" font="HdsCond;32" foregroundColor="hdsAmber" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<!-- cat e in urma fata de direct (lungimea timeshift-ului minus locul redarii), de pilda -2:15 -->
-		<widget source="session.CurrentService" render="Label" position="320,6" size="224,60" font="HdsBold;36" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ServicePosition">Remaining,Negate</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="320,6" size="224,60" font="HdsBold;36" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ServicePosition">Remaining,Negate,Compact</convert></widget>
 		<!-- locul redarii in timeshift: plina pana la capat = direct -->
 		<eLabel position="16,84" size="528,8" backgroundColor="hdsTrack" zPosition="1" />
 		<widget source="session.CurrentService" render="Progress" position="16,84" size="528,8" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" zPosition="2"><convert type="ServicePosition">Position</convert></widget>
@@ -3592,13 +3601,14 @@
 		<widget source="key_yellow" render="Label" position="1146,880" size="214,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="6" />
 	</screen>
 
-	<!-- Calculatorul unghiurilor (Screens/PositionerSetup.py): locul si satelitul, rezultatul si ghidul -->
+	<!-- Calculatorul unghiurilor (Screens/PositionerSetup.py): locul si satelitul, rezultatul, busola desenata (azimutul, elevatia, rotirea LNB-ului) si ghidul -->
 	<screen name="HdsPositionerSetup" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1240" />
 		<widget name="config" position="32,104" size="1176,180" itemHeight="60" font="HdsRegular;32" secondfont="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
 		<eLabel position="32,296" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
 		<widget source="rezultat" render="Label" position="32,306" size="1176,160" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
-		<widget source="ghid" render="Label" position="32,474" size="1176,438" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+		<widget source="busola" render="Canvas" position="32,474" size="1176,290" zPosition="1" />
+		<widget source="ghid" render="Label" position="32,776" size="1176,136" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
 	</screen>
 
 	<!-- Fisierul de swap (Screens/SwapManager.py): lista locurilor si starea -->
@@ -3735,9 +3745,12 @@
 		<widget source="Event" render="Progress" conditional="Event" position="1104,704" size="640,6" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" transparent="1" zPosition="2">
 			<convert type="EventTime">Progress</convert>
 		</widget>
-		<widget source="Event" render="Label" conditional="Event" position="1104,722" size="640,190" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
+		<widget source="Event" render="Label" conditional="Event" position="1104,722" size="640,150" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
 			<convert type="EventName">FullDescription</convert>
 		</widget>
+		<!-- 0.7.5 (LCF, baderwabas): transponderul canalului ALES in lista (satelitul, frecventa, polarizarea, rata de
+		     simboli, FEC, sistemul), din lista de canale, fara tuner; gol pe dosare si canale de internet -->
+		<widget source="hdsTpAles" render="Label" conditional="hdsTpAles" position="1104,878" size="640,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
 		<!-- tasta TEXT = cautarea de canale; doar imaginea HDSatelit are componenta key_text (text din Python), celelalte sar widgetul -->
 		<widget source="key_text" render="FixedLabel" conditional="key_text" position="1520,940" size="224,40" backgroundColor="key_back" zPosition="1" />
 		<widget source="key_text" render="Label" conditional="key_text" position="1520,940" size="224,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="key_back" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2" />
@@ -3993,9 +4006,12 @@
 		<widget source="Event" render="Progress" conditional="Event" position="1104,704" size="640,6" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" transparent="1" zPosition="2">
 			<convert type="EventTime">Progress</convert>
 		</widget>
-		<widget source="Event" render="Label" conditional="Event" position="1104,722" size="640,190" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
+		<widget source="Event" render="Label" conditional="Event" position="1104,722" size="640,150" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
 			<convert type="EventName">FullDescription</convert>
 		</widget>
+		<!-- 0.7.5 (LCF, baderwabas): transponderul canalului ALES in lista (satelitul, frecventa, polarizarea, rata de
+		     simboli, FEC, sistemul), din lista de canale, fara tuner; gol pe dosare si canale de internet -->
+		<widget source="hdsTpAles" render="Label" conditional="hdsTpAles" position="1104,878" size="640,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
 		<!-- tasta TEXT = cautarea de canale; doar imaginea HDSatelit are componenta key_text (text din Python), celelalte sar widgetul -->
 		<widget source="key_text" render="FixedLabel" conditional="key_text" position="1520,940" size="224,40" backgroundColor="key_back" zPosition="1" />
 		<widget source="key_text" render="Label" conditional="key_text" position="1520,940" size="224,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="key_back" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2" />
@@ -4225,9 +4241,12 @@
 		<widget source="Event" render="Progress" conditional="Event" position="1272,688" size="624,6" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" transparent="1" zPosition="2">
 			<convert type="EventTime">Progress</convert>
 		</widget>
-		<widget source="Event" render="Label" conditional="Event" position="1272,704" size="624,180" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
+		<widget source="Event" render="Label" conditional="Event" position="1272,704" size="624,140" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
 			<convert type="EventName">FullDescription</convert>
 		</widget>
+		<!-- 0.7.5 (LCF, baderwabas): transponderul canalului ALES in lista (satelitul, frecventa, polarizarea, rata de
+		     simboli, FEC, sistemul), din lista de canale, fara tuner; gol pe dosare si canale de internet -->
+		<widget source="hdsTpAles" render="Label" conditional="hdsTpAles" position="1272,850" size="624,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
 		<!-- dreapta jos: TEXT (cautarea) si FAV pe un rand, apoi tastele colorate pe doua randuri: rosu Toate, verde Sateliți,
 		     galben Furnizori, albastru Favorite. FAV se lateste spre stanga cu textul marit (hdsFavTastaMarita, cel mult
 		     120 px): de la 1592 pana la cel mult 1472, deci nu ajunge la TEXT (1272-1464) -->
@@ -5536,11 +5555,35 @@
 		<panel name="HdsCadru1776" />
 		<widget name="text" conditional="text" position="32,104" size="1712,808" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
 	</screen>
+	<!-- Informatii canal (Screens/ServiceInfo.py), tema Clasic (DSG2, 14.11.2026): sus casetele semnalului ca in
+	     tema Pro (calitatea mare, semnalul, SNR si BER, starea tunerului cu satelitul), fara chenare, cu o linie subtire
+	     deasupra fiecareia; la un fisier redat casetele de semnal se acopera (IsFile); sub ele titlul paginii si lista -->
 	<screen name="ServiceInfo" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />
-		<widget source="session.CurrentService" render="Label" position="32,100" size="1712,36" font="HdsBold;24" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,page_service,Upper</convert></widget>
-		<eLabel position="32,140" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
-		<widget name="infolist" conditional="infolist" position="32,152" size="1712,768" itemHeight="48" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" selectionDisabled="1" zPosition="2" />
+		<eLabel position="16,100" size="424,1" backgroundColor="hdsDivider" zPosition="1" />
+		<eLabel position="456,100" size="424,1" backgroundColor="hdsDivider" zPosition="1" />
+		<eLabel position="896,100" size="424,1" backgroundColor="hdsDivider" zPosition="1" />
+		<eLabel position="1336,100" size="424,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget source="session.CurrentService" render="Label" position="36,108" size="260,34" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,quality,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="220,140" size="196,80" font="HdsBold;64" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Quality</convert></widget>
+		<widget source="session.CurrentService" render="Progress" position="36,236" size="384,20" foregroundColor="hdsGood" backgroundColor="hdsTrack" zPosition="2"><convert type="HdsSignal">Quality</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="36,258" size="384,30" font="HdsCond;22" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">SnrHonest</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="476,108" size="260,34" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,signal,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="660,140" size="196,80" font="HdsBold;64" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Signal</convert></widget>
+		<widget source="session.CurrentService" render="Progress" position="476,236" size="384,20" foregroundColor="hdsBrand" backgroundColor="hdsTrack" zPosition="2"><convert type="HdsSignal">Signal</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="17,101" size="422,194" backgroundColor="hdsPanelDialog" zPosition="3"><convert type="HdsInfo">IsFile</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="457,101" size="422,194" backgroundColor="hdsPanelDialog" zPosition="3"><convert type="HdsInfo">IsFile</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="916,108" size="384,34" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">SnrLabel,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="916,142" size="384,56" font="HdsBold;40" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">SnrHonest</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="916,204" size="384,34" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,ber,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="916,238" size="384,48" font="HdsBold;34" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Ber</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1356,108" size="384,34" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,state,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1356,142" size="384,48" font="HdsBold;26" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">TunerState</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1356,196" size="384,36" font="HdsBold;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Satellite,Fit=HdsBold:26:384</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1356,236" size="384,52" font="HdsCond;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2"><convert type="HdsInfo">TunerFull</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="32,320" size="1712,40" font="HdsBold;24" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,page_service,Upper</convert></widget>
+		<eLabel position="32,362" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="infolist" conditional="infolist" position="32,368" size="1712,528" itemHeight="48" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" selectionDisabled="1" zPosition="2" />
 	</screen>
 	<screen name="ServiceInfoSimple" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="ServiceInfo" />
@@ -6456,6 +6499,26 @@
 		</widget>
 		<eLabel position="32,680" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
 		<widget name="preview" position="32,692" size="1176,160" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+		<!-- DSG2 casete oarba: inceput -->
+		<!-- casetele cautarii oarbe (ScanerOarba.hdsArataCasetele): ascunse pe fata alegerilor; in Clasic se vede linia
+		     de sus, in Pro fundalul casetei; randul satelitului sub ele; pe alt skin ramane textul din preview -->
+		<widget name="oarba_box_transp" conditional="oarba_box_transp" position="32,692" size="381,116" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="oarba_lin_transp" conditional="oarba_lin_transp" position="32,692" size="381,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="oarba_cap_transp" conditional="oarba_cap_transp" position="56,700" size="333,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="oarba_num_transp" conditional="oarba_num_transp" position="56,732" size="333,70" font="HdsBold;52" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="oarba_sub_transp" conditional="oarba_sub_transp" position="192,756" size="197,40" font="HdsRegular;28" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="oarba_box_progres" conditional="oarba_box_progres" position="429,692" size="381,116" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="oarba_lin_progres" conditional="oarba_lin_progres" position="429,692" size="381,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="oarba_cap_progres" conditional="oarba_cap_progres" position="453,700" size="333,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="oarba_num_progres" conditional="oarba_num_progres" position="453,732" size="333,70" font="HdsBold;52" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="oarba_sub_progres" conditional="oarba_sub_progres" position="589,756" size="197,40" font="HdsRegular;28" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="oarba_box_durata" conditional="oarba_box_durata" position="826,692" size="382,116" backgroundColor="hdsCell" zPosition="1" />
+		<widget name="oarba_lin_durata" conditional="oarba_lin_durata" position="826,692" size="382,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="oarba_cap_durata" conditional="oarba_cap_durata" position="850,700" size="334,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="oarba_num_durata" conditional="oarba_num_durata" position="850,732" size="334,70" font="HdsBold;52" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="oarba_sub_durata" conditional="oarba_sub_durata" position="986,756" size="198,40" font="HdsRegular;28" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="oarba_loc" conditional="oarba_loc" position="32,814" size="1176,38" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<!-- DSG2 casete oarba: sfarsit -->
 	</screen>
 	<!-- fereastra de alegere a scanerelor: titlul (numele campului) in placa, randurile desenate de AlegereDinLista pe
 	     toata latimea (parametrul HdsAlegereScanerRand), 17 randuri de 48; `text` (titlul, pentru alte skinuri) ascuns -->
@@ -6680,6 +6743,34 @@
 		<eLabel position="32,348" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
 		<widget name="servicelist" conditional="servicelist" position="32,360" size="1176,528" itemHeight="48" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" selectionDisabled="1" zPosition="2" />
 		<widget name="scan_result" conditional="scan_result" position="48,368" size="1144,520" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="3" />
+		<!-- DSG casete: inceput -->
+		<!-- rezumatul in casete (Screens/ServiceScan.hdsArataCifrele): cifra mare, eticheta deasupra, randul mic jos in
+		     dreapta; ascunse pana la sfarsit si cand nu s-a gasit nimic (atunci ramane fraza din scan_result, care trece
+		     sub casete cu ce nu incape in ele). Inaltimile lasa loc textului marit la 130%. -->
+		<widget name="scan_box_canale" conditional="scan_box_canale" position="32,368" size="381,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="scan_cap_canale" conditional="scan_cap_canale" position="56,380" size="333,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_canale" conditional="scan_num_canale" position="56,422" size="333,100" font="HdsBold;72" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_canale" conditional="scan_sub_canale" position="176,472" size="213,40" font="HdsRegular;28" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_tv" conditional="scan_box_tv" position="429,368" size="381,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="scan_cap_tv" conditional="scan_cap_tv" position="453,380" size="333,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_tv" conditional="scan_num_tv" position="453,422" size="333,100" font="HdsBold;72" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_tv" conditional="scan_sub_tv" position="573,472" size="213,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_radio" conditional="scan_box_radio" position="826,368" size="382,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="scan_cap_radio" conditional="scan_cap_radio" position="850,380" size="334,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_radio" conditional="scan_num_radio" position="850,422" size="334,100" font="HdsBold;72" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_radio" conditional="scan_sub_radio" position="970,472" size="214,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_transp" conditional="scan_box_transp" position="32,536" size="580,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="scan_cap_transp" conditional="scan_cap_transp" position="56,548" size="532,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_transp" conditional="scan_num_transp" position="56,578" size="532,66" font="HdsBold;52" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_transp" conditional="scan_sub_transp" position="316,598" size="272,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_durata" conditional="scan_box_durata" position="628,536" size="580,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="scan_cap_durata" conditional="scan_cap_durata" position="652,548" size="532,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_durata" conditional="scan_num_durata" position="652,578" size="532,66" font="HdsBold;52" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_durata" conditional="scan_sub_durata" position="912,598" size="272,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_place" conditional="scan_box_place" position="32,660" size="1176,1" backgroundColor="hdsDivider" zPosition="2" />
+		<widget name="scan_place" conditional="scan_place" position="56,660" size="1152,72" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_hint_ok" conditional="scan_hint_ok" position="48,936" size="840,48" font="HdsCond;28" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<!-- DSG casete: sfarsit -->
 		<!-- reteaua citita din NIT la sfarsitul scanarii (Components/ServiceScan.hdsTexteRetea): ecranul o pune sub
 		     rezumat (Screens/ServiceScan.hdsAseazaReteaua), fiecare text cat ii e randul, la orice marime a textului;
 		     scan_network_card e linia de deasupra (Clasic) sau fundalul casetei (Pro, skin_pro.xml). Fara retea, ascunse. -->
@@ -6798,7 +6889,7 @@
 			<convert type="ServicePosition">Position</convert>
 		</widget>
 		<widget source="session.CurrentService" render="Label" position="1544,148" size="200,44" font="HdsCond;32" foregroundColor="hdsAmber" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" zPosition="2">
-			<convert type="ServicePosition">Remaining,Negate,ShowHours</convert>
+			<convert type="ServicePosition">Remaining,ShowHours,Compact</convert>
 		</widget>
 		<widget source="session.CurrentService" render="Label" position="248,190" size="1000,32" font="HdsCond;28" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="2">
 			<convert type="HdsInfo">TechLeft</convert>
@@ -7991,29 +8082,45 @@
 	</screen>
 	<screen name="FileCommanderScreen" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />
-		<widget name="list_left" conditional="list_left" position="32,104" size="1100,261" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" zPosition="2" />
-		<widget name="list_right" conditional="list_right" position="32,377" size="1100,261" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" zPosition="2" />
-		<widget source="list_left_head2" render="Listbox" conditional="list_left_head2" position="32,650" size="1100,261" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="2">
-			<convert type="StringList" />
+		<widget name="list_left_head1" conditional="list_left_head1" position="32,104" size="840,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="sort_left" conditional="sort_left" position="32,150" size="520,36" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_left_free" conditional="list_left_free" position="562,150" size="310,36" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_left" conditional="list_left" position="32,194" size="840,648" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget source="list_left_head2" render="Listbox" conditional="list_left_head2" position="32,852" size="840,40" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" selectionDisabled="1" zPosition="2">
+			<convert type="TemplatedMultiContent">{"template": [MultiContentEntryText(pos=(12, 0), size=(200, 40), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=1), MultiContentEntryText(pos=(220, 0), size=(200, 40), font=0, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=11), MultiContentEntryText(pos=(448, 0), size=(380, 40), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=15)], "fonts": [gFont("HdsRegular", 26)], "itemHeight": 40, "selectionEnabled": False}</convert>
 		</widget>
-		<eLabel position="1148,104" size="1,808" backgroundColor="hdsDivider" zPosition="1" />
-		<widget name="list_left_head1" conditional="list_left_head1" position="1164,112" size="580,44" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<widget name="list_right_head1" conditional="list_right_head1" position="1164,160" size="580,44" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<widget name="sort_left" conditional="sort_left" position="1164,208" size="580,44" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<widget name="sort_right" conditional="sort_right" position="1164,256" size="580,44" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_left_filename" conditional="list_left_filename" position="32,892" size="840,28" font="HdsRegular;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_right_head1" conditional="list_right_head1" position="904,104" size="840,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="sort_right" conditional="sort_right" position="904,150" size="520,36" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_right_free" conditional="list_right_free" position="1434,150" size="310,36" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_right" conditional="list_right" position="904,194" size="840,648" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget source="list_right_head2" render="Listbox" conditional="list_right_head2" position="904,852" size="840,40" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" selectionDisabled="1" zPosition="2">
+			<convert type="TemplatedMultiContent">{"template": [MultiContentEntryText(pos=(12, 0), size=(200, 40), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=1), MultiContentEntryText(pos=(220, 0), size=(200, 40), font=0, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=11), MultiContentEntryText(pos=(448, 0), size=(380, 40), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=15)], "fonts": [gFont("HdsRegular", 26)], "itemHeight": 40, "selectionEnabled": False}</convert>
+		</widget>
+		<widget name="list_right_filename" conditional="list_right_filename" position="904,892" size="840,28" font="HdsRegular;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="887,104" size="2,816" backgroundColor="hdsDivider" zPosition="1" />
 	</screen>
 	<screen name="FileCommanderScreenFileSelect" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />
-		<widget name="list_left" conditional="list_left" position="32,104" size="1100,261" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" zPosition="2" />
-		<widget name="list_right" conditional="list_right" position="32,377" size="1100,261" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" zPosition="2" />
-		<widget source="list_left_head2" render="Listbox" conditional="list_left_head2" position="32,650" size="1100,261" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="2">
-			<convert type="StringList" />
+		<widget name="list_left_head1" conditional="list_left_head1" position="32,104" size="840,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="sort_left" conditional="sort_left" position="32,150" size="520,36" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_left_free" conditional="list_left_free" position="562,150" size="310,36" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_left" conditional="list_left" position="32,194" size="840,648" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget source="list_left_head2" render="Listbox" conditional="list_left_head2" position="32,852" size="840,40" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" selectionDisabled="1" zPosition="2">
+			<convert type="TemplatedMultiContent">{"template": [MultiContentEntryText(pos=(12, 0), size=(200, 40), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=1), MultiContentEntryText(pos=(220, 0), size=(200, 40), font=0, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=11), MultiContentEntryText(pos=(448, 0), size=(380, 40), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=15)], "fonts": [gFont("HdsRegular", 26)], "itemHeight": 40, "selectionEnabled": False}</convert>
 		</widget>
-		<eLabel position="1148,104" size="1,808" backgroundColor="hdsDivider" zPosition="1" />
-		<widget name="list_left_head1" conditional="list_left_head1" position="1164,112" size="580,44" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<widget name="list_right_head1" conditional="list_right_head1" position="1164,160" size="580,44" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<widget name="sort_left" conditional="sort_left" position="1164,208" size="580,44" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<widget name="sort_right" conditional="sort_right" position="1164,256" size="580,44" font="HdsRegular;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_left_select" conditional="list_left_select" position="32,852" size="840,40" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="list_left_filename" conditional="list_left_filename" position="32,892" size="840,28" font="HdsRegular;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_right_head1" conditional="list_right_head1" position="904,104" size="840,44" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="sort_right" conditional="sort_right" position="904,150" size="520,36" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_right_free" conditional="list_right_free" position="1434,150" size="310,36" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2" />
+		<widget name="list_right" conditional="list_right" position="904,194" size="840,648" itemHeight="54" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<widget source="list_right_head2" render="Listbox" conditional="list_right_head2" position="904,852" size="840,40" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" selectionDisabled="1" zPosition="2">
+			<convert type="TemplatedMultiContent">{"template": [MultiContentEntryText(pos=(12, 0), size=(200, 40), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=1), MultiContentEntryText(pos=(220, 0), size=(200, 40), font=0, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=11), MultiContentEntryText(pos=(448, 0), size=(380, 40), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=15)], "fonts": [gFont("HdsRegular", 26)], "itemHeight": 40, "selectionEnabled": False}</convert>
+		</widget>
+		<widget name="list_right_select" conditional="list_right_select" position="904,852" size="840,40" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="list_right_filename" conditional="list_right_filename" position="904,892" size="840,28" font="HdsRegular;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="887,104" size="2,816" backgroundColor="hdsDivider" zPosition="1" />
 	</screen>
 	<screen name="FileCommanderTextEditor" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />

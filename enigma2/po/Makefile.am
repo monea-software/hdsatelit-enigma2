@@ -1,7 +1,7 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 dist_noinst_SCRIPTS = xml2po.py
 
-LANGS = ar ca cs da de el en es et fi fr fy hr hu is it lt lv nl no pl pt ro ru sv sk sl sr tr uk
+LANGS = ar ca cs da de el en es et fi fr fy hr hu is it lt lv nl no pl pt ro ru sv sk sl sr tr uk uz
 LANGMO = $(LANGS:=.mo)
 LANGPO = $(LANGS:=.po)
 

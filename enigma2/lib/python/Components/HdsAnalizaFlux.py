@@ -244,13 +244,27 @@ def fel_din_tabel(tid):
 
 # ---------------------------------------------------------------- texte venite din flux
 
+def _caracter_curat(c):
+	"""Un caracter din satelit -> el insusi, un spatiu sau nimic. Codurile de control DVB (EN 300 468, anexa A.1) se
+	scot de tot, nu devin spatii: 0x80-0x9F in seturile de un octet si in UTF-8, 0xE080-0xE09F in UTF-16. Accentuarea
+	0x86/0x87 sta in mijlocul cuvintelor la unii furnizori (19.2E: "Sky Sport B<0x86>undes<0x87>liga"), deci un spatiu
+	ar rupe numele in doua. Numai 0x8A / 0xE08A (rand nou) devine spatiu, ca restul caracterelor de control (sub 0x20,
+	0x7F). La fel face enigma2 cu numele din lista (convertDVBUTF8)."""
+	if u"\x80" <= c <= u"\x9f" or u"\ue080" <= c <= u"\ue09f":
+		return u" " if c in (u"\x8a", u"\ue08a") else u""
+	if c < u" " or c == u"\x7f":
+		return u" "
+	return c
+
+
 def curat(text, n=120):
-	"""Text din satelit: fara caractere de control, spatiile stranse, taiat la `n` litere cu „…” la capat."""
+	"""Text din satelit: fara caractere de control (codurile DVB scoase, celelalte spatii), spatiile stranse, taiat la
+	`n` litere cu un semn de suspensie la capat."""
 	try:
 		t = text if isinstance(text, str) else str(text)
 	except Exception:
 		return u""
-	t = u"".join(c if (c >= u" " and not (u"\x7f" <= c <= u"\x9f")) else u" " for c in t)
+	t = u"".join(_caracter_curat(c) for c in t)
 	t = u" ".join(t.split())
 	if len(t) > n:
 		t = t[:max(1, n - 1)].rstrip() + u"\u2026"
@@ -282,7 +296,9 @@ def _din_6937(b):
 
 def text_dvb(b, n=120):
 	"""Un sir DVB (ETSI EN 300 468, anexa A) -> text: primul octet < 0x20 alege setul de caractere; implicit ISO 6937.
-	Codurile de control 0x80-0x9F (accentuare, rand nou) se scot."""
+	Codurile de control (0x80-0x9F, in UTF-16 0xE080-0xE09F: accentuare, rand nou) le scoate curat(), in orice set de
+	caractere; randul nou devine spatiu. O singura functie pentru tot ce citeste numele din flux (si op-ul flux al
+	asistentei, Components/HdsAsistentaFlux.py)."""
 	b = bytes(b or b"")
 	if not b:
 		return u""
@@ -297,8 +313,6 @@ def text_dvb(b, n=120):
 			t = b[3:].decode("iso8859-%d" % tabel, "replace") if 1 <= tabel <= 15 and tabel != 12 else b[3:].decode("latin-1")
 		elif c in _ALTE:
 			t = b[1:].decode(_ALTE[c], "replace")
-			if c == 0x11:
-				t = u"".join(x for x in t if not (u"" <= x <= u""))
 		elif c == 0x1F:
 			t = _din_6937(b[2:])
 		else:

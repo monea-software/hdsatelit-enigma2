@@ -125,6 +125,12 @@ void eThread::kill(bool sendcancel)
 	the_thread = 0;
 }
 
+/* the symbol _ZN7eThread4killEv, needed by plugins compiled against other enigma2 trees (see thread.h) */
+void eThread::kill()
+{
+	kill(false);
+}
+
 void eThread::hasStarted()
 {
 	ASSERT(!m_state.value());

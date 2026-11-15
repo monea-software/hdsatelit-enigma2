@@ -2,7 +2,7 @@ SUMMARY = "Imaginea HDSatelit"
 DESCRIPTION = "enigma2 HDSatelit pe baza OE-Alliance. Monea Software pentru HD Satelit."
 LICENSE = "MIT"
 # versiunea se tine dupa configure.ac din depozitul imaginii (AC_INIT) si dupa DISTRO_VERSION din hdsatelit.conf
-PV = "0.7.5"
+PV = "0.7.6"
 
 # hdsatelit-nume-local: numele hdsatelit.local in reteaua de acasa (avahi-publish), pe langa numele receptorului
 IMAGE_INSTALL = "hdsatelit-base hdsatelit-ssh hdsatelit-nume-local"
@@ -70,6 +70,13 @@ BAD_RECOMMENDATIONS:append:ustym4kpro = " oem-info"
 # e recomandat pe sf8008m (masina nu are trasatura oem-info, iar reteta lui e numai pentru sf8008, sfx6008 si sx88v2),
 # deci nu e nevoie de el in BAD_RECOMMENDATIONS; verifica-pachete-060.sh il cere oricum lipsa din manifest.
 BAD_RECOMMENDATIONS:remove:sf8008m = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
+# Octagon SX88V2 4K DUAL OS si SX988 4K DUAL OS (V19, 14.11.2026; masinile sx88v2 si sx988, nucleul linux-octagon 4.4.176):
+# defconfig-urile lor NU au WireGuard inauntru (fara CONFIG_WIREGUARD), deci modulul din afara nucleului intra, ca pe
+# sf8008. oem-info: sx88v2 are trasatura oem-info (sx88v2.conf, reteta oem-info il are), deci afara ca pe sf8008; sx988 n-o
+# are (nu e recomandat).
+BAD_RECOMMENDATIONS:remove:sx88v2 = "kernel-module-wireguard kernel-module-wireguard-4.4.176 wireguard-module"
+BAD_RECOMMENDATIONS:append:sx88v2 = " oem-info"
+BAD_RECOMMENDATIONS:remove:sx988 = "kernel-module-wireguard kernel-module-wireguard-4.4.176 wireguard-module"
 # GigaBlue UHD TRIO 4K (masina gbmv200, MACHINEBUILD gbtrio4k, lotul modele-noi-0611): nucleul lui (linux-gigablue
 # 4.4.35, defconfig gbmv200) NU are nici el WireGuard inauntru, deci modulul din afara nucleului intra si aici, ca pe
 # sf8008. oem-info nu e recomandat (masina nu are trasatura oem-info: gbmv200.conf, gigablue-mv200.inc).
@@ -462,7 +469,8 @@ python () {
             if not re.fullmatch(r'mtd[0-9]+', reguli[k]):
                 bb.fatal('paza de model: hdsatelit-modele/%s: cu stocare=nand, %s= trebuie sa fie mtdN' % (mb, k))
         if ('hdsflashmic' not in (d.getVar('OVERRIDES') or '').split(':')
-                and not (d.getVar('HDS_VARIANTA') == 'usb' and mb == 'vusolose')):
+                and not (d.getVar('HDS_VARIANTA') == 'usb' and mb == 'vusolose')
+                and d.getVar('MACHINE') not in (d.getVar('HDS_MASINI_NAND_MARE') or '').split()):
             bb.fatal('paza de model: hdsatelit-modele/%s are stocare=nand, dar masina %s nu e in HDS_MASINI_FLASH_MIC '
                 '(conf/distro/hdsatelit.conf)' % (mb, d.getVar('MACHINE')))
 }
@@ -514,6 +522,8 @@ IMAGEDIR:vusolose = "vuplus/${UPDATE_DIR}"
 IMAGEDIR:sh1 = "zgemma/sh1"
 # Vu+ Solo2 (MS2, 12.11.2026): la fel, vuplus/solo2 (UPDATE_DIR din vusolo2.conf)
 IMAGEDIR:vusolo2 = "vuplus/${UPDATE_DIR}"
+# Vu+ Duo2 (V22, 14.11.2026): la fel, vuplus/duo2 (UPDATE_DIR din vuduo2.conf)
+IMAGEDIR:vuduo2 = "vuplus/${UPDATE_DIR}"
 # Vu+ Zero (MVZ, 12.11.2026): la fel, vuplus/zero (UPDATE_DIR din vuzero.conf)
 IMAGEDIR:vuzero = "vuplus/${UPDATE_DIR}"
 # Zgemma H9 COMBO si H9 TWIN (MH9): meniul de recuperare al producatorului cauta pe stick dosarul h9combo
@@ -639,6 +649,91 @@ hds_reguli_model:viper4k() {
 # userdata), deci exact corpul functiei viper4k de mai sus. pregateste-meta-local-060.sh opreste stratul daca cele doua
 # se despart.
 hds_reguli_model:sf8008() {
+	[ "${MACHINEBUILD}" = "${HDS_MODEL_MACHINEBUILD}" ] || bbfatal "paza de model: regulile sunt pentru ${HDS_MODEL_MACHINEBUILD}, constructia e pentru ${MACHINEBUILD}"
+	[ "${MTD_KERNEL}" = "${HDS_MODEL_KERNEL_PART}" ] || bbfatal "paza de model: nucleul masinii e pe ${MTD_KERNEL}, regulile spun ${HDS_MODEL_KERNEL_PART}"
+	[ "${MTD_ROOTFS}" = "${HDS_MODEL_ROOTFS_PART}" ] || bbfatal "paza de model: sistemul masinii e pe ${MTD_ROOTFS}, regulile spun ${HDS_MODEL_ROOTFS_PART}"
+	[ -n "${HDS_MODEL_KERNEL_NAME}" ] && [ -n "${HDS_MODEL_ROOTFS_NAME}" ] || bbfatal "paza de model: pe ${MACHINE} regulile trebuie sa aiba kernel_name= si rootfs_name="
+	hds_dosar="${HDS_MODEL_UPD_PATH}"
+	if [ -n "$hds_dosar" ]; then
+		case "$hds_dosar" in
+			/*[!A-Za-z0-9_./-]*|[!/]*) bbfatal "paza de model: dosarul de recuperare $hds_dosar nu e o cale sigura" ;;
+		esac
+		[ ${#hds_dosar} -le 60 ] || bbfatal "paza de model: dosarul de recuperare are peste 60 de caractere"
+	fi
+	case "${HDS_MODEL_CONFIRMAT}" in
+		''|nu) ;;
+		*) bbfatal "paza de model: confirmat=${HDS_MODEL_CONFIRMAT} (poate fi numai nu)" ;;
+	esac
+	printf '%s\n' \
+		"# HD Satelit: receptorul pentru care e construita imaginea (paza de model)" \
+		"format=1" \
+		"distro=${DISTRO_NAME}" \
+		"version=${DISTRO_VERSION}" \
+		"model=${HDS_MODEL_NUME}" \
+		"machine=${MACHINE}" \
+		"machinebuild=${MACHINEBUILD}" \
+		"chip=${HDS_MODEL_CIP}" \
+		"boxtype=${HDS_MODEL_BOXTYPE}" \
+		"hw=${HDS_MODEL_HW}" \
+		"partitions=${HDS_MODEL_PARTITII}" \
+		"kernel_name=${HDS_MODEL_KERNEL_NAME}" \
+		"rootfs_name=${HDS_MODEL_ROOTFS_NAME}" \
+		"kernel_part=${HDS_MODEL_KERNEL_PART}" \
+		"kernel_kib=${HDS_MODEL_KERNEL_KIB}" \
+		"rootfs_part=${HDS_MODEL_ROOTFS_PART}"
+	[ -z "$hds_dosar" ] || printf 'upd_path=%s\n' "$hds_dosar"
+	[ -z "${HDS_MODEL_EMMC_MIN}" ] || printf 'emmc_min_kib=%s\n' "${HDS_MODEL_EMMC_MIN}"
+	[ -z "${HDS_MODEL_EMMC_MAX}" ] || printf 'emmc_max_kib=%s\n' "${HDS_MODEL_EMMC_MAX}"
+	[ -z "${HDS_MODEL_STOCARE}" ] || printf 'stocare=%s\n' "${HDS_MODEL_STOCARE}"
+	[ -z "${HDS_MODEL_CONFIRMAT}" ] || printf 'confirmat=%s\n' "${HDS_MODEL_CONFIRMAT}"
+	[ -z "${HDS_MODEL_FAMILIE}" ] || printf 'familie=%s\n' "${HDS_MODEL_FAMILIE}"
+	[ -z "${HDS_MODEL_ID}" ] || printf 'model_id=%s\n' "${HDS_MODEL_ID}"
+}
+# Octagon SX88V2 4K DUAL OS si SX988 4K DUAL OS (V19, 14.11.2026): aceeasi asezare a partitiilor ca la SF8008 (linuxkernel1 si
+# userdata, sistemul in userdata/linuxrootfs1), alte numere (sx88v2 p12/p16 ca SF8008, sx988 p15/p19), deci exact corpul
+# functiei sf8008.
+hds_reguli_model:sx88v2() {
+	[ "${MACHINEBUILD}" = "${HDS_MODEL_MACHINEBUILD}" ] || bbfatal "paza de model: regulile sunt pentru ${HDS_MODEL_MACHINEBUILD}, constructia e pentru ${MACHINEBUILD}"
+	[ "${MTD_KERNEL}" = "${HDS_MODEL_KERNEL_PART}" ] || bbfatal "paza de model: nucleul masinii e pe ${MTD_KERNEL}, regulile spun ${HDS_MODEL_KERNEL_PART}"
+	[ "${MTD_ROOTFS}" = "${HDS_MODEL_ROOTFS_PART}" ] || bbfatal "paza de model: sistemul masinii e pe ${MTD_ROOTFS}, regulile spun ${HDS_MODEL_ROOTFS_PART}"
+	[ -n "${HDS_MODEL_KERNEL_NAME}" ] && [ -n "${HDS_MODEL_ROOTFS_NAME}" ] || bbfatal "paza de model: pe ${MACHINE} regulile trebuie sa aiba kernel_name= si rootfs_name="
+	hds_dosar="${HDS_MODEL_UPD_PATH}"
+	if [ -n "$hds_dosar" ]; then
+		case "$hds_dosar" in
+			/*[!A-Za-z0-9_./-]*|[!/]*) bbfatal "paza de model: dosarul de recuperare $hds_dosar nu e o cale sigura" ;;
+		esac
+		[ ${#hds_dosar} -le 60 ] || bbfatal "paza de model: dosarul de recuperare are peste 60 de caractere"
+	fi
+	case "${HDS_MODEL_CONFIRMAT}" in
+		''|nu) ;;
+		*) bbfatal "paza de model: confirmat=${HDS_MODEL_CONFIRMAT} (poate fi numai nu)" ;;
+	esac
+	printf '%s\n' \
+		"# HD Satelit: receptorul pentru care e construita imaginea (paza de model)" \
+		"format=1" \
+		"distro=${DISTRO_NAME}" \
+		"version=${DISTRO_VERSION}" \
+		"model=${HDS_MODEL_NUME}" \
+		"machine=${MACHINE}" \
+		"machinebuild=${MACHINEBUILD}" \
+		"chip=${HDS_MODEL_CIP}" \
+		"boxtype=${HDS_MODEL_BOXTYPE}" \
+		"hw=${HDS_MODEL_HW}" \
+		"partitions=${HDS_MODEL_PARTITII}" \
+		"kernel_name=${HDS_MODEL_KERNEL_NAME}" \
+		"rootfs_name=${HDS_MODEL_ROOTFS_NAME}" \
+		"kernel_part=${HDS_MODEL_KERNEL_PART}" \
+		"kernel_kib=${HDS_MODEL_KERNEL_KIB}" \
+		"rootfs_part=${HDS_MODEL_ROOTFS_PART}"
+	[ -z "$hds_dosar" ] || printf 'upd_path=%s\n' "$hds_dosar"
+	[ -z "${HDS_MODEL_EMMC_MIN}" ] || printf 'emmc_min_kib=%s\n' "${HDS_MODEL_EMMC_MIN}"
+	[ -z "${HDS_MODEL_EMMC_MAX}" ] || printf 'emmc_max_kib=%s\n' "${HDS_MODEL_EMMC_MAX}"
+	[ -z "${HDS_MODEL_STOCARE}" ] || printf 'stocare=%s\n' "${HDS_MODEL_STOCARE}"
+	[ -z "${HDS_MODEL_CONFIRMAT}" ] || printf 'confirmat=%s\n' "${HDS_MODEL_CONFIRMAT}"
+	[ -z "${HDS_MODEL_FAMILIE}" ] || printf 'familie=%s\n' "${HDS_MODEL_FAMILIE}"
+	[ -z "${HDS_MODEL_ID}" ] || printf 'model_id=%s\n' "${HDS_MODEL_ID}"
+}
+hds_reguli_model:sx988() {
 	[ "${MACHINEBUILD}" = "${HDS_MODEL_MACHINEBUILD}" ] || bbfatal "paza de model: regulile sunt pentru ${HDS_MODEL_MACHINEBUILD}, constructia e pentru ${MACHINEBUILD}"
 	[ "${MTD_KERNEL}" = "${HDS_MODEL_KERNEL_PART}" ] || bbfatal "paza de model: nucleul masinii e pe ${MTD_KERNEL}, regulile spun ${HDS_MODEL_KERNEL_PART}"
 	[ "${MTD_ROOTFS}" = "${HDS_MODEL_ROOTFS_PART}" ] || bbfatal "paza de model: sistemul masinii e pe ${MTD_ROOTFS}, regulile spun ${HDS_MODEL_ROOTFS_PART}"
@@ -1298,6 +1393,8 @@ HDS_MARCAJ_ZIP:vusolose = "${IMAGE_NAME}_usb.zip"
 HDS_MARCAJ_ZIP:sh1 = "${IMAGE_NAME}_usb.zip"
 # Vu+ Solo2: vusolo2.conf face acelasi ${IMAGE_NAME}_usb.zip, cu reboot.update in loc de force.update
 HDS_MARCAJ_ZIP:vusolo2 = "${IMAGE_NAME}_usb.zip"
+# Vu+ Duo2: vuduo2.conf face acelasi ${IMAGE_NAME}_usb.zip, cu reboot.update (ca Solo2)
+HDS_MARCAJ_ZIP:vuduo2 = "${IMAGE_NAME}_usb.zip"
 # Vu+ Zero: vuzero.conf face acelasi ${IMAGE_NAME}_usb.zip, cu force.update (ca Solo SE)
 HDS_MARCAJ_ZIP:vuzero = "${IMAGE_NAME}_usb.zip"
 IMAGE_CMD:ubi:append = " hds_marcaj_model_zip; hds_paza_marime_flash_mic; "
@@ -1313,11 +1410,14 @@ IMAGE_CMD:ubi:prepend:vusolose = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_
 # BMP 720 x 576 x 24 (cel din imaginea publica OE-Alliance 6.0 a masinii), adica formatul siglei noastre GigaBlue
 IMAGE_CMD:ubi:prepend:sh1 = "install -m 0644 ${HDS_SPLASH_GIGABLUE} ${DEPLOY_DIR_IMAGE}/splash.bin; "
 IMAGE_CMD:ubi:prepend:vusolo2 = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
+IMAGE_CMD:ubi:prepend:vuduo2 = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
 IMAGE_CMD:ubi:prepend:vuzero = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
 # - compresia UBIFS: mkfs.ubifs pune implicit lzo; zlib strange mai bine (planul de marime e socotit cu zlib), iar
 #   nucleul Solo SE (linux-vuplus 3.13.5, defconfig_proxy) are CONFIG_UBIFS_FS_ZLIB=y. MKFS_EXTRA intra in MKUBIFS_ARGS
 #   (vuplus.inc). Fara zstd: nucleul 3.13.5 nu il stie.
 MKFS_EXTRA:hdsflashmic = "-x zlib"
+# Vu+ Duo2 (V22): aceeasi compresie zlib (defconfig_proxy vuduo2: CONFIG_UBIFS_FS_ZLIB=y); pragul de 400 MiB e socotit cu ea
+MKFS_EXTRA:vuduo2 = "-x zlib"
 # Zgemma Star S (MSS): sh1.conf da MKUBIFS_ARGS intreg, fara ${MKFS_EXTRA}; nucleul linux-airdigital 4.10.12 (defconfig sh1)
 # are CONFIG_UBIFS_FS_ZLIB=y, deci aceeasi compresie zlib ca pe Solo SE
 MKUBIFS_ARGS:append:sh1 = " -x zlib"
@@ -1325,6 +1425,9 @@ MKUBIFS_ARGS:append:sh1 = " -x zlib"
 #   UBIFS are ~211 MiB (1745 LEB), din care df arata ~194 MiB; 150 MiB lasa macar ~44 MiB pentru setari, canale, EPG si
 #   pachetele instalate de om. Planul (lucru-sesiune/oe-60/mips-solose/STADIU.md) socoteste ~110-120 MB.
 HDS_FLASH_MIC_MAXIM_MIB ?= "150"
+# Vu+ Duo2 (V22): NAND de 1 GB, imaginea are si completarile (~+80 MiB fata de Solo SE, ~230 MiB asteptat); 400 MiB lasa
+# sute de MiB pentru setari, canale, EPG si pachete (de ajustat cand testerul trimite /proc/mtd)
+HDS_FLASH_MIC_MAXIM_MIB:vuduo2 = "400"
 hds_paza_marime_flash_mic() {
 	zip_imagine="${DEPLOY_DIR_IMAGE}/${HDS_MARCAJ_ZIP}"
 	octeti=$(unzip -l "$zip_imagine" "${IMAGEDIR}/${ROOTFS_FILE}" | awk -v f="${IMAGEDIR}/${ROOTFS_FILE}" '$4 == f { print $1 }')
@@ -1338,6 +1441,8 @@ hds_paza_marime_flash_mic() {
 #   compara-manifest): pe NAND imaginea e UBI, care nu se citeste pe PC. Se face inainte de tipurile de imagine (care
 #   ruleaza in paralel si dintre care ubifs goleste /tmp si /boot din radacina), nu intra in zip si nu se publica.
 IMAGE_PREPROCESS_COMMAND:append:hdsflashmic = " hds_copie_sistem_flash_mic"
+# Vu+ Duo2 (V22): NAND fara hdsflashmic, dar verificatorii NAND citesc tot copia sistemului
+IMAGE_PREPROCESS_COMMAND:append:vuduo2 = " hds_copie_sistem_flash_mic"
 hds_copie_sistem_flash_mic() {
 	tar -cjf ${IMGDEPLOYDIR}/${IMAGE_NAME}.sistem.tar.bz2 -C ${IMAGE_ROOTFS} . || bbfatal "copia sistemului nu s-a facut"
 }

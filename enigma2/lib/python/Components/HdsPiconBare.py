@@ -87,6 +87,15 @@ def plan(ecran):
 	if not sigle:
 		return {}
 	n, d = _scara(ecran)
+	# HDSatelit 0.7.6 (FRZ, raportul 2096, SF8008 0.7.5, TODO 15.11 05:15): regulile fiecarei sigle se desfac o data pe ecran
+	# (inainte: pentru fiecare element al ecranului, la fiecare sigla), iar elementul isi gaseste regula dupa (pozitie, marime),
+	# fara sa le parcurga pe toate; prima regula a primei sigle castiga, ca inainte
+	harta = {}
+	for r in sigle:
+		for x, y, l, i, x2, l2 in reguli(r.vecini):
+			harta.setdefault((x, y, l, i), (r, x2, l2))
+	if not harta:
+		return {}
 	rez = {}
 	for o in _obiecte(ecran):
 		if type(o).__name__ == "Picon":
@@ -98,15 +107,12 @@ def plan(ecran):
 		poz, mar = _numere(a.get("position")), _numere(a.get("size"))
 		if poz is None or mar is None:
 			continue
-		for r in sigle:
-			gasit = False
-			for x, y, l, i, x2, l2 in reguli(r.vecini):
-				if poz == (x, y) and mar == (l, i):
-					rez[id(o)] = (o, r, (x * n // d, l * n // d), ((x2 - x) * n // d, (l2 - l) * n // d))
-					gasit = True
-					break
-			if gasit:
-				break
+		g = harta.get(poz + mar)
+		if g is None:
+			continue
+		r, x2, l2 = g
+		x, l = poz[0], mar[0]
+		rez[id(o)] = (o, r, (x * n // d, l * n // d), ((x2 - x) * n // d, (l2 - l) * n // d))
 	return rez
 
 

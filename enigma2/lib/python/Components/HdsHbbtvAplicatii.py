@@ -11,11 +11,20 @@ consimtamant. Fara fisier sau cu el stricat: DATE_IMPLICITE.
 
 COMPATIBILITATEA (alege_agent, config_cu_profil): compatibilitate cu aplicatiile din lista "compatibilitate".
 
+TASTA DE PORNIRE (tasta_pornire): aplicatiile din lista "albastru" (sau cu blueButton=true in adresa) se deschid cu
+ALBASTRU, nu cu ROSU: la ROSU-ul omului receptorul le trimite VK_BLUE in locul lui VK_RED (Components/HdsHbbtvPornire).
+Masurat pe receptor: aplicatia porneste, se arata fara nimic pe ecran, nu raspunde la ROSU si deschide primul ecran
+(intrebarea despre cookie-uri) la ALBASTRU.
+
 MOTIVUL (motiv): din faptele stiute cand aplicatia nu a pornit, s-a inchis singura sau nu s-a aratat in timp:
   fara-internet       receptorul nu ajunge pe internet (adresa nu se afla si nici serverele DNS publice nu raspund);
   adresa-inexistenta  numele gazdei nu mai exista (NXDOMAIN sau fara adresa), cu internetul bun;
   ceas                certificatul paginii refuzat din cauza ceasului receptorului (ajutorul comun
                       Components/HdsCeasHttps; textul lui, tradus, e mesajul);
+  certificat-expirat  certificatul paginii a expirat, cu ceasul receptorului bun (il reinnoieste postul; televizoarele
+                      refuza pagina la fel);
+  certificat          certificatul paginii nu e valid din alt motiv (alt nume, emitent necunoscut, inca nevalabil),
+                      cu ceasul receptorului bun;
   pagina-mutata       pagina din AIT, sau cea spre care o muta pagina, raspunde 404 sau 410;
   pagina-goala        pagina raspunde 200 fara niciun octet (sau numai spatii);
   numai-televizoare   adresa e in lista "compatibilitate" si aplicatia nu s-a aratat;
@@ -61,7 +70,8 @@ DATE_IMPLICITE = {
 	"compatibilitate": [{"adresa": "hbbtv.mediaset.net/app/"}, {"adresa": "hbbtv.prosiebensat1puls4.com/extern/redorbit/"},
 		{"adresa": "hbbtv.redbutton.de/extern/redorbit/"}],
 	"audienta": [{"adresa": "hbbtv-ikosystem.ikomg.com/"}],
-	"albastru": [{"adresa": "france24.tv.dotscreen.com/", "contine": "bluebutton=true"}],
+	"albastru": [{"adresa": "france24.tv.dotscreen.com/", "contine": "bluebutton=true"},
+		{"adresa": "hbbtv.mediaset.net/app/"}],
 	"consimtamant": [{"adresa": "r9.hbbtv.media/"}],
 }
 
@@ -75,7 +85,12 @@ AUDIENTA = "audienta"
 ALBASTRU = "albastru"
 CONSIMTAMANT = "consimtamant"
 CRIPTAT = "criptat"
-MOTIVE = (FARA_INTERNET, INEXISTENTA, MUTATA, GOALA, TELEVIZOARE, AUDIENTA, ALBASTRU, CONSIMTAMANT, CRIPTAT)
+CERTIFICAT_EXPIRAT = "certificat-expirat"
+CERTIFICAT = "certificat"
+MOTIVE = (FARA_INTERNET, INEXISTENTA, MUTATA, GOALA, TELEVIZOARE, AUDIENTA, ALBASTRU, CONSIMTAMANT, CRIPTAT,
+	CERTIFICAT_EXPIRAT, CERTIFICAT)
+# tasta trimisa aplicatiei la ROSU-ul omului (tasta_pornire)
+TASTA_ROSU, TASTA_ALBASTRU = "rosu", "albastru"
 # certificatul refuzat din cauza ceasului receptorului: textul il da Components/HdsCeasHttps (cercetare["ceas"])
 CEAS = "ceas"
 
@@ -253,6 +268,14 @@ def agent_profil(profil):
 	return _agent_hbbtv()(p["producator"], p["model"], p["versiune"], placa=p["placa"], familie=p["familie"])
 
 
+def tasta_pornire(url, date):
+	"""TASTA_ALBASTRU pentru aplicatiile care se deschid cu ALBASTRU (lista "albastru" sau blueButton=true in adresa),
+	altfel TASTA_ROSU."""
+	if gaseste(url, (date or {}).get("albastru")) or "bluebutton=true" in adresa_scurta(url).lower():
+		return TASTA_ALBASTRU
+	return TASTA_ROSU
+
+
 def alege_agent(url, agent_receptor, date):
 	"""(partea HbbTV a User-Agent-ului, profilul sau None) pentru aplicatia de la `url`: compatibilitate cu aplicatiile
 	din lista."""
@@ -297,6 +320,8 @@ def motiv(fel, url, cercetare=None, date=None, criptat=False):
 		return INEXISTENTA
 	if c.get("ceas"):
 		return CEAS
+	if c.get("certificat"):
+		return CERTIFICAT_EXPIRAT if c.get("certificat") == "expirat" else CERTIFICAT
 	rea = _pagina_rea(c)
 	if rea:
 		return rea
@@ -427,8 +452,9 @@ class Cercetare(object):
 
 	def _ceasul(self, eroare):
 		"""Certificatul refuzat din cauza ceasului receptorului (ajutorul comun Components/HdsCeasHttps): textul lui, deja
-		tradus, ramane in rezultat ("ceas") si devine motivul."""
-		if self._rez.get("ceas"):
+		tradus, ramane in rezultat ("ceas") si devine motivul. Refuzat cu ceasul bun: felul lui ("expirat", "alt",
+		"nu_inca", "necunoscut") ramane in rezultat ("certificat"), motivul certificat-expirat sau certificat."""
+		if self._rez.get("ceas") or self._rez.get("certificat"):
 			return
 		try:
 			try:
@@ -436,10 +462,13 @@ class Cercetare(object):
 			except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
 				import HdsCeasHttps
 			text = HdsCeasHttps.mesaj(eroare)
+			fel = None if text else HdsCeasHttps.felCertificat(eroare)
 		except Exception:
-			text = None
+			text = fel = None
 		if text:
 			self._rez["ceas"] = text
+		elif fel:
+			self._rez["certificat"] = fel
 
 	def _dns(self, gazda_):
 		try:
@@ -511,5 +540,6 @@ def rand_jurnal(fel, url, cod, cercetare=None):
 	"""Un rand pentru jurnalul erorilor navigatorului: felul, motivul, gazda si codurile HTTP (fara calea paginii)."""
 	c = cercetare or {}
 	coduri = ",".join(str(p.get("cod")) + ("/gol" if p.get("gol") else "") for p in c.get("pagini") or ())
-	return "%s hbbtv fel=%s motiv=%s gazda=%s dns=%s internet=%s pagini=%s" % (time.strftime("%Y-%m-%d %H:%M:%S"),
-		fel, cod or "-", gazda(url) or "-", c.get("dns") or "-", c.get("internet"), coduri or "-")
+	return "%s hbbtv fel=%s motiv=%s gazda=%s dns=%s internet=%s pagini=%s%s" % (time.strftime("%Y-%m-%d %H:%M:%S"),
+		fel, cod or "-", gazda(url) or "-", c.get("dns") or "-", c.get("internet"), coduri or "-",
+		(" certificat=%s" % c.get("certificat")) if c.get("certificat") else "")

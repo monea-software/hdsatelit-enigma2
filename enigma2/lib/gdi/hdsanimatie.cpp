@@ -46,7 +46,7 @@ uint32_t hdsAnimatieAmesteca(uint32_t a, uint32_t b, unsigned f)
 
 /*
  * Randul amestecat a doi vectori (aparitia treptata, randurile alunecarii si ale maririi). Pe ARM cu NEON (toate receptoarele
- * ARM ale noastre) 16 pixeli odata: pe .122 calculul pixel cu pixel al unui meniu 1776x1000 lua 45-180 ms pe cadru, iar
+ * ARM ale noastre) 16 pixeli odata: pe receptorul de proba calculul pixel cu pixel al unui meniu 1776x1000 lua 45-180 ms pe cadru, iar
  * copierea in memoria video numai ~5 ms. Aceeasi regula ca hdsAnimatieAmesteca (transparentul ia culoarea celuilalt), cu
  * ponderi f8 = 0..255 si impartirea exacta la 255: capetele ies exact (f = 0: „inainte” pentru ochi; f = 256: exact „dupa”).
  */
@@ -270,8 +270,8 @@ int hdsAnimatieRuleaza(gSurface *ecran, const gSurface *inainte, const gSurface 
 	int generatie = __atomic_load_n(&s_oprire_generatie, __ATOMIC_SEQ_CST);
 	long durata = (long)(a.durata_ms > 0 ? a.durata_ms : 200) * 1000L;
 	int *tabel = new int[2 * w + h];
-	/* cadrul se scrie direct in pagina vazuta (memoria video primeste scrieri late fara cost mare: pe .122, 7 MB in ~5 ms); ce
-	   costa e citirea celor doua imagini din RAM: masurat pe .122, 1920x1080 = 31 ms pe cadru cu NEON, 44 fara, cu procesorul
+	/* cadrul se scrie direct in pagina vazuta (memoria video primeste scrieri late fara cost mare: pe receptorul de proba, 7 MB in ~5 ms); ce
+	   costa e citirea celor doua imagini din RAM: masurat pe receptorul de proba, 1920x1080 = 31 ms pe cadru cu NEON, 44 fara, cu procesorul
 	   liber, deci banda memoriei hotaraste; un tampon in plus ar mai adauga o scriere si o citire de marimea zonei */
 	long start = acumUs(), primul = 0, calcul = 0;
 	int cadre = 0, oprita = 0, mijloc = 0;

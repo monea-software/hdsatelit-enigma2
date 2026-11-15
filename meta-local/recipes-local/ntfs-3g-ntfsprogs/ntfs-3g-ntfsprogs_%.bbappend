@@ -19,7 +19,9 @@
 #    fusermount (setuid) prin RRECOMMENDS.
 # Constructia se opreste cu eroare daca reteta nu mai face mount.ntfs-3g ca legatura sau daca lipseste ntfs-3g.
 
-PR:append = ".hds1"
+# .hds2 (0.7.5): ajutorul monteaza numai pentru citire un volum lasat de Windows in hibernare (comentariul din
+# files/mount.ntfs-3g); ntfs-3g intra acum pe toate masinile, din hdsatelit-base.
+PR:append = ".hds2"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 SRC_URI += "file://mount.ntfs-3g"

@@ -2039,6 +2039,14 @@ class HarddiskManager:
 
 harddiskmanager = HarddiskManager()
 
+# HDSatelit (CRF, forum 1276): primul disc mare legat primeste singur inregistrarile cand locul e pe un stick si omul n-a ales altul
+# (Components/HdsLocInregistrari.pazesteDiscMare; pe PC, fara eTimer, nu face nimic)
+try:
+	from Components.HdsLocInregistrari import pazesteDiscMare
+	pazesteDiscMare(harddiskmanager)
+except Exception as e:
+	print("[Harddisk] discul mare pentru inregistrari: %r" % (e,))
+
 # numele cerute de pluginuri
 def getProcMounts():
 	"""randurile din /proc/mounts, despartite; [] cand nu se poate citi"""

@@ -446,6 +446,13 @@ class Sincronizator(object):
 			self.aplicaSursa()
 			_jurnal("NTP reusit (%s, %s), ceasul mutat cu %.1f s" % (server, program, pas if abs(pas) >= 0.05 else 0.0))
 			self._programeaza(True)
+			# internetul merge: fusul orar dupa internet, daca nu s-a aflat inca la pornire (o data pe pornire, numai cat omul
+			# nu l-a ales; Components/HdsFusTara.py)
+			try:
+				from Components import HdsFusTara
+				HdsFusTara.dupaNtp()
+			except Exception as e:
+				_jurnal("fusul dupa NTP: %r" % (e,))
 		else:
 			motiv = (_("Serverul nu a răspuns în %d de secunde (fără rețea sau fără acces la Internet).") % TIMP_MAXIM_NTP_S
 				if self.expirat else _("Programul NTP a ieșit cu codul %s.") % cod)
@@ -568,6 +575,9 @@ class Sincronizator(object):
 			"salvat": salvat or 0,
 			"sigura_salvata": citesteCeasSalvat(self.cale_sigura) or 0,
 			"esecuri": self.esecuri,
+			# fusul orar dupa internet (Components/HdsFusTara.py), ca asistenta sa vada daca s-a aflat si de ce nu
+			"fus_automat": fusAutomat(),
+			"fus_motiv": _motivFus(),
 		}
 
 
@@ -678,8 +688,37 @@ def fusCurent():
 		return ""
 
 
-def seteaza(mod=None, server=None, fus=None):
-	"""Schimba si salveaza setarile ceasului (web). Intoarce (reusit, mesaj). O valoare straina nu schimba nimic."""
+def fusAutomat():
+	"""True cat fusul orar se afla dupa internet (config.timezone.automat, Components/HdsFusTara.py)"""
+	try:
+		from Components import HdsFusTara
+		return HdsFusTara.automat()
+	except Exception:
+		return True
+
+
+def _motivFus():
+	"""ce a facut aflarea fusului la pornirea aceasta (motivul ales sau de ce nu s-a aflat)"""
+	try:
+		from Components import HdsFusTara
+		s = HdsFusTara.stare()
+		return ("%s: %s" % (s["fus"], s["motiv"])) if s["fus"] else (s["motiv"] or s["stare"])
+	except Exception:
+		return ""
+
+
+def textFus():
+	"""randul de stare al fusului, pentru ecran si web"""
+	try:
+		from Components import HdsFusTara
+		return HdsFusTara.textStare()
+	except Exception:
+		return ""
+
+
+def seteaza(mod=None, server=None, fus=None, fus_automat=None):
+	"""Schimba si salveaza setarile ceasului (web). Intoarce (reusit, mesaj). O valoare straina nu schimba nimic.
+	Un fus ales de om ramane (config.timezone.automat Nu); fus_automat True il intoarce la cel aflat dupa internet."""
 	from Components.config import config, configfile
 	c = _config()
 	if mod is not None and mod not in MODURI:
@@ -690,14 +729,27 @@ def seteaza(mod=None, server=None, fus=None):
 		lista = fusuri()
 		if fus not in lista:
 			return False, _("Fusul orar ales nu există pe acest receptor.")
+	if fus_automat is not None and not isinstance(fus_automat, bool):
+		return False, _("Alegerea pentru fusul orar după internet nu este una din cele permise.")
 	if fus is not None and fus != config.timezone.val.value:
 		config.timezone.val.value = fus      # notificarea din SetupDevices il aplica pe loc
 		config.timezone.val.save()
+		if not fus_automat:
+			from Components import HdsFusTara
+			HdsFusTara.omulAAles()
 	if server is not None and server != c.ntp_server.value:
 		c.ntp_server.value = server
 		c.ntp_server.save()
 	if mod is not None and mod != c.sync_mode.value:
 		c.sync_mode.value = mod
 		c.sync_mode.save()
+	if fus_automat is not None:
+		from Components import HdsFusTara
+		el = config.timezone.content.items.get("automat")
+		if el is not None and bool(el.value) != fus_automat:
+			el.value = fus_automat
+			el.save()
+			if fus_automat:
+				HdsFusTara.porneste()
 	configfile.save()
 	return True, _("Salvat.")

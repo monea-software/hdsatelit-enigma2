@@ -609,6 +609,11 @@ class ComenziMotor(object):
 			return False, text
 		self.slot = slot
 		self.stare = "pregatire"
+		# Comanda omului are intaietate, ca in OE-Alliance: rotirea pornita singura pentru canalul de acum (zap, readucerea
+		# automata) nu o mai amana. Inainte se astepta tot timpul maxim al nucleului (fara semnal 360 s, reluat la fiecare zap si
+		# la fiecare incercare a readucerii), iar omul vedea numai "Antena inca merge spre ..." (asistenta 866218, Ustym 4K PRO,
+		# DiSEqC 1.2, 14.11.2026). Luarea tunerului opreste canalul, iar acordul nostru fara comanda de motor inlocuieste secventa
+		# nucleului (frontend.cpp tune(): setRotorMoving(false), secventa noua); comanda omului pleaca apoi spre motor.
 		sec = T.controlSec()
 		try:
 			miscand = sec is not None and sec.hdsRotorMovingSlot() == slot
@@ -616,34 +621,12 @@ class ComenziMotor(object):
 			miscand = False
 		if miscand:
 			try:
-				secunde_nucleu = max(0, int(sec.hdsRotorSeconds(slot)))
-			except Exception:
-				secunde_nucleu = 360
-			self._asteptare_pana = T.acum() + secunde_nucleu + 5
-			try:
 				tinta = sec.hdsRotorToOrbital(slot)
 			except Exception:
 				tinta = -1
-			self._spune(_("Antena încă merge spre %s. Comenzile pornesc după ce ajunge.") % (satelitText(tinta) or _("satelitul programului")))
-			self._asteaptaNucleulDinProgram()
-			return True, ""
+			T.jurnal("comanda data de om opreste rotirea pornita pentru program (spre %s)" % (satelitText(tinta) or "?"))
 		self._iaAcum()
 		return True, ""
-
-	def _asteaptaNucleulDinProgram(self):
-		if self.stare != "pregatire" or self.tuner is not None:
-			return
-		sec = T.controlSec()
-		try:
-			miscand = sec.hdsRotorMovingSlot() == self.slot
-		except Exception:
-			miscand = False
-		if miscand and T.acum() < self._asteptare_pana:
-			if self._t_asteptare is None:
-				self._t_asteptare = T.cronometru(lambda: self._sigur(self._asteaptaNucleulDinProgram))
-			self._t_asteptare.start(ASTEPTARE_NUCLEU_PAS_MS, True)
-			return
-		self._iaAcum()
 
 	def _iaAcum(self):
 		slot = self.slot

@@ -40,6 +40,32 @@ def _scaraRanduri():
 	except Exception:
 		return 1.0, 1.0, 1.0, "Regular"
 
+def _culoareSkin(nume):
+	"""DSG2: culoarea `nume` din skinul HD Satelit (numar 0xRRGGBB), None pe alt skin: acolo randurile raman cum erau."""
+	try:
+		from Components import HdsTemaTv
+		if not HdsTemaTv.skinImaginii():
+			return None
+		import skin
+		c = skin.colorNames.get(nume)
+		if c is None:
+			return None
+		v = c.argb()
+		return v & 0xFFFFFF if (v >> 24) == 0 else v
+	except Exception:
+		return None
+
+
+def _linieRand():
+	"""DSG2: linia subtire de deasupra unui rand (intre doua randuri cu eticheta), ca in casetele temei; None pe alt skin."""
+	c = _culoareSkin("hdsTrack")
+	if c is None:
+		return None
+	sx, sy = _scaraRanduri()[:2]
+	return (eListboxPythonMultiContent.TYPE_TEXT, int(round(16 * sx)), 0, int(round(1680 * sx)), max(1, int(round(sy))), 0,
+		RT_HALIGN_LEFT, "", None, None, c, c)
+
+
 def ServiceInfoListEntry(a, b, valueType=TYPE_TEXT, param=4):
 	b = H.formateaza(b, valueType, param)
 	# HDSatelit: coloanele pe 1920x1080, inmultite cu marimea ecranului
@@ -259,16 +285,30 @@ class ServiceInfo(Screen):
 
 	def fillList(self, Labels):
 		tlist = [ ]
+		# DSG2: pe skinul HD Satelit eticheta are culoarea etichetelor (hdsLabel), valoarea ramane in culoarea textului, si
+		# o linie subtire intre doua randuri cu eticheta (nu sus pe lista, nu la continuarea unei valori lungi), ca in
+		# casetele temei; pe alt skin randurile sunt cele de dinainte
+		linie = _linieRand()
+		culoare = _culoareSkin("hdsLabel")
+		dinainte = False
 
 		for item in Labels:
 			if item[1] is None:
 				continue
 			value = item[1]
 			prefix = (item[0] + ":") if item[0] else ""
+			inceput = len(tlist)
 			if len(item) < 4:
 				tlist.extend(ServiceInfoListEntries(prefix, value, item[2]))
 			else:
 				tlist.extend(ServiceInfoListEntries(prefix, value, item[2], item[3]))
+			if culoare is not None and prefix:
+				for k in range(inceput, len(tlist)):
+					if len(tlist[k]) == 3 and len(tlist[k][1]) == 8:
+						tlist[k] = [tlist[k][0], tuple(tlist[k][1]) + (culoare, culoare), tlist[k][2]]
+			if linie is not None and prefix and dinainte and inceput < len(tlist):
+				tlist[inceput] = list(tlist[inceput]) + [linie]
+			dinainte = bool(prefix)
 
 		self["infolist"].l.setList(tlist)
 		# fiecare pagina (Rosu, Verde, Galben, Albastru) incepe sus, nu unde ramasese cea dinainte

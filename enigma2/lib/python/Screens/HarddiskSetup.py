@@ -256,7 +256,9 @@ class HarddiskSetup(Screen):
 			"red": self.hddQuestion,
 			"yellow": self.alegeMontare
 		})
-		self.onLayoutFinish.append(self.citesteModel)
+		# fereastra de citire se deschide numai cand ecranul e deja in executie: din onLayoutFinish (la construire)
+		# Session.open o refuza (eroarea "modal open are allowed only from a screen which is modal")
+		self.onFirstExecBegin.append(self.citesteModel)
 
 	def citesteModel(self):
 		self.citeste(lambda: (self.hdd.model(), self.hdd.capacity(), self.hdd.bus()), self.modelGata)
@@ -390,7 +392,8 @@ class HarddiskSelection(Screen):
 
 		# hard diskurile si stick-urile USB (Components/HdsDiscuri.discuriOferite, ca pagina web /discuri)
 		self["hddlist"] = MenuList([(_("Se citesc datele discului..."), 0)])
-		self.onLayoutFinish.append(self.citesteLista)
+		# ca la HarddiskSetup: citirea (alta fereastra) porneste cand ecranul e in executie, nu din onLayoutFinish
+		self.onFirstExecBegin.append(self.citesteLista)
 
 		self["actions"] = ActionMap(["OkCancelActions"],
 		{

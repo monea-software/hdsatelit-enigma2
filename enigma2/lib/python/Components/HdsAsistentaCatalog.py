@@ -69,6 +69,8 @@ TEXTE_CATALOG = (
 	N_("tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"),
 	N_("un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"),
 	N_("canalul deschis: serviciul, transponderul, tunerul, semnalul și modulul de acces"),
+	N_("fluxul prins acum de tunerul canalului deschis sau, cu un transponder dat, de un tuner liber, fără să schimbe "
+		"canalul: TSID, ONID, rețeaua și poziția satelitului din tabelele primite, numai citire"),
 	N_("transponderele din lista ta, cu numele canalelor"),
 	N_("pornește un canal din lista ta (numai cu Control complet)"),
 	N_("schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date "
@@ -77,6 +79,8 @@ TEXTE_CATALOG = (
 	N_("dezinstalează un plugin sau un modul (numai cu Control complet)"),
 	N_("repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control "
 		"complet)"),
+	N_("termină o actualizare rămasă la jumătate: caută în feedul HD Satelit, pune din nou pachetele imaginii rămase "
+		"neterminate și repornește interfața (numai cu Control complet)"),
 )
 
 

@@ -5,7 +5,7 @@
 # driverele USB care au sens pe receptoarele noastre, in feed, instalate singure cand omul baga stickul). NU intra in
 # imagine si nu-l instaleaza nimeni: `bitbake hdsatelit-drivere-feed` construieste driverele masinii, culegerea feedului
 # (--cu hdsatelit-drivere-feed) le aduna cu dependintele lor (modulul nucleului, firmware-ul), iar unealta
-# oe-build/harta_drivere.py (hdsatelit-unelte) citeste lista de aici (campul Depends al pachetului) si face tabela
+# oe-build/harta_drivere.py (uneltele noastre) citeste lista de aici (campul Depends al pachetului) si face tabela
 # ID USB -> pachet pe care o foloseste imaginea (data/hds-drivere-pachete.json, Components/HdsDriverLipsa.py).
 #
 # Ce e deja in imagine ramane in imagine (hdsatelit-base.bb si .bbappend: rt8188fu, modulele Wi-Fi si de retea USB din nucleu,
@@ -37,7 +37,7 @@ SUMMARY = "Driverele USB din feedul imaginii HDSatelit"
 DESCRIPTION = "Metapachet gol pentru constructia si culegerea driverelor USB care nu sunt in imagine; receptorul le instaleaza singur cand omul baga stickul."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
-PV = "0.1.3"
+PV = "0.1.4"
 
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 inherit packagegroup
@@ -58,6 +58,9 @@ RDEPENDS:${PN} = ""
 # Octagon SF8008, SF8008 MINI, Uclan Ustym 4K PRO, GigaBlue UHD TRIO 4K (nucleu 4.4.35, MT7601U in nucleu, in imagine)
 RDEPENDS:${PN}:append:sf8008 = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r8723au"
 RDEPENDS:${PN}:append:sf8008m = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r8723au"
+# Octagon SX88V2 / SX988 (V19; nucleu 4.4.176, MT7601U si R8723AU =m in defconfig): ca pe SF8008
+RDEPENDS:${PN}:append:sx88v2 = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r8723au"
+RDEPENDS:${PN}:append:sx988 = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r8723au"
 RDEPENDS:${PN}:append:ustym4kpro = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r8723au"
 RDEPENDS:${PN}:append:gbtrio4k = " ${HDS_DF_WIFI_NOI} ax88179-178a kernel-module-r8723au"
 # AB-COM PULSe 4K si PULSe 4K MINI (MPU, 12.11.2026; linux-abcom 4.4.35: R8723AU=m, MT7601U=m in imagine, fara AX88179); rtl8192eu
@@ -115,12 +118,33 @@ RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_DF_VU4K}"
 # schmith, LinuxSat 164155, Uno 4K SE): invelisul OE-A cu bbappend-ul nostru (recipes-local/enigma2-plugin-drivers-dvb-usb-dib0700:
 # modulele dib0700, mn88472, tda18250 si firmware-ul linux-firmware-dib0700 prin RDEPENDS). Numai pe nucleele 4.1.20 si 4.1.45,
 # care au peticul Xbox (aliasul in dvb-usb-dib0700.ko); NU pe Solo4K, Ultimo4K (3.14.28) si Solo SE (3.13.5), deci nu in HDS_DF_VU4K.
+# Octagon SF8008 / SF8008 Mini (linux-octagon 4.4.35; 14.11.2026, agentul PLG; asistenta 821342: "nothing provides
+# kernel-module-dib7000p"): dvb-usb-dib0700.ko are si aici aliasul Xbox si xbox_one_attach, iar dib7000p, mn88472 si
+# modulele cerute de dib0700 sunt construite (nu erau in feed); TDA18250 e in nucleu (sf8008/defconfig:
+# CONFIG_MEDIA_TUNER_TDA18250=y), deci aici nu exista pachetul kernel-module-tda18250. Invelisul il cere numai prin
+# RRECOMMENDS, iar unde e modul (Vu+ 4.1, AX HD51, GigaBlue 4.1.20) il numim aici, ca sa intre in culegere.
+# Restul familiilor (15.11.2026, agentul XBX; rafejo si darog69, forumul 801): modulele din imaginile 0.7.5 publicate
+# (unelte/stb/module_nucleu_imagini.py: modules.order si modules.builtin din rootfs) si peticul Xbox din reteta nucleului
+# OE-Alliance (KERNEL_PATCHES_SERIES_4_4_35 -> 0005-xbox-one-tuner-4.4.patch pe linux-uclan, linux-gigablue, linux-amiko
+# 4.4.35; 0005-xbox-one-tuner-4.10.patch pe linux-gfutures 4.10.12; KERNEL_PATCH_DVB_XBOX_DIB pe linux-gigablue 4.1.20):
+#   ustym4kpro, gbtrio4k, viper4k (4.4.35): dvb-usb-dib0700=m, dib7000p=m, mn88472=m, TDA18250=y (ca SF8008);
+#   ax51 (4.10.12) si gbquad4kpro (4.1.20-1.9): dvb-usb-dib0700, dib7000p, mn88472 si tda18250 toate =m.
+# NU pe Viper 4K V20/V30/V40 si Protek 4K X2 (u57, u571): nucleul lor n-are DVB deloc (nici dvb-core, nici dvb-usb).
+# NU pe Vu+ Solo4K, Ultimo4K (3.14.28), Solo SE, Solo2, Duo2, Zero (3.13.5): fara mn88472 si tda18250 in nucleu.
 HDS_DF_XBOX = "enigma2-plugin-drivers-dvb-usb-dib0700"
-RDEPENDS:${PN}:append:vuuno4kse = " ${HDS_DF_XBOX}"
-RDEPENDS:${PN}:append:vuzero4k = " ${HDS_DF_XBOX}"
-RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_DF_XBOX}"
-RDEPENDS:${PN}:append:vuduo4k = " ${HDS_DF_XBOX}"
-RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_DF_XBOX}"
+HDS_DF_XBOX_TDAM = "${HDS_DF_XBOX} kernel-module-tda18250"
+RDEPENDS:${PN}:append:vuuno4kse = " ${HDS_DF_XBOX_TDAM}"
+RDEPENDS:${PN}:append:vuzero4k = " ${HDS_DF_XBOX_TDAM}"
+RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_DF_XBOX_TDAM}"
+RDEPENDS:${PN}:append:vuduo4k = " ${HDS_DF_XBOX_TDAM}"
+RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_DF_XBOX_TDAM}"
+RDEPENDS:${PN}:append:ax51 = " ${HDS_DF_XBOX_TDAM}"
+RDEPENDS:${PN}:append:gbquad4kpro = " ${HDS_DF_XBOX_TDAM}"
+RDEPENDS:${PN}:append:sf8008 = " ${HDS_DF_XBOX}"
+RDEPENDS:${PN}:append:sf8008m = " ${HDS_DF_XBOX}"
+RDEPENDS:${PN}:append:ustym4kpro = " ${HDS_DF_XBOX}"
+RDEPENDS:${PN}:append:gbtrio4k = " ${HDS_DF_XBOX}"
+RDEPENDS:${PN}:append:viper4k = " ${HDS_DF_XBOX}"
 # Vu+ Solo SE (3.13.5, mips): modulele nucleului si firmware-ul lor (in imagine nu e niciunul) si driverele din afara care
 # se compileaza pe 3.13.5 (toate, probat 11.11.2026). zd1211rw nu: firmware-ul lui (zd1211/zd1211_*) nu-l pune niciun pachet.
 # Firmware-ul RTL8188EUS din firmware-rtl8188eu, nu din linux-firmware-rtl8188 (acela pune si fisierul lui firmware-rt8188fu).
@@ -137,6 +161,9 @@ RDEPENDS:${PN}:append:vusolose = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_SOLOSE_AFARA
 RDEPENDS:${PN}:append:sh1 = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_WIFI_NOI} ${HDS_DF_VANDUTE_SOLOSE} ${HDS_DF_WIFI_OCTAGON} kernel-module-mt7601u firmware-mt7601u rt8723a rt8188fu firmware-rt8188fu ax88179-178a"
 # Vu+ Solo2 (MS2, 12.11.2026): acelasi nucleu 3.13.5 (defconfig_proxy vusolo2: aceleasi module =m), aceleasi drivere
 RDEPENDS:${PN}:append:vusolo2 = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_SOLOSE_AFARA} ${HDS_DF_TURBO}"
+# Vu+ Duo2 (V22, 14.11.2026): acelasi nucleu 3.13.5 (defconfig_proxy vuduo2: aceleasi module =m ca vusolose, verificat),
+# aceleasi drivere; vuplus-tuner-turbo{,2}_3.13.5 au vuduo2 in COMPATIBLE_MACHINE
+RDEPENDS:${PN}:append:vuduo2 = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_SOLOSE_AFARA} ${HDS_DF_TURBO}"
 # Vu+ Zero (MVZ, 12.11.2026): acelasi nucleu 3.13.5 (defconfig vuzero, fara proxy: aceleasi module =m ca Solo SE;
 # in plus rtl8192cu.ko in nucleu, care nu se calca cu 8192cu.ko al driverului din afara), aceleasi drivere
 RDEPENDS:${PN}:append:vuzero = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_SOLOSE_AFARA} ${HDS_DF_TURBO}"

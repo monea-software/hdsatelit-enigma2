@@ -15,7 +15,9 @@ Formele recunoscute (din listele publice):
                             (in afara de /abertis/pidN, de care se ocupa abertis.py): programul se cauta dupa
                             SID/TSID/ONID in posturile invatate ale feed-urilor noastre.
 Feed-ul DAB se alege dupa pozitie (NS >> 16), PID si fel (la EDI si adresa, portul); la mai multi, cel cu acelasi SID
-parinte. Totul fara disc si fara enigma2: lista si posturile invatate le da apelantul. Merge pe Python 3 si 2.7.
+parinte. Totul fara disc si fara enigma2 (lista si posturile invatate le da apelantul), in afara de
+driver_decapsuleaza_t2mi si tunerele T2-MI (tunere_t2mi, tunere_satelit, tunere_amestecate), care se uita o data in
+/proc. Merge pe Python 3 si 2.7.
 """
 import re
 
@@ -177,3 +179,139 @@ def pare_strain(text, tip):
         return _DABSTREAMER.match(_fara_cod(':'.join(parti[10:]))) is not None
     m = _DECAPSULATOR.match(_fara_cod(parti[10]))
     return m is not None and not m.group(1).lower().startswith('abertis/')
+
+
+# ---------------------------------------------------------------- DVB-T2 prin satelit cu T2-MI pe transponder
+# Driverele care decapsuleaza T2-MI in placa (HiSilicon: SF8008 si familia) au /proc/stb/frontend/N/t2mi; enigma2 le
+# trimite PID-ul si PLP-ul la acordare (lib/dvb/frontend.cpp, DTV_ISDBT_SB_SEGMENT_IDX), deci acolo un canal cu T2-MI
+# pe transponder merge direct. Pe celelalte (Broadcom: Vu+, ...) driverul ignora campul si ar ramane ecran negru: zap-ul
+# trece prin releul nostru, iar daca feed-ul lipseste din lista noastra il face feed_din_t2mi din lamedb.
+T2MI_DRIVER = 'proc/stb/frontend/*/t2mi'
+_DRIVER_T2MI = {}
+_FEC = {1: '1/2', 2: '2/3', 3: '3/4', 4: '5/6', 5: '7/8', 6: '8/9', 7: '3/5', 8: '4/5', 9: '9/10'}
+_MODULATIE = {1: 'QPSK', 2: '8PSK', 3: 'QAM16', 4: '16APSK', 5: '32APSK'}
+_ROLLOFF = {0: '0.35', 1: '0.25', 2: '0.20'}
+_PLS_MOD = {0: 'root', 1: 'gold', 2: 'combo'}
+
+
+def driver_decapsuleaza_t2mi(radacina='/'):
+    """True daca un tuner al receptorului decapsuleaza T2-MI in driver (/proc/stb/frontend/N/t2mi exista; NimManager
+    isT2MI in OE-Alliance). Citit o data si tinut minte (procfs nu se schimba cat merge enigma2), deci se poate chema si
+    din alt fir dupa prima chemare."""
+    if radacina not in _DRIVER_T2MI:
+        import glob
+        import os
+        _DRIVER_T2MI[radacina] = bool(glob.glob(os.path.join(radacina or '/', T2MI_DRIVER)))
+    return _DRIVER_T2MI[radacina]
+
+
+# Receptoarele cu tunere amestecate (unul cu T2-MI in driver, altul fara: un tuner pe USB sau de alt fel langa cele
+# HiSilicon): un canal cu T2-MI pe transponder merge direct numai pe tunerul cu T2-MI. lib/dvb/frontend.cpp
+# (isCompatibleWith, lib/dvb/hdst2mi.h) nu da transponderul T2-MI tunerului fara T2-MI cand receptorul are si unul cu
+# T2-MI, deci enigma2 il porneste direct numai daca tunerul cu T2-MI e liber si prinde satelitul; altfel pornire.py il
+# duce prin releul nostru, care merge pe orice tuner. Indicele N din /proc/stb/frontend/N este frontend-ul DVB
+# (Frontend_Device din /proc/bus/nim_sockets), ca in frontend.cpp (m_dvbid).
+NIM_SOCKETS = 'proc/bus/nim_sockets'
+_TUNERE_T2MI = {}
+_TUNERE_SAT = {}
+
+
+def tunere_t2mi(radacina='/'):
+    """Frontend-urile al caror driver decapsuleaza T2-MI (/proc/stb/frontend/N/t2mi): frozenset de N. Citit o data si
+    tinut minte, ca driver_decapsuleaza_t2mi (procfs, se poate chema si din alt fir)."""
+    if radacina not in _TUNERE_T2MI:
+        import glob
+        import os
+        rez = set()
+        for cale in glob.glob(os.path.join(radacina or '/', T2MI_DRIVER)):
+            n = os.path.basename(os.path.dirname(cale))
+            if n.isdigit():
+                rez.add(int(n))
+        _TUNERE_T2MI[radacina] = frozenset(rez)
+    return _TUNERE_T2MI[radacina]
+
+
+def citeste_tunere_satelit(text):
+    """Textul din /proc/bus/nim_sockets -> frozenset cu frontend-urile tunerelor de satelit (Type sau un Mode DVB-S*;
+    frontend-ul din Frontend_Device, altfel numarul socketului). Functie pura."""
+    socluri, curent = {}, None
+    for rand in (text or '').splitlines():
+        rand = rand.strip()
+        if rand.startswith('NIM Socket'):
+            try:
+                curent = int(rand.split(' ')[2].rstrip(':'))
+            except (IndexError, ValueError):
+                curent = None
+                continue
+            socluri[curent] = {'fe': curent, 'sat': False}
+        elif curent is None:
+            continue
+        elif rand.startswith('Frontend_Device:'):
+            try:
+                socluri[curent]['fe'] = int(rand[len('Frontend_Device:'):].strip())
+            except ValueError:
+                pass
+        elif rand.startswith('Type:') or (rand.startswith('Mode') and ':' in rand):
+            if rand.split(':', 1)[1].strip().upper().startswith('DVB-S'):
+                socluri[curent]['sat'] = True
+    return frozenset(s['fe'] for s in socluri.values() if s['sat'])
+
+
+def tunere_satelit(radacina='/'):
+    """Frontend-urile tunerelor de satelit, din /proc/bus/nim_sockets (tinut minte); fisierul lipsa: frozenset()."""
+    if radacina not in _TUNERE_SAT:
+        import os
+        try:
+            with open(os.path.join(radacina or '/', NIM_SOCKETS)) as f:
+                text = f.read()
+        except (IOError, OSError):
+            text = ''
+        _TUNERE_SAT[radacina] = citeste_tunere_satelit(text)
+    return _TUNERE_SAT[radacina]
+
+
+def tunere_amestecate(radacina='/'):
+    """True daca receptorul are si tunere de satelit cu T2-MI in driver, si tunere de satelit fara. Fara
+    /proc/bus/nim_sockets se socotesc tunerele din /proc/stb/frontend/N (cele fara fisierul t2mi = fara T2-MI)."""
+    cu = tunere_t2mi(radacina)
+    if not cu:
+        return False
+    sat = tunere_satelit(radacina)
+    if not sat:
+        import glob
+        import os
+        sat = frozenset(int(os.path.basename(c)) for c in glob.glob(os.path.join(radacina or '/', 'proc/stb/frontend/*'))
+                        if os.path.basename(c).isdigit())
+    return bool(sat - cu)
+
+
+def _pozitie_text(poz):
+    return '%d.%d%s' % ((poz // 10, poz % 10, 'E') if poz <= 1800 else ((3600 - poz) // 10, (3600 - poz) % 10, 'W'))
+
+
+def feed_din_t2mi(t):
+    """Transponderul cu T2-MI din lamedb (lamedb.transpondere_t2mi: poz, khz, pol, sr, fec, sistem, modulatie, rolloff,
+    is_id, pls_cod, pls_mod, pid, plp) -> (transponder, feed) in formatul listei (ca feed-ul adaugat de mana), pentru un
+    canal din lista altei imagini al carui feed nu e in lista noastra. Functie pura. None daca datele nu ajung."""
+    try:
+        poz, khz, pol, sr = int(t['poz']), int(t['khz']), 'HVLR'[int(t['pol']) & 3], int(t['sr'])
+        pid, plp, is_id = int(t['pid']), int(t['plp']), int(t.get('is_id', -1))
+        pls_cod, pls_mod = int(t.get('pls_cod') or 0), int(t.get('pls_mod') or 0)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (0 <= poz < 3600 and khz > 0 and sr > 0 and 0 < pid < 0x1FFF and 0 <= plp <= 255):
+        return None
+    mis = 0 <= is_id <= 255
+    tp = {'id': 'lista_%d_%d%s%s' % (poz, khz // 1000, pol.lower(), '_mis%d' % is_id if mis else ''),
+          'pozitie': poz, 'frecventa': khz, 'pol': pol, 'sr': sr,
+          'sistem': 'DVB-S2' if int(t.get('sistem') or 0) else 'DVB-S',
+          'modulatie': _MODULATIE.get(int(t.get('modulatie') or 0), 'AUTO'),
+          'fec': _FEC.get(int(t.get('fec') or 0), 'auto'),
+          'rolloff': _ROLLOFF.get(int(t.get('rolloff') or 0), '0.35'),
+          'is_id': is_id if mis else None,
+          'pls_cod': pls_cod if mis or pls_cod else None,
+          'pls_mod': _PLS_MOD.get(pls_mod, 'root') if mis or pls_cod else None}
+    fid = '%s_%d_plp%d' % (tp['id'], pid, plp)
+    feed = {'id': fid, 'tip': 't2', 'fel': 't2mi', 'pid': pid, 'plp': plp,
+            'nume': '%s %d %s PID %d PLP %d' % (_pozitie_text(poz), khz // 1000, pol, pid, plp)}
+    return tp, feed

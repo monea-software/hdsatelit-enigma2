@@ -45,6 +45,32 @@ _PROTECTED = frozenset((
     "/etc/enigma2", "/etc/tuxbox", "/usr/bin", "/usr/sbin", "/usr/lib",
     "/usr/share", "/usr/share/enigma2", "/usr/lib/enigma2",
 ))
+# System files with passwords or private keys that are of no use to the person in a browser: never read,
+# downloaded or copied, shown with a lock in the list. The access module files (/etc/tuxbox/config) stay
+# open and editable on purpose: they belong to the person and the editor for them was requested (26.10.2026).
+_LOCKED_FILES = frozenset(("/etc/shadow", "/etc/shadow-", "/etc/gshadow", "/etc/gshadow-"))
+_LOCKED_DIRS = ("/etc/dropbear", "/etc/hdsatelit-ssh", "/etc/enigma2/hds-https")
+_SSH_DIRS = ("/root/.ssh", "/home/root/.ssh", "/etc/ssh")
+BACKUP_DIR = ".copii"
+BACKUP_KEEP = 5
+
+
+def locked_path(path):
+    """True for a receiver path that is never opened, downloaded or copied (see _LOCKED_FILES)."""
+    if not isinstance(path, str):
+        return False
+    path = "/" + "/".join(p for p in path.split("/") if p and p != ".")
+    if path in _LOCKED_FILES or any(_under(path, base) and path != base for base in _LOCKED_DIRS):
+        return True
+    parent, name = posixpath.split(path)
+    if parent in _SSH_DIRS and not name.endswith(".pub"):
+        return name.startswith("id_") or (name.startswith("ssh_host_") and name.endswith("_key"))
+    return False
+
+
+def _refuse_locked(path):
+    if locked_path(path):
+        raise FisiereError("locked", _("Fișierul are parole sau chei ale sistemului și nu se deschide din browser."), 403)
 
 
 class FisiereError(Exception):
@@ -435,6 +461,8 @@ class FisiereCore:
                          "size": info.st_size, "mtime": info.st_mtime,
                          "mode": "%04o" % stat.S_IMODE(info.st_mode),
                          "uid": getattr(info, "st_uid", 0), "gid": getattr(info, "st_gid", 0)}
+                if locked_path(entry["path"]):
+                    entry["locked"] = True
                 if kind == "symlink":
                     try:
                         entry["link_target"] = directory.readlink(name)
@@ -447,6 +475,8 @@ class FisiereCore:
                     except (OSError, FisiereError):
                         entry.setdefault("link_target", "")
                         entry["is_directory"] = False
+                    if locked_path(entry.get("resolved_path")):
+                        entry["locked"] = True
                 entries.append(entry)
         entries.sort(key=lambda entry: (entry["type"] != "directory", entry["name"].casefold(), entry["name"]))
         total = len(entries)
@@ -468,6 +498,11 @@ class FisiereCore:
 
     def _copy_entry(self, source, name, target, target_name, path, target_path, state, progress, cancelled):
         self._cancelled(cancelled)
+        if locked_path(path):
+            if state.get("top") == path:
+                _refuse_locked(path)
+            state["skipped"] = state.get("skipped", 0) + 1
+            return
         info = source.info(name)
         if target.exists(target_name) is not None:
             raise FisiereError("exists", _("Există deja un element cu acest nume."), 409)
@@ -609,6 +644,7 @@ class FisiereCore:
         for path in paths:
             if action in ("move", "rename"):
                 self._destructive_allowed(path)
+                _refuse_locked(path)
             elif action == "chmod":
                 self._write_allowed(path)
         was_cancelled = False
@@ -643,7 +679,8 @@ class FisiereCore:
                             if target.exists(dest_name) is not None:
                                 raise FisiereError("exists", _("Există deja un element cu acest nume."), 409)
                             if action == "copy":
-                                self._copy_entry(source, source_name, target, dest_name, path, dest_path,
+                                state["top"] = self.resolve_path(path)
+                                self._copy_entry(source, source_name, target, dest_name, state["top"], dest_path,
                                                  state, progress, cancelled)
                             else:
                                 try:
@@ -666,7 +703,7 @@ class FisiereCore:
                     was_cancelled = True
                     break
         return {"action": action, "results": results, "errors": errors, "cancelled": was_cancelled,
-                "bytes": state["bytes"], "files": state["files"]}
+                "bytes": state["bytes"], "files": state["files"], "skipped": state.get("skipped", 0)}
 
     @_api
     def plan_delete(self, paths):
@@ -792,6 +829,7 @@ class FisiereCore:
     @_api
     def editor_read(self, path):
         path = self.resolve_path(path)
+        _refuse_locked(path)
         with self._parent(path) as (parent, name, path):
             raw, info = self._read_regular(parent, name, EDITOR_LIMIT)
         text, format_info, unused = self._text(raw)
@@ -808,8 +846,53 @@ class FisiereCore:
                 continue
         raise FisiereError("temporary", _("Nu se poate crea un fișier temporar."), 500)
 
+    def _backup_copies(self, parent, name, raw, info):
+        """The version before an editor save, in <folder>/.copii/<name>.<YYYYMMDD-HHMMSS> (BACKUP_KEEP kept).
+        Best effort: a full or read-only folder must not stop the save itself."""
+        try:
+            self._write_anchor_allowed(parent)
+            try:
+                folder = parent.child(BACKUP_DIR)
+            except FileNotFoundError:
+                parent.mkdir(BACKUP_DIR, 0o700)
+                folder = parent.child(BACKUP_DIR)
+            with folder:
+                stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+                target = "%s.%s" % (name, stamp)
+                if len(target.encode("utf-8")) > 255:
+                    return
+                temp_name, fd = self._temporary(folder)
+                try:
+                    self._write_all(fd, raw)
+                    self._attributes(fd, info)
+                    os.fsync(fd)
+                    os.close(fd)
+                    fd = None
+                    folder.rename(temp_name, folder, target)
+                finally:
+                    if fd is not None:
+                        os.close(fd)
+                    try:
+                        folder.unlink(temp_name)
+                    except FileNotFoundError:
+                        pass
+                prefix = name + "."
+                old = sorted(n for n in folder.names() if n.startswith(prefix)
+                             and re.fullmatch(r"\d{8}-\d{6}", n[len(prefix):]))
+                for extra in old[:-BACKUP_KEEP]:
+                    try:
+                        folder.unlink(extra)
+                    except OSError:
+                        pass
+                folder.sync()
+        except (OSError, FisiereError):
+            pass
+
     def _backup(self, parent, name, path, raw, info):
-        if not any(_under(path, base) for base in _SYSTEM) or name.endswith(".hds-inainte"):
+        if name.endswith(".hds-inainte") or parent.exists(name) is None:
+            return
+        self._backup_copies(parent, name, raw, info)
+        if not any(_under(path, base) for base in _SYSTEM):
             return
         backup_name, fd = self._temporary(parent)
         try:
@@ -868,6 +951,7 @@ class FisiereCore:
         ``format`` is informational; the original file determines its encoding.
         """
         path = self._write_allowed(path)
+        _refuse_locked(path)
         if not isinstance(text, str) or not isinstance(version, str) or re.fullmatch(r"[0-9a-f]{64}", version) is None:
             raise FisiereError("editor", _("Textul sau versiunea editorului nu este validă."))
         if len(text) > EDITOR_LIMIT:
@@ -907,6 +991,7 @@ class FisiereCore:
     @_api
     def open_download(self, path):
         path = self.resolve_path(path)
+        _refuse_locked(path)
         if ((path.startswith("/proc/") and posixpath.basename(path) in ("mem", "kcore", "kmsg", "sysrq-trigger", "pagemap"))
                 or posixpath.basename(path) in ("trace_pipe", "trace_pipe_raw")):
             raise FisiereError("unsafe_stream", _("Acest flux special al nucleului nu poate fi descărcat din interfața web."), 403)
@@ -953,6 +1038,7 @@ class FisiereCore:
 
     @_api
     def begin_upload(self, path, size=None):
+        _refuse_locked(path)
         path = self._write_allowed(path)
         if size is not None and (isinstance(size, bool) or not isinstance(size, int) or size < 0):
             raise FisiereError("upload_size", _("Dimensiunea încărcării nu este validă."))

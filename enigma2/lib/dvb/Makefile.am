@@ -78,6 +78,7 @@ dvbinclude_HEADERS = \
 	hdsjurnaldecodor.h \
 	hdsjurnaltuner.h \
 	hdsmultistream.h \
+	hdst2mi.h \
 	hdspazademux.h \
 	hdspazavideo.h \
 	hdsretea.h \

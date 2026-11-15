@@ -3335,8 +3335,13 @@ def epg_event(r):
 def epg_short_line(ev):
 	"""Textul scurt al emisiunii pe un singur rand: randurile din EIT fara cel care repeta titlul (sau inceputul lui),
 	unite cu „ · ”; gol cand nu ramane nimic in afara titlului."""
+	return SEP.join(_epg_short_parts(ev))
+
+
+def _epg_short_parts(ev):
+	"""Randurile textului scurt din EIT, fara cel care repeta titlul (sau inceputul lui) si fara dubluri."""
 	if not ev:
-		return u""
+		return []
 	name = u" ".join(u(ev.get("name")).split())
 	parts = []
 	for line in u(ev.get("short")).replace(u"\r", u"\n").split(u"\n"):
@@ -3345,7 +3350,45 @@ def epg_short_line(ev):
 			line = line[len(name):].lstrip(u" -:,.\u00b7\u2013")
 		if line and line not in parts:
 			parts.append(line)
-	return SEP.join(parts)
+	return parts
+
+
+# Textul scurt prea lung pentru randul lui (0.7.5, EPI; dorinelu, forum 795 #2516): unele posturi pun tot filmul in
+# campul scurt si lasa descrierea lunga goala. Randul scurt al ghidului din panoul info (EpgSelShort) e unul singur si
+# derula textul, iar zona mare (EpgSelLong) ramanea goala. Masura randului scurt e cea din tema HDSatelit (HdsRegular
+# 33, 852 px; Marimea textului se aplica in text_width); in tema compacta (fontul 28) un text care ar incapea la 28,
+# dar nu la 33, merge si el in zona mare, unde se vede intreg. Fara tabel de latimi se numara semnele.
+EPG_RAND_SCURT = ("HdsRegular", 33, 852)
+EPG_RAND_SCURT_SEMNE = 56
+
+
+def epg_short_fits(text):
+	"""Adevarat cand `text` incape pe randul scurt al ghidului (aceeasi margine ca fit)."""
+	font, size, width = EPG_RAND_SCURT
+	try:
+		w = text_width(text, font, size)
+	except Exception as e:
+		log_once("epg_short_fits", e)
+		w = None
+	if w is None:
+		return len(u(text)) <= EPG_RAND_SCURT_SEMNE
+	return w <= width - max(4, width // 50)
+
+
+def epg_descrieri(ev):
+	"""(randul scurt, zona mare) ale emisiunii, pentru ghidul din panoul info si pagina web /ghid: o singura decizie.
+	Randul scurt: textul scurt pe un rand (epg_short_line), gol cand repeta titlul. Zona mare: descrierea lunga, goala
+	cand lipseste sau repeta textul scurt ori titlul. Cand zona mare e goala si textul scurt nu incape pe randul lui,
+	zona mare primeste textul scurt, cu randurile lui din EIT, iar randul scurt ramane gol."""
+	if not ev:
+		return u"", u""
+	parts = [] if ev.get("short") == ev.get("name") else _epg_short_parts(ev)
+	scurt = SEP.join(parts)
+	ext = ev.get("ext") or u""
+	lung = u"" if ext in (ev.get("short"), ev.get("name")) else ext
+	if scurt and not lung and not epg_short_fits(scurt):
+		return u"", u"\n".join(parts)
+	return scurt, lung
 
 
 def _local(t):

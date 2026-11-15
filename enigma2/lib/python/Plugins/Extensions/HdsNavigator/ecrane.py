@@ -168,6 +168,37 @@ def gazdaSimpla(gazda):
 	return (gazda or "").strip().strip("[]").lower()
 
 
+def moduleVechi(eroare, module=None):
+	"""0.7.5 (NVK, Vu+ Solo 4K, 15.11.2026): Adevarat cand eroarea (KeyError sau AttributeError) vine din setari.py sau
+	lansator.py ramase in memorie de la pornirea interfetei, mai vechi decat cele de pe disc: opkg a scris o versiune noua
+	a imaginii fara repornirea interfetei (o extensie din Extensii care trage enigma2-hdsatelit, ca ServiceApp, sau opkg
+	scris de mana), iar ecrane.py se incarca abia la deschidere, deci nou. Atunci ecrane.py nou cere chei pe care
+	modulul vechi nu le are (KeyError 'agent_tv' in Setari navigator). Semnul: numele care lipseste e scris in fisierul
+	.py de pe disc al unuia dintre module. Altfel (o greseala adevarata) Fals, iar eroarea merge mai departe."""
+	if isinstance(eroare, KeyError):
+		nume = eroare.args[0] if eroare.args else None
+	elif isinstance(eroare, AttributeError):
+		nume = getattr(eroare, "name", None)
+	else:
+		return False
+	if not nume or not isinstance(nume, str):
+		return False
+	import re
+	tipar = re.compile(r"""["'.]%s\b""" % re.escape(nume))
+	for m in (module if module is not None else (S, L)):
+		cale = getattr(m, "__file__", None) or ""
+		if cale.endswith(".pyc"):
+			cale = cale[:-1]
+		try:
+			with open(cale, "rb") as f:
+				sursa = f.read().decode("utf-8", "replace")
+		except (IOError, OSError):
+			continue
+		if tipar.search(sursa):
+			return True
+	return False
+
+
 def setariCurente():
 	c = S.initConfig()
 	s = {"marire": c.marire.value, "font_minim": c.font_minim.value, "desen": c.desen.value,
@@ -349,8 +380,10 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 			print("[HdsNavigator] dosarul aplicatiei: %s" % e)
 		if motor != (s.get("motor") or A.MOTOR_IMPLICIT):
 			print("[HdsNavigator] aplicatia %s: motorul %s lipseste, porneste pe %s" % (s["id"], s.get("motor"), motor))
+		# setari.py ramas din interfata dinainte de actualizare nu are agent_tv (moduleVechi): agentul implicit
+		agent = getattr(S.initConfig(), "agent_tv", None)
 		aplicatie = {"program": program, "argumente": A.argumenteAplicatie(s, A.optiuniProgram(program),
-			agent_tv=S.initConfig().agent_tv.value),
+			agent_tv=agent.value if agent is not None else A.AGENT_IMPLICIT),
 			"taste": s.get("taste") or "tv"}
 		self.nav = L.Navigator(self, L.MOD_APLICATIE, s["url"], setari=setariCurente(), dosar_date=date,
 			dosar_cache=cache, aplicatie=aplicatie)
@@ -815,7 +848,17 @@ class HdsNavigatorSetari(Screen, ConfigListScreen):
 		self._favorite = ConfigNothing()
 		self._sterge = ConfigNothing()
 		self._sterge_hbbtv = ConfigNothing()
-		ConfigListScreen.__init__(self, self._randuri(), session=session)
+		# interfata pornita inainte de actualizare (setari.py vechi in memorie, ecrane.py nou): lista goala si intrebarea
+		# de repornire, nu caderea ecranului (moduleVechi)
+		self._vechi = False
+		try:
+			randuri = self._randuri()
+		except (KeyError, AttributeError) as e:
+			if not moduleVechi(e):
+				raise
+			print("[HdsNavigator] setari.py din memorie e mai vechi decat cel de pe disc (%r): cer repornirea" % e)
+			randuri, self._vechi = [], True
+		ConfigListScreen.__init__(self, randuri, session=session)
 		self["actiuni"] = ActionMap(["SetupActions"], {
 			"ok": self.ok,
 			"save": self.salveaza,
@@ -827,6 +870,21 @@ class HdsNavigatorSetari(Screen, ConfigListScreen):
 		for e in (self.c.chenar, self.c.chenar_puls, self.c.hbbtv):
 			e.addNotifier(self._randuriSchimbate, initial_call=False)
 		self.onClose.append(self._faraNotificari)
+		if self._vechi:
+			self["descriere"].setText(_("Repornește interfața ca să folosești actualizarea."))
+			self.onFirstExecBegin.append(self._cereRepornirea)
+
+	def _cereRepornirea(self):
+		self.session.openWithCallback(self._dupaIntrebare, MessageBox, "%s\n%s" % (
+			_("Repornește interfața ca să folosești actualizarea."), _("Repornești interfața acum?")), MessageBox.TYPE_YESNO)
+
+	def _dupaIntrebare(self, da):
+		if not da:
+			self.close()
+			return
+		from Screens.Standby import TryQuitMainloop
+		# pe o inregistrare in curs TryQuitMainloop intreaba; la Nu ecranul gol se inchide
+		self.session.openWithCallback(lambda *_a: self.close(), TryQuitMainloop, 3)
 
 	def _randuri(self):
 		n = len(S.citesteFavorite())

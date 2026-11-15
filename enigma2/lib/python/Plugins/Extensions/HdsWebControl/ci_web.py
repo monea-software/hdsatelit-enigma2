@@ -734,9 +734,11 @@ function formularSetari(cheie, setari, actiune){
 function codPin(s, card){
   var bloc = el("div"), camp = el("input"), pastreaza = el("button", "Păstrează codul PIN");
   bloc.className = "pin";
-  camp.type = "password"; camp.inputMode = "numeric"; camp.maxLength = 8; camp.autocomplete = "off";
+  // regula a5-local: cifrele se vad cat le scrii; dupa salvare pagina spune numai pus / nepus (CRF, forum 1286)
+  camp.type = "text"; camp.inputMode = "numeric"; camp.maxLength = 8; camp.autocomplete = "off";
   camp.setAttribute("aria-label", "Codul PIN al cardului");
   pastreaza.type = "button";
+  bloc.appendChild(el("p", s.pin ? "Codul PIN păstrat: pus" : "Codul PIN păstrat: nepus"));
   bloc.appendChild(eticheta("Codul PIN al cardului", camp)); bloc.appendChild(pastreaza);
   pastreaza.addEventListener("click", function(){
     var date = new URLSearchParams({slot:s.slot, actiune:"pin", pin:camp.value});
@@ -859,7 +861,8 @@ TEXTE_PAGINA = {
 		N_("Salvează și aplică"), N_("Închide"), N_("Oprește slotul"), N_("Pornește slotul"), N_("modulul CI"),
 		N_("canalul pornit"), N_("Setări comune"), N_("Păstrează codul PIN"), N_("Codul PIN al cardului"),
 		N_("Șterge codul PIN păstrat"), N_("Alege fișierele param, root.pem, customer.pem și device.pem"),
-		N_("Pune certificatele"), N_("Șterge certificatele CI+")),
+		N_("Pune certificatele"), N_("Șterge certificatele CI+"),
+		N_("Codul PIN păstrat: pus"), N_("Codul PIN păstrat: nepus")),
 }
 
 

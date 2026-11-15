@@ -184,7 +184,8 @@ class JurnalZapAudio:
 
 	@_sigur
 	def _laMotor(self, cod):
-		self._motor = ({1: "merge", 2: "oprit", 3: "eroare", 4: "fara-date", 5: "proba-gata"}.get(cod), _monoton())
+		# 6 (EGZ, 0.7.5): canal TV, sunetul a trecut de pe placa in egalizator; drumul din procesor merge
+		self._motor = ({1: "merge", 2: "oprit", 3: "eroare", 4: "fara-date", 5: "proba-gata", 6: "merge"}.get(cod), _monoton())
 
 	def _citesteDriver(self, seq):
 		try:

@@ -252,6 +252,8 @@ class HdsActualizari(Screen):
 		elif r.get("stare") in (A.DISPONIBILA, "instalata"):
 			if r.get("nepotrivite"):
 				jos.append(_("Lista pachetelor și starea de pe server nu sunt din aceeași publicare. Caută din nou."))
+			if r.get("reinstalare") and r.get("stare") == A.DISPONIBILA:
+				jos.append(_(A.TEXT_REINSTALARE))
 			ce = A.text_noutati(r.get("server") or {})
 			if ce:
 				jos.append(ce)

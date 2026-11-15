@@ -18,6 +18,8 @@
 # pe televizor (fostul nivel "asociat" numai cu cod) s-a scos; in casa nu se cere nimic.
 #   GET  /api/vpn                         starea (fara nume, parola sau chei)
 #   POST /api/vpn-porneste, /api/vpn-opreste, /api/vpn-ip, /api/vpn-stick
+#   POST /api/vpn-stick-cauta             cate servere VPN sunt pe stick si intrebarea "Le adaug pe toate?" (pagina
+#                                         intreaba cu confirm, apoi /api/vpn-stick le adauga pe cele numarate)
 #   POST /api/vpn-reporneste              aceeasi legatura facuta din nou (numai cu VPN-ul pornit)
 #   POST /api/vpn-viteza                  testul de viteza (cel mult 10 secunde; prin VPN cand e pornit)
 # Cu servere din mai multe tari, pagina arata si alegerea tarii (valoarea = primul server al tarii), iar lista
@@ -26,7 +28,8 @@
 #                                         iptv=0|1, adrese= (numai cheile date se schimba)
 #   POST /api/vpn-cont  (corp: nume=, parola=)   /api/vpn-cont-sterge?confirmat=1
 #   POST /api/vpn-importa (corp: nume=, text=, de mai multe ori: fisierele alese in telefon, cel mult 60 KB odata)
-#   POST /api/vpn-adauga  (corp: nume_fisier= si b64= de mai multe ori, fisierele in base64, si .zip; lipit= textul
+#   POST /api/vpn-adauga  (corp: nume_fisier= si b64= de mai multe ori, fisierele in base64, si .zip, toate ale
+#                         furnizorului intr-o cerere, cel mult MAX_URCARE (plugin.MAX_CORP_VPN); lipit= textul
 #                         lipit; sau fel=, server=, nume=, parola=, psk=, protocol=, metoda=, grup_oc=, id_server=,
 #                         scrise de mana) -> Adauga VPN, felul recunoscut dupa continut; raspunsul spune ce lipseste
 #   POST /api/vpn-secrete (corp: id=, nume=, parola=, psk=)   datele de acces ale serverului ales (protocoalele noi)
@@ -40,10 +43,12 @@
 # importa nimic din enigma2 la incarcare: probele de pe PC dau modulul lor.
 
 MAX_TEXT_FISIER = 61440
-MAX_FISIERE = 40
-# corpul cererii are cel mult 64 KB (plugin.MAX_CORP_CERERE); base64 urlencodat creste, deci pagina trimite cel mult
-# 56000 de semne base64 odata, iar ce e mai mare merge pe stick
-MAX_B64 = 60000
+# toate fisierele unui furnizor deodata (tamiciav7, 14.11.2026): cate fisiere primeste importul (HdsVpn.MAX_MEMBRI)
+MAX_FISIERE = 2000
+# octetii fisierelor dintr-o cerere /api/vpn-adauga (arhiva .zip a furnizorului, zeci de .conf); corpul acestei cai
+# are plugin.MAX_CORP_VPN (base64 creste cu 4/3, codarea in corp inca putin); pagina citeste limita din stare
+MAX_URCARE = 6 * 1024 * 1024
+MAX_B64 = MAX_URCARE * 4 // 3 + 4 * MAX_FISIERE
 CAMPURI_ADAUGA = ("fel", "server", "nume", "parola", "psk", "protocol", "metoda", "grup_oc", "id_server", "port")
 CHEI_SETARI = ("furnizor", "profil", "mod", "oprire_totala", "la_pornire", "iptv", "adrese")
 
@@ -142,7 +147,7 @@ def stare(V=None, nivel_cerere="asociat"):
 		text_programe=V.textProgrameLipsa(s["fel"]) if s["lipsesc"] else (s.get("text_indisponibil") or (_t(
 			V.TEXT_WG_INDISPONIBIL) if s.get("wg_indisponibil") else "")),
 		text_viteza=V.textViteza(s.get("viteza")),
-		text_lucreaza=V.textLucrare(l["lucreaza"]) if l["lucreaza"] else "")
+		text_lucreaza=V.textLucrare(l["lucreaza"]) if l["lucreaza"] else "", max_urcare=MAX_URCARE)
 
 
 def _pornit(numar, mesaj):
@@ -179,6 +184,16 @@ def viteza(request, V=None):
 def stick(request, V=None):
 	V = _v(V)
 	return _pornit(V.pornesteStick(), V.textLucrare(V.LUCRARE_STICK))
+
+
+def stickCauta(request, V=None):
+	"""Cate servere VPN sunt pe stick (HdsVpn.cautaStick) si intrebarea; adaugarea o face apoi /api/vpn-stick."""
+	V = _v(V)
+	g = V.cautaStick()
+	if not g["servere"]:
+		return {"result": False, "message": V.textNimicPeStick(g)}
+	return {"result": True, "message": "", "servere": g["servere"], "unde": g["unde"],
+		"intrebare": V.textIntrebareStick(g)}
 
 
 def instaleaza(request, V=None):
@@ -382,6 +397,7 @@ def rute(baza, resource, V=None, sesiune_cerere=None):
 		b"vpn-reporneste": comanda(reporneste),
 		b"vpn-viteza": comanda(viteza),
 		b"vpn-stick": comanda(stick),
+		b"vpn-stick-cauta": comanda(stickCauta),
 		b"vpn-setari": comanda(setari),
 		b"vpn-cont": comanda(cont),
 		b"vpn-cont-sterge": comanda(contSterge),
@@ -431,6 +447,8 @@ ETICHETE = {
 	"ADAUGA_NOTA": N_("Un fișier de la furnizor (.ovpn, .conf, .sswan, .mobileconfig, .zip, cu certificatele alături), "
 		"un text lipit (ss://, adresa https:// a serverului, fișierul WireGuard) sau datele scrise de mână. Felul se "
 		"recunoaște singur; apoi se cere numai ce lipsește."),
+	# 0.7.6 (tamiciav7, TODO 13.11 20:39): omul cauta unde se scrie un token; fisierul WireGuard are cheia in el
+	"CONF_FARA_CONT": N_("Fișierul WireGuard (.conf) are totul înăuntru: nu cere cont, nume, parolă sau token."),
 	"ALEGE_FISIERE": N_("Fișierele"),
 	"LIPESTE": N_("Sau lipește aici textul"),
 	"MANA": N_("Sau scrie datele de mână"),
@@ -449,7 +467,8 @@ ETICHETE = {
 		"serverul e al tău sau al firmei tale."),
 	"CERTIFICAT_DA": N_("Am încredere"),
 	"STICK": N_("Importă fișierele de pe stick"),
-	"STICK_NOTA": N_("De pe stick: dosarul hdsatelit/vpn, cu fișierele .ovpn sau .conf ori cu arhiva .zip a furnizorului."),
+	"STICK_NOTA": N_("De pe stick, toate deodată: fișierele .conf sau .ovpn ori arhiva .zip a furnizorului, din "
+		"rădăcina stickului, din dosarul lor sau din dosarul hdsatelit/vpn."),
 	"CONT": N_("Numele și parola contului"),
 	"NUME": N_("Numele"),
 	"PAROLA": N_("Parola"),
@@ -569,7 +588,7 @@ __STIL_PAGINI__
   </section>
   <section class="card">
     <h2>__T_ADAUGA__</h2>
-    <p class="nota">__T_ADAUGA_NOTA__</p>
+    <p class="nota">__T_ADAUGA_NOTA__ __T_CONF_FARA_CONT__</p>
     <div class="rand"><label for="fisiere">__T_ALEGE_FISIERE__</label><input type="file" id="fisiere" multiple accept=".ovpn,.conf,.sswan,.mobileconfig,.json,.txt,.zip,.crt,.cer,.der,.key,.pem"></div>
     <p class="nota"><label for="lipit">__T_LIPESTE__</label></p>
     <textarea id="lipit" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
@@ -765,7 +784,15 @@ $("stergeServer").addEventListener("click", function(){
 $("stergeToate").addEventListener("click", function(){
   if(D && confirm(TXT.intrebareStergeToate.replace("%s", String(D.nr_profiluri)))){ trimite("/api/vpn-sterge-toate", {confirmat: "1"}); }
 });
-$("stick").addEventListener("click", function(){ trimite("/api/vpn-stick", {}); });
+// toate fisierele de pe stick deodata: intai cate sunt, o singura intrebare cand sunt mai multe, apoi adaugarea
+$("stick").addEventListener("click", function(){
+  mesaj(TXT.seTrimite);
+  cerere("/api/vpn-stick-cauta", "POST", new URLSearchParams()).then(function(r){
+    if(!r || !r.result){ mesaj((r && r.message) || TXT.necitit, true); return; }
+    if(r.servere > 1 && !confirm(r.intrebare)){ mesaj(""); return; }
+    return trimite("/api/vpn-stick", {});
+  }).catch(function(){ mesaj(TXT.nuRaspunde, true); });
+});
 var ETICHETA_NICIUNUL = __NICIUNUL__;
 function arataCampuriNoi(){
   var f = $("felNou").value;
@@ -781,10 +808,11 @@ function citesteB64(f){
 }
 $("adauga").addEventListener("click", function(){
   var alese = Array.prototype.slice.call($("fisiere").files || []);
-  // corpul unei cereri are cel mult 64 KB: fisierele mai mari (arhivele mari ale furnizorilor) merg pe stick
-  var mare = alese.filter(function(f){ return f.size > 40000; })[0];
+  // toate fisierele furnizorului (si arhiva lui .zip) intr-o cerere, pana la limita data de receptor in stare
+  var maxim = (D && D.max_urcare) || 40000;
+  var mare = alese.filter(function(f){ return f.size > maxim; })[0];
   if(mare){ mesaj(TXT.prea.replace("%s", mare.name) + " " + TXT.stick, true); return; }
-  if(alese.reduce(function(s, f){ return s + f.size; }, 0) > 41000){ mesaj(TXT.preaMulte, true); return; }
+  if(alese.reduce(function(s, f){ return s + f.size; }, 0) > maxim){ mesaj(TXT.preaMulte + " " + TXT.stick, true); return; }
   var lipit = $("lipit").value, f = $("felNou").value;
   if(!alese.length && !lipit.trim() && !f){ mesaj(TXT.nimicDeAdaugat, true); return; }
   mesaj(TXT.seTrimite);

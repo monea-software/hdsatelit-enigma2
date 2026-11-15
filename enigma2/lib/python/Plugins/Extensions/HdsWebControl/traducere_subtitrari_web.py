@@ -467,7 +467,8 @@ def stare(T=None):
 		"cheie_fel": fel_cheie,
 		"cheie_text": text_cheie,
 		"texte": texte_pagina(),
-		"lipsa_text": T.textCeLipseste(cfg),
+		# SBR: cu sfatul subtitrarilor gata facute de pe internet cand nimic din lant nu merge (ca pe televizor)
+		"lipsa_text": T.textCeLipsesteCuSfat(cfg, s) if hasattr(T, "textCeLipsesteCuSfat") else T.textCeLipseste(cfg),
 		"confidentialitate": T.textConfidentialitate(cfg),
 		"instructiuni": dict((c, T.instructiuni(c)) for c in T.SERVICII),
 		"feluri_eroare": [[f, textEroare(f)] for f in T.FELURI_EROARE],

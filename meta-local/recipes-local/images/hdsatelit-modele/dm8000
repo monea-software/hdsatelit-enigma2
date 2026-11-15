@@ -1,0 +1,32 @@
+# HD Satelit: regulile garzii de model pentru Dreambox DM8000HD (masina dm8000, MACHINEBUILD dm8000), NECONFIRMAT
+# (V21B, 14.11.2026). Stratul producatorului: meta-dream din OE-Alliance 6.0 (conf/machine/dm8000.conf,
+# dreambox-mips32el.inc): cip bcm7400 (SOC_FAMILY), MIPS ~300-400 MHz, 256 MB RAM, NAND 256 MB in OE-A
+# (dreambox-nand-256mb.inc, dreambox-part-256mb.inc), nucleu linux-dreambox 3.2, driverele Dream dreambox-dvb-modules-dm8000
+# 3.2-20140604a.
+# NUMAI varianta pe stick (HDS_VARIANTA=usb): in memoria interna sta pornirea mica a noastra (hdsatelit-pornire-stick-image,
+# .nfi din modul de salvare), care porneste sistemul de pe stick din hdsatelit-dm8000/radacina.ext4 (loop). Nucleul este
+# cel din memoria interna, construit in ACELASI dosar cu sistemul (aceleasi module).
+# chip=-: driverele Dream nu fac /proc/stb/info/chipset. boxtype=dm8000: Dreambox nu are boxtype si vumodel; valoarea vine
+# din /proc/stb/info/model (al treilea nod, peticul MDM/V21 al garzii). ATENTIE: si alte placi scriu „dm8000” in model
+# (compatibilitate); nodul se citeste numai cand lipsesc boxtype si vumodel. Dovada in plus (propusa, nefacuta): sistemul de
+# pe stick vede /mnt/memorie-interna/etc/hds-pornire-masina = dm8000, scris de pornirea mica.
+# Partitiile (stocare=nand, /proc/mtd, aceleasi si sub sistemul de pe stick, fiindca nucleul e acelasi): loader 1 MiB, boot
+# 7 MiB (jffs2 cu nucleul ca fisier si autoexec.bat), root 248 MiB (pornirea mica). Numele „complete/loader/boot/root” ca la
+# DM7020HD, din peticul Dream al nucleului 3.2; de confirmat la primul tester (confirmat=nu).
+format=1
+distro=hdsatelit
+model=Dreambox DM8000HD
+machine=dm8000
+machinebuild=dm8000
+chip=-
+boxtype=dm8000
+hw=-
+partitions=complete,loader:1M,boot:7M,root
+kernel_part=mtd2
+kernel_kib=7168
+rootfs_part=mtd3
+kernel_name=boot
+rootfs_name=root
+stocare=nand
+confirmat=nu
+familie=broadcom

@@ -33,8 +33,15 @@
 # Ratio" (Components/AVSwitch.py, lib/driver/avswitch.cpp) writes policy too; until a choice is saved here nothing is
 # written and the row shows what the driver has (16:9 always = panscan); a saved choice is written at every start, at
 # every change and again after the "Aspect Ratio" row wrote its own value; with "Aspect Ratio" on a 4:3 TV the row is not
-# offered and nothing is written (policy is then about 16:9 programmes). policy2 (pictures wider than 16:9) is not
-# offered: whether the driver has its names the other way round there too is not known yet.
+# offered and nothing is written (policy is then about 16:9 programmes).
+# Pictures wider than 16:9 (films of 2.35:1 or 2.39:1, 1280x540 or 1920x800) are the driver file policy2, the OE-Alliance key
+# config.av.policy_169 (Components/AVSwitch.py makes it; the "Filmele mai late de 16:9" row of Setari > Video and of the
+# web page /video). Unlike policy it is written at every start, the default too: the HiSilicon driver starts with "auto"
+# (the platform daemon takes anything it does not know as no conversion), so a 2.37:1 film was stretched over the whole
+# 16:9 screen, without black bars (tfrc, SF8008). Measured on the SF8008 on 15.11.2026: a 1280x540 film with policy2
+# "auto" has the conversion Full in /proc/msp/win0100, with "letterbox" LetterBox (the SDK name: black borders); on a 16:9
+# channel letterbox changes nothing (16:9 in 16:9). The OE-Alliance values map to the driver like the other images
+# do: letterbox and panscan as they are, scale = bestfit; only values the driver lists in policy2_choices are offered.
 #
 # HDMI colours (HdmiColors, config.av.hds_hdmi_colors): the u5x/u57 platform daemon starts the HDMI output as RGB
 # with limited levels (16-235) and leaves the RGB range at "default" in the AVI InfoFrame (Q = 0), so the TV chooses
@@ -106,6 +113,12 @@ POLICY_ATTR = "hds_policy43"
 POLICY_ORDER = ("panscan", "letterbox", "bestfit", "nonlinear", "auto")
 POLICY_DEFAULT = "panscan"
 SIMULATED_POLICY = ["auto", "bestfit", "letterbox", "panscan", "nonlinear"]
+# pictures wider than 16:9 (see the top of the file): the driver file, the OE-Alliance setting, its values in the order
+# offered with the driver value of each, and the default (whole, with black bars at the top and bottom)
+POLICY169_FILE = "policy2"
+POLICY169_ATTR = "policy_169"
+POLICY169_DRIVER = (("letterbox", "letterbox"), ("panscan", "panscan"), ("scale", "bestfit"))
+POLICY169_DEFAULT = "letterbox"
 # the "Aspect Ratio" values (Components/AVSwitch.py) of a 4:3 TV
 ASPECT_43 = ("4_3_letterbox", "4_3_panscan")
 # HDMI colours (see the top of the file): the driver file and the only value written, the setting and its values,
@@ -368,6 +381,30 @@ def policyElement():
 	return configElement(POLICY_ATTR) if wideTv() else None
 
 
+def policy169Label(value):
+	"""the untranslated text of a config.av.policy_169 value, by what is seen; translated where it is shown"""
+	return {
+		"letterbox": N_("Întregi, cu benzi negre sus și jos"),
+		"panscan": N_("Mărite, tăiate în lateral"),
+		"scale": N_("Întinse pe tot ecranul"),
+	}.get(value, value)
+
+
+def policy169RowText():
+	"""the label of the row (pictures wider than 16:9), translated now"""
+	return _("Filmele mai late de 16:9")
+
+
+def policy169Description():
+	"""the help line of the "Filmele mai late de 16:9" row, on the screen and in the web page"""
+	return _("Cum se văd filmele mai late decât ecranul (2,35:1, 2,39:1). Întregi: cu benzi negre sus și jos, fără deformare.")
+
+
+def policy169Element():
+	"""config.av.policy_169 when the driver has policy2 with its list (initPolicy169), otherwise None"""
+	return configElement(POLICY169_ATTR) if SystemInfo.get("HdsPolicy169") else None
+
+
 def zapDescription():
 	"""the help line of the zapmode row, on the screen and in the web page"""
 	return _("Ce se vede cât receptorul trece pe alt canal. Cu „lin”, canalul nou apare abia când imaginea lui e stabilă, cu o clipă mai târziu.")
@@ -534,6 +571,10 @@ class VideoOutput:
 		offered = SIMULATED_POLICY[:] if self.simulation else (self.readChoices(POLICY_FILE + "_choices")
 			if os.path.exists(self.root + POLICY_FILE) else [])
 		self.policyChoices = [value for value in POLICY_ORDER if value in offered] + 			[value for value in offered if value not in POLICY_ORDER]
+		# policy2 (pictures wider than 16:9): the config.av.policy_169 values whose driver value is in policy2_choices
+		offered = SIMULATED_POLICY[:] if self.simulation else (self.readChoices(POLICY169_FILE + "_choices")
+			if os.path.exists(self.root + POLICY169_FILE) else [])
+		self.policy169Choices = [value for value, driver in POLICY169_DRIVER if driver in offered]
 		# zapmode: the first driver file that exists; its values from *_choices (ZAP_MODES when that list is
 		# missing), the known ones first in the order of ZAP_MODES; nothing when the driver has no such file
 		self.zapFile = None
@@ -639,6 +680,13 @@ class VideoOutput:
 	def readPolicy(self):
 		"""what the driver has in policy now (None in the emulator or without the file)"""
 		return None if self.simulation else readText(self.root + POLICY_FILE)
+
+	def writePolicy169(self, value):
+		"""writes the driver value of a config.av.policy_169 value (scale = bestfit) to policy2; True when it got there"""
+		if value not in self.policy169Choices:
+			print("[VideoOutput] policy2 %s is not offered, not written" % value)
+			return False
+		return self.write(POLICY169_FILE, dict(POLICY169_DRIVER)[value])
 
 	def readPreferred(self):
 		"""reads again what the TV accepts (videomode_preferred, from its EDID): the TV can be switched on or
@@ -1313,6 +1361,26 @@ def initPolicy(output):
 	return element
 
 
+def initPolicy169(output):
+	"""config.av.policy_169 (pictures wider than 16:9) when the driver has policy2 with its list: the element of
+	Components/AVSwitch.py (the saved value, also one brought from another image, stays) gets the values the driver
+	offers, labelled by what is seen; written now (the default "letterbox" too, see the top of the file) and at every
+	change. A saved value the driver does not offer falls back to the default."""
+	SystemInfo["HdsPolicy169"] = bool(output.policy169Choices)
+	if not output.policy169Choices:
+		return None
+	default = POLICY169_DEFAULT if POLICY169_DEFAULT in output.policy169Choices else output.policy169Choices[0]
+	choices = [(value, policy169Label(value)) for value in output.policy169Choices]
+	element = configElement(POLICY169_ATTR)
+	if element is None:
+		element = ConfigSelection(choices=choices, default=default)
+		setattr(config.av, POLICY169_ATTR, element)
+	else:
+		element.setChoices(choices, default=default)
+	element.addNotifier(lambda el: output.writePolicy169(el.value))
+	return element
+
+
 class _VideoConfigView(ConfigSelection):
 	"""O setare citita la fiecare acces, fara scriere sau salvare proprie."""
 	def __init__(self, read, choices):
@@ -1453,6 +1521,8 @@ def InitVideoOutput(root=None, msp=MSP, pidFile=DAEMON_PID, timer=None):
 		element.addNotifier(lambda element: output.writeZapmode(element.value))
 	# 4:3 programmes (policy): only with the driver file and its list (see the top of the file)
 	initPolicy(videoOutput)
+	# pictures wider than 16:9 (policy2): written now, the default too (see the top of the file)
+	initPolicy169(videoOutput)
 	# HDMI colours: only where the platform daemon takes hdmi_colorimetry; the first look runs now when YCbCr is the
 	# choice (HdmiColors.start, then the timer); nothing is written when the value changes on a screen, the screens
 	# write it on OK (HdmiColors.tryNow)

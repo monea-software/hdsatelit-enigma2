@@ -50,10 +50,13 @@ static char litera(int slot)
 	return (slot >= 0 && slot < 26) ? (char)('A' + slot) : '?';
 }
 
+int Zap::s_fara_eveniment = 0;
+
 Zap::Zap()
 	: m_citeste_pts(0), m_ctx(0), m_activ(false), m_esec(false), m_avert(false), m_t0(0), m_t_acordat(0), m_t_program(0), m_t_imagine(0),
 	m_t_eveniment(0), m_pts(0), m_t_cadre(0), m_termen_pts(0), m_latime(-1), m_inaltime(-1), m_citiri(0), m_bune(0), m_pts_bun(false),
 	m_ceas_pts(eTimer::create(eApp)),
+	m_din_pts(false), m_t_miscare(0),
 	m_slot(-1), m_vpid(-1), m_vtip(-1), m_apid(-1), m_atip(-1), m_criptat(-1), m_sid(0),
 	m_ceas(eTimer::create(eApp))
 {
@@ -76,6 +79,8 @@ void Zap::pornire(const eServiceReferenceDVB &ref, bool masurat)
 	m_latime = m_inaltime = -1;
 	m_citiri = m_bune = 0;
 	m_pts_bun = false;
+	m_din_pts = false;
+	m_t_miscare = 0;
 	memset(m_marcaje, 0, sizeof(m_marcaje));
 	m_t_comanda = m_t_blocare = 0;
 	m_sec_ms = -1;
@@ -234,6 +239,16 @@ void Zap::program(const eDVBServicePMTHandler::program &p, int vpid, int vtip)
 	m_vtip = vtip;
 	if (vpid > 0 && vpid < 0x2000 && !m_avert && !m_t_eveniment && !m_ceas->isActive() && !m_ceas_pts->isActive())
 	{
+		if (m_citeste_pts && s_fara_eveniment >= INVATAT_DUPA)
+		{
+			/* placa fara eveniment video (Vu+ Solo SE): PTS-ul se citeste de acum, decodorul are PID-ul; termenul
+			   avertismentului ramane FARA_IMAGINE_MS de la cerere */
+			m_din_pts = true;
+			m_t_miscare = 0;
+			pornesteCitiri(m_t0 + FARA_IMAGINE_MS);
+			m_ceas_pts->start(PAS_PTS_MS, true);
+			return;
+		}
 		long trecut = (long)(hdsjurnal::monotonMs() - m_t0);
 		long rest = FARA_IMAGINE_MS - trecut;
 		m_ceas->start(rest < 1000 ? 1000 : rest, true);
@@ -266,6 +281,8 @@ void Zap::programGata()
 
 void Zap::imagine(int latime, int inaltime)
 {
+	/* placa trimite evenimente video: citirile de la program() nu mai pornesc (si dupa randul final) */
+	s_fara_eveniment = 0;
 	if (!m_activ || m_t_eveniment || m_t_imagine || !m_t_program)
 		return;
 	m_t_eveniment = hdsjurnal::monotonMs();
@@ -300,11 +317,30 @@ void Zap::citestePts()
 	long long acum = hdsjurnal::monotonMs();
 	if (bun && m_pts_bun && pts != m_pts)
 	{
+		if (m_din_pts && !m_t_eveniment)
+		{
+			/* placa fara eveniment: prima miscare poate fi PTS-ul canalului dinainte inlocuit de cel nou, deci imaginea
+			   e a primei din doua citiri la rand cu PTS-ul miscat */
+			if (!m_t_miscare)
+			{
+				m_t_miscare = acum;
+				m_pts = pts;
+				++m_bune;
+				++m_citiri;
+				m_ceas_pts->start(PAS_PTS_MS, true);
+				return;
+			}
+			m_t_cadre = acum;
+			scrieImagine(m_t_miscare, DIN_PTS);
+			return;
+		}
 		/* cadre noi: timpul imaginii e al evenimentului cand merg de la prima pereche de citiri */
 		m_t_cadre = acum;
-		scrieImagine(m_t_eveniment && m_citiri == 1 ? m_t_eveniment : acum, !m_t_eveniment);
+		scrieImagine(m_t_eveniment && m_citiri == 1 ? m_t_eveniment : acum, m_t_eveniment ? CU_EVENIMENT : FARA_EVENIMENT);
 		return;
 	}
+	if (bun && m_pts_bun)
+		m_t_miscare = 0;  /* PTS-ul pe loc: miscarea de dinainte nu se mai numara */
 	if (bun)
 	{
 		m_pts = pts;
@@ -334,17 +370,20 @@ void Zap::citestePts()
 	m_ceas_pts->start(PAS_PTS_MS, true);
 }
 
-void Zap::scrieImagine(long long t, bool fara_eveniment)
+void Zap::scrieImagine(long long t, int cum)
 {
 	m_t_imagine = t ? t : hdsjurnal::monotonMs();
 	m_ceas->stop();
 	m_ceas_pts->stop();
 	m_activ = false;
+	/* imagine fara eveniment video: inca un zap la rand care spune ca placa nu trimite evenimentul */
+	if (cum != CU_EVENIMENT && s_fara_eveniment < INVATAT_DUPA)
+		++s_fara_eveniment;
 	char sunet[48];
 	textSunet(sunet, sizeof(sunet));
 	char marcaje[340];
 	textMarcaje(marcaje, sizeof(marcaje));
-	if (fara_eveniment)
+	if (cum == FARA_EVENIMENT)
 	{
 		/* imaginea merge, numai evenimentul a lipsit: reusit, fara canal, fara timpul primei imagini */
 		hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit: acordare %ld ms, program %ld ms, imagine fara "
@@ -356,16 +395,18 @@ void Zap::scrieImagine(long long t, bool fara_eveniment)
 	char marime[32] = "";  /* numai cand primul eveniment e chiar marimea imaginii */
 	if (m_latime > 0 && m_inaltime > 0)
 		snprintf(marime, sizeof(marime), " %dx%d", m_latime, m_inaltime);
-	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c %s: acordare %ld ms, program %ld ms, imagine %ld ms | video %s"
+	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c %s: acordare %ld ms, program %ld ms, imagine %ld ms%s | video %s"
 		"%s | sunet %s | criptat %s%s", litera(m_slot), m_avert ? "imagine tarzie" : "reusit", dupa(m_t0, m_t_acordat),
-		dupa(m_t0, m_t_program), dupa(m_t0, m_t_imagine), codecVideo(m_vtip), marime, sunet,
-		m_criptat ? "da" : "nu", marcaje);
+		dupa(m_t0, m_t_program), dupa(m_t0, m_t_imagine), cum == DIN_PTS ? " (din PTS, fara eveniment video)" : "",
+		codecVideo(m_vtip), marime, sunet, m_criptat ? "da" : "nu", marcaje);
 }
 
 void Zap::faraImagine()
 {
 	if (!m_activ || m_t_imagine || m_t_eveniment || m_avert || m_esec)
 		return;
+	if (m_din_pts || m_ceas_pts->isActive())
+		return;  /* citirile de la program() au termenul lor si scriu singure avertismentul */
 	if (m_citeste_pts)
 	{
 		/* fara eveniment de la decodor: doua citiri ale PTS-ului spun daca imaginea merge */
@@ -384,15 +425,19 @@ void Zap::oprire()
 {
 	m_ceas->stop();
 	m_ceas_pts->stop();
-	/* oprit intre eveniment si a doua citire (zap repede): o ultima citire, decodorul e inca pornit */
-	if (m_activ && m_t_eveniment && !m_t_imagine && !m_esec && m_pts_bun && m_citeste_pts)
+	/* oprit intre eveniment si a doua citire (zap repede), sau inainte de a doua miscare pe o placa fara eveniment: o
+	   ultima citire, decodorul e inca pornit */
+	if (m_activ && (m_t_eveniment || m_din_pts) && !m_t_imagine && !m_esec && m_pts_bun && m_citeste_pts)
 	{
 		long long pts = 0;
 		if (m_citeste_pts(m_ctx, pts) && pts > 0 && pts != m_pts)
 		{
 			long long acum = hdsjurnal::monotonMs();
 			m_t_cadre = acum;
-			scrieImagine(m_citiri == 1 ? m_t_eveniment : acum, false);
+			if (m_t_eveniment)
+				scrieImagine(m_citiri == 1 ? m_t_eveniment : acum, CU_EVENIMENT);
+			else
+				scrieImagine(m_t_miscare ? m_t_miscare : acum, DIN_PTS);
 			return;
 		}
 	}

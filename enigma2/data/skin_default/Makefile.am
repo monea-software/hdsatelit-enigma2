@@ -39,6 +39,8 @@ dist_install_DATA = \
 	no_coverArt.png \
 	pal.png \
 	picon_default.png \
+	picon_lista_radio.png \
+	picon_lista_tv.png \
 	position_arrow.png \
 	position_pointer.png \
 	progress_bg.png \

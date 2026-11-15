@@ -1,5 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-from .config import config, ConfigSelection, ConfigSubsection, ConfigOnOff, ConfigText
+from .config import config, ConfigSelection, ConfigSubsection, ConfigOnOff, ConfigText, ConfigYesNo
 from Components.Timezones import timezones
 from Components.Language import language
 from Components.Keyboard import keyboard
@@ -12,7 +12,8 @@ def InitSetupDevices():
 	config.timezone = ConfigSubsection();
 	config.timezone.val = ConfigSelection(default = timezones.getDefaultTimezone(), choices = timezones.getTimezoneList())
 	config.timezone.val.addNotifier(timezoneNotifier)
-	timezones.autoDetectTimezone()
+	# Nu = fusul ales de om (ecranul Data si ora sau pagina web /ceas): nu se mai schimba dupa internet
+	config.timezone.automat = ConfigYesNo(default = True)
 
 
 	def keyboardNotifier(configElement):
@@ -36,6 +37,14 @@ def InitSetupDevices():
 	except Exception as e:
 		print("[SetupDevices] limba dupa tara: %r" % (e,))
 	config.osd.language.addNotifier(languageNotifier)
+
+	# fusul orar dupa internet (Components/HdsFusTara.py): numai cat omul nu l-a ales; dupa limba, ca la prima pornire
+	# sa foloseasca acelasi raspuns al serverului; pe un fir, fara sa intarzie pornirea
+	try:
+		from Components import HdsFusTara
+		HdsFusTara.laPornire()
+	except Exception as e:
+		print("[SetupDevices] fusul dupa internet: %r" % (e,))
 
 	# marimea fonturilor (Screens/FontSetup.py, config.osd.fontscale) se pune de la pornire, inaintea primului ecran:
 	# skin.parseFont o foloseste la fiecare ecran construit; fara apelul acesta valoarea salvata se vedea numai dupa

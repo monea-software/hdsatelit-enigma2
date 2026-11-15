@@ -9,10 +9,12 @@
 #    /etc/security/hds-ftp-retea-locala.conf (il scrie ecranul, separat de cel al SSH). Din fabrica are regula -: din casa
 #    root intra cu orice parola (si goala, 1234, admin, root, pass). Numai „refuzat” (regula -) duce la pam_permit; orice
 #    alt rezultat, si fisier lipsa, gol sau stricat, sare la verificarea parolei (cand omul si-a pus parola pentru FTP).
+#    quiet_log (pam_access de la 1.6.0): refuzat e aici intrarea buna din casa, deci nu se scrie in syslog ca
+#    access denied; randul 1 (adresa din afara retelei) scrie in continuare refuzul.
 
 auth     requisite                       pam_access.so accessfile=/etc/security/hds-ssh-retele-locale.conf nodefgroup
 auth     required                        pam_listfile.so item=user sense=deny file=/etc/vsftpd.ftpusers onerr=succeed
-auth     [perm_denied=ignore default=1]  pam_access.so accessfile=/etc/security/hds-ftp-retea-locala.conf nodefgroup
+auth     [perm_denied=ignore default=1]  pam_access.so accessfile=/etc/security/hds-ftp-retea-locala.conf nodefgroup quiet_log
 auth     [success=done default=ignore]   pam_permit.so
 auth     include  common-auth
 account  include  common-account

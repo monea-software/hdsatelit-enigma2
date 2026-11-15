@@ -8,7 +8,7 @@
 # nucleului se termina la 0xc0840bac, deci la 32,25 MB de inceputul zonei (0xbe800000). Un salt direct ARM (BL, B)
 # ajunge numai la +-32 MB, iar CONFIG_ARM_MODULE_PLTS e oprit. Un modul incarcat in primii ~265 KB ai zonei nu ajunge
 # la functiile de la capatul codului (_raw_spin_lock*, mutex_lock, schedule*: .sched.text si .spinlock.text) si cade
-# la insmod cu "relocation 28 out of range" ("Invalid module format"). Vazut pe .122 (V20), 11.11.2026: ppp_generic.ko
+# la insmod cu "relocation 28 out of range" ("Invalid module format"). Vazut pe receptorul de proba (V20), 11.11.2026: ppp_generic.ko
 # din imagine; dupa verifica-salturi-imagine.py, pe u57 sunt 122 de module in pericol, 53 in imagine (tun, cfg80211,
 # mac80211, toate driverele Wi-Fi USB, r8152 ...). Pe celelalte modele distanta e sub 32 MB (sigur).
 #

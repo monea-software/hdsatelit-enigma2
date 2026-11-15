@@ -9,6 +9,12 @@ from Tools.LoadPixmap import LoadPixmap
 from Tools.Directories import resolveFilename, SCOPE_CURRENT_SKIN
 
 from Components.config import config
+# 0.7.5 (LCS): setarile noi ale listei (numerele, marimile separate, procentul, siglele, sistemul de acces, tipul, coloanele)
+try:
+	from Components import HdsListaSetari
+except ImportError as e:
+	HdsListaSetari = None
+	print("[ServiceList] HdsListaSetari: %s" % e)
 
 import os
 
@@ -21,9 +27,22 @@ def N_(text):
 PICTOGRAMA_TRANSMIS = "liste/transmis.png"
 
 
+def hds_fisier_buchet(cale):
+	"""Numele fisierului din calea unui dosar de buchet (FROM BOUQUET "userbouquet.x.tv" ...), sau ""."""
+	cale = cale or ""
+	if 'FROM BOUQUET "' not in cale:
+		return ""
+	return cale.split('FROM BOUQUET "', 1)[1].split('"', 1)[0]
+
+
 def _cauta_sigla_lista(sref, nume):
 	from Tools.PiconResolver import cauta_sigla
-	return cauta_sigla(sref, nume=nume or None)
+	gasita = cauta_sigla(sref, nume=nume or None)
+	# 0.7.5 (LCS, tfrc LinuxSat 164126): cu Siglă pentru canalele fără siglă pornita, randul fara sigla primeste sigla
+	# lipsei, deci acelasi loc ca celelalte, iar numele sta in rand cu ele (nucleul lasa locul numai cand are o imagine)
+	if not gasita and HdsListaSetari is not None:
+		gasita = HdsListaSetari.sigla_implicita(sref)
+	return gasita
 
 
 def refs_inregistrate(nav=None):
@@ -455,12 +474,20 @@ class ServiceList(HTMLComponent, GUIComponent):
 			slab = getattr(self, "hdsEcran", None)
 			ecran = slab() if slab is not None else None
 			in_plus = ecran.hdsRanduriBuchete(root) if ecran is not None else []
-			if not numite and not in_plus:
+			# radacinile care sunt locuri in "Sateliți" (IPTV, locurile extensiilor) nu se arata aici: dublau fila
+			# (Screens/ChannelSelection.py, hdsBucheteAscunse; JAKITAKI, forumul 768 #2186)
+			ascunse_de = getattr(ecran, "hdsBucheteAscunse", None)
+			fisiere_ascunse = ascunse_de(root) if ascunse_de is not None else ()
+			ascunse = set(i for i, s in enumerate(randuri)
+				if fisiere_ascunse and s.flags & eServiceReference.isDirectory and hds_fisier_buchet(s.getPath()) in fisiere_ascunse)
+			if not numite and not in_plus and not ascunse:
 				return
 			acum = self.getCurrent()
 			# ca la listele facute din Python (ChannelSelection: setRoot(..., True), addService, FillFinished)
 			self.l.setRoot(root, True)
 			for i, s in enumerate(randuri):
+				if i in ascunse:
+					continue
 				if i in numite:
 					s = eServiceReference(s.toString())
 					s.setName(numite[i])
@@ -770,6 +797,14 @@ class ServiceList(HTMLComponent, GUIComponent):
 			semne = self.SEMNE.get(config.usage.hds_semne_lista.value, 3)
 		except AttributeError:
 			semne = 3
+		# 0.7.5 (LCS, Ozgur): sistemul de acces in locul lui $ (bitul 4) si tipul serviciului (bitul 8), cu nucleul nou
+		if hasattr(l, "setServiceTypeLabels"):
+			u = config.usage
+			if semne & 1 and getattr(getattr(u, "hds_lista_criptare", None), "value", "semn") == "sistem":
+				semne |= 4
+			if getattr(getattr(u, "hds_lista_tip", None), "value", False):
+				semne |= 8
+			l.setServiceTypeLabels(_("SD"), _("HD"), _("UHD"), _("Radio"), _("Serviciu date"))
 		l.setServiceMarks(semne, "$", _("Satelit"), _("Cablu"), _("Terestru"))
 		# locurile adaugate de extensii: eticheta lor, dupa adresa canalului; aici, ca o extensie instalata acum sa se vada fara repornire
 		try:
@@ -856,6 +891,20 @@ class ServiceList(HTMLComponent, GUIComponent):
 			procent = 100 if marime == "tema" else min(150, max(70, 100 + 10 * int(marime)))
 		except ValueError:
 			procent = 100
+		u = config.usage
+
+		# 0.7.5 (LCS, Ozgur e-mailul 6323): numele, descrierea si bara de progres cu marimea lor, separat de textul listei
+		# (Ca textul listei = procentul de mai sus; altfel 10% pe pas, 70..150)
+		def _procent(nume):
+			v = getattr(getattr(u, nume, None), "value", "text")
+			if v in (None, "", "text"):
+				return procent
+			try:
+				return min(150, max(70, 100 + 10 * int(v)))
+			except (TypeError, ValueError):
+				return procent
+		p_nume, p_info, p_bara = _procent("hds_lista_marime_nume"), _procent("hds_lista_marime_info"), _procent("hds_lista_marime_bara")
+		procente = (p_nume, p_info, procent)
 		if randuri in ("8", "10", "12", "14", "16", "18", "20"):
 			if inaltime_lista is None:
 				inaltime_lista = self.instance.size().height()
@@ -864,44 +913,63 @@ class ServiceList(HTMLComponent, GUIComponent):
 			# Loc pentru accente si literele care coboara sub rand, inclusiv chirilice.
 			limita_font = max(1, (inaltime - 4) * 7 // 10)
 			# randul e dat de numarul ales: textul creste numai cat incape in el
-			font_nume, font_info, font_numar = (gFont(f.family, max(1, min(f.pointSize * procent // 100, limita_font)))
-				for f in (font_nume, font_info, font_numar))
-		elif procent != 100:
-			# randurile dupa tema: randul creste sau scade cu textul (si sigla, care ia inaltimea randului); lista ramane in
-			# chenarul temei, cu cate randuri intregi incap
-			inaltime = max(1, inaltime * procent // 100)
+			font_nume, font_info, font_numar = (gFont(f.family, max(1, min(f.pointSize * pr // 100, limita_font)))
+				for f, pr in zip((font_nume, font_info, font_numar), procente))
+		elif max(procente) != 100 or min(procente) != 100:
+			# randurile dupa tema: randul creste sau scade cu textul cel mai mare (si sigla, care ia inaltimea randului);
+			# lista ramane in chenarul temei, cu cate randuri intregi incap
+			inaltime = max(1, inaltime * max(procente) // 100)
 			if inaltime_lista is None:
 				inaltime_lista = self.instance.size().height()
 			inaltime_lista = max(inaltime, inaltime_lista // inaltime * inaltime)
-			font_nume, font_info, font_numar = (gFont(f.family, max(1, f.pointSize * procent // 100))
-				for f in (font_nume, font_info, font_numar))
+			font_nume, font_info, font_numar = (gFont(f.family, max(1, f.pointSize * pr // 100))
+				for f, pr in zip((font_nume, font_info, font_numar), procente))
 		if inaltime_lista is not None and self.instance.size().height() != inaltime_lista:
 			from enigma import eSize
 			self.instance.resize(eSize(latime, inaltime_lista))
 		self.l.setItemHeight(inaltime)
 		self.l.setVisualMode(eListboxServiceContent.visModeComplex)
 		latime = self.instance.size().width()
+		# 0.7.5 (LCS, tfrc LinuxSat 164126): Numerele canalelor Nu = fara coloana numarului (nucleul nu deseneaza un loc de
+		# latime 0), numele incepe la margine; numarul ramane pentru tastele cu cifre
+		numere = mode != self.MODE_NORMAL and getattr(getattr(u, "hds_lista_numere", None), "value", True) is not False
 		# Coloana numarului ramane suficienta si pentru numerele operatorului.
-		nr = getattr(self, "hdsLatimeNumar", 50) if mode != self.MODE_NORMAL else 0
-		if mode != self.MODE_NORMAL:
+		nr = getattr(self, "hdsLatimeNumar", 50) if numere else 0
+		if numere:
 			# Si numerotarea obisnuita poate avea patru cifre, de pilda la canalele de internet.
 			nr = max(nr, 4 * font_numar.pointSize * 62 // 100 + 8)
-		inceput = nr + 10 if mode != self.MODE_NORMAL else 0
+		inceput = nr + 10 if numere else 0
 		progres = config.usage.show_event_progress_in_servicelist.value
-		dreapta = progres and getattr(getattr(config.usage, "hds_progres_lista_pozitie", None),
+		dreapta = progres and getattr(getattr(u, "hds_progres_lista_pozitie", None),
 			"value", "stanga") == "dreapta"
-		bara = min(52 * procent // 100, max(0, latime - inceput - 10)) if progres else 0
+		# 0.7.5 (LCS, tfrc): procentul emisiunii in locul barei, cu nucleul nou (setProgressPercent); locul lui: "100%" in
+		# fontul descrierii
+		ca_procent = bool(progres and hasattr(self.l, "setProgressPercent") and getattr(getattr(u,
+			"hds_lista_progres_forma", None), "value", "bara") == "procent")
+		if hasattr(self.l, "setProgressPercent"):
+			self.l.setProgressPercent(ca_procent)
+		latime_bara = font_info.pointSize * 5 // 2 + 8 if ca_procent else 52 * p_bara // 100
+		bara = min(latime_bara, max(0, latime - inceput - 10)) if progres else 0
 		if hasattr(self.l, "setProgressbarHeight"):
-			self.l.setProgressbarHeight(max(1, getattr(self, "hdsProgresInaltime", 6) * procent // 100))
+			self.l.setProgressbarHeight(max(1, getattr(self, "hdsProgresInaltime", 6) * p_bara // 100))
 		self.l.setElementPosition(self.l.celServiceEventProgressbar,
 			eRect(latime - bara if dreapta else inceput, 0, bara, inaltime) if bara else eRect(inceput, 0, 0, 0))
 		if mode != self.MODE_NORMAL:
 			self.l.setElementFont(self.l.celServiceNumber, font_numar)
 			self.l.setElementPosition(self.l.celServiceNumber, eRect(0, 0, nr, inaltime))
 		self.l.setElementFont(self.l.celServiceName, font_nume)
-		self.l.setElementPosition(self.l.celServiceName,
-			eRect(inceput, 0, max(0, latime - inceput - (bara + 10 if dreapta else 0)), inaltime))
+		latime_nume = max(0, latime - inceput - (bara + 10 if dreapta else 0))
+		self.l.setElementPosition(self.l.celServiceName, eRect(inceput, 0, latime_nume, inaltime))
 		self.l.setElementFont(self.l.celServiceInfo, font_info)
+		# 0.7.5 (LCS, Ozgur): marimea siglelor din lista si coloana emisiunii, cu nucleul nou
+		if hasattr(self.l, "setPiconScale"):
+			marimi = {"mica": 70, "tema": 100, "mare": 130, "foarte_mare": 160}
+			self.l.setPiconScale(marimi.get(getattr(getattr(u, "hds_lista_marime_sigle", None), "value", "tema"), 100))
+		if hasattr(self.l, "setInfoColumn"):
+			# emisiunea de la 45% din locul numelui (dupa bara din stanga, cand e acolo); 0 = imediat dupa nume
+			start = inceput + (bara + 10 if bara and not dreapta else 0)
+			coloane = getattr(getattr(u, "hds_lista_coloane", None), "value", False)
+			self.l.setInfoColumn(start + max(0, inceput + latime_nume - start) * 45 // 100 if coloane else 0)
 		self.hdsSablonActualizeaza()
 
 	# inaltimea barei de progres a temei (progressbarHeight; 6 = cea a nucleului listei, cand tema n-o da)

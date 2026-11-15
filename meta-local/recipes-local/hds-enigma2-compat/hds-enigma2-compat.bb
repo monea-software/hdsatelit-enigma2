@@ -7,7 +7,7 @@
 # versiunea din Provides, deci „enigma2 (>= 2.5)” cadea, iar pachetul de compatibilitate din feedul extern se batea cu
 # Provides-ul („implicitly obsoletes enigma2 provided by enigma2-hdsatelit”). Acum Provides-ul e scos
 # (strat-60/.../enigma2-hdsatelit.bbappend) si pachetul real vine din feedul imaginii, cerut de hdsatelit-base, deci si prin
-# actualizare: proba unelte/stb/proba_opkg_provides.py (.122, 10.11.2026) arata ca fara el in aceeasi tranzactie opkg tine
+# actualizare: proba unelte/stb/proba_opkg_provides.py (receptorul de proba, 10.11.2026) arata ca fara el in aceeasi tranzactie opkg tine
 # pe loc, fara mesaj, furnizorul care pierde Provides-ul (receptoare cu versiuni amestecate). Acelasi continut si nume ca
 # pachetul din feedul extern (aio-panel/compatibilitate-enigma2/build_compat_ipk.py), cu revizia r0 in plus (mai nou).
 # Reteta enigma2 a OE-Alliance nu se construieste in imagine (nu e in pkgdata), deci numele de pachet e liber.

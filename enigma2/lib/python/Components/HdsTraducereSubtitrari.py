@@ -1240,6 +1240,44 @@ def textCeLipseste(cfg=None):
 	return _t("Pentru %s lipsește: %s.") % (numeServiciu(cfg["serviciu"]), u", ".join(_t(_TEXT_CAMP[c]) for c in lipsa))
 
 
+def _surseDescarcarePregatite():
+	"""True daca descarcarea subtitrarilor de pe internet (Components/HdsSubtitrariInternet) are macar o sursa
+	pregatita: cheia aplicatiei OpenSubtitles adusa de imagine (/usr/share/hdsatelit/opensubtitles-aplicatie.key) sau
+	cheia ori contul scrise de om. Fara cerere in retea; False pe orice eroare (modulul lipsa, fisierul conturilor)."""
+	try:
+		from Components.HdsSubtitrariInternet.lucru import lucrare
+		return bool(lucrare().surseConfigurate())
+	except Exception:
+		return False
+
+
+def textCeMaiPoate(s=None, cheile=None, legaturi=None):
+	"""Fraza de langa mesajul cheii lipsa (SBR, 15.11.2026, lordjedy): cand niciun serviciu din lant nu are campurile
+	cerute, omul afla ca poate lua subtitrari gata facute in limba aleasa, cu tasta SUB, din cautarea pe internet.
+	Numai daca o sursa a descarcarii e pregatita (altfel cautarea ar da alt mesaj despre chei); "" in rest. Cand
+	imaginea primeste cheia aplicatiei OpenSubtitles, fraza apare singura, fara alta schimbare."""
+	try:
+		s = s or initConfig()
+		lant = lantul(s, cheile, legaturi)
+		if any(not ceLipseste(c) for c in lant):
+			return u""
+		if not _surseDescarcarePregatite():
+			return u""
+		return _t("Poți folosi și subtitrări gata făcute în %s: tasta SUB, apoi „Caută subtitrări pe internet”.") % \
+			numeLimba(lant[0]["tinta"])
+	except Exception:
+		return u""
+
+
+def textCeLipsesteCuSfat(cfg=None, s=None):
+	"""textCeLipseste, urmat de textCeMaiPoate cand nimic din lant nu merge; pentru mesajele catre om (televizor, web)"""
+	lipsa = textCeLipseste(cfg)
+	if not lipsa:
+		return lipsa
+	sfat = textCeMaiPoate(s)
+	return (lipsa + u" " + sfat) if sfat else lipsa
+
+
 # ------------------------------------------------------------------ cheile (fisier separat, criptat, 0600)
 
 def _citesteText(cale):
@@ -3198,8 +3236,11 @@ class Traducator(object):
 		if not folosite:
 			if generatie and not self.lipsa_spusa:
 				self.lipsa_spusa = True
-				self._mesaj(_t("Traducerea subtitrărilor nu merge încă. %s Completează în Meniu › Setări › Sunet și "
-					"subtitrări › Traducerea subtitrărilor.") % textCeLipseste(cfg))
+				mesaj = _t("Traducerea subtitrărilor nu merge încă. %s Completează în Meniu › Setări › Sunet și "
+					"subtitrări › Traducerea subtitrărilor.") % textCeLipseste(cfg)
+				# SBR: subtitrarile gata facute de pe internet, cand o sursa e pregatita (textCeMaiPoate)
+				sfat = textCeMaiPoate()
+				self._mesaj(mesaj + u" " + sfat if sfat else mesaj)
 			return None
 		principal = cfg["serviciu"]
 		lant = folosite
@@ -4447,7 +4488,7 @@ def diagnosticPornire(s=None, pista=None, ocr=None):
 		return rezultat("tv_stins", _t(TEXT_TV_STINS))
 	lant = lantul(s)
 	if not any(not ceLipseste(c) for c in lant):
-		return rezultat("configurare", textCeLipseste(lant[0]))
+		return rezultat("configurare", textCeLipsesteCuSfat(lant[0], s))
 	if pista is None:
 		return rezultat("fara_pista", _t("Nu este pornită nicio pistă de subtitrare. Alege o pistă; textul scris direct în imaginea filmului nu poate fi tradus."))
 	if cod2(limba) and cod2(limba) == limbaTinta(s):

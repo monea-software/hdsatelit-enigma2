@@ -6,6 +6,8 @@ LICENSE = "CLOSED"
 # pastrau tema veche. 0.7.5-r0 e mai nou decat 0.1.0-r0 si decat 0.1.0-r0.hdsN (actualizarile 0.6.x). Nimeni nu cere tema
 # cu o versiune anume (hdsatelit-base o cere fara versiune).
 PV = "${DISTRO_VERSION}"
+# PR: urcat la fiecare actualizare din meniu cu aceeasi versiune a imaginii (opkg nu ia acelasi PV-PR); r1 = actualizarea 0.7.5 (2), 15.11.2026
+PR = "r1"
 
 # arborele de instalare al skinului (dosarul skin/usr al sursei), pus sau montat doar-citire in /hds/skin;
 # o cale file:// absoluta se despacheteaza cu tot cu cale, deci sursa ajunge in skin/hds/skin

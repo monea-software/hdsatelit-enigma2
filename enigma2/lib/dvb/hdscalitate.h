@@ -47,6 +47,17 @@ namespace hdscal
 			ret = snr;
 			return true;
 		}
+		/* HDSatelit (0.7.5, 15.11.2026, TNB): tunerele Broadcom FBC (GigaBlue UHD Quad 4K Pro si Vu+ 4K:
+		 * "DVB-S2X NIM(45308X FBC)", "DVB-S2 NIM(45308 FBC)", "DVB-S2 NIM(45208 FBC)") dau FE_READ_SNR pe scara 0..65535.
+		 * Fara formula, calitatea in dB ramanea 0x12345678 ("nu se stie"): bucla motorului compara doua valori egale
+		 * (proba de stabilitate a celor 5 pasi era oarba) si ecranele nu aratau dB. Formula pe bucati e cea din
+		 * OE-Alliance enigma2 (lib/dvb/frontend.cpp, aceleasi trei nume, GPL-2.0), in sutimi de dB; 65535 = ~16,4 dB. */
+		if (strstr(descriere, "NIM(45308X FBC)") || strstr(descriere, "NIM(45308 FBC)") || strstr(descriere, "NIM(45208 FBC)"))
+		{
+			ret = (int)(snr < 57500 ? (snr < 52500 ? (snr < 32200 ? 0.02640 * snr + 0.0 : 0.02604 * snr + 11.55125)
+				: 0.01310 * snr + 661.55172) : 0.02826 * snr - 210.);
+			return true;
+		}
 		return false;
 	}
 }

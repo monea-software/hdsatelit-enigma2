@@ -62,6 +62,8 @@ def stare(M=None):
 		"text_suport": "" if ok else M.textSuport(motiv),
 		"despre": M.textDespre(),
 		"parole": M.textParole(),
+		# pe Vu+ copia se pune inapoi de pe stick, cu incarcatorul (Components/HdsCopieImagine.textPunere); altfel ""
+		"punere": getattr(M, "textPunere", lambda: "")(),
 		"lucreaza": bool(st["lucreaza"]),
 		"oprit": bool(st["oprit"]),
 		"pas": st["pas"],
@@ -199,7 +201,7 @@ PAGINA = """<!DOCTYPE html>
   <div class="bara ascuns" id="bara"><div id="umplut"></div></div>
   <p class="mesaj" id="mesaj"></p>
 </section>
-<p class="nota">Copia se pune înapoi din Meniu, Setări, Software &amp; Firmware, Imagine nouă de pe stick.</p>
+<p class="nota" id="punere">Copia se pune înapoi din Meniu, Setări, Software &amp; Firmware, Imagine nouă de pe stick.</p>
 <p class="nota">Pe televizor: Meniu, Setări, Software &amp; Firmware, Copia completă a imaginii.</p>
 </main>
 <script>
@@ -244,6 +246,7 @@ function citeste(){
     if(!d.result){ mesaj(d.message || "Receptorul nu a putut citi starea.", true); ceas = setTimeout(citeste, 3000); return; }
     $("despre").textContent = d.despre || "";
     $("parole").textContent = d.parole || "";
+    if (d.punere) $("punere").textContent = d.punere;
     var nou = JSON.stringify([d.suport, d.lucreaza, d.medii]);
     if(semn !== nou){ desenMedii(d); semn = nou; }
     $("fa").disabled = !d.suport || d.lucreaza || !ales;

@@ -80,6 +80,13 @@ ALLOW_EMPTY:${PN} = "1"
 #
 # exFAT pe stick-uri si discuri: fuse-exfat (montarea prin FUSE, nucleul nu are driver exFAT) si exfatprogs (mkfs.exfat,
 # fsck.exfat); amandoua GPL-2.0, specificatia exFAT e publica.
+# NTFS pe toate masinile (0.7.5): ntfs-3g (GPL-2.0, reteta noastra recipes-local/ntfs-3g-ntfsprogs, cu libntfs-3g; fara
+# ntfsprogs), citire si scriere prin FUSE. Pana acum il trageau numai inlocuirile modulului comercial tntfs (HiSilicon:
+# dinobot, octagon, airdigital ...), iar pe Vu+ si celelalte /etc/filesystems cerea ntfs-3g fara sa-l aiba: un disc NTFS
+# nu se monta deloc (Vu+ Ultimo 4K, asistenta 199875). Nucleele au FUSE: CONFIG_FUSE_FS=y in defconfig-urile OE-Alliance
+# (fuseblk in /proc/filesystems pe Ultimo 4K), =m numai la Dreambox, unde masina cere kernel-module-fuse (dreambox.inc,
+# dreambox-arm.inc); niciun defconfig nu-l are oprit. Pachetele au ~215 KB comprimati pe ARM. Montarea ramane cea de pana
+# acum: mount -t auto ajunge la ajutorul mount.ntfs-3g.
 #
 # VPN: openvpn, wireguard-tools si kernel-module-tun. Pornirea ramane la om (ecranul VPN din enigma2); imaginea nu
 # porneste nicio conexiune singura. Modulul WireGuard din afara nucleului, openresolv si utilitarele FUSE cu setuid nu
@@ -232,6 +239,7 @@ RDEPENDS:${PN} = "\
     libdvbcsa \
     fuse-exfat \
     exfatprogs \
+    ntfs-3g \
     openvpn \
     wireguard-tools \
     kernel-module-tun \

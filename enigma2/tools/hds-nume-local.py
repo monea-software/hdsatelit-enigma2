@@ -21,6 +21,10 @@ RADACINA = "/var/run"
 PAUZA = 2
 REINCERCARE = 10
 JURNAL_RAR = 300
+# 0.2.2 (AJU, TODO 13.11 11:26, Ozgur, Vu+ Solo SE): "start" (din postinst-ul pachetului si din init) asteapta pana la
+# ASTEPTARE_PORNIRE secunde serviciul pornit; pe Solo SE Python porneste in cateva secunde, iar 1 s nu ajungea
+ASTEPTARE_PORNIRE = 10
+PAS_PORNIRE = 0.1
 
 
 def citeste(cale):
@@ -52,12 +56,15 @@ def sterge(cale):
 		pass
 
 
-def jurnal(text):
+def jurnal(text, rand_nou=False):
+	"""In syslog; fara python3-syslog (Solo SE), pe iesire. rand_nou: un rand gol inainte, ca mesajul sa nu se
+	lipeasca de randul lasat la jumatate de opkg in jurnalul actualizarilor (opkg isi tine iesirea in tampon, iar
+	scripturile pachetelor scriu direct)"""
 	try:
 		import syslog
 		syslog.syslog(syslog.LOG_NOTICE, "hds-nume-local: " + text)
 	except ImportError:
-		print("hds-nume-local: " + text, flush=True)
+		print(("\n" if rand_nou else "") + "hds-nume-local: " + text, flush=True)
 
 
 def adresa_retea():
@@ -278,13 +285,20 @@ def main(comanda):
 			copil = subprocess.Popen([sys.executable, os.path.abspath(__file__), "run"],
 				stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
 				stderr=subprocess.DEVNULL, start_new_session=True)
-			for _ in range(20):
+			sfarsit = time.monotonic() + ASTEPTARE_PORNIRE
+			while time.monotonic() < sfarsit:
 				if proces_serviciu():
 					return 0
 				if copil.poll() is not None:
 					break
-				time.sleep(0.05)
-			jurnal("Serviciul nu a confirmat pornirea.")
+				time.sleep(PAS_PORNIRE)
+			if proces_serviciu():
+				return 0
+			if copil.poll() is None:
+				# inca porneste (receptor incet): nu e o greseala; paznicul (hds-watchdog) il verifica dupa un minut
+				jurnal("Serviciul porneste inca; il verifica paznicul.", rand_nou=True)
+				return 0
+			jurnal("Serviciul nu a pornit (cod %s)." % copil.returncode, rand_nou=True)
 			return 1
 	return 0
 

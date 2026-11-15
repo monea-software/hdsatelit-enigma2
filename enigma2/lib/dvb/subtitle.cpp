@@ -37,19 +37,15 @@ int bitstream_get(bitstream *bit)
 
 static int extract_pts(pts_t &pts, __u8 *pkt)
 {
-	pkt += 7;
-	int flags = *pkt++;
-
-	pkt++; // header length
-
-	if (flags & 0x80) /* PTS present? */
+	/* HDSatelit (0.7.5): the PTS is the five bytes 9..13 of the PES header (ISO 13818-1 2.4.3.7); its 7 low bits came
+	   from byte 14 (the data identifier of the subtitles) instead of byte 13, as in enigma2 OE-Alliance 3b24f0d476 */
+	if (pkt[7] & 0x80) /* PTS present? */
 	{
-			/* damn gcc bug */
-		pts  = ((unsigned long long)(((pkt[0] >> 1) & 7))) << 30;
-		pts |=   pkt[1] << 22;
-		pts |=  (pkt[2]>>1) << 15;
-		pts |=   pkt[3] << 7;
-		pts |=  (pkt[5]>>1);
+		pts  = ((unsigned long long)(pkt[9] & 0x0e)) << 29;
+		pts |= ((unsigned long long)(pkt[10] & 0xff)) << 22;
+		pts |= ((unsigned long long)(pkt[11] & 0xfe)) << 14;
+		pts |= ((unsigned long long)(pkt[12] & 0xff)) << 7;
+		pts |= ((unsigned long long)(pkt[13] & 0xfe)) >> 1;
 
 		return 0;
 	} else
@@ -568,7 +564,11 @@ int eDVBSubtitleParser::subtitle_process_segment(__u8 *segment)
 			object->object_horizontal_position |= *segment++;
 			processed_length += 2;
 
-			object->object_vertical_position  = *segment++ << 8;
+			/* HDSatelit (0.7.5): 4 reserved bits, then 12 bits of position (EN 300 743 7.2.3, region composition
+			   segment). A broadcaster that sets the reserved bits to 1 gave a position above 61440: every line of the
+			   object fell below the region (y >= height) and nothing was shown, while the list of subtitles was full
+			   (9.0E 11881 V, 23.5E 11856 V). The same mask as in enigma2 OE-Alliance 42557360eb. */
+			object->object_vertical_position  = (*segment++ & 0xF) << 8;
 			object->object_vertical_position |= *segment++ ;
 			processed_length += 2;
 
@@ -709,6 +709,11 @@ int eDVBSubtitleParser::subtitle_process_segment(__u8 *segment)
 		object_coding_method  = (*segment >> 2) & 3;
 		segment++;
 		processed_length++;
+
+		/* HDSatelit (0.7.5): an object of a page without its own page composition segment (an ancillary page, or the
+		   first packets after the start) has no page: nothing to fill, instead of reading through a null pointer */
+		if (!page)
+			break;
 
 //		eDebug("object id %04x, version %d, object_coding_method %d (page_id %d)", object_id, object_version_number, object_coding_method, page_id);
 		subtitle_region *region = page->regions;
@@ -899,11 +904,13 @@ void eDVBSubtitleParser::subtitle_process_pes(__u8 *pkt, int len)
 void eDVBSubtitleParser::subtitle_redraw_all()
 {
 #if 1
+	/* HDSatelit (0.7.5): every page, as in enigma2 OE-Alliance b5db17f313 ("undo HBO hack"). Before, only a page whose
+	   last page composition segment was an acquisition point or a mode change (page_state 1 or 2) was drawn: a
+	   broadcaster that sends its lines as normal updates (page_state 0) never showed a subtitle. */
 	subtitle_page *page = m_pages;
 	while(page)
 	{
-		if (page->state != 0)
-			subtitle_redraw(page->page_id);
+		subtitle_redraw(page->page_id);
 		page = page->next;
 	}
 #else

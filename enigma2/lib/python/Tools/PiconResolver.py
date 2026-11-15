@@ -187,28 +187,120 @@ def _montari_sigle():
 	return sorted(montari)
 
 
-def dosare_sigle(dosar="picon"):
-	"""Dosare comune; refacute la hotplug, deschiderea listei sau dupa un minut."""
-	acum = time.time()
-	with _zavor:
-		e = _dosare.get(dosar)
-		generatie = _generatie
-	if e is not None and 0 <= acum - e[0] < 60:
-		return e[1]
+# HDSatelit 0.7.6 (FRZ, raportul 2149, SF8008 0.7.5): firul interfetei a stat 12,2 s la pornire cu cadrul in isdir <- Screen.execBegin
+# (prima sigla a barei). dosare_sigle facea isdir pe <montare>/picon pentru FIECARE montare din /proc/mounts, pe firul care cere
+# sigla, si din nou la fiecare minut: o montare de retea moarta (cifs, nfs, autofs care incearca sa monteze) sau un disc adormit
+# tin stat()-ul secunde intregi. Acum montarile de retea se verifica numai pe un fir de fundal, iar dupa prima lista (numai
+# discurile locale) refacerea de la un minut merge tot pe firul de fundal: cine cere sigla primeste lista de pana atunci.
+FS_RETEA = frozenset(("cifs", "smb3", "smbfs", "nfs", "nfs4", "autofs", "fuse.sshfs", "sshfs", "davfs", "fuse.davfs2",
+	"fuse.rclone", "9p", "ncpfs", "afs", "ceph", "glusterfs", "fuse.glusterfs"))
+DOSARE_RETEA = ("/media/net/", "/media/autofs/", "/autofs/", "/mnt/net/", "/mnt/autofs/")
+_fire_sigle = {}        # dosar -> firul care reface lista lui
+
+
+def _montari_retea():
+	"""Caile montarilor de retea din /proc/mounts (dupa tipul sistemului de fisiere)."""
+	rez = set()
+	try:
+		with open("/proc/mounts", "r") as f:
+			for linie in f:
+				campuri = linie.split()
+				if len(campuri) > 2 and campuri[2] in FS_RETEA:
+					cale = campuri[1]
+					for cod, semn in (("\\040", " "), ("\\011", "\t"), ("\\134", "\\")):
+						cale = cale.replace(cod, semn)
+					rez.add(os.path.normpath(cale))
+	except OSError:
+		pass
+	return rez
+
+
+def _e_retea(cale, retea):
+	"""True cand dosarul e pe o montare de retea (sau sub dosarele obisnuite ale retelei)."""
+	c = os.path.normpath(cale)
+	if any((c.replace(os.sep, "/") + "/").startswith(d) for d in DOSARE_RETEA):
+		return True
+	while c:
+		if c in retea:
+			return True
+		sus = os.path.dirname(c)
+		if sus == c:
+			break
+		c = sus
+	return False
+
+
+def _cai_sigle(dosar):
+	"""(cai locale, cai de retea) in ordinea cautarii: dosarele imaginii, apoi montarile."""
 	montari = _montari_sigle()
+	retea = _montari_retea()
 	altele = [c % dosar for c in CAI_SIGLE]
 	altele.extend(os.path.join(m, dosar, "") for m in montari)
-	gasite, vazute = [], set()
+	locale, de_retea = [], []
 	for cale in altele:
+		(de_retea if _e_retea(cale, retea) else locale).append(cale)
+	return locale, de_retea, altele
+
+
+def _existente(cai):
+	gasite, vazute = [], set()
+	for cale in cai:
 		cale = os.path.join(os.path.normpath(cale), "")
 		if os.path.isdir(cale):
 			cheie = os.path.normcase(os.path.realpath(cale))
 			if cheie not in vazute:
 				vazute.add(cheie)
 				gasite.append(cale)
+	return gasite
+
+
+def _reface(dosar):
+	"""Pe firul de fundal: lista intreaga (si montarile de retea), pusa in cache daca discurile nu s-au schimbat intre timp."""
+	try:
+		acum = time.time()
+		with _zavor:
+			generatie = _generatie
+		_locale, _retea, toate = _cai_sigle(dosar)
+		gasite = _existente(toate)
+		with _zavor:
+			if generatie == _generatie:
+				_dosare[dosar] = (acum, gasite)
+	except Exception as e:
+		print("[PiconResolver] dosarele de sigle: %s" % e)
+
+
+def _porneste_refacerea(dosar):
+	import threading
+	with _zavor:
+		fir = _fire_sigle.get(dosar)
+		if fir is not None and fir.is_alive():
+			return False
+		fir = threading.Thread(target=_reface, args=(dosar,), name="HdsDosareSigle")
+		fir.daemon = True
+		_fire_sigle[dosar] = fir
+	fir.start()
+	return True
+
+
+def dosare_sigle(dosar="picon"):
+	"""Dosare comune; refacute la hotplug, deschiderea listei sau dupa un minut (dupa prima lista: pe un fir de fundal)."""
+	acum = time.time()
+	with _zavor:
+		e = _dosare.get(dosar)
+		generatie = _generatie
+	if e is not None and 0 <= acum - e[0] < 60:
+		return e[1]
+	if e is not None:
+		_porneste_refacerea(dosar)
+		return e[1]
+	locale, de_retea, _toate = _cai_sigle(dosar)
+	gasite = _existente(locale)
 	with _zavor:
 		if generatie == _generatie:
-			_dosare[dosar] = (acum, gasite)
+			# cu montari de retea, lista locala tine pana o completeaza firul (fara asteptarea minutului)
+			_dosare[dosar] = (acum - (60 if de_retea else 0), gasite)
+	if de_retea:
+		_porneste_refacerea(dosar)
 	return gasite
 
 

@@ -919,7 +919,7 @@ def _laEveniment(ev):
 		except Exception as e:
 			_jurnal("volumul la pornirea canalului: %s" % e)
 		# placa se cauta din nou la prima verificare de dupa zap (VERIFICARI_START), nu aici: la evStart, inaintea
-		# acordarii, citirea lui /proc/msp/sound0 (de doua ori, prin firul de fundal) tinea ascultatorul ~11 ms pe .122
+		# acordarii, citirea lui /proc/msp/sound0 (de doua ori, prin firul de fundal) tinea ascultatorul ~11 ms pe receptorul de proba
 		_STARE["placa_de_verificat"] = True
 		programeaza(VERIFICARI_START)
 	elif ev == getattr(iPlayableService, "evUpdatedInfo", -1):

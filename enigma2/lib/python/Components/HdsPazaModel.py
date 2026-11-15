@@ -153,7 +153,9 @@ FARA_ANTET = "-"
 # AX HD51 (ax51, aceeasi imagine si placa la Mut@nt HD51), Vu+ Duo4K Lite (vuduo4klite) si Amiko Viper 4K V40 (viper4kv40),
 # din 0.7.5: 0.7.4 alfa pornit de beta testeri pe receptoare adevarate (13.11.2026: modelul recunoscut singur, canale
 # acordate; la V40 si cablul si motorul). Regulile lor raman cu confirmat=nu, ca la V30; aici pleaca numai nota.
-MODELE_CONFIRMATE = ("viper4kv30", "vuultimo4k", "ax51", "vuduo4klite", "viper4kv40")
+# Vu+ Zero4K (vuzero4k) si Vu+ Duo4K SE (vuduo4kse), din 0.7.5: trecute in beta pe 14.11.2026 (0.7.4 pornit pe receptorul
+# unui beta tester inscris din meniu, paza "potrivit"; alfa_beta_zilnic.py). Aici pleaca numai nota, ca la V30.
+MODELE_CONFIRMATE = ("viper4kv30", "vuultimo4k", "ax51", "vuduo4klite", "viper4kv40", "vuzero4k", "vuduo4kse")
 # cheile obligatorii ale fisierului de reguli si ale marcajului
 CHEI_REGULI = ("format", "distro", "model", "machinebuild", "chip", "boxtype", "hw", "partitions", "kernel_part",
 	"kernel_kib", "rootfs_part")

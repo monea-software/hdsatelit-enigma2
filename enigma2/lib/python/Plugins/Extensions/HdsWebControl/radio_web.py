@@ -104,10 +104,23 @@ def semnal_panou(nav, RD=None):
 	if RD is None:
 		from Components import HdsRadioDate as RD
 	try:
-		return RD.semnal_acum(_CuNav(nav))
+		rez = RD.semnal_acum(_CuNav(nav))
 	except Exception as eroare:
 		print("[HdsWebControl] semnalul pentru panou: %s" % eroare)
 		return None
+	# 0.7.5 (LCF, baderwabas): SNR-ul in dB, ca bara intai de pe televizor (HdsSignal QualityDb / SnrDb), numai cand placa
+	# da valoarea adevarata (HdsCommon.snr_db_serviciu); altfel None si pagina arata numai procentele
+	if isinstance(rez, dict) and "db" not in rez:
+		try:
+			from Components.Converter import HdsCommon as C
+			db = C.snr_db_serviciu(nav.getCurrentService())
+			rez["db"] = round(db, 1) if db is not None else None
+			# textul gata scris, cu separatorul zecimal al limbii, ca pe televizor
+			rez["db_text"] = (C.fmt_dec(db, 1) + u" dB") if db is not None else ""
+		except Exception as eroare:
+			print("[HdsWebControl] dB pentru panou: %s" % eroare)
+			rez["db"], rez["db_text"] = None, ""
+	return rez
 
 
 def stare(sesiune=None, S=None, RD=None, DES=None, E=None):

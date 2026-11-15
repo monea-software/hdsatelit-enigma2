@@ -115,6 +115,55 @@ class Sessions:
 SESSIONS = Sessions()
 
 
+# Saltul de la http la https fara a doua parola (hotararea coordonatorului, 14.11.2026). Pe pagina http, butonul
+# "Deschide cu panoul calculatorului" cere aici, LA CLIC, un semn de o singura folosinta (POST prin poarta: browser
+# asociat, CSRF, aceeasi origine). Semnul e valabil SALT_SECUNDE, tine minte secretul browserului (din cookie-ul lui
+# de http), adresa si browserul (amprenta User-Agent) si sta numai in memorie. Pagina https il schimba pe loc in
+# cookie-ul ei (Secure, SameSite=Strict, alt nume decat cel de http: plugin._numeCookie). Folosit sau expirat = refuzat.
+# De ce nu doar o reincarcare pe https: cookie-ul de http poate sa nu plece spre https (SameSite intre scheme, cookie-uri
+# legate de schema), deci pagina https ar cere parola a doua oara.
+SALT_PARAM = b"s"
+SALT_SECUNDE = 60
+SALT_MAXIM = 32
+
+
+class Salturi(object):
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self.lock = threading.Lock()
+        self.items = {}
+
+    @staticmethod
+    def _ua(user_agent):
+        return hashlib.sha256((user_agent or "").encode("utf-8", "replace")).hexdigest()
+
+    def fa(self, secret, liber, fisiere, address, user_agent):
+        semn = secrets.token_urlsafe(32)
+        with self.lock:
+            now = self.clock()
+            self.items = {k: v for k, v in self.items.items() if v["expires"] > now}
+            if len(self.items) >= SALT_MAXIM:
+                raise FisiereError("busy", _("Sunt prea multe deschideri în așteptare. Încearcă din nou peste un minut."), 503)
+            self.items[semn] = {"secret": None if liber else secret, "fisiere": fisiere or "", "address": address,
+                                "ua": self._ua(user_agent), "expires": now + SALT_SECUNDE}
+        return semn
+
+    def foloseste(self, semn, address, user_agent):
+        """Datele semnului sau None (necunoscut, folosit, expirat, alta adresa, alt browser). Semnul iese oricum."""
+        if not isinstance(semn, str) or not semn:
+            return None
+        with self.lock:
+            item = self.items.pop(semn, None)
+        if item is None or item["expires"] <= self.clock() or item["address"] != address:
+            return None
+        if not hmac.compare_digest(item["ua"], self._ua(user_agent)):
+            return None
+        return item
+
+
+SALTURI = Salturi()
+
+
 def _cookie(request):
     value = request.getCookie(COOKIE.encode("ascii"))
     return value.decode("ascii", "ignore") if isinstance(value, bytes) else value
@@ -234,7 +283,8 @@ class Service:
                     job.update(state="cancelled" if event.is_set() else "done", output=output)
             except Exception as error:
                 with self.lock:
-                    job.update(state="cancelled" if event.is_set() else "error", error=_result_error(error)[0]["message"])
+                    job.update(state="cancelled" if event.is_set() else "error", error=_result_error(error)[0]["message"],
+                               code=getattr(error, "code", None))
         try:
             self.workers.start(execute)
         except Exception:
@@ -259,7 +309,7 @@ def _service():
     return _SERVICE
 
 
-def rute(resource, P, service=None, timer_factory=None):
+def rute(resource, P, service=None, timer_factory=None, salturi=SALTURI):
     """Resurse proprii: nu mostenesc poarta care accepta cheia pentru scripturi."""
     from twisted.web.server import NOT_DONE_YET
     S = service or _service()
@@ -508,6 +558,18 @@ def rute(resource, P, service=None, timer_factory=None):
                     S.core.recordings_path = recordings_path()
                     return async_response(request, lambda: {"result": True, "items": S.core.shortcuts_list()})
                 data = body(request) if action != "upload-chunk" else None
+                if action == "salt":
+                    if request.isSecure():
+                        raise FisiereError("https", _("Pagina e deja pe adresa criptată."), 409)
+                    from .https_web import stare
+                    https = stare(P._antet(request, b"host"))
+                    if not https.get("pornit"):
+                        raise FisiereError("https", https.get("motiv") or _("Conexiunea criptată a receptorului nu a pornit."), 503)
+                    secret, browser = P._sesiuneDinCerere(request)
+                    semn = salturi.fa(secret, bool(browser and browser.get("liber")), _cookie(request), P._adresaClient(request),
+                                      P._antet(request, b"user-agent"))
+                    return respond(request, {"result": True, "adresa": https["adresa"] + "?" + SALT_PARAM.decode("ascii") + "=" + semn,
+                                             "secunde": SALT_SECUNDE})
                 if action == "access":
                     if not P._esteAdresaLocala(P._adresaClient(request)) or not isinstance(data.get("permis"), bool):
                         raise FisiereError("local", _("Accesul extern se schimbă numai din casă."), 403)
@@ -608,11 +670,35 @@ def rute(resource, P, service=None, timer_factory=None):
             if (not P._esteAdresaLocala(P._adresaClient(request)) and not P.fisiereAfara()) or P.PARAM_JETON in request.args:
                 return respond(request, {"result": False, "message": _("Accesul la fișiere din afara casei este oprit sau cererea nu vine din browser.")}, 403)
             P._anteteHtml(request)
-            secret, browser = P._sesiuneDinCerere(request)
+            secret, browser = None, None
+            if request.isSecure() and SALT_PARAM in request.args:
+                # saltul de pe pagina http: semnul se schimba pe loc in cookie-ul paginii https; aceasta cerere inca nu
+                # are cookie-ul, deci pagina se face cu secretul din semn (pagina scoate apoi ?s= din adresa)
+                semn = (request.args.get(SALT_PARAM) or [b""])[0]
+                item = salturi.foloseste(semn.decode("ascii", "replace") if isinstance(semn, bytes) else semn,
+                                         P._adresaClient(request), P._antet(request, b"user-agent"))
+                if item is not None:
+                    if item["secret"]:
+                        gasit = P.obtineAsociere().sesiune(item["secret"], tip=P.TIP_BROWSER)
+                        if gasit is not None:
+                            P._puneCookie(request, item["secret"], P.DURATA_SESIUNE_S)
+                            secret, browser = item["secret"], gasit
+                    if item["fisiere"] and (item["secret"] is None or browser is not None):
+                        set_cookie(request, item["fisiere"])
+            if browser is None:
+                secret, browser = P._sesiuneDinCerere(request)
             if browser is None:
                 return P._PAGINA_ASOCIERE.encode("utf-8")
             from .fisiere_pagina import pagina_text
-            return pagina_text(P._STIL_COMUN, P._configPanou(P.csrfPentru(secret), "", browser.get("nume", ""))).encode("utf-8")
+            try:
+                from .https_web import stare
+                https = stare(P._antet(request, b"host"))
+            except Exception:
+                https = {"pornit": False, "adresa": "", "motiv": ""}
+            https["sigur"] = bool(request.isSecure())
+            # portul http (80, sau 8080 cand 80 e al altui program): linkurile din pagina https duc acolo
+            https["port_http"] = getattr(P, "_port_folosit", None) or 80
+            return pagina_text(P._STIL_COMUN, P._configPanou(P.csrfPentru(secret), "", browser.get("nume", "")), https).encode("utf-8")
 
-    actions = ("status", "login", "logout", "access", "list", "editor", "save", "shortcuts", "operate", "job", "cancel", "upload-start", "upload-chunk", "upload-commit", "upload-abort", "download")
+    actions = ("status", "login", "logout", "access", "list", "editor", "save", "shortcuts", "operate", "job", "cancel", "upload-start", "upload-chunk", "upload-commit", "upload-abort", "download", "salt")
     return {("fisiere-" + action).encode("ascii"): Endpoint(action) for action in actions}, Page()

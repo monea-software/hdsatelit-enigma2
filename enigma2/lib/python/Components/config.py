@@ -1590,6 +1590,10 @@ class ConfigSubList(list, object):
 		for x in self:
 			x.load()
 
+	def cancel(self):
+		for x in self:
+			x.cancel()
+
 	def getSavedValue(self):
 		res = { }
 		for i, val in enumerate(self):
@@ -1632,6 +1636,10 @@ class ConfigSubDict(dict, object):
 	def load(self):
 		for x in list(self.values()):
 			x.load()
+
+	def cancel(self):
+		for x in list(self.values()):
+			x.cancel()
 
 	def getSavedValue(self):
 		res = {}
@@ -1726,6 +1734,12 @@ class ConfigSubsection(object):
 	def load(self):
 		for x in list(self.content.items.values()):
 			x.load()
+
+	# EXIT intr-un ecran de setari care tine subsectiuni intregi (SubsSupport 2.0.0: keyCancel face x.cancel() pe
+	# config.plugins.subsSupport.external, raportul 493925): ca save(), pe fiecare setare dinauntru
+	def cancel(self):
+		for x in list(self.content.items.values()):
+			x.cancel()
 
 	def dict(self):
 		return self.content.items

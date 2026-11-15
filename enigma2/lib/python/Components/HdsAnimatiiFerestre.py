@@ -22,7 +22,7 @@
 # animatiei o termina imediat (main/enigma.cpp).
 #
 # Din fabrica: pornita (aparitie treptata, normala) pe receptoarele ARM; oprita pe cele mips (Vu+ Solo SE, Duo2 si celelalte:
-# procesor mai slab, nemasurat). Masurarile: STADIU-AN-ANIMATII-FERESTRE.md (hdsatelit-unelte).
+# procesor mai slab, nemasurat). Masurarile: STADIU-AN-ANIMATII-FERESTRE.md (uneltele noastre).
 
 import os
 

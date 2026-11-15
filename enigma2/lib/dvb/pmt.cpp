@@ -627,9 +627,15 @@ int eDVBServicePMTHandler::getProgramInfo(program &program)
 							isaudio = 1;
 							audio.type = audioStream::atLPCM;
 						}
-					case 0x81: // user private ... but bluray AC3
+					case 0x81: // AC3: ATSC/SCTE (America de Nord) si bluray
 					case 0xA1: // bluray secondary AC3
-						if (!isvideo && !isaudio && is_hdmv)
+						/* HDSatelit (0.7.5, TC308, LinuxSat 164155: feedurile de pe 101W fara sunet): 0x81 e AC3 si fara
+						   HDMV si fara descriptorul AC3 (0x6A) sau cel de inregistrare 'AC-3', ca in enigma2 OE-Alliance
+						   (lib/dvb/pmtparse.cpp). Inainte, fluxul ajungea la pistele necunoscute: 0 piste de sunet, fara
+						   sunet pana la PID-ul AC3 pus de mana in lamedb. Descriptorii de mai jos pot inca preciza felul. Numai
+						   0x81 insusi: 0x80 (LPCM pe bluray, video DigiCipher II pe feedurile americane) cade tot aici si
+						   ramane cum era. */
+						if (!isvideo && !isaudio && (is_hdmv || streamtype == 0x81))
 						{
 							isaudio = 1;
 							audio.type = audioStream::atAC3;
@@ -652,6 +658,18 @@ int eDVBServicePMTHandler::getProgramInfo(program &program)
 					case 0xEA: // TS_PSI_ST_SMPTE_VC1
 					{
 						int num_descriptors = 0;
+						/* HDSatelit (0.7.5, TC308, 101W): descriptorii ATSC A/52 din bucla pistei, AC-3 (eticheta 0x81) si
+						   E-AC-3 (0xCC), pe un flux 0x06/0x81/0x87 care nu are descriptorul DVB AC3 (0x6A) sau 'AC-3'. Pe DVB
+						   0x80-0xFE sunt etichete private ale operatorului, deci se iau numai cand pista n-are
+						   private_data_specifier (0x5F, cautat inainte: ordinea descriptorilor nu e fixa). OE-Alliance nu le
+						   citeste deloc (fluxul ramane necunoscut, fara sunet). */
+						bool hds_atsc = (streamtype == 0x06 || streamtype == 0x81 || streamtype == 0x87);
+						for (DescriptorConstIterator desc = (*es)->getDescriptors()->begin();
+							hds_atsc && desc != (*es)->getDescriptors()->end(); ++desc)
+						{
+							if ((*desc)->getTag() == 0x5F) // private_data_specifier
+								hds_atsc = false;
+						}
 						for (DescriptorConstIterator desc = (*es)->getDescriptors()->begin();
 							desc != (*es)->getDescriptors()->end(); ++desc)
 						{
@@ -662,6 +680,20 @@ int eDVBServicePMTHandler::getProgramInfo(program &program)
 							{
 								switch (tag)
 								{
+								case 0x81: // ATSC AC-3 audio descriptor (A/52 anexa A)
+									if (hds_atsc && !isvideo && streamtype != 0x87)
+									{
+										isaudio = 1;
+										audio.type = audioStream::atAC3;
+									}
+									break;
+								case 0xCC: // ATSC E-AC-3 audio descriptor (A/52 anexa G)
+									if (hds_atsc && !isvideo)
+									{
+										isaudio = 1;
+										audio.type = audioStream::atDDP;
+									}
+									break;
 								case AUDIO_STREAM_DESCRIPTOR:
 									isaudio = 1;
 									break;
@@ -896,14 +928,16 @@ int eDVBServicePMTHandler::getProgramInfo(program &program)
 							necunoscuta.pid = (*es)->getPid();
 							necunoscuta.stream_type = streamtype;
 							necunoscuta.inregistrare = 0;
+							necunoscuta.nr_etichete = 0;
 							for (DescriptorConstIterator desc = (*es)->getDescriptors()->begin();
 								desc != (*es)->getDescriptors()->end(); ++desc)
 							{
-								if ((*desc)->getTag() == REGISTRATION_DESCRIPTOR)
-								{
+								/* etichetele descriptorilor pistei, numai pentru randul din jurnal (servicedvb.cpp,
+								   updateDecoder): asa se vede din prima ce semnaleaza postul (de pilda 0x81 ATSC, 0x5F) */
+								if (necunoscuta.nr_etichete < program::pistaNecunoscuta::MAX_ETICHETE)
+									necunoscuta.etichete[necunoscuta.nr_etichete++] = (*desc)->getTag();
+								if ((*desc)->getTag() == REGISTRATION_DESCRIPTOR && !necunoscuta.inregistrare)
 									necunoscuta.inregistrare = ((RegistrationDescriptor*)*desc)->getFormatIdentifier();
-									break;
-								}
 							}
 							program.pisteNecunoscute.push_back(necunoscuta);
 						}
@@ -913,7 +947,36 @@ int eDVBServicePMTHandler::getProgramInfo(program &program)
 			}
 			ret = 0;
 
-			/* finally some fixup: if our default audio stream is an MPEG audio stream, 
+			/* HDSatelit (0.7.5, TC308, 101W): PMT-ul citit nu are NICIO pista de sunet recunoscuta, dar canalul are una
+			   tinuta minte (lamedb c:01/c:04/..., pusa de om sau aleasa inainte). Atunci pista din cache ramane in
+			   program, in felul ei, ca sa nu se piarda sunetul cand soseste PMT-ul (Toons ET: intai 00b8 din cache, apoi
+			   PMT fara sunet si apid -1). Numai cand PMT-ul n-are niciun sunet: un canal cu piste in PMT ramane exact ca
+			   inainte. Nu se ia un PID care in PMT e imagine, teletext, subtitrare sau AIT. OE-Alliance tine cache-ul
+			   numai cu steagul dxNoDVB (PMT-ul ignorat de tot); aici PMT-ul ramane folosit pentru restul. */
+			if (program.audioStreams.empty() && cached_apid != -1 && cached_apid_type != -1)
+			{
+				bool hds_ocupat = (cached_apid == program.textPid || cached_apid == program.aitPid);
+				for (std::vector<videoStream>::const_iterator v(program.videoStreams.begin());
+					!hds_ocupat && v != program.videoStreams.end(); ++v)
+					hds_ocupat = (v->pid == cached_apid);
+				for (std::vector<subtitleStream>::const_iterator s(program.subtitleStreams.begin());
+					!hds_ocupat && s != program.subtitleStreams.end(); ++s)
+					hds_ocupat = (s->pid == cached_apid);
+				if (!hds_ocupat)
+				{
+					audioStream hds_tinut;
+					hds_tinut.component_tag = -1;
+					hds_tinut.type = cached_apid_type;
+					hds_tinut.pid = cached_apid;
+					hds_tinut.rdsPid = -1;
+					program.audioStreams.push_back(hds_tinut);
+					program.defaultAudioStream = 0;
+					eDebug("[eDVBServicePMTHandler] PMT fara pista de sunet recunoscuta: raman pe pista tinuta minte %04x (fel %d)",
+						cached_apid, cached_apid_type);
+				}
+			}
+
+			/* finally some fixup: if our default audio stream is an MPEG audio stream,
 			   and we have 'defaultac3' set, use the first available ac3 stream instead.
 			   (note: if an ac3 audio stream was selected before, this will be also stored
 			   in 'fisrt_ac3', so we don't need to worry. */

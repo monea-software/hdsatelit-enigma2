@@ -9,10 +9,16 @@ Posterele trec prin receptor (/api/vod-poza, cu semnul pozei, nu cu adresa ei): 
 receptorul le micsoreaza o singura data, in acelasi cache ca ecranul.
 API: GET /api/vod-surse; GET /api/vod?fel=categorii|rand|recente|detalii|cauta&id=&tip=&arg= (sau &cerere=<cheie>);
 GET /api/vod-locale?id=&tip=; GET /api/vod-poza?s=&l=&h=&fel=; POST /api/vod-reda (id, cheie, de_la), POST /api/vod-favorit.
+Serverele Emby / Jellyfin (Components/HdsVodServere): GET /api/vod-servere; POST /api/vod-server (fel=cauta: cautarea in retea;
+fel=adauga: adresa, utilizator, parola; fel=scoate: id), apoi GET /api/vod-server?lucrare= pana e gata (reteaua merge pe un fir,
+pagina si televizorul nu asteapta). Parola nu se intoarce niciodata in pagina.
 """
 import json
 import os
 import re
+import threading
+import time
+import uuid
 
 
 def _(text):
@@ -40,7 +46,7 @@ def _Z():
 
 
 _SID = re.compile(r"^[0-9a-f]{8}$")
-_CHEIE = re.compile(r"^[ves][0-9]{1,12}(\.[A-Za-z0-9]{1,5})?$")
+_CHEIE = re.compile(r"^[ves][0-9A-Za-z]{1,40}(\.[A-Za-z0-9]{1,5})?$")   # Xtream: numere; Emby: numere; Jellyfin: hex; disc: suma
 _FELURI = ("categorii", "rand", "recente", "detalii", "cauta")
 
 
@@ -80,6 +86,18 @@ def raspunsPublic(rez, sid, Z=None, P=None):
 	return rez
 
 
+def _pozitiiServer(rez, src):
+	"""Serverele Emby/Jellyfin tin pozitia (vazut si pe alt aparat): pagina arata pozitia de acolo."""
+	if src is None or not src.continuaPeServer:
+		return rez
+	for t in (rez.get("titluri") or []) + ([rez["detalii"]] if isinstance(rez.get("detalii"), dict) else []):
+		for x in [t] + [e for sz in t.get("sezoane") or [] for e in sz.get("episoade") or []]:
+			p = src.pozitieServer(x.get("cheie") or "") if x.get("cheie") else None
+			if p is not None:
+				x["pozitie"] = p
+	return rez
+
+
 def vod(arg, V=None, Z=None, P=None):
 	V = V or _V()
 	cerere = arg.get("cerere", "")
@@ -95,7 +113,10 @@ def vod(arg, V=None, Z=None, P=None):
 			return {"result": False, "message": _(V.E_OCUPAT)}
 	rez = V.rezultat(cerere)
 	rez["cerere"] = cerere
-	return raspunsPublic(rez, sid, Z, P)
+	rez = raspunsPublic(rez, sid, Z, P)
+	if not rez.get("lucreaza"):
+		rez = _pozitiiServer(rez, V.sursa(sid))
+	return rez
 
 
 def locale(arg, V=None, Z=None, P=None):
@@ -116,7 +137,10 @@ def locale(arg, V=None, Z=None, P=None):
 		else:
 			t.update(id=cheie[1:].split(".")[0], cheie=cheie, progres=round(Z.progres(k), 3), pozitie=Z.pozitie(k))
 		return t
+	src = V.sursa(sid)
 	cont = [titlu(k, r) for k, r in Z.continua(sid) if (r.get("tip") or "filme") == tip]
+	if src is not None and src.continuaPeServer:
+		cont = []               # randul 'Continuă de unde ai rămas' vine de la server, cu categoriile
 	fav = [titlu(k, r) for k, r in Z.favorite(sid) if (r.get("tip") or "filme") == tip]
 	return {"result": True, "continua": cont, "favorite": fav, "recente": V.activ("recente")}
 
@@ -138,6 +162,8 @@ def reda(arg, V=None, Z=None, zap=None):
 	if poza:
 		meta["poza"] = poza
 	de_la = Z.pozitie(Z.cheie(sid, cheie)) if arg.get("de_la", "1") != "0" else 0
+	if arg.get("de_la", "1") != "0" and src.continuaPeServer and src.pozitieServer(cheie) is not None:
+		de_la = src.pozitieServer(cheie)
 	(zap or _zapPlayer)(src, cheie, meta, de_la)
 	return {"result": True, "message": _(N_("Pornește pe televizor.")) + ((" " + _(N_("Continuă de la %s.")) % _ora(de_la)) if de_la else "")}
 
@@ -184,6 +210,83 @@ def poza(arg, P=None):
 		return f.read(2 * 1024 * 1024), None
 
 
+# ------------------------------------------------------------------ serverele Emby / Jellyfin
+
+def _S():
+	from Components import HdsVodServere
+	return HdsVodServere
+
+
+_lucrariServer = {}
+_lacatServer = threading.Lock()
+
+
+def servere(arg=None, S=None):
+	S = S or _S()
+	return {"result": True, "servere": S.publice()}
+
+
+def _inFundal(functie, *argumente):
+	cheie = uuid.uuid4().hex[:16]
+	with _lacatServer:
+		for k in [k for k, v in _lucrariServer.items() if time.monotonic() - v["ora"] > 600]:
+			del _lucrariServer[k]
+		if len(_lucrariServer) >= 8:
+			return ""
+		_lucrariServer[cheie] = {"ora": time.monotonic(), "rez": None}
+
+	def lucru():
+		try:
+			rez = functie(*argumente)
+		except Exception as e:
+			print("[HdsWebControl] server media: %s" % type(e).__name__)
+			rez = {"result": False, "message": _(_S().E_SERVER)}
+		with _lacatServer:
+			if cheie in _lucrariServer:
+				_lucrariServer[cheie]["rez"] = rez
+	fir = threading.Thread(target=lucru, name="HdsWebVodServer")
+	fir.daemon = True
+	fir.start()
+	return cheie
+
+
+def server(arg, S=None, fundal=None):
+	"""POST: fel=cauta (fel_server) | adauga (fel_server, adresa, utilizator, parola) | scoate (id). Cautarea si logarea pe un fir."""
+	S = S or _S()
+	fundal = fundal or _inFundal
+	fel, fs = arg.get("fel", ""), arg.get("fel_server", "")
+	if fel == "scoate":
+		ok = S.scoate(arg.get("id", ""))
+		return {"result": ok, "servere": S.publice()}
+	if fs not in S.FELURI:
+		return {"result": False, "message": _(S.E_ADRESA)}
+	if fel == "cauta":
+		cheie = fundal(lambda: {"result": True, "gasite": S.descopera(2.0, (fs,))})
+	elif fel == "adauga":
+		if not S.adresaBuna(arg.get("adresa", "")):
+			return {"result": False, "message": _(S.E_ADRESA)}
+
+		def adauga():
+			ok, mesaj, sid = S.adauga(fs, arg.get("adresa", ""), arg.get("utilizator", ""), arg.get("parola", ""))
+			return {"result": ok, "message": "" if ok else _(mesaj), "id": sid, "servere": S.publice()}
+		cheie = fundal(adauga)
+	else:
+		return {"result": False, "message": _(_V().E_LIPSA)}
+	if not cheie:
+		return {"result": False, "message": _(_V().E_OCUPAT)}
+	return {"result": True, "lucreaza": True, "lucrare": cheie}
+
+
+def stareServer(arg):
+	with _lacatServer:
+		v = _lucrariServer.get(arg.get("lucrare", ""))
+	if v is None:
+		return {"result": False, "message": _(_V().E_EXPIRAT)}
+	if v["rez"] is None:
+		return {"result": True, "lucreaza": True, "lucrare": arg.get("lucrare", "")}
+	return dict(v["rez"], lucreaza=False)
+
+
 def _argumente(request, chei, maxim=200):
 	rez = {}
 	for c in chei:
@@ -228,6 +331,23 @@ def rute(baza, resource):
 				print("[HdsWebControl] filme si seriale: %s" % type(e).__name__)
 				return self._eroare(request, _eroare(), 503)
 
+	class Server(baza):
+		schimbaCeva = True
+
+		def render_GET(self, request):
+			try:
+				return self._raspunde(request, stareServer(_argumente(request, ("lucrare",), 40)))
+			except Exception as e:
+				print("[HdsWebControl] filme si seriale: %s" % type(e).__name__)
+				return self._eroare(request, _eroare(), 503)
+
+		def render_POST(self, request):
+			try:
+				return self._raspunde(request, server(_argumente(request, ("fel", "fel_server", "adresa", "utilizator", "parola", "id"))))
+			except Exception as e:
+				print("[HdsWebControl] filme si seriale: %s" % type(e).__name__)
+				return self._eroare(request, _eroare(), 503)
+
 	class Poza(baza):
 		def render_GET(self, request):
 			octeti, cod = poza(_argumente(request, ("s", "l", "h", "fel"), 40))
@@ -252,6 +372,8 @@ def rute(baza, resource):
 		b"vod-poza": Poza(),
 		b"vod-reda": schimbare(reda, ("id", "cheie", "de_la", "nume", "poza", "serial", "serial_nume", "sezon", "numar")),
 		b"vod-favorit": schimbare(favorit, ("id", "cheie", "nume", "poza")),
+		b"vod-servere": citire(servere, ()),
+		b"vod-server": Server(),
 	}
 	return api, {b"filme-seriale": Pagina()}
 
@@ -268,7 +390,13 @@ def texte():
 		"sezonul": N_("Sezonul %s"), "nota": N_("Nota %s"), "regia": N_("Regia: %s"), "actori": N_("Actori: %s"),
 		"imagine": N_("Imagine: %s"), "audio": N_("Audio: %s"), "subtitrari": N_("Subtitrări: %s"), "inapoi": N_("Înapoi"),
 		"caut": N_("Caut în tot catalogul; rezultatele apar pe măsură ce le găsesc."), "h": N_("%d h %02d min"), "min": N_("%d min"),
-	}.items()}
+		"faraServer": N_("Nu ai încă un server %s. Îl caut în rețea; scrii apoi utilizatorul și parola."),
+		"cautServer": N_("Caut serverul %s în rețea..."), "nuGasit": N_("Nu l-am găsit în rețea. Scrie adresa lui mai jos."),
+		"adresa": N_("Adresa serverului"), "utilizator": N_("Utilizatorul"), "parola": N_("Parola"),
+		"adauga": N_("Adaugă serverul"), "scoate": N_("Scoate serverul"), "maLeg": N_("Mă conectez la server..."),
+		"legat": N_("Gata: serverul %s este adăugat."), "cautaIar": N_("Caută din nou în rețea"),
+		"faraDisc": N_("Nu am găsit filme pe discuri, stick-uri sau în locurile din rețea."),
+	}.items() if k != "grupe"} | {"grupe": dict((g, _(t)) for g, t in _V().GRUPE)}
 
 
 def pagina_text(stil, config_pagina):
@@ -305,11 +433,17 @@ body{background:#0b1020} main{max-width:1600px!important;width:auto}
 #pagina .dreapta{flex:1;min-width:280px}.piste{color:#f2f4f8}.oameni{color:#aeb9cc}
 .ascuns{display:none!important}
 </style></head><body><div id="fundal"></div><main><h1>__TITLU__</h1>
-<section class="card"><div class="bara">
+<section class="card"><div class="bara" id="grupe" role="tablist"></div>
+<div id="server" class="ascuns"><p id="serverText"></p><div class="bara" id="gasite"></div>
+<div class="bara"><input id="sAdresa" maxlength="200" placeholder="192.168.1.10:8096" autocomplete="off">
+<input id="sUtilizator" maxlength="100" autocomplete="username"><input id="sParola" type="password" maxlength="200" autocomplete="current-password">
+<button type="button" id="sAdauga"></button><button type="button" id="sCauta"></button></div></div>
+<div class="bara" id="baraFilme">
 <button class="fila aleasa" id="filaFilme" type="button"></button><button class="fila" id="filaSeriale" type="button"></button>
 <input type="search" id="text" maxlength="80" aria-label="__CAUTA_ETICHETA__" placeholder="__CAUTA_ETICHETA__">
 <button type="button" id="cauta">__CAUTA__</button>
-<label id="contEticheta" class="ascuns">__CONT__ <select id="cont"></select></label></div>
+<label id="contEticheta" class="ascuns">__CONT__ <select id="cont"></select></label>
+<button type="button" id="sScoate" class="ascuns"></button></div>
 <p id="mesaj" class="mesaj" role="status" aria-live="polite"></p></section>
 <section id="acasa"><div id="info"><h2 id="titlu"></h2><div id="meta"></div><p id="desc"></p></div><div id="randuri"></div></section>
 <section id="detalii" class="card ascuns"><button type="button" id="inapoi"></button><div id="pagina"></div></section>
@@ -377,7 +511,7 @@ function porneste(){
   if(d.favorite.length)cont.insertBefore(rand(T.favorite,d.favorite,false),cont.children[d.continua.length?1:0]||null)});
  var rec=rand(T.recente,null,false);cont.appendChild(rec);
  lucrare(cere("recente","")).then(function(d){if(tura!==S.cereri)return;if(d.oprit){rec.remove();return}cont.replaceChild(rand(T.recente,d.result?d.titluri:[],false),rec)});
- lucrare(cere("categorii","")).then(function(d){if(tura!==S.cereri)return;if(!d.result){mesaj(d.message);return}S.cat=d.categorii;maiMulte()})
+ lucrare(cere("categorii","")).then(function(d){if(tura!==S.cereri)return;if(!d.result){mesaj(d.message);return}S.cat=d.categorii;if(!S.cat.length&&G.grupa==="disc")mesaj(T.faraDisc);maiMulte()})
 }
 function maiMulte(){
  var tura=S.cereri,cont=$("randuri");
@@ -442,12 +576,54 @@ function cauta(){
  })
 }
 $("cauta").addEventListener("click",cauta);$("text").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();cauta()}});
-cerere("/api/vod-surse").then(function(d){
- if(!d.result||!d.surse.length){mesaj(T.faraSursa);return}
- d.surse.forEach(function(s){var o=el("option","",s.nume);o.value=s.id;$("cont").appendChild(o)});
- $("contEticheta").classList.toggle("ascuns",d.surse.length<2);S.sid=d.surse[0].id;
- $("cont").addEventListener("change",function(){S.sid=$("cont").value;S.detalii={};porneste()});porneste()
-}).catch(function(){mesaj(T.nuRaspunde)});
+var G={surse:[],grupa:""};
+function grupa(g){
+ G.grupa=g;Array.prototype.forEach.call($("grupe").children,function(b){b.classList.toggle("aleasa",b.dataset.g===g)});
+ var lista=G.surse.filter(function(s){return s.grupa===g}),c=$("cont");c.innerHTML="";
+ lista.forEach(function(s){var o=el("option","",s.nume);o.value=s.id;c.appendChild(o)});
+ $("contEticheta").classList.toggle("ascuns",lista.length<2);mesaj("");
+ var srv=(g==="emby"||g==="jellyfin");$("sScoate").classList.toggle("ascuns",!srv||!lista.length);
+ $("server").classList.toggle("ascuns",!srv||lista.length>0);
+ $("baraFilme").classList.toggle("ascuns",!lista.length);$("acasa").classList.toggle("ascuns",!lista.length);$("detalii").classList.add("ascuns");
+ if(!lista.length){S.sid="";$("randuri").innerHTML="";if(srv)cautaServer();else mesaj(T.faraSursa);return}
+ S.sid=lista[0].id;S.detalii={};porneste()
+}
+function incarcaSurse(alege){
+ return cerere("/api/vod-surse").then(function(d){
+  if(!d.result){mesaj(d.message||T.neasteptat);return}
+  G.surse=d.surse;var gr=$("grupe");gr.innerHTML="";
+  Object.keys(T.grupe).forEach(function(g){var b=buton(T.grupe[g],"fila",function(){grupa(g)});b.dataset.g=g;b.setAttribute("role","tab");gr.appendChild(b)});
+  grupa(alege||(G.surse.length?G.surse[0].grupa:"iptv"))
+ })
+}
+function asteaptaServer(r){
+ if(!r.lucreaza)return Promise.resolve(r);
+ return new Promise(function(x){setTimeout(x,700)}).then(function(){return cerere("/api/vod-server?lucrare="+encodeURIComponent(r.lucrare))}).then(asteaptaServer)
+}
+function postServer(campuri){var q=new URLSearchParams();Object.keys(campuri).forEach(function(k){q.set(k,campuri[k])});return cerere("/api/vod-server","POST",q).then(asteaptaServer)}
+function cautaServer(){
+ var g=G.grupa,nume=T.grupe[g];$("serverText").textContent=T.faraServer.replace("%s",nume);mesaj(T.cautServer.replace("%s",nume));$("gasite").innerHTML="";
+ postServer({fel:"cauta",fel_server:g}).then(function(r){
+  if(G.grupa!==g)return;var l=r.gasite||[];mesaj(l.length?"":T.nuGasit);
+  l.forEach(function(x){$("gasite").appendChild(buton(x.nume+"  ·  "+x.adresa.replace("http://","").replace("https://",""),"fila",function(){$("sAdresa").value=x.adresa;$("sUtilizator").focus()}))});
+  if(l.length===1){$("sAdresa").value=l[0].adresa;$("sUtilizator").focus()}
+ }).catch(function(){mesaj(T.nuRaspunde)})
+}
+$("sAdresa").setAttribute("aria-label",T.adresa);$("sUtilizator").placeholder=T.utilizator;$("sUtilizator").setAttribute("aria-label",T.utilizator);
+$("sParola").placeholder=T.parola;$("sParola").setAttribute("aria-label",T.parola);
+$("sAdauga").textContent=T.adauga;$("sCauta").textContent=T.cautaIar;$("sScoate").textContent=T.scoate;
+$("sCauta").addEventListener("click",cautaServer);
+$("sAdauga").addEventListener("click",function(){
+ var g=G.grupa;mesaj(T.maLeg);
+ postServer({fel:"adauga",fel_server:g,adresa:$("sAdresa").value,utilizator:$("sUtilizator").value,parola:$("sParola").value}).then(function(r){
+  $("sParola").value="";if(!r.result){mesaj(r.message||T.neasteptat);return}
+  incarcaSurse(g).then(function(){mesaj(T.legat.replace("%s",T.grupe[g]))})
+ }).catch(function(){mesaj(T.nuRaspunde)})
+});
+$("sScoate").addEventListener("click",function(){var q=new URLSearchParams();q.set("fel","scoate");q.set("id",S.sid);
+ cerere("/api/vod-server","POST",q).then(function(){incarcaSurse(G.grupa)})});
+$("cont").addEventListener("change",function(){S.sid=$("cont").value;S.detalii={};porneste()});
+incarcaSurse().catch(function(){mesaj(T.nuRaspunde)});
 </script></body></html>
 """
 

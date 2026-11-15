@@ -11,9 +11,14 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171d
 # files/hds-nume-local (initul) si files/hds-nume-local.py (serviciul) sunt COPII identice, octet cu octet, ale lui
 # tools/hds-nume-local si tools/hds-nume-local.py din arborele imaginii (tools/Makefile.am le tine numai in EXTRA_DIST:
 # le instaleaza un singur pachet, acesta). O schimbare acolo se copiaza din nou aici, cu PV mai mare; proba
-# receptor/imagine-hdsatelit/teste/test_nume_local_reteta_074.py (hdsatelit-unelte) le compara.
-PV = "0.2.1"
+# receptor/imagine-hdsatelit/teste/test_nume_local_reteta_074.py (uneltele noastre) le compara.
+PV = "0.2.2"
 # 0.2.1 (14.11.2026, Eduard): al doilea receptor ia hdsatelit2.local, nu hdsatelit-2.local (mai usor de scris).
+# 0.2.2 (15.11.2026, AJU, TODO 13.11 11:26, Ozgur, Vu+ Solo SE): "start" asteapta serviciul pana la 10 s (era 1 s, iar pe
+# Solo SE Python porneste mai greu: "Serviciul nu a confirmat pornirea" la fiecare actualizare, desi paznicul il vedea
+# pornit peste un minut); serviciul inca pornind dupa termen e o nota, nu o greseala. Scripturile pachetului (mai jos,
+# updatercd_preinst/updatercd_postinst) nu mai scriu randurile lui update-rc.d in iesirea lui opkg: opkg isi tine
+# iesirea in tampon, iar ele cadeau in mijlocul unui rand "Removing obsolete file ..." din hds-actualizari.log.
 
 SRC_URI = "file://hds-nume-local \
            file://hds-nume-local.py \
@@ -71,6 +76,32 @@ pkg_preinst:${PN} () {
 	if [ -z "$D" ] && [ -x ${sysconfdir}/init.d/hds-nume-local ]; then
 		${sysconfdir}/init.d/hds-nume-local stop > /dev/null 2>&1 || true
 	fi
+}
+
+# Aceleasi doua functii ca in update-rc.d.bbclass (populate_packages_updatercd le lipeste la pkg_preinst si
+# pkg_postinst), definite aici dupa inherit, deci in locul celor din clasa: update-rc.d lucreaza la fel, dar fara
+# iesire pe receptor (legaturile din rc*.d nu au ce spune omului), iar pornirea serviciului e separata si nu opreste
+# instalarea (hds-nume-local.py start scrie numai cand ceva nu merge, pe un rand nou). In imaginea construita ($D) ca
+# in clasa. Oprirea serviciului inainte de inlocuire o face pkg_preinst de mai sus.
+updatercd_preinst() {
+if ${@use_updatercd(d)} && type update-rc.d >/dev/null 2>/dev/null; then
+	if [ -n "$D" ]; then
+		update-rc.d -f -r $D ${INITSCRIPT_NAME} remove
+	else
+		update-rc.d -f ${INITSCRIPT_NAME} remove > /dev/null 2>&1 || true
+	fi
+fi
+}
+
+updatercd_postinst() {
+if ${@use_updatercd(d)} && type update-rc.d >/dev/null 2>/dev/null; then
+	if [ -n "$D" ]; then
+		update-rc.d -r $D ${INITSCRIPT_NAME} ${INITSCRIPT_PARAMS}
+	else
+		update-rc.d ${INITSCRIPT_NAME} ${INITSCRIPT_PARAMS} > /dev/null 2>&1
+		${sysconfdir}/init.d/${INITSCRIPT_NAME} start || true
+	fi
+fi
 }
 
 FILES:${PN} = "${sysconfdir}/init.d/hds-nume-local ${bindir}/hds-nume-local.py \

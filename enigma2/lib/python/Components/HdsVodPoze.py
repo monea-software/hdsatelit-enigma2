@@ -135,7 +135,27 @@ def _bucla():
 			print("[HdsVodPoze] %s: %s" % (fel, type(e).__name__))
 
 
+# Filmele de pe disc (Components/HdsVodDisc): o poza de langa film ('/media/hdd/movie/x.jpg') sau un cadru din film
+# ('cadru:/media/hdd/movie/x.mkv', scos cu ffmpeg tot pe firul pozelor, numai pentru ce se vede).
+LOCALE = ("/media/", "/hdd/", "/tmp/hds-vod-")
+
+
+def _local(cale):
+	return cale.startswith(LOCALE) and "/../" not in cale and os.path.isfile(cale)
+
+
 def _citeste(adresa):
+	if adresa.startswith("cadru:"):
+		from Components import HdsVodDisc
+		cale = adresa[6:].split("#", 1)[0]
+		if not _local(cale):
+			raise ValueError("cale")
+		return HdsVodDisc.cadru(cale)
+	if adresa.startswith("/"):
+		if not _local(adresa) or os.path.getsize(adresa) > MAX_OCTETI:
+			raise ValueError("cale")
+		with open(adresa, "rb") as f:
+			return f.read(MAX_OCTETI)
 	from Components import HdsIptvClient as C
 	inceput = time.monotonic()
 	with C.deschide(adresa, termen=TERMEN_S) as r:

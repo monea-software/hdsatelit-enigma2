@@ -26,10 +26,33 @@ colorNames = dict()
 # <color name="ListSelection" value="selection,selectionShade,vertical"/>): nume -> textul degradeului. colorNames are
 # atunci prima culoare (ce desena si inainte), iar degradeul se ia oriunde se cere unul.
 gradients = dict()
-fonts = dict()       # <alias name="Body" font="Regular" size="30" height="40"/> -> (font, size, height)
 # HDSatelit 0.7.4: latimea unui caracter din <alias width="..."/> (skin-urile straine; "w" si "h" in coordonate). fonts ramane cu
 # trei campuri (ecranele noastre il despacheteaza asa).
 latimiFont = dict()
+
+class _Fonturi(dict):
+	"""fonts: aliasul -> (font, size, height). 0.7.5 (MOH): temele scrise pentru OE-Alliance pun aici si patru valori
+	(font, size, height, width; MohammedSkin la pornire); se pastreaza primele trei, iar latimea merge in latimiFont, ca la
+	<alias width="..."/>. Altfel parseFont si ecranele noastre, care despacheteaza trei, cadeau pe acel alias."""
+	def __setitem__(self, nume, valoare):
+		if isinstance(valoare, (tuple, list)) and len(valoare) > 3:
+			try:
+				latimiFont[nume] = int(valoare[3])
+			except (TypeError, ValueError):
+				pass
+			valoare = tuple(valoare[:3])
+		dict.__setitem__(self, nume, valoare)
+
+	def update(self, *a, **k):
+		for nume, valoare in dict(*a, **k).items():
+			self[nume] = valoare
+
+	def setdefault(self, nume, valoare=None):
+		if nume not in self:
+			self[nume] = valoare
+		return self[nume]
+
+fonts = _Fonturi()   # <alias name="Body" font="Regular" size="30" height="40"/> -> (font, size, height)
 parameters = dict()  # <parameter name="X" value="1,2,3"/> -> (1, 2, 3); from <hdsparameters> also image paths
 warnings = [ ]
 MAX_WARNINGS = 50
@@ -176,9 +199,13 @@ COMPONENTE_SABLOANE = ("serviceList",)
 
 class _EcraneDom(object):
 	"""domScreens: numele ecranului -> (elementul <screen>, dosarul fisierului), primul gasit in ordinea cautarii
-	(ca lookupScreen); citit din dom_skins la fiecare folosire, deci mereu la zi"""
+	(ca lookupScreen); citit din dom_skins la fiecare folosire, deci mereu la zi.
+	0.7.5 (MOH): se si scrie, ca dictionarul OE-Alliance. Temele care isi fac ferestre la pornire (MohammedSkin:
+	domScreens["MohammedAuto_1"] = (element, dosar), apoi readSkin cu acel nume) le pun in _ecraneScrise; ce e scris trece
+	inaintea fisierelor si il gasesc lookupScreen, lookupScreenTema si readSkin. Stergerea scoate numai ce a fost scris.
+	Dosarul se scrie ca in dom_skins (cu / la sfarsit), altfel ecranul nu e socotit al temei straine."""
 	def _toate(self):
-		rez = {}
+		rez = dict(_ecraneScrise)
 		for (mpath, radacina) in dom_skins:
 			for x in radacina.findall("screen"):
 				nume = x.attrib.get("name")
@@ -210,7 +237,48 @@ class _EcraneDom(object):
 	def __len__(self):
 		return len(self._toate())
 
+	def __setitem__(self, nume, valoare):
+		element, dosar = valoare[0], (valoare[1] if len(valoare) > 1 else "")
+		_ecraneScrise[nume] = (element, dosar)
+
+	def __delitem__(self, nume):
+		del _ecraneScrise[nume]
+
+	def setdefault(self, nume, valoare=None):
+		gasit = self.get(nume)
+		if gasit is None:
+			self[nume] = valoare
+			gasit = _ecraneScrise[nume]
+		return gasit
+
+	def pop(self, nume, *implicit):
+		return _ecraneScrise.pop(nume, *implicit)
+
+	def update(self, *a, **k):
+		for nume, valoare in dict(*a, **k).items():
+			self[nume] = valoare
+
+	def clear(self):
+		_ecraneScrise.clear()
+
+# ecranele puse de teme in domScreens: nume -> (element, dosar)
+_ecraneScrise = {}
 domScreens = _EcraneDom()
+
+def _ecranScris(name, style_id):
+	"""(element, dosar) scris in domScreens pentru numele dat si stilul cerut (televizor / afisaj), sau None"""
+	gasit = _ecraneScrise.get(name)
+	if gasit is None:
+		return None
+	try:
+		screen_style_id = int(gasit[0].attrib.get('id', '-1'))
+	except (ValueError, AttributeError):
+		screen_style_id = -1
+	if screen_style_id == -1 and name.find('ummary') > 0:
+		screen_style_id = 1
+	if (style_id != 2 and screen_style_id == -1) or screen_style_id == style_id:
+		return gasit
+	return None
 
 def loadSkinTemplates(skinTemplatesFileNames):
 	"""sabloanele cu component= cunoscut: din fisierele date (<skin><template .../></skin>), altfel din ecranele temei"""
@@ -969,7 +1037,9 @@ def scaraEcran(element, skin_path, desktop, modul = None):
 		return None
 	if ecran[0] <= 0 or ecran[1] <= 0:
 		return None
-	baza = rezolutieAtribut(element.attrib.get("resolution")) if element is not None else None
+	# ecranele HDSatelit nu au resolution= (sunt pe baza skinului); unul pus de o tema pe elementul viu din domScreens
+	# (MohammedSkin: resolution="1280,720" pe ecranele mici) nu le schimba scara (MOH)
+	baza = rezolutieAtribut(element.attrib.get("resolution")) if element is not None and not esteDinHds(skin_path) else None
 	alNostru = esteDinHds(skin_path) or (not skin_path and (baza is not None or modulImagine(modul)))
 	if baza is None and not esteDinHds(skin_path):
 		# un skin din cod fara resolution= e deja pe marimea ecranului: numai culorile si fonturile, sub alt skin
@@ -1688,6 +1758,14 @@ def applySingleAttribute(guiObject, desktop, attrib, value, scale = ((1,1),(1,1)
 			guiObject.setBackgroundGradient(*parseGradient(value))
 		elif attrib == "backgroundColorSelected":
 			guiObject.setBackgroundColorSelected(parseColor(value))
+		elif attrib == "selectionBackgroundColor" and hasattr(guiObject, "setBackgroundColorSelected"):
+			# HDSatelit 0.7.5: numele din temele unor pluginuri pentru culorile randului ales (AS17)
+			guiObject.setBackgroundColorSelected(parseColor(value))
+		elif attrib == "selectionForegroundColor" and hasattr(guiObject, "setForegroundColorSelected"):
+			guiObject.setForegroundColorSelected(parseColor(value))
+		elif attrib == "foregroundColor" and not hasattr(guiObject, "setForegroundColor"):
+			# HDSatelit 0.7.5: foregroundColor pe fereastra (eWindow) nu are ce colora; primit fara avertisment (AS17)
+			pass
 		elif attrib == "foregroundColor":
 			value = gradients.get(value.strip(), value)
 			if ',' in value and hasattr(guiObject, "setForegroundGradient"):
@@ -1799,7 +1877,9 @@ def applySingleAttribute(guiObject, desktop, attrib, value, scale = ((1,1),(1,1)
 			v = value.strip()
 			mod = { "showOnDemand": "showOnDemand", "showOnDemandShrink": "showOnDemand", "showLeftOnDemand": "showOnDemand",
 				"showLeft": "showOnDemand", "showTopOnDemand": "showOnDemand", "showAlways": "showAlways",
-				"showLeftAlways": "showAlways", "showTopAlways": "showAlways", "showNever": "showNever" }[v]
+				"showLeftAlways": "showAlways", "showTopAlways": "showAlways", "showNever": "showNever",
+				# HDSatelit 0.7.5: formele scurte din temele unor pluginuri (AS17: scrollbarMode="never")
+				"never": "showNever", "always": "showAlways", "onDemand": "showOnDemand" }[v]
 			guiObject.setScrollbarMode(getattr(guiObject, mod))
 		elif attrib in ("scrollbarForegroundColor", "scrollbarSliderForegroundColor") and hasattr(guiObject, "setScrollbarForegroundColor"):
 			# bara de derulare a listelor, numele din skin-urile straine (cele vechi scrollbarSlider* si cele noi)
@@ -2143,6 +2223,10 @@ def loadSkinData(desktop):
 		_Tema().puneNumeLipsa(globals())
 
 def lookupScreen(name, style_id, numaiHds=False):
+	# ce a scris o tema in domScreens trece inaintea fisierelor (MOH; numai dosarul HDSatelit nu se ia de acolo)
+	scris = None if numaiHds else _ecranScris(name, style_id)
+	if scris is not None:
+		return scris
 	for (path, skin) in dom_skins:
 		if numaiHds and not esteDinHds(path):
 			continue
@@ -2161,6 +2245,9 @@ def lookupScreen(name, style_id, numaiHds=False):
 
 def lookupScreenTema(name, style_id):
 	"""Ca lookupScreen, numai in tema externa"""
+	scris = _ecranScris(name, style_id)
+	if scris is not None and scris[1] in dosareSkinStraine:
+		return scris
 	for (p, radacina) in dom_skins:
 		if p not in dosareSkinStraine:
 			continue

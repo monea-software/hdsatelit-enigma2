@@ -63,21 +63,49 @@ CAMPURI_PAROLA = ("ConfigPassword", "ConfigPIN")
 # setari si tot textul brokerului, Components/HdsAsistentaBroker.mascheaza; recunoasterea randurilor secrete din
 # /setari). Nu schimba ecranul omului. Numai iesirea spre echipa pierde valorile private.
 # Cheile interne si etichetele secretelor, cu sau fara diacritice.
-_SECRET = re.compile(r"(?i)(parol|password|passwd|passphrase|(?:^|[._\s])(?:pass|pwd|psk)(?:\b|[._])|token|secret|jeton|"
-	r"chei[ae]|api[ _.-]?key|key(?:\b|[._0-9])|(?:^|[._\s])pin(?:\b|[._0-9])|servicepin|setuppin|"
-	r"auth|cookie|cod[ _.-]?(?:de[ _.-]?)?asociere|(?:^|[._\s])(?:biss|cw)(?:\b|[._0-9])|"
+# Cuvintele din textul ghidului (0.7.5 ASM, TODO 15.11 03:14 (filtrul secretelor): descrierea emisiunii iesea acoperita
+# in captura pentru echipa): key nu e secret in cuvintele englezesti care se termina asa (Monkey, Turkey, Hockey, Donkey,
+# Jockey, Whiskey, Lackey, Hickey, Mickey) si nici cand il urmeaza alt cuvant cu majuscula (Key West, Key Largo); auth nu
+# e secret in Author, Authority, Authentic; secret nu e secret dupa articol (The Secret). Raman secrete: key la sfarsitul
+# etichetei sau lipit (key1, wifi.key0, config.hotkey, passkey, API key, Private hotkey), auth, auth_token, authorization,
+# authentication, secret, client secret, secret_key.
+_CHEIE_IN_CUVANT = r"(?<!mon)(?<!tur)(?<!hoc)(?<!don)(?<!joc)(?<!whis)(?<!lac)(?<!hic)(?<!mic)"
+_SECRET = re.compile(r"(?i)(parol|password|passwd|passphrase|(?:^|[._\s])(?:pass|pwd|psk)(?:\b|[._])|token|(?<!the )secret|"
+	r"jeton|chei[ae]|api[ _.-]?key|" + _CHEIE_IN_CUVANT + r"key(?:\b(?!\s+(?-i:[A-Z][a-z]))|[._0-9])|"
+	r"(?:^|[._\s])pin(?:\b|[._0-9])|servicepin|setuppin|"
+	r"auth(?!or(?:s|ed|ing|ess|ship|it(?:y|ies|ative))?\b|entic(?:ity|ally)?\b)|cookie|cod[ _.-]?(?:de[ _.-]?)?asociere|(?:^|[._\s])(?:biss|cw)(?:\b|[._0-9])|"
 	r"control[ _.-]?word|cuvant[ _.-](?:de[ _.-])?control)")
 # In text natural, numarul sau numele unei taste arata sensul lui key. Caile interne (remote.key, hotkey etc.)
 # si cheile de acces raman secrete; un alt secret din acelasi text se verifica in continuare.
 _CHEIE_TASTA = re.compile(r"(?i)(?<![\w.-])(?:hotkey|(?:[0-9]|red|green|yellow|blue|ok|exit|menu|info|epg|"
 	r"power|volume|channel|up|down|left|right|arrow|function|keyboard|hot|remote(?:[ -]control)?|button)\s+key)\b(?![._0-9])")
 _CONTEXT_CHEIE_ACCES = re.compile(r"(?i)\b(?:api|access|public|private|encryption|aes|rsa|ssh|wpa|wep|wi[ -]?fi|biss)\b")
+# Frazele obisnuite din textul ghidului in care pass, cookie, cheia si pin nu sunt secrete (0.7.5 FIR, TODO 15.11 05:08
+# (ASM, filtrul secretelor in text natural): "Mountain Pass:", "Fortune Cookie:", "Cheia succesului:" acopereau
+# descrierea in captura pentru echipa si ieseau cu *** in textul ecranului). Ca la ASM, numai excluderi din liste
+# stiute, nu o margine noua: pass dupa un cuvant al trecatorii sau al biletului (Mountain, Boarding, Season, Hall),
+# cookie dupa felul prajiturii sau urmat de alt cuvant cu majuscula (Cookie Monster), cheia sau cheile urmate de un
+# cuvant din povesti (succesului, fericirii, misterului), pin dupa lemn, ulei, padure, con (copacul), pin-up, bowling
+# pin. Nu dupa terminatie (-ului, -ei): "Cheia retelei" e parola Wi-Fi. Raman secrete: pass, passkey, Wi-Fi pass,
+# cookie, Cookie:, session cookie, cookies.txt, Cheie, Cheia API, Cheia retelei, PIN, Codul PIN, cod de pin. Se scot ca
+# tastele, numai cand textul nu pomeneste o cheie de acces (_CONTEXT_CHEIE_ACCES); restul textului se verifica mai
+# departe. Cuvintele romanesti fara diacritice: cheieSecreta le scoate inainte.
+_TEXT_NATURAL = re.compile(r"(?i)\b(?:"
+	r"(?:mountain|boarding|season|hall|free|day|bus|ski|backstage|press|fast|bike|weekly|monthly|annual|world|gold|"
+	r"golden|silver|summer|winter)\s+pass(?:es)?\b|"
+	r"(?:fortune|chocolate(?:\s+chip)?|chip|sugar|butter|oatmeal|ginger|christmas|cream|cracker)\s+cookies?\b|"
+	r"(?-i:Cookies?)(?=\s+(?-i:[A-Z][a-z]))|"
+	r"chei(?:a|le)\s+(?:succesului|fericirii|misterului|enigmei|vietii|victoriei|povestii|inimii|regatului|"
+	r"imparatiei|cerului|raiului|orasului|castelului|comorii|destinului|adevarului|iubirii|libertatii|timpului|lumii|"
+	r"visului|viselor)\b|"
+	r"(?:lemn|ulei|padure|paduri|con|conuri|ace|sirop|miros|parfum|ramuri)\s+de\s+pin\b|"
+	r"pin[ -]?up\b|(?:bowling|safety|rolling)\s+pins?\b)")
 _URL_PAROLA = re.compile(r"(?i)([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^\s/@]*(@)")
 # adresa unui canal de la un furnizor are contul in cale: /live/<utilizator>/<parola>/<id>.ts (Components/HdsIptvClient.py)
 _URL_CALE_CONT = re.compile(r"(?i)(://[^/\s]+/(?:live|movie|series|timeshift)/)[^/\s]+/[^/\s]+/")
 _URL_PARAMETRU = re.compile(r"([?&;])([^=&#;\s]+)=([^&#;\s]*)")
 _ATRIBUIRE = re.compile(r"^([^=:|\n]+)(\s*[=:|]\s*)(.*)$")
-_SECRET_JURNAL = re.compile(r"(?i)(\b(?:password|passwd|passphrase|parol[ăa]|psk|token|secret|pwd|pass|pin|key|"
+_SECRET_JURNAL = re.compile(r"(?i)(\b(?:password|passwd|passphrase|parol[ăa]|psk|token|(?<!the )secret|pwd|pass|pin|key|"
 	r"api[ _.-]?key|chei[ae](?:[ _.-]?api)?|biss[0-9]*|cw|control[ _.-]?word|cuv[âa]nt[ _.-](?:de[ _.-])?control)\s*[=:]\s*)"
 	r"(?:\"[^\"]*\"|'[^']*'|[^\s,;&]+)")
 _BEARER = re.compile(r"(?i)(\bbearer\s+)[a-z0-9._~+/=-]+")
@@ -101,7 +129,7 @@ def cheieSecreta(cheie):
 def _cheieSecreta(cheie):
 	text = "".join(c for c in unicodedata.normalize("NFKD", cheie) if not unicodedata.combining(c))
 	if not _CONTEXT_CHEIE_ACCES.search(text):
-		text = _CHEIE_TASTA.sub("", text)
+		text = _TEXT_NATURAL.sub("", _CHEIE_TASTA.sub("", text))
 	return bool(_SECRET.search(text) or _BETA_ID.search(text))
 
 
@@ -132,8 +160,12 @@ def mascheazaSecrete(text):
 			# prin curatarea de mai jos)
 			valoare = _VALOARE_CONT.match(m.group(3)).group(0)
 			rand = m.group(1) + m.group(2) + "***" + m.group(3)[len(valoare):]
-		rand = _ANTET_SECRET.sub(r"\1***", rand)
-		taste = () if _CONTEXT_CHEIE_ACCES.search(rand) else tuple(_CHEIE_TASTA.finditer(rand))
+		# frazele ghidului (_TEXT_NATURAL: "Fortune Cookie:", "Mountain Pass:") nu sunt antete sau atribuiri secrete
+		fraze = () if _CONTEXT_CHEIE_ACCES.search(rand) else tuple(_TEXT_NATURAL.finditer(rand))
+		rand = _ANTET_SECRET.sub(lambda m: m.group(0) if any(t.start() <= m.start() < t.end() for t in fraze)
+			else m.group(1) + "***", rand)
+		taste = () if _CONTEXT_CHEIE_ACCES.search(rand) else tuple(_CHEIE_TASTA.finditer(rand)) + tuple(
+			_TEXT_NATURAL.finditer(rand))
 		rand = _SECRET_JURNAL.sub(lambda m: m.group(0) if any(t.start() <= m.start() < t.end() for t in taste)
 			else m.group(1) + "***", rand)
 		rand = _BEARER.sub(r"\1***", rand)
@@ -178,6 +210,19 @@ _PAROLA_URL_CODAT = re.compile(r"(?i)(%3a//[^/\s:@%]+%3a)[^\s/@]*?(%40|@)")
 _PAROLA_URL_GOL = re.compile(r"(?<![\w.:/%+-])([\w.+-]+:)[^\s/@:]+(@[\w-]+(?:\.[\w-]+)*)")
 # adresa unui canal de la un furnizor: /live/<utilizator>/<parola>/<id>.ts (Components/HdsIptvClient.py)
 _PAROLA_URL_CALE = re.compile(r"(?i)((?:://|%3a//)[^/\s]+/(?:live|movie|series|timeshift)/[^/\s]+/)[^/\s]+/")
+# Adresele de flux IPTV (DSP 14.11.2026 22:41, asistenta 186908): aici utilizatorul si parola sunt contul liniei, deci
+# se ascund amandoua, oriunde ar sta: /live/<u>/<p> si la sfarsitul adresei (randul ServiceApp "listDir(http://.../live/
+# <u>/<p>) - error"), forma codata a referintei (%3a// si %3a%2f%2f), schema://u:p@, ?username=&password= (get.php,
+# player_api.php), ?token=. In afara adreselor numele de utilizator ramane (Eduard, 12.11.2026 19:19).
+_FLUX_CAPAT = r"[^/\s?#&)\]'\"<>,;:|]+"
+_FLUX_CALE = re.compile(r"(?i)((?:://|%3a//)[^/\s]+/(?:live|movie|series|timeshift)/)" + _FLUX_CAPAT + r"/" + _FLUX_CAPAT)
+_FLUX_CALE_CODAT = re.compile(r"(?i)(%3a%2f%2f(?:(?!%2f)[^\s/:])+(?:%2f(?:(?!%2f)[^\s/:])+)*?%2f(?:live|movie|series|timeshift)%2f)"
+	r"(?:(?!%2f)[^\s/:&|])+%2f(?:(?!%2f)[^\s/:&|?#])+")
+_FLUX_CONT = re.compile(r"(?i)([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^\s/@]*@")
+_FLUX_CONT_CODAT = re.compile(r"(?i)(%3a(?://|%2f%2f))(?:(?!%3a)[^/\s:@%]|%(?!3a)[0-9a-f]{2})+%3a(?:(?!%2f)[^\s/@])*?(%40|@)")
+_FLUX_PARAMETRU = re.compile(r"(?i)([?&](?:username|user|usr|uname|login|password|passwd|pass|pwd|(?:[a-z0-9]+_)?token)=)[^&#\s'\"<>)|]*")
+_FLUX_PARAMETRU_CODAT = re.compile(r"(?i)((?:%3f|%26)(?:username|user|usr|uname|login|password|passwd|pass|pwd|(?:[a-z0-9]+_)?token)%3d)"
+	r"(?:(?!%26)[^&#\s'\"<>):|])*")
 # randurile cititoarelor (CCcam.cfg, newcamd.list): C:/N:/L: gazda port utilizator PAROLA, F: utilizator PAROLA,
 # CWS = gazda port utilizator PAROLA; gazda, portul si utilizatorul raman
 _PAROLA_LINIE = re.compile(r"(?m)^([ \t]*(?:[CNL]:|CWS[ \t]*=)[ \t]*\S+[ \t]+\S+[ \t]+\S+[ \t]+)\S+")
@@ -186,6 +231,8 @@ _PAROLA_PRIETEN = re.compile(r"(?m)^([ \t]*F:[ \t]*\S+[ \t]+)\S+")
 _PAROLA_ANTET = re.compile(r"(?im)(\bauthorization[ \t]*[=:][ \t]*)\S.*$")
 # fara niciunul dintre aceste semne textul nu are parola (jurnalul interfetei: cate un rand, mii pe minut)
 _POATE_PAROLA = re.compile(r"(?im)pass|pwd|psk|parol|wep_key|@|%40|authoriz|/(?:live|movie|series|timeshift)/|^\s*(?:[cnlf]:|cws)|"
+	r"%2f(?:live|movie|series|timeshift)%2f|[?&](?:user(?:name)?|usr|uname|login|(?:[a-z0-9]+_)?token)=|"
+	r"(?:%3f|%26)(?:user(?:name)?|usr|uname|login|(?:[a-z0-9]+_)?token)%3d|"
 	r"kennwort|mot de passe|contrase|wachtw|has[lł]o|heslo|jelsz|lozink|geslo|salasan|adgangskode|senord|parool|slapta|[şs]ifre|"
 	r"senha|lykil|парол|κωδικ|كلمة")
 # aceleasi cuvinte, fara cele englezesti si romanesti (pe care le prind expresiile de sus)
@@ -194,7 +241,8 @@ _POATE_PAROLA_LIMBI = re.compile(r"(?i)kennwort|mot de passe|contrase|wachtw|has
 
 
 def mascheazaParole(text):
-	"""Numai parolele devin ***; tot restul textului ramane cum e (Eduard, 12.11.2026 19:19)."""
+	"""Numai parolele devin ***, plus utilizatorul din adresele de flux (contul liniei, DSP 14.11.2026); tot restul
+	textului ramane cum e (Eduard, 12.11.2026 19:19)."""
 	if not text:
 		return ""
 	if not _POATE_PAROLA.search(text):
@@ -206,6 +254,12 @@ def mascheazaParole(text):
 	text = _PAROLA_URL_CODAT.sub(r"\1***\2", text)
 	text = _PAROLA_URL_GOL.sub(r"\1***\2", text)
 	text = _PAROLA_URL_CALE.sub(r"\1***/", text)
+	text = _FLUX_CALE.sub(r"\1***/***", text)
+	text = _FLUX_CALE_CODAT.sub(r"\1***%2f***", text)
+	text = _FLUX_CONT.sub(r"\1***:***@", text)
+	text = _FLUX_CONT_CODAT.sub(r"\1***%3a***\2", text)
+	text = _FLUX_PARAMETRU.sub(r"\1***", text)
+	text = _FLUX_PARAMETRU_CODAT.sub(r"\1***", text)
 	text = _PAROLA_LINIE.sub(r"\1***", text)
 	text = _PAROLA_PRIETEN.sub(r"\1***", text)
 	text = _PAROLA_ANTET.sub(r"\1***", text)
@@ -725,7 +779,27 @@ def _instanteComponenta(ecran, comp):
 	if instanta is not None:
 		return [instanta]
 	return [r.instance for r in getattr(ecran, "renderer", ())
-		if getattr(r, "source", None) is comp and getattr(r, "instance", None) is not None]
+		if _dinSursa(r, comp) and getattr(r, "instance", None) is not None]
+
+
+def _dinSursa(renderer, comp):
+	"""True cand renderer-ul deseneaza comp, direct sau prin convertori (renderer -> convertor -> ... -> sursa)."""
+	s = getattr(renderer, "source", None)
+	for _ in range(8):
+		if s is None:
+			return False
+		if s is comp:
+			return True
+		s = getattr(s, "source", None)
+	return False
+
+
+def _desenata(ecran, comp):
+	"""False numai cand componenta nu apare deloc pe ecran: fara instance (lipseste din tema) si niciun renderer al
+	ecranului nu o deseneaza, nici prin convertori. Ce nu e desenat nu poate da nimic in captura."""
+	if getattr(comp, "instance", None) is not None:
+		return True
+	return any(_dinSursa(r, comp) for r in getattr(ecran, "renderer", ()))
 
 
 def _randSecret(rand):
@@ -745,8 +819,17 @@ def _dreptunghi(instanta):
 	return p.x(), p.y(), s.width(), s.height()
 
 
-def dreptunghiuriSecrete(ecrane):
-	"""Zonele credentialelor din OSD. None refuza captura cand pozitia nu poate fi aflata sigur."""
+def dreptunghiuriSecrete(ecrane, motive=None):
+	"""Zonele credentialelor din OSD. None refuza captura cand pozitia nu poate fi aflata sigur; in `motive` (o lista,
+	daca e data) intra atunci ecranul si componenta, ca refuzul sa aiba un motiv in jurnal si la echipa (0.7.5 JRN,
+	TODO 12.11 20:36: "captura nu s-a putut face acum" cu EventView deschis, fara niciun rand care sa spuna de ce).
+	O componenta banuita numai dupa text, dar nedesenata (lipseste din tema), nu mai opreste captura: ghidul (EventView)
+	are si epg_description si FullDescription, iar multe teme il deseneaza numai pe unul; textul ghidului da des peste
+	filtru ("Author:", "Key West:", "Turkey:")."""
+	def refuz(motiv):
+		if motive is not None:
+			motive.append(motiv)
+		return None
 	rez = []
 	for ecran in ecrane:
 		if getattr(ecran, "shown", True) is False:
@@ -761,6 +844,7 @@ def dreptunghiuriSecrete(ecrane):
 				if isinstance(lista, (tuple, list)) else []
 			secret = (_componentaSecreta(comp, nume)
 				or (getattr(ecran, "hdsCampSecret", False) and nume in ("text", "input")))
+			marcat = secret
 			text = _text(comp)
 			if text and mascheazaSecrete(text) != text:
 				secret = True
@@ -768,7 +852,11 @@ def dreptunghiuriSecrete(ecrane):
 				continue
 			instante = _instanteComponenta(ecran, comp)
 			if not instante:
-				return None
+				# banuita numai dupa text (ghidul) si nedesenata: nu are ce scapa; un camp marcat (parola, hdsSecret) sau o
+				# lista fara pozitie refuza in continuare (lotul a5parole)
+				if not marcat and not secrete and not _desenata(ecran, comp):
+					continue
+				return refuz("%s.%s: pozitia nu se poate afla" % (type(ecran).__name__, nume))
 			for instanta in instante:
 				try:
 					x, y, latime, inaltime = _dreptunghi(instanta)
@@ -776,7 +864,7 @@ def dreptunghiuriSecrete(ecrane):
 						sus = instanta.getTopIndex()
 						rand_inaltime = instanta.getItemHeight()
 						if rand_inaltime <= 0:
-							return None
+							return refuz("%s.%s: inaltimea randului necunoscuta" % (type(ecran).__name__, nume))
 						for i in secrete:
 							pozitie = (i - sus) * rand_inaltime
 							if 0 <= pozitie < inaltime:
@@ -784,8 +872,8 @@ def dreptunghiuriSecrete(ecrane):
 								rez.append((x, y + pozitie, latime, min(rand_inaltime, inaltime - pozitie)))
 					else:
 						rez.append((x, y, latime, inaltime))
-				except Exception:
-					return None
+				except Exception as e:
+					return refuz("%s.%s: %s" % (type(ecran).__name__, nume, type(e).__name__))
 	return rez
 
 
@@ -798,14 +886,32 @@ def navigatorExternPeEcran():
 	return navigator is not None and navigator.stare == lansator.ARATAT
 
 
+# motivul ultimului refuz al lui curataCapturaEchipa ("" dupa o captura buna): Screens/HdsAsistentaSemn il da echipei
+_motiv_captura = [""]
+
+
+def motivCaptura():
+	"""De ce a refuzat curataCapturaEchipa ultima captura ("" cand n-a refuzat)."""
+	return _motiv_captura[0]
+
+
+def _refuzCaptura(motiv):
+	_motiv_captura[0] = motiv
+	_jurnal("captura refuzata: %s" % motiv)
+	return None
+
+
 def curataCapturaEchipa(octeti, ecrane, marime):
-	"""Curata numai copia din RAM trimisa echipei. Nu modifica framebuffer-ul si nu pastreaza captura pe disc."""
+	"""Curata numai copia din RAM trimisa echipei. Nu modifica framebuffer-ul si nu pastreaza captura pe disc.
+	La refuz (None) motivul e in jurnalul interfetei si in motivCaptura()."""
+	_motiv_captura[0] = ""
 	# Pagina nativa e desenata de alt proces. OSD nu poate afla sigur unde ii sunt conturile.
 	if navigatorExternPeEcran():
-		return None
-	zone = dreptunghiuriSecrete(ecrane)
+		return _refuzCaptura("navigatorul e deschis peste ecran")
+	motive = []
+	zone = dreptunghiuriSecrete(ecrane, motive)
 	if zone is None:
-		return None
+		return _refuzCaptura("camp cu date private fara pozitie sigura (%s)" % (motive[0] if motive else "?"))
 	if not zone:
 		return octeti
 	try:
@@ -816,12 +922,12 @@ def curataCapturaEchipa(octeti, ecrane, marime):
 			imagine = sursa.convert("RGB")
 		latime, inaltime = marime
 		if latime <= 0 or inaltime <= 0:
-			return None
+			return _refuzCaptura("marimea ecranului necunoscuta")
 		sx, sy = imagine.width / float(latime), imagine.height / float(inaltime)
 		desen = ImageDraw.Draw(imagine)
 		for x, y, w, h in zone:
 			if w <= 0 or h <= 0:
-				return None
+				return _refuzCaptura("camp cu date private de marime 0")
 			# Acoperim si doua blocuri JPEG MCU de 16 pixeli, ca nici contururile cromatice sa nu ramana.
 			x0, y0 = max(0, math.floor(x * sx) - 32), max(0, math.floor(y * sy) - 32)
 			x1, y1 = min(imagine.width, math.ceil((x + w) * sx) + 32), min(imagine.height, math.ceil((y + h) * sy) + 32)
@@ -830,8 +936,8 @@ def curataCapturaEchipa(octeti, ecrane, marime):
 		iesire = io.BytesIO()
 		imagine.save(iesire, format="PNG")
 		return iesire.getvalue()
-	except Exception:
-		return None
+	except Exception as e:
+		return _refuzCaptura("acoperirea campurilor private a cazut: %s" % type(e).__name__)
 
 
 def modAscii():

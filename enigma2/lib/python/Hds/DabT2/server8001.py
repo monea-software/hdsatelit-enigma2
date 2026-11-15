@@ -49,6 +49,18 @@ TERMEN_TRIMITERE_S = 5      # o trimitere in soclu asteapta cel mult atat (SO_SN
 TERMEN_FARA_CITIRE_S = 30.0  # un client care nu mai citeste atata timp e lasat: inregistrarea se opreste, tunerul e liber
 CEAS_MS = 1000               # verificarea erorilor inregistrarilor, numai cat exista sesiuni
 SECUNDE_FARA_DATE = 10       # o sesiune fara niciun octet atata timp lasa in jurnal starea acordului (o data)
+# 0.7.5: canalul fara semnal. Releul modulului de acces (Stream Relay) cere canalul din nou la ~4 s dupa fiecare sesiune
+# fara date, iar fiecare pornire de inregistrare scrie ~40 de randuri in jurnalul interfetei (start recording,
+# HdsPazaDemux): 2 MB in ~50 de minute, deci inceputul penei se pierdea din jurnal. Dupa GOALE_LIBERE sesiuni pornite
+# bine si incheiate fara date (sub PRAG_DATE_OCTETI), pe acelasi canal, inregistrarea urmatoare porneste abia dupa o
+# pauza crescatoare (PAUZE_GOL_S); o cerere venita in pauza primeste pe loc raspunsul de refuz, fara inregistrare si fara
+# rand in jurnal (un singur rand la inceputul fiecarei pauze). O sesiune cu date, uita_refuzurile (zap nou) sau
+# fara_pauza (readucerea antenei, care vrea acordul pe loc) pornesc iar fara asteptare.
+GOALE_LIBERE = 2
+PAUZE_GOL_S = (5, 10, 20, 30, 60)
+PRAG_DATE_OCTETI = 188 * 1000
+CERERE_RECENTA_S = 90        # clientul canalului fara date "inca cere" daca a cerut in ultimele atatea secunde
+EROARE_PAUZA = 'pauza dupa sesiuni fara date'
 F_SETPIPE_SZ = 1031          # fcntl: marimea tevii (Linux)
 TEAVA_OCTETI = 1024 * 1024   # se cere; daca nucleul refuza ramane marimea implicita
 BLOC = 256 * 1024
@@ -126,6 +138,9 @@ class Sesiune(object):
         self.octeti = 0
         self.inceput = _monoton()
         self.notat_fara_date = False
+        self.pornita_bine = False            # numai firul principal: inregistrarea a pornit (pentru pauza canalelor fara date)
+        self.in_pauza = False                # numai firul principal: cererea a venit in pauza, fara inregistrare
+        self.tuner = None                    # (tuner_number, orbital_position) citite la pornire, sau None
         self.fir = threading.Thread(target=self._lucreaza, name='hds8001')
         self.fir.daemon = True
 
@@ -274,6 +289,8 @@ class Server(object):
         # pe cheia purtatorului: sesiunile refuzate la rand de la ultima pornire buna (tuner ocupat, acord cazut).
         # Controlorii DVB-T2 / DAB+ le citesc cat asteapta primele date (refuzuri), ca sa spuna pe loc de ce nu merge.
         self._refuzuri = {}
+        # pe cheia canalului: sesiunile pornite bine si incheiate fara date, la rand ({'n', 'la', 'cerere', 'tuner'})
+        self._goale = {}
 
     # ------------------------------------------------------------ firul principal
     def porneste(self):
@@ -441,8 +458,11 @@ class Server(object):
                     self._opreste_inregistrarea(ses)
                     if ses in self.sesiuni:
                         self.sesiuni.remove(ses)
+                    if ses.in_pauza:
+                        continue                 # cererea din pauza: nimic in jurnal (randul l-a scris inceputul pauzei)
                     jurnal.noteaza(ET, 'sesiune incheiata %s: %s, %d octeti in %d s' % (
                         ses.ref or '-', rest[0] if rest else '-', ses.octeti, int(_monoton() - ses.inceput)))
+                    self._noteaza_capatul(ses)
             except Exception:
                 jurnal.eroare(ET, ce)
         self._porneste_ceasul()
@@ -457,6 +477,15 @@ class Server(object):
 
     def _porneste_inregistrarea(self, ses):
         if ses.pornita.is_set():             # refuzata la acceptare (prea multe sesiuni)
+            return
+        if self.pauza_ramasa(ses.ref) > 0:
+            # canalul a dat numai sesiuni fara date: fara inregistrare pana la capatul pauzei, fara rand in jurnal si fara
+            # numarare la refuzuri (controlorii DAB+ / DVB-T2 numara acolo tunerul ocupat)
+            self._goale[_cheie_ref(ses.ref)]['cerere'] = _monoton()
+            ses.in_pauza = True
+            ses.eroare = EROARE_PAUZA
+            ses.oprita.set()
+            ses.pornita.set()
             return
         try:
             from enigma import eServiceCenter, eServiceReference
@@ -501,6 +530,8 @@ class Server(object):
                 return
             self.pornite += 1
             self._refuzuri.pop(_cheie_ref(ses.ref), None)
+            ses.pornita_bine = True
+            ses.tuner = _tuner_rec(rec)
             jurnal.noteaza(ET, 'sesiune pornita %s' % ses.ref)
         except Exception as e:
             ses.eroare = 'eroare la pornire: %s' % e
@@ -537,6 +568,8 @@ class Server(object):
         for ses in list(self.sesiuni):
             if ses.rec is not None and not ses.eroare:
                 eroare = _eroare_rec(ses.rec)
+                if ses.tuner is None:
+                    ses.tuner = _tuner_rec(ses.rec)
                 if eroare:
                     ses.eroare = 'inregistrarea a cazut (%d)' % eroare
                 elif not ses.octeti and not ses.notat_fara_date and _monoton() - ses.inceput > SECUNDE_FARA_DATE:
@@ -575,9 +608,70 @@ class Server(object):
         return self._refuzuri.get(_cheie_ref(ref), 0) if ref else 0
 
     def uita_refuzurile(self, ref):
-        """Firul principal. Un zap nou pe purtator incepe numaratoarea de la zero."""
+        """Firul principal. Un zap nou pe purtator incepe numaratoarea de la zero (si pauza canalelor fara date)."""
         if ref:
             self._refuzuri.pop(_cheie_ref(ref), None)
+            self._goale.pop(_cheie_ref(ref), None)
+
+    # ------------------------------------------------------------ pauza canalelor fara date (0.7.5)
+    def pauza_ramasa(self, ref, acum=None):
+        """Firul principal. Cate secunde mai tine pauza canalului `ref` (0 = inregistrarea porneste pe loc)."""
+        g = self._goale.get(_cheie_ref(ref)) if ref else None
+        if not g or g['n'] <= GOALE_LIBERE:
+            return 0.0
+        pauza = PAUZE_GOL_S[min(g['n'] - GOALE_LIBERE, len(PAUZE_GOL_S)) - 1]
+        return max(0.0, g['la'] + pauza - (_monoton() if acum is None else acum))
+
+    def _noteaza_capatul(self, ses):
+        """Firul principal, la incheierea unei sesiuni: cu date, pauza canalului se uita; pornita bine si fara date, se
+        numara (cu tunerul si satelitul ei, pentru readucerea antenei). Refuzurile nu intra aici."""
+        cheie = _cheie_ref(ses.ref)
+        if not cheie or not ses.pornita_bine:
+            return
+        if ses.octeti >= PRAG_DATE_OCTETI:
+            if self._goale.pop(cheie, None) is not None:
+                jurnal.noteaza(ET, 'canalul %s da iar date: fara pauza' % ses.ref)
+            return
+        acum = _monoton()
+        g = self._goale.setdefault(cheie, {'n': 0, 'la': acum, 'cerere': acum, 'tuner': None})
+        g['n'] += 1
+        g['la'] = g['cerere'] = acum
+        if ses.tuner is not None:
+            g['tuner'] = ses.tuner
+        if g['n'] > GOALE_LIBERE:
+            jurnal.noteaza(ET, 'canalul %s fara date in %d sesiuni la rand: urmatoarea pornire peste %d s' % (
+                ses.ref, g['n'], int(round(self.pauza_ramasa(ses.ref, acum)))))
+
+    def fara_pauza(self, ref):
+        """Firul principal. Cererea urmatoare a canalului porneste inregistrarea pe loc (numaratoarea ramane: daca nici
+        atunci nu vin date, pauza urmatoare e cea lunga). -> True daca era o pauza de sters."""
+        g = self._goale.get(_cheie_ref(ref)) if ref else None
+        if not g:
+            return False
+        g['la'] = -1e9
+        return True
+
+    def tunere(self, acum=None):
+        """Firul principal. Tunerele tinute (sau cerute din nou) de sesiunile serverului: [{'slot', 'orbital', 'blocat',
+        'ref', 'in_pauza'}]. Sesiunile pornite: tunerul inregistrarii, citit acum. Canalele fara date pe care clientul
+        le cere inca (de cel mult CERERE_RECENTA_S): tunerul ultimei lor sesiuni, fara semnal, chiar daca acum nu e
+        nicio inregistrare (pauza sau clipa dintre doua cereri)."""
+        acum = _monoton() if acum is None else acum
+        lista, vazute = [], set()
+        for ses in list(self.sesiuni):
+            if ses.rec is None or ses.oprita.is_set():
+                continue
+            t = _tuner_rec(ses.rec, cu_semnal=True)
+            if t is None:
+                continue
+            vazute.add(_cheie_ref(ses.ref))
+            lista.append({'slot': t[0], 'orbital': t[1], 'blocat': t[2], 'ref': ses.ref, 'in_pauza': False})
+        for cheie, g in list(self._goale.items()):
+            if cheie in vazute or g.get('tuner') is None or acum - g['cerere'] > CERERE_RECENTA_S:
+                continue
+            lista.append({'slot': g['tuner'][0], 'orbital': g['tuner'][1], 'blocat': False, 'ref': cheie,
+                'in_pauza': True})
+        return lista
 
     def stare(self):
         return {'asculta': self.sock is not None, 'sesiuni': len(self.sesiuni), 'pornite': self.pornite,
@@ -602,6 +696,29 @@ def _eroare_rec(rec):
         return int(e or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _tuner_rec(rec, cu_semnal=False):
+    """(tuner_number, orbital_position) al inregistrarii (cu tuner_locked la sfarsit daca cu_semnal), sau None cand nu
+    e pe un tuner de satelit sau nu se poate citi."""
+    try:
+        fi = rec.frontendInfo()
+        if fi is None:
+            return None
+        slot = int((fi.getFrontendData() or {}).get('tuner_number', -1))
+        orbital = int((fi.getTransponderData(True) or {}).get('orbital_position', -1))
+        if slot < 0 or orbital < 0:
+            return None
+        if not cu_semnal:
+            return slot, orbital
+        try:
+            d = fi.getFrontendStatus()
+        except TypeError:
+            d = {}
+            fi.getFrontendStatus(d)
+        return slot, orbital, bool((d or {}).get('tuner_locked'))
+    except Exception:
+        return None
 
 
 def _stare_tuner(rec):
@@ -796,3 +913,18 @@ def uita_refuzurile(ref):
     s = obtine()
     if s is not None:
         s.uita_refuzurile(ref)
+
+
+def tunere():
+    """Firul principal. Tunerele sesiunilor serverului (Server.tunere): readucerea antenei (Components/HdsMotorPozitie)
+    vede asa tunerul cu motor tinut de releul modulului de acces cand programul televizorului n-are tuner. [] fara
+    server."""
+    s = obtine()
+    return s.tunere() if s is not None else []
+
+
+def fara_pauza(ref):
+    """Firul principal. Pauza canalului `ref` se sterge (Server.fara_pauza): readucerea antenei uita pozitia, iar acordul
+    sesiunii urmatoare trimite comanda de motor. False fara server sau fara pauza."""
+    s = obtine()
+    return s.fara_pauza(ref) if s is not None else False

@@ -43,6 +43,35 @@ from Components import HdsModuleAcces
 from Components import HdsInterfeteCam
 
 REIMPROSPATARE = 5000   # ms: starea (ce ruleaza) se reciteste cat timp ecranul e deschis
+# Randurile de la sfarsitul listei, numai de citit (MDA, darog69, forum 479 #2447): un modul pornit de alt program
+# (HdsModuleAcces.pornite_de_alt_program) si modulul CI din fiecare slot (HdsModuleAcces.sloturi_ci). In self.randuri au
+# in locul felului unul din semnele de mai jos (niciun fel nu incepe cu "*"), deci stare() da None si nicio comanda a
+# modulelor nu pleaca de pe ele: OK pe randul CI deschide ecranul Common Interface, pe celalalt "Despre decriptare".
+RAND_ALT = "*alt"
+RAND_CI = "*ci"
+
+
+def text_ci(slot, cod, nume):
+	"""Randul unui slot CI (HdsModuleAcces.sloturi_ci), acelasi in ecran si in pagina web."""
+	if cod == 2:
+		stare = nume or _("modul pregătit")
+	elif cod == 1:
+		stare = _("se pornește")
+	else:
+		stare = _("slot oprit")
+	return _("Modul CI în slotul %d: %s") % (slot + 1, stare) + "  (%s)" % _("Common Interface")
+
+
+def text_alt(a):
+	"""Randul unui modul pornit de alt program (HdsModuleAcces.pornite_de_alt_program)."""
+	return _("Rulează acum: %s (pornit de alt program)") % a["nume"]
+
+
+def detalii_alt(a):
+	"""Detaliile lui, aceleasi in ecran si in pagina web: executabilul, PID-ul si cine il opreste."""
+	return [_("Programul: %s (PID %s).") % (a["cale"], ", ".join(str(p) for p in a["pids"])),
+		_("L-a pornit alt program (alt manager de module sau o comandă), nu lista de aici. "
+			"Se oprește și se repornește din programul care l-a pornit.")]
 
 
 def gazda_interfata_web():
@@ -263,6 +292,8 @@ class CamSetup(Screen):
 		self["info_actions"] = ActionMap(["InfobarEPGActions"], {"showEventInfo": self.informatii}, -1)
 
 		self.stari = []          # HdsModuleAcces.Stare, cate una pe fel aratat (primul: al modulelor obisnuite)
+		self.alte = []           # HdsModuleAcces.pornite_de_alt_program: modulele pornite de alt program
+		self.ci = []             # HdsModuleAcces.sloturi_ci: (slot, stare, nume)
 		self.randuri = []        # (fel, sufix sau None pentru „Niciunul”), in ordinea din lista
 		self.texte = []
 		self.textDetalii = None     # textul aratat in detalii si randul lui: la fel = nu se rescrie (derularea ramane)
@@ -318,6 +349,14 @@ class CamSetup(Screen):
 				texte.append(_eticheta(st.fel, HdsModuleAcces.eticheta_modul(e), principal) +
 					("  (%s)" % ", ".join(semne) if semne else ""))
 				randuri.append((st.fel, e.sufix))
+		self.alte = HdsModuleAcces.pornite_de_alt_program(stari=self.stari)
+		self.ci = HdsModuleAcces.sloturi_ci()
+		for a in self.alte:
+			randuri.append((RAND_ALT, a["pids"][0]))
+			texte.append(text_alt(a))
+		for slot, cod, nume in self.ci:
+			randuri.append((RAND_CI, slot))
+			texte.append(text_ci(slot, cod, nume))
 		if texte != self.texte or randuri != self.randuri:
 			self.randuri, self.texte = randuri, texte
 			self["lista"].setList([(t, r) for t, r in zip(texte, randuri)])
@@ -377,14 +416,50 @@ class CamSetup(Screen):
 		c = self["lista"].getCurrent()
 		return c[1] if c else None
 
+	def alt(self, pid):
+		for a in self.alte:
+			if a["pids"][0] == pid:
+				return a
+		return None
+
+	def arataDetaliiSpeciale(self, rand):
+		"""Detaliile randurilor RAND_ALT si RAND_CI; tastele colorate nu au acolo nicio comanda a modulelor."""
+		fel, cheie = rand
+		randuri = []
+		if fel == RAND_ALT:
+			a = self.alt(cheie)
+			if a is not None:
+				randuri += detalii_alt(a)
+				sistem = HdsModuleAcces.SistemAcces()
+				randuri += ["  " + r for r in randuri_proces(HdsModuleAcces.memorie(sistem, pid_de_aratat(sistem, a["pids"])))]
+				randuri.append(_("Apasă OK sau INFO: %s") % _("Despre decriptare"))
+				st = self.stari[0] if self.stari else None
+				if st is not None and st.ecm:
+					randuri.append("")
+					randuri.append(_("Decriptarea de acum (%s):") % HdsModuleAcces.FISIER_ECM)
+					randuri += ["  " + r for r in st.ecm]
+			self["key_green"].setText("")
+		else:
+			randuri.append(_("Modulul CI din slot are ecranul lui: %s (meniul Acces condiționat).") % _("Common Interface"))
+			randuri.append(_("Apasă OK pentru el."))
+			self["key_green"].setText(_("Common Interface"))
+		self["key_red"].setText("")
+		self["key_yellow"].setText("")
+		self.scrieDetalii("\n".join(randuri), rand)
+
 	def arataDetalii(self):
 		rand = self.randCurent()
 		if rand is None:
 			return
 		fel, sufix = rand
+		if fel in (RAND_ALT, RAND_CI):
+			self.arataDetaliiSpeciale(rand)
+			return
 		st = self.stare(fel)
 		if st is None:
 			return
+		self["key_red"].setText(_("Oprește"))
+		self["key_yellow"].setText(_("Repornește"))
 		e = st.emulator(sufix) if sufix is not None else None
 		randuri = []
 		if e is not None:
@@ -416,6 +491,10 @@ class CamSetup(Screen):
 					randuri.append(_("Programe fără script de pornire, care nu se pot porni de aici: %s") % ", ".join(st.fara_script))
 			elif st.ales_emulator() is None:
 				randuri.append(_("La pornirea receptorului nu pornește niciun modul."))
+			# MDA: un modul pornit de alt program decripteaza totusi (randul lui e mai jos in lista)
+			if self.alte and st.fel == self.felPrincipal():
+				randuri.append(_("Rulează totuși un modul pornit de alt program: %s (rândul lui e mai jos).")
+					% ", ".join(a["nume"] for a in self.alte))
 			ales = st.ales_emulator() is None
 		if st.ecm:
 			randuri.append("")
@@ -478,6 +557,12 @@ class CamSetup(Screen):
 	def ok(self):
 		"""pe un modul care ruleaza: lista scurta cu ce se poate face (fara tastele colorate); altfel ca Verde"""
 		rand = self.randCurent()
+		if rand is not None and rand[0] == RAND_CI:
+			self.deschideCi()
+			return
+		if rand is not None and rand[0] == RAND_ALT:
+			self.informatii()
+			return
 		st = self.stare(rand[0]) if rand is not None else None
 		e = st.emulator(rand[1]) if st is not None and rand[1] is not None else None
 		if e is None or not e.pids:
@@ -506,9 +591,30 @@ class CamSetup(Screen):
 		elif cerere == "informatii":
 			self.informatii()
 
+	def deschideCi(self):
+		"""Ecranul Common Interface (meniul Acces condiționat, intrarea ci_setup din data/menu.xml)."""
+		try:
+			from .Ci import CiSelection
+		except ImportError as e:
+			print("[CamSetup] Common Interface: %s" % e)
+			return
+		self.session.open(CiSelection)
+
+	def randSpecial(self, rand):
+		"""True pe RAND_ALT / RAND_CI: Verde deschide ecranul CI, Rosu si Galben nu trimit nicio comanda."""
+		if rand is None or rand[0] not in (RAND_ALT, RAND_CI):
+			return False
+		if rand[0] == RAND_ALT:
+			self["stare"].setText(_("L-a pornit alt program: se oprește și se repornește din programul acela."))
+		return True
+
 	def verde(self):
 		rand = self.randCurent()
 		if rand is None:
+			return
+		if self.randSpecial(rand):
+			if rand[0] == RAND_CI:
+				self.deschideCi()
 			return
 		fel, sufix = rand
 		st = self.stare(fel)
@@ -520,19 +626,19 @@ class CamSetup(Screen):
 
 	def rosu(self):
 		rand = self.randCurent()
-		if rand is not None:
+		if rand is not None and not self.randSpecial(rand):
 			self.pornesteOperatia("opreste", rand[0])
 
 	def galben(self):
 		rand = self.randCurent()
-		if rand is not None:
+		if rand is not None and not self.randSpecial(rand):
 			self.pornesteOperatia("reporneste", rand[0])
 
 	def albastru(self):
 		"""Interfata web a modulului care ruleaza, pe televizor (navigatorul imaginii, modul cam). Modulul il gaseste
 		navigatorul, la rulare, dupa portul pe care asculta; cand ruleaza mai multe module cu pagina web, le arata pe
 		toate ca sa alegi. Ecranul acesta nu afla si nu tine nicio adresa, niciun utilizator si nicio parola."""
-		if not any(st.pornite() for st in self.stari):
+		if not any(st.pornite() for st in self.stari) and not self.alte:
 			self["stare"].setText(_("Niciun modul nu rulează."))
 			return
 		try:
@@ -549,13 +655,21 @@ class CamSetup(Screen):
 		"""INFO (si „Despre decriptare” din lista de la OK): Screens/CamInfo.py cu modulul ales, daca ruleaza, altfel
 		cu primul pornit"""
 		rand = self.randCurent()
-		st = self.stare(rand[0]) if rand is not None else None
+		from .CamInfo import CamInfo
+		# MDA: pe randul unui modul pornit de alt program (sau cand numai el ruleaza), cu procesul lui
+		a = self.alt(rand[1]) if rand is not None and rand[0] == RAND_ALT else None
+		if rand is not None and rand[0] in (RAND_ALT, RAND_CI):
+			rand = None
+		st = self.stare(rand[0]) if rand is not None else (self.stari[0] if self.stari else None)
 		pornite = st.pornite() if st is not None else []
-		e = st.emulator(rand[1]) if st is not None and rand[1] is not None else None
+		e = st.emulator(rand[1]) if st is not None and rand is not None and rand[1] is not None else None
 		if e is None or not e.pids:
 			e = pornite[0] if pornite else None
-		from .CamInfo import CamInfo
-		if e is not None:
+		if a is None and e is None and self.alte:
+			a = self.alte[0]
+		if a is not None:
+			self.session.open(CamInfo, a["nume"], pid_de_aratat(HdsModuleAcces.SistemAcces(), a["pids"]))
+		elif e is not None:
 			self.session.open(CamInfo, e.sufix, pid_de_aratat(HdsModuleAcces.SistemAcces(), e.pids))
 		else:
 			self.session.open(CamInfo)

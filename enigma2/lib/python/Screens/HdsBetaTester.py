@@ -1493,11 +1493,12 @@ def _capturaSiMesaj():
 	if not m:
 		return
 
-	def trimite():
-		captura = B.capturaOsd()
+	def trimite(captura):
 		ok, text = B.mesaj(m["fel"], m["text"], m["ecran"], m["jurnal"], captura, contor=B.contor())
 		print("[HdsBetaTester] mesajul cu captura: %s (%s)" % (ok, "captura" if captura else "fara captura"))
-	trimite()
+	# grab pe un fir separat, mesajul pleaca la intoarcere, pe firul enigma2 (0.7.5 FIR: pornit de aici, pe HiSilicon
+	# grab trecea de termen cu bucla oprita, iar tastele stateau pana la 20 s)
+	B.capturaOsdInFundal(trimite)
 
 
 def _programeazaCaptura(mesaj_):

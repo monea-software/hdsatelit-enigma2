@@ -1030,24 +1030,77 @@ def scrie_jurnal_rotit(cale, text, maxim=MARIME_JURNAL, sincron=False):
 	DOSAR_JURNALE il face paznicul la pornire; nu se face de aici, ca probele de pe PC sa nu scrie in afara dosarelor
 	lor); fara legaturi simbolice (O_NOFOLLOW, si o legatura pusa in locul fisierului nu se urmeaza), fisier nou cu
 	drepturile 0600. sincron: fsync dupa scriere (o repornire dura a receptorului, de pilda de la watchdogul HW, lasa
-	altfel randurile din ultimul minut zerouri pe eMMC). False la orice eroare (nu arunca)."""
+	altfel randurile din ultimul minut zerouri pe eMMC). sincron=SINCRON_FUNDAL: scrierea ramane aici (ordinea randurilor
+	si rotirea sunt ale apelantului), iar fsync-ul il face un fir separat (sincronizeaza_in_fundal). False la orice eroare
+	(nu arunca)."""
 	date = (text if isinstance(text, str) else str(text)).encode('utf-8', 'replace')[:maxim]
+	fundal = sincron == SINCRON_FUNDAL
 	try:
 		if not os.path.isdir(os.path.dirname(cale) or '.') or os.path.islink(cale):
 			return False
 		if os.path.isfile(cale) and os.path.getsize(cale) + len(date) > maxim:
 			os.replace(cale, cale + '.1')
+			if fundal:
+				sincronizeaza_in_fundal(cale + '.1')
 		fd = os.open(cale, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, 'O_NOFOLLOW', 0) |
 			getattr(os, 'O_BINARY', 0), 0o600)
 		try:
 			os.write(fd, date)
-			if sincron:
+			if sincron and not fundal:
 				os.fsync(fd)
 		finally:
 			os.close(fd)
+		if fundal:
+			sincronizeaza_in_fundal(cale)
 		return True
 	except (IOError, OSError):
 		return False
+
+
+# fsync-ul jurnalelor pe un fir separat (0.7.5 ASM, TODO 15.11 00:02 (HdsPachete in fir)): pe Vu+ Solo SE, in timpul
+# actualizarii, HdsActualizari._jurnal facea fsync pe firul enigma2 la fiecare rand scris de opkg, iar opkg scria in
+# acelasi timp pe memoria interna: firul principal statea 2,8-4 s (HdsPaznic, asistenta 011723) si tastele intarziau pana
+# la 1,4 s. Acum firul enigma2 numai scrie (in memoria nucleului, cateva microsecunde); fsync-ul il face un singur fir pe
+# fisier, care se reia o data daca s-au mai scris randuri cat lucra (cererile din timpul lui nu pornesc alte fire). Ce s-a
+# scris ramane si dupa repornirea interfetei (memoria nucleului nu se pierde); fsync-ul tine randurile si dupa o repornire
+# dura, ca inainte, cu o intarziere de cel mult cat dureaza un fsync.
+SINCRON_FUNDAL = 'fundal'
+_sincron_fundal = {}            # cale -> True cand trebuie inca un fsync dupa cel de acum
+_lacat_sincron = _fire.allocate_lock()
+
+
+def sincronizeaza_in_fundal(cale):
+	"""fsync pe `cale` pe un fir separat; True cand a pornit un fir nou, False cand unul lucreaza deja (se reia)."""
+	with _lacat_sincron:
+		if cale in _sincron_fundal:
+			_sincron_fundal[cale] = True
+			return False
+		_sincron_fundal[cale] = False
+	try:
+		_fire.start_new_thread(_sincronizeaza, (cale,))
+	except Exception:
+		with _lacat_sincron:
+			_sincron_fundal.pop(cale, None)
+		return False
+	return True
+
+
+def _sincronizeaza(cale):
+	while True:
+		try:
+			fd = os.open(cale, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0))
+			try:
+				os.fsync(fd)
+			finally:
+				os.close(fd)
+		except (IOError, OSError):
+			pass
+		with _lacat_sincron:
+			if _sincron_fundal.get(cale):
+				_sincron_fundal[cale] = False
+				continue
+			_sincron_fundal.pop(cale, None)
+			return
 
 
 # ---------------------------------------------------------------- fisiere .ipk de pe stick, disc sau retea

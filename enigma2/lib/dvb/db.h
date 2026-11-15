@@ -70,6 +70,8 @@ public:
 	void saveServicelist();
 	void saveServicelist(const char *file);
 	void reloadBouquets();
+	/* HDSatelit: the channel numbers of the bouquets given again (getChannelNum), as in OE-Alliance; db.cpp */
+	void renumberBouquet();
 	/* HDSatelit: the bouquet calls of the common enigma2 plugin interface, with the names and arguments the bouquet
 	   plugins use (IPTV and terrestrial bouquet makers, backups). Written here (db.cpp). The list of references is
 	   checked whole before anything changes; only userbouquet.* and subbouquet.* files are created or deleted.

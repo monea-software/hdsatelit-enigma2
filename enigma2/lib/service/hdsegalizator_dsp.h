@@ -1346,7 +1346,7 @@ namespace hdsegal
 		static constexpr double LATENTA_PLACA_S = 0.060; /* de la ALSA la iesire: pista din placa si iesirea */
 		static constexpr double LATENTA_ALSA_S = 0.100;  /* cand ALSA nu spune intarzierea */
 
-		SincronTv(): stare(ASTEAPTA), eroare_ms(0.0), taceri(0), aruncari(0), m_pornit_ms(0), m_ultim_ceas_bun(0),
+		SincronTv(): stare(ASTEAPTA), eroare_ms(0.0), taceri(0), aruncari(0), pana_auzit_s(0.0), m_pornit_ms(0), m_ultim_ceas_bun(0),
 			m_tacere_ramasa(0), m_ritm_t(0), m_ritm_pts(0), m_ceas_stabil(false), m_a_pornit(false), m_asteapta_de_la(0),
 			m_intarziere_s(-1.0), m_aruncat_pornire(false), m_corectie(-1),
 			m_corectie_cadre(0), m_corectii_poz(0)
@@ -1451,6 +1451,9 @@ namespace hdsegal
 					taceri++;
 					m_tacere_ramasa = d.cadre;
 				}
+				/* cat trece de acum pana se aude primul esantion (tacerea hotarata plus drumul prin ALSA si placa): la
+				   preluarea de la placa (Preluare) mesajul care opreste sunetul placii pleaca dupa el */
+				pana_auzit_s = (d.fapta == SincronImagine::TACERE ? (double)d.cadre / RATA : 0.0) + intarziere;
 				if (stare.load() != POTRIVIT && stare.load() != NEPOTRIVIT)
 				{
 					stare = POTRIVIT;
@@ -1501,6 +1504,7 @@ namespace hdsegal
 		std::atomic<int> stare;
 		std::atomic<double> eroare_ms;
 		std::atomic<unsigned> taceri, aruncari;
+		double pana_auzit_s;   /* la PORNIT: din clipa hotararii pana se aude primul esantion (numai firul placii) */
 
 	private:
 		int dinTacere()
@@ -1548,9 +1552,16 @@ namespace hdsegal
 	class RampaIesire
 	{
 	public:
-		explicit RampaIesire(double rampa_s = 0.010): m_c(0.0), m_pas(1.0 / (rampa_s * RATA))
+		explicit RampaIesire(double rampa_s = 0.010): m_c(0.0), m_pas(1.0 / (rampa_s * RATA)), m_pas_obisnuit(m_pas)
 		{
 			m_ultim[0] = m_ultim[1] = 0.0;
+		}
+
+		/* numai urcarea urmatoare dureaza `rampa_s` (preluarea de la placa: Preluare::RAMPA_S); dupa ea, iar cea obisnuita */
+		void urcareaUrmatoare(double rampa_s)
+		{
+			if (rampa_s > 0.0)
+				m_pas = 1.0 / (rampa_s * RATA);
 		}
 
 		void aplica(float *f, int cadre, int tacere, int produse, bool coboara)
@@ -1571,6 +1582,9 @@ namespace hdsegal
 							m_ultim[c] = 0.0;
 						f[CANALE * i + c] = (float)m_ultim[c];
 					}
+					/* o urcare de preluare intrerupta (gol, tacere) nu ramane lenta pentru urcarea urmatoare */
+					if (m_c > 0.0)
+						m_pas = m_pas_obisnuit;
 					m_c = 0.0;
 					continue;
 				}
@@ -1583,8 +1597,11 @@ namespace hdsegal
 				else if (m_c < 1.0)
 				{
 					m_c += m_pas;
-					if (m_c > 1.0)
+					if (m_c >= 1.0 - 1e-9)
+					{
 						m_c = 1.0;
+						m_pas = m_pas_obisnuit;
+					}
 				}
 				for (int c = 0; c < CANALE; c++)
 				{
@@ -1597,8 +1614,32 @@ namespace hdsegal
 		double castig() const { return m_c; }
 
 	private:
-		double m_c, m_pas;
+		double m_c, m_pas, m_pas_obisnuit;
 		double m_ultim[CANALE];
+	};
+
+	/* ---------------------------------------------------------------- preluarea de la placa (canalele TV)
+	   Ca sunetul sa porneasca odata cu imaginea, la un canal TV placa canta sunetul din primul cadru, ca fara egalizator,
+	   iar drumul din procesor porneste alaturi, tacut (in umbra), pana cand SincronTv hotaraste primul esantion (PORNIT).
+	   Atunci sunetul din procesor urca in RAMPA_S, iar firul placii trimite firului enigma2 mesajul de preluare (oprirea
+	   sunetului placii: decodorul primeste PID-ul -1). Placa se opreste deodata, deci oprirea ei trebuie sa cada la capatul
+	   rampei, cand sunetul de aici e aproape intreg: mai devreme ar fi un gol, mai tarziu doar cateva zeci de ms de sunet
+	   dublu. Mesajul pleaca asadar la clipa in care se aude primul esantion + RAMPA_S - LATENTA_OPRIRE_MS (cat trece de la
+	   mesaj pana tace placa: pompa firului enigma2, alegerea pistei, AUDIO_STOP; 0 pana o masuram: atunci nu poate iesi
+	   niciodata gol, numai sunetul dublu dureaza cu latenta mai mult). Orice cadere a drumului inainte de
+	   preluare lasa placa sa cante mai departe, fara nicio schimbare auzita. Cele doua cifre se masoara pe receptor (Vu+ si
+	   HiSilicon); simularea pe PC: teste/egalizator_preluare_egz_proba.cpp. */
+	struct Preluare
+	{
+		static const int LATENTA_OPRIRE_MS = 0;
+		static constexpr double RAMPA_S = 0.030;
+
+		/* clipa (ms, ceasul monoton) la care pleaca mesajul: `acum` = clipa hotararii, `pana_auzit_s` = SincronTv::pana_auzit_s */
+		static uint64_t clipaMesajului(uint64_t acum, double pana_auzit_s)
+		{
+			const int64_t pana = (int64_t)llround((pana_auzit_s + RAMPA_S) * 1000.0) - LATENTA_OPRIRE_MS;
+			return pana > 0 ? acum + (uint64_t)pana : acum;
+		}
 	};
 
 	/* float -> 16 biti, cu zgomot de rotunjire triunghiular de un bit, taiat la plin */

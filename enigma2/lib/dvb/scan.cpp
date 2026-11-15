@@ -36,6 +36,25 @@ static_assert((int)eDVBScan::hdsNitInformativ == (int)hdsretea::STEAG_NIT_INFORM
 
 DEFINE_REF(eDVBScan);
 
+/* HDSatelit (SC2, 15.11.2026): NIT-ul scanarii spune jurnalului cand vine prima sectiune, cu network_id (table_id_extension,
+   octetii 3-4), version_number (octetul 5) si cate sectiuni are tabela (last_section_number + 1). Tabela se strange la fel
+   ca inainte (eTable): numai ceasul din hds-scanare.log afla ceva in plus. Din randul de jurnal se vede cat asteapta
+   scanarea dupa restul sectiunilor unei retele deja citite pe alt transponder (cantarirea din STADIU-SC2). */
+class hdsTabelNit: public eTable<NetworkInformationSection>
+{
+	hdsjscan::Stare &m_jurnal;
+protected:
+	int createTable(unsigned int nr, const __u8 *data, unsigned int max)
+	{
+		hdsjscan::sectiuneNit(m_jurnal, (data[3] << 8) | data[4], (data[5] >> 1) & 0x1F, (int)max);
+		return eTable<NetworkInformationSection>::createTable(nr, data, max);
+	}
+public:
+	hdsTabelNit(bool debug, hdsjscan::Stare &jurnal): eTable<NetworkInformationSection>(debug), m_jurnal(jurnal)
+	{
+	}
+};
+
 eDVBScan::eDVBScan(iDVBChannel *channel, bool usePAT, bool debug)
 	:m_channel(channel), m_channel_state(iDVBChannel::state_idle)
 	,m_ready(0), m_ready_all(usePAT ? (readySDT|readyPAT) : readySDT)
@@ -173,6 +192,7 @@ void eDVBScan::stateChange(iDVBChannel *ch)
 	
 	if (state == iDVBChannel::state_ok)
 	{
+		hdsjscan::semnalPrins(m_hds_jurnal);  /* ceasul tabelelor porneste de aici (SC2) */
 		startFilter();
 		m_channel_state = state;
 	} else if (state == iDVBChannel::state_failed)
@@ -325,7 +345,7 @@ RESULT eDVBScan::startFilter()
 		m_NIT = 0;
 		if (m_ready_all & readyNIT)
 		{
-			m_NIT = new eTable<NetworkInformationSection>(m_scan_debug);
+			m_NIT = new hdsTabelNit(m_scan_debug, m_hds_jurnal);
 			if (m_NIT->start(m_demux, eDVBNITSpec()))
 				return -1;
 			CONNECT(m_NIT->tableReady, eDVBScan::NITready);
@@ -365,6 +385,7 @@ void eDVBScan::SDTready(int err)
 			SCAN_eDebug("reluarea SDT actual nu a putut porni");
 		}
 	}
+	hdsjscan::tabel(m_hds_jurnal, hdsjscan::TABEL_SDT, err);
 	m_ready |= readySDT;
 	if (!err)
 		m_ready |= validSDT;
@@ -374,6 +395,7 @@ void eDVBScan::SDTready(int err)
 void eDVBScan::NITready(int err)
 {
 	SCAN_eDebug("got nit, err %d", err);
+	hdsjscan::tabel(m_hds_jurnal, hdsjscan::TABEL_NIT, err);
 	m_ready |= readyNIT;
 	if (!err)
 		m_ready |= validNIT;
@@ -383,6 +405,7 @@ void eDVBScan::NITready(int err)
 void eDVBScan::BATready(int err)
 {
 	SCAN_eDebug("got bat");
+	hdsjscan::tabel(m_hds_jurnal, hdsjscan::TABEL_BAT, err);
 	m_ready |= readyBAT;
 	if (!err)
 		m_ready |= validBAT;
@@ -392,6 +415,7 @@ void eDVBScan::BATready(int err)
 void eDVBScan::PATready(int err)
 {
 	SCAN_eDebug("got pat");
+	hdsjscan::tabel(m_hds_jurnal, hdsjscan::TABEL_PAT, err);
 	m_ready |= readyPAT;
 	if (!err)
 		m_ready |= validPAT;
@@ -444,13 +468,30 @@ void eDVBScan::PMTready(int err)
 						forced_audio = 1;
 						isaudio = 1;
 					}
+				case 0x81: // AC3 (ATSC/SCTE, America de Nord): audio si fara descriptorul AC3, ca in OE-Alliance (TC308)
+				case 0x87: // E-AC3 (ATSC)
+					if (!isvideo && !forced_audio)
+						isaudio = 1;
+					//break; fall through !!!
 				case 0x06: // PES Private
-				case 0x81: // user private
 				case 0xEA: // TS_PSI_ST_SMPTE_VC1
+				{
+					/* HDSatelit (0.7.5, TC308): descriptorii ATSC AC-3 (0x81) si E-AC-3 (0xCC) pe fluxuri 0x06/0x81/0x87, numai
+					   fara private_data_specifier (0x5F) pe pista, ca in lib/dvb/pmt.cpp: canalul cu un asemenea sunet nu iese "date" */
+					int hds_tip = (*es)->getType();
+					bool hds_atsc = (hds_tip == 0x06 || hds_tip == 0x81 || hds_tip == 0x87);
+					for (DescriptorConstIterator desc = (*es)->getDescriptors()->begin();
+							hds_atsc && desc != (*es)->getDescriptors()->end(); ++desc)
+					{
+						if ((*desc)->getTag() == 0x5F) // private_data_specifier
+							hds_atsc = false;
+					}
 					for (DescriptorConstIterator desc = (*es)->getDescriptors()->begin();
 							desc != (*es)->getDescriptors()->end(); ++desc)
 					{
 						uint8_t tag = (*desc)->getTag();
+						if (hds_atsc && !forced_video && !forced_audio && !isvideo && (tag == 0x81 || tag == 0xCC))
+							isaudio = 1;
 						/* PES private can contain AC-3, DTS or lots of other stuff.
 						   check descriptors to get the exakt type. */
 						if (!forced_video && !forced_audio)
@@ -496,6 +537,8 @@ void eDVBScan::PMTready(int err)
 						if (tag == CA_DESCRIPTOR)
 							is_scrambled = 1;
 					}
+				}
+				//break; fall through !!!
 				default:
 					break;
 				}
@@ -524,7 +567,10 @@ void eDVBScan::PMTready(int err)
 			m_pmt_in_progress->second.serviceType = 100;
 	}
 	if (err == -1) // timeout or removed by sdt
+	{
+		hdsjscan::pmtLipsa(m_hds_jurnal);  /* PMT-ul care n-a venit in plafonul lui (4 s) sau scos de SDT (SC2) */
 		m_pmts_to_read.erase(m_pmt_in_progress++);
+	}
 	else if (m_pmt_running)
 		++m_pmt_in_progress;
 	else
@@ -539,6 +585,7 @@ void eDVBScan::PMTready(int err)
 	{
 		m_PMT = 0;
 		m_pmt_running = false;
+		hdsjscan::tabel(m_hds_jurnal, hdsjscan::TABEL_PMT, 0);
 		channelDone();
 	}
 }
@@ -550,6 +597,9 @@ void eDVBScan::addKnownGoodChannel(const eDVBChannelID &chid, iDVBFrontendParame
 	if (chid)
 		m_new_channels.insert(std::pair<eDVBChannelID,ePtr<iDVBFrontendParameters> >(chid, feparm));
 }
+
+/* mai jos, langa hdsCelalaltSistem */
+static bool hdsAltaVarianta(iDVBFrontendParameters *prins, iDVBFrontendParameters *alt);
 
 void eDVBScan::addChannelToScan(const eDVBChannelID &chid, iDVBFrontendParameters *feparm)
 {
@@ -624,6 +674,12 @@ void eDVBScan::addChannelToScan(const eDVBChannelID &chid, iDVBFrontendParameter
 			SCAN_eDebug("successfully scanned");
 			return;
 		}
+		else if (hdsAltaVarianta(*i, feparm))
+		{
+			/* NIT-ul anunta alta varianta (rata, sistem, FEC) a unei purtatori deja prinse: nu se adauga (hdsAltaVarianta) */
+			SCAN_eDebug("other variant of a scanned carrier");
+			return;
+		}
 
 		/* ... in the list of unavailable channels */
 	for (std::list<ePtr<iDVBFrontendParameters> >::const_iterator i(m_ch_unavailable.begin()); i != m_ch_unavailable.end(); ++i)
@@ -692,6 +748,34 @@ static bool hdsCelalaltSistem(iDVBFrontendParameters *prins, iDVBFrontendParamet
 		return false;
 	return hdster::sistemNormalizat(p.system) != hdster::sistemNormalizat(q.system)
 		&& hdster::aceeasiFrecventa(p.frequency, q.frequency) && hdster::acelasiPlp(p.plp_id, q.plp_id);
+}
+
+/* HDSatelit (SCV, 15.11.2026): aceeasi purtatoare de satelit cu alti parametri. Listele vechi (satellites.xml, lamedb) si
+   NIT-urile altor retele pastreaza pe aceeasi frecventa si polarizare rata, sistemul sau FEC-ul de dinainte (Hotbird 13E:
+   11938 H 27500 langa 11938 H 30000, 12207 H 29900 langa 12207 H 27500). sameChannel nu le uneste (diferenta lui aduna kHz
+   si simboli/s, deci 2500000 la 27500 fata de 30000), iar varianta veche se incerca si se dadea fara semnal dupa 3 s
+   (pe receptorul de probe, Hotbird: 7 din cele 43 fara semnal erau asa, 5 dupa ce varianta buna fusese deja prinsa).
+   Pe aceeasi pozitie, polarizare, flux (ISI, cod Gold) si PLP T2-MI, la cel mult HDS_VARIANTA_KHZ de o purtatoare PRINSA
+   cu rata de macar HDS_VARIANTA_SR_MIN nu poate fi alta purtatoare: banda celei prinse (peste 13 MHz) o acopera.
+   Se sare numai fata de una prinsa (m_ch_scanned), niciodata fata de una fara semnal: o varianta veche moarta nu opreste
+   varianta noua. Fluxurile multistream si PLP-urile T2-MI diferite raman (alt flux pe aceeasi purtatoare = alte canale). */
+enum { HDS_VARIANTA_KHZ = 4000, HDS_VARIANTA_SR_MIN = 10000000 };
+
+static bool hdsAltaVarianta(iDVBFrontendParameters *prins, iDVBFrontendParameters *alt)
+{
+	int a, b;
+	if (!prins || !alt || prins == alt || prins->getSystem(a) || alt->getSystem(b))
+		return false;
+	if (a != iDVBFrontend::feSatellite || b != iDVBFrontend::feSatellite)
+		return false;
+	eDVBFrontendParametersSatellite p, q;
+	if (prins->getDVBS(p) || alt->getDVBS(q))
+		return false;
+	return p.orbital_position == q.orbital_position && p.polarisation == q.polarisation
+		&& p.symbol_rate >= HDS_VARIANTA_SR_MIN
+		&& abs((int)p.frequency - (int)q.frequency) <= HDS_VARIANTA_KHZ
+		&& hdsms::acelasiFlux(hdsms::cheie(p.is_id, p.pls_mode, p.pls_code), hdsms::cheie(q.is_id, q.pls_mode, q.pls_code))
+		&& p.t2mi_plp_id == q.t2mi_plp_id;
 }
 
 void eDVBScan::channelDone()
@@ -1105,6 +1189,13 @@ void eDVBScan::channelDone()
 
 	for (std::list<ePtr<iDVBFrontendParameters> >::iterator i(m_ch_toScan.begin()); i != m_ch_toScan.end();)
 	{
+		if (hdsAltaVarianta(m_ch_current, *i))
+		{
+			/* alta varianta a purtatorii abia prinse: nu se mai incearca (hdsAltaVarianta) */
+			hdsjscan::variantaSarita(m_hds_jurnal, *i, m_ch_current);
+			m_ch_toScan.erase(i++);
+			continue;
+		}
 		if (sameChannel(*i, m_ch_current) || hdsCelalaltSistem(m_ch_current, *i))
 		{
 			SCAN_eDebug("remove dupe 2");

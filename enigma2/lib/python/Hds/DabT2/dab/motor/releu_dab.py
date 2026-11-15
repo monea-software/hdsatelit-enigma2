@@ -221,7 +221,7 @@ def _generator(sursa):
 # ceasul monoton ajunge la el. Atentie: enigma2 NU da decodorului PID-ul PCR pentru fluxurile releului (servicedvb.cpp,
 # setSyncPCR(-1) cand m_is_pvr), deci decodorul nu se potriveste dupa PCR; ritmul conteaza numai prin cat de lin vin
 # datele si cat raman in rezerva playerului (eHdsFluxHttp, 400 ms de ceas). Masurat pe receptorul de probe SF8008 (aceeasi sursa):
-# plaja sosire-PTS 424 ms in 0.7.3, 192 ms numai cu trezirea reparata, 20 ms cu ritmul; pe .122 (HiSilicon) nicio
+# plaja sosire-PTS 424 ms in 0.7.3, 192 ms numai cu trezirea reparata, 20 ms cu ritmul; pe receptorul de proba (HiSilicon) nicio
 # golire la niciunul (lucru-sesiune/paralel-1111b/STADIU-F-DAB-SATELIT.md: acolo si proba care hotaraste daca rezerva
 # de pornire ajunge la decodor sau se pierde inainte de filtrul sunetului).
 RITM_REZERVA_S = 0.4               # cat sta un PES in releu dupa sosire (absoarbe rafalele); cat rezerva playerului

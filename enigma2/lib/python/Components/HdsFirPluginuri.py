@@ -37,7 +37,7 @@
 #     la ecran dupa inchidere se opreste (_Oprit), fara raport; un buchet inceput se termina de scris.
 #   - „cade inapoi” se hotaraste inainte de pas, niciodata la jumatatea lui: o greseala a stratului nostru la pornirea
 #     unui pas ruleaza pasul original pe firul principal si opreste protectia pana la repornirea interfetei.
-#   - firul de lucru are aceeasi prioritate ca firul principal (NICE_FIR = 0, fara renice): pe .122 (11.11.2026) nice 10
+#   - firul de lucru are aceeasi prioritate ca firul principal (NICE_FIR = 0, fara renice): pe receptorul de proba (11.11.2026) nice 10
 #     n-a schimbat nimic masurabil (cea mai lunga oprire 0,75 s fata de 0,83 s), deci nu se mai atinge prioritatea.
 #     GIL-ul se imparte la 5 ms, deci firul principal mai asteapta cate putin cat pasul face Python greu, dar nu mai sta
 #     pe loc.
@@ -123,12 +123,15 @@ RETETE = (
 	# bouquets.tv grupat, clearCaches: trei os.system „echo N > /proc/sys/vm/drop_caches”) ruleaza pe fir numai cand le
 	# cheama un pas mutat; chemate din finished() sau din seriale raman pe firul principal, deci calea serialelor ramane
 	# neschimbata.
+	# Amprentele 1.82: 071d2b4026598f50 = fisierele cu capete de rand LF, cum le pune pe receptor installer.sh al autorului
+	# si orice pachet (arhiva de la cad9baaaf); f96938ba9a3a231e = aceleasi fisiere cu CRLF, dintr-o copie git de pe
+	# Windows (proba de PC). Pana pe 15.11.2026 era numai cea CRLF, deci pe receptor 1.82 ramanea neatins.
 	Reteta("BouquetMakerXtream", "Plugins.Extensions.BouquetMakerXtream.buildbouquets", "BmxBuildBouquets",
 		pasi=("downloadXtreamLive", "downloadXtreamVod", "downloadExternal", "loadLive", "loadVod"),
 		ajutatoare=("parseFullM3u8Data", "buildXmltvSource", "buildXmltvChannels", "buildBouquetTvGroupedFile",
 			"clearCaches"),
 		fisiere=("buildbouquets.py", "globalfunctions.py", "parsem3u.py", "seriesparsem3u.py", "bouquetorder.py"),
-		amprente={"f96938ba9a3a231e": "1.82"},
+		amprente={"071d2b4026598f50": "1.82", "f96938ba9a3a231e": "1.82"},
 		principal=(("globalfunctions", "refreshBouquets"),)),
 )
 

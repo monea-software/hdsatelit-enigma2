@@ -232,9 +232,16 @@ def _pista(d, fel):
 	return " ".join(parti)
 
 
+# Randul de sus al ecranului: felurile de surse, in ordine (Components/HdsVodDisc, Components/HdsVodServere).
+GRUPE = (("iptv", N_("Furnizor IPTV")), ("disc", N_("Pe disc")), ("emby", N_("Emby")), ("jellyfin", N_("Jellyfin")))
+
+
 class Sursa(object):
 	"""Forma comuna a unei surse de filme si seriale. Toate functiile ruleaza pe firul de lucru (au retea)."""
 	fel = ""
+	grupa = "iptv"
+	continuaPeServer = False     # randul 'Continuă' vine de la server (pozitia tinuta acolo), nu din fisierul local
+	cu_recente_locale = False    # recente(tip) da singura 'Adăugate recent' (fara lista intreaga scrisa pe flash)
 
 	def __init__(self, s):
 		self.s = s
@@ -257,6 +264,27 @@ class Sursa(object):
 	def referinta(self, cheie):
 		"""Referinta de redare (prin releul local, fara date de acces in ea)."""
 		return I.refCanal(self.id, cheie) if I.cheieBuna(cheie) else None
+
+	def idBun(self, x):
+		"""Un id de categorie sau de titlu al acestei surse (Xtream: numere)."""
+		return bool(_numar(x))
+
+	def recente(self, tip):
+		return []
+
+	def cautaServer(self, tip, text):
+		"""Cautarea facuta de server (None = cautarea noastra prin toate titlurile)."""
+		return None
+
+	def pozitieServer(self, cheie):
+		"""Pozitia tinuta pe server (secunde) sau None."""
+		return None
+
+	def inRedare(self, cheie, pozitie, durata):
+		"""Playerul, la 30 s (pe firul principal: fara retea aici)."""
+
+	def progres(self, cheie, pozitie, durata, fel):
+		"""Playerul: fel = "start" | "progres" | "oprit" (serverele media tin pozitia; trimis pe un fir)."""
 
 
 class SursaXtream(Sursa):
@@ -372,9 +400,8 @@ class SursaXtream(Sursa):
 		return rez
 
 
-# Alte surse (de facut): Stalker (type=vod, get_ordered_list paginat, create_link type=vod: cere o cheie noua in releu,
-# HdsIptvAdrese.adresa) si bibliotecile media de acasa (Emby / Jellyfin: /Items, /Shows/{id}/Seasons, /Videos/{id}/stream,
-# /Sessions/Playing/Progress), cu aceeasi forma: categorii, rand, toate, detalii, referinta.
+# Alte surse: filmele de pe disc (Components/HdsVodDisc) si serverele Emby / Jellyfin (Components/HdsVodServere) se adauga in
+# surse(); Stalker (type=vod, create_link type=vod) ramane de facut, cu aceeasi forma: categorii, rand, toate, detalii, referinta.
 _CLASE = {"xtream": SursaXtream}
 
 
@@ -385,7 +412,21 @@ def surse():
 		cls = _CLASE.get(s.get("fel"))
 		if cls is not None:
 			rez.append(cls(s))
+	try:
+		from Components import HdsVodDisc
+		rez.append(HdsVodDisc.sursa())
+	except ImportError:
+		pass
+	try:
+		from Components import HdsVodServere
+		rez.extend(HdsVodServere.surse())
+	except ImportError:
+		pass
 	return rez
+
+
+def surseGrupa(grupa, toate=None):
+	return [x for x in (surse() if toate is None else toate) if x.grupa == grupa]
 
 
 def sursa(sursa_id):
@@ -396,7 +437,7 @@ def sursa(sursa_id):
 
 
 def publicSurse():
-	return [{"id": x.id, "nume": x.nume, "fel": x.fel} for x in surse()]
+	return [{"id": x.id, "nume": x.nume, "fel": x.fel, "grupa": x.grupa} for x in surse()]
 
 
 # ------------------------------------------------------------------ memoria (randuri, categorii, recente)
@@ -497,7 +538,7 @@ def lucreaza(fel, sid, tip="", arg="", gasite=None):
 				v = _inMemorie(_categorii, (sid, tip), ordoneazaCategorii(src.categorii(tip), _limbaReceptor()))
 			return {"result": True, "categorii": [{"id": a, "nume": b} for a, b in v]}
 		if fel == "rand":
-			if not _numar(arg):
+			if not src.idBun(arg):
 				return {"result": False, "message": E_LIPSA}
 			v = _dinMemorie(_randuri, (sid, tip, arg))
 			if v is None:
@@ -506,15 +547,22 @@ def lucreaza(fel, sid, tip="", arg="", gasite=None):
 		if fel == "recente":
 			if not activ("recente"):
 				return {"result": True, "titluri": [], "oprit": True}
+			if src.cu_recente_locale:
+				return {"result": True, "titluri": src.recente(tip)}
 			ora, v = recenteDinDisc(sid, tip)
 			if arg == "aduce" or not v:
 				v = _recenteNoi(src, tip)
 			return {"result": True, "titluri": v}
 		if fel == "detalii":
-			if not _numar(arg):
+			if not src.idBun(arg):
 				return {"result": False, "message": E_LIPSA}
 			return {"result": True, "detalii": src.detalii(tip, arg)}
 		if fel == "cauta":
+			gasit = src.cautaServer(tip, arg)
+			if gasit is not None:
+				for t in gasit:
+					t["tip"] = tip
+				return {"result": True, "titluri": gasit}
 			return {"result": True, "titluri": cauta(src, tip, arg, gasite)}
 	except C.EroareIptv as e:
 		return {"result": False, "message": e.mesaj}

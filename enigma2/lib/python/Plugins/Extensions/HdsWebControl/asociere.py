@@ -122,13 +122,15 @@ def _gazdaSiPort(schema, netloc):
 	return (gazda.lower(), port)
 
 
-def acelasiOrigin(antet_host, origin, referer):
+def acelasiOrigin(antet_host, origin, referer, schema="http"):
 	"""True doar daca cererea vine dintr-o pagina servita chiar de receptor (aceeasi gazda si acelasi port
 	ca antetul Host). Se uita intai la Origin (trimis de browsere la orice POST); daca lipseste, la Referer.
-	Fara niciunul, raspunsul e False: mai bine o cerere legitima refuzata decat una straina primita."""
-	if not antet_host:
+	Fara niciunul, raspunsul e False: mai bine o cerere legitima refuzata decat una straina primita.
+	`schema` e schema cererii primite ("https" pe portul HTTPS al receptorului, https_web.py): pagina trebuie sa
+	aiba aceeasi schema, deci o pagina http nu trece drept pagina https si nici invers."""
+	if not antet_host or schema not in ("http", "https"):
 		return False
-	asteptat = _gazdaSiPort("http", antet_host.strip())
+	asteptat = _gazdaSiPort(schema, antet_host.strip())
 	if asteptat is None:
 		return False
 	sursa = None
@@ -145,9 +147,9 @@ def acelasiOrigin(antet_host, origin, referer):
 		bucati = urlsplit(sursa)
 	except ValueError:
 		return False
-	if bucati.scheme.lower() != "http":
+	if bucati.scheme.lower() != schema:
 		return False
-	primit = _gazdaSiPort("http", bucati.netloc)
+	primit = _gazdaSiPort(schema, bucati.netloc)
 	return primit is not None and primit == asteptat
 
 

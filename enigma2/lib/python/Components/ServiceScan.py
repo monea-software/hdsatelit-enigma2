@@ -881,7 +881,50 @@ class ServiceScan:
 			parti.append(_("%s (cu semnal, dar fără canale)") % ", ".join(fara_canale))
 		return _("Fără canale TV: %s") % "; ".join(parti)
 
-	def resultLines(self):
+	def hdsSecunde(self):
+		"""Durata cautarii, oprita la sfarsit (showResult): pagina web citeste rezumatul si dupa, iar durata nu mai creste."""
+		gata = getattr(self, "hdsDurataFinala", None)
+		return gata if gata is not None else time.monotonic() - self.startTime
+
+	def hdsLocAfisat(self):
+		"""Randul cu satelitii (sau cablul, terestrul) cautati, sau "" cand caseta retelei spune mai mult (numai cablu
+		sau terestru, cu reteaua citita)."""
+		places = self.scannedPlaces()
+		retea = self.hdsReteaPrincipala() if self.hdsAreCaseta() else None
+		if places and not (retea is not None and retea.get("sistem") in ("cablu", "terestru") and
+				all(x.get("sistem") in ("cablu", "terestru") for x in self.hdsRetele)):
+			return places
+		return ""
+
+	def hdsCifre(self):
+		"""Cifrele rezumatului, pentru casetele ecranului si pagina web: canalele (noi), TV (HD, 4K), radio, alte servicii,
+		transponderele (fara semnal), durata si locul cautat. None cand cautarea n-a gasit niciun canal: atunci ramane
+		numai fraza care spune de ce (resultLines). Valorile necunoscute sunt None (nucleul vechi nu le da)."""
+		services = self.foundServices
+		if not services or self.state != self.Done:
+			return None
+		c = self.typeCounts if self.typesKnown else None
+		secunde = self.hdsSecunde() if self.startTime is not None else None
+		return {
+			"canale": services,
+			"noi": self.newServices,
+			"tv": c["tv"] if c else None,
+			"hd": c["hd"] if c else None,
+			"uhd": c["uhd"] if c else None,
+			"radio": c["radio"] if c else None,
+			"alte": c["other"] if c else None,
+			"transpondere": self.tpDoneBase,
+			"fara_semnal": self.tpUnavailableBase if self.unavailableKnown else None,
+			"secunde": int(secunde) if secunde is not None else None,
+			"durata": durationText(secunde) if secunde is not None else "",
+			"loc": self.hdsLocAfisat(),
+		}
+
+	def resultLines(self, faraCifre=False):
+		"""Randurile rezumatului de la sfarsit. faraCifre: numai ce nu se vede in casetele cifrelor (hdsCifre), pentru
+		ecranul care le are; altfel toate, ca text (alte skinuri, pagina web)."""
+		if faraCifre and self.hdsCifre() is None:
+			faraCifre = False
 		lines = []
 		services = self.foundServices
 		done = self.tpDoneBase
@@ -907,6 +950,8 @@ class ServiceScan:
 				lines.append(_("The transponders had a signal, but no free channels (the scan was for free channels only)."))
 			else:
 				lines.append(_("The transponders had a signal, but did not send any channels."))
+		elif services and faraCifre:
+			pass
 		elif services:
 			line = _("Channels found: %d") % services
 			if self.newServices is not None:
@@ -918,7 +963,7 @@ class ServiceScan:
 				if c["other"]:
 					line += ", " + _("other services: %d") % c["other"]
 				lines.append(line)
-		if done or self.state == self.Done:
+		if (done or self.state == self.Done) and not faraCifre:
 			line = _("Transponders scanned: %d") % done
 			if unavailable is not None:
 				line += ", " + _("without signal: %d") % unavailable
@@ -926,14 +971,12 @@ class ServiceScan:
 		fara_tv = self.hdsRandFaraTv()
 		if fara_tv:
 			lines.append(fara_tv)
-		places = self.scannedPlaces()
 		# la cablu si terestru caseta retelei spune mai mult decat "Recepție: Cablu" (si lasa loc la textul marit)
-		retea = self.hdsReteaPrincipala() if self.hdsAreCaseta() else None
-		if places and not (retea is not None and retea.get("sistem") in ("cablu", "terestru") and
-				all(x.get("sistem") in ("cablu", "terestru") for x in self.hdsRetele)):
+		places = self.hdsLocAfisat()
+		if places and not faraCifre:
 			lines.append(places)
-		if self.startTime is not None and (done or self.state == self.Done):
-			lines.append(_("Duration: %s") % durationText(time.monotonic() - self.startTime))
+		if self.startTime is not None and (done or self.state == self.Done) and not faraCifre:
+			lines.append(_("Duration: %s") % durationText(self.hdsSecunde()))
 		if len(self.scanList) > 1:
 			for (number, feid, reason) in self.passErrors:
 				lines.append(_("Pass %d, tuner %d: %s") % (number, feid, reason))
@@ -1010,6 +1053,8 @@ class ServiceScan:
 
 	def showResult(self):
 		services = self.foundServices
+		if self.startTime is not None and getattr(self, "hdsDurataFinala", None) is None:
+			self.hdsDurataFinala = time.monotonic() - self.startTime
 		if self.etaLabel is not None:
 			self.etaLabel.setText("")
 		if self.transpondersLabel is not None:

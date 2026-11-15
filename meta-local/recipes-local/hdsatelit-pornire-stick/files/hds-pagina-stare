@@ -1,0 +1,35 @@
+#!/bin/sh
+# HD Satelit: pagina web a pornirii mici (Dreambox DM8000HD si DM800SE, V21B 14.11.2026). Pornita de
+# hds-pornire-stick prin „nc -ll -p 80 -e”, cate o data pentru fiecare cerere: citeste prima linie a cererii,
+# raspunde cu starea curenta (/run/hds-pornire-stare: codul si textul pentru om) si pasii, in romana si engleza.
+# Fara formulare si fara comenzi: pagina numai arata.
+R=${HDS_RAD:-}
+read -r cerere
+COD=$(sed -n 1p "$R/run/hds-pornire-stare" 2>/dev/null)
+TEXT=$(sed -n 2p "$R/run/hds-pornire-stare" 2>/dev/null | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+MASINA=$(cat "$R/etc/hds-pornire-masina" 2>/dev/null)
+printf 'HTTP/1.0 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n'
+cat <<PAGINA
+<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8"><meta http-equiv="refresh" content="5">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>HD Satelit: pornirea de pe stick</title>
+<style>body{font-family:sans-serif;max-width:46em;margin:1em auto;padding:0 1em;line-height:1.5}
+.s{font-size:1.3em;padding:.6em;border:2px solid #1565c0;border-radius:6px}</style></head><body>
+<h1>HD Satelit pe $MASINA</h1>
+<p class="s">$TEXT</p>
+<p><small>Starea: $COD. Pagina se reîncarcă singură la 5 secunde.</small></p>
+<h2>Ce faci</h2>
+<ol><li>Pe un stick FAT32 (de la 4 GB) dezarhivezi arhiva HD Satelit pentru $MASINA: pe stick trebuie să fie dosarul
+<b>hdsatelit-$MASINA</b> cu fișierul rootfs.tar.bz2.</li>
+<li>Pui stickul în receptor. Pornirea continuă singură, fără repornire.</li>
+<li>Prima pornire durează mai mult (10-20 de minute): receptorul pregătește pe stick fișierul sistemului și fișierul de
+memorie. Nu scoate stickul și nu opri curentul.</li></ol>
+<p>Stickul rămâne în receptor: sistemul HD Satelit rulează de pe el. Ce aveai pe stick rămâne neatins.</p>
+<hr lang="en"><h2>English</h2>
+<ol><li>On a FAT32 USB stick (4 GB or more), unzip the HD Satelit archive for $MASINA: the stick must contain the folder
+<b>hdsatelit-$MASINA</b> with rootfs.tar.bz2.</li>
+<li>Plug the stick into the receiver. Booting continues by itself, no restart needed.</li>
+<li>The first start takes longer (10-20 minutes) while the receiver prepares the system file and the swap file on the
+stick. Do not unplug the stick or the power.</li></ol>
+<p>Keep the stick plugged in: HD Satelit runs from it. Your existing files on the stick are left untouched.</p>
+</body></html>
+PAGINA

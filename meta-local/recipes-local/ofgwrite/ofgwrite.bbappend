@@ -8,5 +8,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 # Sursa e fixata pe 5.0.4: peticele sunt probate pe aceasta comitere, iar un program care scrie in memoria interna nu se schimba singur.
 SRCREV = "9ef59e0a50d4ad37db1fbbeeb0c6e11be64f5108"
 SRC_URI += "file://cale-cu-spatiu.patch file://oprire-fara-arhiva-50.patch file://ofgwrite-texte-5.0.4.patch file://ofgwrite-font-5.0.4.patch"
+# 14.11.2026 (NEO): imaginea pornita din NeoBoot (/.multinfo) nu scrie memoria interna, care e a imaginii gazda (scriptul ofgwrite).
+SRC_URI += "file://neoboot-oaspete.patch"
 # Aceeasi versiune de sursa: fara asta, feedul nu ar aduce pachetul reparat pe receptoarele care il au deja.
-PR:append = ".hds2"
+PR:append = ".hds3"

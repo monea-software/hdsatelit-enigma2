@@ -1,0 +1,41 @@
+# HD Satelit: regulile garzii de model pentru Dreambox DM7020HD (masina dm7020hd, MACHINEBUILD dm7020hd), NECONFIRMAT
+# (V21, 14.11.2026). Stratul producatorului: meta-dream din OE-Alliance 6.0 (conf/machine/dm7020hd.conf,
+# dreambox-mips32el.inc): cip bcm7405 (SOC_FAMILY), MIPS 400 MHz, 512 MB RAM, NAND de 1 GB, nucleu linux-dreambox 3.2
+# (3.2.68 cu peticul Dream), driverele Dream dreambox-dvb-modules-dm7020hd 3.2-20161019. DM7020HD v2 (alt NAND, masina
+# dm7020hdv2) NU e acoperit de fisierul acesta.
+# NUMAI varianta pe stick (HDS_VARIANTA=usb, chkroot): incarcatorul Dreambox nu porneste din memoria interna un sistem mai
+# mare de ~96-100 MB (OE-Alliance d24bcf6ba8 si f6d48f5768), iar sistemul nostru MIPS are ~140 MiB. Sub chkroot nucleul si
+# memoria interna raman ale imaginii din NAND; sistemul nostru sta pe stick.
+# chip=-: driverele Dream nu fac /proc/stb/info/chipset (stb-core.ko 3.2 are numai sirurile "info", "model", "dm7020hd";
+# citit pe pachetul public 20161019). Cipul nu se compara.
+# boxtype=dm7020hd: Dreambox nu are /proc/stb/info/boxtype si nici vumodel; tipul placii vine din /proc/stb/info/model
+# (valoarea "dm7020hd" e in stb-core.ko). Garda trebuie sa citeasca al treilea nod (MDM/petic_garda_model_dreambox.py,
+# acelasi ca la DM900); fara el interfata s-ar opri. ATENTIE: si alte placi scriu in model "dm8000" (Vu+, HiSilicon), dar
+# niciuna "dm7020hd", iar nodul se citeste numai cand lipsesc boxtype si vumodel.
+# Partitiile (stocare=nand, /proc/mtd): tabela fixa din peticul Dream al nucleului 3.2 (CONFIG_DREAMBOX_DM7020HD):
+# mtd0 complete 1 GiB, mtd1 loader 1 MiB, mtd2 boot 7 MiB (jffs2 cu /boot/vmlinux-3.2-dm7020hd.gz si autoexec.bat),
+# mtd3 root 1016 MiB (pe harta veche: root 248 MiB si misc 768 MiB, de aceea root fara marime). Nucleul nu e o partitie
+# bruta: e fisier in jffs2-ul din mtd2; kernel_kib=7168 e marimea partitiei. kernel_part=mtd2 (OpenMultiboot pune tot
+# mtd2 pe Dreambox), rootfs_part=mtd3 (ubi.mtd=root din autoexec.bat). Numele lor in /proc/mtd sunt "boot" si "root"
+# (nu kernel/rootfs), de aceea kernel_name=boot si rootfs_name=root: garda gaseste locul dupa nume.
+# confirmat=nu: treapta a doua; tabela si marimea nucleului sunt numai avertismente pana citeste un tester /proc/mtd.
+# familie=broadcom: fara /proc/msp/sys, fara blkdevparts, fara partitia deviceinfo; hw=-.
+# Reteta imaginii (hdsatelit-image.bb) citeste fisierul cand MACHINEBUILD=dm7020hd; cu stocare=nand cere varianta usb
+# (peticul runda-0013/V21/petic_strat_dm7020hd_usb.py, neaplicat pana il comite coordonatorul).
+format=1
+distro=hdsatelit
+model=Dreambox DM7020HD
+machine=dm7020hd
+machinebuild=dm7020hd
+chip=-
+boxtype=dm7020hd
+hw=-
+partitions=complete,loader:1M,boot:7M,root
+kernel_part=mtd2
+kernel_kib=7168
+rootfs_part=mtd3
+kernel_name=boot
+rootfs_name=root
+stocare=nand
+confirmat=nu
+familie=broadcom

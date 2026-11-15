@@ -114,7 +114,7 @@ FISIER_MODEL = '/etc/hdsatelit-model'
 CONF_PUBLIC = '/etc/opkg/hdsatelit-feed.conf'
 CONF_PROBA = '/etc/opkg/hdsatelit-proba-feed.conf'
 NETRC = ('/home/root/.netrc', '/.netrc')
-# lacatul lui opkg: opkg 0.10 din imagine il ia in /run/opkg.lock (opkg.conf nu are lock_file; vazut pe .122 in timpul
+# lacatul lui opkg: opkg 0.10 din imagine il ia in /run/opkg.lock (opkg.conf nu are lock_file; vazut pe receptorul de proba in timpul
 # unei instalari, 11.11.2026). /var/run duce in /var/volatile/run, alt dosar, unde opkg nu-l pune niciodata: cu numai
 # /var/run/opkg.lock, opkg_ocupat nu vedea nicio instalare (Extensii, SSH). Calea veche ramane a doua (alte versiuni).
 LACAT_OPKG = '/run/opkg.lock'
@@ -150,6 +150,14 @@ DOSAR_PACHETE = '/tmp/hds-actualizare'
 LOC_IN_PLUS = 16 * 1024 * 1024
 TIMP_PACHET = 60
 INDEXURI_SEMNATE = '/etc/enigma2/hds-indexuri-semnate.json'
+# 0.7.5 (FED, TODO 14.11 02:12): copia listelor HD Satelit facuta chiar inainte de opkg update (pastreaza_listele). Cand
+# feedul se republica in timpul descarcarii (listele arhitecturilor vin una dupa alta, stare.json separat), o lista noua
+# nepotrivita se inlocuieste cu copia ei veche, numai daca si copia e cea dintr-un stare.json semnat; apoi o singura
+# reincercare, dupa REINCERCARE_LISTE_MS (Extensii: opkg update; Actualizare software: cautarea intreaga). In RAM, mica.
+DOSAR_LISTE_VECHI = '/tmp/hds-liste-semnate'
+REINCERCARE_LISTE_MS = 45000
+# rezultatul ultimei pazeste_listele (numele surselor): HdsExtensiiLucru il citeste pentru jurnal si reincercare
+ULTIMA_PAZA = {'sterse': [], 'puse_la_loc': []}
 # actualizarea rapida: repornirea porneste la atatea ms dupa instalare (pagina web apuca sa vada pasul inainte sa cada
 # interfata); cat ar intreba pe televizor, se incearca din nou la atatea ms
 REPORNIRE_RAPIDA_MS = 3000
@@ -172,6 +180,13 @@ TEXTE_PORNIRE = {
 	'terminata': N_('Actualizarea %s fusese oprită la jumătate; s-a terminat la pornirea receptorului.'),
 	'esuata': N_('Actualizarea %s fusese oprită la jumătate și nu s-a putut termina la pornire. Caută din nou în '
 		'Actualizare software; detaliile sunt în jurnalul actualizărilor.'),
+	# 0.7.5 (CTU, TODO 15.11 07:08): pachetele Python ale imaginii inlocuite de un pachet strain (modul pachete-pornire);
+	# %s = pachetele straine (straine= din rezultat)
+	'pornire-reparata': N_('Interfața nu mai pornea: pachetele Python ale imaginii fuseseră înlocuite de un pachet străin '
+		'(%s). Le-am pus la loc din actualizările HD Satelit. Pachetul străin a rămas instalat; dacă îl folosești, cere '
+		'autorului varianta pentru imaginea aceasta.'),
+	'pornire-nereparata': N_('Interfața nu pornea: pachetele Python ale imaginii fuseseră înlocuite de un pachet străin '
+		'(%s), iar punerea lor la loc nu a reușit. Detaliile sunt în jurnalul actualizărilor.'),
 }
 # de ce asteapta repornirea rapida (raspunsul functiei de repornire) si ce se scrie atunci
 TEXTE_ASTEPTARE = {
@@ -214,6 +229,14 @@ MOTIVE = (
 TEXT_MOTIV = dict(MOTIVE)
 TEXT_STATUS_STRICAT = N_('Nu pot verifica versiunea instalată. Nu s-a instalat nimic. Detaliile sunt în jurnalul '
 	'actualizărilor.')
+# 0.7.5 (JAK, TODO 13.11 11:20): actualizarea de dinainte a lasat pachete ale imaginii la jumatate in status (o ciocnire
+# de fisiere cu un pachet strain, un opkg oprit): cautarea le pune in plan ca reinstalare (planul_reinstalarii)
+TEXT_REINSTALARE = N_('Actualizarea de dinainte a rămas neterminată. La instalare pachetele ei se pun din nou, din feedul '
+	'HD Satelit.')
+PREFIX_IMAGINE = 'hdsatelit-'
+# fara half-configured: un postinst care cade mereu ar fi oferit la fiecare cautare (programul de la pornire il ia,
+# acolo incercarile sunt numarate)
+STARI_NETERMINATE = ('half-installed', 'unpacked')
 TEXT_IMAGINE_NOUA = N_('Trebuie pusă imaginea nouă de la zero, din „Imagine nouă de pe stick”. Instalată din meniu peste '
 	'imaginea de acum, actualizarea poate face receptorul instabil, de aceea aici nu se instalează.')
 
@@ -523,6 +546,8 @@ def rezultat_pornire(radacina='/'):
 
 
 def text_rezultat_pornire(rez):
+	if rez['stare'].startswith('pornire-'):
+		return _t(TEXTE_PORNIRE[rez['stare']]) % (rez.get('straine') or '?')
 	return _t(TEXTE_PORNIRE[rez['stare']]) % (rez.get('versiune') or '?')
 
 
@@ -924,21 +949,56 @@ def stare_pachet_principal(radacina='/', conf=None):
 	return 'lipsa', marime
 
 
+def neterminate_imagine(radacina='/', conf=None):
+	"""{nume: versiune} ale pachetelor imaginii (enigma2-hdsatelit, hdsatelit-*) cerute la instalare si ramase in status
+	half-installed, unpacked sau half-configured; un pachet scos (deinstall, config-files) nu intra"""
+	conf = conf or P.citeste_configurarea(radacina)
+	rez = {}
+	for s in P.citeste_strofe(_cale(radacina, conf.status_file)):
+		n = s.get('package', '')
+		st = s.get('status', '').split()
+		if (n == PACHET_PRINCIPAL or n.startswith(PREFIX_IMAGINE)) and st[:1] == ['install'] and st[-1:] and \
+				st[-1] in STARI_NETERMINATE and s.get('version'):
+			rez[n] = s['version']
+	return rez
+
+
+def planul_reinstalarii(feed, neterminate):
+	"""Intrarile de plan (ca planul()) pentru pachetele imaginii ramase la jumatate, cu versiunea din feed cand e cel putin
+	cea din status; 'reinstaleaza' cand e chiar aceeasi: opkg 0.10 cu libsolv o socoteste instalata si nu face nimic
+	fara --force-reinstall (JAK pe receptorul de proba, 13.11; AJU, din cale, 15.11)"""
+	rez = []
+	for n, v in sorted(neterminate.items()):
+		s = feed.get(n)
+		if s is None or P.compara_versiuni(s.get('version', ''), v) < 0:
+			continue
+		rez.append({'nume': n, 'titlu': P.nume_scurt(n) if n.startswith(P.PREFIX) else n, 'de_la': v,
+			'la': s.get('version', ''), 'marime': P._int(s.get('size')), 'depends': s.get('depends', ''),
+			'arhitectura': s.get('architecture', ''), 'reinstaleaza': P.compara_versiuni(s.get('version', ''), v) == 0})
+	return rez
+
+
 def rezultat_din_liste(radacina, surse, stare, conf=None):
 	"""Planul si verdictul cautarii din listele surselor feedului descarcate de `opkg update` (verificate inainte fata
 	de stare.json semnat), fata de pachetele instalate si de numele date prin Provides. Fara enigma2-hdsatelit instalat
 	in status (un status stricat de o repornire dura chiar dupa opkg, o instalare oprita la jumatate) planul ar iesi gol
 	si cautarea ar spune "la zi" pe versiunea veche (09.11.2026, darog69, Ustym): atunci cautarea e o eroare cu motivul
-	spus, nu "la zi"."""
+	spus, nu "la zi". Din 0.7.5 (JAK): pachetele imaginii ramase la jumatate in status (si enigma2-hdsatelit) intra in
+	plan ca reinstalare, cand feedul semnat le are; eroarea ramane numai cand status-ul nu are pachetul principal sau
+	feedul nu-l poate pune la loc."""
 	conf = conf or P.citeste_configurarea(radacina)
 	principal, marime = stare_pachet_principal(radacina, conf)
-	if principal != 'instalat':
+	feed = pachete_din_feed(radacina, surse, conf)
+	reinstalare = planul_reinstalarii(feed, neterminate_imagine(radacina, conf))
+	if principal != 'instalat' and PACHET_PRINCIPAL not in [x['nume'] for x in reinstalare]:
 		return {'stare': EROARE, 'eroare': _t(TEXT_STATUS_STRICAT), 'status': '%s, status %d octeti' % (principal, marime)}
 	inst = instalate(radacina, conf)
-	feed = pachete_din_feed(radacina, surse, conf)
-	plan = planul(feed, inst)
-	return rezultat_cautare(stare, imaginea(radacina, conf), plan,
+	plan = sorted(planul(feed, inst) + reinstalare, key=lambda x: x['nume'])
+	rez = rezultat_cautare(stare, imaginea(radacina, conf), plan,
 		dependinte_lipsa(plan, inst, feed, furnizate(radacina, conf)))
+	if reinstalare:
+		rez['reinstalare'] = [x['nume'] for x in reinstalare]
+	return rez
 
 
 def pachet_din_stare(stare, nume, arhitectura=None):
@@ -967,7 +1027,7 @@ def rezultat_cautare(stare, img, plan, lipsa, cand=None):
 		cod = LA_ZI
 	pachete = [{'nume': x['nume'], 'titlu': x['titlu'], 'de_la': x['de_la'], 'la': x['la'], 'marime': x['marime'],
 		'de_la_scurt': versiune_scurta(x['de_la']), 'la_scurt': versiune_scurta(x['la']),
-		'arhitectura': x.get('arhitectura') or ''} for x in plan]
+		'arhitectura': x.get('arhitectura') or '', 'reinstaleaza': bool(x.get('reinstaleaza'))} for x in plan]
 	# planul trebuie sa fie chiar actualizarea din stare.json (numele, arhitectura si versiunea): altfel listele si
 	# stare.json vin din publicari diferite
 	nepotrivite = [x['nume'] for x in plan
@@ -1059,6 +1119,99 @@ def sterge_listele(radacina, surse, conf=None):
 				pass
 
 
+def _amprente_tinute(radacina):
+	"""amprentele din ultima stare.json semnata tinuta minte ({canal, baza, indexuri}), {} cand lipsesc"""
+	try:
+		with open(_cale(radacina, INDEXURI_SEMNATE), 'r', encoding='utf-8') as f:
+			tinute = json.load(f)
+	except (IOError, OSError, ValueError):
+		return {}
+	return tinute if isinstance(tinute, dict) else {}
+
+
+def pastreaza_listele(radacina='/', conf=None):
+	"""Chiar inainte de opkg update: copia listelor descarcate ale surselor feedului HD Satelit (asa cum le tine opkg, si
+	.gz), in DOSAR_LISTE_VECHI, ca o republicare prinsa la jumatatea descarcarii sa nu lase Extensii fara pachetele
+	noastre. O copie se pune la loc numai daca e chiar cea dintr-un stare.json semnat (pune_la_loc_sau_sterge); o sursa
+	fara lista acum isi pastreaza copia de dinainte. Intoarce numele copiate."""
+	try:
+		conf = conf or P.citeste_configurarea(radacina)
+		dosar = _cale(radacina, conf.lists_dir)
+		tinta = _cale(radacina, DOSAR_LISTE_VECHI)
+		surse = [s for lista in surse_feed(radacina, conf).values() for s in lista]
+	except Exception as e:
+		print('[HdsActualizari] copia listelor: %s' % e)
+		return []
+	copiate = []
+	for nume, _a, _arh, _b in surse:
+		cale = _lista(dosar, nume)
+		if cale is None or os.path.islink(cale):
+			continue
+		try:
+			if not os.path.isdir(tinta):
+				os.makedirs(tinta, 0o700)
+			copie = os.path.join(tinta, os.path.basename(cale))
+			shutil.copyfile(cale, copie + '.nou')
+			os.replace(copie + '.nou', copie)
+			# o singura copie pe sursa: cea simpla sau cea .gz, dupa cum o tine opkg acum
+			alta = copie[:-3] if copie.endswith('.gz') else copie + '.gz'
+			if os.path.isfile(alta):
+				os.remove(alta)
+			copiate.append(nume)
+		except (IOError, OSError) as e:
+			print('[HdsActualizari] copia listei %s: %s' % (nume, e))
+	return copiate
+
+
+def _pune_copia_la_loc(radacina, dosar, nume, arh, stari):
+	"""Copia veche a listei `nume` (pastreaza_listele) in locul celei descarcate, numai daca sha256 si marimea ei sunt
+	indexul `arh` dintr-una din `stari` (stare.json semnate sau amprentele tinute minte, fiecare {'indexuri': ...}).
+	True cand a pus-o."""
+	copie = _lista(_cale(radacina, DOSAR_LISTE_VECHI), nume)
+	if copie is None:
+		return False
+	try:
+		amprenta = _sha256_fisier(copie)
+	except (IOError, OSError, EOFError, ValueError):
+		return False
+	semnata = False
+	for s in stari:
+		ix = s.get('indexuri') if isinstance(s, dict) else None
+		x = ix.get(arh) if isinstance(ix, dict) else None
+		if isinstance(x, dict) and amprenta == (x.get('sha256'), x.get('marime')):
+			semnata = True
+			break
+	if not semnata:
+		return False
+	tinta = os.path.join(dosar, os.path.basename(copie))
+	try:
+		shutil.copyfile(copie, tinta + '.vechi')
+		for cale in (os.path.join(dosar, nume), os.path.join(dosar, nume + '.gz')):
+			if cale != tinta and os.path.lexists(cale):
+				os.remove(cale)
+		os.replace(tinta + '.vechi', tinta)
+	except (IOError, OSError) as e:
+		print('[HdsActualizari] lista %s nu s-a putut pune la loc: %s' % (nume, e))
+		return False
+	return True
+
+
+def pune_la_loc_sau_sterge(radacina, surse, stari, conf=None):
+	"""Listele nepotrivite ale `surse` ([(nume, adresa, arh, baza)]): copia veche semnata se pune la loc
+	(_pune_copia_la_loc, cu `stari`), altfel lista se sterge (sterge_listele). Intoarce (sterse, puse_la_loc)."""
+	conf = conf or P.citeste_configurarea(radacina)
+	dosar = _cale(radacina, conf.lists_dir)
+	stari = [s for s in stari if isinstance(s, dict)]
+	sterse, puse = [], []
+	for nume, a, arh, baza in surse:
+		if _pune_copia_la_loc(radacina, dosar, nume, arh, stari):
+			puse.append(nume)
+		else:
+			sterge_listele(radacina, [(nume, a, arh, baza)], conf)
+			sterse.append(nume)
+	return sterse, puse
+
+
 def tine_minte_indexurile(radacina, canal, baza, stare):
 	"""Indexurile din stare.json semnat (canalul, baza, sha256 si marimea fiecarei liste), pentru pazeste_listele"""
 	indexuri = stare.get('indexuri') if isinstance(stare, dict) else None
@@ -1103,16 +1256,16 @@ def pazeste_listele(radacina='/', deschide=None):
 	dupa punerea la loc a copiei setarilor si schimbarea bazei feedului 0.7.1 -> 0.7.0, amprentele tinute minte erau
 	ale altei baze si fiecare opkg update al Extensiilor stergea toate listele HD Satelit, deci feedul aparea gol). Se
 	sterg numai listele care nu se potrivesc nici cu stare.json semnat proaspat; cand se potrivesc, amprentele lui se
-	tin minte. `deschide` (probele) inlocuieste urlopen."""
+	tin minte. `deschide` (probele) inlocuieste urlopen.
+
+	0.7.5 (FED, TODO 14.11 02:12; omul 945555, 13.11: listele sterse cat se republica feedul): in locul unei liste care nu
+	se potriveste se pune copia ei de dinainte de opkg update (pastreaza_listele), numai cand copia e cea semnata
+	(amprentele tinute minte sau stare.json proaspat); altfel se sterge, ca pana acum. ULTIMA_PAZA spune ce s-a pus la
+	loc si ce s-a sters (Extensii reincearca atunci opkg update o data)."""
+	ULTIMA_PAZA['sterse'], ULTIMA_PAZA['puse_la_loc'] = [], []
 	conf = P.citeste_configurarea(radacina)
 	dosar = _cale(radacina, conf.lists_dir)
-	try:
-		with open(_cale(radacina, INDEXURI_SEMNATE), 'r', encoding='utf-8') as f:
-			tinute = json.load(f)
-	except (IOError, OSError, ValueError):
-		tinute = {}
-	if not isinstance(tinute, dict):
-		tinute = {}
+	tinute = _amprente_tinute(radacina)
 
 	def semnata(nume, arh, canal, baza, amprente):
 		cale = _lista(dosar, nume)
@@ -1124,7 +1277,7 @@ def pazeste_listele(radacina='/', deschide=None):
 		except (IOError, OSError, EOFError, ValueError):
 			return False
 
-	sterse = []
+	sterse, puse = [], []
 	for canal, surse in surse_feed(radacina, conf).items():
 		# pe baze (feed/<canal>/<baza>/<arh>): fiecare baza are stare.json-ul ei
 		pe_baze = {}
@@ -1133,7 +1286,10 @@ def pazeste_listele(radacina='/', deschide=None):
 				pe_baze.setdefault(baza, []).append((nume, arh))
 		for baza, rele in pe_baze.items():
 			noua = _stare_pentru_paza(radacina, canal, baza, deschide)
+			# stari semnate cu care se poate potrivi copia veche: amprentele tinute minte (ale acestei baze) si cele proaspete
+			stari = [tinute] if tinute.get('canal') == canal and tinute.get('baza') == baza else []
 			if noua is not None:
+				stari.append(noua)
 				proaspete = {'canal': canal, 'baza': baza, 'indexuri': noua.get('indexuri')}
 				bune = [(n, a) for n, a in rele if semnata(n, a, canal, baza, proaspete)]
 				if bune and tine_minte_indexurile(radacina, canal, baza, noua):
@@ -1141,11 +1297,14 @@ def pazeste_listele(radacina='/', deschide=None):
 					print('[HdsActualizari] paza listelor: amprentele %s/%s luate din nou, liste pastrate: %s' % (
 						canal, baza, ', '.join(n for n, _a in bune)))
 					rele = [x for x in rele if x not in bune]
-			for nume, arh in rele:
-				sterge_listele(radacina, [(nume, '', arh, baza)], conf)
-				sterse.append(nume)
+			s, p = pune_la_loc_sau_sterge(radacina, [(nume, '', arh, baza) for nume, arh in rele], stari, conf)
+			sterse.extend(s)
+			puse.extend(p)
+	if puse:
+		print('[HdsActualizari] liste HD Satelit nepotrivite, puse la loc cele semnate de dinainte: %s' % ', '.join(puse))
 	if sterse:
 		print('[HdsActualizari] liste HD Satelit nesemnate, sterse: %s' % ', '.join(sterse))
+	ULTIMA_PAZA['sterse'], ULTIMA_PAZA['puse_la_loc'] = list(sterse), list(puse)
 	return sterse
 
 
@@ -1259,16 +1418,18 @@ def descarca_pachete(intrari, adresa_baza, credentiale=None, dosar=None, deschid
 	return cai, None
 
 
-def argumente_instalare(cai, dosar=None):
+def argumente_instalare(cai, dosar=None, reinstaleaza=False):
 	"""Argumentele opkg pentru pachetele verificate (install <cale>...), primite numai din dosarul lor: pe receptor /tmp
 	e o legatura spre /var/volatile/tmp, iar radacinile implicite din Components/Ipkg.py n-ar primi calea reala. None
-	cand o cale e refuzata."""
+	cand o cale e refuzata. reinstaleaza: planul are un pachet ramas la jumatate cu aceeasi versiune (planul_reinstalarii),
+	pe care opkg l-ar refuza din cale ("matches the installed version") fara --force-reinstall."""
 	from Components.Ipkg import opkgArguments
 	radacina = os.path.join(os.path.realpath(dosar or DOSAR_PACHETE), '')
 	# --force-overwrite (12.11.2026, dupa TM): o tema straina instalata ca in OE-Alliance (--force-overwrite) poate lua un fisier al
 	# imaginii in lista ei; fara optiune, actualizarea imaginii ar cadea pe aceeasi ciocnire. Pachetele imaginii sunt semnate si
 	# verificate mai sus, deci ele iau fisierul inapoi.
-	return opkgArguments('install', list(cai), ('--force-overwrite',), (radacina,))
+	optiuni = ('--force-overwrite', '--force-reinstall') if reinstaleaza else ('--force-overwrite',)
+	return opkgArguments('install', list(cai), optiuni, (radacina,))
 
 
 # ---------------------------------------------------------------- config
@@ -1342,8 +1503,18 @@ class Actualizari(object):
 		self._ceas_rapid = None
 		self._legatura_rapid = None
 		self.fabrica_ceas = None        # eTimer; probele de pe PC dau altul
+		# o singura reincercare a cautarii cand listele nu se potrivesc (0.7.5, FED, _reincearca_cautarea)
+		self._reincercare_liste = False
+		self._ceas_liste = None
+		self._legatura_liste = None
 		# rezultatul lui tools/hds-actualizare-intrerupta.py de la pornirea aceasta (rezultat_pornire), sau None
 		self.reparare = None
+		# imaginea() tinuta minte pentru stare_publica (_imaginea_publica): cheia status-ului opkg cand s-a citit, calea lui
+		# si daca o recitire e deja pe firul ei
+		self._img = None
+		self._img_cheie = None
+		self._img_status = None
+		self._img_citire = False
 
 	# ---- ascultatorii (ecranul si pagina web se reimprospateaza singure)
 	def _schimbat(self):
@@ -1357,9 +1528,55 @@ class Actualizari(object):
 		rand = curata(rand)
 		self.jurnal.append(rand)
 		del self.jurnal[:-RANDURI_JURNAL]
-		# cu fsync: randurile sunt putine (o cautare, o instalare) si trebuie sa ramana si dupa o repornire dura
+		# cu fsync, ca randurile sa ramana si dupa o repornire dura; din 0.7.5 (ASM, TODO 15.11 00:02 (HdsPachete in fir))
+		# fsync-ul e pe un fir separat: la fiecare rand scris de opkg in timpul instalarii, firul enigma2 statea 2,8-4 s
+		# in el pe Solo SE (tastele intarziau pana la 1,4 s)
 		P.scrie_jurnal_rotit(JURNAL, '%s %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), rand), MARIME_JURNAL,
-			sincron=True)
+			sincron=P.SINCRON_FUNDAL)
+
+	def _cheie_status(self):
+		"""(inode, marime, mtime) ale status-ului opkg, sau None cand nu exista; calea se afla o data"""
+		if self._img_status is None:
+			try:
+				self._img_status = _cale(self.radacina, P.citeste_configurarea(self.radacina).status_file)
+			except Exception:
+				return None
+		try:
+			st = os.stat(self._img_status)
+		except OSError:
+			return None
+		return (st.st_ino, st.st_size, getattr(st, 'st_mtime_ns', st.st_mtime))
+
+	def _imaginea_publica(self):
+		"""imaginea() pentru stare_publica fara status-ul opkg citit pe firul enigma2 la fiecare reimprospatare (0.7.5 ASM,
+		TODO 15.11 00:02 (HdsPachete in fir)): in timpul instalarii, fiecare rand scris de opkg reimprospata ecranul, care
+		citea si despartea tot status-ul (citeste_strofe, strofe_din_text: 2,8-3,5 s pe Solo SE). Prima data se citeste
+		pe loc, ca pana acum; apoi numai cand status-ul s-a schimbat (inode, marime, ora), pe un fir separat, iar pana
+		atunci ramane valoarea de dinainte; cand opkg lucreaza (faza caut sau instalez) status-ul e pe jumatate scris si
+		nu se reciteste deloc. Dupa citire ecranul si pagina se reimprospateaza (_schimbat)."""
+		if self._img is None:
+			self._img_cheie = self._cheie_status()
+			self._img = imaginea(self.radacina)
+			return self._img
+		if self.faza != 'liber' or self._img_citire:
+			return self._img
+		cheie = self._cheie_status()
+		if cheie == self._img_cheie:
+			return self._img
+		self._img_citire = True
+		radacina = self.radacina
+
+		def gata(rez, eroare):
+			self._img_citire = False
+			if rez is None or eroare:
+				# se reincearca numai cand status-ul se schimba din nou, nu la fiecare reimprospatare
+				self._img_cheie = cheie
+				print('[HdsActualizari] versiunea instalata: %s' % eroare)
+				return
+			self._img, self._img_cheie = rez, cheie
+			self._schimbat()
+		self._lucrare(lambda: imaginea(radacina), gata)
+		return self._img
 
 	def ocupat(self):
 		return self.faza != 'liber'
@@ -1406,7 +1623,6 @@ class Actualizari(object):
 		self.mesaj = ''
 		canal, surse, baza_feed = canalul(self.radacina)
 		self.canal = canal
-		img = imaginea(self.radacina)
 		if canal is None:
 			self.rezultat = {'stare': FARA_SURSA}
 			self._schimbat()
@@ -1418,8 +1634,12 @@ class Actualizari(object):
 		self.faza, self.pas, self.progres = 'caut', _t('Se citește starea actualizărilor de pe server...'), (1, 3)
 		self._schimbat()
 		credentiale = citeste_netrc(self.radacina) if canal == 'proba' else None
-		adresa = adresa_stare(canal, baza_feed or img['baza'])
-		self._semnat, self._adresa, self._baza_feed = None, adresa, baza_feed or img['baza']
+		# numai baza (/etc/hdsatelit-model), nu imaginea(): aceea citea si despartea tot status-ul opkg pe firul enigma2
+		# la fiecare cautare, 2-3 s pe Solo SE (0.7.5 FIR, TODO 15.11 05:08 (ASM, cautarea in fir)); versiunea instalata
+		# o citeste rezultat_din_liste, in lucrarea de dupa opkg update
+		baza = baza_feed or baza_receptorului(self.radacina)
+		adresa = adresa_stare(canal, baza)
+		self._semnat, self._adresa, self._baza_feed = None, adresa, baza
 		radacina = self.radacina
 
 		def citeste():
@@ -1458,6 +1678,8 @@ class Actualizari(object):
 				self._ipkg = None
 				self._dupa_update(stare, surse, param, inceput)
 		ipkg.addCallback(eveniment)
+		# listele de acum, ca sa le punem la loc daca feedul se republica in timpul descarcarii (_dupa_update)
+		pastreaza_listele(self.radacina)
 		self._jurnal('opkg update')
 		ipkg.startCmd(IpkgComponent.CMD_UPDATE)
 
@@ -1485,26 +1707,73 @@ class Actualizari(object):
 			semnata = stare
 			# listele descarcate de opkg trebuie sa fie chiar cele din stare.json semnat (indexuri)
 			g = verifica_listele(radacina, surse, semnata, c)
+			stari = [stare]
 			if g:
 				# publicarea s-a putut schimba intre stare.json si opkg update: stare.json (semnat) se cere inca o data
 				noua, cod = descarca_stare(adresa, citeste_netrc(radacina) if canal == 'proba' else None)
-				if cod is None and noua.get('canal') in (None, canal) and not verifica_listele(radacina, surse, noua, c):
-					semnata, g = noua, []
+				if cod is None and noua.get('canal') in (None, canal):
+					stari.append(noua)
+					if not verifica_listele(radacina, surse, noua, c):
+						semnata, g = noua, []
 			if g:
-				sterge_listele(radacina, surse, c)
-				return {'stare': NESEMNATA, 'eroare': curata('; '.join(g[:3]))}, None
+				# 0.7.5 (FED): listele se pun la loc pe cele semnate de dinainte (copia din _opkg_update), nu se sterg;
+				# amprentele tinute minte ale acestei baze sunt si ele dintr-un stare.json semnat
+				tinute = _amprente_tinute(radacina)
+				if tinute.get('canal') == canal and tinute.get('baza') == baza:
+					stari.append(tinute)
+				sterse, puse = pune_la_loc_sau_sterge(radacina, surse, stari, c)
+				return {'stare': NESEMNATA, 'eroare': curata('; '.join(g[:3])), 'sterse': sterse, 'puse_la_loc': puse}, None
 			tine_minte_indexurile(radacina, canal, baza, semnata)
 			return rezultat_din_liste(radacina, surse, semnata, c), semnata
 
 		def gata(rez, eroare):
 			if rez and not eroare:
 				rezultat, semnata = rez
+				if rezultat.get('stare') == NESEMNATA and 'puse_la_loc' in rezultat:
+					sterse, puse = rezultat.pop('sterse'), rezultat.pop('puse_la_loc')
+					self._jurnal('listele nu sunt cele semnate (%s); puse la loc cele de dinainte: %s; sterse: %s' % (
+						rezultat.get('eroare'), ', '.join(puse) or '-', ', '.join(sterse) or '-'))
+					if self._reincearca_cautarea(rezultat):
+						return
 				self._semnat = {'stare': semnata} if semnata is not None else None
 				return self._cautare_gata(rezultat)
 			self._cautare_gata({'stare': EROARE, 'eroare': curata(eroare)})
 		self._lucrare(calculeaza, gata)
 
+	def _reincearca_cautarea(self, rezultat):
+		"""0.7.5 (FED): listele nu s-au potrivit cu stare.json semnat (feedul se republica chiar acum, de obicei): o
+		singura data pe cautare, cautarea intreaga se reia dupa REINCERCARE_LISTE_MS, cu listele semnate de dinainte pe
+		disc; pana atunci se vede pasul, nu "nesemnata". False cand s-a reincercat deja sau nu se poate programa."""
+		if self._reincercare_liste:
+			return False
+		fabrica = self.fabrica_ceas
+		if fabrica is None:
+			try:
+				from enigma import eTimer as fabrica
+			except ImportError:
+				return False
+
+		def acum():
+			self._ceas_liste = None
+			self.faza = 'liber'
+			if not self.cauta():
+				# nu s-a putut porni (alt opkg lucreaza): ramane rezultatul primei incercari
+				self._cautare_gata(rezultat)
+		t = fabrica()
+		try:
+			self._legatura_liste = t.timeout.connect(acum)
+		except AttributeError:
+			t.callback.append(acum)
+		self._ceas_liste = t
+		self._reincercare_liste = True
+		self.pas = _t('Lista pachetelor se schimbă chiar acum pe server. Se reîncearcă în mai puțin de un minut...')
+		self._jurnal('reincerc cautarea peste %d s' % (REINCERCARE_LISTE_MS // 1000))
+		self._schimbat()
+		t.start(REINCERCARE_LISTE_MS, True)
+		return True
+
 	def _cautare_gata(self, rezultat):
+		self._reincercare_liste = False
 		rezultat.setdefault('cautat_la', int(time.time()))
 		self.rezultat = rezultat
 		self.faza, self.pas, self.progres = 'liber', '', (0, 0)
@@ -1605,7 +1874,10 @@ class Actualizari(object):
 	def _porneste_opkg(self, cai, nume):
 		"""opkg install pe pachetele verificate (fisierele din DOSAR_PACHETE)"""
 		from Components.Ipkg import IpkgComponent
-		argumente = argumente_instalare(cai)
+		if any(p.get('reinstaleaza') for p in self._de_instalat or []):
+			argumente = argumente_instalare(cai, reinstaleaza=True)
+		else:
+			argumente = argumente_instalare(cai)
 		if argumente is None:
 			return self._descarcare_cazuta(('descarcare', 'opkg nu primeste pachetele descarcate'), nume)
 		try:
@@ -1907,7 +2179,7 @@ class Actualizari(object):
 	# ---- pentru ecran si web
 	def stare_publica(self):
 		"""Starea ca dict JSON (pagina web si probele): fara adrese, fara parole"""
-		img = imaginea(self.radacina)
+		img = self._imaginea_publica()
 		return {
 			'faza': self.faza,
 			'pas': self.pas,

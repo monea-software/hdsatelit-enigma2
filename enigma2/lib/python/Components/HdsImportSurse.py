@@ -11,7 +11,8 @@
 #     întâi stick-urile și cardurile, apoi discurile, apoi alte partiții ale memoriei interne; pe fiecare, până la
 #     ADANCIME dosare în jos: un dosar cu lamedb / settings (copie plată sau etc/enigma2 luat ca atare), dosarul
 #     etc/enigma2 al altei imagini (sloturi, OpenMultiBoot, NeoBoot, copii ale rădăcinii) și arhivele de copie
-#     (.tar.gz, .tgz, .tar, .tar.bz2, .tar.xz) care au înăuntru un dosar cu lamedb sau settings;
+#     (.tar.gz, .tgz, .tar, .tar.bz2, .tar.xz, și .zip din 0.7.5/0.7.6: copiile unor imagini sunt zip) care au
+#     înăuntru un dosar cu lamedb sau settings;
 #   - copiile de siguranță făcute de receptor înaintea unui import sau a unei actualizări
 #     (/etc/enigma2/hds-backup-setari-*), la sfârșit: cu ele se poate întoarce un import.
 # Se sar: dosarul amiko/ (fișierele Maintenance Mode), dosarele ascunse și ale sistemului Windows, legăturile
@@ -78,6 +79,10 @@ CALE_ETC = "/etc/enigma2"
 CALE_MOUNTS = "/proc/mounts"
 CALE_SYS_BLOCK = "/sys/block"
 DOSAR_TMP = "/tmp/hds-import"
+# 0.7.5 (MA9, Bogdanici13, forum 795, TODO 09.11 16:54): arhiva de copie trimisa din calculator, din pagina web /import.
+# Sta in /tmp (memoria receptorului, pana la repornire), cate una: o arhiva noua o inlocuieste pe cea dinainte. Apare in
+# lista surselor ca mediul calculator, pe televizor si in web, si se importa ca o copie de pe stick.
+DOSAR_CALCULATOR = "/tmp/hds-import-calculator"
 PREFIX_COPIE_RECEPTOR = "hds-backup-setari-"
 
 ADANCIME = 3                  # cât de adânc se caută pe un mediu (rădăcina = 0)
@@ -98,6 +103,12 @@ CHEI_SCOASE_DIN_COPIE = ("config.plugins.hdswebcontrol.token", "config.crash.ena
 FS_MEDII = ("vfat", "exfat", "ntfs", "ntfs3", "fuseblk", "ext2", "ext3", "ext4", "hfsplus", "btrfs", "xfs", "f2fs")
 TIPAR_DISPOZITIV = re.compile(r"^/dev/(sd[a-z]+|hd[a-z]+|mmcblk\d+|nvme\d+n\d+)(?:p?\d+)?$")
 SUFIXE_ARHIVA = (".tar.gz", ".tgz", ".tar", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
+# 0.7.5/0.7.6 (SMB, TODO 15.11 06:20 (import .zip)): copiile unor imagini sunt arhive zip. Zip-ul se citeste prin
+# _ArhivaZip, cu aceeasi forma ca tarfile (membri, extractfile), deci cautarea si pregatirea sunt aceleasi. Un zip se
+# judeca dupa cuprinsul lui (lista de la coada, fara decomprimare), nu dupa marime: imaginile de scris de pe stick sunt
+# zip-uri de sute de MB fara lamedb si se sar fara mesaj. Din zip se decomprima numai fisierele scoase (MAX_OCTETI).
+SUFIXE_ZIP = (".zip",)
+MAX_ZIP = 4 * 1024 * 1024 * 1024    # marimea unui zip pe disc (FAT32 nu are fisiere mai mari)
 DOSARE_SARITE = ("amiko", "system volume information", "lost+found", "recycler", "recycled")
 # Modulele de acces condiționat nu se recunosc după o listă de nume, ci după felul în care își numesc fișierele și
 # dosarele: un cuvânt (litere și cifre, între semne) care se termină în „cam”, „cams” sau „camd”, cu cifre la coadă sau
@@ -130,7 +141,7 @@ CHEI_SATELIT = ("diseqcMode", "diseqcA", "diseqcB", "diseqcC", "diseqcD", "simpl
 # imaginilor salvate și ale asistentului de restaurare, alta după "dvbs."
 SEMNE_SINGLE = ("config.backupmanager.", "config.imagemanager.", "config.misc.restorewizardrun")
 
-ORDINE_MEDIU = {"stick": 0, "disc": 1, "intern": 2, "receptor": 3}
+ORDINE_MEDIU = {"calculator": -1, "stick": 0, "disc": 1, "intern": 2, "receptor": 3}
 # alegerile importului: (cheia, câmpul sursei care trebuie să fie adevărat ca alegerea să aibă sens)
 ALEGERI = (("canale", "canale"), ("tunere", "setari"), ("temporizatoare", "temporizatoare"), ("retea", "retea"),
 	("picon", "picon"), ("generale", "setari"), ("acces", "acces"), ("pachete", "pachete"))
@@ -243,8 +254,108 @@ def _sarit(nume):
 def este_arhiva(nume):
 	"""O arhivă se judecă după cuprins, nu după nume: o copie a canalelor care are în nume un cuvânt de modul de acces
 	(„…inainte-de-<modul>…”) e bună, iar o arhivă a unui modul nu are lamedb sau settings, deci nu devine sursă
-	(cuprins_arhiva)."""
+	(cuprins_arhiva). Tar sau zip."""
+	return este_tar(nume) or este_zip(nume)
+
+
+def este_tar(nume):
 	return nume.lower().endswith(SUFIXE_ARHIVA)
+
+
+def este_zip(nume):
+	return nume.lower().endswith(SUFIXE_ZIP)
+
+
+class _MembruZip(object):
+	"""Un membru zip in forma unui membru tarfile (name, size, mode, offset_data, isreg). Numele cu bara inversa (unele programe
+	de pe Windows) se scriu cu /; dosarele, legaturile simbolice (in external_attr) si membrii criptati nu sunt fisiere
+	obisnuite, deci nu se citesc niciodata. offset_data e 0: din zip nu se decomprima in ordine, ci numai ce se scoate."""
+
+	def __init__(self, info):
+		self.info = info
+		self.name = info.filename.replace("\\", "/")
+		mod = (info.external_attr >> 16) & 0xFFFF
+		self._legatura = bool(mod) and stat.S_ISLNK(mod)
+		self._dosar = info.filename.endswith(("/", "\\")) or (bool(mod) and stat.S_ISDIR(mod))
+		self._criptat = bool(info.flag_bits & 0x1)
+		self.mode = (mod & 0o7777) or 0o644
+		self.size = info.file_size
+		self.offset_data = 0
+
+	def isreg(self):
+		return not (self._dosar or self._legatura or self._criptat)
+
+	isfile = isreg
+
+	def isdir(self):
+		return self._dosar
+
+
+class _ArhivaZip(object):
+	"""Un zip deschis in forma lui tarfile.TarFile, cat folosesc cautarea si pregatirea: membrii in ordine,
+	extractfile, with."""
+
+	def __init__(self, cale):
+		import zipfile
+		self._z = zipfile.ZipFile(cale)
+
+	def __iter__(self):
+		for info in self._z.infolist():
+			yield _MembruZip(info)
+
+	def extractfile(self, membru):
+		if not membru.isreg():
+			return None
+		return self._z.open(membru.info)
+
+	def close(self):
+		self._z.close()
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, *exc):
+		self.close()
+
+
+class _Arhive(object):
+	"""In locul modulului tarfile la citirea copiilor: open(cale) deschide un zip cu _ArhivaZip si orice altceva (si
+	arhivele din interior, date ca fileobj) cu tarfile."""
+
+	def __getattr__(self, nume):
+		import tarfile
+		return getattr(tarfile, nume)
+
+	def open(self, name=None, mode="r", fileobj=None, **kw):
+		import tarfile
+		if fileobj is None and name and este_zip(os.path.basename(name)):
+			return _ArhivaZip(name)
+		return tarfile.open(name, mode, fileobj=fileobj, **kw)
+
+
+def _arhive():
+	return _Arhive()
+
+
+def zip_pare_copie(cale):
+	"""Lista de la coada zip-ului (fara decomprimare) are un fisier al importului sau o arhiva tar de copie. False
+	pentru zip-urile care nu sunt copii (imaginile de scris pe stick, piconurile): se sar fara mesaj. True si cand
+	zip-ul nu se poate citi: motivul il da cuprins_arhiva."""
+	import zipfile
+	try:
+		with zipfile.ZipFile(cale) as z:
+			for i, info in enumerate(z.infolist()):
+				if i >= 20000:
+					return True
+				nume = posixpath.basename(info.filename.replace("\\", "/"))
+				if fisier_permis(nume):
+					return True
+				# copia programata a unei imagini (o arhiva tar de copie inauntru); rootfs-ul unei imagini nu e copie
+				if este_tar(nume) and 0 < info.file_size <= MAX_ARHIVA and not nume.lower().startswith("rootfs"):
+					return True
+	except Exception:
+		return True
+	return False
 
 
 def _normalizat(nume):
@@ -403,6 +514,8 @@ def nume_mediu(mediu):
 		return _("Disc „%s”") % nume
 	if fel == "intern":
 		return _("Memoria receptorului, partiția „%s”") % nume
+	if fel == "calculator":
+		return _("Trimisă din calculator")
 	return _("Copiile de siguranță de pe receptor")
 
 
@@ -486,7 +599,7 @@ def _membri_arhiva(t, nume_arhiva, max_membri, termen, max_decomprimat, interioa
 		elif (extra is not None and len(extra) < 64 and not _are_cam(norm) and 0 < m.size <= MAX_EXTRA
 				and _rel_extra(norm)):
 			extra.append(norm)
-		elif (interioare is not None and este_arhiva(nume) and not nume.startswith(".") and not _are_cam(norm)
+		elif (interioare is not None and este_tar(nume) and not nume.startswith(".") and not _are_cam(norm)
 				and 0 < m.size <= MAX_ARHIVA):
 			interioare.append(norm)
 	return pe_dosare
@@ -554,13 +667,31 @@ def _cuprins_interior(tarfile, cale, membru, max_membri, termen, max_decomprimat
 	return None
 
 
-def cuprins_arhiva(cale, max_membri=MAX_MEMBRI, termen=None, max_decomprimat=MAX_DECOMPRIMAT):
+def _motiv_necitita(eroare):
+	"""Felul motivului pentru o arhivă care nu se poate citi (necitite, text_necitite)."""
+	import tarfile
+	if isinstance(eroare, tarfile.ReadError):
+		mesaj = str(eroare).lower()
+		# arhiva tăiată: tarfile spune "unexpected end of data" sau "truncated", în rest nu e o arhivă tar
+		return "rupta" if ("end of data" in mesaj or "truncated" in mesaj) else "nu_e_tar"
+	if isinstance(eroare, (EOFError, tarfile.TarError)):
+		return "rupta"
+	if isinstance(eroare, OSError) and eroare.__class__.__name__ not in ("BadGzipFile", "LZMAError"):
+		return "mediu"
+	return "rupta"
+
+
+def cuprins_arhiva(cale, max_membri=MAX_MEMBRI, termen=None, max_decomprimat=MAX_DECOMPRIMAT, necitite=None):
 	"""(dosarul din arhivă, cuprinsul lui) pentru dosarul cu cele mai multe fișiere de import care are lamedb sau
 	settings (etc/enigma2 întâi), sau None: arhivă stricată, fără așa ceva, cu prea mulți membri, cu prea mulți octeți
 	decomprimați, sau căutarea a ajuns la `termen` (time.time()) în mijlocul ei. Când arhiva nu are direct așa ceva,
 	dar are înăuntru alte arhive de copie (copia programată a unei imagini), se caută un nivel mai jos, în cel mult
-	MAX_INTERIOARE dintre ele; atunci cuprinsul are și "interioara" (numele membrului)."""
-	import tarfile
+	MAX_INTERIOARE dintre ele; atunci cuprinsul are și "interioara" (numele membrului). necitite (listă, opțional)
+	primește (numele arhivei, motivul) când arhiva nu se poate citi deloc sau e prea mare pentru căutare: omul află de
+	ce copia lui nu apare (asistența 821342: tar.tar sărită fără niciun mesaj)."""
+	tarfile = _arhive()
+	if este_zip(os.path.basename(cale)) and not zip_pare_copie(cale):
+		return None
 	interioare = []
 	extra = []
 	acces = []
@@ -570,8 +701,13 @@ def cuprins_arhiva(cale, max_membri=MAX_MEMBRI, termen=None, max_decomprimat=MAX
 				extra, acces)
 	except Exception as eroare:  # tarfile.TarError, EOFError, OSError, zlib.error, lzma.LZMAError
 		_jurnal("arhivă necitită %s: %s" % (os.path.basename(cale), eroare.__class__.__name__))
+		if necitite is not None:
+			necitite.append((os.path.basename(cale), _motiv_necitita(eroare)))
 		return None
 	if pe_dosare is None:
+		# prea mulți membri sau prea mult de decomprimat; termenul căutării atins nu e vina arhivei
+		if necitite is not None and not (termen is not None and time.time() > termen):
+			necitite.append((os.path.basename(cale), "prea_mare"))
 		return None
 	gasit = _cel_mai_bun_dosar(pe_dosare, extra, acces)
 	if gasit:
@@ -671,8 +807,9 @@ def _intrari(dosar, termen, max_intrari=MAX_INTRARI):
 	return sorted(fisiere), sorted(dosare), sorted(arhive)
 
 
-def cauta_pe_mediu(mediu, termen, adancime=ADANCIME, max_dosare=MAX_DOSARE, max_arhiva=MAX_ARHIVA):
-	"""Sursele de pe un mediu, căutate în lățime până la `adancime` dosare sub rădăcina lui, până la `termen`."""
+def cauta_pe_mediu(mediu, termen, adancime=ADANCIME, max_dosare=MAX_DOSARE, max_arhiva=MAX_ARHIVA, necitite=None):
+	"""Sursele de pe un mediu, căutate în lățime până la `adancime` dosare sub rădăcina lui, până la `termen`;
+	necitite (listă, opțional): arhivele sărite, cu motivul (cuprins_arhiva)."""
 	radacina = mediu["punct"]
 	gasite = []
 	coada = [(radacina, 0)]
@@ -712,9 +849,16 @@ def cauta_pe_mediu(mediu, termen, adancime=ADANCIME, max_dosare=MAX_DOSARE, max_
 				marime = os.path.getsize(cale)
 			except OSError:
 				continue
-			if not 0 < marime <= max_arhiva:
+			limita = MAX_ZIP if este_zip(n) else max_arhiva
+			if not 0 < marime <= limita:
+				if necitite is not None and marime > limita:
+					necitite.append((posixpath.join(rel, n), "prea_mare"))
 				continue
-			gasit = cuprins_arhiva(cale, termen=termen)
+			lung = len(necitite) if necitite is not None else 0
+			gasit = cuprins_arhiva(cale, termen=termen, necitite=necitite)
+			if necitite is not None and len(necitite) > lung:
+				# numele cu dosarul lui, ca în lista surselor
+				necitite[-1] = (posixpath.join(rel, n), necitite[-1][1])
 			if gasit:
 				gasite.append(_sursa(mediu, cale, "arhiva", gasit[1], _timp(cale), posixpath.join(rel, n),
 					dosar_arhiva=gasit[0]))
@@ -747,15 +891,102 @@ def copii_receptor(dosar_etc=CALE_ETC):
 	return rez
 
 
+def copii_calculator(termen, dosar=DOSAR_CALCULATOR, necitite=None):
+	"""Arhiva trimisa din calculator (salveaza_din_calculator), ca sursa a mediului calculator; [] cand nu e."""
+	if not os.path.isdir(dosar) or os.path.islink(dosar):
+		return []
+	return cauta_pe_mediu({"fel": "calculator", "punct": dosar, "eticheta": ""}, termen, adancime=0, necitite=necitite)
+
+
+def sterge_din_calculator(dosar=DOSAR_CALCULATOR):
+	"""Sterge arhivele trimise din calculator (numai fisierele din dosarul lor). Intoarce cate a sters."""
+	n = 0
+	try:
+		nume = os.listdir(dosar)
+	except OSError:
+		return 0
+	for x in nume:
+		cale = os.path.join(dosar, x)
+		if os.path.isfile(cale) and not os.path.islink(cale):
+			try:
+				os.remove(cale)
+				n += 1
+			except OSError:
+				pass
+	return n
+
+
+def nume_din_calculator(nume):
+	"""Numele fisierului trimis, fara dosare si fara semne care nu au ce cauta intr-un nume; "" cand nu e o arhiva."""
+	nume = posixpath.basename((u"%s" % (nume or "")).replace("\\", "/")).strip()
+	nume = "".join(c for c in nume if c.isprintable() and c not in '<>:"|?*')
+	if not nume or nume.startswith(".") or len(nume) > 200 or not este_arhiva(nume):
+		return ""
+	return nume
+
+
+def salveaza_din_calculator(nume, date, dosar=DOSAR_CALCULATOR, max_arhiva=MAX_ARHIVA):
+	"""Scrie arhiva trimisa din pagina web in DOSAR_CALCULATOR (in locul celei de dinainte) si verifica de pe loc ca are o
+	lista de canale sau setari (cuprins_arhiva). Intoarce calea; ValueError cu textul pentru om cand nu e buna."""
+	n = nume_din_calculator(nume)
+	if not n:
+		raise ValueError(_("Alege o arhivă de copie: .tar.gz, .tgz, .tar, .tar.bz2, .tar.xz sau .zip."))
+	if not date:
+		raise ValueError(_("Fișierul trimis e gol."))
+	if len(date) > max_arhiva:
+		raise ValueError(_("Arhiva e prea mare: cel mult %d MB.") % (max_arhiva // (1024 * 1024)))
+	if os.path.islink(dosar):
+		raise ValueError(_("Arhiva nu se poate scrie pe receptor."))
+	os.makedirs(dosar, exist_ok=True)
+	try:
+		os.chmod(dosar, 0o700)
+	except OSError:
+		pass
+	sterge_din_calculator(dosar)
+	cale = os.path.join(dosar, n)
+	parte = cale + ".part"
+	try:
+		with open(parte, "wb") as f:
+			f.write(date)
+		os.replace(parte, cale)
+	except (IOError, OSError):
+		try:
+			os.remove(parte)
+		except OSError:
+			pass
+		raise ValueError(_("Arhiva nu se poate scrie pe receptor."))
+	necitite = []
+	gasit = cuprins_arhiva(cale, termen=time.time() + TERMEN_S, necitite=necitite)
+	if not gasit:
+		try:
+			os.remove(cale)
+		except OSError:
+			pass
+		motiv = text_necitite([("", n, necitite[-1][1])]) if necitite else []
+		raise ValueError(motiv[0] if motiv else _("În arhivă nu am găsit o listă de canale sau setări."))
+	return cale
+
+
 def cauta_surse(cale_mounts=CALE_MOUNTS, sys_block=CALE_SYS_BLOCK, dosar_etc=CALE_ETC, termen_s=TERMEN_S,
-		citeste=None, realpath=None):
+		citeste=None, realpath=None, necitite=None, dosar_calculator=DOSAR_CALCULATOR):
 	"""Toate sursele, în ordinea arătată: stick-urile (cele mai noi copii întâi), discurile, memoria internă, copiile
-	receptorului. Rulează pe un fir separat."""
+	receptorului. Rulează pe un fir separat. necitite (listă, opțional) primește (mediul, numele arhivei, motivul)
+	pentru arhivele de copie care nu se pot citi (text_necitite); aceeași listă rămâne și în _NECITITE, de unde o ia
+	porneste_cautarea (semnătura apelului din Lucrare rămâne cea veche)."""
 	termen = time.time() + termen_s
 	surse = []
 	vazute = set()
+	colector = []
+	# intai arhiva trimisa chiar acum din calculator (pagina web /import)
+	for s in copii_calculator(termen, dosar_calculator):
+		if s["id"] not in vazute:
+			vazute.add(s["id"])
+			surse.append(s)
 	for mediu in medii(cale_mounts, sys_block, citeste, realpath):
-		for s in cauta_pe_mediu(mediu, termen):
+		sarite = []
+		gasite = cauta_pe_mediu(mediu, termen, necitite=sarite)
+		colector.extend((mediu.get("eticheta") or "", nume, motiv) for nume, motiv in sarite)
+		for s in gasite:
 			if s["id"] not in vazute:
 				vazute.add(s["id"])
 				surse.append(s)
@@ -763,7 +994,13 @@ def cauta_surse(cale_mounts=CALE_MOUNTS, sys_block=CALE_SYS_BLOCK, dosar_etc=CAL
 		if s["id"] not in vazute:
 			vazute.add(s["id"])
 			surse.append(s)
+	_NECITITE[:] = colector
+	if necitite is not None:
+		necitite.extend(colector)
 	return surse
+
+
+_NECITITE = []    # arhivele sărite la ultima căutare (cauta_surse), pentru porneste_cautarea
 
 
 # ---------------------------------------------------------------- textele unei surse
@@ -849,8 +1086,22 @@ def ajutor_alegere(cheie):
 
 def text_fara_surse():
 	return _("Nu am găsit nicio copie a canalelor. Pune în receptor un stick USB care are o copie: dosarul "
-		"etc/enigma2 al altei imagini, un dosar cu lamedb și bouquets.tv sau o arhivă de copie (.tar.gz), apoi "
+		"etc/enigma2 al altei imagini, un dosar cu lamedb și bouquets.tv sau o arhivă de copie (.tar.gz sau .zip), apoi "
 		"alege „Caută din nou”.")
+
+
+def text_necitite(necitite):
+	"""Rândurile de sub lista surselor pentru arhivele de copie sărite: [(mediul, numele, motivul)] -> [text]."""
+	motive = {
+		"nu_e_tar": _("nu e o arhivă tar sau tar.gz (poate e alt fel de arhivă, cu nume schimbat)"),
+		"rupta": _("e ruptă: copiată sau descărcată pe jumătate"),
+		"mediu": _("nu se poate citi de pe stick sau disc"),
+		"prea_mare": _("e prea mare pentru căutare (peste 32 MB sau peste 2000 de fișiere)"),
+	}
+	randuri = []
+	for _mediu, nume, motiv in necitite or []:
+		randuri.append(_("Arhiva %s nu apare în listă: %s.") % (nume, motive.get(motiv, motive["rupta"])))
+	return randuri
 
 
 def alegeri_surse(surse):
@@ -897,10 +1148,10 @@ def _pregateste(sursa, dest, max_membri, max_octeti, max_decomprimat, cu_acces=F
 		if not os.path.isdir(sursa.get("cale", "")):
 			return None, _("dosarul nu mai există: %s") % sursa.get("cale", "")
 		return sursa["cale"], None
-	import tarfile
+	tarfile = _arhive()
 	cale = sursa.get("cale", "")
 	try:
-		if os.path.getsize(cale) > MAX_ARHIVA:
+		if os.path.getsize(cale) > (MAX_ZIP if este_zip(os.path.basename(cale)) else MAX_ARHIVA):
 			return None, _("arhiva e prea mare")
 	except OSError:
 		return None, _("arhiva nu mai există: %s") % cale
@@ -1824,7 +2075,7 @@ def alege_modul_de_acces(modul, rez, gata, alege_modul=None):
 
 # ---------------------------------------------------------------- starea comună (televizor și web)
 
-_STARE = {"surse": None, "cand": 0, "cauta": False, "ocupat": False, "ultimul": None, "in_lucru": 0}
+_STARE = {"surse": None, "cand": 0, "cauta": False, "ocupat": False, "ultimul": None, "in_lucru": 0, "necitite": []}
 _ZAVOR = threading.Lock()
 _ZAVOR_TMP = threading.Lock()    # dosarul /tmp/hds-import: care pregătire îl ia
 _GENERATIE = [0]                 # numărul ultimei pregătiri pornite
@@ -1919,10 +2170,12 @@ def porneste_cautarea(la_sfarsit=None):
 	lucrare = []
 	terminat = []
 
+	del _NECITITE[:]
+
 	def _gata(surse, eroare):
 		if eroare:
 			_jurnal("căutarea surselor: %s" % eroare)
-		_STARE.update(surse=surse or [], cand=time.time(), cauta=False)
+		_STARE.update(surse=surse or [], cand=time.time(), cauta=False, necitite=list(_NECITITE))
 		terminat.append(True)
 		for l in lucrare:
 			if l in _VII:

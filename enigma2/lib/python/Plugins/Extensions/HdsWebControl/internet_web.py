@@ -665,7 +665,8 @@ MAX_FISIER = 40 * 1024
 
 def fisierIptv(arg, I=None):
 	"""POST /api/iptv-fisier: adresele din fisierul ales in browser, ca la /etc/enigma2/iptv.txt pus prin FTP. Sursele noi intra in
-	lista si firul de lucru le aduce canalele, ca la Adauga."""
+	lista si firul de lucru le aduce canalele, ca la Adauga. Un fisier care e chiar o lista de canale (#EXTINF, sub MAX_FISIER) se pune
+	in IPTV din copia lui de pe receptor (HdsIptvFisier.preiaPlaylistText, CRF, forum 1274)."""
 	S, C, L = _iptv(I)
 	from Components import HdsIptvFisier as F
 	text = arg.get("text") or ""
@@ -1693,9 +1694,10 @@ PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
   <section class="card">
     <h2>Mai multe adrese dintr-un fișier</h2>
     <div class="rand"><label for="fisierAdrese">Fișierul cu adrese</label>
-      <input type="file" id="fisierAdrese" accept=".txt,text/plain"></div>
+      <input type="file" id="fisierAdrese" accept=".txt,.m3u,.m3u8,text/plain,audio/x-mpegurl"></div>
     <p class="nota">Un fișier text cu câte o adresă de listă pe rând (http:// sau https://); numele listei poate sta pe același rând. Listele se adaugă imediat ce alegi fișierul.</p>
     <p class="nota">La fel merge și fără browser: copiezi prin FTP fișierul iptv.txt în dosarul /etc/enigma2/ al receptorului, iar listele noi se iau singure în cel mult un minut.</p>
+    <p class="nota">O listă de canale (fișier .m3u sau .m3u8) copiată prin FTP în /etc/enigma2/ sau pusă pe un stick sau disc USB apare singură în IPTV, în cel mult un minut.</p>
   </section>
   <section class="card ascuns" id="cardDemo">
     <h2>Lista demo: acordul fiecărui canal</h2>
@@ -2285,6 +2287,8 @@ TEXTE_PAGINA = {
 			"Listele se adaugă imediat ce alegi fișierul."),
 		N_("La fel merge și fără browser: copiezi prin FTP fișierul iptv.txt în dosarul /etc/enigma2/ al receptorului, iar listele "
 			"noi se iau singure în cel mult un minut."),
+		N_("O listă de canale (fișier .m3u sau .m3u8) copiată prin FTP în /etc/enigma2/ sau pusă pe un stick sau disc USB apare "
+			"singură în IPTV, în cel mult un minut."),
 		N_("Arată cheia"),
 		N_("Cheie nouă pentru panoul web"),
 		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__. Tema și culorile paginilor web sunt în "

@@ -1,0 +1,26 @@
+ServiceApp: fara cautarea subtitrarilor externe pe adresa unui flux (HD Satelit, 15.11.2026, TODO 14.11 22:37)
+
+getSubtitleList cauta .srt langa fisier (access) si in dosarul lui (listDir, si Subs). Pe un canal de internet (5002/5001)
+m_ref.path e adresa fluxului: la fiecare getSubtitleList cele doua cautari nu gasesc nimic, iar listDir scrie
+"listDir(<adresa>) - error in opendir" in jurnalul interfetei, cu adresa liniei. Acum cautarea externa se face numai
+pentru caile de pe disc; pistele din flux (embedded) raman. Se aplica dupa 0001 (care numeste functia getSubtitleTrackList).
+
+diff --git a/src/serviceapp/serviceapp.cpp b/src/serviceapp/serviceapp.cpp
+index e12f094..9124afe 100644
+--- a/src/serviceapp/serviceapp.cpp
++++ b/src/serviceapp/serviceapp.cpp
+@@ -1101,6 +1101,14 @@ RESULT eServiceApp::getSubtitleTrackList(std::vector<struct SubtitleTrack> &subt
+ 			addEmbeddedTrack(subtitlelist, s, pid);
+ 		}
+ 	}
++	/* HD Satelit (15.11.2026): subtitrarile externe (.srt langa fisier, dosarul Subs) se cauta numai pentru fisierele de
++	   pe disc. Pentru un flux (http, https, rtsp, rtmp, udp...) access() si listDir() pe adresa nu gasesc nimic si scriu
++	   la fiecare getSubtitleList "listDir(<adresa>) - error in opendir" in jurnalul interfetei, cu adresa liniei. */
++	if (m_ref.path.find("://") != std::string::npos)
++	{
++		eDebug("eServiceApp::getSubtitleList - stream, no external subtitle search");
++		return 0;
++	}
+ 	std::string basename, extension;
+ 	splitExtension(m_ref.path, basename, extension);
+ 	std::string subtitle_path(basename + ".srt");

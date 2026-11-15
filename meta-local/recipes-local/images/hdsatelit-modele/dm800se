@@ -1,0 +1,25 @@
+# HD Satelit: regulile garzii de model pentru Dreambox DM800SE (masina dm800se, MACHINEBUILD dm800se), NECONFIRMAT
+# (V21B, 14.11.2026). Stratul producatorului: meta-dream din OE-Alliance 6.0 (conf/machine/dm800se.conf): cip bcm7405,
+# MIPS 400 MHz, 256 MB RAM, NAND 64 MB (brcmnand, sector 512), nucleu linux-dreambox 3.2 FARA UBIFS, driverele Dream
+# dreambox-dvb-modules-dm800se 3.2-20151201. DM800SE v2 (masina dm800sev2, alt incarcator) si clonele NU sunt acoperite.
+# NUMAI varianta pe stick (HDS_VARIANTA=usb): in memoria interna (root 60 MiB) sta pornirea mica a noastra
+# (hdsatelit-pornire-stick-image, jffs2, .nfi din modul de salvare), care porneste sistemul din hdsatelit-dm800se/radacina.ext4.
+# chip=-, boxtype=dm800se din /proc/stb/info/model (al treilea nod, ca la DM7020HD si DM8000).
+# Partitiile (peticul Dream al nucleului 3.2, citite de V21): complete 64 MiB, loader 256 KiB, boot 3,75 MiB, root 60 MiB.
+format=1
+distro=hdsatelit
+model=Dreambox DM800SE
+machine=dm800se
+machinebuild=dm800se
+chip=-
+boxtype=dm800se
+hw=-
+partitions=complete,loader:256K,boot:3840K,root
+kernel_part=mtd2
+kernel_kib=3840
+rootfs_part=mtd3
+kernel_name=boot
+rootfs_name=root
+stocare=nand
+confirmat=nu
+familie=broadcom

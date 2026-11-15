@@ -24,7 +24,8 @@
 # imaginii; opkg alege singur cea mai noua, deci altfel ar lua-o din sursa altcuiva). Dupa instalare lista
 # pluginurilor se citeste din nou (Lucrare); pluginul care acum se incarca intra in liste pe loc (PluginComponent.activeazaAcum).
 # Pe ecran: mesajul mic al imaginii (Screens/HdsAnuntRetea), nemodal: "Se instalează modulul X pentru Y.", apoi "Y este gata." sau
-# motivul. O singura incercare pe pachet si sesiune; cel mult MAX_PE_PLUGIN pachete pentru acelasi plugin; un pachet deja instalat, cu
+# motivul. Un pachet pe care feedul nu-l are se tine minte pe disc (LIPSA_FISIER): o zi, fara opkg update la fiecare pornire
+# (0.7.5, vezi REINCERCARE_S). O singura incercare pe pachet si sesiune; cel mult MAX_PE_PLUGIN pachete pentru acelasi plugin; un pachet deja instalat, cu
 # pluginul cazut tot pe el, nu se mai instaleaza (fara bucla). Ce se intampla se vede si in pagina web: motivul din lista pluginurilor
 # care nu se deschid (textStare) si lucrarea in curs din /extensii.
 # Nu importa nimic din enigma la incarcare (probele de pe PC); RADACINA pune un dosar in fata cailor de sistem, numai la probe. Nu arunca.
@@ -57,10 +58,18 @@ VARSTA_LISTE_S = 3 * 24 * 3600
 MAX_PE_PLUGIN = 3
 MAX_ESECURI_LISTE = 3
 DURATA_MESAJ_MS = 9000
+# 0.7.5 (asistenta 821342, TODO 14.11 19:10): un pachet pe care feedul nu-l are (python3-fissix lipsea din feedul 0.7.4) pornea
+# opkg update si "nu se instaleaza: lipsa" la FIECARE pornire a interfetei, fiindca rezultatul se tinea numai in memorie. Acum
+# pachetul lipsa se tine minte pe disc (LIPSA_FISIER), cu ora si semnul listelor surselor noastre (semnListe). Timp de
+# REINCERCARE_S, la pornirile urmatoare nu mai porneste opkg update: cu aceleasi liste nu se face nimic, iar cu liste schimbate
+# (un opkg update al altcuiva, alt feed) se cauta in ele, fara descarcare. Dupa REINCERCARE_S, o incercare intreaga, ca inainte.
+LIPSA_FISIER = "/etc/enigma2/hds-module-lipsa.json"
+REINCERCARE_S = 24 * 3600
 
 _MODUL = re.compile(r"No module named '([^']+)'")
 _NUME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]{0,200}\Z")
 
+_lipsa = [None]      # {pachet: {"cand": ora primei lipse, "semn": semnListe()}}, citit din LIPSA_FISIER o data
 _harta = [None]
 _coada = []          # [{"pachet", "modul", "pluginuri": {cale: {"nume", "cand"}}}], in ordinea cererilor
 _rezultat = {}       # pachet -> {"stare": instalat | esuat | refuzat | lipsa | instalat_dar_cade, "motiv": text}
@@ -355,6 +364,85 @@ def provenienta(pachet, conf=None):
 	return cel_mai_nou[0], None
 
 
+# ---------------------------------------------------------------- pachetele lipsa din feed, tinute minte intre porniri
+
+def semnListe(conf=None):
+	"""semnul listelor surselor noastre: numele, adresa, marimea si ora fiecarei liste descarcate. Se schimba la orice opkg
+	update care aduce alta lista si la schimbarea adresei feedului."""
+	conf = conf or _configurare()
+	parti = []
+	for n, a in sorted(conf.surse):
+		if not _sursaNoastra(conf, n, a):
+			continue
+		try:
+			st = os.stat(os.path.join(_c(conf.lists_dir), n))
+			parti.append("%s|%s|%d|%d" % (n, a, st.st_size, int(st.st_mtime)))
+		except OSError:
+			parti.append("%s|%s|-" % (n, a))
+	return ";".join(parti)
+
+
+def _citesteLipsa():
+	if _lipsa[0] is None:
+		d = {}
+		try:
+			with open(_c(LIPSA_FISIER), encoding="utf-8") as f:
+				date = json.load(f)
+			for p, v in (date.get("pachete") or {}).items():
+				if _pachetBun(p) and isinstance(v, dict) and isinstance(v.get("cand"), (int, float)):
+					d[p] = {"cand": float(v["cand"]), "semn": str(v.get("semn", ""))}
+		except FileNotFoundError:
+			pass
+		except (OSError, ValueError, AttributeError) as e:
+			_jurnal("%s: %s" % (LIPSA_FISIER, e))
+		_lipsa[0] = d
+	return _lipsa[0]
+
+
+def _scrieLipsa():
+	cale = _c(LIPSA_FISIER)
+	try:
+		nou = cale + ".nou"
+		with open(nou, "w", encoding="utf-8") as f:
+			json.dump({"format": 1, "pachete": _citesteLipsa()}, f, sort_keys=True)
+		os.replace(nou, cale)
+	except OSError as e:
+		_jurnal("nu pot scrie %s: %s" % (LIPSA_FISIER, e))
+
+
+def lipsaRecenta(pachet, conf=None, acum=None):
+	"""None cand pachetul nu e tinut minte ca lipsa sau au trecut REINCERCARE_S (o incercare intreaga); altfel "aceleasi"
+	(listele nu s-au schimbat de atunci) sau "schimbate" (se cauta in listele de acum, fara opkg update)."""
+	v = _citesteLipsa().get(pachet)
+	acum = time.time() if acum is None else acum
+	if v is None or not 0 <= acum - v["cand"] < REINCERCARE_S:
+		return None
+	return "aceleasi" if v["semn"] == semnListe(conf) else "schimbate"
+
+
+def tineMinteLipsa(pachet, conf=None, acum=None):
+	"""pachetul lipsa din feed, cu semnul listelor de acum; ora ramane a primei lipse cat timp tine REINCERCARE_S"""
+	d = _citesteLipsa()
+	acum = time.time() if acum is None else acum
+	v = d.get(pachet)
+	cand = v["cand"] if v is not None and 0 <= acum - v["cand"] < REINCERCARE_S else acum
+	d[pachet] = {"cand": cand, "semn": semnListe(conf)}
+	_scrieLipsa()
+
+
+def uitaLipsa(pachet):
+	if _citesteLipsa().pop(pachet, None) is not None:
+		_scrieLipsa()
+
+
+def _textNeinstalat(el, motiv):
+	if motiv != "lipsa":
+		return _t("Altă sursă are o versiune mai nouă; nu o instalez singur.")
+	if el.get("fel") == "biblioteca":
+		return _t("Feedul HD Satelit nu are biblioteca.")
+	return _t("Feedul HD Satelit nu are modulul.")
+
+
 def _mesaj(text):
 	s = _stare["sesiune"]
 	if s is None or not text:
@@ -380,6 +468,21 @@ def _urmatorul():
 			return
 		el = _coada[0]
 		conf = _configurare()
+		amintire = lipsaRecenta(el["pachet"], conf)
+		if amintire is not None:
+			# lipsea din feed la o pornire de curand: fara opkg update; cu liste schimbate intre timp, cautat in ele
+			versiune, motiv = provenienta(el["pachet"], conf) if amintire == "schimbate" else (None, "lipsa")
+			if versiune is not None:
+				_pornesteLucrarea(el, versiune)
+				return
+			_coada.pop(0)
+			_rezultat[el["pachet"]] = {"stare": "lipsa" if motiv == "lipsa" else "refuzat", "motiv": _textNeinstalat(el, motiv)}
+			if amintire == "schimbate" and motiv == "lipsa":
+				tineMinteLipsa(el["pachet"], conf)
+			_jurnal("%s nu se instaleaza: %s (tinut minte, listele %s; fara opkg update pana la %d ore)" % (
+				el["pachet"], motiv, amintire, REINCERCARE_S // 3600))
+			_programeaza(PAS_URMATOR_MS)
+			return
 		if not _stare["liste"] and listeVechi(conf):
 			_stare["liste"] = True
 			_actualizeazaListele()
@@ -392,13 +495,9 @@ def _urmatorul():
 				_actualizeazaListele()
 				return
 			_coada.pop(0)
-			if motiv != "lipsa":
-				text = _t("Altă sursă are o versiune mai nouă; nu o instalez singur.")
-			elif el.get("fel") == "biblioteca":
-				text = _t("Feedul HD Satelit nu are biblioteca.")
-			else:
-				text = _t("Feedul HD Satelit nu are modulul.")
-			_rezultat[el["pachet"]] = {"stare": "lipsa" if motiv == "lipsa" else "refuzat", "motiv": text}
+			_rezultat[el["pachet"]] = {"stare": "lipsa" if motiv == "lipsa" else "refuzat", "motiv": _textNeinstalat(el, motiv)}
+			if motiv == "lipsa":
+				tineMinteLipsa(el["pachet"], conf)
 			_jurnal("%s nu se instaleaza: %s" % (el["pachet"], motiv))
 			_programeaza(PAS_URMATOR_MS)
 			return
@@ -501,6 +600,7 @@ def dupaLucrare(el, lucrare, plugins=None):
 				_mesaj(_t("Modulul %s nu s-a instalat: %s") % (el["modul"], motiv))
 			return
 		_rezultat[el["pachet"]] = {"stare": "instalat", "motiv": ""}
+		uitaLipsa(el["pachet"])
 		if el.get("fel") == "biblioteca":
 			# programele (module de acces) nu sunt pluginuri de activat: fiecare porneste din nou prin dupa(), dar numai dupa ultima
 			# biblioteca pe care o mai asteapta (mgcamd cere trei pachete, deci trei elemente in coada: o pornire dupa primul ar cadea)
@@ -557,6 +657,7 @@ def dupaLucrare(el, lucrare, plugins=None):
 def _reseteaza():
 	"""numai pentru probe: starea modulului ca la pornire"""
 	_harta[0] = None
+	_lipsa[0] = None
 	del _coada[:]
 	_rezultat.clear()
 	_pePlugin.clear()

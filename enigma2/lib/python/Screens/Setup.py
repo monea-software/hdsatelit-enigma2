@@ -437,6 +437,15 @@ class Setup(ConfigListScreen, Screen):
 			HdsSetariSunet.uitaVolume()
 			self.session.open(MessageBox, _("Volumele ținute minte au fost uitate."), MessageBox.TYPE_INFO, timeout=5)
 			return
+		# HDSatelit: o setare cu atributul hdsDeschide (functie(session) -> True daca a deschis un ecran; de pilda
+		# config.usage.hds_piconuri, Components/HdsPiconInstalare.leaga_setarea: fara nicio sigla, OK deschide instalarea)
+		f = getattr(self.getCurrentItem(), "hdsDeschide", None)
+		if f is not None:
+			try:
+				if f(self.session):
+					return
+			except Exception as eroare:
+				print("[Setup] hdsDeschide: %s" % eroare)
 		ConfigListScreen.keyOK(self)
 
 	def createSummary(self):

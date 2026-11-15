@@ -266,6 +266,10 @@ def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=
                 '--rata-min', str(max(1, int(rata_min or 0) // 1000))]
     else:
         argv = [PROGRAM]
+        # sub 1 MSym/s numai la cerere: programul coboara podeaua (implicit 1000 kSym/s) cel mult pana la minimul declarat
+        # de driverul tunerului; alegerile de la 1 MSym/s in sus nu trimit nimic, ca pana acum
+        if 0 < int(rata_min or 0) < RATA_MIC_KSYM:
+            argv += ['--rata-min', str(int(rata_min))]
     argv += ['--tuner', str(int(tuner)), '--lo-jos', str(jos // 1000), '--lo-sus', str(sus // 1000),
              '--timp-max', str(int(timp_max or TIMP_MAX_S))]
     if not vuplus:
@@ -291,7 +295,9 @@ ALEGERI = {
               ('inalta', N_('Numai banda înaltă'))),
     'polarizari': (('ambele', N_('Orizontală și verticală')), ('H', N_('Numai orizontală')),
                    ('V', N_('Numai verticală'))),
-    'rata_min': (('0', N_('Oricare')), ('1000', N_('1 MSym/s')), ('2000', N_('2 MSym/s')), ('5000', N_('5 MSym/s'))),
+    # '100': si ratele sub 1 MSym/s (Silviu, SF8008: 285 kSym/s pe 19,2E), numai pe tunerele care le declara; mai lent
+    'rata_min': (('0', N_('Oricare')), ('100', N_('Și sub 1 MSym/s (mai lent)')), ('1000', N_('1 MSym/s')),
+                 ('2000', N_('2 MSym/s')), ('5000', N_('5 MSym/s'))),
     # treptele: omul alege cat de amanuntit; implicit cea mai sigura
     'trepte': (('1', N_('1: toată banda o dată')), ('2', N_('2: și golurile benzii')),
                ('3', N_('3: golurile de două ori'))),
@@ -302,6 +308,8 @@ TEXTE_TREPTE = {
     2: N_('Treapta 2: și toate golurile benzii, căutate din nou în ferestre înguste.'),
     3: N_('Treapta 3: golurile încă o dată, cu alte margini. Cea mai sigură și cea mai lungă.'),
 }
+# sub aceasta rata (kSym/s) cautarea oarba cere programului podeaua coborata (--rata-min)
+RATA_MIC_KSYM = 1000
 # ultimele alegeri, cat merge interfata (ecranul si pagina web pornesc de la ele)
 ULTIMELE = {'banda': 'toata', 'polarizari': 'ambele', 'rata_min': '0', 'trepte': '3'}
 
@@ -644,6 +652,21 @@ TEXTE_STARE = {'gasit': N_('găsit'), 'nou': N_('nou'), 'cunoscut': N_('se caut�
 
 def text_stare(stare):
     return _t(TEXTE_STARE.get(stare, stare))
+
+
+def casete(st):
+    """DSG2 (14.11.2026): casetele cautarii, pe televizor (Screens/ScanerOarba) si in pagina /oarba:
+    [(cheie, cifra, eticheta, randul mic)] din stare(): Transpondere (gasite, cu cele noi), Progres, Durata. [] cand nu
+    s-a pornit nicio cautare sau la eroare (atunci ramane numai randul de stare, care spune de ce). Aceleasi numere ca
+    randul de stare, care ramane intreg sub casete."""
+    if not st or st.get('faza') in (None, NIMIC, EROARE):
+        return []
+    n = st.get('numere') or {}
+    noi = int(n.get('noi') or 0)
+    gasite = noi + int(n.get('gasite_cunoscute') or 0)
+    return [('transp', '%d' % gasite, _t('Transpondere'), _t('new: %d') % noi),
+            ('progres', '%d%%' % int(st.get('procent') or 0), _t(N_('Progres')), ''),
+            ('durata', '%d s' % int(st.get('durata_s') or 0), _t('Durata'), '')]
 
 
 # ---------------------------------------------------------------- cautarea

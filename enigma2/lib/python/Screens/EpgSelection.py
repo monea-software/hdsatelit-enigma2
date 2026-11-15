@@ -125,14 +125,21 @@ class EPGSelection(Screen):
 			self.onSelectionChanged()
 
 	def timerMenu(self):
+		# MENU in ghidul multiplu: lista; la coada "Ghidul TV din internet" (Screens/HdsGhidInternet.py, 0.7.5, TODO 14.11
+		# 22:14: EPG Import cu sursele tarii intr-un pas). In ghidul unui canal MENU ramane editarea directa.
 		if self.type == EPG_TYPE_MULTI:
 			def ales(ret):
 				if ret is not None:
 					ret[1]()
 			self.session.openWithCallback(ales, ChoiceBox, title=_("Ghid TV"), list=[
-				(_("Editează înregistrarea"), self.timerEdit), (_("Alege ziua și ora"), self.enterDateTime)])
+				(_("Editează înregistrarea"), self.timerEdit), (_("Alege ziua și ora"), self.enterDateTime),
+				(_("Ghidul TV din internet"), self.hdsGhidInternet)])
 		else:
 			self.timerEdit()
+
+	def hdsGhidInternet(self):
+		from Screens.HdsGhidInternet import HdsGhidInternet
+		self.session.open(HdsGhidInternet)
 
 	def hdsGhid(self):
 		"""GhidTimer al ecranului; facut aici si pentru subclasele care nu cheama __init__ (EPGSearch)"""

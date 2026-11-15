@@ -662,7 +662,13 @@ def transpondere_receptor(cale4=None):
                         pid_t2 = int(c[15]) if len(c) > 15 else 4096
                         t2mi[tuple(int(x, 16) for x in parti_cheie[:3])] = {
                             'poz': poz + 3600 if poz < 0 else poz, 'khz': int(c[0]), 'pol': int(c[2]), 'is_id': is_id,
-                            'plp': plp, 'pid': pid_t2 if 0 < pid_t2 < 0x1FFF else 4096}
+                            'plp': plp, 'pid': pid_t2 if 0 < pid_t2 < 0x1FFF else 4096,
+                            # restul acordului (straine.feed_din_t2mi face din ele un feed cand lista noastra nu-l are):
+                            # sr:pol:fec:pozitie:inversare:steaguri:sistem:modulatie:rolloff:pilot:is_id:pls_code:pls_mode
+                            'sr': int(c[1]), 'fec': int(c[3]) if len(c) > 3 else 0,
+                            'sistem': int(c[7]) if len(c) > 7 else 0, 'modulatie': int(c[8]) if len(c) > 8 else 0,
+                            'rolloff': int(c[9]) if len(c) > 9 else 0, 'pls_cod': int(c[12]) if len(c) > 12 else 0,
+                            'pls_mod': int(c[13]) if len(c) > 13 else 0}
                 except (ValueError, IndexError):
                     continue
     _PRINSE['semn'], _PRINSE['tp'], _PRINSE['t2mi'] = semn, rez, t2mi

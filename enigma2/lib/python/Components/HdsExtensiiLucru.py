@@ -434,6 +434,150 @@ def unulPePlugin(pluginuri, plugins=None):
 	return rez
 
 
+# ---------------------------------------------------------------- pachetul instalat fara rand in lista pluginurilor
+# (tamiciav7, LinuxSat 164122, 14.11.2026): OK pe EPGImport cu "Show in plugins" = Nu spunea "este instalat si la zi", desi
+# pluginul are intrarea lui in meniu (WHERE_MENU). Acum OK deschide intrarea din meniu (si randul spune unde e), pe un modul de
+# acces deschide ecranul modulelor (pornire, oprire, repornire), iar la un pachet fara ecran spune la ce foloseste.
+
+# PluginDescriptor.WHERE_MENU (Plugins/Plugin.py), fara import, ca _LISTA_PLUGINURI
+_MENIU = 4
+MENIU_XML = '/usr/share/enigma2/menu.xml'
+_meniuri = {}
+# randul ecranului modulelor de acces din menu.xml (entryID cam_setup, in meniul cu id cam_menu)
+MENIU_ACCES = 'cam_menu'
+RAND_ACCES = N_('Module de acces condiționat')
+
+
+def meniurile(cale=None):
+	"""[(id, drum)] din menu.xml, in ordinea din fisier: id-ul fiecarui meniu (<id val=...>) si titlurile netraduse de la
+	"Menu" pana la el. Citit o data; [] cand fisierul lipseste sau e stricat."""
+	if cale is None:
+		try:
+			from Tools.Directories import resolveFilename, SCOPE_SKIN
+			cale = resolveFilename(SCOPE_SKIN, 'menu.xml')
+		except Exception:
+			cale = MENIU_XML
+	if cale in _meniuri:
+		return _meniuri[cale]
+	rez = []
+	try:
+		import xml.etree.ElementTree as ET
+
+		def mergi(nod, drum):
+			for i in nod.findall('id'):
+				if i.get('val'):
+					rez.append((i.get('val'), drum))
+			for m in nod.findall('menu'):
+				mergi(m, drum + (m.get('text') or '',))
+		radacina = ET.parse(cale).getroot()
+		# <menuxml><menu key="mainmenu">...: meniul principal e "Menu", ca in textele noastre (HdsAsistenta.drumMeniu)
+		for principal in ([radacina] if radacina.tag == 'menu' else radacina.findall('menu')):
+			mergi(principal, (N_('Menu'),))
+	except Exception as e:
+		_jurnal('meniurile din %s: %s' % (cale, e))
+	_meniuri[cale] = rez
+	return rez
+
+
+def drumText(drum):
+	""""Meniu > Setări > EPG-Importer", in limba receptorului"""
+	return ' > '.join(_t(x) for x in drum if x)
+
+
+def intrareMeniu(dosar, plugins=None, meniuri=None):
+	"""Prima intrare de meniu pusa de pluginul din `dosar` (WHERE_MENU), cautata in meniurile imaginii in ordinea din menu.xml
+	si pe id-urile de referinta ale fiecaruia (HdsPluginuriImagine.ID_MENIU_REFERINTA, ca Screens/Menu.py): {'titlu',
+	'functie', 'drum'} (drumul pana la intrare, cu ea), sau None. Un plugin care cade pe un id nu strica cautarea."""
+	f = getattr(_componenta(plugins), 'getPlugins', None)
+	if f is None or not dosar:
+		return None
+	dosar = posixpath.normpath(dosar)
+	try:
+		ale_lui = [x for x in f(_MENIU) if _dosar(x) == dosar]
+	except Exception as e:
+		_jurnal('intrarile de meniu: %s' % e)
+		return None
+	if not ale_lui:
+		return None
+	referinte = getattr(I, 'ID_MENIU_REFERINTA', {})
+	for ident, drum in (meniurile() if meniuri is None else meniuri):
+		for cerut in (ident,) + tuple(referinte.get(ident, ())):
+			for x in ale_lui:
+				try:
+					intrari = x(cerut) or []
+				except Exception:
+					continue
+				for e in intrari:
+					try:
+						titlu, functie = e[0], e[1]
+					except (TypeError, IndexError, KeyError):
+						continue
+					if callable(functie):
+						return {'titlu': str(titlu), 'functie': functie, 'drum': tuple(drum) + (str(titlu),)}
+	return None
+
+
+def drumAcces(meniuri=None):
+	"""drumul ecranului modulelor de acces (CamSetup), din menu.xml"""
+	for ident, drum in (meniurile() if meniuri is None else meniuri):
+		if ident == MENIU_ACCES:
+			return tuple(drum) + (RAND_ACCES,)
+	return (N_('Menu'), RAND_ACCES)
+
+
+def folositDe(catalog, p):
+	"""titlurile pachetelor instalate care depind de p (cel mult 5, dupa nume)"""
+	toate = getattr(catalog, '_toate', None) or {}
+	return sorted(set(x.titlu for x in toate.values()
+		if x is not p and x.instalat and p.nume in (x.depinde or ())), key=lambda t: t.lower())[:5]
+
+
+def deschidereFaraPlugin(catalog, p, plugins=None, meniuri=None, texte=True):
+	"""Ce face OK pe un pachet instalat care nu are rand in lista pluginurilor (pluginPentru da None), aceeasi pe televizor si
+	in web: {'fel': 'meniu', 'titlu', 'functie', 'drum'} (intrarea lui din meniu), {'fel': 'acces', 'drum'} (un modul de
+	acces: ecranul modulelor), {'fel': 'fara_ecran', 'text', 'rand'} (la ce foloseste), sau None (pachet neinstalat).
+	texte=False (tastele si butoanele fiecarui rand): fara textul pachetului fara ecran, care cauta prin toate pachetele."""
+	if p is None or not p.instalat:
+		return None
+	if p.dosar_plugin:
+		m = intrareMeniu(p.dosar_plugin, plugins, meniuri)
+		if m is not None:
+			m['fel'] = 'meniu'
+			return m
+	if p.categorie == 'acces':
+		return {'fel': 'acces', 'drum': drumAcces(meniuri)}
+	if not texte:
+		return {'fel': 'fara_ecran'}
+	rand = primulRandFaraEcran(catalog, p)
+	return {'fel': 'fara_ecran', 'text': textFaraEcran(catalog, p, rand), 'rand': rand}
+
+
+def textFaraEcran(catalog, p, rand=None):
+	"""textul ferestrei de la OK pe un pachet fara ecran (o biblioteca a altor pluginuri, ca MPHelp): ce e, cine il foloseste,
+	apoi descrierea din feed"""
+	text = rand or primulRandFaraEcran(catalog, p)
+	descriere = (p.descriere or p.subtitlu or '').strip()
+	return (text + '\n\n' + descriere) if descriere else text
+
+
+def primulRandFaraEcran(catalog, p):
+	lor = folositDe(catalog, p)
+	if lor:
+		return _t('%s nu are ecran propriu; îl folosesc alte extensii: %s.') % (p.titlu, ', '.join(lor))
+	return _t('%s nu are ecran propriu.') % p.titlu
+
+
+def notaFaraPlugin(d):
+	"""randul din detalii (televizor si web) pentru deschidereFaraPlugin: unde se deschide"""
+	if d is None:
+		return ''
+	if d['fel'] == 'meniu':
+		return _t('Nu are rând în lista pluginurilor; se deschide din %s.') % drumText(d['drum'])
+	if d['fel'] == 'acces':
+		return _t('Modul de acces: se pornește, se oprește și se repornește din %s.') % drumText(d['drum'])
+	return d.get('rand') or ''
+
+
 def descriptoriiPluginului(plugin, plugins=None):
 	"""Ceilalti descriptori ai aceluiasi plugin (acelasi dosar), intai geamanii (aceeasi functie), pentru icoana randului:
 	XStreamity, XKlass, EStalker, BouquetMakerXtream si TV Garden pun icoana numai pe intrarea din lista pluginurilor, iar
@@ -512,12 +656,187 @@ def randuriInstalate(catalog, pluginuri, plugins):
 	restul.sort(key=lambda p: (p.titlu.lower(), p.nume))
 	# in fila asta „Instalat” pe rand nu spune nimic (Eduard, 04.11.2026), deci randul nu poarta insigna
 	rez += [('pachet', p, 'in-instalate') for p in restul]
+	# ordinea omului si pluginurile ascunse de el (MENU, 0.7.5)
+	ordine, ascunse = ordineExtensii()
+	rez = aplicaOrdinea(rez, ordine, ascunse)
 	# ce are versiune noua sta sus, intr-o sectiune a ei: fila Actualizari nu mai exista
 	noi = [r for r in rez if _areActualizare(r)]
 	if not noi:
 		return rez
 	return [('sectiune', _t('Actualizări'), len(noi)), ('actualizeaza', None, len(noi))] + noi + \
 		[('sectiune', _t('Instalate'), len(rez) - len(noi))] + [r for r in rez if not _areActualizare(r)]
+
+
+# ------------------------------------------------------------ ordinea si ascunderea pluginurilor in Instalate (0.7.5)
+# Cerute de hoolman (LinuxSat 164121, 14.11.2026 04:16): pluginurile se pot muta si ascunde, ca in alte imagini. Acelasi fel
+# ca in meniul Aplicatii (Screens/HdsAplicatii.py): MENU pe randul pluginului, "Mută mai sus", "Mută mai jos", "Mută la
+# început", "Ascunde extensia", iar "Arată toate extensiile (N ascunse)" le aduce inapoi; in pagina web /extensii aceleasi
+# butoane. Cheia unui plugin e dosarul lui sub Plugins (Extensions/XStreamity): toate randurile aceluiasi plugin se muta si
+# se ascund impreuna. Ordinea si cele ascunse stau in config.plugins.hdsextensii (doua siruri de chei, cu "|" intre ele).
+# Numai fila Instalate se schimba: lista comuna a pluginurilor (tasta albastra, celelalte meniuri) ramane cum e, iar
+# Cautarea gaseste si pluginurile ascunse.
+SEP_ORDINE = '|'
+_CONFIG_EXTENSII = [None]
+
+
+def idPlugin(cale):
+	"""cheia unui plugin: ultimele doua dosare ale caii lui (Extensions/XStreamity), '' fara cale"""
+	cale = posixpath.normpath(cale.replace('\\', '/')) if isinstance(cale, str) and cale else ''
+	parti = [x for x in cale.split('/') if x and x != '.']
+	if not parti:
+		return ''
+	return '/'.join(parti[-2:]).replace(SEP_ORDINE, '_')
+
+
+def idRand(rand):
+	"""cheia pluginului unui rand din Instalate ('plugin' sau 'indisponibil'), altfel ''"""
+	fel, obj, _extra = rand
+	if fel == 'plugin':
+		return idPlugin(getattr(obj, 'path', ''))
+	if fel == 'indisponibil':
+		return idPlugin(obj.get('path', ''))
+	return ''
+
+
+def listaIduri(text):
+	vazute = []
+	for x in (text or '').split(SEP_ORDINE):
+		x = x.strip()
+		if x and len(x) <= 160 and x.isprintable() and x not in vazute:
+			vazute.append(x)
+	return vazute
+
+
+def configExtensii(config=None):
+	"""config.plugins.hdsextensii (ordine, ascunse), creata o singura data; None cand setarile nu se pot lua (probele)"""
+	if _CONFIG_EXTENSII[0] is not None:
+		return _CONFIG_EXTENSII[0]
+	try:
+		from Components.config import ConfigSubsection, ConfigText
+		if config is None:
+			from Components.config import config
+		c = ConfigSubsection()
+		c.ordine = ConfigText(default='', fixed_size=False)
+		c.ascunse = ConfigText(default='', fixed_size=False)
+		config.plugins.hdsextensii = c
+	except Exception as e:
+		_jurnal('setarile ordinii: %s' % e)
+		return None
+	_CONFIG_EXTENSII[0] = c
+	return c
+
+
+def ordineExtensii():
+	"""(ordinea, cele ascunse): sirurile din setari, ('', '') fara setari"""
+	c = configExtensii()
+	if c is None:
+		return '', ''
+	return c.ordine.value or '', c.ascunse.value or ''
+
+
+def aplicaOrdinea(randuri_, ordine, ascunse):
+	"""Randurile din Instalate fara pluginurile ascunse si cu randurile pluginurilor in ordinea omului: intai cele din
+	`ordine`, apoi cele noi, in ordinea de fabrica (randurile unui plugin raman impreuna, in ordinea lor). Celelalte randuri
+	(pachetele fara plugin) raman pe locul lor, dupa pluginuri."""
+	ascunse = set(listaIduri(ascunse))
+	vazute = [r for r in randuri_ if idRand(r) not in ascunse or not idRand(r)]
+	ordine = listaIduri(ordine)
+	if not ordine:
+		return vazute
+	loc = dict((k, i) for i, k in enumerate(ordine))
+	pluginuri = [(i, r) for i, r in enumerate(vazute) if r[0] == 'plugin']
+	if not pluginuri:
+		return vazute
+	primul = {}
+	for i, r in pluginuri:
+		primul.setdefault(idRand(r), i)
+	ordonate = sorted(pluginuri, key=lambda x: (loc.get(idRand(x[1]), len(ordine)), primul[idRand(x[1])], x[0]))
+	locuri = [i for i, _r in pluginuri]
+	rez = list(vazute)
+	for i, (_j, r) in zip(locuri, ordonate):
+		rez[i] = r
+	return rez
+
+
+def iduriVazute(randuri_):
+	"""cheile pluginurilor din Instalate, o data fiecare, in ordinea din lista"""
+	rez = []
+	for r in randuri_:
+		if r[0] == 'plugin':
+			k = idRand(r)
+			if k and k not in rez:
+				rez.append(k)
+	return rez
+
+
+def iduriPluginuri(pluginuri):
+	return set(k for k in (idPlugin(getattr(x, 'path', '')) for x in pluginuri or ()) if k)
+
+
+def nrAscunse(pluginuri, plugins=None):
+	"""cate pluginuri instalate sunt ascunse acum (si cele care nu pornesc, dupa dosar)"""
+	toate = iduriPluginuri(pluginuri) | set(idPlugin(e.get('path', '')) for e in indisponibile(plugins))
+	return len(toate & set(listaIduri(ordineExtensii()[1])))
+
+
+PASI_ORDINE = ('sus', 'jos', 'inceput', 'ascunde')
+
+
+def pasiPosibili(randuri_, id_):
+	"""ce se poate face cu pluginul `id_` din Instalate: pasii din PASI_ORDINE, in ordinea lor"""
+	vazute = iduriVazute(randuri_)
+	if id_ not in vazute:
+		return []
+	i = vazute.index(id_)
+	rez = []
+	if i > 0:
+		rez += ['sus', 'inceput']
+	if i < len(vazute) - 1:
+		rez.append('jos')
+	return rez + ['ascunde']
+
+
+TEXTE_ORDINE = {'sus': N_('Mută mai sus'), 'jos': N_('Mută mai jos'), 'inceput': N_('Mută la început'),
+	'ascunde': N_('Ascunde extensia')}
+
+
+def schimbaOrdinea(randuri_, id_, pas, salveaza=True):
+	"""Muta sau ascunde pluginul `id_` (pas din PASI_ORDINE) fata de randurile din Instalate de acum. True daca s-a schimbat
+	ceva. Ordinea noua pastreaza locul celor ascunse (dupa cele vazute)."""
+	c = configExtensii()
+	if c is None or pas not in pasiPosibili(randuri_, id_):
+		return False
+	if pas == 'ascunde':
+		ascunse = [x for x in listaIduri(c.ascunse.value) if x != id_] + [id_]
+		c.ascunse.value = SEP_ORDINE.join(ascunse)
+		if salveaza:
+			c.ascunse.save()
+		_jurnal('extensie ascunsa: %s' % id_)
+		return True
+	vazute = iduriVazute(randuri_)
+	i = vazute.index(id_)
+	j = {'sus': i - 1, 'jos': i + 1, 'inceput': 0}[pas]
+	vazute.insert(j, vazute.pop(i))
+	ascunse = set(listaIduri(c.ascunse.value))
+	c.ordine.value = SEP_ORDINE.join(vazute + [x for x in listaIduri(c.ordine.value) if x in ascunse and x not in vazute])
+	if salveaza:
+		c.ordine.save()
+	_jurnal('ordinea extensiilor: %s %s' % (id_, pas))
+	return True
+
+
+def arataToateExtensiile(salveaza=True):
+	c = configExtensii()
+	if c is None or not c.ascunse.value:
+		return False
+	c.ascunse.value = ''
+	if salveaza:
+		c.ascunse.save()
+	return True
+
+
+def textArataToate(n):
+	return _t('Arată toate extensiile (%d ascunse)') % n
 
 
 def _areActualizare(rand):
@@ -561,19 +880,147 @@ def sectiunePachet(p):
 	return (2 + P.ORDINE.get(p.categorie, len(P.CATEGORII)), _t(P.ETICHETE.get(p.categorie, 'Altele')))
 
 
+# ------------------------------------------------------------ dosarele din Disponibile (0.7.5)
+# Cerute de oameni (monuser, LinuxSat 164173, 14.11.2026 02:21; JAKITAKI, Satedu 32518, 14.11.2026 10:36): Disponibile pe
+# dosare care se deschid si se inchid cu OK (Pluginuri, Media, Drivere, Skinuri, Acces conditionat, Sigle...), ca in alte
+# imagini; pachetele noastre (HD Satelit si feedul pluginurilor externe) in dosarele dupa fel, iar cele din sursele
+# adaugate de alte programe sau de om (de pilda feedul adaugat de un manager de pluginuri) intr-un dosar al lor, ultimul,
+# "Din alte surse", cu o sectiune pe sursa. Nimic de setat: dosarele vin inchise; un singur dosar, sau filtrul activ,
+# le deschide singur. Randul ('dosar', Dosar, None) se alege cu cursorul; L.randuri da mereu toate randurile (numaratorile
+# filtrului raman bune), iar fiecare capat le strange dupa dosarele deschise (strangeDosare, pe televizor; in pagina web,
+# scriptul).
+DOSAR_ALTE = 'alte'
+ETICHETA_ALTE = N_('Din alte surse')
+TEXT_DOSAR_ALTE = N_('Pachetele din feedurile adăugate de alte programe sau de tine: %s. Nu sunt verificate de HD Satelit.')
+
+
+class Dosar(object):
+	"""un dosar din Disponibile: cheia (felul pachetelor sau DOSAR_ALTE), cate pachete are si daca e deschis acum"""
+	__slots__ = ('cheie', 'numar', 'deschis')
+
+	def __init__(self, cheie, numar, deschis=True):
+		self.cheie = cheie
+		self.numar = numar
+		self.deschis = deschis
+
+	def cu(self, **schimbari):
+		d = Dosar(self.cheie, self.numar, self.deschis)
+		for k, v in schimbari.items():
+			setattr(d, k, v)
+		return d
+
+	def __eq__(self, alt):
+		return isinstance(alt, Dosar) and (self.cheie, self.numar, self.deschis) == (alt.cheie, alt.numar, alt.deschis)
+
+	def __ne__(self, alt):
+		return not self.__eq__(alt)
+
+	__hash__ = None
+
+	def __repr__(self):
+		return 'Dosar(%r, %r, %r)' % (self.cheie, self.numar, self.deschis)
+
+
+def dinAlteSurse(catalog, p):
+	"""pachetul vine dintr-o sursa care nu e a noastra (nici HD Satelit, nici feedul pluginurilor externe). O sursa adaugata
+	de om ramane a lui, chiar cu adresa unui feed al nostru (felFeed), deci sta tot aici."""
+	feed = feedRand(catalog, 'pachet', p, None)
+	return feed == FEED_ALTA or feed.startswith(PREFIX_SURSA)
+
+
+def dosarPachet(catalog, p):
+	"""(ordinea, cheia) dosarului unui pachet din Disponibile"""
+	if dinAlteSurse(catalog, p):
+		return (1000, DOSAR_ALTE)
+	ordine, _eticheta = sectiunePachet(p)
+	if ordine == 0:
+		return (0, 'pluginuri')
+	if ordine == 1:
+		return (1, 'media')
+	return (ordine, p.categorie if p.categorie in P.ETICHETE else 'altele')
+
+
+def numeDosar(cheie):
+	if cheie == DOSAR_ALTE:
+		return _t(ETICHETA_ALTE)
+	if cheie == 'pluginuri':
+		return _t('Pluginuri')
+	if cheie == 'media':
+		return _t('Media')
+	return _t(P.ETICHETE.get(cheie, 'Altele'))
+
+
+def icoanaDosar(cheie):
+	if cheie in ('pluginuri', 'media'):
+		return 'extensii'
+	return P.ICOANE.get(cheie, 'altele')
+
+
+def surseAlte(catalog):
+	"""numele surselor din dosarul "Din alte surse" (cele care au pachete de luat), in ordinea filtrului"""
+	chei = set(feedRand(catalog, 'pachet', p, None) for p in deDescarcat(catalog) if dinAlteSurse(catalog, p))
+	return [numeFeedFiltru(k) for k in sorted(chei, key=_ordineFeed)]
+
+
 def randuriDeDescarcat(catalog):
-	"""Fila Disponibile, pe feeduri si, in fiecare feed, pe sectiuni: un rand ('sectiune', titlul, numarul) inaintea
-	pachetelor ei. Pe randul de sectiune nu se ajunge cu cursorul."""
+	"""Fila Disponibile, pe dosare (0.7.5): un rand ('dosar', Dosar, None) inaintea pachetelor lui. In dosarul "Din alte
+	surse", un rand ('sectiune', numele sursei, numarul) inaintea pachetelor fiecarei surse; pe randul de sectiune nu se
+	ajunge cu cursorul. Randul fiecarui pachet spune si de unde vine (cuSursa)."""
 	grupe = {}
 	for p in deDescarcat(catalog):
-		cheie = (feedRand(catalog, 'pachet', p, None), sectiunePachet(p))
-		grupe.setdefault(cheie, []).append(p)
+		grupe.setdefault(dosarPachet(catalog, p), []).append(p)
 	rez = []
-	for feed, sectiune in sorted(grupe, key=lambda k: (_ordineFeed(k[0]), k[1])):
-		lista = grupe[(feed, sectiune)]
-		rez.append(('sectiune', '%s  ·  %s' % (numeFeedFiltru(feed), sectiune[1]), len(lista)))
-		rez += [('pachet', p, None) for p in lista]
+	for cheie in sorted(grupe):
+		lista = grupe[cheie]
+		rez.append(('dosar', Dosar(cheie[1], len(lista)), None))
+		if cheie[1] != DOSAR_ALTE:
+			rez += [('pachet', p, None) for p in lista]
+			continue
+		pe_sursa = {}
+		for p in lista:
+			pe_sursa.setdefault(feedRand(catalog, 'pachet', p, None), []).append(p)
+		for feed in sorted(pe_sursa, key=_ordineFeed):
+			rez.append(('sectiune', numeFeedFiltru(feed), len(pe_sursa[feed])))
+			rez += [('pachet', p, None) for p in pe_sursa[feed]]
 	return rez
+
+
+def dosareDeschiseImplicit(randuri_, filtru=None, fila=''):
+	"""Dosarele vin inchise; un singur dosar, sau filtrul activ (lista e deja ingustata de om), le deschide pe toate."""
+	return sum(1 for r in randuri_ if r[0] == 'dosar') <= 1 or filtruActiv(filtru, fila)
+
+
+def strangeDosare(randuri_, alese=None, implicit=False):
+	"""Randurile aratate: sub un dosar inchis nu se vede nimic. `alese`: {cheie: deschis} schimbate de om cu OK in sesiunea
+	ecranului; celelalte dosare sunt `implicit` (dosareDeschiseImplicit). Fiecare rand de dosar spune daca e deschis."""
+	alese = alese or {}
+	rez = []
+	inchis = False
+	for r in randuri_:
+		if r[0] == 'dosar':
+			deschis = alese.get(r[1].cheie, implicit)
+			inchis = not deschis
+			rez.append(('dosar', r[1].cu(deschis=deschis), r[2]))
+		elif not inchis:
+			rez.append(r)
+	return rez
+
+
+def textDosar(d):
+	"""subtitlul randului unui dosar: cate pachete are si ce face OK"""
+	numar = _t('un pachet') if d.numar == 1 else _t('%d pachete') % d.numar
+	return '%s · %s' % (numar, _t('OK închide dosarul') if d.deschis else _t('OK deschide dosarul'))
+
+
+def descriereDosar(catalog, d):
+	"""descrierea din detaliile unui dosar: sursele lui (Din alte surse) sau primele pachete"""
+	if d.cheie == DOSAR_ALTE:
+		return _t(TEXT_DOSAR_ALTE) % ', '.join(surseAlte(catalog))
+	titluri = [p.titlu for p in deDescarcat(catalog) if dosarPachet(catalog, p)[1] == d.cheie]
+	text = ', '.join(titluri[:12])
+	if len(titluri) > 12:
+		text += ' ' + _t('și încă %d') % (len(titluri) - 12)
+	return text
 
 
 def textGolDisponibile(catalog):
@@ -777,7 +1224,29 @@ def filtreaza(catalog, randuri_, filtru, fila):
 	if not areFiltru(fila) or not filtruActiv(filtru, fila):
 		return list(randuri_)
 	bune = [r for r in randuri_ if potrivesteFiltru(catalog, r, filtru, fila)]
-	return [r for i, r in enumerate(bune) if r[0] != 'sectiune' or (i + 1 < len(bune) and bune[i + 1][0] in RANDURI_CU_PACHET)]
+	if not any(r[0] == 'dosar' for r in bune):
+		return [r for i, r in enumerate(bune) if r[0] != 'sectiune' or (i + 1 < len(bune) and bune[i + 1][0] in RANDURI_CU_PACHET)]
+	# Disponibile pe dosare (0.7.5): dosarele si sectiunile fara pachete raman pe dinafara; cele ramase isi numara din nou
+	# pachetele (altfel "Drivere (14)" ar sta deasupra a doua pachete)
+	rez = []
+	n_sectiune = n_dosar = 0
+	for r in reversed(bune):
+		if r[0] in RANDURI_CU_PACHET:
+			n_sectiune += 1
+			n_dosar += 1
+			rez.append(r)
+		elif r[0] == 'sectiune':
+			if n_sectiune:
+				rez.append((r[0], r[1], n_sectiune))
+			n_sectiune = 0
+		elif r[0] == 'dosar':
+			if n_dosar:
+				rez.append((r[0], r[1].cu(numar=n_dosar), r[2]))
+			n_sectiune = n_dosar = 0
+		else:
+			rez.append(r)
+	rez.reverse()
+	return rez
 
 
 def _ordineFeed(cheie):
@@ -871,6 +1340,10 @@ def descriereRand(catalog, fel, obj, extra):
 	"""(icoana, titlu, subtitlu, insigna, culoarea insignei, textul mic din dreapta) al unui rand din lista. Culoarea e
 	o cheie ('bun', 'chihlimbar', 'rau') sau None. Randul cautarii in retea il face fiecare capat. Textele sunt
 	intregi: un rand care nu incape deruleaza (lib/gui/elabel.h)."""
+	if fel == 'dosar':
+		alte = obj.cheie == DOSAR_ALTE
+		sub = cuSursa(', '.join(surseAlte(catalog)), textDosar(obj)) if alte else textDosar(obj)
+		return (icoanaDosar(obj.cheie), numeDosar(obj.cheie), sub, str(obj.numar), 'chihlimbar' if alte else 'eticheta', '')
 	if fel == 'plugin':
 		p = extra
 		cat = p.categorie if p is not None else categoriePlugin(getattr(obj, 'path', ''))
@@ -977,6 +1450,12 @@ def detalii(catalog, fel, obj, extra):
 	(indiciul spune tastele telecomenzii). Randul cautarii in retea il face fiecare capat."""
 	d = {'icoana': None, 'titlu': '', 'insigna': '', 'culoare': 'eticheta', 'etichete': [], 'valori': [],
 		'descriere': '', 'indiciu': ''}
+	if fel == 'dosar':
+		numar = _t('un pachet') if obj.numar == 1 else _t('%d pachete') % obj.numar
+		d.update(icoana=icoanaDosar(obj.cheie), titlu=numeDosar(obj.cheie), insigna=numar,
+			culoare='chihlimbar' if obj.cheie == DOSAR_ALTE else 'eticheta', descriere=descriereDosar(catalog, obj),
+			indiciu=_t('OK închide dosarul') if obj.deschis else _t('OK deschide dosarul'))
+		return d
 	if fel == 'plugin':
 		p = extra
 		cat = p.categorie if p is not None else categoriePlugin(getattr(obj, 'path', ''))
@@ -1061,7 +1540,15 @@ def detalii(catalog, fel, obj, extra):
 		elif p.actualizare:
 			d['indiciu'] = _t('OK actualizează · Roșu șterge')
 		elif p.instalat:
-			d['indiciu'] = _t('Instalat și la zi · Roșu șterge') if p.se_poate_sterge else _t('Instalat și la zi')
+			# fara rand in lista pluginurilor: unde se deschide (intrarea din meniu, ecranul modulelor de acces)
+			fara = deschidereFaraPlugin(catalog, p) if pluginPentru(pluginuriDeDeschis(_componenta(None)), p) is None else None
+			nota = notaFaraPlugin(fara)
+			if nota:
+				d['descriere'] = (d['descriere'] + '\n' if d['descriere'] else '') + nota
+			if fara is not None and fara['fel'] in ('meniu', 'acces'):
+				d['indiciu'] = ' · '.join([_t('OK deschide')] + ([_t('Roșu șterge')] if p.se_poate_sterge else []))
+			else:
+				d['indiciu'] = _t('Instalat și la zi · Roșu șterge') if p.se_poate_sterge else _t('Instalat și la zi')
 		elif p.python2:
 			d.update(insigna=_t(INSIGNA_PYTHON2), culoare='rau', descriere=descrierePython2(catalog, fel, obj, extra),
 				indiciu=_indiciuPython2(catalog, fel, obj, extra))
@@ -1239,6 +1726,9 @@ def taste(catalog, fel, obj, extra, pluginuri):
 			verde = N_('Instalează')
 		elif obj.instalat and pluginPentru(pluginuri, obj) is not None:
 			verde = N_('Deschide')
+		elif obj.instalat and (deschidereFaraPlugin(catalog, obj, texte=False) or {}).get('fel') in ('meniu', 'acces'):
+			# intrarea pluginului din meniu sau ecranul modulelor de acces (tamiciav7, 14.11.2026)
+			verde = N_('Deschide')
 		elif python2Rand(fel, obj, extra) and inlocuitorRand(catalog, fel, obj, extra)[1] == 'instalabil':
 			verde = BUTON_INLOCUITOR
 		if obj.se_poate_sterge:
@@ -1285,6 +1775,58 @@ def descarcareSursa(catalog, fel, obj, extra, **kw):
 # Un pachet dintr-o sursa straina se descarca intai (opkg --download-only) si se citeste inainte de instalare (Lucrare).
 INSIGNA_PYTHON2 = N_('Făcut pentru Python 2')
 TITLU_PYTHON2 = N_('%s este făcut pentru Python 2')
+# 0.7.5 (MA9, TODO 06.11 05:30, raportul 919342): un pachet cu module .so facute numai pentru alt Python 3 nu se instaleaza.
+# Incarcarea lor e oprita deja (Components/HdsAltPython.py, a06e48570, 693c5e6bf), dar pluginul instalat nu mergea si
+# lasa fisiere straine; acum omul afla inainte, din fila Din fisier si la pachetele surselor straine (dupa descarcare).
+TITLU_ALT_PYTHON = N_('%s este făcut pentru alt Python')
+TEXT_ALT_PYTHON = N_('%(nume)s nu se instalează: e făcut pentru Python %(alt)s, iar imaginea are Python %(acum)s. '
+	'Cere autorului varianta pentru Python %(acum)s.')
+
+
+def pythonAcum():
+	import sys
+	return '%d.%d' % tuple(sys.version_info[:2])
+
+
+# 0.7.5 (CTU, TODO 15.11 07:08, Ustym 4K PRO raportul 340957): un pachet care ar inlocui pachetele Python de care porneste
+# interfata (python3-attrs, twisted si dependintele lor, Components/HdsPachetePornire.py) nu se instaleaza: un attrs strain
+# a oprit interfata la fiecare pornire, chiar si in modul sigur.
+TITLU_PORNIRE = N_('%s ar opri pornirea interfeței')
+TEXT_PORNIRE = N_('%(nume)s nu se instalează: ar înlocui %(pachet)s al imaginii (%(motiv)s), iar fără el interfața nu mai '
+	'pornește. Pachetele Python ale imaginii vin numai din actualizările HD Satelit.')
+MOTIVE_PORNIRE = {
+	'nume': N_('versiunea %(versiune)s în locul celei din imagine, %(instalata)s'),
+	'inlocuieste': N_('pachetul spune că îl înlocuiește'),
+	'fisiere': N_('are fișierul lui %(fisier)s'),
+}
+
+
+def refuzPornire(cale, radacina='/'):
+	"""None, sau ce ar inlocui pachetul din pachetele pornirii (HdsPachetePornire.verifica); o eroare nu opreste nimic"""
+	try:
+		try:
+			from Components import HdsPachetePornire
+		except ImportError:  # probe pe PC
+			import HdsPachetePornire
+		return HdsPachetePornire.verifica(cale, radacina)
+	except Exception as e:
+		_jurnal('pachetele pornirii: %s' % e)
+		return None
+
+
+def textPornire(nume, r):
+	"""mesajul refuzului unui pachet care ar inlocui pachetele pornirii (acelasi pe televizor si in pagina web)"""
+	motiv = _t(MOTIVE_PORNIRE.get(r.get('fel'), MOTIVE_PORNIRE['inlocuieste'])) % {
+		'versiune': r.get('versiune') or '?', 'instalata': r.get('instalata') or '?', 'fisier': r.get('fisier') or ''}
+	return _t(TEXT_PORNIRE) % {'nume': nume or r.get('pachet') or _t('Extensia'), 'pachet': r.get('inlocuit') or '?',
+		'motiv': motiv}
+
+
+def textAltPython(nume, alt):
+	"""mesajul refuzului unui pachet facut pentru alt Python 3 (acelasi pe televizor si in pagina web)"""
+	return _t(TEXT_ALT_PYTHON) % {'nume': nume or _t('Extensia'), 'alt': alt, 'acum': pythonAcum()}
+
+
 TEXT_PYTHON2 = (N_('Extensia e făcută pentru imaginile vechi, cu Python 2.'),
 	N_('Imaginea aceasta are Python 3, deci nu se instalează.'))
 BUTON_INLOCUITOR = N_('Instalează înlocuitorul')
@@ -1741,6 +2283,14 @@ def planFisier(f, argumente=None, catalog=None):
 		verifica(refa=True)
 	if getattr(f, 'python2', None):
 		return planPython2Fisier(catalog, f), None
+	# 0.7.5: module .so facute numai pentru alt Python 3 (de pilda 3.7): nu se instaleaza (TODO 06.11 05:30)
+	alt = P.H.alt_python(getattr(f, 'verdict', None))
+	if alt:
+		return None, (textAltPython(f.titlu, alt), 'rau')
+	# 0.7.5 (CTU): pachetele Python de care porneste interfata nu se inlocuiesc (TODO 15.11 07:08)
+	r = refuzPornire(getattr(f, '_citire', None) or f.cale, getattr(catalog, 'radacina', None) or '/')
+	if r:
+		return None, (textPornire(f.titlu, r), 'rau')
 	cale = P.fisier_ipk_permis(f.cale)
 	# 0.7.4: un fisier vechi care cere pachete Python 2: cu perechile python3 si --force-depends (vezi perechiPython3)
 	py2 = dependintePython2([f])
@@ -1904,26 +2454,45 @@ def descarcareInCurs():
 def pazesteListeleHds():
 	"""dupa opkg update, listele surselor HD Satelit care nu sunt cele din ultima stare.json
 	semnata se sterg (Components/HdsActualizari.pazeste_listele), ca un pachet pus pe serverul nostru de altcineva sa
-	nu se vada si sa nu se instaleze din Extensii"""
+	nu se vada si sa nu se instaleze din Extensii. 0.7.5 (FED): cand feedul se republica in timpul descarcarii, in locul
+	listei noi se pune copia semnata de dinainte (pastreazaListeleHds). Intoarce numele listelor nepotrivite (sterse si
+	puse la loc), pentru reincercare."""
 	try:
 		try:
-			from Components.HdsActualizari import pazeste_listele
+			from Components.HdsActualizari import pazeste_listele, ULTIMA_PAZA
 		except ImportError:
-			from HdsActualizari import pazeste_listele
+			from HdsActualizari import pazeste_listele, ULTIMA_PAZA
 		sterse = pazeste_listele()
+		puse = list(ULTIMA_PAZA.get('puse_la_loc') or [])
 	except Exception as e:
 		_jurnal('paza listelor HD Satelit: %s' % e)
 		return []
+	for nume in puse:
+		scrieJurnal('lista %s pusa la loc (cea semnata de dinainte): lista noua nu e inca cea semnata de HD Satelit' % nume)
 	for nume in sterse:
 		scrieJurnal('lista %s stearsa: nu e cea semnata de HD Satelit' % nume)
-	return sterse
+	return list(sterse) + puse
 
 
-def pornesteDescarcarea(ipkg=None, inainte=None, rezerva=False):
+def pastreazaListeleHds():
+	"""chiar inainte de opkg update: copia listelor HD Satelit (Components/HdsActualizari.pastreaza_listele)"""
+	try:
+		try:
+			from Components import HdsActualizari as A
+		except ImportError:
+			import HdsActualizari as A
+		return A.pastreaza_listele()
+	except Exception as e:
+		_jurnal('copia listelor HD Satelit: %s' % e)
+		return []
+
+
+def pornesteDescarcarea(ipkg=None, inainte=None, rezerva=False, reincercare=False):
 	"""opkg update. `ipkg`: IpkgComponent-ul ecranului, cu ascultatorul lui pus deja; altfel unul nou (pagina).
 	Descarcarea se tine aici pana la sfarsit, deci se vede si de pe televizor, si din pagina. La sfarsit:
 	STARE['descarcare'] = {'cod', 'motiv', 'cand', 'rezerva'} si catalogul paginii se citeste din nou. `rezerva`: a doua
-	descarcare, de pe serverul de rezerva al feedului extern (treciPeRezerva)."""
+	descarcare, de pe serverul de rezerva al feedului extern (treciPeRezerva). `reincercare`: descarcarea pornita de
+	reincearcaListele (listele HD Satelit nepotrivite cat se republica feedul), care nu se mai reincearca."""
 	d = ipkg if ipkg is not None else IpkgComponent()
 	linii = []
 	STARE['ultima_descarcare'] = time.time()
@@ -1946,7 +2515,8 @@ def pornesteDescarcarea(ipkg=None, inainte=None, rezerva=False):
 	def paza(e, parametru):
 		if e == IpkgComponent.EVENT_DONE:
 			d.removeCallback(paza)
-			pazesteListeleHds()
+			if pazesteListeleHds() and not reincercare:
+				reincearcaListele()
 			if parametru != 0:
 				treciPeRezerva(linii)
 	# paza listelor HD Satelit inaintea ascultatorului ecranului (pus deja), care citeste
@@ -1957,8 +2527,42 @@ def pornesteDescarcarea(ipkg=None, inainte=None, rezerva=False):
 	else:
 		d.addCallback(paza)
 	pastreazaPanaLaSfarsit(d)
+	pastreazaListeleHds()
 	d.startCmd(IpkgComponent.CMD_UPDATE)
 	return d
+
+
+# 0.7.5 (FED, TODO 14.11 02:12): listele HD Satelit nepotrivite dupa opkg update (feedul se republica chiar atunci; s-au pus
+# la loc cele semnate de dinainte sau s-au sters): inca un opkg update, o singura data, dupa atatea ms, numai daca nu
+# lucreaza deja opkg. Serverul trece publicarea deodata; peste cateva secunde listele si stare.json sunt iar din aceeasi.
+INTARZIERE_REINCERCARE_LISTE_MS = 45000
+FABRICA_CEAS = None     # eTimer; probele de pe PC dau altul
+_reincercareListe = {'ceas': None}
+
+
+def reincearcaListele():
+	"""programeaza descarcarea reincercata (pornesteDescarcarea(reincercare=True)); False cand e deja programata sau nu
+	se poate (pe PC fara ceas)"""
+	if _reincercareListe['ceas'] is not None:
+		return False
+	fabrica = FABRICA_CEAS
+	if fabrica is None:
+		try:
+			from enigma import eTimer as fabrica
+		except ImportError:  # probe pe PC
+			return False
+
+	def acum():
+		_reincercareListe['ceas'] = None
+		if descarcareInCurs() or lucrareInCurs() or rezervaAsteapta():
+			return
+		scrieJurnal('reincerc descarcarea listei pachetelor (feedul HD Satelit se republica)')
+		pornesteDescarcarea(reincercare=True)
+	ceas = fabrica()
+	ceas.callback.append(acum)
+	ceas.start(INTARZIERE_REINCERCARE_LISTE_MS, True)
+	_reincercareListe['ceas'] = ceas
+	return True
 
 
 # rezerva feedului extern (0.7.4): dupa trecere, inca un opkg update, pornit putin mai tarziu (ascultatorii descarcarii
@@ -2203,6 +2807,8 @@ class Lucrare(object):
 				stare['rez'] = [(c, P.H.din_ipk(c)) for c in noi]
 			except Exception as e:
 				_jurnal('verificarea pachetelor: %s' % e)
+			# 0.7.5 (CTU): si dependintele descarcate (un python3-attrs strain cerut de plugin), tot pe firul acesta
+			stare['pornire'] = [(c, refuzPornire(c, radacina)) for c in noi]
 			if teme:
 				# o tema: fisierele imaginii pe care le suprascrie, copiate inainte de instalare (HdsTemeSuprascrise)
 				for c in noi:
@@ -2218,7 +2824,7 @@ class Lucrare(object):
 			from enigma import eTimer
 		except ImportError:          # probele de pe PC: pe loc
 			lucru()
-			self._verificate(stare['rez'])
+			self._verificate(stare['rez'], stare.get('pornire'))
 			return
 		# citirea pe un fir separat; rezultatul il culege un eTimer pe firul enigma2 (tragere, ca in HdsLocInregistrari)
 		self._ceas = eTimer()
@@ -2226,17 +2832,69 @@ class Lucrare(object):
 		def uitaTe():
 			if stare['gata']:
 				self._ceas.stop()
-				self._verificate(stare['rez'])
+				self._verificate(stare['rez'], stare.get('pornire'))
 		self._ceas.callback.append(uitaTe)
 		P._fire.start_new_thread(lucru, ())
 		self._ceas.start(150, False)
 
-	def _verificate(self, rezultate):
+	def _verificate(self, rezultate, pornire=None):
 		for cale, v in rezultate:
 			if v.python2:
 				self._refuzPython2(cale, v)
 				return
+		for cale, v in rezultate:
+			alt = P.H.alt_python(v)
+			if alt:
+				self._refuzAltPython(cale, v, alt)
+				return
+		for cale, r in pornire or ():
+			if r:
+				self._refuzPornire(cale, r)
+				return
 		self._instaleaza()
+
+	def _refuzPornire(self, cale, r):
+		"""un pachet descarcat ar inlocui pachetele Python de care porneste interfata: nu se instaleaza nimic, cache-ul golit"""
+		nume = r.get('pachet') if P.nume_valid(r.get('pachet') or '') else ''
+		titlu = (self.plan.get('titluri') or {}).get(nume) or (P.nume_scurt(nume) if nume else self.plan.get('nume', ''))
+		scrieJurnal('verificare: %s ar inlocui %s (%s %s, instalat %s, %s)' % (nume, r.get('inlocuit'), r.get('fel'),
+			r.get('fisier') or r.get('versiune') or '', r.get('instalata') or '', os.path.basename(cale)))
+		self.etapa = None
+		self.faza = 'gata'
+		self.cod = 'pornire'
+		self._scrie('eroare', textPornire(titlu, r))
+		self.rezultat = {'reusit': False, 'titlu': _t(TITLU_PORNIRE) % titlu, 'stare': _t('Nu s-a instalat nimic.'),
+			'culoare': 'rau', 'butoane': [N_('Închide')], 'ales': 0, 'repornire': False, 'python2': False,
+			'inlocuitor': None, 'textInlocuitor': ''}
+		scrieJurnal('---- cod pornire')
+		try:
+			P.curata_cache(self.radacina)
+		except Exception as e:
+			_jurnal('cache opkg: %s' % e)
+		catalogVechi()
+		self._anunta('gata', self.cod)
+
+	def _refuzAltPython(self, cale, v, alt):
+		"""un pachet descarcat are module .so numai pentru alt Python 3: nu se instaleaza nimic, cache-ul golit"""
+		control = P.citeste_control_ipk(cale)
+		nume = control.get('package', '') if P.nume_valid(control.get('package', '')) else ''
+		titlu = (self.plan.get('titluri') or {}).get(nume) or (P.nume_scurt(nume) if nume else self.plan.get('nume', ''))
+		scrieJurnal('verificare: %s facut pentru Python %s (%s, %s)' % (nume, alt, v.altpy[0] if v.altpy else '',
+			os.path.basename(cale)))
+		self.etapa = None
+		self.faza = 'gata'
+		self.cod = 'altpython'
+		self._scrie('eroare', textAltPython(titlu, alt))
+		self.rezultat = {'reusit': False, 'titlu': _t(TITLU_ALT_PYTHON) % titlu, 'stare': _t('Nu s-a instalat nimic.'),
+			'culoare': 'rau', 'butoane': [N_('Închide')], 'ales': 0, 'repornire': False, 'python2': False,
+			'inlocuitor': None, 'textInlocuitor': ''}
+		scrieJurnal('---- cod altpython')
+		try:
+			P.curata_cache(self.radacina)
+		except Exception as e:
+			_jurnal('cache opkg: %s' % e)
+		catalogVechi()
+		self._anunta('gata', self.cod)
 
 	def _refuzPython2(self, cale, v):
 		"""un pachet descarcat e numai pentru Python 2: nu se instaleaza nimic; textele, inlocuitorul, cache-ul golit"""

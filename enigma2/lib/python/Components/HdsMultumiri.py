@@ -362,6 +362,17 @@ SURSE = (
 	("fissix", N_("traducerea pluginurilor scrise pentru Python 2")),
 	("oZeta", N_("forma convertorului ReceiverInfo")),
 	("polywasm (Evan Wallace)", N_("WebAssembly pentru aplicațiile HbbTV pe receptoarele care nu-l au")),
+	# autorii pluginurilor construite de noi din sursa lor pentru feedul extern (retetele din
+	# meta-pluginuri-externe citeaza depozitul, autorul si licenta; pachetul are licenta si sursa langa el)
+	("Taapat", N_("pluginul YouTube din feedul nostru")),
+	("Anders Holst", N_("pluginul MovieCut din feedul nostru")),
+	("Maros Ondrasek (mx3L)", N_("pluginul SubsSupport din feedul nostru")),
+	("Coolman, betonme, Swiss-MAD", N_("pluginul Enhanced Movie Center din feedul nostru")),
+	("KiddaC", N_("pluginurile XStreamity și Jedi EPG XStream din feedul nostru")),
+	("Lululla", N_("pluginurile Command Center, TV Garden, freearhey, Smart TV Channel List, RSS Reader, Filmon și mmPicons din feedul nostru")),
+	("mMark", N_("piconurile și temele pe care le descarcă mmPicons")),
+	("dorinelu (DG Labs), pQu4k3r", N_("pluginul KidsSafe Bouquets din feedul nostru")),
+	("VicTuS59", N_("pluginul GT IPTV Player Pro din feedul nostru")),
 )
 
 

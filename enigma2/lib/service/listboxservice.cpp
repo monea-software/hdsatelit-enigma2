@@ -383,7 +383,7 @@ void eListboxServiceContent::sort()
 DEFINE_REF(eListboxServiceContent);
 
 eListboxServiceContent::eListboxServiceContent()
-	:m_visual_mode(visModeSimple), m_progressbar_height(6), m_progressbar_border_width(1), m_size(0), m_current_marked(false), m_numberoffset(0), m_hide_number_marker(false), m_itemheight(25), m_service_marks(0), m_picons_enabled(false), m_picon_clock(0)
+	:m_visual_mode(visModeSimple), m_progressbar_height(6), m_progressbar_border_width(1), m_size(0), m_current_marked(false), m_numberoffset(0), m_hide_number_marker(false), m_itemheight(25), m_service_marks(0), m_progress_percent(false), m_picon_scale(100), m_info_column(0), m_picons_enabled(false), m_picon_clock(0)
 {
 	memset(m_color_set, 0, sizeof(m_color_set));
 	cursorHome();
@@ -771,6 +771,91 @@ void eListboxServiceContent::setServiceMarks(int marks, const std::string &crypt
 		m_listbox->invalidate();
 }
 
+void eListboxServiceContent::setServiceTypeLabels(const std::string &sd, const std::string &hd, const std::string &uhd,
+	const std::string &radio, const std::string &data)
+{
+	if (sd == m_type_sd && hd == m_type_hd && uhd == m_type_uhd && radio == m_type_radio && data == m_type_data)
+		return;
+	m_type_sd = sd;
+	m_type_hd = hd;
+	m_type_uhd = uhd;
+	m_type_radio = radio;
+	m_type_data = data;
+	if (m_listbox && m_listbox->isVisible())
+		m_listbox->invalidate();
+}
+
+void eListboxServiceContent::setProgressPercent(bool percent)
+{
+	if (percent == m_progress_percent)
+		return;
+	m_progress_percent = percent;
+	if (m_listbox && m_listbox->isVisible())
+		m_listbox->invalidate();
+}
+
+void eListboxServiceContent::setPiconScale(int percent)
+{
+	percent = percent < 50 ? 50 : (percent > 200 ? 200 : percent);
+	if (percent == m_picon_scale)
+		return;
+	m_picon_scale = percent;
+	if (m_listbox && m_listbox->isVisible())
+		m_listbox->invalidate();
+}
+
+void eListboxServiceContent::setInfoColumn(int x)
+{
+	x = x > 0 ? x : 0;
+	if (x == m_info_column)
+		return;
+	m_info_column = x;
+	if (m_listbox && m_listbox->isVisible())
+		m_listbox->invalidate();
+}
+
+/* the name of a conditional access system by its CAID (the usual first byte of each system); "" when not known */
+static const char *hdsCaSystem(uint16_t caid)
+{
+	if ((caid & 0xFFF0) == 0x4AE0)
+		return "DRE-Crypt";
+	switch (caid >> 8)
+	{
+	case 0x01: return "Seca";
+	case 0x05: return "Viaccess";
+	case 0x06: return "Irdeto";
+	case 0x09: return "Videoguard";
+	case 0x0B: return "Conax";
+	case 0x0D: return "Cryptoworks";
+	case 0x0E: return "PowerVU";
+	case 0x10: return "Tandberg";
+	case 0x17: return "Betacrypt";
+	case 0x18: return "Nagravision";
+	case 0x26: return "BISS";
+	case 0x56: return "Verimatrix";
+	}
+	return "";
+}
+
+/* SD, HD, UHD, Radio or Data by the service type in the reference (EN 300 468 table 87), "" for the other types */
+std::string eListboxServiceContent::serviceTypeLabel(const eServiceReference &ref) const
+{
+	switch (ref.getData(0))
+	{
+	case 0x01: case 0x16: case 0x17: case 0x18:
+		return m_type_sd;
+	case 0x11: case 0x19: case 0x1A: case 0x1B:
+		return m_type_hd;
+	case 0x1F: case 0x20:
+		return m_type_uhd;
+	case 0x02: case 0x0A:
+		return m_type_radio;
+	case 0x0C: case 0x10:
+		return m_type_data;
+	}
+	return "";
+}
+
 /* the marks of a DVB service row (setServiceMarks), "" for anything else: read from the service database at paint
    time, so CAIDs learned at a zap show at once */
 std::string eListboxServiceContent::serviceMarks(const eServiceReference &ref) const
@@ -784,7 +869,37 @@ std::string eListboxServiceContent::serviceMarks(const eServiceReference &ref) c
 		eDVBDB *db = eDVBDB::getInstance();
 		if (db && !db->getService((const eServiceReferenceDVB&)ref, service) && service &&
 			(!service->m_ca.empty() || (service->m_flags & eDVBService::dxIsScrambledPMT)))
+		{
 			marks = m_mark_crypted;
+			if (m_service_marks & markCaSystem)
+			{
+				/* at most two names, "+" when the service has more systems */
+				std::string names;
+				int count = 0;
+				bool more = false;
+				for (CAID_LIST::const_iterator i = service->m_ca.begin(); i != service->m_ca.end(); ++i)
+				{
+					std::string name = hdsCaSystem(*i);
+					if (name.empty() || names.find(name) != std::string::npos)
+						continue;
+					if (count == 2)
+					{
+						more = true;
+						break;
+					}
+					names += (count ? "/" : "") + name;
+					++count;
+				}
+				if (!names.empty())
+					marks = more ? names + "+" : names;
+			}
+		}
+	}
+	if (m_service_marks & markServiceType)
+	{
+		std::string type = serviceTypeLabel(ref);
+		if (!type.empty())
+			marks += (marks.empty() ? "" : "  ") + type;
 	}
 	if (m_service_marks & markSource)
 	{
@@ -1276,7 +1391,12 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 				{
 					if (service_picon && area.height() > 4)
 					{
-						int slot = std::min(96, area.height() * 2), h = area.height() - 4;
+						/* HDSatelit 0.7.5 (LCS): the size of the picons (setPiconScale); smaller ones also get a smaller
+						   place, bigger ones may be wider and take the whole height of the row */
+						int slot = std::min(96 * m_picon_scale / 100, area.height() * 2 * m_picon_scale / 100);
+						int h = m_picon_scale > 100 ? area.height() : (area.height() - 4) * m_picon_scale / 100;
+						if (h < 1)
+							h = 1;
 						int w = std::max(1, service_picon->size().width() * h / std::max(1, service_picon->size().height()));
 						if (w > slot)
 						{
@@ -1327,6 +1447,9 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 
 				eRect tmp = area;
 				tmp.setWidth(tmp.width()-xoffs-reserved);
+				/* HDSatelit 0.7.5 (LCS): with the event column (setInfoColumn) the name ends before the column */
+				if (e == celServiceName && m_info_column > area.left() + xoffs + 8)
+					tmp.setWidth(std::min(tmp.width(), m_info_column - 8 - area.left() - xoffs));
 				if (tmp.width() <= 0)
 					continue;
 
@@ -1338,6 +1461,8 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 				{
 					eRect bbox = para->getBoundBox();
 					int name_width = bbox.width()+8;
+					if (m_info_column > area.left() + xoffs + 8 && m_info_column < area.left() + area.width())
+						name_width = m_info_column - area.left() - xoffs;
 					m_element_position[celServiceInfo].setLeft(area.left()+name_width+xoffs);
 					m_element_position[celServiceInfo].setTop(area.top());
 					m_element_position[celServiceInfo].setWidth(area.width()-(name_width+xoffs));
@@ -1456,7 +1581,27 @@ void eListboxServiceContent::paint(gPainter &painter, eWindowStyle &style, const
 		}
 		if (selected && (!local_style || !local_style->m_selection))
 			style.drawFrame(painter, eRect(offset, m_itemsize), eWindowStyle::frameListboxEntry);
-		if (paintProgress && evt)
+		if (paintProgress && evt && m_progress_percent && m_element_font[celServiceInfo])
+		{
+			/* HDSatelit 0.7.5 (LCS): the percent of the event, in the color of the bar, in the place of the bar */
+			eRect area = event_progress_area;
+			time_t now = time(0);
+			int duration = evt->getDuration();
+			int percent = duration > 0 ? (int)(100 * (now - evt->getBeginTime()) / duration) : 0;
+			percent = percent < 0 ? 0 : (percent > 100 ? 100 : percent);
+			std::string text = std::to_string(percent) + "%";
+			if (!selected && m_color_set[serviceEventProgressbarColor])
+				painter.setForegroundColor(m_color[serviceEventProgressbarColor]);
+			else if (selected && m_color_set[serviceEventProgressbarColorSelected])
+				painter.setForegroundColor(m_color[serviceEventProgressbarColorSelected]);
+			ePtr<eTextPara> ppara = new eTextPara(eRect(area.left(), 0, area.width(), m_itemsize.height()));
+			ppara->setFont(m_element_font[celServiceInfo]);
+			ppara->renderString(text.c_str());
+			ppara->realign(eTextPara::dirRight);
+			eRect pbox = ppara->getBoundBox();
+			painter.renderPara(ppara, offset + ePoint(0, (m_itemsize.height() - pbox.height()) / 2 - pbox.top()));
+		}
+		else if (paintProgress && evt)
 		{
 			eRect area = event_progress_area;
 			if (!selected && m_color_set[serviceEventProgressbarBorderColor])

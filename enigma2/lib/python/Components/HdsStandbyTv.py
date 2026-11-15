@@ -50,9 +50,13 @@
 #     Toate apelurile pe nod si citirea adresei din /proc/msp/hdmi0_sink le face, pe rand, firul de lucru CEC (FirCec);
 #     firul principal pune cererile in coada si ia rezultatele gata la pasii citirii, asteptand cel mult
 #     CITIRE_ASTEAPTA_S (pasul citirii nu asteapta: il ia un ceas dupa PRELUARE_MS). Un apel care nu se intoarce in
-#     CITIRE_BLOCATA_S opreste CEC pana la repornirea interfetei
+#     CITIRE_BLOCATA_S, cu firul de lucru chiar in driver, opreste CEC pana se intoarce
 #     (nimic nu mai pleaca spre nod, nici ce era in coada; firul ramas in driver e de fundal si nu-l asteapta nimeni)
-#     si apare in pagina web ca „nu raspunde”. Adresa fizica se tine minte dupa prima citire buna.
+#     si apare in pagina web ca "nu raspunde". 0.7.5 CEZ (lordjedy, SF8008: CEC oprit dupa un zap greu, pana la
+#     repornirea interfetei): starea firului de lucru se citeste din /proc/self/task/<tid>/wchan; in futex (GIL-ul tinut
+#     de firul principal la zap, coada) sau ruland, CEC nu se opreste, numai un rand "lent" in jurnal; un apel intors,
+#     oricat a durat, nu mai opreste CEC; iar CEC oprit se reia singur cand apelul din driver se intoarce (randul
+#     "reluat" in jurnalul CEC, anuntul pleaca din nou). Adresa fizica se tine minte dupa prima citire buna.
 # Numele: cel scris in setari (config.hds_standby.nume_tv) sau, gol, modelul citit pe receptor (model= din
 # /etc/hdsatelit-model, altfel /usr/lib/enigma.info), simplificat: fara diacritice, numai ASCII, fara primele cuvinte
 # (marca) cat e mai lung de NUME_MAX: "Amiko Viper 4K V20" -> "Viper 4K V20". /proc/stb/info/model nu se foloseste:
@@ -84,8 +88,10 @@
 # 0x85 catre toti: aparatul de pe ecran (sau televizorul, pe tunerul lui) raspunde cu <Active Source> si starea devine
 # False; fara raspuns ramane None. <Active Source> numai cand televizorul arata intrarea noastra: la mesajele
 # de mai sus, la <Request Active Source> daca suntem sursa, la trezirea facuta de om daca eram sursa la intrarea in
-# standby si nimic nu a spus altfel intre timp; la pornire nimic. Nu aprinde si nu muta televizorul. Tipul aparatului
-# e Playback: adresa logica o alege driverul (4, 8, 11). Cat setarea e pornita, mesajele se citesc la CITIRE_RAPIDA_MS.
+# standby si nimic nu a spus altfel intre timp; la pornire nimic. Nu aprinde si nu muta televizorul. Adresa logica o
+# alege driverul (Viper 4K V20: 4, playback; Octagon SF8008: 3, tuner); tipul din <Report Physical Address> e cel al
+# adresei (TIP_DUPA_LOGICA, ca OE-Alliance; 0.7.5 CEC2, inainte mereu playback). Cat setarea e pornita, mesajele se
+# citesc la CITIRE_RAPIDA_MS.
 # Setarile de standby (Stinge si televizorul, Porneste televizorul la trezire) folosesc acelasi nod: <Standby> 0x36
 # catre televizor la intrarea in standby si la oprirea completa cand receptorul e pe ecran SAU nu se stie (0.7.5:
 # inainte numai cand era stiut pe ecran, deci dupa o pornire fara nicio tasta a televizorului pleca numai <Inactive
@@ -138,6 +144,11 @@
 # 0.7.5: acelasi jurnal (o stare pe un rand, apoi ultimele JURNAL_TMP_RANDURI intrari) si in /tmp/hds-cec.txt, scris
 # cel mult o data la JURNAL_TMP_MS dupa o intrare noua (tmpfs). Asistenta il citeste cu operatia existenta „citeste”
 # (/tmp e in tiparul ei), deci proba CEC se face la omul care are televizorul, fara web, fara SSH, fara operatie noua.
+# 0.7.6 (CVZ): un anunt primit identic cu intrarea de dinainte (MESAJE_STRANSE: <Device Vendor ID>, <Report Physical
+# Address>; acelasi mesaj, aceeasi destinatie, aceleasi date) nu face intrare noua: intrarea veche primeste repetat=N si
+# ultima=ora ultimului. Un LG stins trimite catre toti <Device Vendor ID> la ~10 s fara oprire (Viper 4K V20, 15.11.2026),
+# iar cele 200 de randuri ale fisierului se umpleau numai cu el in ~34 de minute. Nu e o intrebare pentru receptor (LG nu
+# trimite <Give Device Vendor ID>, iar OE-Alliance nu raspunde la 0x87), deci nu se trimite nimic in plus.
 # Caile se pot muta sub un dosar cu HDS_PROBA_STANDBY_TV (emulatorul si probele de pe PC). Fisierul nu importa nimic
 # din enigma2 la incarcare: probele de pe PC il folosesc direct.
 
@@ -166,7 +177,9 @@ ENIGMA_INFO_REL = "/usr/lib/enigma.info"
 JURNAL_TMP_REL = "/tmp/hds-cec.txt"     # jurnalul CEC si pentru asistenta (op „citeste”), in tmpfs
 
 OPRIRE_ASTEAPTA_S = 0.5     # oprirea completa: cat asteapta scrierea CEC (firul de lucru CEC) inainte de quitMainloop
-OPRIRE_LINIE_S = 0.2        # ... si apoi cat pleaca mesajul pe fir (un <Standby> are ~60 ms, plus o reincercare)
+OPRIRE_LINIE_S = 0.35       # ... si apoi cat pleaca mesajele pe fir: 0.7.5 CEC4, doua <Standby> (catre televizor si catre
+                            # toti), ~52 ms pe fir fiecare + 17 ms pauza, plus reincercari de ~60 ms; pe SF8008 write() se
+                            # intoarce in 0-18 ms, inainte ca mesajul sa plece (masurat pe SF8008, ms= in randul "trimis")
 PAZA_MS = 2500
 PAZA_LIMITA = 30            # rescrieri ale lui „off” pe ora
 CULORI_DUPA_MS = 2000       # privirea HdmiColors dupa „on”
@@ -183,11 +196,16 @@ CITIRE_SIGURA_MS = 5000     # numai citirea pe firul principal cu poll (inFir=Fa
 CITIRE_ASTEAPTA_S = 0.01    # familia libreader: cat asteapta firul principal o cerere pusa firului de lucru CEC liber
                             # (scrierile, deschiderea, adresele: rezultatul lor merge la apelant)
 PRELUARE_MS = 10            # familia libreader: pasul citirii nu asteapta; rezultatul lui il ia un ceas dupa atat
-CITIRE_BLOCATA_S = 1.0      # familia libreader: un apel in driver care nu se intoarce in atat opreste CEC
+CITIRE_BLOCATA_S = 1.0      # familia libreader: un apel in driver care nu se intoarce in atat opreste CEC (numai cat firul
+                            # de lucru e chiar in driver, dupa wchan; CEC se reia singur cand apelul se intoarce)
+VERIFICA_FIR_S = 0.3        # cel mult o citire a starii firului de lucru (wchan) la atat, cat un apel e lung
+FIR_STARE_REL = "/proc/self/task/%d/stat"
+FIR_WCHAN_REL = "/proc/self/task/%d/wchan"
 JURNAL_PE_CHEIE = 5
 JURNAL_CEC_MAX = 500        # intrarile jurnalului CEC tinute in memorie (cele mai vechi ies)
 JURNAL_TMP_MS = 2000        # jurnalul CEC in JURNAL_TMP_REL: cel mult o scriere la atat dupa o intrare noua
 JURNAL_TMP_RANDURI = 200    # ultimele atatea intrari in fisier
+MESAJE_STRANSE = ("device_vendor_id", "report_physical_address")   # anunturi repetate identic: o intrare, repetat=N
 
 NUME_MAX = 14               # <Set OSD Name>: cel mult 14 caractere ASCII
 NUME_REZERVA = "HD Satelit"
@@ -211,6 +229,10 @@ CEC_INACTIVE_SOURCE = 0x9D
 CEC_CEC_VERSION = 0x9E
 CEC_GET_CEC_VERSION = 0x9F
 CEC_TIP_PLAYBACK = 0x04
+# tipul aparatului dupa adresa logica (standardul CEC: 1, 2, 9 inregistrare; 3, 6, 7, 10 tuner; 4, 8, 11 playback; 5 audio).
+# CEC2: driverul alege singur adresa logica (pe Octagon SF8008: 3, adica tuner; pe Viper 4K V20: 4), iar <Report Physical
+# Address> trimitea mereu tipul playback; OE-Alliance trimite tipul dat de driver, deci la ei adresa si tipul se potrivesc.
+TIP_DUPA_LOGICA = {1: 0x01, 2: 0x01, 9: 0x01, 3: 0x03, 6: 0x03, 7: 0x03, 10: 0x03, 4: 0x04, 8: 0x04, 11: 0x04, 5: 0x05}
 CEC_VERSIUNE_14 = 0x05
 CEC_PORNIT = 0x00
 CEC_IN_STANDBY = 0x01
@@ -220,6 +242,7 @@ CEC_GOLESTE = 0
 CEC_ADRESA = 1
 CEC_DEVICE_VENDOR_ID = 0x87
 CEC_VENDOR_COMMAND = 0x89
+CEC_VENDOR_COMMAND_WITH_ID = 0xA0
 CEC_GIVE_DECK_STATUS = 0x1A
 CEC_DECK_STATUS = 0x1B
 CEC_CASETA_ALTA = 0x1F       # <Deck Status>: "alta stare"
@@ -241,6 +264,13 @@ COMPATIBILITATE_TV = {
 TREZIT_PAUZA_S = 10.0        # dupa trezirea receptorului, un <Standby> de la televizor nu-l mai pune in standby
 ALTA_SURSA_PAUZA_S = 60.0    # televizorul pe alta sursa atat timp: receptorul intra in standby (cec_alta_sursa)
 RASPUNS_SURSA_S = 5.0        # un <Active Source> venit atat dupa <Request Active Source> al nostru e raspunsul, nu o comutare
+# 0.7.5 CEC2 (tamiciav7, LinuxSat 164155, Octagon SF8008 + Samsung UE46F6500, Anynet+: televizorul ramanea aprins la standby):
+SURSA_AMANATA_S = 30.0       # un mesaj de sursa (<Active Source>, <Set Stream Path>, <Routing ...>) venit cat adresa noastra
+                             # fizica nu se stia inca se reia cand vine adresa, cel mult atat dupa; inainte, orice adresa parea
+                             # "alta" (chiar a noastra), activ devenea False si la standby pleca numai <Inactive Source>
+STANDBY_INAINTE_DE_HDMI_S = 0.5  # intrarea in standby: cat asteapta <Standby> (firul de lucru CEC) inainte de oprirea iesirii HDMI
+COD_FARA_PRODUCATOR = b"\x00\x00\x00"  # <Device Vendor ID> ca in OE-Alliance, la televizoarele stiute care nu sunt in
+                             # COMPATIBILITATE_TV (de pilda Samsung 00 00 f0); la LG si la codul nestiut ramane <Feature Abort>
 COD_TV_ASTEPTARE_S = 2.0
 APRINDERE_REPETA_MS = 3000   # aprinderea televizorului: pasul (Image View On + Active Source din nou)
 APRINDERE_TERMEN_S = 45.0    # ... cel mult atat de la inceput
@@ -796,15 +826,23 @@ class CerereCec(object):
 		self.pornit = None
 		self.durata = 0.0
 		self.rezultat = self.eroare = self.raspuns = None
+		self.sarita = False          # 0.7.5 CEZ: pusa inainte de oprirea CEC: firul de lucru n-o mai face
+		self.lenta = False           # 0.7.5 CEZ: apelul a trecut de CITIRE_BLOCATA_S fara sa fie in driver (notat o data)
+		self.verificatLa = None      # 0.7.5 CEZ: cand s-a citit ultima oara starea firului pentru ea
 		import threading
 		self.gata = threading.Event()
+
+
+class CecNefacut(OSError):
+	"""0.7.5 CEZ: cererea pusa inainte de oprirea CEC, sarita de firul de lucru (nu a ajuns in driver)."""
 
 
 class FirCec(object):
 	"""Familia libreader: firul de lucru CEC. Un singur fir de fundal (daemon) face, pe rand, cererile puse de Cec._cere:
 	toate apelurile pe nodul CEC si citirea adresei din driverul HDMI. Un apel ramas in driver tine firul pe loc; Cec
-	opreste atunci CEC (opreste(): cererile ramase nu se mai fac), iar firul nu-l asteapta nimeni, nici la iesirea
-	interfetei."""
+	opreste atunci CEC (opreste(): cererile ramase nu se mai fac, dupa lor primeste CecNefacut), iar firul nu-l asteapta
+	nimeni, nici la iesirea interfetei. Cand apelul se intoarce, Cec reia CEC (reia()). tid = numarul firului in nucleu
+	(wchan-ul lui spune daca e in driver)."""
 
 	def __init__(self, ceas):
 		import queue
@@ -815,6 +853,7 @@ class FirCec(object):
 		self.fir = threading.Thread(target=self._lucreaza, name="HdsCecLucru")
 		self.fir.daemon = True
 		self.fir.start()
+		self.tid = getattr(self.fir, "native_id", None)
 
 	def pune(self, cerere):
 		self.coada.put(cerere)
@@ -822,17 +861,56 @@ class FirCec(object):
 	def opreste(self):
 		self.oprit = True
 
+	def reia(self):
+		self.oprit = False
+
 	def _lucreaza(self):
 		while True:
 			c = self.coada.get()
-			if not self.oprit:
+			if not self.oprit and not c.sarita:
 				c.pornit = self.ceas()
 				try:
 					c.rezultat = c.functie(*c.argumente)
 				except Exception as e:
 					c.eroare = e
 				c.durata = self.ceas() - c.pornit
+			else:
+				c.eroare = CecNefacut(errno.EIO, "CEC oprit: cererea nu s-a facut")
 			c.gata.set()
+
+
+def stareFir(tid):
+	"""0.7.5 CEZ: (starea, wchan) firului `tid` al interfetei, din /proc/self/task/<tid>/ (sub RADACINA in probe), sau
+	None daca nu se poate citi."""
+	if tid is None:
+		return None
+	try:
+		with open(RADACINA + (FIR_WCHAN_REL % tid)) as f:
+			wchan = f.read().strip()
+	except (IOError, OSError, ValueError):
+		return None
+	stare = ""
+	try:
+		with open(RADACINA + (FIR_STARE_REL % tid)) as f:
+			s = f.read()
+		stare = s[s.rindex(")") + 1:].split()[0]
+	except (IOError, OSError, ValueError, IndexError):
+		pass
+	return stare, wchan
+
+
+stareFir_ = stareFir
+
+
+def firInDriver(stare):
+	"""0.7.5 CEZ (FR2, masurat pe Octagon: la 7 zap-uri cu motor firul de lucru a stat numai in futex): False numai cand
+	e sigur ca firul de lucru NU asteapta driverul: ruleaza (R) sau asteapta in futex (GIL-ul tinut de firul principal la
+	un zap greu, coada lui). In rest (hdmicec_*, poll, starea D, alt wchan, starea necitita) True: CEC se opreste, ca
+	inainte, si se reia singur cand apelul se intoarce."""
+	if not stare:
+		return True
+	s, wchan = stare
+	return not (s == "R" or wchan.startswith("futex"))
 
 
 # functiile de mai jos ruleaza pe firul de lucru CEC (in stivele interfetei numele lor spune unde a ramas firul)
@@ -898,13 +976,17 @@ class Cec(object):
 
 	def __init__(self, deschide=None, scrieFd=None, inchide=None, ioctl=None, ceas=None, timer=None, citesteFd=None,
 			nume=None, inStandby=None, telecomanda=None, injecteaza=None, panou=None, poll=None, dupaPoll=None,
-			inFir=None):
+			inFir=None, stareFir=None):
 		self.deschideFd = deschide or os.open
 		self.pollFd = poll or areDate
 		self.dupaPoll = dupaPoll     # None = aflat la deschidere (citireDupaPoll); False dupa un poll care a mintit
 		self.citireSigura = None     # cand s-a facut ultima citire de control (familia libreader)
 		self.inFir = inFir           # None = ca dupaPoll, aflat o data: apelurile pe nod in firul de lucru CEC
-		self.blocat = False          # un apel in driver nu s-a intors: CEC oprit pana la repornirea interfetei
+		self.blocat = False          # un apel in driver nu s-a intors: CEC oprit pana se intoarce (0.7.5 CEZ: apoi se reia)
+		self.stareFir = stareFir or stareFir_   # (starea, wchan) firului de lucru CEC; probele dau alta
+		self._deInchis = None        # 0.7.5 CEZ: nodul inchis cat CEC era oprit; close() se face la reluare
+		self._blocataLa = None       # 0.7.5 CEZ: cererea ramasa in driver cand s-a oprit CEC
+		self.reluari = 0             # 0.7.5 CEZ: de cate ori s-a reluat CEC singur dupa oprire
 		self._lucru = None           # firul de lucru CEC (FirCec), pornit la prima cerere
 		self._cereri = []            # cererile puse firului de lucru, cu rezultatul neluat inca (in ordine)
 		self._iau = False            # _iaRezultatele in curs (un dupa(...) care pune alta cerere nu o reia)
@@ -935,8 +1017,11 @@ class Cec(object):
 		self.telecomanda = telecomanda or telecomandaPornita
 		self.injecteaza = injecteaza or _injecteaza
 		self.panou = panou or deschidePanou
-		self.activ = None            # televizorul arata intrarea receptorului: True, False (stiut ca nu) sau None (nu se
-		                             # stie: la pornire, pana vine un mesaj); din mesajele CEC sau din raspunsul nostru
+		self._activ = None           # televizorul arata intrarea receptorului: True, False (stiut ca nu) sau None (nu se
+		                             # stie: la pornire, pana vine un mesaj); din mesajele CEC sau din raspunsul nostru;
+		                             # citit si scris prin proprietatea activ (fiecare schimbare, un rand in jurnalul CEC)
+		self.sursaAmanata = None     # (mesajul de sursa, cand): venit cat adresa noastra fizica nu se stia (SURSA_AMANATA_S)
+		self.codRefuzat = False      # am raspuns <Feature Abort> la <Give Device Vendor ID> cat codul televizorului nu se stia
 		self.sursaIntrebata = False  # <Request Active Source> trimis dupa primul anunt bun (o data)
 		self.trezitLa = None         # cand s-a trezit receptorul ultima oara (ceasul monoton; pauza la <Standby>)
 		self.standbyTv = None        # functia care pune receptorul in standby (probele o inlocuiesc)
@@ -964,10 +1049,33 @@ class Cec(object):
 		self.timerJurnalTmp = None   # scrierea jurnalului CEC in JURNAL_TMP (asistenta), cel mult una la JURNAL_TMP_MS
 		self.jurnalTmpAsteapta = False
 
+	@property
+	def activ(self):
+		return self._activ
+
+	@activ.setter
+	def activ(self, valoare):
+		"""Sursa activa (True / False / None); trecerea la False ("stiut ca televizorul arata altceva") se noteaza in jurnalul
+		CEC ("activ din=... la=False"), langa mesajul care a facut-o: la asistenta se vede de ce la standby a plecat numai
+		<Inactive Source>. Trecerile la True / None se vad din mesajele primite si trimise."""
+		vechi = self._activ
+		self._activ = valoare
+		if valoare is False and vechi is not False:
+			self._noteaza("activ", din=vechi, la=valoare)
+
 	def _noteaza(self, fel, **campuri):
-		"""O intrare in jurnalul CEC: ora, felul (primit, trimis, tasta, golit) si campurile date."""
+		"""O intrare in jurnalul CEC: ora, felul (primit, trimis, tasta, golit) si campurile date. Un anunt primit la fel
+		ca intrarea de dinainte (MESAJE_STRANSE) mareste repetat si muta ultima pe intrarea veche."""
 		try:
-			campuri["t"] = round(self.ceas(), 3)
+			acum = round(self.ceas(), 3)
+			u = self.jurnalCec[-1] if self.jurnalCec else None
+			if (fel == "primit" and campuri.get("mesaj") in MESAJE_STRANSE and u is not None and u.get("fel") == "primit"
+					and all(u.get(k) == campuri.get(k) for k in ("dest", "mesaj", "date"))):
+				u["repetat"] = u.get("repetat", 1) + 1
+				u["ultima"] = acum
+				self._jurnalTmpCurand()
+				return
+			campuri["t"] = acum
 			campuri["fel"] = fel
 			self.jurnalCec.append(campuri)
 			if len(self.jurnalCec) > JURNAL_CEC_MAX:
@@ -1001,16 +1109,24 @@ class Cec(object):
 			c = _cfg()
 			setari = {"stinge": bool(c.cec_stinge.value), "porneste": bool(c.cec_porneste.value),
 				"telecomanda": bool(c.cec_telecomanda.value)}
+			setari["hdmi_oprit"] = bool(c.hdmi_oprit.value)
+			if hasattr(c, "cec_alta_sursa"):
+				setari["alta_sursa"] = bool(c.cec_alta_sursa.value)
 		except Exception:
 			pass
+		u = self.ultimul or {}
 		stare = [("deschis", self.fd is not None), ("blocat", bool(self.blocat)), ("libreader", self.inFir),
 			("logica", self.logica), ("adresa", textAdresa(self.adresaStiuta())),
 			("activ", self.activ), ("cod_tv", hexa(bytearray(self.codTv)) if self.codTv else None),
-			("primite", self.primite), ("golite", self.golite)] + sorted(setari.items())
+			("primite", self.primite), ("golite", self.golite), ("raspunde", self.raspunde),
+			("ultimul", ("%s/%s" % (u.get("mesaj"), "trimis" if u.get("trimis") else "netrimis")) if u else None),
+			("pid", os.getpid())] + sorted(setari.items())
+		# pid = procesul interfetei care a scris fisierul (0.7.5 ASY): un fisier ramas de la alt proces (o interfata
+		# mai veche, fara scriitor, ori o proba cu fisiere legate) se vede dupa el (TODO 14.11 19:13)
 		randuri = [u"# HD Satelit: jurnalul CEC (ultimele %d intrari), scris la %s" % (JURNAL_TMP_RANDURI, ora(self.ceas())),
 			u"stare: " + u" ".join(u"%s=%s" % (k, v) for k, v in stare)]
 		for x in self.jurnalCec[-JURNAL_TMP_RANDURI:]:
-			campuri = u" ".join(u"%s=%s" % (k, x[k]) for k in sorted(x) if k not in ("t", "fel"))
+			campuri = u" ".join(u"%s=%s" % (k, ora(x[k]) if k == "ultima" else x[k]) for k in sorted(x) if k not in ("t", "fel"))
 			randuri.append(u"%s %s %s" % (ora(x.get("t", 0)), x.get("fel", u"?"), campuri))
 		return u"\n".join(randuri) + u"\n"
 
@@ -1066,14 +1182,19 @@ class Cec(object):
 			_jurnal("golirea cozii CEC: %r" % (e,), "cec-goleste")
 		self._pornesteAnuntul()
 		self._pornesteCitirea()
+		# 0.7.5 ASY: fisierul ramas de la alt proces (o interfata fara scriitor, o proba cu fisiere legate) se rescrie acum,
+		# nu abia la primul mesaj: doua randuri in tmpfs (TODO 14.11 19:13)
+		self.scrieJurnalTmp()
 		return True
 
 	def _deschideInFir(self):
 		"""deschide() pe familia libreader: open() si golirea cozii le face firul de lucru CEC. Ceasul citirii porneste
 		acum (pasii lui iau raspunsul, si opresc CEC daca open() ramane in driver), anuntul cand nodul e deschis.
 		Intoarce True / False daca raspunsul a venit pe loc, altfel None."""
-		if self._seDeschide or self.blocat:
+		if self._seDeschide or (self.blocat and not self._incearcaReluarea()):
 			return None
+		if self.fd is not None:
+			return True              # 0.7.5 CEZ: nodul deschis chiar de cererea intoarsa la reluarea de mai sus
 		self._seDeschide = True
 		self._pornesteCitirea()
 		return self._cere("deschiderea lui", _deschideNodul, (self.deschideFd, self._ioctlPe, CEC), self._deschisInFir)
@@ -1085,6 +1206,8 @@ class Cec(object):
 				self._cere("inchiderea lui", self.inchideFd, (rezultat[0],), self._inchis)
 			return False
 		self._seDeschide = False
+		if isinstance(eroare, CecNefacut):
+			return self._deschideInFir()     # 0.7.5 CEZ: sarita cat CEC era oprit: din nou, dupa reluare
 		if eroare is not None:
 			_jurnal("nu pot deschide %s: %s" % (CEC, eroare), "cec-deschide")
 			self._opresteTimer(self.timerCitire)
@@ -1096,6 +1219,7 @@ class Cec(object):
 		if eroareGolire is not None:
 			_jurnal("golirea cozii CEC: %r" % (eroareGolire,), "cec-goleste")
 		self._pornesteAnuntul()
+		self.scrieJurnalTmp()        # 0.7.5 ASY: ca in deschide()
 		return True
 
 	def _pornesteAnuntul(self):
@@ -1129,8 +1253,11 @@ class Cec(object):
 		fd, self.fd = self.fd, None
 		if self._cuFir():
 			# familia libreader: close() il face firul de lucru CEC, dupa cererile din coada; nu-l asteapta nimeni (dupa
-			# oprirea CEC nici nu se mai face: ar astepta acelasi driver)
-			self._cere("inchiderea lui", self.inchideFd, (fd,), self._inchis)
+			# oprirea CEC nici nu se mai face: ar astepta acelasi driver; 0.7.5 CEZ: se face la reluarea CEC)
+			if self.blocat:
+				self._deInchis = fd
+			else:
+				self._cere("inchiderea lui", self.inchideFd, (fd,), self._inchis)
 		else:
 			try:
 				self.inchideFd(fd)
@@ -1176,6 +1303,8 @@ class Cec(object):
 				a = dinDriver
 		if a is not None:
 			self.adresa = a
+			if self.sursaAmanata is not None:
+				self._reiaSursaAmanata()      # un mesaj de sursa venit cat adresa nu se stia (CEC2)
 		return self.adresa
 
 	def _cereAdresele(self, dupa=None):
@@ -1203,7 +1332,42 @@ class Cec(object):
 			a = self._adreseDinDriver()
 		if a is not None:
 			self.adresa = a
+			if self.sursaAmanata is not None:
+				self._reiaSursaAmanata()
 		return a
+
+	def tipAparat(self):
+		"""Tipul din <Report Physical Address>: cel care se potriveste cu adresa logica luata de driver (TIP_DUPA_LOGICA),
+		playback cat adresa logica nu se stie."""
+		return TIP_DUPA_LOGICA.get(self.logica, CEC_TIP_PLAYBACK)
+
+	def _amanaSursa(self, mesaj):
+		"""Un mesaj de sursa (fel, adresa, vechi) venit cat adresa noastra fizica nu se stie: fara concluzie acum (nu e
+		"alta sursa"), reluat de _reiaSursaAmanata cand vine adresa. Ramane numai ultimul."""
+		try:
+			self.sursaAmanata = (mesaj, self.ceasLucru())
+		except Exception:
+			self.sursaAmanata = None
+			return
+		self._noteaza("sursa_amanata", motiv="adresa noastra nu se stie inca", adresa=textAdresa(mesaj[1]))
+
+	def _reiaSursaAmanata(self):
+		"""Adresa noastra a venit: mesajul de sursa amanat se judeca acum (daca nu e mai vechi de SURSA_AMANATA_S)."""
+		p, self.sursaAmanata = self.sursaAmanata, None
+		if p is None or self.adresa is None:
+			return
+		(fel, adresa, vechi), cand = p
+		try:
+			if self.ceasLucru() - cand > SURSA_AMANATA_S:
+				self._noteaza("sursa_amanata_veche", adresa=textAdresa(adresa))
+				return
+			if fel == "sursa":
+				if adresa != self.adresa and not self._raspunsVechi(adresa, cand):
+					self._altaSursaActiva(adresa)
+			else:
+				self._caleNoua(adresa, vechi)
+		except Exception as e:
+			_jurnal("mesajul de sursa amanat: %r" % (e,), "cec-sursa-amanata")
 
 	def adresaStiuta(self):
 		"""Pentru pagina web: adresa fizica tinuta minte; pe celelalte familii, daca nu e, cea din EDID, citita acum."""
@@ -1235,8 +1399,13 @@ class Cec(object):
 			_jurnal("trimiterea CEC %s: %s" % (NUME_MESAJ.get(cod, hex(cod)), eroare), "cec-trimite")
 			n = 0
 		trimis = bool(n and n > 0)
+		campuri = {}
+		durata = getattr(self, "_durataCerere", None)
+		if durata is not None:
+			# familia libreader (0.7.5 CEC4): cat a stat write() in driver; arata daca driverul asteapta linia CEC
+			campuri["ms"] = int(round(durata * 1000))
 		self._noteaza("trimis", catre=destinatie & 0x0F, mesaj=NUME_MESAJ.get(cod, "%02x" % cod),
-			date=hexa(bytearray(date)[2:]), ok=trimis)
+			date=hexa(bytearray(date)[2:]), ok=trimis, **campuri)
 		self.ultimul = {"mesaj": NUME_MESAJ.get(cod, "%02x" % cod), "cand": self.ceas(), "trimis": trimis}
 		self.raspunde = trimis
 		if not trimis:
@@ -1276,7 +1445,7 @@ class Cec(object):
 	def _anuntaLa(self, a):
 		"""Anuntul cu adresa fizica `a` (None: fara <Report Physical Address>); restul dupa scrierea numelui."""
 		if a is not None:
-			self.trimite(CEC_TOTI, CEC_REPORT_PHYSICAL_ADDRESS, a + bytes(bytearray([CEC_TIP_PLAYBACK])))
+			self.trimite(CEC_TOTI, CEC_REPORT_PHYSICAL_ADDRESS, a + bytes(bytearray([self.tipAparat()])))
 		self.trimiteNumele(dupa=self._dupaAnunt)
 
 	def _dupaAnunt(self, ok):
@@ -1341,7 +1510,7 @@ class Cec(object):
 		"""Tot ce e acum in coada driverului, impartit in inregistrari; fiecare primeste raspunsul ei. Intoarce cate
 		inregistrari s-au citit. Nu blocheaza: read() da 0 cand coada e goala (pe familia libreader citirea o face firul
 		de lucru CEC, vezi _citesteInFir)."""
-		if self.blocat:
+		if self.blocat and not self._incearcaReluarea():
 			return 0
 		if self._cereri or (self.fd is not None and self._cuFir()):
 			return self._citesteInFir()
@@ -1490,57 +1659,130 @@ class Cec(object):
 
 	def _iaRezultatele(self):
 		"""Familia libreader: rezultatele cererilor terminate de firul de lucru CEC, in ordinea lor, pana la prima
-		neterminata; dupa(...) al fiecareia, pe firul principal. Un apel care a stat in driver CITIRE_BLOCATA_S sau mai
-		mult opreste CEC, chiar daca s-a intors pana la urma."""
+		neterminata; dupa(...) al fiecareia, pe firul principal. 0.7.5 CEZ: un apel care a durat CITIRE_BLOCATA_S sau mai
+		mult, dar s-a intors, NU mai opreste CEC (durata o masoara firul de lucru dupa ce isi ia inapoi GIL-ul, deci la un
+		zap greu cuprinde si asteptarea dupa firul principal, lordjedy SF8008): numai un rand in jurnal."""
 		if self._iau:
 			return
 		self._iau = True
 		try:
 			while self._cereri and self._cereri[0].gata.is_set() and not self.blocat:
 				c = self._cereri.pop(0)
-				if c.durata >= CITIRE_BLOCATA_S:
-					self._blocheaza(c.ce, c.durata)
-					break
+				if c.durata >= CITIRE_BLOCATA_S and not c.lenta:
+					self._lent(c, c.durata, None, intors=True)
+				self._durataCerere = c.durata     # 0.7.5 CEC4: cat a stat apelul in driver (randul "trimis", ms=)
 				try:
 					c.raspuns = c.dupa(c.rezultat, c.eroare)
 				except Exception as e:
 					_jurnal("CEC: %r" % (e,), "cec-rezultat")
+				finally:
+					self._durataCerere = None
 		finally:
 			self._iau = False
 
 	def _oprit(self):
 		"""True cand CEC e oprit; pe familia libreader il opreste acum daca apelul la care e firul de lucru nu s-a
-		intors de CITIRE_BLOCATA_S."""
+		intors de CITIRE_BLOCATA_S si firul e chiar in driver (0.7.5 CEZ: wchan, firInDriver; in futex asteapta numai
+		GIL-ul sau coada, la un zap greu: un rand in jurnal, CEC merge mai departe). CEC oprit se reia aici cand apelul
+		ramas in driver s-a intors (_incearcaReluarea). Starea firului se citeste din /proc, nu de pe nodul CEC: firul
+		principal tot nu atinge nodul."""
 		if self.blocat:
-			return True
+			return not self._incearcaReluarea()
 		for c in self._cereri:
 			if c.gata.is_set():
 				continue
 			if c.pornit is not None:
-				durata = self.ceasLucru() - c.pornit
-				if durata >= CITIRE_BLOCATA_S:
-					self._blocheaza(c.ce, durata)
-					return True
+				acum = self.ceasLucru()
+				durata = acum - c.pornit
+				if durata >= CITIRE_BLOCATA_S and (c.verificatLa is None or not 0 <= acum - c.verificatLa < VERIFICA_FIR_S):
+					c.verificatLa = acum
+					stare = None
+					try:
+						stare = self.stareFir(getattr(self._lucru, "tid", None))
+					except Exception:
+						pass
+					if firInDriver(stare):
+						self._blocheaza(c, durata, stare)
+						return True
+					if not c.lenta:
+						self._lent(c, durata, stare)
 			break
 		return False
 
-	def _blocheaza(self, ce, durata):
-		"""Un apel in driver facut de firul de lucru CEC nu s-a intors in CITIRE_BLOCATA_S: CEC oprit pana la repornirea
-		interfetei, fara alte apeluri, care ar astepta acelasi driver (nici cele din coada); firul ramas in driver e de
-		fundal si nu-l asteapta nimeni."""
+	def _lent(self, c, durata, stare, intors=False):
+		"""0.7.5 CEZ: un apel care a trecut de CITIRE_BLOCATA_S fara sa fie in driver (sau intors intre timp): un rand in
+		jurnalul interfetei si unul in jurnalul CEC (o data pe cerere); CEC nu se opreste."""
+		c.lenta = True
+		wchan = stare[1] if stare else ""
+		campuri = {"ce": c.ce, "s": round(durata, 1)}
+		if wchan:
+			campuri["wchan"] = wchan
+		if intors:
+			campuri["intors"] = True
+		self._noteaza("lent", **campuri)
+		if intors:
+			_jurnal("CEC: %s %s a durat %.1f s, dar s-a intors (firul de lucru a asteptat dupa firul principal); CEC "
+				"merge mai departe" % (c.ce, CEC, durata), "cec-lent")
+		else:
+			_jurnal("CEC: %s %s dureaza de %.1f s, dar firul de lucru nu e in driver (%s); CEC merge mai departe" % (
+				c.ce, CEC, durata, wchan or "ruleaza"), "cec-lent")
+
+	def _blocheaza(self, c, durata, stare=None):
+		"""Un apel in driver facut de firul de lucru CEC nu s-a intors in CITIRE_BLOCATA_S: CEC oprit pana se intoarce,
+		fara alte apeluri, care ar astepta acelasi driver (cele din coada sunt sarite: dupa lor primeste CecNefacut);
+		firul ramas in driver e de fundal si nu-l asteapta nimeni. Ceasul citirii ramane pornit: pasii lui vad intoarcerea
+		apelului si reiau CEC (0.7.5 CEZ; inainte CEC ramanea oprit pana la repornirea interfetei)."""
+		if self._lucru is not None:
+			self._lucru.opreste()    # intai: un apel care se intoarce chiar acum nu mai ia urmatoarea cerere
 		self.blocat = True
 		self.raspunde = False
+		self._blocataLa = c
+		for alta in self._cereri:
+			if alta is not c and alta.pornit is None:
+				alta.sarita = True
+		if self.timerAnunt is not None:
+			try:
+				self.timerAnunt.stop()
+			except Exception:
+				pass
+		wchan = stare[1] if stare else ""
+		campuri = {"ce": c.ce, "s": round(durata, 1)}
+		if wchan:
+			campuri["wchan"] = wchan
+		self._noteaza("blocat", **campuri)
+		_jurnal("CEC: %s %s nu s-a intors de %.1f s (driverul asteapta%s); CEC oprit pana se intoarce" % (
+			c.ce, CEC, durata, (", " + wchan) if wchan else ""), "cec-blocat")
+
+	def _incearcaReluarea(self):
+		"""0.7.5 CEZ (lordjedy, TODO 13.11 20:00 si 21:05): CEC oprit se reia singur cand apelul ramas in driver s-a
+		intors si firul de lucru a trecut de cererile sarite. Rezultatul apelului merge la dupa-ul lui (ca la orice
+		cerere), cererile sarite primesc CecNefacut; nodul inchis intre timp se inchide acum; cu nodul deschis, anuntul
+		(adresa si numele) pleaca din nou, iar citirea merge mai departe. True daca CEC merge acum."""
+		if not self.blocat:
+			return True
+		if any(not x.gata.is_set() for x in self._cereri):
+			return False
+		c = self._blocataLa
+		ce = c.ce if c is not None else "apelul"
+		durata = c.durata if c is not None and c.pornit is not None else 0.0
+		if c is not None:
+			c.lenta = True               # randul "reluat" spune deja cat a durat
+		self.blocat = False
+		self._blocataLa = None
+		self.reluari += 1
 		if self._lucru is not None:
-			self._lucru.opreste()
-		for t in (self.timerCitire, self.timerAnunt):
-			if t is not None:
-				try:
-					t.stop()
-				except Exception:
-					pass
-		self._noteaza("blocat")
-		_jurnal("CEC: %s %s nu s-a intors de %.1f s (driverul asteapta); CEC oprit pana la repornirea interfetei" % (
-			ce, CEC, durata), "cec-blocat")
+			self._lucru.reia()
+		self._noteaza("reluat", ce=ce, s=round(durata, 1))
+		_jurnal("CEC: %s %s s-a intors dupa %.1f s; CEC merge din nou" % (ce, CEC, durata), "cec-reluat")
+		self._iaRezultatele()
+		if self._deInchis is not None:
+			fd, self._deInchis = self._deInchis, None
+			self._cere("inchiderea lui", self.inchideFd, (fd,), self._inchis)
+		if self.fd is not None:
+			self.incercariAnunt = 0
+			self._pornesteAnuntul()
+			self._pornesteCitirea()
+		return not self.blocat
 
 	def _inregistrare(self):
 		"""(destinatia, codul, parametrii) de la inceputul tamponului, sau None daca nu e una intreaga. Un inceput de
@@ -1587,23 +1829,28 @@ class Cec(object):
 			self._caleNoua(bytes(parametri[-2:]), vechi)
 			return
 		if cod == CEC_ACTIVE_SOURCE and len(parametri) >= 2:
-			if bytes(parametri[:2]) != self.adresaFizica():
-				era = self.activ
-				self.activ = False      # alt aparat (sau televizorul insusi) e pe ecran
-				self._altaSursa()
-				self.activLaStandby = False
-				self.opresteTastele()
-				self._planificaAltaSursa(era, "alt aparat e pe ecran (Active Source %s)" % textAdresa(bytes(parametri[:2])))
+			noi = self.adresaFizica()
+			if noi is None:
+				# adresa noastra nu se stie inca (familia libreader: primele secunde dupa deschidere): fara concluzie
+				self._amanaSursa(("sursa", bytes(parametri[:2]), None))
+			elif bytes(parametri[:2]) != noi and not self._raspunsVechi(bytes(parametri[:2])):
+				self._altaSursaActiva(bytes(parametri[:2]))
 			return
 		if cod == CEC_REQUEST_ACTIVE_SOURCE:
-			# raspunde numai cine e pe ecran: noi, numai daca asa spun mesajele
+			# raspunde numai cine e pe ecran: noi, numai daca asa spun mesajele (0.7.5 CEC2: si cu tastele televizorului
+			# oprite, ca OE-Alliance; altfel televizorul nu afla niciodata ca receptorul e sursa activa)
 			try:
-				if self.telecomanda() and not self.inStandby() and self.activ:
+				if not self.inStandby() and self.activ:
 					self.anuntaSursaActiva()
 			except Exception as e:
 				_jurnal("sursa activa: %r" % (e,), "cec-sursa")
 			return
 		if cod == CEC_DEVICE_VENDOR_ID and len(parametri) >= 3:
+			self._codPrimit(bytes(bytearray(parametri)[:3]), dest)
+			return
+		if cod == CEC_VENDOR_COMMAND_WITH_ID and len(parametri) >= 3 and self.inFir and dest == CEC_TV:
+			# familia libreader: primul octet e cel care trimite, deci codul din comanda e sigur al televizorului (Samsung
+			# isi trimite comenzile Anynet+ asa, cu 00 00 f0)
 			self._codPrimit(bytes(bytearray(parametri)[:3]), dest)
 			return
 		if cod == CEC_REPORT_POWER_STATUS and parametri:
@@ -1634,7 +1881,7 @@ class Cec(object):
 		elif cod == CEC_GIVE_PHYSICAL_ADDRESS:
 			a = self.adresaFizica()
 			if a is not None:
-				self.trimite(CEC_TOTI, CEC_REPORT_PHYSICAL_ADDRESS, a + bytes(bytearray([CEC_TIP_PLAYBACK])))
+				self.trimite(CEC_TOTI, CEC_REPORT_PHYSICAL_ADDRESS, a + bytes(bytearray([self.tipAparat()])))
 		elif cod == CEC_GIVE_DEVICE_POWER_STATUS:
 			self.trimite(catre, CEC_REPORT_POWER_STATUS,
 				bytes(bytearray([CEC_IN_STANDBY if self.inStandby() else CEC_PORNIT])))
@@ -1643,7 +1890,12 @@ class Cec(object):
 		elif cod == CEC_GIVE_DEVICE_VENDOR_ID:
 			if self.felTv() is not None:
 				self.trimite(CEC_TOTI, CEC_DEVICE_VENDOR_ID, self.codTv)
+			elif self.codTv is not None and self.codTv not in COMPATIBILITATE_TV:
+				# televizor stiut fara legatura proprie la noi (Samsung 00 00 f0 si altele): ca OE-Alliance, un cod
+				# <Device Vendor ID> 00 00 00, nu <Feature Abort>
+				self.trimite(CEC_TOTI, CEC_DEVICE_VENDOR_ID, COD_FARA_PRODUCATOR)
 			else:
+				self.codRefuzat = True
 				self.trimite(catre, CEC_FEATURE_ABORT, bytes(bytearray([cod, CEC_MOTIV_COD_NECUNOSCUT])))
 				if self.codTv is None and self.telecomanda():
 					self.intreabaCodTv()
@@ -1774,6 +2026,11 @@ class Cec(object):
 			return
 		self.codTv = cod
 		_jurnal("codul televizorului: %s" % hexa(bytearray(cod)), "cec-cod-tv")
+		if self.codRefuzat and cod not in COMPATIBILITATE_TV:
+			# televizorul ne-a intrebat codul inainte sa-l stim pe al lui si a primit <Feature Abort>; acum, ca OE-Alliance,
+			# <Device Vendor ID> 00 00 00 catre toti (un aparat il poate trimite oricand)
+			self.codRefuzat = False
+			self.trimite(CEC_TOTI, CEC_DEVICE_VENDOR_ID, COD_FARA_PRODUCATOR)
 
 	def _tvPornit(self):
 		"""Un semn ca televizorul e pornit (starea lui, o tasta, alegerea intrarii noastre): aprinderea se poate opri."""
@@ -1808,8 +2065,13 @@ class Cec(object):
 
 	def _caleNoua(self, adresa, vechi=None):
 		"""<Set Stream Path> / <Routing Change> / <Routing Information>: televizorul arata intrarea `adresa` (`vechi`: de
-		unde a plecat, numai la <Routing Change>)."""
-		if adresa == self.adresaFizica():
+		unde a plecat, numai la <Routing Change>). Cat adresa noastra nu se stie, mesajul se amana (_amanaSursa): inainte
+		orice adresa, chiar a noastra, parea "alta", iar standby-ul trimitea apoi numai <Inactive Source> (CEC2)."""
+		noi = self.adresaFizica()
+		if noi is None:
+			self._amanaSursa(("cale", adresa, vechi))
+			return
+		if adresa == noi:
 			self._opresteAltaSursa("televizorul a trecut din nou pe receptor")
 			self._tvPornit()
 			if self.telecomanda() and self.inStandby():
@@ -1827,8 +2089,39 @@ class Cec(object):
 			self._altaSursa()
 			self.activLaStandby = False
 			self.opresteTastele()
-			deLaNoi = vechi is not None and vechi == self.adresaFizica()
+			deLaNoi = vechi is not None and vechi == noi
 			self._planificaAltaSursa(era, "televizorul a trecut pe %s" % textAdresa(adresa), deLaNoi)
+
+	def _altaSursaActiva(self, adresa):
+		"""<Active Source> al altui aparat (sau al televizorului insusi), cu adresa noastra stiuta si diferita."""
+		era = self.activ
+		self.activ = False      # alt aparat (sau televizorul insusi) e pe ecran
+		self._altaSursa()
+		self.activLaStandby = False
+		self.opresteTastele()
+		self._planificaAltaSursa(era, "alt aparat e pe ecran (Active Source %s)" % textAdresa(adresa))
+
+	def _raspunsVechi(self, adresa, cand=None):
+		"""0.7.5 CEC3: True (si randul "raspuns_vechi" in jurnal) pentru un <Active Source> strain venit in RASPUNS_SURSA_S
+		dupa <Request Active Source> al nostru cat aprindem televizorul (aprindereActiva). E raspunsul la intrebare, dat
+		inainte ca televizorul sa treaca pe receptor; aprinderea ne face oricum sursa. Nu schimba activ si nu opreste
+		aprinderea. Inainte (tamiciav7, Samsung, SF8008): la pornirea rece televizorul raspundea <Active Source> 0.0.0.0
+		la ~0,1 s dupa inceputul aprinderii, aprinderea se oprea ("televizorul arata alta intrare"), activ ramanea False
+		si la standby sau la oprire pleca numai <Inactive Source>: televizorul ramanea aprins. `cand`: ceasul la care a
+		venit mesajul (mesajele amanate pana la adresa noastra), altfel acum."""
+		try:
+			if not self.aprindereActiva or self.sursaIntrebataLa is None:
+				return False
+			t = self.ceasLucru() if cand is None else cand
+			if not 0 <= t - self.sursaIntrebataLa < RASPUNS_SURSA_S:
+				return False
+		except Exception:
+			return False
+		self._noteaza("raspuns_vechi", adresa=textAdresa(adresa),
+			motiv="raspunsul la Request Active Source cat aprindem televizorul")
+		_jurnal("CEC: raspuns_vechi: Active Source %s venit dupa intrebarea noastra, cat aprindem televizorul; nu schimba "
+			"sursa activa si nu opreste aprinderea" % textAdresa(adresa), "cec-raspuns-vechi")
+		return True
 
 	# ---- televizorul pe alta sursa -> standby (cec_alta_sursa)
 
@@ -2013,16 +2306,23 @@ class Cec(object):
 
 	# ---- standby
 
-	def stingeTv(self, peIntrare):
+	def stingeTv(self, peIntrare, dupa=None):
 		"""Intrarea in standby: <Standby> catre televizor, sau numai <Inactive Source> cand se stie ca receptorul nu era
 		sursa activa (peIntrare False: sa nu stingem televizorul cuiva care se uita la altceva). None (nu se stie) =
-		<Standby>."""
+		<Standby>. dupa(trimis) ca la trimite."""
 		if peIntrare is False:
 			a = self.adresaFizica()
 			if a is None:
-				return False
-			return self.trimite(CEC_TV, CEC_INACTIVE_SOURCE, a)
-		return self.trimite(CEC_TV, CEC_STANDBY)
+				return dupa(False) if dupa is not None else False
+			return self.trimite(CEC_TV, CEC_INACTIVE_SOURCE, a, dupa=dupa)
+		return self.trimite(CEC_TV, CEC_STANDBY, dupa=dupa)
+
+	def stingeToti(self, dupa=None):
+		"""0.7.5 CEC4: <Standby> si catre toti (0x0F), chemat numai dupa <Standby>-ul catre televizor, ca OE-Alliance
+		(HdmiCec.py: onEnterDeepStandby si messagesWithBroadcastStandby, "to ensure TV standby"). Samsungul lui tamiciav7
+		se aprindea la <Image View On>, dar ramanea aprins dupa <Standby> catre adresa 0. Toate aparatele CEC care asculta
+		intra in standby (bara de sunet, al doilea receptor), ca la OE-Alliance din fabrica. dupa(trimis) ca la trimite."""
+		return self.trimite(CEC_TOTI, CEC_STANDBY, dupa=dupa)
 
 	def pornesteTv(self):
 		"""Iesirea din standby: <Image View On> catre televizor, apoi <Active Source> catre toti (intrarea noastra)."""
@@ -2197,6 +2497,7 @@ class StandbyTv(object):
 		# Cec cu ceasul dat (probele) sau cu ale lui: ora pentru jurnal, ceasul monoton pentru apelurile ramase in driver
 		self.cec = cec if cec is not None else Cec(ceas=ceas, timer=self.faceTimer)
 		self.oprit = False                # „off” scris de noi in standby-ul de acum
+		self.dormi = None                 # asteptarea scurta dupa mesajul CEC la standby (time.sleep; probele o inlocuiesc)
 		self.timerPaza = None
 		self.pazaPornita = False
 		self.rescrieri = []               # momentele rescrierilor din paza (ultima ora)
@@ -2318,11 +2619,14 @@ class StandbyTv(object):
 	def laIntrare(self):
 		"""Din Screens/Standby.py, dupa ce inStandby e pus (canalul e deja oprit)."""
 		eraActiv = False
+		activMesaje = None
 		try:
+			activMesaje = self.cec.activ        # ce spun mesajele (pentru jurnal: Rsen NO sau un mesaj)
 			eraActiv = self.peEcran()           # True, False sau None (nu se stie)
 			self.cec._opresteAltaSursa("receptorul a intrat in standby")
+			self.cec.sursaAmanata = None        # un mesaj de sursa amanat nu mai trezeste receptorul pus acum in standby
 			self.cec.activLaStandby = eraActiv is True
-			self.cec.activ = False
+			self.cec._activ = False             # fara rand "activ" in jurnal: nu l-a schimbat un mesaj
 			self.cec.opresteTastele()
 		except Exception as e:
 			_jurnal("tastele la standby: %r" % (e,), "cec-tasta")
@@ -2332,12 +2636,21 @@ class StandbyTv(object):
 		if self.aprindere is not None:
 			self._opresteAprinderea("receptorul a intrat in standby")
 		c = _cfg()
+		trimisCec = False
+		mesaj = "nimic (Stinge si televizorul = Nu)"
+		if c.cec_stinge.value:
+			mesaj = self._noteazaStingerea(eraActiv, activMesaje)
+		# 0.7.5 CEC3: in hds-interfata.log (ramane dupa oprire si repornire), nu numai in /tmp/hds-cec.txt
+		_jurnal("CEC la standby: mesaj=%s activ=%s pe_ecran=%s" % (mesaj, activMesaje, eraActiv), "cec-standby-mesaj")
 		if c.cec_stinge.value and self.cec.deschis():
 			try:
 				# <Standby> daca, dupa mesaje, receptorul era pe ecran sau nu se stie; numai <Inactive Source> cand se
 				# stie ca televizorul arata altceva
-				self.cec.stingeTv(eraActiv)
+				trimisCec = self.cec.stingeTv(eraActiv) is not False
 				if eraActiv is not False:
+					# 0.7.5 CEC4: dupa <Standby> catre televizor si catre toti, ca OE-Alliance (Samsung); niciodata dupa
+					# <Inactive Source>
+					trimisCec = (self.cec.stingeToti() is not False) or trimisCec
 					self.cec.activLaStandby = False     # televizorul stins: la trezire nu mai e pe noi
 			except Exception as e:
 				_jurnal("CEC la standby: %r" % (e,), "cec-intrare")
@@ -2350,10 +2663,49 @@ class StandbyTv(object):
 			_jurnal("afisajul in asteptare: %r" % (e,), "afisaj-asteptare")
 		if not c.hdmi_oprit.value or not os.path.exists(IESIRE):
 			return
+		if trimisCec:
+			# 0.7.5 CEC2: iesirea HDMI se opreste numai dupa ce mesajul CEC a plecat (pe familia libreader il scrie firul
+			# de lucru CEC, dupa firul principal), ca la oprirea completa; inainte "off" putea ajunge la driver inaintea lui
+			try:
+				self.cec.asteaptaScrierile(STANDBY_INAINTE_DE_HDMI_S)
+				(self.dormi or time.sleep)(OPRIRE_LINIE_S)
+			except Exception as e:
+				_jurnal("CEC la standby: %r" % (e,), "cec-intrare")
 		if self._opresteIesirea():
 			self.oprit = True
 			_jurnal("iesirea HDMI oprita in standby (vfd %s)" % vfdDorit(), "oprita")
 			self._pornestePaza()
+
+	def _noteazaStingerea(self, eraActiv, activMesaje=None, laOprire=False):
+		"""Un rand in jurnalul CEC la intrarea in standby cu "Stinge si televizorul" aleasa: ce stie receptorul (pe ecran:
+		True / False / None; activ = ce spuneau numai mesajele, deci pe_ecran False cu activ None = Rsen NO; adresele, Rsen,
+		starea nodului; raspunde_inainte = rezultatul scrierii de dinainte, al acestui mesaj e randul "trimis" urmator) si ce trimite (<Standby>, <Inactive Source> sau nimic, cu
+		motivul). Asistenta deosebeste asa: numai <Inactive Source> (receptorul credea ca televizorul arata altceva),
+		<Standby> trimis dar televizorul aprins (televizorul nu l-a luat in seama), nimic trimis (CEC oprit sau negata).
+		laOprire (0.7.5 CEC3): randul opririi complete (drum=oprire), unde pleaca mereu <Standby>. Intoarce mesajul."""
+		mesaj = "nimic"
+		try:
+			cec = self.cec
+			if not cec.deschis():
+				mesaj, motiv = "nimic", "nodul CEC inchis"
+			elif cec.blocat:
+				mesaj, motiv = "nimic", "CEC oprit (driverul nu raspunde)"
+			elif laOprire:
+				mesaj, motiv = "standby", "oprirea completa: <Standby> mereu, ca OE-Alliance"
+			elif eraActiv is False:
+				mesaj, motiv = "inactive_source", "televizorul arata alta sursa (dupa mesajele CEC sau Rsen NO)"
+			else:
+				mesaj, motiv = "standby", "receptorul pe ecran" if eraActiv else "nu se stie ce arata televizorul"
+			try:
+				rsen = tvPeIntrare()
+			except Exception:
+				rsen = None
+			cec._noteaza("standby_tv", pe_ecran=eraActiv, activ=activMesaje, mesaj=mesaj, motiv=motiv,
+				adresa=textAdresa(cec.adresaStiuta()), logica=cec.logica, rsen=rsen, raspunde_inainte=cec.raspunde, cod_tv=hexa(bytearray(cec.codTv)) if cec.codTv else None,
+				drum="oprire" if laOprire else "standby")
+		except Exception as e:
+			_jurnal("jurnalul CEC la standby: %r" % (e,), "cec-intrare")
+		return mesaj
 
 	def peEcran(self):
 		"""Cec.activ (True, False, None = nu se stie); None devine False cand driverul HDMI spune sigur ca televizorul nu
@@ -2368,23 +2720,58 @@ class StandbyTv(object):
 		return a
 
 	def laOprire(self, dormi=None):
-		"""Din Screens/Standby.py, la oprirea completa (TryQuitMainloop 1), chiar inainte de quitMainloop: cu „Stinge si
-		televizorul (CEC)” aleasa, ca la intrarea in standby (<Standby> daca receptorul era pe ecran sau nu se stie, numai
-		<Inactive Source> cand se stie ca televizorul arata altceva), apoi asteptarea scurta ca mesajul sa plece. Din standby nimic. Intoarce True daca a trimis ceva."""
+		"""Din Screens/Standby.py, la oprirea completa (TryQuitMainloop 1), chiar inainte de quitMainloop; la repornire
+		(2, 3 si celelalte) Standby.py nu o cheama. Din standby nimic (televizorul si iesirea au fost tratate la intrare).
+		0.7.5 CEC3, ca OE-Alliance (handle_deepstandby_events si tv_standby_notinputactive = Da din fabrica): cu "Stinge
+		si televizorul (CEC)" aleasa pleaca MEREU <Standby>, oricare ar fi sursa activa dupa mesaje (inainte numai
+		<Inactive Source> cand receptorul credea ca televizorul arata altceva: Samsungul lui tamiciav7 ramanea aprins),
+		0.7.5 CEC4: apoi <Standby> si catre toti (OE-Alliance: onEnterDeepStandby), apoi asteptarea scurta ca mesajele sa
+		plece. Apoi, cu "Opreste HDMI in standby" aleasa, "off" pe
+		/proc/stb/hdmi/output pe placile care il au: televizorul nu mai arata ultimul cadru, inghetat, cat se opreste
+		sistemul. In hds-interfata.log (ramane dupa oprire) randul cu mesajul plecat, activ si pe_ecran. Intoarce True
+		daca a trimis un mesaj CEC."""
 		if _inStandby():
+			_jurnal("CEC la oprirea completa: mesaj=nimic (receptorul era in standby)", "cec-oprire-mesaj")
 			return False
 		c = _cfg()
-		if not c.cec_stinge.value or not self.cec.deschis():
-			return False
 		trimis = False
+		activ = pe_ecran = None
+		rezultat = {}          # rezultatul fiecarei scrieri in driver (si din firul de lucru CEC): "tv", "toti"
+
+		def nota(cheie):
+			def scris(ok):
+				rezultat[cheie] = ok
+				return ok
+			return scris
+		mesaj = "nimic (Stinge si televizorul = Nu)"
 		try:
-			self.cec.opresteTastele()
-			trimis = self.cec.stingeTv(self.peEcran()) is not False      # None (nu se stie) = <Standby>
-			self.cec.asteaptaScrierile(OPRIRE_ASTEAPTA_S)
-			(dormi or time.sleep)(OPRIRE_LINIE_S)
-			_jurnal("CEC la oprirea completa: %s" % ("trimis" if trimis else "netrimis"), "cec-oprire")
+			activ = self.cec.activ
+			pe_ecran = self.peEcran()
+		except Exception:
+			pass
+		if c.cec_stinge.value:
+			mesaj = self._noteazaStingerea(pe_ecran, activ, laOprire=True)
+			if self.cec.deschis():
+				try:
+					self.cec.opresteTastele()
+					# None = <Standby>, fara poarta sursei active; 0.7.5 CEC4: apoi si catre toti, ca OE-Alliance
+					spreTv = self.cec.stingeTv(None, dupa=nota("tv"))
+					spreToti = self.cec.stingeToti(dupa=nota("toti"))
+					trimis = spreTv is not False or spreToti is not False
+					self.cec.asteaptaScrierile(OPRIRE_ASTEAPTA_S)
+					(dormi or time.sleep)(OPRIRE_LINIE_S)
+				except Exception as e:
+					_jurnal("CEC la oprirea completa: %r" % (e,), "cec-oprire")
+		hdmi = "neatins"
+		try:
+			if c.hdmi_oprit.value and os.path.exists(IESIRE):
+				hdmi = "off" if self._opresteIesirea() else "off nescris"
 		except Exception as e:
-			_jurnal("CEC la oprirea completa: %r" % (e,), "cec-oprire")
+			_jurnal("iesirea HDMI la oprirea completa: %r" % (e,), "cec-oprire")
+		# scris = <Standby> catre televizor, difuzat = <Standby> catre toti (CEC4); None = scrierea nu s-a terminat la timp
+		_jurnal("CEC la oprirea completa: mesaj=%s %s scris=%s difuzat=%s activ=%s pe_ecran=%s hdmi=%s" % (
+			mesaj, "trimis" if trimis else "netrimis", rezultat.get("tv"), rezultat.get("toti"), activ, pe_ecran, hdmi),
+			"cec-oprire-mesaj")
 		return trimis
 
 	# ---- aprinderea televizorului (trezire si pornirea receptorului)

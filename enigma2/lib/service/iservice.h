@@ -59,10 +59,11 @@ public:
 		isInvisible=512		// a service or marker that a list does not show
 	};
 	int flags; // flags will NOT be compared.
-	/* the number of the channel in its list, for the plugins that ask; 0 when the list does not number */
-	inline int getChannelNum() const { return 0; }
-	/* HDSatelit: accepted for the plugins that number their lists; the number is not kept (getChannelNum stays 0) */
-	inline void setChannelNum(int) {}
+	/* the number of the channel in the channel list (1, 2, ...), 0 when it has none: given by eDVBDB::renumberBouquet to
+	   the references of the bouquets (as in OE-Alliance) and copied with the reference; the themes and plugins made for
+	   OE-Alliance read it (session.CurrentService.serviceref.getChannelNum(), ServiceNumber converters). Not compared. */
+	inline int getChannelNum() const { return number; }
+	inline void setChannelNum(const int n) { number = n; }
 
 	inline int getSortKey() const { return (flags & hasSortKey) ? data[3] : ((flags & sort1) ? 1 : 0); }
 
@@ -103,6 +104,9 @@ public:
 // real existing service ( for dvb eServiceDVB )
 #ifndef SWIG
 	std::string name;
+	/* HDSatelit: last member, so that the places of the members above stay the same (getChannelNum); every
+	   constructor leaves it 0 */
+	int number = 0;
 #endif
 	std::string getName() const { return name; }
 	void setName( const std::string &n ) { name=n; }

@@ -54,7 +54,11 @@ public:
 	int sendSignal(int sig);
 
 		/* join the thread, i.e. busywait until thread has finnished. */
-	void kill(bool sendcancel=false);
+	void kill(bool sendcancel);
+		/* same as kill(false). Kept as a separate function (not a default argument) so that the symbol
+		   eThread::kill() exists: plugins compiled against other enigma2 trees (for example IPAudioPro,
+		   _eIPaudioPro.so) call kill() without arguments and fail to load without it. */
+	void kill();
 private:
 	pthread_t the_thread;
 

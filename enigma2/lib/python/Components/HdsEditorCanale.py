@@ -1490,6 +1490,30 @@ class Sesiune(object):
 			self._pune_b(p.cu(intrari=l))
 		return buchet_id
 
+	def leaga_toate(self, buchete_ids):
+		"""Buchetele nelegate date puse inapoi la coada listei lor (TV sau radio), in ordinea data, intr-un singur pas
+		(o singura anulare). Lista orfana (Components/HdsBucheteOrfane.py): sute de buchete gasite pe disc, unul cate
+		unul nu se poate. Cele deja legate sau inexistente se sar. -> cate s-au pus."""
+		nelegate = set(b.id for b in self.nelegate())
+		ids = []
+		for f in buchete_ids:
+			if f in nelegate and f not in ids:
+				ids.append(f)
+		if not ids:
+			return 0
+		with self._in_pas(ngettext("%d buchet pus înapoi în listă", "%d buchete puse înapoi în listă", len(ids)) %
+				len(ids)):
+			for radio in (False, True):
+				ale = [f for f in ids if bool(self.d.buchete[f].radio) == radio]
+				if not ale:
+					continue
+				p = self._b(self.radacina(radio))
+				l = list(p.intrari)
+				for f in ale:
+					l.append(self._intrare_noua(D.ref_buchet(f)))
+				self._pune_b(p.cu(intrari=l))
+		return len(ids)
+
 	def sterge_nelegat(self, buchet_id):
 		if buchet_id in self._parinti() or buchet_id in ("bouquets.tv", "bouquets.radio"):
 			raise Eroare(_t("Buchetul e în listă; șterge-l din listă."))

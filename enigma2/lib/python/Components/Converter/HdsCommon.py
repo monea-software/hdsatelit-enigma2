@@ -3443,8 +3443,13 @@ def epg_event(r):
 def epg_short_line(ev):
 	"""Textul scurt al emisiunii pe un singur rand: randurile din EIT fara cel care repeta titlul (sau inceputul lui),
 	unite cu „ · ”; gol cand nu ramane nimic in afara titlului."""
+	return SEP.join(_epg_short_parts(ev))
+
+
+def _epg_short_parts(ev):
+	"""Randurile textului scurt din EIT, fara cel care repeta titlul (sau inceputul lui) si fara dubluri."""
 	if not ev:
-		return u""
+		return []
 	name = u" ".join(u(ev.get("name")).split())
 	parts = []
 	for line in u(ev.get("short")).replace(u"\r", u"\n").split(u"\n"):
@@ -3453,7 +3458,45 @@ def epg_short_line(ev):
 			line = line[len(name):].lstrip(u" -:,.\u00b7\u2013")
 		if line and line not in parts:
 			parts.append(line)
-	return SEP.join(parts)
+	return parts
+
+
+# Textul scurt prea lung pentru randul lui (0.7.5, EPI; dorinelu, forum 795 #2516): unele posturi pun tot filmul in
+# campul scurt si lasa descrierea lunga goala. Randul scurt al ghidului din panoul info (EpgSelShort) e unul singur si
+# derula textul, iar zona mare (EpgSelLong) ramanea goala. Masura randului scurt e cea din tema HDSatelit (HdsRegular
+# 33, 852 px; Marimea textului se aplica in text_width); in tema compacta (fontul 28) un text care ar incapea la 28,
+# dar nu la 33, merge si el in zona mare, unde se vede intreg. Fara tabel de latimi se numara semnele.
+EPG_RAND_SCURT = ("HdsRegular", 33, 852)
+EPG_RAND_SCURT_SEMNE = 56
+
+
+def epg_short_fits(text):
+	"""Adevarat cand `text` incape pe randul scurt al ghidului (aceeasi margine ca fit)."""
+	font, size, width = EPG_RAND_SCURT
+	try:
+		w = text_width(text, font, size)
+	except Exception as e:
+		log_once("epg_short_fits", e)
+		w = None
+	if w is None:
+		return len(u(text)) <= EPG_RAND_SCURT_SEMNE
+	return w <= width - max(4, width // 50)
+
+
+def epg_descrieri(ev):
+	"""(randul scurt, zona mare) ale emisiunii, pentru ghidul din panoul info si pagina web /ghid: o singura decizie.
+	Randul scurt: textul scurt pe un rand (epg_short_line), gol cand repeta titlul. Zona mare: descrierea lunga, goala
+	cand lipseste sau repeta textul scurt ori titlul. Cand zona mare e goala si textul scurt nu incape pe randul lui,
+	zona mare primeste textul scurt, cu randurile lui din EIT, iar randul scurt ramane gol."""
+	if not ev:
+		return u"", u""
+	parts = [] if ev.get("short") == ev.get("name") else _epg_short_parts(ev)
+	scurt = SEP.join(parts)
+	ext = ev.get("ext") or u""
+	lung = u"" if ext in (ev.get("short"), ev.get("name")) else ext
+	if scurt and not lung and not epg_short_fits(scurt):
+		return u"", u"\n".join(parts)
+	return scurt, lung
 
 
 def _local(t):
@@ -5602,3 +5645,92 @@ def parse_fit(tokens):
 		except Exception:
 			return None
 	return None
+
+
+# ---------------------------------------------------------------- transponderul canalului ales in lista (0.7.5, LCF)
+# Cererea lui baderwabas (LinuxSat 164126, 14.11.2026): in lista de canale, sub cursor, frecventa si parametrii
+# transponderului canalului ales, fara sa-l pornesti. Datele vin din lista de canale a receptorului (lamedb, prin
+# eStaticServiceDVBInformation.getInfoObject(ref, sTransponderData)), deci tunerul nu se atinge. Screens/ChannelSelection.py
+# (SelectionEventInfo, sursa hdsTpAles) le pune in panoul listei; pagina web /canale le are din indexul canalelor.
+
+# eServiceReference: idDVB si steagurile care nu sunt un canal (dosar, marcaj, grup de alternative)
+_REF_DVB = 1
+_REF_NU_CANAL = 1 | 2 | 4 | 64 | 128 | 256
+
+
+def text_transponder_ales(tp):
+	"""Randul de sub lista pentru datele unui transponder (dictul sTransponderData):
+	satelit "19,2°E · 11.856 MHz V · 27500 3/4 · DVB-S2 8PSK", cablu "Cablu · 346 MHz · 6900 · QAM256",
+	terestru "Terestru · 482 MHz CH22 · DVB-T2 · 8 MHz"; "" cand datele lipsesc sau nu se inteleg."""
+	if not isinstance(tp, dict) or not tp:
+		return u""
+	kk = tp_kind(tp)
+	try:
+		if kk == "s":
+			return join([orbital(ival(tp, "orbital_position")), freq_long(tp, kk),
+				join([symbol_rate(tp), fec_text(tp, kk)], u" "), system_text(tp, kk)])
+		if kk == "c":
+			return join([tr("rec_cable"), freq_long(tp, kk), symbol_rate(tp), modulation_text(tp, kk)])
+		if kk == "t":
+			return join([tr("rec_terr"), freq_long(tp, kk), system_text(tp, kk), bandwidth_text(tp)])
+	except Exception as e:
+		log_once("text_transponder_ales", e)
+	return u""
+
+
+def transponder_ales(ref, centru=None):
+	"""Datele transponderului unui canal DVB din lista (fara tuner), sau {} pentru dosare, marcaje, canale de internet,
+	inregistrari si referinte fara transponder in lamedb. centru = eServiceCenter.getInstance() (probele dau altul)."""
+	try:
+		if ref is None or ref.type != _REF_DVB or (ref.flags & _REF_NU_CANAL) or ref.getPath():
+			return {}
+		if centru is None:
+			from enigma import eServiceCenter
+			centru = eServiceCenter.getInstance()
+		info = centru.info(ref)
+		c = isi("sTransponderData")
+		d = info.getInfoObject(ref, c) if info is not None and c is not None else None
+		return d if isinstance(d, dict) else {}
+	except Exception as e:
+		log_once("transponder_ales", e)
+		return {}
+
+
+def sid_ales(ref):
+	"""0.7.5 (LCS, tfrc LinuxSat 164126): SID-ul canalului ales, "SID 11110 (0x2B66)", din referinta (fara tuner);
+	"" cand referinta nu il are."""
+	try:
+		sid = ref.getUnsignedData(1) if hasattr(ref, "getUnsignedData") else ref.getData(1)
+		sid = int(sid) & 0xFFFF
+	except Exception:
+		return u""
+	return u"SID %d (0x%04X)" % (sid, sid) if sid else u""
+
+
+def rand_transponder_ales(ref, centru=None):
+	"""Textul gata de pus in panoul listei pentru canalul ales (cu semnul de directie al limbilor de la dreapta la
+	stanga, ca barele), cu SID-ul la capat (0.7.5, LCS); "" cand canalul nu are transponder."""
+	t = text_transponder_ales(transponder_ales(ref, centru))
+	if t:
+		t = join([t, sid_ales(ref)])
+	return ltr(t) if t else u""
+
+
+def snr_db_serviciu(service):
+	"""SNR-ul in dB al canalului redat, numai cand placa da o valoare adevarata (snr_db_honest), altfel None.
+	Pentru pagina web (radio_web.semnal_panou), aceeasi regula ca bara intai (HdsSignal SnrDb)."""
+	if service is None:
+		return None
+	try:
+		class _Sursa(object):
+			pass
+		s = _Sursa()
+		s.service = service
+		r = Reader(s, None)
+		if r.info() is None:
+			return None
+		tp, kk = reader_etp(r)
+		return snr_db_honest(frontend_snr(service, r.sref()), kk)
+	except Exception as e:
+		log_once("snr_db_serviciu", e)
+		return None

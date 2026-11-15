@@ -1,0 +1,37 @@
+ServiceApp: exteplayer3 reface singur legatura fluxurilor vii de pe internet (HD Satelit, 15.11.2026, TODO 15.11 05:35)
+
+exteplayer3 pune pe http(s) timeout=20 s si reconnect=1, dar reconnect_streamed numai cu -v (live TS). Un canal IPTV (flux
+fara lungime) prin exteplayer3 nu se reconecta deloc: o cadere scurta a retelei sau un server care inchide fluxul opreste
+playerul, iar canalul ramanea pe ultimul cadru (canalele din liste .m3u, XStreamity, Bouquet Maker, Vu+ Solo SE).
+Acum buildCommand da, numai pentru http(s), "-f reconnect_streamed=1 -f reconnect_on_network_error=1
+-f reconnect_delay_max=15", fiecare ca doua argumente (ramura "string" din ExtEplayer3Options nu se poate folosi: lipeste
+optiunea si valoarea intr-un singur argument si update() nu tine valoarea). ffmpeg 8/9 din imagine le are pe toate.
+Se aplica dupa 0001-0003 (care nu ating exteplayer3.cpp).
+
+diff --git a/src/serviceapp/exteplayer3.cpp b/src/serviceapp/exteplayer3.cpp
+index 7dff4d3..468216b 100644
+--- a/src/serviceapp/exteplayer3.cpp
++++ b/src/serviceapp/exteplayer3.cpp
+@@ -179,6 +179,22 @@ std::vector<std::string> ExtEplayer3::buildCommand()
+ 		args.push_back("-h");
+ 		args.push_back(headersStr);
+ 	}
++	/* HD Satelit (15.11.2026): reconectarea fluxurilor vii de pe internet. exteplayer3 pune singur pe http(s) timeout=20 s si
++	   reconnect=1, dar reconnect_streamed numai in modul live TS (-v); fara el ffmpeg nu reface legatura unui flux fara
++	   lungime (canalele IPTV), iar o cadere scurta a retelei sau un server care inchide opreste playerul. Fiecare -f se da
++	   ca doua argumente: ramura "string" din ExtEplayer3Options lipeste optiunea si valoarea intr-unul singur, pe care
++	   exteplayer3 nu-l intelege. reconnect_delay_max 15: pauzele ffmpeg dintre incercari (0, 1, 3, 7, 15 s) insumeaza 26 s,
++	   sub cele 30 s dupa care enigma2 socoteste imaginea oprita si porneste canalul din nou (Components/HdsIptvReconectare.py).
++	   Un film (fisier cu lungime) se poate cauta in el, deci nu e "streamed": reconnect_streamed nu-l atinge. */
++	if (mPath.compare(0, 7, "http://") == 0 || mPath.compare(0, 8, "https://") == 0)
++	{
++		args.push_back("-f");
++		args.push_back("reconnect_streamed=1");
++		args.push_back("-f");
++		args.push_back("reconnect_on_network_error=1");
++		args.push_back("-f");
++		args.push_back("reconnect_delay_max=15");
++	}
+ 	for (SettingIter i(mPlayerOptions.GetSettingMap().begin()); i != mPlayerOptions.GetSettingMap().end(); i++)
+ 	{
+ 		if (!i->second.isSet())

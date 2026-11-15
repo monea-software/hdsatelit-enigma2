@@ -292,6 +292,11 @@ public:
 			int pid;
 			int stream_type;
 			uint32_t inregistrare;
+			/* etichetele descriptorilor pistei (cel mult MAX_ETICHETE), numai pentru randul din jurnal la zap
+			   (servicedvb.cpp, updateDecoder); textul sPisteNecunoscute ramane "pid:stream_type:inregistrare" */
+			enum { MAX_ETICHETE = 6 };
+			uint8_t etichete[MAX_ETICHETE];
+			int nr_etichete;
 		};
 		enum { MAX_PISTE_NECUNOSCUTE = 8 };
 		std::vector<pistaNecunoscuta> pisteNecunoscute;

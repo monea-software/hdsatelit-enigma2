@@ -116,6 +116,43 @@ namespace hdsms
 		return isiNormalizat(is_id) != ISI_FARA_FILTRU || !plsImplicit(pls_mode, pls_code);
 	}
 
+	/* fluxul 0 cu secventa implicita: ce scriu listele facute pe alte imagini pentru un transponder obisnuit (coada
+	   ":0:0:1" in lamedb; OE-Alliance ia ISI-ul din descriptorul 0x79 si cand multiple_input_stream_flag e 0) */
+	inline bool fluxZeroImplicit(int is_id, int pls_mode, int pls_code)
+	{
+		return isiNormalizat(is_id) == 0 && plsImplicit(pls_mode, pls_code);
+	}
+
+	/* transponderul are nevoie de un tuner care alege fluxul: un flux 1..255 sau o secventa PLS aleasa. Fluxul 0 cu
+	   secventa implicita nu cere asa ceva (aceeasi regula ca OE-Alliance in isCompatibleWith): un tuner fara multistream
+	   il prinde acordat fara filtru. */
+	inline bool cereTunerMultistream(int is_id, int pls_mode, int pls_code)
+	{
+		return cereFlux(is_id, pls_mode, pls_code) && !fluxZeroImplicit(is_id, pls_mode, pls_code);
+	}
+
+	/* tunerul primeste transponderul (partea de flux a lui isCompatibleWith) */
+	inline bool tunerPrimeste(int is_id, int pls_mode, int pls_code, bool tuner_multistream)
+	{
+		return tuner_multistream || !cereTunerMultistream(is_id, pls_mode, pls_code);
+	}
+
+	/* scorul tunerului dupa canTune: fluxul 0 cu secventa implicita pe un tuner fara multistream pierde un punct, ca un
+	   tuner multistream liber (care aplica fluxul 0 exact) sa fie ales intai; restul ramane cum l-a dat canTune */
+	inline int scorTuner(int scor, int is_id, int pls_mode, int pls_code, bool tuner_multistream)
+	{
+		if (scor > 1 && !tuner_multistream && cereFlux(is_id, pls_mode, pls_code))
+			return scor - 1;
+		return scor;
+	}
+
+	/* se trimite fluxul driverului (DTV_STREAM_ID si PLS-ul): numai unui tuner care stie sa aleaga fluxul; un tuner fara
+	   multistream primeste aici numai fluxul 0 cu secventa implicita si se acordeaza fara filtru */
+	inline bool trimiteFlux(int is_id, int pls_mode, int pls_code, bool tuner_multistream)
+	{
+		return cereFlux(is_id, pls_mode, pls_code) && (tuner_multistream || cereTunerMultistream(is_id, pls_mode, pls_code));
+	}
+
 	/* fluxul ca o pereche comparabila: (ISI sau -1, codul Gold sau -1 pentru un cod rau) */
 	struct Cheie
 	{

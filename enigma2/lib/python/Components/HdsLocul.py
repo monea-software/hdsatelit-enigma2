@@ -890,3 +890,80 @@ def orbitalDinReferinta(ref):
 	if orbital in (0xEEEE, 0xFFFF) or orbital >= 3600:
 		return None
 	return orbital
+
+
+# Gradele din "Coordonatele antenei" tastate ca la calculator (LOC, 14.11.2026, orion_bilo, LinuxSat comment7467, GigaBlue
+# UHD Quad 4K Pro). ConfigFloat (ConfigSequence, config.py) scrie fiecare cifra pe o pozitie fixa a campului de grade (2
+# pozitii la latitudine, 3 la longitudine). In ordinea veche omul scria "030" pe primul rand (latitudinea): "03" si zeroul in
+# zecimale, deci "zeroul din fata nu intra, numai la coada". Cu longitudinea pe primul rand ramanea capcana mai rea: "30"
+# dadea 3 pe sute (300, strans la 180), apoi 100, adica 100 E, fara niciun semn. Aici cifrele gradelor se aduna ca la
+# calculator: "30" si "030" dau 30; "41" si "041" dau 41 la latitudine; campul trece singur la zecimale cand mai
+# are 3 cifre sau cand inca o cifra ar trece peste maxim (90 sau 180). Zecimalele raman pe pozitii, ca pana acum.
+# DREAPTA din grade sare la zecimale, STANGA din zecimale intoarce la inceputul gradelor; la intoarcerea pe rand se
+# incepe iar de la grade. Setarile tunerului (NimManager, ConfigFloat 0..359) nu se schimba.
+_CLASA_GRADE = []
+
+
+def _clasaGrade():
+	if _CLASA_GRADE:
+		return _CLASA_GRADE[0]
+	from Components import config as C
+
+	class ConfigGradeCalculator(C.ConfigFloat):
+		def __init__(self, default, limits):
+			C.ConfigFloat.__init__(self, default=default, limits=limits)
+			self.hdsCifre = ""
+
+		def hdsLatime(self):
+			"""cate pozitii are campul gradelor pe ecran (2 pentru 90, 3 pentru 180)"""
+			return len(str(self.limits[0][1]))
+
+		def handleKey(self, key):
+			latime = self.hdsLatime()
+			if key in C.KEY_NUMBERS or key == C.KEY_ASCII:
+				if self.marked_pos >= latime:
+					self.hdsCifre = ""
+					return C.ConfigFloat.handleKey(self, key)
+				if key == C.KEY_ASCII:
+					cod = C.getPrevAsciiCode()
+					if cod < 48 or cod > 57:
+						return
+					cifra = cod - 48
+				else:
+					cifra = C.getKeyNumber(key)
+				maxim = self.limits[0][1]
+				self.hdsCifre += str(cifra)
+				self._value[0] = min(int(self.hdsCifre), maxim)
+				if len(self.hdsCifre) >= 3 or int(self.hdsCifre + "0") > maxim:
+					self.hdsCifre = ""
+					self.marked_pos = latime
+				else:
+					self.marked_pos = min(len(self.hdsCifre), latime - 1)
+				self.changed()
+				return
+			self.hdsCifre = ""
+			inainte = self.marked_pos
+			C.ConfigFloat.handleKey(self, key)
+			if key == C.KEY_LEFT and self.marked_pos < latime:
+				self.marked_pos = 0
+			elif key == C.KEY_RIGHT and inainte < latime:
+				self.marked_pos = latime
+
+		def onSelect(self, session):
+			self.hdsCifre = ""
+			self.marked_pos = 0
+			C.ConfigFloat.onSelect(self, session)
+
+		def onDeselect(self, session):
+			self.hdsCifre = ""
+			C.ConfigFloat.onDeselect(self, session)
+
+	_CLASA_GRADE.append(ConfigGradeCalculator)
+	return ConfigGradeCalculator
+
+
+def campGrade(maxim, valoare_mii):
+	"""campul de grade al ecranului "Coordonatele antenei": `maxim` 90 (latitudinea) sau 180 (longitudinea), valoarea
+	absoluta in miimi de grad; [grade, miimi] ca ConfigFloat, cu gradele tastate ca la calculator"""
+	valoare_mii = abs(int(valoare_mii))
+	return _clasaGrade()(default=[valoare_mii // 1000, valoare_mii % 1000], limits=[(0, int(maxim)), (0, 999)])

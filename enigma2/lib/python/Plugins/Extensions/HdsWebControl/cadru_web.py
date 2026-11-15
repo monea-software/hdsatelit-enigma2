@@ -195,10 +195,13 @@ PAGINI_TASTE = (
 	("/canale", N_("Canale")),
 	("/cautare", N_("Căutare canale")),
 	("/ghid", N_("Ghidul canalului")),
+	("/ghid-internet", N_("Ghidul TV din internet")),
 	("/radio", N_("Radio")),
 	("/filme", N_("Filmul de acum")),
+	("/despre-film", N_("Despre film")),
 	("/piste", N_("Sunet și subtitrări")),
 	("/teletext", N_("Teletext")),
+	("/mozaic", N_("Mozaic")),
 )
 # bara de jos de pe telefon (ecranele Stitch de telefon): (cale, text, iconita); „Mai mult” deschide meniul
 BARA_JOS = (

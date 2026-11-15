@@ -28,7 +28,16 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b4a4deb94acc9916ca04ba6c5e4d0700"
 # pe ramura master (AUTOREV), deci textul se poate schimba: hds_fara_nume (clasa hds-fara-nume) opreste construirea
 # daca vreun nume a ramas in listele instalate.
 # PR ".hds2" (era ".hds1", al licentei): continutul lui terrestrial.xml s-a schimbat la aceeasi versiune.
-PR:append = ".hds2"
+# PR ".hds3" (0.7.5, 15.11.2026, SXP): copia listei satelitilor a imaginii, mai jos.
+PR:append = ".hds3"
+
+# Copia listei satelitilor a imaginii: /usr/share/hdsatelit/satellites-imagine.xml, identica cu /etc/tuxbox/satellites.xml
+# din pachet. O lista de canale adusa din alt panou scrie satellites.xml-ul ei (de multe ori cu cativa sateliti) peste
+# /etc/tuxbox/satellites.xml; celelalte locuri (/etc/satellites.xml, /usr/share/tuxbox/satellites.xml) sunt legaturi spre
+# el, deci lista imaginii se pierdea. Copia nu e in /etc (nu e fisier de configurare) si n-o atinge nicio lista de canale;
+# din ea enigma2 (Components/HdsSatelitiImagine.py) pune la loc, la pornire, satelitii pe care omul are canale sau ii are
+# la tunere, fara sa stearga ce a adus omul, si tot din ea vine "Pune la loc sateliții din imagine" din editorul de canale.
+FILES:${PN} += "${datadir}/hdsatelit/satellites-imagine.xml"
 
 # Sursa fixata la comiterea din imaginea 0.6.0 (pachetul tuxbox-common 1.0+git1030+194f4de0 din manifestul ei; lotul
 # imagine-060-v10): reteta OE-Alliance ia ultima comitere de pe master (AUTOREV), iar dupa 24.10.2026 master a primit
@@ -62,4 +71,8 @@ do_install:append() {
 	done
 	hds_fara_nume ${D}/etc/tuxbox/satellites.xml ${D}/etc/tuxbox/cables.xml ${D}/etc/tuxbox/terrestrial.xml \
 		${D}/etc/tuxbox/atsc.xml ${D}/etc/tuxbox/timezone.xml
+	install -d ${D}${datadir}/hdsatelit
+	install -m 0644 ${D}/etc/tuxbox/satellites.xml ${D}${datadir}/hdsatelit/satellites-imagine.xml
+	cmp -s ${S}/src/satellites.xml ${D}${datadir}/hdsatelit/satellites-imagine.xml \
+		|| bbfatal "copia satellites-imagine.xml nu e identica cu lista din sursa"
 }

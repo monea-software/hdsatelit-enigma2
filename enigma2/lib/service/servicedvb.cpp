@@ -1607,7 +1607,8 @@ RESULT eDVBServicePlay::pause()
 		/* the subtitles wait in their queue while paused (checkSubtitleTiming, hdssubtitraresincron.h) */
 		m_subtitle_sync_timer->stop();
 		/* sunetul trecut prin egalizatorul din procesor se opreste odata cu decodorul placii */
-		if (m_is_primary && m_hds_sunet_procesor && eHdsEgalizator::existent())
+		if (m_is_primary && eHdsEgalizator::existent() && (m_hds_sunet_procesor ||
+			eHdsEgalizator::existent()->vreaCeasImagine(this)))
 			eHdsEgalizator::existent()->pauza(this, true);
 		if (m_soft_decoder)
 			m_soft_decoder->setPaused(true);
@@ -2199,8 +2200,9 @@ int eDVBServicePlay::selectAudioStream(int i)
 			program.videoStreams.empty(), sigc::mem_fun(*this, &eDVBServicePlay::hdsReaplicaSunetul));
 		if (m_hds_sunet_procesor)
 			hds_apid = -1;
-		/* canal TV cu sunetul prin procesor: motorul tine sunetul dupa PTS-ul imaginii */
-		if (m_hds_sunet_procesor && !program.videoStreams.empty())
+		/* canal TV cu sunetul prin procesor: motorul tine sunetul dupa PTS-ul imaginii, si cat placa mai canta sunetul,
+		   inainte ca drumul din procesor sa-l preia (lib/service/hdsegalizator.h, pornirea la canalele TV) */
+		if ((m_hds_sunet_procesor || eHdsEgalizator::getInstance()->vreaCeasImagine(this)) && !program.videoStreams.empty())
 		{
 			m_hds_ceas_erori = 0;
 			m_hds_ceas_imagine->start(100, false);
@@ -2312,7 +2314,8 @@ void eDVBServicePlay::hdsReaplicaSunetul()
 void eDVBServicePlay::hdsCeasImagine()
 {
 	pts_t pts = 0;
-	if (!m_decoder || !m_hds_sunet_procesor || m_is_paused)
+	if (!m_decoder || m_is_paused || !(m_hds_sunet_procesor ||
+		(eHdsEgalizator::existent() && eHdsEgalizator::existent()->vreaCeasImagine(this))))
 	{
 		m_hds_ceas_imagine->stop();
 		return;
@@ -2988,6 +2991,28 @@ void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)
 		pcrpid = program.pcrPid;
 		eDebug(", and the text pid is %04x", program.textPid);
 		tpid = program.textPid;
+		/* HDSatelit (0.7.5, TC308): pistele din PMT pe care nucleul nu le cunoaste, cu etichetele descriptorilor lor
+		   ("pid:stream_type:inregistrare[etichete]"), in jurnalul interfetei la fiecare zap: un canal fara sunet sau fara
+		   imagine se lamureste din jurnal (asistenta, op citeste), fara taste pe ecranul omului */
+		if (!program.pisteNecunoscute.empty())
+		{
+			std::string hds_piste;
+			char hds_piesa[24];
+			for (std::vector<eDVBServicePMTHandler::program::pistaNecunoscuta>::const_iterator
+				i(program.pisteNecunoscute.begin()); i != program.pisteNecunoscute.end(); ++i)
+			{
+				snprintf(hds_piesa, sizeof(hds_piesa), "%s%04x:%02x:%08x[", hds_piste.empty() ? "" : ", ",
+					(unsigned int)(i->pid & 0x1fff), (unsigned int)(i->stream_type & 0xff), (unsigned int)i->inregistrare);
+				hds_piste += hds_piesa;
+				for (int e = 0; e < i->nr_etichete && e < eDVBServicePMTHandler::program::pistaNecunoscuta::MAX_ETICHETE; ++e)
+				{
+					snprintf(hds_piesa, sizeof(hds_piesa), "%s%02x", e ? "," : "", (unsigned int)i->etichete[e]);
+					hds_piste += hds_piesa;
+				}
+				hds_piste += "]";
+			}
+			eDebug("[eDVBServicePlay] piste necunoscute in PMT: %s", hds_piste.c_str());
+		}
 	}
 
 	if (!m_decoder)

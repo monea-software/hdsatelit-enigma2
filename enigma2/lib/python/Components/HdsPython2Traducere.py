@@ -38,9 +38,13 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 
-VERSIUNE = 1                      # se mareste cand se schimba traducerea; ce s-a tradus cu alta versiune nu se reface singur
+# se mareste cand se schimba traducerea. Un plugin tradus cu o versiune mai veche care cade la import se traduce din nou din
+# originale (incearca, traduceDosar). 2 (0.7.5, raportul 781623, pluginul Styles): un dosar fara __init__ nu mai e modul vecin
+# (`from skin import loadSkin` ramane importul interfetei); plugin.py, __init__.py si fisierele `#!` importate de vecini sunt module
+VERSIUNE = 2
 RADACINA = ""
 STARE = "/var/lib/hds-python2/traduse.json"
 MOTOR = "fissix"
@@ -115,11 +119,29 @@ def _citesteStare():
 	return {"format": 1, "pluginuri": {}, "verificate": {}}
 
 
+# HDSatelit 0.7.6 (FRZ): STARE se scrie si de pe firul verificarii din sursa (_lucreaza); scrierile trec prin lacat si fiecare fir are
+# fisierul lui temporar (doua scrieri in acelasi .tmp ar fi lasat un JSON amestecat, iar toata starea s-ar fi pierdut)
+_lacat = threading.RLock()
+
+
+def _actualizeaza(schimba):
+	"""citire, schimbare si scriere a STARE intr-un singur pas sub lacat: schimba(stare) -> True cand e ceva de scris"""
+	with _lacat:
+		stare = _citesteStare()
+		if schimba(stare):
+			_scrieStare(stare)
+
+
 def _scrieStare(date):
 	cale = _c(STARE)
+	with _lacat:
+		_scrieFisierStare(cale, date)
+
+
+def _scrieFisierStare(cale, date):
 	try:
 		os.makedirs(os.path.dirname(cale), exist_ok=True)
-		tmp = cale + ".tmp"
+		tmp = "%s.tmp%d" % (cale, threading.get_ident())
 		with open(tmp, "w", encoding="utf-8") as f:
 			json.dump(date, f, ensure_ascii=False, indent=1, sort_keys=True)
 			f.flush()
@@ -131,6 +153,13 @@ def _scrieStare(date):
 
 def _cheie(cale):
 	return os.path.normpath(cale).replace("\\", "/")
+
+
+def _punePlugin(cheie, intrare_noua):
+	def schimba(stare):
+		stare["pluginuri"][cheie] = intrare_noua
+		return True
+	_actualizeaza(schimba)
 
 
 def intrare(cale):
@@ -530,6 +559,36 @@ def _fixerImpartire(fixer_base, fixer_util, token, syms):
 	return FixHdsImpartire
 
 
+_INIT_PACHET = ("__init__.py", "__init__.pyc", "__init__.pyo", "__init__" + SUFIX_ORIGINAL)
+
+
+def ePachet(dosar):
+	"""True cand dosarul e pachet pentru Python 2 (are __init__.py, .pyc, .pyo sau originalul nostru __init__.py2)"""
+	return any(os.path.exists(os.path.join(dosar, n)) for n in _INIT_PACHET)
+
+
+def _fixerImport():
+	"""fix_import din fissix, cu modulul vecin ca in Python 2: un dosar e modul vecin numai cand e pachet (are __init__). fissix
+	socoteste orice dosar cu acelasi nume (raportul 781623: Styles/skin/, cu xml si imagini, facea din `from skin import loadSkin`
+	un `from .skin import`, iar in Python 3 dosarul devenea pachet gol: "unknown location")."""
+	from fissix.fixes.fix_import import FixImport
+
+	class FixHdsImport(FixImport):
+		def probably_a_local_import(self, imp_name):
+			if imp_name.startswith("."):
+				return False
+			imp_name = imp_name.split(".", 1)[0]
+			dosar = os.path.dirname(self.filename)
+			if not ePachet(dosar):
+				return False
+			baza = os.path.join(dosar, imp_name)
+			for ext in (".py", ".pyc", ".so", ".sl", ".pyd"):
+				if os.path.exists(baza + ext):
+					return True
+			return os.path.isdir(baza) and ePachet(baza)
+	return FixHdsImport
+
+
 def _unelte():
 	"""(unealta cu gramatica lui Python 2, unealta fara instructiunea print), facute o data"""
 	if "unelte" in _motor:
@@ -541,10 +600,15 @@ def _unelte():
 	logging.getLogger("RefactoringTool").setLevel(logging.ERROR)
 	fixere = [f for f in get_fixers_from_package("fissix.fixes") if f.rsplit(".", 1)[-1] not in _FARA]
 	Impartire = _fixerImpartire(fixer_base, fixer_util, token, pygram.python_symbols)
+	ImportVecin = _fixerImport()
+
+	def _importulNostru(lista, unealta):
+		return [ImportVecin(unealta.options, unealta.fixer_log) if type(f).__name__ == "FixImport" else f for f in lista]
 
 	class Unealta(RefactoringTool):
 		def get_fixers(self):
 			pre, post = RefactoringTool.get_fixers(self)
+			pre, post = _importulNostru(pre, self), _importulNostru(post, self)
 			post.append(Impartire(self.options, self.fixer_log))
 			return pre, post
 
@@ -561,6 +625,10 @@ def _unelte():
 	# de Python 2) intr-un plugin Python 3: se repara numai importurile; impartirea si restul codului lui raman cum sunt
 
 	class NumaiImporturi(RefactoringTool):
+		def get_fixers(self):
+			pre, post = RefactoringTool.get_fixers(self)
+			return _importulNostru(pre, self), _importulNostru(post, self)
+
 		def log_error(self, msg, *args, **kwds):
 			raise
 	importuri = [f for f in fixere if f.rsplit(".", 1)[-1] in _IMPORTURI]
@@ -580,6 +648,68 @@ def eScript(text):
 	if isinstance(text, bytes):
 		return text.startswith(b"#!")
 	return text.startswith("#!")
+
+
+_MODULE_MEREU = ("plugin.py", "__init__.py")   # le importa interfata, oricat ar avea `#!` pe primul rand
+
+
+def _importDe(nume):
+	n = re.escape(nume)
+	return re.compile(r"^[ \t]*(?:from[ \t]+\.?%s(?:\.\w+)*[ \t]+import\b|import[ \t]+[^\n#]*\b%s\b|"
+		r"from[ \t]+\.[ \t]+import[ \t]+[^\n#]*\b%s\b)" % (n, n, n), re.M)
+
+
+def eScriptFisier(text, cale):
+	"""eScript, dupa fisier: plugin.py, __init__.py si un fisier `#!` importat de un modul din acelasi dosar sunt module, nu
+	programe (vezi _moduleDosar). Multe pluginuri vechi au `#!/usr/bin/python` pe plugin.py si pe modulele lor (raportul 781623,
+	Styles: plugin.py, Styles.py, PicLoader.py); fara repararea importurilor ramaneau `from __init__ import _` si
+	`from PicLoader import ...`, care in Python 3 nu gasesc nimic. Un program adevarat (NeoBoot ex_init.py, rulat cu
+	`python ex_init.py`) nu e importat de niciun modul (extract.py e importat numai de ex_init.py, tot program)."""
+	if not eScript(text):
+		return False
+	if not cale:
+		return True
+	baza = os.path.basename(cale)
+	if baza in _MODULE_MEREU:
+		return False
+	return baza.rsplit(".", 1)[0] not in _moduleDosar(os.path.dirname(cale))
+
+
+_module_dosar = {}
+
+
+def _moduleDosar(dosar):
+	"""numele fisierelor .py din dosar care sunt module: cele fara `#!`, plugin.py, __init__.py, apoi, pana nu mai apare nimic nou,
+	orice fisier `#!` importat de un modul (plugin.py -> A.py `#!` -> B.py `#!`: amandoua module). Tinut minte dupa marimile si
+	timpii fisierelor."""
+	try:
+		nume = sorted(f for f in os.listdir(dosar) if f.endswith(".py"))
+		semn = tuple((f, os.stat(os.path.join(dosar, f)).st_size, os.stat(os.path.join(dosar, f)).st_mtime_ns) for f in nume)
+	except OSError:
+		return frozenset()
+	stiut = _module_dosar.get(dosar)
+	if stiut and stiut[0] == semn:
+		return stiut[1]
+	texte = {}
+	for f in nume[:MAX_FISIERE]:
+		try:
+			with open(os.path.join(dosar, f), "rb") as fh:
+				texte[f[:-3]] = fh.read(MAX_OCTETI)
+		except OSError:
+			pass
+	module = set(n for n, d in texte.items() if n + ".py" in _MODULE_MEREU or not d.startswith(b"#!"))
+	de_cautat = list(module)
+	while de_cautat:
+		m = texte[de_cautat.pop()].decode("utf-8", "replace")
+		for n in texte:
+			if n not in module and _importDe(n).search(m):
+				module.add(n)
+				de_cautat.append(n)
+	rez = frozenset(module)
+	if len(_module_dosar) > 64:
+		_module_dosar.clear()
+	_module_dosar[dosar] = (semn, rez)
+	return rez
 
 
 def vecineDosar(dosar):
@@ -663,7 +793,7 @@ def traduceText(text, cale, numai_importuri=False):
 	"""(textul tradus, None) sau (None, (randul, mesajul)). cale e calea adevarata a fisierului (importurile relative
 	implicite se recunosc dupa fisierele vecine). numai_importuri: numai importurile vechi (vezi _unelte)."""
 	py2, py3 = _unelte()
-	script = eScript(text)
+	script = eScriptFisier(text, cale)
 	if script:
 		py2, py3 = _motor["scripturi"]
 	text = repara_taburi(text, _motor["tokenize"])
@@ -779,7 +909,7 @@ def _ePython2(f, vecine, date=None):
 		with warnings.catch_warnings():
 			warnings.simplefilter("ignore")
 			arbore = ast.parse(date, f, "exec", feature_version=GRAMATICA)
-		if eScript(date):
+		if eScriptFisier(date, f):
 			return False
 		v = _ImporturiVecine(vecineDosar(os.path.dirname(f)))
 		v.visit(arbore)
@@ -800,6 +930,9 @@ def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None):
 	cheie = _cheie(cale)
 	vechi = stare["pluginuri"].get(cheie) or {}
 	stiute = (vechi.get("fisiere") or {}) if vechi.get("versiune") == VERSIUNE else {}
+	# traducerile unei versiuni mai vechi a traducatorului: fisierul care e inca acea traducere se traduce din nou din original (.py2),
+	# numai cand .py2 e chiar originalul tinut minte (dupa o actualizare prin opkg fisierul de acum e originalul)
+	traduse_vechi = (vechi.get("fisiere") or {}) if vechi and vechi.get("versiune") != VERSIUNE else {}
 	fisiere = _fisierePy(cale)
 	if len(fisiere) > MAX_FISIERE:
 		return Rezultat(PREA_MARE, motiv="%d fisiere .py" % len(fisiere))
@@ -825,32 +958,54 @@ def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None):
 		if stiut and suma == stiut.get("tradus"):
 			pastrate[rel] = stiut          # e traducerea noastra; nu se traduce a doua oara
 			continue
+		actual = date
+		din_original = False
+		tv = traduse_vechi.get(rel)
+		if tv and suma == tv.get("tradus"):
+			try:
+				with open(f + "2", "rb") as fh:
+					original = fh.read(MAX_OCTETI + 1)
+			except OSError:
+				original = None
+			if original is not None and _suma(original) == tv.get("original"):
+				date, din_original = original, True
+		iesire = None
 		numai_importuri = False
+		sari = False
 		if not tot and not sintaxaPython2(f, date):
 			if not _ePython2(f, vecine, date):
-				continue
+				sari = True
 			numai_importuri = True
-		try:
-			text, codare, cookie = _decodeaza(date)
-		except UnicodeDecodeError as exc:
-			return Rezultat(NETRADUS, motiv="%s: %s" % (rel, exc))
-		nou, eroare = traduceText(text, f, numai_importuri)
-		if eroare is not None:
-			return Rezultat(NETRADUS, motiv="%s, randul %s: %s" % (rel, eroare[0], eroare[1]))
-		if time.monotonic() - inceput > timp_maxim:
-			return Rezultat(NETRADUS, motiv="timpul (%d s)" % timp_maxim, secunde=time.monotonic() - inceput)
-		if nou == text or (nou == text + "\n" and not text.endswith("\n")):
-			continue
-		nou = _faraCookieStrain(nou, codare, cookie)
-		try:
-			iesire = nou.encode(codare)
-		except (UnicodeEncodeError, LookupError):
-			iesire = _faraCookieStrain(nou, "utf-8", False).encode("utf-8")
-		if iesire == date:
+		if not sari:
+			try:
+				text, codare, cookie = _decodeaza(date)
+			except UnicodeDecodeError as exc:
+				return Rezultat(NETRADUS, motiv="%s: %s" % (rel, exc))
+			nou, eroare = traduceText(text, f, numai_importuri)
+			if eroare is not None:
+				return Rezultat(NETRADUS, motiv="%s, randul %s: %s" % (rel, eroare[0], eroare[1]))
+			if time.monotonic() - inceput > timp_maxim:
+				return Rezultat(NETRADUS, motiv="timpul (%d s)" % timp_maxim, secunde=time.monotonic() - inceput)
+			if not (nou == text or (nou == text + "\n" and not text.endswith("\n"))):
+				nou = _faraCookieStrain(nou, codare, cookie)
+				try:
+					iesire = nou.encode(codare)
+				except (UnicodeEncodeError, LookupError):
+					iesire = _faraCookieStrain(nou, "utf-8", False).encode("utf-8")
+		if iesire is None or iesire == date:
+			if not din_original:
+				continue
+			iesire = date               # originalul nu mai are nimic de tradus: se pune inapoi
+		if iesire == actual:
+			pastrate[rel] = {"original": _suma(date), "tradus": suma}
 			continue
 		de_scris.append((f, rel, date, iesire))
 	secunde = time.monotonic() - inceput
 	if not de_scris:
+		if traduse_vechi and pastrate:
+			# traducerea veche era deja cea de acum: tinuta minte cu versiunea noua (nu se mai verifica la fiecare pornire)
+			_punePlugin(cheie, {"stare": TRADUS, "versiune": VERSIUNE, "cand": int(time.time()),
+				"secunde": round(secunde, 2), "fisiere": pastrate})
 		return Rezultat(DEJA if pastrate else NIMIC, secunde=secunde)
 	# totul s-a tradus si se compileaza: abia acum se scrie ceva
 	scrise = []
@@ -858,6 +1013,7 @@ def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None):
 		for f, rel, original, iesire in de_scris:
 			_scrie(f + "2" if f.endswith(".py") else f + SUFIX_ORIGINAL, original)
 			_scrie(f, iesire)
+			_stergeCompilate(f)
 			scrise.append(rel)
 			pastrate[rel] = {"original": _suma(original), "tradus": _suma(iesire)}
 	except OSError as exc:
@@ -869,10 +1025,19 @@ def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None):
 				except OSError:
 					pass
 		return Rezultat(NETRADUS, motiv="scrierea: %s" % exc, secunde=secunde)
-	stare["pluginuri"][cheie] = {"stare": TRADUS, "versiune": VERSIUNE, "cand": int(time.time()), "secunde": round(secunde, 2),
-		"fisiere": pastrate}
-	_scrieStare(stare)
+	_punePlugin(cheie, {"stare": TRADUS, "versiune": VERSIUNE, "cand": int(time.time()), "secunde": round(secunde, 2),
+		"fisiere": pastrate})
 	return Rezultat(TRADUS, fisiere=len(scrise), secunde=secunde, detalii=scrise)
+
+
+def _stergeCompilate(f):
+	"""<nume>.pyc / <nume>.pyo de langa un fisier .py rescris: compilate din textul de dinainte (pe receptor stau langa sursa si
+	s-ar incarca mai departe in locul textului nou); Python le face din nou din textul de acum"""
+	for ext in (".pyc", ".pyo"):
+		try:
+			os.remove(f[:-3] + ext)
+		except OSError:
+			pass
 
 
 def puneOriginalele(cale):
@@ -885,12 +1050,11 @@ def puneOriginalele(cale):
 				vechi = os.path.join(radacina, f)
 				try:
 					os.replace(vechi, vechi[:-len(SUFIX_ORIGINAL)] + ".py")
+					_stergeCompilate(vechi[:-len(SUFIX_ORIGINAL)] + ".py")
 					n += 1
 				except OSError as exc:
 					_jurnal("%s: %s" % (vechi, exc))
-	stare = _citesteStare()
-	if stare["pluginuri"].pop(_cheie(cale), None) is not None:
-		_scrieStare(stare)
+	_actualizeaza(lambda stare: stare["pluginuri"].pop(_cheie(cale), None) is not None)
 	return n
 
 
@@ -988,12 +1152,16 @@ _CANDIDAT = re.compile(br"^[ \t]*print(?:[ \t]+[^\s(=.]|[ \t]*$)|except[ \t]+[^:
 TIMP_DEPASIT = ("", "timpul")   # verificarea din sursa oprita de timp (nu terminata)
 
 
-def semneStatice(cale, timp_maxim=30.0):
+def semneStatice(cale, timp_maxim=30.0, de_la=0, la_pas=None, pauza=0.0):
 	"""(fisierul, motivul) cand sursa pluginului arata cod de Python 2 care nu cade la import (in functii): sintaxa lui Python 2
 	dupa gramatica 3.13 (Python 3.14 primeste iar `except X, e:`, cu alt inteles), importuri de module scoase din Python 3,
-	importuri relative implicite; altfel None. Numai citire si analiza, nimic rulat."""
+	importuri relative implicite; altfel None; TIMP_DEPASIT cand s-a oprit la timp_maxim. Numai citire si analiza, nimic rulat.
+	HDSatelit 0.7.6 (FRZ, raportul 2150): de_la = cate fisiere (in ordinea lui _fisierePy) sunt deja verificate fara semn, de la o
+	citire de dinainte oprita de timp: se sar; la_pas(n) se cheama dupa fiecare fisier verificat fara semn (n = cate sunt gata), ca
+	progresul sa se tina minte; pauza (secunde) dupa fiecare fisier analizat, cand ruleaza pe firul de verificare: lacatul Python
+	ajunge la firul interfetei intre doua fisiere."""
 	try:
-		from Components.HdsPython2 import din_sursa, GRAMATICA
+		from Components.HdsPython2 import din_sursa_arbore
 	except Exception:
 		return None
 	inceput = time.monotonic()
@@ -1001,7 +1169,7 @@ def semneStatice(cale, timp_maxim=30.0):
 	if len(fisiere) > MAX_FISIERE:
 		return None
 	vecine = _moduleVecine(cale)
-	# filtrul ieftin (masurat pe .122: analiza completa a 14 pluginuri dura 43 s pe ARM): un fisier se analizeaza numai cand textul
+	# filtrul ieftin (masurat pe receptorul de proba: analiza completa a 14 pluginuri dura 43 s pe ARM): un fisier se analizeaza numai cand textul
 	# lui are o forma care poate fi de Python 2 sau un import al unui modul vecin ori al unui modul de Python 2
 	try:
 		from Components.HdsPython2 import MODULE_PY2
@@ -1010,7 +1178,12 @@ def semneStatice(cale, timp_maxim=30.0):
 	nume_imp = sorted(n for n in (set(vecine) | set(MODULE_PY2)) if re.match(r"^\w+$", n))
 	imp = re.compile(br"^[ \t]*(?:from|import)[ \t]+(?:" + b"|".join(re.escape(n.encode("ascii", "ignore")) for n in nume_imp) +
 		br")\b|\burllib\.(?:urlopen|urlencode|quote|unquote|urlretrieve)\b|^[ \t]*from[ \t]+urllib[ \t]+import", re.M) if nume_imp else None
-	for f in fisiere:
+	vecine_dosar = {}       # dosarul -> vecineDosar(dosar), o data pe verificare (inainte: la fiecare fisier cu importuri)
+	for i, f in enumerate(fisiere):
+		if i < de_la:
+			continue
+		if i > de_la and la_pas is not None:
+			la_pas(i)
 		if time.monotonic() - inceput > timp_maxim:
 			return TIMP_DEPASIT
 		try:
@@ -1025,19 +1198,20 @@ def semneStatice(cale, timp_maxim=30.0):
 		if not (forma or importuri):
 			continue
 		rel = os.path.relpath(f, cale).replace("\\", "/")
-		r = din_sursa(date, f)
+		r, arbore = din_sursa_arbore(date, f)
+		if pauza:
+			time.sleep(pauza)
 		if r is not None:
 			return rel, "%s %s" % r
-		if not importuri:
+		if not importuri or arbore is None:
 			continue
-		import warnings
 		try:
-			with warnings.catch_warnings():
-				warnings.simplefilter("ignore")
-				arbore = ast.parse(date, f, "exec", feature_version=GRAMATICA)
-			if eScript(date):
+			if eScriptFisier(date, f):
 				continue
-			v = _ImporturiVecine(vecineDosar(os.path.dirname(f)))
+			dosar = os.path.dirname(f)
+			if dosar not in vecine_dosar:
+				vecine_dosar[dosar] = vecineDosar(dosar)
+			v = _ImporturiVecine(vecine_dosar[dosar])
 			v.visit(arbore)
 		except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError, UnicodeError):
 			continue
@@ -1046,10 +1220,25 @@ def semneStatice(cale, timp_maxim=30.0):
 	return None
 
 
-# cat poate lua verificarea din sursa intr-o citire a listei de pluginuri (la pornire, inainte de prima bataie a paznicului):
-# masurat pe .122 ~0,1 s pe fisier; ce nu incape se verifica la citirea urmatoare (semnatura nu se scrie)
+# cat poate lua verificarea din sursa intr-o citire a listei de pluginuri, cand ruleaza pe firul care citeste lista (FUNDAL False):
+# masurat pe receptorul de proba ~0,1 s pe fisier; ce nu incape se verifica la citirea urmatoare, de unde a ramas (STARE "progres")
 BUGET_CITIRE_S = 20.0
 _buget = {"ramas": BUGET_CITIRE_S}
+
+# HDSatelit 0.7.6 (FRZ, rapoartele 2150 si 2136, Uno 4K SE si SF8008, 0.7.5): verificarea din sursa a tinut firul interfetei 20,2 s si
+# 22,1 s (ast.parse <- Ipkg.cmdFinished: dupa fiecare opkg din Extensii lista pluginurilor se citeste din nou) si 21,4 s la pornire
+# ("TiviMateE2 (import)"): tot bugetul de 20 s, la FIECARE citire, fiindca un plugin mare nu se termina in buget, semnatura nu se scria
+# si verificarea o lua de la primul fisier. Acum: pe receptor (FUNDAL) verificarea merge pe un fir de lucru, dupa citire; progresul se
+# tine minte in STARE ("progres", pe semnatura); semnul gasit se tine minte ("semne") si lista se citeste din nou pe firul interfetei,
+# unde traducerea si importul din nou merg ca pana acum. FUNDAL False (probele vechi de pe PC): verificarea pe loc, cu bugetul.
+FUNDAL = True
+INTARZIERE_FUNDAL_S = 60.0        # firul asteapta atat inainte de primul plugin (pornirea interfetei tine 40-50 s pe ARM)
+PAUZA_FUNDAL_S = 0.1              # dupa fiecare fisier analizat (~0,1 s): lacatul Python e jumatate din timp al interfetei
+TIMP_FUNDAL_S = 600.0             # un plugin pe firul de lucru; ce ramane se reia de unde a ramas, la citirea urmatoare
+PAS_PROGRES_S = 5.0               # progresul se scrie in STARE cel mult o data la atatea secunde
+PAS_POMPA_MS = 2000               # ceasul de pe firul interfetei care vede semnele gasite in fundal
+NICE_FUNDAL = 10
+_fundal = {"fir": None, "acum": None, "coada": [], "gasite": [], "pompa": None}
 
 
 def incepeCitirea():
@@ -1057,39 +1246,213 @@ def incepeCitirea():
 	_buget["ramas"] = BUGET_CITIRE_S
 
 
+def _progres(stare, cheie, sem):
+	"""cate fisiere ale pluginului sunt deja verificate fara semn (pentru aceeasi semnatura), altfel 0"""
+	p = (stare.get("progres") or {}).get(cheie) or {}
+	try:
+		return int(p.get("fisiere", 0)) if p.get("sem") == sem else 0
+	except (TypeError, ValueError):
+		return 0
+
+
+def _tineMinteProgres(cheie, sem, n):
+	def schimba(stare):
+		stare.setdefault("progres", {})[cheie] = {"sem": sem, "fisiere": int(n)}
+		return True
+	_actualizeaza(schimba)
+
+
+def _tineMinteVerdict(cheie, sem, semn):
+	"""semn None: pluginul e curat (verificate); altfel semnul gasit, pana la traducere (semne). Progresul se uita."""
+	def schimba(stare):
+		stare.setdefault("progres", {}).pop(cheie, None)
+		if semn is None:
+			stare.setdefault("verificate", {})[cheie] = sem
+			stare.setdefault("semne", {}).pop(cheie, None)
+		else:
+			stare.setdefault("semne", {})[cheie] = {"sem": sem, "semn": [semn[0], semn[1]]}
+		return True
+	_actualizeaza(schimba)
+
+
+def _semnPastrat(stare, cheie, sem):
+	"""semnul gasit de firul de verificare pentru aceeasi semnatura, ca tuplu, altfel None"""
+	g = (stare.get("semne") or {}).get(cheie) or {}
+	if g.get("sem") != sem:
+		return None
+	s = g.get("semn") or ["?", "?"]
+	return (str(s[0]), str(s[1] if len(s) > 1 else ""))
+
+
+def _verificaPeLoc(categorie, nume, cale, cheie, sem, stare):
+	"""verificarea pe firul care citeste lista (FUNDAL False), in bugetul citirii, reluata de unde a ramas"""
+	if _buget["ramas"] <= 0:
+		# bugetul acestei citiri s-a dus (prima pornire dupa actualizare, multe pluginuri): pluginul se verifica la citirea urmatoare
+		return TIMP_DEPASIT
+	gata = [_progres(stare, cheie, sem)]
+	t0 = time.monotonic()
+	semn = semneStatice(cale, timp_maxim=max(1.0, _buget["ramas"]), de_la=gata[0], la_pas=lambda n: gata.__setitem__(0, n))
+	durata = time.monotonic() - t0
+	_buget["ramas"] -= durata
+	if durata > 0.5:
+		_jurnal("%s/%s: verificarea din sursa %.1f s" % (categorie, nume, durata))
+	if semn is TIMP_DEPASIT:
+		_tineMinteProgres(cheie, sem, gata[0])
+	return semn
+
+
+def _ePrincipal():
+	return threading.current_thread() is threading.main_thread()
+
+
+def _cereVerificarea(categorie, nume, cale, cheie, sem):
+	"""pune pluginul la coada firului de verificare (o data) si porneste firul, daca nu ruleaza"""
+	with _lacat:
+		if _fundal["acum"] == cheie or any(c[3] == cheie for c in _fundal["coada"]):
+			return
+		_fundal["coada"].append((categorie, nume, cale, cheie, sem))
+		fir = _fundal["fir"]
+		if fir is None or not fir.is_alive():
+			fir = threading.Thread(target=_lucreaza, name="HdsPython2Verificare")
+			fir.daemon = True
+			_fundal["fir"] = fir
+			fir.start()
+	_pornestePompa()
+
+
+def _lucreaza():
+	"""firul de verificare: pluginurile din coada, unul cate unul; nimic din enigma (numai fisiere si STARE)"""
+	try:
+		os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), NICE_FUNDAL)
+	except (AttributeError, OSError):
+		pass
+	if INTARZIERE_FUNDAL_S > 0:
+		time.sleep(INTARZIERE_FUNDAL_S)
+	while True:
+		with _lacat:
+			if not _fundal["coada"]:
+				_fundal["fir"] = None
+				_fundal["acum"] = None
+				return
+			categorie, nume, cale, cheie, sem = _fundal["coada"].pop(0)
+			_fundal["acum"] = cheie
+		try:
+			_verificaInFundal(categorie, nume, cale, cheie, sem)
+		except Exception as e:
+			_jurnal("%s/%s: verificarea din fundal a cazut: %r" % (categorie, nume, e))
+
+
+def _verificaInFundal(categorie, nume, cale, cheie, sem):
+	if semnatura(cale) != sem:
+		return          # pluginul s-a schimbat intre timp (opkg): citirea urmatoare il cere din nou
+	gata = [_progres(_citesteStare(), cheie, sem)]
+	scris = [time.monotonic()]
+
+	def la_pas(n):
+		gata[0] = n
+		if time.monotonic() - scris[0] >= PAS_PROGRES_S:
+			scris[0] = time.monotonic()
+			_tineMinteProgres(cheie, sem, n)
+
+	t0 = time.monotonic()
+	semn = semneStatice(cale, timp_maxim=TIMP_FUNDAL_S, de_la=gata[0], la_pas=la_pas, pauza=PAUZA_FUNDAL_S)
+	durata = time.monotonic() - t0
+	if durata > 0.5:
+		_jurnal("%s/%s: verificarea din sursa (in fundal) %.1f s" % (categorie, nume, durata))
+	if semn is TIMP_DEPASIT:
+		_tineMinteProgres(cheie, sem, gata[0])
+		return
+	if semnatura(cale) != sem:
+		return
+	_tineMinteVerdict(cheie, sem, semn)
+	if semn is not None:
+		_jurnal("%s/%s: cod de Python 2 in %s (%s), gasit in fundal: lista pluginurilor se citeste din nou" % (categorie, nume,
+			semn[0], semn[1]))
+		with _lacat:
+			_fundal["gasite"].append(cheie)
+
+
+def _pornestePompa():
+	"""ceasul de pe firul interfetei (facut numai acolo) care, dupa un semn gasit in fundal, citeste din nou lista pluginurilor"""
+	if not _ePrincipal():
+		return
+	try:
+		if _fundal["pompa"] is None:
+			from enigma import eTimer
+			t = eTimer()
+			t.callback.append(pompa)
+			_fundal["pompa"] = t
+		if not _fundal["pompa"].isActive():
+			_fundal["pompa"].start(PAS_POMPA_MS, False)
+	except Exception as e:
+		# pe PC (fara enigma) probele cheama pompa() de mana
+		_fundal["pompa"] = None
+		if not isinstance(e, ImportError):
+			_jurnal("ceasul verificarii: %r" % (e,))
+
+
+def _recitesteLista():
+	"""numai citirea listei (ca reincarcaPluginuri dupa opkg, dar fara curatarea locurilor orfane, care sterge fisiere)"""
+	import importlib
+	from Components.PluginComponent import plugins
+	from Tools.Directories import resolveFilename, SCOPE_PLUGINS
+	importlib.invalidate_caches()
+	plugins.readPluginList(resolveFilename(SCOPE_PLUGINS))
+
+
+def pompa(reciteste=None):
+	"""Pe firul interfetei: dupa semnele gasite in fundal, lista pluginurilor se citeste din nou (PluginComponent.
+	readPluginList, ca dupa opkg): dupaImport gaseste semnul in STARE, traduce si importa din nou pe loc. Intoarce True cand a
+	cerut citirea. Ceasul se opreste cand firul s-a terminat si nu mai e nimic de facut."""
+	with _lacat:
+		gasite = list(_fundal["gasite"])
+		del _fundal["gasite"][:]
+		fir = _fundal["fir"]
+		viu = fir is not None and fir.is_alive()
+	if not viu and not gasite and _fundal["pompa"] is not None:
+		try:
+			_fundal["pompa"].stop()
+		except Exception:
+			pass
+	if not gasite:
+		return False
+	try:
+		if reciteste is None:
+			reciteste = _recitesteLista
+		reciteste()
+	except Exception as e:
+		_jurnal("citirea listei dupa verificare: %r" % (e,))
+	return True
+
+
 def dupaImport(categorie, nume, cale, plugin, importa):
 	"""Din Components/PluginComponent.py, dupa un import reusit: un plugin extern al carui cod de Python 2 e numai in functii (cade
 	abia la deschidere) se recunoaste din sursa, o singura data pe versiunea fisierelor (semnatura in STARE), se traduce si se
-	importa din nou. Intoarce modulul de folosit; arunca exceptia celui de-al doilea import daca pluginul tradus cade la import."""
+	importa din nou. Intoarce modulul de folosit; arunca exceptia celui de-al doilea import daca pluginul tradus cade la import.
+	Pe receptor (FUNDAL) recunoasterea merge pe firul de verificare: pluginul ramane cum s-a incarcat, iar semnul gasit acolo se
+	traduce la citirea urmatoare a listei (ceruta singura, vezi pompa)."""
 	try:
 		if _pluginImagine(categorie, nume) or not os.path.exists(os.path.join(cale, "plugin.py")):
 			return plugin
 		stare = _citesteStare()
 		cheie = _cheie(cale)
 		sem = semnatura(cale)
-		verificate = stare.setdefault("verificate", {})
-		if verificate.get(cheie) == sem:
+		if stare.setdefault("verificate", {}).get(cheie) == sem:
 			return plugin
-		if _buget["ramas"] <= 0:
-			# bugetul acestei citiri s-a dus (prima pornire dupa actualizare, multe pluginuri): pluginul se verifica la citirea urmatoare
-			return plugin
-		t0 = time.monotonic()
-		semn = semneStatice(cale, timp_maxim=max(1.0, _buget["ramas"]))
-		durata = time.monotonic() - t0
-		_buget["ramas"] -= durata
-		if durata > 0.5:
-			_jurnal("%s/%s: verificarea din sursa %.1f s" % (categorie, nume, durata))
-		if semn is TIMP_DEPASIT:
-			return plugin       # oprita de timp, nu terminata: se reia la citirea urmatoare
+		semn = _semnPastrat(stare, cheie, sem)
 		if semn is None:
-			verificate[cheie] = sem
-			_scrieStare(stare)
-			return plugin
+			if FUNDAL:
+				_cereVerificarea(categorie, nume, cale, cheie, sem)
+				return plugin
+			semn = _verificaPeLoc(categorie, nume, cale, cheie, sem, stare)
+			if semn is TIMP_DEPASIT:
+				return plugin       # oprita de timp, nu terminata: se reia la citirea urmatoare, de unde a ramas
+			if semn is None:
+				_tineMinteVerdict(cheie, sem, None)
+				return plugin
 		_jurnal("%s/%s: cod de Python 2 in %s (%s)" % (categorie, nume, semn[0], semn[1]))
 		r = traduceDosar(cale)
-		stare = _citesteStare()
-		stare.setdefault("verificate", {})[_cheie(cale)] = semnatura(cale)
-		_scrieStare(stare)
+		_tineMinteVerdict(_cheie(cale), semnatura(cale), None)
 	except Exception as e:
 		_jurnal("%s/%s: verificarea a cazut: %r" % (categorie, nume, e))
 		return plugin
@@ -1113,9 +1476,7 @@ def dupaImport(categorie, nume, cale, plugin, importa):
 
 
 def _uitaVerificarea(cale):
-	stare = _citesteStare()
-	if stare.get("verificate", {}).pop(_cheie(cale), None) is not None:
-		_scrieStare(stare)
+	_actualizeaza(lambda stare: stare.get("verificate", {}).pop(_cheie(cale), None) is not None)
 
 
 class Python2Netradus(ImportError):
@@ -1136,7 +1497,13 @@ def incearca(categorie, nume, cale, exc, importa):
 	initiala). Arunca exceptia celui de-al doilea import (pluginul tradus tot cade), ModuleNotFoundError('fissix') cand lipseste
 	motorul (Components/HdsModuleLipsa.py il aduce) sau Python2Netradus."""
 	try:
-		if _pluginImagine(categorie, nume) or not semnPython2(exc, cale):
+		if _pluginImagine(categorie, nume):
+			return None
+		# tradus de o versiune mai veche a traducatorului si tot cade (orice eroare, de pilda "unknown location" din raportul
+		# 781623): se traduce din nou din originale; altfel numai la semnele lui Python 2
+		e = intrare(cale)
+		tradus_vechi = bool(e and e.get("stare") == TRADUS and e.get("versiune") != VERSIUNE)
+		if not tradus_vechi and not semnPython2(exc, cale):
 			return None
 		r = traduceDosar(cale, tot=True)
 	except Exception as e:

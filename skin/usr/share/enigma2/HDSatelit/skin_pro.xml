@@ -122,6 +122,7 @@
 		<widget source="session.CurrentService" render="Label" position="816,60" size="144,30" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">Label,signal,Upper</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="816,88" size="144,34" font="HdsBold;28" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsSignal">Signal</convert></widget>
 		<widget source="session.CurrentService" render="Progress" position="816,124" size="144,8" foregroundColor="hdsBrand" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsSignal">Signal</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="700,88" size="92,34" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4"><convert type="HdsSignal">SnrDb</convert></widget>
 		<widget source="session.CurrentService" render="FixedLabel" position="630,57" size="344,80" backgroundColor="hdsPanelSolid" zPosition="5"><convert type="HdsInfo">ViaInternet</convert><convert type="ConditionalShowHide" /></widget>
 		<widget source="session.CurrentService" render="Label" position="648,60" size="316,30" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6"><convert type="HdsInfo">ViaInternetText</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="648,88" size="316,34" font="HdsBold;24" foregroundColor="hdsGood" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6"><convert type="HdsInfo">ViaInternetNet</convert></widget>
@@ -288,7 +289,7 @@
 		<widget name="statusicon" conditional="statusicon" position="0,0" size="1,1" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
 		<widget name="state" conditional="state" position="16,6" size="180,60" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<widget name="speed" conditional="speed" position="204,6" size="110,60" font="HdsCond;32" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget source="session.CurrentService" render="Label" position="320,6" size="224,60" font="HdsBold;36" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ServicePosition">Remaining,Negate</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="320,6" size="224,60" font="HdsBold;36" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ServicePosition">Remaining,Negate,Compact</convert></widget>
 		<eLabel position="16,84" size="528,8" backgroundColor="hdsTrack" zPosition="1" />
 		<widget source="session.CurrentService" render="Progress" position="16,84" size="528,8" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" zPosition="2"><convert type="ServicePosition">Position</convert></widget>
 	</screen>
@@ -1447,9 +1448,12 @@
 		<widget source="Event" render="Progress" conditional="Event" position="1104,704" size="640,6" foregroundColor="hdsGood" backgroundColor="hdsTrack" transparent="1" zPosition="2">
 			<convert type="EventTime">Progress</convert>
 		</widget>
-		<widget source="Event" render="Label" conditional="Event" position="1104,722" size="640,190" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
+		<widget source="Event" render="Label" conditional="Event" position="1104,722" size="640,150" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
 			<convert type="EventName">FullDescription</convert>
 		</widget>
+		<!-- 0.7.5 (LCF, baderwabas): transponderul canalului ALES in lista (satelitul, frecventa, polarizarea, rata de
+		     simboli, FEC, sistemul), din lista de canale, fara tuner; gol pe dosare si canale de internet -->
+		<widget source="hdsTpAles" render="Label" conditional="hdsTpAles" position="1104,878" size="640,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
 		<!-- tasta TEXT = cautarea de canale; doar imaginea HDSatelit are componenta key_text (text din Python), celelalte sar widgetul -->
 		<widget source="key_text" render="FixedLabel" conditional="key_text" position="1520,940" size="224,40" backgroundColor="hdsCell" zPosition="1" />
 		<widget source="key_text" render="Label" conditional="key_text" position="1520,940" size="224,40" font="HdsCond;26" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2" />
@@ -1615,9 +1619,12 @@
 		<widget source="Event" render="Progress" conditional="Event" position="1272,688" size="624,6" foregroundColor="hdsGood" backgroundColor="hdsTrack" transparent="1" zPosition="2">
 			<convert type="EventTime">Progress</convert>
 		</widget>
-		<widget source="Event" render="Label" conditional="Event" position="1272,704" size="624,180" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
+		<widget source="Event" render="Label" conditional="Event" position="1272,704" size="624,140" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
 			<convert type="EventName">FullDescription</convert>
 		</widget>
+		<!-- 0.7.5 (LCF, baderwabas): transponderul canalului ALES in lista (satelitul, frecventa, polarizarea, rata de
+		     simboli, FEC, sistemul), din lista de canale, fara tuner; gol pe dosare si canale de internet -->
+		<widget source="hdsTpAles" render="Label" conditional="hdsTpAles" position="1272,850" size="624,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
 		<!-- dreapta jos: TEXT (cautarea) si FAV pe un rand, apoi tastele colorate pe doua randuri: rosu Toate, verde Sateliți,
 		     galben Furnizori, albastru Favorite. FAV se lateste spre stanga cu textul marit (hdsFavTastaMarita, cel mult
 		     120 px): de la 1592 pana la cel mult 1472, deci nu ajunge la TEXT (1272-1464) -->
@@ -1906,6 +1913,34 @@
 		<eLabel position="32,348" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
 		<widget name="servicelist" conditional="servicelist" position="32,360" size="1176,528" itemHeight="48" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" selectionDisabled="1" zPosition="2" />
 		<widget name="scan_result" conditional="scan_result" position="48,368" size="1144,520" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="3" />
+		<!-- DSG casete: inceput -->
+		<!-- rezumatul in casete (Screens/ServiceScan.hdsArataCifrele): cifra mare, eticheta deasupra, randul mic jos in
+		     dreapta; ascunse pana la sfarsit si cand nu s-a gasit nimic (atunci ramane fraza din scan_result, care trece
+		     sub casete cu ce nu incape in ele). Inaltimile lasa loc textului marit la 130%. -->
+		<widget name="scan_box_canale" conditional="scan_box_canale" position="32,368" size="381,156" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="scan_cap_canale" conditional="scan_cap_canale" position="56,380" size="333,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_canale" conditional="scan_num_canale" position="56,422" size="333,100" font="HdsBold;72" foregroundColor="hdsBrandLight" backgroundColor="hdsCell" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_canale" conditional="scan_sub_canale" position="176,472" size="213,40" font="HdsRegular;28" foregroundColor="hdsGood" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_tv" conditional="scan_box_tv" position="429,368" size="381,156" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="scan_cap_tv" conditional="scan_cap_tv" position="453,380" size="333,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_tv" conditional="scan_num_tv" position="453,422" size="333,100" font="HdsBold;72" foregroundColor="hdsBrandLight" backgroundColor="hdsCell" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_tv" conditional="scan_sub_tv" position="573,472" size="213,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_radio" conditional="scan_box_radio" position="826,368" size="382,156" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="scan_cap_radio" conditional="scan_cap_radio" position="850,380" size="334,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_radio" conditional="scan_num_radio" position="850,422" size="334,100" font="HdsBold;72" foregroundColor="hdsBrandLight" backgroundColor="hdsCell" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_radio" conditional="scan_sub_radio" position="970,472" size="214,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_transp" conditional="scan_box_transp" position="32,536" size="580,112" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="scan_cap_transp" conditional="scan_cap_transp" position="56,548" size="532,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_transp" conditional="scan_num_transp" position="56,578" size="532,66" font="HdsBold;52" foregroundColor="hdsBrandLight" backgroundColor="hdsCell" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_transp" conditional="scan_sub_transp" position="316,598" size="272,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_durata" conditional="scan_box_durata" position="628,536" size="580,112" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="scan_cap_durata" conditional="scan_cap_durata" position="652,548" size="532,36" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_num_durata" conditional="scan_num_durata" position="652,578" size="532,66" font="HdsBold;52" foregroundColor="hdsBrandLight" backgroundColor="hdsCell" transparent="1" valign="bottom" noWrap="1" zPosition="3" />
+		<widget name="scan_sub_durata" conditional="scan_sub_durata" position="912,598" size="272,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4" />
+		<widget name="scan_box_place" conditional="scan_box_place" position="32,660" size="1176,72" backgroundColor="hdsCell" zPosition="2" />
+		<widget name="scan_place" conditional="scan_place" position="56,660" size="1128,72" font="HdsBold;32" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget name="scan_hint_ok" conditional="scan_hint_ok" position="48,936" size="840,48" font="HdsCond;28" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<!-- DSG casete: sfarsit -->
 		<!-- reteaua citita din NIT la sfarsitul scanarii (Components/ServiceScan.hdsTexteRetea): ecranul o pune sub
 		     rezumat (Screens/ServiceScan.hdsAseazaReteaua), fiecare text cat ii e randul, la orice marime a textului;
 		     scan_network_card e linia de deasupra (Clasic) sau fundalul casetei (Pro, skin_pro.xml). Fara retea, ascunse. -->

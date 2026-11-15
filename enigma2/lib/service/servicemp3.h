@@ -421,6 +421,19 @@ private:
 	gint m_aspect, m_width, m_height, m_framerate, m_progressive, m_gamma;
 	int videoInfo(const char *name, bool hex, int din_sink);
 	void gammaDinDecodor();
+	/* HiSilicon (servicemp3.cpp, hdsmarime): the size from /proc/stb/vmpeg/0 when the sink tells none, and a change of
+	   aspect alone told to the bar; declared on every machine, used only there */
+	ePtr<eTimer> m_hds_marime_timer;
+	int m_hds_marime_pasi;		/* ticks since the first ASYNC_DONE with a video stream */
+	int m_hds_x0, m_hds_y0;		/* xres and yres in vmpeg/0 when the service started (the channel before) */
+	int m_hds_aspect_spus, m_hds_aspect_nou;	/* sAspect last told, and a new one seen once */
+	void hdsMarimeDinDecodor();
+	/* GST_MESSAGE_TAG (servicemp3.cpp, hdsinfo): evUpdatedInfo from the tags at most once in hdsinfo::PAS_MS; a change
+	   inside the step is sent when the step ends, by the timer */
+	ePtr<eTimer> m_hds_info_timer;
+	long long m_hds_info_ultim_ms;	/* steady clock of the last evUpdatedInfo sent from the tags, -1 = none yet */
+	void hdsInfoDinEtichete();
+	void hdsInfoAmanat();
 	std::string m_useragent;
 };
 

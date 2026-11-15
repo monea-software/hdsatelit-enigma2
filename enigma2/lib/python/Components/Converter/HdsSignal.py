@@ -70,6 +70,11 @@ TYPES = {
 	"SnrHonest": ("_snr_honest", False, 1000),
 	"SnrLabel": ("_snr_label", False, 1000),
 	"SnrIsDb": ("_snr_is_db", True, 1000),
+	# 0.7.5 (LCF, baderwabas): SNR-ul in dB pe bara intai. SnrDb: numai valoarea in dB, gol cand placa nu da dB adevarat
+	# (tema Pro, langa procente); QualityDb: dB cand placa il da, altfel textul lui Quality, valoarea (bara) ramane a lui
+	# Quality (tema Clasic, in locul procentelor, unde randul tehnic nu mai are loc)
+	"SnrDb": ("_snr_db", False, 1000),
+	"QualityDb": ("_quality_db", False, 1000),
 	"TunerState": ("_tuner_state", False, 1000),
 	# motor: pozitia din setari si miscarea (doar cand tunerul are motor)
 	"RotorPosition": ("_rotor_position", False, 1000),
@@ -530,6 +535,25 @@ class HdsSignal(Poll, Converter):
 
 	def _snr_is_db(self):
 		return self._snr()[1] is not None
+
+	def _snr_db(self):
+		"""SNR in dB (de pilda 12,4 dB) numai cand placa da o valoare adevarata (C.snr_db_honest); altfel gol, nu procente:
+		procentele sunt deja in CALITATE, langa."""
+		db = self._snr()[1]
+		if db is None:
+			return (u"", 0)
+		return (C.fmt_dec(db, 1) + u" dB", min(100, int(db)))
+
+	def _quality_db(self):
+		"""Valoarea de langa CALITATE: SNR in dB cand placa da o valoare adevarata, altfel procentele (si viteza la
+		canalele de internet), ca Quality; valoarea numerica ramane a lui Quality."""
+		q = self._quality()
+		if self._iptv() is not None:
+			return q
+		db = self._snr()[1]
+		if db is None:
+			return q
+		return (C.fmt_dec(db, 1) + u" dB", q[1])
 
 	def _tuner_state(self):
 		service, sref = self._service_ref()

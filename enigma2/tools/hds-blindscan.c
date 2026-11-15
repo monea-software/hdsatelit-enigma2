@@ -46,6 +46,8 @@
  *                                  sub 7500 MHz = banda C (frecventa reala = LO - IF)
  *   --felie KHZ                    latimea unei felii (implicit 150000, masurat pe un V20; 0 = trecerea intreaga)
  *   --timp-max S                   paznicul de timp: dupa atatea secunde se opreste curat (implicit 1200)
+ *   --rata-min KSYM                numai pe calea hife: cea mai mica rata cautata, in kSym/s (implicit 1000); sub 1000
+ *                                  coboara cel mult pana la minimul declarat de driverul tunerului (FE_GET_INFO)
  *   --asteapta-frontend S          cat asteapta sa se elibereze frontend-ul (implicit 15)
  *   --diseqc-port N                comutatorul DiSEqC 1.0 al satelitului cautat: 0..3 = A..D (AA, AB, BA, BB); inainte de
  *                                  fiecare trecere programul trimite e01038(F0|N<<2|H<<1|banda inalta), la prima si reset
@@ -380,6 +382,8 @@ static Trecere treceri[MAX_TRECERI];
 static int nr_treceri = 0;
 static uint32_t lo_jos_mhz = 9750, lo_sus_mhz = 10600;
 static uint32_t felie_khz = 150000;
+/* --rata-min: cea mai mica rata ceruta de om pe calea hife, in kSym/s; 0 = podeaua de pana acum (1000 kSym/s) */
+static uint32_t rata_min_ceruta_ksym = 0;
 static long port_tuner = 0;
 static const Profil *placa_aleasa = NULL;
 /* comutatorul satelitului cautat (--diseqc-port, --diseqc-octet, --toneburst); -1 = nimic de trimis */
@@ -406,6 +410,8 @@ static int e_dublura(uint32_t f, uint32_t rata_ksym, uint32_t pol) {
 		if (gasite[i].polarizare != pol) continue;
 		uint32_t r = gasite[i].rata_ksym < rata_ksym ? gasite[i].rata_ksym : rata_ksym;
 		uint32_t tol = r / 4 > 1000 ? r / 4 : 1000;   /* kHz: un sfert din rata, cel putin 1 MHz */
+		/* sub 1 MSym/s purtatoarele vecine stau la ~1,2 x rata una de alta: 1 MHz le-ar lua drept dubluri */
+		if (r < 1000u) tol = r / 2u > 50u ? r / 2u : 50u;
 		uint32_t d = gasite[i].frecventa_khz > f ? gasite[i].frecventa_khz - f : f - gasite[i].frecventa_khz;
 		if (d <= tol) return 1;
 	}
@@ -570,6 +576,9 @@ gata:
 #define HIFE_RATA_MIN 1000000u
 #define HIFE_RATA_MAX 45000000u
 #define HIFE_FELIE_MS_MAX 180000u
+/* podeaua folosita, in kSym/s: HIFE_RATA_MIN, sau mai jos cu --rata-min, dar niciodata sub minimul declarat de driverul
+ * tunerului (FE_GET_INFO, symbol_rate_min; pe SF8008 Si2166D: 100000 Sym/s, citit pe aparat 15.11.2026) */
+static uint32_t hife_rata_jos_ksym = HIFE_RATA_MIN / 1000u;
 
 typedef struct {
 	uint32_t frecventa_start_mhz, frecventa_stop_mhz, rata_min, rata_max, numar;
@@ -627,7 +636,8 @@ static void tp_hife(const HifeTp *t, const Trecere *tr) {
 	uint32_t f = f_mhz * 1000u, rata = t->rata_ksym, pol = tr->polarizare;
 	linie("JURNAL tp-hife %u %u %u %u %u %u %u %u", t->frecventa_mhz, t->rata_ksym, t->fec, t->inversiune, t->sistem,
 	      t->modulatie, t->rolloff, t->pilot);
-	if (f < 1000000u || f > 30000000u || rata < 500u || rata > 70000u) return;
+	/* sub jumatate din podeaua cautata e zgomot (implicit 500 kSym/s, ca pana acum) */
+	if (f < 1000000u || f > 30000000u || rata < hife_rata_jos_ksym / 2u || rata > 70000u) return;
 	if (e_dublura(f, rata, pol) || nr_gasite >= MAX_GASITE) return;
 	gasite[nr_gasite].frecventa_khz = f;
 	gasite[nr_gasite].rata_ksym = rata;
@@ -705,7 +715,22 @@ static void *lucru_hife(void *arg) {
 	/* Si2166: firul din nucleu (si2166_blindscan_thread) inmulteste limitele cu 1000, deci cere kSym/s. Cu Sym/s, dupa depasire si
 	 * impachetarea pe 16 biti, intervalul cautat iese 16960-18711 kSym/s si scapa transpondere care se prind la acordare directa */
 	uint32_t impartitor = strstr(nume_nim, "Si2166") ? 1000u : 1u;
-	linie("JURNAL hife-rate %u %u", HIFE_RATA_MIN / impartitor, HIFE_RATA_MAX / impartitor);
+	/* Podeaua ratei: 1000 kSym/s (masurata pe aparat), sau cea ceruta cu --rata-min. Sub 1000 numai pana la minimul pe care
+	 * il declara driverul acestui tuner (FE_GET_INFO pe frontend-ul deschis mai sus); fara raspuns de la driver ramane 1000. */
+	if (rata_min_ceruta_ksym && rata_min_ceruta_ksym < hife_rata_jos_ksym) {
+		struct dvb_frontend_info info;
+		memset(&info, 0, sizeof info);
+		if (ioctl(fe, FE_GET_INFO, &info) == 0 && info.symbol_rate_min > 0) {
+			uint32_t tuner_ksym = (info.symbol_rate_min + 999u) / 1000u;
+			uint32_t jos = rata_min_ceruta_ksym > tuner_ksym ? rata_min_ceruta_ksym : tuner_ksym;
+			if (jos < hife_rata_jos_ksym) hife_rata_jos_ksym = jos;
+		}
+		linie("JURNAL hife-tuner-min %u", (unsigned)info.symbol_rate_min);
+	} else if (rata_min_ceruta_ksym > hife_rata_jos_ksym) {
+		hife_rata_jos_ksym = rata_min_ceruta_ksym;
+	}
+	uint32_t rata_jos = hife_rata_jos_ksym * 1000u / impartitor;
+	linie("JURNAL hife-rate %u %u", rata_jos, HIFE_RATA_MAX / impartitor);
 	linie("PORNIT %d %llu", nr_treceri, (unsigned long long)khz_total);
 	for (int i = 0; i < nr_treceri && !cerere_oprire; i++) {
 		Trecere *t = &treceri[i];
@@ -717,7 +742,7 @@ static void *lucru_hife(void *arg) {
 		for (uint32_t a0 = t->if_start; a0 < t->if_stop && !cerere_oprire; a0 += pas) {
 			uint32_t a1 = a0 + pas + SUPRAPUNERE_KHZ;
 			if (a1 > t->if_stop || t->if_stop - a1 < FELIE_MIN_KHZ) a1 = t->if_stop;
-			HifeParam p = { a0 / 1000u, (a1 + 999u) / 1000u, HIFE_RATA_MIN / impartitor, HIFE_RATA_MAX / impartitor, 0 };
+			HifeParam p = { a0 / 1000u, (a1 + 999u) / 1000u, rata_jos, HIFE_RATA_MAX / impartitor, 0 };
 			khz_felie = a1 - a0 > pas ? pas : a1 - a0;
 			uint64_t tf = ms_acum();
 			int n = -1;
@@ -799,6 +824,7 @@ int main(int argc, char **argv) {
 		else if (!strcmp(a, "--lo-sus") && !numar(v, &x) && x > 0 && x < 30000) { lo_sus_mhz = (uint32_t)x; i++; }
 		else if (!strcmp(a, "--felie") && !numar(v, &x) && x >= 0 && x <= 1200000) { felie_khz = (uint32_t)x; i++; }
 		else if (!strcmp(a, "--timp-max") && !numar(v, &x) && x > 0 && x < 86400) { timp_max = x; i++; }
+		else if (!strcmp(a, "--rata-min") && !numar(v, &x) && x >= 1 && x <= 45000) { rata_min_ceruta_ksym = (uint32_t)x; i++; }
 		else if (!strcmp(a, "--asteapta-frontend") && !numar(v, &x) && x >= 0 && x < 600) { asteapta_fe = x; i++; }
 		else if (!strcmp(a, "--lib") && v) { cale_lib = v; i++; }
 		else if (!strcmp(a, "--diseqc-port") && !numar(v, &x) && x >= 0 && x <= 3) { diseqc_port = (int)x; i++; }

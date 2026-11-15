@@ -20,7 +20,7 @@
  *   [sistem]    schimbarea sistemului pe un tuner combinat (DVB-C <-> DVB-T), reusita sau refuzata.
  * SCANAREA (/home/root/logs/hds-scanare.log, namespace hdsjscan, chemat din scan.cpp): pornirea (cate transpondere,
  * steagurile), fiecare transponder (parametrii; prins in cat timp, cate servicii noi, SNR-ul, nivelul semnalului si cat
- * a durat citirea lor, sau fara semnal dupa cat timp) si sfarsitul (cercetate, fara semnal, servicii gasite, durata). Fara
+ * a durat citirea lor, cand s-a terminat fiecare tabel: PAT, SDT, PMT, NIT, BAT, sau fara semnal dupa cat timp) si sfarsitul (cercetate, fara semnal, servicii gasite, durata). Fara
  * numele serviciilor gasite.
  * Exemplu: "2026-10-29T08:14:02Z [INFO] [acordare] A DVB-S2 8PSK 11054 H 27500 3/4 19.2E | lnb 18V 22k DiSEqC1.0
  *   port 2 | semnal in 412 ms snr 12.40 dB"
@@ -92,6 +92,9 @@ void textParametri(char *buf, size_t n, iDVBFrontendParameters *p);
 namespace hdsjscan
 {
 
+/* tabelele unui transponder prins, in ordinea din randul de jurnal (SC2, 15.11.2026) */
+enum Tabel { TABEL_PAT, TABEL_SDT, TABEL_PMT, TABEL_NIT, TABEL_BAT, NR_TABELE };
+
 /* starea jurnalului unei scanari (membru in eDVBScan) */
 struct Stare
 {
@@ -99,6 +102,13 @@ struct Stare
 	size_t servicii_inainte;
 	int fara_citiri;        /* o citire de semnal a durat prea mult: scanarea asta nu mai citeste semnalul */
 	char tp[160];
+	/* ceasul tabelelor pe transponderul de acum, in ms de la acordare (tp_ms); -1 = nimic inca */
+	long semnal_ms;                 /* starea "ok" a canalului: de aici pornesc filtrele */
+	long tabel_ms[NR_TABELE];       /* tabelul terminat (cu toate sectiunile) sau renuntat */
+	int tabel_err[NR_TABELE];       /* 0 terminat, altfel renuntat (plafon, retras de SDT) */
+	long nit_prima_ms;              /* prima sectiune NIT primita */
+	int nit_retea, nit_versiune, nit_sectiuni;  /* din prima sectiune NIT: network_id, version_number, cate sectiuni */
+	int pmt_lipsa;                  /* PMT-uri renuntate (plafonul de 4 s al fiecaruia sau scoase de SDT) */
 	Stare();
 };
 
@@ -108,7 +118,19 @@ void transponder(Stare &s, iDVBFrontendParameters *p, size_t servicii);
 bool citesteSemnal(const Stare &s);
 /* snr_db100 si nivel ca la hdsjtuner; citire_ms = cat au durat cele doua citiri, < 0 cand nu s-au facut */
 void prins(Stare &s, size_t servicii, int snr_db100 = -1, int nivel = -1, long citire_ms = -1);
+/* ceasul tabelelor (numai la scanarea cu jurnal, pe transponderul de acum): canalul a ajuns "ok", un tabel s-a terminat
+   (err ca la tableReady: 0 intreg, altfel renuntat), prima sectiune NIT (network_id, versiunea, cate sectiuni are).
+   Prins scrie la coada randului, dupa SNR, "pe tabele: semnal X ms, PAT ... ms, SDT ... ms, PMT ... ms, NIT ... ms
+   (prima sectiune la ... ms, retea N v V, S sectiuni)"; un tabel renuntat are "fara" dupa timp. Fara ceas, randul ramane
+   cum era. */
+void semnalPrins(Stare &s);
+void tabel(Stare &s, Tabel t, int err);
+void sectiuneNit(Stare &s, int retea, int versiune, int sectiuni);
+/* un PMT renuntat; randul scrie "PMT ... ms (N fara)" */
+void pmtLipsa(Stare &s);
 void faraSemnal(Stare &s);
+/* un transponder din lista sarit fara acordare: alta varianta (rata, sistem, FEC) a unei purtatori deja prinse */
+void variantaSarita(Stare &s, iDVBFrontendParameters *sarit, iDVBFrontendParameters *prins);
 void gata(Stare &s, size_t cercetate, size_t fara_semnal, size_t servicii);
 
 }

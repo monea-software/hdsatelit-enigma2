@@ -31,9 +31,17 @@
 #      (pe care instalarea nu il vede) devine <nume>.zip. Oprirea sau orice eroare sterg fisierul de lucru.
 # Copia numai CITESTE de pe receptor; nu scrie nimic pe memoria interna. Nu porneste ofgwrite.
 #
-# Modelele: numai eMMC HiSilicon (toate regulile fara familie=broadcom). Vu+ 4K (familie=broadcom) si Vu+ Solo SE
-# (stocare=nand) NU inca: zip-ul Vu+ de pe site are si initrd_auto.bin, splash_auto.bin si mkpart.update, pe care
-# receptorul pornit nu le are, iar pe NAND copia ar cere mkfs.ubifs/ubinize/nanddump, care nu sunt in imagine. Fara
+# Modelele: eMMC HiSilicon (forma de mai sus) si, din 0.7.5, Vu+ 4K (familie=broadcom; JAKITAKI, Satedu, 14.11.2026).
+# Pe Vu+ forma e a stickului Vu+, ca la OE-Alliance (Screens/ImageBackup.py) si ca zip-urile noastre de pe site:
+# <nume>_usb.zip cu vuplus/<model>/imageversion, kernel_auto.bin (zImage, taiat la marimea din antet), rootfs.tar.bz2,
+# reboot.update si marcajul. Fara initrd_auto.bin, splash_auto.bin si FARA mkpart.update (ar reface partitiile): copia
+# pune inapoi numai nucleul si sistemul. Se pune inapoi ca imaginea Vu+ de pe site: zip-ul dezarhivat pe stick, apoi
+# receptorul pornit cu stickul (incarcatorul Vu+; instalarea din meniu cauta kernel.bin si nu o vede).
+# NU inca: stocare=nand (Vu+ Solo SE, Solo2, Duo2, Zero: copia ar cere mkfs.ubifs/ubinize/nanddump, care nu sunt in
+# imagine) si pornirile al caror nucleu nu sta intr-o partitie (kexec, NeoBoot: nucleul e un fisier al locului).
+# Nucleul: kernel= din /proc/cmdline cand exista (slotul pornit, si de pe stick: /dev/sdaK pe SF8008), altfel
+# kernel_part din reguli. Cand kernel= numeste altceva decat o partitie, copia nu se face: pana pe 14.11.2026 cadea pe
+# kernel_part, adica pe nucleul ALTEI imagini cand pornirea era dintr-un loc de pe stick (typhoones12, SF8008). Fara
 # fisierul de reguli (emulatorul de pe PC, alta imagine) copia nu se face: un zip fara marcaj nu s-ar putea instala.
 #
 # Fisierul nu importa nimic din enigma2 la incarcare; `radacina` (fisierele de reguli, cmdline, mounts) si
@@ -75,12 +83,15 @@ CUVANT_COPIE = "-copie-"
 DOSAR_LEGARE = "/tmp/hds-copie-imagine-radacina"
 MAGIC_UIMAGE = b"\x27\x05\x19\x56"
 ANTET_UIMAGE = 64
+# zImage ARM (nucleul Vu+ 4K): semnul 0x016F2818 la 0x24, inceputul si sfarsitul (little-endian) la 0x28 si 0x2C
+MAGIC_ZIMAGE = b"\x18\x28\x6f\x01"
+ANTET_NUCLEU = 64
 NUCLEU_MAXIM = 64 * 1024 * 1024
 BLOC = 1024 * 1024
 NIVEL_BZ2 = 9
 # fisierele fara de care imaginea nu porneste (REGULI-FLASH-RECEPTOR, regula 7)
 OBLIGATORII = ("./sbin/init", "./sbin/ldconfig", "./usr/bin/enigma2")
-# dosarele care intra goale, ca in imaginea de pe site: pe imaginea noastra /run sta pe radacina (nu in RAM), iar pe .122
+# dosarele care intra goale, ca in imaginea de pe site: pe imaginea noastra /run sta pe radacina (nu in RAM), iar pe receptorul de proba
 # (11.11.2026) avea 408 intrari de rulare (pid-uri, baza udev, avahi); puse inapoi, ar strica pornirea serviciilor
 GOALE = ("./run",)
 # cererile de punere la loc a copiei setarilor (Components/HdsCopieSetari: cerere, inceputa.json) nu intra: puse inapoi
@@ -99,14 +110,23 @@ LIMITA_FARA_ZIP64 = 1536 * 1024 * 1024
 _USB_RX = re.compile(r"^/dev/sd[a-z]+[0-9]*$")
 _NUME_RX = re.compile(r"[^A-Za-z0-9_.+-]")
 _KERNEL_RX = re.compile(r"^mmcblk[0-9]+p[0-9]+$")
+# kernel= din /proc/cmdline: o partitie din memorie sau de pe un stick (locurile USB ale SF8008: /dev/sdaK)
+_KERNEL_CMDLINE_RX = re.compile(r"^/dev/(mmcblk[0-9]+p[0-9]+|sd[a-z]+[0-9]+)$")
+
+# FORMELE copiei (aceeasi tabela la scriere si la verificare): dosarul din zip, numele nucleului, sufixul, fisierele in plus
+FORMA_EMMC = {"fel": "emmc", "subcale": "e2/update", "kernel": "kernel.bin", "sufix": "_mmc.zip", "in_plus": ()}
+# reboot.update: ca toate zip-urile Vu+ 4K de pe site (masina din stratul OE-Alliance); fara el incarcatorul cere confirmare
+FORMA_VUPLUS = {"fel": "vuplus", "subcale": "vuplus/%s", "kernel": "kernel_auto.bin", "sufix": "_usb.zip",
+	"in_plus": (("reboot.update", "This file forces a reboot after the update.\n"),)}
 
 PAS_NUCLEU, PAS_SISTEM, PAS_VERIFICARE = 1, 2, 3
 PASI = 3
 
 # de ce nu se poate face copia pe acest receptor (suport())
 NU_REGULI = "fara-reguli"
-NU_VUPLUS = "vuplus"
+NU_VUPLUS = "vuplus"  # pana in 0.7.4; din 0.7.5 Vu+ 4K are copia (FORMA_VUPLUS), ramane numai pentru textul vechi
 NU_NAND = "nand"
+NU_LOC = "loc-fara-partitie"
 
 
 class Oprita(Exception):
@@ -136,6 +156,36 @@ def textReguli(radacina=None):
 	return _citesteText(_cale(radacina, P.FISIER_REGULI), P.MARIME_MAXIMA_TEXT)
 
 
+def forma(reguli):
+	"""Forma copiei pentru regulile date (FORMA_EMMC sau FORMA_VUPLUS, cu dosarul modelului completat)."""
+	if P.broadcom(reguli):
+		f = dict(FORMA_VUPLUS)
+		masina = (reguli or {}).get("machinebuild", "")
+		f["subcale"] = f["subcale"] % (masina[2:] if masina.startswith("vu") else masina)
+		return f
+	return FORMA_EMMC
+
+
+def nucleuDinCmdline(cmdline):
+	"""(are_kernel, partitia): are_kernel = /proc/cmdline are kernel=; partitia = "mmcblk0p13" / "sda1" cand kernel=
+	numeste o partitie, "" altfel (un fisier, UUID, kexec)."""
+	for cuvant in (cmdline or "").split():
+		if cuvant.startswith("kernel="):
+			m = _KERNEL_CMDLINE_RX.match(cuvant[7:])
+			return True, (m.group(1) if m else "")
+	return False, ""
+
+
+def _pornireFaraPartitie(radacina, cmdline):
+	"""True cand nucleul pornit nu sta intr-o partitie: kexec (Vu+ 4K cu pornire multipla), NeoBoot (/.multinfo, ca paza
+	din ofgwrite) sau kernel= care nu e o partitie."""
+	cuvinte = (cmdline or "").split()
+	if "kexec=1" in cuvinte or os.path.exists(_cale(radacina, ".multinfo")):
+		return True
+	are, kp = nucleuDinCmdline(cmdline)
+	return are and not kp
+
+
 def suport(radacina=None):
 	"""(True, "") cand copia se poate face pe acest receptor; altfel (False, NU_*)."""
 	reguli = P.citesteReguli(radacina)
@@ -143,8 +193,8 @@ def suport(radacina=None):
 		return False, NU_REGULI
 	if P.nand(reguli):
 		return False, NU_NAND
-	if P.broadcom(reguli):
-		return False, NU_VUPLUS
+	if _pornireFaraPartitie(radacina, _citesteText(_cale(radacina, "proc/cmdline"), 4096) or ""):
+		return False, NU_LOC
 	return True, ""
 
 
@@ -152,6 +202,9 @@ def textSuport(motiv):
 	if motiv == NU_VUPLUS:
 		return _("Pe receptoarele Vu+ copia completă a imaginii nu se poate face încă. Fă copia setărilor (Meniu, Setări, "
 			"Software & Firmware, Copia setărilor): ea păstrează canalele, setările și pluginurile, iar imaginea o iei de pe site.")
+	if motiv == NU_LOC:
+		return _("Imaginea rulează dintr-un loc de pornire multiplă al cărui nucleu nu stă într-o partiție, deci copia ei "
+			"nu s-ar putea pune înapoi. Pornește imaginea HD Satelit din memoria receptorului și fă copia de acolo.")
 	if motiv == NU_NAND:
 		return _("Pe acest receptor copia completă a imaginii nu se poate face încă. Fă copia setărilor (Meniu, Setări, "
 			"Software & Firmware, Copia setărilor): ea păstrează canalele, setările și pluginurile, iar imaginea o iei de pe site.")
@@ -160,33 +213,39 @@ def textSuport(motiv):
 
 
 def dispozitivNucleu(reguli, cmdline):
-	"""„mmcblk0p9”: partitia nucleului pornit (kernel= din /proc/cmdline, pe pornirea multipla slotul ales), altfel
-	kernel_part= din reguli. "" cand niciuna nu e o partitie eMMC."""
-	kp, _rsd = P.nucleuPornit(cmdline)
-	for candidat in (kp, (reguli or {}).get("kernel_part", "")):
-		if candidat and _KERNEL_RX.match(candidat):
-			return candidat
-	return ""
+	"""mmcblk0p9 / sda1: partitia nucleului pornit (kernel= din /proc/cmdline: slotul ales, si locurile de pe stick),
+	altfel, numai cand cmdline nu are kernel=, kernel_part= din reguli. "" cand kernel= nu numeste o partitie sau regulile
+	nu au o partitie eMMC. Pe modelele unde locul nu pune kernel= in cmdline (numai comanda incarcatorului), dintr-un loc
+	altul decat 1 se ia inca kernel_part din reguli (de facut, cu proba pe acele modele)."""
+	are, kp = nucleuDinCmdline(cmdline)
+	if are:
+		return kp
+	candidat = (reguli or {}).get("kernel_part", "")
+	return candidat if _KERNEL_RX.match(candidat) else ""
 
 
 def marimeUimage(antet):
-	"""Octetii nucleului dupa antetul uImage (64 + marimea datelor); None fara antet uImage."""
-	if len(antet) < ANTET_UIMAGE or antet[:4] != MAGIC_UIMAGE:
-		return None
-	return ANTET_UIMAGE + struct.unpack(">I", antet[12:16])[0]
+	"""Octetii nucleului dupa antetul uImage (64 + marimea datelor) sau zImage ARM (sfarsit - inceput, din antet);
+	None fara unul din ele."""
+	if len(antet) >= ANTET_UIMAGE and antet[:4] == MAGIC_UIMAGE:
+		return ANTET_UIMAGE + struct.unpack(">I", antet[12:16])[0]
+	if len(antet) >= 0x30 and antet[0x24:0x28] == MAGIC_ZIMAGE:
+		inceput, sfarsit = struct.unpack("<II", antet[0x28:0x30])
+		return sfarsit - inceput if sfarsit > inceput else None
+	return None
 
 
 def citesteNucleu(cale_dispozitiv):
 	"""Nucleul din partitie, taiat la marimea din antetul uImage. EroareCopie cand nu se poate citi sau nu are antet."""
 	try:
 		with open(cale_dispozitiv, "rb") as f:
-			antet = f.read(ANTET_UIMAGE)
+			antet = f.read(ANTET_NUCLEU)
 			marime = marimeUimage(antet)
 			if marime is None:
 				raise EroareCopie(_("Nucleul receptorului nu are forma cunoscută, deci copia nu se poate face."))
 			f.seek(0, os.SEEK_END)
 			partitie = f.tell()
-			if marime <= ANTET_UIMAGE or marime > min(partitie, NUCLEU_MAXIM):
+			if marime <= ANTET_NUCLEU or marime > min(partitie, NUCLEU_MAXIM):
 				raise EroareCopie(_("Nucleul receptorului nu are forma cunoscută, deci copia nu se poate face."))
 			f.seek(0)
 			date = f.read(marime)
@@ -415,7 +474,7 @@ def scrieArhiva(tar, radacina_arhivei, progres=None, oprit=None, exclus=()):
 
 def _legatSub(punct, radacina=None):
 	"""True cand ceva e montat pe `punct`. /proc/mounts arata calea adevarata: pe receptor /tmp e o legatura spre
-	/var/volatile/tmp (gasit pe .122, 11.11.2026), deci se compara si calea cu legaturile rezolvate."""
+	/var/volatile/tmp (gasit pe receptorul de proba, 11.11.2026), deci se compara si calea cu legaturile rezolvate."""
 	cai = {punct, os.path.realpath(punct)}
 	return any(p in cai for _d, p, _t in montari(radacina))
 
@@ -444,9 +503,10 @@ def dezlegaRadacina(dosar=DOSAR_LEGARE):
 		pass
 
 
-def _intrare(nume):
-	"""Intrarea din zip: e2/update/<nume>, ora de acum, drepturile 0644, fara comprimare (bz2 e deja comprimat)."""
-	info = zipfile.ZipInfo(SUBCALE + "/" + nume, time.localtime(time.time())[:6])
+def _intrare(nume, subcale=SUBCALE):
+	"""Intrarea din zip: <subcale>/<nume> (e2/update sau vuplus/<model>), ora de acum, drepturile 0644, fara comprimare
+	(bz2 e deja comprimat)."""
+	info = zipfile.ZipInfo(subcale + "/" + nume, time.localtime(time.time())[:6])
 	info.compress_type = zipfile.ZIP_STORED
 	info.external_attr = (stat.S_IFREG | 0o644) << 16
 	return info
@@ -474,15 +534,19 @@ def _scoateDinMemorie(cale):
 
 
 def scrieZip(f, nucleu, radacina_arhivei, text_reguli, versiune_imagine, octeti, progres=None, oprit=None, exclus=(),
-		verificaLoc=None):
-	"""Zip-ul copiei in obiectul-fisier `f` (fisierul de pe stick; in proba de pe .122, fara stick, iesirea ssh spre PC):
+		verificaLoc=None, fel=None):
+	"""Zip-ul copiei in obiectul-fisier `f` (fisierul de pe stick; in proba de pe receptorul de proba, fara stick, iesirea ssh spre PC):
 	imageversion, kernel.bin, rootfs.tar.bz2 (tar GNU -> bz2, cu SHA-256 din mers) si marcajul. Intoarce numarul
 	fisierelor sarite; EroareCopie cand lipsesc fisierele de pornire."""
+	fel = fel or FORMA_EMMC
+	sc = fel["subcale"]
 	sume = {"kernel_sha256": hashlib.sha256(nucleu).hexdigest()}
 	with zipfile.ZipFile(f, "w", allowZip64=True) as z:
-		z.writestr(_intrare(NUME_VERSIUNE), versiune_imagine + "\n")
-		z.writestr(_intrare(NUME_KERNEL), nucleu)
-		with z.open(_intrare(NUME_ROOTFS), "w", force_zip64=octeti > LIMITA_FARA_ZIP64) as dest:
+		z.writestr(_intrare(NUME_VERSIUNE, sc), versiune_imagine + "\n")
+		z.writestr(_intrare(fel["kernel"], sc), nucleu)
+		for nume_plus, text_plus in fel["in_plus"]:
+			z.writestr(_intrare(nume_plus, sc), text_plus)
+		with z.open(_intrare(NUME_ROOTFS, sc), "w", force_zip64=octeti > LIMITA_FARA_ZIP64) as dest:
 			scriitor = _ScriitorBz2(dest, verificaLoc)
 			with tarfile.open(fileobj=scriitor, mode="w|", format=tarfile.GNU_FORMAT) as tar:
 				tar.copybufsize = BLOC  # bucati de 1 MiB: mai putine treceri prin Python, interfata ramane vie
@@ -492,7 +556,7 @@ def scrieZip(f, nucleu, radacina_arhivei, text_reguli, versiune_imagine, octeti,
 		if lipsa:
 			raise EroareCopie(_("În sistem lipsesc fișiere de pornire (%s), deci copia nu ar porni.") % ", ".join(lipsa))
 		sume["rootfs_sha256"] = scriitor.sha.hexdigest()
-		z.writestr(_intrare(NUME_MARCAJ), marcaj(text_reguli, versiune_imagine, sume))
+		z.writestr(_intrare(NUME_MARCAJ, sc), marcaj(text_reguli, versiune_imagine, sume))
 	return sarite
 
 
@@ -517,9 +581,10 @@ def faCopia(punct, progres=None, oprit=None, radacina=None, radacina_arhivei=Non
 	reguli = P.citesteReguli(radacina)
 	versiune = P.versiuneAcum(radacina) or reguli.get("version", "")
 	nume = numeCopie(versiune, reguli.get("machinebuild", ""), acum)
+	fel = forma(reguli)
 	if not os.path.isdir(punct):
 		raise EroareCopie(_("Stickul ales nu mai este în receptor."))
-	cale_zip = os.path.join(punct, nume + SUFIX_ZIP)
+	cale_zip = os.path.join(punct, nume + fel["sufix"])
 	cale_lucru = cale_zip + SUFIX_LUCRU
 
 	# pasul 1: nucleul
@@ -559,7 +624,7 @@ def faCopia(punct, progres=None, oprit=None, radacina=None, radacina_arhivei=Non
 		try:
 			with open(cale_lucru, "wb") as f:
 				sarite = scrieZip(f, nucleu, radacina_arhivei, text_reguli, nume, octeti, progres, oprit, exclus,
-					verificaLoc)
+					verificaLoc, fel)
 		except OSError as eroare:
 			raise EroareCopie(_("Scrierea pe stick a căzut (%s). Verifică stickul și încearcă din nou.") % (
 				eroare.strerror or eroare.__class__.__name__))
@@ -574,7 +639,7 @@ def faCopia(punct, progres=None, oprit=None, radacina=None, radacina_arhivei=Non
 	try:
 		_scoateDinMemorie(cale_lucru)
 		verifica(cale_lucru, radacina=radacina, amprenta=amprenta, progres=progres, oprit=oprit,
-			la_inceput=lambda total: pas(PAS_VERIFICARE, total))
+			la_inceput=lambda total: pas(PAS_VERIFICARE, total), fel=fel)
 		os.rename(cale_lucru, cale_zip)
 		try:
 			fd = os.open(punct, os.O_RDONLY)
@@ -588,26 +653,29 @@ def faCopia(punct, progres=None, oprit=None, radacina=None, radacina_arhivei=Non
 		_sterge(cale_lucru)
 		raise
 	return {"cale": cale_zip, "nume": os.path.basename(cale_zip), "marime": os.path.getsize(cale_zip),
-		"secunde": time.time() - inceput, "sarite": sarite}
+		"secunde": time.time() - inceput, "sarite": sarite, "fel": fel["fel"]}
 
 
-def verifica(cale_zip, radacina=None, amprenta=None, progres=None, oprit=None, la_inceput=None):
-	"""Verificarea instalarii pe zip-ul de pe stick: structura e2/update, marcajul fata de receptor
-	(HdsPazaModel.verificaPachet, ca instalarea), sumele SHA-256 recitite. EroareCopie la orice nepotrivire."""
+def verifica(cale_zip, radacina=None, amprenta=None, progres=None, oprit=None, la_inceput=None, fel=None):
+	"""Verificarea instalarii pe zip-ul de pe stick: structura (dosarul si numele formei: e2/update sau vuplus/<model>),
+	marcajul fata de receptor (HdsPazaModel.verificaPachet, ca instalarea), sumele SHA-256 recitite. EroareCopie la orice
+	nepotrivire."""
+	fel = fel or FORMA_EMMC
+	sc = fel["subcale"]
 	try:
 		with zipfile.ZipFile(cale_zip) as z:
 			nume = set(z.namelist())
-			for n in (NUME_VERSIUNE, NUME_KERNEL, NUME_ROOTFS, NUME_MARCAJ):
-				if SUBCALE + "/" + n not in nume:
+			for n in (NUME_VERSIUNE, fel["kernel"], NUME_ROOTFS, NUME_MARCAJ) + tuple(p[0] for p in fel["in_plus"]):
+				if sc + "/" + n not in nume:
 					raise EroareCopie(_("Copia de pe stick nu e întreagă (lipsește %s).") % n)
-			text_marcaj = z.read(SUBCALE + "/" + NUME_MARCAJ).decode("utf-8", "replace")
+			text_marcaj = z.read(sc + "/" + NUME_MARCAJ).decode("utf-8", "replace")
 			if amprenta is None:
 				cod, text, m = P.verificaPachet(text_marcaj, radacina=radacina)
 			else:
 				cod, text, m = P.verificaPachet(text_marcaj, a=amprenta)
 			if cod != P.PACHET_BUN:
 				raise EroareCopie(_("Instalarea nu ar primi copia: %s") % text)
-			intrari = [z.getinfo(SUBCALE + "/" + NUME_KERNEL), z.getinfo(SUBCALE + "/" + NUME_ROOTFS)]
+			intrari = [z.getinfo(sc + "/" + fel["kernel"]), z.getinfo(sc + "/" + NUME_ROOTFS)]
 			total = sum(i.file_size for i in intrari)
 			if la_inceput is not None:
 				la_inceput(total)
@@ -681,6 +749,10 @@ def textPas(progres, acum=None):
 
 
 def textGata(r):
+	if r.get("fel") == "vuplus":
+		return _("Copia e gata: %s (%d MB), făcută în %s. Se pune înapoi ca imaginea Vu+ de pe site: dezarhivezi fișierul "
+			"pe un stick FAT32 (dosarul vuplus ajunge în rădăcina stickului), oprești receptorul, pui stickul și îl pornești."
+			) % (r["nume"], (r["marime"] + 1024 * 1024 - 1) // (1024 * 1024), _textDurata(r["secunde"]))
 	return _("Copia e gata: %s (%d MB), făcută în %s. Se pune înapoi din Meniu, Setări, Software & Firmware, Imagine nouă "
 		"de pe stick.") % (r["nume"], (r["marime"] + 1024 * 1024 - 1) // (1024 * 1024), _textDurata(r["secunde"]))
 
@@ -689,6 +761,14 @@ def textDespre():
 	return _("Copia completă are tot ce e pe receptor: imaginea, canalele, setările, pluginurile și modulele de acces. "
 		"Se face pe un stick sau un disc USB, ca un fișier pe care instalarea de pe stick îl pune înapoi exact cum e acum. "
 		"Receptorul rămâne pornit cât se face copia.")
+
+
+def textPunere(radacina=None):
+	"""Cum se pune inapoi copia, numai pe Vu+ (pe celelalte ramane randul fix al ecranului si al paginii web)."""
+	if not P.broadcom(P.citesteReguli(radacina)):
+		return ""
+	return _("Pe Vu+ copia se pune înapoi ca imaginea de pe site: dezarhivezi fișierul pe un stick FAT32, oprești "
+		"receptorul, pui stickul și îl pornești.")
 
 
 def textParole():
@@ -704,7 +784,7 @@ def _ruleaza(punct):
 		except OSError:
 			pass
 		rez = faCopia(punct, _stare["progres"], lambda: _stare["oprit"])
-		r = {"ok": True, "mesaj": textGata(rez), "nume": rez["nume"], "marime": rez["marime"]}
+		r = {"ok": True, "mesaj": textGata(rez), "nume": rez["nume"], "marime": rez["marime"], "fel": rez.get("fel")}
 	except Oprita:
 		r = {"ok": False, "mesaj": _("Copia a fost oprită. Fișierul început s-a șters; pe receptor nu s-a schimbat nimic.")}
 	except EroareCopie as eroare:
