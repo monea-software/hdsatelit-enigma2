@@ -166,3 +166,14 @@ CFLAGS:append:vuduo4k = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuduo4kse = " -DBROADCOM_PLATFORM"
 CXXFLAGS:append:vuduo4k = " -DBROADCOM_PLATFORM"
 CXXFLAGS:append:vuduo4kse = " -DBROADCOM_PLATFORM"
+
+# NVM (0.7.7, 15.11.2026; Eduard 23:10: navigatorul si pe Vu+ Solo SE si pe celelalte receptoare MIPS): MIPS pe 32 de biti
+# (tune mips32el pe vusolose, vusolo2, vuduo2, vuzero si sh1, deci un singur pachet mips32el pentru toate). WebKit 2.54 are
+# inca ramura MIPS (WebKitFeatures.cmake: JIT oprit, C_LOOP, fara WebAssembly, mimalloc; -mno-lxc1-sxc1), dar libpas
+# alege pe GCC pas_pair de 128 de biti pe orice tinta afara de ARM32: 0020 da tuturor tintelor pe 32 de biti caile ARM32
+# (libpas nu aloca pe 32 de biti). 0021: WTF SequenceLocked (SharedTimebase.cpp) cere atomice de 64 de biti fara lacat, pe
+# care MIPS32 nu le are: acolo cuvinte de 32 de biti. Numai pe MIPS, ca pachetele ARM sa ramana neschimbate. Desenul e pe
+# procesor ca pe ARM (0004/0006), deci EGL-ul Broadcom al masinii (vuplus-libgles-<masina>) nu se foloseste la rulare;
+# antetul lui eglplatform.h pe Solo SE are tipurile void * si nu cere BROADCOM_PLATFORM.
+SRC_URI:append:mipsarch = " file://0020-libpas-use-the-ARM32-pair-paths-on-every-32-bit-target.patch \
+                            file://0021-WTF-SequenceLocked-use-32-bit-words-without-lock-free-64-bit-atomics.patch"

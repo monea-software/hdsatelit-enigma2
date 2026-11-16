@@ -1,0 +1,70 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] libpas: use the ARM32 pair paths on every 32-bit target
+
+pas_utils.h picks the 128-bit pas_pair (__uint128_t) for every GCC build that
+is not ARM32. 32-bit MIPS (mips32el, Vu+ Solo SE and the other Broadcom MIPS
+receivers) has no __uint128_t, so bmalloc and WTF (Threading.cpp includes
+pas_process.h) stop compiling. On 32-bit targets libpas is compiled but never
+used (bmalloc/BPlatform.h enables it only on 64-bit CPUs without mimalloc),
+exactly as on ARM32, so every 32-bit target takes the same struct pas_pair and
+the same "should not be reached"
+atomic pair helpers. On ARM32 nothing changes (PAS_ARM32 implies ADDRESS32).
+
+Upstream-Status: Pending
+
+--- a/Source/bmalloc/libpas/src/libpas/pas_utils.h
++++ b/Source/bmalloc/libpas/src/libpas/pas_utils.h
+@@ -928,7 +928,7 @@
+     return value;
+ }
+ 
+-#if PAS_COMPILER(CLANG) || PAS_ARM32
++#if PAS_COMPILER(CLANG) || PAS_ARM32 || PAS_CPU(ADDRESS32)
+ 
+ struct pas_pair;
+ typedef struct pas_pair pas_pair;
+@@ -1019,7 +1019,7 @@
+ #endif
+     return __c11_atomic_compare_exchange_weak((_Atomic pas_pair*)raw_ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+ PAS_IGNORE_WARNINGS_END
+-#elif PAS_ARM32
++#elif PAS_ARM32 || PAS_CPU(ADDRESS32)
+     PAS_ASSERT_IF(true, !"Should not be reached");
+     PAS_UNUSED_PARAM(raw_ptr);
+     PAS_UNUSED_PARAM(old_value);
+@@ -1069,7 +1069,7 @@
+     __c11_atomic_compare_exchange_strong((_Atomic pas_pair*)raw_ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+ PAS_IGNORE_WARNINGS_END
+     return old_value;
+-#elif PAS_ARM32
++#elif PAS_ARM32 || PAS_CPU(ADDRESS32)
+     PAS_ASSERT_IF(true, !"Should not be reached");
+     PAS_UNUSED_PARAM(raw_ptr);
+     PAS_UNUSED_PARAM(new_value);
+@@ -1097,7 +1097,7 @@
+ PAS_IGNORE_WARNINGS_BEGIN("atomic-alignment")
+     return __c11_atomic_load((_Atomic pas_pair*)raw_ptr, __ATOMIC_RELAXED);
+ PAS_IGNORE_WARNINGS_END
+-#elif PAS_ARM32
++#elif PAS_ARM32 || PAS_CPU(ADDRESS32)
+     PAS_ASSERT_IF(true, !"Should not be reached");
+     PAS_UNUSED_PARAM(raw_ptr);
+     return *(pas_pair*)raw_ptr;
+@@ -1126,7 +1126,7 @@
+ PAS_IGNORE_WARNINGS_BEGIN("atomic-alignment")
+     __c11_atomic_store((_Atomic pas_pair*)raw_ptr, value, __ATOMIC_SEQ_CST);
+ PAS_IGNORE_WARNINGS_END
+-#elif PAS_ARM32
++#elif PAS_ARM32 || PAS_CPU(ADDRESS32)
+     PAS_ASSERT_IF(true, !"Should not be reached");
+     PAS_UNUSED_PARAM(raw_ptr);
+     PAS_UNUSED_PARAM(value);
+@@ -1142,7 +1142,7 @@
+ PAS_IGNORE_WARNINGS_BEGIN("atomic-alignment")
+     __c11_atomic_store((_Atomic pas_pair*)raw_ptr, value, __ATOMIC_RELAXED);
+ PAS_IGNORE_WARNINGS_END
+-#elif PAS_ARM32
++#elif PAS_ARM32 || PAS_CPU(ADDRESS32)
+     PAS_ASSERT_IF(true, !"Should not be reached");
+     PAS_UNUSED_PARAM(raw_ptr);
+     PAS_UNUSED_PARAM(value);

@@ -60,8 +60,16 @@ RDEPENDS:${PN}:append:hdsflashmic = " hdsatelit-partea-doua"
 # Navigatorul si OCR asteapta constructia MIPS si auditul scripturilor.
 # Pachetul se scoate din aceasta lista numai dupa acea poarta, apoi se trece
 # in HDS_FUNCTII_MIPS_PREGATITE. Nu este o limita a memoriei USB.
-HDS_FUNCTII_MIPS_PREGATITE ?= ""
-HDS_FUNCTII_MIPS_IN_ASTEPTARE = "hds-navigator hds-ocr hds-ocr-modele"
+# NVM (0.7.7, 16.11.2026): navigatorul a trecut poarta: WPE WebKit 2.54 construit pentru mips32el (peticele 0020 si 0021
+# din wpewebkit, numai pe MIPS), instalat cu opkg peste sistemul Solo SE 0.7.6 si probat in containerul MIPS (qemu): pagina
+# desenata pe procesor, JavaScript modern, fonturile; scripturile inchiderii lui auditate (ldconfig, fc-cache, useradd
+# hdsnav), runda-0013/STADIU-NVM.md. Intra in imagine pe vuduo2 (NAND de 1 GB) si in varianta USB a lui Solo SE (hdsusb);
+# pe NAND-ul de 256 MB (hdsflashmic, mai sus) ramane in feed si se instaleaza din cardul lui din Aplicatii, cand incape.
+HDS_FUNCTII_MIPS_PREGATITE ?= "hds-navigator"
+HDS_FUNCTII_MIPS_IN_ASTEPTARE = "hds-ocr hds-ocr-modele"
+# pachetul de grup are acum navigatorul pe aceste doua: PR nou, ca actualizarea din meniu sa-l aduca
+PR:append:vuduo2 = ".1"
+PR:append:hdsusb = ".1"
 RDEPENDS:${PN}:remove:vusolose = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
 RDEPENDS:${PN}:append:vusolose = " hdsatelit-radacina-usb"
 # Zgemma Star S (MSS, 12.11.2026; masina sh1, MIPS, NAND): aceeasi imagine mica si aceleasi limite ca Solo SE
