@@ -12,7 +12,9 @@
 #     enigma2, ce cere operatorul pe ecran, fiindca brokerul ruleaza pe alt fir si nu are voie sa atinga interfata:
 #     mesajele (op "mesaj"), nemodale, cu HdsAnuntRetea, fiecare cel putin MESAJ_S secunde, la rand (unul nu il
 #     inlocuieste pe altul), si concluziile echipei (op "concluzii"), in fereastra modala HdsAsistentaConcluzii, care
-#     sta pana la OK: o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile;
+#     sta pana la OK: o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile; si intrebarile echipei
+#     (op "intrebare", 0.7.7): o fereastra Da/Nu (MessageBox) cu variantele, peste orice ecran, inchisa inainte ca
+#     raspunsul sa plece la echipa (_intrebare), cu fereastra mesajului ascunsa cat sta;
 #   - ctxReceptor(session): settings de acum pentru copia facuta cand intra echipa („Pune înapoi cum era”, setari_acum,
 #     pe firul enigma2) si uneltele date brokerului care au nevoie de receptor: captura video cu OSD, JPEG mic, aceeasi
 #     cu ce e pe televizor (fara ecrane ascunse si fara steluțe).
@@ -78,6 +80,10 @@ SKIN_BANDA = """
 ECRANE_FARA_BANDA = ("HdsAsistenta", "HdsAsistentaAlege", "HdsAsistentaTermeni", "HdsAsistentaConcluzii")
 # cat sta pe ecran un mesaj al echipei (op "mesaj"), cel putin; urmatorul vine dupa
 MESAJ_S = 30
+# raspunsurile ferestrei intrebarii (op "intrebare") care nu sunt ale omului: timpul ferestrei s-a terminat, sau am inchis-o
+# noi (raspuns din web, timpul intrebarii, oprirea asistentei)
+INTREBARE_TERMEN = "termen"
+INTREBARE_INCHISA = "inchisa"
 
 
 def N_(text):
@@ -114,10 +120,14 @@ class Controler(object):
 		self.ceas.callback.append(self._tic)
 		self._mesaje = []
 		self._mesaj_liber_la = 0.0
+		self._mesaj_aratat = None
 		self._concluzii = []
 		self._stare_vazuta = None
 		# sesiunea vazuta activa (id-ul ei): la sfarsitul ei, daca echipa a trimis concluzii, fereastra inca o data
 		self._id_activ = None
+		# intrebarile echipei (op "intrebare", A.Intrebare) de deschis pe televizor si (nr, fereastra) celei deschise
+		self._intrebari = []
+		self.fereastraIntrebare = None
 
 	def instaleaza(self):
 		A.adaugaObservator(self._schimbare)
@@ -169,9 +179,13 @@ class Controler(object):
 			_jurnal("coada: %r" % (e,))
 		ses = A.sesiune()
 		activa = ses is not None and ses.activa()
-		# mesajele: la rand, fiecare cel putin MESAJ_S secunde (si dupa oprire, cele ramase in coada)
-		if self._mesaje and time.time() >= self._mesaj_liber_la:
-			self._arataMesaj(self._mesaje.pop(0))
+		if self._intrebari:
+			self._deschideIntrebarea(activa)
+		# mesajele: la rand, fiecare cel putin MESAJ_S secunde (si dupa oprire, cele ramase in coada); nu cat e deschisa o
+		# intrebare a echipei: fereastra mesajului, nemodala si deasupra, ar acoperi-o (vazut pe receptor peste Da/Nu)
+		if self._mesaje and time.time() >= self._mesaj_liber_la and self.fereastraIntrebare is None:
+			self._mesaj_aratat = self._mesaje.pop(0)
+			self._arataMesaj(self._mesaj_aratat)
 			self._mesaj_liber_la = time.time() + MESAJ_S
 		while self._concluzii:
 			self._arataConcluzii(self._concluzii.pop(0))
@@ -243,15 +257,117 @@ class Controler(object):
 
 	def _arataConcluzii(self, intrare, la_sfarsit=False):
 		"""Fereastra concluziilor (modala, pana la OK), prin notificari: se deschide cand omul e la imaginea canalului,
-		nu peste alt ecran modal. La sfarsitul sesiunii nu se deschide a doua oara daca e inca deschisa."""
+		nu peste alt ecran modal. La sfarsitul sesiunii nu se deschide a doua oara daca e inca deschisa.
+		0.7.6 (ASF, asistenta 222923): cand omul sta chiar in ecranul asistentei (acolo asteapta raspunsul), fereastra se
+		deschide indata peste el; inainte o primea abia la imaginea canalului, la Galben sau la sfarsitul sesiunii."""
 		try:
 			from Screens.HdsAsistenta import HdsAsistentaConcluzii
 			if la_sfarsit and HdsAsistentaConcluzii.deschise:
 				return
+			continut = dict(intrare, sfarsit=True) if la_sfarsit else intrare
+			if self._poateDeschidePesteAsistenta():
+				self.session.open(HdsAsistentaConcluzii, continut)
+				return
 			from Tools import Notifications
-			Notifications.AddNotification(HdsAsistentaConcluzii, dict(intrare, sfarsit=True) if la_sfarsit else intrare)
+			Notifications.AddNotification(HdsAsistentaConcluzii, continut)
 		except Exception as e:
 			_jurnal("concluzii: %r" % (e,))
+
+	def _poateDeschidePesteAsistenta(self):
+		"""Ecranul asistentei e sus, in executie, si nicio inchidere nu asteapta (altfel Session.open ar cadea)."""
+		return self._ecranAsistenta() and self._poateDeschide()
+
+	def _poateDeschide(self):
+		"""Ecranul de sus e in executie si nicio inchidere nu asteapta: Session.open poate deschide o fereastra acum."""
+		s = self.session
+		if not getattr(s, "in_exec", False):
+			return False
+		try:
+			return not s.delay_timer.isActive()
+		except Exception:
+			return False
+
+	# ---- intrebarea echipei (op "intrebare", 0.7.7)
+
+	def cereIntrebare(self, q):
+		"""Chemata de pe firul sesiunii (_intrebare): pune intrebarea in coada; _tic o deschide pe firul enigma2."""
+		self._intrebari.append(q)
+
+	def _deschideIntrebarea(self, activa):
+		"""Prima intrebare din coada, pe televizor: o fereastra Da/Nu (MessageBox) cu variantele intrebarii, prima aleasa
+		(fara variante: Nu), cu timpul ramas al intrebarii, peste orice ecran, cand Session.open poate deschide acum
+		(altfel la tic-ul urmator). In standby nu se arata: echipa afla pe loc. Fereastra mesajului se ascunde cat sta."""
+		q = self._intrebari[0]
+		if q.gata.is_set() or q.ramasS() <= 1 or not activa:
+			self._intrebari.pop(0)
+			return
+		try:
+			from Screens import Standby
+			if Standby.inStandby:
+				self._intrebari.pop(0)
+				A.inchideIntrebarea(q.id, "standby")
+				return
+		except Exception:
+			pass
+		if not self._poateDeschide():
+			return
+		if self.fereastraIntrebare is not None:
+			# o intrebare veche ramasa pe ecran (inlocuita de aceasta) se inchide intai, ca omul sa vada numai intrebarea de
+			# acum; cea noua se deschide la tic-ul urmator (dupa o inchidere Session.open trebuie sa astepte)
+			self._inchideFereastraIntrebarii()
+			return
+		self._intrebari.pop(0)
+		try:
+			from Screens.MessageBox import MessageBox
+			if self.fereastraMesaj is not None:
+				self.fereastraMesaj.ascunde()
+				# mesajul ascuns inainte de vreme (echipa trimite des mesaj, apoi intrebare) vine iar dupa intrebare
+				import time
+				if self._mesaj_aratat is not None and time.time() < self._mesaj_liber_la:
+					self._mesaje.insert(0, self._mesaj_aratat)
+				self._mesaj_aratat = None
+				self._mesaj_liber_la = 0.0
+			lista = [(eticheta, str(i)) for i, eticheta in enumerate(q.etichete)]
+			dlg = self.session.openWithCallback(lambda rez=None, nr=q.id: self._dupaIntrebare(nr, rez), MessageBox, q.text,
+				MessageBox.TYPE_YESNO, timeout=max(1, q.ramasS()), timeout_default=INTREBARE_TERMEN, list=lista,
+				default=0, title=_(A.TEXT_INTREBARE_TITLU))
+			self.fereastraIntrebare = (q.id, dlg)
+			q.aratata = True
+		except Exception as e:
+			_jurnal("intrebarea: %r" % (e,))
+			A.inchideIntrebarea(q.id, "nearatata: %s" % type(e).__name__)
+
+	def _dupaIntrebare(self, nr, rez):
+		"""Raspunsul ferestrei: OK pe o varianta ("0", "1" ...) e raspunsul omului; EXIT (False) inchide fara raspuns;
+		timpul ferestrei (INTREBARE_TERMEN) si inchiderea de catre noi (INTREBARE_INCHISA) nu mai schimba nimic."""
+		if self.fereastraIntrebare is not None and self.fereastraIntrebare[0] == nr:
+			self.fereastraIntrebare = None
+		if isinstance(rez, str) and rez.isdigit():
+			A.raspundeIntrebare(nr, int(rez), "televizor")
+		elif rez is False or rez is None:
+			A.inchideIntrebarea(nr, "exit")
+
+	def inchideIntrebare(self, nr):
+		"""Pe firul enigma2, dupa ce firul sesiunii a primit raspunsul (sau timpul a trecut, sau s-a raspuns din web):
+		intrebarea nr iese din coada, iar fereastra ei se inchide inainte ca echipa sa primeasca raspunsul, ca o tasta OK
+		trimisa apoi de echipa sa n-o poata alege in locul omului. -> True."""
+		self._intrebari = [q for q in self._intrebari if q.id != nr]
+		if self.fereastraIntrebare is not None and self.fereastraIntrebare[0] == nr:
+			self._inchideFereastraIntrebarii()
+		return True
+
+	def _inchideFereastraIntrebarii(self):
+		"""Fereastra intrebarii deschise jos, cand e ecranul de sus; altfel o inchide timpul ei, iar un raspuns dat acolo
+		mai tarziu nu mai e luat (intrebarea nu mai e deschisa)."""
+		f = self.fereastraIntrebare
+		self.fereastraIntrebare = None
+		if f is None:
+			return
+		try:
+			if self.session.current_dialog is f[1]:
+				f[1].close(INTREBARE_INCHISA)
+		except Exception as e:
+			_jurnal("inchiderea intrebarii: %r" % (e,))
 
 
 _controler = [None]
@@ -706,6 +822,29 @@ def _setare(cheie, valoare):
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
+def _intrebare(text, variante="", secunde="", stop=None):
+	"""Op "intrebare" (brokerul, pe firul sesiunii): intrebarea noua (A.puneIntrebare) merge la controler (fereastra de pe
+	televizor; pagina web o vede in A.stare()), firul asteapta raspunsul (A.asteaptaRaspuns: raspunsul omului, timpul,
+	EXIT, oprirea asistentei), apoi fereastra se inchide pe firul enigma2 si abia dupa aceea pleaca raspunsul cererii.
+	-> (cod, text) pentru echipa."""
+	c = _controler[0]
+	if c is None:
+		return 1, "(intrebarea nu se poate arata: interfata nu e gata)"
+	q = A.puneIntrebare(text, variante, secunde)
+	if q is None:
+		return 1, "(variante rele: intre 2 si %d, diferite, fiecare cel mult %d semne, despartite cu |)" % (
+			A.INTREBARE_VARIANTE_MAX, A.INTREBARE_VARIANTA_SEMNE)
+	c.cereIntrebare(q)
+	try:
+		# fereastra indata, nu la urmatoarea secunda a ceasului controlerului
+		_trezeste(c._tic)
+	except Exception as e:
+		_jurnal("trezirea intrebarii: %r" % (e,))
+	A.asteaptaRaspuns(q, stop)
+	_peFir.cere(lambda gata: gata(c.inchideIntrebare(q.id)), TERMEN_FIR_S)
+	return A.textRaspunsIntrebare(q)
+
+
 def _setariAcum():
 	"""settings de acum pentru copia de dinaintea asistentei (A.Sesiune._copia_inainte, „Pune înapoi cum era”):
 	HdsCopieSetari.text_setari_acum (SETARI_FIXE puse, apoi config.pickle()), pe firul enigma2, ca la „Copia setărilor”.
@@ -732,6 +871,7 @@ def ctxReceptor(session):
 	ctx["reporneste"] = _reporneste
 	ctx["setare"] = _setare
 	ctx["repara_actualizarea"] = _reparaActualizarea
+	ctx["intrebare"] = _intrebare
 	if _controler[0] is not None:
 		ctx["mesaj"] = _controler[0].cereMesaj
 		ctx["concluzii"] = _controler[0].cereConcluzii
@@ -790,6 +930,24 @@ def puneInapoi(session):
 		from Screens.Standby import TryQuitMainloop
 		session.open(TryQuitMainloop, 3)
 	session.openWithCallback(dupa, MessageBox, copie["intrebare"], MessageBox.TYPE_YESNO, default=False)
+
+
+# Rosu "Oprește" pe ecranul asistentei, dupa Start (RCF, 15-16.11.2026)
+TEXT_OPRESTI_ASISTENTA = N_("Oprești asistența?")
+# o intrebare uitata deschisa (omul a plecat de la televizor) s-ar pune in calea tastelor trimise de echipa: dupa atatea
+# secunde se inchide singura cu "Nu", iar asistenta ramane pornita
+OPRIRE_INTREBARE_S = 30
+
+
+def intreabaOprirea(session, dupa):
+	"""Rosu "Oprește" pe ecranul asistentei (Screens/HdsAsistenta.py), cat asistenta merge: o intrebare scurta, cu "Nu"
+	ales. Pe pagina de pornire Rosu e "Înapoi", iar dupa Start, pe acelasi ecran si in acelasi loc, opreste; pe 15.11.2026
+	trei sesiuni s-au oprit asa, din greseala, la 35 s - 2 minute dupa salut (STADIU-ASX.md). dupa(da) primeste True
+	numai la "Da"; "Nu", EXIT si timpul trecut dau False. Aici, nu in Screens/HdsAsistenta.py: acolo Start porneste fara
+	nicio intrebare (regula 0.6.13). Concluziile si avertismentul dinaintea unei parole opresc tot pe loc."""
+	from Screens.MessageBox import MessageBox
+	session.openWithCallback(lambda da=False: dupa(da is True), MessageBox, _(TEXT_OPRESTI_ASISTENTA),
+		MessageBox.TYPE_YESNO, default=False, timeout=OPRIRE_INTREBARE_S, timeout_default=False)
 
 
 TEXT_WEB_PE_RECEPTOR = N_("Pe receptor s-a deschis Asistența de la distanță: apasă Start acolo.")

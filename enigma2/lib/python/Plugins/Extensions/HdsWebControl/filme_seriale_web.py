@@ -12,6 +12,8 @@ GET /api/vod-locale?id=&tip=; GET /api/vod-poza?s=&l=&h=&fel=; POST /api/vod-red
 Serverele Emby / Jellyfin (Components/HdsVodServere): GET /api/vod-servere; POST /api/vod-server (fel=cauta: cautarea in retea;
 fel=adauga: adresa, utilizator, parola; fel=scoate: id), apoi GET /api/vod-server?lucrare= pana e gata (reteaua merge pe un fir,
 pagina si televizorul nu asteapta). Parola nu se intoarce niciodata in pagina.
+0.7.7 (FLM): /filme-seriale?sursa=<id> se deschide direct pe acel cont (butonul 'Filme și seriale' de pe cartela unui cont Xtream
+din /iptv; pe televizor randul de sub cartela, Screens/IptvSetup); un id necunoscut deschide pagina ca de obicei.
 """
 import json
 import os
@@ -46,7 +48,8 @@ def _Z():
 
 
 _SID = re.compile(r"^[0-9a-f]{8}$")
-_CHEIE = re.compile(r"^[ves][0-9A-Za-z]{1,40}(\.[A-Za-z0-9]{1,5})?$")   # Xtream: numere; Emby: numere; Jellyfin: hex; disc: suma
+_CHEIE = re.compile(r"^([ves][0-9A-Za-z]{1,40}(\.[A-Za-z0-9]{1,5})?|[0-9a-f]{12}(-[0-9]{1,5})?)$")   # Xtream: numere; Emby: numere;
+# Jellyfin: hex; disc: suma; 0.7.7 (FLM2): filmele unui playlist M3U, cheia canalului (HdsIptvSurse.cheieDinNume: 12 hex, -n)
 _FELURI = ("categorii", "rand", "recente", "detalii", "cauta")
 
 
@@ -154,7 +157,7 @@ def reda(arg, V=None, Z=None, zap=None):
 	src = V.sursa(sid)
 	if src is None:
 		return {"result": False, "message": _(V.E_FARA_SURSA)}
-	meta = {"nume": arg.get("nume", "")[:200] or cheie, "tip": "seriale" if cheie[0] == "e" else "filme"}
+	meta = {"nume": arg.get("nume", "")[:200] or cheie, "tip": "seriale" if cheie[0] == "e" and src.fel != "m3u" else "filme"}
 	for camp in ("serial", "serial_nume", "sezon", "numar"):
 		if arg.get(camp):
 			meta[camp] = arg[camp][:200]
@@ -410,6 +413,8 @@ def pagina_text(stil, config_pagina):
 	return _cuLimba(text.replace("__TEXTE__", json.dumps(texte(), ensure_ascii=True).replace("</", "<\\/")))
 
 
+# FSV (15.11.2026): textele de peste fundal (titlul, descrierea, randurile, pagina titlului) au umbra fondului, ca pe televizor
+# (Screens/HdsFilmeSeriale.py); fundalul e aceeasi poza intunecata (HdsVodPoze.MASTI["fundal"]).
 PAGINA = """<!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLU__</title><style>__STIL_COMUN__ __STIL_PAGINI__
@@ -432,6 +437,7 @@ body{background:#0b1020} main{max-width:1600px!important;width:auto}
 #pagina{display:flex;gap:24px;flex-wrap:wrap}#pagina h2{font-size:34px;margin:0 0 6px}#pagina .mare{width:240px;height:360px;background:#1a2340;object-fit:cover}
 #pagina .dreapta{flex:1;min-width:280px}.piste{color:#f2f4f8}.oameni{color:#aeb9cc}
 .ascuns{display:none!important}
+main>h1,#info,.vrand h3,.poster .t,#pagina .dreapta{text-shadow:0 1px 3px #0b1020,0 0 2px #0b1020}
 </style></head><body><div id="fundal"></div><main><h1>__TITLU__</h1>
 <section class="card"><div class="bara" id="grupe" role="tablist"></div>
 <div id="server" class="ascuns"><p id="serverText"></p><div class="bara" id="gasite"></div>
@@ -577,7 +583,7 @@ function cauta(){
 }
 $("cauta").addEventListener("click",cauta);$("text").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();cauta()}});
 var G={surse:[],grupa:""};
-function grupa(g){
+function grupa(g,sid){
  G.grupa=g;Array.prototype.forEach.call($("grupe").children,function(b){b.classList.toggle("aleasa",b.dataset.g===g)});
  var lista=G.surse.filter(function(s){return s.grupa===g}),c=$("cont");c.innerHTML="";
  lista.forEach(function(s){var o=el("option","",s.nume);o.value=s.id;c.appendChild(o)});
@@ -586,13 +592,16 @@ function grupa(g){
  $("server").classList.toggle("ascuns",!srv||lista.length>0);
  $("baraFilme").classList.toggle("ascuns",!lista.length);$("acasa").classList.toggle("ascuns",!lista.length);$("detalii").classList.add("ascuns");
  if(!lista.length){S.sid="";$("randuri").innerHTML="";if(srv)cautaServer();else mesaj(T.faraSursa);return}
- S.sid=lista[0].id;S.detalii={};porneste()
+ var ales=lista.filter(function(s){return s.id===sid})[0]||lista[0];
+ S.sid=ales.id;c.value=ales.id;S.detalii={};porneste()
 }
 function incarcaSurse(alege){
  return cerere("/api/vod-surse").then(function(d){
   if(!d.result){mesaj(d.message||T.neasteptat);return}
   G.surse=d.surse;var gr=$("grupe");gr.innerHTML="";
   Object.keys(T.grupe).forEach(function(g){var b=buton(T.grupe[g],"fila",function(){grupa(g)});b.dataset.g=g;b.setAttribute("role","tab");gr.appendChild(b)});
+  var cerut=alege?"":(new URLSearchParams(location.search).get("sursa")||""),dinAdresa=G.surse.filter(function(s){return s.id===cerut})[0];
+  if(dinAdresa){grupa(dinAdresa.grupa,dinAdresa.id);return}
   grupa(alege||(G.surse.length?G.surse[0].grupa:"iptv"))
  })
 }

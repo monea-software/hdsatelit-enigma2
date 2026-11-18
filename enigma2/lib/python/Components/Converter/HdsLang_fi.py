@@ -308,4 +308,10 @@ T = {
 	"cpu_mode": u"Suorittimen tila",
 	"cpu_volt": u"Jännite",
 	"cpu_steps": u"Aika taajuuksittain",
+	"bitrate_va": u"Bittinopeus: video · ääni",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"ka",
+	"ecm_hop": u"Hypyt",
+	"ecm_reader": u"Lukija",
 }

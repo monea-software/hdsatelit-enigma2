@@ -1,6 +1,6 @@
 {
   "versiune": 1,
-  "actualizat": "2026-11-06",
+  "actualizat": "2026-11-17",
   "unitati": {
     "frecventa": "kHz (12687000 = 12687 MHz; jumatatile de MHz se pastreaza, ex. 12031500)",
     "rata": "kSymb/s (27500 = 27500000 simboluri/s)",
@@ -793,7 +793,7 @@
         "modulatie": "8PSK",
         "pls": null,
         "flux": null,
-        "rolloff": "0.35"
+        "rolloff": "0.20"
       },
       "fel": "t2mi",
       "incredere": "probabil",
@@ -815,7 +815,7 @@
         "modulatie": "8PSK",
         "pls": null,
         "flux": null,
-        "rolloff": "0.35"
+        "rolloff": "0.20"
       },
       "fel": "t2mi",
       "incredere": "probabil",
@@ -837,7 +837,7 @@
         "modulatie": "8PSK",
         "pls": null,
         "flux": null,
-        "rolloff": "0.35"
+        "rolloff": "0.20"
       },
       "fel": "t2mi",
       "incredere": "probabil",
@@ -859,7 +859,7 @@
         "modulatie": "8PSK",
         "pls": null,
         "flux": null,
-        "rolloff": "0.35"
+        "rolloff": "0.20"
       },
       "fel": "t2mi",
       "incredere": "probabil",
@@ -881,11 +881,33 @@
         "modulatie": "8PSK",
         "pls": null,
         "flux": null,
-        "rolloff": "0.35"
+        "rolloff": "0.20"
       },
       "fel": "t2mi",
       "incredere": "probabil",
-      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 13.10.2026): transponderul 190 (12583.14 V DVB-S2/8PSK), TSID 60008, 1 fluxuri TS in PID (PID 8008 BISS), 0 in clar; programele fiecarui flux sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Nemasurat pe receptorul nostru."
+      "sursa": "Lista publica a fluxurilor de distributie de pe 30W (abertis-dtt.github.io, sat_data.json, 11.11.2026): transponderul 190 (12583.14 V DVB-S2/8PSK/T2MI), TSID 60008, 1 flux TS in PID (PID 8008 BISS), 0 in clar; programele fluxului sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS-ul din payload-ul PID-ului 8008 e un flux T2-MI (PID 4096, PLP 0; astra.conf si pid8008.log ale aceleiasi liste, 11.11.2026), desfacut de t2mi_decap -A -T 4096 -l 0; KingOfSat (17.11.2026) vede pe satelit numai PID-ul 8008 (0x90, criptat, ~35 Mbit/s). Roll-off 0,20 ca in NIT. Nemasurat pe receptorul nostru."
+    },
+    {
+      "id": "abertis_es_12599v",
+      "nume": "Abertis 12599 V (Spania)",
+      "tari": [
+        "ES"
+      ],
+      "pozitie": 3300,
+      "transponder": {
+        "frecventa": 12599760,
+        "pol": "V",
+        "rata": 10200,
+        "fec": "3/4",
+        "sistem": "DVB-S2",
+        "modulatie": "8PSK",
+        "pls": null,
+        "flux": null,
+        "rolloff": "0.20"
+      },
+      "fel": "t2mi",
+      "incredere": "probabil",
+      "sursa": "Doua surse: LinuxSat-Support, firul [ABERTIS] Hispasat 30W-6 (20.04.2026): 12599.76 V DVB-S2/8PSK, SR 10200, FEC 3/4, PID 8009 BISS, purtatorul SID 1009, TSID 60009; KingOfSat (16.11.2026): 12599.70 V Hispasat 30W-6, DVB-S2 8PSK 10200 3/4, eticheta ABERTIS. Lista publica abertis-dtt (11.11.2026) nu il are inca. Programele fluxului sunt in Hds/DabT2/t2/date/frecvente.json (cheia programe). Formatul: TS terestru intreg in payload-ul PID-ului, desfacut de t2mi_decap -A. Nemasurat pe receptorul nostru."
     },
     {
       "id": "abertis_es_8002",
@@ -903,7 +925,7 @@
         "modulatie": "8PSK",
         "pls": null,
         "flux": null,
-        "rolloff": "0.35"
+        "rolloff": "0.20"
       },
       "fel": "t2mi",
       "incredere": "probabil",
@@ -925,7 +947,7 @@
         "modulatie": "8PSK",
         "pls": null,
         "flux": null,
-        "rolloff": "0.35"
+        "rolloff": "0.20"
       },
       "fel": "t2mi",
       "incredere": "probabil",

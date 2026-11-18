@@ -37,13 +37,15 @@ def N_(text):
 
 
 FOND = "#00101828"
-CULOARE_STARE = {A.INSTALAT: "#00a8b3c7", A.ACTUALIZARE: "#00f5b83d", A.DISPONIBIL: "#004fd18b"}
+CULOARE_STARE = {A.INSTALAT: "#00a8b3c7", A.ACTUALIZARE: "#00f5b83d", A.DISPONIBIL: "#004fd18b",
+	A.CERE_NAVIGATOR: "#004fd18b", A.NU_INCAPE: "#00f5b83d"}
 TEXTE_ACTIUNI = {
 	"porneste": N_("Pornește"),
 	"instaleaza": N_("Instalează"),
 	"actualizeaza": N_("Actualizează"),
 	"dezinstaleaza": N_("Dezinstalează"),
 	"instaleaza-widevine": N_("Instalează modulul Widevine"),
+	"instaleaza-navigator": N_("Instalează navigatorul web"),
 }
 FOND_CARD_GOL = "#001b2436"
 CHIHLIMBAR = "#00f5b83d"
@@ -151,12 +153,23 @@ class HdsAplicatii(Screen):
 		}, -1)
 		self.onLayoutFinish.append(self._laInceput)
 		self.onClose.append(self.ceas.stop)
+		# NVM: dupa instalarea navigatorului (pornita din cardul lui) grila se reface singura: cardul trece pe Instalat si apar
+		# scurtaturile care pornesc cu el
+		try:
+			from Components import HdsLimbaRestaurare as _R
+			_R.laNavigatorInstalat(self._dupaNavigator)
+			self.onClose.append(lambda: _R.faraNavigatorInstalat(self._dupaNavigator))
+		except ImportError:
+			pass
 
 	def _laInceput(self):
 		self.catalog = A.catalogAcum()
 		self.reumple()
 		if self.catalog is None:
 			self.ceas.start(400, False)
+
+	def _dupaNavigator(self):
+		self.reumple("navigator")
 
 	def _asteaptaCatalogul(self):
 		if A.catalogInLucru():
@@ -186,6 +199,10 @@ class HdsAplicatii(Screen):
 			nota = A.stare(a, self.video)
 			return _(nota) if nota else _("Instalat")
 		text = _(A.TEXTE_STARE.get(s, ""))
+		if s == A.CERE_NAVIGATOR:
+			trebuie, _liber = A.locNavigator()
+			if trebuie:
+				text += " · ~%d MB" % (trebuie // 1048576)
 		if s == A.DISPONIBIL:
 			p = A.pachetDinCatalog(a, self.catalog)
 			if p is not None and p.marime:
@@ -268,12 +285,67 @@ class HdsAplicatii(Screen):
 		if actiuni:
 			self.fa(actiuni[0], a)
 
+	# ------------------------------------------------ mouse-ul (USB si panoul web, Components/HdsMouseEcran)
+
+	def _cardSub(self, x, y):
+		"""Locul (0 .. locuri-1) al cardului vazut de sub (x, y), dupa pozitiile de pe ecran ale cardurilor (tema poate
+		avea blocul ei HdsAplicatii, deci nu geometrie()), sau None."""
+		if x is None or y is None:
+			return None
+		for k in range(self.locuri):
+			inst = getattr(self.get("card%d" % k), "instance", None)
+			if inst is None:
+				continue
+			try:
+				if not inst.isVisible():
+					continue
+				p, s = inst.getAbsolutePosition(), inst.size()
+				if p.x() <= x < p.x() + s.width() and p.y() <= y < p.y() + s.height():
+					return k
+			except Exception:
+				continue
+		return None
+
+	# OK pe aceste carduri porneste o instalare fara alta fereastra de confirmare (navigatorul din feed): la mouse, primul
+	# clic numai alege cardul, al doilea (pe cardul ales) face OK, ca in setari; celelalte au fereastra lor (Extensii,
+	# licenta Widevine)
+	DOI_PASI_MOUSE = ("instaleaza-navigator",)
+
+	def hdsGestMouse(self, fel, x=None, y=None, clicuri=1, **_rest):
+		"""Clicul pe un card il alege si face ce face OK (porneste aplicatia; instalarea unei aplicatii din feed si
+		Widevine trec prin fereastra lor de confirmare), ca pe televizoarele smart; pe cardul navigatorului de instalat
+		(DOI_PASI_MOUSE) primul clic numai il alege. Clicul langa carduri nu face nimic. Rotita, clicul dreapta (EXIT) si
+		clicul pe rotita (MENU) merg pe drumul obisnuit al mouse-ului (None): fara liste, ele sunt tastele SUS/JOS,
+		EXIT si MENU ale grilei."""
+		if fel not in ("clic", "dublu"):
+			return None
+		rez = {"facut": "nimic", "ecran": self.__class__.__name__}
+		k = self._cardSub(x, y)
+		i = None if k is None else self.inceput * A.COLOANE + k
+		if i is None or i >= len(self.aplicatii):
+			return rez
+		a = self.aplicatii[i]
+		rez.update(rand=i, nume=a["id"])
+		if i != self.ales:
+			self.ales = i
+			self.deseneaza()
+			if (A.actiuni(a, a.get("stare")) or [None])[0] in self.DOI_PASI_MOUSE:
+				rez["facut"] = "selectie"
+				return rez
+		rez["facut"] = "ok"
+		self.ok()
+		return rez
+
 	def deschide(self):
 		"""Porneste aplicatia aleasa (OK pe o aplicatie instalata)."""
 		if self.aplicatii:
 			self.fa("porneste", self.aplicatii[self.ales])
 
 	def fa(self, actiune, a):
+		if actiune == "instaleaza-navigator":
+			text = A.instaleazaNavigator(self.session)
+			self._mesaj(_(A.TEXT_NAVIGATOR_PORNIT) if text is None else text)
+			return
 		if actiune == "instaleaza-widevine":
 			eroare = A.instaleazaWidevine(self.session, lambda *r: self.reumple(a["id"]))
 			if eroare:
@@ -318,7 +390,12 @@ class HdsAplicatii(Screen):
 		else:
 			plan, eroare = L.planStergere(self.catalog, p, opkgArguments)
 		if plan is None:
-			if eroare is not None:
+			if getattr(eroare, "imagine", None):
+				# 0.7.6 (EX2): aplicatia cere o versiune mai noua a imaginii: aceeasi fereastra ca in Extensii, cu
+				# butonul Actualizare software (tot setul), nimic instalat pe bucati
+				from Screens.HdsExtensii import spreActualizare
+				spreActualizare(self.session, eroare)
+			elif eroare is not None:
 				self._mesaj(eroare[0], MessageBox.TYPE_ERROR)
 			return
 		plan.setdefault("titluri", L.titluri(self.catalog))

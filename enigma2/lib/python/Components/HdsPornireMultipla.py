@@ -915,10 +915,37 @@ def startupuri(dosar, radacina=None):
 
 # ------------------------------------------------------------------ lista locurilor
 
+def _montateInfo(text, radacina, sub):
+	"""{dispozitiv: dosarul} din /proc/self/mountinfo: numai montarile care arata toata partitia (campul root e "/").
+	0.7.7 (UPD, Wlad, forum 948 #2639, Viper 4K V10): din 0.7.5 /media/hdd, /media/usb.. sunt montari bind (c03fa5342,
+	Harddisk.bindName), nu legaturi. Pornit dintr-un loc de pe disc (root=UUID, rootsubdir=linuxrootfsN), discul imaginii
+	pornite e montat numai ca / (subdosarul locului), iar /media/hdd devine un bind al lui /: in /proc/mounts apare tot ca
+	/dev/sdc1, dar arata numai linuxrootfsN. Luat drept partitia intreaga, toate locurile de pe disc erau socotite goale
+	si ascunse ("Multiboot nu mai vede stickul"). Un asemenea bind se sare, iar partitia se monteaza ca pana in 0.7.4."""
+	rez = {}
+	for rand in text.splitlines():
+		parti = rand.split(" - ", 1)
+		if len(parti) != 2:
+			continue
+		a, b = parti[0].split(), parti[1].split()
+		if len(a) < 5 or len(b) < 2 or b[0] != "ext4":
+			continue
+		punct = a[4].replace("\\040", " ")
+		if a[3] != "/" or (punct == "/" and sub):
+			continue
+		if b[1] not in rez:
+			rez[b[1]] = _cale(radacina, punct)
+	return rez
+
+
 def _montate(radacina):
-	"""{dispozitiv: dosarul} din /proc/mounts, cu radacina."""
+	"""{dispozitiv: dosarul} din /proc/self/mountinfo (numai montarile partitiei intregi, _montateInfo) sau, fara el, din
+	/proc/mounts, cu radacina."""
 	rez = {}
 	sub = parametri(linieComanda(radacina)).get("rootsubdir", "") not in ("", "linuxrootfs0")
+	info = _text(_cale(radacina, "proc/self/mountinfo"))
+	if info.strip():
+		return _montateInfo(info, radacina, sub)
 	for rand in _text(_cale(radacina, "proc/mounts")).splitlines():
 		c = rand.split()
 		if len(c) < 4 or c[2] != "ext4" or (c[1] == "/" and sub):
@@ -949,9 +976,12 @@ def _rand(n, nume_fisier, date, imagine, acum=False, alegere=False, strica=False
 		"fisier": nume_fisier, "date": date}
 
 
-def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacina, monteaza, oriunde=None):
+def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacina, monteaza, oriunde=None, ascunse=None):
 	"""Randul unui loc care nu e din memorie (card, stick sau o forma necunoscuta); None cand locul e gol sau discul lui nu
-	e pus (STARTUP_5 si STARTUP_6 ale fabricii stau pe orice receptor, si fara disc)."""
+	e pus (STARTUP_5 si STARTUP_6 ale fabricii stau pe orice receptor, si fara disc). `ascunse`: {loc: de ce nu apare},
+	pentru jurnalul listei (_jurnalLista)."""
+	if ascunse is None:
+		ascunse = {}
 	p = st["p"] if st else {}
 	ref = p.get("root", "")
 	dev = _radacinaDisc(ref, radacina)
@@ -966,7 +996,10 @@ def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacin
 	fabrica = (st and sablon == (st["tinta"], ref) and "rootsubdir" not in p and
 		bool(verificaDisc(st, cmd, radacina)))
 	if not dev or dev[5:] not in partitii_:
-		return None if fabrica else _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_PARTITIE)
+		if fabrica:
+			ascunse[n] = {"de_ce": "sablonul fabricii, fara disc", "partitia": dev or ref}
+			return None
+		return _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_PARTITIE)
 	sub = p.get("rootsubdir", "")
 	if sub and not SUBDOSAR_DISC.fullmatch(sub):
 		return _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_FORMA)
@@ -987,7 +1020,15 @@ def _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacin
 		if forma and forma[1] != dev:
 			return _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_PARTITIE)
 		if not os.path.isdir(os.path.join(sistem, "etc")):
-			return None if forma else _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_FORMA)
+			if forma:
+				try:
+					are = any(x.startswith("linuxrootfs") for x in os.listdir(dosar))
+				except OSError:
+					are = False
+				ascunse[n] = {"de_ce": "gol: fara etc", "partitia": dev, "dosar": dosar, "sistem": sistem,
+					"montata": dev in montate, "are_linuxrootfs": are}
+				return None
+			return _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_FORMA)
 		imagine = numeImagine(sistem)
 		if forma and not _uuidDovedit(st, cmd, radacina):
 			forma = None
@@ -1080,6 +1121,7 @@ def locuri(radacina=None, monteaza=None, numai=None):
 			demonteazaBoot()
 	if numai is not None:
 		fisiere = [x for x in fisiere if x[0] == str(numai)]
+	ascunse = {}
 	if kexec:
 		montate = _montate(radacina)
 		oriunde = _dispozitiveMontate(radacina)
@@ -1092,9 +1134,13 @@ def locuri(radacina=None, monteaza=None, numai=None):
 				continue
 			if loc:
 				rez["locuri"].append(loc)
+			else:
+				ascunse[n] = {"de_ce": "kexec: forma, partitia sau dosarul imaginii"}
 		rez["pe_stick"] = any(l.get("extern") and l["acum"] for l in rez["locuri"])
 		# STARTUP_ONCE (pus de alta imagine) are intaietate la pornirea urmatoare; nu e al nostru, deci il spunem doar.
 		rez["o_data"] = o_data
+		if numai is None:
+			_jurnalLista(rez, cmd, montate, ascunse, [n for n, _f, _d in fisiere], radacina)
 		return rez
 	emmc, altele = [], []
 	for n, nume_fisier, date in fisiere:
@@ -1112,7 +1158,7 @@ def locuri(radacina=None, monteaza=None, numai=None):
 		oriunde = _dispozitiveMontate(radacina)
 		for n, nume_fisier, date, st in altele:
 			try:
-				l = _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacina, monteaza, oriunde)
+				l = _locDisc(n, nume_fisier, date, st, cmd, discuri, partitii_, montate, radacina, monteaza, oriunde, ascunse)
 			except (IOError, OSError) as e:
 				_log("locul %s: %r" % (n, e))
 				l = _rand(n, nume_fisier, date, _(FARA_NUME), motiv=MOTIV_CITIRE)
@@ -1123,7 +1169,109 @@ def locuri(radacina=None, monteaza=None, numai=None):
 	if pe_stick and numai is None and not any(l["acum"] for l in rez["locuri"]):
 		rez["locuri"].insert(0, {"loc": "", "fel": "stick", "imagine": numeImagine(_cale(radacina, "/")),
 			"acum": True, "alegere": False, "fara_loc": True})
+	if numai is None:
+		_jurnalLista(rez, cmd, montate, ascunse, [n for n, _f, _d in fisiere], radacina)
 	return rez
+
+
+# ------------------------------------------------------------------ jurnalul listei (USI, 16.11.2026)
+# Wlad (forum 948 #2869, Viper 4K V10, 0.7.6): „MultiBoot vede stickul, dar nu imaginile de pe el”; din cod si surse nu se
+# vede de ce (STADIU-USI, partea 5). Fiecare citire intreaga a listei (ecranul si /alimentare, pe firul lor) scrie o data,
+# in RAM, ce a hotarat pentru fiecare STARTUP_N si de ce, cu partitiile citite si discul pornirii; raportul receptorului
+# (tools/hds-raport.sh) il adauga, deci orice raport il are. Cand toate locurile unei partitii montate sunt ascunse ca goale
+# si in dosarul citit nu e niciun linuxrootfs* (s-a citit alt dosar decat partitia), receptorul trimite singur, o data pe
+# pornire, un raport (ca Components/HdsProcesorRaport.py: motiv=pornire-multipla, declansare=automata; serverul il primeste
+# fara schimbare). Omul nu face nimic.
+FISIER_LISTA = "var/run/hds-pornire-multipla.txt"
+SEMN_RAPORT = "var/run/hds-pornire-multipla.raportat"
+PROGRAM_RAPORT = "/usr/bin/hds-raport.sh"
+MAXIM_JURNAL = 8192
+
+
+def _radacinaExterna():
+	"""Discul pornirii dupa Components/HdsStocare.discRadacina (citit o data, din /sys), ca text."""
+	try:
+		from Components.HdsStocare import discRadacina
+		r = discRadacina()
+	except Exception as e:
+		return "necitit (%s)" % e.__class__.__name__
+	if not r:
+		return "nu (memoria interna, toata partitia, disc sub 16 GB sau alta forma)"
+	return "partitia %s, discul %s, dosarul %s" % (r.get("partitie"), r.get("disc"), r.get("subdosar"))
+
+
+def _trimiteRaport():
+	"""Raportul automat, detasat (nu tine lista): acelasi canal ca raportul de procesor."""
+	if not os.path.isfile(PROGRAM_RAPORT):
+		return False
+	env = dict(os.environ, HDS_RAPORT_MOTIV="pornire-multipla", HDS_RAPORT_DECLANSARE="automata")
+	subprocess.Popen(["/bin/sh", PROGRAM_RAPORT, "raport", "manual"], env=env, stdin=subprocess.DEVNULL,
+		stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
+	return True
+
+
+# probele de pe PC dau functiile lor
+radacinaExterna = _radacinaExterna
+trimiteRaport = _trimiteRaport
+
+
+def partitiiCuToateAscunse(rez, ascunse):
+	"""Partitiile montate ale caror locuri sunt toate ascunse ca goale, cu niciun linuxrootfs* in dosarul citit; un loc
+	aratat de pe partitie (ales sau cu motiv) inseamna ca dosarul a fost cel bun."""
+	pe_partitie = {}
+	for a in ascunse.values():
+		if a.get("de_ce", "").startswith("gol") and a.get("montata"):
+			p = pe_partitie.setdefault(a["partitia"], {"are": False})
+			p["are"] = p["are"] or bool(a.get("are_linuxrootfs"))
+	return sorted(dev for dev, p in pe_partitie.items() if not p["are"])
+
+
+def _jurnalLista(rez, cmd, montate, ascunse, numere, radacina=None):
+	"""O data pe citirea intreaga a listei: hotararile in RAM (FISIER_LISTA) si, la nevoie, raportul automat (o data pe
+	pornire, SEMN_RAPORT in RAM). Orice eroare ramane aici: lista nu se opreste din cauza jurnalului."""
+	rele = []
+	try:
+		randuri = ["lista pornirii multiple, uptime %s" % (_text(_cale(radacina, "proc/uptime"), 64).split(" ")[0] or "?"),
+			"linia de comanda: " + " ".join("%s=%s" % (k, cmd[k]) for k in ("root", "rootsubdir", "kernel", "kexec") if k in cmd),
+			"discul pornirii (HdsStocare.discRadacina): %s" % radacinaExterna(),
+			"/dev/.newMB-uuid: %s" % ("da" if os.path.exists(_cale(radacina, "dev/.newMB-uuid")) else "nu")]
+		randuri += ["montata: %s -> %s" % (d, m) for d, m in sorted(montate.items())]
+		dupa_loc = dict((str(l.get("loc")), l) for l in rez.get("locuri", []))
+		for n in numere:
+			l = dupa_loc.get(str(n))
+			if l:
+				parti = ["loc %s: aratat" % n, l.get("fel", ""), "imagine=%s" % l.get("imagine", "")]
+				parti += [cuvant for cheie, cuvant in (("acum", "acum"), ("alegere", "se alege"), ("strica", "stricat")) if l.get(cheie)]
+				if l.get("motiv"):
+					parti.append("motiv=%s" % l["motiv"])
+				if l.get("radacina"):
+					parti.append("partitia=%s" % l["radacina"])
+			else:
+				a = ascunse.get(n) or {"de_ce": "gol in memorie sau alta forma"}
+				parti = ["loc %s: ascuns" % n, a["de_ce"]] + ["%s=%s" % (k, a[k]) for k in
+					("partitia", "dosar", "sistem", "montata", "are_linuxrootfs") if k in a]
+			randuri.append(", ".join(str(p) for p in parti if p != ""))
+		rele = partitiiCuToateAscunse(rez, ascunse)
+		if rele:
+			randuri.append("ANORMAL: toate locurile ascunse, fara linuxrootfs in dosarul citit: %s" % " ".join(rele))
+		cale = _cale(radacina, FISIER_LISTA)
+		with open(cale + ".nou", "w", encoding="utf-8") as f:
+			f.write(("\n".join(randuri) + "\n")[:MAXIM_JURNAL])
+		os.replace(cale + ".nou", cale)
+	except Exception as e:
+		_log("jurnalul listei: %r" % (e,))
+	if not rele:
+		return
+	semn = _cale(radacina, SEMN_RAPORT)
+	if os.path.exists(semn):
+		return
+	try:
+		with open(semn, "w") as f:
+			f.write(" ".join(rele) + "\n")
+		trimis = trimiteRaport()
+		_log("toate locurile de pe %s ascunse; raportul automat: %s" % (" ".join(rele), "pornit" if trimis else "fara program"))
+	except Exception as e:
+		_log("raportul automat al listei: %r" % (e,))
 
 
 def _locuriEmmc(rez, emmc, cmd, montate, radacina, monteaza):

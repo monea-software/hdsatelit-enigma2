@@ -107,11 +107,9 @@ std::string eEnv::resolve(const std::string &src)
 		initialized = true;
 	}
 
-	eDebug("%s: resolve %s", __func__, src.c_str());
-
+	/* HD Satelit (0.7.6): no debug lines here. Every bouquet load (eDVBDB::loadBouquet) and every resolveFilename
+	 * resolved a path and printed two lines, about 30% of the 64 KB of hds-interfata.log the testers send. */
 	eEnv::resolveVar(dest, src);
-
-	eDebug("%s: -> %s", __func__, dest.c_str());
 
 	return dest;
 }

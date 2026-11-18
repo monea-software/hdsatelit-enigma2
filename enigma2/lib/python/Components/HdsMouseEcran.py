@@ -21,6 +21,11 @@
 #   telefon: glisarea spre dreapta si tasta Inapoi a telefonului = clic dreapta, atingerea tinuta = clic pe rotita).
 #   De ce IESIRE la dreapta: Inapoi se foloseste mult mai des decat MENIU, deci
 #   sta pe butonul cel mai la indemana.
+# - mouse-ul ca telecomanda (0.7.7, setarile din Butoane colorate si taste rapide si /taste-rapide, PROFIL_SETARI din
+#   Components/HdsTasteRapide.py, citite la fiecare gest): rotita cat te uiti la televizor sau la un film (bara, fara
+#   lista sub mouse) = volumul (hds_mouse_rotita; "obisnuit" = sagetile SUS/JOS, ca inainte); clicul pe rotita
+#   (hds_mouse_mijloc, din fabrica MENIU) si butoanele laterale ale mouse-urilor cu 5 butoane (gesturile lateral_spate,
+#   din fabrica Inapoi = IESIRE, si lateral_fata, din fabrica Sunet oprit) = MENIU, Sunet oprit, Inapoi sau nimic;
 # - tastatura din pagina web, unde nu e o tasta a telecomenzii: "pagina" (Page Up/Down) =
 #   o pagina in lista principala a ecranului (cea mai mare lista vizibila), iar fara lista (la privit) canalul +/-;
 #   "capat" (Home/End) = primul sau ultimul rand al listei principale (fara lista: nimic);
@@ -49,6 +54,7 @@ KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE = 398, 399, 400, 401
 KEY_UP, KEY_DOWN = 103, 108
 KEY_CHANNELUP, KEY_CHANNELDOWN = 402, 403
 KEY_BACKSPACE, KEY_PAUSE = 14, 119
+KEY_MUTE, KEY_VOLUMEDOWN, KEY_VOLUMEUP = 113, 114, 115
 # semnele tastaturii cand pe televizor nu e un camp de text: tastele telecomenzii (cifrele KEY_1..KEY_0 = 2..11)
 TASTE_SEMNE = dict([(str(c), c + 1) for c in range(1, 10)] + [("0", 11), ("m", KEY_MENU), ("i", KEY_INFO),
 	("e", KEY_EPG), ("t", KEY_TEXT), (" ", KEY_PAUSE), ("\b", KEY_EXIT)])
@@ -71,7 +77,15 @@ PASI_MAXIM = 12        # cati pasi se primesc odata (restul se arunca: o rotita 
 TASTE_ROTITA = 3       # fara lista sub mouse: cel mult atatea taste SUS/JOS la o cerere
 LATIME_BARA = (18, 22)  # latimea barii de derulare a lui eListbox (elistbox.cpp, updateScrollBar): latimea/16 in aceste limite
 SPATIU_BARA = 5         # spatiul dintre randuri si bara (acelasi loc in elistbox.cpp)
-GESTURI = ("clic", "dublu", "drag", "dragend", "rotita", "dreapta", "mijloc", "pagina", "capat", "text")
+GESTURI = ("clic", "dublu", "drag", "dragend", "rotita", "dreapta", "mijloc", "pagina", "capat", "text", "lateral_spate",
+	"lateral_fata")
+# mouse-ul ca telecomanda: setarea fiecarui buton (Components/HdsTasteRapide.PROFIL_SETARI) si fabrica ei, si tasta fiecarei
+# alegeri (nimic = None)
+SETARI_MOUSE = {"hds_mouse_rotita": "volum", "hds_mouse_mijloc": "meniu", "hds_mouse_spate": "inapoi", "hds_mouse_fata": "mut"}
+TASTE_MOUSE = {"meniu": KEY_MENU, "mut": KEY_MUTE, "inapoi": KEY_EXIT, "nimic": None}
+BUTOANE_MOUSE = {"mijloc": "hds_mouse_mijloc", "lateral_spate": "hds_mouse_spate", "lateral_fata": "hds_mouse_fata"}
+# ecranele "la privit": rotita fara lista sub mouse schimba volumul (hds_mouse_rotita)
+ECRANE_PRIVIT = ("InfoBar", "MoviePlayer")
 
 
 def jurnal(text):
@@ -149,6 +163,16 @@ def scrieAscii(functie, cod, module=()):
 	finally:
 		for g, v in vechi:
 			g["getPrevAsciiCode"] = v
+
+
+def setareMouse(nume):
+	"""Alegerea omului pentru un buton al mouse-ului (config.usage.<nume>, HdsTasteRapide.optiune), sau fabrica."""
+	try:
+		from Components.HdsTasteRapide import optiune
+		v = optiune(nume)
+	except Exception:
+		v = None
+	return v if v is not None else SETARI_MOUSE[nume]
 
 
 def marimeEcran():
@@ -292,9 +316,10 @@ class MouseEcran(object):
 	"""Gesturile mouse-ului pe ecranul de deasupra al televizorului. `ecran_curent()` da ecranul (session.current_dialog),
 	`apasa(cod)` trimite o tasta. Tine minte numai cat trebuie: ultimul clic (pentru dublu clic) si trasul pe bara."""
 
-	def __init__(self, ecran_curent, apasa=None, ceas=time.monotonic, mod_ascii=None, module_ascii=None):
+	def __init__(self, ecran_curent, apasa=None, ceas=time.monotonic, mod_ascii=None, module_ascii=None, setare=None):
 		self._ecran_curent = ecran_curent
 		self._apasa = apasa or apasaTasta
+		self._setare = setare or setareMouse
 		self._ceas = ceas
 		self._modAscii = mod_ascii or modAscii
 		self._moduleAscii = module_ascii
@@ -313,11 +338,23 @@ class MouseEcran(object):
 		randuri) primeste gestul intai; daca intoarce un dictionar, acela e raspunsul, iar None = gestul merge ca mai jos.
 		Ecranele pluginului File Commander n-au metoda: adaptorul din HdsMouseFileCommander ii tine locul (clicul in
 		celalalt panou il face activ, tragerea dintre panouri copiaza, cu Shift muta)."""
+		if fel in BUTOANE_MOUSE and self._setare(BUTOANE_MOUSE[fel]) == "inapoi":
+			# un buton pus pe Inapoi face ce face clicul dreapta, si pe ecranele cu hdsGestMouse (in navigator si in
+			# aplicatii: pagina de dinainte, nu inchiderea)
+			fel = "dreapta"
 		ecran = self._ecran()
 		propriu = getattr(ecran, "hdsGestMouse", None) if ecran is not None else None
 		if propriu is None and ecran is not None:
 			propriu = self._adaptor(ecran)
 		if propriu is not None:
+			if fel in ("clic", "dublu"):
+				# ca in clic(): al doilea clic al unui dublu clic, venit pe ecranul deschis de primul (grila Aplicatii
+				# deschisa din meniu, fereastra de instalare deschisa dintr-un card), nu mai apasa nimic acolo
+				acum = self._ceas()
+				ultim_timp, ultim_ecran = self._ultim
+				self._ultim = (acum, id(ecran))
+				if (fel == "dublu" or clicuri >= 2) and ultim_ecran != id(ecran) and acum - ultim_timp < DUBLU_CLIC_S:
+					return {"facut": "nimic", "ecran": _numeEcran(ecran), "motiv": "ecran_nou"}
 			try:
 				extra = {"mod": frozenset(mod)} if mod is not None else {}
 				rez = propriu(fel, x=x, y=y, clicuri=clicuri, pasi=pasi, x0=x0, y0=y0, nou=nou, text=text, **extra)
@@ -340,8 +377,11 @@ class MouseEcran(object):
 			return self.rotita(x, y, pasi)
 		if fel == "dreapta":
 			return self._tasta(KEY_EXIT)
-		if fel == "mijloc":
-			return self._tasta(KEY_MENU)
+		if fel in BUTOANE_MOUSE:
+			cod = TASTE_MOUSE.get(self._setare(BUTOANE_MOUSE[fel]), KEY_MENU if fel == "mijloc" else None)
+			if cod is None:
+				return {"facut": "nimic", "ecran": _numeEcran(self._ecran())}
+			return self._tasta(cod)
 		if fel == "pagina":
 			return self.pagina(pasi)
 		if fel == "capat":
@@ -505,6 +545,9 @@ class MouseEcran(object):
 			return {"facut": "derulare", "ecran": _numeEcran(ecran), "lista": lista.nume, "rand": inst.getCurrentIndex(),
 				"pagina": abs(pasi) >= PAS_PAGINA}
 		cod = KEY_DOWN if pasi > 0 else KEY_UP
+		if any(c in ECRANE_PRIVIT for c in _clase(ecran)) and self._setare("hds_mouse_rotita") == "volum":
+			# la privit: rotita spre ecran (pasi < 0) = mai tare, spre tine = mai incet
+			cod = KEY_VOLUMEDOWN if pasi > 0 else KEY_VOLUMEUP
 		for _i in range(min(abs(pasi), TASTE_ROTITA)):
 			self._apasa(cod)
 		return {"facut": "tasta", "tasta": cod, "ecran": _numeEcran(ecran)}

@@ -85,6 +85,13 @@ class SkinError(Exception):
 dom_skins = [ ]
 _surseSkin = {}
 _xmlAfisaj = set()
+# HDSatelit 0.7.7 (CPP, 16.11.2026): _caiPoze si _uitaCaiPoze definite inaintea lui loadSkin. TSR (fb7a51fda) le cheama in
+# loadSkin, care ruleaza la importul modulului (randurile cu loadSkin(...) de mai jos); definite mai jos, dadeau NameError si
+# interfata nu pornea (nicio tema). Ce tin minte: vezi comentariul de langa resolveSkinImage.
+_caiPoze = {}
+
+def _uitaCaiPoze():
+	_caiPoze.clear()
 
 def _citesteXml(filename):
 	# HDSatelit: si fisierele temelor cu randuri salvate in codarea veche a limbii, nu in UTF-8 (MERCUS-FHD, forum 1342):
@@ -100,6 +107,7 @@ def loadSkin(name = None, scope = SCOPE_SKIN, desktop = None, screenID = None, f
 	# scrise pentru acele imagini; desktop/screenID nu schimba nimic aici (datele se incarca in loadSkinData)
 	if name is None:
 		name = filename
+	_uitaCaiPoze()
 	filename = resolveFilename(scope, name)
 	mpath = path.dirname(filename) + "/"
 	radacina = _citesteXml(filename)
@@ -445,7 +453,7 @@ def afisajExternActiv():
 		nume = _surseSkin.get(id(radacina), "")
 		if id(radacina) in _xmlAfisaj:
 			return "" if nume == AFISAJ_HDS else nume
-		if not nume or nume in ("HDSatelit/skin.xml", "HDSatelit/skin_pro.xml", "skin_default.xml"):
+		if not nume or nume in ("HDSatelit/skin.xml", "HDSatelit/skin_pro.xml", TEMA_FUNDAL_FISIER, "skin_default.xml"):
 			continue
 		if any(
 			e.get("id") in ("1", "2") for e in radacina.findall("screen")):
@@ -499,10 +507,22 @@ config.skin.layout_meniu = ConfigSelection(default="lista", choices=[("lista", "
 # tema interfetei web (config.plugins.hdswebcontrol.tema_web). Valorile raman identificatori, ca layout_meniu.
 config.skin.tema_tv = ConfigSelection(default="clasic", choices=[("clasic", "clasic"), ("pro", "pro")])
 TEMA_PRO_FISIER = "HDSatelit/skin_pro.xml"
+# HDSatelit 0.7.6 (TPR, Eduard 04.11 si 08.11): fundalul tematic pus peste tema Pro ("" = Pro, cum e acum, fara fundal).
+# Se alege din Meniu > Interfata si aspect > Fundalul temei Pro (Screens/HdsFundalPro.py) si din web (/tema-tv); logica si
+# dosarele: Components/HdsFundalPro.py. HDSatelit/skin_pro_fundal.xml (scris de receptor/skin/tools/fa_skin_pro_fundal.py din
+# skin_pro.xml) are panourile Pro cu pozele temei; se incarca inaintea lui skin_pro.xml numai cand toate pozele exista.
+config.skin.fundal_pro = ConfigText(default="")
+TEMA_FUNDAL_FISIER = "HDSatelit/skin_pro_fundal.xml"
 # HDSatelit 0.7.5: rezolutia interfetei temei HD Satelit, 1080p sau 2K (2560x1440, numai unde placa poate). Tema ramane
 # scrisa pe 1920x1080; la 2K loadSkinData face ecranul final 2560x1440 si ScaraEcran o scaleaza. Logica, ecranul si
-# pagina: Components/HdsRezolutieTv.py. Valorile raman identificatori, ca layout_meniu.
-config.skin.rezolutie_tv = ConfigSelection(default="1080", choices=[("1080", "1080"), ("1440", "1440")])
+# pagina: Components/HdsRezolutieTv.py. Valorile raman identificatori, ca layout_meniu. 0.7.7 (SK2): si "auto" (Automată:
+# 2K numai pe televizoarele 4K, unde placa poate); implicitul sta intr-un singur loc, HdsRezolutieTv.IMPLICITA.
+try:
+	from Components.HdsRezolutieTv import IMPLICITA as _rezImplicita, VALORI as _rezValori
+except Exception:
+	# numai pe bancurile de proba de pe PC, cu Components inlocuit; pe receptor modulul exista mereu
+	_rezImplicita, _rezValori = "1080", ("auto", "1080", "1440")
+config.skin.rezolutie_tv = ConfigSelection(default=_rezImplicita, choices=[(_v, _v) for _v in _rezValori])
 
 profile("LoadSkin")
 # HDSatelit: in the safe mode started by enigma2.sh (HDS_MOD_SIGUR=1, Components/HdsModSigur.py) the user additions in
@@ -510,11 +530,13 @@ profile("LoadSkin")
 # colours and the info bar layout chosen in the skin settings (HdsSkinSetari, part of the image, writes them into it).
 from os import environ as _mediu
 from Components import HdsSkinuri as _HdsSkinuri
+# SKU: elementul <skin> citit din fisierul omului, ca sa poata fi scos mai jos daca e scris pentru alta tema
+_radacinaSkinUser = None
 if _mediu.get("HDS_MOD_SIGUR") == "1":
 	skinNotice("safe mode: skin_user.xml not loaded")
 elif fileExists(resolveFilename(SCOPE_CONFIG, 'skin_user.xml')):
 	try:
-		loadSkin('skin_user.xml', SCOPE_CONFIG)
+		_radacinaSkinUser = loadSkin('skin_user.xml', SCOPE_CONFIG)
 	except Exception as err:
 		skinWarning("user skin not loaded: %s" % err)
 
@@ -552,6 +574,16 @@ incarcaAfisaj(skinAles)
 # cu alt skin ales nu se incarca.
 try:
 	if skinAles is None and temaProDeIncarcat():
+		# fundalul temei Pro (TPR): panourile cu poze inaintea celor curate; orice greseala lasa Pro curat
+		try:
+			from Components import HdsFundalPro as _HdsFundalPro
+			_HdsFundalPro.curataActiv(config.skin.fundal_pro.value)
+			_fundalBun = _HdsFundalPro.fundalDeIncarcat(config.skin.fundal_pro.value, _mediu)
+			if _fundalBun and fileExists(resolveFilename(SCOPE_SKIN, TEMA_FUNDAL_FISIER)):
+				loadSkin(TEMA_FUNDAL_FISIER)
+				skinNotice("fundalul temei Pro: %s" % config.skin.fundal_pro.value)
+		except Exception as err:
+			skinWarning("fundalul temei Pro nu s-a incarcat, ramane Pro curat: %s" % err)
 		loadSkin(TEMA_PRO_FISIER)
 		skinNotice("tema Pro: %s" % TEMA_PRO_FISIER)
 except Exception as err:
@@ -607,6 +639,58 @@ if skinAles is not None:
 				loadSkin(TEMA_PRO_FISIER)
 		except Exception as err2:
 			skinWarning("tema Pro nu s-a incarcat, ramane Clasic: %s" % err2)
+
+# TEM (16.11.2026): fisierul pe tema, ca in imaginile OE-Alliance: skin_user_<dosarul temei>.xml (in /etc/enigma2/<dosar>/,
+# /etc/enigma2/ sau in dosarul temei) se aplica primul, in locul lui skin_user.xml, cand exista pentru tema care porneste de
+# fapt; skin_user.xml ramane pe disc, neatins. Nu in modul sigur. Orice greseala: skin_user.xml ca pana acum.
+_skinUserTema = None
+_proprietarSkinUser = None
+if _mediu.get("HDS_MOD_SIGUR") != "1":
+	try:
+		for _nume, _unde in _HdsSkinuri.caiSkinUserTema(skinPornit):
+			_scope = SCOPE_CONFIG if _unde == "config" else SCOPE_SKIN
+			if fileExists(resolveFilename(_scope, _nume)):
+				loadSkin(_nume, _scope)
+				dom_skins.insert(0, dom_skins.pop())
+				_skinUserTema = _nume
+				break
+		if _skinUserTema is not None:
+			if _radacinaSkinUser is not None:
+				dom_skins[:] = [_x for _x in dom_skins if _x[1] is not _radacinaSkinUser]
+				_surseSkin.pop(id(_radacinaSkinUser), None)
+			# SK2 (rezolutiaTemeiHds): adaugirile omului aplicate sunt acum cele din fisierul pe tema
+			_radacinaSkinUser = dom_skins[0][1]
+			skinNotice("fisierul pe tema %s se aplica in locul lui skin_user.xml" % _skinUserTema)
+	except Exception as err:
+		skinWarning("fisierul pe tema skin_user_<tema>.xml nu s-a incarcat: %s" % err)
+	# a cui e skin_user.xml dupa sesiunea in care s-a schimbat (HdsSkinuri.amintireSkinUser), si cand lipseste
+	try:
+		_proprietarSkinUser = _HdsSkinuri.amintireSkinUser(resolveFilename(SCOPE_CONFIG, 'skin_user.xml'), skinPornit)
+	except Exception as err:
+		skinWarning("amintirea lui skin_user.xml n-a mers: %s" % err)
+
+# SKU (15.11.2026, asistenta 452351): un skin_user.xml scris de unealta altei teme (fonturile si barele ei, MERCUS-FHD) nu
+# se aplica peste tema care porneste de fapt (skinPornit: HD Satelit si cand tema aleasa a fost refuzata sau a cazut mai
+# sus). Fisierul ramane pe disc, neatins, si se aplica iar la intoarcerea pe tema lui; unul fara cai de tema (scris de mana)
+# ramane la orice tema. Orice greseala aici il lasa aplicat, ca pana acum (Components/HdsSkinuri.skinUserPentruAltaTema).
+# TEM: cand caile nu arata nicio tema instalata, hotaraste tema straina in a carei sesiune s-a schimbat fisierul (amintirea);
+# fisierul pe tema, cand exista, a luat deja locul lui skin_user.xml.
+if _radacinaSkinUser is not None and _skinUserTema is None:
+	try:
+		_radacinaTema = None
+		for _p, _r in dom_skins:
+			if _surseSkin.get(id(_r)) == skinPornit:
+				_radacinaTema = _r
+				break
+		_temaUser = _HdsSkinuri.skinUserPentruAltaTema(_radacinaSkinUser, skinPornit, resolveFilename(SCOPE_SKIN, ""),
+			radacina_tema=_radacinaTema, proprietar=_proprietarSkinUser)
+		if _temaUser:
+			dom_skins[:] = [_x for _x in dom_skins if _x[1] is not _radacinaSkinUser]
+			_surseSkin.pop(id(_radacinaSkinUser), None)
+			skinNotice("skin_user.xml e scris pentru tema %s, nu se aplica peste %s (fisierul ramane pe loc)"
+				% (_temaUser, skinPornit))
+	except Exception as err:
+		skinWarning("verificarea temei lui skin_user.xml n-a mers, ramane aplicat: %s" % err)
 
 # sabloanele listei de canale ale temei alese (registrul componentTemplates; cu tema HD Satelit nu se citeste nimic)
 try:
@@ -991,6 +1075,43 @@ def altSkinActiv():
 # Obiectul insusi (nu getStyle al managerului: SWIG nu da inapoi un eWindowStyle * folosibil, iar un id nepus e ASSERT).
 STIL_HDS = [ None ]
 _rameFerestre = {}
+
+# FUR (16.11.2026): <windowstyle id="N"><configList entryFont="..." valueFont="..." headerFont="..."/>, conventia OE-Alliance:
+# o lista de setari fara font propriu ia fontul randurilor, al valorilor si al titlurilor din stilul ferestrei, iar eticheta si
+# valoarea stau la mijlocul randului. Temele scrise pentru OE-Alliance (Fury-FHD: 168 din 169 de liste fara font de valori) dau
+# fonturile NUMAI aici; fara ele valorile ieseau in Regular 16, sus in rand (Wlad, forum 948 #2869/#2874, capturile 300 si 301).
+# stilListaSetari[id] = {"font": ..., "valueFont": ..., "headerFont": ...}, in coordonatele ecranului (ca titlul ferestrei).
+# Se folosesc numai la listele de setari din ecranele temei si ale pluginurilor (readSkin, completareListaSetari); ecranele
+# imaginii raman cu fonturile lor.
+stilListaSetari = {}
+_ATRIBUTE_LISTA_SETARI = (("entryFont", "font"), ("valueFont", "valueFont"), ("headerFont", "headerFont"))
+# atributele din XML care dau acelasi font al listei de setari (applySingleAttribute)
+_ECHIVALENTE_FONT = {"font": ("font", "entryFont"), "valueFont": ("secondfont", "secondFont", "valueFont"), "headerFont": ("headerFont",)}
+_ATRIBUTE_VALIGN = ("valign", "verticalAlignment", "vAlign")
+
+def esteListaSetari(componenta):
+	"""True pentru o componenta care deseneaza cu eListboxPythonConfigContent (ConfigList si clasele derivate din ea, si cele
+	ale pluginurilor)"""
+	try:
+		from enigma import eListboxPythonConfigContent
+		return isinstance(getattr(componenta, "l", None), eListboxPythonConfigContent)
+	except Exception:
+		return False
+
+def completareListaSetari(componenta, style_id, puse):
+	"""FUR: atributele (nume, valoare) de pus unei liste de setari dintr-un ecran al temei sau al unui plugin, pentru ce nu da
+	XML-ul ei (`puse`, numele atributelor din XML): fonturile din <windowstyle><configList> (stilListaSetari) si alinierea
+	la mijloc pe verticala, ca eListboxPythonConfigContent din OE-Alliance. Lista goala pentru alte componente."""
+	if not esteListaSetari(componenta):
+		return []
+	stil = stilListaSetari.get(style_id) or {}
+	rez = []
+	for _xml, atribut in _ATRIBUTE_LISTA_SETARI:
+		if stil.get(atribut) and not puse.intersection(_ECHIVALENTE_FONT[atribut]):
+			rez.append((atribut, stil[atribut]))
+	if not puse.intersection(_ATRIBUTE_VALIGN):
+		rez.append(("valign", "center"))
+	return rez
 
 def puneStilHds(fereastra):
 	"""GUISkin.applySkin, pentru ecranele noastre sub alt skin ales (screen.stilHds, pus de readSkin): fereastra (si
@@ -1581,11 +1702,33 @@ def centerPixmap(rect, pixmap):
 		return rect
 	return x + max(0, (w - pw) // 2), y + max(0, (h - ph) // 2), min(w, pw), min(h, ph)
 
+# HDSatelit 0.7.6 (TSR, raportul 2152: firul interfetei ocupat 11,8 s in isfile sub readSkin, la pornire, cu o tema straina): fiecare
+# poza a unui ecran (pixmap=, pointer=, pozele barelor) trecea la fiecare ecran construit prin aceleasi verificari pe disc
+# (langa tema, suprascrierile din /etc/enigma2, HDSatelit/, skin_default/: pana la vreo 10 stat-uri pentru o poza care nu e langa
+# tema), iar temele folosesc aceleasi poze pe zeci de ecrane. Rezultatul se tine minte o data pe pornire, cu tot cu cele negasite;
+# se uita la fiecare loadSkin si dupa loadSkinData (dosarele temelor si rezolutia sunt atunci hotarate), iar cheia are si tema
+# aleasa. Pozele din dosarul unui plugin nu se tin minte: un plugin se poate instala sau actualiza fara repornire.
+# _caiPoze si _uitaCaiPoze stau sus, langa _xmlAfisaj: loadSkin le cheama la import (CPP, 16.11.2026)
+
 def resolveSkinImage(filename, path_prefix):
 	"""a skin image: next to the skin first (how skins for other images are written),
 	then in the current skin, then the classic image path"""
 	if not filename or filename[0] == '/':
 		return filename
+	if path_prefix and "/Plugins/" in path_prefix:
+		return _resolveSkinImage(filename, path_prefix)
+	try:
+		ales = config.skin.primary_skin.value
+	except Exception:
+		ales = None
+	cheie = (ales, path_prefix, filename)
+	gasit = _caiPoze.get(cheie)
+	if gasit is None:
+		gasit = _caiPoze[cheie] = _resolveSkinImage(filename, path_prefix)
+	return gasit
+
+def _resolveSkinImage(filename, path_prefix):
+	"""cautarea de pe disc din resolveSkinImage, neschimbata (fara memorie)"""
 	base, sep, options = filename.partition('#')
 	for candidate in (path.join(path_prefix, base) if path_prefix else None, resolveFilename(SCOPE_CURRENT_SKIN, base)):
 		if candidate and fileExists(candidate):
@@ -2132,6 +2275,30 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 			style.setTitleFont(font)
 			style.setTitleOffset(offset)
 
+			# FUR: fonturile listelor de setari din stilul ferestrei (stilListaSetari); cu o tema straina aleasa raman ale ei,
+			# chiar daca dupa ea se incarca fisierele HDSatelit
+			if dinTema or not dosareSkinStraine:
+				lista = {}
+				for configList in windowstyle.findall("configList"):
+					get_attr = configList.attrib.get
+					if dinTema:
+						get_attr = _cuFactor(configList.attrib)
+					for xml_nume, atribut in _ATRIBUTE_LISTA_SETARI:
+						v = (get_attr(xml_nume) or "").strip()
+						if v:
+							try:
+								parseFont(v, scara_font)  # numai verificarea; se tine textul, ca atributul din XML
+								if scara is not None and ";" in v:
+									nume_font, marime = v.split(";")
+									v = "%s;%d" % (nume_font, int(marime) * scara_font[0][0] // scara_font[0][1])
+								lista[atribut] = v
+							except Exception as e:
+								skinWarning("%s: configList %s=%s: %s" % (path_prefix, xml_nume, v, e))
+				if lista:
+					stilListaSetari[id] = lista
+				else:
+					stilListaSetari.pop(id, None)
+
 			for borderset in windowstyle.findall("borderset"):
 				bsName = str(borderset.attrib.get("name"))
 				for pixmap in borderset.findall("pixmap"):
@@ -2181,15 +2348,20 @@ def loadSingleSkinData(desktop, skin, path_prefix, scara = None):
 def rezolutiaTemeiHds(final, poate=None):
 	"""Ecranul final al interfetei cu tema HD Satelit aleasa: 2560x1440 cand omul a ales 2K si placa l-a primit
 	(Components/HdsRezolutieTv.py), altfel `final` (rezolutia din <output>). Cu o tema straina aleasa nu se schimba
-	nimic: ea isi spune rezolutia. La refuz alegerea revine singura pe 1080p. Pune si SystemInfo["HdsRezolutie2K"]."""
+	nimic: ea isi spune rezolutia. La refuz alegerea revine singura pe 1080p. Pune si SystemInfo["HdsRezolutie2K"].
+	Automată (SK2): 2K numai pe iesirea 2160p si fara skin_user.xml aplicat (adaugirile omului nu se scaleaza)."""
 	from Components import HdsRezolutieTv as R
 	try:
 		if skinPornit == _HdsSkinuri.SKIN_IMAGINE and (final is None or final == bazaHds()):
-			cerut = R.deCerutLaPornire(True, config)
+			# skin_user.xml aplicat peste tema (SKU il scoate cand e scris pentru alta tema)
+			user = globals().get("_radacinaSkinUser")
+			skinUserAplicat = user is not None and any(r is user for _p, r in dom_skins)
+			cerut = R.deCerutLaPornire(True, config, skinUser=skinUserAplicat)
 			if cerut:
 				primit = (poate or rezolutiaPrimitaDePlaca)(cerut[0], cerut[1])
 				if R.dupaRaspunsPlaca(cerut, primit, config, intreaba=poate or rezolutiaPrimitaDePlaca):
-					skinNotice("tema HD Satelit la %dx%d (2K ales)" % cerut)
+					skinNotice("tema HD Satelit la %dx%d (%s)" % (cerut + ("Automată, iesirea 2160p" if R.aleasa(config) == R.RAUTO
+						else "2K ales",)))
 					final = cerut
 		else:
 			R.deCerutLaPornire(False, config)
@@ -2221,6 +2393,8 @@ def loadSkinData(desktop):
 	# tema externa: numele pe care le importa fisierele aduse de teme si de extensiile lor, inainte sa se incarce extensiile
 	if dosareSkinStraine:
 		_Tema().puneNumeLipsa(globals())
+	# rezolutia (skin_fallback_<inaltime>) si dosarele sunt hotarate abia acum: pozele cautate pana aici se cauta din nou
+	_uitaCaiPoze()
 
 def lookupScreen(name, style_id, numaiHds=False):
 	# ce a scris o tema in domScreens trece inaintea fisierelor (MOH; numai dosarul HDSatelit nu se ia de acolo)
@@ -2275,10 +2449,11 @@ def ecranulTemei(screen, names, style_id):
 					return n, x, p
 	return None, None, None
 
-def motivRezervaTema(screen, element, style_id):
-	"""De ce nu se poate folosi ecranul temei ((fel, detaliu)), inainte sa se construiasca ceva, sau None"""
+def motivRezervaTema(screen, element, style_id, detaliu=None):
+	"""De ce nu se poate folosi ecranul temei ((fel, detaliu)), inainte sa se construiasca ceva, sau None. `detaliu` (lista)
+	primeste ce nu are tema, pentru raport (HdsTemaExterna.motivEcran)."""
 	try:
-		return _Tema().motivEcran(screen, element, lambda n: lookupScreen(n, style_id)[0])
+		return _Tema().motivEcran(screen, element, lambda n: lookupScreen(n, style_id)[0], detaliu=detaliu)
 	except Exception as e:
 		skinNotice("verificarea ecranului temei: %s" % e)
 		return None
@@ -2289,11 +2464,14 @@ _ecraneFaraTema = set()
 def ecranFaraTema(screen):
 	_ecraneFaraTema.add(screen.__class__.__name__)
 
-def notaTema(name, cheie, valoare):
-	"""raportTema: ce nu s-a putut din tema pentru ecranul `name`"""
+def notaTema(name, cheie, valoare, detaliu=""):
+	"""raportTema: ce nu s-a putut din tema pentru ecranul `name`; la rezerva, `detaliu` = ce nu are tema (pentru raport,
+	HdsTemaExterna.detaliuRezerva)"""
 	e = raportTema.setdefault(name, {"rezerva": None, "lipsa": []})
 	if cheie == "rezerva":
 		e["rezerva"] = valoare
+		if detaliu:
+			e["detaliu"] = detaliu
 	elif valoare not in e["lipsa"] and len(e["lipsa"]) < 20:
 		e["lipsa"].append(valoare)
 
@@ -2528,12 +2706,24 @@ def readSkin(screen, skin, names, desktop):
 
 	# try all skins, first existing one have priority
 	myscreen, path = None, None
-	# tema externa: un nume pe care il are tema trece inaintea unuia pe care il are numai rezerva
-	if dosareSkinStraine and not screen.__class__.__name__ in _ecraneFaraTema:
+	# FUR: un ecran al imaginii care e alt ecran decat cel cu acelasi nume din OE-Alliance (SwapManager: lista discurilor, nu
+	# etichetele lab1..lab4) isi ia ecranul lui sub orice tema straina (hdsEcranPropriu = True pe clasa), fara rezerva si fara
+	# mesaj catre om: ecranul temei, facut pentru celalalt, nu are ce ii trebuie
+	if dosareSkinStraine and getattr(screen, "hdsEcranPropriu", False):
+		for n in names:
+			myscreen, path = lookupScreen(n, style_id, numaiHds=True)
+			if myscreen is not None:
+				name = n
+				break
+		if myscreen is None:
+			# fara ecran HDSatelit: cel scris in codul ecranului, nu al temei
+			path = None
+	elif dosareSkinStraine and not screen.__class__.__name__ in _ecraneFaraTema:
+		# tema externa: un nume pe care il are tema trece inaintea unuia pe care il are numai rezerva
 		n, myscreen, path = ecranulTemei(screen, names, style_id)
 		if myscreen is not None:
 			name = n
-	if myscreen is None:
+	if myscreen is None and not (dosareSkinStraine and getattr(screen, "hdsEcranPropriu", False)):
 		for n in names:
 			myscreen, path = lookupScreen(n, style_id)
 			if myscreen is not None:
@@ -2548,7 +2738,8 @@ def readSkin(screen, skin, names, desktop):
 		if path in dosareSkinStraine:
 			# si cand lipseste lista ecranului sau cea mai mare parte din componente; se hotaraste inainte sa se construiasca
 			# ceva, deci nu e nimic de desfacut. Ecranul care a cazut o data cu tema ramane pe rezerva (mytest.py).
-			motiv = ("cadere", "") if screen.__class__.__name__ in _ecraneFaraTema else motivRezervaTema(screen, myscreen, style_id)
+			detaliu = []
+			motiv = ("cadere", "") if screen.__class__.__name__ in _ecraneFaraTema else motivRezervaTema(screen, myscreen, style_id, detaliu)
 			if motiv:
 				gasit = False
 				for n in names:
@@ -2565,7 +2756,7 @@ def readSkin(screen, skin, names, desktop):
 					myscreen, path = None, None
 					gasit = True
 				if gasit:
-					notaTema(name, "rezerva", motiv)
+					notaTema(name, "rezerva", motiv, "; ".join(detaliu))
 					_Tema().rezervaFolosita(_HdsSkinuri.numeDinValoare(skinPornit) or skinPornit, name, motiv)
 		else:
 			lipsa = panouLipsa(myscreen, style_id)
@@ -2668,15 +2859,24 @@ def readSkin(screen, skin, names, desktop):
 					raise SkinError("component '%s' not found" % wname)
 				attributes = screen[wname].skinAttributes = [ ]
 				collectAttributes(attributes, widget, prefix, ignore=('name', 'conditional', 'excludes', 'objectTypes'))
+				# FUR: lista de setari din ecranul temei sau al unui plugin (sub o tema straina) ia ce nu are din stilul
+				# ferestrei, ca in OE-Alliance: fonturile din <configList> si randul centrat pe verticala
+				completare = []
+				if strain or (pluginStrain and dosareSkinStraine):
+					completare = completareListaSetari(screen[wname], style_id, set(a for a, v in attributes))
 				if sc is not None:
 					if wname == "config":
 						# lista de setari (eListboxPythonConfigContent) scrie cu "Regular;20" si "Regular;16" cand skinul
-						# nu da font si secondfont: numele si marimile acelea trec si ele prin scara
+						# nu da font si secondfont (nici din stilul ferestrei): numele si marimile acelea trec si ele prin scara
 						puse = set(a for a, v in attributes)
-						for a, v in (("font", "Regular;20"), ("secondfont", "Regular;16")):
-							if a not in puse:
+						date = set(a for a, v in completare)
+						for a, v, grup in (("font", "Regular;20", "font"), ("secondfont", "Regular;16", "valueFont")):
+							if not puse.intersection(_ECHIVALENTE_FONT[grup]) and grup not in date:
 								attributes.append((a, v))
-					screen[wname].skinAttributes = sc.atribute(attributes)
+					# fonturile stilului sunt in coordonatele ecranului: dupa scara, nu prin ea
+					screen[wname].skinAttributes = sc.atribute(attributes) + completare
+				else:
+					attributes.extend(completare)
 			elif wsource and strain and wsource in screen and hasattr(screen[wsource], "GUIcreate") and not hasattr(screen[wsource], "connectDownstream"):
 				# tema externa: source= pentru ce la noi e un element al ecranului (o tasta Button in loc de StaticText): atributele merg la el
 				attributes = screen[wsource].skinAttributes = [ ]

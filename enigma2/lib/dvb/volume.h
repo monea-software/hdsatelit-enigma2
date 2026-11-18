@@ -15,6 +15,7 @@ private:
 	void closeMixer(int fd);
 	
 	bool muted;
+	bool pistaPlaciiTacuta;   /* egalizatorul la canalele TV (HiSilicon): vezi setPistaPlaciiTacuta */
 	int leftVol, rightVol;
 	
 	int checkVolume(int vol);
@@ -30,6 +31,10 @@ public:
 	void volumeMute();
 	void volumeUnMute();	
 	void volumeToggleMute();
+	/* egalizatorul (lib/service/servicedvb.cpp, numai HiSilicon): cat sunetul unui canal TV trece prin procesor, pista
+	   decodorului placii tace (AUDIO_SET_MUTE), iar decodorul ramane pe PID-ul adevarat. Tacerea omului ramane a lui:
+	   volumeUnMute nu reda pista placii cat e tacuta aici, iar isMuted spune numai tacerea omului. */
+	void setPistaPlaciiTacuta(bool tacuta);
 			
 	int getVolume();
 	bool isMuted();

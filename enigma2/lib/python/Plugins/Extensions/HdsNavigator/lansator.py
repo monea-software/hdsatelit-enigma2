@@ -66,6 +66,16 @@
 # (--script) vin din scurtatura (aplicatie["argumente"]); programul poate fi alt motor (aplicatie["program"], de pilda
 # /usr/bin/hds-chromium, cu acelasi protocol). Profilul e al aplicatiei (dosar_date), separat de al navigatorului.
 #
+# MOUSE-UL (0.7.7): un mouse pus in receptor ramane al enigma2 si cat navigatorul are ecranul (faraMouse: lansatorul nu
+# apuca mouse-urile simple; eRCInput lasa evenimentele mouse-ului sa treaca si cu lacatul pus, lib/driver/rc.cpp), iar
+# Components/HdsMouseUsb.py le da ecranului (HdsNavigatorEcran.hdsMouseMiscare / hdsGestMouse), care le trimite aici
+# (Navigator.mouse): miscarea porneste indicatorul lansatorului (sageata desenata de el, ca la ALBASTRU) si il muta
+# ("indicator-la"), clicul stanga = apasare si eliberare acolo ("tasta 352 1/0", clic in pagina), rotita = sagetile
+# SUS/JOS (navigarea paginii, indicatorul oprit), clicul dreapta = Inapoi. Indicatorul pornit de mouse se opreste singur
+# dupa MOUSE_ASCUNDE_MS fara mouse si la prima sageata a telecomenzii, ca sagetile sa mearga iar pe selectie. Clicurile
+# din panoul web (/api/mouse) trec pe acelasi drum. Comenzile exista in lansator din 0.4.0, deci merge si cu binarul de
+# acum. In modul HbbTV mouse-ul nu se trimite (aplicatiile HbbTV se folosesc cu tastele).
+#
 # Modulul nu importa enigma2 la incarcare: tot ce tine de enigma2 trece prin Mediu, inlocuit la probele de pe PC.
 
 import base64
@@ -225,7 +235,9 @@ def scrie_jurnal_rotit(cale, bloc, maxim=JURNAL_OCTETI_MAX):
 
 
 TERMEN_PORNIRE_S = 20      # de la pornirea procesului pana la „PORNIT”
-TERMEN_INCARCARE_S = 30     # de la „PORNIT” pana la prima pagina desenata
+TERMEN_INCARCARE_S = 30     # fara niciun pas inainte al progresului atata timp (de la "PORNIT" sau de la ultimul
+                            # "PROGRES" mai mare) pana la prima pagina desenata (0.7.7, HB4: pe Solo SE paginile grele
+                            # treceau de 30 s de la pornire cu progresul inca urcand)
 TERMEN_VIU_S = 10           # fara niciun rand atata timp: navigatorul e blocat
 TERMEN_ASCUNS_MS = 2000     # asteptarea lui „ASCUNS” inainte de a lua ecranul inapoi oricum
 OPRIRE_SIGTERM_S = 3
@@ -253,6 +265,51 @@ SCARA_PAGINA_1080 = 1.25
 # reporneste singur pe procesor ("REZERVA procesor proces-web-cazut"): o pornire in plus, cu procesorul plin, cat se
 # descifreaza canalul. Dupa prima cadere, pana la repornirea interfetei, navigatoarele (si HbbTV) pornesc direct cu --cpu.
 _gl_cazut = [False]
+# 0.7.6 (HB3): caderea GL de dinaintea primei pagini (Mali-450: procesul web cade pe loc, inainte de orice cadru) sau
+# GL fara niciun cadru ramane tinuta minte si dupa repornirea interfetei, in fisierul de mai jos, cu amprenta
+# navigatorului (marimea si data lui /usr/bin/hds-navigator): pana acum, dupa fiecare repornire prima aplicatie (de
+# pilda HbbTV la ROSU) pornea iar pe GL, cadea si pornea a doua oara, pe procesor. Un navigator nou (alta amprenta)
+# incearca GL din nou, o data. O cadere dupa prima pagina (o pagina anume) ramane numai pana la repornire, ca inainte.
+FISIER_GL_CAZUT = "/etc/enigma2/hds-navigator-gl-cazut"
+
+
+def amprenta_navigator(cale=None):
+	"""Amprenta navigatorului ("marimea data"), sau "" cand lipseste."""
+	try:
+		st = os.stat(cale or CALE_LANSATOR)
+	except OSError:
+		return ""
+	return "%d %d" % (st.st_size, int(st.st_mtime))
+
+
+def gl_cazut_pe_disc(fisier=None, cale=None):
+	"""Adevarat cand GL a cazut inainte de prima pagina cu acest navigator (aceeasi amprenta), la o pornire de dinainte."""
+	a = amprenta_navigator(cale)
+	if not a:
+		return False
+	try:
+		with open(fisier or FISIER_GL_CAZUT) as f:
+			return f.read().strip() == a
+	except (IOError, OSError):
+		return False
+
+
+def noteaza_gl_cazut(fisier=None, cale=None):
+	"""Scrie amprenta navigatorului in FISIER_GL_CAZUT (prin fisier temporar, ca o oprire sa nu lase jumatate)."""
+	a = amprenta_navigator(cale)
+	if not a:
+		return False
+	fisier = fisier or FISIER_GL_CAZUT
+	try:
+		with open(fisier + ".tmp", "w") as f:
+			f.write(a + "\n")
+		os.rename(fisier + ".tmp", fisier)
+		return True
+	except (IOError, OSError) as e:
+		_jurnal("caderea GL nu s-a putut tine minte: %s" % e)
+		return False
+
+
 TEXT_MAXIM = 4096
 PRIORITATE_TASTE = -0x7FFFFFFF
 
@@ -276,6 +333,42 @@ FERESTRE_PAGINA = ("tastatura", "adresa", "autentificare", "dialog", "alegere", 
 
 # flagurile enigma2 pentru taste (eActionMap): apasare, ridicare, repetare, lunga, ASCII
 _VALOARE_TASTA = {0: 1, 1: 0, 2: 2}
+
+# mouse-ul (vezi antetul): codurile tastelor trimise lansatorului si cat ramane indicatorul pornit fara mouse
+# cat ramane sageata mouse-ului fara mouse: lansatorul arata la fiecare pornire a indicatorului cateva secunde textul lui
+# de ajutor, deci nu prea des (dupa o pauza de citit), dar nici sageata uitata peste film
+MOUSE_ASCUNDE_MS = 8000
+MOUSE_ROTITA_MAXIM = 3      # cel mult atatea sageti la o rotire (ca in Components/HdsMouseEcran, TASTE_ROTITA)
+_KEY_OK, _KEY_UP, _KEY_DOWN, _KEY_LEFT, _KEY_RIGHT, _KEY_BACK = 352, 103, 108, 105, 106, 158
+_KEY_CHANNELUP, _KEY_CHANNELDOWN = 402, 403
+_SAGETI = (_KEY_UP, _KEY_DOWN, _KEY_LEFT, _KEY_RIGHT)
+
+
+def faraMouse(cai, fel=None):
+	"""Dispozitivele de intrare date lansatorului (--intrare), fara mouse-urile simple (REL_X, REL_Y si BTN_LEFT, fara
+	tastatura: Components/InputDevice.felDupaTaste): lansatorul nu le apuca (EVIOCGRAB), deci mouse-ul ramane al enigma2,
+	care il trimite navigatorului (antetul, MOUSE-UL). Un dispozitiv care nu se poate citi ramane in lista, ca inainte;
+	o tastatura cu touchpad ramane a lansatorului (tastele ei merg in pagina)."""
+	if fel is None:
+		fel = _felDispozitiv
+	return [c for c in cai if fel(c) != "mouse"]
+
+
+def _felDispozitiv(cale):
+	try:
+		from Components.InputDevice import felDupaTaste
+	except ImportError:
+		return None
+	try:
+		fd = os.open(cale, os.O_RDONLY | os.O_NONBLOCK)
+	except OSError:
+		return None
+	try:
+		return felDupaTaste(fd)
+	except Exception:
+		return None
+	finally:
+		os.close(fd)
 
 _activ = [None]
 
@@ -389,9 +482,10 @@ class Mediu(object):
 
 	def intrari(self):
 		try:
-			return sorted(os.path.join("/dev/input", n) for n in os.listdir("/dev/input") if n.startswith("event"))
+			cai = sorted(os.path.join("/dev/input", n) for n in os.listdir("/dev/input") if n.startswith("event"))
 		except OSError:
 			return []
+		return faraMouse(cai)
 
 	def memorie_libera_kb(self):
 		try:
@@ -632,8 +726,11 @@ class Navigator(object):
 		self.stare = OPRIT
 		self.desen = ""
 		self.rezerva = ""
+		self._prima_venita = False      # PRIMA-PAGINA venita (o cadere GL dupa ea nu se tine minte pe disc)
 		self.camp = "niciunul"
 		self.cu_indicator = False
+		self._zona = None           # pagina pe ecranul enigma2 (x, y, latime, inaltime), din argumente(); pentru mouse
+		self._mouse_indicator = False   # indicatorul pornit de mouse (se opreste singur); False cand l-a pornit omul
 		self.marire = 0
 		self.progres = -1
 		self.timpi = {}             # randurile „TIMP fel ms”: raspunsul la taste, rezumat in jurnal la inchidere
@@ -663,6 +760,7 @@ class Navigator(object):
 		self._ceas_ascuns = self.m.ceas_nou(self._termenAscuns)
 		self._ceas_oprire = self.m.ceas_nou(self._treaptaOprire)
 		self._ceas_erori_pagina = self.m.ceas_nou(self._scrieEroriPagina)
+		self._ceas_mouse = self.m.ceas_nou(self._mouseGata)
 		self._treapta = 0
 		self._paze = set()
 		self._paza_pornire = False
@@ -676,6 +774,7 @@ class Navigator(object):
 		hbbtv = self.mod == MOD_HBBTV
 		aplicatie = self.mod == MOD_APLICATIE
 		margini = []
+		self._zona = (0, 0, latime, inaltime)
 		if hbbtv or aplicatie:
 			latime_css = LATIME_CSS
 			scara = latime / float(LATIME_CSS)
@@ -688,6 +787,7 @@ class Navigator(object):
 			latime_css = int(round(latime / (SCARA_PAGINA_1080 * k)))
 			scara = latime / float(latime_css)
 			margini = ["--margine-x", str(mx), "--margine-y", str(my)]
+			self._zona = (mx, my, latime, inaltime)
 		inaltime_css = int(round(inaltime / scara))
 		a = ["--latime", str(latime_css), "--inaltime", str(inaltime_css), "--scara", "%.4f" % scara,
 			"--ascuns", "--oom", "1000", "--limba", self.m.limba()] + margini
@@ -697,6 +797,9 @@ class Navigator(object):
 			for i in [] if (hbbtv or aplicatie) else self.m.intrari():
 				a += ["--intrare", i]
 		s = self.setari or {}
+		if not _gl_cazut[0] and gl_cazut_pe_disc():
+			_gl_cazut[0] = True             # cazut inainte de prima pagina la o pornire de dinainte (FISIER_GL_CAZUT)
+			_jurnal("desenul pe procesor: GL a cazut la o pornire de dinainte (%s)" % FISIER_GL_CAZUT)
 		if s.get("desen") == "procesor" or _gl_cazut[0]:
 			a.append("--cpu")
 		if not hbbtv and not aplicatie and s.get("chenar", True) is not False:
@@ -809,17 +912,30 @@ class Navigator(object):
 		return CALE_LANSATOR
 
 	def _prefixDecodor(self):
-		"""Modul HbbTV cu serverul imprumutului (hbbtv["decodor"]): ["/usr/bin/env", "HDS_DECODOR=...", ...]; altfel []."""
+		"""Cu serverul imprumutului (modul HbbTV: hbbtv["decodor"]; modul aplicatie pe navigatorul imaginii, de pilda
+		YouTube pentru televizor: aplicatie["decodor"]): ["/usr/bin/env", "HDS_DECODOR=...", ...]. Fara el, cu WebKit-ul
+		cu video SAU cand raspunsul nu e stiut inca (None: cautarea de la pornirea enigma2 inca merge): sink-urile placii
+		scoase din registrul procesului (HdsDecodorWeb.mediu_fara_placa; pe un WebKit fara video nu schimba nimic).
+		Altfel []."""
+		cale = ""
 		if self.mod != MOD_HBBTV:
-			return []
-		cale = _text(self.hbbtv.get("decodor"))
-		if not cale:
-			return []
+			aplicatie = getattr(self, "aplicatie", None) or {}
+			if self.mod == MOD_APLICATIE and aplicatie.get("program", CALE_LANSATOR) != CALE_LANSATOR:
+				return []                    # alt motor (Chromium): nu e WebKit-ul imaginii
+			if self.mod == MOD_APLICATIE:
+				cale = _text(aplicatie.get("decodor"))
+		else:
+			cale = _text(self.hbbtv.get("decodor"))
 		try:
 			from Components import HdsDecodorWeb
 		except ImportError:
 			return []
-		return HdsDecodorWeb.mediu_navigator(cale)
+		if cale:
+			# HbbTV: si filmele DASH date direct in <video src> (HdsDecodorWeb.MEDIU_HBBTV_FLUXURI)
+			return HdsDecodorWeb.mediu_navigator(cale, hbbtv=self.mod == MOD_HBBTV)
+		if HdsDecodorWeb.webkit_cu_video(numai_stiut=True) is not False:
+			return HdsDecodorWeb.mediu_fara_placa()
+		return []
 
 	def _nuAPornit(self, motiv):
 		self._motiv = motiv
@@ -937,6 +1053,75 @@ class Navigator(object):
 		"""Indicatorul (mouse din sageti): pornit, oprit, sau comutat (None)."""
 		self._scrie("indicator" if activ is None else "indicator %d" % (1 if activ else 0))
 
+	# ------------------------------------------------------------ mouse-ul (antetul, MOUSE-UL)
+
+	def peEcran(self):
+		"""Pagina se vede si mouse-ul ii merge (nu in modul HbbTV)."""
+		return self.stare == ARATAT and self.mod != MOD_HBBTV
+
+	def _punctPagina(self, x, y):
+		"""Pixelii ecranului enigma2 -> pixelii paginii lansatorului (fara margini), in pagina."""
+		zx, zy, zl, zi = self._zona or ((0, 0) + tuple(self.m.marime_ecran()))
+		return (min(max(int(x) - zx, 0), max(zl - 1, 0)), min(max(int(y) - zy, 0), max(zi - 1, 0)))
+
+	def _mouseIndicator(self, x, y):
+		if not self._mouse_indicator and not self.cu_indicator:
+			self._scrie("indicator 1")
+			self._mouse_indicator = True
+		self._scrie("indicator-la %d %d" % self._punctPagina(x, y))
+		if self._mouse_indicator:
+			self._ceas_mouse.start(MOUSE_ASCUNDE_MS, True)
+
+	def _mouseOpreste(self):
+		self._ceas_mouse.stop()
+		if self._mouse_indicator:
+			self._mouse_indicator = False
+			if self.stare in (ARATAT, ASCUNS):
+				self._scrie("indicator 0")
+				self.cu_indicator = False   # starea "INDICATOR 0" vine mai tarziu; o miscare de pana atunci il reporneste
+
+	def _mouseGata(self):
+		self._mouseOpreste()
+
+	def _tastaScurta(self, cod):
+		self._scrie("tasta %d 1" % cod)
+		self._scrie("tasta %d 0" % cod)
+
+	def mouse(self, fel, x=None, y=None, pasi=0):
+		"""Mouse-ul in pagina; x, y in pixelii ecranului enigma2. fel: "misca" (sageata acolo), "clic" (sageata acolo,
+		apoi clic in pagina), "rotita" (pasi > 0 = in jos: sageti JOS, < 0 = SUS; cu indicatorul pornit de om, o pagina cu
+		CH-/CH+), "inapoi" (Inapoi: in aplicatii prin harta aplicatiei, in navigator pagina de dinainte). True daca
+		navigatorul l-a luat; False cand nu are ecranul (atunci mouse-ul ramane al enigma2)."""
+		if not self.peEcran():
+			return False
+		if fel in ("misca", "clic"):
+			if x is None or y is None:
+				return False
+			self._mouseIndicator(x, y)
+			if fel == "clic":
+				self._tastaScurta(_KEY_OK)
+			return True
+		if fel == "rotita":
+			pasi = int(pasi or 0)
+			if not pasi:
+				return True
+			if self.cu_indicator and not self._mouse_indicator:
+				self._tastaScurta(_KEY_CHANNELDOWN if pasi > 0 else _KEY_CHANNELUP)
+				return True
+			self._mouseOpreste()
+			for _i in range(min(abs(pasi), MOUSE_ROTITA_MAXIM)):
+				self._tastaScurta(_KEY_DOWN if pasi > 0 else _KEY_UP)
+			return True
+		if fel == "inapoi":
+			cod = _KEY_BACK
+			if self.mod == MOD_APLICATIE:
+				cale, cod = tastaAplicatie(self.aplicatie.get("taste"), cod)
+				if cale != "navigator":
+					return True
+			self._tastaScurta(cod)
+			return True
+		return False
+
 	def scrie(self):
 		"""Ca tasta TEXT: tastatura pentru campul cu focalizare sau pentru primul camp de pe ecran."""
 		self._scrie("scrie")
@@ -1032,6 +1217,9 @@ class Navigator(object):
 			_jurnal("rezerva: %s" % self.rezerva)
 			if "proces-web-cazut" in cuv or "fara-cadre" in cuv:
 				_gl_cazut[0] = True
+				# inainte de prima pagina (sau fara niciun cadru): GL nu merge pe aceasta placa, tinut minte pe disc
+				if ("fara-cadre" in cuv or not self._prima_venita) and self.program() == CALE_LANSATOR:
+					noteaza_gl_cazut()
 			return
 		if fel == "REPORNIRE":
 			_jurnal("repornire pe procesor")
@@ -1041,9 +1229,17 @@ class Navigator(object):
 			_jurnal("%s: %s" % (fel.lower(), " ".join(cuv[1:3])[:30]))
 			return
 		if fel == "PROGRES" and len(cuv) > 1 and cuv[1].isdigit():
-			self.progres = int(cuv[1])
+			p = int(cuv[1])
 			if self.stare == INCARCARE:
-				self.a.laPas("incarcare", self.progres)
+				if p > self.progres:
+					self._ceas_incarcare.start(TERMEN_INCARCARE_S * 1000, True)   # termenul curge de la ultimul pas inainte
+				self.a.laPas("incarcare", p)
+			self.progres = p
+			return
+		if fel in ("PRIMUL-CADRU", "PRIMA-PAGINA-DEVREME") and len(cuv) > 2:
+			# hds-navigator r12: primul cadru dupa angajarea paginii / pagina aratata inainte de sfarsitul incarcarii
+			_jurnal("%s dupa %s ms, progres %s%%" % ("primul cadru" if fel == "PRIMUL-CADRU" else "prima pagina devreme",
+				cuv[1][:8], cuv[2][:4]))
 			return
 		if fel == "PRIMA-PAGINA":
 			self._primaPagina()
@@ -1154,6 +1350,7 @@ class Navigator(object):
 	# ------------------------------------------------------------ ecranul si telecomanda
 
 	def _primaPagina(self):
+		self._prima_venita = True
 		self._ceas_incarcare.stop()
 		if self.stare == INCARCARE and self.mod == MOD_HBBTV and self.strat_hbbtv:
 			# aplicatia HbbTV porneste ascunsa: ecranul il ia abia la Application.show() (ascultatorul cheama reia())
@@ -1219,6 +1416,8 @@ class Navigator(object):
 		"""Orice tasta ajunsa la enigma2 cat navigatorul e pe ecran merge la navigator (nu si la ecranele de sub el)."""
 		if self.stare != ARATAT:
 			return 0
+		if self._mouse_indicator and cod in _SAGETI and flag == 0:
+			self._mouseOpreste()      # sagetile telecomenzii merg iar pe selectie, nu pe sageata mouse-ului
 		if self.mod == MOD_APLICATIE:
 			fel, cod_nou = tastaAplicatie(self.aplicatie.get("taste"), cod)
 			if fel == "enigma2":
@@ -1425,8 +1624,9 @@ class Navigator(object):
 			ceas.stop()
 		self._paze.clear()
 		for t in (self._ceas_pornire, self._ceas_incarcare, self._ceas_viu, self._ceas_ascuns, self._ceas_oprire,
-				self._ceas_erori_pagina):
+				self._ceas_erori_pagina, self._ceas_mouse):
 			t.stop()
+		self._mouse_indicator = False
 		self._legaTaste(False)
 		self._desprinde()
 		self._c = None

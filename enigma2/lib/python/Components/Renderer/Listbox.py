@@ -5,6 +5,8 @@ from enigma import eListbox
 # HDSatelit: the rows kept visible below and above the selection in menus, choice lists and settings screens, so
 # the rows that do not fit are seen coming instead of hiding on a next page (eListbox.setScrollMargin; 0 = by page)
 MARGINE_DERULARE = 2
+# HDSatelit: the first list moved without a source is written to the log once, with its position and size
+_faraSursaScris = False
 
 
 def margineDerulare():
@@ -71,7 +73,23 @@ class Listbox(Renderer, object):
 	wrap_around = property(lambda self: self.__wrap_around, setWrapAround)
 
 	def selectionChanged(self):
-		self.source.selectionChanged(self.index)
+		# HDSatelit: a list whose source is gone (disconnectAll after the screen closed) or never had selectionChanged can
+		# still get a key while it is drawn; the move then has no one to tell, instead of an AttributeError that restarted
+		# the user interface (Listbox.py selectionChanged, source None)
+		source = self.source
+		if source is None or not hasattr(source, "selectionChanged"):
+			global _faraSursaScris
+			if not _faraSursaScris:
+				_faraSursaScris = True
+				loc = ""
+				try:
+					p, m = self.instance.position(), self.instance.size()
+					loc = " at %d,%d %dx%d" % (p.x(), p.y(), m.width(), m.height())
+				except Exception:
+					pass
+				print("[Listbox] selectionChanged without a source (%s)%s" % (type(source).__name__, loc))
+			return
+		source.selectionChanged(self.index)
 
 	def getIndex(self):
 		if self.instance is None:

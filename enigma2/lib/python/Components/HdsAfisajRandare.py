@@ -15,7 +15,8 @@ from PIL import Image, ImageDraw, ImageFont
 MARIMI = ((400, 240), (480, 320), (800, 480))
 T, S, C, G, R = "#DCE9F4", "#A5B9CE", "#42DDE5", "#F2BD68", "#FF7D8D"
 # Temele mari (alese la „Tema afișajului”): literele cele mai mari care incap, citite de la cativa metri.
-TEME_MARI = ("picon_mare", "text_mare", "ora_urmatoarea")
+TEME_MARI = ("picon_mare", "text_mare", "ora_urmatoarea", "picon_ora", "picon_emisiune", "picon_ora_emisiune")
+PISTA_BARA = "#2B3D52"   # pista barei de progres din temele mari cu emisiunea de acum (plinul e C)
 PAS_MARE = 1.06          # distanta dintre randurile unui text mare, fata de corpul literei
 REF_MARE = 100           # corpul la care se masoara textele mari (restul marimilor se socotesc proportional)
 UNUL_DIN_DOUA = 0.85     # un rand ramane un rand cat timp e macar atat de mare cat varianta pe mai multe randuri
@@ -554,6 +555,9 @@ def _temaMare(c):
 		# fara canal (filme, redare): numai ora, cat tot afisajul
 		ceasul((m, sus, lat, jos - sus))
 		return
+	if tema in ("picon_ora", "picon_emisiune", "picon_ora_emisiune"):
+		_temaPicon(c, tema, m, sus, lat, jos, ceasul)
+		return
 	if tema == "picon_mare":
 		hn, linii = int(h * .30), 1
 		fam = _familie(nume, "condensed")
@@ -591,6 +595,63 @@ def _temaMare(c):
 		c.mare(eticheta, (m, y, lat, he), maxim=he * 1.4, minim=int(h * .08), color=C)
 		y += he + g
 	c.mare(titlu, (m, y, lat, jos - y), maxim=h * .32, minim=int(h * .09), linii=2)
+
+
+def _baraEmisiune(c, box):
+	"""Bara de progres a emisiunii de acum in temele cu picon: pista si plinul, cu capete rotunde; numai cu
+	„Bara de progres colorată” (scena["bara"]) si cand emisiunea are progres (ora sigura, emisiunea in desfasurare)."""
+	p = c.s.get("progres")
+	if not c.s.get("bara") or p is None:
+		return False
+	x, y, w, h = [int(round(v)) for v in box]
+	r = h // 2
+	c.d.rounded_rectangle((x, y, x + w - 1, y + h - 1), radius=r, fill=PISTA_BARA)
+	plin = int(round(w * max(0.0, min(1.0, float(p)))))
+	if plin >= h:
+		c.d.rounded_rectangle((x, y, x + plin - 1, y + h - 1), radius=r, fill=C)
+	elif plin > 0:
+		c.d.ellipse((x, y, x + h - 1, y + h - 1), fill=C)
+	return True
+
+
+def _temaPicon(c, tema, m, sus, lat, jos, ceasul):
+	"""Temele cu picon alese de om: piconul si ora (picon_ora), piconul si emisiunea de acum (picon_emisiune), piconul,
+	ora si emisiunea de acum (picon_ora_emisiune); sub emisiune bara ei de progres (_baraEmisiune). Fara picon: textele
+	iau si locul lui; fara emisiune: numele canalului in locul titlului."""
+	s, (w, h) = c.s, c.marime
+	ch = s.get("canal") or {}
+	nume = ch.get("nume", "")
+	sigla = ch.get("sigla", "")
+	e = ch.get("emisiune") or {}
+	titlu = e.get("titlu") or nume or _("Program indisponibil")
+	g = int(h * .03)
+	if tema == "picon_ora":
+		hc = int((jos - sus) * .42)
+		if sigla and c.imagine(sigla, (m, sus, lat, jos - sus - hc - g)):
+			ceasul((m, jos - hc, lat, hc))
+		else:
+			ceasul((m, sus, lat, jos - sus))
+		return
+	bara = bool(s.get("bara")) and s.get("progres") is not None and bool(e.get("titlu"))
+	hb = max(6, int(h * .035)) if bara else 0
+	jos_text = jos - (hb + g if bara else 0)
+	ht = int((jos - sus) * (.36 if tema == "picon_emisiune" else .32))
+	sus_text = jos_text - ht
+	if tema == "picon_emisiune":
+		are = bool(sigla) and c.imagine(sigla, (m, sus, lat, sus_text - g - sus))
+		if not are:
+			sus_text = sus
+	else:
+		# randul de sus: piconul in stanga, ora in dreapta; fara picon, ora pe tot randul
+		hr = sus_text - g - sus
+		lp = int(lat * .46)
+		if sigla and c.imagine(sigla, (m, sus, lp, hr)):
+			ceasul((m + lp + g, sus, lat - lp - g, hr))
+		else:
+			ceasul((m, sus, lat, hr))
+	c.mare(titlu, (m, sus_text, lat, jos_text - sus_text), maxim=h * .30, minim=int(h * .09), linii=2)
+	if bara:
+		_baraEmisiune(c, (m, jos - hb, lat, hb))
 
 
 def randeaza(scena, marime=(480, 320), audit=None):

@@ -97,6 +97,9 @@ PAS_CEAS_MS = 250
 ERORI_PE_MINUT = 5
 JURNAL_RANDURI = 300
 MESAJ_MAX = 300
+# un rand al stivei (randul sursei, sublinierea ^~~~ de sub el) mai lung de atat se taie: pluginurile cu codul ascuns
+# intr-un singur rand (exec pe zeci de KB de base64) faceau din fiecare raport si jurnal de cadere ~65 KB
+RAND_STIVA_MAX = 500
 CORP_MAX = 1024 * 1024
 FISIER_MAX = 5 * 1024 * 1024
 FARA_EXTENSIE_MAX = 256 * 1024
@@ -111,6 +114,8 @@ ANTET_CHEI = ("format", "cheie", "receptor_anonim", "model", "imagine", "build",
 	"functionare_s", "plugin", "cale", "pachet", "pachet_versiune", "pachet_sursa", "plugin_versiune",
 	"amprenta_fisiere", "semnatura", "cauza", "exceptie", "mesaj", "erori_sesiune")
 SECTIUNI = ("stiva", "jurnal", "fisiere", "pluginuri_externe", "surse_opkg", "jurnal_cadere")
+# numai cand au ceva, dupa SECTIUNI (MI9: fisierele insotitoare ale unor pluginuri, INSOTITOARE)
+SECTIUNI_OPTIONALE = ("insotitoare",)
 
 # dosarele Plugins/<fel>/<nume> ale imaginii: lib/python/Plugins din sursa si pachetul hdsatelit-skin (HdsSkinSetari)
 PLUGINURI_IMAGINE = frozenset((
@@ -138,7 +143,10 @@ CAUZA_INCARCARE = "incarcare"
 _OCTETI_TEXT = re.compile(r"can't concat (?:str|bytes) to (?:bytes|str)|can only concatenate str \(not \"bytes\"\) to str"
 	r"|'str' object has no attribute 'decode'|'bytes' object has no attribute 'encode'|a bytes-like object is required"
 	r"|cannot use a (?:string|bytes) pattern on a (?:bytes|string)-like object")
-_PYTHON2_NUME = re.compile(r"name '(?:unicode|basestring|xrange|raw_input|long|unichr|execfile|reload)' is not defined")
+# NB2 (0.7.6, raportul 266302): si file, cmp, coerce, apply, buffer, intern, reduce (aceleasi nume ca la traducator,
+# Components/HdsPython2Traducere._NUME_PY2); NeoBoot v10 `open = file` iesea "interna"
+_PYTHON2_NUME = re.compile(r"name '(?:unicode|basestring|xrange|raw_input|long|unichr|execfile|reload|file|cmp|coerce|apply|"
+	r"buffer|intern|reduce)' is not defined")
 _INTERNET = frozenset(("URLError", "HTTPError", "timeout", "TimeoutError", "ConnectionError", "gaierror", "SSLError"))
 _FISIER = frozenset(("FileNotFoundError", "PermissionError", "IsADirectoryError"))
 
@@ -151,6 +159,23 @@ NUME_SECRETE = ("*.key", "softcam*", "oscam*", "ncam*", "cccam*", "mgcamd*", "ne
 	"*.crt", "*.pfx", "settings", "id_rsa*", "id_ed25519*", "id_ecdsa*", ".env", "passw*", "credential*", "hds_iptv*")
 # un rand cu o parola, un jeton sau o cheie cu valoare; cheia poate fi intre ghilimele (JSON)
 _SECRET_RAND = re.compile(r"(?i)(?:pass|passwd|password|pwd|token|secret|apikey|api_key)[\"']?\s*[=:](.*)")
+
+# MI9 (0.7.6, TODO NB2 15.11 11:27): fisierele din afara dosarului pluginului care spun de ce a cazut, puse in raport ca
+# sectiunea [insotitoare] (in textul raportului: serverul primeste in pachetul de fisiere numai fisiere de sub dosarul
+# pluginului, fara .log). NeoBoot: scriptul schimbarii de imagine (switch_image.py, in Extensions/NeoBootAurora sau pe
+# discul imaginilor, /media/<loc>/.neoboot-aurora) si jurnalul lui (/tmp/neoboot-aurora-sync.log; jurnalul 2130, raportul
+# 497094: schimbarea de imagine iese cu eroare pe Vu+ Solo 4K, iar scriptul si jurnalul nu veneau in raport).
+# Cheia: pluginul (Extensions/<nume>); valorile: cai sau tipare glob. Un fisier .log se ia numai de la coada.
+INSOTITOARE = {
+	"Extensions/NeoBoot": (
+		PREFIX_PLUGINURI + "Extensions/NeoBootAurora/switch_image.py",
+		"/media/*/.neoboot-aurora/switch_image.py",
+		"/tmp/neoboot-aurora-sync.log",
+	),
+}
+INSOTITOR_MAX = 64 * 1024          # un script: cel mult atat, de la inceput
+JURNAL_INSOTITOR_MAX = 20 * 1024   # un jurnal: ultimii atatia octeti
+INSOTITOARE_MAX = 4                # fisiere pe raport (pot fi mai multe discuri cu .neoboot-aurora)
 
 # masca datelor omului (ca tools/hds-raport.sh.in): adresele web intregi, IPv4 a.b.x.x, MAC cu producatorul, e-mail
 _URL = re.compile(r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s\"'<>]+")
@@ -178,6 +203,43 @@ def _jurnal(text):
 
 def _r(cale):
 	return RADACINA + cale if RADACINA else cale
+
+
+# ------------------------------------------------------------------ programul imaginii schimbat sub interfata
+# 0.7.7 (UPD, asistenta 683170, pachetul de testeri 2445, TODO 16.11 00:10): un opkg care a schimbat enigma2-hdsatelit
+# cat interfata ruleaza (o extensie care il trage, asistenta, linia de comanda, reinstalarea dupa copia setarilor) lasa
+# pe disc alt program decat cel pornit. Pluginurile C++ si modulele Python noi, incarcate atunci in procesul vechi, cad
+# (ImportError "undefined symbol: _ZN7eThread4killEv", ServiceApp r11 facut pe 0.7.6 in enigma2 0.7.5): eroarea vine din
+# amestec, nu din plugin, deci nu pleaca raportul de plugin extern, iar Extensii nu mai recitesc pluginurile si
+# repornesc interfata (Components/HdsExtensiiLucru.reincarcaPluginuri).
+EXECUTABIL_PORNIT = "/proc/self/exe"
+_STERS = " (deleted)"
+
+
+def imagineSchimbataPeDisc(exe=None, citesteLegatura=None, stare=None):
+	"""True cand programul enigma2 de pe disc nu mai e cel care ruleaza in acest proces. Se ia din proces, nu din
+	versiunea scrisa pe disc: opkg dezarhiveaza cu unlink, deci programul nou are alt inod, iar /proc/self/exe duce tot la
+	cel pornit (cu " (deleted)" cand calea lui nu mai e a lui). Numai in procesul enigma2; in orice alt proces (probele de
+	pe PC) si la orice eroare de citire: False. Nu arunca."""
+	exe = exe or EXECUTABIL_PORNIT
+	citesteLegatura = citesteLegatura or os.readlink
+	stare = stare or os.stat
+	try:
+		cale = citesteLegatura(exe)
+	except (OSError, ValueError, NotImplementedError):
+		return False
+	sters = cale.endswith(_STERS)
+	if sters:
+		cale = cale[:-len(_STERS)]
+	if os.path.basename(cale) != "enigma2":
+		return False
+	if sters:
+		return True
+	try:
+		pornit, pe_disc = stare(exe), stare(cale)
+	except OSError:
+		return True       # programul nu mai e la calea lui
+	return (pornit.st_dev, pornit.st_ino) != (pe_disc.st_dev, pe_disc.st_ino)
 
 
 # ------------------------------------------------------------------ decizia
@@ -374,6 +436,12 @@ def _dupaDecizie(fel, nume, cadru, tip, valoare, stiva, apel, jurnal,
 		_programeaza()
 		return
 	st["semnaturi"].add(sem)
+	if imagineSchimbataPeDisc():
+		# 0.7.7 (UPD): procesul vechi cu programul imaginii nou pe disc; repornirea interfetei o repara, raportul ar minti
+		_jurnal("eroare in pluginul extern %s dupa schimbarea programului imaginii pe disc (interfata trebuie repornita): "
+			"raportul nu pleaca" % nume)
+		_programeaza()
+		return
 	cod = CAUZA_INCARCARE if incarcare else cauza(tip, valoare)
 	if cod == "modul-lipsa":
 		# un modul Python din feedul nostru se instaleaza singur (Components/HdsModuleLipsa.py); raportul pleaca oricum
@@ -451,6 +519,17 @@ def raporteazaRefuz(fel, nume, valoare, acum=None, mono=None):
 
 # ------------------------------------------------------------------ raportul: compunerea (firul enigma2, ieftina)
 
+def stivaText(tip, valoare, stiva):
+	"""traceback.format_exception intr-un text, cu randurile mai lungi de RAND_STIVA_MAX taiate (ramane inceputul lor si
+	cate semne s-au taiat); cadrele, fisierele, randurile si mesajul de la coada raman toate."""
+	randuri = []
+	for rand in "".join(traceback.format_exception(tip, valoare, stiva)).split("\n"):
+		if len(rand) > RAND_STIVA_MAX:
+			rand = "%s ... [%d semne taiate]" % (rand[:RAND_STIVA_MAX], len(rand) - RAND_STIVA_MAX)
+		randuri.append(rand)
+	return "\n".join(randuri)
+
+
 def unRand(text, maxim=None):
 	"""Valoarea unui rand din antet: fara sfarsituri de rand, fara = la inceput."""
 	text = " ".join((text or "").replace("\r", " ").replace("\n", " ").split())
@@ -470,7 +549,7 @@ def masca(text):
 
 def textJurnalCadere(nume, tip, valoare, stiva):
 	"""Textul jurnalului de cadere (si al sectiunii [jurnal_cadere]): antetul, pluginul, stiva."""
-	return "%s\nPlugin extern: %s\n%s" % (ANTET, nume, "".join(traceback.format_exception(tip, valoare, stiva)))
+	return "%s\nPlugin extern: %s\n%s" % (ANTET, nume, stivaText(tip, valoare, stiva))
 
 
 def compuneRaport(fel, nume, cod, sem, tip, valoare, stiva, apel, jurnal, erori, acum, mono):
@@ -480,7 +559,7 @@ def compuneRaport(fel, nume, cod, sem, tip, valoare, stiva, apel, jurnal, erori,
 		"ora": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(acum)), "plugin": nume, "cale": "%s/%s" % (fel, nume),
 		"semnatura": sem, "cauza": cod, "exceptie": getattr(tip, "__name__", str(tip)),
 		"mesaj": unRand(masca(_text(valoare)), MESAJ_MAX), "erori_sesiune": str(erori)})
-	stiva_text = "".join(traceback.format_exception(tip, valoare, stiva)).rstrip("\n")
+	stiva_text = stivaText(tip, valoare, stiva).rstrip("\n")
 	if apel:
 		stiva_text += "\n" + apel
 	cadere = textJurnalCadere(nume, tip, valoare, stiva)
@@ -717,6 +796,52 @@ def fisierePlugin(cale_plugin):
 	return rez
 
 
+def _faraSecrete(text):
+	"""Randurile cu o parola, un jeton sau o cheie cu valoare inlocuite, apoi masca datelor omului."""
+	randuri = []
+	for rand in text.splitlines():
+		m = _SECRET_RAND.search(rand)
+		randuri.append("<rand ascuns: posibil secret>" if m and _valoare(m.group(1)) else rand)
+	return masca("\n".join(randuri))
+
+
+def fisiereInsotitoare(cale_plugin):
+	"""[(calea pe receptor, marime, textul)] pentru INSOTITOARE[cale_plugin]: scriptul de la inceput (INSOTITOR_MAX),
+	jurnalul de la coada (JURNAL_INSOTITOR_MAX), fara secrete si cu datele omului ascunse; fara legaturi, fara binare."""
+	import glob
+	rez = []
+	for tipar in INSOTITOARE.get(cale_plugin, ()):
+		cai = sorted(glob.glob(_r(tipar))) if "*" in tipar else [_r(tipar)]
+		for disc in cai:
+			if len(rez) >= INSOTITOARE_MAX:
+				return rez
+			try:
+				if os.path.islink(disc) or not os.path.isfile(disc):
+					continue
+				if any(fnmatch.fnmatch(os.path.basename(disc).lower(), s) for s in NUME_SECRETE):
+					continue
+				marime = os.path.getsize(disc)
+				with open(disc, "rb") as f:
+					if disc.endswith(".log") and marime > JURNAL_INSOTITOR_MAX:
+						f.seek(marime - JURNAL_INSOTITOR_MAX)
+						date = f.read(JURNAL_INSOTITOR_MAX)
+						date = date[date.find(b"\n") + 1:]
+					else:
+						date = f.read(INSOTITOR_MAX)
+			except (IOError, OSError):
+				continue
+			if b"\0" in date[:8192]:
+				continue
+			cale = disc[len(RADACINA):] if RADACINA and disc.startswith(RADACINA) else disc
+			rez.append((cale.replace("\\", "/"), marime, _faraSecrete(date.decode("utf-8", "replace"))))
+	return rez
+
+
+def textInsotitoare(insotitoare):
+	"""Textul sectiunii [insotitoare]: "== <cale> (<marime> octeti)" si continutul, pentru fiecare fisier."""
+	return "\n\n".join("== %s (%d octeti)\n%s" % (cale, marime, text.rstrip("\n")) for cale, marime, text in insotitoare)
+
+
 def amprenta(fisiere):
 	"""sha256 hex al listei "cale marime sha256" (un rand pe fisier, sortata): aceeasi versiune = aceeasi amprenta."""
 	return hashlib.sha256("".join("%s %d %s\n" % f[:3] for f in fisiere).encode("utf-8", "replace")).hexdigest()
@@ -798,6 +923,9 @@ def completeaza(raport):
 		"surse_opkg": "\n".join(surseOpkg()),
 		"jurnal_cadere": masca(raport["jurnal_cadere"]).rstrip("\n"),
 	}
+	insotitoare = fisiereInsotitoare(a["cale"])
+	if insotitoare:
+		raport["sectiuni"]["insotitoare"] = textInsotitoare(insotitoare)
 	return raport
 
 
@@ -806,6 +934,9 @@ def textRaport(antet, sectiuni):
 	randuri = ["%s=%s" % (k, unRand(antet.get(k, ""))) for k in ANTET_CHEI]
 	corp = "\n\n".join("[%s]\n%s" % (s, sectiuni.get(s, "").strip("\n")) if sectiuni.get(s, "").strip("\n")
 		else "[%s]" % s for s in SECTIUNI)
+	for s in SECTIUNI_OPTIONALE:
+		if sectiuni.get(s, "").strip("\n"):
+			corp += "\n\n[%s]\n%s" % (s, sectiuni[s].strip("\n"))
 	return "\n".join(randuri) + "\n\n" + corp + "\n"
 
 
@@ -813,7 +944,7 @@ def construieste(raport):
 	"""Textul raportului, cel mult CORP_MAX octeti: se taie intai [jurnal] (randurile vechi), apoi [fisiere]."""
 	sectiuni = dict(raport["sectiuni"])
 	text = textRaport(raport["antet"], sectiuni)
-	for s in ("jurnal", "fisiere", "pluginuri_externe", "stiva"):
+	for s in ("insotitoare", "jurnal", "fisiere", "pluginuri_externe", "stiva"):
 		while len(text.encode("utf-8")) > CORP_MAX and sectiuni.get(s):
 			randuri = sectiuni[s].split("\n")
 			sectiuni[s] = "\n".join(randuri[len(randuri) // 2 + 1:]) if len(randuri) > 1 else ""
@@ -1015,6 +1146,7 @@ def puneInCoada(text, cheie, acum=None):
 		with open(os.path.join(dosar, nume + ".nou"), "wb") as f:
 			f.write(gzip.compress(text.encode("utf-8")))
 		os.rename(os.path.join(dosar, nume + ".nou"), os.path.join(dosar, nume))
+		_coadaGoala[0] = False
 	except (IOError, OSError) as e:
 		_jurnal("coada rapoartelor: %s" % e)
 		return False
@@ -1067,24 +1199,33 @@ def trimiteCoada():
 	return trimise, len(coada())
 
 
+# FRZ 0.7.7 (pachetul de testeri 2445, Vu+ Uno 4K SE 0.7.6: firul interfetei 5,1 s in os.listdir <- coada <- porneste, la 20 s
+# dupa pornire, cand memoria interna e ocupata de pornirea tuturor): dosarul cozii nu se mai citeste pe firul interfetei. porneste
+# pune ceasul fara sa citeasca nimic; la fiecare tic firul cozii trimite ce gaseste si spune cate au ramas, iar ceasul se opreste
+# la ticul de dupa o coada goala.
+_coadaGoala = [False]
+
+
 def _lucruCoada():
 	try:
 		trimise, ramase = trimiteCoada()
+		_coadaGoala[0] = ramase == 0
 		_jurnal("coada rapoartelor: %d trimise, %d raman" % (trimise, ramase))
 	except Exception as e:
 		_jurnal("coada rapoartelor: %r" % (e,))
 
 
 def porneste():
-	"""Din mytest.py, la pornirea interfetei: cu rapoarte ramase in coada, ceasul de COADA_PAS_MS. Nu arunca."""
+	"""Din mytest.py, la pornirea interfetei: ceasul de COADA_PAS_MS, fara sa citeasca dosarul cozii aici (firul lui il
+	citeste la primul tic si opreste ceasul daca e gol). Nu arunca."""
 	try:
-		if coada():
-			_pornesteCeasCoada()
+		_pornesteCeasCoada()
 	except Exception as e:
 		_jurnal("pornirea cozii: %r" % (e,))
 
 
 def _pornesteCeasCoada():
+	_coadaGoala[0] = False      # un raport nou in coada: ceasul nu se mai opreste dupa ce a vazut-o goala
 	if _ceasCoada[0] is None:
 		from enigma import eTimer
 		t = eTimer()
@@ -1094,11 +1235,12 @@ def _pornesteCeasCoada():
 
 
 def _ticCoada():
-	if not coada():
+	if _firCoada[0] is not None and _firCoada[0].is_alive():
+		return
+	if _coadaGoala[0]:
+		# firul a gasit coada goala la ticul de dinainte (FRZ 0.7.7: fara os.listdir pe firul interfetei)
 		_ceasCoada[0].stop()
 		_ceasCoada[0] = None
-		return
-	if _firCoada[0] is not None and _firCoada[0].is_alive():
 		return
 	fir = threading.Thread(target=_lucruCoada, name="hds-plugin-coada")
 	fir.daemon = True
@@ -1111,7 +1253,9 @@ def _ticCoada():
 def textCauza(cod):
 	return {
 		"octeti-text": _("Pluginul a fost scris pentru alt fel de imagine și nu înțelege încă un răspuns al receptorului."),
-		"python2": _("Pluginul e făcut pentru imaginile vechi (Python 2) și nu poate rula așa pe această imagine."),
+		# MI9 (TODO NB2 15.11 11:27): imaginea traduce singura pluginurile de Python 2 (la import si din sursa, la citirea
+		# listei); cauza python2 la rulare inseamna o parte pe care traducerea n-a prins-o
+		"python2": _("Pluginul are o parte scrisă pentru imaginile vechi (Python 2), pe care imaginea nu a putut-o traduce singură."),
 		"modul-lipsa": _("Pluginului îi lipsește o componentă de care are nevoie."),
 		"tema": _("Pluginul cere un ecran pe care tema de acum nu îl are."),
 		"internet": _("Pluginul nu a putut lua date de pe internet."),

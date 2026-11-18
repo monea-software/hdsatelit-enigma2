@@ -49,6 +49,15 @@ public:
 	// a new PMT: the PIDs of the loop again
 	void updatePids();
 
+	// the bitrate of the service (BR2, eDVBServicePlay::getLiveBitrate): the recorder of the loop counts the TS payload of
+	// up to two PIDs (iDVBTSRecorder::setCountPID, slot 0 video, 1 audio). The wanted PIDs are kept here and given to every
+	// new recorder of the loop (a restart of the writer, play after a pause), and the bytes of the recorders before are
+	// kept, so getCountedBytes only grows while the PID stays the same. pid -1 stops a slot.
+	void setCountPID(int slot, int pid);
+	int getCountPID(int slot) const { return (slot == 0 || slot == 1) ? m_count_pid[slot] : -1; }
+	// false while no recorder runs (paused, between two writers): nothing is counted then
+	bool getCountedBytes(int slot, uint64_t &bytes);
+
 private:
 	eDVBServicePMTHandler& m_source_handler;
 	ePtr<iServiceScrambled> m_descrambler;
@@ -60,6 +69,9 @@ private:
 	ePtr<eConnection> m_record_event_conn;
 
 	int m_dvr_fd;
+	int m_count_pid[2];		// see setCountPID
+	uint64_t m_count_base[2];	// bytes counted by the recorders of the loop before the current one
+	void keepCountedBytes();	// before a recorder goes: its bytes into m_count_base
 	bool m_running;
 	bool m_stopping;
 	bool m_paused;

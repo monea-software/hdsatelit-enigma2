@@ -248,7 +248,9 @@ class JurnalZapAudio:
 		# referinta poate lipsi; un zero implicit nu ar fi o masurare valida.
 		dorite = (HdsSetariSunet.intarzieriDorite() or {}) if nav.getCurrentlyPlayingServiceReference() is not None else {}
 		c = getattr(config, "hds_setari_sunet", None)
-		avc = _alege(getattr(getattr(c, "volum_egal", None), "value", None), ("oprit", "usor", "puternic"))
+		# volumul egal: treptele AVC (HiSilicon) sau iesirea Auto Volume Level (Broadcom, 0.7.7 VOL)
+		avc = _alege(getattr(getattr(c, "volum_egal", None), "value", None),
+			("oprit", "usor", "puternic", "hdmi", "spdif", "dac"))
 		c = getattr(config, "hds_egalizator", None)
 		eq = _numar(getattr(getattr(c, "pornit", None), "value", None), maxim=1)
 		redare, lock = self._ui(nav)

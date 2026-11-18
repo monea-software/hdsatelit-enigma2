@@ -32,8 +32,13 @@
 
 import os
 import sys
+import threading
 
 SCRIERE_DUPA_S = 60
+# Scrierea din ceas (dupa 60 s pe canal) merge pe un fir (TJB, 15.11.2026): pe flash-ul ocupat (o actualizare care scrie
+# pachete) fsync a tinut firul interfetei 21,1 s (paznicul, SF8008 0.7.5, pachetul 2059). scrie_acum ramane pe loc
+# (repornirea ceruta asteapta fisierul pe disc). False = tot pe firul apelantului (probele vechi).
+FUNDAL = True
 TIPURI_RADIO = (2, 10)      # tipul serviciului DVB: radio, radio AAC
 CALE_CANAL = "/etc/enigma2/hds-ultimul-canal"
 CALE_SETARI = "/etc/enigma2/settings"
@@ -49,6 +54,9 @@ PARTI = (("tv", "tv_cale", "baza_tv"), ("radio", "radio_cale", "baza_radio"))
 
 _ceas = [None]
 _scris = [None]             # ce e acum in fisierul mic (dict), aflat o data
+_lacat = threading.Lock()   # o singura scriere odata (firul din ceas si scrie_acum)
+_de_scris = [None]          # (text, rand): ultima cerere a ceasului, luata de fir
+_fir = [None]
 
 
 def _jurnal(text):
@@ -149,28 +157,70 @@ def _scrie_sigur(cale, text):
 		pass
 
 
-def scrie_daca_s_a_schimbat():
-	"""Fisierul mic scris cand canalul (sau calea) tinut minte e altul decat cel din el. -> True la scriere."""
+def _cerere():
+	"""(text, rand) pentru fisierul mic cand canalul (sau calea) tinut minte e altul decat cel scris, altfel None."""
+	acum = _acum()
+	if _scris[0] is None:
+		_scris[0] = _citeste_perechi(CALE_CANAL) or {}
+		if not _scris[0]:
+			# fara fisier mic: ce e in settings e la zi pana la prima schimbare
+			_scris[0] = _din_setari() or {}
+	if all(_scris[0].get(k, "") == v for k, v in acum.items()):
+		return None
+	baza = _din_setari() or {}
+	rand = dict(acum)
+	rand["baza_tv"] = baza.get("tv", "")
+	rand["baza_radio"] = baza.get("radio", "")
+	return ("".join("%s=%s\n" % (k, rand[k]) for k in
+		("tv", "tv_cale", "radio", "radio_cale", "baza_tv", "baza_radio")), rand)
+
+
+def _scrie_cererile():
+	"""Pe fir: scrie ultima cerere a ceasului, cat timp mai vin (o cerere noua in timpul scrierii ia locul celei vechi)."""
+	while True:
+		with _lacat:
+			cerere, _de_scris[0] = _de_scris[0], None
+			if cerere is None:
+				_fir[0] = None
+				return
+			try:
+				_scrie_sigur(CALE_CANAL, cerere[0])
+				_scris[0] = cerere[1]
+			except Exception as e:
+				_jurnal("scrierea: %s" % e)
+
+
+def scrie_daca_s_a_schimbat(fundal=False):
+	"""Fisierul mic scris cand canalul (sau calea) tinut minte e altul decat cel din el. -> True la scriere (cu fundal si
+	FUNDAL: scrierea pornita pe fir). Fara fundal (scrie_acum) asteapta intai firul, apoi scrie pe loc."""
 	try:
-		acum = _acum()
-		if _scris[0] is None:
-			_scris[0] = _citeste_perechi(CALE_CANAL) or {}
-			if not _scris[0]:
-				# fara fisier mic: ce e in settings e la zi pana la prima schimbare
-				_scris[0] = _din_setari() or {}
-		if all(_scris[0].get(k, "") == v for k, v in acum.items()):
-			return False
-		baza = _din_setari() or {}
-		rand = dict(acum)
-		rand["baza_tv"] = baza.get("tv", "")
-		rand["baza_radio"] = baza.get("radio", "")
-		_scrie_sigur(CALE_CANAL, "".join("%s=%s\n" % (k, rand[k]) for k in
-			("tv", "tv_cale", "radio", "radio_cale", "baza_tv", "baza_radio")))
-		_scris[0] = rand
-		return True
+		if fundal and FUNDAL:
+			cerere = _cerere()
+			if cerere is None:
+				return False
+			with _lacat:
+				_de_scris[0] = cerere
+				if _fir[0] is None:
+					t = threading.Thread(target=_scrie_cererile, name="HdsCanalTinut")
+					t.daemon = True
+					_fir[0] = t
+					t.start()
+			return True
+		with _lacat:
+			_de_scris[0] = None
+			cerere = _cerere()
+			if cerere is None:
+				return False
+			_scrie_sigur(CALE_CANAL, cerere[0])
+			_scris[0] = cerere[1]
+			return True
 	except Exception as e:
 		_jurnal("scrierea: %s" % e)
 		return False
+
+
+def _scrie_din_ceas():
+	scrie_daca_s_a_schimbat(fundal=True)
 
 
 def programeaza_scrierea():
@@ -180,7 +230,7 @@ def programeaza_scrierea():
 		if _ceas[0] is None:
 			from enigma import eTimer
 			t = eTimer()
-			t.callback.append(scrie_daca_s_a_schimbat)
+			t.callback.append(_scrie_din_ceas)
 			_ceas[0] = t
 		_ceas[0].start(SCRIERE_DUPA_S * 1000, True)
 	except Exception as e:

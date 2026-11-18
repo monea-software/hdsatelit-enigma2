@@ -350,6 +350,133 @@ def dupa_update(linii, radacina='/'):
 		return False
 
 
+# /etc/opkg/all-feed.conf, pe care pluginurile scrise pentru imaginile OE-Alliance il gasesc acolo: primul rand
+# "src/gz <imaginea>-all <adresa>"; unele pluginuri iau din el numele imaginii, cu al doilea cuvant al randului sau cu
+# cut -d'-' -f1, si nu se mai incarca deloc cand lipseste. La noi sursele sunt in hdsatelit-feed.conf, deci randul sursei
+# de aici e o nota (#src/gz ...), pe care opkg si uneltele imaginii nu o citesc: nicio sursa dublata. Il scrie imaginea
+# inainte de prima citire a pluginurilor, ca sa vina si printr-o actualizare prin pachete; un all-feed.conf fara
+# ANTET_COMPAT (pus de om sau de un pachet) nu se atinge. Niciun pachet nu trebuie sa puna acest fisier: opkg refuza sa
+# instaleze peste un fisier care exista si nu e al niciunui pachet.
+FISIER_ALL = '/etc/opkg/all-feed.conf'
+NUME_ALL = 'hdsatelit-all'
+ANTET_COMPAT = '# HD Satelit: nota pentru pluginurile scrise pentru alte imagini. O scrie imaginea la pornire.'
+
+
+def text_all_feed(adresa=None):
+	"""Continutul lui all-feed.conf: nota cu forma unei surse OE-Alliance (al doilea cuvant: NUME_ALL), apoi ANTET_COMPAT."""
+	nota = '#src/gz %s %s' % (NUME_ALL, adresa) if adresa else '#src/gz %s' % NUME_ALL
+	return '%s\n%s\n# Sursele de pachete sunt in hdsatelit-feed.conf; randul de sus e numai o nota, opkg nu-l citeste.\n' % (
+		nota, ANTET_COMPAT)
+
+
+# /etc/issue si /etc/issue.net: primul rand e "hdsatelit <versiune> \n \l" (in issue.net "... %h"), scris de pachetul base-files
+# cu versiunea imaginii de pe stick. base-files nu se schimba printr-o actualizare prin pachete (oe-build/feed_actualizare.py,
+# TIPARE_IMAGINE_NOUA), deci dupa actualizari ramanea versiunea bazei (0.7.0 sau 0.7.1 pe receptoarele cu 0.7.6), iar pluginurile
+# care iau versiunea de acolo (al doilea cuvant al randului) si jurnalul de cadere (main/bsod.cpp, issue.net) o vedeau pe cea
+# veche. Imaginea pune la pornire, in locul ei, versiunea care ruleaza (randul version= din /etc/image-version, ca ecranul
+# Despre); restul fisierului ramane octet cu octet. Un fisier care nu incepe cu "hdsatelit <versiune>" (schimbat de om sau
+# de alt pachet) nu se atinge, unul lipsa nu se face, iar unul deja la zi nu se rescrie (nicio scriere pe flash la pornire).
+FISIERE_ISSUE = ('/etc/issue', '/etc/issue.net')
+_RAND_ISSUE = re.compile(br'\Ahdsatelit[ \t]+([0-9]{1,3}(?:\.[0-9]{1,3}){1,3})(?=[ \t\r\n]|\Z)')
+_ISSUE_MAX = 4096
+
+
+def versiune_care_ruleaza(radacina='/'):
+	"""Versiunea imaginii care ruleaza ("0.7.6", "0.3.10") din randul version= al /etc/image-version (16 sau 19 cifre,
+	Components/HdsJurnalVersiuni.py); "" pentru un fisier lipsa sau stricat si pentru un build de incercare."""
+	try:
+		from Components import HdsJurnalVersiuni as J
+	except ImportError:  # probe pe PC: modulul incarcat singur, din dosarul Components
+		import HdsJurnalVersiuni as J
+	return J.versiune_din_build(J.build_curent(P._cale(radacina, J.IMAGE_VERSION)))
+
+
+def _scrie_octeti(cale, date):
+	"""Inlocuieste fisierul dintr-o data (fisier.nou, apoi rename), cu drepturile celui vechi. None sau textul erorii."""
+	nou = cale + '.nou'
+	try:
+		mod = os.stat(cale).st_mode & 0o7777
+		with open(nou, 'wb') as fh:
+			fh.write(date)
+			fh.flush()
+			os.fsync(fh.fileno())
+		os.chmod(nou, mod)
+		os.replace(nou, cale)
+		return None
+	except (IOError, OSError) as e:
+		try:
+			os.remove(nou)
+		except OSError:
+			pass
+		return str(getattr(e, 'strerror', None) or e)
+
+
+def pune_versiunea_issue(radacina='/'):
+	"""Aduce la zi versiunea din /etc/issue si /etc/issue.net (vezi sus). Intoarce lista fisierelor scrise; nu ridica exceptii."""
+	scrise = []
+	try:
+		versiune = versiune_care_ruleaza(radacina)
+	except Exception as e:
+		_jurnal('issue: versiunea imaginii: %s' % e)
+		return scrise
+	if not versiune:
+		return scrise
+	nou_v = versiune.encode('ascii')
+	for fisier in FISIERE_ISSUE:
+		cale = P._cale(radacina, fisier)
+		try:
+			if os.path.islink(cale) or not os.path.isfile(cale):
+				continue
+			with open(cale, 'rb') as fh:
+				acum = fh.read(_ISSUE_MAX + 1)
+			if len(acum) > _ISSUE_MAX:
+				continue
+			m = _RAND_ISSUE.match(acum)
+			if not m or m.group(1) == nou_v:
+				continue
+			eroare = _scrie_octeti(cale, acum[:m.start(1)] + nou_v + acum[m.end(1):])
+		except Exception as e:
+			eroare = str(e)
+		if eroare:
+			_jurnal('%s: %s' % (fisier, eroare))
+		else:
+			scrise.append(fisier)
+	return scrise
+
+
+def pune_fisierele_compat(radacina='/'):
+	"""Pune sau tine la zi all-feed.conf (vezi mai sus) si versiunea din /etc/issue si /etc/issue.net (pune_versiunea_issue),
+	inainte de prima citire a pluginurilor (Components/PluginComponent.py). Fara /etc/opkg/opkg.conf (nu e un receptor, de pilda
+	probele de pe PC) nu scrie nimic. Intoarce lista fisierelor scrise."""
+	scrise = []
+	if not os.path.isfile(P._cale(radacina, '/etc/opkg/opkg.conf')):
+		return scrise
+	# issue inaintea intoarcerilor de mai jos: un all-feed.conf strain sau deja la zi nu opreste versiunea
+	scrise.extend(pune_versiunea_issue(radacina))
+	cale = P._cale(radacina, FISIER_ALL)
+	try:
+		with open(cale, 'r', encoding='utf-8', errors='replace') as fh:
+			acum = fh.read()
+	except (IOError, OSError):
+		acum = None
+	if acum is not None and ANTET_COMPAT not in acum:
+		return scrise
+	adresa = None
+	for nume, adr, _f in _surse_din_alte_fisiere(radacina):
+		if nume == NUME_ALL:
+			adresa = adr
+			break
+	text = text_all_feed(adresa)
+	if acum == text:
+		return scrise
+	eroare = _scrie(cale, text)
+	if eroare:
+		_jurnal('all-feed.conf: %s' % eroare)
+	else:
+		scrise.append(FISIER_ALL)
+	return scrise
+
+
 def porneste(radacina='/'):
 	"""Din mytest.py, la pornire. Pornirea nu depinde de el."""
 	try:

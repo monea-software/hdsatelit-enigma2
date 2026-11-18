@@ -5042,7 +5042,7 @@ def ecm_system_name(caid, d=None):
 	return u"0x%04X" % caid
 
 
-def ecm_rows(r):
+def ecm_rows(r, cititor=True):
 	"""Randurile „de la CAM” pentru pagina 4, numai cand camul decripteaza acum canalul: sistemul si CAID-ul, PID-ul
 	ECM si furnizorul, timpul ECM si pasii, protocolul si locul (local / prin retea)."""
 	caid = ecm_active(r)
@@ -5050,7 +5050,7 @@ def ecm_rows(r):
 		return []
 	d = ecm_info()
 	rows = [u"%s: %s · CAID %04X" % (tr("ecm_system"), ecm_system_name(caid, d), caid)]
-	# furnizorul 000000 = niciun furnizor (nu se arata); pasii retelei (hops) nu spun nimic omului, nu se arata
+	# furnizorul 000000 = niciun furnizor (nu se arata); pasii retelei (hops) numai la cerere (ecm_sursa, mai jos)
 	prov = u""
 	if d.get("prov", -1) > 0:
 		prov = u"%06X" % d["prov"]
@@ -5058,12 +5058,154 @@ def ecm_rows(r):
 		prov = join([prov, d["prov_name"]], u" ")
 	rows.append(join([(u"%s: %d" % (tr("ecm_pid"), d["pid"])) if d.get("pid", 0) > 0 else u"",
 		(u"%s: %s" % (tr("provider"), prov)) if prov else u""]))
-	rows.append((u"%s: %d ms" % (tr("ecm_time"), d["ms"])) if d.get("ms", -1) >= 0 else u"")
+	# hop-urile si eticheta cititorului numai cu alegerea „Arată hop-urile și cititorul” (ecm_sursa; fara adrese)
+	src = ecm_sursa() if cititor else {}
+	rows.append(join([(u"%s: %d ms" % (tr("ecm_time"), d["ms"])) if d.get("ms", -1) >= 0 else u"",
+		(u"%s: %d" % (tr("ecm_hop"), src["hops"])) if "hops" in src else u""]))
 	where = u""
 	if "local" in d:
 		where = tr("ecm_local") if d["local"] else tr("ecm_net")
-	rows.append(join([(u"%s: %s" % (tr("ecm_protocol"), d["protocol"])) if d.get("protocol") else u"", where]))
+	rows.append(join([(u"%s: %s" % (tr("ecm_protocol"), d["protocol"])) if d.get("protocol") else u"", where,
+		(u"%s: %s" % (tr("ecm_reader"), src["cititor"])) if src.get("cititor") else u""]))
 	return [x for x in rows if x][:ECM_ROWS]
+
+
+_ecm_conv = []         # weakref.ref la convertoarele care pot arata eticheta (HdsSignal EcmRow / EcmLine)
+_ecm_legat = [False]
+
+
+def ecm_inregistreaza(conv):
+	"""Un convertor care poate arata eticheta cititorului: se redeseneaza pe loc cand HdsEcm.ascundeCititorul o ascunde
+	(inainte de o captura), chiar daca ecranul lui e ascuns."""
+	import weakref
+	_ecm_conv[:] = [w for w in _ecm_conv if w() is not None]
+	_ecm_conv.append(weakref.ref(conv))
+	if not _ecm_legat[0]:
+		m = _ecm()
+		if m is not None and hasattr(m, "laAscundere"):
+			m.laAscundere(_ecm_redeseneaza)
+			_ecm_legat[0] = True
+
+
+def _ecm_redeseneaza():
+	for w in list(_ecm_conv):
+		c = w()
+		if c is None:
+			continue
+		try:
+			c._ecm_reimprospateaza()
+		except Exception as e:
+			log_once("ecm_redeseneaza", e)
+
+
+def ecm_sursa():
+	"""Hop-urile si eticheta cititorului ({"hops": n, "cititor": t}) din modulul imaginii (HdsEcm.sursa): numai cu
+	alegerea „Arată hop-urile și cititorul” si cat nimic de pe ecran nu pleaca de pe receptor; altfel {}. Fara adrese,
+	porturi sau randurile from/source."""
+	m = _ecm()
+	if m is None or not hasattr(m, "sursa"):
+		return {}
+	try:
+		return m.sursa() or {}
+	except Exception as e:
+		log_once("ecm_sursa", e)
+		return {}
+
+
+# ---------------------------------------------------------------- bara canalului: randul ECM; a doua bara: debitul DVB
+# Alegerile din Preferinte OSD (config.usage.hds_bara_ecm, config.usage.hds_debit_bara, Components/UsageConfig.py) se
+# citesc la fiecare tic al convertorului (HdsSignal EcmLine / Debit), deci o schimbare din meniu sau din web se vede la
+# tic, fara repornire. Pe o imagine fara ele: implicitul dat aici (randul ECM oprit, debitul fara statistici).
+
+def optiune_usage(nume, implicit):
+	"""config.usage.<nume>.value, sau `implicit` cand setarea lipseste (alte imagini) ori nu se poate citi."""
+	try:
+		from Components.config import config
+		el = getattr(config.usage, nume, None)
+		return implicit if el is None else el.value
+	except Exception:
+		return implicit
+
+
+def ecm_line(r, cititor=True):
+	"""Randul ECM din bara canalului, cat camul decripteaza acum canalul si alegerea e pornita: sistemul, CAID-ul,
+	timpul ECM si protocolul (aceleasi date ca pagina 4, intr-un rand), plus hop-urile si eticheta cititorului cu
+	alegerea „Arată hop-urile și cititorul” (ecm_sursa). Gol altfel."""
+	if not optiune_usage("hds_bara_ecm", False):
+		return u""
+	caid = ecm_active(r)
+	if caid <= 0:
+		return u""
+	d = ecm_info()
+	parts = [ecm_system_name(caid, d), u"CAID %04X" % caid]
+	if d.get("ms", -1) >= 0:
+		parts.append(u"%d ms" % d["ms"])
+	if d.get("protocol"):
+		parts.append(d["protocol"])
+	src = ecm_sursa() if cititor else {}
+	if "hops" in src:
+		parts.append(u"%s: %d" % (tr("ecm_hop"), src["hops"]))
+	if src.get("cititor"):
+		parts.append(src["cititor"])
+	return join(parts)
+
+
+DEBIT_KINDS = ("s", "c", "t", "a")
+DEBIT_PAS_S = 0.8          # doua citiri mai apropiate de atat sunt acelasi tic (eticheta, valoarea si statisticile)
+_debit = {"ref": None, "t": -1000.0, "n": 0, "sum": 0, "min": 0, "max": 0, "v": -1, "a": -1}
+
+
+def debit_mod():
+	"""„nu”, „da” sau „statistici” (config.usage.hds_debit_bara); o valoare straina = „da”."""
+	v = optiune_usage("hds_debit_bara", "da")
+	return v if v in ("nu", "da", "statistici") else "da"
+
+
+def debit_reset():
+	_debit.update(ref=None, t=-1000.0, n=0, sum=0, min=0, max=0, v=-1, a=-1)
+
+
+def debit_citeste(r, sref):
+	"""(video, sunet) in kbit/s masurate de enigma2 pe canalele DVB (iServiceInformation sVideoBitrate / sAudioBitrate:
+	numaratorul din demux porneste la prima intrebare, da -1 sau 0 pana la prima fereastra si se opreste singur la 5 s
+	fara intrebari), sau (-1, -1): alt fel de receptie, enigma2 fara masurare sau alegerea „nu”. O citire video > 0 intra
+	o singura data pe tic in minimul, maximul si media canalului; la alt canal se pornesc din nou."""
+	if debit_mod() == "nu" or isi("sVideoBitrate") is None or r.kind() not in DEBIT_KINDS:
+		return -1, -1
+	acum = _now()
+	if sref != _debit["ref"]:
+		debit_reset()
+		_debit["ref"] = sref
+	elif 0.0 <= acum - _debit["t"] < DEBIT_PAS_S:
+		return _debit["v"], _debit["a"]
+	v, a = r.geti("sVideoBitrate"), r.geti("sAudioBitrate")
+	_debit.update(t=acum, v=v, a=a)
+	if v > 0:
+		_debit["n"] += 1
+		_debit["sum"] += v
+		_debit["min"] = v if _debit["n"] == 1 else min(_debit["min"], v)
+		_debit["max"] = max(_debit["max"], v)
+	return v, a
+
+
+def fmt_mbps(kbit):
+	return u"%s Mbps" % fmt_dec(kbit / 1000.0, 1)
+
+
+def debit_text(r, sref, fel=u""):
+	"""fel "": „8,4 Mbps · 192 kbps” (videoul, sunetul; partea necunoscuta lipseste); "Label": eticheta, numai cand e
+	o valoare; "Stat": „min 6,1 · max 12,3 · medie 8,2 Mbps” (alegerea „statistici”, dupa macar o citire video)."""
+	v, a = debit_citeste(r, sref)
+	if v <= 0 and a <= 0:
+		return u""
+	if fel == u"Label":
+		return tr("bitrate_va")
+	if fel == u"Stat":
+		if debit_mod() != "statistici" or _debit["n"] <= 0:
+			return u""
+		return u"%s %s · %s %s · %s %s" % (tr("br_min"), fmt_dec(_debit["min"] / 1000.0, 1),
+			tr("br_max"), fmt_dec(_debit["max"] / 1000.0, 1), tr("br_avg"), fmt_mbps(_debit["sum"] / float(_debit["n"])))
+	return join([fmt_mbps(v) if v > 0 else u"", (u"%d kbps" % a) if a > 0 else u""])
 
 
 def access_module_name():

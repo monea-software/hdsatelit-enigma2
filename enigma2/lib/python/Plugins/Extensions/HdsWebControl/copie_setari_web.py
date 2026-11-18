@@ -17,6 +17,8 @@
 #   POST /api/copie-setari-pune?copie=<id>           cere punerea la loc si reporneste interfata
 #   POST /api/copie-setari-sterge?copie=<id>         sterge copia
 #   POST /api/copie-setari-automat?automat=oprita|zilnic&pastrate=<1-10>
+#   POST /api/copie-setari-module                    pune acum modulele de acces din copie care nu sunt instalate (Da-ul
+#                                                    intrebarii de pe televizor, Components/HdsReinstalare.pune_modulele)
 #   GET  /copie-setari                               pagina
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2 si raspund pe loc; copia si cautarea merg pe firul lor, iar
@@ -83,7 +85,7 @@ def stare(a, M=None):
 	c = M.config_copie()
 	implicit = M.mediu_implicit(st["medii"] or [])
 	rez = M.citeste_rezultat()
-	return {
+	rez_stare = {
 		"result": True,
 		"cauta": bool(st["cauta"]),
 		"lucreaza": bool(st["lucreaza"]),
@@ -102,6 +104,41 @@ def stare(a, M=None):
 		"punere": M.text_ultima_punere() if hasattr(M, "text_ultima_punere") else
 			"\n".join(t for t in (M.mesaj_rezultat(rez) if rez else "", M.mesaj_reinstalare()) if t),
 	}
+	rez_stare.update(stare_module(M))
+	return rez_stare
+
+
+def _r(M):
+	"""Components/HdsReinstalare prin modulul copiei; None pe imaginile vechi."""
+	try:
+		return M._reinstalare()
+	except Exception:
+		return None
+
+
+def stare_module(M):
+	"""Modulele de acces din copie care nu sunt instalate: aceeasi intrebare ca pe televizor, cu butonul ei."""
+	R = _r(M)
+	if R is None or not hasattr(R, "module_de_pus"):
+		return {"module": [], "intrebare_module": "", "module_lucreaza": False}
+	nume = R.module_de_pus()
+	return {"module": [R._scurt(n) for n in nume], "intrebare_module": R.intrebare_module(nume),
+		"module_lucreaza": bool(R.module_in_lucru())}
+
+
+def module(a, M=None):
+	"""POST /api/copie-setari-module: pune modulele pe firul lor (opkg poate dura); pagina intreaba din nou."""
+	M = _m(M)
+	R = _r(M)
+	if R is None or not hasattr(R, "porneste_modulele"):
+		return {"result": False, "message": _t("Imaginea aceasta nu poate pune modulele din copie.")}
+	if R.module_in_lucru():
+		return {"result": True, "message": _t("Modulul se pune acum. Durează până la câteva minute.")}
+	if not R.module_de_pus():
+		return {"result": False, "message": _t("Niciun modul din copie nu așteaptă să fie pus.")}
+	if not R.porneste_modulele():
+		return {"result": False, "message": _t("Modulul nu s-a putut porni acum. Încearcă din nou.")}
+	return {"result": True, "message": _t("Modulul se pune acum. Durează până la câteva minute.")}
 
 
 def fa(a, M=None):
@@ -185,6 +222,7 @@ def rute(baza, resource, M=None, sesiune=None):
 		b"copie-setari-sterge": resursa(lambda a: sterge(a, M)),
 		b"copie-setari-automat": resursa(lambda a: automat(a, M)),
 		b"copie-setari-anuleaza": resursa(lambda a: anuleaza(a, M)),
+		b"copie-setari-module": resursa(lambda a: module(a, M)),
 	}
 	return api, PaginaResource()
 
@@ -282,6 +320,9 @@ PAGINA = """<!DOCTYPE html>
 <section class="card ascuns" id="card-punere">
   <h2>Ultima punere la loc</h2>
   <p class="desc" id="punere" style="white-space:pre-line"></p>
+  <div id="module" class="intrebare ascuns"><span id="intrebare-module"></span>
+    <div class="butoane"><button type="button" class="verde" id="pune-module">Da, pune acum</button></div></div>
+  <p class="mesaj" id="mesaj-module"></p>
 </section>
 <p class="nota">Pe televizor: Meniu, Setări, Software &amp; Firmware, Copia setărilor.</p>
 </main>
@@ -389,7 +430,11 @@ function citeste(cauta){
     if(semnCopii !== copiiNoi){ desenCopii(d); semnCopii = copiiNoi; }
     desenAutomat(d);
     $("cerere").classList.toggle("ascuns", !d.cerere);
-    $("card-punere").classList.toggle("ascuns", !d.punere); $("punere").textContent = d.punere || "";
+    var areModule = !!(d.module && d.module.length);
+    $("card-punere").classList.toggle("ascuns", !d.punere && !areModule); $("punere").textContent = d.punere || "";
+    $("module").classList.toggle("ascuns", !areModule); $("intrebare-module").textContent = d.intrebare_module || "";
+    $("pune-module").disabled = !!d.module_lucreaza;
+    if(d.module_lucreaza){ mesaj("mesaj-module", "Modulul se pune acum. Durează până la câteva minute."); }
     if(asteapta === "copie" && !d.lucreaza){
       asteapta = null;
       var u = d.ultimul || {mesaje: []};
@@ -410,6 +455,12 @@ $("fa").addEventListener("click", function(){
   }).catch(function(){ mesaj("mesaj-copie", "Receptorul nu răspunde.", true); $("fa").disabled = false; });
 });
 $("cauta").addEventListener("click", function(){ mesaj("mesaj-copie", ""); citeste(true); });
+$("pune-module").addEventListener("click", function(){
+  $("pune-module").disabled = true; mesaj("mesaj-module", "");
+  cerere("/api/copie-setari-module", "POST").then(function(d){
+    mesaj("mesaj-module", d.message, !d.result); citeste();
+  }).catch(function(){ mesaj("mesaj-module", "Receptorul nu răspunde.", true); $("pune-module").disabled = false; });
+});
 function salveazaAutomat(){
   cerere("/api/copie-setari-automat?automat=" + $("automat").value + "&pastrate=" + $("pastrate").value, "POST").then(function(d){
     mesaj("mesaj-automat", d.message, !d.result); citeste();
@@ -456,6 +507,7 @@ TEXTE_PAGINA = {
 		N_("Renunță la punerea la loc"),
 		N_("Se caută copiile..."),
 		N_("Ultima punere la loc"),
+		N_("Da, pune acum"),
 		N_("Pe televizor: Meniu, Setări, Software &amp; Firmware, Copia setărilor."),
 	),
 	"js": (
@@ -477,6 +529,7 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu a putut citi starea."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 		N_("Se face copia. Nu scoate stickul până nu scrie „Copia e gata”."),
+		N_("Modulul se pune acum. Durează până la câteva minute."),
 	),
 }
 

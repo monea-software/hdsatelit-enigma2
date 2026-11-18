@@ -137,6 +137,14 @@ def hdsPortalSauMesaj(ecran):
 	HdsPortal.apasaPortal(ecran)
 
 
+def hdsAcelasiServiciu(a, b):
+	"""True cand doua referinte duc la acelasi lucru redat: acelasi fel (4097, 5002...) si aceeasi cale (adresa)."""
+	try:
+		return a is not None and b is not None and a.type == b.type and (a.getPath() or "") == (b.getPath() or "")
+	except Exception:
+		return False
+
+
 def hdsEsteCanal(ref):
 	"""True cand referinta e a unui canal (TV, radio, flux din retea), nu a unui fisier de pe disc (filmele si
 	inregistrarile au calea lor, care incepe cu /)."""
@@ -217,6 +225,19 @@ def hdsHbbtvDisponibil(ecran):
 		return False
 
 
+def hdsHbbtvAitInAsteptare(ecran):
+	"""ROSU apasat imediat dupa un zap, cat AIT-ul canalului nu e citit inca (HdsHbbtvPornire.ait_in_asteptare): tasta
+	merge totusi la HdsHbbtvPornire, care o tine minte pana vine AIT-ul. Etichetele raman dupa hdsHbbtvDisponibil."""
+	if ecran is None or getattr(ecran, "timeshift_enabled", False):
+		return False
+	try:
+		from Components import HdsHbbtvPornire as H
+		mediu = H.Mediu(ecran.session)
+		return bool(mediu.hbbtv_pornit()) and H.ait_in_asteptare(mediu.rezumat_canal()[0])
+	except Exception:
+		return False
+
+
 def hdsFaActiuneaLunga(ecran, actiune):
 	"""Actiunile comune ale tastelor, cu ecranele si verificarile lor obisnuite."""
 	if actiune == "none":
@@ -286,6 +307,16 @@ def hdsFaActiuneaLunga(ecran, actiune):
 		# toate canalele TV ale transponderului canalului de acum, pe 2, 4 sau 9 celule (Screens/HdsMozaic.py)
 		from Screens.HdsMozaic import HdsMozaic
 		ecran.session.open(HdsMozaic, ecran)
+	elif actiune == "vpn":
+		# ecranul VPN, ca din Setari > Retea & Internet > VPN (aceeasi conditie ca intrarea din menu.xml)
+		from Components.SystemInfo import SystemInfo
+		if SystemInfo.get("HdsVpn"):
+			from Screens.HdsVpn import HdsVpn
+			ecran.session.open(HdsVpn)
+		else:
+			from Screens.MessageBox import MessageBox
+			ecran.session.open(MessageBox, _("VPN-ul nu este disponibil pe acest receptor."),
+				MessageBox.TYPE_INFO, timeout=6)
 	elif actiune == "movies":
 		ecran.showMovies()
 	elif actiune == "record":
@@ -718,7 +749,7 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		hdsPortalSauMesaj(self)
 
 	def hdsHbbtvRosu(self):
-		if not hdsHbbtvDisponibil(self):
+		if not hdsHbbtvDisponibil(self) and not hdsHbbtvAitInAsteptare(self):
 			return 0
 		rez = hdsHbbtvRosu(self)
 		# Dupa pornirea aplicatiei canalului nu mai pornim alta actiune lunga.
@@ -802,7 +833,7 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		return True
 
 	def subserviceSelection(self):
-		"""VERDE scurt urmeaza alegerea comuna, implicit subcanalele canalului."""
+		"""VERDE scurt urmeaza alegerea comuna, implicit Extensii si aplicatii (subcanalele sunt in Lista extensiilor)."""
 		actiune = hdsActiuneVerdeScurt()
 		if actiune != "none":
 			self.hdsPornesteTastaLunga("green", actiune)
@@ -911,6 +942,9 @@ class MoviePlayer(InfoBarBase, InfoBarShowHide, \
 		self.addExtension((self.hdsNumeEditorMarcaje, self.hdsEditorMarcaje, self.hdsAreMarcaje))
 
 		self.lastservice = session.nav.getCurrentlyPlayingServiceReference()
+		# filmul acestui player: o adresa de retea data de un plugin (YouTube in direct, un film IPTV) nu e un canal
+		# pornit peste film (hdsVerificaCanalul)
+		self.hdsRefFilm = service
 		session.nav.playService(service)
 		self.returning = False
 		self.onClose.append(self.__onClose)
@@ -944,9 +978,9 @@ class MoviePlayer(InfoBarBase, InfoBarShowHide, \
 		self.hdsCeasCanal.start(0, True)
 
 	def hdsVerificaCanalul(self):
-		"""Daca merge un canal (nu un fisier de pe disc), playerul se inchide si canalul ramane. Cu alt ecran deasupra
-		(lista filmelor, intrebarea de oprire) se inchide cand ajunge din nou in fata."""
-		if not hdsEsteCanal(self.session.nav.getCurrentlyPlayingServiceReference()):
+		"""Daca merge un canal (nu un fisier de pe disc si nu filmul dat playerului), playerul se inchide si canalul
+		ramane. Cu alt ecran deasupra (lista filmelor, intrebarea de oprire) se inchide cand ajunge din nou in fata."""
+		if not hdsEsteCanal(self.session.nav.getCurrentlyPlayingServiceReference()) or 				hdsAcelasiServiciu(self.session.nav.getCurrentlyPlayingServiceReference(), getattr(self, "hdsRefFilm", None)):
 			self.hdsCanalPeste = False
 			return
 		self.hdsCanalPeste = True

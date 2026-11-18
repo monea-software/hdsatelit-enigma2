@@ -43,10 +43,27 @@
 # oprit, niciun modul, modulul fara releu), cu legaturile spre pagina Canale si spre setarile Stream Relay.
 # 0.7.4 (11.11.2026): GET da si icam, randul din ecranul modulelor (Components/HdsSoftCsa.randModul) cand un modul
 # ruleaza si SoftCSA nu e gata cu el (OSCam-smod nu descifreaza ICAM): sta in cardul „Acum”; "" altfel.
+# 0.7.7 (16.11.2026; LinuxSat 164183 #970691 si #970816): la un modul care nu ruleaza, GET da si "nepornit" {motiv, text, buton}:
+# de ce nu poate porni (Components/HdsModulNepornit.diagnosticPeEcran, aceeasi fraza ca pe televizor) si butonul
+# „Pune <modul> din feedul HD Satelit”; "inlocuire" = mersul acelei lucrari (HdsModulNepornit.stareWeb).
+#   POST /api/acces-conditionat-inlocuieste?fel=<fel>&sufix=<x>   pachetul nostru al modulului, instalat, ales si pornit
+#                                          (HdsModulNepornit.porneste, pe un fir; raspunde pe loc, mersul vine prin GET;
+#                                          0.7.7, MG4: verificarea si starea din raspuns vin din citirea modulelor de pe fir)
+# 0.7.7: GET da si "din_feed": modulele din feedurile HD Satelit care nu sunt instalate (HdsModulNepornit.dinFeed), cu
+# {pachet, fel, nume, versiune, descriere, buton}; in pagina, cate un rand sub modulele instalate ale felului, cu butonul
+# "Pune <modul> din feedul HD Satelit", ca pe televizor.
+#   POST /api/acces-conditionat-inlocuieste?fel=<fel>&pachet=<pachet>   modulul din feed (numai un pachet din "din_feed"),
+#                                          instalat, ales si pornit (HdsModulNepornit.porneste cu pachetul)
+# 0.7.7 (MGR/PLAN-078 punctul 3): cardul cu cititoarele, clientii si jurnalul modulului care ruleaza, aceleasi randuri ca pe
+# televizor in Informatii despre decriptare (Components/HdsJurnalModul.py, din interfata web a modulului, pe receptor).
+# Spre deosebire de ecm.info (de mai sus), randurile acestea au numele cititoarelor si jurnalul modulului (fara adresele
+# cititoarelor), deci le primesc NUMAI cererile din reteaua de acasa, ca pagina modulului insusi, oricum ar intra cererea.
+#   GET  /api/acces-conditionat-jurnal     {result, modul, linii}: linii = textele ecranului (titlurile fara spatii in fata,
+#                                          randurile cu doua spatii in fata), pe un fir; o citire odata
 import re
 import time
 
-ARGUMENTE = ("cerere", "fel", "sufix")
+ARGUMENTE = ("cerere", "fel", "sufix", "pachet")
 MAX_VALOARE = 64
 # acelasi tipar ca HdsModuleAcces._SUFIX_BUN (Operatie il verifica din nou pe lista citita chiar atunci)
 _SUFIX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
@@ -96,10 +113,11 @@ def _jurnal(text):
 	print("[HdsWebControl] acces conditionat: %s" % text)
 
 
-def _memorie(H, sistem, pid):
-	"""{"kb": VmRSS, "fire": Threads} din /proc/<pid>/status (HdsModuleAcces.memorie), fara valorile care lipsesc"""
+def _memorie(H, sistem, pid, randuri=None):
+	"""{"kb": VmRSS, "fire": Threads} din /proc/<pid>/status (HdsModuleAcces.memorie), fara valorile care lipsesc; cu
+	`randuri` (0.7.7: citite pe fir, Screens/CamSetup.citesteEcranul), din ele, fara alta citire"""
 	rez = {}
-	for r in H.memorie(sistem, pid):
+	for r in (H.memorie(sistem, pid) if randuri is None else randuri):
 		parti = r.split()
 		if len(parti) > 1 and parti[1].isdigit():
 			if parti[0] == "VmRSS:":
@@ -109,14 +127,45 @@ def _memorie(H, sistem, pid):
 	return rez
 
 
-def _modul(H, E, sistem, e):
+def _nepornit(N=None):
+	"""Components.HdsModulNepornit (probele dau unul); None cand nu se poate incarca."""
+	if N is not None:
+		return N
+	try:
+		from Components import HdsModulNepornit as N
+		return N
+	except Exception as eroare:
+		_jurnal("HdsModulNepornit: %r" % (eroare,))
+		return None
+
+
+def _modul(H, E, sistem, e, N=None, citita=None):
+	"""Randul unui modul; cu `citita` (0.7.7: Screens/CamSetup.citesteEcranul, facuta pe un fir) procesul aratat, memoria si
+	diagnosticul vin din ea, fara alte citiri pe firul enigma2."""
 	m = {"sufix": e.sufix, "descriere": e.descriere or "", "ales": bool(e.ales), "ruleaza": bool(e.pids),
 		"versiune": getattr(e, "versiune", "") or ""}
+	cheie = (getattr(e, "fel", ""), e.sufix)
 	if e.pids:
-		pid = E.pid_de_aratat(sistem, e.pids)
+		if citita is not None and cheie in citita.get("pid", {}):
+			pid = citita["pid"][cheie]
+			m["memorie"] = _memorie(H, sistem, pid, citita["memorie"].get(cheie, [])) if pid is not None else {}
+		else:
+			pid = E.pid_de_aratat(sistem, e.pids)
+			m["memorie"] = _memorie(H, sistem, pid) if pid is not None else {}
 		m["pid"] = pid
 		m["procese"] = len(e.pids)
-		m["memorie"] = _memorie(H, sistem, pid) if pid is not None else {}
+	else:
+		# 0.7.7: de ce nu poate porni si butonul din feedul nostru (aceleasi texte ca pe televizor)
+		N = _nepornit(N)
+		try:
+			if citita is not None and cheie in citita.get("nepornit", {}):
+				d = citita["nepornit"][cheie]
+			else:
+				d = N.diagnosticPeEcran(sistem, cheie[0], e.sufix) if N is not None else None
+			if d:
+				m["nepornit"] = {"motiv": d.get("motiv") or "", "text": N.text(d), "buton": N.textOferta(e.sufix)}
+		except Exception as eroare:
+			_jurnal("modulul %s: %r" % (e.sufix, eroare))
 	return m
 
 
@@ -128,39 +177,112 @@ def _comanda(H):
 	return {"in_curs": False, "ultima": _STARE["ultima"]}
 
 
-def stare(H=None, E=None, SR=None, SC=None):
-	"""Pentru GET /api/acces-conditionat. `SR` e Components.HdsStreamRelay, `SC` Components.HdsSoftCsa (probele dau
-	unele false)."""
+def stare(H=None, E=None, SR=None, SC=None, N=None, citita=None):
+	"""Pentru GET /api/acces-conditionat. `SR` e Components.HdsStreamRelay, `SC` Components.HdsSoftCsa, `N`
+	Components.HdsModulNepornit (probele dau unele false). `citita` (0.7.7): citirea modulelor facuta pe un fir
+	(Screens/CamSetup.citesteEcranul, vezi _stareDinFir); fara ea, citirea se face aici."""
 	H = _h(H)
 	E = _ecran(E)
+	N = _nepornit(N)
 	sistem = H.SistemAcces()
 	feluri = []
 	decripteaza = False
 	ruleaza = False
-	stari = H.feluri_de_aratat(sistem)
+	stari = citita["stari"] if citita is not None else H.feluri_de_aratat(sistem)
 	for i, st in enumerate(stari):
 		feluri.append({
 			"fel": st.fel,
 			"eticheta": _t(ETICHETA_PRINCIPAL if i == 0 else ETICHETA_ALTE),
 			"niciunul_ales": st.ales_emulator() is None,
 			"legatura": st.legatura,
-			"module": [_modul(H, E, sistem, e) for e in st.emulatoare],
+			"module": [_modul(H, E, sistem, e, N, citita) for e in st.emulatoare],
 			"fara_script": list(st.fara_script),
 		})
 		decripteaza = decripteaza or bool(st.ecm)
 		ruleaza = ruleaza or any(e.pids for e in st.emulatoare)
+	if citita is not None and hasattr(H, "ModuleCitite"):
+		# 0.7.7: motivul releului ia modulele din citirea de pe fir (HdsModuleAcces.ModuleCitite), fara alta citire
+		SR = _ReleuCuModule(SR, H.ModuleCitite(stari))
 	rez = {"result": True, "feluri": feluri, "sufix_gol": H.SUFIX_GOL, "decripteaza_acum": decripteaza,
 		"comanda": _comanda(H), "stream_relay": _streamRelay(H, SR), "icam": _icam(ruleaza, SC)}
-	rez.update(_inAfaraListei(H, E, sistem, stari))
+	rez.update(_inAfaraListei(H, E, sistem, stari, citita["alte"] if citita is not None else None))
+	rez["din_feed"] = _dinFeed(N, [st.fel for st in stari])
+	try:
+		rez["inlocuire"] = N.stareWeb() if N is not None else None
+	except Exception as eroare:
+		_jurnal("inlocuire: %r" % (eroare,))
+		rez["inlocuire"] = None
 	return rez
 
 
-def _inAfaraListei(H, E, sistem, stari):
+def _dinFeed(N, feluri):
+	"""0.7.7: modulele din feed care nu sunt instalate, numai ale felurilor aratate, cu textul butonului; [] fara ele"""
+	f = getattr(N, "dinFeed", None) if N is not None else None
+	if f is None:
+		return []
+	try:
+		return [dict(x, buton=N.textOfertaFeed(x)) for x in f() if x.get("fel") in feluri]
+	except Exception as eroare:
+		_jurnal("modulele din feed: %r" % (eroare,))
+		return []
+
+
+def inlocuieste(argumente, H=None, E=None, N=None, cu_stare=True, citita=None):
+	"""POST /api/acces-conditionat-inlocuieste: „Pune <modul> din feedul HD Satelit” pentru un modul instalat care nu ruleaza
+	(Components/HdsModulNepornit.porneste, pe un fir), sau, cu `pachet`, pentru un modul din feed care nu e instalat (numai un
+	pachet din lista "din_feed" de acum). Raspunde pe loc; mersul vine prin GET ("inlocuire").
+	0.7.7 (MG4): `citita` = citirea modulelor facuta pe un fir (Screens/CamSetup.citesteEcranul, prin _stareDinFir): felurile si
+	modulul (daca e instalat, daca ruleaza) se iau din ea, fara alta citire pe firul enigma2; fara ea se citesc acum, ca pana
+	acum. `cu_stare`=False da numai result si message (starea o pune _stareDinFir din aceeasi citire)."""
+	H = _h(H)
+	E = _ecran(E)
+	N = _nepornit(N)
+	st = (lambda: stare(H, E, N=N)) if cu_stare else dict
+	sistem = H.SistemAcces()
+	fel = argumente.get("fel") or ""
+	sufix = argumente.get("sufix") or ""
+	if N is None:
+		return _cuMesaj(st(), False, _t("Comanda nu a pornit."))
+	feluri = [s.fel for s in citita["stari"]] if citita is not None else H.feluri(sistem)
+	pachet = argumente.get("pachet") or ""
+	if pachet:
+		x = [x for x in _dinFeed(N, feluri) if x["pachet"] == pachet and x["fel"] == fel]
+		if not x:
+			return _cuMesaj(st(), False, _t("Modulul ales nu există."))
+		if not N.porneste(fel, x[0]["nume"], pachet=pachet):
+			return _cuMesaj(st(), False, _t("Așteaptă să se termine comanda de acum."))
+		_jurnal("pune din feed %s %s" % (fel, pachet))
+		return _cuMesaj(st(), True, N.stareWeb().get("text") or _t("Comanda a pornit."))
+	if fel not in feluri or not _SUFIX.match(sufix):
+		return _cuMesaj(st(), False, _t("Modulul ales nu există."))
+	e = _emulatorCitit(H, sistem, fel, sufix, citita)
+	if e is None:
+		return _cuMesaj(st(), False, _t("Modulul ales nu există."))
+	if e.pids:
+		return _cuMesaj(st(), False, E.text_rezultat({"ok": True, "motiv": "ruleaza_deja", "nume": sufix}))
+	if not N.porneste(fel, sufix):
+		return _cuMesaj(st(), False, _t("Așteaptă să se termine comanda de acum."))
+	_jurnal("inlocuieste %s %s" % (fel, sufix))
+	return _cuMesaj(st(), True, N.stareWeb().get("text") or _t("Comanda a pornit."))
+
+
+def _emulatorCitit(H, sistem, fel, sufix, citita=None):
+	"""0.7.7 (MG4): modulul <fel>.<sufix> din citirea de pe fir (`citita`, citesteEcranul), altfel citit acum; None cand nu e"""
+	if citita is None:
+		return H.citeste(sistem, fel).emulator(sufix)
+	for s in citita["stari"]:
+		if s.fel == fel:
+			return s.emulator(sufix)
+	return None
+
+
+def _inAfaraListei(H, E, sistem, stari, alte=None):
 	"""MDA (darog69, forum 479 #2447): ce ruleaza in afara listei, cu textele ecranului (Screens/CamSetup.text_alt,
-	detalii_alt, text_ci): modulele pornite de alt program si modulul CI din fiecare slot. Numai citire."""
+	detalii_alt, text_ci): modulele pornite de alt program si modulul CI din fiecare slot. Numai citire. `alte` (0.7.7):
+	modulele pornite de alt program, citite deja pe un fir."""
 	rez = {"alte": [], "ci": []}
 	try:
-		for a in H.pornite_de_alt_program(sistem, stari):
+		for a in (H.pornite_de_alt_program(sistem, stari) if alte is None else alte):
 			rez["alte"].append({"text": E.text_alt(a), "detalii": E.detalii_alt(a), "pid": a["pids"][0]})
 		for slot, cod, nume in H.sloturi_ci():
 			rez["ci"].append({"slot": slot, "stare": cod, "text": E.text_ci(slot, cod, nume)})
@@ -196,31 +318,49 @@ def _streamRelay(H, SR=None):
 		return None
 
 
+class _ReleuCuModule(object):
+	"""0.7.7: Components/HdsStreamRelay (sau `SR`, la probe) cu modulele deja citite (HdsModuleAcces.ModuleCitite) ca H."""
+
+	def __init__(self, SR, H):
+		self.SR = SR
+		self.H = H
+
+	def stare(self, H=None):
+		SR = self.SR
+		if SR is None:
+			from Components import HdsStreamRelay as SR
+		return SR.stare(H=self.H)
+
+
 def _cuMesaj(rez, reusit, mesaj):
 	rez = dict(rez)
 	rez.update({"result": bool(reusit), "message": mesaj})
 	return rez
 
 
-def comanda(argumente, H=None, E=None, ceas=None):
+def comanda(argumente, H=None, E=None, ceas=None, cu_stare=True):
 	"""POST /api/acces-conditionat-comanda. Verifica cererea, porneste HdsModuleAcces.Operatie si raspunde pe loc;
 	pasii si rezultatul (text_pas, text_rezultat) se tin aici pentru GET. Refuza cand ruleaza deja o comanda (de pe
-	televizor sau din web). Felul trebuie sa fie unul de pe receptor (HdsModuleAcces.feluri); fara fel, primul."""
+	televizor sau din web). Felul trebuie sa fie unul de pe receptor (HdsModuleAcces.feluri); fara fel, primul.
+	0.7.7 (IPE): `cu_stare`=False da numai result si message, fara starea modulelor: ComandaResource o adauga din citirea
+	de pe fir (_stareDinFir), ca Verde si Rosu din pagina sa nu citeasca toate modulele pe firul enigma2. Cand comanda a
+	pornit, atunci se intoarce o functie: result si message se socotesc la plecarea raspunsului (_cuAdaos)."""
 	H = _h(H)
 	E = _ecran(E)
 	ceas = ceas or time.time
+	st = stare if cu_stare else (lambda H, E: {})
 	cerere = argumente.get("cerere") or ""
 	feluri_receptor = H.feluri(H.SistemAcces())
 	fel = argumente.get("fel") or (feluri_receptor[0] if feluri_receptor else "")
 	sufix = argumente.get("sufix") or None
 	if cerere not in H.CERERI:
-		return _cuMesaj(stare(H, E), False, _t("Comanda „%s” nu există.") % cerere[:MAX_VALOARE])
+		return _cuMesaj(st(H, E), False, _t("Comanda „%s” nu există.") % cerere[:MAX_VALOARE])
 	if fel not in feluri_receptor or (sufix is not None and not _SUFIX.match(sufix)):
-		return _cuMesaj(stare(H, E), False, _t("Modulul ales nu există."))
+		return _cuMesaj(st(H, E), False, _t("Modulul ales nu există."))
 	if cerere == "alege" and sufix is None:
-		return _cuMesaj(stare(H, E), False, _t("Modulul ales nu există."))
+		return _cuMesaj(st(H, E), False, _t("Modulul ales nu există."))
 	if H.in_curs() is not None:
-		return _cuMesaj(stare(H, E), False, _t("Așteaptă să se termine comanda de acum."))
+		return _cuMesaj(st(H, E), False, _t("Așteaptă să se termine comanda de acum."))
 	gata = []
 	operatie = [None]
 
@@ -240,9 +380,17 @@ def comanda(argumente, H=None, E=None, ceas=None):
 	if not o.porneste() or gata:
 		# terminata pe loc (nimic de facut, necunoscut, ocupat) sau fara niciun script de asteptat
 		r = gata[0] if gata else (o.rezultat or {})
-		return _cuMesaj(stare(H, E), bool(r.get("ok")), E.text_rezultat(r) if r else _t("Comanda nu a pornit."))
-	pas = _STARE["pas"]
-	return _cuMesaj(stare(H, E), True, pas["text"] if pas else _t("Comanda a pornit."))
+		return _cuMesaj(st(H, E), bool(r.get("ok")), E.text_rezultat(r) if r else _t("Comanda nu a pornit."))
+
+	def raspuns():
+		# 0.7.7 (IPE): pe receptor planul se citeste pe fir, deci un refuz (nimic pornit, ruleaza deja) sau primul pas vin dupa
+		# porneste(); fara stare (cu_stare=False) raspunsul se socoteste abia cand pleaca, cu ce s-a intamplat pana atunci
+		if gata:
+			r = gata[0]
+			return _cuMesaj(st(H, E), bool(r.get("ok")), E.text_rezultat(r))
+		pas = _STARE["pas"]
+		return _cuMesaj(st(H, E), True, pas["text"] if pas else _t("Comanda a pornit."))
+	return raspuns() if cu_stare else raspuns
 
 
 def argumente(request):
@@ -258,6 +406,49 @@ def argumente(request):
 			v = v.decode("utf-8", "replace")
 		rez[cheie] = str(v)[:MAX_VALOARE].strip()
 	return rez
+
+
+# ---------------------------------------------------------------- cheile publice (0.7.7)
+# Cardul "Cheile publice (SoftCam.Key)", perechea randului din ecranul modulelor: aceeasi lucrare si aceleasi texte, traduse pe
+# receptor (Components/HdsCheiPublice.py). Nimic nu se aduce singur, numai la butonul omului.
+#   GET  /api/acces-conditionat-chei          {in_lucru, ok, mesaj, adresa, adresa_fabrica, ultima, fisiere, texte}, din memorie
+#   POST /api/acces-conditionat-chei-cerere?cerere=adu|adresa[&adresa=<adresa>]
+#                                          adu: descarca acum, pe un fir (raspunde pe loc; mersul vine prin GET);
+#                                          adresa: adresa noua a omului (gol = cea din fabrica)
+# Adresa nu trece prin argumente(), care taie la MAX_VALOARE: se citeste aici, cel mult HdsCheiPublice.ADRESA_MAXIM.
+def _chei(K=None):
+	if K is not None:
+		return K
+	from Components import HdsCheiPublice as K
+	return K
+
+
+def stare_chei(K=None):
+	return dict(_chei(K).stareWeb(), result=True)
+
+
+def argument_lung(request, nume, maxim):
+	"""Un argument al cererii (si din corpul unui POST de formular), taiat la `maxim`; "" cand lipseste."""
+	args = getattr(request, "args", None) or {}
+	valori = args.get(nume.encode("ascii")) or args.get(nume) or []
+	v = valori[0] if valori else b""
+	if isinstance(v, bytes):
+		v = v.decode("utf-8", "replace")
+	return str(v)[:maxim].strip()
+
+
+def cerere_chei(cerere, adresa="", K=None):
+	"""POST /api/acces-conditionat-chei-cerere."""
+	K = _chei(K)
+	if cerere == "adu":
+		if not K.porneste():
+			return _cuMesaj(stare_chei(K), False, _t("Așteaptă să se termine comanda de acum."))
+		_jurnal("cheile publice: aducere pornita")
+		return _cuMesaj(stare_chei(K), True, K.stareWeb().get("mesaj") or _t("Comanda a pornit."))
+	if cerere == "adresa":
+		ok, mesaj = K.puneAdresa(adresa)
+		return _cuMesaj(stare_chei(K), ok, mesaj)
+	return _cuMesaj(stare_chei(K), False, _t("Comanda nu a pornit."))
 
 
 def interfete_web(H=None):
@@ -276,15 +467,161 @@ def dosare_configurare(H=None):
 		return {"result": False, "dosare": []}
 
 
+# 0.7.7: GET /api/acces-conditionat citeste modulele pe un fir (Screens/CamSetup.citesteEcranul,
+# Components/HdsModuleAcces.CitirePeFir) si raspunde de pe firul enigma2. Pagina intreaba la 5 s, iar citirea facuta pe firul
+# enigma2 il tinea 0,3-0,4 s, si 4,8-7,4 s cat calcula alt fir Python (masurat pe receptorul de probe; HdsModuleAcces, citirea pe un fir).
+# Cererile venite cat merge o citire primesc aceeasi citire.
+_CITIRE_WEB = {"cititor": None, "cereri": []}
+
+
+def _cuAdaos(rez, adaos):
+	if callable(adaos):
+		adaos = adaos()      # comanda pornita: result si message de acum (comanda(cu_stare=False))
+	if adaos:
+		rez = dict(rez)
+		rez.update(adaos)
+	return rez
+
+
+def _pentruCerere(H, E, citita, adaos=None, inainte=None):
+	"""Raspunsul unei cereri din citirea `citita` (None: starea se citeste acum): intai inainte(citita) (0.7.7, MG4: comanda
+	hotarata si pornita din aceeasi citire, pe firul enigma2), apoi starea, apoi campurile ei (adaos)."""
+	if inainte is not None:
+		adaos = inainte(citita)
+	return _cuAdaos(stare(H, E, citita=citita), adaos)
+
+
+def _stareDinFir(resursa, request, H=None, E=None, adaos=None, inainte=None):
+	"""Raspunsul GET cu citirea pe un fir; intoarce NOT_DONE_YET. Pe un sistem de proba (HdsModuleAcces.citire_pe_fir: o
+	radacina intr-un dosar) raspunsul se da pe loc, ca inainte. O citire pornita inainte de sfarsitul unei comenzi
+	(HdsModuleAcces.generatie) e veche: atunci starea se citeste din nou, pe loc. `adaos` (0.7.7, IPE): campurile puse peste
+	stare in raspunsul acestei cereri (result si message ale unei comenzi, POST). `inainte(citita)` (0.7.7, MG4): pe firul
+	enigma2, dupa citire si inainte de stare, da campurile acestei cereri (POST Pune <modul> din feed: verificarea si pornirea
+	din aceeasi citire, ca starea din raspuns sa arate deja lucrarea pornita); o eroare a ei da 500 numai cererii ei."""
+	Hm = _h(H)
+	sistem = Hm.SistemAcces()
+	if not hasattr(Hm, "CitirePeFir") or not Hm.citire_pe_fir(sistem):
+		return resursa._raspunde(request, _pentruCerere(H, E, None, adaos, inainte))
+	Em = _ecran(E)
+	Hm.pregateste_la_schimbare(sistem)    # pe firul enigma2, numai cand s-a schimbat ceva (citirea de pe fir nu pregateste)
+	cerere = (request, adaos, inainte)
+	_CITIRE_WEB["cereri"].append(cerere)
+	c = _CITIRE_WEB["cititor"]
+	if c is None:
+		c = _CITIRE_WEB["cititor"] = Hm.CitirePeFir()
+	if not c.in_curs():
+		generatie = Hm.generatie()
+
+		def gata(rezultat, eroare):
+			cereri, _CITIRE_WEB["cereri"] = _CITIRE_WEB["cereri"], []
+			if eroare is not None:
+				_jurnal("citirea pe fir: %r" % (eroare,))
+			citita = rezultat[1] if rezultat is not None and rezultat[0] == Hm.generatie() else None
+			for r, adaos_r, inainte_r in cereri:
+				try:
+					corp = resursa._raspunde(r, _pentruCerere(H, E, citita, adaos_r, inainte_r))
+				except Exception as e:
+					corp = resursa._eroare(r, _t("Eroare pe receptor: %s") % e, 500)
+				try:
+					r.write(corp)
+					r.finish()
+				except Exception as e:
+					_jurnal("raspunsul nu a plecat (client plecat?): %r" % (e,))
+		try:
+			c.porneste(lambda: (generatie, Em.citesteEcranul(sistem)), gata)
+		except Exception:
+			_CITIRE_WEB["cereri"].remove(cerere)
+			raise
+	from twisted.web.server import NOT_DONE_YET
+	return NOT_DONE_YET
+
+
+# ---------------------------------------------------------------- cititoarele, clientii si jurnalul modulului (0.7.7)
+_STEAG_JURNAL = [False]
+# portul interfetei modulului aratat (tinut JURNAL_INTERFATA_S) si pauza de dupa o parola care nu merge (failban)
+_JURNAL = {"cheie": None, "interfata": None, "cand": 0.0, "oprit_pana": 0.0}
+JURNAL_INTERFATA_S = 60.0
+JURNAL_PAROLA_S = 600.0
+
+
+def _jurnalModul(J=None):
+	if J is not None:
+		return J
+	from Components import HdsJurnalModul
+	return HdsJurnalModul
+
+
+def modul_aratat(H, E):
+	"""(nume, pid, eticheta) al modulului ca in Informatii despre decriptare: intai cel ales care ruleaza, apoi primul
+	pornit (felurile in ordinea lor), apoi unul pornit de alt program; (None, None, "") cand nu ruleaza niciunul"""
+	sistem = H.SistemAcces()
+	stari = H.feluri_de_aratat(sistem)
+	for st in stari:
+		pornite = st.pornite()
+		ales = st.ales_emulator()
+		if ales is not None and ales.pids:
+			pornite = [ales] + [e for e in pornite if e is not ales]
+		if pornite:
+			e = pornite[0]
+			return e.sufix, E.pid_de_aratat(sistem, e.pids), H.eticheta_modul(e)
+	for a in H.pornite_de_alt_program(sistem, stari):
+		return a["nume"], E.pid_de_aratat(sistem, a["pids"]), a["nume"]
+	return None, None, ""
+
+
+def jurnal_modul(H=None, E=None, J=None, ceas=None):
+	"""GET /api/acces-conditionat-jurnal, pe un fir: randurile cititoarelor, clientilor si jurnalului modulului care
+	ruleaza (HdsJurnalModul.randuri_text, aceleasi ca pe televizor); linii [] cand nu ruleaza niciun modul sau modulul
+	nu are interfata web din familia lui. O eroare (un proces disparut in timpul citirii) da {"result": False}."""
+	try:
+		return _jurnal_modul(H, E, J, ceas)
+	except Exception as eroare:
+		_jurnal("jurnalul modulului: %s" % eroare.__class__.__name__)
+		return {"result": False, "modul": "", "linii": []}
+
+
+def _jurnal_modul(H, E, J, ceas):
+	H, E, J = _h(H), _ecran(E), _jurnalModul(J)
+	acum = (ceas or time.time)()
+	nume, pid, eticheta = modul_aratat(H, E)
+	if nume is None:
+		return {"result": True, "modul": "", "linii": []}
+	cheie = (nume, pid)
+	if _JURNAL["cheie"] != cheie:
+		_JURNAL.update(cheie=cheie, interfata=None, cand=0.0, oprit_pana=0.0)
+	if not _JURNAL["cand"] or acum - _JURNAL["cand"] > JURNAL_INTERFATA_S:
+		_JURNAL.update(interfata=J.interfata_pentru(nume, pid, H), cand=acum)
+	i = _JURNAL["interfata"]
+	if not i:
+		return {"result": True, "modul": eticheta, "linii": []}
+	if acum < _JURNAL["oprit_pana"]:
+		rez = {"ok": False, "eroare": J.PAROLA}
+	else:
+		rez = J.citeste(i["port"], i.get("protocol") or "http", nume)
+		if rez.get("eroare") == J.PAROLA:
+			_JURNAL["oprit_pana"] = acum + JURNAL_PAROLA_S
+	return {"result": True, "modul": eticheta, "linii": J.randuri_text(rez, _t)}
+
+
+def din_casa(request, P=None):
+	"""True numai pentru o cerere din reteaua de acasa (aceeasi verificare ca pagina)"""
+	try:
+		if P is None:
+			from . import plugin as P
+		return bool(P._esteAdresaLocala(P._adresaClient(request)))
+	except Exception:
+		return False
+
+
 def rute(baza, resource, H=None, E=None, pe_fir=None):
 	"""Resursele: ({nume: resursa de sub /api}, resursa paginii). `baza` e HdsJsonResource din plugin.py."""
 
 	class StareResource(baza):
-		"""GET /api/acces-conditionat: numai citire."""
+		"""GET /api/acces-conditionat: numai citire (0.7.7: pe un fir, _stareDinFir)."""
 
 		def render_GET(self, request):
 			try:
-				return self._raspunde(request, stare(H, E))
+				return _stareDinFir(self, request, H, E)
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -293,7 +630,45 @@ def rute(baza, resource, H=None, E=None, pe_fir=None):
 
 		def render_POST(self, request):
 			try:
-				return self._raspunde(request, comanda(argumente(request), H, E))
+				# 0.7.7 (IPE): comanda porneste pe loc, starea modulelor din raspuns vine din citirea de pe fir
+				return _stareDinFir(self, request, H, E, adaos=comanda(argumente(request), H, E, cu_stare=False))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
+	class InlocuiesteResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				# 0.7.7 (MG4): verificarea, pornirea si starea din raspuns din aceeasi citire de pe fir, nu de pe firul enigma2
+				a = argumente(request)
+				return _stareDinFir(self, request, H, E,
+					inainte=lambda citita: inlocuieste(a, H, E, cu_stare=False, citita=citita))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
+	class CheiResource(baza):
+		"""GET /api/acces-conditionat-chei: starea cheilor publice, din memorie."""
+
+		def render_GET(self, request):
+			try:
+				return self._raspunde(request, stare_chei())
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+	class CheiCerereResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				return self._raspunde(request, cerere_chei(argumente(request).get("cerere") or "",
+					argument_lung(request, "adresa", _chei().ADRESA_MAXIM)))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -320,6 +695,20 @@ def rute(baza, resource, H=None, E=None, pe_fir=None):
 				lucru = peFir
 			return lucru(request, lambda: dosare_configurare(H), _STEAG_DOSARE, 10)
 
+	class JurnalResource(baza):
+		"""GET /api/acces-conditionat-jurnal (0.7.7): numai din reteaua de acasa, pe un fir, o citire odata."""
+
+		def render_GET(self, request):
+			if not din_casa(request):
+				return self._eroare(request, _t("Acces permis doar din rețeaua locală."), 403)
+			if _STEAG_JURNAL[0]:
+				return self._raspunde(request, {"result": False, "ocupat": True, "linii": []})
+			lucru = pe_fir
+			if lucru is None:
+				from .meniu_comun_web import peFir
+				lucru = peFir
+			return lucru(request, lambda: jurnal_modul(H, E), _STEAG_JURNAL, 15)
+
 	class PaginaResource(resource.Resource):
 		"""GET /acces-conditionat: pagina „Acces condiționat”."""
 		isLeaf = True
@@ -328,10 +717,14 @@ def rute(baza, resource, H=None, E=None, pe_fir=None):
 			return pagina(request)
 
 	api = {
+		b"acces-conditionat-chei": CheiResource(),
+		b"acces-conditionat-chei-cerere": CheiCerereResource(),
 		b"acces-conditionat": StareResource(),
 		b"acces-conditionat-comanda": ComandaResource(),
+		b"acces-conditionat-inlocuieste": InlocuiesteResource(),
 		b"acces-conditionat-interfete": InterfeteWebResource(),
 		b"acces-conditionat-dosare": DosareResource(),
+		b"acces-conditionat-jurnal": JurnalResource(),
 	}
 	return api, PaginaResource()
 
@@ -403,6 +796,8 @@ PAGINA = """<!DOCTYPE html>
   .semn{display:inline-block;font-size:.8rem;border-radius:999px;padding:3px 10px;margin-left:6px;white-space:nowrap;background:#242a33;color:var(--text-slab);vertical-align:middle;}
   .semn.pornit{background:var(--verde);color:#fff;}
   .semn.ales{background:#2d3b66;color:#dfe6ff;}
+  .adresa-chei{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;}
+  .adresa-chei input{flex:1 1 260px;min-width:0;min-height:44px;box-sizing:border-box;padding:6px 8px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;}
   .butoane{display:flex;gap:8px;flex-wrap:wrap;}
   button{min-height:44px;padding:10px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
   button.verde{background:var(--verde);border-color:var(--verde);color:#fff;}
@@ -415,6 +810,7 @@ PAGINA = """<!DOCTYPE html>
   .ascuns{display:none;}
   .legaturi{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.9rem;}
   .legaturi a{color:var(--text);}
+  .rand-jurnal{font-family:monospace;font-size:.82rem;margin:2px 0 0;overflow-wrap:anywhere;}
   @media (max-width:560px){ .butoane button{flex:1 1 auto;} }
 </style>
 </head>
@@ -431,10 +827,23 @@ PAGINA = """<!DOCTYPE html>
     <div id="inafara"></div>
   </section>
   <div id="feluri"></div>
+  <section class="card ascuns" id="chei">
+    <h2 id="cheiTitlu"></h2>
+    <p class="acum" id="cheiUltima"></p>
+    <div class="butoane"><button type="button" class="verde" id="cheiAdu"></button></div>
+    <p class="nota" id="cheiNota"></p>
+    <p class="mesaj" id="cheiMesaj"></p>
+    <div class="adresa-chei"><label for="cheiAdresa" id="cheiEticheta"></label><input id="cheiAdresa" type="url" maxlength="512" spellcheck="false" autocomplete="off"><button type="button" id="cheiSalveaza"></button></div>
+    <p class="nota" id="cheiNotaAdresa"></p>
+  </section>
   <section class="card ascuns" id="releu">
     <h2>Stream Relay</h2>
     <div id="releuStare"></div>
     <div class="legaturi"><a id="releuCanale" href="/canale">Lista de canale</a><a id="releuSetari" href="/setari?id=hds_stream_relay">Setările Stream Relay</a></div>
+  </section>
+  <section class="card ascuns" id="jurnalCard">
+    <h2 id="jurnalTitlu"></h2>
+    <div id="jurnalLinii"></div>
   </section>
   <section class="card">
     <h2>Pe televizor</h2>
@@ -551,11 +960,20 @@ function randModul(f, m){
   var proces = el("div", "detaliu", detaliiProces(m) + (m.ales ? " Pornește la fiecare pornire a receptorului." : ""));
   stanga.appendChild(proces);
   randuriProcese.push({fel: f.fel, sufix: m.sufix, element: proces});
+  // 0.7.7: de ce nu poate porni (textul vine tradus de pe receptor)
+  if(m.nepornit && m.nepornit.text){ stanga.appendChild(el("div", "detaliu", m.nepornit.text)); }
   stanga.appendChild(detaliuDosar(f, m));
   rand.appendChild(stanga);
   var b = el("div", "butoane");
+  if(m.nepornit && m.nepornit.buton){
+    // 0.7.7: pachetul nostru al aceluiasi modul, instalat, ales si pornit
+    var bi = el("button", "verde", m.nepornit.buton);
+    bi.type = "button";
+    bi.addEventListener("click", function(){ inlocuieste(f.fel, m.sufix); });
+    b.appendChild(bi);
+  }
   if(!m.ales){
-    b.appendChild(buton("Alege", "verde", f.fel, "alege", m.sufix,
+    b.appendChild(buton("Alege", m.nepornit ? "" : "verde", f.fel, "alege", m.sufix,
       "Se alege " + m.sufix + ": modulul de acum se oprește, iar " + m.sufix + " pornește acum și la fiecare pornire a receptorului. Continui?"));
   } else if(!m.ruleaza){
     b.appendChild(buton("Pornește", "verde", f.fel, "porneste", m.sufix));
@@ -575,6 +993,21 @@ function randModul(f, m){
   if(m.ales || m.ruleaza){
     b.appendChild(buton("Repornește", "", f.fel, "reporneste", m.sufix));
   }
+  rand.appendChild(b);
+  return rand;
+}
+function randFeed(f, x){
+  // 0.7.7: un modul din feedul HD Satelit care nu e instalat (textele vin traduse de pe receptor)
+  var rand = el("div", "modul");
+  var stanga = el("div", "stanga");
+  stanga.appendChild(el("div", "nume", x.nume + (x.versiune ? " " + x.versiune : "")));
+  if(x.descriere){ stanga.appendChild(el("div", "detaliu", x.descriere)); }
+  rand.appendChild(stanga);
+  var b = el("div", "butoane");
+  var bi = el("button", "verde", x.buton);
+  bi.type = "button";
+  bi.addEventListener("click", function(){ inlocuieste(f.fel, "", x.pachet); });
+  b.appendChild(bi);
   rand.appendChild(b);
   return rand;
 }
@@ -607,6 +1040,15 @@ function arata(d){
   (d.alte || []).forEach(function(a){
     afara.appendChild(el("p", "acum", a.text));
     (a.detalii || []).forEach(function(t){ afara.appendChild(el("p", "nota", t)); });
+    // interfata web a modulului pornit de alt program (fel gol, pid = al randului lui)
+    INTERFETE.forEach(function(i){
+      if(i.fel || !i.pid || i.pid !== a.pid){ return; }
+      var adresaWeb = adresaInterfataModul(i);
+      if(!adresaWeb){ return; }
+      var p = el("p", "acum"), w = el("a", "buton-web hds-derulant", "Interfața web");
+      w.href = adresaWeb; w.target = "_blank"; w.rel = "noopener noreferrer";
+      p.appendChild(w); afara.appendChild(p);
+    });
   });
   (d.ci || []).forEach(function(c){
     var p = el("p", "acum"), a = el("a", "", c.text);
@@ -617,6 +1059,13 @@ function arata(d){
   if(c.in_curs){ $("comanda").textContent = c.text || ""; }
   else if(c.ultima){ $("comanda").textContent = "Ultima comandă din pagină: " + c.ultima.text; }
   else { $("comanda").textContent = ""; }
+  // 0.7.7: lucrarea „Pune <modul> din feedul HD Satelit” (textele vin traduse de pe receptor)
+  var inl = d.inlocuire;
+  if(inl && inl.in_lucru){ ocupat = true; $("comanda").textContent = inl.text || ""; }
+  if(asteptInlocuire && inl && !inl.in_lucru){
+    asteptInlocuire = false;
+    if(inl.text){ mesaj(inl.text, !inl.ok); }
+  }
   if(astept && !c.in_curs){
     astept = false;
     if(c.ultima){ mesaj(c.ultima.text, !c.ultima.ok); }
@@ -624,7 +1073,7 @@ function arata(d){
   // Pastreaza nodurile si derularea cailor cand se schimba numai cifrele proceselor.
   var semnatura = JSON.stringify(d.feluri || [], function(k, v){
     return k === "pid" || k === "procese" || k === "memorie" ? undefined : v;
-  }) + JSON.stringify([INTERFETE, DOSARE, DOSARE === null && dosareEroare]);
+  }) + JSON.stringify([INTERFETE, DOSARE, DOSARE === null && dosareEroare, d.din_feed || []]);
   if(semnaturaLista !== semnatura){
     semnaturaLista = semnatura;
     randuriProcese = [];
@@ -638,6 +1087,7 @@ function arata(d){
         card.appendChild(randNiciunul(f));
         f.module.forEach(function(m){ card.appendChild(randModul(f, m)); });
       }
+      (d.din_feed || []).forEach(function(x){ if(x.fel === f.fel){ card.appendChild(randFeed(f, x)); } });
       if(f.fara_script && f.fara_script.length){
         card.appendChild(el("p", "nota", "Programe fără script de pornire, care nu se pot porni de aici: " + f.fara_script.join(", ")));
       }
@@ -670,9 +1120,30 @@ $("camTv").addEventListener("click", function(){
   cerere("/api/navigator-cam", "POST", new URLSearchParams()).then(function(d){ mesaj(d.message, !d.result); })
     .catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 });
+var jurnalInLucru = false, jurnalCitit = 0;
+function citesteJurnal(){
+  // cititoarele, clientii si jurnalul modulului care ruleaza (aceleasi randuri ca pe televizor, deja traduse); cel mult
+  // o data la 10 s (receptorul cauta modulul in /proc la fiecare cerere)
+  if(jurnalInLucru || Date.now() - jurnalCitit < 10000){ return; }
+  jurnalInLucru = true;
+  jurnalCitit = Date.now();
+  cerere("/api/acces-conditionat-jurnal").then(function(d){
+    if(d.ocupat){ return; }
+    var linii = d.result ? (d.linii || []) : [];
+    $("jurnalCard").classList.toggle("ascuns", !linii.length);
+    $("jurnalTitlu").textContent = d.modul || "";
+    var loc = $("jurnalLinii");
+    loc.textContent = "";
+    linii.forEach(function(t){
+      var rand = t.indexOf("  ") === 0;
+      loc.appendChild(el("p", rand ? "nota rand-jurnal" : "acum", rand ? t.slice(2) : t));
+    });
+  }).catch(function(){}).then(function(){ jurnalInLucru = false; });
+}
 function citeste(){
   citesteInterfete();
   citesteDosare();
+  citesteJurnal();
   return cerere("/api/acces-conditionat").then(function(d){
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi modulele."; return; }
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
@@ -696,6 +1167,19 @@ function citesteDosare(){
     dosareInLucru = false;
     if(D){ arata(D); }
   });
+}
+var asteptInlocuire = false;
+function inlocuieste(fel, sufix, pachet){
+  var q = new URLSearchParams();
+  q.set("fel", fel);
+  if(pachet){ q.set("pachet", pachet); } else { q.set("sufix", sufix); }
+  mesaj("Se trimite...");
+  cerere("/api/acces-conditionat-inlocuieste", "POST", q).then(function(d){
+    mesaj(d.message, !d.result);
+    asteptInlocuire = !!d.result;
+    if(d.feluri){ arata(d); }
+    setTimeout(citeste, 1500);
+  }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 }
 function trimite(cerereNume, fel, sufix){
   var q = new URLSearchParams();
@@ -722,6 +1206,42 @@ function bucla(){
   (document.hidden ? Promise.resolve() : citeste()).then(function(){ setTimeout(bucla, ocupat ? 1500 : pas); });
 }
 bucla();
+// cheile publice (SoftCam.Key): textele vin traduse de pe receptor; campul adresei nu se rescrie cat il schimba omul
+var cheiAdresaAtinsa = false;
+var cheiAstept = false;
+function arataChei(d){
+  if(!d || !d.texte){ return; }
+  var t = d.texte;
+  $("cheiTitlu").textContent = t.titlu; $("cheiAdu").textContent = t.buton; $("cheiNota").textContent = t.nota;
+  $("cheiEticheta").textContent = t.eticheta_adresa; $("cheiSalveaza").textContent = t.salveaza;
+  $("cheiNotaAdresa").textContent = t.nota_adresa;
+  $("cheiUltima").textContent = d.ultima || "";
+  $("cheiMesaj").textContent = d.message || d.mesaj || "";
+  $("cheiMesaj").classList.toggle("eroare", d.result === false || (!!d.mesaj && !d.ok && !d.in_lucru));
+  if(!cheiAdresaAtinsa){ $("cheiAdresa").value = d.adresa || ""; }
+  $("cheiAdu").disabled = !!d.in_lucru;
+  $("chei").classList.remove("ascuns");
+  if(d.in_lucru && !cheiAstept){ cheiAstept = true; setTimeout(citesteChei, 1000); }
+}
+function citesteChei(){
+  cheiAstept = false;
+  cerere("/api/acces-conditionat-chei").then(arataChei).catch(function(){});
+}
+function cerereChei(q){
+  cerere("/api/acces-conditionat-chei-cerere", "POST", q).then(function(d){
+    // adresa salvata: campul ia adresa de pe receptor; adresa refuzata ramane in camp, cu mesajul
+    if(q.get("cerere") === "adresa" && d.result){ cheiAdresaAtinsa = false; }
+    arataChei(d);
+  }).catch(function(){ $("cheiMesaj").textContent = "Receptorul nu răspunde."; $("cheiMesaj").classList.add("eroare"); });
+}
+$("cheiAdu").addEventListener("click", function(){
+  var q = new URLSearchParams(); q.set("cerere", "adu"); cerereChei(q);
+});
+$("cheiAdresa").addEventListener("input", function(){ cheiAdresaAtinsa = true; });
+$("cheiSalveaza").addEventListener("click", function(){
+  var q = new URLSearchParams(); q.set("cerere", "adresa"); q.set("adresa", $("cheiAdresa").value); cerereChei(q);
+});
+citesteChei();
 </script>
 </body>
 </html>

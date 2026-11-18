@@ -315,4 +315,10 @@ T = {
 	"set_grid_value_alpha": u"Seçilen renk: {0}, saydamlık {1}",
 	"set_grid_help": u"Oklar seni ızgarada, saydamlık satırında ve alttaki şeritte gezdirir; renk hemen sağda görünür. OK veya Yeşil rengi tutar, Mavi hex kodunu ve R, G, B'yi açar.",
 	"set_advanced": u"Gelişmiş",
+	"bitrate_va": u"Video · ses bit hızı",
+	"br_min": u"min",
+	"br_max": u"maks",
+	"br_avg": u"ort",
+	"ecm_hop": u"Hop",
+	"ecm_reader": u"Okuyucu",
 }

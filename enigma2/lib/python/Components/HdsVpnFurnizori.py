@@ -17,7 +17,8 @@
 #   nordvpn    OpenVPN cu datele de serviciu (Service credentials, nu e-mailul). Nord nu are o lista de servere
 #              documentata; oficiale sunt arhiva ovpn.zip (ghidul lor de Linux, 68 MB) si adresa fisierului unui server
 #              (ghidul lor de OpenWrt). Se citeste numai CUPRINSUL arhivei (doua cereri HTTP Range, ~3,3 MB), de unde
-#              ies numele serverelor pe tara, apoi se descarca fisierele a cateva servere din tara aleasa.
+#              ies numele serverelor pe tara, apoi se descarca fisierele serverelor din tara aleasa (cate cere randul
+#              "Servere pe tara"; peste PRAG_ARHIVA din aceeasi arhiva, cu Range, pe bucati asezate la rand).
 #   pia        Private Internet Access, OpenVPN cu numele (p...) si parola din e-mailul de la cumparare. Arhiva oficiala
 #              din articolul lor "Linux - Set Up a Manual OpenVPN Connection Through Terminal" (166 de regiuni).
 #              Directiva disable-occ din fisierele lor nu e in lista alba din HdsVpn.py; se scoate inainte de import
@@ -36,7 +37,8 @@
 # VPN. CyberGhost: configuratia se face in contul online (VPN, Configure Device, protocol, tara, grup, Save, View).
 #
 # Ce primeste omul: alege furnizorul, scrie contul (o singura data; cel salvat nu se mai cere), alege tara. Receptorul
-# descarca, importa cate un server pe oras (Nord si IPVanish: cateva servere din tara), alege primul, instaleaza
+# descarca, importa cate un server pe oras (Nord si IPVanish: 3, 10 sau toate serverele tarii, dupa randul "Servere
+# pe tara", fara sa treaca de HdsVpn.MAX_PROFILURI si de locul liber al receptorului), alege primul, instaleaza
 # programele daca lipsesc si porneste VPN-ul (cu VPN-ul deja pornit pe alt server il reporneste).
 #
 # Datele omului (numele, parola, numarul contului, cheia privata) nu intra in jurnal (_jurnal le ascunde, apoi
@@ -59,17 +61,40 @@ import struct
 import threading
 import time
 import zipfile
+import zlib
 import io
 
-# probele de pe PC: modulul HdsVpn, cine face cererile HTTPS (url, date, interval, maxim) -> (cod, octeti)
+# probele de pe PC: modulul HdsVpn, cine face cererile HTTPS (url, date, interval, maxim) -> (cod, octeti); LOC_LIBER:
+# functia care da octetii liberi de pe partitia lui HdsVpn.DOSAR (pe receptor os.statvfs)
 V = None
 DESCARCATOR = None
+LOC_LIBER = None
 
 MAX_DESCARCARE = 8 * 1024 * 1024
 MAX_JSON = 2 * 1024 * 1024
 MAX_FISIER = 65536
 MAX_ORASE = 60
-SERVERE_ALESE = 3
+# "Servere pe tara" la NordVPN si IPVanish (tamiciav7, LinuxSat 164122 #970681: altul ii arata zeci de servere in Franta,
+# Italia, Elvetia). Pana in 0.7.6 erau numai 3, alegere de simplitate din prima versiune (V3, 11.11.2026), nu o limita
+# tehnica. Acum omul alege 3, 10 sau toate (0); implicit 10 (a doua parere, 15.11.2026). Numarul e tinta pentru tara:
+# cele puse deja se pastreaza si se adauga numai cate lipsesc. Masurat pe 15.11.2026: Nord are 7425 de servere UDP in
+# 156 de tari (us 2615, uk 832, de 360, fr 255, it 171, ch 154, ro 29), fisierul ~2,9 KB; IPVanish 3598 (us 1713).
+SERVERE_ALESE = 10
+ALEGERI_SERVERE = (3, 10, 0)
+CU_ALEGERE_SERVERE = ("nordvpn", "ipvanish")
+# "toate" nu umple receptorul: cel mult HdsVpn.MAX_PROFILURI servere in total si cel putin LOC_RAMAS liberi pe partitia
+# setarilor dupa ce se pun (MARIME_SERVER: fisierul, blocul lui pe disc si randul din index, socotite cu rezerva)
+LOC_RAMAS = 10 * 1024 * 1024
+MARIME_SERVER = 6 * 1024
+# Nord, peste PRAG_ARHIVA servere: fisierele din arhiva oficiala, cu cereri Range pe bucati asezate la rand (serverele
+# unei tari stau la rand in ovpn.zip: Elvetia, 154 de servere, = o cerere de ~660 KB in loc de 154). GOL_ARHIVA: cat de
+# departe poate fi urmatorul fisier ca sa intre in aceeasi cerere; REZERVA_ANTET: campul extra al antetului local.
+PRAG_ARHIVA = 10
+GOL_ARHIVA = 65536
+REZERVA_ANTET = 1024
+# fisier cu fisier (IPVanish, Nord pana la PRAG_ARHIVA): cate cereri deodata; serverele se pun pe receptor in loturi
+FIRE_DESCARCARE = 4
+LOT_IMPORT = 250
 TIMP_S = 30
 VALABIL_LISTA_S = 6 * 3600
 VALABIL_ARHIVA_S = 3600
@@ -332,6 +357,68 @@ def _contAl(furnizor):
 	_scrieJson(CALE_FURNIZORI, date)
 
 
+# ---------------------------------------------------------------- "Servere pe tara" (NordVPN, IPVanish)
+
+def serverePeTara(fid):
+	"""Cate servere ale tarii pune furnizorul `fid`: 3, 10 sau 0 (toate); alegerea tinuta minte in furnizori.json."""
+	date = _citesteJson(CALE_FURNIZORI) or {}
+	s = date.get("servere")
+	n = s.get(fid) if isinstance(s, dict) else None
+	return n if (type(n) is int and n in ALEGERI_SERVERE) else SERVERE_ALESE
+
+
+def seteazaServerePeTara(fid, numar):
+	"""Tine minte alegerea (aceeasi pe televizor si in web). False pentru un furnizor sau un numar strain."""
+	if fid not in CU_ALEGERE_SERVERE or type(numar) is not int or numar not in ALEGERI_SERVERE:
+		return False
+	date = _citesteJson(CALE_FURNIZORI) or {}
+	s = date.get("servere") if isinstance(date.get("servere"), dict) else {}
+	if s.get(fid) == numar:
+		return True
+	s[fid] = numar
+	date["servere"] = s
+	_scrieJson(CALE_FURNIZORI, date)
+	return True
+
+
+def textServere(numar):
+	return _("Toate") if numar == 0 else "%d" % numar
+
+
+def _locLiber():
+	"""Octetii liberi de pe partitia lui HdsVpn.DOSAR (sau a primului dosar parinte care exista); None daca nu se stie."""
+	if LOC_LIBER is not None:
+		return LOC_LIBER()
+	v = _hv()
+	cale = v.RADACINA + v.DOSAR
+	while cale and not os.path.isdir(cale):
+		parinte = os.path.dirname(cale)
+		if parinte == cale:
+			break
+		cale = parinte
+	try:
+		st = os.statvfs(cale or "/")
+	except (AttributeError, OSError):
+		return None
+	return st.f_bavail * st.f_frsize
+
+
+def locServere():
+	"""(cate servere noi mai incap pe receptor, motivul limitei: "numar" = HdsVpn.MAX_PROFILURI, "loc" = memoria)."""
+	v = _hv()
+	n, motiv = max(0, v.MAX_PROFILURI - len(v.profiluri())), "numar"
+	liber = _locLiber()
+	if liber is not None:
+		k = max(0, int((liber - LOC_RAMAS) // MARIME_SERVER))
+		if k < n:
+			n, motiv = k, "loc"
+	return n, motiv
+
+
+def _progres(gata, total, faza="descarca"):
+	_STARE["progres"] = (faza, gata, total)
+
+
 # ---------------------------------------------------------------- cererile HTTPS
 
 class EroareRetea(Exception):
@@ -400,6 +487,47 @@ def _cere(url, furnizor, coduri=(200,), **k):
 		_jurnal("%s: HTTP %s la %s" % (furnizor, cod, url))
 		raise EroareRetea(_("%s a răspuns neașteptat (HTTP %s).") % (furnizor, cod))
 	return continut
+
+
+def _descarcaToate(furnizor, lista, fire=None):
+	"""{cheie: octeti} pentru [(cheie, adresa)]: cate FIRE_DESCARCARE cereri deodata (fiecare cu deschizatorul ei),
+	progresul in _STARE. Un fisier care nu vine (de pilda un server scos intre timp, HTTP 404) e lasat deoparte si scris
+	in jurnal; daca nu vine niciunul, prima greseala merge mai departe (fara legatura: dupa cateva greseli la rand)."""
+	rez = {}
+	greseli = []
+	coada = list(lista)
+	lacat = threading.Lock()
+
+	def lucreaza():
+		while True:
+			with lacat:
+				if not coada or (len(greseli) >= 6 and not rez):
+					return
+				cheie, adresa = coada.pop(0)
+			try:
+				date = _cere(adresa, furnizor, maxim=MAX_FISIER)
+			except Exception as eroare:
+				with lacat:
+					greseli.append(eroare)
+				continue
+			with lacat:
+				rez[cheie] = date
+				_progres(len(rez), len(lista))
+	n = min(FIRE_DESCARCARE if fire is None else fire, len(lista))
+	if n <= 1:
+		lucreaza()
+	else:
+		fire_ = [threading.Thread(target=lucreaza, name="HdsVpnFurnizori-fisiere") for _i in range(n)]
+		for f in fire_:
+			f.daemon = True
+			f.start()
+		for f in fire_:
+			f.join()
+	if greseli:
+		_jurnal("%s: %d din %d fisiere nu au venit (%r)" % (furnizor, len(greseli), len(lista), greseli[0]))
+		if not rez:
+			raise greseli[0]
+	return rez
 
 
 # ---------------------------------------------------------------- furnizorii
@@ -525,7 +653,9 @@ class Nordvpn(Furnizor):
 	_NUME = re.compile(r"^ovpn_udp/([a-z]{2})([0-9]{1,5})\.nordvpn\.com\.udp\.ovpn\Z")
 
 	def _servere(self):
-		"""{cod ISO: [numele serverelor]} din cuprinsul arhivei oficiale (fara s-o descarce intreaga)."""
+		"""{cod ISO: [numele serverelor]} din cuprinsul arhivei oficiale (fara s-o descarce intreaga). Langa lista se
+		tine minte, pentru fiecare server, locul fisierului lui in arhiva (inceputul antetului local, marimea comprimata,
+		CRC-ul, metoda, marimea), ca _dinArhiva sa-l poata cere cu Range."""
 		c = type(self)._cache
 		if c and time.time() - c[0] < VALABIL_LISTA_S:
 			return c[1]
@@ -539,41 +669,132 @@ class Nordvpn(Furnizor):
 		cd = _cere(ADRESA_NORD_ARHIVA, self.titlu, coduri=(206,), interval="%d-%d" % (inceput, inceput + marime - 1),
 			maxim=marime)
 		rez = {}
+		locuri = {}
 		p = 0
 		while p + 46 <= len(cd) and cd[p:p + 4] == b"PK\x01\x02":
+			metoda, = struct.unpack("<H", cd[p + 10:p + 12])
+			crc, comprimat, necomprimat = struct.unpack("<III", cd[p + 16:p + 28])
 			ln, le, lc = struct.unpack("<HHH", cd[p + 28:p + 34])
+			loc, = struct.unpack("<I", cd[p + 42:p + 46])
 			nume = cd[p + 46:p + 46 + ln].decode("utf-8", "replace")
 			p += 46 + ln + le + lc
 			m = self._NUME.match(nume)
 			if m:
-				rez.setdefault(codTara(m.group(1)), []).append(m.group(1) + m.group(2))
+				server = m.group(1) + m.group(2)
+				rez.setdefault(codTara(m.group(1)), []).append(server)
+				locuri[server] = (loc, comprimat, crc, metoda, necomprimat)
 		if not rez:
 			raise EroareRetea(_("Lista serverelor %s nu se poate citi.") % self.titlu)
-		type(self)._cache = (time.time(), rez)
+		type(self)._cache = (time.time(), rez, locuri)
 		return rez
 
 	def tari(self):
 		return dict((cod, l) for cod, l in self._servere().items())
 
+	@staticmethod
+	def numeInArhiva(server):
+		return "ovpn_udp/%s.nordvpn.com.udp.ovpn" % server
+
+	def _dinArhiva(self, alese):
+		"""{server: octetii fisierului} luati din arhiva oficiala cu cereri Range, pe bucati de servere asezate la rand
+		(cel mult MAX_DESCARCARE pe cerere); fiecare fisier verificat (antetul local cu numele lui, CRC-ul, marimea).
+		None daca arhiva nu se mai potriveste cu cuprinsul tinut minte (Nord a pus alta intre timp)."""
+		self._servere()
+		locuri = type(self)._cache[2]
+		lista = sorted((locuri[s][0], s) for s in alese if s in locuri)
+		if len(lista) != len(alese):
+			return None
+		bucati = []
+		for loc, s in lista:
+			sfarsit = loc + 30 + len(self.numeInArhiva(s)) + locuri[s][1] + REZERVA_ANTET
+			if bucati and loc - bucati[-1][1] <= GOL_ARHIVA and sfarsit - bucati[-1][0] <= MAX_DESCARCARE:
+				bucati[-1][1] = max(bucati[-1][1], sfarsit)
+				bucati[-1][2].append(s)
+			else:
+				bucati.append([loc, sfarsit, [s]])
+		rez = {}
+		for inceput, sfarsit, servere in bucati:
+			date = _cere(ADRESA_NORD_ARHIVA, self.titlu, coduri=(206,), interval="%d-%d" % (inceput, sfarsit - 1),
+				maxim=sfarsit - inceput)
+			for s in servere:
+				text = self._membru(date, locuri[s][0] - inceput, s, locuri[s])
+				if text is None:
+					_jurnal("nordvpn: %s nu se potriveste in arhiva" % s)
+					return None
+				rez[s] = text
+			_progres(len(rez), len(alese))
+		return rez
+
+	def _membru(self, date, i, server, loc):
+		"""Fisierul serverului din bucata `date` a arhivei (antetul local la `i`), verificat; altfel None."""
+		_loc, comprimat, crc, metoda, marime = loc
+		if i < 0 or len(date) < i + 30 or date[i:i + 4] != b"PK\x03\x04":
+			return None
+		ln, le = struct.unpack("<HH", date[i + 26:i + 30])
+		if date[i + 30:i + 30 + ln] != self.numeInArhiva(server).encode("ascii"):
+			return None
+		j = i + 30 + ln + le
+		brut = date[j:j + comprimat]
+		if len(brut) != comprimat or marime > MAX_FISIER:
+			return None
+		try:
+			if metoda == 8:
+				text = zlib.decompressobj(-15).decompress(brut, MAX_FISIER + 1)
+			elif metoda == 0:
+				text = brut
+			else:
+				return None
+		except zlib.error:
+			return None
+		if len(text) != marime or (zlib.crc32(text) & 0xFFFFFFFF) != crc:
+			return None
+		return text
+
 	def fisiere(self, cod, cont):
 		servere = list(self._servere().get(cod, []))
 		alese = _alegeServere(self.id, servere, r"\s([a-z]{2}[0-9]{1,5})(?: \(UDP\))?\Z", lambda m: m.group(1))
-		rez = []
-		for s in sorted(alese, key=lambda x: (len(x), x)):
-			text = _cere(ADRESA_NORD_SERVER % s, self.titlu, maxim=MAX_FISIER)
-			rez.append((self.numeFisier(cod, s, ".ovpn"), text))
-		return rez
+		alese = sorted(alese, key=lambda x: (len(x), x))
+		date = None
+		if len(alese) > PRAG_ARHIVA:
+			for _incercare in range(2):
+				try:
+					date = self._dinArhiva(alese)
+				except EroareRetea as eroare:
+					_jurnal("nordvpn: arhiva: %s" % (eroare,))
+					break
+				if date is not None:
+					break
+				# cuprinsul tinut minte e vechi: citit din nou o data, apoi fisier cu fisier
+				type(self)._cache = None
+		if date is None:
+			date = _descarcaToate(self.titlu, [(s, ADRESA_NORD_SERVER % s) for s in alese])
+		return [(self.numeFisier(cod, s, ".ovpn"), date[s]) for s in alese if s in date]
 
 
-def _alegeServere(fid, servere, tipar, cheie):
-	"""Cel mult SERVERE_ALESE servere din `servere`: intai cele ale tarii puse deja (recunoscute in titluri cu `tipar`;
-	`cheie(potrivire)` da numele serverului), ca a doua alegere a tarii sa nu adune altele; altfel la intamplare."""
+def _alegeServere(fid, servere, tipar, cheie, numar=None):
+	"""Serverele de pus pentru tara: tinta e serverePeTara(fid) (sau `numar`; 0 = toate serverele tarii). Intai cele ale
+	tarii puse deja (recunoscute in titluri cu `tipar`; `cheie(potrivire)` da numele serverului), ca a doua alegere a
+	tarii sa nu adune altele; apoi, cate lipsesc pana la tinta, altele la intamplare, numai cate mai incap pe receptor
+	(locServere). Cate s-ar fi vrut si motivul taierii raman in _STARE["alese"] pentru mesajul de la sfarsit."""
+	n = serverePeTara(fid) if numar is None else numar
+	in_tara = set(servere)
 	puse = []
 	for p in _hv().profiluriGrup(grupPentru(fid)):
 		m = re.search(tipar, p.get("titlu", ""))
-		if m and cheie(m) in servere and cheie(m) not in puse:
+		if m and cheie(m) in in_tara and cheie(m) not in puse:
 			puse.append(cheie(m))
-	return puse[:SERVERE_ALESE] or random.sample(servere, min(SERVERE_ALESE, len(servere)))
+	dorite = len(servere) if n == 0 else min(n, len(servere))
+	_STARE["alese"] = {"dorite": dorite, "motiv": ""}
+	if len(puse) >= dorite:
+		return puse[:dorite]
+	luate = set(puse)
+	alte = [s for s in servere if s not in luate]
+	lipsa = dorite - len(puse)
+	loc, motiv = locServere()
+	if loc < lipsa:
+		_STARE["alese"]["motiv"] = motiv
+		lipsa = loc
+	return puse + (alte if lipsa >= len(alte) else random.sample(alte, lipsa))
 
 
 class Ipvanish(Furnizor):
@@ -629,12 +850,15 @@ class Ipvanish(Furnizor):
 		dupa_server = dict((self.descriere(n)[1], n) for n in servere)
 		alese = _alegeServere(self.id, list(dupa_server), r"\s([a-z]{3}) ([a-z][0-9]{2,4})(?: \(UDP\))?\Z",
 			lambda m: "%s-%s" % (m.group(1), m.group(2)))
+		alese = sorted(alese)
+		date = _descarcaToate(self.titlu, [(s, ADRESA_IPVANISH + dupa_server[s]) for s in alese])
 		rez = []
 		cu_ca = False
-		for s in sorted(alese):
-			nume = dupa_server[s]
-			text = _cere(ADRESA_IPVANISH + nume, self.titlu, maxim=MAX_FISIER)
-			oras, server = self.descriere(nume)
+		for s in alese:
+			if s not in date:
+				continue
+			text = date[s]
+			oras, server = self.descriere(dupa_server[s])
 			cu_ca = cu_ca or b"<ca>" not in text
 			rez.append((self.numeFisier(cod, "%s %s" % (oras, server), ".ovpn"), text))
 		if cu_ca:
@@ -780,7 +1004,8 @@ def indisponibil(fid):
 
 # ---------------------------------------------------------------- starea (fara retea, fara secrete)
 
-_STARE = {"tari": {}, "eroare": {}, "gata": None, "aplica": ""}
+# progres: (faza, gata, total) cat merge configurarea; alese: {"dorite", "motiv"} pus de _alegeServere
+_STARE = {"tari": {}, "eroare": {}, "gata": None, "aplica": "", "progres": None, "alese": None}
 _LACAT = threading.Lock()
 
 
@@ -823,6 +1048,10 @@ def stare(fid=""):
 		rez.update({"furnizor": fid, "titlu": f.titlu, "fel": f.fel, "fel_cont": f.cont, "cont": contSalvat(fid),
 			"eticheta_cont": textCont(fid), "nota_cont": textNotaCont(fid), "tari": listaTarilor(fid),
 			"eroare": _STARE["eroare"].get(fid, ""), "indisponibil": indisponibil(fid), "ajutor": textAjutor(fid)})
+		if fid in CU_ALEGERE_SERVERE:
+			# "Servere pe tara": alegerea, cele trei valori si cate servere noi mai incap pe receptor
+			rez.update({"servere": serverePeTara(fid), "loc_servere": locServere()[0],
+				"alegeri_servere": [[n, textServere(n)] for n in ALEGERI_SERVERE]})
 	elif fid in CU_FISIERE:
 		rez.update({"furnizor": fid, "titlu": titlu(fid), "ajutor": textAjutor(fid), "fel": "fisiere"})
 	return rez
@@ -899,6 +1128,8 @@ def _jobConfigureaza(fid, cod, cont):
 		if not reusit:
 			return False, mesaj
 		_contAl(fid)
+	_STARE["progres"] = None
+	_STARE["alese"] = None
 	try:
 		fisiere = f.fisiere(cod, cont)
 	except EroareRetea as eroare:
@@ -906,11 +1137,18 @@ def _jobConfigureaza(fid, cod, cont):
 	except Exception as eroare:
 		_jurnal("%s: fisierele: %r" % (fid, eroare))
 		return False, _mesajRetea(eroare, f.titlu)
+	finally:
+		_STARE["progres"] = None
+	alese = _STARE.get("alese") or {}
 	if not fisiere:
+		if alese.get("motiv") == "numar":
+			return False, _("Sunt deja %d servere; șterge din ele.") % v.MAX_PROFILURI
+		if alese.get("motiv") == "loc":
+			return False, _("Nu mai e loc pe receptor pentru alte servere VPN. Fă loc și încearcă din nou.")
 		return False, _("%s nu are servere în %s acum.") % (f.titlu, numeTara(cod))
 	grup = grupPentru(fid)
 	inainte = set(p["id"] for p in v.profiluriGrup(grup))
-	reusit, mesaj, detalii = v.importa(fisiere, grup)
+	reusit, mesaj = _importaInLoturi(v, fisiere, grup)
 	if not reusit:
 		return False, mesaj
 	# serverele (fara certificatele de alaturi, de pilda ca.ipvanish.com.crt)
@@ -932,15 +1170,44 @@ def _jobConfigureaza(fid, cod, cont):
 		return False, mesaj
 	_STARE["gata"] = {"furnizor": fid, "grup": grup, "profil": ales["id"], "fel": f.fel}
 	_jurnal("%s: %s, %d servere (%s)" % (fid, cod, len(servere), mesaj))
+	if alese.get("motiv") and alese.get("dorite", 0) > len(servere):
+		return True, _("Gata: %s, %s (servere: %d din %d; celelalte nu mai încap pe receptor). VPN-ul pornește.") % (
+			f.titlu, numeTara(cod), len(servere), alese["dorite"])
 	return True, _("Gata: %s, %s (servere: %d). VPN-ul pornește.") % (f.titlu, numeTara(cod), len(servere))
 
 
-def configureaza(fid, cod, cont):
+def _importaInLoturi(v, fisiere, grup):
+	"""HdsVpn.importa pe loturi de LOT_IMPORT servere (cu fisierele de alaturi in fiecare lot), cu progresul in _STARE:
+	pentru "toate" (pana la cateva mii de fisiere) memoria ramane mica si omul vede cat s-a pus. (reusit, mesaj)."""
+	servere = [(n, d) for n, d in fisiere if n.lower().endswith((".ovpn", ".conf"))]
+	alaturi = [(n, d) for n, d in fisiere if not n.lower().endswith((".ovpn", ".conf"))]
+	if len(servere) <= LOT_IMPORT:
+		reusit, mesaj, _detalii = v.importa(fisiere, grup)
+		return reusit, mesaj
+	reusit_vreunul = False
+	primul_mesaj = ""
+	try:
+		for i in range(0, len(servere), LOT_IMPORT):
+			_progres(i, len(servere), "salveaza")
+			reusit, mesaj, _detalii = v.importa(servere[i:i + LOT_IMPORT] + alaturi, grup)
+			reusit_vreunul = reusit_vreunul or reusit
+			primul_mesaj = primul_mesaj or mesaj
+			if not reusit and not reusit_vreunul:
+				return False, mesaj
+	finally:
+		_STARE["progres"] = None
+	return reusit_vreunul, primul_mesaj
+
+
+def configureaza(fid, cod, cont, servere=None):
 	"""Porneste lucrarea care face profilurile pentru tara `cod` (contul din verificaCont). Numarul lucrarii sau None
-	daca merge alta. La reusita, _aplica() alege serverul si porneste VPN-ul."""
+	daca merge alta. La reusita, _aplica() alege serverul si porneste VPN-ul. `servere`: "Servere pe tara" (3, 10 sau
+	0 = toate), tinut minte pentru furnizor inainte de pornire (pagina web il trimite odata cu tara)."""
 	v = _hv()
 	if fid not in FURNIZORI or not _COD.match(cod or ""):
 		return None
+	if servere is not None:
+		seteazaServerePeTara(fid, servere)
 	_STARE["gata"] = None
 	numar = v.LUCRARI.porneste(LUCRARE_CONFIGURARE, _jobConfigureaza, fid, cod, dict(cont or {}))
 	if numar is not None:
@@ -1033,6 +1300,11 @@ def textLucrare(nume):
 	if nume == LUCRARE_TARI:
 		return _("Se citește lista țărilor de la furnizor...")
 	if nume == LUCRARE_CONFIGURARE:
+		p = _STARE.get("progres")
+		if p and p[2] > 1:
+			if p[0] == "salveaza":
+				return _("Se salvează serverele pe receptor (%d din %d)...") % (p[1], p[2])
+			return _("Se pregătesc serverele țării alese (%d din %d)...") % (p[1], p[2])
 		return _("Se pregătesc serverele țării alese...")
 	return _hv().textLucrare(nume)
 

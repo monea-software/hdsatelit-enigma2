@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # traducere_configurare_web.py: „Traducerea subtitrărilor: configurare pas cu pas” in interfata web (HdsWebControl).
-# Telefonul ajunge aici din codul QR al ecranului traducerii de pe televizor (/t/<jeton> il asociaza si il trimite
-# aici); pagina merge la fel din PC. Pasii: alegi serviciul, iti faci cheia pe pagina oficiala (deschisa intr-o fila
+# Telefonul ajunge aici din codul QR al ecranului traducerii de pe televizor (codul are adresa simpla a paginii, fara
+# jeton); pagina merge la fel din PC. Pasii: alegi serviciul, iti faci cheia pe pagina oficiala (deschisa intr-o fila
 # noua), lipesti cheia, iar receptorul o probeaza pe loc; la reusita o salveaza, porneste traducerea si arata
 # confirmarea pe televizor. Pentru serverul din casa (LibreTranslate, Ollama) receptorul il cauta in reteaua de acasa.
 #
@@ -258,7 +258,8 @@ def acum(T):
 	chei = dict(T.chei().stare())
 	try:
 		cfg = T.configuratia(s)
-		lipsa = T.textCeLipseste(cfg)
+		# cu sfatul despre subtitrarile gata facute, ca in /traducere-subtitrari (SBR, lordjedy, TODO 15.11 06:40)
+		lipsa = T.textCeLipsesteCuSfat(cfg, s) if hasattr(T, "textCeLipsesteCuSfat") else T.textCeLipseste(cfg)
 	except Exception:
 		cfg, lipsa = None, ""
 	try:

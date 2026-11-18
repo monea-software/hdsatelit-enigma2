@@ -405,7 +405,9 @@ class HdsActualizari(Screen):
 			server = r.get("server") or {}
 			text = _("Instalezi versiunea %s (%s)?") % (server.get("versiune", ""), text_pachete(len(r.get("pachete") or []),
 				P.marime_text(r.get("marime")) or "?"))
-			text += "\n" + _("La sfârșit interfața trebuie repornită.")
+			# 0.7.7 (DRV): cu driverul placii in plan se reporneste receptorul intreg
+			text += "\n" + (_("La sfârșit receptorul trebuie repornit, ca să încarce driverul nou al plăcii.")
+				if r.get("repornire_receptor") else _("La sfârșit interfața trebuie repornită."))
 			self.session.openWithCallback(self._confirmat, MessageBox, text, MessageBox.TYPE_YESNO, default=True)
 			return
 		self._arata()

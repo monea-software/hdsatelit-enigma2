@@ -178,6 +178,9 @@ CUVINTE = {
 	"hds_antena_rotire": N_("motor DiSEqC USALS"),
 	"hds_ipv6": N_("adresa IPv6 odhcp6c DHCPv6"),
 	"hds_samba": N_("Samba SMB partajare dosare rețea Windows Explorer NAS"),
+	# Locuri din rețea (Media si copia din Rețea & internet): montarile cautate cu numele din alte imagini
+	"hds_locuri_retea": N_("montare mount SMB CIFS NFS NAS Windows dosar partajat"),
+	"hds_retea_locuri_retea": N_("montare mount SMB CIFS NFS NAS Windows dosar partajat"),
 	"hds_antena_locul": N_("oraș țară latitudine longitudine coordonate USALS motor"),
 	"audio_setup": N_("sunet AC3 DTS 5.1"),
 	"time_setup": N_("ceas oră"),

@@ -12,7 +12,8 @@
 #      octetii primiti cu cheile feedului (Components/HdsSemnatura.py, scopul imagini.json). Modelul e machinebuild= din
 #      /etc/hdsatelit-model; versiunea aleasa e cea mai mare, numai mai noua decat cea de acum;
 #   2. locul: tinta_scriere citeste /proc/cmdline. Se scrie numai locul din care ruleaza imaginea, dat explicit programului
-#      de scriere. De pe stick, de pe un disc sau dintr-o asezare necunoscuta nu se scrie;
+#      de scriere. Din 0.7.7 si locul de pe stick al pornirii multiple si locurile kexec, ca „Imagine nouă de pe stick”
+#      (HdsSoftwareUpdate.tintaScrierii). De pe un disc fara pornire multipla sau dintr-o asezare necunoscuta nu se scrie;
 #   3. descarcarea numai pe stick (hdsatelit/imagine-noua/<fisier>.partial), cu reluare (Range); memoria interna nu se
 #      atinge. Fara stick sau cu loc putin nu porneste;
 #   4. fisierul se citeste inapoi de pe stick (cache-ul golit), mai mare sau cu alta suma = sters si oprire; apoi cele patru
@@ -90,6 +91,8 @@ FOLDER_CURAT = ".hds-actualizare-extrasa"
 SUBCALE_UPDATE = ("e2", "update")
 NUME_MARCAJ = "hdsatelit-model"
 NUME_PACHET = ("kernel.bin", "rootfs.tar.bz2", "imageversion", NUME_MARCAJ)
+# arhivele Vu+ 4K de pe site: nucleul e vuplus/<model>/kernel_auto.bin (HdsPazaModel.SCRIERE_VUPLUS, _nume_din_zip)
+NUME_NUCLEU_VUPLUS = "kernel_auto.bin"
 CALE_PROGRAM = "/usr/bin/ofgwrite"
 NUME_JURNAL_STICK = "hds-actualizare-jurnal.txt"
 JURNAL = "/home/root/logs/hds-imagine-online.log"
@@ -142,6 +145,10 @@ T_NESEMNATA = N_("Lista imaginilor nu e semnată de HD Satelit. Nu s-a instalat 
 T_FARA_FISIER = N_("Imaginea nouă nu se găsește pe server. Încearcă mai târziu.")
 T_NEPOTRIVIT = N_("Imaginea descărcată nu se potrivește. Nu s-a instalat nimic. Apasă din nou ca s-o descarc iar.")
 T_ALT_RECEPTOR = N_("Imaginea nu este pentru acest receptor. Nu s-a instalat nimic.")
+# arhiva Vu+ cat poarta HdsPazaModel.SCRIERE_VUPLUS e inchisa: arhiva ramane pe stick, iar omul afla ce face acum
+T_VUPLUS_PE_STICK = N_("Imaginea nouă este pe stick, în dosarul %s. Nu s-a instalat nimic.")
+T_VUPLUS = N_("Arhivele în forma Vu+ se vor instala din meniu într-o actualizare. Până atunci pune imaginea cu pașii de "
+	"pe pagina receptorului de pe site.")
 T_STICK_STRICAT = N_("Stickul a fost scos sau are o eroare. Nu s-a instalat nimic.")
 T_FARA_COPIE = N_("Copia setărilor nu s-a putut face pe stick. Nu s-a instalat nimic.")
 T_SIMULARE = N_("Verificarea de dinainte de instalare n-a ieșit bine. Nu s-a instalat nimic.")
@@ -558,19 +565,56 @@ def _refuz_loc(motiv):
 	return {"bun": False, "motiv": motiv}
 
 
+FELURI_PORNIRE_MULTIPLA = ("usb", "kexec", "kexec_usb")
+
+
+def _loc_pornire_multipla(cmdline):
+	"""Locul de pe stick al pornirii multiple (STARTUP_5/6 pe Ustym 4K PRO si SF8008: root=/dev/sda2 kernel=/dev/sda1) sau
+	un loc kexec (Vu+ 4K, din memorie sau de pe USB): aceleasi forme, aceleasi argumente si aceleasi refuzuri ca la
+	„Imagine nouă de pe stick” (Screens/HdsSoftwareUpdate.tintaScrierii, din 0.7.7; USI, 16.11.2026, space71 pe SatFan).
+	Nucleul locului kexec e fisierul <loc>/zImage, asa cum il anunta programul de scriere. Puntea de pe 0.6.x si probele
+	fara ecran nu au functia: atunci refuz, ca inainte."""
+	try:
+		from Screens.HdsSoftwareUpdate import tintaScrierii
+	except Exception as e:
+		_jurnal("locul de pe stick sau kexec: fara tintaScrierii (%s)" % e)
+		return _refuz_loc("stick")
+	try:
+		t = tintaScrierii(cmdline)
+	except ValueError as e:
+		return _refuz_loc("stick sau kexec: %s" % e)
+	if t.get("fel") not in FELURI_PORNIRE_MULTIPLA:
+		return _refuz_loc("stick")
+	return {"bun": True, "fel": t["fel"], "kernel": t["nucleu"], "radacina": t["radacina"], "subdosar": t["subdosar"],
+		"loc": int(t["loc"] or 0), "argumente": t["argumente"].split()}
+
+
+def pe_tinta(tinta, dispozitiv):
+	"""True cand `dispozitiv` (partitia stickului cu pachetul) e chiar o partitie in care se scrie: nucleul locului de pe
+	stick (sda1 la STARTUP_5). Radacina locului o refuza deja Tools/MediuImagine (acelasi dispozitiv cu /)."""
+	def real(d):
+		try:
+			return os.path.normpath(os.path.realpath(d))
+		except (OSError, ValueError):
+			return d
+	tinte = set(real(d) for d in (tinta.get("kernel"), tinta.get("radacina")) if d and d.startswith("/dev/"))
+	return bool(dispozitiv) and real(dispozitiv) in tinte
+
+
 def tinta_scriere(cmdline, reguli=None):
 	"""Locul din care ruleaza imaginea, din /proc/cmdline si partitiile date de bootloader:
 	{"bun": True, "kernel", "radacina", "subdosar", "loc", "argumente"} sau {"bun": False, "motiv"}. Se scrie numai aici:
 	nucleul si radacina se dau explicit programului de scriere, cu -m<N> numai cand sistemul sta in subdosarul
-	linuxrootfs<N> (fara el programul refuza dispozitivul dat). Numai pe partitii cu numele asteptate; de pe stick, de pe
-	disc, cu UUID sau cu alt nume de subdosar nu se scrie."""
+	linuxrootfs<N> (fara el programul refuza dispozitivul dat). Numai pe partitii cu numele asteptate; cu UUID sau cu alt
+	nume de subdosar nu se scrie. Locul de pe stick al pornirii multiple si locurile kexec: _loc_pornire_multipla (si
+	„fel”); de pe un disc USB fara pornire multipla nu se scrie."""
 	H = _paza()
 	reguli = reguli or {}
 	radacina = _camp(cmdline, "root")
 	kernel = _camp(cmdline, "kernel")
 	subdosar = _camp(cmdline, "rootsubdir")
-	if radacina.startswith("/dev/sd") or kernel.startswith("/dev/sd"):
-		return _refuz_loc("stick")
+	if _camp(cmdline, "kexec") == "1" or radacina.startswith("/dev/sd") or kernel.startswith("/dev/sd"):
+		return _loc_pornire_multipla(cmdline)
 	if not _RX_MMC.match(radacina):
 		return _refuz_loc("radacina necunoscuta")
 	partitii = H.partitiiDinCmdline(cmdline) or []
@@ -673,6 +717,15 @@ def simulare_buna(iesire, tinta, dosar):
 		return False
 	if not kernele or not radacini or set(kernele) != set([tinta["kernel"]]) or set(radacini) != set([tinta["radacina"]]):
 		return False
+	if tinta.get("fel") in FELURI_PORNIRE_MULTIPLA:
+		# ca la „Imagine nouă de pe stick” (HdsSoftwareUpdate._simulareLocPornireMultipla): se scrie chiar locul pornit
+		if ("Current rootfs is: %s" % tinta["radacina"]) not in randuri:
+			return False
+		if tinta["fel"] == "usb" and ("Flashing without rootSubDir check" not in randuri or
+				any(r.startswith("Flashing multiboot partition") for r in randuri)):
+			return False
+		if tinta["fel"] != "usb" and "Kexec mode is: 1" not in randuri:
+			return False
 	subdosare = [r[len("Current root sub dir is:"):].strip() for r in randuri if r.startswith("Current root sub dir is:")]
 	if tinta["subdosar"]:
 		return tinta["subdosar"] in subdosare and set(subdosare) == set([tinta["subdosar"]]) and \
@@ -947,22 +1000,31 @@ def _nume_din_zip(z, cu_marcaj=True):
 	"""{nume din NUME_PACHET: numele adevarat din arhiva}: dosarul care are si nucleul, si sistemul, si marcajul. Arhivele
 	publice il tin in dosarul pe care il cauta Maintenance Mode (amiko/viper4kv20, octagon/sf8008) sau in e2/update; cu mai
 	multe dosare se ia primul, iar marcajul si sumele hotarasc oricum daca e cel bun. Imaginile altora n-au marcaj: acolo
-	ajung nucleul si sistemul, cu e2/update intai."""
+	ajung nucleul si sistemul, cu e2/update intai. Arhivele Vu+ 4K (vuplus/<model>/kernel_auto.bin, fara kernel.bin in
+	acelasi dosar): nucleul e kernel_auto.bin, dat sub cheia kernel.bin, iar cheia vuplus spune asta (scoate_pachetul)."""
 	dosare = {}
 	ordine = []
 	for n in z.namelist():
 		curat = n.replace("\\", "/")
 		dosar, _bara, scurt = curat.rpartition("/")
-		if scurt in NUME_PACHET:
+		if scurt in NUME_PACHET or scurt == NUME_NUCLEU_VUPLUS:
 			if dosar not in dosare:
 				dosare[dosar] = {}
 				ordine.append(dosar)
 			dosare[dosar].setdefault(scurt, n)
+	for d in ordine:
+		if "kernel.bin" not in dosare[d] and NUME_NUCLEU_VUPLUS in dosare[d]:
+			dosare[d]["kernel.bin"] = dosare[d][NUME_NUCLEU_VUPLUS]
+			dosare[d]["vuplus"] = True
 	cerute = ("kernel.bin", "rootfs.tar.bz2") + ((NUME_MARCAJ,) if cu_marcaj else ())
 	bune = [d for d in ordine if all(x in dosare[d] for x in cerute)]
 	if not cu_marcaj:
 		bune.sort(key=lambda d: 0 if d == "/".join(SUBCALE_UPDATE) or d.endswith("/" + "/".join(SUBCALE_UPDATE)) else 1)
 	return dosare[bune[0]] if bune else {}
+
+
+class ArhivaVuplus(ValueError):
+	"""Arhiva Vu+ (kernel_auto.bin) cat poarta HdsPazaModel.SCRIERE_VUPLUS e inchisa: nu se scoate si nu se sterge."""
 
 
 def dosar_curat(punct):
@@ -978,6 +1040,8 @@ def scoate_pachetul(cale_zip, punct, oprit=None, cu_marcaj=True):
 		nume = _nume_din_zip(z, cu_marcaj)
 		if not nume:
 			raise ValueError("arhiva nu are pachetul")
+		if nume.get("vuplus") and not getattr(_paza(), "SCRIERE_VUPLUS", False):
+			raise ArhivaVuplus("arhiva Vu+: instalarea din meniu este oprita")
 		for scurt in NUME_PACHET:
 			if scurt not in nume:
 				continue
@@ -1672,6 +1736,10 @@ class ImagineOnline(object):
 		except (IOError, OSError) as e:
 			return None, None, _t(T_FARA_LOC) % (loc_necesar(imagine) // (1024 * 1024) + 1) if e.errno == errno.ENOSPC else \
 				_t(T_STICK_STRICAT)
+		except ArhivaVuplus as e:
+			# arhiva e buna si ramane pe stick (nu se descarca din nou), dar nu se instaleaza din meniu
+			_jurnal("arhiva: %s" % e)
+			return None, None, (_t(T_VUPLUS_PE_STICK) % DOSAR_PE_STICK) + " " + _t(T_VUPLUS)
 		except (ValueError, KeyError, zipfile.BadZipFile, RuntimeError) as e:
 			_jurnal("arhiva: %s" % e)
 			if self._opreste:
@@ -1783,6 +1851,9 @@ class ImagineOnline(object):
 		if not permis or motiv != M.PERMIS_USB:
 			_jurnal("mediul nu e bun: %s" % motiv)
 			return _t(T_STICK_STRICAT)
+		if pe_tinta(self._tinta or {}, _d):
+			_jurnal("pachetul sta pe o partitie in care se scrie: %s" % _d)
+			return _t(T_LOC_STRAIN)
 		if motiv_nume_stick(dosar, muta=False)[0]:
 			return _t(T_NUME_STICK)
 		try:

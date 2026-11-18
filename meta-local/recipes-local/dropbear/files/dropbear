@@ -15,8 +15,11 @@
 # loc (requisite) logarea cu parola de la orice alta adresa, ca la FTP (/etc/pam.d/vsftpd). Cheile merg de oriunde.
 # Un client pe IPv6 (cand IPv6 e pornit in Setari) intra numai cu cheia: pam_access 1.7.1 nu potriveste retelele IPv6
 # scrise cu prefix (fe80::/10, fc00::/7), deci parola se primeste numai pe IPv4.
+# quiet_log (pam_access de la 1.6.0) NUMAI pe comutator, ca la FTP: refuzat e aici intrarea buna din casa, fara parola,
+# deci nu se scrie in syslog ca access denied; verificarea retelei (randurile 2 si 4) scrie in continuare refuzul
+# adevarat, al adresei din afara retelei de acasa.
 
-auth     [perm_denied=ignore default=2]  pam_access.so accessfile=/etc/security/hds-ssh-retea-locala.conf nodefgroup
+auth     [perm_denied=ignore default=2]  pam_access.so accessfile=/etc/security/hds-ssh-retea-locala.conf nodefgroup quiet_log
 auth     [success=ignore default=1]      pam_access.so accessfile=/etc/security/hds-ssh-retele-locale.conf nodefgroup
 auth     [success=done default=ignore]    pam_permit.so
 auth     requisite                        pam_access.so accessfile=/etc/security/hds-ssh-retele-locale.conf nodefgroup

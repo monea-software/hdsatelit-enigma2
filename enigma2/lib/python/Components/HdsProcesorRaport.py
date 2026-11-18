@@ -19,6 +19,11 @@
 #   deci un esantion cade si cand C++ tine GIL-ul (de pilda in ioctl-ul tunerului), nu numai intre apelurile Python.
 #   Se numara cadrul de sus si primele trei cadre; caile se taie ca in raportul pornirii (dupa enigma2/python/), un cadru
 #   cu "cam" in cale e numai "(modul-acces)";
+#   0.7.7: faulthandler scrie NUMAI stiva firului care primeste semnalul (all_threads=False). Cu toate firele, manerul
+#   citea fara lacat si cadrele firelor care rulau cod Python in acelasi timp, iar pe receptorul de proba un astfel de esantion a oprit
+#   enigma2 (SIGSEGV in libpython, 1 din ~318) cat firul ghidului de internet lucra. Raportul folosea oricum numai stiva
+#   firului principal. Semnalul trimis procesului (kill PID) il primeste firul principal (226 din 226 pe receptorul de proba); o stiva
+#   care nu se termina in <module> (mytest.py) e a altui fir, se numara separat si nu intra in clasament;
 # - clasamentul tuturor proceselor (/proc/*/stat la inceput si la sfarsit; la un tester timpul era in user pe
 #   tot sistemul, deci trebuie vazut si daca e alt proces); numele unui modul de acces e numai "modul-acces";
 # - contoarele citirilor starii tunerelor (enigma.getFrontendReadCounts(), lib/dvb/hdscitirifrontend.h): cereri, cate au
@@ -156,7 +161,10 @@ class Prag(object):
 
 # Python 3.14 scrie si numele firului: "Thread 0x... [nume] (most recent call first):"
 _CAP = re.compile(r"^(?:Current thread|Thread) (0x[0-9A-Fa-f]+)(?: \[[^\]]*\])? \(most recent call first\):\s*$")
+# un singur fir (all_threads=False): firul care a primit semnalul, fara adresa
+_CAP_UNUL = re.compile(r"^Stack \(most recent call first\):\s*$")
 _CADRU = re.compile(r'^  File "([^"]*)", line (\d+) in (\S+)\s*$')
+MAX_CADRE_FAULTHANDLER = 100   # faulthandler nu scrie mai mult de atat (3.14 taie fara semn)
 
 
 def cale_curata(cale):
@@ -174,31 +182,57 @@ def cale_curata(cale):
 	return "(alt fisier)"
 
 
-def stive_fir(text, ident):
-	"""lista stivelor (fiecare: [cadrul de sus, ...] ca "cale:rand functie") ale firului cu identificatorul ident, din
-	toate scrierile faulthandler din text"""
+def _blocuri(text):
+	"""[(ident, cadre, functia de jos)] din scrierile faulthandler: ident din antetul tuturor firelor, None din antetul unui
+	singur fir (all_threads=False); cadrele ca "cale:rand functie", cadrul de sus primul; functia de jos e a ultimului cadru
+	citit (None fara cadre Python)"""
 	rez, cur = [], None
 	for r in text.splitlines():
 		m = _CAP.match(r)
-		if m:
+		if m or _CAP_UNUL.match(r):
 			if cur is not None:
 				rez.append(cur)
-			cur = [] if int(m.group(1), 16) == ident else None
+			cur = [int(m.group(1), 16) if m else None, [], None]
 			continue
 		if cur is None:
 			continue
 		m = _CADRU.match(r)
 		if m:
 			c = cale_curata(m.group(1))
-			cur.append(c if c == "(modul-acces)" else "%s:%s %s" % (c, m.group(2), m.group(3)))
+			cur[1].append(c if c == "(modul-acces)" else "%s:%s %s" % (c, m.group(2), m.group(3)))
+			cur[2] = m.group(3)
 		elif r.strip() == "<no Python frame>":
-			cur.append("(fara cadru Python)")
+			cur[1].append("(fara cadru Python)")
+			cur[2] = None
 		elif not r.strip():
 			rez.append(cur)
 			cur = None
 	if cur is not None:
 		rez.append(cur)
-	return rez
+	return [tuple(b) for b in rez]
+
+
+def stive_principal(text, ident):
+	"""(stivele firului cu identificatorul ident, cate stive de un singur fir au fost ale altui fir). O stiva de un singur
+	fir (all_threads=False: a firului care a primit semnalul) e a firului principal cand se termina in <module> (mytest.py)
+	sau are cate cadre scrie faulthandler cel mult (taiata); a unui fir pornit din threading se termina in _bootstrap si se
+	numara separat, fara sa intre in clasament."""
+	rez, alt_fir = [], 0
+	for fir, cadre, jos in _blocuri(text):
+		if fir is not None:
+			if fir == ident:
+				rez.append(cadre)
+		elif jos == "<module>" or len(cadre) >= MAX_CADRE_FAULTHANDLER:
+			rez.append(cadre)
+		else:
+			alt_fir += 1
+	return rez, alt_fir
+
+
+def stive_fir(text, ident):
+	"""lista stivelor (fiecare: [cadrul de sus, ...] ca "cale:rand functie") ale firului cu identificatorul ident, din
+	toate scrierile faulthandler din text (si cele de un singur fir, dupa stive_principal)"""
+	return stive_principal(text, ident)[0]
 
 
 def clasamente(stive, adancime=MAX_STIVA):
@@ -296,8 +330,8 @@ def cai_descriptori(pid, fd_uri):
 
 
 def text_raport(fire_a, fire_b, dt, intr_a, intr_b, proc_a, proc_b, fe_a, fe_b, stive, pid, parte, clk=CLK,
-		procese_a=None, procese_b=None, bucla_a=None, bucla_b=None, cai=None):
-	"""textul sectiunii raportului; fire_*: {tid: (nume, stare, utime, stime)}"""
+		procese_a=None, procese_b=None, bucla_a=None, bucla_b=None, cai=None, alt_fir=0):
+	"""textul sectiunii raportului; fire_*: {tid: (nume, stare, utime, stime)}; alt_fir: esantioanele primite de alt fir"""
 	r = ["procesor_fereastra_s=%.1f" % dt, "procesor_prag=%d%%/%ds" % (int(PRAG * 100), DURATA_S),
 		"fir_principal_ultima_masura=%d%%" % int(round(parte * 100))]
 	ocupat = procesor_total(proc_b)[0] - procesor_total(proc_a)[0]
@@ -350,7 +384,8 @@ def text_raport(fire_a, fire_b, dt, intr_a, intr_b, proc_a, proc_b, fe_a, fe_b, 
 		r.append("%s %s %.1f" % (k, nume, d / dt if dt > 0 else 0))
 	r.append("")
 	sus, lant = clasamente(stive)
-	r.append("-- stiva firului principal: %d esantioane (cadrul de sus)" % len(stive))
+	r.append("-- stiva firului principal: %d esantioane (cadrul de sus)%s" % (len(stive),
+		("; %d primite de alt fir, sarite" % alt_fir) if alt_fir else ""))
 	r += ["%3d %s" % (n, k) for k, n in sus[:MAX_RANDURI]]
 	r.append("")
 	r.append("-- stiva firului principal (primele %d cadre)" % MAX_STIVA)
@@ -432,12 +467,13 @@ class Urmaritor(object):
 		self.oprit = False
 
 	def inregistreaza(self):
-		"""faulthandler pe SEMNAL, cu fisierul lui (din firul principal, la pornire)"""
+		"""faulthandler pe SEMNAL, cu fisierul lui (din firul principal, la pornire); numai stiva firului care primeste
+		semnalul: citirea celorlalte fire din manerul de semnal poate opri procesul cat ele ruleaza cod Python"""
 		import faulthandler
 		import signal
 		self.semnal = int(signal.SIGRTMIN) + SEMNAL_PESTE_RTMIN
 		self.fisier = open(FISIER_STIVE, "w")
-		faulthandler.register(self.semnal, file=self.fisier, all_threads=True, chain=False)
+		faulthandler.register(self.semnal, file=self.fisier, all_threads=False, chain=False)
 
 	def porneste(self):
 		import threading
@@ -485,11 +521,11 @@ class Urmaritor(object):
 		self._esantioneaza()
 		b = _instantaneu(self.pid)
 		self.fisier.flush()
-		stive = stive_fir(_citeste(FISIER_STIVE, 2 * 1024 * 1024), self.ident)
+		stive, alt_fir = stive_principal(_citeste(FISIER_STIVE, 2 * 1024 * 1024), self.ident)
 		fd_uri = list(((b.get("bucla") or {}).get("fd") or {}).keys())
 		text = text_raport(a["fire"], b["fire"], b["t"] - a["t"], a["intr"], b["intr"], a["stat"], b["stat"], a["fe"],
 			b["fe"], stive, self.pid, self.prag.parte, procese_a=a["procese"], procese_b=b["procese"],
-			bucla_a=a.get("bucla"), bucla_b=b.get("bucla"), cai=cai_descriptori(self.pid, fd_uri))
+			bucla_a=a.get("bucla"), bucla_b=b.get("bucla"), cai=cai_descriptori(self.pid, fd_uri), alt_fir=alt_fir)
 		with open(FISIER_RAPORT, "w") as f:
 			f.write(text)
 		try:

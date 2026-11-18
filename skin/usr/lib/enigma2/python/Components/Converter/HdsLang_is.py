@@ -312,4 +312,10 @@ T = {
 	"cpu_mode": u"Hamur örgjörva",
 	"cpu_volt": u"Spenna",
 	"cpu_steps": u"Tími á tíðni",
+	"bitrate_va": u"Bitahraði myndar · hljóðs",
+	"br_min": u"lágm",
+	"br_max": u"hám",
+	"br_avg": u"með.",
+	"ecm_hop": u"Hoppafjöldi",
+	"ecm_reader": u"Lesari",
 }

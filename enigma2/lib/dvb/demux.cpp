@@ -6,6 +6,10 @@
 #include <errno.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/eventfd.h>
+#include <poll.h>
+#include <time.h>
+#include <atomic>
 
 // #define FUZZING 1
 
@@ -156,6 +160,387 @@ RESULT eDVBDemux::createTSRecorder(ePtr<iDVBTSRecorder> &recorder)
 		return -EBUSY;
 	recorder = new eDVBTSRecorder(this);
 	return 0;
+}
+
+RESULT eDVBDemux::createBitrateCounter(ePtr<iDVBBitrateCounter> &counter)
+{
+#if HAVE_DVB_API_VERSION < 3
+	(void)counter;
+	return -1;
+#else
+	counter = new eDVBBitrateCounter(this);
+	return 0;
+#endif
+}
+
+/* The bitrate of an encrypted service on HiSilicon (BR2, 16.11.2026, lib/service/servicedvb.cpp getLiveBitrate): there
+ * a TS tap of one PID gets nothing of its own. The record path of the driver has groups (at most 3 per demux); only PID 0
+ * opens one, the other PIDs join the group opened last, and the data of a group goes to the filter of its PID 0
+ * (the guard of the record channel, in the HiSilicon parts of eDVBTSRecorder). So the TS packets come only to a recording that
+ * starts with PID 0: the caller adds PID 0 and its PIDs, sets the counting slots and a target that takes everything
+ * (/dev/null). For the driver it is one more recording, with the guard of the record channel like every recording
+ * (eDVBTSRecorder::start / stop), so no buffer is lost. Only on a covered demux (0 and 1 of adapter 0) where nothing
+ * else records: the recordings, the streams and the timeshift keep their record groups. */
+RESULT eDVBDemux::createCountingRecorder(ePtr<iDVBTSRecorder> &recorder)
+{
+#if HAVE_HISILICON
+	if (hdsPazaRecorders(adapter, demux) != 0)
+		return -1;
+	recorder = new eDVBTSRecorder(this);
+	return 0;
+#else
+	(void)recorder;
+	return -1;
+#endif
+}
+
+/* ==== eDVBBitrateCounter (see demux.h): from the GPL-2.0 sources of a public enigma2, commits 2d5bc2b55524 and
+   ce2af803e20f (Huevos, 10.2026); here without the TS tap on HiSilicon, and with the packets mode for encrypted services
+   (BR2, 16.11.2026). The SoftCSA loop counts in its own recorder (eDVBRecordFileThread::countPIDs). ==== */
+
+static int64_t bitrateMonotonicUs()
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
+
+eDVBBitrateCounter::eDVBBitrateCounter(eDVBDemux *demux):
+	m_demux(demux), m_pid(-1), m_packets(false), m_part_len(0), m_fd(-1), m_wake_fd(-1), m_buf(188 * 512),
+	m_bytes(0), m_last_query_us(0), m_exited(true), m_ts_tap(false),
+	m_win_bytes(0), m_win_us(0), m_kbps(0)
+{
+}
+
+DEFINE_REF(eDVBBitrateCounter)
+
+eDVBBitrateCounter::~eDVBBitrateCounter()
+{
+	stop();
+}
+
+bool eDVBBitrateCounter::tsTapAllowed()
+{
+	/* two plain blocks, not one #if with ||: the source checks of the HiSilicon parts (teste/test_verif_radio_regresii.py
+	   rezolva_hisilicon) read only a plain #if HAVE_HISILICON */
+#if HAVE_HISILICON
+	/* HiSilicon: a TS tap is a record channel of the driver (see demux.h) */
+	return false;
+#else
+#if HAVE_DVB_API_VERSION <= 3
+	/* old API: no DMX_OUT_TSDEMUX_TAP */
+	return false;
+#else
+	return true;
+#endif
+#endif
+}
+
+/* Demux filter of one PID. ts == false: PES tap, the payload of the PID. ts == true: TS tap, the raw packets of the
+ * PID, opened the way the recorder opens it. Which of the two a driver delivers differs between boxes. */
+int eDVBBitrateCounter::openFilter(int pid, bool ts)
+{
+#if HAVE_DVB_API_VERSION < 3
+	(void)pid;
+	(void)ts;
+	return -1;
+#else
+	if (ts && !tsTapAllowed())
+		return -1;
+	/* read-only, the way the recorder opens its TS tap (openDemux() would give O_RDWR) */
+	char filename[32] = {};
+	snprintf(filename, sizeof(filename), "/dev/dvb/adapter%d/demux%d", m_demux->adapter, m_demux->demux);
+	int fd = ::open(filename, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+	{
+		eDebug("[eDVBBitrateCounter] open %s failed: %m", filename);
+		return -1;
+	}
+	::fcntl(fd, F_SETFL, O_NONBLOCK);
+	if (::ioctl(fd, DMX_SET_BUFFER_SIZE, BUFFER_SIZE) < 0)
+		eDebug("[eDVBBitrateCounter] DMX_SET_BUFFER_SIZE failed: %m");
+
+	dmx_pes_filter_params flt = {};
+	flt.pes_type = DMX_PES_OTHER;
+#if HAVE_DVB_API_VERSION > 3
+	flt.output = ts ? DMX_OUT_TSDEMUX_TAP : DMX_OUT_TAP;
+#else
+	flt.output = DMX_OUT_TAP;
+#endif
+	flt.pid = pid;
+	flt.input = DMX_IN_FRONTEND;
+	flt.flags = ts ? 0 : DMX_IMMEDIATE_START;
+	if (::ioctl(fd, DMX_SET_PES_FILTER, &flt) < 0 || (ts && ::ioctl(fd, DMX_START) < 0))
+	{
+		eDebug("[eDVBBitrateCounter] cannot filter pid=%04x (%s tap on %s): %m", pid, ts ? "TS" : "PES", filename);
+		::close(fd);
+		return -1;
+	}
+	return fd;
+#endif
+}
+
+/* The payload of the TS packets of m_pid in buf (tsPayloadBytes), on the counting thread. A read may end inside a
+ * packet: the part is kept and finished by the next read; a lost sync is found again on 0x47. */
+uint64_t eDVBBitrateCounter::countTs(const unsigned char *buf, int len)
+{
+	uint64_t bytes = 0;
+	int i = 0;
+	if (m_part_len)
+	{
+		const int need = 188 - m_part_len;
+		if (len < need)
+		{
+			memcpy(m_part + m_part_len, buf, len);
+			m_part_len += len;
+			return 0;
+		}
+		memcpy(m_part + m_part_len, buf, need);
+		m_part_len = 0;
+		if (m_part[0] == 0x47 && (((m_part[1] & 0x1f) << 8) | m_part[2]) == m_pid)
+			bytes += tsPayloadBytes(m_part);
+		i = need;
+	}
+	while (i + 188 <= len)
+	{
+		if (buf[i] != 0x47)
+		{
+			++i;
+			continue;
+		}
+		if ((((buf[i + 1] & 0x1f) << 8) | buf[i + 2]) == m_pid)
+			bytes += tsPayloadBytes(buf + i);
+		i += 188;
+	}
+	if (i < len && buf[i] == 0x47)
+	{
+		m_part_len = len - i;
+		memcpy(m_part, buf + i, m_part_len);
+	}
+	return bytes;
+}
+
+int eDVBBitrateCounter::startThread()
+{
+	/* always start on the PES tap: a TS tap that was needed once is not trusted for the next start. In the packets mode
+	   (encrypted service) only the TS tap: the PES tap would count wrong there */
+	bool ts = m_packets;
+	int fd = openFilter(m_pid, ts);
+	if (fd < 0 && !m_packets && tsTapAllowed())
+	{
+		/* the driver does not take a PES filter on this PID: the TS tap is the only way */
+		ts = true;
+		fd = openFilter(m_pid, true);
+	}
+	if (fd < 0)
+		return -1;
+	m_ts_tap = ts;
+	int wake = ::eventfd(0, EFD_CLOEXEC);
+	if (wake < 0)
+	{
+		eDebug("[eDVBBitrateCounter] eventfd failed: %m");
+		::ioctl(fd, DMX_STOP);
+		::close(fd);
+		return -1;
+	}
+	m_fd = fd;
+	m_wake_fd = wake;
+	m_part_len = 0;
+	m_bytes = 0;
+	m_last_query_us = bitrateMonotonicUs();
+	m_win_bytes = 0;
+	m_win_us = 0;
+	m_kbps = 0;
+	m_exited = false;
+	if (run())
+	{
+		::ioctl(m_fd, DMX_STOP);
+		::close(m_fd);
+		::close(m_wake_fd);
+		m_fd = m_wake_fd = -1;
+		m_exited = true;
+		return -1;
+	}
+	return 0;
+}
+
+void eDVBBitrateCounter::stopThread()
+{
+	if (m_wake_fd >= 0)
+	{
+		uint64_t one = 1;
+		ssize_t w = ::write(m_wake_fd, &one, sizeof(one));
+		(void)w;
+	}
+	kill(); /* joins the thread; nothing to do when it never ran or ended already */
+	if (m_fd >= 0)
+	{
+		::ioctl(m_fd, DMX_STOP);
+		::close(m_fd);
+		m_fd = -1;
+	}
+	if (m_wake_fd >= 0)
+	{
+		::close(m_wake_fd);
+		m_wake_fd = -1;
+	}
+}
+
+RESULT eDVBBitrateCounter::start(int pid, bool packets)
+{
+	stop();
+	if (pid <= 0 || pid >= 0x2000)
+		return -1;
+	if (packets && !tsTapAllowed())
+		return -1; /* no TS packets of one PID here, and a PES tap counts wrong on a scrambled PID */
+	m_pid = pid;
+	m_packets = packets;
+	m_ts_tap = false; /* a new PID starts on the PES tap again (the packets mode on the TS tap) */
+	if (startThread())
+	{
+		m_pid = -1;
+		return -1;
+	}
+	return 0;
+}
+
+RESULT eDVBBitrateCounter::stop()
+{
+	stopThread();
+	m_pid = -1;
+	return 0;
+}
+
+/* Runs on the counting thread: read what the filter has and add it up, nothing else. */
+void eDVBBitrateCounter::thread()
+{
+	hasStarted();
+
+	struct pollfd pfd[2] = {};
+	pfd[0].fd = m_fd;
+	pfd[0].events = POLLIN;
+	pfd[1].fd = m_wake_fd;
+	pfd[1].events = POLLIN;
+
+	/* progress watchdog: a filter that stays silent for TAP_FALLBACK_US is opened again. If it never delivered a
+	 * byte since it was opened, the other kind of tap is tried (where it is allowed), otherwise the same kind again;
+	 * in the packets mode always the TS tap */
+	int64_t progress_us = bitrateMonotonicUs();
+	uint64_t seen_bytes = 0;
+	bool delivered = false;
+
+	while (true)
+	{
+		int r = ::poll(pfd, 2, POLL_TIMEOUT_MS);
+		if (r < 0)
+		{
+			if (errno == EINTR)
+				continue;
+			eDebug("[eDVBBitrateCounter] poll failed: %m");
+			break;
+		}
+		if (pfd[1].revents)
+			break; /* stop() */
+		if (pfd[0].revents & POLLNVAL)
+			break;
+		if (pfd[0].revents & (POLLIN | POLLERR))
+		{
+			bool failed = false;
+			for (int n = 0; n < 16; ++n)
+			{
+				ssize_t len = ::read(m_fd, m_buf.data(), m_buf.size());
+				if (len > 0)
+				{
+					/* a TS tap: the payload of its packets, the same scrambled or clear; a PES tap: the payload as read */
+					const uint64_t got = m_ts_tap.load() ? countTs(m_buf.data(), (int)len) : (uint64_t)len;
+					if (got)
+						m_bytes.fetch_add(got, std::memory_order_relaxed);
+					continue;
+				}
+				/* EOVERFLOW: the filter buffer ran full and bytes were dropped, keep counting */
+				if (len < 0 && (errno == EOVERFLOW || errno == EINTR))
+					continue;
+				if (len < 0 && errno != EAGAIN)
+				{
+					eDebug("[eDVBBitrateCounter] read failed: %m");
+					failed = true;
+				}
+				break;
+			}
+			if (failed)
+				break;
+		}
+		const int64_t now_us = bitrateMonotonicUs();
+		const uint64_t bytes_now = m_bytes.load(std::memory_order_relaxed);
+		if (bytes_now != seen_bytes)
+		{
+			seen_bytes = bytes_now;
+			progress_us = now_us;
+			delivered = true;
+		}
+		else if (now_us - progress_us >= TAP_FALLBACK_US)
+		{
+			/* only this thread touches m_fd while it runs */
+			const bool ts = m_packets ? true : (delivered || !tsTapAllowed()) ? m_ts_tap.load() : !m_ts_tap.load();
+			::ioctl(m_fd, DMX_STOP);
+			::close(m_fd);
+			m_part_len = 0;
+			m_fd = openFilter(m_pid, ts);
+			if (m_fd < 0)
+				break;
+			pfd[0].fd = m_fd;
+			m_ts_tap = ts;
+			delivered = false;
+			progress_us = now_us;
+		}
+		if (bitrateMonotonicUs() - m_last_query_us.load(std::memory_order_relaxed) > IDLE_US)
+			break; /* nobody asks any more: give the demux filter back */
+	}
+
+	if (m_fd >= 0)
+	{
+		::ioctl(m_fd, DMX_STOP);
+		::close(m_fd);
+		m_fd = -1;
+	}
+	m_exited = true;
+}
+
+int eDVBBitrateCounter::getKbps()
+{
+	if (m_pid < 0)
+		return -1;
+
+	const int64_t now = bitrateMonotonicUs();
+	m_last_query_us.store(now, std::memory_order_relaxed);
+
+	if (m_exited)
+	{
+		/* the counting thread gave up while nobody asked: start over, the first window is measured from now */
+		stopThread();
+		if (startThread())
+		{
+			m_pid = -1;
+			return -1;
+		}
+	}
+
+	const uint64_t bytes = m_bytes.load(std::memory_order_relaxed);
+	if (!m_win_us)
+	{
+		m_win_us = now;
+		m_win_bytes = bytes;
+		return m_kbps;
+	}
+	const int64_t delta_us = now - m_win_us;
+	if (delta_us >= MIN_WINDOW_US)
+	{
+		/* bytes * 8 / 1000 / (us / 1e6) == bytes * 8000 / us; payload in both taps (a TS tap counts tsPayloadBytes) */
+		m_kbps = (int)((bytes - m_win_bytes) * 8000ULL / (uint64_t)delta_us * PES_PAYLOAD_PERCENT / 100);
+		m_win_us = now;
+		m_win_bytes = bytes;
+	}
+	return m_kbps;
 }
 
 RESULT eDVBDemux::getMPEGDecoder(ePtr<iTSMPEGDecoder> &decoder, int primary)
@@ -482,9 +867,17 @@ public:
 #if HAVE_HISILICON
 	void setParseStream(bool parse) { m_parse = parse; }
 #endif
+		/* iDVBTSRecorder::setCountPID (the bitrate of a live service, BR2): slot 0 or 1; set by the main thread */
+	void setCountPID(int slot, int pid);
+	int getCountPID(int slot) { return m_count_pid[slot].load(std::memory_order_relaxed); }
+	uint64_t getCountedBytes(int slot) { return m_count_bytes[slot].load(std::memory_order_relaxed); }
 protected:
 	int filterRecordData(const unsigned char *data, int len, size_t &current_span_remaining);
 private:
+		/* the TS payload of up to two PIDs (setCountPID): written by this thread, read by the main thread */
+	std::atomic<int> m_count_pid[2];
+	std::atomic<uint64_t> m_count_bytes[2];
+	void countPIDs(const unsigned char *data, int len);
 #if HAVE_HISILICON
 	bool m_parse; /* parse the TS (access points, PTS); not for a pipe or a socket target */
 #endif
@@ -502,6 +895,11 @@ private:
 eDVBRecordFileThread::eDVBRecordFileThread()
 	:eFilePushThread(IOPRIO_CLASS_RT, 7), m_ts_parser(m_stream_info)
 {
+	for (int i = 0; i < 2; ++i)
+	{
+		m_count_pid[i] = -1;
+		m_count_bytes[i] = 0;
+	}
 	m_current_offset = 0;
 #if HAVE_HISILICON
 	m_parse = true;
@@ -528,6 +926,50 @@ int eDVBRecordFileThread::getLastPTS(pts_t &pts)
 	return m_ts_parser.getLastPTS(pts);
 }
 
+void eDVBRecordFileThread::setCountPID(int slot, int pid)
+{
+	if (slot < 0 || slot > 1)
+		return;
+	/* stopped first, so no byte of the old PID is added to the new one */
+	m_count_pid[slot].store(-1, std::memory_order_relaxed);
+	m_count_bytes[slot].store(0, std::memory_order_relaxed);
+	if (pid > 0 && pid < 0x1fff)
+		m_count_pid[slot].store(pid, std::memory_order_relaxed);
+}
+
+/* The payload of the counted PIDs (tsPayloadBytes, lib/dvb/demux.h) in the data of this thread: only read, from the
+ * thread that owns the buffer. The data comes in whole packets (the descrambler needs them so); a lost sync is found
+ * again on 0x47. The idea of counting in the recorder comes from the GPL-2.0 sources of a public enigma2 (commit
+ * 2d5bc2b55524, Huevos, 10.2026: setCountPID / countPIDs), written again here for this recorder. */
+void eDVBRecordFileThread::countPIDs(const unsigned char *data, int len)
+{
+	const int pid0 = m_count_pid[0].load(std::memory_order_relaxed);
+	const int pid1 = m_count_pid[1].load(std::memory_order_relaxed);
+	if (pid0 < 0 && pid1 < 0)
+		return;
+	uint64_t bytes0 = 0, bytes1 = 0;
+	int i = 0;
+	while (i + 188 <= len)
+	{
+		const unsigned char *p = data + i;
+		if (p[0] != 0x47)
+		{
+			++i;
+			continue;
+		}
+		const int pid = ((p[1] & 0x1f) << 8) | p[2];
+		if (pid == pid0)
+			bytes0 += tsPayloadBytes(p);
+		else if (pid == pid1)
+			bytes1 += tsPayloadBytes(p);
+		i += 188;
+	}
+	if (bytes0)
+		m_count_bytes[0].fetch_add(bytes0, std::memory_order_relaxed);
+	if (bytes1)
+		m_count_bytes[1].fetch_add(bytes1, std::memory_order_relaxed);
+}
+
 int eDVBRecordFileThread::filterRecordData(const unsigned char *data, int len, size_t &current_span_remaining)
 {
 	/* SoftCSA: the packets are in our own buffer (eFilePushThread::m_buffer), whole and aligned; descrambled in place, so
@@ -538,6 +980,9 @@ int eDVBRecordFileThread::filterRecordData(const unsigned char *data, int len, s
 		if (m_descrambler)
 			m_descrambler->descramble(const_cast<unsigned char*>(data), len);
 	}
+	/* the bitrate of a live service (setCountPID): the payload of one or two PIDs, nothing written */
+	if (len > 0)
+		countPIDs(data, len);
 #if HAVE_HISILICON
 	if (m_parse)
 #else
@@ -916,6 +1361,28 @@ RESULT eDVBTSRecorder::setDvrLoop(bool loop)
 {
 	m_thread->setDvrLoop(loop);
 	return 0;
+}
+
+RESULT eDVBTSRecorder::setCountPID(int slot, int pid)
+{
+	if (!m_thread || slot < 0 || slot > 1)
+		return -1;
+	m_thread->setCountPID(slot, pid);
+	return 0;
+}
+
+int eDVBTSRecorder::getCountPID(int slot)
+{
+	if (!m_thread || slot < 0 || slot > 1)
+		return -1;
+	return m_thread->getCountPID(slot);
+}
+
+uint64_t eDVBTSRecorder::getCountedBytes(int slot)
+{
+	if (!m_thread || slot < 0 || slot > 1)
+		return 0;
+	return m_thread->getCountedBytes(slot);
 }
 
 void eDVBTSRecorder::filepushEvent(int event)

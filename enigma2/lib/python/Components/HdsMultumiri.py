@@ -34,8 +34,19 @@ albastri din aceeasi copie; bucati_albastre() da tabelului de pe televizor si pa
 Producatorii care ne ajuta: producatori() citeste lista din imagine (data/multumiri-producatori.json) si
 da firmele cu motivele; HdsAbout.populate le pune in sectiunea „Mulțumiri”, inaintea randului testerilor.
 
+Contributorii (cine ne trimite cod, corecturi, pluginuri sau grafica folosite in imagine e trecut la contributori, pe site
+si in imagine): contributori(limba) da [(nume, ce a adus, in limba receptorului)], sub
+producatori, ca sectiunea Contributori de pe pagina /dezvoltatori/ a site-ului. Aceeasi lista din doua copii, ca la
+testeri: ${datadir}/enigma2/contributori.json (data/contributori.json, refacuta la fiecare versiune de
+multumiri_versiune.py --despre din situl-imaginii/date/contributori.json) si /etc/enigma2/hds-contributori.json, luata o
+data pe zi de pe https://stb.hdsatelit.com/contributori.json (scris de fa_situl.py), ca un contributor nou sau unul scos
+la cererea lui sa se vada fara imagine noua. Forma: {"v": 1, "actualizat": "AAAA-LL-ZZ HH:MM", "contributori": [{"nume",
+"data", "ce": {limba: text}}]}; se arata copia cu "actualizat" mai nou (la egalitate cea de pe receptor), deci o lista
+mai scurta trece si ea; o lista goala e buna (sectiunea nu apare). Textul „ce” vine din fisier in limba receptorului,
+altfel in engleza, altfel in romana; numele nu se traduc.
+
 Modul curat (fara enigma la incarcare): probele pe PC in test_multumiri_testeri_0621.py,
-test_testeri_albastri_0611.py si test_multumiri_producatori_mu_074.py.
+test_testeri_albastri_0611.py, test_multumiri_producatori_mu_074.py si test_ctb_contributori_077.py.
 """
 
 import json
@@ -60,7 +71,7 @@ EROARE = "eroare"
 
 # caracterele de control (C0, C1) si de format (directia textului, latime zero, separatorii de rand si paragraf)
 _ASCUNSE = re.compile(u"[\x00-\x1f\x7f-\x9f­؜᠎​-‏ -‮⁠-⁯﻿￹-￻]")
-_STARE = {"incercare": None, "fir": None}
+_STARE = {"incercare": None, "incercare_contributori": None, "fir": None}
 
 
 def N_(text):
@@ -395,6 +406,134 @@ def subtitluSurse(traducere=None):
 		return SUBTITLU_SURSE
 
 
+def subtitluContributori(traducere=None):
+	try:
+		return (traducere or _t)(SUBTITLU_CONTRIBUTORI) or SUBTITLU_CONTRIBUTORI
+	except Exception:
+		return SUBTITLU_CONTRIBUTORI
+
+
+# ---------------------------------------------------------------- contributorii (oameni care ne-au trimis ceva)
+
+NUME_CONTRIBUTORI = "contributori.json"
+CALE_CONTRIBUTORI = None                  # None: ${datadir}/enigma2/contributori.json; probele pun alta cale
+CALE_CONTRIBUTORI_RECEPTOR = "/etc/enigma2/hds-contributori.json"
+URL_CONTRIBUTORI = "https://stb.hdsatelit.com/contributori.json"
+MARIME_MAX_CONTRIBUTORI = 256 * 1024
+CONTRIBUTORI_MAX = 200
+CE_MAX = 400                              # semnele textului „ce” intr-o limba
+LIMBI_MAX = 40
+SUBTITLU_CONTRIBUTORI = N_("Contributori")
+_ACTUALIZAT_CONTRIBUTORI = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+_DATA_ZI = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_COD_LIMBA = re.compile(r"^[a-z]{2,3}(_[A-Z]{2})?$")
+
+
+def cale_contributori():
+	"""Copia venita cu imaginea: ${datadir}/enigma2/contributori.json."""
+	if CALE_CONTRIBUTORI:
+		return CALE_CONTRIBUTORI
+	try:
+		from enigma import eEnv
+		return eEnv.resolve("${datadir}/enigma2/" + NUME_CONTRIBUTORI)
+	except Exception:
+		return "/usr/share/enigma2/" + NUME_CONTRIBUTORI
+
+
+def curat_text(text, maxim=CE_MAX):
+	"""Un text curat (fara semne ascunse, spatiile unite), cel mult `maxim` semne (unul mai lung se scurteaza cu „…”),
+	sau "" (nu e sir sau nu ramane nimic din el)."""
+	if not isinstance(text, str):
+		return ""
+	text = " ".join(_ASCUNSE.sub(" ", text).split())
+	if len(text) > maxim:
+		text = text[:maxim - 1].rstrip() + u"…"
+	return text
+
+
+def curat_nume_contributor(nume):
+	"""Numele ca la testeri (curat), fara „:” (in tabel numele e eticheta, iar „: ” ar despica randul in doua)."""
+	return curat(" ".join(nume.replace(":", " ").split()) if isinstance(nume, str) else nume)
+
+
+def contributori_din_raspuns(corp):
+	"""Octetii unei liste (raspunsul serverului sau fisierul site-ului) -> octetii copiei curate {"v": 1, "actualizat",
+	"contributori": [{"nume", "data"?, "ce"}]}, sau None: prea mare, JSON stricat, alta forma, "actualizat" lipsa sau gresit.
+	Se sar intrarile fara nume sau fara niciun text „ce”; o lista goala e buna (cineva a cerut sa fie scos). Campurile
+	interne (de pilda "_despre") nu trec. Folosita si de unealta care face copia din imagine."""
+	if not isinstance(corp, bytes) or len(corp) > MARIME_MAX_CONTRIBUTORI:
+		return None
+	try:
+		d = json.loads(corp.decode("utf-8"))
+	except (ValueError, UnicodeDecodeError):
+		return None
+	if not isinstance(d, dict) or d.get("v") != 1 or not isinstance(d.get("contributori"), list):
+		return None
+	actualizat = d.get("actualizat")
+	if not isinstance(actualizat, str) or not _ACTUALIZAT_CONTRIBUTORI.match(actualizat):
+		return None
+	lista = []
+	for c in d["contributori"]:
+		if not isinstance(c, dict) or not isinstance(c.get("ce"), dict):
+			continue
+		nume = curat_nume_contributor(c.get("nume"))
+		ce = {}
+		for limba, text in c["ce"].items():
+			text = curat_text(text)
+			if isinstance(limba, str) and _COD_LIMBA.match(limba) and text and len(ce) < LIMBI_MAX:
+				ce[limba] = text
+		if not nume or not ce:
+			continue
+		intrare = {"nume": nume}
+		if isinstance(c.get("data"), str) and _DATA_ZI.match(c["data"]):
+			intrare["data"] = c["data"]
+		intrare["ce"] = ce
+		lista.append(intrare)
+		if len(lista) >= CONTRIBUTORI_MAX:
+			break
+	copie = {"v": 1, "actualizat": actualizat, "contributori": lista}
+	return (json.dumps(copie, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
+
+
+def _citeste_contributori(cale):
+	"""(actualizat, lista curata) dintr-o copie, sau None (lipseste, stricata, alta forma)."""
+	try:
+		with open(cale, "rb") as f:
+			date = f.read(MARIME_MAX_CONTRIBUTORI + 1)
+	except (IOError, OSError):
+		return None
+	octeti = contributori_din_raspuns(date)
+	if octeti is None:
+		return None
+	d = json.loads(octeti.decode("utf-8"))
+	return d["actualizat"], d["contributori"]
+
+
+def lista_contributori():
+	"""Intrarile de aratat: copia de pe receptor, altfel cea din imagine (si cea din imagine cand e mai noua, dupa o versiune
+	noua pe un receptor fara internet), altfel []."""
+	receptor = _citeste_contributori(CALE_CONTRIBUTORI_RECEPTOR)
+	imagine = _citeste_contributori(cale_contributori())
+	if receptor and (not imagine or receptor[0] >= imagine[0]):
+		return receptor[1]
+	return imagine[1] if imagine else []
+
+
+def _text_in_limba(ce, limba):
+	"""Textul „ce” in limba receptorului (ro_RO, apoi ro), altfel in engleza, altfel in romana, altfel primul."""
+	limba = limba if isinstance(limba, str) else ""
+	for cheie in (limba, limba.split("_")[0].lower(), "en", "ro"):
+		if cheie and ce.get(cheie):
+			return ce[cheie]
+	return next(iter(ce.values()), "")
+
+
+def contributori(limba=None):
+	"""[(nume, ce a adus)] in ordinea din lista; `limba` = limba receptorului (language.getLanguage(), de pilda "pl_PL"),
+	data de ecran ca modulul sa ramana fara enigma; fara ea, engleza."""
+	return [(c["nume"], _text_in_limba(c["ce"], limba)) for c in lista_contributori()]
+
+
 def titluri(traducere=None):
 	"""(titlul sectiunii, subtitlul producatorilor, subtitlul testerilor), traduse."""
 	tr = traducere or _t
@@ -443,21 +582,31 @@ def _scrie_atomic(cale, octeti):
 		raise
 
 
-def e_timpul(acum=None):
-	"""Se cere lista acum? Numai pe receptor (dosarul copiei exista), cel mult o incercare pe zi de la pornirea
-	interfetei, si numai cand copia de pe receptor lipseste, e mai veche de o zi sau are ora in viitor (ceasul pus
-	abia dupa scriere)."""
+def _e_timpul(cale, cheie, acum=None):
+	"""Se cere lista acum? Numai pe receptor (dosarul copiei `cale` exista), cel mult o incercare pe zi de la pornirea
+	interfetei (_STARE[cheie]), si numai cand copia de pe receptor lipseste, e mai veche de o zi sau are ora in viitor
+	(ceasul pus abia dupa scriere)."""
 	acum = time.time() if acum is None else acum
-	if not os.path.isdir(os.path.dirname(CALE_RECEPTOR) or "."):
+	if not os.path.isdir(os.path.dirname(cale) or "."):
 		return False
-	ultima = _STARE["incercare"]
+	ultima = _STARE.get(cheie)
 	if ultima is not None and 0 <= acum - ultima < ZI:
 		return False
 	try:
-		varsta = acum - os.path.getmtime(CALE_RECEPTOR)
+		varsta = acum - os.path.getmtime(cale)
 	except OSError:
 		return True
 	return not 0 <= varsta < ZI
+
+
+def e_timpul(acum=None):
+	"""Lista testerilor (_e_timpul pe copia de pe receptor CALE_RECEPTOR)."""
+	return _e_timpul(CALE_RECEPTOR, "incercare", acum)
+
+
+def e_timpul_contributori(acum=None):
+	"""Lista contributorilor (_e_timpul pe CALE_CONTRIBUTORI_RECEPTOR, cu incercarea ei separata)."""
+	return _e_timpul(CALE_CONTRIBUTORI_RECEPTOR, "incercare_contributori", acum)
 
 
 def actualizeaza(acum=None, citeste_url=None):
@@ -481,13 +630,41 @@ def actualizeaza(acum=None, citeste_url=None):
 	return NOU, "%d nume" % len(json.loads(octeti.decode("utf-8"))["nume"])
 
 
+def actualizeaza_contributori(acum=None, citeste_url=None):
+	"""Lista contributorilor de pe server, scrisa atomic in copia de pe receptor cand e buna (si goala). Blocanta (fir
+	separat), independenta de lista testerilor. -> (stare, mesaj): NOU, SARIT sau EROARE (nimic schimbat)."""
+	acum = time.time() if acum is None else acum
+	if not e_timpul_contributori(acum):
+		return SARIT, "nu e timpul"
+	_STARE["incercare_contributori"] = acum
+	try:
+		corp = (citeste_url or _citeste_url)(URL_CONTRIBUTORI, TIMP, MARIME_MAX_CONTRIBUTORI)
+	except Exception as e:
+		return EROARE, "%s: %s" % (type(e).__name__, e)
+	octeti = contributori_din_raspuns(corp)
+	if octeti is None:
+		return EROARE, "raspuns respins"
+	try:
+		_scrie_atomic(CALE_CONTRIBUTORI_RECEPTOR, octeti)
+	except (IOError, OSError) as e:
+		return EROARE, "scriere: %s" % e
+	return NOU, "%d contributori" % len(json.loads(octeti.decode("utf-8"))["contributori"])
+
+
 def _lucreaza():
+	# testerii, apoi contributorii; o cadere la una nu o opreste pe cealalta
 	try:
 		stare, mesaj = actualizeaza()
 	except Exception as e:
 		stare, mesaj = EROARE, "%s: %s" % (type(e).__name__, e)
 	if stare != SARIT:
 		_jurnal("%s (%s)" % (stare, mesaj))
+	try:
+		stare, mesaj = actualizeaza_contributori()
+	except Exception as e:
+		stare, mesaj = EROARE, "%s: %s" % (type(e).__name__, e)
+	if stare != SARIT:
+		_jurnal("contributori: %s (%s)" % (stare, mesaj))
 
 
 def _fir_daemon(functie):
@@ -498,12 +675,12 @@ def _fir_daemon(functie):
 
 
 def porneste(fir=None):
-	"""Din "Despre imagine" (ecranul si pagina web): actualizarea pe un fir separat, cand e timpul si nu merge deja
-	una. -> True daca a pornit."""
+	"""Din "Despre imagine" (ecranul si pagina web): actualizarea pe un fir separat, cand e timpul pentru lista
+	testerilor sau pentru cea a contributorilor si nu merge deja una. -> True daca a pornit."""
 	vechi = _STARE["fir"]
 	if vechi is not None and vechi.is_alive():
 		return False
-	if not e_timpul():
+	if not e_timpul() and not e_timpul_contributori():
 		return False
 	_STARE["fir"] = (fir or _fir_daemon)(_lucreaza)
 	return True

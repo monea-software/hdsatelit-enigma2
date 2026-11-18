@@ -61,7 +61,8 @@
 # APLICATIILE DE TELEFON (aplicatii_web.py): rutele cerute de aplicatiile obisnuite ale receptoarelor Enigma2 (/web/*,
 # rutele cu aceleasi nume din /api, /picon, /file, /grab), scrise de la zero. Pornite din fabrica
 # (config.plugins.hdswebcontrol.aplicatii) si fara parola din reteaua locala, cu Host-ul
-# receptorului (IP-ul, numele lui si numele lui cu terminatiile date de routere, _numeAcasa). Cu parola din reteaua de
+# receptorului (IP-ul, numele lui si numele lui cu terminatiile date de routere, _numeAcasa) si, pentru aplicatii (nu
+# pentru paginile din browser), cu orice nume (aplicatii_web._faraPagina). Cu parola din reteaua de
 # acasa bifata la interfata web, si din casa cu utilizatorul oricare si parola omului. Din afara retelei locale
 # raspund numai cu „Acces din afara casei” pornit (config.plugins.hdswebcontrol.aplicatii_afara, oprit din fabrica) si
 # numai cu HTTP Basic si parola pentru aplicatii. Bariera si rutele: capul fisierului aplicatii_web.py. Restul
@@ -371,6 +372,11 @@ MAX_CORP_IPK = 16 * 1024 * 1024
 # vpn_web.MAX_URCARE (6 MiB de fisiere) creste cu 4/3 la base64 si inca putin la codarea corpului
 CALE_VPN_ADAUGA = b"/api/vpn-adauga"
 MAX_CORP_VPN = 10 * 1024 * 1024
+# Fisierul cu adrese sau lista de canale .m3u ales in pagina /iptv (internet_web.fisierIptv, POST /api/iptv-fisier; CRF, TODO
+# 15.11 02:20): textul vine in formular (URLSearchParams), unde orice octet afara de litere, cifre si *-._ devine %XX, deci corpul
+# are cel mult de trei ori internet_web.MAX_FISIER (4 MiB), plus numele fisierului; aceeasi conditie ca la urcari (corpMareMedia)
+CALE_IPTV_FISIER = b"/api/iptv-fisier"
+MAX_CORP_IPTV_FISIER = 13 * 1024 * 1024
 
 
 def corpMareMedia(are_cookie, adresa, aceeasi_origine):
@@ -582,8 +588,9 @@ def _numeAcasa():
 	numele receptorului (primul cuvant din gethostname) cu TERMINATII_ROUTER: viper4kv20.lan, viper4kv20.home,
 	viper4kv20.localdomain, viper4kv20.home.arpa. Numai numele EXACT: gazdaPermisa compara intreg,
 	deci xviper4kv20.lan sau viper4kv20.lan.altceva.ro nu trec; numele publicat de avahi (hdsatelit.local) nu primeste
-	terminatii (routerul nu il stie). Orice alt nume in Host ramane cu parola (bariera din aplicatii_web.py). Citit la
-	fiecare cerere, ca _numeProprii."""
+	terminatii (routerul nu il stie). Orice alt nume in Host trece numai pentru aplicatii (fara Origin, Referer si
+	User-Agent de browser, aplicatii_web._faraPagina); dintr-un browser ramane cu parola (bariera din aplicatii_web.py).
+	Citit la fiecare cerere, ca _numeProprii."""
 	proprii = _numeProprii()
 	try:
 		nume = socket.gethostname().strip().lower().rstrip(".").split(".", 1)[0]
@@ -597,9 +604,9 @@ def _numeAcasa():
 def _gazdaPermisaCerere(request):
 	"""Poarta contra DNS rebinding, chemata pentru ORICE cerere (_CerereHds.process), inaintea rutelor. Trece
 	un Host care numeste receptorul, sau un ?token= valid oricare ar fi Host-ul (o pagina straina nu are
-	jetonul, iar scripturile care folosesc un nume dat de router merg mai departe), sau o cerere cu antet Basic spre
-	rutele aplicatiilor de telefon (aplicatii_web.gazdaPermisa; parola o verifica bariera lor, cu numaratoarea
-	greselilor). La orice eroare: respins."""
+	jetonul, iar scripturile care folosesc un nume dat de router merg mai departe), sau, spre rutele aplicatiilor de
+	telefon, o aplicatie din casa (fara Origin, Referer si User-Agent de browser) ori o cerere cu antet Basic
+	(aplicatii_web.gazdaPermisa; parola o verifica bariera lor, cu numaratoarea greselilor). La orice eroare: respins."""
 	try:
 		if gazdaPermisa(_antet(request, b"host"), _numeProprii()):
 			return True
@@ -2074,7 +2081,9 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>GET /api/statusinfo</code>: canalul curent, volumul, standby</li>
   <li><code>GET /api/portal</code>: starea HbbTV a canalului care rulează (da, nu are, încă nu se știe), cu mesajul arătat pe televizor la tasta PORTAL</li>
   <li><code>GET /api/remotecontrol?command=&lt;cod&gt;&amp;lung=1</code>: apasă o tastă ca de pe telecomanda receptorului (coduri de tastă Linux, de exemplu 352 pentru OK); cu <code>lung=1</code>, apăsare lungă</li>
-  <li><code>GET /api/mouse?fel=clic|dublu|drag|dragend|rotita|dreapta|mijloc&amp;xp=&amp;yp=</code>: mouse-ul pe ecranul televizorului, ca în emulator: <code>xp</code>, <code>yp</code> = locul în procente din ecran (sau <code>x</code>, <code>y</code> în pixelii ecranului, 1920x1080); <code>clic</code> alege rândul de sub mouse, iar pe rândul ales sau cu <code>clicuri=2</code> dă OK; un buton colorat = tasta lui; <code>drag</code> (cu <code>x0p</code>, <code>y0p</code> = locul apăsării, <code>nou=1</code> la prima mișcare) și <code>dragend</code> = trasul pe bara de derulare; <code>rotita&amp;pasi=-12..12</code> = sus/jos (3 pași sau mai mulți = o pagină); <code>dreapta</code> = Meniu, <code>mijloc</code> = Ieșire. Răspunsul spune ce s-a făcut (<code>facut</code>: selectie, ok, buton, bara, derulare, tasta, nimic). Din browser, cu POST și antetul <code>X-HDS-CSRF</code>, ca <code>remotecontrol</code></li>
+  <li><code>GET /api/mouse?fel=clic|dublu|drag|dragend|rotita|dreapta|mijloc|lateral_spate|lateral_fata|pagina|capat|text&amp;xp=&amp;yp=</code>: mouse-ul pe ecranul televizorului, ca în emulator și ca un mouse pus în receptor: <code>xp</code>, <code>yp</code> = locul în procente din ecran (sau <code>x</code>, <code>y</code> în pixelii ecranului, 1920x1080); <code>clic</code> alege rândul de sub mouse, iar pe rândul ales sau cu <code>clicuri=2</code> dă OK; un buton colorat = tasta lui; <code>drag</code> (cu <code>x0p</code>, <code>y0p</code> = locul apăsării, <code>nou=1</code> la prima mișcare) și <code>dragend</code> = trasul pe bara de derulare; <code>rotita&amp;pasi=-12..12</code> = sus/jos (3 pași sau mai mulți = o pagină), iar cât te uiți la televizor sau la un film, fără listă sub mouse, volumul (pașii negativi = mai tare); <code>dreapta</code> = Ieșire; din fabrică <code>mijloc</code> (clicul pe rotiță) = Meniu, <code>lateral_spate</code> (butonul lateral din spate) = Înapoi, ca <code>dreapta</code>, și <code>lateral_fata</code> (cel din față) = Sunet oprit; <code>pagina</code> și <code>capat</code> (cu <code>pasi=-1|1</code>) = Page Up/Down și Home/End; <code>text&amp;text=</code> = literele scrise la tastatură. Răspunsul spune ce s-a făcut (<code>facut</code>: selectie, ok, buton, bara, derulare, tasta, text, navigator, nimic; ecranele cu gesturile lor pot da și altele). Din browser, cu POST și antetul <code>X-HDS-CSRF</code>, ca <code>remotecontrol</code></li>
+  <li>Mouse-ul în Aplicații, în navigatorul web și în YouTube (<code>/api/mouse</code> și mouse-ul pus în receptor): în Aplicații, <code>clic</code> pe un card îl alege și îl deschide, ca OK (pe cardul navigatorului de instalat, primul clic numai îl alege); cât o pagină web sau o aplicație e pe ecran, <code>clic</code> apasă în pagină, în locul cerut, <code>rotita</code> o derulează, iar <code>dreapta</code> și butonul pus pe Înapoi duc la pagina de dinainte (<code>facut</code>: navigator); al doilea clic al unui dublu clic, venit pe ecranul deschis de primul, nu mai apasă nimic</li>
+  <li><code>GET /api/taste-rapide</code>, <code>POST /api/taste-rapide-seteaza?&lt;cheie&gt;=&lt;valoare&gt;</code>: butoanele colorate și tastele rapide, ca pe televizor și în pagina <code>/taste-rapide</code>, cu alegerile fiecăreia; mouse-ul ca telecomandă: <code>hds_mouse_rotita=volum|obisnuit</code> (rotița cât te uiți la televizor: volumul sau sus/jos), <code>hds_mouse_mijloc</code>, <code>hds_mouse_spate</code> și <code>hds_mouse_fata=meniu|mut|inapoi|nimic</code> (clicul pe rotiță și butoanele laterale), pentru <code>/api/mouse</code> și pentru mouse-ul pus în receptor</li>
   <li><code>GET /api/zap?sRef=&lt;referință&gt;</code>: schimbă canalul</li>
   <li><code>GET /api/screenshot?format=jpg|png&amp;quality=N&amp;width=N&amp;mode=all|video|osd&amp;download=1</code>: imaginea de pe ecran; <code>mode</code>: <code>all</code> cu afișajul OSD (implicit), <code>video</code> numai imaginea canalului, <code>osd</code> numai afișajul OSD; <code>download=1</code>: descărcare ca fișier, cu data și ora receptorului în nume</li>
   <li><code>GET /api/jurnal</code>: jurnalul de versiuni (ce s-a schimbat la fiecare actualizare)</li>
@@ -2159,7 +2168,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/dabt2-televizor?fel=dab|t2</code>: deschide fereastra pe televizor</li>
   <li><code>GET /api/dab-terestru</code>, <code>POST /api/dab-terestru-fa?actiune=pregateste|cauta|opreste|asculta|opreste_radio|favorit|seteaza</code>: radioul DAB+ prin stick USB: starea stickului, căutarea, posturile, opțiunile</li>
   <li><code>GET /api/oarba</code>: căutarea oarbă pe satelit: satelitul pe care stă antena, alegerile (<code>banda</code>, <code>polarizari</code>, <code>rata_min</code>), previzualizarea și starea căutării (<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, <code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); numai citire</li>
-  <li><code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: pornește căutarea oarbă (pe televizor se deschide ecranul ei)</li>
+  <li><code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|100|1000|2000|5000&amp;pozitie=&lt;satelitul, în zecimi de grad, din alegerile lui GET /api/oarba&gt;</code>: pornește căutarea oarbă (pe televizor se deschide ecranul ei)</li>
   <li><code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs</li>
   <li><code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi găsite</li>
   <li><code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe</li>
@@ -2354,73 +2363,6 @@ def _anteteHtml(request):
 	request.setHeader(b"content-security-policy",
 		b"default-src 'self'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
 		b"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
-
-
-# Pagina deschisa de telefon din codul QR de pe televizor (GET /t/<jeton>, asociere.py: cereJeton/verificaJeton). GET-ul
-# nu consuma jetonul (unele aplicatii de scanare deschid adresa o data inainte, ca previzualizare): pagina trimite
-# jetonul cu POST /t (aceeasi origine, reteaua locala, ca la cod), primeste cookie-ul si merge la pagina ceruta de
-# ecran. Fara JavaScript, acelasi POST din formular (raspunsul 303). Jetonul se pune in pagina numai dupa ce are forma
-# buna (base64url), deci nu poate scapa din sirul JSON; nu se scrie in jurnal si nu pleaca spre alta adresa
-# (Referrer-Policy: same-origin: Referer si Origin pleaca numai spre receptor, deci si formularul fara JavaScript trece
-# de acelasiOrigin).
-_PAGINA_JETON = """<!DOCTYPE html>
-<html lang="ro">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="referrer" content="same-origin">
-<title>Receptorul HD Satelit</title>
-<style>__STIL_COMUN__
-  main{max-width:520px;margin:0 auto;}
-  h1{font-size:1.25rem;margin:0 0 12px;}
-  p{line-height:1.5;}
-  button{min-height:44px;padding:10px 16px;border-radius:8px;border:1px solid var(--bordura);background:#0f1216;color:var(--text);font:inherit;}
-  .eroare{color:#ffb4a8;}
-</style>
-</head>
-<body>
-<main>
-<h1>Receptorul HD Satelit</h1>
-<p id="mesaj">Se conectează telefonul la receptor...</p>
-<noscript><form method="post" action="/t"><input type="hidden" name="j" value="__JETON__"><input type="hidden" name="fel" value="formular"><button type="submit">Continuă</button></form></noscript>
-<p><a href="/" id="panou" hidden>Deschide panoul receptorului</a></p>
-</main>
-<script>
-var JETON = __JETON_JSON__;
-function mesaj(t, eroare){ var m = document.getElementById("mesaj"); m.textContent = t; m.className = eroare ? "eroare" : ""; }
-if(!JETON){
-  mesaj("Codul QR nu e bun. Deschide din nou codul pe televizor și scanează-l.", true);
-  document.getElementById("panou").hidden = false;
-} else {
-  var corp = new URLSearchParams(); corp.set("j", JETON);
-  fetch("/t", {method: "POST", credentials: "same-origin", cache: "no-store",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: corp.toString()}).then(function(r){
-    return r.json().catch(function(){ return {result: false, mesaj: "Receptorul a răspuns neașteptat (HTTP " + r.status + ")."}; });
-  }).then(function(d){
-    if(d.result && d.destinatie){ mesaj("Telefonul e conectat. Se deschide pagina..."); location.replace(d.destinatie); return; }
-    mesaj(d.mesaj || "Nu s-a putut conecta telefonul.", true);
-    document.getElementById("panou").hidden = false;
-  }).catch(function(){ mesaj("Receptorul nu răspunde. Verifică dacă telefonul e în aceeași rețea cu receptorul.", true); });
-}
-</script>
-</body>
-</html>
-"""
-
-
-def _paginaJeton(request, jeton):
-	"""GET /t/<jeton>: numai din reteaua locala; jetonul nu se consuma aici (vezi _PAGINA_JETON)."""
-	if not _esteAdresaLocala(_adresaClient(request)):
-		request.setResponseCode(403)
-		request.setHeader(b"content-type", b"text/plain; charset=utf-8")
-		return _t("Acces permis doar din rețeaua locală.").encode("utf-8")
-	_anteteHtml(request)
-	request.setHeader(b"referrer-policy", b"same-origin")
-	request.setHeader(b"cache-control", b"no-store")
-	bun = jeton if formatSecretValid(jeton) else ""
-	return _traducePagina(_PAGINA_JETON).replace("__STIL_COMUN__", _STIL_COMUN).replace("__JETON_JSON__",
-		json.dumps(bun)).replace(
-		"__JETON__", bun).encode("utf-8")
 
 
 def _paginaPrincipala(request):
@@ -3535,7 +3477,7 @@ def _construiesteResurse():
 		return json.dumps(corp, ensure_ascii=False).encode("utf-8", "replace")
 
 	def _poartaAsociere(request):
-		"""Cererile de intrare (/intra, /t) nu au inca un cookie, deci nimic de furat, dar o pagina straina ar
+		"""Cererea de intrare cu parola (/intra) nu are inca un cookie, deci nimic de furat, dar o pagina straina ar
 		putea incerca parole prin browserul omului. De aceea: doar din reteaua locala si
 		doar dintr-o pagina servita chiar de receptor (Origin/Referer egal cu Host). Intoarce None sau
 		raspunsul de eroare gata facut."""
@@ -3548,8 +3490,8 @@ def _construiesteResurse():
 
 	class IntraResource(resource.Resource):
 		"""POST /intra cu parola=<text>: parola din reteaua de acasa (numai cand omul si-a pus-o si a bifat interfata
-		web). La parola buna, cookie-ul sesiunii (un an), ca dupa vechiul cod. Aceeasi poarta ca /t: reteaua locala si
-		aceeasi origine (o pagina de pe internet nu poate incerca parole prin browserul omului)."""
+		web). La parola buna, cookie-ul sesiunii (un an), ca dupa vechiul cod. Poarta: reteaua locala si aceeasi origine
+		(o pagina de pe internet nu poate incerca parole prin browserul omului)."""
 		isLeaf = True
 
 		def render_POST(self, request):
@@ -3580,42 +3522,27 @@ def _construiesteResurse():
 			return _json(request, scriereSecret())
 
 	class JetonQrResource(resource.Resource):
-		"""/t: telefonul care a scanat codul QR de pe televizor (asociere.py, cereJeton/verificaJeton).
-		GET /t/<jeton> = pagina care trimite jetonul; POST /t cu j=<jeton> = asocierea: aceeasi poarta ca POST /intra
-		(reteaua locala si aceeasi origine; antetul Host e verificat pentru orice cerere in _CerereHds.process), apoi
-		cookie-ul pe un an, ca dupa cod, si fereastra „Browser conectat” pe televizor (numai pentru o intrare noua).
-		Raspunsul: JSON {result, destinatie}; din formularul fara JavaScript (fel=formular), 303 spre pagina."""
+		"""/t: adresele din codurile QR de pe televizor de dinainte (http://<IP>/t/<jeton>), scanate din nou sau puse la
+		favorite. In reteaua de acasa interfata web nu cere nimic (fara cod, fara jeton), deci /t, /t/ si /t/<orice> duc
+		direct la prima pagina, fara nicio verificare si fara pagina de eroare: / alege singura panoul sau, numai cand omul
+		si-a pus parola pentru web, pagina parolei lui (si un browser care a intrat deja ajunge direct la panou). Codurile
+		de acum au adresa simpla (Screens/HdsWebTelefon.py, Screens/HdsTraducereSubtitrari.py)."""
 		isLeaf = True
 
 		def render_GET(self, request):
-			cale = request.postpath[0] if request.postpath else b""
-			return _paginaJeton(request, cale.decode("ascii", "replace") if isinstance(cale, bytes) else str(cale))
+			request.setResponseCode(302)
+			request.setHeader(b"location", b"/")
+			request.setHeader(b"cache-control", b"no-store")
+			return b""
 
 		def render_POST(self, request):
-			refuz = _poartaAsociere(request)
-			if refuz is not None:
-				return refuz
-			jeton = request.args.get(b"j", [b""])[0].decode("ascii", "replace")
-			formular = request.args.get(b"fel", [b""])[0] == b"formular"
-			r = obtineAsociere().verificaJeton(jeton, _antet(request, b"user-agent") or "", _adresaClient(request) or "",
-				secret_existent=_secretDinCookie(request))
-			if r["stare"] != "ok":
-				if formular:
-					request.setResponseCode(303)
-					request.setHeader(b"location", b"/")
-					return b""
-				return _json(request, {"result": False, "stare": "expirat",
-					"mesaj": _t("Codul QR a expirat sau a fost deja folosit. Deschide din nou codul pe televizor și "
-						"scanează-l.")}, 410)
-			if r["secret"]:
-				_puneCookie(request, r["secret"], DURATA_SESIUNE_S)
-			if r["nou"]:
-				_jurnal("browser asociat prin codul QR: %s (%s)" % (r["browser"].get("nume", ""), r["browser"].get("adresa", "")))
-			if formular:
+			"""O pagina veche de intrare prin cod, ramasa deschisa pe un telefon, trimite jetonul aici: raspunsul o duce
+			la prima pagina (cu formularul fara JavaScript, 303 spre /), fara cookie si fara verificare."""
+			if request.args.get(b"fel", [b""])[0] == b"formular":
 				request.setResponseCode(303)
-				request.setHeader(b"location", r["destinatie"].encode("ascii"))
+				request.setHeader(b"location", b"/")
 				return b""
-			return _json(request, {"result": True, "destinatie": r["destinatie"]})
+			return _json(request, {"result": True, "destinatie": "/"})
 
 	class InterfataWebResource(HdsJsonResource):
 		"""GET /api/interfata-web: parola in reteaua locala (ceruta sau nu) si daca browserul a intrat liber."""
@@ -3979,8 +3906,9 @@ def _construiesteResurse():
 	from . import traducere_subtitrari_web
 	_TRADUCERE, _TRADUCERE_PAGINA = traducere_subtitrari_web.rute(HdsJsonResource, resource)
 	# ---------------------------------------------------------------- Configurarea traducerii pas cu pas (traducere_configurare_web.py)
-	# Pagina deschisa si de telefonul care scaneaza codul QR de pe televizor (/t/<jeton>): recunoasterea cheii, proba pe
-	# loc, cautarea serverului din casa (Components/HdsConfigurareTraducere.py); cheia numai din corpul POST.
+	# Pagina deschisa si de telefonul care scaneaza codul QR de pe televizor (adresa simpla a paginii): recunoasterea
+	# cheii, proba pe loc, cautarea serverului din casa (Components/HdsConfigurareTraducere.py); cheia numai din
+	# corpul POST.
 	from . import traducere_configurare_web
 	_CONFIGURARE, _CONFIGURARE_PAGINA = traducere_configurare_web.rute(HdsJsonResource, resource)
 	# ---------------------------------------------------------------- Traducerea paginilor HbbTV (traducere_hbbtv_web.py)
@@ -4115,6 +4043,9 @@ def _construiesteResurse():
 	from . import scanare_liste_web
 	_IMPORT, _IMPORT_PAGINA = scanare_import_web.rute(HdsJsonResource, resource)
 	_LISTE_IMPLICITE, _LISTE_IMPLICITE_PAGINA = scanare_liste_web.rute(HdsJsonResource, resource)
+	# Liste de canale de pe internet (liste_internet_web.py; Screens/HdsListeInternet.py, Components/HdsListeInternet.py)
+	from . import liste_internet_web
+	_LISTE_INTERNET, _LISTE_INTERNET_PAGINA = liste_internet_web.rute(HdsJsonResource, resource)
 
 	# ---------------------------------------------------------------- regula web pentru ce e deja pe receptor
 	# Limba sunetului si a subtitrarilor (Components/HdsPisteLimbi.py), Telecomenzi (Components/HdsTelecomenziDate.py),
@@ -4508,6 +4439,8 @@ def _construiesteResurse():
 			for nume_ruta, resursa in _IMPORT.items():
 				self.putChild(nume_ruta, resursa)
 			self.putChild(b"liste-implicite", _LISTE_IMPLICITE[b"liste-implicite"])
+			for nume_ruta, resursa in _LISTE_INTERNET.items():
+				self.putChild(nume_ruta, resursa)
 			# Configurare LNB, Găsire semnal si comenzile motorului (antena_web.py)
 			self.putChild(b"lnb", _ANTENA[b"lnb"])
 			self.putChild(b"unicable", _ANTENA[b"unicable"])
@@ -4571,7 +4504,7 @@ def _construiesteResurse():
 
 	class HdsWebRoot(resource.Resource):
 		"""Radacina site-ului. '/' (si '/panou') = panoul (cu parola omului pusa pentru web, intai pagina parolei);
-		'/intra' = parola din reteaua de acasa; '/t/<jeton>' = codul QR de pe televizor; '/deconectare';
+		'/intra' = parola din reteaua de acasa; '/t/<orice>' = adresele codurilor QR vechi, spre '/'; '/deconectare';
 		'/programatori' = lista API; '/jurnal' = jurnalul de versiuni; '/api/...' = resursele de mai sus. Streaming (Faza 2, viitor) se adauga
 		aici mai tarziu cu putChild(), fara sa schimbe API-urile deja existente."""
 
@@ -4582,7 +4515,7 @@ def _construiesteResurse():
 			self.putChild(b"fisiere", _FISIERE_PAGINA)
 			self.putChild(b"intra", IntraResource())
 			self.putChild(b"scriere-secret", ScriereSecretResource())
-			# telefonul din codul QR de pe televizor (jetonul de unica folosinta, asociere.py)
+			# adresele codurilor QR vechi de pe televizor (/t/<jeton>): direct la prima pagina
 			self.putChild(b"t", JetonQrResource())
 			self.putChild(b"deconectare", DeconectareResource())
 			self.putChild(b"programatori", ProgramatoriResource())
@@ -4632,6 +4565,7 @@ def _construiesteResurse():
 			self.putChild(b"mod-sigur", _MOD_SIGUR_PAGINA)
 			self.putChild(b"import", _IMPORT_PAGINA)
 			self.putChild(b"liste-implicite", _LISTE_IMPLICITE_PAGINA)
+			self.putChild(b"liste-internet", _LISTE_INTERNET_PAGINA)
 			self.putChild(b"limbi", _LIMBI_PAGINA)
 			self.putChild(b"navigator", _NAVIGATOR_PAGINA)
 			self.putChild(b"aplicatii-tv", _APLICATII_TV_PAGINA)
@@ -4750,6 +4684,9 @@ def _construiesteServer(radacina):
 				if cale == CALE_VPN_ADAUGA and corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
 						_acelasiOriginCerere(self)):
 					return MAX_CORP_VPN
+				if cale == CALE_IPTV_FISIER and corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
+						_acelasiOriginCerere(self)):
+					return MAX_CORP_IPTV_FISIER
 				# Numai editorul (limitat la 1 MiB de fisier) are JSON mai mare.
 				# Urcarile folosesc bucati <=64 KiB si bugetul comun de RAM.
 				if cale == b"/api/fisiere-save" and corpMareMedia(self._areCookieDeSesiune(), self._adresaCanal(),
@@ -5108,16 +5045,36 @@ TEXTE_PAGINA = {
 		N_("<code>GET /api/remotecontrol?command=&lt;cod&gt;&amp;lung=1</code>: apasă o tastă ca de pe "
 			"telecomanda receptorului (coduri de tastă Linux, de exemplu 352 pentru OK); cu "
 			"<code>lung=1</code>, apăsare lungă"),
-		N_("<code>GET /api/mouse?fel=clic|dublu|drag|dragend|rotita|dreapta|mijloc&amp;xp=&amp;yp=</code>: "
-			"mouse-ul pe ecranul televizorului, ca în emulator: <code>xp</code>, <code>yp</code> = locul în "
-			"procente din ecran (sau <code>x</code>, <code>y</code> în pixelii ecranului, 1920x1080); "
-			"<code>clic</code> alege rândul de sub mouse, iar pe rândul ales sau cu <code>clicuri=2</code> "
-			"dă OK; un buton colorat = tasta lui; <code>drag</code> (cu <code>x0p</code>, <code>y0p</code> = "
-			"locul apăsării, <code>nou=1</code> la prima mișcare) și <code>dragend</code> = trasul pe bara "
-			"de derulare; <code>rotita&amp;pasi=-12..12</code> = sus/jos (3 pași sau mai mulți = o pagină); "
-			"<code>dreapta</code> = Meniu, <code>mijloc</code> = Ieșire. Răspunsul spune ce s-a făcut "
-			"(<code>facut</code>: selectie, ok, buton, bara, derulare, tasta, nimic). Din browser, cu POST "
-			"și antetul <code>X-HDS-CSRF</code>, ca <code>remotecontrol</code>"),
+		N_("<code>GET "
+			"/api/mouse?fel=clic|dublu|drag|dragend|rotita|dreapta|mijloc|lateral_spate|lateral_fata|pagina|capat|text&amp;xp=&amp;yp=</code>: "
+			"mouse-ul pe ecranul televizorului, ca în emulator și ca un mouse pus în receptor: <code>xp</code>, "
+			"<code>yp</code> = locul în procente din ecran (sau <code>x</code>, <code>y</code> în pixelii "
+			"ecranului, 1920x1080); <code>clic</code> alege rândul de sub mouse, iar pe rândul ales sau cu "
+			"<code>clicuri=2</code> dă OK; un buton colorat = tasta lui; <code>drag</code> (cu <code>x0p</code>, "
+			"<code>y0p</code> = locul apăsării, <code>nou=1</code> la prima mișcare) și <code>dragend</code> = "
+			"trasul pe bara de derulare; <code>rotita&amp;pasi=-12..12</code> = sus/jos (3 pași sau mai mulți = o "
+			"pagină), iar cât te uiți la televizor sau la un film, fără listă sub mouse, volumul (pașii negativi "
+			"= mai tare); <code>dreapta</code> = Ieșire; din fabrică <code>mijloc</code> (clicul pe rotiță) = "
+			"Meniu, <code>lateral_spate</code> (butonul lateral din spate) = Înapoi, ca <code>dreapta</code>, și "
+			"<code>lateral_fata</code> (cel din față) = Sunet oprit; <code>pagina</code> și <code>capat</code> "
+			"(cu <code>pasi=-1|1</code>) = Page Up/Down și Home/End; <code>text&amp;text=</code> = literele "
+			"scrise la tastatură. Răspunsul spune ce s-a făcut (<code>facut</code>: selectie, ok, buton, bara, "
+			"derulare, tasta, text, navigator, nimic; ecranele cu gesturile lor pot da și altele). Din browser, "
+			"cu POST și antetul <code>X-HDS-CSRF</code>, ca <code>remotecontrol</code>"),
+		N_("Mouse-ul în Aplicații, în navigatorul web și în YouTube (<code>/api/mouse</code> și mouse-ul pus în "
+			"receptor): în Aplicații, <code>clic</code> pe un card îl alege și îl deschide, ca OK (pe cardul "
+			"navigatorului de instalat, primul clic numai îl alege); cât o pagină web sau o aplicație e pe ecran, "
+			"<code>clic</code> apasă în pagină, în locul cerut, <code>rotita</code> o derulează, iar "
+			"<code>dreapta</code> și butonul pus pe Înapoi duc la pagina de dinainte (<code>facut</code>: "
+			"navigator); al doilea clic al unui dublu clic, venit pe ecranul deschis de primul, nu mai apasă "
+			"nimic"),
+		N_("<code>GET /api/taste-rapide</code>, <code>POST "
+			"/api/taste-rapide-seteaza?&lt;cheie&gt;=&lt;valoare&gt;</code>: butoanele colorate și tastele "
+			"rapide, ca pe televizor și în pagina <code>/taste-rapide</code>, cu alegerile fiecăreia; mouse-ul ca "
+			"telecomandă: <code>hds_mouse_rotita=volum|obisnuit</code> (rotița cât te uiți la televizor: volumul "
+			"sau sus/jos), <code>hds_mouse_mijloc</code>, <code>hds_mouse_spate</code> și "
+			"<code>hds_mouse_fata=meniu|mut|inapoi|nimic</code> (clicul pe rotiță și butoanele laterale), pentru "
+			"<code>/api/mouse</code> și pentru mouse-ul pus în receptor"),
 		N_("<code>GET /api/zap?sRef=&lt;referință&gt;</code>: schimbă canalul"),
 		N_("<code>GET "
 			"/api/screenshot?format=jpg|png&amp;quality=N&amp;width=N&amp;mode=all|video|osd&amp;download=1</code>: imaginea de pe ecran; <code>mode</code>: <code>all</code> cu afișajul OSD (implicit), <code>video</code> numai imaginea canalului, <code>osd</code> numai afișajul OSD; <code>download=1</code>: descărcare ca fișier, cu data și ora receptorului în nume"),
@@ -5355,7 +5312,8 @@ TEXTE_PAGINA = {
 			"(<code>faza</code>, <code>procent</code>, <code>text</code>, <code>randuri</code> cu <code>mhz</code>, "
 			"<code>pol</code>, <code>ksym</code>, <code>stare</code> gasit|nou|cunoscut|negasit|neverificat); numai citire"),
 		N_("<code>POST "
-			"/api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|1000|2000|5000</code>: "
+			"/api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|100|1000|2000|5000"
+			"&amp;pozitie=&lt;satelitul, în zecimi de grad, din alegerile lui GET /api/oarba&gt;</code>: "
 			"pornește căutarea oarbă (pe televizor se deschide ecranul ei)"),
 		N_("<code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs"),
 		N_("<code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi "
@@ -5594,10 +5552,6 @@ TEXTE_PAGINA = {
 			"pe televizor, în ecranul interfeței web, și în pagina Setări. După 5 parole greșite de la "
 			"aceeași adresă, receptorul nu-i mai răspunde 5 minute. Cererile venite din alte pagini web sunt "
 			"refuzate, iar oprirea completă și repornirea nu se fac din aplicații."),
-		N_("Receptorul HD Satelit"),
-		N_("Se conectează telefonul la receptor..."),
-		N_("Continuă"),
-		N_("Deschide panoul receptorului"),
 		N_("Fonturi Google"),
 		N_("Se citește lista..."),
 		N_("Fonturi descărcate pe receptor"),
@@ -5646,10 +5600,6 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 		N_("Se deschide pagina..."),
 		N_("Parola nu a fost primită."),
-		N_("Codul QR nu e bun. Deschide din nou codul pe televizor și scanează-l."),
-		N_("Telefonul e conectat. Se deschide pagina..."),
-		N_("Nu s-a putut conecta telefonul."),
-		N_("Receptorul nu răspunde. Verifică dacă telefonul e în aceeași rețea cu receptorul."),
 		N_("Se scriu în"),
 		N_("(mediu extern, rezistă la actualizarea imaginii)"),
 		N_("(memoria receptorului: o actualizare de imagine le șterge)"),

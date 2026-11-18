@@ -35,30 +35,63 @@
 #    de acasa si a bifat interfata web (L.codAcasa = plugin.parolaWebCeruta, Components/HdsParolaLocala.py), si din
 #    casa se cere HTTP Basic cu utilizatorul oricare si parola lui (o singura parola
 #    pentru tot, numai daca o pune el);
-# 5. DIN AFARA CASEI (cu „Acces din afara casei” pornit) si din casa cu alt nume in Host: HTTP Basic,
-#    utilizatorul oricare (aplicatiile au „root” scris), parola = parola pentru aplicatii (12 litere si cifre in grupe
-#    de 4, facuta pe receptor, separata de parola root, aratata pe televizor in ecranul interfetei web si in /setari)
+# 4b. DIN CASA, cu un nume in Host pe care receptorul nu il stie (alt nume dat de router, de exemplu cu .fritz.box, un
+#    nume pus de om in DNS-ul lui sau in fisierul hosts al calculatorului): la fel ca la punctul 4, fara parola, cand
+#    cererea nu poate veni dintr-o pagina web (_faraPagina): fara Origin, fara Referer, fara Sec-Fetch-* si cu un
+#    User-Agent care nu e al unui browser (fara Mozilla/). Aplicatiile (Kodi, VLC, Home Assistant, dreamDroid,
+#    okhttp, CFNetwork) nu trimit nimic din acestea. O pagina re-legata prin DNS (DNS rebinding) are Host-ul ei, iar
+#    Origin / Referer sunt tot ale ei, deci punctul 3 n-o opreste; o opreste User-Agent-ul de browser: masurat in
+#    Chromium 156, fetch si XMLHttpRequest trimit tot User-Agent-ul browserului cand scriptul pune altul (GET fara
+#    Origin si, cu referrerPolicy no-referrer, fara Referer; POST cu Origin). Alte browsere nemasurate: unul care ar
+#    lasa scriptul sa schimbe User-Agent-ul ar trece numai cu GET, fara Referer. O cerere care arata a browser cu un
+#    nume necunoscut trece pe punctul 5 (cu parola), ca inainte;
+# 5. DIN AFARA CASEI (cu Acces din afara casei pornit) si din casa, dintr-un browser, cu alt nume in Host:
+#    HTTP Basic, utilizatorul oricare (aplicatiile au root scris), parola = parola pentru aplicatii (12 litere si
+#    cifre in grupe de 4, facuta pe receptor, separata de parola root, aratata pe televizor in ecranul interfetei web
+#    si in /setari),
 #    sau cheia pentru scripturi (?token= merge si el); din casa merge si parola omului, cand e pusa. Fara antet: 401
 #    cu provocarea WWW-Authenticate (Kodi, VLC, libcurl trimit parola numai dupa ea). O cerere care arata a browser
 #    (User-Agent cu „Mozilla/”) primeste 401 fara provocare: browserul nu arata fereastra de parola, deci nici nu o
 #    tine minte ca s-o trimita apoi singur din paginile altora. Antetele Sec-Fetch-* nu ajuta aici: browserele nu le
 #    trimit spre o adresa http. Parola gresita de GRESELI_MAX ori de la aceeasi adresa din afara casei: 429 pentru
 #    BLOCARE_S secunde si un mesaj pe televizor (din casa, cu numele receptorului, greselile nu se numara). In casa, un
-#    Host strain cere parola fiindca o pagina re-legata prin DNS (DNS rebinding) trimite Host-ul ei, iar Origin /
-#    Referer sunt tot ale ei: fara parola, numai Host-ul o deosebeste de o aplicatie (paza fata de internet);
+#    Host strain dintr-un browser cere parola fiindca o pagina re-legata prin DNS (DNS rebinding) trimite Host-ul ei, iar
+#    Origin / Referer sunt tot ale ei (paza fata de internet, nevazuta de aplicatii);
 # 6. comenzile (canal, taste, volum, standby, mesaj, temporizatoare) sunt sub aceeasi bariera; oprirea completa si
 #    repornirea receptorului (powerstate 1, 2) nu se fac de aici deloc. Repornirea interfetei (powerstate 3) da, din
 #    0.7.6, ca pe portul 8081: pluginurile si uneltele care o cer pe portul 80 credeau ca s-a facut (TODO 13.11 11:02);
 #    se face pe calea meniului (TryQuitMainloop 3, cu intrebarea de pe televizor la o inregistrare in curs).
+# 6b. COMENZILE DINTR-UN BROWSER (din 0.7.7): din casa, fara parola pusa de om (punctele 4 si 4b), rutele care schimba
+#    ceva (COMENZI: canal, taste, volum, standby si repornirea interfetei, mesaj, temporizatoare, inregistrarea,
+#    stergerea filmelor, reincarcarea listelor, fluxul pentru transcodare /web/stream, care ia un tuner) nu primesc, cu
+#    orice metoda, o cerere care arata a browser si nu vine dintr-o pagina a receptorului
+#    (_comandaDinBrowserStrain): 403. Cu IP-ul receptorului in Host, o
+#    pagina de pe internet deschisa in browserul omului trimite <img src=".../web/moviedelete?..."
+#    referrerpolicy="no-referrer"> sau fetch(..., {mode: "no-cors", referrerPolicy: "no-referrer"}) fara Origin si fara
+#    Referer, iar Sec-Fetch-* nu pleaca spre o adresa http (punctul 3 n-o opreste). Ce nu poate ascunde pagina:
+#    User-Agent-ul browserului (in no-cors antetul pus de script se arunca; in cors Chromium trimite tot User-Agent-ul
+#    lui, iar Firefox si WebKit intreaba intai cu OPTIONS, toate cu Origin strain, deci 403 la punctul 3). Semnul de
+#    browser: orice antet Sec-Fetch-* sau un motor de browser in User-Agent
+#    (_MOTOARE_BROWSER; Mozilla/ singur nu: PowerShell si programele de pe PC facute cu Indy il au fara motor).
+#    Trec ca pana acum: aplicatiile si scripturile (Kodi, dreamDroid cu okhttp, Home Assistant cu aiohttp, VLC, curl,
+#    PowerShell: fara Sec-Fetch-* si fara motor de browser), paginile receptorului (Origin sau Referer ale lui,
+#    Sec-Fetch-Site same-origin), adresa scrisa de om in bara browserului pe https (Sec-Fetch-Site none si
+#    Sec-Fetch-Mode navigate), ?token= si parola (o pagina nu le are). Pe http, o adresa de comanda scrisa sau pusa la
+#    favorite in browser arata la fel ca a unei pagini straine, deci primeste si ea 403. Rutele care doar citesc
+#    (canale, ghid, liste m3u, /file, /picon, statusinfo, lista filmelor) raman deschise si browserului, la fel captura
+#    (/grab): fara Access-Control-Allow-Origin, o pagina straina nu poate citi poza, iar oamenii se uita la /grab din
+#    browser si il pun in paginile lor din casa.
 # Prima cerere buna a unei aplicatii noi (adresa + felul aplicatiei, dintr-un vocabular fix), cu parola sau fara, pune
 # pe televizor „Aplicație conectată”. Parola si aplicatiile vazute stau in CALE_PAROLA (0600, in afara fisierului
 # settings); copia setarilor (Components/HdsCopieSetari.py) il ia in setari.tar.gz si il pune la loc numai pe acelasi
 # receptor (FISIERE_PROPRII), deci parola ramane si dupa o versiune noua. „Parolă nouă pentru aplicații” o schimba si
 # goleste lista.
 # Antetul Host: o cerere spre o ruta de aici trece de poarta Host (gazdaPermisa, chemata din _gazdaPermisaCerere) cu
-# numele receptorului si terminatiile routerelor (L.gazdaProprie, ca la punctul 4) si, cu un antet Basic, cu orice alt
-# nume; parola o verifica apoi bariera (punctul 5), cu numaratoarea greselilor. Fara antet Basic, un nume strain
-# primeste 403 de la poarta Host, ca restul interfetei (care nu primeste terminatiile routerelor).
+# numele receptorului si terminatiile routerelor (L.gazdaProprie, ca la punctul 4), din casa cu orice nume cand nu vine
+# dintr-o pagina (_faraPagina, punctul 4b; cu parola omului pusa, bariera ii cere apoi parola, cu provocarea pentru
+# aplicatie) si, cu un antet Basic, cu orice alt nume; parola o verifica apoi bariera (punctul 5), cu numaratoarea
+# greselilor. Fara antet Basic, un nume strain dintr-un browser sau din afara casei primeste 403 de la poarta Host, ca
+# restul interfetei (care nu primeste terminatiile routerelor).
 # /api/statusinfo, /api/zap si /api/remotecontrol exista deja pentru panou (cookie-ul interfetei, antetul X-HDS-CSRF) si
 # scripturi (?token=): forma de aici raspunde cererilor cu Authorization: Basic si celor fara ?token=, fara X-HDS-CSRF si
 # fara cookie-ul interfetei (Home Assistant din casa, fara parola); celelalte merg ca inainte (Alege, din rute;
@@ -78,6 +111,8 @@
 #   /web/getlocations, /web/getcurrlocation, /web/movielist[?dirname=&tag=], /web/gettags
 #   /web/stream.m3u?ref=[&name=], /web/services.m3u?bRef=, /web/streamcurrentm3u (si streamm3u, servicesm3u)
 #   /web/ts.m3u?file=[&name=] (si tsm3u): lista m3u cu adresa /file a unei inregistrari
+#   /web/stream?StreamService=: canalul pentru transtreamproxy (transcodarea spre telefon pe Vu+ cu codor, portul 8002),
+#     numai de pe receptor (flux_transcodare_web.py)
 #   /api/statusinfo, /api/about, /api/deviceinfo, /api/currenttime, /api/tunersignal, /api/bouquets?stype=tv|radio,
 #   /api/getservices, /api/getallservices, /api/zap, /api/remotecontrol, /api/vol, /api/powerstate, /api/message,
 #   /api/epgnow, /api/epgnext, /api/epgnownext, /api/epgservice, /api/epgservicenow, /api/epgservicenext,
@@ -623,6 +658,7 @@ def uita():
 	_VAZUTE_ACUM.clear()
 	_GRESELI.clear()
 	_ULTIMUL_MESAJ[0] = -3600.0
+	_ULTIMUL_REFUZ[0] = -3600.0
 	del _FLUXURI[:]
 	_FIRE_FLUX[0] = 0
 
@@ -820,6 +856,78 @@ def _dinPagina(request, L):
 	return False
 
 
+def _faraPagina(request, L):
+	"""True cand cererea nu poate veni dintr-o pagina web deschisa intr-un browser (punctul 4b din capul fisierului):
+	fara Origin, fara Referer, fara niciun antet Sec-Fetch-* si cu un User-Agent fara Mozilla/. Asa intra din casa,
+	fara parola, aplicatiile care folosesc un nume pe care receptorul nu il stie; o pagina re-legata prin DNS ramane
+	oprita de User-Agent-ul browserului."""
+	for antet in (b"origin", b"referer", b"sec-fetch-site", b"sec-fetch-mode", b"sec-fetch-dest"):
+		if L.antet(request, antet):
+			return False
+	return "mozilla/" not in (L.antet(request, b"user-agent") or "").lower()
+
+
+# Rutele care schimba ceva pe receptor (punctul 6b din capul fisierului), din /web si din /api.
+COMENZI = frozenset((b"zap", b"remotecontrol", b"vol", b"powerstate", b"message", b"timeradd", b"timerchange",
+	b"timerdelete", b"timercleanup", b"timeraddbyeventid", b"recordnow", b"moviedelete", b"servicelistreload",
+	b"stream"))
+
+# Motorul unui browser, in User-Agent cu litere mici: Chromium, Edge si Opera (AppleWebKit, like Gecko), Firefox (Gecko/),
+# Safari (AppleWebKit), Internet Explorer (MSIE, Trident), Opera veche (Presto), Konqueror (KHTML). Aplicatiile nu il au.
+_MOTOARE_BROWSER = ("applewebkit/", "gecko", "trident/", "presto/", "msie ", "khtml")
+_ULTIMUL_REFUZ = [-3600.0]
+REFUZ_JURNAL_S = 60
+
+
+def esteComanda(request):
+	"""True pentru o cerere spre o ruta din COMENZI (/web/<nume>, /api/<nume>, si cu ce urmeaza dupa nume), oricare ar
+	fi metoda. Bucatile caii se citesc decodate (%xx), ca la Twisted cand alege ruta (postpath): /web/%7Aap e tot zap."""
+	from urllib.parse import unquote_to_bytes
+	cale = getattr(request, "path", b"") or b""
+	if not isinstance(cale, bytes):
+		cale = str(cale).encode("latin-1", "replace")
+	parti = [unquote_to_bytes(p) for p in cale.split(b"?", 1)[0].split(b"/")[1:]]
+	return len(parti) > 1 and parti[0] in (b"web", b"api") and parti[1] in COMENZI
+
+
+def _comandaDinBrowserStrain(request, L):
+	"""True cand cererea arata a browser si nu vine dintr-o pagina a receptorului (punctul 6b din capul fisierului).
+	False pentru Origin / Referer ale receptorului, Sec-Fetch-Site same-origin, adresa scrisa de om in bara browserului
+	pe https (Sec-Fetch-Site none cu Sec-Fetch-Mode navigate) si pentru cererile fara semne de browser (fara Sec-Fetch-*
+	si fara motor de browser in User-Agent: aplicatiile si scripturile)."""
+	origin = L.antet(request, b"origin")
+	referer = L.antet(request, b"referer")
+	if origin or referer:
+		from .asociere import acelasiOrigin
+		try:
+			schema = "https" if request.isSecure() else "http"
+		except Exception:
+			schema = "http"
+		return not acelasiOrigin(L.antet(request, b"host"), origin, referer, schema)
+	sfs = (L.antet(request, b"sec-fetch-site") or "").strip().lower()
+	if sfs == "same-origin":
+		return False
+	if sfs == "none" and (L.antet(request, b"sec-fetch-mode") or "").strip().lower() == "navigate":
+		return False
+	for antet in (b"sec-fetch-site", b"sec-fetch-mode", b"sec-fetch-dest", b"sec-fetch-user"):
+		if L.antet(request, antet):
+			return True
+	ua = (L.antet(request, b"user-agent") or "").lower()
+	return any(motor in ua for motor in _MOTOARE_BROWSER)
+
+
+def _jurnalComandaRefuzata(request, adresa, user_agent, acum):
+	"""Cel mult un rand la REFUZ_JURNAL_S secunde: o pagina care trimite comenzi in bucla nu umple jurnalul."""
+	if acum - _ULTIMUL_REFUZ[0] < REFUZ_JURNAL_S:
+		return
+	_ULTIMUL_REFUZ[0] = acum
+	cale = getattr(request, "path", b"") or b""
+	if isinstance(cale, bytes):
+		cale = cale.decode("latin-1", "replace")
+	_jurnal("comanda dintr-un browser, fara pagina receptorului, refuzata: %s de la %s (%s)" % (cale[:80], adresa,
+		numeAplicatie(user_agent)))
+
+
 def _ramasBlocat(adresa, acum):
 	x = _GRESELI.get(adresa)
 	if not x or x["pana"] <= acum:
@@ -872,6 +980,8 @@ def _poarta(request, L, M):
 		return (404, "Not found", None)
 	adresa = L.adresaClient(request) or ""
 	acasa = esteReteaLocala(adresa)
+	if _fluxTranscodare(request, L, adresa):
+		return None
 	if not acasa and not L.afara():
 		return (403, _t("Acces permis doar din rețeaua locală."), None)
 	if _dinPagina(request, L):
@@ -879,15 +989,20 @@ def _poarta(request, L, M):
 	if b"token" in request.args and L.jetonValid(request):
 		return None
 	user_agent = L.antet(request, b"user-agent") or ""
-	if acasa and not L.codAcasa() and L.gazdaProprie(request):
-		# din casa, cu Host-ul receptorului si fara parola pusa de om pentru interfata web: fara parola; ce e scris in
-		# Utilizator / Parola nu se verifica si nu se numara
+	# din casa: cu Host-ul receptorului (punctul 4) sau dintr-o aplicatie, oricare ar fi numele din Host (punctul 4b)
+	din_casa = acasa and (L.gazdaProprie(request) or _faraPagina(request, L))
+	if din_casa and not L.codAcasa():
+		# fara parola pusa de om pentru interfata web: fara parola; ce e scris in Utilizator / Parola nu se verifica si
+		# nu se numara. Comenzile insa nu dintr-un browser fara pagina receptorului (punctul 6b)
+		if esteComanda(request) and _comandaDinBrowserStrain(request, L):
+			_jurnalComandaRefuzata(request, adresa, user_agent, CEAS())
+			return (403, _t("Cerere respinsă: vine dintr-o pagină web, nu dintr-o aplicație."), None)
 		_noteazaAplicatia(adresa, user_agent, M)
 		return None
 	acum = CEAS()
 	# din casa, cu numele receptorului in adresa, greselile nu se numara si nu blocheaza (nicio paza intre om
-	# si receptorul lui); cu alt nume in Host (o pagina de pe internet re-legata prin DNS, din browserul omului) se
-	# numara ca inainte
+	# si receptorul lui); cu alt nume in Host (o pagina de pe internet re-legata prin DNS, din browserul omului, sau o
+	# cerere care numai arata a aplicatie) se numara ca inainte: aici e o parola adevarata, pusa de om
 	fara_numarare = acasa and L.gazdaProprie(request)
 	ramas = 0 if fara_numarare else _ramasBlocat(adresa, acum)
 	if ramas:
@@ -933,9 +1048,10 @@ def esteCaleAplicatii(cale):
 
 def gazdaPermisa(request):
 	"""Pentru _gazdaPermisaCerere: o cerere spre o ruta de aici, cu setarea pornita, trece cu numele receptorului si
-	terminatiile routerelor in Host (L.gazdaProprie: viper4kv20.lan, viper4kv20.home, ca IP-ul) si, cu un antet Basic
-	bine scris, cu orice antet Host; parola o verifica ruta (_poarta), cu numaratoarea greselilor si blocarea. Daca parola
-	s-ar verifica aici, diferenta 403 / 200 ar lasa pe oricine sa incerce parole fara sa fie numarat."""
+	terminatiile routerelor in Host (L.gazdaProprie: viper4kv20.lan, viper4kv20.home, ca IP-ul), din casa cu orice nume
+	cand nu vine dintr-o pagina web (_faraPagina: aplicatiile cu un nume pe care receptorul nu il stie) si, cu un antet
+	Basic bine scris, cu orice antet Host; parola o verifica ruta (_poarta), cu numaratoarea greselilor si blocarea. Daca
+	parola s-ar verifica aici, diferenta 403 / 200 ar lasa pe oricine sa incerce parole fara sa fie numarat."""
 	L = _LEG["L"]
 	if L is None:
 		return False
@@ -943,6 +1059,10 @@ def gazdaPermisa(request):
 		if not L.activ() or not esteCaleAplicatii(getattr(request, "path", b"")):
 			return False
 		if L.gazdaProprie(request):
+			return True
+		if esteReteaLocala(L.adresaClient(request) or "") and _faraPagina(request, L):
+			return True
+		if _fluxTranscodare(request, L, L.adresaClient(request) or ""):
 			return True
 		return _parolaDinAntet(L.antet(request, b"authorization")) is not None
 	except Exception as eroare:
@@ -4017,6 +4137,31 @@ def _servesteFisier(c, NOT_DONE_YET):
 	return NOT_DONE_YET
 
 
+# ---------------------------------------------------------------- transcodarea spre telefon (/web/stream, TRC)
+
+def h_stream(c):
+	"""/web/stream?StreamService=: canalul pentru transtreamproxy (Vu+ cu codor, portul 8002); flux_transcodare_web.py."""
+	from . import flux_transcodare_web
+	return flux_transcodare_web.h_stream(c)
+
+
+def _fluxTranscodare(request, L, adresa):
+	"""True pentru transtreamproxy de pe receptor pe /web/stream, fara parola pusa in casa (flux_transcodare_web). Numai
+	fara antetul Host: transtreamproxy nu-l trimite, orice browser il trimite (si o pagina re-legata prin DNS la
+	127.0.0.1, deschisa in navigatorul receptorului, ar avea Host-ul ei)."""
+	cale = getattr(request, "path", b"") or b""
+	if not isinstance(cale, bytes) or not cale.startswith(b"/web/stream") or not esteReceptorul(adresa):
+		return False
+	if L.antet(request, b"host"):
+		return False
+	try:
+		from . import flux_transcodare_web
+		return flux_transcodare_web.treceFaraParola(request, L, adresa, esteReceptorul)
+	except Exception as eroare:
+		_jurnal("transcodarea: %s" % eroare)
+		return False
+
+
 # ---------------------------------------------------------------- tabelele rutelor
 
 RUTE_WEB = {
@@ -4034,7 +4179,7 @@ RUTE_WEB = {
 	b"servicelistreload": h_servicelistreload, b"subservices": h_subservices, b"streamsubservices": h_streamsubservices,
 	b"external": h_external,
 	b"epgbouquet": h_epgbouquet, b"epgmulti": h_epgmulti, b"epgsearch": h_epgsearch,
-	b"timeraddbyeventid": h_timeraddbyeventid,
+	b"timeraddbyeventid": h_timeraddbyeventid, b"stream": h_stream,
 }
 
 RUTE_API = {

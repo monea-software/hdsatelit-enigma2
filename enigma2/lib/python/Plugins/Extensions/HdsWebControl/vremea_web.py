@@ -202,7 +202,7 @@ PAGINA = """<!DOCTYPE html>
     <label for="tema">Vremea pe televizor</label>
     <select id="tema">
       <option value="nu">Nu se afișează</option>
-      <option value="bara">În bara de informații</option>
+      <option value="bara">În bara canalului</option>
       <option value="principal">Pe ecranul principal</option>
       <option value="ambele">În ambele locuri</option>
     </select>
@@ -318,7 +318,7 @@ TEXTE_PAGINA = {
 		N_("Caută"),
 		N_("Vremea pe televizor"),
 		N_("Nu se afișează"),
-		N_("În bara de informații"),
+		N_("În bara canalului"),
 		N_("Pe ecranul principal"),
 		N_("În ambele locuri"),
 		N_("Salvează"),

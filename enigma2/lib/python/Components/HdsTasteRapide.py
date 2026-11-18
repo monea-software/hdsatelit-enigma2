@@ -62,6 +62,9 @@ ACTIUNI_DISPONIBILE = [
 	("plugins", _("Plugins & Applications")),
 	("extensions", _("Lista extensiilor (ca ALBASTRU)")),
 	("info", _("Informații sistem")),
+	# ecranul VPN (Screens/HdsVpn.py, Setari > Retea & Internet > VPN) dintr-o tasta (tamiciav7, LinuxSat 164122
+	# #970724); eticheta randului din meniu, deja tradusa
+	("vpn", _("VPN")),
 	("audio", _("Selectare pistă audio")),
 	("subtitle", _("Subtitrări")),
 	("channellist", _("Lista de canale")),
@@ -139,16 +142,19 @@ SCURTE = [
 	("next_short", _("Canalul următor (>)")),
 ]
 
+# VERDE scurt deschide din fabrica Extensii si aplicatii (PluginBrowser), ca in celelalte imagini Enigma2; subcanalele
+# raman in Lista extensiilor (ALBASTRU) cand canalul le are. Cine a ales altceva pentru VERDE isi pastreaza alegerea
+# (config salveaza numai valorile diferite de fabrica). Aceeasi valoare pe televizor, in web (/taste-rapide) si in ajutor.
 VALORI_IMPLICITE = dict((k, "default") for k, _text in SCURTE + BUTOANE)
 VALORI_IMPLICITE.update(red="none", green="none", yellow="none",
-	blue="none", green_short="subservices", yellow_short="audio", blue_short="extensions")
+	blue="none", green_short="plugins", yellow_short="audio", blue_short="extensions")
 
 # Sensul functiei obisnuite se pastreaza intr-un singur loc.
 FUNCTII_OBISNUITE = {
 	"info_short": "eventinfo", "info_long": "epg",
 	"epg_short": "epg_multi", "epg_long": "epg",
 	"subtitle_short": "subtitle_toggle", "subtitle_long": "subtitle",
-	"green_short": "subservices", "yellow_short": "audio", "blue_short": "extensions",
+	"green_short": "plugins", "yellow_short": "audio", "blue_short": "extensions",
 	"red": "none", "green": "none", "yellow": "none", "blue": "none",
 	# < tinut apasat: lista canalelor recente; < scurt ramane canalul de dinainte din istoric, la eliberare
 	"previous_long": "channel_history",
@@ -194,6 +200,16 @@ PROFIL_SETARI = (
 	("hds_filme_culori_vechi", False, _("Culorile vechi în lista de filme")),
 	("hds_ch_privire", "device", _("CH+ și CH- la privit")),
 	("hds_exit_film", "hide", _("EXIT în timpul filmului")),
+	# 0.7.7 (LST, tamiciav7, LinuxSat 164182 #970755): EXIT in lista de canale; aceeasi setare si in Setări listă de canale
+	# (data/setup.xml hds_lista_canale). Din fabrica ca pana acum (Screens/ChannelSelection.hdsTastaExit)
+	("hds_exit_lista", "up", _("EXIT în lista de canale")),
+	# 0.7.7: mouse-ul pus in receptor tine loc de telecomanda (Components/HdsMouseEcran: setareMouse, TASTE_MOUSE;
+	# forumul 795 #2940): rotita la privit = volumul, clicul pe rotita = MENIU, butoanele laterale = Inapoi si Sunet
+	# oprit, toate la alegere
+	("hds_mouse_rotita", "volum", _("Rotița mouse-ului cât te uiți la TV")),
+	("hds_mouse_mijloc", "meniu", _("Clicul pe rotița mouse-ului")),
+	("hds_mouse_spate", "inapoi", _("Butonul lateral din spate al mouse-ului")),
+	("hds_mouse_fata", "mut", _("Butonul lateral din față al mouse-ului")),
 )
 # alegerile se traduc la afisare (initConfigProfil, cand se deschide ecranul sau pagina /taste-rapide), nu la import:
 # atunci limba poate lipsi inca si alegerile ramaneau in romana (asistenta 946155, 14.11.2026)
@@ -201,7 +217,15 @@ ALEGERI_CH = (("device", N_("După telecomandă")),
 	("zap", N_("Schimbă canalul")), ("list", N_("Deschide lista de canale")))
 ALEGERI_PROFIL = {"hds_ch_privire": ALEGERI_CH,
 	"hds_exit_film": (("hide", N_("Ascunde bara de informații")), ("ask", N_("Ask user")),
-		("movielist", N_("Return to movie list")), ("quit", N_("Return to previous service")))}
+		("movielist", N_("Return to movie list")), ("quit", N_("Return to previous service"))),
+	# up: dintr-un buchet sau dosar EXIT urca un nivel, iar in lista de sus inchide lista (ca pana acum); close: EXIT
+	# inchide lista direct, din orice nivel, ca in OE-Alliance (urcarea ramane pe tasta 0)
+	"hds_exit_lista": (("up", N_("Înapoi un nivel")), ("close", N_("Închide lista"))),
+	# mouse-ul: numai texte care exista deja (volumul, meniul, inapoi, sunetul oprit, nimic)
+	"hds_mouse_rotita": (("volum", N_("Volumul")), ("obisnuit", N_("Funcția obișnuită"))),
+	"hds_mouse_mijloc": (("meniu", N_("Meniu")), ("mut", N_("Sunet oprit")), ("inapoi", N_("Înapoi")), ("nimic", N_("Nimic"))),
+	"hds_mouse_spate": (("inapoi", N_("Înapoi")), ("mut", N_("Sunet oprit")), ("meniu", N_("Meniu")), ("nimic", N_("Nimic"))),
+	"hds_mouse_fata": (("mut", N_("Sunet oprit")), ("inapoi", N_("Înapoi")), ("meniu", N_("Meniu")), ("nimic", N_("Nimic")))}
 
 
 def initConfigProfil(config=None):
@@ -273,7 +297,12 @@ TEXTE_ACTIUNI = {
 	"back": _("Înapoi"),
 	"channel_history": _("Canale recente"),
 	"mozaic": _("Mozaic: toate canalele transponderului"),
+	"vpn": _("VPN"),
 }
+
+# EXIT in lista de canale (sens_tasta, alegerea hds_exit_lista): aceleasi texte ca alegerile setarii
+TEXTE_ACTIUNI["back_level"] = _("Înapoi un nivel")
+TEXTE_ACTIUNI["close_list"] = _("Închide lista")
 
 
 def text_actiune(actiune):
@@ -353,7 +382,9 @@ def sens_tasta(context, key, lung=False, config=None, **stare):
 		if lung:
 			return "none"
 		return {"text": "search_channels" if optiune("hds_text_lista_cauta", config) else "none",
-			"channelup": "next_bouquet", "channeldown": "previous_bouquet"}.get(key, "default")
+			"channelup": "next_bouquet", "channeldown": "previous_bouquet",
+			# EXIT: Screens/ChannelSelection.hdsTastaExit (in mutare si in editare EXIT termina numai mutarea/editarea)
+			"exit": "close_list" if optiune("hds_exit_lista", config) == "close" else "back_level"}.get(key, "default")
 	if context == "movie_list":
 		if lung:
 			return "none"

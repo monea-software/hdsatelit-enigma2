@@ -33,6 +33,9 @@ def _t(text):
 
 
 CHEI_CERERE = ("banda", "polarizari", "trepte", "rata_min")
+# 0.7.7 (WLD, Wlad forum 948 #2359): satelitul ales, ca randul "Satelit" de pe televizor; alegerile vin din antena()
+# (satelitii la care se ajunge fara sa se miste antena), nu din HdsCautareOarba.ALEGERI, si nu intra in ULTIMELE
+CHEIE_POZITIE = "pozitie"
 
 
 def _o(O=None):
@@ -54,26 +57,47 @@ def _in_standby():
 		return False
 
 
-def _antena(O, sesiune):
+def _antena(O, sesiune, pozitie=None):
 	try:
-		return O.antena(sesiune)
+		return O.antena(sesiune) if pozitie is None else O.antena(sesiune, pozitie)
 	except Exception as eroare:
 		_jurnal("antena: %s" % eroare)
 		return {"motiv": _t("Nu pot citi setările tunerului de satelit."), "osc": None, "nume": "", "motor": False,
 			"sateliti": [], "pozitie": None, "slot": None}
 
 
+def _pozitie_ceruta(argumente):
+	"""Satelitul ales in pagina (?pozitie=, pozitia orbitala in zecimi de grad) -> (bun, pozitie): (True, None) cand
+	lipseste sau e gol (cel pe care sta antena), (False, None) cand nu e numar."""
+	v = (argumente or {}).get(CHEIE_POZITIE)
+	if v is None or v == "":
+		return True, None
+	try:
+		return True, int(v)
+	except (TypeError, ValueError):
+		return False, None
+
+
+def _optiuni_satelit(a):
+	"""[(valoare, nume)] pentru selectul "Satelit": aceleasi alegeri ca pe televizor; "" = cel pe care sta antena."""
+	return [("" if p is None else str(p), nume) for p, nume, _slot in (a.get("alegeri") or [])]
+
+
 def stare(sesiune=None, O=None, argumente=None):
 	"""Ce arata pagina: alegerile (valorile ultimei folosiri, peste care vin cele bune din cerere, numai pentru
 	previzualizare: nimic nu se salveaza), previzualizarea si starea cautarii."""
 	O = _o(O)
-	a = _antena(O, sesiune)
+	a = _antena(O, sesiune, _pozitie_ceruta(argumente)[1])
 	valori = dict(O.ULTIMELE)
 	for cheie, v in (argumente or {}).items():
 		if cheie in CHEI_CERERE and O.valoare_buna(cheie, v):
 			valori[cheie] = v
 	doua = O.are_doua_benzi(a.get("osc"))
 	campuri = []
+	optiuni = _optiuni_satelit(a)
+	if len(optiuni) > 1:
+		campuri.append({"cheie": CHEIE_POZITIE, "eticheta": _t("Satelit"), "optiuni": optiuni})
+		valori[CHEIE_POZITIE] = "" if a.get("pozitie") is None else str(a.get("pozitie"))
 	if doua:
 		campuri.append({"cheie": "banda", "eticheta": _t("Banda"), "optiuni": O.alegeri_traduse("banda")})
 	campuri.append({"cheie": "polarizari", "eticheta": _t("Polarizările"), "optiuni": O.alegeri_traduse("polarizari")})
@@ -82,7 +106,17 @@ def stare(sesiune=None, O=None, argumente=None):
 	c = O.cautare()
 	return {"result": True, "satelit": O.text_satelit(a), "motiv": a.get("motiv") or "", "motor": bool(a.get("motor")),
 		"campuri": campuri, "valori": valori, "previzualizare": O.text_previzualizare(a, valori),
-		"standby": _in_standby(), "cautare": c.stare(), "casete": _casete(O, c)}
+		"standby": _in_standby(), "cautare": c.stare(), "casete": _casete(O, c), "instalare": _instalare(O)}
+
+
+def _instalare(O):
+	"""0.7.7 (BSC): aducerea programului Vu+ (Vu+ Solo SE, la prima cautare), aceeasi ca pe televizor: {faza, in_curs,
+	eroare, text}; text = pasul cu timpul scurs sau, dupa un esec, ce a cazut (HdsCautareOarba.InstalareVuplus.stare)."""
+	try:
+		return O.instalare_vuplus().stare()
+	except Exception as eroare:
+		_jurnal("instalarea programului Vu+: %r" % (eroare,))
+		return {"faza": "nimic", "in_curs": False, "eroare": False, "text": ""}
 
 
 def _casete(O, c):
@@ -139,12 +173,28 @@ def porneste(argumente, sesiune=None, O=None):
 	refuz = _alta_scanare(sesiune)
 	if refuz:
 		return {"result": False, "message": refuz}
+	# satelitul ales: numai unul din alegerile de acum (cele aratate in pagina si pe televizor)
+	bun, pozitie = _pozitie_ceruta(argumente)
+	if pozitie is not None and pozitie not in [p for p, _n, _s in (_antena(O, sesiune).get("alegeri") or [])]:
+		bun = False
+	if not bun:
+		return {"result": False, "message": _t("Valoare necunoscută pentru %s.") % _t("Satelit"),
+			"stare": stare(sesiune, O)}
 	O.ULTIMELE.update(config)
-	refuz = O.porneste_pe_receptor(sesiune, O.cerere_din(config))
+	cerere = O.cerere_din(config)
+	if pozitie is not None:
+		cerere["pozitie"] = pozitie
+	refuz = O.porneste_pe_receptor(sesiune, cerere)
 	if refuz:
-		return {"result": False, "message": refuz, "stare": stare(sesiune, O)}
+		st = stare(sesiune, O)
+		if st["instalare"]["in_curs"]:
+			# programul Vu+ se aduce acum (Solo SE): nu e o eroare; pasul cu timpul scurs se vede in randul de stare
+			return {"result": True, "message": _t("Programul Vu+ pentru căutarea oarbă se instalează. Căutarea pornește "
+				"singură după instalare."), "stare": st}
+		return {"result": False, "message": refuz, "stare": st}
 	pe_tv = _deschide_ecranul(sesiune)
-	_jurnal("cautare oarba pornita din web (%s)" % ", ".join("%s=%s" % x for x in sorted(config.items())))
+	_jurnal("cautare oarba pornita din web (%s)" % ", ".join("%s=%s" % x for x in sorted(dict(config,
+		pozitie=pozitie).items())))
 	text = _t("Căutarea a pornit.")
 	if not pe_tv:
 		text += " " + _t("Televizorul nu o arată acum (receptorul e în standby sau ecranul nu s-a deschis), dar merge.")
@@ -189,7 +239,7 @@ def argumente(request):
 	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:20]:
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie not in CHEI_CERERE:
+		if cheie not in CHEI_CERERE and cheie != CHEIE_POZITIE:
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
@@ -351,7 +401,7 @@ PAGINA = """<!DOCTYPE html>
 <p class="mesaj" id="incarcare">Se citește starea...</p>
 <div id="continut" class="ascuns">
   <section class="card">
-    <p class="acum">Satelit: <b id="satelit"></b></p>
+    <p class="acum" id="randSatelit">Satelit: <b id="satelit"></b></p>
     <div id="campuri"></div>
     <p class="nota" id="previzualizare"></p>
     <div class="butoane">
@@ -416,10 +466,16 @@ function deseneazaCampurile(d){
 }
 function deseneaza(d){
   $("satelit").textContent = d.cautare.satelit || d.satelit;
+  // 0.7.7: cu selectul "Satelit" (comutator DiSEqC), randul de sus spune numai pe ce satelit a fost cautarea aratata
+  var cuSelect = d.campuri.some(function(k){ return k.cheie === "pozitie"; });
+  arata($("randSatelit"), !cuSelect || d.cautare.faza !== "nimic");
   deseneazaCampurile(d);
   $("previzualizare").textContent = d.previzualizare;
   var c = d.cautare;
-  $("stare").textContent = c.text || "";
+  var ins = d.instalare || {};
+  var cuInstalare = !c.in_curs && !!ins.text;
+  $("stare").textContent = cuInstalare ? ins.text : (c.text || "");
+  $("stare").classList.toggle("eroare", cuInstalare && !!ins.eroare);
   var cs = $("casete"); cs.textContent = "";
   (d.casete || []).forEach(function(k){
     var x = el("div", "caseta"); x.id = "c_" + k.cheie;
@@ -429,7 +485,7 @@ function deseneaza(d){
   });
   arata(cs, (d.casete || []).length > 0);
   $("progres").style.width = (c.faza === "nimic" ? 0 : c.procent) + "%";
-  $("cauta").disabled = c.in_curs || !!d.motiv;
+  $("cauta").disabled = c.in_curs || !!ins.in_curs || !!d.motiv;
   $("opreste").disabled = !c.in_curs || c.faza === "opreste";
   $("scaneaza").disabled = !c.poate_scana || d.standby;
   $("televizor").disabled = d.standby;
@@ -448,7 +504,7 @@ function deseneaza(d){
     });
     arata($("tabel"), c.randuri.length > 0);
   }
-  if(c.in_curs && !S.urmarire){ S.urmarire = setTimeout(function(){ S.urmarire = null; citeste(); }, 1500); }
+  if((c.in_curs || ins.in_curs) && !S.urmarire){ S.urmarire = setTimeout(function(){ S.urmarire = null; citeste(); }, 1500); }
 }
 function alese(){
   var q = new URLSearchParams();

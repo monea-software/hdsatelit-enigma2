@@ -406,6 +406,12 @@
 
 	<screen name="InfoBar" position="72,802" size="1776,232" backgroundColor="hdsPanel" flags="wfNoBorder">
 		<panel name="HdsInfoBarBase" />
+		<!-- vremea de acum in bara (Vremea pe TV = Bara canalului sau Ambele; Screens/HdsVremea.LegaturaVremea): pictograma si
+		     temperatura in randul emisiunii de acum, dupa pictograma retelei, in locul gol din stanga timpului ramas. Codul le
+		     aseaza la fiecare pas dupa textul vecinului: fara loc pentru pictograma ramane temperatura, fara loc nici pentru ea
+		     se ascund amandoua; conditional: alte clase care iau acest ecran (InfoBarLite) nu le cer -->
+		<widget name="hdsVremeaPoza" conditional="hdsVremeaPoza" position="1512,86" size="36,36" alphatest="blend" scale="1" zPosition="3" />
+		<widget name="hdsVremeaText" conditional="hdsVremeaText" position="1554,82" size="150,44" font="HdsCond;32" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="3" />
 		<!-- urmatorul eveniment -->
 		<widget source="session.Event_Next" render="Label" position="24,144" size="100,40" font="HdsCond;30" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" valign="center" zPosition="2">
 			<convert type="EventTime">StartTime</convert>
@@ -417,6 +423,11 @@
 		<widget source="session.Event_Next" render="Label" position="1512,144" size="240,40" font="HdsCond;30" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" zPosition="2">
 			<convert type="HdsInfo">Duration</convert>
 		</widget>
+		<!-- randul ECM (alegerea „Informația ECM în bara canalului”, oprita din fabrica; HdsSignal EcmLine): cat modulul de
+		     acces decripteaza canalul, in dreapta randului emisiunii urmatoare, inaintea duratei ei: sistemul, CAID-ul, timpul
+		     ECM si protocolul; fundalul plin (EcmLineOn) acopera capatul titlului urmator numai cat randul are text -->
+		<widget source="session.CurrentService" render="FixedLabel" position="752,144" size="750,40" backgroundColor="hdsPanel" zPosition="3"><convert type="HdsSignal">EcmLineOn</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="760,144" size="740,40" font="HdsCond;30" foregroundColor="hdsGood" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4"><convert type="HdsSignal">EcmLine</convert></widget>
 		<!-- etichete scurte: stinse = Label,flag_* gri; aprinse = fundal FixedLabel conditionat + Flag,<x> (text doar cand e adevarat) -->
 		<!-- rezolutia: SD / HD / FHD / UHD se exclud, stau in acelasi loc, doar aprinse -->
 		<widget source="session.CurrentService" render="FixedLabel" position="920,33" size="70,30" backgroundColor="hdsBrand" zPosition="2">
@@ -720,6 +731,11 @@
 		<widget source="session.CurrentService" render="Label" position="1338,568" size="414,57" font="HdsCond;33" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsInfo">Video,Short,P1</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="1338,628" size="414,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsInfo">Label,audio,Upper,P1,OnS,OnC,OnT,OnIp</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="1338,668" size="414,57" font="HdsCond;33" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsInfo">Audio,P1</convert></widget>
+		<!-- debitul masurat pe DVB („Debitul în a doua bară”; HdsSignal Debit): eticheta numai langa o valoare, videoul in Mbps
+		     si sunetul in kbps, dedesubt minimul, maximul si media videoului (alegerea cu statistici) -->
+		<widget source="session.CurrentService" render="Label" position="1338,728" size="414,40" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsSignal">Debit,Label,Upper,P1,OnS,OnC,OnT</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1338,768" size="414,57" font="HdsCond;33" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsSignal">Debit,P1,OnS,OnC,OnT</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1338,828" size="414,50" font="HdsCond;26" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsSignal">Debit,Stat,P1,OnS,OnC,OnT</convert></widget>
 		<!-- pagina 2: antena si tuner (din setarile tunerului, fara unghiuri si fara coordonate) -->
 		<widget source="session.CurrentService" render="FixedLabel" position="450,168" size="1,720" backgroundColor="hdsDivider" zPosition="3"><convert type="HdsInfo">Page,2</convert><convert type="ConditionalShowHide" /></widget>
 		<widget source="session.CurrentService" render="FixedLabel" position="888,168" size="1,720" backgroundColor="hdsDivider" zPosition="3"><convert type="HdsInfo">Page,2</convert><convert type="ConditionalShowHide" /></widget>
@@ -1185,6 +1201,10 @@
 		<widget source="session.CurrentService" render="Label" position="1338,408" size="414,34" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsInfo">Video,Short,P1</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="1338,444" size="414,24" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsInfo">Label,audio,Upper,P1,OnS,OnC,OnT,OnIp</convert></widget>
 		<widget source="session.CurrentService" render="Label" position="1338,468" size="414,34" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsInfo">Audio,P1</convert></widget>
+		<!-- debitul masurat pe DVB (ca in ecranul mare, pe randurile ferestrei) -->
+		<widget source="session.CurrentService" render="Label" position="1338,504" size="414,24" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsSignal">Debit,Label,Upper,P1,OnS,OnC,OnT</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1338,528" size="414,34" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsSignal">Debit,P1,OnS,OnC,OnT</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1338,564" size="414,30" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" valign="center" noWrap="1" zPosition="5"><convert type="HdsSignal">Debit,Stat,P1,OnS,OnC,OnT</convert></widget>
 		<!-- pagina 2: antena si tuner (din setarile tunerului, fara unghiuri si fara coordonate) -->
 		<widget source="session.CurrentService" render="FixedLabel" position="450,168" size="1,432" backgroundColor="hdsDivider" zPosition="3"><convert type="HdsInfo">Page,2</convert><convert type="ConditionalShowHide" /></widget>
 		<widget source="session.CurrentService" render="FixedLabel" position="888,168" size="1,432" backgroundColor="hdsDivider" zPosition="3"><convert type="HdsInfo">Page,2</convert><convert type="ConditionalShowHide" /></widget>
@@ -1930,7 +1950,7 @@
 		<!-- linia si descrierea numai cand ecranul are descriere (Menu cu sursa description, pe alte imagini); fara ea
 		     (meniul imaginii HDSatelit n-are descrieri) nu ramane o zona goala intre linia aceasta si linia cadrului -->
 		<widget source="description" render="FixedLabel" conditional="description" position="32,836" size="936,1" backgroundColor="hdsDivider" zPosition="1" />
-		<widget source="description" render="Label" conditional="description" position="32,844" size="936,76" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
+		<widget source="description" render="RunningText" options="movetype=swimming,direction=top,wrap=1,startdelay=3000,steptime=60" conditional="description" position="32,844" size="936,76" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
 		<!-- iconita elementului (fara PNG in skin, ramane goala); pe imaginile vechi: meniul cu iconite si culorile vechi -->
 		<widget name="menuimage" conditional="menuimage" position="0,0" size="1,1" transparent="1" zPosition="0" />
 		<widget name="pointer" conditional="pointer" position="0,0" size="1,1" transparent="1" zPosition="0" />
@@ -1967,7 +1987,8 @@
 		<widget name="dala_cale" position="32,18" size="600,56" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_sus" render="Label" position="1100,89" size="612,24" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3" />
 		<widget name="dala_sageata_sus" position="1720,89" size="24,24" alphatest="blend" zPosition="3" />
-		<widget source="dala_pozitie" render="Label" position="32,898" size="700,24" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget source="dala_pozitie" render="Label" position="32,89" size="700,24" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<widget source="dala_descriere" render="RunningText" options="movetype=swimming,startdelay=2000,steptime=40" position="32,896" size="1060,28" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
 		<widget source="dala_jos" render="Label" position="1100,898" size="612,24" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3" />
 		<widget name="dala_sageata_jos" position="1720,898" size="24,24" alphatest="blend" zPosition="3" />
 		<widget name="dala_bara" position="1756,104" size="6,792" orientation="orTopToBottom" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" zPosition="3" />
@@ -2180,6 +2201,9 @@
 		<widget name="coloana2" position="904,104" size="840,756" itemHeight="42" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" selectionDisabled="1" scrollbarMode="showNever" zPosition="2" />
 		<widget name="despartitor" position="887,104" size="1,756" backgroundColor="hdsDivider" zPosition="1" />
 		<widget name="text" position="32,104" size="1712,756" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="0" scrollbarMode="showOnDemand" zPosition="3" />
+		<!-- Retea (HdsNetworkInfo): codul QR al interfetei web in caseta Interfata web, sub adresa; pozitia si marimea le pune
+		     ecranul (peste randurile lasate libere in caseta), celelalte ecrane nu au sursa qr, deci nici widgetul -->
+		<widget source="qr" render="Canvas" conditional="qr" position="32,104" size="210,210" zPosition="4" />
 		<widget name="HintText" position="32,868" size="1712,44" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<!-- Module de acces conditionat (Screens/CamSetup.py): lista modulelor, starea comenzii si detaliile (Stanga /
@@ -2437,10 +2461,12 @@
 		<widget name="ghid" position="32,100" size="1712,56" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 		<widget name="lista" position="32,168" size="1712,740" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" transparent="1" scrollbarMode="showOnDemand" zPosition="1" />
 	</screen>
-	<screen name="IptvSeriale" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+	<!-- 0.7.7 (FLM2): pagina unei surse IPTV (IptvCont): Canale TV, Filme, Seriale, apoi grupele, categoriile, titlurile; lista
+	     compacta, cu text (in locul listei vechi a serialelor, IptvSeriale) -->
+	<screen name="IptvCont" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />
 		<widget name="ghid" position="32,100" size="1712,56" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
-		<widget name="lista" position="32,168" size="1712,740" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsPanelDialog" transparent="1" scrollbarMode="showOnDemand" zPosition="1" />
+		<widget name="lista" position="32,168" size="1712,740" itemHeight="60" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" textOffset="16,0" scrollbarMode="showOnDemand" zPosition="1" />
 	</screen>
 	<screen name="IptvTextSerial" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />

@@ -76,6 +76,11 @@
 # e legata de alta adresa decat cea de acum (cheie_oprita), cu clasa de avertisment. Nota „trebuie puse din nou” e
 # rosie numai la serviciile care cer cheie; la celelalte, o nota blanda, galbena.
 #
+# CANALELE FARA TRADUCERE (ca randul de pe televizor): starea are canale = T.stareCanale() ({"acum": cheia, numele si
+# oprit, sau None; "oprite": lista}). Randul Traducerea pe canalul de acum (Da/Nu) si Scoate din lista intra in
+# schimbarile nesalvate, ca restul paginii; la Salveaza: canal_acum=0|1 (canalul care merge acum) si scoate_canal=
+# cheile despartite prin rand nou, puse cu T.puneOpritPeCanal dupa celelalte setari.
+#
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2 (reactorul e bucla enigma2); apelurile sunt scurte, proba
 # merge pe firul ei (in modul). Fisierul nu importa nimic la incarcare: probele de pe PC dau modulul lor (T).
 
@@ -119,6 +124,7 @@ NUME_CAMP = {
 	"propriu_cale": N_("Calea traducerii"), "rezerve": N_("Serviciile de rezervă"), "bara": N_("Tradu bara de jos"),
 	"epg": N_("Tradu EPG"), "principal": N_("Serviciul principal"), "teletext": N_("Tradu teletextul"),
 	"teletext_mod": N_("Teletextul tradus"), "hbbtv": N_("Tradu HbbTV"),
+	"canal_acum": N_("Traducerea pe canalul de acum"), "scoate_canal": N_("Canalele fără traducere"),
 }
 
 
@@ -483,6 +489,7 @@ def stare(T=None):
 		"texte_tradus": _stareTexte(),
 		"gata": list(T.serviciiGata(s)) if hasattr(T, "serviciiGata") else [],
 		"stari_chei": T.chei().stare_chei() if hasattr(T.chei(), "stare_chei") else {},
+		"canale": T.stareCanale() if hasattr(T, "stareCanale") else {"acum": None, "oprite": []},
 	}
 	return T.faraSecrete(rez) if hasattr(T, "faraSecrete") else rez
 
@@ -638,6 +645,18 @@ def seteaza(argumente, T=None, configfile=None, din_adresa=(), doar_proba=False)
 			sfaturi.append(_t(SFAT_REZERVE[eroare]))
 		else:
 			noi["rezerve"] = ",".join(lista)
+	# canalele fara traducere: puse dupa celelalte setari (_puneCanalele)
+	canal, scoase = None, []
+	if "canal_acum" in argumente and not doar_proba:
+		cheie_canal, nume_canal = T.canalDeAcum() if hasattr(T, "canalDeAcum") else (None, u"")
+		if argumente["canal_acum"] not in ("0", "1") or not cheie_canal:
+			rele.append("canal_acum")
+		else:
+			canal = (cheie_canal, argumente["canal_acum"] == "0", nume_canal)
+	if "scoate_canal" in argumente and not doar_proba:
+		scoase = [c.strip() for c in argumente["scoate_canal"].split("\n") if c.strip()]
+		if not scoase or not hasattr(T, "puneOpritPeCanal") or len(scoase) > getattr(T, "MAX_CANALE_OPRITE", 2000):
+			rele.append("scoate_canal")
 	if rele:
 		mesaj = _t("Valoare greșită pentru: %s.") % ", ".join(numeCamp(c) for c in rele)
 		if adresa_rea:
@@ -645,7 +664,7 @@ def seteaza(argumente, T=None, configfile=None, din_adresa=(), doar_proba=False)
 		for sfat in sfaturi:
 			mesaj += " " + sfat
 		return _cuMesaj(T, False, mesaj + " " + _t("Nu s-a schimbat nimic."))
-	if not noi and not modificari and not doar_proba:
+	if not noi and not modificari and not doar_proba and canal is None and not scoase:
 		return _cuMesaj(T, False, _t("Nu s-a trimis nicio alegere."))
 	if modificari or doar_proba:
 		from types import SimpleNamespace
@@ -671,12 +690,25 @@ def seteaza(argumente, T=None, configfile=None, din_adresa=(), doar_proba=False)
 	if configfile is None:
 		from Components.config import configfile
 	configfile.save()
+	if not _puneCanalele(T, canal, scoase):
+		return _cuMesaj(T, False, _t("Setările nu s-au putut salva. Încearcă din nou."))
 	rez = _cuMesaj(T, True, _t("Salvat."))
 	if s.pornit.value and hasattr(T, "diagnosticPornire"):
 		diagnostic = T.diagnosticPornire(s=s)
 		if not diagnostic.get("poate_traduce"):
 			rez["diagnostic_pornire"] = diagnostic
 	return rez
+
+
+def _puneCanalele(T, canal, scoase):
+	"""Canalele fara traducere, dupa celelalte setari: scoase din lista, apoi canalul de acum (cheia, oprit, numele).
+	-> False daca fisierul nu s-a putut scrie"""
+	bine = True
+	for cheie in scoase:
+		bine = T.puneOpritPeCanal(cheie, False) and bine
+	if canal is not None:
+		bine = T.puneOpritPeCanal(canal[0], canal[1], canal[2]) and bine
+	return bine
 
 
 def _raspunsCheie(T, rezultat, mesaj):
@@ -974,6 +1006,12 @@ PAGINA = """<!DOCTYPE html>
   <section class="card" id="card-traducere">
     <h2>Traducerea</h2>
     <div class="rand" id="rand-pornit"><label for="alege-pornit">Traducerea automată</label><select id="alege-pornit"></select></div>
+    <div class="rand ascuns" id="rand-canal_acum">
+      <label for="alege-canal_acum">Traducerea pe canalul de acum</label><select id="alege-canal_acum"></select>
+      <p class="nota tot" id="canal-acum-nume"></p>
+      <p class="nota tot">Nu: pe canalul acesta subtitrările nu se mai traduc și nu mai pornesc singure pentru traducere.</p>
+    </div>
+    <div class="ascuns" id="canale-oprite"><h3>Canalele fără traducere</h3><ul class="alte" id="canale-oprite-lista"></ul></div>
     <div class="rand" id="rand-serviciu"><label for="alege-serviciu">Serviciul</label><select id="alege-serviciu"></select></div>
     <p class="nota ascuns" id="eticheta-serviciu"></p>
     <p class="avertisment ascuns" id="avertisment-serviciu"></p>
@@ -1232,7 +1270,7 @@ function puneTot(d, fortat){
     initiale = JSON.parse(JSON.stringify(d.valori));
     d = Object.assign({}, d, {valori: Object.assign({}, d.valori, schimbari)});
   }
-  ["valori", "fabricatie", "alegeri", "cere", "chei", "chei_din_nou", "chei_din_nou_bland", "cheie_fel", "cheie_text", "texte", "lipsa_text", "confidentialitate", "instructiuni", "feluri_eroare", "implicite", "modele_propuse", "regiuni", "stare", "epg", "texte_tradus", "gata", "stari_chei"].forEach(function(k){
+  ["valori", "fabricatie", "alegeri", "cere", "chei", "chei_din_nou", "chei_din_nou_bland", "cheie_fel", "cheie_text", "texte", "lipsa_text", "confidentialitate", "instructiuni", "feluri_eroare", "implicite", "modele_propuse", "regiuni", "stare", "epg", "texte_tradus", "gata", "stari_chei", "canale"].forEach(function(k){
     if(d[k] !== undefined){ ultim[k] = d[k]; }
   });
   var v = ultim.valori;
@@ -1302,7 +1340,31 @@ function puneTot(d, fortat){
   puneContorTexte();
   puneRezerve();
   puneCheiExtra(v.serviciu);
+  puneCanale(fortat);
   puneVedere();
+}
+function puneCanale(fortat){
+  var c = ultim.canale || {}, acum = c.acum, s = $("alege-canal_acum"), scoase = schimbari.scoate_canal || [];
+  arata($("rand-canal_acum"), !!acum && !!ultim.valori.pornit);
+  if(acum){
+    if(fortat || document.activeElement !== s){ umple(s, [["1", "Da"], ["0", "Nu"]], schimbari.canal_acum !== undefined ? schimbari.canal_acum : (acum.oprit ? "0" : "1")); }
+    paragraf("canal-acum-nume", acum.nume || "");
+  }
+  var ul = $("canale-oprite-lista"); sterge(ul);
+  var lista = (c.oprite || []).filter(function(x){ return scoase.indexOf(x.cheie) === -1; });
+  lista.forEach(function(x){
+    var li = document.createElement("li");
+    var n = document.createElement("span"); n.textContent = x.nume || x.cheie; li.appendChild(n);
+    var b = document.createElement("div"); b.className = "butoane";
+    var bt = document.createElement("button"); bt.type = "button"; bt.textContent = "Scoate";
+    bt.addEventListener("click", function(){
+      schimbari.scoate_canal = scoase.concat([x.cheie]);
+      puneTot({}, true);
+      mesaj("mesaj-traducere", "Schimbări nesalvate.");
+    });
+    b.appendChild(bt); li.appendChild(b); ul.appendChild(li);
+  });
+  arata($("canale-oprite"), !!lista.length);
 }
 
 function campLocal(camp, valoare){
@@ -1637,7 +1699,7 @@ function dateSchimbari(){
   retineCheia();
   var q = new URLSearchParams();
   Object.keys(schimbari).forEach(function(k){
-    var v = schimbari[k]; q.set(k, k === "rezerve" ? v.join(",") : (DA_NU[k] ? (v ? "1" : "0") : v));
+    var v = schimbari[k]; q.set(k, k === "rezerve" ? v.join(",") : (k === "scoate_canal" ? v.join("\\n") : (DA_NU[k] ? (v ? "1" : "0") : v)));
   });
   var lista = listaChei();
   if(lista.length){ q.set("chei_noi", JSON.stringify(lista)); }
@@ -1686,6 +1748,12 @@ ALEGERI.forEach(function(k){
 TEXTE.concat(TEXTE_PROPRIU).forEach(function(k){
   var i = $("camp-" + k);
   i.addEventListener("change", function(){ var q = new URLSearchParams(); q.set(k, i.value.trim()); trimite(q, "mesaj-traducere"); });
+});
+$("alege-canal_acum").addEventListener("change", function(){
+  var s = $("alege-canal_acum"), acum = (ultim.canale || {}).acum, initial = acum && acum.oprit ? "0" : "1";
+  if(s.value === initial){ delete schimbari.canal_acum; } else { schimbari.canal_acum = s.value; }
+  puneTot({}, true);
+  mesaj("mesaj-traducere", "Schimbări nesalvate.");
 });
 if(CFG.jeton){ $("legatura-configurare").href = adresa("/traducere-configurare"); }
 $("cheie").addEventListener("keydown", function(e){ if(e && e.key === "Enter"){ $("salveaza").click(); } });
@@ -1895,6 +1963,10 @@ TEXTE_PAGINA = {
 		N_("lipește cheia aici"),
 		N_("translatedText"),
 		N_("gemma3:4b"),
+		# canalele fara traducere
+		N_("Traducerea pe canalul de acum"),
+		N_("Nu: pe canalul acesta subtitrările nu se mai traduc și nu mai pornesc singure pentru traducere."),
+		N_("Canalele fără traducere"),
 	),
 	"js": (
 		N_("Reglajele uzuale"),

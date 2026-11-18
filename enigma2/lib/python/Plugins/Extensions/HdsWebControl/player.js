@@ -10,6 +10,10 @@
  * stratul receptorului merg la fel cu amandoua: _media() da elementul <video> sau playerul wasm, care are aceleasi
  * proprietati (paused, muted, volume, play(), pause()). Pagina trimite wasm=1 cand browserul are WebAssembly, WebGL si
  * Worker; un canal la care formatul nu se stia trece singur pe playerul wasm cand fluxul arata MPEG-2.
+ * H.264 FARA MEDIASOURCE (Opera sau Chromium pe Linux fara codecurile sistemului): cand receptorul spune pe_wasm
+ * (decodorul wasm al imaginii are H.264, tv-wasm/decodoare.txt), imaginea H.264 merge tot pe playerul wasm; un canal cu
+ * formatul necunoscut porneste direct pe el cand MediaSource nu decodeaza nici H.264, nici HEVC (workerul afla formatul
+ * din flux). Playerul wasm nu ia niciodata locul lui MediaSource cand acesta decodeaza imaginea (procesorul).
  * Sunetul AC-3 al canalelor H.264 / HEVC, in browserele care nu il redau singure (Chrome, Edge, Firefox): il
  * decodeaza pagina, cu acelasi decodor wasm, si il da lui MediaSource ca FLAC (/tv/hds-sunet.js, convertorul trecut
  * lui mpegts.js prin config.hdsSunetAc3); pagina trimite atunci ac3=1, ca receptorul sa lase AC-3 in PMT.
@@ -137,6 +141,7 @@
     // scripturile care nu s-au incarcat
     e_mpegts: "Biblioteca de redare nu s-a încărcat de pe receptor.",
     e_wasm: "Decodorul MPEG-2 nu s-a încărcat de pe receptor.",
+    e_wasm_toate: "Decodorul din browser nu s-a încărcat de pe receptor.",
     e_sunet: "Decodorul de sunet nu s-a încărcat de pe receptor.",
     // pistele si subtitrarea
     sunet_pista: "Sunet: %s",
@@ -195,6 +200,8 @@
     flux_oprit: "Fluxul s-a oprit de la receptor.",
     legatura: "Legătura cu receptorul s-a întrerupt.",
     wasm_oprit: "Decodorul MPEG-2 din browser nu a pornit.",
+    wasm_oprit_toate: "Decodorul din browser nu a pornit.",
+    h264_wasm: "Imaginea acestui canal (H.264) se decodează în browser, pe procesorul calculatorului.",
     format: "Browserul nu cunoaște formatul imaginii sau al sunetului.",
     forma: "Fluxul are o formă pe care playerul nu o înțelege.",
     cod4: "Browserul nu a putut deschide imaginea (n-a primit date pe care să le înțeleagă).",
@@ -437,6 +444,17 @@
     return POATE;
   }
   function imagineWasm(video){ return video === "mpeg2" || video === "mpeg1"; }
+  // decodorul wasm din imagine are H.264? (tv-wasm/decodoare.txt, o singura cerere pe pagina; numai cand MediaSource nu
+  // decodeaza un canal H.264 desi spune ca poate)
+  var H264_WASM = null;
+  function areH264Wasm(){
+    if(!H264_WASM){
+      H264_WASM = fetch("/tv/tv-wasm/decodoare.txt", {cache: "no-store", credentials: "same-origin"})
+        .then(function(r){ return r.ok ? r.text() : ""; })
+        .then(function(t){ return /^h264\s*$/m.test(t); }, function(){ return false; });
+    }
+    return H264_WASM;
+  }
   // programul (sid-ul) canalului, din referinta lui: al patrulea camp, in hex ("1:0:19:157F:41F:..." -> 0x157F); 0 = nu
   // se stie. Playerul wasm il cauta in PAT: la inceputul fluxului pot trece inca PAT-ul si PMT-ul canalului de dinainte
   function programDinRef(ref){
@@ -1114,11 +1132,21 @@
     function faraH264(video){
       return !self.cuWasm && String(video || "").toLowerCase() === "h264" && pt.mse && !pt.h264;
     }
+    // imaginea pe playerul wasm: MPEG-2 / MPEG-1; H.264 cand receptorul spune pe_wasm (MediaSource fara H.264, decodorul
+    // wasm cu H.264); formatul necunoscut cand MediaSource nu decodeaza nimic (workerul il afla din flux)
+    function peWasm(r){
+      if(!pt.wasm){ return false; }
+      if(imagineWasm(r.video)){ return true; }
+      if(String(r.video || "").toLowerCase() === "h264" && !pt.h264 && r.pe_wasm){ return true; }
+      return !r.video && !mse;
+    }
     function q0(){
       var q = new URLSearchParams();
       q.set("hevc", pt.hevc ? "1" : "0");
-      // h264=0 numai cand MediaSource nu decodeaza H.264 (fara parametru receptorul presupune ca da)
-      if(pt.mse && !pt.h264){ q.set("h264", "0"); }
+      // h264=0 cand MediaSource nu decodeaza H.264 sau lipseste de tot (Safari pe iPhone inainte de iOS 17.1) si pagina
+      // are macar unul din cele doua playere; atunci receptorul pune H.264 pe playerul wasm (pe_wasm) daca decodorul il
+      // are. Fara parametru receptorul presupune ca da (paginile vechi; browserul fara MediaSource si fara wasm)
+      if(!pt.h264 && (pt.mse || pt.wasm)){ q.set("h264", "0"); }
       q.set("ac3", pt.ac3 ? "1" : "0"); q.set("wasm", pt.wasm ? "1" : "0");
       if(preia){ q.set("preia", "1"); }
       return q;
@@ -1180,7 +1208,7 @@
         // imaginea MPEG-2 / MPEG-1: playerul wasm (HdsPlayerWasm, /tv/hds-player.js) in locul lui mpegts.js, pe acelasi
         // /api/tv-flux; receptorul trimite fluxul la fel
         return incarcaRedarea().then(function(){
-          self.cuWasm = pt.wasm && imagineWasm(v.video);
+          self.cuWasm = peWasm(v);
           if(!self.cuWasm && !mse){ throw faraMse(); }
           if(faraH264(v.video)){ throw new Error(tx(self.o.m3u ? "h264_m3u" : "h264")); }
           var q = q0(); q.set("ref", self.ref);
@@ -1208,7 +1236,7 @@
         self.ref = d.ref || self.ref;
         self.nume = d.nume || self.nume;
         self.peTv = true;
-        self.cuWasm = pt.wasm && imagineWasm(d.video);
+        self.cuWasm = peWasm(d);
         if(!self.cuWasm && !mse){ throw faraMse(); }
         if(faraH264(d.video)){ throw new Error(tx(self.o.m3u ? "h264_m3u" : "h264")); }
       }
@@ -1413,12 +1441,16 @@
     }
     if(tip !== "eroare"){ return; }
     if(d.fel === "format"){
-      // fluxul nu are imagine MPEG-2 (formatul nu se stia dinainte): imaginea trece pe mpegts.js
-      if(window.mpegts && mpegts.getFeatureList && mpegts.getFeatureList().mseLivePlayback){
+      // imaginea fluxului nu e in decodorul wasm (formatul nu se stia dinainte): trece pe mpegts.js cand MediaSource o
+      // decodeaza; altfel cauza dupa format (H.264 intr-un browser fara H.264 si decodorul wasm fara el)
+      var ptf = poate(), vf = String(d.video || "").toLowerCase(), fl = (window.mpegts && mpegts.getFeatureList) ? mpegts.getFeatureList() : null;
+      var mseIa = vf === "hevc" ? ptf.hevc : ptf.h264;
+      if(fl && mseIa && (fl.mseLivePlayback || fl.networkStreamIO)){
         self.cuWasm = false;
         self._jucator();
         return;
       }
+      if(vf === "h264"){ self._codecImagine = "avc1.640028"; }
       self._eroareFlux("MediaError", "FormatUnsupported", {msg: d.text});
       return;
     }
@@ -1681,7 +1713,7 @@
       self._cerere("/api/motor").then(function(d){
         if(gen !== self._generatie || !self._semnVizibil()){ return; }
         // readucerea antenei dupa pierderea semnalului (HdsMotorPozitie) nu se spune aici, ca nici pe televizor: omul a
-        // schimbat canalul pe acelasi satelit si vedea „Antena se roteste...” (Eduard, Amiko fara semnal, 11.11.2026)
+        // schimbat canalul pe acelasi satelit si vedea "Antena se roteste..." (Amiko fara semnal, 11.11.2026)
         var readucere = d && d.readucere && d.readucere.activa && d.readucere.in_curs;
         var misca = !!(d && d.result && d.se_misca) && !readucere;
         self._antenaMisca = misca;
@@ -1742,6 +1774,8 @@
         if(self.radio){ self.e.bifa.checked = false; self._strat(); self._radioAnalizor(); }
       }
       self._avertizarePmt(a);
+      // receptorul spune ca imaginea H.264 merge pe playerul wasm (browserul fara H.264 in MediaSource, decodorul cu H.264)
+      self._h264PeWasm = !!(a.pe_wasm && String(a.video || "").toLowerCase() === "h264");
       if(a.video && imagineWasm(a.video) && poate().wasm && !self.cuWasm && !self.inLucru){
         // formatul nu se stia la pornire, iar PMT-ul fluxului arata MPEG-2: imaginea trece pe playerul wasm
         self.cuWasm = true;
@@ -1751,10 +1785,24 @@
         self._jucator();
         return;
       }
+      if(self._h264PeWasm && poate().wasm && !poate().h264 && !self.cuWasm && !self.inLucru){
+        // formatul nu se stia la pornire (browserul are HEVC, nu H.264), iar PMT-ul arata H.264: tot pe playerul wasm
+        self._laWasmH264();
+        return;
+      }
       self._decriptarea(a);
       // dupa o tasta de zap fluxul asteapta canalul nou (_semnTasta), iar cat se decripteaza, imaginea clara: nu se reia
       if(!self.jucator && !self.inLucru && self.reconectare && !self._semnTasta && !self._seDecripteaza){ self._jucator(); }
     }).catch(function(){});
+  };
+
+  // imaginea H.264 pe playerul wasm, dupa PMT (formatul nu se stia la pornire): ca la MPEG-2, cu textul lui
+  Player.prototype._laWasmH264 = function(){
+    this.cuWasm = true;
+    this.reconectare = true;
+    this.mesaj("");
+    this.stare(tx("h264_wasm"));
+    this._jucator();
   };
 
   // canalul criptat, dupa raspunsul camului de pe receptor (a.decriptare): "asteapta" = camul inca incearca (semnul "Se
@@ -1903,7 +1951,11 @@
     } else if(tip === "MediaError"){
       if(detaliu === "DecodorWasm"){ cauza = tx("wasm_oprit"); }
       else if((detaliu === "FormatUnsupported" || detaliu === "CodecUnsupported") && /^avc1\./.test(self._codecImagine || "") &&
-        !poate().h264){ cauza = self.o.m3u ? tx("h264_m3u") : tx("h264"); }
+        !poate().h264){
+        // receptorul a spus ca imaginea H.264 merge pe playerul wasm: acolo, nu mesajul
+        if(self._h264PeWasm && poate().wasm && !self.cuWasm){ self._opresteJucatorul(); self._laWasmH264(); return; }
+        cauza = self.o.m3u ? tx("h264_m3u") : tx("h264");
+      }
       else if(detaliu === "FormatUnsupported" || detaliu === "CodecUnsupported"){ cauza = tx("format"); }
       else if(detaliu === "FormatError"){ cauza = tx("forma"); }
       else if(cod === 4){ cauza = tx("cod4"); }
@@ -1916,10 +1968,29 @@
     self.reconectari = self.reconectari.filter(function(t){ return acum - t < 60000; });
     self.reconectare = reincearca && self.reconectari.length < 3;
     if(self.reconectare){ self.reconectari.push(acum); }
-    self.mesaj(cauza, tx("incearca"), function(){ self._dinNou(); });
-    self.stare(cauza, true, tehnic);
-    // starea sesiunii poate spune mai mult (oprita cu motiv, canal care nu se decripteaza)
-    setTimeout(function(){ self._citesteStarea(); }, 800);
+    function arata(){
+      self.mesaj(cauza, tx("incearca"), function(){ self._dinNou(); });
+      self.stare(cauza, true, tehnic);
+      // starea sesiunii poate spune mai mult (oprita cu motiv, canal care nu se decripteaza)
+      setTimeout(function(){ self._citesteStarea(); }, 800);
+    }
+    if(decodare && !/audio packet/i.test(msg) && /^avc1\./.test(self._codecImagine || "") && !self.cuWasm &&
+      poate().wasm && poate().h264 && !self._h264Incercat){
+      // MediaSource spune ca are H.264, dar nu decodeaza imaginea acestui canal nici dupa reconectare (de pilda Chromium
+      // fara decodorul H.264 al sistemului, care raspunde totusi "da"): cand decodorul wasm din imagine are H.264, pagina
+      // trece pe el (h264=0, receptorul spune pe_wasm) pana la reincarcare; altfel mesajul
+      self._h264Incercat = true;
+      var gen = self._generatie;
+      areH264Wasm().then(function(da){
+        if(gen !== self._generatie || self.jucator || self.inLucru){ return; }
+        if(!da){ arata(); return; }
+        POATE.h264 = false;
+        self.stare(tx("h264_wasm"));
+        self._dinNou();
+      });
+      return;
+    }
+    arata();
   };
 
   Player.prototype._citestePistele = function(){

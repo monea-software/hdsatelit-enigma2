@@ -321,9 +321,9 @@ class Afisaj(A.Afisaj):
 		tema = self._temaMare()
 		if tema is not None:
 			# tema mare: canalul privit, cu litere mari, in locul listei de rotire
-			sigla = self._sigla(acum) if tema == "picon_mare" else ""
+			sigla = self._sigla(acum) if tema in S.TEME_CU_PICON else ""
 			scena = S.scenaTema(self.ctx, tema, acum, dict(imagine=sigla))
-			scena["bara"] = False
+			scena["bara"] = baraTema(tema, c)
 			return self._arataScena(scena, scena.get("valoare", ""), ms)
 		secunde = max(0.0, acum - a.cititLa)
 		id_ = a.intrare.d.id
@@ -476,6 +476,16 @@ class Afisaj(A.Afisaj):
 			self.ecran = None
 
 
+def baraTema(tema, c=None):
+	"""Bara de progres a emisiunii intr-o tema mare: numai in temele cu emisiunea de acum (HdsAfisajScena.TEME_CU_BARA)
+	si dupa „Bara de progres colorată” (color_bara)."""
+	from Components import HdsAfisajScena as S
+	if tema not in S.TEME_CU_BARA:
+		return False
+	c = A._cfg() if c is None else c
+	return getattr(getattr(c, "color_bara", None), "value", "da") == "da"
+
+
 def _siglaPrevizualizare(motor, ctx):
 	"""Piconul canalului privit pentru previzualizare: al motorului (acelasi cache), altfel cautat la fel."""
 	if motor is not None and hasattr(motor, "_sigla"):
@@ -508,10 +518,10 @@ def cadruTema(tema, picon=None, valori=None, marime=None, sigla=None):
 	if picon is None:
 		picon = getattr(getattr(c, "color_picon", None), "value", "nu")
 	if sigla is None:
-		sigla = _siglaPrevizualizare(motor, ctx) if (tema == "picon_mare" or picon != "nu") else ""
+		sigla = _siglaPrevizualizare(motor, ctx) if (tema in S.TEME_CU_PICON or picon != "nu") else ""
 	if tema != "orbita":
 		s = S.scenaTema(ctx, tema, detalii=dict(imagine=sigla))
-		s["bara"] = False
+		s["bara"] = baraTema(tema, c)
 		return R.cadru(s, marime)
 	d = D.DUPA_ID.get("canal.numar_nume")
 	if d is not None:

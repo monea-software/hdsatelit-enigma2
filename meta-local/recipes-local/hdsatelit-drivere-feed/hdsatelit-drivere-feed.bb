@@ -37,7 +37,7 @@ SUMMARY = "Driverele USB din feedul imaginii HDSatelit"
 DESCRIPTION = "Metapachet gol pentru constructia si culegerea driverelor USB care nu sunt in imagine; receptorul le instaleaza singur cand omul baga stickul."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
-PV = "0.1.4"
+PV = "0.1.5"
 
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 inherit packagegroup
@@ -112,6 +112,11 @@ RDEPENDS:${PN}:append:multiboxpro = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} 
 # Zgemma H17 COMBO (MH7, linux-airdigital 4.10.12, h17/defconfig): ca la AX HD51, MT7601U e in nucleu, R8723AU si AX88179
 # lipsesc (driverele din afara); fara tunerele VU+ Turbo (meta-vuplus nu e in straturile masinii)
 RDEPENDS:${PN}:append:zgemmah17combo = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} rt8723a ax88179-178a"
+# Dreambox DM900 si DM920 (V10, 13.11.2026; linux-dreambox 3.14, dm900/defconfig si dm920/defconfig): MT7601U nu exista in
+# nucleu (a intrat in 3.19), R8723AU si AX88179_178A nesetate => driverele din afara, ca la Vu+ 4K; fara tunerele VU+ Turbo.
+# Aceleasi retete se construiesc pe 3.14.28 pentru Vu+ Solo4K (HDS_DF_VU4K); probate la constructia de proba dm920 (DM9).
+RDEPENDS:${PN}:append:dm900 = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} mt7601u rt8723a ax88179-178a"
+RDEPENDS:${PN}:append:dm920 = " ${HDS_DF_WIFI_NOI} ${HDS_DF_WIFI_OCTAGON} mt7601u rt8723a ax88179-178a"
 RDEPENDS:${PN}:append:vuduo4k = " ${HDS_DF_VU4K}"
 RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_DF_VU4K}"
 # Tunerul DVB-T/T2/C pe USB Xbox One Digital TV Tuner (045e:02d5) si stickurile DiBcom dib0700 (13.11.2026, agentul USB;
@@ -167,3 +172,35 @@ RDEPENDS:${PN}:append:vuduo2 = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_SOLOSE_AFARA} 
 # Vu+ Zero (MVZ, 12.11.2026): acelasi nucleu 3.13.5 (defconfig vuzero, fara proxy: aceleasi module =m ca Solo SE;
 # in plus rtl8192cu.ko in nucleu, care nu se calca cu 8192cu.ko al driverului din afara), aceleasi drivere
 RDEPENDS:${PN}:append:vuzero = " ${HDS_DF_SOLOSE_NUCLEU} ${HDS_DF_SOLOSE_AFARA} ${HDS_DF_TURBO}"
+
+# 0.7.7 (SCM, 16.11.2026; dorinelu, forumul nostru 795 #2823, Vu+ Solo4K cu cititorul Smargo 0403:6001; TODO 15.11 23:17):
+# adaptoarele seriale USB (FTDI, Prolific PL2303, Silicon Labs CP210x, WCH CH340/CH341, CDC-ACM) sunt in IMAGINE din 0.7.6
+# (hdsatelit-base.bbappend, HDS_SERIAL_USB, aceleasi 17 masini, modulele =m in nucleele lor). Receptoarele cu imaginea de baza
+# 0.7.0, 0.7.1 sau 0.7.3 nu le primesc insa prin actualizarea din meniu: hdsatelit-base 0.7.6 nu poate merge pe acele baze
+# (cere openssl3-compat, libcrypto3, libssl3, pe care garda feedului le refuza: „trebuie imagine noua”; proba uscata SCM).
+# Aici stau numai ca sa intre in tabela driverelor (oe-build/harta_drivere.py -> data/hds-drivere-pachete.json) si in culegerea
+# bazelor vechi: Components/HdsDriverLipsa.py pune singur modulul cand omul baga adaptorul (sau la pornire, cu el in mufa), iar
+# pe bazele 0.7.4 si 0.7.5, unde actualizarea le-a instalat deja, scrie „add” in uevent si udev il incarca, fara repornire.
+# E ACELASI pachet si in imagine si aici (nu doua module care se bat pe acelasi ID), deci harta il lasa in tabela.
+# kernel-module-usbserial vine singur, ca dependinta.
+HDS_DF_SERIAL = "kernel-module-ftdi-sio kernel-module-pl2303 kernel-module-cp210x kernel-module-ch341 kernel-module-cdc-acm"
+RDEPENDS:${PN}:append:sf8008 = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:sf8008m = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:ustym4kpro = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:gbtrio4k = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:viper4k = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:u57 = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:u571 = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:vusolo4k = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:vuultimo4k = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:vuduo4k = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:vuduo4kse = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:vuuno4kse = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:vuzero4k = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:vuduo4klite = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:gbquad4kpro = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:ax51 = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:vusolose = " ${HDS_DF_SERIAL}"
+# Dreambox DM900 si DM920 (DM9, 16.11.2026): aceleasi module ca in HDS_SERIAL_USB din hdsatelit-base.bbappend (=m in 3.14)
+RDEPENDS:${PN}:append:dm900 = " ${HDS_DF_SERIAL}"
+RDEPENDS:${PN}:append:dm920 = " ${HDS_DF_SERIAL}"

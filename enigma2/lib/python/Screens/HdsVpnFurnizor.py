@@ -7,8 +7,10 @@
 # si alege tara; receptorul pune serverele tarii si porneste VPN-ul. Contul salvat nu se mai cere. Pentru furnizorii
 # fara cale oficiala ecranul arata de unde iei fisierele (se importa apoi din ecranul VPN).
 #
-# Sus: titlul si starea VPN-ului; apoi randurile (furnizorul, contul, tara, stergerea contului, "Inchide"); sub lista
-# explicatia randului ales si rezultatul ultimei lucrari. VERDE pune VPN-ul pentru tara aleasa.
+# Sus: titlul si starea VPN-ului; apoi randurile (furnizorul, contul, tara, "Servere pe tara" la NordVPN si IPVanish,
+# stergerea contului, "Inchide"); sub lista explicatia randului ales si rezultatul ultimei lucrari. VERDE pune VPN-ul
+# pentru tara aleasa. "Servere pe tara" (3, 10 sau Toate; tamiciav7, LinuxSat 164122): STANGA/DREAPTA schimba alegerea
+# (tinuta minte, F.seteazaServerePeTara), OK da lista celor trei si, cu tara aleasa, pune VPN-ul ca alegerea tarii.
 #
 # Toata logica e in Components/HdsVpnFurnizori.py (aceeasi in pagina web /vpn-furnizor): ecranul citeste stare() la
 # fiecare CITIRE_MS si porneste lucrarile (lista tarilor, configurarea) pe firul lor; nicio cerere pe internet pe firul
@@ -129,6 +131,7 @@ def skinRezerva(latime, inaltime, procent=None):
 FURNIZOR = "furnizor"
 CONT = "cont"
 TARA = "tara"
+SERVERE = "servere"
 STERGE = "sterge"
 INCHIDE = "inchide"
 
@@ -149,19 +152,37 @@ def randuri(s, tara):
 		cum = _("salvate") if s["cont"] else _("lipsesc")
 	r.append(("%s (%s)" % (s["eticheta_cont"], cum), CONT, s["nota_cont"]))
 	nume_tara = ""
+	in_tara = 0
 	for t in s.get("tari") or []:
 		if t["cod"] == tara:
 			nume_tara = t["titlu"]
+			in_tara = t.get("orase") or 0
 	if nume_tara:
 		r.append(("%s: %s" % (_("Țara"), nume_tara), TARA, _("OK: altă țară. VERDE: pune VPN-ul pentru această țară.")))
 	else:
 		r.append((_("Alege țara"), TARA, _("OK: lista țărilor furnizorului. După alegere receptorul pune serverele și "
 			"pornește VPN-ul.")))
+	if "servere" in s:
+		r.append(("%s: %s" % (_("Servere pe țară"), F.textServere(s["servere"])), SERVERE,
+			textRandServere(s, in_tara)))
 	if s["cont"]:
 		r.append((_("Șterge contul acestui furnizor"), STERGE, _("Șterge de pe receptor contul salvat pentru acest "
 			"furnizor.")))
 	r.append((_("Închide"), INCHIDE, ""))
 	return r
+
+
+def textRandServere(s, in_tara=0):
+	"""Explicatia randului "Servere pe tara": ce face, cate are tara aleasa si, cand nu incap toate, cate mai incap."""
+	# prima propozitie e aceeasi in pagina web (vpn_furnizori_web.TEXTE_JS["servereNota"])
+	text = _("Câte servere ale țării pune receptorul: 3, 10 sau toate. Cele puse înainte rămân.") + " " + _(
+		"STÂNGA/DREAPTA: schimbă. OK: lista.")
+	if in_tara:
+		text += " " + _("Servere în țara aleasă: %d.") % in_tara
+		dorite = in_tara if s["servere"] == 0 else min(s["servere"], in_tara)
+		if s.get("loc_servere") is not None and s["loc_servere"] < dorite:
+			text += " " + _("Mai încap pe receptor: %d.") % s["loc_servere"]
+	return text
 
 
 class HdsVpnFurnizor(Screen):
@@ -296,6 +317,13 @@ class HdsVpnFurnizor(Screen):
 
 	def _sageata(self, pas):
 		r = self._randAlesAcum()
+		if r is not None and r[1] == SERVERE and self._stare and "servere" in self._stare:
+			alegeri = list(F.ALEGERI_SERVERE)
+			acum = self._stare["servere"]
+			i = alegeri.index(acum) if acum in alegeri else 0
+			F.seteazaServerePeTara(self._furnizor, alegeri[(i + pas) % len(alegeri)])
+			self._citeste()
+			return
 		if r is None or r[1] != FURNIZOR:
 			self["list"].pageUp() if pas < 0 else self["list"].pageDown()
 			return
@@ -333,6 +361,11 @@ class HdsVpnFurnizor(Screen):
 			self._scrieContul(None)
 		elif a == TARA:
 			self._alegeTara()
+		elif a == SERVERE:
+			lista = [(text, n) for n, text in s.get("alegeri_servere") or []]
+			valori = [n for _t, n in lista]
+			self.session.openWithCallback(self._servereAlese, ChoiceBox, title=_("Servere pe țară"), list=lista,
+				selection=valori.index(s["servere"]) if s.get("servere") in valori else 0)
 		elif a == STERGE:
 			self.session.openWithCallback(self._confirmaSterge, MessageBox,
 				_("Ștergi de pe receptor contul acestui furnizor?"), MessageBox.TYPE_YESNO, default=False)
@@ -359,6 +392,15 @@ class HdsVpnFurnizor(Screen):
 		ales = self._tara.get(self._furnizor)
 		self.session.openWithCallback(self._taraAleasa, ChoiceBox, title=_("Țara"), list=lista,
 			selection=coduri.index(ales) if ales in coduri else 0)
+
+	def _servereAlese(self, ales):
+		"""Alegerea din lista: tinuta minte; cu tara aleasa, VPN-ul se pune indata (ca la alegerea tarii)."""
+		if not ales:
+			return
+		F.seteazaServerePeTara(self._furnizor, ales[1])
+		self._citeste()
+		if self._tara.get(self._furnizor):
+			self.verde()
 
 	def _taraAleasa(self, ales):
 		if not ales:

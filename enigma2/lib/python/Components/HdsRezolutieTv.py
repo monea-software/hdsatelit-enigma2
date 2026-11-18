@@ -19,6 +19,17 @@
 # - Intoarcerea singura la 1080p: placa refuza 2560x1440 la pornire (driverul vechi), driverul nu mai e cel peticit, sau
 #   interfata se opreste neasteptat in primele HdsSkinuri.PROBA_S secunde cu 2K (semnul probei in /tmp, ca la temele
 #   alese). Atunci setarea revine pe 1080p, ramane un motiv in /tmp si omul il afla o data, la pornirea sesiunii.
+# - 0.7.7 (SK2, Eduard 15.11.2026 23:13: „sa faci 2K si skinul nostru”): a treia valoare, „Automată” = 2K numai cand
+#   placa poate (poate2K), iesirea video aleasa e 2160p (televizor 4K; pe o iesire 1080p o interfata 2K e doar micsorata
+#   de placa) si nu exista adaugiri ale omului in skin_user.xml (acelea nu se scaleaza); altfel 1080p. Un refuz al placii
+#   in Automată nu schimba setarea si nu arata niciun mesaj (limita ramane tinuta minte numai pentru pornirea asta a
+#   receptorului: driverul peticit pus de actualizare se incarca abia la urmatoarea pornire); numai o oprire neasteptata
+#   in primele PROBA_S secunde pune setarea pe 1080p, cu explicatia o data. Valorile vechi ("1080", "1440") raman.
+# - 4K (3840x2160) nu se ofera (masurat in jurnalele testerilor, randul [gFBDC]): doua pagini 3840x2160 cer 64800 kB, iar
+#   memoria video a interfetei e 49152 kB pe SF8008 / Viper 4K V10 / Ustym 4K Pro / GigaBlue Trio 4K, 40500 kB pe Viper 4K
+#   V20/V40, 24300 kB pe GigaBlue Quad 4K Pro si Vu+ Duo 4K lite, 21600 kB pe Vu+ Uno 4K SE / Solo 4K / Duo 4K / Duo 4K SE /
+#   Zero 4K (Ultimo 4K si AX HD51 nemasurate); cu o singura pagina enigma2 ar desena direct pe ecranul vazut, iar driverul
+#   hi_fb (si cel peticit) refuza 3840x2160 (probat pe Viper 4K V20). Iesirea video 2160p e alta setare (Setari > Video) si merge.
 #
 # Modulul nu importa nimic din enigma2 la incarcare (probele de pe PC dau config si caile).
 
@@ -27,11 +38,20 @@ import json
 import os
 import time
 
+RAUTO = "auto"
 R1080 = "1080"
 R1440 = "1440"
-VALORI = (R1080, R1440)
+VALORI = (RAUTO, R1080, R1440)
+# implicitul, intr-un singur loc (skin.py il ia de aici): 1080p pana se probeaza HbbTV si viteza la 2K pe placile cu
+# driverul peticit (a doua parere, SK2 15.11.2026), apoi RAUTO
 IMPLICITA = R1080
 MARIMI = {R1080: (1920, 1080), R1440: (2560, 1440)}
+# iesirea video aleasa (VideoOutput.py: config.av.hds_videomode, ex. "2160p50"); la pornirea temei (loadSkinData) setarea
+# nu e inca facuta (InitAVSwitch vine dupa), deci se citeste din settings, apoi modul de acum al placii
+SETTINGS = "/etc/enigma2/settings"
+CHEIE_MOD_VIDEO = "config.av.hds_videomode="
+MOD_VIDEO_PROC = "/proc/stb/video/videomode"
+SKIN_USER = "/etc/enigma2/skin_user.xml"
 
 HIFB = "/lib/modules/*/extra/hi_fb.ko"
 HIFB_PROC = "/proc/msp/hifb0"
@@ -61,12 +81,16 @@ def N_(text):
 	return text
 
 
-NUME = {R1080: N_("1080p (1920x1080)"), R1440: N_("2K (2560x1440)")}
+NUME = {RAUTO: N_("Automată"), R1080: N_("1080p (1920x1080)"), R1440: N_("2K (2560x1440)")}
 DESCRIERE = {
-	R1080: N_("Rezoluția obișnuită a temei HD Satelit."),
 	# un singur rand in fereastra de alegere de pe televizor (proba pe receptorul de probe: textul mai lung se derula)
+	RAUTO: N_("2K pe televizoarele 4K (ieșirea 2160p), altfel 1080p."),
+	R1080: N_("Rezoluția obișnuită a temei HD Satelit."),
 	R1440: N_("Text și poze mai fine pe televizoarele 2K și 4K."),
 }
+# ce foloseste Automată acum, langa „aleasă” (ecranul si pagina)
+TEXT_AUTO_ACUM = N_("aleasă, acum %s")
+NUME_SCURT = {R1080: "1080p", R1440: "2K"}
 TEXT_MOTIV = {
 	MOTIV_PLACA: N_("Receptorul n-a primit interfața 2K (%s), așa că a rămas la 1080p."),
 	MOTIV_DRIVER: N_("Driverul grafic al receptorului nu poate 2K, așa că interfața a rămas la 1080p."),
@@ -201,6 +225,57 @@ def poate2K(hifb=None, proc=None, limita=None):
 	return True
 
 
+def _cai(cai, *nume):
+	return {k: v for k, v in cai.items() if k in nume}
+
+
+def modVideo(config=None, settings=None, proc=None):
+	"""iesirea video aleasa ("2160p50", "1080p50"...) sau "": setarea din memorie cand e facuta (in sesiune), altfel
+	randul ei din settings (la pornirea temei), altfel modul de acum al placii"""
+	try:
+		el = _config(config).av.content.items.get("hds_videomode")
+		if el is not None and el.value:
+			return str(el.value)
+	except Exception:
+		pass
+	try:
+		with open(settings or SETTINGS, encoding="utf-8", errors="replace") as f:
+			for rand in f:
+				if rand.startswith(CHEIE_MOD_VIDEO):
+					v = rand[len(CHEIE_MOD_VIDEO):].strip()
+					if v:
+						return v
+	except (IOError, OSError):
+		pass
+	try:
+		with open(proc or MOD_VIDEO_PROC, encoding="utf-8", errors="replace") as f:
+			return f.read().strip()
+	except (IOError, OSError):
+		return ""
+
+
+def iesire4K(config=None, settings=None, modproc=None):
+	"""True cand iesirea video e 2160p (televizor 4K)"""
+	return modVideo(config, settings, modproc).startswith("2160")
+
+
+def autoVrea2K(config=None, skinUser=None, **cai):
+	"""Automată alege 2K: placa poate, iesirea e 2160p si nu sunt adaugiri ale omului in skin_user.xml. skinUser: True/False
+	de la skin.py (fisierul chiar se aplica peste tema), None = se uita daca fisierul exista."""
+	if skinUser is None:
+		skinUser = os.path.exists(cai.get("skinuser") or SKIN_USER)
+	if skinUser:
+		return False
+	if not iesire4K(config, cai.get("settings"), cai.get("modproc")):
+		return False
+	return poate2K(**_cai(cai, "hifb", "proc", "limita"))
+
+
+def autoAlege(config=None, **cai):
+	"""ce ar folosi Automată la pornirea interfetei: R1440 sau R1080"""
+	return R1440 if autoVrea2K(config, **cai) else R1080
+
+
 # ------------------------------------------------------------------ alegerea
 
 def aleasa(config=None):
@@ -209,6 +284,30 @@ def aleasa(config=None):
 	except AttributeError:
 		return IMPLICITA
 	return v if v in VALORI else IMPLICITA
+
+
+def peEcran(latime=None):
+	"""rezolutia interfetei de acum (R1440 / R1080) dupa latimea desktopului, sau None cand nu se stie (PC)"""
+	if latime is None:
+		try:
+			from enigma import getDesktop
+			latime = getDesktop(0).size().width()
+		except Exception:
+			return None
+	if not latime:
+		return None
+	return R1440 if latime >= MARIMI[R1440][0] else R1080
+
+
+def eticheta(valoare, ales, acum=None, traducere=None):
+	"""randul unei valori in ecran si in pagina: numele, iar la cea aleasa „(aleasă)”; la Automată aleasa si ce
+	foloseste acum („(aleasă, acum 2K)”)"""
+	nume = _t(NUME.get(valoare, valoare), traducere)
+	if valoare != ales:
+		return nume
+	if valoare == RAUTO and acum in NUME_SCURT:
+		return "%s  (%s)" % (nume, _t(TEXT_AUTO_ACUM, traducere) % NUME_SCURT[acum])
+	return "%s  (%s)" % (nume, _t(N_("aleasă"), traducere))
 
 
 def seAlege(config=None, **cai):
@@ -272,16 +371,23 @@ def refuza(motiv, detaliu="", config=None, refuz=None, proba=None):
 
 
 def deCerutLaPornire(temaHds, config=None, mediu=None, proba=None, caderi=None, uptime=None, refuz=None, **cai):
-	"""skin.py, inainte de loadSkinData: marimea de cerut placii (2560, 1440) sau None (ramane cea din tema, 1080p)"""
+	"""skin.py, inainte de loadSkinData: marimea de cerut placii (2560, 1440) sau None (ramane cea din tema, 1080p).
+	Automată (SK2): numai cand autoVrea2K; altfel nimic cerut placii, fara mesaj (Vu+ si celelalte nu se intreaba deloc)."""
 	proba = proba or PROBA
 	mediu = os.environ if mediu is None else mediu
-	if aleasa(config) != R1440 or not temaHds or mediu.get("HDS_MOD_SIGUR") == "1":
+	ales = aleasa(config)
+	if ales not in (R1440, RAUTO) or not temaHds or mediu.get("HDS_MOD_SIGUR") == "1":
 		_sterge(proba)
 		return None
 	semn = _citesteJson(proba)
 	if semn and _caderiDupa(int(semn.get("pornit") or 0), caderi):
+		# oprirea neasteptata in proba 2K e singurul lucru care schimba si Automată (pe 1080p, cu explicatia)
 		refuza(MOTIV_CADERE, "", config, refuz, proba)
 		return None
+	if ales == RAUTO:
+		if not autoVrea2K(config, **cai):
+			_sterge(proba)
+			return None
 	driver = caleHifb(cai.get("hifb"))
 	if driver is not None and not hifbPeticit(driver):
 		refuza(MOTIV_DRIVER, "", config, refuz, proba)
@@ -301,7 +407,12 @@ def dupaRaspunsPlaca(cerut, primit, config=None, limita=None, refuz=None, proba=
 		if lim and (cerut[0] > lim[0] or cerut[1] > lim[1]):
 			_sterge(limita or LIMITA)
 		return True
+	auto = aleasa(config) == RAUTO
 	if not primit or not primit[0] or not primit[1]:
+		if auto:
+			_sterge(proba or PROBA)
+			_jurnal("Automată: placa nu se poate intreba, interfata ramane 1080p")
+			return False
 		refuza(MOTIV_PLACA, "%dx%d" % tuple(cerut), config, refuz, proba)
 		return False
 	baza = MARIMI[R1080]
@@ -313,6 +424,12 @@ def dupaRaspunsPlaca(cerut, primit, config=None, limita=None, refuz=None, proba=
 		except Exception:
 			pass
 	_scrieJson(limita or LIMITA, {"maxim": [int(primit[0]), int(primit[1])], "refuzat": list(cerut), "ora": int(time.time())})
+	if auto:
+		# Automată: setarea ramane, fara mesaj; limita tinuta minte opreste incercarea pana la urmatoarea pornire a
+		# receptorului (limitaTinuta cu driverul), cand se incarca driverul de pe disc
+		_sterge(proba or PROBA)
+		_jurnal("Automată: placa a refuzat %dx%d, interfata ramane 1080p" % tuple(cerut))
+		return False
 	refuza(MOTIV_PLACA, "%dx%d" % tuple(cerut), config, refuz, proba)
 	return False
 

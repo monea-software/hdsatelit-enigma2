@@ -310,4 +310,10 @@ T = {
 	"cpu_mode": u"Procesora režīms",
 	"cpu_volt": u"Spriegums",
 	"cpu_steps": u"Laiks pa frekvencēm",
+	"bitrate_va": u"Video · skaņas bitu ātrums",
+	"br_min": u"min",
+	"br_max": u"maks",
+	"br_avg": u"vid",
+	"ecm_hop": u"Lēcieni",
+	"ecm_reader": u"Lasītājs",
 }

@@ -176,6 +176,14 @@ REFUZ_ALT_RECEPTOR = "alt-receptor"
 REFUZ_NECITIT = "necitit"
 REFUZ_SUMA = "suma"
 REFUZ_SCHIMBAT = "schimbat"
+# Arhivele Vu+ 4K de pe site au nucleul in vuplus/<model>/kernel_auto.bin, nu in kernel.bin. Ambele instalari (de pe stick si
+# de pe internet) le recunosc, dar cat SCRIERE_VUPLUS e False le opresc inainte de dosarul curat, cu REFUZ_VUPLUS: scrierea
+# din meniu pe Vu+ nu a fost inca probata pe un receptor Vu+. Cu poarta deschisa, nucleul se copiaza in dosarul curat cu
+# numele kernel.bin (programul de scriere ia drept nucleu orice nume care contine kernel si .bin), deci sumele, semnul fisierelor
+# si verificarea simularii raman cele de acum.
+REFUZ_VUPLUS = "vuplus"
+NUME_NUCLEU_VUPLUS = "kernel_auto.bin"
+SCRIERE_VUPLUS = False
 
 # tipuri de placa din eticheta si un receptor cunoscut de acel tip (oe-alliance, u571.conf); numai pentru mesaj
 EXEMPLU_TIP = {"u571": "Amiko Viper 4K V40", "sf8008": "Octagon SF8008 4K UHD", "sf8008m": "Octagon SF8008 MINI 4K",
@@ -639,7 +647,10 @@ def amprentaDinTexte(msp_sys=None, boxtype=None, cmdline=None, partitions=None, 
 		# Broadcom (CHEIE_FAMILIE): `vumodel` = /proc/stb/info/vumodel, `kernel_part` = kernel_part= din reguli
 		c = _cuvinteCmdline(cmdline)
 		a["cip"] = _simplu((chipset or "").split("\n")[0])
-		a["boxtype"] = a["boxtype"] or _simplu((vumodel or "").split("\n")[0])
+		# tipul placii: boxtype, altfel vumodel (Vu+), altfel model (Dreambox DM900/DM920, MDM: driverele Dream dau
+		# numai /proc/stb/info/model), ca garda din enigma2.sh; numai pe eMMC (aici): amprentaNandDinTexte nu ia model
+		a["boxtype"] = (a["boxtype"] or _simplu((vumodel or "").split("\n")[0])
+			or _simplu((model_placa or "").split("\n")[0]))
 		a["partitii_lista"] = []
 		a["partitii"] = ""
 		rp = _partitieDinCmdline(c.get("root"))
@@ -1511,6 +1522,8 @@ def textRefuz(cod, marcaj=None, a=None, nepotriviri=None, fisier=None):
 				"pe stick.") % (nume[0] if nume else "?")
 	elif cod == REFUZ_SCHIMBAT:
 		t = _("Fișierele software-ului s-au schimbat după verificare. Verifică-l din nou.")
+	elif cod == REFUZ_VUPLUS:
+		t = textVuplus()
 	else:
 		t = ""
 	t = (t + "\n" + nimic) if t else nimic
@@ -1534,7 +1547,16 @@ def scurtRefuz(cod):
 		return _("nu se poate instala: fișierele sunt stricate")
 	if cod in (REFUZ_SUMA, REFUZ_SCHIMBAT):
 		return _("nu se poate instala: fișierele sunt stricate sau schimbate")
+	if cod == REFUZ_VUPLUS:
+		return _("nu se poate instala încă din meniu: arhivă în forma Vu+")
 	return _("nu se poate instala: receptorul nu se poate verifica")
+
+
+def textVuplus():
+	"""Ce i se spune omului la o arhiva in forma Vu+ (kernel_auto.bin; si copiile complete facute pe AX HD51 inainte de 0.7.7) cat
+	poarta SCRIERE_VUPLUS e inchisa (si pe internet, in HdsImagineOnline)"""
+	return _("Arhivele în forma Vu+ se vor instala din meniu într-o actualizare. Până atunci pune imaginea cu pașii de "
+		"pe pagina receptorului de pe site.")
 
 
 def randSusRefuz(cod):

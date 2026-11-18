@@ -27,7 +27,7 @@
 	"use strict";
 
 	// aceeasi ca in hds-player.js: primele 12 cifre din sha256 al tv-wasm/hdsdec.wasm (adresa decodorului, cache o zi)
-	var VERSIUNE_DECODOR = "099cf027855f";
+	var VERSIUNE_DECODOR = "e835a97f5725";
 	var COADA_MAX = 400;              // PES-uri AC-3 in asteptare cat se incarca decodorul (~13 s de sunet)
 	var GOL_MAX_S = 10;               // un gol de timp pana la atat se umple cu liniste; peste: timp nou
 	// codul ratei in antetul cadrului FLAC (RFC 9639, 9.1.3); alta rata: 0 = cea din STREAMINFO

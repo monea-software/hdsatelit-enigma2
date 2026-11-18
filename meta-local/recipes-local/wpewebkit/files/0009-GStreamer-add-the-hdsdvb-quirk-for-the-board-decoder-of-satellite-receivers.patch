@@ -1,0 +1,864 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] GStreamer: add the hdsdvb quirk for the board decoder of satellite receivers
+
+On satellite receivers the board decodes the compressed streams written to
+/dev/dvb/adapter0/video0 and audio0 by dvbvideosink and dvbaudiosink
+(dvbmediasink), the sinks the receiver software uses for its own player.
+The quirk ("hdsdvb" in WEBKIT_GST_QUIRKS and WEBKIT_GST_HOLE_PUNCH_QUIRK)
+plays the media on them:
+
+- the parsers stand for the decoders in the codec registry (the board
+  decodes), playbin gets native-video and native-audio, and the elements
+  that would decode video on the processor (VP8, VP9, AV1, Theora, the
+  libav and openh264 video decoders) are kept out, together with the
+  parsers of the codecs not measured on the board (HEVC, VP9, AV1);
+- the decoders belong to the receiver software, which plays the TV channel
+  on them: HdsDvbDecoder borrows them on the UNIX socket named by
+  HDS_DECODOR ("cere", answer "ok" once the channel is stopped and the web
+  process may open the devices), gives them back when the last board sink
+  is finalized ("gata") and sends the video rectangle there ("fereastra"),
+  since only the receiver moves the video plane. Without the loan no board
+  sink is made: the page gets a decoding error and the board is not
+  touched;
+- three hooks in GStreamerQuirk for sinks of platform decoders: the
+  position read from the decoder (get-decoder-time) instead of the
+  position query, which these sinks answer with what was written to the
+  driver; the seek flags (key unit instead of accurate: the base sink drops
+  the key frame before an accurate segment start and the decoder shows
+  nothing until the next one); and the completion of a flushing seek
+  without ASYNC_DONE, which non-asynchronous sinks never post.
+
+Upstream-Status: Inappropriate [satellite receiver configuration]
+
+--- a/Source/WebCore/platform/SourcesGStreamer.txt
++++ b/Source/WebCore/platform/SourcesGStreamer.txt
+@@ -102,13 +102,16 @@
+ 
+ platform/gstreamer/GStreamerCodecUtilities.cpp
+ platform/gstreamer/GStreamerElementHarness.cpp
++platform/gstreamer/GStreamerHdsDvbDecoder.cpp @no-unify
+ platform/gstreamer/GStreamerHolePunchQuirkBcmNexus.cpp
++platform/gstreamer/GStreamerHolePunchQuirkHdsDvb.cpp @no-unify
+ platform/gstreamer/GStreamerHolePunchQuirkRialto.cpp
+ platform/gstreamer/GStreamerHolePunchQuirkWesteros.cpp
+ platform/gstreamer/GStreamerQuirkAmLogic.cpp
+ platform/gstreamer/GStreamerQuirkBcmNexus.cpp
+ platform/gstreamer/GStreamerQuirkBroadcom.cpp
+ platform/gstreamer/GStreamerQuirkBroadcomBase.cpp
++platform/gstreamer/GStreamerQuirkHdsDvb.cpp @no-unify
+ platform/gstreamer/GStreamerQuirkOpenMAX.cpp
+ platform/gstreamer/GStreamerQuirkQualcomm.cpp
+ platform/gstreamer/GStreamerQuirkRealtek.cpp
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -623,6 +623,7 @@
+         flag = GST_SEEK_FLAG_FLUSH;
+     }
+     auto seekFlags = static_cast<GstSeekFlags>(flag | GST_SEEK_FLAG_ACCURATE);
++    seekFlags = GStreamerQuirksManager::singleton().playbackSeekFlags(seekFlags);
+ 
+     // Seeking towards the end is not well supported in oggdemux, sometimes it receives EOS
+     // while trying to retrieve a chain and thus disables seeking in push mode.
+@@ -682,6 +683,16 @@
+     }
+ 
+     auto result = gst_element_send_event(m_pipeline.get(), event.leakRef());
++    if (result && GStreamerQuirksManager::singleton().completesSeekWithoutPreroll()) {
++        // No ASYNC_DONE follows the flush on these sinks, and no state change either: the seek is complete once the
++        // flush went through the pipeline.
++        RunLoop::mainSingleton().dispatchAfter(100_ms, [weakThis = ThreadSafeWeakPtr { *this }, time = target.time] {
++            RefPtr self = weakThis.get();
++            if (!self || !self->m_isSeeking || self->m_isSeekPending || self->m_seekTarget.time != time)
++                return;
++            self->finishSeek();
++        });
++    }
+     if (isSegment || !isSeamlessSeekingEnabled() || !result)
+         return result;
+ 
+@@ -1686,6 +1697,17 @@
+ 
+ GstClockTime MediaPlayerPrivateGStreamer::gstreamerPositionFromSinks() const
+ {
++    auto& quirksManager = GStreamerQuirksManager::singleton();
++    if (quirksManager.isEnabled()) {
++        if (auto decoderPosition = quirksManager.decoderPosition(m_audioSink.get(), m_videoSink.get())) {
++            // Before its first picture a decoder may give a position far beyond the media.
++            if (GST_CLOCK_TIME_IS_VALID(*decoderPosition) && m_cachedDuration.isValid() && m_cachedDuration.isFinite()
++                && MediaTime(*decoderPosition, GST_SECOND) > m_cachedDuration + MediaTime(5, 1))
++                return GST_CLOCK_TIME_NONE;
++            return *decoderPosition;
++        }
++    }
++
+     gint64 gstreamerPosition = GST_CLOCK_TIME_NONE;
+     // Asking directly to the sinks and choosing the highest value is faster than asking to the pipeline.
+     GST_TRACE_OBJECT(pipeline(), "Querying position to audio sink (if any).");
+--- a/Source/WebCore/platform/gstreamer/GStreamerHdsDvbDecoder.cpp
++++ b/Source/WebCore/platform/gstreamer/GStreamerHdsDvbDecoder.cpp
+@@ -0,0 +1,222 @@
++/*
++ * Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * along with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#include "config.h"
++#include "GStreamerHdsDvbDecoder.h"
++
++#if USE(GSTREAMER)
++
++#include "GStreamerCommon.h"
++#include <errno.h>
++#include <poll.h>
++#include <string.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <unistd.h>
++#include <wtf/MonotonicTime.h>
++#include <wtf/NeverDestroyed.h>
++#include <wtf/text/MakeString.h>
++
++namespace WebCore {
++
++GST_DEBUG_CATEGORY_STATIC(webkit_hdsdvb_decoder_debug);
++#define GST_CAT_DEFAULT webkit_hdsdvb_decoder_debug
++
++// The receiver answers once it stopped the channel and changed the rights of the devices, which takes well under a
++// second; the wait blocks the thread that builds the pipeline, so it stays short.
++static constexpr Seconds answerTimeout = 5_s;
++static constexpr size_t answerMaximumLength = 64;
++
++HdsDvbDecoder& HdsDvbDecoder::singleton()
++{
++    static NeverDestroyed<HdsDvbDecoder> decoder;
++    return decoder;
++}
++
++HdsDvbDecoder::HdsDvbDecoder()
++{
++    GST_DEBUG_CATEGORY_INIT(webkit_hdsdvb_decoder_debug, "webkithdsdvbdecoder", 0, "WebKit receiver decoder loan");
++
++    const char* path = g_getenv("HDS_DECODOR");
++    if (path && *path == '/' && strlen(path) < sizeof(sockaddr_un::sun_path))
++        m_socketPath = path;
++    GST_DEBUG("Decoder loan socket: %s", m_socketPath.isNull() ? "none" : m_socketPath.data());
++}
++
++bool HdsDvbDecoder::isLent()
++{
++    Locker locker { m_lock };
++    return m_socket >= 0;
++}
++
++void HdsDvbDecoder::closeLocked()
++{
++    if (m_socket >= 0)
++        close(m_socket);
++    m_socket = -1;
++    m_sentRectangle = std::nullopt;
++}
++
++bool HdsDvbDecoder::sendLocked(const char* line)
++{
++    if (m_socket < 0)
++        return false;
++
++    size_t length = strlen(line);
++    size_t written = 0;
++    while (written < length) {
++        ssize_t result = send(m_socket, line + written, length - written, MSG_NOSIGNAL);
++        if (result < 0 && errno == EINTR)
++            continue;
++        if (result <= 0) {
++            GST_WARNING("The connection to the receiver is lost: %s", g_strerror(errno));
++            closeLocked();
++            return false;
++        }
++        written += result;
++    }
++    return true;
++}
++
++bool HdsDvbDecoder::borrowLocked()
++{
++    if (m_socket >= 0)
++        return true;
++    if (m_socketPath.isNull())
++        return false;
++
++    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
++    if (fd < 0) {
++        GST_WARNING("socket(): %s", g_strerror(errno));
++        return false;
++    }
++
++    struct sockaddr_un address;
++    memset(&address, 0, sizeof(address));
++    address.sun_family = AF_UNIX;
++    memcpy(address.sun_path, m_socketPath.data(), m_socketPath.length());
++    if (connect(fd, reinterpret_cast<struct sockaddr*>(&address), sizeof(address)) < 0) {
++        GST_WARNING("The receiver does not lend its decoder (connect: %s)", g_strerror(errno));
++        close(fd);
++        return false;
++    }
++
++    m_socket = fd;
++    if (!sendLocked("cere\n"))
++        return false;
++
++    char answer[answerMaximumLength];
++    size_t length = 0;
++    bool lineComplete = false;
++    auto deadline = MonotonicTime::now() + answerTimeout;
++    while (length < answerMaximumLength - 1) {
++        auto remaining = deadline - MonotonicTime::now();
++        if (remaining <= 0_s)
++            break;
++        struct pollfd descriptor = { fd, POLLIN, 0 };
++        int ready = poll(&descriptor, 1, static_cast<int>(remaining.milliseconds()) + 1);
++        if (ready < 0 && errno == EINTR)
++            continue;
++        if (ready <= 0)
++            break;
++        ssize_t result = read(fd, answer + length, 1);
++        if (result < 0 && errno == EINTR)
++            continue;
++        if (result <= 0)
++            break;
++        if (answer[length] == '\n') {
++            lineComplete = true;
++            break;
++        }
++        length++;
++    }
++    answer[length] = '\0';
++
++    if (!lineComplete || strcmp(answer, "ok")) {
++        GST_WARNING("The receiver does not lend its decoder: %s", lineComplete ? answer : "no answer");
++        closeLocked();
++        return false;
++    }
++
++    GST_INFO("The receiver lent its decoder");
++    sendRectangleLocked();
++    return true;
++}
++
++void HdsDvbDecoder::giveBackLocked()
++{
++    if (m_socket < 0)
++        return;
++    sendLocked("gata\n");
++    closeLocked();
++    GST_INFO("Decoder given back to the receiver");
++}
++
++GstElement* HdsDvbDecoder::createSink(ASCIILiteral factoryName)
++{
++    Locker locker { m_lock };
++    if (!borrowLocked())
++        return nullptr;
++
++    GstElement* sink = makeGStreamerElement(factoryName);
++    if (!sink) {
++        GST_WARNING("No %s element", factoryName.characters());
++        if (!m_sinkCount)
++            giveBackLocked();
++        return nullptr;
++    }
++
++    m_sinkCount++;
++    g_object_weak_ref(G_OBJECT(sink), sinkFinalized, this);
++    GST_DEBUG("%s created, %u board sinks", factoryName.characters(), m_sinkCount);
++    return sink;
++}
++
++void HdsDvbDecoder::sinkFinalized(gpointer data, GObject*)
++{
++    auto& decoder = *static_cast<HdsDvbDecoder*>(data);
++    Locker locker { decoder.m_lock };
++    if (!decoder.m_sinkCount)
++        return;
++    if (!--decoder.m_sinkCount)
++        decoder.giveBackLocked();
++}
++
++void HdsDvbDecoder::sendRectangleLocked()
++{
++    if (m_socket < 0 || !m_rectangle || m_sentRectangle == m_rectangle)
++        return;
++
++    auto line = makeString("fereastra "_s, m_rectangle->x(), ' ', m_rectangle->y(), ' ', m_rectangle->width(), ' ', m_rectangle->height(), '\n');
++    if (sendLocked(line.utf8().data()))
++        m_sentRectangle = m_rectangle;
++}
++
++void HdsDvbDecoder::setVideoRectangle(const IntRect& rectangle)
++{
++    Locker locker { m_lock };
++    m_rectangle = rectangle;
++    sendRectangleLocked();
++}
++
++#undef GST_CAT_DEFAULT
++
++} // namespace WebCore
++
++#endif // USE(GSTREAMER)
+--- a/Source/WebCore/platform/gstreamer/GStreamerHdsDvbDecoder.h
++++ b/Source/WebCore/platform/gstreamer/GStreamerHdsDvbDecoder.h
+@@ -0,0 +1,79 @@
++/*
++ * Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * along with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#pragma once
++
++#if USE(GSTREAMER)
++
++#include "IntRect.h"
++#include <gst/gst.h>
++#include <optional>
++#include <wtf/Forward.h>
++#include <wtf/Lock.h>
++#include <wtf/Noncopyable.h>
++#include <wtf/text/ASCIILiteral.h>
++#include <wtf/text/CString.h>
++
++namespace WebCore {
++
++// The video and audio decoders of a satellite receiver board (/dev/dvb/adapter0/video0 and audio0) belong to the
++// receiver software, which plays the TV channel on them. The web process may use them only while the receiver lends
++// them. The loan goes over the UNIX socket named by the HDS_DECODOR environment variable, one text line per message:
++//   web process -> receiver: "cere" (borrow the decoder), "fereastra X Y WIDTH HEIGHT" (where the video is, in CSS
++//                            pixels of the page), "gata" (the decoder is given back);
++//   receiver -> web process: "ok" once the channel is stopped and the two devices may be opened, or "nu REASON".
++// The loan lasts as long as the connection. It is given back when the last board sink made here is finalized, which
++// happens after the sink closed its device (state NULL). The receiver alone moves the video plane, so the position of
++// the video travels on the same connection.
++class HdsDvbDecoder {
++    WTF_MAKE_NONCOPYABLE(HdsDvbDecoder);
++    friend NeverDestroyed<HdsDvbDecoder>;
++public:
++    static HdsDvbDecoder& singleton();
++
++    // HDS_DECODOR is set: the board sinks may be used, through the loan.
++    bool isConfigured() const { return !m_socketPath.isNull(); }
++    // The decoder is lent to this process right now.
++    bool isLent();
++
++    // A board sink ("dvbvideosink" or "dvbaudiosink") once the decoder is lent, otherwise nullptr.
++    GstElement* createSink(ASCIILiteral factoryName);
++    void setVideoRectangle(const IntRect&);
++
++private:
++    HdsDvbDecoder();
++
++    bool borrowLocked();
++    void giveBackLocked();
++    bool sendLocked(const char*);
++    void sendRectangleLocked();
++    void closeLocked();
++    static void sinkFinalized(gpointer, GObject*);
++
++    CString m_socketPath;
++    Lock m_lock;
++    int m_socket { -1 };
++    unsigned m_sinkCount { 0 };
++    std::optional<IntRect> m_rectangle;
++    std::optional<IntRect> m_sentRectangle;
++};
++
++} // namespace WebCore
++
++#endif // USE(GSTREAMER)
+--- a/Source/WebCore/platform/gstreamer/GStreamerHolePunchQuirkHdsDvb.cpp
++++ b/Source/WebCore/platform/gstreamer/GStreamerHolePunchQuirkHdsDvb.cpp
+@@ -0,0 +1,65 @@
++/*
++ * Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * along with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#include "config.h"
++#include "GStreamerHolePunchQuirkHdsDvb.h"
++
++#if USE(GSTREAMER)
++
++#include "GStreamerCommon.h"
++#include "GStreamerHdsDvbDecoder.h"
++#include "MediaPlayerPrivateGStreamer.h"
++#include <wtf/glib/GUniquePtr.h>
++
++namespace WebCore {
++
++GstElement* GStreamerHolePunchQuirkHdsDvb::createHolePunchVideoSink(bool, const MediaPlayer* player)
++{
++    if (auto* sink = HdsDvbDecoder::singleton().createSink("dvbvideosink"_s))
++        return sink;
++
++    // The receiver did not lend its decoder (no application on screen, the decoder memory is missing, the receiver
++    // software does not answer). dvbvideosink would play to nothing when it cannot open its device, without an error:
++    // the page gets a decoding error instead, and the board is not touched.
++    if (player) {
++        auto* playerPrivate = static_cast<const MediaPlayerPrivateGStreamer*>(player->playerPrivate());
++        if (playerPrivate && playerPrivate->pipeline()) {
++            GstElement* pipeline = playerPrivate->pipeline();
++            GUniquePtr<GError> error(g_error_new_literal(GST_STREAM_ERROR, GST_STREAM_ERROR_DECODE, "The receiver decoder is not available"));
++            gst_element_post_message(pipeline, gst_message_new_error(GST_OBJECT_CAST(pipeline), error.get(), "hdsdvb: decoder loan refused"));
++        }
++    }
++    return makeGStreamerElement("fakesink"_s);
++}
++
++bool GStreamerHolePunchQuirkHdsDvb::setHolePunchVideoRectangle(GstElement*, const IntRect& rect)
++{
++    HdsDvbDecoder::singleton().setVideoRectangle(rect);
++    return true;
++}
++
++std::optional<bool> GStreamerHolePunchQuirkHdsDvb::paintsVideoHole() const
++{
++    // The hole only while the board shows the video of this process; otherwise the area keeps the page content.
++    return HdsDvbDecoder::singleton().isLent();
++}
++
++} // namespace WebCore
++
++#endif // USE(GSTREAMER)
+--- a/Source/WebCore/platform/gstreamer/GStreamerHolePunchQuirkHdsDvb.h
++++ b/Source/WebCore/platform/gstreamer/GStreamerHolePunchQuirkHdsDvb.h
+@@ -0,0 +1,43 @@
++/*
++ * Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * along with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#pragma once
++
++#if USE(GSTREAMER)
++
++#include "GStreamerQuirks.h"
++
++namespace WebCore {
++
++// The video of a satellite receiver board is a plane under the graphics: dvbvideosink writes the compressed stream to
++// the board decoder, the page is cleared (alpha 0) where the video is, and the receiver places the video plane there.
++// The web page is painted without compositing on these receivers, so the hole is made when the video element paints.
++class GStreamerHolePunchQuirkHdsDvb final : public GStreamerHolePunchQuirk {
++public:
++    const ASCIILiteral identifier() const final { return "HdsDvbHolePunch"_s; }
++
++    GstElement* createHolePunchVideoSink(bool, const MediaPlayer*) final;
++    bool setHolePunchVideoRectangle(GstElement*, const IntRect&) final;
++    bool requiresClockSynchronization() const final { return false; }
++    std::optional<bool> paintsVideoHole() const final;
++};
++
++} // namespace WebCore
++
++#endif // USE(GSTREAMER)
+--- a/Source/WebCore/platform/gstreamer/GStreamerQuirkHdsDvb.cpp
++++ b/Source/WebCore/platform/gstreamer/GStreamerQuirkHdsDvb.cpp
+@@ -0,0 +1,158 @@
++/*
++ * Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * along with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#include "config.h"
++#include "GStreamerQuirkHdsDvb.h"
++
++#if USE(GSTREAMER)
++
++#include "GStreamerCommon.h"
++#include "GStreamerHdsDvbDecoder.h"
++#include <array>
++#include <mutex>
++#include <wtf/text/StringView.h>
++
++namespace WebCore {
++
++GST_DEBUG_CATEGORY_STATIC(webkit_hdsdvb_quirks_debug);
++#define GST_CAT_DEFAULT webkit_hdsdvb_quirks_debug
++
++GStreamerQuirkHdsDvb::GStreamerQuirkHdsDvb()
++{
++    GST_DEBUG_CATEGORY_INIT(webkit_hdsdvb_quirks_debug, "webkitquirkshdsdvb", 0, "WebKit receiver board quirks");
++}
++
++static bool isBoardSink(GstElement* element)
++{
++    return element && (gstElementFactoryEquals(element, "dvbvideosink"_s) || gstElementFactoryEquals(element, "dvbaudiosink"_s));
++}
++
++bool GStreamerQuirkHdsDvb::isPlatformSupported() const
++{
++    if (!HdsDvbDecoder::singleton().isConfigured()) {
++        GST_DEBUG("HDS_DECODOR is not set, the receiver decoder cannot be borrowed");
++        return false;
++    }
++
++    GRefPtr videoSinkFactory = adoptGRef(gst_element_factory_find("dvbvideosink"));
++    GRefPtr audioSinkFactory = adoptGRef(gst_element_factory_find("dvbaudiosink"));
++    if (!videoSinkFactory || !audioSinkFactory)
++        return false;
++
++    static std::once_flag rankFlag;
++    std::call_once(rankFlag, [] {
++        // Streams that would be decoded on the processor (the board takes compressed video only, and four processor
++        // cores do not decode HD video), and the codecs whose way to the board decoder was not measured on the
++        // receiver (HEVC, VP9, AV1): neither the codec registry nor decodebin may choose these elements.
++        static const std::array<ASCIILiteral, 19> disabledElements {
++            "h265parse"_s,
++            "vp9parse"_s,
++            "av1parse"_s,
++            "theoraparse"_s,
++            "vp8dec"_s,
++            "vp9dec"_s,
++            "theoradec"_s,
++            "av1dec"_s,
++            "dav1ddec"_s,
++            "openh264dec"_s,
++            "libde265dec"_s,
++            "mpeg2dec"_s,
++            "avdec_h264"_s,
++            "avdec_h265"_s,
++            "avdec_vp8"_s,
++            "avdec_vp9"_s,
++            "avdec_av1"_s,
++            "avdec_mpeg2video"_s,
++            "avdec_mpeg4"_s,
++        };
++        for (const auto& name : disabledElements) {
++            if (GRefPtr factory = adoptGRef(gst_element_factory_find(name.characters()))) {
++                gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE_CAST(factory.get()), GST_RANK_NONE);
++                GST_DEBUG("%s kept out", name.characters());
++            }
++        }
++    });
++
++    GST_INFO("Receiver board quirk enabled");
++    return true;
++}
++
++GstElement* GStreamerQuirkHdsDvb::createAudioSink()
++{
++    if (auto* sink = HdsDvbDecoder::singleton().createSink("dvbaudiosink"_s))
++        return sink;
++
++    // Without the loan the board is not touched (the channel plays on it): the sound goes nowhere, and the video sink,
++    // which can reach the player, reports the error.
++    GstElement* sink = makeGStreamerElement("fakesink"_s);
++    if (sink)
++        g_object_set(sink, "sync", TRUE, nullptr);
++    return sink;
++}
++
++std::optional<bool> GStreamerQuirkHdsDvb::isHardwareAccelerated(GstElementFactory* factory)
++{
++    auto view = StringView::fromLatin1(GST_OBJECT_NAME(factory));
++    if (view.startsWith("dvb"_s))
++        return true;
++
++    // These parsers stand for the decoders in the codec registry: what they parse goes to the board decoder.
++    if (view == "h264parse"_s || view == "mpegvideoparse"_s || view == "mpeg4videoparse"_s)
++        return true;
++
++    return std::nullopt;
++}
++
++std::optional<GstClockTime> GStreamerQuirkHdsDvb::decoderPosition(GstElement* audioSink, GstElement* videoSink) const
++{
++    // The board sinks answer position queries with what was written to the driver (a whole short clip after a second)
++    // instead of what is shown. The decoder tells its presentation time through the get-decoder-time action signal;
++    // the sound decoder first, as the receiver player does, then the video decoder.
++    bool hasBoardSink = false;
++    for (auto* sink : { audioSink, videoSink }) {
++        if (!isBoardSink(sink))
++            continue;
++        hasBoardSink = true;
++        gint64 position = -1;
++        g_signal_emit_by_name(sink, "get-decoder-time", &position);
++        if (position >= 0 && GST_CLOCK_TIME_IS_VALID(static_cast<GstClockTime>(position)))
++            return static_cast<GstClockTime>(position);
++    }
++
++    if (!hasBoardSink)
++        return std::nullopt;
++    return GST_CLOCK_TIME_NONE;
++}
++
++GstSeekFlags GStreamerQuirkHdsDvb::playbackSeekFlags(GstSeekFlags flags) const
++{
++    // After an accurate seek the demuxer starts at the key frame before the target, in a segment that starts at the
++    // target; the base sink drops the buffers before the segment, the key frame among them, and the board decoder,
++    // left without it, shows nothing until the next key frame. Seek to the key frame instead, as the receiver
++    // player does.
++    unsigned result = flags & ~GST_SEEK_FLAG_ACCURATE;
++    result |= GST_SEEK_FLAG_KEY_UNIT | GST_SEEK_FLAG_SNAP_BEFORE;
++    return static_cast<GstSeekFlags>(result);
++}
++
++#undef GST_CAT_DEFAULT
++
++} // namespace WebCore
++
++#endif // USE(GSTREAMER)
+--- a/Source/WebCore/platform/gstreamer/GStreamerQuirkHdsDvb.h
++++ b/Source/WebCore/platform/gstreamer/GStreamerQuirkHdsDvb.h
+@@ -0,0 +1,51 @@
++/*
++ * Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * along with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#pragma once
++
++#if USE(GSTREAMER)
++
++#include "GStreamerQuirks.h"
++
++namespace WebCore {
++
++// Satellite receivers whose board decodes the compressed streams written to /dev/dvb/adapter0/video0 and audio0 by
++// dvbvideosink and dvbaudiosink (dvbmediasink). Nothing is decoded on the processor: playbin stops at the compressed
++// caps the sinks accept, the parsers stand for the decoders in the codec registry, and the decoders that would decode
++// video on the processor are kept out. The sinks are made only while the receiver lends its decoder (HdsDvbDecoder).
++// Selected with WEBKIT_GST_QUIRKS=hdsdvb, together with WEBKIT_GST_HOLE_PUNCH_QUIRK=hdsdvb.
++class GStreamerQuirkHdsDvb final : public GStreamerQuirk {
++public:
++    GStreamerQuirkHdsDvb();
++    const ASCIILiteral identifier() const final { return "HdsDvb"_s; }
++    bool isPlatformSupported() const final;
++
++    GstElement* createAudioSink() final;
++    std::optional<bool> isHardwareAccelerated(GstElementFactory*) final;
++    std::optional<GstElementFactoryListType> audioVideoDecoderFactoryListType() const final { return GST_ELEMENT_FACTORY_TYPE_PARSER; }
++    unsigned getAdditionalPlaybinFlags() const final { return getGstPlayFlag("text") | getGstPlayFlag("native-video") | getGstPlayFlag("native-audio"); }
++
++    std::optional<GstClockTime> decoderPosition(GstElement* audioSink, GstElement* videoSink) const final;
++    GstSeekFlags playbackSeekFlags(GstSeekFlags) const final;
++    bool completesSeekWithoutPreroll() const final { return true; }
++};
++
++} // namespace WebCore
++
++#endif // USE(GSTREAMER)
+--- a/Source/WebCore/platform/gstreamer/GStreamerQuirks.cpp
++++ b/Source/WebCore/platform/gstreamer/GStreamerQuirks.cpp
+@@ -26,11 +26,13 @@
+ #include "GStreamerCommon.h"
+ #include "GStreamerHolePunchQuirkBcmNexus.h"
+ #include "GStreamerHolePunchQuirkFake.h"
++#include "GStreamerHolePunchQuirkHdsDvb.h"
+ #include "GStreamerHolePunchQuirkRialto.h"
+ #include "GStreamerHolePunchQuirkWesteros.h"
+ #include "GStreamerQuirkAmLogic.h"
+ #include "GStreamerQuirkBcmNexus.h"
+ #include "GStreamerQuirkBroadcom.h"
++#include "GStreamerQuirkHdsDvb.h"
+ #include "GStreamerQuirkOpenMAX.h"
+ #include "GStreamerQuirkQualcomm.h"
+ #include "GStreamerQuirkRealtek.h"
+@@ -88,7 +90,7 @@
+     GST_DEBUG("Attempting to parse requested quirks: %s", GST_STR_NULL(quirksString.utf8()));
+     if (quirksString) {
+         if (WTF::equalLettersIgnoringASCIICase(quirksString.span(), "help"_s)) {
+-            gst_printerrln("Supported quirks for WEBKIT_GST_QUIRKS are: amlogic, broadcom, bcmnexus, openmax, qualcomm, realtek, rialto, westeros");
++            gst_printerrln("Supported quirks for WEBKIT_GST_QUIRKS are: amlogic, broadcom, bcmnexus, hdsdvb, openmax, qualcomm, realtek, rialto, westeros");
+             return;
+         }
+ 
+@@ -100,6 +102,8 @@
+                 quirk = WTF::makeUnique<GStreamerQuirkBroadcom>();
+             else if (WTF::equalLettersIgnoringASCIICase(identifier, "bcmnexus"_s))
+                 quirk = WTF::makeUnique<GStreamerQuirkBcmNexus>();
++            else if (WTF::equalLettersIgnoringASCIICase(identifier, "hdsdvb"_s))
++                quirk = WTF::makeUnique<GStreamerQuirkHdsDvb>();
+             else if (WTF::equalLettersIgnoringASCIICase(identifier, "openmax"_s))
+                 quirk = WTF::makeUnique<GStreamerQuirkOpenMAX>();
+             else if (WTF::equalLettersIgnoringASCIICase(identifier, "qualcomm"_s))
+@@ -150,7 +154,7 @@
+         return;
+ 
+     if (WTF::equalLettersIgnoringASCIICase(identifierString.span(), "help"_s)) {
+-        gst_printerrln("Supported quirks for WEBKIT_GST_HOLE_PUNCH_QUIRK are: fake, bcmnexus, rialto, westeros");
++        gst_printerrln("Supported quirks for WEBKIT_GST_HOLE_PUNCH_QUIRK are: fake, bcmnexus, hdsdvb, rialto, westeros");
+         return;
+     }
+ 
+@@ -163,6 +167,8 @@
+         m_holePunchQuirk = WTF::makeUnique<GStreamerHolePunchQuirkWesteros>();
+     else if (WTF::equalLettersIgnoringASCIICase(identifierString.span(), "fake"_s))
+         m_holePunchQuirk = WTF::makeUnique<GStreamerHolePunchQuirkFake>();
++    else if (WTF::equalLettersIgnoringASCIICase(identifierString.span(), "hdsdvb"_s))
++        m_holePunchQuirk = WTF::makeUnique<GStreamerHolePunchQuirkHdsDvb>();
+     else
+         GST_WARNING("HolePunch quirk %s un-supported.", identifierString.utf8());
+ }
+@@ -230,6 +236,39 @@
+     return m_holePunchQuirk->requiresClockSynchronization();
+ }
+ 
++std::optional<bool> GStreamerQuirksManager::paintsVideoHole() const
++{
++    if (!m_holePunchQuirk)
++        return std::nullopt;
++
++    return m_holePunchQuirk->paintsVideoHole();
++}
++
++std::optional<GstClockTime> GStreamerQuirksManager::decoderPosition(GstElement* audioSink, GstElement* videoSink) const
++{
++    for (const auto& quirk : m_quirks) {
++        if (auto position = quirk->decoderPosition(audioSink, videoSink))
++            return position;
++    }
++    return std::nullopt;
++}
++
++GstSeekFlags GStreamerQuirksManager::playbackSeekFlags(GstSeekFlags flags) const
++{
++    for (const auto& quirk : m_quirks)
++        flags = quirk->playbackSeekFlags(flags);
++    return flags;
++}
++
++bool GStreamerQuirksManager::completesSeekWithoutPreroll() const
++{
++    for (const auto& quirk : m_quirks) {
++        if (quirk->completesSeekWithoutPreroll())
++            return true;
++    }
++    return false;
++}
++
+ void GStreamerQuirksManager::configureElement(GstElement* element, OptionSet<ElementRuntimeCharacteristics>&& characteristics)
+ {
+     if (m_quirks.isEmpty())
+--- a/Source/WebCore/platform/gstreamer/GStreamerQuirks.h
++++ b/Source/WebCore/platform/gstreamer/GStreamerQuirks.h
+@@ -111,6 +111,14 @@
+ 
+     virtual std::optional<GstState> eosMediaPlayerState() const { return { }; }
+ 
++    // Sinks of platform decoders that answer position queries with what was written to the driver instead of what
++    // is shown: the position read from the decoder. std::nullopt when the quirk does not handle the given sinks,
++    // GST_CLOCK_TIME_NONE when the decoder has no position yet.
++    virtual std::optional<GstClockTime> decoderPosition(GstElement*, GstElement*) const { return std::nullopt; }
++    // The flags of the seeks sent to the pipeline.
++    virtual GstSeekFlags playbackSeekFlags(GstSeekFlags flags) const { return flags; }
++    // Sinks that are not asynchronous: no ASYNC_DONE follows a flushing seek, so the seek completes without it.
++    virtual bool completesSeekWithoutPreroll() const { return false; }
+ };
+ 
+ class GStreamerHolePunchQuirk : public GStreamerQuirkBase {
+@@ -122,6 +130,10 @@
+     virtual GstElement* createHolePunchVideoSink(bool, const MediaPlayer*) { return nullptr; }
+     virtual bool setHolePunchVideoRectangle(GstElement*, const IntRect&) { return false; }
+     virtual bool requiresClockSynchronization() const { return true; }
++    // Pages painted without accelerated compositing have no hole-punch layer: the player sends the video rectangle
++    // (CSS pixels of the page) when the video element paints and, when this is true, clears the area (alpha 0).
++    // std::nullopt when the quirk relies on the compositor.
++    virtual std::optional<bool> paintsVideoHole() const { return std::nullopt; }
+ };
+ 
+ class GStreamerQuirksManager : public RefCounted<GStreamerQuirksManager> {
+@@ -154,6 +166,11 @@
+     GstElement* createHolePunchVideoSink(bool isLegacyPlaybin, const MediaPlayer*);
+     void setHolePunchVideoRectangle(GstElement*, const IntRect&);
+     bool sinksRequireClockSynchronization() const;
++    std::optional<bool> paintsVideoHole() const;
++
++    std::optional<GstClockTime> decoderPosition(GstElement* audioSink, GstElement* videoSink) const;
++    GstSeekFlags playbackSeekFlags(GstSeekFlags) const;
++    bool completesSeekWithoutPreroll() const;
+ 
+     void setHolePunchEnabledForTesting(bool);
+ 

@@ -57,6 +57,11 @@ MAX_ADRESA = 2048
 LUNGIME_RAND = 250       # octeti pe rand de buchet: nucleul citeste cu un tampon de 256
 
 FELURI = ("m3u", "xtream", "stalker", "demo")
+# 0.7.7 (FLM; Eduard 16.11 09:28 si 11:01): felurile ale caror filme (si seriale) nu stau in lista de canale, ci in aplicatia IPTV,
+# sub sursa lor (Screens/IptvSetup.IptvCont), si in 'Filme și seriale' (Components/HdsVod._CLASE, aceleasi chei): contul Xtream
+# (citite de la furnizor la cerere) si playlistul (filme-<sursa>.json, scris la citirea listei).
+FELURI_CATALOG = ("xtream", "m3u")
+
 SCHEME_SURSA = ("http", "https")
 SCHEME_FLUX = ("http", "https", "rtsp", "rtmp", "mms", "udp")
 SCHEME_REDIRECT = ("http", "https")           # numai de aici se poate urma o redirectionare HTTP
@@ -72,6 +77,7 @@ _MAC = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
 _GAZDA = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9\-.]{0,251}[A-Za-z0-9])?$")
 _CHEIE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 _ID_SURSA = re.compile(r"^[0-9a-f]{8}$")
+_CHEIE_FILM = re.compile(r"^[ve][0-9]{1,12}\.[A-Za-z0-9]{1,5}$")   # filmele si episoadele Xtream (HdsIptvClient.xtreamAdresa)
 
 _LACAT = threading.RLock()
 
@@ -83,6 +89,11 @@ def N_(text):
 
 NUME_FEL = {"m3u": N_("Playlist"), "xtream": N_("Cont"), "stalker": N_("Portal"), "demo": N_("Listă demo")}
 T_FARA_HTTPS = N_("Legătura cu acest server nu este criptată, fiindcă furnizorul nu are HTTPS.")
+
+
+def areCatalog(p):
+	"""Sursa (sau randul ei public) isi are filmele si serialele in 'Filme și seriale'."""
+	return (p or {}).get("fel") in FELURI_CATALOG
 
 
 def numeSursa(s):
@@ -180,11 +191,27 @@ def sursa(sursa_id, surse=None):
 
 def citesteCanale(sursa_id):
 	"""[[cheie, nume, grupa, adresa], ...], [] fara fisier."""
+	return canaleDinOcteti(octetiCanale(sursa_id))
+
+
+def octetiCanale(sursa_id):
+	"""Fisierul canalelor sursei, asa cum e pe disc (octetii), sau None fara fisier. 0.7.7 (EPG3): ghidul TV (HdsIptvEpg) ia
+	semnatura listei din aceiasi octeti din care o citeste, ca sa-si pastreze harta canalelor cat lista nu se schimba."""
 	try:
-		with open(_caleCanale(sursa_id), encoding="utf-8") as f:
-			date = json.load(f)
+		with open(_caleCanale(sursa_id), "rb") as f:
+			return f.read()
+	except (IOError, OSError):
+		return None
+
+
+def canaleDinOcteti(octeti):
+	"""citesteCanale din octetii lui octetiCanale: lista, sau [] (fara fisier, fisier stricat sau altceva decat o lista)."""
+	if octeti is None:
+		return []
+	try:
+		date = json.loads(octeti.decode("utf-8"))
 		return date if isinstance(date, list) else []
-	except (IOError, OSError, ValueError):
+	except ValueError:
 		return []
 
 
@@ -192,6 +219,203 @@ def scrieCanale(sursa_id, canale):
 	with _LACAT:
 		_asiguraDosar()
 		_scrie(_caleCanale(sursa_id), json.dumps(canale, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), 0o600)
+
+
+# ------------------------------------------------------------------ filmele unui playlist (0.7.7, FLM2)
+# Eduard 16.11 11:01: filmele unui playlist nu mai stau in lista de canale; se rasfoiesc in aplicatia IPTV, sub sursa lor
+# (Screens/IptvSetup.IptvCont), si in Filme si seriale (Components/HdsVod.SursaM3U). Fisierul lor, filme-<sursa>.json, 0600
+# (adresele pot avea parola), un film pe rand: [cheie, nume, grupa, adresa, meta]; se scrie din mers, la citirea listei
+# (HdsIptvClient), fara sa tina toate filmele in memorie. grupe-filme-<sursa>.json: [[grupa, cate filme]], in ordinea listei.
+MAX_FILME_SURSA = 50000      # ~5,5 MB pe flash; peste plafon cartela spune cat a intrat (HdsIptvClient.textTaiate)
+EXT_FILM = (".mp4", ".mkv", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".webm")
+
+
+def eAdresaFilm(adresa):
+	"""Un film dintr-un playlist care le amesteca: dupa sfarsitul adresei, fara parametri."""
+	return isinstance(adresa, str) and adresa.split("?", 1)[0].lower().endswith(EXT_FILM)
+
+
+def _caleFilme(sursa_id):
+	return _cale("filme-%s.json" % sursa_id)
+
+
+def _caleGrupeFilme(sursa_id):
+	return _cale("grupe-filme-%s.json" % sursa_id)
+
+
+class ScriitorFilme(object):
+	"""Filmele unei surse, scrise din mers in filme-<sursa>.json.nou; gata() le pune in locul celor vechi, renunta() le arunca.
+	Fara sursa (probele de pe PC care citesc numai lista) nu scrie nimic, doar numara."""
+
+	def __init__(self, sursa_id=None, maxim=None):
+		self.sursa_id = sursa_id
+		self.maxim = MAX_FILME_SURSA if maxim is None else maxim
+		self.scrise = 0
+		self.taiate = 0
+		self.grupe = []
+		self._n = {}
+		self._f = None
+		if sursa_id:
+			with _LACAT:
+				_asiguraDosar()
+			self._nou = _caleFilme(sursa_id) + ".nou"
+			self._f = os.fdopen(os.open(self._nou, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8")
+
+	def scrie(self, rand):
+		"""rand = [cheie, nume, grupa, adresa, meta]. -> False cand nu mai incape."""
+		if self.scrise >= self.maxim:
+			self.taiate += 1
+			return False
+		g = rand[2]
+		if g not in self._n:
+			self._n[g] = 0
+			self.grupe.append(g)
+		self._n[g] += 1
+		if self._f is not None:
+			self._f.write(json.dumps(rand, ensure_ascii=False, separators=(",", ":")) + "\n")
+		self.scrise += 1
+		return True
+
+	def gata(self):
+		if self._f is None:
+			return
+		self._f.flush()
+		os.fsync(self._f.fileno())
+		self._f.close()
+		self._f = None
+		cale = _caleFilme(self.sursa_id)
+		if self.scrise:
+			os.chmod(self._nou, 0o600)
+			os.replace(self._nou, cale)
+			_scrie(_caleGrupeFilme(self.sursa_id), json.dumps([[g, self._n[g]] for g in self.grupe], ensure_ascii=False,
+				separators=(",", ":")).encode("utf-8"), 0o600)
+		else:
+			# o lista fara filme: nu ramane nimic vechi in urma
+			for c in (self._nou, cale, _caleGrupeFilme(self.sursa_id)):
+				try:
+					os.unlink(c)
+				except OSError:
+					pass
+
+	def renunta(self):
+		if self._f is not None:
+			self._f.close()
+			self._f = None
+			try:
+				os.unlink(self._nou)
+			except OSError:
+				pass
+
+
+def grupeFilme(sursa_id):
+	"""[[grupa, cate filme]] ale unui playlist, [] fara filme."""
+	try:
+		with open(_caleGrupeFilme(sursa_id), encoding="utf-8") as f:
+			date = json.load(f)
+		return [g for g in date if isinstance(g, list) and len(g) == 2] if isinstance(date, list) else []
+	except (IOError, OSError, ValueError):
+		return []
+
+
+def filmeSursa(sursa_id, grupa=None, maxim=None):
+	"""Filmele playlistului, din mers (generator), [cheie, nume, grupa, adresa, meta]; numai cele din `grupa`, daca e data."""
+	try:
+		f = open(_caleFilme(sursa_id), encoding="utf-8")
+	except (IOError, OSError):
+		return
+	n = 0
+	with f:
+		for rand in f:
+			try:
+				r = json.loads(rand)
+			except ValueError:
+				continue
+			if not isinstance(r, list) or len(r) < 4 or (grupa is not None and r[2] != grupa):
+				continue
+			yield r
+			n += 1
+			if maxim and n >= maxim:
+				return
+
+
+_filmGasit = {}
+
+
+def filmDupaCheie(sursa_id, cheie):
+	"""Randul unui film al playlistului (releul, la pornire; pagina filmului), sau None. Tinut minte dupa fisier."""
+	try:
+		st = os.stat(_caleFilme(sursa_id))
+	except OSError:
+		return None
+	semn = (sursa_id, cheie, st.st_mtime_ns, st.st_size)
+	if semn in _filmGasit:
+		return _filmGasit[semn]
+	inceput = '["%s",' % cheie
+	rez = None
+	try:
+		with open(_caleFilme(sursa_id), encoding="utf-8") as f:
+			for rand in f:
+				if rand.startswith(inceput):
+					try:
+						rez = json.loads(rand)
+					except ValueError:
+						rez = None
+					break
+	except (IOError, OSError):
+		return None
+	if len(_filmGasit) > 64:
+		_filmGasit.clear()
+	_filmGasit[semn] = rez
+	return rez
+
+
+def areFilme(s):
+	"""Un playlist cu filme (un os.stat): randul Filme in aplicatia IPTV si sursa in Filme si seriale."""
+	return s.get("fel") == "m3u" and os.path.isfile(_caleFilme(s.get("id") or ""))
+
+
+# ------------------------------------------------------------------ aplicatia IPTV: canalele unei surse, pe grupe (FLM2)
+
+def grupeCanale(s):
+	"""Grupele de canale ale sursei cum le arata lista de canale (fara grupele ascunse, fara filmele unei surse cu Filme si
+	seriale, fara randurile de titlu): [(grupa, [(cheie, nume, adresa directa sau None)])]. Citeste canale-<sursa>.json: pe fir."""
+	canale = citesteCanale(s["id"])
+	if filmeAfaraDinLista(s):
+		canale = [c for c in canale if not _eFilmSursei(c)]
+	ascunse = frozenset(s.get("ascunse") or ())
+	cu_adrese = s.get("fel") in ("m3u", "demo")
+	rez = []
+	for nume, lista in _impartePeGrupe(s, canale):
+		if eAscunsa(ascunse, nume):
+			continue
+		randuri = []
+		for c in lista:
+			if len(c) < 4 or _DESPARTIRE.match(c[1] or ""):
+				continue
+			directa = adresaDirecta(c[3])[0] if cu_adrese and c[3] else None
+			randuri.append((c[0], c[1], directa))
+		if randuri:
+			rez.append((nume, randuri))
+	return rez
+
+
+def filmeAfaraDinLista(s):
+	"""Filmele sursei nu se arata in lista de canale: la un cont Xtream niciodata, la un playlist numai cand are fisierul filmelor.
+	Un playlist adus de 0.7.6 sau de FLM (cu filmele in canale-<sursa>.json, fara fisier) le pastreaza in lista pana la aducerea
+	lui de dupa actualizare: altfel ar disparea si din lista, si din aplicatia IPTV."""
+	return s.get("fel") == "xtream" or areFilme(s)
+
+
+def numarFilme(s):
+	"""Cate filme are playlistul in fisierul lor (din grupe-filme-<sursa>.json, mic), 0 fara fisier."""
+	if not areFilme(s):
+		return 0
+	return sum(int(n) for _g, n in grupeFilme(s["id"]) if isinstance(n, int))
+
+
+def _eFilmSursei(c):
+	"""Un film (Xtream v/e sau, la un playlist, dupa adresa) ramas in canalele sursei pentru Favorite (pastreazaDinBuchete)."""
+	return bool(c) and isinstance(c[0], str) and (bool(_CHEIE_FILM.match(c[0])) or (len(c) > 3 and eAdresaFilm(c[3])))
 
 
 # ------------------------------------------------------------------ verificarea a ce scrie omul
@@ -407,14 +631,16 @@ def desparteCale(cale):
 	return m.groups() if m else (None, None)
 
 
+# ':' '%' si caracterele de control (sub 32) ca %xx, restul la fel. 0.7.7 (EPG3): cu str.translate in loc de o bucla Python pe
+# fiecare litera: refCanal e chemat o data pe fiecare canal la harta ghidului TV (HdsIptvEpg) si la scrierea buchetelor; pe un
+# Viper 4K harta a 29.000 de canale scade de la 5,7 s la 4,2 s de procesor. Acelasi text, litera cu litera.
+_CODARE = dict((i, "%%%02x" % i) for i in range(32))
+_CODARE[ord(":")] = "%3a"
+_CODARE[ord("%")] = "%25"
+
+
 def _codeaza(text):
-	rez = []
-	for c in text:
-		if c == ":" or c == "%" or ord(c) < 32:
-			rez.append("%%%02x" % ord(c))
-		else:
-			rez.append(c)
-	return "".join(rez)
+	return text.translate(_CODARE)
 
 
 def numereCanal(sursa_id, cheie):
@@ -514,6 +740,9 @@ def pastreazaDinBuchete(sursa_id, canale):
 	"""Canalele din buchetele omului care nu mai sunt in lista noua raman: o lista scurtata de server nu-i strica Favoritele, iar un canal scos
 	de furnizor spune singur, la pornire, ca nu mai e acolo."""
 	lipsa = cheiInBuchete(sursa_id) - set(c[0] for c in canale)
+	if lipsa and os.path.isfile(_caleFilme(sursa_id)):
+		# 0.7.7 (FLM2): un film al playlistului din Favorite e in fisierul filmelor (adresa de acum), nu se tine copia veche
+		lipsa -= set(r[0] for r in filmeSursa(sursa_id) if r[0] in lipsa)
 	if not lipsa:
 		return canale
 	return canale + [c for c in citesteCanale(sursa_id) if isinstance(c, list) and c and c[0] in lipsa]
@@ -530,9 +759,11 @@ class Filtru(object):
 		self.implicit = numeSursa(s) if s else ""
 		self.grupe = {}
 		self.taiate = 0
+		# 0.7.7 (BQT, Ozgur e-mailul 6514): din cele taiate, cate sunt filme (restul sunt canale TV), pentru textul cartelei
+		self.taiate_filme = 0
 
-	def primeste(self, grupa, cheie, plin):
-		"""-> True daca, la plafonul de acum (plin), canalul intra in lista."""
+	def primeste(self, grupa, cheie, plin, film=False):
+		"""-> True daca, la plafonul de acum (plin), canalul (sau filmul, `film`) intra in lista."""
 		g = grupa or self.implicit
 		n = self.grupe.get(g)
 		if n is not None or len(self.grupe) < MAX_CATALOG:
@@ -543,6 +774,8 @@ class Filtru(object):
 			return False
 		if plin:
 			self.taiate += 1
+			if film:
+				self.taiate_filme += 1
 			return False
 		return True
 
@@ -691,6 +924,10 @@ def scrieBuchete():
 		o_singura = False
 		for s in surse:
 			canale = citesteCanale(s["id"])
+			if filmeAfaraDinLista(s):
+				# 0.7.7 (FLM): un film pastrat pentru Favorite (pastreazaDinBuchete) ramane in canalele sursei, dar nu mai face o grupa
+				# de un rand sub 'IPTV' (filmele stau in aplicatia IPTV, sub sursa lor, si in Filme si seriale)
+				canale = [c for c in canale if not _eFilmSursei(c)]
 			ascunse = frozenset(s.get("ascunse") or ())
 			grupe = [g for g in _impartePeGrupe(s, canale) if not eAscunsa(ascunse, g[0])]
 			o_lista = len(surse) == 1 and len(grupe) == 1
@@ -916,10 +1153,12 @@ def stergeSursa(sursa_id):
 		for s in surse:
 			if s.get("id") == sursa_id:
 				_tineIdentitate(s)
-		try:
-			os.unlink(_caleCanale(sursa_id))
-		except OSError:
-			pass
+		# 0.7.7 (FLM2): si filmele playlistului (au adrese, poate cu parola)
+		for cale in (_caleCanale(sursa_id), _caleFilme(sursa_id), _caleGrupeFilme(sursa_id)):
+			try:
+				os.unlink(cale)
+			except OSError:
+				pass
 		if noi:
 			scrieSurse(noi)
 		else:
@@ -969,6 +1208,10 @@ def publica(s):
 		"epg_stare": s.get("epg_stare") or "", "epg_evenimente": int(s.get("epg_evenimente") or 0),
 		"epg_mesaj": s.get("epg_mesaj") or "",
 	}
+	# 0.7.7 (BQT): cate canale TV si filme au intrat si cate filme s-au taiat (HdsIptvClient.textTaiate); o sursa adusa de
+	# o versiune veche nu le are, iar textul cartelei ramane atunci cel general
+	if "taiate_filme" in s:
+		rez.update(vii=int(s.get("vii") or 0), filme=int(s.get("filme") or 0), taiate_filme=int(s.get("taiate_filme") or 0))
 	if fel == "m3u":
 		rez["gazda"] = gazdaAdresei(s.get("adresa"))
 	elif fel == "xtream":

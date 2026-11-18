@@ -140,6 +140,25 @@ def casete_semnal(feinfo, C=None):
 	return rez
 
 
+# MI9 (0.7.6, TODO NOU BRT 15.11 11:41): debitul masurat de enigma2 pe canalele DVB (iServiceInformation sVideoBitrate /
+# sAudioBitrate, kbit/s), perechea temei (HdsInfo Bitrate). Numai pe pagina web: ea se citeste din nou la 4 s, sub cele
+# 5 s dupa care numaratorul din demux se opreste singur; ecranul de pe televizor citeste o singura data, iar prima
+# intrebare doar porneste numaratorul (-1). Randurile apar numai cand enigma2 are cheile si a masurat ceva (> 0).
+def randuriDebit(info, I, tip_text):
+	cv, ca = getattr(I, "sVideoBitrate", None), getattr(I, "sAudioBitrate", None)
+	if info is None or cv is None or ca is None:
+		return []
+	rez = []
+	for eticheta, cheie in ((_t("Debit video"), cv), (_t("Debit sunet"), ca)):
+		try:
+			v = info.getInfo(cheie)
+		except Exception:
+			v = -1
+		if isinstance(v, int) and v > 0:
+			rez.append((eticheta, _t("%d kbit/s") % v, tip_text))
+	return rez
+
+
 def stare(mediu=None, H=None):
 	"""GET /api/informatii-canal: cele patru pagini ale ecranului, pentru canalul de acum."""
 	H = _h(H)
@@ -154,7 +173,7 @@ def stare(mediu=None, H=None):
 	rec_info = m.recInfo()
 
 	def serviciu():
-		return H.randuriServiciu(info, m.I, nume, refstr)
+		return list(H.randuriServiciu(info, m.I, nume, refstr)) + randuriDebit(info, m.I, H.TYPE_TEXT)
 
 	def pid():
 		return H.randuriPid(info, m.I)

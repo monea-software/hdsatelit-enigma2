@@ -137,6 +137,11 @@ ERORI_AMANARE = 3
 REINCERCARE_S = 600
 REINCERCARI_MAX = 3
 ASTEPTARE_FIR_S = 3.0
+# citirea dinainte pe fir (preincarca): incarca() o asteapta cel mult atat, apoi citeste pe loc, ca inainte
+ASTEPTARE_CITIRE_S = 30.0
+# la citirea pe fir, dupa atatea randuri o pauza scurta: lacatul Python ramane si al firului interfetei
+CEDEAZA_LA_RANDURI = 256
+CEDEAZA_S = 0.001
 # doua scrieri "uitare" la rand (de ex. din web, in bucla) nu rescriu tot fisierul mai des de atat
 MARGINE_UITARE_S = 10
 # o data in "vf" in afara acestui interval nu e o data (si nu trece prin time.localtime)
@@ -335,6 +340,36 @@ def cheie_rezerva(k):
 		return None
 	sid, ns, tsid, onid = [int(x, 16) for x in k.split(":")]
 	return "%x:%x:%x@%s" % (onid, tsid, sid, poz_din_ns(ns))
+
+
+def _harta_rezerva_adauga(harta, x):
+	"""Harta cheilor de rezerva: cheie de rezerva -> cheia canalului (text) sau, pentru mai multe canale, un tuplu de
+	chei (toate, fara dubluri). Depinde numai de multimea cheilor: _candidat_rezerva le filtreaza dupa randurile de acum si
+	cere exact una, deci ordinea din tuplu nu conteaza."""
+	r = cheie_rezerva(x)
+	if r is None:
+		return
+	e = harta.get(r)
+	if e is None:
+		harta[r] = x
+	elif isinstance(e, str):
+		if e != x:
+			harta[r] = (e, x)
+	elif x not in e:
+		harta[r] = e + (x,)
+
+
+def harta_rezerva_din(chei, cedeaza=False):
+	"""Harta cheilor de rezerva pentru cheile date (aceeasi ca BazaCanale._harta_rezerva pe aceleasi chei). Nu atinge
+	nimic comun: se poate chema de pe un fir; cedeaza=True: o pauza de CEDEAZA_S la CEDEAZA_LA_RANDURI chei."""
+	harta = {}
+	n = 0
+	for x in chei:
+		_harta_rezerva_adauga(harta, x)
+		n += 1
+		if cedeaza and n % CEDEAZA_LA_RANDURI == 0:
+			time.sleep(CEDEAZA_S)
+	return harta
 
 
 def cheie_din_cheie_limbi(k):
@@ -1208,6 +1243,29 @@ def _fir_implicit(functie):
 	return t
 
 
+def _fir_citire_implicit(functie):
+	"""Firul citirii dinainte (preincarca), cu numele lui: paznicul il numeste cand tine lacatul Python."""
+	t = threading.Thread(target=functie, name="HdsBazaCanaleCitire")
+	t.daemon = True
+	t.start()
+	return t
+
+
+def _citire_pe_loc(functie):
+	"""In locul firului citirii, cand apelantul isi aduce firul de scriere (probele): citirea pe loc, fara fir."""
+	functie()
+	return None
+
+
+def _semn_fisier(cale):
+	"""(marime, mtime_ns) sau None cand fisierul nu se poate vedea: fisierul citit pe fir e acelasi cu cel de acum?"""
+	try:
+		s = os.stat(cale)
+	except (IOError, OSError, ValueError):
+		return None
+	return (s.st_size, getattr(s, "st_mtime_ns", int(s.st_mtime * 1e9)))
+
+
 class _Citire(object):
 	"""Rezultatul citirii unui fisier: stare "lipseste", "necitit", "mare" sau "citit"."""
 
@@ -1274,9 +1332,11 @@ def _numar_sfarsit(linie):
 
 class BazaCanale(object):
 	"""O baza pe proces (vezi baza()). Toate metodele se cheama de pe firul interfetei; numai scrierea pe disc ruleaza
-	in firul de scriere, sub un lacat, pe un instantaneu luat inainte."""
+	in firul de scriere, sub un lacat, pe un instantaneu luat inainte (la fel citirea dinainte, preincarca, si harta
+	cheilor de rezerva, pregateste_rezerva, facuta dintr-o copie a listei cheilor)."""
 
-	def __init__(self, cale=CALE, ceas=None, fs=None, contor=None, porneste_fir=None, jurnal=None, imagine=""):
+	def __init__(self, cale=CALE, ceas=None, fs=None, contor=None, porneste_fir=None, jurnal=None, imagine="",
+			porneste_citire=None):
 		self.cale = cale
 		self._ceas = ceas or time.time
 		self._fs = fs or SistemFisiere()
@@ -1298,6 +1358,10 @@ class BazaCanale(object):
 		self._ultima_scriere = 0
 		self._incarcare_ms = 0.0
 		self._ultima_scriere_reusita = 0
+		# citirea dinainte pe fir (preincarca): None = nepornita, (fir, rezultat) = pornita, False = folosita. Cand
+		# apelantul isi aduce firul de scriere (probele), citirea se face pe loc, daca nu-si aduce si firul ei
+		self._porneste_citire = porneste_citire or (_fir_citire_implicit if porneste_fir is None else _citire_pe_loc)
+		self._precitire = None
 
 	def _goleste(self):
 		self._c = {}
@@ -1316,6 +1380,10 @@ class BazaCanale(object):
 		self._chemari = 0
 		self._schimbate = {}
 		self._rezerva = None
+		# harta cheilor de rezerva facuta pe un fir (pregateste_rezerva): None sau {"c": randurile, "fir", "multime", "harta"}
+		self._pregatire_rezerva = None
+		# ultima cautare fara harta (_chei_pe_rezerva): (r, randurile, versiunea, numarul lor, cheile gasite)
+		self._cautare_rezerva = None
 		self._lungi_notate = set()
 		self.versiune = 0
 		self.versiune_scrisa = 0
@@ -1387,6 +1455,68 @@ class BazaCanale(object):
 			self._incarcare_ms))
 		return self._stare
 
+	def preincarca(self):
+		"""Citirea fisierului pe un fir, pornita devreme (Components/HdsCulegereCanale.Pornire, din lista de canale, inainte
+		de primul ecran): pe 0.7.5 primul ecran care cerea baza tinea firul interfetei 2,6-7 s in _citeste (paznicul, 9
+		randuri pe SF8008 si Uno 4K SE). Firul numai citeste si imparte randurile in obiecte _Citire noi (fisierul viu si,
+		numai cand acela lipseste sau nu e intreg, .bak), fara nimic din memoria bazei; incarca(), tot pe firul
+		interfetei, il asteapta (cel mult ASTEPTARE_CITIRE_S) si foloseste ce a citit, cu aceeasi hotarare ca inainte.
+		Fisierul schimbat intre timp (marime, mtime), o cadere a firului sau o asteptare depasita = citirea pe loc, ca
+		inainte. -> True daca a pornit firul."""
+		if self._incarcat or self._precitire is not None:
+			return False
+		rezultat = {}
+		bak = self.cale + ".bak"
+
+		def lucreaza():
+			inceput = time.time()
+			try:
+				citiri = {}
+				semn = _semn_fisier(self.cale)
+				r = self._citeste(self.cale, cedeaza=True)
+				citiri[self.cale] = (semn, r)
+				if r.stare == "lipseste" or (r.stare == "citit" and not r.intreg) or r.stare == "mare":
+					semn = _semn_fisier(bak)
+					citiri[bak] = (semn, self._citeste(bak, cedeaza=True))
+				rezultat["citiri"] = citiri
+			except BaseException as e:
+				rezultat["eroare"] = "%s: %s" % (type(e).__name__, e)
+			rezultat["ms"] = (time.time() - inceput) * 1000.0
+
+		try:
+			fir = self._porneste_citire(lucreaza)
+		except Exception as e:
+			self._jurnal("citirea pe fir nu a pornit: %s" % e)
+			self._precitire = False
+			return False
+		self._precitire = (fir, rezultat)
+		return True
+
+	def _citiri_dinainte(self):
+		"""{cale: _Citire} din citirea pe fir, o singura data (reincercarile citesc din nou de pe disc); numai caile
+		neschimbate de cand le-a citit firul."""
+		p = self._precitire
+		if not p:
+			return {}
+		self._precitire = False
+		fir, rezultat = p
+		if fir is not None and fir.is_alive():
+			fir.join(ASTEPTARE_CITIRE_S)
+			if fir.is_alive():
+				self._jurnal("citirea pe fir nu s-a terminat in %.0f s; citesc pe loc" % ASTEPTARE_CITIRE_S)
+				return {}
+		if "eroare" in rezultat or "citiri" not in rezultat:
+			self._jurnal("citirea pe fir: %s; citesc pe loc" % rezultat.get("eroare", "fara rezultat"))
+			return {}
+		bune = {}
+		for cale, (semn, r) in rezultat["citiri"].items():
+			if _semn_fisier(cale) == semn:
+				bune[cale] = r
+			else:
+				self._jurnal("%s s-a schimbat dupa citirea pe fir; il citesc din nou" % cale)
+		self._jurnal("citirea pe fir: %.0f ms" % rezultat.get("ms", 0.0))
+		return bune
+
 	def _asigura(self):
 		if not self._incarcat:
 			self.incarca()
@@ -1394,7 +1524,8 @@ class BazaCanale(object):
 	def _dosar(self):
 		return os.path.dirname(self.cale) or "."
 
-	def _citeste(self, cale):
+	def _citeste(self, cale, cedeaza=False):
+		"""cedeaza=True (citirea pe fir): o pauza de CEDEAZA_S la fiecare CEDEAZA_LA_RANDURI randuri."""
 		fs = self._fs
 		try:
 			f = fs.deschide_citire(cale)
@@ -1412,10 +1543,15 @@ class BazaCanale(object):
 				return _Citire("mare", marime)
 			prima = True
 			citit = 0
+			n = 0
 			for b in f:
 				citit += len(b)
 				if citit > MAX_CITIT:
 					return _Citire("mare", citit)
+				if cedeaza:
+					n += 1
+					if n % CEDEAZA_LA_RANDURI == 0:
+						time.sleep(CEDEAZA_S)
 				linie = b.decode("utf-8", "replace").rstrip("\r\n")
 				if prima:
 					prima = False
@@ -1494,9 +1630,10 @@ class BazaCanale(object):
 			self._numai_citire(DOSAR_LIPSA, self._dosar())
 			return
 		bak = self.cale + ".bak"
-		r = self._citeste(self.cale)
+		citiri = self._citiri_dinainte()
+		r = citiri.get(self.cale) or self._citeste(self.cale)
 		if r.stare == "lipseste":
-			rb = self._citeste(bak)
+			rb = citiri.get(bak) or self._citeste(bak)
 			if rb.intreg:
 				self._foloseste(rb, ".bak (fisierul viu lipseste)")
 				self._verifica_versiunea()
@@ -1511,7 +1648,7 @@ class BazaCanale(object):
 			self._verifica_versiunea()
 		else:
 			self._jurnal("%s %s" % (self.cale, "prea mare" if r.stare == "mare" else "taiat sau fara antet"))
-			rb = self._citeste(bak)
+			rb = citiri.get(bak) or self._citeste(bak)
 			if rb.intreg:
 				self._foloseste(rb, ".bak")
 				self._viu_bun = False
@@ -1704,7 +1841,8 @@ class BazaCanale(object):
 		se uneste pe loc sub k (grupa mai noua castiga, ca la uneste_grupa), iar randul vechi pleaca; pe disc la
 		urmatoarea scriere. Se face si cand k are deja rand. Contractul apelantului: rezerva=True numai cand lamedb are
 		un singur canal pe cheia de rezerva a lui k (numarat de apelant pe tot lamedb-ul); altfel unirea ar strica randul
-		unui canal adevarat. Harta cheilor de rezerva se face la primul apel cu rezerva=True, apoi se tine la zi."""
+		unui canal adevarat. Fara harta cheilor de rezerva (o pune unirea bazei de pornire, pregateste_rezerva) se cauta
+		numai cheia de rezerva a lui k (_candidat_pe)."""
 		k = cheie(ref_sau_cheie)
 		if k is None:
 			return None
@@ -1740,17 +1878,78 @@ class BazaCanale(object):
 
 	def _rezerva_adauga(self, x):
 		"""Harta: cheie de rezerva -> cheia canalului (text) sau, pentru mai multe canale, un tuplu de chei."""
-		r = cheie_rezerva(x)
-		if r is None:
-			return
-		e = self._rezerva.get(r)
-		if e is None:
-			self._rezerva[r] = x
-		elif isinstance(e, str):
-			if e != x:
-				self._rezerva[r] = (e, x)
-		elif x not in e:
-			self._rezerva[r] = e + (x,)
+		_harta_rezerva_adauga(self._rezerva, x)
+
+	def pregateste_rezerva(self, porneste_fir=None):
+		"""Harta cheilor de rezerva (cea pe care o face _harta_rezerva la primul candidat_rezerva sau cauta(...,
+		rezerva=True)), facuta pe un fir: unirea bazei de pornire (Components/HdsBazaPornire.Unire) nu mai tine firul
+		interfetei cat trece prin toate randurile bazei (secunde pe un receptor cu o baza mare). Se cheama de pe firul
+		interfetei, de mai multe ori, fara asteptare: prima chemare ia lista cheilor de acum si porneste firul; o chemare
+		de dupa terminarea firului pune harta in folosinta, adusa la cheile de acum (scoase cele plecate, adaugate cele
+		aparute intre timp, cu operatii pe multimi), deci exact harta cheilor de acum. O baza recitita intre timp (alt
+		dictionar de randuri) porneste firul din nou; harta facuta intre timp pe loc (o nota a culegerii) castiga.
+		porneste_fir None, firul care nu porneste sau care cade: harta pe loc, ca inainte. -> True cand harta e gata."""
+		self._asigura()
+		if self._rezerva is not None:
+			self._pregatire_rezerva = None
+			return True
+		if porneste_fir is None:
+			self._harta_rezerva()
+			return True
+		p = self._pregatire_rezerva
+		if p is None or p["c"] is not self._c:
+			chei = list(self._c)
+			p = {"c": self._c}
+
+			def lucreaza():
+				try:
+					p["multime"] = frozenset(chei)
+					p["harta"] = harta_rezerva_din(chei, cedeaza=True)
+				except BaseException as e:
+					p["eroare"] = "%s: %s" % (type(e).__name__, e)
+			self._pregatire_rezerva = p
+			try:
+				p["fir"] = porneste_fir(lucreaza)
+			except Exception as e:
+				p["eroare"] = "firul nu a pornit: %s" % e
+		fir = p.get("fir")
+		if fir is not None and fir.is_alive():
+			return False
+		self._pregatire_rezerva = None
+		if "harta" not in p or "multime" not in p:
+			self._jurnal("harta cheilor de rezerva pe fir: %s; o fac pe loc" % p.get("eroare", "fara rezultat"))
+			self._harta_rezerva()
+			return True
+		self._rezerva = p["harta"]
+		for x in p["multime"].difference(self._c):
+			self._rezerva_scoate(x)
+		for x in self._c.keys() - p["multime"]:
+			self._rezerva_adauga(x)
+		return True
+
+	def _chei_pe_rezerva(self, r):
+		"""Cheile randurilor cu cheia de rezerva r, cautate fara harta: o expresie peste toate cheile lipite (o trecere in C)
+		alege cheile cu acelasi sid, tsid si onid (in hex, orice litere, cu zerouri in fata: tot ce primeste cheie_rezerva),
+		iar cheie_rezerva le confirma (pozitia). Acelasi raspuns ca harta, fara s-o faca."""
+		try:
+			parti, _poz = r.split("@", 1)
+			onid, tsid, sid = [int(x, 16) for x in parti.split(":")]
+		except (ValueError, AttributeError):
+			return []
+
+		def cifre(v):
+			return "".join("[%s%s]" % (c, c.upper()) if c.isalpha() else c for c in "%x" % v)
+		# aceeasi intrebare de doua ori la rand (_cheia: candidat_rezerva, apoi cauta cu rezerva=True), fara nicio schimbare a
+		# bazei intre ele: raspunsul de adineauri
+		semn = (r, self._c, self.versiune, len(self._c))
+		tinut = self._cautare_rezerva
+		if tinut is not None and tinut[0] == semn[0] and tinut[1] is semn[1] and tinut[2:4] == semn[2:]:
+			return list(tinut[4])
+		# \n la inceput: cautarea sare din rand in rand (memchr), nu incearca fiecare octet
+		model = re.compile("\n(0*%s:[0-9a-fA-F]{1,8}:0*%s:0*%s)(?=\n|$)" % (cifre(sid), cifre(tsid), cifre(onid)))
+		rez = [x for x in model.findall("\n" + "\n".join(self._c)) if cheie_rezerva(x) == r]
+		self._cautare_rezerva = semn + (tuple(rez),)
+		return rez
 
 	def _rezerva_scoate(self, x):
 		r = cheie_rezerva(x)
@@ -1768,15 +1967,31 @@ class BazaCanale(object):
 		r = cheie_rezerva(k)
 		if r is None:
 			return None
-		e = self._harta_rezerva().get(r)
+		return self._candidat_pe(k, r)
+
+	def _candidat_pe(self, k, r):
+		"""Singurul alt rand cu cheia de rezerva r: din harta cand exista (pusa de unirea bazei de pornire, apoi tinuta la zi),
+		altfel cautat numai pentru r (_chei_pe_rezerva), fara s-o faca pe firul interfetei (pe 0.7.6 prima nota a culegerii
+		pe un canal fara rand facea harta peste toata baza: 6,8 s pe un u57 cu 8615 randuri). Acelasi raspuns."""
+		if self._rezerva is None:
+			alte = [x for x in self._chei_pe_rezerva(r) if x != k]
+			return alte[0] if len(alte) == 1 else None
+		e = self._rezerva.get(r)
 		if e is None:
 			return None
 		alte = [x for x in ((e,) if isinstance(e, str) else e) if x != k and x in self._c]
 		return alte[0] if len(alte) == 1 else None
 
+	def candidat_rezerva_cunoscut(self, k, rezerva):
+		"""candidat_rezerva pentru o cheie deja in forma bazei (cheie(k) == k, ca cheile din lamedb), cu cheia ei de rezerva
+		deja calculata (cheie_rezerva(k)): unirea bazei de pornire o cheama pe mii de chei, fara sa le calculeze din nou
+		pe firul interfetei."""
+		self._asigura()
+		return self._candidat_pe(k, rezerva)
+
 	def candidat_rezerva(self, ref_sau_cheie):
 		"""Cheia singurului alt rand din baza cu aceeasi cheie de rezerva ca acest canal, sau None (niciunul sau mai
-		multe). Nu schimba nimic; harta cheilor de rezerva se face la primul apel (ca la cauta cu rezerva=True)."""
+		multe). Nu schimba nimic; fara harta cheilor de rezerva se cauta numai aceasta cheie (_candidat_pe)."""
 		k = cheie(ref_sau_cheie)
 		if k is None:
 			return None
@@ -2193,7 +2408,7 @@ class BazaCanale(object):
 			return None
 		return rec
 
-	def _uneste_linii(self, linii, fel, chei_lamedb=None, tacut=False):
+	def _uneste_linii(self, linii, fel, chei_lamedb=None, tacut=False, buget=True):
 		self._asigura()
 		acum = self._ceas()
 		adaugate = schimbate = respinse = 0
@@ -2236,7 +2451,8 @@ class BazaCanale(object):
 					adaugate += 1
 				else:
 					schimbate += 1
-		self._potriveste_bugetul()
+		if buget:
+			self._potriveste_bugetul()
 		if not tacut:
 			self._jurnal("unire (fel %d): %d adaugate, %d schimbate, %d respinse" % (fel, adaugate, schimbate, respinse))
 		return adaugate, schimbate, respinse
@@ -2553,10 +2769,11 @@ class BazaCanale(object):
 			self._antet[cheie] = valoare
 			self._schimba(grupe=())
 
-	def uneste_linii_pornire(self, linii, chei_lamedb=None):
+	def uneste_linii_pornire(self, linii, chei_lamedb=None, buget=True):
 		"""O bucata dintr-o baza de pornire (randuri-text JSONL), fara randul de jurnal al unirii: apelantul (unirea pe
-		bucati din Components/HdsBazaPornire.py) scrie unul singur la sfarsit. -> (adaugate, schimbate, respinse)."""
-		return self._uneste_linii(linii, FEL_PORNIRE, chei_lamedb, tacut=True)
+		bucati din Components/HdsBazaPornire.py) scrie unul singur la sfarsit. buget=False: fara potrivirea bugetului la
+		sfarsit (unirea taiata dupa timp o face o data pe bucata, ca fara taiere). -> (adaugate, schimbate, respinse)."""
+		return self._uneste_linii(linii, FEL_PORNIRE, chei_lamedb, tacut=True, buget=buget)
 
 	# ------------------------------------------------ exportul
 

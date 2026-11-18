@@ -1,0 +1,56 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Poarta transcodarii (portul 8002): inetd (/etc/hds-transcodare.conf) o porneste pentru fiecare legatura, cu socketul
+# legaturii pe fd 0 si 1. Adresa celuilalt capat se afla din socket (/proc/$$/fd/0) si din /proc/net/tcp, ca la
+# hds-telnet-poarta:
+# - din reteaua de acasa (retelele din hds-ssh-retele-locale.conf, aceleasi ca la SSH, FTP si Telnet): exec
+#   /usr/bin/transtreamproxy pe aceeasi legatura;
+# - din afara casei, sau cand adresa nu se poate afla sigur: raspuns 403 si legatura se inchide.
+# Variabilele sunt numai pentru probele de pe PC (HDS_TRC_PROC: /proc fals; HDS_TRC_PROXY: programul pornit).
+
+PROC=${HDS_TRC_PROC:-/proc}
+RETELE=${HDS_TRC_RETELE:-/etc/security/hds-ssh-retele-locale.conf}
+PROXY=${HDS_TRC_PROXY:-/usr/bin/transtreamproxy}
+EU=${HDS_TRC_PID_EU:-$$}
+
+inchide() {
+	printf 'HTTP/1.0 403 Forbidden\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nnumai din reteaua de acasa / home network only\r\n'
+	exit 1
+}
+
+# socketul legaturii: socket:[INODE] pe fd 0 al acestui proces
+s=$(readlink "$PROC/$EU/fd/0" 2>/dev/null)
+case $s in
+	socket:\[*\]) i=${s#socket:[}; i=${i%]} ;;
+	*) inchide ;;
+esac
+case $i in ''|*[!0-9]*) inchide ;; esac
+
+# adresa celuilalt capat (IPv4, /proc/net/tcp: hex in ordinea octetilor din memorie) si verdictul: acasa sau afara
+loc=$(awk -v inod="$i" '
+	function hx(t,   k, v) { v = 0; t = toupper(t); for (k = 1; k <= length(t); k++) v = v * 16 + index("0123456789ABCDEF", substr(t, k, 1)) - 1; return v }
+	function nr(a,   p) { if (split(a, p, ".") != 4) return -1; return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+	FNR == NR {
+		if ($10 == inod && !gasit) {
+			split($3, x, ":")
+			if (length(x[1]) == 8) { ip = ((hx(substr(x[1], 7, 2)) * 256 + hx(substr(x[1], 5, 2))) * 256 + hx(substr(x[1], 3, 2))) * 256 + hx(substr(x[1], 1, 2)); gasit = 1 }
+		}
+		next
+	}
+	/^\+ *: *root *:/ {
+		sub(/^\+ *: *root *:/, "")
+		n = split($0, r, " ")
+		for (k = 1; k <= n; k++) {
+			if (split(r[k], q, "/") != 2 || q[2] !~ /^[0-9]+$/ || q[2] > 32) continue
+			b = nr(q[1]); if (b < 0) continue
+			bloc = 2 ^ (32 - q[2])
+			if (gasit && int(ip / bloc) == int(b / bloc)) acasa = 1
+		}
+	}
+	END { print (gasit && acasa) ? "acasa" : "afara" }
+' "$PROC/net/tcp" "$RETELE" 2>/dev/null)
+
+[ "$loc" = acasa ] || inchide
+exec "$PROXY"

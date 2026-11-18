@@ -75,8 +75,31 @@ POZ_TERESTRU = "terestru"
 
 FELURI = ("canal", "marcaj", "spatiu", "subbuchet", "alternative", "flux", "altul")
 
-_FROM = re.compile(r'FROM BOUQUET "([^"]{1,200})"')
-_NUME_FISIER = re.compile(r"^[A-Za-z0-9_.\-]{1,120}$")
+_FROM = re.compile(r'FROM BOUQUET "([^"]{1,250})"')
+# 0.7.7 (UTF): numele fisierului unui buchet (userbouquet, subbouquet, alternatives, bouquets.tv) se judeca dupa ce nu
+# are voie sa aiba, ca la import (Components/HdsImportSurse.TIPAR_BUCHET): / si \ (cai), ghilimelele (incheie numele
+# in randul FROM BOUQUET), : si % (nucleul le codeaza in referinta), caracterele de control (si C1), LS si PS,
+# octetii care nu sunt UTF-8 (surogatele), punctul la inceput (., .., fisierele ascunse); cel mult MAX_OCTETI_NUME
+# octeti UTF-8. Tiparul vechi, numai ASCII, lasa pe dinafara buchetele cu diacritice, spatiu sau & in nume (Türksat 42E
+# dupa import): pe televizor se vedeau, in editor si in web nu.
+MAX_OCTETI_NUME = 250
+_TIPAR_NUME_FISIER = re.compile('^[^.\\x00-\\x1f\\x7f-\\x9f/\\\\":%\\u2028\\u2029\\ud800-\\udfff]'
+	'[^\\x00-\\x1f\\x7f-\\x9f/\\\\":%\\u2028\\u2029\\ud800-\\udfff]*\\Z')
+
+
+class _NumeFisier(object):
+	"""_NUME_FISIER: match(nume) ca la un tipar re (None sau potrivirea), cu lungimea numarata in octeti UTF-8."""
+
+	def match(self, nume):
+		if not isinstance(nume, str):
+			return None
+		m = _TIPAR_NUME_FISIER.match(nume)
+		if m is None or len(nume.encode("utf-8")) > MAX_OCTETI_NUME:
+			return None
+		return m
+
+
+_NUME_FISIER = _NumeFisier()
 _POLARIZARE = {0: "H", 1: "V", 2: "L", 3: "R"}
 
 

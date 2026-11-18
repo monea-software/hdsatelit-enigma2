@@ -41,7 +41,13 @@ BUCHETE_STRAINE = ("userbouquet.hds_dab.radio", "userbouquet.hds_t2.tv", "userbo
 	"userbouquet.LastScanned.tv",
 	"userbouquet.LastScanned.radio")
 
-_FISIER = re.compile(r'FROM BOUQUET "([A-Za-z0-9_.\-]{1,120})"')
+_FISIER = re.compile(r'FROM BOUQUET "([^"]{1,250})"')
+# 0.7.7 (UTF): numele fisierului se judeca dupa ce nu are voie sa aiba, ca in editorul de canale
+# (HdsEditorCanaleDate._NUME_FISIER; scrisa si aici: fisierul nu importa alte module la incarcare). Tiparul vechi, numai
+# ASCII, lasa pe dinafara buchetele cu diacritice, spatiu sau & in nume (Türksat 42E): FAV tinut apasat nu le arata.
+MAX_OCTETI_NUME = 250
+_NUME_FISIER = re.compile('^[^.\\x00-\\x1f\\x7f-\\x9f/\\\\":%\\u2028\\u2029\\ud800-\\udfff]'
+	'[^\\x00-\\x1f\\x7f-\\x9f/\\\\":%\\u2028\\u2029\\ud800-\\udfff]*\\Z')
 _CONTROL = re.compile(u"[\u0000-\u001f\u007f-\u009f]")
 
 
@@ -75,7 +81,10 @@ def ref_favorite(tip):
 def fisier_din_ref(ref):
 	"""Fisierul buchetului din referinta (sau calea) unui buchet, ori None."""
 	m = _FISIER.search(ref or "")
-	return m.group(1) if m else None
+	if not m:
+		return None
+	f = m.group(1)
+	return f if _NUME_FISIER.match(f) and len(f.encode("utf-8")) <= MAX_OCTETI_NUME else None
 
 
 def e_favorite(fisier):

@@ -38,7 +38,9 @@ from Screens.Screen import Screen
 from Screens.VirtualKeyBoard import VirtualKeyBoard
 
 CITIRE_MS = 700
-CULOARE_STARE = {"montat": 0x4FD18B, "eroare": 0xFF8A7A, "lucreaza": 0xF5B83D, "nemontat": 0xAEB9CC}
+# raspunsul ecranului cautarii cand omul alege GALBEN (adauga de mana un server care nu a aparut)
+DE_MANA = "de_mana"
+CULOARE_STARE ={"montat": 0x4FD18B, "eroare": 0xFF8A7A, "lucreaza": 0xF5B83D, "nemontat": 0xAEB9CC}
 
 
 def _factor():
@@ -311,7 +313,9 @@ class HdsLocuriRetea(_Lista):
 		self.session.openWithCallback(self._ales, HdsLocReteaCautare)
 
 	def _ales(self, g=None):
-		if g:
+		if g == DE_MANA:
+			self.adauga()
+		elif g:
 			self.adauga(S.dinCautare(g))
 		else:
 			self.citeste()
@@ -379,12 +383,15 @@ class HdsLocReteaCautare(_Lista):
 			"adresa lui."))
 		self["key_red"].setText(_("Închide"))
 		self["key_green"].setText(_("Caută din nou"))
+		# un NAS care nu raspunde la cautare se adauga de aici, si cat inca se cauta (fara Inchide, apoi VERDE dedesubt)
+		self["key_yellow"].setText(_("Adaugă un loc"))
 		self.gasite = []
 		self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {
 			"ok": self.alege,
 			"cancel": self.close,
 			"red": self.close,
 			"green": self.cauta,
+			"yellow": self.deMana,
 		}, -1)
 
 	def pornit(self):
@@ -428,6 +435,9 @@ class HdsLocReteaCautare(_Lista):
 		k = self.curent()
 		if k is not None and k < len(self.gasite):
 			self.close(self.gasite[k])
+
+	def deMana(self):
+		self.close(DE_MANA)
 
 
 # ------------------------------------------------------------------ rasfoirea unui loc
@@ -608,7 +618,9 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 		self.dosar = ConfigText(default=d.get("dosar") or u"", fixed_size=False)
 		self.utilizator = ConfigText(default=d.get("utilizator") or u"", fixed_size=False)
 		self.parola = _ParolaLoc()
-		self.pornire = ConfigYesNo(default=bool(d.get("pornire")))
+		# un loc nou: Montat si dupa repornire ramane din fabrica Nu, ca pana in 0.7.6 (regula 17.11 16:08: ce era ramane,
+		# omul il bifeaza daca vrea); cel salvat ramane cum l-a lasat omul
+		self.pornire = ConfigYesNo(default=bool(d.get("pornire")) if (vechi or "pornire" in d) else False)
 		self.citire = ConfigYesNo(default=bool(d.get("citire")))
 		self.tls = ConfigYesNo(default=bool(d.get("tls_oricare")))
 		self.are_parola = bool(vechi and vechi.get("utilizator") and S.parole().are(ident))
@@ -636,6 +648,10 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 		self._randuri()
 		self["config"].onSelectionChanged.append(self._descriere)
 		self.onLayoutFinish.append(self._descriere)
+		# serverul ales din cautarea in casa (SMB, NFS): lista dosarelor se cere singura, ca omul sa aleaga dosarul din ea;
+		# la prima executie (lista e alt ecran, Session.open o refuza din onLayoutFinish)
+		if not vechi and date and d.get("gazda") and d.get("fel") in S.FELURI_MONTATE and not d.get("dosar"):
+			self.onFirstExecBegin.append(lambda: self.alegeDosarul(automat=True))
 
 	def _inchis(self):
 		self.inchis = True
@@ -673,6 +689,12 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 	def _cheie(self):
 		c = self["config"].getCurrent()
 		return c[2] if c and len(c) > 2 else ""
+
+	def _mergiLa(self, cheie):
+		for i, rand in enumerate(self["config"].list):
+			if len(rand) > 2 and rand[2] == cheie:
+				self["config"].setCurrentIndex(i)
+				return
 
 	def _descriere(self):
 		k = self._cheie()
@@ -754,22 +776,39 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 	def renunta(self):
 		self.close(None)
 
-	def alegeDosarul(self):
+	def alegeDosarul(self, automat=False):
 		fel = self.fel.value
 		if fel not in S.FELURI_MONTATE:
 			return
 		gazda, _p, _d = S.desparteGazda(self.gazda.value, fel)
 		if not S.gazdaBuna(gazda):
-			self.session.open(MessageBox, _("Scrie întâi serverul."), MessageBox.TYPE_INFO, timeout=6)
+			if not automat:
+				self.session.open(MessageBox, _("Scrie întâi serverul."), MessageBox.TYPE_INFO, timeout=6)
 			return
 		self["footnote"].setText(_("Se cere lista dosarelor de la server..."))
 		parola = self.parola.value or None
-		S.dosareServer(fel, gazda, self.utilizator.value, self.ident if not parola else None, parola, self._dosare)
+		S.dosareServer(fel, gazda, self.utilizator.value, self.ident if not parola else None, parola,
+			lambda r: self._dosare(r, automat), port=self.port.value)
 
-	def _dosare(self, r):
+	def _dosare(self, r, automat=False):
 		if self.inchis:       # raspunsul a venit dupa ce omul a inchis ecranul
 			return
 		self._descriere()
+		if automat and (not r.get("ok") or not r.get("dosare")):
+			# cererea singura, dupa cautare: fara fereastra; o eroare sta in nota de jos, iar cursorul merge pe randul de
+			# completat: utilizatorul cand serverul SMB cere cont, serverul cand nu raspunde, altfel dosarul
+			if r.get("ok"):
+				rand = "dosar"
+			elif r.get("cod") in ("acces", "parola") and self.fel.value == "smb":
+				rand = "utilizator"
+			elif r.get("cod") in ("server", "nume", "termen"):
+				rand = "gazda"
+			else:
+				rand = "dosar"
+			self._mergiLa(rand)
+			self["footnote"].setText(r.get("mesaj") or (S.textEroare(r.get("cod") or "alta") if not r.get("ok") else
+				_("Serverul nu a dat niciun dosar.")))
+			return
 		if not r.get("ok"):
 			self.session.open(MessageBox, r.get("mesaj") or S.textEroare("alta"), MessageBox.TYPE_ERROR, timeout=10)
 			return

@@ -27,6 +27,9 @@
 # Ce cere nucleul nou (lib/service/listboxservice.cpp) se cere cu hasattr: pe un nucleu vechi setarea nu face nimic, nu cade.
 # Fisierul se poate incarca si pe PC (probele): enigma se importa numai in functii.
 
+import re
+import time
+
 from Components.config import config, ConfigSelection, ConfigYesNo, ConfigText
 
 
@@ -60,6 +63,23 @@ if not hasattr(c, "hds_lista_numere"):
 	c.hds_lista_tip = ConfigYesNo(default=False)
 	c.hds_lista_coloane = ConfigYesNo(default=False)
 	c.hds_pornire_canal = ConfigText(default="")
+# 0.7.7 (LST, tamiciav7, LinuxSat 164182 #970755): randul „Current Transponder” (Transponder curent), primul in lista
+# buchetelor si in „Sateliți” (Screens/ChannelSelection.hdsArataTransponderul); Nu: randul nu se mai arata, tasta rapida
+# „Current Transponder” merge mai departe. Separat de blocul de mai sus, ca sa fie pus si cand blocul exista deja.
+if not hasattr(c, "hds_lista_transponder"):
+	c.hds_lista_transponder = ConfigYesNo(default=True)
+# 0.7.7 (OBU): "Afișează IPTV și alte liste în Buchete". Da (din fabrica, ca in 0.7.4): lista buchetelor (FAV) are si
+# dosarul IPTV, dosarele locurilor adaugate de extensii (amandoua sunt si in "Sateliți") si randurile Toate canalele, După
+# satelit, După furnizor (si pe pastilele capului listei si pe tastele colorate). Nu: numai buchetele, cum a cerut un tester
+# (forumul 768 #2186). Citita de Screens/ChannelSelection.hdsArataDosareleInBuchete si de pagina web /canale (canale_web).
+if not hasattr(c, "hds_lista_dosare_buchete"):
+	c.hds_lista_dosare_buchete = ConfigYesNo(default=True)
+# 0.7.7 (SRF, tfrc LinuxSat 164118 #970941): "Calitatea semnalului in bara canalului": dB (din fabrica, ca de la LCF
+# incoace) sau procente (ca inainte). O citesc bara intai (Components/Converter/HdsSignal QualityDb / SnrDb) si pagina de
+# start din web (HdsCommon.snr_db_serviciu), prin HdsCommon.semnal_in_db, la fiecare tic. In setup.xml in Setări listă de
+# canale si in OSD Preferences (langa randul ECM din bara canalului), deci si in web la /setari.
+if not hasattr(c, "hds_semnal_unitate"):
+	c.hds_semnal_unitate = ConfigSelection(default="db", choices=[("db", N_("dB")), ("procent", N_("Procente (%)"))])
 del c
 
 
@@ -127,6 +147,24 @@ for _nume in ("hds_lista_numere", "hds_lista_marime_nume", "hds_lista_marime_inf
 	getattr(config.usage, _nume).addNotifier(reface, initial_call=False)
 
 
+def reface_transponderul(configElement=None):
+	"""0.7.7 (LST): „Afișează Transponder curent” schimbata pe TV sau in web: randul apare sau dispare pe loc in lista
+	deschisa (Screens/ChannelSelection.hdsRefaRandulTransponderului), nu abia la urmatoarea umplere."""
+	try:
+		from Screens.InfoBar import InfoBar
+		ecran = InfoBar.instance and InfoBar.instance.servicelist
+		refa = getattr(ecran, "hdsRefaRandulTransponderului", None)
+		if refa is not None:
+			refa()
+	except Exception as e:
+		print("[HdsListaSetari] randul transponderului: %s" % e)
+
+
+config.usage.hds_lista_transponder.addNotifier(reface_transponderul, initial_call=False)
+# 0.7.7 (OBU): aceeasi refacere pe loc a listei buchetelor deschise cand se schimba dosarele din ea
+config.usage.hds_lista_dosare_buchete.addNotifier(reface_transponderul, initial_call=False)
+
+
 # ---------------------------------------------------------------- sigla pentru canalele fara sigla
 
 TIPURI_RADIO = ("2", "a", "A")
@@ -187,12 +225,23 @@ def e_canal_pornire(ref_text):
 
 
 def alege_canal_pornire(ref_text):
-	"""Receptorul porneste de acum pe canalul `ref_text`; "" = inapoi la ultimul canal urmarit. -> True cand s-a schimbat."""
-	ref_text = fara_nume(ref_text)
+	"""Receptorul porneste de acum pe canalul `ref_text`; "" = inapoi la ultimul canal urmarit. -> True cand s-a schimbat
+	canalul. 0.7.6 (LPN, TODO 15.11 08:58 (MLW)): un canal cu adresa (internet) se tine intreg, cu numele din lista de la
+	coada (nu are alt nume: servicemp3 da gol pentru o adresa); un canal DVB tot fara nume, fiindca nucleul da numele din
+	referinta si pentru un canal sters (eStaticServiceDVBInformation::getName), iar pornirea si randul de stare il recunosc
+	ca disparut numai fara nume. Canalul se compara tot fara nume (fara_nume)."""
+	ref_text = ref_text or ""
+	if not _cale(ref_text):
+		ref_text = fara_nume(ref_text)
+	_NUME_BUCHETE.clear()
 	try:
 		u = config.usage
 		if ref_text:
-			if u.hds_pornire.value == "canal" and u.hds_pornire_canal.value == ref_text:
+			if u.hds_pornire.value == "canal" and fara_nume(u.hds_pornire_canal.value) == fara_nume(ref_text):
+				# acelasi canal: se pune numai numele din lista, cand il are (canalul de pornire ramane acelasi)
+				if u.hds_pornire_canal.value != ref_text and nume_din_referinta(ref_text):
+					u.hds_pornire_canal.value = ref_text
+					u.hds_pornire_canal.save()
 				return False
 			u.hds_pornire_canal.value = ref_text
 			u.hds_pornire_canal.save()
@@ -225,18 +274,152 @@ def _tr(text):
 		return text
 
 
-def nume_canal(ref_text):
-	"""Numele canalului cu referinta `ref_text` din lista receptorului, "" cand nu se gaseste."""
-	if not ref_text:
+def _decodeaza(text):
+	"""O parte din referinta scrisa de eServiceReference::toString (encode: ':', '%' si semnele sub 32 ca %xx), inapoi."""
+	return re.sub(r"%([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), text or "")
+
+
+def _cale(ref_text):
+	"""Adresa (al 11-lea camp) din referinta, "" la un canal DVB."""
+	return ((ref_text or "").split(":") + [""] * 11)[10]
+
+
+def nume_din_referinta(ref_text):
+	"""Numele pus la coada referintei (campul de dupa adresa: lista il pune din #DESCRIPTION), "" cand nu are."""
+	parti = (ref_text or "").split(":")
+	return _decodeaza(":".join(parti[11:])).strip() if len(parti) > 11 else ""
+
+
+# LPN (0.7.6, TODO 15.11 08:58 de la MLW): un canal de internet (4097, 5001, 5002: adresa in referinta) nu are nume in afara
+# buchetului: eStaticServiceMP3Info::getName da gol pentru o adresa "://" (sau capatul caii). Numele se cauta in buchetele
+# omului dupa referinta fara nume, cum il arata lista. Tinut minte NUME_BUCHETE_S secunde: Screens/Setup.py reciteste starea
+# la 3 s, iar un buchet de internet are zeci de mii de randuri. Cheia: referinta fara nume -> (ora, numele).
+_NUME_BUCHETE = {}
+NUME_BUCHETE_S = 60
+RADACINI_BUCHETE = ('1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "bouquets.tv" ORDER BY bouquet',
+	'1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "bouquets.radio" ORDER BY bouquet')
+BUCHETE_MAX = 2000
+DOSAR_BUCHETE = "/etc/enigma2"
+_FISIER_BUCHET = re.compile(r'FROM BOUQUET "([^"/]+)"')
+
+
+def _e_lenes(fisier):
+	"""Grupele de internet ale surselor noastre pe care nucleul le citeste abia la deschidere (lib/dvb/db.cpp isLazyBouquet):
+	o lista ceruta aici le-ar tine in memorie pe toate; ele se cauta direct in fisier."""
+	return fisier.startswith("subbouquet.hdsiptv_") or fisier == "userbouquet.hdsiptv.tv"
+
+
+def _cheie_text(ref_text):
+	"""Referinta fara nume, ca sa se potriveasca si cu un fisier scris de alta unealta (hex mare, %3A in loc de %3a)."""
+	parti = (ref_text or "").split(":")[:11]
+	if len(parti) < 11:
 		return ""
+	return ":".join([p.lower() for p in parti[:10]] + [_decodeaza(parti[10])])
+
+
+def _nume_din_fisier(fisier, cheie):
+	"""Numele canalului `cheie` (_cheie_text) dintr-un fisier de buchet: #DESCRIPTION de dupa #SERVICE, altfel numele din
+	referinta. -> (numele, referintele sub-buchetelor din fisier, de cautat dupa el)."""
+	try:
+		with open("%s/%s" % (DOSAR_BUCHETE, fisier), "rb") as f:
+			continut = f.read().decode("utf-8", "replace")
+	except (IOError, OSError):
+		return "", []
+	gasit, nume, sub = False, "", []
+	for rand in continut.splitlines():
+		if gasit:
+			if rand.startswith("#DESCRIPTION"):
+				nume = rand[14:] if rand[12:13] == ":" else rand[13:]
+			break
+		if not rand.startswith("#SERVICE"):
+			continue
+		ref = (rand[10:] if rand[8:9] == ":" else rand[9:]).strip()
+		parti = ref.split(":")
+		try:
+			steaguri = int(parti[1])
+		except (IndexError, ValueError):
+			steaguri = 0
+		if steaguri & 1:
+			sub.append(ref)
+		elif _cheie_text(ref) == cheie:
+			gasit = True
+			nume = nume_din_referinta(ref)
+	return (nume.strip() if gasit else ""), sub
+
+
+def nume_din_buchete(ref_text, acum=None):
+	"""Numele canalului `ref_text` din buchetele omului (primul buchet care il are cu nume), "" cand nu e in niciunul.
+	O singura lista din C++ pe buchet (getContent "S": referintele ca text, cu numele la coada), apoi sub-buchetele; grupele
+	citite la deschidere (_e_lenes) direct din fisier."""
+	cheie = fara_nume(ref_text)
+	if not cheie:
+		return ""
+	acum = time.time() if acum is None else acum
+	tinut = _NUME_BUCHETE.get(cheie)
+	if tinut is not None and 0 <= acum - tinut[0] < NUME_BUCHETE_S:
+		return tinut[1]
+	nume = ""
 	try:
 		from enigma import eServiceCenter, eServiceReference
-		ref = eServiceReference(ref_text)
-		info = eServiceCenter.getInstance().info(ref)
-		nume = info.getName(ref) if info is not None else ""
+		centru = eServiceCenter.getInstance()
+		de_vazut = [eServiceReference(r) for r in RADACINI_BUCHETE]
+		vazute = set()
+		cheie_t = _cheie_text(cheie)
+		tip = cheie.split(":", 1)[0]
+		while de_vazut and not nume and len(vazute) < BUCHETE_MAX:
+			buchet = de_vazut.pop(0)
+			text_b = buchet.toString()
+			if text_b in vazute:
+				continue
+			vazute.add(text_b)
+			fisier = _FISIER_BUCHET.search(text_b)
+			if fisier is not None and _e_lenes(fisier.group(1)):
+				nume, sub = _nume_din_fisier(fisier.group(1), cheie_t)
+				de_vazut.extend(eServiceReference(r) for r in sub)
+				continue
+			lista = centru.list(buchet)
+			texte = lista.getContent("S", False) if lista is not None else None
+			for t in texte or ():
+				parti = t.split(":")
+				if len(parti) < 11:
+					continue
+				try:
+					steaguri = int(parti[1])
+				except ValueError:
+					steaguri = 0
+				if steaguri & 1:            # dosar (buchet, sub-buchet): se cauta si in el, dupa cel de acum
+					de_vazut.append(eServiceReference(t))
+				elif ":".join(parti[:11]) == cheie or (parti[0] == tip and _cheie_text(t) == cheie_t):
+					nume = nume_din_referinta(t)
+					if nume:
+						break
 	except Exception as e:
-		print("[HdsListaSetari] numele canalului de pornire: %s" % e)
+		print("[HdsListaSetari] numele canalului de pornire din buchete: %s" % e)
 		nume = ""
+	_NUME_BUCHETE[cheie] = (acum, nume)
+	return nume
+
+
+def nume_canal(ref_text):
+	"""Numele canalului cu referinta `ref_text` din lista receptorului, "" cand nu se gaseste. 0.7.6 (LPN): la un canal cu
+	adresa (internet) intai numele tinut in referinta (pus din lista la alegere), apoi numele din buchetele omului; apoi (si
+	la un canal DVB, numai din lista receptorului: gol pentru un canal sters) numele dat de nucleu."""
+	if not ref_text:
+		return ""
+	nume = ""
+	if _cale(ref_text):
+		nume = nume_din_referinta(ref_text) or nume_din_buchete(ref_text)
+	else:
+		ref_text = fara_nume(ref_text)
+	if not nume:
+		try:
+			from enigma import eServiceCenter, eServiceReference
+			ref = eServiceReference(ref_text)
+			info = eServiceCenter.getInstance().info(ref)
+			nume = info.getName(ref) if info is not None else ""
+		except Exception as e:
+			print("[HdsListaSetari] numele canalului de pornire: %s" % e)
+			nume = ""
 	# semnele de evidentiere din numele canalelor (0x86 / 0x87) nu se arata
 	return (nume or "").replace("\x86", "").replace("\x87", "").strip()
 
@@ -251,9 +434,9 @@ def stare_pornire():
 	except AttributeError:
 		return []
 	if not ref_text:
-		return [_tr("Niciun canal de pornire ales încă: în lista de canale, MENU pe canal > Pornește pe acest canal. Până atunci "
-			"receptorul pornește pe ultimul canal urmărit.")]
+		return [_tr(N_("Niciun canal de pornire ales încă: în lista de canale, MENU pe canal > Pornește pe acest canal. Până atunci "
+			"receptorul pornește pe ultimul canal urmărit."))]
 	nume = nume_canal(ref_text)
 	if not nume:
-		return [_tr("Canalul de pornire nu se mai găsește în lista de canale: receptorul pornește pe ultimul canal urmărit.")]
-	return [_tr("Canalul de pornire: %s") % nume]
+		return [_tr(N_("Canalul de pornire nu se mai găsește în lista de canale: receptorul pornește pe ultimul canal urmărit."))]
+	return [_tr(N_("Canalul de pornire: %s")) % nume]

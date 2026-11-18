@@ -204,6 +204,38 @@ def cereBiblioteca(biblioteca, cale, nume, cand="program", dupa=None):
 		return None
 
 
+def cerePachet(pachet, cine, nume, dupa=None):
+	"""0.7.6 (NCP, TODO 15.11 10:27): un pachet al feedului nostru pus in coada pentru altceva decat un plugin cazut (de pilda pluginul
+	de setari al unei teme straine, Components/HdsPartiTema.py), sau None. In liniste: fara mesajele "Se instalează modulul ...";
+	`dupa(reusit)` se cheama la sfarsitul lucrarii opkg (True dupa instalare, False cand n-a reusit) si spune omului ce e de spus. Aceleasi reguli ca la
+	cere(): numai din feedul HD Satelit, o incercare pe pachet si sesiune, lipsa din feed tinuta minte o zi, nimic daca e instalat."""
+	try:
+		if not _pachetBun(pachet) or instalat(pachet) or pachet in _rezultat:
+			return None
+		cine = cine or nume or pachet
+		el = next((x for x in _coada if x["pachet"] == pachet), None)
+		if el is None:
+			el = {"pachet": pachet, "modul": pachet, "fel": "pachet", "pluginuri": {}}
+			_coada.append(el)
+			_jurnal("in coada: %s (pentru %s)" % (pachet, nume or cine))
+		el["pluginuri"].setdefault(cine, {"nume": nume or cine, "cand": "pachet", "dupa": dupa})
+		if _stare["pornit"]:
+			_programeaza(PAS_URMATOR_MS)
+		return pachet
+	except Exception as e:
+		_jurnal("cerePachet: %r" % (e,))
+		return None
+
+
+def _dupaPachet(el, reusit):
+	for cale, v in el["pluginuri"].items():
+		if callable(v.get("dupa")):
+			try:
+				v["dupa"](reusit)
+			except Exception as e:
+				_jurnal("dupa %s: %r" % (cale, e))
+
+
 def dupaCitire(plugins):
 	"""Dupa readPluginList: pluginurile cazute la import pe un modul din harta (erori cu "modul")."""
 	try:
@@ -252,6 +284,13 @@ def porneste(session):
 		HdsModuleAcces.dupa_pornirea_interfetei()
 	except Exception as e:
 		_jurnal("dupa_pornirea_interfetei: %r" % (e,))
+	try:
+		# 0.7.7 (MGR/PLAN-078 punctul 5): oscam.srvid2 din lista de canale in dosarul modulului ales, cand omul nu are fisierul lui
+		# (Components/HdsSrvid.py), pe un fir, dupa lucrul greu de la pornire
+		from Components import HdsSrvid
+		HdsSrvid.porneste()
+	except Exception as e:
+		_jurnal("HdsSrvid: %r" % (e,))
 	if _coada:
 		_programeaza(INTARZIERE_PORNIRE_MS)
 
@@ -542,7 +581,7 @@ def listaCazuta(X=None):
 		_rezultat[el["pachet"]] = {"stare": "esuat", "motiv": motiv}
 	del _coada[:]
 	_jurnal("listele surselor nu se descarca (%d incercari): %s" % (_stare["esecuri_liste"], motiv))
-	if primul is not None:
+	if primul is not None and primul.get("fel") != "pachet":
 		_mesaj(_t("Modulul %s nu s-a instalat: %s") % (primul["modul"], motiv))
 
 
@@ -552,7 +591,10 @@ def planModul(el, versiune):
 	argumente = X.opkgArguments("install", [el["pachet"]])
 	if argumente is None:
 		return None
-	titlu = (_t("biblioteca %s") if el.get("fel") == "biblioteca" else _t("modulul %s")) % el["modul"]
+	if el.get("fel") == "pachet":
+		titlu = el["pachet"]
+	else:
+		titlu = (_t("biblioteca %s") if el.get("fel") == "biblioteca" else _t("modulul %s")) % el["modul"]
 	return {"fel": "instaleaza", "titlu": titlu, "nume": titlu, "subtitlu": _numePluginuri(el), "icoana": "altele", "randuri": [],
 		"nota": "", "externe": [], "notaCuloare": "", "buton": N_("Instalează"), "argumente": argumente, "repornire": False,
 		"pachete": [el["pachet"]], "tinte": [{"nume": el["pachet"], "titlu": el["pachet"], "la": versiune, "de": "", "acces": False}],
@@ -575,7 +617,9 @@ def _pornesteLucrarea(el, versiune):
 			dupaLucrare(el, l)
 	l.asculta(ascultator)
 	_jurnal("instalez %s %s pentru %s" % (el["pachet"], versiune, _numePluginuri(el)))
-	if el.get("fel") == "biblioteca":
+	if el.get("fel") == "pachet":
+		pass
+	elif el.get("fel") == "biblioteca":
 		_mesaj(_t("Se instalează biblioteca %s pentru %s.") % (el["modul"], _numePluginuri(el)))
 	else:
 		_mesaj(_t("Se instalează modulul %s pentru %s.") % (el["modul"], _numePluginuri(el)))
@@ -594,13 +638,20 @@ def dupaLucrare(el, lucrare, plugins=None):
 		if not rez.get("reusit"):
 			motiv = rez.get("stare") or _t("Operațiunea nu a reușit.")
 			_rezultat[el["pachet"]] = {"stare": "esuat", "motiv": motiv}
-			if el.get("fel") == "biblioteca":
+			if el.get("fel") == "pachet":
+				_jurnal("%s nu s-a instalat: %s" % (el["pachet"], motiv))
+				_dupaPachet(el, False)
+			elif el.get("fel") == "biblioteca":
 				_mesaj(_t("Biblioteca %s nu s-a instalat: %s") % (el["modul"], motiv))
 			else:
 				_mesaj(_t("Modulul %s nu s-a instalat: %s") % (el["modul"], motiv))
 			return
 		_rezultat[el["pachet"]] = {"stare": "instalat", "motiv": ""}
 		uitaLipsa(el["pachet"])
+		if el.get("fel") == "pachet":
+			_jurnal("%s instalat pentru %s" % (el["pachet"], _numePluginuri(el)))
+			_dupaPachet(el, True)
+			return
 		if el.get("fel") == "biblioteca":
 			# programele (module de acces) nu sunt pluginuri de activat: fiecare porneste din nou prin dupa(), dar numai dupa ultima
 			# biblioteca pe care o mai asteapta (mgcamd cere trei pachete, deci trei elemente in coada: o pornire dupa primul ar cadea)

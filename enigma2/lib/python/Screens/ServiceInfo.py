@@ -154,11 +154,11 @@ def getReceiverConnectionInfo():
 						rest = line.split("legat si autentificat la", 1)[1].split()
 						adresa_jurnal = rest[0].strip(",;") if rest else adresa_jurnal
 					if "tuner 0 = slot 0" in line:
-						t_name = "Tuner A (Satelit DVB-S2X)"
+						t_name = _("Tuner A (Satelit DVB-S2X)")
 						if t_name not in connected_tuners:
 							connected_tuners.append(t_name)
 					if "tuner 1 = slot 1" in line:
-						t_name = "Tuner B (Cablu/Terestru DVB-C/T2)"
+						t_name = _("Tuner B (Cablu/Terestru DVB-C/T2)")
 						if t_name not in connected_tuners:
 							connected_tuners.append(t_name)
 		except Exception:
@@ -167,7 +167,9 @@ def getReceiverConnectionInfo():
 	is_connected = bool(hds_tuner and cheie_ok) or log_connected
 	receiver_target = hds_tuner or (adresa_jurnal if is_connected else "")
 	if not connected_tuners and is_connected:
-		connected_tuners = ["Tuner A (Satelit DVB-S2X)", "Tuner B (Cablu/Terestru DVB-C/T2)"]
+		# EPG (0.7.7): numele tunerelor se vad in Stare tuner (Tunere preluate), deci trec prin traducere; textele cautate
+		# in jurnalul emulatorului ("legat si autentificat la", "tuner 0 = slot 0") raman cum le scrie el
+		connected_tuners = [_("Tuner A (Satelit DVB-S2X)"), _("Tuner B (Cablu/Terestru DVB-C/T2)")]
 
 	return {
 		"is_pc_emu": is_pc_emu,

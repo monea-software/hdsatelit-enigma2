@@ -84,6 +84,10 @@ GRATIE_OPRIRE_S = 90                       # dupa EXIT programul termina felia i
 # estimarea de pe ecran, pe trecere (banda x polarizare), dupa treptele alese; masurat pe Astra 19,2E (4 treceri):
 # treapta 1 ~195 s, cu golurile (2) ~430 s, cu golurile de doua ori (3) ~654 s
 SECUNDE_PE_TREAPTA = {1: 50, 2: 110, 3: 165}
+# cu "Si sub 1 MSym/s" (podeaua coborata, --rata-min sub RATA_MIC_KSYM): masurat pe un SF8008, 19,2E, 4 treceri (WLD, o
+# rulare): treapta 1 ~1230 s, 2 ~2340 s, 3 2626 s, fata de ~158 / ~405 / 652 s fara (estimarea spunea "cam 11 minute"
+# la amandoua)
+SECUNDE_PE_TREAPTA_SUB1 = {1: 310, 2: 585, 3: 660}
 
 # a doua trecere: fereastra in jurul unui transponder cunoscut negasit, ±max(6 MHz, 0,7 x rata)
 FEREASTRA_MIN_KHZ = 6000
@@ -112,7 +116,9 @@ FEC_AUTO, MODULATIE_QPSK = 0, 1
 
 # fazele cautarii
 NIMIC, CAUTA, A_DOUA, OPRESTE, GATA, OPRIT, EROARE = 'nimic', 'cauta', 'a_doua', 'opreste', 'gata', 'oprit', 'eroare'
-IN_CURS = (CAUTA, A_DOUA, OPRESTE)
+# 0.7.7 (M30): la antena cu motor, rotirea spre satelitul ales, inaintea programului
+ROTIRE = 'rotire'
+IN_CURS = (ROTIRE, CAUTA, A_DOUA, OPRESTE)
 
 # codurile scurte ale programului -> ce afla omul (fara amanunte interne pe televizor)
 MESAJE_EROARE = {
@@ -255,6 +261,55 @@ def argv_comutare(comutare):
     return argv
 
 
+# ---------------------------------------------------------------- satelitul ales in ecran (0.7.7, WLD)
+def _lnb_fix(lnb):
+    """LNB-ul la care programul ajunge fara sa miste antena: nu cel al motorului (DiSEqC 1.2 sau "toti satelitii") si nu
+    Unicable (cautarea oarba nu merge prin el)."""
+    return bool(lnb) and not lnb.get('toti') and lnb.get('diseqc') != '1_2' and lnb.get('tip') != 'unicable'
+
+
+def alegeri_satelit(modele, slot_acum, poz_acum, cu_comanda=True):
+    """Satelitii randului "Satelit" al cautarii oarbe -> [(pozitie, slot)], in ordinea tunerelor si a porturilor.
+
+    De ce: Wlad (forum 948 #2339/#2359, Amiko Viper 4K V10, comutator DiSEqC A=4,8E, B=13E, C=19,2E, D=4W): pana in
+    0.7.6 se cauta numai pe satelitul canalului pornit, iar pentru altul trebuia pornit intai un canal de pe el.
+    modele: [(slot, modelul tunerului din Components/HdsLnb.citeste)], tunerul cautarii intai. Intra satelitii la care
+    programul ajunge fara sa miste antena: serviti de un LNB fix (_lnb_fix), pe un tuner cu un singur LNB (nimic de
+    comutat) sau cu comutarea stiuta (comutare_din_lnb: portul DiSEqC 1.0, octetul scris de om, toneburst), pe care
+    hds-blindscan o trimite inainte de fiecare trecere; DiSEqC 1.1 numai pe un tuner cu un singur LNB (comanda necomisa
+    nu e in model si programul nu o trimite). cu_comanda=False (adaptorul Vu+, care nu trimite DiSEqC): numai
+    tunerele cu un singur LNB. Pozitia de acum (poz_acum pe slot_acum; None = nestiuta: motor sau mai multi sateliti
+    fara canal de satelit pornit) e mereu in lista, cu tunerul cautarii, ca implicitul sa ramana cautarea de pana
+    acum; cand nu e printre cei fixi (motorul), e prima."""
+    rez, vazute = [], set()
+    for slot, model in modele or []:
+        model = model or {}
+        if model.get('motiv'):
+            continue
+        lnburi = list(model.get('lnburi') or [])
+        # satelitul e al primului LNB anume care il are (ca HdsLnb.lnbPentruSatelit); "toti satelitii" nu intra
+        al_cui = {}
+        for i, lnb in enumerate(lnburi):
+            if not lnb.get('toti'):
+                for p in lnb.get('sateliti') or []:
+                    al_cui.setdefault(p, i)
+        for i, lnb in enumerate(lnburi):
+            if not _lnb_fix(lnb):
+                continue
+            # DiSEqC 1.1 poate cere si comanda necomisa, pe care programul nu o trimite: numai pe un tuner cu un singur LNB
+            if len(lnburi) > 1 and (lnb.get('diseqc') == '1_1' or not (cu_comanda and comutare_din_lnb(lnb))):
+                continue
+            for p in lnb.get('sateliti') or []:
+                if al_cui.get(p) == i and p not in vazute:
+                    vazute.add(p)
+                    rez.append((int(p), slot))
+    if poz_acum in vazute:
+        rez = [(p, slot_acum if p == poz_acum else s) for p, s in rez]
+    else:
+        rez.insert(0, (poz_acum, slot_acum))
+    return rez
+
+
 def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=0, comutare=None):
     """Chemarea programului pentru trecerile date: oscilatoarele in MHz, fiecare trecere 'POL,TON,START,STOP'.
     vuplus: {'adaptor', 'program', 'i2c'} pe Vu+ Solo SE (vezi vuplus_pentru): acelasi protocol, prin HdsOarbaVuplus.
@@ -279,8 +334,24 @@ def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=
     return argv
 
 
-def estimare_s(nr_treceri, trepte=3):
-    return int(nr_treceri) * SECUNDE_PE_TREAPTA.get(int(trepte), SECUNDE_PE_TREAPTA[3])
+def estimare_s(nr_treceri, trepte=3, rata_min=0):
+    """Cat dureaza cautarea, dupa treceri, trepte si rata minima aleasa (sub 1 MSym/s e de ~4 ori mai lunga)."""
+    try:
+        sub1 = 0 < int(rata_min or 0) < RATA_MIC_KSYM
+    except (TypeError, ValueError):
+        sub1 = False
+    tabel = SECUNDE_PE_TREAPTA_SUB1 if sub1 else SECUNDE_PE_TREAPTA
+    return int(nr_treceri) * tabel.get(int(trepte), tabel[3])
+
+
+def text_rotire(secunde):
+    """Cat poate dura rotirea antenei, ca la scanarile prin satelit ("30 de secunde", "un minut": ScanerSatelit)."""
+    secunde = int(secunde or 0) or 60
+    try:
+        from Screens import ScanerSatelit as S
+        return S.text_durata(secunde)
+    except Exception:
+        return text_durata(secunde)
 
 
 def text_durata(secunde):
@@ -323,10 +394,25 @@ def valoare_buna(cheie, valoare):
 
 
 def cerere_din(config):
-    """Alegerile (ecranul sau pagina web) -> cererea cautarii (treceri)."""
+    """Alegerile (ecranul sau pagina web) -> cererea cautarii (treceri). 0.7.7 (WLD): config['pozitie'] = satelitul ales
+    in randul "Satelit" (pozitia_din), dus in cerere ca porneste_pe_receptor sa-l dea lui antena()."""
     pol = config.get('polarizari') or 'ambele'
-    return {'banda': config.get('banda') or 'toata', 'polarizari': ['H', 'V'] if pol == 'ambele' else [pol],
-            'rata_min': int(config.get('rata_min') or 0), 'trepte': trepte_din(config.get('trepte'))}
+    rez = {'banda': config.get('banda') or 'toata', 'polarizari': ['H', 'V'] if pol == 'ambele' else [pol],
+           'rata_min': int(config.get('rata_min') or 0), 'trepte': trepte_din(config.get('trepte'))}
+    poz = pozitie_din(config.get('pozitie'))
+    if poz is not None:
+        rez['pozitie'] = poz
+    return rez
+
+
+def pozitie_din(valoare):
+    """Satelitul ales (pozitia orbitala in zecimi de grad, 0-3599) din ecran sau din pagina web; None = niciunul ales
+    (gol, nestiut), adica satelitul de pana acum: cel pe care sta antena (al canalului pornit)."""
+    try:
+        poz = int(valoare)
+    except (TypeError, ValueError):
+        return None
+    return poz if 0 <= poz < 3600 else None
 
 
 def trepte_din(valoare):
@@ -349,9 +435,16 @@ def text_previzualizare(antena, config):
         return pregatit['eroare']
     n = len(pregatit['treceri'])
     trepte = trepte_din(config.get('trepte'))
-    text = _t('Treceri (bandă × polarizare): %d. Durata: %s.') % (n, text_durata(estimare_s(n, trepte)))
+    text = _t('Treceri (bandă × polarizare): %d. Durata: %s.') % (
+        n, text_durata(estimare_s(n, trepte, config.get('rata_min'))))
     text += ' ' + _t(TEXTE_TREPTE[trepte])
-    if antena.get('motor') or len(antena.get('sateliti') or []) > 1:
+    # 0.7.7 (WLD): satelitii din spatele unui comutator se aleg in randul "Satelit"; nota ramane la motor (antena nu se
+    # roteste) si cand niciun alt satelit nu se poate alege (comutare necunoscuta, adaptorul Vu+)
+    # 0.7.7 (M30): la motor satelitul se alege si el in rand; antena se roteste inainte de cautare
+    if antena.get('rotire'):
+        text += ' ' + _t('Antena se rotește spre %s (până la %s).') % (antena.get('nume') or text_satelit({}),
+                                                                       text_rotire(antena.get('secunde_rotire')))
+    elif len(antena.get('sateliti') or []) > 1 and len(antena.get('alegeri') or []) < 2:
         text += ' ' + _t('Antena nu se mișcă: pentru alt satelit, pornește întâi un canal de pe el.')
     return text
 
@@ -718,6 +811,8 @@ class Cautare(object):
         self.satelit_schimbat = False
         self._candidati = None
         self._nume_pozitii = {}
+        self.secunde_rotire = 0
+        self.opreste_rotirea = None       # pus de partea de receptor in faza ROTIRE: da tunerul rotirii inapoi
 
     # ---- ascultatori
     def adauga_ascultator(self, f):
@@ -742,8 +837,8 @@ class Cautare(object):
     def porneste(self, cerere, osc=None, orbpos=None, cunoscute=None, nume_satelit='', candidati=None,
                  nume_pozitii=None):
         """Porneste cautarea. nume_pozitii: {pozitie: nume} pentru satelitul aflat. Intoarce None sau textul
-        refuzului."""
-        if self.in_curs():
+        refuzului. Din faza ROTIRE (antena a ajuns pe satelitul ales) porneste ca de obicei."""
+        if self.in_curs() and self.faza != ROTIRE:
             return _t('O căutare oarbă e deja în curs pe acest receptor.')
         pregatit = treceri(cerere, osc)
         if pregatit.get('eroare'):
@@ -763,6 +858,29 @@ class Cautare(object):
         self._nume_pozitii = dict(nume_pozitii or {})
         self.t_inceput = self._ceas()
         return self._porneste_etapa(1, self.treceri1)
+
+    def roteste(self, orbpos, nume_satelit='', secunde=0):
+        """0.7.7 (M30): antena cu motor se roteste intai spre satelitul ales (rotirea o face partea de receptor, prin
+        acordul enigma2); ecranul si pagina arata faza ROTIRE, iar porneste() urmeaza cand antena a ajuns. Intoarce None
+        sau textul refuzului."""
+        if self.in_curs():
+            return _t('O căutare oarbă e deja în curs pe acest receptor.')
+        self._goleste()
+        self.faza = ROTIRE
+        self.orbpos = self.orbpos_ales = orbpos
+        self.nume_satelit = nume_satelit or ''
+        self.secunde_rotire = int(secunde or 0)
+        self.t_inceput = self._ceas()
+        self._anunta()
+        return None
+
+    def renunta(self, mesaj):
+        """Cautarea nu mai porneste (rotirea n-a putut lua tunerul, programul a refuzat): EROARE cu mesajul dat."""
+        self.opreste_rotirea = None
+        self.faza = EROARE
+        self.mesaj = mesaj or mesaj_eroare('')
+        self.t_sfarsit = self._ceas()
+        self._anunta()
 
     def _porneste_etapa(self, etapa, lista):
         """O etapa = o lista de treceri, data programului in grupe de cel mult TRECERI_PE_CHEMARE."""
@@ -909,7 +1027,17 @@ class Cautare(object):
 
     # ---- oprire
     def opreste(self):
-        """Cere oprirea curata (programul termina felia in curs). True daca era ceva de oprit."""
+        """Cere oprirea curata (programul termina felia in curs). True daca era ceva de oprit. In faza ROTIRE programul
+        nu ruleaza inca: cautarea se socoteste oprita, iar rotirea, cand se termina, nu mai porneste nimic."""
+        if self.faza == ROTIRE:
+            f, self.opreste_rotirea = self.opreste_rotirea, None
+            try:
+                if f is not None:
+                    f()
+            except Exception as e:
+                print('[HdsCautareOarba] oprirea rotirii: %s' % e)
+            self._termina(OPRIT)
+            return True
         if self.faza not in (CAUTA, A_DOUA):
             return False
         self.faza = OPRESTE
@@ -970,6 +1098,9 @@ class Cautare(object):
         n = self.numere()
         if self.faza == NIMIC:
             return ''
+        if self.faza == ROTIRE:
+            return _t('Antena se rotește spre %s (până la %s).') % (self.nume_satelit or text_satelit({}),
+                                                                       text_rotire(self.secunde_rotire))
         if self.faza in (CAUTA, A_DOUA):
             return _t('Treapta %d din %d: %d%%. Găsite: %d, noi: %d.') % (
                 min(self.etapa, self.trepte), self.trepte, self.procent, len(self.gasite), n['noi'])
@@ -1121,35 +1252,177 @@ def _repune_canalul():
         print('[HdsCautareOarba] repunerea canalului: %s' % e)
 
 
-def antena(sesiune):
+def tuner_cautare(S, nim, sesiune):
+    """Tunerul cautarii oarbe (0.7.7, SCN; tfrc LinuxSat 164155: pana acum mereu primul tuner de satelit). Antena nu se
+    misca, deci se cauta acolo unde sta antena canalului pornit: tunerul canalului de satelit pornit acum, cand e unul
+    cu antena pusa (ScanerSatelit.slot_serviciu); altfel tunerul care are pozitia de acum (ultima pozitie a motorului,
+    ScanerSatelit.pozitie_curenta), daca se stie; altfel primul (slot_satelit), ca pana acum. Cat merge o cautare
+    (canalul e oprit) si cat ii stau rezultatele pe ecran fara alt canal pornit, tunerul ramane al ei (cerere["tuner"]),
+    ca ecranul, pagina si "Scaneaza canalele" sa nu treaca pe alt tuner. ScanerSatelit = S."""
+    sloturi = S.sloturi_satelit(nim)
+    try:
+        c = cautare()
+        al_cautarii = (getattr(c, 'cerere', None) or {}).get('tuner')
+        in_curs, ramasa = c.in_curs(), getattr(c, 'faza', NIMIC) != NIMIC
+    except Exception as e:
+        print('[HdsCautareOarba] tunerul cautarii: %s' % e)
+        al_cautarii, in_curs, ramasa = None, False, False
+    if al_cautarii not in sloturi:
+        al_cautarii = None
+    if al_cautarii is not None and in_curs:
+        return al_cautarii
+    slot, _pozitie = S.slot_serviciu(sesiune)
+    if slot is not None and slot in sloturi:
+        return slot
+    if al_cautarii is not None and ramasa:
+        return al_cautarii
+    poz = S.pozitie_curenta(sesiune)
+    slot = S.slot_pentru(nim, poz) if poz is not None else None
+    return slot if slot is not None else S.slot_satelit(nim)
+
+
+def _modele_tunere(S, nim, slot):
+    """[(slot, modelul tunerului din Components/HdsLnb.citeste)]: tunerul cautarii intai, apoi celelalte tunere de
+    satelit cu antena pusa (S.sloturi_satelit), fiecare citit o singura data."""
+    try:
+        from Components import HdsLnb
+        sloturi = [slot] + [s for s in S.sloturi_satelit(nim) if s != slot]
+    except Exception as e:
+        print('[HdsCautareOarba] tunerele: %s' % e)
+        return []
+    rez = []
+    for s in sloturi:
+        try:
+            rez.append((s, HdsLnb.citeste(s, nim)))
+        except Exception as e:
+            print('[HdsCautareOarba] setarile tunerului %s: %s' % (s, e))
+    return rez
+
+
+def alegeri_motor(S, nim, slot, sateliti, alegeri):
+    """0.7.7 (M30): la tunerul cautarii cu motor (USALS sau DiSEqC 1.2) randul "Satelit" are si
+    satelitii la care antena se poate roti: ai tunerului, in ordinea lui, fara cei spre care nucleul nu trimite comanda
+    (locul antenei nestabilit, sub orizont: HdsLocul.refuzUsals) si fara cei deja in alegeri -> [(pozitie, slot)].
+    Pana acum la motor ramanea numai pozitia de acum, cu nota "Antena nu se misca"."""
+    try:
+        if not S.are_motor(nim, slot):
+            return []
+    except Exception:
+        return []
+    try:
+        from Components import HdsLocul
+        refuz = HdsLocul.refuzUsals
+    except Exception:
+        refuz = None
+    vazute = set(p for p, _s in alegeri or [])
+    rez = []
+    for p, _n in sateliti or []:
+        if p is None or p in vazute:
+            continue
+        try:
+            if refuz is not None and refuz(slot, p):
+                continue
+        except Exception:
+            pass
+        vazute.add(p)
+        rez.append((int(p), slot))
+    return rez
+
+
+def secunde_rotire(de_la, la):
+    """Cat poate dura cel mult rotirea antenei de pe de_la pe la: termenul acordului care o roteste
+    (Hds/DabT2/tuner.Tuner: asezarea dupa arc + 45 s, cel mult 180 s); cu semnal la sosire se termina mai devreme."""
+    try:
+        from Hds.DabT2 import tuner as hds_tuner
+        return min(int(hds_tuner.secunde_asezare(hds_tuner.arc_grade(de_la, la))) + 45, 180)
+    except Exception:
+        return 60
+
+
+FEC_TEXT = {0: 'auto', 1: '1/2', 2: '2/3', 3: '3/4', 4: '5/6', 5: '7/8', 6: '8/9', 7: '3/5', 8: '4/5', 9: '9/10'}
+MODULATIE_TEXT = {1: 'QPSK', 2: '8PSK', 3: 'QAM16', 4: '16APSK', 5: '32APSK'}
+ROLLOFF_TEXT = {0: '0.35', 1: '0.25', 2: '0.20'}
+
+
+def tp_rotire(poz, cunoscute):
+    """Transponderul acordului care roteste antena (forma lui Hds/DabT2/tuner.parametri): cunoscutul cel mai lat al
+    satelitului (rata de simbol cea mai mare: de obicei se prinde cel mai usor, iar cu semnal acordul se termina cand
+    antena a ajuns; pe Octagonul de proba un 4000 kSym/s neprins a tinut rotirea 70 s in loc de ~20), cu FEC-ul,
+    modulatia si roll-off-ul lui; fara cunoscute, unul oarecare pe pozitie: comanda motorului pleaca oricum."""
+    bune = sorted(cunoscute or [], key=lambda t: (-int(t.get('symbol_rate') or 0),
+                                                  int(t.get('system') or 0) != SISTEM_DVB_S))
+    if bune:
+        t = bune[0]
+        s2 = int(t.get('system') or 0) == SISTEM_DVB_S2
+        return {'frecventa': int(t.get('frequency') or 0), 'sr': int(t.get('symbol_rate') or 0),
+                'pol': POLARIZARI[int(t.get('polarisation') or 0) % 4], 'pozitie': int(poz),
+                'sistem': 'DVB-S2' if s2 else 'DVB-S',
+                'modulatie': MODULATIE_TEXT.get(int(t.get('modulation') or 1), 'QPSK'),
+                'fec': FEC_TEXT.get(int(t.get('fec') or 0), 'auto'),
+                'rolloff': ROLLOFF_TEXT.get(int(t.get('rolloff') or 0), '0.35')}
+    return {'frecventa': 11766000, 'sr': 27500000, 'pol': 'H', 'pozitie': int(poz), 'sistem': 'DVB-S',
+            'modulatie': 'QPSK', 'fec': 'auto'}
+
+
+def antena(sesiune, pozitie=None):
     """Ce stie receptorul despre antena tunerului de satelit: {"slot", "pozitie", "nume", "osc", "motor",
-    "sateliti", "comutare", "motiv"}; motiv = de ce nu se poate cauta (text), altfel ''. comutare: portul DiSEqC /
-    toneburst al satelitului aratat (comutare_din_lnb), numai cand satelitul e stiut."""
+    "sateliti", "comutare", "alegeri", "motiv"}; motiv = de ce nu se poate cauta (text), altfel ''. comutare: portul
+    DiSEqC / toneburst al satelitului aratat (comutare_din_lnb), numai cand satelitul e stiut.
+
+    0.7.7 (WLD): alegeri = [(pozitie, nume, slot)], satelitii randului "Satelit" (alegeri_satelit; pozitia None =
+    "cel pe care sta antena acum"); `pozitie` = satelitul ales acolo: cand e printre alegeri, tot ce intoarce (tunerul,
+    oscilatoarele, comutarea, numele) e al lui; altfel ramane satelitul de pana acum (al canalului pornit)."""
     from Screens import ScanerSatelit as S
     rez = {'slot': None, 'pozitie': None, 'nume': '', 'osc': None, 'motor': False, 'sateliti': [], 'comutare': None,
-           'motiv': ''}
+           'alegeri': [], 'motiv': '', 'rotire': False, 'de_la': None, 'secunde_rotire': 0}
     nim = S._nimmanager()
-    slot = S.slot_satelit(nim) if nim is not None else None
+    slot = tuner_cautare(S, nim, sesiune) if nim is not None else None
     if slot is None:
         rez['motiv'] = _t('Receptorul nu are tuner de satelit.')
         return rez
+    sateliti = S.sateliti_tuner(nim, slot)
+    poz = S.pozitie_curenta(sesiune) if sateliti else None
+    pozitii = [p for p, _n in sateliti]
+    if poz not in pozitii:
+        poz = pozitii[0] if len(pozitii) == 1 else None
+    poz_antena, slot_antena = poz, slot
+    modele = _modele_tunere(S, nim, slot) if sateliti else []
+    if sateliti:
+        try:
+            nume = dict(S.sateliti_receptor(nim))
+        except Exception:
+            nume = {}
+        nume.update(sateliti)
+        alegeri = alegeri_satelit(modele, slot, poz, cu_comanda=model_vuplus() is None)
+        alegeri += alegeri_motor(S, nim, slot, sateliti, alegeri)
+        rez['alegeri'] = [(p, (nume.get(p) or S.text_pozitie(p)) if p is not None else text_satelit({}), s)
+                          for p, s in alegeri]
+        ales = pozitie_din(pozitie)
+        if ales is not None and ales != poz:
+            for p, s in alegeri:
+                if p == ales:
+                    slot, poz = s, p
+                    sateliti = S.sateliti_tuner(nim, slot)
+                    pozitii = [x for x, _n in sateliti]
+                    break
     rez['slot'] = slot
-    rez['sateliti'] = S.sateliti_tuner(nim, slot)
+    rez['sateliti'] = sateliti
     rez['motor'] = bool(S.are_motor(nim, slot))
+    # 0.7.7 (M30): satelitul ales nu e cel pe care sta antena cu motor: se roteste intai (porneste_pe_receptor)
+    rez['de_la'] = poz_antena
+    rez['rotire'] = bool(rez['motor'] and poz is not None and poz != poz_antena and slot == slot_antena)
+    rez['secunde_rotire'] = secunde_rotire(poz_antena, poz) if rez['rotire'] else 0
     if not rez['sateliti']:
         rez['motiv'] = _t('Tunerul de satelit nu are niciun satelit configurat. Configurează antena în „Setări tuner”.')
         return rez
-    poz = S.pozitie_curenta(sesiune)
-    pozitii = [p for p, _n in rez['sateliti']]
-    if poz not in pozitii:
-        poz = pozitii[0] if len(pozitii) == 1 else None
     rez['pozitie'] = poz
     if poz is not None:
         rez['nume'] = dict(rez['sateliti']).get(poz) or S.text_pozitie(poz)
     osc = None
     try:
         from Components import HdsLnb
-        lnb = HdsLnb.lnbPentruSatelit(slot, poz if poz is not None else pozitii[0], nim)
+        model = dict(modele).get(slot)
+        lnb = HdsLnb.lnbPentruSatelit(slot, poz if poz is not None else pozitii[0], nim, model=model)
         if lnb is not None:
             osc = HdsLnb.oscilatoareKhz(lnb)
             if osc is None:
@@ -1184,7 +1457,8 @@ def porneste_pe_receptor(sesiune, cerere):
     pe_vuplus = model_vuplus() is not None
     if not pe_vuplus and not os.path.exists(PROGRAM):
         return _t('Programul de căutare oarbă nu e instalat pe acest receptor. Îl aduce actualizarea software.')
-    a = antena(sesiune)
+    # 0.7.7 (WLD): satelitul ales in randul "Satelit" (cerere["pozitie"]); fara el, cel pe care sta antena
+    a = antena(sesiune, cerere.get('pozitie'))
     if a['motiv']:
         return a['motiv']
     cerere_omului = cerere
@@ -1234,11 +1508,55 @@ def porneste_pe_receptor(sesiune, cerere):
     except Exception as e:
         print('[HdsCautareOarba] tunerul pentru cautare (DAB+ / DVB-T2): %s' % e)
     nume = dict((p, n or S.text_pozitie(p)) for p, n in a['sateliti'])
-    refuz = c.porneste(cerere, a['osc'], poz, cunoscute, a['nume'], candidati if len(sateliti) > 1 else None, nume)
+    if a.get('rotire'):
+        refuz = _roteste_apoi_cauta(c, a, cerere, poz, cunoscute, candidati if len(sateliti) > 1 else None, nume)
+    else:
+        refuz = c.porneste(cerere, a['osc'], poz, cunoscute, a['nume'], candidati if len(sateliti) > 1 else None, nume)
     if refuz:
         _dupa_schimbare(c)
         return refuz
     _porneste_ceasul()
+    return None
+
+
+def _roteste_apoi_cauta(c, a, cerere, poz, cunoscute, candidati, nume_pozitii):
+    """0.7.7 (M30): antena cu motor, satelit ales altul decat cel pe care sta: acord enigma2 pe un transponder al
+    satelitului ales (SEC trimite comanda motorului, Hds/DabT2/tuner.Tuner asteapta oprirea si semnalul, cel mult
+    termenul lui), apoi tunerul dat inapoi si programul pornit ca de obicei. Faza ROTIRE pe ecran si in pagina; EXIT o
+    opreste (tunerul rotirii se da inapoi imediat). Fara semnal la sosire cautarea porneste totusi: antena a ajuns cat a
+    putut, iar programul isi afla singur satelitul dupa prima treapta."""
+    try:
+        from Hds.DabT2 import tuner as hds_tuner
+        t = hds_tuner.Tuner('oarba')
+    except Exception as e:
+        print('[HdsCautareOarba] tunerul rotirii: %s' % e)
+        return mesaj_eroare('')
+    refuz = c.roteste(poz, a.get('nume'), a.get('secunde_rotire'))
+    if refuz:
+        return refuz
+    c.opreste_rotirea = t.elibereaza
+
+    def gata(ok, mesaj):
+        alocat = bool(getattr(t, 'alocari', 0))
+        try:
+            t.elibereaza()
+        except Exception as e:
+            print('[HdsCautareOarba] eliberarea tunerului rotirii: %s' % e)
+        if c.faza != ROTIRE:
+            return                          # oprita in timpul rotirii
+        c.opreste_rotirea = None
+        if not alocat:
+            # acordul n-a pornit (tunerul ocupat): antena nu s-a miscat, deci nu se cauta pe alt satelit
+            c.renunta(mesaj)
+            return
+        print('[HdsCautareOarba] rotirea spre %s gata (%s): pornesc cautarea' % (poz, 'semnal' if ok else mesaj))
+        refuz2 = c.porneste(cerere, a['osc'], poz, cunoscute, a['nume'], candidati, nume_pozitii)
+        if refuz2:
+            c.renunta(refuz2)
+        else:
+            _porneste_ceasul()
+
+    t.acordeaza(tp_rotire(poz, cunoscute), gata)
     return None
 
 
@@ -1263,7 +1581,7 @@ def vuplus_pentru(slot, **unde):
 
 
 def _arata(text):
-    """Un mesaj pe televizor dupa o lucrare in fundal (instalarea programului Vu+)."""
+    """Un mesaj pe televizor dupa o lucrare in fundal (instalarea programului Vu+), cand ecranul cautarii e inchis."""
     try:
         from Tools import Notifications
         from Screens.MessageBox import MessageBox
@@ -1272,18 +1590,22 @@ def _arata(text):
         print('[HdsCautareOarba] %s (%s)' % (text, e))
 
 
-_TIMERE = []
+class _CeasSecunda(object):
+    """Bataia de o secunda a instalarii programului Vu+ (eTimer), una singura pentru toti pasii."""
 
+    def __init__(self, f):
+        from enigma import eTimer
+        self._t = eTimer()
+        try:
+            self._t.callback.append(f)
+        except AttributeError:
+            self._t.timeout.get().append(f)
 
-def _dupa_ms(ms, f):
-    from enigma import eTimer
-    t = eTimer()
-    try:
-        t.callback.append(f)
-    except AttributeError:
-        t.timeout.get().append(f)
-    _TIMERE[:] = [t]
-    t.start(int(ms), True)
+    def start(self):
+        self._t.start(1000, False)
+
+    def stop(self):
+        self._t.stop()
 
 
 def _pe_fir(lucru, gata):
@@ -1301,20 +1623,57 @@ def _pe_fir(lucru, gata):
     threading.Thread(target=alearga, name='HdsCautareOarba', daemon=True).start()
 
 
+# 0.7.7 (BSC, e-mailul 6525, Vu+ Solo SE 0.7.6): fiecare pas al aducerii programului Vu+ are o limita de timp; pana atunci
+# ecranul putea ramane pe „se descarca” fara sfarsit, iar esecul aparea numai ca fereastra, abia dupa inchiderea ecranelor.
+# Acum pasul curent, cu timpul scurs, si motivul esecului se vad pe ecranul cautarii oarbe si in pagina web.
+LIMITE_S = {'citesc': 120, 'lista': 300, 'astept': 300, 'instalare': 300}
+TEXTE_PAS = {
+    'citesc': N_('Pregătesc căutarea oarbă: citesc lista de programe (%s).'),
+    'lista': N_('Pregătesc căutarea oarbă: descarc lista de programe de pe internet (%s).'),
+    'astept': N_('Pregătesc căutarea oarbă: aștept să se termine altă instalare (%s).'),
+    'instalare': N_('Pregătesc căutarea oarbă: instalez programul Vu+ (%s). Căutarea pornește singură după aceea.'),
+}
+TEXTE_TERMEN = {
+    'citesc': N_('Lista de programe nu s-a putut citi în %d minute. Încearcă din nou.'),
+    'lista': N_('Lista de programe de pe internet nu s-a descărcat în %d minute. Verifică legătura la internet și '
+                'încearcă din nou.'),
+    'astept': N_('Altă instalare ține receptorul ocupat de %d minute. Încearcă din nou după ce se termină.'),
+    'instalare': N_('Instalarea programului Vu+ pentru căutarea oarbă nu s-a terminat în %d minute. Verifică legătura '
+                    'la internet și încearcă din nou.'),
+}
+# cat timp se mai arata un esec (ecranul cautarii, pagina web), daca omul nu incearca din nou
+ESEC_ARATAT_S = 600
+
+
+def _ceas_text(secunde):
+    secunde = max(0, int(secunde))
+    return '%d:%02d' % (secunde // 60, secunde % 60)
+
+
 class InstalareVuplus(object):
     """Aduce o singura data programul Vu+ (PACHET_VUPLUS) din feed, pe drumul Extensiilor (catalogul; lista de pe
-    internet reimprospatata daca pachetul nu e in ea; lucrarea opkg), apoi cheama dupa(). Numai pe firul interfetei.
-    Faze: nimic, citesc, lista, instalare, gata, eroare."""
+    internet reimprospatata daca pachetul nu e in ea; lucrarea opkg), apoi cheama dupa() (care intoarce None sau textul
+    unui refuz). Numai pe firul interfetei. Faze: nimic, citesc, lista, astept (alta lucrare opkg), instalare, gata, eroare.
+    text(): pasul curent cu timpul scurs sau, dupa un esec, ce a cazut; il arata ecranul cautarii (ascultatorii) si pagina
+    web (stare()). Fara ascultator (ecranul inchis), esecul vine si ca fereastra. Fiecare pas are limita lui (LIMITE_S)."""
 
-    def __init__(self, X=None, pe_fir=None, dupa_ms=None, arata=None):
+    def __init__(self, X=None, pe_fir=None, ceas=None, arata=None, timp=None):
         self._x = X
         self._pe_fir = pe_fir or _pe_fir
-        self._dupa_ms = dupa_ms or _dupa_ms
+        self._fabrica_ceas = ceas or _CeasSecunda
+        self._ceas = None
         self._arata = arata or _arata
+        self._timp = timp or time.time
         self.faza = 'nimic'
         self.dupa = None
         self.lucrare = None
-        self._lista_ceruta = False
+        self.eroare = ''
+        self._cand_eroare = 0
+        self._din = 0                 # cand a inceput pasul curent
+        self._citire = 0              # numarul citirii: raspunsul unei citiri ramase dupa termen nu mai conteaza
+        self._lista_ceruta = False    # descarcarea listei pornita de noi (abia dupa ea lipsa pachetului e un raspuns)
+        self._descarcare_veche = None  # STARE['descarcare'] dinaintea descarcarii noastre (motivul nu se ia de acolo)
+        self._ascultatori = []
 
     def X(self):
         if self._x is None:
@@ -1322,65 +1681,179 @@ class InstalareVuplus(object):
             self._x = HdsExtensiiLucru
         return self._x
 
+    # ---------------------------------------------------------------- starea, pentru ecran si pagina
     def in_curs(self):
-        return self.faza in ('citesc', 'lista', 'instalare')
+        return self.faza in ('citesc', 'lista', 'astept', 'instalare')
 
+    def esec_recent(self):
+        return self.faza == 'eroare' and self._timp() - self._cand_eroare < ESEC_ARATAT_S
+
+    def text(self):
+        if self.in_curs():
+            return _t(TEXTE_PAS[self.faza]) % _ceas_text(self._timp() - self._din)
+        if self.esec_recent():
+            return self.eroare
+        return ''
+
+    def stare(self):
+        return {'faza': self.faza, 'in_curs': self.in_curs(), 'eroare': self.esec_recent(), 'text': self.text()}
+
+    def adauga_ascultator(self, f):
+        if f not in self._ascultatori:
+            self._ascultatori.append(f)
+
+    def scoate_ascultator(self, f):
+        if f in self._ascultatori:
+            self._ascultatori.remove(f)
+
+    def _anunta(self):
+        for f in list(self._ascultatori):
+            try:
+                f(self)
+            except Exception as e:
+                print('[HdsCautareOarba] ascultatorul instalarii: %s' % e)
+
+    # ---------------------------------------------------------------- pasii
     def porneste(self, dupa):
         self.dupa = dupa
         if self.in_curs():
             return
         self._lista_ceruta = False
+        self.eroare = ''
         self._citeste()
 
+    def _pas(self, faza):
+        self.faza = faza
+        self._din = self._timp()
+        if self._ceas is None:
+            self._ceas = self._fabrica_ceas(self._bataie)
+        self._ceas.start()
+        self._anunta()
+
+    def _opreste_ceasul(self):
+        if self._ceas is not None:
+            self._ceas.stop()
+
     def _citeste(self):
-        self.faza = 'citesc'
-        self._pe_fir(self.X().incarcaCatalog, self._catalog)
+        self._citire += 1
+        n = self._citire
+        self._pas('citesc')
+        self._pe_fir(self.X().incarcaCatalog, lambda catalog, eroare: self._catalog(catalog, eroare, n))
 
     def _esec(self, text):
         self.faza = 'eroare'
+        self.eroare = text
+        self._cand_eroare = self._timp()
         self.dupa = None
-        self._arata(text)
+        self._opreste_ceasul()
+        print('[HdsCautareOarba] programul Vu+: %s' % text)
+        if not self._ascultatori:
+            self._arata(text)
+        self._anunta()
 
-    def _catalog(self, catalog, eroare):
+    def _ocupat(self):
+        """o descarcare a listei sau o alta lucrare opkg (televizor sau pagina) in curs, ori rezerva feedului programata"""
+        X = self.X()
+        return bool(X.descarcareInCurs() or X.lucrareInCurs() or X.rezervaAsteapta())
+
+    def _stare_descarcare(self):
+        return (getattr(self.X(), 'STARE', None) or {}).get('descarcare')
+
+    def _motiv_lista(self):
+        """motivul dat de opkg pentru descarcarea listei pornita de noi, cand a cazut, sau '' (nu al uneia mai vechi)"""
+        d = self._stare_descarcare()
+        if not d or d is self._descarcare_veche or d.get('cod') in (0, None):
+            return ''
+        return d.get('motiv') or ''
+
+    def _descarca_lista(self):
+        """opkg update, pornit de noi, numai cand receptorul e liber; altfel bataia il porneste cand se elibereaza"""
+        if self._ocupat():
+            return False
+        self._descarcare_veche = self._stare_descarcare()
+        self._lista_ceruta = True
+        self.X().pornesteDescarcarea()
+        return True
+
+    def _catalog(self, catalog, eroare, n=None):
+        if (n is not None and n != self._citire) or self.faza != 'citesc':
+            return
         if eroare is not None or catalog is None:
             return self._esec(_t('Nu am putut citi lista de programe. Încearcă din nou.'))
         X = self.X()
-        ocupat = X.motivOcupat()
-        if ocupat is not None:
-            return self._esec(ocupat[0])
         p = catalog._toate.get(PACHET_VUPLUS)
         if p is None:
             if self._lista_ceruta:
+                motiv = self._motiv_lista()
+                if motiv:
+                    return self._esec(_t('Lista de programe de pe internet nu s-a descărcat: %s') % motiv)
                 return self._esec(_t('Programul Vu+ pentru căutarea oarbă nu e în lista de pe internet. Verifică '
                                      'legătura la internet și încearcă din nou.'))
-            self._lista_ceruta = True
-            if not X.descarcareInCurs():
-                X.pornesteDescarcarea()
-            self.faza = 'lista'
-            self._dupa_ms(1000, self._asteapta_lista)
+            self._descarca_lista()
+            # lista se citeste din nou la prima bataie dupa sfarsitul descarcarii (sau o porneste bataia, daca acum
+            # lucra alt opkg)
+            self._pas('lista')
             return
+        if self._ocupat():
+            self._pas('astept')
+            return
+        ocupat = X.motivOcupat()
+        if ocupat is not None:
+            return self._esec(ocupat[0])
         plan, eroare_plan = X.planInstalare(catalog, p)
         if plan is None:
             return self._esec(eroare_plan[0])
-        self.faza = 'instalare'
         from Components.PluginComponent import plugins
+        # un program, nu o extensie: fara „Reporneste interfata” in rezultatul lucrarii
+        plan['repornire'] = False
+        self._pas('instalare')
         self.lucrare = X.pornesteLucrarea(plan, plugins=plugins, din_web=False)
         self.lucrare.asculta(self._lucrare)
 
-    def _asteapta_lista(self):
-        if self.X().descarcareInCurs():
-            self._dupa_ms(1000, self._asteapta_lista)
+    def _bataie(self):
+        """o data pe secunda, cat ruleaza un pas: sfarsitul asteptarii, limita de timp, textul cu secundele"""
+        if not self.in_curs():
+            self._opreste_ceasul()
             return
-        self._citeste()
+        if self._timp() - self._din >= LIMITE_S[self.faza]:
+            return self._termen()
+        if self.faza in ('lista', 'astept') and not self._ocupat():
+            if self.faza == 'lista' and not self._lista_ceruta:
+                self._descarca_lista()
+            else:
+                return self._citeste()
+        self._anunta()
+
+    def _termen(self):
+        faza = self.faza
+        l, self.lucrare = self.lucrare, None
+        if faza == 'instalare' and l is not None:
+            l.lasa(self._lucrare)
+            # opkg tacut de un minut (retea blocata): oprit, ca la EXIT in Extensii; altfel isi termina treaba singur
+            try:
+                if l.poateOpri():
+                    l.opreste()
+            except Exception as e:
+                print('[HdsCautareOarba] oprirea instalarii: %s' % e)
+        self._esec(_t(TEXTE_TERMEN[faza]) % (LIMITE_S[faza] // 60))
 
     def _lucrare(self, fel, *date):
-        if fel != 'gata':
+        if fel != 'gata' or self.faza != 'instalare':
             return
-        self.lucrare = None
+        l, self.lucrare = self.lucrare, None
+        rez = getattr(l, 'rezultat', None) or {}
+        if rez and not rez.get('reusit'):
+            motiv = rez.get('stare') or ''
+            if motiv:
+                return self._esec(_t('Programul Vu+ pentru căutarea oarbă nu s-a instalat: %s') % motiv)
+            return self._esec(_t('Programul Vu+ pentru căutarea oarbă nu s-a putut instala.'))
         self.faza = 'gata'
+        self._opreste_ceasul()
         dupa, self.dupa = self.dupa, None
-        if dupa is not None:
-            dupa()
+        refuz = dupa() if dupa is not None else None
+        if refuz:
+            return self._esec(refuz)
+        self._anunta()
 
 
 _INSTALARE = []
@@ -1393,24 +1866,18 @@ def instalare_vuplus():
 
 
 def _instaleaza_vuplus(sesiune, cerere, vu, i=None):
-    """Porneste aducerea programului Vu+ si, la sfarsit, cautarea ceruta (fara alt pas al omului). Intoarce textul de aratat."""
+    """Porneste aducerea programului Vu+ si, la sfarsit, cautarea ceruta (fara alt pas al omului). Intoarce textul de aratat
+    (pasul curent sau esecul); ecranul cautarii si pagina web il urmaresc apoi prin instalare_vuplus()."""
     import os
     i = i or instalare_vuplus()
-    if i.in_curs():
-        return _t('Programul Vu+ pentru căutarea oarbă se instalează. Căutarea pornește singură după instalare.')
 
     def dupa():
         if not os.path.exists(vu['program']):
-            _arata(_t('Instalarea programului Vu+ pentru căutarea oarbă nu a reușit. Verifică legătura la internet '
-                      'și încearcă din nou.'))
-            return
-        refuz = porneste_pe_receptor(sesiune, cerere)
-        if refuz:
-            _arata(refuz)
+            return _t('Instalarea programului Vu+ pentru căutarea oarbă nu a reușit. Verifică legătura la internet '
+                      'și încearcă din nou.')
+        return porneste_pe_receptor(sesiune, cerere)
     i.porneste(dupa)
-    if i.faza == 'eroare':
-        return _t('Programul Vu+ pentru căutarea oarbă nu s-a putut instala.')
-    return _t('Aduc programul Vu+ pentru căutarea oarbă (o singură dată). Căutarea pornește singură după instalare.')
+    return i.text() or _t('Programul Vu+ pentru căutarea oarbă se instalează. Căutarea pornește singură după instalare.')
 
 
 def scaneaza_canalele(sesiune):
@@ -1423,10 +1890,13 @@ def scaneaza_canalele(sesiune):
         from enigma import eDVBFrontendParametersSatellite
         from Screens.ServiceScan import ServiceScan
         from Screens import ScanerSatelit as S
-        a = antena(sesiune)
+        # pe tunerul pe care s-a cautat (0.7.7, SCN), nu pe cel al canalului pornit intre timp
+        slot = (c.cerere or {}).get('tuner')
+        if slot is None:
+            slot = antena(sesiune)['slot']
         parametri = [S.in_parametri(eDVBFrontendParametersSatellite, tp) for tp in lista
                      if not S.motiv_refuz(tp)]
-        sesiune.open(ServiceScan, [{"transponders": parametri, "feid": a['slot'], "flags": 0,
+        sesiune.open(ServiceScan, [{"transponders": parametri, "feid": slot, "flags": 0,
                                     "hds_fel": "satelit/oarba"}])
     except Exception as e:
         print('[HdsCautareOarba] ServiceScan: %s' % e)

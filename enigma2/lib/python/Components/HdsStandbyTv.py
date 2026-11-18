@@ -180,6 +180,8 @@ OPRIRE_ASTEAPTA_S = 0.5     # oprirea completa: cat asteapta scrierea CEC (firul
 OPRIRE_LINIE_S = 0.35       # ... si apoi cat pleaca mesajele pe fir: 0.7.5 CEC4, doua <Standby> (catre televizor si catre
                             # toti), ~52 ms pe fir fiecare + 17 ms pauza, plus reincercari de ~60 ms; pe SF8008 write() se
                             # intoarce in 0-18 ms, inainte ca mesajul sa plece (masurat pe SF8008, ms= in randul "trimis")
+TEXT_OPRIRE_S = 1.0         # 0.7.7 (OSD): „Receptorul se oprește...” (Screens/Standby.py) sta pe ecran macar atat inainte
+                            # de „off” pe HDMI; timpul CEC de mai sus intra in el. CEC poate stinge televizorul mai devreme.
 PAZA_MS = 2500
 PAZA_LIMITA = 30            # rescrieri ale lui „off” pe ora
 CULORI_DUPA_MS = 2000       # privirea HdmiColors dupa „on”
@@ -2719,9 +2721,11 @@ class StandbyTv(object):
 				pass
 		return a
 
-	def laOprire(self, dormi=None):
+	def laOprire(self, dormi=None, desenatLa=None):
 		"""Din Screens/Standby.py, la oprirea completa (TryQuitMainloop 1), chiar inainte de quitMainloop; la repornire
 		(2, 3 si celelalte) Standby.py nu o cheama. Din standby nimic (televizorul si iesirea au fost tratate la intrare).
+		0.7.7 (OSD): desenatLa = ora (time.monotonic) la care Standby.py a desenat „Receptorul se oprește...”; „off” pe HDMI
+		se scrie abia dupa TEXT_OPRIRE_S de la desen (se asteapta numai cat a ramas dupa CEC), ca textul sa se vada.
 		0.7.5 CEC3, ca OE-Alliance (handle_deepstandby_events si tv_standby_notinputactive = Da din fabrica): cu "Stinge
 		si televizorul (CEC)" aleasa pleaca MEREU <Standby>, oricare ar fi sursa activa dupa mesaje (inainte numai
 		<Inactive Source> cand receptorul credea ca televizorul arata altceva: Samsungul lui tamiciav7 ramanea aprins),
@@ -2763,15 +2767,22 @@ class StandbyTv(object):
 				except Exception as e:
 					_jurnal("CEC la oprirea completa: %r" % (e,), "cec-oprire")
 		hdmi = "neatins"
+		textul = "-"
 		try:
 			if c.hdmi_oprit.value and os.path.exists(IESIRE):
+				if desenatLa is not None:
+					ramas = TEXT_OPRIRE_S - (time.monotonic() - desenatLa)
+					if ramas > 0:
+						(dormi or time.sleep)(min(ramas, TEXT_OPRIRE_S))
+					textul = "%.2fs" % (time.monotonic() - desenatLa)
 				hdmi = "off" if self._opresteIesirea() else "off nescris"
 		except Exception as e:
 			_jurnal("iesirea HDMI la oprirea completa: %r" % (e,), "cec-oprire")
-		# scris = <Standby> catre televizor, difuzat = <Standby> catre toti (CEC4); None = scrierea nu s-a terminat la timp
-		_jurnal("CEC la oprirea completa: mesaj=%s %s scris=%s difuzat=%s activ=%s pe_ecran=%s hdmi=%s" % (
-			mesaj, "trimis" if trimis else "netrimis", rezultat.get("tv"), rezultat.get("toti"), activ, pe_ecran, hdmi),
-			"cec-oprire-mesaj")
+		# scris = <Standby> catre televizor, difuzat = <Standby> catre toti (CEC4); None = scrierea nu s-a terminat la timp;
+		# textul = cat a stat „Receptorul se oprește...” pe ecran inainte de „off” (0.7.7, OSD; "-" fara text sau fara off)
+		_jurnal("CEC la oprirea completa: mesaj=%s %s scris=%s difuzat=%s activ=%s pe_ecran=%s hdmi=%s textul=%s" % (
+			mesaj, "trimis" if trimis else "netrimis", rezultat.get("tv"), rezultat.get("toti"), activ, pe_ecran, hdmi,
+			textul), "cec-oprire-mesaj")
 		return trimis
 
 	# ---- aprinderea televizorului (trezire si pornirea receptorului)
@@ -3075,10 +3086,11 @@ def laIesire():
 		_jurnal("iesirea din standby: %r" % (e,), "iesire")
 
 
-def laOprire():
-	"""Din Screens/Standby.py (TryQuitMainloop), numai la oprirea completa, chiar inainte de quitMainloop."""
+def laOprire(desenatLa=None):
+	"""Din Screens/Standby.py (TryQuitMainloop), numai la oprirea completa, chiar inainte de quitMainloop; desenatLa =
+	ora desenului textului de oprire (0.7.7, OSD), vezi HdsStandbyTv.laOprire."""
 	try:
-		return instanta().laOprire()
+		return instanta().laOprire(desenatLa=desenatLa)
 	except Exception as e:
 		_jurnal("oprirea completa: %r" % (e,), "oprire")
 		return False

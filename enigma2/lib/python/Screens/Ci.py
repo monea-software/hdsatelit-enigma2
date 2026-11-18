@@ -56,7 +56,7 @@ def ciplusTextCheieRefuzata():
 
 def ciplusMesajCheieRefuzata(slot):
 	"""Mesajul de pe ecran in locul imaginii oprite fara explicatie."""
-	return _("Modulul CI+ din slotul %d funcționează, dar receptorul nu poate folosi cheia lui de protecție, așa că pe canalele protejate CI+ imaginea se oprește după câteva secunde. Receptorul a încercat singur toate dispozitivele de descifrare potrivite. Scrieți-ne pe forum modelul receptorului și canalul.") % (slot + 1)
+	return _("Modulul CI+ din slotul %d funcționează, dar receptorul nu poate folosi cheia lui de protecție, așa că pe canalele protejate CI+ imaginea se oprește după câteva secunde. Receptorul a încercat singur toate căile de descifrare pe care le cunoaște. Este o greșeală a noastră și o reparăm într-o actualizare; nu trebuie să faci nimic.") % (slot + 1)
 
 
 def anuntaCheieRefuzata(slot, acum=None, standby=None):
@@ -198,6 +198,7 @@ def InitCiConfig():
 		config.ci[slot].disable_operator_profile.slotid = slot
 		config.ci[slot].disable_operator_profile.addNotifier(setCIPlusOption, initial_call=False)
 		# „Automat” (HD Satelit): receptorul alege singur dispozitivul CA care primeste cheia CI+; 0-3 ca in OE-Alliance
+		# (din 0.7.6, cand driverul refuza cheia pe dispozitivul ales de mana, se incearca singure si celelalte)
 		config.ci[slot].alternative_ca_handling = ConfigSelection(default="auto", choices=[
 			("auto", _("Automat")),
 			("0", _("Off")), ("1", _("Închide dispozitivul CA la sfârșitul programului")),
@@ -970,7 +971,9 @@ class CiAssignment(Screen):
 		semne = [t for t, da in ((_("modulul CI"), c.get("modul")), (_("canalul pornit"), c.get("acum"))) if da]
 		return text + (" (%s)" % ", ".join(semne) if semne else "")
 
-	def canalAles(self, ref):
+	# EXIT in alegerea simpla inchide lista fara canal (SimpleChannelSelection: close() fara argument, ca in OE-Alliance):
+	# ref lipseste si nu se adauga nimic (inainte interfata cadea: canalAles() missing 'ref', darog69 10.11.2026)
+	def canalAles(self, ref=None):
 		if ref is None:
 			return
 		from ServiceReference import ServiceReference
@@ -979,7 +982,7 @@ class CiAssignment(Screen):
 		except ValueError:
 			self.eroare(_("Alege un canal DVB pentru modulul CI."))
 
-	def furnizorAles(self, ref):
+	def furnizorAles(self, ref=None):
 		if ref is None:
 			return
 		from enigma import eServiceCenter, iServiceInformation

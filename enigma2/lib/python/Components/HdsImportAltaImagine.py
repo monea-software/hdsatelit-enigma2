@@ -30,6 +30,10 @@
 #   5. La capat: starea GATA cu rezumatul (ce s-a adus, cu numere, si ce nu), aratat o data pe televizor si in web;
 #      apoi, pe televizor, oferta pluginurilor (cate unul, cu intrebarea de la Extensii si aplicatii) si, cand setarile
 #      asteapta repornirea interfetei, intrebarea daca o reporneste acum. In web oferta e in rezumat.
+#   6. 0.7.7: starea NIMIC nu mai e definitiva cat timp omul nu are canale (are_canale): un stick sau un disc montat mai
+#      tarziu (harddiskmanager, "add") si fiecare pornire a interfetei reiau aceeasi cautare (reia_cautarea), deci copia
+#      de pe stickul pus dupa prima pornire, sau cu receptorul oprit, aduce intrebarea; fara copie: NIMIC, fara mesaj.
+#      Cautarea vede si locurile altor imagini din memoria receptorului (HdsImportSurse.surse_memorie, mediul "memorie").
 # Starea sta in /home/root/hds-restaurare/alta-imagine.json (dosarul restaurarii HD Satelit, in afara /etc/enigma2:
 # o resetare la valorile din fabrica nu o aduce inapoi), scrisa atomic: starea, numere si calea copiei, fara valori din
 # settings. Variabila HDS_RADACINA e numai pentru probe, ca la HdsCopieSetari.
@@ -55,7 +59,8 @@ NIMIC = "nimic"            # cautarea nu a gasit nicio copie a altei imagini
 STARI = (CAUTA, INTREBARE, DA, GATA, NU, NIMIC)
 DESCHISE = (CAUTA, INTREBARE)
 
-MEDII_BUNE = ("stick", "disc")
+# "memorie": locul altei imagini din memoria receptorului (pornire multipla), gasit fara stick (HdsImportSurse)
+MEDII_BUNE = ("stick", "disc", "memorie")
 # copiile HD Satelit stau pe mediu sub HdsCopieSetari.DOSAR_PE_MEDIU ("hdsatelit/copii-setari")
 PREFIX_COPII_HDS = "hdsatelit/"
 # rețeaua numai cand receptorul nu are deja una care merge (retea_merge); pluginurile numai cu oferta; modulele de
@@ -68,6 +73,13 @@ TIPURI_RADIO = (2, 10)
 TIPAR_BUCHET_INDEX = re.compile(r'^#SERVICE\s+1:7:\d+:.*FROM BOUQUET "', re.I)
 TIPAR_TIMER = re.compile(r"<timer[\s>/]")
 PREFIX_BUCHET_IMAGINE = "userbouquet.hds_"   # acelasi ca HdsImportSurse.PREFIX_BUCHET_IMAGINE (un test le compara)
+# Omul "are canale" (are_canale): servicii in lamedb puse de el (scanare, liste, import), nu de imagine. Imaginea scrie
+# singura numai purtatorii releului (Hds/DabT2/lamedb.py: FURNIZOR, FURNIZORI, FURNIZOR_ABERTIS) si buchetele ei
+# (userbouquet.hds*: DAB+, DVB-T2, IPTV, DVB-I).
+FURNIZORI_IMAGINE = ("HDSatelit T2-MI", "HDSatelit ETI", u"Abertis 30\u00b0W")
+PREFIX_BUCHETE_IMAGINE = "userbouquet.hds"
+TIPAR_SERVICIU_BUCHET = re.compile(r"^#SERVICE\s+(?!1:64:)(?!1:7:)\S")   # fara etichete si fara trimiteri la buchete
+LINISTE_DISC_MS = 5000   # dupa ultimul anunt de stick montat (un stick are mai multe partitii), apoi cautarea
 
 
 def _(text):
@@ -159,13 +171,22 @@ def _rel(s):
 
 
 def sursa_potrivita(s):
-	"""O sursa pentru intrebarea primei porniri: pe un stick sau un disc, cu lista de canale (lamedb in formatul pe
-	care il citeste imaginea), nu o copie HD Satelit."""
+	"""O sursa pentru intrebarea primei porniri: pe un stick, un disc sau in alt loc al memoriei (MEDII_BUNE), cu lista
+	de canale (lamedb in formatul pe care il citeste imaginea), nu o copie HD Satelit."""
 	if not isinstance(s, dict) or s.get("mediu") not in MEDII_BUNE or not s.get("canale"):
 		return False
 	if not s.get("lamedb", True):
 		return False
 	return not _rel(s).lower().startswith(PREFIX_COPII_HDS)
+
+
+def sursa_exista(s):
+	"""Copia e inca acolo. Locul altei imagini din memorie (HdsImportSurse, "memorie") e montat numai cat tine cautarea
+	si importul, deci pentru el ajunge partitia; importul il monteaza din nou."""
+	mem = s.get("memorie")
+	if isinstance(mem, dict):
+		return os.path.exists(mem.get("dispozitiv") or "")
+	return os.path.exists(s.get("cale", ""))
 
 
 def alege_sursa(surse):
@@ -219,15 +240,17 @@ def numara_canale(cale):
 	return tv, radio
 
 
-def numara_buchete(dosar):
+def numara_buchete(dosar, pastrate=()):
 	"""Listele de canale din bouquets.tv si bouquets.radio (randurile "FROM BOUQUET"), cum le vede omul, fara listele
-	imaginii (userbouquet.hds_*: DAB+ si DVB-T2 din satelit), pe care importul le pastreaza, nu le aduce."""
+	imaginii (userbouquet.hds_*: DAB+ si DVB-T2 din satelit) si fara `pastrate` (rezultatul importului,
+	"buchete_pastrate": IPTV, Radio online, DVB-I, fluxurile omului), pe care importul le pastreaza, nu le aduce."""
+	fara = ['"%s"' % p for p in (pastrate if isinstance(pastrate, (list, tuple)) else ()) if isinstance(p, str)]
 	n = 0
 	for nume in ("bouquets.tv", "bouquets.radio"):
 		try:
 			with open(os.path.join(dosar, nume), "r", encoding="utf-8", errors="replace") as f:
 				n += sum(1 for rand in f if TIPAR_BUCHET_INDEX.match(rand.strip())
-					and '"' + PREFIX_BUCHET_IMAGINE not in rand)
+					and '"' + PREFIX_BUCHET_IMAGINE not in rand and not any(p in rand for p in fara))
 		except (OSError, IOError):
 			continue
 	return n
@@ -239,6 +262,45 @@ def numara_temporizatoare(cale):
 			return len(TIPAR_TIMER.findall(f.read(8 * 1024 * 1024)))
 	except (OSError, IOError):
 		return 0
+
+
+def are_canale(dosar_etc=None):
+	"""Omul are deja canale: in lamedb un serviciu care nu e al imaginii (furnizorul lui nu e in FURNIZORI_IMAGINE), sau
+	intr-un buchet al lui (nu userbouquet.hds*) un serviciu. Citirea se opreste la primul gasit (pe firul enigma2)."""
+	dosar_etc = dosar_etc or CALE_ETC
+	try:
+		with open(os.path.join(dosar_etc, "lamedb"), "r", encoding="utf-8", errors="replace") as f:
+			if f.readline().startswith("eDVB services /"):
+				in_servicii = False
+				rand_serviciu = 0
+				for rand in f:
+					rand = rand.rstrip("\r\n")
+					if not in_servicii:
+						in_servicii = rand == "services"
+						continue
+					if rand == "end":
+						break
+					if rand_serviciu == 2:
+						furnizor = rand[2:].split(",", 1)[0] if rand.startswith("p:") else ""
+						if furnizor not in FURNIZORI_IMAGINE:
+							return True
+					rand_serviciu = (rand_serviciu + 1) % 3
+	except (OSError, IOError):
+		pass
+	try:
+		nume = sorted(os.listdir(dosar_etc))
+	except OSError:
+		return False
+	for n in nume:
+		if not n.startswith("userbouquet.") or n.startswith(PREFIX_BUCHETE_IMAGINE) or not n.endswith((".tv", ".radio")):
+			continue
+		try:
+			with open(os.path.join(dosar_etc, n), "r", encoding="utf-8", errors="replace") as f:
+				if any(TIPAR_SERVICIU_BUCHET.match(rand.strip()) for rand in f):
+					return True
+		except (OSError, IOError):
+			continue
+	return False
 
 
 def fa_rezumatul(rez, alegeri, sursa, dosar_etc=None):
@@ -282,7 +344,7 @@ def fa_rezumatul(rez, alegeri, sursa, dosar_etc=None):
 	}
 	if rez.get("canale"):
 		r["tv"], r["radio"] = numara_canale(os.path.join(dosar_etc, "lamedb"))
-		r["buchete"] = numara_buchete(dosar_etc)
+		r["buchete"] = numara_buchete(dosar_etc, rez.get("buchete_pastrate"))
 	if rez.get("temporizatoare") and alegeri.get("temporizatoare"):
 		r["temporizatoare"] = numara_temporizatoare(os.path.join(dosar_etc, "timers.xml"))
 	r["repornire"] = r["setari"] > 0
@@ -551,7 +613,8 @@ def _dupa_cautare(rad=None):
 	sursa = alege_sursa(HdsImportSurse.stare().get("surse") or [])
 	if sursa is None:
 		_schimba(rad, stare=NIMIC, sursa=None)
-		_jurnal("nicio copie a altei imagini pe stick-uri sau discuri; nimic de intrebat")
+		_jurnal("nicio copie a altei imagini pe stick-uri, discuri sau in alt loc al memoriei; nimic de intrebat")
+		_leaga_discurile(rad)
 		return
 	_schimba(rad, stare=INTREBARE, sursa=sursa)
 	_jurnal("copie a altei imagini gasita: %s (%s); intreb" % (_rel(sursa), sursa.get("mediu")))
@@ -589,6 +652,68 @@ def _porneste_cautarea(rad=None):
 	ceas.start(500, False)
 
 
+# ---------------------------------------------------------------- cautarea reluata (starea NIMIC, omul fara canale)
+
+_DISC = {"legat": False, "ceas": None, "legatura": None, "rad": None}
+
+
+def reia_cautarea(rad=None, motiv=""):
+	"""In starea NIMIC, cat omul nu are canale (are_canale): aceeasi cautare ca la prima pornire, din nou (o sursa gasita =
+	intrebarea; altfel NIMIC, fara mesaj). marcheaza_cautarea nu redeschide NIMIC; aici da. True daca a pornit."""
+	if citeste_starea(rad).get("stare") != NIMIC or are_canale():
+		return False
+	_schimba(rad, stare=CAUTA)
+	_jurnal("caut din nou copia altei imagini (%s)" % motiv)
+	_porneste_cautarea(rad)
+	return True
+
+
+def _leaga_discurile(rad=None):
+	"""Starea NIMIC: un stick sau un disc montat mai tarziu reia cautarea (_la_disc). O singura legatura pe proces."""
+	_DISC["rad"] = rad
+	if _DISC["legat"]:
+		return
+	try:
+		from Components.Harddisk import harddiskmanager
+		harddiskmanager.on_partition_list_change.append(_la_disc)
+		_DISC["legat"] = True
+	except Exception as eroare:
+		_jurnal("legatura la stickuri: %s" % eroare.__class__.__name__)
+
+
+def _la_disc(actiune, partitie=None):
+	"""harddiskmanager.on_partition_list_change: la un stick sau disc montat ("add"), in starea NIMIC, cautarea porneste
+	dupa LINISTE_DISC_MS fara alt anunt (fiecare partitie a stickului are anuntul ei). Nu arunca."""
+	if actiune != "add":
+		return
+	try:
+		if citeste_starea(_DISC["rad"]).get("stare") != NIMIC:
+			return
+		if _DISC["ceas"] is None:
+			from enigma import eTimer
+			ceas = eTimer()
+			try:
+				_DISC["legatura"] = ceas.timeout.connect(_dupa_liniste)
+			except AttributeError:
+				ceas.callback.append(_dupa_liniste)
+			_DISC["ceas"] = ceas
+		_DISC["ceas"].start(LINISTE_DISC_MS, True)
+	except Exception as eroare:
+		_jurnal("stick montat: %s" % eroare)
+
+
+def _dupa_liniste():
+	try:
+		from Components import HdsImportSurse
+		if HdsImportSurse.stare().get("cauta"):
+			# o cautare pornita inainte de montarea stickului nu il vede: dupa capatul ei, inca una
+			_DISC["ceas"].start(LINISTE_DISC_MS, True)
+			return
+		reia_cautarea(_DISC["rad"], "stick sau disc montat")
+	except Exception as eroare:
+		_jurnal("cautarea la stick: %s" % eroare)
+
+
 def raspunde(da, de_unde="web", rad=None):
 	"""Raspunsul la intrebare, de pe televizor sau din web, pe firul enigma2. (ok, mesaj)."""
 	st = citeste_starea(rad)
@@ -601,7 +726,7 @@ def raspunde(da, de_unde="web", rad=None):
 		return True, _("Bine. Canalele se pot aduce oricând din Meniu, Scanare, Import canale și setări.")
 	from Components import HdsImportSurse
 	sursa = st.get("sursa")
-	if not isinstance(sursa, dict) or not os.path.exists(sursa.get("cale", "")):
+	if not isinstance(sursa, dict) or not sursa_exista(sursa):
 		r = {"ok": False, "mesaje": [_("Copia nu mai este pe stick sau pe disc.")]}
 		_schimba(rad, stare=GATA, rezumat=fa_rezumatul(r, {}, sursa if isinstance(sursa, dict) else {}))
 		_scoate_din_coada()
@@ -723,5 +848,9 @@ def porneste(session, rad=None):
 			_arata_rezumatul(rad)
 		elif stare == GATA:
 			_arata_rezumatul(rad)
+		elif stare == NIMIC and not are_canale():
+			# stickul cu copia pus cu receptorul oprit nu are anunt de montare: o cautare la pornirea interfetei
+			_leaga_discurile(rad)
+			reia_cautarea(rad, "pornirea interfetei")
 	except Exception as eroare:
 		_jurnal("pornirea: %s" % eroare)

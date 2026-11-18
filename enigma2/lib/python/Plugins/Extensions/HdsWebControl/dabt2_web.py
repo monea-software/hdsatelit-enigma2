@@ -104,6 +104,9 @@ def _numeFlux(f, D):
 def _acum(ctrl, D):
 	"""Ca randul de jos al ferestrei la deschidere (EcranPrincipal._stare_curenta)."""
 	_ = D.limba._
+	if getattr(ctrl, "rotire", False) and ctrl.stare in ("pregatire", "canta") and ctrl.feed:
+		# acelasi text ca pe televizor (Hds/DabT2/pornire.py): postul asteapta antena cu motor
+		return _("Se roteste antena")
 	if ctrl.stare == "canta" and ctrl.feed:
 		return _("Canta acum: %s pe %s") % (_numeFlux(ctrl.feed, D),
 			_text(D.tuner.text_transponder(ctrl.tp)))

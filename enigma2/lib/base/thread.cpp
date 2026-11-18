@@ -125,10 +125,14 @@ void eThread::kill(bool sendcancel)
 	the_thread = 0;
 }
 
-/* the symbol _ZN7eThread4killEv, needed by plugins compiled against other enigma2 trees (see thread.h) */
-void eThread::kill()
+/* The symbol _ZN7eThread4killEv (eThread::kill() without arguments), needed by plugins compiled against other enigma2
+   trees (see thread.h). A non-virtual member function gets `this` as its first argument (Itanium C++ ABI, ARM EABI and
+   MIPS o32), so a free function taking eThread * under that assembler name is the same entry point. It is not declared
+   in thread.h, so code compiled against our headers keeps asking for kill(bool) (_ZN7eThread4killEb). */
+void hds_eThread_kill_fara_argumente(eThread *self) __asm__("_ZN7eThread4killEv");
+void hds_eThread_kill_fara_argumente(eThread *self)
 {
-	kill(false);
+	self->kill(false);
 }
 
 void eThread::hasStarted()

@@ -14,7 +14,19 @@
 DVBMEDIASINK_CONFIG:remove = "--with-wma"
 DVBMEDIASINK_CONFIG:append = " --with-aac-loas --with-vb6"
 
-PR:append = ".hds1"
+# MI7 (15.11.2026): dvbvideosink citeste evenimentele video (marimea imaginii) si in bucla de dupa EOS (POLLPRI); fisierele
+# TS scurte, servite repede pe HTTP, ramaneau fara marime (proba OCT pe SF8008). Peticul e facut pe sursa fixata in
+# recipes-local/hds-dts-ac3/gstreamer1.0-plugin-dvbmediasink.bbappend (SRCREV 66ff8288) si atinge numai gstdvbvideosink.c.
+FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+SRC_URI += "file://0001-dvbvideosink-evenimente-video-dupa-eos.patch"
+
+# H.264 cu intrarea avc3 (filmele DVB-DASH, de pilda BBC; HbbTV): avcC fara SPS/PPS (parametrii vin in
+# flux) lasa codec_data NULL si lungimea NAL 0, deci render nu punea start code si placa primea prefixele de lungime:
+# imagine neagra cu sunet. Peticul citeste avcC si fara SPS (lungimea NAL, codec_data si gol, ca la H.265); ramura veche
+# (un SPS si un PPS) neschimbata. Facut pe aceeasi sursa fixata (66ff8288), dupa 0001; atinge numai set_caps.
+SRC_URI += "file://0002-dvbvideosink-avc3-fara-parametri-in-avcc.patch"
+
+PR:append = ".hds3"
 
 do_configure:append() {
 	h=${B}/config.h
@@ -24,4 +36,9 @@ do_configure:append() {
 	if grep -q '^#define HAVE_WMA 1' "$h"; then
 		bbfatal "dvbmediasink: HAVE_WMA e inca pornit"
 	fi
+}
+
+do_compile:append() {
+	grep -q 'video_event_post' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul evenimentelor video dupa EOS nu e aplicat"
+	grep -q 'avcC without SPS (avc3)' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul avc3 (avcC fara SPS) nu e aplicat"
 }

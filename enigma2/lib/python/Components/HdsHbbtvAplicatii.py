@@ -70,8 +70,7 @@ DATE_IMPLICITE = {
 	"compatibilitate": [{"adresa": "hbbtv.mediaset.net/app/"}, {"adresa": "hbbtv.prosiebensat1puls4.com/extern/redorbit/"},
 		{"adresa": "hbbtv.redbutton.de/extern/redorbit/"}],
 	"audienta": [{"adresa": "hbbtv-ikosystem.ikomg.com/"}],
-	"albastru": [{"adresa": "france24.tv.dotscreen.com/", "contine": "bluebutton=true"},
-		{"adresa": "hbbtv.mediaset.net/app/"}],
+	"albastru": [{"adresa": "france24.tv.dotscreen.com/", "contine": "bluebutton=true"}],
 	"consimtamant": [{"adresa": "r9.hbbtv.media/"}],
 }
 

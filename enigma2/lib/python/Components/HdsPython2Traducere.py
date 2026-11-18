@@ -28,7 +28,8 @@ Cum:
   - in jurnal: "tradus din Python 2: <plugin>"; daca pluginul tot cade dupa traducere, raportul obisnuit al pluginurilor externe
     (Components/HdsPluginExtern.py), iar lista pluginurilor care nu se deschid spune "Tradus din Python 2; ...".
 Ce nu se traduce (mesajul pentru om, fara cadere): plugin numai cu fisiere compilate (.pyo/.pyc de Python 2, fara sursa), module
-native facute pentru Python 2 (le opreste deja Components/HdsAltPython.py), sursa care nu se poate citi nici ca Python 2.
+native facute pentru Python 2 (le opreste deja Components/HdsAltPython.py), sursa care nu se poate citi nici ca Python 2. Un
+modul nativ (.so) gasit, dar care nu se incarca (alt Python, un nume lipsa la dlopen) nu e semn de Python 2 (nativNeincarcat).
 
 Nu importa nimic din enigma (probele de pe PC). RADACINA pune un dosar in fata caii STARE, numai la probe. Nu arunca din incearca()."""
 import ast
@@ -40,6 +41,10 @@ import re
 import sys
 import threading
 import time
+try:
+	import _thread as _fire_joase
+except ImportError:  # pragma: no cover
+	import thread as _fire_joase
 
 # se mareste cand se schimba traducerea. Un plugin tradus cu o versiune mai veche care cade la import se traduce din nou din
 # originale (incearca, traduceDosar). 2 (0.7.5, raportul 781623, pluginul Styles): un dosar fara __init__ nu mai e modul vecin
@@ -121,12 +126,17 @@ def _citesteStare():
 
 # HDSatelit 0.7.6 (FRZ): STARE se scrie si de pe firul verificarii din sursa (_lucreaza); scrierile trec prin lacat si fiecare fir are
 # fisierul lui temporar (doua scrieri in acelasi .tmp ar fi lasat un JSON amestecat, iar toata starea s-ar fi pierdut)
+# PLG 0.7.7: doua lacate. _lacatStare tine citirea, schimbarea si scrierea lui STARE (cu fsync pe memoria interna, sute de ms cand
+# discul e ocupat); _lacat tine numai memoria procesului (coada firului, semnaturile, ce s-a tradus) si nu se tine niciodata in
+# timpul unei citiri sau scrieri pe disc. Inainte un singur lacat: pompa (la 2 s pe firul interfetei), dupaImport si
+# _cereVerificarea asteptau dupa fsync-ul progresului scris de firul de verificare la 5 s.
 _lacat = threading.RLock()
+_lacatStare = threading.RLock()
 
 
 def _actualizeaza(schimba):
-	"""citire, schimbare si scriere a STARE intr-un singur pas sub lacat: schimba(stare) -> True cand e ceva de scris"""
-	with _lacat:
+	"""citire, schimbare si scriere a STARE intr-un singur pas sub lacatul ei: schimba(stare) -> True cand e ceva de scris"""
+	with _lacatStare:
 		stare = _citesteStare()
 		if schimba(stare):
 			_scrieStare(stare)
@@ -134,7 +144,7 @@ def _actualizeaza(schimba):
 
 def _scrieStare(date):
 	cale = _c(STARE)
-	with _lacat:
+	with _lacatStare:
 		_scrieFisierStare(cale, date)
 
 
@@ -187,6 +197,34 @@ def _lant(exc):
 	return vazute
 
 
+# PY2 0.7.7 (asistenta 751207, GigaBlue UHD Trio 4K 0.7.6, pluginul extern Wireguard 14.8 numai cu plugin.so): un modul nativ GASIT,
+# dar neincarcat (dlopen: "plugin.so: undefined symbol: _PyUnicode_Ready"; Components/HdsAltPython.py: "built for Python 3.13") da
+# un ImportError cu path = fisierul .so si name = numele scurt al modulului ("plugin"). Numele e al unui fisier din dosarul
+# pluginului, dar nu e un import relativ implicit: modulul s-a gasit si e facut pentru alt Python, iar traducerea surselor nu il
+# repara. Inainte: semn de Python 2, python3-fissix adus din feed degeaba si "traducerea" pluginului (13,4 s pe firul care citeste
+# lista, dupa opkg firul interfetei), apoi aceeasi eroare. Un modul NEGASIT (fara path) ramane semn.
+_NATIV_TEXT = re.compile(r"^(\S+?\.(?:so(?:\.[0-9.]+)?|pyd)): ")
+
+
+def _fisierNativ(cale):
+	baza = os.path.basename(cale or "")
+	return baza.endswith(".so") or ".so." in baza or baza.endswith(".pyd")
+
+
+def nativNeincarcat(e):
+	"""True cand e e ImportError-ul unui modul nativ (.so) gasit, dar neincarcat: facut pentru alt Python (hdsAltPython), un nume
+	lipsa la dlopen, un fisier stricat. Calea din path sau, cand pluginul a dat mai departe numai textul, de la inceputul textului."""
+	if not isinstance(e, ImportError) or isinstance(e, ModuleNotFoundError):
+		return False
+	if getattr(e, "hdsAltPython", None):
+		return True
+	cale = getattr(e, "path", None)
+	if not cale:
+		m = _NATIV_TEXT.match(str(e))
+		cale = m.group(1) if m else None
+	return _fisierNativ(cale)
+
+
 def _subDosar(fisier, cale):
 	if not fisier:
 		return False
@@ -228,6 +266,9 @@ def semnPython2(exc, cale):
 			if _subDosar(getattr(e, "filename", None), cale):
 				return True
 		elif isinstance(e, ImportError):
+			if nativNeincarcat(e):
+				# PY2 0.7.7: modul nativ gasit, facut pentru alt Python; nu e semn (celelalte exceptii din lant raman)
+				continue
 			nume = getattr(e, "name", None) or ""
 			if not nume and "No module named" in str(e):
 				m = re.search(r"No module named '([^']+)'", str(e))
@@ -438,6 +479,226 @@ class _NumeFolosite(ast.NodeVisitor):
 	def visit_ImportFrom(self, nod):
 		for a in nod.names:
 			self.definite.add(a.asname or a.name)
+
+
+# HDSatelit 0.7.6 (NB2, raportul plugin 266302, NeoBoot v10 pe Vu+ Solo 4K 0.7.5): files/devices.py are la nivelul modulului
+# `if not fileExists('/usr/lib/python2.7'): open = file`. Sintaxa e de Python 3, fara importuri vechi, iar fisierul se importa abia
+# la eticheta discului (goSetDiskLabel, din callback-ul unui ecran): nici citirea listei, nici verificarea din sursa nu-l vedeau,
+# deci interfata cadea cu NameError "name 'file' is not defined". Acum un nume vechi citit si nedefinit nicaieri in fisier e semn
+# de Python 2 (semneStatice, _ePython2), iar traducerea pune in fisier randul PRELUDIU (numele din HdsPython2Compat).
+# Filtrul ieftin de dinaintea analizei: numele intreg, nu atribut (.file), nu sir ('file'), urmat de ( ) , : ] } sau sfarsitul
+# randului (fara `file=` din print(..., file=...), fara `file.` si fara cuvantul din fraze).
+_NUME_CANDIDAT = re.compile(br"(?<![\w.'\"])(?:" + b"|".join(n.encode("ascii") for n in sorted(_NUME_PY2)) +
+	br")\b(?=[ \t]*(?:[(),:\]}]|\r?$))", re.M)
+# un `from X import *` din aceste pachete poate aduce chiar numele vechi (six.moves.xrange, past.builtins.unicode), la fel PRELUDIU;
+# `from Components.config import *` si celelalte module ale interfetei nu aduc nume vechi
+_STEA_COMPAT = frozenset(("six", "past", "future", "builtins", "__builtin__"))
+_MODUL_COMPAT = "Components.HdsPython2Compat"
+
+
+# PLG 0.7.7 (GT IPTV Player Pro 1.9.4 din feedul nostru extern): youtube_vendor/compat.py are, ca youtube-dl,
+# `if version_info[0] == 2:` cu unicode, basestring, long si unichr, iar ramura `else:` pentru Python 3. Cu regula NB2 de mai sus
+# semneStatice il dadea "nume Python 2 basestring" si un plugin Python 3 care merge se traducea in fundal (compat.py rescris, minute
+# de analiza pe receptor cu lacatul Python tinut, apoi lista citita din nou si pluginul importat din nou pe firul interfetei). Acum:
+# ramura unui test pe versiunea lui Python care in Python 3 nu ruleaza niciodata nu se cerceteaza (nici numele citite, nici cele
+# definite acolo), iar un nume citit pe loc in corpul unui try care prinde NameError nu da NameError. Un test care nu e pe versiune
+# (NeoBoot: `if not fileExists('/usr/lib/python2.7'):`) se cerceteaza in ambele ramuri, ca pana acum.
+_NUME_TEST = {"PY2": False, "PY3": True, "IS_PY2": False, "IS_PY3": True, "PY3K": True, "IS_PY3K": True, "PYTHON2": False,
+	"PYTHON3": True, "PYTHON_2": False, "PYTHON_3": True, "isPY2": False, "isPY3": True}
+_VERSIUNE_ACUM = tuple(sys.version_info[:3])
+_COMPARATII = {ast.Eq: lambda a, b: a == b, ast.NotEq: lambda a, b: a != b, ast.Lt: lambda a, b: a < b,
+	ast.LtE: lambda a, b: a <= b, ast.Gt: lambda a, b: a > b, ast.GtE: lambda a, b: a >= b}
+
+
+def _valoareVersiune(nod):
+	"""sys.version_info / version_info (tuplul), [0], [:2], .major, .minor in Python-ul de acum; altfel None"""
+	if isinstance(nod, ast.Name) and nod.id == "version_info":
+		return _VERSIUNE_ACUM
+	if isinstance(nod, ast.Attribute):
+		if nod.attr == "version_info" and isinstance(nod.value, ast.Name) and nod.value.id == "sys":
+			return _VERSIUNE_ACUM
+		if nod.attr in ("major", "minor"):
+			v = _valoareVersiune(nod.value)
+			if isinstance(v, tuple):
+				return v[0] if nod.attr == "major" else v[1]
+		return None
+	if isinstance(nod, ast.Subscript):
+		v = _valoareVersiune(nod.value)
+		if not isinstance(v, tuple):
+			return None
+		s = nod.slice
+		if isinstance(s, ast.Constant) and type(s.value) is int and 0 <= s.value < len(v):
+			return v[s.value]
+		if isinstance(s, ast.Slice) and s.step is None and isinstance(s.upper, ast.Constant) and type(s.upper.value) is int and \
+				0 < s.upper.value <= len(v) and (s.lower is None or (isinstance(s.lower, ast.Constant) and s.lower.value == 0)):
+			return v[:s.upper.value]
+	return None
+
+
+def _constantaVersiune(nod):
+	"""un intreg sau un tuplu de intregi scris in sursa, altfel None"""
+	if isinstance(nod, ast.Constant) and type(nod.value) is int:
+		return nod.value
+	if isinstance(nod, ast.Tuple) and nod.elts and all(isinstance(e, ast.Constant) and type(e.value) is int for e in nod.elts):
+		return tuple(e.value for e in nod.elts)
+	return None
+
+
+def testVersiune(nod):
+	"""True / False: cat face in Python-ul de acum un test pe versiune (sys.version_info[0] == 2, version_info >= (3, 4),
+	sys.version_info.major < 3, PY2, six.PY3, str is bytes, not, and, or); None cand testul nu e (numai) pe versiune"""
+	if isinstance(nod, ast.UnaryOp) and isinstance(nod.op, ast.Not):
+		v = testVersiune(nod.operand)
+		return None if v is None else not v
+	if isinstance(nod, ast.BoolOp):
+		valori = [testVersiune(x) for x in nod.values]
+		if isinstance(nod.op, ast.And):
+			if False in valori:
+				return False
+			return True if all(v is True for v in valori) else None
+		if True in valori:
+			return True
+		return False if all(v is False for v in valori) else None
+	if isinstance(nod, ast.Name):
+		return _NUME_TEST.get(nod.id)
+	if isinstance(nod, ast.Attribute) and isinstance(nod.value, ast.Name):
+		return _NUME_TEST.get(nod.attr)
+	if isinstance(nod, ast.Compare) and len(nod.ops) == 1:
+		stanga, dreapta, op = nod.left, nod.comparators[0], nod.ops[0]
+		if isinstance(stanga, ast.Name) and isinstance(dreapta, ast.Name) and set((stanga.id, dreapta.id)) == set(("str", "bytes")):
+			# `str is bytes` / `bytes == str`: adevarat numai in Python 2
+			if isinstance(op, (ast.Is, ast.Eq)):
+				return False
+			if isinstance(op, (ast.IsNot, ast.NotEq)):
+				return True
+			return None
+		f = _COMPARATII.get(type(op))
+		if f is None:
+			return None
+		a, b = _valoareVersiune(stanga), _constantaVersiune(dreapta)
+		if a is None or b is None:
+			a, b = _constantaVersiune(stanga), _valoareVersiune(dreapta)
+		if a is None or b is None or type(a) is not type(b):
+			return None
+		return bool(f(a, b))
+	return None
+
+
+def _prindeNameError(tip):
+	"""True cand clauza except numeste chiar NameError (singur sau in tuplu): rezerva scrisa pentru Python 3. `except:` si
+	`except Exception:` nu: codul de Python 2 inchis intr-un try care prinde tot nu mai cade, dar nici nu merge (NB2)."""
+	if isinstance(tip, ast.Tuple):
+		return any(_prindeNameError(e) for e in tip.elts)
+	return isinstance(tip, ast.Name) and tip.id == "NameError"
+
+
+class _NumeVechi(_NumeFolosite):
+	"""ca _NumeFolosite, plus ce mai leaga un nume: parametrii functiilor si ai lambda, `except ... as e`, `global`/`nonlocal`,
+	tiparele din match; peste tot in fisier, in orice ramura al carei test nu e pe versiune (la NeoBoot testul e pe un fisier si in
+	Python 3 chiar ruleaza ramura cu numele vechi; PRELUDIU numai defineste numele vechi, nu schimba nimic altceva). PLG 0.7.7: fara
+	ramurile pe care testul pe versiune le opreste in Python 3 si fara numele citite pe loc intr-un try care prinde NameError."""
+
+	def __init__(self):
+		_NumeFolosite.__init__(self)
+		self.stea = False
+		self._prins = 0         # cate try-uri care prind NameError cuprind codul cercetat acum (care ruleaza pe loc)
+
+	def visit_Name(self, nod):
+		if self._prins and isinstance(nod.ctx, ast.Load) and nod.id in _NUME_PY2:
+			return
+		_NumeFolosite.visit_Name(self, nod)
+
+	def visit_If(self, nod):
+		v = testVersiune(nod.test)
+		self.visit(nod.test)
+		if v is not False:
+			for n in nod.body:
+				self.visit(n)
+		if v is not True:
+			for n in nod.orelse:
+				self.visit(n)
+
+	def visit_IfExp(self, nod):
+		v = testVersiune(nod.test)
+		self.visit(nod.test)
+		if v is not False:
+			self.visit(nod.body)
+		if v is not True:
+			self.visit(nod.orelse)
+
+	def visit_Try(self, nod):
+		prinde = any(_prindeNameError(h.type) for h in nod.handlers)
+		self._prins += 1 if prinde else 0
+		try:
+			for n in nod.body:
+				self.visit(n)
+		finally:
+			self._prins -= 1 if prinde else 0
+		for n in list(nod.handlers) + list(nod.orelse) + list(nod.finalbody):
+			self.visit(n)
+
+	visit_TryStar = visit_Try
+
+	def _faraTry(self, nod, vizita):
+		# corpul unei functii sau al unui lambda ruleaza mai tarziu, nu sub try-ul in care e definit
+		prins, self._prins = self._prins, 0
+		try:
+			vizita(self, nod)
+		finally:
+			self._prins = prins
+
+	def visit_FunctionDef(self, nod):
+		self._faraTry(nod, _NumeFolosite.visit_FunctionDef)
+
+	visit_AsyncFunctionDef = visit_FunctionDef
+
+	def visit_Lambda(self, nod):
+		self._faraTry(nod, ast.NodeVisitor.generic_visit)
+
+	def visit_arg(self, nod):
+		self.definite.add(nod.arg)
+		self.generic_visit(nod)
+
+	def visit_ExceptHandler(self, nod):
+		if nod.name:
+			self.definite.add(nod.name)
+		self.generic_visit(nod)
+
+	def visit_Global(self, nod):
+		self.definite.update(nod.names)
+
+	visit_Nonlocal = visit_Global
+
+	def visit_MatchAs(self, nod):
+		if nod.name:
+			self.definite.add(nod.name)
+		self.generic_visit(nod)
+
+	def visit_MatchStar(self, nod):
+		if nod.name:
+			self.definite.add(nod.name)
+
+	def visit_MatchMapping(self, nod):
+		if nod.rest:
+			self.definite.add(nod.rest)
+		self.generic_visit(nod)
+
+	def visit_ImportFrom(self, nod):
+		_NumeFolosite.visit_ImportFrom(self, nod)
+		modul = nod.module or ""
+		if any(a.name == "*" for a in nod.names) and (modul == _MODUL_COMPAT or modul.split(".", 1)[0] in _STEA_COMPAT):
+			self.stea = True
+
+
+def numePython2(arbore):
+	"""primul nume vechi din Python 2 (_NUME_PY2: file, unicode, xrange, cmp ...) citit in arborele unui fisier si nedefinit
+	nicaieri in el (in Python 3 da NameError cand ajunge acolo), altfel None"""
+	v = _NumeVechi()
+	v.visit(arbore)
+	if v.stea:
+		return None
+	lipsa = (v.citite & _NUME_PY2) - v.definite
+	return min(lipsa) if lipsa else None
 
 
 def _cuPreludiu(text, cale):
@@ -891,7 +1152,8 @@ def sintaxaPython2(f, date=None):
 
 def _ePython2(f, vecine, date=None):
 	"""True cand fisierul .py e de Python 2: nu se compileaza in Python-ul de acum sau dupa gramatica 3.13, importa module de
-	Python 2 ori importa fara punct un modul vecin (care nu exista ca import absolut)"""
+	Python 2, citeste un nume vechi nedefinit (numePython2) ori importa fara punct un modul vecin (care nu exista ca import
+	absolut)"""
 	try:
 		if date is None:
 			with open(f, "rb") as fh:
@@ -911,6 +1173,10 @@ def _ePython2(f, vecine, date=None):
 			arbore = ast.parse(date, f, "exec", feature_version=GRAMATICA)
 		if eScriptFisier(date, f):
 			return False
+		# NB2 (0.7.6): un nume vechi citit si nedefinit (NeoBoot files/devices.py `open = file`): traducerea numai la importuri,
+		# care pune PRELUDIU in fisier
+		if _NUME_CANDIDAT.search(date) is not None and numePython2(arbore):
+			return True
 		v = _ImporturiVecine(vecineDosar(os.path.dirname(f)))
 		v.visit(arbore)
 		return bool(v.gasite)
@@ -918,9 +1184,10 @@ def _ePython2(f, vecine, date=None):
 		return False
 
 
-def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None):
+def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None, pauza=0.0):
 	"""traduce pluginul din dosarul cale (vezi antetul). Intoarce Rezultat. tot: True = tot pluginul (s-a vazut ca nu se incarca in
-	Python 3: e un plugin de Python 2), None = dupa sintaxa lui plugin.py (pluginul s-a incarcat, deci partea lui Python 3 nu se atinge)."""
+	Python 3: e un plugin de Python 2), None = dupa sintaxa lui plugin.py (pluginul s-a incarcat, deci partea lui Python 3 nu se atinge).
+	pauza: secunde de asteptare inaintea fiecarui fisier dupa primul (pe firul de verificare, ca interfata sa ia lacatul Python)."""
 	inceput = time.monotonic()
 	if _numaiCompilate(cale):
 		return Rezultat(COMPILAT, motiv="plugin.pyo")
@@ -944,7 +1211,9 @@ def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None):
 	# numai importuri vechi numai la importuri (NeoBoot files/Harddisk.py: `import Task` pe o ramura, dar `/` e impartirea reala)
 	if tot is None:
 		tot = sintaxaPython2(os.path.join(cale, "plugin.py"))
-	for f in fisiere:
+	for i_fisier, f in enumerate(fisiere):
+		if pauza and i_fisier:
+			time.sleep(pauza)
 		rel = os.path.relpath(f, cale).replace("\\", "/")
 		try:
 			with open(f, "rb") as fh:
@@ -1130,9 +1399,17 @@ def _absolutLipsa(nume):
 	return _absolute[nume]
 
 
+# regulile verificarii din sursa (semneStatice): se mareste cand verificarea vede semne noi. 2 (0.7.6, NB2): numele vechi citite si
+# nedefinite (numePython2). Altfel decat VERSIUNE: nu traduce din nou nimic din originale, numai verifica din nou.
+VERSIUNE_SEMNE = 2
+
+
 def semnatura(cale):
 	"""suma numelor, marimilor si timpilor fisierelor .py ale pluginului (fara sa le citeasca): se schimba la orice actualizare"""
 	h = hashlib.sha256()
+	# NB2 (0.7.6): versiunea regulilor verificarii din sursa intra in semnatura: un plugin verificat curat cu regulile de dinainte
+	# ("verificate" in STARE) se verifica o data din nou dupa actualizarea imaginii (pe firul de verificare), cu regulile noi
+	h.update(b"semne %d\n" % VERSIUNE_SEMNE)
 	for f in _fisierePy(cale)[:MAX_FISIERE + 1]:
 		try:
 			s = os.stat(f)
@@ -1155,7 +1432,8 @@ TIMP_DEPASIT = ("", "timpul")   # verificarea din sursa oprita de timp (nu termi
 def semneStatice(cale, timp_maxim=30.0, de_la=0, la_pas=None, pauza=0.0):
 	"""(fisierul, motivul) cand sursa pluginului arata cod de Python 2 care nu cade la import (in functii): sintaxa lui Python 2
 	dupa gramatica 3.13 (Python 3.14 primeste iar `except X, e:`, cu alt inteles), importuri de module scoase din Python 3,
-	importuri relative implicite; altfel None; TIMP_DEPASIT cand s-a oprit la timp_maxim. Numai citire si analiza, nimic rulat.
+	importuri relative implicite, nume vechi citite si nedefinite (NB2: "nume Python 2 file"); altfel None; TIMP_DEPASIT cand s-a
+	oprit la timp_maxim. Numai citire si analiza, nimic rulat.
 	HDSatelit 0.7.6 (FRZ, raportul 2150): de_la = cate fisiere (in ordinea lui _fisierePy) sunt deja verificate fara semn, de la o
 	citire de dinainte oprita de timp: se sar; la_pas(n) se cheama dupa fiecare fisier verificat fara semn (n = cate sunt gata), ca
 	progresul sa se tina minte; pauza (secunde) dupa fiecare fisier analizat, cand ruleaza pe firul de verificare: lacatul Python
@@ -1195,7 +1473,8 @@ def semneStatice(cale, timp_maxim=30.0, de_la=0, la_pas=None, pauza=0.0):
 			continue
 		forma = _CANDIDAT.search(date) is not None
 		importuri = imp is not None and imp.search(date) is not None
-		if not (forma or importuri):
+		nume_vechi = _NUME_CANDIDAT.search(date) is not None
+		if not (forma or importuri or nume_vechi):
 			continue
 		rel = os.path.relpath(f, cale).replace("\\", "/")
 		r, arbore = din_sursa_arbore(date, f)
@@ -1203,10 +1482,16 @@ def semneStatice(cale, timp_maxim=30.0, de_la=0, la_pas=None, pauza=0.0):
 			time.sleep(pauza)
 		if r is not None:
 			return rel, "%s %s" % r
-		if not importuri or arbore is None:
+		if not (importuri or nume_vechi) or arbore is None:
 			continue
 		try:
 			if eScriptFisier(date, f):
+				continue
+			# NB2 (0.7.6): nume vechi citit si nedefinit (NeoBoot files/devices.py `open = file`), din acelasi arbore
+			n = numePython2(arbore) if nume_vechi else None
+			if n:
+				return rel, "nume Python 2 %s" % n
+			if not importuri:
 				continue
 			dosar = os.path.dirname(f)
 			if dosar not in vecine_dosar:
@@ -1235,10 +1520,25 @@ FUNDAL = True
 INTARZIERE_FUNDAL_S = 60.0        # firul asteapta atat inainte de primul plugin (pornirea interfetei tine 40-50 s pe ARM)
 PAUZA_FUNDAL_S = 0.1              # dupa fiecare fisier analizat (~0,1 s): lacatul Python e jumatate din timp al interfetei
 TIMP_FUNDAL_S = 600.0             # un plugin pe firul de lucru; ce ramane se reia de unde a ramas, la citirea urmatoare
+# FRZ 0.7.7 (pachetul de testeri 2445, Vu+ Uno 4K SE 0.7.6: 18,2 s in ast.parse <- HdsPython2.din_sursa_arbore <- pompa): dupa un
+# semn gasit in fundal, dupaImport traducea pluginul (o analiza si fissix pe fiecare fisier, ~400 la IPTVplayer) PE FIRUL INTERFETEI,
+# in citirea ceruta de pompa. Acum traducerea se face tot pe firul de verificare, cu pauza intre fisiere si timpul ei (ceasul merge
+# si in pauze si cat firul asteapta lacatul, deci mai lung decat TIMP_MAXIM); pe firul interfetei raman scoaterea modulelor si
+# importul din nou al pluginului tradus (acelasi cost ca importul lui la pornire).
+TIMP_TRADUCERE_FUNDAL_S = 900.0
 PAS_PROGRES_S = 5.0               # progresul se scrie in STARE cel mult o data la atatea secunde
 PAS_POMPA_MS = 2000               # ceasul de pe firul interfetei care vede semnele gasite in fundal
 NICE_FUNDAL = 10
-_fundal = {"fir": None, "acum": None, "coada": [], "gasite": [], "pompa": None}
+_fundal = {"fir": None, "acum": None, "coada": [], "gasite": [], "pompa": None, "traduse": {}}
+# FRD (pachetul 2206: 6,7 s in semnatura <- ActionMap.action): semnatura unui plugin (os.walk si cate un stat pe fiecare .py,
+# pana la 401) se face numai pe firul de verificare; aici ramane, in memoria procesului, cheie -> (semnul usor, semnatura).
+# Semnul usor e statul lui plugin.py (inode, marime, ora): opkg scrie din nou toate fisierele pachetului la orice instalare
+# sau actualizare, deci si plugin.py. Un fisier schimbat de mana fara plugin.py se vede la pornirea urmatoare a interfetei.
+_semnaturi = {}
+
+
+def _semnUsor(st):
+	return (getattr(st, "st_ino", 0), st.st_size, int(st.st_mtime))
 
 
 def incepeCitirea():
@@ -1305,47 +1605,111 @@ def _ePrincipal():
 	return threading.current_thread() is threading.main_thread()
 
 
-def _cereVerificarea(categorie, nume, cale, cheie, sem):
-	"""pune pluginul la coada firului de verificare (o data) si porneste firul, daca nu ruleaza"""
+NUME_FIR = "HdsPython2Verificare"
+
+
+class _FirVerificare(object):
+	"""Manerul firului de verificare (in locul lui threading.Thread): ruleaza pana la sfarsitul lui _lucreaza; join si is_alive
+	fara lacatul firului (MI8)."""
+	name = NUME_FIR
+
+	def __init__(self):
+		self._gata = threading.Event()
+
+	def is_alive(self):
+		return not self._gata.is_set()
+
+	def join(self, timeout=None):
+		self._gata.wait(timeout)
+
+	def terminat(self):
+		self._gata.set()
+
+
+def _pornesteFir(tinta, fir):
+	"""Firul nou fara asteptarea pornirii lui: threading.Thread.start asteapta ca firul nou sa primeasca lacatul Python, iar
+	cat il tine alt fir, interfata sta (FRD, ca HdsStareOsd.Cititor). Probele il pot inlocui."""
+	_fire_joase.start_new_thread(tinta, (fir,))
+
+
+def _cereVerificarea(categorie, nume, cale, cheie, sem, usor=None):
+	"""pune pluginul la coada firului de verificare (o data) si porneste firul, daca nu ruleaza. sem None: semnatura o afla
+	firul (FRD), cu semnul usor `usor` pentru memoria _semnaturi. Firul porneste fara threading.Thread.start (MI8: start
+	astepta lacatul Python, o data pe citirea listei cand firul nu rula)."""
+	fir_nou = None
 	with _lacat:
 		if _fundal["acum"] == cheie or any(c[3] == cheie for c in _fundal["coada"]):
 			return
-		_fundal["coada"].append((categorie, nume, cale, cheie, sem))
+		_fundal["coada"].append((categorie, nume, cale, cheie, sem, usor))
 		fir = _fundal["fir"]
 		if fir is None or not fir.is_alive():
-			fir = threading.Thread(target=_lucreaza, name="HdsPython2Verificare")
-			fir.daemon = True
-			_fundal["fir"] = fir
-			fir.start()
+			fir_nou = _FirVerificare()
+			_fundal["fir"] = fir_nou
+	if fir_nou is not None:
+		try:
+			_pornesteFir(_lucreaza, fir_nou)
+		except Exception as e:
+			_jurnal("firul verificarii nu a pornit: %r" % (e,))
+			with _lacat:
+				if _fundal["fir"] is fir_nou:
+					_fundal["fir"] = None
+			fir_nou.terminat()
 	_pornestePompa()
 
 
-def _lucreaza():
+def _lucreaza(fir=None):
 	"""firul de verificare: pluginurile din coada, unul cate unul; nimic din enigma (numai fisiere si STARE)"""
 	try:
-		os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), NICE_FUNDAL)
-	except (AttributeError, OSError):
-		pass
-	if INTARZIERE_FUNDAL_S > 0:
-		time.sleep(INTARZIERE_FUNDAL_S)
-	while True:
-		with _lacat:
-			if not _fundal["coada"]:
-				_fundal["fir"] = None
-				_fundal["acum"] = None
-				return
-			categorie, nume, cale, cheie, sem = _fundal["coada"].pop(0)
-			_fundal["acum"] = cheie
 		try:
-			_verificaInFundal(categorie, nume, cale, cheie, sem)
-		except Exception as e:
-			_jurnal("%s/%s: verificarea din fundal a cazut: %r" % (categorie, nume, e))
+			threading.current_thread().name = NUME_FIR
+		except Exception:
+			pass
+		try:
+			os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), NICE_FUNDAL)
+		except (AttributeError, OSError):
+			pass
+		if INTARZIERE_FUNDAL_S > 0:
+			time.sleep(INTARZIERE_FUNDAL_S)
+		while True:
+			with _lacat:
+				if not _fundal["coada"]:
+					if _fundal["fir"] is fir or fir is None:
+						_fundal["fir"] = None
+					_fundal["acum"] = None
+					return
+				categorie, nume, cale, cheie, sem, usor = _fundal["coada"].pop(0)
+				_fundal["acum"] = cheie
+			try:
+				_verificaInFundal(categorie, nume, cale, cheie, sem, usor)
+			except Exception as e:
+				_jurnal("%s/%s: verificarea din fundal a cazut: %r" % (categorie, nume, e))
+	finally:
+		if fir is not None:
+			with _lacat:
+				if _fundal["fir"] is fir:
+					_fundal["fir"] = None
+			fir.terminat()
 
 
-def _verificaInFundal(categorie, nume, cale, cheie, sem):
-	if semnatura(cale) != sem:
-		return          # pluginul s-a schimbat intre timp (opkg): citirea urmatoare il cere din nou
-	gata = [_progres(_citesteStare(), cheie, sem)]
+def _verificaInFundal(categorie, nume, cale, cheie, sem, usor=None):
+	proaspata = semnatura(cale)
+	if proaspata != sem:
+		# FRD: semnatura se afla aici, nu pe firul care citeste lista (sem None: prima data; alta: pluginul s-a schimbat de la
+		# cerere, si un .py schimbat fara plugin.py); memoria se face din nou, apoi ce stie STARE pentru semnatura de acum
+		sem = proaspata
+		with _lacat:
+			_semnaturi[cheie] = (usor, sem)
+		stare = _citesteStare()
+		if stare.get("verificate", {}).get(cheie) == sem:
+			return
+	else:
+		stare = _citesteStare()
+	semn = _semnPastrat(stare, cheie, sem)
+	if semn is not None:
+		# semnul gasit inainte (alta citire, alta pornire a interfetei): traducerea tot aici (FRZ 0.7.7)
+		_traduceInFundal(categorie, nume, cale, cheie, semn)
+		return
+	gata = [_progres(stare, cheie, sem)]
 	scris = [time.monotonic()]
 
 	def la_pas(n):
@@ -1355,10 +1719,13 @@ def _verificaInFundal(categorie, nume, cale, cheie, sem):
 			_tineMinteProgres(cheie, sem, n)
 
 	t0 = time.monotonic()
-	semn = semneStatice(cale, timp_maxim=TIMP_FUNDAL_S, de_la=gata[0], la_pas=la_pas, pauza=PAUZA_FUNDAL_S)
+	in_proces, semn = _semneInProces(cale, TIMP_FUNDAL_S, gata[0], la_pas)
+	if not in_proces:
+		semn = semneStatice(cale, timp_maxim=TIMP_FUNDAL_S, de_la=gata[0], la_pas=la_pas, pauza=PAUZA_FUNDAL_S)
 	durata = time.monotonic() - t0
 	if durata > 0.5:
-		_jurnal("%s/%s: verificarea din sursa (in fundal) %.1f s" % (categorie, nume, durata))
+		_jurnal("%s/%s: verificarea din sursa (in fundal%s) %.1f s" % (categorie, nume, ", proces separat" if in_proces else "",
+			durata))
 	if semn is TIMP_DEPASIT:
 		_tineMinteProgres(cheie, sem, gata[0])
 		return
@@ -1366,10 +1733,129 @@ def _verificaInFundal(categorie, nume, cale, cheie, sem):
 		return
 	_tineMinteVerdict(cheie, sem, semn)
 	if semn is not None:
-		_jurnal("%s/%s: cod de Python 2 in %s (%s), gasit in fundal: lista pluginurilor se citeste din nou" % (categorie, nume,
-			semn[0], semn[1]))
+		_jurnal("%s/%s: cod de Python 2 in %s (%s), gasit in fundal: il traduc tot aici" % (categorie, nume, semn[0], semn[1]))
+		_traduceInFundal(categorie, nume, cale, cheie, semn)
+
+
+# PLG 0.7.7 (masurat pe Octagonul SF8008 de proba, cu GT IPTV Player Pro 1.9.4 instalat): ast.parse e un apel C care tine lacatul
+# Python cat analizeaza. Pe firul de verificare fisierele mari ale lui GTI (main.py 376 KB: 1,79 s pe ARM, inca 4 peste 1 s)
+# opreau firul interfetei de 8-9 ori cate 1-3 s in cele 45-60 s ale verificarii (o data dupa instalare, actualizare sau
+# actualizarea imaginii). Acum verificarea din sursa merge intr-un proces python3 separat (nice 10, alt interpretor, fara
+# lacatul lui enigma2; ~37 MB de memorie cat tine, masurat pe GTI): firul de verificare doar citeste ce scrie procesul (pasii,
+# pentru progres, si semnul). Fara python3, cand procesul nu porneste sau nu scrie semnul, verificarea merge pe fir, ca pana
+# acum. Traducerea (numai pluginurile chiar scrise in Python 2, rare) ramane pe firul de verificare.
+PYTHON3 = "/usr/bin/python3"      # niciodata sys.executable: in enigma2 nu e un interpretor
+PROCES = True
+TIMP_PROCES_IN_PLUS_S = 60.0      # procesul se opreste singur la TIMP_FUNDAL_S; dupa inca atat il opreste firul
+_COPIL = """import json, os, sys
+radacina, cale, de_la, timp, parinte = sys.argv[1], sys.argv[2], int(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5])
+try:
+    os.nice(max(0, 10 - os.nice(0)))
+except Exception:
+    pass
+sys.path.insert(0, radacina)
+import builtins
+if not hasattr(builtins, "_"):
+    builtins._ = lambda s: s
+from Components import HdsPython2Traducere as T
+def pas(n):
+    if os.getppid() != parinte:
+        sys.exit(0)
+    sys.stdout.write("pas %d\\n" % n)
+    sys.stdout.flush()
+s = T.semneStatice(cale, timp_maxim=timp, de_la=de_la, la_pas=pas)
+sys.stdout.write("semn %s\\n" % json.dumps(None if s is None else list(s)))
+sys.stdout.flush()
+"""
+
+
+def _semneInProces(cale, timp_maxim, de_la, la_pas):
+	"""semneStatice intr-un proces python3 separat: (True, semnul) sau (False, None) cand nu s-a putut (verificarea merge atunci
+	pe fir). la_pas(n) se cheama pe firul acesta, pe masura ce procesul scrie pasii."""
+	if not PROCES or not os.access(PYTHON3, os.X_OK):
+		return False, None
+	import subprocess
+	radacina = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+	try:
+		p = subprocess.Popen([PYTHON3, "-I", "-B", "-c", _COPIL, radacina, cale, str(int(de_la)), repr(float(timp_maxim)),
+			str(os.getpid())], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, close_fds=True)
+	except (OSError, ValueError) as e:
+		_jurnal("verificarea in proces separat nu a pornit: %r" % (e,))
+		return False, None
+	ceas = threading.Timer(timp_maxim + TIMP_PROCES_IN_PLUS_S, p.kill)
+	ceas.daemon = True
+	ceas.start()
+	gasit, semn = False, None
+	try:
+		for rand in p.stdout:
+			rand = rand.decode("utf-8", "replace").strip()
+			if rand.startswith("pas "):
+				try:
+					la_pas(int(rand[4:]))
+				except ValueError:
+					pass
+			elif rand.startswith("semn "):
+				try:
+					v = json.loads(rand[5:])
+				except ValueError:
+					continue
+				if v is None or (isinstance(v, list) and len(v) == 2):
+					gasit, semn = True, (None if v is None else (str(v[0]), str(v[1])))
+	finally:
+		ceas.cancel()
+		try:
+			p.stdout.close()
+		except Exception:
+			pass
+		try:
+			p.wait(10)
+		except Exception:
+			p.kill()
+			try:
+				p.wait(5)
+			except Exception:
+				pass
+	if not gasit:
+		_jurnal("verificarea in proces separat nu a dat semnul (cod %s): o fac pe fir" % (p.returncode,))
+		return False, None
+	if semn == TIMP_DEPASIT:
+		semn = TIMP_DEPASIT
+	return True, semn
+
+
+def _traduceInFundal(categorie, nume, cale, cheie, semn):
+	"""Pe firul de verificare (FRZ 0.7.7): traducerea pluginului cu semnul gasit. Rezultatul ramane in _fundal["traduse"] pana la
+	citirea listei ceruta de pompa, cand dupaImport (pe firul interfetei) face numai ce cere enigma: modulul tradus importat din
+	nou, ori cererea motorului (python3-fissix). Semnatura fisierelor traduse se tine minte aici, ca dupaImport sa nu mai ceara
+	nimic dupa aceea."""
+	t0 = time.monotonic()
+	try:
+		r = traduceDosar(cale, timp_maxim=TIMP_TRADUCERE_FUNDAL_S, pauza=PAUZA_FUNDAL_S)
+	except Exception as e:
+		_jurnal("%s/%s: traducerea din fundal a cazut: %r" % (categorie, nume, e))
+		return
+	if r.stare == FARA_MOTOR:
+		# ca inainte: verificarea se reia dupa ce vine python3-fissix (semnul se uita, pluginul ramane cum s-a incarcat)
+		_tineMinteVerdict(cheie, semnatura(cale), None)
+		_uitaVerificarea(cale)
 		with _lacat:
-			_fundal["gasite"].append(cheie)
+			_semnaturi.pop(cheie, None)
+	else:
+		sem = semnatura(cale)
+		_tineMinteVerdict(cheie, sem, None)
+		try:
+			usor = _semnUsor(os.stat(os.path.join(cale, "plugin.py")))
+		except OSError:
+			usor = None
+		with _lacat:
+			if usor is None:
+				_semnaturi.pop(cheie, None)
+			else:
+				_semnaturi[cheie] = (usor, sem)
+	_jurnal("%s/%s: tradus in fundal: %s (%.1f s)" % (categorie, nume, r.stare, time.monotonic() - t0))
+	with _lacat:
+		_fundal["traduse"][cheie] = (r, semn)
+		_fundal["gasite"].append(cheie)     # pompa citeste lista din nou; dupaImport importa pluginul tradus
 
 
 def _pornestePompa():
@@ -1392,8 +1878,14 @@ def _pornestePompa():
 
 
 def _recitesteLista():
-	"""numai citirea listei (ca reincarcaPluginuri dupa opkg, dar fara curatarea locurilor orfane, care sterge fisiere)"""
+	"""numai citirea listei (ca reincarcaPluginuri dupa opkg, dar fara curatarea locurilor orfane, care sterge fisiere).
+	0.7.7 (UPD): nu cand programul imaginii s-a schimbat pe disc sub interfata (pluginurile noi ar cadea in procesul vechi;
+	traducerea se face la pornirea urmatoare)"""
 	import importlib
+	from Components.HdsPluginExtern import imagineSchimbataPeDisc
+	if imagineSchimbataPeDisc():
+		_jurnal("lista pluginurilor nu se citeste din nou: programul imaginii s-a schimbat pe disc (interfata trebuie repornita)")
+		return
 	from Components.PluginComponent import plugins
 	from Tools.Directories import resolveFilename, SCOPE_PLUGINS
 	importlib.invalidate_caches()
@@ -1432,18 +1924,39 @@ def dupaImport(categorie, nume, cale, plugin, importa):
 	Pe receptor (FUNDAL) recunoasterea merge pe firul de verificare: pluginul ramane cum s-a incarcat, iar semnul gasit acolo se
 	traduce la citirea urmatoare a listei (ceruta singura, vezi pompa)."""
 	try:
-		if _pluginImagine(categorie, nume) or not os.path.exists(os.path.join(cale, "plugin.py")):
+		if _pluginImagine(categorie, nume):
 			return plugin
-		stare = _citesteStare()
+		try:
+			st_plugin = os.stat(os.path.join(cale, "plugin.py"))
+		except OSError:
+			return plugin
 		cheie = _cheie(cale)
-		sem = semnatura(cale)
+		if FUNDAL:
+			# FRZ 0.7.7: pluginul tradus pe firul de verificare; aici numai importul din nou
+			with _lacat:
+				gata_tradus = _fundal["traduse"].pop(cheie, None)
+			if gata_tradus is not None:
+				return _dupaTraducere(categorie, nume, cale, plugin, importa, gata_tradus[0])
+			# FRD: pe firul care citeste lista numai statul lui plugin.py; semnatura vine din memoria facuta de firul de verificare
+			usor = _semnUsor(st_plugin)
+			tinut = _semnaturi.get(cheie)
+			if tinut is None or tinut[0] != usor:
+				_cereVerificarea(categorie, nume, cale, cheie, None, usor)
+				return plugin
+			sem = tinut[1]
+		else:
+			sem = semnatura(cale)
+		# PLG 0.7.7: STARE (JSON pe memoria interna) se citeste abia aici, nu pentru fiecare plugin strain la fiecare citire a listei:
+		# la pornirea interfetei memoria semnaturilor e goala, deci pe firul interfetei nu se mai citeste nimic din STARE
+		stare = _citesteStare()
 		if stare.setdefault("verificate", {}).get(cheie) == sem:
 			return plugin
 		semn = _semnPastrat(stare, cheie, sem)
+		if FUNDAL:
+			# fara semn: verificarea; cu semnul pastrat (gasit inainte): traducerea; amandoua pe firul de verificare (FRZ 0.7.7)
+			_cereVerificarea(categorie, nume, cale, cheie, sem, tinut[0])
+			return plugin
 		if semn is None:
-			if FUNDAL:
-				_cereVerificarea(categorie, nume, cale, cheie, sem)
-				return plugin
 			semn = _verificaPeLoc(categorie, nume, cale, cheie, sem, stare)
 			if semn is TIMP_DEPASIT:
 				return plugin       # oprita de timp, nu terminata: se reia la citirea urmatoare, de unde a ramas
@@ -1453,12 +1966,20 @@ def dupaImport(categorie, nume, cale, plugin, importa):
 		_jurnal("%s/%s: cod de Python 2 in %s (%s)" % (categorie, nume, semn[0], semn[1]))
 		r = traduceDosar(cale)
 		_tineMinteVerdict(_cheie(cale), semnatura(cale), None)
+		with _lacat:
+			_semnaturi.pop(_cheie(cale), None)   # fisierele traduse au alta semnatura: firul o afla la citirea urmatoare
 	except Exception as e:
 		_jurnal("%s/%s: verificarea a cazut: %r" % (categorie, nume, e))
 		return plugin
 	if r.stare == FARA_MOTOR:
-		# fara motor: pluginul ramane cum e (s-a incarcat); verificarea se reia dupa ce vine python3-fissix
 		_uitaVerificarea(cale)
+	return _dupaTraducere(categorie, nume, cale, plugin, importa, r)
+
+
+def _dupaTraducere(categorie, nume, cale, plugin, importa, r):
+	"""pe firul care citeste lista, dupa traducerea pluginului (pe loc sau pe firul de verificare): ce cere enigma"""
+	if r.stare == FARA_MOTOR:
+		# fara motor: pluginul ramane cum e (s-a incarcat); verificarea se reia dupa ce vine python3-fissix
 		_jurnal("%s/%s: lipseste traducatorul (python3-fissix)" % (categorie, nume))
 		try:
 			from Components import HdsModuleLipsa
@@ -1498,6 +2019,11 @@ def incearca(categorie, nume, cale, exc, importa):
 	motorul (Components/HdsModuleLipsa.py il aduce) sau Python2Netradus."""
 	try:
 		if _pluginImagine(categorie, nume):
+			return None
+		# PY2 0.7.7: importul s-a oprit pe un modul nativ al pluginului facut pentru alt Python (.so cu un nume lipsa, "built for
+		# Python 3.13"): fara traducere si fara python3-fissix; lista pluginurilor spune ca e facut pentru alta versiune de Python
+		# (Components/PluginComponent.py, alt_python, din Components/HdsAltPython.py)
+		if nativNeincarcat(exc):
 			return None
 		# tradus de o versiune mai veche a traducatorului si tot cade (orice eroare, de pilda "unknown location" din raportul
 		# 781623): se traduce din nou din originale; altfel numai la semnele lui Python 2

@@ -319,4 +319,10 @@ T = {
 	"cpu_mode": u"وضع المعالج",
 	"cpu_volt": u"الجهد",
 	"cpu_steps": u"الوقت لكل تردد",
+	"bitrate_va": u"معدل بت الفيديو · الصوت",
+	"br_min": u"أدنى",
+	"br_max": u"أقصى",
+	"br_avg": u"متوسط",
+	"ecm_hop": u"القفزات",
+	"ecm_reader": u"قارئ",
 }

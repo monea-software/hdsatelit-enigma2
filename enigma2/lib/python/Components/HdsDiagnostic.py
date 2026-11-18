@@ -779,6 +779,9 @@ TEXTE_ENGLEZA = {
 	"Coduri:": "Codes:",
 	"Da": "Yes",
 	"Dacă nu se schimbă nimic, aici apare în curând codul de diagnostic.": "If nothing changes, the diagnostic code appears here soon.",
+	"Se termină actualizarea software…": "Finishing the software update…",
+	"Nu opri receptorul. Pe un stick USB poate dura câteva minute; interfața pornește singură la sfârșit.":
+		"Do not turn the receiver off. On a USB stick this can take a few minutes; the interface starts by itself at the end.",
 	"Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este.": "The receiver data in this software is damaged or from another version, so we cannot check which receiver it is for.",
 	"De obicei pornirea durează sub un minut.": "The start usually takes less than a minute.",
 	"Detalii": "Details",
@@ -956,6 +959,9 @@ TEXTE_PORNIRE = {
 	"lent": N_("Pornirea durează mai mult decât de obicei…"),
 	"lent2": N_("Dacă nu se schimbă nimic, aici apare în curând codul de diagnostic."),
 	"E306": N_("Pornirea s-a oprit înainte de interfață, la pasul arătat pe afișaj."),
+	# MI6 0.7.5: ecranul lui tools/hds-actualizare-intrerupta.py (hds-rezerva-ecran.py, faza actualizare)
+	"actualizare": N_("Se termină actualizarea software…"),
+	"actualizare2": N_("Nu opri receptorul. Pe un stick USB poate dura câteva minute; interfața pornește singură la sfârșit."),
 }
 
 

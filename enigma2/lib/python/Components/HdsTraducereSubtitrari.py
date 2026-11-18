@@ -122,6 +122,20 @@
 # (Components/HdsTraducereTeletext.py) si textele vazute ale paginilor HbbTV (HdsNavigator/hds-hbbtv.js, prin
 # HdsWebControl/traducere_hbbtv_web.py). Lucreaza si cand traducerea subtitrarilor e oprita, ca "Tradu EPG".
 #
+# CAND NU SE TRADUCE (motivFaraTraducere, aceeasi hotarare pentru nucleu, OCR, ecran si web):
+#   - pista e deja in limba tinta: limba din eticheta pistei (pistaAleasa). O pista de canal FARA LIMBA (eticheta
+#     goala, und, qaa, ca paginile de teletext gasite din mers, pe care nucleul le da cu und) primeste limba ghicita
+#     dupa canal, ca la OCR (limbaGhicita: Components/HdsOcrLimbaGhicita, ghidul TV, sunetul, celelalte canale de pe
+#     transponder; la versiunea originala numai ghidul). Limba ghicita foloseste NUMAI aici: spre serviciu sursa ramane
+#     necunoscuta (serviciul o afla singur), ca o ghicire gresita sa nu strice traducerea. Cand sunetul si ghidul nu au
+#     sosit inca, ghicirea se reia la pagini (GHICIRE_DIN_NOU_S, de cel mult GHICIRE_INCERCARI ori), fara transponder.
+#     O eticheta cu o limba stiuta (si una din afara LIMBI_TINTA) nu se ghiceste: se traduce, ca pana acum.
+#   - traducerea e oprita de om pe canalul de acum (CANALELE OPRITE: randul Traducerea pe canalul de acum, pe
+#     televizor si in web, lista din web cu Scoate). Fisierul CALE_CANALE_OPRITE (cheia canalului ca in
+#     Components/HdsPisteLimbi.cheieCanal, plus numele de atunci), scris atomic; intra in copia setarilor cu tot
+#     /etc/enigma2. Pe un canal oprit nici alegerea automata a subtitrarii (HdsPisteLimbi.limbaTraducerii) nu mai
+#     porneste o subtitrare pentru traducere; dupa o schimbare subtitrarea canalului se alege din nou pe loc.
+#
 # API (nucleu, ecrane, web):
 #   initConfig()                     setarile (config.hds_traducere)
 #   legaNucleul()                    din Screens/SubtitleDisplay.py: functia pusa sau scoasa dupa setari (si la
@@ -155,6 +169,9 @@
 #   locServiciu(), etichetaLoc(), numeCuLoc()   unde lucreaza un serviciu (pe internet / local), pentru toate listele
 #   puneEticheteleServiciilor()      alegerea Serviciul de pe televizor cu unde lucreaza fiecare
 #   contCloudflareBun(), MODELE_GROQ, MODELE_CLOUDFLARE   ID-ul contului Cloudflare si modelele propuse (ecran, web)
+#   canalDeAcum(), stareCanale()     (cheia, numele) canalului care merge; {"acum", "oprite"} pentru ecran si web
+#   opritPeCanal(cheie), opritPeCanalulDeAcum(), puneOpritPeCanal(cheie, oprit, nume)   canalele fara traducere
+#   limbaGhicita(eticheta, fel)      limba (ISO 639-1) unei piste de canal fara limba, ghicita dupa canal; "" altfel
 
 from __future__ import absolute_import
 
@@ -233,6 +250,15 @@ ULTIMELE = 12
 CEAS_SIGURANTA_MS = 250
 
 CALE_CHEI = "/etc/enigma2/hdsatelit/traducere-chei.bin"
+# canalele pe care omul a oprit traducerea (JSON: {"v": 1, "canale": [[cheie, nume], ...]}, in ordinea opririi)
+CALE_CANALE_OPRITE = "/etc/enigma2/hdsatelit/traducere-canale-oprite.json"
+MAX_CANALE_OPRITE = 2000      # paza pentru un fisier umflat; un om opreste cateva canale
+MAX_OCTETI_CANALE = 512 * 1024
+MAX_NUME_CANAL = 80
+# pista fara limba a carei limba nu s-a putut ghici la alegere (sunetul sau ghidul emisiunii sosesc dupa PMT): ghicirea
+# se reia la pagini, cel mult o data la GHICIRE_DIN_NOU_S, de GHICIRE_INCERCARI ori (cam un minut)
+GHICIRE_DIN_NOU_S = 10.0
+GHICIRE_INCERCARI = 6
 # plicul fisierului cheilor: 1 = identitateVeche (adresa | /etc/machine-id, se schimba la flash), 2 = identitateAparat
 VERSIUNE_CHEI = 2
 VERSIUNI_CHEI = (1, 2)
@@ -3137,6 +3163,9 @@ class Traducator(object):
 		self.media_ms = None
 		self.ultima_proba = None
 		self.sursa = ""
+		self.sursa_ghicita = ""		# limba unei piste fara limba, ghicita dupa canal: numai pentru deja in limba tinta
+		self._ghicire = None		# pista fara limba inca neghicita: ghicirea se reia la pagini (_reiaGhicirea)
+		self.canal_oprit = False	# traducerea oprita de om pe canalul pistei de acum (canalele oprite)
 		self.trezire = Trezire(self.proceseaza) if cu_trezire else None
 		self.puneContorulLaZero()
 
@@ -3206,13 +3235,63 @@ class Traducator(object):
 		with self.lacat:
 			return bool(self.coada) or self.fire > 0
 
+	# ------------------------------------------------------------------ cand nu se traduce
+	def motivFaraTraducere(self, tinta):
+		"""De ce pista de acum nu se traduce, fara nicio cerere: "canal_oprit" (oprita de om pe canal), "deja_tinta"
+		(limba pistei, sau la o pista fara limba cea ghicita dupa canal, e chiar limba tinta) sau "" (se traduce)."""
+		if self.canal_oprit:
+			return "canal_oprit"
+		if self._ghicire is not None and not self.sursa:
+			self._reiaGhicirea()
+		if tinta and (self.sursa == tinta or (not self.sursa and self.sursa_ghicita == tinta)):
+			return "deja_tinta"
+		return ""
+
+	def pistaFaraLimba(self, eticheta, fel, ghiceste=None):
+		"""Pista aleasa nu are limba stiuta: limba ghicita dupa canal acum (cu transponderul), altfel ghicirea se reia
+		la pagini, fara transponder. ghiceste(eticheta, fel, transponder) -> cod ISO 639-1 sau "" (probele il dau)."""
+		ghiceste = ghiceste or limbaGhicita
+		self.sursa_ghicita = ghiceste(eticheta, fel, True) or ""
+		self._ghicire = None
+		if self.sursa_ghicita:
+			_jurnal("pista fara limba: limba ghicita dupa canal %s" % self.sursa_ghicita)
+		else:
+			self._ghicire = {"eticheta": eticheta, "fel": fel, "incercari": 0, "dupa": self._acum() + GHICIRE_DIN_NOU_S,
+				"ghiceste": ghiceste}
+
+	def _reiaGhicirea(self):
+		g = self._ghicire
+		acum = self._acum()
+		if g is None or acum < g["dupa"]:
+			return
+		g["incercari"] += 1
+		g["dupa"] = acum + GHICIRE_DIN_NOU_S
+		try:
+			limba = g["ghiceste"](g["eticheta"], g["fel"], False) or ""
+		except Exception as e:
+			_jurnal("ghicirea limbii: %s" % e.__class__.__name__)
+			limba = ""
+		if limba:
+			self.sursa_ghicita = limba
+			self._ghicire = None
+			_jurnal("pista fara limba: limba ghicita dupa canal %s (la pagina)" % limba)
+		elif g["incercari"] >= GHICIRE_INCERCARI:
+			self._ghicire = None
+			_jurnal("pista fara limba: limba nu se poate ghici, se traduce")
+
+	def uitaPista(self):
+		self.sursa = ""
+		self.sursa_ghicita = ""
+		self._ghicire = None
+		self.canal_oprit = False
+
 	# ------------------------------------------------------------------ paginile
 	def laPagina(self, generatie, texte, fel=0, intarziere_ms=-1, cfg=None, rezerve=None):
 		"""functia nucleului. -> lista de traduceri (din memorie), True (vine prin setTranslation; fiecare pagina asteptata
 		primeste un raspuns, si renuntarea: setTranslation(gen, [])), None (nu se traduce acum: campuri lipsa, pauza
-		dupa erori, niciun serviciu liber; nucleul arata originalul cu semn) sau False (fara text, deja in limba tinta:
-		originalul curat). cfg / rezerve: configuratia serviciului principal si ale rezervelor (probele); implicit din
-		setari."""
+		dupa erori, niciun serviciu liber; nucleul arata originalul cu semn) sau False (fara text, deja in limba tinta,
+		traducerea oprita pe canal: originalul curat; motivFaraTraducere). cfg / rezerve: configuratia serviciului
+		principal si ale rezervelor (probele); implicit din setari."""
 		if cfg is None:
 			# televizorul stins (dupa driverul HDMI): nimeni nu citeste, deci nimic nu pleaca la serviciu (originalul curat)
 			if _tvStins():
@@ -3246,8 +3325,8 @@ class Traducator(object):
 		lant = folosite
 		cfg = lant[0]
 		sursa = self.sursa
-		if sursa and sursa == cfg["tinta"]:
-			return False		# subtitrarea e deja in limba tinta
+		if self.motivFaraTraducere(cfg["tinta"]):
+			return False		# deja in limba tinta (si cea ghicita dupa canal), sau traducerea oprita pe canal
 		traduse = self._dinMemorie(lant, pagina)
 		if traduse is not None:
 			if generatie:
@@ -4460,6 +4539,8 @@ _PISTA_TRADUCERE = [None]
 def diagnosticPornire(s=None, pista=None, ocr=None):
 	"""Explica starea pistei alese pentru televizor si web, fara cereri la serviciul de traducere."""
 	s = s or initConfig()
+	# pista de acum: hotararea traducatorului (limba ghicita dupa canal, canalul oprit) se aplica si aici
+	deAcum = pista is None or pista is _PISTA_TRADUCERE[0]
 	pista = _PISTA_TRADUCERE[0] if pista is None else pista
 	fel, limba, poza = None, u"", False
 	if isinstance(pista, (list, tuple)):
@@ -4489,9 +4570,14 @@ def diagnosticPornire(s=None, pista=None, ocr=None):
 	lant = lantul(s)
 	if not any(not ceLipseste(c) for c in lant):
 		return rezultat("configurare", textCeLipsesteCuSfat(lant[0], s))
+	if deAcum and opritPeCanalulDeAcum():
+		return rezultat("canal_oprit", _t(TEXT_CANAL_OPRIT))
 	if pista is None:
 		return rezultat("fara_pista", _t("Nu este pornită nicio pistă de subtitrare. Alege o pistă; textul scris direct în imaginea filmului nu poate fi tradus."))
-	if cod2(limba) and cod2(limba) == limbaTinta(s):
+	tinta = limbaTinta(s)
+	t = _INSTANTA[0]
+	ghicita = t.sursa_ghicita if deAcum and t is not None and not t.sursa else u""
+	if (cod2(limba) and cod2(limba) == tinta) or (ghicita and ghicita == tinta):
 		return rezultat("deja_tinta", _t("Subtitrarea este deja în limba aleasă pentru traducere."))
 	if not necesita:
 		if fel == 1:
@@ -4535,14 +4621,15 @@ def cereOcr():
 
 
 def traduceDvbAcum():
-	"""traducerea e pornita pentru subtitrarile DVB si chiar traduce pista de acum: limba ei (pistaAleasa) nu e deja
-	limba tinta; o pista fara limba stiuta se traduce (Components/HdsOcrSubtitrari.ocrDeFolos)"""
+	"""traducerea e pornita pentru subtitrarile DVB si chiar traduce pista de acum (motivFaraTraducere: limba ei, sau
+	cea ghicita dupa canal la o pista fara limba, nu e deja limba tinta, iar canalul nu e oprit); o pista fara limba
+	care nu se poate ghici se traduce (Components/HdsOcrSubtitrari.ocrDeFolos)"""
 	try:
 		s = initConfig()
 		if not (s.pornit.value and s.dvb.value):
 			return False
-		sursa = _INSTANTA[0].sursa if _INSTANTA[0] is not None else ""
-		return not (sursa and sursa == limbaTinta(s))
+		t = _INSTANTA[0]
+		return t is None or not t.motivFaraTraducere(limbaTinta(s))
 	except Exception:
 		return False
 
@@ -4582,29 +4669,253 @@ def inainte(texte):
 
 
 def pistaAleasa(pista):
-	"""limba subtitrarii pornite (tuplul din getSubtitleList, sau un cod): sursa cererilor; aceeasi limba = nimic"""
+	"""limba subtitrarii pornite (tuplul din getSubtitleList, sau un cod): sursa cererilor; aceeasi limba = nimic. O
+	pista de canal fara limba stiuta primeste limba ghicita dupa canal (numai pentru deja in limba tinta); canalul
+	oprit de om se citeste acum."""
 	_PISTA_TRADUCERE[0] = pista
-	limba = u""
+	limba, eticheta, fel, stiuta = u"", u"", None, True
 	try:
 		if isinstance(pista, (list, tuple)):
-			limba = pista[4] if len(pista) > 4 else u""
+			eticheta = pista[4] if len(pista) > 4 else u""
+			limba = eticheta
+			try:
+				fel = int(pista[0])
+			except (TypeError, ValueError, IndexError):
+				fel = None
 			try:
 				from Components.HdsPisteLimbi import limbiDinText
-				l = limbiDinText(limba)
-				limba = l[0] if l else limba
+				l = limbiDinText(eticheta)
+				limba = l[0] if l else eticheta
+				stiuta = bool(l)
 			except Exception:
-				pass
+				stiuta = bool(cod2(eticheta))
 		else:
 			limba = pista or u""
 	except Exception:
 		limba = u""
-	instanta().sursa = cod2(limba)
+	t = instanta()
+	t.uitaPista()
+	t.sursa = cod2(limba)
+	if not initConfigSigur("pornit"):
+		return		# traducerea oprita: nimic de ghicit; pornita mai tarziu, _laSchimbare cheama din nou pistaAleasa
+	if not stiuta and not t.sursa and fel in (0, 1):
+		t.pistaFaraLimba(eticheta, fel)
+	t.canal_oprit = opritPeCanalulDeAcum()
 
 
 def pistaOprita():
 	_PISTA_TRADUCERE[0] = None
 	if _INSTANTA[0] is not None:
-		_INSTANTA[0].sursa = ""
+		_INSTANTA[0].uitaPista()
+
+
+# ------------------------------------------------------------------ pista fara limba: limba ghicita dupa canal
+
+def _componentaSubtitrare(c, continut):
+	try:
+		return int(c[2]) == continut
+	except (TypeError, ValueError, IndexError):
+		return False
+
+
+def _versiuneOriginala(eticheta):
+	try:
+		from Components.HdsOcrSubtitrari import esteVersiuneOriginala
+		return bool(esteVersiuneOriginala(eticheta))
+	except Exception:
+		return False
+
+
+def limbaGhicita(eticheta, fel, transponder=True, date=None):
+	"""Limba (ISO 639-1) unei piste de canal fara limba declarata (eticheta goala, und, qaa ...), ghicita dupa canalul
+	de acum ca la OCR (Components/HdsOcrLimbaGhicita): ghidul TV, sunetul, celelalte canale de pe transponder (numai cu
+	transponder=True). La teletext (fel 1) componentele de subtitrare DVB din ghid nu spun nimic (sunt ale altei piste);
+	la versiunea originala (qaa, orig) numai ghidul. Numai pistele canalelor (DVB 0, teletext 1): un film din fisier n-are
+	canal. "" cand nu se stie. date: {"componente", "audio", "transponder"} (probele), altfel canalul de acum."""
+	if fel not in (0, 1):
+		return u""
+	try:
+		from Components import HdsOcrLimbaGhicita as G
+	except Exception:
+		return u""
+	try:
+		if date is None:
+			date = G.dateCanalDeAcum() or {}
+		componente = list(date.get("componente") or ())
+		if fel == 1:
+			componente = [c for c in componente if not _componentaSubtitrare(c, G.CONTINUT_SUBTITRARE)]
+		if _versiuneOriginala(eticheta):
+			l = G.dinComponenteSubtitrare(componente) if fel == 0 else None
+		else:
+			l = G.ghiceste(componente, date.get("audio"), date.get("transponder") if transponder else None)[0]
+	except Exception as e:
+		_jurnal("ghicirea limbii: %s" % e.__class__.__name__)
+		return u""
+	return cod2(l) if l else u""
+
+
+# ------------------------------------------------------------------ canalele oprite (traducerea oprita de om pe canal)
+
+def _textCanal(valoare, maxim):
+	if isinstance(valoare, bytes):
+		valoare = valoare.decode("utf-8", "replace")
+	t = u"%s" % (valoare or u"",)
+	return u"".join(c for c in t if ord(c) >= 32 and c not in u"\u0086\u0087")[:maxim].strip()
+
+
+def _citesteCanaleOprite(cale=None):
+	"""OrderedDict cheie -> nume, din CALE_CANALE_OPRITE; un fisier lipsa, stricat sau prea mare = niciun canal"""
+	cale = cale or CALE_CANALE_OPRITE
+	rez = OrderedDict()
+	try:
+		if os.path.getsize(cale) > MAX_OCTETI_CANALE:
+			_jurnal("canalele oprite: fisierul e prea mare, se ignora")
+			return rez
+		with open(cale, "rb") as f:
+			date = json.loads(f.read().decode("utf-8"))
+		for intrare in (date.get("canale") or [])[:MAX_CANALE_OPRITE]:
+			if isinstance(intrare, (list, tuple)) and intrare:
+				cheie = _textCanal(intrare[0], 300)
+				if cheie and cheie not in rez:
+					rez[cheie] = _textCanal(intrare[1] if len(intrare) > 1 else u"", MAX_NUME_CANAL)
+	except (OSError, IOError):
+		pass
+	except Exception as e:
+		_jurnal("canalele oprite nu se pot citi: %s" % e.__class__.__name__)
+		return OrderedDict()
+	return rez
+
+
+def _scrieCanaleOprite(canale, cale=None):
+	"""scris atomic (.nou, fsync, os.replace); fisierul se sterge cand lista e goala -> True daca s-a scris"""
+	cale = cale or CALE_CANALE_OPRITE
+	try:
+		if not canale:
+			if os.path.exists(cale):
+				os.remove(cale)
+			return True
+		dosar = os.path.dirname(cale)
+		if dosar and not os.path.isdir(dosar):
+			os.makedirs(dosar)
+		date = json.dumps({"v": 1, "canale": [[c, n] for c, n in list(canale.items())[:MAX_CANALE_OPRITE]]},
+			ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+		nou = cale + ".nou"
+		with open(nou, "wb") as f:
+			f.write(date)
+			f.flush()
+			os.fsync(f.fileno())
+		os.replace(nou, cale)
+		return True
+	except Exception as e:
+		_jurnal("canalele oprite nu se pot scrie: %s" % e.__class__.__name__)
+		return False
+
+
+def canaleOprite(cale=None):
+	"""[{"cheie", "nume"}] in ordinea opririi"""
+	return [{"cheie": c, "nume": n} for c, n in _citesteCanaleOprite(cale).items()]
+
+
+def opritPeCanal(cheie, cale=None):
+	return bool(cheie) and cheie in _citesteCanaleOprite(cale)
+
+
+def _refDeAcum():
+	try:
+		import NavigationInstance
+		nav = NavigationInstance.instance
+		return nav.getCurrentlyPlayingServiceReference() if nav is not None else None
+	except Exception:
+		return None
+
+
+def _numeServiciu(ref):
+	try:
+		from ServiceReference import ServiceReference
+		return _textCanal(ServiceReference(ref).getServiceName(), MAX_NUME_CANAL)
+	except Exception:
+		return u""
+
+
+def canalDeAcum(ref=None):
+	"""(cheia, numele) canalului care merge (la o inregistrare, canalul ei de origine; Components/HdsPisteLimbi.cheieCanal),
+	sau (None, "")"""
+	ref = ref if ref is not None else _refDeAcum()
+	if ref is None:
+		return None, u""
+	try:
+		from Components import HdsPisteLimbi as L
+		cheie = L.cheieCanal(ref)
+	except Exception:
+		cheie = None
+	if not cheie:
+		return None, u""
+	nume = u""
+	try:
+		cale = ref.getPath()
+	except Exception:
+		cale = u""
+	if cale and cale.startswith("/"):
+		try:
+			from enigma import eServiceCenter, eServiceReference, iServiceInformation
+			info = eServiceCenter.getInstance().info(ref)
+			origine = info and info.getInfoString(ref, iServiceInformation.sServiceref)
+			nume = _numeServiciu(eServiceReference(origine)) if origine else u""
+		except Exception:
+			nume = u""
+	else:
+		nume = _numeServiciu(ref)
+	return cheie, nume
+
+
+def opritPeCanalulDeAcum(cale=None):
+	"""traducerea e oprita de om pe canalul care merge acum"""
+	return opritPeCanal(canalDeAcum()[0], cale)
+
+
+def stareCanale(cale=None):
+	"""{"acum": {"cheie", "nume", "oprit"} sau None (niciun canal), "oprite": [{"cheie", "nume"}]}, pentru ecran si web"""
+	canale = _citesteCanaleOprite(cale)
+	cheie, nume = canalDeAcum()
+	acum = {"cheie": cheie, "nume": nume or canale.get(cheie, u""), "oprit": cheie in canale} if cheie else None
+	return {"acum": acum, "oprite": [{"cheie": c, "nume": n} for c, n in canale.items()]}
+
+
+def puneOpritPeCanal(cheie, oprit, nume=u"", cale=None):
+	"""Opreste (oprit=True) sau porneste din nou traducerea pe canalul `cheie`, salvat pe loc. Pe canalul de acum
+	traducatorul afla pe loc, iar subtitrarea canalului se alege din nou (Components/HdsPisteLimbi). -> True daca s-a
+	salvat (si cand nu era nimic de schimbat)."""
+	cheie = _textCanal(cheie, 300)
+	if not cheie:
+		return False
+	canale = _citesteCanaleOprite(cale)
+	if bool(oprit) == (cheie in canale):
+		return True
+	if oprit:
+		if len(canale) >= MAX_CANALE_OPRITE:
+			canale.popitem(last=False)
+		canale[cheie] = _textCanal(nume, MAX_NUME_CANAL)
+	else:
+		canale.pop(cheie, None)
+	if not _scrieCanaleOprite(canale, cale):
+		return False
+	_jurnal("traducerea %s pe un canal" % ("oprita" if oprit else "pornita din nou"))
+	t = _INSTANTA[0]
+	if t is not None and cheie == canalDeAcum()[0]:
+		t.canal_oprit = bool(oprit)
+		try:
+			from Components import HdsPisteLimbi
+			HdsPisteLimbi._traducereSchimbata()
+		except Exception as e:
+			_jurnal("subtitrarea canalului dupa schimbare: %s" % e.__class__.__name__)
+	return True
+
+
+# Pe canalul de acum traducerea e oprita de om (diagnosticul de dupa Salveaza, televizor si web)
+TEXT_CANAL_OPRIT = N_("Pe canalul de acum traducerea e oprită.")
+TEXT_RAND_CANAL = N_("Traducerea pe canalul de acum")
+TEXT_AJUTOR_CANAL = N_("Nu: pe canalul acesta subtitrările nu se mai traduc și nu mai pornesc singure pentru traducere.")
+TEXT_CANALE_OPRITE = N_("Canalele fără traducere")
 
 
 def pentruNucleu(widget, t=None):
@@ -4665,6 +4976,13 @@ def puneLegatura(widget=None):
 
 def _laSchimbare(element=None):
 	instanta().setariSchimbate()
+	if element is None or element is initConfig().pornit:
+		# traducerea pornita peste o subtitrare care merge deja: limba ghicita si canalul oprit se afla acum
+		try:
+			if _PISTA_TRADUCERE[0] is not None:
+				pistaAleasa(_PISTA_TRADUCERE[0])
+		except Exception as e:
+			_jurnal("pista de acum dupa setari: %s" % e.__class__.__name__)
 	puneEticheteleServiciilor()		# o adresa schimbata: (local) sau (pe internet) dupa ea
 	try:
 		from Components import HdsTraducereEpg

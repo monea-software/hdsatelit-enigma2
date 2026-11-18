@@ -12,7 +12,15 @@
 # fara argumente, afla singur modulul pornit (Components/HdsModuleAcces), la deschidere si la fiecare citire. Citirile
 # sunt fisiere mici, o data la 3 s, pe firul enigma2; pagina derulata cu sagetile ramane la fiecare citire.
 # Tastele sunt toate tratate (WizardActions + ColorActions), ca jurnalul sa nu scrie „unknown action”.
+# 0.7.7 (MGR/PLAN-078 punctul 3): sub ce decripteaza acum, cititoarele si clientii modulului (starea, canalul, timpul de
+# raspuns) si ultimele randuri din jurnalul lui, din interfata web a modulului, pe receptor, fara parola pe reteaua de
+# acasa (Components/HdsJurnalModul.py); ecranul se deschide si din OK > Despre decriptare pe modulul care ruleaza, deci tot
+# ce arata pagina modulului se vede pe televizor dintr-o privire, fara navigator. Portul interfetei se afla o data, pe un
+# fir (HdsJurnalModul.interfata_pentru); interfata se citeste tot pe un fir, o cerere odata, la fiecare citire; dupa ce
+# interfata a cerut parola si cea din setarile modulului nu merge, nu se mai incearca pana la redeschiderea ecranului.
+# Aceleasi randuri sunt in pagina web Acces condiționat (HdsWebControl/acces_conditionat_web.py).
 import io
+import threading
 import time
 
 from enigma import eTimer
@@ -25,6 +33,23 @@ from Components.Sources.StaticText import StaticText
 FISIER_ECM = "/tmp/ecm.info"
 ECM_MAXIM = 4096           # octeti cititi din FISIER_ECM
 CITIRE = 3000              # ms intre doua citiri
+
+
+def emulatorulPornit(sistem=None):
+	"""0.7.7: (nume, pid) al modulului pornit (modulele obisnuite, apoi serverele de carduri; in fiecare, intai cel ales;
+	procesul e cel care lucreaza, CamSetup.pid_de_aratat), sau (None, None). Fara widgeturi si fara enigma, deci bun de rulat
+	pe un fir; fiecare cale se citeste o singura data (HdsModuleAcces.SistemCuMemorie)."""
+	from Components import HdsModuleAcces
+	from .CamSetup import pid_de_aratat
+	sistem = HdsModuleAcces.SistemCuMemorie(sistem or HdsModuleAcces.SistemAcces())
+	for st in HdsModuleAcces.feluri_de_aratat(sistem, pregateste=False):
+		pornite = st.pornite()
+		ales = st.ales_emulator()
+		if ales is not None and ales.pids:
+			pornite = [ales] + [e for e in pornite if e is not ales]
+		if pornite:
+			return pornite[0].sufix, pid_de_aratat(sistem, pornite[0].pids)
+	return None, None
 
 
 class CamInfo(Screen):
@@ -42,6 +67,9 @@ class CamInfo(Screen):
 		self.automat = daemon_name is None
 		self.daemon_name = daemon_name
 		self.daemon_pid = pid
+		self.cititor = None        # 0.7.7: citirea modulului pornit pe un fir (HdsModuleAcces.CitirePeFir)
+		self.citit = not self.automat
+		self.aratat = False
 		if self.automat:
 			self.aflaEmulatorul()
 		self.setTitle(_("Informații despre decriptare"))
@@ -65,6 +93,11 @@ class CamInfo(Screen):
 		}, -1)
 
 		self.pagina = 0            # cate pagini s-au derulat, puse la loc dupa fiecare citire (setText muta textul sus)
+		# 0.7.7: interfata web a modulului aratat (HdsJurnalModul): cheia (nume, pid), interfata gasita, ultimul rezultat
+		self.web = {"cheie": None, "cautata": False, "interfata": None, "rezultat": None, "oprit": False}
+		self.lucruWeb = None       # citirea de pe fir, in lucru
+		self.ceasWeb = eTimer()
+		self.ceasWeb.callback.append(self.verificaWeb)
 
 		self.timer = eTimer()
 		self.timer.callback.append(self.refresh)
@@ -90,37 +123,55 @@ class CamInfo(Screen):
 		return max(0, min(pagina, (w.pages or 1) - 1))
 
 	def startTimer(self):
+		self.aratat = True
 		self.refresh()
 		self.timer.start(CITIRE)
 
 	def stopTimer(self):
 		self.timer.stop()
+		self.ceasWeb.stop()
+		self.lucruWeb = None
+		if self.cititor is not None:
+			self.cititor.opreste()
 
 	def aflaEmulatorul(self):
-		"""numele si procesul modulului pornit, din Components/HdsModuleAcces (modulele obisnuite, apoi serverele de
-		carduri; in fiecare, intai cel ales); procesul e cel care lucreaza (CamSetup.pid_de_aratat). Niciunul pornit:
-		nume si proces None."""
-		nume, pid = None, None
+		"""numele si procesul modulului pornit (emulatorulPornit). Niciunul pornit: nume si proces None. 0.7.7: pe receptor
+		citirea merge pe un fir (in minutele de dupa pornirea interfetei, cat alt fir Python calculeaza, citirea pe firul
+		enigma2 il tinea 2,6-10 s la fiecare 3 s), iar rezultatul vine in laEmulator; True cand s-a aflat pe loc (sistemul de
+		proba), False cand citirea merge pe fir."""
 		try:
 			from Components import HdsModuleAcces
-			from .CamSetup import pid_de_aratat
 			sistem = HdsModuleAcces.SistemAcces()
-			for st in HdsModuleAcces.feluri_de_aratat(sistem):
-				pornite = st.pornite()
-				ales = st.ales_emulator()
-				if ales is not None and ales.pids:
-					pornite = [ales] + [e for e in pornite if e is not ales]
-				if pornite:
-					nume, pid = pornite[0].sufix, pid_de_aratat(sistem, pornite[0].pids)
-					break
+			HdsModuleAcces.pregateste_la_schimbare(sistem)   # pe firul enigma2 (emulatorulPornit nu pregateste)
+			if HdsModuleAcces.citire_pe_fir(sistem):
+				if self.cititor is None:
+					self.cititor = HdsModuleAcces.CitirePeFir()
+				if not self.cititor.in_curs():
+					self.cititor.porneste(lambda: emulatorulPornit(sistem), self.laEmulator)
+				return False
+			nume, pid = emulatorulPornit(sistem)
 		except Exception as e:
 			print("[CamInfo] modulul pornit nu s-a putut afla: %s" % e)
+			nume, pid = None, None
 		self.daemon_name, self.daemon_pid = nume, pid
+		self.citit = True
+		return True
+
+	def laEmulator(self, rezultat, eroare):
+		"""0.7.7: rezultatul citirii de pe fir (aflaEmulatorul), pe firul enigma2"""
+		if eroare is not None:
+			print("[CamInfo] modulul pornit nu s-a putut afla: %r" % (eroare,))
+		self.daemon_name, self.daemon_pid = rezultat if rezultat is not None else (None, None)
+		self.citit = True
+		if self.aratat:
+			self.citesteWeb()
+			self.scrie()
 
 	def randuriProces(self):
 		lines = []
 		if self.daemon_name is None:
-			lines.append(_("Niciun modul nu rulează."))
+			# 0.7.7: pana vine prima citire de pe fir (aflaEmulatorul) nu se stie inca
+			lines.append(_("Niciun modul nu rulează.") if self.citit else _("citesc lista..."))
 			return lines
 		lines.append(_("Modulul: %s") % self.daemon_name)
 		if self.daemon_pid:
@@ -153,13 +204,84 @@ class CamInfo(Screen):
 			lines.append("  " + _("Modulul nu a scris încă nimic despre canalul de acum."))
 		return lines
 
+	def citesteWeb(self):
+		"""0.7.7: pe un fir, portul interfetei web a modulului aratat (o data pe modul) si starea lui din interfata
+		(Components/HdsJurnalModul.citeste); o singura citire odata. Rezultatul il ia verificaWeb, pe firul enigma2."""
+		w = self.web
+		if self.lucruWeb is not None or self.daemon_name is None:
+			return
+		cheie = (self.daemon_name, self.daemon_pid)
+		if cheie != w["cheie"]:
+			w.update(cheie=cheie, cautata=False, interfata=None, rezultat=None, oprit=False)
+		if w["oprit"] or (w["cautata"] and not w["interfata"]):
+			return
+		lucru = {"cheie": cheie, "cautata": w["cautata"], "interfata": w["interfata"], "rezultat": None, "gata": False}
+
+		def citeste():
+			try:
+				from Components import HdsJurnalModul
+				if not lucru["cautata"]:
+					lucru["interfata"] = HdsJurnalModul.interfata_pentru(cheie[0], cheie[1])
+				i = lucru["interfata"]
+				if i:
+					lucru["rezultat"] = HdsJurnalModul.citeste(i["port"], i.get("protocol") or "http", cheie[0])
+			except Exception as e:
+				print("[CamInfo] interfata web a modulului: %s" % e.__class__.__name__)
+			lucru["gata"] = True
+		try:
+			fir = threading.Thread(target=citeste)
+			fir.daemon = True
+			fir.start()
+		except Exception:
+			return
+		self.lucruWeb = lucru
+		self.ceasWeb.start(200, False)
+
+	def verificaWeb(self):
+		lucru = self.lucruWeb
+		if lucru is None:
+			self.ceasWeb.stop()
+			return
+		if not lucru["gata"]:
+			return
+		self.ceasWeb.stop()
+		self.lucruWeb = None
+		w = self.web
+		if lucru["cheie"] != w["cheie"]:
+			return
+		rez = lucru["rezultat"]
+		w.update(cautata=True, interfata=lucru["interfata"], rezultat=rez)
+		if rez and rez.get("eroare") == "parola":
+			w["oprit"] = True    # failban: fara alte incercari pana la redeschidere
+		self.scrie()
+
+	def randuriWeb(self):
+		"""0.7.7: cititoarele, clientii si jurnalul modulului (HdsJurnalModul.randuri_text), [] pana la prima citire"""
+		rez = self.web["rezultat"]
+		if not rez or self.web["cheie"] != (self.daemon_name, self.daemon_pid):
+			return []
+		try:
+			from Components import HdsJurnalModul
+			return HdsJurnalModul.randuri_text(rez, _)
+		except Exception:
+			return []
+
 	def refresh(self):
-		if self.automat:
-			self.aflaEmulatorul()
+		if self.automat and not self.aflaEmulatorul():
+			self.scrie()   # cu ce s-a citit data trecuta; citirea noua vine in laEmulator
+			return
+		self.citesteWeb()
+		self.scrie()
+
+	def scrie(self):
 		lines = self.randuriProces()
 		if self.daemon_name is not None:
 			lines.append("")
 			lines += self.randuriEcm()
+			web = self.randuriWeb()
+			if web:
+				lines.append("")
+				lines += web
 		lines.append("")
 		lines.append(_("Citit la: %s") % time.strftime("%H:%M:%S", time.localtime()))
 		w = self["text"]

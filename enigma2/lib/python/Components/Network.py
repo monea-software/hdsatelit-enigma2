@@ -34,6 +34,15 @@ def ipv6AfterNetwork():
 	except Exception as e:
 		print("[Network.py] IPv6 after network start: %s" % e)
 
+def hdsAmanaPazaWifi():
+	# HDSatelit: a network action (adapter off/on, connecting to a WiFi network) restarts the countdown of the WiFi
+	# watchdog (Components/HdsPazaWifi.py), so it never restarts the chip in the middle of what the user is doing
+	try:
+		from Components import HdsPazaWifi
+		HdsPazaWifi.amana()
+	except Exception as e:
+		print("[Network.py] WiFi watchdog: %s" % e)
+
 def sysfsUp(iface, sysfs="/sys/class/net"):
 	# HDSatelit: IFF_UP from /sys/class/net/<iface>/flags; None when it cannot be read. "ip -o addr" of iproute2 prints
 	# only the address lines (no "eth0: <...,UP,...>" line), so without this every adapter looked down: both adapters
@@ -522,6 +531,20 @@ class Network:
 		self.commands.append("/etc/init.d/networking stop")
 		self.commands.append("killall -9 udhcpc")
 		self.commands.append("rm /var/run/udhcpc*")
+		# HDSatelit (support session 906594, Realtek RTL8822CU on SF8008): ifdown/ifup does not reinitialise the chip of a
+		# USB WiFi adapter (the driver closes and opens it with the chip left powered), so a chip gone deaf only came back
+		# after rebooting the receiver. Here the chip of every USB WiFi adapter is started again between stop and start
+		# (tools/hds-wifi-reporneste.py: driver unbind and bind, firmware loaded again); the web page /retea goes through
+		# this same function. The WiFi watchdog (Components/HdsPazaWifi.py) starts its countdown again.
+		hdsWifi = []
+		try:
+			from Components import HdsPazaWifi
+			HdsPazaWifi.amana()
+			hdsWifi = HdsPazaWifi.deRepornit([i for i in self.ifaces.keys() if validIfaceName(i)])
+		except Exception as e:
+			print("[Network.py] Wi-Fi USB la Repornire retea: %s" % e)
+		for iface in hdsWifi:
+			self.commands.append(argv(*(HdsPazaWifi.PYTHON + (HdsPazaWifi.PROGRAM, "--fara-ifupdown", iface))))
 		self.commands.append("/etc/init.d/networking start")
 		self.commands.append("/etc/init.d/avahi-daemon start")
 		self.restartConsole.eBatch(self.commands, self.restartNetworkFinished, callback, debug=True)
@@ -624,6 +647,7 @@ class Network:
 	def deactivateInterface(self,ifaces,callback = None):
 		self.config_ready = False
 		self.msgPlugins()
+		hdsAmanaPazaWifi()
 		commands = []
 		def buildCommands(iface):
 			commands.append(argv("ifdown", iface))
@@ -672,6 +696,7 @@ class Network:
 					callback(True)
 
 	def activateInterface(self,iface,callback = None):
+		hdsAmanaPazaWifi()
 		if self.config_ready:
 			self.config_ready = False
 			self.msgPlugins()

@@ -28,6 +28,11 @@
 #                                                          ca OK pe ecran cu Enable timer (actiunea si intrebarea
 #                                                          sunt optionale: lipsa = valoarea de acum)
 #   POST /api/alimentare-somn?fapta=opreste                ca OK pe ecran cu Disable timer
+#   POST /api/alimentare-auto?minute=0|60|120|180|240|360|480&fel=standby|shutdown
+#                                                          0.7.7 (OSD, LinuxSat 164182): oprirea automata dupa atatea
+#                                                          minute fara nicio tasta, aleasa o data (Components/
+#                                                          HdsOprireAutomata.py), ca randurile ei din ecranul Sleep Timer;
+#                                                          fiecare argument e optional, o valoare straina nu schimba nimic
 #   POST /api/alimentare-fa?ce=standby|interfata|receptor|flash|oprire&pas=intreaba   intrebarea si codul
 #   POST /api/alimentare-fa?ce=...&cod=<cod>                fapta: ecranul de pe televizor peste 1,5 s
 #   POST /api/alimentare-fa?ce=...&pas=renunta              codul nu mai e bun
@@ -52,6 +57,7 @@
 DUPA_MS = 1500
 CONFIRMARE = "alimentare"
 CHEI_SOMN = ("fapta", "minute", "actiune", "intreaba", "durata")
+CHEI_AUTO = ("minute", "fel")
 CHEI_FA = ("ce", "pas", "cod", "loc")
 CACHE_IMAGINI_S = 15
 TIMP_FIR_IMAGINI_S = 60
@@ -85,6 +91,13 @@ def _pm(PM=None):
 		return PM
 	from Components import HdsPornireMultipla
 	return HdsPornireMultipla
+
+
+def _o(O=None):
+	if O is not None:
+		return O
+	from Components import HdsOprireAutomata
+	return HdsOprireAutomata
 
 
 _imagini = {}
@@ -285,7 +298,16 @@ def kexecInstaleaza(sesiune, PM=None, Standby=None, fabrica_ceas=None, A=None):
 	return {"result": True, "message": text}
 
 
-def stare(A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_manager=None):
+def stareAuto(O=None, config=None, SystemInfo=None):
+	"""Oprirea automata (0.7.7, OSD) pentru starea paginii; None cand modulul lipseste."""
+	try:
+		return _o(O).stare(_config(config), _si(SystemInfo))
+	except Exception as eroare:
+		_mc().jurnal("alimentare: oprirea automata: %r" % eroare)
+		return None
+
+
+def stare(A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_manager=None, O=None):
 	"""Pentru GET /api/alimentare."""
 	A = _a(A)
 	SI = _si(SystemInfo)
@@ -313,7 +335,28 @@ def stare(A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_
 		"minute_max": maxim,
 		"durate_uzuale": list(A.DURATE_UZUALE),
 		"carduri": [{"ce": c, "vizibil": _cardVizibil(c, SI)} for c in CARDURI],
+		"auto": stareAuto(O, config, SI),
 	}
+
+
+def auto(argumente, O=None, A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_manager=None,
+		configfile=None):
+	"""POST /api/alimentare-auto: ca randurile opririi automate din ecranul Sleep Timer (salvate pe loc). O valoare
+	straina nu schimba nimic."""
+	O = _o(O)
+	minute = argumente.get("minute")
+	fel = argumente.get("fel")
+	if minute is None and fel is None:
+		mesaj, rezultat = _t("Se alege cu minute= sau fel=."), False
+	else:
+		try:
+			O.seteaza(minute, fel, _config(config), configfile)
+			mesaj, rezultat = O.descriere(_config(config), _si(SystemInfo)), True
+		except ValueError as eroare:
+			mesaj, rezultat = str(eroare), False
+	rez = stare(A, sesiune, config, SystemInfo, Standby, job_manager, O)
+	rez.update(result=rezultat, message=mesaj)
+	return rez
 
 
 def somn(argumente, A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_manager=None,
@@ -501,6 +544,20 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class AutoResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				arg = MC.argumente(request, CHEI_AUTO, 16)
+				return self._raspunde(request, auto(arg, None, A, _ses(), config, SystemInfo, Standby, job_manager,
+					configfile))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
 	class FaResource(baza):
 		schimbaCeva = True
 
@@ -576,6 +633,7 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 	api = {
 		b"alimentare": StareResource(),
 		b"alimentare-somn": SomnResource(),
+		b"alimentare-auto": AutoResource(),
 		b"alimentare-fa": FaResource(),
 		b"pornire-multipla": ImaginiResource(),
 		b"pornire-multipla-kexec": KexecResource(),
@@ -646,6 +704,16 @@ __STIL_PAGINI__
         <button type="button" id="somnOpreste">Dezactivare temporizator</button>
       </div>
       <p class="nota" id="somnNota">Duratele se activează direct, cu tipul opririi și întrebarea alese în pagină. Până la sfârșitul emisiunii folosește timpul emisiunii sau al filmului de acum, plus două minute. Ultima durată activată rămâne propunerea de data viitoare. Pe televizor: __DRUM_SOMN__.</p>
+      <div class="status-linie"><span>Oprire automată</span><span id="autoStare">-</span></div>
+      <div class="rand">
+        <label for="autoMinute">Oprire automată fără taste</label>
+        <select id="autoMinute"></select>
+      </div>
+      <div class="rand" id="autoFelRand">
+        <label for="autoFel">Felul opririi automate</label>
+        <select id="autoFel"></select>
+      </div>
+      <p class="nota">Aleasă o singură dată: după atâta timp fără nicio tastă, receptorul trece singur în standby sau se oprește. Înainte apare pe televizor o numărătoare de 60 de secunde; orice tastă o oprește. Nu se oprește cât se înregistrează sau se instalează ceva. Din standby, oprirea completă se face fără întrebare. Se salvează pe loc.</p>
     </section>
     <section class="card" id="card-standby">
       <h2>Standby</h2>
@@ -703,6 +771,7 @@ function arata(d){
   scrie("stUrmatoarea", r.urmatoarea ? ora(r.urmatoarea) : "Niciuna");
   scrie("stLucrari", String(r.lucrari || 0));
   scrie("stSomn", d.somn ? textSomn(d.somn) : "-");
+  arataAuto(d.auto);
   var s = d.somn;
   ["somnPorneste", "somnOpreste", "minute", "actiune", "intreaba"].forEach(function(id){ $(id).disabled = !s; });
   Array.prototype.forEach.call(document.querySelectorAll("button[data-minute]"), function(b){ b.disabled = !s; });
@@ -727,6 +796,29 @@ function arata(d){
   if(!imaginiCitite && !$("card-flash").classList.contains("ascuns")){ citesteImagini(); }
   if(!kexecCitit && !$("card-kexec").classList.contains("ascuns")){ citesteKexec(); }
   var b = document.querySelector("button[data-fa=standby]"); if(b){ b.disabled = !!r.standby; }
+}
+function umple(id, alegeri, valoare){
+  var e = $(id);
+  if(document.activeElement === e){ return; }
+  e.textContent = "";
+  (alegeri || []).forEach(function(x){ var o = document.createElement("option"); o.value = x[0]; o.textContent = x[1]; e.appendChild(o); });
+  e.value = String(valoare);
+}
+function arataAuto(a){
+  ["autoMinute", "autoFel"].forEach(function(id){ $(id).disabled = !a; });
+  if(!a){ scrie("autoStare", "-"); return; }
+  scrie("autoStare", a.text);
+  umple("autoMinute", a.alegeri_minute, a.minute);
+  umple("autoFel", a.alegeri_fel, a.fel);
+  $("autoFelRand").classList.toggle("ascuns", !a.minute);
+}
+function auto(nume){
+  var q = new URLSearchParams(); q.set(nume, $(nume === "minute" ? "autoMinute" : "autoFel").value);
+  mesaj("Se trimite...");
+  cerere("/api/alimentare-auto", "POST", q).then(function(d){
+    mesaj(d.message, !d.result);
+    if(d.receptor){ arata(d); }
+  }).catch(nimicNuRaspunde);
 }
 var imaginiCitite = false;
 function citesteImagini(){
@@ -828,6 +920,8 @@ $("minute").addEventListener("input", function(){ minuteAtinse = true; });
 $("somnPorneste").addEventListener("click", function(){ somn("porneste"); });
 $("somnOpreste").addEventListener("click", function(){ somn("opreste"); });
 $("somnCanal").addEventListener("click", function(){ somn("porneste", null, "emisiune"); });
+$("autoMinute").addEventListener("change", function(){ auto("minute"); });
+$("autoFel").addEventListener("change", function(){ auto("fel"); });
 Array.prototype.forEach.call(document.querySelectorAll("button[data-minute]"), function(b){
   b.addEventListener("click", function(){ somn("porneste", b.getAttribute("data-minute")); });
 });
@@ -900,6 +994,13 @@ TEXTE_PAGINA = {
 		N_("Se citește starea..."),
 		N_("Instalează"),
 		N_("Pe televizor: __DRUM_KEXEC__."),
+		N_("Oprire automată"),
+		N_("Oprire automată fără taste"),
+		N_("Felul opririi automate"),
+		N_("Aleasă o singură dată: după atâta timp fără nicio tastă, receptorul trece singur în standby sau se "
+			"oprește. Înainte apare pe televizor o numărătoare de 60 de secunde; orice tastă o oprește. Nu se oprește "
+			"cât se înregistrează sau se instalează ceva. Din standby, oprirea completă se face fără întrebare. Se "
+			"salvează pe loc."),
 	),
 	"js": (
 		N_("Dezactivat"),

@@ -67,6 +67,47 @@ except ImportError:
 	_ID_CAUTARE_XML = frozenset(("hds_cauta_setari", "hds_cauta_setari_principal"))
 
 
+# HDSatelit 0.7.7 (DRG, darog69, forum 789 #2379: „o descriere scurta pentru fiecare intrare din meniu, ca la alte imagini”):
+# atributul description din menu.xml (o propozitie, extrasa pentru traducere de po/xml2po.py), aratat pentru intrarea
+# aleasa: in lista sub intrari (sursa description, care exista acum si in tema noastra), in dale pe randul de jos
+# (dala_descriere, deruleaza cand nu incape), in temele straine care au elementul description; in web pe pagina /meniu.
+# Randul „Caută în meniu” ia descrierea intrarii hds_cauta_setari (acelasi ecran). Pana la traducere, o limba a meniului
+# alta decat romana nu primeste fraza in romana (textDescriere da "").
+_DESCRIERI = {}
+
+
+def descrieriMeniu(radacina=None):
+	"""{entryID: msgid-ul descrierii} din menu.xml (o data; `radacina` pentru probe)."""
+	if radacina is None and _DESCRIERI:
+		return _DESCRIERI
+	rez = {}
+	for x in (radacina if radacina is not None else mdom.getroot()).iter():
+		e, d = x.get("entryID"), x.get("description")
+		if e and d:
+			rez[e] = d
+	if "hds_cauta_setari" in rez:
+		rez.setdefault(ID_RAND_CAUTARE, rez["hds_cauta_setari"])
+	if radacina is None:
+		_DESCRIERI.update(rez)
+	return rez
+
+
+def textDescriere(msgid, traducere=None, limba=None):
+	"""Descrierea tradusa; "" fara descriere sau cand limba meniului nu e romana si textul nu are inca traducere."""
+	if not msgid:
+		return ""
+	tradus = (traducere or _)(msgid)
+	if tradus and tradus != msgid:
+		return tradus
+	if limba is None:
+		try:
+			from Components.Language import language
+			limba = language.getLanguage() or ""
+		except Exception:
+			limba = "ro"
+	return msgid if str(limba).lower().startswith("ro") else ""
+
+
 # coloanele randului de meniu dupa numele sabloanelor temelor (Components/Converter/XmlMultiContent.py); Number si Image nu
 # exista la noi (glif e numele pictogramei noastre, nu un caracter de font), deci raman goale
 INDEX_MENIU = {"Text": 0, "NumberText": 0}
@@ -547,6 +588,8 @@ class Menu(Screen):
 			if self._alesInitial is not None:
 				# o metoda, nu lambda: GUISkin cheama direct numai metodele (restul trece prin exec)
 				self.onLayoutFinish.append(self._listaAlege)
+			self["menu"].onSelectionChanged.append(self._puneDescrierea)
+			self.onLayoutFinish.append(self._puneDescrierea)
 
 		actions = {
 				"ok": self.okbuttonClick,
@@ -575,6 +618,21 @@ class Menu(Screen):
 				"upRepeated": self._dalaSus, "downRepeated": self._dalaJos,
 				# ridicarea tastei: nimic de facut (altfel jurnalul scrie "unknown action")
 				"leftUp": self.nothing, "rightUp": self.nothing, "upUp": self.nothing, "downUp": self.nothing}, -1)
+		# HDSatelit (MNA): modul de mutare cu sagetile (MENU > Muta "X" cu sagetile; OK salveaza, EXIT renunta). Harta
+		# e oprita din fabrica si porneste numai cat dureaza mutarea, cand celelalte harti ale meniului se opresc; are
+		# prioritatea hartii dalelor (-1, inaintea listei native, ListboxActions cu 0) si ia toate actiunile contextelor
+		# ei (o actiune lipsa ar trece la lista, care ar muta cursorul fara intrare). CH+/CH- duc intrarea la capete.
+		self._mutare = None
+		self["mutare"] = ActionMap(["OkCancelActions", "DirectionActions", "ListboxActions", "MenuActions"], {
+			"ok": self.mutareGata, "cancel": self.mutareRenunta, "menu": self.nothing,
+			"up": self._mutareSus, "down": self._mutareJos, "left": self._mutareStanga, "right": self._mutareDreapta,
+			"upRepeated": self._mutareSus, "downRepeated": self._mutareJos,
+			"leftRepeated": self._mutareStanga, "rightRepeated": self._mutareDreapta,
+			"leftUp": self.nothing, "rightUp": self.nothing, "upUp": self.nothing, "downUp": self.nothing,
+			"moveUp": self._mutareSus, "moveDown": self._mutareJos,
+			"pageUp": self._mutareInceput, "moveTop": self._mutareInceput,
+			"pageDown": self._mutareSfarsit, "moveEnd": self._mutareSfarsit}, -1)
+		self["mutare"].setEnabled(False)
 
 		a = parent.get("title", "") or None
 		a = a and _(a)
@@ -588,12 +646,43 @@ class Menu(Screen):
 		for tasta in ("key_red", "key_green", "key_yellow", "key_blue"):
 			adauga(self, tasta, StaticText)
 		adauga(self, "menuimage", Pixmap, ascuns=True)
+		# si elementele cu nume ale ecranului menu_mainmenu din temele straine (Premium-FHD: <widget name="red">,
+		# <widget name="description"> si <widget source="description">): goale, meniul nostru n-are descrieri si taste colorate;
+		# Label, ca acelasi nume sa mearga si ca name=, si ca source= (skin.py: source= pe un element al ecranului)
+		from Components.Label import Label
+		# description: si in tema noastra (0.7.7, descrierea intrarii alese; HdsMenuBase o arata sub lista, cu linia ei):
+		# acolo sursa (StaticText, source=); sub o tema straina Label, ca acelasi nume sa mearga si ca name=, si ca source=
+		# (skin.py leaga source= de un element al ecranului numai sub tema straina)
+		if "description" not in self:
+			from Components.HdsNumeStandard import temaStraina
+			self["description"] = Label("") if temaStraina() else StaticText("")
+		for nume in ("red", "green", "yellow", "blue"):
+			adauga(self, nume, lambda: Label(""))
 		self.menu_title = a
 		# si titlul ferestrei (sursa Title): skinurile il deseneaza in bara de sus, iar fara el bara ramane goala
 		self.setTitle(a)
 
 	def _listaAlege(self):
 		self["menu"].setIndex(self._alesInitial)
+
+	def descriereAleasa(self):
+		"""Descrierea intrarii alese acum (lista sau dale), tradusa; "" cand n-are."""
+		try:
+			x = self._intrareCurenta()
+		except Exception:
+			x = None
+		if not x or len(x) < 3:
+			return ""
+		return textDescriere(descrieriMeniu().get(x[2], ""))
+
+	def _puneDescrierea(self, *argumente):
+		text = self.descriereAleasa()
+		for nume in ("description", "dala_descriere"):
+			if nume in self:
+				try:
+					self[nume].setText(text)
+				except Exception as e:
+					print("[Menu] descrierea: %s" % e)
 
 	def _panouMeniu(self):
 		self["meniu_semnal_titlu"] = StaticText(_("Semnal / tuner"))
@@ -633,13 +722,17 @@ class Menu(Screen):
 		"""Randurile din nou, pe loc (dupa o mutare, o ascundere, Arata intrarile ascunse, Ordinea din fabrica), cu
 		cursorul pe intrarea `cheie` (sau pe primul rand de sub cautare)."""
 		lista = self._listaVazuta()
-		self._flatlist = self.list = lista
 		i = 1 if len(lista) > 1 else 0
 		if cheie is not None:
 			for k in range(1, len(lista)):
 				if HdsMeniuOrdine.cheieTuplu(lista[k]) == cheie:
 					i = k
 					break
+		self._puneLista(lista, i)
+
+	def _puneLista(self, lista, i):
+		"""Randurile `lista` pe ecran, cu cursorul pe randul i (lista sau dale: cifrele, fereastra, numele)."""
+		self._flatlist = self.list = lista
 		if self._modDale:
 			if not self._dalaGata:
 				self._dalaAles = i
@@ -668,6 +761,9 @@ class Menu(Screen):
 			x = original[0] if original else curent
 			nume = x[4] if len(x) > 4 else x[0]
 			i = chei.index(cheie)
+			if len(chei) > 1:
+				# MNA: mutarea cu sagetile, prima; pasii de mai jos raman (merg si fara harta de mutare)
+				rez.append((_("Mută „%s” cu săgețile") % nume, boundFunction(self.pornesteMutarea, cheie)))
 			if i > 0:
 				rez.append((_("Mută mai sus „%s”") % nume, boundFunction(self.mutaIntrarea, cheie, -1)))
 			if i < len(chei) - 1:
@@ -721,6 +817,122 @@ class Menu(Screen):
 		HdsMeniuOrdine.fabrica(self._cheieMeniu)
 		self._aratate.clear()
 		self._refaLista(HdsMeniuOrdine.cheieTuplu(curent) if curent is not None else None)
+
+	# ------------------------------------------------------------ modul de mutare cu sagetile (MNA)
+	def pornesteMutarea(self, cheie):
+		"""MENU > Muta "X" cu sagetile: sagetile muta intrarea pe loc, OK salveaza ordinea (o singura scriere), EXIT o
+		lasa cum era. Fara setari (ordinea nu se poate salva) nu porneste."""
+		randuri = list(self._flatlist[1:])
+		chei = [HdsMeniuOrdine.cheieTuplu(x) for x in randuri]
+		if self._mutare is not None or cheie not in chei or len(chei) < 2 or HdsMeniuOrdine.setari() is None:
+			return False
+		original = [x for x in self._listaToata if HdsMeniuOrdine.cheieTuplu(x) == cheie]
+		x = original[0] if original else randuri[chei.index(cheie)]
+		self._mutare = {"cheie": cheie, "randuri": randuri, "schimbat": False}
+		self["mutare"].setEnabled(True)
+		self["actions"].setEnabled(False)
+		if self._modDale:
+			self["dala_sageti"].setEnabled(False)
+		self._mutareTexte(x[4] if len(x) > 4 else x[0])
+		self._mutareArata()
+		return True
+
+	def _mutareArata(self):
+		m = self._mutare
+		semn = _("%s (se mută)")
+		if semn.count("%s") != 1:
+			semn = "%s (se mută)"
+		lista = [self._flatlist[0]]
+		ales = 1
+		for k, x in enumerate(m["randuri"]):
+			if HdsMeniuOrdine.cheieTuplu(x) == m["cheie"]:
+				# numele cu semnul mutarii; a opta valoare pastreaza cheia (ca _cuSemnAscuns)
+				x = (semn % x[0], x[1], x[2], x[3], semn % (x[4] if len(x) > 4 else x[0])) + tuple(x[5:7]) + \
+					(HdsMeniuOrdine.cheieTuplu(x),)
+				ales = k + 1
+			lista.append(x)
+		self._puneLista(lista, ales)
+
+	def _mutareTexte(self, nume=None):
+		"""Titlul si linia de jos: in mod, ce fac tastele acum; dupa, cele obisnuite (_surseJos)."""
+		mut = self._mutare is not None
+		titlu = (_("Mută „%s” cu săgețile") % nume) if mut else self.menu_title
+		try:
+			self.setTitle(titlu)
+			self["title"].setText(titlu)
+		except Exception as e:
+			print("[Menu] titlul mutarii: %s" % e)
+		self["dala_ok"].setText(_("Gata") if mut else _("Deschide"))
+		self["dala_exit"].setText(_("Renunță") if mut else _("Înapoi"))
+		self["dala_t_cifre"].setText("" if mut else "1-9")
+		self["dala_cifre"].setText("" if mut else _("Direct"))
+		if mut:
+			for nume_sursa in ("dala_t_text", "dala_text", "dala_galben"):
+				self[nume_sursa].setText("")
+		else:
+			self._actualizeazaTasteMeniu()
+
+	def _mutarePas(self, pas):
+		m = self._mutare
+		if m is None:
+			return
+		randuri = m["randuri"]
+		chei = [HdsMeniuOrdine.cheieTuplu(x) for x in randuri]
+		if m["cheie"] not in chei:
+			return
+		i = chei.index(m["cheie"])
+		# intre randurile de sub "Cauta in meniu" (care ramane primul)
+		j = max(0, min(len(randuri) - 1, i + pas))
+		if i == j:
+			return
+		randuri.insert(j, randuri.pop(i))
+		m["schimbat"] = True
+		self._mutareArata()
+
+	def _mutareSus(self):
+		self._mutarePas(-HdsDale.COLOANE if self._modDale else -1)
+
+	def _mutareJos(self):
+		self._mutarePas(HdsDale.COLOANE if self._modDale else 1)
+
+	def _mutareStanga(self):
+		self._mutarePas(-1)
+
+	def _mutareDreapta(self):
+		self._mutarePas(1)
+
+	def _mutareInceput(self):
+		if self._mutare is not None:
+			self._mutarePas(-len(self._mutare["randuri"]))
+
+	def _mutareSfarsit(self):
+		if self._mutare is not None:
+			self._mutarePas(len(self._mutare["randuri"]))
+
+	def mutareGata(self):
+		m = self._mutare
+		if m is None:
+			return
+		if m["schimbat"]:
+			HdsMeniuOrdine.salveazaOrdinea(self._cheieMeniu, [HdsMeniuOrdine.cheieTuplu(x) for x in m["randuri"]])
+		self._mutareIesi()
+
+	def mutareRenunta(self):
+		self._mutareIesi()
+
+	def _mutareIesi(self):
+		"""Iesirea din mod: hartile la loc, textele obisnuite si randurile din ordinea salvata (la EXIT, cea de dinainte),
+		cu cursorul pe intrarea mutata."""
+		m = self._mutare
+		if m is None:
+			return
+		self._mutare = None
+		self["mutare"].setEnabled(False)
+		self["actions"].setEnabled(True)
+		if self._modDale:
+			self["dala_sageti"].setEnabled(True)
+		self._mutareTexte()
+		self._refaLista(m["cheie"])
 
 	def alegeIntrarea(self, entryID):
 		"""Cursorul pe intrarea cu entryID-ul dat (Caută setări, comutarea lista / dale), in ambele moduri. O intrare
@@ -780,6 +992,7 @@ class Menu(Screen):
 		self["dala_sageata_jos"] = Pixmap()
 		self["dala_bara"] = Slider(0, 1)
 		self["dala_masura"] = Label("")
+		self["dala_descriere"] = StaticText("")
 		self._textLucru = _("ÎN LUCRU")
 		self._textNetestat = _("NETESTAT")
 
@@ -1012,6 +1225,7 @@ class Menu(Screen):
 		total = HdsDale.randuri(n)
 		if 0 <= self._dalaAles < n:
 			self["dala_aleasa"].setText(self._dalaIntrari[self._dalaAles]["simplu"])
+		self._puneDescrierea()
 		vizibile = HdsDale.RANDURI_VIZIBILE
 		multe = total > vizibile
 		sus = self._dalaInceput if multe else 0

@@ -165,6 +165,76 @@ def cheie_transponder(tp):
     return (p['orbital_position'], p['frequency'] // 1000, p['polarisation'], p['is_id'])
 
 
+# ---------------------------------------------------------------- motorul antenei si sesiunea 8001
+# Releele DAB+ si DVB-T2 din satelit cer fluxul purtatorului pe 127.0.0.1:8001; tunerul il acordeaza inregistrarea
+# serverului 8001 (server8001.py), deci si motorul il roteste sec.cpp, in timp ce releul asteapta primele date.
+# Releul (t2mi_decap -w, surse.CititorHttp) inchide sesiunea dupa termenul primelor date, iar inchiderea elibereaza
+# frontendul: motorul se opreste la jumatate, iar sesiunea urmatoare trimite din nou oprirea si comanda, cu aceeasi
+# asteptare. Inregistrarea nu se inchide singura la un acord cazut (eDVBServiceRecord nu pune eroarea la
+# evTuneFailed), deci termenul releului e singura taiere. Cu pozitia antenei necunoscuta si tinta pe 13 V sec.cpp
+# tine 18 V cat drumul cel mai lung posibil si abia apoi cauta semnalul (lib/dvb/hdsrotire.h), deci semnalul poate veni
+# dupa 137-167 s, peste cele 90 s ale releelor: canalul nu pornea niciodata.
+# De aceea, cand un tuner primeste satelitul feed-ului prin motor, termenul primelor date e un plafon: cel obisnuit
+# plus cel mai lung timp pe care sec.cpp il poate da unei mutari. Plafonul nu intarzie nimic cand semnalul vine
+# (datele pornesc la sosire) si nu hotaraste esecul: pe acela il hotaraste controlorul (pornire.py), cand motorul s-a
+# oprit si datele tot nu vin.
+TERMEN_8001_S = 90             # termenul obisnuit al releelor (releu_t2.TERMEN_8001_S, releu_dab, surse.pachete_ts)
+MOTOR_TIMP_IMPLICIT_S = 360    # config.sec.motor_running_timeout implicit (NimManager): plecarea necunoscuta
+MOTOR_DRUM_STIUT_MAX_S = 363   # sec.cpp cu plecarea stiuta: 0,5 grade pe secunda + 3 s, pentru 180 de grade
+MOTOR_BUCLA_S = 10             # bucla de semnal de dupa tinerea pe 18 V, cel putin (lib/dvb/hdsrotire.h BUCLA_MIN_S)
+MOTOR_MARJA_S = 20             # oprirea, comenzile DiSEqC, proba de semnal dinaintea comenzii (4 s), pornirea sesiunii
+
+
+def ajunge_cu_motorul(pozitie):
+    """True daca vreun tuner de satelit primeste pozitia `pozitie` (zecimi de grad, 0..3599) prin motor (DiSEqC 1.2
+    sau USALS, si in configurarea avansata). Fara NimManager (probe, alte medii): False."""
+    try:
+        from Components.NimManager import nimmanager
+    except Exception:
+        return False
+    try:
+        for nim in nimmanager.nim_slots:
+            try:
+                if not nim.isCompatible('DVB-S') or getattr(nim, 'config_mode', '') == 'nothing':
+                    continue
+                if pozitie in [s[0] for s in nimmanager.getRotorSatListForNim(nim.slot)]:
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        jurnal.eroare(ET, 'ajunge_cu_motorul')
+    return False
+
+
+def timp_maxim_motor():
+    """Cel mai lung timp (secunde) cat sec.cpp poate tine o mutare a motorului inainte sa dea acordul drept cazut:
+    timpul maxim din setari (plecarea necunoscuta; HdsMotorPlafon pune in nucleu cel mult atat) sau drumul de 180 de
+    grade cu plecarea stiuta, plus bucla de semnal si marja."""
+    try:
+        from Components.config import config
+        setare = int(config.sec.motor_running_timeout.value)
+    except Exception:
+        setare = MOTOR_TIMP_IMPLICIT_S
+    return max(setare, MOTOR_DRUM_STIUT_MAX_S) + MOTOR_BUCLA_S + MOTOR_MARJA_S
+
+
+def termen_8001(tp, din_feed=None):
+    """Termenul primelor date pe 8001 (secunde, intreg) pentru releul feed-ului de pe transponderul `tp`, cand antena
+    poate avea de rotit; None cand niciun tuner nu ajunge la satelit prin motor (ramane termenul obisnuit al releului).
+    din_feed: termenul pus in feed (daca e mai mare, ramane el)."""
+    try:
+        pozitie = parametri(tp)['orbital_position']
+    except Exception:
+        return None
+    if not ajunge_cu_motorul(pozitie):
+        return None
+    try:
+        din_feed = float(din_feed or 0)
+    except (TypeError, ValueError):
+        din_feed = 0.0
+    return int(max(TERMEN_8001_S + timp_maxim_motor(), din_feed))
+
+
 # ---------------------------------------------------------------- citirea frontend-ului, prin ioctl
 def _deschide(cale):
     return os.open(cale, os.O_RDONLY | os.O_NONBLOCK)
@@ -237,8 +307,21 @@ def cale_frontend(slot):
     return cale
 
 
+def _legat(nimmanager, nim):
+    """Tunerul primeste semnalul prin altul de acelasi fel (loopthrough, satposdepends): sarit, ca la scanare
+    (Screens/ScanerSatelit.sloturi_satelit, ScanSetup); 0.7.7, SCN."""
+    if getattr(nim, 'config_mode', '') not in ('loopthrough', 'satposdepends'):
+        return False
+    try:
+        radacina = nimmanager.sec.getRoot(nim.slot_id, int(nim.config.connectedTo.value))
+        return nim.type == nimmanager.nim_slots[radacina].type
+    except Exception:
+        return False
+
+
 def alege_slot(pozitie):
-    """Primul tuner DVB-S care are pozitia in lista lui de sateliti; altfel primul DVB-S; altfel 0."""
+    """Primul tuner DVB-S care are pozitia in lista lui de sateliti; altfel primul DVB-S; altfel 0. Fara tunerele
+    "nimic conectat" si fara cele legate de un tuner de acelasi fel, ca scanerul (aceeasi alegere la poarta si la acord)."""
     try:
         from Components.NimManager import nimmanager
     except Exception:
@@ -250,6 +333,8 @@ def alege_slot(pozitie):
                 if not nim.isCompatible('DVB-S'):
                     continue
                 if getattr(nim, 'config_mode', '') == 'nothing':
+                    continue
+                if _legat(nimmanager, nim):
                     continue
             except Exception:
                 continue

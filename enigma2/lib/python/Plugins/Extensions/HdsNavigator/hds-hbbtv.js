@@ -963,6 +963,51 @@
         var laFel = gaura.el === el && gaura.drept === drept && !gaura.schimbat;
         if (laFel && ++gaura.ticuri % GAURA_CAUTARE_TICURI && gaura.ticuri > GAURA_TICURI_LA_INCEPUT)
             return;
+        var tinta = tintePornite(el);
+        try {
+            gauraCauta(el, x0, y0, x1, y1, drept, laFel);
+        } finally {
+            if (tinta)
+                tinteOprite();
+        }
+    }
+
+    /* Un obiect cu pointer-events:none (al lui sau mostenit: aplicatia ERT il pune pe parintele filmului, #videodiv, si pe
+     * previzualizarea din cardul primei pagini) nu e intors de elementsFromPoint, deci cautarea de mai jos nu l-ar gasi in
+     * niciun punct: nicio gaura, iar scena aplicatiei de sub film ramane opaca peste el (filmul se aude, ecranul e negru).
+     * Pe durata cautarii (sincron, aplicatia nu apuca sa vada nimic) o regula a stratului face tinta orice element:
+     * pointer-events nu schimba nici asezarea, nici desenul, deci ordinea gasita e cea de pe ecran. Numai pentru un astfel de
+     * obiect; la celelalte cautarea ramane neschimbata. */
+    var TINTE_REGULA = "*:not(#hds-a):not(#hds-b){pointer-events:auto !important}";
+    var tinte = null;   /* foaia si locul regulii, cat e pusa */
+
+    function tintePornite(el) {
+        try {
+            if (window.getComputedStyle(el).pointerEvents !== "none")
+                return false;
+            var st = window.document.getElementById(STIL_ID), sh = st && st.sheet;
+            if (!sh)
+                return false;
+            tinte = { sh: sh, i: sh.insertRule(TINTE_REGULA, sh.cssRules.length) };
+            return true;
+        } catch (x) {
+            return false;
+        }
+    }
+
+    function tinteOprite() {
+        var t = tinte;
+        tinte = null;
+        try {
+            if (t && t.i < t.sh.cssRules.length && /pointer-events/.test(t.sh.cssRules[t.i].cssText))
+                t.sh.deleteRule(t.i);
+        } catch (x) {
+            /* foaia stratului scoasa intre timp de aplicatie: regula a plecat odata cu ea */
+        }
+    }
+
+    function gauraCauta(el, x0, y0, x1, y1, drept, laFel) {
+        var d = window.document;
         var gasite = dedesubt(el, x0, y0, x1, y1), sub = gasite.sub;
         /* elementele si cutiile lor: un panou mutat (de pilda de un parinte) reface gaura */
         var cheie = drept + "|" + sub.map(function (e) {
@@ -2482,9 +2527,193 @@
         return true;
     }
 
+    /* Adaptare TVP (HB4, 0.7.7): aplicatia TVP a canalelor terestre (canalele virtuale, hbb-prod.tvp.pl/apps/manager)
+     * citeste starea filmului din extra.stateReady.code, pe care o pun numai motoarele ei html5 si hls.js; motorul "Object"
+     * (obiectul A/V) pune extra.statePlay, si acela gol: compara playState (numar, OIPF 0-6) cu starile lor, care sunt
+     * siruri ("playing"...). Fara adaptare pagina cade la primul PlayStateChange (3), filmul se opreste si "Trwa
+     * wczytywanie..." ramane (olo, forum 1148). Numai pe paginile acelei aplicatii: stateReady, pe obiectele care au
+     * statePlay al lor, e starea data de numarul primit de functia de eveniment (extra.event) cand statePlay n-are cod,
+     * altfel statePlay; o scriere face proprietatea proprie (ca fara adaptare); playState ramane numar (alte pagini TVP il
+     * compara ca numar). Cu obiectul A/V, MediaSource e ascuns acolo: aplicatia alege atunci Object (playerul
+     * receptorului) si pe WebKit-ul cu video, nu hls.js pe MSE. */
+    var TVP_STARI = ["stopped", "playing", "pause", "connecting", "buffering", "ended", "error"];
+
+    /* A treia greseala TVP (HB4, runda 2): pe virtual-channel proprietatea calculata video face push in
+     * usedOrInaccessibleFormats la fiecare citire; cand Vue o citeste de doua ori inainte de player, filmul iese undefined
+     * si pagina sta la "Trwa wczytywanie..." fara sa ceara nimic (~1 din 10 porniri, si fara strat). O singura reincarcare
+     * a documentului, cand incarcarea e inca pe ecran dupa TVP_REINCARCARE_MS si pagina n-a pornit niciun film prin
+     * obiectul A/V; semnul din window.name tine cat traieste navigatorul (alt ROSU = alt navigator). */
+    var TVP_REINCARCARE_MS = 20000, TVP_SEMN_REINCARCAT = "hds-tvp-reincarcat";
+
+    function reincarcareTvp(loc) {
+        var pagina = /^\/apps\/manager\/virtual-channel/;
+        try {
+            if (String(window.name || "").indexOf(TVP_SEMN_REINCARCAT) >= 0)
+                return false;
+        } catch (x) {
+            return false;
+        }
+        setTimeout(function () {
+            try {
+                if (avUltimId > 0 || !pagina.test(loc.pathname || ""))
+                    return;
+                var l = document.getElementById("mainLoader");
+                if (!l || window.getComputedStyle(l).display === "none")
+                    return;
+                var nume = String(window.name || "");
+                window.name = (nume ? nume + " " : "") + TVP_SEMN_REINCARCAT;
+                jurnalPagina("adaptare TVP: incarcarea e inca pe ecran dupa " + TVP_REINCARCARE_MS / 1000 +
+                    " s, fara film; pagina se reincarca o data");
+                loc.reload();
+            } catch (x) {
+                /* nimic de facut: ramane ca fara adaptare */
+            }
+        }, TVP_REINCARCARE_MS);
+        return true;
+    }
+
+    function adaptareTvpStare() {
+        var loc = window.location;
+        if (!loc || !/(^|\.)tvp\.pl$/.test(loc.hostname || "") || !/^\/apps\/manager\//.test(loc.pathname || ""))
+            return false;
+        if ("stateReady" in Object.prototype)
+            return false;
+        var faraMse = false, scris = false;
+        if (/^\/apps\/manager\/virtual-channel/.test(loc.pathname || ""))
+            reincarcareTvp(loc);
+        if (avPornit) {
+            ["MediaSource", "WebKitMediaSource", "ManagedMediaSource"].forEach(function (n) {
+                try {
+                    if (window[n] !== undefined) {
+                        Object.defineProperty(window, n, { value: undefined, writable: true, configurable: true });
+                        faraMse = true;
+                    }
+                } catch (x) {
+                    /* proprietatea nu se poate schimba: aplicatia alege ca inainte */
+                }
+            });
+        }
+        try {
+            Object.defineProperty(Object.prototype, "stateReady", {
+                configurable: true,
+                enumerable: false,
+                get: function () {
+                    if (!Object.prototype.hasOwnProperty.call(this, "statePlay"))
+                        return undefined;
+                    var s = this.statePlay, n = this.event;
+                    if (s && typeof s === "object" && s.code === undefined && typeof n === "number" && TVP_STARI[n]) {
+                        if (!scris) {
+                            scris = true;
+                            jurnalPagina("adaptare TVP: starea motorului Object data paginii (" + TVP_STARI[n] + ")" +
+                                (faraMse ? "; MediaSource ascuns" : ""));
+                        }
+                        return { code: TVP_STARI[n], type: TVP_STARI[n].toUpperCase() };
+                    }
+                    return s;
+                },
+                set: function (v) {
+                    Object.defineProperty(this, "stateReady", { value: v, writable: true, enumerable: true,
+                        configurable: true });
+                }
+            });
+        } catch (x) {
+            return false;
+        }
+        return true;
+    }
+
+    /* ------------------------------------------------------------ animatiile cand desenul e pe procesor (0.7.7)
+     * Fara placa grafica (rezerva pe procesor: GL cade pe Mali-450, deci pe SF8008 si celelalte cu Mali-450, sau --cpu)
+     * pagina n-are compunere: o animatie CSS lunga (o sigla care pulseaza, un cerc care se invarte) se redeseneaza la
+     * fiecare cadru pe firul principal al procesului web. Desenul cu procesorul tine cat un cadru sau mai mult, deci firul
+     * ramane ocupat, iar ceasurile JavaScript (setTimeout, setInterval) si restul nu mai ajung la rand: aplicatia sta pe
+     * ecranul de incarcare (o mediateca cu sigla "pulsate 6s infinite": WPEWebProcess la 100 % minute intregi; cu animatia
+     * oprita ajunge la pagina de start in 8 s). Aici, numai fara compunere ((-webkit-transform-3d) fals; config.desen
+     * "procesor" sau "gl" o hotaraste in locul ei): animatiile CSS fara sfarsit (animation-iteration-count: infinite) se
+     * opresc (pause) la pornire (animationstart) si le mutam noi la fiecare ANIM_PAS_MS (currentTime), ~10 cadre pe secunda:
+     * arata la fel, dar lasa firul paginii liber. Cele cu sfarsit raman ale paginii (se termina singure, cu animationend).
+     * Cu compunere (placa grafica) nu se schimba nimic. Un rand in jurnalul paginii, o data pe document. */
+    var ANIM_PAS_MS = 100;
+
+    function faraCompunere() {
+        if (S.config && (S.config.desen === "procesor" || S.config.desen === "gl"))
+            return S.config.desen === "procesor";
+        try {
+            return typeof window.matchMedia === "function" && !window.matchMedia("(-webkit-transform-3d)").matches;
+        } catch (x) {
+            return false;
+        }
+    }
+
+    function animatiiPeProcesor() {
+        if (typeof window.addEventListener !== "function" || !window.Element || !window.Element.prototype ||
+                typeof window.Element.prototype.getAnimations !== "function")
+            return false;
+        var mutate = [], ceas = null, scris = false, fara = null;
+
+        function pas() {
+            ceas = null;
+            var acum = Date.now();
+            mutate = mutate.filter(function (m) {
+                var a = m.a;
+                /* oprita, terminata sau scoasa de pagina, ori pornita din nou de ea (play): nu mai e a noastra */
+                if (a.playState !== "paused" || (m.el.isConnected === false))
+                    return false;
+                try {
+                    a.currentTime = m.t0 + (acum - m.p0) * (typeof a.playbackRate === "number" ? a.playbackRate : 1);
+                } catch (x) {
+                    return false;
+                }
+                return true;
+            });
+            if (mutate.length)
+                ceas = setTimeout(pas, ANIM_PAS_MS);
+        }
+
+        function faraSfarsit(a) {
+            var t = a.effect && typeof a.effect.getComputedTiming === "function" ? a.effect.getComputedTiming() : null;
+            return !!t && t.activeDuration === Infinity;
+        }
+
+        window.addEventListener("animationstart", function (e) {
+            if (fara === null)
+                fara = faraCompunere();
+            var el = e && e.target;
+            if (!fara || !el || typeof el.getAnimations !== "function")
+                return;
+            var noi = 0;
+            el.getAnimations({ subtree: true }).forEach(function (a) {
+                if (a.animationName !== e.animationName || a.playState !== "running" || !faraSfarsit(a))
+                    return;
+                for (var i = 0; i < mutate.length; i++) {
+                    if (mutate[i].a === a)
+                        return;
+                }
+                var t0 = a.currentTime || 0;
+                try {
+                    a.pause();
+                } catch (x) {
+                    return;
+                }
+                mutate.push({ a: a, el: el, t0: t0, p0: Date.now() });
+                noi++;
+            });
+            if (noi && !scris) {
+                scris = true;
+                jurnalPagina("adaptare desen pe procesor: animatiile fara sfarsit ale paginii merg cu " + 1000 / ANIM_PAS_MS +
+                    " cadre pe secunda (" + String(e.animationName).slice(0, 40) + ")");
+            }
+            if (mutate.length && !ceas)
+                ceas = setTimeout(pas, ANIM_PAS_MS);
+        }, true);
+        return true;
+    }
+
     Object.defineProperty(window, "__hdsHbbtvPrimeste", { value: primeste, writable: false, configurable: false,
         enumerable: false });
     adaptareTvpHub();
+    adaptareTvpStare();
+    animatiiPeProcesor();
     puneCaruselul();
     tradSetari();
 })();

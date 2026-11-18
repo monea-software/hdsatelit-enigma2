@@ -22,6 +22,14 @@
 # (Screens/HdsEcranRadio.py, numaiSunet) si protectiei ecranului (bara, Screens/ScreenSaver.py, screenSaverTimerStart);
 # mesajul „Numai sunet” se vede numai cat ecranul radio nu il acopera (setarea „Protecția ecranului”).
 #
+# Fondul negru (0.7.7, Components/HdsEcranNegru.py stareFond): o fereastra neagra pe tot ecranul, nemodala, sub mesaj si
+# sub bare (zPosition -4, sub poza canalului din HdsUltimaImagine, -3), care ascunde cadrul canalului de dinainte tinut de
+# „Ultima imagine” cand canalul nou nu da niciun cadru in Components/HdsEcranNegru.PRAG_FOND secunde. Se arata oricare ar fi
+# ecranul din fata (se vede si in fereastra mica a listei de canale), nu depinde de setarea mesajului si de EXIT; ramane la
+# zap-ul urmator pana vin cadre noi (verificate la PAS_FOND_MS cat se vede) si se ascunde la radio, fisiere, pauza, PiP,
+# standby sau cand masura nu mai e sigura. Fara animatie (apare si dispare pe loc). Un rand in jurnalul interfetei la
+# aratare si la ascundere.
+#
 # Asezarea: randurile goale nu lasa loc gol. Dupa layout se citesc pozitiile din skin; la fiecare mesaj nou randurile
 # vazute se aseaza unul sub altul cu distantele din skin, fereastra se scurteaza si ramane centrata pe acelasi mijloc.
 # Etichetele sistemelor si butonul faptei se centreaza pe latimea textului lor. Skinul HDSatelit are blocul
@@ -449,6 +457,22 @@ class HdsEcranNegruFereastra(HdsEcranNegru):
 # ---------------------------------------------------------------- tastele
 
 
+# cat timp dupa aratare (sau dupa un zap sub fond) cadrele se cauta la PAS_FOND_MS; apoi o data pe secunda
+FOND_REPEDE_S = 10.0
+# cat ramane fondul cand contorul de cadre nu se poate citi (zap-ul pe HiSilicon ia ~1-2 s)
+FOND_NESTIUT_S = 3.0
+SKIN_FOND = """<screen name="HdsEcranNegruFond" position="0,0" size="1920,1080" flags="wfNoBorder" zPosition="-4" backgroundColor="#00000000" />"""
+
+
+class HdsEcranNegruFond(Screen):
+	"""Fondul negru pe tot ecranul (fara randuri), scris pentru 1920 si scalat la desktop."""
+
+	def __init__(self, session):
+		self.skin = scaledSkin(SKIN_FOND, 1920)
+		Screen.__init__(self, session)
+		self.skinName = "HdsEcranNegruFond"
+
+
 class HartaEcranNegru(ActionMap):
 	"""Harta de taste a mesajului: tasta fara actiune merge mai departe fara nimic in jurnal; execBegin / execEnd
 	(chemate de InfoBar cand devine sau nu mai e ecranul din fata) ajung la legatura."""
@@ -496,7 +520,15 @@ class LegaturaEcranNegru(object):
 		self.session = infobar.session
 		E.initConfig()
 		self.ecran = self.session.instantiateDialog(HdsEcranNegru)
-		self.urm = E.Urmaritor(self.session, self._verdictNou, infobar)
+		self.urm = E.Urmaritor(self.session, self._verdictNou, infobar, fond=self._fond)
+		# fondul negru: fereastra facuta la prima aratare, ceasul care verifica repede cadrele cat se vede
+		self.fond = None
+		self.fond_vizibil = False
+		self.fond_ceas = None
+		self.fond_de_la = 0.0
+		self.fond_tic_de_la = 0.0
+		# de cand masura e nesigura cat se vede fondul (None = sigura)
+		self.fond_nestiut_de_la = None
 		self.verdict = None
 		self.numai_sunet = False
 		self.vizibil = False
@@ -554,6 +586,10 @@ class LegaturaEcranNegru(object):
 			self.verdict = None
 			self._actualizeaza()
 		self.urm.laStart()
+		if self.fond_vizibil and self.fond_ceas is not None:
+			# canal nou sub fond: cadrele lui se cauta iar repede
+			self.fond_tic_de_la = E._monoton()
+			self.fond_ceas.start(E.PAS_FOND_MS, False)
 
 	def _refRedata(self):
 		try:
@@ -634,6 +670,92 @@ class LegaturaEcranNegru(object):
 				self.pornesteAnaliza()
 		except Exception as e:
 			print("[HdsEcranNegru] analiza singura: %s" % e)
+
+	# ---- fondul negru (Components/HdsEcranNegru.Urmaritor.stareFond)
+
+	def _fond(self, stare):
+		"""La fiecare pas al urmaritorului: "negru" il arata, None il ascunde, "asteapta" il lasa cum e (canal nou fara
+		cadre inca: fondul de la canalul dinainte ramane pana vin cadre), "nestiut" il lasa cel mult FOND_NESTIUT_S."""
+		if stare == "nestiut" and not self._inStandby():
+			self._nestiut()
+			return
+		self.fond_nestiut_de_la = None
+		if stare == "negru" and not self._inStandby():
+			self._arataFond()
+		elif stare is None or self._inStandby():
+			self._ascundeFond("nu se mai pune")
+
+	def _nestiut(self):
+		"""Contorul de cadre nu spune nimic acum (pe HiSilicon nu se poate citi chiar in timpul zap-ului, Octagon SF8008):
+		fondul vazut ramane, dar numai FOND_NESTIUT_S; mai mult de atat, mai bine cadrul vechi decat negru
+		peste o imagine pe care nu o putem vedea."""
+		if not self.fond_vizibil:
+			return
+		acum = E._monoton()
+		if self.fond_nestiut_de_la is None:
+			self.fond_nestiut_de_la = acum
+		elif acum - self.fond_nestiut_de_la > FOND_NESTIUT_S:
+			self._ascundeFond("contorul de cadre nu spune nimic de %.0f s" % FOND_NESTIUT_S)
+
+	def _arataFond(self):
+		if self.fond_vizibil:
+			return
+		try:
+			if self.fond is None:
+				self.fond = self.session.instantiateDialog(HdsEcranNegruFond)
+				try:
+					self.fond.setAnimationMode(0)
+				except Exception:
+					pass
+			self.fond.show()
+		except Exception as e:
+			print("[HdsEcranNegru] fondul: %s: %s" % (type(e).__name__, e))
+			return
+		self.fond_vizibil = True
+		self.fond_de_la = self.fond_tic_de_la = E._monoton()
+		print("[HdsEcranNegru] fond negru: niciun cadru nou de %.0f s de la schimbare (%s)" % (E.PRAG_FOND,
+			self._refRedata() or "-"))
+		if self.fond_ceas is None:
+			from enigma import eTimer
+			self.fond_ceas = eTimer()
+			self.fond_ceas.callback.append(self._ticFond)
+		self.fond_ceas.start(E.PAS_FOND_MS, False)
+
+	def _ascundeFond(self, motiv):
+		if self.fond_ceas is not None:
+			self.fond_ceas.stop()
+		if not self.fond_vizibil:
+			return
+		self.fond_vizibil = False
+		self.fond_nestiut_de_la = None
+		try:
+			self.fond.hide()
+		except Exception as e:
+			print("[HdsEcranNegru] fondul: %s: %s" % (type(e).__name__, e))
+		print("[HdsEcranNegru] fond negru ascuns dupa %.1f s: %s" % (E._monoton() - self.fond_de_la, motiv))
+
+	def _ticFond(self):
+		"""Cat se vede fondul: numai contorul de cadre (fara fotografie), ca imaginea venita sa nu stea sub negru."""
+		try:
+			r = self.urm.cadreNoi()
+		except Exception as e:
+			print("[HdsEcranNegru] fondul, cadrele: %s: %s" % (type(e).__name__, e))
+			r = None
+		if r is True:
+			self._ascundeFond("au venit cadre noi")
+			return
+		if r is None:
+			self._nestiut()
+		# un contor citit, dar pe loc, nu sterge socoteala lui "nestiut": numai o stare sigura a pasului rar ("negru",
+		# "asteapta") o sterge; altfel un contor intepenit peste o imagine buna ar tine fondul oricat
+		if not self.fond_vizibil:
+			return
+		if self._inStandby():
+			self._ascundeFond("standby")
+		elif E._monoton() - self.fond_tic_de_la > FOND_REPEDE_S:
+			# acelasi canal fara imagine de mult: o data pe secunda ajunge (zap-ul urmator il face iar repede, laStart)
+			self.fond_tic_de_la = float("inf")
+			self.fond_ceas.start(1000, False)
 
 	# ---- cand se vede
 

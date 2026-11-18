@@ -648,6 +648,21 @@ class iDVBPESReader;
 class iDVBTSRecorder;
 class iTSMPEGDecoder;
 
+	/* Counts the bytes of one PID of a demux and reports the rate (sVideoBitrate / sAudioBitrate of a live DVB service).
+	   The counting runs on its own thread and stops by itself when nobody asks for the rate for a few seconds; the next
+	   getKbps() starts it again. From the GPL-2.0 sources of a public enigma2 (commits 2d5bc2b55524 and ce2af803e20f,
+	   Huevos, 10.2026), see lib/dvb/demux.h, eDVBBitrateCounter. */
+class iDVBBitrateCounter: public iObject
+{
+public:
+		/* packets: count the TS packets of the PID (their payload), for an encrypted service, where a PES filter gets
+		   no clear packets; fails where the demux cannot give TS packets of one PID (HiSilicon, old API) */
+	virtual RESULT start(int pid, bool packets)=0;
+	virtual RESULT stop()=0;
+		/* kbit/s of the last measuring window (0 until the first window is complete), -1 = not running */
+	virtual int getKbps()=0;
+};
+
 class iDVBDemux: public iObject
 {
 public:
@@ -659,6 +674,12 @@ public:
 	virtual RESULT getCADemuxID(uint8_t &id)=0;
 	virtual RESULT flush()=0;
 	virtual int openDVR(int flags)=0;
+		/* last in the class, so the slots above keep their place for plugins built against the older header */
+	virtual RESULT createBitrateCounter(ePtr<iDVBBitrateCounter> &counter) { (void)counter; return -1; }
+		/* a TS recorder used only to count (iDVBTSRecorder::setCountPID), where the demux cannot give the TS packets
+		   of one PID to a filter of its own (HiSilicon: only a recording with PID 0 gets the data of its PIDs). Refused
+		   (-1) where it could cost the driver memory or the record groups of the recordings, and on the other boxes */
+	virtual RESULT createCountingRecorder(ePtr<iDVBTSRecorder> &recorder) { (void)recorder; return -1; }
 };
 
 #if HAVE_DVB_API_VERSION < 3 && !defined(VIDEO_EVENT_SIZE_CHANGED)

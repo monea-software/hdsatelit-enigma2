@@ -40,8 +40,11 @@ import os
 import re
 import shutil
 
-# pagina de pornire din fabrica (si cea folosita cand adresa salvata nu e buna); webul /navigator ia aceeasi constanta
-PAGINA_IMPLICITA = "https://www.hdsatelit.com/"
+# pagina de pornire din fabrica (si cea folosita cand adresa salvata nu e buna); webul /navigator ia aceeasi constanta.
+# 0.7.7 (TVR, Eduard 16.11.2026 13:09): stirile HD Satelit facute pentru televizor de serverul nostru, in limba meniului, nu
+# www.hdsatelit.com (pagina grea, cu reclame, paza gazduirii). Cine n-a schimbat pagina primeste adresa noua singur (enigma2
+# nu salveaza valoarea egala cu cea din fabrica); cine si-a ales alta pagina o pastreaza.
+PAGINA_IMPLICITA = "https://stb.hdsatelit.com/tv/"
 DOSAR_DATE = "/home/root/.local/share/hds-navigator"
 DOSAR_CACHE = "/tmp/hds-navigator-cache"
 # datele aplicatiilor HbbTV (Components/HdsHbbtvPornire.DOSAR_DATE si DOSAR_CACHE), ale utilizatorului hdsnav

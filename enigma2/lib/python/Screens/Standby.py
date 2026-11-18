@@ -14,11 +14,11 @@ inStandby = None
 _ARE_AVS = os.path.exists("/proc/stb/avs/0/input")
 
 
-def _standbyTv(functie):
+def _standbyTv(functie, *argumente):
 	"""Iesirea HDMI si televizorul (Components/HdsStandbyTv.py); o eroare nu opreste standby-ul."""
 	try:
 		from Components import HdsStandbyTv
-		getattr(HdsStandbyTv, functie)()
+		getattr(HdsStandbyTv, functie)(*argumente)
 	except Exception as e:
 		print("[Standby] HdsStandbyTv.%s: %r" % (functie, e))
 
@@ -140,7 +140,11 @@ class StandbySummary(Screen):
 
 from enigma import quitMainloop, iRecordableService
 from Screens.MessageBox import MessageBox
-from time import time
+from time import time, sleep
+try:
+	from time import monotonic
+except ImportError:
+	monotonic = time
 from Components.Task import job_manager
 
 inTryQuitMainloop = False
@@ -164,6 +168,8 @@ QUIT_IMAGE_RESTORE = 43
 QUIT_UPGRADE_FRONTPANEL = 44
 QUIT_WOLSHUTDOWN = 45
 quitMainloopCode = 1
+# 0.7.7 (UPD): codul iesirii care a pornit din TryQuitMainloop (close cu True), None pana atunci
+iesireCeruta = None
 TVinStandby = None
 
 # HDSatelit (0.7.4, LinuxSat 164125 #969426): cat ruleaza opkg (o actualizare din meniu sau o extensie se instaleaza),
@@ -195,6 +201,121 @@ def _textInstalare(retvalue):
 			_("OK sau EXIT: renunți.")
 	return _("Se instalează pachete software. Interfața repornește singură după ce se termină instalarea.") + "\n" + \
 		_("OK sau EXIT: renunți.")
+
+
+# HDSatelit 0.7.7 (OSD; e-mailul 6416, Vu+ Solo SE; TODO 15.11 14:22): textul de pe televizor la iesirea interfetei, ca
+# in OE-Alliance (aceeasi clasa, QuitMainloopScreen, cu widgetul „text”, ca temele si pluginurile scrise pentru ea sa-l
+# gaseasca). Inainte TryQuitMainloop iesea pe loc, cu ecranul neschimbat, si omul nu stia ce se intampla. Bucla
+# principala nu mai apuca sa deseneze o fereastra aratata chiar inainte de quitMainloop, deci desenul se cere pe loc
+# (desktop.paint) si se asteapta randarea, cel mult RANDARE_ASTEAPTA_S. La oprire (codul 1) ora desenului merge la
+# Components/HdsStandbyTv.laOprire, care opreste HDMI abia dupa ce textul a stat macar o secunda pe ecran. Cat receptorul
+# e in standby (televizorul si iesirea HDMI sunt deja stinse) nu se arata nimic; codurile 4 (afisajul din fata) si 5
+# (caderea) n-au text. Celelalte coduri pornesc interfata din nou (tools/enigma2.sh.in), deci „Interfața repornește...”.
+# Desenul se cere o data si se asteapta randarea; se cere din nou numai la REPICTARE_S (animatia ferestrelor poate tine
+# desenul cel mult 100 ms dupa o inchidere): cerut la fiecare pas, ar tine coada randarii mereu ocupata si asteptarea ar
+# merge pana la capat. RANDARE_ASTEAPTA_S e numai marginea; iesirea asteapta cat dureaza desenul.
+RANDARE_ASTEAPTA_S = 1.5
+REPICTARE_S = 0.12
+
+
+def textIesire(cod):
+	"""Textul de pe televizor pentru codul dat lui quitMainloop; "" cand nu se arata nimic."""
+	if cod == QUIT_SHUTDOWN:
+		return _("Receptorul se oprește...")
+	if cod == QUIT_REBOOT:
+		return _("Receptorul repornește...")
+	if cod in (QUIT_UPGRADE_FP, QUIT_ERROR_RESTART):
+		return ""
+	return _("Interfața repornește...")
+
+
+class QuitMainloopScreen(Screen):
+	"""Fereastra pe tot ecranul cu textul iesirii (vezi textIesire). Tema o poate desena dupa numele din OE-Alliance."""
+	skin = """<screen name="QuitMainloopScreen" position="0,0" size="1920,1080" flags="wfNoBorder" backgroundColor="#000a0e1a" zPosition="120">
+		<widget name="text" position="120,440" size="1680,200" font="Regular;54" halign="center" valign="center" foregroundColor="#00f0f6fc" backgroundColor="#000a0e1a" transparent="1" />
+	</screen>"""
+
+	def __init__(self, session, retvalue=QUIT_SHUTDOWN):
+		Screen.__init__(self, session)
+		try:
+			from Tools.ScaledSkin import scaledSkin
+			self.skin = scaledSkin(QuitMainloopScreen.skin, 1920)   # skinul e scris pe 1920 de pixeli
+		except Exception:
+			pass
+		from Components.Label import Label
+		self["text"] = Label(textIesire(retvalue))
+
+
+class HdsTextIesire(QuitMainloopScreen):
+	"""Aceeasi fereastra cu skinul nostru, cand QuitMainloopScreen din tema aleasa nu se poate pune."""
+	def __init__(self, session, retvalue=QUIT_SHUTDOWN):
+		QuitMainloopScreen.__init__(self, session, retvalue)
+		self.skinName = ["HdsTextIesire"]
+
+
+_ecranIesire = []     # fereastra tinuta pana la iesire (altfel Python o strica inainte de desen)
+
+
+def _deseneazaAcum(desktop):
+	"""Desenul ferestrelor aratate acum, pe loc, si asteptarea randarii (gRC), cel mult RANDARE_ASTEAPTA_S. True cand
+	randarea s-a terminat. paint() poate lasa desenul pentru mai tarziu (animatia ferestrelor tine cel mult 100 ms dupa o
+	inchidere), deci se cere din nou, dar numai la REPICTARE_S."""
+	capat = monotonic() + RANDARE_ASTEAPTA_S
+	urmatorul = 0
+	while True:
+		try:
+			if monotonic() >= urmatorul:
+				desktop.paint()
+				urmatorul = monotonic() + REPICTARE_S
+			sleep(0.01)
+			if desktop.captureReady():
+				return True
+		except Exception as e:
+			print("[TryQuitMainloop] desenul textului de iesire: %r" % (e,))
+			return False
+		if monotonic() >= capat:
+			return False
+
+
+def arataTextIesire(session, cod):
+	"""Textul iesirii pe televizor, desenat pe loc (vezi textIesire). Intoarce ora desenului (monotonic) sau None cand nu
+	s-a aratat nimic. Nu arunca: iesirea nu depinde de el."""
+	text = textIesire(cod)
+	if not text or inStandby is not None or session is None:
+		return None
+	try:
+		from enigma import getDesktop
+		desktop = getDesktop(0)
+	except Exception as e:
+		print("[TryQuitMainloop] textul de iesire: %r" % (e,))
+		return None
+	for nume in ("hdsAnimatieElibereaza", "hdsAnimatieFaraPas"):
+		try:
+			getattr(desktop, nume)()
+		except Exception:
+			pass
+	ecran = None
+	for clasa in (QuitMainloopScreen, HdsTextIesire):
+		try:
+			ecran = session.instantiateDialog(clasa, retvalue=cod)
+			break
+		except Exception as e:
+			print("[TryQuitMainloop] %s: %r" % (clasa.__name__, e))
+	if ecran is None:
+		return None
+	_ecranIesire.append(ecran)
+	try:
+		ecran.instance.setAnimationMode(0)
+		ecran.show()
+	except Exception as e:
+		print("[TryQuitMainloop] textul de iesire: %r" % (e,))
+		return None
+	inceput = monotonic()
+	gata = _deseneazaAcum(desktop)
+	acum = monotonic()
+	print("[TryQuitMainloop] textul de iesire pe ecran (cod %s): %s in %d ms" % (cod,
+		"desenat" if gata else "randarea neconfirmata", int((acum - inceput) * 1000)))
+	return acum
 
 
 class TryQuitMainloop(MessageBox):
@@ -304,10 +425,22 @@ class TryQuitMainloop(MessageBox):
 				scrie_acum()
 			except Exception as e:
 				print("[TryQuitMainloop] canalul tinut minte: %r" % (e,))
+			# HDSatelit 0.7.7 (UPD, dorinelu forum 795 #2668): codul iesirii care chiar porneste acum (si fara intrebare,
+			# cand fereastra nu se arata deloc), pentru semnul iesirii (Components/HdsPaznic._codIesireCeruta): dupa o
+			# iesire agatata, paznicul o opreste, iar enigma2.sh face tot ce s-a cerut (repornirea receptorului, oprirea)
+			global iesireCeruta
+			iesireCeruta = self.retval
+			# HDSatelit 0.7.7 (OSD): textul iesirii pe televizor („Receptorul se oprește...” si celelalte), desenat pe loc,
+			# inainte ca CEC si HDMI sa stinga ecranul
+			desenat = arataTextIesire(getattr(self, "session", None), self.retval)
 			# HDSatelit: la oprirea completa (nu la repornire) televizorul primeste prin CEC acelasi mesaj ca la intrarea
-			# in standby, cand e aleasa „Stinge si televizorul (CEC)” (Components/HdsStandbyTv.py)
+			# in standby, cand e aleasa „Stinge si televizorul (CEC)” (Components/HdsStandbyTv.py); HDMI se opreste abia
+			# dupa ce textul a stat macar o secunda pe ecran
 			if self.retval == 1:
-				_standbyTv("laOprire")
+				if desenat is None:
+					_standbyTv("laOprire")
+				else:
+					_standbyTv("laOprire", desenat)
 			quitMainloop(self.retval)
 		else:
 			MessageBox.close(self, True)

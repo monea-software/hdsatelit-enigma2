@@ -46,6 +46,10 @@ class HdsMontareDiscuri(Screen):
 		self.ceas = eTimer()
 		self.ceas.callback.append(self.urmareste)
 		self.onClose.append(self.ceas.stop)
+		# 0.7.7 (DRG): dupa ce un disc montat, necunoscut managerului, e pus din nou in lista lui, ecranul citeste iar
+		self.ceasReparare = eTimer()
+		self.ceasReparare.callback.append(self.dupaReparare)
+		self.onClose.append(self.ceasReparare.stop)
 		self.citind = False
 		self.deAratat = None
 		# citirea e alta fereastra: se deschide la prima executie, nu din onLayoutFinish (Session.open ar refuza-o)
@@ -85,6 +89,8 @@ class HdsMontareDiscuri(Screen):
 			self["list"].setList([_("Discul nu răspunde la timp. Încearcă din nou.")])
 			return
 		self.randuri = rez["valoare"] or []
+		if M.reparaNecunoscute(self.randuri):
+			self.ceasReparare.start(3000, True)
 		if not self.randuri:
 			self["list"].setList([_("Niciun hard disk și niciun stick USB găsit.")])
 		else:
@@ -94,6 +100,10 @@ class HdsMontareDiscuri(Screen):
 		if l is not None:
 			self.session.open(MessageBox, l["mesaj"], MessageBox.TYPE_INFO if l["stare"] == M.GATA else MessageBox.TYPE_ERROR,
 				timeout=10)
+
+	def dupaReparare(self):
+		if not M.inLucru() and not self.citind:
+			self.citeste()
 
 	def randAles(self):
 		i = self["list"].getSelectedIndex()

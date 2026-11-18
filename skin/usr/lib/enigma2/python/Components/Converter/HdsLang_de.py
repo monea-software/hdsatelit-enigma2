@@ -294,4 +294,10 @@ T = {
 	"set_grid_value_alpha": u"Gewählte Farbe: {0}, Transparenz {1}",
 	"set_grid_help": u"Die Pfeile bewegen dich im Raster, in der Zeile der Transparenz und im unteren Band; die Farbe siehst du sofort rechts. OK oder Grün behält die Farbe, Blau öffnet den Hex-Code und R, G, B.",
 	"set_advanced": u"Erweitert",
+	"bitrate_va": u"Bitrate Video · Audio",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"ø",
+	"ecm_hop": u"Hops",
+	"ecm_reader": u"Reader",
 }

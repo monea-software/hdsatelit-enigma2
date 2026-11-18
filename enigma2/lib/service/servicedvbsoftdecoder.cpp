@@ -16,6 +16,8 @@ DEFINE_REF(eDVBSoftDecoder);
 eDVBSoftDecoder::eDVBSoftDecoder(eDVBServicePMTHandler& source_handler)
 	: m_source_handler(source_handler)
 	, m_dvr_fd(-1)
+	, m_count_pid{-1, -1}
+	, m_count_base{0, 0}
 	, m_running(false)
 	, m_stopping(false)
 	, m_paused(false)
@@ -60,6 +62,7 @@ void eDVBSoftDecoder::setPaused(bool paused)
 		if (m_record)
 		{
 			m_record->stop();
+			keepCountedBytes();
 			m_record->setDescrambler(0);
 			m_record_event_conn = 0;
 			m_record = 0;
@@ -156,6 +159,7 @@ int eDVBSoftDecoder::startRecorder()
 	if (m_record)
 	{
 		m_record->stop();
+		keepCountedBytes();
 		m_record->setDescrambler(0);
 		m_record_event_conn = 0;
 		m_record = 0;
@@ -177,6 +181,10 @@ int eDVBSoftDecoder::startRecorder()
 	}
 	m_record->setTargetFD(m_dvr_fd);
 	m_record->setDescrambler(m_descrambler);
+	// the bitrate counting goes on in the new recorder (setCountPID)
+	for (int slot = 0; slot < 2; ++slot)
+		if (m_count_pid[slot] > 0)
+			m_record->setCountPID(slot, m_count_pid[slot]);
 	m_record->connectEvent(sigc::mem_fun(*this, &eDVBSoftDecoder::recordEvent), m_record_event_conn);
 	m_pids_active.clear();
 	updatePids();
@@ -216,6 +224,7 @@ void eDVBSoftDecoder::stop()
 	if (m_record)
 	{
 		m_record->stop();
+		keepCountedBytes();
 		m_record->setDescrambler(0);
 		m_record_event_conn = 0;
 		m_record = 0;
@@ -378,6 +387,36 @@ void eDVBSoftDecoder::streamHealthCheck()
 	}
 
 	m_last_pts = current_pts;
+}
+
+void eDVBSoftDecoder::keepCountedBytes()
+{
+	for (int slot = 0; slot < 2; ++slot)
+		if (m_record && m_count_pid[slot] > 0 && m_record->getCountPID(slot) == m_count_pid[slot])
+			m_count_base[slot] += m_record->getCountedBytes(slot);
+}
+
+void eDVBSoftDecoder::setCountPID(int slot, int pid)
+{
+	if (slot < 0 || slot > 1)
+		return;
+	if (pid <= 0 || pid >= 0x1fff)
+		pid = -1;
+	if (pid == m_count_pid[slot])
+		return;
+	m_count_pid[slot] = pid;
+	m_count_base[slot] = 0;
+	if (m_record)
+		m_record->setCountPID(slot, pid);
+}
+
+bool eDVBSoftDecoder::getCountedBytes(int slot, uint64_t &bytes)
+{
+	bytes = 0;
+	if (slot < 0 || slot > 1 || m_count_pid[slot] <= 0 || !m_record || m_record->getCountPID(slot) != m_count_pid[slot])
+		return false;
+	bytes = m_count_base[slot] + m_record->getCountedBytes(slot);
+	return true;
 }
 
 void eDVBSoftDecoder::updatePids()

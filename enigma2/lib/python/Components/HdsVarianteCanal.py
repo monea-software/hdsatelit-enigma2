@@ -22,13 +22,28 @@ vazute de rezerva. Scris sigur (temporar + fsync + os.replace), numai cand se sc
 citi nu se scrie peste.
 
 Grupele se fac din textul lamedb (citire usoara: numai randurile serviciilor si pozitiile transponderelor), o data pe
-semnatura fisierului (data si marimea). Nimic din enigma2 la incarcare: probele de pe PC il incarca direct."""
+semnatura fisierului (data in nanosecunde, marimea, inode-ul). Nimic din enigma2 la incarcare: probele de pe PC il
+incarca direct.
+
+Citirea grupelor PE UN FIR (VAR, 0.7.7, asistenta 888733: cu 22 400 de servicii citirea tinea firul interfetei 2,6 s la
+prima deschidere a listei de canale dupa fiecare pornire a interfetei si dupa fiecare scriere a lamedb, care se scrie si
+la intrarea in standby): porneste(), chemat o data din mytest.py, porneste un fir care cheama variante() la
+INTARZIERE_FIR_S dupa pornire si apoi la fiecare PAS_FIR_S (un os.stat; citirea numai cand lamedb s-a schimbat). Lista
+deschisa dupa aceea gaseste grupele gata. variante() e sigura pe fire: memoria e un singur tuplu (semnatura, grupele)
+schimbat dintr-o data, iar citirea se face sub _LACAT, deci cine vine in timpul citirii altui fir asteapta rezultatul
+(lacatul elibereaza lacatul Python) si nu citeste a doua oara. Lista arata exact ce arata si inainte."""
 from __future__ import absolute_import, unicode_literals
 
 import json
 import os
 import re
+import threading
 import time
+
+try:
+	import _thread as _fire_joase
+except ImportError:  # Python 2
+	import thread as _fire_joase
 
 try:
 	from Components import HdsIndexCanale as X
@@ -40,6 +55,10 @@ LAMEDB = "lamedb"
 FISIER = "/etc/enigma2/hds_variante_canale.json"
 MAX_NOTE = 600
 MAX_ALESE = 400
+# firul grupelor (porneste): asteapta atat dupa pornirea interfetei (pornirea tine 40-50 s pe ARM, ca
+# HdsPython2Traducere.INTARZIERE_FUNDAL_S), apoi se uita la lamedb la fiecare PAS_FIR_S
+INTARZIERE_FIR_S = 60.0
+PAS_FIR_S = 30.0
 # tipurile cu imagine HD dupa EN 300 468 (MPEG-2 HD, H.264 HD, H.265, H.265 UHD)
 TIPURI_HD = frozenset((0x11, 0x19, 0x1F, 0x20))
 # HD / FHD / SD la coada numelui (cuvant intreg, si in paranteze): "TLC HD", "Kanal Yek SD", "Pro TV (HD)"; 4K si UHD
@@ -481,7 +500,12 @@ def text_varianta(v, acum=False):
 
 # ---------------------------------------------------------------- instanta procesului (receptorul)
 
-_MEMORIE = {"sem": None, "variante": None}
+# (semnatura lamedb, Variante): un singur tuplu, schimbat dintr-o data (firul grupelor si interfata il citesc fara lacat)
+_MEMORIE = {"t": (None, None)}
+# o singura citire a grupelor odata; cine vine in timpul ei asteapta (acquire elibereaza lacatul Python) si ia rezultatul
+_LACAT = threading.Lock()
+# firul grupelor: "semn" e al firului care merge acum (opreste() il sterge, firul iese la urmatoarea trezire)
+_FIR = {"semn": None, "eroare": None, "sem_gresit": None}
 _STARE = []
 _STIUTE = {"cheie": None, "set": frozenset()}
 
@@ -493,11 +517,22 @@ def stare():
 
 
 def _semnatura(cale):
+	"""(data in ns, marime, inode) sau None. Nucleul scrie lamedb pe loc (lib/dvb/db.cpp saveServicelist, fopen "w"),
+	deci data intreaga in secunde nu ajunge: doua scrieri in aceeasi secunda cu aceeasi marime ar parea acelasi fisier."""
 	try:
 		st = os.stat(cale)
-		return (int(st.st_mtime), st.st_size)
 	except (IOError, OSError):
 		return None
+	ns = getattr(st, "st_mtime_ns", None)
+	if ns is None:
+		ns = int(st.st_mtime * 1000000000)
+	return (ns, st.st_size, getattr(st, "st_ino", 0))
+
+
+def _sem_lamedb(director):
+	cale = os.path.join(director or DIRECTOR, LAMEDB)
+	sem = _semnatura(cale)
+	return cale, ((cale,) + sem if sem is not None else None)
 
 
 def _stiute():
@@ -518,31 +553,96 @@ def _stiute():
 	return _STIUTE["set"]
 
 
-def variante(director=None):
-	"""Grupele lamedb-ului de acum (citite din nou numai cand se schimba fisierul)."""
-	cale = os.path.join(director or DIRECTOR, LAMEDB)
-	sem = _semnatura(cale)
-	if sem is not None:
-		sem = (cale,) + sem
-	if sem is not None and sem == _MEMORIE["sem"] and _MEMORIE["variante"] is not None:
-		return _MEMORIE["variante"]
-	inceput = time.time()
-	grupe = {}
-	if sem is not None:
-		try:
-			with open(cale, "rb") as f:
-				grupe = grupe_din_lamedb(f.read().decode("utf-8", "replace"))
-		except (IOError, OSError) as e:
-			_jurnal("lamedb: %s" % e)
-	v = Variante(grupe, stare(), _stiute)
-	_MEMORIE["sem"], _MEMORIE["variante"] = sem, v
+def variante(director=None, fundal=False):
+	"""Grupele lamedb-ului de acum (citite din nou numai cand se schimba fisierul). Sigura pe fire: o cerere venita in
+	timpul citirii altui fir (firul grupelor) asteapta rezultatul aceleia. fundal=True (firul grupelor): fara lamedb nu
+	face nimic (None)."""
+	cale, sem = _sem_lamedb(director)
+	m_sem, m_v = _MEMORIE["t"]
+	if sem is not None and sem == m_sem:
+		return m_v
+	if fundal and sem is None:
+		return None
+	with _LACAT:
+		# poate le-a citit chiar acum alt fir, cat asteptam lacatul
+		cale, sem = _sem_lamedb(director)
+		m_sem, m_v = _MEMORIE["t"]
+		if sem is not None and sem == m_sem:
+			return m_v
+		inceput = time.time()
+		grupe = {}
+		if sem is not None:
+			try:
+				with open(cale, "rb") as f:
+					grupe = grupe_din_lamedb(f.read().decode("utf-8", "replace"))
+			except (IOError, OSError) as e:
+				_jurnal("lamedb: %s" % e)
+		v = Variante(grupe, stare(), _stiute)
+		# lamedb scris chiar in timpul citirii (nucleul il scrie pe loc): rezultatul nu se tine minte, cererea urmatoare
+		# (sau firul, la pasul urmator) il citeste din nou pe cel intreg
+		stabil = sem is not None and _sem_lamedb(director)[1] == sem
+		_MEMORIE["t"] = (sem if stabil else None, v)
 	durata = (time.time() - inceput) * 1000
-	_jurnal("%d grupe, %d variante in %.0f ms" % (len(grupe), sum(len(l) for l in grupe.values()), durata))
+	_jurnal("%d grupe, %d variante in %.0f ms%s%s" % (len(grupe), sum(len(l) for l in grupe.values()), durata,
+		" (pe fir, inainte de deschiderea listei)" if fundal else "",
+		"" if stabil or sem is None else " (lamedb s-a schimbat in timpul citirii)"))
 	return v
 
 
 def uita():
-	_MEMORIE["sem"], _MEMORIE["variante"] = None, None
+	_MEMORIE["t"] = (None, None)
+
+
+# ---------------------------------------------------------------- firul grupelor
+
+def porneste(intarziere=None, pas=None, director=None, asteapta=None):
+	"""O data, la pornirea interfetei (mytest.py): firul care citeste grupele inainte ca omul sa deschida lista. A doua
+	chemare nu porneste alt fir (False). intarziere / pas / director / asteapta (functia de asteptare): pentru probe."""
+	if _FIR["semn"] is not None:
+		return False
+	semn = object()
+	_FIR["semn"], _FIR["sem_gresit"], _FIR["eroare"] = semn, None, None
+	args = (semn, INTARZIERE_FIR_S if intarziere is None else intarziere, PAS_FIR_S if pas is None else pas, director,
+		asteapta or time.sleep)
+	try:
+		# fara threading.Thread.start: el asteapta ca firul nou sa primeasca lacatul Python (FRD, HdsStareOsd.Cititor)
+		_fire_joase.start_new_thread(_fir, args)
+	except Exception as e:
+		_FIR["semn"] = None
+		_jurnal("firul grupelor nu a pornit: %r" % (e,))
+		return False
+	return True
+
+
+def opreste():
+	"""Firul grupelor iese la urmatoarea trezire (probele)."""
+	_FIR["semn"] = None
+
+
+def _fir(semn, intarziere, pas, director, asteapta):
+	try:
+		asteapta(intarziere)
+		while _FIR["semn"] is semn:
+			sem = _sem_lamedb(director)[1]
+			# un lamedb pe care citirea a cazut nu se reciteste la fiecare pas, ci numai dupa ce se schimba
+			if sem is None or sem != _FIR.get("sem_gresit"):
+				try:
+					variante(director, fundal=True)
+					_FIR["eroare"] = _FIR["sem_gresit"] = None
+				except Exception as e:
+					# o greseala nu opreste firul; aceeasi greseala se scrie o singura data
+					_FIR["sem_gresit"] = sem
+					text = repr(e)
+					if text != _FIR["eroare"]:
+						_FIR["eroare"] = text
+						_jurnal("firul grupelor: %s" % text)
+			if _FIR["semn"] is not semn:
+				break
+			asteapta(pas)
+	except Exception as e:
+		_jurnal("firul grupelor s-a oprit: %r" % (e,))
+		if _FIR["semn"] is semn:
+			_FIR["semn"] = None
 
 
 def alternative(ref):

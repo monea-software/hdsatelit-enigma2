@@ -217,7 +217,8 @@ protected:
 		/* in timeshift mode, we essentially have two channels, and thus pmt handlers. */
 	eDVBServicePMTHandler m_service_handler_timeshift;
 	eDVBServiceEITHandler m_event_handler;
-	int m_current_audio_pid;
+		/* -1 until the first selectAudioStream(): getLiveBitrate(true) may be asked before it */
+	int m_current_audio_pid = -1;
 	
 	eDVBServicePlay(const eServiceReference &ref, eDVBService *service);
 	
@@ -298,6 +299,34 @@ protected:
 		   recorder gets its own session (m_timeshift_csa_session), never the one of the loop. A service known as CSA-ALT
 		   since the interface started gets the session and the loop before its first decoder (lib/service/
 		   hdssoftcsapornire.h), without waiting for the PMT and the ECM. */
+		/* live bitrate of the video and the audio PID, see sVideoBitrate / sAudioBitrate (lib/dvb/demux.h,
+		   eDVBBitrateCounter). Nothing is counted until a skin asks for it. */
+	ePtr<iDVBBitrateCounter> m_vbitrate, m_abitrate;
+	int m_vbitrate_pid = -1, m_abitrate_pid = -1;
+	bool m_vbitrate_packets = false, m_abitrate_packets = false;	/* the counter counts TS packets (encrypted service) */
+	const iDVBDemux *m_bitrate_demux = nullptr;	/* the demux the counters were created on, only compared */
+	bool m_bitrate_failed = false;
+	int getLiveBitrate(bool audio);
+	void releaseLiveBitrate();
+	void releaseDemuxBitrate();
+		/* BR2: a recorder counts the payload of the two PIDs (iDVBTSRecorder::setCountPID): the recorder of the SoftCSA
+		   loop (eDVBSoftDecoder::setCountPID), or on HiSilicon, for an encrypted service without the loop, a counting
+		   recorder of our own (iDVBDemux::createCountingRecorder, PID 0 + the PIDs into /dev/null), given back
+		   RECORDER_IDLE_MS after the last query. One measuring window per slot (0 video, 1 audio) for both. */
+	bool m_loop_bitrate = false;
+	ePtr<iDVBTSRecorder> m_bitrate_rec;
+	int m_bitrate_rec_fd = -1;
+	int m_bitrate_rec_pid[2] = {-1, -1};
+	ePtr<eTimer> m_bitrate_rec_timer;
+	uint64_t m_rec_bytes[2] = {0, 0};
+	int64_t m_rec_us[2] = {0, 0};
+	int m_rec_kbps[2] = {0, 0};
+	int recorderKbps(int slot, bool counting, uint64_t bytes);
+	int loopBitrate(bool audio, int pid);
+	void releaseLoopBitrate();
+	int recorderBitrate(iDVBDemux *demux, const eDVBServicePMTHandler::program &program, bool audio, int pid);
+	void releaseRecorderBitrate();
+
 	ePtr<eDVBCSASession> m_csa_session, m_timeshift_csa_session;
 	ePtr<eDVBSoftDecoder> m_soft_decoder;
 	bool m_soft_active, m_soft_proba;

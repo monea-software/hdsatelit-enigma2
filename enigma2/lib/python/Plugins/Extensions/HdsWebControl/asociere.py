@@ -2,7 +2,7 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# asociere.py: browserele intrate pe receptor (sesiunea cu cookie) si jetonul din codul QR de pe televizor.
+# asociere.py: browserele intrate pe receptor (sesiunea cu cookie).
 #
 # Codul de 6 cifre aratat pe televizor si scris in browser s-a scos de tot. In casa interfata web merge fara nimic de
 # scris. Numai cand omul si-a pus parola din reteaua de acasa (Components/HdsParolaLocala.py) si a bifat interfata web,
@@ -23,12 +23,9 @@
 # O SINGURA lista pentru toate aparatele: fiecare intrare are campul `tip` ("browser" sau "aplicatie"; intrarile
 # de tip aplicatie sunt de dinainte si raman numai ca sa nu se piarda fisierul).
 #
-# JETONUL DIN CODUL QR (cereJeton / verificaJeton): un ecran de pe televizor (de ex. „Configurează de pe telefon” din
-# traducerea subtitrarilor) arata un cod QR cu adresa http://<IP receptor>/t/<jeton>; telefonul care il scaneaza ajunge
-# direct la pagina ceruta de ecran (si devine browser intrat, chiar cand omul are parola pusa). Omul nu scrie nimic:
-# jetonul are 256 de biti, o singura folosire, JETON_S secunde pe ceasul monoton, un singur jeton activ, se anuleaza cand
-# ecranul se inchide; in memorie se tine doar amprenta lui. Destinatia e o cale din DESTINATII_JETON, niciodata o adresa
-# primita.
+# Codurile QR de pe televizor (interfata web pe telefon, configurarea traducerii) au adresa simpla a paginii, fara jeton:
+# in casa interfata web nu cere nimic, iar codul trebuie sa mearga oricand si sa poata fi pus la favorite. Adresele
+# vechi /t/<jeton> duc direct la prima pagina (plugin.py, JetonQrResource).
 
 import hashlib
 import hmac
@@ -59,10 +56,6 @@ CALE_IMPLICITA = "/etc/enigma2/hdswebcontrol-browsere.json"
 DURATA_SESIUNE_S = 365 * 24 * 3600
 MAX_BROWSERE = 20
 INTERVAL_SALVARE_FOLOSIRE_S = 24 * 3600
-# jetonul din codul QR: cinci minute (omul scaneaza cu telefonul din fata televizorului; ecranul face altul la expirare)
-JETON_S = 300
-# paginile spre care poate duce un jeton (ecranul alege una; nimic primit din retea)
-DESTINATII_JETON = ("/", "/traducere-configurare", "/traducere-subtitrari")
 # sub aceasta data (01.01.2020) ceasul receptorului nu era inca potrivit cand s-a creat sesiunea
 # (receptorul porneste uneori cu ora din 1970 pana la sincronizare)
 CEAS_MINIM_PLAUZIBIL = 1577836800
@@ -240,7 +233,7 @@ def _adresaCurata(adresa):
 
 
 class Asociere(object):
-	"""Browserele intrate (pe disc, doar amprente) si jetonul codului QR (in memorie)."""
+	"""Browserele intrate (pe disc, doar amprente)."""
 
 	def __init__(self, cale=CALE_IMPLICITA, ceas=time.time, ceas_monoton=time.monotonic, jurnal=None):
 		self._cale = cale
@@ -249,8 +242,6 @@ class Asociere(object):
 		self._jurnal = jurnal or (lambda text: None)
 		self._lacat = threading.RLock()
 		self._browsere = None  # lista de dictionare, incarcata la prima folosire
-		self._jeton = None  # {"hash", "id", "destinatie", "expira"}: jetonul activ al codului QR (numai amprenta)
-		self._jeton_folosit = None  # {"id", "nume", "adresa"}: ultimul jeton folosit, pentru ecranul de pe televizor
 
 	# ------------------------------------------------------------------ fisierul
 	def _incarca(self):
@@ -324,76 +315,6 @@ class Asociere(object):
 			secret = secrets.token_urlsafe(32)
 			intrare = self._adaugaBrowser(secret, numeBrowser(user_agent), _adresaCurata(adresa), TIP_BROWSER)
 			return secret, self._faraAmprenta(intrare)
-
-	# ------------------------------------------------------------------ jetonul din codul QR (vezi nota de sus)
-	def cereJeton(self, destinatie="/"):
-		"""Un jeton nou pentru codul QR al unui ecran de pe televizor (cel vechi nu mai e bun). Intoarce
-		{"jeton": textul pus in cod, "id": id-ul lui (pentru stareJeton/anuleazaJeton), "ramas": secunde}. Jetonul in
-		clar nu se pastreaza aici si nu se scrie nicaieri: il are numai ecranul, cat il deseneaza."""
-		if destinatie not in DESTINATII_JETON:
-			destinatie = "/"
-		jeton = secrets.token_urlsafe(32)
-		with self._lacat:
-			self._jeton = {"hash": amprenta(jeton), "id": secrets.token_hex(8), "destinatie": destinatie,
-				"expira": self._monoton() + JETON_S}
-			return {"jeton": jeton, "id": self._jeton["id"], "ramas": JETON_S}
-
-	def _jetonCurent(self, acum):
-		if self._jeton is not None and self._jeton["expira"] <= acum:
-			self._jeton = None
-		return self._jeton
-
-	def anuleazaJeton(self, id_jeton=None):
-		"""Ecranul s-a inchis: jetonul lui nu mai e bun (fara id: oricare). True daca a anulat."""
-		with self._lacat:
-			if self._jeton is None:
-				return False
-			if id_jeton is not None and not secrets.compare_digest(str(id_jeton).encode("utf-8"),
-					self._jeton["id"].encode("ascii")):
-				return False
-			self._jeton = None
-			return True
-
-	def stareJeton(self, id_jeton):
-		"""Pentru ecranul de pe televizor: ("activ", secunde ramase) | ("folosit", {"nume", "adresa"}) | ("expirat", None)."""
-		with self._lacat:
-			acum = self._monoton()
-			curent = self._jetonCurent(acum)
-			if curent is not None and curent["id"] == id_jeton:
-				return "activ", int(curent["expira"] - acum + 0.999)
-			f = self._jeton_folosit
-			if f is not None and f["id"] == id_jeton:
-				return "folosit", {"nume": f["nume"], "adresa": f["adresa"]}
-			return "expirat", None
-
-	def verificaJeton(self, jeton, user_agent="", adresa="", secret_existent=None):
-		"""Jetonul primit de la telefon. Intoarce un dictionar:
-		  stare: 'ok' | 'format' | 'expirat'
-		  secret: la 'ok', secretul nou al browserului (pentru cookie), sau None daca browserul era deja asociat
-		          (`secret_existent` = secretul din cookie-ul lui, bun): atunci nu se face a doua intrare
-		  browser: la 'ok', intrarea (fara amprenta); nou: True daca intrarea e noua
-		  destinatie: la 'ok', pagina spre care merge telefonul
-		Jetonul se consuma la prima folosire buna; unul gresit nu schimba nimic (nicio blocare, vezi nota de sus)."""
-		if not formatSecretValid(jeton):
-			return {"stare": "format"}
-		with self._lacat:
-			acum = self._monoton()
-			curent = self._jetonCurent(acum)
-			if curent is None or not secrets.compare_digest(amprenta(jeton), curent["hash"]):
-				return {"stare": "expirat"}
-			self._jeton = None
-			destinatie = curent["destinatie"]
-			if secret_existent is not None:
-				existenta = self.sesiune(secret_existent, tip=TIP_BROWSER)
-				if existenta is not None:
-					self._jeton_folosit = {"id": curent["id"], "nume": existenta.get("nume", ""),
-						"adresa": _adresaCurata(adresa)}
-					return {"stare": "ok", "secret": None, "browser": existenta, "nou": False, "destinatie": destinatie}
-			secret = secrets.token_urlsafe(32)
-			intrare = self._adaugaBrowser(secret, numeBrowser(user_agent), _adresaCurata(adresa), TIP_BROWSER)
-			self._jeton_folosit = {"id": curent["id"], "nume": intrare["nume"], "adresa": intrare["adresa"]}
-			return {"stare": "ok", "secret": secret, "browser": self._faraAmprenta(intrare), "nou": True,
-				"destinatie": destinatie}
 
 	# ------------------------------------------------------------------ aparatele asociate (browsere si aplicatii)
 	def _adaugaBrowser(self, secret, nume, adresa, tip=TIP_BROWSER):
@@ -499,7 +420,7 @@ class Asociere(object):
 			return True
 
 	def deconecteazaToate(self, pastreaza=None):
-		"""Scoate toate aparatele (browsere si aplicatii) si jetonul codului QR. `pastreaza`:
+		"""Scoate toate aparatele (browsere si aplicatii). `pastreaza`:
 		secretul unui browser care ramane (cel care a cerut din web cheia noua pentru panou). Intoarce cate au fost
 		scoase."""
 		with self._lacat:
@@ -509,7 +430,6 @@ class Asociere(object):
 				ramas = None
 			numar = len(self._browsere) - (1 if ramas is not None else 0)
 			self._browsere = [ramas] if ramas is not None else []
-			self._jeton = None
 			self._salveaza()
 			return numar
 

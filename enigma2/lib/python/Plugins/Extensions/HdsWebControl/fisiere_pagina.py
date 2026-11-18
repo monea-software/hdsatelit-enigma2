@@ -11,7 +11,11 @@ Panoul calculatorului are doua moduri (designul din Stitch, proiectul interfetei
 - intreg: Chrome/Edge pe adresa https a receptorului (https_web.py): alegerea dosarului (showDirectoryPicker),
   citire, scriere, stergere, creare; dosarul ales se tine minte in browser (IndexedDB);
 - simplu: orice alt browser sau adresa http: fisierele alese sau trase din Explorer se copiaza pe receptor, iar de
-  pe receptor se copiaza prin descarcare. Ce nu merge spune de ce si duce la adresa https (butonul mare).
+  pe receptor se copiaza prin descarcare. Pe http (cum intra omul din casa) asta e ce vede intai, fara sa fie trimis
+  spre avertismentul certificatului; adresa https ramane o legatura mica sub butoane, pentru cine o alege (browserul da
+  voie la dosarele calculatorului numai pe https, isSecureContext). Ce nu merge spune de ce, cand omul il cere.
+Latimea panoului calculatorului sta in variabila CSS --f-st (bara dintre panouri), nu in --st: --st e marginea paginii
+din cadru_web (16-32 px), iar cu acelasi nume panoul calculatorului ramanea lat de 16-32 px.
 API-ul receptorului e cel de pana acum (fisiere_web.py): cookie-ul fisierelor, CSRF-ul browserului asociat,
 confirmarile serverului la stergere si la inlocuire.
 """
@@ -187,12 +191,12 @@ main{max-width:none;margin:0 auto;min-width:0}.ascuns,[hidden]{display:none!impo
 .f-tabs{display:none;gap:6px;margin-bottom:6px}.f-tabs button{flex:1;min-height:44px}.f-tabs button.on{background:var(--accent);color:#fff}
 .f-panes{display:flex;gap:0;align-items:stretch;height:calc(100vh - 230px);min-height:380px}
 .f-pane{display:flex;flex-direction:column;min-width:0;border:1px solid var(--bordura);border-radius:10px;background:var(--panou);overflow:hidden}
-#f-pane-0{flex:0 0 var(--st,50%)}#f-pane-1{flex:1 1 0}.f-pane.activ{border-top:3px solid var(--accent)}
+#f-pane-0{flex:0 0 var(--f-st,50%)}#f-pane-1{flex:1 1 0}.f-pane.activ{border-top:3px solid var(--accent)}
 .f-split{flex:0 0 10px;cursor:col-resize;display:flex;align-items:center;justify-content:center;touch-action:none}.f-split:before{content:"";width:3px;height:36px;border-radius:2px;background:var(--bordura)}.f-split:hover:before,.f-split.trage:before{background:var(--accent)}
 .f-ph{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bordura);flex-wrap:wrap}.f-ph h2{margin:0;font-size:1rem;text-transform:none;display:flex;align-items:center;gap:6px}.f-ph h2 svg{width:18px;height:18px}.f-badge{font-size:.7rem;padding:1px 7px;border-radius:9px;background:var(--accent);color:#fff}.f-ph .f-sp{flex:1}.f-ph button{min-height:32px;padding:4px 10px;font-size:.8rem}
 .f-pills{display:flex;gap:5px;flex-wrap:wrap}.f-pills button{min-height:28px;padding:2px 10px;border-radius:14px;font-size:.75rem}
 .f-pathbar{display:flex;gap:6px;padding:6px 10px;border-bottom:1px solid var(--bordura);align-items:center}.f-pathbar input{flex:1;min-width:60px;font-family:monospace;font-size:.85rem;min-height:32px;padding:3px 8px}.f-pathbar button{min-height:32px;padding:3px 9px;font-size:.8rem}.f-pcpath{flex:1;font-size:.85rem;color:var(--text-slab);overflow-wrap:anywhere}
-.f-note{padding:10px;border-bottom:1px solid var(--bordura);font-size:.82rem;line-height:1.4}.f-note p{margin:0 0 8px}.f-note .f-big{display:inline-block;padding:10px 16px;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none;margin:2px 0 6px}.f-note .f-row{display:flex;gap:6px;flex-wrap:wrap}.f-note .nota{margin:0;color:var(--text-slab)}
+.f-note{padding:10px;border-bottom:1px solid var(--bordura);font-size:.82rem;line-height:1.4}.f-note p{margin:0 0 8px}.f-note .f-big{display:inline-block;padding:10px 16px;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none;margin:2px 0 6px}.f-note .f-row{display:flex;gap:6px;flex-wrap:wrap}.f-note .nota{margin:0;color:var(--text-slab)}.f-note .f-row+.nota{margin-top:8px}.f-note .f-https{color:var(--accent);font-weight:600}
 .f-listwrap{flex:1;overflow:auto;position:relative}.f-listwrap.drop{outline:2px dashed var(--accent);outline-offset:-4px}
 .f-t{width:100%;border-collapse:collapse;table-layout:fixed;margin:0;font-size:.85rem}.f-t th{position:sticky;top:0;background:var(--fundal);z-index:1;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-slab);padding:5px 6px;text-align:left;cursor:pointer;user-select:none}.f-t th.c{width:30px;cursor:default}.f-t th.s{width:84px;text-align:right}.f-t th.d{width:118px;text-align:right}.f-t th.m{width:80px}
 .f-t td{padding:3px 6px;border-top:1px solid var(--bordura);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}.f-t td.s,.f-t td.d{text-align:right;font-variant-numeric:tabular-nums;color:var(--text-slab);font-size:.8rem}.f-t td.m{font-family:monospace;font-size:.78rem;color:var(--text-slab)}
@@ -459,16 +463,18 @@ async function onDrop(e,p,target){var move=e.shiftKey;
   $("f-all-"+i).addEventListener("change",function(){var on=$("f-all-"+i).checked;(P[i].view||[]).forEach(function(x){if(on){P[i].sel.add(x.key);}else{P[i].sel.delete(x.key);}});mark(P[i]);});
   Array.prototype.forEach.call($("f-pane-"+i).querySelectorAll("th[data-sort]"),function(th){th.addEventListener("click",function(){var p=P[i],k=th.dataset.sort;p.asc=p.sort===k?!p.asc:true;p.sort=k;render(p);});});});
 /* bara dintre panouri */
-(function(){var sp=$("f-split"),panes=$("f-panes"),saved=Number(localStorage.getItem("hds-fisiere-latime"));if(saved>15&&saved<85){panes.style.setProperty("--st",saved+"%");}
-  function set(pct){pct=Math.max(18,Math.min(82,pct));panes.style.setProperty("--st",pct+"%");try{localStorage.setItem("hds-fisiere-latime",String(Math.round(pct)));}catch(e){}}
+(function(){var sp=$("f-split"),panes=$("f-panes"),saved=Number(localStorage.getItem("hds-fisiere-latime"));if(saved>15&&saved<85){panes.style.setProperty("--f-st",saved+"%");}
+  function set(pct){pct=Math.max(18,Math.min(82,pct));panes.style.setProperty("--f-st",pct+"%");try{localStorage.setItem("hds-fisiere-latime",String(Math.round(pct)));}catch(e){}}
   sp.addEventListener("pointerdown",function(e){e.preventDefault();sp.setPointerCapture(e.pointerId);sp.classList.add("trage");});sp.addEventListener("pointermove",function(e){if(!sp.classList.contains("trage")){return;}var r=panes.getBoundingClientRect();set((e.clientX-r.left)/r.width*100);});
-  sp.addEventListener("pointerup",function(){sp.classList.remove("trage");});sp.addEventListener("keydown",function(e){var cur=parseFloat(getComputedStyle(panes).getPropertyValue("--st"))||50;if(e.key==="ArrowLeft"){set(cur-3);}if(e.key==="ArrowRight"){set(cur+3);}});})();
+  sp.addEventListener("pointerup",function(){sp.classList.remove("trage");});sp.addEventListener("keydown",function(e){var cur=parseFloat(getComputedStyle(panes).getPropertyValue("--f-st"))||50;if(e.key==="ArrowLeft"){set(cur-3);}if(e.key==="ArrowRight"){set(cur+3);}});})();
 /* ---------- nota panoului calculatorului ---------- */
 function renderNote(){var n=$("f-pcnote");n.textContent="";var fsa=S.pcMode==="fsa";$("f-choose").hidden=!FSA;n.hidden=FSA&&!!P[0].stack.length;
   if(FSA){if(!P[0].stack.length){n.appendChild(el("p","",T.pcEmpty));}return;}
-  if(CHROMIUM&&!window.isSecureContext){n.appendChild(el("p","",T.pcHttp));if(H.pornit&&H.adresa){var a=el("a","f-big",T.openHttps);a.href=H.adresa;a.addEventListener("click",function(e){e.preventDefault();api("salt",{}).then(function(d){location.href=d.adresa;}).catch(function(){location.href=H.adresa;});});n.appendChild(a);n.appendChild(el("p","nota",T.httpsWarn));}else{n.appendChild(el("p","nota",fmt(T.httpsOff,H.motiv||"")));}}
-  else if(MOBIL){n.appendChild(el("p","",T.phone));}else{n.appendChild(el("p","",T.otherBrowser));}
-  var row=el("div","f-row"),b1=el("button","",T.chooseFiles),b2=el("button","",T.chooseFolder);b1.type=b2.type="button";b1.addEventListener("click",function(){$("f-files").click();});b2.addEventListener("click",function(){$("f-folder").click();});row.appendChild(b1);if("webkitdirectory" in document.createElement("input")&&!MOBIL){row.appendChild(b2);}n.appendChild(row);if(fsa){n.hidden=true;}}
+  var http=CHROMIUM&&!window.isSecureContext;
+  if(MOBIL){n.appendChild(el("p","",T.phone));}else if(http){n.appendChild(el("p","",T.pcSimpleEmpty));}else{n.appendChild(el("p","",T.otherBrowser));}
+  var row=el("div","f-row"),b1=el("button","",T.chooseFiles),b2=el("button","",T.chooseFolder);b1.type=b2.type="button";b1.addEventListener("click",function(){$("f-files").click();});b2.addEventListener("click",function(){$("f-folder").click();});row.appendChild(b1);if("webkitdirectory" in document.createElement("input")&&!MOBIL){row.appendChild(b2);}n.appendChild(row);
+  if(http&&H.pornit&&H.adresa){var a=el("a","f-https",T.openHttps);a.href=H.adresa;a.addEventListener("click",function(e){e.preventDefault();api("salt",{}).then(function(d){location.href=d.adresa;}).catch(function(){location.href=H.adresa;});});var pa=el("p","nota");pa.appendChild(a);pa.appendChild(document.createTextNode(" "+T.httpsWarn));n.appendChild(pa);}
+  if(fsa){n.hidden=true;}}
 ["f-files","f-folder"].forEach(function(id){$(id).addEventListener("change",function(){if($(id).files.length){S.pcMode="simplu";vadd($(id).files);P[0].stack=[];load(P[0]);setActive(0);}$(id).value="";});});
 $("f-choose").addEventListener("click",async function(){try{var h=await window.showDirectoryPicker({id:"hds-fisiere",mode:"readwrite"});await useDir(h);}catch(e){if(e.name!=="AbortError"){fail(e);}}});
 $("f-reopen").addEventListener("click",async function(){try{var h=await IDB.get("dosar");if(h){await useDir(h);$("f-reopen").hidden=true;}}catch(e){fail(e);}});

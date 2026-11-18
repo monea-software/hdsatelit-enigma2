@@ -47,6 +47,9 @@
 # AC-3 IN BROWSER: la imaginea H.264 / HEVC, pagina trimite ac3=1 cand poate reda AC-3, nativ (MediaSource) sau prin
 # decodorul wasm (hds-sunet.js: decodorul ac3 pe firul paginii, sunetul dat lui MediaSource ca FLAC); RescrierePsi
 # lasa atunci pista AC-3 in PMT. Cu wasm=1 si ac3=1 sunetul AC-3 merge sigur, deci potrivire() nu mai avertizeaza.
+# H.264 FARA MEDIASOURCE (Opera sau Chromium pe Linux): pagina trimite h264=0; cand decodorul wasm are H.264
+# (tv-wasm/decodoare.txt, HdsTransmisie.peWasm) canalul merge pe playerul wasm, ca la MPEG-2: tv-verifica si
+# tv-porneste spun "pe_wasm", iar sesiunea pastreaza in PMT sunetul pe care il are decodorul (si AAC, daca il are).
 #
 # FERESTRELE: playerul trimite antetul X-HDS-Fereastra (un id aleator pe fila). O sesiune folosita de alta
 # fereastra a aceluiasi browser nu se mai inlocuieste pe tacute: pornirea raspunde cu "alta_fereastra" si pagina
@@ -176,6 +179,8 @@ TEXTE_PLAYER = {
 	# scripturile care nu s-au incarcat
 	"e_mpegts": N_("Biblioteca de redare nu s-a încărcat de pe receptor."),
 	"e_wasm": N_("Decodorul MPEG-2 nu s-a încărcat de pe receptor."),
+	# in locul lui e_wasm / wasm_oprit cand decodorul wasm are si H.264 (textePlayer, tv-wasm/decodoare.txt)
+	"e_wasm_toate": N_("Decodorul din browser nu s-a încărcat de pe receptor."),
 	"e_sunet": N_("Decodorul de sunet nu s-a încărcat de pe receptor."),
 	# pistele si subtitrarea
 	"sunet_pista": N_("Sunet: %s"),
@@ -234,6 +239,9 @@ TEXTE_PLAYER = {
 	"flux_oprit": N_("Fluxul s-a oprit de la receptor."),
 	"legatura": N_("Legătura cu receptorul s-a întrerupt."),
 	"wasm_oprit": N_("Decodorul MPEG-2 din browser nu a pornit."),
+	"wasm_oprit_toate": N_("Decodorul din browser nu a pornit."),
+	# canalul pornit cu formatul necunoscut trece pe playerul wasm cand PMT-ul arata H.264 (acelasi text ca HdsTransmisie)
+	"h264_wasm": N_("Imaginea acestui canal (H.264) se decodează în browser, pe procesorul calculatorului."),
 	"format": N_("Browserul nu cunoaște formatul imaginii sau al sunetului."),
 	"forma": N_("Fluxul are o formă pe care playerul nu o înțelege."),
 	"cod4": N_("Browserul nu a putut deschide imaginea (n-a primit date pe care să le înțeleagă)."),
@@ -272,8 +280,8 @@ FISIER_WORKER = "hds-worker.js"
 FISIER_SUNET = "hds-sunet.js"
 DOSAR_WASM = "tv-wasm"
 # ce se serveste din tv-wasm/ (orice alt nume: 404): decodorul si textele licentelor lui
-FISIERE_WASM = ("hdsdec.js", "hdsdec.wasm", "ffmpeg-licenta.txt", "emscripten-licenta.txt", "musl-licenta.txt",
-	"compiler-rt-licenta.txt", "dlmalloc-licenta.txt")
+FISIERE_WASM = ("hdsdec.js", "hdsdec.wasm", "decodoare.txt", "ffmpeg-licenta.txt", "emscripten-licenta.txt",
+	"musl-licenta.txt", "compiler-rt-licenta.txt", "dlmalloc-licenta.txt")
 TIPURI_TV = (1, 0x11, 0x16, 0x19, 0x1F, 0x86, 0xC3)
 TIPURI_RADIO = (2, 0x0A)
 
@@ -297,6 +305,14 @@ def _m(H=None, M=None):
 	if M is not None:
 		return M
 	return _T(H).manager()
+
+
+def peWasm(T, video, wasm, h264):
+	"""`pe_wasm` in raspunsul lui tv-verifica / tv-porneste: imaginea canalului o decodeaza playerul wasm al paginii
+	(MPEG-2 / MPEG-1, sau H.264 intr-un browser fara H.264 in MediaSource, cand decodorul wasm il are:
+	HdsTransmisie.peWasm). player.js alege dupa el playerul (mpegts.js sau wasm)."""
+	f = getattr(T, "peWasm", None)
+	return bool(f(video, wasm, h264)) if f else False
 
 
 def argumente(request, chei=("ref", "id", "hevc", "h264", "ac3", "wasm", "permis", "standby", "sesiuni_max", "asteptare", "preia",
@@ -509,8 +525,9 @@ def porneste(argumente_, cine, browser_nume, adresa, H=None, M=None, ref_tv=None
 	nume = numeCanal(ref) or ref
 	if not merge:
 		return {"result": False, "message": text, "nume": nume, "ref": ref}
+	# h264=False numai cand pagina a trimis h264=0 (sesiunea pune atunci H.264 pe playerul wasm, daca decodorul il are)
 	ses, motiv = m.porneste(ref, nume, cine, browser_nume, adresa, ac3=ac3, fereastra=fereastra,
-		preia=argumente_.get("preia") == "1", wasm=wasm)
+		preia=argumente_.get("preia") == "1", wasm=wasm, **({} if h264 else {"h264": False}))
 	if ses is None:
 		if motiv == T.ALTA_FEREASTRA:
 			return {"result": False, "alta_fereastra": True,
@@ -529,11 +546,11 @@ def porneste(argumente_, cine, browser_nume, adresa, H=None, M=None, ref_tv=None
 		return {"result": False, "message": motiv, "nume": nume, "ref": ref}
 	# AVERTIZAREA SUNETULUI (sus): din PMT cand sesiunea l-a citit deja (sesiune reluata), altfel numai a imaginii
 	if getattr(ses, "pmt_citit", False) and hasattr(T, "avertizarePmt"):
-		avertizare = T.avertizarePmt(ses.video, ses.piste, ses.ac3, ses.wasm)
+		avertizare = T.avertizarePmt(ses.video, ses.piste, ses.ac3, ses.wasm, *([] if h264 else [False]))
 	else:
-		avertizare = T.potrivire(info["video"], [], hevc, ac3, wasm)[1]
+		avertizare = T.potrivire(info["video"], [], hevc, ac3, wasm, h264)[1]
 	rez = {"result": True, "id": ses.id, "ref": ses.ref, "nume": ses.nume, "avertizare": avertizare,
-		"video": info["video"], "audio": info["audio"], "urmeaza": urmeaza,
+		"video": info["video"], "audio": info["audio"], "urmeaza": urmeaza, "pe_wasm": peWasm(T, info["video"], wasm, h264),
 		"pe_tv": bool(ref_tv) and T.refCurata(ref_tv) == ses.ref, "decriptare": getattr(ses, "decriptare", None)}
 	rez.update(dateRadio(ses.ref, ses.nume, ses, T, ref_tv))
 	return rez
@@ -610,7 +627,8 @@ def verifica(argumente_, cine, H=None, M=None, ref_tv=None, serviciu=None, baza=
 	merge, text = T.potrivire(info["video"], info["audio"], argumente_.get("hevc") == "1", argumente_.get("ac3") == "1",
 		argumente_.get("wasm") == "1", argumente_.get("h264") != "0")
 	rez = {"result": True, "ref": ref, "nume": numeCanal(ref) or ref, "video": info["video"], "audio": info["audio"],
-		"pe_tv": bool(ref_tv) and T.refCurata(ref_tv) == ref, "extern": bool(ok), "extern_motiv": "" if ok else motiv}
+		"pe_tv": bool(ref_tv) and T.refCurata(ref_tv) == ref, "extern": bool(ok), "extern_motiv": "" if ok else motiv,
+		"pe_wasm": peWasm(T, info["video"], argumente_.get("wasm") == "1", argumente_.get("h264") != "0")}
 	if not ok and mutare is not None and not mutare[0]:
 		rez.update({"merge": False, "motiv": mutare[1], "ocupat": True, "avertizare": ""})
 	elif not ok and mutare is not None and merge:
@@ -1576,9 +1594,30 @@ def fisierStatic(request, nume):
 	return date
 
 
-def textePlayer():
-	"""{cheie: textul in limba meniurilor} pentru player.js (TEXTE_PLAYER)."""
-	return dict((k, _t(v)) for k, v in TEXTE_PLAYER.items())
+# cheia de dinainte -> textul fara "MPEG-2", cand decodorul wasm al imaginii are si H.264 (tv-wasm/decodoare.txt)
+TEXTE_DECODOR_TOATE = {"e_wasm": "e_wasm_toate", "wasm_oprit": "wasm_oprit_toate"}
+
+
+def decodorCuH264(T=None):
+	"""True cand decodorul wasm al paginii are si H.264 (HdsTransmisie.wasmAre); False fara HdsTransmisie (probe)."""
+	try:
+		T = T or _T()
+		f = getattr(T, "wasmAre", None)
+		return bool(f("h264")) if f else False
+	except Exception:
+		return False
+
+
+def textePlayer(cuH264=None):
+	"""{cheie: textul in limba meniurilor} pentru player.js (TEXTE_PLAYER). Cu decodorul wasm care are si H.264, textele
+	despre "Decodorul MPEG-2" spun "Decodorul din browser" (MI8)."""
+	if cuH264 is None:
+		cuH264 = decodorCuH264()
+	rez = dict((k, _t(v)) for k, v in TEXTE_PLAYER.items())
+	if cuH264:
+		for vechi, nou in TEXTE_DECODOR_TOATE.items():
+			rez[vechi] = rez[nou]
+	return rez
 
 
 def playerTradus(date):
@@ -1614,10 +1653,17 @@ def _drumMeniu(id_intrare):
 	return drumHtml(id_intrare)
 
 
+def sablonPagina(cuH264=None):
+	"""PAGINA, cu nota de jos despre "decodorul din browser" cand decodorul wasm are si H.264 (MI8); altfel neschimbata."""
+	if cuH264 is None:
+		cuH264 = decodorCuH264()
+	return PAGINA.replace(NOTA_MPEG2, NOTA_TOATE, 1) if cuH264 else PAGINA
+
+
 def pagina_text(stil, config_pagina):
 	"""Cardul aparatelor si textele lui (traduse) intai, apoi stilul, configuratia si drumul din meniu."""
 	from . import aparate_web
-	return aparate_web.inPagina(_traducePagina(PAGINA)).replace("__STIL_COMUN__", stil).replace("__CONFIG__",
+	return aparate_web.inPagina(_traducePagina(sablonPagina())).replace("__STIL_COMUN__", stil).replace("__CONFIG__",
 		config_pagina).replace(
 		"__DRUM_MENIU__", _drumMeniu("hds_transmisie"))
 
@@ -2028,6 +2074,12 @@ setInterval(function(){ if(!document.hidden){ citesteStarea(); } }, 5000);
 # ---------------------------------------------------------------- traducerea paginilor
 # Textele sabloanelor de mai sus, traduse la cerere in limba receptorului (traducere_pagini.py). Un text
 # nou sau schimbat in sablon se scrie si aici (proba textelor paginilor web il cere).
+# nota de jos a paginii: bucata despre decodor, schimbata de sablonPagina cand decodorul wasm are si H.264
+NOTA_MPEG2 = ("Canalele cu imagine MPEG-2 și sunetul AC-3 (unde browserul nu îl redă singur) se decodează în browser, pe "
+	"procesorul calculatorului, cu decodorul FFmpeg (LGPL-2.1) venit tot cu imaginea: ")
+NOTA_TOATE = ("Imaginea MPEG-2 sau H.264 și sunetul pe care browserul nu le redă singur se decodează în browser, pe "
+	"procesorul calculatorului, cu decodorul din browser (FFmpeg, LGPL-2.1) venit tot cu imaginea: ")
+
 TEXTE_PAGINA = {
 	"html": (
 		N_("TV în browser"),
@@ -2055,6 +2107,13 @@ TEXTE_PAGINA = {
 			"(Apache-2.0), venită cu imaginea: <a href=\"/tv/mpegts-licenta.txt\">licența</a>. Canalele cu "
 			"imagine MPEG-2 și sunetul AC-3 (unde browserul nu îl redă singur) se decodează în browser, pe "
 			"procesorul calculatorului, cu decodorul FFmpeg (LGPL-2.1) venit tot cu imaginea: <a "
+			"href=\"/tv/tv-wasm/ffmpeg-licenta.txt\">licența și sursa</a>; toate licențele sunt în <a "
+			"href=\"/licente\">Licențe</a>."),
+		# aceeasi nota cand decodorul wasm are si H.264 (sablonPagina)
+		N_("Aceleași setări sunt pe televizor, în __DRUM_MENIU__. Redarea folosește biblioteca mpegts.js "
+			"(Apache-2.0), venită cu imaginea: <a href=\"/tv/mpegts-licenta.txt\">licența</a>. Imaginea MPEG-2 sau "
+			"H.264 și sunetul pe care browserul nu le redă singur se decodează în browser, pe procesorul "
+			"calculatorului, cu decodorul din browser (FFmpeg, LGPL-2.1) venit tot cu imaginea: <a "
 			"href=\"/tv/tv-wasm/ffmpeg-licenta.txt\">licența și sursa</a>; toate licențele sunt în <a "
 			"href=\"/licente\">Licențe</a>."),
 	),

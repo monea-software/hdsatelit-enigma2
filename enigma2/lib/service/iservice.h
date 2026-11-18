@@ -403,6 +403,16 @@ public:
 			/* SoftCSA, la coada: 1 cand canalul redat e descifrat in software (CSA-ALT, lib/dvb/csasession.h), altfel 0 */
 		sIsSoftCSA,
 
+			/* tot la coada: debitul masurat al pistei video si al pistei de sunet redate, in kbit/s (0 pana se incheie
+			   prima fereastra de masurare, -1 = nu se poate masura: inregistrare, flux, timeshift, canal nepornit, canal
+			   criptat unde demux-ul nu da pachetele TS ale unui PID).
+			   Pe canalele DVB se masoara numai cat timp le cere cineva (eDVBServicePlay::getLiveBitrate): pe cele libere
+			   filtrul PES al demux-ului, pe cele criptate pachetele TS (antetul lor e in clar), pe SoftCSA in bucla
+			   descifrarii (lib/dvb/demux.h eDVBBitrateCounter, iDVBTSRecorder::setCountPID); convertorul BitrateInfo le
+			   citeste o data pe secunda */
+		sVideoBitrate,
+		sAudioBitrate,
+
 		sUser = 0x100
 	};
 	enum {

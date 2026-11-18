@@ -7,10 +7,20 @@ DVB-I (ETSI TS 103 669): canale TV liniare livrate prin internet (HLS/DASH/TS).
 Scris de la zero.
 
 DVB-I: listele tarii alese din registrele DVB-I (Components/HdsDvbIRegistru, HdsDvbISetari), un singur
-buchet TV "Canale de pe internet (DVB-I)" in ordinea LCN a regiunii (Components/HdsDvbILegare), mereu in lista;
+buchet TV "Canale de pe internet (DVB-I)" in ordinea LCN a regiunii (Components/HdsDvbILegare), in lista din fabrica;
+scos de om din lista de canale nu mai revine singur (semnul CALE_SCOASA, Components/HdsDvbISetari), pana il pune la loc
+randul "Arată lista în lista de canale" (ecranul DVB-I, pagina web);
 adresele cu ':' codificat (%3a) si buchetele reincarcate (reloadBouquets); starea pentru lista de canale, bara,
 trecerea pe internet si web (Components/HdsDvbIDate); canalele incercate din casa (Components/HdsDvbIIncercare) la
 6 ore, la cerere si dupa schimbarea VPN-ului; la pornirea sesiunii, trecerea pe internet (Components/HdsDvbIRezerva).
+
+EPG2 (0.7.7, asistenta 058499, hotararea coordonatorului 16.11 02:45, varianta 2): in buchet intra numai canalele care pot
+merge. Adresele care nu sunt canale (clipurile Vimeo cu lungime si imaginile de proba DASH-IF, HdsDvbIIncercare.felScos)
+nu intra deloc si nu se incearca; canalele care n-au trecut incercarea din casa (oprite pentru tara, adrese moarte, fara
+raspuns) stau ascunse pana la urmatoarea incercare reusita: raman in starea DVB-I (lista din web le arata, incercarea le
+reia la fiecare reincarcare, INCERCARE_ASCUNSE_S), iar buchetul se rescrie fara descarcare cand se schimba ceva. Totul pe
+firul de fundal, cu un termen pe canal (TERMEN_CANAL_S) si unul pe toata incercarea (TERMEN_INCERCARI_S); in jurnal un
+singur rand pe buchet, cu cate s-au scos si cate s-au ascuns, si de ce.
 
 Integrare:
   - Autostart la pornire Enigma2 (PluginDescriptor.WHERE_AUTOSTART)
@@ -41,6 +51,7 @@ CALE_BOUQUET_TV      = '/etc/enigma2/userbouquet.hdsdvbi.tv'
 CALE_BOUQUET_RADIO   = '/etc/enigma2/userbouquet.hdsdvbi.radio'
 CALE_BOUQUETS_TV     = '/etc/enigma2/bouquets.tv'
 CALE_BOUQUETS_RADIO  = '/etc/enigma2/bouquets.radio'
+CALE_SCOASA          = '/etc/enigma2/hdsdvbi.scoasa'   # listele scoase de om din lista de canale (tv, radio)
 USER_AGENT           = 'HDSatelit/%s DVB-I/1.0 (hdsatelit.com)' % VERSIUNE
 TIMP_FETCH           = 15.0
 MAX_LISTA            = 4 * 1024 * 1024
@@ -86,6 +97,9 @@ _TOATE_AU_CAZUT = [False]
 # proprii). Reincarcarea "reuseste" fara sa faca nimic; Components/HdsDvbISetari.reincarca il citeste dupa ea, ca
 # ecranul DVB-I Reload Now si pagina web sa nu mai spuna "terminată cu succes".
 _FARA_LISTE = [False]
+# DVJ (15.11.2026): textul erorii ultimei descarcari nereusite (_fetch nu mai scrie el in jurnal: listele care nu
+# raspund le noteaza Components/HdsDvbISurse, un rand la prima cadere si cel mult unul pe zi, cu pauza crescatoare)
+_ULTIMA_EROARE_FETCH = [None]
 
 
 def N_(text):
@@ -112,7 +126,8 @@ def _mesaj_ceas(eroare):
 
 
 def _fetch(url):
-    """Descarca URL-ul listei DVB-I. -> bytes sau None la eroare."""
+    """Descarca URL-ul listei DVB-I. -> bytes sau None la eroare (textul ei in _ULTIMA_EROARE_FETCH)."""
+    _ULTIMA_EROARE_FETCH[0] = None
     try:
         req = Request(url, headers={
             'User-Agent': USER_AGENT,
@@ -121,11 +136,11 @@ def _fetch(url):
         r = urlopen(req, timeout=TIMP_FETCH)
         date = r.read(MAX_LISTA + 1)
         if len(date) > MAX_LISTA:
-            print('[HdsDvbI] lista prea mare: %s' % url)
+            _ULTIMA_EROARE_FETCH[0] = 'lista prea mare'
             return None
         return date
     except (HTTPError, URLError, Exception) as e:
-        print('[HdsDvbI] eroare fetch %s: %s' % (url, e))
+        _ULTIMA_EROARE_FETCH[0] = str(e) or e.__class__.__name__
         ceas = _mesaj_ceas(e)
         if ceas:
             _ULTIMA_EROARE_CEAS[0] = ceas
@@ -395,6 +410,39 @@ def _adauga_in_bouquets_master(cale_master, cale_bouquet_nou, nume_bouquet):
         print('[HdsDvbI] eroare bouquets master: %s' % e)
 
 
+def _scoasa(fel):
+    """Buchetul DVB-I de felul 'tv' / 'radio' scos de om din lista de canale (semnul CALE_SCOASA, pus de
+    Components/HdsDvbISetari): nu se mai scrie si nu se mai leaga singur. Citit din fisier la fiecare scriere, nu din
+    setarile tinute de manager."""
+    try:
+        with open(CALE_SCOASA, 'r', encoding='utf-8', errors='replace') as f:
+            return fel in f.read().split()
+    except (IOError, OSError):
+        return False
+
+
+def _scoate_din_bouquets_master(cale_master, cale_bouquet):
+    """Scoate randul buchetului DVB-I din bouquets.tv / bouquets.radio; celelalte randuri si sfarsiturile lor raman.
+    -> True daca s-a scris."""
+    cauta = 'FROM BOUQUET "%s"' % os.path.basename(cale_bouquet)
+    try:
+        with open(cale_master, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+            continut = f.read()
+    except (IOError, OSError):
+        return False
+    randuri = continut.splitlines(True)
+    ramase = [r for r in randuri if not (r.startswith('#SERVICE') and cauta in r)]
+    if len(ramase) == len(randuri):
+        return False
+    try:
+        with open(cale_master, 'w', encoding='utf-8', errors='surrogateescape', newline='') as f:
+            f.write(''.join(ramase))
+        return True
+    except (IOError, OSError) as e:
+        print('[HdsDvbI] scoaterea din %s: %s' % (cale_master, e))
+        return False
+
+
 # ---------------------------------------------------------------- citire/scriere config
 def _citeste_config():
     """Citeste /etc/enigma2/hdsdvbi.conf -> dict, cu toate cheile (tara, regiunea, listele tarii scoase sau puse,
@@ -476,6 +524,10 @@ class HdsDvbIManager(object):
         self._vpn = None
         # registrele au raspuns cu liste la ultima intrebare (_adrese): numai atunci "tara n-are liste" e sigur
         self._registru_raspuns = False
+        # EPG2: ce a dat ultima descarcare (buchetul se rescrie din ea dupa o incercare, fara descarcare) si adresele
+        # ascunse in buchetul scris
+        self._ultim = None
+        self._ascunse = None
 
     @property
     def activ(self):
@@ -505,7 +557,9 @@ class HdsDvbIManager(object):
         gol_tv = '#NAME %s\n' % _linie_sigura(_numeBuchet())
         gol_radio = '#NAME %s\n' % _linie_sigura(_numeBuchet())
         schimbat = False
-        for cale, gol in ((CALE_BOUQUET_TV, gol_tv), (CALE_BOUQUET_RADIO, gol_radio)):
+        for cale, gol, fel in ((CALE_BOUQUET_TV, gol_tv, 'tv'), (CALE_BOUQUET_RADIO, gol_radio, 'radio')):
+            if _scoasa(fel):
+                continue
             try:
                 vechi = ''
                 if os.path.exists(cale):
@@ -564,13 +618,15 @@ class HdsDvbIManager(object):
             self._grupe = {}
         return S.adreseDeDescarcat(config, registru, plugin=_eu())
 
-    def fetch_si_actualizeaza(self):
-        """Descarca toate listele DVB-I configurate si actualizeaza bouquet-urile enigma2."""
+    def fetch_si_actualizeaza(self, forteaza=False):
+        """Descarca toate listele DVB-I configurate si actualizeaza bouquet-urile enigma2. forteaza (reincarcarea
+        ceruta de om): si listele aflate in pauza pentru ca nu raspundeau (Components/HdsDvbISurse)."""
         with self._lacat:
-            self._fetch_si_actualizeaza()
+            self._fetch_si_actualizeaza(forteaza)
 
-    def _fetch_si_actualizeaza(self):
+    def _fetch_si_actualizeaza(self, forteaza=False):
         config = self._config
+        self._reincearca_peste = None
         _ULTIMA_EROARE_CEAS[0] = None
         _TOATE_AU_CAZUT[0] = False
         _FARA_LISTE[0] = False
@@ -580,6 +636,8 @@ class HdsDvbIManager(object):
         if not url_uri:
             print('[HdsDvbI] nicio lista configurata')
             _FARA_LISTE[0] = True
+            # EPG2: o incercare de dupa asta nu mai rescrie buchetul listelor de dinainte
+            self._ultim = None
             self._golesteFaraListe()
             return
 
@@ -592,14 +650,30 @@ class HdsDvbIManager(object):
         tv_all, radio_all = [], []
         urluri_puse = {}
         id_folosite = set()
+        # EPG2: clipurile si imaginile de proba (nu sunt canale), numarate o data pe adresa
+        I = _incercare()
+        felScos = getattr(I, 'felScos', None) if I is not None else None
+        scoase, scoase_url = {}, set()
         liste_info, legaturi_brute = [], []
         descarcate = 0
+        # DVJ: o lista care nu raspundea sta in pauza crescatoare (nu se mai asteapta 15 s la fiecare pornire)
+        SU = _surse()
+        sarite = SU.deIncercat(url_uri, forteaza)[1] if SU is not None else {}
+        rezultate = []
 
         for index_lista, url in enumerate(url_uri):
             info = {'adresa': url, 'nume': '', 'ok': False, 'tv': 0, 'radio': 0, 'regiuni': []}
             liste_info.append(info)
+            if url in sarite:
+                info['pauza_pana'] = int(sarite[url])
+                info['eroare'] = SU.eroare(url)
+                continue
             date = _fetch(url)
+            rezultate.append((url, bool(date), _ULTIMA_EROARE_FETCH[0]))
             if not date:
+                info['eroare'] = _ULTIMA_EROARE_FETCH[0] or ''
+                if SU is None:
+                    print('[HdsDvbI] eroare fetch %s: %s' % (url, info['eroare']))
                 continue
             descarcate += 1
             info['ok'] = True
@@ -624,6 +698,13 @@ class HdsDvbIManager(object):
                 id_stabil, nume, url_flux, tip = servicii[i]
                 if url_flux in urluri_puse:
                     continue
+                fel = felScos(url_flux) if felScos is not None else ''
+                if fel:
+                    if url_flux not in scoase_url:
+                        scoase_url.add(url_flux)
+                        scoase[fel] = scoase.get(fel, 0) + 1
+                        info['scoase'] = info.get('scoase', 0) + 1
+                    continue
                 id_serviciu = id_stabil
                 while id_serviciu in id_folosite:  # coliziune rara de CRC32 pe 16 biti -- pastram unicitatea
                     id_serviciu = (id_serviciu + 1) & 0xFFFF or 1
@@ -637,33 +718,69 @@ class HdsDvbIManager(object):
                     tv_all.append(intrare)
                     info['tv'] += 1
 
+        if SU is not None:
+            try:
+                self._reincearca_peste = SU.noteaza(rezultate)
+            except Exception as e:
+                print('[HdsDvbI] sursele: %s' % e)
+
+        if not descarcate and not rezultate:
+            # toate listele sunt in pauza (nu raspundeau): nimic de descarcat acum, buchetele raman cum erau
+            return
+
         if not descarcate:
             # fara internet, server cazut, ceasul in urma: buchetele de dinainte raman cum erau (nescrise, fara
-            # reincarcarea listei de canale)
+            # reincarcarea listei de canale); randul din jurnal il scrie HdsDvbISurse (o data, nu la fiecare incercare)
             _TOATE_AU_CAZUT[0] = True
-            print('[HdsDvbI] nicio lista nu s-a putut descarca (%d configurate); buchetele raman neschimbate'
-                  % len(url_uri))
+            if SU is None:
+                print('[HdsDvbI] nicio lista nu s-a putut descarca (%d configurate); buchetele raman neschimbate'
+                      % len(url_uri))
             _scrieStare(liste_info, None, None, pastreaza_canalele=True)
             return
 
-        bouquet_tv, bouquet_radio = _genereaza_bouquet(_cuMarcaje(tv_all, urluri_puse, url_uri, self._grupe),
-            _cuMarcaje(radio_all, urluri_puse, url_uri, self._grupe), _numeBuchet())
+        self._ultim = {'tv': tv_all, 'radio': radio_all, 'urluri_puse': urluri_puse, 'url_uri': url_uri,
+                       'liste_info': liste_info, 'legaturi': legaturi_brute, 'grupe': dict(self._grupe),
+                       'scoase': scoase}
+        self._scrieBuchetele(self._ultim)
 
-        # Scrie fisierele bouquet
-        try:
-            with open(CALE_BOUQUET_TV, 'w', encoding='utf-8') as f:
-                f.write(bouquet_tv)
-            with open(CALE_BOUQUET_RADIO, 'w', encoding='utf-8') as f:
-                f.write(bouquet_radio)
-        except (IOError, OSError) as e:
-            print('[HdsDvbI] eroare scriere bouquet: %s' % e)
-            return
+    def _scrieBuchetele(self, u, numai_buchetele=False):
+        """Scrie buchetele DVB-I din ce a dat o descarcare (u = self._ultim), fara canalele ascunse (EPG2: n-au trecut
+        incercarea din casa), apoi starea (cu toate canalele, si cele ascunse, ca incercarea sa le reia) si randul din
+        jurnal; reincarcarea listei de canale merge pe firul principal. numai_buchetele: rescrierea de dupa o incercare
+        (lamedb nu s-a schimbat, ajunge reloadBouquets). -> False daca fisierele nu s-au putut scrie."""
+        ascunse = _ascunse(u['tv'] + u['radio'])
+        # numarul de canale al fiecarei liste (ecranul si web: "canale: N") fara cele ascunse
+        for info in u['liste_info']:
+            info['ascunse'] = 0
+        for url in ascunse:
+            index_lista = u['urluri_puse'].get(url, (None,))[0]
+            if index_lista is not None and index_lista < len(u['liste_info']):
+                u['liste_info'][index_lista]['ascunse'] += 1
+        tv_all = [x for x in u['tv'] if x[2] not in ascunse]
+        radio_all = [x for x in u['radio'] if x[2] not in ascunse]
+        urluri_puse, url_uri, grupe = u['urluri_puse'], u['url_uri'], u['grupe']
+        bouquet_tv, bouquet_radio = _genereaza_bouquet(_cuMarcaje(tv_all, urluri_puse, url_uri, grupe),
+            _cuMarcaje(radio_all, urluri_puse, url_uri, grupe), _numeBuchet())
 
-        # Adauga in bouquets master
-        _adauga_in_bouquets_master(CALE_BOUQUETS_TV, CALE_BOUQUET_TV, 'DVB-I TV')
-        _adauga_in_bouquets_master(CALE_BOUQUETS_RADIO, CALE_BOUQUET_RADIO, 'DVB-I Radio')
+        # Scrie fisierele bouquet si le leaga in bouquets.tv / bouquets.radio; cel scos de om din lista de canale nu
+        # se mai scrie si nu se mai leaga (_scoasa)
+        for cale, continut, master, nume, fel in (
+                (CALE_BOUQUET_TV, bouquet_tv, CALE_BOUQUETS_TV, 'DVB-I TV', 'tv'),
+                (CALE_BOUQUET_RADIO, bouquet_radio, CALE_BOUQUETS_RADIO, 'DVB-I Radio', 'radio')):
+            if _scoasa(fel):
+                continue
+            try:
+                with open(cale, 'w', encoding='utf-8') as f:
+                    f.write(continut)
+            except (IOError, OSError) as e:
+                print('[HdsDvbI] eroare scriere bouquet: %s' % e)
+                return False
+            _adauga_in_bouquets_master(master, cale, nume)
 
-        _scrieStare(liste_info, (tv_all, radio_all, urluri_puse), legaturi_brute)
+        _scrieStare(u['liste_info'], (u['tv'], u['radio'], urluri_puse), u['legaturi'], ascunse=ascunse,
+            in_plus={'scoase': dict(u.get('scoase') or {})})
+        self._ascunse = set(ascunse)
+        print(_textBuchet(len(tv_all), len(radio_all), u.get('scoase') or {}, ascunse))
 
         # HDSatelit: eDVBDB.getInstance().reloadServicelist() ruleaza aici pe firul
         # de fundal (threading.Thread din porneste_refresh_periodic, mai jos) -- un apel in
@@ -677,7 +794,8 @@ class HdsDvbIManager(object):
             try:
                 from enigma import eDVBDB
                 db = eDVBDB.getInstance()
-                db.reloadServicelist()
+                if not numai_buchetele:
+                    db.reloadServicelist()
                 # DVB-I: reloadServicelist citeste numai lamedb; buchetul scris acum intra in lista numai
                 # cu reloadBouquets (inainte aparea abia dupa o repornire)
                 db.reloadBouquets()
@@ -691,11 +809,27 @@ class HdsDvbIManager(object):
             reactor.callFromThread(_reincarca_pe_firul_principal)
         except Exception as e:
             print('[HdsDvbI] nu am putut programa reloadServicelist pe firul principal: %s' % e)
+        return True
+
+    def _dupaIncercare(self):
+        """EPG2: dupa o incercare din casa, buchetul se rescrie (fara descarcare) numai daca s-au schimbat canalele
+        ascunse: unul a cazut sau unul ascuns merge din nou."""
+        u = self._ultim
+        if u is None:
+            return
+        if set(_ascunse(u['tv'] + u['radio'])) == (self._ascunse or set()):
+            return
+        with self._lacat:
+            if self._ultim is u:
+                self._scrieBuchetele(u, numai_buchetele=True)
 
     def incearca_canalele(self, forteaza=False, numai=None):
         """Incearca din casa fluxurile canalelor (Components/HdsDvbIIncercare): numai pe cele neincercate sau
         incercate de mai mult de INCERCARE_S, ori toate cu forteaza; 'numai' = stari de incercat din nou (de pilda
-        oprit_tara dupa pornirea VPN-ului). Pe firul celui care cheama; una deodata."""
+        oprit_tara dupa pornirea VPN-ului). Pe firul celui care cheama (mereu un fir de fundal); una deodata.
+        EPG2: cele ascunse (n-au trecut incercarea) se reiau dupa INCERCARE_ASCUNSE_S; fiecare canal are TERMEN_CANAL_S,
+        toata incercarea TERMEN_INCERCARI_S (cele ramase se iau la urmatoarea); la sfarsit buchetul se rescrie daca s-a
+        schimbat ce e ascuns."""
         I, D = _incercare(), _date()
         if I is None or D is None:
             return
@@ -704,30 +838,48 @@ class HdsDvbIManager(object):
         try:
             acum = time.time()
             de_incercat = []
+            ascunsa = getattr(I, 'ascunsa', lambda st: False)
             for c in D.canale():
                 st, _cod, ora = D.stareUrl(c.get('url', ''))
                 if numai is not None:
                     if st in numai:
                         de_incercat.append(c)
-                elif forteaza or not st or acum - ora > INCERCARE_S or acum < ora:
+                elif forteaza or not st or acum - ora > (INCERCARE_ASCUNSE_S if ascunsa(st) else INCERCARE_S) \
+                        or acum < ora:
                     de_incercat.append(c)
             _INCERCARE.update(in_curs=True, facute=0, total=len(de_incercat), ora=acum)
             rezultate = {}
+            # EPG2: "nu raspunde" (cod 0) spune ceva despre canal numai daca reteaua mergea: pana la primul raspuns HTTP
+            # (oricare, si 403 sau 404) nimic nu se scrie, iar o incercare fara niciun raspuns (reteaua cazuta, routerul
+            # repornit, VPN-ul abia oprit) lasa starile cum erau, deci nu goleste buchetul
+            raspuns_http = False
             for c in de_incercat:
                 if not self._activ:
                     break
-                rezultate[c['url']] = I.incearca(c['url'])
+                if time.time() - acum > TERMEN_INCERCARI_S:
+                    print('[HdsDvbI] incercarea canalelor: termenul de %d s s-a terminat dupa %d din %d; restul la '
+                          'urmatoarea' % (TERMEN_INCERCARI_S, _INCERCARE['facute'], len(de_incercat)))
+                    break
+                rezultate[c['url']] = I.incearca(c['url'], termen=TERMEN_CANAL_S)
+                raspuns_http = raspuns_http or bool(rezultate[c['url']][1])
                 _INCERCARE['facute'] += 1
-                if len(rezultate) >= 10:
+                if len(rezultate) >= 10 and raspuns_http:
                     D.noteazaIncercari(rezultate)
                     rezultate = {}
-            if rezultate:
+            if rezultate and raspuns_http:
                 D.noteazaIncercari(rezultate)
+            elif rezultate:
+                print('[HdsDvbI] incercarea canalelor: niciuna din cele %d adrese n-a raspuns (reteaua?); starile raman '
+                      'cum erau' % len(rezultate))
         except Exception as e:
             print('[HdsDvbI] incercarea canalelor: %s' % e)
         finally:
             _INCERCARE.update(in_curs=False)
             _INCERCARE['lacat'].release()
+        try:
+            self._dupaIncercare()
+        except Exception as e:
+            print('[HdsDvbI] buchetul dupa incercare: %s' % e)
         _anuntaSchimbarea()
 
     def _pazaVpn(self):
@@ -771,7 +923,10 @@ class HdsDvbIManager(object):
                 if time.time() >= urmatoarea:
                     self.fetch_si_actualizeaza()
                     self.incearca_canalele()
-                    urmatoarea = time.time() + interval
+                    # DVJ: cand nu a raspuns nicio lista (internetul inca nepregatit la pornire), din nou curand
+                    # (60 s, 2, 5, 10 min: HdsDvbISurse.REINCERCARI_RETEA_S), nu peste o ora
+                    peste = getattr(self, '_reincearca_peste', None)
+                    urmatoarea = time.time() + (min(peste, interval) if peste else interval)
                 self._pazaVpn()
                 time.sleep(60)
 
@@ -786,6 +941,11 @@ class HdsDvbIManager(object):
 # Componentele se incarca la folosire si pot lipsi (probele de pe PC dau pluginul fara ele): atunci pluginul merge ca
 # inainte (adresele proprii si predefinite, fara stare, legare si incercari).
 INCERCARE_S = 6 * 3600
+# EPG2: canalele ascunse (n-au trecut incercarea) se reiau la fiecare reincarcare (o ora), ca sa revina repede; termenul
+# unui canal (manifestul cerut, cu redirectari) si al intregii incercari, pe firul de fundal
+INCERCARE_ASCUNSE_S = 3000
+TERMEN_CANAL_S = 8
+TERMEN_INCERCARI_S = 300
 _INCERCARE = {'in_curs': False, 'facute': 0, 'total': 0, 'ora': 0, 'lacat': threading.Lock()}
 CALE_STARE = '/etc/enigma2/hdsdvbi-stare.json'
 
@@ -828,6 +988,37 @@ def _cuMarcaje(servicii, urluri_puse, url_uri, grupe):
 
 def _numeBuchet():
     return _t(T_NUME_BUCHET)
+
+
+def _ascunse(servicii):
+    """EPG2: {adresa: starea incercarii} pentru canalele care n-au trecut incercarea din casa (oprite pentru tara, adrese
+    moarte, fara raspuns): nu intra in buchet pana la urmatoarea incercare reusita. Neincercatele intra. {} fara
+    componente (probele de pe PC fara ele: ca inainte)."""
+    I, D = _incercare(), _date()
+    if I is None or D is None or not hasattr(I, 'ascunsa'):
+        return {}
+    rez = {}
+    for s in servicii:
+        st = D.stareUrl(s[2])[0]
+        if I.ascunsa(st):
+            rez[s[2]] = st
+    return rez
+
+
+def _textBuchet(tv, radio, scoase, ascunse):
+    """Randul din jurnal la fiecare buchet scris: cate canale, cate adrese scoase (clipuri, imagini de proba) si cate
+    canale ascunse pana merg din nou, pe stari."""
+    parti = ['[HdsDvbI] buchetul: %d TV, %d radio' % (tv, radio)]
+    n = sum(scoase.values())
+    if n:
+        parti.append('scoase %d (clipuri %d, imagini de proba %d)' % (n, scoase.get('clip', 0), scoase.get('proba', 0)))
+    if ascunse:
+        st = {}
+        for v in ascunse.values():
+            st[v] = st.get(v, 0) + 1
+        parti.append('ascunse pana merg din nou %d (oprite pentru tara %d, adrese moarte %d, fara raspuns %d)' % (
+            len(ascunse), st.get('oprit_tara', 0), st.get('adresa_moarta', 0), st.get('nu_raspunde', 0)))
+    return '; '.join(parti)
 
 
 def _eu():
@@ -875,6 +1066,15 @@ def _date():
         return None
 
 
+def _surse():
+    """starea listelor care nu raspund (Components/HdsDvbISurse), sau None (probele de pe PC fara el: ca inainte)"""
+    try:
+        from Components import HdsDvbISurse
+        return HdsDvbISurse.surse(os.path.join(os.path.dirname(CALE_STARE), 'hdsdvbi-surse.json'))
+    except Exception:
+        return None
+
+
 def stareIncercare():
     return dict((k, v) for k, v in _INCERCARE.items() if k != 'lacat')
 
@@ -894,15 +1094,20 @@ def _numeLista(xml_bytes):
     return ''
 
 
-def _scrieStare(liste_info, canale, legaturi_brute, pastreaza_canalele=False, in_plus=None):
+def _scrieStare(liste_info, canale, legaturi_brute, pastreaza_canalele=False, in_plus=None, ascunse=None):
     """Starea pentru lista de canale, bara, trecerea pe internet si pagina web (Components/HdsDvbIDate). in_plus:
-    chei in plus (fara_liste, tara: tara de acum nu are liste)."""
+    chei in plus (fara_liste, tara: tara de acum nu are liste; scoase). ascunse (EPG2): {adresa: stare} pentru canalele
+    care nu sunt in buchet; raman in stare cu "ascuns" si fara loc in buchet ("nr" None)."""
+    ascunse = ascunse or {}
     D = _date()
     if D is None:
         return
     vechi = D.stare(CALE_STARE) if pastreaza_canalele else {}
     stare = {'ora': int(time.time()), 'liste': liste_info, 'lungi': _SARITE_LUNGI[0],
              'canale': list(vechi.get('canale') or []), 'legaturi': dict(vechi.get('legaturi') or {})}
+    if pastreaza_canalele and isinstance(vechi.get('scoase'), dict):
+        # EPG2: cand toate listele cad, canalele raman, deci si ce s-a scos din ele
+        stare['scoase'] = dict(vechi['scoase'])
     stare.update(in_plus or {})
     if canale is not None:
         tv_all, radio_all, urluri_puse = canale
@@ -912,7 +1117,9 @@ def _scrieStare(liste_info, canale, legaturi_brute, pastreaza_canalele=False, in
         id_dupa_lista_nume = {}
         for idx, nume, url_flux, tip in tv_all + radio_all:
             index_lista, _intrare, lcn = urluri_puse[url_flux]
-            if tip == 'radio':
+            if url_flux in ascunse:
+                nr = None
+            elif tip == 'radio':
                 nr_radio += 1
                 nr = nr_radio
             else:
@@ -920,7 +1127,7 @@ def _scrieStare(liste_info, canale, legaturi_brute, pastreaza_canalele=False, in
                 nr = nr_tv
             lista_canale.append({'id': idx, 'nume': nume, 'url': url_flux, 'tip': tip, 'lcn': lcn, 'nr': nr,
                                  'lista': liste_info[index_lista]['adresa'], 'sat': '',
-                                 'ref': ref_serviciu(idx, url_flux, tip)})
+                                 'ref': ref_serviciu(idx, url_flux, tip), 'ascuns': ascunse.get(url_flux, '')})
             id_dupa_lista_nume.setdefault((index_lista, nume), lista_canale[-1])
         dupa_url = dict((c['url'], c) for c in lista_canale)
         legaturi = {}
@@ -958,9 +1165,12 @@ def _anuntaSchimbarea():
 
 
 def _asiguraBuchetul():
-    """Buchetul "Canale de pe internet (DVB-I)" e mereu in lista de canale, si fara nicio lista aleasa: gol, cu
-    explicatia din lista (Components/HdsIndexCanale, felul 'dvbi'). -> True daca s-a scris ceva acum."""
+    """Buchetul "Canale de pe internet (DVB-I)" e in lista de canale din fabrica, si fara nicio lista aleasa: gol, cu
+    explicatia din lista (Components/HdsIndexCanale, felul 'dvbi'). Scos de om din lista (_scoasa) nu se mai pune.
+    -> True daca s-a scris ceva acum."""
     scris = False
+    if _scoasa('tv'):
+        return scris
     try:
         if not os.path.exists(CALE_BOUQUET_TV):
             with open(CALE_BOUQUET_TV, 'w', encoding='utf-8') as f:
@@ -976,6 +1186,43 @@ def _asiguraBuchetul():
     except (IOError, OSError) as e:
         print('[HdsDvbI] buchetul DVB-I: %s' % e)
     return scris
+
+
+def legaInLista(da):
+    """Randul "Arată lista în lista de canale" (Components/HdsDvbISetari.puneInLista, semnul deja scris): cu da
+    buchetele DVB-I se leaga la loc (TV si gol, radio daca are fisier), cu nu se scot din bouquets.tv / bouquets.radio
+    si fisierele lor se sterg, ca la stergerea din lista de canale. Apoi lista din memorie se reincarca. Pe firul
+    enigma2. -> True daca s-a schimbat ceva."""
+    schimbat = False
+    if da:
+        schimbat = _asiguraBuchetul()
+        if not _scoasa('radio') and os.path.exists(CALE_BOUQUET_RADIO):
+            are = False
+            try:
+                with open(CALE_BOUQUETS_RADIO, 'r', encoding='utf-8', errors='replace') as f:
+                    are = os.path.basename(CALE_BOUQUET_RADIO) in f.read()
+            except (IOError, OSError):
+                pass
+            if not are:
+                _adauga_in_bouquets_master(CALE_BOUQUETS_RADIO, CALE_BOUQUET_RADIO, 'DVB-I Radio')
+                schimbat = True
+    else:
+        for master, cale in ((CALE_BOUQUETS_TV, CALE_BOUQUET_TV), (CALE_BOUQUETS_RADIO, CALE_BOUQUET_RADIO)):
+            if _scoate_din_bouquets_master(master, cale):
+                schimbat = True
+            try:
+                os.unlink(cale)
+                schimbat = True
+            except OSError:
+                pass
+    if schimbat:
+        try:
+            from enigma import eDVBDB
+            eDVBDB.getInstance().reloadBouquets()
+        except Exception as e:
+            print('[HdsDvbI] reloadBouquets: %s' % e)
+        _anuntaSchimbarea()
+    return schimbat
 
 
 def reincarca_acum(la_gata=None):
@@ -995,7 +1242,7 @@ def reincarca_acum(la_gata=None):
     def _fir():
         eroare = None
         try:
-            _manager.fetch_si_actualizeaza()
+            _manager.fetch_si_actualizeaza(forteaza=True)
         except Exception as e:
             eroare = str(e)
         if eroare is None and _ULTIMA_EROARE_CEAS[0]:

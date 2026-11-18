@@ -15,6 +15,11 @@
 #
 # Fisierul nu importa nimic din enigma2 la incarcare: iServiceInformation, centrul de servicii, nimmanager si
 # convertorul transponderului se dau ca argumente.
+#
+# Toate textele aratate trec prin _() (EPG, 0.7.7, asistenta 058499: pe un receptor in slovaca valorile din Multiplex si
+# Stare tuner ramaneau in romana): si valorile, nu numai etichetele; sabloanele cu %s se traduc inainte de completare.
+# Raman netraduse numai cifrele, unitatile kS/s si %, prescurtarile tehnice (HDR, HDR10, HLG, PLP) si ce vine de la tuner,
+# din lista de canale sau de la om (numele, referinta, descrierea tunerului, traduse acolo unde se fac).
 
 TYPE_TEXT = 0
 TYPE_VALUE_HEX = 1
@@ -186,18 +191,19 @@ def dateFrontend(feinfo, ref, info, centru, I):
 
 
 def _mhz(freq, satelit):
+	# unitatea din catalogul enigma2 ("MHz"; in rusa si ucraineana "МГц")
 	if satelit:
 		if freq > 1000000:
-			return "%d MHz" % (freq // 1000)
+			return "%d %s" % (freq // 1000, _("MHz"))
 		if freq > 0:
-			return "%d MHz" % freq
+			return "%d %s" % (freq, _("MHz"))
 		return _("N/A")
 	if freq > 1000000:
-		return "%d MHz" % (freq // 1000000)
+		return "%d %s" % (freq // 1000000, _("MHz"))
 	if freq > 1000:
-		return "%d MHz" % (freq // 1000)
+		return "%d %s" % (freq // 1000, _("MHz"))
 	if freq > 0:
-		return "%d MHz" % freq
+		return "%d %s" % (freq, _("MHz"))
 	return _("N/A")
 
 
@@ -214,14 +220,14 @@ def randuriTransponder(frontendDataOrg, refstr, rec_info, ConvertToHumanReadable
 	Labels = []
 	if not frontendDataOrg or not frontendDataOrg.get("tuner_type"):
 		if refstr.startswith("4097:") or "://" in refstr:
-			Labels.append((_("Tip transmisiune"), "IPTV / Flux Rețea IP", TYPE_TEXT))
-			Labels.append((_("Protocol"), "HTTP / MPEG-TS Stream", TYPE_TEXT))
-			Labels.append((_("Decodare"), "Redare software prin decodor intern", TYPE_TEXT))
+			Labels.append((_("Tip transmisiune"), _("IPTV / Flux Rețea IP"), TYPE_TEXT))
+			Labels.append((_("Protocol"), _("HTTP / MPEG-TS Stream"), TYPE_TEXT))
+			Labels.append((_("Decodare"), _("Redare software prin decodor intern"), TYPE_TEXT))
 			Labels.append((_("Referință serviciu"), refstr, TYPE_TEXT))
 		else:
-			Labels.append((_("Stare multiplex"), "Parametrii de transponder nu sunt disponibili", TYPE_TEXT))
+			Labels.append((_("Stare multiplex"), _("Parametrii de transponder nu sunt disponibili"), TYPE_TEXT))
 			if rec_info["is_pc_emu"] and not rec_info["is_connected"]:
-				Labels.append(("", "Conectează emulatorul la receptor (vezi tasta Albastră) pentru recepție DVB.", TYPE_TEXT))
+				Labels.append(("", _("Conectează emulatorul la receptor (vezi tasta Albastră) pentru recepție DVB."), TYPE_TEXT))
 		return Labels
 
 	tp = ConvertToHumanReadable(frontendDataOrg)
@@ -240,16 +246,16 @@ def randuriTransponder(frontendDataOrg, refstr, rec_info, ConvertToHumanReadable
 
 	if rec_info["is_pc_emu"]:
 		if rec_info["is_connected"]:
-			tuner_desc = "Tuner %s (Receptor %s prin rețea)" % (chr(65 + tuner_num), rec_info["receiver_target"])
+			tuner_desc = _("Tuner %s (Receptor %s prin rețea)") % (chr(65 + tuner_num), rec_info["receiver_target"])
 		else:
-			tuner_desc = "Tuner %s virtual (Receptor neconectat)" % chr(65 + tuner_num)
+			tuner_desc = _("Tuner %s virtual (Receptor neconectat)") % chr(65 + tuner_num)
 	else:
-		tuner_desc = "Tuner %s hardware intern" % chr(65 + tuner_num)
+		tuner_desc = _("Tuner %s hardware intern") % chr(65 + tuner_num)
 	Labels.append((_("Tuner recepție"), tuner_desc, TYPE_TEXT))
 
 	if ttype == "DVB-S":
 		system_str = tp.get("system", "DVB-S")
-		Labels.append((_("Tip transmisie"), "Satelit (%s)" % system_str, TYPE_TEXT))
+		Labels.append((_("Tip transmisie"), _("Satelit (%s)") % system_str, TYPE_TEXT))
 		Labels.append((_("Satelit / Poziție"), tp.get("orbital_position", _("N/A")), TYPE_TEXT))
 		Labels.extend(randuriRetea(refstr, cuNumar=False))
 		Labels.append((_("Frecvență"), _mhz(tp.get("frequency", 0), True), TYPE_TEXT))
@@ -264,7 +270,7 @@ def randuriTransponder(frontendDataOrg, refstr, rec_info, ConvertToHumanReadable
 			if "pilot" in tp:
 				Labels.append((_("Pilot"), str(tp.get("pilot")), TYPE_TEXT))
 	elif ttype == "DVB-C":
-		Labels.append((_("Tip transmisie"), "Cablu digital (DVB-C)", TYPE_TEXT))
+		Labels.append((_("Tip transmisie"), _("Cablu digital (DVB-C)"), TYPE_TEXT))
 		Labels.extend(randuriRetea(refstr, cuNumar=False))
 		Labels.append((_("Frecvență"), _mhz(tp.get("frequency", 0), False), TYPE_TEXT))
 		Labels.append((_("Rată simboluri (SR)"), _ksps(tp.get("symbol_rate", 0)), TYPE_TEXT))
@@ -274,7 +280,7 @@ def randuriTransponder(frontendDataOrg, refstr, rec_info, ConvertToHumanReadable
 	elif ttype == "DVB-T":
 		# sistemul si PLP-ul spuse de tuner (Tools/Transponder.py: "DVB-T" sau "DVB-T2")
 		sistem = tp.get("system", "DVB-T")
-		Labels.append((_("Tip transmisie"), "Terestru digital (%s)" % sistem, TYPE_TEXT))
+		Labels.append((_("Tip transmisie"), _("Terestru digital (%s)") % sistem, TYPE_TEXT))
 		Labels.extend(randuriRetea(refstr, cuNumar=False))
 		Labels.append((_("Frecvență"), _mhz(tp.get("frequency", 0), False), TYPE_TEXT))
 		if sistem == "DVB-T2":
@@ -298,9 +304,9 @@ def randuriTuner(rec_info, feinfo, ref, centru, I, nimmanager, mod_receptie):
 	Labels = []
 	if rec_info["is_pc_emu"]:
 		if rec_info["is_connected"]:
-			Labels.append((_("Conexiune tunere"), "Conectat prin rețea la receptor (DVB-TR)", TYPE_TEXT))
+			Labels.append((_("Conexiune tunere"), _("Conectat prin rețea la receptor (DVB-TR)"), TYPE_TEXT))
 			# protocolul HdsTunerRetea nu trimite numele modelului, doar adresa si portul
-			Labels.append((_("Receptor fizic"), "Receptor conectat prin rețea (%s)" % rec_info["receiver_target"], TYPE_TEXT))
+			Labels.append((_("Receptor fizic"), _("Receptor conectat prin rețea (%s)") % rec_info["receiver_target"], TYPE_TEXT))
 			Labels.append((_("Tunere preluate"), ", ".join(rec_info["connected_tuners"]), TYPE_TEXT))
 
 			# tunerul canalului de acum
@@ -316,30 +322,30 @@ def randuriTuner(rec_info, feinfo, ref, centru, I, nimmanager, mod_receptie):
 					elif ttype in ("DVB-C", "DVB-T"):
 						tuner_num = 1
 			if tuner_num == 0:
-				canal_tuner = "Tuner A Satelit DVB-S2X (Slot 0 pe receptor)"
+				canal_tuner = _("Tuner A Satelit DVB-S2X (Slot 0 pe receptor)")
 			elif tuner_num == 1:
-				canal_tuner = "Tuner B Cablu DVB-C (Slot 1 pe receptor)"
+				canal_tuner = _("Tuner B Cablu DVB-C (Slot 1 pe receptor)")
 			elif tuner_num is not None:
-				canal_tuner = "Tuner %s de pe receptor" % chr(65 + tuner_num)
+				canal_tuner = _("Tuner %s de pe receptor") % chr(65 + tuner_num)
 			else:
-				canal_tuner = "Tuner DVB virtual / Redare IPTV"
+				canal_tuner = _("Tuner DVB virtual / Redare IPTV")
 			Labels.append((_("Tuner canal curent"), canal_tuner, TYPE_TEXT))
 			Labels.append(("", "", TYPE_TEXT))
-			Labels.append((_("Telemetrie semnal"), "Semnal recepționat live de la tunerul receptorului:", TYPE_TEXT))
+			Labels.append((_("Telemetrie semnal"), _("Semnal recepționat live de la tunerul receptorului:"), TYPE_TEXT))
 
 			status = (feinfo and feinfo.getFrontendStatus()) or {}
 			if status.get("tuner_locked"):
-				lock_text = "DA (Semnal sincronizat cu succes - LOCK)"
+				lock_text = _("DA (Semnal sincronizat cu succes - LOCK)")
 			else:
-				lock_text = "NU (Fără sincronizare / În căutare semnal)"
+				lock_text = _("NU (Fără sincronizare / În căutare semnal)")
 			Labels.append((_("Sincronizare (Lock)"), lock_text, TYPE_TEXT))
 			raw_state = status.get("tuner_state", "IDLE")
 			state_map = {
-				"LOCKED": "Blocat pe frecvență (Recepție optimă)",
-				"TUNING": "În curs de acordare...",
-				"FAILED": "Lipsă semnal RF pe frecvență",
-				"LOSTLOCK": "Semnal pierdut",
-				"IDLE": "Inactiv / În așteptare semnal",
+				"LOCKED": _("Blocat pe frecvență (Recepție optimă)"),
+				"TUNING": _("În curs de acordare..."),
+				"FAILED": _("Lipsă semnal RF pe frecvență"),
+				"LOSTLOCK": _("Semnal pierdut"),
+				"IDLE": _("Inactiv / În așteptare semnal"),
 			}
 			Labels.append((_("Stare acordare"), state_map.get(raw_state, raw_state), TYPE_TEXT))
 			snr_raw = status.get("tuner_signal_quality")
@@ -358,23 +364,23 @@ def randuriTuner(rec_info, feinfo, ref, centru, I, nimmanager, mod_receptie):
 			Labels.append((_("Rată erori (BER)"), str(ber_raw) if ber_raw is not None else "0", TYPE_TEXT))
 		else:
 			# emulator neconectat la receptor: pasii de conectare
-			Labels.append((_("Stare conexiune"), "Receptor neconectat (Niciun tuner activ)", TYPE_TEXT))
-			Labels.append((_("Mod emulator"), "Rulare autonomă pe PC (fără preluare tunere)", TYPE_TEXT))
+			Labels.append((_("Stare conexiune"), _("Receptor neconectat (Niciun tuner activ)"), TYPE_TEXT))
+			Labels.append((_("Mod emulator"), _("Rulare autonomă pe PC (fără preluare tunere)"), TYPE_TEXT))
 			Labels.append(("", "-" * 96, TYPE_TEXT))
-			Labels.append((_("Cum conectezi"), "Urmează pașii de mai jos pentru a prelua tunerele receptorului:", TYPE_TEXT))
-			Labels.append((_("Pasul 1 (Găsire)"), "În fereastra Receptoare din rețea din bara emulatorului, apasă Caută în rețea", TYPE_TEXT))
-			Labels.append(("", "  (sau apasă Adaugă după IP și introdu adresa receptorului, de ex: 192.168.1.10)", TYPE_TEXT))
+			Labels.append((_("Cum conectezi"), _("Urmează pașii de mai jos pentru a prelua tunerele receptorului:"), TYPE_TEXT))
+			Labels.append((_("Pasul 1 (Găsire)"), _("În fereastra Receptoare din rețea din bara emulatorului, apasă Caută în rețea"), TYPE_TEXT))
+			Labels.append(("", "  " + _("(sau apasă Adaugă după IP și introdu adresa receptorului, de ex: 192.168.1.10)"), TYPE_TEXT))
 			# numele receptorului: din regulile modelului cand exista, altfel cel al receptorului de azi
 			try:
 				from Components.About import about
 				nume_receptor = about.valoareDinReguli("machinebuild") or "viper4kv20"
 			except Exception:
 				nume_receptor = "viper4kv20"
-			Labels.append((_("Pasul 2 (Listă)"), "Receptorul %s va apărea în tabel cu starea Cere împerechere" % nume_receptor, TYPE_TEXT))
-			Labels.append((_("Pasul 3 (Împerechere)"), "Dă clic pe rândul receptorului din listă, apoi apasă butonul Împerechează", TYPE_TEXT))
-			Labels.append((_("Pasul 4 (Cod PIN)"), "Pe ecranul televizorului va apărea un cod PIN de 6 cifre. Scrie PIN-ul pe PC și apasă OK", TYPE_TEXT))
-			Labels.append((_("Pasul 5 (Tunere)"), "Apasă Alege tunerele și bifează: Tuner A (Satelit DVB-S2X) și/sau Tuner B (Cablu DVB-C)", TYPE_TEXT))
-			Labels.append((_("Pasul 6 (Pornire)"), "Apasă Folosește în emulator. Tunerele receptorului vor fi conectate instantaneu prin rețea.", TYPE_TEXT))
+			Labels.append((_("Pasul 2 (Listă)"), _("Receptorul %s va apărea în tabel cu starea Cere împerechere") % nume_receptor, TYPE_TEXT))
+			Labels.append((_("Pasul 3 (Împerechere)"), _("Dă clic pe rândul receptorului din listă, apoi apasă butonul Împerechează"), TYPE_TEXT))
+			Labels.append((_("Pasul 4 (Cod PIN)"), _("Pe ecranul televizorului va apărea un cod PIN de 6 cifre. Scrie PIN-ul pe PC și apasă OK"), TYPE_TEXT))
+			Labels.append((_("Pasul 5 (Tunere)"), _("Apasă Alege tunerele și bifează: Tuner A (Satelit DVB-S2X) și/sau Tuner B (Cablu DVB-C)"), TYPE_TEXT))
+			Labels.append((_("Pasul 6 (Pornire)"), _("Apasă Folosește în emulator. Tunerele receptorului vor fi conectate instantaneu prin rețea."), TYPE_TEXT))
 	else:
 		# direct pe receptor: numele receptorului (about.getReceiverName, dat de apelant) si descrierile reale ale
 		# tunerelor, raportate de driver (nimmanager.getNimDescription)
@@ -389,7 +395,7 @@ def randuriTuner(rec_info, feinfo, ref, centru, I, nimmanager, mod_receptie):
 				Labels.append((nume_sloturi[idx], descriere, TYPE_TEXT))
 		status = (feinfo and feinfo.getFrontendStatus()) or {}
 		locked = status.get("tuner_locked")
-		Labels.append((_("Sincronizare (Lock)"), "DA (LOCK)" if locked else "NU (Fără semnal)", TYPE_TEXT))
+		Labels.append((_("Sincronizare (Lock)"), _("DA (LOCK)") if locked else _("NU (Fără semnal)"), TYPE_TEXT))
 		snr_raw = status.get("tuner_signal_quality")
 		Labels.append((_("Calitate semnal (SNR)"), _procent(snr_raw) if snr_raw is not None else "0 %", TYPE_TEXT))
 		agc_raw = status.get("tuner_signal_power")

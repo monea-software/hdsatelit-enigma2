@@ -280,6 +280,114 @@ def _R():
 	return HdsDvbIRegistru
 
 
+# Lista scoasa de om din lista de canale nu mai revine singura. Din fabrica buchetul "Canale de pe internet (DVB-I)" e
+# in lista si gol, cu explicatia (pluginul DVB-I, _asiguraBuchetul); cand omul il scoate din lista de canale
+# (Screens/ChannelSelection.removeBouquet), semnul de mai jos tine minte asta: pluginul nu-l mai scrie si nu-l mai
+# leaga, nici la pornire, nici la reincarcarea din ora in ora. Descarcarea listelor, starea si trecerea pe internet merg mai departe. Randul
+# "Arată lista în lista de canale" (ecranul DVB-I si pagina web) il pune la loc sau il scoate. Semnul e un fisier
+# separat de hdsdvbi.conf (scrierea setarilor ar fixa tara aleasa singura), cate un cuvant pe rand: tv, radio; in
+# /etc/enigma2, deci si in copia setarilor.
+CALE_SCOASA = "/etc/enigma2/hdsdvbi.scoasa"
+FELURI_BUCHET = {"userbouquet.hdsdvbi.tv": "tv", "userbouquet.hdsdvbi.radio": "radio"}
+R_IN_LISTA = "in_lista"
+
+
+def felBuchet(fisier):
+	"""'tv' / 'radio' pentru fisierul (sau calea, sau referinta cu FROM BOUQUET) unui buchet DVB-I, altfel None."""
+	text = fisier or ""
+	if 'FROM BOUQUET "' in text:
+		text = text.split('FROM BOUQUET "', 1)[1].split('"', 1)[0]
+	return FELURI_BUCHET.get(os.path.basename(text))
+
+
+def listeScoase(cale=None):
+	"""Felurile scoase de om din lista de canale: set din 'tv', 'radio'."""
+	try:
+		with open(cale or CALE_SCOASA, "r", encoding="utf-8", errors="replace") as f:
+			return set(c for c in f.read().split() if c in ("tv", "radio"))
+	except (IOError, OSError):
+		return set()
+
+
+def tineMinteScoasa(feluri, scoasa=True, cale=None):
+	"""Semnul listei scoase pus (scoasa=True) sau ridicat pentru felurile date. Fara niciun fel ramas, fisierul se
+	sterge. -> True daca s-a schimbat ceva."""
+	cale = cale or CALE_SCOASA
+	vechi = listeScoase(cale)
+	nou = (vechi | set(feluri)) if scoasa else (vechi - set(feluri))
+	if nou == vechi:
+		return False
+	if scoasa:
+		_pazaStieDeOm()
+	try:
+		if not nou:
+			os.unlink(cale)
+			return True
+		tmp = cale + ".nou"
+		with open(tmp, "w", encoding="utf-8") as f:
+			f.write("".join("%s\n" % x for x in sorted(nou)))
+		os.replace(tmp, cale)
+		return True
+	except (IOError, OSError) as eroare:
+		print("[HdsDvbISetari] semnul listei scoase: %s" % eroare)
+		return False
+
+
+def _pazaStieDeOm():
+	"""Paza buchetelor imaginii (Components/HdsBucheteOrfane, ceasul de un minut) leaga la loc DVB-I TV si DVB-I Radio cand
+	lipsesc amandoua dintr-odata, ca dupa o lista de canale pusa de alt program; scoaterea de acum e a omului, ca la
+	editorul de canale: paza o tine minte si nu le mai pune la loc. Numai daca paza e incarcata (fara import aici)."""
+	import sys
+	O = sys.modules.get("Components.HdsBucheteOrfane")
+	try:
+		if O is not None and isinstance(getattr(O, "_PAZA", None), dict):
+			O._PAZA["omul"] = True
+	except Exception as eroare:
+		print("[HdsDvbISetari] paza buchetelor: %s" % eroare)
+
+
+def scoasaDeOm(fisier, cale=None):
+	"""Omul a scos din lista de canale buchetul `fisier` (numele, calea sau referinta): daca e al DVB-I, nu se mai pune
+	singur la loc. -> True daca s-a tinut minte acum."""
+	fel = felBuchet(fisier)
+	return bool(fel) and tineMinteScoasa([fel], True, cale)
+
+
+def inListaDeCanale(cale_bouquets=None, cale=None):
+	"""Randul "Arată lista în lista de canale": da cand buchetul DVB-I TV e chiar in bouquets.tv si nu e scos de om."""
+	if "tv" in listeScoase(cale):
+		return False
+	try:
+		with open(cale_bouquets or "/etc/enigma2/bouquets.tv", "r", encoding="utf-8", errors="replace") as f:
+			return 'FROM BOUQUET "userbouquet.hdsdvbi.tv"' in f.read()
+	except (IOError, OSError):
+		return False
+
+
+def comutaInLista(plugin=None, cale=None, cale_bouquets=None):
+	"""OK pe randul "Arată lista în lista de canale" (si Da/Nu din web): lista DVB-I (TV si radio) pusa la loc in lista
+	de canale, sau scoasa, pe loc. -> True daca acum e in lista."""
+	return puneInLista(not inListaDeCanale(cale_bouquets, cale), plugin, cale)
+
+
+def puneInLista(da, plugin=None, cale=None):
+	"""Lista DVB-I pusa in lista de canale (da) sau scoasa (nu): semnul, apoi legarea prin plugin (fara plugin numai
+	semnul). Cu da, listele se si descarca din nou, ca buchetul gol sa se umple. -> da."""
+	tineMinteScoasa(["tv", "radio"], not da, cale)
+	try:
+		p = _plugin(plugin)
+	except Exception:
+		p = None
+	try:
+		if p is not None and hasattr(p, "legaInLista"):
+			p.legaInLista(da)
+	except Exception as eroare:
+		print("[HdsDvbISetari] legarea listei DVB-I: %s" % eroare)
+	if da and p is not None and getattr(p, "_manager", None) is not None:
+		reincarca(plugin=p)
+	return bool(da)
+
+
 def rezervaPornita(config):
 	return str(config.get("rezerva", "da")).lower() in ("da", "yes", "1", "true")
 
@@ -569,6 +677,30 @@ def textIncercari(rez, incercare=None):
 		rez.get("merge", 0), rez.get("oprit_tara", 0), rez.get("adresa_moarta", 0), rez.get("nu_raspunde", 0))
 
 
+def numarAscunse(stare=None):
+	"""EPG2: (cate canale sunt ascunse din buchet pana merg din nou, cate adrese s-au scos din liste: clipuri si imagini
+	de proba), din starea DVB-I"""
+	stare = _dateStare(stare)
+	ascunse = sum(1 for c in stare.get("canale") or [] if c.get("ascuns"))
+	scoase = stare.get("scoase")
+	try:
+		n_scoase = sum(int(v) for v in scoase.values()) if isinstance(scoase, dict) else 0
+	except (TypeError, ValueError):
+		n_scoase = 0
+	return ascunse, n_scoase
+
+
+def textAscunse(stare=None):
+	"""EPG2: fraza din explicatia randului incercarilor: canalele care nu merg din casa nu apar in lista de canale pana
+	merg din nou, clipurile si imaginile de proba nu intra deloc; cu numerele de acum"""
+	ascunse, scoase = numarAscunse(stare)
+	text = _("Canalele care nu merg din casa ta nu apar în lista de canale până merg din nou; clipurile și imaginile de "
+		"probă din liste nu intră deloc.")
+	if ascunse or scoase:
+		text += " " + _("Acum ascunse: %d, scoase: %d.") % (ascunse, scoase)
+	return text
+
+
 def textFaraRegistre(raspuns):
 	"""mesajul cand niciun registru n-a dat liste: ce s-a intrebat si ce a raspuns fiecare (numai ce s-a masurat)"""
 	parti = []
@@ -582,11 +714,88 @@ def textFaraRegistre(raspuns):
 
 
 def canaleLista(stare, adresa):
-	"""cate canale (TV si radio) a dat lista la ultima descarcare, sau None daca nu s-a descarcat"""
+	"""cate canale (TV si radio) a dat lista la ultima descarcare in buchet (EPG2: fara cele ascunse pana merg din nou),
+	sau None daca nu s-a descarcat"""
 	for l in stare.get("liste") or []:
 		if l.get("adresa") == adresa and l.get("ok"):
-			return int(l.get("tv", 0)) + int(l.get("radio", 0))
+			return max(0, int(l.get("tv", 0)) + int(l.get("radio", 0)) - int(l.get("ascunse", 0) or 0))
 	return None
+
+
+# ------------------------------------------------------------------ listele care nu raspund (DVK, 15.11.2026)
+# O lista care nu raspunde sta in pauza crescatoare (Components/HdsDvbISurse, DVJ). Ecranul DVB-I, ecranul avansat si
+# pagina web spun la fiecare lista de cand nu raspunde si cand se incearca din nou. Datele vin din aceeasi stare ca a
+# pluginului (pluginul._surse()): o a doua citire a fisierului ar ramane in urma, pentru ca starea se citeste o data.
+TEXT_SEMN_NU_RASPUNDE = N_("nu răspunde")
+
+
+def _surse(plugin=None):
+	try:
+		f = getattr(_plugin(plugin), "_surse", None)
+		return f() if f is not None else None
+	except Exception:
+		return None
+
+
+def _deCand(secunde):
+	"""'Nu răspunde de 3 zile.' din secundele trecute de la prima cadere (zile peste o zi, ore sub o zi)"""
+	ore = int(max(0, secunde)) // 3600
+	zile = ore // 24
+	if zile >= 2:
+		# romana: 20-99 (si 100, 200 ...) cer "de" inainte de substantiv
+		if zile % 100 == 0 or zile % 100 >= 20:
+			return _("Nu răspunde de %d de zile.") % zile
+		return _("Nu răspunde de %d zile.") % zile
+	if zile == 1:
+		return _("Nu răspunde de o zi.")
+	if ore >= 20:
+		return _("Nu răspunde de %d de ore.") % ore
+	if ore >= 2:
+		return _("Nu răspunde de %d ore.") % ore
+	if ore == 1:
+		return _("Nu răspunde de o oră.")
+	return _("Nu răspunde de mai puțin de o oră.")
+
+
+def textNuRaspunde(adresa, surse=None, acum=None, plugin=None):
+	"""'' daca lista raspunde (sau n-a fost incercata), altfel fraza intreaga: 'Nu răspunde de 3 zile. Următoarea
+	încercare: azi, 14:30.' Numai citire; nimic de ales sau de confirmat pentru om."""
+	su = surse if surse is not None else _surse(plugin)
+	if su is None or not adresa:
+		return ""
+	try:
+		v = su.faraRaspuns(adresa)
+	except Exception:
+		return ""
+	if not v:
+		return ""
+	prima, _urmatoarea = v
+	acum = time.time() if acum is None else acum
+	if acum < prima - 300:
+		# ceasul receptorului e in urma (pornire inainte de NTP): nici durata, nici ora pauzei nu sunt adevarate, iar
+		# pluginul o incearca oricum la trecerea urmatoare (HdsDvbISurse.inPauza, CEAS_INAPOI_S); nu spunem nimic
+		return ""
+	text = _deCand(acum - prima)
+	try:
+		pana = su.inPauza(adresa, acum)
+	except Exception:
+		pana = 0
+	if pana:
+		return "%s %s" % (text, _("Următoarea încercare: %s.") % oraText(pana, acum))
+	return "%s %s" % (text, _("Se încearcă din nou la următoarea reîncărcare."))
+
+
+def stariAdrese(adrese, surse=None, acum=None, plugin=None):
+	"""{adresa: textNuRaspunde} numai pentru adresele care nu raspund (pagina web, ecranul avansat)"""
+	su = surse if surse is not None else _surse(plugin)
+	rez = {}
+	if su is None:
+		return rez
+	for a in adrese or []:
+		t = textNuRaspunde(a, su, acum)
+		if t:
+			rez[a] = t
+	return rez
 
 
 # actiunile randurilor ecranului de pe televizor (Screens/HdsDvbI.py HdsDvbISetup)
@@ -600,10 +809,13 @@ R_AVANSAT = "avansat"
 R_INCHIDE = "inchide"
 
 
-def randuriSetari(config, registru=None, stare=None, rez=None, incercare=None):
+def randuriSetari(config, registru=None, stare=None, rez=None, incercare=None, surse=None, acum=None, in_lista=None):
 	"""Randurile ecranului DVB-I: [(text, actiune, valoare, explicatie, bifa)], in ordinea din fisa Stitch (dvbi-048);
-	bifa = True / False la listele tarii (casuta desenata de ecran), None la celelalte."""
+	bifa = True / False la listele tarii (casuta desenata de ecran), None la celelalte. DVK: lista bifata care nu
+	raspunde are semnul scurt in rand si fraza intreaga (de cand, urmatoarea incercare) in explicatie. in_lista: randul
+	"Arată lista în lista de canale" (None = citit acum, inListaDeCanale)."""
 	stare = _dateStare(stare)
+	surse = surse if surse is not None else _surse()
 	r = [("%s %s" % (_("Țara:"), numeTara(config.get("tara", ""))), R_TARA, None,
 		_("STÂNGA/DREAPTA schimbă țara. OK deschide lista țărilor din registrele DVB-I."), None)]
 	if config.get("tara") and regiuniTarii(config, stare, registru):
@@ -619,6 +831,10 @@ def randuriSetari(config, registru=None, stare=None, rez=None, incercare=None):
 		expl = _("OK scoate sau pune lista. Furnizor: %s.") % (l["furnizor"] or "?")
 		if l["proba"]:
 			expl += " " + _("Listă de probă a registrului: canalele ei pot să nu meargă.")
+		nu = textNuRaspunde(l["adresa"], surse, acum) if l["aleasa"] and surse is not None else ""
+		if nu:
+			text += " · %s" % _(TEXT_SEMN_NU_RASPUNDE)
+			expl = "%s %s" % (nu, expl)
 		r.append((text, R_LISTA, l["adresa"], expl, bool(l["aleasa"])))
 	n_alte = len(listeleAltorTari(config, registru)) if config.get("tara") and toateTarilePornit(config) else 0
 	r.append(("%s %s" % (_("Liste din toate țările:"), (_("da") + (" · %s %d" % (_("liste:"), n_alte) if n_alte else ""))
@@ -629,7 +845,13 @@ def randuriSetari(config, registru=None, stare=None, rez=None, incercare=None):
 		_("da") if rezervaPornita(config) else _("nu")), R_REZERVA, None,
 		_("Când satelitul unui canal nu se recepționează, imaginea vine singură de pe internet, dacă lista are canalul; se întoarce pe satelit când semnalul revine."), None))
 	r.append((textIncercari(rez or {}, incercare), R_INCERCARI, None,
-		_("OK încearcă din nou toate canalele, din casa ta. Cele oprite pentru țara ta se pot vedea cu VPN-ul receptorului pornit."), None))
+		_("OK încearcă din nou toate canalele, din casa ta. Cele oprite pentru țara ta se pot vedea cu VPN-ul receptorului pornit.")
+		+ " " + textAscunse(stare), None))
+	if in_lista is None:
+		in_lista = inListaDeCanale()
+	r.append(("%s: %s" % (_("Arată lista în lista de canale"), _("da") if in_lista else _("nu")), R_IN_LISTA, None,
+		_("OK pune lista Canale de pe internet (DVB-I) în lista de canale sau o scoate. Scoasă, nu mai revine singură."),
+		None))
 	r.append(("%s %d" % (_("Adrese puse de mână și liste predefinite (avansat):"), len(config.get("url_uri", [])) +
 		len(config.get("predefinite", []))), R_AVANSAT, None,
 		_("OK deschide adresele puse de mână, listele predefinite și pornirea DVB-I."), None))

@@ -526,7 +526,8 @@ TYPES = {
 }
 
 # tipurile cu cronometru (textul se schimba cu minutul)
-TIMED = ("_remaining", "_elapsed", "_tech_left", "_iptv_stare")
+# MI9 (0.7.6): si debitul (Bitrate, si TechRight pe radio), cat timp enigma2 il masoara pe DVB (BITRATE_PAS_S)
+TIMED = ("_remaining", "_elapsed", "_tech_left", "_iptv_stare", "_bitrate", "_tech_right")
 
 # Flag,<x>: eticheta flag_<x> cand conditia e adevarata, altfel ""
 # (pe o imagine veche un Label pus dupa ConditionalShowHide nu merge, deci textul vine gata filtrat)
@@ -875,6 +876,11 @@ def N_(text):
 ETICHETE_IPTV = {"signal": N_("Răspuns"), "quality": N_("Viteză")}
 SEMN_IPTV = "8897/tv/"
 IPTV_PAS_S = 2
+# MI9 (0.7.6, TODO NOU BRT 15.11 11:41): debitul masurat de enigma2 pe canalele DVB (iServiceInformation sVideoBitrate /
+# sAudioBitrate, kbit/s; numaratorul din demux porneste la prima intrebare, intoarce -1 pana la prima masurare si se opreste
+# singur dupa 5 s fara intrebari). Cat timp widgetul se vede, il intrebam o data pe secunda; ascuns, ceasul se opreste
+# (doSuspend), deci si numaratorul. Pe un enigma2 fara cheile astea (isi None) ramane ce era: sTagBitrate, fara ceas.
+BITRATE_PAS_S = 1
 
 
 class HdsInfo(Converter):
@@ -1409,6 +1415,7 @@ class HdsInfo(Converter):
 		return C.join([C.tr("rec_ip"), C.tr("local_stream") if C.is_local_host(host) else host])
 
 	def _tech_right(self, r):
+		self._due = None   # MI9: pe radio, _bitrate porneste ceasul cat timp debitul se masoara
 		if r.info() is None:
 			return u""
 		# NoAccess: fara acces; bara il scrie separat (HdsSignal AccessRest / AccessBox), cu sistemul folosit acum in caseta
@@ -1626,10 +1633,17 @@ class HdsInfo(Converter):
 		return C.join([u"%s: %d" % (C.tr("cnt_audio"), max(n, 0)), u"%s: %d" % (C.tr("cnt_subs"), max(s, 0))])
 
 	def _bitrate(self, r):
+		self._due = None
 		dab = C.rj_dict(r.rj() or {}, "dab")
 		kb = C.ival(dab, "kbit")
 		if kb > 0:
 			return u"%d kbit/s" % kb
+		# DVB: debitul masurat (video + sunet), vezi BITRATE_PAS_S; pana la prima masurare, ce stie fluxul
+		if C.isi("sVideoBitrate") is not None and r.kind() in DVB_KINDS:
+			self._due = C._now() + BITRATE_PAS_S
+			v, a = r.geti("sVideoBitrate"), r.geti("sAudioBitrate")
+			if v > 0 or a > 0:
+				return u"%d kbit/s" % (max(v, 0) + max(a, 0))
 		v = r.geti("sTagBitrate")
 		if v > 0:
 			return u"%d kbit/s" % (v // 1000 if v >= 1000 else v)

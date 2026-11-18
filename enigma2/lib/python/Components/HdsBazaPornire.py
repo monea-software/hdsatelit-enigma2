@@ -31,6 +31,10 @@ HdsCulegereCanale.py o pornesc dupa migrare, numai dupa o pornire curata si in a
     urmatoarea scriere a bazei (o singura scriere la prag, nu una pe bucata).
 MEMORIA: fisierul se citeste rand cu rand din gzip (nimic intreg in memorie), cel mult HdsBazaCanale.MAX_CITIT octeti
 desfacuti si randuri de cel mult RAND_CITIT; lamedb-ul se citeste tot rand cu rand (cheile si o harta de intregi).
+FIRUL (din ceasurile bazei, Unire(fir=fir_unire)): lamedb-ul se citeste si se desface pe un fir (citeste_lamedb_pe_fir,
+cu paza scrierii pe loc a nucleului), iar harta cheilor de rezerva a bazei se face tot pe fir, dintr-o copie a cheilor
+(HdsBazaCanale.BazaCanale.pregateste_rezerva): pe 0.7.6 amandoua stateau intr-un singur pas pe firul interfetei, la
+fiecare pornire si dupa fiecare schimbare a lamedb-ului (3 s cu 23 920 de servicii pe Octagon, 9,4 s pe un u57).
 
 DESCARCAREA (descarca, blocanta, intr-un fir; Zilnic o porneste din ticul bazei): intai suma publicata (<url>.sha256);
 daca e aceeasi cu a fisierului stb de pe receptor, nu se mai ia nimic si nu se scrie nimic (eMMC). Altfel fisierul
@@ -70,6 +74,20 @@ MARIME_LAMEDB_MAX = 32 * 1024 * 1024
 TIMP_DESCARCARE = 20.0
 BUCATA = 200
 BUCATA_REZERVE = 500
+# unirea taiata dupa timp (Unire cu felie_s, din ceasurile bazei): randurile citite se unesc cate MINI_UNIRE, iar pasul se
+# opreste cand trece felia. Pe procesorul unui receptor un rand unit peste unul existent tine ~2-3 ms (200 de randuri: 0,5 s;
+# in enigma2, cu lacatul Python impartit, 1,5-3 s). Pe timp, nu pe numar: cand alt fir Python (de pilda EPG-ul IPTV) tine
+# lacatul, o bucata pe numar se lungeste (masurat pe un u57: 20 de randuri = pana la 632 ms), o felie de timp nu
+MINI_UNIRE = 5
+# citirea lamedb-ului pe un fir (Unire cu fir, din ceasurile bazei): o pauza de CEDEAZA_S la CEDEAZA_LA servicii, ca firul
+# interfetei sa ia lacatul Python repede; o citire prinsa de o scriere a lamedb-ului se reia de cel mult INCERCARI_LAMEDB
+# ori, la PAUZA_LAMEDB_S una de alta, iar la predare (firul interfetei) o semnatura schimbata de atunci o reia de cel mult
+# RECITIRI_LAMEDB ori
+CEDEAZA_LA = 256
+CEDEAZA_S = 0.001
+INCERCARI_LAMEDB = 3
+PAUZA_LAMEDB_S = 1.0
+RECITIRI_LAMEDB = 2
 
 PRIMA_S = 300
 INTERVAL_S = 24 * 3600
@@ -184,33 +202,64 @@ def amprenta(cale):
 	return [int(st.st_mtime), int(st.st_size)]
 
 
+def _semnatura(st):
+	return (getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)), st.st_size, st.st_ino)
+
+
+def semnatura_lamedb(cale):
+	"""(mtime_ns, marime, inode) al fisierului, sau None: nucleul scrie lamedb pe loc (lib/dvb/db.cpp, fopen "w"), deci
+	o scriere schimba data si, de cele mai multe ori, marimea, iar inode-ul ramane."""
+	try:
+		return _semnatura(os.stat(cale))
+	except (IOError, OSError):
+		return None
+
+
 class Lamedb(object):
 	"""Serviciile din lamedb, citit rand cu rand: cheile (forma cheii bazei) si, pe fiecare cheie de rezerva,
-	namespace-ul singurului serviciu (>= 0) sau minus numarul serviciilor (mai multe)."""
+	namespace-ul singurului serviciu (>= 0) sau minus numarul serviciilor (mai multe). complet: randul "end" al
+	serviciilor citit; semn: semnatura fisierului deschis (fstat), aceeasi inainte si dupa citire, altfel None.
+	cedeaza=True (citirea pe fir): o pauza de CEDEAZA_S la CEDEAZA_LA servicii."""
 
-	def __init__(self, cale=CALE_LAMEDB):
+	def __init__(self, cale=CALE_LAMEDB, cedeaza=False):
 		self.chei = []
 		self.multime = set()
 		self.harta = {}
 		self.citit = False
+		self.complet = False
+		self.semn = None
+		self._cedeaza = cedeaza
+		self._unice = None
+		if cale is None:
+			return
 		try:
 			if os.path.getsize(cale) > MARIME_LAMEDB_MAX:
 				_jurnal("lamedb prea mare; fara potrivirea pe cheia de rezerva")
 				return
 			with io.open(cale, "r", encoding="utf-8", errors="replace") as f:
+				inainte = _semnatura(os.fstat(f.fileno()))
 				self._citeste(f)
+				if inainte == _semnatura(os.fstat(f.fileno())):
+					self.semn = inainte
 			self.citit = True
 		except (IOError, OSError):
 			pass
+
+	@classmethod
+	def gol(cls):
+		"""Un lamedb fara servicii (ca unul lipsa): fara potrivirea pe cheia de rezerva."""
+		return cls(None)
 
 	def _citeste(self, f):
 		for linie in f:
 			if linie.strip() == "services":
 				break
 		i = 0
+		cedeaza = self._cedeaza
 		for linie in f:
 			s = linie.strip()
 			if s == "end":
+				self.complet = True
 				break
 			if i % 3 == 0:
 				parti = s.split(":")
@@ -221,6 +270,8 @@ class Lamedb(object):
 						sid = None
 					if sid is not None:
 						self._adauga("%x:%x:%x:%x" % (sid, ns, tsid, onid), ns)
+				if cedeaza and i % (3 * CEDEAZA_LA) == 0:
+					time.sleep(CEDEAZA_S)
 			i += 1
 
 	def _adauga(self, k, ns):
@@ -233,6 +284,23 @@ class Lamedb(object):
 			return
 		e = self.harta.get(r)
 		self.harta[r] = ns if e is None else (-2 if e >= 0 else e - 1)
+
+	def unice(self):
+		"""[(cheie, cheie de rezerva)] ale serviciilor singure pe cheia lor de rezerva, in ordinea din lamedb: cele pe care
+		unirea le cauta in baza la sfarsit. Facuta o data (pe firul care a citit lamedb-ul, cand e citit pe fir)."""
+		u = self._unice
+		if u is None:
+			u = []
+			n = 0
+			for k in self.chei:
+				r = B.cheie_rezerva(k)
+				if r is not None and self.harta.get(r, -1) >= 0:
+					u.append((k, r))
+				n += 1
+				if self._cedeaza and n % CEDEAZA_LA == 0:
+					time.sleep(CEDEAZA_S)
+			self._unice = u
+		return u
 
 	def singurul(self, rezerva):
 		"""Cheia singurului serviciu din lamedb pe cheia de rezerva, sau None."""
@@ -255,14 +323,45 @@ def cheie_potrivita(k, lamedb, duble):
 	return lamedb.singurul(r) or k
 
 
+def citeste_lamedb_pe_fir(cale, incercari=INCERCARI_LAMEDB, pauza=PAUZA_LAMEDB_S, dormi=None):
+	"""Lamedb-ul citit de pe un fir (Unire cu fir). Nucleul scrie lamedb pe loc, deci o citire de pe alt fir decat al
+	interfetei poate prinde fisierul pe jumatate; se primeste numai o citire cu aceeasi semnatura (mtime_ns, marime,
+	inode) pe descriptor inainte si dupa si pe cale dupa, si cu randul "end" al serviciilor (fara el numai la ultima
+	incercare, cum l-ar fi citit si firul interfetei: un fisier stricat, dar care nu se mai schimba); altfel se citeste din
+	nou dupa `pauza`. Lipsa sau prea mare: ca pe firul interfetei. -> Lamedb, sau Lamedb.gol() cand fisierul s-a schimbat
+	la fiecare incercare (unirea merge fara potrivirea pe cheia de rezerva, iar ceasurile bazei o reiau la tic: amprenta
+	lamedb-ului s-a schimbat)."""
+	dormi = dormi or time.sleep
+	for i in range(incercari):
+		l = Lamedb(cale, cedeaza=True)
+		if not l.citit:
+			return l
+		if l.semn is not None and l.semn == semnatura_lamedb(cale) and (l.complet or i == incercari - 1):
+			l.unice()
+			return l
+		if i < incercari - 1:
+			dormi(pauza)
+	_jurnal("lamedb s-a schimbat in timpul fiecarei citiri; unirea merge fara potrivirea pe cheia de rezerva")
+	return Lamedb.gol()
+
+
 # ---------------------------------------------------------------- unirea pe bucati
 
 class Unire(object):
 	"""Unirea bazelor de pornire in baza `b`, pe bucati (vezi antetul modulului). pas() -> True cat mai e de lucru;
 	rez = {"imagine": stare, "stb": stare, "rezerve": numarul randurilor mutate}; numere = {sursa: (adaugate,
-	schimbate, respinse)}."""
+	schimbate, respinse)}.
+	fir: functie(lucru) -> firul pornit (cu is_alive), pentru munca grea care nu atinge baza: citirea lamedb-ului
+	(citeste_lamedb_pe_fir, pornita la primul pas) si harta cheilor de rezerva a bazei (BazaCanale.pregateste_rezerva,
+	din copia cheilor). Cat firul lucreaza, pas() nu face nimic, intoarce True si pune asteapta = True (apelantul revine
+	mai tarziu, fara sa se invarta); pe firul apelantului raman numai bucatile care ating baza. fir None: totul pe loc,
+	ca inainte (uneste(), probele).
+	felie_s: un pas se opreste dupa atatea secunde (randurile unei bucati se unesc cate MINI_UNIRE, cheile de rezerva
+	una cate una), iar restul ramane pentru pasul urmator; bugetul bazei se potriveste tot o data la `bucata` randuri.
+	felie_s None: pasii pe numar, ca inainte. Rezultatul e acelasi cu si fara fir si felie."""
 
-	def __init__(self, b, cale_imagine_=None, cale_stb=CALE_STB, cale_lamedb=CALE_LAMEDB, bucata=BUCATA):
+	def __init__(self, b, cale_imagine_=None, cale_stb=CALE_STB, cale_lamedb=CALE_LAMEDB, bucata=BUCATA, fir=None,
+			felie_s=None):
 		self.b = b
 		self.cai = {"imagine": cale_imagine_ or cale_imagine(), "stb": cale_stb}
 		self.cale_lamedb = cale_lamedb
@@ -270,6 +369,15 @@ class Unire(object):
 		self.rez = {}
 		self.numere = {}
 		self.gata = False
+		self.asteapta = False
+		self._fir = fir
+		self.felie_s = felie_s
+		self._cron = getattr(time, "monotonic", time.time)
+		self._citire = None
+		self._recitiri = 0
+		# harta cheilor de rezerva a bazei inaintea cheilor de rezerva: pe fir (cu fir) sau pe loc (fara fir), dar mereu
+		# intai: fara harta, candidat_rezerva cauta cheie cu cheie peste toata baza (bun pentru o nota, nu pentru mii de chei)
+		self._rezerva_gata = False
 		self._ramase = None
 		self._curent = None
 		self._lamedb = None
@@ -278,6 +386,7 @@ class Unire(object):
 	# -------------------------------------------- pasii
 
 	def pas(self):
+		self.asteapta = False
 		if self.gata:
 			return False
 		try:
@@ -296,11 +405,15 @@ class Unire(object):
 			return self._sfarsit()
 		if self._ramase is None:
 			self._ramase = self._alege()
+			if self._fir is not None:
+				self._porneste_citirea()
 			return True
 		if self._curent is not None:
 			self._bucata()
 			return True
 		if self._ramase:
+			if self._lamedb_gata() is None:
+				return self._asteapta()
 			self._incepe(self._ramase.pop(0))
 			return True
 		return self._pas_rezerve()
@@ -309,10 +422,77 @@ class Unire(object):
 		self.gata = True
 		return False
 
+	def _asteapta(self):
+		self.asteapta = True
+		return True
+
 	def _lamedb_citit(self):
 		if self._lamedb is None:
 			self._lamedb = Lamedb(self.cale_lamedb)
 		return self._lamedb
+
+	def _porneste_citirea(self):
+		c = {}
+
+		def lucreaza():
+			try:
+				c["lamedb"] = citeste_lamedb_pe_fir(self.cale_lamedb)
+			except BaseException as e:
+				c["eroare"] = e
+		self._citire = c
+		try:
+			c["fir"] = self._fir(lucreaza)
+		except Exception as e:
+			# fara fir (de pilda prea multe fire): restul unirii pe loc, ca inainte
+			_jurnal("unirea: firul nu a pornit (%s); citesc pe loc" % e)
+			self._fir = None
+			self._citire = None
+
+	def _lamedb_gata(self):
+		"""Lamedb-ul pentru pasul de acum, sau None cat firul il citeste. Fara fir: citit pe loc, ca inainte. La predare
+		(pe firul apelantului) semnatura fisierului se verifica inca o data: un lamedb scris dupa citire se citeste din
+		nou (de cel mult RECITIRI_LAMEDB ori, apoi unirea merge fara potrivirea pe cheia de rezerva)."""
+		if self._lamedb is not None:
+			return self._lamedb
+		if self._fir is None:
+			return self._lamedb_citit()
+		c = self._citire
+		if c is None:
+			self._porneste_citirea()
+			return None
+		fir = c.get("fir")
+		if fir is not None and fir.is_alive():
+			return None
+		self._citire = None
+		if "eroare" in c:
+			raise c["eroare"]
+		l = c.get("lamedb")
+		if l is None:
+			raise RuntimeError("citirea lamedb pe fir nu a dat nimic")
+		if l.citit and l.semn != semnatura_lamedb(self.cale_lamedb):
+			if self._recitiri < RECITIRI_LAMEDB:
+				self._recitiri += 1
+				self._porneste_citirea()
+				return None
+			_jurnal("lamedb s-a schimbat dupa fiecare citire; unirea merge fara potrivirea pe cheia de rezerva")
+			l = Lamedb.gol()
+		self._lamedb = l
+		return l
+
+	def _lamedb_neschimbat(self):
+		"""Cu fir (unirea tine minute pe o lista mare): inaintea fiecarei bucati noi si a cheilor de rezerva, un lamedb scris
+		intre timp (o scanare, editorul de canale) se citeste din nou, ca potrivirea pe cheia de rezerva sa nu ia o cheie
+		"singura" dintr-o lista veche (de cel mult RECITIRI_LAMEDB ori in toata unirea). -> True = se poate merge mai
+		departe cu lamedb-ul tinut; False = citirea din nou a pornit (pasul asteapta). Fara fir: True, ca inainte."""
+		l = self._lamedb
+		if self._fir is None or l is None or not l.citit or self._recitiri >= RECITIRI_LAMEDB:
+			return True
+		if l.semn == semnatura_lamedb(self.cale_lamedb):
+			return True
+		self._recitiri += 1
+		self._lamedb = None
+		self._porneste_citirea()
+		return False
 
 	def _alege(self):
 		"""Fisierele de unit acum, in ordinea versiunilor."""
@@ -383,8 +563,15 @@ class Unire(object):
 
 	def _bucata(self):
 		"""Cel mult `bucata` randuri din fisierul curent, unite intr-o singura chemare a bazei; la capatul fisierului,
-		verificarea sfarsitului si nota in antet."""
+		verificarea sfarsitului si nota in antet. Cu felie_s, randurile citite raman in c["bune"] si se unesc pe mai multi
+		pasi (_uneste_bune), inainte de a citi altele."""
 		c = self._curent
+		if c.get("bune"):
+			self._uneste_bune(c)
+			return
+		if not self._lamedb_neschimbat() or self._lamedb_gata() is None:
+			self.asteapta = True
+			return
 		lamedb = self._lamedb
 		bune = []
 		citite = 0
@@ -407,11 +594,27 @@ class Unire(object):
 			_jurnal("%s: gzip stricat: %s" % (c["sursa"], e))
 			self._inchide()
 			return
-		if bune:
-			n = self.b.uneste_linii_pornire(bune)
+		c["bune"] = bune
+		c["terminat"] = terminat
+		self._uneste_bune(c)
+
+	def _uneste_bune(self, c):
+		"""Randurile citite ale bucatii: toate deodata (fara felie, ca inainte) sau cate MINI_UNIRE pana trece felia; bugetul
+		bazei se potriveste numai dupa ultimele randuri ale bucatii, ca la unirea dintr-o chemare (acelasi rezultat)."""
+		bune = c["bune"]
+		limita = None if self.felie_s is None else self._cron() + self.felie_s
+		while bune:
+			if limita is None:
+				parte, bune = bune, []
+			else:
+				parte, bune = bune[:MINI_UNIRE], bune[MINI_UNIRE:]
+			c["bune"] = bune
+			n = self.b.uneste_linii_pornire(parte, buget=not bune)
 			for i in range(3):
 				c["numere"][i] += n[i]
-		if terminat:
+			if bune and self._cron() >= limita:
+				return
+		if c["terminat"]:
 			self._gata_fisier(c)
 
 	@staticmethod
@@ -458,25 +661,35 @@ class Unire(object):
 
 	def _pas_rezerve(self):
 		"""Randurile ramase sub o cheie veche dupa o scanare: mutate sub cheia din lamedb si unite cu randul ei (o bucata
-		pe pas)."""
-		lamedb = self._lamedb_citit()
+		pe pas). Cu fir: intai lamedb-ul si harta cheilor de rezerva a bazei, facute pe fir."""
+		lamedb = self._lamedb_gata()
+		if lamedb is None or (self._rezerve is None and not self._lamedb_neschimbat()):
+			return self._asteapta()
+		unice = lamedb.unice()
+		if not self._rezerva_gata and unice:
+			if not self.b.pregateste_rezerva(self._fir):
+				return self._asteapta()
+			self._rezerva_gata = True
 		if self._rezerve is None:
 			self._rezerve = {"i": 0, "mutate": 0}
 		r = self._rezerve
-		chei = lamedb.chei
 		b = self.b
-		for k in chei[r["i"]:r["i"] + BUCATA_REZERVE]:
-			# si cand k are deja rand (de pilda din baza de pornire): randul vechi al receptorului se uneste in el, cu
-			# regula obisnuita (ce stie receptorul castiga)
-			rez = B.cheie_rezerva(k)
-			if rez is None or lamedb.harta.get(rez, -1) < 0:
-				continue
-			if b.candidat_rezerva(k) is None:
-				continue
-			b.cauta(k, rezerva=True)
-			r["mutate"] += 1
-		r["i"] += BUCATA_REZERVE
-		if r["i"] < len(chei):
+		i = r["i"]
+		capat = min(len(unice), i + BUCATA_REZERVE)
+		limita = None if self.felie_s is None else self._cron() + self.felie_s
+		while i < capat:
+			# numai serviciile singure pe cheia lor de rezerva in lamedb (unice), in ordinea din lamedb; si cand k are
+			# deja rand (de pilda din baza de pornire): randul vechi al receptorului se uneste in el, cu regula obisnuita
+			# (ce stie receptorul castiga)
+			k, rez = unice[i]
+			i += 1
+			if b.candidat_rezerva_cunoscut(k, rez) is not None:
+				b.cauta(k, rezerva=True)
+				r["mutate"] += 1
+			if limita is not None and self._cron() >= limita:
+				break
+		r["i"] = i
+		if i < len(unice):
 			return True
 		self.rez["rezerve"] = r["mutate"]
 		if r["mutate"]:
@@ -676,11 +889,16 @@ class Zilnic(object):
 			self._rezultat = (EROARE, "%s: %s" % (type(e).__name__, e))
 
 
-def _fir_daemon(functie):
-	t = threading.Thread(target=functie, name="hds-baza-stb")
+def _fir_daemon(functie, nume="hds-baza-stb"):
+	t = threading.Thread(target=functie, name=nume)
 	t.daemon = True
 	t.start()
 	return t
+
+
+def fir_unire(functie):
+	"""Firul unirii (Unire(fir=...), din ceasurile bazei): citirea lamedb-ului si harta cheilor de rezerva."""
+	return _fir_daemon(functie, "hds-baza-unire")
 
 
 # ---------------------------------------------------------------- setarea si textele

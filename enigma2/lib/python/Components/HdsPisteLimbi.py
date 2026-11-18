@@ -33,6 +33,11 @@
 #                  are modelul OCR al limbii ei (Components/HdsOcrSubtitrari.poateCiti) si OCR e pornit; o pista DVB fara
 #                  limba stiuta nu se ia (modelul ar fi ghicit);
 #               d. altfel preferintele 1, 2, 3, ca fara traducere (pe Nu, dupa a. vin direct acestea).
+#   a., b. si c. pornesc o subtitrare NUMAI cand sunetul care merge nu e deja in limba traducerii (limbaSunetului:
+#   limba pistei audio pornite; fara limba, ghicita dupa canal ca la subtitrari; la versiunea originala sau fara nicio
+#   sursa nu se stie, si atunci a., b., c. lucreaza ca inainte). Pe un canal in limba omului nu porneste deci singura
+#   nicio subtitrare pentru traducere; raman memoria, setarea niciodata si preferintele. Nici pe un canal unde omul a
+#   oprit traducerea (traducerePeCanal).
 #   Intre mai multe limbi la b. si c.: limbile din preferinte (in ordinea lor), apoi engleza, apoi celelalte, apoi cele
 #   fara limba stiuta; la aceeasi limba, subtitrarea obisnuita inaintea celei pentru surzi. Pe acelasi canal, o
 #   subtitrare DVB pusa la c. se schimba o singura data pe teletext (b.) sau pe limba traducerii (a.) cand acestea apar
@@ -677,9 +682,12 @@ def _cheieTraducere(s, ordine):
 
 
 def alegeSubtitrareTradusa(subtitrari, tinta, preferinte=PREF_SUBTITRARE_IMPLICITE, limbaReceptor="ro",
-		niciodata=False, memorat=None, traduOrice=True, poateCiti=None):
+		niciodata=False, memorat=None, traduOrice=True, poateCiti=None, limbaSunet=None):
 	"""Alegerea cu traducerea subtitrarilor pornita (vezi „CU TRADUCEREA” sus). tinta = limba traducerii (orice cod sau
 	nume); poateCiti(limba) -> True daca o pista DVB in limba aceea se poate citi cu OCR acum (None = niciuna).
+	limbaSunet = limba sunetului care merge (cod sau nume; o functie fara argumente care o da, chemata numai cand
+	trebuie; None = nu se stie): cand e chiar limba traducerii, a., b. si c. nu pornesc nimic (omul aude deja limba
+	lui), raman preferintele (d.), ca fara traducere.
 	-> (subtitrarea in forma comuna sau None; motiv). Motive: memorat, memorat-oprit, niciodata, traducere-tinta,
 	traducere-teletext, traducere-dvb, apoi cele din alegeSubtitrare (preferinta-1/2/3, fara-potrivire)."""
 	if memorat == OPRIT:
@@ -692,9 +700,20 @@ def alegeSubtitrareTradusa(subtitrari, tinta, preferinte=PREF_SUBTITRARE_IMPLICI
 		return (None, "niciodata")
 	lista = list(subtitrari or ())
 	t = limbaCanonica(tinta) if tinta else None
+	sunet = []
+
+	def sunetInTinta():
+		"""sunetul care merge e deja in limba traducerii (aflat o singura data, numai cand e un candidat)"""
+		if not sunet:
+			try:
+				v = limbaSunet() if callable(limbaSunet) else limbaSunet
+			except Exception:
+				v = None
+			sunet.append(limbaCanonica(v) if v else None)
+		return sunet[0] is not None and sunet[0] == t
 	if t:
 		candidati = [s for s in lista if t in s["limbi"]]
-		if candidati:
+		if candidati and not sunetInTinta():
 			ales = sorted(candidati, key=lambda s: (
 				1 if s["surzi"] else 0,
 				0 if s["limbi"][0] == t else 1,
@@ -705,7 +724,7 @@ def alegeSubtitrareTradusa(subtitrari, tinta, preferinte=PREF_SUBTITRARE_IMPLICI
 	if traduOrice and t:
 		ordine = _ordineLimbiTraducere(preferinte, limbaReceptor, t)
 		text = [s for s in lista if s["fel"] in ("ttx", "fisier")]
-		if text:
+		if text and not sunetInTinta():
 			return (min(text, key=lambda s: _cheieTraducere(s, ordine)), MOTIV_TRADUCERE_TEXT)
 		dvb = []
 		for s in lista:
@@ -716,7 +735,7 @@ def alegeSubtitrareTradusa(subtitrari, tinta, preferinte=PREF_SUBTITRARE_IMPLICI
 					dvb.append(s)
 			except Exception:
 				pass
-		if dvb:
+		if dvb and not sunetInTinta():
 			return (min(dvb, key=lambda s: _cheieTraducere(s, ordine)), MOTIV_TRADUCERE_DVB)
 	return alegeSubtitrare(lista, preferinte, limbaReceptor, False, None)
 
@@ -1151,12 +1170,74 @@ def textTraducere():
 		"preferințele de mai sus.") % numeLimba(tinta)
 
 
-def alegeAcum(lista, memorat):
-	"""Alegerea subtitrarii unui canal: cu traducerea pornita alegeSubtitrareTradusa, altfel alegeSubtitrare."""
+def traducerePeCanal():
+	"""False cand omul a oprit traducerea pe canalul care merge (Components/HdsTraducereSubtitrari.opritPeCanalulDeAcum):
+	acolo alegerea e cea de fara traducere, deci nu porneste singura o subtitrare pentru traducere."""
+	try:
+		from Components import HdsTraducereSubtitrari as T
+		oprit = getattr(T, "opritPeCanalulDeAcum", None)
+		return not (oprit is not None and oprit())
+	except Exception as e:
+		print("[HdsPisteLimbi] canalele fara traducere nu se pot citi: %s" % e)
+		return True
+
+
+# versiunea originala a sunetului: limba lui e de obicei alta decat a canalului, deci nu se ghiceste dupa canal
+VERSIUNE_ORIGINALA_SUNET = frozenset(("orig", "original", "originalton", "ov", "vo", "vos", "qaa"))
+
+
+def _componentaSubtitrare(c):
+	try:
+		return int(c[2]) == 0x03
+	except (TypeError, ValueError, IndexError):
+		return False
+
+
+def limbaSunetului(service):
+	"""Limba (cod canonic) sunetului care merge, pentru alegerea subtitrarii cu traducerea pornita: a pistei audio
+	pornite; cand ea nu-si spune limba, ghicita dupa canal ca la subtitrari (Components/HdsOcrLimbaGhicita: celelalte
+	piste de sunet, ghidul TV fara componentele de subtitrare, transponderul). None cand nu se poate afla si la
+	versiunea originala (qaa, Original)."""
+	try:
+		piste, curenta = pisteAudio(service)
+	except Exception as e:
+		print("[HdsPisteLimbi] pistele de sunet: %s" % e)
+		return None
+	pista = next((p for p in piste if p["index"] == curenta), None)
+	if pista is not None and pista["limbi"]:
+		return pista["limbi"][0]
+	text = _faraDiacritice(pista["text"]) if pista is not None else u""
+	if _DESPARTIRE.split(text)[0].strip() in VERSIUNE_ORIGINALA_SUNET:
+		return None
+	try:
+		from Components import HdsOcrLimbaGhicita as G
+		date = G.dateCanalDeAcum() or {}
+		componente = [c for c in (date.get("componente") or ()) if not _componentaSubtitrare(c)]
+		return G.ghiceste(componente, date.get("audio"), date.get("transponder"))[0]
+	except Exception as e:
+		print("[HdsPisteLimbi] limba sunetului: %s" % e)
+		return None
+
+
+def alegeAcum(lista, memorat, service=None):
+	"""Alegerea subtitrarii unui canal: cu traducerea pornita (si nu oprita pe canalul acesta) alegeSubtitrareTradusa,
+	cu limba sunetului serviciului dat (limbaSunetului, aflata numai cand trebuie), altfel alegeSubtitrare."""
 	tinta = limbaTraducerii()
+	if tinta and not traducerePeCanal():
+		tinta = None
 	if tinta:
-		return alegeSubtitrareTradusa(lista, tinta, preferinteSubtitrare(), limbaReceptor(), faraSubtitrariNiciodata(),
-			memorat, traduOrice(), _ocrPoateCiti)
+		sunet = []
+
+		def limbaSunet():
+			if not sunet:
+				sunet.append(limbaSunetului(service) if service is not None else None)
+			return sunet[0]
+		ales, motiv = alegeSubtitrareTradusa(lista, tinta, preferinteSubtitrare(), limbaReceptor(),
+			faraSubtitrariNiciodata(), memorat, traduOrice(), _ocrPoateCiti, limbaSunet)
+		if sunet and sunet[0] and sunet[0] == limbaCanonica(tinta):
+			print("[HdsPisteLimbi] sunetul e deja in limba traducerii (%s): nicio subtitrare pornita pentru traducere"
+				% sunet[0])
+		return ales, motiv
 	return alegeSubtitrare(lista, preferinteSubtitrare(), limbaReceptor(), faraSubtitrariNiciodata(), memorat)
 
 
@@ -1481,7 +1562,7 @@ def aplicaSubtitrare(infobar, semn=None):
 				or ultima.get("cheie") != cheie or not aceeasiSubtitrare(infobar.selected_subtitle, ultima.get("tuplu")):
 			return semnNou
 		try:
-			ales, motiv = alegeAcum(lista, memorie().alegere(cheie).get("s") if cheie else None)
+			ales, motiv = alegeAcum(lista, memorie().alegere(cheie).get("s") if cheie else None, service)
 		except Exception as e:
 			print("[HdsPisteLimbi] subtitrarea tradusa: %s" % e)
 			return semnNou
@@ -1506,7 +1587,7 @@ def aplicaSubtitrare(infobar, semn=None):
 			film = None
 	if film is None:
 		memorat = memorie().alegere(cheie).get("s") if cheie else None
-		ales, motiv = alegeAcum(lista, memorat)
+		ales, motiv = alegeAcum(lista, memorat, service)
 	dorita = ales["tuplu"] if ales else None
 	if acelasiCanal and dorita is None:
 		return semnNou

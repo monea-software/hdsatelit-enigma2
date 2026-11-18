@@ -12,12 +12,16 @@
  * direct in payload-ul unui PID privat, fara T2-MI: payload-urile pachetelor acelui PID, puse cap la cap (dupa antet si
  * campul de adaptare), sunt pachetele TS de 188 de octeti ale multiplexului terestru, cu PAT, PMT si programele lui.
  * Pachetele cu bitii de criptare pusi (flux criptat pe care modulul CAM nu l-a decriptat) se numara si se arunca.
+ * Cu -A -T PID multiplexul purtat asa e el insusi un flux T2-MI (fluxurile spre emitatoarele DVB-T2, ca 8008 pe
+ * 12583 V cu T2-MI pe PID-ul 4096): pachetele TS-ului interior cu PID-ul dat merg in decapsulatorul T2-MI, ca la -p,
+ * iar iesirea e TS-ul PLP-ului ales (-l). Continuitatea (CC) se urmareste separat pe cele doua straturi.
  *
  * Folosire:
- *   t2mi_decap -p PID [-l PLP] [-n] [-s] [-r] [-A] [-i fisier|-] [-o fisier|-] [-u PORT] [-a PREFIX]
+ *   t2mi_decap -p PID [-l PLP] [-n] [-s] [-r] [-A [-T PID]] [-i fisier|-] [-o fisier|-] [-u PORT] [-a PREFIX]
  *              [-h URL [-I SEC] [-w SEC] [-R N] [-c FISIER]] [-j FISIER] [-P FISIER]
  *     -p PID   PID-ul care poarta T2-MI (0..8191); nu trebuie cu -r
- *     -A       PID-ul poarta un TS intreg in payload (fara T2-MI); -l, -n si -r nu se folosesc
+ *     -A       PID-ul poarta un TS intreg in payload (fara T2-MI); -r nu se foloseste, -l si -n numai cu -T
+ *     -T PID   cu -A: TS-ul interior poarta T2-MI pe acest PID (0..8191); se scoate PLP-ul lui
  *     -l PLP   PLP-ul dorit (0..255); lipsa = primul PLP de date din L1-current
  *     -n       pune la loc pachetele nule sterse (NPD/DNP)
  *     -s       statistici pe stderr la 5 s, JSON pe o linie (ignorat cu -u)
@@ -163,6 +167,7 @@ static int l1_n = -1;               /* -1 = inca nu am primit L1-current */
 
 static int opt_pid = -1, opt_plp = -1, opt_nule = 0, opt_stat = 0, opt_brut = 0, opt_port = -1;
 static int opt_ts_in_pid = 0;        /* -A */
+static int opt_t2mi_interior = -1;   /* -T: PID-ul T2-MI din TS-ul interior al lui -A */
 static int plp_date = -1, plp_comun = -1;
 
 static volatile sig_atomic_t opreste = 0;
@@ -851,6 +856,8 @@ static void asm_date(const uint8_t *d, size_t n)
     }
 }
 
+static void ts_pachet_t2mi(const uint8_t *p);
+
 static void ts_pachet(const uint8_t *p)
 {
     st.ts_in++;
@@ -858,6 +865,12 @@ static void ts_pachet(const uint8_t *p)
     if ((int)pid != opt_pid)
         return;
     st.ts_pid++;
+    ts_pachet_t2mi(p);
+}
+
+/* un pachet TS care poarta T2-MI: al PID-ului -p sau, cu -A -T, al PID-ului -T din TS-ul interior */
+static void ts_pachet_t2mi(const uint8_t *p)
+{
     if (p[1] & 0x80) {
         st.ts_tei++;
         cc_are = 0;
@@ -971,6 +984,10 @@ static void ts_pachet(const uint8_t *p)
 static uint8_t ab[AB_MAX];
 static size_t ab_len;
 static int ab_sinc = 0;
+/* continuitatea PID-ului exterior; cea a lui ts_pachet_t2mi (cc_are...) ramane a PID-ului T2-MI din TS-ul interior */
+static int ab_cc_are = 0;
+static unsigned ab_cc_ultim;
+static uint8_t ab_ts_ultim[TS_LEN];
 
 static void ab_pierdut(void)
 {
@@ -978,6 +995,17 @@ static void ab_pierdut(void)
         st.ab_resinc++;
     ab_len = 0;
     ab_sinc = 0;
+}
+
+/* un pachet al TS-ului interior: iesirea, sau cu -T decapsulatorul T2-MI (numai PID-ul lui) */
+static void ab_interior(const uint8_t *p)
+{
+    if (opt_t2mi_interior < 0) {
+        emite_188(p);
+        return;
+    }
+    if ((int)((((unsigned)(p[1] & 0x1F)) << 8) | p[2]) == opt_t2mi_interior)
+        ts_pachet_t2mi(p);
 }
 
 static void ab_date(const uint8_t *d, size_t n)
@@ -995,7 +1023,7 @@ static void ab_date(const uint8_t *d, size_t n)
             if (ab_len - i < TS_LEN)
                 break;
             if (ab[i] == 0x47) {
-                emite_188(ab + i);
+                ab_interior(ab + i);
                 i += TS_LEN;
                 continue;
             }
@@ -1032,7 +1060,7 @@ static void ts_pachet_in_pid(const uint8_t *p)
     st.ts_pid++;
     if (p[1] & 0x80) {
         st.ts_tei++;
-        cc_are = 0;
+        ab_cc_are = 0;
         ab_pierdut();
         return;
     }
@@ -1042,7 +1070,7 @@ static void ts_pachet_in_pid(const uint8_t *p)
     int disc = 0;
     if (p[3] & 0xC0) {
         st.ts_criptate++;
-        cc_are = 0;
+        ab_cc_are = 0;
         ab_pierdut();
         return;
     }
@@ -1056,7 +1084,7 @@ static void ts_pachet_in_pid(const uint8_t *p)
         if ((afc == 3 && afl > 182) || (afc == 2 && afl != 183)) {
             st.ts_af_rau++;
             if (afc == 3) {
-                cc_are = 0;
+                ab_cc_are = 0;
                 ab_pierdut();
             }
             return;
@@ -1067,22 +1095,22 @@ static void ts_pachet_in_pid(const uint8_t *p)
     }
     if (!(afc & 1))
         return;
-    if (cc_are && !disc) {
-        if (cc == cc_ultim) {
-            if (memcmp(p, ts_ultim, TS_LEN) == 0) {
+    if (ab_cc_are && !disc) {
+        if (cc == ab_cc_ultim) {
+            if (memcmp(p, ab_ts_ultim, TS_LEN) == 0) {
                 st.ts_dublu++;
                 return;
             }
             st.ts_cc++;
             ab_pierdut();
-        } else if (cc != ((cc_ultim + 1) & 0x0F)) {
+        } else if (cc != ((ab_cc_ultim + 1) & 0x0F)) {
             st.ts_cc++;
             ab_pierdut();
         }
     }
-    cc_ultim = cc;
-    cc_are = 1;
-    memcpy(ts_ultim, p, TS_LEN);
+    ab_cc_ultim = cc;
+    ab_cc_are = 1;
+    memcpy(ab_ts_ultim, p, TS_LEN);
     ab_date(p + off, TS_LEN - off);
 }
 
@@ -1201,6 +1229,7 @@ static void decap_reset(void)
     cc_are = 0;
     ab_len = 0;
     ab_sinc = 0;
+    ab_cc_are = 0;
     t2_flux = -1;
     t2_are_contor = 0;
     memset(plp, 0, sizeof(plp));
@@ -1308,6 +1337,25 @@ static int url_citeste(const char *u)
     return 0;
 }
 
+/* Numele randurilor acestui binar in fisierul -c: "t2mi_decap.<fnv1a32 al adresei -h, 8 cifre hex>". Fereastra -R si
+ * pauza de la pornire se socotesc numai pe randurile ACELUIASI purtator: un binar repornit pe acelasi canal nu ocoleste
+ * limita, dar sesiunile altor fluxuri (invatarea dupa o cautare DVB-T2 prin satelit, cate o sesiune pe flux) nu mai
+ * opresc zap-ul de dupa ea. Masurat pe SF8008 (OC2): 4 fluxuri Abertis invatate in 50 s, apoi zap-ul a asteptat in
+ * H_LIMITA pana la 120 s dupa prima sesiune (45-54 s cu ecranul negru). Toate randurile raman in fisier: contorul de
+ * memorie vmalloc din comun/sesiuni8001.py le numara pe toate, oricum s-ar numi. Releul (t2/motor/releu_t2.py
+ * nume_contor) face acelasi nume cand scrie el randul unui binar omorat. */
+static char nume_contor[24] = "t2mi_decap";
+
+static void nume_contor_din_url(const char *url)
+{
+    uint32_t h = 2166136261u;
+    for (const unsigned char *c = (const unsigned char *)url; c && *c; c++) {
+        h ^= *c;
+        h *= 16777619u;
+    }
+    snprintf(nume_contor, sizeof(nume_contor), "t2mi_decap.%08x", (unsigned)h);
+}
+
 /* un rand in fisierul -c, in formatul din comun/sesiuni8001.py */
 static void noteaza_sesiune(void)
 {
@@ -1333,7 +1381,7 @@ static void noteaza_sesiune(void)
         }
     }
     char l[96];
-    int n = snprintf(l, sizeof(l), "%ld %lld t2mi_decap\n", up, (long long)time(NULL));
+    int n = snprintf(l, sizeof(l), "%ld %lld %s\n", up, (long long)time(NULL), nume_contor);
     if (n > 0) {
         ssize_t w = write(fd, l, (size_t)n);
         (void)w;
@@ -1413,9 +1461,10 @@ static int64_t uptime_ms(void)
     return s * 1000 + frac;
 }
 
-/* La pornire cu -c: randurile "<uptime> <epoch> t2mi_decap" din ultimele 120 s (dupa uptime, care nu sare cand se
- * potriveste ceasul) intra in fereastra, iar pauza continua de unde a lasat-o binarul de dinainte. Se citeste doar
- * coada fisierului, intr-un buffer fix. Randurile altor procese (releul DAB scrie "releu") nu se iau: limita e pe proces. */
+/* La pornire cu -c: randurile "<uptime> <epoch> <nume_contor>" din ultimele 120 s (dupa uptime, care nu sare cand se
+ * potriveste ceasul) intra in fereastra, iar pauza continua de unde a lasat-o binarul de dinainte pe acelasi purtator.
+ * Se citeste doar coada fisierului, intr-un buffer fix. Randurile altor procese (releul DAB scrie "releu") si ale
+ * binarelor altor purtatori ("t2mi_decap.<alt hash>", vechiul "t2mi_decap" fara hash) nu se iau. */
 static char contor_buf[8193];
 
 static void h_citeste_contor(int64_t t)
@@ -1448,7 +1497,7 @@ static void h_citeste_contor(int64_t t)
             return;
         p++;
     }
-    static const char nume[] = "t2mi_decap";
+    const char *nume = nume_contor;
     int gasite = 0;
     int64_t ultimul = 0;
     while (*p) {
@@ -2039,10 +2088,11 @@ static void la_semnal(int s)
 static void folosire(void)
 {
     static const char t[] =
-        "folosire: t2mi_decap -p PID [-l PLP] [-n] [-s] [-r] [-A] [-i fisier|-] [-o fisier|-] [-u PORT] [-a PREFIX]\n"
-        "                     [-h URL [-I SEC] [-w SEC] [-R N] [-c FISIER]] [-j FISIER] [-P FISIER]\n"
+        "folosire: t2mi_decap -p PID [-l PLP] [-n] [-s] [-r] [-A [-T PID]] [-i fisier|-] [-o fisier|-] [-u PORT]\n"
+        "                     [-a PREFIX] [-h URL [-I SEC] [-w SEC] [-R N] [-c FISIER]] [-j FISIER] [-P FISIER]\n"
         "  -p PID     PID-ul cu T2-MI (0..8191), nu trebuie cu -r\n"
-        "  -A         PID-ul poarta un TS intreg in payload, fara T2-MI (fara -l, -n, -r)\n"
+        "  -A         PID-ul poarta un TS intreg in payload, fara T2-MI (fara -r; -l si -n numai cu -T)\n"
+        "  -T PID     cu -A: TS-ul interior poarta T2-MI pe acest PID (0..8191); iese PLP-ul lui\n"
         "  -l PLP     PLP-ul dorit (0..255), implicit primul PLP de date din L1-current\n"
         "  -n         pune la loc pachetele nule sterse (NPD)\n"
         "  -s         statistici JSON pe stderr la 5 s (nu cu -u)\n"
@@ -2096,7 +2146,7 @@ int main(int argc, char **argv)
         if (strncmp(argv[i], "-u", 2) == 0)
             tacut = 1;
 
-    while ((c = getopt(argc, argv, "p:l:nsrAi:o:u:th:I:w:R:c:j:P:a:")) != -1) {
+    while ((c = getopt(argc, argv, "p:l:nsrAT:i:o:u:th:I:w:R:c:j:P:a:")) != -1) {
         switch (c) {
         case 'p':
             if (numar(optarg, 0, 8191, &v)) { folosire(); return 2; }
@@ -2110,13 +2160,17 @@ int main(int argc, char **argv)
         case 's': opt_stat = 1; break;
         case 'r': opt_brut = 1; break;
         case 'A': opt_ts_in_pid = 1; break;
+        case 'T':
+            if (numar(optarg, 0, 8191, &v)) { folosire(); return 2; }
+            opt_t2mi_interior = (int)v;
+            break;
         case 'i': f_in = optarg; break;
         case 'o': f_out = optarg; break;
         case 'u':
             if (numar(optarg, 1, 65535, &v)) { folosire(); return 2; }
             opt_port = (int)v;
             break;
-        case 'h': opt_url = optarg; break;
+        case 'h': opt_url = optarg; nume_contor_din_url(optarg); break;
         case 'I':
             if (numar(optarg, 0, 86400, &v)) { folosire(); return 2; }
             opt_inactiv = v;
@@ -2149,7 +2203,8 @@ int main(int argc, char **argv)
     }
     tacut = opt_port >= 0;
     if (optind != argc || (opt_pid < 0 && !opt_brut) || (opt_url && strcmp(f_in, "-") != 0)
-        || (opt_ts_in_pid && (opt_pid < 0 || opt_brut || opt_nule || opt_plp >= 0))) {
+        || (opt_ts_in_pid && (opt_pid < 0 || opt_brut || ((opt_nule || opt_plp >= 0) && opt_t2mi_interior < 0)))
+        || (opt_t2mi_interior >= 0 && !opt_ts_in_pid)) {
         folosire();
         return 2;
     }

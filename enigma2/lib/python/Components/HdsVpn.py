@@ -3135,16 +3135,25 @@ def _pornesteWg(p, servere, plan):
 			return False, _("Nu găsesc adresa serverului %s. Verifică legătura la internet.") % g
 		endpointuri[(g, pt)] = ips[0]
 	navigator = plan["mod"] == "navigator"
+	incarcare = (0, "")
 	if not areWireguardInNucleu():
 		# modulul din feed (kernel-module-wireguard-<nucleu>) nu se incarca singur pe toate imaginile
-		_ruleaza([PROGRAM_MODPROBE, "wireguard"], 20)
+		incarcare = _ruleaza([PROGRAM_MODPROBE, "wireguard"], 20)
+		if incarcare[0] != 0:
+			jurnal("modprobe wireguard, nucleul %s: cod %s: %s" % (versiuneNucleu(), incarcare[0],
+				(incarcare[1] or "").strip()[:200]))
 	_ip("link", "del", INTERFATA_WG)
 	if navigator:
 		_ip("-n", NETNS, "link", "del", INTERFATA_WG)
 	# interfata se face in namespace-ul de baza: acolo ramane socketul UDP (legatura criptata iese pe placa de retea)
 	cod, text = _ip("link", "add", "dev", INTERFATA_WG, "type", "wireguard")
 	if cod != 0:
-		return False, _("Nucleul nu a făcut interfața WireGuard: %s") % text.strip()[:80]
+		# H51 (16.11.2026, LinuxSat 164155 #970748, AX HD51): cand modulul nu s-a incarcat, ip spune numai "Operation not
+		# supported"; motivul adevarat (modulul refuzat de nucleu, o dependinta lipsa) e in raspunsul lui modprobe
+		randuri = [r.strip() for r in (incarcare[1] or "").splitlines() if r.strip()]
+		motiv = randuri[-1][:120] if incarcare[0] != 0 and randuri else text.strip()[:80]
+		jurnal("ip link add wireguard: cod %s: %s" % (cod, text.strip()[:200]))
+		return False, _("Nucleul nu a făcut interfața WireGuard: %s") % motiv
 	_scrieAtomic(CALE_WG_CONF, textSetconf(a, endpointuri), 0o600)
 	try:
 		cod, text = _ruleaza([PROGRAM_WG, "setconf", INTERFATA_WG, _cale(CALE_WG_CONF)])

@@ -345,22 +345,30 @@ def scena(ctx, id_data="ceas.ora", text="", pereche=None, acum=None, detalii=Non
 
 
 # Temele mari de la „Tema afișajului” (randarea: HdsAfisajRandare._temaMare).
-TEME_MARI = ("picon_mare", "text_mare", "ora_urmatoarea")
+TEME_MARI = ("picon_mare", "text_mare", "ora_urmatoarea", "picon_ora", "picon_emisiune", "picon_ora_emisiune")
+# temele mari care arata piconul canalului; cele cu emisiunea de acum si cu bara ei de progres (rotunjita la 1%, ca
+# cadrul sa nu se refaca la fiecare secunda; se vede dupa „Bara de progres colorată”)
+TEME_CU_PICON = ("picon_mare", "picon_ora", "picon_emisiune", "picon_ora_emisiune")
+TEME_CU_BARA = ("picon_emisiune", "picon_ora_emisiune")
 
 
 def scenaTema(ctx, tema, acum=None, detalii=None):
 	"""Pagina unei teme mari: canalul privit (numele, piconul, emisiunea de acum si urmatoarea) si ora. Fara
-	progresul emisiunii: cadrul se schimba numai cu ora, canalul sau emisiunea, nu la fiecare secunda."""
+	progresul emisiunii, cadrul se schimba numai cu ora, canalul sau emisiunea; temele cu bara (TEME_CU_BARA) il au
+	rotunjit la 1%, deci cadrul se reface cel mult o data la 1% din emisiune."""
 	if tema not in TEME_MARI:
 		raise ValueError("Tema necunoscuta")
 	detalii = dict(detalii or {})
-	if tema != "picon_mare":
+	if tema not in TEME_CU_PICON:
 		detalii["imagine"] = ""
 	rez = scena(ctx, "canal.nume", "", None, acum, detalii)
 	canal = dict(rez.get("canal") or {})
 	for cheie in ("emisiune", "urmatoarea"):
 		if canal.get(cheie):
-			canal[cheie] = dict(canal[cheie], progres=None)
-	rez.update(pagina="tema_mare", tema=tema, canal=canal, progres=None,
+			p = canal[cheie].get("progres")
+			p = round(p, 2) if (cheie == "emisiune" and tema in TEME_CU_BARA and p is not None) else None
+			canal[cheie] = dict(canal[cheie], progres=p)
+	progres = (canal.get("emisiune") or {}).get("progres") if tema in TEME_CU_BARA else None
+	rez.update(pagina="tema_mare", tema=tema, canal=canal, progres=progres,
 		titlu=canal.get("nume", ""), valoare=canal.get("nume") or rez["ceas"])
 	return rez

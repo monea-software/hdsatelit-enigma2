@@ -36,6 +36,10 @@ eDVBCICcSession::eDVBCICcSession(eDVBCISlot *slot, int version) : m_slot(slot), 
 	m_descrambler_ca = -1;
 	m_descrambler_fel = -1;
 	m_cheie_primita = false;
+	m_oe22 = false;
+	m_oe22_index = -1;
+	m_oe22_cheie_dupa_pid = false;
+	m_cheie_refuzata = false;
 
 	parameter_init(m_slot->getSlotID(), m_dh_p, m_dh_g, m_dh_q, m_s_key, m_key_data, m_iv);
 
@@ -154,6 +158,7 @@ void eDVBCICcSession::addProgram(uint16_t program_number, std::vector<uint16_t> 
 {
 	// add program means probably decoding on this slot is about to begin. So mark this slot as ready for descramble
 	eDVBCI_UI::getInstance()->setDecodingState(m_slot->getSlotID(), 1);
+	bool primul = m_programe.empty(); /* HD Satelit: forma OE 2.2, cheia dupa legarea PID-urilor (mai jos) */
 	// first open ca device and set descrambler key if it's not set yet
 	set_descrambler_key();
 
@@ -163,8 +168,48 @@ void eDVBCICcSession::addProgram(uint16_t program_number, std::vector<uint16_t> 
 	eDebugNoNewLine("\n");
 
 	for (std::vector<uint16_t>::iterator it = pids.begin(); it != pids.end(); ++it)
-		descrambler_set_pid(m_descrambler_fd, m_slot, 1, *it);
+	{
+		if (m_oe22)
+			descrambler_oe22_set_pid(m_descrambler_fd, m_slot, m_oe22_index, 1, *it);
+		else
+			descrambler_set_pid(m_descrambler_fd, m_slot, 1, *it);
+	}
 	m_programe[program_number] = pids;
+
+	/* HD Satelit: forma OE 2.2: cheia amanata de set_descrambler_key pana la legarea PID-urilor programului nou, si cheia
+	   data din nou cand programul e primul (la zap removeProgram a dezlegat toate PID-urile, iar pe acelasi demux
+	   set_descrambler_key nu trimite nimic; in OE 2.2 cheia sta pe indexul legat, ca la OSCam, scrisa dupa legare) */
+	if (m_oe22 && m_cheie_primita && (m_oe22_cheie_dupa_pid || primul))
+	{
+		m_oe22_cheie_dupa_pid = false;
+		m_descrambler_new_key = false;
+		int rezultat = descrambler_oe22_set_key(m_descrambler_fd, m_slot, m_oe22_index, m_descrambler_odd_even, m_descrambler_key_iv);
+		if (rezultat < 0)
+			cheieRefuzata(rezultat);
+		else
+		{
+			m_slot->setCaAles(m_descrambler_fel);
+			m_slot->setCheieCiplusRefuzata(false);
+			m_cheie_refuzata = false;
+		}
+	}
+
+	/* HD Satelit: cheia a fost refuzata in toate formele inainte sa existe PID-uri (asa vine pe AX HD51: cheia, apoi ADD
+	   PROGRAM); in forma OE 2.2 driverul poate cere PID-urile legate de index inaintea cheii, deci inca o incercare acum */
+	if (!m_oe22 && m_cheie_primita && m_cheie_refuzata)
+	{
+		char incercate[512];
+		snprintf(incercate, sizeof(incercate), "la ADD PROGRAM %04x", program_number);
+		if (!incearcaOe22(incercate, sizeof(incercate)))
+		{
+			/* abia acum refuzul e sigur (forma de azi pe toate dispozitivele, OE 2.2 si cu PID-urile legate): starea 3 si
+			   mesajul de pe ecran */
+			hdsjurnal::scrief("ci", hdsjurnal::AVERT, "slot", "CI%d CI+: cheia modulului refuzata de driver in toate formele, "
+				"si cu PID-urile legate (%s); optiunile de decriptare: %d", m_slot->getSlotID(), incercate,
+				m_slot->getDescramblingOptions());
+			m_slot->setCheieCiplusRefuzata(true);
+		}
+	}
 }
 
 void eDVBCICcSession::removeProgram(uint16_t program_number, std::vector<uint16_t> &pids)
@@ -175,7 +220,12 @@ void eDVBCICcSession::removeProgram(uint16_t program_number, std::vector<uint16_
 	eDebugNoNewLine("\n");
 
 	for (std::vector<uint16_t>::iterator it = pids.begin(); it != pids.end(); ++it)
-		descrambler_set_pid(m_descrambler_fd, m_slot, 0, *it);
+	{
+		if (m_oe22)
+			descrambler_oe22_set_pid(m_descrambler_fd, m_slot, m_oe22_index, 0, *it);
+		else
+			descrambler_set_pid(m_descrambler_fd, m_slot, 0, *it);
+	}
 	m_programe.erase(program_number);
 
 	if (m_slot->getDescramblingOptions() == 1 || m_slot->getDescramblingOptions() == 3)
@@ -883,8 +933,16 @@ void eDVBCICcSession::set_descrambler_key()
 
 	if (m_descrambler_fd != -1 && (set_key || m_descrambler_new_key))
 	{
+		/* HD Satelit: in forma OE 2.2 driverul primeste cheia numai pe un index cu PID-uri legate; fara niciun program (cheia
+		   vine inaintea PID-urilor programului nou) o da addProgram, dupa legarea lor */
+		if (m_oe22 && m_programe.empty())
+		{
+			m_oe22_cheie_dupa_pid = true;
+			return;
+		}
 		eDebug("[CI%d RCC] setting key: new ca device: %d, new key: %d", m_slot->getSlotID(), set_key, m_descrambler_new_key);
-		int rezultat = descrambler_set_key(m_descrambler_fd, m_slot, m_descrambler_odd_even, m_descrambler_key_iv);
+		int rezultat = m_oe22 ? descrambler_oe22_set_key(m_descrambler_fd, m_slot, m_oe22_index, m_descrambler_odd_even,
+			m_descrambler_key_iv) : descrambler_set_key(m_descrambler_fd, m_slot, m_descrambler_odd_even, m_descrambler_key_iv);
 		if (rezultat < 0)
 			cheieRefuzata(rezultat);
 		else if (m_cheie_primita)
@@ -892,6 +950,7 @@ void eDVBCICcSession::set_descrambler_key()
 			/* cheia adevarata a modulului a intrat: dispozitivul ramane cel tinut minte */
 			m_slot->setCaAles(m_descrambler_fel);
 			m_slot->setCheieCiplusRefuzata(false);
+			m_cheie_refuzata = false;
 		}
 		if (m_descrambler_new_key)
 		{
@@ -909,8 +968,10 @@ void eDVBCICcSession::cheieRefuzata(int eroare)
 {
 	if (!m_cheie_primita)
 		return;
-	char incercate[256];
-	snprintf(incercate, sizeof(incercate), "ca%d: %s", m_descrambler_ca, strerror(-eroare));
+	char incercate[512];
+	snprintf(incercate, sizeof(incercate), "ca%d%s: %s", m_descrambler_ca, m_oe22 ? " OE 2.2" : "", strerror(-eroare));
+	/* forma OE 2.2 aleasa mai devreme si refuzata acum (alt dispozitiv, driver reincarcat): de la capat, ca la inceput */
+	m_oe22 = false;
 	int fd = -1, ca = -1, fel = -1;
 	if (descrambler_set_key_alt(m_slot, m_descrambler_ca, m_descrambler_odd_even, m_descrambler_key_iv, &fd, &ca, &fel,
 		incercate, sizeof(incercate)))
@@ -923,15 +984,62 @@ void eDVBCICcSession::cheieRefuzata(int eroare)
 		for (std::map<uint16_t, std::vector<uint16_t> >::iterator p = m_programe.begin(); p != m_programe.end(); ++p)
 			for (std::vector<uint16_t>::iterator it = p->second.begin(); it != p->second.end(); ++it)
 				descrambler_set_pid(m_descrambler_fd, m_slot, 1, *it);
-		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d CI+: cheia primita pe ca%d, ales singur (ca%d o refuza: %s)",
-			m_slot->getSlotID(), ca, vechi, strerror(-eroare));
+		int optiune = m_slot->getDescramblingOptions();
+		if (optiune == HDS_CA_AUTOMAT)
+			hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d CI+: cheia primita pe ca%d, ales singur (ca%d o refuza: %s)",
+				m_slot->getSlotID(), ca, vechi, strerror(-eroare));
+		else
+			hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d CI+: cheia primita pe ca%d, ales singur (ca%d o refuza: %s; "
+				"optiunea de decriptare %d aleasa de mana, Automat ar alege direct)", m_slot->getSlotID(), ca, vechi,
+				strerror(-eroare), optiune);
 		m_slot->setCaAles(fel);
 		m_slot->setCheieCiplusRefuzata(false);
+		m_cheie_refuzata = false;
+		return;
+	}
+	/* HD Satelit: forma OE-Alliance refuzata pe toate dispozitivele (AX HD51: EINVAL peste tot): forma OE 2.2 */
+	if (incearcaOe22(incercate, sizeof(incercate)))
+		return;
+	m_cheie_refuzata = true;
+	if (m_programe.empty())
+	{
+		/* cheia vine inaintea PID-urilor programului (asa pe AX HD51): forma OE 2.2 poate cere PID-urile legate, deci
+		   refuzul il spune incercarea de la ADD PROGRAM, nu acum (altfel mesajul ar aparea la fiecare zap, si cand merge) */
+		eDebug("[CI%d RCC] cheia refuzata inainte de ADD PROGRAM (%s); din nou dupa legarea PID-urilor", m_slot->getSlotID(),
+			incercate);
 		return;
 	}
 	hdsjurnal::scrief("ci", hdsjurnal::AVERT, "slot", "CI%d CI+: cheia modulului refuzata de driver pe toate dispozitivele "
 		"incercate (%s); optiunile de decriptare: %d", m_slot->getSlotID(), incercate, m_slot->getDescramblingOptions());
 	m_slot->setCheieCiplusRefuzata(true);
+}
+
+/* HD Satelit: forma „OE 2.2” a cererilor (descrambler.cpp, descrambler_oe22_incearca) cu PID-urile tuturor programelor;
+   dispozitivul care o primeste ramane deschis si toate cererile urmatoare merg in forma asta. Primita nu inseamna inca
+   imagine: jurnalul o spune asa. */
+bool eDVBCICcSession::incearcaOe22(char *incercate, size_t marime)
+{
+	std::vector<uint16_t> piduri;
+	for (std::map<uint16_t, std::vector<uint16_t> >::iterator p = m_programe.begin(); p != m_programe.end(); ++p)
+		piduri.insert(piduri.end(), p->second.begin(), p->second.end());
+	int fd = -1, ca = -1, fel = -1, index = -1;
+	if (!descrambler_oe22_incearca(m_slot, m_descrambler_fd, m_descrambler_ca, piduri, m_descrambler_odd_even,
+		m_descrambler_key_iv, &fd, &ca, &fel, &index, incercate, marime))
+		return false;
+	if (fd != m_descrambler_fd)
+		descrambler_deinit(m_descrambler_fd);
+	m_descrambler_fd = fd;
+	m_descrambler_ca = ca;
+	m_descrambler_fel = fel;
+	m_oe22 = true;
+	m_oe22_index = index;
+	m_cheie_refuzata = false;
+	hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d CI+: cheia primita pe ca%d in forma OE 2.2 (index %d, %d PID-uri "
+		"legate, AES-128 CBC; forma OE-Alliance refuzata: %s); imaginea de confirmat pe canal", m_slot->getSlotID(), ca, index,
+		(int)piduri.size(), incercate);
+	m_slot->setCaAles(fel);
+	m_slot->setCheieCiplusRefuzata(false);
+	return true;
 }
 
 void eDVBCICcSession::generate_key_seed()

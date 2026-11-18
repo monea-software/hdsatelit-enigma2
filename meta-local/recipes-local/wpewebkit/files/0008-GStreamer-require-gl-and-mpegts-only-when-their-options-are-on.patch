@@ -1,0 +1,28 @@
+From: HDSatelit
+Subject: [PATCH] GStreamer: cere gl si mpegts numai cand optiunile lor sunt pornite
+
+Cu ENABLE_VIDEO=ON, GStreamerChecks.cmake pune mereu componentele "mpegts" si "gl" in lista ceruta la
+find_package(GStreamer ... REQUIRED), chiar daca USE_GSTREAMER_MPEGTS=OFF si USE_GSTREAMER_GL=OFF.
+FindGStreamer.cmake le face atunci obligatorii (REQUIRED_VARS) si configurarea cade pe un sysroot fara
+gstreamer-gl-1.0 (gst-plugins-base construit fara OpenGL, ca al receptorului). La legare WebKit le
+foloseste oricum numai cu optiunile pornite (Source/WebCore/platform/GStreamer.cmake), deci se cer la fel.
+
+--- a/Source/cmake/GStreamerChecks.cmake
++++ b/Source/cmake/GStreamerChecks.cmake
+@@ -9,7 +9,15 @@
+       else ()
+           set(GSTREAMER_COMPONENTS app pbutils)
+           if (ENABLE_VIDEO)
+-              list(APPEND GSTREAMER_COMPONENTS video mpegts tag gl)
++              list(APPEND GSTREAMER_COMPONENTS video tag)
++          endif ()
++
++          if (USE_GSTREAMER_MPEGTS)
++              list(APPEND GSTREAMER_COMPONENTS mpegts)
++          endif ()
++
++          if (USE_GSTREAMER_GL)
++              list(APPEND GSTREAMER_COMPONENTS gl)
+           endif ()
+
+           if (ENABLE_WEB_AUDIO)

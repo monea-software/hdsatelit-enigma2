@@ -47,6 +47,7 @@
 
 import json
 import os
+import re
 
 IMPLICIT = "Default Skin"
 NUME_POZA = "prev.png"
@@ -551,6 +552,16 @@ def refuza(valoare, motiv, detaliu="", cale=None):
 	return r
 
 
+def _cauzaCaderii(pornit=None):
+	"""MI6 0.7.5: cauza ultimei caderi (Components/HdsTemaExterna.cauzaCaderii), detaliul refuzului MOTIV_CADERE pentru
+	raportul temei; "" cand nu se stie. Nu arunca."""
+	try:
+		T = _temaExterna()
+		return T.cauzaCaderii(pornit) if T is not None else ""
+	except Exception:
+		return ""
+
+
 def skinDePornit(valoare, mediu=None, root="/usr/share/enigma2", proba=None, refuz=None, caderi=None, uptime=None):
 	"""Ce skin incarca skin.py: (valoarea de incarcat in plus fata de HDSatelit, sau None; refuzul, sau None).
 	None, None = numai HDSatelit, fara nimic de spus (skinul imaginii e cel ales sau modul sigur)."""
@@ -570,7 +581,7 @@ def skinDePornit(valoare, mediu=None, root="/usr/share/enigma2", proba=None, ref
 	semn = _citesteJson(proba)
 	if semn and semn.get("skin") == valoare and _caderiDupa(int(semn.get("pornit") or 0), caderi):
 		_sterge(proba)
-		return None, refuza(valoare, MOTIV_CADERE, "", refuz)
+		return None, refuza(valoare, MOTIV_CADERE, _cauzaCaderii(int(semn.get("pornit") or 0)), refuz)
 	cale = os.path.join(root, valoare)
 	v = verificaSkin(cale)
 	if not v["bun"]:
@@ -581,7 +592,7 @@ def skinDePornit(valoare, mediu=None, root="/usr/share/enigma2", proba=None, ref
 	if T is not None:
 		if T.caderiRecente(acum, caderi or CADERI) >= PRAG_CADERI:
 			_sterge(proba)
-			return None, refuza(valoare, MOTIV_CADERE, "", refuz)
+			return None, refuza(valoare, MOTIV_CADERE, _cauzaCaderii(), refuz)
 		motiv = T.laPornire(valoare, cale)
 		if motiv:
 			_sterge(proba)
@@ -684,3 +695,164 @@ def skinPornit():
 		return getattr(skin, "skinPornit", SKIN_IMAGINE) or SKIN_IMAGINE
 	except Exception:
 		return SKIN_IMAGINE
+
+
+# ------------------------------------------------------------------ skin_user.xml scris pentru alta tema
+# SKU (15.11.2026, asistenta 452351, AX HD51, 0.7.5): unealta de setari a unei teme straine (MERCUS-FHD) scrie
+# /etc/enigma2/skin_user.xml cu ecranele si fonturile ei (InfoBar, SecondInfoBar; Regular, Bold... din dosarul temei).
+# skin.py citeste fisierul la orice tema, inaintea ei, deci dupa intoarcerea pe HD Satelit barele de informatii ramaneau
+# cele ale temei straine. Acum skin.py, dupa ce stie tema care porneste de fapt (skinPornit), intreaba
+# skinUserPentruAltaTema: un skin_user.xml care trimite numai in dosarele altei teme (fonturi, poze, cai) nu se aplica peste
+# tema pornita. Fisierul ramane pe loc, neatins: la intoarcerea pe tema lui se aplica iar (setarile facute cu unealta temei
+# nu se pierd, iar unealta il gaseste unde l-a scris). Un fisier fara nicio cale de tema (adaugirile scrise de mana) se
+# aplica la orice tema, ca pana acum. Fisierele pe tema din OE-Alliance (skin_user_<tema>.xml) nu sunt atinse.
+RADACINA_TEME = "/usr/share/enigma2/"
+_CALE_TEMA = re.compile(r"/usr/share/enigma2/+([^/\s\"'<>,;|]+)/")
+_BUCATI = re.compile(r"[\s,;|]+")
+_NUME_DOSAR = re.compile(r"^[^\\/:*?\"<>|\s]+$")
+
+
+def _dosarComun(nume):
+	"""dosarele de sub radacina temelor care nu sunt ale unei teme: skin_default (al imaginii) si piconurile (puse de om,
+	uneori lipsa sau pe stick)"""
+	n = nume.lower()
+	return n.startswith("skin_default") or n.startswith("picon") or n.startswith(".")
+
+
+def dosareTeme(radacina_xml, root=None):
+	"""Dosarele de teme spre care trimite un skin deja citit (elementul <skin>), {dosar: de cate ori}: cai absolute sub
+	radacina temelor (/usr/share/enigma2/<dosar>/..., de pilda fonturile) si cai relative care incep cu dosarul unei teme
+	(<dosar>/okna/bara.png). Se numara dosarul imaginii (HDSatelit), dosarele cu skin.xml si, numai la caile absolute, cele
+	care nu mai exista (tema dezinstalata, ale carei fonturi si poze lipsesc). skin_default si piconurile nu se numara."""
+	if root is None:
+		root = radacina()
+	gasite = {}
+	stiute = {}
+
+	def eTema(d, absoluta):
+		cheie = (d, absoluta)
+		if cheie not in stiute:
+			if d in (".", "..") or not _NUME_DOSAR.match(d) or _dosarComun(d):
+				stiute[cheie] = False
+			elif d == DOSAR_IMAGINE or os.path.isfile(os.path.join(root, d, "skin.xml")):
+				stiute[cheie] = True
+			else:
+				stiute[cheie] = absoluta and not os.path.exists(os.path.join(root, d))
+		return stiute[cheie]
+
+	def numara(d, absoluta):
+		if eTema(d, absoluta):
+			gasite[d] = gasite.get(d, 0) + 1
+
+	for el in radacina_xml.iter():
+		valori = list(el.attrib.values())
+		if el.text:
+			valori.append(el.text)
+		for v in valori:
+			if not v or "/" not in v:
+				continue
+			for d in _CALE_TEMA.findall(v):
+				numara(d, True)
+			for bucata in _BUCATI.split(v):
+				if "/" in bucata and not bucata.startswith("/"):
+					numara(bucata.split("/", 1)[0], False)
+	return gasite
+
+
+def skinUserPentruAltaTema(radacina_user, tema, root=None, radacina_tema=None, proprietar=None):
+	"""Dosarul temei pentru care e scris skin_user.xml (deja citit), cand e alta decat `tema` (valoarea temei care porneste,
+	"MERCUS-FHD/skin.xml"); atunci fisierul nu se aplica. None cand se aplica: fara nicio cale de tema (scris de mana) sau
+	cand trimite si in dosarele temei pornite. `radacina_tema` (skin.xml-ul temei pornite, citit) adauga dosarele spre care
+	trimite chiar tema: o varianta (X-Black) care isi ia pozele din dosarul temei de baza (X) primeste si fisierul scris in X.
+	`proprietar` (TEM, amintireSkinUser): tema straina in a carei sesiune s-a schimbat fisierul ("" = sesiunea temei imaginii,
+	None = nu se stie: in ambele cazuri hotaraste continutul, ca pana acum). Conteaza NUMAI cand continutul nu trimite in nicio
+	tema instalata: cand trimite, hotaraste continutul (cazul MERCUS-FHD de la asistenta 452351)."""
+	if root is None:
+		root = radacina()
+	gasite = dosareTeme(radacina_user, root)
+	dosar = numeDinValoare(tema) or DOSAR_IMAGINE
+	instalate = [d for d in gasite if d == DOSAR_IMAGINE or os.path.isfile(os.path.join(root, d, "skin.xml"))]
+	if not instalate and proprietar:
+		# fara cai spre o tema instalata (unealta care scrie fonturi din /usr/share/fonts): hotaraste tema straina in a carei
+		# sesiune s-a schimbat fisierul. Schimbat sub tema imaginii ("") nu hotaraste nimic: asa arata si fisierul altei teme
+		# pus la loc dintr-o copie (sau din FTP) inainte ca tema lui sa fie instalata, pe care continutul il opreste corect.
+		if proprietar in (dosar, DOSAR_IMAGINE):
+			return None
+		if radacina_tema is not None and proprietar in dosareTeme(radacina_tema, root):
+			return None
+		return proprietar
+	if not gasite:
+		return None
+	if dosar in gasite:
+		return None
+	if radacina_tema is not None and set(dosareTeme(radacina_tema, root)) & set(gasite):
+		return None
+	return max(sorted(gasite), key=lambda d: gasite[d])
+
+
+# ------------------------------------------------------------------ amintirea lui skin_user.xml si fisierul pe tema
+# TEM (16.11.2026; TODO 15.11 22:25 SKU, completari la TODO 15.11 13:05 FR11, asistenta 452351):
+# 1. Semnul de mai sus (caile spre dosarul temei) nu vede unealta unei teme care scrie skin_user.xml fara asemenea cai. Semnul
+#    in plus: imaginea tine minte, langa skin_user.xml (hds-skin-user.json), amprenta fisierului si tema care a pornit ultima
+#    data. Cand amprenta s-a schimbat in sesiunea unei teme straine, fisierul e al ei. Schimbat sub tema imaginii nu hotaraste
+#    nimic (poate fi un fisier al altei teme pus la loc dintr-o copie), deci un fisier scris de mana cu o cale spre un dosar
+#    lipsa ramane luat drept al unei teme dezinstalate, ca pana acum. Fisierul existent dinainte (fara amintire) ramane la
+#    semnul din continut. Se scrie numai cand se schimba fisierul sau tema pornita; orice greseala = nu se stie.
+# 2. Fisierul pe tema, ca in imaginile OE-Alliance (skin.py: USER_SKIN_TEMPLATE "skin_user_%s.xml" cu dosarul temei;
+#    Tools/Directories.py, SCOPE_GUISKIN): cand exista pentru tema care porneste, se aplica el in locul lui skin_user.xml.
+AMINTIRE_SKIN_USER = "hds-skin-user.json"
+
+
+def caiSkinUserTema(tema):
+	"""Unde se cauta fisierul pe tema pornita, in ordinea din imaginile OE-Alliance: [(nume, "config"|"skin")] =
+	/etc/enigma2/<dosar>/skin_user_<dosar>.xml, /etc/enigma2/skin_user_<dosar>.xml, /usr/share/enigma2/<dosar>/
+	skin_user_<dosar>.xml (nume relativ la /etc/enigma2, respectiv la radacina temelor). [] cand valoarea nu are dosar."""
+	dosar = numeDinValoare(tema)
+	if not dosar or not _NUME_DOSAR.match(dosar) or dosar in (".", ".."):
+		return []
+	nume = "skin_user_%s.xml" % dosar
+	return [(dosar + "/" + nume, "config"), (nume, "config"), (dosar + "/" + nume, "skin")]
+
+
+def _semnSkinUser(cale):
+	"""md5-ul fisierului, "" cand lipseste; None cand nu se poate citi"""
+	import hashlib
+	try:
+		with open(cale, "rb") as f:
+			return hashlib.md5(f.read()).hexdigest()
+	except (IOError, OSError) as eroare:
+		if os.path.exists(cale):
+			_jurnal("%s: %s" % (cale, eroare))
+			return None
+		return ""
+
+
+def amintireSkinUser(cale_user, tema, cale_amintire=None):
+	"""skin.py, la fiecare pornire (nu in modul sigur): a cui e skin_user.xml dupa sesiunea in care s-a schimbat. Intoarce
+	dosarul temei straine, "" (schimbat sub tema imaginii; skinUserPentruAltaTema il trateaza ca None) sau None (nu se stie: fisier dinainte de amintire, lipsa,
+	greseala). Tine la zi amintirea: amprenta de acum, proprietarul ei si tema care porneste acum (`tema`, skinPornit)."""
+	try:
+		cale_amintire = cale_amintire or os.path.join(os.path.dirname(cale_user), AMINTIRE_SKIN_USER)
+		semn = _semnSkinUser(cale_user)
+		if semn is None:
+			return None
+		dosar = numeDinValoare(tema) or DOSAR_IMAGINE
+		vechi = _citesteJson(cale_amintire)
+		if vechi is None or not isinstance(vechi.get("semn"), str):
+			proprietar = None
+		elif vechi["semn"] == semn:
+			proprietar = vechi.get("proprietar")
+			if not (proprietar is None or isinstance(proprietar, str)):
+				proprietar = None
+		else:
+			sesiune = vechi.get("sesiune")
+			proprietar = "" if not isinstance(sesiune, str) or sesiune in ("", DOSAR_IMAGINE) else sesiune
+		if not semn:
+			proprietar = None
+		nou = {"semn": semn, "proprietar": proprietar, "sesiune": dosar}
+		if nou != vechi:
+			_scrieJson(cale_amintire, nou)
+		return proprietar
+	except Exception as eroare:
+		_jurnal("amintirea lui skin_user.xml: %s" % eroare)
+		return None

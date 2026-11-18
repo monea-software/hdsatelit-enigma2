@@ -54,11 +54,13 @@ public:
 	int sendSignal(int sig);
 
 		/* join the thread, i.e. busywait until thread has finnished. */
-	void kill(bool sendcancel);
-		/* same as kill(false). Kept as a separate function (not a default argument) so that the symbol
-		   eThread::kill() exists: plugins compiled against other enigma2 trees (for example IPAudioPro,
-		   _eIPaudioPro.so) call kill() without arguments and fail to load without it. */
-	void kill();
+	void kill(bool sendcancel=false);
+		/* The symbol of eThread::kill() without arguments (_ZN7eThread4killEv), wanted by plugins compiled against
+		   other enigma2 trees (for example IPAudioPro, _eIPaudioPro.so), is defined in thread.cpp under its
+		   assembler name and is NOT declared here: with a declaration (0.7.6) every kill() call compiled against
+		   this header asks for _ZN7eThread4killEv, which enigma2 0.7.5 and older do not have, so our own plugins
+		   built on 0.7.6 (ServiceApp r11) did not load there. Callers compiled here ask for kill(bool), present in
+		   every version (TODO 16.11 00:10, AS45/SYM). */
 private:
 	pthread_t the_thread;
 

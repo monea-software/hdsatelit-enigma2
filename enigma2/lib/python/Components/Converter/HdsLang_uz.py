@@ -304,4 +304,10 @@ T = {
 	"set_grid_value_alpha": u"Tanlangan rang: {0}, shaffoflik {1}",
 	"set_grid_help": u"Yo‘naltiruvchi tugmalar sizni setka, shaffoflik qatori va pastki tasma bo‘ylab harakatlantiradi; rang o‘ng tomonda darhol ko‘rinadi. OK yoki Yashil tugma rangni saqlaydi, Ko‘k tugma hex-kodni va R, G, B parametrlarini ochadi.",
 	"set_advanced": u"Kengaytirilgan",
+	"bitrate_va": u"Video · ovoz bitreyti",
+	"br_min": u"min",
+	"br_max": u"maks",
+	"br_avg": u"o‘rt",
+	"ecm_hop": u"Hoplar",
+	"ecm_reader": u"O‘quvchi",
 }

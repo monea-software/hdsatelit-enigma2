@@ -60,8 +60,16 @@ RDEPENDS:${PN}:append:hdsflashmic = " hdsatelit-partea-doua"
 # Navigatorul si OCR asteapta constructia MIPS si auditul scripturilor.
 # Pachetul se scoate din aceasta lista numai dupa acea poarta, apoi se trece
 # in HDS_FUNCTII_MIPS_PREGATITE. Nu este o limita a memoriei USB.
-HDS_FUNCTII_MIPS_PREGATITE ?= ""
-HDS_FUNCTII_MIPS_IN_ASTEPTARE = "hds-navigator hds-ocr hds-ocr-modele"
+# NVM (0.7.7, 16.11.2026): navigatorul a trecut poarta: WPE WebKit 2.54 construit pentru mips32el (peticele 0020 si 0021
+# din wpewebkit, numai pe MIPS), instalat cu opkg peste sistemul Solo SE 0.7.6 si probat in containerul MIPS (qemu): pagina
+# desenata pe procesor, JavaScript modern, fonturile; scripturile inchiderii lui auditate (ldconfig, fc-cache, useradd
+# hdsnav), runda-0013/STADIU-NVM.md. Intra in imagine pe vuduo2 (NAND de 1 GB) si in varianta USB a lui Solo SE (hdsusb);
+# pe NAND-ul de 256 MB (hdsflashmic, mai sus) ramane in feed si se instaleaza din cardul lui din Aplicatii, cand incape.
+HDS_FUNCTII_MIPS_PREGATITE ?= "hds-navigator"
+HDS_FUNCTII_MIPS_IN_ASTEPTARE = "hds-ocr hds-ocr-modele"
+# pachetul de grup are acum navigatorul pe aceste doua: PR nou, ca actualizarea din meniu sa-l aduca
+PR:append:vuduo2 = ".1"
+PR:append:hdsusb = ".1"
 RDEPENDS:${PN}:remove:vusolose = "rt8188fu firmware-rt8188fu ${@' '.join(p for p in d.getVar('HDS_FUNCTII_MIPS_IN_ASTEPTARE').split() if p not in (d.getVar('HDS_FUNCTII_MIPS_PREGATITE') or '').split())}"
 RDEPENDS:${PN}:append:vusolose = " hdsatelit-radacina-usb"
 # Zgemma Star S (MSS, 12.11.2026; masina sh1, MIPS, NAND): aceeasi imagine mica si aceleasi limite ca Solo SE
@@ -95,6 +103,10 @@ RDEPENDS:${PN}:append:vuduo4klite = " kernel-module-nandsim"
 RDEPENDS:${PN}:append:gbquad4kpro = " kernel-module-nandsim"
 # GigaBlue UHD X3 4K (MGX): gb72604/defconfig (linux-gigablue 4.1.20) are CONFIG_MTD_NAND_NANDSIM=m
 RDEPENDS:${PN}:append:gbx34k = " kernel-module-nandsim"
+# Dreambox DM900 si DM920 (DM9, 16.11.2026): linux-dreambox-3.14 dm900/defconfig si dm920/defconfig au
+# CONFIG_MTD_NAND_NANDSIM=m, iar masinile au trasatura omb (OpenMultiboot), ca Vu+ 4K
+RDEPENDS:${PN}:append:dm900 = " kernel-module-nandsim"
+RDEPENDS:${PN}:append:dm920 = " kernel-module-nandsim"
 # Vu+ Duo 4K Lite (VU1): vuplus-ddbootup (meta-vuplusde, numai Recommends acolo) scrie la pornire boxtype, vumodel si
 # model (driverul nu le da) si porneste afisajul (lcd/mode 1, /dev/dbox/lcd0); garda de model si afisajul color au nevoie de el
 RDEPENDS:${PN}:append:vuduo4klite = " vuplus-ddbootup"
@@ -199,8 +211,7 @@ RDEPENDS:${PN}:append:zgemmah17combo = " ${HDS_WIFI_USB} ${HDS_RETEA_USB} kernel
 # Dreambox DM900 si DM920 (MDM dm900 wifi, 12.11.2026; linux-dreambox-3.14/dm900/defconfig si dm920/defconfig, OE-Alliance
 # 6.0, la fel in afara de numele masinii): toate modulele din cele doua liste sunt =m (r8152 = CONFIG_USB_RTL8152, asix =
 # CONFIG_USB_NET_AX8817X), in afara de ath9k-htc (CONFIG_ATH9K_HTC nesetat), scos mai jos ca sa nu opreasca constructia.
-# Fara mt7601u (lipseste din nucleu) si fara HDS_WIFI_VANDUTE: driverele din afara nucleului nu sunt probate pe 3.14
-# (raman in feed; imaginile OE-Alliance dm900 au 8812au si 8821au, cu alte retete).
+# Fara mt7601u (lipseste din nucleu; driverul din afara e in hdsatelit-drivere-feed). HDS_WIFI_VANDUTE: mai jos (DM9).
 RDEPENDS:${PN}:append:dm900 = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
 RDEPENDS:${PN}:append:dm920 = " ${HDS_WIFI_USB} ${HDS_RETEA_USB}"
 RDEPENDS:${PN}:remove:dm900 = "kernel-module-ath9k-htc"
@@ -348,6 +359,10 @@ RDEPENDS:${PN}:append:osmio4k = " ${HDS_WIFI_VANDUTE} rt8821cu"
 # Zgemma H17 COMBO (MH7): acelasi nucleu 4.10.12 ca AX HD51 (imaginea publica OE-Alliance 6.0 a masinii are si
 # rtl8192fu, 8812au, 8821au si 8822bu); rt8821cu de probat la constructie
 RDEPENDS:${PN}:append:zgemmah17combo = " ${HDS_WIFI_VANDUTE} rt8821cu"
+# Dreambox DM900 si DM920 (DM9, 16.11.2026; linux-dreambox 3.14-1.17): aceleasi retete se construiesc pe 3.14 si pentru
+# Vu+ Solo4K si Ultimo4K (linux-vuplus 3.14.28); probate la constructia de proba dm920 (runda-0013/STADIU-DM9.md)
+RDEPENDS:${PN}:append:dm900 = " ${HDS_WIFI_VANDUTE} rt8821cu"
+RDEPENDS:${PN}:append:dm920 = " ${HDS_WIFI_VANDUTE} rt8821cu"
 # Vu+ Solo SE (NAND 256 MB, hotararea lui Eduard din 06.11: imaginea incape in NAND, ce e mare sta in feed; ~72 MiB raman
 # omului dupa instalare): numai primul, rtl8821au (Archer T2U Nano / T2U Plus, cele mai ieftine si mai vandute AC600; ~3,2 MB
 # necomprimat, mai putin in UBIFS). Celelalte trei ar lua inca ~11 MB din locul omului; raman in feed si in pachetul de
@@ -374,7 +389,7 @@ PR:append = ".1"
 # S05modload.sh la pornire, iar 60-serial.rules (eudev, deja in imagine) face /dev/serial/by-id si by-path. usbserial vine
 # si singur, ca dependinta, aici e scris pentru claritate. ~0,2 MB instalati. Masinile sunt numite una cate una, ca mai sus:
 # o masina noua primeste lista numai dupa module_nucleu_imagini.py pe prima ei imagine (pe cele neconstruite inca, ca
-# h9combo, multiboxpro, sh1, vusolo2, vuduo2, vuzero, dm900, nu e verificat).
+# h9combo, multiboxpro, sh1, vusolo2, vuduo2, vuzero, nu e verificat; dm900 si dm920: defconfig-urile 3.14, DM9).
 HDS_SERIAL_USB = "kernel-module-usbserial kernel-module-ftdi-sio kernel-module-pl2303 kernel-module-cp210x \
     kernel-module-ch341 kernel-module-cdc-acm"
 RDEPENDS:${PN}:append:sf8008 = " ${HDS_SERIAL_USB}"
@@ -396,6 +411,10 @@ RDEPENDS:${PN}:append:gbquad4kpro = " ${HDS_SERIAL_USB}"
 RDEPENDS:${PN}:append:ax51 = " ${HDS_SERIAL_USB}"
 # Vu+ Solo SE (3.13.5, NAND): ~0,2 MB din ~9 MiB ramasi sub limita de 150 MiB (root_cfe_auto.bin 0.7.5: 141 MiB)
 RDEPENDS:${PN}:append:vusolose = " ${HDS_SERIAL_USB}"
+# Dreambox DM900 si DM920 (DM9, 16.11.2026): USB_SERIAL, FTDI_SIO, PL2303, CP210X, CH341 si USB_ACM sunt =m in
+# linux-dreambox-3.14 dm900/defconfig si dm920/defconfig
+RDEPENDS:${PN}:append:dm900 = " ${HDS_SERIAL_USB}"
+RDEPENDS:${PN}:append:dm920 = " ${HDS_SERIAL_USB}"
 
 # 0.7.5 (SER, 15.11.2026; JAKITAKI, forumul nostru 787, Vu+ Zero4K): comanda blockdev (util-linux-blockdev, ~30 KB), ceruta de
 # pluginurile de pornire multipla (MOH Boot o cere ca dependinta). util-linux 2.42.4 e deja construit pe toate arhitecturile
@@ -437,3 +456,25 @@ RDEPENDS:${PN}:append:vuduo2 = " gstreamer1.0-plugins-bad-faad"
 RDEPENDS:${PN}:append:vuzero = " gstreamer1.0-plugins-bad-faad"
 # Revizia urca peste ".1" de la SER, ca receptoarele de mai sus sa ia pluginul prin actualizarea din meniu.
 PR:append = ".1"
+
+# Transcodarea spre telefon (TRC, 15.11.2026; TODO 15.11 01:56): transtreamproxy (vuplus-transtreamproxy, GPL-3, cu
+# bbappend-ul nostru fara inetd-ul sistemului si cu serviciul hds-transcodare pe portul 8002) in imagine pe Vu+ ARM cu
+# codor: masinile cu "transcoding" in MACHINE_FEATURES din conf-ul OE-Alliance (vusolo4k, vuultimo4k, vuuno4k,
+# vuuno4kse, vuduo4k, vuduo4kse; vuduo4klite din meta-vuplusde). Vu+ Zero 4K nu are codor. Masinile MIPS cu codor
+# (vusolose, vusolo2, vuduo2) au memoria mica: transtreamproxy numai din feed, prin pluginul TransCodingSetup.
+# Revizia creste pe aceleasi masini, ca actualizarea din meniu sa-l aduca si celor care au deja imaginea. Blocul sta la
+# coada fisierului: adaugarile la PR se lipesc in ordinea din fisier, deci numai una pusa ultima face revizia mai mare.
+RDEPENDS:${PN}:append:vusolo4k = " vuplus-transtreamproxy"
+RDEPENDS:${PN}:append:vuultimo4k = " vuplus-transtreamproxy"
+RDEPENDS:${PN}:append:vuuno4k = " vuplus-transtreamproxy"
+RDEPENDS:${PN}:append:vuuno4kse = " vuplus-transtreamproxy"
+RDEPENDS:${PN}:append:vuduo4k = " vuplus-transtreamproxy"
+RDEPENDS:${PN}:append:vuduo4kse = " vuplus-transtreamproxy"
+RDEPENDS:${PN}:append:vuduo4klite = " vuplus-transtreamproxy"
+PR:append:vusolo4k = ".1"
+PR:append:vuultimo4k = ".1"
+PR:append:vuuno4k = ".1"
+PR:append:vuuno4kse = ".1"
+PR:append:vuduo4k = ".1"
+PR:append:vuduo4kse = ".1"
+PR:append:vuduo4klite = ".1"

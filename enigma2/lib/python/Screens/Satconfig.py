@@ -694,6 +694,11 @@ class NimSelection(Screen):
 			# randul probei automate a tunerului B: proba din nou sau configurarea lui de mana
 			_tunerB("ok_din_ecran", self.session, self.updateList)
 			return
+		if nim and nim[0] == "hds_tuner_rezerva":
+			# ultimul rand: tunerul de rezerva din retea (Components/HdsTunerRezerva.py), ecranul din setup.xml
+			from Screens.Setup import Setup
+			self.session.openWithCallback(self.updateList, Setup, "hds_tuner_rezerva")
+			return
 		nim = nim and nim[3]
 		if nim is not None and not nim.empty and nim.isSupported():
 			self.session.openWithCallback(self.updateList, self.resultclass, nim.slot)
@@ -712,5 +717,12 @@ class NimSelection(Screen):
 				b = _tunerB("stare") if self.__class__ is NimSelection else None
 				if b and b["slot"] == slotid:
 					self.list.append(("hds_tuner_b", _("Pornire automată"), b["text"], None))
+		# HDSatelit 0.7.7: ultimul rand, tunerul de rezerva din retea (Oprit sau receptorul ales); OK deschide alegerea
+		if self.__class__ is NimSelection:
+			try:
+				from Components import HdsTunerRezerva
+				self.list.append(("hds_tuner_rezerva", _("Tuner de rezervă din rețea"), HdsTunerRezerva.stareScurta(), None))
+			except Exception as e:
+				print("[Satconfig] tunerul de rezerva: %s" % e)
 		# la intoarcerea din setarile unui tuner cursorul ramane pe tunerul lui (cheia: slotul), nu pe primul
 		pune_randurile(self["nimlist"], self.list, cheie=0)

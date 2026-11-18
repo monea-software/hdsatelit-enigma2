@@ -309,4 +309,10 @@ T = {
 	"set_grid_value_alpha": u"Vybraná barva: {0}, průhlednost {1}",
 	"set_grid_help": u"Šipky tě posouvají po mřížce, po řádku průhlednosti a po spodním pásu; barva se hned ukáže vpravo. OK nebo Zelené barvu ponechá, Modré otevře hex kód a R, G, B.",
 	"set_advanced": u"Pokročilé",
+	"bitrate_va": u"Datový tok videa · zvuku",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"prům",
+	"ecm_hop": u"Hopy",
+	"ecm_reader": u"Čtečka",
 }

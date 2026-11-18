@@ -8,6 +8,9 @@
 #
 #   GET  /api/ghid-internet                  starea (tara, sursele, programarea, ce se lucreaza)
 #   POST /api/ghid-internet-porneste?tara=   un pas (tara: codul din lista tarilor cu surse)
+#
+# Rusia, Ucraina, Belarus, Kazahstan (GTR): sursele dupa satelitii de la tunere; pagina arata satelitii (pe_satelit,
+# sateliti), ca ecranul.
 
 
 def _t(text):
@@ -31,6 +34,7 @@ def date(s):
 	return {"result": True, "tara": s["tara"], "nume": s["nume"], "sigur": s["sigur"], "are_sursa": s["are_sursa"],
 		"candidati": s["candidati"], "tari": s["tari"], "instalat": s["instalat"],
 		"surse": [" ".join(d.split()) for d in s["surse_tarii"]], "bifate": len(s["bifate"]),
+		"pe_satelit": s.get("pe_satelit", False), "sateliti": s.get("sateliti", []),
 		"programat": s["programat"], "ora": s["ora"], "ultimul": s["ultimul"], "faza": s["faza"], "mesaj": s["mesaj"],
 		"in_lucru": s["in_lucru"]}
 
@@ -54,7 +58,7 @@ def rute(baza, resource):
 			try:
 				G = _G()
 				tara = _arg(request, b"tara").upper()
-				if tara not in G.SURSE_TARII:
+				if not G.areSursa(tara):
 					return self._eroare(request, _t(G.TEXT_FARA_SURSA) % G.numeTara(tara) if tara else _t(G.TEXT_NECUNOSCUTA), 400)
 				from Screens.InfoBar import InfoBar
 				sesiune = InfoBar.instance.session if InfoBar.instance else None
@@ -142,6 +146,8 @@ function deseneaza(){
  if(S.tara){rand(i,"Țara: "+S.nume);if(!S.are_sursa){rand(i,"Pentru această țară nu avem încă o sursă liberă de ghid din internet. Poți alege altă țară.",true);}}
  else if(S.candidati.length>1){rand(i,"Alege țara ghidului: "+S.candidati[0].nume+" sau "+S.candidati[1].nume+".");}
  else{rand(i,"Nu știu încă în ce țară ești. Alege țara ta.");}
+ if(S.pe_satelit){rand(i,"Sateliții de la tunere: "+(S.sateliti.length?S.sateliti.join(", "):"niciunul"),true);
+  if(S.instalat&&!S.surse.length){rand(i,"Pe sateliții de la tunerele tale nu avem încă surse de ghid din internet pentru această țară.",true);}}
  if(S.surse.length){rand(i,"Sursele: "+S.surse.join(", "),true);}
  rand(i,S.instalat?"EPG Import este instalat.":"EPG Import se instalează la pornire.",true);
  if(S.programat&&S.bifate){rand(i,"Importul se face zilnic la "+S.ora+".",true);}
@@ -186,6 +192,8 @@ TEXTE_PAGINA = {"html": (
 	N_("Receptorul nu răspunde. Verifică legătura și încearcă din nou."),
 	N_("Țara: "), N_("Pentru această țară nu avem încă o sursă liberă de ghid din internet. Poți alege altă țară."),
 	N_("Alege țara ghidului: "), N_(" sau "), N_("Nu știu încă în ce țară ești. Alege țara ta."), N_("Sursele: "),
+	N_("Sateliții de la tunere: "), N_("niciunul"),
+	N_("Pe sateliții de la tunerele tale nu avem încă surse de ghid din internet pentru această țară."),
 	N_("EPG Import este instalat."), N_("EPG Import se instalează la pornire."), N_("Importul se face zilnic la "),
 	N_("Ultimul import: "), N_("Pornește"), N_("Pornește din nou"), N_("Alege țara ta."), N_("Se pornește..."),
 )}

@@ -39,7 +39,11 @@ ST_RDONLY = 1
 _ATA_RX = re.compile(r"/ata[0-9]+/")
 _DISC_SD_RX = re.compile(r"^sd[a-z]+$")
 _DISC_MMC_RX = re.compile(r"^mmcblk[0-9]+$")
-_SUBDOSAR_RX = re.compile(r"(?:^|\s)rootsubdir=([A-Za-z0-9_]+)(?:\s|$)")
+# rootsubdir=linuxrootfs14 (locurile de pe disc cu STARTUP) sau, la locurile kexec de pe USB/HDD ale Vu+ 4K, un dosar al
+# modelului in fata: rootsubdir=uno4kse/linuxrootfs5 (Components/HdsPornireMultipla.SUBDOSAR_KEXEC; USI 16.11.2026: fara el
+# partitia nu se monta intreaga, /media/hdd ajungea legat de / (dosarul locului) si inregistrarile erau refuzate ca pe
+# memoria interna, desi celelalte imagini inregistreaza pe acelasi disc, in varful partitiei)
+_SUBDOSAR_RX = re.compile(r"(?:^|\s)rootsubdir=((?:[A-Za-z0-9_-]{1,40}/)?[A-Za-z0-9_]+)(?:\s|$)")
 # dosarele imaginilor si ale datelor lor, in varful unei partitii cu pornire multipla
 _DOSAR_IMAGINE_RX = re.compile(r"^(linuxrootfs[0-9]+|userdata[0-9]*)$")
 
@@ -180,10 +184,12 @@ def _afla(cmdline, st_dev, statvfs, realpath, citeste):
 
 
 def _inDosarImagine(cale, punct, radacina, realpath=None):
-	"""Calea, vazuta prin a doua montare a partitiei, duce in dosarul imaginii de acum sau al altei imagini de pe disc."""
+	"""Calea, vazuta prin a doua montare a partitiei, duce in dosarul imaginii de acum sau al altei imagini de pe disc. La
+	kexec (subdosar <model>/linuxrootfsN) tot dosarul <model> tine locurile imaginilor."""
 	cale = (realpath or os.path.realpath)(cale)
 	primul = cale[len(punct.rstrip("/")):].lstrip("/").split("/")[0]
-	return primul == radacina.get("subdosar") or _DOSAR_IMAGINE_RX.match(primul) is not None
+	al_imaginii = (radacina.get("subdosar") or "").split("/")[0]
+	return bool(al_imaginii) and primul == al_imaginii or _DOSAR_IMAGINE_RX.match(primul) is not None
 
 
 def verificaDisc(cale, montari=None, dev_radacina=None, statvfs=None, realpath=None, radacina=None, optiuni=None):

@@ -173,6 +173,27 @@ def sateliti(slot):
 		return []
 
 
+def primitDeNucleu(slot, orbital):
+	"""True cand nucleul are satelitul `orbital` pe tunerul `slot`, deci un acord pe el poate pune tensiunea si DiSEqC.
+	Din d45ed988b NimManager.SecConfigure nu da nucleului satelitii USALS sub orizont din locul antenei (hdsSubOrizont),
+	iar cu locul nestabilit niciun satelit USALS (hdsFaraLoc); aceeasi regula o are refuzul lui "Mergi la satelit"
+	(refuzFaraLoc, HdsLocul.refuzUsals). Pozitiile memorate fara USALS raman ale nucleului."""
+	try:
+		sub = _nimmanager().sec.hdsSubOrizontSloturi.get(slot, ())
+	except Exception:
+		sub = ()
+	if int(orbital) in sub:
+		return False
+	return refuzFaraLoc(slot, int(orbital)) is None
+
+
+def satelitiPrimiti(slot):
+	"""sateliti(slot) fara cei pe care nucleul nu ii are (primitDeNucleu): referinta comenzilor motorului si lista
+	"Mergi la satelit" (televizor si web). Desenul rotirii foloseste mai departe lista intreaga (cei sub orizont stau sub
+	linia orizontului)."""
+	return [(o, n) for o, n in sateliti(slot) if primitDeNucleu(slot, o)]
+
+
 def numeSatelit(orbital):
 	try:
 		nume = _nimmanager().getSatName(orbital)

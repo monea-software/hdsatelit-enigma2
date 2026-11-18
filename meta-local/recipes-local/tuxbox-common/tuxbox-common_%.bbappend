@@ -29,7 +29,22 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b4a4deb94acc9916ca04ba6c5e4d0700"
 # daca vreun nume a ramas in listele instalate.
 # PR ".hds2" (era ".hds1", al licentei): continutul lui terrestrial.xml s-a schimbat la aceeasi versiune.
 # PR ".hds3" (0.7.5, 15.11.2026, SXP): copia listei satelitilor a imaginii, mai jos.
-PR:append = ".hds3"
+# PR ".hds4" (0.7.7, 16.11.2026, SAT2): listele de cautare ca fisiere de configurare (CONFFILES, mai jos).
+PR:append = ".hds4"
+
+# Listele de cautare ca fisiere de configurare (0.7.7, 16.11.2026, SAT2; forum 1588: un satelit sters nu mai revine singur).
+# Fara CONFFILES (asa e reteta OE-Alliance, si la fel in alte imagini), opkg rescrie la orice
+# actualizare a pachetului /etc/tuxbox/satellites.xml cu lista din pachet: satelitii stersi de om (de mana sau din editorul de
+# canale de pe televizor si din web, care scriu acolo) reveneau o data, la actualizarea imaginii. Cu CONFFILES, opkg 0.10.0
+# (libopkg/opkg_install.c, backup_modified_conffiles si resolve_conffiles) pastreaza fisierul schimbat de om si pune lista
+# noua alaturi, ca <fisier>-opkg; un fisier neschimbat primeste lista noua; unul sters de om se pune din nou. La trecerea de
+# la un pachet fara conffiles (.hds2/.hds3) opkg compara fisierul de pe receptor cu cel din pachetul nou: listele sunt aceleasi
+# la acelasi SRCREV, deci numai cine a schimbat ceva isi pastreaza lista. Transponderele noi ale imaginii ajung oricum la
+# satelitii omului prin copia de mai jos (Components/HdsSatelitiImagine.py, la pornire). Aceeasi clasa (liste de cautare pe
+# care omul le poate schimba): cables.xml, terrestrial.xml, atsc.xml; timezone.xml ramane al pachetului (nu e o lista de
+# cautare). Probat cu opkg 0.10.0 pe pachetele adevarate (.hds3 -> .hds4 -> o lista noua; schimbat, neatins, sters).
+CONFFILES:${PN} = "${sysconfdir}/tuxbox/satellites.xml ${sysconfdir}/tuxbox/cables.xml ${sysconfdir}/tuxbox/terrestrial.xml \
+	${sysconfdir}/tuxbox/atsc.xml"
 
 # Copia listei satelitilor a imaginii: /usr/share/hdsatelit/satellites-imagine.xml, identica cu /etc/tuxbox/satellites.xml
 # din pachet. O lista de canale adusa din alt panou scrie satellites.xml-ul ei (de multe ori cu cativa sateliti) peste

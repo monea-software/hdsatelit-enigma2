@@ -11,6 +11,9 @@
 #                    "legaturi": {cheie satelit: {"nume", "url", "id"}}}
 #                   "sat" e cheia de legare (SID:TSID:ONID:NS, Components/HdsDvbILegare.cheie) cand canalul e si pe
 #                   satelit; "nr" e locul din buchetul DVB-I (numarul vazut in lista, in ordinea LCN).
+#                   EPG2 (0.7.7): canalele care n-au trecut incercarea din casa raman aici cu "ascuns" (starea) si
+#                   "nr" None (nu sunt in buchet); "scoase": {"clip": n, "proba": n} = adresele din liste care nu sunt
+#                   canale (clipuri, imagini de proba), care nu intra nici in buchet, nici aici.
 #   CALE_INCERCARI  scris de incercarea fluxurilor din casa (Components/HdsDvbIIncercare): {url: [stare, cod, ora]}.
 #                   Dupa adresa, nu dupa id: o reincarcare nu pierde ce s-a aflat.
 #
@@ -196,6 +199,22 @@ def noteazaIncercari(rezultate, cale=None, acum=None):
 		for url in sorted(d, key=lambda u: d[u][2])[:len(d) - MAX_INCERCARI]:
 			d.pop(url, None)
 	return scrieJson(cale, d)
+
+
+def ascunse(cale=None):
+	"""EPG2: {stare: cate} pentru canalele ascunse din buchet la ultima scriere (n-au trecut incercarea din casa)"""
+	n = {}
+	for c in canale(cale):
+		st = c.get("ascuns") or ""
+		if st:
+			n[st] = n.get(st, 0) + 1
+	return n
+
+
+def scoase(cale=None):
+	"""EPG2: {fel: cate} pentru adresele scoase din liste la ultima descarcare (clipuri, imagini de proba)"""
+	v = stare(cale).get("scoase")
+	return dict((k, int(x)) for k, x in v.items()) if isinstance(v, dict) else {}
 
 
 def rezumat(cale_stare=None, cale_incercari=None):

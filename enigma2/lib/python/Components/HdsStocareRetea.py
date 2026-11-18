@@ -1736,14 +1736,20 @@ def exporturiNfs(gazda, termen=5.0):
 	return [d for d, _g in P.raspunsExport(corp)]
 
 
-def dosareServer(fel, gazda, utilizator=u"", ident=None, parola=None, gata=None):
+def dosareServer(fel, gazda, utilizator=u"", ident=None, parola=None, gata=None, port=0):
 	"""Dosarele pe care le da un server (exporturile NFS; partajarile SMB prin Components/HdsReteaSmb, daca exista),
-	pe un fir. gata({ok, cod, mesaj, dosare})."""
+	pe un fir. gata({ok, cod, mesaj, dosare}). port: cel scris in formular (0 = 445 la SMB), acelasi ca la montare."""
 	if parola is None and ident:
 		# parola salvata pleaca numai spre serverul ei, nu spre o gazda scrisa intre timp in formular
 		vechi = locuri().dupaId(ident)
 		if vechi and vechi.get("gazda") == gazda:
 			parola = parole().parola(ident)
+	try:
+		port = int(port or 0)
+	except (TypeError, ValueError):
+		port = 0
+	if not 0 < port < 65536:
+		port = 0
 
 	def lucru():
 		try:
@@ -1751,7 +1757,9 @@ def dosareServer(fel, gazda, utilizator=u"", ident=None, parola=None, gata=None)
 				return {"ok": True, "dosare": exporturiNfs(gazda)}
 			if fel == "smb":
 				from Components import HdsReteaSmb
-				return {"ok": True, "dosare": HdsReteaSmb.partajari(gazda, utilizator, parola or u"")}
+				# portul numai cand omul a scris altul (cel obisnuit e implicitul lui partajari)
+				return {"ok": True, "dosare": HdsReteaSmb.partajari(gazda, utilizator, parola or u"",
+					**({"port": port} if port else {}))}
 		except ImportError:
 			return {"ok": False, "cod": "nesuportat", "mesaj": textEroare("nesuportat"), "dosare": []}
 		except Exception as e:

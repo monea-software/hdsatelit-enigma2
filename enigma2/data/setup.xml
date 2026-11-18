@@ -36,13 +36,16 @@
 		</setup>
 		<!-- Components/HdsSetariSunet.py: aceleasi randuri si texte ca pagina web /volum-intarziere
 		     (volum_intarziere_web.py). Randurile placii (volumul egal, intarzierile) se arata numai cand /proc/msp/sound0 le
-		     are (HdsSunetAvc, HdsSunetIntarziere). Balansul lipseste: driverul nu il primeste. -->
+		     are (HdsSunetAvc, HdsSunetIntarziere). Balansul lipseste: driverul nu il primeste.
+		     0.7.7 (VOL, forum 795 #2702/#2704): pe Broadcom volumul egal e Auto Volume Level al driverului (/proc/stb/audio/avl,
+		     ca la OE-Alliance), cu iesirile ca alegeri: al doilea rand, cu alt ajutor (HdsSunetAvl); numai unul se vede. -->
 		<setup key="hds_setari_sunet" title="Volum și întârziere">
 			<item level="0" text="Pasul volumului" description="Cât crește sau scade volumul la o apăsare pe tastele de volum (volumul merge de la 0 la 100).">config.hds_setari_sunet.pas_volum</item>
 			<item level="0" text="Cât stă volumul pe ecran" description="Câte secunde rămâne bara volumului pe ecran după ultima apăsare pe tastele de volum.">config.hds_setari_sunet.afisare_volum</item>
 			<item level="0" text="Cât stă semnul de mut pe ecran" description="Câte secunde rămâne semnul de mut pe ecran după apăsarea pe MUTE. Mereu: semnul stă până pornește din nou sunetul.">config.hds_setari_sunet.afisare_mut</item>
 			<item level="0" text="Volumul ținut minte pe canal" description="Da: fiecare canal pornește cu volumul la care l-ai lăsat. Un canal la care nu ai schimbat volumul îl păstrează pe cel de acum.">config.hds_setari_sunet.volum_pe_canal</item>
 			<item level="0" text="Volum egal între canale" requires="HdsSunetAvc" description="Placa de sunet apropie singură volumul: canalele și reclamele tari se aud mai încet, cele încete mai tare. Puternic micșorează și diferența dintre tare și încet (bun noaptea). Nu lucrează când sunetul pleacă neschimbat spre televizor.">config.hds_setari_sunet.volum_egal</item>
+			<item level="0" text="Volum egal între canale" requires="HdsSunetAvl" description="Receptorul apropie singur volumul: canalele și reclamele tari se aud mai încet, cele încete mai tare. Alege pe unde asculți: HDMI, optic sau analogic. Nu lucrează când sunetul pleacă neschimbat spre televizor.">config.hds_setari_sunet.volum_egal</item>
 			<item level="0" text="Întârzierea sunetului pe HDMI" requires="HdsSunetIntarziere" description="Când buzele se mișcă după sunet, întârzie sunetul spre televizor. Sunetul se poate numai întârzia, nu grăbi.">config.hds_setari_sunet.intarziere_hdmi</item>
 			<item level="0" text="Întârzierea sunetului pe optic" requires="HdsSunetIntarziere" description="La fel, pentru bara de sunet sau amplificatorul legat la ieșirea optică a receptorului.">config.hds_setari_sunet.intarziere_optic</item>
 		</setup>
@@ -76,6 +79,7 @@
 			<item level="2" text="Load Length of Movies in Movielist">config.usage.load_length_of_movies_in_moviellist</item>
 			<item level="1" text="Show positioner movement">config.usage.showdish</item>
 			<item level="1" text="Desenul rotirii văzut din spatele antenei" description="Da: în desenul rotirii antenei (ecranul motorului și pagina web a motorului) antena e văzută din spate, ca atunci când stai lângă ea cu fața spre sud: estul în stânga, vestul în dreapta, sudul în vârful curbei. Nu: ca până acum, vestul în stânga și estul în dreapta.">config.usage.hds_motor_din_spate</item>
+			<item level="1" text="Elevația minimă în desenul rotirii" description="Capetele desenului rotirii antenei (ecranul motorului și pagina web a motorului) se pun acolo unde sateliții urcă la această înălțime deasupra orizontului: limitele până la care antena ta mai prinde (clădiri, copaci, dealuri). 0°: orizontul, ca până acum. De pildă, din Berlin, la 18° capetele sunt pe la 30°V și 57°E. Sateliții de dincolo apar în afara desenului. Rotirea antenei nu se schimbă.">config.usage.hds_motor_elevatie_min</item>
 			<item level="1" text="Enable multiple bouquets">config.usage.multibouquet</item>
 			<item level="1" text="Multi-EPG bouquet selection">config.usage.multiepg_ask_bouquet</item>
 			<!-- limba ghidului (Components/HdsLimbaEpg.py, lib/service/event.cpp; 0.7.4): ce limba se arata cand canalul trimite
@@ -141,6 +145,15 @@
 			<item level="2" text="Show infobar on channel change">config.usage.show_infobar_on_zap</item>
 			<item level="2" text="Show infobar on skip forward/backward">config.usage.show_infobar_on_skip</item>
 			<item level="2" text="Show infobar on event change">config.usage.show_infobar_on_event_change</item>
+			<!-- randul ECM din bara canalului si debitul DVB din a doua bara (Components/Converter/HdsSignal.py EcmLine si
+			     Debit, HdsCommon.ecm_line / debit_text); in web: /setari?id=usage -->
+			<item level="0" text="Informația ECM în bara canalului" description="Da: cât modulul de acces decriptează canalul, bara canalului arată și un rând cu sistemul, CAID-ul, timpul ECM și protocolul (în tema clasică pe rândul emisiunii următoare, în dreapta, cu titlul ei scurtat; în tema Pro sub caseta recepției). Pe canalele libere bara rămâne ca înainte. Nu: rândul nu se arată; aceleași date rămân pe pagina modulului din a doua bară.">config.usage.hds_bara_ecm</item>
+			<item level="0" text="Arată hop-urile și cititorul" description="Da: pe pagina modulului din a doua bară și în rândul ECM din bara canalului apar și numărul de hop-uri și numele cititorului, așa cum l-ai scris în modulul de acces. Adresele și porturile nu se arată niciodată. Cât rulează asistența sau se face o captură pentru un raport, ele nu se arată. Nu: rămân ascunse.">config.usage.hds_ecm_hopuri_cititor</item>
+			<!-- 0.7.7 (SRF, tfrc LinuxSat 164118 #970941): dB-ul pus de LCF pe bara intai sau procentele de dinainte
+			     (Components/HdsListaSetari.py hds_semnal_unitate, HdsCommon.semnal_in_db); acelasi rand si in Setări listă
+			     de canale; in web: /setari?id=usage -->
+			<item level="0" text="Calitatea semnalului în bara canalului" description="dB: în bara canalului, la calitate, se vede semnalul în dB (raportul semnal-zgomot), pe tunerele care dau o valoare adevărată; pe celelalte rămân procentele. Procente (%): numai procentele, ca înainte. La fel și pe pagina de start din interfața web.">config.usage.hds_semnal_unitate</item>
+			<item level="0" text="Debitul în a doua bară" description="Pe canalele de satelit, cablu și terestre, pagina întâi a celei de-a doua bare arată debitul videoului în Mbps și al sunetului în kbps, măsurate cât pagina se vede. Cu minim, maxim și medie: și cele trei valori ale videoului de când ai deschis pagina pe canalul acesta. Nu: fără debit pe aceste canale. Pe canalele de internet debitul se vede ca înainte.">config.usage.hds_debit_bara</item>
 			<!-- playerul de filme (Screens/InfoBar.py, MoviePlayer; filme si inregistrari); in web: /filme (filme_web.py) -->
 			<item level="0" text="EXIT în timpul filmului" description="Din fabrică ascunde bara, ca înainte. Poți alege întrebarea de oprire, lista de filme sau canalul de dinainte.">config.usage.hds_exit_film</item>
 			<item level="2" text="La pornirea unui film" description="Ce face receptorul când pornești un film sau o înregistrare văzută pe jumătate: întreabă, reia de unde ai rămas sau pornește de la început.">config.usage.on_movie_start</item>
@@ -190,6 +203,17 @@
 			<item level="0" text="Bara de progres colorată" description="Nu: o singură culoare. Colțurile rămân rotunjite. În web, reîncarcă pagina.">config.skin.progres_colorat</item>
 			<item level="0" text="Emisiunea pe coloană separată" requires="HdsListaNucleu" description="Da: numele canalului în stânga, emisiunea de acum într-o coloană a ei, care începe în același loc pe toate rândurile. Nu: emisiunea vine imediat după nume.">config.usage.hds_lista_coloane</item>
 			<item level="1" text="Furnizori și Nou la fiecare satelit" description="Da: în lista de canale, la „Sateliți”, fiecare satelit are sub numele lui și rândurile „Furnizori” (canalele lui după furnizor) și „Nou” (canalele noi găsite la căutare). Nu: un singur rând pe satelit, iar furnizorii tuturor sateliților rămân pe tasta galbenă.">config.usage.hds_lista_furnizori_nou</item>
+			<!-- 0.7.7 (LST, tamiciav7, LinuxSat 164182 #970755): randul „Current Transponder” (Screens/ChannelSelection.py,
+			     hdsArataTransponderul) si EXIT in lista (hdsTastaExit; aceeasi setare si in Butoane colorate și taste rapide,
+			     Components/HdsTasteRapide.py PROFIL_SETARI, web /taste-rapide); in web: /setari?id=hds_lista_canale -->
+			<item level="0" text="Afișează „Transponder curent”" description="Da: primul rând din lista buchetelor și din „Sateliți” e „Transponder curent”, cu canalele transponderului canalului de acum. Nu: rândul nu se mai arată. Tasta rapidă „Transponder curent” merge la fel.">config.usage.hds_lista_transponder</item>
+			<!-- 0.7.7 (OBU): dosarul IPTV, dosarele extensiilor si grupele in lista buchetelor (Screens/ChannelSelection.py,
+			     hdsArataDosareleInBuchete; Components/HdsListaSetari.py); Da din fabrica, ca in 0.7.4; in web:
+			     /setari?id=hds_lista_canale, iar /canale arata lista IPTV in caseta numai cu Da -->
+			<item level="0" text="Afișează IPTV și alte liste în Buchete" conditional="config.usage.multibouquet.value" description="Da: lista buchetelor (FAV) are și dosarul IPTV, dosarele adăugate de extensii și rândurile „Toate canalele”, „După satelit”, „După furnizor”. Nu: lista buchetelor are numai buchetele; IPTV și dosarele extensiilor rămân la „Sateliți”, iar grupele pe tastele colorate. Se vede pe loc. În interfața web, la Canale, lista IPTV apare numai cu Da.">config.usage.hds_lista_dosare_buchete</item>
+			<!-- 0.7.7 (SRF, tfrc LinuxSat 164118 #970941): acelasi rand ca in OSD Preferences; in web: /setari?id=hds_lista_canale -->
+			<item level="0" text="Calitatea semnalului în bara canalului" description="dB: în bara canalului, la calitate, se vede semnalul în dB (raportul semnal-zgomot), pe tunerele care dau o valoare adevărată; pe celelalte rămân procentele. Procente (%): numai procentele, ca înainte. La fel și pe pagina de start din interfața web.">config.usage.hds_semnal_unitate</item>
+			<item level="0" text="EXIT în lista de canale" description="Înapoi un nivel: dintr-un buchet sau dintr-un dosar EXIT urcă în lista de deasupra, iar de acolo închide lista. Închide lista: EXIT închide lista din orice loc; urci un nivel cu tasta 0. La mutarea sau editarea canalelor EXIT termină numai mutarea sau editarea.">config.usage.hds_exit_lista</item>
 		</setup>
 		<setup key="harddisk" title="Harddisk setup" >
 			<item level="0" text="Harddisk standby after">config.usage.hdd_standby</item>
@@ -311,5 +335,14 @@
 			<item level="0" text="Portul releului" stare="netestat" description="Portul pe care releul dă canalele decodate (17999 din fabrică). Dacă releul nu răspunde, canalul pornește direct, ca fără Stream Relay.">config.misc.acces_streamrelay_port</item>
 			<item level="0" text="Întârzierea la schimbarea canalului (ms)" stare="netestat" description="Cât așteaptă receptorul, de la un canal prin releu la altul, ca releul să lase canalul vechi. Canalele se pun în Stream Relay din meniul listei de canale.">config.misc.acces_streamrelay_delay</item>
 			<item level="0" text="Fluxuri pentru alte aparate din rețeaua de acasă" stare="netestat" description="Pornită (din fabrică), fluxurile canalelor le pot cere și aparatele din rețeaua de acasă (adrese 192.168.x.x, 10.x.x.x, 172.16-31.x.x, 169.254.x.x): VLC, Kodi, aplicațiile de telefon, un releu Stream Relay de pe alt receptor; din internet, niciodată. Oprită, fluxurile rămân numai pe acest receptor.">config.misc.hds_fluxuri_retea_acasa</item>
+		</setup>
+		<!-- tunerul de rezerva din retea (0.7.7, Components/HdsTunerRezerva.py; in OE-Alliance "fallback tuner"): un rand cu
+		     receptoarele gasite singur in casa, Oprit si Alta adresa; randul adresei numai la Alta adresa. Deasupra ajutorului,
+		     starea (hdsStare): ce s-a gasit, ce receptor e folosit, ultima pornire prin rezerva. In web: /setari?id=hds_tuner_rezerva
+		     si cartela tunerelor din /antena/tuner (scanare_web.py); pe televizor Meniu > Tunere si scanare si ultimul rand din
+		     Setari tuner (Screens/Satconfig.py) -->
+		<setup key="hds_tuner_rezerva" title="Tuner de rezervă din rețea">
+			<item level="0" text="Tuner de rezervă din rețea" stare="netestat" description="Când tunerele acestui receptor sunt ocupate (de pildă cu înregistrări) sau nu pot lua canalul (alt fel de tuner, satelit nelegat), canalul vine prin rețea de la alt receptor din casă, cu tunerele lui. Receptoarele din casă se găsesc singure; alegi unul din listă. Canalul trebuie să fie și în lista acestui receptor. Oprit: canalul nu pornește, ca până acum.">config.usage.hds_tuner_rezerva</item>
+			<item level="0" text="Adresa receptorului" stare="netestat" conditional="config.usage.hds_tuner_rezerva.value == 'adresa'" description="Adresa receptorului din casă care dă canalele, de pildă 192.168.1.20 sau numele lui .local. Portul 8001 se pune singur; alt port îl scrii după două puncte (192.168.1.20:8001).">config.usage.hds_tuner_rezerva_adresa</item>
 		</setup>
 </setupxml>

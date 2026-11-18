@@ -507,7 +507,13 @@ class InfoBarNumberZap:
 		bouquet = sl.bouquet_root
 		service = None
 		serviceHandler = eServiceCenter.getInstance()
-		if not config.usage.multibouquet.value:
+		laNumar = getattr(sl, "hdsCanalLaNumar", None)
+		if laNumar is not None:
+			# 0.7.6 (LPN): ca in zapToNumber
+			service, gasit = laNumar(number)
+			if gasit is not None:
+				bouquet = gasit
+		elif not config.usage.multibouquet.value:
 			service, number = self.searchNumberHelper(serviceHandler, number, bouquet)
 		else:
 			bouquetlist = serviceHandler.list(bouquet)
@@ -529,7 +535,17 @@ class InfoBarNumberZap:
 		bouquet = self.servicelist.bouquet_root
 		service = None
 		serviceHandler = eServiceCenter.getInstance()
-		if not config.usage.multibouquet.value:
+		# HDSatelit 0.7.6 (LPN, TODO 15.11 10:03 (FRZ)): cautarea de mai jos lua canal cu canal (getNext) toate canalele
+		# buchetelor de dinaintea numarului, la fiecare numar tastat (zeci de mii de randuri cu buchetele de internet). Lista de
+		# canale o face acum din numerotarea ei tinuta minte (ChannelSelection.hdsCanalLaNumar): buchetele numarate o data,
+		# fiecare dintr-o singura lista, si numai pana la cel cautat. Cautarea veche ramane pentru o lista fara metoda
+		# (searchNumberHelper ramane si pentru extensiile care il cheama).
+		laNumar = getattr(self.servicelist, "hdsCanalLaNumar", None)
+		if laNumar is not None:
+			service, gasit = laNumar(number)
+			if gasit is not None:
+				bouquet = gasit
+		elif not config.usage.multibouquet.value:
 			service, number = self.searchNumberHelper(serviceHandler, number, bouquet)
 		else:
 			bouquetlist = serviceHandler.list(bouquet)
@@ -584,6 +600,48 @@ try:
 	config.usage.hds_pornire.hdsStare = _hdsStarePornire
 except ImportError:
 	pass
+
+
+def hds_canal_de_dupa(serviceHandler, buchet_text, mort_text, exista, cel_mult=500):
+	"""HDSatelit 0.7.6 (LP2, TODO 15.11 11:13 (LPN)): canalul de pornire cand ultimul canal urmarit nu mai exista (sters la o
+	rescanare): in buchetul in care era (ultimul loc din config.tv.lastroot), primul canal de dupa el care exista, iar dupa
+	capat de la inceput; cand nu mai e in buchet, primul care exista. Dosarele, semnele si randurile ascunse se sar. Buchetul
+	vine dintr-o singura lista (getContent "S"), canalele se intreaba pe rand (exista = _hdsServiciulExista), cel mult cel_mult.
+	Canalul se compara fara numele de la coada (primele 11 campuri). -> eServiceReference sau None (atunci pornirea trece mai
+	departe pe lant, ca inainte)."""
+	if not buchet_text or not mort_text:
+		return None
+	lista = serviceHandler.list(eServiceReference(buchet_text))
+	if lista is None:
+		return None
+	try:
+		texte = lista.getContent("S", False)
+	except Exception:
+		texte = None
+	if not texte:
+		return None
+	cheie = ":".join(mort_text.split(":")[:11]).upper()
+	locul = None
+	for i, t in enumerate(texte):
+		if ":".join(t.split(":")[:11]).upper() == cheie:
+			locul = i
+			break
+	ordine = texte if locul is None else texte[locul + 1:] + texte[:locul]
+	sari = eServiceReference.isDirectory | eServiceReference.isMarker | getattr(eServiceReference, "isInvisible", 512)
+	for t in ordine:
+		if cel_mult <= 0:
+			break
+		try:
+			f = int(t.split(":", 2)[1])
+		except (ValueError, IndexError):
+			continue
+		if f & sari:
+			continue
+		cel_mult -= 1
+		ref = eServiceReference(t)
+		if ref.valid() and exista(ref):
+			return ref
+	return None
 
 
 class InfoBarChannelSelection:
@@ -693,13 +751,34 @@ class InfoBarChannelSelection:
 				print("[InfoBar] canalul de internet: %r" % (e,))
 			return True
 		try:
-			info = eServiceCenter.getInstance().info(ref)
+			# 0.7.6 (LP2, TODO 15.11 11:13 (LPN)): nucleul se intreaba cu referinta FARA numele de la coada. Ultimul canal
+			# urmarit (config.tv.lastservice) se tine cu numele din buchet, iar eStaticServiceDVBInformation::getName da numele
+			# din referinta fara sa caute in lamedb: un canal DVB sters la o rescanare parea existent si pornirea mergea pe un
+			# canal mort. Fara nume, un canal din lamedb da numele lui (eDVBService::getName), unul sters da gol. Un sub-canal
+			# (TSID-ul parintelui in referinta) nu e in lamedb: ramane intrebat cu numele, ca inainte.
+			intrebat = ref
+			campuri = ref.toString().split(":")
+			if len(campuri) > 11 and campuri[11] and not campuri[8].strip("0"):
+				intrebat = eServiceReference(":".join(campuri[:11]))
+			info = eServiceCenter.getInstance().info(intrebat)
 			if info is None:
 				return False
-			name = info.getName(ref)
-			return bool(name) and name != ref.toString()
+			name = info.getName(intrebat)
+			return bool(name) and name != intrebat.toString()
 		except Exception:
 			return False
+
+	def _hdsCanalDeDupa(self, ref_text):
+		"""0.7.6 (LP2): ultimul canal urmarit nu mai exista: canalul de dupa el din buchetul in care era (hds_canal_de_dupa),
+		ca televizorul sa porneasca pe un canal in loc sa deschida lista. -> eServiceReference sau None."""
+		try:
+			locul = [x for x in (config.tv.lastroot.value or "").split(";") if x]
+			if not locul:
+				return None
+			return hds_canal_de_dupa(eServiceCenter.getInstance(), locul[-1], ref_text, self._hdsServiciulExista)
+		except Exception as e:
+			print("[InfoBar] canalul de dupa cel sters: %r" % (e,))
+			return None
 
 	def _hdsListaAreContinut(self):
 		# CORECTIE -- prima presupunere (ref.valid() pe
@@ -773,7 +852,21 @@ class InfoBarChannelSelection:
 					if radio:
 						# un post de radio: lista radio, ca la zap-ul din lista, apoi postul
 						self.servicelist.setModeRadio()
+					# 0.7.6 (LPN, TODO 15.11 08:58 (MLW)): un canal de internet tinut fara nume (ales inainte ca referinta sa
+					# se tina cu numele) ia numele din buchetele omului, ca bara sa nu arate adresa sau nimic
+					try:
+						if not ref.getName() and ref.getPath():
+							from Components.HdsListaSetari import nume_din_buchete
+							nume = nume_din_buchete(ref_text)
+							if nume:
+								ref.setName(nume)
+					except Exception as e:
+						print("[InfoBar] numele canalului de pornire: %r" % (e,))
 					self.session.nav.playService(ref)
+					# getattr: probele de pe PC copiaza numai unele metode pe o bara de proba
+					istoric = getattr(self, "_hdsIstoricPornire", None)
+					if istoric is not None:
+						istoric(ref, radio)
 					return
 			self._hdsIncercarePornire(index + 1)
 			return
@@ -783,6 +876,18 @@ class InfoBarChannelSelection:
 				ref = eServiceReference(ref_text)
 				if ref.valid() and self._hdsServiciulExista(ref):
 					self.session.nav.playService(ref)
+					istoric = getattr(self, "_hdsIstoricPornire", None)
+					if istoric is not None:
+						istoric(ref)
+					return
+				# 0.7.6 (LP2): canalul nu mai exista (sters la o rescanare): canalul de dupa el din acelasi buchet, nu lista
+				urmator = self._hdsCanalDeDupa(ref_text) if ref.valid() else None
+				if urmator is not None:
+					print("[InfoBar] startupService: ultimul canal nu mai exista -> %r" % urmator.toString())
+					self.session.nav.playService(urmator)
+					istoric = getattr(self, "_hdsIstoricPornire", None)
+					if istoric is not None:
+						istoric(urmator)
 					return
 			self._hdsIncercarePornire(index + 1)  # lastservice gol/invalid/disparut -- urmatoarea
 			return
@@ -813,13 +918,54 @@ class InfoBarChannelSelection:
 		t.callback.append(boundFunction(self._hdsVerificaSiContinuaPornire, index))
 		t.start(50, True)
 
+	def _hdsIstoricPornire(self, ref, radio=False):
+		"""Canalul pornit de lant intra in istoricul listei de canale (ChannelSelection.hdsIstoricPornire), ca dupa primul zap
+		0 (canalul dinainte) si istoricul inapoi sa intoarca la el. Un post de radio pornit cu lista radio separata (fara modul
+		radio comun) nu intra in istoricul listei TV, ca la cautare (hdsPornesteGasit). O greseala aici nu opreste pornirea."""
+		if radio and not config.usage.e1like_radio_mode.value:
+			return
+		pune = getattr(getattr(self, "servicelist", None), "hdsIstoricPornire", None)
+		if pune is None:
+			return
+		try:
+			pune(ref)
+		except Exception as e:
+			print("[InfoBar] istoricul canalului de pornire: %r" % (e,))
+
 	def _hdsVerificaSiContinuaPornire(self, index):
 		are = self._hdsListaAreContinut()
 		print('[InfoBar] startupService: incercare=%r are_continut=%r' % (self._hdsLantPornire[index], are))
 		if are:
-			self.session.execDialog(self.servicelist)
+			self._hdsDeschideListaPornire()
 			return
 		self._hdsIncercarePornire(index + 1)
+
+	def _hdsDeschideListaPornire(self, pas=0):
+		"""0.7.7 (DLG): lista de canale de la capatul lantului de pornire. Lantul construieste lista pe
+		firul interfetei (cateva secunde pe un receptor mic), iar o tasta apasata intre timp (JOS, SUS, OK) o deschide deja;
+		deschisa inca o data de aici, lista ajungea de doua ori in stiva si al doilea EXIT oprea interfata (processDelayHds).
+		Lista se deschide numai daca nu e deja deschisa si InfoBar e ecranul de sus. Cu alt ecran deasupra (o fereastra a
+		pornirii, o intrebare, meniul) se asteapta pana revine InfoBar; daca intre timp lista a fost deschisa sau merge un
+		canal, nu se mai deschide."""
+		s = self.session
+		lista = self.servicelist
+		if s.current_dialog is lista or any(d[0] is lista for d in s.dialog_stack):
+			print("[InfoBar] startupService: lista de canale e deja deschisa (o tasta apasata la pornire), n-o deschid a doua oara")
+			return
+		if pas and s.nav.getCurrentlyPlayingServiceOrGroup() is not None:
+			print("[InfoBar] startupService: merge deja un canal, lista de canale nu se mai deschide")
+			return
+		if s.current_dialog is self:
+			if pas:
+				print("[InfoBar] startupService: InfoBar e iar ecranul de sus, deschid lista de canale")
+			s.execDialog(lista)
+			return
+		if not pas:
+			print("[InfoBar] startupService: deasupra e %s, lista de canale se deschide cand revine InfoBar" % s.current_dialog.__class__.__name__)
+		t = eTimer()
+		self._hdsTimerPornire = t
+		t.callback.append(boundFunction(self._hdsDeschideListaPornire, pas + 1))
+		t.start(500, True)
 
 	def showTvChannelList(self, zap=False):
 		self.servicelist.setModeTv()
@@ -2263,8 +2409,8 @@ class InfoBarExtensions:
 			# 0.2.6: functiile imaginii sunt in meniu, deci fara extensii puse de om lista
 			# e goala: un mesaj in locul unei ferestre fara niciun rand. Extensii sunt, dar nu se pot deschide de aici: unul
 			# care cere lista de canale, in playerul de filme
-			from Components.HdsExtensiiLucru import pluginuriDeDeschis
-			if pluginuriDeDeschis(plugins):
+			from Components.HdsExtensiiLucru import pluginuriAlbastru
+			if pluginuriAlbastru(plugins):
 				text = _("Nu sunt pluginuri care se pot deschide acum.")
 			else:
 				text = _("Nu ai extensii instalate. Le poți adăuga din meniu, la Extensii și aplicații.")
@@ -2288,21 +2434,20 @@ class InfoBarPlugins:
 		return name
 
 	def getPluginList(self):
-		"""Lista tastei albastre: aceleasi pluginuri ca in Extensii (plugins.pluginuriDeDeschis), dupa nume, fara cele care
-		cer lista de canale acolo unde ea nu exista (playerul de filme). Dupa ele, ce e pe receptor si nu se poate deschide
-		acum, cu motivul scurt langa nume; OK arata motivul intreg."""
-		from Components.HdsExtensiiLucru import pluginuriDeDeschis, indisponibile
+		"""Lista tastei albastre: functiile imaginii (randurile puse cu addExtension) si numai pluginurile care se inscriu
+		singure in lista extensiilor (WHERE_EXTENSIONSMENU, HdsExtensiiLucru.pluginuriAlbastru), ca in imaginile
+		OE-Alliance; tot inventarul, si pluginurile care nu s-au incarcat cu motivul lor, e in Extensii si aplicatii, pe
+		VERDE. Dupa nume, fara cele care cer lista de canale acolo unde ea nu exista (playerul de filme); motivul unei
+		deschideri cazute sta langa nume."""
+		from Components.HdsExtensiiLucru import pluginuriAlbastru
 		l = []
 		cuLista = isinstance(self, InfoBarChannelSelection)
-		for p in pluginuriDeDeschis(plugins):
+		for p in pluginuriAlbastru(plugins):
 			if cuLista or not p.cereListaCanale():
 				motiv = p.motivDeschidere()
 				nume = "%s · %s" % (p.name, motiv) if motiv else str(p.name)
 				l.append(((boundFunction(self.getPluginName, nume), boundFunction(self.runPlugin, p), lambda: True), None, str(p.name)))
 		l.sort(key = lambda e: e[2].lower()) # sort by name
-		for e in indisponibile(plugins):
-			nume = "%s · %s" % (e["nume"], e["motiv"])
-			l.append(((boundFunction(self.getPluginName, nume), boundFunction(self.hdsMotivPlugin, e), lambda: True), None, e["nume"]))
 		return l
 
 	def runPlugin(self, plugin):

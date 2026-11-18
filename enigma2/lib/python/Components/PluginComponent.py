@@ -108,6 +108,8 @@ def _faraDescriptoriGoi(plugins, nume):
 
 # versiunea celuilalt Python din mesajul pastrat in erori (Components/HdsAltPython.AltPython)
 _ALT_PYTHON = re_compile(r"built for Python (\d+\.\d+), this image has Python (\d+\.\d+)")
+_ALT_PYTHON_VECHI = re_compile(r"built for Python (\d+\.\d+) or older, this image has Python (\d+\.\d+)")
+_ALT_PYTHON_ALTUL = re_compile(r"built for another Python, this image has Python (\d+\.\d+)")
 
 
 def _altPython(exc):
@@ -314,6 +316,16 @@ class PluginComponent:
 			HdsNeoBoot.pregateste()
 		except Exception as exc:
 			print("[PluginComponent] HdsNeoBoot:", exc)
+		# HDSatelit: /etc/opkg/all-feed.conf, which plugins made for OE-Alliance images read while they load
+		# (Components/HdsPluginuriExterne.py); before the first read, so it is there on the start after an update
+		if self.firstRun:
+			try:
+				from Components import HdsPluginuriExterne
+				scrise = HdsPluginuriExterne.pune_fisierele_compat()
+				if scrise:
+					print("[PluginComponent] fisierele pentru pluginurile altor imagini:", ", ".join(scrise))
+			except Exception as exc:
+				print("[PluginComponent] HdsPluginuriExterne:", exc)
 		# the first read is the start of the interface, before the first heartbeat
 		semn = None if self.firstRun else _SemnRecitire()
 		try:
@@ -379,7 +391,13 @@ class PluginComponent:
 								p.updateIcon(path)
 						except Exception as exc:
 							print("Plugin ", c + "/" + pluginname, "failed to load:", exc)
-							print_exc(file=stdout)
+							# stiva cu randurile prea lungi taiate (un plugin cu codul ascuns intr-un rand umplea jurnalul la fiecare citire)
+							try:
+								from Components.HdsPluginExtern import stivaText
+								print(stivaText(type(exc), exc, exc.__traceback__).rstrip("\n"))
+							except Exception:
+								from traceback import print_exception
+								print_exception(type(exc), exc, exc.__traceback__, file=stdout)
 							print("skipping plugin.")
 							alt = _altPython(exc)
 							if alt is not None:
@@ -455,7 +473,8 @@ class PluginComponent:
 		return res
 
 	def pluginuriDeDeschis(self):
-		"""Inventarul comun al pluginurilor cu ecran, acelasi in orice lista (tasta albastra, Extensii, pagina web):
+		"""Inventarul comun al pluginurilor cu ecran, acelasi in Extensii si aplicatii si in pagina web (lista tastei
+		albastre ia din el numai pluginurile WHERE_EXTENSIONSMENU, HdsExtensiiLucru.pluginuriAlbastru):
 		WHERE_EXTENSIONSMENU si WHERE_PLUGINMENU, fara dubluri. PluginDescriptor.__eq__ compara fnc: aceeasi actiune apare o
 		data, iar doua functii ale aceluiasi plugin raman amandoua. WHERE_EXTENSIONSMENU primul, ca aceeasi actiune sa-si
 		pastreze numele de acolo."""
@@ -496,6 +515,13 @@ class PluginComponent:
 			m = _ALT_PYTHON.search(eroare["mesaj"] or "")
 			if m:
 				return _("Nu s-a încărcat: %s") % (_("făcut pentru Python %s, imaginea are Python %s") % m.groups())
+			# MI6 0.7.5: modulul .so cere un nume din C-API-ul altui Python (Components/HdsAltPython.AltPythonSimbol)
+			m = _ALT_PYTHON_VECHI.search(eroare["mesaj"] or "")
+			if m:
+				return _("Nu s-a încărcat: %s") % (_("făcut pentru Python %s sau mai vechi, imaginea are Python %s") % m.groups())
+			m = _ALT_PYTHON_ALTUL.search(eroare["mesaj"] or "")
+			if m:
+				return _("Nu s-a încărcat: %s") % (_("făcut pentru altă versiune de Python, imaginea are Python %s") % m.group(1))
 		if eroare.get("python2"):
 			return _("Nu s-a încărcat: %s") % eroare["python2"]
 		try:

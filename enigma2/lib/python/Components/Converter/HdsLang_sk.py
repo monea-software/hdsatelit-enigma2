@@ -304,4 +304,10 @@ T = {
 	"cpu_mode": u"Režim procesora",
 	"cpu_volt": u"Napätie",
 	"cpu_steps": u"Čas na frekvenciách",
+	"bitrate_va": u"Dátový tok videa · zvuku",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"priem",
+	"ecm_hop": u"Hopy",
+	"ecm_reader": u"Čítačka",
 }

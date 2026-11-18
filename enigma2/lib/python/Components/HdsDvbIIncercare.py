@@ -7,13 +7,21 @@
 # Se cere numai inceputul fluxului (manifestul DASH sau lista HLS), urmand redirectarile, cu un termen scurt.
 # Masurat pe listele germane reale: fara VPN raspund 403 dupa o redirectare 307, cu o adresa de Germania 200;
 # o adresa moarta din lista raspunde 404. Fara texte pentru om aici: ecranele aleg mesajul dupa stare.
+#
+# EPG2 (0.7.7, asistenta 058499): in buchet intra numai canalele care pot merge (pluginul DVB-I). felScos spune dupa
+# adresa ce nu e canal deloc: lista "Freeview Australia" din registre da clipuri Vimeo de 30 s - 2 min
+# (player.vimeo.com/external/<nr>.mpd, MPD static cu lungime: pornesc, se termina, imaginea sta pe loc), iar mai multe
+# liste dau imaginea de proba DASH-IF (livesim.dashif.org). ascunsa spune ce stare a incercarii tine canalul afara din
+# buchet pana la urmatoarea incercare reusita; un canal neincercat intra.
 from __future__ import absolute_import, unicode_literals
 
 try:
 	from urllib.request import Request, urlopen
 	from urllib.error import HTTPError, URLError
+	from urllib.parse import urlsplit
 except ImportError:  # Python 2
 	from urllib2 import Request, urlopen, HTTPError, URLError
+	from urlparse import urlsplit
 
 MERGE = "merge"
 OPRIT_TARA = "oprit_tara"
@@ -23,6 +31,11 @@ NU_RASPUNDE = "nu_raspunde"
 # 403 si 451 = refuzat pentru adresa de unde vine cererea (blocarea pe tara); 401 cere cont, deci tot "nu de aici"
 CODURI_TARA = (401, 403, 451)
 CODURI_MOARTA = (404, 410)
+# starile care tin canalul afara din buchet (EPG2)
+STARI_ASCUNSE = (OPRIT_TARA, ADRESA_MOARTA, NU_RASPUNDE)
+# adresele care nu sunt canale (EPG2)
+CLIP = "clip"
+PROBA = "proba"
 CITITI = 4096  # ajunge pentru inceputul unui manifest; fluxul insusi nu se descarca
 
 
@@ -35,6 +48,26 @@ def stareDinCod(cod):
 	if cod in CODURI_MOARTA:
 		return ADRESA_MOARTA
 	return NU_RASPUNDE
+
+
+def felScos(url):
+	"""CLIP (clip cu lungime, nu canal), PROBA (imaginea de proba DASH-IF) sau "" (canal), numai dupa adresa"""
+	try:
+		parti = urlsplit(url or "")
+		gazda = (parti.hostname or "").lower()
+	except (ValueError, AttributeError):
+		return ""
+	cale = parti.path or ""
+	if gazda == "player.vimeo.com" and cale.startswith("/external/"):
+		return CLIP
+	if (gazda == "dashif.org" or gazda.endswith(".dashif.org")) and "livesim" in (gazda + cale).lower():
+		return PROBA
+	return ""
+
+
+def ascunsa(stare):
+	"""True cand canalul cu starea aceasta a incercarii nu intra in buchet (n-a trecut incercarea din casa)"""
+	return stare in STARI_ASCUNSE
 
 
 def incearca(url, termen=8, deschide=None):

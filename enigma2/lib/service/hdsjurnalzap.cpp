@@ -8,6 +8,7 @@
  */
 
 #include <lib/service/hdsjurnalzap.h>
+#include <lib/service/hdsreleut2.h>
 
 #include <lib/base/hdsjurnal.h>
 #include <lib/dvb/db.h>
@@ -57,7 +58,7 @@ Zap::Zap()
 	m_t_eveniment(0), m_pts(0), m_t_cadre(0), m_termen_pts(0), m_latime(-1), m_inaltime(-1), m_citiri(0), m_bune(0), m_pts_bun(false),
 	m_ceas_pts(eTimer::create(eApp)),
 	m_din_pts(false), m_t_miscare(0),
-	m_slot(-1), m_vpid(-1), m_vtip(-1), m_apid(-1), m_atip(-1), m_criptat(-1), m_sid(0),
+	m_slot(-1), m_vpid(-1), m_vtip(-1), m_apid(-1), m_atip(-1), m_criptat(-1), m_sid(0), m_releu(false),
 	m_ceas(eTimer::create(eApp))
 {
 	CONNECT(m_ceas->timeout, Zap::faraImagine);
@@ -86,6 +87,8 @@ void Zap::pornire(const eServiceReferenceDVB &ref, bool masurat)
 	m_sec_ms = -1;
 	m_slot = m_vpid = m_vtip = m_apid = m_atip = m_criptat = -1;
 	m_sid = 0;
+	/* releul T2-MI local: canal fara tunerul si fara acordarea lui (randul spune "releu T2-MI") */
+	m_releu = masurat && hdsEsteReleuT2(ref.path);
 	if (masurat)
 		m_ref = ref;
 }
@@ -93,6 +96,23 @@ void Zap::pornire(const eServiceReferenceDVB &ref, bool masurat)
 static long dupa(long long t0, long long t)
 {
 	return t ? (long)(t - t0) : -1;
+}
+
+void Zap::textCine(char *buf, size_t n) const
+{
+	if (m_releu)
+		snprintf(buf, n, "releu T2-MI");
+	else
+		snprintf(buf, n, "%c", litera(m_slot));
+}
+
+void Zap::textAcordare(char *buf, size_t n) const
+{
+	/* la releu tunerul e al releului: nici eventTuned, nici timpii frontend-ului nu tin de acest canal */
+	if (m_releu)
+		buf[0] = 0;
+	else
+		snprintf(buf, n, "acordare %ld ms, ", dupa(m_t0, m_t_acordat));
 }
 
 void Zap::marcaj(int etapa, long long t)
@@ -121,13 +141,9 @@ void Zap::textMarcaje(char *buf, size_t n) const
 		dupa(m_t0, m_t_blocare), dupa(m_t0, m_marcaje[EVENIMENT_VIDEO]), dupa(m_t0, m_t_cadre));
 }
 
-void Zap::textCanal(char *buf, size_t n)
+std::string Zap::numeCanal()
 {
-	size_t f = 0;
-	buf[0] = 0;
-	std::string ref = m_ref.toString();
 	std::string nume;
-	char tp[160] = "?";
 	ePtr<eDVBResourceManager> res;
 	ePtr<iDVBChannelList> db;
 	if (!eDVBResourceManager::getInstance(res) && !res->getChannelList(db) && db)
@@ -135,11 +151,36 @@ void Zap::textCanal(char *buf, size_t n)
 		ePtr<eDVBService> s;
 		if (!db->getService(m_ref, s) && s)
 			nume = s->m_service_name;
+	}
+	for (size_t i = 0; i < nume.size(); ++i)
+		if (nume[i] == '"')
+			nume[i] = '\'';
+	return nume;
+}
+
+void Zap::textCanalScurt(char *buf, size_t n)
+{
+	/* randurile reusite: numai numele si referinta (o cautare in lista de canale, ca la esec) */
+	snprintf(buf, n, " | canal: nume=\"%s\" ref=%s", numeCanal().c_str(), m_ref.toString().c_str());
+}
+
+void Zap::textCanal(char *buf, size_t n)
+{
+	size_t f = 0;
+	buf[0] = 0;
+	std::string ref = m_ref.toString();
+	std::string nume = numeCanal();
+	char tp[160] = "?";
+	ePtr<eDVBResourceManager> res;
+	ePtr<iDVBChannelList> db;
+	if (!eDVBResourceManager::getInstance(res) && !res->getChannelList(db) && db)
+	{
 		eDVBChannelID chid;
 		m_ref.getChannelID(chid);
 		ePtr<iDVBFrontendParameters> fp;
 		int tip = -1;
-		if (!db->getChannelFrontendData(chid, fp) && fp && !fp->getSystem(tip))
+		/* la releul T2-MI tp= vine din cale (hdsReleuT2Tp, mai jos), nu din lista de canale */
+		if (!m_releu && !db->getChannelFrontendData(chid, fp) && fp && !fp->getSystem(tip))
 		{
 			if (tip == iDVBFrontend::feSatellite)
 			{
@@ -161,9 +202,13 @@ void Zap::textCanal(char *buf, size_t n)
 			}
 		}
 	}
-	for (size_t i = 0; i < nume.size(); ++i)
-		if (nume[i] == '"')
-			nume[i] = '\'';
+	/* MI7 (15.11.2026): fluxul releului nu are transponder in lista; randul arata feed-ul si PLP-ul din cale, nu "tp=?" */
+	if (m_releu)
+	{
+		std::string t2 = hdsReleuT2Tp(m_ref.path);
+		if (!t2.empty())
+			snprintf(tp, sizeof(tp), "%s", t2.c_str());
+	}
 	int sid = m_sid ? m_sid : m_ref.getServiceID().get();
 	int r = snprintf(buf, n, "canal: nume=\"%s\" ref=%s tp=%s sid=0x%x", nume.c_str(), ref.c_str(), tp, sid);
 	f = r > 0 ? (size_t)r : 0;
@@ -181,9 +226,12 @@ void Zap::scrieEsec(const char *nivel, const char *motiv)
 	char marcaje[340];
 	textMarcaje(marcaje, sizeof(marcaje));
 	textCanal(canal, sizeof(canal));
+	char cine[16], acordare[40];
+	textCine(cine, sizeof(cine));
+	textAcordare(acordare, sizeof(acordare));
 	long long acum = hdsjurnal::monotonMs();
-	hdsjurnal::scrief(COMPONENTA, nivel, "zap", "%c %s dupa %ld ms (acordare %ld ms, program %ld ms)%s | %s", litera(m_slot),
-		motiv, (long)(acum - m_t0), dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), marcaje, canal);
+	hdsjurnal::scrief(COMPONENTA, nivel, "zap", "%s %s dupa %ld ms (%sprogram %ld ms)%s | %s", cine,
+		motiv, (long)(acum - m_t0), acordare, dupa(m_t0, m_t_program), marcaje, canal);
 }
 
 void Zap::eveniment(int ev, int slot)
@@ -274,15 +322,23 @@ void Zap::programGata()
 	textSunet(sunet, sizeof(sunet));
 	char marcaje[340];
 	textMarcaje(marcaje, sizeof(marcaje));
-	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit fara imagine (radio): acordare %ld ms, program %ld ms"
-		" | sunet %s | criptat %s%s", litera(m_slot), dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), sunet,
-		m_criptat ? "da" : "nu", marcaje);
+	char cine[16], acordare[40];
+	textCine(cine, sizeof(cine));
+	textAcordare(acordare, sizeof(acordare));
+	char canal[400];
+	textCanalScurt(canal, sizeof(canal));
+	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%s reusit fara imagine (radio): %sprogram %ld ms"
+		" | sunet %s | criptat %s%s%s", cine, acordare, dupa(m_t0, m_t_program), sunet,
+		m_criptat ? "da" : "nu", marcaje, canal);
 }
 
 void Zap::imagine(int latime, int inaltime)
 {
-	/* placa trimite evenimente video: citirile de la program() nu mai pornesc (si dupa randul final) */
-	s_fara_eveniment = 0;
+	/* placa trimite evenimente video: zap-urile la rand fara eveniment se numara de la capat (si dupa randul final).
+	   O placa deja invatata ramane invatata (0.7.7, asistenta 888733): driverul Vu+ 4K trimite evenimentul numai cand se
+	   schimba marimea imaginii, deci un eveniment nu spune ca il trimite la fiecare zap */
+	if (s_fara_eveniment < INVATAT_DUPA)
+		s_fara_eveniment = 0;
 	if (!m_activ || m_t_eveniment || m_t_imagine || !m_t_program)
 		return;
 	m_t_eveniment = hdsjurnal::monotonMs();
@@ -383,22 +439,27 @@ void Zap::scrieImagine(long long t, int cum)
 	textSunet(sunet, sizeof(sunet));
 	char marcaje[340];
 	textMarcaje(marcaje, sizeof(marcaje));
+	char cine[16], acordare[40];
+	textCine(cine, sizeof(cine));
+	textAcordare(acordare, sizeof(acordare));
+	char canal[400];
+	textCanalScurt(canal, sizeof(canal));
 	if (cum == FARA_EVENIMENT)
 	{
-		/* imaginea merge, numai evenimentul a lipsit: reusit, fara canal, fara timpul primei imagini */
-		hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c reusit: acordare %ld ms, program %ld ms, imagine fara "
-			"eveniment de la decodor (merge la %d ms) | video %s | sunet %s | criptat %s%s", litera(m_slot),
-			dupa(m_t0, m_t_acordat), dupa(m_t0, m_t_program), (int)FARA_IMAGINE_MS, codecVideo(m_vtip), sunet,
-			m_criptat ? "da" : "nu", marcaje);
+		/* imaginea merge, numai evenimentul a lipsit: reusit, fara timpul primei imagini */
+		hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%s reusit: %sprogram %ld ms, imagine fara "
+			"eveniment de la decodor (merge la %d ms) | video %s | sunet %s | criptat %s%s%s", cine,
+			acordare, dupa(m_t0, m_t_program), (int)FARA_IMAGINE_MS, codecVideo(m_vtip), sunet,
+			m_criptat ? "da" : "nu", marcaje, canal);
 		return;
 	}
 	char marime[32] = "";  /* numai cand primul eveniment e chiar marimea imaginii */
 	if (m_latime > 0 && m_inaltime > 0)
 		snprintf(marime, sizeof(marime), " %dx%d", m_latime, m_inaltime);
-	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%c %s: acordare %ld ms, program %ld ms, imagine %ld ms%s | video %s"
-		"%s | sunet %s | criptat %s%s", litera(m_slot), m_avert ? "imagine tarzie" : "reusit", dupa(m_t0, m_t_acordat),
+	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "%s %s: %sprogram %ld ms, imagine %ld ms%s | video %s"
+		"%s | sunet %s | criptat %s%s%s", cine, m_avert ? "imagine tarzie" : "reusit", acordare,
 		dupa(m_t0, m_t_program), dupa(m_t0, m_t_imagine), cum == DIN_PTS ? " (din PTS, fara eveniment video)" : "",
-		codecVideo(m_vtip), marime, sunet, m_criptat ? "da" : "nu", marcaje);
+		codecVideo(m_vtip), marime, sunet, m_criptat ? "da" : "nu", marcaje, canal);
 }
 
 void Zap::faraImagine()

@@ -17,7 +17,8 @@
 #                             hdswebcontrol-browsere.json, hdswebcontrol-aplicatii.json = parola pentru aplicatii) si
 #                             etc/tuxbox/*.xml, cu excluderile lui copie-de-mana.sh
 #                             (settings* la orice adancime, semnul garzii, fisierele .nou, SEMNE_PORNIRE = semnele
-#                             unei porniri sau probe in curs, numele de module de acces conditionat: _nume_de_modul),
+#                             unei porniri sau probe in curs, numele de module de acces conditionat: _nume_de_modul,
+#                             afara de semnele imaginii cu felul in nume: SEMNE_ALEGERE_MODUL),
 #                             fara legaturi; plus
 #                             etc/enigma2/settings-fara-token: settings fara jetonul interfetei web si fara
 #                             config.crash.enabledebug (importul il recunoaste), cu SETARI_FIXE scrise (vezi mai jos);
@@ -54,7 +55,7 @@
 #   - canalele (tot etc/enigma2 din copie) pe orice receptor; setarile, reteaua, fisierele receptorului
 #     (FISIERE_PROPRII: browserele asociate, parola pentru aplicatiile de telefon, pozitia si viteza motorului,
 #     temporizatoarele, discul ales, treapta probata a procesorului si fisierele criptate cu identitatea receptorului:
-#     cheile de traducere, conturile subtitrarilor),
+#     cheile de traducere, conturile subtitrarilor; Niciunul ales la modulele de acces: SEMNE_ALEGERE_MODUL),
 #     machine-id, cheile SSH, sistem.json si modulele de acces conditionat NUMAI pe receptorul copiei (aceeasi amprenta
 #     si acelasi model); din sistem.json, „Fără parolă în rețeaua locală” oprita se pune numai cand e alegerea omului
 #     (regula_ssh_aleasa: copia de la VERSIUNE_FARA_PAROLA_PORNITA incoace), iar repara_regula_ssh (din porneste)
@@ -72,7 +73,7 @@
 #     receptorului, pe care interfata o face singura o data (rezultat.json, „repornire”) cand un fisier s-a schimbat;
 #   - semnul „gata” in /home/root/hds-restaurare (acelasi ca al trusei, in afara /etc/enigma2: o resetare la valorile
 #     din fabrica nu aduce nimic inapoi); rezultatul in rezultat.json (numai nume si numere), pentru mesajul de pe
-#     televizor;
+#     televizor; notele lui si netraduse (note_forma, vezi Nota), fiindca aici limba inca nu e incarcata;
 #   - jurnalul (hds-restaurare.log) spune la sfarsit ce s-a pus si ce nu, cu motivul; serviciul si rezervele traducerii
 #     din copie (sau ca lipsesc: atunci ramane valoarea din fabrica a imaginii); care SETARI_FIXE erau in copie; daca
 #     fisierele criptate cu identitatea receptorului (cheile de traducere, conturile subtitrarilor) se pot citi acum,
@@ -164,6 +165,16 @@ SEMNE_O_DATA = ("hdsdab/port-8898", "hdsdab/port-8898-ts", "hdsdab/marcaje-mux",
 FISIERE_PROPRII = ("hdswebcontrol-browsere.json", "hdswebcontrol-aplicatii.json", "hds-motor-pozitie.json",
 	"timers.xml", "hdsatelit/traducere-chei.bin", "hdsatelit/subtitrari-conturi.bin", "hds-disc-hdd",
 	"hds-procesor.probat", "hds-motor-viteza.json", "hdsatelit/retea-parole.bin")
+# semnele imaginii care au in nume felul unui modul de acces conditionat: Niciunul ales de om pentru un fel
+# (Components/HdsModuleAcces.py, SEMN_NICIUNUL + fel, tinut minte peste reporniri, ca paza sa nu aleaga singura un modul nou).
+# Felul (softcam) are forma numelor de module (_nume_de_modul), dar numele intreg PREFIX + fel e al imaginii, nu al unui
+# modul: intra in copie si se pune la loc, numai pe receptorul copiei, ca modulele si alegerea lor (acces-conditionat.tar.gz);
+# pe alt receptor ar opri alegerea singura a unui modul nou fara ca omul de acolo sa fi ales Niciunul. Un test compara
+# prefixul cu cel din HdsModuleAcces.
+SEMNE_ALEGERE_MODUL = (".hds-modul-niciunul.",)
+# buchetele omului (userbouquet.<nume>.tv/.radio, subbouquet.*), direct in etc/enigma2: numele vine din ce a scris omul
+# (Webcams, Live cam), deci poate avea forma numelor de module, dar fisierul e o lista de canale, nu al unui modul
+TIPAR_BUCHET = re.compile(r"^(?:userbouquet|subbouquet)\.[A-Za-z0-9_.+-]{1,200}\.(?:tv|radio)$")
 # semnele unei porniri sau probe in curs: placa 2D (hds-accel.*), placa video (hds-gpu.pornire, lib/gdi/hdsgpu.cpp: ramas
 # = „pornirea de data trecuta nu s-a terminat”), proba procesorului (hds-procesor.proba cu boot_id: alt boot_id = o
 # pornire cazuta cu procesorul accelerat, Components/HdsProcesor.py); nu intra in copie
@@ -276,6 +287,112 @@ def ngettext(unu, multe, n):
 	except ImportError:
 		return unu if n == 1 else multe
 	return ng(unu, multe, n)
+
+
+# ---------------------------------------------------------------- notele punerii la loc, traduse la afisare
+
+# 0.7.7 (asistenta 594572, SF8008 in italiana: fereastra "Copia setărilor" arata doua note in romana, desi it.po le are
+# traduse). pune_la_loc ruleaza din enigma2.sh, inainte de enigma2: limba nu e incarcata, deci _() si ngettext() intorc
+# textul romanesc. Notele (si motivele din paranteza lor) se tin de aceea si netraduse: textul romanesc de baza,
+# argumentele si numarul pluralului (Nota.forma, "note_forma" in rezultat.json), iar textul se face abia la afisare
+# (texte_note: fereastra de pe televizor, randul din "Copia setărilor" si pagina web), in limba interfetei de atunci.
+MAX_ADANCIME_NOTA = 4
+
+
+def _forma_argument(a):
+	"""Un argument al unei note, cum intra in rezultat.json: forma unei Nota (motivul din paranteza, tradus si el la
+	afisare), un numar ca numar, altfel textul lui (nume de fisiere, nume de erori: raman cum sunt)."""
+	if isinstance(a, Nota):
+		return a.forma
+	if isinstance(a, (int, float)) and not isinstance(a, bool):
+		return a
+	return str(a)
+
+
+class Nota(str):
+	"""Textul unei note sau al unui motiv, cu forma lui netradusa (ca Components/HdsPlural.Forma). Valoarea e traducerea
+	de acum, deci cine o foloseste ca text vede ce vedea si pana acum (din enigma2.sh: romana); .forma = {"t": textul
+	romanesc, "a": [argumentele], "p": pluralul, "n": numarul} se scrie in rezultat.json si se traduce la afisare
+	(text_nota). Se fac numai prin Nota.N_ si Nota.ngettext: numele sunt cuvintele cheie ale lui xgettext (N_ din
+	po/Makefile.am si ngettext, recunoscute si dupa punct), deci textele raman in enigma2.pot cu traducerile lor."""
+
+	def __new__(cls, text, forma):
+		o = str.__new__(cls, text)
+		o.forma = forma
+		return o
+
+	def __reduce__(self):
+		# copy si pickle: textul si forma (al lui str ar da numai textul, iar __new__ cere si forma)
+		return (Nota, (str(self), self.forma))
+
+	@staticmethod
+	def N_(text, *argumente):
+		forma = {"t": text}
+		if argumente:
+			forma["a"] = [_forma_argument(a) for a in argumente]
+		try:
+			sablon = _(text)
+			valoare = sablon % argumente if argumente else sablon
+		except (TypeError, ValueError, KeyError):
+			valoare = text % argumente if argumente else text
+		return Nota(valoare, forma)
+
+	@staticmethod
+	def ngettext(unu, multe, n):
+		forma = {"t": unu, "p": multe, "n": int(n)}
+		try:
+			valoare = ngettext(unu, multe, n) % n
+		except (TypeError, ValueError, KeyError):
+			valoare = (unu if n == 1 else multe) % n
+		return Nota(valoare, forma)
+
+
+def _text_nota(forma, adancime):
+	if isinstance(forma, str):
+		return _(forma)
+	if adancime > MAX_ADANCIME_NOTA or not isinstance(forma, dict) or not isinstance(forma.get("t"), str):
+		raise ValueError("forma notei")
+	argumente = tuple(_text_nota(a, adancime + 1) if isinstance(a, dict) else a for a in forma.get("a") or ())
+	if isinstance(forma.get("p"), str):
+		n = forma.get("n")
+		if type(n) is not int:
+			raise ValueError("numarul notei")
+		return ngettext(forma["t"], forma["p"], n) % (argumente or (n,))
+	sablon = _(forma["t"])
+	return sablon % argumente if argumente else sablon
+
+
+def text_nota(forma, rezerva=""):
+	"""Textul unei note in limba de acum, din forma ei (Nota.forma; un element din note_forma). Un text simplu se traduce
+	cand e chiar un text romanesc al imaginii (nota cozii reinstalarii, notele unui rezultat.json de dinainte de 0.7.7).
+	La o forma stricata sau la o traducere care nu primeste argumentele: `rezerva` (textul scris la punere)."""
+	try:
+		return _text_nota(forma, 0)
+	except Exception:
+		return rezerva
+
+
+def texte_note(rez):
+	"""Notele rezultatului unei puneri la loc, in limba de acum: din note_forma cand e cate una pentru fiecare nota,
+	altfel din note (Nota tinuta in memorie, sau textul unui rezultat.json de dinainte de 0.7.7: tradus numai cand e
+	un text intreg al imaginii; cele cu numere sau motive raman cum au fost scrise)."""
+	note = rez.get("note") or []
+	forme = rez.get("note_forma")
+	if not isinstance(forme, list) or len(forme) != len(note):
+		forme = None
+	texte = []
+	for i, n in enumerate(note):
+		rezerva = n if isinstance(n, str) else ""
+		if forme is not None:
+			forma = forme[i]
+		elif isinstance(n, Nota):
+			forma = n.forma
+		else:
+			forma = rezerva
+		t = text_nota(forma, rezerva)
+		if t:
+			texte.append(t)
+	return texte
 
 
 # ---------------------------------------------------------------- caile
@@ -554,9 +671,20 @@ def _nume_de_modul(nume):
 	return any(TIPAR_CUVANT_ACCES.search(c) for c in re.split(r"[^a-z0-9]+", nume.lower()))
 
 
+def semn_alegere_modul(rel):
+	"""`rel` (cale sub etc/enigma2) e chiar unul din SEMNE_ALEGERE_MODUL: prefixul si un fel, direct in etc/enigma2."""
+	for prefix in SEMNE_ALEGERE_MODUL:
+		if rel.startswith(prefix) and _NUME_FEL_ACCES.match(rel[len(prefix):]):
+			return True
+	return False
+
+
 def _exclus_setari(rel):
 	"""Membrii lui etc/enigma2 care nu intra in copie, pe fiecare nume din cale (ca --exclude din copie-de-mana.sh, dar
-	numele de module se recunosc dupa regula generala _nume_de_modul, mai larga decat cele doua nume ale scriptului)."""
+	numele de module se recunosc dupa regula generala _nume_de_modul, mai larga decat cele doua nume ale scriptului).
+	Semnele imaginii cu felul in nume (SEMNE_ALEGERE_MODUL) si buchetele omului (TIPAR_BUCHET) intra."""
+	if semn_alegere_modul(rel) or TIPAR_BUCHET.match(rel):
+		return False
 	for nume in rel.split("/"):
 		if nume.startswith("settings") or nume == ".hds-setari-din-copie":
 			return True
@@ -1262,78 +1390,100 @@ def _date_pluginuri(rad, nume_pluginuri, punct, reface_pachete=False):
 		except Exception as eroare:
 			_jurnal("listele feedurilor: %s" % eroare.__class__.__name__)
 	for nume in nume_pluginuri:
-		lista = _c(rad, "var/lib/opkg/info/%s.list" % nume)
-		livrate = set(_lista_opkg(lista))
-		config = _configurari_plugin(rad, nume)
-		candidati = set(config)
-		radacini = set(filter(None, (_radacina_plugin(p) for p in livrate)))
-		for rel in sorted(radacini):
-			cale = _c(rad, rel)
-			if not _fara_legaturi(rad, rel) or not os.path.isdir(cale):
-				continue
-			for d, sub, fisiere in os.walk(cale, followlinks=False):
-				sub[:] = sorted(n for n in sub if n != "__pycache__" and not _nume_de_modul(n)
-					and not os.path.islink(os.path.join(d, n)))
-				for f in sorted(fisiere):
-					r = os.path.relpath(os.path.join(d, f), rad).replace("\\", "/")
-					if r not in livrate and _cale_plugin(r):
-						candidati.add(r)
+		# 0.7.7 (asistenta 321045, TODO 15.11 17:52): o greseala la o singura extensie (un fisier sters chiar atunci, o
+		# lista opkg stricata, un .ipk necitit) nu mai opreste toata copia ("inventarul pluginurilor: OSError" si copia
+		# de la intrarea echipei lipsea): extensia ramane in inventar fara fisiere (se pune din nou din feed), ce adunase
+		# ea se scoate, iar jurnalul spune eroarea intreaga, cu fisierul
+		inainte = (total, total_ipk, set(surse))
+		try:
+			lista = _c(rad, "var/lib/opkg/info/%s.list" % nume)
+			livrate = set(_lista_opkg(lista))
+			config = _configurari_plugin(rad, nume)
+			candidati = set(config)
+			radacini = set(filter(None, (_radacina_plugin(p) for p in livrate)))
+			for rel in sorted(radacini):
+				cale = _c(rad, rel)
+				if not _fara_legaturi(rad, rel) or not os.path.isdir(cale):
+					continue
+				for d, sub, fisiere in os.walk(cale, followlinks=False):
+					sub[:] = sorted(n for n in sub if n != "__pycache__" and not _nume_de_modul(n)
+						and not os.path.islink(os.path.join(d, n)))
+					for f in sorted(fisiere):
+						r = os.path.relpath(os.path.join(d, f), rad).replace("\\", "/")
+						if r not in livrate and _cale_plugin(r):
+							candidati.add(r)
+					if len(candidati) > MAX_MEMBRI:
+						break
 				if len(candidati) > MAX_MEMBRI:
 					break
+			intrare = {"nume": nume, "fisiere": [], "ipk": None, "fara_lista": not bool(livrate), "sarite": 0}
 			if len(candidati) > MAX_MEMBRI:
-				break
-		intrare = {"nume": nume, "fisiere": [], "ipk": None, "fara_lista": not bool(livrate), "sarite": 0}
-		if len(candidati) > MAX_MEMBRI:
-			# 14.11.2026 (asistenta 423813, IPTVPlayer): o extensie care si-a scris singura mii de fisiere nu mai opreste
-			# toata copia; fisierele ei se sar (mesajul "fisiere sarite"), iar extensia ramane in lista de pus din nou
-			_jurnal("extensia %s: peste %d fisiere scrise dupa instalare; copia le sare" % (nume, MAX_MEMBRI))
-			intrare["sarite"] = len(candidati)
-			candidati = set()
-		for rel in sorted(candidati):
-			cale = _c(rad, rel)
-			if not _fara_legaturi(rad, rel):
-				continue
-			try:
-				st = os.lstat(cale)
-			except OSError:
-				continue
-			if not stat.S_ISREG(st.st_mode):
-				continue
-			if st.st_size > MAX_FISIER_PLUGIN or total + st.st_size > MAX_DECOMPRIMAT - MAX_DESCRIERE \
-					or len(surse) >= MAX_MEMBRI - 2:
-				intrare["sarite"] += 1
-				continue
-			if config.get(rel) and _md5(cale) == config[rel]:
-				continue
-			intrare["fisiere"].append(rel)
-			if rel not in surse:
-				surse[rel] = cale
-				total += st.st_size
-		ipk = _ipk_plugin(rad, nume, punct)
-		refacut = False
-		if not ipk and reface_pachete and nume not in in_feeduri and not intrare["fara_lista"]:
-			ipk = _ipk_refacut(rad, nume, dosar_ipk_refacute(punct))
-			refacut = bool(ipk)
-		if ipk:
-			rel = "hds-ipk/" + os.path.basename(ipk)
-			marime = os.path.getsize(ipk)
-			# BUGET_IPK numai cand se refac pachete: o copie de mana sau zilnica ramane cum era
-			if total + marime <= MAX_DECOMPRIMAT - MAX_DESCRIERE and len(surse) < MAX_MEMBRI - 2 and \
-					(not reface_pachete or total_ipk + marime <= BUGET_IPK):
-				intrare["ipk"] = rel
-				surse[rel] = ipk
-				total += marime
-				total_ipk += marime
-			else:
-				intrare["sarite"] += 1
-				if refacut:
-					_jurnal("pachetul refacut al extensiei %s nu mai incape in copie" % nume)
-					try:
-						os.remove(ipk)
-					except OSError:
-						pass
+				# 14.11.2026 (asistenta 423813, IPTVPlayer): o extensie care si-a scris singura mii de fisiere nu mai opreste
+				# toata copia; fisierele ei se sar (mesajul "fisiere sarite"), iar extensia ramane in lista de pus din nou
+				_jurnal("extensia %s: peste %d fisiere scrise dupa instalare; copia le sare" % (nume, MAX_MEMBRI))
+				intrare["sarite"] = len(candidati)
+				candidati = set()
+			for rel in sorted(candidati):
+				cale = _c(rad, rel)
+				if not _fara_legaturi(rad, rel):
+					continue
+				try:
+					st = os.lstat(cale)
+				except OSError:
+					continue
+				if not stat.S_ISREG(st.st_mode):
+					continue
+				if st.st_size > MAX_FISIER_PLUGIN or total + st.st_size > MAX_DECOMPRIMAT - MAX_DESCRIERE \
+						or len(surse) >= MAX_MEMBRI - 2:
+					intrare["sarite"] += 1
+					continue
+				if config.get(rel) and _md5(cale) == config[rel]:
+					continue
+				intrare["fisiere"].append(rel)
+				if rel not in surse:
+					surse[rel] = cale
+					total += st.st_size
+			ipk = _ipk_plugin(rad, nume, punct)
+			refacut = False
+			if not ipk and reface_pachete and nume not in in_feeduri and not intrare["fara_lista"]:
+				ipk = _ipk_refacut(rad, nume, dosar_ipk_refacute(punct))
+				refacut = bool(ipk)
+			if ipk:
+				rel = "hds-ipk/" + os.path.basename(ipk)
+				marime = os.path.getsize(ipk)
+				# BUGET_IPK numai cand se refac pachete: o copie de mana sau zilnica ramane cum era
+				if total + marime <= MAX_DECOMPRIMAT - MAX_DESCRIERE and len(surse) < MAX_MEMBRI - 2 and \
+						(not reface_pachete or total_ipk + marime <= BUGET_IPK):
+					intrare["ipk"] = rel
+					surse[rel] = ipk
+					total += marime
+					total_ipk += marime
+				else:
+					intrare["sarite"] += 1
+					if refacut:
+						_jurnal("pachetul refacut al extensiei %s nu mai incape in copie" % nume)
+						try:
+							os.remove(ipk)
+						except OSError:
+							pass
+		except Exception as eroare:
+			total, total_ipk, chei = inainte
+			for rel in [r for r in surse if r not in chei]:
+				del surse[rel]
+			_jurnal("extensia %s: %s; copia merge fara fisierele ei" % (nume, textEroare(eroare)))
+			intrare = {"nume": nume, "fisiere": [], "ipk": None, "fara_lista": False, "sarite": 0}
 		meta.append(intrare)
 	return meta, surse
+
+
+def textEroare(eroare):
+	"""Eroarea intreaga pentru jurnal: numele ei si textul (la OSError si fisierul), nu numai "OSError" (asistenta
+	321045, 15.11.2026: jurnalul spunea numai clasa si nu se putea afla ce fisier)."""
+	try:
+		text = str(eroare)
+	except Exception:
+		text = ""
+	return "%s: %s" % (eroare.__class__.__name__, text) if text else eroare.__class__.__name__
 
 
 class LimitaCopie(IOError):
@@ -1419,7 +1569,7 @@ def _permis_pluginuri(nume, m):
 
 def _citeste_pluginuri(cale, nume_pluginuri=None):
 	if os.path.islink(cale) or os.path.getsize(cale) > MAX_ARHIVA:
-		return None, None, _("Arhiva pluginurilor e prea mare sau nu e un fișier obișnuit.")
+		return None, None, Nota.N_("Arhiva pluginurilor e prea mare sau nu e un fișier obișnuit.")
 	membri, eroare = _citeste_arhiva(cale, _permis_pluginuri, MAX_DECOMPRIMAT)
 	if membri is None:
 		return None, None, eroare
@@ -1452,7 +1602,7 @@ def _citeste_pluginuri(cale, nume_pluginuri=None):
 			raise ValueError()
 		return meta["pluginuri"], date, None
 	except (ValueError, KeyError, TypeError, AttributeError, UnicodeError):
-		return None, None, _("Lista datelor pluginurilor nu e bună.")
+		return None, None, Nota.N_("Lista datelor pluginurilor nu e bună.")
 
 
 def pregateste_pluginuri(dosar, rad, baza_alta=False):
@@ -1621,7 +1771,7 @@ def _fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, refac
 	try:
 		meta_pluginuri, surse_pluginuri = _date_pluginuri(rad, pluginuri, punct, reface_pachete)
 	except Exception as eroare:
-		_jurnal("inventarul pluginurilor: %s" % eroare.__class__.__name__)
+		_jurnal("inventarul pluginurilor: %s" % textEroare(eroare))
 		mesaje.append(_("Datele pluginurilor nu s-au putut copia. Încearcă din nou."))
 		return rez
 	necesar = REZERVA_SPATIU
@@ -2222,17 +2372,17 @@ def verifica_copia(dosar, d=None):
 	"""None daca fisierele copiei sunt intregi (md5 din copie.txt), altfel motivul."""
 	d = d or citeste_descriere(dosar)
 	if d is None:
-		return _("copia nu are o descriere bună (copie.txt)")
+		return Nota.N_("copia nu are o descriere bună (copie.txt)")
 	for n, h in d["md5"].items():
 		cale = os.path.join(dosar, n)
 		if not os.path.isfile(cale) or os.path.islink(cale):
-			return _("lipsește %s din copie") % n
+			return Nota.N_("lipsește %s din copie", n)
 		maxim = {ARH_RETEA: MAX_RETEA, FIS_MASINA: 64, FIS_CHEI: MAX_CHEI, FIS_SISTEM: MAX_SISTEM,
 			FIS_PAROLA: MAX_PAROLA_COPIE, ARH_CHEI_GAZDA: 8 * MAX_CHEIE_GAZDA}.get(n, MAX_ARHIVA)
 		if os.path.getsize(cale) > maxim:
-			return _("%s e prea mare") % n
+			return Nota.N_("%s e prea mare", n)
 		if _md5(cale) != h:
-			return _("%s nu mai e cum a fost scris (md5)") % n
+			return Nota.N_("%s nu mai e cum a fost scris (md5)", n)
 	return None
 
 
@@ -2270,28 +2420,28 @@ def _parcurge(cale, permis, functie=None, max_decomprimat=MAX_DECOMPRIMAT):
 		with tarfile.open(cale, "r:gz") as t:
 			for i, m in enumerate(t):
 				if i >= MAX_MEMBRI:
-					return _("arhiva are prea multe fișiere")
+					return Nota.N_("arhiva are prea multe fișiere")
 				nume = _normalizat(m.name)
 				if nume is None:
-					return _("arhiva are o cale nepermisă")
+					return Nota.N_("arhiva are o cale nepermisă")
 				if not (m.isreg() or m.isdir() or m.issym()):
-					return _("arhiva are un fișier de un fel nepermis")
+					return Nota.N_("arhiva are un fișier de un fel nepermis")
 				if not permis(nume, m):
-					return _("arhiva are un fișier în afara locurilor permise")
+					return Nota.N_("arhiva are un fișier în afara locurilor permise")
 				date = None
 				if m.isreg():
 					total += max(0, m.size)
 					if total > max_decomprimat:
-						return _("arhiva e prea mare după decomprimare")
+						return Nota.N_("arhiva e prea mare după decomprimare")
 					if functie is not None:
 						f = t.extractfile(m)
 						date = f.read() if f is not None else b""
 						if len(date) != m.size:
-							return _("arhiva e tăiată")
+							return Nota.N_("arhiva e tăiată")
 				if functie is not None:
 					functie(nume, m, date)
 	except Exception as eroare:  # tarfile.TarError, EOFError, OSError, zlib.error
-		return _("arhiva nu se poate citi (%s)") % eroare.__class__.__name__
+		return Nota.N_("arhiva nu se poate citi (%s)", eroare.__class__.__name__)
 	return None
 
 
@@ -2372,7 +2522,7 @@ def _verifica_acces(membri):
 	din usr/ numai daca sunt in lista opkg a acelui pachet; altfel (None, motiv)."""
 	pachete = _pachete_din_meta(membri)
 	if pachete is None:
-		return None, _("lista pachetelor din copie nu e bună")
+		return None, Nota.N_("lista pachetelor din copie nu e bună")
 	nume_pachete = set(p["nume"] for p in pachete)
 	ale_pachetelor = _fisierele_pachetelor(membri, nume_pachete)
 	for nume, m, _date in membri:
@@ -2381,15 +2531,15 @@ def _verifica_acces(membri):
 		mm = re.match(r"^var/lib/opkg/info/(.+)\.([a-z0-9]+)$", nume)
 		if nume.startswith("var/lib/opkg/info/"):
 			if not mm or mm.group(1) not in nume_pachete or mm.group(2) not in SUFIXE_INFO_OPKG:
-				return None, _("copia modulelor are informații opkg străine")
+				return None, Nota.N_("copia modulelor are informații opkg străine")
 		elif nume.startswith(META_ACCES):
 			if nume != PACHETE_ACCES and not re.match(r"^hds-copie/ipk/[A-Za-z0-9][A-Za-z0-9.+_~-]*\.ipk$", nume):
-				return None, _("copia modulelor are un fișier necunoscut")
+				return None, Nota.N_("copia modulelor are un fișier necunoscut")
 		elif nume.startswith(DOSARE_PACHET_PERMISE) and nume not in ale_pachetelor:
-			return None, _("copia modulelor are un program care nu e al niciunui pachet")
+			return None, Nota.N_("copia modulelor are un program care nu e al niciunui pachet")
 	for p in pachete:
 		if p.get("ipk") and not any(n == p["ipk"] for n, _m, _d in membri):
-			return None, _("lista pachetelor din copie nu e bună")
+			return None, Nota.N_("lista pachetelor din copie nu e bună")
 	return pachete, None
 
 
@@ -2503,14 +2653,14 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 	d = citeste_descriere(dosar)
 	if d is None:
 		_jurnal("copia nu are copie.txt bun, nu scriu nimic")
-		note.append(_("Copia nu are o descriere bună; nu s-a pus nimic la loc."))
+		note.append(Nota.N_("Copia nu are o descriere bună; nu s-a pus nimic la loc."))
 		return rez
 	rez["copie"] = {"nume": os.path.basename(dosar.rstrip("/\\")), "data_text": d.get("data_text") or _data_text(d["data"]),
 		"versiune": d["versiune"]}
 	motiv_rau = verifica_copia(dosar, d)
 	if motiv_rau:
 		_jurnal("copia nu e intreaga, nu scriu nimic")
-		note.append(_("Copia nu e întreagă (%s); nu s-a pus nimic la loc.") % motiv_rau)
+		note.append(Nota.N_("Copia nu e întreagă (%s); nu s-a pus nimic la loc.", motiv_rau))
 		return rez
 	acest = _e_acest_receptor(d, amprenta_aici(rad), model_aici(rad))
 	rez["acest"] = acest
@@ -2521,7 +2671,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 	eroare = _parcurge(arh_setari, _permis_setari)
 	if eroare:
 		_jurnal("arhiva canalelor refuzata, nu scriu nimic")
-		note.append(_("Arhiva canalelor din copie nu e bună (%s); nu s-a pus nimic la loc.") % eroare)
+		note.append(Nota.N_("Arhiva canalelor din copie nu e bună (%s); nu s-a pus nimic la loc.", eroare))
 		return rez
 	meta_pluginuri = []
 	if ARH_PLUGINURI in d["md5"]:
@@ -2531,7 +2681,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		meta_pluginuri, _date_plugin, eroare = _citeste_pluginuri(os.path.join(dosar, ARH_PLUGINURI), d["pluginuri"] or None)
 		if eroare:
 			_jurnal("datele pluginurilor refuzate, nu scriu nimic")
-			note.append(_("Datele pluginurilor din copie nu sunt bune (%s); nu s-a pus nimic la loc.") % eroare)
+			note.append(Nota.N_("Datele pluginurilor din copie nu sunt bune (%s); nu s-a pus nimic la loc.", eroare))
 			return rez
 		del _date_plugin
 	retea = None
@@ -2539,7 +2689,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		retea, eroare = _citeste_arhiva(os.path.join(dosar, ARH_RETEA), _permis_retea, MAX_RETEA * 4)
 		if retea is None:
 			_jurnal("arhiva retelei refuzata, nu scriu nimic")
-			note.append(_("Arhiva rețelei din copie nu e bună (%s); nu s-a pus nimic la loc.") % eroare)
+			note.append(Nota.N_("Arhiva rețelei din copie nu e bună (%s); nu s-a pus nimic la loc.", eroare))
 			return rez
 	acces = None
 	pachete = []
@@ -2551,7 +2701,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 				acces = None
 		if acces is None:
 			_jurnal("copia modulelor de acces conditionat refuzata; restul se pune")
-			note.append(_("Copia modulelor de acces condiționat nu e bună (%s); nu s-a pus la loc.") % eroare)
+			note.append(Nota.N_("Copia modulelor de acces condiționat nu e bună (%s); nu s-a pus la loc.", eroare))
 	sistem = None
 	sistem_refuzat = False
 	if acest and FIS_SISTEM in d["md5"]:
@@ -2565,7 +2715,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 			parola_locala = _parola_locala_din_copie(dosar)
 		except (ValueError, UnicodeError):
 			_jurnal("parola locala din copie nu are o forma buna; nu scriu nimic")
-			note.append(_("Parola din copia setărilor nu e întreagă; nu s-a pus nimic la loc."))
+			note.append(Nota.N_("Parola din copia setărilor nu e întreagă; nu s-a pus nimic la loc."))
 			return rez
 	E = _c(rad, "etc/enigma2")
 	S = os.path.join(E, "settings")
@@ -2589,7 +2739,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 			"motiv": rez["motiv"]}, ensure_ascii=True).encode("ascii"), 0o600)
 		_sincronizeaza()
 	except OSError:
-		note.append(_("Restaurarea nu a putut începe. Se reia la pornirea următoare."))
+		note.append(Nota.N_("Restaurarea nu a putut începe. Se reia la pornirea următoare."))
 		rez["reincearca"] = True
 		return rez
 
@@ -2615,11 +2765,11 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		if _exclus_setari(rel) or rel.split("/")[-1] in FISIERE_NEPUSE:
 			nepus["semne"] += 1
 			return
-		if not acest and rel in FISIERE_PROPRII:
+		if not acest and (rel in FISIERE_PROPRII or semn_alegere_modul(rel)):
 			nepus["proprii"] += 1
 			return
 		if rel == "lamedb" and not date.startswith(ANTET_LAMEDB.encode("ascii")):
-			note.append(_("Lista de canale din copie nu are forma obișnuită; a rămas cea de acum."))
+			note.append(Nota.N_("Lista de canale din copie nu are forma obișnuită; a rămas cea de acum."))
 			return
 		tinta = os.path.join(E, *rel.split("/"))
 		if os.path.islink(tinta) or os.path.isdir(tinta):
@@ -2704,14 +2854,14 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 					rest.scrie(tinta, "".join(r + "\n" for r in vechi + noi).encode("ascii"), 0o600)
 					chei_noi = len(noi)
 			else:
-				note.append(_("Cheile SSH din copie nu au forma obișnuită; nu s-au pus la loc."))
+				note.append(Nota.N_("Cheile SSH din copie nu au forma obișnuită; nu s-au pus la loc."))
 		# cheile gazdei SSH: o arhiva rea nu opreste restul (cheile proaspete ale imaginii raman)
 		if acest and ARH_CHEI_GAZDA in d["md5"]:
 			gazda, eroare = _citeste_arhiva(os.path.join(dosar, ARH_CHEI_GAZDA), _permis_chei_gazda,
 				8 * MAX_CHEIE_GAZDA)
 			if gazda is None:
 				_jurnal("cheile gazdei SSH din copie nu se pot citi; raman cele ale imaginii")
-				note.append(_("Cheile SSH din copie nu au forma obișnuită; nu s-au pus la loc."))
+				note.append(Nota.N_("Cheile SSH din copie nu au forma obișnuită; nu s-au pus la loc."))
 			else:
 				for nume, _m, date in gazda:
 					tinta = _c(rad, nume)
@@ -2759,7 +2909,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		canale.curata()
 		rest.curata()
 		_jurnal("pregatirea a cazut (%s), nu scriu nimic" % eroare.__class__.__name__)
-		note.append(_("Copia nu s-a putut pregăti pe receptor (memoria plină sau copia stricată); nu s-a pus nimic "
+		note.append(Nota.N_("Copia nu s-a putut pregăti pe receptor (memoria plină sau copia stricată); nu s-a pus nimic "
 			"la loc."))
 		return rez
 	try:
@@ -2835,7 +2985,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		canale.curata()
 		rest.curata()
 		_jurnal("mutarea s-a oprit (%s)" % eroare.__class__.__name__)
-		note.append(_("Punerea la loc s-a întrerupt. Se reia la pornirea următoare."))
+		note.append(Nota.N_("Punerea la loc s-a întrerupt. Se reia la pornirea următoare."))
 		return rez
 	if acest and stare_canale["settings"] is not None:
 		try:
@@ -2863,7 +3013,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 			note.extend(motive)
 		except Exception as eroare:
 			_jurnal("modulele de acces conditionat: %s" % eroare.__class__.__name__)
-			note.append(_("Modulele de acces condiționat nu s-au putut pune la loc."))
+			note.append(Nota.N_("Modulele de acces condiționat nu s-au putut pune la loc."))
 			return rez
 	# Datele necriptate si conturile pluginurilor urmeaza stickul.
 	if d.get("pluginuri") and (acest or any(p["fisiere"] for p in meta_pluginuri)):
@@ -2874,7 +3024,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 			_jurnal("pluginurile din copie: %d, in coada reinstalarii: %d" % (len(d["pluginuri"]), n))
 		except Exception as eroare:
 			_jurnal("coada pluginurilor: %s" % eroare.__class__.__name__)
-			note.append(_("Pluginurile nu au putut fi pregătite. Se reia la pornirea următoare."))
+			note.append(Nota.N_("Pluginurile nu au putut fi pregătite. Se reia la pornirea următoare."))
 			return rez
 	try:
 		nota = _reinstalare().nota_coada(rad)
@@ -3087,8 +3237,8 @@ def _pune_acces(rad, membri, pachete, porneste_modulele, baza_alta=False):
 		_scrie_atomic(tinta, date, _mod_fisier(m, 0o755 if e_program else 0o644))
 		pus += 1
 	if sarite:
-		note.append(ngettext("%d fișier al modulelor exista deja în imagine și a rămas al imaginii.",
-			"%d fișiere ale modulelor existau deja în imagine și au rămas ale imaginii.", sarite) % sarite)
+		note.append(Nota.ngettext("%d fișier al modulelor exista deja în imagine și a rămas al imaginii.",
+			"%d fișiere ale modulelor existau deja în imagine și au rămas ale imaginii.", sarite))
 	# pachetele puse din fisiere: trecute in starea opkg, ca opkg sa stie de ele
 	status = _c(rad, "var/lib/opkg/status")
 	if os.path.isdir(os.path.dirname(status)):
@@ -3102,9 +3252,54 @@ def _pune_acces(rad, membri, pachete, porneste_modulele, baza_alta=False):
 			adaugat = adaugat.rstrip("\n") + ("\n\n" if adaugat.strip() else "") + str(p["strofa"]).strip("\n") + "\n"
 		if adaugat != vechi:
 			_scrie_atomic(status, adaugat.encode("utf-8"), 0o644)
+	# programele sau scripturile modulelor puse din copie (module puse fara opkg): modulul e pe receptor, nu se intreaba
+	are_programe = any(_e_fisier_de_acces(n, feluri) for n, m, _d in membri if not m.isdir())
+	_coada_module_lipsa(rad, membri, pachete, [p["nume"] for p in pachete], intrebari=not are_programe)
 	if porneste_modulele:
 		_porneste_modulul(rad)
 	return pus, note
+
+
+def _legaturi_alese(membri):
+	"""{rel: tinta} pentru legaturile de pornire ale modulelor din copie (etc/init.d/<fel>, etc/rcN.d)."""
+	return dict((n, m.linkname) for n, m, _d in membri
+		if m.issym() and (TIPAR_LEGATURA_ALEASA.match(n) or TIPAR_LEGATURA_RC.match(n)))
+
+
+def _coada_module_lipsa(rad, membri, pachete, de_verificat, intrebari=True):
+	"""0.7.6 (RSC, asistenta 430032: 23 de fisiere ale modulelor puse la loc, dar niciun modul instalat). Dupa punere:
+	pachetele copiei din `de_verificat` care tot nu sunt instalate (copie fara strofa sau fara .ipk, opkg cazut) intra
+	in coada reinstalarii (din feed, si sub numele nostru: HdsReinstalare.tinta_acces); modulele pe care copia le are
+	numai prin configurari (etc/tuxbox/config/<modul>.conf ..., fara niciun pachet de modul in copie; de pilda puse de
+	un panou) intra numai la intrebare (Da pe televizor si in pagina web), daca feedul le are si niciun pachet al
+	aceluiasi modul nu e instalat. Cand copia are pachete de module, ele sunt modulele omului: configurarile altor
+	module raman numai fisiere. intrebari=False: copia a adus programele modulelor (puse fara opkg, aceeasi baza), deci
+	modulul e pe receptor si nu se intreaba nimic. Intoarce cate nume au intrat."""
+	try:
+		R = _reinstalare()
+		acum = R.instalate(rad)
+		lipsa = [n for n in de_verificat if TIPAR_PACHET.match(n or "") and n not in acum]
+		familii_instalate = set(R.familie_modul(n) for n in acum)
+		familii = set()
+		for nume, m, _d in ([] if pachete or not intrebari else membri):
+			# fisierele de chei (*.key) sunt ale tuturor modulelor, nu spun care modul era folosit
+			if nume.startswith(DOSAR_CONFIG_ACCES) and not m.isdir() and not m.issym() \
+					and not nume.lower().endswith(".key"):
+				f = R.familie_modul(os.path.basename(nume))
+				if f and f not in familii_instalate:
+					familii.add(f)
+		# numai numele modulului: HdsReinstalare.pachet_din_feed afla pachetul lui din feed
+		de_intrebat = [f for f in sorted(familii) if TIPAR_PACHET.match(f)]
+		if not lipsa and not de_intrebat:
+			return 0
+		n = R.adauga(rad, [(x, R.FEL_ACCES) for x in lipsa] + [(x, R.FEL_ACCES_INTREBARE) for x in de_intrebat],
+			_legaturi_alese(membri))
+		_jurnal("modulele de acces din copie: %d pachete neinstalate dupa punere, %d module numai cu configurari (%s); "
+			"in coada reinstalarii: %d" % (len(lipsa), len(de_intrebat), ", ".join(sorted(familii)) or "-", n))
+		return n
+	except Exception as eroare:
+		_jurnal("coada modulelor de acces: %s" % eroare.__class__.__name__)
+		return 0
 
 
 def _pune_acces_alta_baza(rad, membri, pachete):
@@ -3135,6 +3330,7 @@ def _pune_acces_alta_baza(rad, membri, pachete):
 	n = _reinstalare().adauga(rad, [(p, "acces") for p in nume_pachete], legaturi)
 	_jurnal("modulele de acces de pe alta baza: %d fisiere de configurare puse ca atare, %d fisiere ale pachetelor "
 		"lasate (binarele bazei vechi), %d pachete in coada reinstalarii" % (pus, sarite, n))
+	_coada_module_lipsa(rad, membri, pachete, [])
 	return pus, []
 
 
@@ -3161,6 +3357,11 @@ def _porneste_modulul(rad):
 # ---------------------------------------------------------------- pornirea (din enigma2.sh)
 
 def _scrie_rezultat(rad, rez):
+	note = rez.get("note")
+	if isinstance(note, list) and any(isinstance(n, Nota) for n in note):
+		# langa textul notelor si forma lor netradusa, cate una pentru fiecare (texte_note); o rescriere a rezultatului
+		# citit de pe disc (note simple, ca in _arata_rezultatul) pastreaza note_forma de atunci
+		rez = dict(rez, note_forma=[n.forma if isinstance(n, Nota) else str(n) for n in note])
 	d = dosar_restaurare(rad)
 	os.makedirs(d, exist_ok=True)
 	_scrie_atomic(os.path.join(d, REZULTAT), json.dumps(rez, ensure_ascii=True, sort_keys=True).encode("ascii"), 0o600)
@@ -3432,7 +3633,7 @@ def pornire(rad=None, asteapta=True):
 		if not os.path.isfile(os.path.join(dosar, DESCRIERE)):
 			anuleaza_cererea(rad)
 			_jurnal("cererea arata spre o copie care nu mai e pe mediu, nu scriu nimic")
-			_scrie_rezultat(rad, {"ok": False, "pus": [], "note": [_("Copia aleasă nu mai era pe mediu la repornire; "
+			_scrie_rezultat(rad, {"ok": False, "pus": [], "note": [Nota.N_("Copia aleasă nu mai era pe mediu la repornire; "
 				"nu s-a pus nimic la loc.")], "repornire": "nu", "aratat": False, "motiv": "cerere",
 				"cand": int(time.time()), "copie": {}})
 			return 0
@@ -3521,7 +3722,8 @@ def parti_rezultat(rez):
 	note = []
 	if rez.get("pus") and not rez.get("acest"):
 		note.append(_("Copia era de pe alt receptor, deci numai canalele."))
-	note.extend((rez.get("note") or [])[:3])
+	# notele scrise inainte sa fie incarcata limba (enigma2.sh), traduse acum (texte_note)
+	note.extend(texte_note(rez)[:3])
 	return sus, puse, note
 
 

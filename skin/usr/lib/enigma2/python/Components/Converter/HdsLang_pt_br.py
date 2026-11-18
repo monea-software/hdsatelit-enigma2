@@ -302,4 +302,10 @@ T = {
 	"cpu_mode": u"Modo do processador",
 	"cpu_volt": u"Tensão",
 	"cpu_steps": u"Tempo por frequência",
+	"bitrate_va": u"Taxa de bits de vídeo · áudio",
+	"br_min": u"mín",
+	"br_max": u"máx",
+	"br_avg": u"méd",
+	"ecm_hop": u"Saltos",
+	"ecm_reader": u"Leitor",
 }

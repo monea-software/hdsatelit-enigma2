@@ -5,6 +5,9 @@ din pagina.
 
 ROSU in bara (Screens/InfoBar.py, actiunea „hbbtvRosu” din HdsInfobarActions, data/keymap.xml) cheama apasaRosu(bara):
   - canalul nu are in AIT o aplicatie de pornit: intoarce 0, tasta merge mai departe ca inainte (nimic nou);
+  - imediat dupa un zap, PMT-ul are PID-ul AIT dar tabelul nu e citit inca (ait_in_asteptare): ROSU e tinut minte si
+    hotararea de mai sus se ia cand vine AIT-ul (_asteaptaAit, cel mult ROSU_ASTEAPTA_AIT_MS); inainte tasta se pierdea
+    cu "Tasta nefolosita", iar omul trebuia sa apese din nou;
   - timeshift pornit: un mesaj, aplicatia nu porneste (in timeshift HbbTV se opreste, hotararea C3 a planului);
   - aplicatia are numai carusel DSM-CC (fara adresa HTTP): caruselul se citeste din semnal, apoi navigatorul porneste la
     adresa locala a aplicatiei (vezi CARUSELUL mai jos);
@@ -36,13 +39,19 @@ ROSU-UL URMARIT (VK_RED trimis de receptor cu stratul, aplicatia pe ecran si ecr
                    (semnul aplicatiei, macar ROSU_DESEN_MINIM puncte) vazut de doua ori la rand -> inca un VK_RED, acum
                    ca aplicatia s-a aratat gata; nimic in ROSU_SEMN_MAXIM_MS -> inca un VK_RED (aplicatia s-a aratat
                    inainte sa-si puna ascultatorii de taste si a pierdut primul VK_RED: masurat pe receptor, o
-                   aplicatie a raspuns abia la a doua apasare, la 6 s si la 9 s dupa prima);
-    oricand, reactii sunt si o pagina noua (lansatorul spune INCARCARE: laIncarcare), alta masca de taste (ARD trece
-    din 13 in 63 la ROSU), arata, ascunde, distruge, aplicatie, canal, urmator, anterior. Legarea video/broadcast,
-    fereastra si o masca pusa din nou cu aceeasi valoare vin si singure, cat aplicatia se pregateste, deci nu sunt
-    reactii. Al doilea VK_RED pleaca o singura data; orice tasta trimisa aplicatiei de om opreste urmarirea;
+                   aplicatie a raspuns abia la a doua apasare, la 6 s si la 9 s dupa prima); cat tot nu e nimic
+                   desenat, tasta pleaca din nou la fiecare ROSU_SEMN_MAXIM_MS, de cel mult ROSU_GOL_REPETARI ori
+                   (masurat pe receptor: o aplicatie raspunde la a doua tasta abia la 4-9 s dupa show(), pana
+                   atunci tasta se pierde); o masca noua pe ecranul gol nu e reactie (o aplicatie isi pune
+                   tastele la ~2 s dupa VK_RED si nu deseneaza nimic), e numai tinuta minte: masca noua urmata de
+                   un semn mic e reactia (bara aplicatiei), fara alta tasta;
+    oricand, reactii sunt si o pagina noua (lansatorul spune INCARCARE: laIncarcare), alta masca de taste cu ceva pe
+    ecran (ARD trece din 13 in 63 la ROSU), arata, ascunde, distruge, aplicatie, canal, urmator, anterior. Legarea
+    video/broadcast, fereastra si o masca pusa din nou cu aceeasi valoare vin si singure, cat aplicatia se pregateste,
+    deci nu sunt reactii. Cu ceva pe ecran al doilea VK_RED pleaca o singura data; orice tasta trimisa aplicatiei de
+    om opreste urmarirea;
   - tasta de pornire: aplicatiile care se deschid cu ALBASTRU (HdsHbbtvAplicatii.tasta_pornire, lista "albastru")
-    primesc VK_BLUE in locul lui VK_RED, cu aceleasi reguli (masca, urmarirea, a doua trimitere);
+    primesc VK_BLUE in locul lui VK_RED, cu aceleasi reguli (masca, urmarirea, trimiterile din nou);
   - ecranul: pagina afisata a /dev/fb0 (cat aplicatia e pe ecran numai navigatorul deseneaza acolo, enigma2 are
     lacatul), un rand din SEMN_PAS si un punct din SEMN_PAS pe rand (alfa > 0) si crc32 al randurilor citite
     (semn_ecran, ca stratul web Plugins/Extensions/HdsWebControl/osd_strat.py; ~14 ms pe Amiko Viper 4K V20);
@@ -87,8 +96,10 @@ CAT RULEAZA APLICATIA:
       inchide    EXIT: aplicatia se inchide, canalul ramane, telecomanda e libera pe loc (nu a fost apucata);
       nimic      restul (MENU, INFO, EPG ... din afara mastii): nicio urmare cat aplicatia e pe ecran (enigma2 nu poate
                  desena peste ea).
-    Cat se incarca (pana la prima pagina si pana la show()) numai EXIT e al aplicatiei (renunta); restul merge la
-    enigma2 ca inainte. Cat aplicatia e ascunsa (hide()), tastele din masca ajung la ea numai cand pe ecran e bara
+    Cat se incarca (pana la prima pagina si pana la show()) EXIT e al aplicatiei (renunta), iar culorile nu mai ajung
+    la enigma2 (tasta_la_incarcare: ALBASTRU deschidea lista extensiilor si fereastra inchidea aplicatia): cele din
+    masca merg la aplicatie dupa prima pagina, tasta de pornire si restul se tin; celelalte taste merg la enigma2 ca
+    inainte. Cat aplicatia e ascunsa (hide()), tastele din masca ajung la ea numai cand pe ecran e bara
     (televizorul), nu un meniu; EXIT o inchide si merge si la enigma2.
   - se inchide singura la: schimbarea canalului facuta de om (evStart / evEnd), standby, timeshift pornit, memorie
     putina, caderea navigatorului, o schimbare de canal ceruta de aplicatie spre un canal in care aplicatia nu e
@@ -148,8 +159,8 @@ aplicatia, cititorul tine caruselul la zi; la orice inchidere (laOprit), la zap 
 opresc si dosarul se sterge (si la pornirea enigma2, porneste). O aplicatie din carusel nu ramane dupa un zap (nici dupa
 unul cerut de ea), pornirea automata nu o porneste, iar o pornire cazuta nu se cerceteaza pe internet.
 
-Partea de sus (hotarare_rosu, fel_tasta, taste_din_masca, canal_hbbtv, programe_hbbtv, config_hbbtv, adresa_dvb,
-fereastra_valida, fereastra_vmpeg, text_mesaj, text_carusel, semn_ecran, urmare_rosu) nu importa enigma2, iar Controlor
+Partea de sus (hotarare_rosu, ait_in_asteptare, fel_tasta, taste_din_masca, canal_hbbtv, programe_hbbtv, config_hbbtv,
+adresa_dvb, fereastra_valida, fereastra_vmpeg, text_mesaj, text_carusel, semn_ecran, urmare_rosu) nu importa enigma2, iar Controlor
 primeste totul printr-un Mediu, deci se probeaza pe PC (test_hbbtv_h2.py, test_hbbtv_h3.py, test_hbbtv_h4_h6.py,
 test_hbbtv_rosu_auto.py)."""
 
@@ -179,6 +190,7 @@ KEY_CHANNELUP, KEY_CHANNELDOWN, KEY_NEXT, KEY_PREVIOUS = 402, 403, 407, 412
 TASTE_APLICATIE = frozenset([KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_OK, KEY_ENTER, KEY_SELECT, KEY_RED, KEY_GREEN,
 	KEY_YELLOW, KEY_BLUE, KEY_BACK] + list(range(KEY_1, KEY_0 + 1)))
 TASTE_RECEPTOR = frozenset([KEY_MUTE, KEY_VOLUMEDOWN, KEY_VOLUMEUP, KEY_POWER, KEY_CHANNELUP, KEY_CHANNELDOWN])
+TASTE_CULORI = frozenset([KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE])
 
 # Keyset (OIPF DAE 7.2.5.1): bitii mastii si tastele telecomenzii fiecaruia. ALPHA (0x200) nu are taste pe
 # telecomanda, OTHER (0x400) nu e in HbbTV 1.5 (anexa A): masca cea mai mare e 0x1FF.
@@ -212,6 +224,13 @@ ROSU_DUPA_MS = 1000         # fara strat (H2): VK_RED la atat dupa ce aplicatia 
 # pagina. O singura data: ARD comuta ascuns/aratat la fiecare ROSU.
 ROSU_DUPA_ARATA_MS = 500
 ROSU_FARA_ARATA_MS = 6000
+# ROSU apasat imediat dupa un zap, cat PMT-ul canalului are PID-ul AIT, dar tabelul AIT nu e citit inca (ait_in_asteptare):
+# tasta e tinuta minte si aplicatia porneste cand vine AIT-ul, uitandu-ne la ROSU_AIT_PAS_MS, cel mult ROSU_ASTEAPTA_AIT_MS
+# (masurat pe Octagon SF8008: AIT-ul ajunge la ~2 s dupa zap; ROSU apasat la 1 s dadea "Tasta nefolosita" si nimic). Daca
+# AIT-ul nu vine, pe acel canal tasta nu se mai tine (merge mai departe ca inainte) pana cand AIT-ul lui e citit o data;
+# cu alta fereastra deschisa intre timp peste bara (MENU, OK...) tasta tinuta minte se lasa.
+ROSU_ASTEAPTA_AIT_MS = 4000
+ROSU_AIT_PAS_MS = 250
 # Unele aplicatii se deschid direct cu tot ecranul si iau ROSU drept "inchide" (Anixe LinearToVOD: Anixe+ s-a aratat si
 # s-a inchis singura la ROSU-ul de mai sus). Daca aplicatia se inchide singura (destroyApplication, window.close) la cel
 # mult INCHISA_DUPA_ROSU_S dupa VK_RED trimis de receptor, se incarca din nou, o singura data, fara el.
@@ -223,7 +242,10 @@ ROSU_PAS_MS = 250            # cat de des se citeste ecranul dupa VK_RED trimis 
 ROSU_DESEN_MINIM = 20        # puncte opace (din esantion) de la care pe ecran "e ceva"
 ROSU_SEMN_MARE = 0.25        # de atat din ecran incolo e un meniu deschis (o reactie), nu semnul de ROSU
 ROSU_REACTIE_MS = 2500       # ecranul avea ceva: neschimbat atat dupa VK_RED -> inca un VK_RED
-ROSU_SEMN_MAXIM_MS = 8000    # ecranul era gol: cat se asteapta semnul aplicatiei, apoi inca un VK_RED (o data)
+ROSU_SEMN_MAXIM_MS = 8000    # ecranul era gol: cat se asteapta semnul aplicatiei, apoi inca un VK_RED
+# ecranul gol si nimic desenat: de cate ori se mai trimite tasta de pornire, la fiecare ROSU_SEMN_MAXIM_MS (masurat pe
+# receptor: o aplicatie raspunde la a doua tasta abia la 4-9 s dupa show(); cu trei repetari tasta pleaca pana la ~25 s)
+ROSU_GOL_REPETARI = 3
 SEMN_PAS = 8                 # semn_ecran: un rand din atatea si un punct din atatea pe rand
 CURAT_MS = 150
 TERMEN_ARATA_MS = 10000      # de la prima pagina pana la Application.show()
@@ -363,6 +385,15 @@ def hotarare_rosu(rez, timeshift=False):
 	return PORNESTE, url
 
 
+def ait_in_asteptare(rez):
+	"""PMT-ul canalului redat are PID-ul AIT, dar tabelul AIT nu e citit inca (rezumatul HdsHbbtv cu are_hbbtv None si
+	pid > 0): ROSU apasat acum se tine minte pana vine AIT-ul (Controlor.rosu). Fara PID (un flux de internet, PMT-ul
+	necitit) sau fara AIT in PMT (pid 0): False, tasta merge mai departe ca inainte."""
+	if not rez or rez.get("are_hbbtv") is not None:
+		return False
+	return _intreg(rez.get("pid"), -1) > 0
+
+
 def taste_din_masca(masca):
 	"""Tastele telecomenzii (coduri evdev) pe care masca Keyset le da aplicatiei."""
 	rez = set()
@@ -388,6 +419,19 @@ def fel_tasta(cod, aratat, masca=None, ascunsa=False):
 	if cod in taste_din_masca(masca):
 		return APLICATIE if (aratat or ascunsa) else RECEPTOR
 	return NIMIC if aratat else RECEPTOR
+
+
+def tasta_la_incarcare(cod, masca=None, pornita=False, tasta_pornire=KEY_RED):
+	"""O tasta colorata apasata cat aplicatia pornita de om se incarca (de la ROSU pana la show() sau pana la
+	TERMEN_ARATA_MS): None pentru celelalte taste (merg mai departe dupa fel_tasta); APLICATIE cand prima pagina a venit
+	si masca ei o are; NIMIC altfel: tasta e tinuta, nu mai ajunge la enigma2. Masurat pe receptor: ALBASTRU apasat in
+	primele secunde deschidea lista extensiilor, iar fereastra deschisa peste bara inchidea aplicatia. Tasta de pornire
+	(ROSU sau ALBASTRU) e tinuta mereu: receptorul o trimite singur cand aplicatia e gata (vezi ROSU-UL URMARIT)."""
+	if cod not in TASTE_CULORI:
+		return None
+	if cod != tasta_pornire and pornita and masca is not None and cod in taste_din_masca(masca):
+		return APLICATIE
+	return NIMIC
 
 
 def text_mesaj(fel, traducere=None):
@@ -544,6 +588,11 @@ def lipeste_url(baza, interogare, fragment):
 		baza += ("&" if "?" in baza else "?") + interogare
 	f = fragment if fragment else frag_ait
 	return baza + ("#" + f if f else "")
+
+
+# dosarul caruselului (acelasi cu HdsCaruselServer.DOSAR_CARUSEL; proba test_fz2_hbbtv_pornire_075 le compara), aici ca
+# porneste() sa nu importe serverul numai ca sa vada daca a ramas ceva de la o cadere
+DOSAR_CARUSEL_RAMAS = "/tmp/hds-carusel"
 
 
 def _server():
@@ -1290,8 +1339,9 @@ class Mediu(object):
 		if u is None:
 			return None
 		from Components import HdsDecodorWeb as D
-		if not D.webkit_cu_video(numai_stiut=True):
+		if D.webkit_cu_video(numai_stiut=True) is False:
 			return None                  # WebKit-ul fara video (sau fara /usr/bin/env): navigatorul porneste ca pana acum
+		# None (cautarea de la pornire inca merge): serverul porneste; pe un WebKit fara video nu-l cere nimeni
 		s = D.Server(asculta, self._notificator, u[1], u[2])
 		cale = s.porneste()
 		self._decodor = s if cale else None
@@ -1322,8 +1372,8 @@ class Mediu(object):
 		if not os.path.isdir("/proc/hisi/msp"):        # HdsEcranNegru.HISI_DIR: nu e HiSilicon
 			return True
 		from Components import HdsPlatforma, HdsMemorieDriver
-		if not HdsPlatforma.cuMemorieEs():
-			return True
+		if not HdsPlatforma.cuMemorieEs() or HdsPlatforma.familiaLibreader():
+			return True               # familia libreader (SF8008 si celelalte) n-are maparea lui showiframe Dinobot
 		return HdsMemorieDriver.mapareEs() != 0
 
 	def decodor_la_pornire(self):
@@ -1468,6 +1518,11 @@ class Controlor(object):
 		self._ceas_rosu_urma = mediu.ceas(self._urmaresteRosu)   # ROSU-ul urmarit, la ROSU_PAS_MS
 		self._ceas_arata = mediu.ceas(self._termenArata)
 		self._ceas_automat = mediu.ceas(self._verificaAutomat)
+		# ROSU apasat inainte de AIT-ul canalului (ait_in_asteptare): {"ref", "la", "bara"} cat se asteapta; canalele pe care
+		# AIT-ul n-a venit in ROSU_ASTEAPTA_AIT_MS (acolo tasta nu se mai tine pana cand AIT-ul lor e citit o data)
+		self._rosu_ait = None
+		self._ait_lipsa = set()
+		self._ceas_rosu_ait = mediu.ceas(self._verificaRosuAit)
 		self._ev_canal = mediu.evenimente()
 		self._ev_ait, self._ev_eit = self._din_mediu("evenimente_info", ((), ()))
 		self._video_pus = None            # fereastra video scrisa de noi (720x576); None = ecran intreg
@@ -1578,6 +1633,8 @@ class Controlor(object):
 			return 0
 		if self._car_asteapta is not None:
 			return 1                               # aplicatia se incarca deja din carusel
+		if self._rosu_ait is not None:
+			return 1                               # ROSU tinut minte pana vine AIT-ul canalului
 		if self.nav is not None:
 			if self.fundal:
 				self._dezvaluie()
@@ -1592,6 +1649,8 @@ class Controlor(object):
 		except Exception as e:
 			_jurnal("AIT-ul canalului: %s" % e)
 			return 0
+		if self._asteaptaAit(rez, ref, bara):
+			return 1
 		fel, url = hotarare_rosu(rez, self.m.in_timeshift(bara))
 		if fel == NIMIC:
 			return 0
@@ -1609,6 +1668,59 @@ class Controlor(object):
 			return 1
 		self._porneste(url, rez, ref)
 		return 1
+
+	def _asteaptaAit(self, rez, ref, bara):
+		"""ROSU apasat cat AIT-ul canalului redat nu e citit inca (ait_in_asteptare): tasta e tinuta minte si
+		_verificaRosuAit porneste aplicatia cand vine AIT-ul. False (ca inainte) in timeshift si pe canalul pe care AIT-ul
+		nu a venit data trecuta in ROSU_ASTEAPTA_AIT_MS (pana il citeste o data)."""
+		if not ait_in_asteptare(rez):
+			self._ait_lipsa.discard(ref)           # AIT-ul a venit pana la urma: data viitoare tasta se tine din nou
+			return False
+		if not ref or ref in self._ait_lipsa or self.m.in_timeshift(bara):
+			return False
+		self._rosu_ait = {"ref": ref, "la": self._timp(), "bara": bara}
+		_jurnal("ROSU inainte de AIT-ul canalului (PID %s): tinut minte" % rez.get("pid"))
+		self._ceas_rosu_ait.start(ROSU_AIT_PAS_MS, False)
+		return True
+
+	def _verificaRosuAit(self):
+		"""La ROSU_AIT_PAS_MS cat ROSU e tinut minte: AIT-ul citit -> rosu() din nou (porneste aplicatia, sau o arata pe
+		cea pornita automat); alt canal, standby, HbbTV oprit sau alta fereastra deschisa peste bara (omul a apasat intre
+		timp MENU, OK...) -> renunta; ROSU_ASTEAPTA_AIT_MS trecut fara AIT -> renunta, iar pe acest canal tasta nu se mai
+		tine pana cand AIT-ul lui e citit o data."""
+		w = self._rosu_ait
+		if w is None:
+			self._ceas_rosu_ait.stop()
+			return
+		motiv = None
+		if self._din_mediu("ref_curent", w["ref"]) != w["ref"]:
+			motiv = "canalul schimbat"
+		elif self._din_mediu("in_standby", False):
+			motiv = "standby"
+		elif not self._din_mediu("hbbtv_pornit", True):
+			motiv = "HbbTV oprit din setari"
+		elif not self._din_mediu("bara_libera", True):
+			motiv = "alta fereastra peste bara"
+		rez = None
+		if motiv is None:
+			try:
+				rez = self.m.rezumat_canal()[0]
+			except Exception as e:
+				_jurnal("AIT-ul canalului: %s" % e)
+				motiv = "eroare"
+		trecut = self._timp() - w["la"]
+		if motiv is None and ait_in_asteptare(rez):
+			if trecut * 1000 < ROSU_ASTEAPTA_AIT_MS:
+				return
+			self._ait_lipsa.add(w["ref"])
+			motiv = "AIT-ul nu a venit in %d s" % (ROSU_ASTEAPTA_AIT_MS // 1000)
+		self._ceas_rosu_ait.stop()
+		self._rosu_ait = None
+		if motiv is not None:
+			_jurnal("ROSU tinut minte: renuntat (%s)" % motiv)
+			return
+		_jurnal("AIT-ul canalului citit dupa %.1f s: ROSU-ul tinut minte merge mai departe" % trecut)
+		self.rosu(w["bara"])
 
 	def _pazaRosu(self):
 		"""ROSU apasat de om: inregistrarea care ruleaza sau memoria prea putina opresc pornirea cu un mesaj
@@ -2393,7 +2505,13 @@ class Controlor(object):
 			v = _intreg(a[0] if a else None)
 			if v is not None:
 				if (v & MASCA_MAXIM) != self.masca:
-					self._reactieRosu("masca")
+					u = self._rosu_urmarit
+					if u is not None and u["gol"]:
+						# pe ecranul gol masca noua poate fi numai pregatirea aplicatiei (o aplicatie isi pune tastele la
+						# ~2 s dupa VK_RED si tot nu deseneaza nimic): tinuta minte, vezi _urmaresteRosu
+						u["masca"] = True
+					else:
+						self._reactieRosu("masca")
 				self.masca = v & MASCA_MAXIM
 				self._trimite("taste")
 				if self._rosu_in_asteptare and self.masca & self._masca_tasta:
@@ -2755,6 +2873,18 @@ class Controlor(object):
 				return 1                           # caruselul se incarca: EXIT renunta
 			return 0
 		ascunsa = self._ascunsa()
+		if not self.aratat and not ascunsa and not self.fundal:
+			# se incarca (pana la show() sau TERMEN_ARATA_MS): culorile nu deschid ecrane enigma2 peste aplicatie
+			fel = tasta_la_incarcare(cod, self.masca if self.strat else None, self.pornita, self._tasta_pornire)
+			if fel == APLICATIE:
+				v = VALOARE_TASTA.get(flag)
+				if v is not None:
+					self.nav.tasta(cod, v)
+				return 1
+			if fel == NIMIC:
+				if flag == 0:
+					_jurnal("tasta %d tinuta: aplicatia se incarca" % cod)
+				return 1
 		fel = fel_tasta(cod, self.aratat, self.masca if self.strat else None, ascunsa)
 		if fel == RECEPTOR:
 			return 0
@@ -2820,15 +2950,26 @@ class Controlor(object):
 		if fapta == ASTEAPTA:
 			return
 		self._opresteUrmarirea()
+		nimic = u["gol"] and u["vazut"] < 2
 		if fapta == REACTIE:
 			_jurnal("VK_RED primit de aplicatie (ecranul)")
+		elif fapta == REPETA and u["gol"] and not nimic and u.get("masca"):
+			# masca noua, apoi semnul ei mic: aplicatia a primit tasta si a raspuns (o bara mica), fara alta tasta
+			_jurnal("VK_RED primit de aplicatie (masca, apoi semnul ei)")
 		elif fapta == REPETA:
+			u["repetari"] = u.get("repetari", 0) + 1
 			_jurnal("%s trimis din nou dupa %d ms (%s)" % ("VK_BLUE" if self._tasta_pornire == KEY_BLUE else "VK_RED",
-				u["pasi"] * ROSU_PAS_MS, ("semnul aplicatiei aparut" if u["vazut"] >= 2 else "nimic desenat") if u["gol"]
-				else "ecranul neschimbat"))
+				u["pasi"] * ROSU_PAS_MS, ("semnul aplicatiei aparut" if not nimic else "nimic desenat, a %d-a oara" %
+				u["repetari"]) if u["gol"] else "ecranul neschimbat"))
 			self._rosu_trimis_la = self._timp()
 			self.nav.tasta(self._tasta_pornire, 1)
 			self.nav.tasta(self._tasta_pornire, 0)
+			if nimic and u["repetari"] < ROSU_GOL_REPETARI:
+				# tot nimic pe ecran: aplicatia inca nu-si asculta tastele (uneori 4-9 s dupa show()); se urmareste
+				# mai departe si tasta pleaca din nou peste ROSU_SEMN_MAXIM_MS, pana la desen, tasta omului sau capat
+				u["pasi"], u["vazut"] = 0, 0
+				self._rosu_urmarit = u
+				self._ceas_rosu_urma.start(ROSU_PAS_MS, False)
 
 	def laIncarcare(self):
 		"""Lansatorul incepe o pagina noua (INCARCARE): dupa VK_RED, aplicatia l-a primit si merge mai departe. Filmul
@@ -3140,7 +3281,11 @@ def porneste(session):
 	except Exception as e:
 		_jurnal("decodorul la pornire: %s" % e)
 	try:
-		_server().curata()                 # caruselul ramas de la o cadere a interfetei
+		# caruselul ramas de la o cadere a interfetei. Modulul serverului (http.server, socketserver, demux-ul
+		# caruselului) se importa numai cand chiar a ramas ceva: importul tinea firul interfetei 5-7 s la fiecare
+		# pornire (randul paznicului get_data <- porneste, 0.7.5), ca sa nu gaseasca de obicei nimic de sters
+		if os.path.lexists(DOSAR_CARUSEL_RAMAS):
+			_server().curata(DOSAR_CARUSEL_RAMAS)
 	except Exception as e:
 		_jurnal("caruselul ramas: %s" % e)
 	c = controlor(session)

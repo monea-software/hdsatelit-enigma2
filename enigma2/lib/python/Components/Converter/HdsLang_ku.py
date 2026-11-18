@@ -308,4 +308,10 @@ T = {
 	"cpu_mode": u"Moda pêvajoyê",
 	"cpu_volt": u"Voltaj",
 	"cpu_steps": u"Dem li gor frekansê",
+	"bitrate_va": u"Bitrate vîdyo · deng",
+	"br_min": u"min",
+	"br_max": u"maks",
+	"br_avg": u"navîn",
+	"ecm_hop": u"Bazdan",
+	"ecm_reader": u"Xwîner",
 }

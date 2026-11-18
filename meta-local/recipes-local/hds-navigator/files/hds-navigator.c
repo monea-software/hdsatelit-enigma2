@@ -105,6 +105,11 @@
  * „TIMP tasta-cadru MS” (primul cadru dupa ea), „TIMP tasta-chenar MS” (chenarul a ajuns pe noul element) si
  * „TIMP tasta-gata MS CADRE” (ultimul cadru inainte de 300 ms de liniste).
  *
+ * Tasta tinuta (0.7.7, in afara modului HbbTV): o singura tasta de navigare (sagetile, P+/P-) e "in zbor" spre pagina;
+ * repetarile telecomenzii (valoarea 2) venite cat pagina n-a terminat-o pe cea de dinainte se sar, ca sa nu se adune la
+ * coada (pe procesor o sageata pe o pagina mare cere secunde). Pagina spune ca a terminat tasta prin mesajul
+ * "hdsnavtasta" (SCRIPT_TASTA_GATA); apasarile noi si eliberarea trec mereu. La eliberare: "TIMP repetari-sarite N".
+ *
  * Din 0.7.0, numai in modul HbbTV:
  * - Traducerea textelor paginii prin receptor: comanda paginii "tradu ID BASE64" (ID din cifre si litere mici, cel mult
  *   16; BASE64 = JSON-ul facut de pagina) trece spre enigma2 ca orice comanda, cu un debit al ei
@@ -206,6 +211,7 @@ static struct {
     char *limba;
     char *cache;
     gboolean hbbtv;
+    gboolean autoplay;
     char *agent_adaugat;
     char *agent;
     char *script;
@@ -257,6 +263,7 @@ static GOptionEntry intrari_optiuni[] = {
     { "limba", 0, 0, G_OPTION_ARG_STRING, &opt.limba, "Limba preferata a paginilor (de exemplu ro)", "COD" },
     { "cache", 0, 0, G_OPTION_ARG_FILENAME, &opt.cache, "Dosarul cache-ului (implicit <date>/cache)", "CALE" },
     { "hbbtv", 0, 0, G_OPTION_ARG_NONE, &opt.hbbtv, "Modul HbbTV: fundal transparent, tastele HbbTV, constantele VK_*", NULL },
+    { "autoplay", 0, 0, G_OPTION_ARG_NONE, &opt.autoplay, "Filmele paginii pornesc si cu sunet, ca la televizoare (aplicatiile meniului Aplicatii)", NULL },
     { "agent-adaugat", 0, 0, G_OPTION_ARG_STRING, &opt.agent_adaugat, "Text adaugat la sfarsitul User-Agent-ului (partea HbbTV)", "TEXT" },
     { "agent", 0, 0, G_OPTION_ARG_STRING, &opt.agent, "User-Agent-ul intreg, in locul celui WebKit (scurtaturile meniului Aplicatii)", "TEXT" },
     { "script", 0, 0, G_OPTION_ARG_FILENAME, &opt.script, "Script JavaScript pus in toate cadrele la inceputul fiecarui document (harta tastelor unei aplicatii)", "CALE" },
@@ -1102,6 +1109,76 @@ static void masura_cadru(void)
     masura.cadre++;
 }
 
+/* ---------------------------------------------------------------- tasta tinuta */
+
+/* Pe procesor (receptoarele cu Mali-450, unde desenul GL cade) o sageata pe o pagina mare cere firului paginii 0,6-2,7 s
+ * (navigarea spatiala WebKit cauta prin toate elementele paginii la fiecare sageata; JavaScript fara JIT), iar telecomanda
+ * trimite ~10 repetari pe secunda cat tasta e tinuta. Trimise toate, ele se adunau la coada: pagina se tot muta secunde dupa
+ * eliberare si nu raspundea la nicio alta tasta (masurat pe un receptor Hi3798MV200: 1,45 s de tasta tinuta pe o pagina cu
+ * 7000 de legaturi = ~5,5 s de lucru dupa eliberare). Acum o singura tasta de navigare e "in zbor": pana cand pagina o
+ * termina (mesajul "hdsnavtasta", trimis de SCRIPT_TASTA_GATA dupa tratarea ei) sau trec TASTA_IN_ZBOR_MAXIM_MS, repetarile
+ * se sar. Apasarile noi (valoarea 1) si eliberarea (0) trec mereu, deci nicio apasare a omului nu se pierde. Termenul e
+ * numai plasa pentru o tasta fara raspuns (de pilda in timpul unei navigari): pe o pagina foarte mare firul paginii poate
+ * sta ocupat si 11-12 s dupa o derulare, iar un termen mai scurt ar lasa iar coada sa creasca; apasarile noi trec oricum. */
+#define TASTA_IN_ZBOR_MAXIM_MS 15000
+
+static struct {
+    gboolean in_zbor;                 /* tasta de dinainte inca nu e terminata de pagina */
+    gint64 trimisa;                   /* cand a plecat ea */
+    guint sarite;                     /* repetarile sarite de la ultima eliberare */
+} tinuta;
+
+/* TINUTA-INCEPUT */
+/* Hotararea pentru o tasta de navigare: 1 = se trimite paginii, 0 = se sare. valoare: 1 apasare, 2 repetare, 0 eliberare
+ * (ca evdev); in_zbor: tasta de dinainte inca nu e terminata de pagina; de_la_ms: de cand a plecat ea; maxim_ms: dupa atat
+ * trece oricum urmatoarea (pagina fara scriptul nostru, de pilda un cadru gol). */
+static int tinuta_trimite(int valoare, int in_zbor, long long de_la_ms, long long maxim_ms)
+{
+    if (valoare != 2)
+        return 1;
+    return !in_zbor || de_la_ms < 0 || de_la_ms >= maxim_ms;
+}
+/* TINUTA-SFARSIT */
+
+/* Sagetile si P+/P- (CH+/CH-): tastele care cer paginii navigarea spatiala sau derularea. */
+static gboolean tasta_de_navigare(guint cod)
+{
+    switch (cod) {
+    case KEY_UP: case KEY_DOWN: case KEY_LEFT: case KEY_RIGHT:
+    case KEY_PAGEUP: case KEY_PAGEDOWN: case KEY_CHANNELUP: case KEY_CHANNELDOWN:
+        return TRUE;
+    default:
+        return FALSE;
+    }
+}
+
+/* FALSE: repetarea se sare (tasta de dinainte inca e in pagina). La eliberare spune cate repetari s-au sarit. */
+static gboolean tinuta_lasa(guint cod, int valoare)
+{
+    if (!tasta_de_navigare(cod))
+        return TRUE;
+    gint64 acum = g_get_monotonic_time();
+    if (!tinuta_trimite(valoare, tinuta.in_zbor, (acum - tinuta.trimisa) / 1000, TASTA_IN_ZBOR_MAXIM_MS)) {
+        tinuta.sarite++;
+        return FALSE;
+    }
+    if (valoare != 0) {
+        tinuta.in_zbor = TRUE;
+        tinuta.trimisa = acum;
+    } else if (tinuta.sarite) {
+        stare_f("TIMP repetari-sarite %u", tinuta.sarite);
+        tinuta.sarite = 0;
+    }
+    return TRUE;
+}
+
+/* Mesajul "hdsnavtasta": pagina a terminat tasta (si navigarea spatiala sau derularea ei). */
+static void tasta_gata(WebKitUserContentManager *m, JSCValue *v, gpointer d)
+{
+    (void)m; (void)v; (void)d;
+    tinuta.in_zbor = FALSE;
+}
+
 /* ---------------------------------------------------------------- textele stratului (FreeType) */
 
 /* O eticheta gata desenata: fundal inchis opac, margine galbena, litere albe. */
@@ -1860,6 +1937,18 @@ static char *adresa_reluare;     /* pagina deschisa cand procesul web a cazut */
 static gboolean reporneste_pe_cpu;
 static guint cadre_primite;
 static guint paza_cadre;
+/* Pagina aratata devreme (0.7.7, HB4, r12): pe un procesor slab (desen pe procesor, JavaScript fara JIT) paginile grele
+ * ajung la LOAD_FINISHED tarziu sau deloc (www.hdsatelit.com/?tv=1 pe receptorul de proba: 90 % la 5 s, fara "load" in 40 s, procesul web
+ * plin; pe Vu+ Solo SE termenul de 30 s al enigma2), iar pana atunci pagina sta ascunsa. In afara modului HbbTV si a
+ * modului CAM, PRIMA-PAGINA se anunta si la primul cadru dupa LOAD_COMMITTED, cand progresul a trecut de ARATARE_PROGRES
+ * sau au trecut ARATARE_DUPA_MS de la angajare. */
+#define ARATARE_PROGRES 50
+#define ARATARE_DUPA_MS 3000
+static gboolean pagina_angajata;
+static gint64 angajata_la;
+static guint cadre_dupa_angajare;
+static gboolean primul_cadru_scris;
+static guint ceas_aratare;
 
 #define INTRARI_MAXIM 16
 static int intrari_fd[INTRARI_MAXIM];
@@ -2024,6 +2113,14 @@ static const char SCRIPT_CHENAR[] =
     "try{if(a.shadowRoot.delegatesFocus){a.shadowRoot.activeElement.blur();return;}"
     "if(!a.hasAttribute('tabindex'))a.setAttribute('tabindex','-1');a.focus();}catch(x){}},true);})();";
 
+/* Injectat in toate cadrele (in afara modului HbbTV): dupa fiecare keydown, cand pagina a terminat-o (setTimeout 0: dupa
+ * ascultatorii paginii si dupa tratarea implicita, deci si dupa navigarea spatiala sau derulare), mesajul "hdsnavtasta"
+ * catre lansator (tasta tinuta, mai sus). Ascultatorul e pe window, la captura, pus inaintea scripturilor sitului. */
+static const char SCRIPT_TASTA_GATA[] =
+    "(function(){if(window.__hdsTastaGata)return;window.__hdsTastaGata=1;"
+    "window.addEventListener('keydown',function(){setTimeout(function(){"
+    "try{window.webkit.messageHandlers.hdsnavtasta.postMessage('');}catch(x){}},0);},true);})();";
+
 /* Injectat in toate cadrele (in afara modului HbbTV): fiecare regula CSS cu :hover a paginii (si din @media) se copiaza,
  * cu :focus-within in loc de :hover, intr-o foaie <style id="hds-meniuri"> pusa la sfarsitul lui <head>; numai partile
  * selectorului care au :hover. Foile noi (<style>, <link> adaugate sau incarcate mai tarziu) se trec si ele, o singura
@@ -2128,11 +2225,45 @@ static void anunta_prima_pagina(void)
 
 /* O pagina statica poate avea toate cadrele inainte de sfarsitul incarcarii: PRIMA-PAGINA se anunta la primul
  * cadru dupa incarcare sau chiar la incarcare, daca au venit deja cadre. */
+/* Aratarea devreme se verifica la fiecare cadru, la fiecare pas al progresului si o data la ARATARE_DUPA_MS de la
+ * angajare: un proces web plin poate sa nu mai deseneze nimic dupa primul cadru, iar acel cadru ajunge pentru pagina. */
+static void verifica_aratare_devreme(void)
+{
+    if (!pagina_angajata || pagina_incarcata || prima_pagina_anuntata || !cadre_dupa_angajare)
+        return;
+    if (opt.hbbtv || (opt.numai_gazda && *opt.numai_gazda))
+        return;
+    gint64 ms = (g_get_monotonic_time() - angajata_la) / 1000;
+    if (ultim_progres >= ARATARE_PROGRES || ms >= ARATARE_DUPA_MS) {
+        stare_f("PRIMA-PAGINA-DEVREME %d %d", (int)ms, ultim_progres);
+        anunta_prima_pagina();
+    }
+}
+
+static gboolean aratare_la_termen(gpointer d)
+{
+    (void)d;
+    ceas_aratare = 0;
+    verifica_aratare_devreme();
+    return G_SOURCE_REMOVE;
+}
+
 static void cadru_afisat(void)
 {
     cadre_primite++;
-    if (pagina_incarcata)
+    if (pagina_incarcata) {
         anunta_prima_pagina();
+        return;
+    }
+    if (!pagina_angajata)
+        return;
+    cadre_dupa_angajare++;
+    if (!primul_cadru_scris) {
+        /* o data pe pornire: cand vine primul cadru dupa angajare si cu ce progres (dovada din teren) */
+        primul_cadru_scris = TRUE;
+        stare_f("PRIMUL-CADRU %d %d", (int)((g_get_monotonic_time() - angajata_la) / 1000), ultim_progres);
+    }
+    verifica_aratare_devreme();
 }
 
 /* GL care porneste dar nu deseneaza (context refuzat de driver fara caderea procesului web): niciun cadru la
@@ -2289,6 +2420,7 @@ static void progres_schimbat(WebKitWebView *v, GParamSpec *p, gpointer d)
     if (procent >= ultim_progres + 5 || procent == 100 || procent < ultim_progres) {
         ultim_progres = procent;
         stare_f("PROGRES %d", procent);
+        verifica_aratare_devreme();
     }
 }
 
@@ -2297,8 +2429,16 @@ static void incarcare_schimbata(WebKitWebView *v, WebKitLoadEvent ev, gpointer d
     (void)d;
     if (ev == WEBKIT_LOAD_STARTED) {
         ultim_progres = -1;
+        pagina_angajata = FALSE;
         stare("INCARCARE");
     } else if (ev == WEBKIT_LOAD_COMMITTED) {
+        pagina_angajata = TRUE;
+        tinuta.in_zbor = FALSE;     /* documentul nou nu raspunde pentru tastele celui vechi */
+        angajata_la = g_get_monotonic_time();
+        cadre_dupa_angajare = 0;
+        if (ceas_aratare)
+            g_source_remove(ceas_aratare);
+        ceas_aratare = g_timeout_add(ARATARE_DUPA_MS, aratare_la_termen, NULL);
         chenar_uita();
         marire_pentru_pagina(webkit_web_view_get_uri(v));
         if (strcmp(camp_fel, "niciunul")) {
@@ -3141,6 +3281,8 @@ static void tasta_telecomanda(guint cod, int valoare)
     default:
         return;
     }
+    if (!tinuta_lasa(cod, valoare))
+        return;
     trimite_tasta(keyval, cod, apasat);
 }
 
@@ -4426,6 +4568,13 @@ int main(int argc, char **argv)
             WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL);
         webkit_user_content_manager_add_script(continut, ch);
         webkit_user_script_unref(ch);
+        /* tasta tinuta: pagina spune cand a terminat fiecare tasta */
+        g_signal_connect(continut, "script-message-received::hdsnavtasta", G_CALLBACK(tasta_gata), NULL);
+        webkit_user_content_manager_register_script_message_handler(continut, "hdsnavtasta", NULL);
+        WebKitUserScript *tg = webkit_user_script_new(SCRIPT_TASTA_GATA, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+            WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL);
+        webkit_user_content_manager_add_script(continut, tg);
+        webkit_user_script_unref(tg);
         /* meniurile deschise numai sub mouse se deschid si la focalizare */
         WebKitUserScript *mn = webkit_user_script_new(SCRIPT_MENIURI, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
             WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL);
@@ -4439,9 +4588,10 @@ int main(int argc, char **argv)
     }
 
     /* autoplay (H20-AUTOPLAY): in modul HbbTV filmele aplicatiilor pornesc si cu sunet, ca la televizoare (tastele vin de la
-     * enigma2, nu ca gesturi ale omului); regula implicita a WebKit-ului (fara sunet) le pune in pauza dupa pornire */
+     * enigma2, nu ca gesturi ale omului); regula implicita a WebKit-ului (fara sunet) le pune in pauza dupa pornire. La fel
+     * cu --autoplay: aplicatiile pentru televizor din meniul Aplicatii (YouTube), unde OK-ul omului vine tot de la enigma2 */
     WebKitWebsitePolicies *politici = webkit_website_policies_new_with_policies("autoplay",
-        opt.hbbtv ? WEBKIT_AUTOPLAY_ALLOW : WEBKIT_AUTOPLAY_ALLOW_WITHOUT_SOUND, NULL);
+        opt.hbbtv || opt.autoplay ? WEBKIT_AUTOPLAY_ALLOW : WEBKIT_AUTOPLAY_ALLOW_WITHOUT_SOUND, NULL);
     vedere = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
         "web-context", context,
         "network-session", sesiune,

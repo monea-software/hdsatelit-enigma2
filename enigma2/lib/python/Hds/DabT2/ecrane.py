@@ -266,6 +266,7 @@ class EcranPrincipal(Screen):
         self.onClose.append(self._la_inchidere)
 
     def _la_inchidere(self):
+        self._inchis = True
         self.fundal.opreste()
         if self.scanare is not None:
             self.scanare.opreste()
@@ -330,7 +331,9 @@ class EcranPrincipal(Screen):
 
     def _stare_curenta(self):
         c = self.ctrl
-        if c.stare == 'canta' and c.feed:
+        if getattr(c, 'rotire', False) and c.stare in ('pregatire', 'canta') and c.feed:
+            self['stare'].setText(_('Se roteste antena'))     # postul asteapta antena cu motor (pornire.py)
+        elif c.stare == 'canta' and c.feed:
             self['stare'].setText(_('Canta acum: %s pe %s') % (compat.text_nativ(nume_feed(c.feed)),
                                                             tuner.text_transponder(c.tp)))
         elif c.stare == 'pregatire':
@@ -521,10 +524,18 @@ class EcranPrincipal(Screen):
 
     @_pazit
     def _invatat(self, ok, rez):
+        # raspunsul invatarii poate veni dupa ce omul a inchis ecranul: controlorul invata mai departe, iar Screen.doClose
+        # ii sterge componentele (KeyError 'stare'); rezultatul ramane in lista, ecranul nu mai are ce arata
+        if getattr(self, '_inchis', False):
+            return
+        try:
+            stare = self['stare']
+        except KeyError:
+            return
         if ok:
-            self['stare'].setText(text_gasite(self.profil, rez))
+            stare.setText(text_gasite(self.profil, rez))
         else:
-            self['stare'].setText(str(rez))
+            stare.setText(str(rez))
         self.umple()
 
 

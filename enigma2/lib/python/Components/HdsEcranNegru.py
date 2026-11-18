@@ -23,6 +23,22 @@
 #   iese imagine din decodor, sta pe loc cand pachetele sunt criptate sau nu vin), altfel din evVideoSizeChanged venit
 #   dupa evStart sau din inaltimea video (nesigure pe unele drivere, deci numai in partea care nu arata mesajul).
 #   Un contor care scade (decodor refacut) nu se socoteste imagine.
+#   Din 0.7.7, pe celelalte placi (Vu+ si restul Broadcom) contorul se face din PTS-ul video al decodorului (CadreDinPts,
+#   lib/service/servicedvb.cpp getInfo(sUser+40)): fiecare citire cu PTS diferit de cea dinainte e un cadru nou. Pe Vu+
+#   evenimentul video vine numai cand se schimba marimea imaginii, iar cu „Ultima imagine” inaltimea ramane a canalului de
+#   dinainte, deci un canal acordat fara imagine (criptat fara modul) parea cu imagine: niciun mesaj, iar cadrul vechi
+#   ramanea pe ecran oricat (asistenta 888733, Vu+ Duo 4K SE; mesajul de tester 18 „imaginea ingheata la schimbarea
+#   canalului”). Contorul din PTS se foloseste numai dupa ce PTS-ul s-a vazut miscandu-se pe acel receptor in pornirea de
+#   acum (_PTS["dovedit"]); pana atunci, si pe un enigma2 fara cheie, ramane felul de dinainte.
+# - fondul negru (0.7.7): cu „La schimbarea canalului” = „Ultima imagine” (din fabrica) driverul tine cadrul canalului de
+#   dinainte pana vine primul cadru al celui nou, deci pe un canal care nu da imagine ramanea fara limita. Cand masura e
+#   sigura (contorul de mai sus, nu evenimentul sau inaltimea) si de la schimbare au trecut PRAG_FOND secunde fara niciun
+#   cadru nou pe un canal TV prin DVB (nu radio, pauza, PiP, fisier, flux IP, standby), urmaritorul spune „negru”
+#   (stareFond), iar legatura (Screens/HdsEcranNegru.py) pune peste imagine, sub bare si sub mesaj, un fond negru pe tot
+#   ecranul. Fondul ramane si la zap-ul urmator pana vin cadre noi (cine trece prin mai multe canale criptate la rand vede
+#   negru, nu iar cadrul vechi) si se ascunde la cel mult PAS_FOND_MS dupa primul cadru nou. Cu „Ecran negru” nu se vede
+#   nicio diferenta. Fara setare noua; o masura nesigura nu pune niciodata fondul (mai bine cadrul vechi decat negru peste
+#   un canal bun).
 # - textele: fraza simpla pe intelesul oricui, fapta (butonul) unde ajuta si detaliul tehnic, mai mic. Aceleasi texte
 #   pe televizor, in ferestrele de eroare si in web.
 #
@@ -62,6 +78,12 @@ PRAG_SUNET_FLUX = 8.0  # flux prin alt serviciu de redare, fara numarul pistelor
 URMARIRE_FLUX_S = 30.0 # fluxul prin GStreamer fara imagine si fara verdict se mai urmareste atatea secunde
 PAS_ASTEPTARE_MS = 1000
 PAS_IMAGINE_MS = 2000
+# fondul negru: fara niciun cadru nou atatea secunde de la schimbare (toate zap-urile reusite masurate pe Vu+ Duo 4K SE in
+# asistenta 888733 au dat imaginea in 0,7-2,9 s), apoi verificarea repede a cadrelor cat se vede fondul
+PRAG_FOND = 4.0
+PAS_FOND_MS = 300
+# lib/service/servicedvb.cpp: getInfo(sUser + INFO_PTS) = PTS-ul video (31 de biti), -1 fara PTS, -2 fara decodor
+INFO_PTS = 40
 MAX_ETICHETE = 4
 MAX_CAID_DETALIU = 6
 # „Tunerul este ocupat”: cate inregistrari se numesc (celelalte: „și încă N”) si cate litere are cel mult un nume
@@ -99,8 +121,11 @@ DATE = "date"
 CRIPTAT = "criptat"
 FARA_IMAGINE = "fara_imagine"
 NUMAI_SUNET = "numai_sunet"
+# canal DVB-T2 din satelit prin releul local: binarul T2 nu a deschis inca sesiunea 8001 pe purtator (pauza, limita sau
+# conectarea), deci lipsa PAT-ului nu spune nimic despre frecventa (OC2, Abertis 30W: 45-54 s dupa player)
+T2_PORNESTE = "t2_porneste"
 CODURI = (BLOCAT, FARA_TUNER, TUNER_NESETAT, MULTISTREAM_FARA_TUNER, LOC_NESTABILIT, SUB_ORIZONT, ANTENA, FARA_SEMNAL, FRECVENTA_GOALA, POST_MUTAT, FARA_PMT,
-	FORMAT, DATE, CRIPTAT, FARA_IMAGINE, NUMAI_SUNET)
+	FORMAT, DATE, CRIPTAT, FARA_IMAGINE, NUMAI_SUNET, T2_PORNESTE)
 
 # faptele (butonul de pe televizor si din web)
 F_CAUTA_TP = "cauta_tp"          # cautarea din nou pe transponderul canalului
@@ -159,6 +184,7 @@ TITLURI = {
 	CRIPTAT: N_("Acces condiționat"),
 	FARA_IMAGINE: N_("Fără imagine"),
 	NUMAI_SUNET: N_("Numai sunet"),
+	T2_PORNESTE: N_("Pornește fluxul DVB-T2"),
 }
 
 TEXTE = {
@@ -179,7 +205,9 @@ TEXTE = {
 	CRIPTAT: N_("Canalul este criptat. Niciun modul de acces condiționat nu îl decriptează."),
 	FARA_IMAGINE: N_("Canalul nu trimite imagine acum. Emisia poate fi oprită sau canalul s-a mutat."),
 	NUMAI_SUNET: N_("Canalul trimite acum numai sunet, fără imagine."),
+	T2_PORNESTE: N_("Receptorul pornește fluxul DVB-T2 din satelit. Canalul apare după ce tunerul primește datele."),
 }
+T_T2_PORNESTE_SEC = N_("Receptorul pornește fluxul DVB-T2 din satelit. Tunerul se conectează în %d secunde.")
 T_ANTENA_SPRE = N_("Antena se rotește spre %s. Imaginea apare după ce ajunge.")
 T_ANTENA = N_("Antena se rotește. Imaginea apare după ce ajunge.")
 # plecarea antenei nu se stie (dupa pornire, dupa flash, dupa o pozitie uitata): se stie numai ca a plecat comanda
@@ -413,6 +441,11 @@ def analizeaza(d):
 		# canalul DVB-T2 din satelit prin releul local cu fluxul numai criptat (BISS fara cheie, Abertis 30W): frecventa
 		# trimite, dar releul nu are ce desface; nu "Frecventa nu trimite nimic" cu o cautare noua
 		return _verdict(CRIPTAT, d, text=_t(TEXTE[CRIPTAT]))
+	if eroare == E_FARA_PAT and d.get("t2_porneste") is not None:
+		# releul T2 nu a deschis inca sesiunea 8001 pe purtator: nimic de facut de om, fara cautare noua
+		sec = d["t2_porneste"]
+		text = _t(T_T2_PORNESTE_SEC) % sec if sec > 0 else _t(TEXTE[T2_PORNESTE])
+		return _verdict(T2_PORNESTE, d, text=text)
 	if eroare == E_FARA_PAT:
 		return _verdict(FRECVENTA_GOALA, d, fapta=F_CAUTA, detaliu=_detaliu(_t(DETALII[FRECVENTA_GOALA])))
 	if eroare == E_FARA_SID:
@@ -537,7 +570,47 @@ def verdict_eroare(eroare, fel="s", canal=u""):
 		d["multistream_fara_tuner"] = multistream_fara_tuner(_refRedata())
 	if eroare == E_FARA_PAT:
 		d["t2_criptat"] = t2_releu_criptat(_refRedata())
+		d["t2_porneste"] = t2_releu_porneste(_refRedata())
 	return analizeaza(d)
+
+
+STAT_T2 = "/tmp/hdst2mi-stat.json"      # statisticile binarului T2 (Hds/DabT2/t2/bin/t2mi_decap.c, -j)
+# starile intrarii HTTP a binarului in care nu a venit inca nicio sesiune 8001 (h_nume din t2mi_decap.c)
+STARI_T2_INAINTE = ("asteapta_client", "conectare", "astept_date", "pauza", "limita")
+
+
+def _este_releu_t2(ref):
+	try:
+		s = ref.toString() if hasattr(ref, "toString") else str(ref or "")
+	except Exception:
+		return False
+	return "127.0.0.1%3a8889/t2/" in s or "127.0.0.1:8889/t2/" in s
+
+
+def t2_releu_porneste(ref, cale=STAT_T2, proc="/proc"):
+	"""Canal DVB-T2 din satelit prin releul local, iar binarul T2 (viu) nu a deschis inca nicio sesiune 8001 pe
+	purtator si nu a primit niciun octet: asteapta clientul, pauza, limita de conexiuni sau raspunsul serverului.
+	-> secundele pana la conectare (pauza_ramasa_ms rotunjit in sus; 0 = nu se stie) sau None (alt caz: fara releu,
+	sesiune deja deschisa, date venite, fisier lipsa sau stricat). Masurat pe Octagon (OC2): dupa o cautare
+	DVB-T2 prin satelit binarul pornit la zap sta in limita (fereastra de 4 conexiuni plina) pana la 50 s, iar eventNoPAT
+	vine dupa ~10 s."""
+	if not _este_releu_t2(ref):
+		return None
+	import json
+	try:
+		with open(cale) as f:
+			st = json.loads(f.read(65536))
+		if str(st.get("http_stare")) not in STARI_T2_INAINTE:
+			return None
+		if int(st.get("sesiuni_8001") or 0) or int(st.get("octeti_intrare") or 0) or st.get("antet_200") is True:
+			return None
+		pid = int(st.get("pid") or 0)
+		if pid <= 0 or not os.path.exists(os.path.join(proc, str(pid))):
+			return None
+		ms = int(st.get("pauza_ramasa_ms") or 0)
+	except Exception:
+		return None
+	return max(0, (ms + 999) // 1000)
 
 
 def t2_releu_criptat(ref):
@@ -707,8 +780,10 @@ def cadre_din_text(text):
 
 
 def cadre_hisilicon(citeste=None):
-	"""Cadrele iesite din decodoarele video care ruleaza (suma vdec00 si vdec01), sau None cand nu se pot citi (fisierele lipsesc sau firul de
-	citire e ocupat: dupa un flux de internet driverul poate tine citirea cat se inchide playerul). Un decodor oprit nu adauga nimic.
+	"""Cadrele iesite din decodoarele video (suma vdec00 si vdec01), sau None cand nu se pot citi (fisierele lipsesc sau firul de
+	citire e ocupat: dupa un flux de internet driverul poate tine citirea cat se inchide playerul). Un decodor oprit isi pastreaza
+	contorul in suma (PRN, masurat pe receptor: la zap decodorul trece RUN 1 -> STOP 1 -> RUN 1; fara el suma era 1 -> 0 -> 1, iar 0 -> 1 parea un
+	cadru nou si fondul negru VUZ se ascundea pe un canal fara semnal); el nu creste, deci nu aduce cadre noi.
 	Inainte, necititul dadea 0, adica "nicio imagine", si aparea "Fara imagine" peste un canal cu imagine buna.
 	Fara citeste (pe receptor): amandoua fisierele intr-o singura cerere catre firul de fundal (_citeste_vdec_direct)."""
 	if citeste is None:
@@ -720,8 +795,7 @@ def cadre_hisilicon(citeste=None):
 		if rez is None:
 			continue
 		gasit = True
-		if rez[0]:
-			total += rez[1]
+		total += rez[1]
 	if not gasit:
 		return None
 	return total
@@ -884,6 +958,36 @@ def fapta_web(fapta):
 
 # ---------------------------------------------------------------- urmaritorul (pe receptor)
 
+# PTS-ul s-a vazut miscandu-se pe acest receptor in pornirea de acum: abia atunci contorul din PTS e o masura sigura
+_PTS = {"dovedit": False}
+
+
+class CadreDinPts(object):
+	"""Contorul de cadre al placilor fara contorul HiSilicon, facut din PTS-ul video (aceeasi forma ca cadre_hisilicon,
+	pentru Urmaritor.imagine): creste cu 1 la fiecare citire cu PTS diferit de citirea buna de dinainte. citeste() -> PTS
+	(>= 0), -1 (decodorul nu da PTS), -2 (fara decodor) sau None (fara serviciu, raspuns ciudat). Intoarce None cat PTS-ul nu
+	s-a vazut miscandu-se pe receptor (_PTS) sau cand citirea nu spune nimic; -1 si -2 nu adauga nimic (niciun cadru nou)."""
+
+	def __init__(self, citeste):
+		self.citeste = citeste
+		self.n = 0
+		self.ultim = None
+
+	def dinNou(self):
+		"""Canal nou: prima citire numai se tine minte (PTS-ul canalului dinainte nu e un cadru nou)."""
+		self.ultim = None
+
+	def __call__(self):
+		v = self.citeste()
+		if type(v) is not int or v < -2:
+			return None
+		if v >= 0:
+			if self.ultim is not None and v != self.ultim:
+				self.n += 1
+				_PTS["dovedit"] = True
+			self.ultim = v
+		return self.n if _PTS["dovedit"] else None
+
 
 def _monoton():
 	try:
@@ -903,12 +1007,17 @@ class _Sursa(object):
 class Urmaritor(object):
 	"""Culege fotografia si da verdictul prin `schimbat(verdict)`; eTimer-ul merge numai cat e ceva de urmarit."""
 
-	def __init__(self, session, schimbat, infobar=None, ceas=None, cadre=None):
+	def __init__(self, session, schimbat, infobar=None, ceas=None, cadre=None, fond=None):
 		self.session = session
 		self.schimbat = schimbat
 		self.infobar = infobar
 		self.ceas = ceas or _monoton
-		self.cadre = cadre if cadre is not None else (cadre_hisilicon if hisilicon() else None)
+		self.cadre = cadre if cadre is not None else (cadre_hisilicon if hisilicon() else CadreDinPts(self._citestePts))
+		# fondul negru: fond(stare) la fiecare pas, cu stare "negru" / "asteapta" / None (stareFond)
+		self.fond = fond
+		self.stare_fond = None
+		# masura de la ultimul imagine(): contorul a spus ceva (nu evenimentul sau inaltimea)
+		self.sigur = False
 		self.pornit_la = self.ceas()
 		self.cadre_prev = None
 		self.cadre_la = -1.0
@@ -928,6 +1037,9 @@ class Urmaritor(object):
 		self.cadre_la = -1.0
 		self.video_ev = False
 		self.oprit = False
+		dinNou = getattr(self.cadre, "dinNou", None)
+		if dinNou is not None:
+			dinNou()
 
 	def laStart(self):
 		self._dinNou(self.ceas())
@@ -973,13 +1085,20 @@ class Urmaritor(object):
 				self.schimbat(v)
 			except Exception as e:
 				print("[HdsEcranNegru] fereastra: %s: %s" % (type(e).__name__, e))
+		if self.fond is not None:
+			try:
+				self.fond(self.stare_fond if urmarit else None)
+			except Exception as e:
+				print("[HdsEcranNegru] fondul: %s: %s" % (type(e).__name__, e))
 		if urmarit:
 			self._planifica(PAS_IMAGINE_MS if (vine and v is None) else PAS_ASTEPTARE_MS)
 
 	def calculeaza(self):
 		"""(verdict, mai e de urmarit, imaginea vine)."""
+		self.sigur = False
 		d = self.fotografie()
 		v = analizeaza(d)
+		self.stare_fond = self.stareFond(d)
 		urmarit = not d.get("nimic") and not d.get("radio") and (d.get("fel") in FEL_DVB or bool(d.get("flux_dvb")))
 		if d.get("flux_gst") and not d.get("nimic"):
 			# fluxul prin GStreamer: cat nu vine imaginea, cel mult URMARIRE_FLUX_S fara verdict (evenimentele il pornesc din nou)
@@ -989,7 +1108,8 @@ class Urmaritor(object):
 	# ---- imaginea
 
 	def imagine(self, acum, inaltime):
-		"""(imaginea vine: True / False, secunde fara imagine)."""
+		"""(imaginea vine: True / False, secunde fara imagine). self.sigur: raspunsul vine din contorul de cadre."""
+		self.sigur = False
 		if self.cadre is not None:
 			n = self.cadre()
 			if n is not None:
@@ -1001,10 +1121,50 @@ class Urmaritor(object):
 					# marimea imaginii a venit dupa pornire, dar contorul nu s-a miscat deloc: contorul nu spune nimic despre acest decodor
 					# (de pilda dupa un flux de internet); fara cadre deloc nu vine nici marimea, deci nu e ecran negru
 					return True, 0.0
+				self.sigur = True
 				baza = self.cadre_la if vazut else self.pornit_la
 				return (vazut and acum - self.cadre_la < PRAG_CADRE), max(0.0, acum - baza)
 		vazut = self.video_ev or inaltime > 0
 		return vazut, (0.0 if vazut else max(0.0, acum - self.pornit_la))
+
+	def cadreNoi(self):
+		"""Numai contorul, fara fotografie (fondul negru il intreaba la PAS_FOND_MS cat se vede): True cand au venit cadre
+		noi de la pornirea canalului, False cand nu, None cand contorul nu spune nimic."""
+		if self.cadre is None:
+			return None
+		n = self.cadre()
+		if n is None:
+			return None
+		if self.cadre_prev is not None and n > self.cadre_prev:
+			self.cadre_la = self.ceas()
+		self.cadre_prev = n
+		return self.cadre_la >= self.pornit_la
+
+	def stareFond(self, d):
+		"""Fondul negru pentru fotografia d: "negru" (canal TV prin DVB, masura sigura, niciun cadru nou de PRAG_FOND
+		secunde de la pornire), "asteapta" (la fel, dar mai devreme: fondul ramane cum e), "nestiut" (canal TV prin DVB,
+		masura nesigura acum: pe HiSilicon contorul nu se poate citi chiar in timpul zap-ului; fondul nu se pune, iar unul
+		vazut ramane cel mult Screens/HdsEcranNegru.FOND_NESTIUT_S), None (nu se pune: cadre noi, radio, pauza, PiP,
+		fisier, flux, nimic redat)."""
+		if not d or d.get("nimic") or d.get("radio") or d.get("pauza") or d.get("pip") or d.get("fel") not in FEL_DVB:
+			return None
+		if self.cadre_la >= self.pornit_la:
+			return None
+		if not self.sigur:
+			return "nestiut"
+		return "negru" if (d.get("secunde") or 0.0) >= PRAG_FOND else "asteapta"
+
+	def _citestePts(self):
+		"""PTS-ul video al canalului redat (lib/service/servicedvb.cpp getInfo(sUser + INFO_PTS)), sau None."""
+		try:
+			from enigma import iServiceInformation
+			service = self.session.nav.getCurrentService()
+			info = service.info() if service is not None else None
+			if info is None:
+				return None
+			return info.getInfo(iServiceInformation.sUser + INFO_PTS)
+		except Exception:
+			return None
 
 	def inPauza(self):
 		ib = self.infobar
@@ -1079,6 +1239,7 @@ class Urmaritor(object):
 		d["eroare"] = eroare_acordare(stare_dvb)
 		if d["eroare"] == E_FARA_PAT:
 			d["t2_criptat"] = t2_releu_criptat(sref)
+			d["t2_porneste"] = t2_releu_porneste(sref)
 		if d["eroare"] == E_CONFIGURARE and d["fel"] == "s":
 			d["loc_nestabilit"] = loc_nestabilit(sref)
 			d["sub_orizont"] = sub_orizont(sref)

@@ -51,6 +51,9 @@
 #   POST /api/canale-pornire?fila=&buchet=&ref=&vrea=1|0  receptorul porneste pe acest canal (1) sau pe ultimul canal
 #                                                   urmarit (0): butonul Pornire al randului, ca MENU > Pornește pe acest
 #                                                   canal pe televizor (0.7.5, LCS; Components/HdsListaSetari.py)
+#   POST /api/canale-redenumeste-buchet?fila=&buchet=<fisier>&nume=  numele nou al buchetului ales (butonul
+#        "Redenumește buchetul" de sus, ca MENU > Redenumește buchetul in lista buchetelor; 0.7.6, RBC); salvarea merge pe
+#        un fir: 202, apoi POST ?stare=1 pana la "gata" sau "eroare" (GET numai cu ?token=, ca celelalte)
 #   POST /api/canale-stream-relay?fila=&buchet=&ref=&vrea=1|0  canalul trece prin Stream Relay (1) sau nu (0): butonul SR
 #        al randului (0.7.0, Components/HdsStreamRelay.py; aceeasi lista ca meniul listei de pe televizor)
 #   GET  /api/canale-sigla?p=<nume>                 sigla (PNG), numai un nume gasit pe disc
@@ -148,8 +151,30 @@ SEMN_NUMEROTAT = 256 # eServiceReference.isNumberedMarker: randul „-” pus de
 
 _REF = re.compile(r"^\d{1,4}:\d{1,5}(:[0-9A-Fa-f]{1,8}){8}:")
 _NUME_SIGLA = re.compile(r"(?:[0-9A-Fa-f]{1,8}(?:_[0-9A-Fa-f]{1,8}){9}|[a-z0-9]+)\Z")
-_FISIER_BUCHET = re.compile(r'FROM BOUQUET "([A-Za-z0-9_.\-]{1,120})"')
-_ID_BUCHET = re.compile(r"^[A-Za-z0-9_.\-]{1,120}$")
+_FISIER_BUCHET = re.compile(r'FROM BOUQUET "([^"]{1,250})"')
+# 0.7.7 (UTF): id-ul unui buchet in pagina e numele fisierului lui, judecat dupa ce nu are voie sa aiba, ca in editorul
+# de canale (Components/HdsEditorCanaleDate._NUME_FISIER; scrisa si aici: fisierul nu importa alte module la incarcare):
+# / si \ (cai), ghilimelele, : si %, caracterele de control (si C1), LS si PS, octetii care nu sunt UTF-8, punctul la
+# inceput (., ..); cel mult 250 de octeti UTF-8. Tiparul vechi, numai ASCII, dadea buchetelor cu diacritice, spatiu
+# sau & in nume (Türksat 42E) un id b<loc>, fara redenumire si fara locul lor in alegerea buchetului.
+MAX_OCTETI_BUCHET = 250
+_TIPAR_ID_BUCHET = re.compile('^[^.\\x00-\\x1f\\x7f-\\x9f/\\\\":%\\u2028\\u2029\\ud800-\\udfff]'
+	'[^\\x00-\\x1f\\x7f-\\x9f/\\\\":%\\u2028\\u2029\\ud800-\\udfff]*\\Z')
+
+
+class _IdBuchet(object):
+	"""_ID_BUCHET: match(id) ca la un tipar re (None sau potrivirea), cu lungimea numarata in octeti UTF-8."""
+
+	def match(self, id_):
+		if not isinstance(id_, str):
+			return None
+		m = _TIPAR_ID_BUCHET.match(id_)
+		if m is None or len(id_.encode("utf-8")) > MAX_OCTETI_BUCHET:
+			return None
+		return m
+
+
+_ID_BUCHET = _IdBuchet()
 _ADRESA_IN_TEXT = re.compile(r"(?i)[a-z][a-z0-9+.-]*(?::|%3a)//")
 _CONTROL = re.compile(u"[\u0000-\u001f\u007f-\u009f\ud800-\udfff]")
 _SECRET_REF = os.urandom(32)
@@ -339,7 +364,7 @@ def nume_sigla(ref, c=False):
 
 def fisier_buchet(ref):
 	m = _FISIER_BUCHET.search(ref or "")
-	return m.group(1) if m else None
+	return m.group(1) if m and _ID_BUCHET.match(m.group(1)) else None
 
 
 def fara_mod(nume):
@@ -497,6 +522,12 @@ class _Furnizor(object):
 	def multibuchet(self):
 		from Components.config import config
 		return bool(config.usage.multibouquet.value)
+
+	def dosare_in_buchete(self):
+		"""0.7.7 (OBU): "Afișează IPTV și alte liste în Buchete" (Components/HdsListaSetari.py); Da daca lipseste."""
+		from Components.config import config
+		setare = getattr(config.usage, "hds_lista_dosare_buchete", None)
+		return setare is None or bool(setare.value)
 
 	def radio_separat(self):
 		from Components.config import config
@@ -956,7 +987,7 @@ def fel_buchet_gol(M, lista):
 def gen_buchete(M, tip, viata=VIATA_LISTA_S):
 	"""Buchetele filei, cu continutul si numerele lor, ca lista de pe televizor. Memorie pana se schimba fisierele si,
 	daca `viata` nu e None, cel mult `viata` secunde (o lista editata pe televizor e in memorie inainte sa fie scrisa)."""
-	sem = (semnatura(M.director()), M.multibuchet())
+	sem = (semnatura(M.director()), M.multibuchet(), dosare_in_buchete(M))
 	vechi = _MEMORIE["buchete"].get(tip)
 	if _proaspat(vechi, sem, M.acum(), viata):
 		return vechi[2]
@@ -969,10 +1000,18 @@ def _gen_construieste_buchete(M, tip, sem):
 	buchete = []
 	numar = 0
 	for i, (ref, nume) in enumerate(surse):
-		if fisier_buchet(ref) == getattr(M.X, "BUCHET_IPTV", "userbouquet.hdsiptv.tv"):
+		if fisier_buchet(ref) == buchet_iptv(M):
 			# Grupele online vin din indexul citit pe fir, niciodata prin getContent pe toate fluxurile.
 			index = yield from gen_index(M)
 			numar += getattr(index, "numar_radacina_online", 0)
+			# 0.7.7 (M3U): lista "IPTV" in caseta, ca dosarul ei din lista buchetelor de pe televizor; randurile le face
+			# _gen_construieste_lista din index (aici numai numarul, fara intrari). Numai cu "Afișează IPTV și alte liste
+			# în Buchete" = Da, ca pe televizor (OBU, dosare_in_buchete)
+			if tip == "tv" and sem[2]:
+				randuri = yield from _gen_randuri_iptv(M, index)
+				canale = sum(1 for _k, c, _n in randuri if c is not None)
+				if canale:
+					buchete.append({"id": buchet_iptv(M), "nume": "IPTV", "ref": ref, "intrari": [], "numar": canale})
 			continue
 		intrari = []
 		canale = 0
@@ -1022,7 +1061,7 @@ def gen_lista(M, tip, id_, viata=VIATA_LISTA_S):
 	oricat de veche, cat timp fisierele nu s-au schimbat (paginile urmatoare ale aceleiasi liste)."""
 	index = yield from gen_index(M)
 	sem = (semnatura(M.director()), M.multibuchet(), id(index), versiune_variante(M) if id_ == TOATE else None)
-	if id_ == TOATE or (tip == "radio" and id_ in RADIO_LISTE):
+	if id_ == TOATE or (tip == "radio" and id_ in RADIO_LISTE) or e_lista_iptv(M, tip, id_):
 		# facuta numai din index (legat de fisiere prin id(index)) si din variante, ambele in semnatura: aceeasi lista cat
 		# timp nu se schimba nimic, oricat de veche. Limita de VIATA_LISTA_S ramane la buchete (editate pe televizor
 		# inainte sa fie scrise). Pe receptorul de probe, cu 35 552 de canale, refacerea la fiecare deschidere dupa un minut costa ~18 s.
@@ -1066,10 +1105,79 @@ def sursa_radio(c):
 	return "satelit" if c.poz is not None else ""
 
 
+def buchet_iptv(M):
+	"""Fisierul radacinii IPTV (Components/HdsIptvSurse.BUCHET_RADACINA, acelasi in indexul cautarii)."""
+	return getattr(M.X, "BUCHET_IPTV", "userbouquet.hdsiptv.tv")
+
+
+def dosare_in_buchete(M):
+	"""0.7.7 (OBU): setarea "Afișează IPTV și alte liste în Buchete" (perechea lui Screens/ChannelSelection
+	.hdsArataDosareleInBuchete): Da (din fabrica) = lista "IPTV" in caseta listelor, Nu = fara ea. Furnizorii falsi ai
+	probelor fara metoda: Da."""
+	f = getattr(M, "dosare_in_buchete", None)
+	return True if f is None else bool(f())
+
+
+def e_lista_iptv(M, tip, id_):
+	"""0.7.7 (M3U): lista "IPTV" din caseta listelor, perechea dosarului IPTV din lista buchetelor de pe televizor
+	(Screens/ChannelSelection.hdsBucheteAscunse nu il mai ascunde). Se face din indexul cautarii, ca "Toate canalele"."""
+	return tip == "tv" and id_ == buchet_iptv(M)
+
+
+def _grupe_iptv(M, index):
+	"""Grupele surselor IPTV, in ordinea radacinii: [(numele grupei, [cheile canalelor])]. Numai structura deja citita in index
+	(HdsIndexCanale._grupe_online / grupe_online_canale); locurile extensiilor raman in fila lor. Cu mai multe surse, grupa
+	poarta si numele sursei, ca marcajele surselor din radacina de pe televizor."""
+	radacina = buchet_iptv(M)
+	grupe = [g for g in getattr(index, "grupe_online", ()) if g[0] == radacina or str(g[0]).startswith("subbouquet.hdsiptv_")]
+	surse = set(g[1] for g in grupe)
+	canale = getattr(index, "grupe_online_canale", {})
+	rez = []
+	for fisier, sursa, nume_sursa, nume in grupe:
+		titlu = curat(nume) or curat(nume_sursa) or "IPTV"
+		if len(surse) > 1 and curat(nume_sursa):
+			titlu = "%s · %s" % (curat(nume_sursa), titlu)
+		rez.append((titlu, list(canale.get(fisier, ()))))
+	return rez
+
+
+def _gen_randuri_iptv(M, index):
+	"""Randurile listei "IPTV": [(cheie, None, titlu) pentru marcaj | (cheie, canal, nume)], fara radio si fara chei lipsa din index."""
+	harta, _numar = yield from gen_canale_index(index)
+	rez = []
+	for titlu, chei in _grupe_iptv(M, index):
+		yield
+		canale = []
+		for i, k in enumerate(chei):
+			if i % UNITATE == UNITATE - 1:
+				yield
+			c = harta.get(k)
+			if c is None or c.radio:
+				continue
+			canale.append((k, c, curat(c.nume_afisat() if hasattr(c, "nume_afisat") else c.nume) or "?"))
+		if canale:
+			rez.append(("", None, titlu))
+			rez.extend(canale)
+	return rez
+
+
 def _gen_construieste_lista(M, tip, id_, index, sem, viata):
 	X = M.X
 	virtual = tip == "radio" and id_ in RADIO_LISTE
-	if id_ == TOATE or virtual:
+	if e_lista_iptv(M, tip, id_):
+		# fara ref_buchet: canalul porneste ca rezultatul cautarii de pe televizor (hdsPunePeLista), in grupa lui
+		lista = Lista(tip, id_, "IPTV", None, index)
+		randuri = yield from _gen_randuri_iptv(M, index)
+		for i, (k, c, nume) in enumerate(randuri):
+			if i % UNITATE == UNITATE - 1:
+				yield
+			if c is None:
+				lista.adauga(Rand("", "", nume, X, marcaj=True))
+			else:
+				lista.adauga(Rand(k, c.ref, nume, X, canal=c))
+		if not lista.canale:
+			return None
+	elif id_ == TOATE or virtual:
 		lista = Lista(tip, id_, _nume_lista_radio(id_) if virtual else _t("Toate canalele"), None, index)
 		radio = tip == "radio"
 		for i, c in enumerate(index.canale):
@@ -1952,9 +2060,12 @@ def _rand_json(r, sigle, X, favorite=None, deosebire="", releu=None, variante=No
 		d["d"] = curat(deosebire)
 	tp = _transponder_rand(r.canal, X)
 	if tp:
-		# 0.7.5 (LCS, tfrc LinuxSat 164126): si SID-ul, ca randul de sub lista de pe televizor
-		sid = _sid_rand(r.ref)
-		d["tp"] = curat(tp + " · " + sid) if sid else tp
+		d["tp"] = tp
+		# 0.7.7 (SRF, tfrc LinuxSat 164118 #970941): si referinta canalului (din care se fac numele siglelor), ca randul
+		# de sub lista de pe televizor; in 0.7.5 (LCS) era SID-ul. Camp separat, ca pagina s-o puna pe randul ei
+		rf = _referinta_rand(r.ref)
+		if rf:
+			d["rf"] = rf
 	if _e_pornire(r.ref):
 		d["pn"] = 1
 	dvbi = _eticheta_dvbi(r.ref)
@@ -2435,16 +2546,14 @@ def alege_varianta(M, ref):
 		_jurnal("varianta aleasa: %s" % e)
 
 
-def _sid_rand(ref):
-	"""SID-ul unui canal DVB din referinta lui (al patrulea camp, hex), "SID 11110 (0x2B66)"; "" pentru restul."""
-	try:
-		campuri = (ref or "").split(":")
-		if len(campuri) < 10 or campuri[0] != "1" or campuri[10:] and campuri[10]:
-			return ""
-		sid = int(campuri[3], 16)
-		return "SID %d (0x%04X)" % (sid, sid) if sid else ""
-	except (ValueError, IndexError):
+def _referinta_rand(ref):
+	"""Referinta unui canal DVB in forma din care se fac numele siglelor, primele 10 campuri si ":" la capat
+	("1:0:19:2B66:3F6:1:C00000:0:0:0:", ca HdsCommon.referinta_scurta pe televizor); "" pentru restul (canale de
+	internet, inregistrari, dosare). 0.7.7 (SRF): in locul SID-ului din 0.7.5 (LCS)."""
+	campuri = (ref or "").split(":")
+	if len(campuri) < 10 or campuri[0] != "1" or campuri[10:] and campuri[10] or not all(campuri[:10]):
 		return ""
+	return ":".join(campuri[:10]) + ":"
 
 
 def _e_pornire(ref):
@@ -2491,6 +2600,49 @@ def gen_pornire(argumente_, M=None):
 	if vrea == "1":
 		return 200, {"result": True, "pn": 1, "message": _t("Receptorul va porni pe acest canal după o repornire.")}
 	return 200, {"result": True, "pn": 0, "message": _t("Receptorul va porni pe ultimul canal urmărit.")}
+
+
+def _redenumire(R=None):
+	"""Components/HdsRedenumireBuchet (probele dau unul fals), sau None cand lipseste."""
+	if R is not None:
+		return R
+	try:
+		from Components import HdsRedenumireBuchet as R
+	except ImportError:
+		return None
+	return R
+
+
+def redenumeste_buchet(argumente_, R=None):
+	"""POST /api/canale-redenumeste-buchet?fila=&buchet=<fisier>&nume= -> (cod, corp): numele nou al buchetului, ca
+	MENU > Redenumește buchetul in lista buchetelor de pe televizor (0.7.6, RBC; aceeasi functie ca editorul de canale,
+	Components/HdsRedenumireBuchet.redenumeste). Salvarea merge pe un fir: 202 cu "lucreaza", apoi pagina intreaba
+	cu stare=1 (tot POST: din browser poarta cere POST) pana e "gata" sau "eroare"."""
+	R = _redenumire(R)
+	if R is None:
+		return 409, {"result": False, "message": _t("Buchetul nu s-a putut schimba.")}
+	if argumente_.get("stare") == "1":
+		st = dict(R.STARE)
+		return 200, {"result": st.get("fel") != "eroare", "fel": st.get("fel") or "", "buchet": st.get("buchet") or "",
+			"nume": st.get("nume") or "", "message": st.get("mesaj") or ""}
+	fisier = argumente_.get("buchet") or ""
+	if not fisier or R.fisier_din_ref('FROM BOUQUET "%s"' % fisier) != fisier:
+		return 400, {"result": False, "message": _t("Buchetul nu e bun."), "camp": "buchet"}
+	automat = R.automat(fisier)
+	if automat:
+		return 409, {"result": False, "message": automat, "camp": "buchet"}
+	nume = (argumente_.get("nume") or "").strip()
+	if not nume:
+		return 400, {"result": False, "message": _t("Numele nu poate fi gol."), "camp": "nume"}
+	if not R.redenumeste(fisier, nume):
+		return 409, {"result": False, "message": R.STARE.get("mesaj") or _t("Buchetul nu s-a putut schimba.")}
+	_jurnal("buchet redenumit din web: %s" % fisier)
+	st = R.STARE
+	if st.get("fel") == "gata":
+		return 200, {"result": True, "fel": "gata", "nume": st.get("nume") or nume, "message": ""}
+	if st.get("fel") == "eroare":
+		return 409, {"result": False, "fel": "eroare", "message": st.get("mesaj") or _t("Buchetul nu s-a putut schimba.")}
+	return 202, {"result": True, "fel": "lucreaza", "dupa_ms": 400}
 
 
 def gen_favorit(argumente_, M=None):
@@ -2582,6 +2734,15 @@ def gen_gaseste(M, tip, id_, ref):
 	`canal` (din index) numai la TOATE: il cere drumul cautarii de pe televizor; dintr-un buchet drumul e al lui
 	zapToNumber si nu il foloseste."""
 	X = M.X
+	if e_lista_iptv(M, tip, id_):
+		# lista "IPTV" (0.7.7, M3U) e facuta din index: canalul vine cu locul lui din index, ca din "Toate canalele"
+		lista = yield from gen_lista(M, tip, id_, None)
+		if lista is None:
+			return None
+		rand = lista.dupa_public.get(ref) or lista.dupa_ref.get(ref) or lista.dupa_cheie.get(X.cheie_din_ref(ref) or ref)
+		if rand is None:
+			return False
+		return rand.ref, rand.nume, None, rand.canal
 	if _REF_PUBLIC.fullmatch(ref) or (tip == "radio" and id_ in RADIO_LISTE):
 		lista = yield from gen_lista(M, tip, id_, None)
 		if lista is None:
@@ -3071,6 +3232,21 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 		def render_GET(self, request):
 			return self._porneste(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class RedenumesteBuchetResource(baza):
+		"""POST /api/canale-redenumeste-buchet: numele nou al unui buchet (0.7.6, RBC); cu stare=1: cum a mers."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				cod, corp = redenumeste_buchet(argumente(request))
+				return self._raspunde(request, corp, cod)
+			except Exception as e:
+				_jurnal("redenumirea buchetului: %s" % type(e).__name__)
+				return self._eroare(request, _t("Eroare pe receptor."), 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
 	class StreamRelayResource(_PeFelii):
 		"""POST /api/canale-stream-relay: schimba lista Stream Relay pe receptor; trece inaintea listelor in lucru."""
 		schimbaCeva = True
@@ -3191,6 +3367,7 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 		b"canale-exporta": ExportaResource(),
 		b"canale-favorit": FavoritResource(),
 		b"canale-pornire": PornireResource(),
+		b"canale-redenumeste-buchet": RedenumesteBuchetResource(),
 		b"canale-stream-relay": StreamRelayResource(),
 		b"canale-sigla": SiglaResource(),
 	}
@@ -3289,6 +3466,8 @@ PAGINA = """<!DOCTYPE html>
   .sus{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;margin:0 0 12px;}
   h1{font-size:1.25rem;margin:0;}
   .leg-editor{margin-left:auto;color:#7fb8ff;min-height:44px;display:inline-flex;align-items:center;}
+  button.leg-editor{background:none;border:0;padding:0;font:inherit;cursor:pointer;}
+  button.leg-editor[hidden]{display:none;}
   .recente{flex:1 1 100%;font-size:.92rem;}
   .recente summary{cursor:pointer;color:var(--text-slab);}
   .recente ol{list-style:none;margin:.4rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem;}
@@ -3380,6 +3559,7 @@ PAGINA = """<!DOCTYPE html>
   /* transponderul canalului (LCF 0.7.5), ca randul de sub lista de pe televizor: mic si gri, ca celelalte semne, pe
      fiecare rand (nimic numai la trecerea mouse-ului, telefonul nu are cursor) */
   .semne.tp{font-variant-numeric:tabular-nums;}
+.semne.ref{font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:anywhere;}
   .eticheta{background:var(--verde);color:#fff;border-radius:6px;padding:1px 7px;font-size:.78rem;white-space:nowrap;}
   .eticheta.transmis{background:#46cee2;color:#0b1020;font-weight:bold;}
   .eticheta.dvbi{background:#374ea1;color:#fff;}
@@ -3437,6 +3617,7 @@ __LIVE_STIL__
   <h1>Canale</h1>
   <div class="pe-tv" id="peTv" aria-live="polite"></div>
   <details class="recente" id="recente"><summary>Canale recente</summary><ol id="recenteLista"></ol></details>
+  <button type="button" class="leg-editor" id="redenumesteBuchet" hidden>Redenumește buchetul</button>
   <a class="leg-editor" href="/editor-canale#buchet-nou">Creează buchet nou</a>
   <a class="leg-editor" href="/editor-canale">Editează lista de canale</a>
 </div>
@@ -3604,7 +3785,7 @@ function incarcaBuchete(){
     if(!d.result){ $("numar").textContent = d.message || "Listele nu s-au putut citi."; return; }
     var s = $("buchet"); gol(s);
     d.buchete.forEach(function(b){
-      var o = el("option", "", b.nume + " (" + b.numar + ")"); o.value = b.id; s.appendChild(o);
+      var o = el("option", "", b.nume + " (" + b.numar + ")"); o.value = b.id; o.dataset.nume = b.nume; s.appendChild(o);
     });
     // Initial vin numai antetele din lista receptorului. Randurile se cer cand omul deschide grupa.
     S.buchet = "toate";
@@ -3616,6 +3797,7 @@ function cuFiltre(){ return Object.keys(S.ales).some(function(g){ return S.ales[
 // "Toate canalele" fara text si fara filtre = pe grupe; altfel lista plata, peste toate canalele listei alese
 function eGrupat(){ return S.buchet === "toate" && !S.text && !cuFiltre(); }
 function incarcaLista(){
+  arataRedenumire();
   S.gen += 1;
   S.fundal += 1;
   S.inceput = 0; S.inainteEl = null;
@@ -4102,6 +4284,8 @@ function deseneaza(randuri, tinta){
     if(r.d){ linie.appendChild(el("span", "semne deosebire", r.d)); }
     // transponderul (pozitia, frecventa si polarizarea), ca randul de sub lista de pe televizor
     if(r.tp){ linie.appendChild(el("span", "semne tp", r.tp)); b.title = r.tp; }
+    // referinta canalului (0.7.7, SRF), din care se fac numele siglelor; pe un ecran ingust trece pe randul ei
+    if(r.rf){ linie.appendChild(el("span", "semne ref", r.rf)); b.title = (b.title ? b.title + " · " : "") + r.rf; }
     // semnul canalelor transmise acum in retea (TV in browser, player extern), ca in lista de pe televizor
     var tr = el("span", "eticheta transmis ascuns", "În rețea");
     tr.title = "Canalul e transmis acum în rețea (TV în browser sau un player extern)";
@@ -4413,6 +4597,49 @@ function laAcum(){
 $("filaTv").addEventListener("click", function(){ if(S.tip !== "tv"){ S.tip = "tv"; S.ales = {}; S.deschise = {}; S.fundal += 1; incarcaBuchete(); } });
 $("filaRadio").addEventListener("click", function(){ if(S.tip !== "radio"){ S.tip = "radio"; S.ales = {}; S.deschise = {}; S.fundal += 1; incarcaBuchete(); } });
 $("buchet").addEventListener("change", function(){ S.buchet = $("buchet").value; incarcaLista(); });
+// 0.7.6 (RBC): "Redenumește buchetul" pentru buchetul ales, ca MENU > Redenumește buchetul pe televizor; numai la
+// buchetele omului (fisiere userbouquet), nu la "Toate canalele" si nici la listele puse de imagine; 0.7.7 (M3U): nici la lista
+// IPTV (radacina ei se rescrie la fiecare improspatare a surselor, deci numele nou s-ar pierde)
+// 0.7.7 (UTF): si numele cu diacritice, spatiu sau &; numele intreg il judeca serverul (_ID_BUCHET)
+var BUCHET_REDENUMIT = /^(?!userbouquet\\.hdsiptv\\.tv$)userbouquet\\..+\\.(tv|radio)$/;
+function arataRedenumire(){ $("redenumesteBuchet").hidden = !BUCHET_REDENUMIT.test(S.buchet || ""); }
+function redenumesteBuchet(){
+  var bid = S.buchet, o = $("buchet").selectedOptions[0];
+  if(!BUCHET_REDENUMIT.test(bid || "")){ return; }
+  var vechi = o && o.dataset.nume || "";
+  var nume = window.prompt("Numele nou", vechi);
+  if(nume === null){ return; }
+  nume = nume.trim();
+  if(!nume || nume === vechi){ return; }
+  var b = $("redenumesteBuchet"), pana = Date.now() + 30000;
+  b.disabled = true;
+  function gata(d){
+    b.disabled = false;
+    if(!d.result){ mesaj(d.message || "Buchetul nu s-a putut schimba.", true); return; }
+    mesaj("Gata.", false);
+    incarcaBuchete().then(function(){
+      var s = $("buchet");
+      if(Array.prototype.some.call(s.options, function(x){ return x.value === bid; })){ s.value = bid; S.buchet = bid; incarcaLista(); }
+    });
+  }
+  function intreaba(){
+    var st = new URLSearchParams();
+    st.set("stare", "1");
+    cerere("/api/canale-redenumeste-buchet", "POST", st).then(function(d){
+      // starea e una pe receptor: alta redenumire (televizorul, alt browser) nu e a noastra
+      if(d.buchet && d.buchet !== bid){ gata({result: false}); return; }
+      if(d.fel === "lucreaza" && Date.now() < pana){ setTimeout(intreaba, 400); return; }
+      gata(d.fel === "lucreaza" ? {result: false} : d);
+    }).catch(function(){ gata({result: false, message: "Receptorul nu răspunde."}); });
+  }
+  var q = new URLSearchParams();
+  q.set("fila", S.tip); q.set("buchet", bid); q.set("nume", nume);
+  cerere("/api/canale-redenumeste-buchet", "POST", q).then(function(d){
+    if(d.fel === "lucreaza"){ setTimeout(intreaba, d.dupa_ms || 400); return; }
+    gata(d);
+  }).catch(function(){ gata({result: false, message: "Receptorul nu răspunde."}); });
+}
+$("redenumesteBuchet").addEventListener("click", redenumesteBuchet);
 $("text").addEventListener("input", function(){
   if(ceasText){ clearTimeout(ceasText); }
   ceasText = setTimeout(function(){ var t = $("text").value.trim(); if(t !== S.text){ S.text = t; incarcaLista(); } }, 250);
@@ -4462,6 +4689,7 @@ TEXTE_PAGINA = {
 		N_("Canale"),
 		N_("Editează lista de canale"),
 		N_("Creează buchet nou"),
+		N_("Redenumește buchetul"),
 		N_("Radio"),
 		N_("Filtre<span class=\"nrf\" id=\"nrFiltre\"></span>"),
 		N_("Șterge filtrele"),
@@ -4527,6 +4755,8 @@ TEXTE_PAGINA = {
 		N_("Canalul de pornire:"),
 		N_("Pornește pe acest canal:"),
 		N_("Canalul de pornire nu s-a schimbat."),
+		N_("Numele nou"),
+		N_("Buchetul nu s-a putut schimba."),
 		N_("Pe televizor:"),
 		N_("· în standby"),
 		N_("Încă nu ai schimbat canalul. Canalele văzute apar aici."),

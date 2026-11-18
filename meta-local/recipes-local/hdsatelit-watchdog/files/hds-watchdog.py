@@ -132,6 +132,14 @@ Mecanism (cinci nivele, independente unul de altul):
      avahi-daemon si hds-nume-local: hdsatelit.local nu mai raspundea, desi interfata web mergea pe adresa IP. Aici, la
      SERVICII_INTERVAL_S secunde si numai dupa SERVICII_PORNIRE_S de la pornirea receptorului (pana atunci le porneste
      rc5):
+       - si numai dupa ce scripturile de pornire s-au terminat (r16, 0.7.6, asistenta 430032 15.11.2026): cat mai ruleaza
+         /etc/init.d/rc sau rcS (rc_in_lucru, dupa linia de comanda din /proc), un serviciu care inca nu e pornit nu
+         e cazut, ci la rand. O pornire lenta (reteaua, discurile, reparatia actualizarii) trecea de 180 s, iar paznicul
+         pornea avahi in paralel cu rc, care il pornea si el. Cel mult SERVICII_RC_MAX_S de la pornire: un script de
+         pornire agatat nu lasa hdsatelit.local cazut pentru totdeauna;
+       - avahi-daemon si hds-nume-local sunt cazute numai cand lipsesc la DOUA verificari la rand (r16): interfata le
+         opreste si le porneste singura la schimbarea retelei (Components/Network.py: avahi-daemon stop, ifdown/ifup,
+         avahi-daemon start), iar o verificare cazuta intre ele pornea avahi in paralel cu ea. dbus ramane cu regula lui;
        - dbus merge cand exista un proces dbus-daemon si soclul sistemului (DBUS_SOCLURI) primeste o conexiune; fara
          proces, sau cu soclul refuzat SERVICII_CONFIRMARI verificari la rand, se porneste din nou cu scriptul lui
          (/etc/init.d/dbus-1 start; restart cand procesul a ramas, dar nu raspunde);
@@ -152,6 +160,17 @@ Mecanism (cinci nivele, independente unul de altul):
          /jurnale-sistem;
        - hotararea e o functie fara efecte (hotarare_servicii), testata in teste/test_gasite_0607.py (clasa
          Servicii), impreuna cu limita de timp a unei treceri.
+       - DE CE (r17, 0.7.6, asistenta 430032 15.11.2026): cand avahi sau numele local e socotit cazut (a doua
+         verificare fara proces), o data pe cadere, un rand "<cheie> cazut, de ce: ..." in jurnalul paznicului si in
+         SERVICII_JURNAL_PATH (motiv_lipsa): uptime-ul, fisierul pid (ramas cu procesul mort = oprit brusc sau cazut;
+         lipsa lui = oprit curat, de pilda de Network.py, sau nepornit) si ultimele MOTIV_RANDURI randuri ale lui din
+         coada lui MESAJE_PATH (cel mult MOTIV_MESAJE_OCTETI, citita numai atunci). Inainte se scria numai "avahi
+         cazut" si cauza lipsei nu ramanea nicaieri;
+       - randul de pornire al paznicului (rand_pornire, r17) spune uptime-ul si daca ceasul e inca ora salvata
+         (fake-hwclock, nesincronizat), numai in jurnalul paznicului (in SERVICII_JURNAL_PATH ar face fisierul pe
+         orice receptor sanatos, trimis apoi de HdsBetaTester ca jurnal de eroare). Fara el, randurile a doua
+         porniri, ambele plecate de la aceeasi ora salvata, se citeau ca o singura pornire (asistenta 430032: "avahi
+         cazut" la 39 s dupa o cerere de iesire, citit ca "4 s dupa rc5" al pornirii urmatoare).
 
   Cat ruleaza opkg (r14, versiunea 0.7.4): orice proces cu numele opkg (actualizarea din meniu sau din web,
      Extensii, SSH, reparatia actualizarii de la pornire) face bataia „ocupat” cu motivul „actualizare” (opkg_in_lucru,
@@ -257,6 +276,16 @@ STIVE_SEMNAL = int(getattr(signal, "SIGRTMIN", 34)) + 7   # 41 pe receptor; geta
 STIVE_PATH = os.environ.get("HDS_WATCHDOG_STIVE", "/tmp/enigma2-stive.txt")
 STIVE_ASTEPTARE_S = 2.0      # scrierea stivelor ia cateva milisecunde; termenul e numai pentru un proces care nu raspunde
 STIVE_PREFIX = "enigma2-stive-"
+# 0.7.7 (STV): stivele tuturor firelor le scrie intai firul de stive al enigma2 (Components/HdsPaznic.StiveLaCerere),
+# citite din Python, la o cerere pe teava lui; faulthandler (STIVE_SEMNAL: numai firul principal, STIVE_TOATE_SEMNAL:
+# toate firele) numai daca firul nu raspunde in STIVE_PYTHON_S, adica lacatul Python e tinut si niciun alt fir nu ruleaza
+# cod Python. Toate firele citite din semnal cat alt fir rula cod Python au oprit enigma2 (SIGSEGV in libpython, 1 din
+# ~318 pe receptorul de proba), iar la pornirea fara bataie procesul nici nu era oprit dupa aceea.
+STIVE_TOATE_SEMNAL = int(getattr(signal, "SIGRTMIN", 34)) + 9   # 43 pe receptor; numai enigma2 0.7.7 si mai nou il prinde
+STIVE_CERERE = os.environ.get("HDS_WATCHDOG_STIVE_CERERE", "/tmp/hds-stive-%d.cerere")   # %d = pid-ul enigma2
+STIVE_PYTHON_S = 2.0         # cat asteapta raspunsul firului de stive; un fir care poate rula raspunde in milisecunde
+STIVE_SFARSIT = "# sfarsit cererea "   # ultimul rand al raspunsului (SFARSIT_STIVE din Components/HdsPaznic.py)
+STIVE_MAX_OCTETI = 262144
 
 # ---- semnul pentru enigma2.sh: iesirea care urmeaza e ceruta de paznic (lotul paza-cadere-023, 05.10.2026) ----
 # aceeasi cale ca HDS_PAZNIC_OPRIRE in tools/enigma2.sh.in (hdsatelit-image); /tmp e in RAM pe receptor
@@ -266,6 +295,25 @@ UPTIME_PATH = os.environ.get("HDS_WATCHDOG_UPTIME", "/proc/uptime")
 # ---- viata enigma2 (071): numai jurnal si stive, fara o hotarare noua de repornire ----
 IESIRE_PATH = os.environ.get("HDS_WATCHDOG_IESIRE", "/tmp/hds-enigma2.iesire")  # HDS_IESIRE in enigma2.sh
 IESIRE_MAX_OCTETI = 4096     # semnul mic din RAM se citeste marginit, chiar daca fisierul e stricat
+
+# ---- 0.7.6 (WDG): iesirea ceruta care nu se mai termina (asistenta 430032, 15.11.2026) ----
+# Components/HdsPaznic.iesireInceputa scrie semnul imediat dupa runReactor() din mytest.py (bucla oprita: Reporneste
+# interfata, schimbarea temei, o actualizare) si sterge bataia putin dupa. La un SF8008 cu o tema straina pornita,
+# procesul ramanea viu dupa "reached rl -1" (5 din 5 reporniri ale interfetei, intre 40 s si 26 de minute): nivelul 3
+# vedea numai "fara bataie" si astepta, iar init nu avea ce reporni. Pe celelalte receptoare iesirea se termina in
+# 10-30 s. Daca procesul semnului e tot viu dupa IESIRE_CERUTA_S secunde: un rand in hds-caderi.log (codul, tema,
+# ecranele, firele ramase), stivele, semnul opririi pentru enigma2.sh (motiv=iesire-ceruta), SIGTERM si, dupa
+# IESIRE_SIGKILL_DUPA_S secunde, SIGKILL (dupa bucla, SIGTERM-ul nu mai are cine sa-l trateze). Codul necunoscut
+# (quitMainloop chemat direct de un plugin) da tot o repornire a interfetei.
+# r18 (0.7.7, UPD, dorinelu forum 795 #2668, Vu+ Solo4K): si iesirile dupa care enigma2.sh opreste sau reporneste
+# receptorul (1, 2), scrie afisajul din fata (4) sau porneste Kodi (15): un enigma2 care nu mai iesea la o repornire a
+# receptorului ceruta din meniu tinea receptorul agatat pana la buton. enigma2.sh pune apoi la loc codul cerut (din
+# acelasi semn al iesirii, pid= si cod=) si face ce s-a cerut. Numai caderea (5) ramane neatinsa.
+IESIRE_CERUTA_PATH = os.environ.get("HDS_WATCHDOG_IESIRE_CERUTA", "/var/run/hds-paznic.iesire")
+IESIRE_CERUTA_S = 45
+IESIRE_SIGKILL_DUPA_S = 5
+IESIRE_CODURI_NEATINSE = (5,)
+_iesire_oprita = None        # [pid, ceas monoton al SIGTERM-ului, SIGKILL trimis] pentru iesirea ceruta oprita
 PRIMA_BATAIE_LUNGA_S = 90    # numai o prima bataie mai tarzie de atat are rand propriu in jurnal
 STIVE_FARA_BATAIE_S = 180    # prima copie a stivelor, de la pornirea procesului, daca nu a batut deloc
 STIVE_FARA_BATAIE_DIN_NOU_S = 600  # a doua si ultima copie pentru acelasi proces fara nicio bataie
@@ -365,6 +413,7 @@ _ng_copii_blocati = []       # "ip" care nu au murit la SIGKILL (stare D); nu se
 # ---- nivelul 6, serviciile de sistem (0.6.7) ----
 SERVICII_INTERVAL_S = 60     # o privire in /proc si o conexiune la un soclu local: practic zero procesor
 SERVICII_PORNIRE_S = 180     # dupa pornirea receptorului: pana atunci serviciile le porneste rc5 (S02dbus-1, S21, S22)
+SERVICII_RC_MAX_S = 900      # r16: cat ruleaza rc/rcS se asteapta, dar nu mai mult de atat de la pornire (rc agatat)
 SERVICII_CONFIRMARI = 3      # soclul D-Bus refuzat de atatea ori la rand, cu procesul inca acolo
 SERVICII_MAX_ORA = 3         # porniri ale aceluiasi serviciu in ultima ora
 SERVICII_TIMEOUT_S = 10      # scriptul de pornire (dbus-1 se desprinde singur cu --fork, avahi cu -D, numele local
@@ -395,6 +444,19 @@ _srv_stare = ("", "", 0)     # (servicii, detaliu, ora de perete) pentru STARE_P
 _srv_reporniri = 0           # porniri facute de nivelul 6 de la pornirea acestui paznic
 _srv_anuntat = None          # ultima stare scrisa in jurnal
 _srv_copii_blocati = []      # scripturi de pornire care nu au murit la SIGKILL (stare D); nu se asteapta dupa ei
+_srv_lipsa = set()           # r16: avahi / numele local fara proces la verificarea de dinainte (dupa pornirea receptorului)
+_srv_motiv_scris = set()     # r17: caderile (avahi / numele local) pentru care s-a scris deja randul "de ce"
+
+# r17: de ce lipseste avahi sau numele local (motiv_lipsa). Fisierul pid ramas cu procesul mort = oprit brusc sau
+# cazut; lipsa lui = oprit curat (avahi-daemon -k il sterge) sau nepornit. Cai despartite prin os.pathsep.
+AVAHI_PID = tuple(os.environ.get("HDS_WATCHDOG_AVAHI_PID", os.pathsep.join(("/run/avahi-daemon/pid",
+    "/var/run/avahi-daemon/pid"))).split(os.pathsep))
+MOTIV_MESAJE_OCTETI = 65536  # coada lui MESAJE_PATH citita, numai cand un serviciu e socotit cazut
+MOTIV_RANDURI = 3            # ultimele randuri ale serviciului din coada
+MOTIV_RAND_MAX = 200         # caractere dintr-un rand
+# r17: ora salvata (fake-hwclock, UTC, "%Y-%m-%d %H:%M:%S"), pusa ca ora la pornire cat nu e ceas hardware
+FAKE_HWCLOCK_PATH = os.environ.get("HDS_WATCHDOG_FAKE_HWCLOCK", "/etc/fake-hwclock.data")
+CEAS_TOLERANTA_S = 300       # pornirea socotita pe ceas (acum - uptime) atat de aproape de ora salvata = ceas nemutat
 
 # ioctl-uri standard <linux/watchdog.h> (stabile de zeci de ani, nu se schimba cu kernelul)
 WDIOC_GETSUPPORT = 0x80045700
@@ -967,32 +1029,92 @@ def _marime(cale):
         return -1
 
 
-def cere_stivele(pid, anunta=True):
-    """La diagnostic sau inainte de SIGTERM: enigma2 scrie stivele tuturor firelor Python in STIVE_PATH (din semnal,
-    merge si cu firul principal blocat); partea noua se copiaza in CRASH_LOG_DIR/enigma2-stive-<data>.txt, cu ultimele
-    CRASH_LOG_PASTRATE pastrate. -> calea copiei sau None. anunta=False: apelantul scrie randul cu motivul. Nu arunca."""
+def _trimite_cererea_stivelor(pid, semn):
+    """Un rand cu semnul cererii in teava firului de stive al enigma2 pid (STIVE_CERERE). -> True daca a ajuns la un
+    cititor; False fara teava, fara cititor (enigma2 mai vechi, firul nepornit, procesul mort) sau cand calea nu e o teava.
+    Nu asteapta si nu arunca."""
+    cale = STIVE_CERERE % pid if "%d" in STIVE_CERERE else STIVE_CERERE
+    try:
+        fd = os.open(cale, os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
+    except OSError:
+        return False
+    try:
+        if not stat.S_ISFIFO(os.fstat(fd).st_mode):
+            return False
+        os.write(fd, ("%s\n" % semn).encode("ascii"))
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+
+
+def _asteapta_raspunsul_stivelor(inainte, semn, termen):
+    """True cand partea noua a STIVE_PATH (de la octetul inainte) are randul de sfarsit al cererii semn, in cel mult
+    termen secunde."""
+    sfarsit = (STIVE_SFARSIT + semn).encode("ascii")
+    capat = time.monotonic() + termen
+    while True:
+        try:
+            with open(STIVE_PATH, "rb") as f:
+                f.seek(inainte)
+                if sfarsit in f.read(STIVE_MAX_OCTETI):
+                    return True
+        except OSError:
+            pass
+        if time.monotonic() >= capat:
+            return False
+        time.sleep(0.1)
+
+
+def alege_semnalul_stivelor(oprire, nou, trimisa):
+    """Semnalul faulthandler cand firul de stive n-a raspuns, sau None. oprire: procesul e oprit imediat dupa (SIGTERM);
+    nou: enigma2 prinde STIVE_TOATE_SEMNAL (0.7.7+, la el STIVE_SEMNAL da numai firul principal); trimisa: cererea a ajuns
+    la firul de stive, deci tacerea lui inseamna lacatul Python tinut."""
+    if oprire:
+        # toate firele numai cand niciun alt fir nu poate rula cod Python; un enigma2 mai vechi le da oricum pe STIVE_SEMNAL
+        return STIVE_TOATE_SEMNAL if (nou and trimisa) else STIVE_SEMNAL
+    # diagnostic (procesul merge mai departe): numai firul principal, sigur oricand; la un enigma2 mai vechi nimic
+    return STIVE_SEMNAL if nou else None
+
+
+def cere_stivele(pid, anunta=True, oprire=True):
+    """Inainte de SIGTERM (oprire=True) sau la diagnostic (oprire=False, procesul nu e oprit): stivele firelor Python ale
+    enigma2 in STIVE_PATH. Intai cererea catre firul de stive al enigma2 (toate firele, citite din Python, sigur oricand);
+    daca nu raspunde in STIVE_PYTHON_S, semnalul faulthandler ales de alege_semnalul_stivelor (merge si cu firul principal
+    blocat). Partea noua se copiaza in CRASH_LOG_DIR/enigma2-stive-<data>.txt, cu ultimele CRASH_LOG_PASTRATE pastrate.
+    -> calea copiei sau None. anunta=False: apelantul scrie randul cu motivul. Nu arunca."""
     global _ultimul_nucleu
     if not _prinde_semnalul(pid, STIVE_SEMNAL):
         return None
-    # inainte de semnal (semnalul scoate firele din apelul in care stau): ce vede nucleul la fiecare fir
+    # inainte de cerere si de semnal (semnalul scoate firele din apelul in care stau): ce vede nucleul la fiecare fir
     nucleu, _ultimul_nucleu = fire_in_nucleu(pid)
     inainte = max(_marime(STIVE_PATH), 0)
-    try:
-        os.kill(pid, STIVE_SEMNAL)
-    except OSError:
-        return None
-    capat = time.monotonic() + STIVE_ASTEPTARE_S
-    ultima = inainte
-    while time.monotonic() < capat:
-        time.sleep(0.2)
-        m = _marime(STIVE_PATH)
-        if m > inainte and m == ultima:
-            break
-        ultima = m
+    semn = "%d" % int(time.monotonic() * 1000)
+    trimisa = _trimite_cererea_stivelor(pid, semn)
+    if trimisa and _asteapta_raspunsul_stivelor(inainte, semn, STIVE_PYTHON_S):
+        cum = "citite din Python"
+    else:
+        sig = alege_semnalul_stivelor(oprire, _prinde_semnalul(pid, STIVE_TOATE_SEMNAL), trimisa)
+        if sig is None:
+            return None
+        cum = "din semnal, %s" % ("toate firele" if sig == STIVE_TOATE_SEMNAL else "semnalul %d" % sig)
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            return None
+        capat = time.monotonic() + STIVE_ASTEPTARE_S
+        ultima = max(_marime(STIVE_PATH), inainte)
+        while time.monotonic() < capat:
+            time.sleep(0.2)
+            m = _marime(STIVE_PATH)
+            if m > inainte and m == ultima:
+                break
+            ultima = m
     try:
         with open(STIVE_PATH, "rb") as f:
             f.seek(inainte)
-            date = f.read(262144)
+            date = f.read(STIVE_MAX_OCTETI)
     except OSError:
         return None
     if not date:
@@ -1002,8 +1124,8 @@ def cere_stivele(pid, anunta=True):
         cale = os.path.join(CRASH_LOG_DIR, "%s%s-%d.txt" % (STIVE_PREFIX, time.strftime("%Y%m%d-%H%M%S"), pid))
         with open(cale, "wb") as f:
             if nucleu:
-                f.write(("== firele enigma2 vazute de nucleu (inainte de semnal)\n%s\n== stivele Python\n" % nucleu)
-                        .encode("utf-8", "replace"))
+                f.write(("== firele enigma2 vazute de nucleu (inainte de semnal)\n%s\n== stivele Python (%s)\n" %
+                         (nucleu, cum)).encode("utf-8", "replace"))
             f.write(date)
         vechi = sorted(n for n in os.listdir(CRASH_LOG_DIR) if n.startswith(STIVE_PREFIX) and n.endswith(".txt"))
         for n in vechi[:-CRASH_LOG_PASTRATE]:
@@ -1015,7 +1137,7 @@ def cere_stivele(pid, anunta=True):
         log("stivele enigma2 nu s-au putut pastra: %s" % e)
         return None
     if anunta:
-        log("stivele firelor Python ale enigma2 pid=%d pastrate in %s%s" % (pid, cale,
+        log("stivele firelor Python ale enigma2 pid=%d pastrate in %s (%s)%s" % (pid, cale, cum,
             ("; firul principal in nucleu: %s" % _ultimul_nucleu) if _ultimul_nucleu else ""))
     return cale
 
@@ -1220,7 +1342,7 @@ def pas_viata_enigma2(acum, pid_enigma2, bataie, diagnostic=True):
     praguri = (STIVE_FARA_BATAIE_S, STIVE_FARA_BATAIE_DIN_NOU_S)
     if proces["stive"] < len(praguri) and varsta >= praguri[proces["stive"]]:
         proces["stive"] += 1  # se incearca o data la fiecare prag, inclusiv daca procesul nu poate da stivele
-        cale = cere_stivele(pid_enigma2, anunta=False)
+        cale = cere_stivele(pid_enigma2, anunta=False, oprire=False)
         rezultat = ("stivele firelor Python pastrate in %s" % cale if cale else
                     "stivele firelor Python nu s-au putut pastra")
         log("enigma2 pid=%d fara nicio bataie de %d s de la pornire: %s%s" % (pid_enigma2, int(varsta), rezultat,
@@ -1239,7 +1361,7 @@ def parinte(pid):
     return None
 
 
-def scrie_semn_oprire(pid, sigkill=False):
+def scrie_semn_oprire(pid, sigkill=False, motiv="blocaj-moale"):
     """Semnul pentru tools/enigma2.sh.in, inainte de SIGTERM si de SIGKILL catre enigma2: iesirea care urmeaza e ceruta de
     paznic pentru un blocaj moale, deci nu se socoteste placii 2D. Randuri „cheie=valoare”: pid, parinte (enigma2.sh care
     asteapta acest enigma2: $$ acolo), uptime (secunde intregi din /proc/uptime la scriere), motiv; inainte de SIGKILL si
@@ -1250,7 +1372,8 @@ def scrie_semn_oprire(pid, sigkill=False):
         up = uptime_secunde()
         if tata is None or tata <= 1 or up is None:
             return False
-        text = "pid=%d\nparinte=%d\nuptime=%d\nmotiv=blocaj-moale\n" % (pid, tata, up)
+        # motiv: blocaj-moale (nivelul 3) sau iesire-ceruta (0.7.6, pas_iesire_ceruta); enigma2.sh il pune in randul lui
+        text = "pid=%d\nparinte=%d\nuptime=%d\nmotiv=%s\n" % (pid, tata, up, motiv)
         if sigkill:
             text += "sigkill=%d\n" % up
         nou = OPRIRE_PATH + ".nou"
@@ -1290,6 +1413,140 @@ def force_soft_recovery(reason, acum=None):
             log("SIGTERM catre pid=%d a esuat: %s" % (pid, e))
     _reporniri_interfata += 1
     _ultima_actiune = ("interfata repornita: nu a mai raspuns", time.time())
+
+
+def citeste_semn_iesire():
+    """Semnul iesirii cerute (Components/HdsPaznic.iesireInceputa, IESIRE_CERUTA_PATH): {"pid", "ceruta" (ceas monoton),
+    "cod" (None = necunoscut), "tema", "ecrane"}, sau None daca lipseste ori e stricat. Citit marginit."""
+    try:
+        with open(IESIRE_CERUTA_PATH, "r", encoding="utf-8", errors="replace") as f:
+            text = f.read(IESIRE_MAX_OCTETI)
+    except OSError:
+        return None
+    d = {}
+    for rand in text.splitlines():
+        cheie, semn, valoare = rand.partition("=")
+        if semn:
+            d[cheie.strip()] = valoare.strip()
+    try:
+        rez = {"pid": int(d["pid"]), "ceruta": float(d["ceruta"])}
+        cod = d.get("cod", "-")
+        rez["cod"] = None if cod in ("", "-") else int(cod)
+    except (KeyError, ValueError):
+        return None
+    rez["tema"] = " ".join(d.get("tema", "").split())[:160]
+    rez["ecrane"] = " ".join(d.get("ecrane", "").split())[:240]
+    return rez
+
+
+def proces_enigma2_viu(pid, proc=None):
+    """True cat procesul pid exista si e tot TARGET_PROCESS (PROC_DIR/<pid>/comm; pid-urile se refolosesc). Un proces cu
+    firul principal terminat ("Z") si alte fire inca vii se socoteste viu: exact cel care nu mai iese."""
+    try:
+        with open(os.path.join(proc or PROC_DIR, str(pid), "comm")) as f:
+            return f.read().strip() == TARGET_PROCESS
+    except OSError:
+        return False
+
+
+def hotarare_iesire_ceruta(acum, semn, viu, interfata_pornita, opkg):
+    """Fara efecte (teste/test_wdg_iesire_ceruta_076.py). acum: ceas monoton; semn: citeste_semn_iesire(); viu: procesul
+    semnului inca exista; opkg: un opkg ruleaza (r14: atunci nu se reporneste nimic). -> (fel, detaliu), fel fiind:
+      fara        niciun semn
+      iesit       procesul semnului nu mai exista (iesirea s-a terminat)
+      alt-cod     o iesire pe care paznicul nu o atinge (IESIRE_CODURI_NEATINSE: caderea, 5)
+      oprit       repornirea interfetei e oprita din setari (config.hds_paznic.interfata)
+      ocupat      un opkg ruleaza
+      asteapta    mai putin de IESIRE_CERUTA_S secunde de la semn
+      opreste     procesul nu a iesit in IESIRE_CERUTA_S secunde: SIGTERM, apoi SIGKILL"""
+    if semn is None:
+        return "fara", ""
+    pid = semn["pid"]
+    if not viu:
+        return "iesit", "enigma2 pid=%d a iesit" % pid
+    cod = semn["cod"]
+    if cod in IESIRE_CODURI_NEATINSE:
+        return "alt-cod", "iesirea enigma2 pid=%d cu codul %d nu se atinge" % (pid, cod)
+    if not interfata_pornita:
+        return "oprit", "repornirea interfetei e oprita din setari"
+    varsta = acum - semn["ceruta"]
+    if varsta < -5:
+        # ceasul monoton o ia de la zero la pornirea receptorului (/var/run e oricum in RAM)
+        return "fara", "semnul iesirii de dinaintea unei reporniri (pid=%d)" % pid
+    if opkg:
+        return "ocupat", "enigma2 pid=%d iese de %ds, dar opkg ruleaza" % (pid, int(varsta))
+    if varsta < IESIRE_CERUTA_S:
+        return "asteapta", "enigma2 pid=%d iese de %ds" % (pid, max(0, int(varsta)))
+    return "opreste", ("enigma2 pid=%d nu a iesit la repornire in %d s (a asteptat %d s; cod %s, tema %s, ecranele: %s)"
+                       % (pid, IESIRE_CERUTA_S, int(varsta), "necunoscut" if cod is None else cod,
+                          semn["tema"] or "necunoscuta", semn["ecrane"] or "nestiute"))
+
+
+def firele_ramase(pid, maxim=400):
+    """Firele procesului care nu iese, pe un rand: nume (stare, wchan), cel mult maxim caractere."""
+    text, _principal = fire_in_nucleu(pid, PROC_DIR)
+    parti = []
+    for rand in text.splitlines():
+        d = dict(c.split("=", 1) for c in rand.split() if "=" in c)
+        parti.append("%s (%s, %s)" % (d.get("nume", "?") or "?", d.get("stare", "?"), d.get("wchan", "?")))
+    return (", ".join(parti) or "necitite")[:maxim]
+
+
+def pas_iesire_ceruta(acum, opkg):
+    """Pasul iesirii cerute din bucla principala (inainte de nivelul 3): hotararea si, la "opreste", randul in jurnale,
+    stivele, semnul opririi si SIGTERM; SIGKILL dupa IESIRE_SIGKILL_DUPA_S. _sigterm primeste pid-ul (cu ceas infinit):
+    nivelul 3 nu mai trimite inca un SIGTERM, pas_sigkill nu se amesteca, iar nivelul 5 stie ca o oprire e in curs.
+    Intoarce felul hotararii (sau "sigterm"/"sigkill" cat urmareste o oprire)."""
+    global _iesire_oprita, _sigterm, _reporniri_interfata, _ultima_actiune
+    if _iesire_oprita is not None:
+        pid, cand, ucis = _iesire_oprita
+        if not proces_enigma2_viu(pid):
+            log("enigma2 pid=%d a iesit dupa oprirea paznicului (%d s de la SIGTERM)" % (pid, int(acum - cand)))
+            _iesire_oprita = None
+            if _sigterm is not None and _sigterm[0] == pid:
+                _sigterm = None
+            return "iesit"
+        if ucis:
+            return "sigkill"
+        if acum - cand < IESIRE_SIGKILL_DUPA_S:
+            return "sigterm"
+        _iesire_oprita[2] = True
+        scrie_semn_oprire(pid, sigkill=True, motiv="iesire-ceruta")
+        try:
+            os.kill(pid, signal.SIGKILL)
+            log("enigma2 pid=%d nu a iesit nici la SIGTERM in %d s: SIGKILL trimis" % (pid, int(acum - cand)))
+        except OSError as e:
+            log("SIGKILL catre pid=%d a esuat: %s" % (pid, e))
+        return "sigkill"
+    semn = citeste_semn_iesire()
+    if semn is None:
+        return "fara"
+    if _sigterm is not None and _sigterm[0] == semn["pid"]:
+        return "nivelul-3"        # nivelul 3 a trimis deja SIGTERM acestui proces; pas_sigkill urmeaza
+    try:
+        interfata, _asteptare = setari_paznic()
+    except Exception:
+        interfata = INTERFATA_IMPLICIT
+    fel, detaliu = hotarare_iesire_ceruta(acum, semn, proces_enigma2_viu(semn["pid"]), interfata, bool(opkg))
+    if fel != "opreste":
+        return fel
+    pid = semn["pid"]
+    rand = "%s; firele ramase: %s" % (detaliu, firele_ramase(pid))
+    log(rand)
+    scrie_jurnal_caderi("%s; oprit de paznic (SIGTERM, apoi SIGKILL)" % rand)
+    # inaintea oricarui semnal: enigma2.sh afla ca iesirea care urmeaza e oprirea paznicului (motiv=iesire-ceruta)
+    scrie_semn_oprire(pid, motiv="iesire-ceruta")
+    cere_stivele(pid)
+    try:
+        os.kill(pid, signal.SIGTERM)
+        log("SIGTERM trimis catre pid=%d (iesirea ceruta nu s-a terminat)" % pid)
+    except OSError as e:
+        log("SIGTERM catre pid=%d a esuat: %s" % (pid, e))
+    _iesire_oprita = [pid, acum, False]
+    _sigterm = (pid, float("inf"))
+    _reporniri_interfata += 1
+    _ultima_actiune = ("interfata repornita: nu iesea dupa repornirea ceruta", time.time())
+    return "sigterm"
 
 
 def _kmsg_randuri(date):
@@ -1386,6 +1643,11 @@ def salveaza_firele_blocate(reason, kmsg=None, dosar=None, sysrq=None):
 
 def force_hard_reboot(reason):
     log("declansez repornire dura (sysrq): %s" % reason)
+    # r16 (0.7.6, asistenta 430032): intai randul in jurnalul mic al opririlor (fsync), inainte de orice altceva; jurnalul
+    # paznicului (LOG_PATH) nu se citeste din asistenta, iar hds-blocaj-*.txt lipseste cand /dev/kmsg nu se citeste.
+    # Asa o repornire dura a paznicului nu mai ramane fara urma in hds-caderi.log. Motivul intreg (firul, starea, wchan),
+    # pe un rand, cel mult 400 de semne: e singura urma care ramane sigur pe disc.
+    scrie_jurnal_caderi("paznicul reporneste dur receptorul (sysrq): %s" % (" ".join(str(reason).split())[:400] or "gol"))
     try:
         with open("/proc/sys/kernel/sysrq", "w") as f:
             f.write("1")
@@ -2243,12 +2505,52 @@ def citeste_servicii():
     return rez
 
 
-def hotarare_servicii(stari, uptime_s, refuzuri, porniri, acum):
+def rc_in_lucru(proc=None):
+    """True cat ruleaza scripturile de pornire: un proces viu cu /etc/init.d/rc sau /etc/init.d/rcS in linia de comanda
+    (inittab: "/etc/init.d/rc 3", deci "/bin/sh /etc/init.d/rc 3"; numai citiri din /proc)"""
+    proc = proc or PROC_DIR
+    try:
+        intrari = os.listdir(proc)
+    except OSError:
+        return False
+    for x in intrari:
+        if not x.isdigit():
+            continue
+        try:
+            with open(os.path.join(proc, x, "cmdline"), "rb") as f:
+                argumente = f.read(512).split(b"\0")
+        except OSError:
+            continue
+        if any(a.endswith((b"/init.d/rc", b"/init.d/rcS")) for a in argumente[:3]):
+            try:
+                with open(os.path.join(proc, x, "stat")) as f:
+                    stare = f.read().rsplit(")", 1)[-1].split()
+                if stare and stare[0] == "Z":
+                    continue
+            except (OSError, IndexError):
+                pass
+            return True
+    return False
+
+
+def lipsa_procese(stari):
+    """Multimea serviciilor (avahi, nume-local) pornite la pornirea receptorului care nu au proces acum (numai citiri)"""
+    return set(c for c in ("avahi", "nume-local") if (stari.get(c) or {}).get("instalat") and
+               (stari.get(c) or {}).get("pornit_la_pornire") and not (stari.get(c) or {}).get("proces"))
+
+
+def hotarare_servicii(stari, uptime_s, refuzuri, porniri, acum, rc_ruleaza=False, lipsa_inainte=None):
     """Fara efecte. -> (lista de (cheie, script, actiune), refuzuri noi, starea pentru ecran, detaliu).
     actiune: "start" sau "restart" (dbus cu procesul ramas, dar fara raspuns de SERVICII_CONFIRMARI ori la rand).
-    porniri: {cheie: [ceas monoton al pornirilor]}; acum: ceasul monoton."""
+    porniri: {cheie: [ceas monoton al pornirilor]}; acum: ceasul monoton.
+    rc_ruleaza (r16): scripturile de pornire (rc, rcS) inca ruleaza; pana la SERVICII_RC_MAX_S de la pornire nimic nu e
+    cazut, rc ii porneste la randul lor.
+    lipsa_inainte (r16): serviciile fara proces la verificarea de dinainte (lipsa_procese); avahi si numele local care
+    lipsesc acum, dar nu si atunci, se mai cauta o data. None = fara confirmare (ca inainte de r16)."""
     if uptime_s is not None and uptime_s < SERVICII_PORNIRE_S:
         return [], 0, "", "pornirea receptorului: serviciile le porneste rc5"
+    if rc_ruleaza and (uptime_s is None or uptime_s < SERVICII_RC_MAX_S):
+        return [], 0, "", "pornirea receptorului: scripturile de pornire (rc) inca ruleaza"
     de_pornit = []
     cazute = []
     limitate = []
@@ -2283,11 +2585,18 @@ def hotarare_servicii(stari, uptime_s, refuzuri, porniri, acum):
     # avahi si numele local: numai cele pornite la pornirea receptorului, numai cu D-Bus mergand (sau pornit acum)
     dbus_va_merge = dbus_bun or any(c == "dbus" for c, _s, _a in de_pornit)
     avahi_va_merge = True
+    de_confirmat = []
     for cheie, script in (("avahi", "avahi-daemon"), ("nume-local", "hds-nume-local")):
         d = stari.get(cheie) or {}
         if not d.get("instalat") or not d.get("pornit_la_pornire"):
             continue
         if d.get("proces"):
+            continue
+        if lipsa_inainte is not None and cheie not in lipsa_inainte:
+            # prima verificare fara proces: poate e oprit chiar acum de cine il porneste la loc (schimbarea retelei)
+            de_confirmat.append(cheie)
+            if cheie == "avahi":
+                avahi_va_merge = False
             continue
         cazute.append(cheie)
         if cheie == "avahi":
@@ -2314,6 +2623,8 @@ def hotarare_servicii(stari, uptime_s, refuzuri, porniri, acum):
         stare = "esec" if cazute else "ok"
         detaliu = ("cazute: %s (fara D-Bus nu se pot porni)" % ", ".join(cazute)) if cazute else \
             "soclul D-Bus nu raspunde (%d/%d)" % (refuzuri, SERVICII_CONFIRMARI)
+    elif de_confirmat:
+        stare, detaliu = "ok", "fara proces acum: %s; se verifica din nou la trecerea urmatoare" % ", ".join(de_confirmat)
     else:
         stare, detaliu = "ok", "dbus, avahi si numele local merg"
     return de_pornit, refuzuri, stare, detaliu
@@ -2371,13 +2682,142 @@ def jurnal_servicii(text):
         pass
 
 
+def randuri_mesaje(cuvant, cale=None):
+    """r17: ultimele MOTIV_RANDURI randuri care contin cuvant din coada lui MESAJE_PATH (cel mult MOTIV_MESAJE_OCTETI
+    octeti de la capat, nu tot fisierul: o trecere a nivelului 6 are timp marginit). Fiecare rand taiat la
+    MOTIV_RAND_MAX caractere. [] daca fisierul lipseste."""
+    cale = cale or MESAJE_PATH
+    try:
+        with open(cale, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            marime = f.tell()
+            f.seek(max(0, marime - MOTIV_MESAJE_OCTETI))
+            date = f.read(MOTIV_MESAJE_OCTETI)
+    except OSError:
+        return []
+    randuri = date.split(b"\n")
+    if marime > MOTIV_MESAJE_OCTETI:
+        randuri = randuri[1:]  # primul rand e taiat la mijloc
+    cuvant_b = cuvant.encode("utf-8")
+    gasite = [r for r in randuri if cuvant_b in r][-MOTIV_RANDURI:]
+    return [r.decode("utf-8", "replace").strip()[:MOTIV_RAND_MAX] for r in gasite]
+
+
+def motiv_lipsa(cheie, uptime=None):
+    """r17: de ce lipseste avahi-daemon ("avahi") sau hds-nume-local ("nume-local"), intr-un singur rand: uptime-ul,
+    fisierul pid si ultimele randuri ale serviciului din messages. Nu arunca niciodata (e chemat din nivelul 6)."""
+    try:
+        if cheie == "avahi":
+            cai, cuvant = AVAHI_PID, "avahi-daemon"
+        else:
+            cai, cuvant = (NUME_LOCAL_PID,), "hds-nume-local"
+        parti = ["uptime=%s" % ("%ds" % uptime if uptime is not None else "?")]
+        text_pid = "fisier pid lipsa (oprit curat sau nepornit)"
+        for cale in cai:
+            try:
+                with open(cale) as f:
+                    continut = f.read(32).strip()
+            except OSError:
+                continue
+            if continut.isdigit():
+                try:
+                    with open(os.path.join(PROC_DIR, continut, "comm")) as f:
+                        nume = f.read(64).strip()
+                except OSError:
+                    nume = None
+                if nume is None:
+                    text_pid = "fisier pid %s ramas, pid %s mort (oprit brusc sau cazut)" % (cale, continut)
+                else:
+                    text_pid = "fisier pid %s ramas, pid %s folosit acum de %s" % (cale, continut, nume)
+            else:
+                text_pid = "fisier pid %s ramas, fara pid in el" % cale
+            break
+        parti.append(text_pid)
+        randuri = randuri_mesaje(cuvant)
+        parti.append("messages: " + (" | ".join(randuri) if randuri else "nimic despre %s in coada" % cuvant))
+        return "; ".join(parti)
+    except Exception as e:
+        return "motivul nu s-a putut citi: %r" % (e,)
+
+
+def _secunde_utc(an, luna, zi, ora, minut, secunda):
+    """secundele UTC ale unei date (zilele din calendarul gregorian), fara calendar/datetime (RDEPENDS neschimbat)"""
+    a = an - (1 if luna <= 2 else 0)
+    era = a // 400
+    ya = a - era * 400
+    zi_an = (153 * (luna + (-3 if luna > 2 else 9)) + 2) // 5 + zi - 1
+    ze = ya * 365 + ya // 4 - ya // 100 + zi_an
+    zile = era * 146097 + ze - 719468
+    return zile * 86400 + ora * 3600 + minut * 60 + secunda
+
+
+def citeste_ora_salvata(cale=None):
+    """r17: ora din FAKE_HWCLOCK_PATH ("%Y-%m-%d %H:%M:%S", UTC) in secunde, sau None"""
+    try:
+        with open(cale or FAKE_HWCLOCK_PATH) as f:
+            text = f.read(64).strip()
+        data, ora = text.split()[:2]
+        an, luna, zi = (int(x) for x in data.split("-"))
+        h, m, s = (int(x) for x in ora.split(":"))
+        if not (1 <= luna <= 12 and 1 <= zi <= 31 and 0 <= h < 24 and 0 <= m < 60 and 0 <= s < 61):
+            return None
+        return _secunde_utc(an, luna, zi, h, m, s)
+    except (OSError, ValueError):
+        return None
+
+
+def stare_ceas_pornire(acum, uptime, salvat):
+    """r17, fara efecte. acum: ora de perete (time.time()); uptime: secundele de la pornirea receptorului; salvat: ora
+    salvata (citeste_ora_salvata) sau None. La pornire ceasul pleaca de la ora salvata; cat nu s-a mutat (NTP, HTTPS,
+    transponder), pornirea socotita pe ceas (acum - uptime) cade langa ea (CEAS_TOLERANTA_S).
+    Limita: un paznic repornit de init mai tarziu, dupa o ora sigura salvata in primele minute ale aceleiasi porniri,
+    poate fi socotit tot "ora salvata"; uptime-ul din rand arata atunci ca nu e pornirea receptorului."""
+    if salvat is None:
+        return "ceas=necunoscut (fara ora salvata)"
+    text = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(salvat))
+    if uptime is None:
+        return "ceas=? (fara uptime; ora salvata %s UTC)" % text
+    abatere = int(round((acum - uptime) - salvat))
+    if abs(abatere) <= CEAS_TOLERANTA_S:
+        return "ceas=ORA SALVATA, nesincronizat inca (%s UTC + uptime)" % text
+    return "ceas=mutat fata de ora salvata (%+d s; ora salvata %s UTC)" % (abatere, text)
+
+
+def rand_pornire():
+    """r17: randul "pornire hds-watchdog.py" cu uptime-ul si starea ceasului (stare_ceas_pornire). Nu arunca: o eroare
+    aici ar opri paznicul inainte de /dev/watchdog, iar init l-ar porni in bucla."""
+    baza = "pornire hds-watchdog.py (tinta=%s, interval=%ds, prag confirmare=%d verificari, %d cand e ocupat, " \
+        "jurnal=%s)" % (TARGET_PROCESS, PET_INTERVAL_S, CONFIRM_HANG_CHECKS, CONFIRM_HANG_CHECKS_OCUPAT, LOG_PATH)
+    try:
+        up = _paznic_pornit_la if _paznic_pornit_la is not None else uptime_precis()
+        up = int(up) if up is not None else None
+        return "%s; uptime=%s; %s" % (baza, "%ds" % up if up is not None else "?",
+                                      stare_ceas_pornire(time.time(), up, citeste_ora_salvata()))
+    except Exception as e:
+        return "%s; ceas: %r" % (baza, e)
+
+
 def pas_servicii(acum):
     """Nivelul 6: o verificare a serviciilor de sistem si pornirile hotarate; o linie in jurnal la fiecare pornire si
     la schimbarea starii. Intoarce starea (servicii, detaliu, ora)."""
-    global _srv_refuzuri, _srv_stare, _srv_reporniri, _srv_anuntat
+    global _srv_refuzuri, _srv_stare, _srv_reporniri, _srv_anuntat, _srv_lipsa, _srv_motiv_scris
     stari = citeste_servicii()
-    de_pornit, _srv_refuzuri, stare, detaliu = hotarare_servicii(stari, uptime_secunde(), _srv_refuzuri,
-                                                                 _srv_porniri, acum)
+    uptime = uptime_secunde()
+    # r16: rc citit numai dupa SERVICII_PORNIRE_S si pana la SERVICII_RC_MAX_S (dupa aceea nu mai conteaza)
+    rc = uptime is not None and SERVICII_PORNIRE_S <= uptime < SERVICII_RC_MAX_S and rc_in_lucru()
+    de_pornit, _srv_refuzuri, stare, detaliu = hotarare_servicii(stari, uptime, _srv_refuzuri, _srv_porniri, acum,
+                                                                 rc_ruleaza=rc, lipsa_inainte=_srv_lipsa)
+    lipsa_inainte = _srv_lipsa
+    # ce lipseste se tine minte numai dupa pornirea receptorului (in timpul ei serviciile inca pornesc)
+    _srv_lipsa = set() if rc or (uptime is not None and uptime < SERVICII_PORNIRE_S) else lipsa_procese(stari)
+    # r17: cazute = fara proces si acum, si la verificarea de dinainte (ca in hotarare_servicii); o data pe cadere,
+    # inaintea randului pornirii, de ce lipseste
+    cazute = _srv_lipsa & lipsa_inainte
+    for cheie in sorted(cazute - _srv_motiv_scris):
+        motiv = motiv_lipsa(cheie, uptime)
+        log("servicii: %s cazut, de ce: %s" % (cheie, motiv))
+        jurnal_servicii("%s cazut, de ce: %s" % (cheie, motiv))
+    _srv_motiv_scris = cazute
     # hotarare_servicii da cel mult unul; fara sleep si fara asteptarea soclului: ce depinde de el (avahi dupa dbus,
     # numele dupa avahi) se porneste la verificarea urmatoare, cand se vede ca merge
     for cheie, script, actiune in de_pornit[:1]:
@@ -2459,6 +2899,11 @@ def un_pas(fd, confirmed, urmatoarea_netguard):
     # dura e deja in curs (fara rost sa mai trimitem SIGTERM catre un sistem care oricum reporneste).
     # O eroare neprevazuta aici nu are voie sa opreasca bucla (hranirea watchdogului HW).
     if not confirmed:
+        # 0.7.6 (WDG): iesirea ceruta care nu se termina (semnul din mytest.py dupa runReactor), inainte de nivelul 3
+        try:
+            pas_iesire_ceruta(acum, opkg)
+        except Exception as e:
+            log("eroare interna la iesirea ceruta: %r" % (e,))
         try:
             fel, detaliu, interfata, asteptare = pas_blocaj_moale(acum, pid_enigma2, bataie)
             pas_sigkill(acum, pids)
@@ -2523,8 +2968,10 @@ def un_pas(fd, confirmed, urmatoarea_netguard):
 def main():
     global _paznic_pornit_la
     _paznic_pornit_la = uptime_precis()  # 0.7.5 (PRN): vezi PRIMA_BATAIE_NECUNOSCUTA
-    log("pornire hds-watchdog.py (tinta=%s, interval=%ds, prag confirmare=%d verificari, %d cand e ocupat, "
-        "jurnal=%s)" % (TARGET_PROCESS, PET_INTERVAL_S, CONFIRM_HANG_CHECKS, CONFIRM_HANG_CHECKS_OCUPAT, LOG_PATH))
+    # r17: cu uptime-ul si starea ceasului. NUMAI in jurnalul paznicului, nu si in hds-servicii.log: acolo un rand la
+    # fiecare pornire ar face fisierul pe orice receptor sanatos, iar HdsBetaTester.doarStareBuna (ultimul rand "stare
+    # ok") l-ar trimite ca jurnal de eroare; randul "de ce" de acolo are deja uptime-ul.
+    log(rand_pornire())
 
     fd = open_watchdog()
     ensure_crash_log_dir()

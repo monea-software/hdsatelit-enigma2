@@ -77,7 +77,10 @@ RESULT eNavigation::recordService(const eServiceReference &ref, ePtr<iRecordable
 {
 	ASSERT(m_servicehandler);
 	RESULT res = m_servicehandler->record(ref, service);
-	eDebug("record: %d", res);
+	/* EPG (0.7.7, asistenta 058499): inregistrarea simulata reusita nu mai scrie randul (EPGImport verifica asa fiecare
+	   canal din rytec.channels.xml, 10.431 intr-un import, si umplea hds-interfata.log); esecul si cea adevarata raman */
+	if (!simulate || res)
+		eDebug("record: %d", res);
 	if (res)
 		service = 0;
 	else

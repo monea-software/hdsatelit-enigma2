@@ -19,6 +19,13 @@
 # - volumul egal intre canale: AVC-ul motorului de sunet al placii (comanda „avc” din /proc/msp/sound0), in doua trepte:
 #   Usor (apropie incet volumul canalelor si al reclamelor) si Puternic (si diferenta dintre tare si incet mai mica).
 #   Motorul acestui cip nu are alt compresor (DRC pe iesire lipseste), deci compresia ceruta e treapta Puternic;
+# - 0.7.7 (VOL, dorinelu forum 795 #2702/#2704, Vu+ Solo 4K): pe Broadcom (Vu+, AX HD51 si ceilalti) volumul egal e
+#   nivelarea automata a driverului (Auto Volume Level), pe calea standard OE-Alliance, ca la celelalte imagini:
+#   /proc/stb/audio/avl_choices spune iesirile („dac spdif hdmi none” pe Vu+ Solo SE, din asistenta 07.11), iar
+#   /proc/stb/audio/avl primeste iesirea aleasa sau „none” (o scriere, fara rand nou, ca la OE-Alliance). Driverul
+#   nu are trepte, deci alegerile randului sunt Oprit si iesirile lui (HDMI, Optic, Analogic), cu alt ajutor (RANDURI,
+#   cheia HdsSunetAvl). Randul se arata dupa fisierele din /proc, nu dupa model. Pe HiSilicon (dosarul /proc/msp sau
+#   /proc/hisi) fisierele avl ale lui hi_dvb nu se ating deloc: citirea lor opreste nucleul (esteHisilicon);
 # - intarzierea sunetului pe HDMI si pe optic: compensarea pe iesire a placii („HDMI0 delaycomps N”, „SPDIF0
 #   delaycomps N”, 0..500 ms), la care se aduna intarzierea pistei de acum, tinuta minte pe canal si pe pista. Suma se
 #   scrie numai cand difera de ce arata placa (DelayComps(Nms) in /proc/msp/sound0): la pornirea canalului, la
@@ -50,7 +57,17 @@ AFISARE_MIN, AFISARE_MAX, AFISARE_IMPLICIT = 1, 10, 3
 # cat sta semnul de mut pe ecran, in secunde; "0" = mereu (cum statea inainte). tfrc, LinuxSat 164122 #970392: sa plece
 # singur, ca bara volumului. Afisajul din fata il arata mai departe (Components/HdsAfisaj.py asculta numai onShow).
 AFISARE_MUT_IMPLICIT = 5
+# 0.7.7 (OSD, asistenta 906594): la pornirea cu mutul tinut minte (si la volumul 0) semnul de mut sta pe ecran cel putin
+# atat, chiar daca setarea de mai sus e mai scurta: televizorul se aprinde greu prin HDMI/CEC si ar rata 5 s; "Mereu"
+# ramane mereu. La tasta MUTE ramane setarea omului.
+MUT_PORNIRE_MIN_MS = 15000
 VOLUM_EGAL = ("oprit", "usor", "puternic")
+# volumul egal pe Broadcom (Auto Volume Level al driverului, calea OE-Alliance): alegerile si valoarea scrisa
+AVL_ALEGERI = "proc/stb/audio/avl_choices"
+AVL = "proc/stb/audio/avl"
+AVL_OPRIT = "none"
+AVL_IESIRI = ("hdmi", "spdif", "dac")    # ordinea din meniu, ca la OE-Alliance (Off, HDMI, S/PDIF, DAC)
+MAX_OCTETI_AVL = 256
 # atributele AVC pe trepte (limitele driverului: prag -40..-16 dB, castig 0..8 dB, limita -40..0 dB, atac si revenire
 # 20..2000 ms). Ordinea scrierii: fiecare comanda schimba un atribut si le verifica pe toate, deci timpii intai, apoi
 # castigul, pragul si limita (limita ramane mereu peste prag). Valorile sunt puncte de plecare, de potrivit la ascultare.
@@ -74,7 +91,7 @@ INCERCARI_NAVIGARE = 90
 _STARE = {"memorie": None, "pornit": False, "nav": None, "ceas_nav": None, "incercari": 0, "ceas": None,
 	"verificari": [], "volum_initial": False, "mut_initial": False, "ceas_volum": None, "ceas_scriere": None,
 	"avc_scris": None, "erori": {}, "standby_legat": False,
-	"placa_de_verificat": False}
+	"placa_de_verificat": False, "avl": []}
 
 
 def N_(text):
@@ -111,6 +128,10 @@ RANDURI = (
 	("egal", "volum_egal", N_("Volum egal între canale"),
 		N_("Placa de sunet apropie singură volumul: canalele și reclamele tari se aud mai încet, cele încete mai tare. Puternic micșorează și diferența dintre tare și încet (bun noaptea). Nu lucrează când sunetul pleacă neschimbat spre televizor."),
 		"HdsSunetAvc"),
+	# acelasi rand pe Broadcom (Auto Volume Level al driverului): alegerile sunt iesirile, deci alt ajutor
+	("egal", "volum_egal", N_("Volum egal între canale"),
+		N_("Receptorul apropie singur volumul: canalele și reclamele tari se aud mai încet, cele încete mai tare. Alege pe unde asculți: HDMI, optic sau analogic. Nu lucrează când sunetul pleacă neschimbat spre televizor."),
+		"HdsSunetAvl"),
 	("hdmi", "intarziere_hdmi", N_("Întârzierea sunetului pe HDMI"),
 		N_("Când buzele se mișcă după sunet, întârzie sunetul spre televizor. Sunetul se poate numai întârzia, nu grăbi."),
 		"HdsSunetIntarziere"),
@@ -119,6 +140,7 @@ RANDURI = (
 		"HdsSunetIntarziere"),
 )
 NUME_VOLUM_EGAL = {"oprit": N_("Oprit"), "usor": N_("Ușor"), "puternic": N_("Puternic")}
+NUME_AVL = {"hdmi": "HDMI", "spdif": N_("Optic"), "dac": N_("Analogic")}
 ETICHETA_PISTA = N_("Întârzierea pistei pe acest canal")
 AJUTOR_PISTA = N_("Se adună la întârzierea ieșirii, numai pentru pista de sunet de acum a canalului de acum. Se ține minte.")
 
@@ -237,6 +259,59 @@ def areAvc(rad=None):
 	"""Comanda „avc” e a aceluiasi driver (hi_aiao) care face /proc/msp/sound0 (tabelul comenzilor lui); o aplica
 	motorul de sunet din software (hi_adsp, iMedia AVC)."""
 	return bool(citestePlaca(rad))
+
+
+def esteHisilicon(rad=None):
+	"""Driverul HiSilicon: dosarele /proc/msp si /proc/hisi apar cu modulele lui, inaintea lui hi_dvb (care face
+	/proc/stb) si a enigma2; acelasi semn ca HdsSunet._faraCitireDriver. Acolo hi_dvb are si /proc/stb/audio/avl si
+	avl_choices, dar citirea lor opreste nucleul (Oops in proc_audio_avl_read pe SF8008 si Viper 4K), deci calea avl nu
+	le atinge deloc, nici macar nu le cauta."""
+	return os.path.isdir(_cale(rad, "proc/msp")) or os.path.isdir(_cale(rad, "proc/hisi"))
+
+
+def iesiriAvl(rad=None):
+	"""Iesirile pe care driverul Broadcom le niveleaza (/proc/stb/audio/avl_choices), in ordinea din meniu: [] pe
+	HiSilicon (nu se deschide nimic), fara fisiere, fara drept de scriere in /proc/stb/audio/avl sau fara „none” in
+	alegeri (nivelarea n-ar avea cum sa se opreasca). Cuvintele necunoscute nu se arata."""
+	if esteHisilicon(rad):
+		return []
+	cale = _cale(rad, AVL)
+	if not os.path.isfile(cale) or not os.access(cale, os.W_OK):
+		return []
+	try:
+		with open(_cale(rad, AVL_ALEGERI), "rb") as f:
+			cuvinte = f.read(MAX_OCTETI_AVL).decode("ascii", "replace").split()
+	except (IOError, OSError):
+		return []
+	if AVL_OPRIT not in cuvinte:
+		return []
+	return [i for i in AVL_IESIRI if i in cuvinte]
+
+
+def alegeriVolumEgal(iesiri=None):
+	"""Alegerile randului „Volum egal între canale”: HiSilicon (si fara driver) Oprit, Ușor, Puternic, treptele AVC-ului;
+	Broadcom Oprit si iesirile Auto Volume Level ale driverului (iesiriAvl)."""
+	if iesiri:
+		return [("oprit", NUME_VOLUM_EGAL["oprit"])] + [(i, NUME_AVL[i]) for i in iesiri if i in NUME_AVL]
+	return [(k, NUME_VOLUM_EGAL[k]) for k in VOLUM_EGAL]
+
+
+def scrieAvl(valoare, rad=None):
+	"""Iesirea aleasa (sau „none”) in /proc/stb/audio/avl, o scriere fara rand nou, ca la OE-Alliance. -> True cand a
+	mers. Pe HiSilicon nu se scrie niciodata (esteHisilicon)."""
+	if esteHisilicon(rad):
+		return False
+	try:
+		with open(_cale(rad, AVL), "w") as f:
+			f.write(valoare)
+	except (IOError, OSError) as e:
+		n = _STARE["erori"].get("avl", 0)
+		if n < 3:
+			_jurnal("driverul a refuzat volumul egal „%s”: %s" % (valoare, e))
+		_STARE["erori"]["avl"] = n + 1
+		return False
+	_jurnal("volumul egal (Auto Volume Level): %s" % valoare)
+	return True
 
 
 def pePas(ms, jos=PISTA_MIN, sus=PISTA_MAX):
@@ -503,6 +578,8 @@ def initConfig():
 	"""config.hds_setari_sunet si cheile SystemInfo; din Components/AVSwitch.InitAVSwitch, inaintea meniurilor."""
 	from Components.config import config, ConfigSubsection, ConfigSelection, ConfigYesNo
 	from Components.SystemInfo import SystemInfo
+	# Broadcom: iesirile Auto Volume Level ale driverului, cunoscute de la incarcarea modulelor (inaintea enigma2)
+	iesiri = iesiriAvl()
 	if "hds_setari_sunet" not in config.content.items:
 		config.hds_setari_sunet = ConfigSubsection()
 		c = config.hds_setari_sunet
@@ -511,11 +588,13 @@ def initConfig():
 		c.afisare_volum = ConfigSelection(choices=alegeriAfisare(), default=str(AFISARE_IMPLICIT))
 		c.afisare_mut = ConfigSelection(choices=alegeriAfisareMut(), default=str(AFISARE_MUT_IMPLICIT))
 		c.volum_pe_canal = ConfigYesNo(default=False)
-		c.volum_egal = ConfigSelection(choices=[(k, NUME_VOLUM_EGAL[k]) for k in VOLUM_EGAL], default="oprit")
+		c.volum_egal = ConfigSelection(choices=alegeriVolumEgal(iesiri), default="oprit")
 		c.intarziere_hdmi = ConfigSelection(choices=alegeriIntarziere(), default="0")
 		c.intarziere_optic = ConfigSelection(choices=alegeriIntarziere(), default="0")
+	_STARE["avl"] = list(iesiri)
 	SystemInfo["HdsSunetIntarziere"] = areIntarziere()
 	SystemInfo["HdsSunetAvc"] = areAvc()
+	SystemInfo["HdsSunetAvl"] = bool(iesiri)
 
 
 def _c():
@@ -656,17 +735,27 @@ def verifica(rad=None):
 	return comenzi
 
 
-def aplicaAvc(fortat=False, rad=None):
-	"""Pune treapta AVC aleasa. Placa nu arata AVC in /proc, deci se scrie numai la schimbare, la pornire (cand nu e
-	oprit: oprit e starea placii la pornire) si dupa standby (fortat)."""
+def _caleVolumEgal():
+	"""„avl” (Broadcom, Auto Volume Level al driverului), „avc” (HiSilicon, placa gasita) sau None (fara driver)."""
 	try:
 		from Components.SystemInfo import SystemInfo
-		if not SystemInfo.get("HdsSunetAvc"):
-			return []
 	except Exception:
-		pass
+		return "avc"
+	if SystemInfo.get("HdsSunetAvl") and _STARE["avl"]:
+		return "avl"
+	return "avc" if SystemInfo.get("HdsSunetAvc") else None
+
+
+def aplicaAvc(fortat=False, rad=None):
+	"""Pune volumul egal ales: pe HiSilicon treapta AVC in /proc/msp/sound0, pe Broadcom iesirea in /proc/stb/audio/avl.
+	Placa HiSilicon nu arata AVC in /proc, iar /proc/stb/audio/avl nu se citeste, deci se scrie numai la schimbare, la
+	pornire (cand nu e oprit: oprit e starea driverului la pornire) si dupa standby (fortat)."""
+	cale = _caleVolumEgal()
+	if cale is None:
+		return []
+	permise = (("oprit",) + tuple(_STARE["avl"])) if cale == "avl" else VOLUM_EGAL
 	nivel = _valoare("volum_egal", "oprit")
-	if nivel not in VOLUM_EGAL:
+	if nivel not in permise:
 		nivel = "oprit"
 	scris = _STARE["avc_scris"]
 	if not fortat and (scris == nivel or (scris is None and nivel == "oprit")):
@@ -674,6 +763,11 @@ def aplicaAvc(fortat=False, rad=None):
 		return []
 	if fortat and nivel == "oprit" and scris in (None, "oprit"):
 		return []
+	if cale == "avl":
+		valoare = AVL_OPRIT if nivel == "oprit" else nivel
+		if scrieAvl(valoare, rad):
+			_STARE["avc_scris"] = nivel
+		return [valoare]
 	comenzi = comenziAvc(nivel)
 	cazute = []
 	scrieComenzi(comenzi, rad, cazute)
@@ -756,9 +850,11 @@ def volumLaPornireaCanalului():
 def mutLaPornire(v):
 	"""La primul canal dupa pornirea receptorului (o singura data): (pune_mut, arata_semnul). Mutul tinut minte revine;
 	un volum salvat 0 fara mut (pus asa din web) e tratat ca mut, ca receptorul sa nu porneasca tacut fara niciun semn.
-	Semnul de mut se arata numai cand nivelul e peste 0 (la 0 tastele de volum il pun si ele fara semn). Cat
-	receptorul e in standby nu se face nimic (standby-ul pune si scoate singur mutul): se incearca la canalul urmator.
-	(False, False) cand nu e nimic de facut. `v` = volumul pus acum (None = ramane cel al placii)."""
+	0.7.7 (OSD, asistenta 906594): semnul de mut se arata la pornire ori de cate ori mutul e pus, si la nivelul 0 (omul
+	coborase volumul la 0, iar receptorul pornea fara sunet si fara niciun semn pe ecran), ca in celelalte imagini; pe
+	ecran sta cel putin MUT_PORNIRE_MIN_MS. Cat receptorul e in standby nu se face nimic (standby-ul pune si scoate
+	singur mutul): se incearca la canalul urmator. (False, False) cand nu e nimic de facut. `v` = volumul pus acum
+	(None = ramane cel al placii)."""
 	if _STARE["mut_initial"]:
 		return False, False
 	if _inStandby():
@@ -769,7 +865,7 @@ def mutLaPornire(v):
 		return False, False
 	nivel = v if v is not None else _volumSalvat()
 	if mut or nivel == 0:
-		return True, bool(nivel)
+		return True, True
 	return False, False
 
 
@@ -805,10 +901,11 @@ def _aplicaVolum():
 			if inst is not None:
 				inst.volumeDialog.setValue(0 if vc.isMuted() else vc.getVolume())
 				if pune and semn:
-					# semnul pleaca singur dupa setarea "Cât stă semnul de mut pe ecran"
+					# semnul pleaca singur dupa setarea "Cât stă semnul de mut pe ecran", la pornire dupa cel putin
+					# MUT_PORNIRE_MIN_MS ("Mereu" ramane mereu)
 					arata = getattr(inst, "arataMut", None)
 					if arata is not None:
-						arata()
+						arata(MUT_PORNIRE_MIN_MS)
 					else:
 						inst.muteDialog.show()
 		except Exception:

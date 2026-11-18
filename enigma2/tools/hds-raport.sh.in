@@ -64,6 +64,14 @@ SERVER=${HDS_RAPORT_SERVER:-https://stb.hdsatelit.com/api/testeri/raport-pornire
 PAS=${HDS_RAPORT_PAS:-5}
 ASTEPTARE=${HDS_RAPORT_ASTEPTARE:-60}
 FARA_E2=${HDS_RAPORT_FARA_ENIGMA2:-300}
+# MI6 0.7.5 (report 606060, SF8008 with its root on a USB 2.0 stick, 14.11.2026): before enigma2, tools/enigma2.sh may run
+# tools/hds-actualizare-intrerupta.py, which finishes an update cut in the middle and never stops opkg at a deadline (a
+# whole update took 463 s on that stick). While its pid file names a live process the start is not stuck: no fara-enigma2,
+# the steps get "actualizare" and "actualizare-gata dupa=Ns", the header actualizare_in_curs=. fara-enigma2 comes
+# ASTEPTARE seconds after the program ended without an enigma2, or after ACTUALIZARE_MAX seconds of the program (so a
+# program that never ends is still reported).
+ACTUALIZARE=${HDS_RAPORT_ACTUALIZARE:-$R/tmp/hds-actualizare-intrerupta.ruleaza}
+ACTUALIZARE_MAX=${HDS_RAPORT_ACTUALIZARE_MAX:-1800}
 IMAGINE_S=${HDS_RAPORT_IMAGINE_S:-30}
 CADERI_PRAG=${HDS_RAPORT_CADERI:-3}
 INCERCARI=${HDS_RAPORT_INCERCARI:-6}
@@ -482,6 +490,33 @@ rp_fisiere_pornire() {
 	done
 }
 
+# D1 (USI, 16.11.2026): the mounts of the discs as the kernel keeps them (/proc/self/mountinfo): the root of each mount
+# (/ = the whole partition, /linuxrootfs17 = a folder of it mounted again elsewhere), the mountpoint, the type, the device.
+# /proc/mounts does not tell a bind of a folder from the whole partition (Wlad, forum 948: the list of the images).
+rp_montari_discuri() {
+	awk '{ s = index($0, " - "); if (!s) next; split(substr($0, s + 3), b, " ")
+		if (b[2] !~ /^\/dev\/(sd|mmcblk|nvme)/) next
+		print "radacina=" $4 " punct=" $5 " tip=" b[1] " dispozitiv=" b[2] }' "$R/proc/self/mountinfo" 2>/dev/null | head -n 60
+}
+
+# D3 (USI): what "Restart into another image" decided at its last full reading of the list, for every STARTUP_N, with the
+# partitions it read (Components/HdsPornireMultipla.py, _jurnalLista; in RAM, one per boot); printable, at most 8 KiB
+rp_lista_pornire_multipla() {
+	if [ -f "$R/var/run/hds-pornire-multipla.txt" ]; then
+		head -c 8192 "$R/var/run/hds-pornire-multipla.txt" 2>/dev/null | tr -cd '\11\12\15\40-\176'
+	else
+		echo "(lista imaginilor nu a fost citita de la pornire)"
+	fi
+}
+
+# D1-D3 together, for the report of the other slots
+rp_pornire_multipla() {
+	rp_sectiune "lista pornirii multiple (ultima citire)"
+	rp_lista_pornire_multipla
+	echo "-- montarile discurilor (mountinfo)"
+	rp_montari_discuri
+}
+
 # the last $2 lines of a file (bounded in bytes), or a note
 rp_coada() {
 	if [ -f "$1" ]; then
@@ -515,22 +550,46 @@ rp_proc_dosar() {
 	done
 }
 
-# the Python stacks of enigma2 kept by the watchdog: the last three $L/enigma2-stive-*.txt (faulthandler of mytest.py,
-# written at SIGRTMIN+7 before the SIGTERM of an interface that no longer answers). Only the lines of the faulthandler
-# format are kept: the thread lines without the address, the frames as file, line and function, the path cut to what
-# follows enigma2/python/ or python3.N/ (any other path: "(alt fisier)"); a frame of an access module (the forms of
-# rp_filtru, and any line with "cam" in it, also when more letters follow) is only "(modul-acces)". Not through
-# rp_filtru: its rules drop whole lines with words such as key,
-# session or user, which are also names of ordinary files and functions, and a stack with holes in it says nothing.
+# the Python stacks of enigma2 kept by the watchdog: the last three $L/enigma2-stive-*.txt (before the SIGTERM of an
+# interface that no longer answers, and when it never answered after a start): the stacks of all threads read from Python
+# by the stack thread of the image (Components/HdsPaznic.py, textStive), or faulthandler of mytest.py when that thread
+# cannot answer. Only the lines of the faulthandler format are kept: the thread lines without the address, with the thread
+# name when there is one (Python 3.14 writes it between square brackets; the stack thread writes it on the line
+# "# fir: <name>" just before), "Stack (most recent call first):" (faulthandler for one thread), the line of the watchdog
+# copy saying how they were read ("== stivele Python (X)", written "stivele Python: X": a line starting with "== " opens a
+# section of the report), the frames as file, line (or ???) and function, the path cut
+# to what follows enigma2/python/ or python3.N/ (any other path: "(alt fisier)"); a frame of an access module (the forms
+# of rp_filtru, and any line with "cam" in it, also when more letters follow) is only "(modul-acces)", a thread name of
+# that form only "modul-acces"; a name keeps letters, digits, space and _.()- (an IPv4 address as x.x.x.x; at most 40).
+# At most 16 KiB of each file: in the faulthandler form of all threads the main thread ("Current thread") comes last.
+# Not through rp_filtru: its rules drop whole lines with words such as key, session or user, which are also names of
+# ordinary files and functions, and a stack with holes in it says nothing. Same reading as
+# Components/HdsBetaTester.stiveCurate.
 rp_stive() {
 	rp_sectiune "stivele firelor Python ale enigma2 (paznicul, ultimele trei)"
 	for rp_f in $(ls -t "$L"/enigma2-stive-*.txt 2>/dev/null | head -n 3); do
 		echo "-- ${rp_f##*/}"
-		head -c 8192 "$rp_f" 2>/dev/null | tr -d '\000-\010\013-\037\177' | awk '
-			/^(Current thread|Thread) 0x[0-9A-Fa-f]+ \(most recent call first\):$/ { sub(/ 0x[0-9A-Fa-f]+ /, " "); print; next }
-			/^  <no Python frame>$/ { print; next }
-			/^  File "[A-Za-z0-9_.\/-]+", line [0-9]+ in [A-Za-z0-9_<>]+$/ {
-				if (tolower($0) ~ /cam|cardd([^a-z]|$)|card[_.-]?serv|(^|[^a-z])[gs]b[o]x|newc[s]([^a-z]|$)|cs3[0-9][0-9]x|radeg[a]st|smartcard|tuxbox\/config/) { print "  (modul-acces)"; next }
+		head -c 16384 "$rp_f" 2>/dev/null | tr -d '\000-\010\013-\037\177' | awk '
+			function acces(t) {
+				return tolower(t) ~ /cam|cardd([^a-z]|$)|card[_.-]?serv|(^|[^a-z])[gs]b[o]x|newc[s]([^a-z]|$)|cs3[0-9][0-9]x|radeg[a]st|smartcard|tuxbox\/config/
+			}
+			function nume(n) {
+				gsub(/[^A-Za-z0-9 _.()-]/, "", n); gsub(/[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+/, "x.x.x.x", n)
+				n = substr(n, 1, 40); sub(/^ +/, "", n); sub(/ +$/, "", n)
+				return acces(n) ? "modul-acces" : n
+			}
+			/^# fir: / { fir = substr($0, 8); next }
+			{ ante = fir; fir = "" }
+			/^(Current thread|Thread) 0x[0-9A-Fa-f]+( \[.*\])? \(most recent call first\):$/ {
+				f = ($0 ~ /^Current/) ? "Current thread" : "Thread"
+				if (match($0, /\[.*\]/)) ante = substr($0, RSTART + 1, RLENGTH - 2)
+				n = nume(ante)
+				print f (n != "" ? " [" n "]" : "") " (most recent call first):"; next }
+			/^Stack \(most recent call first\):$/ || /^  <no Python frame>$/ { print; next }
+			/^== stivele Python \((citite din Python|din semnal, toate firele|din semnal, semnalul [0-9]+)\)$/ {
+				s = $0; sub(/^== stivele Python \(/, "", s); sub(/\)$/, "", s); print "stivele Python: " s; next }
+			/^  File "[A-Za-z0-9_.\/-]+", line ([0-9]+|[?][?][?]) in [A-Za-z0-9_<>]+$/ {
+				if (acces($0)) { print "  (modul-acces)"; next }
 				p = $0; sub(/^  File "/, "", p); sub(/", line .*$/, "", p)
 				r = $0; sub(/^  File "[^"]*"/, "", r)
 				if (match(p, /enigma2\/python\//)) p = substr(p, RSTART)
@@ -619,6 +678,34 @@ rp_fstab() {
 }
 
 # Numai Enigma2: cel mult 32 de fire si 4 KiB din fiecare stiva.
+# the pid of tools/hds-actualizare-intrerupta.py while it runs (ACTUALIZARE names a live process), else status 1
+rp_actualizare() {
+	rp_ap=""
+	read rp_ap 2>/dev/null < "$ACTUALIZARE"
+	case $rp_ap in ''|*[!0-9]*) return 1 ;; esac
+	[ -d "$R/proc/$rp_ap" ] || return 1
+	echo "$rp_ap"
+}
+
+# MI6: what the processes in state D wait for in the kernel (opkg on a slow stick, jbd2, usb-storage): pid, name, wchan,
+# the kernel stack and, for the user programs, the bytes read and written (/proc/PID/io); at most 12 processes
+rp_procese_d() {
+	rp_nr=0
+	for rp_d in "$R"/proc/[0-9]*; do
+		[ "$rp_nr" -lt 12 ] || break
+		rp_st=$(sed -n 's/^State:[[:space:]]*\([A-Z]\).*/\1/p' "$rp_d/status" 2>/dev/null)
+		[ "$rp_st" = D ] || continue
+		rp_nr=$((rp_nr + 1))
+		printf '\n-- pid=%s %s\nasteptare=' "${rp_d##*/}" "$(head -c 40 "$rp_d/comm" 2>/dev/null | tr -cd 'A-Za-z0-9_./ -')"
+		head -c 200 "$rp_d/wchan" 2>/dev/null
+		echo
+		head -c 2048 "$rp_d/stack" 2>/dev/null
+		grep -E '^(read_bytes|write_bytes|cancelled_write_bytes):' "$rp_d/io" 2>/dev/null
+	done
+	[ "$rp_nr" -gt 0 ] || echo "(niciunul)"
+	return 0
+}
+
 rp_stive_nucleu() {
 	rp_e=$(rp_enigma2)
 	rp_pid=${rp_e%% *}
@@ -680,6 +767,8 @@ runpy.run_path(sys.argv[0], run_name="__main__")' "$PYTHON_E2" 2>&1 | head -n 12
 	cat "$R/proc/cmdline" 2>/dev/null
 	rp_sectiune "fisierele de pornire"
 	rp_fisiere_pornire
+	rp_sectiune "lista pornirii multiple (ultima citire)"
+	rp_lista_pornire_multipla
 	rp_sectiune "setari (numai cheile simple)"
 	rp_setari_permise
 	rp_sectiune "bataia interfetei si paznicul"
@@ -718,12 +807,20 @@ runpy.run_path(sys.argv[0], run_name="__main__")' "$PYTHON_E2" 2>&1 | head -n 12
 	rp_procese
 	rp_sectiune "asteptarea Enigma2 in nucleu"
 	rp_stive_nucleu
+	rp_sectiune "procesele in starea D (asteptarea in nucleu)"
+	rp_procese_d
+	# MI6: the log of the updates (Components/HdsActualizari.py and tools/hds-actualizare-intrerupta.py), the cause of a
+	# slow or cut update; the addresses go through the filter of the body like every other line
+	rp_sectiune "jurnalul actualizarilor"
+	rp_coada "$L/hds-actualizari.log" 80
 	rp_sectiune "memoria si discurile"
 	cat "$R/proc/meminfo" 2>/dev/null | head -n 20
 	df -k 2>/dev/null
 	cat "$R/proc/partitions" 2>/dev/null
 	rp_sectiune "montarile"
 	cat "$MOUNTS" 2>/dev/null
+	echo "-- montarile discurilor (mountinfo)"
+	rp_montari_discuri
 	rp_sectiune "montarile cerute in fstab (fara date private)"
 	rp_fstab
 	rp_sectiune "reteaua (adresele mascate)"
@@ -805,6 +902,10 @@ rp_antet() {
 	echo "enigma2_s=$2"
 	echo "interfata=${3:-nu}"
 	echo "cod_diagnostic=$(sed -n 's/^coduri=//p' "$REZERVA/date.txt" 2>/dev/null | head -n 1 | tr -cd 'E0-9 ' | cut -c1-40)"
+	# MI6: the program that finishes an update cut in the middle runs now (seconds since the watcher saw it)
+	if rp_ap=$(rp_actualizare); then
+		echo "actualizare_in_curs=pid=$rp_ap de=$(($(rp_acum) - ${u_act_t0:-0}))s"
+	fi
 	# a report started by the image itself (Components/HdsProcesorRaport.py: motiv=procesor, declansare=automata)
 	[ -n "${HDS_RAPORT_MOTIV:-}" ] && echo "motiv=$(echo "$HDS_RAPORT_MOTIV" | tr -cd 'a-z0-9-' | cut -c1-20)"
 	[ -n "${HDS_RAPORT_DECLANSARE:-}" ] && echo "declansare=$(echo "$HDS_RAPORT_DECLANSARE" | tr -cd 'a-z0-9-' | cut -c1-20)"
@@ -1016,6 +1117,7 @@ rp_urmareste() {
 	u_interfata=""; u_interfata_run=""; u_imagine=""; u_tv_de=""; u_raport_interfata=""; u_trimite=1; u_trimite_t=0
 	u_acord=""; rp_imagine_acord=""
 	u_cod_afisat=""; rp_ultim_cod=""; u_afisaj_t=0; u_sigur=""
+	u_act=""; u_act_t0=0; u_act_gata=""
 	[ -x "$LIBREADER" ] && u_libreader=1 || u_libreader=""
 	while :; do
 		rp_a=$(rp_acum)
@@ -1097,9 +1199,28 @@ rp_urmareste() {
 		if [ -n "$u_e2_prim" ] && [ -z "$u_interfata" ] && [ $((rp_a - u_e2_prim)) -ge "$ASTEPTARE" ]; then
 			rp_declanseaza interfata "$((rp_a - u_e2_prim))" ""
 		fi
+		# MI6: an update cut in the middle being finished before enigma2 (ACTUALIZARE) holds fara-enigma2 back
+		if [ -z "$u_e2_prim" ] && rp_ap=$(rp_actualizare); then
+			if [ -z "$u_act" ]; then
+				u_act=$rp_ap; u_act_t0=$rp_a; u_act_gata=""
+				rp_pas actualizare "pid=$rp_ap"
+			fi
+		elif [ -n "$u_act" ] && [ -z "$u_act_gata" ]; then
+			u_act_gata=$rp_a
+			rp_pas actualizare-gata "dupa=$((rp_a - u_act_t0))s"
+		fi
 		if [ -z "$u_e2_prim" ] && [ "$rp_a" -ge "$FARA_E2" ]; then
-			rp_pas init-acum "$(rp_pas_init)"
-			rp_declanseaza fara-enigma2 "" ""
+			if [ -n "$u_act" ] && [ -z "$u_act_gata" ]; then
+				[ $((rp_a - u_act_t0)) -ge "$ACTUALIZARE_MAX" ] && rp_act_ok=1 || rp_act_ok=""
+			elif [ -n "$u_act_gata" ]; then
+				[ $((rp_a - u_act_gata)) -ge "$ASTEPTARE" ] && rp_act_ok=1 || rp_act_ok=""
+			else
+				rp_act_ok=1
+			fi
+			if [ -n "$rp_act_ok" ]; then
+				rp_pas init-acum "$(rp_pas_init)"
+				rp_declanseaza fara-enigma2 "" ""
+			fi
 		fi
 		if [ -z "$u_sigur" ] && [ -f "$MOD_SIGUR" ]; then
 			u_sigur=1
@@ -1198,8 +1319,10 @@ rp_sloturi_cauta() {
 	echo "gata=$rp_g"
 }
 
-# the body of the report "sloturi": what each slot left (goes through rp_filtru)
+# the body of the report "sloturi": what each slot left (goes through rp_filtru), and first what the list of the images
+# saw from this slot (D1-D3)
 rp_sloturi_corp() {
+	rp_pornire_multipla
 	for rp_s in $(rp_sloturi_radacini | tr ' ' '\001'); do
 		rp_s=$(echo "$rp_s" | tr '\001' ' ')
 		rp_sectiune "slotul ${rp_s#$RAM/slot-}"

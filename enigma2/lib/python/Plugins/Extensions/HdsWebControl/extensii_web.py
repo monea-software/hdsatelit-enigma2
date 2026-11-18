@@ -705,10 +705,20 @@ def instaleaza(arg, request, M):
 		return _refuz(_t("Extensia nu se mai poate instala. Reîncarcă pagina."))
 	plan, eroare = M.L.planInstalare(catalog, p, nota=_notaWeb(M.L, catalog))
 	if plan is None:
-		return _refuz(eroare[0])
+		return _refuzPlan(eroare)
 	if plan.get("fel") == "python2":
 		return _refuzPython2(M.L, plan)
 	return _pornestePlan(request, arg, M, catalog, "extensii-instaleaza", nume, plan)
+
+
+def _refuzPlan(eroare):
+	"""refuzul unui plan; 0.7.6 (EXG, TODO 15.11 07:35): cand extensia cere o versiune mai noua a imaginii, mesajul si
+	butonul spre Actualizare software (ca fereastra de pe televizor), nimic instalat pe bucati"""
+	rez = _refuz(eroare[0])
+	im = getattr(eroare, "imagine", None)
+	if im:
+		rez["imagine"] = {"legatura": im["legatura"], "text": _t(im["buton"])}
+	return rez
 
 
 def _refuzPython2(L, plan):
@@ -741,7 +751,7 @@ def actualizeaza(arg, request, M):
 		tinta = arg.get("pachet", "")
 	plan, eroare = M.L.planActualizare(catalog, pachete, nota=_notaWeb(M.L, catalog))
 	if plan is None:
-		return _refuz(eroare[0] if eroare else _t("Nu e nimic de actualizat. Reîncarcă pagina."))
+		return _refuzPlan(eroare) if eroare else _refuz(_t("Nu e nimic de actualizat. Reîncarcă pagina."))
 	if tot:
 		# codul e legat de lista vazuta: o actualizare noua aparuta intre intrebare si confirmare cere alta intrebare
 		tinta = "*" + ",".join(sorted(plan["pachete"]))
@@ -783,7 +793,8 @@ def fisier(arg, request, M):
 	catalog = _catalog(M)
 	plan, eroare = M.L.planFisier(f, catalog=catalog)
 	if plan is None:
-		return _refuz(eroare[0])
+		# 0.7.6 (EX2): un fisier care cere o imagine mai noua: mesajul si butonul spre Actualizare software
+		return _refuzPlan(eroare)
 	if plan.get("fel") == "python2":
 		return _refuzPython2(M.L, plan)
 	return _pornestePlan(request, arg, M, catalog, "extensii-fisier", cale, plan)
@@ -1333,6 +1344,7 @@ __STIL_PAGINI__
   <section class="card" id="randuri"></section>
   <p class="mesaj" id="mesaj"></p>
   <div class="butoane ascuns" id="inlocuitorBara"><button type="button" id="inlocuitor" class="principal"></button></div>
+  <div class="butoane ascuns" id="imagineBara"><button type="button" id="imagine" class="principal"></button></div>
   <div id="confirmare" class="card ascuns"></div>
   <p class="nota">Aceleași extensii și acțiuni sunt pe televizor, în __DRUM_MENIU__.</p>
 </div>
@@ -1365,7 +1377,9 @@ function trimite(cale, q, tacut){
 var INLOCUITOR = "";
 function arataInlocuitor(x){ INLOCUITOR = x && x.inlocuitor ? x.inlocuitor : ""; $("inlocuitorBara").classList.toggle("ascuns", !INLOCUITOR); if(INLOCUITOR){ $("inlocuitor").textContent = x.text; } }
 function instaleazaInlocuitor(nume){ arataInlocuitor(null); var q = new URLSearchParams(); q.set("pachet", nume); cuConfirmare("/api/extensii-instaleaza", q, dupa); }
-function dupa(d){ arataInlocuitor(d && d.python2); citeste(); }
+var IMAGINE = "";
+function arataImagine(x){ IMAGINE = x && x.legatura ? x.legatura : ""; $("imagineBara").classList.toggle("ascuns", !IMAGINE); if(IMAGINE){ $("imagine").textContent = x.text; } }
+function dupa(d){ arataInlocuitor(d && d.python2); arataImagine(d && d.imagine); citeste(); }
 function arataStare(d){
   $("lista").textContent = d.lista + (d.descarcare.in_curs ? (d.descarcare.rezerva ? " · serverul principal nu răspunde, se descarcă de pe serverul de rezervă" : " · se descarcă acum") : "");
   var p = [];
@@ -1570,6 +1584,7 @@ $("reporneste").addEventListener("click", function(){ cuConfirmare("/api/extensi
 $("lucrareReporneste").addEventListener("click", function(){ cuConfirmare("/api/extensii-reporneste", new URLSearchParams(), dupaRepornire); });
 $("lucrareInlocuitor").addEventListener("click", function(){ var n = $("lucrareInlocuitor").dataset.pachet; if(n){ instaleazaInlocuitor(n); } });
 $("inlocuitor").addEventListener("click", function(){ if(INLOCUITOR){ instaleazaInlocuitor(INLOCUITOR); } });
+$("imagine").addEventListener("click", function(){ if(IMAGINE){ location.href = IMAGINE; } });
 $("opreste").addEventListener("click", function(){ cuConfirmare("/api/extensii-opreste", new URLSearchParams(), dupa); });
 $("sursaOpreste").addEventListener("click", function(){ trimite("/api/extensii-sursa-opreste", new URLSearchParams()); });
 $("cautaFisiere").addEventListener("click", function(){ trimite("/api/extensii-cauta-fisiere", new URLSearchParams()); });

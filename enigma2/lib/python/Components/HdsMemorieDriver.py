@@ -489,6 +489,16 @@ def ultimulCod():
 def codRepornireDupaActualizare(sesiune=None, m=None, prag_kb=None, inregistrari=None, jurnal=None):
 	"""Codul pentru TryQuitMainloop dupa o actualizare instalata. Masuratoarea e citita acum (nu din cache). La
 	COD_RECEPTOR scrie randul in jurnalul paznicului. Nu arunca: la orice eroare COD_INTERFATA."""
+	# 0.7.7 (DRV): actualizarea a schimbat driverul placii (Components/HdsActualizari.SEMN_DRIVER_NOU): driverul nou se
+	# incarca numai la pornirea receptorului, deci receptorul intreg, oricare ar fi memoria (o inregistrare in curs o
+	# intreaba TryQuitMainloop, iar actualizarea rapida asteapta sfarsitul ei, ca pana acum)
+	try:
+		if _driverNou():
+			_ultim[0] = COD_RECEPTOR
+			_log("dupa actualizare: driverul placii s-a schimbat, repornesc receptorul")
+			return COD_RECEPTOR
+	except Exception as e:
+		_log("driverul placii: %r" % (e,))
 	try:
 		if m is None:
 			# masuratoarea crezuta din afara standby-ului (o clipa de memorie putina nu reporneste receptorul); fara ea,
@@ -520,8 +530,23 @@ def codRepornireDupaActualizare(sesiune=None, m=None, prag_kb=None, inregistrari
 		return COD_INTERFATA
 
 
+def _driverNou():
+	"""True cat un driver al placii instalat la pornirea de acum asteapta repornirea receptorului (0.7.7, DRV); fara
+	modulul actualizarilor (probele de pe PC) False, fara rand in jurnal"""
+	try:
+		from Components.HdsActualizari import repornire_receptor_ceruta
+	except ImportError:
+		return False
+	return repornire_receptor_ceruta()
+
+
 def textRepornire(cod):
 	if cod == COD_RECEPTOR:
+		try:
+			if _driverNou():
+				return _("Actualizarea s-a instalat. Receptorul se repornește acum, ca să încarce driverul nou al plăcii.")
+		except Exception:
+			pass
 		return _("Actualizarea s-a instalat. Receptorul se repornește acum, ca să elibereze memoria decodorului.")
 	return _("Actualizarea s-a instalat. Interfața se repornește acum.")
 

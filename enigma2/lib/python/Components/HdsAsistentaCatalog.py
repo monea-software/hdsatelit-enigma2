@@ -63,6 +63,7 @@ TEXTE_CATALOG = (
 	N_("setările receptorului, cu parolele ca steluțe"),
 	N_("captură cu meniurile și imaginea canalului, ca pe televizor"),
 	N_("un mesaj scris pe ecranul televizorului"),
+	N_("o întrebare pe ecranul televizorului; răspunsul tău (Da, Nu sau o variantă) ajunge la echipă"),
 	N_("concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"),
 	N_("Ecran"), N_("Control"),
 	N_("textul ecranului, ca pe televizor; rândurile cu parole trec prin filtrul de secrete"),

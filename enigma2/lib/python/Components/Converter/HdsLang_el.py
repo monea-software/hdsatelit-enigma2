@@ -313,4 +313,10 @@ T = {
 	"cpu_mode": u"Λειτουργία CPU",
 	"cpu_volt": u"Τάση",
 	"cpu_steps": u"Χρόνος ανά συχνότητα",
+	"bitrate_va": u"Bitrate βίντεο · ήχου",
+	"br_min": u"ελάχ",
+	"br_max": u"μέγ",
+	"br_avg": u"μ.ό.",
+	"ecm_hop": u"Hops",
+	"ecm_reader": u"Αναγνώστης",
 }

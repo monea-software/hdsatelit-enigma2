@@ -27,14 +27,26 @@ try:
 except Exception as e:
 	print("[mytest] numele enigma pentru pluginuri:", e)
 
-# HDSatelit: stivele tuturor firelor Python in /tmp/enigma2-stive.txt la semnalul SIGRTMIN+7. hds-watchdog il trimite
-# inainte de SIGTERM-ul unei interfete care nu mai raspunde si pastreaza copia in /home/root/logs (enigma2-stive-*.txt):
-# un blocaj lasa urma lui, nu numai „fara bataie”. Fisierul se goleste la fiecare pornire.
+# HDSatelit: stivele Python in /tmp/enigma2-stive.txt, cerute de hds-watchdog inainte de SIGTERM-ul unei interfete care nu
+# mai raspunde (si la o pornire fara nicio bataie); copia ramane in /home/root/logs (enigma2-stive-*.txt): un blocaj lasa
+# urma lui, nu numai lipsa bataii. Fisierul se goleste la fiecare pornire si se scrie numai la coada.
+# 0.7.7: stivele tuturor firelor le scrie intai un fir al imaginii, citite din Python (Components/HdsPaznic.py,
+# StiveLaCerere), la cererea paznicului pe o teava. faulthandler ramane pentru interfata care tine lacatul Python:
+# SIGRTMIN+7 numai firul care primeste semnalul (firul principal), SIGRTMIN+9 toate firele (paznicul il trimite numai
+# inaintea opririi, cand firul cererilor n-a putut raspunde, deci niciun alt fir nu ruleaza cod Python). Toate firele
+# citite din semnal cat alt fir rula cod Python au oprit enigma2 (SIGSEGV in libpython, 1 din ~318 pe receptorul de proba).
 try:
 	import faulthandler
 	import signal
-	_hdsStive = open("/tmp/enigma2-stive.txt", "w")
-	faulthandler.register(signal.SIGRTMIN + 7, file=_hdsStive, all_threads=True, chain=False)
+	open("/tmp/enigma2-stive.txt", "w").close()
+	_hdsStive = open("/tmp/enigma2-stive.txt", "a")
+	faulthandler.register(signal.SIGRTMIN + 7, file=_hdsStive, all_threads=False, chain=False)
+	faulthandler.register(signal.SIGRTMIN + 9, file=_hdsStive, all_threads=True, chain=False)
+	try:
+		from Components.HdsPaznic import pornesteStiveLaCerere
+		pornesteStiveLaCerere(_hdsStive)
+	except Exception as e:
+		print("[mytest] stivele la cererea paznicului:", e)
 except Exception as e:
 	print("[mytest] stivele la semnal:", e)
 
@@ -162,6 +174,13 @@ try:
 except Exception as e:
 	print("[mytest] beta tester:", e)
 	HdsBetaTester = None
+# HDSatelit 0.7.6 (NBM): un plugin strain care deschide un ecran cand nu e niciun ecran modal (de pilda NeoBoot, chiar dupa
+# ce si-a inchis fereastra) nu mai cade; ecranul se deschide dupa o clipa (Components/HdsDeschidereAmanata.py)
+try:
+	from Components import HdsDeschidereAmanata
+except Exception as e:
+	print("[mytest] deschiderea amanata:", e)
+	HdsDeschidereAmanata = None
 
 def setEPGCachePath(configElement):
 	# HDSatelit: locul il alege setarea „Unde se păstrează ghidul TV” (config.misc.hds_epg_loc); prima chemare pune
@@ -325,16 +344,23 @@ class Session:
 				HdsAnimatiiFerestre.dupaInchidere()
 
 	def processDelayHds(self):
-		callback = self.current_dialog.callback
+		# HDSatelit 0.7.7 (DLG): un ecran ajuns de doua ori in stiva (deschis inainte de garda din execDialog, de un plugin)
+		# n-are callback la a doua inchidere: era AttributeError si interfata se oprea. Se trece mai departe, cu rand in jurnal,
+		# iar popCurrent aduce ecranul de dedesubt, ca la o inchidere obisnuita.
+		callback = getattr(self.current_dialog, "callback", None)
 
-		retval = self.current_dialog.returnValue
+		retval = getattr(self.current_dialog, "returnValue", ())
 
-		if self.current_dialog.isTmp:
+		if self.current_dialog is None:
+			print("[Session] inchidere fara ecran curent")
+		elif self.current_dialog.isTmp:
 			self.current_dialog.doClose()
 #			dump(self.current_dialog)
 			del self.current_dialog
-		else:
+		elif hasattr(self.current_dialog, "callback"):
 			del self.current_dialog.callback
+		else:
+			print("[Session] %s inchis a doua oara (era de doua ori in stiva), merg la ecranul de dedesubt" % self.current_dialog.__class__.__name__)
 
 		self.popCurrent()
 		if callback is not None:
@@ -544,6 +570,11 @@ class Session:
 			self.current_dialog = None
 
 	def execDialog(self, dialog):
+		# HDSatelit 0.7.7 (DLG): un ecran care e deja deschis (ecranul de sus sau unul din stiva) nu se pune inca o data:
+		# lista de canale deschisa de doua ori la pornire (o tasta + lantul de pornire) cadea la al doilea EXIT
+		if dialog is self.current_dialog or any(d[0] is dialog for d in self.dialog_stack):
+			print("[Session] %s e deja deschis, nu-l pun a doua oara in stiva" % dialog.__class__.__name__)
+			return
 		self.pushCurrent()
 		self.current_dialog = dialog
 		self.current_dialog.isTmp = False
@@ -554,6 +585,11 @@ class Session:
 		self.execBegin()
 
 	def openWithCallback(self, callback, screen, *arguments, **kwargs):
+		# HDSatelit 0.7.6 (NBM): amanata cu tot cu callback, numai pentru pluginurile straine (Components/HdsDeschidereAmanata.py)
+		if self.dialog_stack and not self.in_exec and HdsDeschidereAmanata is not None:
+			plugin = HdsDeschidereAmanata.deAmanat(self)
+			if plugin:
+				return HdsDeschidereAmanata.amana(self, plugin, callback, screen, arguments, kwargs)
 		dlg = self.open(screen, *arguments, **kwargs)
 		if dlg is not None:
 			dlg.callback = callback
@@ -561,6 +597,12 @@ class Session:
 
 	def open(self, screen, *arguments, **kwargs):
 		if self.dialog_stack and not self.in_exec:
+			# HDSatelit 0.7.6 (NBM): cererea unui plugin strain se deschide cand e iar un ecran modal (open intoarce None);
+			# codul imaginii primeste eroarea ca inainte (Components/HdsDeschidereAmanata.py)
+			if HdsDeschidereAmanata is not None:
+				plugin = HdsDeschidereAmanata.deAmanat(self)
+				if plugin:
+					return HdsDeschidereAmanata.amana(self, plugin, None, screen, arguments, kwargs)
 			raise RuntimeError("modal open are allowed only from a screen which is modal!")
 			# ...unless it's the very first screen.
 
@@ -618,6 +660,9 @@ class Session:
 			# numai dupa eroarea unui plugin extern); eroarea merge mai departe ca inainte.
 			dlg.hdsDeschidereEsuata = True
 			raise
+		# HDSatelit 0.7.6 (ASF): fereastra deschisa inaintea InfoBar-ului intra in jurnal (Components/HdsDeschidereAmanata.py)
+		if HdsDeschidereAmanata is not None:
+			HdsDeschidereAmanata.laDeschidere(self, dlg, screen, arguments, kwargs)
 		return dlg
 
 	def close(self, screen, *retval):
@@ -1140,6 +1185,10 @@ def runScreenTest():
 		else:
 			session.open(screen, *args)
 		if screen is Screens.InfoBar.InfoBar:
+			# HDSatelit 0.7.6 (ASF, asistenta 222923): ferestrele deschise de pluginuri la sessionstart, ramase sub InfoBar,
+			# se aduc deasupra cand InfoBar e ecranul de sus (Components/HdsDeschidereAmanata.py)
+			if HdsDeschidereAmanata is not None:
+				HdsDeschidereAmanata.dupaInfoBar(session, Screens.InfoBar.InfoBar.instance)
 			try:
 				from Screens.HdsParteaDoua import pornesteParteaDoua
 				pornesteParteaDoua(session)
@@ -1169,6 +1218,13 @@ def runScreenTest():
 		HdsJurnalSistem.porneste()
 	except Exception as e:
 		print("[mytest] jurnalele retelei si discurilor:", e)
+	# HDSatelit 0.7.7 (VAR, asistenta 888733): variantele canalelor (Components/HdsVarianteCanal.py) se citesc pe un fir la un
+	# minut dupa pornire si din nou dupa fiecare scriere a lamedb, nu pe firul interfetei la deschiderea listei de canale
+	try:
+		from Components import HdsVarianteCanal
+		HdsVarianteCanal.porneste()
+	except Exception as e:
+		print("[mytest] variantele canalelor:", e)
 	# HDSatelit: rapoartele erorilor din pluginurile externe ramase netrimise (Components/HdsPluginExtern): reincercate
 	# la 15 minute, pe un fir; numai cand coada are ceva
 	try:
@@ -1191,6 +1247,13 @@ def runScreenTest():
 		HdsPorturi.porneste(session)
 	except Exception as e:
 		print("[mytest] paznicul porturilor:", e)
+	# HDSatelit 0.7.7 (OSD, LinuxSat 164182): oprirea automata dupa atatea ore fara nicio tasta, aleasa o data in ecranul
+	# Sleep Timer sau in web (Components/HdsOprireAutomata.py); oprita din fabrica, fara ea nu se leaga nimic.
+	try:
+		from Components import HdsOprireAutomata
+		HdsOprireAutomata.porneste(session)
+	except Exception as e:
+		print("[mytest] oprirea automata:", e)
 
 	runNextScreen(session, screensToRun)
 
@@ -1205,6 +1268,20 @@ def runScreenTest():
 	profile("RunReactor")
 	profile_final()
 	runReactor()
+
+	# HDSatelit 0.7.6 (WDG): bucla s-a oprit; semnul pentru hds-watchdog.py, care opreste procesul daca nu iese in 45 s
+	try:
+		from Components import HdsPaznic
+		HdsPaznic.iesireInceputa()
+	except Exception as e:
+		print("[mytest] semnul iesirii:", e)
+	# HDSatelit 0.7.7 (IES): dupa salvari, firele straine non-daemon (un server web, o descarcare a unei teme) nu mai tin
+	# procesul viu pana la paza de 45 s: Py_Finalize le asteapta cel mult cateva secunde (Components/HdsPaznic.py)
+	try:
+		from Components import HdsPaznic
+		HdsPaznic.pazaFirelorLaIesire()
+	except Exception as e:
+		print("[mytest] firele la iesire:", e)
 
 	# oprirea la cerere nu se numara impotriva unei teme externe aflate in proba
 	if skin.altSkinActiv():
@@ -1315,8 +1392,11 @@ skin.loadSkinData(getDesktop(0))
 # HDSatelit: skinul a schimbat rezolutia OSD-ului si a sters semnatura: se deseneaza din nou, iar la primul pas al
 # buclei principale locul ei se redeseneaza. Ecranul de pornire ales se pune din nou daca o actualizare l-a
 # inlocuit, iar ecranele sterse de om din galerie se sterg din nou (pe un fir separat). Pornirea nu depinde de ele.
+# 0.7.7 (OSD, e-mailul 6416): intai „Enigma2 pornește...” in coltul din dreapta jos (desenul lui poate sterge capsula,
+# deci semnatura vine dupa); pleaca odata cu semnatura, la primul pas al buclei.
 try:
 	from Components import HdsSemnaturaPornire
+	HdsSemnaturaPornire.arataColt()
 	HdsSemnaturaPornire.arata()
 	HdsSemnaturaPornire.ascundeLaPrimulDesen()
 except Exception as e:

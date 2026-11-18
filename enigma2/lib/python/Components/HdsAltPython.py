@@ -265,13 +265,154 @@ def eElf(date):
 	return date[:4] == b"\x7fELF"
 
 
+# ------------------------------------------------------------------ fisiere .pyc fara sursa, facute de alt Python
+# 0.7.5 (TJA, 15.11.2026; rapoartele pluginurilor externe 399305 si 796072, SF8008 0.7.4 si 0.7.5): un plugin pus numai
+# ca .pyc (fara .py langa), compilat de alt Python (IPTVPlayer cu .pyc de Python 3.13), cadea la import cu ImportError
+# "bad magic number in 'Plugins.Extensions.IPTVPlayer': b'\xf3\r\r\n'", iar lista pluginurilor care nu se deschid arata
+# omului textul acesta tehnic. Primii doi octeti ai fisierului (little endian) sunt numarul magic al versiunii care l-a
+# compilat; din el iese versiunea, iar eroarea devine AltPython, cu textul care exista deja pe ecran ("facut pentru
+# Python 3.13, imaginea are Python 3.14") si cauza alt-python in raport. Numerele: inceputul fiecarei versiuni, din
+# Lib/importlib/_bootstrap_external.py (pana la 3.13) si Include/internal/pycore_magic_number.h (3.14: 3600..3627).
+_MAGIC_PY3 = ((3000, (3, 0)), (3150, (3, 1)), (3180, (3, 2)), (3190, (3, 3)), (3250, (3, 4)), (3320, (3, 5)),
+	(3360, (3, 6)), (3390, (3, 7)), (3400, (3, 8)), (3420, (3, 9)), (3430, (3, 10)), (3450, (3, 11)), (3500, (3, 12)),
+	(3550, (3, 13)), (3600, (3, 14)), (3650, (3, 15)))
+_MAGIC_PY3_SFARSIT = 3700        # dupa 3.15 nu se stie: nimic schimbat
+_MAGIC_PY27 = (62171, 62211)     # Python 2.7 (de la 2.7a0 la 2.7 final)
+_BAD_MAGIC = "bad magic number in "
+
+
+def versiuneMagic(numar):
+	"""(major, minor) pentru numarul magic al unui .pyc (primii doi octeti, little endian), sau None cand nu se stie"""
+	if _MAGIC_PY27[0] <= numar <= _MAGIC_PY27[1]:
+		return (2, 7)
+	if not _MAGIC_PY3[0][0] <= numar < _MAGIC_PY3_SFARSIT:
+		return None
+	v = None
+	for inceput, versiune in _MAGIC_PY3:
+		if numar < inceput:
+			break
+		v = versiune
+	return v
+
+
+def altPythonPyc(exc):
+	"""AltPython pentru ImportError-ul lui Python la un .pyc fara sursa facut de alt Python ("bad magic number in ..."),
+	cu calea si numele modulului din exceptie; None pentru orice altceva (alta eroare, fisierul necitit, un numar
+	necunoscut sau chiar al versiunii de acum: atunci fisierul e stricat, nu facut de alt Python). Rezultatul se tine
+	pe exceptie (fisierul se citeste o singura data)."""
+	if not isinstance(exc, ImportError) or not str(exc).startswith(_BAD_MAGIC):
+		return None
+	gata = getattr(exc, "hdsAltPythonPyc", None)
+	if gata is not None:
+		return gata or None
+	alt = None
+	cale = getattr(exc, "path", None)
+	try:
+		with open(cale, "rb") as f:
+			cap = f.read(4)
+		v = versiuneMagic(int.from_bytes(cap[:2], "little")) if len(cap) == 4 and cap[2:4] == b"\r\n" else None
+	except Exception:
+		v = None
+	if v is not None and v != ACUM:
+		print("[HdsAltPython] %s nu se incarca: e compilat de Python %s" % (cale, textVersiune(v)))
+		alt = AltPython(cale, textVersiune(v), getattr(exc, "name", None))
+	try:
+		exc.hdsAltPythonPyc = alt or False
+	except Exception:
+		pass
+	return alt
+
+
+# ------------------------------------------------------------------ module .so cu un nume din C-API-ul altui Python
+# 0.7.5 (MI6, 15.11.2026; raportul pluginului extern 439857, MultiStalkerPro, SF8008 0.7.5): un modul Cython facut pentru
+# Python 3.12 sau mai vechi (plugin.so, fara eticheta cpython-3XX in nume si fara libpython in antet) cade chiar la dlopen,
+# inainte de verificarea versiunii lui Cython: ImportError "plugin.so: undefined symbol: _PyThreadState_UncheckedGet".
+# Lista pluginurilor care nu se deschid arata omului textul acesta tehnic. Un nume lipsa care e din C-API-ul lui Python
+# (incepe cu Py sau _Py) inseamna modul facut pentru alt Python: eroarea devine AltPython, cu versiunea din eticheta
+# numelui fisierului (exacta), din tabelul de mai jos ("3.12 sau mai vechi") sau, altfel, "alt Python". Un nume lipsa care
+# nu e al lui Python (o biblioteca C lipsa sau de alta versiune) ramane eroarea de pana acum.
+# Tabelul: numai nume a caror disparitie e sigura. _PyThreadState_UncheckedGet: functie exportata pana la 3.12, in 3.13
+# devenita PyThreadState_GetUnchecked (gh-108867, What's New 3.13, C API); Cython o cheama pentru Python 3.6..3.12
+# (__Pyx_PyThreadState_Current), deci modulul e facut pentru 3.12 sau mai vechi.
+SIMBOLURI_DISPARUTE = {"_PyThreadState_UncheckedGet": (3, 12)}
+_SIMBOL_LIPSA = re.compile(r"undefined symbol: ((?:_{1,2})?Py[A-Za-z0-9_]*)")
+_ETICHETA_SO = re.compile(r"\.cpython-3([0-9]{1,3})[a-z]*(?:-[^/]*)?\.so$")
+
+
+class AltPythonSimbol(AltPython):
+	"""Un modul .so care cere un nume din C-API-ul altui Python. maxim: (3, 12) = facut pentru 3.12 sau mai vechi; None =
+	pentru alt Python (versiunea nu se stie). hdsAltPython: "<=3.12" sau "?" (adevarat, ca la AltPython)."""
+
+	def __init__(self, cale, simbol, maxim=None, nume=None):
+		self.hdsAltPython = ("<=" + textVersiune(maxim)) if maxim else "?"
+		self.prin = None
+		self.simbol = simbol
+		self.maxim = maxim
+		if maxim:
+			text = "%s: built for Python %s or older, this image has Python %s; not loaded (undefined symbol %s)" % (
+				cale, textVersiune(maxim), textVersiune(ACUM), simbol)
+		else:
+			text = "%s: built for another Python, this image has Python %s; not loaded (undefined symbol %s)" % (
+				cale, textVersiune(ACUM), simbol)
+		ImportError.__init__(self, text, name=nume, path=cale)
+
+
+def altPythonSimbol(exc):
+	"""AltPython (sau AltPythonSimbol) pentru ImportError-ul lui dlopen la un modul .so care cere un nume din C-API-ul lui
+	Python pe care Python-ul imaginii nu-l are ("undefined symbol: _PyThreadState_UncheckedGet"); None pentru orice
+	altceva: alta eroare, un nume care nu e al lui Python, un fisier care nu e .so, eticheta cpython chiar a versiunii de acum
+	(atunci nu e vorba de alt Python) sau un nume din tabel care exista totusi in Python-ul de acum."""
+	if not isinstance(exc, ImportError) or isinstance(exc, AltPython):
+		return None
+	gata = getattr(exc, "hdsAltPythonSimbol", None)
+	if gata is not None:
+		return gata or None
+	alt = _altPythonSimbol(exc)
+	try:
+		exc.hdsAltPythonSimbol = alt or False
+	except Exception:
+		pass
+	return alt
+
+
+def _altPythonSimbol(exc):
+	text = str(exc)
+	m = _SIMBOL_LIPSA.search(text)
+	if not m:
+		return None
+	simbol = m.group(1)
+	cale = getattr(exc, "path", None) or text[:m.start()].rstrip(": ")
+	baza = os.path.basename(cale or "")
+	if not (baza.endswith(".so") or ".so." in baza):
+		return None
+	t = _ETICHETA_SO.search(baza)
+	if t:
+		v = (3, int(t.group(1)))
+		if v == ACUM:
+			return None
+		alt = AltPython(cale, textVersiune(v), getattr(exc, "name", None))
+	else:
+		maxim = SIMBOLURI_DISPARUTE.get(simbol)
+		if maxim is not None and ACUM <= maxim:
+			return None
+		alt = AltPythonSimbol(cale, simbol, maxim, getattr(exc, "name", None))
+	print("[HdsAltPython] %s nu se incarca: cere %s, care nu e in Python %s" % (cale, simbol, textVersiune(ACUM)))
+	return alt
+
+
 def exceptieDinLant(exc):
 	"""Exceptia care poarta hdsAltPython (AltPython sau OSError-ul din ctypes): ea insasi sau una din lantul ei
-	(__cause__, __context__), cand pluginul a prins-o si a dat alta; altfel None."""
+	(__cause__, __context__), cand pluginul a prins-o si a dat alta; un .pyc fara sursa facut de alt Python da AltPython-ul
+	lui (altPythonPyc); altfel None."""
 	vazute = 0
 	while exc is not None and vazute < 16:
 		if getattr(exc, "hdsAltPython", None):
 			return exc
+		alt = altPythonPyc(exc)
+		if alt is None:
+			alt = altPythonSimbol(exc)
+		if alt is not None:
+			return alt
 		exc = exc.__cause__ or exc.__context__
 		vazute += 1
 	return None

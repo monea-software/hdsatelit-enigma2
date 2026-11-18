@@ -69,7 +69,24 @@ PV = "0.1.0"
 # Tot in r14: „memoria pozelor lipseste” citita din vmallocinfo se crede numai dupa doua citiri la rand fara mapare (o
 # citire falsa noaptea, V20, dadea anuntul si putea cere o repornire in standby de prisos). Tot cu r14 ajunge pe receptoare
 # si paznicul care merge fara /dev/watchdog (56a30f81a, ramas pe r13). Fara importuri noi, deci RDEPENDS neschimbat.
-PR = "r15"
+# r16 (15.11.2026, 0.7.6, asistenta 430032): nivelul 6 nu mai porneste avahi sau numele local in paralel cu cine le
+# porneste deja: cat ruleaza /etc/init.d/rc sau rcS (cel mult 15 minute de la pornire) nimic nu e cazut, iar avahi si
+# numele local sunt cazute numai cand lipsesc la doua verificari la rand (interfata le opreste si le porneste singura
+# la schimbarea retelei). Fara importuri noi, deci RDEPENDS neschimbat.
+# Tot in r16 (RFU, asistenta 430032): force_hard_reboot scrie intai un rand in /home/root/logs/hds-caderi.log (fsync),
+# apoi stivele si sysrq. Tot in r16 (WDG, asistenta 430032, G1): pas_iesire_ceruta opreste enigma2 care nu iese in 45 s
+# de la semnul iesirii cerute (SIGTERM, SIGKILL dupa 5 s), cu rand in hds-caderi.log. Fara importuri noi.
+# r17 (15.11.2026, 0.7.6, MIB, asistenta 430032): cand avahi sau numele local e socotit cazut, o data pe cadere, randul
+# "de ce" in jurnalul paznicului si in hds-servicii.log (uptime, fisierul pid ramas sau lipsa, ultimele randuri din
+# messages); randul de pornire al paznicului spune uptime-ul si daca ceasul e inca ora salvata (fake-hwclock). Fara
+# importuri noi (data salvata socotita fara calendar), deci RDEPENDS neschimbat.
+# r18 (16.11.2026, 0.7.7, UPD, dorinelu forum 795 #2668): iesirea ceruta care nu se termina e oprita si la repornirea
+# sau oprirea receptorului, afisaj si Kodi (codurile 1, 2, 4, 15; enigma2.sh face apoi ce s-a cerut). Fara importuri noi.
+# r19 (0.7.7, STV, stivele de pe receptorul de proba): stivele enigma2 se cer intai firului de stive al imaginii, pe teava
+# /tmp/hds-stive-<pid>.cerere (toate firele citite din Python, sigur); faulthandler numai daca firul nu raspunde in 2 s:
+# inaintea opririi SIGRTMIN+9 (toate firele), la pornirea fara bataie SIGRTMIN+7 (numai firul principal); un enigma2
+# mai vechi (fara SIGRTMIN+9) primeste ca pana acum SIGRTMIN+7 numai inaintea opririi. Fara importuri noi.
+PR = "r19"
 
 SRC_URI = "file://hds-watchdog.py"
 S = "${UNPACKDIR}"

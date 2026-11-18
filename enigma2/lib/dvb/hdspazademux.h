@@ -100,4 +100,9 @@ namespace hdspaza
 void hdsPazaRecorderStarted(int adapter, int demux);
 void hdsPazaRecorderStopping(int adapter, int demux);
 
+/* The recordings running now on a covered demux (demux 0 and 1 of adapter 0, the only ones the driver records on), -1
+   for a demux the guard does not cover. For eDVBDemux::createCountingRecorder (the bitrate of an encrypted service,
+   lib/service/servicedvb.cpp): a counting recorder only on a covered demux where nothing else records. */
+int hdsPazaRecorders(int adapter, int demux);
+
 #endif

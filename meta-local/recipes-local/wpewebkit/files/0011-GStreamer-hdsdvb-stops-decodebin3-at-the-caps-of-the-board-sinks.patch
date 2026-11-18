@@ -1,0 +1,69 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] GStreamer: hdsdvb stops decodebin3 at the caps of the board sinks (MSE)
+
+Media Source Extensions and blobs always play through playbin3, whose
+uridecodebin3 decodes to raw caps unless its caps property says otherwise.
+The board sinks (dvbvideosink, dvbaudiosink) take the compressed streams
+themselves and the processor decoders are kept out by the quirk, so
+decodebin3 would find no way to raw video and the MSE playback would fail.
+
+The hdsdvb quirk now sets the caps of uridecodebin3 and decodebin3 to the
+default raw caps plus the sink pad templates of the two board sinks, as the
+legacy playbin does by itself when it queries the sinks.
+
+Upstream-Status: Inappropriate [satellite receiver configuration]
+
+--- a/Source/WebCore/platform/gstreamer/GStreamerQuirkHdsDvb.cpp
++++ b/Source/WebCore/platform/gstreamer/GStreamerQuirkHdsDvb.cpp
+@@ -106,6 +106,41 @@
+     return sink;
+ }
+ 
++static void appendSinkTemplateCaps(GstCaps* caps, ASCIILiteral sinkName)
++{
++    GRefPtr factory = adoptGRef(gst_element_factory_find(sinkName.characters()));
++    if (!factory)
++        return;
++    for (const GList* item = gst_element_factory_get_static_pad_templates(factory.get()); item; item = item->next) {
++        auto* padTemplate = static_cast<GstStaticPadTemplate*>(item->data);
++        if (padTemplate->direction != GST_PAD_SINK)
++            continue;
++        GRefPtr<GstCaps> templateCaps = adoptGRef(gst_static_pad_template_get_caps(padTemplate));
++        gst_caps_append(caps, gst_caps_copy(templateCaps.get()));
++    }
++}
++
++void GStreamerQuirkHdsDvb::configureElement(GstElement* element, const OptionSet<ElementRuntimeCharacteristics>&)
++{
++    // Media Source Extensions (and blobs) always play through playbin3, whose uridecodebin3 decodes to raw caps unless
++    // told otherwise. The board sinks take the compressed streams themselves, and with the processor decoders kept out
++    // decodebin3 would find no way to raw video and fail. Stop decoding at what the board sinks accept, as the legacy
++    // playbin does by itself when it asks the sinks.
++    auto name = StringView::fromLatin1(GST_ELEMENT_NAME(element));
++    if (!name.startsWith("uridecodebin3"_s) && !name.startsWith("decodebin3"_s))
++        return;
++    if (!gstObjectHasProperty(element, "caps"_s))
++        return;
++
++    GstCaps* caps = gst_caps_from_string("video/x-raw(ANY); audio/x-raw(ANY); text/x-raw(ANY); subpicture/x-dvd; subpicture/x-dvb; subpicture/x-pgs");
++    appendSinkTemplateCaps(caps, "dvbvideosink"_s);
++    appendSinkTemplateCaps(caps, "dvbaudiosink"_s);
++    caps = gst_caps_simplify(caps);
++    GST_INFO_OBJECT(element, "Decoding stops at the caps of the board sinks: %" GST_PTR_FORMAT, caps);
++    g_object_set(element, "caps", caps, nullptr);
++    gst_caps_unref(caps);
++}
++
+ std::optional<bool> GStreamerQuirkHdsDvb::isHardwareAccelerated(GstElementFactory* factory)
+ {
+     auto view = StringView::fromLatin1(GST_OBJECT_NAME(factory));
+--- a/Source/WebCore/platform/gstreamer/GStreamerQuirkHdsDvb.h
++++ b/Source/WebCore/platform/gstreamer/GStreamerQuirkHdsDvb.h
+@@ -37,6 +37,7 @@
+     bool isPlatformSupported() const final;
+ 
+     GstElement* createAudioSink() final;
++    void configureElement(GstElement*, const OptionSet<ElementRuntimeCharacteristics>&) final;
+     std::optional<bool> isHardwareAccelerated(GstElementFactory*) final;
+     std::optional<GstElementFactoryListType> audioVideoDecoderFactoryListType() const final { return GST_ELEMENT_FACTORY_TYPE_PARSER; }
+     unsigned getAdditionalPlaybinFlags() const final { return getGstPlayFlag("text") | getGstPlayFlag("native-video") | getGstPlayFlag("native-audio"); }

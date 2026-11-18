@@ -14,9 +14,16 @@
 #   POST /api/tema-tv-seteaza?tema=clasic|pro   alege tema (se vede pe televizor dupa repornirea interfetei)
 #   POST /api/tema-tv-reporneste             reporneste interfata (TryQuitMainloop 3)
 #   GET  /api/tema-tv-poza?id=clasic|pro     previzualizarea temei (JPEG din pachetul skinului)
-#   POST /api/tema-tv-rezolutie?rezolutie=1080|1440&aplicare=acum|pornire   0.7.5: rezolutia interfetei temei HD
+#   POST /api/tema-tv-rezolutie?rezolutie=auto|1080|1440&aplicare=acum|pornire   0.7.5: rezolutia interfetei temei HD
 #                                            Satelit, 1080p sau 2K (Components/HdsRezolutieTv.py; perechea ecranului
-#                                            „Rezoluția interfeței”); in pagina numai unde placa poate 2K
+#                                            „Rezoluția interfeței”); in pagina numai unde placa poate 2K. 0.7.7 (SK2): si
+#                                            Automată (2K numai pe iesirea 2160p), cu ce foloseste acum
+#   GET  /api/tema-tv-fundal                 0.7.6 (TPR): fundalurile temei Pro (din receptor si de pe server, citite pe un
+#                                            fir), fundalul ales, lucrul in curs (Components/HdsFundalPro.py; perechea
+#                                            ecranului "Fundalul temei Pro")
+#   POST /api/tema-tv-fundal-alege?fundal=<id>   pune fundalul ("" = Pro fara fundal); cel de pe server se descarca, apoi
+#                                            interfata reporneste singura
+#   GET  /api/tema-tv-fundal-poza?fundal=<id>    previzualizarea unui fundal (JPEG)
 #   GET  /tema-tv                            pagina
 #
 # Modulul nu importa nimic din enigma2 la incarcare (probele de pe PC dau config si caile).
@@ -56,14 +63,17 @@ def _peEcran():
 
 def stareRezolutie(R=None, config=None, latime=None, **cai):
 	"""partea „Rezoluția interfeței” din GET /api/tema-tv: se_alege (placa poate 2K sau e deja pe 2K), aleasa,
-	pe_ecran, motivul unei intoarceri pe 1080p"""
+	pe_ecran, motivul unei intoarceri pe 1080p; la Automată aleasa (SK2) si eticheta „(aleasă, acum 2K)” ca pe televizor"""
 	R = _rezolutie(R)
 	latime = _peEcran() if latime is None else latime
+	pe_ecran = (R.R1440 if latime and latime >= R.MARIMI[R.R1440][0] else R.R1080) if latime else None
+	aleasa = R.aleasa(config)
 	return {
 		"se_alege": bool(R.seAlege(config, **{k: v for k, v in cai.items() if k in ("hifb", "proc", "limita")})),
-		"aleasa": R.aleasa(config),
-		"pe_ecran": (R.R1440 if latime and latime >= R.MARIMI[R.R1440][0] else R.R1080) if latime else None,
-		"valori": [{"id": v, "nume": _t(R.NUME[v]), "descriere": _t(R.DESCRIERE[v])} for v in R.VALORI],
+		"aleasa": aleasa,
+		"pe_ecran": pe_ecran,
+		"valori": [{"id": v, "nume": _t(R.NUME[v]), "descriere": _t(R.DESCRIERE[v]),
+			"eticheta": R.eticheta(v, aleasa, pe_ecran, _t)} for v in R.VALORI],
 		"refuz": R.textRefuz(R.citesteRefuz(cai.get("refuz")), _t),
 	}
 
@@ -168,13 +178,68 @@ def argumente(request):
 	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:6]:
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie not in ("tema", "id", "aplicare", "rezolutie"):
+		if cheie not in ("tema", "id", "aplicare", "rezolutie", "fundal"):
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:12].strip()
+		rez[cheie] = str(v)[:48 if cheie == "fundal" else 12].strip()
 	return rez
+
+
+# ---------------------------------------------------------------- fundalul temei Pro (TPR, 0.7.6)
+def _fundal(F=None):
+	if F is not None:
+		return F
+	from Components import HdsFundalPro
+	return HdsFundalPro
+
+
+def stareFundal(F=None, **cai):
+	"""GET /api/tema-tv-fundal: randurile (id, nume, sursa, aleasa, are_poza), nota, lucrul in curs; porneste citirea
+	catalogului de pe server pe un fir cand nu e proaspat"""
+	F = _fundal(F)
+	F.citesteServer()
+	teme, motiv, citeste = F.server()
+	s = F.stare(server=teme, motiv=motiv, traducere=_t, **cai)
+	randuri = [{"id": r["id"], "nume": r["nume"], "sursa": r["sursa"], "aleasa": r["aleasa"],
+		"are_poza": bool(r.get("previzualizare"))} for r in s["randuri"]]
+	l = F.stareLucru()
+	return {"result": True, "ales": s["ales"], "randuri": randuri, "nota": s["nota"], "descriere": s["descriere"],
+		"se_citeste": citeste, "lucru": {"id": l["id"], "lucreaza": l["lucreaza"], "bun": l["bun"], "mesaj": l["mesaj"],
+		"repornire": l["repornire"]}}
+
+
+def alegeFundal(argumente, F=None, sesiune=None, **cai):
+	"""POST /api/tema-tv-fundal-alege: acelasi pas ca OK pe televizor"""
+	F = _fundal(F)
+	id_ = argumente.get("fundal", "")
+	if id_ and not F.valid(id_):
+		return {"result": False, "message": _t("Fundal necunoscut.")}
+	if F.stareLucru()["lucreaza"]:
+		return {"result": False, "message": _t("Alt fundal se pune acum. Încearcă peste câteva secunde.")}
+	if not F.porneste(id_, sesiune=sesiune, traducere=_t, **cai):
+		return {"result": False, "message": _t("Fundal necunoscut.")}
+	return {"result": True, "message": _t("Se pune fundalul. Interfața se repornește singură când e gata.")}
+
+
+def pozaFundal(argumente, F=None, **cai):
+	"""(octetii JPEG, None) sau (None, motivul): previzualizarea unui rand din lista fundalurilor"""
+	F = _fundal(F)
+	id_ = argumente.get("fundal", "")
+	teme, motiv, _c = F.server()
+	rand = next((r for r in F.stare(server=teme, motiv=motiv, **cai)["randuri"] if r["id"] == id_ and id_), None)
+	cale = rand.get("previzualizare") if rand else ""
+	if not cale:
+		return None, _t("Previzualizarea lipsește.")
+	try:
+		with open(cale, "rb") as f:
+			date = f.read(MAXIM_POZA + 1)
+	except (IOError, OSError):
+		return None, _t("Previzualizarea lipsește.")
+	if len(date) > MAXIM_POZA or date[:3] != b"\xff\xd8\xff":
+		return None, _t("Previzualizarea nu e bună.")
+	return date, None
 
 
 def _sesiune():
@@ -227,9 +292,30 @@ def rute(baza, resource, T=None):
 		def render_GET(self, request):
 			return pagina(request)
 
+	class StareFundalResource(baza):
+		def render_GET(self, request):
+			try:
+				return self._raspunde(request, stareFundal())
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+	class PozaFundalResource(baza):
+		def render_GET(self, request):
+			try:
+				date, motiv = pozaFundal(argumente(request))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+			if date is None:
+				return self._eroare(request, motiv, 404)
+			request.setHeader(b"content-type", b"image/jpeg")
+			request.setHeader(b"cache-control", b"private, max-age=3600")
+			return date
+
 	return ({b"tema-tv": StareResource(), b"tema-tv-seteaza": _scrie(lambda a: seteaza(a, T, sesiune=_sesiune())),
 		b"tema-tv-reporneste": _scrie(lambda a: reporneste(_sesiune())), b"tema-tv-poza": PozaResource(),
-		b"tema-tv-rezolutie": _scrie(lambda a: seteazaRezolutie(a, sesiune=_sesiune()))},
+		b"tema-tv-rezolutie": _scrie(lambda a: seteazaRezolutie(a, sesiune=_sesiune())),
+		b"tema-tv-fundal": StareFundalResource(), b"tema-tv-fundal-alege": _scrie(lambda a: alegeFundal(a, sesiune=_sesiune())),
+		b"tema-tv-fundal-poza": PozaFundalResource()},
 		{b"tema-tv": PaginaResource()})
 
 
@@ -322,6 +408,13 @@ PAGINA = """<!DOCTYPE html>
     <div class="alegeri" id="rezolutie_alegeri"></div>
     <p class="nota">Alegerea repornește interfața. La 2K animațiile ferestrelor pot fi puțin mai lente. Dacă 2K nu pornește, receptorul revine singur la 1080p.</p>
   </section>
+  <section class="card rezolutie ascuns" id="fundal">
+    <h2>Fundalul temei Pro</h2>
+    <p class="descriere" id="fundal_text"></p>
+    <p class="nota" id="fundal_nota"></p>
+    <div class="teme" id="fundal_alegeri"></div>
+    <p class="mesaj" id="fundal_mesaj"></p>
+  </section>
   <p class="mesaj" id="mesaj"></p>
   <p class="nota">Tema se vede pe televizor după repornirea interfeței: câteva secunde, receptorul nu se oprește și canalul pornește din nou. Culorile rămân cele alese la Setări skin. Același ecran e pe televizor, în __DRUM_MENIU__.</p>
 </div>
@@ -393,9 +486,10 @@ function arataRezolutie(r){
   $("rezolutie_refuz").textContent = r.refuz || "";
   $("rezolutie_refuz").classList.toggle("ascuns", !r.refuz);
   r.valori.forEach(function(v){
-    if(v.id === "1440"){ $("rezolutie_text").textContent = v.descriere; }
+    if(v.id === "auto"){ $("rezolutie_text").textContent = v.descriere; }
     var b = document.createElement("button"); b.type = "button";
-    b.textContent = v.nume + (v.id === r.aleasa ? " · " + (r.pe_ecran && r.pe_ecran !== r.aleasa ? "aleasă, după repornire" : "pe ecran acum") : "");
+    if(v.id === "auto"){ b.textContent = v.eticheta || v.nume; }
+    else { b.textContent = v.nume + (v.id === r.aleasa ? " · " + (r.pe_ecran && r.pe_ecran !== r.aleasa ? "aleasă, după repornire" : "pe ecran acum") : ""); }
     if(v.id === r.aleasa){ b.classList.add("aleasa"); }
     b.addEventListener("click", function(){ alegeRezolutie(v.id); });
     c.appendChild(b);
@@ -427,6 +521,48 @@ function alege(id, aplicare){
   })
     .catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 }
+var fundalCeas = null;
+function arataFundal(d){
+  if(!d || !d.result){ return; }
+  $("fundal").classList.remove("ascuns");
+  $("fundal_text").textContent = d.descriere || "";
+  $("fundal_nota").textContent = d.se_citeste ? "Se citesc fundalurile de pe server..." : (d.nota || "");
+  var c = $("fundal_alegeri"); c.textContent = "";
+  d.randuri.forEach(function(r){
+    var card = document.createElement("section"); card.className = "card" + (r.aleasa ? " aleasa" : "");
+    var h = document.createElement("h2"); h.textContent = r.nume; card.appendChild(h);
+    if(r.are_poza){
+      var img = document.createElement("img"); img.className = "poza"; img.alt = "Previzualizarea fundalului " + r.nume;
+      img.src = adresa("/api/tema-tv-fundal-poza?fundal=" + encodeURIComponent(r.id));
+      img.addEventListener("error", function(){ img.classList.add("ascuns"); });
+      card.appendChild(img);
+    }
+    var b = document.createElement("button"); b.type = "button";
+    b.textContent = r.aleasa ? "Fundalul de acum" : (r.sursa === "server" ? "Descarcă și pune" : "Pune fundalul");
+    b.disabled = r.aleasa || d.lucru.lucreaza;
+    b.addEventListener("click", function(){ alegeFundal(r.id); });
+    card.appendChild(b);
+    c.appendChild(card);
+  });
+  var m = $("fundal_mesaj");
+  if(d.lucru.lucreaza){ m.textContent = "Se pune fundalul..."; m.classList.remove("eroare"); }
+  else if(d.lucru.mesaj){ m.textContent = d.lucru.mesaj; m.classList.toggle("eroare", d.lucru.bun === false); }
+  clearTimeout(fundalCeas);
+  if(d.se_citeste || d.lucru.lucreaza){ fundalCeas = setTimeout(citesteFundal, 2000); }
+  if(d.lucru.bun && d.lucru.repornire){ setTimeout(function(){ location.reload(); }, 20000); }
+}
+function citesteFundal(){
+  return cerere("/api/tema-tv-fundal").then(arataFundal).catch(function(){});
+}
+function alegeFundal(id){
+  var q = new URLSearchParams(); q.set("fundal", id);
+  var m = $("fundal_mesaj"); m.textContent = "Se pune fundalul..."; m.classList.remove("eroare");
+  cerere("/api/tema-tv-fundal-alege", "POST", q).then(function(d){
+    m.textContent = d.message || ""; m.classList.toggle("eroare", !d.result);
+    if(d.result){ setTimeout(citesteFundal, 1500); }
+  }).catch(function(){ m.textContent = "Receptorul nu răspunde."; m.classList.add("eroare"); });
+}
+citesteFundal();
 $("reporneste").addEventListener("click", function(){
   mesaj("Se repornește interfața...");
   cerere("/api/tema-tv-reporneste", "POST", new URLSearchParams()).then(function(d){
@@ -459,6 +595,7 @@ TEXTE_PAGINA = {
 		N_("Se citește tema..."),
 		N_("Repornește interfața acum"),
 		N_("Rezoluția interfeței"),
+		N_("Fundalul temei Pro"),
 		N_("Alegerea repornește interfața. La 2K animațiile ferestrelor pot fi puțin mai lente. Dacă 2K nu pornește, receptorul "
 			"revine singur la 1080p."),
 		N_("Tema se vede pe televizor după repornirea interfeței: câteva secunde, receptorul nu se oprește "
@@ -485,6 +622,13 @@ TEXTE_PAGINA = {
 		N_("Se salvează rezoluția..."),
 		# 0.7.5 (PRB, 14.11.2026): textele sablonului care lipseau din lista
 		N_("pe ecran acum"),
+		# 0.7.6 (TPR): fundalul temei Pro
+		N_("Se citesc fundalurile de pe server..."),
+		N_("Previzualizarea fundalului"),
+		N_("Fundalul de acum"),
+		N_("Descarcă și pune"),
+		N_("Pune fundalul"),
+		N_("Se pune fundalul..."),
 	),
 }
 

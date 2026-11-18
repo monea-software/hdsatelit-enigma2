@@ -402,7 +402,9 @@ def grilaLunii(an, luna):
 
 # ---------------------------------------------------------------- stirile de pe hdsatelit.com
 
-STIRI_ADRESA = "https://www.hdsatelit.com/feed"
+# 0.7.7 (TVR, Eduard 16.11.2026 13:09: receptorul nu mai intra direct pe hdsatelit.com): titlurile vin de pe serverul nostru,
+# in limba meniului (Accept-Language; serverul trimite la /tv/<limba>/rss, titlurile traduse cand traducerea e gata)
+STIRI_ADRESA = "https://stb.hdsatelit.com/tv/rss"
 STIRI_CACHE = "/tmp/hds-screensaver-stiri.json"
 STIRI_PERIOADA = 60 * 60
 STIRI_MAX_OCTETI = 512 * 1024
@@ -459,7 +461,12 @@ class Stiri(object):
 	@staticmethod
 	def _descarcaUrl():
 		from urllib.request import Request, urlopen
-		cerere = Request(STIRI_ADRESA, headers={"User-Agent": "HDSatelit-receptor"})
+		try:
+			from Components.Language import language
+			limba = (language.getLanguage() or "ro")[:2]
+		except Exception:
+			limba = "ro"
+		cerere = Request(STIRI_ADRESA, headers={"User-Agent": "HDSatelit-receptor", "Accept-Language": limba})
 		r = urlopen(cerere, timeout=10)
 		try:
 			return r.read(STIRI_MAX_OCTETI)

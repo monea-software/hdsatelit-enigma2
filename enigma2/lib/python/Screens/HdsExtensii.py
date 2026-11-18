@@ -67,7 +67,10 @@ JURNAL_OPKG = L.JURNAL_OPKG
 DESCARCARE_AUTOMATA = 3600          # lista se descarca singura cel mult o data pe ora, la deschiderea ecranului
 PAS_CAUTARE = 100                   # ms: cat de des se uita ecranul daca a terminat cautarea fisierelor .ipk (in fundal)
 PAS_SCHIMBARI = 2000                # ms: cat de des se uita ecranul daca fisierele opkg s-au schimbat (pagina web)
+PAS_SEMN_FIR = 50                   # ms: cat de des se uita ecranul daca firul a luat semnul fisierelor opkg (0.7.6)
+FIR_SEMN = True                     # semnul fisierelor opkg pe un fir (0.7.6, FRY); False numai in probe: pe loc
 CAUTARE_LENTA = 10                  # s: dupa atat, textul spune ca un stick, un disc sau o retea raspunde greu
+REPORNIRE_IMAGINE_MS = 5000         # ms: dupa o lucrare care a schimbat programul imaginii, interfata reporneste singura (0.7.7)
 MESAJ_CAUTA_FISIERE = N_('Căutarea fișierelor rulează încă.')
 MESAJ_CAUTA_RETEA = N_('Se caută deja în rețea.')
 # descrierea care nu incape in panoul din dreapta se arata intreaga pe pagini care se schimba singure (sagetile sunt
@@ -122,6 +125,18 @@ def _descarcareRamasa():
 
 def _jurnal(text):
 	print('[HdsExtensii] %s' % text)
+
+
+def spreActualizare(session, eroare):
+	"""0.7.6 (EXG; EX2: si fila Din fisier, si Aplicații): extensia cere o versiune mai noua a imaginii (refuzul
+	HdsExtensiiLucru.EroareImagine): nimic instalat pe bucati; un mesaj si butonul care deschide Actualizare software
+	(tot setul, cu Ce e nou si repornirea interfetei)"""
+	def ales(da):
+		if da:
+			from Screens.HdsActualizari import HdsActualizari
+			session.open(HdsActualizari)
+	session.openWithCallback(ales, MessageBox, eroare[0], type=MessageBox.TYPE_YESNO, default=True,
+		list=[(_t(eroare.imagine['buton']), True), (_t('Renunță'), False)])
 
 
 def _culoare(cheie):
@@ -523,6 +538,10 @@ class HdsExtensii(Screen, HelpableScreen):
 		self.timerSchimbari.callback.append(self._verificaSchimbari)
 		self.timerIntoarcere = eTimer()
 		self.timerIntoarcere.callback.append(self._verificaSchimbari)
+		# semnul fisierelor opkg se ia pe un fir (0.7.6, FRY); rezultatul il ia ceasul acesta (_semnFirGata)
+		self.semnFir = None
+		self.timerSemnFir = eTimer()
+		self.timerSemnFir.callback.append(self._semnFirGata)
 
 		self.onLayoutFinish.append(self._pregateste)
 		# la intrare nicio fereastra peste lista: motivul fiecarui plugin sta pe randul lui. Ce a mai ramas de anuntat s-a vazut
@@ -600,6 +619,9 @@ class HdsExtensii(Screen, HelpableScreen):
 		self.timerSemn.stop()
 		self.timerSchimbari.stop()
 		self.timerIntoarcere.stop()
+		# un semn inca in lucru pe fir isi termina firul singur; rezultatul lui nu mai e asteptat
+		self.timerSemnFir.stop()
+		self.semnFir = None
 		self._opresteDescrierea()
 		# o cautare de fisiere neterminata isi termina firul singura (HdsPachete._cautari); rezultatul ei nu mai e asteptat
 		self.timerCautare.stop()
@@ -657,7 +679,58 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._arataFila()
 		if self.descarca is not None or L.lucrareInCurs() or L.descarcareInCurs() or L.rezervaAsteapta():
 			return
-		semn = self._semnCatalog()
+		self._pornesteSemnFir()
+
+	def _pornesteSemnFir(self):
+		"""0.7.6 (FRY): semnul fisierelor opkg (HdsExtensiiLucru.semnCatalog: stat pe /etc/opkg, pe starea pachetelor si
+		pe fiecare lista) se ia pe un fir, nu pe firul principal: il cere ceasul la 2 s, iar pe un SF8008 cu discul ocupat
+		(jurnalul 2216 de la testeri) trei stat-uri au tinut imaginea si telecomanda pe loc 3,2 s. Un singur fir odata;
+		_semnFirGata il compara din firul principal. FIR_SEMN False (numai probele): pe loc, ca inainte."""
+		if self.semnFir is not None:
+			return
+		lucrare = {'baza': self.semnCatalog, 'catalog': self.catalog, 'semn': None, 'gata': False}
+
+		def fa():
+			try:
+				lucrare['semn'] = L.semnCatalog(lucrare['catalog'])
+			except Exception as e:
+				_jurnal('semnul fisierelor opkg: %s' % e)
+			lucrare['gata'] = True
+
+		self.semnFir = lucrare
+		if not FIR_SEMN:
+			fa()
+			return self._semnFirGata()
+		try:
+			import threading
+			fir = threading.Thread(target=fa, name='HdsExtensiiSemn')
+			fir.daemon = True
+			fir.start()
+		except Exception as e:
+			self.semnFir = None
+			_jurnal('semnul fisierelor opkg: firul nu porneste: %s' % e)
+			return
+		self.timerSemnFir.start(PAS_SEMN_FIR, False)
+
+	def _semnFirGata(self):
+		"""Din firul principal (ceasul timerSemnFir): semnul luat pe fir, comparat cu cel al catalogului citit. Conditiile
+		din _verificaSchimbari se cer din nou: in timp ce firul lucra s-a putut deschide alt ecran, porni o lucrare opkg sau
+		reciti catalogul (atunci semnul e al celui vechi si nu mai conteaza)."""
+		lucrare = self.semnFir
+		if lucrare is None:
+			self.timerSemnFir.stop()
+			return
+		if not lucrare['gata']:
+			return
+		self.timerSemnFir.stop()
+		self.semnFir = None
+		semn = lucrare['semn']
+		if lucrare['baza'] is not self.semnCatalog or self.semnCatalog is None:
+			return
+		if getattr(self.session, 'current_dialog', self) is not self:
+			return
+		if self.descarca is not None or L.lucrareInCurs() or L.descarcareInCurs() or L.rezervaAsteapta():
+			return
 		if semn is None or semn == self.semnCatalog:
 			return
 		_jurnal('fisierele opkg s-au schimbat (pagina web sau alt program): catalogul se citeste din nou')
@@ -1839,8 +1912,14 @@ class HdsExtensii(Screen, HelpableScreen):
 		plan, eroare = rezultat
 		if plan is not None:
 			self._deschide(plan)
+		elif getattr(eroare, 'imagine', None):
+			self._spreActualizare(eroare)
 		elif eroare is not None:
 			self._mesaj(*eroare)
+
+	def _spreActualizare(self, eroare):
+		"""0.7.6 (EXG): extensia cere o versiune mai noua a imaginii (fereastra din spreActualizare)"""
+		spreActualizare(self.session, eroare)
 
 	def _planInstalare(self, p):
 		if not self._poateLucra():
@@ -2170,8 +2249,19 @@ class HdsExtensiiActiune(Screen):
 		self._setCuloare('stare', 'chihlimbar')
 
 	def _reporneste(self):
+		# 0.7.7 (UPD): repornirea ceruta de om opreste ceasul repornirii singure (o singura fereastra TryQuitMainloop)
+		t = getattr(self, 'repornireImagine', None)
+		if t is not None:
+			t.stop()
+			self.repornireImagine = None
 		from Screens.Standby import TryQuitMainloop
 		self.session.open(TryQuitMainloop, 3)
+
+	def _repornireImagineAcum(self):
+		"""ceasul repornirii singure (0.7.7, UPD): numai cand fereastra e inca deasupra (altfel omul a ales deja ceva)"""
+		self.repornireImagine = None
+		if self.execing:
+			self._reporneste()
 
 	# ------------------------------------------------------------ lucrul
 
@@ -2238,9 +2328,19 @@ class HdsExtensiiActiune(Screen):
 		# dupa o instalare care cere repornire e ales Mai tarziu: un OK apasat in timpul instalarii (ca sa vezi daca
 		# s-a terminat) nu reporneste interfata; repornirea ramane la Stanga + OK sau la verde
 		self._butoane(r['butoane'], r['ales'])
+		if r.get('imagine_schimbata'):
+			# 0.7.7 (UPD, TODO 16.11 00:10): programul imaginii s-a schimbat pe disc; procesul vechi nu mai poate incarca
+			# pluginurile noi, deci interfata reporneste singura dupa ce omul a apucat sa citeasca (TryQuitMainloop intreaba
+			# numai cand o inregistrare e in curs)
+			self.repornireImagine = eTimer()
+			self.repornireImagine.callback.append(self._repornireImagineAcum)
+			self.repornireImagine.start(REPORNIRE_IMAGINE_MS, True)
 
 	def _laInchidere(self):
 		self.timer.stop()
+		t = getattr(self, 'repornireImagine', None)
+		if t is not None:
+			t.stop()
 		if self.lucrare is not None:
 			self.lucrare.lasa(self._dinLucrare)
 

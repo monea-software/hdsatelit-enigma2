@@ -25,6 +25,8 @@ TIPAR_LISTE = re.compile(r"<tag\s+type\s*=\s*[\"']services[\"']")
 MARIME_INFO = 64 * 1024
 # (cheia, tipul de tuner cerut sau None, modulul și clasa ecranului, felul dat ecranului, pagina web)
 ACTIUNI = (
+	# listele gata facute ale autorilor cunoscuti, descarcate de pe internet (Components/HdsListeInternet.py)
+	("internet", "DVB-S", "Screens.HdsListeInternet", "HdsListeInternet", None, "/liste-internet"),
 	("satelit", "DVB-S", "Screens.ScanerSatelit", "ScanerSatelit", "satelit", "/scanare/satelit/satelit"),
 	("cablu", "DVB-C", "Screens.ScanerCablu", "ScanerCablu", "operator", "/scanare/cablu/operator"),
 	("terestru", "DVB-T", "Screens.ScanerTerestru", "ScanerTerestru", "regiune", "/scanare/terestru/regiune"),
@@ -62,6 +64,9 @@ def texte_actiune(cheie):
 	return {
 		"pachete": (_t("Instalează listele din imagine"),
 			_t("Deschide asistentul listelor gata făcute din imagine.")),
+		"internet": (_t("Descarcă o listă de canale de pe internet"),
+			_t("Listele gata făcute ale autorilor cunoscuți, după sateliții antenei tale. Lista de acum se păstrează și "
+				"se pune la loc cu un buton.")),
 		"satelit": (_t("Caută canalele pe satelit"),
 			_t("Deschide Scanare, Satelit, După satelit: toate transponderele unui satelit al antenei.")),
 		"cablu": (_t("Caută canalele prin cablu"),

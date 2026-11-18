@@ -60,13 +60,37 @@ def albastre(pagina, M=None):
 		return []
 
 
-def informatii(pagina, Information=None, D=None, T=None, V=None, M=None):
+def codQr(Information=None, W=None, Q=None):
+	"""Pe pagina "retea": codul QR al interfetei web, ca in caseta Interfata web de pe televizor (Screens/Information.py,
+	HdsNetworkInfo): {"titlu": titlul casetei, "text": adresa simpla din cod (Screens/HdsWebTelefon.textCod), "module":
+	randurile matricei ca "0"/"1"}; pagina il deseneaza in caseta, ca SVG. {} fara adresa sau la o eroare."""
+	try:
+		if Information is None:
+			from Screens import Information
+		adresa, _nume = Information._interfataWeb()
+		if not adresa:
+			return {}
+		if W is None:
+			from Screens import HdsWebTelefon as W
+		if Q is None:
+			from Components import HdsQr as Q
+		text = W.textCod(adresa)
+		module = ["".join("1" if c else "0" for c in rand) for rand in Q.matrice(text)]
+		return {"titlu": _t("Interfața web"), "text": text, "module": module}
+	except Exception as e:
+		print("[informatii_tabel_web] codul QR: %r" % (e,))
+		return {}
+
+
+def informatii(pagina, Information=None, D=None, T=None, V=None, M=None, W=None, Q=None):
 	"""GET /api/informatii: ce da informatii_web.informatii, plus sectiunile tabelului si, pe „despre”, randurile cu
-	bucati albastre (albastre())."""
+	bucati albastre (albastre()); pe "retea" si codul QR al interfetei web (codQr)."""
 	rez = (V or _vechi()).informatii(pagina, Information=Information, D=D)
 	if rez.get("result") and rez.get("text") is not None:
 		rez["sectiuni"] = (T or _tabel()).sectiuni(rez["text"])
 		rez["albastre"] = albastre(pagina, M)
+		if pagina == "retea":
+			rez["qr"] = codQr(Information, W, Q)
 	return rez
 
 
@@ -151,6 +175,7 @@ PAGINA = """<!DOCTYPE html>
   .r.lat .v{text-align:left;font-weight:400;}
   .r:last-child{border-bottom:0;}
   .r.lat{grid-template-columns:minmax(0,1fr);}
+  .sect svg.qr{display:block;width:176px;height:176px;margin:8px 0 6px auto;background:#fff;border-radius:6px;}
   .bara{grid-column:2;height:8px;border-radius:4px;background:#2a3350;overflow:hidden;margin:2px 0 4px;}
   .bara i{display:block;height:100%;background:#9fb4ff;}
   pre.text{font-family:monospace;font-size:.85rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;margin:0;}
@@ -210,10 +235,18 @@ function randAlbastru(bucati){
   });
   return s;
 }
-function tabel(sectiuni, cuAlbastru){
+function desenQr(module){
+  var n = module.length, m = 4, ns = "http://www.w3.org/2000/svg", d = "";
+  module.forEach(function(rand, y){ for(var x = 0; x < rand.length; x++){ if(rand.charAt(x) === "1"){ d += "M" + (x + m) + " " + (y + m) + "h1v1h-1z"; } } });
+  var svg = document.createElementNS(ns, "svg"); svg.setAttribute("class", "qr"); svg.setAttribute("viewBox", "0 0 " + (n + 2 * m) + " " + (n + 2 * m));
+  svg.setAttribute("shape-rendering", "crispEdges"); svg.setAttribute("role", "img");
+  var p = document.createElementNS(ns, "path"); p.setAttribute("d", d); p.setAttribute("fill", "#000"); svg.appendChild(p);
+  return svg;
+}
+function tabel(sectiuni, cuAlbastru, qr){
   var A = albastre(cuAlbastru);
   var g = el("div", "coloane");
-  sectiuni.forEach(function(s){
+  sectiuni.forEach(function(s, i){
     var d = el("div", "sect");
     if(s.titlu){ d.appendChild(el("h3", "", s.titlu)); }
     s.randuri.forEach(function(r){
@@ -225,6 +258,8 @@ function tabel(sectiuni, cuAlbastru){
       if(r.bara !== null && r.bara !== undefined){ var b = el("div", "bara"); var i = el("i"); i.style.width = Math.max(0, Math.min(100, r.bara)) + "%"; b.appendChild(i); rd.appendChild(b); }
       d.appendChild(rd);
     });
+    // Retea: codul QR al interfetei web in caseta ei, ca pe televizor
+    if(qr && qr.module && i === 0 && s.titlu === qr.titlu){ var svg = desenQr(qr.module); svg.setAttribute("aria-label", qr.text); d.appendChild(svg); }
     g.appendChild(d);
   });
   return g;
@@ -249,7 +284,7 @@ function arata(){
   $("brut").style.visibility = d.text !== undefined ? "visible" : "hidden";
   $("brut").textContent = BRUT ? "Tabel" : "Text brut";
   if(d.text !== undefined && (BRUT || !d.sectiuni)){ c.appendChild(el("pre", "text", d.text)); return; }
-  c.appendChild(d.sectiuni ? tabel(d.sectiuni, d.albastre) : hdmi(d.coloane));
+  c.appendChild(d.sectiuni ? tabel(d.sectiuni, d.albastre, d.qr) : hdmi(d.coloane));
 }
 function citeste(){
   cerere("/api/informatii?pagina=" + encodeURIComponent(ALES)).then(function(d){

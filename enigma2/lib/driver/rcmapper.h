@@ -38,7 +38,8 @@
  *     F1-F4 = culorile, F5 si tasta de meniu = MENIU, F6 = INFO, F7 = EPG, Spatiu = OK cand nu se scrie text,
  *     cifrele si +/- din dreapta = cifrele si volumul cand nu se scrie text. Tasta tine sensul de la apasare pana
  *     la eliberare (m_keyboardHeld), chiar daca ecranul schimba intre timp felul tastaturii.
- *  4. mouse-ul (eRCDeviceInputDev cu REL_X/REL_Y/BTN_LEFT): miscarea, rotita si cele trei butoane vin la noteMouse,
+ *  4. mouse-ul (eRCDeviceInputDev cu REL_X/REL_Y/BTN_LEFT): miscarea, rotita si butoanele (stanga 1, dreapta 2,
+ *     mijloc 4, lateral din spate 8 = BTN_SIDE/BTN_BACK, lateral din fata 16 = BTN_EXTRA/BTN_FORWARD) vin la noteMouse,
  *     se aduna pana la EV_SYN si intra intr-o coada (cel mult MAX_MOUSE pachete; pachetele la rand cu aceleasi
  *     butoane apasate se aduna intr-unul). mouseEvent anunta Python-ul cand coada nu mai e goala; getMouse() o
  *     da si o goleste (Components/HdsMouseUsb.py).

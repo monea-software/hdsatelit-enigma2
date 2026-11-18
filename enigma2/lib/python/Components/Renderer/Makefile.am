@@ -7,4 +7,4 @@ install_PYTHON = \
 	HdsRandatoareStraine.py \
 	EGclock.py EtAnalogClockLCD.py NextEvent.py PrimeTime.py QRCode.py VReference.py VWatches.py \
 	VWeatherUpdater.py VtiEmuInfo.py VtiImageVersion.py pstrRndr.py \
-	BoxLogo.py
+	BoxLogo.py YWeatherPicon.py

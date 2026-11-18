@@ -345,6 +345,12 @@ def texte():
 		"intrebare": _t("Instalezi versiunea %s? La sfârșit interfața trebuie repornită."),
 		"gata": _t("Pachete gata: %d din %d."),
 		"repornesteNota": _t("Repornește interfața ca să folosești actualizarea."),
+		# 0.7.7 (DRV): actualizarea a schimbat driverul placii; se incarca numai la pornirea receptorului
+		"repornesteReceptorNota": _t("Actualizarea a schimbat driverul plăcii. Receptorul trebuie repornit ca să-l încarce."),
+		"repornesteReceptor": _t("Repornește receptorul"),
+		"repornesteInterfata": _t("Repornește interfața"),
+		"intrebareReceptor": _t("Instalezi versiunea %s? La sfârșit receptorul trebuie repornit, ca să încarce driverul nou al "
+			"plăcii."),
 		# actualizarea rapida: intrebarea, pasii si ce se vede dupa repornire
 		"rapidIntrebare": _t("Pornești actualizarea rapidă? Dacă există o actualizare, se instalează, apoi interfața se "
 			"repornește singură."),
@@ -604,7 +610,7 @@ function arata(d){
   if(lucreaza){
     stareText = d.pas || "";
     if(d.faza === "instalez" && d.progres && d.progres[1]){ stareText = T.gata.replace("%d", d.progres[0]).replace("%d", d.progres[1]) + " " + stareText; }
-  } else if(d.repornire){ stareText = T.repornesteNota; }
+  } else if(d.repornire){ stareText = d.repornire_receptor ? T.repornesteReceptorNota : T.repornesteNota; }
   $("mesaj").textContent = rr ? "" : stareText;
   if(rr){ arataRapid(rr); } else { $("rapidCard").className = "card ascuns"; }
   // butonul de actualizare rapida si nota lui, numai cand se poate porni
@@ -614,6 +620,7 @@ function arata(d){
   $("instaleaza").className = "principal" + (!lucreaza && !d.repornire && x.poate_instala ? "" : " ascuns");
   // cat interfata se reporneste singura, nu; cat asteapta o inregistrare, da (repornirea de acum, cu intrebarea de pe
   // televizor)
+  $("reporneste").textContent = d.repornire_receptor ? T.repornesteReceptor : T.repornesteInterfata;
   $("reporneste").className = "principal" + (d.repornire && !lucreaza && !(d.rapid && d.rapid_pas === "repornesc" && !(rr && rr.reporneste)) ? "" : " ascuns");
   $("cauta").disabled = lucreaza || d.repornire;
   $("zilnic").textContent = d.zilnic ? "__T_ZILNIC_OPRESTE__" : "__T_ZILNIC_PORNESTE__";
@@ -653,7 +660,8 @@ $("rapid").addEventListener("click", function(){
 $("cauta").addEventListener("click", function(){ RAPID = null; trimite("/api/actualizari-cauta", new URLSearchParams()); });
 $("instaleaza").addEventListener("click", function(){
   var s = (ULTIMA && ULTIMA.rezultat && ULTIMA.rezultat.server) || {};
-  if(!confirm(T.intrebare.replace("%s", s.versiune || ""))){ return; }
+  var cuReceptor = !!(ULTIMA && ULTIMA.rezultat && ULTIMA.rezultat.repornire_receptor);
+  if(!confirm((cuReceptor ? T.intrebareReceptor : T.intrebare).replace("%s", s.versiune || ""))){ return; }
   RAPID = null;
   var q = new URLSearchParams(); q.set("actualizare", String(s.actualizare));
   trimite("/api/actualizari-instaleaza", q);

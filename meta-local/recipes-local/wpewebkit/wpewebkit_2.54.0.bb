@@ -166,3 +166,68 @@ CFLAGS:append:vuduo4k = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuduo4kse = " -DBROADCOM_PLATFORM"
 CXXFLAGS:append:vuduo4k = " -DBROADCOM_PLATFORM"
 CXXFLAGS:append:vuduo4kse = " -DBROADCOM_PLATFORM"
+
+# NVM (0.7.7, 15.11.2026; Eduard 23:10: navigatorul si pe Vu+ Solo SE si pe celelalte receptoare MIPS): MIPS pe 32 de biti
+# (tune mips32el pe vusolose, vusolo2, vuduo2, vuzero si sh1, deci un singur pachet mips32el pentru toate). WebKit 2.54 are
+# inca ramura MIPS (WebKitFeatures.cmake: JIT oprit, C_LOOP, fara WebAssembly, mimalloc; -mno-lxc1-sxc1), dar libpas
+# alege pe GCC pas_pair de 128 de biti pe orice tinta afara de ARM32: 0020 da tuturor tintelor pe 32 de biti caile ARM32
+# (libpas nu aloca pe 32 de biti). 0021: WTF SequenceLocked (SharedTimebase.cpp) cere atomice de 64 de biti fara lacat, pe
+# care MIPS32 nu le are: acolo cuvinte de 32 de biti. Numai pe MIPS, ca pachetele ARM sa ramana neschimbate. Desenul e pe
+# procesor ca pe ARM (0004/0006), deci EGL-ul Broadcom al masinii (vuplus-libgles-<masina>) nu se foloseste la rulare;
+# antetul lui eglplatform.h pe Solo SE are tipurile void * si nu cere BROADCOM_PLATFORM.
+SRC_URI:append:mipsarch = " file://0020-libpas-use-the-ARM32-pair-paths-on-every-32-bit-target.patch \
+                            file://0021-WTF-SequenceLocked-use-32-bit-words-without-lock-free-64-bit-atomics.patch"
+
+# YTV (0.7.7, 16.11.2026; Eduard 15.11 23:05 si 23:07: YouTube din meniul Aplicatii, filme si live cu sunet): pe ARM WebKit-ul
+# are video HTML5 si Media Source Extensions prin GStreamer, decodate de placa receptorului (acelasi decodor ca la canal, dat
+# cu imprumut de enigma2: Components/HdsDecodorWeb.py). Blocul vine din stratul de proba meta-video (lotul hbbtv-video A si B,
+# pachetul r0.video3 probat pe Viper 4K V20: <video> si MSE pe placa, YouTube pentru televizor cu sunet). Totul e numai :arm,
+# deci pachetul mips32el (Vu+ Solo SE si celelalte MIPS, blocul NVM de sus) ramane neschimbat, fara video.
+#   - GStreamer, video si MSE pornite; GL, MPEG-TS si WebRTC prin GStreamer oprite (Mali-450 nu compune cu GL, MPEG-TS nu
+#     cere nimic); EME (DRM) si sunetul web raman oprite;
+#   - 0008: GStreamerChecks.cmake cere componentele gl si mpegts numai cand optiunile lor sunt pornite (gst-plugins-base din
+#     imagine e construit fara GL, deci fara gstreamer-gl-1.0);
+#   - 0009: quirk-ul "hdsdvb" (WEBKIT_GST_QUIRKS si WEBKIT_GST_HOLE_PUNCH_QUIRK): filmul ajunge comprimat la dvbvideosink/
+#     dvbaudiosink (aceleasi sink-uri ca playerul receptorului), parserele tin locul decodoarelor in registrul codecurilor,
+#     decodoarele video pe procesor (VP8/VP9/AV1/Theora) si HEVC/VP9/AV1 (nemasurate pe placa) sunt scoase, pozitia vine din
+#     decodor (get-decoder-time), cautarea merge pe cadre cheie si se incheie fara ASYNC_DONE; decodorul il imprumuta enigma2
+#     pe socketul din HDS_DECODOR (cere/ok, fereastra, gata) si fereastra video o muta tot enigma2;
+#   - 0010: navigatorul deseneaza fara compunere de straturi (pe procesor): la desenul elementului <video> zona se goleste
+#     (alfa 0, se vede planul video de sub grafica) si dreptunghiul pleaca spre enigma2;
+#   - 0011: MSE (playbin3): uridecodebin3/decodebin3 se opresc la caps-urile sink-urilor placii;
+#   - 0012: sink-urile placii primesc e2-async (preroll), fara de care playsink din playbin3 (MSE) ramane in READY;
+#   - DEPENDS cu gstreamer1.0 si gstreamer1.0-plugins-base; RDEPENDS cu pluginurile folosite la rulare, toate deja in imaginile
+#     ARM 0.7.6 (verificat pe cele 18 manifeste); dvbmediasink e pachetul masinii, tot in imagine. Biblioteca creste cu ~2,4 MB.
+# PR r0.video3: acelasi nume ca pachetul probat; e mai mare decat 2.54.0-r0 al lui 0.7.6, deci actualizarea il ia.
+PR:arm = "r0.video3"
+DESCRIPTION:arm = "WPE WebKit 2.54 construit numai cu API-ul WPEPlatform (fara libwpe, fara Wayland, fara DRM/GBM), \
+                   cu video HTML5 si MSE prin GStreamer, decodate de placa receptorului (fara GL, fara MPEG-TS, fara EME), \
+                   fara sunet web, WebGL, WebRTC si inspector."
+DEPENDS:append:arm = " gstreamer1.0 gstreamer1.0-plugins-base"
+SRC_URI:append:arm = " file://0008-GStreamer-require-gl-and-mpegts-only-when-their-options-are-on.patch \
+                       file://0009-GStreamer-add-the-hdsdvb-quirk-for-the-board-decoder-of-satellite-receivers.patch \
+                       file://0010-GStreamer-punch-the-video-hole-when-painting-without-compositing.patch \
+                       file://0011-GStreamer-hdsdvb-stops-decodebin3-at-the-caps-of-the-board-sinks.patch \
+                       file://0012-GStreamer-hdsdvb-board-sinks-preroll-e2-async-for-playbin3-and-MSE.patch"
+EXTRA_OECMAKE:remove:arm = "-DUSE_GSTREAMER=OFF -DENABLE_VIDEO=OFF"
+EXTRA_OECMAKE:append:arm = " \
+    -DUSE_GSTREAMER=ON \
+    -DENABLE_VIDEO=ON \
+    -DENABLE_MEDIA_SOURCE=ON \
+    -DUSE_GSTREAMER_GL=OFF \
+    -DUSE_GSTREAMER_MPEGTS=OFF \
+    -DUSE_GSTREAMER_WEBRTC=OFF \
+"
+RDEPENDS:${PN}:append:arm = " \
+    gstreamer1.0-plugins-base-app \
+    gstreamer1.0-plugins-base-playback \
+    gstreamer1.0-plugins-base-typefindfunctions \
+    gstreamer1.0-plugins-base-audioconvert \
+    gstreamer1.0-plugins-base-audioresample \
+    gstreamer1.0-plugins-base-volume \
+    gstreamer1.0-plugins-good-isomp4 \
+    gstreamer1.0-plugins-good-matroska \
+    gstreamer1.0-plugins-good-audioparsers \
+    gstreamer1.0-plugins-good-id3demux \
+    gstreamer1.0-plugins-bad-videoparsersbad \
+"

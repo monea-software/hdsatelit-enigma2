@@ -12,7 +12,8 @@ In imagine nu exista descriptori de plugin si nici steag de dezactivare:
                       singura data a referintelor vechi din buchete (port, forma sunetului DAB; SEMN_PORT) si a
                       marcajelor ansamblurilor („MUX DAB+: ...”; SEMN_MARCAJE) merg in fir de fundal; la fel
                       buchetele scrise in alta limba decat a interfetei (SEMN_LIMBA, retradu), si la fiecare
-                      schimbare a limbii (Components.Language).
+                      schimbare a limbii (Components.Language), si buchetele facute dupa alta lista din imagine
+                      (SEMN_LISTA, reface_daca_lista_noua), o data dupa o actualizare.
   opreste()           chemat din mytest.py la iesirea enigma2: marcajele protectiei la pornire se sterg primele
                       (sterge_marcajele), apoi releele se opresc, tunerul se elibereaza.
   descarcarea zilnica a listelor (liste.Zilnic) porneste aici; merge numai cu setarea ei pornita.
@@ -59,6 +60,12 @@ SEMN_MARCAJE = 'marcaje-mux'
 # la fiecare schimbare a limbii (Components.Language), buchetul se reface in fundal: numele noastre trec in limba noua,
 # referintele, ordinea si numele puse de om raman (buchete.compune)
 SEMN_LIMBA = 'limba-buchet'
+
+# semnul (in dosarul de date al profilului) cu amprenta listei din imagine (date/frecvente.json) dupa care s-a scris
+# buchetul. O actualizare a imaginii poate aduce alta lista (programe noi intr-un flux, un canal mutat, un flux cu id
+# nou): la prima pornire cu ea buchetul se reface o data, in fundal, ca schimbarea sa ajunga in lista de canale fara
+# scanare si fara alt pas al omului; referintele, ordinea si numele puse de om raman (buchete.compune)
+SEMN_LISTA = 'lista-buchet'
 
 # DAB in imagine: sunetul ca TS cu un program pe tipul 1 (eHdsFluxHttp, decodorul placii: AAC-LATM si MP2). Pe
 # receptor 4097 nu poate suna: gstreamer nu are tsdemux si nici decodor AAC, iar dvbaudiosink refuza LOAS/LATM
@@ -416,6 +423,98 @@ def retradu(*_a):
         jurnal.eroare('imagine', 'buchetele in limba noua')
 
 
+def amprenta_listei(cale):
+    """sha1 al listei din imagine (cateva zeci de KB, citita in fir), sau None daca nu se poate citi. Citirea ramane
+    in buchete.py (imagine.py nu deschide fisiere)."""
+    import hashlib
+    from . import buchete
+    text = buchete._citeste_text(cale)
+    if text is None:
+        return None
+    if not isinstance(text, bytes):
+        text = text.encode('utf-8', 'surrogateescape')
+    return hashlib.sha1(text).hexdigest()
+
+
+def de_refacut_dupa_lista(director_enigma2=None):
+    """[(profil, calea listei din imagine)] pentru profilurile cu cel putin un buchet al lor care exista si e in lista
+    de canale: prof.buchet (DVB-T2 sau DAB+ din satelit), iar la T2 si BUCHET_ABERTIS (omul poate pastra numai unul).
+    Cateva os.stat si indexul, pe firul principal; amprenta listei se socoteste in fir (reface_dupa_lista), iar
+    refacerea nu pune in index un buchet scos de om."""
+    from . import buchete
+    director = director_enigma2 or buchete.DIRECTOR_ENIGMA2
+    rez = []
+    for prof, cale in profiluri():
+        index = buchete._citeste_text(os.path.join(director, prof.index_buchete))
+        if isinstance(index, bytes):
+            index = index.decode('utf-8', 'replace')
+        if not index:
+            continue
+        fisiere = [prof.buchet] + ([buchete.BUCHET_ABERTIS] if prof.tip == 't2' else [])
+        if any(os.path.exists(os.path.join(director, f)) and ('"%s"' % f) in index for f in fisiere):
+            rez.append((prof, os.path.join(cale, 'date', 'frecvente.json')))
+    return rez
+
+
+def reface_dupa_lista(lucrari, director_enigma2=None):
+    """In fir, sub zavorul scrierilor: lucrari = [(profil, calea listei din imagine, arata_nedecodabile)]. Pentru
+    fiecare profil a carui lista din imagine are alta amprenta decat cea din SEMN_LISTA (sau fara semn): lista unita
+    citita din nou, buchetul refacut (buchete.reface, fara reincarcare), apoi semnul. Un profil cazut ramane fara semn
+    (se reia la pornirea urmatoare). -> True daca s-a schimbat vreun buchet."""
+    from . import buchete, liste
+    schimbat = False
+    for prof, incorporat, arata in lucrari:
+        amprenta = amprenta_listei(incorporat)
+        if amprenta is None:
+            continue
+        semn = os.path.join(prof.director, SEMN_LISTA)
+        vechi = buchete._citeste_text(semn)
+        if isinstance(vechi, bytes):
+            vechi = vechi.decode('ascii', 'replace')
+        if vechi is not None and vechi.strip() == amprenta:
+            continue
+        lista = liste.incarca(prof.tip, prof.director, incorporat)
+        if not arata:
+            lista = liste.fara_nedecodabile(lista)
+        rez = buchete.reface(prof, lista, director_enigma2, reincarca=False, index=False)
+        if rez.get('eroare'):
+            continue
+        schimbat = schimbat or bool(rez.get('schimbat'))
+        buchete.scrie_atomic(semn, amprenta.encode('ascii'))
+        jurnal.noteaza(prof.eticheta, 'buchetul refacut dupa lista din imagine (%s)' % amprenta[:12])
+    return schimbat
+
+
+def _buchete_dupa_lista(ok, rez):
+    if not ok:
+        jurnal.noteaza('imagine', 'buchetele nu s-au putut reface dupa lista din imagine (se reia la pornirea '
+                       'urmatoare): %s' % rez)
+    if not ok or rez:
+        from . import buchete
+        buchete.reincarca_buchete()
+
+
+def reface_daca_lista_noua():
+    """Pe firul principal, la pornire: buchetele facute dupa alta lista din imagine se refac o data, in fundal. Nimic
+    de facut de om. Nu arunca."""
+    try:
+        from .intrare import _controlori
+        lucrari = []
+        for prof, incorporat in de_refacut_dupa_lista():
+            c = _controlori.get(prof.nume)
+            if c is None:
+                continue
+            try:
+                arata = bool(c._arata_nedecodabile())
+            except Exception:
+                arata = False
+            lucrari.append((prof, incorporat, arata))
+        if lucrari:
+            _sub_zavor_in_fundal(reface_dupa_lista, _buchete_dupa_lista, lucrari)
+    except Exception:
+        jurnal.eroare('imagine', 'buchetele dupa lista din imagine')
+
+
 def _leaga_limba():
     """retradu() la fiecare schimbare a limbii interfetei (o singura legatura pe proces)."""
     if _stare.get('limba_legata'):
@@ -484,6 +583,8 @@ def porneste(sesiune):
         jurnal.eroare('imagine', 'marcajele buchetelor')
     # numele buchetelor si ale multiplexurilor in limba receptorului (SEMN_LIMBA), acum si la schimbarea limbii
     retradu()
+    # buchetele facute dupa lista de dinainte a imaginii (SEMN_LISTA): o data, dupa o actualizare care aduce alta lista
+    reface_daca_lista_noua()
     try:
         _leaga_limba()
     except Exception:

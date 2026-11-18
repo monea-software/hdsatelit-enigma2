@@ -61,6 +61,18 @@ PREUMPLERE_S = 1.5                  # atat timp, ce vine intai (la inceput serve
 TERMEN_CITIRE_S = 10                # server care tace: legatura se reface
 REINCERCARI_CONEXIUNE = 4           # serverul mai socoteste conexiunea veche: mai incercam, la PAUZA_CONEXIUNE_S
 PAUZA_CONEXIUNE_S = 0.8
+# FSV (15.11.2026, LinuxSat 164155, „Filme și seriale”): la un film fiecare cerere noua (cautarea la pozitia ramasa, un salt, Range
+# refacut de GStreamer) inchide legatura veche si deschide alta pe loc; pe un abonament cu o conexiune serverul o mai socoteste pe cea
+# veche cateva secunde si refuza (403, 458...). Fereastra „prea multe conexiuni” putea aparea peste film fara alt aparat (filmul mergea
+# mai departe: cererea refuzata era una in plus, de pilda saltul suprapus al lui ffmpeg sau o cerere HEAD). Acum:
+# - un refuz venit la cel mult INCHISA_DE_CURAND_S dupa ce s-a inchis o legatura a sursei e tot a noastra, oricine a inchis-o primul
+#   (inainte: numai cand releul o inchidea chiar in cererea de acum; cand playerul inchidea primul, 403 ajungea pe loc la om);
+# - la film, episod, arhiva sau o cerere cu Range se asteapta pana la ASTEPTARE_FILM_S (un zap ramane la 4 x 0,8 s): sub termenul de
+#   15 s al lui souphttpsrc (lib/service/servicemp3.cpp, HTTP_TIMEOUT), cu loc pentru raspunsul serverului.
+INCHISA_DE_CURAND_S = 15.0
+ASTEPTARE_FILM_S = 10.0
+PAUZA_FILM_S = 1.0
+_FILM = re.compile(r"^[ve]\d{1,12}\.[A-Za-z0-9]{1,5}$")   # filmele si episoadele din Xtream (HdsIptvClient.xtreamAdresa)
 RECONECTARI_MAX = 6                 # consecutive, fara date intre ele
 SANATOS_S = 30                      # dupa atatea secunde cu date, numaratoarea reconectarilor o ia de la capat
 FEREASTRA_VITEZA_S = 2.0
@@ -144,6 +156,9 @@ def adresa(sursa_id, cheie):
 	if fel == "xtream":
 		return C.xtreamAdresa(s, cheie)
 	c = _coloane(sursa_id).get(cheie)
+	if not c and fel == "m3u":
+		# 0.7.7 (FLM2): filmele playlistului nu mai sunt in canalele lui, ci in fisierul filmelor (aplicatia IPTV, Filme si seriale)
+		c = I.filmDupaCheie(sursa_id, cheie)
 	if not c:
 		return None
 	valoare = c[3]
@@ -165,6 +180,8 @@ def antete(sursa_id, cheie):
 	if s.get("fel") == "stalker":
 		a.update(C._antetePortal(s, s.get("baza") or ""))
 	c = _coloane(sursa_id).get(cheie)
+	if not c and s.get("fel") == "m3u":
+		c = I.filmDupaCheie(sursa_id, cheie)      # 0.7.7 (FLM2): antetele unui film al playlistului
 	if c and len(c) > 4 and isinstance(c[4], dict):
 		a.update(C.anteteCurate(c[4].get("antete")))
 	return a
@@ -308,23 +325,29 @@ def _inchideRaspuns(r):
 
 
 _legaturi = {}        # sursa -> [_Legatura]; cea mai noua la sfarsit
+_inchise = {}         # sursa -> ora (time.monotonic) la care s-a inchis ultima ei legatura spre server
 
 
 def _ocupa(s, sid):
-	"""O legatura noua pentru sursa: cele vechi peste limita contului se inchid acum. -> (legatura, s-a inchis vreuna)."""
+	"""O legatura noua pentru sursa: cele vechi peste limita contului se inchid acum. -> (legatura, serverul poate socoti inca o
+	legatura de-a noastra: una inchisa acum sau de curand, INCHISA_DE_CURAND_S)."""
 	try:
 		limita = max(1, int(s.get("conexiuni") or 1))
 	except (TypeError, ValueError):
 		limita = 1
 	noua = _Legatura()
+	acum = time.monotonic()
 	with _lacat:
 		lista = _legaturi.setdefault(sid, [])
 		de_inchis = lista[:max(0, len(lista) - limita + 1)]
 		del lista[:len(de_inchis)]
 		lista.append(noua)
+		inchisa = _inchise.get(sid)
+		if any(v.raspuns is not None for v in de_inchis):
+			_inchise[sid] = acum
 	for v in de_inchis:
 		v.inchide()
-	return noua, bool(de_inchis)
+	return noua, bool(de_inchis) or (inchisa is not None and acum - inchisa < INCHISA_DE_CURAND_S)
 
 
 def _elibereaza(sid, legatura):
@@ -332,6 +355,14 @@ def _elibereaza(sid, legatura):
 		lista = _legaturi.get(sid)
 		if lista and legatura in lista:
 			lista.remove(legatura)
+			if legatura.raspuns is not None:
+				# a fost o legatura adevarata (serverul a raspuns): o cerere refuzata nu lasa nimic socotit pe server
+				_inchise[sid] = time.monotonic()
+
+
+def esteFilm(cheie, cu_range=False):
+	"""Cererea are sfarsit si se poate relua de la un loc: film sau episod din Xtream, emisiune din arhiva, sau orice cerere cu Range."""
+	return bool(cu_range) or bool(_FILM.match(cheie or "")) or C.eArhiva(cheie or "")
 
 
 class _Tampon(object):
@@ -411,10 +442,11 @@ class _Tampon(object):
 				self.semnal.wait(min(ramas, 0.2))
 
 
-def _deschideCuAsteptare(tinta_fn, a, legatura, metoda=None, a_inchis=False):
-	"""Legatura spre server. Daca serverul spune ca are prea multe conexiuni (de obicei a noastra, abia inchisa) mai incearca de cateva ori.
-	-> raspunsul. Arunca EroareIptv."""
+def _deschideCuAsteptare(tinta_fn, a, legatura, metoda=None, a_inchis=False, film=False):
+	"""Legatura spre server. Daca serverul spune ca are prea multe conexiuni (de obicei a noastra, abia inchisa) mai incearca de cateva ori;
+	la un film dupa o legatura a noastra inchisa (film=True, a_inchis=True), pana la ASTEPTARE_FILM_S. -> raspunsul. Arunca EroareIptv."""
 	incercari = REINCERCARI_CONEXIUNE
+	termen = time.monotonic() + ASTEPTARE_FILM_S if film and a_inchis else None
 	retea = 1
 	while True:
 		try:
@@ -425,14 +457,24 @@ def _deschideCuAsteptare(tinta_fn, a, legatura, metoda=None, a_inchis=False):
 		except C.EroareIptv as e:
 			# un 403 dupa ce tocmai am inchis o legatura e tot conexiunea veche; altfel e un refuz adevarat si nu mai asteptam. Un server cazut
 			# o clipa se mai incearca, iar reteaua numai o data; Retry-After se respecta, dar un zap nu asteapta oricat.
-			repeta = e.cod in C.COD_CONEXIUNI or e.cod in C.COD_TEMPORAR or (a_inchis and e.cod == 403)
+			conexiune = e.cod in C.COD_CONEXIUNI or (a_inchis and e.cod == 403)
+			repeta = conexiune or e.cod in C.COD_TEMPORAR
 			if not repeta and not e.cod and e.mesaj == C.E_NU_RASPUNDE and retea > 0:
 				retea -= 1
 				repeta = True
-			if not repeta or incercari <= 0 or legatura.inchisa or e.dupa > ASTEPTARE_MAX_S:
+			if not repeta or legatura.inchisa or e.dupa > ASTEPTARE_MAX_S:
 				raise
-			incercari -= 1
-			time.sleep(max(PAUZA_CONEXIUNE_S, e.dupa))
+			if conexiune and termen is not None:
+				# filmul: serverul uita legatura noastra veche in cateva secunde; omul asteapta oricum dupa un salt
+				pauza = max(PAUZA_FILM_S, e.dupa)
+				if time.monotonic() + pauza > termen:
+					raise
+			else:
+				if incercari <= 0:
+					raise
+				incercari -= 1
+				pauza = max(PAUZA_CONEXIUNE_S, e.dupa)
+			time.sleep(pauza)
 
 
 def _citesteViu(raspuns, tampon, legatura, tinta_fn, a, m, plecat):
@@ -604,7 +646,8 @@ class _Cerere(BaseHTTPRequestHandler):
 			def tinta_fn():
 				return adresa(sid, cheie)
 			inceput = time.monotonic()
-			raspuns = _deschideCuAsteptare(tinta_fn, a, legatura, "HEAD" if cap else None, a_inchis)
+			raspuns = _deschideCuAsteptare(tinta_fn, a, legatura, "HEAD" if cap else None, a_inchis,
+				film=not cap and esteFilm(cheie, "Range" in a))
 			legatura.pune(raspuns)
 			if not cap:
 				m.raspuns_ms = int((time.monotonic() - inceput) * 1000)
@@ -612,20 +655,27 @@ class _Cerere(BaseHTTPRequestHandler):
 		except (ConnectionError, socket.timeout):
 			pass
 		except C.EroareIptv as e:
-			if not proba:
+			# HEAD nu e redarea omului (nu ocupa legatura, nu inchide fluxul pornit): un refuz al lui nu deschide fereastra peste film
+			if not proba and not cap:
 				self._anunta(sid, e)
 			self._raspunde(503)
 		except Exception as e:
 			# numai felul erorii: textul ei ar putea cuprinde adresa
 			print("[HdsIptvAdrese] %s/%s: %s" % (sid, cheie, type(e).__name__))
-			if not proba:
+			if not proba and not cap:
 				# o proba cazuta (cautarea 4K, canal mort) nu e a omului: fara fereastra pe ecran, fara eroare pe cartela sursei
 				self._anunta(sid, e)
 			if not self._trimis:
 				self._raspunde(503)
 		finally:
-			if not cap:
-				legatura.inchide()
+			# si raspunsul unei cereri HEAD se inchide acum (inainte ramanea deschis spre server pana il strangea Python), iar serverul
+			# il poate socoti cateva secunde ca pe orice legatura
+			legatura.inchide()
+			if cap:
+				if legatura.raspuns is not None:
+					with _lacat:
+						_inchise[sid] = time.monotonic()
+			else:
 				_elibereaza(sid, legatura)
 				if not proba:
 					with _lacat:
@@ -800,6 +850,7 @@ def opreste():
 	with _lacat:
 		toate = [x for lista in _legaturi.values() for x in lista]
 		_legaturi.clear()
+		_inchise.clear()
 	for x in toate:
 		x.inchide()
 	global _masura

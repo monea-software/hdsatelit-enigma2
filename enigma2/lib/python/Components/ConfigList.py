@@ -392,6 +392,16 @@ class ConfigListScreen:
 				return
 			self.KeyText()           # OK pe un camp de text: tastatura de pe ecran
 			return
+		# FUR: ecranul unui plugin strain care isi leaga singur OK (alta harta a ecranului, activa, cu "ok") il primeste,
+		# ca in OE-Alliance, unde lista de setari ia OK abia dupa hartile ecranului (ConfigListActions, prio 1). Aici
+		# config_actions are prio -1 si lua OK inainte: randurile-buton (ConfigNothing, la noi un ConfigSelection) nu mai
+		# faceau nimic (AIFury: FuryEpg, Wlad forum 948 #2869). Ecranele imaginii si campurile de text raman ca pana acum.
+		try:
+			cedez = ConfigListScreen._okDinListaNoastra(self) and ConfigListScreen._okAlEcranului(self)
+		except Exception:
+			cedez = False   # o copie a metodei fara restul clasei: purtarea de pana acum
+		if cedez:
+			return 0
 		from Components.config import ConfigSelection, ConfigBoolean
 		# OK schimba numai valoarea curenta; pagina se salveaza cu VERDE.
 		if cur is not None and len(cur) > 1 and isinstance(cur[1], (ConfigSelection, ConfigBoolean)):
@@ -399,6 +409,39 @@ class ConfigListScreen:
 			self.__changed()
 			return
 		self["config"].handleKey(KEY_OK)
+
+	# contextele din keymap.xml care leaga tasta OK de actiunea "ok"
+	CONTEXTE_OK = ("OkCancelActions", "OkActions", "OkSaveActions", "SetupActions", "WizardActions", "MsgBoxActions",
+		"InputBoxActions", "MinuteInputActions", "PiPSetupActions", "TeletextActions", "CCcamInfoActions")
+
+	def _okDinListaNoastra(self):
+		"""FUR: True cand keyOK e chemat chiar de harta config_actions (tasta OK ajunsa la ea), nu de codul ecranului:
+		un plugin care leaga OK de keyOK mostenit sau il cheama din handlerul lui (si din cod Cython, fara cadru Python
+		propriu) primeste purtarea de pana acum (valoarea schimbata, tastatura)."""
+		try:
+			import sys
+			return sys._getframe(2).f_locals.get("self") is self.get("config_actions")
+		except Exception:
+			return False
+
+	def _okAlEcranului(self):
+		"""FUR: True cand ecranul e al unui plugin strain (nu al imaginii: skin.modulImagine) si are, in afara de
+		config_actions, o harta activa care leaga OK ("ok" intr-un context care il primeste): atunci OK e al ei."""
+		try:
+			from skin import modulImagine
+			if modulImagine(self.__class__.__module__) or not hasattr(self, "items"):
+				return False
+			proprii = self.get("config_actions")
+			for nume, harta in list(self.items()):
+				if harta is proprii or nume == "config_actions" or not getattr(harta, "enabled", False):
+					continue
+				actiuni = getattr(harta, "actions", None)
+				contexte = getattr(harta, "contexts", None) or ()
+				if isinstance(actiuni, dict) and "ok" in actiuni and any(c in ConfigListScreen.CONTEXTE_OK for c in contexte):
+					return True
+		except Exception:
+			return False
+		return False
 
 	def keyMenu(self):
 		"""MENU: toate valorile unui ConfigSelection, fara salvarea paginii."""

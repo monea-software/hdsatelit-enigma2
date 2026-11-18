@@ -40,6 +40,9 @@
 #    cere canalul adevarat, sa nu ia redarea drept acelasi serviciu; calea http://<gazda>:<port>/<referinta>), iar
 #    referinta din navigatie ramane cea a canalului: bara, ghidul, sigla si lista de canale vad canalul obisnuit;
 #  - de la un canal prin releu la altul, playerul porneste dupa intarzierea din setari (releul elibereaza canalul vechi).
+# GRUPURILE DE ALTERNATIVE (0.7.7): odata cu laZap se pune laGrup in Navigation.grupFaraTuner; cand niciuna dintre
+# alternative n-are tuner, sesiunea 8001 a releului televizorului se opreste pe loc, ca la plecarea pe alt transponder
+# (Releu._peGrup).
 # Serverul de flux (Hds/DabT2/server8001.py) da oricui, si releului, fluxul inscris la modulul de acces ca orice flux,
 # descifrat de receptor unde poate (12.11.2026; pana atunci un releu din retea primea fluxul criptat, cu PID-urile ECM).
 #
@@ -472,7 +475,7 @@ class Releu(object):
 	"""Lista canalelor, trecerea singura si legatura la zap. Un singur obiect pe proces (releu())."""
 
 	def __init__(self, fisier=FISIER, extensii=None, configurare=None, anunta=None, module=None, ceas=None,
-			automat=None, fisier_automat=FISIER_AUTOMAT, lamedb=LAMEDB, monoton=None, softcsa=None):
+			automat=None, fisier_automat=FISIER_AUTOMAT, lamedb=LAMEDB, monoton=None, softcsa=None, extensii_grup=None):
 		# trecerea singura (0.7.4): `automat` = (pornita, multimea CAID) pentru probe, altfel din config
 		self._automatConf = automat
 		# SoftCSA (0.7.4): (stare(), canalCsaAlt(ref)) pentru probe, altfel Components.HdsSoftCsa
@@ -501,6 +504,8 @@ class Releu(object):
 		self._navEv = None              # lista nav.event in care sta ascultatorul
 		self.fisier = fisier
 		self._extensii = extensii      # lista Navigation.playServiceExtensions (probele dau una a lor)
+		# lista Navigation.grupFaraTuner; cand probele dau `extensii`, numai cea data aici (None = fara legare pe grup)
+		self._extensiiGrup = extensii_grup
 		self._configurare = configurare  # (gazda, port, intarziere_ms) pentru probe; altfel din config
 		self._anunta = anunta or _anuntaPeTelevizor   # mesajul de pe televizor (probele dau o functie a lor)
 		self._module = module          # Components.HdsModuleAcces (probele dau unul fals)
@@ -514,7 +519,7 @@ class Releu(object):
 		self._prinReleu = False         # serviciul pornit de ultimul zap a mers prin releu
 		self._refReleu = None           # ... si cheia canalului lui (sesiunea 8001 a releului e pe transponderul lui)
 		self._ceas = None
-		self._asteapta = None           # (nav, playref, text releu) pentru pornirea dupa intarziere
+		self._asteapta = None           # (nav, playref, text releu, cheia releului vechi): pornirea dupa intarziere
 		self._eliberare = None          # (nav, playref, cheia releului vechi, ora limita): pornire directa amanata
 		self._ceasEliberare = None
 
@@ -880,21 +885,37 @@ class Releu(object):
 			return None
 		return Navigation.playServiceExtensions
 
+	def _listaGrup(self):
+		if self._extensii is not None:
+			return self._extensiiGrup
+		try:
+			from Navigation import Navigation
+		except Exception:
+			return None
+		return getattr(Navigation, "grupFaraTuner", None)
+
 	def actualizeazaLegatura(self, gol=None):
 		"""Legatura la zap numai cat lista are canale sau trecerea singura e pornita; ascultatorul PMT-ului numai cu
-		trecerea singura pornita. Se cheama si de notificatorul setarii (Components/UsageConfig.py)."""
+		trecerea singura pornita. Se cheama si de notificatorul setarii (Components/UsageConfig.py). Odata cu laZap se
+		pune si se scoate laGrup (Navigation.grupFaraTuner, la inceputul listei)."""
 		lista = self._lista()
 		if not isinstance(lista, list):
 			return
+		grup = self._listaGrup()
 		if gol is None:
 			gol = not self.chei()
 		pornit = self.automat()[0]
 		if gol and not pornit:
 			while laZap in lista:
 				lista.remove(laZap)
+			while isinstance(grup, list) and laGrup in grup:
+				grup.remove(laGrup)
 			self._prinReleu = False
-		elif laZap not in lista:
-			lista.append(laZap)
+		else:
+			if laZap not in lista:
+				lista.append(laZap)
+			if isinstance(grup, list) and laGrup not in grup:
+				grup.insert(0, laGrup)
 		if not pornit:
 			self._opresteUrmarirea()
 			self._dezleagaAscultator()
@@ -928,7 +949,7 @@ class Releu(object):
 				self._mesajReleuOprit("127.0.0.1" if gazda == "localhost" else gazda, port)
 			return self._direct(nav, playref, vechi, vechiRef)
 		if vechi and intarziere > 0:
-			self._asteapta = (nav, playref, text)
+			self._asteapta = (nav, playref, text, vechiRef)
 			self._pornesteCeas(intarziere)
 			return playref, True
 		if self._reda(nav, text):
@@ -978,6 +999,38 @@ class Releu(object):
 		self._eliberare = None
 		_pornesteDirect(nav, playref)
 
+	def _releuTelevizorului(self):
+		"""Cheia canalului a carui sesiune 8001 a releului e inca a televizorului: canalul redat acum prin releu, sau, in
+		fereastra de dupa plecarea de pe el (pornirea amanata: _eliberare, _asteapta), canalul vechi. None altfel."""
+		if self._prinReleu and self._refReleu:
+			return self._refReleu
+		for a, i in ((self._eliberare, 2), (self._asteapta, 3)):
+			if a is not None and len(a) > i and a[i]:
+				return a[i]
+		return None
+
+	def _peGrup(self, nav, grup, inregistrare):
+		"""Extensia grupului de alternative fara alternativa libera (Navigation.grupFaraTuner). De obicei zap-ul pe grup
+		trece si fara ea: canalul de pe televizor e cel ignorat la alegere, iar tunerul tinut numai de sesiunea releului
+		conteaza liber (lib/dvb/dvb.cpp, hdscedare::liveOnly); apoi _peZap / _direct opresc sesiunea. Nu trece cand
+		acelasi canal il cere prin releu si un aparat din casa (mai multe sesiuni de pe receptor, pe care
+		server8001.la_grup nu le atinge) sau in fereastra de dupa plecarea de pe un canal prin releu (navigatia e deja pe
+		canalul nou). Aceeasi regula ca in _direct: la zap, cand o alternativa DVB e pe alt transponder, sesiunile 8001 ale
+		canalului releului se opresc pe loc. La o inregistrare nimic: canalul prin releu e televizorul, care isi tine
+		tunerul, ca pe orice canal. -> True daca s-a oprit ceva."""
+		if inregistrare:
+			return False
+		vechiRef = self._releuTelevizorului()
+		if not vechiRef or not _sesiuni8001(vechiRef):
+			return False
+		alternative = [k for k in (cheie(t) for t in nav.alternativeDvb(grup)) if k]
+		if not any(not _acelasiTransponder(k, vechiRef) for k in alternative):
+			return False
+		_jurnal("televizorul cere grupul de alternative (%s): opresc sesiunea 8001 a releului (%s)" % (
+			", ".join(alternative)[:300], vechiRef))
+		_opreste8001(vechiRef)
+		return True
+
 	def _mesajReleuOprit(self, gazda, port):
 		"""Pe televizor, de ce canalul din lista porneste fara releu (motivReleu); acelasi motiv se arata din nou numai
 		dupa REPETARE_MESAJ_S, ca zap-urile prin lista sa nu-l aduca la fiecare canal. Nicio eroare nu opreste zap-ul."""
@@ -1014,7 +1067,7 @@ class Releu(object):
 		a, self._asteapta = self._asteapta, None
 		if a is None:
 			return
-		nav, playref, text = a
+		nav, playref, text = a[:3]
 		# alt zap intre timp: nimic
 		acum = nav.getCurrentlyPlayingServiceReference()
 		if acum is None or cheie(acum) != cheie(playref):
@@ -1469,6 +1522,14 @@ def releu():
 def laZap(nav, playref, event, infobar):
 	"""Navigation.playServiceExtensions: pusa numai cat lista are canale sau trecerea singura e pornita."""
 	return releu()._peZap(nav, playref)
+
+
+def laGrup(nav, grup, liber, inregistrare=False, *rest):
+	"""Navigation.grupFaraTuner: pusa si scoasa odata cu laZap (Releu._peGrup). Nicio eroare nu opreste zap-ul."""
+	try:
+		releu()._peGrup(nav, grup, inregistrare)
+	except Exception as e:
+		_jurnal("grupul de alternative: %r" % (e,))
 
 
 def porneste():

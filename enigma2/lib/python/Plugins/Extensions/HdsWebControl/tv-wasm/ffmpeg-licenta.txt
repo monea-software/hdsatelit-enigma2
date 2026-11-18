@@ -1,11 +1,11 @@
-Decodorul MPEG-2 al paginii "TV în browser": tv-wasm/hdsdec.wasm și tv-wasm/hdsdec.js
+Decodorul paginii "TV în browser": tv-wasm/hdsdec.wasm și tv-wasm/hdsdec.js
 (imaginea HD Satelit, extensia HdsWebControl)
 
 Conține FFmpeg 8.1.3 (https://ffmpeg.org), numai bibliotecile libavcodec și libavutil, cu decodoarele
-mpeg1video, mpeg2video, mp2float, mp3float și ac3 și cu parserele mpegvideo, mpegaudio și ac3. FFmpeg e
-construit fără --enable-gpl și fără --enable-nonfree, deci licența lui e GNU Lesser General Public License,
-versiunea 2.1 sau (la alegere) orice versiune mai nouă (LGPL-2.1-or-later). Textul ei exact, fișierul
-COPYING.LGPLv2.1 din sursa FFmpeg 8.1.3, e mai jos.
+mpeg1video, mpeg2video, mp2float, mp3float, ac3, h264 și aac și cu parserele mpegvideo, mpegaudio, ac3, h264
+și aac. FFmpeg e construit fără --enable-gpl și fără --enable-nonfree, deci licența lui e GNU Lesser General
+Public License, versiunea 2.1 sau (la alegere) orice versiune mai nouă (LGPL-2.1-or-later). Textul ei exact,
+fișierul COPYING.LGPLv2.1 din sursa FFmpeg 8.1.3, e mai jos.
 
 Sursa:
 - FFmpeg 8.1.3, neschimbat: https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz
@@ -15,6 +15,7 @@ Sursa:
 - puntea dintre FFmpeg și pagină (hdsdec.c, GPL-2.0-only) și scriptul care construiește decodorul
   (construieste-decodor-wasm.sh) sunt în sursa imaginii, în lib/python/Plugins/Extensions/HdsWebControl/tv-wasm/,
   cu tot codul sursă al imaginii: https://hdsatelit.com/codul-sursa/
+  Decodorul din imagine e construit cu: HDS_DEC_EXTRA=h264,aac bash construieste-decodor-wasm.sh
 - compilatorul: emscripten 6.0.9 (containerul emscripten/emsdk:6.0.9); în decodor intră și părți din biblioteca C
   musl (MIT), din compiler-rt (Apache-2.0 cu excepțiile LLVM), din emscripten (MIT sau NCSA) și dlmalloc (domeniu
   public). Licențele lor sunt lângă acest fișier: emscripten-licenta.txt, musl-licenta.txt, compiler-rt-licenta.txt,
@@ -22,8 +23,8 @@ Sursa:
 
 Decodorul se poate înlocui cu unul construit din aceeași sursă sau dintr-o versiune FFmpeg schimbată: fișierele
 hdsdec.js și hdsdec.wasm din /usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/ pe receptor.
-  hdsdec.wasm  sha256 099cf027855f9659157e28a26a2c3cc0e8ba46d50d387bdd2007299127ea4711
-  hdsdec.js    sha256 8688f27f8b55bada8a4e73083f01001a4753118c5a2fa62c2d149c1bf3ceb374
+  hdsdec.wasm  sha256 e835a97f572579072f36517ca9b116332e22c686149da9b0f6b449abf2d40c16
+  hdsdec.js    sha256 06803f384c5927ecba285b627e892c944772eef7856df5f3a0fb5c551192a157
 
 ===============================================================================
 Textul de mai jos e fisierul COPYING.LGPLv2.1 din ffmpeg-8.1.3, neschimbat.

@@ -12,6 +12,8 @@
 #
 # Fara enigma2 (probele de pe PC) lucrarile se pot rula direct cu lucreaza().
 
+import os
+import sys
 import threading
 import time
 
@@ -202,6 +204,11 @@ def reincarca():
 		_jurnal("reincarcarea: %s" % type(e).__name__)
 
 
+def timpCitire(text):
+	"""Cat sta fereastra de eroare: 12 s, sau mai mult la un text lung (cam 15 semne pe secunda), cel mult 25 s."""
+	return max(12, min(25, len(text or "") // 15))
+
+
 def _laTic():
 	global _de_incarcat
 	try:
@@ -224,7 +231,9 @@ def _laTic():
 		try:
 			from Screens.InfoBar import InfoBar
 			from Screens.MessageBox import MessageBox
-			InfoBar.instance.session.open(MessageBox, _(erori[0]), MessageBox.TYPE_ERROR, timeout=12)
+			text = _(erori[0])
+			# 0.7.7 (IPX): textul lung (de pilda conexiunile ocupate, ~300 de semne) sta mai mult, ca sa se poata citi; OK il inchide oricand
+			InfoBar.instance.session.open(MessageBox, text, MessageBox.TYPE_ERROR, timeout=timpCitire(text))
 		except Exception:
 			pass
 	if rezultate:
@@ -310,6 +319,83 @@ def _zilnic():
 				K.porneste()
 		except Exception as e:
 			_jurnal("4K: %s" % type(e).__name__)
+	try:
+		pazaListei()
+	except Exception as e:
+		_jurnal("paza listei: %s" % type(e).__name__)
+
+
+# 0.7.7 (AST): o lista de canale pusa de alt program (pluginuri de liste ca AutoSetting, un FTP de pe calculator) sterge
+# /etc/enigma2/*.tv si pastreaza cel mult buchetele cu 'http': radacina 'IPTV' cu grupe dispare cu totul, iar cea cu o
+# singura grupa ramane pe disc, dar nu mai e in bouquets.tv. Regula modulului ramane aceeasi (cat sunt surse, IPTV e in
+# lista: HdsIptvSurse.leagaIndex), numai ca nu mai asteapta improspatarea zilnica: la minutul urmator radacina si grupele
+# se refac din canale-<sursa>.json (fara retea) si se leaga la coada listei.
+LINISTE_S = 30           # bouquets.tv neschimbat de atat: lista straina s-a terminat de scris
+MAX_INCERCARI = 3        # refaceri sau legari dupa care IPTV tot lipseste (memoria plina): nu se mai incearca pana la repornire
+_paza = {}
+
+
+def _modul(nume):
+	"""Un modul al imaginii numai daca e deja incarcat (importul sau editorul nu pot lucra fara el); nimic nou incarcat."""
+	return sys.modules.get(nume)
+
+
+def _listaInLucru():
+	"""Importul imaginii (si listele de pe internet, prin zavorul lui) sau editorul de canale, pe televizor sau in web."""
+	imp = _modul("Components.HdsImportSurse")
+	try:
+		if imp is not None and imp.ocupat():
+			return True
+	except Exception:
+		pass
+	ed = _modul("Components.HdsEditorCanale")
+	try:
+		if ed is not None and ed.sesiune() is not None:
+			return True
+	except Exception:
+		pass
+	return _editorDeschis()
+
+
+def pazaListei():
+	"""Pe firul enigma2, din ceasul de un minut. -> "refacere", "legare" sau "" (nimic de facut ori de asteptat)."""
+	global _de_incarcat
+	if not I.areSurse():
+		_paza.clear()
+		return ""
+	with _lacat:
+		if _in_lucru is not None or _coada or _de_incarcat:
+			return ""
+	radacina = os.path.join(I.DIRECTOR, I.BUCHET_RADACINA)
+	index = os.path.join(I.DIRECTOR, "bouquets.tv")
+	try:
+		with open(index, encoding="utf-8", errors="surrogateescape") as f:
+			legata = ('FROM BOUQUET "%s"' % I.BUCHET_RADACINA) in f.read()
+		liniste = time.time() - os.stat(index).st_mtime >= LINISTE_S
+	except (IOError, OSError):
+		legata, liniste = False, True
+	exista = os.path.isfile(radacina)
+	if exista and legata:
+		_paza.clear()
+		return ""
+	if not liniste or _listaInLucru() or not I.citesteSurse():
+		return ""
+	n = _paza.get("incercari", 0)
+	if n >= MAX_INCERCARI:
+		if not _paza.get("spus"):
+			_paza["spus"] = True
+			_jurnal("IPTV tot lipseste din lista dupa %d incercari: nu mai incerc pana la repornire" % n)
+		return ""
+	_paza["incercari"] = n + 1
+	if exista:
+		_jurnal("radacina IPTV nu mai era in bouquets.tv (lista de canale schimbata de alt program): legata la loc")
+		with _lacat:
+			_de_incarcat = True
+		_pornesteCeasul()
+		return "legare"
+	_jurnal("radacina IPTV lipsea (lista de canale schimbata de alt program): buchetele refacute din disc")
+	cere(_REFACERE)
+	return "refacere"
 
 
 def porneste():

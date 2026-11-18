@@ -79,6 +79,35 @@ def _get_dns_servers():
 	return ns
 
 
+def _interfataWeb():
+	"""(adresa, nume) ale interfetei web, pentru ecranul Retea si pagina lui web /informatii/retea: http://<IP>[:port]
+	dupa ruta implicita (HdsWebControl.adresaWeb) si http://<nume .local>[:port] numai cand avahi chiar il publica acum
+	(HdsComutareRetea.nume_local_confirmat). ("", "") fara retea sau cu interfata web oprita. Adresa IP merge si pe
+	telefoanele care nu afla numele .local (Android vechi, VPN), deci e scrisa intai; codul QR (tasta galbena,
+	Screens/HdsWebTelefon.py) o foloseste pe ea."""
+	try:
+		from Plugins.Extensions.HdsWebControl.plugin import adresaWeb, initConfigHdsWebControl
+		from Components.config import config
+		initConfigHdsWebControl()
+		if not config.plugins.hdswebcontrol.activ.value:
+			return "", ""
+		adresa = adresaWeb() or ""
+	except Exception as e:
+		print("[Information] adresa interfetei web: %r" % (e,))
+		return "", ""
+	if not adresa:
+		return "", ""
+	try:
+		from Components.HdsComutareRetea import nume_local_confirmat
+		nume = nume_local_confirmat()
+	except Exception as e:
+		print("[Information] numele .local: %r" % (e,))
+		nume = ""
+	gazda = adresa.split("//", 1)[-1]
+	port = gazda[gazda.index(":"):] if ":" in gazda else ""
+	return adresa, ("http://%s%s" % (nume, port) if nume else "")
+
+
 def _rand(eticheta, valoare, prefix="  "):
 	"""Un rand eticheta / valoare in forma citita de Components/HdsInformatiiTabel.py (si aliniat in textul brut); o
 	eticheta mai lunga decat coloana (o traducere) primeste tot doua spatii dupa „:”, ca sa nu se lipeasca de valoare."""
@@ -155,6 +184,7 @@ class InformationBase(Screen):
 		<widget name="despartitor" position="591,69" size="1,504" backgroundColor="#D9FFFFFF" zPosition="1" />
 		<widget name="coloana2" position="603,69" size="560,504" itemHeight="28" foregroundColor="#00F2F4F8" backgroundColor="#0D10162A" transparent="1" selectionDisabled="1" scrollbarMode="showNever" zPosition="2" />
 		<widget name="text" position="21,69" size="1141,504" font="Regular;19" foregroundColor="#00F2F4F8" backgroundColor="#0D10162A" transparent="1" scrollbarMode="showOnDemand" zPosition="3" />
+		<widget source="qr" render="Canvas" conditional="qr" position="21,69" size="140,140" zPosition="4" />
 		<widget name="HintText" position="21,579" size="1141,29" font="Regular;17" foregroundColor="#00AEB9CC" backgroundColor="#0D10162A" transparent="1" valign="center" noWrap="1" zPosition="2" />
 		<eLabel position="21,616" size="1141,1" backgroundColor="#D9FFFFFF" zPosition="1" />
 		<eLabel position="21,629" size="4,21" backgroundColor="#00E5484D" zPosition="1" />
@@ -309,6 +339,11 @@ class InformationBase(Screen):
 		(Despre imagine: numele testerilor care si-au trimis receptorul si legenda lor). Aici niciunul."""
 		return {}
 
+	def _coloane(self, coloane):
+		"""Coloanele tabelului inainte de rupere si de pagini; un ecran isi poate pune aici randuri care nu sunt in text
+		(Retea: randurile "loc" pentru codul QR). Aici neschimbate."""
+		return coloane
+
 	def _deseneaza(self, text):
 		if not self.latimi[0]:
 			return
@@ -318,7 +353,7 @@ class InformationBase(Screen):
 		except Exception as e:
 			self.bucati = {}
 			print("[Information] albastrul: %r" % (e,))
-		coloane = T.coloane(T.sectiuni(text), self.COLOANE)
+		coloane = self._coloane(T.coloane(T.sectiuni(text), self.COLOANE))
 		# DSG2: in caseta textele se rup la latimea dinauntru (fara marginile casetei); liniile dintre randuri
 		stil = getattr(self, "stilCaseta", None)
 		margine = T.margine_caseta(stil, self.inaltime)
@@ -363,6 +398,9 @@ class InformationBase(Screen):
 			intrare.append(MultiContentEntryText(pos=(0, 0), size=(w, h), font=0, text="", backcolor=c["caseta"],
 				backcolor_sel=c["caseta"]))
 		w = w - 2 * m
+		if r[0] == "loc":
+			# locul unui desen pus peste lista (codul QR din Retea): numai fundalul casetei
+			return intrare
 		if linie:
 			gros = max(1, h // 28)
 			intrare.append(MultiContentEntryText(pos=(m, 0), size=(w, gros), font=0, text="", backcolor=cul_linie,
@@ -675,7 +713,11 @@ class HdsAbout(InformationBase):
 		# ultimul, sub subtitlul lui. Fara lista producatorilor, ecranul ramane ca inainte.
 		# Sub producatori, codul deschis luat de la altii (HdsMultumiri.surse: proiectul si ce am luat, citat si in fisiere);
 		# o eroare la producatori nu scoate sursele, si invers.
+		# Intre producatori si surse, contributorii (HdsMultumiri.contributori: oamenii care ne-au trimis cod, corecturi,
+		# pluginuri sau grafica, aceeasi lista ca pe pagina /dezvoltatori/ a site-ului): eticheta = numele
+		# public, valoarea = ce a adus, in limba receptorului (din fisier, nu din traduceri), rupta pe randuri in tabel.
 		producatori = []
+		contributori = []
 		surse = []
 		try:
 			from Components import HdsMultumiri
@@ -685,12 +727,23 @@ class HdsAbout(InformationBase):
 			print("[Information] producatorii: %r" % (e,))
 		try:
 			from Components import HdsMultumiri
+			try:
+				from Components.Language import language
+				limba = language.getLanguage()
+			except Exception:
+				limba = None
+			contributori = HdsMultumiri.contributori(limba)
+		except Exception as e:
+			contributori = []
+			print("[Information] contributorii: %r" % (e,))
+		try:
+			from Components import HdsMultumiri
 			surse = HdsMultumiri.surse(traducere=_)
 		except Exception as e:
 			surse = []
 			print("[Information] sursele: %r" % (e,))
 		try:
-			if producatori or surse:
+			if producatori or contributori or surse:
 				titlu_m, sub_producatori, sub_testeri = HdsMultumiri.titluri(traducere=_)
 				l.append("")
 				l.append(titlu_m + ":")
@@ -698,12 +751,16 @@ class HdsAbout(InformationBase):
 					l.append(" " + sub_producatori)
 					for firma, motive in producatori:
 						l.append(rand(firma, motive))
+				if contributori:
+					l.append(" " + HdsMultumiri.subtitluContributori(traducere=_))
+					for nume, ce in contributori:
+						l.append(rand(nume, ce))
 				if surse:
 					l.append(" " + HdsMultumiri.subtitluSurse(traducere=_))
 					for nume, ce in surse:
 						l.append(rand(nume, ce))
 		except Exception as e:
-			producatori = surse = []
+			producatori = contributori = surse = []
 			print("[Information] multumirile: %r" % (e,))
 		try:
 			from Components import HdsMultumiri
@@ -711,7 +768,7 @@ class HdsAbout(InformationBase):
 			nume_multumiri, trimisi = HdsMultumiri.lista()
 			text_multumiri = HdsMultumiri.text(nume_multumiri, traducere=_)
 			if text_multumiri:
-				if producatori or surse:
+				if producatori or contributori or surse:
 					l.append(" " + sub_testeri)
 				l.append("")
 				l.append(" • " + text_multumiri)
@@ -794,6 +851,19 @@ class HdsReceiverInfo(InformationBase):
 				l.append(_rand(_("Procese"), _("%(active)s active din %(totale)s") % {"active": active, "totale": totale}))
 		except Exception:
 			pass
+
+		# Transcodarea spre telefon sau tableta (Components/HdsTranscodareInfo.py): numai ce spun profilul modelului si
+		# driverul codorului; aceeasi sectiune si in web (informatii_web citeste textul ecranului). O eroare o sare.
+		try:
+			from Components import HdsTranscodareInfo
+			tr = HdsTranscodareInfo.randuri()
+			if tr:
+				l.append("")
+				l.append(_("Transcodarea spre telefon sau tabletă:"))
+				for eticheta, valoare in tr:
+					l.append(_rand(eticheta, valoare))
+		except Exception as e:
+			print("[Information] transcodarea: %r" % (e,))
 
 		# Recuperarea modelului, fara citirea memoriei interne. O eroare nu goleste ecranul.
 		try:
@@ -1162,11 +1232,143 @@ class HdsStorageInfo(InformationBase):
 
 
 class HdsNetworkInfo(InformationBase):
+	# Codul QR al interfetei web sta chiar in caseta Interfata web, sub adresa, fara nicio tasta: RANDURI_QR randuri
+	# "loc" (numai fundalul casetei) puse dupa randurile casetei (_coloane), iar desenul (widgetul Canvas "qr" din skin,
+	# conditional="qr": numai ecranul acesta il are) mutat peste ele (_puneQr), cat se vede pagina lor in tabel. In
+	# textul brut, pe alta pagina sau fara adresa, codul e ascuns. Codul are adresa simpla (Screens/HdsWebTelefon.textCod),
+	# ca ecranul mare. Un skin fara widgetul "qr" (o tema straina) nu primeste randurile, iar tasta galbena deschide
+	# ecranul mare (Screens/HdsWebTelefon.py), ca inainte; cand codul e in caseta, tasta nu se mai scrie jos (StaticText
+	# gol: cadrul temei o ascunde), dar galbenul deschide tot ecranul mare.
+	RANDURI_QR = 5
+
 	def __init__(self, session):
+		from Components.Sources.CanvasSource import CanvasSource
+		from Components.Sources.StaticText import StaticText
 		InformationBase.__init__(self, session, _("Rețea"))
+		self["qr"] = CanvasSource()
+		# tasta galbena: ecranul mare al codului (Screens/HdsWebTelefon.py). Prioritatea -2: inaintea hartii "pagini" din
+		# InformationBase (-1), care leaga galbenul (showProviders) de _nimic
+		self["key_yellow"] = StaticText(_("Cod QR pentru telefon"))
+		self["telefon"] = ActionMap(["ColorActions"], {"yellow": self.codTelefon}, -2)
+		self.qrDesenat = None      # (textul, x, y, latura) desenat acum
+
+	def codTelefon(self):
+		from Screens.HdsWebTelefon import HdsWebTelefon
+		self.session.open(HdsWebTelefon)
+
+	def _rendererQr(self):
+		for r in getattr(self, "renderer", []) or []:
+			if getattr(r, "source", None) is self["qr"] and r.instance is not None:
+				return r
+		return None
+
+	def _pagini(self, col):
+		"""Cate pagini are coloana, rupta si asezata ca in _deseneaza."""
+		from Components import HdsInformatiiTabel as T
+		n = max(1, self.perPagina)
+		latime = self.latimi[0] - 2 * T.margine_caseta(getattr(self, "stilCaseta", None), self.inaltime)
+		return (len(T.pe_pagini(self._incapute(list(col), latime), n)) + n - 1) // n
+
+	def _coloane(self, coloane):
+		"""Randurile "loc" ale codului dupa randurile casetei Interfata web (prima sectiune a primei coloane), numai cand
+		skinul are desenul codului, interfata web are adresa si ecranul nu primeste din cauza lor o pagina in plus (marimea
+		textului mare, multe interfete); altfel codul ramane pe tasta galbena."""
+		self.qrText = ""
+		if not coloane or not coloane[0] or self._rendererQr() is None:
+			return coloane
+		col = coloane[0]
+		if col[0] != ("titlu", _("Interfața web")):
+			return coloane
+		adresa, _nume = _interfataWeb()
+		if not adresa:
+			return coloane
+		capat = 1
+		while capat < len(col) and col[capat][0] != "gol":
+			capat += 1
+		nou = list(col[:capat]) + [("loc",)] * self.RANDURI_QR + list(col[capat:])
+		try:
+			pagini = max([self._pagini(c) for c in coloane if c] or [1])
+			if self._pagini(nou) > pagini:
+				return coloane
+		except Exception as e:
+			print("[Information] locul codului QR: %r" % (e,))
+			return coloane
+		from Screens.HdsWebTelefon import textCod
+		self.qrText = textCod(adresa)
+		coloane = list(coloane)
+		coloane[0] = nou
+		return coloane
+
+	def _arataPagina(self):
+		InformationBase._arataPagina(self)
+		self._puneQr()
+
+	def _puneQr(self):
+		"""Codul peste randurile "loc", cat pagina lor se vede in tabel; altfel ascuns. Tasta galbena se scrie jos numai cand
+		codul nu poate sta in caseta."""
+		r = self._rendererQr()
+		text = getattr(self, "qrText", "")
+		self["key_yellow"].setText("" if (r is not None and text) else _("Cod QR pentru telefon"))
+		if r is None:
+			return
+		loc = None
+		col = self.randuriDesenate[0] or []
+		if text and not self.brutVizibil and ("loc",) in col:
+			j = col.index(("loc",))
+			k = 0
+			while j + k < len(col) and col[j + k] == ("loc",):
+				k += 1
+			n = max(1, self.perPagina)
+			try:
+				pagina = (self["coloana1"].getSelectionIndex() or 0) // n
+			except Exception:
+				pagina = 0
+			if j // n == pagina and (j + k - 1) // n == pagina:
+				from Components import HdsInformatiiTabel as T
+				h = self.inaltime
+				lista = self["coloana1"].instance
+				stil = getattr(self, "stilCaseta", None) or {}
+				m = T.margine_caseta(stil, h)
+				pad = max(4, h // 6)
+				latura = k * h - 2 * pad
+				w = self.latimi[0]
+				if stil.get("dreapta"):
+					# valorile stau la dreapta (temele imaginii): codul sub adresa, la dreapta casetei
+					x = w - m - latura
+				else:
+					x = m + T.latime_eticheta(w - 2 * m, h)
+				loc = (text, lista.position().x() + x, lista.position().y() + (j % n) * h + pad, latura)
+		if loc is None:
+			r.instance.hide()
+			return
+		if loc != self.qrDesenat:
+			from enigma import ePoint, eSize
+			from Screens.HdsWebTelefon import deseneazaQr
+			text, x, y, latura = loc
+			r.instance.move(ePoint(x, y))
+			r.instance.resize(eSize(latura, latura))
+			try:
+				r.instance.setSize(eSize(latura, latura))
+			except Exception as e:
+				# fara panza noua desenul ramane pe marimea din skin (taiat cand latura e mai mare)
+				print("[Information] marimea codului QR: %r" % (e,))
+			if not deseneazaQr(self, "qr", text):
+				r.instance.hide()
+				return
+			self.qrDesenat = loc
+		r.instance.show()
 
 	def populate(self):
 		l = []
+		# sus, inaintea placilor: adresa de scris in browser (aceleasi randuri si in /informatii/retea)
+		adresa, nume = _interfataWeb()
+		if adresa:
+			# titlul sectiunii: textul deja tradus al intrarii din meniu, cu doua puncte ca la celelalte sectiuni
+			l.append(_("Interfața web") + ":")
+			l.append(_rand(_("Adresa"), adresa))
+			if nume:
+				l.append(_rand(_("Numele"), nume))
+			l.append("")
 		gw_iface, gw_ip = _get_default_gateway()
 		dns_servers = _get_dns_servers()
 

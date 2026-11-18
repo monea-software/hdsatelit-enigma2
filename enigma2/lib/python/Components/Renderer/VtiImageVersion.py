@@ -18,8 +18,13 @@ class VtiImageVersion(VariableText, Renderer):
 		Renderer.__init__(self)
 		VariableText.__init__(self)
 
+	# Schimbat de HD Satelit (MI7, 15.11.2026), ca Label.connect: Renderer.connect cheama deja changed; legatura ca in
+	# Element.connect, iar textul se cere o singura data, dupa legatura completa.
 	def connect(self, source):
-		Renderer.connect(self, source)
+		assert not self.SINGLE_SOURCE or self.source is None
+		self.sources.append(source)
+		self.source = source
+		source.connectDownstream(self)
 		self.changed((self.CHANGED_DEFAULT,))
 
 	def changed(self, what):

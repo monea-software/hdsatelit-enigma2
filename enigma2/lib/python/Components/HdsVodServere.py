@@ -53,10 +53,26 @@ def N_(text):
 	return text
 
 
+def _t(text):
+	"""Traducerea enigma2 (functia _ din builtins), sau textul insusi pe PC."""
+	try:
+		return _(text)  # noqa: F821
+	except NameError:
+		return text
+
+
 E_LOGARE = N_("Serverul nu a primit utilizatorul sau parola. Scrie-le din nou în Filme și seriale > MENU > Schimbă utilizatorul sau parola.")
 E_SERVER = N_("Serverul nu răspunde. Verifică dacă este pornit și în aceeași rețea.")
 E_ADRESA = N_("Adresa serverului nu este bună (de exemplu http://192.168.1.10:8096).")
 T_CONTINUA = N_("Continuă de unde ai rămas")
+# filmul nu merge direct pe placa, iar serverul nu are voie sa-l transforme pentru acest utilizator (PlaybackInfo cu ErrorCode
+# NotAllowed): fereastra playerului si pagina web spun ce bifa se pune pe server, in locul refuzului obisnuit (EMT, TODO 15.11 07:06)
+T_TRANSCODARE_OPRITA = N_("Serverul %s nu are voie să transforme filmul.")
+T_TRANSCODARE_BIFA = N_("Pe server: Utilizatori > %s, bifează transcodarea video, apoi pornește filmul din nou.")
+# eticheta bifei in tabloul serverului, in englezeste (aceeasi la Emby si la Jellyfin); numai in randul tehnic
+BIFA_SERVER = "Users > %s > Allow video playback that requires transcoding"
+REFUZ_TRANSCODARE = "NotAllowed"
+_MEDIA = re.compile(r"/media/([0-9a-f]{8})/([ve][0-9A-Za-z]{1,40})(?:[/?#]|$)")
 
 
 class EroareServer(V.C.EroareIptv):
@@ -747,8 +763,10 @@ class SursaServer(V.Sursa):
 			msid = msid if self.idBun(msid) else iid
 			sesiune = V._text(d.get("PlaySessionId"), 64)
 			sesiune = sesiune if _ID.match(sesiune) else uuid.uuid4().hex
+			refuz = V._text(d.get("ErrorCode"), 40)
 			if ms.get("SupportsDirectPlay"):
-				return {"metoda": "DirectPlay", "sursa": msid, "sesiune": sesiune, "adresa": self._static(iid, msid, sesiune)}
+				return self._cuRefuz({"metoda": "DirectPlay", "sursa": msid, "sesiune": sesiune,
+					"adresa": self._static(iid, msid, sesiune)}, refuz)
 			# altfel lista HLS a serverului (el copiaza ce se poate: numai containerul sau numai sunetul schimbat); DirectStream
 			# la Emby inseamna containerul schimbat de server, deci fisierul static numai cand nu exista transcodare
 			a = self._faraCheie(ms.get("TranscodingUrl")) if ms.get("TranscodingUrl") else None
@@ -758,12 +776,15 @@ class SursaServer(V.Sursa):
 				if not potrivire(ms, fam)[2] and ms.get("SupportsTranscoding", True):
 					# container fara demultiplexor in imagine (MPG, VOB, WMV): pistele copiate intr-o lista HLS, fara transformare
 					return {"metoda": "Transcode", "sursa": msid, "sesiune": sesiune, "adresa": self._master(iid, msid, sesiune, fam, True, True)}
-				return {"metoda": "DirectStream", "sursa": msid, "sesiune": sesiune, "adresa": self._static(iid, msid, sesiune)}
+				return self._cuRefuz({"metoda": "DirectStream", "sursa": msid, "sesiune": sesiune,
+					"adresa": self._static(iid, msid, sesiune)}, refuz)
 		if isinstance(d, dict) and d.get("ErrorCode"):
-			# serverul a refuzat (transcodarea oprita pentru acest utilizator, debit): o adresa facuta de noi ar fi refuzata la fel
-			print("[HdsVodServere] PlaybackInfo refuzat: %s" % V._text(d.get("ErrorCode"), 40))
+			# serverul a refuzat (transcodarea oprita pentru acest utilizator, debit): o adresa facuta de noi ar fi refuzata la fel.
+			# Filmul se incearca direct; daca placa nu-l poate reda, refuzul tinut minte schimba fereastra (textRefuz)
+			refuz = V._text(d.get("ErrorCode"), 40)
+			print("[HdsVodServere] PlaybackInfo refuzat: %s" % refuz)
 			s = uuid.uuid4().hex
-			return {"metoda": "DirectPlay", "sursa": iid, "sesiune": s, "adresa": self._static(iid, iid, s), "refuz": True}
+			return {"metoda": "DirectPlay", "sursa": iid, "sesiune": s, "adresa": self._static(iid, iid, s), "refuz": refuz}
 		# server fara PlaybackInfo (sau raspuns fara surse): aceeasi hotarare din pistele filmului
 		s = uuid.uuid4().hex
 		try:
@@ -780,6 +801,24 @@ class SursaServer(V.Sursa):
 				return {"metoda": "Transcode", "sursa": msid, "sesiune": s, "adresa": self._master(iid, msid, s, fam, img, sun)}
 			return {"metoda": "DirectPlay", "sursa": msid, "sesiune": s, "adresa": self._static(iid, msid, s)}
 		return {"metoda": "DirectPlay", "sursa": iid, "sesiune": s, "adresa": self._static(iid, iid, s)}
+
+	def _cuRefuz(self, r, refuz):
+		"""Hotararea, cu codul refuzului serverului (ErrorCode) cand PlaybackInfo l-a dat langa sursele lui."""
+		if refuz:
+			print("[HdsVodServere] PlaybackInfo: %s, %s" % (refuz, r["metoda"]))
+			r["refuz"] = refuz
+		return r
+
+	def textRefuz(self, cheie):
+		"""(titlu, detaliu, tehnic) pentru fereastra filmului care nu merge, cand serverul nu are voie sa-l transforme pentru acest
+		utilizator (ErrorCode NotAllowed), altfel None. Numai hotararea deja luata de releu; nicio cerere la server."""
+		r = self._redareStiuta(cheie) if self._cheieBuna(cheie) else None
+		if not r or r.get("refuz") != REFUZ_TRANSCODARE:
+			return None
+		# caseta de mesaj are trei randuri (HdsFilmRedare.Verdict.text): numele utilizatorului scurtat
+		utilizator = V._text(self.s.get("utilizator"), 20) or "-"
+		return (_t(T_TRANSCODARE_OPRITA) % NUME_FEL.get(self.fel, self.nume), _t(T_TRANSCODARE_BIFA) % utilizator,
+			"ErrorCode %s (%s)" % (REFUZ_TRANSCODARE, BIFA_SERVER % utilizator))
 
 	def redareInchisa(self, cheie):
 		"""Playerul s-a inchis inainte sa anunte inceputul (iesire in primele secunde): transcodarea se opreste pe server, fara
@@ -899,6 +938,18 @@ class SursaServer(V.Sursa):
 			HdsSubtitrariFilm.inregistreazaRetea(cale, v[0])
 		except ImportError:
 			pass
+
+
+def textRefuz(cale):
+	"""(titlu, detaliu, tehnic) cand filmul de la calea releului (/media/<sursa>/<cheie>) e al unui server care nu are voie sa-l
+	transforme pentru utilizator (SursaServer.textRefuz), altfel None. Calea poate avea ":" scris %3a (referinta serviciului)."""
+	m = _MEDIA.search(str(cale or "").replace("%3a", ":").replace("%3A", ":"))
+	if not m:
+		return None
+	from Components import HdsIptvAdrese as A
+	src = A.ALTE_SURSE.get(m.group(1))
+	f = getattr(src, "textRefuz", None)
+	return f(m.group(2)) if f is not None else None
 
 
 def _limbiPreferate():

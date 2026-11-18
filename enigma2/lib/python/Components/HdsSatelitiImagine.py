@@ -10,7 +10,8 @@
 # eDVBDB::readSatellites). Satelitii lipsa dispar din NimManager.satList: motorul USALS nu-i mai are, Setari tuner nu-i
 # mai ofera, iar canalele lor din lamedb raman gri (fara setarile satelitului nu se acordeaza nimic).
 #
-# CE FACE: la fiecare citire a listei satelitilor (NimManager.readTransponders: la pornire si la
+# CE FACEA PANA LA 0.7.6 (scos in 0.7.7, vezi SATELITII STERSI NU MAI REVIN mai jos): la fiecare citire a listei
+# satelitilor (NimManager.readTransponders: la pornire si la
 # /web/servicelistreload?mode=3), inainte ca nucleul sa o citeasca, pozitiile care chiar sunt folosite si lipsesc din
 # fisierul citit de nucleu se pun la loc din lista imaginii: pozitiile transponderelor din lamedb (canalele) si
 # pozitiile salvate la tunere in /etc/enigma2/settings (DiSEqC A-D si satelitii cu LNB din modul avansat; config.Nims nu
@@ -40,6 +41,18 @@
 # pe televizor, Avansat, cu intrebare; pagina web /editor-canale, Sateliți, se scrie la "Salvează satellites.xml"),
 # cu copia de siguranta a listei omului.
 #
+# SATELITII STERSI NU MAI REVIN (0.7.7, 16.11.2026, SAT; forum 1588 lme, cererea lui Eduard 06:32 "A sters, nu mai
+# revine automat. Mai simplu, ca la alte imagini."): unirea de la pornire NU mai pune la loc niciun satelit. Punea inapoi
+# orice pozitie cu canale in lamedb sau salvata la un tuner, deci un satelit sters in editor, de mana din satellites.xml
+# sau printr-o lista instalata de om revenea la fiecare pornire (la lme: 28,2E si 19,2E, satelitii impliciti ai tarii
+# GB scrisi fortat la prima pornire in diseqcA/diseqcB si ramasi in settings dupa trecerea tunerului pe modul avansat).
+# Acum fisierul citit de nucleu e adevarul, ca in OE-Alliance (NimManager.readTransponders citeste satellites.xml si
+# atat): ce lipseste ramane lipsa pana il pune omul (editorul, "Pune la loc satelitii din imagine", lista imaginii).
+# Raman: transponderele noi ale listei imaginii la satelitii pe care omul ii are (SXE, mai sus) si butoanele manuale.
+# Referintele tunerelor la un satelit care nu mai e in lista se scot (portul DiSEqC "nimic conectat", LNB nefolosit):
+# la pornire in NimManager.hdsSatelitiSalvatiLipsa, la stergerea din editor (televizor, web) prin scoate_de_la_tunere.
+# Numai cheile active ale modului tunerului conteaza (referinte_tuner), nu si cele ramase de la alt mod.
+#
 # Nimic de aici nu ridica exceptii spre NimManager (e chemat din NimManager.__init__, la pornirea enigma2).
 # Nimic din enigma2 la incarcare: modulul se probeaza pe PC.
 
@@ -59,8 +72,11 @@ SETARI = "/etc/enigma2/settings"
 STARE_NUME = "sateliti-imagine-cunoscute.txt"   # in dosarul copiilor (HdsEditorSateliti.dosar_copii)
 _ANTET_STARE = "hds-sateliti-imagine 1"
 
-_DISEQC = re.compile(br"^config\.Nims\.\d+\.diseqc[ABCD]=(\d{1,4})\s*$")
-_AVANSAT = re.compile(br"^config\.Nims\.\d+\.advanced\.sat\.(\d{1,4})\.lnb=(\d+)\s*$")
+_NIMS = re.compile(br"^config\.Nims\.(\d+)\.([A-Za-z0-9_.]+)=(.*?)\s*$")
+# porturile DiSEqC folosite de fiecare fel al modului simplu (motorul nu are porturi: foloseste toata lista)
+_PORTURI = {"single": "A", "toneburst_a_b": "AB", "diseqc_a_b": "AB", "diseqc_a_b_c_d": "ABCD"}
+DISEQC_IMPLICIT = "diseqc_a_b"        # NimManager: nim.diseqcMode = ConfigSelection(..., "diseqc_a_b")
+NIMIC_CONECTAT = "3601"
 
 
 def _jurnal(text):
@@ -129,10 +145,54 @@ def pozitii_lamedb(cale=None):
 	return rez
 
 
-def pozitii_setari(cale=SETARI):
-	"""Pozitiile salvate la tunere in settings: config.Nims.N.diseqcA..D si config.Nims.N.advanced.sat.POZ.lnb (cu LNB
-	ales, nu 0). 3601 (nimic conectat) nu conteaza."""
-	rez = set()
+def porturi_diseqc(fel):
+	"""Literele porturilor DiSEqC folosite de felul `fel` al modului simplu ("single" -> "A"; motorul -> "")."""
+	return _PORTURI.get(str(fel or DISEQC_IMPLICIT), "")
+
+
+def _poz_tuner(valoare):
+	"""Pozitia unei valori salvate la tuner (0..3599); 3601-3604 ("nimic conectat", "toti satelitii") si valorile rele
+	-> None."""
+	try:
+		p = int(str(valoare).strip())
+	except (TypeError, ValueError):
+		return None
+	return p if 0 <= p < 3600 else None
+
+
+def referinte_tuner(salvate, mod_implicit="nothing"):
+	"""[(cheie, pozitie)] ale satelitilor folositi cu adevarat de un tuner, din valorile lui salvate (dict, ca
+	config.Nims[N].content.stored_values): in modul simplu numai porturile DiSEqC ale felului ales (porturi_diseqc), in
+	modul avansat satelitii cu LNB ales (cheia "advanced.sat.<cheia din settings>"). Cheile celuilalt mod (raman in
+	settings de la prima pornire, cand diseqcA/diseqcB se scriu fortat, sau de la o schimbare de mod) nu conteaza.
+	`mod_implicit`: configMode cand lipseste ("simple" la primul tuner de satelit, "nothing" la celelalte)."""
+	if not isinstance(salvate, dict):
+		return []
+	mod = str(salvate.get("configMode") or mod_implicit)
+	rez = []
+	if mod == "simple":
+		for litera in porturi_diseqc(salvate.get("diseqcMode")):
+			p = _poz_tuner(salvate.get("diseqc" + litera))
+			if p is not None:
+				rez.append(("diseqc" + litera, p))
+	elif mod == "advanced":
+		avansat = salvate.get("advanced")
+		sateliti = avansat.get("sat") if isinstance(avansat, dict) else None
+		if isinstance(sateliti, dict):
+			for cheie in sorted(sateliti, key=lambda k: str(k)):
+				valori = sateliti[cheie]
+				p = _poz_tuner(cheie)
+				if p is None or not isinstance(valori, dict):
+					continue
+				if str(valori.get("lnb", "0")).strip() not in ("", "0"):
+					rez.append(("advanced.sat.%s" % cheie, p))
+	return rez
+
+
+def setari_tunere(cale=SETARI):
+	"""{N: valorile salvate ale tunerului N, ca dict imbricat (config.Nims.N.advanced.sat.282.lnb -> ["advanced"]["sat"]
+	["282"]["lnb"])} din fisierul settings. Valorile raman text."""
+	rez = {}
 	try:
 		f = open(cale, "rb")
 	except (IOError, OSError):
@@ -141,15 +201,124 @@ def pozitii_setari(cale=SETARI):
 		for rand in f:
 			if not rand.startswith(b"config.Nims."):
 				continue
-			m = _DISEQC.match(rand)
-			if m:
-				p = _poz(m.group(1))
-			else:
-				m = _AVANSAT.match(rand)
-				p = _poz(m.group(1)) if m and m.group(2) != b"0" else None
-			if p is not None:
-				rez.add(p)
+			m = _NIMS.match(rand)
+			if not m:
+				continue
+			try:
+				n, cale_cheie, valoare = int(m.group(1)), m.group(2).decode("ascii"), m.group(3).decode("utf-8", "replace")
+			except (ValueError, UnicodeDecodeError):
+				continue
+			d = rez.setdefault(n, {})
+			parti = cale_cheie.split(".")
+			for p in parti[:-1]:
+				urm = d.get(p)
+				if not isinstance(urm, dict):
+					urm = d[p] = {}
+				d = urm
+			d[parti[-1]] = valoare
 	return rez
+
+
+def pozitii_setari(cale=SETARI):
+	"""Pozitiile folosite de tunere dupa settings (referinte_tuner: numai cheile active ale modului fiecarui tuner;
+	configMode lipsa = "nothing", fiindca primul tuner de satelit il are mereu scris). 3601 nu conteaza."""
+	rez = set()
+	for _n, salvate in setari_tunere(cale).items():
+		for _cheie, p in referinte_tuner(salvate):
+			rez.add(p)
+	return rez
+
+
+def text_scoase(scoase):
+	"""Textul scurt pentru om: [(slot, cheie, pozitie)] -> "Tuner A: 28,2°E (DiSEqC B); Tuner B: 19,2°E (LNB)"."""
+	parti = []
+	for slot, cheie, p in scoase:
+		unde = "DiSEqC %s" % cheie[-1] if cheie.startswith("diseqc") else "LNB"
+		parti.append("%s %s: %s (%s)" % (_t("Tuner"), chr(65 + int(slot)) if 0 <= int(slot) < 26 else slot,
+			D.text_pozitie(p), unde))
+	return "; ".join(parti)
+
+
+def _t(text):
+	try:
+		return _(text)  # noqa: F821  (builtins pe receptor)
+	except NameError:
+		return text
+
+
+def scoate_de_la_tunere(pozitii, aplica=True, nimmgr=None, cfg=None, salveaza=None):
+	"""Pe receptor, pe firul enigma2, dupa stergerea din editor (televizor, web): pozitiile date scoase din configurarea
+	tunerelor de satelit, pe obiectele config.Nims (settings scris direct s-ar pierde la oprire): portul DiSEqC al felului
+	ales care arata spre ele devine "nimic conectat" (3601), LNB-ul lor din modul avansat devine nefolosit ("0"); restul
+	tunerului ramane. Cu aplica=False numai spune ce s-ar scoate (textul intrebarii). Nu ridica.
+	-> [(slot, cheie, pozitie)]"""
+	pozitii = set(p for p in (_poz_tuner(x) for x in (pozitii or ())) if p is not None)
+	scoase = []
+	if not pozitii:
+		return scoase
+	try:
+		if nimmgr is None:
+			from Components.NimManager import nimmanager as nimmgr
+		if cfg is None:
+			from Components.config import config as cfg
+		sloturi = list(nimmgr.nim_slots)
+	except Exception as e:
+		_jurnal("tunerele nu se pot citi: %r" % (e,))
+		return scoase
+	schimbat = False
+	for slot in sloturi:
+		try:
+			if not slot.isCompatible("DVB-S"):
+				continue
+			nim = cfg.Nims[slot.slot]
+			mod = nim.configMode.value
+			if mod == "simple":
+				for litera in porturi_diseqc(nim.diseqcMode.value):
+					el = getattr(nim, "diseqc" + litera)
+					p = _poz_tuner(el.value)
+					if p in pozitii:
+						scoase.append((slot.slot, "diseqc" + litera, p))
+						if aplica:
+							el.value = NIMIC_CONECTAT
+							el.save()
+							schimbat = True
+			elif mod == "advanced":
+				for p in sorted(pozitii):
+					if p not in nim.advanced.sat:
+						continue
+					lnb = nim.advanced.sat[p].lnb
+					if lnb.value != "0":
+						scoase.append((slot.slot, "advanced.sat.%d" % p, p))
+						if aplica:
+							lnb.value = "0"
+							lnb.save()
+							schimbat = True
+		except Exception as e:
+			_jurnal("tunerul %s: %r" % (getattr(slot, "slot", "?"), e))
+	if schimbat:
+		try:
+			if salveaza is None:
+				from Components.config import configfile
+				salveaza = configfile.save
+			salveaza()
+		except Exception as e:
+			_jurnal("setarile tunerelor nu s-au salvat: %r" % (e,))
+		_jurnal("scoase de la tunere: %s" % ", ".join("%s/%s" % (s, c) for s, c, _p in scoase))
+	return scoase
+
+
+def sterge_din_lista(poz, cale=None):
+	"""Pentru televizor si pentru pagina web fara modul avansat: satelitul de pe `poz` scos din fisierul citit de nucleu
+	(copie de siguranta inainte) si din configurarea tunerelor. Nu revine singur la pornire (unirea nu mai pune la loc
+	sateliti). -> (numele satelitului, [(slot, cheie, pozitie)] scoase de la tunere); Eroare (HdsEditorSateliti) cand nu
+	merge (atunci nici tunerele nu se ating)."""
+	S = _S()
+	sateliti = S.citeste(cale)
+	s = sateliti.sterge_satelit(poz)
+	S.scrie(sateliti, cale)
+	p = s.poz
+	_jurnal("%s: satelitul %s (%s) sters la cererea omului" % (sateliti.cale, p, s.name))
+	return s.name, scoate_de_la_tunere([p])
 
 
 def _acelasi(a, b):
@@ -281,10 +450,11 @@ def adauga_transpondere_noi(sateliti, imagine, cunoscute):
 
 
 def uneste_la_pornire(cale=None, copie=None, lamedb=None, setari=SETARI, stare=None, detalii=False):
-	"""Din NimManager.readTransponders, inainte de eDVBDB.readSatellites: pozitiile cu canale (lamedb) si cele salvate
-	la tunere (settings) care lipsesc din fisierul citit de nucleu se pun la loc din lista imaginii, iar satelitii
-	omului primesc transponderele noi ale listei imaginii (unire, o singura scriere, cu copie de siguranta). Nu ridica
-	niciodata. -> pozitiile satelitilor pusi; cu detalii=True (sateliti, transpondere puse: [(poz, kHz, pol)])"""
+	"""Din NimManager.readTransponders, inainte de eDVBDB.readSatellites: satelitii omului primesc transponderele noi ale
+	listei imaginii (unire, o singura scriere, cu copie de siguranta). Din 0.7.7 (SAT) niciun satelit nu se mai pune la
+	loc: un satelit care lipseste din fisier ramane lipsa (vezi antetul); lamedb si setari nu se mai citesc (raman ca
+	argumente pentru cine le da). Nu ridica niciodata. -> pozitiile satelitilor pusi (mereu []); cu detalii=True
+	([], transpondere puse: [(poz, kHz, pol)])"""
 	try:
 		puse, tp = _uneste(cale, copie, lamedb, setari, stare)
 	except Exception as e:
@@ -308,14 +478,11 @@ def _uneste(cale, copie, lamedb, setari, stare=None):
 	are = D.citeste_sateliti(cale)       # repede: numai etichetele <sat>
 	if not are:
 		return [], []                     # lista goala sau stricata nu e treaba unirii (nucleul nu o poate citi)
-	dorite = pozitii_lamedb(lamedb) | pozitii_setari(setari)
 	cale_im = cale_imagine(cale, copie)
 	if cale_im is None:
-		if dorite - set(are):
-			_jurnal("%d pozitii cu canale lipsesc din %s, dar lista imaginii lipseste" % (len(dorite - set(are)), cale))
 		return [], []
-	# tot repede: satelitii care lipsesc la om si pe care lista imaginii chiar ii are
-	sat_lipsa = (dorite - set(are)) & set(D.citeste_sateliti(cale_im)) if dorite - set(are) else set()
+	# 0.7.7 (SAT): niciun satelit nu se mai pune la loc singur (un satelit sters de om nu revine; vezi antetul)
+	sat_lipsa = set()
 	# transponderele noi: numai cand copia imaginii s-a schimbat de la unirea de dinainte (primul rand din STARE)
 	stare = stare or cale_stare(cale)
 	semn = _semn(cale_im)
@@ -355,7 +522,7 @@ def _uneste(cale, copie, lamedb, setari, stare=None):
 		sateliti = S.citeste(cale)
 	except S.Eroare:
 		return [], []
-	puse = adauga_din(sateliti, imagine, dorite) if sat_lipsa else []
+	puse = []
 	tp = adauga_transpondere_noi(sateliti, imagine, (vechi or {}).get("ids") or set()) if tp_de_vazut else []
 	copia = None
 	if puse or tp:

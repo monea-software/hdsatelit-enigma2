@@ -210,7 +210,9 @@ def _stareCeas():
 		"transponder_pornit": bool(s.dvb_pornit),
 		"stare_ceas": C.NUME_STARI[cod] if isinstance(cod, int) and 0 <= cod < len(C.NUME_STARI) else "",
 		"ultima": dict(s.ultima), "esecuri": s.esecuri, "salvat": C.citesteCeasSalvat(s.cale_ceas) or 0,
-		"sigura_salvata": C.citesteCeasSalvat(s.cale_sigura) or 0}
+		"sigura_salvata": C.citesteCeasSalvat(s.cale_sigura) or 0,
+		# a treia sursa, ora prin HTTPS de la serverul nostru (din 0.7.6, CLK)
+		"https": dict(getattr(s, "https", None) or {}), "https_in_curs": bool(getattr(s, "https_in_curs", False))}
 
 
 def _ceas(ctx):
@@ -237,6 +239,15 @@ def _ceas(ctx):
 		else:
 			randuri.append("Ultima incercare NTP: niciuna de la pornire")
 		randuri.append("Esecuri NTP la rand: %s" % s.get("esecuri", "?"))
+		hx = s.get("https") or {}
+		if hx.get("rezultat") in ("reusit", "esuat"):
+			randuri.append("Ora prin HTTPS (%s, sursa a treia, dupa NTP nereusit): %s la %s UTC%s%s" % (hx.get("server", ""),
+				hx["rezultat"], time.strftime(fmt, time.gmtime(hx.get("ora") or 0)),
+				(", ceasul mutat cu %.0f s" % (hx.get("pas_s") or 0.0)) if hx.get("mutat") else
+				(", diferenta %.1f s, nemutat" % (hx.get("pas_s") or 0.0) if hx["rezultat"] == "reusit" else ""),
+				(": %s (%s)" % (hx.get("motiv", ""), hx.get("detaliu", ""))) if hx["rezultat"] == "esuat" else ""))
+		else:
+			randuri.append("Ora prin HTTPS: %s" % ("in curs" if s.get("https_in_curs") else "neceruta (NTP a mers sau ora e sigura)"))
 		for nume, cheie in (("Ora salvata (fake-hwclock)", "salvat"), ("Ultima ora sigura salvata", "sigura_salvata")):
 			v = s.get(cheie) or 0
 			randuri.append("%s: %s" % (nume, time.strftime(fmt, time.gmtime(v)) if v else "lipseste"))
@@ -756,17 +767,59 @@ def op_memorie(ctx, args):
 	return Rezultat(0, text="\n\n".join(parti))
 
 
+# Jurnalul paznicului (hds-watchdog.py, Components/HdsPaznic.CALE_JURNAL) sta in /home/root, nu in dosarul jurnalelor:
+# op jurnale il arata in lista, iar op jurnal il citeste sub numele lui (si cu "de la octetul"), ca pe celelalte (asistenta
+# 430032, 15.11.2026: pornirile si cererile de iesire ale paznicului nu se puteau citi; TODO 15.11 10:50, RFU). Numai acest
+# fisier: restul lui /home/root ramane in afara.
+JURNAL_PAZNIC = "hds-watchdog.log"
+
+
+def _caleJurnalPaznic(ctx, baza):
+	"""Calea jurnalului paznicului: ctx["jurnal_paznic"] (probele); cu dosarul jurnalelor obisnuit, HdsPaznic.CALE_JURNAL;
+	cu un dosar de proba (ctx["jurnale"]), fisierul de langa el, ca pe receptor (/home/root/logs -> /home/root)."""
+	if "jurnal_paznic" in ctx:
+		return ctx["jurnal_paznic"]
+	if baza == CALE_JURNALE:
+		try:
+			from Components.HdsPaznic import CALE_JURNAL
+			return CALE_JURNAL
+		except Exception:
+			pass
+	return os.path.join(os.path.dirname(baza.rstrip("/\\")), JURNAL_PAZNIC)
+
+
 def op_jurnale(ctx, args):
 	baza = ctx.get("jurnale", CALE_JURNALE)
 	randuri = []
 	try:
-		for nume in sorted(os.listdir(baza)):
+		nume_vazute = sorted(os.listdir(baza))
+		for nume in nume_vazute:
 			cale = os.path.join(baza, nume)
 			if os.path.isfile(cale):
 				randuri.append("%10d  %s" % (os.path.getsize(cale), nume))
 	except Exception as e:
 		return Rezultat(1, text="(nu se poate citi dosarul jurnalelor: %s)" % type(e).__name__)
+	paznic = _caleJurnalPaznic(ctx, baza)
+	if JURNAL_PAZNIC not in nume_vazute and os.path.isfile(paznic) and not os.path.islink(paznic):
+		randuri.append("%10d  %s" % (os.path.getsize(paznic), JURNAL_PAZNIC))
 	return Rezultat(0, text="\n".join(randuri) or "(niciun jurnal)")
+
+
+# Jurnalele pe care le scrie imaginea (hds-*.log si rotirile lor, messages): cand lipsesc, "nu exista inca" (0.7.7,
+# asistenta 683170, TODO 16.11 00:10: seq 1 automat cere hds-caderi.log, care lipseste pe un receptor fara nicio cadere,
+# iar raspunsul "(jurnal necunoscut)" il facea pe operator sa creada ca a gresit numele).
+_JURNAL_IMAGINE = re.compile(r"^(?:hds-[a-z0-9-]+\.log|messages)(?:\.[0-9]{1,2})?$")
+
+
+def _textJurnalLipsa(nume, cale):
+	"""Raspunsul lui op jurnal cand fisierul nu e de citit: "nu exista inca" pentru un jurnal al imaginii care lipseste;
+	"necunoscut" pentru alt nume (cu sfatul op jurnale, care da lista) si cand numele e altceva decat un fisier (un
+	dosar, o legatura spre afara)."""
+	if os.path.lexists(cale):
+		return "(jurnal necunoscut)"
+	if _JURNAL_IMAGINE.match(nume):
+		return "(jurnalul nu exista inca: %s)" % nume
+	return "(jurnal necunoscut: %s; op jurnale da lista)" % nume
 
 
 def op_jurnal(ctx, args):
@@ -779,7 +832,14 @@ def op_jurnal(ctx, args):
 	try:
 		real = os.path.realpath(cale)
 		if os.path.dirname(real) != os.path.realpath(baza) or not os.path.isfile(real):
-			return Rezultat(1, text="(jurnal necunoscut)")
+			real = None
+		if real is None and nume == JURNAL_PAZNIC:
+			# jurnalul paznicului, de langa dosarul jurnalelor (JURNAL_PAZNIC): numai fisierul lui, fara legaturi
+			paznic = _caleJurnalPaznic(ctx, baza)
+			if os.path.isfile(paznic) and not os.path.islink(paznic):
+				real = os.path.realpath(paznic)
+		if real is None:
+			return Rezultat(1, text=_textJurnalLipsa(nume, cale))
 	except Exception:
 		return Rezultat(1, text="(jurnal necunoscut)")
 	de_la = _deLa(args, 2)
@@ -941,6 +1001,21 @@ def op_mesaj(ctx, args):
 	return Rezultat(0, text="mesaj aratat pe ecran: " + text)
 
 
+def op_intrebare(ctx, args):
+	"""O intrebare pe televizor si in pagina web a asistentei (0.7.7, TODO 16.11 01:10): TEXT, apoi variantele ("Da|Nu|Nu
+	stiu", 2-4; fara ele Nu / Da, cu Nu ales) si secundele (30-300, implicit 180). Asteapta raspunsul omului pe firul
+	sesiunii (ctx["stop"] o opreste) si il da echipei: cod 0 "raspuns: Da ...", cod 1 cand n-a venit (timpul, EXIT,
+	oprirea asistentei, standby). Lucrul cu ecranul il face ctx["intrebare"] (Screens/HdsAsistentaSemn._intrebare)."""
+	intreaba = ctx.get("intrebare")
+	if intreaba is None:
+		return Rezultat(1, text="(intrebarea nu se poate arata)")
+	rez = intreaba(args[0], args[1] if len(args) > 1 else "", args[2] if len(args) > 2 else "", ctx.get("stop"))
+	if not rez:
+		return Rezultat(1, text="(receptorul nu a raspuns)")
+	cod, text = rez
+	return Rezultat(cod, text=text)
+
+
 def op_concluzii(ctx, args):
 	"""Concluziile echipei la finalul asistentei (ce am gasit si ce am facut): pastrate pe receptor si aratate intr-o
 	fereastra care sta pana la OK, apoi o data la sfarsitul sesiunii, cu multumirile. Raspunsul nu repeta textul."""
@@ -1059,6 +1134,91 @@ def _treciPeRezerva(ctx, text):
 		return False
 
 
+# 0.7.7 (UPD, TODO 15.11 19:08 asistenta 421715 si 16.11 00:10 asistenta 683170): op instaleaza nu mai aduce pe bucati
+# pachetele imaginii si nu mai opreste opkg la jumatate.
+# - Un pachet care cere o versiune mai noua a imaginii (ServiceApp r11 cere enigma2-hdsatelit >= 0.7.6, IPTVplayer cere
+#   ServiceApp) facea opkg sa puna programul imaginii singur, fara restul setului si fara repornirea interfetei: interfata
+#   veche peste fisierele noi (caderea "undefined symbol" din 683170), iar o ciocnire cu fisierul unei teme lasa
+#   enigma2-hdsatelit half-installed (opkg install fara --force-overwrite; 421715). Acum intai `opkg --noaction install`:
+#   daca ar actualiza, ar cobori sau ar scoate un pachet al imaginii instalat (enigma2-hdsatelit, hdsatelit-*), nu se
+#   instaleaza nimic si raspunsul spune ce sa trimita echipa (repara-actualizarea = actualizarea rapida, tot setul semnat,
+#   cu --force-overwrite si repornirea), ca Extensii in 0.7.7 (EXG).
+# - opkg nu mai e oprit cu SIGKILL la termen (fisiere amestecate, status vechi) si nu mai scrie pe o teava (la o iesire a
+#   enigma2 ar fi murit de SIGPIPE): iesirea merge intr-un fisier din RAM, opkg ruleaza in sesiunea lui, iar dupa termen
+#   raspunsul spune ca lucreaza inca; se culege cand iese.
+_OPKG_LASATE = []
+_IMAGINE_RAND = re.compile(r"^(?:Installing|Upgrading|Downgrading|Removing)\s+([A-Za-z0-9][A-Za-z0-9+._-]*)", re.M)
+STATUS_OPKG = "/var/lib/opkg/status"
+
+
+def _ruleazaOpkg(argv, termen=TERMEN_S, limita=RASPUNS_MAX):
+	"""Ca _ruleaza, pentru opkg: iesirea intr-un fisier temporar (nu pe teava), opkg in sesiunea lui si niciun semnal la
+	termen (atunci cod 124 si iesirea de pana acum; procesul se culege la un apel urmator). -> (cod_iesire, text)."""
+	import tempfile
+	for p in list(_OPKG_LASATE):
+		if p.poll() is not None:
+			_OPKG_LASATE.remove(p)
+	try:
+		f = tempfile.TemporaryFile(prefix="hds-asistenta-opkg-")
+	except OSError:
+		return _ruleaza(argv, termen, limita)
+	try:
+		try:
+			p = subprocess.Popen(argv, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+				env={"LC_ALL": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}, start_new_session=True)
+		except Exception as e:
+			return 127, "(nu se poate porni %s: %s)" % (argv[0], type(e).__name__)
+		try:
+			cod = p.wait(timeout=termen)
+		except subprocess.TimeoutExpired:
+			_OPKG_LASATE.append(p)
+			cod = 124
+		# pread nu muta pozitia comuna cu opkg (care poate scrie inca, dupa termen)
+		if hasattr(os, "pread"):
+			date = os.pread(f.fileno(), limita + 1, 0)
+		else:
+			f.seek(0)
+			date = f.read(limita + 1)
+		text = date.decode("utf-8", "replace")
+	finally:
+		f.close()
+	if cod == 124:
+		text += ("\n(opkg lucreaza inca dupa %d s; nu il opresc, ca pachetele sa nu ramana la jumatate. Urmareste cu op "
+			"pachete si op jurnal hds-actualizari.log)" % termen)
+	return cod, text
+
+
+def _instalateImagine(ctx):
+	"""Pachetele imaginii instalate acum (enigma2-hdsatelit, hdsatelit-*), din status-ul opkg"""
+	rez, nume = set(), ""
+	try:
+		with open(ctx.get("opkg_status", STATUS_OPKG), "r", encoding="utf-8", errors="replace") as f:
+			for rand in f:
+				if rand.startswith("Package:"):
+					nume = rand.split(":", 1)[1].strip()
+				elif rand.startswith("Status:") and _alImaginii(nume):
+					st = rand.split(":", 1)[1].split()
+					if "not-installed" not in st and "config-files" not in st:
+						rez.add(nume)
+	except (IOError, OSError):
+		pass
+	return rez
+
+
+def _alImaginii(nume):
+	return nume == "enigma2-hdsatelit" or nume.startswith("hdsatelit-")
+
+
+def imagineAtinsa(text, instalate):
+	"""Pachetele imaginii instalate pe care un `opkg --noaction install` le-ar schimba (randurile Installing/Upgrading/
+	Downgrading/Removing ale lui opkg 0.10), in ordine, fara repetari"""
+	rez = []
+	for nume in _IMAGINE_RAND.findall(text or ""):
+		if _alImaginii(nume) and nume in instalate and nume not in rez:
+			rez.append(nume)
+	return rez
+
+
 def _opkg(ctx, actiune, pachet):
 	from Components import HdsAsistentaControl as C
 	if not _controlPermis(ctx):
@@ -1066,7 +1226,10 @@ def _opkg(ctx, actiune, pachet):
 	tipar = C.PACHET_INSTALARE if actiune == "install" else C.PACHET
 	if not tipar.match(pachet or ""):
 		return Rezultat(1, text="(nume de pachet nepermis)")
+	# update, status si proba --noaction nu schimba nimic: cu termen si oprire (o descarcare blocata nu tine lacatul lui
+	# opkg o ora); numai instalarea si stergerea adevarate merg fara oprire (_ruleazaOpkg)
 	ruleaza = ctx.get("opkg", _ruleaza)
+	lucreaza = ctx.get("opkg", _ruleazaOpkg)
 	feeduri = C.feeduriNoastre(ctx.get("opkg_conf", "/etc/opkg"))
 	if not feeduri:
 		return Rezultat(1, text="(niciun feed HD Satelit in /etc/opkg)")
@@ -1083,13 +1246,22 @@ def _opkg(ctx, actiune, pachet):
 				jurnal.append("opkg update (serverul de rezerva): cod %s" % cod)
 			if not C.pachetInFeed(pachet, feeduri, liste):
 				return Rezultat(1, text="(%s nu e in feedurile HD Satelit)" % pachet)
+		# 0.7.7 (UPD): pachetele imaginii nu se schimba pe bucati (vezi _OPKG_LASATE)
+		cod, proba = ruleaza(["opkg", "--noaction", "install", pachet], termen=120, limita=65536)
+		atinse = imagineAtinsa(proba, _instalateImagine(ctx))
+		if atinse:
+			jurnal.append(proba.strip())
+			jurnal.append("(%s ar schimba pachetele imaginii: %s; nu se instaleaza pe bucati. Trimite intai "
+				"repara-actualizarea (actualizarea rapida, tot setul semnat, cu repornirea interfetei), apoi din nou "
+				"instaleaza %s)" % (pachet, ", ".join(atinse), pachet))
+			return Rezultat(1, text="\n".join(jurnal))
 		argv = ["opkg", "install", pachet]
 	else:
 		cod, stare = ruleaza(["opkg", "status", pachet], termen=30, limita=65536)
 		if "Status:" not in stare or "not-installed" in stare:
 			return Rezultat(1, text="(%s nu e instalat)" % pachet)
 		argv = ["opkg", "remove", pachet]
-	cod, text = ruleaza(argv, termen=TERMEN_OPKG_S, limita=256 * 1024)
+	cod, text = lucreaza(argv, termen=TERMEN_OPKG_S, limita=256 * 1024)
 	jurnal.append(text.strip())
 	return Rezultat(cod, text="\n".join(jurnal))
 
@@ -1128,6 +1300,7 @@ TABEL = {
 	"setari": op_setari,
 	"captura": op_captura,
 	"mesaj": op_mesaj,
+	"intrebare": op_intrebare,
 	"concluzii": op_concluzii,
 	"ecran": op_ecran,
 	"taste": op_taste,

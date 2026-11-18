@@ -133,6 +133,19 @@ _ARH = {'armv7l': 'armv7', 'armv7': 'armv7', 'armv6l': 'armv7', 'aarch64': 'aarc
         'mips': 'mipsel', 'mipsel': 'mipsel', 'x86_64': 'x86_64', 'amd64': 'x86_64'}
 
 
+def nume_contor(url):
+    """Numele randurilor binarului in fisierul sesiunilor 8001 (-c), ca in t2/bin/t2mi_decap.c nume_contor_din_url:
+    "t2mi_decap.<FNV-1a pe 32 de biti al adresei -h, 8 cifre hex>". Fereastra de 4 conexiuni / 120 s si pauza de la
+    pornire a binarului se socotesc numai pe randurile aceluiasi purtator (OC2: dupa o cautare DVB-T2 prin satelit,
+    sesiunile invatarii altor fluxuri opreau zap-ul pana la 120 s). Fara adresa: vechiul "t2mi_decap"."""
+    if not url:
+        return 't2mi_decap'
+    h = 2166136261
+    for c in bytearray(url.encode('utf-8') if not isinstance(url, bytes) else url):
+        h = ((h ^ c) * 16777619) & 0xFFFFFFFF
+    return 't2mi_decap.%08x' % h
+
+
 class Jurnal(object):
     PLAFON = 64 * 1024              # REGULA 2: stderr ajunge intr-un fisier din /tmp (RAM); peste plafon se tace
 
@@ -337,6 +350,19 @@ def ts_in_pid(feed):
     return str((feed or {}).get('fel') or '') == 'abertis'
 
 
+def t2mi_interior(feed):
+    """Felul abertis al carui TS purtat e el insusi un flux T2-MI (fluxurile spre emitatoarele DVB-T2, ca 8008 pe
+    12583 V: T2-MI pe PID-ul 4096 al TS-ului interior): PID-ul acela (cheia t2mi_pid din lista), altfel None. Binarul
+    primeste -A -T PID cu -l/-n ca la felul t2mi; rezerva Python leaga t2mi.TsInPid de t2mi.Decapsulator."""
+    if not ts_in_pid(feed):
+        return None
+    try:
+        p = int(feed.get('t2mi_pid'))
+    except (TypeError, ValueError):
+        return None
+    return p if 0 < p < 8191 else None
+
+
 class DecapBinar(object):
     """t2mi_decap ca proces: stdin TS (sau T2-MI brut cu -r), stdout TS 188. Un fir citeste stdout."""
     fel = 'binar'
@@ -348,6 +374,11 @@ class DecapBinar(object):
         cmd = [binar] if not binar.endswith('.py') else [sys.executable, binar]
         if ts_in_pid(releu.feed):
             cmd += ['-A', '-p', str(releu.pid)]       # TS intreg in payload-ul PID-ului: fara PLP, -r si -n
+            interior = t2mi_interior(releu.feed)
+            if interior is not None:                  # T2-MI in TS-ul interior: PLP-ul si nulele ca la felul t2mi
+                cmd += ['-T', str(interior), '-l', str(plp)]
+                if releu.feed.get('nule'):
+                    cmd.append('-n')
         else:
             cmd += ['-p', str(releu.pid), '-l', str(plp)]
             if forma == 'sarcina':
@@ -453,6 +484,10 @@ class DecapPython(object):
         if ts_in_pid(releu.feed):
             self.d = t2mi.TsInPid(releu.pid)
             self.ad = self.d.adauga
+            interior = t2mi_interior(releu.feed)
+            if interior is not None:                  # TS-ul scos din PID trece prin decapsulatorul T2-MI
+                self.t2 = t2mi.Decapsulator(interior, plp, nule=bool(releu.feed.get('nule')))
+                self.ad = lambda bloc, ts=self.d.adauga, t2=self.t2.adauga: t2(ts(bloc))
         else:
             self.d = t2mi.Decapsulator(releu.pid, plp, nule=bool(releu.feed.get('nule')))
             self.ad = self.d.adauga_sarcina if forma == 'sarcina' else self.d.adauga
@@ -725,9 +760,10 @@ class ReleuT2(object):
         gazda = str(f.get('gazda_8001') or '127.0.0.1')
         port_8001 = _intreg(f.get('port_8001'), 8001) or 8001
         termen = float(f.get('termen_8001') or TERMEN_8001_S)
+        self.url_binar = 'http://%s:%d/%s' % (gazda, port_8001, ref)
         cmd = [self.binar, '-p', str(self.pid), '-u', str(self.port_fluxuri),
                '-a', '/t2/%s/%d' % (self.feed_id, self.plp_binar),
-               '-h', 'http://%s:%d/%s' % (gazda, port_8001, ref),
+               '-h', self.url_binar,
                '-I', str(max(0, int(math.ceil(self.arg.inactiv)))), '-w', str(max(1, int(math.ceil(termen)))),
                '-R', str(CONEXIUNI_FEREASTRA),
                # -c: mereu acelasi fisier, la orice fel de pornire; releul nu il sterge si nu il goleste niciodata
@@ -735,7 +771,10 @@ class ReleuT2(object):
                '-j', self.cale_stat, '-P', self.cale_psi, '-c', self.cale_sesiuni]
         if ts_in_pid(f):
             cmd.append('-A')           # TS intreg in payload-ul PID-ului (fara T2-MI): fara -l si -n
-            return cmd
+            interior = t2mi_interior(f)
+            if interior is None:
+                return cmd
+            cmd += ['-T', str(interior)]   # T2-MI in TS-ul interior: -l si -n ca la felul t2mi
         if plp is not None:
             cmd += ['-l', str(self.plp_binar)]
         if f.get('nule'):
@@ -793,11 +832,12 @@ class ReleuT2(object):
             pass
 
     def _noteaza_sesiunea_binarului(self, motiv):
-        """Binarul omorat cu SIGKILL nu mai apuca sa scrie randul sesiunii in -c: il scrie releul, cu acelasi nume
-        („t2mi_decap"), ca binarul urmator sa il ia in fereastra (formatul din comun/sesiuni8001.noteaza)."""
+        """Binarul omorat cu SIGKILL nu mai apuca sa scrie randul sesiunii in -c: il scrie releul, cu acelasi nume ca
+        binarul (nume_contor: t2mi_decap.<hash al adresei -h>), ca binarul urmator de pe acelasi purtator sa il ia in
+        fereastra (formatul din comun/sesiuni8001.noteaza)."""
         try:
             import sesiuni8001
-            if sesiuni8001.noteaza('t2mi_decap', cale=self.cale_sesiuni):
+            if sesiuni8001.noteaza(nume_contor(getattr(self, 'url_binar', '')), cale=self.cale_sesiuni):
                 self.randuri_releu += 1
                 self.jurnal('rand in %s: %s' % (self.cale_sesiuni, motiv))
         except Exception:

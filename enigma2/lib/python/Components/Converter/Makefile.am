@@ -11,4 +11,4 @@ install_PYTHON = \
 	Combine.py SensorToText.py ValueToPixmap.py XmlMultiContent.py Hds*.py \
 	ChannelNumbers.py EGAnalogic.py EtAnalogClock.py ExtremeInfo.py HbbtvApplicationInfo.py RemoteControlInfo.py \
 	SmartInfo.py Streaming2.py TrackInfo.py VExtraNumText.py VServiceOrbitalPosition.py VWeather.py VfdDisplay.py \
-	VtiInfo.py VtiTempFan.py pstrCnvrt.py
+	VtiInfo.py VtiTempFan.py pstrCnvrt.py BitrateInfo.py EGExtraInfo.py

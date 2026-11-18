@@ -33,7 +33,7 @@ install_PYTHON = \
 	HdsAjutor.py \
 	ScanerMaiMultiSateliti.py ScanerCablu.py ScanerOarba.py \
 	HdsPisteLimbi.py HdsTelecomenzi.py HdsSubtitrariAspect.py HdsOcrLimbi.py HdsTraducereSubtitrari.py \
-	HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsProcesor.py HdsLocInregistrari.py HdsMontareDiscuri.py HdsPiconuri.py HdsLicente.py HdsListeImplicite.py \
+	HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsProcesor.py HdsLocInregistrari.py HdsMontareDiscuri.py HdsPiconuri.py HdsLicente.py HdsListeImplicite.py HdsListeInternet.py \
 	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py HdsVpnFurnizor.py \
 	HdsAsistenta.py HdsAsistentaSemn.py \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py ScreenSaver.py HdsAfisaj.py \
@@ -41,7 +41,7 @@ install_PYTHON = \
 	HdsCopieSetari.py HdsCopieImagine.py HdsCulegereTotala.py HdsActualizari.py HdsImagineOnline.py HdsDescarcareSubtitrari.py \
 	HdsLocul.py HdsCalitateImagine.py HdsRezolutieTv.py HdsIstoricCanale.py HdsMozaic.py HdsDespreFilm.py HdsSportAzi.py HdsGhidInternet.py \
 	HdsImportSetari.py MediaPlayer.py PicturePlayer.py HdsSkinSetari.py \
-	HdsAplicatii.py HdsNavigatorWeb.py HdsTemaInterfata.py HdsVremea.py HdsAnuntRetea.py HdsUnelteRetea.py \
-	HdsLocuriRetea.py HdsReteaStandard.py HdsBetaTester.py HdsQrRapoarte.py HdsForumReceptor.py \
+	HdsAplicatii.py HdsNavigatorWeb.py HdsTemaInterfata.py HdsFundalPro.py HdsVremea.py HdsAnuntRetea.py HdsUnelteRetea.py \
+	HdsLocuriRetea.py HdsReteaStandard.py HdsBetaTester.py HdsQrRapoarte.py HdsForumReceptor.py HdsWebTelefon.py \
 	Opkg.py NetworkServices.py DVD.py \
 	TaskList.py Toast.py

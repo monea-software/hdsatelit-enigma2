@@ -1,0 +1,57 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] GStreamer: punch the video hole when painting without compositing
+
+The hole-punch rendering relies on the compositor: the video layer carries
+a hole-punch buffer that clears the area and sends the rectangle to the
+sink. When the page is painted without accelerated compositing (CPU-only
+rendering, as on receivers whose GPU cannot run the compositor), there is
+no layer and nothing reaches the sink.
+
+When the hole-punch quirk asks for it (GStreamerHolePunchQuirk::
+paintsVideoHole()), the player sends the video rectangle, in CSS pixels of
+the page, when the video element paints, and clears the area (alpha 0) so
+that the video plane under the graphics shows through. Once the hole-punch
+sink exists, the element is painted again.
+
+Upstream-Status: Inappropriate [satellite receiver configuration]
+
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -4319,6 +4319,25 @@
+     if (!m_pageIsVisible || isSuspended())
+         return;
+ 
++    if (isHolePunchRenderingEnabled() && !m_quirksManagerForTesting) {
++        // Without accelerated compositing there is no hole-punch layer. The video rectangle, in CSS pixels of the
++        // page, goes to the quirk from here, and the area is cleared (alpha 0) so that the video plane under the
++        // graphics shows through.
++        auto& quirksManager = GStreamerQuirksManager::singleton();
++        if (auto clearsHole = quirksManager.paintsVideoHole()) {
++            float scale = 1;
++            if (RefPtr player = m_player.get())
++                scale = player->playerContentsScale();
++            auto pageRect = context.getCTM(GraphicsContext::DefinitelyIncludeDeviceScale).mapRect(rect);
++            if (scale > 0 && scale != 1)
++                pageRect.scale(1 / scale);
++            quirksManager.setHolePunchVideoRectangle(m_videoSink.get(), enclosingIntRect(pageRect));
++            if (*clearsHole)
++                context.clearRect(rect);
++            return;
++        }
++    }
++
+     // Keep a reference to the sample to avoid keeping the sampleMutex locked, which would be prone
+     // to deadlocks if triggerRepaint is called while the video frame converter is blocked on its
+     // state change.
+@@ -4559,6 +4578,11 @@
+         m_videoSink = createHolePunchVideoSink();
+         // Do not check the m_videoSink value. The nullptr case will trigger auto-plugging in playbin.
+         pushNextHolePunchBuffer();
++        // Without compositing the hole is made when the element paints: paint it again now that the sink exists.
++        if (!m_quirksManagerForTesting && GStreamerQuirksManager::singleton().paintsVideoHole()) {
++            if (RefPtr player = m_player.get())
++                player->repaint();
++        }
+         return m_videoSink.get();
+     }
+ 

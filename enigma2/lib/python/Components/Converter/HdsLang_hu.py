@@ -313,4 +313,10 @@ T = {
 	"set_grid_value_alpha": u"Választott szín: {0}, átlátszóság {1}",
 	"set_grid_help": u"A nyilak a rácson, az átlátszóság során és az alsó sávon visznek; a szín azonnal látszik jobbra. Az OK vagy a Zöld megtartja a színt, a Kék megnyitja a hex kódot és az R, G, B értékeket.",
 	"set_advanced": u"Haladó",
+	"bitrate_va": u"Bitráta: videó · hang",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"átl",
+	"ecm_hop": u"Hopszám",
+	"ecm_reader": u"Olvasó",
 }

@@ -1,0 +1,31 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] GStreamer: hdsdvb board sinks preroll (e2-async) for playbin3 and MSE
+
+The OE-Alliance dvbvideosink and dvbaudiosink start with sync and async off
+and ignore the "sync" and "async" properties; only e2-sync and e2-async,
+set by the receiver player, change them. With playbin3, which Media Source
+Extensions always use, playsink waits for the sink to preroll: without it
+the video chain stays in READY and the first buffer fails with
+"gst_pad_push() returned error". The legacy playbin did not need it.
+
+The receiver decoder loan now sets e2-async to TRUE on the board sinks it
+creates (sync stays as it is).
+
+Upstream-Status: Inappropriate [satellite receiver configuration]
+
+--- a/Source/WebCore/platform/gstreamer/GStreamerHdsDvbDecoder.cpp
++++ b/Source/WebCore/platform/gstreamer/GStreamerHdsDvbDecoder.cpp
+@@ -182,6 +182,13 @@
+         return nullptr;
+     }
+ 
++    // The board sinks start with sync and async off and ignore the "sync" and "async" properties: only the e2-sync and
++    // e2-async properties of the receiver player change them. playbin3, which Media Source Extensions always use, needs a
++    // sink that prerolls (async), otherwise playsink never reaches PAUSED and the first buffers fail. The legacy playbin
++    // did not need it.
++    if (gstObjectHasProperty(sink, "e2-async"_s))
++        g_object_set(sink, "e2-async", TRUE, nullptr);
++
+     m_sinkCount++;
+     g_object_weak_ref(G_OBJECT(sink), sinkFinalized, this);
+     GST_DEBUG("%s created, %u board sinks", factoryName.characters(), m_sinkCount);

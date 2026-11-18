@@ -307,4 +307,10 @@ T = {
 	"cpu_mode": u"Chế độ CPU",
 	"cpu_volt": u"Điện áp",
 	"cpu_steps": u"Thời gian mỗi tần số",
+	"bitrate_va": u"Bitrate video · âm thanh",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"tb",
+	"ecm_hop": u"Bước nhảy",
+	"ecm_reader": u"Đầu đọc",
 }

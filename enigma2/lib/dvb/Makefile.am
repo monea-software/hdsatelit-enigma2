@@ -80,6 +80,7 @@ dvbinclude_HEADERS = \
 	hdsmultistream.h \
 	hdst2mi.h \
 	hdspazademux.h \
+	hdspazaphi.h \
 	hdspazavideo.h \
 	hdsretea.h \
 	hdsrotire.h \

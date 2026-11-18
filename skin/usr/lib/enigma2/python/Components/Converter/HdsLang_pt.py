@@ -311,4 +311,10 @@ T = {
 	"set_grid_value_alpha": u"Cor escolhida: {0}, transparência {1}",
 	"set_grid_help": u"As setas levam-te pela grelha, pela linha da transparência e pela faixa de baixo; a cor vê-se logo à direita. OK ou Verde guarda a cor, Azul abre o código hex e R, G, B.",
 	"set_advanced": u"Avançado",
+	"bitrate_va": u"Taxa de bits de vídeo · áudio",
+	"br_min": u"mín",
+	"br_max": u"máx",
+	"br_avg": u"méd",
+	"ecm_hop": u"Saltos",
+	"ecm_reader": u"Leitor",
 }

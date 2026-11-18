@@ -9,7 +9,8 @@
 #
 # Fazele (faza= in date.txt): pornire (pasul pornirii, cat urmarirea din hds-rezerva.sh vede pornirea inainte de enigma2:
 # titlul "HD Satelit porneste...", pasul, cat dureaza de obicei), lent (pornirea dureaza mai mult decat de obicei) si cod
-# (diagnosticul). La pornire si lent nu se scrie pagina, iar la pornire imaginea nu se scrie daca enigma2 a pornit
+# (diagnosticul), plus actualizare (MI6 0.7.5: tools/hds-actualizare-intrerupta.py termina o actualizare oprita la
+# jumatate). La pornire, lent si actualizare nu se scrie pagina, iar la pornire imaginea nu se scrie daca enigma2 a pornit
 # intre timp (ecranul e al lui).
 # Intrarea: --date <date.txt> (randurile cheie=valoare scrise de hds-rezerva.sh), --dosar <dosarul din RAM>,
 # --python <dosarul Python al enigma2> (pentru textele din Components/HdsDiagnostic.py, TEXTE_REZERVA, in cele 13
@@ -58,6 +59,8 @@ TEXTE = {
 		"obisnuit": "De obicei pornirea durează sub un minut.",
 		"lent": "Pornirea durează mai mult decât de obicei…",
 		"lent2": "Dacă nu se schimbă nimic, aici apare în curând codul de diagnostic.",
+		"actualizare": "Se termină actualizarea software…",
+		"actualizare2": "Nu opri receptorul. Pe un stick USB poate dura câteva minute; interfața pornește singură la sfârșit.",
 		"E306": "Pornirea s-a oprit înainte de interfață, la pasul arătat pe afișaj.",
 		"E101": "Procesorul receptorului nu este cel pentru care e făcut software-ul.",
 		"E102": "Driverul spune alt tip de placă decât cel pentru care e făcut software-ul.",
@@ -98,6 +101,8 @@ TEXTE = {
 		"obisnuit": "The start usually takes less than a minute.",
 		"lent": "The start takes longer than usual…",
 		"lent2": "If nothing changes, the diagnostic code appears here soon.",
+		"actualizare": "Finishing the software update…",
+		"actualizare2": "Do not turn the receiver off. On a USB stick this can take a few minutes; the interface starts by itself at the end.",
 		"E306": "The start stopped before the interface, at the step shown on the display.",
 		"E101": "The processor of the receiver is not the one the software is made for.",
 		"E102": "The driver reports another board type than the one the software is made for.",
@@ -763,6 +768,17 @@ def randuriEcran(date, t, litere, coloane, cu_qr=False):
 
 def randuriPornire(date, t, coloane):
 	"""ecranul fazelor pornire si lent: titlul, pasul, cat dureaza de obicei sau ca dureaza mai mult, apoi modelul"""
+	if date.get("faza") == "actualizare":
+		# MI6 0.7.5: tools/hds-actualizare-intrerupta.py termina o actualizare oprita la jumatate inainte de enigma2 (raportul
+		# 606060: minute intregi pe un stick USB 2.0, iar omul a taiat curentul); titlul si rugamintea, fara pas si fara cod
+		r = [(t.get("actualizare", ""), 2, CULORI["titlu"]), (None, 1, None)]
+		for rand in potrivesteText(t.get("actualizare2", ""), coloane):
+			r.append((rand, 1, CULORI["text"]))
+		r.append((None, 1, None))
+		model = date.get("model") or ""
+		if model:
+			r.append((textAscii("%s %s" % (model, date.get("imagine") or ""), 160), 1, CULORI["gri"]))
+		return r
 	r = [(t.get("porneste", ""), 2, CULORI["titlu"]), (None, 1, None)]
 	if date.get("faza") == "lent":
 		for rand in potrivesteText(t.get("lent", ""), coloane):
@@ -784,6 +800,10 @@ def randuriPornire(date, t, coloane):
 	if model:
 		r.append((textAscii("%s %s" % (model, date.get("imagine") or date.get("versiune", "")), 160), 1, CULORI["gri"]))
 	return r
+
+
+# fazele fara cod de diagnostic: fara pagina, fara QR, fara randurile tehnice (actualizare: MI6 0.7.5)
+FAZE_FARA_COD = ("pornire", "lent", "actualizare")
 
 
 def ruleazaEnigma2(radacina="/proc"):
@@ -817,14 +837,14 @@ def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta, qr=None):
 		except (ImportError, IOError, OSError):
 			pass
 		marg_x = max(16, geom.xres // 24)
-		cu_qr = bool(qr) and faza not in ("pornire", "lent")
+		cu_qr = bool(qr) and faza not in FAZE_FARA_COD
 		latime_text = geom.xres - 2 * marg_x - (latimeQr(geom, qr) + marg_x if cu_qr else 0)
 		coloane = latime_text // litere.lat
-		if faza in ("pornire", "lent"):
+		if faza in FAZE_FARA_COD:
 			randuri = randuriPornire(date, t, coloane)
 		else:
 			randuri = randuriEcran(date, t, litere, coloane, cu_qr)
-		if faza in ("pornire", "lent"):
+		if faza in FAZE_FARA_COD:
 			pass
 		elif geom.yres < 800:
 			# 720p: codul de doua ori, nu de trei, fara randurile goale si fara randul reincercarii, ca sa incapa
@@ -834,7 +854,7 @@ def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta, qr=None):
 		img = compune(geom, randuri, litere, latime_text)
 		if cu_qr:
 			puneQr(img, geom, qr)
-		if faza == "pornire" and ruleazaEnigma2():
+		if faza in ("pornire", "actualizare") and ruleazaEnigma2():
 			# enigma2 a pornit cat se desena: ecranul e al lui
 			return geom, 0
 		os.lseek(fd, geom.yoff * geom.stride + geom.xoff * geom.octeti, 0)
@@ -869,7 +889,7 @@ def main(argv):
 	a, fara_fb = argumente(argv)
 	date = citesteDate(a["--date"])
 	faza = date.get("faza") or "cod"
-	if faza not in ("pornire", "lent") and not date.get("cod"):
+	if faza not in FAZE_FARA_COD and not date.get("cod"):
 		print("fara cod in %s" % a["--date"])
 		return 1
 	texte_diag = texteDiagnostic(a["--python"])
@@ -877,7 +897,7 @@ def main(argv):
 	t = texte(limba, texte_diag)
 	t_en = texte("en", texte_diag) if limba != "en" else t
 	jurnal = jurnalCaderi(a["--jurnal"]) if a["--jurnal"] else []
-	if a["--dosar"] and faza not in ("pornire", "lent"):
+	if a["--dosar"] and faza not in FAZE_FARA_COD:
 		try:
 			scriePagina(a["--dosar"], date, t, t_en, jurnal)
 			print("pagina scrisa (%s)" % limba)
@@ -895,7 +915,7 @@ def main(argv):
 			rezerva = Geometrie(l, i, b)
 		except ValueError:
 			pass
-	qr = matriceQr(a["--python"], date, jurnal, limba) if faza not in ("pornire", "lent") else None
+	qr = matriceQr(a["--python"], date, jurnal, limba) if faza not in FAZE_FARA_COD else None
 	try:
 		geom, scris = deseneaza(a["--fb"], date, t, t_en, rezerva, qr)
 		print("imaginea pe %s: %s, %d octeti" % (a["--fb"], geom.text(), scris))

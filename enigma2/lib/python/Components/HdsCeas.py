@@ -28,6 +28,18 @@
 #      + rename). Fara „force” nu se scrie o ora mai veche decat cea salvata (ca `fake-hwclock save`); ora sigura se
 #      scrie oricum.
 #   5. Starea pentru ecranul „Data si ora” (Screens/Time.py) si pagina web /ceas (HdsWebControl/ceas_web.py).
+#   6. A treia sursa, ora prin HTTPS de la serverul nostru (din 0.7.6, CLK; greseala 1265: un Ustym 4K PRO a ramas cu ~4 h
+#      48 min in urma, fara NTP si fara satelit): dupa FIECARE incercare NTP nereusita, cat ora nu e sigura si sursa e
+#      "auto" sau "ntp", o cerere HEAD catre ADRESA_HTTPS (feedul nostru), pe un fir. Din antetul Date al raspunsului
+#      (orice cod HTTP, si 403/404 il au) plus jumatate din timpul dus-intors se afla ora serverului. Peste PRAG_HTTPS_S
+#      ceasul se muta (time.clock_settime); peste sau sub prag, ora devine sigura ca dupa NTP (hdsConfirmTime, ora sigura
+#      salvata), deci reincercarile se opresc singure. Nicio setare noua si niciun temporizator in plus: cel mult o
+#      cerere pe incercare NTP nereusita (pasii INCERCARI_S, apoi la 15 minute), niciuna dupa ce ora e sigura.
+#      Certificatul: ca ora sa poata fi citita si cu ceasul gresit cu ani, contextul (contextHttps) verifica lantul si
+#      numele serverului, dar nu si datele de valabilitate (X509_V_FLAG_NO_CHECK_TIME din OpenSSL, numai pentru cererea
+#      asta). Cand steagul nu se poate pune, sursa nu se foloseste deloc (niciodata fara verificare).
+#      Ora din transponder ramane pornita in "auto" (ora HTTPS are pasul de o secunda; transponderul o potriveste,
+#      lib/dvb/dvbtime.cpp, POTRIVIRE).
 #
 # Ora sigura si ora provizorie: ora de la UN SINGUR transponder e PROVIZORIE (lib/dvb/dvbtime.cpp,
 # hdsceas::decide); devine SIGURA numai prin NTP, RTC sau doua multiplexuri diferite de acord. De aici:
@@ -72,6 +84,16 @@ SERVERE = (
 	("time.google.com", "time.google.com"),
 )
 SERVER_IMPLICIT = "ro.pool.ntp.org"
+
+# a treia sursa: ora din antetul Date al serverului nostru (punctul 6 din cap)
+ADRESA_HTTPS = "https://stb.hdsatelit.com/feed/"
+GAZDA_HTTPS = "stb.hdsatelit.com"
+PROGRAM_HTTPS = "https"          # ultima["program"] / https["program"]: ora a venit prin HTTPS, nu prin NTP
+AGENT_HTTPS = "hdsatelit-receptor/1"   # ca HdsLoculInternet.AGENT
+PRAG_HTTPS_S = 120               # ceasul se muta numai peste atat (ca hdsceas::TOLERANTA_S din lib/dvb/dvbtime.h)
+TIMP_CERERE_HTTPS_S = 10
+DUS_INTORS_MAXIM_S = 10          # un raspuns mai lent nu da o ora destul de buna
+X509_V_FLAG_NO_CHECK_TIME = 0x200000   # OpenSSL >= 1.1.0: lantul si numele verificate, datele de valabilitate nu
 
 
 def _(text):
@@ -186,6 +208,116 @@ def comandaNtp(server, exista=None):
 	return None
 
 
+def contextHttps(ssl_=None):
+	"""Contextul TLS al cererii de ora: certificatul cerut, lantul pana la o autoritate cunoscuta si numele serverului
+	verificate, NUMAI datele de valabilitate nu (ceasul de verificat e chiar cel gresit). Arunca cand steagul nu se poate
+	pune: atunci sursa HTTPS nu se foloseste (nu exista cale fara verificare)."""
+	if ssl_ is None:
+		import ssl as ssl_
+	ctx = ssl_.create_default_context()
+	ctx.check_hostname = True
+	ctx.verify_mode = ssl_.CERT_REQUIRED
+	ctx.verify_flags = ctx.verify_flags | X509_V_FLAG_NO_CHECK_TIME
+	if not (int(ctx.verify_flags) & X509_V_FLAG_NO_CHECK_TIME) or not ctx.check_hostname or \
+			ctx.verify_mode != ssl_.CERT_REQUIRED:
+		raise ValueError("verificarea fara data nu se poate pune")
+	return ctx
+
+
+def dataDinAntet(text):
+	"""Antetul HTTP Date (RFC 7231, de pilda "Sun, 15 Nov 2026 08:43:12 GMT") in secunde UTC, sau None."""
+	if not text:
+		return None
+	try:
+		from email.utils import parsedate_tz, mktime_tz
+		t = parsedate_tz(str(text).strip())
+		return None if t is None else int(mktime_tz(t))
+	except (TypeError, ValueError, OverflowError):
+		return None
+
+
+# motivele nereusitei, pentru om (ecranul "Data si ora", /ceas)
+def _motivHttps(cod):
+	return {
+		"context": _("Certificatul nu se poate verifica pe acest receptor fără oră."),
+		"certificat": _("Certificatul serverului nu a trecut verificarea."),
+		"retea": _("Serverul HD Satelit nu a răspuns (fără rețea sau fără acces la Internet)."),
+		"lent": _("Serverul HD Satelit a răspuns prea încet pentru o oră exactă."),
+		"fara_data": _("Răspunsul serverului nu are ora."),
+		"ceas": _("Ceasul receptorului nu a putut fi mutat."),
+	}.get(cod, cod)
+
+
+def citesteDataHttps(adresa=None, timp=TIMP_CERERE_HTTPS_S, mono=None, deschide=None, context=None):
+	"""Blocanta, numai pe fir. O cerere HEAD; -> {"ok": True, "ora_server": ..., "mono": ..., "dus_intors": ...}
+	(ora serverului la clipa `mono` a ceasului monoton, cand a sosit raspunsul) sau {"ok": False, "cod": ..., "detaliu": ...}.
+	Antetul Date are pasul de o secunda (ora serverului e in [Date, Date + 1)): mijlocul, plus jumatate din dus-intors."""
+	mono = mono or time.monotonic
+	adresa = adresa or ADRESA_HTTPS
+	try:
+		ctx = context if context is not None else contextHttps()
+	except Exception as e:
+		return {"ok": False, "cod": "context", "detaliu": "%s: %s" % (type(e).__name__, e)}
+	try:
+		from urllib.request import Request, urlopen
+		from urllib.error import HTTPError
+	except ImportError:  # Python 2, numai pe PC
+		from urllib2 import Request, urlopen, HTTPError
+	if deschide is None:
+		def deschide(cerere, timp_, ctx_):
+			return urlopen(cerere, timeout=timp_, context=ctx_)
+	cerere = Request(adresa, headers={"User-Agent": AGENT_HTTPS, "Accept-Encoding": "identity"})
+	cerere.get_method = lambda: "HEAD"
+	m0 = mono()
+	try:
+		r = deschide(cerere, timp, ctx)
+		try:
+			antet = r.headers.get("Date")
+		finally:
+			r.close()
+	except HTTPError as e:
+		# 3xx ramas, 403, 404, 5xx: raspunsul serverului are tot antetul Date
+		antet = e.headers.get("Date") if getattr(e, "headers", None) is not None else None
+	except Exception as e:
+		fel = None
+		try:
+			from Components import HdsCeasHttps
+			fel = HdsCeasHttps.felCertificat(e)
+		except Exception:
+			fel = "certificat" if "certif" in str(e).lower() else None
+		return {"ok": False, "cod": "certificat" if fel else "retea", "detaliu": "%s: %s" % (type(e).__name__, e)}
+	m1 = mono()
+	dus_intors = m1 - m0
+	if dus_intors > DUS_INTORS_MAXIM_S:
+		return {"ok": False, "cod": "lent", "detaliu": "%.1f s" % dus_intors}
+	data = dataDinAntet(antet)
+	if data is None:
+		return {"ok": False, "cod": "fara_data", "detaliu": repr(antet)[:80]}
+	return {"ok": True, "ora_server": data + 0.5 + dus_intors / 2.0, "mono": m1, "dus_intors": dus_intors}
+
+
+def puneCeas(secunde):
+	"""Muta ceasul sistemului (CLOCK_REALTIME) la `secunde` UTC. Arunca la esec."""
+	time.clock_settime(time.CLOCK_REALTIME, float(secunde))
+
+
+def _firNou(functie):
+	import threading
+	t = threading.Thread(target=functie, name="HdsCeasHttps")
+	t.daemon = True
+	t.start()
+
+
+def _peFirulPrincipal(functie):
+	import threading
+	principal = getattr(threading, "main_thread", None)
+	if principal is not None and threading.current_thread() is principal():
+		functie()
+		return
+	from twisted.internet import reactor
+	reactor.callFromThread(functie)
+
+
 class Executor(object):
 	"""porneste(argv, la_final) -> obiect cu opreste(); la_final(cod) vine pe firul enigma2. Fara interpretor de comenzi."""
 
@@ -252,7 +384,15 @@ def salveazaOraSigura(acum=None, cale_ceas=None, cale_sigura=None):
 
 class Sincronizator(object):
 	def __init__(self, fabrica_timer=None, executor=None, mono=None, perete=None, handler=None, cale_ceas=None,
-			exista=None, config=None, cale_sigura=None):
+			exista=None, config=None, cale_sigura=None, citeste_data_https=None, pune_ceas=None, fir=None, pe_fir=None):
+		# a treia sursa (HTTPS): cererea (pe fir), mutarea ceasului, firul si intoarcerea pe firul enigma2
+		self.citeste_data_https = citeste_data_https or citesteDataHttps
+		self.pune_ceas = pune_ceas or puneCeas
+		self.fir = fir or _firNou
+		self.pe_fir = pe_fir or _peFirulPrincipal
+		self.https_in_curs = False
+		self.https = {"rezultat": "niciuna", "ora": 0, "program": PROGRAM_HTTPS, "server": GAZDA_HTTPS, "pas_s": 0.0,
+			"motiv": "", "detaliu": "", "mutat": False}
 		self.fabrica_timer = fabrica_timer or _timerEnigma
 		self.executor = executor or Executor()
 		self.mono = mono or time.monotonic
@@ -369,6 +509,7 @@ class Sincronizator(object):
 		if argv is None:
 			self._rezultat("esuat", server, "", _("Imaginea nu are niciun program NTP (ntpdate sau ntpd)."))
 			self._programeaza(False)
+			self._dupaEsecNtp()
 			return False, self.ultima["motiv"]
 		self.timerNtp.stop()
 		self.expirat = False
@@ -378,6 +519,7 @@ class Sincronizator(object):
 			self.inceput = None
 			self._rezultat("esuat", server, os.path.basename(argv[0]), _("Programul NTP nu a pornit."))
 			self._programeaza(False)
+			self._dupaEsecNtp()
 			return False, self.ultima["motiv"]
 		self.proces = proces
 		self.timerLimita.start(TIMP_MAXIM_NTP_S * 1000, True)
@@ -459,6 +601,95 @@ class Sincronizator(object):
 			self._rezultat("esuat", server, program, motiv)
 			_jurnal("NTP nereusit (%s, %s): %s" % (server, program, "timp depasit" if self.expirat else "cod %s" % cod))
 			self._programeaza(False)
+			self._dupaEsecNtp()
+
+	# ---- a treia sursa: ora prin HTTPS de la serverul nostru (punctul 6 din cap) ----
+
+	def _dupaEsecNtp(self):
+		"""Dupa o incercare NTP nereusita: o cerere HEAD pe un fir, numai cat ora nu e sigura, sursa e "auto" sau "ntp"
+		si nu merge deja una. -> True daca a pornit-o."""
+		if self.mod() not in ("auto", "ntp") or self.https_in_curs or self.oraSigura():
+			return False
+		self.https_in_curs = True
+		citeste = self.citeste_data_https
+
+		def lucru():
+			try:
+				r = citeste()
+			except Exception as e:
+				r = {"ok": False, "cod": "retea", "detaliu": "%s: %s" % (type(e).__name__, e)}
+			try:
+				self.pe_fir(lambda: self._dupaHttps(r))
+			except Exception as e:
+				self.https_in_curs = False
+				_jurnal("ora prin HTTPS: intoarcerea pe firul enigma2: %r" % (e,))
+
+		try:
+			self.fir(lucru)
+		except Exception as e:
+			self.https_in_curs = False
+			_jurnal("ora prin HTTPS: firul nu a pornit: %r" % (e,))
+			return False
+		return True
+
+	def _rezultatHttps(self, rezultat, motiv="", detaliu="", pas=0.0, mutat=False):
+		self.https = {"rezultat": rezultat, "ora": self.perete(), "program": PROGRAM_HTTPS, "server": GAZDA_HTTPS,
+			"pas_s": pas, "motiv": motiv, "detaliu": detaliu, "mutat": mutat}
+
+	def _dupaHttps(self, r):
+		"""Pe firul enigma2, cu raspunsul cererii HEAD."""
+		self.https_in_curs = False
+		r = r or {}
+		if not r.get("ok"):
+			cod = r.get("cod") or "retea"
+			self._rezultatHttps("esuat", _motivHttps(cod), r.get("detaliu") or "")
+			_jurnal("ora prin HTTPS (%s) nereusita: %s (%s)" % (GAZDA_HTTPS, cod, r.get("detaliu") or ""))
+			return False
+		# intre timp NTP a pornit din nou sau ora a devenit sigura (NTP, doua transpondere): raspunsul nu mai trebuie
+		# (sau omul a ales intre timp numai transponderul)
+		if self.mod() not in ("auto", "ntp"):
+			_jurnal("ora prin HTTPS lasata: sursa aleasa e numai transponderul")
+			return False
+		if self.proces is not None or self.oraSigura():
+			_jurnal("ora prin HTTPS lasata: %s" % ("NTP lucreaza" if self.proces is not None else "ora e deja sigura"))
+			return False
+		ora_server = r["ora_server"] + (self.mono() - r["mono"])
+		pas = ora_server - self.perete()
+		mutat = abs(pas) > PRAG_HTTPS_S
+		if mutat:
+			try:
+				self.pune_ceas(ora_server)
+			except Exception as e:
+				self._rezultatHttps("esuat", _motivHttps("ceas"), "%s: %s" % (type(e).__name__, e))
+				_jurnal("ora prin HTTPS: ceasul nu a putut fi mutat cu %.0f s: %r" % (pas, e))
+				return False
+		h = self.handler()
+		if h is not None and hasattr(h, "hdsConfirmTime"):
+			self.in_confirmare = True     # m_timeUpdated vine chiar din hdsConfirmTime: salvarea e mai jos, o data
+			try:
+				h.hdsConfirmTime()
+			except Exception as e:
+				_jurnal("hdsConfirmTime: %r" % (e,))
+			finally:
+				self.in_confirmare = False
+		scris, motiv = salveazaOraSigura(self.perete(), self.cale_ceas, self.cale_sigura)
+		if not scris:
+			_jurnal("fake-hwclock: %s" % motiv)
+		self.stare_vazuta = stareOra(h)
+		self._rezultatHttps("reusit", pas=pas, mutat=mutat)
+		if mutat:
+			_jurnal("ora prin HTTPS (%s, sursa a treia, NTP nereusit): ceasul mutat cu %.0f s (dus-intors %.2f s)" % (
+				GAZDA_HTTPS, pas, r.get("dus_intors", 0.0)))
+		else:
+			_jurnal("ora prin HTTPS (%s, sursa a treia, NTP nereusit): ceasul se potriveste (%.1f s, sub pragul de %d s), "
+				"nemutat; ora sigura" % (GAZDA_HTTPS, pas, PRAG_HTTPS_S))
+		self.aplicaSursa()
+		try:
+			from Components import HdsFusTara
+			HdsFusTara.dupaNtp()
+		except Exception as e:
+			_jurnal("fusul dupa HTTPS: %r" % (e,))
+		return True
 
 	def _rezultat(self, rezultat, server, program, motiv, pas=0.0):
 		self.ultima = {"rezultat": rezultat, "ora": self.perete(), "server": server, "program": program, "pas_s": pas,
@@ -559,7 +790,13 @@ class Sincronizator(object):
 			except Exception:
 				confirmata = None
 		u = dict(self.ultima)
+		hs = dict(self.https)
 		salvat = citesteCeasSalvat(self.cale_ceas)
+		# randul HTTPS sta langa cel NTP in ultima_text (ecranul "Data si ora", /ceas si asistenta il arata fara alt camp)
+		ultima_text = textUltima(u, self.perete())
+		text_https = textHttps(hs, self.perete())
+		if text_https:
+			ultima_text = ultima_text + " " + text_https
 		return {
 			"mod": self.mod(),
 			"mod_text": textMod(self.mod()),
@@ -570,8 +807,11 @@ class Sincronizator(object):
 			"stare_ceas": NUME_STARI[cod] if cod is not None else "",
 			"transponder_pornit": bool(self.dvb_pornit),
 			"ultima": u,
-			"ultima_text": textUltima(u, self.perete()),
-			"sursa_text": textSursa(cod, u),
+			"ultima_text": ultima_text,
+			"sursa_text": textSursa(cod, u, hs),
+			"https": hs,
+			"https_text": text_https,
+			"https_in_curs": self.https_in_curs,
 			"salvat": salvat or 0,
 			"sigura_salvata": citesteCeasSalvat(self.cale_sigura) or 0,
 			"esecuri": self.esecuri,
@@ -608,6 +848,21 @@ def textUltima(u, acum):
 	return _("Ultima încercare prin Internet, la %s, nu a reușit: %s") % (cand, u.get("motiv", ""))
 
 
+def textHttps(hs, acum):
+	"""Randul celei de-a treia surse (ora prin HTTPS de la serverul nostru) sau "" cand nu s-a cerut inca."""
+	if not hs or hs.get("rezultat") not in ("reusit", "esuat"):
+		return ""
+	cand = time.strftime("%H:%M", time.localtime(hs.get("ora") or acum))
+	if hs.get("rezultat") == "reusit":
+		pas = hs.get("pas_s") or 0.0
+		if hs.get("mutat"):
+			return (_("Ora luată prin HTTPS de la serverul HD Satelit la %s: ceasul a fost mutat înainte cu %s.") if pas > 0
+				else _("Ora luată prin HTTPS de la serverul HD Satelit la %s: ceasul a fost mutat înapoi cu %s.")) % (
+				cand, textDurataScurta(pas))
+		return _("Ora verificată prin HTTPS cu serverul HD Satelit la %s: ceasul era bun.") % cand
+	return _("Ora prin HTTPS de la serverul HD Satelit, la %s, nu a reușit: %s") % (cand, hs.get("motiv", ""))
+
+
 def textStare(cod):
 	"""Starea orei pe ecranul „Data si ora” si in /ceas."""
 	if cod == SIGURA_RTC:
@@ -626,9 +881,20 @@ def textStare(cod):
 	return ""
 
 
-def textSursa(cod, u):
+def _dinHttps(u, hs):
+	"""Ora sigura vine din HTTPS (ultima confirmare), nu din NTP?"""
+	if not hs or hs.get("rezultat") != "reusit":
+		return False
+	return not (u.get("rezultat") == "reusit" and (u.get("ora") or 0) >= (hs.get("ora") or 0))
+
+
+def textSursa(cod, u, hs=None):
+	if cod == SIGURA_INTERNET and _dinHttps(u, hs):
+		return _("Ora sigură (Internet, prin HTTPS de la serverul HD Satelit)")
 	if cod is not None:
 		return textStare(cod)
+	if _dinHttps(u, hs):                 # fara C++ (probe pe PC)
+		return _("Ora sigură (Internet, prin HTTPS de la serverul HD Satelit)")
 	if u.get("rezultat") == "reusit":    # fara C++ (probe pe PC): numai ce stie Python
 		return textStare(SIGURA_INTERNET)
 	return ""

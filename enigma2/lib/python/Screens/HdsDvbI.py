@@ -387,7 +387,7 @@ class HdsDvbISetup(Screen):
         elif r[1] == S.R_REGIUNE:
             S.seteazaRegiune(self._config, S.regiuneVecina(self._config, pas))
             self._salveaza(reincarca=True)
-        elif r[1] == S.R_REZERVA:
+        elif r[1] in (S.R_REZERVA, getattr(S, 'R_IN_LISTA', None)):
             self.ok()
 
     def ok(self):
@@ -409,6 +409,10 @@ class HdsDvbISetup(Screen):
             # TODO 1883: listele din toate tarile pornite / oprite; buchetul se reface
             S.comutaToateTarile(self._config)
             self._salveaza(reincarca=True)
+        elif actiune == getattr(S, 'R_IN_LISTA', None):
+            # lista DVB-I pusa la loc in lista de canale sau scoasa, pe loc (randul arata starea noua)
+            S.comutaInLista()
+            self._citeste()
         elif actiune == S.R_INCERCARI:
             self.incearca()
         elif actiune == S.R_AVANSAT:
@@ -608,9 +612,12 @@ class HdsDvbIAvansat(Screen):
             self._intrari.append((descriere, ('predefinit', cheie), cheie in predefinite_active))
 
         self._intrari.append((_('--- Adrese proprii ---'), None))
+        # DVK (15.11.2026): adresa care nu raspunde are semnul inainte (adresa lunga deruleaza, semnul ramane vazut)
+        nu = S.stariAdrese(self._config.get('url_uri', []))
         for i, url in enumerate(self._config.get('url_uri', [])):
             # adresa intreaga: un rand care nu incape deruleaza (lib/gui/elabel.h)
-            self._intrari.append(('  ' + url, ('url', i)))
+            semn = '(%s) ' % _(S.TEXT_SEMN_NU_RASPUNDE) if url in nu else ''
+            self._intrari.append(('  ' + semn + url, ('url', i)))
 
     def _randuri(self):
         """Randurile desenate: cele predefinite au casuta lor, bifata sau nu"""

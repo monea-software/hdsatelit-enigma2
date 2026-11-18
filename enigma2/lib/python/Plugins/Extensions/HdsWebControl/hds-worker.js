@@ -5,6 +5,10 @@
  * al transmisiei (fetch pe /api/tv-flux, cu antetele paginii), il desface in JS (PAT, PMT, PES), da imaginea MPEG-2 /
  * MPEG-1 si sunetul MP2 / MP3 / AC-3 decodorului wasm (tv-wasm/hdsdec.js + hdsdec.wasm: libavcodec din FFmpeg 8.1.3,
  * LGPL-2.1-or-later) si trimite paginii cadrele gata decodate.
+ * H.264 SI AAC: numai cand decodorul le are (construit cu HDS_DEC_EXTRA=h264,aac). Dupa incarcare workerul incearca
+ * dec_open("h264") si dec_open("aac") (cuDecodoare): imaginea H.264 merge atunci si aici, pentru navigatoarele fara H.264
+ * in MediaSource (Opera sau Chromium pe Linux), iar sunetul AAC ADTS (0x0F) intra in alegere dupa MP2 / MP3. Fara ele,
+ * ca inainte: la H.264 {tip: "eroare", fel: "format", video: "h264"}.
  *
  * Timpul: PTS-urile (33 de biti, 90 kHz) se desfac intr-un timp continuu (Cronologie): trecerea peste 2^33 (la ~26,5 h)
  * nu se vede, iar un salt mare (alt flux, emisiune lipita de alta, flux reluat) incepe o "epoca" noua; cadrele poarta
@@ -13,7 +17,19 @@
  * dar nu se mai copiaza si nu se mai trimite; sunetul merge. Oprirea: fetch-ul se intrerupe pe loc (AbortController),
  * decodoarele se inchid, apoi {tip: "oprit"}.
  *
- * Mesaje primite: {cmd: "start", url, antete, versiune, sunet, program}; {cmd: "vizibil", da}; {cmd: "stop"}.
+ * IMAGINEA TINUTA NEDECODATA (15.11.2026, H.264 1080i pe playerul wasm): intr-un flux DVB imaginea vine cu 1-2 s
+ * inaintea sunetului (cat tine tamponul decodorului), deci un cadru decodat ar astepta atat in coada paginii; la 1080
+ * un cadru are ~3 MB, iar coada paginii (48 MB) arunca cadrele: 38 de cadre aratate din 371. Acum PES-urile imaginii
+ * asteapta aici, NEDECODATE (zeci de KB), si se decodeaza numai cat in drum spre pagina si in coada ei sunt mai putin de
+ * ~24 MB de cadre (limitaCadre: 7 la 1080, 38 la 576), SAU cand ora PES-ului a venit dupa ceasul paginii (pagina care
+ * deseneaza rar, de pilda o fereastra acoperita, nu lasa imaginea in urma sunetului). Pagina spune cat a primit, cat
+ * are in coada, ceasul si epoca ({cmd: "coada"}), de cateva ori pe secunda; fara raport de 2 s (pagina veche, fila
+ * ascunsa) sau cu peste 12 MB tinuti aici, imaginea se decodeaza pe loc, ca inainte. PES-urile unei epoci pe care
+ * pagina a lasat-o in urma se arunca. Sunetul nu asteapta niciodata.
+ *
+ * Mesaje primite: {cmd: "start", url, antete, versiune, sunet, program}; {cmd: "vizibil", da}; {cmd: "stop"};
+ * {cmd: "coada", primite, n, ceas, epoca} (cadrele de imagine primite de pagina pana acum, cate asteapta in coada ei,
+ * PTS-ul aratat acum sau null, epoca paginii).
  * Mesaje trimise: {tip: "gata"}, {tip: "info"}, {tip: "v"} (un cadru), {tip: "a"} (sunet), {tip: "stat"},
  * {tip: "eroare", fel: "http"|"retea"|"sfarsit"|"decodor"|"format", cod, text}, {tip: "oprit"}.
  * In node (probele de pe PC) fisierul exporta Demux, Cronologie si celelalte bucati fara decodor.
@@ -28,7 +44,7 @@ var SALT_SEMNALAT = 90000;             // dupa discontinuity_indicator: peste 1 
 var PES_MAX = 4 * 1024 * 1024;         // un PES mai mare e stricat (fara sfarsit): se arunca
 
 var VIDEO_TIP = {0x01: "mpeg1video", 0x02: "mpeg2video", 0x1B: "h264", 0x24: "hevc"};
-var VIDEO_WASM = {mpeg1video: true, mpeg2video: true};
+var VIDEO_WASM = {mpeg1video: true, mpeg2video: true};     // h264 se adauga cand decodorul il are (cuDecodoare)
 
 // ---------------------------------------------------------------- timpul
 
@@ -127,7 +143,16 @@ function felAudio(tip, descriptori) {
 	return null;
 }
 
-var AUDIO_DECODABIL = {mpa: true, ac3: true};
+var AUDIO_DECODABIL = {mpa: true, ac3: true};              // aac se adauga cand decodorul il are (cuDecodoare)
+var ORDINE_AUDIO = ["mpa", "aac", "ac3"];                    // alegerea pistei: MP2 / MP3, AAC ADTS, AC-3
+
+// ce mai are decodorul in afara de MPEG-2 / MP2 / MP3 / AC-3 (numele din libavcodec): imaginea H.264 si sunetul AAC
+function cuDecodoare(nume) {
+	for (var i = 0; i < (nume || []).length; i++) {
+		if (nume[i] === "h264") VIDEO_WASM.h264 = true;
+		if (nume[i] === "aac") AUDIO_DECODABIL.aac = true;
+	}
+}
 
 // optiuni: {program: sid sau 0 (primul cu imagine sau sunet), sunet: true|false, pista: PID-ul audio dorit sau 0}
 // asculta: {pmt(alegere), pes(pid, date, pts, discontinuu), salt(), uitat(alegere)}
@@ -319,7 +344,7 @@ Demux.prototype.pmt = function (pid, s) {
 	var audioToate = fluxuri.filter(function (f) { return !f.video; });
 	if (this.o.sunet !== false) {
 		if (this.o.pista) audio = audioToate.filter(function (f) { return f.pid === this.o.pista && AUDIO_DECODABIL[f.fel]; }, this)[0] || null;
-		var ordine = ["mpa", "ac3"];
+		var ordine = ORDINE_AUDIO.filter(function (f) { return AUDIO_DECODABIL[f]; });
 		for (k = 0; !audio && k < ordine.length; k++) {
 			audio = audioToate.filter(function (f) { return f.fel === ordine[k]; })[0] || null;
 		}
@@ -391,6 +416,58 @@ var DEC = {};                 // PID -> {d, tip: "v"|"a", nume, epoca}
 var curent = null;            // decodorul in lucru (cadrele ies in timpul lui dec_push)
 var ultimPtsV = -1, ultimPtsA = -1, durataV = 3600;
 var st = null;
+// imaginea tinuta nedecodata (sus): cadrele trimise, ultimul raport al paginii, PES-urile care asteapta
+var OCTETI_DECODATE_MAX = 24 * 1024 * 1024;   // cadre decodate in drum spre pagina si in coada ei
+var ASTEPTARE_OCTETI_MAX = 12 * 1024 * 1024;  // PES-uri de imagine tinute aici; peste, se decodeaza pe loc
+var RAPORT_VECHI_MS = 2000;
+var LA_TIMP = 9000;                           // un PES cu ora sub ceasul paginii + 100 ms se decodeaza oricum
+var trimiseV = 0, raport = null, asteptare = [], asteptareOcteti = 0, octetiCadru = 0, ultimExtAsteptare = -1;
+
+function inZbor() {
+	return raport ? trimiseV - raport.primite + raport.n : 0;
+}
+
+// ceasul paginii acum (aceleasi unitati ca ext), dupa ultimul raport; null cand pagina inca nu are ceas
+function ceasPagina() {
+	if (!raport || raport.ceas === null || raport.ceas === undefined) return null;
+	return raport.ceas + (performance.now() - raport.t) * 90;
+}
+
+// PES-ul de imagine e la rand: e loc in drum si in coada paginii, sau ora lui a venit (pagina care deseneaza rar, de
+// pilda o fereastra acoperita: imaginea nu ramane in urma sunetului; coada paginii arunca atunci cadrele vechi)
+function laRand(e) {
+	if (inZbor() < limitaCadre()) return true;
+	var c = ceasPagina();
+	return c !== null && raport.epoca === e.epoca && e.ord >= 0 && e.ord <= c + LA_TIMP;
+}
+
+// cate cadre decodate pot fi in drum si in coada paginii; inaintea primului cadru (marimea nestiuta), ca la 1080
+function limitaCadre() {
+	return octetiCadru ? Math.max(4, Math.min(40, Math.floor(OCTETI_DECODATE_MAX / octetiCadru))) : 8;
+}
+
+function retine() {
+	return raport !== null && vizibil && !oprit && performance.now() - raport.t < RAPORT_VECHI_MS &&
+		asteptareOcteti < ASTEPTARE_OCTETI_MAX;
+}
+
+function golesteAsteptarea() {
+	while (asteptare.length) {
+		var e = asteptare[0];
+		// din epoca de dinainte a paginii: cadrele ei nu se mai arata (decodorul o ia oricum de la capat la epoca noua)
+		var vechi = raport !== null && e.epoca < raport.epoca;
+		if (!vechi && retine() && !laRand(e)) break;
+		asteptare.shift();
+		asteptareOcteti -= e.date.length;
+		if (!vechi) impinge(e.pid, "v", e.date, e.ext, e.epoca);
+	}
+}
+
+function uitaAsteptarea() {
+	asteptare = [];
+	asteptareOcteti = 0;
+	ultimExtAsteptare = -1;
+}
 
 function stareNoua() {
 	return {incarcare_ms: 0, octeti: 0, pornit: 0, primul_cadru_ms: -1, erori: 0,
@@ -408,7 +485,17 @@ function incarcaDecodorul(versiune) {
 	var v = versiune ? "?v=" + encodeURIComponent(versiune) : "";
 	importScripts("/tv/tv-wasm/hdsdec.js" + v);
 	return HdsDec({locateFile: function (f) { return "/tv/tv-wasm/" + f + v; }, onVideo: laVideo, onAudio: laAudio})
-		.then(function (m) { M = m; st.incarcare_ms = performance.now() - t0; });
+		.then(function (m) { M = m; cuDecodoare(decodoareInPlus()); st.incarcare_ms = performance.now() - t0; });
+}
+
+// decodoarele din afara celor de baza pe care hdsdec.wasm chiar le are (dec_open da 0 pentru cele lipsa)
+function decodoareInPlus() {
+	var are = [];
+	["h264", "aac"].forEach(function (nume) {
+		var d = M.ccall("dec_open", "number", ["string", "number"], [nume, 1]);
+		if (d) { are.push(nume); M._dec_close(d); }
+	});
+	return are;
 }
 
 function deschide(nume, tip) {
@@ -430,7 +517,8 @@ function laPmt(alegere, vechi) {
 		return {pid: f.pid, fel: f.fel, limba: f.limba, video: f.video};
 	})};
 	if (alegere.video && !VIDEO_WASM[alegere.video.fel]) {
-		trimite({tip: "eroare", fel: "format", cod: 0, text: "imaginea e " + alegere.video.fel + ", nu MPEG-2", video: alegere.video.fel});
+		trimite({tip: "eroare", fel: "format", cod: 0, text: "imaginea e " + alegere.video.fel + ", decodorul nu o are",
+			video: alegere.video.fel});
 		oprit = true;
 		return;
 	}
@@ -455,6 +543,7 @@ function laPmt(alegere, vechi) {
 // resincronizeaza), iar PMT-ul canalului nou deschide altele
 function laUitat() {
 	for (var pid in DEC) inchide(pid);
+	uitaAsteptarea();
 	cronologie.nouaEpoca();
 	st.salturi = cronologie.salturi;
 	ultimPtsV = -1;
@@ -467,7 +556,7 @@ function laPes(pid, date, pts, stricat) {
 		// sunetul MPEG se deschide la primul PES: Layer II (mp2float) sau Layer III (mp3float), dupa antetul cadrului
 		var al = demux.alegere && demux.alegere.audio;
 		if (!al || al.pid !== pid) return;
-		var nume = al.fel === "ac3" ? "ac3" : null;
+		var nume = al.fel === "ac3" ? "ac3" : (al.fel === "aac" && AUDIO_DECODABIL.aac ? "aac" : null);
 		if (al.fel === "mpa") {
 			var strat = stratMpegAudio(date);
 			nume = strat === 2 ? "mp2float" : (strat === 3 ? "mp3float" : null);
@@ -487,10 +576,26 @@ function laPes(pid, date, pts, stricat) {
 		ext = t.ext;
 		st.salturi = cronologie.salturi;
 	}
-	if (x.epoca !== cronologie.epoca) {
+	if (tip === "v" && (asteptare.length || (retine() && inZbor() >= limitaCadre()))) {
+		// imaginea asteapta nedecodata (sus), in ordinea sosirii; timpul si epoca ei sunt cele de la sosire; ord = ora
+		// pentru laRand (al doilea camp fara PTS merge odata cu primul)
+		if (ext >= 0) ultimExtAsteptare = ext;
+		asteptare.push({pid: pid, date: date, ext: ext, ord: ext >= 0 ? ext : ultimExtAsteptare, epoca: cronologie.epoca});
+		asteptareOcteti += date.length;
+		golesteAsteptarea();
+		return;
+	}
+	impinge(pid, tip, date, ext, cronologie.epoca);
+}
+
+// un PES la decodorul lui (imaginea poate veni aici mai tarziu decat a sosit: epoca e cea de la sosire)
+function impinge(pid, tip, date, ext, epoca) {
+	var x = DEC[pid];
+	if (!x) return;                              // decodorul s-a inchis intre timp (alt PMT, alt canal)
+	if (x.epoca !== epoca) {
 		// discontinuitate: decodorul o ia de la capat; cadrele vechi nu mai ies
 		M._dec_reset(x.d);
-		x.epoca = cronologie.epoca;
+		x.epoca = epoca;
 		if (tip === "v") { ultimPtsV = -1; } else { ultimPtsA = -1; }
 	}
 	if (date.length > marimeIn) {
@@ -518,6 +623,8 @@ function laVideo(w, h, fmt, y, u, v, ly, lu, lv, pts, flags, sarN, sarD, matrice
 	var sw = (fmt >> 8) & 0xF, sh = (fmt >> 12) & 0xF;
 	var cw = (w + (1 << sw) - 1) >> sw, ch = (h + (1 << sh) - 1) >> sh;
 	var buf = new Uint8Array(w * h + 2 * cw * ch);
+	trimiseV++;
+	octetiCadru = buf.length;
 	var H = M.HEAPU8;
 	copiaza(H, y, ly, buf, 0, w, h);
 	copiaza(H, u, lu, buf, w * h, cw, ch);
@@ -537,7 +644,7 @@ function laAudio(n, canale, rata, fmt, date, pts) {
 	st.a.esantioane += n;
 	if (pts < 0 && ultimPtsA >= 0) pts = ultimPtsA + n * 90000 / rata;
 	if (pts >= 0) ultimPtsA = pts;
-	if (fmt !== 8 || pts < 0 || !canale) return;     // AV_SAMPLE_FMT_FLTP: mp2float, mp3float si ac3 dau asa
+	if (fmt !== 8 || pts < 0 || !canale) return;     // AV_SAMPLE_FMT_FLTP: mp2float, mp3float, ac3 si aac dau asa
 	var U32 = M.HEAPU32, F32 = M.HEAPF32, can = [];
 	for (var i = 0; i < canale; i++) {
 		var p = U32[(date >> 2) + i] >> 2;
@@ -565,10 +672,12 @@ function trimiteStat() {
 	var s = JSON.parse(JSON.stringify(st));
 	s.erori = erori;
 	s.demux = demux ? demux.st : null;
+	s.asteptare = {pes: asteptare.length, octeti: asteptareOcteti, in_zbor: inZbor(), limita: limitaCadre()};
 	trimite({tip: "stat", st: s, timp_ms: performance.now() - st.pornit});
 }
 
 function curata() {
+	uitaAsteptarea();
 	for (var pid in DEC) inchide(pid);
 	if (ptrIn && M) { M._free(ptrIn); ptrIn = 0; marimeIn = 0; }
 }
@@ -576,6 +685,10 @@ function curata() {
 function porneste(m) {
 	st = stareNoua();
 	oprit = false;
+	trimiseV = 0;
+	raport = null;
+	octetiCadru = 0;
+	uitaAsteptarea();
 	cronologie = new Cronologie();
 	var incarcare;
 	try { incarcare = incarcaDecodorul(m.versiune); } catch (e) { incarcare = Promise.reject(e); }
@@ -628,6 +741,11 @@ if (typeof importScripts === "function" && typeof self !== "undefined") {
 			porneste(m);
 		} else if (m.cmd === "vizibil") {
 			vizibil = !!m.da;
+			if (M) golesteAsteptarea();      // fila ascunsa: imaginea se decodeaza pe loc (referintele raman bune)
+		} else if (m.cmd === "coada") {
+			raport = {primite: +m.primite || 0, n: +m.n || 0, t: performance.now(),
+				ceas: typeof m.ceas === "number" ? m.ceas : null, epoca: +m.epoca || 0};
+			if (M && !oprit) golesteAsteptarea();
 		} else if (m.cmd === "stop") {
 			oprit = true;
 			if (controler) { try { controler.abort(); } catch (e2) {} }
@@ -639,5 +757,6 @@ if (typeof importScripts === "function" && typeof self !== "undefined") {
 
 if (typeof module === "object" && module.exports) {
 	module.exports = {Demux: Demux, Cronologie: Cronologie, dif33: dif33, crc32Mpeg: crc32Mpeg, ptsDin: ptsDin,
-		stratMpegAudio: stratMpegAudio, felAudio: felAudio, SALT_MAX: SALT_MAX};
+		stratMpegAudio: stratMpegAudio, felAudio: felAudio, SALT_MAX: SALT_MAX, cuDecodoare: cuDecodoare,
+		VIDEO_WASM: VIDEO_WASM, AUDIO_DECODABIL: AUDIO_DECODABIL};
 }

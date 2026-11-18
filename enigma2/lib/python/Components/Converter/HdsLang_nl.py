@@ -295,4 +295,10 @@ T = {
 	"set_grid_value_alpha": u"Gekozen kleur: {0}, transparantie {1}",
 	"set_grid_help": u"De pijlen bewegen je over het raster, de rij met transparantie en de band onderaan; de kleur zie je meteen rechts. OK of Groen houdt de kleur, Blauw opent de hexcode en R, G, B.",
 	"set_advanced": u"Geavanceerd",
+	"bitrate_va": u"Bitrate video · audio",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"gem",
+	"ecm_hop": u"Hops",
+	"ecm_reader": u"Lezer",
 }

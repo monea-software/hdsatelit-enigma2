@@ -288,4 +288,10 @@ T = {
 	"cpu_mode": u"Processortilstand",
 	"cpu_volt": u"Spænding",
 	"cpu_steps": u"Tid pr. frekvens",
+	"bitrate_va": u"Bitrate video · lyd",
+	"br_min": u"min",
+	"br_max": u"maks",
+	"br_avg": u"gns",
+	"ecm_hop": u"Hop",
+	"ecm_reader": u"Læser",
 }

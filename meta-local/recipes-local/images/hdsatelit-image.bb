@@ -2,7 +2,7 @@ SUMMARY = "Imaginea HDSatelit"
 DESCRIPTION = "enigma2 HDSatelit pe baza OE-Alliance. Monea Software pentru HD Satelit."
 LICENSE = "MIT"
 # versiunea se tine dupa configure.ac din depozitul imaginii (AC_INIT) si dupa DISTRO_VERSION din hdsatelit.conf
-PV = "0.7.6"
+PV = "0.7.7"
 
 # hdsatelit-nume-local: numele hdsatelit.local in reteaua de acasa (avahi-publish), pe langa numele receptorului
 IMAGE_INSTALL = "hdsatelit-base hdsatelit-ssh hdsatelit-nume-local"
@@ -1336,9 +1336,12 @@ IMAGE_CMD:tar:append:gbx34k = "; hds_marcaj_model_zip; "
 # ${IMAGEDIR}/{imageversion,kernel.bin,rootfs.tar.bz2} (si _recovery_emmc.zip cu disk.img, pe care nu-l atingem).
 HDS_MARCAJ_ZIP:hd51 = "${IMAGE_NAME}_multi.zip"
 # Dreambox DM900 si DM920 (MDM dm900 marcaj): zip-ul _mmc.zip (HDS_MARCAJ_ZIP implicit) il inchide IMAGE_CMD:tar:prepend al
-# masinii, inainte de comanda tar a lui image_types.bbclass, ca pe Vu+: deci marcajul vine in IMAGE_CMD:tar:append, cu „;”.
-IMAGE_CMD:tar:append:dm900 = "; hds_marcaj_model_zip; "
-IMAGE_CMD:tar:append:dm920 = "; hds_marcaj_model_zip; "
+# masinii, inainte de comanda tar a lui image_types.bbclass, ca pe Vu+: deci marcajul vine in IMAGE_CMD:tar:append, FARA punct
+# si virgula in fata (DM9, 16.11.2026): dm900.conf si dm920.conf au deja IMAGE_CMD:tar:append = " ; cd ${DEPLOY_DIR_IMAGE}; ...
+# rm -f .manifest; ", terminat cu punct si virgula, iar append-ul pe masina vine dupa el; cu inca unul in fata comanda avea doua
+# la rand, eroare de sintaxa in do_image_tar.
+IMAGE_CMD:tar:append:dm900 = " hds_marcaj_model_zip; "
+IMAGE_CMD:tar:append:dm920 = " hds_marcaj_model_zip; "
 IMAGE_CMD:hdemmc:append = " hds_marcaj_model_zip; "
 # Zgemma H17 COMBO (MH7): IMAGE_CMD:airdigitalemmc:append din airdigital-arm.inc (meta-airdigital) face
 # ${IMAGE_NAME}_recovery_emmc.zip (disk.img, nu-l atingem) si ${IMAGE_NAME}_multi.zip cu ${IMAGEDIR}/{imageversion,

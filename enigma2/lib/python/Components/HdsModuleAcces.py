@@ -41,11 +41,11 @@ import time
 try:
 	from Components.HdsInterfeteCam import DOSAR_SCRIPTURI, FISIER_ECM, PROCESE_MAXIM, SUFIX_GOL, \
 		Proces, Sistem, _scriptul_porneste, citeste_scripturi, curata_nume, e_script_modul, feluri as _feluri, \
-		_CA, _CITITOR_CARD, _FRONTEND, citeste_proces, inode_decriptare
+		_CA, _CITITOR_CARD, _FRONTEND, citeste_proces, inode_decriptare, porturi_in_ascultare
 except ImportError:  # probe pe PC: modulul incarcat din dosarul Components
 	from HdsInterfeteCam import DOSAR_SCRIPTURI, FISIER_ECM, PROCESE_MAXIM, SUFIX_GOL, \
 		Proces, Sistem, _scriptul_porneste, citeste_scripturi, curata_nume, e_script_modul, feluri as _feluri, \
-		_CA, _CITITOR_CARD, _FRONTEND, citeste_proces, inode_decriptare
+		_CA, _CITITOR_CARD, _FRONTEND, citeste_proces, inode_decriptare, porturi_in_ascultare
 
 ACTIUNI = ('start', 'stop', 'restart')
 CERERI = ('alege', 'porneste', 'opreste', 'reporneste')
@@ -300,10 +300,29 @@ def citeste(sistem=None, fel=None, procese=True):
 	return st
 
 
-def feluri_de_aratat(sistem=None):
+def pregateste_scripturi(sistem):
+	"""0.7.7, inainte de citirea listei: (1) modulele puse ca scripturi ale unui manager de module din Extensii (in afara
+	/etc/init.d) primesc scriptul lor <fel>.<id> scris de imagine, ca sa apara in lista ca orice modul
+	(Components/HdsAdaptorModule.py); (2) scripturile modulelor instalate din pachete, sterse de scoaterea altui pachet, se pun
+	la loc din copia lor (Components/HdsPazaScripturi.py). Nu arunca."""
+	for nume in ('HdsPazaScripturi', 'HdsAdaptorModule'):
+		try:
+			try:
+				m = __import__('Components.' + nume, fromlist=[nume])
+			except ImportError:  # probe pe PC: modulul incarcat din dosarul Components
+				m = __import__(nume)
+			m.sincronizeaza(sistem)
+		except Exception as e:
+			_jurnal("%s: %r" % (nume, e))
+
+
+def feluri_de_aratat(sistem=None, pregateste=True):
 	"""[Stare]: primul fel (al modulelor obisnuite) mereu, celelalte (serverele de carduri) numai cand au macar un
-	script"""
+	script. `pregateste`=False: fara pregateste_scripturi (citirea de pe un fir, vezi CitirePeFir; scripturile le pregateste
+	firul enigma2)."""
 	sistem = sistem or SistemAcces()
+	if pregateste:
+		pregateste_scripturi(sistem)
 	rez = []
 	for i, fel in enumerate(feluri(sistem)):
 		st = citeste(sistem, fel)
@@ -580,12 +599,16 @@ def dosare_configurare(sistem=None, stari=None):
 
 
 def nume_configurari_web(comm, exe):
-	"""Nume de proces/executabil si radacina lor, in aceeasi ordine ca navigatorul; fara nume de module in cod."""
+	"""Nume de proces/executabil si radacina lor, in aceeasi ordine ca navigatorul; fara nume de module in cod. La
+	coada si aceleasi nume cu litere mici (un program redenumit cu majuscule citeste tot configurarea cu litere mici)."""
 	rez = []
 	for nume in (comm, posixpath.basename(exe or '')):
 		for n in (nume, re.split(r'[-_.]', nume or '')[0]):
 			if n and _SUFIX_BUN.match(n) and n + '.conf' not in rez:
 				rez.append(n + '.conf')
+	for n in list(rez):
+		if n.lower() not in rez:
+			rez.append(n.lower())
 	return rez
 
 
@@ -629,40 +652,140 @@ def eticheta_modul(e):
 	return e.sufix + (' ' + e.versiune if e.versiune else '')
 
 
+# Unde se cauta configurarea unui modul pornit FARA -c / --config-dir (atunci modulul citeste dosarul scris in programul
+# lui, pe care nu-l putem afla fara sa-l rulam): intai dosarele din scriptul lui, apoi locurile obisnuite ale modulelor
+# din feedurile enigma2, fiecare si cu dosarul numelui modulului in el (<loc>/<nume>, ca /etc/tuxbox/config/<nume>).
+# Exceptie voita de la regula fara cai din capul fisierului, ca NUME_MODULE_CUNOSCUTE. Un dosar gasit asa se crede numai
+# daca procesele modulului chiar asculta pe portul citit (porturi_procese); numai httpport se citeste, ca pana acum.
+DOSARE_CONFIG_OBISNUITE = ('/etc/tuxbox/config', '/var/tuxbox/config', '/usr/keys', '/var/keys', '/var/etc',
+	'/usr/local/etc', '/etc')
+DOSARE_GHICITE_MAXIM = 64
+
+
+def porturi_procese(sistem, pids, ascultare=None):
+	"""Porturile TCP pe care asculta procesele `pids` ale unui modul (paznicul si copilul lui: socket-ul il tine de obicei
+	copilul), din /proc/net/tcp, /proc/net/tcp6 si /proc/<pid>/fd. `ascultare` = {inode: (adresa, port)} citit o data de
+	cel care cheama, sau None. Numai citire, nicio conexiune."""
+	if ascultare is None:
+		ascultare = porturi_in_ascultare(sistem)
+	rez = set()
+	for pid in pids[:PROGRAME_MAXIM]:
+		try:
+			p = citeste_proces(sistem, pid)
+		except Exception:
+			p = None
+		if p is None:
+			continue
+		for inode in p.socketuri:
+			if inode in ascultare:
+				rez.add(ascultare[inode][1])
+	return rez
+
+
+def dosare_ghicite(nume_conf, dosare_script=()):
+	"""Dosarele in care se cauta configurarea unui modul pornit fara -c, in ordine: cele din scriptul lui, apoi
+	DOSARE_CONFIG_OBISNUITE, fiecare intai cu dosarul numelui modulului (numele din `nume_conf` si inceputurile lor pana la
+	o liniuta: un program redenumit <nume>-<ceva> isi tine de obicei configurarea in dosarul <nume>). Fara dubluri, cel
+	mult DOSARE_GHICITE_MAXIM."""
+	radacini = []
+	for n in nume_conf:
+		r = n[:-len('.conf')] if n.endswith('.conf') else n
+		parti = r.split('-')
+		for i in range(len(parti), 0, -1):
+			p = '-'.join(parti[:i])
+			if p and p not in radacini:
+				radacini.append(p)
+	rez = []
+	for d in list(dosare_script or ()) + [posixpath.join(b, r) for b in DOSARE_CONFIG_OBISNUITE for r in radacini + ['']]:
+		d = posixpath.normpath(d) if d else ''
+		if d.startswith('/') and d not in rez:
+			rez.append(d)
+	return rez[:DOSARE_GHICITE_MAXIM]
+
+
+def _interfata_din_dosar(sistem, dosar, nume_conf):
+	"""{port, protocol} din prima configurare <dosar>/<nume> care exista (ordinea din `nume_conf`), sau None."""
+	for nume in nume_conf:
+		cale = posixpath.join(dosar, nume)
+		if os.path.isfile(sistem.cale(cale)):
+			return _port_web_configurare(sistem, cale)
+	return None
+
+
+def _dosare_din_script(sistem, cale):
+	"""Dosarul ales la ultima pornire si cel scris in scriptul modulului (ca dosare_configurare), fara rularea lui."""
+	try:
+		text = sistem.citeste(cale, SCRIPT_CONFIG_MAXIM)
+	except (OSError, IOError, ValueError):
+		return []
+	return [d for d in (dosar_ales_ultima_data(sistem, text), dosar_configurare_din_script(text)) if d]
+
+
+def interfata_modul(sistem, pids, cale_script=None, citite=None):
+	"""{port, protocol} al interfetei web a unui modul care ruleaza (procesele lui `pids`), sau None. Dosarul din linia de
+	comanda (-c, --config-dir) se crede ca pana acum. Cand niciun proces nu are dosarul in linia de comanda, se cauta
+	in dosare_ghicite (intai dosarele scriptului `cale_script`), iar portul gasit se crede numai daca procesele modulului
+	chiar asculta pe el. `citite` = {} tinut de cel care cheama, ca /proc/net/tcp sa se citeasca o singura data."""
+	citite = {} if citite is None else citite
+	nume_toate, are_dosar = [], False
+	for pid in pids[:PROGRAME_MAXIM]:
+		baza = '/proc/%d' % pid
+		try:
+			argumente = sistem.citeste(baza + '/cmdline', 8192).split('\0')[1:]
+			comm = sistem.citeste(baza + '/comm', 256).strip()
+			exe = sistem.legatura(baza + '/exe')
+		except (OSError, IOError, ValueError):
+			continue
+		if exe.endswith(_STERS):
+			exe = exe[:-len(_STERS)]
+		nume_conf = nume_configurari_web(comm, exe)
+		dosar = dosar_configurare_web(argumente)
+		if dosar is None:
+			nume_toate.extend(n for n in nume_conf if n not in nume_toate)
+			continue
+		are_dosar = True
+		interfata = _interfata_din_dosar(sistem, dosar, nume_conf)
+		if interfata:
+			return interfata
+	if are_dosar or not nume_toate:
+		return None
+	porturi = None
+	dosare = _dosare_din_script(sistem, cale_script) if cale_script else []
+	for dosar in dosare_ghicite(nume_toate, dosare):
+		interfata = _interfata_din_dosar(sistem, dosar, nume_toate)
+		if not interfata:
+			continue
+		if porturi is None:
+			if 'ascultare' not in citite:
+				citite['ascultare'] = porturi_in_ascultare(sistem)
+			porturi = porturi_procese(sistem, pids, citite['ascultare'])
+		if interfata['port'] in porturi:
+			return interfata
+	return None
+
+
 def interfete_web(sistem=None, stari=None):
 	"""Modulele active care au interfata web: [{fel, sufix, versiune, eticheta, protocol, port}], portul/protocolul din
 	configurarea lor, fara conexiuni. Se cheama pe un fir separat. O singura sursa pentru ecran, pagina Acces
 	condiționat, prima pagina web si bara de sus (GET /api/acces-conditionat-interfete); adresa o face fiecare din
-	adresa receptorului: <protocol>://<gazda>:<port>/."""
+	adresa receptorului: <protocol>://<gazda>:<port>/. Intai modulele din lista (felurile in ordinea lor), apoi cele
+	pornite de alt program (pornite_de_alt_program): acestea au fel '', sufixul si eticheta = numele procesului si
+	pid = primul lor PID (al randului lor din ecran si din pagina Acces condiționat)."""
 	sistem = sistem or SistemAcces()
 	stari = feluri_de_aratat(sistem) if stari is None else stari
 	rez = []
+	citite = {}
 	for st in stari:
 		for e in st.emulatoare:
-			for pid in e.pids[:PROGRAME_MAXIM]:
-				baza = '/proc/%d' % pid
-				try:
-					argumente = sistem.citeste(baza + '/cmdline', 8192).split('\0')[1:]
-					dosar = dosar_configurare_web(argumente)
-					if dosar is None:
-						continue
-					comm = sistem.citeste(baza + '/comm', 256).strip()
-					exe = sistem.legatura(baza + '/exe')
-				except (OSError, IOError, ValueError):
-					continue
-				if exe.endswith(_STERS):
-					exe = exe[:-len(_STERS)]
-				for nume in nume_configurari_web(comm, exe):
-					cale = posixpath.join(dosar, nume)
-					if not os.path.isfile(sistem.cale(cale)):
-						continue
-					interfata = _port_web_configurare(sistem, cale)
-					if interfata:
-						rez.append(dict(interfata, fel=st.fel, sufix=e.sufix, versiune=e.versiune,
-							eticheta=eticheta_modul(e)))
-					break
-				if rez and rez[-1]['fel'] == st.fel and rez[-1]['sufix'] == e.sufix:
-					break
+			if not e.pids:
+				continue
+			interfata = interfata_modul(sistem, e.pids, e.cale, citite)
+			if interfata:
+				rez.append(dict(interfata, fel=st.fel, sufix=e.sufix, versiune=e.versiune, eticheta=eticheta_modul(e)))
+	for a in pornite_de_alt_program(sistem, stari, descriptori=False):
+		interfata = interfata_modul(sistem, a['pids'], None, citite)
+		if interfata:
+			rez.append(dict(interfata, fel='', sufix=a['nume'], versiune='', eticheta=a['nume'], pid=a['pids'][0]))
 	return rez
 
 
@@ -762,11 +885,18 @@ def argv_script(sistem, fel, sufix, actiune):
 
 _in_lucru = []      # scripturile care nu au terminat: containerul tinut in viata pana la appClosed
 _curenta = [None]   # o singura operatie deodata (ecranul si pagina web)
+_generatie = [0]    # 0.7.7: creste la sfarsitul fiecarei operatii (generatie())
 
 
 def in_curs():
 	o = _curenta[0]
 	return o if o is not None and not o.gata else None
+
+
+def generatie():
+	"""0.7.7: un numar care creste la sfarsitul fiecarei operatii (Operatie._termina). O citire pe fir (CitirePeFir) pornita
+	inainte ca el sa creasca e veche: ecranul o arunca si citeste din nou."""
+	return _generatie[0]
 
 
 class Executor(object):
@@ -835,10 +965,12 @@ class Operatie(object):
 	Dupa fiecare script se verifica in /proc starea asteptata (cel mult VERIFICARI secunde). la_pas(actiune, nume)
 	spune ce incepe; la_final(rezultat) vine o singura data, cu {'ok', 'motiv', 'fel', 'nume', 'cod', 'raspuns',
 	'eroare', 'secunde', 'ramane_ales'}. Motivele: ales, niciunul, pornit, oprit, repornit, ruleaza_deja,
-	nimic_pornit, niciunul_ales, ocupat, necunoscut, nu_e_legatura, legatura, nu_a_pornit, nu_s_a_oprit, termen."""
+	nimic_pornit, niciunul_ales, ocupat, necunoscut, nu_e_legatura, legatura, nu_a_pornit, nu_s_a_oprit, termen.
+	0.7.7: pe receptor (sistemul adevarat, citire_pe_fir) starea de la pornire, scriptul fiecarui pas si starea de dupa
+	fiecare script se citesc pe un fir (_pe_fir); `cititor` (CitirePeFir) se da la probe."""
 
 	def __init__(self, cerere, fel=None, sufix=None, sistem=None, executor=None, temporizator=None,
-			la_pas=None, la_final=None, limita=LIMITA_SCRIPT, verificari=VERIFICARI):
+			la_pas=None, la_final=None, limita=LIMITA_SCRIPT, verificari=VERIFICARI, cititor=None):
 		sistem = sistem or SistemAcces()
 		lista = feluri(sistem)
 		if fel is None and lista:
@@ -865,19 +997,79 @@ class Operatie(object):
 		self._iesire = ''
 		self._final = ('', '')
 		self._ramane_ales = False
+		self.cititor = cititor
+		self._citiri = 0
+
+	# ------------------------------------------------ citirea pe un fir (0.7.7)
+	# Starea unui fel (citeste: legatura, scripturile, /proc pentru fiecare proces) si scriptul unui pas (argv_script) fac pe
+	# receptor cateva sute de apeluri de sistem. Pe firul enigma2, cat calcula alt fir Python (importul ghidului IPTV in minutele
+	# de dupa pornirea interfetei), fiecare apel astepta lacatul Python ~5 ms: Verde, Rosu si alegerea facuta de paza tineau
+	# interfata 3-4,5 s (receptorul de probe, cu ghidul fara pauze). Acum citirile merg pe un fir (CitirePeFir), iar planul,
+	# scriptul si legatura raman pe firul enigma2, in aceeasi ordine: in aceeasi proba apasarea Verde raspunde in ~1 s si
+	# interfata nu mai sta. Pe un sistem de proba (o radacina intr-un dosar) totul merge pe loc, ca pana acum.
+	def _pe_fir(self, lucru, mai_departe, nume=''):
+		"""lucru(sistem) pe un fir, apoi mai_departe(rezultat) pe firul enigma2. Rezultatul venit dupa sfarsitul operatiei (sau al
+		unei citiri mai vechi) se arunca; o citire care cade sau nu se termina in `limita` secunde termina operatia."""
+		sistem = self.sistem
+		if not citire_pe_fir(sistem):
+			mai_departe(lucru(sistem))
+			return
+		self._citiri += 1
+		semn = self._citiri
+
+		def gata(rezultat, eroare):
+			if self.gata or semn != self._citiri:
+				return
+			self._opreste_ceasul()
+			if eroare is not None:
+				_jurnal("%s %s: citirea starii: %r" % (self.cerere, self.fel, eroare))
+				self._termina(False, 'necunoscut', nume=curata_nume(nume))
+				return
+			mai_departe(rezultat)
+		try:
+			if self.cititor is None:
+				self.cititor = CitirePeFir()
+			self._ceas = self.temporizator(self.limita, lambda: self._termen_citire(semn, nume))
+			pornita = self.cititor.porneste(lambda: lucru(SistemCuMemorie(sistem)), gata)
+		except Exception as e:
+			# citirea n-a pornit (firul, ceasul): operatia se termina, ca zavorul operatiilor (in_curs) sa nu ramana luat
+			_jurnal("%s %s: citirea pe fir nu a pornit: %r" % (self.cerere, self.fel, e))
+			self._termina(False, 'necunoscut', nume=curata_nume(nume))
+			return
+		if not pornita:
+			# nu se intampla (o singura citire a operatiei odata); ca inainte, pe loc
+			self._opreste_ceasul()
+			mai_departe(lucru(sistem))
+
+	def _termen_citire(self, semn, nume):
+		if self.gata or semn != self._citiri:
+			return
+		self._ceas = None
+		self._termina(False, 'termen', nume=curata_nume(nume), secunde=int(self.limita))
 
 	# ------------------------------------------------ planul
 	def porneste(self):
-		"""True daca a inceput; altfel rezultatul e deja dat prin la_final"""
+		"""True daca a inceput; altfel rezultatul e deja dat prin la_final. Pe receptor starea se citeste pe un fir: atunci
+		porneste() intoarce True, iar un plan care nu se poate face (ruleaza deja, modul necunoscut) vine tot prin la_final,
+		putin mai tarziu. Operatia e in curs (in_curs) chiar de la porneste()."""
 		if in_curs() is not None:
 			self._termina(False, 'ocupat')
 			return False
-		st = citeste(self.sistem, self.fel)
+		fel = self.fel
+		if citire_pe_fir(self.sistem):
+			_curenta[0] = self
+			self._pe_fir(lambda s: citeste(s, fel), self._dupa_citire, self.sufix or '')
+			return True
+		st = citeste(self.sistem, fel)
 		if not self._planifica(st):
 			return False
 		_curenta[0] = self
 		self._urmatorul()
 		return True
+
+	def _dupa_citire(self, st):
+		if self._planifica(st):
+			self._urmatorul()
 
 	def _planifica(self, st):
 		ales = st.ales_emulator()
@@ -947,8 +1139,18 @@ class Operatie(object):
 			self._termina(True, self._final[0], nume=self._final[1], ramane_ales=self._ramane_ales)
 			return
 		fel_pas, sufix, actiune = self._pasi.pop(0)
+		if fel_pas == 'leaga' and sufix == SUFIX_GOL:
+			self._fa_pasul(fel_pas, sufix, actiune, None)
+			return
+		fel = self.fel
+		cuvant = 'start' if fel_pas == 'leaga' else actiune
+		self._pe_fir(lambda s: argv_script(s, fel, sufix, cuvant),
+			lambda argv: self._fa_pasul(fel_pas, sufix, actiune, argv), sufix)
+
+	def _fa_pasul(self, fel_pas, sufix, actiune, argv):
+		"""Pe firul enigma2: legatura sau scriptul pasului; `argv` = argv_script citit chiar inainte (None: nu e bun de pornit)."""
 		if fel_pas == 'leaga':
-			if sufix != SUFIX_GOL and argv_script(self.sistem, self.fel, sufix, 'start') is None:
+			if sufix != SUFIX_GOL and argv is None:
 				# scriptul nou a disparut intre timp: legatura nu se muta spre un script care nu mai e
 				self._termina(False, 'necunoscut', nume=curata_nume(sufix))
 				return
@@ -960,7 +1162,6 @@ class Operatie(object):
 			self._urmatorul()
 			return
 		self._pas = (sufix, actiune)
-		argv = argv_script(self.sistem, self.fel, sufix, actiune)
 		if argv is None:
 			self._termina(False, 'necunoscut', nume=curata_nume(sufix))
 			return
@@ -984,9 +1185,13 @@ class Operatie(object):
 	def _verifica(self):
 		if self.gata:
 			return
+		fel = self.fel
+		self._pe_fir(lambda s: citeste(s, fel), self._dupa_verificare, self._pas[0])
+
+	def _dupa_verificare(self, st):
 		sufix, actiune = self._pas
 		asteptat = actiune != 'stop'
-		e = citeste(self.sistem, self.fel).emulator(sufix)
+		e = st.emulator(sufix)
 		if e is not None and not e.verificabil:
 			# scriptul nu scrie niciun executabil: nu se poate vedea procesul, ramane codul scriptului
 			ok = self._cod == 0
@@ -1018,11 +1223,15 @@ class Operatie(object):
 			return
 		self.gata = True
 		self._opreste_ceasul()
+		c = self.cititor
+		if c is not None and c.in_curs():
+			c.opreste()      # o citire pe fir inca in curs: rezultatul ei se arunca
 		self.rezultat = {'ok': ok, 'motiv': motiv, 'fel': self.fel, 'nume': '', 'cod': None, 'raspuns': '',
 			'eroare': '', 'secunde': 0, 'ramane_ales': False}
 		self.rezultat.update(extra)
 		if _curenta[0] is self:
 			_curenta[0] = None
+		_generatie[0] += 1   # 0.7.7: o citire pornita inainte (ecranul, pagina web) e veche
 		tine_minte_oprirea(self.rezultat, self.sistem)   # 0.7.5: Rosu pe modulul ales nu e pornit din nou dupa interfata
 		f = self.la_final
 		if f is not None:
@@ -1056,6 +1265,572 @@ def _dupa_operatie(rezultat):
 		pass
 
 
+# ---------------------------------------------------------------- citirea pe un fir (0.7.7)
+# Blocajul de 4-7 s al ecranului modulelor, masurat pe doua receptoare (0.7.6, Python 3.14): o reimprospatare a ecranului
+# (la 5 s) si o cerere a paginii web /acces-conditionat (la 5 s) fac pe firul enigma2 ~1200 de apeluri de sistem (felurile,
+# scripturile citite de doua ori, /proc pentru trei cautari). Singure tin 0,3-0,4 s; cat alt fir Python calculeaza (in primele
+# minute dupa pornirea interfetei, importul ghidului IPTV, HdsIptvEpg, ~3 minute la ~97%), fiecare apel asteapta lacatul Python
+# ~5 ms, deci 4,8-7,4 s. Acum: (1) o citire tine minte ce a citit (SistemCuMemorie), deci aceleasi legaturi, dosare si fisiere
+# se cer o singura data; (2) ecranul si pagina web citesc pe un fir separat (CitirePeFir) si scriu rezultatul pe firul enigma2.
+# Alegerea, pornirea si oprirea (Operatie) raman pe firul enigma2, ca pana acum.
+class SistemCuMemorie(object):
+	"""Un sistem (SistemAcces sau unul de proba) ale carui citiri se tin minte cat traieste obiectul (o singura citire a
+	ecranului sau a paginii web). Numai citire: alegerea si scrierile nu trec pe aici."""
+
+	def __init__(self, sistem):
+		self._sistem = sistem
+		self._tinute = {}
+		self.radacina = getattr(sistem, 'radacina', '/')
+		self.pid_propriu = sistem.pid_propriu
+
+	def _tine(self, cheie, functie, *argumente):
+		try:
+			bun, valoare = self._tinute[cheie]
+		except KeyError:
+			try:
+				bun, valoare = True, functie(*argumente)
+			except (OSError, IOError, ValueError) as e:
+				bun, valoare = False, e
+			self._tinute[cheie] = (bun, valoare)
+		if bun:
+			return valoare
+		raise type(valoare)(*valoare.args)
+
+	def cale(self, p):
+		return self._sistem.cale(p)
+
+	def listeaza(self, p):
+		return list(self._tine(('listeaza', p), self._sistem.listeaza, p))
+
+	def legatura(self, p):
+		return self._tine(('legatura', p), self._sistem.legatura, p)
+
+	def citeste(self, p, *argumente):
+		return self._tine(('citeste', p) + argumente, self._sistem.citeste, p, *argumente)
+
+	def exista(self, p):
+		return self._tine(('exista', p), self._sistem.exista, p)
+
+	def executabil(self, p):
+		return self._tine(('executabil', p), self._sistem.executabil, p)
+
+	def tinta(self, p):
+		return Sistem.tinta(self, p)
+
+	def __getattr__(self, nume):
+		# orice altceva (scrierile, ajutoarele sistemelor de proba) merge direct la sistemul de dedesubt
+		return getattr(self._sistem, nume)
+
+
+def semn_scripturi(sistem):
+	"""Ce se schimba cand apare, dispare sau e inlocuit un script de modul: ora si inode-ul dosarului scripturilor si ale
+	dosarului adaptorului (Components/HdsAdaptorModule.DOSAR). Doua apeluri de sistem: ecranul il intreaba la fiecare
+	reimprospatare si cheama pregateste_scripturi (pe firul enigma2) numai cand s-a schimbat."""
+	dosare = [DOSAR_SCRIPTURI]
+	try:
+		try:
+			from Components import HdsAdaptorModule as A
+		except ImportError:  # probe pe PC
+			import HdsAdaptorModule as A
+		dosare.append(A.DOSAR)
+	except Exception:
+		pass
+	semn = []
+	for d in dosare:
+		try:
+			st = os.stat(sistem.cale(d))
+			semn.append((d, st.st_ino, st.st_mtime_ns))
+		except (OSError, AttributeError):
+			semn.append((d, None))
+	return tuple(semn)
+
+
+class ModuleCitite(object):
+	"""In locul modulului HdsModuleAcces pentru Components/HdsStreamRelay.stare(H=...): starile deja citite pe fir (ecranul,
+	pagina web), ca motivul releului (care modul ruleaza sau e ales) sa nu mai citeasca o data modulele pe firul enigma2.
+	Pe receptorul de probe, cu ecranul deschis, numai citirea aceasta mai tinea firul principal 3-7 s la fiecare reimprospatare."""
+
+	def __init__(self, stari):
+		self.stari = stari
+
+	def SistemAcces(self):
+		return None
+
+	def feluri_de_aratat(self, sistem=None, pregateste=True):
+		return self.stari
+
+
+_pregatite = {'semn': None}
+
+
+def pregateste_la_schimbare(sistem):
+	"""pregateste_scripturi pe firul enigma2, numai cand s-a schimbat ceva in dosarele scripturilor (semn_scripturi, doua apeluri
+	de sistem): ecranul modulelor, pagina web si Informatii despre decriptare citesc apoi pe un fir, fara pregatire (o
+	pregatire pe fir n-ar putea porni reinstalarea scripturilor sterse, HdsPazaScripturi). Nu arunca."""
+	try:
+		semn = semn_scripturi(sistem)
+		if semn != _pregatite['semn']:
+			_pregatite['semn'] = semn
+			pregateste_scripturi(sistem)
+	except Exception as e:
+		_jurnal("pregatirea scripturilor: %r" % (e,))
+
+
+def citire_pe_fir(sistem):
+	"""True cand citirea merge pe un fir: sistemul adevarat al receptorului (radacina /). Un sistem de proba (o radacina
+	intr-un dosar) se citeste pe loc, ca probele sa vada rezultatul imediat."""
+	return getattr(sistem, 'radacina', '/') in ('/', '')
+
+
+class CitirePeFir(object):
+	"""porneste(lucru, la_sfarsit): lucru() pe un fir separat; la_sfarsit(rezultat, eroare) vine pe firul enigma2, dintr-un
+	eTimer care se uita la PAS_MS. Una singura odata: cat merge, porneste() intoarce False. opreste() (ecranul se inchide):
+	rezultatul care vine se arunca. `fir(functie)` si `fabrica_ceas` se dau la probe."""
+	PAS_MS = 100
+
+	def __init__(self, fir=None, fabrica_ceas=None):
+		self._fir = fir
+		self._fabrica_ceas = fabrica_ceas
+		self._lucru = None
+		self._ceas = None
+
+	def in_curs(self):
+		return self._lucru is not None
+
+	def porneste(self, lucru, la_sfarsit):
+		if self._lucru is not None:
+			return False
+		stare = {'la_sfarsit': la_sfarsit}
+
+		def ruleaza():
+			try:
+				stare['rezultat'] = lucru()
+			except Exception as e:
+				stare['eroare'] = e
+			stare['gata'] = True
+
+		if self._ceas is None:
+			fabrica = self._fabrica_ceas
+			if fabrica is None:
+				from enigma import eTimer as fabrica
+			self._ceas = fabrica()
+			self._ceas.callback.append(self._verifica)
+		self._lucru = stare
+		try:
+			if self._fir is not None:
+				self._fir(ruleaza)
+			else:
+				import threading
+				t = threading.Thread(target=ruleaza, name='HdsModuleCitire')
+				t.daemon = True
+				t.start()
+			self._ceas.start(self.PAS_MS, False)
+		except Exception:
+			self._lucru = None
+			raise
+		return True
+
+	def _verifica(self):
+		stare = self._lucru
+		if stare is None or not stare.get('gata'):
+			return
+		self._ceas.stop()
+		self._lucru = None
+		stare['la_sfarsit'](stare.get('rezultat'), stare.get('eroare'))
+
+	def opreste(self):
+		self._lucru = None
+		if self._ceas is not None:
+			self._ceas.stop()
+			del self._ceas.callback[:]
+			self._ceas = None
+
+# ---------------------------------------------------------------- paza modulelor (0.7.7)
+# Doua lucruri cerute dupa ce s-au comparat managerii de module ai altora, pornite din fabrica, fara setare si fara texte noi:
+#   (1) ALEGEREA SINGURA: un modul instalat din Extensii, din pagina web, cu opkg sau din alt manager devine singur cel ales si
+#       pornit (aceeasi operatie ca Verde), cand felul lui nu are niciun modul ales si omul nu a ales el Niciunul (SEMN_NICIUNUL,
+#       pus de tine_minte_oprirea, pastrat peste reporniri). Numai un script NOU: fata de lista celor vazute (FISIER_STIUTE; la
+#       prima rulare se face lista fara sa se aleaga nimic, ca un receptor adus la zi cu Niciunul ales inainte de semn sa nu
+#       porneasca singur un modul), vazut la doua verificari la rand, cu opkg liber, fara alta comanda a modulelor in curs, fara
+#       semnul Rosu si fara alt modul care ruleaza. Doua noi deodata: primul dupa nume. Un script evaluat intra in lista, ales sau
+#       nu, ca sa nu porneasca mult mai tarziu, pe neasteptate.
+#   (2) PAZA LA CADERE: modulul ales, vazut ruland, care a disparut la doua verificari la rand fara oprirea noastra, e pornit din
+#       nou (Operatie porneste), cu un rand in jurnal, cel mult INCERCARI_PE_ORA incercari in ultimele 60 de minute (tinute in
+#       /tmp, peste repornirea interfetei). Deosebirea de oprirea voita: fisierul pid al modulului (din linia lui de comanda,
+#       altfel un *.pid care contine pid-ul lui). Familia OSCam (si NCam) il sterge la iesirea curata (oprit din pagina lui web, cu
+#       scriptul, cu SIGTERM din alt manager) si il lasa la cadere (SIGKILL de la lipsa de memorie, SIGABRT, SIGSEGV fara paznicul
+#       lui intern). Fisierul pid ramas = cadere; sters = oprit voit, nu se reporneste; fara fisier pid nu se poate deosebi, deci
+#       nu se reporneste. Nici cand: semnul Rosu, o comanda in curs, opkg lucreaza, acelasi program sau alt modul ruleaza pornit de
+#       alt program (alt manager l-a inlocuit).
+# Verificarea usoara, pe firul enigma2, la PAS_PAZA_S: doua stat-uri (semn_scripturi) si cate o legatura /proc/<pid>/exe a
+# modulelor vazute ruland. Citirea intreaga (aceeasi ca a ecranului, plus fisierele pid) merge pe un fir (CitirePeFir) numai cand
+# s-a schimbat ceva: un script, un proces disparut, o comanda terminata, sau o data la PAS_COMPLET_S.
+SEMN_NICIUNUL = '/etc/enigma2/.hds-modul-niciunul.'      # + fel
+FISIER_STIUTE = '/etc/enigma2/.hds-module-stiute.json'
+FISIER_INCERCARI = '/tmp/.hds-paza-module.json'
+PAS_PAZA_S = 15.0
+PAS_COMPLET_S = 120.0
+INCERCARI_PE_ORA = 3
+DOSARE_PID = ('/var/run', '/run', '/tmp')
+DOSARE_PID_MAXIM = 64
+STIUTE_MAXIM = 64 * 1024
+
+
+def _ceas_monoton():
+	return time.monotonic()
+
+
+def _scrie_json(sistem, cale, date):
+	c = sistem.cale(cale)
+	nou = c + '.nou'
+	with open(nou, 'w') as fh:
+		json.dump(date, fh, sort_keys=True)
+	os.replace(nou, c)
+
+
+def _citeste_json(sistem, cale):
+	try:
+		date = json.loads(sistem.citeste(cale, STIUTE_MAXIM))
+		return date if isinstance(date, dict) else None
+	except (OSError, IOError, ValueError):
+		return None
+
+
+def _pid_in_fisier(sistem, cale, pids):
+	try:
+		return int(sistem.citeste(cale, 64).split()[0]) in pids
+	except (OSError, IOError, ValueError, IndexError):
+		return False
+
+
+def fisier_pid(sistem, pids):
+	"""Fisierul pid al modulului care ruleaza cu `pids`: cel din linia de comanda (--pidfile FIS, --pidfile=FIS, -B FIS), daca
+	contine unul din pid-uri; altfel un *.pid din DOSARE_PID sau din /tmp/.<x>/ care contine unul din ele. None cand nu are."""
+	pids = set(pids or [])
+	for pid in sorted(pids):
+		try:
+			argv = sistem.citeste('/proc/%d/cmdline' % pid, 4096).split('\0')
+		except (OSError, IOError):
+			continue
+		for i, a in enumerate(argv):
+			cale = None
+			if a in ('--pidfile', '-B') and i + 1 < len(argv):
+				cale = argv[i + 1]
+			elif a.startswith('--pidfile='):
+				cale = a.split('=', 1)[1]
+			if cale and cale.startswith('/') and _pid_in_fisier(sistem, posixpath.normpath(cale), pids):
+				return posixpath.normpath(cale)
+	dosare = list(DOSARE_PID)
+	try:
+		dosare += ['/tmp/' + n for n in sorted(sistem.listeaza('/tmp')) if n.startswith('.') and _SUFIX_BUN.match(n[1:])]
+	except OSError:
+		pass
+	for d in dosare[:DOSARE_PID_MAXIM]:
+		try:
+			nume = sorted(sistem.listeaza(d))
+		except OSError:
+			continue
+		for n in nume[:PROGRAME_MAXIM]:
+			if n.endswith('.pid') and _pid_in_fisier(sistem, d + '/' + n, pids):
+				return d + '/' + n
+	return None
+
+
+def citeste_paza(sistem=None, fisiere_pid=None):
+	"""Citirea intreaga a pazei (pe un fir): pentru fiecare fel, scripturile, cel ales, daca ruleaza (pid-uri, executabil, fisierul
+	pid), daca ruleaza ceva al lui pornit de alt program; existenta fisierelor pid tinute minte (`fisiere_pid`), opkg, semnele.
+	Numai citire."""
+	sistem = SistemCuMemorie(sistem or SistemAcces())
+	stari = feluri_de_aratat(sistem, pregateste=False)
+	alte = pornite_de_alt_program(sistem, stari, descriptori=False)
+	rez = {'feluri': {}, 'fisiere_pid': {}, 'opkg': False}
+	for i, st in enumerate(stari):
+		e = st.ales_emulator()
+		f = {'scripturi': sorted(x.script for x in st.emulatoare), 'ales': e.sufix if e is not None else None,
+			'legatura': st.legatura, 'pornite': sorted(x.sufix for x in st.pornite()), 'pids': [], 'exe': '', 'pid_fisier': None,
+			'verificabil': bool(e is not None and e.verificabil), 'niciunul': sistem.exista(SEMN_NICIUNUL + st.fel),
+			'oprit': oprit_de_om(sistem, st.fel)}
+		if e is not None and e.pids:
+			f['pids'] = list(e.pids)
+			f['exe'] = _exe_proces(sistem, e.pids[0])
+			f['pid_fisier'] = fisier_pid(sistem, e.pids)
+		scripturi = scripturile(sistem, st.fel)
+		f['alt_program'] = bool(alt_program_pornit(sistem, st.fel, scripturi)) or (i == 0 and bool(alte))
+		rez['feluri'][st.fel] = f
+	for cale in fisiere_pid or ():
+		rez['fisiere_pid'][cale] = sistem.exista(cale)
+	try:
+		try:
+			from Components import HdsPazaScripturi as P
+		except ImportError:  # probe pe PC
+			import HdsPazaScripturi as P
+		rez['opkg'] = bool(P.opkg_lucreaza(sistem))
+	except Exception:
+		pass
+	return rez
+
+
+def _import_ocupat():
+	"""True cat merge un import de setari (Components/HdsImportSurse.ocupat); False cand nu se poate afla"""
+	try:
+		try:
+			from Components import HdsImportSurse as I
+		except ImportError:  # probe pe PC
+			import HdsImportSurse as I
+		return bool(I.ocupat())
+	except Exception:
+		return False
+
+
+class PazaModule(object):
+	"""Paza (1) si (2) de mai sus. pas() = verificarea usoara (din ceas); acum() = citirea intreaga, de pilda la deschiderea
+	ecranului modulelor. `sistem`, `operatie`, `cititor`, `ceas`, `fabrica_ceas` si `import_ocupat` se dau la probe.
+	Cat merge un import de setari (Components/HdsImportSurse.ocupat: copia pusa pe receptor reinstaleaza pachetele modulelor si
+	alege ea modulul din copie) si la prima citire de dupa el, paza nu face nimic si scripturile de acum intra in lista celor
+	vazute: modulele puse de import nu sunt luate drept instalate de om."""
+
+	def __init__(self, sistem=None, operatie=None, cititor=None, ceas=None, fabrica_ceas=None, import_ocupat=None):
+		self.sistem = sistem or SistemAcces()
+		self.import_ocupat = import_ocupat or _import_ocupat
+		self.dupa_import = False
+		self.Op = operatie or Operatie
+		self.cititor = cititor or CitirePeFir()
+		self.ceas = ceas or _ceas_monoton
+		self.fabrica_ceas = fabrica_ceas
+		self.ceas_pas = None
+		self.vii = {}          # fel -> {'sufix', 'pids', 'exe', 'pid_fisier', 'lipsa'}: modulul ales vazut ruland
+		self.vazute = {}       # fel -> scripturile noi vazute la citirea de dinainte
+		self.semn = None
+		self.generatie = None
+		self.ultima = None
+		self.in_lucru = False   # o operatie pornita de paza, pana la la_final
+
+	# ------------------------------------------------ ceasul
+	def porneste(self):
+		if self.ceas_pas is not None:
+			return
+		fabrica = self.fabrica_ceas
+		if fabrica is None:
+			from enigma import eTimer as fabrica
+		self.ceas_pas = fabrica()
+		self.ceas_pas.callback.append(self.pas)
+		self.ceas_pas.start(int(PAS_PAZA_S * 1000), False)
+
+	def pas(self):
+		"""Verificarea usoara; citirea intreaga numai cand s-a schimbat ceva. Nu arunca."""
+		try:
+			if self.trebuie_citit():
+				self.acum()
+		except Exception as e:
+			_jurnal("paza: %r" % (e,))
+
+	def trebuie_citit(self):
+		if self.cititor.in_curs() or self.in_lucru:
+			return False
+		if self.import_ocupat() or self.dupa_import:
+			return True
+		if self.ultima is None or self.ceas() - self.ultima >= PAS_COMPLET_S or generatie() != self.generatie:
+			return True
+		if semn_scripturi(self.sistem) != self.semn or any(self.vazute.values()):
+			return True
+		for v in self.vii.values():
+			if not any(self._viu(pid, v['exe']) for pid in v['pids']):
+				return True
+		return False
+
+	def _viu(self, pid, exe):
+		e = _exe_proces(self.sistem, pid)
+		return bool(e) and e == exe
+
+	def acum(self):
+		"""Citirea intreaga pe un fir (pe loc pe un sistem de proba), apoi hotararea pe firul enigma2. Nu arunca."""
+		if self.cititor.in_curs() or self.in_lucru:
+			return
+		g = generatie()
+		semn = semn_scripturi(self.sistem)
+		pid_uri = [v['pid_fisier'] for v in self.vii.values() if v.get('pid_fisier')]
+		sistem = self.sistem
+
+		def lucru():
+			return citeste_paza(sistem, pid_uri)
+
+		def gata(rezultat, eroare):
+			if eroare is not None:
+				_jurnal("paza: citirea %r" % (eroare,))
+			elif rezultat is not None and g == generatie():
+				self.semn, self.generatie, self.ultima = semn, g, self.ceas()
+				self.hotaraste(rezultat)
+		try:
+			if citire_pe_fir(sistem):
+				self.cititor.porneste(lucru, gata)
+			else:
+				gata(lucru(), None)
+		except Exception as e:
+			_jurnal("paza: %r" % (e,))
+
+	# ------------------------------------------------ hotararea
+	def hotaraste(self, c):
+		"""Pe firul enigma2, din citirea intreaga `c` (citeste_paza): cel mult o operatie pornita. Cu o comanda a modulelor in
+		curs, nimic (nici starea nu se schimba): citirea de dupa ea hotaraste."""
+		if in_curs() is not None or self.in_lucru:
+			return
+		if self.import_ocupat() or self.dupa_import:
+			self.dupa_import = self.import_ocupat()
+			self.vii = {}
+			self.vazute = {}
+			self._scrie_stiute(dict((fel, f['scripturi']) for fel, f in c['feluri'].items()))
+			return
+		actiuni = []
+		self._caderi(c, actiuni)
+		self._alegeri(c, actiuni)
+		if actiuni and in_curs() is None:
+			cerere, fel, sufix = actiuni[0]
+			self._operatie(cerere, fel, sufix)
+
+	def _caderi(self, c, actiuni):
+		for fel, f in sorted(c['feluri'].items()):
+			v = self.vii.get(fel)
+			if f['ales'] is not None and f['pids']:
+				self.vii[fel] = {'sufix': f['ales'], 'pids': f['pids'], 'exe': f['exe'], 'pid_fisier': f['pid_fisier'], 'lipsa': 0}
+				continue
+			if v is None:
+				continue
+			if f['ales'] != v['sufix']:
+				del self.vii[fel]          # omul (sau alt program) a ales altceva
+				continue
+			v['lipsa'] += 1
+			if v['lipsa'] < 2:
+				continue
+			nume = '%s.%s' % (fel, v['sufix'])
+			del self.vii[fel]
+			if f['oprit']:
+				continue                   # Rosu: oprit de om
+			motiv = None
+			if c['opkg']:
+				motiv = 'opkg lucreaza'
+			elif f['alt_program']:
+				motiv = 'ruleaza un modul pornit de alt program'
+			elif f['pornite']:
+				motiv = 'ruleaza alt modul al felului'
+			elif not v['pid_fisier']:
+				motiv = 'fara fisier pid nu se poate deosebi caderea de oprirea voita'
+			elif not c['fisiere_pid'].get(v['pid_fisier']):
+				motiv = 'oprit curat (fisierul pid %s a fost sters)' % v['pid_fisier']
+			if motiv:
+				_jurnal("paza: %s nu mai ruleaza; nu il pornesc: %s" % (nume, motiv))
+				continue
+			if not self._incercare_permisa(nume):
+				_jurnal("paza: %s a cazut, dar a fost pornit de %d ori in ultima ora: astept" % (nume, INCERCARI_PE_ORA))
+				continue
+			_jurnal("paza: %s a cazut (fisierul pid %s a ramas): il pornesc din nou" % (nume, v['pid_fisier']))
+			actiuni.append(('porneste', fel, v['sufix']))
+
+	def _alegeri(self, c, actiuni):
+		stiute = _citeste_json(self.sistem, FISIER_STIUTE)
+		feluri = c['feluri']
+		if stiute is None or not isinstance(stiute.get('feluri'), dict):
+			self._scrie_stiute(dict((fel, f['scripturi']) for fel, f in feluri.items()))
+			self.vazute = {}
+			return
+		lista = dict((fel, set(x for x in s if isinstance(x, str))) for fel, s in stiute['feluri'].items() if isinstance(s, list))
+		schimbat = False
+		vazute = {}
+		for fel, f in sorted(feluri.items()):
+			acum = set(f['scripturi'])
+			vechi = lista.get(fel, set())
+			if not c['opkg'] and vechi - acum:
+				lista[fel] = vechi & acum      # scripturile scoase ies din lista (o instalare noua e din nou noua)
+				schimbat = True
+			noi = acum - lista.get(fel, set())
+			if not noi:
+				continue
+			gata = noi & self.vazute.get(fel, set())
+			vazute[fel] = noi - gata
+			if not gata:
+				continue
+			if c['opkg'] or in_curs() is not None or self.in_lucru or actiuni:
+				vazute[fel] = noi             # trecator (sau alta operatie pornita acum): data viitoare
+				continue
+			lista.setdefault(fel, set()).update(gata)
+			schimbat = True
+			motiv = None
+			if f['ales'] is not None:
+				motiv = 'e ales %s.%s' % (fel, f['ales'])
+			elif f['legatura'] == 'fisier':
+				motiv = 'legatura alegerii e un fisier'
+			elif f['niciunul']:
+				motiv = 'omul a ales Niciunul'
+			elif f['oprit']:
+				motiv = 'oprit de om'
+			elif f['pornite'] or f['alt_program']:
+				motiv = 'ruleaza alt modul'
+			nou = sorted(gata)[0]
+			if motiv:
+				_jurnal("paza: modulul nou %s nu e ales singur: %s" % (', '.join(sorted(gata)), motiv))
+				continue
+			_jurnal("paza: modulul nou %s, niciun modul ales: il aleg si il pornesc" % nou)
+			actiuni.append(('alege', fel, nou[len(fel) + 1:]))
+		self.vazute = vazute
+		if schimbat:
+			self._scrie_stiute(dict((fel, sorted(s)) for fel, s in lista.items()))
+
+	def _scrie_stiute(self, feluri):
+		try:
+			_scrie_json(self.sistem, FISIER_STIUTE, {'feluri': feluri})
+		except (OSError, IOError, ValueError) as e:
+			_jurnal("paza: lista modulelor stiute: %r" % (e,))
+
+	def _incercare_permisa(self, nume):
+		"""Cel mult INCERCARI_PE_ORA incercari in ultimele 3600 s (ceas monoton al sistemului, la fel peste repornirea interfetei);
+		incercarea se scrie acum in FISIER_INCERCARI."""
+		acum = self.ceas()
+		date = _citeste_json(self.sistem, FISIER_INCERCARI) or {}
+		toate = date.get('incercari') if isinstance(date.get('incercari'), dict) else {}
+		ale_lui = [t for t in toate.get(nume, []) if isinstance(t, (int, float)) and 0 <= acum - t < 3600]
+		if len(ale_lui) >= INCERCARI_PE_ORA:
+			return False
+		toate[nume] = ale_lui + [acum]
+		try:
+			_scrie_json(self.sistem, FISIER_INCERCARI, {'incercari': toate})
+		except (OSError, IOError, ValueError) as e:
+			_jurnal("paza: incercarile: %r" % (e,))
+		return True
+
+	def _operatie(self, cerere, fel, sufix):
+		self.in_lucru = True
+
+		def gata(rezultat):
+			self.in_lucru = False
+			_jurnal("paza: %s %s.%s: %s" % (cerere, fel, sufix, rezultat.get('motiv')))
+		try:
+			if not self.Op(cerere, fel=fel, sufix=sufix, sistem=self.sistem, la_final=gata).porneste():
+				self.in_lucru = False
+		except Exception as e:
+			self.in_lucru = False
+			_jurnal("paza: %s %s.%s: %r" % (cerere, fel, sufix, e))
+
+
+_paza = [None]
+
+
+def paza():
+	"""Paza modulelor a imaginii (una pe proces), pornita la prima chemare. Nu arunca."""
+	try:
+		if _paza[0] is None:
+			_paza[0] = PazaModule()
+		_paza[0].porneste()
+	except Exception as e:
+		_jurnal("paza: %r" % (e,))
+	return _paza[0]
+
+
+def paza_acum():
+	"""Citirea intreaga a pazei chiar acum (deschiderea ecranului modulelor): un modul instalat chiar inainte e vazut indata."""
+	p = paza()
+	if p is not None:
+		p.acum()
+
+
 # ---------------------------------------------------------------- dupa repornirea interfetei (0.7.5)
 # darog69, forum 789 #2047 (Vu+ Duo 4K, 12.11.2026): modulul de acces ales si pornit din ecranul modulelor se oprea la fiecare repornire a
 # interfetei. Nu il oprea imaginea: un manager de module din Extensii, ramas instalat cu acelasi modul ales, face la oprirea
@@ -1075,6 +1850,7 @@ MARCAJ_OPRIT = '/tmp/.hds-modul-oprit.'   # + fel
 INTARZIERE_INTERFATA = 5.0                # secunde: modulul oprit de la vechea interfata a avut timp sa iasa de tot
 _SUFIX_FEL = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$')
 _dupa_interfata = []                      # ceasurile in asteptare (tinute in viata)
+_citiri_dupa_interfata = []               # 0.7.7: citirile pe fir in curs (tinute in viata pana la apelul inapoi)
 
 
 def _jurnal(text):
@@ -1103,12 +1879,21 @@ def tine_minte_oprirea(rezultat, sistem=None):
 			oprit = False
 		else:
 			return
-		cale = (sistem or SistemAcces()).cale(MARCAJ_OPRIT + fel)
+		sistem = sistem or SistemAcces()
+		cale = sistem.cale(MARCAJ_OPRIT + fel)
 		if oprit:
 			with open(cale, 'w'):
 				pass
 		elif os.path.lexists(cale):
 			os.remove(cale)
+		# 0.7.7: Niciunul ales de om (ecranul, pagina web) e tinut minte peste reporniri: paza nu alege singura un modul nou;
+		# un modul ales de om sterge semnul
+		niciunul = sistem.cale(SEMN_NICIUNUL + fel)
+		if motiv == 'niciunul':
+			with open(niciunul, 'w'):
+				pass
+		elif motiv == 'ales' and os.path.lexists(niciunul):
+			os.remove(niciunul)
 	except (OSError, IOError, AttributeError, ValueError):
 		pass
 
@@ -1164,9 +1949,12 @@ def alt_program_pornit(sistem, fel, scripturi=None):
 	return rez
 
 
-def de_pornit_dupa_interfata(sistem=None):
-	"""[(fel, sufix)]: modulul ales al fiecarui fel care nu ruleaza acum si trebuie pornit din nou (vezi mai sus)"""
+def de_pornit_dupa_interfata(sistem=None, pregateste=True):
+	"""[(fel, sufix)]: modulul ales al fiecarui fel care nu ruleaza acum si trebuie pornit din nou (vezi mai sus). `pregateste`=False:
+	fara pregateste_scripturi (0.7.7: citirea de pe un fir din dupa_pornirea_interfetei; scripturile le pregateste firul enigma2)."""
 	sistem = sistem or SistemAcces()
+	if pregateste:
+		pregateste_scripturi(sistem)
 	rez = []
 	for fel in feluri(sistem):
 		st = citeste(sistem, fel)
@@ -1183,11 +1971,12 @@ def de_pornit_dupa_interfata(sistem=None):
 	return rez
 
 
-def dupa_pornirea_interfetei(sistem=None, operatie=None, temporizator=None, intarziere=INTARZIERE_INTERFATA):
+def dupa_pornirea_interfetei(sistem=None, operatie=None, temporizator=None, intarziere=INTARZIERE_INTERFATA, cititor=None):
 	"""Din HdsModuleLipsa.porneste (dupa crearea sesiunii, la fiecare pornire a interfetei): peste `intarziere` secunde,
 	modulele alese care nu ruleaza pornesc din nou, unul dupa altul. Daca alta comanda a modulelor ruleaza chiar atunci
 	(„ocupat”, de pilda biblioteca lipsa adusa din feed), inca o incercare peste 10 s. `operatie` si `temporizator` sunt
-	pentru probe. Nu arunca."""
+	pentru probe, ca si `cititor` (clasa CitirePeFir). Pe receptor (citire_pe_fir) starea modulelor se citeste pe un fir (0.7.7).
+	Nu arunca."""
 	Op = operatie or Operatie
 	ceas = temporizator or Temporizator
 
@@ -1203,11 +1992,41 @@ def dupa_pornirea_interfetei(sistem=None, operatie=None, temporizator=None, inta
 
 	def verifica(incercari):
 		try:
-			ramase = de_pornit_dupa_interfata(sistem)
+			s = sistem or SistemAcces()
+			pe_fir = citire_pe_fir(s)
+			if not pe_fir:
+				ramase = de_pornit_dupa_interfata(sistem)
 		except Exception as e:
 			_jurnal("dupa pornirea interfetei: %r" % (e,))
 			return
+		if not pe_fir:
+			porneste_pe_rand(ramase, incercari)
+			return
+		# 0.7.7: pe receptor scripturile se pregatesc pe firul enigma2 (numai cand s-a schimbat ceva), iar citirea felurilor si a lui
+		# /proc (fiecare fel, plus alt_program_pornit) merge pe un fir; pornirile raman pe firul enigma2, in apelul inapoi. Pe
+		# receptorul de probe citirea tinea firul enigma2 0,47 s la 5 s dupa pornirea interfetei (cat lucreaza firele pornirii, fiecare
+		# apel de sistem asteapta lacatul Python). Cititorul sta in _citiri_dupa_interfata pana la apelul inapoi (ceasul lui nu are alt
+		# stapan), unul nou la fiecare verificare.
+		pregateste_la_schimbare(s)
+		c = None
+		try:
+			c = (cititor or CitirePeFir)()
+			_citiri_dupa_interfata.append(c)
 
+			def gata(rezultat, eroare):
+				if c in _citiri_dupa_interfata:
+					_citiri_dupa_interfata.remove(c)
+				if eroare is not None:
+					_jurnal("dupa pornirea interfetei: %r" % (eroare,))
+					return
+				porneste_pe_rand(rezultat or [], incercari)
+			c.porneste(lambda: de_pornit_dupa_interfata(SistemCuMemorie(s), pregateste=False), gata)
+		except Exception as e:
+			if c in _citiri_dupa_interfata:
+				_citiri_dupa_interfata.remove(c)
+			_jurnal("dupa pornirea interfetei: %r" % (e,))
+
+	def porneste_pe_rand(ramase, incercari):
 		curent = ['']
 
 		def urmatorul(rezultat=None):
@@ -1232,6 +2051,8 @@ def dupa_pornirea_interfetei(sistem=None, operatie=None, temporizator=None, inta
 		pune_ceas(intarziere, lambda: verifica(2))
 	except Exception as e:
 		_jurnal("dupa pornirea interfetei: %r" % (e,))
+	if sistem is None and operatie is None:
+		paza()   # 0.7.7: paza modulelor (alegerea singura, paza la cadere), o singura data pe proces
 
 
 # ---------------------------------------------------------------- ce ruleaza in afara listei (MDA, 14.11.2026)
@@ -1268,11 +2089,12 @@ def _pare_modul(p, decriptare):
 		not any(_FRONTEND.match(d) for d in p.dispozitive)
 
 
-def pornite_de_alt_program(sistem=None, stari=None):
+def pornite_de_alt_program(sistem=None, stari=None, descriptori=True):
 	"""[{'nume', 'cale', 'pids'}]: modulele de acces care ruleaza, dar nu din scripturile din lista (pornite de alt manager
 	de module sau de mana, de pilda cu programul pe stick). Procesul propriu, pid 1 si procesele scripturilor din `stari`
 	nu intra; procesele cu acelasi executabil (paznicul si copilul) sunt un singur rand. Rapid: comm si exe la toate
-	procesele; descriptorii se citesc numai in cazul rar de mai sus. Nu arunca."""
+	procesele; descriptorii se citesc numai in cazul rar de mai sus, si numai cu `descriptori` (interfete_web, cerut des
+	de prima pagina web, ramane la numele cunoscute). Nu arunca."""
 	try:
 		sistem = sistem or SistemAcces()
 		if stari is None:
@@ -1297,7 +2119,7 @@ def pornite_de_alt_program(sistem=None, stari=None):
 		if exe:
 			gasite.setdefault(exe, {'nume': curata_nume(comm), 'cale': curata_nume(exe, DESCRIERE_MAXIM), 'pids': []})
 			gasite[exe]['pids'].append(pid)
-	if not gasite and not ale_noastre:
+	if descriptori and not gasite and not ale_noastre:
 		gasite = _dupa_descriptori(sistem, pids)
 	return sorted(gasite.values(), key=lambda a: (a['pids'][0], a['cale']))[:ALTE_MAXIM]
 

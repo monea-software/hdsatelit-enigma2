@@ -1575,6 +1575,8 @@ def satelitiReceptorului(satlist, limba=None):
 # cu implicitul (ConfigSelection.setValue), iar la prima salvare disparea si din settings. kegnkiwi (GigaBlue Quad 4K Pro,
 # SatWorld 3925 #5697): tunerul B fix pe 28,2E a ajuns sa arate numai 19,2E si 13,0E. Acum pozitia intra in satList cu un
 # nume care spune ca lipseste din lista satelitilor: valoarea omului ramane si nucleul primeste satelitul.
+# 0.7.7 (SAT, 16.11.2026, forum 1588 lme): pozitia nu se mai pastreaza (satelitul sters de om revenea in alegeri), ci
+# portul ei devine "nimic conectat" / LNB nefolosit, cu un mesaj pe ecran (hdsSatelitiSalvatiLipsa); implicitul nu se pune.
 def _hdsPozitie(valoare):
 	try:
 		pozitie = int(str(valoare).strip())
@@ -1589,48 +1591,89 @@ def _hdsNumeSatelit(pozitie):
 	return "%d.%dE" % (pozitie // 10, pozitie % 10)
 
 
-def hdsPozitiiSalvate(salvate):
-	"""Pozitiile din valorile salvate ale unui tuner (stored_values din config.Nims[N]): DiSEqC A-D din modul simplu si
-	satelitii cu LNB ales din modul avansat. Valorile rele si "nimic conectat" (3601) nu conteaza."""
-	rez = set()
-	if not isinstance(salvate, dict):
-		return rez
-	for cheie in ("diseqcA", "diseqcB", "diseqcC", "diseqcD"):
-		pozitie = _hdsPozitie(salvate.get(cheie))
-		if pozitie is not None:
-			rez.add(pozitie)
-	avansat = salvate.get("advanced")
-	sateliti = avansat.get("sat") if isinstance(avansat, dict) else None
-	if isinstance(sateliti, dict):
-		for cheie, valori in sateliti.items():
-			pozitie = _hdsPozitie(cheie)
-			if pozitie is None or not isinstance(valori, dict):
-				continue
-			if str(valori.get("lnb", "0")).strip() not in ("", "0"):
-				rez.add(pozitie)
-	return rez
+def _hdsReferinte(salvate, mod_implicit="nothing"):
+	"""[(cheie, pozitie)] folosite cu adevarat de tuner (Components/HdsSatelitiImagine.referinte_tuner: numai cheile
+	active ale modului lui)."""
+	try:
+		from Components.HdsSatelitiImagine import referinte_tuner
+	except ImportError:  # pe PC, in probe
+		from HdsSatelitiImagine import referinte_tuner
+	return referinte_tuner(salvate, mod_implicit)
+
+
+def hdsPozitiiSalvate(salvate, mod_implicit="simple"):
+	"""Pozitiile din valorile salvate ale unui tuner (stored_values din config.Nims[N]): porturile DiSEqC ale felului ales
+	in modul simplu si satelitii cu LNB ales in modul avansat (0.7.7, SAT: numai cheile active; diseqcA/diseqcB scrise
+	fortat la prima pornire raman in settings si dupa trecerea pe modul avansat, iar la lme aduceau inapoi 28,2E si
+	19,2E). Valorile rele si "nimic conectat" (3601) nu conteaza."""
+	return set(p for _cheie, p in _hdsReferinte(salvate, mod_implicit))
 
 
 def hdsSatelitiSalvatiLipsa(nimmgr):
-	"""Pune in nimmgr.satList pozitiile salvate la tunerele de satelit care lipsesc din satellites.xml. Inaintea
-	alegerilor din InitNimManager. Intoarce pozitiile adaugate."""
+	"""0.7.7 (SAT, 16.11.2026; inlocuieste pastrarea TNB din 0.7.5): o pozitie folosita de un tuner de satelit (portul
+	DiSEqC al felului ales, LNB-ul din modul avansat) care nu mai e in satellites.xml se scoate de la tuner, inaintea
+	alegerilor din InitNimManager: portul devine "nimic conectat" (3601), LNB-ul satelitului nefolosit; restul tunerului
+	ramane. Satelitul nu mai intra in satList (un satelit sters de om, din editor, de mana sau printr-o lista instalata,
+	nu revine, ca in celelalte imagini), iar implicitul nu se mai pune tacut in locul lui (kegnkiwi, TNB). Cu satList
+	gol (satellites.xml lipsa sau stricat) nu se atinge nimic. Ce s-a scos se spune pe ecran dupa pornire
+	(_hdsSpuneScoase). Intoarce [(slot, cheie, pozitie)] scoase."""
+	nimmgr.hdsPozitiiPastrate = []
 	try:
 		nims = config.Nims
 	except Exception:
 		return []
+	if not nimmgr.satList:
+		return []
 	cunoscute = set(x[0] for x in nimmgr.satList)
-	lipsa = set()
+	primul = None
+	for slot in nimmgr.nim_slots:
+		if slot.isCompatible("DVB-S"):
+			primul = slot.slot
+			break
+	scoase = []
 	for slot in nimmgr.nim_slots:
 		try:
 			if not slot.isCompatible("DVB-S"):
 				continue
-			lipsa |= hdsPozitiiSalvate(nims[slot.slot].content.stored_values) - cunoscute
+			salvate = nims[slot.slot].content.stored_values
+			for cheie, pozitie in _hdsReferinte(salvate, "simple" if slot.slot == primul else "nothing"):
+				if pozitie in cunoscute:
+					continue
+				if cheie.startswith("diseqc"):
+					salvate[cheie] = "3601"
+				else:
+					salvate["advanced"]["sat"][cheie.split(".", 2)[2]].pop("lnb", None)
+				scoase.append((slot.slot, cheie, pozitie))
+				print("[NimManager] tunerul %d: %s = %d nu mai e in satellites.xml: scos (nimic conectat / LNB nefolosit)" %
+					(slot.slot, cheie, pozitie))
 		except Exception as e:
 			print("[NimManager] satelitii salvati ai tunerului %s: %s" % (getattr(slot, "slot", "?"), e))
-	pastrate = set(getattr(nimmgr, "hdsPozitiiPastrate", None) or ())
-	nimmgr.hdsPozitiiPastrate = sorted(pastrate | lipsa)
-	_hdsPunePozitii(nimmgr, lipsa)
-	return sorted(lipsa)
+	if scoase:
+		_hdsSpuneScoase(nimmgr, scoase)
+	return scoase
+
+
+def _hdsSpuneScoase(nimmgr, scoase):
+	"""Mesajul scurt pe ecran, dupa pornire (coada Notifications, din bucla enigma2: la crearea NimManager ecranele nu
+	sunt gata)."""
+	nimmgr.hdsScoaseLaPornire = list(scoase)
+
+	def spune():
+		try:
+			from Components.HdsSatelitiImagine import text_scoase
+			from Tools import Notifications
+			from Screens.MessageBox import MessageBox
+			text = _("Sateliți care nu mai sunt în lista sateliților, scoși de la tunere: %s.") % text_scoase(scoase)
+			Notifications.AddPopup(text, MessageBox.TYPE_INFO, 15, "HdsSatelitiScosi")
+		except Exception as e:
+			print("[NimManager] mesajul satelitilor scosi: %s" % e)
+	try:
+		from enigma import eTimer
+		nimmgr.hdsCeasScoase = eTimer()
+		nimmgr.hdsCeasScoase.callback.append(spune)
+		nimmgr.hdsCeasScoase.start(8000, True)
+	except Exception as e:
+		print("[NimManager] mesajul satelitilor scosi: %s" % e)
 
 
 def _hdsPunePozitii(nimmgr, pozitii):
@@ -1739,7 +1782,7 @@ def InitNimManager(nimmgr):
 
 	positioner_mode_choices = [("usals", _("USALS")), ("manual", _("manual"))]
 
-	# HDSatelit: un satelit salvat la un tuner ramane si cand lipseste din satellites.xml (hdsSatelitiSalvatiLipsa)
+	# HDSatelit: un satelit folosit de un tuner si lipsa din satellites.xml se scoate de la tuner (hdsSatelitiSalvatiLipsa, 0.7.7)
 	hdsSatelitiSalvatiLipsa(nimmgr)
 	diseqc_satlist_choices = [(3601, _('nothing connected'), 1)] + nimmgr.satList
 	

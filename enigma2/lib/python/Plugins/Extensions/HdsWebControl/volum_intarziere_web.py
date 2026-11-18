@@ -12,12 +12,16 @@
 # canalul si pista de acum cu intarzierea ei, cate canale au volumul tinut minte, cu „Uită volumele ținute minte”.
 # O SINGURA LOGICA: totul trece prin Components/HdsSetariSunet.py; setarile sunt config.hds_setari_sunet.*, cu
 # notificatorii lor (intarzierea si AVC-ul se scriu in placa de acolo).
+# 0.7.7 (VOL, forum 795 #2702/#2704): „Volum egal între canale” are doua randuri in RANDURI, unul pe driver (HiSilicon:
+# Oprit/Ușor/Puternic, HdsSunetAvc; Broadcom: Oprit si iesirile Auto Volume Level, HdsSunetAvl), cu aceeasi cheie „egal”;
+# se arata si se schimba numai cel al driverului de pe receptor.
 #
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat; ce schimba
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/volum-intarziere                       setarile, placa, canalul si pista de acum
 #   POST /api/volum-intarziere-seteaza?pas=1..10&afisare=1..10&mut=0..10&canal=da|nu&egal=oprit|usor|puternic&hdmi=0..500&optic=0..500
 #                                 &pista=-250..250&uita=volume
+#                                 (egal pe Broadcom: oprit si iesirile driverului, hdmi|spdif|dac)
 #                                                oricare dintre ele; toate verificate inainte de orice schimbare
 #   GET  /volum-intarziere                           pagina
 # Nu se schimba nimic cat e deschis pe televizor ecranul „Volum și întârziere” sau ecranul AUDIO.
@@ -107,6 +111,11 @@ def _vizibil(si, cere):
 	return not cere or bool(si.get(cere))
 
 
+def _altRandVizibil(S, si, cheie):
+	"""Aceeasi cheie are un rand pentru driverul de pe receptor (volumul egal: HiSilicon sau Broadcom)."""
+	return any(k == cheie and _vizibil(si, c) for k, a, e, d, c in S.RANDURI)
+
+
 def _rand(cheie, element, eticheta, descriere):
 	if cheie == "canal":
 		valoare = "da" if element.value else "nu"
@@ -127,7 +136,7 @@ def stare(S=None, cfg=None, sesiune=None, si=None):
 	randuri = []
 	for cheie, atribut, eticheta, descriere, cere in S.RANDURI:
 		el = _element(cfg, atribut)
-		if el is not None and _vizibil(si, cere):
+		if el is not None and _vizibil(si, cere) and cheie not in [r["nume"] for r in randuri]:
 			randuri.append(_rand(cheie, el, eticheta, descriere))
 	acum = S.stare()
 	pista = acum.get("pista") if si.get("HdsSunetIntarziere") else None
@@ -174,8 +183,10 @@ def seteaza(argumente, S=None, cfg=None, sesiune=None, configfile=None, si=None)
 		return _cuMesaj(baza, False, refuz)
 	noi = []
 	for cheie, atribut, eticheta, descriere, cere in S.RANDURI:
-		if cheie not in argumente:
+		if cheie not in argumente or cheie in [x[0] for x in noi]:
 			continue
+		if not _vizibil(si, cere) and _altRandVizibil(S, si, cheie):
+			continue        # randul aceleiasi setari pentru celalalt driver
 		el = _element(cfg, atribut)
 		text = argumente[cheie]
 		valoare = None if el is None or not _vizibil(si, cere) else _valoareNoua(cheie, el, text, S)

@@ -18,6 +18,15 @@ filtre, ~70-90 us pe rand pe PC, de cateva ori mai mult pe receptor), deci:
   randurile obisnuite se numara si se sar, iar in locul lor se scrie „N randuri sarite”; randurile de eroare (si blocul
   Traceback) trec in continuare prin toate filtrele, cu o rezerva proprie (BUGET_REZERVA), ca nici ele sa nu poata
   tine firul ocupat la nesfarsit.
+
+Randurile scrise cate unul pe canal sau pe eveniment (EPG, 0.7.7, asistenta 058499: importul EPGImport scria cate un rand
+pe fiecare canal necunoscut si pe fiecare eveniment respins, iar verificarea canalelor 2 x 10.431 de randuri in 9 s, deci
+2 MB si jurnalul rotit, cu dovezile de dinainte pierdute) se strang intr-un rezumat (RANDURI_REZUMATE): primul rand al
+unei rafale se scrie ca atare, urmatoarele se numara fara filtre si valorile lor se tin minte; la sfarsitul rafalei
+(REZUMAT_LINISTE secunde fara alt rand de acelasi fel, un rand al importului care incepe cu HOTARE_REZUMAT, oprirea) se
+scrie un rand cu numarul, intervalul si TOATE valorile (numele canalelor, referintele; lista lunga continua pe randurile
+urmatoare), trecut prin filtrul parolelor. La felurile cu exemple (mesajele evenimentelor respinse) se tine numarul pe
+fiecare mesaj diferit, primele REZUMAT_EXEMPLE. Ecranul pluginului (inelul lui de 8 KB) nu se schimba.
 """
 
 import atexit
@@ -66,6 +75,39 @@ _STIVA = b"most recent call"
 # Cuvintele de eroare: aceleasi ca in HdsBetaTester._CUVINTE_EROARE (cine alege jurnalele de trimis), plus stiva.
 _EROARE_REZERVA = r"eroare|esec|eșec|error|fail|cazut|căzut|blocat|timeout|traceback|exception"
 TEXT_SARITE = "[HdsJurnalInterfata] %d randuri sarite (prea multe pe secunda, erorile raman)"
+# Rezumatul randurilor scrise cate unul pe canal sau pe eveniment (vezi capul fisierului). Inceputul randului si felul:
+# "nume" = se scriu toate valorile, in ordine (numele canalelor, referintele); "exemple" = numarul pe fiecare mesaj
+# diferit, primele REZUMAT_EXEMPLE, si cate alte mesaje au mai fost. Textele sunt ale EPGImport (OE-Alliance XMLTV-Import,
+# plugin.py, EPGConfig.py, xmltvconverter.py) si ale imaginii (Navigation.py, lib/nav/core.cpp); daca pluginul le
+# schimba, randurile trec ca pana acum, unul cate unul.
+RANDURI_REZUMATE = (
+	(b"[XMLTVConverter] Unknown channel: ", "nume"),
+	(b"Serviceref not in bouquets: ", "nume"),
+	(b"Serviceref is in ignore list:", "nume"),
+	(b"Invalid serviceref string: ", "nume"),
+	(b"record returned non-zero (simulat): ", "nume"),
+	(b"[EPGImport] INFO : skipping ", "nume"),
+	(b"[XMLTVConverter] Skipping event with invalid timing: ", "exemple"),
+	(b"[XMLTVConverter] Skipping bad start/stop time: ", "exemple"),
+	(b"[XMLTVConverter] Invalid duration format: ", "exemple"),
+	(b"[XMLTVConverter] parsing event error: ", "exemple"),
+	(b"[XMLTVConverter] get_time_utc error: ", "exemple"),
+	(b"[XMLTVConverter] get_xml_string error", "exemple"),
+	(b"[XMLTVConverter] get_xml_rating_string error", "exemple"),
+	# verificarea canalelor prin inregistrari simulate: din 0.7.7 C++ nu mai scrie randul la cele reusite; ramane aici
+	# pentru orice alta rafala (o inregistrare adevarata scrie un singur rand, care trece ca atare)
+	(b"record: ", "exemple"),
+)
+# Un rand care incepe asa (sursa urmatoare, sfarsitul citirii unei surse, sfarsitul importului) scrie intai rezumatele
+# adunate, deci rezumatul ramane langa sursa lui, nu dupa ea.
+HOTARE_REZUMAT = (b"[EPGImport]",)
+REZUMAT_LINISTE = 2.0
+REZUMAT_LUNGIME = 4000
+REZUMAT_VALORI = 16 * 1024
+REZUMAT_EXEMPLE = 20
+TEXT_REZUMAT = "[HdsJurnalInterfata] \"%s\" inca %d (%s-%sZ): %s"
+TEXT_REZUMAT_CONTINUARE = "[HdsJurnalInterfata] \"%s\" (continuare): %s"
+TEXT_ALTE_MESAJE = "alte %d mesaje diferite"
 
 
 def _cuvinteEroare():
@@ -84,11 +126,76 @@ def _cuvinteEroare():
 	return tuple(sorted(set(c.lower().encode("utf-8") for c in cuvinte) | {_STIVA}))
 
 
+def _oraUtc(secunde):
+	return time.strftime("%H:%M:%S", time.gmtime(secunde))
+
+
+class _Rezumat(object):
+	"""O rafala de randuri de acelasi fel (un inceput din RANDURI_REZUMATE): numarul, intervalul si valorile, pana la
+	scriere."""
+
+	def __init__(self, inceput, fel, acum, perete):
+		self.inceput = inceput
+		self.fel = fel
+		self.eticheta = inceput.decode("utf-8", "replace").strip()
+		self.ultim = acum
+		self.goleste(perete)
+
+	def goleste(self, perete):
+		self.n = 0
+		self.de_la = self.pana_la = perete
+		self.valori = []
+		self.mesaje = {}
+		self.alte = 0
+		self.octeti = 0
+
+	def adauga(self, valoare, acum, perete):
+		if not self.n:
+			self.de_la = perete
+		self.n += 1
+		self.ultim = acum
+		self.pana_la = perete
+		if self.fel == "nume":
+			self.valori.append(valoare)
+			self.octeti += len(valoare) + 2
+		elif valoare in self.mesaje:
+			self.mesaje[valoare] += 1
+		elif len(self.mesaje) < REZUMAT_EXEMPLE:
+			self.mesaje[valoare] = 1
+			self.octeti += len(valoare) + 2
+		else:
+			self.alte += 1
+
+	def randuri(self):
+		"""Randurile de scris pentru ce s-a strans de la scrierea dinainte ([] cand n-a venit nimic dupa primul rand)."""
+		if not self.n:
+			return []
+		if self.fel == "nume":
+			bucati = list(self.valori)
+		else:
+			bucati = [m if k == 1 else "%s (x%d)" % (m, k) for m, k in self.mesaje.items()]
+			if self.alte:
+				bucati.append(TEXT_ALTE_MESAJE % self.alte)
+		rez = []
+		curent = []
+		lungime = 0
+		for b in bucati:
+			if curent and lungime + len(b) + 2 > REZUMAT_LUNGIME:
+				rez.append(", ".join(curent))
+				curent, lungime = [], 0
+			curent.append(b)
+			lungime += len(b) + 2
+		if curent or not rez:
+			rez.append(", ".join(curent))
+		cap = TEXT_REZUMAT % (self.eticheta, self.n, _oraUtc(self.de_la), _oraUtc(self.pana_la), rez[0])
+		return [cap] + [TEXT_REZUMAT_CONTINUARE % (self.eticheta, r) for r in rez[1:]]
+
+
 class Jurnal:
 
 	def __init__(self, cale=CALE_JURNAL, maxim=MAX_OCTETI,
 			interval=INTERVAL, grup=GRUP_OCTETI, procent=BUGET_PROCENT,
-			rafala=BUGET_RAFALA, rezerva=BUGET_REZERVA, ceas=None, procesor=None):
+			rafala=BUGET_RAFALA, rezerva=BUGET_REZERVA, ceas=None, procesor=None, perete=None):
 		# Fara filtrul parolelor nu se pastreaza niciun text brut (importul cade, jurnalul nu porneste).
 		from Components.HdsAsistentaControl import mascheazaParole
 		self._filtre = (mascheazaParole,)
@@ -109,6 +216,10 @@ class Jurnal:
 		self._procesor = procesor or getattr(time, "thread_time", None) or time.perf_counter
 		self._buget = self.rafala
 		self._ultim_buget = self._ceas()
+		# rezumatele randurilor pe canal sau pe eveniment (RANDURI_REZUMATE): inceputul -> _Rezumat; ora din perete
+		self._perete = perete or time.time
+		self._rezumate = {}
+		self._prefixe = tuple(p for p, _fel in RANDURI_REZUMATE) + tuple(HOTARE_REZUMAT)
 		self._sarite = 0
 		self._sarite_de_la = None
 		self._bloc = 0
@@ -204,9 +315,59 @@ class Jurnal:
 			return True
 		return False
 
+	def _rezuma(self, rand):
+		"""True cand randul s-a numarat intr-un rezumat (nu se scrie acum). Primul rand al unei rafale se scrie ca atare;
+		un rand de hotar (HOTARE_REZUMAT) scrie intai rezumatele adunate si se scrie si el. In mijlocul unei stive nimic
+		nu se rezuma."""
+		if self._bloc or not rand.startswith(self._prefixe):
+			return False
+		for inceput, fel in RANDURI_REZUMATE:
+			if rand.startswith(inceput):
+				break
+		else:
+			self._scrieRezumate()
+			return False
+		acum = self._ceas()
+		r = self._rezumate.get(inceput)
+		if r is None:
+			self._rezumate[inceput] = _Rezumat(inceput, fel, acum, self._perete())
+			return False
+		# valoarea intreaga (randul are deja cel mult MAX_RAND): o taiere aici, inainte de filtrul parolelor, ar putea rupe
+		# o parola in doua si ar lasa-o pe disc (taierea se face numai dupa mascare)
+		valoare = _CONTROALE.sub("", bytes(rand[len(inceput):]).decode("utf-8", "replace")).strip()
+		r.adauga(valoare, acum, self._perete())
+		if r.octeti >= REZUMAT_VALORI:
+			# memoria ramane mica si la o rafala foarte lunga: ce s-a strans se scrie acum, rafala continua
+			self._scrieRezumat(r)
+		return True
+
+	def _scrieRezumat(self, r):
+		randuri = r.randuri()
+		r.goleste(self._perete())
+		for text in randuri:
+			try:
+				text = self._filtreaza(text)
+			except Exception:
+				# O eroare de filtru nu permite salvarea randului brut.
+				continue
+			if text:
+				self._adauga(text)
+
+	def _scrieRezumate(self, liniste=None):
+		"""Scrie rezumatele adunate: toate, sau (liniste) numai pe cele fara rand nou de atatea secunde."""
+		if not self._rezumate:
+			return
+		acum = self._ceas()
+		for inceput, r in list(self._rezumate.items()):
+			if liniste is None or acum - r.ultim >= liniste:
+				del self._rezumate[inceput]
+				self._scrieRezumat(r)
+
 	def _randIntreg(self):
 		if self._prea_lung:
 			self._adauga("[HdsJurnalInterfata] rand prea lung omis")
+		elif self._rezuma(self._rand):
+			pass
 		else:
 			de_eroare = self._deStiva(self._rand)
 			self._reumple()
@@ -286,6 +447,8 @@ class Jurnal:
 		# Un val lung de randuri sarite se spune macar o data la INTERVAL, nu abia la sfarsitul lui.
 		if self._sarite and time.monotonic() - self._sarite_de_la >= self.interval:
 			self._scrieSarite()
+		# rafalele terminate (REZUMAT_LINISTE secunde fara rand nou de acelasi fel) isi scriu rezumatul
+		self._scrieRezumate(REZUMAT_LINISTE)
 		if self._grup and time.monotonic() - self._ultima_scriere >= self.interval:
 			self.goleste()
 
@@ -322,6 +485,7 @@ class Jurnal:
 		if self._rand or self._prea_lung:
 			self._randIntreg()
 		self._scrieSarite()
+		self._scrieRezumate()
 		self.goleste()
 
 

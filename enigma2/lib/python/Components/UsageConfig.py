@@ -198,8 +198,13 @@ def InitUsageConfig():
 	global config
 	config.usage.showdish = ConfigYesNo(default = True)
 	# HDSatelit: desenul rotirii antenei (ecranele motorului si pagina web /motor) vazut din spatele antenei: estul in
-	# stanga, vestul in dreapta, sudul in varful curbei (Silviu, forum 683, 14.11.2026); Nu = ca pana acum
-	config.usage.hds_motor_din_spate = ConfigYesNo(default = False)
+	# stanga, vestul in dreapta, sudul in varful curbei (Silviu, forum 683, 14.11.2026); Nu = vestul in stanga.
+	# Da din fabrica de la 0.7.7 (dorinelu, forum 795 #2676, si Silviu; hotararea coordonatorului 16.11.2026 03:20): cine
+	# a ales Da il pastreaza; Nu ales de mana nu are rand in settings (era implicitul), deci trece si el pe Da
+	config.usage.hds_motor_din_spate = ConfigYesNo(default = True)
+	# HDSatelit 0.7.7: capetele desenului rotirii la limitele practice ale antenei (dorinelu, forum 795 #2676): elevatia minima
+	# in grade (Components/HdsMotorStare.elevatieDesen); 0 = orizontul, ca pana acum; numai desenul, nu rotirea
+	config.usage.hds_motor_elevatie_min = ConfigSelection(default = "0", choices = [(str(x), u"%d°" % x) for x in range(31)])
 	# HDSatelit: tasta albastra deschide lista buchetelor (Favorite primul), nu numai Favorite
 	config.usage.multibouquet = ConfigYesNo(default = True)
 	# OE-Alliance: semnele numerotate (randurile „-” puse de Fast Scan in locul numerelor nefolosite ale operatorului) nu se vad
@@ -234,11 +239,29 @@ def InitUsageConfig():
 	config.usage.hds_semne_lista = ConfigSelection(default = "ambele", choices = [
 		("ambele", N_("„$” la canalele codate și sursa")), ("codat", N_("Numai „$” la canalele codate")),
 		("sursa", N_("Numai sursa (satelit, cablu, terestru)")), ("niciunul", N_("Fără semne"))])
+	# 0.7.7 (BQT, Ozgur e-mailul 6509): setarea schimbata (pe televizor, la EXIT fara salvare inapoi, sau din web) se vede pe
+	# loc in lista deschisa o data (Components/HdsListaSetari.reface -> ServiceList.hdsSemne), nu abia la urmatoarea deschidere
+	def _hdsSemneSchimbate(configElement):
+		try:
+			from Components.HdsListaSetari import reface
+			reface()
+		except Exception as e:
+			print("[UsageConfig] semnele listei: %s" % e)
+	config.usage.hds_semne_lista.addNotifier(_hdsSemneSchimbate, initial_call=False)
 	alegeri_infobar, alegeri_disc = _alegeriCuNumere()
 	config.usage.infobar_timeout = ConfigSelection(default = "8", choices = alegeri_infobar)
 	config.usage.show_infobar_on_zap = ConfigYesNo(default = True)
 	config.usage.show_infobar_on_skip = ConfigYesNo(default = True)
 	config.usage.show_infobar_on_event_change = ConfigYesNo(default = True)
+	# randul ECM din bara canalului (HdsSignal EcmLine: CAID, timpul ECM, protocolul, cat modulul de acces decripteaza
+	# canalul) si debitul DVB pe pagina intai a celei de-a doua bare (HdsSignal Debit); le citesc convertoarele temei prin
+	# HdsCommon.optiune_usage, la fiecare tic; in web: /setari?id=usage
+	config.usage.hds_bara_ecm = ConfigYesNo(default = False)
+	# hop-urile si eticheta cititorului pe pagina modulului si in randul ECM (Components/HdsEcm.sursa: niciodata adrese, nimic
+	# cat ruleaza asistenta sau o captura pentru un raport); oprita din fabrica
+	config.usage.hds_ecm_hopuri_cititor = ConfigYesNo(default = False)
+	config.usage.hds_debit_bara = ConfigSelection(default = "da", choices = [
+		("nu", _("Nu")), ("da", _("Da")), ("statistici", _("Da, cu minim, maxim și medie"))])
 	config.usage.hide_zap_errors = ConfigYesNo(default = False)
 	config.usage.hdd_standby = ConfigSelection(default = "600", choices = alegeri_disc)
 	# limba aleasa se activeaza dupa InitUsageConfig (SetupDevices), deci textele compuse de mai sus ies in engleza
@@ -568,6 +591,15 @@ def InitUsageConfig():
 		HdsRadioSetari.initProtectie()
 	except Exception as eroare:
 		print("[UsageConfig] HdsRadioSetari: %s" % eroare)
+
+	# HDSatelit 0.7.7: tunerul de rezerva din retea (in OE-Alliance "fallback tuner": config.usage.remote_fallback_enabled si
+	# remote_fallback), un rand cu receptoarele gasite in casa, setup.xml hds_tuner_rezerva; legatura la zap si anuntul
+	# serverului de flux (_e2stream._tcp) in Components/HdsTunerRezerva.py
+	try:
+		from Components import HdsTunerRezerva
+		HdsTunerRezerva.initConfig()
+	except Exception as eroare:
+		print("[UsageConfig] HdsTunerRezerva: %s" % eroare)
 
 def updateChoices(sel, choices):
 	if choices:

@@ -622,6 +622,75 @@ PICTOGRAME = ("cablu_ok", "cablu_fara_internet", "cablu_fara_router", "cablu_ver
 	"wifi_fara_router", "wifi_verific")
 
 
+# ---------------------------------------------------------------- citirea pe fir (0.7.7, UIF)
+# Fiecare apel de fisier (open si read, os.path.exists, os.listdir) da lacatul Python; cand alt fir Python lucreaza
+# (indexul canalelor la pornire, EPG-ul IPTV etc.), firul enigma2 il ia inapoi abia dupa intervalul de comutare
+# (5 ms), la FIECARE apel, deci un tic cu 6-10 apeluri statea zeci-sute de ms (golurile buclei enigma2 la 3 s unul de
+# altul, masurate pe un SF8008). In imagine (porneste()), citirile tic-ului se fac pe un fir care tine o fotografie,
+# refacuta la PERIOADA_CITIRE_S; tic-ul ia fotografia, fara niciun apel de fisier. Aceleasi valori, citite cel mult
+# ~1 s mai devreme: o schimbare din ultima secunda dinaintea unui tic se vede la tic-ul urmator (+3 s in cel mai rau
+# caz). O fotografie mai veche de PROASPAT_S (firul nu mai citeste) nu se foloseste: citirea pe loc, ca inainte.
+# Fara porneste() (probele de pe PC, apelurile directe) totul ramane pe loc.
+PERIOADA_CITIRE_S = 1.0
+PROASPAT_S = 2.5
+
+
+class CitireFir(object):
+	"""functie() rulata pe un fir la fiecare `perioada` secunde; ultima() -> rezultatul ei daca e mai nou de `proaspat`
+	secunde, altfel None. Fotografia se publica dintr-o data (un tuplu nou), deci firul enigma2 o ia fara zavor si fara
+	asteptare. Folosita si de Components/HdsComutareRetea.py."""
+
+	def __init__(self, functie, nume, perioada=PERIOADA_CITIRE_S, proaspat=PROASPAT_S, ceas=None):
+		self.functie = functie
+		self.nume = nume
+		self.perioada = perioada
+		self.proaspat = proaspat
+		self.ceas = ceas or time.monotonic
+		self.fotografie = None      # (ora monotona a citirii, rezultatul)
+		self.citiri = 0
+		self.erori = 0
+		self.durata_max = 0.0       # cea mai lunga citire (pentru masuratori)
+		self._oprit = threading.Event()
+		self._fir = None
+
+	def porneste(self):
+		if self._fir is None:
+			self._fir = threading.Thread(target=self._bucla, name=self.nume)
+			self._fir.daemon = True
+			self._fir.start()
+		return self
+
+	def opreste(self):
+		self._oprit.set()
+
+	def citeste_o_data(self):
+		t0 = self.ceas()
+		try:
+			rez = self.functie()
+		except Exception as e:
+			self.erori += 1
+			if self.erori <= 3:
+				_jurnal("citirea pe fir (%s): %r" % (self.nume, e))
+			return
+		self.citiri += 1
+		self.fotografie = (t0, rez)
+		self.durata_max = max(self.durata_max, self.ceas() - t0)
+
+	def _bucla(self):
+		while not self._oprit.is_set():
+			self.citeste_o_data()
+			self._oprit.wait(self.perioada)
+
+	def ultima(self, acum=None, dupa=None):
+		"""Fotografia proaspata, sau None; cu `dupa` (ora monotona), numai una inceputa dupa acea ora (de pilda dupa ce
+		pasii trecerii pe alta retea au schimbat rutele: una mai veche ar arata rutele de dinainte)."""
+		f = self.fotografie
+		if f is None or (dupa is not None and f[0] <= dupa):   # la ceas egal: nu se stie, deci veche
+			return None
+		acum = self.ceas() if acum is None else acum
+		return f[1] if 0.0 <= acum - f[0] < self.proaspat else None
+
+
 # ---------------------------------------------------------------- urmaritorul (pe firul enigma2)
 
 class Urmaritor(object):
@@ -654,6 +723,13 @@ class Urmaritor(object):
 		self.pierdere = False
 		self.pierdere_anuntata = False
 		self.verificari = 0
+		self.citire = None          # CitireFir, pusa de porneste() (in imagine); None = citirea pe loc
+
+	def citire_pasiva(self):
+		"""Ce citeste tic-ul din fisiere: (legatura, felul de rezerva cand legatura nu are fel, altfel None). Pe firul de
+		citire (CitireFir) sau pe loc."""
+		s = self.citeste()
+		return s, (None if s.get("fel") else self.fel_gol())
 
 	# ---- starea
 
@@ -667,12 +743,16 @@ class Urmaritor(object):
 	def tic(self, acum=None):
 		acum = self.ceas() if acum is None else acum
 		self.t_tic = acum
-		s = self.citeste()
+		f = self.citire.ultima() if self.citire is not None else None
+		if f is not None:
+			s, fel_gol = f
+		else:
+			s, fel_gol = self.citeste(), None
 		if s.get("fel"):
 			self.fel_tinut = s["fel"]
 		else:
 			s = dict(s)
-			s["fel"] = self.fel_tinut or self.fel_gol()
+			s["fel"] = self.fel_tinut or (fel_gol if fel_gol is not None else self.fel_gol())
 		semn = semnatura(s)
 		porneste = None
 		with self._zavor:
@@ -804,6 +884,8 @@ def porneste(session=None):
 			from Screens import HdsAnuntRetea
 			HdsAnuntRetea.arata(session, text_mesaj(cod, fel), cheie_pictograma({"cod": cod, "fel": fel, "treapta": 4}))
 		u.anunta = anunta
+	if u.citire is None:
+		u.citire = CitireFir(u.citire_pasiva, "HdsStareRetea-citire").porneste()
 	if _ceas[0] is None:
 		from enigma import eTimer
 		t = eTimer()

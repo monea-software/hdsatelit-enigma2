@@ -35,10 +35,8 @@ struct queueData
 	}
 };
 
-enum data_source
-{
-	TUNER_A, TUNER_B, TUNER_C, TUNER_D, CI_A, CI_B, CI_C, CI_D
-};
+/* sursele fluxului din /proc/stb/tsmux sunt text, ca in OE-Alliance: litera tunerului (A..Z) sau CI<slot>
+   (lib/dvb_ci/hdstsmux.h); tunerele FBC trec de D */
 
 typedef std::pair<std::string, uint32_t> providerPair;
 typedef std::set<providerPair> providerSet;
@@ -63,7 +61,7 @@ class eDVBCISlot: public iObject, public sigc::trackable
 	providerSet possible_providers;
 	int use_count;
 	eDVBCISlot *linked_next; // needed for linked CI handling
-	data_source current_source;
+	std::string current_source;
 	int current_tuner;
 	bool user_mapped;
 	void data(int);
@@ -150,7 +148,7 @@ public:
 	int sendCAPMT(eDVBServicePMTHandler *ptr, const std::vector<uint16_t> &caids=std::vector<uint16_t>());
 	void removeService(uint16_t program_number=0xFFFF);
 	int getNumOfServices() { return running_services.size(); }
-	int setSource(data_source source);
+	int setSource(const std::string &source);
 	int setClockRate(int);
 	int setEnabled(bool enabled);
 };
@@ -206,7 +204,7 @@ public:
 	int cancelEnq(int slot);
 	int getMMIState(int slot);
 	int sendCAPMT(int slot);
-	int setInputSource(int tunerno, data_source source);
+	int setInputSource(int tunerno, const std::string &source);
 	int setCIClockRate(int slot, int rate);
 	int setCIEnabled(int slot, bool enabled);
 	/* CI+ (din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e019680741efdad5ca7e7902b20e4) */

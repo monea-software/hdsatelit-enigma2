@@ -1,23 +1,35 @@
-# HD Satelit: regulile garzii de model pentru Zgemma H17 COMBO (masina h17, MACHINEBUILD zgemmah17combo), NECONFIRMAT
-# MH7, 12.11.2026. Zgemma H17 TWIN e aceeasi masina h17 in OE-Alliance 6.0, dar alt MACHINEBUILD (zgemmah17twin), alt pachet
-# de drivere (MACHINE_DRIVER h17twin) si alt dosar pe stick (zgemma/h17twin), deci NU e acoperit aici: are regulile lui.
-# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al
-# sistemului; marimea nucleului e numai avertisment, aratat de interfata.
+# HD Satelit: regulile garzii de model pentru Zgemma H17 COMBO (masina h17, MACHINEBUILD zgemmah17combo), alfa
+# (MH7 12.11.2026; V6 13.11.2026 19:30: tipul placii dovedit din cod public; MI4 15.11.2026: cipul si tipul placii MASURATE
+# pe un H17 COMBO adevarat, tester, e-mailul 6330 din 14.11.2026).
+# Zgemma H17 TWIN e aceeasi masina h17 in OE-Alliance 6.0, dar alt MACHINEBUILD (zgemmah17twin), alt pachet de drivere
+# (MACHINE_DRIVER h17twin), alt dosar pe stick (zgemma/h17twin) si alt tip de placa (h17twin, mai jos), deci NU e acoperit
+# aici: garda il opreste.
+# confirmat=nu pune garda din enigma2.sh in treapta a doua: hotarasc cipul, tipul placii si locul nucleului si al sistemului;
+# marimea nucleului e numai avertisment, aratat de interfata.
 # familie=broadcom: placa Broadcom (SOC_FAMILY bcm7251s in meta-airdigital/conf/machine/h17.conf, ca AX HD51), nucleu
-# linux-airdigital 4.10.12 (defconfig-ul h17 difera de hd51 numai prin 5 module HID/serial), fara /proc/msp/sys, fara
-# blkdevparts si fara partitia deviceinfo. Garda citeste cipul din /proc/stb/info/chipset, tipul placii din
-# /proc/stb/info/boxtype, sistemul din root= si nucleul din kernel= al lui /proc/cmdline. hw= si partitions= sunt "-".
-# kernel_part, rootfs_part si kernel_kib: DOVEDITE din imaginea publica OE-Alliance 6.0 pentru zgemmah17combo
-# (_recovery_emmc.zip, disk.img citit ca date, 12.11.2026): GPT p1 boot 3 MiB, p2 rescue 32 MiB, p3-p10 linuxkernel1-8
-# cate 8192 KiB, p11 swap 256 MiB, p12 userdata; fisierul STARTUP din p1: "root=/dev/mmcblk0p12 rootsubdir=linuxrootfs1
-# kernel=/dev/mmcblk0p3 rw rootwait coherent_pool=2M h17_4.boxmode=1"; locurile 2-8 au acelasi root=/dev/mmcblk0p12 cu
-# rootsubdir=linuxrootfs2..8 si nucleul pe p4..p10 (garda vede atunci pornirea din alt loc). Acelasi lucru in
-# airdigital-emmc_image_multiboot16gb.bbclass si h17.conf (MTD_KERNEL mmcblk0p3, MTD_ROOTFS mmcblk0p12).
-# chip=7251s si boxtype=h17: ASTEPTATE, NEMASURATE pe un H17. Driverele h17_1..4.ko sunt ofuscate (niciun sir boxtype sau
-# chipset, ca hd51_4.ko); imaginile publice nu citesc nodul cipului pe h17 (pun constanta 7251S). Tiparul masurat: pe AX HD51
-# (aceeasi familie, driver de aceeasi marime) chipset = bcm7251s si boxtype = numele masinii (hd51). De inlocuit cu valorile
-# citite de tester (intrebarea din STADIU-MH7.md) INAINTE de constructie; daca nodul chipset lipseste, chip=- (garda nu
-# compara cipul pe broadcom, peticul MHD 3a250fe18).
+# linux-airdigital 4.10.12, fara /proc/msp/sys, fara blkdevparts si fara partitia deviceinfo. Garda citeste cipul din
+# /proc/stb/info/chipset, tipul placii din /proc/stb/info/boxtype, sistemul din root= si nucleul din kernel= ale lui
+# /proc/cmdline. hw= si partitions= sunt "-".
+# Valorile si sursele lor:
+#   chip=7251s: MASURAT. Testerul (prompt root@zgemmah17combo, imagine OE-Alliance pe acelasi driver airdigital h17 pe care il
+#            punem si noi) a trimis `grep -r "" /proc/stb/info`: model=h17, boxtype=h17, chipset=bcm7251s, release=7845214,
+#            version=2, board_revision=1 (aceleasi noduri ca la AX HD51). Garda scoate "bcm" din fata pe ambele parti
+#            (familia broadcom), ca la ax51 (chip=7251s din bcm7251s, masurat la darog69). Ramura chip=- a garzii (MHD) e
+#            aleasa numai prin profil; pentru H17 nu are niciun motiv acum, cand nodul exista si da valoarea asteptata.
+#            Urmarea: si cu confirmat=nu, un cip diferit sau un nod lipsa opreste imaginea (ecranul "alt receptor").
+#   boxtype: MASURAT exact "h17" (primul in lista). Dovedit inainte si din cod public: OpenWebif (GPL,
+#            E2OpenPlugins/e2openplugin-OpenWebif, plugin/controllers/models/owibranding.py, getAllInfo) citeste primul rand
+#            din /proc/stb/info/boxtype cu litere mici si recunoaste "h17" = Zgemma H17Combo (commitul 95144c381f,
+#            21.10.2024) si separat "h17twin" = Zgemma H17Twin (commitul e46534fb66, 15.05.2026). H17 si numele lungi
+#            (h17combo, H17Combo, H17COMBO, zgemmah17combo) raman numai rezerva pentru alte versiuni ale driverului.
+#            h17twin si H17Twin NU sunt in lista: H17 TWIN se opreste.
+#   kernel_part, rootfs_part, kernel_kib: DOVEDITE din imaginea publica OE-Alliance 6.0 pentru zgemmah17combo
+#            (_recovery_emmc.zip, disk.img citit ca date, MH7 12.11.2026): GPT p1 boot 3 MiB, p2 rescue 32 MiB, p3-p10
+#            linuxkernel1-8 cate 8192 KiB, p11 swap 256 MiB, p12 userdata; fisierul STARTUP din p1: "root=/dev/mmcblk0p12
+#            rootsubdir=linuxrootfs1 kernel=/dev/mmcblk0p3 rw rootwait coherent_pool=2M h17_4.boxmode=1"; locurile 2-8 au
+#            acelasi root=/dev/mmcblk0p12 cu rootsubdir=linuxrootfs2..8 si nucleul pe p4..p10 (garda vede atunci pornirea din
+#            alt loc). La fel in airdigital-emmc_image_multiboot16gb.bbclass si h17.conf (MTD_KERNEL mmcblk0p3, MTD_ROOTFS
+#            mmcblk0p12). /proc/cmdline si /proc/partitions de pe aparat nu au fost trimise.
 # confirmat=nu ramane pana porneste imaginea noastra pe aparat (fisa testerului).
 format=1
 distro=hdsatelit
@@ -25,7 +37,7 @@ model=Zgemma H17 COMBO
 machine=h17
 machinebuild=zgemmah17combo
 chip=7251s
-boxtype=h17
+boxtype=h17,H17,h17combo,H17Combo,H17COMBO,zgemmah17combo
 hw=-
 partitions=-
 kernel_part=mmcblk0p3

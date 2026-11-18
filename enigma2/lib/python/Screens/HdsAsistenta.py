@@ -17,7 +17,8 @@
 # - HdsAsistenta: intrarea din meniu. Cat asistenta e oprita deschide pe loc pagina de pornire (la prima executie,
 #   onFirstExecBegin: un ecran modal se deschide numai cand cel de dedesubt ruleaza); iesirea de pe pagina fara Start
 #   inchide si intrarea. Cat e pornita arata numai pana cand e pornita (A.textPana) si, dedesubt, jurnalul (fiecare
-#   cerere a echipei, cum promit termenii), cu Rosu "Oprește" (oprire pe loc). Codul sesiunii nu se arata nicaieri: el
+#   cerere a echipei, cum promit termenii), cu Rosu "Oprește" (o intrebare scurta, "Nu" ales, Semn.intreabaOprirea: dupa
+#   Start Rosu sta in locul lui "Înapoi" de pe pagina de pornire; RCF 15.11.2026). Codul sesiunii nu se arata nicaieri: el
 #   ramane intern, intre receptor, server si echipa. Deschis la o cerere din pagina web (un browser fara cod, vezi
 #   Screens/HdsAsistentaSemn.cerereWeb), deschide aceeasi pagina de pornire. Cat ecranele asistentei sunt deschise,
 #   banda de semn de sus (Screens/HdsAsistentaSemn.py) se ascunde: ecranul arata el starea si pana cand e pornita.
@@ -272,7 +273,10 @@ class HdsAsistenta(Screen):
 		self["antet"].setText(s.get("pana_text") or "")
 		if s.get("stare") == A.ASTEAPTA:
 			jurnal = _(TEXT_ASTEPTARE) + "\n" + _(TEXT_NU_OPRI) + "\n\n" + jurnal
-		self._puneText("\n\n".join(t for t in (sus, jurnal) if t))
+		# conectata: deasupra jurnalului (sub ziua copiei, cand e), ce face echipa sau ca vine si ca EXIT o lasa pornita
+		# (A.textConectat)
+		rand = s.get("rand_conectat") or ""
+		self._puneText("\n\n".join(t for t in (sus, rand, jurnal) if t))
 		# cu legenda Albastra, ajutorul (aliniat la dreapta, peste locul ei) ramane gol
 		self["ajutor"].setText("" if copie else _("Sus/Jos: tot textul"))
 		# cat asistenta merge, Verde nu are ce face: fara text, legenda ei nu apare
@@ -298,9 +302,19 @@ class HdsAsistenta(Screen):
 			self._deschidePagina()
 
 	def _rosu(self):
+		if not _activa(A.stare()):
+			self.close()
+			return
+		# dupa Start Rosu "Oprește" sta in locul lui "Înapoi" de pe pagina de pornire: o intrebare scurta, cu "Nu" ales
+		# (RCF, 15-16.11.2026: trei sesiuni oprite din greseala); "Nu" (si EXIT) lasa asistenta pornita si ecranul deschis
+		Semn.intreabaOprirea(self.session, self._dupaIntrebareaOpririi)
+
+	def _dupaIntrebareaOpririi(self, da):
+		if not da:
+			return
 		if _activa(A.stare()):
-			# oprirea e pe loc, fara intrebare (a opri nu primejduieste nimic); ecranul se inchide
-			A.opreste("de om")
+			# Motivul spune locul (randul "oprita:" din jurnalul interfetei, A.Sesiune._scrieOprirea); omul vede tot "de om"
+			A.opreste("de om (ecran)")
 		self.close()
 
 	def _galben(self):
@@ -354,9 +368,10 @@ class HdsAsistentaConcluzii(Screen):
 		HdsAsistentaConcluzii.deschise = max(0, HdsAsistentaConcluzii.deschise - 1)
 
 	def _rosu(self):
-		"""Oprirea pe loc, fara intrebare (ca Rosu pe ecranul asistentei), numai pentru concluziile sesiunii de acum."""
+		"""Oprirea pe loc, fara intrebare (fereastra spune limpede "Oprește" de la deschidere; pe ecranul asistentei Rosu
+		intreaba, RCF), numai pentru concluziile sesiunii de acum."""
 		if self["key_red"].getText() and A.concluziiDeAcum(self.intrare):
-			A.opreste("de om")
+			A.opreste("de om (concluzii)")
 			self.close()
 
 

@@ -759,6 +759,7 @@ class Comutator(object):
 		self.anunta = anunta
 		self.anunta_rau = None      # mesajul unei treceri care n-a mers (text, cale); porneste() il pune
 		self.cai_fn = cai_fn or (lambda: cai(self.sistem.radacina))
+		self._cai_implicit = cai_fn is None
 		self.ocupat = ocupat or motiv_ocupat
 		self.pornita_fn = pornita_fn or pornita
 		self.interval = interval
@@ -783,6 +784,40 @@ class Comutator(object):
 		self.treceri = 0
 		self.intoarceri = 0
 		self.anuntat_pierderea = False  # mesajul de esec / "nicio retea Wi-Fi salvata": o data la fiecare pierdere
+		# 0.7.7 (UIF): citirile tic-ului (caile, rutele, legatura placilor) pe un fir, ca in Components/HdsStareRetea.py
+		# (CitireFir, de ce): pusa de citeste_pe_fir() din porneste(); None = pe loc, ca inainte (probele de pe PC)
+		self.citire = None
+		self._ordine = ordinea()    # ordinea cailor (setarea), citita pe firul enigma2 si data firului de citire
+		self._f = None              # fotografia folosita de tic-ul de acum (None = citirile pe loc)
+		# ora monotona la care s-a terminat ultimul pas pe firul lucrului (rute, adrese, Wi-Fi schimbate): o fotografie
+		# inceputa inainte nu se mai foloseste
+		self._t_lucru_gata = None
+
+	def citeste_pe_fir(self):
+		if self.citire is None:
+			from Components import HdsStareRetea
+			self.citire = HdsStareRetea.CitireFir(self.fotografie, "HdsComutareRetea-citire").porneste()
+		return self.citire
+
+	def fotografie(self):
+		"""Pe firul de citire: tot ce citeste tic-ul din fisiere, cu ordinea data de firul enigma2 (caile date din afara,
+		cai_fn, in probe, se cer ca atare)."""
+		lista = cai(self.sistem.radacina, self._ordine) if self._cai_implicit else self.cai_fn()
+		rute = self.sistem.rute()
+		placi = set(c["placa"] for c in lista) | set(x[0] for x in rute)
+		return {"cai": lista, "rute": rute, "legatura": dict((p, self.lucru.legatura(p)) for p in placi),
+			"are_wifi": self._are_wifi()}
+
+	def _cai(self):
+		return self._f["cai"] if self._f is not None else self.cai_fn()
+
+	def _rute(self):
+		return self._f["rute"] if self._f is not None else self.sistem.rute()
+
+	def _legatura(self, placa):
+		if self._f is not None and placa in self._f["legatura"]:
+			return self._f["legatura"][placa]
+		return self.lucru.legatura(placa)
 
 	def urmaritor(self):
 		if self._urmaritor is None:
@@ -814,6 +849,9 @@ class Comutator(object):
 	# ---- pe firul enigma2
 	def tic(self, acum=None):
 		acum = self.ceas() if acum is None else acum
+		if self.citire is not None:
+			self._ordine = ordinea()
+			self._f = self.citire.ultima(dupa=self._t_lucru_gata)
 		self._primeste(acum)
 		if self.lucreaza:
 			return
@@ -823,7 +861,7 @@ class Comutator(object):
 				self._porneste(acum, "inapoi", self._lucru_inapoi)
 			return
 		try:
-			lista = self.cai_fn()
+			lista = self._cai()
 		except Exception as e:
 			_jurnal("caile: %r" % (e,))
 			lista = []
@@ -836,7 +874,8 @@ class Comutator(object):
 			if len(lista) >= 2 and self.rele >= PRAG_TRECERE and self._se_poate(acum, False):
 				self.rele = 0
 				self._porneste(acum, "trece", self._lucru_trece, lista)
-			elif len(lista) < 2 and scos and not self.anuntat_pierderea and self._are_wifi():
+			elif len(lista) < 2 and scos and not self.anuntat_pierderea and (
+					self._f["are_wifi"] if self._f is not None else self._are_wifi()):
 				self.anuntat_pierderea = True
 				self._noteaza(_("Receptorul nu poate trece singur pe Wi-Fi: nu e nicio rețea Wi-Fi salvată și pornită. "
 					"Conectează receptorul o dată la Wi-Fi (Rețea și internet), apoi trecerea se face singură."),
@@ -852,7 +891,7 @@ class Comutator(object):
 		if self.lucreaza or self.preferata is None or self.activa is None:
 			return
 		if self.facut and self.facut.get("adresa_fixa") and self.preferata["fel"] == CABLU and \
-				self.lucru.legatura(self.preferata["placa"]) is True:
+				self._legatura(self.preferata["placa"]) is True:
 			# cablul e bagat la loc: adresa fixa ramane numai pe cablu (altfel doua placi raspund la ea pana la intoarcere)
 			self._porneste(acum, "ia_adresa", self._lucru_ia_adresa)
 			return
@@ -860,7 +899,7 @@ class Comutator(object):
 			pas = max(PROBA_MINIM_S, float(self._interval()))
 			if self.t_proba is None or acum - self.t_proba >= pas:
 				self.t_proba = acum
-				if self.preferata["fel"] == CABLU and not self.lucru.legatura(self.preferata["placa"]):
+				if self.preferata["fel"] == CABLU and not self._legatura(self.preferata["placa"]):
 					self.bune_pref = 0
 					return
 				self._porneste(acum, "proba", self._lucru_proba)
@@ -872,13 +911,13 @@ class Comutator(object):
 	def _cablu_scos(self, lista):
 		"""Placa rutei castigatoare e un cablu fara legatura (scos din receptor sau din router)."""
 		try:
-			r = self.sistem.rute()
+			r = self._rute()
 		except Exception:
 			return False
 		if not r:
 			return False
 		placa = min(enumerate(r), key=lambda x: (x[1][2], x[0]))[1][0]
-		return any(c["placa"] == placa and c["fel"] == CABLU for c in lista) and self.lucru.legatura(placa) is False
+		return any(c["placa"] == placa and c["fel"] == CABLU for c in lista) and self._legatura(placa) is False
 
 	def _are_wifi(self):
 		try:
@@ -924,7 +963,7 @@ class Comutator(object):
 		"""Cat sta pe alta placa: daca ruta caii parasite castiga din nou (udhcpc a reinnoit-o), se muta iar la rezerva."""
 		if self.activa is None or self.preferata is None or self.activa["placa"] == self.preferata["placa"]:
 			return
-		r = self.sistem.rute()
+		r = self._rute()
 		if not r:
 			return
 		castiga = min(enumerate(r), key=lambda x: (x[1][2], x[0]))[1]
@@ -944,6 +983,7 @@ class Comutator(object):
 				rez = {"bun": False, "eroare": repr(e)}
 			with self._zavor:
 				self.rezultat = (fel, rez)
+				self._t_lucru_gata = time.monotonic()
 		if self.porneste_fir:
 			fir = threading.Thread(target=merge)
 			fir.daemon = True
@@ -1037,6 +1077,9 @@ class Comutator(object):
 		if r is None:
 			return
 		self.lucreaza = False
+		# pasii de pe firul lucrului au schimbat poate rutele: restul acestui tic citeste pe loc, nu din fotografia
+		# luata la inceputul lui (urmatoarele iau numai fotografii incepute dupa _t_lucru_gata)
+		self._f = None
 		fel, rez = r
 		if fel in ("trece", "inapoi_si_trece"):
 			pref_veche = self.preferata
@@ -1176,6 +1219,7 @@ def porneste(session=None):
 				HdsStareRetea.FARA_INTERNET, "fel": fel, "treapta": 4}))
 		c.anunta = anunta
 		c.anunta_rau = lambda text, cale: anunta(text, cale, False)
+	c.citeste_pe_fir()
 	if _ceas[0] is None:
 		from enigma import eTimer
 		t = eTimer()

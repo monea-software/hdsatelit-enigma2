@@ -1717,7 +1717,9 @@ class HdsBetaPublic(Screen, ConfigListScreen):
 	def qr(self):
 		if not self.forum:
 			return
-		self.session.openWithCallback(lambda *r: self._porneste("profil-stare", self._arataProfil), HdsBetaLegareQr)
+		# _dupaSalvare, nu _arataProfil: dupa o legare prin codul QR jetonul de forum tinut o ora (fara cont) se uita, ca
+		# Ecran de pornire > Din comunitate sa arate indata siglele private ale contului (GLP, 15.11.2026)
+		self.session.openWithCallback(lambda *r: self._porneste("profil-stare", self._dupaSalvare), HdsBetaLegareQr)
 
 
 CORP_LEGARE = """
@@ -1797,4 +1799,6 @@ class HdsBetaLegareQr(Screen):
 			b = B.initConfig()
 			b.public.value = profil.get("nume_public") or ""
 			B.salveaza(b)
+			# receptorul abia legat: jetonul de forum vechi (fara cont) se uita aici, chiar daca citirea de dupa inchidere nu reuseste (GLP)
+			uitaJetonulForumului()
 			self["text"].setText(B.textProfil(profil))

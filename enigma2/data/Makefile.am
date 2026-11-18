@@ -20,6 +20,7 @@ dist_hdsdisplay_DATA = $(top_srcdir)/HDSatelit/display/skin_display.xml
 dist_pkgdata_DATA = \
 	black.mvi \
 	cablu-romania.json \
+	contributori.json \
 	defaultsatlists.xml \
 	defaultwizard.xml \
 	dreampackagewizard.xml \

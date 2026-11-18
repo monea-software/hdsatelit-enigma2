@@ -1992,19 +1992,19 @@
     "/usr/lib/enigma2/python/Plugins/Extensions/HdsWebControl/tv-wasm/ffmpeg-licenta.txt"
    ],
    "ce": {
-    "ro": "Pagina TV în browser a interfeței web decodează imaginea MPEG-2 și sunetul MP2, MP3 și AC-3 cu FFmpeg 8.1.3 (numai libavcodec), compilat în WebAssembly, care rulează numai în browser.",
-    "en": "The TV in browser page of the web interface decodes MPEG-2 pictures and MP2, MP3 and AC-3 sound with FFmpeg 8.1.3 (libavcodec only), compiled to WebAssembly, which runs only in the browser.",
-    "cs": "Stránka TV v prohlížeči webového rozhraní dekóduje obraz MPEG-2 a zvuk MP2, MP3 a AC-3 pomocí FFmpeg 8.1.3 (jen libavcodec), přeloženého do WebAssembly, který běží jen v prohlížeči.",
-    "de": "Die Seite TV im Browser der Weboberfläche dekodiert MPEG-2-Bilder und MP2-, MP3- und AC-3-Ton mit FFmpeg 8.1.3 (nur libavcodec), nach WebAssembly kompiliert, das nur im Browser läuft.",
-    "es": "La página TV en el navegador de la interfaz web decodifica la imagen MPEG-2 y el sonido MP2, MP3 y AC-3 con FFmpeg 8.1.3 (solo libavcodec), compilado a WebAssembly, que solo se ejecuta en el navegador.",
-    "fr": "La page TV dans le navigateur de l'interface web décode l'image MPEG-2 et le son MP2, MP3 et AC-3 avec FFmpeg 8.1.3 (libavcodec seulement), compilé en WebAssembly, qui ne s'exécute que dans le navigateur.",
-    "hu": "A webes felület TV a böngészőben oldala az MPEG-2 képet és az MP2, MP3 és AC-3 hangot az FFmpeg 8.1.3-mal (csak libavcodec) dekódolja, amely WebAssemblyre fordítva csak a böngészőben fut.",
-    "it": "La pagina TV nel browser dell'interfaccia web decodifica l'immagine MPEG-2 e l'audio MP2, MP3 e AC-3 con FFmpeg 8.1.3 (solo libavcodec), compilato in WebAssembly, che funziona solo nel browser.",
-    "nl": "De pagina TV in de browser van de webinterface decodeert MPEG-2-beeld en MP2-, MP3- en AC-3-geluid met FFmpeg 8.1.3 (alleen libavcodec), gecompileerd naar WebAssembly, dat alleen in de browser draait.",
-    "pl": "Strona TV w przeglądarce interfejsu WWW dekoduje obraz MPEG-2 i dźwięk MP2, MP3 i AC-3 za pomocą FFmpeg 8.1.3 (tylko libavcodec), skompilowanego do WebAssembly, działającego tylko w przeglądarce.",
-    "pt": "A página TV no navegador da interface web descodifica a imagem MPEG-2 e o som MP2, MP3 e AC-3 com o FFmpeg 8.1.3 (só libavcodec), compilado para WebAssembly, que só corre no navegador.",
-    "ru": "Страница «ТВ в браузере» веб-интерфейса декодирует изображение MPEG-2 и звук MP2, MP3 и AC-3 с помощью FFmpeg 8.1.3 (только libavcodec), скомпилированного в WebAssembly, который работает только в браузере.",
-    "tr": "Web arayüzünün Tarayıcıda TV sayfası MPEG-2 görüntüyü ve MP2, MP3 ve AC-3 sesi, WebAssembly'ye derlenmiş ve yalnızca tarayıcıda çalışan FFmpeg 8.1.3 (yalnızca libavcodec) ile çözer."
+    "ro": "Pagina TV în browser a interfeței web decodează imaginea MPEG-2 și H.264 și sunetul MP2, MP3, AC-3 și AAC cu FFmpeg 8.1.3 (numai libavcodec), compilat în WebAssembly, care rulează numai în browser.",
+    "en": "The TV in browser page of the web interface decodes MPEG-2 and H.264 pictures and MP2, MP3, AC-3 and AAC sound with FFmpeg 8.1.3 (libavcodec only), compiled to WebAssembly, which runs only in the browser.",
+    "cs": "Stránka TV v prohlížeči webového rozhraní dekóduje obraz MPEG-2 a H.264 a zvuk MP2, MP3, AC-3 a AAC pomocí FFmpeg 8.1.3 (jen libavcodec), přeloženého do WebAssembly, který běží jen v prohlížeči.",
+    "de": "Die Seite TV im Browser der Weboberfläche dekodiert MPEG-2- und H.264-Bilder und MP2-, MP3-, AC-3- und AAC-Ton mit FFmpeg 8.1.3 (nur libavcodec), nach WebAssembly kompiliert, das nur im Browser läuft.",
+    "es": "La página TV en el navegador de la interfaz web decodifica la imagen MPEG-2 y H.264 y el sonido MP2, MP3, AC-3 y AAC con FFmpeg 8.1.3 (solo libavcodec), compilado a WebAssembly, que solo se ejecuta en el navegador.",
+    "fr": "La page TV dans le navigateur de l'interface web décode l'image MPEG-2 et H.264 et le son MP2, MP3, AC-3 et AAC avec FFmpeg 8.1.3 (libavcodec seulement), compilé en WebAssembly, qui ne s'exécute que dans le navigateur.",
+    "hu": "A webes felület TV a böngészőben oldala az MPEG-2 és H.264 képet és az MP2, MP3, AC-3 és AAC hangot az FFmpeg 8.1.3-mal (csak libavcodec) dekódolja, amely WebAssemblyre fordítva csak a böngészőben fut.",
+    "it": "La pagina TV nel browser dell'interfaccia web decodifica l'immagine MPEG-2 e H.264 e l'audio MP2, MP3, AC-3 e AAC con FFmpeg 8.1.3 (solo libavcodec), compilato in WebAssembly, che funziona solo nel browser.",
+    "nl": "De pagina TV in de browser van de webinterface decodeert MPEG-2- en H.264-beeld en MP2-, MP3-, AC-3- en AAC-geluid met FFmpeg 8.1.3 (alleen libavcodec), gecompileerd naar WebAssembly, dat alleen in de browser draait.",
+    "pl": "Strona TV w przeglądarce interfejsu WWW dekoduje obraz MPEG-2 i H.264 oraz dźwięk MP2, MP3, AC-3 i AAC za pomocą FFmpeg 8.1.3 (tylko libavcodec), skompilowanego do WebAssembly, działającego tylko w przeglądarce.",
+    "pt": "A página TV no navegador da interface web descodifica a imagem MPEG-2 e H.264 e o som MP2, MP3, AC-3 e AAC com o FFmpeg 8.1.3 (só libavcodec), compilado para WebAssembly, que só corre no navegador.",
+    "ru": "Страница «ТВ в браузере» веб-интерфейса декодирует изображение MPEG-2 и H.264 и звук MP2, MP3, AC-3 и AAC с помощью FFmpeg 8.1.3 (только libavcodec), скомпилированного в WebAssembly, который работает только в браузере.",
+    "tr": "Web arayüzünün Tarayıcıda TV sayfası MPEG-2 ve H.264 görüntüyü ve MP2, MP3, AC-3 ve AAC sesi, WebAssembly'ye derlenmiş ve yalnızca tarayıcıda çalışan FFmpeg 8.1.3 (yalnızca libavcodec) ile çözer."
    }
   },
   {
@@ -2327,7 +2327,7 @@
    }
   },
   {
-   "nume": "libdvbcsa 1.1.0",
+   "nume": "libdvbcsa 1.2.0",
    "pachet": "libdvbcsa",
    "fisier": "/usr/lib/libdvbcsa.so.1",
    "cai": [
@@ -2336,19 +2336,19 @@
    "licenta": "GPL-2.0-or-later",
    "spdx": "GPL-2.0-or-later",
    "ce": {
-    "ro": "Algoritmul comun de cifrare DVB (CSA) vine din biblioteca libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; partea paralelă după codul lui fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), sub licența GPL 2 sau mai nouă.",
-    "en": "The DVB Common Scrambling Algorithm (CSA) comes from the libdvbcsa 1.1.0 library (Alexandre Becoulet, 2006-2008; the parallel part based on code by fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), under the GPL 2 or later licence.",
-    "cs": "Společný šifrovací algoritmus DVB (CSA) pochází z knihovny libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; paralelní část podle kódu fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa) pod licencí GPL 2 nebo novější.",
-    "de": "Der gemeinsame DVB-Verschlüsselungsalgorithmus (CSA) stammt aus der Bibliothek libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; der parallele Teil nach dem Code von fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), unter der Lizenz GPL 2 oder neuer.",
-    "es": "El algoritmo común de cifrado DVB (CSA) viene de la biblioteca libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; la parte paralela basada en el código de fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), con la licencia GPL 2 o posterior.",
-    "fr": "L'algorithme commun de chiffrement DVB (CSA) vient de la bibliothèque libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008 ; la partie parallèle d'après le code de fatih89r, 2003-2004 ; github.com/oe-mirrors/libdvbcsa), sous la licence GPL 2 ou ultérieure.",
-    "hu": "A közös DVB-titkosító algoritmus (CSA) a libdvbcsa 1.1.0 könyvtárból származik (Alexandre Becoulet, 2006-2008; a párhuzamos rész fatih89r kódja alapján, 2003-2004; github.com/oe-mirrors/libdvbcsa), GPL 2 vagy újabb licenc alatt.",
-    "it": "L'algoritmo comune di cifratura DVB (CSA) viene dalla libreria libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; la parte parallela basata sul codice di fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), con la licenza GPL 2 o successiva.",
-    "nl": "Het gemeenschappelijke DVB-versleutelingsalgoritme (CSA) komt uit de bibliotheek libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; het parallelle deel naar de code van fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), onder de licentie GPL 2 of later.",
-    "pl": "Wspólny algorytm szyfrowania DVB (CSA) pochodzi z biblioteki libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; część równoległa na podstawie kodu fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), na licencji GPL 2 lub nowszej.",
-    "pt": "O algoritmo comum de cifra DVB (CSA) vem da biblioteca libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; a parte paralela baseada no código de fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), sob a licença GPL 2 ou posterior.",
-    "ru": "Общий алгоритм шифрования DVB (CSA) взят из библиотеки libdvbcsa 1.1.0 (Alexandre Becoulet, 2006-2008; параллельная часть основана на коде fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa) по лицензии GPL 2 или более поздней.",
-    "tr": "Ortak DVB şifreleme algoritması (CSA), GPL 2 veya sonrası lisansı altındaki libdvbcsa 1.1.0 kütüphanesinden gelir (Alexandre Becoulet, 2006-2008; paralel kısım fatih89r'ın koduna dayanır, 2003-2004; github.com/oe-mirrors/libdvbcsa)."
+    "ro": "Algoritmul comun de cifrare DVB (CSA) vine din biblioteca libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008; partea paralelă după codul lui fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), sub licența GPL 2 sau mai nouă.",
+    "en": "The DVB Common Scrambling Algorithm (CSA) comes from the libdvbcsa 1.2.0 library (Alexandre Becoulet, 2006-2008; the parallel part based on code by fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), under the GPL 2 or later licence.",
+    "cs": "Společný šifrovací algoritmus DVB (CSA) pochází z knihovny libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008; paralelní část podle kódu fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa) pod licencí GPL 2 nebo novější.",
+    "de": "Der gemeinsame DVB-Verschlüsselungsalgorithmus (CSA) stammt aus der Bibliothek libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008; der parallele Teil nach dem Code von fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), unter der Lizenz GPL 2 oder neuer.",
+    "es": "El algoritmo común de cifrado DVB (CSA) viene de la biblioteca libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008; la parte paralela basada en el código de fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), con la licencia GPL 2 o posterior.",
+    "fr": "L'algorithme commun de chiffrement DVB (CSA) vient de la bibliothèque libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008 ; la partie parallèle d'après le code de fatih89r, 2003-2004 ; github.com/oe-mirrors/libdvbcsa), sous la licence GPL 2 ou ultérieure.",
+    "hu": "A közös DVB-titkosító algoritmus (CSA) a libdvbcsa 1.2.0 könyvtárból származik (Alexandre Becoulet, 2006-2008; a párhuzamos rész fatih89r kódja alapján, 2003-2004; github.com/oe-mirrors/libdvbcsa), GPL 2 vagy újabb licenc alatt.",
+    "it": "L'algoritmo comune di cifratura DVB (CSA) viene dalla libreria libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008; la parte parallela basata sul codice di fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), con la licenza GPL 2 o successiva.",
+    "nl": "Het gemeenschappelijke DVB-versleutelingsalgoritme (CSA) komt uit de bibliotheek libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008; het parallelle deel naar de code van fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), onder de licentie GPL 2 of later.",
+    "pl": "Wspólny algorytm szyfrowania DVB (CSA) pochodzi z biblioteki libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008; część równoległa na podstawie kodu fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), na licencji GPL 2 lub nowszej.",
+    "pt": "O algoritmo comum de cifra DVB (CSA) vem da biblioteca libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008; a parte paralela baseada no código de fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa), sob a licença GPL 2 ou posterior.",
+    "ru": "Общий алгоритм шифрования DVB (CSA) взят из библиотеки libdvbcsa 1.2.0 (Alexandre Becoulet, 2006-2008; параллельная часть основана на коде fatih89r, 2003-2004; github.com/oe-mirrors/libdvbcsa) по лицензии GPL 2 или более поздней.",
+    "tr": "Ortak DVB şifreleme algoritması (CSA), GPL 2 veya sonrası lisansı altındaki libdvbcsa 1.2.0 kütüphanesinden gelir (Alexandre Becoulet, 2006-2008; paralel kısım fatih89r'ın koduna dayanır, 2003-2004; github.com/oe-mirrors/libdvbcsa)."
    }
   },
   {

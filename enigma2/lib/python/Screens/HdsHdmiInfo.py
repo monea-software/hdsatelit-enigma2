@@ -96,7 +96,7 @@ class HdsHdmiInfo(Screen, HelpableScreen):
 	def __init__(self, session, radacina='/'):
 		Screen.__init__(self, session)
 		HelpableScreen.__init__(self)
-		self.setTitle(D.TITLU)
+		self.setTitle(_(D.TITLU))
 		self.radacina = radacina       # alt dosar doar la probe (emulatorul nu are /proc/msp)
 		self.stare = None
 		self.ultimaCitire = None       # time.monotonic() la ultima citire care a gasit ceva
@@ -113,22 +113,22 @@ class HdsHdmiInfo(Screen, HelpableScreen):
 			self['coloana%d' % i] = MenuList([], content=eListboxPythonMultiContent)
 		self['brut'] = ScrollLabel('')
 		self['actualizat'] = Label('')
-		self['key_red'] = Label('Închide')
-		self['key_blue'] = Label('Text brut')
+		self['key_red'] = Label(_('Închide'))
+		self['key_blue'] = Label(_('Text brut'))
 
 		self['actiuni'] = HelpableActionMap(self, 'OkCancelActions', {
-			'ok': (self.close, 'Închide'),
-			'cancel': (self.close, 'Închide'),
+			'ok': (self.close, _('Închide')),
+			'cancel': (self.close, _('Închide')),
 		}, -1)
 		self['culori'] = HelpableActionMap(self, 'ColorActions', {
-			'red': (self.close, 'Închide'),
-			'blue': (self.keyAlbastru, 'Textul brut al driverului sau rezumatul'),
+			'red': (self.close, _('Închide')),
+			'blue': (self.keyAlbastru, _('Textul brut al driverului sau rezumatul')),
 		}, -1)
 		self['directii'] = HelpableActionMap(self, 'DirectionActions', {
-			'up': (self.keySus, 'Pagina de sus'),
-			'down': (self.keyJos, 'Pagina de jos'),
-			'left': (self.keyStanga, 'Fișierul anterior (text brut)'),
-			'right': (self.keyDreapta, 'Fișierul următor (text brut)'),
+			'up': (self.keySus, _('Pagina de sus')),
+			'down': (self.keyJos, _('Pagina de jos')),
+			'left': (self.keyStanga, _('Fișierul anterior (text brut)')),
+			'right': (self.keyDreapta, _('Fișierul următor (text brut)')),
 			'upRepeated': self.keySus,
 			'downRepeated': self.keyJos,
 			'leftRepeated': self._nimic,         # tinuta apasat, Stanga/Dreapta nu sar peste fisiere
@@ -251,11 +251,11 @@ class HdsHdmiInfo(Screen, HelpableScreen):
 		varsta = None if self.ultimaCitire is None else time.monotonic() - self.ultimaCitire
 		text = D.text_actualizat(varsta, CITIRE_LA * BATAIE_MS / 1000.0)
 		if self.brutVizibil and self.numarPagini > 1:
-			text = 'Stânga/Dreapta: alt fișier · Sus/Jos: derulare · ' + text
+			text = _('Stânga/Dreapta: alt fișier · Sus/Jos: derulare · %s') % text
 		elif not self.brutVizibil:
 			pagina, pagini = self._pagina()
 			if pagini > 1:
-				text = 'Sus, Jos, CH+ și CH-: altă pagină (pagina %d din %d) · %s' % (pagina, pagini, text)
+				text = _('Sus, Jos, CH+ și CH-: altă pagină (pagina %d din %d) · %s') % (pagina, pagini, text)
 		self['actualizat'].setText(text)
 
 	def _pagina(self):
@@ -358,12 +358,12 @@ class HdsHdmiInfo(Screen, HelpableScreen):
 		pagini = D.pagini_brute(self.stare) if self.stare is not None else []
 		self.numarPagini = len(pagini)
 		if not pagini:
-			self.setTitle('%s: text brut' % D.TITLU)
-			text = 'Receptorul nu are fișierele driverului HDMI (/proc/msp/hdmi0 și celelalte).'
+			self.setTitle(_('%s: text brut') % _(D.TITLU))
+			text = _('Receptorul nu are fișierele driverului HDMI (/proc/msp/hdmi0 și celelalte).')
 		else:
 			self.paginaBruta %= len(pagini)
 			_titlu, cale, text = pagini[self.paginaBruta]
-			self.setTitle('%s: %s (%d din %d)' % (D.TITLU, cale, self.paginaBruta + 1, len(pagini)))
+			self.setTitle(_('%s: %s (%d din %d)') % (_(D.TITLU), cale, self.paginaBruta + 1, len(pagini)))
 		if text == self.textBrut and not sus:
 			return
 		pagina = 0 if sus else self._paginaBruta()
@@ -391,7 +391,7 @@ class HdsHdmiInfo(Screen, HelpableScreen):
 			for i in (1, 2, 3):
 				self['coloana%d' % i].hide()
 			self['brut'].show()
-			self['key_blue'].setText('Pe scurt')
+			self['key_blue'].setText(_('Pe scurt'))
 			self.textBrut = None
 			self._citeste()                # dosarele /proc/stb intregi, doar cat se vede pagina bruta
 			self._deseneazaBrut(sus=True)
@@ -399,8 +399,8 @@ class HdsHdmiInfo(Screen, HelpableScreen):
 			self['brut'].hide()
 			for i in (1, 2, 3):
 				self['coloana%d' % i].show()
-			self['key_blue'].setText('Text brut')
-			self.setTitle(D.TITLU)
+			self['key_blue'].setText(_('Text brut'))
+			self.setTitle(_(D.TITLU))
 			self._arataVarsta()
 
 	def keySus(self):

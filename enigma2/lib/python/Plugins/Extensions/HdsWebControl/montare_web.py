@@ -45,18 +45,33 @@ def _lucru(M):
 	return {"fel": l["fel"], "disc": l["dispozitiv"], "stare": l["stare"], "text": l["mesaj"]}
 
 
-def stare(M=None, cere=None):
+CHEIE_CITIRE = ("montare-discuri-web",)
+
+
+def stare(M=None, cere=None, citireTerminata=None):
 	"""GET /api/montare-discuri: {"result", "discuri": [...], "asteapta", "lucru"}."""
 	M = _m(M)
 	if cere is None:
-		from Components.HdsStocareDisc import cere
-	rez = cere(("montare-discuri-web",), M.lista, termen=TERMEN_CITIRE_S, varsta=1)
+		from Components.HdsStocareDisc import cere, stare as citireTerminata
+	elif citireTerminata is None:
+		citireTerminata = lambda cheie: None
+	# 0.7.7 (DRG, darog69, Vu+ Duo4K, forum 789 #2619): rezultatul citirii se tine 1 s, iar pagina intreaba din nou dupa
+	# 0,7 s; pe un receptor ocupat a doua intrebare venea dupa ce rezultatul expirase, pornea o citire noua si pagina ramanea
+	# la "Se citesc discurile...". Citirea terminata intre doua intrebari se ia acum inainte sa porneasca alta.
+	terminata = citireTerminata(CHEIE_CITIRE)
+	rez = cere(CHEIE_CITIRE, M.lista, termen=TERMEN_CITIRE_S, varsta=1)
+	if rez["stare"] == "asteapta" and terminata is not None and terminata.get("stare") == "gata":
+		rez = terminata
 	date = {"result": True, "discuri": [], "asteapta": False, "lucru": _lucru(M)}
 	if rez["stare"] == "asteapta":
 		date["asteapta"] = True
 	elif rez["stare"] != "gata":
 		date.update(result=False, message=_t("Discul nu răspunde la timp. Încearcă din nou."))
 	else:
+		repara = getattr(M, "reparaNecunoscute", None)
+		if repara is not None:
+			# discurile montate pe care managerul nu le stie intra din nou in lista lui (pe firul interfetei)
+			repara(rez["valoare"] or [])
 		for r in rez["valoare"] or []:
 			date["discuri"].append(dict(r, text_stare=M.textStare(r)))
 	return date

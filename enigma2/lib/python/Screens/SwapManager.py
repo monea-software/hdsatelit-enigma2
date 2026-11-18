@@ -32,6 +32,11 @@ def _swapuriActive():
 
 
 class SwapManager(Screen):
+	# FUR (16.11.2026): ecranul cu acelasi nume din temele OE-Alliance e alt ecran (etichetele lab1..lab4, labplace, labsize,
+	# active/inactive, fara lista discurilor): sub o tema straina se ia ecranul HDSatelit al imaginii, fara rezerva si fara
+	# mesaj catre om (skin.readSkin; Wlad, forum 948 #2874, raportul 712654)
+	hdsEcranPropriu = True
+
 	skin = """
 	<screen name="SwapManager" resolution="1920,1080" position="center,center" size="1000,520" title="Fișier de swap (memorie virtuală)">
 		<widget name="lista" position="30,30" size="940,280" font="Regular;22" itemHeight="40" scrollbarMode="showOnDemand" />

@@ -149,11 +149,45 @@ def _stocare(radacina):
 	return r
 
 
+def _phiTinut(radacina):
+	"""True cand /proc/stb/audio/ac3 se poate citi: nu exista /dev/phi (alt driver) sau un proces il tine deschis numai
+	pentru citire. Pe HiSilicon (hi_dvb al familiei SF8008) citirea lui ac3 ia valoarea dintr-o zona care exista numai
+	cat demonul platformei (libreader) tine /dev/phi; fara el citirea opreste nucleul. Aceeasi paza ca scrierea
+	intarzierii sunetului in enigma2 (lib/dvb/hdspazaphi.h): legatura /proc/<pid>/fd/<n> spre /dev/phi si, in
+	fdinfo/<n>, modul de acces O_RDONLY."""
+	if not os.path.exists(B._cale(radacina, "/dev/phi")):
+		return True
+	proc = B._cale(radacina, "/proc")
+	try:
+		pids = [p for p in os.listdir(proc) if p.isdigit()]
+	except OSError:
+		return False
+	for p in pids:
+		dosar = os.path.join(proc, p, "fd")
+		try:
+			fds = os.listdir(dosar)
+		except OSError:
+			continue
+		for n in fds:
+			try:
+				if os.readlink(os.path.join(dosar, n)) != "/dev/phi":
+					continue
+				with open(os.path.join(proc, p, "fdinfo", n)) as f:
+					for rand in f:
+						if rand.startswith("flags:") and int(rand.split()[1], 8) & 3 == os.O_RDONLY:
+							return True
+			except (OSError, ValueError, IndexError):
+				continue
+	return False
+
+
 def _imagine(radacina):
 	r = ["hdmi=%s" % B._hdmi(radacina)]
-	for cale in ("/proc/stb/video/videomode", "/proc/stb/video/aspect", "/proc/stb/vmpeg/0/xres",
-			"/proc/stb/vmpeg/0/yres", "/proc/stb/vmpeg/0/framerate", "/proc/stb/audio/hdmi_choices",
-			"/proc/stb/audio/ac3"):
+	cai = ["/proc/stb/video/videomode", "/proc/stb/video/aspect", "/proc/stb/vmpeg/0/xres",
+		"/proc/stb/vmpeg/0/yres", "/proc/stb/vmpeg/0/framerate", "/proc/stb/audio/hdmi_choices"]
+	if _phiTinut(radacina):
+		cai.append("/proc/stb/audio/ac3")
+	for cale in cai:
 		v = _citeste(radacina, cale, 256).strip()
 		if v:
 			r.append("%s=%s" % (cale.rsplit("/", 2)[-2] + "/" + cale.rsplit("/", 1)[-1], B._txt(v, 80)))

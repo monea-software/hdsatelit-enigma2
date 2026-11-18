@@ -258,6 +258,12 @@ class eDVBCICcSession : public eDVBCISession
 	bool m_cheie_primita;
 	std::map<uint16_t, std::vector<uint16_t> > m_programe;
 	void cheieRefuzata(int eroare);
+	/* HD Satelit: forma „OE 2.2” a cererilor (descrambler_oe22_*), aleasa cand driverul refuza forma OE-Alliance peste tot */
+	bool m_oe22;
+	int m_oe22_index;
+	bool m_oe22_cheie_dupa_pid;
+	bool m_cheie_refuzata;
+	bool incearcaOe22(char *incercate, size_t marime);
 
 	int receivedAPDU(const unsigned char *tag, const void *data, int len);
 	int doAction();

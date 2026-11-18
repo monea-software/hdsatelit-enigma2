@@ -209,11 +209,23 @@ def asiguraCertificat(dosar=DOSAR):
 	return cert_pem, cheie_pem, False
 
 
-def _asculta(reactor):
+def optiuniTls(cert_pem, cheie_pem):
+	"""Optiunile TLS ale portului 443: certificatul receptorului si negocierea ALPN cu un singur protocol, http/1.1.
+	De ce: toate browserele trimit ALPN (h2 si http/1.1). Fara o lista a serverului, Twisted 26.4 (cel din imagine)
+	raspundea cu alerta TLS internal_error, deci https://hdsatelit.local nu se deschidea in niciun browser
+	(ERR_SSL_PROTOCOL_ERROR, fara pagina de acceptare a certificatului), iar un browser care trece singur pe https
+	(Brave cu upgrade-ul HTTPS strict) nu putea ramane pe https. Lista sta in optiuni, nu in fabrica serverului: asa merge
+	si cu Twisted 25.5, unde fabrica cu negociere schimba contextul TLS dupa prima conexiune, iar pyOpenSSL nou refuza.
+	Numai http/1.1: canalul serverului (plugin._construiesteServer) nu vorbeste HTTP/2."""
 	from twisted.internet import ssl
+	certificat = ssl.PrivateCertificate.loadPEM(cert_pem + b"\n" + cheie_pem)
+	return ssl.CertificateOptions(privateKey=certificat.privateKey.original, certificate=certificat.original,
+		acceptableProtocols=[b"http/1.1"])
+
+
+def _asculta(reactor):
 	cert_pem, cheie_pem, unused = asiguraCertificat()
-	optiuni = ssl.PrivateCertificate.loadPEM(cert_pem + b"\n" + cheie_pem).options()
-	port = reactor.listenSSL(PORT_HTTPS, _fabrica(), optiuni)
+	port = reactor.listenSSL(PORT_HTTPS, _fabrica(), optiuniTls(cert_pem, cheie_pem))
 	nume, adrese = numeDorite()
 	_stare.update(pornit=True, motiv="", nume=nume + adrese, port=port)
 	_jurnal("pornit pe portul %d" % PORT_HTTPS)

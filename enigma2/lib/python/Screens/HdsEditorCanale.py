@@ -2187,6 +2187,72 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		self.session.open(MessageBox, _('Lista sateliților imaginii e pusă la loc. Se vede după repornirea interfeței.'),
 			MessageBox.TYPE_INFO, timeout=10)
 
+	# SAT (0.7.7, 16.11.2026; forum 1588 lme, Eduard 06:32): un satelit scos din lista satelitilor, pe televizor. Pana acum
+	# numai in web (Mod avansat), iar unirea de la pornire il punea inapoi; acum ramane scos (Components/HdsSatelitiImagine.py),
+	# tunerele care il foloseau trec pe "nimic conectat" / LNB nefolosit, iar interfata reporneste in aceeasi confirmare
+	# (alegerile tunerelor si lista lor se fac la pornire), numai cand editorul nu are schimbari nesalvate.
+
+	def _inListaSatelitilor(self, poz):
+		try:
+			from Components import HdsEditorCanaleDate as D
+			return int(poz) in D.citeste_sateliti()
+		except Exception:
+			return False
+
+	def _alegeSatelitDeSters(self, a=None):
+		if isinstance(a, tuple) and len(a) > 1:
+			self._intreabaStergereSatelit(a[1])
+			return
+		try:
+			from Components import HdsEditorSateliti as S
+			from Components import HdsEditorCanaleDate as D
+			sateliti = S.citeste().lista
+		except Exception as e:
+			self.session.open(MessageBox, e.mesaj() if hasattr(e, 'mesaj') else '%s' % e, MessageBox.TYPE_ERROR)
+			return
+		lista = [(u'%s  %s' % (D.text_pozitie(s.poz), s.name), s.poz) for s in
+			sorted(sateliti, key=lambda s: s.poz - 3600 if s.poz > 1800 else s.poz)]
+		self.session.openWithCallback(self._satelitDeStersAles, ChoiceBox, title=_('Șterge un satelit din listă…'),
+			list=lista)
+
+	def _satelitDeStersAles(self, ales):
+		if ales and not self.inchis:
+			self._intreabaStergereSatelit(ales[1])
+
+	def _intreabaStergereSatelit(self, poz):
+		try:
+			from Components import HdsEditorSateliti as S
+			from Components import HdsEditorCanaleDate as D
+			from Components import HdsSatelitiImagine as SI
+			s = S.citeste().satelit(poz)
+		except Exception as e:
+			self.session.open(MessageBox, e.mesaj() if hasattr(e, 'mesaj') else '%s' % e, MessageBox.TYPE_ERROR)
+			return
+		text = _('Ștergi %s din lista sateliților? Nu mai revine singur.') % (u'%s %s' % (D.text_pozitie(s.poz), s.name))
+		tunere = SI.scoate_de_la_tunere([s.poz], aplica=False)
+		if tunere:
+			text += '\n' + _('Se scoate și de la tunere: %s.') % SI.text_scoase(tunere)
+		repornire = not (self.s is not None and self.s.nesalvate())
+		text += '\n' + (_('Interfața repornește după ștergere.') if repornire else
+			_('Se vede peste tot după repornirea interfeței.'))
+		self.session.openWithCallback(boundFunction(self._raspunsStergereSatelit, s.poz, repornire), MessageBox, text,
+			MessageBox.TYPE_YESNO, default=False)
+
+	def _raspunsStergereSatelit(self, poz, repornire, da):
+		if not da or self.inchis:
+			return
+		try:
+			from Components import HdsSatelitiImagine as SI
+			SI.sterge_din_lista(poz)
+		except Exception as e:
+			self.session.open(MessageBox, e.mesaj() if hasattr(e, 'mesaj') else '%s' % e, MessageBox.TYPE_ERROR)
+			return
+		if repornire:
+			from Screens.Standby import TryQuitMainloop
+			self.session.open(TryQuitMainloop, 3)
+		else:
+			self._spune(_('Satelitul e șters din lista sateliților.'))
+
 	def _fa(self, functie, *a, **k):
 		"""O operatie a partii comune; o eroare pentru om apare in indiciu. -> rezultatul sau None (si False la eroare)."""
 		try:
@@ -2950,6 +3016,9 @@ class HdsEditorCanale(Screen, HelpableScreen):
 					lista.append((_('Buchet nou din %s') % r[1][2], 'buchet_din'))
 				if r[1][0] in ('satelit', 'transponder'):
 					lista.append((_('Șterge din receptor: %s') % r[1][2], 'sterge_dosar'))
+				# SAT (0.7.7): satelitul scos din satellites.xml (nu revine singur la pornire), nu si canalele lui
+				if r[1][0] == 'satelit' and self._inListaSatelitilor(r[1][1]):
+					lista.append((_('Șterge din lista sateliților: %s') % r[1][2], ('sterge_satelit_lista', r[1][1])))
 			if canal and getattr(self, 'varianteSursa', {}).get(_g(obj, 'cheie')):
 				lista.append((_('Alte variante (%d)') % len(self.varianteSursa[_g(obj, 'cheie')]), 'alte_variante'))
 			if canal:
@@ -3008,13 +3077,16 @@ class HdsEditorCanale(Screen, HelpableScreen):
 		# SXE (0.7.5): lista intreaga a imaginii in locul celei a omului (transponderele noi vin singure la pornire)
 		if self._listaSatelitiProprie():
 			lista.append((_('Înapoi la lista sateliților imaginii'), 'inapoi_imagine'))
+		# SAT (0.7.7): un satelit scos din lista satelitilor, ales din lista (cu tunerele curatate si repornirea interfetei)
+		lista.append((_('Șterge un satelit din listă…'), 'sterge_satelit_lista'))
 		lista.append((_('Lista radio') if not self.radio else _('Lista TV'), 'lista'))
 		lista.append((_('Ajutorul editorului'), 'ajutor'))
 		# Uneltele folosite rar au un singur loc. Mutarea si lucrul cu buchetele raman direct in meniu.
 		rare = frozenset(('test', 'dubluri', 'moarte', 'verifica', 'goale', 'transpondere', 'fluxuri', 'sigle',
 			'curatenie', 'importa', 'exporta', 'exporta_m3u', 'copii', 'alt_noi', 'alt_desface', 'alt_pune',
 			'editeaza_flux', 'flux', 'sterge_sateliti', 'pastreaza_sateliti', 'sterge_tp_bifate', 'sterge_dosar',
-			'sterge_receptor', 'scoate_nou', 'sterge_nelegat', 'leaga', 'sateliti_imagine', 'inapoi_imagine'))
+			'sterge_receptor', 'scoate_nou', 'sterge_nelegat', 'leaga', 'sterge_satelit_lista',
+			'sateliti_imagine', 'inapoi_imagine'))
 		def actiune(rand):
 			return rand[1][0] if isinstance(rand[1], tuple) else rand[1]
 		self._meniuAvansat = [rand for rand in lista if actiune(rand) in rare]
@@ -3187,6 +3259,7 @@ class HdsEditorCanale(Screen, HelpableScreen):
 			'pastreaza_sateliti': lambda a: self._stergeSateliti(True),
 			'sterge_tp_bifate': self._stergeTpBifate,
 			'sterge_dosar': self._stergeDosar,
+			'sterge_satelit_lista': self._alegeSatelitDeSters,
 			'adauga_inainte': lambda a: self._adaugaLa(False),
 			'adauga_inceput': lambda a: self._adaugaLa(True),
 			'scoate_nou': self._scoateNou,

@@ -15,6 +15,16 @@
 #     înăuntru un dosar cu lamedb sau settings;
 #   - copiile de siguranță făcute de receptor înaintea unui import sau a unei actualizări
 #     (/etc/enigma2/hds-backup-setari-*), la sfârșit: cu ele se poate întoarce un import.
+# Când imaginea pornește de pe un stick sau un disc (un loc de pe USB), celelalte partiții ale lui sunt tot stickul
+# omului, nu memoria receptorului, iar partiția rădăcinii montată întreagă și altundeva (un loc de pe disc, /media/hdd)
+# se caută și ea, fără locul pornit acum (medii cu discul_pornirii, _chei_proprii). Sub rădăcina unei imagini nu se
+# coboară în dosarele sistemului; copiile complete ale altor imagini (cu ghidul TV, /home, modulele) se citesc până la
+# MAX_ARHIVA_MEDIU, după copiile mici de pe același mediu, iar la o limită copia găsită până acolo rămâne. Fiecare
+# montare sărită și fiecare mediu căutat lasă un rând în jurnal.
+# Locurile altor imagini din memoria receptorului (pornire multiplă cu rootsubdir=linuxrootfsN: Ustym 4K PRO, SF8008,
+# V10, Trio 4K, HD51), fără stick: surse_memorie, mediul "memorie". Partiția locurilor se montează NUMAI pentru citit
+# într-un dosar al ei din /tmp cât ține căutarea și din nou cât ține importul (monteaza_numai_citire), apoi se
+# demontează; locul pornit acum se sare. Pe partițiile memoriei nu se scrie nimic.
 # Se sar: dosarul amiko/ (fișierele Maintenance Mode), dosarele ascunse și ale sistemului Windows, legăturile
 # simbolice și dosarele modulelor de acces condiționat, recunoscute fără să li se știe numele (după felul în care își
 # numesc fișierele și după locurile lor standard, vezi _nume_de_modul și _loc_acces): nu devin surse, nu se citesc, nu
@@ -48,10 +58,19 @@
 # listă prin import sunt notate ca aduse din altă listă (semnul din lista Sateliți, cât receptorul nu le-a recepționat);
 # întoarcerea unui import din copia receptorului pune la loc originea din copie, care o are (copie_de_siguranta o ia).
 #
-# După scriere: rândurile buchetelor imaginii (userbouquet.hds_*: DAB+ și DVB-T2 din satelit) se pun la loc în indexul
-# luat din copie (pune_la_loc_buchetele_imaginii); înregistrările programate importate intră și în lista din memorie a
-# lui RecordTimer (incarca_temporizatoarele, în incheie_importul), altfel ieșirea interfeței le scria peste: lista care
-# rămâne e unirea celor de pe receptor cu cele din copie, fără dubluri (timers.xml importat e înlocuit de această
+# După scriere: rândurile buchetelor care nu țin de lista de canale se pun la loc, la sfârșit, în indexul luat din copie
+# (randuri_buchete_imagine, pune_la_loc_buchetele_imaginii): ale imaginii, pe care le scriu ea și extensiile ei din
+# starea lor, nu din listă (userbouquet.hds*: IPTV, DVB-I, DAB+ și DVB-T2 din satelit; locurile extensiilor din
+# hds_locuri, de pildă Radio online), de la orice sursă; ale omului care nu depind de lamedb (numai fluxuri de internet,
+# buchete din el sau gol, ca la listele de pe internet, Components/HdsListeInternet.py), numai când sursa nu e o copie
+# a acestui receptor: întoarcerea la o copie aduce lista exact cum era. Fișierele din sursă se copiază ca înainte, în afară
+# de buchetele imaginii care sunt deja pe receptor (buchete_imagine_pe_receptor): ale lui rămân, cu sub-buchetele lor, nu
+# cele din copie. În rezultat, "buchete_pastrate" (nu se numără ca aduse). Apoi randurile indexului copiei care trimit la
+# un userbouquet fara fisier pe receptor se scot (scoate_randurile_fara_fisier): buchetul n-ar avea ce deschide.
+# Numele buchetelor (TIPAR_BUCHET) primesc litere cu diacritice, spatii si &, ca in listele obisnuite (din 0.7.7); un nume
+# citit de pe un stick FAT montat cu iocharset=iso8859-1 (octeti latin-1) se scrie pe receptor in UTF-8 (buchet_latin1).
+# Înregistrările programate importate intră și în lista din memorie a lui RecordTimer (incarca_temporizatoarele, în
+# incheie_importul), altfel ieșirea interfeței le scria peste: lista care rămâne e unirea celor de pe receptor cu cele din copie, fără dubluri (timers.xml importat e înlocuit de această
 # unire la prima salvare). Cheile tunerelor puse de unele imagini sub config.Nims.N.dvbs.* se aduc la forma imaginii, iar
 # valorile implicite ale imaginii sursă care diferă de ale acesteia se scriu (chei_setari_cu_note,
 # chei_tuner_imagine). O arhivă fără lamedb sau settings direct, dar cu o arhivă de copie înăuntru (copia programată a
@@ -66,11 +85,13 @@
 # mai dă nimănui. Fișierul nu importă nimic din enigma2 la încărcare: probele de pe PC îl folosesc direct.
 
 import glob
+import json
 import os
 import posixpath
 import re
 import shutil
 import stat
+import subprocess
 import sys
 import threading
 import time
@@ -89,10 +110,14 @@ ADANCIME = 3                  # cât de adânc se caută pe un mediu (rădăcina
 MAX_DOSARE = 600              # dosare citite pe un mediu
 MAX_INTRARI = 5000            # intrări citite dintr-un singur dosar (un dosar picon/ poate avea zeci de mii)
 TERMEN_S = 20.0               # toată căutarea
-MAX_ARHIVA = 32 * 1024 * 1024  # mărimea arhivei pe disc
-MAX_MEMBRI = 2000
+MAX_ARHIVA = 32 * 1024 * 1024  # arhiva trimisă din calculator (ține în memorie); pe mediu, peste ea = arhivă mare
+# O arhivă tar de pe stick sau disc se citește de acolo, pe bucăți, deci poate fi mai mare: copiile complete ale altor
+# imagini au și ghidul TV (epg.dat din etc/enigma2), /home și modulele. Cele mari se citesc după celelalte de pe același
+# mediu (cauta_pe_mediu), ca să nu ia timpul copiilor mici.
+MAX_ARHIVA_MEDIU = 256 * 1024 * 1024
+MAX_MEMBRI = 20000
 MAX_OCTETI = 32 * 1024 * 1024  # totalul fișierelor scrise dintr-o arhivă
-MAX_DECOMPRIMAT = 128 * 1024 * 1024  # cât se decomprimă dintr-o arhivă, la căutare și la pregătire
+MAX_DECOMPRIMAT = 512 * 1024 * 1024  # cât se decomprimă dintr-o arhivă, la căutare și la pregătire
 MAX_EXTRA = 4 * 1024 * 1024  # un fișier al rețelei sau o listă de pachete dintr-o arhivă
 MAX_INTERIOARE = 3            # arhivele din interiorul unei arhive cercetate (copia programată a unei imagini are una)
 PASTRATE_COPII = 5            # copiile de siguranță ale importului păstrate în /etc/enigma2 (cele mai noi)
@@ -100,9 +125,35 @@ REZERVA_SPATIU = 1024 * 1024  # spațiul lăsat liber pe /etc/enigma2 după copi
 # settings intră în copie fără jetonul interfeței web (e numai al acestui receptor) și fără depanarea pornită
 CHEI_SCOASE_DIN_COPIE = ("config.plugins.hdswebcontrol.token", "config.crash.enabledebug")
 
-FS_MEDII = ("vfat", "exfat", "ntfs", "ntfs3", "fuseblk", "ext2", "ext3", "ext4", "hfsplus", "btrfs", "xfs", "f2fs")
+FS_MEDII = ("vfat", "msdos", "exfat", "ntfs", "ntfs3", "fuseblk", "ext2", "ext3", "ext4", "hfsplus", "btrfs", "xfs",
+	"f2fs", "tntfs", "texfat", "ufsd", "sdfat")
+# Prin FUSE (exFAT si NTFS pe nucleele fara driver): fuseblk, sau cu subtipul pus de programul de montare
+# (fuseblk.exfat, fuse.exfat, fuseblk.ntfs-3g); sursa ramane dispozitivul (/dev/sda1).
+PREFIXE_FS_FUSE = ("fuseblk.", "fuse.")
 TIPAR_DISPOZITIV = re.compile(r"^/dev/(sd[a-z]+|hd[a-z]+|mmcblk\d+|nvme\d+n\d+)(?:p?\d+)?$")
 SUFIXE_ARHIVA = (".tar.gz", ".tgz", ".tar", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
+# rootfs-ul unei imagini (din copiile complete de imagine): nu e o copie a setarilor si se citeste foarte incet (bz2/xz)
+TIPAR_ROOTFS = re.compile(r"^rootfs[^/]*\.(tar|tgz|tbz2|txz)", re.I)
+# Dosarele sistemului de sub radacina unei imagini (rootfs-ul altui loc montat intreg, o copie a radacinii): acolo nu
+# stau copii ale setarilor, iar coborarea in ele ar lua bugetul dosarelor si timpul cautarii.
+DOSARE_SISTEM = ("bin", "boot", "dev", "lib", "lib32", "lib64", "media", "mnt", "proc", "run", "sbin", "srv", "sys",
+	"tmp", "usr", "var")
+# Montarile de lucru ale receptorului intr-un dosar hds-* din /tmp (/tmp e legatura spre /var/volatile/tmp): lista
+# pornirii multiple (Components/HdsPornireMultipla.py, hds-pornire-*), copia imaginii (hds-copie-imagine-radacina). Nu
+# sunt medii: tin cateva secunde, iar o cautare care le-ar citi ar putea opri demontarea lor.
+TIPAR_MONTARE_LUCRU = re.compile(r"^(?:/var/volatile)?/tmp/hds-[^/]+/?$")
+# 0.7.7: locurile altor imagini din memoria receptorului. Partitia lor (userdata la SF8008 si inrudite, p3 si p8 la
+# HD51) e montata de sistem numai ca / (subdosarul locului pornit) sau deloc. Se monteaza in DOSAR_MEMORIE % <partitia>
+# (nu incepe cu hds-import: curata_tmp sterge /tmp/hds-import.*): o partitie deja montata cu montarea simpla (o a doua
+# montare cu -o ro da EBUSY pe nucleul 4.4) si apoi `mount -o remount,bind,ro` numai pe ea, pe calea reala (busybox
+# cauta in /proc/mounts /var/volatile/tmp/..., nu /tmp/..., si altfel nu face nimic); o partitie nemontata cu ro,noload.
+# Fara "ro" dovedit in mountinfo pentru montarea noastra: demontata si sarita (probat pe receptor: scrierea prin ea cade
+# cu Read-only file system, iar / ramane rw).
+DOSAR_MEMORIE = "/tmp/hds-locuri-ro-%s"
+CALE_MOUNTINFO = "/proc/self/mountinfo"
+TIPAR_PARTITIE_MEMORIE = re.compile(r"^/dev/mmcblk0p[1-9][0-9]*$")
+TIPAR_LOC_MEMORIE = re.compile(r"^linuxrootfs[1-9][0-9]*$")
+TERMEN_MEMORIE_S = 5.0          # cautarea in locurile din memorie, din TERMEN_S
 # 0.7.5/0.7.6 (SMB, TODO 15.11 06:20 (import .zip)): copiile unor imagini sunt arhive zip. Zip-ul se citeste prin
 # _ArhivaZip, cu aceeasi forma ca tarfile (membri, extractfile), deci cautarea si pregatirea sunt aceleasi. Un zip se
 # judeca dupa cuprinsul lui (lista de la coada, fara decomprimare), nu dupa marime: imaginile de scris de pe stick sunt
@@ -123,10 +174,48 @@ FISIERE_CANALE = ("lamedb", "lamedb5", "bouquets.tv", "bouquets.radio")
 FISIERE_TEMPORIZATOARE = ("timers.xml", "autotimer.xml")
 NUME_ORIGINE = "hds_origine_pozitii.json"    # Components/HdsIstoricSemnal.NUME_ORIGINE
 NUME_SETARI = ("settings", "settings-fara-token")
-TIPAR_BUCHET = re.compile(r"^userbouquet\.[A-Za-z0-9_.@+-]{1,120}\.(tv|radio)$")
+# 0.7.7 (BQN, asistenta 365893): numele unui fisier de buchet se judeca dupa ce nu are voie sa aiba, nu dupa o lista de
+# litere permise. Listele obisnuite au in nume litere cu diacritice (Türksat, TurkmenÄlem), spatii, &, apostrofuri sau
+# paranteze; tiparul vechi, numai ASCII, le lasa pe dinafara la import si in copia de siguranta, iar randul lor ramanea
+# in bouquets.tv (buchetul disparea fara niciun mesaj). Refuzate: / si \ (cai), ghilimelele (incheie numele in randul
+# FROM BOUQUET citit de nucleu), : si % (nucleul le scrie in referinta ca %xx si le decodeaza la citire,
+# lib/service/service.cpp, deci randul din index n-ar mai avea acelasi nume ca fisierul), caracterele de control (si
+# C1), despartitoarele de rand pe care le vede splitlines (U+2028, U+2029) si octetii care nu sunt UTF-8 (surogatele lui
+# surrogateescape: nu se pot scrie in jurnal si in JSON). Cel mult MAX_OCTETI_NUME octeti UTF-8: impreuna cu ".nou" al
+# scrierilor atomice incape in 255, limita unui nume de fisier.
+MAX_OCTETI_NUME = 250
+_TIPAR_NUME_BUCHET = re.compile('^userbouquet\\.[^\\x00-\\x1f\\x7f-\\x9f/\\\\":%\\u2028\\u2029\\ud800-\\udfff]+'
+	'\\.(tv|radio)\\Z')
+
+
+class _NumeBuchet(object):
+	"""TIPAR_BUCHET: match(nume) ca la un tipar re (None sau potrivirea), cu lungimea numarata in octeti UTF-8."""
+
+	def match(self, nume):
+		if not isinstance(nume, str):
+			return None
+		m = _TIPAR_NUME_BUCHET.match(nume)
+		if m is None or len(nume.encode("utf-8")) > MAX_OCTETI_NUME:
+			return None
+		return m
+
+
+TIPAR_BUCHET = _NumeBuchet()
 TIPAR_RAND_INDEX = re.compile(r'^#SERVICE\s+1:7:\d+:.*FROM BOUQUET\s+"([^"]+)"', re.I)
 INDEXURI_BUCHETE = ("bouquets.tv", "bouquets.radio")
 PREFIX_BUCHET_IMAGINE = "userbouquet.hds_"
+# 0.7.7: buchetele care rămân în index după import (randuri_buchete_imagine). Ale imaginii:
+# userbouquet.hds* (hdsiptv, hdsdvbi, hds_dab, hds_t2, hds_abertis; ca Components/HdsBucheteOrfane.PREFIX_PROPRII) și
+# rădăcinile locurilor extensiilor (Components/HdsLocuriLista.py, /etc/enigma2/hds_locuri/<id>.json, câmpul "buchet").
+PREFIX_BUCHETE_IMAGINE = "userbouquet.hds"
+DOSAR_LOCURI = "hds_locuri"
+MAX_LOC = 64 * 1024           # un fișier al registrului locurilor
+# ale listei de canale, nu ale omului: favoritele vin din sursă, ultima scanare ține de lista veche
+BUCHETE_LISTEI = ("userbouquet.favourites.tv", "userbouquet.favourites.radio", "userbouquet.LastScanned.tv",
+	"userbouquet.LastScanned.radio")
+TIPAR_SERVICIU = re.compile(r"^#SERVICE ", re.I)
+TIPAR_ETICHETA = re.compile(r"^#SERVICE\s+1:64:", re.I)
+TIPAR_TRIMITERE = re.compile(r"^#SERVICE\s+1:7:", re.I)
 ANTET_LAMEDB = {"lamedb": "eDVB services /4/", "lamedb5": "eDVB services /5/"}
 CHEI_TUNERE = ("config.Nims.",)
 TIPAR_CHEIE_NIMS = re.compile(r"^config\.Nims\.(\d+)\.(.+)$")
@@ -141,7 +230,7 @@ CHEI_SATELIT = ("diseqcMode", "diseqcA", "diseqcB", "diseqcC", "diseqcD", "simpl
 # imaginilor salvate și ale asistentului de restaurare, alta după "dvbs."
 SEMNE_SINGLE = ("config.backupmanager.", "config.imagemanager.", "config.misc.restorewizardrun")
 
-ORDINE_MEDIU = {"calculator": -1, "stick": 0, "disc": 1, "intern": 2, "receptor": 3}
+ORDINE_MEDIU = {"calculator": -1, "stick": 0, "disc": 1, "intern": 2, "memorie": 3, "receptor": 4}
 # alegerile importului: (cheia, câmpul sursei care trebuie să fie adevărat ca alegerea să aibă sens)
 ALEGERI = (("canale", "canale"), ("tunere", "setari"), ("temporizatoare", "temporizatoare"), ("retea", "retea"),
 	("picon", "picon"), ("generale", "setari"), ("acces", "acces"), ("pachete", "pachete"))
@@ -221,12 +310,40 @@ def ngettext(unu, multe, n):
 def fisier_permis(nume):
 	"""Numele unui fișier din lista albă a importului (numai numele, fără dosar)."""
 	return (nume in FISIERE_CANALE or nume in FISIERE_TEMPORIZATOARE or nume in NUME_SETARI
-		or bool(TIPAR_BUCHET.match(nume)))
+		or bool(TIPAR_BUCHET.match(nume)) or buchet_latin1(nume) is not None)
+
+
+def buchet_latin1(nume):
+	"""Numele UTF-8 al unui buchet citit de pe un stick FAT: nucleele receptoarelor monteaza FAT cu iocharset=iso8859-1
+	(SF8008: /media/hdd), deci un fisier userbouquet.Türksat.tv pus de pe calculator vine cu ü ca un octet latin-1, adica
+	un nume care nu e UTF-8 (surogate in Python), iar randul din bouquets.tv il cere in UTF-8. Si UTF-8 citit ca latin-1
+	(mai jos). None cand numele e deja bun sau nu devine un nume bun de buchet (TIPAR_BUCHET)."""
+	if not isinstance(nume, str) or not nume.startswith("userbouquet."):
+		return None
+	try:
+		nume.encode("utf-8")
+	except UnicodeEncodeError:
+		try:
+			reparat = nume.encode("utf-8", "surrogateescape").decode("latin-1")
+		except UnicodeError:
+			return None
+		return reparat if TIPAR_BUCHET.match(reparat) else None
+	# 0.7.7 (UTF): stickurile FAT se monteaza acum cu utf8. Un fisier scris de receptor pe stick inainte (FTP, Samba,
+	# copiat din receptor, cu montarea iso8859-1) are in FAT octetii UTF-8 ca litere latin-1, deci vine ca TÃ¼rksat:
+	# numele care, scris inapoi in latin-1, e UTF-8 bun si altul decat el e numele adevarat (cel din bouquets.tv).
+	try:
+		reparat = nume.encode("latin-1").decode("utf-8")
+	except UnicodeError:
+		return None
+	return reparat if reparat != nume and TIPAR_BUCHET.match(reparat) else None
 
 
 def nume_tinta(nume):
-	"""settings-fara-token (forma copiilor de mână) se importă ca settings."""
-	return "settings" if nume in NUME_SETARI else nume
+	"""settings-fara-token (forma copiilor de mână) se importă ca settings; un buchet cu numele în latin-1 (stick FAT),
+	cu numele UTF-8 (buchet_latin1)."""
+	if nume in NUME_SETARI:
+		return "settings"
+	return buchet_latin1(nume) or nume
 
 
 def _nume_de_modul(nume):
@@ -273,7 +390,16 @@ class _MembruZip(object):
 
 	def __init__(self, info):
 		self.info = info
-		self.name = info.filename.replace("\\", "/")
+		nume = info.filename
+		if not info.flag_bits & 0x800:
+			# fara semnul UTF-8 (bitul 11) zipfile citeste numele ca cp437, dar zip-urile facute pe Linux il au tot in UTF-8:
+			# userbouquet.Türksat.tv devenea userbouquet.T├╝rksat.tv si nu se mai potrivea cu randul din bouquets.tv. Un nume
+			# cp437 adevarat (Türksat de pe Windows) nu e UTF-8 valid dupa intoarcere, deci ramane cum l-a citit zipfile.
+			try:
+				nume = nume.encode("cp437").decode("utf-8")
+			except (UnicodeEncodeError, UnicodeDecodeError):
+				pass
+		self.name = nume.replace("\\", "/")
 		mod = (info.external_attr >> 16) & 0xFFFF
 		self._legatura = bool(mod) and stat.S_ISLNK(mod)
 		self._dosar = info.filename.endswith(("/", "\\")) or (bool(mod) and stat.S_ISDIR(mod))
@@ -382,7 +508,7 @@ def cuprins_dosar(nume_fisiere):
 		"lamedb": "lamedb" in nume,
 		"setari": setari,
 		"temporizatoare": bool(nume & set(FISIERE_TEMPORIZATOARE)),
-		"buchete": len([n for n in nume if TIPAR_BUCHET.match(n)]),
+		"buchete": len([n for n in nume if TIPAR_BUCHET.match(n) or buchet_latin1(n)]),
 	}
 
 
@@ -459,11 +585,39 @@ def medii_de_proba(text):
 	return rez
 
 
-def medii(cale_mounts=CALE_MOUNTS, sys_block=CALE_SYS_BLOCK, citeste=None, realpath=None):
+def fel_fs_mediu(fel_fs):
+	"""Felul sistemului de fișiere al unui stick, card sau disc (FS_MEDII, sau FUSE cu subtip: PREFIXE_FS_FUSE)."""
+	f = (fel_fs or "").lower()
+	return f in FS_MEDII or f.startswith(PREFIXE_FS_FUSE)
+
+
+def _radacini_montari(cale_mountinfo):
+	"""{punctul de montare: campul root din mountinfo} (ce dosar al partitiei arata montarea: "/" = toata partitia);
+	{} cand fisierul lipseste."""
+	rez = {}
+	try:
+		with open(cale_mountinfo, "r", encoding="utf-8", errors="surrogateescape") as f:
+			for rand in f:
+				a = rand.split(" - ", 1)[0].split()
+				if len(a) >= 5:
+					rez.setdefault(a[4].replace("\\040", " "), a[3].replace("\\040", " "))
+	except (OSError, IOError):
+		pass
+	return rez
+
+
+def medii(cale_mounts=CALE_MOUNTS, sys_block=CALE_SYS_BLOCK, citeste=None, realpath=None, discul_pornirii=False,
+		cale_mountinfo=None, jurnal=None):
 	"""Mediile pe care se caută: [{"punct", "dispozitiv", "fel" (stick / disc / intern), "eticheta"}], stick-urile
 	întâi, apoi discurile, apoi celelalte partiții ale memoriei interne; un dispozitiv montat de două ori apare o
 	dată. Rădăcina receptorului nu e o sursă. Cu HDS_COPIE_MEDII pusă (numai probele) și /proc/mounts implicit:
-	mediile din variabilă (medii_de_proba)."""
+	mediile din variabilă (medii_de_proba).
+	discul_pornirii (căutarea importului): când imaginea pornește de pe un stick sau un disc (un loc de pe USB sau HDD,
+	root=/dev/sdaN), celelalte partiții ale lui sunt tot stickul sau discul omului, judecate ca orice stick sau disc;
+	"intern" rămâne numai memoria de pe placă (mmcblk). Partiția rădăcinii montată ÎNTREAGĂ și altundeva (de pildă /media/hdd la
+	un loc de pe disc, câmpul root din mountinfo = "/") intră și ea, cu "radacina": True; locul pornit acum se sare la
+	căutare (_chei_proprii), deci imaginea nu se găsește pe ea însăși. jurnal (listă, opțional) primește câte un rând
+	pentru fiecare montare a unui dispozitiv bloc care nu devine mediu, cu motivul."""
 	if cale_mounts == CALE_MOUNTS and os.environ.get("HDS_COPIE_MEDII"):
 		return medii_de_proba(os.environ["HDS_COPIE_MEDII"])
 	montari = _montari(cale_mounts)
@@ -472,13 +626,36 @@ def medii(cale_mounts=CALE_MOUNTS, sys_block=CALE_SYS_BLOCK, citeste=None, realp
 		if punct == "/":
 			dispozitiv_radacina = disp
 	disc_radacina = disc_din_dispozitiv(dispozitiv_radacina)
+	radacini = {}
+	if discul_pornirii:
+		if cale_mountinfo is None and cale_mounts == CALE_MOUNTS:
+			cale_mountinfo = "/proc/self/mountinfo"
+		radacini = _radacini_montari(cale_mountinfo) if cale_mountinfo else {}
+
+	def sarit(disp, punct, fel_fs, motiv):
+		if jurnal is not None:
+			jurnal.append("%s %s (%s): %s" % (disp, punct, fel_fs, motiv))
+
 	rez = []
 	vazute = set()
 	for disp, punct, fel_fs in montari:
 		disc = disc_din_dispozitiv(disp)
-		if disc is None or fel_fs not in FS_MEDII or punct == "/" or disp == dispozitiv_radacina:
+		if disc is None or punct == "/":
 			continue
+		if not fel_fs_mediu(fel_fs):
+			sarit(disp, punct, fel_fs, "felul sistemului de fisiere")
+			continue
+		if TIPAR_MONTARE_LUCRU.match(punct):
+			sarit(disp, punct, fel_fs, "montare de lucru a receptorului")
+			continue
+		radacina_intreaga = False
+		if disp == dispozitiv_radacina:
+			if radacini.get(punct) != "/":
+				sarit(disp, punct, fel_fs, "partitia imaginii pornite (numai locul ei)")
+				continue
+			radacina_intreaga = True
 		if punct.startswith(("/boot", "/proc", "/sys", "/dev")):
+			sarit(disp, punct, fel_fs, "loc al sistemului")
 			continue
 		# același sistem de fișiere montat de două ori = aceeași rădăcină (dispozitiv și inod); o montare „bind” a
 		# unui alt dosar de pe el are alt inod și rămâne; un fișier montat peste un fișier nu e un mediu
@@ -492,13 +669,16 @@ def medii(cale_mounts=CALE_MOUNTS, sys_block=CALE_SYS_BLOCK, citeste=None, realp
 		if cheie in vazute:
 			continue
 		vazute.add(cheie)
-		if disc == disc_radacina:
+		if disc == disc_radacina and (not discul_pornirii or disc.startswith("mmcblk")):
 			fel = "intern"
 		elif este_amovibil(disc, sys_block, citeste, realpath):
 			fel = "stick"
 		else:
 			fel = "disc"
-		rez.append({"punct": punct, "dispozitiv": disp, "fel": fel, "eticheta": eticheta(punct, disp)})
+		m = {"punct": punct, "dispozitiv": disp, "fel": fel, "eticheta": eticheta(punct, disp)}
+		if radacina_intreaga:
+			m["radacina"] = True
+		rez.append(m)
 	rez.sort(key=lambda m: ORDINE_MEDIU[m["fel"]])
 	return rez
 
@@ -514,6 +694,9 @@ def nume_mediu(mediu):
 		return _("Disc „%s”") % nume
 	if fel == "intern":
 		return _("Memoria receptorului, partiția „%s”") % nume
+	if fel == "memorie":
+		# locul altei imagini din memorie (surse_memorie); locul se vede in randul sursei (linuxrootfsN/etc/enigma2)
+		return _("Memoria receptorului")
 	if fel == "calculator":
 		return _("Trimisă din calculator")
 	return _("Copiile de siguranță de pe receptor")
@@ -574,17 +757,26 @@ def _membri_arhiva(t, nume_arhiva, max_membri, termen, max_decomprimat, interioa
 	limită depășită. În `interioare` (dacă e dată) pune membrii care sunt ei înșiși arhive de copie (fișiere obișnuite,
 	nu legături, cel mult MAX_ARHIVA), în `extra` căile fișierelor rețelei și ale listelor de pachete (_rel_extra), iar
 	în `acces` căile fișierelor obișnuite din locurile modulelor de acces (numai ca să fie numărate sub rădăcina copiei;
-	nu se scot și nu ajung în sursă)."""
+	nu se scot și nu ajung în sursă).
+	La o limită (membri, octeți decomprimați, termenul), dosarul cu lamedb sau settings găsit până acolo rămâne: copiile
+	complete ale altor imagini au după etc/enigma2 și ghidul TV, /home sau modulele, iar copia nu se pierde din cauza
+	lor (pregătirea se oprește la aceeași limită, _scoate_din_arhiva). Fără un asemenea dosar: None."""
 	pe_dosare = {}
+
+	def la_limita(motiv):
+		if _cel_mai_bun_dosar(pe_dosare) is not None:
+			_jurnal("arhivă citită până la limită %s (%s); copia găsită până acolo rămâne" % (nume_arhiva, motiv))
+			return pe_dosare
+		_jurnal("arhivă sărită %s: %s" % (nume_arhiva, motiv))
+		return None
+
 	for i, m in enumerate(t):
 		if i >= max_membri:
-			return None
+			return la_limita("prea mulți membri")
 		if _prea_mult_decomprimat(m, max_decomprimat):
-			_jurnal("arhivă sărită %s: prea mare după decomprimare" % nume_arhiva)
-			return None
+			return la_limita("prea mare după decomprimare")
 		if termen is not None and i % 50 == 49 and time.time() > termen:
-			_jurnal("arhivă sărită %s: s-a terminat timpul căutării" % nume_arhiva)
-			return None
+			return la_limita("s-a terminat timpul căutării")
 		if not m.isreg():
 			continue
 		norm = _normalizat(m.name)
@@ -807,15 +999,58 @@ def _intrari(dosar, termen, max_intrari=MAX_INTRARI):
 	return sorted(fisiere), sorted(dosare), sorted(arhive)
 
 
-def cauta_pe_mediu(mediu, termen, adancime=ADANCIME, max_dosare=MAX_DOSARE, max_arhiva=MAX_ARHIVA, necitite=None):
+def _cheie_dosar(cale):
+	try:
+		st = os.stat(cale)
+		return (st.st_dev, st.st_ino)
+	except OSError:
+		return None
+
+
+def _chei_proprii():
+	"""(dispozitiv, inod) ale rădăcinii și ale lui /etc/enigma2 ale imaginii pornite: pe partiția rădăcinii montată
+	întreagă (mediul cu "radacina"), locul pornit acum nu e copia altei imagini și nu se citește."""
+	return set(k for k in (_cheie_dosar("/"), _cheie_dosar(CALE_ETC)) if k)
+
+
+def _radacina_imagine(dosare):
+	"""Dosarul are forma rădăcinii unei imagini (etc lângă usr, bin sau sbin): rootfs-ul altui loc, o copie a
+	rădăcinii."""
+	return "etc" in dosare and any(n in dosare for n in ("usr", "bin", "sbin"))
+
+
+def cauta_pe_mediu(mediu, termen, adancime=ADANCIME, max_dosare=MAX_DOSARE, max_arhiva=MAX_ARHIVA_MEDIU, necitite=None,
+		proprii=None, stare=None):
 	"""Sursele de pe un mediu, căutate în lățime până la `adancime` dosare sub rădăcina lui, până la `termen`;
-	necitite (listă, opțional): arhivele sărite, cu motivul (cuprins_arhiva)."""
+	necitite (listă, opțional): arhivele sărite, cu motivul (cuprins_arhiva). Sub rădăcina unei imagini nu se coboară
+	în dosarele sistemului (DOSARE_SISTEM, etc). Într-un dosar, arhivele cele mai noi se citesc întâi; cele de peste
+	MAX_ARHIVA (până la max_arhiva) după tot restul mediului, cu timpul rămas; rootfs-ul unei imagini nu se citește.
+	proprii: (dispozitiv, inod) ale dosarelor care nu se citesc (locul pornit acum, _chei_proprii). stare (dict,
+	opțional) primește "dosare" (câte s-au citit) și "arhive" (câte s-au cercetat)."""
 	radacina = mediu["punct"]
 	gasite = []
 	coada = [(radacina, 0)]
 	citite = 0
+	cercetate = [0]
+	mari = []
+
+	def cerceteaza(cale, rel, n, mare=False):
+		lung = len(necitite) if necitite is not None else 0
+		cercetate[0] += 1
+		gasit = cuprins_arhiva(cale, termen=termen, necitite=necitite)
+		if necitite is not None and len(necitite) > lung:
+			# numele cu dosarul lui, ca în lista surselor
+			necitite[-1] = (posixpath.join(rel, n), necitite[-1][1])
+		elif mare and not gasit and necitite is not None and time.time() > termen:
+			necitite.append((posixpath.join(rel, n), "prea_mare"))
+		if gasit:
+			gasite.append(_sursa(mediu, cale, "arhiva", gasit[1], _timp(cale), posixpath.join(rel, n),
+				dosar_arhiva=gasit[0]))
+
 	while coada and citite < max_dosare and time.time() < termen:
 		dosar, nivel = coada.pop(0)
+		if proprii and _cheie_dosar(dosar) in proprii:
+			continue
 		citite += 1
 		intrari = _intrari(dosar, termen)
 		if intrari is None:
@@ -832,7 +1067,8 @@ def cauta_pe_mediu(mediu, termen, adancime=ADANCIME, max_dosare=MAX_DOSARE, max_
 				continue
 		if "etc" in dosare:
 			e2 = os.path.join(dosar, "etc", "enigma2")
-			in_e2 = None if os.path.islink(e2) else _intrari(e2, termen)
+			proprie = bool(proprii) and _cheie_dosar(e2) in proprii
+			in_e2 = None if os.path.islink(e2) or proprie else _intrari(e2, termen)
 			cuprins = cuprins_dosar(in_e2[0]) if in_e2 else None
 			if cuprins:
 				gasite.append(_sursa(mediu, e2, "dosar", cuprins, _timp_dosar(e2, in_e2[0]),
@@ -840,10 +1076,13 @@ def cauta_pe_mediu(mediu, termen, adancime=ADANCIME, max_dosare=MAX_DOSARE, max_
 				if nivel > 0:
 					continue
 		if nivel < adancime:
-			coada.extend((os.path.join(dosar, n), nivel + 1) for n in dosare)
-		for n in arhive:
+			sistem = DOSARE_SISTEM + ("etc",) if _radacina_imagine(dosare) else ()
+			coada.extend((os.path.join(dosar, n), nivel + 1) for n in dosare if n not in sistem)
+		for n in sorted(arhive, key=lambda n: (-_timp(os.path.join(dosar, n)), n)):
 			if time.time() >= termen:
 				break
+			if este_tar(n) and TIPAR_ROOTFS.match(n):
+				continue
 			cale = os.path.join(dosar, n)
 			try:
 				marime = os.path.getsize(cale)
@@ -854,14 +1093,19 @@ def cauta_pe_mediu(mediu, termen, adancime=ADANCIME, max_dosare=MAX_DOSARE, max_
 				if necitite is not None and marime > limita:
 					necitite.append((posixpath.join(rel, n), "prea_mare"))
 				continue
-			lung = len(necitite) if necitite is not None else 0
-			gasit = cuprins_arhiva(cale, termen=termen, necitite=necitite)
-			if necitite is not None and len(necitite) > lung:
-				# numele cu dosarul lui, ca în lista surselor
-				necitite[-1] = (posixpath.join(rel, n), necitite[-1][1])
-			if gasit:
-				gasite.append(_sursa(mediu, cale, "arhiva", gasit[1], _timp(cale), posixpath.join(rel, n),
-					dosar_arhiva=gasit[0]))
+			if not este_zip(n) and marime > MAX_ARHIVA:
+				mari.append((cale, rel, n))
+				continue
+			cerceteaza(cale, rel, n)
+	# arhivele mari (copiile complete ale altor imagini), după restul mediului, cele mai noi întâi
+	for cale, rel, n in sorted(mari, key=lambda x: -_timp(x[0])):
+		if time.time() >= termen:
+			if necitite is not None:
+				necitite.append((posixpath.join(rel, n), "prea_mare"))
+			continue
+		cerceteaza(cale, rel, n, mare=True)
+	if stare is not None:
+		stare.update(dosare=citite, arhive=cercetate[0])
 	# etc/enigma2 găsit de la rădăcina unei imagini și apoi încă o dată ca dosar: rămâne primul (are numele imaginii)
 	unice = []
 	vazute = set()
@@ -967,12 +1211,242 @@ def salveaza_din_calculator(nume, date, dosar=DOSAR_CALCULATOR, max_arhiva=MAX_A
 	return cale
 
 
+# ---------------------------------------------------------------- locurile altor imagini din memoria receptorului
+
+_LOCURI_MONTATE = {}    # dosarul montarii -> cate cautari si importuri il folosesc acum
+_ZAVOR_LOCURI = threading.Lock()
+
+
+def _montari_info(cale_mountinfo=CALE_MOUNTINFO):
+	"""[(campul root, punctul, optiunile montarii, felul, dispozitivul)] din mountinfo, in ordine; [] cand lipseste."""
+	rez = []
+	try:
+		with open(cale_mountinfo, "r", encoding="utf-8", errors="surrogateescape") as f:
+			for rand in f:
+				a, semn, b = rand.partition(" - ")
+				a, b = a.split(), b.split()
+				if semn and len(a) >= 6 and len(b) >= 2:
+					rez.append((a[3].replace("\\040", " "), a[4].replace("\\040", " "), a[5], b[0], b[1]))
+	except (OSError, IOError):
+		pass
+	return rez
+
+
+def _locuri_din_startup():
+	"""[(root=, rootsubdir=)] din fisierele de pornire ale locurilor (STARTUP_N, STARTUP_LINUX_N_BOXMODE_M), citite cu
+	Components/HdsPornireMultipla.py de pe partitia de pornire deja montata (nimic montat, nimic scris): la HD51 locul 1
+	sta pe alta partitie (p3) decat locurile 2-4 (p8). [] cand nu se pot citi."""
+	try:
+		from Components import HdsPornireMultipla as P
+		boot = P.dosarBoot()
+		if not boot:
+			return []
+		rez = []
+		for _n, _fisier, date in P.startupuri(boot):
+			st = P.citesteStartup(date)
+			if st and not st.get("repetate"):
+				rez.append((st["p"].get("root", ""), st["p"].get("rootsubdir", "")))
+		return rez
+	except Exception as eroare:
+		_jurnal("locurile din memorie, fisierele de pornire: %s" % eroare.__class__.__name__)
+		return []
+
+
+def locuri_memorie(cale_mountinfo=CALE_MOUNTINFO, din_startup=None):
+	"""Partitiile memoriei de pe placa (/dev/mmcblk0pN) cu locurile altor imagini (subdosarele linuxrootfsN):
+	[{"dispozitiv", "fs", "baza", "monteaza", "subdosare", "acum"}]. Din randul lui / din mountinfo (campul root
+	/linuxrootfsN = rootsubdir: partitia radacinii) si din fisierele de pornire (_locuri_din_startup). "baza": unde se vede
+	toata partitia: o montare intreaga facuta deja de sistem (radacina flash la /boot la kexec), altfel DOSAR_MEMORIE, de
+	montat ("monteaza"). "acum": subdosarul locului pornit (numai pe partitia radacinii). Radacina montata intreaga ca /
+	(fara rootsubdir) nu intra: celelalte locuri ar fi chiar sub sistemul pornit."""
+	info = _montari_info(cale_mountinfo)
+	radacini = [x for x in info if x[1] == "/"]
+	if not radacini:
+		return []
+	camp_root, _p, _o, _fs, dev_rad = radacini[-1]
+	sub_acum = camp_root.strip("/")
+	perechi = [(dev_rad, None)] if sub_acum else []
+	for dev, sub in (din_startup or _locuri_din_startup)():
+		if TIPAR_LOC_MEMORIE.match(sub or ""):
+			perechi.append((dev, sub))
+	rez = []
+	pe_dispozitiv = {}
+	for dev, sub in perechi:
+		if not TIPAR_PARTITIE_MEMORIE.match(dev or "") or (dev == dev_rad and not sub_acum):
+			continue
+		if dev not in pe_dispozitiv:
+			montari = [x for x in info if x[4] == dev]
+			intregi = [x[1] for x in montari if x[0] == "/" and x[1] != "/" and not TIPAR_MONTARE_LUCRU.match(x[1])]
+			loc = {"dispozitiv": dev, "fs": montari[0][3] if montari else "ext4",
+				"baza": intregi[0] if intregi else DOSAR_MEMORIE % posixpath.basename(dev), "monteaza": not intregi,
+				"subdosare": [], "acum": sub_acum if dev == dev_rad else ""}
+			pe_dispozitiv[dev] = loc
+			rez.append(loc)
+		if sub and sub not in pe_dispozitiv[dev]["subdosare"]:
+			pe_dispozitiv[dev]["subdosare"].append(sub)
+	return rez
+
+
+def _ruleaza(comanda):
+	try:
+		return subprocess.call(comanda, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+	except OSError:
+		return -1
+
+
+def _numai_citire(real, dispozitiv, info):
+	"""Montarea de deasupra din `real` e a dispozitivului si numai pentru citit (optiunile montarii, nu ale superblocului)."""
+	ale_lui = [x for x in info if x[1] == real]
+	return bool(ale_lui) and ale_lui[-1][4] == dispozitiv and "ro" in ale_lui[-1][2].split(",")
+
+
+def _demonteaza(real, ruleaza, cale_mountinfo):
+	for _i in range(4):    # si montarile puse una peste alta
+		if not [x for x in _montari_info(cale_mountinfo) if x[1] == real]:
+			return
+		if ruleaza(["umount", real]) != 0:
+			ruleaza(["umount", "-l", real])
+
+
+def demonteaza_locul(dosar, ruleaza=None, cale_mountinfo=CALE_MOUNTINFO):
+	"""Demonteaza dosarul unui loc din memorie si sterge dosarul gol (os.rmdir: niciodata cu ce e in el)."""
+	_demonteaza(os.path.realpath(dosar), ruleaza or _ruleaza, cale_mountinfo)
+	try:
+		os.rmdir(dosar)
+	except OSError:
+		pass
+
+
+def monteaza_numai_citire(dispozitiv, fs, dosar, ruleaza=None, cale_mountinfo=CALE_MOUNTINFO):
+	"""Partitia locurilor din memorie montata NUMAI pentru citit in dosarul ei (DOSAR_MEMORIE % <partitia>). True numai
+	cand mountinfo arata montarea noastra cu "ro"; altfel nu ramane nimic montat. Pe partitie nu se scrie nimic: una deja
+	montata (rw, ca /) primeste a doua montare simpla (acelasi superbloc, fara reluarea jurnalului), facuta imediat ro numai
+	pentru ea (remount,bind,ro, pe calea reala); una nemontata se monteaza ro,noload (fara reluarea jurnalului ext4)."""
+	ruleaza = ruleaza or _ruleaza
+	if fs != "ext4" or not TIPAR_PARTITIE_MEMORIE.match(dispozitiv or "") or \
+			dosar != DOSAR_MEMORIE % posixpath.basename(dispozitiv):
+		return False
+	try:
+		os.makedirs(dosar, 0o700, exist_ok=True)
+	except OSError:
+		return False
+	real = os.path.realpath(dosar)
+	if real == os.path.realpath("/"):
+		return False
+	info = _montari_info(cale_mountinfo)
+	if [x for x in info if x[1] == real]:
+		# ramasa de la o interfata oprita in timpul cautarii: buna numai daca e a partitiei si numai pentru citit
+		if _numai_citire(real, dispozitiv, info):
+			return True
+		_demonteaza(real, ruleaza, cale_mountinfo)
+		info = _montari_info(cale_mountinfo)
+		if [x for x in info if x[1] == real]:
+			return False
+	if [x for x in info if x[4] == dispozitiv]:
+		if ruleaza(["mount", "-t", fs, dispozitiv, real]) == 0:
+			ruleaza(["mount", "-o", "remount,bind,ro", real])
+	else:
+		ruleaza(["mount", "-t", fs, "-o", "ro,noload", dispozitiv, real])
+	if _numai_citire(real, dispozitiv, _montari_info(cale_mountinfo)):
+		return True
+	_jurnal("montarea numai pentru citit a lui %s nu s-a dovedit; nu citesc nimic de acolo" % dispozitiv)
+	demonteaza_locul(dosar, ruleaza, cale_mountinfo)
+	return False
+
+
+class _LocMontat(object):
+	"""Partitia unui loc din memorie montata numai pentru citit cat tine blocul (cautarea, importul); mem None = nimic de
+	montat (partitia se vede deja intreaga). Cautarea si importul pot merge deodata: o singura montare, demontata de
+	ultimul care iese. `with _LocMontat(mem) as montat:` (False = nemontata, nu se citeste nimic)."""
+
+	def __init__(self, mem):
+		self.mem = mem
+		self.luat = False
+
+	def __enter__(self):
+		if not self.mem:
+			return True
+		d = self.mem.get("dosar") or ""
+		with _ZAVOR_LOCURI:
+			n = _LOCURI_MONTATE.get(d, 0)
+			if n == 0 and not monteaza_numai_citire(self.mem.get("dispozitiv") or "", self.mem.get("fs") or "ext4", d):
+				return False
+			_LOCURI_MONTATE[d] = n + 1
+		self.luat = True
+		return True
+
+	def __exit__(self, *exc):
+		if self.luat:
+			d = self.mem.get("dosar") or ""
+			with _ZAVOR_LOCURI:
+				n = _LOCURI_MONTATE.get(d, 1) - 1
+				if n > 0:
+					_LOCURI_MONTATE[d] = n
+				else:
+					_LOCURI_MONTATE.pop(d, None)
+					demonteaza_locul(d)
+		return False
+
+
+def _numar_loc(sub):
+	try:
+		return int(sub[len("linuxrootfs"):])
+	except ValueError:
+		return 0
+
+
+def surse_memorie(termen, cautate=(), necitite=None, cale_mountinfo=CALE_MOUNTINFO, din_startup=None):
+	"""Sursele din locurile altor imagini din memoria receptorului (locuri_memorie), mediul "memorie", fara locul pornit
+	acum (subdosarul lui si cheia dispozitiv/inod a lui /). Partitia se monteaza numai pentru citit cat tine cautarea si
+	se demonteaza la capat; sursa tine "memorie" (dispozitivul, felul, dosarul), ca importul sa o monteze din nou.
+	cautate: dispozitivele cautate deja ca medii (partitia montata intreaga la /media/hdd), sarite aici. necitite (lista,
+	optional) primeste (locul, numele arhivei, motivul)."""
+	rez = []
+	proprii = None
+	for loc in locuri_memorie(cale_mountinfo, din_startup):
+		dev = loc["dispozitiv"]
+		if dev in cautate or time.time() >= termen:
+			continue
+		mem = {"dispozitiv": dev, "fs": loc["fs"], "dosar": loc["baza"]} if loc["monteaza"] else None
+		with _LocMontat(mem) as montat:
+			if not montat:
+				_jurnal("locurile din memorie: %s nu s-a putut monta numai pentru citit; sărit" % dev)
+				continue
+			if proprii is None:
+				proprii = _chei_proprii()
+			baza = loc["baza"]
+			try:
+				in_baza = [n for n in os.listdir(baza) if TIPAR_LOC_MEMORIE.match(n)]
+			except OSError:
+				in_baza = []
+			for sub in sorted(set(loc["subdosare"]) | set(in_baza), key=_numar_loc):
+				punct = os.path.join(baza, sub)
+				if sub == loc["acum"] or os.path.islink(punct) or not os.path.isdir(punct) or time.time() >= termen:
+					continue
+				sarite, cifre = [], {}
+				gasite = cauta_pe_mediu({"punct": punct, "dispozitiv": dev, "fel": "memorie", "eticheta": sub}, termen,
+					necitite=sarite, proprii=proprii, stare=cifre)
+				_jurnal("locul %s din memorie (%s, %s): %d dosare citite, %d arhive cercetate, %d surse" % (sub, dev,
+					"montat numai pentru citit" if mem else baza, cifre.get("dosare", 0), cifre.get("arhive", 0),
+					len(gasite)))
+				if necitite is not None:
+					necitite.extend((sub, posixpath.join(sub, nume), motiv) for nume, motiv in sarite)
+				for s in gasite:
+					s["rel"] = posixpath.join(sub, s["rel"]) if s.get("rel") else sub
+					s["punct"] = baza
+					if mem:
+						s["memorie"] = dict(mem)
+					rez.append(s)
+	return rez
+
+
 def cauta_surse(cale_mounts=CALE_MOUNTS, sys_block=CALE_SYS_BLOCK, dosar_etc=CALE_ETC, termen_s=TERMEN_S,
-		citeste=None, realpath=None, necitite=None, dosar_calculator=DOSAR_CALCULATOR):
-	"""Toate sursele, în ordinea arătată: stick-urile (cele mai noi copii întâi), discurile, memoria internă, copiile
-	receptorului. Rulează pe un fir separat. necitite (listă, opțional) primește (mediul, numele arhivei, motivul)
-	pentru arhivele de copie care nu se pot citi (text_necitite); aceeași listă rămâne și în _NECITITE, de unde o ia
-	porneste_cautarea (semnătura apelului din Lucrare rămâne cea veche)."""
+		citeste=None, realpath=None, necitite=None, dosar_calculator=DOSAR_CALCULATOR, cale_mountinfo=None, memorie=None):
+	"""Toate sursele, în ordinea arătată: stick-urile (cele mai noi copii întâi), discurile, memoria internă, locurile
+	altor imagini din memorie (surse_memorie), copiile receptorului. Rulează pe un fir separat. necitite (listă,
+	opțional) primește (mediul, numele arhivei, motivul) pentru arhivele de copie care nu se pot citi (text_necitite);
+	aceeași listă rămâne și în _NECITITE, de unde o ia porneste_cautarea (semnătura apelului din Lucrare rămâne cea
+	veche). memorie: locurile din memorie se caută (None: numai pe receptor, cu /proc/mounts adevărat)."""
 	termen = time.time() + termen_s
 	surse = []
 	vazute = set()
@@ -982,14 +1456,45 @@ def cauta_surse(cale_mounts=CALE_MOUNTS, sys_block=CALE_SYS_BLOCK, dosar_etc=CAL
 		if s["id"] not in vazute:
 			vazute.add(s["id"])
 			surse.append(s)
-	for mediu in medii(cale_mounts, sys_block, citeste, realpath):
+	# un rand de jurnal pentru fiecare montare sarita si pentru fiecare mediu cautat: raportul receptorului spune singur
+	# de ce o copie nu apare
+	sarite_medii = []
+	lista_medii = medii(cale_mounts, sys_block, citeste, realpath, discul_pornirii=True, cale_mountinfo=cale_mountinfo,
+		jurnal=sarite_medii)
+	for rand in sarite_medii:
+		_jurnal("montare sărită: %s" % rand)
+	# locurile altor imagini din memoria receptorului (pornire multipla), fara stick, fara cele cautate deja ca medii:
+	# intai (dureaza putin, cu termenul lor), ca stickurile si discurile mari sa nu le ia timpul; in lista vin dupa ele
+	if memorie is None:
+		memorie = cale_mounts == CALE_MOUNTS and not os.environ.get("HDS_COPIE_MEDII")
+	din_memorie, sarite_memorie = [], []
+	if memorie:
+		try:
+			cautate = set(m.get("dispozitiv") for m in lista_medii if m.get("dispozitiv"))
+			din_memorie = surse_memorie(min(termen, time.time() + TERMEN_MEMORIE_S), cautate, sarite_memorie,
+				cale_mountinfo or CALE_MOUNTINFO)
+		except Exception as eroare:
+			_jurnal("locurile din memorie: %s" % eroare)
+	proprii = _chei_proprii() if any(m.get("radacina") for m in lista_medii) else None
+	for mediu in lista_medii:
 		sarite = []
-		gasite = cauta_pe_mediu(mediu, termen, necitite=sarite)
+		cifre = {}
+		gasite = cauta_pe_mediu(mediu, termen, necitite=sarite, proprii=proprii if mediu.get("radacina") else None,
+			stare=cifre)
+		_jurnal("mediul %s (%s, %s%s): %d dosare citite, %d arhive cercetate, %d surse, %d arhive sărite%s" % (
+			mediu.get("punct"), mediu.get("dispozitiv") or "-", mediu.get("fel"),
+			", partiția rădăcinii" if mediu.get("radacina") else "", cifre.get("dosare", 0), cifre.get("arhive", 0),
+			len(gasite), len(sarite), ", timpul căutării s-a terminat" if time.time() >= termen else ""))
 		colector.extend((mediu.get("eticheta") or "", nume, motiv) for nume, motiv in sarite)
 		for s in gasite:
 			if s["id"] not in vazute:
 				vazute.add(s["id"])
 				surse.append(s)
+	colector.extend(sarite_memorie)
+	for s in din_memorie:
+		if s["id"] not in vazute:
+			vazute.add(s["id"])
+			surse.append(s)
 	for s in copii_receptor(dosar_etc):
 		if s["id"] not in vazute:
 			vazute.add(s["id"])
@@ -1096,7 +1601,8 @@ def text_necitite(necitite):
 		"nu_e_tar": _("nu e o arhivă tar sau tar.gz (poate e alt fel de arhivă, cu nume schimbat)"),
 		"rupta": _("e ruptă: copiată sau descărcată pe jumătate"),
 		"mediu": _("nu se poate citi de pe stick sau disc"),
-		"prea_mare": _("e prea mare pentru căutare (peste 32 MB sau peste 2000 de fișiere)"),
+		# limitele cautarii s-au schimbat (MAX_ARHIVA_MEDIU, MAX_MEMBRI): textul fara cifre, deja tradus
+		"prea_mare": _("arhiva e prea mare"),
 	}
 	randuri = []
 	for _mediu, nume, motiv in necitite or []:
@@ -1151,7 +1657,7 @@ def _pregateste(sursa, dest, max_membri, max_octeti, max_decomprimat, cu_acces=F
 	tarfile = _arhive()
 	cale = sursa.get("cale", "")
 	try:
-		if os.path.getsize(cale) > (MAX_ZIP if este_zip(os.path.basename(cale)) else MAX_ARHIVA):
+		if os.path.getsize(cale) > (MAX_ZIP if este_zip(os.path.basename(cale)) else MAX_ARHIVA_MEDIU):
 			return None, _("arhiva e prea mare")
 	except OSError:
 		return None, _("arhiva nu mai există: %s") % cale
@@ -1235,8 +1741,11 @@ def _scoate_din_arhiva(tarfile, cale, dosar_arhiva, lucru, max_membri, max_octet
 	"""Scrie în `lucru` fișierele din lista albă aflate în `dosar_arhiva`, iar în `lucru`/extra fișierele `extra` (căi
 	de sub rădăcina copiei: rețeaua, listele pachetelor) și, cu `cu_acces`, fișierele modulelor de acces de sub rădăcina
 	copiei (HdsImportExtra.este_loc_acces), ca atare, cu limitele lor (MAX_FISIERE_ACCES, MAX_FISIER_ACCES,
-	MAX_TOTAL_ACCES; ce trece de ele se lasă, fără eroare); None dacă a mers, altfel motivul."""
+	MAX_TOTAL_ACCES; ce trece de ele se lasă, fără eroare); None dacă a mers, altfel motivul. La limita membrilor sau a
+	octeților decomprimați, cu lamedb sau settings deja scrise (ca la căutare, _membri_arhiva): ce s-a scris rămâne și
+	pregătirea merge mai departe."""
 	scrise = 0
+	esentiale = 0
 	total = 0
 	X = _extra()
 	rad_copie = X.radacina_copiei(dosar_arhiva)
@@ -1249,9 +1758,12 @@ def _scoate_din_arhiva(tarfile, cale, dosar_arhiva, lucru, max_membri, max_octet
 	try:
 		with tarfile.open(cale, "r:*") as t:
 			for i, m in enumerate(t):
-				if i >= max_membri:
-					return _("arhiva are prea multe fișiere")
-				if _prea_mult_decomprimat(m, max_decomprimat):
+				if i >= max_membri or _prea_mult_decomprimat(m, max_decomprimat):
+					if esentiale:
+						_jurnal("arhivă scoasă până la limită %s: %d fișiere" % (os.path.basename(cale), scrise))
+						break
+					if i >= max_membri:
+						return _("arhiva are prea multe fișiere")
 					return _("arhiva e prea mare după decomprimare")
 				norm = _normalizat(m.name)
 				if norm is None or not m.isreg():
@@ -1308,6 +1820,8 @@ def _scoate_din_arhiva(tarfile, cale, dosar_arhiva, lucru, max_membri, max_octet
 						ramas -= len(bucata)
 				os.replace(tinta + ".nou", tinta)
 				scrise += 1
+				if nume == "lamedb" or nume in NUME_SETARI:
+					esentiale += 1
 	except Exception as eroare:  # tarfile.TarError, EOFError, OSError, zlib.error, lzma.LZMAError
 		return _("arhiva nu se poate citi (%s)") % eroare.__class__.__name__
 	if not scrise:
@@ -1589,11 +2103,68 @@ def _buchet_din_rand(rand):
 	return m.group(1) if m else None
 
 
-def randuri_buchete_imagine(dest=CALE_ETC):
-	"""{index: [rânduri]}: rândurile din bouquets.tv / bouquets.radio de acum care arată spre buchetele imaginii
-	(userbouquet.hds_*, de pildă "DAB+ din satelit" și "DVB-T2 din satelit", puse o singură dată, la prima pornire, de
-	Hds/DabT2/imagine.py) și al căror fișier există. Citit înainte ca importul să înlocuiască indexul."""
+def locuri_extensii(dest=CALE_ETC):
+	"""Buchetele rădăcină ale locurilor extensiilor (Components/HdsLocuriLista.py, de pildă Radio online:
+	userbouquet.radioonline.radio): le scrie și le leagă extensia din starea ei, nu din lista de canale."""
+	rez = set()
+	dosar = os.path.join(dest, DOSAR_LOCURI)
+	try:
+		nume = os.listdir(dosar)
+	except OSError:
+		return rez
+	for n in nume:
+		if not n.endswith(".json"):
+			continue
+		try:
+			with open(os.path.join(dosar, n), "r", encoding="utf-8", errors="replace") as f:
+				d = json.loads(f.read(MAX_LOC))
+		except (OSError, IOError, ValueError):
+			continue
+		buchet = d.get("buchet") if isinstance(d, dict) else None
+		if isinstance(buchet, str) and TIPAR_BUCHET.match(buchet):
+			rez.add(buchet)
+	return rez
+
+
+def nu_depinde_de_lista(cale):
+	"""Buchetul nu depinde de lista de canale (lamedb): are numai fluxuri de internet și trimiteri la alte buchete (IPTV,
+	Radio online și DVB-I au sub-buchete), sau e gol; etichetele (1:64) nu contează. Același semn ca la listele de pe
+	internet (Components/HdsListeInternet._fara_lista). Un fișier care nu se poate citi: False."""
+	try:
+		with open(cale, "r", encoding="utf-8", errors="surrogateescape") as f:
+			for rand in f:
+				r = rand.strip()
+				if not TIPAR_SERVICIU.match(r) or TIPAR_ETICHETA.match(r):
+					continue
+				mic = r.lower()
+				if "%3a//" in mic or "http" in mic or TIPAR_TRIMITERE.match(r):
+					continue
+				return False
+	except (OSError, IOError):
+		return False
+	return True
+
+
+def buchete_imagine_pe_receptor(dest=CALE_ETC):
+	"""Numele buchetelor imaginii care sunt acum pe receptor (userbouquet.hds* și rădăcinile locurilor extensiilor,
+	locuri_extensii). Importul nu le înlocuiește cu cele din copie."""
+	locuri = locuri_extensii(dest)
+	try:
+		nume = os.listdir(dest)
+	except OSError:
+		return set()
+	return set(n for n in nume if TIPAR_BUCHET.match(n) and (n.startswith(PREFIX_BUCHETE_IMAGINE) or n in locuri)
+		and os.path.isfile(os.path.join(dest, n)))
+
+
+def randuri_buchete_imagine(dest=CALE_ETC, ale_omului=True):
+	"""{index: [rânduri]}: rândurile din bouquets.tv / bouquets.radio de acum care arată spre buchete care nu țin de
+	lista de canale și al căror fișier există, în ordinea lor: ale imaginii (userbouquet.hds*: IPTV, DVB-I, DAB+ și
+	DVB-T2 din satelit, puse de modulele lor, și rădăcinile locurilor extensiilor, locuri_extensii) și, cu `ale_omului`,
+	buchetele omului care nu depind de lamedb (nu_depinde_de_lista; fără BUCHETE_LISTEI). Citit înainte ca importul să
+	înlocuiască indexul."""
 	rez = {}
+	locuri = locuri_extensii(dest)
 	for index in INDEXURI_BUCHETE:
 		try:
 			with open(os.path.join(dest, index), "r", encoding="utf-8", errors="surrogateescape") as f:
@@ -1601,19 +2172,25 @@ def randuri_buchete_imagine(dest=CALE_ETC):
 		except (OSError, IOError):
 			continue
 		ale = []
+		vazute = set()
 		for rand in randuri:
 			nume = _buchet_din_rand(rand)
-			if nume and nume.startswith(PREFIX_BUCHET_IMAGINE) and os.path.isfile(os.path.join(dest, nume)):
+			if not nume or nume in vazute or "/" in nume or not os.path.isfile(os.path.join(dest, nume)):
+				continue
+			if nume.startswith(PREFIX_BUCHETE_IMAGINE) or nume in locuri or (ale_omului and TIPAR_BUCHET.match(nume)
+					and nume not in BUCHETE_LISTEI and nu_depinde_de_lista(os.path.join(dest, nume))):
+				vazute.add(nume)
 				ale.append(rand.rstrip())
 		if ale:
 			rez[index] = ale
 	return rez
 
 
-def pune_la_loc_buchetele_imaginii(dest, ale_imaginii):
-	"""După ce importul a înlocuit indexul cu al copiei: rândurile buchetelor imaginii care lipsesc din el se adaugă la
-	sfârșit (altfel listele DAB+ și DVB-T2 din satelit dispăreau din lista de canale, iar semnul lor de "pus o dată"
-	nu le mai punea). Întoarce câte rânduri s-au adăugat."""
+def pune_la_loc_buchetele_imaginii(dest, ale_imaginii, nume_adaugate=None):
+	"""După ce importul a înlocuit indexul cu al copiei: rândurile din randuri_buchete_imagine care lipsesc din el se
+	adaugă la sfârșit, în ordinea lor, fiecare în indexul din care era (altfel IPTV, Radio online, DVB-I, listele DAB+ și
+	DVB-T2 din satelit și fluxurile omului dispăreau din lista de canale, iar semnul de "pus o dată" nu le mai punea).
+	Întoarce câte rânduri s-au adăugat; numele lor intră în `nume_adaugate`, dacă e dat."""
 	adaugate = 0
 	for index, randuri in (ale_imaginii or {}).items():
 		cale = os.path.join(dest, index)
@@ -1623,7 +2200,12 @@ def pune_la_loc_buchetele_imaginii(dest, ale_imaginii):
 		except (OSError, IOError):
 			continue
 		are = set(n for n in (_buchet_din_rand(r) for r in text.splitlines()) if n)
-		lipsa = [r for r in randuri if _buchet_din_rand(r) not in are]
+		lipsa = []
+		for r in randuri:
+			nume = _buchet_din_rand(r)
+			if nume and nume not in are:
+				are.add(nume)
+				lipsa.append(r)
 		if not lipsa:
 			continue
 		capat = "\r\n" if "\r\n" in text else "\n"   # buchetele scrise de enigma2 au CRLF (lib/dvb/db.cpp)
@@ -1635,9 +2217,55 @@ def pune_la_loc_buchetele_imaginii(dest, ale_imaginii):
 				f.write(text)
 			os.replace(cale + ".nou", cale)
 			adaugate += len(lipsa)
+			if nume_adaugate is not None:
+				nume_adaugate.extend(_buchet_din_rand(r) for r in lipsa)
 		except (OSError, IOError) as eroare:
 			_jurnal("buchetele imaginii în %s: %s" % (index, eroare))
 	return adaugate
+
+
+def _decodat_ca_nucleul(nume):
+	"""Numele din referinta asa cum il deschide nucleul: %xx decodat (lib/service/service.cpp, decode)."""
+	return re.sub(r"%([0-9A-Fa-f]{2})", lambda m: chr(int(m.group(1), 16)), nume) if "%" in nume else nume
+
+
+def scoate_randurile_fara_fisier(dest, indexuri, scoase=None):
+	"""Dupa ce importul a scris indexurile copiei (`indexuri`, din INDEXURI_BUCHETE): randurile lor care trimit la un
+	userbouquet al carui fisier nu e pe receptor (lipsea din copie sau importul nu l-a putut lua) se scot, ca buchetul sa
+	nu ramana in lista fara sa se poata deschide. Raman ale imaginii (userbouquet.hds*, radacinile din hds_locuri), cele
+	ale listei (favoritele, ultima scanare: le reface nucleul) si randurile cu nume de cale. Restul textului ramane
+	octet cu octet. Intoarce cate randuri s-au scos; numele lor intra in `scoase`, daca e dat."""
+	locuri = locuri_extensii(dest)
+	n = 0
+	for index in indexuri:
+		cale = os.path.join(dest, index)
+		try:
+			with open(cale, "r", encoding="utf-8", errors="surrogateescape", newline="") as f:
+				text = f.read()
+		except (OSError, IOError):
+			continue
+		randuri = text.split("\n")
+		ramase = []
+		for rand in randuri:
+			nume = _buchet_din_rand(rand)
+			if (nume and nume.startswith("userbouquet.") and "/" not in nume
+					and not nume.startswith(PREFIX_BUCHETE_IMAGINE) and nume not in locuri and nume not in BUCHETE_LISTEI
+					and not os.path.isfile(os.path.join(dest, nume))
+					and not os.path.isfile(os.path.join(dest, _decodat_ca_nucleul(nume)))):
+				n += 1
+				if scoase is not None:
+					scoase.append(nume)
+				continue
+			ramase.append(rand)
+		if len(ramase) == len(randuri):
+			continue
+		try:
+			with open(cale + ".nou", "w", encoding="utf-8", errors="surrogateescape", newline="") as f:
+				f.write("\n".join(ramase))
+			os.replace(cale + ".nou", cale)
+		except (OSError, IOError) as eroare:
+			_jurnal("randurile fara fisier din %s: %s" % (index, eroare))
+	return n
 
 
 def incarca_temporizatoarele(cale, rt=None, creeaza=None):
@@ -1730,10 +2358,16 @@ def _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa=
 	mesaje.extend(note_copie)
 	importate = []
 	if alegeri.get("canale"):
-		ale_imaginii = randuri_buchete_imagine(dest)
+		# ale omului numai când sursa nu e o copie a acestui receptor (întoarcerea aduce lista exact cum era în copie)
+		din_copia_receptorului = isinstance(sursa, dict) and sursa.get("mediu") == "receptor"
+		ale_imaginii = randuri_buchete_imagine(dest, ale_omului=not din_copia_receptorului)
+		# buchetele imaginii de pe receptor rămân ale lui; cele din copie (alt receptor HD Satelit, o copie mai veche) nu
+		# le înlocuiesc: IPTV-ul își are sub-buchetele și sursele numai aici, DVB-I, Radio online și releele la fel
+		ale_receptorului = buchete_imagine_pe_receptor(dest)
 		pozitii_inainte = _pozitii_lamedb(os.path.join(dest, "lamedb"))
 		lamedb_copiat = False
 		copiate = 0
+		indexuri_copiate = []
 		for nume in FISIERE_CANALE:
 			cale = os.path.join(dosar, nume)
 			if not os.path.isfile(cale):
@@ -1744,17 +2378,34 @@ def _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa=
 			if _copiaza(cale, os.path.join(dest, nume), mesaje):
 				copiate += 1
 				lamedb_copiat = lamedb_copiat or nume == "lamedb"
+				if nume in INDEXURI_BUCHETE:
+					indexuri_copiate.append(nume)
 		if lamedb_copiat:
 			_noteaza_originea(dest, dosar, pozitii_inainte, sursa)
+		neluate = []
 		for cale in sorted(glob.glob(os.path.join(dosar, "userbouquet.*"))):
-			nume = os.path.basename(cale)
+			nume = nume_tinta(os.path.basename(cale))
+			if nume in ale_receptorului:
+				neluate.append(nume)
+				continue
 			if TIPAR_BUCHET.match(nume) and os.path.isfile(cale) and _copiaza(cale, os.path.join(dest, nume), mesaje):
 				copiate += 1
+		if neluate:
+			_jurnal("buchetele imaginii rămân cele de pe receptor, nu cele din copie: %s" % ", ".join(neluate))
 		rez["canale"] = copiate
 		if copiate:
 			importate.append(ngettext("canale și buchete (%d fișier)", "canale și buchete (%d fișiere)", copiate)
 				% copiate)
-			pune_la_loc_buchetele_imaginii(dest, ale_imaginii)
+			pastrate = []
+			pune_la_loc_buchetele_imaginii(dest, ale_imaginii, pastrate)
+			if pastrate:
+				rez["buchete_pastrate"] = pastrate
+				_jurnal("buchete păstrate în index (nu țin de lista de canale): %s" % ", ".join(pastrate))
+			fara_fisier = []
+			scoate_randurile_fara_fisier(dest, indexuri_copiate, fara_fisier)
+			if fara_fisier:
+				_jurnal("randuri scoase din index (fisierul buchetului nu e in copie sau nu s-a putut lua): %s"
+					% ", ".join(fara_fisier))
 			if not os.path.isfile(os.path.join(dosar, "lamedb")) and os.path.isfile(os.path.join(dosar, "lamedb5")):
 				mesaje.append(_("Copia are numai lamedb5, pe care această imagine nu îl citește: lista de canale a "
 					"rămas cea de dinainte."))
@@ -1952,9 +2603,14 @@ def pregateste_si_importa(sursa, alegeri, text_setari=None, anulat=None, dest_tm
 		context=None, dest_picon=None, catalog=None, rad_sistem="/", opkg=None):
 	"""Tot lucrul importului de pe firul lui: pregătirea sursei, importul (fără reîncărcarea listei), apoi ștergerea
 	fișierelor scoase din arhivă. `anulat` (threading.Event): pus înainte de import (ecranul închis cât se pregătea
-	copia), nu se mai scrie nimic pe receptor."""
-	with _InLucru():
+	copia), nu se mai scrie nimic pe receptor. Sursa dintr-un loc al memoriei ("memorie"): partiția lui montată numai
+	pentru citit cât ține tot importul, apoi demontată."""
+	mem = sursa.get("memorie") if isinstance(sursa, dict) else None
+	with _InLucru(), _LocMontat(mem if isinstance(mem, dict) else None) as montat:
 		try:
+			if not montat:
+				return {"ok": False, "mesaje": [_("Importul nu a pornit: %s.") % (_("dosarul nu mai există: %s")
+					% sursa.get("cale", ""))]}
 			dosar, motiv = pregateste(sursa, dest_tmp, cu_acces=bool(alegeri.get("acces")))
 			if dosar is None:
 				return {"ok": False, "mesaje": [_("Importul nu a pornit: %s.") % motiv]}

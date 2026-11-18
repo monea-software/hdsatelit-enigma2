@@ -37,9 +37,12 @@ FURNIZOR_STRAIN = 'ABERTIS'
 # sunt ale altui automat
 _PID_ASTRA = re.compile(r'(?:/abertis\s+|abertis/pid|Abertis PID\s+)(\d{1,4})(?!\d)', re.I)
 # adresele canalelor din listele altor automate: iesirea decapsulatorului lor (portul 9999) sau forma scrisa uneori cu
-# 8001 (intrarea lor); 127.0.0.1, localhost sau 0.0.0.0 (listele care scriu adresa pe care asculta decapsulatorul)
+# 8001 (intrarea lor); 127.0.0.1, localhost sau 0.0.0.0 (listele care scriu adresa pe care asculta decapsulatorul).
+# Forma aber<N>_pid<M>plp<P> are doua citiri: N numar de ordine si M fluxul (aber1_pid8008plp0), sau N fluxul
+# si M PID-ul T2-MI din TS-ul lui (aber8008_pid4096plp0, fluxurile cu T2-MI inauntru); adresa_e_a_fluxului le
+# incearca pe amandoua
 _ADRESA_STRAINA = re.compile(r'^https?://(?:127\.0\.0\.1|localhost|0\.0\.0\.0)(?::(?:9999|8001))?/abertis/'
-                             r'(?:aber\d+_)?pid(\d{1,4})(?:plp\d{1,3})?/?$',
+                             r'(?:aber(\d{1,4})_)?pid(\d{1,4})(?:plp\d{1,3})?/?$',
                              re.I)
 
 
@@ -105,8 +108,9 @@ def e_strain(feed, straine):
 
 def pid_din_adresa_straina(ref):
     """Referinta unui canal din lista altui automat pentru aceste fluxuri (1:0:<tip>:<SID>:<TSID>:<ONID>:...:
-    http%3a//localhost%3a9999/abertis/pid<N>:<nume>) -> {'pid', 'sid', 'tsid', 'onid', 'tip', 'nume'} sau None.
-    SID-ul, TSID-ul si ONID-ul sunt ale programului din multiplexul desfacut."""
+    http%3a//localhost%3a9999/abertis/pid<N>:<nume>) -> {'pid', 'pid_aber', 'sid', 'tsid', 'onid', 'tip', 'nume'}
+    sau None. SID-ul, TSID-ul si ONID-ul sunt ale programului din multiplexul desfacut; pid_aber = N din aber<N>_
+    (sau None)."""
     try:
         parti = str(ref or '').split(':')
         if len(parti) < 11:
@@ -115,10 +119,23 @@ def pid_din_adresa_straina(ref):
         m = _ADRESA_STRAINA.match(url)
         if not m:
             return None
-        pid = int(m.group(1))
+        pid = int(m.group(2))
         if not 0 < pid < 0x1FFF:
             return None
-        return {'pid': pid, 'sid': int(parti[3], 16), 'tsid': int(parti[4], 16), 'onid': int(parti[5], 16),
+        return {'pid': pid, 'pid_aber': int(m.group(1)) if m.group(1) else None,
+                'sid': int(parti[3], 16), 'tsid': int(parti[4], 16), 'onid': int(parti[5], 16),
                 'tip': int(parti[2], 16) or 1, 'nume': ':'.join(parti[11:])}
     except (ValueError, IndexError, TypeError):
         return None
+
+
+def adresa_e_a_fluxului(feed, x):
+    """Adresa straina x (pid_din_adresa_straina) e a fluxului abertis din lista: PID-ul din adresa e al lui, sau adresa
+    e aber<PID-ul lui>_pid<T2-MI>, iar fluxul are chiar acel T2-MI inauntru (cheia t2mi_pid; ca 8008 cu 4096)."""
+    try:
+        pid = int(feed.get('pid') or -1)
+        if pid == x['pid']:
+            return True
+        return x.get('pid_aber') == pid and int(feed.get('t2mi_pid') or -1) == x['pid']
+    except (TypeError, ValueError, KeyError, AttributeError):
+        return False

@@ -105,9 +105,20 @@ TYPES = {
 	"AccessBox": ("_access_box", False, 2000),
 	"AccessBoxOn": ("_access_box_on", True, 2000),
 	"AccessRest": ("_access_rest", False, 2000),
+	# bara canalului: randul ECM (HdsCommon.ecm_line: sistemul, CAID-ul, timpul ECM, protocolul), numai cu alegerea
+	# „Informația ECM în bara canalului” si cat camul decripteaza canalul; EcmLineOn = randul are text (fundalul lui)
+	"EcmLine": ("_ecm_line", False, 2000),
+	"EcmLineOn": ("_ecm_line_on", True, 2000),
+	# a doua bara, pagina 1: debitul masurat pe DVB (HdsCommon.debit_text; „Debitul în a doua bară”): Debit = videoul si
+	# sunetul, Debit,Label[,Upper] = eticheta numai langa o valoare, Debit,Stat = minimul, maximul si media videoului.
+	# La ceas de 1 s: numaratorul din demux se opreste singur dupa 5 s fara intrebari
+	"Debit": ("_debit", False, 1000),
 	# pagina 5: randul scurt din banda dupa o inregistrare pusa din bara
 	"EpgNote": ("_epg_note", False, 1000),
 }
+
+# tipurile care pot arata eticheta cititorului (HdsCommon.ecm_sursa)
+ECM_CITITOR = ("_ecm_row", "_ecm_line", "_ecm_line_on")
 
 GOOD = 55
 WARN = 30
@@ -143,6 +154,7 @@ class HdsSignal(Poll, Converter):
 		self._ctx = None
 		self._cpu_gol = True
 		self._cpu_scurte = 0
+		self._fara_cititor = False
 		try:
 			parts = [p.strip() for p in str(arg or "").split(",")]
 			name = parts[0]
@@ -160,6 +172,9 @@ class HdsSignal(Poll, Converter):
 					C.page_subscribe(self, self._page)
 				if name == "CaSys" and len(self._opts) > 1:
 					C.ca_visible(self._opts[1])
+				# eticheta cititorului (Arată hop-urile și cititorul): redesenat pe loc inainte de o captura
+				if self._fn in ECM_CITITOR and hasattr(C, "ecm_inregistreaza"):
+					C.ecm_inregistreaza(self)
 				if name == "CpuLoad":
 					# prima citire cat se face ecranul: la aratare e deja una cu care se face diferenta
 					C.cpu_sample()
@@ -187,7 +202,13 @@ class HdsSignal(Poll, Converter):
 				self.poll_enabled = False
 				if self._fn == "_page_tick" and C is not None:
 					C.page_stop()
+				if self._fn in ECM_CITITOR:
+					# ecranul ascuns nu tine eticheta cititorului in widget (un ecran ascuns se poate citi sau captura)
+					self._fara_cititor = True
+					self._val = None
+					Converter.changed(self, (self.CHANGED_POLL,))
 			elif self._fn is not None:
+				self._fara_cititor = False
 				self._val = None
 				self._fok = None
 				self._ctx = None
@@ -686,7 +707,7 @@ class HdsSignal(Poll, Converter):
 		n = self._row_n()
 		if n <= 0:
 			return u""
-		rows = C.ecm_rows(self._reader())
+		rows = C.ecm_rows(self._reader(), not self._fara_cititor)
 		return rows[n - 1] if n <= len(rows) else u""
 
 	def _access_box(self):
@@ -709,6 +730,24 @@ class HdsSignal(Poll, Converter):
 		if "NoBox" in self._opts:
 			return u"" if act > 0 else C.access_short(r)
 		return C.access_short(r, act)
+
+	def _ecm_line(self):
+		return C.ecm_line(self._reader(), not self._fara_cititor)
+
+	def _ecm_line_on(self):
+		return bool(C.ecm_line(self._reader(), not self._fara_cititor))
+
+	def _ecm_reimprospateaza(self):
+		"""Chemat de HdsCommon cand eticheta cititorului se ascunde (o captura urmeaza): textul nou acum, si pe un ecran
+		ascuns."""
+		self._val = None
+		Converter.changed(self, (self.CHANGED_POLL,))
+
+	def _debit(self):
+		fel = u"Label" if "Label" in self._opts else (u"Stat" if "Stat" in self._opts else u"")
+		_service, sref = self._service_ref()
+		t = C.debit_text(self._reader(), sref, fel)
+		return C.upper(t) if (t and "Upper" in self._opts) else t
 
 	# ------------------------------------------------------------ pagina 5: randul scurt din banda
 

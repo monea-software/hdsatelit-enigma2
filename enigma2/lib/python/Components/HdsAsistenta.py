@@ -84,6 +84,14 @@ CONCLUZII_MAX = 2000
 # (HdsCopieSetari.pornire, care verifica toata copia) la repornirea interfetei. Pachetele instalate sau scoase in
 # sesiune NU intra in v1: le scoate echipa, cu op "dezinstaleaza".
 DOSAR_COPIE = "/home/root/hds-asistenta-copie"
+# 0.7.7 (asistenta 594572: omul a apasat Albastru la 3 minute dupa Start, inainte ca echipa sa schimbe ceva; interfata a
+# repornit si a pus la loc copia facuta chiar atunci, fara niciun folos). Copia de la intrarea echipei e insotita de
+# semnul acesta (in DOSAR_COPIE, scris inaintea copiei), iar prima cerere de control din sesiune (taste, text, zap, o
+# setare, o instalare, o dezinstalare, o repornire) il sterge inainte sa ruleze (_scoateSemnul). Cat semnul exista,
+# "Pune înapoi cum era" nu apare si nu se poate cere: Albastru pe ecranul asistentei si pe pagina de pornire, cardul din
+# pagina web (toate prin stareCopie) si cerePunereaInapoi. O copie fara semn (facuta inainte de 0.7.7) ramane ca pana
+# acum. Semnul sta langa copie, deci ramane si dupa oprire, iar copia sesiunii urmatoare il pune din nou.
+SEMN_FARA_SCHIMBARI = "fara-schimbari"
 IMAGE_VERSION = "/etc/image-version"
 
 PROTOCOL = 1
@@ -108,6 +116,9 @@ TIMP_CERERE_S = 20
 RASPUNS_SERVER_MAX = 512 * 1024
 TIMP_DNS_PORNIRE_S = 2
 TIMP_HTTPS_PORNIRE_S = 3
+# un salt al ceasului peretelui fata de cel monoton mai mare de atat intre doua citiri muta si ora de sfarsit a sesiunii
+# (Sesiune._urmeazaCeasul)
+SALT_CEAS_S = 2
 
 # starile sesiunii
 OPRIT, VERIFICARE, INREGISTRARE, ASTEAPTA, CONECTAT, SE_OPRESTE = (
@@ -229,6 +240,10 @@ TEXT_OPRITA_GATA = N_("Asistența s-a oprit. Nu mai ai nimic de făcut.")
 # anuntul de pe ecran cand sesiunea se opreste fara om (echipa a inchis-o sau a trecut timpul), dupa ce echipa a intrat
 TEXT_SFARSIT_ECHIPA = N_("Echipa HD Satelit a terminat și a închis asistența. Nu mai ai nimic de făcut.")
 TEXT_SFARSIT_TIMP = N_("Asistența s-a oprit singură: s-a terminat timpul ales. Nu mai ai nimic de făcut.")
+# pe ecranul asistentei, sub "Pornită până la ...", cat e conectata si echipa nu lucreaza acum: opririle repezi cadeau in
+# golul de dupa salut, cand ecranul arata numai jurnalul; fara promisiune de timp (echipa poate intra si dupa o ora),
+# cu tasta care iese de pe ecran fara s-o opreasca (Rosu o opreste). Perechea din web: asistenta_web, "conectatNota"
+TEXT_CONECTAT = N_("Echipa se uită imediat ce poate. Poți ieși cu EXIT, asistența rămâne pornită.")
 TEXT_ACCEPT = N_("Accept termenii și condițiile")
 TEXT_TERMENI = N_("Termenii și condițiile")
 TEXT_FARA_BIFA = N_("Fără bifă, asistența nu pornește.")
@@ -327,9 +342,14 @@ def drumMeniu(scurt=False):
 	return " > ".join(_t(p) for p in ("Menu", "Settings", "Asistență de la distanță"))
 
 
-# de ce s-a oprit o sesiune, pe intelesul omului (randul "oprită (...)" din jurnal); cheile sunt motivele din cod
+# de ce s-a oprit o sesiune, pe intelesul omului (randul "oprită (...)" din jurnal); cheile sunt motivele din cod. Omul
+# o opreste din trei locuri pe receptor (Rosu pe ecranul asistentei, Rosu in fereastra concluziilor, "Oprește asistența"
+# la o parola): cheia spune locul (randul "oprita:" din jurnalul interfetei si POST inchide), textul ramane "de om"
 MOTIVE_OPRIRE = {
 	"de om": N_("de om"),
+	"de om (ecran)": N_("de om"),
+	"de om (concluzii)": N_("de om"),
+	"de om (avertisment)": N_("de om"),
 	"de om (web)": N_("din pagina web"),
 	"fara-server": N_("serverul nu răspunde"),
 	"inregistrare-refuzata": N_("înregistrare refuzată"),
@@ -746,8 +766,12 @@ class Sesiune(object):
 		self.motiv_oprire = ""
 		self.ultim_seq = 0
 		self.pana_la_ora = None            # ora peretelui la care se opreste singura (None la permanent)
+		self._ancora_ceas = None           # (ora peretelui, ceasul monoton) la ultima citire: _urmeazaCeasul
+		# numai pentru socoteala ancorei (ramasS o cere si firul interfetei, la fiecare secunda): nu asteapta scrierea pe disc
+		self._lacat_ceas = threading.Lock()
 		self.copie_pentru = None           # id-ul sesiunii pentru care s-a incercat copia setarilor (_copia_inainte)
 		self._activ = _acum()              # ultima data cand s-a intamplat ceva (pornire, conectare, cerere)
+		self._pornita_mono = _acum()       # pornirea (sau reluarea) acestei sesiuni, pentru randul opririi (_scrieOprirea)
 		self.dosar = None
 		self.jurnal = None
 		self._fir = None
@@ -765,7 +789,34 @@ class Sesiune(object):
 			return None
 		if self.pana_la_ora is None:
 			return self.durata_min * 60
+		self._urmeazaCeasul()
 		return max(0, int(self.pana_la_ora - _oraPerete()))
+
+	def _ancoreazaCeasul(self):
+		self._ancora_ceas = (_oraPerete(), _acum())
+
+	def _urmeazaCeasul(self):
+		"""Ora de sfarsit (pana_la_ora, pe ceasul peretelui) se muta odata cu ceasul peretelui cand acesta sare (NTP, ora
+		din transponder, ora HTTPS a serverului; receptoarele fara ceas hardware pornesc cu ore in urma): sesiunea tine cat
+		a ales omul in timp scurs (ceasul monoton), nu se opreste cu "termen" la o corectura a ceasului si nu se lungeste
+		la una inapoi. Afisajul ("Pornită până la ..."), fisierul de stare si reluarea dupa repornire folosesc mai departe
+		pana_la_ora, deci raman potrivite cu ceasul corectat; fisierul de stare se scrie pe loc, ca o repornire venita
+		inaintea cererii urmatoare sa nu gaseasca ora veche, trecuta dupa ceasul corectat. Mersul obisnuit al ceasului
+		(sub SALT_CEAS_S intre doua citiri) nu muta nimic."""
+		with self._lacat_ceas:
+			perete, monoton = _oraPerete(), _acum()
+			ancora = self._ancora_ceas
+			self._ancora_ceas = (perete, monoton)
+			if ancora is None or self.pana_la_ora is None:
+				return
+			salt = (perete - ancora[0]) - (monoton - ancora[1])
+			if abs(salt) < SALT_CEAS_S:
+				return
+			self.pana_la_ora += salt
+		_jurnal("ceasul s-a mutat cu %+d s; sfarsitul sesiunii se muta la fel (raman %d s)"
+			% (int(salt), max(0, int(self.pana_la_ora - perete))))
+		if self.id:
+			self._scrie_stare()
 
 	def expirata(self):
 		"""A trecut durata aleasa? (niciodata la permanent)"""
@@ -806,11 +857,26 @@ class Sesiune(object):
 		self._stop.set()
 		self._pune_stare(SE_OPRESTE)
 
-	def _curata(self):
-		# anunta serverul si sterge dosarul temporar (cheia/jurnalul dispar)
+	def _scrieOprirea(self):
+		"""Randul opririi in jurnalul interfetei (hds-interfata.log) si corpul lui POST inchide: motivul (de om (ecran),
+		de om (web), termen, inchis, eroare: X ...), cate secunde a mers sesiunea (de la pornire sau de la reluare) si
+		ultima cerere. Jurnalul sesiunii se sterge la oprire, iar serverul nu stia cine a pus "inchis": cinci sesiuni din
+		15.11.2026 s-au inchis la 1-3 minute dupa salut si nu s-a putut afla daca le-a oprit omul sau firul."""
+		# nimic de aici nu are voie sa opreasca curatarea (_curata sterge stare.json): la orice greseala, corpul gol
+		try:
+			oprire = {"motiv": str(self.motiv_oprire or "necunoscut")[:60],
+				"secunde": max(0, int(_acum() - self._pornita_mono)), "seq": int(self.ultim_seq or 0)}
+			_jurnal("oprita: %s, dupa %d s, ultima cerere %d" % (oprire["motiv"], oprire["secunde"], oprire["seq"]))
+			return oprire
+		except Exception:
+			return {}
+
+	def _curata(self, oprire=None):
+		# anunta serverul (cu motivul opririi, _scrieOprirea; serverul vechi ignora corpul) si sterge dosarul temporar
+		# (cheia/jurnalul dispar)
 		if self.id and self.secret:
 			try:
-				_ceruta(self.server + "inchide?id=" + self.id, "POST", {}, {"X-Secret": self.secret})
+				_ceruta(self.server + "inchide?id=" + self.id, "POST", oprire or {}, {"X-Secret": self.secret})
 			except Exception:
 				pass
 		if self.dosar:
@@ -827,18 +893,20 @@ class Sesiune(object):
 	# -------- fisierul de stare (reluare dupa repornirea interfetei)
 
 	def _scrie_stare(self):
-		try:
-			os.makedirs(os.path.dirname(STARE_FISIER), mode=0o700, exist_ok=True)
-			nou = STARE_FISIER + ".nou"
-			fd = os.open(nou, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-			with os.fdopen(fd, "w", encoding="utf-8") as f:
-				json.dump({"v": PROTOCOL, "id": self.id, "secret": self.secret, "server": self.server,
-					"nivel": self.nivel, "durata_min": self.durata_min, "pana_la_ora": self.pana_la_ora,
-					"ultim_seq": self.ultim_seq, "limba": self.limba, "dosar": self.dosar, "cod": self.cod,
-					"asteapta": self.stare == ASTEAPTA, "copie": self.copie_pentru}, f)
-			os.replace(nou, STARE_FISIER)
-		except Exception:
-			pass
+		# sub lacat: o scrie si firul interfetei, dupa un salt al ceasului (_urmeazaCeasul, rar), nu numai firul sesiunii
+		with self._lacat:
+			try:
+				os.makedirs(os.path.dirname(STARE_FISIER), mode=0o700, exist_ok=True)
+				nou = STARE_FISIER + ".nou"
+				fd = os.open(nou, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+				with os.fdopen(fd, "w", encoding="utf-8") as f:
+					json.dump({"v": PROTOCOL, "id": self.id, "secret": self.secret, "server": self.server,
+						"nivel": self.nivel, "durata_min": self.durata_min, "pana_la_ora": self.pana_la_ora,
+						"ultim_seq": self.ultim_seq, "limba": self.limba, "dosar": self.dosar, "cod": self.cod,
+						"asteapta": self.stare == ASTEAPTA, "copie": self.copie_pentru}, f)
+				os.replace(nou, STARE_FISIER)
+			except Exception:
+				pass
 
 	# -------- firul
 
@@ -867,7 +935,7 @@ class Sesiune(object):
 			# pentru anuntul de sfarsit (textSfarsit): cum s-a oprit si daca echipa a intrat (a trimis macar o cerere)
 			_ultimaOprire[0] = {"id": self.id, "motiv": self.motiv_oprire, "cu_echipa": self.ultim_seq > 0}
 			self._pune_stare(OPRIT)
-			self._curata()
+			self._curata(self._scrieOprirea())
 			_uita(self)
 
 	def _esecPornire(self, motiv):
@@ -898,6 +966,7 @@ class Sesiune(object):
 		self.secret = str(o["secret"])[:128]
 		self.cod = re.sub(r"\D", "", str(o["cod"]))[:6]
 		self.pana_la_ora = None if self.permanenta() else _oraPerete() + self.durata_min * 60
+		self._ancoreazaCeasul()
 		self.stare = ASTEAPTA
 		self._scrie_stare()
 		self._pune_stare(ASTEAPTA)
@@ -950,7 +1019,8 @@ class Sesiune(object):
 			_jurnal("setarile de acum: %s" % type(e).__name__)
 			text = None
 		try:
-			ok, motiv = faCopieAsistenta(text)
+			# Albastru "Pune înapoi cum era" numai dupa prima schimbare a echipei (SEMN_FARA_SCHIMBARI)
+			ok, motiv = faCopieAsistenta(text, fara_schimbari=True)
 		except Exception as e:
 			ok, motiv = False, type(e).__name__
 		self.copie_pentru = self.id
@@ -1023,6 +1093,10 @@ class Sesiune(object):
 			rez = Broker.Rezultat(1, text=Broker.TEXT_FARA_CONTROL)
 		else:
 			self.jurnal.adauga("%s: %s" % (fel, eticheta))
+			if fel_cat == "control":
+				# prima schimbare a echipei: de acum "Pune înapoi cum era" are rost; inainte de rulare, fiindca o repornire
+				# a interfetei (reporneste, taste, o setare) poate veni inaintea raspunsului
+				_scoateSemnul()
 			# orice cerere (si citirile): banda spune ca echipa lucreaza
 			_ultimControl[0] = _acum()
 			if op == "reporneste":
@@ -1030,7 +1104,8 @@ class Sesiune(object):
 				self.ultim_seq = seq
 				self._scrie_stare()
 			_anunta()
-			rez = Broker.ruleaza(op, args, dict(self.ctx, nivel=self.nivel))
+			# stop: op "intrebare" asteapta raspunsul omului si iese indata ce asistenta se opreste (asteaptaRaspuns)
+			rez = Broker.ruleaza(op, args, dict(self.ctx, nivel=self.nivel, stop=self._stop))
 			_ultimControl[0] = _acum()
 			if op == "concluzii":
 				# echipa a trimis concluziile: a terminat, pana la o alta cerere
@@ -1106,6 +1181,15 @@ def textActivitate(ses=None):
 	return ""
 
 
+def textConectat(ses=None):
+	"""Randul de sub "Pornită până la ..." pe ecranul asistentei, cat sesiunea e conectata: ce face echipa
+	(textActivitate: "lucrează acum" / "a terminat...") sau, cand nu lucreaza acum, TEXT_CONECTAT; "" in alte stari."""
+	ses = ses if ses is not None else _sesiune
+	if ses is None or ses.stare != CONECTAT:
+		return ""
+	return textActivitate(ses) or _t(TEXT_CONECTAT)
+
+
 def textSfarsit(id_sesiune):
 	"""Anuntul de pe ecran la sfarsitul sesiunii id_sesiune, cand s-a oprit fara om (echipa a inchis-o, a trecut timpul)
 	si echipa intrase; altfel "" (omul care o opreste stie, iar o sesiune fara echipa nu are ce anunta)."""
@@ -1117,6 +1201,167 @@ def textSfarsit(id_sesiune):
 	if o.get("motiv") in ("termen", "expirat"):
 		return _t(TEXT_SFARSIT_TIMP)
 	return ""
+
+
+# ---------------------------------------------------------------- intrebarea echipei (op "intrebare")
+# 0.7.7 (asistenta 755708, Vu+ Solo SE, TODO 16.11 01:10): op "mesaj" e numai intr-o parte, iar un om a dat acordul pentru
+# o instalare ocolit, prin Beta tester > Trimite mesaj. Op "intrebare" deschide pe televizor (Screens/HdsAsistentaSemn, o
+# fereastra MessageBox) si in pagina web a asistentei aceeasi intrebare, cu Nu / Da sau cu 2-4 variante scurte ale echipei.
+# Firul sesiunii asteapta raspunsul omului (asteaptaRaspuns, cel mult INTREBARE_MAX_S) si il trimite echipei ca raspuns al
+# acelei cereri: serverul ramane cel de acum (un raspuns pe cerere). O singura intrebare deodata; primul raspuns, de pe
+# televizor sau din web, o inchide peste tot. Timpul trecut, EXIT, oprirea asistentei sau o fereastra care nu s-a putut
+# deschide nu sunt niciodata un raspuns: textul pentru echipa spune care a fost (textRaspunsIntrebare).
+INTREBARE_IMPLICIT_S = 180
+INTREBARE_MIN_S = 30
+INTREBARE_MAX_S = 300
+INTREBARE_VARIANTE_MAX = 4
+INTREBARE_VARIANTA_SEMNE = 40
+# fara variante: Nu (ales, primul) si Da, ca ferestrele Da/Nu ale imaginii cu "Nu" ales; echipa primeste "Nu" / "Da"
+INTREBARE_DA_NU = (("Nu", N_("No")), ("Da", N_("Yes")))
+TEXT_INTREBARE_TITLU = N_("Întrebare de la HD Satelit")
+TEXT_INTREBARE_INCHISA = N_("Întrebarea s-a închis între timp.")
+
+
+class Intrebare(object):
+	"""O intrebare a echipei: textul, variantele (chei: ce primeste echipa; etichete: ce vede omul), termenul si
+	raspunsul (indicele variantei), sau de ce n-a venit (fara: termen, exit, oprita, inlocuita, standby, nearatata)."""
+
+	def __init__(self, nr, text, chei, etichete, secunde):
+		self.id = nr
+		self.text = text
+		self.chei = list(chei)
+		self.etichete = list(etichete)
+		self.secunde = secunde
+		self.pornita = _acum()
+		self.pana = self.pornita + secunde
+		self.raspuns = None
+		self.de_la = ""
+		self.dupa_s = 0
+		self.fara = ""
+		self.aratata = False
+		self.gata = threading.Event()
+
+	def ramasS(self):
+		return max(0, int(round(self.pana - _acum())))
+
+	def public(self):
+		return {"id": self.id, "text": self.text, "variante": list(self.etichete), "ramas_s": self.ramasS()}
+
+
+_intrebare = [None]
+_intrebareNr = [0]
+_lacatIntrebare = threading.Lock()
+
+
+def varianteIntrebare(text):
+	"""Variantele unei intrebari: "Da|Nu|Nu știu" -> (chei, etichete), aceleasi; fara text, Nu / Da (etichetele traduse
+	in limba receptorului). None cand forma nu e buna (una sau peste INTREBARE_VARIANTE_MAX, goale, prea lungi, la fel)."""
+	if not text:
+		return [c for c, _e in INTREBARE_DA_NU], [_t(e) for _c, e in INTREBARE_DA_NU]
+	parti = [p.strip() for p in str(text).split("|")]
+	if not 2 <= len(parti) <= INTREBARE_VARIANTE_MAX or len(set(parti)) != len(parti) \
+			or any(not p or len(p) > INTREBARE_VARIANTA_SEMNE for p in parti):
+		return None
+	return parti, parti
+
+
+def secundeIntrebare(text):
+	"""Cat sta intrebarea deschisa: secundele cerute, intre INTREBARE_MIN_S si INTREBARE_MAX_S (firul sesiunii nu ia alta
+	cerere cat asteapta); fara ele, INTREBARE_IMPLICIT_S."""
+	try:
+		s = int(text) if text not in (None, "") else INTREBARE_IMPLICIT_S
+	except (TypeError, ValueError):
+		s = INTREBARE_IMPLICIT_S
+	return max(INTREBARE_MIN_S, min(INTREBARE_MAX_S, s))
+
+
+def puneIntrebare(text, variante="", secunde=""):
+	"""Intrebarea noua (Intrebare), cea deschisa de acum; una ramasa deschisa se inchide fara raspuns ("inlocuita").
+	None cand variantele nu au forma buna."""
+	v = varianteIntrebare(variante)
+	if v is None:
+		return None
+	with _lacatIntrebare:
+		vechi = _intrebare[0]
+		if vechi is not None and not vechi.gata.is_set():
+			vechi.fara = "inlocuita"
+			vechi.gata.set()
+		_intrebareNr[0] += 1
+		q = Intrebare(_intrebareNr[0], str(text), v[0], v[1], secundeIntrebare(secunde))
+		_intrebare[0] = q
+	return q
+
+
+def intrebareDeschisa():
+	"""Intrebarea care asteapta raspunsul ({"id", "text", "variante", "ramas_s"}, pentru pagina web), sau None."""
+	q = _intrebare[0]
+	if q is None or q.gata.is_set() or q.ramasS() <= 0:
+		return None
+	return q.public()
+
+
+def raspundeIntrebare(nr, index, de_la="televizor"):
+	"""Raspunsul omului (indicele variantei) la intrebarea nr, de pe televizor sau din web: primul castiga, iar o
+	intrebare inchisa, alta sau un indice din afara listei nu primesc nimic. -> True cand raspunsul a fost luat."""
+	try:
+		nr, i = int(nr), int(index)
+	except (TypeError, ValueError):
+		return False
+	with _lacatIntrebare:
+		q = _intrebare[0]
+		if q is None or q.id != nr or q.gata.is_set() or q.ramasS() <= 0 or not 0 <= i < len(q.chei):
+			return False
+		q.raspuns = i
+		q.de_la = de_la
+		q.dupa_s = max(0, int(_acum() - q.pornita))
+		q.gata.set()
+	return True
+
+
+def inchideIntrebarea(nr, motiv):
+	"""Intrebarea nr se inchide fara raspuns (motiv: exit, standby, nearatata...). -> True daca era inca deschisa."""
+	with _lacatIntrebare:
+		q = _intrebare[0]
+		if q is None or q.id != nr or q.gata.is_set():
+			return False
+		q.fara = motiv
+		q.gata.set()
+	return True
+
+
+def asteaptaRaspuns(q, stop=None, pas=0.5):
+	"""Pe firul sesiunii: asteapta raspunsul la q pana la termen; iese indata ce asistenta se opreste (stop, sesiunea
+	nu mai e activa sau i-a trecut timpul). Apoi intrebarea nu mai e deschisa nicaieri. -> q."""
+	while not q.gata.is_set():
+		ses = _sesiune
+		if (stop is not None and stop.is_set()) or ses is None or not ses.activa() or ses.expirata():
+			inchideIntrebarea(q.id, "oprita")
+			break
+		if q.ramasS() <= 0:
+			inchideIntrebarea(q.id, "termen")
+			break
+		q.gata.wait(max(0.05, min(pas, q.pana - _acum())))
+	with _lacatIntrebare:
+		if _intrebare[0] is q:
+			_intrebare[0] = None
+	return q
+
+
+def textRaspunsIntrebare(q):
+	"""Raspunsul cererii, pentru echipa (romana fara diacritice, ca restul brokerului): (0, "raspuns: Da ...") sau
+	(1, "(fara raspuns ...)"); niciodata un raspuns din timpul trecut sau din EXIT."""
+	if q.raspuns is not None:
+		return 0, "raspuns: %s (varianta %d din %d, %s, dupa %d s)" % (q.chei[q.raspuns], q.raspuns + 1, len(q.chei),
+			"din pagina web" if q.de_la == "web" else "pe televizor", q.dupa_s)
+	pe_tv = "" if q.aratata else "; fereastra nu s-a putut deschide pe televizor"
+	motive = {
+		"termen": "fara raspuns in %d s; intrebarea s-a inchis%s" % (q.secunde, pe_tv),
+		"exit": "omul a inchis intrebarea fara raspuns (EXIT)",
+		"oprita": "fara raspuns: asistenta s-a oprit",
+		"inlocuita": "fara raspuns: o intrebare noua i-a luat locul",
+		"standby": "intrebarea nu s-a aratat: receptorul e in standby",
+	}
+	return 1, "(%s)" % motive.get(q.fara, "fara raspuns: %s%s" % (q.fara or "?", pe_tv))
 
 
 def _seq_din(exterior):
@@ -1328,8 +1573,13 @@ def mediuCopie():
 
 
 # copia gasita (dictul lui HdsCopieSetari.copii), tinuta cat nu se schimba dosarul copiilor: stare() e chemata in
-# fiecare secunda de ecran si la 3 secunde de pagina web
-_copieTinuta = {"cheie": None, "copie": None}
+# fiecare secunda de ecran si la 3 secunde de pagina web; "fara_schimbari": SEMN_FARA_SCHIMBARI era langa ea (citit o
+# data cu copia, adus la zi de _scoateSemnul: numai acest proces il scrie si il sterge)
+_copieTinuta = {"cheie": None, "copie": None, "fara_schimbari": False}
+
+
+def _caleSemn():
+	return os.path.join(DOSAR_COPIE, SEMN_FARA_SCHIMBARI)
 
 
 def copieAsistenta():
@@ -1341,28 +1591,57 @@ def copieAsistenta():
 	try:
 		cheie = (os.stat(dosar).st_mtime_ns, tuple(sorted(os.listdir(dosar))))
 	except OSError:
-		_copieTinuta.update(cheie=None, copie=None)
+		_copieTinuta.update(cheie=None, copie=None, fara_schimbari=False)
 		return None
 	if cheie != _copieTinuta["cheie"]:
 		lista = C.copii([mediuCopie()])
-		_copieTinuta.update(cheie=cheie, copie=lista[0] if lista else None)
+		_copieTinuta.update(cheie=cheie, copie=lista[0] if lista else None,
+			fara_schimbari=os.path.lexists(_caleSemn()))
 	return _copieTinuta["copie"]
 
 
-def faCopieAsistenta(text_setari=None):
+def copieDePusInapoi():
+	"""Copia pentru "Pune înapoi cum era": copia de asistenta numai dupa prima schimbare a echipei (fara
+	SEMN_FARA_SCHIMBARI langa ea), altfel None."""
+	c = copieAsistenta()
+	if c is None or _copieTinuta.get("fara_schimbari"):
+		return None
+	return c
+
+
+def _scoateSemnul():
+	"""Prima cerere de control a sesiunii (Sesiune._face_cerere): semnul copiei se sterge, deci Albastru apare. Daca
+	stergerea nu merge, Albastru apare oricum in interfata de acum (un Albastru in plus nu strica; unul lipsa dupa o
+	schimbare, da). Nu arunca."""
+	_copieTinuta["fara_schimbari"] = False
+	try:
+		cale = _caleSemn()
+		if os.path.lexists(cale):
+			os.remove(cale)
+			_jurnal("copia setarilor: prima schimbare a echipei, Pune inapoi cum era se poate cere")
+	except Exception as e:
+		_jurnal("copia setarilor, semnul: %s" % type(e).__name__)
+
+
+def faCopieAsistenta(text_setari=None, fara_schimbari=False):
 	"""Copia setarilor in DOSAR_COPIE, cu HdsCopieSetari.fa_copia (garda de spatiu a ei ramane: fara loc, nimic scris).
 	Intai dosarul intreg se sterge (copia veche si un .part ramas dupa o cadere de curent), apoi se face din nou (0700:
-	copia are parolele Wi-Fi). fel "automata": citeste_descriere arata orice alta valoare decat "automata" ca „făcută de
-	mână”. Pe firul sesiunii. -> (ok, motiv scurt pentru jurnal)."""
+	copia are parolele Wi-Fi). fel "automata": citeste_descriere arata orice alta valoare decat "automata" ca "făcută de
+	mână". fara_schimbari (copia de la intrarea echipei, Sesiune._copia_inainte): SEMN_FARA_SCHIMBARI se scrie inaintea
+	copiei, deci Albastru nu apare pana la prima cerere de control. Pe firul sesiunii. -> (ok, motiv scurt pentru
+	jurnal)."""
 	C = _copie()
 	if C is None:
 		return False, "HdsCopieSetari"
-	_copieTinuta.update(cheie=None, copie=None)
+	_copieTinuta.update(cheie=None, copie=None, fara_schimbari=False)
 	try:
 		if os.path.islink(DOSAR_COPIE):
 			os.remove(DOSAR_COPIE)
 		shutil.rmtree(DOSAR_COPIE, ignore_errors=True)
 		os.makedirs(DOSAR_COPIE, mode=0o700, exist_ok=True)
+		if fara_schimbari:
+			with open(_caleSemn(), "w") as f:
+				f.write("Pune inapoi cum era: dupa prima schimbare a echipei\n")
 		rez = C.fa_copia(DOSAR_COPIE, text_setari, "automata")
 	except Exception as e:
 		_jurnal("copia setarilor: %s" % e)
@@ -1376,9 +1655,10 @@ def faCopieAsistenta(text_setari=None):
 
 
 def stareCopie():
-	"""Pentru ecran si pagina web: {"data_text", "text" (ziua si ora copiei), "intrebare" (aceeasi ca la „Copia
-	setărilor”: HdsCopieSetari.text_intrebare_punere)} sau None cand nu e copie."""
-	c = copieAsistenta()
+	"""Pentru ecran si pagina web: {"data_text", "text" (ziua si ora copiei), "intrebare" (aceeasi ca la "Copia
+	setărilor": HdsCopieSetari.text_intrebare_punere)} sau None cand nu e copie sau echipa n-a schimbat inca nimic
+	(copieDePusInapoi)."""
+	c = copieDePusInapoi()
 	C = _copie()
 	if c is None or C is None:
 		return None
@@ -1395,6 +1675,9 @@ def cerePunereaInapoi():
 	c = copieAsistenta()
 	if C is None or c is None:
 		return False, _t("Copia nu mai este pe mediu.")
+	if copieDePusInapoi() is None:
+		# echipa n-a schimbat inca nimic (o pagina web ramasa deschisa de la copia dinainte): nimic de pus inapoi
+		return False, _t("Nu s-a schimbat nimic.")
 	ok, mesaj = C.cere_punerea(c["id"], [c])
 	ses = _sesiune
 	if ok and ses is not None and ses.activa() and ses.jurnal is not None:
@@ -1431,9 +1714,13 @@ def stare():
 		"pana_text": textPana(ses),
 		# ce face echipa acum ("lucrează acum" / "a terminat..." / ""), ca pe banda de sus
 		"activitate": textActivitate(ses),
+		# randul de sub "Pornită până la ..." pe ecranul asistentei, cat e conectata (textConectat), altfel ""
+		"rand_conectat": textConectat(ses),
 		"jurnal": ses.jurnal.ultimele(40) if ses.jurnal else [],
 		"durate": list(DURATE_MIN),
 		"durata_implicita": DURATA_IMPLICITA_MIN,
+		# intrebarea echipei care asteapta raspunsul (op "intrebare"), pentru pagina web, sau None
+		"intrebare": intrebareDeschisa() if ses.activa() else None,
 	}
 
 
@@ -1475,6 +1762,7 @@ def reia(ctx=None):
 	ses.secret = s["secret"]
 	ses.ultim_seq = int(s.get("ultim_seq", 0))
 	ses.pana_la_ora = pana
+	ses._ancoreazaCeasul()
 	# copia setarilor deja incercata pentru aceasta sesiune: nu se mai face (Sesiune._copia_inainte)
 	ses.copie_pentru = s.get("copie") if isinstance(s.get("copie"), str) else None
 	# dupa o repornire a receptorului intreg dosarul temporar al jurnalului nu mai exista: altul nou
@@ -1509,7 +1797,7 @@ def _bucla_dupa_reluare(self):
 		self.opreste("eroare: %s" % type(e).__name__)
 	finally:
 		self._pune_stare(OPRIT)
-		self._curata()
+		self._curata(self._scrieOprirea())
 		_uita(self)
 
 

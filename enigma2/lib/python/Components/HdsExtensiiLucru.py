@@ -364,10 +364,21 @@ def pluginPentru(pluginuri, p, plugins=None):
 
 
 def pluginuriDeDeschis(plugins):
-	"""Pluginurile omului cu ecran, aceleasi in Extensii, la albastru si in web. Extensii arata din ele cate un rand pe
-	plugin (unulPePlugin)."""
+	"""Pluginurile omului cu ecran (tot inventarul), aceleasi in Extensii si aplicatii (VERDE) si in web. Extensii arata
+	din ele cate un rand pe plugin (unulPePlugin); lista ALBASTRA numai o parte (pluginuriAlbastru)."""
 	f = getattr(plugins, 'pluginuriDeDeschis', None)
 	return [p for p in f() if not I.pluginImagine(getattr(p, 'path', ''))] if f is not None else []
+
+
+# PluginDescriptor.WHERE_EXTENSIONSMENU (Plugins/Plugin.py), fara import, ca _LISTA_PLUGINURI
+_LISTA_EXTENSII = 0
+
+
+def pluginuriAlbastru(plugins):
+	"""Pluginurile din lista tastei ALBASTRE (Lista extensiilor): numai cele care se inscriu singure acolo
+	(WHERE_EXTENSIONSMENU), ca in imaginile OE-Alliance; restul inventarului (WHERE_PLUGINMENU) si pluginurile care nu
+	s-au incarcat, cu motivul, sunt in Extensii si aplicatii, pe VERDE."""
+	return [p for p in pluginuriDeDeschis(plugins) if _are(p, _LISTA_EXTENSII)]
 
 
 # PluginDescriptor.WHERE_PLUGINMENU (Plugins/Plugin.py), fara import: probele de pe PC incarca modulul singur
@@ -1827,6 +1838,35 @@ def textAltPython(nume, alt):
 	return _t(TEXT_ALT_PYTHON) % {'nume': nume or _t('Extensia'), 'alt': alt, 'acum': pythonAcum()}
 
 
+# 0.7.6 (MI3, TODO 15.11 01:12, FDS: Satelliweb ..._py3.13.ipk): modulele Cython nu poarta eticheta .cpython-3X in nume si
+# nu cer libpython, deci HdsPython2.alt_python nu le vede, iar mesajul venea abia la deschidere (HdsAltPython). Numele
+# fisierului spune insa pentru ce Python e facut (_py3.13.ipk, -py3.12): cu un modul .so in pachet si niciunul pentru
+# Python-ul imaginii, acelasi refuz ca la alt_python, inainte sa se puna vreun fisier. Un pachet numai Python (fara .so)
+# trece: merge si pe alt Python 3. Din 0.7.6 (MI5) modulul fara eticheta se cauta in toata arhiva (HdsPython2,
+# Verdict.so_fara), nu numai cand e primul ELF; un .abi3.so trece (merge pe orice Python 3); ce nu s-a citit pana la capat
+# (taiat) nu opreste nimic.
+_PY3_IN_NUME = re.compile(r'(?<![a-z0-9])py(?:thon)?-?3\.([0-9]{1,2})(?![0-9])', re.I)
+
+
+def altPythonNume(cale):
+	""""3.13" cand numele fisierului spune alt Python 3 decat al imaginii, altfel ''"""
+	m = _PY3_IN_NUME.search(posixpath.basename(cale or ''))
+	if not m:
+		return ''
+	alt = '3.%d' % int(m.group(1))
+	return alt if alt != pythonAcum() else ''
+
+
+def altPythonPachet(cale, v):
+	"""alt_python dupa continut (HdsPython2) si, pentru modulele fara eticheta, dupa numele fisierului"""
+	alt = P.H.alt_python(v)
+	if alt or v is None or v.python2 or v.taiat or v.py_acum:
+		return alt
+	if not getattr(v, 'so_fara', ''):
+		return ''
+	return altPythonNume(cale)
+
+
 TEXT_PYTHON2 = (N_('Extensia e făcută pentru imaginile vechi, cu Python 2.'),
 	N_('Imaginea aceasta are Python 3, deci nu se instalează.'))
 BUTON_INLOCUITOR = N_('Instalează înlocuitorul')
@@ -2038,6 +2078,152 @@ def _nota(catalog, pachete, nota):
 	return nota(pachete) if nota is not None else ''
 
 
+# ---------------------------------------------------------------- pachetele imaginii trase de o extensie (0.7.6, EXG)
+# De ce (NVK, 15.11.2026, Vu+ Solo 4K): ServiceApp cere "enigma2-hdsatelit (>= 0.7.5)". Actualizat din Extensii (sau cu
+# "Actualizează toate"), opkg aducea singur programul imaginii 0.7.5, fara tema, fara restul setului si fara repornirea
+# interfetei; interfata 0.7.4 ramasa pornita peste fisierele noi a cazut (Setari navigator, KeyError 'agent_tv').
+# Acum, inainte de opkg, Extensii (televizor si pagina web) citesc Depends cu versiuni din listele opkg: daca extensia (sau o
+# dependinta pe care opkg ar aduce-o odata cu ea) cere o versiune mai noua a unui pachet al imaginii instalat acum
+# (enigma2-hdsatelit, hdsatelit-*, orice pachet pus la constructie) si listele o au, nu se instaleaza nimic pe bucati:
+# un singur mesaj si butonul care deschide Actualizare software (tot setul, cu Ce e nou si repornirea interfetei).
+# Cand versiunea instalata e destul de noua (cazul obisnuit), instalarea merge ca inainte. Ajuta de la 0.7.6 incolo (pe
+# 0.7.5 ruleaza Extensiile vechi; acolo apara blocul din postinst-ul lui enigma2-hdsatelit).
+TEXT_IMAGINE = N_('%s cere o versiune mai nouă a imaginii; o primești din Actualizare software.')
+TEXT_IMAGINE_TOATE = N_('Celelalte extensii le actualizezi aici după aceea.')
+BUTON_IMAGINE = N_('Actualizare software')
+LEGATURA_IMAGINE = '/actualizari'
+# indexul listelor opkg (nume -> (versiune, Depends)), tinut minte cat timp listele si starea nu se schimba
+_INDEX_LISTE = {'semn': None, 'index': None}
+
+
+def _A():
+	"""Components/HdsActualizari (Depends cu versiuni, pachetele instalate), incarcat la prima folosire"""
+	if 'A' not in _VECINI:
+		_VECINI['A'] = _vecin('HdsActualizari')
+	return _VECINI['A']
+
+
+def _semnListe(radacina, conf):
+	semn = []
+	for cale in [P._cale(radacina, conf.status_file)] + [os.path.join(P._cale(radacina, conf.lists_dir), n)
+			for n, _a in conf.surse]:
+		try:
+			s = os.stat(cale)
+			semn.append((cale, s.st_mtime, s.st_size))
+		except OSError:
+			semn.append((cale, 0, 0))
+	return (radacina, tuple(semn))
+
+
+def indexListe(radacina, conf, hds=()):
+	"""{nume: (versiune, depends, versiunea din feedul HD Satelit sau '')} cu versiunea cea mai noua a fiecarui pachet din
+	listele opkg, pe arhitecturile receptorului (ca opkg: o instalare sau o actualizare ia versiunea cea mai noua). `hds`:
+	numele surselor feedului HD Satelit (de acolo ia Actualizare software setul imaginii)."""
+	semn = (_semnListe(radacina, conf), tuple(sorted(hds)))
+	if _INDEX_LISTE['semn'] == semn and _INDEX_LISTE['index'] is not None:
+		return _INDEX_LISTE['index']
+	rez = {}
+	dosar = P._cale(radacina, conf.lists_dir)
+	for nume_sursa, _adresa in conf.surse:
+		f = os.path.join(dosar, nume_sursa)
+		if not os.path.isfile(f):
+			continue
+		din_hds = nume_sursa in hds
+		for s in P.citeste_strofe(f):
+			n = s.get('package', '')
+			if not n or (conf.arhitecturi and s.get('architecture', '') not in conf.arhitecturi):
+				continue
+			v = s.get('version', '')
+			vechi = rez.get(n) or ('', '', '')
+			ver, dep, ver_hds = vechi
+			if not ver or P.compara_versiuni(v, ver) > 0:
+				ver, dep = v, s.get('depends', '')
+			if din_hds and (not ver_hds or P.compara_versiuni(v, ver_hds) > 0):
+				ver_hds = v
+			rez[n] = (ver, dep, ver_hds)
+	_INDEX_LISTE['semn'], _INDEX_LISTE['index'] = semn, rez
+	return rez
+
+
+def imagineTrasa(catalog, pachete, radacina=None, fisiere=()):
+	"""[{'cine': titlul extensiei, 'pachet': pachetul imaginii, 'de': versiunea instalata, 'la': cea din liste}]: pachetele
+	imaginii, instalate acum, pe care opkg le-ar actualiza ca dependinte ale extensiilor `pachete` (Pachet din catalog).
+	`fisiere`: FisierIpk din fila Din fisier (0.7.6, EX2); Depends lor vine din fisierul control, nu din liste.
+	Lista goala cand nu trage nimic sau cand nu se poate citi (instalarea merge atunci ca inainte, nu se opreste)."""
+	try:
+		A = _A()
+		rad = radacina or getattr(catalog, 'radacina', None) or '/'
+		conf = getattr(catalog, 'configurare', None) or P.citeste_configurarea(rad)
+		inst = A.instalate(rad, conf)
+		din = I.pacheteImagine(rad)
+		hds = set(x[0] for canal in A.surse_feed(rad, conf).values() for x in canal)
+		index = indexListe(rad, conf, hds)
+	except Exception as e:
+		_jurnal('pachetele imaginii trase: %s' % e)
+		return []
+
+	def alImaginii(n):
+		return n == A.PACHET_PRINCIPAL or n.startswith(A.PREFIX_IMAGINE) or n in din
+
+	rez, vazute, coada = [], set(), []
+	for p in pachete:
+		vazute.add(p.nume)
+		x = index.get(p.nume)
+		if x is not None:
+			coada.append((x[1], p.titlu))
+	for f in fisiere:
+		if getattr(f, 'nume', ''):
+			vazute.add(f.nume)
+		coada.append((getattr(f, 'depinde_text', '') or '', f.titlu))
+	while coada:
+		depends, cine = coada.pop(0)
+		for alternative in A._dependinte(depends):
+			# o dependinta pe care versiunea instalata o satisface nu schimba nimic (cazul obisnuit)
+			if any(n in inst and (not op or A._satisface(inst[n], op, v)) for n, op, v in alternative):
+				continue
+			for n, op, v in alternative:
+				x = index.get(n)
+				if x is None or (op and not A._satisface(x[0], op, v)):
+					continue
+				# numai cand feedul HD Satelit are versiunea ceruta: atunci o aduce Actualizare software, cu tot setul
+				if n in inst and alImaginii(n) and x[2] and (not op or A._satisface(x[2], op, v)) and 						not any(r['pachet'] == n for r in rez):
+					rez.append({'cine': cine, 'pachet': n, 'de': inst[n], 'la': x[2]})
+				# ce aduce opkg odata cu extensia (nou sau actualizat) poate trage si el pachete ale imaginii
+				if n not in vazute:
+					vazute.add(n)
+					coada.append((x[1], cine))
+				break
+	return rez
+
+
+def imagineTrasaFisier(catalog, f):
+	"""0.7.6 (EX2, TODO NOU EXG 15.11 10:33): ca imagineTrasa, pentru un .ipk din fila Din fisier (televizor si web): un
+	fisier care cere enigma2-hdsatelit (sau alt pachet al imaginii) mai nou decat cel instalat duce la Actualizare
+	software, nu aduce pe bucati programul imaginii"""
+	return imagineTrasa(catalog, (), fisiere=(f,))
+
+
+class EroareImagine(tuple):
+	"""Refuzul planului cand extensia trage pachete ale imaginii: (mesaj, culoare), ca orice refuz al planurilor (ceilalti
+	apelanti, de pilda Radio online sau cautarea oarba, arata numai mesajul, fara opkg), plus `imagine`: {'trase',
+	'buton', 'legatura'}, dupa care Extensii (televizor si pagina web) pun butonul spre Actualizare software."""
+
+	def __new__(cls, text, trase):
+		e = tuple.__new__(cls, (text, 'chihlimbar'))
+		e.imagine = {'trase': trase, 'buton': BUTON_IMAGINE, 'legatura': LEGATURA_IMAGINE}
+		return e
+
+
+def eroareImagine(trase, toate=False):
+	"""Mesajul (acelasi pe televizor si in pagina) si datele butonului spre Actualizare software; nimic de instalat"""
+	text = _t(TEXT_IMAGINE) % trase[0]['cine']
+	if toate:
+		text += ' ' + _t(TEXT_IMAGINE_TOATE)
+	_jurnal('trage pachetele imaginii: %s' % ', '.join('%s cere %s %s (acum %s)' % (x['cine'], x['pachet'], x['la'],
+		x['de']) for x in trase))
+	return EroareImagine(text, trase)
+
+
 def planInstalare(catalog, p, argumente=None, nota=None):
 	"""(plan, None) sau (None, (mesaj, culoare)). `argumente`: opkgArguments (ecranul da functia lui); `nota`:
 	functia capatului care scrie nota din surseExterne()."""
@@ -2048,6 +2234,10 @@ def planInstalare(catalog, p, argumente=None, nota=None):
 	for d in dep:
 		if d.python2:
 			return planPython2Pachet(catalog, p, (P.H.DEPENDINTA, d.nume)), None
+	# 0.7.6 (EXG): o extensie care cere o versiune mai noua a imaginii duce la Actualizare software (TODO 15.11 07:35)
+	trase = imagineTrasa(catalog, [p])
+	if trase:
+		return None, eroareImagine(trase)
 	py2 = dependintePython2([p] + dep)
 	perechi, fara = perechiPython3(catalog, py2)
 	optiuni = optiuniTema(p.nume, ('--force-depends',) if py2 else ())
@@ -2113,6 +2303,11 @@ def planActualizare(catalog, pachete, argumente=None, nota=None):
 	pachete = [p for p in pachete if p.actualizare and P.nume_valid(p.nume)]
 	if not pachete:
 		return None, None
+	# 0.7.6 (EXG): una dintre extensii cere o versiune mai noua a imaginii: tot planul duce la Actualizare software (un
+	# mesaj, un buton); celelalte se actualizeaza aici dupa aceea, cand imaginea e la zi (TODO 15.11 07:35)
+	trase = imagineTrasa(catalog, pachete)
+	if trase:
+		return None, eroareImagine(trase, toate=len(pachete) > 1)
 	# numai teme: --force-overwrite, ca la instalare (o versiune noua poate aduce alt fisier al imaginii); amestecate cu
 	# alte extensii („Actualizează toate”): fara, ca optiunea sa nu ajunga la ele (o tema instalata tine deja fisierele ei)
 	optiuni = optiuniTema(pachete[0].nume, actualizare=True) if all(TS.eTema(p.nume) for p in pachete) else ()
@@ -2284,13 +2479,17 @@ def planFisier(f, argumente=None, catalog=None):
 	if getattr(f, 'python2', None):
 		return planPython2Fisier(catalog, f), None
 	# 0.7.5: module .so facute numai pentru alt Python 3 (de pilda 3.7): nu se instaleaza (TODO 06.11 05:30)
-	alt = P.H.alt_python(getattr(f, 'verdict', None))
+	alt = altPythonPachet(f.cale, getattr(f, 'verdict', None))
 	if alt:
 		return None, (textAltPython(f.titlu, alt), 'rau')
 	# 0.7.5 (CTU): pachetele Python de care porneste interfata nu se inlocuiesc (TODO 15.11 07:08)
 	r = refuzPornire(getattr(f, '_citire', None) or f.cale, getattr(catalog, 'radacina', None) or '/')
 	if r:
 		return None, (textPornire(f.titlu, r), 'rau')
+	# 0.7.6 (EX2): un fisier care cere o versiune mai noua a imaginii duce la Actualizare software, ca pachetele din feed
+	trase = imagineTrasaFisier(catalog, f)
+	if trase:
+		return None, eroareImagine(trase)
 	cale = P.fisier_ipk_permis(f.cale)
 	# 0.7.4: un fisier vechi care cere pachete Python 2: cu perechile python3 si --force-depends (vezi perechiPython3)
 	py2 = dependintePython2([f])
@@ -2354,6 +2553,28 @@ SEMNE_SCRIPT_RAU = ('invalid tar magic', 'truncated input file', 'not in gzip fo
 	': command not found', 'syntax error')
 
 
+# FRZ 0.7.7 (pachetul de testeri 2445, Vu+ Uno 4K SE 0.7.6: firul interfetei 3,9 s in f.read <- reparaScripturiPachete <-
+# _instaleaza, inainte de fiecare opkg din Extensii): toate scripturile pachetelor (sute) se citeau de fiecare data. Stampila de
+# langa dosarul info tine ora dosarului (mtime, o schimba numai adaugarea, stergerea sau inlocuirea unui fisier) si clipa
+# verificarii: cu dosarul neschimbat nu se citeste nimic; altfel numai scripturile cu ctime de la verificarea trecuta incoace
+# (ctime o pune nucleul la orice scriere sau mutare, nu se poate pastra din arhiva pachetului ca mtime). Fara stampila (prima
+# lucrare dupa actualizare) se citesc toate, ca inainte.
+STAMPILA_SCRIPTURI = '.hds-scripturi-verificate'
+
+
+def _stampilaScripturi(dosar):
+	return os.path.join(os.path.dirname(os.path.normpath(dosar)), STAMPILA_SCRIPTURI)
+
+
+def _citesteStampila(cale):
+	try:
+		with open(cale) as f:
+			parti = f.read().split()
+		return int(parti[0]), int(parti[1])
+	except (OSError, ValueError, IndexError):
+		return None
+
+
 def reparaScripturiPachete(radacina='/', dosar=None):
 	"""Scoate BOM-ul si CR-urile din scripturile pachetelor din dosarul info al lui opkg. Intoarce numele reparate."""
 	if dosar is None:
@@ -2361,6 +2582,16 @@ def reparaScripturiPachete(radacina='/', dosar=None):
 			dosar = P._cale(radacina, P.citeste_configurarea(radacina).info_dir)
 		except Exception:
 			dosar = P._cale(radacina, P.DOSAR_INFO)
+	stampila = _stampilaScripturi(dosar)
+	try:
+		mtime_dosar = os.stat(dosar).st_mtime_ns
+	except OSError:
+		return []
+	vechi = _citesteStampila(stampila)
+	if vechi is not None and vechi[0] == mtime_dosar:
+		return []
+	prag = vechi[1] if vechi is not None else None
+	inceput = time.time_ns()
 	try:
 		nume = sorted(os.listdir(dosar))
 	except OSError:
@@ -2371,7 +2602,10 @@ def reparaScripturiPachete(radacina='/', dosar=None):
 			continue
 		cale = os.path.join(dosar, n)
 		try:
-			if os.path.islink(cale) or os.path.getsize(cale) > SCRIPT_MAXIM:
+			st = os.lstat(cale)
+			if prag is not None and st.st_ctime_ns < prag:
+				continue
+			if os.path.islink(cale) or st.st_size > SCRIPT_MAXIM:
 				continue
 			with open(cale, 'rb') as f:
 				date = f.read()
@@ -2387,6 +2621,19 @@ def reparaScripturiPachete(radacina='/', dosar=None):
 			reparate.append(n)
 		except OSError as e:
 			_jurnal('scriptul %s: %s' % (n, e))
+	try:
+		# ora dosarului de dupa reparatii (os.replace o schimba) si clipa de dinaintea citirii: ce s-a scris intre timp se
+		# vede data viitoare
+		# sisteme de fisiere cu ora pe secunda (jffs2): o ora a dosarului din ultimele 2 s nu se crede, iar pragul ctime
+		# coboara cu 2 s
+		dupa = os.stat(dosar).st_mtime_ns
+		if time.time_ns() - dupa < 2 * 10 ** 9:
+			dupa = 0
+		with open(stampila + '.nou', 'w') as f:
+			f.write('%d %d\n' % (dupa, inceput - 2 * 10 ** 9))
+		os.replace(stampila + '.nou', stampila)
+	except OSError as e:
+		_jurnal('stampila scripturilor: %s' % e)
 	return reparate
 
 
@@ -2411,9 +2658,34 @@ def scrieJurnal(linie, sincron=False):
 		P._curat(P.fara_parola(linie), 400)), P.MARIME_JURNAL, sincron)
 
 
+def imagineSchimbata():
+	"""Programul enigma2 de pe disc nu mai e cel care ruleaza (Components/HdsPluginExtern.imagineSchimbataPeDisc); False
+	cand nu se poate afla"""
+	try:
+		try:
+			from Components.HdsPluginExtern import imagineSchimbataPeDisc
+		except ImportError:  # probe pe PC
+			from HdsPluginExtern import imagineSchimbataPeDisc
+		return bool(imagineSchimbataPeDisc())
+	except Exception as e:
+		_jurnal('programul imaginii schimbat: %s' % e)
+		return False
+
+
+# 0.7.7 (UPD, asistenta 683170, TODO 16.11 00:10): dupa un opkg care a schimbat enigma2-hdsatelit, pluginurile nu se mai
+# recitesc in procesul vechi; interfata se reporneste (pe televizor singura, dupa cateva secunde; in pagina, butonul)
+TEXT_IMAGINE_SCHIMBATA = N_('Programul imaginii s-a schimbat. Interfața trebuie repornită ca să-l folosească.')
+
+
 def reincarcaPluginuri(plugins=None):
 	"""dupa opkg: pluginurile sterse dispar imediat; cele noi apar imediat doar daca nu cer repornire (in imaginea
-	aceasta, un plugin nou fara needsRestart=False apare dupa repornirea interfetei: plugins.restartRequired)"""
+	aceasta, un plugin nou fara needsRestart=False apare dupa repornirea interfetei: plugins.restartRequired).
+	0.7.7 (UPD): cand opkg a schimbat programul imaginii (enigma2-hdsatelit) sub interfata care ruleaza, lista nu se mai
+	citeste: pluginurile C++ si modulele noi ar cadea in procesul vechi; intoarce True (repornirea e ceruta)."""
+	if imagineSchimbata():
+		scrieJurnal('programul imaginii (enigma2-hdsatelit) s-a schimbat pe disc sub interfata care ruleaza: pluginurile nu '
+			'se recitesc, interfata trebuie repornita', True)
+		return True
 	try:
 		if plugins is None:
 			from Components.PluginComponent import plugins
@@ -2843,7 +3115,7 @@ class Lucrare(object):
 				self._refuzPython2(cale, v)
 				return
 		for cale, v in rezultate:
-			alt = P.H.alt_python(v)
+			alt = altPythonPachet(cale, v)
 			if alt:
 				self._refuzAltPython(cale, v, alt)
 				return
@@ -3074,8 +3346,15 @@ class Lucrare(object):
 			titlu = (texte.get(fel) or _t('%s: nu a reușit.')) % nume
 			stare, culoare = motiv, 'rau'
 			butoane = [N_('Închide')]
+		# 0.7.7 (UPD, TODO 16.11 00:10): programul imaginii s-a schimbat pe disc sub interfata (lucrarea a tras
+		# enigma2-hdsatelit, sau l-a schimbat altcineva inainte): numai repornirea interfetei, pe televizor singura
+		# (Screens/HdsExtensii.HdsExtensiiActiune), si dupa o lucrare cazuta (la pornire enigma2.sh termina ce a ramas)
+		self.imagineSchimbata = (self.schimbat or cod == 0) and imagineSchimbata()
+		if self.imagineSchimbata:
+			butoane, ales = [N_('Repornește interfața')], 0
+			stare, culoare = _t(TEXT_IMAGINE_SCHIMBATA), 'chihlimbar'
 		self.rezultat = {'reusit': reusit, 'titlu': titlu, 'stare': stare, 'culoare': culoare, 'butoane': butoane,
-			'ales': ales, 'repornire': 'Repornește interfața' in butoane}
+			'ales': ales, 'repornire': 'Repornește interfața' in butoane, 'imagine_schimbata': self.imagineSchimbata}
 		if self.schimbat:
 			# fisierele imaginii suprascrise de o tema stearsa acum (sau altfel) se pun la loc (HdsTemeSuprascrise)
 			try:

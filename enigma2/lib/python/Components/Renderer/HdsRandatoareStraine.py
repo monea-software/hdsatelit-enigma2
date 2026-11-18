@@ -41,8 +41,13 @@ class _Eticheta(Renderer, VariableText):
 		Renderer.__init__(self)
 		VariableText.__init__(self)
 
+	# MI7 (15.11.2026), ca Label.connect (TSR): Renderer.connect cheama deja changed, deci textul se cerea de doua ori la
+	# legare. Legatura ca in Element.connect, fara cererea din mijloc; textul se cere o data, dupa legatura completa.
 	def connect(self, source):
-		Renderer.connect(self, source)
+		assert not self.SINGLE_SOURCE or self.source is None
+		self.sources.append(source)
+		self.source = source
+		source.connectDownstream(self)
 		self.changed((self.CHANGED_DEFAULT,))
 
 
@@ -551,3 +556,34 @@ from Components.Renderer.EGclock import EGclock as _EGclock
 class Bhclock(_EGclock):
 	pass
 
+
+
+# ---------------------------------------------------------------- xtraPoster, xtraNextEvents (agentul TPF, 15.11.2026)
+
+# Numele cerute de temele facute pentru pluginul xtraEvent (16 si 11 teme din feeduri; Premium-FHD le pune in bara canalului, a
+# doua bara si lista de canale): posterul emisiunii de acum sau al celor urmatoare, din pozele pe care le descarca pluginul. Fara
+# plugin nu avem pozele, deci elementul ramane ascuns si ecranul temei se poate folosi intreg (altfel lipsa randatorului il trece
+# pe rezerva). Cand pluginul e instalat, fisierele lui (Components/Renderer/xtraPoster.py ...) trec inaintea acestor nume.
+# Cod nou: numai locul pozei; atributele pluginului (nextEvent, usedImage, delayPic ...) si chenarul se lasa deoparte.
+class _PozaXtraEvent(Renderer):
+	GUI_WIDGET = ePixmap
+	ATRIBUTE = ("position", "size", "zPosition", "transparent", "alphatest", "backgroundColor", "scale")
+
+	def applySkin(self, desktop, parent):
+		self.skinAttributes = [(a, v) for (a, v) in (self.skinAttributes or []) if a in self.ATRIBUTE]
+		return Renderer.applySkin(self, desktop, parent)
+
+	def postWidgetCreate(self, instance):
+		instance.hide()
+
+	def changed(self, what):
+		if self.instance:
+			self.instance.hide()
+
+
+class xtraPoster(_PozaXtraEvent):
+	pass
+
+
+class xtraNextEvents(_PozaXtraEvent):
+	pass

@@ -314,4 +314,10 @@ T = {
 	"cpu_mode": u"Procesoriaus režimas",
 	"cpu_volt": u"Įtampa",
 	"cpu_steps": u"Laikas pagal dažnį",
+	"bitrate_va": u"Vaizdo · garso bitų sparta",
+	"br_min": u"min",
+	"br_max": u"maks",
+	"br_avg": u"vid",
+	"ecm_hop": u"Šuoliai",
+	"ecm_reader": u"Skaitytuvas",
 }

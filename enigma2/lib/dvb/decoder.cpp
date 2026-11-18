@@ -8,6 +8,9 @@
 #if HAVE_HISILICON
 #include <lib/dvb/hdspazavideo.h>
 #endif
+#if HAVE_HISILICON_LIBREADER
+#include <lib/dvb/hdspazaphi.h>
+#endif
 #if HAVE_DVB_API_VERSION < 3 
 #define audioStatus audio_status
 #define videoStatus video_status
@@ -1269,10 +1272,29 @@ int eTSMPEGDecoder::setState()
 int eTSMPEGDecoder::m_pcm_delay=-1,
 	eTSMPEGDecoder::m_ac3_delay=-1;
 
+#if HAVE_HISILICON_LIBREADER
+/* boards with libreader: the driver stores a delay in a status memory that exists only while the platform daemon holds
+   /dev/phi for reading (lib/dvb/hdspazaphi.h); without a holder the write is not made and the cached value stays as it
+   was, so the next call (the next zap, a change of the setting) tries again */
+static bool hdsIntarziereVoie(const char *nod)
+{
+	static hdspazaphi::Detinator detinator;
+	if (hdspazaphi::stare("", detinator) != hdspazaphi::NETINUT)
+		return true;
+	eWarning("[eTSMPEGDecoder] %s not written: no process holds /dev/phi for reading (platform daemon not up yet or gone), tried again at the next zap", nod);
+	hdsjdecodor::eroare("audio", 0, "audio_delay fara cititorul /dev/phi (amanat)", EAGAIN);
+	return false;
+}
+#endif
+
 RESULT eTSMPEGDecoder::setHwPCMDelay(int delay)
 {
 	if (delay != m_pcm_delay )
 	{
+#if HAVE_HISILICON_LIBREADER
+		if (!hdsIntarziereVoie("audio_delay_pcm"))
+			return -1;
+#endif
 		FILE *fp = fopen("/proc/stb/audio/audio_delay_pcm", "w");
 		if (fp)
 		{
@@ -1289,6 +1311,10 @@ RESULT eTSMPEGDecoder::setHwAC3Delay(int delay)
 {
 	if ( delay != m_ac3_delay )
 	{
+#if HAVE_HISILICON_LIBREADER
+		if (!hdsIntarziereVoie("audio_delay_bitstream"))
+			return -1;
+#endif
 		FILE *fp = fopen("/proc/stb/audio/audio_delay_bitstream", "w");
 		if (fp)
 		{

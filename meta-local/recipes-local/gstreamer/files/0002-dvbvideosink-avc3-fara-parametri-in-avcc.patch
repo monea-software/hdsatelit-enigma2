@@ -1,0 +1,52 @@
+Subject: [PATCH] dvbvideosink: avc3, avcC fara SPS si PPS
+
+La H.264 cu intrarea avc3 (ISO/IEC 14496-15) parametrii SPS/PPS vin in flux, iar avcC din caps-uri (qtdemux sau
+h264parse) nu are niciunul: 7 octeti (Main) sau 11 (High). Ramura veche citea mereu un SPS la data[6..7] si un PPS
+dupa el: cu 7 octeti iesea la "codec_data too short(1)", cu 11 lua octetii extensiei High drept lungimea SPS-ului
+("too short(2)"). codec_data ramanea NULL si lungimea NAL 0, iar render pune start code in locul prefixelor de
+lungime numai cand are codec_data: placa primea NAL-uri cu prefix de lungime si imaginea ramanea neagra, cu sunet
+(filmele DVB-DASH cu avc3, de pilda testcard-ul BBC; DASH cu avc1 mergea).
+O ramura noua, inaintea celei vechi, pentru avcC versiunea 1 fara SPS: lungimea prefixului NAL din data[4], PPS-urile
+din avcC (daca sunt) cu start code, codec_data facut si gol, ca la H.265 (unde hev1 trece deja pe drumul acesta).
+Ramura veche (un SPS si un PPS, nivelul coborat la 4.1) ramane neschimbata; render neschimbat.
+
+Upstream-Status: Pending
+---
+--- a/gstdvbvideosink.c
++++ b/gstdvbvideosink.c
+@@ -1508,7 +1508,34 @@ static gboolean gst_dvbvideosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
+ 			data = codecdatamap.data;
+ 			cd_len = codecdatamap.size;
+ 			GST_INFO_OBJECT (self, "H264 have codec data..!");
+-			if (cd_len > 7 && data[0] == 1)
++			if (cd_len >= 7 && data[0] == 1 && (data[5] & 0x1f) == 0)
++			{
++				/* avc3 (ISO/IEC 14496-15): avcC fara SPS (de obicei si fara PPS), parametrii vin in flux, inaintea
++				 * cadrelor IDR. Lungimea prefixului NAL se ia totusi de aici si codec_data se face si gol (ca la H.265),
++				 * ca render sa puna start code in locul prefixelor de lungime; altfel placa primea prefixele si imaginea
++				 * ramanea neagra, cu sunet (filmele DVB-DASH cu avc3). Un PPS din avcC, daca e, merge inainte. */
++				unsigned int num_pps = data[6];
++				unsigned int i;
++				cd_pos = 7;
++				for (i = 0; i < num_pps && cd_pos + 2 <= cd_len; i++)
++				{
++					unsigned int len = (data[cd_pos] << 8) | data[cd_pos + 1];
++					cd_pos += 2;
++					if (cd_pos + len > cd_len || tmp_len + 4 + len >= sizeof(tmp))
++						break;
++					memcpy(tmp + tmp_len, "\x00\x00\x00\x01", 4);
++					tmp_len += 4;
++					memcpy(tmp + tmp_len, data + cd_pos, len);
++					tmp_len += len;
++					cd_pos += len;
++				}
++				self->codec_data = gst_buffer_new_and_alloc(tmp_len);
++				if (tmp_len)
++					gst_buffer_fill(self->codec_data, 0, tmp, tmp_len);
++				self->h264_nal_len_size = (data[4] & 0x03) + 1;
++				GST_INFO_OBJECT (self, "H264 avcC without SPS (avc3): %u PPS, NAL length size %d", i, self->h264_nal_len_size);
++			}
++			else if (cd_len > 7 && data[0] == 1)
+ 			{
+ 				unsigned short len = (data[6] << 8) | data[7];
+ 				if (cd_len >= (len + 8))

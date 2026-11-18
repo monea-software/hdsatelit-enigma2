@@ -11,7 +11,10 @@ PV = "0.1.0"
 # r2: hds-jurnal porneste la fiecare pornire, in fundal, pasii pornirii si raportul pornirii ratate (tools/hds-raport.sh
 #     din enigma2), cand scriptul exista
 # r3: pornirea cu media in fundal nu sincronizeaza toate discurile.
-PR = "r3"
+# r4 (0.7.6, asistenta 430032): dupa o oprire necurata, un rand "pornire dupa oprire brusca" in hds-caderi.log, cu
+#     ultimul rand din messages, ultimul rand al interfetei, ultima comanda opkg/Console si ultima lucrare din Extensii
+#     (proba: teste/test_rfu_oprire_brusca_075.py)
+PR = "r4"
 
 SRC_URI = "file://hds-jurnal file://hds-wifi-jurnal file://hds-rtl8188fu.conf"
 S = "${UNPACKDIR}"
@@ -50,6 +53,8 @@ do_install() {
         bbfatal "hdsatelit-jurnal: hds-jurnal fara semnul opririi curate"
     grep -q 'hds-raport.sh}" urmareste < /dev/null > /dev/null 2>&1 &$' ${D}${sysconfdir}/init.d/hds-jurnal || \
         bbfatal "hdsatelit-jurnal: hds-jurnal nu porneste in fundal raportul pornirii (hds-raport.sh urmareste)"
+    grep -q '[[:space:]]rand_oprire_brusca 2> /dev/null$' ${D}${sysconfdir}/init.d/hds-jurnal || \
+        bbfatal "hdsatelit-jurnal: hds-jurnal nu scrie randul opririi bruste in hds-caderi.log"
 }
 
 FILES:${PN} = "${sysconfdir}/init.d/hds-jurnal ${sbindir}/hds-wifi-jurnal ${sysconfdir}/modprobe.d/hds-rtl8188fu.conf"

@@ -61,6 +61,10 @@ MAX_TITLU = 74
 # pregatirea indexului in fundal (vezi mai jos); False: pe loc, ca inainte (probele de pe PC, fara bucla enigma2)
 IN_FUNDAL = True
 FELIE_S = 0.012            # cat lucreaza o chemare a ceasului pe firul enigma2 (masuratorile si pistele)
+# 0.7.7 (UIF): cate canale face un pas al feliilor (Index.aplica_treptat; o felie are cel putin un pas). Cu pasul obisnuit
+# (HdsIndexCanale.PAS_TREPTAT, 250) o felie tinea firul enigma2 pana la 170-280 ms pe un SF8008 cu 23.920 de servicii
+# (canalele cu randuri in baza desfac fiecare doua randuri); cu 25, 32-135 ms, la aceeasi suma
+PAS_FELIE = 25
 INCALZIRE_MS = 45000       # dupa pornirea interfetei: indexul gata inainte de prima cautare
 AMANARE_TEXT_MS = 180      # cautarea dupa text, cel mult o data in atat; 0 = pe loc
 MAX_RANDURI_GATA = 600     # randurile rezultatelor tinute gata construite (vezi HdsCautareCanale._randRezultat)
@@ -194,10 +198,14 @@ class _Pregatire(object):
 	"""Un index nou: citirea lamedb-ului si a buchetelor si Index(...) pe un fir (HdsIndexCanale.construieste, numai
 	fisiere si obiecte noi); apoi, pe firul enigma2, masuratorile si pistele (priviri peste baza unica, care se citesc
 	numai de aici) in felii de cel mult FELIE_S (Index.aplica_treptat). La sfarsit indexul intra in memorie si merge la
-	ascultatori. Indexul vechi din memorie nu se atinge cat timp se pregateste cel nou."""
+	ascultatori. Indexul vechi din memorie nu se atinge cat timp se pregateste cel nou. Firul face pauze (HdsIndexCanale.Ritm)
+	numai cat nu-l asteapta nimeni: nici un ascultator, nici o cerere din pagina /cautare (grabita)."""
 
 	def __init__(self, fir=None, ceas=None):
 		self.ascultatori = []
+		# 0.7.7 (EPG3): o cerere din pagina /cautare (index_pentru_web) care a gasit pregatirea in lucru; ca un ecran care
+		# asteapta, opreste pauzele firului (HdsIndexCanale.Ritm)
+		self.grabita = False
 		self.gata = False
 		self._rez = {}
 		self._lucru = None
@@ -210,12 +218,19 @@ class _Pregatire(object):
 		self._ceas.start(40, False)
 
 	def _construieste(self):
-		# pe fir: nimic din enigma2, nimic comun
+		# pe fir: nimic din enigma2, nimic comun. 0.7.7 (EPG3): cu pauze (HdsIndexCanale.Ritm), ca firul enigma2 sa nu
+		# astepte lacatul Python cat se face indexul dupa pornire (INCALZIRE_MS); fara pauze cat cineva il asteapta
 		try:
-			self._rez["index"] = X.construieste(X.DIRECTOR, self._pozitii, complet=False)
+			ritm = X.Ritm(cu_pauze=self._cu_pauze, dormi=_dormi)
+			self._rez["index"] = X.construieste(X.DIRECTOR, self._pozitii, complet=False, ritm=ritm)
+			self._rez["pauze"] = ritm.pauze
 		except Exception as e:
 			self._rez["eroare"] = e
 		self._rez["gata"] = True
+
+	def _cu_pauze(self):
+		"""Citit de pe firul indexului: pauze numai cat nimeni nu asteapta indexul (niciun ecran, nicio cerere web)."""
+		return not (self.ascultatori or self.grabita)
 
 	def _tic(self):
 		try:
@@ -227,7 +242,7 @@ class _Pregatire(object):
 				self.sem, self.index = self._rez["index"]
 				b = P.baza()
 				self._lucru = self.index.aplica_treptat(masurari_curente(), b.trasaturi(), b.versiune,
-					P.limba_receptor(), P.nume_limba)
+					P.limba_receptor(), P.nume_limba, pas=min(PAS_FELIE, X.PAS_TREPTAT))
 				# 0.7.5 (PRN): feliile la cativa ms una de alta, fiecare pornita abia DUPA ce s-a terminat cea dinainte
 				# (ceas cu o singura bataie, pornit din nou mai jos). Un ceas repetat de 4 ms cu felii de 12 ms ramanea
 				# mereu in urma (lib/base/ebase.cpp, eTimer::activate: nextActivation += interval), iar bucla enigma2 il
@@ -254,8 +269,9 @@ class _Pregatire(object):
 			_pregatire[0] = None
 		if index is not None:
 			X.pune_in_memorie(self.sem, index)
-			_jurnal('index: %d canale pregatite in %.0f ms (piste stiute la %d)' % (len(index.canale),
-				(_timp() - self._inceput) * 1000, index.canale_cu_piste()))
+			_jurnal('index: %d canale pregatite in %.0f ms (piste stiute la %d; pauzele firului %.0f ms)' % (
+				len(index.canale), (_timp() - self._inceput) * 1000, index.canale_cu_piste(),
+				self._rez.get("pauze", 0.0) * 1000))
 		ascultatori, self.ascultatori = self.ascultatori, []
 		for f in ascultatori:
 			try:
@@ -273,6 +289,12 @@ def _timp():
 	# sarire inapoi ar tine firul principal pana se termina tot indexul
 	import time
 	return time.monotonic()
+
+
+def _dormi(secunde):
+	# pauzele firului indexului (HdsIndexCanale.Ritm); inlocuita in probe
+	import time
+	time.sleep(secunde)
 
 
 def _fir_implicit(functie):
@@ -324,7 +346,7 @@ def index_pentru_web():
 	index = index_la_zi()
 	if index is not None:
 		return index
-	porneste_pregatirea()
+	porneste_pregatirea().grabita = True
 	return X.din_memorie()
 
 

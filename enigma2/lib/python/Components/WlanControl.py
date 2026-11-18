@@ -18,6 +18,17 @@ BUSY_RETRIES = 3
 START_WAIT_MS = 1500
 
 
+def amanaPazaWifi():
+	# HDSatelit: the user scans or starts a supplicant for scanning now, so the WiFi watchdog (Components/HdsPazaWifi.py)
+	# starts its countdown again. Only here, not in status(): the status bar, the WiFi status screen and the web page
+	# /retea ask for the status all the time and would keep the watchdog waiting forever
+	try:
+		from Components import HdsPazaWifi
+		HdsPazaWifi.amana()
+	except Exception:
+		pass
+
+
 class WlanControl:
 	def __init__(self, iface, conf=WlanTools.SUPPLICANT_CONF, ctrl=WlanTools.CTRL_INTERFACE):
 		self.iface = iface
@@ -67,6 +78,7 @@ class WlanControl:
 
 	def ensureSupplicant(self, callback):
 		"""starts wpa_supplicant for scanning if nothing runs on the interface; callback(ok)"""
+		amanaPazaWifi()
 		if self.isRunning():
 			# a supplicant already running (ifup) may still hold the block matching any network: the file is cleaned
 			# and the supplicant reads it again (reconfigure), so it no longer joins open networks of the neighbours
@@ -121,6 +133,7 @@ class WlanControl:
 	def scan(self, callback, retries=BUSY_RETRIES, raw=False):
 		"""callback(networks) with the list from WlanTools.parseScanResults, or None if scanning failed; with raw=True
 		callback(text) with the scan_results text itself (one row for each access point, for the channel tool)"""
+		amanaPazaWifi()
 		def requested(retval, output):
 			answer = output.strip()
 			if answer == "OK":

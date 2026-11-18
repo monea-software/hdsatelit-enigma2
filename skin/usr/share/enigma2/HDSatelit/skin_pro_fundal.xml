@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scris de receptor/skin/tools/fa_skin_pro_fundal.py din skin_pro.xml; nu se schimba de mana. Panourile temei Pro
+     cu pozele fundalului tematic ales (Components/HdsFundalPro.py); skin.py il incarca inaintea lui skin_pro.xml. -->
+<skin hds-tema="pro">
+<screen name="HdsCadru1776" position="0,0" size="1776,1000">
+		<ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/cap_1776.png" position="0,0" size="1776,88" alphatest="blend" zPosition="0" /><ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/jos_1776.png" position="0,924" size="1776,76" alphatest="blend" zPosition="0" /><eLabel position="0,0" size="1776,2" backgroundColor="hdsBrand" zPosition="1" />
+		<eLabel position="32,22" size="44,44" backgroundColor="hdsBrand" zPosition="1" />
+		<ePixmap pixmap="pro/sigla32.png" position="38,28" size="32,32" alphatest="blend" zPosition="2" />
+		<eLabel text="HD SATELIT" position="92,22" size="220,44" font="HdsBold;30" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="316,31" size="64,26" backgroundColor="hdsBrand" zPosition="1" />
+		<eLabel text="PRO" position="316,31" size="64,26" font="HdsBold;20" foregroundColor="white" backgroundColor="hdsBrand" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<eLabel position="390,26" size="1,36" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1210,22" size="300,44" backgroundColor="hdsPanelSolid" zPosition="1" />
+		<eLabel position="1210,22" size="300,1" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="1210,65" size="300,1" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="1210,23" size="1,42" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="1509,23" size="1,42" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="1226,38" size="12,12" backgroundColor="hdsGood" zPosition="3" />
+		<widget source="session.CurrentService" render="Label" position="1248,22" size="150,44" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">Label,quality,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1330,22" size="164,44" font="HdsBold;26" foregroundColor="hdsGood" backgroundColor="hdsPanelSolid" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3"><convert type="HdsSignal">Quality</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="1210,22" size="300,44" backgroundColor="hdsPanelDialog" zPosition="4"><convert type="HdsInfo">IsFile</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Pixmap" position="1526,26" size="48,36" alphatest="blend" zPosition="3"><convert type="HdsReteaPictograma">Pictograma|1590,8,154,48=1534,210|1590,56,154,28=1434,310</convert></widget>
+		<widget source="Title" render="Label" position="410,16" size="776,60" font="HdsBold;38" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="global.CurrentTime" render="Label" position="1590,8" size="154,48" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ClockToText">Format:%H:%M</convert></widget>
+		<widget source="global.CurrentTime" render="Label" position="1590,56" size="154,28" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ClockToText">Format:%d.%m.%Y</convert></widget>
+		<eLabel position="32,88" size="1712,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="32,924" size="1712,1" backgroundColor="hdsTrack" zPosition="1" />
+		<widget source="key_red" render="FixedLabel" conditional="ScreenPath" objectTypes="key_red,StaticText" position="32,952" size="16,16" backgroundColor="key_red" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_red" render="Pixmap" conditional="ScreenPath" objectTypes="key_red,StaticText" position="28,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_red.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_red" objectTypes="key_red,Button,Label" position="32,952" size="16,16" backgroundColor="key_red" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_red" objectTypes="key_red,Button,Label" position="28,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_red.png" alphatest="blend" />
+		<widget source="key_green" render="FixedLabel" conditional="ScreenPath" objectTypes="key_green,StaticText" position="460,952" size="16,16" backgroundColor="key_green" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_green" render="Pixmap" conditional="ScreenPath" objectTypes="key_green,StaticText" position="456,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_green.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_green" objectTypes="key_green,Button,Label" position="460,952" size="16,16" backgroundColor="key_green" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_green" objectTypes="key_green,Button,Label" position="456,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_green.png" alphatest="blend" />
+		<widget source="key_yellow" render="FixedLabel" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="888,952" size="16,16" backgroundColor="key_yellow" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_yellow" render="Pixmap" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="884,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_yellow.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="888,952" size="16,16" backgroundColor="key_yellow" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="884,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_yellow.png" alphatest="blend" />
+		<widget source="key_blue" render="FixedLabel" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1316,952" size="16,16" backgroundColor="key_blue" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_blue" render="Pixmap" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1312,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_blue.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_blue" objectTypes="key_blue,Button,Label" position="1316,952" size="16,16" backgroundColor="key_blue" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_blue" objectTypes="key_blue,Button,Label" position="1312,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_blue.png" alphatest="blend" />
+		<widget name="key_red" conditional="key_red" objectTypes="key_red,Button,Label" position="58,936" size="392,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="486,936" size="392,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="914,936" size="392,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="1342,936" size="392,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="58,936" size="392,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="486,936" size="392,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="914,936" size="392,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="1342,936" size="392,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+	</screen>
+<screen name="HdsCadru1240" position="0,0" size="1240,1000">
+		<ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/cap_1240.png" position="0,0" size="1240,88" alphatest="blend" zPosition="0" /><ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/jos_1240.png" position="0,924" size="1240,76" alphatest="blend" zPosition="0" /><eLabel position="0,0" size="1240,2" backgroundColor="hdsBrand" zPosition="1" />
+		<eLabel position="32,22" size="44,44" backgroundColor="hdsBrand" zPosition="1" />
+		<ePixmap pixmap="pro/sigla32.png" position="38,28" size="32,32" alphatest="blend" zPosition="2" />
+		<widget source="Title" render="Label" position="92,16" size="890,60" font="HdsBold;38" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="global.CurrentTime" render="Label" position="998,8" size="210,48" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ClockToText">Format:%H:%M</convert></widget>
+		<widget source="global.CurrentTime" render="Label" position="898,56" size="310,28" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ClockToText">Format:%d.%m.%Y</convert></widget>
+		<eLabel position="32,88" size="1176,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="32,924" size="1176,1" backgroundColor="hdsTrack" zPosition="1" />
+		<widget source="key_red" render="FixedLabel" conditional="ScreenPath" objectTypes="key_red,StaticText" position="32,952" size="16,16" backgroundColor="key_red" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_red" render="Pixmap" conditional="ScreenPath" objectTypes="key_red,StaticText" position="28,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_red.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_red" objectTypes="key_red,Button,Label" position="32,952" size="16,16" backgroundColor="key_red" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_red" objectTypes="key_red,Button,Label" position="28,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_red.png" alphatest="blend" />
+		<widget source="key_green" render="FixedLabel" conditional="ScreenPath" objectTypes="key_green,StaticText" position="326,952" size="16,16" backgroundColor="key_green" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_green" render="Pixmap" conditional="ScreenPath" objectTypes="key_green,StaticText" position="322,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_green.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_green" objectTypes="key_green,Button,Label" position="326,952" size="16,16" backgroundColor="key_green" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_green" objectTypes="key_green,Button,Label" position="322,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_green.png" alphatest="blend" />
+		<widget source="key_yellow" render="FixedLabel" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="620,952" size="16,16" backgroundColor="key_yellow" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_yellow" render="Pixmap" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="616,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_yellow.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="620,952" size="16,16" backgroundColor="key_yellow" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="616,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_yellow.png" alphatest="blend" />
+		<widget source="key_blue" render="FixedLabel" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="914,952" size="16,16" backgroundColor="key_blue" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_blue" render="Pixmap" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="910,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_blue.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_blue" objectTypes="key_blue,Button,Label" position="914,952" size="16,16" backgroundColor="key_blue" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_blue" objectTypes="key_blue,Button,Label" position="910,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_blue.png" alphatest="blend" />
+		<widget name="key_red" conditional="key_red" objectTypes="key_red,Button,Label" position="58,936" size="258,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="352,936" size="258,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="646,936" size="258,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="940,936" size="258,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="58,936" size="258,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="352,936" size="258,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="646,936" size="258,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="940,936" size="258,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+	</screen>
+<screen name="HdsCadru1000" position="0,0" size="1000,1000">
+		<ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/cap_1000.png" position="0,0" size="1000,88" alphatest="blend" zPosition="0" /><ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/jos_1000.png" position="0,924" size="1000,76" alphatest="blend" zPosition="0" /><eLabel position="0,0" size="1000,2" backgroundColor="hdsBrand" zPosition="1" />
+		<eLabel position="32,22" size="44,44" backgroundColor="hdsBrand" zPosition="1" />
+		<ePixmap pixmap="pro/sigla32.png" position="38,28" size="32,32" alphatest="blend" zPosition="2" />
+		<widget source="Title" render="Label" position="92,16" size="650,60" font="HdsBold;38" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="global.CurrentTime" render="Label" position="758,8" size="210,48" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ClockToText">Format:%H:%M</convert></widget>
+		<widget source="global.CurrentTime" render="Label" position="658,56" size="310,28" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1"><convert type="ClockToText">Format:%d.%m.%Y</convert></widget>
+		<eLabel position="32,88" size="936,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="32,924" size="936,1" backgroundColor="hdsTrack" zPosition="1" />
+		<widget source="key_red" render="FixedLabel" conditional="ScreenPath" objectTypes="key_red,StaticText" position="32,952" size="16,16" backgroundColor="key_red" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_red" render="Pixmap" conditional="ScreenPath" objectTypes="key_red,StaticText" position="28,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_red.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_red" objectTypes="key_red,Button,Label" position="32,952" size="16,16" backgroundColor="key_red" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_red" objectTypes="key_red,Button,Label" position="28,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_red.png" alphatest="blend" />
+		<widget source="key_green" render="FixedLabel" conditional="ScreenPath" objectTypes="key_green,StaticText" position="266,952" size="16,16" backgroundColor="key_green" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_green" render="Pixmap" conditional="ScreenPath" objectTypes="key_green,StaticText" position="262,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_green.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_green" objectTypes="key_green,Button,Label" position="266,952" size="16,16" backgroundColor="key_green" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_green" objectTypes="key_green,Button,Label" position="262,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_green.png" alphatest="blend" />
+		<widget source="key_yellow" render="FixedLabel" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="500,952" size="16,16" backgroundColor="key_yellow" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_yellow" render="Pixmap" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="496,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_yellow.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="500,952" size="16,16" backgroundColor="key_yellow" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="496,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_yellow.png" alphatest="blend" />
+		<widget source="key_blue" render="FixedLabel" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="734,952" size="16,16" backgroundColor="key_blue" zPosition="1"><convert type="ConditionalShowHide" /></widget>
+		<widget source="key_blue" render="Pixmap" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="730,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_blue.png" alphatest="blend"><convert type="ConditionalShowHide" /></widget>
+		<widget source="Title" render="FixedLabel" conditional="key_blue" objectTypes="key_blue,Button,Label" position="734,952" size="16,16" backgroundColor="key_blue" zPosition="1" />
+		<widget source="Title" render="Pixmap" conditional="key_blue" objectTypes="key_blue,Button,Label" position="730,948" size="24,24" zPosition="2" pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/tasta_blue.png" alphatest="blend" />
+		<widget name="key_red" conditional="key_red" objectTypes="key_red,Button,Label" position="58,936" size="198,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget name="key_green" conditional="key_green" objectTypes="key_green,Button,Label" position="292,936" size="198,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget name="key_yellow" conditional="key_yellow" objectTypes="key_yellow,Button,Label" position="526,936" size="198,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget name="key_blue" conditional="key_blue" objectTypes="key_blue,Button,Label" position="760,936" size="198,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_red" render="Label" conditional="ScreenPath" objectTypes="key_red,StaticText" position="58,936" size="198,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_green" render="Label" conditional="ScreenPath" objectTypes="key_green,StaticText" position="292,936" size="198,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_yellow" render="Label" conditional="ScreenPath" objectTypes="key_yellow,StaticText" position="526,936" size="198,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="Label" conditional="ScreenPath" objectTypes="key_blue,StaticText" position="760,936" size="198,48" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+	</screen>
+<screen name="HdsMenuBase" position="0,0" size="1776,1000">
+		<panel name="HdsCadru1776" />
+		<ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/card_stanga.png" position="16,100" size="1088,816" alphatest="blend" zPosition="1" /><eLabel position="16,100" size="1088,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="16,915" size="1088,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="16,101" size="1,814" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1103,101" size="1,814" backgroundColor="hdsTrack" zPosition="1" />
+		<widget source="menu" render="Listbox" position="32,112" size="1056,726" itemHeight="66" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="2" selectionPixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/selectie_meniu.png"><convert type="TemplatedMultiContent">{"template": [MultiContentEntryText(pos=(24, 0), size=(1008, 66), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=0)], "fonts": [gFont("HdsRegular", 32)], "itemHeight": 66}</convert></widget>
+		<widget source="description" render="FixedLabel" conditional="description" position="32,846" size="1056,1" backgroundColor="hdsTrack" zPosition="1" />
+		<widget source="description" render="Label" conditional="description" position="32,850" size="1056,60" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
+		<widget name="menuimage" conditional="menuimage" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="pointer" conditional="pointer" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="pixmap1" conditional="pixmap1" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="pixmap2" conditional="pixmap2" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="pixmap3" conditional="pixmap3" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="pixmap4" conditional="pixmap4" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="pixmap5" conditional="pixmap5" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="pixmap6" conditional="pixmap6" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="red" conditional="red" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<widget name="green" conditional="green" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<widget name="yellow" conditional="yellow" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<widget name="blue" conditional="blue" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<eLabel position="1120,100" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,343" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,101" size="1,242" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1759,101" size="1,242" backgroundColor="hdsTrack" zPosition="1" />
+		<widget source="session.CurrentService" render="Label" position="1140,108" size="300,34" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,now,Upper</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="1140,148" size="96,42" backgroundColor="hdsBrand" zPosition="2"><convert type="HdsInfo">ChannelNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="1140,148" size="96,42" font="HdsBold;26" foregroundColor="white" backgroundColor="hdsBrand" transparent="1" halign="center" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">ChannelNumber</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1250,148" size="490,42" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Name,IfNumber,Fit=HdsBold:30:490</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1140,148" size="600,42" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Name,IfNoNumber,Fit=HdsBold:30:600</convert></widget>
+		<widget source="session.Event_Now" render="Label" position="1140,196" size="600,40" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="EventName">Name</convert></widget>
+		<widget source="session.Event_Now" render="Progress" position="1140,244" size="600,10" foregroundColor="hdsGood" backgroundColor="hdsTrack" zPosition="2"><convert type="EventTime">Progress</convert></widget>
+		<widget source="session.Event_Now" render="Label" position="1140,260" size="140,34" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="EventTime">StartTime</convert><convert type="ClockToText">Format:%H:%M</convert></widget>
+		<widget source="session.Event_Now" render="Label" position="1290,260" size="450,34" font="HdsBold;24" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Remaining</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1140,298" size="170,36" font="HdsBold;22" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,next,Upper</convert></widget>
+		<widget source="session.Event_Next" render="Label" position="1316,298" size="424,36" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="EventName">Name</convert></widget>
+		<eLabel position="1120,360" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,609" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,361" size="1,248" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1759,361" size="1,248" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1140,374" size="12,12" backgroundColor="hdsGood" zPosition="1" />
+		<widget source="session.CurrentService" render="Label" position="1162,362" size="578,36" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Satellite,Fit=HdsBold:24:578</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1140,404" size="300,32" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,quality,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1440,404" size="300,32" font="HdsBold;26" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Quality</convert></widget>
+		<widget source="session.CurrentService" render="Progress" position="1140,440" size="600,10" foregroundColor="hdsGood" backgroundColor="hdsTrack" zPosition="2"><convert type="HdsSignal">Quality</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1140,462" size="300,32" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,signal,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1440,462" size="300,32" font="HdsBold;26" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Signal</convert></widget>
+		<widget source="session.CurrentService" render="Progress" position="1140,498" size="600,10" foregroundColor="hdsBrand" backgroundColor="hdsTrack" zPosition="2"><convert type="HdsSignal">Signal</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="1121,400" size="638,208" backgroundColor="hdsPanelDialog" zPosition="3"><convert type="HdsInfo">IsFile</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="1140,524" size="292,74" backgroundColor="hdsPanelSolid" zPosition="1"><convert type="HdsSignal">SnrLabel,Upper</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="1140,528" size="292,30" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">SnrLabel,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1140,558" size="292,36" font="HdsBold;26" foregroundColor="hdsGood" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">SnrHonest</convert></widget>
+		<eLabel position="1448,524" size="292,74" backgroundColor="hdsPanelSolid" zPosition="1" />
+		<widget source="session.CurrentService" render="Label" position="1448,528" size="292,30" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,ber,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1448,558" size="292,36" font="HdsBold;26" foregroundColor="hdsGood" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Ber</convert></widget>
+		<widget source="radio_meniu_online" render="FixedLabel" conditional="radio_meniu_online" position="1121,361" size="638,248" backgroundColor="hdsPanelSolid" zPosition="4"><convert type="ConditionalShowHide" /></widget>
+		<widget name="radio_meniu_titlu" conditional="radio_meniu_titlu" position="1140,362" size="600,36" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget name="radio_meniu_debit" conditional="radio_meniu_debit" position="1140,402" size="600,40" font="HdsBold;32" foregroundColor="hdsGood" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget name="radio_meniu_sunet" conditional="radio_meniu_sunet" position="1140,446" size="600,34" font="HdsCond;24" foregroundColor="hdsText2" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget name="radio_meniu_mesaj" conditional="radio_meniu_mesaj" position="1140,558" size="600,42" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6" />
+		<widget source="radio_meniu_bare" conditional="radio_meniu_bare" render="Canvas" position="1140,486" size="600,64" backgroundColor="hdsPanelSolid" zPosition="5" />
+		<eLabel position="1120,626" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,839" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,627" size="1,212" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1759,627" size="1,212" backgroundColor="hdsTrack" zPosition="1" />
+		<widget source="session.CurrentService" render="Label" position="1140,634" size="600,34" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,grp_receiver,Upper</convert></widget>
+		<eLabel position="1140,674" size="170,104" backgroundColor="hdsPanelSolid" zPosition="1" />
+		<widget source="session.CurrentService" render="Label" position="1140,680" size="170,30" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,temperature</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1144,712" size="162,56" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Temperature</convert></widget>
+		<eLabel position="1326,674" size="190,104" backgroundColor="hdsPanelSolid" zPosition="1" />
+		<widget source="session.CurrentService" render="Label" position="1326,680" size="190,30" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,cpu_load</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1330,712" size="182,56" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">CpuLoad</convert></widget>
+		<eLabel position="1532,674" size="208,104" backgroundColor="hdsPanelSolid" zPosition="1" />
+		<widget source="session.CurrentService" render="Label" position="1532,680" size="208,30" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,ram_free</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1536,712" size="200,56" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">MemFree</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1140,790" size="200,40" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">Label,uptime</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1340,790" size="400,40" font="HdsBold;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsSignal">Uptime</convert></widget>
+		<eLabel position="1120,856" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,915" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,857" size="1,58" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1759,857" size="1,58" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1140,880" size="10,10" backgroundColor="hdsBrandLight" zPosition="1" />
+		<widget source="session.CurrentService" render="Label" position="1160,858" size="364,56" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">ImageName</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="1540,858" size="200,56" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="2"><convert type="HdsInfo">BoxName</convert></widget>
+	</screen>
+<screen name="HdsSetupBase" position="0,0" size="1776,1000">
+		<panel name="HdsCadru1776" />
+		<ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/card_stanga.png" position="16,100" size="1088,816" alphatest="blend" zPosition="1" /><ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/card_dreapta.png" position="1120,100" size="640,816" alphatest="blend" zPosition="1" /><eLabel position="16,100" size="1088,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="16,915" size="1088,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="16,101" size="1,814" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1103,101" size="1,814" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,100" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,915" size="640,1" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1120,101" size="1,814" backgroundColor="hdsTrack" zPosition="1" />
+		<eLabel position="1759,101" size="1,814" backgroundColor="hdsTrack" zPosition="1" />
+		<widget name="config" conditional="config" position="32,112" size="1056,780" itemHeight="60" font="HdsRegular;30" secondfont="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="2" selectionPixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/selectie_setari.png" />
+		<widget name="list" conditional="list" position="32,112" size="1056,780" itemHeight="60" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="1" selectionPixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/selectie_setari.png" />
+		<eLabel position="1140,124" size="8,32" backgroundColor="hdsBrandLight" zPosition="1" />
+		<eLabel text="Despre această setare" position="1160,112" size="580,56" font="HdsBold;26" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="1140,172" size="600,1" backgroundColor="hdsTrack" zPosition="1" />
+		<widget name="description" conditional="description" position="1140,188" size="600,640" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
+		<widget name="introduction" conditional="introduction" position="1140,188" size="600,640" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+		<widget name="info" conditional="info" position="1140,188" size="600,640" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+		<widget name="text" conditional="text" position="1140,188" size="600,640" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+		<eLabel position="1140,844" size="600,1" backgroundColor="hdsTrack" zPosition="1" />
+		<widget name="footnote" conditional="footnote" position="1140,852" size="600,56" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
+		<widget name="footer" conditional="footer" position="1140,852" size="600,56" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
+		<widget name="HelpWindow" conditional="HelpWindow" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="preview" conditional="preview" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="ok" conditional="ok" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="cancel" conditional="cancel" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="thumb" conditional="thumb" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="setupimage" conditional="setupimage" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="wizard" conditional="wizard" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="rc" conditional="rc" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="stepslider" conditional="stepslider" position="0,0" size="1,1" transparent="1" zPosition="0" />
+		<widget name="labelExitsave" conditional="labelExitsave" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<widget name="oktext" conditional="oktext" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<widget name="canceltext" conditional="canceltext" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<widget name="label" conditional="label" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<widget name="languagetext" conditional="languagetext" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<widget name="step" conditional="step" position="0,0" size="1,1" font="HdsCond;22" foregroundColor="hdsPanelDialog" backgroundColor="hdsPanelDialog" transparent="1" zPosition="0" />
+		<panel name="HdsIndicatoriTelecomanda" />
+	</screen>
+<screen name="HdsInfoBarBase" position="0,0" size="1920,1080">
+		<eLabel position="96,54" size="880,84" backgroundColor="hdsPanelDialog" zPosition="1" />
+		<ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/bara_stare.png" position="96,54" size="880,84" alphatest="blend" zPosition="1" /><eLabel position="96,54" size="880,1" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="96,137" size="880,1" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="96,55" size="1,82" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="975,55" size="1,82" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="112,74" size="44,44" backgroundColor="hdsBrand" zPosition="3" />
+		<ePixmap pixmap="pro/sigla32.png" position="118,80" size="32,32" alphatest="blend" zPosition="4" />
+		<widget source="session.CurrentService" render="FixedLabel" position="112,74" size="44,44" backgroundColor="hdsBrand" zPosition="5"><convert type="HdsInfo">IsIptv</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Pixmap" pixmap="pro/internet32.png" position="118,80" size="32,32" alphatest="blend" zPosition="6"><convert type="HdsInfo">IsIptv</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="172,58" size="440,40" font="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">Satellite,Fit=HdsBold:28:440</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="172,98" size="440,34" font="HdsCond;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">TechLeft,Short,Fit=HdsCond:24:440</convert></widget>
+		<eLabel position="628,66" size="1,60" backgroundColor="hdsTrack" zPosition="3" />
+		<widget source="session.CurrentService" render="Label" position="648,60" size="144,30" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">Label,quality,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="648,88" size="144,34" font="HdsBold;28" foregroundColor="hdsGood" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsSignal">Quality</convert></widget>
+		<widget source="session.CurrentService" render="Progress" position="648,124" size="144,8" foregroundColor="hdsGood" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsSignal">Quality</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="816,60" size="144,30" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">Label,signal,Upper</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="816,88" size="144,34" font="HdsBold;28" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsSignal">Signal</convert></widget>
+		<widget source="session.CurrentService" render="Progress" position="816,124" size="144,8" foregroundColor="hdsBrand" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsSignal">Signal</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="700,88" size="92,34" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4"><convert type="HdsSignal">SnrDb</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="630,57" size="344,80" backgroundColor="hdsPanelSolid" zPosition="5"><convert type="HdsInfo">ViaInternet</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="648,60" size="316,30" font="HdsBold;22" foregroundColor="hdsLabel" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6"><convert type="HdsInfo">ViaInternetText</convert></widget>
+		<widget source="session.CurrentService" render="Label" position="648,88" size="316,34" font="HdsBold;24" foregroundColor="hdsGood" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="6"><convert type="HdsInfo">ViaInternetNet</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="630,57" size="344,80" backgroundColor="hdsPanelDialog" zPosition="5"><convert type="HdsInfo">IsFile</convert><convert type="ConditionalShowHide" /></widget>
+		<eLabel position="1288,54" size="536,84" backgroundColor="hdsPanelDialog" zPosition="1" />
+		<ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/bara_ceas.png" position="1288,54" size="536,84" alphatest="blend" zPosition="1" /><eLabel position="1288,54" size="536,1" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="1288,137" size="536,1" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="1288,55" size="1,82" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="1823,55" size="1,82" backgroundColor="hdsTrack" zPosition="2" />
+		<widget source="session.RecordState" render="FixedLabel" text="REC" font="HdsBold;24" foregroundColor="white" halign="center" valign="center" noWrap="1" position="1358,76" size="80,40" backgroundColor="hdsRec" zPosition="3"><convert type="ConditionalShowHide" /></widget>
+		<widget source="global.CurrentTime" render="Label" position="1446,58" size="168,76" font="HdsCond;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3"><convert type="ClockToText">Format:%d.%m.%Y</convert></widget>
+		<widget source="global.CurrentTime" render="Label" position="1620,58" size="188,76" font="HdsBold;56" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="3"><convert type="ClockToText">Format:%H:%M</convert></widget>
+		<widget source="session.CurrentService" render="Pixmap" position="1300,78" size="48,36" alphatest="blend" zPosition="4"><convert type="HdsReteaPictograma">Pictograma|1288,54,536,84=1344,480|1288,54,536,1=1344,480|1288,137,536,1=1344,480|1288,55,1,82=1344,1</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="112,932" size="160,32" backgroundColor="hdsBrandLight" zPosition="3"><convert type="HdsTransmis">Activ</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="112,932" size="160,32" font="HdsBold;22" foregroundColor="hdsPanelSolid" backgroundColor="hdsBrandLight" transparent="1" halign="center" valign="center" noWrap="1" zPosition="6"><convert type="HdsTransmis">Text</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="280,932" size="96,32" backgroundColor="hdsBrand" zPosition="3"><convert type="HdsInfo">HasDvbI</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="280,932" size="96,32" font="HdsBold;22" foregroundColor="white" backgroundColor="hdsBrand" transparent="1" halign="center" valign="center" noWrap="1" zPosition="6"><convert type="HdsInfo">DvbIText</convert></widget>
+		<eLabel position="96,772" size="1728,254" backgroundColor="hdsPanelDialog" zPosition="1" />
+		<ePixmap pixmap="/etc/enigma2/hdsatelit/fundal-pro/activ/bara_jos.png" position="96,772" size="1728,254" alphatest="blend" zPosition="1" /><eLabel position="96,772" size="1728,2" backgroundColor="hdsBrand" zPosition="2" />
+		<eLabel position="96,774" size="1,252" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="1823,774" size="1,252" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="96,1025" size="1728,1" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="97,970" size="1726,1" backgroundColor="hdsTrack" zPosition="2" />
+		<widget source="session.CurrentService" render="Label" position="104,792" size="136,84" font="HdsBold;56" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">ChannelNumber</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="248,792" size="420,84" backgroundColor="hdsPanelSolid" zPosition="2"><convert type="HdsInfo">ChannelNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="248,792" size="420,1" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">ChannelNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="248,875" size="420,1" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">ChannelNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="248,793" size="1,82" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">ChannelNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="667,793" size="1,82" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">ChannelNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="264,792" size="388,84" font="HdsBold;34" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="4"><convert type="HdsInfo">Name,IfNumber,Fit=HdsBold:34:388</convert></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="104,792" size="564,84" backgroundColor="hdsPanelSolid" zPosition="2"><convert type="HdsInfo">Name,IfNoNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="104,792" size="564,1" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">Name,IfNoNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="104,875" size="564,1" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">Name,IfNoNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="104,793" size="1,82" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">Name,IfNoNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="FixedLabel" position="667,793" size="1,82" backgroundColor="hdsTrack" zPosition="3"><convert type="HdsInfo">Name,IfNoNumber</convert><convert type="ConditionalShowHide" /></widget>
+		<widget source="session.CurrentService" render="Label" position="120,792" size="532,84" font="HdsBold;34" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" valign="center" noWrap="1" zPosition="4"><convert type="HdsInfo">Name,IfNoNumber,Fit=HdsBold:34:532</convert></widget>
+		<widget source="session.CurrentService" render="Picon" position="104,792" size="140,84" alphatest="blend" zPosition="3" vecini="104,792,136,84=252,136|248,792,420,84=396,272|248,792,420,1=396,272|248,875,420,1=396,272|248,793,1,82=396,1|264,792,388,84=412,240|104,792,564,84=252,416|104,792,564,1=252,416|104,875,564,1=252,416|104,793,1,82=252,1|120,792,532,84=268,384"><convert type="ServiceName">Reference</convert></widget>
+		<eLabel position="684,792" size="1,150" backgroundColor="hdsTrack" zPosition="2" />
+		<eLabel position="704,786" size="1100,94" backgroundColor="hdsCell" zPosition="2" />
+		<eLabel position="704,786" size="1100,2" backgroundColor="hdsBrand" zPosition="3" />
+		<eLabel position="704,878" size="1100,2" backgroundColor="hdsBrand" zPosition="3" />
+		<eLabel position="704,788" size="2,90" backgroundColor="hdsBrand" zPosition="3" />
+		<eLabel position="1802,788" size="2,90" backgroundColor="hdsBrand" zPosition="3" />
+		<widget source="session.Event_Now" render="Label" position="722,790" size="640,52" font="HdsBold;40" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="4"><convert type="EventName">Name</convert></widget>
+		<widget source="session.Event_Now" render="Label" position="1362,794" size="92,44" font="HdsBold;30" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4"><convert type="EventTime">StartTime</convert><convert type="ClockToText">Format:%H:%M</convert></widget>
+		<widget source="session.Event_Now" render="Label" position="1458,794" size="116,44" font="HdsBold;30" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" valign="center" noWrap="1" zPosition="4"><convert type="EventTime">EndTime</convert><convert type="ClockToText">Format:- %H:%M</convert></widget>
+		<widget source="session.Event_Now" render="Label" position="1578,794" size="210,44" font="HdsBold;28" foregroundColor="hdsGood" backgroundColor="hdsCell" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4"><convert type="HdsInfo">Remaining</convert></widget>
+		<widget source="session.Event_Now" render="Progress" position="722,854" size="1066,12" foregroundColor="hdsGood" backgroundColor="hdsPanelSolid" zPosition="4"><convert type="EventTime">Progress</convert></widget>
+		<eLabel position="116,990" size="16,16" backgroundColor="key_red" zPosition="3" />
+		<eLabel text="Înregistrează" position="142,974" size="220,48" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<eLabel position="380,990" size="16,16" backgroundColor="key_yellow" zPosition="3" />
+		<eLabel text="Sunet" position="406,974" size="220,48" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<eLabel position="560,990" size="16,16" backgroundColor="key_blue" zPosition="3" />
+		<eLabel text="Extensii" position="586,974" size="220,48" font="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<eLabel position="1396,980" size="76,36" backgroundColor="hdsCell" zPosition="3" />
+		<eLabel text="INFO" position="1396,980" size="76,36" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<eLabel text="Ghid TV" position="1482,974" size="140,48" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+		<eLabel position="1630,980" size="76,36" backgroundColor="hdsCell" zPosition="3" />
+		<eLabel text="EXIT" position="1630,980" size="76,36" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" halign="center" valign="center" noWrap="1" zPosition="4" />
+		<eLabel text="Închide" position="1716,974" size="100,48" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
+	</screen>
+</skin>

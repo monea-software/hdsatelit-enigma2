@@ -55,12 +55,28 @@
 # Rutele: GET /api/tema-web (implicitele de pe receptor si paletele) si POST /api/tema-web-seteaza?tema=&culori=.
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2; setup.xml (~10 KB) se citeste numai cand se schimba.
+#
+# 0.7.6 (SXW): SETARILE PLUGINURILOR. Un plugin cu setup.xml in dosarul lui (Plugins/<Categorie>/<Nume>/setup.xml,
+# de pilda TransCodingSetup: portul, debitul, rezolutia) isi deschide ecranul pe televizor cu Setup(plugin=...); aici
+# aceleasi ecrane apar in /setari, in grupa Pluginuri, cu numele pluginului. Se arata toate ecranele
+# care au macar un rand config.* care exista acum (pluginul incarcat; toate setarile la vedere, fara alt semn in xml). Id-ul ecranului e
+# "<Categorie>/<Nume>/<cheie>" (cheile imaginii n-au '/'); se deschid numai ecranele gasite pe disc, caile nu se fac
+# din cerere. Ca pe televizor (Setup.includeElement): level= nu ascunde nimic la pluginuri, requires= cu ';', '!' si
+# config.* (citit prin getattr, fara eval), randurile din <if>/<elif>/<else> toate (conditional= nu se evalueaza din
+# web; o setare in plus nu strica, fiecare are valoarea ei), fiecare setare o data; textele in domeniul de traducere
+# al pluginului (numele dosarului), apoi in al imaginii. Caile pot avea indici: config.plugins.x.encoder[0].bitrate
+# (ConfigSubList) sau ['cheie'] (ConfigSubDict). Un text (ConfigText) al unui plugin se scrie din web (cel mult 80 de
+# caractere; parolele si cheile raman 'pusa / nepusa'). Salvarea e aceeasi: value, changedFinal, save, configfile.
 
 import os
+import re
 import xml.etree.ElementTree as ET
 
 CALE_SETUP = None          # probele pun aici un setup.xml; pe receptor: ${datadir}/enigma2/setup.xml
+CALE_PLUGINURI = None      # probele pun aici un dosar Plugins; pe receptor: SCOPE_PLUGINS
 MAX_RANDURI = 80
+MAX_PLUGINURI = 60         # cate ecrane de pluginuri se arata cel mult
+MAX_TEXT_PLUGIN = 80       # cat de lung poate fi un text al unui plugin scris din web
 MAX_CIFRE = 999999999      # un ConfigNumber n-are limita; pagina primeste cel mult 9 cifre
 
 
@@ -117,9 +133,137 @@ def _nodSetup(cheie):
 	return None
 
 
+def _calePluginuri():
+	if CALE_PLUGINURI:
+		return CALE_PLUGINURI
+	try:
+		from Tools.Directories import resolveFilename, SCOPE_PLUGINS
+		return resolveFilename(SCOPE_PLUGINS)
+	except Exception:
+		return "/usr/lib/enigma2/python/Plugins"
+
+
+_CACHE_PLUGINURI = {}      # calea setup.xml -> (semnul fisierului, radacina)
+_NUME_BUN = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,59}$")
+
+
+def _xmlPlugin(cale):
+	"""Radacina setup.xml-ului unui plugin, recitita numai cand se schimba fisierul; None daca nu se poate citi."""
+	try:
+		semn = os.path.getmtime(cale)
+	except OSError:
+		_CACHE_PLUGINURI.pop(cale, None)
+		return None
+	v = _CACHE_PLUGINURI.get(cale)
+	if v is None or v[0] != semn:
+		try:
+			radacina = ET.parse(cale).getroot()
+		except Exception as eroare:
+			_jurnal("nu pot citi %s: %s" % (cale, eroare))
+			radacina = None
+		v = (semn, radacina)
+		_CACHE_PLUGINURI[cale] = v
+	return v[1]
+
+
+def _areSetariPlugin(nod):
+	"""Ecranul unui plugin are macar un rand config.* (in <if> la fel); daca setarea exista acum se vede in lista."""
+	return any((x.text or "").strip().startswith("config.") for x in nod.iter("item"))
+
+
+def _ecranePlugin():
+	"""{id: ("Categorie/Nume", nodul <setup>)} pentru setup.xml-urile pluginurilor instalate, in ordinea dosarelor."""
+	baza = _calePluginuri()
+	rez = {}
+	try:
+		categorii = sorted(os.listdir(baza))
+	except OSError:
+		return rez
+	for cat in categorii:
+		dcat = os.path.join(baza, cat)
+		if not _NUME_BUN.match(cat) or not os.path.isdir(dcat):
+			continue
+		try:
+			nume = sorted(os.listdir(dcat))
+		except OSError:
+			continue
+		for n in nume:
+			cale = os.path.join(dcat, n, "setup.xml")
+			if not _NUME_BUN.match(n) or not os.path.isfile(cale):
+				continue
+			radacina = _xmlPlugin(cale)
+			if radacina is None:
+				continue
+			for x in radacina.findall("setup"):
+				cheie = x.get("key") or ""
+				id_ecran = "%s/%s/%s" % (cat, n, cheie)
+				if not _NUME_BUN.match(cheie) or len(id_ecran) > 80 or id_ecran in rez or not _areSetariPlugin(x):
+					continue
+				rez[id_ecran] = ("%s/%s" % (cat, n), x)
+				if len(rez) >= MAX_PLUGINURI:
+					return rez
+	return rez
+
+
+def _nodEcran(cheie):
+	"""(nodul <setup>, "Categorie/Nume" sau None): ecranul imaginii (cheia din data/setup.xml) sau al unui plugin."""
+	if "/" in (cheie or ""):
+		v = _ecranePlugin().get(cheie)
+		return (v[1], v[0]) if v else (None, None)
+	return _nodSetup(cheie), None
+
+
+def _traducator(plugin):
+	"""Traducerea textelor unui ecran: a imaginii; la un plugin intai domeniul lui (numele dosarului, ca
+	PluginLanguageDomain al pluginurilor), apoi a imaginii (ca Screens/Setup.py)."""
+	if not plugin:
+		return _t
+	domeniu = plugin.split("/")[-1]
+
+	def tradu(text):
+		if not text:
+			return text or ""
+		try:
+			from gettext import dgettext
+			tradus = dgettext(domeniu, text)
+		except Exception:
+			tradus = text
+		return tradus if tradus != text else _t(text)
+	return tradu
+
+
+def _numePlugin(plugin):
+	"""Numele pluginului din lista pluginurilor (PluginDescriptor.name), altfel numele dosarului."""
+	try:
+		from Components.PluginComponent import plugins
+		coada = os.sep + os.path.normpath(plugin)
+		for p in getattr(plugins, "pluginList", []) or []:
+			cale = os.path.normpath(getattr(p, "path", "") or "")
+			if cale.endswith(coada) and getattr(p, "name", ""):
+				return str(p.name)
+	except Exception:
+		pass
+	return plugin.split("/")[-1]
+
+
 def titlu(cheie):
-	nod = _nodSetup(cheie)
-	return _t(nod.get("title", "")) if nod is not None else ""
+	nod, plugin = _nodEcran(cheie)
+	return _traducator(plugin)(nod.get("title", "")) if nod is not None else ""
+
+
+def listaPluginuri(config=None, SystemInfo=None):
+	"""[{id, text: numele pluginului, titlu}] ecranele pluginurilor care au acum macar un rand (GET /api/setari)."""
+	config = _config(config)
+	rez = []
+	for id_ecran, (plugin, nod) in _ecranePlugin().items():
+		try:
+			if not _randuriNod(nod, plugin, config, SystemInfo):
+				continue
+		except Exception as eroare:
+			_jurnal("%s: %s" % (id_ecran, eroare))
+			continue
+		rez.append({"id": id_ecran, "text": _numePlugin(plugin), "titlu": _traducator(plugin)(nod.get("title", ""))})
+	return rez
 
 
 def _config(config=None):
@@ -136,8 +280,9 @@ def _nivel(config):
 		return 0
 
 
-def _cerinta(nume, SystemInfo=None):
-	"""requires= din setup.xml, ca Setup.addItems: SystemInfo.get(nume, False)."""
+def _cerinta(nume, SystemInfo=None, config=None):
+	"""requires= din setup.xml, ca Setup.includeElement: chei SystemInfo sau setari config.*, mai multe cu ';', '!' in
+	fata = negat; o setare config.* care nu exista ascunde randul."""
 	if not nume:
 		return True
 	if SystemInfo is None:
@@ -145,24 +290,49 @@ def _cerinta(nume, SystemInfo=None):
 			from Components.SystemInfo import SystemInfo
 		except Exception:
 			return True
-	return bool(SystemInfo.get(nume, False))
+	for c in [c.strip() for c in nume.split(";") if c.strip()]:
+		negat = c.startswith("!")
+		if negat:
+			c = c[1:].strip()
+		if c.startswith("config."):
+			el = _element(config, c) if config is not None else None
+			if el is None:
+				return False
+			v = getattr(el, "value", None)
+			rezultat = bool(v) and str(v).lower() not in ("0", "disable", "false", "no", "off")
+		else:
+			rezultat = bool(SystemInfo.get(c, False))
+		if negat == rezultat:
+			return False
+	return True
+
+
+# o bucata a caii: numele, apoi indici [0] (ConfigSubList) sau ['cheie'] (ConfigSubDict)
+_PARTE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)((?:\[(?:\d{1,3}|'[A-Za-z0-9_]{1,40}'|\"[A-Za-z0-9_]{1,40}\")\])*)$")
+_INDICE = re.compile(r"\[(\d{1,3}|'[A-Za-z0-9_]{1,40}'|\"[A-Za-z0-9_]{1,40}\")\]")
 
 
 def _element(config, cale):
-	"""Setarea pentru textul unui rand („config.av.downmix_ac3”), prin getattr; None daca nu exista."""
+	"""Setarea pentru textul unui rand (config.av.downmix_ac3, config.plugins.x.encoder[0].bitrate), prin getattr
+	si indici numerici sau chei simple, fara eval; None daca nu exista."""
 	parti = (cale or "").strip().split(".")
-	if len(parti) < 2 or parti[0] != "config" or not all(p.isidentifier() and not p.startswith("_") for p in parti):
+	if len(parti) < 2 or parti[0] != "config":
 		return None
 	obiect = config
 	for p in parti[1:]:
+		m = _PARTE.match(p)
+		if not m:
+			return None
 		try:
-			obiect = getattr(obiect, p)
+			obiect = getattr(obiect, m.group(1))
+			for k in _INDICE.findall(m.group(2)):
+				obiect = obiect[int(k) if k.isdigit() else k[1:-1]]
 		except Exception:
 			return None
 	return obiect
 
 
-def _fel(el, nod=None):
+def _fel(el, nod=None, plugin=None):
 	"""'bool', 'alegere', 'multime', 'numar', 'glisor', 'cifre', 'text', 'secret' sau 'citire', dupa clasa setarii (numele
 	claselor din config.py)."""
 	clase = [c.__name__ for c in type(el).__mro__]
@@ -184,18 +354,21 @@ def _fel(el, nod=None):
 		return "numar"
 	if "ConfigNumber" in clase:
 		return "cifre"          # numar fara limite scrise (ConfigNumber): pe televizor se scrie cu cifrele
-	if "ConfigText" in clase and "ConfigPassword" not in clase and _lungimeText(el):
-		return "text"           # text care se scrie si din web: setarea spune cat de lung (web_text_max)
+	if "ConfigText" in clase and "ConfigPassword" not in clase and _lungimeText(el, plugin):
+		return "text"           # text care se scrie si din web: setarea spune cat de lung (web_text_max) sau e a unui plugin
 	return "citire"
 
 
-def _lungimeText(el):
-	"""web_text_max al unei setari text (cate caractere primeste din web), sau 0 daca textul nu se schimba din web."""
+def _lungimeText(el, plugin=None):
+	"""web_text_max al unei setari text (cate caractere primeste din web), MAX_TEXT_PLUGIN pentru textul unui plugin,
+	sau 0 daca textul nu se schimba din web."""
 	try:
 		n = int(getattr(el, "web_text_max", 0) or 0)
 	except (TypeError, ValueError):
-		return 0
-	return n if 0 < n <= 80 else 0
+		n = 0
+	if 0 < n <= 80:
+		return n
+	return MAX_TEXT_PLUGIN if plugin else 0
 
 
 def _textGol(el):
@@ -209,35 +382,53 @@ def _textGol(el):
 	return str(gol or "")
 
 
-def _textStare(nod):
+def _textStare(nod, tradu=None):
+	tradu = tradu or _t
 	try:
 		from Components import HdsStareMeniu
-		return HdsStareMeniu.textNod(nod, _t)
+		return HdsStareMeniu.textNod(nod, tradu)
 	except ImportError:
-		return _t(nod.get("text") or "??")
+		return tradu(nod.get("text") or "??")
 
 
 def _randuri(cheie, config, SystemInfo=None):
 	"""[(nodul, setarea)] vizibile, in ordinea si cu regulile lui Setup.addItems."""
-	nod = _nodSetup(cheie)
+	nod, plugin = _nodEcran(cheie)
 	if nod is None:
 		return []
+	return _randuriNod(nod, plugin, config, SystemInfo)
+
+
+def _itemi(nod, plugin):
+	"""Randurile <item> ale unui <setup>; la un plugin si cele din <if> (toate ramurile, fara conditional=)."""
+	for x in nod:
+		if x.tag == "item":
+			yield x
+		elif plugin and x.tag == "if":
+			for y in _itemi(x, plugin):
+				yield y
+
+
+def _randuriNod(nod, plugin, config, SystemInfo=None):
 	nivel = _nivel(config)
 	rez = []
-	for x in nod:
-		if x.tag != "item":
-			continue
+	vazute = set()
+	for x in _itemi(nod, plugin):
 		try:
 			nivel_rand = int(x.get("level", 0))
 		except (TypeError, ValueError):
 			nivel_rand = 0
-		if nivel_rand > nivel:
+		if nivel_rand > nivel and not plugin:
 			continue
-		if not _cerinta(x.get("requires"), SystemInfo):
+		if not _cerinta(x.get("requires"), SystemInfo, config):
 			continue
-		el = _element(config, x.text)
-		if el is None or _fel(el, x) is None:
+		cale = (x.text or "").strip()
+		if plugin and cale in vazute:
 			continue
+		el = _element(config, cale)
+		if el is None or _fel(el, x, plugin) is None:
+			continue
+		vazute.add(cale)
 		rez.append((x, el))
 		if len(rez) >= MAX_RANDURI:
 			break
@@ -262,7 +453,7 @@ def _alegeriMultime(el):
 	return [[str(c), str(el.description[c])] for c in el.choices]
 
 
-def _descriere(el, fel):
+def _descriere(el, fel, plugin=None):
 	d = {"fel": fel}
 	if fel == "secret":
 		# dupa salvare valoarea nu se mai arata nicaieri (nici cu stelute sau puncte);
@@ -288,7 +479,7 @@ def _descriere(el, fel):
 	elif fel == "cifre":
 		d.update(valoare=str(el.value), min=0, max=MAX_CIFRE, pas=1)
 	elif fel == "text":
-		d.update(valoare=str(el.value or ""), max=_lungimeText(el), gol=_textGol(el))
+		d.update(valoare=str(el.value or ""), max=_lungimeText(el, plugin), gol=_textGol(el))
 	else:
 		try:
 			d["valoare_text"] = el.getText()
@@ -300,20 +491,24 @@ def _descriere(el, fel):
 def ecran(cheie, config=None, SystemInfo=None):
 	"""GET /api/setari?id=<cheie>."""
 	config = _config(config)
-	nod = _nodSetup(cheie)
+	nod, plugin = _nodEcran(cheie)
 	if nod is None:
 		return {"result": False, "message": _t("Ecranul de setări „%s” nu există.") % cheie[:40]}
+	tradu = _traducator(plugin)
 	randuri = []
 	stare = []
-	for i, (x, el) in enumerate(_randuri(cheie, config, SystemInfo)):
-		r = _descriere(el, _fel(el, x))
-		r.update(nr=i, text=_textStare(x), ajutor=_t(x.get("description")) if x.get("description") else "",
+	for i, (x, el) in enumerate(_randuriNod(nod, plugin, config, SystemInfo)):
+		r = _descriere(el, _fel(el, x, plugin), plugin)
+		r.update(nr=i, text=_textStare(x, tradu), ajutor=tradu(x.get("description")) if x.get("description") else "",
 			setare=(x.text or "").strip())
 		randuri.append(r)
 		for t in _stareSetare(el):
 			if t not in stare:
 				stare.append(t)
-	return {"result": True, "id": cheie, "titlu": _t(nod.get("title", "")), "randuri": randuri, "stare": stare}
+	rez = {"result": True, "id": cheie, "titlu": tradu(nod.get("title", "")), "randuri": randuri, "stare": stare}
+	if plugin:
+		rez["plugin"] = _numePlugin(plugin)
+	return rez
 
 
 def _stareSetare(el):
@@ -329,7 +524,7 @@ def _stareSetare(el):
 		return []
 
 
-def _valoareNoua(el, fel, text):
+def _valoareNoua(el, fel, text, plugin=None):
 	"""Valoarea de pus pentru textul primit, sau (None, motivul) daca nu e una din valorile televizorului."""
 	if fel == "bool":
 		if text not in ("0", "1"):
@@ -361,7 +556,7 @@ def _valoareNoua(el, fel, text):
 	if fel == "text":
 		# ca pe televizor orice litera, dar fara caractere de control si cel mult web_text_max; gol = implicitul
 		text = text.strip()
-		if len(text) > _lungimeText(el) or any(ord(c) < 0x20 or 0x7F <= ord(c) < 0xA0 for c in text):
+		if len(text) > _lungimeText(el, plugin) or any(ord(c) < 0x20 or 0x7F <= ord(c) < 0xA0 for c in text):
 			return None
 		return text
 	if fel in ("numar", "glisor"):
@@ -385,9 +580,10 @@ def _valoareNoua(el, fel, text):
 def seteaza(cheie, valori, config=None, SystemInfo=None, configfile=None):
 	"""POST /api/setari-seteaza: {"r<N>": text}. Toate valorile trebuie sa fie bune, altfel nu se schimba nimic."""
 	config = _config(config)
-	if _nodSetup(cheie) is None:
+	nod, plugin = _nodEcran(cheie)
+	if nod is None:
 		return {"result": False, "message": _t("Ecranul de setări „%s” nu există.") % cheie[:40]}
-	randuri = _randuri(cheie, config, SystemInfo)
+	randuri = _randuriNod(nod, plugin, config, SystemInfo)
 	noi = []
 	for nume, text in valori.items():
 		if not nume.startswith("r") or not nume[1:].isdigit():
@@ -398,14 +594,15 @@ def seteaza(cheie, valori, config=None, SystemInfo=None, configfile=None):
 			rez.update(result=False, message=_t("Lista setărilor s-a schimbat. Pagina se încarcă din nou."))
 			return rez
 		x, el = randuri[i]
-		fel = _fel(el, x)
-		v = _valoareNoua(el, fel, text)
+		fel = _fel(el, x, plugin)
+		v = _valoareNoua(el, fel, text, plugin)
 		if v is None:
 			rez = ecran(cheie, config, SystemInfo)
 			if fel == "secret":
 				rez.update(result=False, message=_t("Această setare se schimbă de pe televizor."))
 			else:
-				rez.update(result=False, message=_t("Valoarea „%s” nu e bună pentru „%s”.") % (text[:40], _textStare(x)))
+				rez.update(result=False, message=_t("Valoarea „%s” nu e bună pentru „%s”.") % (text[:40],
+					_textStare(x, _traducator(plugin))))
 			return rez
 		noi.append((el, v))
 	if not noi:
@@ -457,6 +654,21 @@ def rute(baza, resource, chei=None):
 			_jurnal("lista ecranelor: %s" % eroare)
 			return []
 
+	def _deschis(cheie, permise=None):
+		"""Ecranul se poate deschide din web: al imaginii, din meniu (ca televizorul), sau al unui plugin instalat, cu
+		macar un rand acum (ca in lista)."""
+		if "/" in cheie:
+			v = _ecranePlugin().get(cheie)
+			return bool(v) and bool(_randuriNod(v[1], v[0], _config(None)))
+		return cheie in [c for c, _t2 in (_permise() if permise is None else permise)]
+
+	def _pluginuri():
+		try:
+			return listaPluginuri()
+		except Exception as eroare:
+			_jurnal("lista pluginurilor: %s" % eroare)
+			return []
+
 	class StareResource(baza):
 		def render_GET(self, request):
 			a = argumente(request)
@@ -464,8 +676,8 @@ def rute(baza, resource, chei=None):
 			permise = _permise()
 			if not cheie:
 				return self._raspunde(request, {"result": True, "ecrane": [{"id": c, "text": t, "titlu": titlu(c)}
-					for c, t in permise]})
-			if cheie not in [c for c, _t2 in permise]:
+					for c, t in permise], "pluginuri": _pluginuri()})
+			if not _deschis(cheie, permise):
 				return self._eroare(request, _t("Ecranul de setări „%s” nu e în meniu.") % cheie[:40], 404)
 			try:
 				return self._raspunde(request, ecran(cheie))
@@ -478,7 +690,7 @@ def rute(baza, resource, chei=None):
 		def render_POST(self, request):
 			a = argumente(request)
 			cheie = a.pop("id", "")
-			if cheie not in [c for c, _t2 in _permise()]:
+			if not _deschis(cheie):
 				return self._eroare(request, _t("Ecranul de setări „%s” nu e în meniu.") % cheie[:40], 404)
 			try:
 				return self._raspunde(request, seteaza(cheie, a))
@@ -678,7 +890,8 @@ PAGINA = """<!DOCTYPE html>
 <h1 id="titlu">Setări</h1>
 <form class="cauta-setari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută în meniu: scrie un cuvânt, de exemplu subtitrări" aria-label="Caută în meniu" autocomplete="off"><button type="submit">Caută</button></form>
 <p class="mesaj" id="incarcare">Se citesc setările...</p>
-<section class="card ascuns" id="lista"><ul class="ecrane" id="ecrane"></ul></section>
+<section class="card ascuns" id="lista"><ul class="ecrane" id="ecrane"></ul>
+<h2 class="ascuns" id="pluginuriTitlu">Pluginuri</h2><ul class="ecrane" id="pluginuri"></ul></section>
 <section class="card ascuns" id="aspectWeb" aria-labelledby="aspectTitlu">
   <h2 id="aspectTitlu">Aspectul interfeței web</h2>
   <p class="nota aspect-intro">Tema și culorile paginilor web. Sunt numai ale interfeței web: tema și culorile de pe televizor nu se schimbă de aici.</p>
@@ -1089,8 +1302,10 @@ function citeste(){
     citesteInterfataWeb();
     return cerere("/api/setari").then(function(d){
       $("incarcare").classList.add("ascuns"); $("lista").classList.remove("ascuns");
-      var ul = $("ecrane"); ul.textContent = "";
-      (d.ecrane || []).forEach(function(e){ var li = document.createElement("li"); var a = document.createElement("a"); a.href = adresa("/setari?id=" + encodeURIComponent(e.id)); a.textContent = e.text + (e.titlu && e.titlu !== e.text ? " (" + e.titlu + ")" : ""); li.appendChild(a); ul.appendChild(li); });
+      function puneEcrane(ul, lista){ ul.textContent = ""; (lista || []).forEach(function(e){ var li = document.createElement("li"); var a = document.createElement("a"); a.href = adresa("/setari?id=" + encodeURIComponent(e.id)); a.textContent = e.text + (e.titlu && e.titlu !== e.text ? " (" + e.titlu + ")" : ""); li.appendChild(a); ul.appendChild(li); }); }
+      puneEcrane($("ecrane"), d.ecrane);
+      puneEcrane($("pluginuri"), d.pluginuri);
+      $("pluginuriTitlu").classList.toggle("ascuns", !(d.pluginuri || []).length);
     });
   }
   return cerere("/api/setari?id=" + encodeURIComponent(ID)).then(function(d){
@@ -1221,6 +1436,8 @@ TEXTE_PAGINA = {
 
 
 TEXTE_PAGINA["html"] += (N_("Renunță"),)
+# 0.7.6 (SXW): grupa ecranelor de setari ale pluginurilor instalate (setup.xml din dosarul pluginului)
+TEXTE_PAGINA["html"] += (N_("Pluginuri"),)
 TEXTE_PAGINA["js"] += (N_("Nu s-a schimbat nimic."),)
 
 

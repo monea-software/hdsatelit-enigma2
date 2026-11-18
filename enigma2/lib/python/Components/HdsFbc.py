@@ -91,8 +91,56 @@ def _scrie(frontend, cheie, valoare):
 			raise IOError("scriere proc incompleta")
 
 
+CHEI = ("fbc_connect", "fbc_link")
+
+
+def _grupa(tunere, set_id):
+	"""Cele opt demodulatoare ale setului `set_id`, in ordinea frontendurilor, sau None cand setul nu e confirmat."""
+	grupa = sorted((t for t in tunere if t.fbc_set_id == set_id), key=lambda t: t.frontend_id)
+	if len(grupa) != 8 or any(
+			t.fbc_role not in (RADACINA, LEGAT) or t.type not in ("DVB-S", "DVB-S2") for t in grupa):
+		return None
+	frontends = [t.frontend_id for t in grupa]
+	if frontends != list(range(frontends[0], frontends[0] + 8)):
+		return None
+	return grupa
+
+
+def _scriePereche(frontend, dorit):
+	"""Scrie fbc_connect si fbc_link, in ordinea asta, MEREU, si cand /proc arata deja valoarea dorita: asa face
+	OE-Alliance enigma2 (fbc.cpp SetProcFBCID, GPL-2.0; cod nou). Pana la 0.7.5 se scria numai ce era altfel decat
+	valoarea citita, iar driverul GigaBlue (Quad 4K Pro, 45308X FBC) pare sa nu aplice o valoare care nu i-a fost
+	scrisa: /proc arata tunerul A pe 0 si B pe 1, dar B pierdea semnalul in aceeasi secunda in care A schimba tensiunea
+	sau trimitea comanda de motor, iar mufa motorului ramanea fara curent (asistenta 457322,
+	15.11.2026). Intoarce (reusit, valorile vechi); la o greseala pune la loc valorile vechi."""
+	vechi = tuple(_numar(_citeste(frontend, cheie)) for cheie in CHEI)
+	if vechi[0] is None or vechi[0] >= 8 or vechi[1] not in (0, 1):
+		print("[HdsFbc] rutare refuzata pentru frontend %d: proc lipsa sau nevalid" % frontend)
+		return False, vechi
+	incercate = []
+	try:
+		for cheie, anterior, valoare in zip(CHEI, vechi, dorit):
+			# Si scrierea care arunca exceptia poate sa fi ajuns partial la driver.
+			incercate.append((cheie, anterior))
+			_scrie(frontend, cheie, valoare)
+		if tuple(_numar(_citeste(frontend, cheie)) for cheie in CHEI) != tuple(dorit):
+			raise IOError("driverul nu a pastrat rutarea ceruta")
+	except (IOError, OSError, ValueError) as eroare:
+		print("[HdsFbc] rutarea frontend %d a esuat: %s" % (frontend, eroare))
+		for cheie, anterior in reversed(incercate):
+			try:
+				_scrie(frontend, cheie, anterior)
+				if _numar(_citeste(frontend, cheie)) != anterior:
+					raise IOError("driverul nu a pastrat valoarea veche")
+			except (IOError, OSError, ValueError) as revenire:
+				print("[HdsFbc] revenire esuata frontend %d, %s: %s" % (frontend, cheie, revenire))
+		return False, vechi
+	return True, vechi
+
+
 def ruteaza(tunere, sursa_slot, radacina_slot, legat=True):
-	"""Leaga numai intrari fizice FBC confirmate; demodulatoarele interne raman neatinse."""
+	"""Leaga numai intrari fizice FBC confirmate; demodulatoarele interne raman neatinse. Scrierea pleaca si cand
+	valoarea citita e deja cea dorita (_scriePereche), ca setTunerLinked -> UpdateFBCID in OE-Alliance."""
 	pe_slot = dict((t.slot, t) for t in tunere)
 	sursa, radacina = pe_slot.get(sursa_slot), pe_slot.get(radacina_slot)
 	if sursa is None or radacina is None:
@@ -104,54 +152,65 @@ def ruteaza(tunere, sursa_slot, radacina_slot, legat=True):
 		return False
 	if (sursa_slot == radacina_slot) == bool(legat):
 		return False
-	grupa = sorted((t for t in tunere if t.fbc_set_id == set_id), key=lambda t: t.frontend_id)
-	if len(grupa) != 8 or any(
-			t.fbc_role not in (RADACINA, LEGAT) or t.type not in ("DVB-S", "DVB-S2") for t in grupa):
+	grupa = _grupa(tunere, set_id)
+	if grupa is None:
 		return False
-	frontends = [t.frontend_id for t in grupa]
-	if frontends != list(range(frontends[0], frontends[0] + 8)):
-		return False
-	index = frontends.index(radacina.frontend_id)
-	frontend = sursa.frontend_id
-	chei = ("fbc_connect", "fbc_link")
-	vechi = tuple(_numar(_citeste(frontend, cheie)) for cheie in chei)
-	if vechi[0] is None or vechi[0] >= 8 or vechi[1] not in (0, 1):
-		print("[HdsFbc] rutare refuzata pentru frontend %d: proc lipsa sau nevalid" % frontend)
-		return False
+	index = [t.frontend_id for t in grupa].index(radacina.frontend_id)
 	dorit = (index, int(bool(legat)))
-	incercate = []
+	reusit, vechi = _scriePereche(sursa.frontend_id, dorit)
+	if reusit:
+		print("[HdsFbc] frontend %d: fbc_connect %d, fbc_link %d scrise (erau %s/%s)" % (
+			sursa.frontend_id, dorit[0], dorit[1], vechi[0], vechi[1]))
+	return reusit
+
+
+def _mod(tuner):
 	try:
-		for cheie, anterior, valoare in zip(chei, vechi, dorit):
-			if anterior != valoare:
-				# Si scrierea care arunca exceptia poate sa fi ajuns partial la driver.
-				incercate.append((cheie, anterior))
-				_scrie(frontend, cheie, valoare)
-		if tuple(_numar(_citeste(frontend, cheie)) for cheie in chei) != dorit:
-			raise IOError("driverul nu a pastrat rutarea ceruta")
-	except (IOError, OSError, ValueError) as eroare:
-		print("[HdsFbc] rutarea frontend %d a esuat: %s" % (frontend, eroare))
-		for cheie, anterior in reversed(incercate):
-			try:
-				_scrie(frontend, cheie, anterior)
-				if _numar(_citeste(frontend, cheie)) != anterior:
-					raise IOError("driverul nu a pastrat valoarea veche")
-			except (IOError, OSError, ValueError) as revenire:
-				print("[HdsFbc] revenire esuata frontend %d, %s: %s" % (frontend, cheie, revenire))
-		return False
-	return True
+		return tuner.config.configMode.value
+	except AttributeError:
+		return None
+
+
+def _unicableLegat(tuner):
+	avansat = getattr(tuner.config, "advanced", None)
+	conectat = getattr(avansat, "unicableconnected", None)
+	return conectat is not None and bool(conectat.value)
 
 
 def ruteazaIndependente(tunere):
-	"""O intrare fizica redevenita independenta nu trebuie sa ramana pe cablul vecinului."""
-	for tuner in tunere:
-		if tuner.fbc_role != RADACINA or tuner.fbc_set_id is None:
+	"""La fiecare SecConfigure.update (si deci la pornire, din SecConfigure.__init__), inaintea legaturilor: fiecare
+	demodulator FBC care nu primeste mai jos o legatura primeste valorile implicite, scrise MEREU, ca OE-Alliance enigma2
+	(GPL-2.0, cod nou: la pornire eFBCTunerManager, apoi la fiecare reconfigurare sec.cpp clear() -> fbc.cpp
+	SetDefaultFBCID): o radacina pe mufa ei (fbc_connect = locul ei in set, fbc_link 0), iar un demodulator legat
+	nefolosit (nimic conectat) pe 0 si 0. Asa o intrare redevenita independenta nu ramane pe cablul vecinului, iar
+	driverul primeste valoarea si cand /proc o arata deja (_scriePereche, asistenta 457322).
+	Fara resetarea intermediara din clear(): o radacina care se leaga mai jos (loopthrough, Unicable legat) si un
+	demodulator legat folosit raman pentru linkNIMs -> ruteaza, deci fiecare primeste o singura pereche de scrieri, cu
+	valoarea finala. Intoarce cate demodulatoare au primit scrierea."""
+	seturi = sorted(set(t.fbc_set_id for t in tunere if t.fbc_set_id is not None and t.fbc_set_id >= 0))
+	scrise = 0
+	for set_id in seturi:
+		grupa = _grupa(tunere, set_id)
+		if grupa is None:
 			continue
-		mod = tuner.config.configMode.value
-		if mod not in ("simple", "advanced", "equal", "satposdepends"):
-			continue
-		if mod == "advanced":
-			avansat = getattr(tuner.config, "advanced", None)
-			conectat = getattr(avansat, "unicableconnected", None)
-			if conectat is not None and conectat.value:
-				continue  # linkNIMs aplica mai jos legatura explicita, fara o resetare intermediara.
-		ruteaza(tunere, tuner.slot, tuner.slot, legat=False)
+		randuri = []
+		for index, tuner in enumerate(grupa):
+			mod = _mod(tuner)
+			if mod is None:
+				continue
+			if tuner.fbc_role == RADACINA:
+				if mod == "loopthrough" or (mod == "advanced" and _unicableLegat(tuner)):
+					continue  # linkNIMs aplica mai jos legatura explicita, fara o resetare intermediara.
+				dorit = (index, 0)
+			elif mod == "nothing":
+				dorit = (0, 0)
+			else:
+				continue  # demodulator legat folosit: neatins, ca pana acum
+			reusit, vechi = _scriePereche(tuner.frontend_id, dorit)
+			if reusit:
+				scrise += 1
+			randuri.append("%d=%d/%d(era %s/%s)%s" % (tuner.frontend_id, dorit[0], dorit[1], vechi[0], vechi[1],
+				"" if reusit else " ESUAT"))
+		if randuri:
+			print("[HdsFbc] setul %d, fbc_connect/fbc_link scrise ca la pornire: %s" % (set_id, " ".join(randuri)))
+	return scrise

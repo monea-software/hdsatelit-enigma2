@@ -13,7 +13,9 @@
 # un browser (cel din casa), nu cheia pentru scripturi.
 #   GET  /api/vpn-furnizor?furnizor=..          starea (fara nume, parola, numar sau chei)
 #   POST /api/vpn-furnizor-tari                 furnizor=, din_nou=0|1: citeste lista tarilor (lucrare)
-#   POST /api/vpn-furnizor-configureaza         corp: furnizor=, tara=, nume=, parola=, numar= (contul numai in corp)
+#   POST /api/vpn-furnizor-configureaza         corp: furnizor=, tara=, nume=, parola=, numar= (contul numai in corp),
+#                                               servere=3|10|0 ("Servere pe tara" la NordVPN si IPVanish, 0 = toate;
+#                                               tinut minte pentru furnizor, ca randul de pe televizor)
 #   POST /api/vpn-furnizor-sterge               furnizor=, confirmat=1: sterge contul acestui furnizor de pe receptor
 #   GET  /vpn-furnizor                          pagina
 #
@@ -134,7 +136,10 @@ def configureaza(request, F=None):
 		_arg(request, "numar", 40))
 	if not bun:
 		return {"result": False, "message": mesaj}
-	return _pornit(F.configureaza(fid, cod, cont), F.textLucrare(F.LUCRARE_CONFIGURARE))
+	# "Servere pe tara": numai valorile din lista (3, 10, 0 = toate), numai la furnizorii care au randul
+	servere = _arg(request, "servere", 3)
+	servere = int(servere) if (fid in F.CU_ALEGERE_SERVERE and servere in [str(n) for n in F.ALEGERI_SERVERE]) else None
+	return _pornit(F.configureaza(fid, cod, cont, servere), F.textLucrare(F.LUCRARE_CONFIGURARE))
 
 
 def sterge(request, F=None):
@@ -223,6 +228,7 @@ ETICHETE = {
 	"PAROLA": N_("Parola"),
 	"NUMAR": N_("Numărul contului"),
 	"TARA": N_("Țara"),
+	"SERVERE": N_("Servere pe țară"),
 	"PUNE": N_("Pune VPN-ul pe receptor"),
 	"DIN_NOU": N_("Citește din nou lista țărilor"),
 	"STERGE": N_("Șterge contul acestui furnizor de pe receptor"),
@@ -246,6 +252,10 @@ TEXTE_JS = {
 	"scrieContul": N_("Scrie întâi contul."),
 	"intrebareSterge": N_("Ștergi de pe receptor contul acestui furnizor?"),
 	"numaiStarea": N_("Cu cheia pentru scripturi pagina arată numai starea."),
+	# "Servere pe tara": aceleasi texte ca randul de pe televizor (Screens/HdsVpnFurnizor.textRandServere)
+	"servereNota": N_("Câte servere ale țării pune receptorul: 3, 10 sau toate. Cele puse înainte rămân."),
+	"inTara": N_("Servere în țara aleasă: %d."),
+	"maiIncap": N_("Mai încap pe receptor: %d."),
 }
 
 
@@ -295,6 +305,10 @@ __STIL_PAGINI__
     <div class="rand" id="randNumar"><label for="numar">__T_NUMAR__</label><input type="text" id="numar" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="24"></div>
     <p class="nota" id="contNota"></p>
     <div class="rand"><label for="tara">__T_TARA__</label><select id="tara"></select></div>
+    <div id="randServere" class="ascuns">
+      <div class="rand"><label for="servere">__T_SERVERE__</label><select id="servere"></select></div>
+      <p class="nota" id="notaServere"></p>
+    </div>
     <div class="butoane">
       <button type="button" class="principal" id="pune">__T_PUNE__</button>
       <button type="button" id="dinNou">__T_DIN_NOU__</button>
@@ -311,7 +325,7 @@ __STIL_PAGINI__
 </main>
 <script>__SCRIPT_COMUN__
 var TXT = __TEXTE_JS__;
-var D = null, ALES = null, ASTEPT = null, VAZUTA = null, CERUTE = {}, APLICA = "";
+var D = null, ALES = null, ASTEPT = null, VAZUTA = null, CERUTE = {}, APLICA = "", SERVERE = {};
 function pune(id, text){ $(id).textContent = text || ""; }
 function optiuni(sel, lista, ales){
   if(document.activeElement === sel){ return; }
@@ -341,6 +355,7 @@ function arata(d){
     var alesTara = $("tara").value;
     tari.unshift(["", d.tari ? TXT.alegeTara : TXT.seCitesc]);
     optiuni($("tara"), tari, tari.some(function(t){ return t[0] === alesTara; }) ? alesTara : "");
+    arataServere(d);
     if(!d.tari && !d.lucreaza && !CERUTE[d.furnizor] && d.asociat){ CERUTE[d.furnizor] = 1; trimite("/api/vpn-furnizor-tari", {furnizor: d.furnizor}); }
   }
   if(d.nivel === "jeton"){ mesaj(TXT.numaiStarea); }
@@ -354,6 +369,26 @@ function arata(d){
     if(noua && (ASTEPT === null || d.ultima.id >= ASTEPT)){ mesaj(d.ultima.mesaj, !d.ultima.reusit); ASTEPT = null; }
   }
   if(d.aplica && d.aplica !== APLICA){ APLICA = d.aplica; mesaj(d.aplica, true); }
+}
+function arataServere(d){
+  var are = !!d.alegeri_servere;
+  $("randServere").classList.toggle("ascuns", !are);
+  if(!are){ return; }
+  // alegerea de pe receptor numai prima data (apoi ramane ce a ales omul aici, pana pune VPN-ul)
+  if(SERVERE[d.furnizor] === undefined){ SERVERE[d.furnizor] = String(d.servere); }
+  optiuni($("servere"), d.alegeri_servere.map(function(x){ return [String(x[0]), x[1]]; }), SERVERE[d.furnizor]);
+  notaServere();
+}
+function notaServere(){
+  if(!D || !D.alegeri_servere){ return; }
+  var text = TXT.servereNota, cod = $("tara").value, n = parseInt($("servere").value, 10);
+  (D.tari || []).forEach(function(t){
+    if(t.cod !== cod || !t.orase){ return; }
+    text += " " + TXT.inTara.replace("%d", t.orase);
+    var dorite = n === 0 ? t.orase : Math.min(n, t.orase);
+    if(typeof D.loc_servere === "number" && D.loc_servere < dorite){ text += " " + TXT.maiIncap.replace("%d", D.loc_servere); }
+  });
+  pune("notaServere", text);
 }
 function citeste(){
   return cerere("/api/vpn-furnizor?furnizor=" + encodeURIComponent(ALES || "")).then(function(d){
@@ -370,12 +405,15 @@ function trimite(cale, campuri){
   }).catch(function(){ mesaj(TXT.nuRaspunde, true); });
 }
 $("furnizor").addEventListener("change", function(){ ALES = this.value; $("tara").value = ""; mesaj(""); citeste(); });
+$("tara").addEventListener("change", notaServere);
+$("servere").addEventListener("change", function(){ if(D){ SERVERE[D.furnizor] = this.value; } notaServere(); });
 $("dinNou").addEventListener("click", function(){ if(ALES){ trimite("/api/vpn-furnizor-tari", {furnizor: ALES, din_nou: "1"}); } });
 $("pune").addEventListener("click", function(){
   if(!D){ return; }
   var tara = $("tara").value;
   if(!tara){ mesaj(TXT.faraTara, true); return; }
   var c = {furnizor: D.furnizor, tara: tara};
+  if(D.alegeri_servere){ c.servere = $("servere").value; }
   if(D.fel_cont === "numar"){ c.numar = $("numar").value.trim(); }
   else { c.nume = $("nume").value.trim(); c.parola = $("parola").value; }
   if(!D.cont && !(c.numar || (c.nume && c.parola))){ mesaj(TXT.scrieContul, true); return; }

@@ -319,4 +319,10 @@ T = {
 	"cpu_mode": u"Режим процесора",
 	"cpu_volt": u"Напруга",
 	"cpu_steps": u"Час за частотами",
+	"bitrate_va": u"Бітрейт відео · аудіо",
+	"br_min": u"мін",
+	"br_max": u"макс",
+	"br_avg": u"сер",
+	"ecm_hop": u"Хопи",
+	"ecm_reader": u"Зчитувач",
 }

@@ -483,7 +483,8 @@ void eRCMapper::noteMouse(int type, int code, int value)
 	}
 	else if (type == EV_KEY)
 	{
-		int bit = code == BTN_LEFT ? 1 : code == BTN_RIGHT ? 2 : code == BTN_MIDDLE ? 4 : 0;
+		int bit = code == BTN_LEFT ? 1 : code == BTN_RIGHT ? 2 : code == BTN_MIDDLE ? 4 :
+			(code == BTN_SIDE || code == BTN_BACK) ? 8 : (code == BTN_EXTRA || code == BTN_FORWARD) ? 16 : 0;
 		if (!bit || value == 2)
 			return;
 		if (value)

@@ -112,6 +112,8 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 		# Components/HdsPazaModel.py)
 		hds_cs=$(head -n 1 "$hds_p/proc/stb/info/chipset" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
 		hds_vm=$(head -n 1 "$hds_p/proc/stb/info/vumodel" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
+		# Dreambox (MDM, DM900/DM920, eMMC): no boxtype and no vumodel; the Dream drivers give the box in /proc/stb/info/model
+		hds_mo=$(head -n 1 "$hds_p/proc/stb/info/model" 2>/dev/null | tr -cd 'A-Za-z0-9_.-' | cut -c1-32)
 		hds_rp=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's#^root=/dev/\(mmcblk[0-9]*p[0-9]*\)$#\1#p' | head -n 1)
 		hds_kp=$(tr ' ' '\n' < "$hds_p/proc/cmdline" 2>/dev/null | sed -n 's#^kernel=/dev/\(mmcblk[0-9]*p[0-9]*\)$#\1#p' | head -n 1)
 		# Multiboot (as Components/HdsPazaModel.py pornireMultiboot): kernel=, root= and rootsubdir= of the slot that
@@ -146,7 +148,7 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 			for hds_f in model gbmodel vumodel; do head -c 64 "$hds_p/proc/stb/info/$hds_f"; echo; done
 			head -c 4096 "$hds_p/proc/stb/info/boxtype"; } 2>/dev/null | tr -c 'A-Za-z0-9' ' ')
 		awk -v cip="$hds_cip" -v bt="$hds_bt" -v parti="$hds_parti" -v hw="$hds_hw" -v et="$hds_et" -v kpo="$hds_kpo" -v rsd="$hds_rsd" \
-			-v nand="$hds_nand" -v cs="$hds_cs" -v vm="$hds_vm" -v brp="$hds_rp" -v bkp="$hds_kp" \
+			-v nand="$hds_nand" -v cs="$hds_cs" -v vm="$hds_vm" -v mo="$hds_mo" -v brp="$hds_rp" -v bkp="$hds_kp" \
 			-v slotroot="$hds_root" -v slotkernel="$hds_kernel" -v slotsub="$hds_sub" -v cl="$hds_cl" -v dt="$hds_dt" \
 			-v mi="$hds_mi" '
 			# modelele cunoscute, in ordine alfabetica (ca HdsPazaModel.MODELE_CUNOSCUTE)
@@ -224,7 +226,9 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				}
 				fam = (R["familie"] == "broadcom")
 				if (fam) {
-					cip = cs; if (bt == "") bt = vm; et = ""
+					# the box type: boxtype, else vumodel (Vu+), else model (Dreambox: the only node its drivers give), the
+					# last one only on eMMC: on NAND boards (Zgemma H9) model is not proof of the box type
+					cip = cs; if (bt == "") bt = vm; if (bt == "" && !nand) bt = mo; et = ""
 					# on eMMC the place comes from /proc/cmdline; on NAND (Vu+ Solo SE) from the /proc/mtd list above
 					if (!nand) {
 						rp = brp; kp = bkp; parti = ""
@@ -419,17 +423,117 @@ fi
 # V20, V30 and V40 (u5/u4, where showiframe is the platform daemon) have none, and there this is one file test.
 # Whether libreader runs is read from /proc by the shell itself (no pidof or pgrep needed). The variables are only for
 # the tests on the PC; init sets none of them.
+# Where the driver has /dev/phi (hi_dvb of the SF8008 family), a libreader counts as running only while it holds /dev/phi
+# open for reading only: the driver keeps its status memory (the audio delay, read and written through /proc/stb) only
+# while that file is held, and does not forget its address when it is closed, so a write of the audio delay without a
+# holder is a kernel oops (seen at the first channel after a restart of the interface: the libreader stopped at the end
+# of the run before was still stuck in its exit, its name still in /proc, and no fresh one was started). A libreader
+# that does not hold /dev/phi is given HDS_LIBREADER_TINE seconds (it may be starting, or ending). Then:
+# - when none of them has a file left open (all in their exit: the stuck case above), they are stopped (one stuck in the
+#   kernel cannot be, it is only waited for, at most HDS_LIBREADER_IESIRE seconds) and a fresh one is started;
+# - when one still has files open (alive: still in the board check, or a board whose driver works another way), it is
+#   left running, as before (no second daemon beside it), and the line libreader_fara_phi goes to HDS_LIBREADER_SEMN.
+# The sign that a fresh one is up is that it holds /dev/phi. When it does not come, the receiver is restarted ONCE (the
+# recovery the board had before, when the first channel ended in a kernel oops and the watchdog restarted it): a line
+# with the time goes to the log of the falls, a mark goes to HDS_LIBREADER_REPORNIT (RAM: once in this boot) and to
+# HDS_LIBREADER_REPORNIT_FLASH (kept across the restart, so a board on which libreader never comes up is not restarted
+# in a loop), then HDS_LIBREADER_REPORNIRE. With either mark there, only the line goes to the log, no restart, the start
+# goes on and the line libreader_fara_phi goes to HDS_LIBREADER_SEMN. The mark kept across the restart is removed as soon
+# as a libreader holds /dev/phi again. Once HDS_LIBREADER_SEMN says libreader cannot come up on this board in this boot,
+# only the name is looked at, as before, so a board that stays in the check does not wait at every restart. These cases
+# also go, with the time, to the log of the falls (HDS_LIBREADER_JURNAL, the one the reports collect). enigma2 itself
+# also writes the delay only while /dev/phi is held (lib/dvb/hdspazaphi.h).
 HDS_LIBREADER=${HDS_LIBREADER:-@bindir@/libreader}
 HDS_LIBREADER_PAUZA=${HDS_LIBREADER_PAUZA:-5}
 HDS_LIBREADER_ASTEAPTA=${HDS_LIBREADER_ASTEAPTA:-60}
 HDS_LIBREADER_SEMN=${HDS_LIBREADER_SEMN:-/tmp/hds-libreader.blocat}
-if [ -x "$HDS_LIBREADER" ]; then
-	hds_lr=""
-	for hds_c in /proc/[0-9]*/comm; do
+HDS_LIBREADER_PROC=${HDS_LIBREADER_PROC:-/proc}
+HDS_LIBREADER_PHI=${HDS_LIBREADER_PHI:-/dev/phi}
+HDS_LIBREADER_TINE=${HDS_LIBREADER_TINE:-20}
+HDS_LIBREADER_IESIRE=${HDS_LIBREADER_IESIRE:-10}
+HDS_LIBREADER_JURNAL=${HDS_LIBREADER_JURNAL:-${HDS_CADERI_JURNAL:-/home/root/logs/hds-caderi.log}}
+HDS_LIBREADER_REPORNIRE=${HDS_LIBREADER_REPORNIRE:-/sbin/reboot}
+HDS_LIBREADER_REPORNIT=${HDS_LIBREADER_REPORNIT:-/tmp/hds-libreader.repornit}
+HDS_LIBREADER_REPORNIT_FLASH=${HDS_LIBREADER_REPORNIT_FLASH:-/home/root/logs/hds-libreader-repornit.semn}
+# one line with the time in the log of the falls (and the same on the console)
+hds_lr_jurnal() {
+	echo "[hds-libreader] $*"
+	mkdir -p "${HDS_LIBREADER_JURNAL%/*}" 2>/dev/null
+	echo "$(date '+%Y-%m-%d %H:%M:%S') libreader: $*" >> "$HDS_LIBREADER_JURNAL" 2>/dev/null
+}
+# the pids of the processes named libreader, a zombie left out (it holds nothing and is only waiting to be reaped)
+hds_lr_pids() {
+	hds_sep=""
+	for hds_c in "$HDS_LIBREADER_PROC"/[0-9]*/comm; do
 		hds_n=""
 		read -r hds_n 2>/dev/null < "$hds_c"
-		[ "$hds_n" = libreader ] && { hds_lr=1; break; }
+		[ "$hds_n" = libreader ] || continue
+		hds_d=${hds_c%/comm}
+		hds_s=""
+		while read -r hds_k hds_v hds_rest; do
+			[ "$hds_k" = "State:" ] && { hds_s=$hds_v; break; }
+		done 2>/dev/null < "$hds_d/status"
+		[ "$hds_s" = Z ] && continue
+		printf '%s%s' "$hds_sep" "${hds_d##*/}"
+		hds_sep=" "
 	done
+}
+# the pid of a libreader that holds /dev/phi open for reading only: a link fd/<n> to it and, in fdinfo/<n>, flags
+# with the access mode O_RDONLY (the last octal digit 0 or 4); nothing when there is none. One in its exit has no fd left.
+hds_lr_cititor() {
+	for hds_p in $(hds_lr_pids); do
+		for hds_f in "$HDS_LIBREADER_PROC/$hds_p"/fd/*; do
+			[ "$(readlink "$hds_f" 2>/dev/null)" = "$HDS_LIBREADER_PHI" ] || continue
+			hds_fl=""
+			while read -r hds_k hds_v hds_rest; do
+				[ "$hds_k" = "flags:" ] && { hds_fl=$hds_v; break; }
+			done 2>/dev/null < "$HDS_LIBREADER_PROC/$hds_p/fdinfo/${hds_f##*/}"
+			case "$hds_fl" in
+				*0|*4) printf '%s' "$hds_p"; return 0 ;;
+			esac
+		done
+	done
+	return 1
+}
+if [ -x "$HDS_LIBREADER" ]; then
+	hds_lr=""
+	if [ -e "$HDS_LIBREADER_PHI" ] && ! grep -q '^libreader_' "$HDS_LIBREADER_SEMN" 2>/dev/null; then
+		hds_t=0
+		while [ -n "$(hds_lr_pids)" ] && [ -z "$(hds_lr_cititor)" ] && [ "$hds_t" -lt "$HDS_LIBREADER_TINE" ]; do
+			sleep 1
+			hds_t=$((hds_t + 1))
+		done
+		if [ -n "$(hds_lr_cititor)" ]; then
+			hds_lr=1
+			[ -e "$HDS_LIBREADER_REPORNIT_FLASH" ] && rm -f "$HDS_LIBREADER_REPORNIT_FLASH"
+		elif [ -n "$(hds_lr_pids)" ]; then
+			hds_vechi=$(hds_lr_pids)
+			hds_vii=""
+			for hds_p in $hds_vechi; do
+				for hds_f in "$HDS_LIBREADER_PROC/$hds_p"/fd/*; do
+					[ -e "$hds_f" ] || [ -L "$hds_f" ] || continue
+					hds_vii="$hds_vii $hds_p"
+					break
+				done
+			done
+			if [ -n "$hds_vii" ]; then
+				hds_lr=1
+				hds_lr_jurnal "pid$hds_vii nu tine $HDS_LIBREADER_PHI dupa ${hds_t} s, dar are fisiere deschise: lasat pornit, ca inainte"
+				echo "libreader_fara_phi=enigma2.sh ${hds_t} viu" >> "$HDS_LIBREADER_SEMN" 2>/dev/null
+			else
+				hds_lr_jurnal "pid $hds_vechi agatat in iesire (niciun fisier deschis, nu tine $HDS_LIBREADER_PHI) dupa ${hds_t} s: oprit, se porneste altul"
+				kill -9 $hds_vechi 2>/dev/null
+				hds_t=0
+				while [ -n "$(hds_lr_pids)" ] && [ "$hds_t" -lt "$HDS_LIBREADER_IESIRE" ]; do
+					sleep 1
+					hds_t=$((hds_t + 1))
+				done
+				[ -n "$(hds_lr_pids)" ] && hds_lr_jurnal "pid $(hds_lr_pids) tot in iesire dupa ${hds_t} s; cel nou porneste langa el"
+			fi
+		fi
+	else
+		[ -n "$(hds_lr_pids)" ] && hds_lr=1
+	fi
 	if [ -z "$hds_lr" ]; then
 		echo "[hds-libreader] libreader was not running: started again (720P_50)"
 		# In the background, waited for at most HDS_LIBREADER_ASTEAPTA seconds: libreader checks the board before it
@@ -445,6 +549,27 @@ if [ -x "$HDS_LIBREADER" ]; then
 		if kill -0 "$hds_lrp" 2>/dev/null; then
 			echo "[hds-libreader] libreader did not become a daemon in ${hds_t} s (board check?): the start goes on"
 			echo "libreader_blocat=enigma2.sh ${hds_t}" > "$HDS_LIBREADER_SEMN" 2>/dev/null
+		elif [ -e "$HDS_LIBREADER_PHI" ]; then
+			# the sign of the fresh daemon: it holds /dev/phi for reading
+			hds_t=0
+			while [ -z "$(hds_lr_cititor)" ] && [ "$hds_t" -lt "$HDS_LIBREADER_TINE" ]; do
+				sleep 1
+				hds_t=$((hds_t + 1))
+			done
+			if [ -n "$(hds_lr_cititor)" ]; then
+				echo "[hds-libreader] libreader $(hds_lr_cititor) holds $HDS_LIBREADER_PHI after ${hds_t} s"
+				[ -e "$HDS_LIBREADER_REPORNIT_FLASH" ] && rm -f "$HDS_LIBREADER_REPORNIT_FLASH"
+			elif [ -e "$HDS_LIBREADER_REPORNIT" ] || [ -e "$HDS_LIBREADER_REPORNIT_FLASH" ]; then
+				hds_lr_jurnal "cel nou nu tine $HDS_LIBREADER_PHI dupa ${hds_t} s, din nou dupa repornirea facuta pentru asta: fara alta repornire, interfata porneste asa (intarzierea sunetului nu se scrie)"
+				echo "libreader_fara_phi=enigma2.sh ${hds_t}" >> "$HDS_LIBREADER_SEMN" 2>/dev/null
+			else
+				hds_lr_jurnal "cel nou nu tine $HDS_LIBREADER_PHI dupa ${hds_t} s: receptorul se reporneste o data"
+				mkdir -p "${HDS_LIBREADER_REPORNIT_FLASH%/*}" 2>/dev/null
+				touch "$HDS_LIBREADER_REPORNIT" "$HDS_LIBREADER_REPORNIT_FLASH" 2>/dev/null
+				sync
+				$HDS_LIBREADER_REPORNIRE
+				exit 0
+			fi
 		fi
 	fi
 	killall -9 showiframe 2>/dev/null && sleep 1
@@ -1156,6 +1281,9 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	esac
 	# the end asked for by hds-watchdog (see above)
 	paznic=""
+	# 0.7.6 (WDG): the reason in the mark (motiv=): blocaj-moale (no heartbeat) or iesire-ceruta (the end asked for did
+	# not finish in 45 s after the main loop stopped, Components/HdsPaznic.iesireInceputa)
+	paznic_motiv=""
 	# validarea semnului paznicului, pentru arhiva cauzei (hds_arhiveaza_cauza): absent, nevalid sau valid
 	paznic_validare=absent
 	if [ -f "$HDS_PAZNIC_OPRIRE" ]; then
@@ -1167,6 +1295,9 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 			if grep -qx "parinte=$$" "$HDS_PAZNIC_OPRIRE" 2>/dev/null && [ -n "$paznic_up" ] &&
 				[ "$paznic_up" -le "$acum" ] && [ $((acum - paznic_up)) -le 300 ]; then
 				paznic=1
+				paznic_motiv=$(sed -n 's/^motiv=//p' "$HDS_PAZNIC_OPRIRE" 2>/dev/null | head -n 1 | tr -cd 'a-z-' | cut -c1-32)
+				# 0.7.7 (UPD): the pid of the enigma2 the watchdog stopped, for the code asked for (block before Fallback)
+				paznic_pid=$(sed -n 's/^pid=//p' "$HDS_PAZNIC_OPRIRE" 2>/dev/null | head -n 1 | tr -cd 0-9 | cut -c1-10)
 				paznic_validare=valid
 				tde_lucrat=" paznic"
 			fi
@@ -1195,7 +1326,13 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	dovada=""
 	cauza_rand=""
 	plugin_extern=""
-	if [ -n "$paznic" ]; then
+	if [ -n "$paznic" ] && [ "$paznic_motiv" = "iesire-ceruta" ]; then
+		# 0.7.6 (WDG): the interface had already stopped at a request (all saved) and the process did not end: asked
+		# for, not a crash; "oprire" keeps it out of the count of safe mode, the pause and the trial of a foreign theme
+		# (Components/HdsSkinuri.py), which would otherwise take the chosen theme away from the person
+		cauza="oprire"
+		cauza_rand="oprire: enigma2 nu a iesit in 45 s dupa repornirea ceruta, oprit de paznic"
+	elif [ -n "$paznic" ]; then
 		cauza="paznic"
 	elif [ "$motiv_fel" = "extern" ]; then
 		# Sent from outside, not a crash of enigma2: the word "extern" in the count (counted like the unexplained ends
@@ -1305,7 +1442,9 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	recente=$((recente + 0))
 	recente_placa=$(awk -v a="$acum" '$1 + 600 >= a && $3 == "placa"' "$HDS_CADERI" 2>/dev/null | wc -l)
 	recente_placa=$((recente_placa + 0))
-	if [ -n "$paznic" ]; then
+	if [ -n "$paznic" ] && [ "$paznic_motiv" = "iesire-ceruta" ]; then
+		tde=", oprire ceruta de paznic: nu a iesit dupa repornirea ceruta"
+	elif [ -n "$paznic" ]; then
 		tde=", oprire ceruta de paznic: interfata nu mai raspundea"
 	elif [ "$tde_cuvant" = "pornit" ]; then
 		tde=", placa 2D folosita"
@@ -1402,6 +1541,27 @@ if [ -f "$HDS_SETARI_SEMN" ]; then
 	fi
 fi
 
+# 0.7.7 (UPD, dorinelu, forum 795 #2668, Vu+ Solo4K): a reboot (or a halt, an update of the front panel, Kodi) asked for
+# from the menu stayed stuck when enigma2 did not end after its main loop (a thread of a plugin keeps Python alive): the
+# watchdog left those codes alone, so the receiver hung until the button. Since hds-watchdog r18 it stops such an enigma2
+# too (after 45 s, motiv=iesire-ceruta); here the code asked for, read from the exit mark of the same process
+# (HDS_PAZNIC_IESIRE, Components/HdsPaznic.iesireInceputa: pid= and cod=), takes the place of 143/137, so the blocks
+# below do what was asked. The count above keeps the end as "oprire" (asked for, not a crash).
+HDS_PAZNIC_IESIRE=${HDS_PAZNIC_IESIRE:-/var/run/hds-paznic.iesire}
+if [ -n "${paznic:-}" ] && [ "${paznic_motiv:-}" = "iesire-ceruta" ] && [ -n "${paznic_pid:-}" ]; then
+	hds_cerut_pid=$(sed -n 's/^pid=//p' "$HDS_PAZNIC_IESIRE" 2>/dev/null | head -n 1 | tr -cd 0-9 | cut -c1-10)
+	hds_cerut=$(sed -n 's/^cod=//p' "$HDS_PAZNIC_IESIRE" 2>/dev/null | head -n 1 | tr -cd 0-9 | cut -c1-3)
+	if [ "$hds_cerut_pid" = "$paznic_pid" ]; then
+		case $hds_cerut in
+			1|2|4|15)
+				echo "$(date '+%Y-%m-%d %H:%M:%S') iesirea ceruta (cod $hds_cerut) se face dupa oprirea paznicului" \
+					>> "$HDS_CADERI_JURNAL"
+				ret=$hds_cerut
+				;;
+		esac
+	fi
+fi
+
 # Fallback (block before the start of enigma2), after the count of unclean ends and both stages of safe mode, so that
 # safe mode stays the first help: an end with another code than 0-4 goes to hds-rezerva.sh with the uptime of the
 # start and the cause found above. It counts the ends before the interface and shows the codes and the address on the
@@ -1439,11 +1599,21 @@ fi
 
 # Receivers with libreader (see the block before showiframe): after every end of enigma2 but halt (code 1) libreader
 # is stopped, as the images made for these receivers do; the next run of this script starts a fresh one before enigma2.
+# After the stop its real end is waited for, at most HDS_LIBREADER_IESIRE seconds: one stuck in its exit keeps its name
+# in /proc, and the start of the next run would take it for a running one (it then stops it again and starts a fresh
+# one, see the block before showiframe).
 # For Kodi (code 15) it stays up when Kodi has its HiSilicon reader (the sound of Kodi goes through the same vendor
 # service; without it the driver can read freed memory); an older Kodi without the reader gets the stop as before.
 HDS_KODI_CITITOR=${HDS_KODI_CITITOR:-/usr/lib/kodi/kodi-hisi-reader}
 if [ "$ret" -ne "1" ] && [ -x "$HDS_LIBREADER" ] && { [ "$ret" -ne "15" ] || [ ! -x "$HDS_KODI_CITITOR" ]; }; then
-	killall -9 libreader 2>/dev/null; sleep "$HDS_LIBREADER_PAUZA"
+	killall -9 libreader 2>/dev/null
+	hds_t=0
+	while [ -n "$(hds_lr_pids 2>/dev/null)" ] && [ "$hds_t" -lt "$HDS_LIBREADER_IESIRE" ]; do
+		sleep 1
+		hds_t=$((hds_t + 1))
+	done
+	[ -n "$(hds_lr_pids 2>/dev/null)" ] && hds_lr_jurnal "pid $(hds_lr_pids) tot in iesire la ${hds_t} s dupa oprire"
+	sleep "$HDS_LIBREADER_PAUZA"
 fi
 
 # Kodi (code 15 = QUIT_KODI in Screens/Standby.py; asked by the Kodi card of the Applications menu, Components/

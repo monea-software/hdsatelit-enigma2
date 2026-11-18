@@ -1,0 +1,66 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# hds-transcodare: portul transcodarii spre telefon (8002, transtreamproxy, pe Vu+ cu codor). Il tine
+# `busybox inetd -f /etc/hds-transcodare.conf` (imaginea nu are inetd-ul sistemului), ca Telnet-ul din hds-ssh.
+# Porneste numai cand placa are codor (/proc/stb/encoder/0 sau /dev/bcm_enc0) si transtreamproxy e pus.
+# restart: dupa ce pluginul TransCodingSetup schimba portul in /etc/hds-transcodare.conf.
+# Variabilele sunt numai pentru probele de pe PC.
+
+CONF=${HDS_TRC_CONF:-/etc/hds-transcodare.conf}
+PID=${HDS_TRC_PID:-/var/run/hds-transcodare.pid}
+PROXY=${HDS_TRC_PROXY:-/usr/bin/transtreamproxy}
+CODOR=${HDS_TRC_CODOR:-/proc/stb/encoder/0}
+CODOR_DEV=${HDS_TRC_CODOR_DEV:-/dev/bcm_enc0}
+
+ruleaza() {
+	[ -f "$PID" ] && kill -0 "$(cat "$PID" 2>/dev/null)" 2>/dev/null
+}
+
+porneste() {
+	[ -f "$CONF" ] && [ -x "$PROXY" ] && [ -x /usr/sbin/hds-transcodare-poarta ] || return 0
+	[ -d "$CODOR" ] || [ -e "$CODOR_DEV" ] || return 0
+	ruleaza && return 0
+	# in prim-plan (-f), pus in fundal de noi: pidul e chiar al lui
+	busybox inetd -f "$CONF" < /dev/null > /dev/null 2>&1 &
+	echo $! > "$PID"
+}
+
+opreste() {
+	if ruleaza; then
+		kill "$(cat "$PID")" 2>/dev/null
+		i=0
+		while [ $i -lt 5 ] && ruleaza; do
+			sleep 1
+			i=$((i + 1))
+		done
+	fi
+	rm -f "$PID"
+}
+
+case "$1" in
+start|"")
+	porneste
+	;;
+stop)
+	opreste
+	;;
+restart|force-reload|reload)
+	opreste
+	porneste
+	;;
+status)
+	if ruleaza; then
+		echo "hds-transcodare: pornit"
+	else
+		echo "hds-transcodare: oprit"
+		exit 3
+	fi
+	;;
+*)
+	echo "folosire: $0 start|stop|restart|status" >&2
+	exit 1
+	;;
+esac
+exit 0

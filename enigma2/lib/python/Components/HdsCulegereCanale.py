@@ -29,7 +29,8 @@ CE SE CULEGE (un singur ascultator pe session.nav.event; valorile intra in baza 
 
 CEASURILE BAZEI (Pornire):
   INCARCARE_MS dupa pornirea culegerii (din lista de canale, dupa primul ecran): baza().incarca(), cu versiunea
-    imaginii pentru antet;
+    imaginii pentru antet; fisierul il citeste insa un fir pornit chiar la pornirea culegerii (baza().preincarca()),
+    ca nici incarca(), nici primul ecran care cere baza, sa nu-l mai citeasca pe firul interfetei;
   la fiecare TIC_MS: reincearca() (numai din numai-citire; baza asteapta singura intre incercari) si salveaza(PRAG)
     (scrie numai o baza murdara, dupa prag si sub bugetul zilei);
   MIGRARE_MS: migrarea din fisierele de dinainte (HdsBazaCanale.Migrare), numai dupa o pornire curata (nicio oprire
@@ -38,12 +39,17 @@ CEASURILE BAZEI (Pornire):
     fiecare tic. Migrarea merge pe bucati: cel mult FELIE_MIGRARE_S de lucru pe o chemare a ceasului, apoi
     PAUZA_MIGRARE_MS pentru interfata;
   dupa migrare: unirea bazei de pornire (Components/HdsBazaPornire.Unire), tot pe felii, cu aceleasi conditii (pornire
-    curata, nicio inregistrare); se reia la tic dupa o descarcare noua de pe stb.hdsatelit.com, cand lamedb-ul s-a
+    curata, nicio inregistrare), cu PAUZA_UNIRE_MS intre felii; citirea lamedb-ului si harta cheilor de rezerva merg pe
+    firul unirii (BP.fir_unire), iar cat le asteapta, ceasul revine dupa ASTEPTARE_FIR_UNIRE_MS; se reia la tic dupa o descarcare noua de pe stb.hdsatelit.com, cand lamedb-ul s-a
     schimbat (o scanare) sau cand a asteptat ceasul ori o baza care se poate scrie;
   la fiecare tic, descarcarea zilnica a bazei de pe stb (HdsBazaPornire.Zilnic), numai cu setarea "Ia baza de canale de
     pe stb.hdsatelit.com" pornita (oprita din fabrica);
-  standby: salveaza(STANDBY, sincron=True), prin config.misc.standbyCounter, cu initial_call=False (altfel s-ar scrie
-    la fiecare pornire a interfetei).
+  standby: salveaza(STANDBY) pe firul de scriere al bazei, prin config.misc.standbyCounter, cu initial_call=False
+    (altfel s-ar scrie la fiecare pornire a interfetei). Pe 0.7.5 scrierea era sincrona, pe firul interfetei: fsync-ul
+    tinea intrarea in standby 7-9 s (raportul paznicului 2205, SF8008), iar POWER apasat atunci nu raspundea. Scrierea
+    ramane atomica (.nou, fsync, inlocuire); cat firul de scriere e ocupat cu alta scriere, se reia la REIA_STANDBY_MS
+    (cel mult REIA_STANDBY_ORI ori), pana porneste sau baza e curata. Standby-ul adanc si repornirea trec prin
+    la_oprire(), care asteapta firul (pana la ASTEPTARE_OPRIRE_S) si scrie sincron ce a ramas.
   Oprirea interfetei: la_oprire() din mytest.py. Resetarea din fabrica si flash-ul: opreste_scrierile(); inaintea
   copiei de dinaintea flash-ului: inainte_de_copie().
 
@@ -55,6 +61,7 @@ from __future__ import absolute_import
 
 import errno
 import os
+import re
 import time
 
 try:
@@ -80,10 +87,20 @@ VIDEO_MS = 1500
 HBBTV_MS = 500
 VIDEO_PORNIRE_MS = 6000
 INCARCARE_MS = 2000
+# scrierea de la standby, cand firul de scriere al bazei e ocupat cu alta scriere: o noua incercare la atatea ms
+REIA_STANDBY_MS = 1000
+REIA_STANDBY_ORI = 60
+# la oprirea interfetei, cat se asteapta scrierea din fundal inca in lucru (apoi scrierea sincrona a ce a ramas)
+ASTEPTARE_OPRIRE_S = 15.0
 TIC_MS = 60000
 MIGRARE_MS = 90000
 FELIE_MIGRARE_S = 0.05
 PAUZA_MIGRARE_MS = 20
+# unirea bazei de pornire cat firul ei citeste lamedb-ul sau face harta cheilor de rezerva: se uita din nou la atatea ms
+ASTEPTARE_FIR_UNIRE_MS = 250
+# unirea bazei de pornire, intre doua felii (FELIE_MIGRARE_S de lucru): firul interfetei ramane liber ~2/3 din timp (cu
+# 20 ms, ca la migrare, statea ocupat ~75% din timp cat tinea unirea, iar cererile web mergeau cu 1-1,5 s)
+PAUZA_UNIRE_MS = 100
 
 CALE_CADERI = "/tmp/hds-enigma2.caderi"
 CALE_UPTIME = "/proc/uptime"
@@ -298,6 +315,122 @@ def numara_rezerve_lamedb(text):
 	return rez
 
 
+# un camp hex al randului de serviciu, cum il citeste nucleul (sscanf %x: spatii, semn, 0x, zerouri in fata, orice litere)
+_SPATII = r"[ \t\r\f\v]*"
+
+
+def _cifre(v):
+	return "".join("[%s%s]" % (c, c.upper()) if c.isalpha() else c for c in "%x" % v)
+
+
+def _camp_hex(v):
+	return _SPATII + r"[+-]?(?:0[xX])?0*" + _cifre(v) + _SPATII
+
+
+def _rand_octeti(date, poz):
+	"""Randul care cuprinde pozitia poz, ca text (acelasi ca in text_lista(date).split("\n"): decodarea nu trece de \n)."""
+	a = date.rfind(b"\n", 0, poz) + 1
+	b = date.find(b"\n", poz)
+	return text_lista(date[a:b if b >= 0 else len(date)])
+
+
+def _sectiune_servicii(date):
+	"""Sectiunea services a unui lamedb (octeti), ca in _servicii_lamedb: (inceputul randului "services", numarul lui,
+	numarul randului "end" care o inchide sau None); None fara randul "services". Randurile se cauta dupa octetii lor
+	(un rand cu strip() == "services" ii cuprinde), apoi se verifica pe text."""
+	poz = 0
+	while True:
+		i = date.find(b"services", poz)
+		if i < 0:
+			return None
+		if _rand_octeti(date, i).strip() == "services":
+			break
+		poz = i + 1
+	a = date.rfind(b"\n", 0, i) + 1
+	l0 = date.count(b"\n", 0, a)
+	poz, linie = a, l0
+	urm = date.find(b"\n", i)
+	cauta = urm + 1 if urm >= 0 else len(date)
+	while True:
+		e = date.find(b"end", cauta)
+		if e < 0:
+			return a, l0, None
+		inceput = date.rfind(b"\n", 0, e) + 1
+		linie += date.count(b"\n", poz, inceput)
+		poz = inceput
+		if (linie - l0 - 1) % 3 == 0 and _rand_octeti(date, e).strip() == "end":
+			return a, l0, linie
+		urm = date.find(b"\n", e)
+		if urm < 0:
+			return a, l0, None
+		cauta = urm + 1
+
+
+def valoare_rezerva_lamedb(date, rezerva):
+	"""harta_rezerve_lamedb(text_lista(date)).get(rezerva), socotita numai pentru aceasta cheie de rezerva, fara toata
+	harta: o expresie (in C, pe octeti) alege randurile cu acelasi sid, tsid si onid, scrise cum le citeste nucleul, iar
+	fiecare e verificat ca in _servicii_lamedb (locul in sectiunea services, strip, int(x, 16), cheie_rezerva). Randurile
+	pe care int() le-ar primi, dar nucleul nu le citeste (_ intre cifre, cifre sau spatii Unicode), nu se aleg."""
+	try:
+		parti, _poz = rezerva.split("@", 1)
+		onid, tsid, sid = [int(x, 16) for x in parti.split(":")]
+	except (ValueError, AttributeError):
+		return None
+	sectiune = _sectiune_servicii(date)
+	if sectiune is None:
+		return None
+	a, l0, capat = sectiune
+	model = re.compile(("\n" + _camp_hex(sid) + ":[^:\n]*:" + _camp_hex(tsid) + ":" + _camp_hex(onid) +
+		"(?=[:\n]|$)").encode("ascii"))
+	n = 0
+	ns = None
+	poz, linie = a, l0
+	for c in model.finditer(date, a):
+		inceput = c.start() + 1
+		linie += date.count(b"\n", poz, inceput)
+		poz = inceput
+		if (linie - l0 - 1) % 3 or (capat is not None and linie >= capat):
+			continue
+		p = _rand_octeti(date, inceput).strip().split(":")
+		if len(p) < 4:
+			continue
+		try:
+			v = [int(x, 16) for x in p[:4]]
+		except ValueError:
+			continue
+		if B.cheie_rezerva("%x:%x:%x:%x" % tuple(v)) != rezerva:
+			continue
+		n += 1
+		ns = v[1]
+	if not n:
+		return None
+	return ns if n == 1 else -n
+
+
+def citeste_harta_lamedb(cale, incercari=3, pauza=1.0, dormi=None):
+	"""Pe un fir (RezerveLamedb cu fir): lamedb-ul si harta lui. Nucleul scrie lamedb pe loc, deci se primeste numai o
+	citire cu aceeasi semnatura (mtime, marime, inode) pe descriptor inainte si dupa si pe cale, si cu randul "end" al
+	serviciilor (fara el numai la ultima incercare, ca pe firul interfetei). -> ((mtime, marime), harta) sau None."""
+	dormi = dormi or time.sleep
+	for i in range(incercari):
+		try:
+			with open(cale, "rb") as f:
+				st1 = os.fstat(f.fileno())
+				date = f.read(MAX_LAMEDB)
+				st2 = os.fstat(f.fileno())
+			st3 = os.stat(cale)
+		except (IOError, OSError):
+			return None
+		s1, s2, s3 = [(x.st_mtime, x.st_size, x.st_ino) for x in (st1, st2, st3)]
+		if s1 == s2 == s3:
+			sectiune = _sectiune_servicii(date)
+			if (sectiune is not None and sectiune[2] is not None) or i == incercari - 1:
+				return (st1.st_mtime, st1.st_size), harta_rezerve_lamedb(text_lista(date))
+		if i < incercari - 1:
+			dormi(pauza)
+	return None
+
+
 def harta_rezerve_lamedb(text):
 	"""{cheie de rezerva: namespace-ul singurului serviciu cu ea (>= 0), sau minus numarul serviciilor cand sunt mai
 	multe}: un intreg pe cheie, nu cheia intreaga, ca harta sa ramana mica."""
@@ -313,13 +446,19 @@ def harta_rezerve_lamedb(text):
 
 class RezerveLamedb(object):
 	"""Serviciile din lamedb pe o cheie de rezerva: cate sunt si, cand e unul singur, care e. lamedb se citeste numai la
-	cerere (dupa o rescanare, cand baza are un rand sub alta cheie) si din nou numai cand s-a schimbat."""
+	cerere (dupa o rescanare, cand baza are un rand sub alta cheie) si din nou numai cand s-a schimbat.
+	fir: functie(lucru) -> firul pornit; atunci harta lamedb-ului se face pe fir (citeste_harta_lamedb), iar pana e gata
+	raspunsul pentru o cheie se cauta numai pentru ea (valoare_rezerva_lamedb, acelasi raspuns): pe 0.7.6 o nota la zap
+	tinea firul interfetei cat citirea intregului lamedb. fir None: ca inainte."""
 
-	def __init__(self, cale=os.path.join(B.DOSAR_VECHI, "lamedb")):
+	def __init__(self, cale=os.path.join(B.DOSAR_VECHI, "lamedb"), fir=None):
 		self.cale = cale
 		self._semn = None
 		self._harta = {}
 		self.citiri = 0
+		self.cautari = 0
+		self._fir = fir
+		self._lucru = None
 
 	def _la_zi(self):
 		try:
@@ -338,15 +477,66 @@ class RezerveLamedb(object):
 			self._semn = semn
 		return True
 
+	def _valoare(self, rezerva):
+		"""Harta lamedb-ului de acum pe cheia de rezerva (namespace-ul, minus numarul serviciilor, sau None)."""
+		if self._fir is None:
+			return self._harta.get(rezerva) if self._la_zi() else None
+		try:
+			st = os.stat(self.cale)
+		except (IOError, OSError):
+			return None
+		semn = (st.st_mtime, st.st_size)
+		if semn == self._semn:
+			return self._harta.get(rezerva)
+		l = self._lucru
+		if l is not None and not (l.get("fir") is not None and l["fir"].is_alive()):
+			self._lucru = None
+			rez = l.get("rez")
+			if rez is not None and rez[0] == semn:
+				self.citiri += 1
+				self._semn, self._harta = rez
+				return self._harta.get(rezerva)
+			l = None
+		# intai raspunsul (firul nou ar lua lacatul Python chiar cat se cauta), apoi firul care face harta
+		raspuns = self._o_cheie(rezerva)
+		if l is None:
+			self._porneste()
+		return raspuns
+
+	def _porneste(self):
+		l = {}
+
+		def lucreaza():
+			try:
+				l["rez"] = citeste_harta_lamedb(self.cale)
+			except BaseException as e:
+				l["eroare"] = "%s: %s" % (type(e).__name__, e)
+		self._lucru = l
+		try:
+			l["fir"] = self._fir(lucreaza)
+		except Exception as e:
+			l["eroare"] = "firul nu a pornit: %s" % e
+
+	def _o_cheie(self, rezerva):
+		"""Raspunsul pentru o singura cheie, cat harta se face pe fir: lamedb citit pe firul interfetei (citirea e in C,
+		iar nucleul il scrie tot de pe firul interfetei, deci nu se amesteca), fara harta lui."""
+		try:
+			with open(self.cale, "rb") as f:
+				date = f.read(MAX_LAMEDB)
+		except (IOError, OSError):
+			return None
+		self.cautari += 1
+		return valoare_rezerva_lamedb(date, rezerva)
+
 	def numar(self, rezerva):
-		e = self._harta.get(rezerva) if self._la_zi() else None
+		e = self._valoare(rezerva)
 		if e is None:
 			return 0
 		return 1 if e >= 0 else -e
 
 	def singurul(self, rezerva):
 		"""Cheia singurului serviciu din lamedb pe cheia de rezerva, sau None (niciunul sau mai multe)."""
-		e = self._harta.get(rezerva) if self._la_zi() else None
+		e = self._valoare(rezerva)
 		if e is None or e < 0:
 			return None
 		try:
@@ -379,7 +569,9 @@ class Culegere(P.Culegator):
 	imaginea da. Scrierea pe disc e a bazei (Pornire), nu a culegatorului."""
 
 	def __init__(self, nav, b=None, fabrica_ceas=None, cititor=None, evenimente=None, info_const=None, ceasornic=None,
-			mod=None, rezerve=None):
+			mod=None, rezerve=None, fir=None):
+		"""fir: functie(lucru) -> firul pornit, pentru harta lamedb-ului (RezerveLamedb, in _cheia); None = pe loc, ca
+		inainte."""
 		if info_const is None:
 			from enigma import iServiceInformation as info_const
 		self.b = b if b is not None else B.baza()
@@ -398,7 +590,8 @@ class Culegere(P.Culegator):
 			self.urmaritor_semnal = None
 			self._ev_video = tuple(x for x in (getattr(self.ev, n, None) for n in ("evVideoSizeChanged",
 				"evVideoProgressiveChanged", "evVideoFramerateChanged", "evVideoGammaChanged")) if x is not None)
-			self.rezerve = rezerve if rezerve is not None else RezerveLamedb()
+			self._fir = fir
+			self.rezerve = rezerve if rezerve is not None else RezerveLamedb(fir=fir)
 			self._chei = set()
 			self.note = 0
 		except Exception:
@@ -480,6 +673,8 @@ class Culegere(P.Culegator):
 			return
 		self._chei.add(k)
 		try:
+			# fara harta cheilor de rezerva (inainte de unirea bazei de pornire), candidat_rezerva cauta numai cheia asta,
+			# iar lamedb-ul se citeste intreg pe fir (RezerveLamedb cu fir): nimic greu pe firul interfetei
 			if self.b.contine(k) or self.b.candidat_rezerva(k) is None:
 				return
 			r = B.cheie_rezerva(k)
@@ -607,6 +802,14 @@ class Pornire(object):
 		self.ceasTic.callback.append(self._tic)
 		self.ceasUnire = fabrica()
 		self.ceasUnire.callback.append(self._laUnire)
+		self.ceasStandby = fabrica()
+		self.ceasStandby.callback.append(self._reiaStandby)
+		self._standbyReluari = 0
+		# fisierul bazei se citeste de acum pe un fir (HdsBazaCanale.preincarca); incarca() de la INCARCARE_MS il asteapta
+		try:
+			self.b.preincarca()
+		except Exception as e:
+			_jurnal("citirea pe fir: %s" % e)
 		self.ceasIncarcare.start(INCARCARE_MS, True)
 		self.ceasMigrare.start(MIGRARE_MS, True)
 		self.ceasTic.start(TIC_MS, False)
@@ -625,10 +828,24 @@ class Pornire(object):
 			_jurnal("incarcarea: %s" % e)
 
 	def _laStandby(self, *argumente):
+		"""Intrarea in standby: scrierea bazei pe firul ei, fara asteptare pe firul interfetei (vezi antetul)."""
+		self._standbyReluari = 0
+		self._scrieLaStandby()
+
+	def _scrieLaStandby(self):
 		try:
-			self.b.salveaza(B.STANDBY, sincron=True)
+			if self.b.salveaza(B.STANDBY):
+				return
+			# salveaza(STANDBY) a scos deja baza din AMANAT; murdara si cu scrierile permise inseamna ca firul de scriere
+			# e ocupat cu alta scriere: se incearca din nou putin mai tarziu, nu se asteapta aici
+			if self.b.murdar() and self.b.stare_scriere()[0] == B.SCRIE and self._standbyReluari < REIA_STANDBY_ORI:
+				self._standbyReluari += 1
+				self.ceasStandby.start(REIA_STANDBY_MS, True)
 		except Exception as e:
 			_jurnal("scrierea la standby: %s" % e)
+
+	def _reiaStandby(self):
+		self._scrieLaStandby()
 
 	def _permisa(self):
 		if not self.curata():
@@ -698,7 +915,10 @@ class Pornire(object):
 	# ------------------------------------------------ baza de pornire (Components/HdsBazaPornire.py)
 
 	def _unire_implicita(self, b):
-		return BP.Unire(b, cale_stb=os.path.join(self.dosar, os.path.basename(BP.CALE_STB)), cale_lamedb=self.cale_lamedb)
+		# citirea lamedb-ului si harta cheilor de rezerva pe firul unirii, nu pe al interfetei (3-10 s pe 0.7.6), iar
+		# pasii taiati dupa felie (o bucata de 200 de randuri tinea 0,5 s pe procesorul receptorului, 1,5-3 s in enigma2)
+		return BP.Unire(b, cale_stb=os.path.join(self.dosar, os.path.basename(BP.CALE_STB)), cale_lamedb=self.cale_lamedb,
+			fir=BP.fir_unire, felie_s=FELIE_MIGRARE_S)
 
 	def _incearcaUnirea(self):
 		if not self._permisa():
@@ -718,12 +938,17 @@ class Pornire(object):
 		self._pasUnire()
 
 	def _pasUnire(self):
-		"""Ca migrarea: cat tine o felie (FELIE_MIGRARE_S), apoi ceasul unirii o reia dupa PAUZA_MIGRARE_MS."""
+		"""Ca migrarea: cat tine o felie (FELIE_MIGRARE_S; pasii unirii se taie si ei dupa ea), apoi ceasul unirii o reia
+		dupa PAUZA_UNIRE_MS. Cand unirea asteapta firul ei (asteapta), ceasul revine dupa ASTEPTARE_FIR_UNIRE_MS, fara sa
+		se invarta pe firul interfetei."""
 		inceput = self._cronometru()
 		try:
 			while self._unirePasi.pas():
+				if getattr(self._unirePasi, "asteapta", False):
+					self.ceasUnire.start(ASTEPTARE_FIR_UNIRE_MS, True)
+					return
 				if self._cronometru() - inceput >= FELIE_MIGRARE_S:
-					self.ceasUnire.start(PAUZA_MIGRARE_MS, True)
+					self.ceasUnire.start(PAUZA_UNIRE_MS, True)
 					return
 		except Exception as e:
 			_jurnal("unirea bazei de pornire: %s" % e)
@@ -814,7 +1039,7 @@ def porneste(session):
 		# culegerea de dinainte (aleasa de apelant) noteaza prin adaptoare, cu accesul notat din afisaj ca inainte
 		if _STARE["pornire"] is None:
 			_STARE["pornire"] = Pornire(b, session.nav)
-		_STARE["culegere"] = Culegere(session.nav, b)
+		_STARE["culegere"] = Culegere(session.nav, b, fir=BP.fir_unire)
 		A.lasa_notarea_culegerii()
 		H = _hbbtv()
 		if H is not None:
@@ -840,7 +1065,9 @@ def la_oprire():
 	"""Oprirea sau repornirea interfetei (mytest.py, dupa runReactor): scrierea sincrona numai daca baza e murdara."""
 	_istoric("la_oprire")
 	b = B.baza_existenta()
-	return b.la_oprire() if b is not None else False
+	# scrierea de la standby merge acum pe fir si poate dura cat fsync-ul de pe flash (7-9 s masurat pe SF8008): oprirea
+	# o asteapta pana la ASTEPTARE_OPRIRE_S, ca o oprire ceruta imediat dupa standby sa nu sara ce s-a aflat inainte
+	return b.la_oprire(ASTEPTARE_OPRIRE_S) if b is not None else False
 
 
 def _istoric(nume):

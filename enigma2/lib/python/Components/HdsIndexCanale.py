@@ -33,6 +33,7 @@ Nimic din enigma nu se importa aici: modulul se incarca si pe PC, in teste
 import json
 import os
 import re
+import time
 import unicodedata
 
 try:
@@ -63,6 +64,67 @@ def _(text):
 GRUPURI = ('tip', 'rez', 'acces', 'sistem', 'cod', 'poz', 'are', 'fsunet', 'msunet', 'psunet', 'lsunet', 'lsub')
 # cate canale trec intre doua opriri ale lucrului in bucati (Index.aplica_treptat): pe PC sub 1 ms, pe receptor 5-15 ms
 PAS_TREPTAT = 250
+
+
+# 0.7.7 (EPG3): pauzele firului care face indexul dupa pornire (Screens/HdsCautareCanale._Pregatire, firul HdsCautareIndex).
+# Pe un Viper 4K (0.7.6, Python 3.14) cu 39.141 de canale (30.627 din buchetele IPTV) construieste tinea un nucleu 11-13 s la
+# 58-72 s dupa pornire; firul enigma2 isi lua lacatul Python inapoi abia la intervalul de comutare, dupa fiecare apel care il
+# da (un poll, un fisier citit), iar la 58-100 s dupa pornire o cerere web astepta pana la 2,2-3,4 s (cel mai lung gol, in
+# toate cele 6 masurari fara pauze, pornit la ~70 s, spre sfarsitul indexului). Ritm: dupa ~PAS_LUCRU_S de lucru firul doarme
+# jumatate din cat a lucrat (cel mult PAUZA_MAX_S); fara pauze cand cineva asteapta indexul (ecranul cautarii deschis,
+# pagina /cautare): atunci merge cat poate de repede. Cu pauze, pe acelasi receptor, cel mai lung gol 0,2-1,5 s (3 masurari);
+# mediana si p90 ale cererilor nu s-au schimbat masurabil, iar indexul e gata la 82-89 s in loc de 72.
+# Bucatile sunt mai lungi decat la firul HdsIptvEpg (0,25 s): guvernatorul de frecventa (interactive, citeste sarcina la
+# 200 ms, tinta 90%) cobora ceasul la 400 MHz cu pauze dese, iar acelasi lucru lua de 3 ori mai mult procesor (proces separat,
+# lista reala: fara pauze 10,8 s; 0,25 s / 0,25 s: 66-68 s; 1 s / 0,5 s: 29 s; 2 s / 1 s: 20 s).
+PAS_LUCRU_S = 2.0
+PAUZA_RAPORT = 0.5
+PAUZA_MAX_S = 1.0
+PAS_RITM = 32          # chemari intre doua citiri ale ceasului (un canal din buchet costa ~0,25 ms pe receptor)
+
+
+class Ritm(object):
+	"""Chemat des din buclele lui construieste (ritm()), pe firul indexului; doarme cand lucrul adunat de la pauza de
+	dinainte trece de PAS_LUCRU_S. cu_pauze(): False cat cineva asteapta indexul (lucrul merge atunci fara pauze).
+	dormi, ceas: time.sleep si time.monotonic, inlocuite in probe. pauze: somnul adunat."""
+
+	def __init__(self, cu_pauze=None, dormi=None, ceas=None):
+		self.cu_pauze = cu_pauze
+		self.dormi = dormi or time.sleep
+		self.ceas = ceas or time.monotonic
+		self.pauze = 0.0
+		self.n = 0
+		self.t = self.ceas()
+
+	def __call__(self):
+		self.n += 1
+		if self.n < PAS_RITM:
+			return
+		self.n = 0
+		acum = self.ceas()
+		lucru = acum - self.t
+		if lucru < PAS_LUCRU_S:
+			return
+		if self.cu_pauze is not None and not self.cu_pauze():
+			self.t = acum
+			return
+		p = min(PAUZA_MAX_S, lucru * PAUZA_RAPORT)
+		self.dormi(p)
+		self.pauze += p
+		self.t = self.ceas()
+
+
+def _cu_ritm(elemente, ritm):
+	"""Elementele, cu ritm() chemat la fiecare; fara ritm, elementele asa cum sunt."""
+	if ritm is None:
+		return elemente
+	return _cu_ritm_gen(elemente, ritm)
+
+
+def _cu_ritm_gen(elemente, ritm):
+	for x in elemente:
+		ritm()
+		yield x
 # randurile pistelor (HdsPisteCanale): se arata de la o singura optiune (un canal fara piste stiute nu intra, deci si o
 # optiune singura filtreaza); celelalte randuri cer cel putin doua
 GRUPURI_PISTE = ('are', 'fsunet', 'msunet', 'psunet', 'lsunet', 'lsub')
@@ -317,6 +379,26 @@ _TABEL[ord(u'œ')] = 'oe'
 _NU_LITERA = re.compile(r'[\W_]+', re.UNICODE)
 
 
+class _TabelSimplu(dict):
+	"""Tabelul lui str.translate pentru _simplu, completat la prima vedere a fiecarei litere: semnele combinate (categoria
+	M*) se scot, literele din _TABEL se inlocuiesc, restul raman (codul literei). Acelasi rezultat ca filtrul semnelor urmat
+	de translate(_TABEL) (cheile lui _TABEL sunt litere, nu semne, iar inlocuirile sunt ASCII), fara un apel Python pentru
+	fiecare litera a fiecarui nume (0.7.7, EPG3: pe receptor ~11% din firul indexului la o lista IPTV mare)."""
+	MAX = 20000
+
+	def __missing__(self, cod):
+		if unicodedata.category(chr(cod)).startswith('M'):
+			v = None
+		else:
+			v = _TABEL.get(cod, cod)
+		if len(self) < self.MAX:
+			self[cod] = v
+		return v
+
+
+_TABEL_SIMPLU = _TabelSimplu()
+
+
 def _simplu(text):
 	t = (text or '').lower()
 	# un nume numai cu litere ASCII (cele mai multe) nu are ce inlocui: translate e partea cea mai scumpa la citirea
@@ -325,7 +407,7 @@ def _simplu(text):
 		return t
 	# Compatibility forms and vowel marks must not split Arabic words.
 	t = unicodedata.normalize('NFKC', t)
-	return ''.join(c for c in t if not unicodedata.category(c).startswith('M')).translate(_TABEL)
+	return t.translate(_TABEL_SIMPLU)
 
 
 def _ascii(t):
@@ -407,9 +489,29 @@ _ARE_TTX = frozenset(('ttx',))
 CUVINTE_FEL = {'dab': ('dab', 'dabplus'), 't2': ('dvbt2', 't2'), 'iptv': ('iptv',)}
 
 
+# 0.7.7 (EPG3): ansamblul unui canal IPTV e grupa lui (#NAME din subbouquet.hdsiptv_*), aceeasi pentru sute de canale, iar
+# cuvinte_flux o normaliza din nou la fiecare (pe receptor ~18% din firul indexului cu 30.627 de canale IPTV in 751 de
+# grupe). Rezultatul (un tuplu, deci nu se poate schimba) se tine minte, cel mult MAX_CUVINTE_FLUX perechi.
+_CUVINTE_FLUX = {}
+MAX_CUVINTE_FLUX = 4096
+
+
 def cuvinte_flux(tip, ansamblu=''):
 	"""Textele in plus in care se cauta un post DAB/T2: felul, apoi ansamblul intreg si de la fiecare cuvant al lui
 	(„DR Deutschland” se gaseste si cu „deutsch”). Normalizate ca numele. () pentru restul canalelor."""
+	if not ansamblu or not isinstance(ansamblu, str):
+		return _cuvinte_flux(tip, ansamblu)
+	cheie = (tip, ansamblu)
+	rez = _CUVINTE_FLUX.get(cheie)
+	if rez is None:
+		rez = _cuvinte_flux(tip, ansamblu)
+		if len(_CUVINTE_FLUX) >= MAX_CUVINTE_FLUX:
+			_CUVINTE_FLUX.clear()
+		_CUVINTE_FLUX[cheie] = rez
+	return rez
+
+
+def _cuvinte_flux(tip, ansamblu):
 	rez = list(CUVINTE_FEL.get(tip, ()))
 	if ansamblu:
 		cuv = cuvinte(ansamblu)
@@ -623,9 +725,10 @@ def text_transponder(date):
 	return ''
 
 
-def citeste_lamedb(text):
-	"""Textul lamedb -> lista de Canal. Un fisier care nu se intelege da lista goala (nu ridica)."""
-	text = text_lista(text)
+def citeste_lamedb(text, ritm=None):
+	"""Textul lamedb -> lista de Canal. Un fisier care nu se intelege da lista goala (nu ridica). ritm: Ritm, chemat la
+	fiecare transponder si serviciu (pauzele firului indexului)."""
+	text = _text_lista_repede(text)
 	randuri = text.split('\n')
 	if not randuri or not randuri[0].startswith('eDVB services /'):
 		return []
@@ -636,6 +739,8 @@ def citeste_lamedb(text):
 	i += 1
 	transpondere, frecvente = {}, {}
 	while i < n and randuri[i].strip() != 'end':
+		if ritm is not None:
+			ritm()
 		cheie = randuri[i].strip().lower()
 		date = randuri[i + 1].strip() if i + 1 < n else ''
 		poz = None
@@ -664,6 +769,8 @@ def citeste_lamedb(text):
 	i += 1
 	canale = []
 	while i + 2 < n and randuri[i].strip() != 'end':
+		if ritm is not None:
+			ritm()
 		cheie, nume, date = randuri[i].strip(), randuri[i + 1].rstrip('\r'), randuri[i + 2].rstrip('\r')
 		i += 3
 		c = _canal_lamedb(cheie, nume, date, transpondere, frecvente)
@@ -988,8 +1095,9 @@ def _grupe_iptv(director):
 	return rez
 
 
-def citeste_buchet(text, nume_fisier, pozitii_feed=None):
-	"""Fluxurile dintr-un buchet (referintele DVB fara cale vin din lamedb) -> lista de Canal."""
+def citeste_buchet(text, nume_fisier, pozitii_feed=None, ritm=None):
+	"""Fluxurile dintr-un buchet (referintele DVB fara cale vin din lamedb) -> lista de Canal. ritm: Ritm, chemat la fiecare
+	intrare (pauzele firului indexului)."""
 	text = text_lista(text or "")
 	pozitii_feed = pozitii_feed or {}
 	rez = []
@@ -1008,7 +1116,7 @@ def citeste_buchet(text, nume_fisier, pozitii_feed=None):
 	# marcajul de deasupra: in buchetele DAB+ / DVB-T2 din satelit fiecare ansamblu (feed) are un marcaj cu numele lui
 	# (Hds/DabT2/buchete.py, intrari_noi), urmat de posturile lui
 	marcaj = ''
-	for ref, descriere in intrari:
+	for ref, descriere in _cu_ritm(intrari, ritm):
 		parti = ref.split(':')
 		if len(parti) > 1 and parti[1] == '64':
 			# numai marcajele noastre (1:64:4844xxxx, Hds/DabT2/buchete.ref_marcaj) sunt ansambluri; un marcaj pus de om
@@ -1062,9 +1170,45 @@ def citeste_buchet(text, nume_fisier, pozitii_feed=None):
 def _citeste_text(cale):
 	try:
 		with open(cale, 'rb') as f:
-			return text_lista(f.read())
+			return _text_lista_repede(f.read())
 	except (IOError, OSError):
 		return None
+
+
+# 0.7.7 (UIF): text_lista (Components/HdsListeText) trece expresia surogatelor peste tot textul dintr-o bucata, in C, cu
+# lacatul Python tinut: pe lamedb-ul de 2,2 MB al unei liste de 23.920 de servicii 0,3-0,5 s pe ARM, de doua ori (la
+# citire si in citeste_lamedb), iar firul enigma2 statea 0,4-0,9 s cat firul indexului citea lamedb-ul (masurat pe un
+# SF8008). Acelasi rezultat, fara bucata lunga: un text UTF-8 valid (bytes) sau fara surogate (str) n-are ce schimba;
+# altfel (liste vechi, cu octeti CP1252) text_lista pe bucati de ~BUCATA_TEXT, fiecare taiata dupa un sfarsit de rand
+# (expresia nu trece de un rand, iar octetul 0x0A nu face parte din nicio secventa UTF-8, deci decodarea e aceeasi).
+BUCATA_TEXT = 65536
+
+
+def _text_lista_repede(text):
+	"""text_lista(text), cu acelasi rezultat, fara sa tina lacatul Python mult pe un text mare (vezi mai sus)."""
+	if not isinstance(text, (bytes, str)):
+		return text_lista(text)
+	if isinstance(text, bytes):
+		try:
+			return text.decode('utf-8')
+		except UnicodeDecodeError:
+			sep = b'\n'
+	else:
+		if text.isascii():
+			return text
+		try:
+			text.encode('utf-8')
+			return text
+		except UnicodeEncodeError:
+			sep = '\n'
+	parti = []
+	i, n = 0, len(text)
+	while i < n:
+		j = text.find(sep, i + BUCATA_TEXT - 1)
+		j = n if j < 0 else j + 1
+		parti.append(text_lista(text[i:j]))
+		i = j
+	return ''.join(parti)
 
 
 # ---------------------------------------------------------------- buchetele DAB+ / DVB-T2 din satelit in lista de canale
@@ -1226,13 +1370,43 @@ def _semnatura(cai):
 
 # ---------------------------------------------------------------- indexul
 
+# 0.7.7 (UIF): pe firul indexului, list.sort pe cele ~23.500 de canale ale unei liste mari compara cheile in C cu lacatul
+# Python tinut, ~0,35 s pe ARM, cat firul enigma2 nu poate lucra. Index(complet=False) le sorteaza pe bucati de
+# BUCATA_SORTARE (fiecare scurta) unite cu heapq.merge (in Python, deci lacatul se da mai departe): aceeasi ordine, fiindca
+# bucatile sunt felii la rand din lista, sortarea lor e stabila, iar merge ia la chei egale intai din bucata dinainte.
+BUCATA_SORTARE = 1000
+
+
+def _cheie_ordine(c):
+	return (c.fara_nume, not c.cheie, c.cheie, c.nume.lower())
+
+
+def _sorteaza_pe_bucati(canale, cheie, bucata=None, ritm=None):
+	"""canale.sort(key=cheie), pe loc si cu aceeasi ordine, fara o sortare in C mai lunga decat o bucata. ritm: Ritm,
+	chemat la fiecare canal (pauzele firului indexului)."""
+	bucata = bucata or BUCATA_SORTARE
+	if len(canale) <= bucata:
+		canale.sort(key=cheie)
+		return
+	import heapq
+	chei = [cheie(c) for c in _cu_ritm(canale, ritm)]
+	k = chei.__getitem__
+	bucati = [sorted(range(i, min(i + bucata, len(canale))), key=k) for i in range(0, len(canale), bucata)]
+	vechi = list(canale)
+	canale[:] = [vechi[i] for i in _cu_ritm(heapq.merge(*bucati, key=k), ritm)]
+
+
 class Index(object):
-	def __init__(self, canale, complet=True):
+	def __init__(self, canale, complet=True, ritm=None):
 		"""complet=False: numai ordinea si bitii (fara limbi, masti si numarare), pentru un index facut pe un fir si
-		terminat pe firul enigma2 cu aplica_treptat (Screens/HdsCautareCanale.py, pregatirea in fundal)."""
+		terminat pe firul enigma2 cu aplica_treptat (Screens/HdsCautareCanale.py, pregatirea in fundal). ritm: Ritm al
+		firului indexului (numai cu complet=False, la sortare)."""
 		# ordinea de baza: dupa nume (fara diacritice); numele fara nicio litera sau cifra (de ex. „.") spre sfarsit, iar
 		# serviciile fara nume (numele facut la scanare) la coada; filtrarea pastreaza ordinea
-		canale.sort(key=lambda c: (c.fara_nume, not c.cheie, c.cheie, c.nume.lower()))
+		if complet:
+			canale.sort(key=_cheie_ordine)
+		else:
+			_sorteaza_pe_bucati(canale, _cheie_ordine, ritm=ritm)
 		self.canale = canale
 		self.grupe_online = ()  # (fisier, identitate locala, nume, grupa), citite odata cu buchetele
 		self.grupe_online_canale = {}
@@ -1676,18 +1850,19 @@ def semnatura(director=DIRECTOR, pozitii_feed=None):
 	return (director, _semnatura(cai), tuple(sorted((pozitii_feed or {}).items(), key=repr)))
 
 
-def construieste(director=DIRECTOR, pozitii_feed=None, complet=True):
+def construieste(director=DIRECTOR, pozitii_feed=None, complet=True, ritm=None):
 	"""Citirea lamedb-ului si a buchetelor si indexul, fara masuratori si piste (cu tabelul cheilor pentru baza unica,
 	_tabel_chei). Numai fisiere si obiecte noi, nimic din enigma2 si nimic comun: se poate chema de pe un fir.
+	ritm: Ritm, numai pe firul indexului (pauzele lui); None pe orice alt fir (fara pauze, ca inainte).
 	-> (semnatura, Index)."""
 	sem = semnatura(director, pozitii_feed)
 	buchete = fisiere_buchete(director)
 	grupe_online = _grupe_online(director, buchete)
 	canonice = {g[0] for g in grupe_online}
-	canale = citeste_lamedb(_citeste_text(os.path.join(director, 'lamedb')) or '')
+	canale = citeste_lamedb(_citeste_text(os.path.join(director, 'lamedb')) or '', ritm)
 	grupe_online_canale = {}
 	for b in buchete:
-		intrari = citeste_buchet(_citeste_text(os.path.join(director, b)), b, pozitii_feed)
+		intrari = citeste_buchet(_citeste_text(os.path.join(director, b)), b, pozitii_feed, ritm)
 		if b in canonice:
 			grupe_online_canale[b] = [c.cheie_mas or c.ref for c in intrari]
 		canale.extend(intrari)
@@ -1695,7 +1870,7 @@ def construieste(director=DIRECTOR, pozitii_feed=None, complet=True):
 	# acelasi flux in doua buchete: o singura data. Copia pastrata (de pilda din Favorite, fara marcaj) ia ansamblul
 	# postului DAB+ / DVB-T2 din copia din buchetul lui, unde marcajul de deasupra il da (la fel grupa unui canal IPTV)
 	vazute, unice = {}, []
-	for c in canale:
+	for c in _cu_ritm(canale, ritm):
 		k = c.cheie_mas or c.ref
 		pastrat = vazute.get(k)
 		if pastrat is not None:
@@ -1709,11 +1884,11 @@ def construieste(director=DIRECTOR, pozitii_feed=None, complet=True):
 			continue
 		vazute[k] = c
 		unice.append(c)
-	index = Index(unice, complet=complet)
+	index = Index(unice, complet=complet, ritm=ritm)
 	index.grupe_online = grupe_online
 	index.grupe_online_canale = grupe_online_canale
 	index.numar_radacina_online = numar_radacina_online
-	index.chei_baza = _tabel_chei(unice)
+	index.chei_baza = _tabel_chei(unice, ritm)
 	return sem, index
 
 
@@ -1729,15 +1904,16 @@ def _modul_baza():
 	return B
 
 
-def _tabel_chei(canale):
+def _tabel_chei(canale, ritm=None):
 	"""Cheile canalelor deja calculate pentru baza unica (HdsBazaCanale.tabel_chei): pe firul care face indexul, o
 	singura data, ca trecerea indexului peste baza, pe firul enigma2, sa nu le mai calculeze la fiecare cautare. Date
-	noi, numai ale indexului; le pune in folosinta Index._chei_in_folosinta. None daca baza nu se incarca."""
+	noi, numai ale indexului; le pune in folosinta Index._chei_in_folosinta. None daca baza nu se incarca. ritm: Ritm,
+	chemat la fiecare cheie data bazei (pauzele firului indexului)."""
 	B = _modul_baza()
 	if B is None:
 		return None
 	try:
-		return B.tabel_chei(c.cheie_mas for c in canale if c.cheie_mas)
+		return B.tabel_chei(c.cheie_mas for c in _cu_ritm(canale, ritm) if c.cheie_mas)
 	except Exception:
 		return None
 

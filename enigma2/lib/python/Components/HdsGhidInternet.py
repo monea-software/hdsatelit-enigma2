@@ -27,13 +27,19 @@
 # stranse; in alegere se scrie descrierea EXACTA din fisier (EPG Import compara sirurile intregi, iar unele au doua
 # spatii: "Deutschland - Basis  (xz)").
 #
-# Tarile fara sursa libera in lista OE-Alliance (Ungaria, Ucraina, tarile baltice, ...) primesc un mesaj clar; Rusia
-# are surse dupa satelit, nu dupa tara, deci nu e aici.
+# Tarile fara sursa libera in lista OE-Alliance (Ungaria, tarile baltice, ...) primesc un mesaj clar.
+#
+# Rusia, Ucraina, Belarus, Kazahstan (GTR, TODO 15.11 07:51): russian.sources.xml are cate o sursa pentru fiecare satelit
+# (AMOS 4.0W, Astra 19.2E, Express 80.0E...), nu pe tara. Pentru ele se bifeaza, tot intr-un singur pas si fara
+# intrebari, sursele satelitilor de la tunerele omului (NimManager, ca in ecranul tunerelor; la motor numai satelitii
+# pe care omul are canale, altfel ar intra toata lista). Pozitia sursei: din descriere (ultima, "Astra 2E/2F/2G 28.2E"
+# = 28.2E) sau, cand descrierea n-o are ("Eutelsat 36B/36C", "Tricolor"), din adresa channels-360E.xml.gz.
 #
 # Fisierul nu importa nimic din enigma la incarcare: probele de pe PC folosesc direct partea fara efecte.
 
 import os
 import pickle
+import re
 import xml.etree.ElementTree as ET
 
 DOSAR_SURSE = "/etc/epgimport"
@@ -108,8 +114,20 @@ NUME_TARA = {
 	"HR": N_("Croația"), "BA": N_("Bosnia și Herțegovina"), "RS": N_("Serbia"), "ME": N_("Muntenegru"),
 	"SI": N_("Slovenia"), "GB": N_("Marea Britanie"), "IE": N_("Irlanda"), "ES": N_("Spania"), "TR": N_("Turcia"),
 	"HU": N_("Ungaria"), "UA": N_("Ucraina"), "RU": N_("Rusia"), "EE": N_("Estonia"), "LT": N_("Lituania"),
-	"LV": N_("Letonia"), "LU": N_("Luxemburg"),
+	"LV": N_("Letonia"), "LU": N_("Luxemburg"), "BY": N_("Belarus"), "KZ": N_("Kazahstan"),
 }
+
+# Fisierele de surse pe satelit (nu pe tara) -> tarile lor. russian.sources.xml (categoria "Russian XMLTV", runigma):
+# canalele in rusa si ucraineana de pe fiecare satelit, de la 4.0W (AMOS) pana la 96.5E (Express-AM33).
+SURSE_SATELIT = {"russian.sources.xml": ("RU", "UA", "BY", "KZ")}
+
+# Cat poate fi pozitia sursei departe de a satelitului de la tuner, in zecimi de grad: sursele scriu Thor 1.0W, Sirius
+# 4.9E, ABS 74.9E, lista satelitilor 0.8W, 4.8E, 75.0E, iar banda C sta cu o zecime mai incolo (96.5E = 966). Sub 5:
+# Astra 31.5E nu trebuie sa ia Turksat 31.0E, iar Belintersat 51.5E nu trebuie sa ia 52.0E.
+TOLERANTA_POZITIE = 3
+
+_POZ_DESCRIERE = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d)?)\s*°?\s*([EW])(?![A-Za-z0-9])")
+_POZ_ADRESA = re.compile(r"channels-(?:[a-z]+-)?(\d{3,4})([ew])\.xml", re.I)
 
 # limba meniului -> tara, unde partea a doua a codului nu e tara (sr_YU, en_EN, fy_x-FY)
 _TARA_LIMBII = {"YU": "RS", "EN": "", "X-FY": "NL"}
@@ -117,6 +135,7 @@ _TARA_LIMBII = {"YU": "RS", "EN": "", "X-FY": "NL"}
 TEXT_FARA_SURSA = N_("Pentru %s nu avem încă o sursă liberă de ghid din internet. Poți alege altă țară.")
 TEXT_NECUNOSCUTA = N_("Nu știu încă în ce țară ești. Alege țara ta.")
 TEXT_NESIGURA = N_("Alege țara ghidului: %s sau %s.")
+TEXT_FARA_SATELIT = N_("Pe sateliții de la tunerele tale nu avem încă surse de ghid din internet pentru %s.")
 
 
 def numeTara(cod):
@@ -154,14 +173,72 @@ def citesteSurse(dosar=None):
 			for s in copii:
 				d = s.findtext("description")
 				if d and d.strip():
-					surse.append({"descriere": d, "categorie": nume_cat, "fisier": f})
+					surse.append({"descriere": d, "categorie": nume_cat, "fisier": f,
+						"channels": s.get("channels", "")})
 	return surse
 
 
-def sursePentru(tara, surse):
-	"""descrierile exacte ale surselor tarii, fara dubluri, in ordinea din fisiere; [] pentru o tara fara sursa"""
-	inceputuri = [_strans(p) for p in SURSE_TARII.get((tara or "").upper(), ())]
+def pozitieSursa(descriere, channels=""):
+	"""pozitia orbitala a unei surse pe satelit, ca in NimManager (0..3599, vestul 3600 - x): ultima pozitie din
+	descriere ("Astra 2E/2F/2G 28.2E" = 282, "AMOS 4.0W" = 3560, "Express 80.0°E" = 800); altfel din adresa
+	channels-360E.xml.gz (numai 3-4 cifre, in zecimi: "4W" si "49E" din aceeasi lista nu spun sigur zecimile). None
+	pentru o sursa fara satelit ("IPTV")."""
+	gasite = _POZ_DESCRIERE.findall(descriere or "")
+	if gasite:
+		zecimi, parte = int(round(float(gasite[-1][0]) * 10)), gasite[-1][1]
+	else:
+		m = _POZ_ADRESA.search(channels or "")
+		if not m:
+			return None
+		zecimi, parte = int(m.group(1)), m.group(2).upper()
+	if zecimi > 1800:
+		return None
+	return (3600 - zecimi) % 3600 if parte == "W" else zecimi
+
+
+def textPozitie(poz):
+	"""282 -> "28.2E", 3560 -> "4.0W" """
+	poz = int(poz) % 3600
+	if poz > 1800:
+		return "%d.%dW" % divmod(3600 - poz, 10)
+	return "%d.%dE" % divmod(poz, 10)
+
+
+def _distanta(a, b):
+	d = abs(int(a) - int(b)) % 3600
+	return min(d, 3600 - d)
+
+
+def fisiereSatelit(tara):
+	"""fisierele de surse pe satelit ale tarii (gol pentru tarile cu surse pe tara)"""
+	tara = (tara or "").upper()
+	return tuple(f for f, tari in sorted(SURSE_SATELIT.items()) if tara in tari)
+
+
+def peSatelit(tara):
+	return bool(fisiereSatelit(tara))
+
+
+def areSursa(tara):
+	"""tara are surse in epgimport-sources: pe tara (SURSE_TARII) sau pe satelit (SURSE_SATELIT)"""
+	return (tara or "").upper() in SURSE_TARII or peSatelit(tara)
+
+
+def sursePentru(tara, surse, pozitii=None):
+	"""descrierile exacte ale surselor tarii, fara dubluri, in ordinea din fisiere; [] pentru o tara fara sursa. Pentru
+	tarile cu surse pe satelit: numai sursele satelitilor din `pozitii` (satelitii de la tunere, pozitiiTunere)."""
+	fisiere = fisiereSatelit(tara)
 	alese = []
+	if fisiere:
+		for s in surse:
+			d = s["descriere"]
+			if s.get("fisier") not in fisiere or d in alese:
+				continue
+			p = pozitieSursa(d, s.get("channels", ""))
+			if p is not None and any(_distanta(p, q) <= TOLERANTA_POZITIE for q in pozitii or ()):
+				alese.append(d)
+		return alese
+	inceputuri = [_strans(p) for p in SURSE_TARII.get((tara or "").upper(), ())]
 	for s in surse:
 		d = s["descriere"]
 		if d not in alese and any(_strans(d).startswith(p) for p in inceputuri):
@@ -169,10 +246,34 @@ def sursePentru(tara, surse):
 	return alese
 
 
+def _areSurseSatelit(tara, surse):
+	fisiere = fisiereSatelit(tara)
+	return any(s.get("fisier") in fisiere and pozitieSursa(s["descriere"], s.get("channels", "")) is not None
+		for s in surse)
+
+
 def tariCuSursa(surse=None):
-	"""codurile tarilor care au surse (in lista instalata, daca e data), in ordinea numelor"""
+	"""codurile tarilor care au surse (in lista instalata, daca e data), in ordinea numelor. Tarile cu surse pe satelit
+	apar cand fisierul lor e instalat, oricare ar fi satelitii de la tunere (mesajul spune daca nu se potriveste
+	niciunul)."""
 	coduri = [c for c in SURSE_TARII if surse is None or sursePentru(c, surse)]
+	for tari in SURSE_SATELIT.values():
+		coduri += [c for c in tari if c not in coduri and (surse is None or _areSurseSatelit(c, surse))]
 	return sorted(coduri, key=lambda c: _strans(numeTara(c)))
+
+
+def pozitiiDinTunere(tunere, cu_canale=()):
+	"""tunere: [(pozitiile satelitilor de la tuner, motor)] -> pozitiile de luat in seama. La motor NimManager da toata
+	lista satelitilor; acolo numai pozitiile pe care omul are canale (cu_canale, din lamedb), in toleranta."""
+	rez = set()
+	for pozitii, motor in tunere:
+		for p in pozitii:
+			p = int(p)
+			if p < 0 or p >= 3600:
+				continue
+			if not motor or any(_distanta(p, q) <= TOLERANTA_POZITIE for q in cu_canale):
+				rez.add(p)
+	return rez
 
 
 # ---------------------------------------------------------------- alegerea EPG Import
@@ -356,6 +457,34 @@ def taraAcum():
 	return taraOmului(server, fus, limba, zoneTari())
 
 
+def pozitiiTunere():
+	"""pozitiile satelitilor de la tunerele de satelit (configuratia tunerelor, NimManager.getSatListForNim); la motor
+	numai cele cu canale in lamedb. Rezerva, cand NimManager nu raspunde: pozitiile salvate la tunere in settings si cele
+	cu canale (Components/HdsSatelitiImagine, ca la unirea satelitilor)."""
+	try:
+		from Components.NimManager import nimmanager
+		tunere = []
+		for slot in range(len(nimmanager.nim_slots)):
+			if not nimmanager.nim_slots[slot].isCompatible("DVB-S"):
+				continue
+			pozitii = [x[0] for x in nimmanager.getSatListForNim(slot)]
+			if pozitii:
+				tunere.append((pozitii, bool(nimmanager.getRotorSatListForNim(slot))))
+		cu_canale = ()
+		if any(motor for _p, motor in tunere):
+			from Components.HdsSatelitiImagine import pozitii_lamedb
+			cu_canale = pozitii_lamedb()
+		return pozitiiDinTunere(tunere, cu_canale)
+	except Exception as e:
+		print("[HdsGhidInternet] satelitii de la tunere: %r" % (e,))
+	try:
+		from Components.HdsSatelitiImagine import pozitii_lamedb, pozitii_setari
+		return set(pozitii_setari()) | set(pozitii_lamedb())
+	except Exception as e:
+		print("[HdsGhidInternet] satelitii din settings: %r" % (e,))
+		return set()
+
+
 def _programare():
 	"""(programat, "HH:MM", ultimul import) din setarile EPG Import, cand pluginul e incarcat"""
 	try:
@@ -379,12 +508,16 @@ def stare():
 	programat, ora, ultimul = _programare()
 	tara = _STARE["tara"] or t["tara"]
 	lista = surse or None
+	pe_satelit = peSatelit(tara)
+	pozitii = pozitiiTunere() if pe_satelit else set()
 	return {
 		"tara": tara, "nume": numeTara(tara) if tara else "", "sigur": t["sigur"] or bool(_STARE["tara"]),
-		"candidati": [{"cod": c, "nume": numeTara(c), "are": c in SURSE_TARII} for c in t["candidati"]],
+		"candidati": [{"cod": c, "nume": numeTara(c), "are": areSursa(c)} for c in t["candidati"]],
 		"tari": [{"cod": c, "nume": numeTara(c)} for c in tariCuSursa(lista)],
-		"are_sursa": tara in SURSE_TARII,
-		"instalat": instalat(), "bifate": citesteAlegerea(), "surse_tarii": sursePentru(tara, surse) if tara else [],
+		"are_sursa": areSursa(tara),
+		"pe_satelit": pe_satelit, "sateliti": [textPozitie(p) for p in sorted(pozitii, key=lambda x: x - 3600 if x > 1800 else x)],
+		"instalat": instalat(), "bifate": citesteAlegerea(),
+		"surse_tarii": sursePentru(tara, surse, pozitii) if tara else [],
 		"programat": programat, "ora": ora, "ultimul": ultimul,
 		"faza": _STARE["faza"], "mesaj": _STARE["mesaj"], "in_lucru": inLucru(),
 	}
@@ -402,6 +535,10 @@ def textStare(s=None):
 		r.append(_t(TEXT_NESIGURA) % (s["candidati"][0]["nume"], s["candidati"][1]["nume"]))
 	else:
 		r.append(_t(TEXT_NECUNOSCUTA))
+	if s.get("pe_satelit"):
+		r.append(_t("Sateliții de la tunere: %s") % (", ".join(s.get("sateliti") or ()) or _t("niciunul")))
+		if s["instalat"] and not s["surse_tarii"]:
+			r.append(_t(TEXT_FARA_SATELIT) % s["nume"])
 	if s["surse_tarii"]:
 		r.append(_t("Sursele: %s") % ", ".join(" ".join(d.split()) for d in s["surse_tarii"]))
 	if s["programat"] and s["bifate"]:
@@ -419,7 +556,7 @@ def porneste(tara, session=None):
 	tara = (tara or "").upper()
 	if inLucru():
 		return _t("Ghidul TV din internet se pregătește deja. Așteaptă puțin.")
-	if tara not in SURSE_TARII:
+	if not areSursa(tara):
 		return _t(TEXT_FARA_SURSA) % numeTara(tara) if tara else _t(TEXT_NECUNOSCUTA)
 	_STARE["tara"] = tara
 	if instalat():
@@ -505,9 +642,13 @@ def activeazaPlugin(session, plugins=None):
 
 def _aplica(tara, session):
 	_pune("aplic", _t("Se bifează sursele..."), tara)
-	alese = sursePentru(tara, citesteSurse())
+	pe_satelit = peSatelit(tara)
+	alese = sursePentru(tara, citesteSurse(), pozitiiTunere() if pe_satelit else None)
 	if not alese:
-		_pune(EROARE, _t("Lista surselor EPG Import nu are încă surse pentru %s.") % numeTara(tara))
+		if pe_satelit:
+			_pune(EROARE, _t(TEXT_FARA_SATELIT) % numeTara(tara))
+		else:
+			_pune(EROARE, _t("Lista surselor EPG Import nu are încă surse pentru %s.") % numeTara(tara))
 		return
 	try:
 		scrieAlegerea(alese)

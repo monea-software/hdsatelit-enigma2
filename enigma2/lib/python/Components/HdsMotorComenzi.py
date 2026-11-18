@@ -60,6 +60,8 @@ INREGISTRARE_REFUZ_S = 60
 INREGISTRARE_AVERTISMENT_S = 600
 # cat asteptam, la luarea tunerului, o miscare a nucleului inceputa inainte (un zap chiar atunci)
 ASTEPTARE_NUCLEU_PAS_MS = 500
+# cati sateliti incercam ca referinta cand nucleul refuza acordul (de pilda banda C printr-un LNB universal)
+REFERINTA_INCERCARI = 10
 FISIER_LIMITE_OPRITE = "/etc/enigma2/hds-motor-limite-oprite"
 
 _unic = None
@@ -659,22 +661,23 @@ class ComenziMotor(object):
 		T.jurnal("tunerul %s luat pentru comenzile motorului" % T.numeTuner(self.slot))
 		self._leagaMasca()
 		self._pornestePaza()
-		if self.referinta is None:
-			self.referinta = self._referintaImplicita()
-		if self.referinta is None or not self._acorda(self.referinta, True):
-			orbital = self.referinta["orbital_position"] if self.referinta else -1
+		# textul se alege inainte de eliberare: _elibereazaTot sterge referinta, iar dupa ea ramanea mereu textul
+		# "niciun transponder", si cand nucleul refuzase acordul (asistenta 457322, GigaBlue Quad 4K Pro, 15.11.2026)
+		if self.referinta is not None:
+			text = None if self._acorda(self.referinta, True) else \
+				_("Tunerul nu a putut fi pregătit pe %s.") % satelitText(self.referinta["orbital_position"])
+		else:
+			self.referinta, text = self._pregatesteReferinta()
+		if text is not None:
 			self._asteapta = None
 			self._elibereazaTot(pune_programul=True)
-			if self.referinta is None:
-				self._spune(_("Pentru satelitul ales nu există niciun transponder în lista de sateliți, deci receptorul nu are ce acorda."), eroare=True)
-			else:
-				self._spune(_("Tunerul nu a putut fi pregătit pe %s.") % satelitText(orbital), eroare=True)
+			self._spune(text, eroare=True)
 			return
 		self._candNucleulLiber(self._dupaLuare)
 
-	def _referintaImplicita(self):
-		"""transponderul de referinta cand programul nu era pe tunerul cu motor: ultima tinta a nucleului, pozitia
-		stiuta de nucleu, altfel primul satelit al tunerului"""
+	def _candidatiReferinta(self):
+		"""orbitalele din care se alege referinta cand programul nu era pe tunerul cu motor: ultima tinta a nucleului,
+		pozitia stiuta de nucleu, apoi satelitii tunerului in ordinea din satellites.xml"""
 		sec = T.controlSec()
 		candidati = []
 		for nume in ("hdsRotorToOrbital", "hdsKnownRotorPosition"):
@@ -684,12 +687,47 @@ class ComenziMotor(object):
 					candidati.append(valoare)
 			except Exception:
 				continue
-		candidati += [o for o, _n in T.sateliti(self.slot)]
-		for orbital in candidati:
+		return candidati + [o for o, _n in T.sateliti(self.slot)]
+
+	def _pregatesteReferinta(self):
+		"""(transponder, None) cu acordul fara motor pornit pe referinta, sau (None, textul pentru om). Referinta e primul
+		candidat pe care nucleul il are (T.primitDeNucleu), cu un transponder bun, pe care nucleul primeste acordul; la un
+		refuz se trece la urmatorul, cel mult REFERINTA_INCERCARI. Asistenta 457322 (Marea Britanie, 15.11.2026): primul
+		satelit din satellites.xml era 180,0E banda C, sub orizont (din d45ed988b nucleul nu-l mai are) si, cu un LNB
+		universal, cu frecventa intermediara in afara tunerului (sec.cpp canTune, 900-2200 MHz); acordul era refuzat, nu
+		pleca nici tensiunea, nici DiSEqC, deci STANGA si DREAPTA nu miscau motorul cand tunerul A nu rula un program. Un
+		acord refuzat nu atinge tunerul (nucleul raspunde pe loc)."""
+		refuzat = None
+		incercari = 0
+		vazute = set()
+		for orbital in self._candidatiReferinta():
+			if orbital in vazute or not T.primitDeNucleu(self.slot, orbital):
+				continue
+			vazute.add(orbital)
 			tp = T.alegeTransponder(T.transpondereBune(orbital, self.slot))
-			if tp:
-				return tp
-		return None
+			if not tp:
+				continue
+			if self._acorda(tp, True):
+				return tp, None
+			if refuzat is None:
+				refuzat = orbital
+			incercari += 1
+			if incercari >= REFERINTA_INCERCARI:
+				break
+		if refuzat is not None:
+			return None, _("Tunerul nu a putut fi pregătit pe %s.") % satelitText(refuzat)
+		return None, self._textFaraReferinta()
+
+	def _textFaraReferinta(self):
+		"""de ce nu exista referinta: cand nucleul nu are niciunul dintre satelitii tunerului (USALS, toti sub orizont sau
+		locul antenei nestabilit), motivul locului (textul existent al lui "Mergi la satelit", HdsLocul.refuzUsals);
+		altfel lipsa transponderelor"""
+		candidati = self._candidatiReferinta()
+		if candidati and not any(T.primitDeNucleu(self.slot, o) for o in candidati):
+			refuz = T.refuzFaraLoc(self.slot, candidati[0])
+			if refuz:
+				return refuz
+		return _("Pentru satelitul ales nu există niciun transponder în lista de sateliți, deci receptorul nu are ce acorda.")
 
 	def _dupaLuare(self):
 		self.stare = "gata"

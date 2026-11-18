@@ -43,6 +43,11 @@ void eRCDeviceInputDev::handleCode(long rccode)
 			mapper->noteMouse(ev->type, ev->code, ev->value);
 		return;
 	}
+	/* HDSatelit: locked, eRCInputEventDriver::keyPressed lets the mouse events of every device through; those of a
+	   device that is not a mouse (EV_SYN of a remote, a button of a keyboard) do nothing here */
+	if ((ev->type == EV_REL || ev->type == EV_SYN || (ev->type == EV_KEY && ev->code >= BTN_MOUSE && ev->code < BTN_JOYSTICK))
+		&& eRCInput::getInstance() && eRCInput::getInstance()->islocked())
+		return;
 	/* HDSatelit: codul brut al tastelor USB (codul HID, trimis inaintea tastei) pentru cititor */
 	if (ev->type == EV_MSC && ev->code == MSC_SCAN)
 	{

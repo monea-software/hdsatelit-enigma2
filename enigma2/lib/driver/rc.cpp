@@ -106,7 +106,14 @@ void eRCInputEventDriver::keyPressed(int what)
 				closeGone();
 			break;
 		}
-		if (enabled && !input->islocked())
+		/*
+		 * HDSatelit: while the web browser has the screen (eRCInput::lock, HdsNavigator/lansator.py) the events of a
+		 * mouse still reach eRCDeviceInputDev::handleCode, which hands them to eRCMapper and nothing else while locked:
+		 * the browser does not grab the mice (lansator.faraMouse) and Components/HdsMouseUsb.py gives them to it as
+		 * its pointer. Keys stay locked.
+		 */
+		if (enabled && (!input->islocked() || ev.type == EV_REL || ev.type == EV_SYN ||
+			(ev.type == EV_KEY && ev.code >= BTN_MOUSE && ev.code < BTN_JOYSTICK)))
 			for (std::list<eRCDevice*>::iterator i(listeners.begin()); i!=listeners.end(); ++i)
 				(*i)->handleCode((long)&ev);
 	}

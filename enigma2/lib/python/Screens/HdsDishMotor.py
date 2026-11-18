@@ -51,6 +51,10 @@ from Components.Sources.CanvasSource import CanvasSource
 from Components.Sources.StaticText import StaticText
 from Components.Label import Label
 from Components.HdsMotorStare import gradeText, secundeText, stareMotor, panou_automat_oprit, panouAutomatAscuns, satelitiPeArc, istoricTinta, desenDinSpate, boltaVizibila, unghiPeBolta, pozitiiCuCanale
+try:
+	from Components.HdsMotorStare import elevatieDesen
+except ImportError:
+	elevatieDesen = lambda: 0.0
 from Components import HdsGrade
 from Components import HdsMarireText as MT
 from Tools.ScaledSkin import LAYOUT_WIDTH, scaledSkin
@@ -116,7 +120,8 @@ CON_MERS = (0xc038b6ff, 0x9038b6ff)
 CON_SOSIT = (0xb8ffc250, 0x80ffc250)
 # bolta intreaga (locul stabilit; HdsMotorStare.boltaVizibila): satelitii din afara (sub orizont sau dincolo de o limita a
 # motorului) sunt inele rosii; cei sub orizont stau sub linia orizontului, de partea lor, cel mult SUB_ORIZONT_MAX grade pe
-# cerc (deasupra barei de jos); capetele boltii au gradele satelitului de la orizont, sudul si limitele cate un semn scurt
+# cerc (deasupra barei de jos); capetele boltii au gradele satelitului de la capat (orizontul sau, cu setarea "Elevatia minima
+# in desenul rotirii", limita practica a antenei; HdsMotorStare.elevatieDesen), sudul si limitele cate un semn scurt
 AFARA = 0xff6b6b
 CAPAT = 0x8aa2b8
 LIMITA = 0xffa040
@@ -749,7 +754,8 @@ class HdsDishMotor(Screen):
 	def _bolta(self, stare, de_la, la, acum):
 		"""bolta intreaga pentru deseneazaRotirea (locul stabilit), sau None: geometria (HdsMotorStare.boltaVizibila) si
 		satelitii cu canale se iau o data pe miscare, unghiurile plecarii, tintei si pozitiei la fiecare cadru"""
-		cheie = (stare["slot"], stare["de_la_orbital"], stare["la_orbital"])
+		# elevatia minima a desenului (setarea, 0.7.7) intra in cheie: schimbata, capetele se socotesc din nou
+		cheie = (stare["slot"], stare["de_la_orbital"], stare["la_orbital"], elevatieDesen())
 		if getattr(self, "_bolta_cheie", None) != cheie:
 			self._bolta_cheie = cheie
 			b = boltaVizibila(stare["slot"])
@@ -1047,10 +1053,17 @@ class HdsDishMotorEcran(HdsDishMotor):
 			self._arata((False, refuz))
 			self._alegeLocul(refuz, self._alegeSatelit)
 			return
-		sateliti = HdsMotorTuner.sateliti(slot)
-		if not sateliti:
+		toti = HdsMotorTuner.sateliti(slot)
+		if not toti:
 			self._arata((False, _("Pentru satelitul ales nu există niciun transponder în lista de sateliți, deci receptorul nu are ce acorda.")))
 			return
+		# numai satelitii pe care nucleul ii are: cei USALS sub orizont din locul antenei ar fi refuzati (d45ed988b;
+		# asistenta 457322, 15.11.2026). Cand nu ramane niciunul, locul e probabil scris gresit: motivul in banda si lista
+		# cu randul "Schimba locul antenei"
+		sateliti = HdsMotorTuner.satelitiPrimiti(slot)
+		if not sateliti:
+			self._arata((False, HdsMotorTuner.refuzFaraLoc(slot, toti[0][0]) or
+				_("Pentru satelitul ales nu există niciun transponder în lista de sateliți, deci receptorul nu are ce acorda.")))
 		curent = c.referinta["orbital_position"] if c.referinta else c.pozitie_stiuta
 		lista, ales = [], 0
 		for i, (orbital, nume) in enumerate(sateliti):
@@ -1063,7 +1076,8 @@ class HdsDishMotorEcran(HdsDishMotor):
 			titlu = "%s\n%s" % (titlu, _("Locul antenei: %s") % HdsLocul.textLoc())
 		# primul rand schimba locul antenei (acelasi pentru toate tunerele), restul sunt satelitii
 		lista.insert(0, (_("Schimbă locul antenei"), "loc"))
-		self.session.openWithCallback(self._satelitAles, HdsMotorAlegere, title=titlu, list=lista, keys=[], selection=ales + 1)
+		self.session.openWithCallback(self._satelitAles, HdsMotorAlegere, title=titlu, list=lista, keys=[],
+			selection=ales + 1 if sateliti else 0)
 
 	def _satelitAles(self, rezultat):
 		if rezultat and rezultat[1] == "loc":

@@ -46,7 +46,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.7.6+git${SRCPV}"
+PV = "0.7.7+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe
@@ -240,7 +240,7 @@ FILES:${PN}-dbg += "${libdir}/enigma2/python/.debug ${libdir}/enigma2/python/*/.
     ${libdir}/enigma2/python/Hds/DabT2/t2/bin/.debug"
 
 # SoftCSA (0.7.4, lib/dvb/csaengine.cpp): canalele CSA-ALT (ICAM, Sky Deutschland) se descifreaza in software cu
-# libdvbcsa (strat: libdvbcsa_git.bbappend, fixata la b84e790a, cu dvbcsa_bs_key_set_ecm). Programul o incarca la rulare
+# libdvbcsa (strat: libdvbcsa_git.bbappend, fixata la 6c459854, 1.2.0, cu dvbcsa_bs_key_set_ecm). Programul o incarca la rulare
 # (dlopen, libdvbcsa.so.1): DEPENDS numai pentru ordinea constructiei si proba QA build-deps, RDEPENDS ca sa vina in
 # imagine si la actualizare. Codul pune si semnul ${datadir}/hdsatelit/softcsa (data/Makefile.am): dupa el scriptul de
 # pornire al modulelor de acces trece singur pe pmt_mode = 6 si extended_cw_api = 1.
@@ -282,6 +282,15 @@ RRECOMMENDS:${PN} += "${@bb.utils.contains("MACHINE_FEATURES", "hiaccel", "dinob
 # cheia aplicatiei OpenSubtitles (reteta hdsatelit-opensubtitles; SBR 15.11.2026): fisierul din care citeste
 # Components/HdsSubtitrariInternet/surse/opensubtitles.py; pachet gol cand constructia nu are cheia
 RRECOMMENDS:${PN} += "hdsatelit-opensubtitles"
+
+# textele ajutorului (reteta hdsatelit-ajutor, pachet allarch separat): HELP pe orice ecran, Meniu > Informatii despre sistem >
+# Ajutor si /ajutor in web (Components/HdsAjutor.py). Recomandat, nu cerut: intra in imaginile noi (imaginea instaleaza
+# recomandarile) si vine la actualizarea din meniu odata cu enigma2-hdsatelit (opkg aduce recomandarile din feed; culegerea il
+# are in COMUN), iar daca lipseste din feedul unei baze, actualizarea nu se opreste (fara el HELP arata lista tastelor, cu textele
+# de rezerva din HdsAjutor.py). Pe hdsflashmic (Vu+ Solo SE NAND, memoria mica) nu: acolo raman lista tastelor si TEXT_LIPSA.
+# REL8, 17.11.2026 (hotararea coordonatorului 20:25, varianta (a)).
+RRECOMMENDS:${PN} += "hdsatelit-ajutor"
+RRECOMMENDS:${PN}:remove:hdsflashmic = "hdsatelit-ajutor"
 
 # Urmarirea pornirii (tools/hds-rezerva.sh) priveste ca pornire in dubiu orice pornire fara semnul
 # /etc/hds-interfata-pornita. O instalare prin actualizare din meniu inseamna ca interfata a mers pe receptor, deci

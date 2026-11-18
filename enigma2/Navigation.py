@@ -10,6 +10,7 @@ import Screens.Standby
 import NavigationInstance
 import ServiceReference
 import sys
+import threading
 
 # masurarea zap-ului (Components/HdsMasuraZap.py): pasii lui playService si fiecare ascultator, cateva secunde dupa
 # fiecare zap, scrisi intr-un fisier din /tmp; fara modul (probele de pe PC), nimic
@@ -43,6 +44,25 @@ class Navigation:
 	# le cheama variabila locala `simulate` spune daca e doar o verificare.
 	playServiceExtensions = []
 	recordServiceExtensions = []
+	# playServiceUltima: f(nav, playref, event, infobar), ca extensiile, chemata ULTIMA, numai cand nicio extensie n-a
+	# schimbat referinta si n-a luat-o asincron (transmisia in browser, releele DAB+ / DVB-T2 si fluxurile 8001 cerute din
+	# retea si-au lasat deja tunerul in extensiile lor). O pune numai tunerul de rezerva din retea
+	# (Components/HdsTunerRezerva.py), cat e ales; None = nimic.
+	playServiceUltima = None
+	# grupFaraTuner: f(nav, grup, liber, inregistrare), chemate pe rand (celMaiBunDinGrup) numai cand niciuna dintre
+	# alternativele unui grup n-are tuner si nu e o verificare (simulate). O extensie poate elibera tunere, oprindu-se cand
+	# liber() spune ca o alternativa are tuner; inregistrare: False la zap, True la o inregistrare (televizorul ruleaza
+	# mai departe). Prima care elibereaza un tuner le opreste pe celelalte. Ordinea: cele care isi dau oricum tunerul
+	# canalului ales, puse la inceput: releele DAB+ / DVB-T2 (Hds/DabT2/pornire.py), Stream Relay
+	# (Components/HdsStreamRelay.py) si cautarea DVB-T2 / DAB+ prin satelit care tine tunerul pana la alegere
+	# (Screens/ScanerSatelit.py); apoi fluxurile 8001 cerute din retea (Hds/DabT2/server8001.py), transmisia din browser (Components/HdsTransmisie.py)
+	# si transcodarea (HdsWebControl/flux_transcodare_web.py), puse la coada. Alternativele DVB: nav.alternativeDvb(grup).
+	grupFaraTuner = []
+	# grupFaraTunerUltima: f(nav, grup) -> alternativa sau None, chemata ULTIMA, numai la zap, cand nici dupa extensiile de
+	# mai sus nu e nicio alternativa libera: alternativa pe care o reda altfel (playServiceUltima o ia apoi, ca la orice
+	# canal). O pune numai tunerul de rezerva din retea (Components/HdsTunerRezerva.py, dupa prioritatea tipurilor de
+	# tuner), cat e ales; None = nimic.
+	grupFaraTunerUltima = None
 
 	def __init__(self, nextRecordTimerAfterEventActionAuto=False):
 		if NavigationInstance.instance is not None:
@@ -74,6 +94,12 @@ class Navigation:
 				if not Screens.Standby.inTryQuitMainloop: # not a shutdown messagebox is open
 					RecordTimer.RecordTimerEntry.TryQuitMainloop(False) # start shutdown handling
 		self.SleepTimer = SleepTimer.SleepTimer()
+		# tunerul de rezerva din retea: legatura la zap, daca e ales (setarile se fac inainte de navigatie)
+		try:
+			from Components import HdsTunerRezerva
+			HdsTunerRezerva.leagaZap(Navigation)
+		except Exception as e:
+			print("[Navigation] tunerul de rezerva:", e)
 
 	def dispatchEvent(self, i):
 		m = _masura
@@ -136,7 +162,7 @@ class Navigation:
 			if ref.flags & eServiceReference.isGroup:
 				if not oldref:
 					oldref = eServiceReference()
-				playref = getBestPlayableServiceReference(ref, oldref)
+				playref = self.celMaiBunDinGrup(ref, oldref)
 				print("playref", playref)
 				if playref and oldref and playref == oldref and not forceRestart:
 					print("ignore request to play already running service(2)")
@@ -146,7 +172,7 @@ class Navigation:
 					return 0
 			else:
 				playref = ref
-			extensii = bool(self.pnav and Navigation.playServiceExtensions)
+			extensii = bool(self.pnav and (Navigation.playServiceExtensions or Navigation.playServiceUltima))
 			if extensii:
 				playref, asincron = self._extensiiZap(playref)
 				if asincron:
@@ -166,6 +192,55 @@ class Navigation:
 		else:
 			self.stopService()
 		return 1
+
+	def celMaiBunDinGrup(self, ref, ignore, simulate=False, inregistrare=False):
+		"""Alternativa grupului `ref` care se poate reda acum (getBestPlayableServiceReference, cu aceleasi argumente pe
+		care le dadea zap-ul, inregistrarea sau temporizatorul), sau None. Cand nu e niciuna si nu e o verificare
+		(simulate), extensiile grupFaraTuner pot elibera tunere; dupa fiecare se intreaba din nou. Fara extensii, ca
+		inainte. O extensie care arunca e sarita (un rand in jurnal). La zap, cand tot nu e nicio alternativa libera,
+		grupFaraTunerUltima poate da alternativa pe care o reda altfel (tunerul de rezerva din retea)."""
+		playref = getBestPlayableServiceReference(ref, ignore, simulate)
+		ultima = None if inregistrare else Navigation.grupFaraTunerUltima
+		if playref or simulate or not (Navigation.grupFaraTuner or ultima):
+			return playref
+		liber = lambda: bool(getBestPlayableServiceReference(ref, ignore))
+		for f in list(Navigation.grupFaraTuner):
+			try:
+				f(self, ref, liber, inregistrare)
+			except Exception as e:
+				print("[Navigation] extensia grupului fara tuner %s a cazut: %s" % (getattr(f, "__name__", "?"), e))
+				continue
+			playref = getBestPlayableServiceReference(ref, ignore)
+			if playref:
+				return playref
+		if ultima is not None:
+			try:
+				return ultima(self, ref) or None
+			except Exception as e:
+				print("[Navigation] ultima extensie a grupului fara tuner a cazut: %s" % e)
+		return None
+
+	def alternativeDvb(self, grup):
+		"""Textele alternativelor DVB ale grupului `grup` (canalele de tip 1 fara cale, care cer un tuner), in ordinea din
+		grup; [] daca lista nu se poate citi. Pentru extensiile grupFaraTuner si grupFaraTunerUltima."""
+		try:
+			lista = self.ServiceHandler.list(grup)
+			texte = (lista and lista.getContent("S")) or []
+		except Exception as e:
+			print("[Navigation] alternativele grupului: %s" % e)
+			return []
+		rez = []
+		for t in texte:
+			p = str(t or "").split(":")
+			if len(p) < 10 or p[0] != "1" or (len(p) > 10 and p[10].strip()):
+				continue
+			try:
+				# fara dosare si marcaje (1, 2, 64), cu numarul serviciului (ca server8001._ref_dvb_fara_cale)
+				if int(p[1] or "0") & (1 | 2 | 64) == 0 and int(p[3] or "0", 16) != 0:
+					rez.append(t)
+			except ValueError:
+				continue
+		return rez
 
 	def _hdsNumarCanal(self, ref):
 		"""Numarul canalului ca in lista de canale (HdsInfo.numar_in_lista: buchetul, reteaua de cablu, locul unei
@@ -214,6 +289,21 @@ class Navigation:
 				self.currentlyPlayingServiceReference = playref
 			if asincron or schimbat:
 				return playref, asincron
+		f = Navigation.playServiceUltima
+		if f is not None:
+			try:
+				rez = f(self, playref, None, infobar)
+			except Exception as e:
+				print("[Navigation] ultima extensie de zap a cazut: %s" % e)
+				return playref, False
+			if isinstance(rez, tuple):
+				nou, asincron = rez[0], bool(rez[1]) if len(rez) > 1 else False
+			else:
+				nou, asincron = rez, False
+			if nou is not None and nou is not playref and _refText(nou) != _refText(playref):
+				playref = nou
+				self.currentlyPlayingServiceReference = playref
+			return playref, asincron
 		return playref, False
 	
 	def getCurrentlyPlayingServiceReference(self):
@@ -237,18 +327,29 @@ class Navigation:
 		return bool(citita())
 	
 	def recordService(self, ref, simulate=False):
+		# EPG (0.7.7, asistenta 058499): o inregistrare simulata (EPGImport verifica asa fiecare canal din
+		# rytec.channels.xml, 10.431 intr-un import; TimerSanityCheck, PiP) nu mai scrie un rand cand reuseste: randul de
+		# pe fiecare canal umplea hds-interfata.log (2 MB in 9 s) si il rotea. Le numara _simulate, care scrie un singur
+		# rand dupa rafala. Inregistrarea adevarata scrie referinta ca text si cand vine ca eServiceReference (inainte, numai
+		# ServiceReference dadea textul; eServiceReference dadea obiectul SWIG); esecul se scrie la amandoua.
 		service = None
-		print("recording service: %s" % (str(ref)))
 		if isinstance(ref, ServiceReference.ServiceReference):
 			ref = ref.ref
+		if not simulate:
+			print("recording service: %s" % _refText(ref))
 		if ref:
 			if ref.flags & eServiceReference.isGroup:
-				ref = getBestPlayableServiceReference(ref, eServiceReference(), simulate)
+				ref = self.celMaiBunDinGrup(ref, eServiceReference(), simulate, True)
 			if ref and Navigation.recordServiceExtensions:
 				ref = self._extensiiInregistrare(ref, simulate)
 			service = ref and self.pnav and self.pnav.recordService(ref, simulate)
+			if simulate:
+				_simulate.noteaza(service is not None)
 			if service is None:
-				print("record returned non-zero")
+				if simulate:
+					print("record returned non-zero (simulat): %s" % _refText(ref))
+				else:
+					print("record returned non-zero")
 		return service
 
 	def _extensiiInregistrare(self, ref, simulate):
@@ -313,3 +414,64 @@ def _refText(ref):
 		return ref.toString()
 	except Exception:
 		return str(ref)
+
+
+class _NumaratoareSimulate(object):
+	"""Inregistrarile simulate (verificarea canalelor: EPGImport, cronometrele, PiP) numarate, cu un singur rand in jurnal
+	dupa fiecare rafala (LINISTE_S secunde fara alta): cate, in cat timp, cate refuzate. EPGImport le cheama de pe firul
+	lui twisted, deci numaratoarea are lacat si randul il scrie un threading.Timer (niciun eTimer facut din alt fir)."""
+
+	LINISTE_S = 2.0
+	TEXT = "[Navigation] inregistrari simulate (verificarea canalelor: EPGImport, cronometre, PiP): %d in %.1f s, %d refuzate"
+
+	def __init__(self, ceas=None, scrie=None):
+		self._ceas = ceas or _monoton
+		self._scrie = scrie or print
+		self._lacat = threading.Lock()
+		self._fir = None
+		self._goleste()
+
+	def _goleste(self):
+		self.n = 0
+		self.refuzate = 0
+		self.de_la = self.ultim = 0.0
+
+	def noteaza(self, reusita):
+		with self._lacat:
+			acum = self._ceas()
+			if not self.n:
+				self.de_la = acum
+			self.n += 1
+			if not reusita:
+				self.refuzate += 1
+			self.ultim = acum
+			if self._fir is None:
+				self._porneste(self.LINISTE_S)
+
+	def _porneste(self, secunde):
+		try:
+			fir = threading.Timer(secunde, self.verifica)
+			fir.daemon = True
+			fir.start()
+			self._fir = fir
+		except Exception:
+			# fara fir (memorie, oprire): randul se scrie la urmatoarea verificare
+			self._fir = None
+
+	def verifica(self):
+		"""Scrie randul cand rafala s-a terminat; altfel asteapta restul linistii. Intoarce randul scris sau None."""
+		with self._lacat:
+			self._fir = None
+			if not self.n:
+				return None
+			ramas = self.LINISTE_S - (self._ceas() - self.ultim)
+			if ramas > 0:
+				self._porneste(ramas)
+				return None
+			text = self.TEXT % (self.n, max(0.0, self.ultim - self.de_la), self.refuzate)
+			self._goleste()
+		self._scrie(text)
+		return text
+
+
+_simulate = _NumaratoareSimulate()

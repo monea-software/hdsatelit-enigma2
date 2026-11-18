@@ -318,4 +318,10 @@ T = {
 	"cpu_mode": u"מצב מעבד",
 	"cpu_volt": u"מתח",
 	"cpu_steps": u"זמן לכל תדר",
+	"bitrate_va": u"קצב סיביות וידאו · שמע",
+	"br_min": u"מינ׳",
+	"br_max": u"מקס׳",
+	"br_avg": u"ממוצע",
+	"ecm_hop": u"קפיצות",
+	"ecm_reader": u"קורא",
 }

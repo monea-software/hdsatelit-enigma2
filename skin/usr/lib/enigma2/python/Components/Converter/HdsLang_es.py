@@ -304,4 +304,10 @@ T = {
 	"set_grid_value_alpha": u"Color elegido: {0}, transparencia {1}",
 	"set_grid_help": u"Las flechas te mueven por la cuadrícula, la fila de transparencia y la banda de abajo; el color se ve al momento a la derecha. OK o Verde guarda el color, Azul abre el código hex y R, G, B.",
 	"set_advanced": u"Avanzado",
+	"bitrate_va": u"Bitrate de vídeo · audio",
+	"br_min": u"mín",
+	"br_max": u"máx",
+	"br_avg": u"med",
+	"ecm_hop": u"Hops",
+	"ecm_reader": u"Lector",
 }

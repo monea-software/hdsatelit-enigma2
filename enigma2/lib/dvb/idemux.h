@@ -2,6 +2,7 @@
 #ifndef __dvb_idemux_h
 #define __dvb_idemux_h
 
+#include <stdint.h>
 #include <lib/dvb/idvb.h>
 #include <lib/service/iservicescrambled.h>
 
@@ -66,6 +67,14 @@ public:
 		   for a bounded time) instead of waiting in it for good; must be set before start(). eDVBTSRecorder does it on
 		   every receiver (HiSilicon and the generic path, lib/base/filepush.cpp); -1 from a recorder that cannot. */
 	virtual RESULT setDvrLoop(bool loop) { return -1; }
+		/* counting only, nothing is written (sVideoBitrate / sAudioBitrate of a live service, lib/service/servicedvb.cpp
+		   getLiveBitrate): the TS payload bytes (after the TS header and the adaptation field, both always in clear) of up
+		   to two PIDs that pass through the recorder, slot 0 and 1, after the descrambler. pid -1 stops a slot, a new PID
+		   starts it at 0 bytes; getCountPID gives the PID a slot counts (-1: none). Last in the class, with bodies, so the
+		   slots above keep their place; eDVBTSRecorder counts on every receiver, -1 / 0 from a recorder that cannot. */
+	virtual RESULT setCountPID(int slot, int pid) { (void)slot; (void)pid; return -1; }
+	virtual int getCountPID(int slot) { (void)slot; return -1; }
+	virtual uint64_t getCountedBytes(int slot) { (void)slot; return 0; }
 };
 
 #endif

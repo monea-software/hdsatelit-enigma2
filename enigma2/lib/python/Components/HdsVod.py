@@ -400,16 +400,68 @@ class SursaXtream(Sursa):
 		return rez
 
 
+class SursaM3U(Sursa):
+	"""0.7.7 (FLM2, Eduard 16.11 11:01): filmele unui playlist M3U, din fisierul lor (HdsIptvSurse.filmeSursa, scris la citirea
+	listei; nu mai sunt in lista de canale). Categoriile sunt grupele listei (id = numarul grupei), titlul e cheia filmului;
+	fara retea, fara seriale (un playlist nu le deosebeste de filme), fara 'Adăugate recent' (lista nu are date)."""
+	fel = "m3u"
+	cu_recente_locale = True
+	fara_recente = True
+
+	def _grupe(self):
+		return I.grupeFilme(self.id)
+
+	def categorii(self, tip):
+		if tip != FILME:
+			return []
+		return [(str(i), I.numeCurat(g) or self.nume) for i, (g, _n) in enumerate(self._grupe()[:I.MAX_GRUPE])]
+
+	def idBun(self, x):
+		return bool(_numar(x)) or I.cheieBuna(x)
+
+	def _titlu(self, r):
+		meta = r[4] if len(r) > 4 and isinstance(r[4], dict) else {}
+		nume = numeCurat(r[1])
+		return {"id": r[0], "cheie": r[0], "nume": nume, "poza": _poza(meta.get("logo")), "nota": "", "an": _an(nume), "adaugat": 0}
+
+	def rand(self, tip, categorie):
+		grupe = self._grupe()
+		if tip != FILME or not _numar(categorie) or int(categorie) >= len(grupe):
+			return []
+		return [self._titlu(r) for r in I.filmeSursa(self.id, grupe[int(categorie)][0], MAX_RAND)]
+
+	def toate(self, tip):
+		if tip != FILME:
+			return
+		for r in I.filmeSursa(self.id):
+			yield self._titlu(r)
+
+	def detalii(self, tip, titlu_id):
+		r = I.filmDupaCheie(self.id, titlu_id) if tip == FILME else None
+		if not r:
+			raise C.EroareIptv(E_LIPSA)
+		t = self._titlu(r)
+		return {"id": t["id"], "tip": FILME, "cheie": t["cheie"], "nume": _numeFaraAn(t["nume"]), "descriere": "", "gen": "", "tara": "",
+			"regia": "", "actori": "", "nota": "", "an": t["an"], "poster": t["poza"], "fundal": "", "trailer": "", "varsta": "",
+			"durata": 0, "video": "", "audio": ""}
+
+	def recente(self, tip):
+		return []
+
+
 # Alte surse: filmele de pe disc (Components/HdsVodDisc) si serverele Emby / Jellyfin (Components/HdsVodServere) se adauga in
 # surse(); Stalker (type=vod, create_link type=vod) ramane de facut, cu aceeasi forma: categorii, rand, toate, detalii, referinta.
-_CLASE = {"xtream": SursaXtream}
+# Cheile sunt I.FELURI_CATALOG: felurile ale caror filme nu stau in lista de canale.
+_CLASE = {"xtream": SursaXtream, "m3u": SursaM3U}
 
 
 def surse():
-	"""Sursele care au filme si seriale, in ordinea din IPTV."""
+	"""Sursele care au filme si seriale, in ordinea din IPTV (un playlist numai cand are filme)."""
 	rez = []
 	for s in I.citesteSurse():
 		cls = _CLASE.get(s.get("fel"))
+		if cls is SursaM3U and not I.areFilme(s):
+			continue
 		if cls is not None:
 			rez.append(cls(s))
 	try:
@@ -545,7 +597,7 @@ def lucreaza(fel, sid, tip="", arg="", gasite=None):
 				v = _inMemorie(_randuri, (sid, tip, arg), src.rand(tip, arg), MAX_RANDURI)
 			return {"result": True, "titluri": v}
 		if fel == "recente":
-			if not activ("recente"):
+			if not activ("recente") or getattr(src, "fara_recente", False):
 				return {"result": True, "titluri": [], "oprit": True}
 			if src.cu_recente_locale:
 				return {"result": True, "titluri": src.recente(tip)}

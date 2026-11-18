@@ -53,6 +53,9 @@
 #   POST /api/iptv-fisier           text=<continutul unui fisier cu adrese, cate una pe rand> (fisierul ales in browser; aceeasi
 #                                   citire ca /etc/enigma2/iptv.txt pus prin FTP, Components/HdsIptvFisier.py)
 #   POST /api/iptv-sterge           id=<sursa>, in doi pasi
+#   GET  /api/iptv-sursa-canale     id=<sursa>[&grupa=<n>&de_la=<n>]: grupele sursei sau canalele unei grupe (butonul Deschide, FLM2
+#                                   0.7.7; fisierul se citeste pe un fir, primul raspuns poate fi {"asteapta": true})
+#   POST /api/iptv-sursa-porneste   id=<sursa>&cheie=<canal>: canalul porneste pe televizor (filmele si serialele: /api/vod*)
 #   GET  /api/interfata-web-detalii pornirea, portul, browserele (fara cheie)
 #   POST /api/interfata-web-actiune fapta=activ&valoare=0|1 | fapta=port&valoare=N | fapta=deconecteaza |
 #                                   fapta=cheie; cele periculoase in doi pasi (browser_nou, codul de pe televizor, s-a scos)
@@ -181,7 +184,7 @@ def _canaleDvbi(DD):
 		n[st] = n.get(st, 0) + 1
 		rez.append({"id": c.get("id"), "nr": c.get("nr"), "lcn": c.get("lcn"), "nume": c.get("nume", ""),
 			"tip": c.get("tip", "tv"), "url": c.get("url", ""), "sat": bool(c.get("sat")), "stare": st, "cod": cod,
-			"ora": ora})
+			"ora": ora, "ascuns": bool(c.get("ascuns"))})
 	return rez, n
 
 
@@ -194,6 +197,11 @@ def stareDvbi(D=None, cale=None, DD=None, registru=None):
 		"predefinite": [{"cheie": c, "descriere": d, "tara": t, "bifata": c in bifate}
 			for c, d, _a, t in D.listePredefinite()],
 		"url_uri": list(cfg.get("url_uri", [])), "reincarcare": _reincarcare(D)}
+	# DVK (15.11.2026): listele care nu raspund (Components/HdsDvbISurse, prin HdsDvbISetari): "nu_raspunde" la fiecare
+	# lista si "adrese_nu_raspund" {adresa: text} pentru adresele proprii (url_uri ramane lista de adrese)
+	su = D._surse() if hasattr(D, "textNuRaspunde") else None
+	nu = (lambda a: D.textNuRaspunde(a, su)) if su is not None else (lambda a: "")
+	rez["adrese_nu_raspund"] = D.stariAdrese(rez["url_uri"], su) if su is not None else {}
 	# DVB-I: tara si regiunea din registre, listele tarii, trecerea pe internet, canalele incercate din casa
 	if not hasattr(D, "listeleTarii"):
 		return rez
@@ -214,13 +222,19 @@ def stareDvbi(D=None, cale=None, DD=None, registru=None):
 			"mesaj": "" if reg.get("liste") else D.textFaraRegistre(reg)},
 		"regiune": cfg.get("regiune", ""),
 		"regiuni": [{"id": i, "nume": nume, "nivel": niv} for i, nume, niv in D.regiuniTarii(cfg, stare, reg)],
-		"liste_tarii": [dict(l, canale=D.canaleLista(stare, l["adresa"])) for l in D.listeleTarii(cfg, reg)],
+		"liste_tarii": [dict(l, canale=D.canaleLista(stare, l["adresa"]), nu_raspunde=nu(l["adresa"]) if l.get("aleasa")
+			else "") for l in D.listeleTarii(cfg, reg)],
 		"rezerva": D.rezervaPornita(cfg),
 		"toate_tarile": D.toateTarilePornit(cfg) if hasattr(D, "toateTarilePornit") else None,
-		"liste_alte_tari": [dict(l, canale=D.canaleLista(stare, l["adresa"]), tara_nume=D.numeTara(l["tara"]) if l["tara"]
-			else "") for l in D.listeleAltorTari(cfg, reg)] if hasattr(D, "listeleAltorTari") and cfg.get("tara") else [],
+		# lista DVB-I in lista de canale (scoasa de om, nu mai revine singura), ca randul de pe televizor
+		"in_lista": D.inListaDeCanale() if hasattr(D, "inListaDeCanale") else None,
+		"liste_alte_tari": [dict(l, canale=D.canaleLista(stare, l["adresa"]), nu_raspunde=nu(l["adresa"]),
+			tara_nume=D.numeTara(l["tara"]) if l["tara"] else "") for l in D.listeleAltorTari(cfg, reg)] if hasattr(D, "listeleAltorTari") and cfg.get("tara") else [],
 		"stare": {"culoare": culoare, "text": text, "detalii": detalii},
 		"canale": canale, "rezumat": n,
+		# EPG2: cate canale nu sunt in buchet pana merg din nou si cate adrese (clipuri, imagini de proba) s-au scos
+		"ascunse": sum(1 for c in canale if c.get("ascuns")),
+		"scoase": sum(int(v) for v in (stare.get("scoase") or {}).values()) if isinstance(stare.get("scoase"), dict) else 0,
 		"incercare": {"in_curs": bool(incercare.get("in_curs")), "facute": int(incercare.get("facute", 0) or 0),
 			"total": int(incercare.get("total", 0) or 0)},
 		"vpn": _vpnDvbi(),
@@ -311,6 +325,13 @@ def seteazaDvbi(arg, D=None, cale=None):
 			D.comutaToateTarile(cfg)
 		mesaj = _t("Salvat. Listele se descarcă din nou.")
 		reincarca = True
+	elif "in_lista" in arg and hasattr(D, "puneInLista"):
+		# randul "Arată lista în lista de canale": semnul listei scoase si legarea, pe loc; hdsdvbi.conf nu se rescrie
+		v = _bool(arg["in_lista"])
+		if v is None:
+			return _cuMesaj(stareDvbi(D, cale), False, _t("Nu s-a trimis nicio setare."))
+		D.puneInLista(v)
+		return _cuMesaj(stareDvbi(D, cale), True, _t("Salvat."))
 	elif "rezerva" in arg and hasattr(D, "comutaRezerva"):
 		v = _bool(arg["rezerva"])
 		if v is None:
@@ -609,8 +630,14 @@ def stareIptv(I=None):
 		p["nume"] = p["nume"] or p["fel_text"]
 		p["canale_text"] = _textCanale(p["canale"]) if p["canale"] else ""
 		p["eroare"] = _t(p["eroare"]) if p["eroare"] else ""
+		# 0.7.7 (IPX, e-mailurile 6514 si 6520): pagina pune "Merge." in fata notei (JS stareSursa), ca pe televizor eticheta verde
 		p["fara_https_text"] = _t(S.T_FARA_HTTPS) if p["fara_https"] else ""
+		# 0.7.7 (BQT, Ozgur e-mailul 6514): ce n-a incaput, canalele TV si filmele separat, acelasi text ca pe televizor
+		# (Screens/IptvSetup.mesajSursa, HdsIptvClient.textTaiate)
+		p["taiate_text"] = C.textTaiate(p, _t) if p.get("taiate") else ""
 		p["expira_text"] = _textExpirare(p.get("expira"))
+		# 0.7.7 (FLM2): cate filme are un playlist in fisierul lor (randul Filme din pagina sursei, butonul Deschide)
+		p["filme_sursa"] = S.numarFilme(p) if p["fel"] == "m3u" else 0
 		p["epg_text"] = _t(N_("Se încarcă ghidul TV...")) if p.get("epg_stare") == "lucreaza" else _t(p.get("epg_mesaj") or "")
 		if p.get("epg_evenimente") and p.get("epg_stare") != "lucreaza":
 			p["epg_text"] += " " + _t(N_("%d programe.")) % p["epg_evenimente"]
@@ -659,8 +686,11 @@ def adaugaIptv(arg, din_adresa=(), I=None):
 	return rez
 
 
-# corpul unei cereri are cel mult 64 KB (plugin.MAX_CORP_CERERE); textul codat in adresa creste cu ~1/3
-MAX_FISIER = 40 * 1024
+# fisierul ales in pagina, cel mult atatea caractere: o lista de canale obisnuita are cateva sute de KB (inainte 40 KB, cat
+# incapea in corpul obisnuit de 64 KB, deci listele de canale nu treceau; CRF, TODO 15.11 02:20). Corpul cererii are limita lui
+# (plugin.MAX_CORP_IPTV_FISIER: de trei ori atat, fiindca formularul codeaza octetii ca %XX). O lista mai mare merge pe stick sau
+# prin FTP in /etc/enigma2 (HdsIptvFisier, cel mult MAX_PLAYLIST_COPIAT); pagina spune asta si nu mai trimite nimic.
+MAX_FISIER = 4 * 1024 * 1024
 
 
 def fisierIptv(arg, I=None):
@@ -672,7 +702,9 @@ def fisierIptv(arg, I=None):
 	text = arg.get("text") or ""
 	nume = S.numeCurat(arg.get("nume") or "", "iptv.txt")
 	if len(text) > MAX_FISIER:
-		return _cuMesaj(stareIptv(I), False, _t(F.T_PREA_MARE))
+		# o lista de canale mai mare decat pagina: acelasi sfat ca pe stick (numai scripturile ajung aici, pagina opreste inainte)
+		mesaj = _t(F.T_PLAYLIST_PREA_MARE) % nume if F.ePlaylist(text) else _t(F.T_PREA_MARE)
+		return _cuMesaj(stareIptv(I), False, mesaj)
 	rez = F.preiaText(text, nume, verifica=C.verificaDate, adauga=L.adaugaSiCere, dosar=S.DOSAR, e_plin=C.E_PREA_MULTE,
 		tine_minte=False)
 	if not rez["mesaje"]:
@@ -691,6 +723,89 @@ def actualizeazaIptv(arg, I=None):
 	else:
 		L.cereToate()
 	return _cuMesaj(stareIptv(I), True, _t("Se actualizează..."))
+
+
+# 0.7.7 (FLM2, Eduard 16.11 11:01): butonul "Deschide" de pe o sursa din /iptv, perechea paginii sursei de pe televizor
+# (Screens/IptvSetup.IptvCont): canalele, pe grupe, si pornirea lor pe televizor; filmele si serialele vin prin /api/vod si
+# /api/vod-reda (HdsWebControl/filme_seriale_web.py, aceleasi ca in Filme si seriale)
+PE_PAGINA_WEB = 300
+_canale_web = {}     # sursa -> [semnul fisierului, None (se citeste) | grupele (HdsIptvSurse.grupeCanale)]
+
+
+def _pornesteFir(lucru):
+	import threading
+	threading.Thread(target=lucru, name="IptvSursaCanaleWeb", daemon=True).start()
+
+
+def _grupeWeb(S, s, fir=None):
+	"""Grupele de canale ale sursei, citite pe un fir (fisierul poate avea 30000 de canale) si tinute minte cat nu se schimba
+	fisierul sau grupele ascunse. -> lista sau None (inca se citeste)."""
+	import os
+	try:
+		st = os.stat(os.path.join(S.DOSAR, "canale-%s.json" % s["id"]))
+		semn = (st.st_mtime_ns, st.st_size, tuple(sorted(s.get("ascunse") or ())))
+	except OSError:
+		semn = None
+	v = _canale_web.get(s["id"])
+	if v is None or v[0] != semn:
+		_canale_web.clear()          # o singura sursa in memorie
+		v = _canale_web[s["id"]] = [semn, None]
+
+		def lucru(v=v):
+			try:
+				v[1] = S.grupeCanale(s)
+			except Exception as e:
+				_jurnal("canalele sursei: %s" % type(e).__name__)
+				v[1] = []
+		(fir or _pornesteFir)(lucru)
+	return v[1]
+
+
+def canaleSursaIptv(arg, I=None, fir=None):
+	"""GET /api/iptv-sursa-canale?id=<sursa>[&grupa=<numarul grupei>&de_la=<n>]: grupele sursei cu cate canale au, sau canalele
+	unei grupe (cate PE_PAGINA_WEB: cheie si nume, fara adrese). Primul raspuns poate fi {"asteapta": true}."""
+	S, C, L = _iptv(I)
+	s = S.sursa(arg.get("id", ""))
+	if s is None:
+		return {"result": False, "message": _t(N_("Sursa aleasă nu mai e în listă. Pagina se încarcă din nou."))}
+	grupe = _grupeWeb(S, s, fir)
+	if grupe is None:
+		return {"result": True, "asteapta": True}
+	g = arg.get("grupa", "")
+	if g == "":
+		return {"result": True, "grupe": [{"nume": nume, "n": len(c), "text": _textCanale(len(c))} for nume, c in grupe]}
+	if not g.isdigit() or int(g) >= len(grupe):
+		return {"result": False, "message": _t(N_("Lista s-a schimbat. Deschide din nou sursa."))}
+	de_la = int(arg.get("de_la", "0")) if arg.get("de_la", "0").isdigit() else 0
+	nume, canale = grupe[int(g)]
+	return {"result": True, "grupa": nume, "de_la": de_la, "toate": len(canale),
+		"canale": [{"cheie": k, "nume": n} for k, n, _d in canale[de_la:de_la + PE_PAGINA_WEB]]}
+
+
+def pornesteCanalSursaIptv(arg, I=None, nav=None):
+	"""POST /api/iptv-sursa-porneste?id=<sursa>&cheie=<canal>: canalul porneste pe televizor (ca OK pe el in pagina sursei)."""
+	S, C, L = _iptv(I)
+	sid, cheie = arg.get("id", ""), arg.get("cheie", "")
+	v = _canale_web.get(sid)
+	gasit = None
+	for _g, canale in ((v[1] or []) if v else []):
+		gasit = next((c for c in canale if c[0] == cheie), None)
+		if gasit:
+			break
+	if gasit is None:
+		return {"result": False, "message": _t(N_("Lista s-a schimbat. Deschide din nou sursa."))}
+	try:
+		from enigma import eServiceReference
+		if nav is None:
+			import NavigationInstance
+			nav = NavigationInstance.instance
+		r = eServiceReference(S.refCanal(sid, gasit[0], gasit[2]))
+		r.setName(gasit[1])
+		nav.playService(r)
+	except Exception as e:
+		_jurnal("canalul sursei, pornirea: %s" % type(e).__name__)
+		return {"result": False, "message": _t(N_("Canalul nu a pornit. Încearcă din nou."))}
+	return {"result": True, "message": _t(N_("Canalul pornește pe televizor."))}
 
 
 def stergeIptv(arg, I=None):
@@ -1014,7 +1129,7 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 
 	def dvbi_seteaza(request):
 		return seteazaDvbi(_argumente(request, ("activ", "predefinita", "bifata", "adauga_url", "tara", "regiune", "lista",
-			"rezerva"), 1024), D, cale_dvbi)
+			"rezerva", "toate_tarile", "in_lista"), 1024), D, cale_dvbi)
 
 	def dvbi_incearca(request):
 		return incearcaDvbi(D, cale_dvbi)
@@ -1080,6 +1195,12 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 	def sursa_antete(request):
 		return anteteIptv(_argumente(request, ("id", "user_agent", "referer"), 2048), _dinAdresa(request), I)
 
+	def iptv_sursa_canale(request):
+		return canaleSursaIptv(_argumente(request, ("id", "grupa", "de_la")), I)
+
+	def iptv_sursa_porneste(request):
+		return pornesteCanalSursaIptv(_argumente(request, ("id", "cheie")), I)
+
 	def seriale(request):
 		return stareSeriale(_argumente(request, ("id", "serial", "sezon", "pagina", "cauta", "cerere"), 128))
 
@@ -1127,6 +1248,8 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 		b"iptv-fisier": _schimbare(iptv_fisier),
 		b"iptv-sterge": _schimbare(iptv_sterge, True),
 		b"sursa-antete": _schimbare(sursa_antete),
+		b"iptv-sursa-canale": _citire(iptv_sursa_canale),
+		b"iptv-sursa-porneste": _schimbare(iptv_sursa_porneste),
 		b"seriale": _citire(seriale),
 		b"seriale-reda": _schimbare(seriale_reda),
 		b"interfata-web-detalii": _citire(interfata_web),
@@ -1177,7 +1300,7 @@ def pagina_mabr(stil, config_pagina):
 
 
 def pagina_iptv(stil, config_pagina):
-	return _sablon(_traducePagina(PAGINA_IPTV), stil, config_pagina, "hds_iptv_setup")
+	return _sablon(_traducePagina(PAGINA_IPTV), stil, config_pagina, "hds_iptv_setup").replace("__MAX_FISIER__", str(MAX_FISIER))
 
 
 def pagina_iptv_4k(stil, config_pagina):
@@ -1252,8 +1375,8 @@ __STIL_PAGINI__
   .lista-rand>span{overflow-wrap:anywhere;min-width:0;}
   .lista-rand button{flex:0 0 auto;}
   .sursa-actiuni{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;}
-  #serialeTitlu,#serialeNota,#anteteTitlu{overflow-wrap:anywhere;}
-  #serialeLista .lista-rand>span{white-space:normal;overflow-wrap:anywhere;}
+  #contTitlu,#contNota,#anteteTitlu{overflow-wrap:anywhere;}
+  #contLista .lista-rand>span{white-space:normal;overflow-wrap:anywhere;}
   @media(max-width:640px){#surse>.lista-rand{align-items:flex-start;flex-wrap:wrap;}.sursa-actiuni{justify-content:flex-start;}}
   .bifa{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 0;border-bottom:1px solid var(--bordura);cursor:pointer;}
   .bifa:last-child{border-bottom:0;}
@@ -1270,6 +1393,7 @@ __STIL_PAGINI__
   .dvbi-insigna.slab{color:var(--text-slab);} .dvbi-insigna.gol{border-style:dashed;} .dvbi-insigna.albastru{color:var(--accent);}
   .bifa .dvbi-insigna{margin-left:auto;}
   .dvbi-lista{display:flex;flex-direction:column;min-width:0;flex:1;} .dvbi-lista small{color:var(--text-slab);}
+  .dvbi-lista small.dvbi-nu,.dvbi-nu{color:var(--eroare);}
   .dvbi-rezumat{margin:0 0 8px;}
   .dvbi-canal{display:grid;grid-template-columns:3em minmax(0,1fr) auto auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--bordura);}
   .dvbi-canal:last-child{border-bottom:0;}
@@ -1348,6 +1472,9 @@ PAGINA_DVBI = "<!DOCTYPE html>" + _CAP + "DVB-I: Configurare" + _STIL + """<h1>C
       <p class="intrebare" id="reincarcareText"></p>
       <div class="butoane"><button type="button" class="principal" id="reincarca">Reîncarcă acum</button></div>
       <p class="nota">Descarcă acum listele alese; canalele apar în lista de canale, în buchetul Canale de pe internet (DVB-I).</p>
+      <div class="rand"><label for="in_lista">Arată lista în lista de canale</label>
+        <select id="in_lista"><option value="1">Da</option><option value="0">Nu</option></select></div>
+      <p class="nota">Cu Nu, lista Canale de pe internet (DVB-I) iese din lista de canale și nu mai revine singură.</p>
     </section>
   </div>
   <section class="card">
@@ -1410,6 +1537,7 @@ function arataListe(d){
     var s = document.createElement("span"); s.className = "dvbi-lista";
     var n = document.createElement("b"); n.textContent = x.lista || x.adresa; s.appendChild(n);
     var f = document.createElement("small"); f.textContent = "Furnizor: " + (x.furnizor || "?") + (x.proba ? " · listă de probă" : ""); s.appendChild(f);
+    if(x.nu_raspunde){ var nr = document.createElement("small"); nr.className = "dvbi-nu"; nr.textContent = x.nu_raspunde; s.appendChild(nr); }
     e.appendChild(c); e.appendChild(s);
     if(x.canale !== null && x.canale !== undefined){ e.appendChild(insigna("canale: " + x.canale, "slab")); }
     return e;
@@ -1433,6 +1561,8 @@ function arataCanale(d){
   [["merge", "merg"], ["oprit_tara", "oprite pentru țara ta"], ["adresa_moarta", "adrese moarte"], ["nu_raspunde", "fără răspuns"], ["", "neîncercate"]].forEach(function(k){
     if(n[k[0]]){ p.push(insigna(n[k[0]] + " " + k[1], STARI[k[0]][1])); }
   });
+  if(d.ascunse){ p.push(insigna(d.ascunse + " " + "ascunse din lista de canale până merg din nou", "slab")); }
+  if(d.scoase){ p.push(insigna(d.scoase + " " + "scoase din liste: clipuri și imagini de probă", "slab")); }
   pune("rezumat", p.length ? p : [gol(c.length ? "" : "Niciun canal încă. Alege țara sau o listă, apoi Reîncarcă acum.")]);
   $("incearca").disabled = !c.length || !!(d.incercare && d.incercare.in_curs);
   var rand = function(x){
@@ -1443,7 +1573,9 @@ function arataCanale(d){
     if(x.sat){ sat.appendChild(insigna("și pe satelit", "albastru")); }
     r.appendChild(sat);
     var st = STARI[x.stare] || STARI[""];
-    var stare = document.createElement("span"); stare.className = "dvbi-st"; stare.appendChild(insigna(st[0] + (x.cod && x.stare !== "merge" ? " (" + x.cod + ")" : ""), st[1])); r.appendChild(stare);
+    var stare = document.createElement("span"); stare.className = "dvbi-st"; stare.appendChild(insigna(st[0] + (x.cod && x.stare !== "merge" ? " (" + x.cod + ")" : ""), st[1]));
+    if(x.ascuns){ stare.appendChild(insigna("nu e în lista de canale", "slab gol")); }
+    r.appendChild(stare);
     var b = document.createElement("a"); b.className = "dvbi-priveste"; b.textContent = "Privește"; b.target = "_blank"; b.rel = "noopener";
     b.href = adresa("/dvb-i-priveste?id=" + encodeURIComponent(String(x.id))); r.appendChild(b);
     return r;
@@ -1465,8 +1597,9 @@ function arata(d){
   if(document.activeElement !== $("activ")){ $("activ").value = d.activ ? "1" : "0"; }
   if(document.activeElement !== $("rezerva")){ $("rezerva").value = d.rezerva === false ? "0" : "1"; }
   if(document.activeElement !== $("toate_tarile")){ $("toate_tarile").value = d.toate_tarile === false ? "0" : "1"; }
+  if(document.activeElement !== $("in_lista")){ $("in_lista").value = d.in_lista === false ? "0" : "1"; }
   var ua = $("listeAlteTari"); ua.textContent = "";
-  (d.liste_alte_tari || []).forEach(function(l){ var li = document.createElement("li"); li.textContent = (l.tara_nume ? l.tara_nume + ": " : "") + (l.lista || l.adresa) + (l.canale !== null && l.canale !== undefined ? " · " + l.canale : ""); ua.appendChild(li); });
+  (d.liste_alte_tari || []).forEach(function(l){ var li = document.createElement("li"); li.textContent = (l.tara_nume ? l.tara_nume + ": " : "") + (l.lista || l.adresa) + (l.canale !== null && l.canale !== undefined ? " · " + l.canale : "") + (l.nu_raspunde ? " · " + l.nu_raspunde : ""); if(l.nu_raspunde){ li.className = "dvbi-nu"; } ua.appendChild(li); });
   var r = d.reincarcare || {};
   $("reincarcareText").textContent = r.mesaj || "Listele se reîncarcă singure din oră în oră cât timp receptorul e pornit.";
   $("reincarcareText").classList.toggle("eroare", !!(r.gata && !r.succes));
@@ -1475,7 +1608,7 @@ function arata(d){
   if(lucreaza && !CEAS){ CEAS = setInterval(citeste, 1500); }
   if(!lucreaza && CEAS){ clearInterval(CEAS); CEAS = null; }
   arataTara(d); arataCanale(d);
-  var semn = JSON.stringify([d.activ, d.predefinite, d.url_uri, d.liste_tarii]);
+  var semn = JSON.stringify([d.activ, d.predefinite, d.url_uri, d.liste_tarii, d.adrese_nu_raspund]);
   if(semn === DATE){ return; }
   DATE = semn;
   arataListe(d);
@@ -1486,8 +1619,9 @@ function arata(d){
     var s = document.createElement("span"); s.textContent = p.descriere + (p.tara ? " (" + p.tara + ")" : "");
     l.appendChild(c); l.appendChild(s); return l;
   }));
+  var nuR = d.adrese_nu_raspund || {};
   var a = (d.url_uri || []).map(function(u, i){
-    return rand(u, "Șterge", function(){ var q = new URLSearchParams(); q.set("index", String(i)); cuConfirmare("/api/dvb-i-sterge", q, dupa); });
+    return rand(nuR[u] ? u + " · " + nuR[u] : u, "Șterge", function(){ var q = new URLSearchParams(); q.set("index", String(i)); cuConfirmare("/api/dvb-i-sterge", q, dupa); });
   });
   pune("adrese", a.length ? a : [gol("Nicio adresă proprie.")]);
 }
@@ -1506,7 +1640,7 @@ function citeste(){
   }).catch(faraRaspuns);
 }
 function reincarca(){ trimite("/api/dvb-i-reincarca", new URLSearchParams()); }
-["activ", "rezerva", "toate_tarile", "tara", "regiune"].forEach(function(id){
+["activ", "rezerva", "toate_tarile", "in_lista", "tara", "regiune"].forEach(function(id){
   $(id).addEventListener("change", function(){ var q = new URLSearchParams(); q.set(id, $(id).value); trimite("/api/dvb-i-seteaza", q); });
 });
 $("reincarca").addEventListener("click", reincarca);
@@ -1717,15 +1851,15 @@ PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
     <div class="rand"><label for="anteteReferer">Referer (opțional)</label><input type="text" id="anteteReferer" maxlength="2048" autocomplete="off"></div>
     <div class="butoane"><button type="button" id="anteteSalveaza">Salvează antetele</button><button type="button" id="anteteInchide">Închide</button></div>
   </section>
-  <section class="card ascuns" id="cardSeriale">
-    <h2 id="serialeTitlu">Seriale</h2>
-    <div class="rand" id="serialeCautare"><label for="serialeText">Caută seriale</label><input type="text" id="serialeText" maxlength="80" autocomplete="off"></div>
-    <div class="butoane"><button type="button" id="serialeCauta">Caută</button><button type="button" id="serialeInapoi">Înapoi</button></div>
-    <p class="nota" id="serialeNota"></p>
-    <div id="serialeLista"></div>
-    <div class="butoane"><button type="button" id="serialePrecedenta">Pagina precedentă</button><span id="serialePagina"></span><button type="button" id="serialeUrmatoarea">Pagina următoare</button></div>
+  <section class="card ascuns" id="cardCont">
+    <h2 id="contTitlu">IPTV</h2>
+    <div class="rand ascuns" id="contCautare"><label for="contText">Caută</label><input type="text" id="contText" maxlength="80" autocomplete="off"></div>
+    <div class="butoane"><button type="button" id="contCauta" class="ascuns">Caută</button><button type="button" id="contInapoi">Înapoi</button></div>
+    <p class="nota" id="contNota"></p>
+    <div id="contLista"></div>
+    <div class="butoane ascuns" id="contPagini"><button type="button" id="contPrecedenta">Pagina precedentă</button><button type="button" id="contUrmatoarea">Pagina următoare</button></div>
   </section>
-  <p class="nota">Pe televizor, OK deschide grupele sursei. MENU arată datele de acces și serialele.</p>
+  <p class="nota">OK: canalele, filmele și serialele. MENU: date de acces și grupele.</p>
   <p class="nota">Aceleași liste sunt pe televizor, în __DRUM_MENIU__.</p>
 </div>
 """ + _COADA + """var ASTEPT = null;
@@ -1741,9 +1875,8 @@ function textSursa(x){
 function stareSursa(x){
   if(x.lucreaza){ return "Se încarcă..."; }
   if(x.eroare){ return x.eroare; }
-  if(x.fara_https_text){ return x.fara_https_text; }
-  if(x.taiate){ return "Lista are prea multe canale: au intrat primele " + String(DATE.plafon) + "."; }
-  return "Merge.";
+  var nota = [x.fara_https_text, x.taiate_text].filter(Boolean).join(" ");
+  return "Merge." + (nota ? " " + nota : "");
 }
 var CONT = {};
 function stareCont(id, incercari){
@@ -1769,9 +1902,9 @@ function randSursa(x){
   if(x.fel === "xtream"){ var c = el("small", "", CONT[x.id] ? CONT[x.id].text : ""); c.setAttribute("data-cont", x.id); if(CONT[x.id] && CONT[x.id].rau){ c.className = "rau"; } s.appendChild(document.createElement("br")); s.appendChild(c); stareCont(x.id, 0); }
   d.appendChild(s);
   var b = el("span", "sursa-actiuni");
-  if(x.fel === "xtream"){
-    var seriale = el("button", "", "Seriale"); seriale.type = "button";
-    seriale.addEventListener("click", function(){ deschideSeriale(x); }); b.appendChild(seriale);
+  if(x.fel !== "demo"){
+    var deschide = el("button", "principal", "Deschide"); deschide.type = "button";
+    deschide.addEventListener("click", function(){ deschideCont(x); }); b.appendChild(deschide);
   }
   if(x.fel !== "demo"){
     var grupe = el("button", "", "Grupele"); grupe.type = "button";
@@ -1867,13 +2000,13 @@ $("adauga").addEventListener("click", function(){
 $("fisierAdrese").addEventListener("change", function(){
   var f = this.files && this.files[0], el = this;
   if(!f){ return; }
-  if(f.size > 40960){ mesaj("Fișierul e prea mare pentru o listă de adrese.", true); el.value = ""; return; }
+  if(f.size > __MAX_FISIER__){ mesaj("Fișierul e prea mare pentru pagina web. Pune-l pe un stick sau prin FTP în /etc/enigma2: receptorul îl ia singur.", true); el.value = ""; return; }
   var r = new FileReader();
   r.onload = function(){ var q = new URLSearchParams(); q.set("text", String(r.result || "")); q.set("nume", f.name || ""); trimite("/api/iptv-fisier", q).then(function(d){ el.value = ""; if(d && d.result){ urmareste(); } }); };
   r.onerror = function(){ mesaj("Fișierul nu s-a putut citi.", true); el.value = ""; };
   r.readAsText(f);
 });
-var ANTETE_ID = "", SR = null, SR_TURA = 0;
+var ANTETE_ID = "";
 var GRUPE_ID = "", GRUPE_DATE = null;
 function arataGrupe(d){
   var l = $("grupeLista"); l.textContent = ""; GRUPE_DATE = d;
@@ -1913,60 +2046,125 @@ $("anteteSalveaza").addEventListener("click", function(){
   q.set("user_agent", $("anteteAgent").value.trim()); q.set("referer", $("anteteReferer").value.trim());
   trimite("/api/sursa-antete", q).then(function(d){ if(d && d.result){ $("anteteInchide").click(); } });
 });
-function deschideSeriale(x){
-  SR = {id:x.id,nume:x.nume,serial:"",sezon:"",pagina:0,cauta:"",drum:[],cerere:"",ocupat:false};
-  $("serialeText").value = ""; $("cardSeriale").classList.remove("ascuns");
-  $("cardSeriale").scrollIntoView({block:"start",behavior:"smooth"}); incarcaSeriale();
+var CT = null, CT_TURA = 0;
+function deschideCont(x){
+  CT = {id:x.id, nume:x.nume, fel:x.fel, filme:x.filme_sursa || 0, canale:x.canale_text || "", drum:[], pagina:null};
+  $("contText").value = ""; $("cardCont").classList.remove("ascuns");
+  $("cardCont").scrollIntoView({block:"start",behavior:"smooth"});
+  nivelCont("", arataSectiuni, "");
 }
-function butoaneSeriale(){
-  $("serialeCautare").classList.toggle("ascuns", !!SR.serial); $("serialeCauta").classList.toggle("ascuns", !!SR.serial);
-  $("serialeCauta").disabled = SR.ocupat;
-  $("serialePrecedenta").disabled = SR.ocupat || !SR.pagina;
-  $("serialeUrmatoarea").disabled = SR.ocupat || !SR.altele;
-  $("serialePagina").textContent = "Pagina" + " " + String(SR.pagina + 1);
+function nivelCont(titlu, fn, tip){ CT.drum.push({titlu:titlu, fn:fn, tip:tip}); fn(); }
+function sus(){ return CT.drum[CT.drum.length - 1]; }
+function listaCont(randuri, nota){
+  $("contTitlu").textContent = [CT.nume].concat(CT.drum.map(function(n){ return n.titlu; }).filter(Boolean)).join(" › ");
+  var tip = sus().tip; $("contCautare").classList.toggle("ascuns", !tip); $("contCauta").classList.toggle("ascuns", !tip);
+  var p = CT.pagina; $("contPagini").classList.toggle("ascuns", !p);
+  if(p){ $("contPrecedenta").disabled = !p.de_la; $("contUrmatoarea").disabled = p.de_la + PE_PAGINA >= p.toate; }
+  $("contNota").textContent = nota || ""; pune("contLista", randuri.length ? randuri : [gol("Niciun rezultat.")]);
 }
-function incarcaSeriale(){
-  if(!SR){ return; } var tura = ++SR_TURA, q = new URLSearchParams();
-  ["id","serial","sezon","pagina","cauta"].forEach(function(k){ q.set(k, SR[k]); });
-  SR.ocupat = true; SR.cerere = ""; butoaneSeriale(); pune("serialeLista", []);
-  $("serialeNota").textContent = "Se încarcă...";
-  function primeste(d){
-    if(!SR || tura !== SR_TURA){ return; }
-    if(d.lucreaza){ setTimeout(function(){ if(SR && tura === SR_TURA){ cerere("/api/seriale?cerere=" + encodeURIComponent(d.cerere)).then(primeste).catch(esec); } }, 500); return; }
-    SR.ocupat = false; SR.altele = !!d.altele; SR.cerere = d.cerere || ""; butoaneSeriale();
-    if(!d.result){ $("serialeNota").textContent = d.message; return; }
-    $("serialeTitlu").textContent = (d.titlu || SR.nume) + " · " + "Seriale";
-    $("serialeNota").textContent = [d.descriere, d.message].filter(Boolean).join(" ");
-    var randuri = (d.randuri || []).map(function(r){
-      var nume = d.nivel === "sezoane" ? "Sezonul" + " " + r.numar : r.nume;
-      var randNou = rand(nume, d.nivel === "episoade" ? "Redă pe televizor" : "Alege", function(){
-        if(!SR || SR.ocupat || tura !== SR_TURA){ return; }
-        if(d.nivel === "episoade"){
-          var p = new URLSearchParams(); p.set("cerere", SR.cerere); p.set("episod", r.cheie);
-          cerere("/api/seriale-reda", "POST", p).then(function(rez){ mesaj(rez.message, !rez.result); }).catch(nimicNuRaspunde);
-        } else {
-          SR.drum.push({serial:SR.serial,sezon:SR.sezon,pagina:SR.pagina,cauta:SR.cauta});
-          if(d.nivel === "seriale"){ SR.serial = r.id; } else { SR.sezon = r.id; }
-          SR.pagina = 0; incarcaSeriale();
-        }
-      });
-      if(r.descriere || r.durata){ randNou.firstChild.appendChild(document.createElement("br")); randNou.firstChild.appendChild(el("small", "", [r.durata,r.descriere].filter(Boolean).join(" · "))); }
-      return randNou;
-    });
-    pune("serialeLista", randuri.length ? randuri : [gol("Niciun rezultat.")]);
+var PE_PAGINA = 300;
+function incarcareCont(){ ++CT_TURA; CT.pagina = null; $("contNota").textContent = "Se încarcă..."; pune("contLista", []); return CT_TURA; }
+function faraRaspunsCont(tura){ if(CT && tura === CT_TURA){ $("contNota").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; } }
+function cerereCanale(q, gata){
+  var tura = incarcareCont(); q.set("id", CT.id);
+  (function una(n){
+    cerere("/api/iptv-sursa-canale?" + q.toString()).then(function(d){
+      if(!CT || tura !== CT_TURA){ return; }
+      if(d.asteapta && n < 120){ setTimeout(function(){ una(n + 1); }, 500); return; }
+      if(!d.result){ $("contNota").textContent = d.message || ""; return; }
+      gata(d);
+    }).catch(function(){ faraRaspunsCont(tura); });
+  })(0);
+}
+function cerereVod(q, gata){
+  var tura = incarcareCont(); q.set("id", CT.id);
+  (function una(cale){
+    cerere(cale).then(function(d){
+      if(!CT || tura !== CT_TURA){ return; }
+      if(d.lucreaza){ setTimeout(function(){ una("/api/vod?id=" + encodeURIComponent(CT.id) + "&cerere=" + encodeURIComponent(d.cerere)); }, 500); return; }
+      if(!d.result){ $("contNota").textContent = d.message || ""; return; }
+      gata(d);
+    }).catch(function(){ faraRaspunsCont(tura); });
+  })("/api/vod?" + q.toString());
+}
+function arataSectiuni(){
+  ++CT_TURA; CT.pagina = null;
+  var r = [rand("Canale TV" + (CT.canale ? " · " + CT.canale : ""), "Deschide", function(){ nivelCont("Canale TV", grupeCont, ""); })];
+  if(CT.fel === "xtream" || (CT.fel === "m3u" && CT.filme)){
+    r.push(rand("Filme" + (CT.fel === "m3u" ? " · " + CT.filme : ""), "Deschide", function(){ nivelCont("Filme", function(){ categoriiCont("filme"); }, "filme"); }));
   }
-  function esec(){ if(SR && tura === SR_TURA){ SR.ocupat = false; butoaneSeriale(); $("serialeNota").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; } }
-  cerere("/api/seriale?" + q.toString()).then(primeste).catch(esec);
+  if(CT.fel === "xtream"){ r.push(rand("Seriale", "Deschide", function(){ nivelCont("Seriale", function(){ categoriiCont("seriale"); }, "seriale"); })); }
+  listaCont(r);
 }
-$("serialeInapoi").addEventListener("click", function(){
-  if(!SR){ return; }
-  if(SR.drum.length){ var d = SR.drum.pop(); ["serial","sezon","pagina","cauta"].forEach(function(k){ SR[k] = d[k]; }); incarcaSeriale(); }
-  else { SR = null; ++SR_TURA; $("cardSeriale").classList.add("ascuns"); }
+function grupeCont(){
+  cerereCanale(new URLSearchParams(), function(d){
+    listaCont((d.grupe || []).map(function(g, i){ return rand(g.nume + " · " + g.text, "Deschide", function(){ nivelCont(g.nume, function(){ canaleCont(i, 0); }, ""); }); }));
+  });
+}
+function canaleCont(i, de_la){
+  var q = new URLSearchParams(); q.set("grupa", String(i)); q.set("de_la", String(de_la));
+  cerereCanale(q, function(d){
+    CT.pagina = {grupa:i, de_la:d.de_la, toate:d.toate};
+    listaCont((d.canale || []).map(function(c){
+      return rand(c.nume, "Pornește pe televizor", function(){
+        var p = new URLSearchParams(); p.set("id", CT.id); p.set("cheie", c.cheie);
+        cerere("/api/iptv-sursa-porneste", "POST", p).then(function(r){ mesaj(r.message, !r.result); }).catch(nimicNuRaspunde);
+      });
+    }));
+  });
+}
+function categoriiCont(tip){
+  var q = new URLSearchParams(); q.set("fel", "categorii"); q.set("tip", tip);
+  cerereVod(q, function(d){
+    listaCont((d.categorii || []).map(function(c){ return rand(c.nume, "Deschide", function(){ nivelCont(c.nume, function(){ titluriCont(tip, "rand", c.id); }, tip); }); }));
+  });
+}
+function titluriCont(tip, fel, arg){
+  var q = new URLSearchParams(); q.set("fel", fel); q.set("tip", tip); q.set("arg", arg);
+  cerereVod(q, function(d){
+    listaCont((d.titluri || []).map(function(t){
+      var text = [t.nume, t.nota ? t.nota.replace(".", ",") : ""].filter(Boolean).join(" · ");
+      if(tip === "seriale"){ return rand(text, "Deschide", function(){ nivelCont(t.nume, function(){ sezoaneCont(t); }, ""); }); }
+      return rand(text, "Pornește pe televizor", function(){ redaCont(t, {}); });
+    }));
+  });
+}
+function sezoaneCont(t){
+  var q = new URLSearchParams(); q.set("fel", "detalii"); q.set("tip", "seriale"); q.set("arg", t.id);
+  cerereVod(q, function(d){
+    var det = d.detalii || {};
+    listaCont((det.sezoane || []).map(function(sz){
+      return rand("Sezonul" + " " + sz.numar, "Deschide", function(){
+        nivelCont("Sezonul" + " " + sz.numar, function(){
+          ++CT_TURA; CT.pagina = null;
+          listaCont((sz.episoade || []).map(function(e){
+            return rand((e.numar ? e.numar + ". " : "") + e.nume, "Pornește pe televizor", function(){
+              redaCont(e, {serial:det.id || t.id, serial_nume:det.nume || t.nume, sezon:sz.numar, numar:e.numar || ""});
+            });
+          }));
+        }, "");
+      });
+    }), det.descriere || "");
+  });
+}
+function redaCont(t, extra){
+  var q = new URLSearchParams(); q.set("id", CT.id); q.set("cheie", t.cheie); q.set("de_la", "1"); q.set("nume", t.nume || ""); q.set("poza", t.poza || "");
+  Object.keys(extra).forEach(function(k){ q.set(k, extra[k]); });
+  cerere("/api/vod-reda", "POST", q).then(function(r){ mesaj(r.message, !r.result); }).catch(nimicNuRaspunde);
+}
+$("contInapoi").addEventListener("click", function(){
+  if(!CT){ return; }
+  if(CT.drum.length > 1){ CT.drum.pop(); sus().fn(); }
+  else { CT = null; ++CT_TURA; $("cardCont").classList.add("ascuns"); }
 });
-$("serialeCauta").addEventListener("click", function(){ if(SR && !SR.ocupat){ SR.cauta = $("serialeText").value.trim(); SR.pagina = 0; incarcaSeriale(); } });
-$("serialeText").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); $("serialeCauta").click(); } });
-$("serialePrecedenta").addEventListener("click", function(){ if(SR && !SR.ocupat && SR.pagina){ --SR.pagina; incarcaSeriale(); } });
-$("serialeUrmatoarea").addEventListener("click", function(){ if(SR && !SR.ocupat && SR.altele){ ++SR.pagina; incarcaSeriale(); } });
+$("contCauta").addEventListener("click", function(){
+  var text = $("contText").value.trim(), tip = CT ? sus().tip : "";
+  if(!CT || !text || !tip){ return; }
+  nivelCont(text, function(){ titluriCont(tip, "cauta", text); }, tip);
+});
+$("contText").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); $("contCauta").click(); } });
+$("contPrecedenta").addEventListener("click", function(){ var p = CT && CT.pagina; if(p && p.de_la){ canaleCont(p.grupa, Math.max(0, p.de_la - PE_PAGINA)); } });
+$("contUrmatoarea").addEventListener("click", function(){ var p = CT && CT.pagina; if(p && p.de_la + PE_PAGINA < p.toate){ canaleCont(p.grupa, p.de_la + PE_PAGINA); } });
 var ARHIVA = "";
 function arhiva(incercari){
   cerere("/api/iptv-arhiva").then(function(d){
@@ -2182,6 +2380,8 @@ TEXTE_PAGINA = {
 		N_("Reîncarcă acum"),
 		N_("Descarcă acum listele alese; canalele apar în lista de canale, în buchetul Canale de pe "
 			"internet (DVB-I)."),
+		N_("Arată lista în lista de canale"),
+		N_("Cu Nu, lista Canale de pe internet (DVB-I) iese din lista de canale și nu mai revine singură."),
 		N_("Canalele"),
 		N_("Încearcă din nou"),
 		N_("Setări VPN"),
@@ -2220,7 +2420,7 @@ TEXTE_PAGINA = {
 			"receptorului nu le folosește încă. Aceleași setări sunt pe televizor, în __DRUM_MENIU__."),
 		N_("http://"),
 		N_("Listele și conturile tale"),
-		N_("Pe televizor, OK deschide grupele sursei. MENU arată datele de acces și serialele."),
+		N_("OK: canalele, filmele și serialele. MENU: date de acces și grupele."),   # 0.7.7 (FLM2)
 		N_("Emisiunile trecute"),
 		N_("Pentru alt canal: pornește-l pe televizor, apoi apasă Reîncarcă. Pe televizor: MENU pe canal în lista de canale, apoi Emisiunile trecute."),
 		N_("Reîncarcă"),
@@ -2250,8 +2450,6 @@ TEXTE_PAGINA = {
 		N_("Valorile salvate nu se arată. Completează ambele câmpuri; gol revine la valoarea implicită."),
 		N_("Salvează antetele"),
 		N_("Închide"),
-		N_("Seriale"),
-		N_("Caută seriale"),
 		N_("Caută"),
 		N_("Înapoi"),
 		N_("Pagina precedentă"),
@@ -2327,6 +2525,9 @@ TEXTE_PAGINA = {
 		N_("adrese moarte"),
 		N_("fără răspuns"),
 		N_("neîncercate"),
+		N_("ascunse din lista de canale până merg din nou"),
+		N_("scoase din liste: clipuri și imagini de probă"),
+		N_("nu e în lista de canale"),
 		N_("Niciun canal încă. Alege țara sau o listă, apoi Reîncarcă acum."),
 		N_("și pe satelit"),
 		N_("Privește"),
@@ -2359,19 +2560,19 @@ TEXTE_PAGINA = {
 		N_("Apasă Caută SAP pentru a descoperi sesiuni MABR în rețea."),
 		N_("Niciun grup adăugat de mână."),
 		N_("Încă nu ai adăugat nimic."),
-		N_("Fișierul e prea mare pentru o listă de adrese."),
+		N_("Fișierul e prea mare pentru pagina web. Pune-l pe un stick sau prin FTP în /etc/enigma2: receptorul îl ia singur."),
 		N_("Fișierul nu s-a putut citi."),
+		# 0.7.7 (FLM2): pagina sursei (butonul Deschide): randurile si titlul
+		N_("Deschide"),
+		N_("Canale TV"),
+		N_("Filme"),
 		N_("Seriale"),
 		N_("Antete"),
 		N_("Antetele sursei"),
 		N_("Grupele"),
-		N_("Pagina"),
 		N_("Sezonul"),
-		N_("Redă pe televizor"),
-		N_("Alege"),
 		N_("Niciun rezultat."),
 		N_("Se încarcă..."),
-		N_("Lista are prea multe canale: au intrat primele"),
 		N_("Merge."),
 		N_("Pornește pe televizor"),
 		N_("Actualizează"),

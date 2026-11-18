@@ -639,11 +639,7 @@ class Wizard(Screen):
 				if "VKeyIcon" in self:
 					self["VirtualKB"].setEnabled(True)
 					self["VKeyIcon"].boolean = True
-				if "HelpWindow" in self:
-					if self["config"].getCurrent()[1].help_window.instance is not None:
-						helpwindowpos = self["HelpWindow"].getPosition()
-						from enigma import ePoint
-						self["config"].getCurrent()[1].help_window.instance.move(ePoint(helpwindowpos[0],helpwindowpos[1]))
+				self._mutaFereastraCifrelor()
 			else:
 				if "VKeyIcon" in self:
 					self["VirtualKB"].setEnabled(False)
@@ -652,6 +648,19 @@ class Wizard(Screen):
 			if "VKeyIcon" in self:
 				self["VirtualKB"].setEnabled(False)
 				self["VKeyIcon"].boolean = False
+
+	def _mutaFereastraCifrelor(self):
+		# fereastra cifrelor (help_window) la locul lui "HelpWindow" din tema, numai cand amandoua au desen: unele campuri de text
+		# n-au help_window (ConfigDirectory), iar "HelpWindow" pus de un plugin fara element in tema are instance None si
+		# GUIComponent.getPosition cadea (aceeasi garda ca in ConfigList, cb182e60f; GUC 15.11.2026, Vu+ Ultimo 4K 0.7.4)
+		if "HelpWindow" not in self:
+			return
+		fereastra = getattr(self["config"].getCurrent()[1], "help_window", None)
+		if fereastra is None or fereastra.instance is None or self["HelpWindow"].instance is None:
+			return
+		helpwindowpos = self["HelpWindow"].getPosition()
+		from enigma import ePoint
+		fereastra.instance.move(ePoint(helpwindowpos[0], helpwindowpos[1]))
 
 	def KeyText(self):
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
@@ -667,11 +676,7 @@ class Wizard(Screen):
 	def VirtualKeyBoardCallback(self, callback = None):
 		if callback is not None and len(callback):
 			if isinstance(self["config"].getCurrent()[1], ConfigText) or isinstance(self["config"].getCurrent()[1], ConfigPassword):
-				if "HelpWindow" in self:
-					if self["config"].getCurrent()[1].help_window.instance is not None:
-						helpwindowpos = self["HelpWindow"].getPosition()
-						from enigma import ePoint
-						self["config"].getCurrent()[1].help_window.instance.move(ePoint(helpwindowpos[0],helpwindowpos[1]))
+				self._mutaFereastraCifrelor()
 			self["config"].instance.moveSelectionTo(self.currentConfigIndex)
 			self["config"].setCurrentIndex(self.currentConfigIndex)
 			self["config"].getCurrent()[1].setValue(callback)

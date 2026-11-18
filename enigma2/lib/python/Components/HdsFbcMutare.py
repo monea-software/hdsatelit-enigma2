@@ -37,6 +37,19 @@
 #
 # Semnul „o singura data”: config.misc.hds_fbc_mutare in settings, un cuvant pe pereche („1>0:mutat:<ora>”). O copie
 # a setarilor de dinainte (fara semn) se judeca din nou. Logica de alegere e in functii fara enigma (probe pe PC).
+#
+# Perechea inversa (FB4, 15.11.2026; monuser, Vu+ Duo 4K Lite, si Dervis, GigaBlue UHD Quad 4K Pro, LinuxSat 164155):
+# tunerul A configurat (asa vine din fabrica si din asistentul primei porniri), B nimic conectat, iar cablul in mufa B.
+# A citeste mufa lui, unde nu e nimic: Tuning failed pe toti satelitii. HdsTunerB probeaza si radacinile FBC (B pe mufa
+# lui, cu doua cabluri porneste singur; proba test_fbb_tuner_b_fbc_075), dar numai cand A prinde un canal, deci aici nu
+# ajuta. Aceeasi masinarie, cu rolurile schimbate: destinatia e B, sursa A, cheia 0>1. Diferentele, pentru ca aici nu e o
+# actualizare care a stricat ceva, ci un cablu pus in cealalta mufa, oricand:
+#  - merge pe orice set FBC cu doua radacini, nu numai cu forma cu litere a alegerilor;
+#  - nu_e_cazul nu se scrie la pornire (omul poate configura A mai tarziu): perechea se judeca la fiecare pornire,
+#    pana A prinde (gata, nimic schimbat) sau B prinde in locul lui (mutat, mesajul o data);
+#  - nici B nu prinde (transponder mort, antena nelegata sau prost indreptata): nimic scris, niciun mesaj, se reia la
+#    pornirea urmatoare; la fel cand proba nu poate porni pe B;
+#  - dupa o mutare B -> A (perechea obisnuita), antena e dovedit in mufa A: perechea inversa nu se mai judeca.
 
 import time
 
@@ -69,6 +82,8 @@ _incercari = 0                # probe incepute la pornirea de acum
 _esecuri = 0                  # probe cazute chiar la pornire (in HdsTunerB.Proba.porneste), la pornirea de acum
 _in_pornire = False           # proba e in porneste(): un „cedat” acum e un esec al probei, nu o intrerupere
 _ultimul_motiv = ""           # ultimul motiv de amanare scris in jurnal (fiecare motiv o data)
+_amanate = set()              # cheile perechilor inverse fara raspuns la pornirea de acum (nici B nu prinde, sau
+                              # proba nu porneste pe B): se judeca din nou abia la pornirea urmatoare
 
 
 def _jurnal(text):
@@ -117,6 +132,30 @@ def perechi_fbc(tunere, citeste):
 			continue
 		rez.append((radacini[0].slot, radacini[1].slot))
 	return rez
+
+
+def perechi_inverse(tunere):
+	"""[(B, A)]: pentru fiecare set FBC cu cel putin doua radacini, a doua radacina ca destinatie si prima ca sursa
+	(cablul in mufa B, setarile pe A). Orice forma a alegerilor: cablul pus in cealalta mufa nu tine de versiune."""
+	from Components.HdsFbc import RADACINA
+	grupe = {}
+	for t in tunere:
+		if getattr(t, "fbc_role", 0) != RADACINA or getattr(t, "fbc_set_id", None) is None:
+			continue
+		if t.frontend_id is None or t.frontend_id < 0:
+			continue
+		grupe.setdefault(t.fbc_set_id, []).append(t)
+	rez = []
+	for set_id in sorted(grupe):
+		radacini = sorted(grupe[set_id], key=lambda t: t.frontend_id)
+		if len(radacini) >= 2:
+			rez.append((radacini[1].slot, radacini[0].slot))
+	return rez
+
+
+def invers(a, b):
+	"""perechea inversa: destinatia (unde se cauta antena) e dupa sursa (tunerul cu setarile)"""
+	return a > b
 
 
 def _valoare(cfg, cale, implicit=None):
@@ -185,6 +224,17 @@ def text_nesigur(a, b):
 	return _("Tunerul %(b)s nu prinde semnal. Din versiunea 0.7.4 fiecare mufă a receptorului merge cu tunerul ei. "
 		"Dacă antena este în mufa %(a)s: Meniu > Orientarea și setarea antenei > Setări tuner, configurează tunerul "
 		"%(a)s la fel ca tunerul %(b)s, apoi pune tunerul %(b)s pe „nimic conectat”.") % {"a": litera(a), "b": litera(b)}
+
+
+def text_nesigur_invers(a, b):
+	"""perechea inversa: B a prins cu setarile lui A (antena e in mufa B), dar mutarea nu s-a putut face singura"""
+	return _("Antena este în mufa %(a)s, dar setările sunt pe tunerul %(b)s. Meniu > Orientarea și setarea antenei > "
+		"Setări tuner: configurează tunerul %(a)s la fel ca tunerul %(b)s, apoi pune pe „nimic conectat” tunerul %(b)s "
+		"și tunerele legate de el.") % {"a": litera(a), "b": litera(b)}
+
+
+def text_nesigur_pereche(a, b):
+	return text_nesigur_invers(a, b) if invers(a, b) else text_nesigur(a, b)
 
 
 def frunze_de_mutat(cfg_b):
@@ -279,7 +329,7 @@ def de_judecat(scrie=False):
 	ecranul tunerului si nesalvata nu lasa semn)."""
 	nm = _nm()
 	from Components import HdsFbc
-	perechi = perechi_fbc(nm.nim_slots, HdsFbc._citeste)
+	perechi = perechi_fbc(nm.nim_slots, HdsFbc._citeste) + perechi_inverse(nm.nim_slots)
 	if not perechi:
 		return []
 	semne = citeste_semn(_semn().value)
@@ -288,6 +338,14 @@ def de_judecat(scrie=False):
 	for a, b in perechi:
 		k = cheie(a, b)
 		if k in semne:
+			continue
+		if invers(a, b):
+			# antena dovedit in mufa sursei (mutarea obisnuita s-a facut), sau fara raspuns la pornirea de acum
+			if k in _amanate or semne.get(cheie(b, a), ("",))[0] == MUTAT:
+				continue
+			fel = poarta(a, b, _cfg, sloturi)
+			if fel is not None:
+				rez.append((a, b, fel))
 			continue
 		fel = poarta(a, b, _cfg, sloturi)
 		if fel is None and scrie:
@@ -317,7 +375,7 @@ def stare_web(acum=None):
 			try:
 				if _valoare(_cfg(a), "configMode") == "nothing" and \
 						_valoare(_cfg(b), "configMode") in ("simple", "advanced"):
-					rez[b] = text_nesigur(a, b)
+					rez[b] = text_nesigur_pereche(a, b)
 			except Exception:
 				pass
 	return rez
@@ -418,9 +476,23 @@ def _hotaraste(a, b, rezultat, motiv=""):
 	semne[cheie(a, b)] = (rezultat, int(time.time()))
 	_scrie_semn(semne)
 	_citiri.pop(cheie(a, b), None)
-	_jurnal_tuner("tunerul %s fara semnal dupa 0.7.4: %s%s" % (litera(b), rezultat, (" (%s)" % motiv) if motiv else ""))
+	if rezultat == B_ARE_SEMNAL:
+		# MI7 (15.11.2026): tunerul are semnal pe mufa lui; randul vechi ("fara semnal, antena cautata") era derutant
+		_jurnal_tuner("tunerul %s are semnal pe mufa lui: nimic schimbat (perechea cu mufa %s, %s)%s" % (litera(b),
+			litera(a), rezultat, (" (%s)" % motiv) if motiv else ""))
+	else:
+		_jurnal_tuner("tunerul %s fara semnal, antena cautata in mufa %s: %s%s" % (litera(b), litera(a), rezultat,
+			(" (%s)" % motiv) if motiv else ""))
 	if rezultat == NESIGUR:
-		_arata(text_nesigur(a, b))
+		_arata(text_nesigur_pereche(a, b))
+
+
+def _amana(a, b, motiv):
+	"""perechea inversa fara raspuns: nimic scris, niciun mesaj; se judeca din nou la pornirea urmatoare"""
+	_amanate.add(cheie(a, b))
+	_citiri.pop(cheie(a, b), None)
+	_jurnal_tuner("tunerul %s fara semnal, nici mufa %s nu prinde cu setarile lui (%s): reluat la pornirea urmatoare"
+		% (litera(b), litera(a), motiv))
 
 
 def _rand_tuner(slot):
@@ -509,13 +581,19 @@ def _gata(a, b, fel, rezultat):
 		elif rezultat == "b_prins":
 			_hotaraste(a, b, B_ARE_SEMNAL)
 		elif rezultat == "neprins":
-			_hotaraste(a, b, NESIGUR, "nici %s nu prinde" % litera(a))
+			if invers(a, b):
+				_amana(a, b, "nici %s nu prinde" % litera(a))
+			else:
+				_hotaraste(a, b, NESIGUR, "nici %s nu prinde" % litera(a))
 		elif _in_pornire:
 			# proba n-a pornit deloc pe A (canalul brut sau acordul): de cateva ori -> nesigur, cu mesajul
 			_esecuri += 1
 			_citiri.pop(cheie(a, b), None)
 			if _esecuri >= ESECURI_LA_PORNIRE:
-				_hotaraste(a, b, NESIGUR, "proba n-a putut porni pe %s" % litera(a))
+				if invers(a, b):
+					_amana(a, b, "proba n-a putut porni pe %s" % litera(a))
+				else:
+					_hotaraste(a, b, NESIGUR, "proba n-a putut porni pe %s" % litera(a))
 		else:
 			_citiri.pop(cheie(a, b), None)     # intrerupta (alt canal, inregistrare): se reia de la capat
 	except Exception as e:
@@ -609,7 +687,7 @@ def _programeaza():
 
 
 def porneste(session):
-	"""Din mytest.py. Fara FBC cu forma cu litere, sau cu toate perechile judecate (semnul), nu face nimic."""
+	"""Din mytest.py. Fara FBC, sau fara nicio pereche de judecat (semnul, poarta), nu face nimic."""
 	global _sesiune, _ceas
 	_sesiune = session
 	if not de_judecat(scrie=True):

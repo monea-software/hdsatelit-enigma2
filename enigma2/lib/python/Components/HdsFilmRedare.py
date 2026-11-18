@@ -391,7 +391,33 @@ def verdictDinInfo(info, cale="", canal=False):
 	except Exception as e:
 		print("[HdsFilmRedare] motivul nu se poate citi: %s" % e)
 		return None
-	return verdict(motiv, video, sunet, esteFlux(cale) or canal, canal)
+	v = verdict(motiv, video, sunet, esteFlux(cale) or canal, canal)
+	if v is not None and v.refuza and v.fel not in ("decodor", "pipeline") and _releuServer(cale):
+		v = verdictServer(v, cale)
+	return v
+
+
+def _releuServer(cale):
+	"""Calea releului pentru filmele serverelor media de acasa; nu un fisier de pe disc (/media/hdd/...)."""
+	cale = cale or ""
+	return cale.startswith("http://127.0.0.1") and "/media/" in cale
+
+
+def verdictServer(v, cale):
+	"""Un film de pe Emby/Jellyfin (releul, http://127.0.0.1:<port>/media/<sursa>/<cheie>) care nu merge pe placa, cand serverul
+	n-a avut voie sa-l transforme pentru utilizator (ErrorCode NotAllowed): fereastra spune ce bifa se pune pe server, in locul
+	refuzului obisnuit (EMT, TODO 15.11 07:06). Altfel verdictul ramane. Pe televizor (InfoBarFilmRefuz) si in pagina web
+	(filme_web) prin acelasi verdictDinInfo."""
+	try:
+		from Components import HdsVodServere as S
+		text = S.textRefuz(cale)
+	except Exception as e:
+		print("[HdsFilmRedare] refuzul serverului: %s" % type(e).__name__)
+		return v
+	if not text:
+		return v
+	titlu, detaliu, tehnic = text
+	return Verdict("server", True, titlu, detaliu, "; ".join(x for x in (tehnic, v.tehnic) if x))
 
 
 def esteFilm(ref):

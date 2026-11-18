@@ -10,6 +10,8 @@
 # Tastatura cheii foloseste tastatura comuna, cu un camp local mascat.
 # Galben probeaza configuratia locala fara salvare. Albastru deschide instructiunile.
 # Pornirea spune ce lipseste pistei de subtitrare, inclusiv OCR pentru imagini.
+# Randul canalului de acum (sub pornire, cu traducerea pornita): Nu = pe canalul care merge subtitrarile nu se mai
+# traduc (T.puneOpritPeCanal, la VERDE, ca restul); lista canalelor oprite, cu Scoate, e in pagina web.
 # Aceleasi reglaje si actiuni sunt in HdsWebControl, /traducere-subtitrari.
 
 from __future__ import absolute_import
@@ -23,7 +25,8 @@ from Screens.ChoiceBox import ChoiceBox
 from Screens.VirtualKeyBoard import VirtualKeyBoard
 from Components.ActionMap import ActionMap
 from Components.ConfigList import ConfigListScreen
-from Components.config import configfile, getConfigListEntry, ConfigSelection, ConfigSubsection, ConfigText
+from Components.config import configfile, getConfigListEntry, ConfigSelection, ConfigSubsection, ConfigText, \
+	ConfigYesNo
 from Components.GUIComponent import GUIComponent
 from Components.ScrollLabel import ScrollLabel
 from Components.Sources.StaticText import StaticText
@@ -41,6 +44,23 @@ LENT_MS = 1000				# peste atat, proba spune ca serverul e prea lent pentru subti
 REGIUNI_AZURE_REZERVA = (("", "Global"), ("westeurope", "West Europe"), ("northeurope", "North Europe"),
 	("germanywestcentral", "Germany West Central"), ("francecentral", "France Central"), ("swedencentral", "Sweden Central"),
 	("uksouth", "UK South"), ("switzerlandnorth", "Switzerland North"))
+
+
+def _titluCheie(serv, idx):
+	"""Titlul alegerii si al tastaturii pentru cheia idx a serviciului. Traducerea poate avea alte specificatoare decat
+	textul romanesc: in tr.po „%s için API anahtarı %d” punea numele serviciului in %d, TypeError la OK si interfata
+	cadea (forum 1589, 16.11.2026). Acum, cand traducerea nu primeste argumentele, se ia textul romanesc (poarta
+	verifica_limbi_complete.py opreste de acum constructia cu o asemenea traducere)."""
+	argumente = (idx + 1, T.numeServiciu(serv))
+	if serv == "propriu":
+		tradus, roman = _("Valoarea antetului %d pentru %s"), "Valoarea antetului %d pentru %s"
+	else:
+		tradus, roman = _("Cheia API %d pentru %s"), "Cheia API %d pentru %s"
+	try:
+		return tradus % argumente
+	except (TypeError, ValueError, KeyError):
+		print("[HdsTraducereSubtitrari] traducerea titlului cheii are alte specificatoare: %s" % roman)
+		return roman % argumente
 
 
 def _C():
@@ -362,9 +382,10 @@ def _skinTelefon(latime, inaltime):
 
 
 class HdsTraducereTelefon(Screen):
-	"""Codul QR care deschide pe telefon pagina pas cu pas a receptorului, deja asociata (jetonul de unica folosinta
-	din HdsWebControl/asociere.py). Jetonul se reface la expirare si dupa folosire (al doilea aparat poate scana si el)
-	si se anuleaza la inchidere; ecranul arata telefonul conectat si rezultatul probei pornite de pe telefon."""
+	"""Codul QR care deschide pe telefon pagina pas cu pas a receptorului: adresa simpla http://<IP>/traducere-configurare,
+	aceeasi de fiecare data (oricate scanari, oricate telefoane, buna de favorite). In reteaua de acasa interfata web nu
+	cere nimic; numai cu parola pusa de om pentru web pagina cere parola lui. Ecranul arata rezultatul probei pornite
+	de pe telefon."""
 	DESTINATIE = "/traducere-configurare"
 
 	def __init__(self, session):
@@ -379,9 +400,6 @@ class HdsTraducereTelefon(Screen):
 		self["adresa"] = StaticText(u"")
 		self["jos"] = StaticText(_("OK sau Ieșire închide."))
 		self["actiuni"] = ActionMap(["OkCancelActions"], {"ok": self.close, "cancel": self.close}, -1)
-		self._asociere = None
-		self._jeton = None
-		self._conectat = None
 		self._lucrare = None
 		self._ceas = eTimer()
 		self._ceas.callback.append(self._bate)
@@ -395,25 +413,17 @@ class HdsTraducereTelefon(Screen):
 				self._lucrare = C.configurator().stare().get("id")
 			except Exception as e:
 				print("[HdsTraducereSubtitrari] configurarea: %s" % e)
-		self._jetonNou()
+		self._codul()
 		self._ceas.start(TELEFON_MS, False)
 
-	def _jetonNou(self):
+	def _codul(self):
 		baza = _adresaWeb()
 		if not baza:
-			self._jeton = None
 			_deseneazaQr(self, "qr", u"")
 			self["stare"].setText(_("Receptorul nu are legătură în rețea, deci pagina nu se poate deschide pe telefon."))
 			self["adresa"].setText(u"")
 			return
-		try:
-			from Plugins.Extensions.HdsWebControl.plugin import obtineAsociere
-			self._asociere = obtineAsociere()
-			self._jeton = self._asociere.cereJeton(self.DESTINATIE)
-		except Exception as e:
-			print("[HdsTraducereSubtitrari] jetonul pentru telefon: %s" % e.__class__.__name__)
-			self._jeton = None
-		_deseneazaQr(self, "qr", (baza + "/t/" + self._jeton["jeton"]) if self._jeton else (baza + self.DESTINATIE))
+		_deseneazaQr(self, "qr", baza + self.DESTINATIE)
 		gazda = baza.split("//", 1)[-1]
 		port = gazda[gazda.index(":"):] if ":" in gazda else u""
 		self["adresa"].setText(_("Sau scrie în browser: %s\nsau %s") % (baza + self.DESTINATIE,
@@ -422,22 +432,6 @@ class HdsTraducereTelefon(Screen):
 
 	def _bate(self):
 		randuri = []
-		if self._asociere is not None and self._jeton is not None:
-			stare, info = self._asociere.stareJeton(self._jeton["id"])
-			if stare == "folosit":
-				self._conectat = info
-				self._jetonNou()
-				return
-			if stare == "expirat":
-				self._jetonNou()
-				return
-			if not self._conectat:
-				randuri.append(_("Codul e valabil încă %d:%02d; apoi apare altul.") % (info // 60, info % 60))
-		if self._conectat:
-			nume = self._conectat.get("nume") or u""
-			if self._conectat.get("adresa"):
-				nume += u" (%s)" % self._conectat["adresa"]
-			randuri.insert(0, _("Telefon conectat: %s. Continuă pe telefon.") % nume)
 		C = _C()
 		if C is not None:
 			try:
@@ -454,9 +448,6 @@ class HdsTraducereTelefon(Screen):
 
 	def _inchis(self):
 		self._ceas.stop()
-		if self._asociere is not None and self._jeton is not None:
-			self._asociere.anuleazaJeton(self._jeton["id"])
-		self._jeton = None
 
 
 class HdsTraducereSubtitrari(Screen, ConfigListScreen):
@@ -504,6 +495,17 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		self.randProba = ConfigSelection(choices=[("proba", _("OK probează"))], default="proba")
 		self.randInstructiuni = ConfigSelection(choices=[("instructiuni", _("OK le deschide"))], default="instructiuni")
 		self.randToate = ConfigSelection(choices=[("toate", _("OK le deschide"))], default="toate")
+		# randul canalului de acum: Da = se traduce pe canalul care merge; schimbarea se salveaza la VERDE
+		self.randCanal = None
+		self._canal = None
+		try:
+			acum = T.stareCanale()["acum"] if hasattr(T, "stareCanale") else None
+		except Exception as eroare:
+			print("[HdsTraducereSubtitrari] canalul de acum: %s" % eroare.__class__.__name__)
+			acum = None
+		if acum:
+			self._canal = dict(acum)
+			self.randCanal = ConfigYesNo(default=not acum["oprit"])
 		self._textProba = None
 		self._textMesaj = None
 		self._textLucrare = None		# rezultatul cautarii sau al configurarii pornite de aici
@@ -566,8 +568,10 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		if pune is not None:
 			pune(s)
 		lista = [getConfigListEntry(_("Configurează de pe telefon"), self.randTelefon),
-			getConfigListEntry(_("Traducerea subtitrărilor"), s.pornit),
-			getConfigListEntry(_("Serviciul"), s.serviciu)]
+			getConfigListEntry(_("Traducerea subtitrărilor"), s.pornit)]
+		if self.randCanal is not None and s.pornit.value:
+			lista.append(getConfigListEntry(_("Traducerea pe canalul de acum"), self.randCanal))
+		lista.append(getConfigListEntry(_("Serviciul"), s.serviciu))
 		if _camp(s, "rezerve") is not None:
 			self._puneValoare(self.randRezerve, "rezerve", self._textRezerve())
 			lista.append(getConfigListEntry(_("Serviciile de rezervă"), self.randRezerve))
@@ -638,7 +642,7 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		if not self._toate:
 			vizibile = self._numeVizibile()
 			elemente = [getattr(s, n) for n in vizibile if _camp(s, n) is not None]
-			butoane = (self.randCauta, self.randProba, self.randChei[0])
+			butoane = (self.randCauta, self.randProba, self.randChei[0], self.randCanal)
 			lista = [r for r in lista if self._real(r[1]) in elemente or r[1] in butoane]
 		ascunse = self._ascunseSchimbate()
 		text = (_("%d reglaje ascunse schimbate") % ascunse) if ascunse and not self._toate else _("OK le deschide")
@@ -864,6 +868,10 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 			return self._textMesaj
 		if e is self.randToate:
 			return _("OK schimbă vederea. Reglajele ascunse se păstrează. VERDE salvează tot; EXIT renunță.")
+		if self.randCanal is not None and e is self.randCanal:
+			nume = (self._canal or {}).get("nume") or u""
+			return (nume + u": " if nume else u"") + _("Nu: pe canalul acesta subtitrările nu se mai traduc și nu mai "
+				"pornesc singure pentru traducere.")
 		if e is s.pornit and hasattr(T, "diagnosticPornire"):
 			return T.diagnosticPornire(s=s)["mesaj"]
 		if self._textProba is not None and e in (s.serviciu, self.randProba):
@@ -1027,6 +1035,23 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 
 	# ------------------------------------------------------------------ tastele
 	def ok(self):
+		"""OK pe un rand. Orice eroare de aici ar fi doborat interfata (o exceptie dintr-o tasta = bsodFatal), ca la cheia
+		API in turca (forum 1589): acum se scrie in jurnal stiva ei ca de obicei („Traceback”, ca s-o gaseasca jurnalele
+		trimise si asistenta), dar fara mesajul erorii, care poate avea cheia; ecranul ramane deschis."""
+		try:
+			self._ok()
+		except Exception as eroare:
+			import sys
+			import traceback
+			print("Traceback (most recent call last):\n%s%s (mesajul nu se scrie: poate avea cheia)\n"
+				"[HdsTraducereSubtitrari] OK: eroarea a ramas in ecran, interfata merge" % (
+				"".join(traceback.format_list(traceback.extract_tb(sys.exc_info()[2]))), eroare.__class__.__name__))
+			try:
+				self._mesaj(_("Încearcă din nou."))
+			except Exception:
+				pass
+
+	def _ok(self):
 		e = self._curent()
 		s = self.setari
 		if e is self.randToate:
@@ -1060,7 +1085,7 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 			if not are_cheie:
 				self._alegereCheieIndice(idx, (u"", "scrie"))
 				return
-			titlu = (_("Valoarea antetului %d pentru %s") if s.serviciu.value == "propriu" else _("Cheia API %d pentru %s")) % (idx + 1, T.numeServiciu(s.serviciu.value))
+			titlu = _titluCheie(s.serviciu.value, idx)
 			optiuni = [(_("Scrie cheia nouă"), "scrie")]
 			if are_cheie:
 				optiuni.append((_("Șterge cheia"), "sterge"))
@@ -1160,8 +1185,8 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 				print("[HdsTraducereSubtitrari] inchiderea tastaturii: %s" % eroare.__class__.__name__)
 				self._textMesaj = _("Cheia nu s-a putut pregăti. Încearcă din nou.")
 				self["ajutor"].setText(self._textMesaj)
-		titlu = (_("Valoarea antetului %d pentru %s") if serv == "propriu" else _("Cheia API %d pentru %s")) % (idx + 1, T.numeServiciu(serv))
 		try:
+			titlu = _titluCheie(serv, idx)
 			self.session.openWithCallback(gata, VirtualKeyBoard, title=titlu, text=u"", hdsSecret=True)
 		except Exception as eroare:
 			print("[HdsTraducereSubtitrari] deschiderea tastaturii: %s" % eroare.__class__.__name__)
@@ -1506,6 +1531,7 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 				e.save()
 			configfile.save()
 			T.instanta().setariSchimbate()
+			self._salveazaCanalul()
 			diagnostic = T.diagnosticPornire(s=finale) if finale.pornit.value and hasattr(T, "diagnosticPornire") else None
 		except Exception as eroare:
 			print("[HdsTraducereSubtitrari] salvarea: %s" % eroare.__class__.__name__)
@@ -1519,9 +1545,23 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		else:
 			self.close()
 
+	def _canalSchimbat(self):
+		"""randul canalului de acum spune altceva decat lista canalelor oprite"""
+		return self.randCanal is not None and self._canal is not None and \
+			(not self.randCanal.value) != bool(self._canal.get("oprit"))
+
+	def _salveazaCanalul(self):
+		"""la VERDE: traducerea oprita sau pornita din nou pe canalul de acum (T.puneOpritPeCanal, salvat pe loc)"""
+		if not self._canalSchimbat():
+			return
+		oprit = not self.randCanal.value
+		if T.puneOpritPeCanal(self._canal["cheie"], oprit, self._canal.get("nume") or u""):
+			self._canal["oprit"] = oprit
+
 	def _schimbat(self):
 		"""o setare schimbata si nesalvata, sau o cheie scrisa aici pentru un server cu adresa (se leaga la Verde)"""
-		return bool(self._cheiNoi) or any(e.value != self._initiale[n] for n, e in self.setari.dict().items())
+		return bool(self._cheiNoi) or self._canalSchimbat() or \
+			any(e.value != self._initiale[n] for n, e in self.setari.dict().items())
 
 	def iesire(self):
 		"""EXIT renunta la toate schimbarile locale."""

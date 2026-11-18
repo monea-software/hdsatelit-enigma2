@@ -299,6 +299,13 @@ def _pornireReusita():
 			HdsTemaExterna.dupaProba(HdsSkinuri.numeDinValoare(valoare) or valoare, skin.raportTema, skin.warnings)
 	except Exception as eroare:
 		print("[SkinSelector] raportul temei: %s" % eroare)
+	# tema straina cu parti la alegere (allScreens/, ca Nacht 7.0): pluginul ei de setari (AtileHD) vine singur din feedul nostru
+	# (Components/HdsPartiTema.py, 0.7.6)
+	try:
+		from Components import HdsPartiTema
+		HdsPartiTema.dupaPornire(HdsSkinuri.skinPornit())
+	except Exception as eroare:
+		print("[SkinSelector] pluginul de setari al temei: %s" % eroare)
 
 
 def laPornireaSesiunii(reason, session = None, **kwargs):

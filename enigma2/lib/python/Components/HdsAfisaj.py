@@ -712,14 +712,18 @@ def alegeriColorPicon():
 # Temele afisajului color desenate de noi: „orbita” e tema HD Satelit de pana acum (lista de rotire, toate paginile);
 # celelalte arata canalul privit cu litere mari (Components/HdsAfisajRandare._temaMare), cat te uiti la televizor.
 AFISAJ_HDS = "HDSatelit/display/skin_display.xml"
-TEME_COLOR = ("orbita", "picon_mare", "text_mare", "ora_urmatoarea")
+# Temele cu picon (picon_*) iau piconul canalului fara alta setare; cele cu emisiunea de acum au si bara ei de progres,
+# dupa „Bara de progres colorată” (Components/HdsAfisajScena.TEME_CU_PICON, TEME_CU_BARA).
+TEME_COLOR = ("orbita", "picon_mare", "text_mare", "ora_urmatoarea", "picon_ora", "picon_emisiune", "picon_ora_emisiune")
 TEMA_COLOR_IMPLICITA = "orbita"
 
 
 def alegeriColorTema():
 	return [("orbita", _("HD Satelit")), ("picon_mare", _("Picon mare și numele canalului")),
 		("text_mare", _("Ora și numele canalului, foarte mari")),
-		("ora_urmatoarea", _("Ora mare și emisiunea următoare"))]
+		("ora_urmatoarea", _("Ora mare și emisiunea următoare")),
+		("picon_ora", _("Picon și ora")), ("picon_emisiune", _("Picon și emisiunea de acum")),
+		("picon_ora_emisiune", _("Picon, ora și emisiunea de acum"))]
 
 
 def valoareTema(fisier, tema):

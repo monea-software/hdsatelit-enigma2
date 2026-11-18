@@ -650,6 +650,13 @@ def captureaza(sesiune=None):
 		return False
 	_stare["sesiune"] = sesiune
 	ascuns = _ascundeMesajul()
+	# eticheta cititorului (Arată hop-urile și cititorul, Components/HdsEcm) nu intra in captura: ecranele o scot pe loc,
+	# iar grab-ul asteapta redesenarea ca la mesaj
+	try:
+		from Components import HdsEcm
+		ascuns = HdsEcm.ascundeCititorul() or ascuns
+	except Exception as e:
+		_jurnal("eticheta cititorului: %s" % e)
 	try:
 		if ascuns:
 			t = _stare.get("pornire") or _ceas(_pornesteLucrul)

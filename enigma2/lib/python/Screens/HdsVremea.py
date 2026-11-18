@@ -22,9 +22,21 @@ from Tools.LoadPixmap import LoadPixmap
 from Tools.ScaledSkin import scaledSkin
 
 
+def N_(text):
+	"""Marcajul textelor din tabele (xgettext --keyword=N_); traducerea se face la afisare, cu _()."""
+	return text
+
+
 UNITATI = (("C", "Celsius"), ("F", "Fahrenheit"), ("K", "Kelvin"))
-LOCURI = (("nu", "Nu"), ("bara", "Bara de informații"),
-	("principal", "Ecranul principal"), ("ambele", "Ambele"))
+# "Bara canalului": vremea mica in bara (pictograma si temperatura), in locul pus de tema; pe temele fara el, panoul plutitor
+LOCURI = (("nu", N_("Nu")), ("bara", N_("Bara canalului")),
+	("principal", N_("Ecranul principal")), ("ambele", N_("Ambele")))
+
+# Locul vremii in bara canalului (tema HDSatelit, Clasic si Pro): doua widgeturi cu nume in ecranul InfoBar al temei, cu
+# conditional="..." (o alta clasa care ia acelasi ecran din skin nu le cere). Pictograma sta in stanga locului, temperatura
+# dupa ea; codul le aseaza la fiecare pas dupa textul vecinilor din dreapta (timpul ramas, data, REC).
+NUME_POZA = "hdsVremeaPoza"
+NUME_TEXT = "hdsVremeaText"
 
 
 def locOsd(mod, bara):
@@ -54,6 +66,7 @@ def _poza(widget, cale):
 	except Exception:
 		ptr = None
 	widget.setPixmap(ptr)
+	widget._hds_vremea_are = ptr is not None
 	if ptr is not None:
 		widget.show()
 	else:
@@ -378,23 +391,131 @@ class HdsVremeaOsd(Screen):
 		self.instance.move(ePoint(x, y))
 
 
+def _cutie(inst):
+	p, m = inst.position(), inst.size()
+	return p.x(), p.y(), m.width(), m.height()
+
+
+def _atribute(element):
+	try:
+		return dict(getattr(element, "skinAttributes", None) or ())
+	except (TypeError, ValueError):
+		return {}
+
+
+def margineLibera(ecran, x0, y0, x1, y1, ale_mele=(), z=0):
+	"""Unde incepe, la dreapta lui x0, primul lucru desenat pe randul y0..y1 al ecranului (pixeli), sau x1.
+	Se uita la elementele care se vad si ating locul [x0, x1) pe acel rand: o eticheta transparenta conteaza cu textul
+	ei (cea aliniata la dreapta, ca timpul ramas sau data, de unde incepe textul; una goala deloc); o caseta plina (REC)
+	sau o poza conteaza intreaga, afara de fundalurile de sub vreme (zPosition sub `z`, ca fundalul casetei Pro). Ce
+	incepe inaintea lui x0 si intra in loc lasa locul fara nimic (x0)."""
+	limita = x1
+	elemente = list(getattr(ecran, "renderer", None) or []) + list(getattr(ecran, "additionalWidgets", None) or [])
+	for el in elemente:
+		inst = getattr(el, "instance", None)
+		if inst is None or id(el) in ale_mele:
+			continue
+		try:
+			if not inst.isVisible():
+				continue
+			x, y, l, i = _cutie(inst)
+		except Exception:
+			continue
+		if y + i <= y0 or y >= y1 or x + l <= x0 or x >= limita:
+			continue
+		a = _atribute(el)
+		if a.get("transparent") == "1" and hasattr(inst, "calculateSize"):
+			try:
+				text = inst.calculateSize().width()
+			except Exception:
+				text = l
+			if text <= 0:
+				continue
+			alinie = a.get("halign", "left")
+			if alinie == "right":
+				inceput = x + max(0, l - text)
+			elif alinie == "center":
+				inceput = x + max(0, (l - text) // 2)
+			else:
+				inceput = x
+			sfarsit = inceput + min(text, l)
+		else:
+			try:
+				if int(a.get("zPosition", "0")) < z:
+					continue
+			except ValueError:
+				pass
+			inceput, sfarsit = x, x + l
+		if sfarsit <= x0:
+			continue
+		limita = min(limita, max(x0, inceput))
+	return limita
+
+
+def asezareInBara(loc, latimeText, limita):
+	"""Ce incape din vreme in locul ei din bara, fara sa atinga vecinul din dreapta.
+	loc = (xPoza, yPoza, latimePoza, inaltimePoza, xText, yText, latimeText, inaltimeText) din skin, in pixeli;
+	latimeText = cat ocupa temperatura; limita = margineLibera(...).
+	-> (ce, xPoza, xText, latimeCasetei): ce = "tot" (pictograma si temperatura), "text" (numai temperatura) sau ""."""
+	xp, _yp, lp, _ip, xt, _yt, lt, _it = loc
+	pas = max(2, lp // 6)       # intre pictograma si temperatura
+	aer = max(4, lp // 4)       # inaintea vecinului din dreapta
+	dreapta = min(xt + lt, limita - aer)
+	if latimeText <= 0:
+		return "", xp, xp, 0
+	x = xp + lp + pas
+	if x + latimeText <= dreapta:
+		return "tot", xp, x, dreapta - x
+	if xp + latimeText <= dreapta:
+		return "text", xp, xp, dreapta - xp
+	return "", xp, xp, 0
+
+
 class LegaturaVremea(object):
-	"""Panoul traieste cat bara; niciun fir de retea nu atinge fereastra."""
+	"""Vremea traieste cat bara; niciun fir de retea nu atinge fereastra. Cu "Bara canalului" (sau "Ambele", cat se vede
+	bara) vremea sta in bara, in locul pus de tema (NUME_POZA, NUME_TEXT); o tema fara loc (temele straine) primeste
+	panoul plutitor, ca inainte. "Ecranul principal" ramane panoul din colt, cat bara nu se vede."""
 
 	def __init__(self, bara):
 		self.bara = bara
+		bara[NUME_POZA] = Pixmap()
+		bara[NUME_TEXT] = Label("")
+		self.loc = None
+		self.inBara = None
 		self.panou = bara.session.instantiateDialog(HdsVremeaOsd)
 		self.panou.hide()
 		self.ceas = eTimer()
 		self.ceas.callback.append(self.actualizeaza)
+		bara.onLayoutFinish.append(self._dupaSkin)
 		bara.onShow.append(self.actualizeaza)
 		bara.onHide.append(self.ascunde)
 		bara.onClose.append(self.inchide)
 		self.ceas.start(1000, False)
 
+	def _dupaSkin(self):
+		"""Locul din tema, citit o data: numai cand tema are amandoua widgeturile."""
+		b = self.bara
+		try:
+			poza, text = b[NUME_POZA].instance, b[NUME_TEXT].instance
+		except (KeyError, AttributeError, TypeError):
+			return
+		if poza is None or text is None:
+			return
+		self.loc = _cutie(poza) + _cutie(text)
+		self._ascundeInBara()
+
+	def _ascundeInBara(self):
+		if self.inBara is False or self.loc is None:
+			return
+		self.inBara = False
+		for nume in (NUME_POZA, NUME_TEXT):
+			self.bara[nume].hide()
+
 	def ascunde(self):
 		if self.panou is not None:
 			self.panou.hide()
+		if self.bara is not None:
+			self._ascundeInBara()
 
 	def inchide(self):
 		self.ceas.stop()
@@ -436,6 +557,43 @@ class LegaturaVremea(object):
 		if not d or d.get("temperatura") is None:
 			self.ascunde()
 			return
+		if loc == "bara" and self.loc is not None:
+			self.panou.hide()
+			self._arataInBara(d, s.get("unitate", "C"))
+			return
+		self._ascundeInBara()
 		self.panou.actualizeaza(d, s.get("unitate", "C"))
 		self.panou.aseaza(loc, b)
 		self.panou.show()
+
+	def _arataInBara(self, date, unitate):
+		"""Pictograma si temperatura in locul din bara; fara loc destul, intai pleaca pictograma, apoi tot."""
+		b = self.bara
+		poza, text = b[NUME_POZA], b[NUME_TEXT]
+		t = V.textTemperatura(date["temperatura"], unitate)
+		if getattr(text, "_hds_vremea_text", None) != t:
+			text.setText(t)
+			text._hds_vremea_text = t
+		latime = text.instance.calculateSize().width()
+		xp, yp, lp, ip, xt, yt, lt, it = self.loc
+		try:
+			z = int(_atribute(text).get("zPosition", "0"))
+		except ValueError:
+			z = 0
+		limita = margineLibera(b, xp, min(yp, yt), xt + lt, max(yp + ip, yt + it), (id(poza), id(text)), z)
+		ce, _xPoza, xText, latimeCasetei = asezareInBara(self.loc, latime, limita)
+		if not ce:
+			self._ascundeInBara()
+			return
+		from enigma import eSize
+		text.instance.move(ePoint(xText, yt))
+		text.instance.resize(eSize(latimeCasetei, it))
+		cale = date.get("pictograma", "") if ce == "tot" else ""
+		if cale:
+			_poza(poza, cale)
+		if cale and getattr(poza, "_hds_vremea_are", False):
+			poza.show()
+		else:
+			poza.hide()
+		self.inBara = True
+		text.show()

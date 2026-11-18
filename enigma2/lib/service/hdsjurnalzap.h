@@ -19,7 +19,13 @@
  *         AVERT „fara imagine” cu motivul (eveniment video fara cadre noi). Timpul „imagine” ramane al evenimentului
  *         cand cadrele merg de la prima pereche de citiri, altfel e al citirii care a vazut PTS-ul miscandu-se;
  *         marcajul „cadre” spune cand s-a vazut. Dupa avertisment citirile mai merg FARA_IMAGINE_MS: cheia venita
- *         tarziu da randul „imagine tarzie”. Nu se citeste /proc/stb/video/zapmode (pe HiSilicon poate da Oops). FARA canal: nici numele, nici referinta, nici transponderul (acelea sunt in hds-tuner.log, dupa ora).
+ *         tarziu da randul „imagine tarzie”. Nu se citeste /proc/stb/video/zapmode (pe HiSilicon poate da Oops).
+ *         La coada, ca la esec, numai numele si referinta canalului ("| canal: nume=... ref=..."; din 0.7.7,
+ *         asistenta 888733: fara ele nu se putea spune daca un canal care o data a iesit "oprit fara imagine" a mers
+ *         alta data); transponderul si PID-urile raman ale randurilor cu esec (transponderul si in hds-tuner.log, dupa
+ *         ora). Canalul randurilor reusite e pentru asistenta: hds-zap.log nu intra in rapoartele prin coduri QR
+ *         (HdsQrRapoarte), iar in pachetele testerilor coada lor se taie (HdsBetaTester.faraCanaleReusite; nota lor
+ *         spune „fără listele tale de canale”, iar canalul care nu merge era deja acceptat).
  *         sunet: codecul; "fara" numai dupa ce a sosit PMT-ul si n-are sunet; "nestiut" cand randul se scrie inaintea PMT-ului.
  *   AVERT/EROARE la esec, CU canalul (ca sa se afle exact canalul care nu merge): numele, referinta, pozitia,
  *         transponderul, sistemul, SID-ul, PID-urile si codecurile; motivul: fara resurse (tuner ocupat), fara PAT,
@@ -28,16 +34,26 @@
  *         evenimentul video venit, dar fara cadre noi: „eveniment video fara cadre noi”), oprit de om
  *         fara imagine dupa mai mult de PRAG_OPRIRE_MS.
  * Exemplu: "2026-10-29T08:14:04Z [INFO] [zap] A reusit: acordare 118 ms, program 302 ms, imagine 846 ms | video H264
- *   1920x1080 | sunet AAC | criptat nu"
+ *   1920x1080 | sunet AAC | criptat nu | zap_t0 ... | marcaje: ... | canal: nume="TVR 1" ref=1:0:19:..."
  *
  * PLACILE FARA EVENIMENT VIDEO (15.11.2026, Vu+ Solo SE, driverul Vu+ vechi): decodorul nu trimite niciodata evenimentul
  * video, deci fara masura de mai jos fiecare zap scria "imagine fara eveniment de la decodor (merge la 6000 ms)" (timpul
  * pana la imagine lipsea) si, la zap-ul facut intre 3 si 6 s, "oprit fara imagine" fals. Dupa INVATAT_DUPA zap-uri la
- * rand cu imagine (PTS miscat) si fara eveniment, placa e tinuta minte ca fara eveniment (pana la repornirea enigma2;
- * orice eveniment video venit sterge semnul): atunci PTS-ul se citeste de la program() (decodorul pornit), la PAS_PTS_MS,
+ * rand cu imagine (PTS miscat) si fara eveniment, placa e tinuta minte ca fara eveniment (pana la repornirea enigma2):
+ * atunci PTS-ul se citeste de la program() (decodorul pornit), la PAS_PTS_MS,
  * si imaginea e prima din doua citiri la rand cu PTS-ul miscat (o citire singura poate fi PTS-ul canalului dinainte
  * inlocuit de cel nou). Randul: "imagine N ms (din PTS, fara eveniment video)". Primele zap-uri dupa pornire raman ca
  * inainte (randul de la 6 s e corect, numai fara timp).
+ * Un eveniment video sterge numai socoteala de dinaintea invatarii (zap-urile la rand); o placa invatata ramane invatata
+ * (0.7.7, asistenta 888733, Vu+ Duo 4K SE): driverul Vu+ 4K trimite evenimentul NUMAI cand se schimba marimea imaginii,
+ * deci dupa un canal SD urmat de unul HD semnul se stergea, PTS-ul se citea iar abia la 6 s, iar zap-ul parasit la 3,8-6,3 s
+ * pe un canal de aceeasi marime iesea "oprit fara imagine", chiar daca imaginea mergea. Citirile de la program() nu strica
+ * nimic pe o placa cu eveniment: evenimentul venit intre ele da timpul imaginii, ca inainte.
+ *
+ * RELEUL T2-MI LOCAL (15.11.2026): canalul pus prin releul imaginii (hdsreleut2.h, 127.0.0.1:8889/t2/) vine ca flux, fara
+ * tunerul si fara acordarea acestui canal (tunerul il tine releul). Randul nu mai arata tunerul "?" si "acordare -1 ms",
+ * ci "releu T2-MI" in locul literei tunerului, fara campul acordare: "releu T2-MI reusit: program 210 ms, imagine 900 ms
+ * | ...". Randurile tunerelor raman neschimbate.
  *
  * Scris de la zero pentru imaginea HD Satelit.
  */
@@ -48,6 +64,7 @@
 #include <lib/dvb/idvb.h>
 #include <lib/dvb/pmt.h>
 #include <sigc++/sigc++.h>
+#include <string>
 
 namespace hdsjzap
 {
@@ -104,11 +121,20 @@ private:
 	long long m_marcaje[NR_MARCAJE], m_t_comanda, m_t_blocare;
 	long m_sec_ms;
 	int m_slot, m_vpid, m_vtip, m_apid, m_atip, m_criptat, m_sid;
+	/* canalul vine prin releul T2-MI local (hdsEsteReleuT2 pe calea referintei, la pornire) */
+	bool m_releu;
+	/* inceputul randului: litera tunerului sau "releu T2-MI"; campul "acordare N ms, " (gol la releu) */
+	void textCine(char *buf, size_t n) const;
+	void textAcordare(char *buf, size_t n) const;
 	eServiceReferenceDVB m_ref;
 	ePtr<eTimer> m_ceas;
 	void faraImagine();
 	void scrieEsec(const char *nivel, const char *motiv);
 	void textCanal(char *buf, size_t n);
+	/* numele canalului din lista de canale ("" cand nu e), cu ghilimelele schimbate in apostrof */
+	std::string numeCanal();
+	/* coada randurilor reusite: " | canal: nume=\"...\" ref=..." (numai numele si referinta) */
+	void textCanalScurt(char *buf, size_t n);
 	void textMarcaje(char *buf, size_t n) const;
 	void textSunet(char *buf, size_t n) const;
 };

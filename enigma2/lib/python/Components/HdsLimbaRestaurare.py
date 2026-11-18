@@ -35,6 +35,17 @@ AJUTOR = "hdsatelit-ajutor"
 # recunoasterea textului: programul (cu tesseract si leptonica, ca dependinte) si modelele celor 8 limbi
 OCR = ("hds-ocr", "hds-ocr-modele")
 BINAR_OCR = "usr/bin/hds-ocr"
+# navigatorul web (NVM, 0.7.7; Eduard 15.11.2026 23:10-23:12: navigatorul si pe Vu+ Solo SE si pe celelalte receptoare MIPS):
+# pe receptoarele unde nu e in imagine (memoria interna mica: Solo SE, Solo2, Zero, Zgemma Star S) omul il cere din meniul
+# Aplicatii (cardul „Navigator web”, Components/HdsAplicatii.instaleazaNavigator), iar el vine de aici, ca OCR-ul: din feedul
+# semnat, cu dependintele lui (WPE WebKit, ICU, fonturile), cu socoteala locului, fara alta intrebare. Instalat in radacina
+# (NAND-ul de 512 MB al lui Solo SE V2, stickul celor care pornesc imaginea de pe USB); pe NAND-ul de 256 MB nu incape.
+NAVIGATOR = ("hds-navigator",)
+BINAR_NAVIGATOR = "usr/bin/hds-navigator"
+# locul cerut de navigator in radacina, pentru cardul din Aplicatii (inainte de OK, fara retea): inchiderea dependintelor
+# fata de imaginea 0.7.6 a lui Solo SE, desfacuta, masurata in containerul MIPS (NVM, 16.11.2026: 18 pachete, 136,2 MB, din
+# care WPE WebKit 106,3 si ICU 24,7), plus LOC_REZERVA (32 MB)
+NAVIGATOR_NEVOIE = 170 * 1024 * 1024
 _LIMBA = re.compile(r"^[a-z]{2,3}(?:_[A-Za-z0-9-]{1,12})?\Z")
 _PACHET = re.compile(
 	r"^(?:enigma2-hdsatelit-po-|hdsatelit-ajutor-)[a-z]{2,3}"
@@ -62,8 +73,11 @@ STICK_A_DOUA_MS = 15 * 1000
 
 # pachetele refuzate pana la pornirea urmatoare (nu sunt in feedul semnat, alta baza, fara loc, opkg le-a refuzat)
 _FINALE = set()
-# cererile din memorie: OCR cerut de traducerea subtitrarilor (HdsOcrSubtitrari.puneLegatura)
-_CERERI = {"ocr": False}
+# cererile din memorie: OCR cerut de traducerea subtitrarilor (HdsOcrSubtitrari.puneLegatura), navigatorul cerut de om
+# din Aplicatii (cereNavigator)
+_CERERI = {"ocr": False, "navigator": False}
+# functiile chemate pe firul interfetei dupa ce navigatorul s-a instalat (ecranul Aplicatii isi reface grila)
+_DUPA_NAVIGATOR = []
 _SESIUNE = [None]
 # fisierele de pe stick citite deja, (cale, marime, mtime): nu se mai citesc pana la bagarea unui stick
 _FOLOSITE = set()
@@ -178,15 +192,22 @@ def _peStick(rad):
 	return bool(P.citesteConf(rad) and P.radacinaNand(rad))
 
 
-def lipsa(rad="/", limba=None, ocr=False):
+def navigatorLipsa(rad="/"):
+	"""Programul navigatorului lipseste de pe receptor (Vu+ Solo SE si celelalte MIPS fara el in imagine)"""
+	return not os.access(_c(rad, BINAR_NAVIGATOR), os.X_OK)
+
+
+def lipsa(rad="/", limba=None, ocr=False, navigator=False):
 	"""Pachetele care lipsesc: limba aleasa fara catalog, ajutorul pe care omul il avea si, cand ocr e adevarat
-	(traducerea subtitrarilor din imagine o cere), recunoasterea textului."""
+	(traducerea subtitrarilor din imagine o cere), recunoasterea textului; cand navigator e adevarat (omul l-a cerut din
+	Aplicatii), navigatorul web."""
 	date = citeste(rad)
 	limba = limba or _limba(rad)
-	if not _LIMBA.fullmatch(limba):
-		return []
-	cod = _cod(limba)
 	inst = _instalate(rad)
+	nav = [n for n in NAVIGATOR if n not in inst] if navigator and navigatorLipsa(rad) else []
+	if not _LIMBA.fullmatch(limba):
+		return nav
+	cod = _cod(limba)
 	po = PREFIX_PO + cod
 	rez = [po] if po not in inst and not os.path.isfile(_catalog(rad, limba)) else []
 	# Ajutorul pe limbi se cere numai daca omul il avea deja.
@@ -195,7 +216,7 @@ def lipsa(rad="/", limba=None, ocr=False):
 			rez.append(n)
 	if ocr and not os.access(_c(rad, BINAR_OCR), os.X_OK) and not _peStick(rad):
 		rez += [n for n in OCR if n not in inst]
-	return sorted(set(rez))
+	return sorted(set(rez + nav))
 
 
 def _oricare(nume):
@@ -439,9 +460,9 @@ def _actualizare_in_lucru(A):
 		actualizare.faza != "liber" or actualizare.repornire)
 
 
-def lucreaza(rad="/", limba=None, ocr=False):
+def lucreaza(rad="/", limba=None, ocr=False, navigator=False):
 	"""Intai serverul; fara retea sau cand serverul nu raspunde, fisierul de completari de pe stick (daca e unul necitit)."""
-	cerute = [n for n in lipsa(rad, limba, ocr) if n not in _FINALE]
+	cerute = [n for n in lipsa(rad, limba, ocr, navigator) if n not in _FINALE]
 	if not cerute:
 		return {"stare": "gata", "puse": [], "cerute": []}
 	A = _actualizari()
@@ -539,6 +560,8 @@ def _parti(limba, cerute):
 		parti.append(_t("limba %s") % numeLimba(limba))
 	if any(n in OCR for n in cerute):
 		parti.append(_t("recunoașterea textului pentru subtitrări"))
+	if any(n in NAVIGATOR for n in cerute):
+		parti.append(_t("navigatorul web"))
 	return parti
 
 
@@ -553,14 +576,17 @@ def _mesaj(text):
 		print("[HdsLimbaRestaurare] mesaj: %r" % (e,))
 
 
-def _probabilLipsa(limba, ocr, rad="/"):
-	"""Firul interfetei, fara opkg: ce pare sa lipseasca (catalogul limbii, programul OCR), afara de cele refuzate"""
+def _probabilLipsa(limba, ocr, rad="/", navigator=False):
+	"""Firul interfetei, fara opkg: ce pare sa lipseasca (catalogul limbii, programul OCR, navigatorul), afara de cele
+	refuzate"""
 	rez = []
 	if limba and _LIMBA.fullmatch(limba) and not os.path.isfile(_catalog(rad, limba)) \
 			and PREFIX_PO + _cod(limba) not in _FINALE:
 		rez.append(PREFIX_PO + _cod(limba))
 	if ocr and not os.access(_c(rad, BINAR_OCR), os.X_OK) and not (set(OCR) & _FINALE):
 		rez += list(OCR)
+	if navigator and navigatorLipsa(rad) and not (set(NAVIGATOR) & _FINALE):
+		rez += list(NAVIGATOR)
 	return rez
 
 
@@ -596,13 +622,14 @@ class _Ceas:
 			return
 		aleasa = _aleasa()
 		ocr = _ocrCerut()
-		self._anunta(aleasa, ocr)
-		self.lucrare = Lucrare(lambda: lucreaza(limba=aleasa, ocr=ocr), self.gata)
+		nav = bool(_CERERI["navigator"])
+		self._anunta(aleasa, ocr, nav)
+		self.lucrare = Lucrare(lambda: lucreaza(limba=aleasa, ocr=ocr, navigator=nav), self.gata)
 
-	def _anunta(self, aleasa, ocr):
+	def _anunta(self, aleasa, ocr, nav=False):
 		"""Anuntul de inceput, o singura data, numai cand ceva lipseste si receptorul are retea"""
 		try:
-			cerute = _probabilLipsa(aleasa, ocr)
+			cerute = _probabilLipsa(aleasa, ocr, navigator=nav)
 			# fara sesiune (OCR cerut din legaNucleul inainte de porneste) anuntul asteapta incercarea urmatoare
 			if not cerute or _SESIUNE[0] is None:
 				return
@@ -617,7 +644,10 @@ class _Ceas:
 			parti = _parti(aleasa, cerute)
 			if parti and self.anuntat != parti:
 				self.anuntat = parti
-				_mesaj(_t("Se instalează completările receptorului: %s.") % ", ".join(parti))
+				if set(cerute) <= set(NAVIGATOR):
+					_mesaj(_t("Se instalează navigatorul web. Durează câteva minute; un mesaj îți spune când e gata."))
+				else:
+					_mesaj(_t("Se instalează completările receptorului: %s.") % ", ".join(parti))
 		except Exception as e:
 			print("[HdsLimbaRestaurare] anunt: %r" % (e,))
 
@@ -644,6 +674,10 @@ class _Ceas:
 				HdsOcrSubtitrari.dupaInstalare()
 			except Exception as e:
 				print("[HdsLimbaRestaurare] OCR dupa instalare: %r" % (e,))
+		if _CERERI["navigator"] and set(NAVIGATOR) & set(rez.get("cerute") or []):
+			if self._dupaNavigator(rez, puse):
+				self.anuntat = None
+				return
 		if rez.get("sursa") == "stick" and rez.get("stick") and not puse and self.anuntat is not None:
 			# fisierul de pe stick e stricat, nesemnat, al altui model sau al altei versiuni: o data pe stick
 			self.anuntat = None
@@ -663,6 +697,36 @@ class _Ceas:
 		elif rez.get("finale"):
 			_mesaj(_t("Completările receptorului nu se pot instala acum. Receptorul încearcă din nou la următoarea "
 				"pornire."))
+
+	def _dupaNavigator(self, rez, puse):
+		"""Sfarsitul unei instalari a navigatorului cerute de om: mesajul lui (oricum ar fi fost anuntul) si, cand s-a pus,
+		intrarile din meniu (SystemInfo["HdsNavigator"], citit la deschiderea meniului) si grila Aplicatii, fara repornirea
+		interfetei. True cand rezultatul e final (s-a spus ceva omului), False cand se reincearca (fara retea, opkg ocupat)."""
+		if set(NAVIGATOR) & set(puse) and not navigatorLipsa():
+			_CERERI["navigator"] = False
+			try:
+				from Components.SystemInfo import SystemInfo
+				SystemInfo["HdsNavigator"] = True
+			except Exception as e:
+				print("[HdsLimbaRestaurare] SystemInfo HdsNavigator: %r" % (e,))
+			for f in list(_DUPA_NAVIGATOR):
+				try:
+					f()
+				except Exception as e:
+					print("[HdsLimbaRestaurare] dupa navigator: %r" % (e,))
+			_mesaj(_t("Navigatorul web este instalat. Îl găsești în Aplicații și în Media > Navigator web."))
+			return True
+		if rez.get("loc"):
+			_CERERI["navigator"] = False
+			trebuie, liber = rez["loc"]
+			_mesaj(textNavigatorNuIncape(trebuie, liber))
+			return True
+		if rez.get("stare") == "amanat":
+			return False
+		_CERERI["navigator"] = False
+		_mesaj(_t("Navigatorul web nu se poate instala acum: nu este încă în feedul versiunii acestui receptor. "
+			"Încearcă din nou după actualizarea receptorului."))
+		return True
 
 
 _CEAS = []
@@ -704,6 +768,72 @@ def cereOcr():
 	_CERERI["ocr"] = True
 	_porneste_sau_grabeste()
 	return True
+
+
+def locNavigator(rad="/"):
+	"""(trebuie, liber) in octeti pentru navigator in radacina, fara retea (cardul din Aplicatii il arata inainte de OK):
+	NAVIGATOR_NEVOIE (inchiderea dependintelor masurata pe 0.7.6, desfacuta, plus rezerva) si locul liber; liber None
+	cand nu se poate citi. Instalarea socoteste din nou, din indexurile semnate."""
+	try:
+		st = os.statvfs(_c(rad, ""))
+		liber = st.f_bavail * st.f_frsize
+	except OSError:
+		liber = None
+	return NAVIGATOR_NEVOIE, liber
+
+
+def _soloSe(rad="/"):
+	"""Vu+ Solo SE: singurul model mic care are si imaginea pornita de pe stick (USB, chkroot), cu loc pentru navigator"""
+	try:
+		with open(_c(rad, "proc/stb/info/vumodel")) as f:
+			return f.read(32).strip() == "solose"
+	except (IOError, OSError):
+		return False
+
+
+def textNavigatorNuIncape(trebuie, liber, rad="/"):
+	text = _t("Navigatorul web nu încape în memoria internă: trebuie %d MB liberi, sunt %d MB.") % (
+		trebuie // 1048576 + 1, liber // 1048576)
+	if _soloSe(rad):
+		text += " " + _t("Are loc în imaginea pentru stick (USB) a lui Vu+ Solo SE.")
+	return text
+
+
+def cereNavigator(session=None, rad="/"):
+	"""Omul a ales „Navigator web” in Aplicatii (televizor sau pagina web) si navigatorul lipseste: se instaleaza din feedul
+	semnat, fara alta intrebare (anuntul de inceput si mesajul de sfarsit le da _Ceas). Firul interfetei. Intoarce None
+	cand a pornit, altfel textul pentru om (e deja instalat, nu incape: atunci nu porneste nimic)."""
+	if session is not None:
+		_SESIUNE[0] = session
+	if not navigatorLipsa(rad):
+		return _t("Navigatorul web este deja instalat.")
+	trebuie, liber = locNavigator(rad)
+	if liber is not None and liber < trebuie:
+		return textNavigatorNuIncape(trebuie, liber)
+	_CERERI["navigator"] = True
+	# o cerere a omului: un refuz de mai devreme (fara loc, lipsa din feed) se incearca din nou
+	_FINALE.difference_update(NAVIGATOR)
+	if not _CEAS:
+		_CEAS.append(_Ceas(repede=True))
+	# omul citeste deja pe ecran (sau in pagina web) ca navigatorul se instaleaza: fara al doilea anunt la inceput
+	_CEAS[0].anuntat = _parti(None, list(NAVIGATOR))
+	_CEAS[0].grabeste()
+	return None
+
+
+def navigatorInLucru():
+	return bool(_CERERI["navigator"])
+
+
+def laNavigatorInstalat(functie):
+	"""functie() pe firul interfetei dupa ce navigatorul s-a instalat (o singura data pe functie)"""
+	if functie not in _DUPA_NAVIGATOR:
+		_DUPA_NAVIGATOR.append(functie)
+
+
+def faraNavigatorInstalat(functie):
+	if functie in _DUPA_NAVIGATOR:
+		_DUPA_NAVIGATOR.remove(functie)
 
 
 def _porneste_sau_grabeste():

@@ -49,6 +49,9 @@ from Components.config import getConfigListEntry, ConfigNothing
 from . import lansator as L
 from . import setari as S
 
+# uid-ul navigatorului in modul aplicatie (lansator.argumente: --utilizator numai in modul HbbTV, deci root)
+UID_NAVIGATOR_APLICATIE = 0
+
 TERMEN_CAUTARE_S = 10      # cautarea interfetei camului (HdsInterfeteCam: cel mult 8 s)
 PAS_CAUTARE_MS = 250
 # modul cam: motivele pentru care nu se arata codul QR spre /interfete-cam (nu ruleaza niciun cam, camul n-are pagina
@@ -385,6 +388,10 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		aplicatie = {"program": program, "argumente": A.argumenteAplicatie(s, A.optiuniProgram(program),
 			agent_tv=agent.value if agent is not None else A.AGENT_IMPLICIT),
 			"taste": s.get("taste") or "tv"}
+		if program == L.CALE_LANSATOR:
+			cale_decodor = self._decodorPorneste()
+			if cale_decodor:
+				aplicatie["decodor"] = cale_decodor
 		self.nav = L.Navigator(self, L.MOD_APLICATIE, s["url"], setari=setariCurente(), dosar_date=date,
 			dosar_cache=cache, aplicatie=aplicatie)
 		self.nav.porneste()
@@ -417,6 +424,35 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 			return
 		self.hide()
 		self.show()
+
+	# ------------------------------------------------ mouse-ul (Components/HdsMouseUsb si panoul web, lansator.mouse)
+
+	def hdsMouseMiscare(self, x, y):
+		"""Mouse-ul USB s-a miscat: cat pagina se vede, sageata o deseneaza navigatorul (cursorul enigma2 nu se poate
+		desena peste el). True = luat de navigator."""
+		return bool(self.nav is not None and not self.inchis and self.nav.mouse("misca", x, y))
+
+	def hdsGestMouse(self, fel, x=None, y=None, clicuri=1, pasi=0, **_rest):
+		"""Clicul (si dublul clic: doua clicuri, pagina le socoteste singura), rotita si clicul dreapta (Inapoi) merg in
+		pagina; clicul pe rotita (MENU, meniul navigatorului) si restul pe drumul obisnuit (None). Cat se vede ecranul
+		de progres sau o fereastra a enigma2, tot drumul obisnuit."""
+		nav = self.nav
+		if nav is None or self.inchis or not nav.peEcran():
+			return None
+		rez = {"facut": "navigator", "ecran": self.__class__.__name__}
+		if fel in ("clic", "dublu"):
+			# "dublu" (cererea /api/mouse?fel=dublu) = doua clicuri; clicurile mouse-ului vin cate unul (clicuri=1, 2)
+			for _i in range(2 if fel == "dublu" else 1):
+				nav.mouse("clic", x, y)
+		elif fel == "rotita":
+			nav.mouse("rotita", x, y, pasi)
+		elif fel == "dreapta":
+			nav.mouse("inapoi")
+		elif fel in ("drag", "dragend"):
+			rez["facut"] = "nimic"
+		else:
+			return None
+		return rez
 
 	def laCerere(self, fel, date):
 		if self.inchis or self.nav is None:
@@ -726,6 +762,94 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		self.cautare = None
 		if self.nav is not None and self.nav.stare != L.OPRIT:
 			self.nav.opreste()
+		self._decodorOpreste()
+
+	# ------------------------------------------------ filmele aplicatiei pe placa (Components/HdsDecodorWeb.py)
+	#
+	# O aplicatie pe tot ecranul (YouTube pentru televizor) reda filmele prin WebKit-ul cu video (Media Source Extensions
+	# si <video>, quirk-ul hdsdvb): la primul film WebKit cere decodorul placii. Enigma2 opreste canalul (o data, pana la
+	# iesirea din aplicatie), verifica memoria decodorului (HiSilicon), da dreptul pe video0/audio0 cat tine imprumutul si
+	# muta fereastra video dupa dreptunghiul filmului din pagina. La "gata" dreptul se ia inapoi (urmatorul film il cere
+	# din nou); la iesirea din aplicatie: serverul oprit, dispozitivele inapoi, procesele ramase cu ele oprite, imaginea pe
+	# tot ecranul si canalul de dinainte pornit din nou. Mediul (sesiunea, memoria, fereastra) e cel al HbbTV. Altfel decat
+	# in HbbTV, aplicatiile pornesc navigatorul ca root (fara --utilizator): serverul primeste legatura procesului root, iar
+	# grupul dispozitivelor nu se schimba (root le poate deschide oricum). Fara WebKit-ul cu video serverul nu porneste.
+
+	def _decodorPorneste(self):
+		"""Serverul imprumutului pentru aplicatia de acum -> calea socketului (pentru mediul navigatorului) sau None."""
+		self._dec_imprumutat = False
+		self._dec_ref = None
+		self._dec_server = None
+		try:
+			from Components import HdsHbbtvPornire as H
+			from Components import HdsDecodorWeb as D
+			self._dec_mediu = H.Mediu(self.session)
+			# None (raspunsul nu e stiut inca, de pilda in prima secunda dupa pornirea enigma2) porneste serverul: pe un
+			# WebKit fara video nu-l cere nimeni, iar pe unul cu video filmul aplicatiei ar ramane altfel fara decodor
+			if D.webkit_cu_video(numai_stiut=True) is False:
+				return None
+			s = D.Server(self, self._dec_mediu._notificator, UID_NAVIGATOR_APLICATIE)
+			cale = s.porneste()
+			self._dec_server = s if cale else None
+			return cale
+		except Exception as e:
+			print("[HdsNavigator] serverul decodorului: %s" % e)
+			self._dec_mediu = None
+			return None
+
+	def _decodorOpreste(self):
+		m = getattr(self, "_dec_mediu", None)
+		if m is None:
+			return
+		self._dec_mediu = None
+		try:
+			s, self._dec_server = getattr(self, "_dec_server", None), None
+			if s is not None:
+				s.opreste()
+			m.decodor_opreste()
+			if self._dec_imprumutat or self._dec_ref is not None:
+				from Components import HdsHbbtvPornire as H
+				H.scrie_fereastra_video(None)
+			self._dec_imprumutat = False
+			if self._dec_ref:
+				print("[HdsNavigator] canalul de dinainte porneste din nou")
+				m.porneste_serviciu(self._dec_ref)
+		except Exception as e:
+			print("[HdsNavigator] decodorul inapoi: %s" % e)
+		self._dec_ref = None
+
+	def laDecodorCere(self):
+		"""HdsDecodorWeb.Ascultator: True (decodorul e al navigatorului) sau motivul refuzului (un cuvant)."""
+		m = getattr(self, "_dec_mediu", None)
+		if m is None or self.inchis:
+			return "aplicatie"
+		if self._dec_imprumutat:
+			return "ocupat"
+		if not m.decodor_memorie_ok():
+			print("[HdsNavigator] filmul aplicatiei: memoria decodorului lipseste, refuzat")
+			return "memorie"
+		if self._dec_ref is None:
+			self._dec_ref = m.opreste_serviciu() or ""
+		self._dec_imprumutat = True
+		print("[HdsNavigator] decodorul dat aplicatiei (filmul)")
+		return True
+
+	def laDecodorFereastra(self, argumente):
+		if not getattr(self, "_dec_imprumutat", False):
+			return
+		from Components import HdsHbbtvPornire as H
+		v = H.fereastra_valida(list(argumente))
+		if v is not None:
+			H.scrie_fereastra_video(H.fereastra_vmpeg(v))
+
+	def laDecodorGata(self):
+		m = getattr(self, "_dec_mediu", None)
+		if m is None or not self._dec_imprumutat:
+			return
+		self._dec_imprumutat = False
+		from Components import HdsHbbtvPornire as H
+		H.scrie_fereastra_video(None)
+		print("[HdsNavigator] decodorul inapoi de la aplicatie")
 
 
 # ---------------------------------------------------------------- rezerva: codul QR spre interfata web

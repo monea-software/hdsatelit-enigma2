@@ -319,4 +319,10 @@ T = {
 	"cpu_mode": u"处理器模式",
 	"cpu_volt": u"电压",
 	"cpu_steps": u"各频率时间",
+	"bitrate_va": u"视频 · 音频码率",
+	"br_min": u"最低",
+	"br_max": u"最高",
+	"br_avg": u"平均",
+	"ecm_hop": u"跳数",
+	"ecm_reader": u"读卡器",
 }

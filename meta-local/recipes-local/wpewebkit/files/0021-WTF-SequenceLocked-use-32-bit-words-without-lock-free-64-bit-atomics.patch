@@ -1,0 +1,101 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] WTF: SequenceLocked uses 32-bit words without lock-free 64-bit atomics
+
+SequenceLocked asserts that std::atomic<uint64_t> is always lock-free. On
+32-bit MIPS (mips32el: Vu+ Solo SE and the other Broadcom MIPS receivers)
+64-bit atomics go through libatomic and are not lock-free, so
+WebCore/platform/SharedTimebase.cpp (the only user) does not compile. There the
+sequence counter and the protected words become 32-bit; a 32-bit counter is
+enough for a seqlock (a reader would need 2^31 writes during one read to be
+fooled). On every CPU with lock-free 64-bit atomics (x86, ARM, ARM64) the type
+stays uint64_t, so nothing changes there.
+
+Upstream-Status: Pending
+
+--- a/Source/WTF/wtf/SequenceLocked.h
++++ b/Source/WTF/wtf/SequenceLocked.h
+@@ -41,10 +41,15 @@
+ // Boehm for more details.
+ //
+ // [1] https://www.hpl.hp.com/techreports/2012/HPL-2012-68.pdf
++//
++// On 32-bit CPUs without lock-free 64-bit atomics (32-bit MIPS) the counter and
++// the protected words are 32-bit; everywhere else they stay 64-bit.
++using SequenceLockWord = std::conditional_t<std::atomic<uint64_t>::is_always_lock_free, uint64_t, uint32_t>;
++
+ template<typename T>
+ class SequenceLocked {
+ public:
+-    static_assert(std::atomic<uint64_t>::is_always_lock_free);
++    static_assert(std::atomic<SequenceLockWord>::is_always_lock_free);
+     static_assert(std::is_trivially_copyable_v<T>);
+ 
+     // Copy T from store and return it, protected as a read-side
+@@ -55,14 +60,14 @@
+         for (;;) {
+             // Acquire barrier ensures that no loads are reordered
+             // above the first load of the sequence counter.
+-            uint64_t versionBefore = m_version.load(std::memory_order_acquire);
++            SequenceLockWord versionBefore = m_version.load(std::memory_order_acquire);
+             if ((versionBefore & 1) == 1) [[unlikely]]
+                 continue;
+             relaxedCopyFromAtomic(asMutableByteSpan(result), std::span { m_storage });
+             // Another acquire fence ensures that the load of 'm_version' below is
+             // strictly ordered after the RelaxedCopyToAtomic call above.
+             std::atomic_thread_fence(std::memory_order_acquire);
+-            uint64_t versionAfter = m_version.load(std::memory_order_relaxed);
++            SequenceLockWord versionAfter = m_version.load(std::memory_order_relaxed);
+             if (versionBefore == versionAfter) [[likely]]
+                 break;
+         }
+@@ -81,7 +86,7 @@
+         // are extenally synchronized. The std::atomic_thread_fence below
+         // ensures that the counter updates don't get interleaved with the
+         // copy to the data.
+-        uint64_t version = m_version.load(std::memory_order_relaxed);
++        SequenceLockWord version = m_version.load(std::memory_order_relaxed);
+         m_version.store(version + 1, std::memory_order_relaxed);
+ 
+         // We put a release fence between update to m_version and writes to shared data.
+@@ -99,12 +104,12 @@
+ private:
+     // Perform the equivalent of "memcpy(dst, src, size)", but using relaxed
+     // atomics.
+-    static constexpr size_t storageSize = (sizeof(T) + sizeof(uint64_t) - 1) / sizeof(std::atomic<uint64_t>);
+-    static void relaxedCopyFromAtomic(std::span<uint8_t> destination, std::span<const std::atomic<uint64_t>, storageSize> source)
++    static constexpr size_t storageSize = (sizeof(T) + sizeof(SequenceLockWord) - 1) / sizeof(std::atomic<SequenceLockWord>);
++    static void relaxedCopyFromAtomic(std::span<uint8_t> destination, std::span<const std::atomic<SequenceLockWord>, storageSize> source)
+     {
+         size_t sourceIndex = 0;
+-        while (destination.size() >= sizeof(uint64_t)) {
+-            uint64_t word = source[sourceIndex++].load(std::memory_order_relaxed);
++        while (destination.size() >= sizeof(SequenceLockWord)) {
++            SequenceLockWord word = source[sourceIndex++].load(std::memory_order_relaxed);
+             memcpySpan(consumeSpan(destination, sizeof(word)), asByteSpan(word));
+         }
+         ASSERT(destination.empty());
+@@ -112,19 +117,19 @@
+ 
+     // Perform the equivalent of "memcpy(dst, src, size)", but using relaxed
+     // atomics.
+-    static void relaxedCopyToAtomic(std::span<std::atomic<uint64_t>, storageSize> destination, std::span<const uint8_t> source)
++    static void relaxedCopyToAtomic(std::span<std::atomic<SequenceLockWord>, storageSize> destination, std::span<const uint8_t> source)
+     {
+         size_t destinationIndex = 0;
+-        while (source.size() >= sizeof(uint64_t)) {
+-            uint64_t word;
++        while (source.size() >= sizeof(SequenceLockWord)) {
++            SequenceLockWord word;
+             memcpySpan(asMutableByteSpan(word), consumeSpan(source, sizeof(word)));
+             destination[destinationIndex++].store(word, std::memory_order_relaxed);
+         }
+         ASSERT(source.empty());
+     }
+ 
+-    std::atomic<uint64_t> m_version { 0 };
+-    using Storage = std::array<std::atomic<uint64_t>, storageSize>;
++    std::atomic<SequenceLockWord> m_version { 0 };
++    using Storage = std::array<std::atomic<SequenceLockWord>, storageSize>;
+     Storage m_storage { };
+ };
+ 

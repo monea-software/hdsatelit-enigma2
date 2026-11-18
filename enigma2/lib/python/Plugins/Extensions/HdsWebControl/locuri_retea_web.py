@@ -19,7 +19,7 @@
 #   POST /api/locuri-retea-fa?fa=monteaza|demonteaza|viteza|sterge&id=...
 #   POST /api/locuri-retea-cauta              porneste cautarea in casa (rezultatul in /api/locuri-retea)
 #   POST /api/locuri-retea-rasfoieste?id=&cale=   porneste citirea dosarului -> {lucrare}
-#   POST /api/locuri-retea-dosare?fel=&gazda=&utilizator=&id=   lista dosarelor serverului (NFS, SMB) -> {lucrare}
+#   POST /api/locuri-retea-dosare?fel=&gazda=&utilizator=&id=&port=   lista dosarelor serverului (NFS, SMB) -> {lucrare}
 #   POST /api/locuri-retea-reda?lucrare=&index=   porneste pe televizor fisierul din dosarul citit de acea lucrare
 #   GET  /api/locuri-retea-lucrare?lucrare=   rezultatul unei lucrari (gata sau nu)
 #   GET  /locuri-retea                        pagina
@@ -159,7 +159,8 @@ def dosare(a, S=None):
 	if fel not in S.FELURI_MONTATE or not S.gazdaBuna(gazda):
 		return {"result": False, "message": _t("Scrie întâi serverul.")}
 	cheie = _lucrareNoua("dosare")
-	S.dosareServer(fel, gazda, a.get("utilizator") or "", a.get("id") or None, a.get("parola") or None, _gata(cheie))
+	S.dosareServer(fel, gazda, a.get("utilizator") or "", a.get("id") or None, a.get("parola") or None, _gata(cheie),
+		port=a.get("port") or 0)
 	return {"result": True, "lucrare": cheie}
 
 
@@ -173,7 +174,8 @@ def lucrare(a, S=None):
 		return {"result": True, "gata": False}
 	r = l["rez"] or {}
 	rez = {"result": True, "gata": True, "ok": bool(r.get("ok")), "mesaj": r.get("mesaj") or (
-		"" if r.get("ok") else S.textEroare(r.get("cod") or "alta"))}
+		"" if r.get("ok") else S.textEroare(r.get("cod") or "alta")),
+		"cod": "" if r.get("ok") else (r.get("cod") or "alta")}
 	if l["fel"] == "rasfoieste":
 		rez["intrari"] = [_intrarePagina(i) for i in r.get("intrari") or []]
 		rez["cale"] = l["date"].get("cale") or ""
@@ -581,6 +583,8 @@ function dinCautare(x){
   potriveste();
   $("formular").scrollIntoView({block: "start"});
   $(x.fel === "smb" ? "f_dosar" : "f_nume").focus();
+  // serverul ales din cautare (SMB, NFS): lista dosarelor se cere singura, ca pe televizor
+  if(x.fel === "smb" || x.fel === "nfs"){ ceDosare(true); }
 }
 $("f_fel").addEventListener("change", potriveste);
 $("renunta").addEventListener("click", function(){ goleste(); mesaj("mesajFormular", "", false); });
@@ -610,16 +614,26 @@ $("formular").addEventListener("submit", function(ev){
     });
   }).catch(function(){ blocheazaFormular(false); mesaj("mesajFormular", "Receptorul nu răspunde.", true); });
 });
-$("alegeDosar").addEventListener("click", function(){
+function ceDosare(automat){
   var q = new URLSearchParams();
   q.set("fel", $("f_fel").value); q.set("gazda", $("f_gazda").value); q.set("utilizator", $("f_utilizator").value);
+  q.set("port", $("f_port").value || "0");
   if($("f_id").value){ q.set("id", $("f_id").value); }
   if($("f_parola").value){ q.set("parola", $("f_parola").value); }
   mesaj("mesajFormular", "Se cere lista dosarelor de la server...", false);
   cerere("/api/locuri-retea-dosare", "POST", q).then(function(d){
     if(!d.result){ mesaj("mesajFormular", d.message, true); return; }
     asteapta(d.lucrare, function(r){
-      if(!r.gata || !r.ok){ mesaj("mesajFormular", r.mesaj || r.message || "Serverul nu a dat lista dosarelor.", true); return; }
+      if(!r.gata || !r.ok){
+        mesaj("mesajFormular", r.mesaj || r.message || "Serverul nu a dat lista dosarelor.", true);
+        // cererea singura, dupa cautare: campul de completat, ca pe televizor (serverul care nu raspunde, contul cerut, dosarul)
+        if(automat){
+          var c = r.cod || "";
+          $(c === "server" || c === "nume" || c === "termen" ? "f_gazda" :
+            ((c === "acces" || c === "parola") && $("f_fel").value === "smb" ? "f_utilizator" : "f_dosar")).focus();
+        }
+        return;
+      }
       if(!(r.dosare || []).length){ mesaj("mesajFormular", "Serverul nu a dat niciun dosar.", true); return; }
       var m = $("mesajFormular"); m.textContent = ""; m.classList.remove("eroare", "ascuns");
       r.dosare.forEach(function(x){
@@ -628,7 +642,8 @@ $("alegeDosar").addEventListener("click", function(){
       });
     });
   });
-});
+}
+$("alegeDosar").addEventListener("click", function(){ ceDosare(false); });
 function cautaServere(){
   $("cauta").disabled = true;
   cerere("/api/locuri-retea-cauta", "POST", new URLSearchParams()).then(function(d){ if(d.locuri){ arata(d); } programeaza(1000); });

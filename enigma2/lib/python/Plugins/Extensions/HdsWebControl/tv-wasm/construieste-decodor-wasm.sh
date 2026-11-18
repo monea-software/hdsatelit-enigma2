@@ -10,6 +10,11 @@
 #     si libavutil, LGPL-2.1-or-later: FARA --enable-gpl, FARA --enable-nonfree;
 #   - decodoarele: mpeg1video, mpeg2video, mp2float, mp3float, ac3 (brevetele lor au expirat); fara E-AC-3, H.264,
 #     HEVC, AAC (numai variantele libere);
+#   - cu HDS_DEC_EXTRA=h264,aac (implicit gol): si decodoarele h264 si aac, cu parserele lor, pentru navigatoarele
+#     fara H.264 in MediaSource (Opera sau Chromium pe Linux fara codecurile sistemului, browserele fara MediaSource).
+#     Codul lor e tot LGPL-2.1-or-later (fara --enable-gpl). DECODORUL DIN IMAGINE E CONSTRUIT ASA (hotarat pe
+#     15.11.2026, runda-0013, STADIU-WEB): HDS_DEC_EXTRA=h264,aac bash construieste-decodor-wasm.sh. Pagina si
+#     receptorul merg cu amandoua: afla ce are decodorul din decodoare.txt (scris aici, langa hdsdec.wasm) si din dec_open;
 #   - emscripten 6.0.9, containerul oficial emscripten/emsdk:6.0.9
 #     (sha256:96617f27fe16421588241def73908fd348a7f9d260440ed0d00b36dcf7a063cc);
 #   - puntea noastra hdsdec.c (de langa acest fisier).
@@ -17,6 +22,7 @@
 # 89+, Safari 16.4+). Construirea dureaza cam un minut.
 #
 # Rulare (din WSL, cu docker): bash construieste-decodor-wasm.sh [dosarul de iesire]
+#   cu H.264 si AAC: HDS_DEC_EXTRA=h264,aac bash construieste-decodor-wasm.sh [dosarul de iesire]
 #   sursa FFmpeg: $LUCRU/ffmpeg-8.1.3.tar.xz (LUCRU implicit ~/mpeg2-wasm); se descarca daca lipseste
 #   iesirea implicita: $LUCRU/iesire
 # La sfarsit: sha256 al fisierelor si bibliotecile emscripten legate in hdsdec.wasm (pentru ecranul Licente).
@@ -30,6 +36,12 @@ FF_SHA256=7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
 IMAGINE=emscripten/emsdk:6.0.9@sha256:96617f27fe16421588241def73908fd348a7f9d260440ed0d00b36dcf7a063cc
 DEC="mpeg1video,mpeg2video,mp2float,mp3float,ac3"
 PAR="mpegvideo,mpegaudio,ac3"
+# decodoarele cerute in plus (sus): numai lista intreaga de mai jos, altceva se refuza
+case "${HDS_DEC_EXTRA:-}" in
+	"") ;;
+	h264,aac) DEC="$DEC,$HDS_DEC_EXTRA"; PAR="$PAR,$HDS_DEC_EXTRA" ;;
+	*) echo "HDS_DEC_EXTRA: gol sau h264,aac (acum: $HDS_DEC_EXTRA)" >&2; exit 1 ;;
+esac
 B=b-imagine
 
 mkdir -p "$LUCRU" "$IESIRE"
@@ -65,10 +77,14 @@ EOF
 docker run --rm -u "$(id -u):$(id -g)" -v "$LUCRU:/w" "$IMAGINE" nice -n 10 bash /w/in-container-imagine.sh
 cp "$LUCRU/$B/hdsdec.js" "$LUCRU/$B/hdsdec.wasm" "$IESIRE/"
 cp "$LUCRU/$B/biblioteci.txt" "$IESIRE/biblioteci-emscripten.txt"
+# lista decodoarelor din hdsdec.wasm, langa el in imagine (receptorul o citeste: ce canale merg pe playerul wasm)
+{ echo "# decodoarele din hdsdec.wasm (construieste-decodor-wasm.sh, FFmpeg $FFV)"; echo "$DEC" | tr ',' '\n'; } > "$IESIRE/decodoare.txt"
 grep -E "^License:" "$LUCRU/$B/configure.log" > "$IESIRE/licenta-configure.txt" || true
 echo "== iesirea: $IESIRE"
 cat "$IESIRE/licenta-configure.txt"
 echo "== bibliotecile emscripten legate:"
 cat "$IESIRE/biblioteci-emscripten.txt"
+echo "== decodoarele:"
+cat "$IESIRE/decodoare.txt"
 sha256sum "$IESIRE/hdsdec.js" "$IESIRE/hdsdec.wasm"
 ls -la "$IESIRE"

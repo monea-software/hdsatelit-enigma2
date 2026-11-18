@@ -5,7 +5,7 @@ intrarea standard (o comanda pe rand), starea iese pe iesirea standard (randuri 
 de enigma2, pornit la cerere; intra in imagine prin hdsatelit-base. Monea Software pentru HD Satelit."
 LICENSE = "GPL-2.0-only & MIT"
 LIC_FILES_CHKSUM = "file://hds-navigator.c;beginline=2;endline=3;md5=fb87bc14f85a0e8e73d2e038b3c2f7e1 \
-                    file://hds-hbbtv.js;beginline=2515;endline=2533;md5=a27e35cdfe59b078f9273144a89e57db"
+                    file://hds-hbbtv.js;beginline=2744;endline=2762;md5=a27e35cdfe59b078f9273144a89e57db"
 PV = "0.7.0"
 # r1: la repornirea pe procesor (GL cazut) procesele WebKit ale incercarii cu GL se culeg inainte de execv (nu mai raman
 # zombi pana la inchiderea aplicatiei)
@@ -26,7 +26,26 @@ PV = "0.7.0"
 # https://github.com/evanw/polywasm) cand WebKit nu-l are (ARMv7); de aici si MIT in LICENSE
 # r9 (0.7.5, HBX): functiile de eveniment puse pe <object> inainte de type ajung la evenimente (aplicatia TVP de pe
 # DVB-T afla ca filmul merge si scoate "Trwa wczytywanie"); acelasi numar de randuri, nota MIT neatinsa.
-PR = "r9"
+# r10 (0.7.7, YTB): --autoplay: filmele aplicatiilor din meniul Aplicatii (YouTube pentru televizor) pornesc si cu sunet
+# r11 (0.7.7, HB4): hds-hbbtv.js: aplicatia TVP a canalelor terestre (hbb-prod.tvp.pl/apps/manager) primeste starea
+# filmului motorului Object asa cum o citeste (stateReady) si merge pe playerul receptorului (MediaSource ascuns numai
+# acolo); altfel cadea la primul PlayStateChange si ramanea la "Trwa wczytywanie". Tot r11 (HB4 runda 2, neconstruit
+# inca): pe virtual-channel o singura reincarcare cand pagina sta la incarcare 20 s fara film (alta greseala TVP).
+# Nota MIT neschimbata, mutata cu randurile adaugate inaintea ei.
+# r12 (0.7.7, HB4 runda 3): in afara modului HbbTV si CAM pagina se arata (PRIMA-PAGINA) si la primul cadru dupa
+# angajare, cu progresul peste 50 % sau dupa 3 s, nu abia la sfarsitul incarcarii (paginile grele pe procesoarele slabe:
+# Vu+ Solo SE, Viper 4K V10); randul PRIMUL-CADRU spune cand vine primul cadru.
+# r13 (0.7.7, SRV): hds-hbbtv.js: cand desenul e pe procesor (fara compunere: rezerva pe Mali-450) animatiile CSS fara
+# sfarsit ale paginilor HbbTV merg cu ~10 cadre pe secunda (oprite si mutate de strat), altfel tineau firul paginii ocupat si
+# aplicatia ramanea pe ecranul de incarcare (ServusTV On). Nota MIT neschimbata, mutata cu randurile adaugate (+88).
+# r14 (0.7.7, V1S): tasta tinuta pe procesor: o singura sageata sau P+/P- in zbor spre pagina; repetarile telecomenzii
+# venite cat pagina n-a terminat tasta de dinainte (mesajul hdsnavtasta) se sar, ca sa nu se adune la coada (Viper 4K V10:
+# pagina se tot muta secunde dupa eliberare); la eliberare randul TIMP repetari-sarite N. Nota MIT neatinsa.
+# r15 (0.7.7, ERT): hds-hbbtv.js: gaura filmului se pune si cand obiectul A/V are pointer-events:none (al lui sau de la un
+# parinte; aplicatia ERT de pe ERT World 39,0E): elementsFromPoint nu-l intorcea, deci scena aplicatiei ramanea opaca peste
+# film (sunet, ecran negru); pe durata cautarii o regula a stratului face tinta orice element. Nota MIT neschimbata, mutata
+# cu randurile adaugate (+45).
+PR = "r15"
 
 SRC_URI = "file://hds-navigator.c file://hds-hbbtv.js"
 S = "${UNPACKDIR}"

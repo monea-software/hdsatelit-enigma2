@@ -474,8 +474,8 @@ class ServiceList(HTMLComponent, GUIComponent):
 			slab = getattr(self, "hdsEcran", None)
 			ecran = slab() if slab is not None else None
 			in_plus = ecran.hdsRanduriBuchete(root) if ecran is not None else []
-			# radacinile care sunt locuri in "Sateliți" (IPTV, locurile extensiilor) nu se arata aici: dublau fila
-			# (Screens/ChannelSelection.py, hdsBucheteAscunse; JAKITAKI, forumul 768 #2186)
+			# cu "Afișează IPTV și alte liste în Buchete" = Nu, radacina IPTV si radacinile locurilor extensiilor din
+			# "Sateliți" nu se arata aici (Screens/ChannelSelection.py, hdsBucheteAscunse); cu Da (din fabrica) se arata, ca dosare
 			ascunse_de = getattr(ecran, "hdsBucheteAscunse", None)
 			fisiere_ascunse = ascunse_de(root) if ascunse_de is not None else ()
 			ascunse = set(i for i, s in enumerate(randuri)

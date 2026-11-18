@@ -3871,6 +3871,13 @@ void eServiceMP3::pagesIntoQueue(const std::vector<SubtitlePage> &noi)
 
 /* the longest the subtitle timer waits before the clock is read again (ms) */
 static const int MAX_ASTEPTARE_SUB_MS = 1000;
+#if HAVE_HISILICON
+/* HiSilicon (Octagon SF8008, measured with a film whose picture shows its own clock and whose text lines say
+   their time, three runs, SRT and ASS): the text lines of a film came 0,40-0,48 s before the picture, the same in every
+   run. The text pages are moved later by this much on these boards only; the delay chosen by the viewer adds to it.
+   Picture subtitles (PGS, DVB in a film) and the subtitle files beside the film are not measured yet and stay as they were. */
+static const int DECALAJ_TEXT_HISI_MS = 400;
+#endif
 
 void eServiceMP3::pushSubtitles()
 {
@@ -3912,6 +3919,9 @@ void eServiceMP3::pushSubtitles()
 		{
 			show_pts = frontpage.pango_page.m_show_pts;
 			durata_ms = frontpage.pango_page.m_timeout;
+#if HAVE_HISILICON
+			show_pts += (gint64)DECALAJ_TEXT_HISI_MS * 90;
+#endif
 		}
 		else if (frontpage.type == SubtitlePage::Dvb)
 		{
@@ -4469,6 +4479,14 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 				}
 				m_prev_decoder_time = -1;
 				m_subtitle_pages.clear();
+				/* A change while the film runs: the demuxer had already sent the lines of the new stream for as far as it
+				   had read ahead, and the selector dropped them. Measured on the SF8008 with a 350 kbit/s film: no line
+				   for 16 s and more after the change, the log showed the lines from 45 s ahead (the read-ahead is counted
+				   in bytes, so the loss grows as the bit rate falls). A jump to the same place makes the demuxer send them
+				   again (seekTo drops what waited here). Files only: a stream cannot go back; not in the first second. */
+				pts_t aici = 0;
+				if (!m_sourceinfo.is_streaming && m_state == stRunning && getPlayPosition(aici) == 0 && aici > 90000)
+					seekTo(aici);
 			}
 		}
 		m_external_shown.clear();

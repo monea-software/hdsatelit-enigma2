@@ -15,6 +15,8 @@ Legatura cu enigma2 (Navigation.py, punctele de extensie ale zap-ului si ale inr
   - serviciu strain: oprim releul si eliberam tunerul SINCRON, inainte ca enigma2 sa aloce tunerul pentru el.
   recordService: Navigation.recordServiceExtensions ruleaza inainte de pnav.recordService. La o inregistrare
   adevarata (simulate=False) cedam tunerul acolo, altfel alocarea ar cadea.
+  grupFaraTuner (0.7.7, numai in imagine): la un grup de alternative fara nicio alternativa libera Navigation nu ajunge
+  la extensiile de mai sus; extensie_grup face aceeasi cedare pe alternativele grupului (pusa la inceputul listei).
 
 Imagini fara Navigation.playServiceExtensions (multe imagini mai vechi): se lucreaza pe evenimentele serviciului. La evEnd al unui serviciu de-al nostru se elibereaza
 tot, sincron (evEnd vine din stopService, inainte ca serviciul nou sa ceara tunerul); la evStart pe o
@@ -126,6 +128,12 @@ VERIFICARE_MAX_S = 60       # ... dar cel mult atat de la plecare
 PAT_TERMEN_S = 20
 RELUARE_DUPA_S = PAT_TERMEN_S + 2
 REFUZURI_8001_MAX = 2       # sesiuni 8001 refuzate la rand (tuner ocupat) cat nu a venit niciun octet = mesaj pe loc
+# Reluarea dupa un esec adevarat pe 8001 (antena oprita si datele tot nu vin): releul se opreste si tunerul se
+# elibereaza ca inainte, dar canalul ramas pe ecran se porneste din nou singur dupa o pauza care creste, cat timp
+# omul nu schimba canalul (inainte canalul ramanea negru ore intregi, fara nicio incercare). Pauzele sunt de minute:
+# fiecare sesiune 8001 noua costa 4 MB in driverul HiSilicon (sesiuni8001); cand paznicul acelei memorii cere repornirea
+# receptorului (sesiuni8001.stare), nu se mai reia nimic.
+RELUARE_PAUZE_S = (60, 120, 300, 600, 1800)
 
 
 def _sub_zavor(functie, *argumente):
@@ -137,6 +145,30 @@ def _sub_zavor(functie, *argumente):
         zavor = coord.zavor_disc = threading.Lock()
     with zavor:
         return functie(*argumente)
+
+
+def _purtator_si_lamedb(lista, tp, feed, active, tip):
+    """In fundal, sub zavorul scrierilor (FRD): purtatorul feed-ului care porneste (lamedb.purtator_pentru; la felul
+    abertis citeste si desface tot lamedb-ul) si scrierea lui in lamedb (lamedb.actualizeaza, fara reincarcare: aceea
+    se face in firul principal). -> (purtator, rezultatul scrierii); (None, None) cand feed-ul nu are purtator."""
+    from . import lamedb
+    purtator = lamedb.purtator_pentru(lista, tp, feed)
+    if purtator is None:
+        return None, None
+    return purtator, lamedb.actualizeaza(lista, None, None, False, active, tip)
+
+
+def _purtator_in_jurnal(x):
+    """Pentru randul din jurnal cand nu vin date pe 8001: ce purtator a cerut releul si ce PID de date tine minte in
+    lamedb (c:18 al nostru, al altui automat sau PID-ul T2-MI ca video). Programul din jurnalul serverului 8001 e cel
+    din PMT (getStreamingData) si nu arata PID-urile din lamedb; inregistrarea le pune in filtru (RECORD: PID tinut
+    minte, hds-interfata.log)."""
+    try:
+        fel = ('al altui automat, tipul %X' % x['tip'] if x.get('strain') else
+               'al nostru, c:18' if x.get('real') else 'al nostru, HDSatelit T2-MI')
+        return ' | purtator %s (%s), PID de date %d (0x%x)' % (x['ref'], fel, x['pid'], x['pid'])
+    except Exception:
+        return ''
 
 
 def _ref_text(ref):
@@ -200,6 +232,17 @@ def cere_tunerul(text, ref_purtator):
         return True
     acelasi = all(_hex(parti[i]) is not None and _hex(parti[i]) == _hex(p[i]) for i in (4, 5, 6))
     return not acelasi
+
+
+def _fel_tuner(text):
+    """Felul tunerului pentru o referinta DVB, dupa spatiul de nume: 'teren' (EEEE....), 'cablu' (FFFF....), altfel 'sat';
+    None daca referinta nu se poate citi (ca familie() din Components/HdsTransmisie.py). Functie pura."""
+    p = str(text or '').split(':')
+    ns = _hex(p[6]) if len(p) > 6 else None
+    if ns is None:
+        return None
+    poz = (ns >> 16) & 0xFFFF
+    return 'teren' if poz == 0xEEEE else 'cablu' if poz == 0xFFFF else 'sat'
 
 
 def _sesiuni_server_local(ref):
@@ -296,6 +339,7 @@ class Controlor(object):
         self._receptie_scrisa = False
         self._servicii_cache = {}
         self._ref_purtator = None
+        self._purtator_jurnal = ''    # felul purtatorului si PID-ul de date tinut minte, pentru randul "renunt" din jurnal
         self._amanat = None           # (feed, tp, playref, text): zap pe un feed 8001 nou, pornit dupa intarziere
         self._timer_amanat = None
         self._timer_tinere = None
@@ -320,6 +364,10 @@ class Controlor(object):
         self._semnal_la = 0.0
         self._frontend_purtator = None  # (cheia transponderului, slot, calea frontend-ului)
         self._fundal_semnal = None
+        self._reluare = None          # dupa un esec adevarat pe 8001: {feed, tp, playref, text, pauza_s} (canalul reluat)
+        self._timer_reluare = None
+        self._reluari = 0             # reluari la rand fara date (pauza urmatoare); 0 dupa date adevarate
+        self.reluari_facute = 0       # probe, jurnal
         # manierele legaturilor timerelor, pe nume (compat.conecteaza_timer). Cu semnale-obiect legatura traieste
         # doar cat e tinut manierul; timerele raman eTimer simple in atributele _timer_*.
         self._legaturi = {}
@@ -357,25 +405,42 @@ class Controlor(object):
             self._pune_in_lista(sesiune.nav.event, ev)
         except Exception:
             jurnal.eroare(self.et, 'nav.event')
+        # 0.7.7, grupurile de alternative (Navigation.grupFaraTuner, numai in imagine): la inceputul listei, fiindca
+        # releul isi da oricum tunerul canalului ales si oricarei inregistrari (extensie_zap, extensie_inregistrare)
+        try:
+            from Navigation import Navigation
+            lista = getattr(Navigation, 'grupFaraTuner', None)
+            if isinstance(lista, list):
+                grupul = self._eticheta(lambda nav, grup, liber, inregistrare=False, *rest:
+                                        self.extensie_grup(nav, grup, liber, inregistrare))
+                self._pune_in_lista(lista, grupul, la_inceput=True)
+        except Exception:
+            jurnal.eroare(self.et, 'extensia grupului de alternative')
 
     def _eticheta(self, functie):
         """Functiile puse in listele enigma2 poarta numele pluginului, ca o reincarcare sa o scoata pe cea veche."""
         functie._hds_nume = self.nume
         return functie
 
-    def _pune_in_lista(self, lista, functie):
+    def _pune_in_lista(self, lista, functie, la_inceput=False):
         for f in list(lista):
             if getattr(f, '_hds_nume', None) == self.nume:
                 lista.remove(f)
-        lista.append(functie)
+        if la_inceput:
+            lista.insert(0, functie)
+        else:
+            lista.append(functie)
 
     def dezinstaleaza(self):
         self.opreste('dezinstalare')
+        self._anuleaza_reluarea()
         self._anuleaza_eliberarea()
         self._anuleaza_verificarea()
         try:
             from Navigation import Navigation
             liste_ = [Navigation.playServiceExtensions, Navigation.recordServiceExtensions]
+            if isinstance(getattr(Navigation, 'grupFaraTuner', None), list):
+                liste_.append(Navigation.grupFaraTuner)
             if self.sesiune is not None:
                 liste_.append(self.sesiune.nav.event)
             for lista in liste_:
@@ -580,7 +645,7 @@ class Controlor(object):
             return None
         for tp in self.lista().get('transpondere', []):
             for f in tp.get('feeduri', []):
-                if f.get('tip') == 't2' and str(f.get('fel') or '') == 'abertis' and f.get('pid') == x['pid']:
+                if f.get('tip') == 't2' and str(f.get('fel') or '') == 'abertis' and abertis.adresa_e_a_fluxului(f, x):
                     ref = buchete.ref_t2(self.profil, f, x)
                     return '%s:%s' % (ref, x['nume']) if x['nume'] else ref
         return None
@@ -779,6 +844,7 @@ class Controlor(object):
         nav.playService(playref, checkParentalControl=False, forceRestart=True)
 
     def _extensie_zap(self, nav, playref):
+        self._anuleaza_reluarea()     # omul a ales un canal (si acelasi): reluarea de dupa un esec nu mai are rost
         text = _ref_text(playref)
         reparat = buchete.repara_cale_decodata(text)
         if reparat is not None and buchete.al_nostru(self.profil, reparat):
@@ -1227,9 +1293,11 @@ class Controlor(object):
 
     # ------------------------------------------------------------ protectia la pornire (marcajul pe disc)
     def _scrie_marcaj(self, text):
+        # in fundal (FRD, pachetul 2186: open pe flash a tinut firul principal 4,8 s la pornire); ordinea fata de
+        # stergeri o tine marcaj.py
         try:
-            marcaj.scrie(self.profil.director, text, self._ultimul_strain, time.time(), marcaj.compat.monoton(),
-                         self._boot)
+            marcaj.scrie_in_fundal(self.profil.director, text, self._ultimul_strain, time.time(),
+                                   marcaj.compat.monoton(), self._boot)
             self._marcaj_la = _monoton()          # varsta redarii (_redare_buna); pe disc raman ora si ceasul monoton
         except Exception:
             self._marcaj_la = None
@@ -1239,8 +1307,15 @@ class Controlor(object):
         if self._marcaj_la is None:
             return
         self._marcaj_la = None
-        if marcaj.sterge(self.profil.director):
-            jurnal.noteaza(self.et, 'marcaj de pornire sters (%s)' % motiv)
+        et = self.et
+
+        def sters(da):
+            if da:
+                jurnal.noteaza(et, 'marcaj de pornire sters (%s)' % motiv)
+        try:
+            marcaj.sterge_in_fundal(self.profil.director, sters)
+        except Exception:
+            jurnal.eroare(self.et, 'stergerea marcajului de pornire')
 
     def _verifica_marcajul(self):
         """La pornirea sesiunii. Marcaj ramas si recent = enigma2 a murit cat pornea un serviciu al nostru."""
@@ -1316,6 +1391,73 @@ class Controlor(object):
             jurnal.eroare(self.et, 'extensia de inregistrare')
         return ref
 
+    def extensie_grup(self, nav, grup, liber, inregistrare=False):
+        """Navigation.grupFaraTuner (0.7.7): niciuna dintre alternativele unui grup n-are tuner, deci zap-ul si
+        inregistrarea se opreau inainte de extensie_zap / extensie_inregistrare (televizorul pe un canal prin releu, zap pe
+        un grup de pe alt transponder: ecran negru, releul oprit abia de plasa, dupa ~10 s). Aceeasi regula ca acolo, pe
+        alternativele DVB ale grupului (_cedeaza_grupului). `liber` nu trebuie: in imagine sesiunile 8001 ale purtatorului
+        se opresc pe loc (_inchide_sesiunile_8001), iar Navigation intreaba din nou dupa extensie. Din alt fir nu se atinge
+        nimic aici: cedarea se face in firul principal (_grup_din_alt_fir). Nu arunca."""
+        try:
+            if grup is None:
+                return
+            if not fir.in_principal():
+                # doar citiri de atribute, ca in _zap_din_alt_fir
+                if self.stare != 'oprit' or self.tuner.canal is not None or self.releu._container is not None:
+                    jurnal.noteaza(self.et, '%s din alt fir cere un grup de alternative: cedez in firul principal'
+                                   % ('o inregistrare' if inregistrare else 'zap-ul'))
+                    fir.programeaza(self._grup_din_alt_fir, nav, grup, inregistrare)
+                return
+            self._cedeaza_grupului(nav, grup, inregistrare)
+        except Exception:
+            jurnal.eroare(self.et, 'extensia grupului de alternative')
+
+    def _cedeaza_grupului(self, nav, grup, inregistrare):
+        """Firul principal. La zap: releul se opreste cand o alternativa cere tunerul (cere_tunerul, ca la un canal strain in
+        _extensie_zap; in cautarea posturilor, esecul ei). La o inregistrare adevarata: releul cedeaza ca la orice
+        inregistrare (cedeaza, cu oprirea canalului de pe televizor daca era al nostru), dar numai cand o alternativa e de
+        felul tunerului purtatorului: altfel tunerul releului nu i-ar folosi, iar canalul de pe televizor s-ar opri degeaba.
+        Fara releu pornit, alternativele nici nu se citesc. -> True daca releul s-a oprit."""
+        if inregistrare:
+            if not (self.tuner.tinut() or (self._prin_8001() and self.releu.ruleaza())):
+                return False
+        elif self.stare == 'oprit':
+            return False
+        alternative = nav.alternativeDvb(grup)
+        desc = ', '.join(buchete.cheie_ref(a) for a in alternative)[:300]
+        if inregistrare:
+            fel = _fel_tuner(self._ref_purtator) or 'sat'
+            if not any(_fel_tuner(a) == fel for a in alternative):
+                return False
+            jurnal.noteaza(self.et, 'o inregistrare cere grupul de alternative (%s): cedez' % desc)
+            self.cedeaza('inregistrare', opreste_serviciul=True)
+            return True
+        if not any(cere_tunerul(a, self._ref_purtator) for a in alternative):
+            return False
+        jurnal.noteaza(self.et, 'televizorul cere grupul de alternative (%s), care cere tunerul: opresc' % desc)
+        self._anuleaza_reluarea()
+        if self.mod == 'invata':
+            self._ref_inainte = None
+            self._esec(self._text_cautare_oprita())
+        else:
+            self.opreste('zap pe alt serviciu')
+        return True
+
+    def _grup_din_alt_fir(self, nav, grup, inregistrare):
+        """In firul principal: grupul cerut din alt fir. Inregistrarea gaseste tunerul la urmatoarea incercare a
+        temporizatorului (dupa pauza); la zap, daca televizorul a ramas oprit (Navigation n-a gasit alternativa), zap-ul pe
+        grup se reface, ca sa treaca iar prin extensie."""
+        try:
+            if not self._cedeaza_grupului(nav, grup, inregistrare) or inregistrare:
+                return
+            curent = _ref_text(nav.getCurrentlyPlayingServiceReference())
+            if curent.strip():
+                jurnal.noteaza(self.et, 'zap-ul pe grup din alt fir e depasit (acum ruleaza %s)' % curent[:80])
+                return
+            nav.playService(grup, forceRestart=True)
+        except Exception:
+            jurnal.eroare(self.et, 'grupul de alternative cerut din alt fir')
+
     @staticmethod
     def _rotorul_se_misca():
         try:
@@ -1373,6 +1515,7 @@ class Controlor(object):
                 and self.releu.ruleaza() and (self.tuner.prins_pe(tp) or self._prin_8001(feed)))
 
     def _pregateste(self, feed, tp, playref, mod):
+        self._anuleaza_reluarea()
         if self.feed is not None and self.feed.get('id') != feed.get('id'):
             for abonament in self._abonamente_web:
                 abonament['oprit'].set()
@@ -1442,24 +1585,23 @@ class Controlor(object):
         date.update({'http_port': self.profil.port, 'port_control': self.profil.port_control, 'adapter': 0, 'demux': 0,
                      'frontend': self.tuner.slot, 'plugin': self.nume})
         if self._prin_8001():
-            from . import lamedb
-            purtator = lamedb.purtator_pentru(self.lista(), self.tp, self.feed)
-            if purtator is None:
-                self._esec(_('Eroare interna.'))
-                return
-            # feed nou: purtatorul lui se scrie acum, inainte de releu (streamserver-ul trebuie sa-l stie).
-            # Scrierea (citire lamedb, fsync) merge in fundal; releul porneste din callback, in firul principal.
+            # feed nou: purtatorul lui se afla si se scrie acum, inainte de releu (streamserver-ul trebuie sa-l stie).
+            # Amandoua merg in fundal (FRD, pachetul 2186: la felul abertis aflarea citeste tot lamedb-ul, 8-11 s pe
+            # firul principal cu o lista mare); releul porneste din callback, in firul principal.
             feed_id = self.feed.get('id')
-            self.fundal_disc.lanseaza(_sub_zavor, lambda ok, r: self._purtator_scris(ok, r, feed_id, date,
-                                                                                               purtator),
-                                      lamedb.actualizeaza, self.lista(), None, None, False,
-                                      self.feeduri_active(plus=self.feed),
-                                      self.profil.tip)
+            if not self.fundal_disc.lanseaza(_sub_zavor, lambda ok, r: self._purtator_scris(ok, r, feed_id, date),
+                                             _purtator_si_lamedb, self.lista(), self.tp, self.feed,
+                                             self.feeduri_active(plus=self.feed), self.profil.tip):
+                self._esec(_('Eroare interna.'))
             return
         self._lanseaza_releul(date)
 
-    def _purtator_scris(self, ok, r, feed_id, date, purtator):
+    def _purtator_scris(self, ok, rez, feed_id, date):
         if self.stare != 'pregatire' or self.feed is None or self.feed.get('id') != feed_id:
+            return
+        purtator, r = rez if ok and isinstance(rez, tuple) and len(rez) == 2 else (False, None)
+        if purtator is None:
+            self._esec(_('Eroare interna.'))
             return
         if not ok or not isinstance(r, dict) or r.get('eroare'):
             self._esec(_('Nu pot scrie serviciul purtator in lamedb.'))
@@ -1470,8 +1612,16 @@ class Controlor(object):
         date['purtator_ref'] = purtator['ref']
         date['ref_8001'] = purtator['ref']      # asta citeste releul (surse.ref_purtator)
         self._ref_purtator = purtator['ref']
+        self._purtator_jurnal = _purtator_in_jurnal(purtator)
         self._uita_refuzurile()                 # refuzurile 8001 se numara de la pornirea acestui releu
         date['url_8001'] = 'http://127.0.0.1:8001/%s' % purtator['ref']
+        # antena cu motor: releul (t2mi_decap -w, surse.CititorHttp) tine sesiunea 8001 cat poate roti sec.cpp antena
+        # (tuner.termen_8001); altfel o inchidea la 90 s si motorul se oprea la jumatate, de fiecare data
+        termen = tuner.termen_8001(self.tp, date.get('termen_8001'))
+        if termen:
+            date['termen_8001'] = termen
+            jurnal.noteaza(self.et, 'satelitul se primeste prin motor: releul asteapta primele date cel mult %d s'
+                           % termen)
         self._lanseaza_releul(date)
 
     def _setare_sunet(self):
@@ -1564,7 +1714,10 @@ class Controlor(object):
                     # datele vin, dar toate pachetele PID-ului au bitii de criptare: nu e o lipsa de semnal
                     self._esec(_('Fluxul %s e criptat si nu se poate desface.') % nume)
                     return
-                self._esec(_('Releul nu a primit date de la %s.') % nume)
+                # zap prin 8001 (DAB+ asteapta aici lista posturilor, deci datele): antena nu se mai roteste (rotirea
+                # muta termenul mai sus), deci canalul se reia singur dupa o pauza
+                self._esec_cu_reluare(_('Releul nu a primit date de la %s.') % nume,
+                                      _('Releul nu a primit date de la %s. Incerc din nou singur peste %d min.'))
                 return
             if self._tuner_8001_refuzat():
                 return
@@ -1690,6 +1843,84 @@ class Controlor(object):
             self._invatare_gata(False, mesaj)
         elif mod != 'web':
             self._popup(mesaj)
+
+    # ------------------------------------------------------------ reluarea dupa un esec adevarat pe 8001
+    def _esec_cu_reluare(self, mesaj, mesaj_reluare):
+        """Esecul unui canal pornit de om prin 8001 (antena oprita, datele tot nu vin): ca _esec (releul oprit, tunerul
+        eliberat), dar canalul ramas pe ecran se porneste din nou singur dupa RELUARE_PAUZE_S. mesaj_reluare: acelasi
+        mesaj cu minutele pana la reluare (%s numele, %d minutele). In afara zap-ului prin 8001: _esec simplu."""
+        if self.mod != 'zap' or not self._prin_8001() or self.feed is None or self.tp is None or self._playref is None:
+            self._esec(mesaj)
+            return
+        pauza = RELUARE_PAUZE_S[min(self._reluari, len(RELUARE_PAUZE_S) - 1)]
+        reluare = {'feed': self.feed, 'tp': self.tp, 'playref': self._playref, 'text': self.ref_asteptat,
+                   'pauza_s': pauza}
+        nume = self.feed.get('nume') or self.feed.get('id')
+        self._esec(mesaj_reluare % (nume, max(1, int(round(pauza / 60.0)))))
+        self._reluari += 1
+        try:
+            if self._timer_reluare is None:
+                from enigma import eTimer
+                self._timer_reluare = eTimer()
+                self._leaga('reluare', self._timer_reluare, self._pas_reluare)
+            self._reluare = reluare
+            self._timer_reluare.start(int(pauza * 1000), True)
+            jurnal.noteaza(self.et, 'reiau canalul peste %d s (reluarea %d)' % (pauza, self._reluari))
+        except Exception:
+            self._reluare = None
+            jurnal.eroare(self.et, 'reluarea dupa esec')
+
+    def _anuleaza_reluarea(self):
+        """O reluare care astepta nu mai porneste (omul a ales un canal, alt start): pauzele incep iar de la prima."""
+        if self._reluare is not None:
+            self._reluare = None
+            self._reluari = 0
+            self._opreste_timer(self._timer_reluare)
+
+    def _reluarea_inca_are_rost(self, r):
+        """Canalul reluat e tot serviciul curent, iar controlorul nu face altceva (omul n-a schimbat canalul, receptorul
+        nu e in asteptare: acolo serviciul e oprit)."""
+        if r is None or self._reluare is not r or self.stare != 'oprit' or self.sesiune is None:
+            return False
+        try:
+            curent = _ref_text(self.sesiune.nav.getCurrentlyPlayingServiceReference())
+        except Exception:
+            return False
+        return aceeasi_ref(curent, r['text'])
+
+    def _pas_reluare(self):
+        """Timerul reluarii: intai memoria driverului (in fundal), apoi pornirea canalului."""
+        try:
+            r = self._reluare
+            if not self._reluarea_inca_are_rost(r):
+                if r is not None:
+                    jurnal.noteaza(self.et, 'reluarea nu mai are rost (alt canal sau receptorul in asteptare)')
+                self._reluare = None
+                self._reluari = 0
+                return
+            self.fundal.lanseaza(sesiuni8001.stare, lambda ok, st: self._reluare_dupa_memorie(r, ok, st))
+        except Exception:
+            self._reluare = None
+            jurnal.eroare(self.et, 'reluarea dupa esec')
+
+    def _reluare_dupa_memorie(self, r, ok, st):
+        try:
+            if not self._reluarea_inca_are_rost(r):
+                if self._reluare is r:
+                    self._reluare = None
+                return
+            self._reluare = None
+            if ok and isinstance(st, dict) and st.get('trebuie_repornit'):
+                jurnal.noteaza(self.et, 'nu reiau canalul: %s' % st.get('motiv'))
+                self._reluari = 0
+                return
+            self.reluari_facute += 1
+            jurnal.noteaza(self.et, 'reiau canalul dupa %d s: %s' % (r['pauza_s'], (r['text'] or '')[:100]))
+            reluari = self._reluari
+            self._pregateste(r['feed'], r['tp'], r['playref'], 'zap')
+            self._reluari = reluari
+        except Exception:
+            jurnal.eroare(self.et, 'reluarea dupa esec')
 
     # ------------------------------------------------------------ paza
     def _porneste_paza(self):
@@ -1929,6 +2160,8 @@ class Controlor(object):
             self._date_la = acum
             if self._reincercari_date and acum - self._flux_de_la >= LINISTE_RESETARE_S:
                 self._reincercari_date = 0
+            if self._reluari and acum - self._flux_de_la >= LINISTE_RESETARE_S:
+                self._reluari = 0         # datele merg de un minut: o reluare viitoare incepe iar cu pauza cea scurta
             if self._marcaj_la is not None and self._redare_buna(acum):
                 self._sterge_marcaj('redarea merge de %d s' % marcaj.REDARE_BUNA_S)
             return
@@ -1942,13 +2175,17 @@ class Controlor(object):
             if acum - self._date_la < FARA_DATE_8001_S:
                 return
             nume = self.feed.get('nume') or self.feed.get('id')
-            jurnal.noteaza(self.et, 'fara date de %.0f s pe 8001 (releul raspunde, %s): renunt'
-                           % (acum - self._date_la, 'au venit date' if self._a_curs else 'niciun octet'))
+            jurnal.noteaza(self.et, 'fara date de %.0f s pe 8001 (releul raspunde, %s): renunt%s'
+                           % (acum - self._date_la, 'au venit date' if self._a_curs else 'niciun octet',
+                              self._purtator_jurnal))
             self._reincercari_date = 0
+            # antena nu se mai roteste (altfel se astepta mai sus), deci esecul e adevarat: canalul se reia dupa o pauza
             if self._a_curs:
-                self._esec(_('Nu mai vin date de la %s. Tunerul a fost eliberat.') % nume)
+                self._esec_cu_reluare(_('Nu mai vin date de la %s. Tunerul a fost eliberat.') % nume,
+                                      _('Nu mai vin date de la %s. Incerc din nou singur peste %d min.'))
             else:
-                self._esec(_('Nu au venit date de la %s. Tunerul a fost eliberat.') % nume)
+                self._esec_cu_reluare(_('Nu au venit date de la %s. Tunerul a fost eliberat.') % nume,
+                                      _('Nu au venit date de la %s. Incerc din nou singur peste %d min.'))
             return
         if acum - self._date_la < self._prag_fara_date():
             return
@@ -2098,6 +2335,7 @@ class Controlor(object):
         self._utile_de_la = self._utile_la = 0.0
         self._nota_pornire = False
         self._semnal_purtator = None
+        self.rotire = False           # randul de stare (TV, /dabt2, bataia) nu mai spune ca antena se roteste
         self.stare = 'oprit'
         self.mod = None
         self.feed = None

@@ -168,13 +168,13 @@ _sateliti_tinuti = {}
 
 def desenDinSpate():
 	"""(din_spate, sud) pentru desenul rotirii (Screens/HdsDishMotor.py si pagina web /motor): setarea
-	config.usage.hds_motor_din_spate (Nu cand nu se poate citi) si longitudinea locului antenei in grade (Components/
+	config.usage.hds_motor_din_spate (Da, ca implicitul din 0.7.7, cand nu se poate citi) si longitudinea locului antenei in grade (Components/
 	HdsLocul.py; None cand locul nu e stabilit: atunci desenul e numai oglindit, fara sudul in varf)"""
 	try:
 		from Components.config import config
 		din_spate = bool(config.usage.hds_motor_din_spate.value)
 	except Exception:
-		din_spate = False
+		din_spate = True
 	sud = None
 	if din_spate:
 		try:
@@ -235,17 +235,47 @@ def pozitiiCuCanale(cale=None):
 	return _pozitii_lamedb["pozitii"]
 
 
-def _capeteGrade(lat, lon):
-	"""(gradele satelitului de la orizontul din vest, din est), est pozitiv, din locul (lat, lon); None fara arc vizibil"""
+# Limitele practice (0.7.7, SCN; dorinelu, forum 795 #2676, Berlin, antena de 90 cm: "prinde pana pe la 56E si 30V"): cu
+# setarea config.usage.hds_motor_elevatie_min (Elevatia minima in desenul rotirii, 0-30 grade) capetele boltii sunt unde
+# satelitii ajung la acea elevatie, nu la orizontul geometric; din Berlin 18 grade dau ~56E si ~30V (DishMath). 0 = orizontul,
+# ca pana acum. Numai desenul (televizor si web): rotirea, plafonul de timp al nucleului si listele scanarii raman pe orizont
+# (Components/HdsMotorPlafon.py neatins). Satelitii dintre capat si orizont se deseneaza "in afara", ca cei sub orizont.
+ELEVATIE_DESEN_MAX = 30
+
+
+def elevatieDesen():
+	"""Elevatia minima a desenului rotirii, in grade (0..ELEVATIE_DESEN_MAX); 0 cand setarea nu se poate citi."""
+	try:
+		from Components.config import config
+		return max(0.0, min(float(ELEVATIE_DESEN_MAX), float(config.usage.hds_motor_elevatie_min.value)))
+	except Exception:
+		return 0.0
+
+
+def _vizibilDesen(grade, lat, lon, elevatie=0.0):
+	"""Satelitul de la `grade` (est pozitiv) e in desen: deasupra orizontului (elevatie 0, HdsMotorPlafon.vizibil) sau cel
+	putin la `elevatie` grade deasupra lui"""
 	from Components import HdsMotorPlafon as P
-	if not P.vizibil(lon, lat, lon):
+	if elevatie <= 0.0:
+		return P.vizibil(grade, lat, lon)
+	try:
+		from Components import DishMath
+		return DishMath.elevation(grade % 360.0, float(lat), float(lon) % 360.0) >= elevatie
+	except (ValueError, ZeroDivisionError, TypeError):
+		return False
+
+
+def _capeteGrade(lat, lon, elevatie=0.0):
+	"""(gradele satelitului de la capatul din vest, din est), est pozitiv, din locul (lat, lon): orizontul (elevatie 0) sau
+	elevatia data; None fara arc"""
+	if not _vizibilDesen(lon, lat, lon, elevatie):
 		return None
 	capete = []
 	for semn in (-1.0, 1.0):
 		jos, sus = 0.0, 90.0
 		for _i in range(40):
 			mijloc = (jos + sus) / 2.0
-			if P.vizibil(lon + semn * mijloc, lat, lon):
+			if _vizibilDesen(lon + semn * mijloc, lat, lon, elevatie):
 				jos = mijloc
 			else:
 				sus = mijloc
@@ -254,26 +284,47 @@ def _capeteGrade(lat, lon):
 	return capete[0], capete[1]
 
 
+def _marginiDesen(lat, lon, elevatie):
+	"""(unghiul motorului la capatul de vest, la cel de est) ale arcului de la elevatia data; la 0 chiar
+	HdsMotorPlafon.margini (orizontul). None fara arc."""
+	from Components import HdsMotorPlafon as P
+	if elevatie <= 0.0:
+		return P.margini(lat, lon)
+	capete = _capeteGrade(lat, lon, elevatie)
+	if capete is None:
+		return None
+	unghiuri = [V.unghiMotor(g, lat, lon) for g in capete]
+	if None in unghiuri:
+		return None
+	return min(unghiuri), max(unghiuri)
+
+
 def boltaVizibila(slot=None):
 	"""Bolta intreaga pentru locul stabilit, sau None (locul nestabilit, nimic vizibil, eroare): {"a": unghiul motorului la
-	capatul cel mai departat (scara desenului), "unghi_vest", "unghi_est", "grade_vest", "grade_est" (satelitul de la orizont),
-	"sud" (longitudinea locului = satelitul din sud), "lat", "limita_vest", "limita_est" (unghiul motorului al limitei puse, sau
-	None)}"""
+	capatul cel mai departat (scara desenului), "unghi_vest", "unghi_est", "grade_vest", "grade_est" (satelitul de la capat:
+	orizontul sau elevatia minima aleasa, elevatieDesen), "elevatie" (cea folosita), "sud" (longitudinea locului = satelitul
+	din sud), "lat", "limita_vest", "limita_est" (unghiul motorului al limitei puse, sau None)}. Cand din loc niciun satelit
+	nu ajunge la elevatia aleasa (de pilda 30 de grade din nordul Scandinaviei), capetele raman la orizont."""
 	try:
 		from Components import HdsLocul
-		from Components import HdsMotorPlafon as P
 		loc = HdsLocul.locul() if HdsLocul.stabilit() else None
 		if loc is None:
 			return None
 		lat, lon = loc[0] / 1000.0, loc[1] / 1000.0
-		margini = P.margini(lat, lon)
-		capete = _capeteGrade(lat, lon)
+		elevatie = elevatieDesen()
+		margini = _marginiDesen(lat, lon, elevatie)
+		capete = _capeteGrade(lat, lon, elevatie)
+		if elevatie > 0.0 and (margini is None or capete is None):
+			elevatie = 0.0
+			margini = _marginiDesen(lat, lon, elevatie)
+			capete = _capeteGrade(lat, lon, elevatie)
 		if margini is None or capete is None:
 			return None
 	except Exception:
 		return None
 	b = {"a": max(abs(margini[0]), abs(margini[1]), 1.0), "unghi_vest": margini[0], "unghi_est": margini[1],
-		"grade_vest": capete[0], "grade_est": capete[1], "sud": lon, "lat": lat, "limita_vest": None, "limita_est": None}
+		"grade_vest": capete[0], "grade_est": capete[1], "elevatie": elevatie, "sud": lon, "lat": lat, "limita_vest": None,
+		"limita_est": None}
 	try:
 		from Components import HdsMotorComenzi as C
 		info = C.limiteInfo(slot)
@@ -288,11 +339,11 @@ def boltaVizibila(slot=None):
 
 
 def unghiPeBolta(grade, bolta):
-	"""(unghiul motorului, in_afara) pentru satelitul de la `grade` (est pozitiv): in_afara = sub orizont sau dincolo de o
-	limita a motorului. Departe sub orizont (fara unghi in formula) unghiul e pus dincolo de capatul boltii, de partea lui."""
-	from Components import HdsMotorPlafon as P
+	"""(unghiul motorului, in_afara) pentru satelitul de la `grade` (est pozitiv): in_afara = sub orizont, sub elevatia minima
+	a desenului (bolta["elevatie"]) sau dincolo de o limita a motorului. Departe sub orizont (fara unghi in formula) unghiul
+	e pus dincolo de capatul boltii, de partea lui."""
 	unghi = V.unghiMotor(grade, bolta["lat"], bolta["sud"])
-	afara = unghi is None or not P.vizibil(grade, bolta["lat"], bolta["sud"])
+	afara = unghi is None or not _vizibilDesen(grade, bolta["lat"], bolta["sud"], bolta.get("elevatie", 0.0))
 	if unghi is None:
 		# departe sub orizont (formula nu da unghi): dincolo de capatul boltii, de partea lui, ca sa fie totusi marcat
 		diferenta = ((grade - bolta["sud"] + 540.0) % 360.0) - 180.0

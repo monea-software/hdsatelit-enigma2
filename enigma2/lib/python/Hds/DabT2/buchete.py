@@ -497,17 +497,32 @@ def salveaza_servicii(profil, feed_id, lista, director=None):
     return True
 
 
+SUFIX_BISS = ' (BISS)'
+
+
+def copie_din_lista(feed, servicii):
+    """Serviciile tinute minte ale unui feed sunt o copie a programelor scrise in lista, nu posturi citite din flux?
+    Scanarea pune in servicii.json programele listei (scanare.stiute), cu numele din lista, care la fluxurile BISS se
+    termina in SUFIX_BISS; invatarea din flux (pornire._memoreaza_servicii) scrie numele din SDT, fara sufix. O copie
+    veche ramane in urma listei din imagine (programele noi ale unui flux, un canal mutat), deci lista de acum castiga."""
+    if not feed.get('programe') or not servicii:
+        return False
+    nume = [s.get('nume') for s in servicii if isinstance(s, dict)]
+    return bool(nume) and all(_text(n or '').endswith(SUFIX_BISS) for n in nume)
+
+
 def servicii_feed(profil, feed, memorate, stb=None, tp=None, prinse=None):
     """Serviciile unui feed: cele invatate de receptor (servicii.json), altfel cele publicate pe stb.hdsatelit.com
     (servicii-stb.json), altfel programele scrise in lista (`programe`), aceste doua numai cand receptorul prinde
-    transponderul feed-ului (`prinse`), altfel cele din lista (posturi / servicii)."""
+    transponderul feed-ului (`prinse`), altfel cele din lista (posturi / servicii). O copie a programelor listei tinuta
+    minte de la o scanare sau publicata pe stb (copie_din_lista) lasa locul programelor din lista de acum."""
     din_cache = (memorate.get(_curata_id(feed.get('id'))) or {}).get('servicii')
     if din_cache:
-        return _servicii_curate(profil, din_cache)
+        return _servicii_curate(profil, feed.get('programe') if copie_din_lista(feed, din_cache) else din_cache)
     are_prins = tp is not None and prins(tp, prinse)
     if stb and are_prins:
         publicate = servicii_stb_pentru(profil, feed, tp, stb)
-        if publicate:
+        if publicate and not copie_din_lista(feed, publicate):
             return publicate
     if feed.get('programe') and are_prins:
         return _servicii_curate(profil, feed.get('programe'))
@@ -804,8 +819,25 @@ def asigura_index(profil, director, fisier=None):
     return True
 
 
-def reface(profil, lista, director=None, director_date=None, reincarca=True):
-    """Scrie buchetul si indexul. -> {'schimbat': bool, 'intrari': n, 'feeduri': n}. Nu arunca."""
+def scoate_din_index(profil, director, fisier):
+    """Scoate din indexul profilului (bouquets.radio / bouquets.tv) randurile care trimit la `fisier`; restul ramane
+    octet cu octet. -> True daca a scris."""
+    cale = os.path.join(director, profil.index_buchete)
+    text = _citeste_text(cale)
+    semn = 'FROM BOUQUET "%s"' % fisier
+    if not text or semn not in text:
+        return False
+    randuri = text.splitlines(True)
+    ramase = [r for r in randuri if not (r.lstrip().upper().startswith('#SERVICE ') and semn in r)]
+    if len(ramase) == len(randuri):
+        return False
+    scrie_atomic(cale, _octeti_text(''.join(ramase)))
+    return True
+
+
+def reface(profil, lista, director=None, director_date=None, reincarca=True, index=True):
+    """Scrie buchetul si indexul. -> {'schimbat': bool, 'intrari': n, 'feeduri': n}. Nu arunca. index=False: numai
+    buchetele, fara randuri noi in bouquets.tv / bouquets.radio (un buchet scos de om din lista nu revine)."""
     rez = {'schimbat': False, 'intrari': 0, 'feeduri': 0}
     director = director or DIRECTOR_ENIGMA2
     try:
@@ -819,9 +851,14 @@ def reface(profil, lista, director=None, director_date=None, reincarca=True):
         rez['intrari'] = len([1 for _, c, _, _ in noi + noi_ab if not _e_marcaj_nostru(c)])
         schimbat = False
         de_scris = [(profil.buchet, None, noi)]
-        # buchetul fluxurilor de pe 30W: facut la primul program al lor, refacut cat exista (unul golit ramane gol)
-        if noi_ab or os.path.exists(os.path.join(director, BUCHET_ABERTIS)):
-            de_scris.append((BUCHET_ABERTIS, NUME_BUCHET_ABERTIS, noi_ab))
+        # buchetul fluxurilor de pe 30W: facut la primul program al lor, refacut cat exista (unul golit ramane gol);
+        # e un buchet TV, deci numai al profilului T2. Profilul DAB nu il atinge: altfel ii scotea marcajele grupelor
+        # (nu sunt ale lui) si il lega si in bouquets.radio; randul ramas acolo de atunci il scoate.
+        if profil.tip == 't2':
+            if noi_ab or os.path.exists(os.path.join(director, BUCHET_ABERTIS)):
+                de_scris.append((BUCHET_ABERTIS, NUME_BUCHET_ABERTIS, noi_ab))
+        elif scoate_din_index(profil, director, BUCHET_ABERTIS):
+            schimbat = True
         for fisier, nume_b, intrari in de_scris:
             cale = os.path.join(director, fisier)
             vechi = _citeste_text(cale)
@@ -829,7 +866,7 @@ def reface(profil, lista, director=None, director_date=None, reincarca=True):
             if nou != vechi:
                 scrie_atomic(cale, _octeti_text(nou))
                 schimbat = True
-            if asigura_index(profil, director, fisier):
+            if index and asigura_index(profil, director, fisier):
                 schimbat = True
         rez['schimbat'] = schimbat
         if schimbat:

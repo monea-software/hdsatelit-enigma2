@@ -178,10 +178,13 @@ def elibereazaDupaLucrare(proprietar, lucrare):
 
 
 NUME_KERNEL = "kernel.bin"
+NUME_KERNEL_VUPLUS = HdsPazaModel.NUME_NUCLEU_VUPLUS  # arhivele Vu+ 4K (vuplus/<model>/), vezi _radacinaPachet
 NUME_ROOTFS = "rootfs.tar.bz2"
 NUME_VERSIUNE = "imageversion"
 NUME_MARCAJ = HdsPazaModel.NUME_MARCAJ  # semnul receptorului pentru care e pachetul
 SUBCALE_UPDATE = ("e2", "update")  # structura standard
+# arhivele .zip se cauta in radacina discului si in aceste dosare, ca la celelalte imagini OE-Alliance (dosareArhive)
+DOSARE_ARHIVE = ("images", "downloaded_images", "imagebackups")
 FOLDER_DEZARHIVARE = ".hds-actualizare-extrasa"  # dosarul curat, pe acelasi mediu
 NUME_PACHET = (NUME_KERNEL, NUME_ROOTFS, NUME_VERSIUNE, NUME_MARCAJ)
 BLOC_COPIE = 1024 * 1024
@@ -458,17 +461,40 @@ def _candidatDinFolder(disc):
 	return None
 
 
+def numeNucleu(intrari, radacina):
+	"""Numele nucleului in dosarul `radacina` al arhivei: kernel.bin, sau kernel_auto.bin al arhivelor Vu+ 4K numai cand
+	dosarul nu are kernel.bin (un dosar cu amandoua ramane cu kernel.bin, ca pana acum)."""
+	return NUME_KERNEL if radacina + NUME_KERNEL in intrari else NUME_KERNEL_VUPLUS
+
+
+def esteVuplus(c):
+	"""Pachetul are nucleul in kernel_auto.bin (arhivele Vu+ 4K de pe site)."""
+	return c.get("nucleu_in_zip") == NUME_KERNEL_VUPLUS
+
+
+def _acelasiModel(c):
+	"""machinebuild din marcajul pachetului e chiar al imaginii care ruleaza (regulile ei); False la orice lipsa sau eroare."""
+	try:
+		masina = HdsPazaModel.cheiValori(c.get("marcaj") or "").get("machinebuild") or ""
+		return bool(masina) and masina == (HdsPazaModel.citesteReguli() or {}).get("machinebuild")
+	except Exception as eroare:
+		print("[HdsSoftwareUpdate] modelul pachetului: %s" % eroare)
+		return False
+
+
 def _radacinaPachet(intrari):
-	"""Dosarul din arhiva care tine kernel.bin si rootfs.tar.bz2: e2/update, ca la noi, sau alt dosar (arhivele altor
-	echipe, <producator>/<model>/). None daca nu e niciunul. Se scrie numai dupa simulare."""
+	"""Dosarul din arhiva care tine kernel.bin (sau kernel_auto.bin, arhivele Vu+ 4K: numeNucleu) si rootfs.tar.bz2:
+	e2/update, ca la noi, sau alt dosar (arhivele altor echipe, <producator>/<model>/, vuplus/<model>/). None daca nu e
+	niciunul. Se scrie numai dupa simulare."""
 	toate = set(intrari)
 	sufix = "/".join(SUBCALE_UPDATE) + "/"
 	bune = []
 	for n in intrari:
-		if n == NUME_KERNEL or n.endswith("/" + NUME_KERNEL):
-			radacina = n[: -len(NUME_KERNEL)]
-			if radacina + NUME_ROOTFS in toate:
-				bune.append(radacina)
+		for nucleu in (NUME_KERNEL, NUME_KERNEL_VUPLUS):
+			if n == nucleu or n.endswith("/" + nucleu):
+				radacina = n[: -len(nucleu)]
+				if radacina + NUME_ROOTFS in toate and numeNucleu(toate, radacina) == nucleu:
+					bune.append(radacina)
 	if len(bune) < 2:
 		return bune[0] if bune else None
 	# arhiva cu mai multe modele: numai dosarul acestui receptor, altfel nu se ghiceste
@@ -480,19 +506,44 @@ def _radacinaPachet(intrari):
 	return ale_noastre[0] if len(ale_noastre) == 1 else None
 
 
+def dosareArhive(punct):
+	"""Dosarele in care se cauta arhivele .zip pe un disc: radacina, apoi DOSARE_ARHIVE, numai cele care sunt dosare
+	adevarate (nu legaturi si nu puncte de montare), ca in celelalte imagini OE-Alliance (getImagesList din ecranele lor de
+	scriere a imaginii). Un Ustym 4K PRO avea arhiva in images/."""
+	dosare = [punct]
+	for nume in DOSARE_ARHIVE:
+		cale = os.path.join(punct, nume)
+		try:
+			if os.path.isdir(cale) and not os.path.islink(cale) and not os.path.ismount(cale):
+				dosare.append(cale)
+		except (OSError, ValueError):
+			continue
+	return dosare
+
+
 def _candidatiDinZipuri(disc):
-	"""Scaneaza DOAR radacina discului (fara subfoldere — conventie proprie, simpla) pentru
-	fisiere .zip care contin, oriunde in interior, kernel.bin si rootfs.tar.bz2 in acelasi dosar
-	(_radacinaPachet). Nu dezarhiveaza acum — doar detecteaza si citeste versiunea."""
+	"""Arhivele .zip din radacina discului si din dosarele images/, downloaded_images/, imagebackups/ (dosareArhive) care
+	contin, oriunde in interior, kernel.bin si rootfs.tar.bz2 in acelasi dosar (_radacinaPachet). Nu dezarhiveaza acum:
+	doar detecteaza si citeste versiunea. Un dosar care nu se poate citi nu ascunde celelalte."""
 	rezultat = []
-	try:
-		nume_fisiere = os.listdir(disc.mountpoint)
-	except OSError:
-		return rezultat
+	for dosar in dosareArhive(disc.mountpoint):
+		try:
+			nume_fisiere = os.listdir(dosar)
+		except OSError:
+			continue
+		rezultat.extend(_candidatiDinDosar(disc, dosar, nume_fisiere))
+	return rezultat
+
+
+def _candidatiDinDosar(disc, dosar, nume_fisiere):
+	"""Pachetele din arhivele .zip ale unui singur dosar (`nume_fisiere`: continutul lui)."""
+	rezultat = []
 	for nume in sorted(nume_fisiere):
 		if not nume.lower().endswith(".zip"):
 			continue
-		cale_zip = os.path.join(disc.mountpoint, nume)
+		cale_zip = os.path.join(dosar, nume)
+		if not os.path.isfile(cale_zip):
+			continue
 		try:
 			with zipfile.ZipFile(cale_zip) as z:
 				# numele cu bara inversa (arhive facute pe Windows) se cauta dupa forma cu „/”, dar se citesc dupa
@@ -531,6 +582,7 @@ def _candidatiDinZipuri(disc):
 					"cale_finala": None,  # gata doar dupa dezarhivare
 					"cale_zip": cale_zip,
 					"radacina_in_zip": radacina,
+					"nucleu_in_zip": numeNucleu(originale, radacina),
 					"versiune": versiune,
 					"marcaj": marcaj,
 				})
@@ -543,12 +595,19 @@ def _candidatiDinZipuri(disc):
 
 def pazaPachet(c, a=None):
 	"""(cod, text) al pazei de model pentru un pachet gasit: marcajul lui fata de receptorul acesta, fara sume. `a`:
-	amprenta receptorului citita o data pentru toata lista (fara ea se citeste acum)."""
+	amprenta receptorului citita o data pentru toata lista (fara ea se citeste acum). Arhiva Vu+ (kernel_auto.bin) cat
+	poarta HdsPazaModel.SCRIERE_VUPLUS e inchisa: REFUZ_VUPLUS in locul verdictului bun si al celui fara marcaj (nu trece nici
+	dupa avertisment), si in locul lui alt receptor cand marcajul e al aceluiasi model (pe un Broadcom pornit din alt loc paza
+	stricta refuza si arhiva lui); celelalte refuzuri (alt model, marcaj stricat) raman, ca omul sa afle motivul adevarat."""
 	try:
 		cod, text, _marcaj = HdsPazaModel.verificaPachet(c.get("marcaj"), a=a)
 	except Exception as eroare:
 		print("[HdsSoftwareUpdate] paza de model: %s" % eroare)
 		cod, text = HdsPazaModel.REFUZ_NECITIT, HdsPazaModel.textRefuz(HdsPazaModel.REFUZ_NECITIT)
+	if esteVuplus(c) and not getattr(HdsPazaModel, "SCRIERE_VUPLUS", False) and \
+			(cod in (HdsPazaModel.PACHET_BUN, HdsPazaModel.REFUZ_FARA_MARCAJ) or
+			(cod == HdsPazaModel.REFUZ_ALT_RECEPTOR and _acelasiModel(c))):
+		return HdsPazaModel.REFUZ_VUPLUS, HdsPazaModel.textRefuz(HdsPazaModel.REFUZ_VUPLUS)
 	return cod, text
 
 
@@ -708,17 +767,30 @@ def textVerificare(c):
 		_("Acum se face numai o verificare (o simulare): nu se instalează nimic pe receptor. Continui?")
 
 
-def textUltimaConfirmare(c, inregistrare=False, recuperare="", subdosar=""):
+def discUsbTinta(cmdline=None):
+	"""Partitia radacinii cand locul care ruleaza acum (si deci cel in care se scrie) e pe un disc USB: locul de pe stick
+	al pornirii multiple sau un loc kexec de pe USB (tintaScrierii); "" altfel sau la orice eroare."""
+	try:
+		t = tintaScrierii(_citesteCmdline() if cmdline is None else cmdline)
+	except ValueError:
+		return ""
+	return t["radacina"] if t["fel"] in ("usb", "kexec_usb") else ""
+
+
+def textUltimaConfirmare(c, inregistrare=False, recuperare="", subdosar="", usb=""):
 	"""Ultima confirmare: textul simplu (se termina cu intrebarea), apoi, dupa un rand gol, randurile mai mici: fraza
 	cu dosarul pentru Maintenance Mode (`recuperare`, poate lipsi) si pachetul. `subdosar`: rootsubdir= din
 	/proc/cmdline (primul Viper 4K, V10: sistemul intr-un subdosar, repararea cu arhiva producatorului); "" = o
-	singura pereche de partitii (V20, V30, V40), textul de pana acum."""
+	singura pereche de partitii (V20, V30, V40), textul de pana acum. `usb`: partitia locului de pe disc USB in care se
+	scrie (discUsbTinta); imaginile din memoria interna nu se schimba."""
 	sus = _("Atenție: o înregistrare este în curs chiar acum.") + "\n" if inregistrare else ""
 	tehnic = (recuperare.strip() + "\n" if recuperare and recuperare.strip() else "") + \
 		_("Software: %s") % "  ·  ".join(_numeSiVersiune(c))
 	if esteCopieCompleta(c):
 		pereche = _("Este o copie completă: se pune înapoi exact cum a fost făcută, cu setările, canalele și pluginurile ei. "
 			"Setările de acum nu se mai copiază și nu se pun peste ea.")
+	elif usb:
+		pereche = _("Noul software se instalează în locul celui care rulează acum, pe discul USB (%s). Imaginile din memoria internă nu se schimbă. Înainte de instalare, setările și lista de canale se copiază pe stick.") % usb
 	elif subdosar:
 		pereche = _("Noul software se instalează în locul celui care rulează acum (dosarul %s din memoria internă): dacă nu pornește, repararea se face de mână, cu arhiva de recuperare a producătorului pe un stick. Înainte de instalare, setările și lista de canale se copiază pe stick.") % subdosar
 	else:
@@ -1024,13 +1096,18 @@ def _copiaza(sursa, dest, oprit=None, progres=None):
 
 def _extrageZip(candidat, tinta, oprit=None, progres=None):
 	"""Scoate din zip-ul candidat numai cele patru fisiere ale pachetului (NUME_PACHET) in dosarul `tinta`. Ridica
-	OSError/KeyError/zipfile.BadZipFile la orice problema; apelantul le arata."""
+	OSError/KeyError/zipfile.BadZipFile la orice problema; apelantul le arata. Nucleul Vu+ (kernel_auto.bin) intra in
+	dosarul curat ca kernel.bin, numai cu poarta HdsPazaModel.SCRIERE_VUPLUS deschisa."""
 	radacina = candidat["radacina_in_zip"]
+	if esteVuplus(candidat) and not getattr(HdsPazaModel, "SCRIERE_VUPLUS", False):
+		raise OSError("arhiva Vu+: instalarea din meniu este oprita")
+	nucleu = candidat.get("nucleu_in_zip") or NUME_KERNEL
 	with zipfile.ZipFile(candidat["cale_zip"]) as z:
 		originale = {}
 		for n in z.namelist():
 			originale.setdefault(n.replace("\\", "/"), n)
-		alese = [(nume_scurt, originale.get(radacina + nume_scurt)) for nume_scurt in NUME_PACHET]
+		alese = [(nume_scurt, originale.get(radacina + (nucleu if nume_scurt == NUME_KERNEL else nume_scurt)))
+			for nume_scurt in NUME_PACHET]
 		alese = [(scurt, n) for scurt, n in alese if n is not None]
 		if progres is not None:
 			progres["total"] = sum(z.getinfo(n).file_size for _scurt, n in alese)
@@ -1239,33 +1316,173 @@ def subdosarRadacina(cmdline=None):
 	return v if re.match(r"^[A-Za-z0-9_]{1,40}$", v) else ""
 
 
-def _argumenteOfgwrite(cmdline):
-	"""Slotul pornit din memorie sau perechea simpla; refuz la pornire nesigura."""
+# UNDE SE SCRIE (USI, 16.11.2026; space71, SatFan 3085, Uclan Ustym 4K PRO): mereu locul care ruleaza acum, citit din
+# /proc/cmdline. Pana in 0.7.6 orice radacina pe USB/UUID si orice pornire kexec se opreau cu „Imaginea rulează de pe un
+# disc extern”, si pe locurile pornirii multiple unde celelalte imagini scriu fara grija. Argumentele sunt cele folosite de
+# celelalte imagini OE-Alliance la scrierea imaginii, citite in ofgwrite 5.0.4 (comiterea retetei noastre, 9ef59e0):
+#   - o singura pereche nucleu-sistem: -r -k (ofgwrite isi gaseste singur partitiile);
+#   - loc din memorie cu rootsubdir (SF8008, Ustym 4K PRO, primul Viper 4K): -r -k -mN;
+#   - loc din memorie al pornirii kexec (Vu+ 4K): -r<partitia din root=> -k -mN. Fara -r<partitie>, la kexec=1 ofgwrite
+#     ia radacina din root= de acum (ofgwrite.c, „use kexec rootfs mode”), iar nucleul e fisierul <loc>/zImage;
+#   - loc kexec de pe USB/HDD (rootsubdir=<model>/linuxrootfsN, root=/dev/sdXN gasit de initramfs): ca mai sus, plus
+#     -s<model>/linuxrootfs, dosarul locului;
+#   - loc de pe stick al pornirii multiple cu STARTUP (STARTUP_5/6 ale producatorului pe SF8008 si Ustym 4K PRO:
+#     root=/dev/sda2 kernel=/dev/sda1, fara rootsubdir): -r<sda2> -k<sda1> -m0 (m0 = fara verificarea subdosarului).
+# Ramane oprit, cu textul de pana acum: radacina pe un disc USB pe un receptor FARA pornire multipla (nu se stie ce
+# porneste dupa, iar ofgwrite ar scrie memoria interna, alta imagine decat cea pornita), Recovery-ul kexec (radacina flash
+# cu STARTUP*), un loc cu nucleul comun din memorie si sistemul pe USB, si orice forma necunoscuta. Pachetul nu are voie sa
+# stea pe partitia in care se scrie (refuzTinta; radacina o pazeste deja Tools/MediuImagine).
+_BLOC_EMMC = r"/dev/mmcblk0p[1-9][0-9]*"
+_PARTITIE_USB = re.compile(r"^/dev/(sd[a-z])([1-9][0-9]?)$")
+_SUBDOSAR_KEXEC_USB = re.compile(r"^(?:([A-Za-z0-9_-]{1,40})/)?linuxrootfs([1-9][0-9]?)$")
+_EXTERNE = ("/dev/sd", "/dev/nvme", "/dev/mmcblk1", "/dev/disk/", "/dev/mapper/", "UUID=", "PARTUUID=")
+
+
+def _textDiscExtern():
+	return _("Imaginea rulează de pe un disc extern. Pornește imaginea din memoria internă și verifică din nou.")
+
+
+def _textLocNesigur():
+	return _("Slotul pornit din memoria internă nu poate fi stabilit sigur. Instalarea este oprită.")
+
+
+def _pornireMultipla():
+	"""True pe receptoarele cu pornire multipla (bootoptions cu STARTUP_N, kexec, schema flag): SystemInfo["HdsMultiboot"],
+	socotit la pornire de Components/HdsPornireMultipla.disponibil. Orice eroare: False (deci refuz)."""
+	try:
+		from Components.SystemInfo import SystemInfo
+		return bool(SystemInfo.get("HdsMultiboot"))
+	except Exception as eroare:
+		print("[HdsSoftwareUpdate] pornirea multipla: %s" % eroare)
+		return False
+
+
+def _tintaKexec(p):
+	"""Locul kexec care ruleaza acum (kexec=1): din memorie sau de pe USB/HDD. ValueError pentru Recovery si forme necunoscute."""
+	sub, root, nucleu = p.get("rootsubdir", ""), p.get("root", ""), p.get("kernel", "")
+	# unele initramfs nu lasa kernel= in linia de comanda (Components/HdsPornireMultipla._acumKexec); cand e, e chiar al locului
+	nucleu_bun = nucleu.lstrip("/") in ("", sub + "/zImage")
+	if p.get("rootfstype", "ext4") == "ext4" and nucleu_bun:
+		m = re.fullmatch(r"linuxrootfs([1-9])", sub)
+		if m and re.fullmatch(_BLOC_EMMC, root):
+			return {"fel": "kexec", "argumente": "-r%s -k -m%s" % (root[len("/dev/"):], m.group(1)), "subdosar": sub,
+				"radacina": root, "nucleu": "/oldroot_remount/%s/zImage" % sub, "loc": m.group(1)}
+		m = _SUBDOSAR_KEXEC_USB.fullmatch(sub)
+		if m and _PARTITIE_USB.fullmatch(root):
+			argumente = "-r%s -k" % root[len("/dev/"):]
+			if m.group(1):
+				argumente += " -s%s/linuxrootfs" % m.group(1)
+			return {"fel": "kexec_usb", "argumente": "%s -m%s" % (argumente, m.group(2)), "subdosar": sub,
+				"radacina": root, "nucleu": "/oldroot_remount/%s/zImage" % sub, "loc": m.group(2)}
+	if root.startswith(_EXTERNE):
+		raise ValueError(_textDiscExtern())
+	raise ValueError(_textLocNesigur())
+
+
+def _tintaLocUsb(p, multiboot):
+	"""Locul de pe stick al pornirii multiple cu STARTUP (root=/dev/sdXM kernel=/dev/sdXK pe acelasi disc, fara rootsubdir),
+	numai pe un receptor cu pornire multipla; None altfel."""
+	root, nucleu = p.get("root", ""), p.get("kernel", "")
+	r, k = _PARTITIE_USB.fullmatch(root), _PARTITIE_USB.fullmatch(nucleu)
+	if "rootsubdir" in p or p.get("rootfstype", "ext4") != "ext4" or not r or not k or r.group(1) != k.group(1) or \
+			r.group(2) == k.group(2):
+		return None
+	if not (_pornireMultipla() if multiboot is None else multiboot):
+		return None
+	return {"fel": "usb", "argumente": "-r%s -k%s -m0" % (root[len("/dev/"):], nucleu[len("/dev/"):]), "subdosar": "",
+		"radacina": root, "nucleu": nucleu, "loc": ""}
+
+
+def tintaScrierii(cmdline, multiboot=None):
+	"""Unde scrie instalarea: locul care ruleaza acum (vezi mai sus). Intoarce {"fel", "argumente", "subdosar", "radacina",
+	"nucleu", "loc"}; fel: "unic", "memorie", "kexec", "kexec_usb", "usb". ValueError cu textul pentru om la o pornire
+	nesigura. `multiboot`: pornirea multipla a receptorului (None = SystemInfo, citit numai cand trebuie)."""
 	chei = ("kernel", "root", "rootsubdir", "kexec", "rootfstype")
 	campuri = [c.split("=", 1) for c in (cmdline or "").split() if "=" in c]
 	if any(sum(k == cheie for k, _v in campuri) > 1 for cheie in chei):
 		raise ValueError(_("Pornirea receptorului este neclară. Instalarea este oprită."))
 	p = dict(campuri)
+	if p.get("kexec") == "1":
+		return _tintaKexec(p)
 	root = p.get("root", "")
-	externe = ("/dev/sd", "/dev/nvme", "/dev/mmcblk1", "/dev/disk/", "/dev/mapper/", "UUID=", "PARTUUID=")
-	if any(d.startswith(externe) for d in (root, p.get("kernel", ""))) or p.get("kexec") == "1":
-		raise ValueError(_("Imaginea rulează de pe un disc extern. Pornește imaginea din memoria internă și verifică din nou."))
+	if any(d.startswith(_EXTERNE) for d in (root, p.get("kernel", ""))):
+		t = _tintaLocUsb(p, multiboot)
+		if t:
+			return t
+		raise ValueError(_textDiscExtern())
 	if "rootsubdir" not in p:
-		return "-r -k"
+		return {"fel": "unic", "argumente": "-r -k", "subdosar": "", "radacina": root, "nucleu": p.get("kernel", ""), "loc": ""}
 	m = re.fullmatch(r"linuxrootfs([1-4])", p["rootsubdir"])
-	bloc = r"/dev/mmcblk0p[1-9][0-9]*"
-	if not m or not re.fullmatch(bloc, root) or not re.fullmatch(bloc, p.get("kernel", "")) or \
+	if not m or not re.fullmatch(_BLOC_EMMC, root) or not re.fullmatch(_BLOC_EMMC, p.get("kernel", "")) or \
 			p.get("kernel") == root or p.get("rootfstype", "ext4") != "ext4":
-		raise ValueError(_("Slotul pornit din memoria internă nu poate fi stabilit sigur. Instalarea este oprită."))
-	return "-r -k -m%s" % m.group(1)
+		raise ValueError(_textLocNesigur())
+	return {"fel": "memorie", "argumente": "-r -k -m%s" % m.group(1), "subdosar": p["rootsubdir"], "radacina": root,
+		"nucleu": p["kernel"], "loc": m.group(1)}
 
 
-def _simulareAratacorect(iesire, cmdline=None):
+def _argumenteOfgwrite(cmdline, multiboot=None):
+	"""Argumentele lui ofgwrite pentru locul care ruleaza acum (tintaScrierii); ValueError la pornire nesigura."""
+	return tintaScrierii(cmdline, multiboot)["argumente"]
+
+
+def _dispozitivReal(cale):
+	try:
+		return os.path.normpath(os.path.realpath(cale))
+	except (OSError, ValueError):
+		return cale
+
+
+def refuzTinta(t, cale_pachet, verifica=None):
+	"""Textul refuzului cand pachetul sta chiar pe o partitie in care se scrie (nucleul unui loc de pe stick: sda1 la
+	STARTUP_5); None altfel. Radacina locului o refuza deja Tools/MediuImagine (acelasi dispozitiv cu /)."""
+	tinte = set(_dispozitivReal(d) for d in (t.get("radacina"), t.get("nucleu")) if d and d.startswith("/dev/"))
+	if not tinte:
+		return None
+	try:
+		_permis, _motiv, dispozitiv, _punct = (verifica or verificaMediuScriere)(cale_pachet)
+	except Exception as eroare:
+		print("[HdsSoftwareUpdate] partitia pachetului: %s" % eroare)
+		dispozitiv = None
+	if not dispozitiv or _dispozitivReal(dispozitiv) not in tinte:
+		return None
+	return _("Instalarea este oprită: software-ul stă chiar pe partiția în care se instalează (%s). Copiază-l pe alt stick și încearcă din nou. Nu s-a instalat nimic.") % dispozitiv
+
+
+def _tinteDinIesire(randuri):
+	"""{"kernel": set, "rootfs": set}: toate destinatiile anuntate de ofgwrite (Found/Using cmdLine ... device, Using X as
+	... device), din randurile deja scrise cu litere mici."""
+	tinte = {"kernel": set(), "rootfs": set()}
+	for rand in randuri:
+		m = re.fullmatch(r"(?:found|using) cmdline (kernel|rootfs) device: (\S+)", rand)
+		if m:
+			tinte[m.group(1)].add(m.group(2))
+		m = re.fullmatch(r"using (\S+) as (kernel|rootfs) device", rand)
+		if m:
+			tinte[m.group(2)].add(m.group(1))
+	return tinte
+
+
+def _simulareLocPornireMultipla(randuri, t):
+	"""Locurile kexec si locul de pe stick (tintaScrierii): simularea trebuie sa numeasca exact nucleul si radacina locului
+	care ruleaza acum, si nimic altceva, iar radacina de acum sa fie chiar aceea (se scrie locul pornit)."""
+	if _tinteDinIesire(randuri) != {"kernel": {t["nucleu"].lower()}, "rootfs": {t["radacina"].lower()}}:
+		return False
+	if "current rootfs is: " + t["radacina"].lower() not in randuri:
+		return False
+	sloturi = set(r for r in randuri if r.startswith("flashing multiboot partition "))
+	subdosare = set(r for r in randuri if r.startswith("current root sub dir is:"))
+	if t["fel"] == "usb":
+		return "flashing without rootsubdir check" in randuri and not sloturi and subdosare == {"current root sub dir is:"}
+	return "kexec mode is: 1" in randuri and sloturi == {"flashing multiboot partition " + t["loc"]} and \
+		subdosare == {"current root sub dir is: " + t["subdosar"].lower()}
+
+
+def _simulareAratacorect(iesire, cmdline=None, multiboot=None):
 	"""Verificare PROPRIE, din text, ca ofgwrite a recunoscut pachetul — NU se are incredere in
 	textul lui de "succes" (identic la simulare si la scriere reala). Cere gasirea
 	explicita a kernelului, rootfs-ului SI a dispozitivelor tinta, fara nicio mentiune de eroare.
 	Cu rootsubdir=, destinatiile trebuie sa fie chiar kernel= si root=.
-	Numarul dat prin -m trebuie sa corespunda subdosarului pornit."""
+	Numarul dat prin -m trebuie sa corespunda subdosarului pornit. Locurile kexec si cel de pe stick: _simulareLocPornireMultipla."""
 	txt = (iesire or "").lower()
 	are_kernel = "found kernel file" in txt
 	are_rootfs = any(s in txt for s in (
@@ -1273,11 +1490,13 @@ def _simulareAratacorect(iesire, cmdline=None):
 	))
 	cmdline = _citesteCmdline() if cmdline is None else cmdline
 	try:
-		_argumenteOfgwrite(cmdline)
+		t = tintaScrierii(cmdline, multiboot)
 	except ValueError:
 		return False
 	subdosar = subdosarRadacina(cmdline)
-	if subdosar:
+	if t["fel"] in ("kexec", "kexec_usb", "usb"):
+		are_dispozitive = _simulareLocPornireMultipla([r.strip() for r in txt.splitlines()], t)
+	elif subdosar:
 		kernel, radacina = campCmdline(cmdline, "kernel"), campCmdline(cmdline, "root")
 		randuri = [r.strip() for r in txt.splitlines()]
 		tinte = {"kernel": set(), "rootfs": set()}
@@ -1310,7 +1529,7 @@ _ANALIZA_FARA_ROST = re.compile(
 	r"Delete rootfs|Creating directory|"
 	r"Searching image files|Found mounted |Found /proc/mtd|Device:|Using (kernel|rootfs) mtd device|Read /proc/cmdline|"
 	r"Kexec mode|Chkroot mode|Current (rootfs|kernel|root sub dir) is:|Syncing filesystem|daemonize|Successfully|Checking E2|"
-	r"E2 is stopped|Boxname detect)", re.I)
+	r"E2 is stopped|Boxname detect|Flashing multiboot partition|Flashing without rootSubDir|Using user defined slot)", re.I)
 
 
 def textNerecunoscut():
@@ -1336,9 +1555,17 @@ def _analizaRand(rand):
 	if m or gpt:
 		fel, dispozitiv = m.groups() if m else (gpt.group(2), gpt.group(1))
 		loc = os.path.basename(dispozitiv)
+		# locul kexec: nucleul e fisierul /oldroot_remount/<loc>/zImage; locul de pe stick: partitii /dev/sd*
+		kexec = re.match(r"/oldroot_remount/(.+)/zImage$", dispozitiv, re.I)
+		if kexec and fel.lower() == "kernel":
+			return _("Nucleul se va instala în dosarul %s, lângă sistem.") % kexec.group(1)
+		if dispozitiv.startswith("/dev/sd"):
+			if fel.lower() == "kernel":
+				return _("Nucleul se va instala pe discul USB, pe partiția %s.") % loc
+			return _("Sistemul se va instala pe discul USB, pe partiția %s.") % loc
 		if fel.lower() == "kernel":
-			return _("Nucleul se va instala în memoria internă, în locul %s.") % loc
-		return _("Sistemul se va instala în memoria internă, în locul %s.") % loc
+			return _("Nucleul se va instala în memoria internă, pe partiția %s.") % loc
+		return _("Sistemul se va instala în memoria internă, pe partiția %s.") % loc
 	jos = rand.lower()
 	for semn, text in (
 			("no kernel file was found", _("Nu a găsit nucleul sistemului în acest software.")),
@@ -1977,11 +2204,17 @@ class HdsSoftwareUpdate(Screen):
 			return
 		cmdline = _citesteCmdline()
 		try:
-			argumente = _argumenteOfgwrite(cmdline)
+			tinta = tintaScrierii(cmdline)
 		except ValueError as eroare:
 			self._arataCorect = False
 			self._eroareInapoiLaLista(str(eroare))
 			return
+		refuz = refuzTinta(tinta, cale_pachet)
+		if refuz:
+			self._arataCorect = False
+			self._eroareInapoiLaLista(refuz)
+			return
+		argumente = tinta["argumente"]
 		self._cmdlineVerificare = cmdline
 		self._faza = "verificare"
 		self._ocupat = True
@@ -2071,7 +2304,7 @@ class HdsSoftwareUpdate(Screen):
 		except Exception:
 			pass
 		self._intreaba(self._dupaConfirmareFlashReal,
-			textUltimaConfirmare(self._candidatAles, inregistrare, self._textRecuperare(), subdosarRadacina()),
+			textUltimaConfirmare(self._candidatAles, inregistrare, self._textRecuperare(), subdosarRadacina(), discUsbTinta()),
 			_("Ultima confirmare"), _("Da, instalează acum"), False, RANDURI_CONFIRMARE)
 
 	def _textRecuperare(self):
@@ -2158,9 +2391,13 @@ class HdsSoftwareUpdate(Screen):
 			return refuz
 		cmdline = _citesteCmdline()
 		try:
-			argumente = _argumenteOfgwrite(cmdline)
+			tinta = tintaScrierii(cmdline)
 		except ValueError as eroare:
 			return str(eroare)
+		refuz = refuzTinta(tinta, cale_pachet)
+		if refuz:
+			return refuz
+		argumente = tinta["argumente"]
 		if (" -m" in argumente or getattr(self, "_pornireVerificata", None) is not None) and (not self._arataCorect or
 				getattr(self, "_pornireVerificata", None) != (cmdline, os.path.realpath(cale_pachet))):
 			return _("Slotul sau pachetul nu mai corespunde verificării. Verifică din nou software-ul înainte de instalare.")

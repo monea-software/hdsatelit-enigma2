@@ -5,6 +5,8 @@
 #define __DESCR_H_
 
 #include <linux/dvb/ca.h>
+#include <stdint.h>
+#include <vector>
 #include <lib/dvb_ci/dvbci.h>
 
 /**
@@ -28,5 +30,13 @@ int descrambler_set_key(int &desc_fd, eDVBCISlot *slot, int parity, unsigned cha
 int descrambler_set_pid(int desc_fd, eDVBCISlot *slot, int enable, int pid);
 bool descrambler_set_key_alt(eDVBCISlot *slot, int ca_curent, int parity, unsigned char *data, int *fd_nou, int *ca_nou,
 	int *fel_nou, char *incercate, size_t marime);
+
+/* HD Satelit: a doua forma a cererilor, „OE 2.2” (index simplu in CA_SET_PID, CA_SET_DESCR_MODE AES-128 CBC inaintea
+   IV-ului si a cheii); folosita numai dupa ce forma de mai sus e refuzata (descrambler.cpp, dvbci_ccmgr.cpp) */
+int descrambler_oe22_index(int desc_fd, eDVBCISlot *slot);
+int descrambler_oe22_set_pid(int desc_fd, eDVBCISlot *slot, int index, int enable, int pid);
+int descrambler_oe22_set_key(int desc_fd, eDVBCISlot *slot, int index, int parity, unsigned char *data, bool *mod_pus = nullptr);
+bool descrambler_oe22_incearca(eDVBCISlot *slot, int fd_curent, int ca_curent, const std::vector<uint16_t> &piduri, int parity,
+	unsigned char *data, int *fd_nou, int *ca_nou, int *fel_nou, int *index_nou, char *incercate, size_t marime);
 
 #endif

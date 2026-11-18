@@ -26,7 +26,7 @@ eDVBVolumecontrol* eDVBVolumecontrol::getInstance()
 	return instance;
 }
 
-eDVBVolumecontrol::eDVBVolumecontrol()
+eDVBVolumecontrol::eDVBVolumecontrol() : muted(false), pistaPlaciiTacuta(false)
 {
 	volumeUnMute();
 	setVolume(100, 100);
@@ -151,7 +151,7 @@ void eDVBVolumecontrol::volumeUnMute()
 {
 	int fd = openMixer();
 #ifdef HAVE_DVB_API_VERSION
-	ioctl(fd, AUDIO_SET_MUTE, false);
+	ioctl(fd, AUDIO_SET_MUTE, pistaPlaciiTacuta ? 1 : 0);   /* pista placii tacuta de egalizator ramane tacuta */
 #endif
 	closeMixer(fd);
 	muted = false;
@@ -166,6 +166,27 @@ void eDVBVolumecontrol::volumeUnMute()
 	fprintf(f, "%d", 0);
 
 	fclose(f);
+}
+
+/* Egalizatorul la canalele TV pe HiSilicon (lib/service/servicedvb.cpp, selectAudioStream): imaginea si sunetul au acelasi
+   player, iar AUDIO_STOP / AUDIO_PLAY pe decodorul de sunet in mijlocul imaginii o opresc 0,3-1,2 s (masurat pe SF8008,
+   16.11.2026, unelte/stb/masoara_inghetare_egalizator.py). AUDIO_SET_MUTE taie acolo numai pista decodorului placii
+   (/proc/msp/sound0: Track(0) master), nu iesirile, si nu opreste imaginea; sunetul egalizatorului e alta pista (ALSA).
+   /proc/stb/audio/j1_mute taie iesirile, deci nu se atinge aici. Tacerea pistei ramane peste zap-uri si peste schimbarea
+   pistei de sunet (masurat), deci se trimite numai la schimbare. */
+void eDVBVolumecontrol::setPistaPlaciiTacuta(bool tacuta)
+{
+	if (tacuta == pistaPlaciiTacuta)
+		return;
+	pistaPlaciiTacuta = tacuta;
+	eDebug("[eDVBVolumecontrol] pista placii %s (egalizatorul)", tacuta ? "tacuta" : "redata");
+	int fd = openMixer();
+	if (fd < 0)
+		return;
+#ifdef HAVE_DVB_API_VERSION
+	ioctl(fd, AUDIO_SET_MUTE, (muted || tacuta) ? 1 : 0);
+#endif
+	closeMixer(fd);
 }
 
 void eDVBVolumecontrol::volumeToggleMute()

@@ -334,7 +334,7 @@ def cereOprirePentruSecret(session=None):
 			session.hdsAvertismentSecret = False
 			if opreste:
 				from Components import HdsAsistenta
-				HdsAsistenta.opreste()
+				HdsAsistenta.opreste("de om (avertisment)")
 
 		session.openWithCallback(raspuns, MessageBox, _(TEXT_OPRESTE_SECRET), MessageBox.TYPE_YESNO,
 			default=False, list=[(_("Oprește asistența"), True), (_("Înapoi"), False)])
@@ -736,6 +736,7 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 	parti = ["Ecrane: " + " > ".join(cap),
 		"Sus: %s (%s)" % (type(sus).__name__, _modul(sus)),
 		"Tastatura: " + ("câmp de text deschis (scrii cu op text)" if mod_ascii else "telecomanda")]
+	parti.extend(_randuriDedesubt(ecrane))
 	texte, taste, liste = [], [], []
 	try:
 		componente = list(sus.items())
@@ -772,6 +773,43 @@ def textEcran(ecrane, mod_ascii=False, ssh_deschis=False):
 	if len(text) > TEXT_ECRAN_MAX:
 		text = text[:TEXT_ECRAN_MAX] + "\n... (taiat)"
 	return mascheazaSecrete(text)
+
+
+TEXT_DEDESUBT_MAX = 300
+
+
+def _randuriDedesubt(ecrane):
+	"""HDSatelit 0.7.6 (ASF, asistenta 222923): "Ecrane:" da numai numele ferestrelor de dedesubt. Pentru cele ramase sub
+	InfoBar (deschise de un plugin inaintea lui, la pornire) si pentru orice MessageBox de dedesubt, un rand cu titlul,
+	modulul si textul, ca echipa sa afle ce scrie in ele fara sa apese taste (la 222923: MessageBox "Eroare" sub InfoBar)."""
+	jos = ecrane[:-1]
+	clase = [_clase(e) for e in jos]
+	sus_infobar = next((i for i, c in enumerate(clase) if "InfoBar" in c), None)
+	randuri = []
+	for i, e in enumerate(jos):
+		if "InfoBar" in clase[i]:
+			continue
+		if not ((sus_infobar is not None and i < sus_infobar) or "MessageBox" in clase[i]):
+			continue
+		text = ""
+		for nume in ("text", "Text"):
+			try:
+				comp = e[nume]
+			except Exception:
+				continue
+			if _componentaSecreta(comp, nume):
+				text = "[ascuns]"
+				break
+			text = _text(comp) or ""
+			if text.strip():
+				break
+		t = _titlu(e)
+		r = "Dedesubt: %s (%s)" % ('%s "%s"' % (type(e).__name__, t) if t else type(e).__name__, _modul(e))
+		text = " ".join(mascheazaSecrete(text).split()) if text != "[ascuns]" else text
+		if text:
+			r += ": " + (text if len(text) <= TEXT_DEDESUBT_MAX else text[:TEXT_DEDESUBT_MAX] + "...")
+		randuri.append(r)
+	return randuri
 
 
 def _instanteComponenta(ecran, comp):

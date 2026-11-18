@@ -306,4 +306,10 @@ T = {
 	"cpu_mode": u"Protsessori režiim",
 	"cpu_volt": u"Pinge",
 	"cpu_steps": u"Aeg sageduste kaupa",
+	"bitrate_va": u"Video · heli bitikiirus",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"kesk",
+	"ecm_hop": u"Hüpped",
+	"ecm_reader": u"Lugeja",
 }

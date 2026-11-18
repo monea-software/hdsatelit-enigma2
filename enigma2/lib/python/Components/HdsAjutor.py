@@ -69,14 +69,27 @@ TEXT_LIPSA = {
 	"ru": "Справка не установлена на этом приёмнике.",
 	"tr": "Yardım bu alıcıda kurulu değil.",
 }
-# textele din jur cand index.json nu le are (pachet mai vechi decat codul)
+# textele din jur cand index.json nu le are (pachet mai vechi decat codul) sau cand pachetul lipseste: atunci ecranul
+# tastelor (HELP) si cautarea le cer tot de aici, iar fara ele aratau cheia (indemn_pagina, tastele_ecranului pe ALBASTRU:
+# proba REL8 pe receptorul de proba, 0.7.7 fara hdsatelit-ajutor, 17.11.2026). Toate cheile ecranelor si ale paginii web,
+# ca in index.json 2026.11.17.
 TEXTE_REZERVA = {
 	"ro": {"ajutor": "Ajutor", "inchide": "Închide", "cuprins": "Cuprins", "cauta": "Caută",
 		"taste": _("Tastele acestui ecran"), "pagina_din": "Pagina %d din %d", "pagini_n": "%d pagini",
-		"gasite_n": "%d găsite"},
+		"gasite_n": "%d găsite", "tastele_ecranului": "Tastele ecranului",
+		"indemn_pagina": "Sus/Jos: rândul · Stânga/Dreapta: pagina", "indemn_legatura": "OK: deschide pagina legată",
+		"cauta_titlu": "Caută în ajutor", "nimic_gasit": "Nicio pagină nu se potrivește cu căutarea.",
+		"fara_pagina": "Ecranul acesta nu are încă o pagină de ajutor. Alege din cuprins.",
+		"pagina_lipsa": "Pagina nu se găsește în ajutor.", "cand": "Când o schimbi", "din_fabrica": "Din fabrică",
+		"valori": "Valori", "in_engleza": "Ajutorul nu e tradus încă în limba ta: îl vezi în engleză."},
 	"en": {"ajutor": "Help", "inchide": "Close", "cuprins": "Contents", "cauta": "Search",
 		"taste": _("Keys on this screen"), "pagina_din": "Page %d of %d", "pagini_n": "%d pages",
-		"gasite_n": "%d found"},
+		"gasite_n": "%d found", "tastele_ecranului": "Screen keys",
+		"indemn_pagina": "Up/Down: row · Left/Right: page", "indemn_legatura": "OK: open the linked page",
+		"cauta_titlu": "Search the help", "nimic_gasit": "No page matches the search.",
+		"fara_pagina": "This screen does not have a help page yet. Choose one from the contents.",
+		"pagina_lipsa": "The page is not in the help.", "cand": "When to change it", "din_fabrica": "Default",
+		"valori": "Values", "in_engleza": "The help is not translated into your language yet, so you see it in English."},
 }
 
 

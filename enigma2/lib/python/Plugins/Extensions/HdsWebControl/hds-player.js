@@ -11,6 +11,10 @@
  * intretesute), raportul imaginii dupa SAR (4:3 sau 16:9) si dupa AFD, sunetul cu Web Audio (bucati programate dupa
  * PTS; merge si pe http, fara AudioWorklet). Ceasul comun e ceasul sunetului; fara sunet, ceasul paginii.
  * Pagina receptorului e http: nimic din ce cere context securizat (fara SharedArrayBuffer, WebCodecs, AudioWorklet).
+ * Si imaginea H.264 (cu sunetul AAC), in browserele fara H.264 in MediaSource (decodorul din imagine il are). Pagina
+ * spune workerului de cateva ori pe secunda cate cadre a primit si cate are in coada ({cmd: "coada"}): imaginea
+ * asteapta acolo nedecodata, iar aici vin numai cadrele care se arata in curand (la 1080 un cadru are ~3 MB, iar in DVB
+ * imaginea vine cu 1-2 s inaintea sunetului).
  *
  * Folosire (player.js):
  *   var j = new HdsPlayerWasm(canvas, {antete: {...}, volum: 0.8, mut: false, program: sid, laEveniment: function(tip, date){}});
@@ -22,7 +26,7 @@
 	"use strict";
 
 	// primele 12 cifre din sha256 al tv-wasm/hdsdec.wasm: adresa decodorului se schimba odata cu el (cache o zi)
-	var VERSIUNE_DECODOR = "099cf027855f";
+	var VERSIUNE_DECODOR = "e835a97f5725";
 	var COADA_MAX = 50;                       // cadre decodate in asteptare (2 s la 25 de cadre/s)
 	var COADA_OCTETI_MAX = 48 * 1024 * 1024;
 	var INAINTE_MAX = 90000 * 3;              // un cadru cu peste 3 s inaintea ceasului: ceasul se reia
@@ -86,6 +90,9 @@
 		this.primulCadruT = 0;
 		this.ultimSunetT = 0;
 		this.raportAratat = 0;
+		this.primiteV = 0;          // cadrele de imagine primite de la worker (toate, si cele aruncate)
+		this._raportat = "";
+		this._raportatT = 0;
 		// tarzii / salturi_ceas: masuratorile probei din 14.10 (zap MPEG-2 -> MPEG-2: ~1 cadru/s pe al doilea player, cu
 		// sute de cadre "aruncate"): cadre sosite dupa ora lor (ceasul inaintea imaginii) si salturile ceasului fata de timpul
 		// paginii (peste 200 ms intre doua imagini), ca proba pe receptor sa arate care din ele e
@@ -152,6 +159,7 @@
 		var bucla = function () {
 			if (self.oprit) return;
 			self._cadru();
+			self._raporteaza();
 			radacina.requestAnimationFrame(bucla);
 		};
 		radacina.requestAnimationFrame(bucla);
@@ -228,8 +236,22 @@
 	};
 
 	// ---------------------------------------------------------------- mesajele workerului
+	// workerul tine imaginea nedecodata cat aici sunt destule cadre (hds-worker.js, retine): cate a primit pagina, cate
+	// asteapta in coada, ceasul (PTS-ul aratat acum, ca imaginea sa nu ramana in urma cand pagina deseneaza rar) si
+	// epoca, la fiecare schimbare si macar o data la 250 ms (fara raport de 2 s workerul decodeaza pe loc)
+	HdsPlayerWasm.prototype._raporteaza = function () {
+		if (!this.w) return;
+		var k = this.primiteV + "/" + this.coada.length, t = performance.now();
+		if (k === this._raportat && t - this._raportatT < 250) return;
+		this._raportat = k;
+		this._raportatT = t;
+		var c = this._ultimCeas && !this.paused ? this._ultimCeas.c + (t - this._ultimCeas.t) * 90 : null;
+		this.w.postMessage({cmd: "coada", primite: this.primiteV, n: this.coada.length, ceas: c, epoca: this.epoca});
+	};
+
 	HdsPlayerWasm.prototype._mesaj = function (m) {
 		if (this.oprit || !m) return;
+		if (m.tip === "v") this.primiteV++;
 		if (m.tip === "v" || m.tip === "a") {
 			if (m.epoca < this.epoca) return;
 			if (m.epoca > this.epoca) this._epocaNoua(m.epoca);
@@ -582,6 +604,7 @@
 			video_ms_pe_cadru: w && w.v.cadre ? +(w.v.ms / w.v.cadre).toFixed(2) : null, video_ms_max: w ? +w.v.max.toFixed(1) : null,
 			audio_s: +s.audio_s.toFixed(1), audio_goluri: s.audio_goluri, audio_reluari: s.audio_reluari,
 			salturi: s.salturi, erori_decodor: w ? w.erori : null, demux: w ? w.demux : null,
+			asteptare: w ? w.asteptare : null,
 			sincron_ms: {medie: +med.toFixed(1), p5: +p(0.05).toFixed(1), p95: +p(0.95).toFixed(1), n: sin.length},
 			raport: +(this.raportAratat || 0).toFixed(3), octeti: w ? w.octeti : 0,
 			sunet: this.ac ? this.ac.state : "fara",

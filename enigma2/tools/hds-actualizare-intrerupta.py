@@ -53,6 +53,11 @@
 # rezultat (stare pornire-reparata sau pornire-nereparata), pe care enigma2 il arata o data, pe televizor si in pagina web.
 # Daca chiar python3-core e stricat, programul nu poate porni: ramane modul sigur.
 #
+# Pe televizor (MI6 0.7.5, raportul pornirii 606060: SF8008 cu radacina pe un stick USB 2.0, opkg minute intregi in starea
+# D, omul a taiat curentul): cand lucrul tine mai mult de ECRAN_DUPA_S secunde, tools/hds-rezerva-ecran.py deseneaza "Se
+# termina actualizarea software..., nu opri receptorul". Randurile lui opkg merg in jurnal fara fsync pe fiecare rand.
+# tools/hds-raport.sh nu trimite "nu porneste" cat ruleaza programul (fisierul RULEAZA).
+#
 # Numai biblioteca standard Python (fara module enigma2 si fara alte module HD Satelit: acelea pot fi chiar fisierele
 # amestecate). Variabilele HDS_AI_* sunt numai pentru probele de pe PC (teste/test_actualizare_intrerupta_074.py).
 
@@ -70,6 +75,15 @@ RADACINA = os.environ.get('HDS_AI_RADACINA', '')
 # probele dau aici programul lor, cu argumentele despartite prin |
 OPKG = [x for x in os.environ.get('HDS_AI_OPKG', 'opkg').split('|') if x]
 AFISAJ = os.environ.get('HDS_AI_AFISAJ', '/dev/dbox/oled0')
+# MI6 0.7.5 (raportul pornirii 606060): imaginea de pe televizor cat se termina actualizarea (tools/hds-rezerva-ecran.py)
+ECRAN = os.environ.get('HDS_AI_ECRAN', '/usr/bin/hds-rezerva-ecran.py')
+ECRAN_FB = os.environ.get('HDS_AI_FB', '/dev/fb0')
+ECRAN_DOSAR = '/tmp/hds-actualizare-ecran'
+ECRAN_PYTHON = '/usr/lib/enigma2/python'
+ECRAN_DUPA_S = float(os.environ.get('HDS_AI_ECRAN_S', '5'))
+ECRAN_TERMEN_S = 60
+# randurile lui opkg in jurnal: fsync cel mult o data la atatea secunde (nu dupa fiecare rand)
+JURNAL_FSYNC_S = 10
 
 SEMN = '/etc/enigma2/hds-actualizare.in-curs'
 DOSAR_PACHETE = '/tmp/hds-actualizare'
@@ -140,8 +154,14 @@ def c(cale):
 
 # ---------------------------------------------------------------- jurnal si fisiere mici
 
-def jurnal(rand):
-	"""Un rand in jurnalul actualizarilor (rotit ca HdsPachete.scrie_jurnal_rotit), fara parole din adrese"""
+_ultimul_fsync = [0.0]
+
+
+def jurnal(rand, sincron=True):
+	"""Un rand in jurnalul actualizarilor (rotit ca HdsPachete.scrie_jurnal_rotit), fara parole din adrese. sincron=False
+	(randurile lui opkg, MI6 0.7.5): fsync numai daca ultimul a fost acum mai bine de JURNAL_FSYNC_S secunde. Pe un stick
+	USB cu ext4 (data=ordered) fiecare fsync impinge pe disc si tot ce a scris opkg pana atunci, iar opkg astepta dupa el
+	(raportul 606060, SF8008 cu radacina pe stick: opkg in starea D minute intregi); ruleaza_opkg face sync la sfarsit."""
 	rand = _PAROLA_IN_ADRESA.sub(r'\1', u'%s' % rand)
 	rand = ''.join(x for x in rand if x >= ' ' or x == '\t')[:400]
 	text = '%s pornire: %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), rand)
@@ -154,7 +174,10 @@ def jurnal(rand):
 		with open(cale, 'a', encoding='utf-8') as f:
 			f.write(text)
 			f.flush()
-			os.fsync(f.fileno())
+			acum = time.monotonic()
+			if sincron or acum - _ultimul_fsync[0] >= JURNAL_FSYNC_S:
+				os.fsync(f.fileno())
+				_ultimul_fsync[0] = acum
 	except (IOError, OSError):
 		pass
 	sys.stdout.write('[hds-actualizare-intrerupta] %s' % text)
@@ -595,7 +618,7 @@ def ruleaza_opkg(argumente):
 		if rand:
 			if _A_LUCRAT.match(rand):
 				a_lucrat = True
-			jurnal(rand)
+			jurnal(rand, sincron=False)
 	cod = p.wait()
 	try:
 		os.sync()
@@ -740,9 +763,60 @@ def pornire():
 		goleste_lucrul()
 
 
+def ecran_actualizare(versiune=''):
+	"""MI6 0.7.5 (raportul pornirii 606060, SF8008 cu radacina pe un stick USB 2.0): cat timp programul termina actualizarea,
+	enigma2 nu ruleaza si pe televizor ramanea numai imaginea de pornire; dupa ~5 minute omul a taiat curentul (exact ce
+	lasa actualizarea pe jumatate). Acum tools/hds-rezerva-ecran.py (numai biblioteca standard, fara enigma2) deseneaza
+	"Se termina actualizarea software..., nu opri receptorul" (faza=actualizare; textele in 13 limbi din
+	Components/HdsDiagnostic.py, altfel romana/engleza din ecran). enigma2 ia ecranul cand porneste. Nu arunca."""
+	if not os.path.isfile(c(ECRAN)) or not os.path.exists(c(ECRAN_FB)):
+		return False
+	try:
+		dosar = c(ECRAN_DOSAR)
+		if not os.path.isdir(dosar):
+			os.makedirs(dosar)
+		model = ''
+		try:
+			with open(c('/proc/stb/info/model'), 'r', encoding='ascii', errors='replace') as f:
+				model = re.sub(r'[^A-Za-z0-9_. -]', '', f.read(40)).strip()
+		except (IOError, OSError):
+			pass
+		scrie_atomic(os.path.join(dosar, 'date.txt'), 'faza=actualizare\nmodel=%s\nimagine=%s\n' % (model,
+			re.sub(r'[^0-9A-Za-z.+~-]', '', versiune or '')[:40]), sincron=False)
+		r = subprocess.run([PYTHON, '-I', '-S', '-B', c(ECRAN), '--date', os.path.join(dosar, 'date.txt'), '--fb',
+			c(ECRAN_FB), '--python', c(ECRAN_PYTHON)], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+			stderr=subprocess.STDOUT, timeout=ECRAN_TERMEN_S)
+		jurnal('imaginea de pe televizor: %s' % r.stdout.decode('utf-8', 'replace').strip().replace('\n', '; ')[:200])
+		return r.returncode == 0
+	except (OSError, ValueError, subprocess.SubprocessError) as e:
+		jurnal('imaginea de pe televizor nu s-a desenat: %s' % e)
+		return False
+
+
 def _termina(optiuni, randuri, arh, semn, ramase, inst, img, motiv):
 	jurnal('actualizare neterminata: %s' % motiv)
 	afisaj('UPD')
+	# imaginea de pe televizor numai cand lucrul tine mai mult de ECRAN_DUPA_S (pe un fir, ca sa nu intarzie nimic)
+	ceas = None
+	try:
+		import threading
+		ceas = threading.Timer(ECRAN_DUPA_S, ecran_actualizare, ((semn or {}).get('versiune') or img or '',))
+		ceas.daemon = True
+		ceas.start()
+	except Exception as e:
+		jurnal('ceasul imaginii: %s' % e)
+	try:
+		return _termina_lucrul(optiuni, randuri, arh, semn, ramase, inst, img)
+	finally:
+		if ceas is not None:
+			ceas.cancel()
+			# un desen inceput se lasa sa termine (cateva secunde), ca sa nu ajunga peste ecranul enigma2
+			ceas.join(10)
+			# un desen inceput se lasa sa termine (cateva secunde), ca sa nu ajunga peste ecranul enigma2
+			ceas.join(10)
+
+
+def _termina_lucrul(optiuni, randuri, arh, semn, ramase, inst, img):
 	t = 0
 	while opkg_ocupat() and t < ASTEPTARE_LACAT_S:
 		if t == 0:

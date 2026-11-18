@@ -30,6 +30,12 @@
 #     (Components/HdsSoftCsa.randModul), acelasi ca in pagina web Acces condiționat.
 # Toata logica e in Components/HdsModuleAcces.py (aceeasi o foloseste interfata web,
 # HdsWebControl/acces_conditionat_web.py); ecranul doar o arata. text_rezultat si pid_de_aratat sunt folosite si de pagina web, ca textele sa fie aceleasi.
+# 0.7.7 (16.11.2026; LinuxSat 164183 #970691 si #970816): la un modul care nu ruleaza, detaliile spun intr-o fraza de ce nu poate
+# porni (programul lipseste, nu are drept de pornire, e pentru alt procesor, ii lipseste o biblioteca; Components/HdsModulNepornit.py),
+# iar OK da ca prima alegere „Pune <modul> din feedul HD Satelit”: pachetul nostru al aceluiasi modul, instalat, ales si pornit.
+# 0.7.7: sub modulele instalate ale fiecarui fel, modulele din feedurile HD Satelit care nu sunt instalate
+# (Components/HdsModulNepornit.dinFeed), cate un rand "Pune <modul> din feedul HD Satelit"; OK (sau Verde) il instaleaza, il alege si
+# il porneste, fara drumul prin Extensii. Detaliile randului: descrierea pachetului si versiunea.
 from enigma import eTimer
 import threading
 
@@ -49,6 +55,31 @@ REIMPROSPATARE = 5000   # ms: starea (ce ruleaza) se reciteste cat timp ecranul 
 # modulelor nu pleaca de pe ele: OK pe randul CI deschide ecranul Common Interface, pe celalalt "Despre decriptare".
 RAND_ALT = "*alt"
 RAND_CI = "*ci"
+# 0.7.7: randul unui modul din feed care nu e instalat (HdsModulNepornit.dinFeed); in self.randuri (RAND_FEED, pachetul)
+RAND_FEED = "*feed"
+RANDURI_SPECIALE = (RAND_ALT, RAND_CI, RAND_FEED)
+
+
+def _nepornit(fel, sufix, sistem=None):
+	"""0.7.7: de ce nu poate porni modulul (Components/HdsModulNepornit.diagnosticPeEcran), sau None"""
+	if sufix is None or fel in RANDURI_SPECIALE:
+		return None
+	try:
+		from Components import HdsModulNepornit
+		return HdsModulNepornit.diagnosticPeEcran(sistem or HdsModuleAcces.SistemAcces(), fel, sufix)
+	except Exception as e:
+		print("[CamSetup] modulul care nu porneste: %r" % (e,))
+		return None
+
+
+def _dinFeed():
+	"""0.7.7: modulele din feed care nu sunt instalate (Components/HdsModulNepornit.dinFeed), sau [] cand nu se pot citi"""
+	try:
+		from Components import HdsModulNepornit
+		return HdsModulNepornit.dinFeed()
+	except Exception as e:
+		print("[CamSetup] modulele din feed: %r" % (e,))
+		return []
 
 
 def text_ci(slot, cod, nume):
@@ -88,10 +119,21 @@ def gazda_interfata_web():
 	return socket.gethostname()
 
 
-def _liniiStreamRelay():
-	"""Randurile Stream Relay de la sfarsitul detaliilor (0.7.1, HdsStreamRelay.liniiStare), sau [] la o eroare."""
+def randuri_interfata_web(interfata):
+	"""Randurile detaliilor cu adresa interfetei web a unui modul (un element din HdsModuleAcces.interfete_web): acelasi
+	text pe randul modulului din lista si pe al celui pornit de alt program."""
+	adresa = '%s://%s:%d/' % (interfata['protocol'], gazda_interfata_web(), interfata['port'])
+	return [_("Interfața web: %s") % adresa,
+		_("Deschide adresa în browserul telefonului sau al calculatorului din aceeași rețea.")]
+
+
+def _liniiStreamRelay(stari=None):
+	"""Randurile Stream Relay de la sfarsitul detaliilor (0.7.1, HdsStreamRelay.liniiStare), sau [] la o eroare. Cu `stari`
+	(0.7.7: modulele citite pe fir, citesteEcranul), motivul releului le ia din ele, fara alta citire a modulelor."""
 	try:
 		from Components import HdsStreamRelay
+		if stari is not None:
+			return HdsStreamRelay.stare(H=HdsModuleAcces.ModuleCitite(stari))["linii"]
 		return HdsStreamRelay.liniiStare()
 	except Exception as e:
 		print("[CamSetup] Stream Relay: %s" % e)
@@ -152,6 +194,28 @@ def randuri_proces(linii):
 		elif parti[0] == "Threads:":
 			rez.append(_("Fire de lucru: %s") % parti[1])
 	return rez
+
+
+def citesteEcranul(sistem=None):
+	"""0.7.7: tot ce citeste ecranul (si pagina web) la o reimprospatare, fara widgeturi si fara enigma, deci bun de
+	rulat pe un fir (HdsModuleAcces.CitirePeFir): modulele pe feluri, cele pornite de alt program, memoria procesului aratat
+	al fiecarui modul care ruleaza si de ce nu poate porni fiecare modul oprit. Fiecare legatura, dosar si fisier se citeste o
+	singura data (HdsModuleAcces.SistemCuMemorie). Scripturile nu se pregatesc aici (HdsModuleAcces.pregateste_scripturi ramane
+	pe firul enigma2)."""
+	sistem = HdsModuleAcces.SistemCuMemorie(sistem or HdsModuleAcces.SistemAcces())
+	stari = HdsModuleAcces.feluri_de_aratat(sistem, pregateste=False)
+	alte = HdsModuleAcces.pornite_de_alt_program(sistem, stari)
+	memorie, nepornit, pids = {}, {}, {}
+	for st in stari:
+		for e in st.emulatoare:
+			if e.pids:
+				pid = pids[(st.fel, e.sufix)] = pid_de_aratat(sistem, e.pids)
+				memorie[(st.fel, e.sufix)] = HdsModuleAcces.memorie(sistem, pid) if pid is not None else []
+			else:
+				nepornit[(st.fel, e.sufix)] = _nepornit(st.fel, e.sufix, sistem)
+	for a in alte:
+		memorie[(RAND_ALT, a["pids"][0])] = HdsModuleAcces.memorie(sistem, pid_de_aratat(sistem, a["pids"]))
+	return {"stari": stari, "alte": alte, "memorie": memorie, "nepornit": nepornit, "pid": pids}
 
 
 def _alegere():
@@ -248,6 +312,23 @@ def _anunta_dupa_inchidere(r):
 		print("[CamSetup] rezultat dupa inchidere: %s (%s)" % (r.get("motiv"), e))
 
 
+# 0.7.7: randul cheilor publice ale omului (Components/HdsCheiPublice.py), la coada listei, dupa modulele CI; in self.randuri
+# (RAND_CHEI, None). E un rand special ca celelalte (nicio comanda a modulelor nu pleaca de pe el): OK si Verde aduc cheile,
+# Galben schimba adresa de unde se aduc.
+RAND_CHEI = "*chei"
+RANDURI_SPECIALE = RANDURI_SPECIALE + (RAND_CHEI,)
+
+
+def _cheiPublice():
+	"""Components.HdsCheiPublice, sau None cand nu se poate incarca (atunci randul nu apare)."""
+	try:
+		from Components import HdsCheiPublice
+		return HdsCheiPublice
+	except Exception as e:
+		print("[CamSetup] cheile publice: %r" % (e,))
+		return None
+
+
 class CamSetup(Screen):
 	skin = """
 	<screen name="CamSetup" position="center,center" size="1240,860" title="Module de acces condiționat">
@@ -294,6 +375,7 @@ class CamSetup(Screen):
 		self.stari = []          # HdsModuleAcces.Stare, cate una pe fel aratat (primul: al modulelor obisnuite)
 		self.alte = []           # HdsModuleAcces.pornite_de_alt_program: modulele pornite de alt program
 		self.ci = []             # HdsModuleAcces.sloturi_ci: (slot, stare, nume)
+		self.dinFeed = []        # HdsModulNepornit.dinFeed: modulele din feed care nu sunt instalate
 		self.randuri = []        # (fel, sufix sau None pentru „Niciunul”), in ordinea din lista
 		self.texte = []
 		self.textDetalii = None     # textul aratat in detalii si randul lui: la fel = nu se rescrie (derularea ramane)
@@ -309,13 +391,38 @@ class CamSetup(Screen):
 		self["lista"].onSelectionChanged.append(self.arataDetalii)
 		self.onLayoutFinish.append(self.porneste)
 		self.onClose.append(self.laInchidere)
+		# 0.7.7: mersul lucrarii „Pune <modul> din feedul HD Satelit” (pornita de aici sau din pagina web)
+		try:
+			from Components import HdsModulNepornit
+			HdsModulNepornit.asculta(self.laInlocuire)
+		except Exception as e:
+			print("[CamSetup] HdsModulNepornit: %r" % (e,))
+		# 0.7.7: mersul aducerii cheilor publice (pornita de aici sau din pagina web)
+		self.chei = _cheiPublice()
+		if self.chei is not None:
+			self.chei.asculta(self.laChei)
+			self.onClose.append(self.lasaChei)
 
 	# ------------------------------------------------ starea
 	def porneste(self):
+		# 0.7.7: citirea modulelor merge pe un fir (citesteEcranul, HdsModuleAcces.CitirePeFir); aici, pe firul
+		# enigma2, raman scripturile pregatite (cand s-a schimbat ceva in dosarul lor), sloturile CI si modulele din feed
+		self.cititor = HdsModuleAcces.CitirePeFir()
+		self.citita = None          # ultima citire (citesteEcranul): memoria si diagnosticul fiecarui rand, fara alte citiri
+		if HdsModuleAcces.citire_pe_fir(HdsModuleAcces.SistemAcces()):
+			# un modul instalat chiar inainte (din Extensii) devine indata cel ales, cand nu e ales niciunul (paza modulelor)
+			HdsModuleAcces.paza_acum()
 		self.reimprospateaza()
 		self.ceas.start(REIMPROSPATARE, False)
 
 	def laInchidere(self):
+		try:
+			from Components import HdsModulNepornit
+			HdsModulNepornit.lasa(self.laInlocuire)
+		except Exception:
+			pass
+		if getattr(self, "cititor", None) is not None:
+			self.cititor.opreste()
 		self.ceas.stop()
 		self.ceasWeb.stop()
 		del self.ceasWeb.callback[:]
@@ -325,14 +432,65 @@ class CamSetup(Screen):
 		self.operatie = None
 
 	def reimprospateaza(self):
+		"""0.7.7: citirea (citesteEcranul) pe un fir; lista si detaliile se scriu in aplica, pe firul enigma2. Pe sistemul de proba
+		(o radacina intr-un dosar, HdsModuleAcces.citire_pe_fir) totul pe loc. Cat merge o citire, alta nu porneste; daca intre
+		timp a terminat o comanda a modulelor (HdsModuleAcces.generatie), rezultatul ei e vechi: se arunca si se citeste din nou."""
+		if getattr(self, "cititor", None) is None:
+			self.cititor = HdsModuleAcces.CitirePeFir()
+		sistem = HdsModuleAcces.SistemAcces()
+		self.pregatesteScripturi(sistem)
+		if self.cititor.in_curs():
+			return
+		if not HdsModuleAcces.citire_pe_fir(sistem):
+			self.aplica(self.citesteAcum(sistem))
+			return
+		generatie = HdsModuleAcces.generatie()
 		try:
-			self.stari = HdsModuleAcces.feluri_de_aratat()
+			self.cititor.porneste(lambda: (generatie, citesteEcranul(sistem)), self.dupaCitire)
+		except Exception as e:
+			print("[CamSetup] citirea pe fir: %r" % (e,))
+			self.aplica(self.citesteAcum(sistem))
+			return
+		if getattr(self, "citita", None) is None and not self.texte:
+			# prima citire, cu lista inca goala (de obicei sub o secunda)
+			self.textCitire = _("citesc lista...")
+			self["stare"].setText(self.textCitire)
+
+	def pregatesteScripturi(self, sistem):
+		"""Scripturile modulelor puse de alt manager si cele sterse de scoaterea altui pachet (HdsModuleAcces.pregateste_scripturi),
+		pe firul enigma2, numai cand s-a schimbat ceva in dosarele lor (HdsModuleAcces.pregateste_la_schimbare)."""
+		HdsModuleAcces.pregateste_la_schimbare(sistem)
+
+	def citesteAcum(self, sistem):
+		try:
+			return citesteEcranul(sistem)
 		except Exception as e:
 			print("[CamSetup] citirea modulelor: %s" % e)
-			self.stari = []
+			return None
+
+	def dupaCitire(self, rezultat, eroare):
+		if eroare is not None:
+			print("[CamSetup] citirea modulelor: %r" % (eroare,))
+		if rezultat is not None and rezultat[0] != HdsModuleAcces.generatie():
+			self.reimprospateaza()
+			return
+		self.aplica(rezultat[1] if rezultat is not None else None)
+
+	def aplica(self, citita):
+		"""Lista si detaliile din citirea `citita` (citesteEcranul; None = nu s-a putut citi), pe firul enigma2."""
+		self.citita = citita
+		if getattr(self, "textCitire", None):
+			try:
+				if self["stare"].getText() == self.textCitire:
+					self["stare"].setText("")
+			except Exception:
+				pass
+			self.textCitire = None
+		self.stari = citita["stari"] if citita else []
 		ales_acum = self.randCurent()
 		randuri, texte = [], []
 		principal = self.felPrincipal()
+		self.dinFeed = _dinFeed()
 		for st in self.stari:
 			niciunul = st.ales_emulator() is None
 			randuri.append((st.fel, None))
@@ -349,7 +507,12 @@ class CamSetup(Screen):
 				texte.append(_eticheta(st.fel, HdsModuleAcces.eticheta_modul(e), principal) +
 					("  (%s)" % ", ".join(semne) if semne else ""))
 				randuri.append((st.fel, e.sufix))
-		self.alte = HdsModuleAcces.pornite_de_alt_program(stari=self.stari)
+			for x in self.dinFeed:
+				if x["fel"] == st.fel:
+					from Components import HdsModulNepornit
+					randuri.append((RAND_FEED, x["pachet"]))
+					texte.append(_eticheta(st.fel, HdsModulNepornit.textOfertaFeed(x), principal))
+		self.alte = citita["alte"] if citita else []
 		self.ci = HdsModuleAcces.sloturi_ci()
 		for a in self.alte:
 			randuri.append((RAND_ALT, a["pids"][0]))
@@ -357,6 +520,7 @@ class CamSetup(Screen):
 		for slot, cod, nume in self.ci:
 			randuri.append((RAND_CI, slot))
 			texte.append(text_ci(slot, cod, nume))
+		self.adaugaRandChei(randuri, texte)
 		if texte != self.texte or randuri != self.randuri:
 			self.randuri, self.texte = randuri, texte
 			self["lista"].setList([(t, r) for t, r in zip(texte, randuri)])
@@ -369,6 +533,8 @@ class CamSetup(Screen):
 					if st is not None and st.ales_emulator() is not None and st.ales_emulator().sufix == sufix:
 						self["lista"].moveToIndex(i)
 						break
+		# Stream Relay o data pe citire, cu modulele citite deja (fara a doua citire a lor pe firul enigma2)
+		self.liniiReleu = _liniiStreamRelay(self.stari) if citita else None
 		self.arataDetalii()
 		self.citesteInterfeteWeb()
 
@@ -416,22 +582,60 @@ class CamSetup(Screen):
 		c = self["lista"].getCurrent()
 		return c[1] if c else None
 
+	def feed(self, pachet):
+		for x in self.dinFeed:
+			if x["pachet"] == pachet:
+				return x
+		return None
+
 	def alt(self, pid):
 		for a in self.alte:
 			if a["pids"][0] == pid:
 				return a
 		return None
 
+	def memorieRand(self, cheie, pids):
+		"""0.7.7: randurile memoriei procesului aratat al randului `cheie` ((fel, sufix) sau (RAND_ALT, pid)) din ultima citire
+		(citesteEcranul), fara alte citiri la mutarea cursorului; citite acum numai cand randul nu e in ea."""
+		citita = getattr(self, "citita", None)
+		if citita and cheie in citita["memorie"]:
+			return citita["memorie"][cheie]
+		sistem = HdsModuleAcces.SistemAcces()
+		pid = pid_de_aratat(sistem, pids)
+		return HdsModuleAcces.memorie(sistem, pid) if pid is not None else []
+
+	def nepornitRand(self, fel, sufix):
+		"""0.7.7: de ce nu poate porni modulul randului, din ultima citire (citesteEcranul), altfel citit acum (_nepornit)."""
+		citita = getattr(self, "citita", None)
+		if citita and (fel, sufix) in citita["nepornit"]:
+			return citita["nepornit"][(fel, sufix)]
+		return _nepornit(fel, sufix)
+
 	def arataDetaliiSpeciale(self, rand):
-		"""Detaliile randurilor RAND_ALT si RAND_CI; tastele colorate nu au acolo nicio comanda a modulelor."""
+		"""Detaliile randurilor RAND_ALT, RAND_CI si RAND_FEED; tastele colorate nu au acolo nicio comanda a modulelor."""
 		fel, cheie = rand
+		if fel == RAND_CHEI:
+			self.arataDetaliiChei(rand)
+			return
 		randuri = []
-		if fel == RAND_ALT:
+		if fel == RAND_FEED:
+			x = self.feed(cheie)
+			if x is not None:
+				from Components import HdsModulNepornit
+				if x["descriere"]:
+					randuri.append(_("Descriere: %s") % x["descriere"])
+				randuri.append("%s  %s" % (x["nume"], x["versiune"]))
+				randuri.append(HdsModulNepornit.randOkFeed(x))
+			self["key_green"].setText("")
+		elif fel == RAND_ALT:
 			a = self.alt(cheie)
 			if a is not None:
 				randuri += detalii_alt(a)
-				sistem = HdsModuleAcces.SistemAcces()
-				randuri += ["  " + r for r in randuri_proces(HdsModuleAcces.memorie(sistem, pid_de_aratat(sistem, a["pids"])))]
+				randuri += ["  " + r for r in randuri_proces(self.memorieRand((RAND_ALT, cheie), a["pids"]))]
+				# interfata web a modulului pornit de alt program (HdsModuleAcces.interfete_web: fel '', pid = randul lui)
+				for interfata in self.interfeteWeb:
+					if not interfata.get('fel') and interfata.get('pid') == a["pids"][0]:
+						randuri += randuri_interfata_web(interfata)
 				randuri.append(_("Apasă OK sau INFO: %s") % _("Despre decriptare"))
 				st = self.stari[0] if self.stari else None
 				if st is not None and st.ecm:
@@ -452,7 +656,7 @@ class CamSetup(Screen):
 		if rand is None:
 			return
 		fel, sufix = rand
-		if fel in (RAND_ALT, RAND_CI):
+		if fel in RANDURI_SPECIALE:
 			self.arataDetaliiSpeciale(rand)
 			return
 		st = self.stare(fel)
@@ -467,8 +671,7 @@ class CamSetup(Screen):
 				randuri.append(_("Descriere: %s") % e.descriere)
 			if e.pids:
 				randuri.append(_("Rulează (PID %s).") % ", ".join(str(p) for p in e.pids))
-				sistem = HdsModuleAcces.SistemAcces()
-				randuri += ["  " + r for r in randuri_proces(HdsModuleAcces.memorie(sistem, pid_de_aratat(sistem, e.pids)))]
+				randuri += ["  " + r for r in randuri_proces(self.memorieRand((fel, sufix), e.pids))]
 				randuri.append(_("Apasă OK pentru oprire, repornire sau informații."))
 				randuri.append("INFO: " + _("Despre decriptare"))
 				icam = _randIcam(True)
@@ -476,11 +679,15 @@ class CamSetup(Screen):
 					randuri.append(icam)
 				for interfata in self.interfeteWeb:
 					if interfata['fel'] == fel and interfata['sufix'] == sufix:
-						adresa = '%s://%s:%d/' % (interfata['protocol'], gazda_interfata_web(), interfata['port'])
-						randuri.append(_("Interfața web: %s") % adresa)
-						randuri.append(_("Deschide adresa în browserul telefonului sau al calculatorului din aceeași rețea."))
+						randuri += randuri_interfata_web(interfata)
 			else:
 				randuri.append(_("Nu rulează."))
+				# 0.7.7: de ce nu poate porni si ce se poate face dintr-o apasare (Components/HdsModulNepornit.py)
+				d = self.nepornitRand(fel, sufix)
+				if d:
+					from Components import HdsModulNepornit
+					randuri.append(HdsModulNepornit.text(d))
+					randuri.append(HdsModulNepornit.randOk(sufix))
 			if e.ales:
 				randuri.append(_("Pornește la fiecare pornire a receptorului."))
 			ales = e.ales
@@ -502,7 +709,9 @@ class CamSetup(Screen):
 			randuri += ["  " + r for r in st.ecm]
 		# 0.7.1: Stream Relay (Components/HdsStreamRelay.liniiStare, aceleasi randuri ca ecranul setarilor lui si pagina
 		# web Acces condiționat): cate canale are lista, de unde se adauga, daca releul raspunde si de ce nu
-		releu = _liniiStreamRelay()
+		releu = getattr(self, "liniiReleu", None)   # 0.7.7: o data pe citire, cu modulele citite pe fir (aplica)
+		if releu is None:
+			releu = _liniiStreamRelay()
 		if releu:
 			randuri.append("")
 			randuri += releu
@@ -560,11 +769,24 @@ class CamSetup(Screen):
 		if rand is not None and rand[0] == RAND_CI:
 			self.deschideCi()
 			return
+		if rand is not None and rand[0] == RAND_CHEI:
+			self.aduChei()
+			return
+		if rand is not None and rand[0] == RAND_FEED:
+			self.puneDinFeed()
+			return
 		if rand is not None and rand[0] == RAND_ALT:
 			self.informatii()
 			return
 		st = self.stare(rand[0]) if rand is not None else None
 		e = st.emulator(rand[1]) if st is not None and rand[1] is not None else None
+		if e is not None and not e.pids and _nepornit(rand[0], e.sufix):
+			# 0.7.7: modulul nu poate porni; prima alegere pune pachetul nostru al aceluiasi modul
+			from Components import HdsModulNepornit
+			alegeri = [(HdsModulNepornit.textOferta(e.sufix), "inlocuieste"), (_("Pornește") if e.ales else _("Alege"), "alege")]
+			self.session.openWithCallback(self.dupaAlegere, _alegere(), title=_eticheta(rand[0], e.sufix, self.felPrincipal()),
+				list=alegeri)
+			return
 		if e is None or not e.pids:
 			self.verde()
 			return
@@ -590,6 +812,79 @@ class CamSetup(Screen):
 			self.albastru()
 		elif cerere == "informatii":
 			self.informatii()
+		elif cerere == "inlocuieste":
+			self.inlocuieste()
+
+	def inlocuieste(self):
+		"""0.7.7: „Pune <modul> din feedul HD Satelit” (Components/HdsModulNepornit.porneste): pachetul nostru al modulului de pe
+		randul curent, instalat pe un fir, apoi ales si pornit; mersul vine in laInlocuire."""
+		rand = self.randCurent()
+		if rand is None or rand[1] is None or rand[0] in RANDURI_SPECIALE:
+			return
+		from Components import HdsModulNepornit
+		if (self.operatie is not None and not self.operatie.gata) or not HdsModulNepornit.porneste(rand[0], rand[1]):
+			self["stare"].setText(_("Așteaptă să se termine comanda de acum."))
+
+	def puneDinFeed(self):
+		"""0.7.7: OK (sau Verde) pe randul unui modul din feed care nu e instalat: pachetul lui, instalat pe un fir, apoi ales si
+		pornit (Components/HdsModulNepornit.porneste cu pachetul); mersul vine in laInlocuire."""
+		rand = self.randCurent()
+		x = self.feed(rand[1]) if rand is not None and rand[0] == RAND_FEED else None
+		if x is None:
+			return
+		from Components import HdsModulNepornit
+		if (self.operatie is not None and not self.operatie.gata) or 				not HdsModulNepornit.porneste(x["fel"], x["nume"], pachet=x["pachet"]):
+			self["stare"].setText(_("Așteaptă să se termine comanda de acum."))
+
+	def laInlocuire(self, text, ok, gata):
+		self["stare"].setText(text)
+		if gata:
+			self.reimprospateaza()
+
+	# ------------------------------------------------ cheile publice (Components/HdsCheiPublice.py)
+	def adaugaRandChei(self, randuri, texte):
+		"""randul de la coada listei, cu data ultimei aduceri (din memorie: nicio citire la reimprospatare)"""
+		if getattr(self, "chei", None) is not None:
+			randuri.append((RAND_CHEI, None))
+			texte.append(self.chei.textRand())
+
+	def arataDetaliiChei(self, rand):
+		verde, galben = self.chei.tasteRand() if self.chei is not None else ("", "")
+		self["key_red"].setText("")
+		self["key_green"].setText(verde)
+		self["key_yellow"].setText(galben)
+		self.scrieDetalii("\n".join(self.chei.randuriDetalii()) if self.chei is not None else "", rand)
+
+	def aduChei(self):
+		"""OK sau Verde pe randul cheilor: aducerea pe un fir; mersul vine in laChei"""
+		if self.chei is None or not self.chei.porneste():
+			self["stare"].setText(_("Așteaptă să se termine comanda de acum."))
+
+	def laChei(self, text, ok, gata):
+		self["stare"].setText(text)
+		if gata:
+			self.reimprospateaza()
+
+	def lasaChei(self):
+		if self.chei is not None:
+			self.chei.lasa(self.laChei)
+
+	def schimbaSursaChei(self):
+		"""Galben pe randul cheilor: tastatura cu locul de unde se aduc acum (titlul si textul le da HdsCheiPublice); gol =
+		cel din fabrica"""
+		if self.chei is None:
+			return
+		from .VirtualKeyBoard import VirtualKeyBoard
+		titlu, text = self.chei.tastatura()
+		self.session.openWithCallback(self.dupaTastaturaChei, VirtualKeyBoard, title=titlu, text=text)
+
+	def dupaTastaturaChei(self, text):
+		if text is None or self.chei is None:
+			return
+		_ok, mesaj = self.chei.dinTastatura(text)
+		self["stare"].setText(mesaj)
+		self.textDetalii = None
+		self.arataDetalii()
 
 	def deschideCi(self):
 		"""Ecranul Common Interface (meniul Acces condiționat, intrarea ci_setup din data/menu.xml)."""
@@ -601,8 +896,9 @@ class CamSetup(Screen):
 		self.session.open(CiSelection)
 
 	def randSpecial(self, rand):
-		"""True pe RAND_ALT / RAND_CI: Verde deschide ecranul CI, Rosu si Galben nu trimit nicio comanda."""
-		if rand is None or rand[0] not in (RAND_ALT, RAND_CI):
+		"""True pe RAND_ALT / RAND_CI / RAND_FEED: Verde deschide ecranul CI sau pune modulul din feed, Rosu si Galben nu trimit
+		nicio comanda."""
+		if rand is None or rand[0] not in RANDURI_SPECIALE:
 			return False
 		if rand[0] == RAND_ALT:
 			self["stare"].setText(_("L-a pornit alt program: se oprește și se repornește din programul acela."))
@@ -615,6 +911,10 @@ class CamSetup(Screen):
 		if self.randSpecial(rand):
 			if rand[0] == RAND_CI:
 				self.deschideCi()
+			elif rand[0] == RAND_FEED:
+				self.puneDinFeed()
+			elif rand[0] == RAND_CHEI:
+				self.aduChei()
 			return
 		fel, sufix = rand
 		st = self.stare(fel)
@@ -631,6 +931,9 @@ class CamSetup(Screen):
 
 	def galben(self):
 		rand = self.randCurent()
+		if rand is not None and rand[0] == RAND_CHEI:
+			self.schimbaSursaChei()
+			return
 		if rand is not None and not self.randSpecial(rand):
 			self.pornesteOperatia("reporneste", rand[0])
 
@@ -658,7 +961,7 @@ class CamSetup(Screen):
 		from .CamInfo import CamInfo
 		# MDA: pe randul unui modul pornit de alt program (sau cand numai el ruleaza), cu procesul lui
 		a = self.alt(rand[1]) if rand is not None and rand[0] == RAND_ALT else None
-		if rand is not None and rand[0] in (RAND_ALT, RAND_CI):
+		if rand is not None and rand[0] in RANDURI_SPECIALE:
 			rand = None
 		st = self.stare(rand[0]) if rand is not None else (self.stari[0] if self.stari else None)
 		pornite = st.pornite() if st is not None else []

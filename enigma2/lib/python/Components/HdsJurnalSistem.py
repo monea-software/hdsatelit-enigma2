@@ -11,6 +11,9 @@
 # - discurile: montarea si demontarea sub /media si /run/media (dispozitivul, sistemul de fisiere, marimea, cat e
 #   liber), spatiul sub PRAG_LIBER_PROCENTE (cel mult un rand pe ora pe disc). Numele dosarului de montare se scrie numai
 #   daca e unul obisnuit (hdd, usb, usb1, sdcard, mmc, net...), altfel "eticheta".
+# Ceasul e pe firul principal, dar citirile merg pe un fir separat (FRD, pachetul 2186: listdir pe /sys/class/net a tinut
+# interfata 3,7 s; citirile retelei din /sys asteapta lacatul retelei din nucleu cat lucreaza driverul, iar statvfs un
+# disc care se trezeste). O verificare noua nu porneste cat cea de dinainte inca lucreaza. HdsJurnal scrie din orice fir.
 
 import os
 import re
@@ -26,10 +29,12 @@ FS_LOCALE = ("ext2", "ext3", "ext4", "vfat", "exfat", "ntfs", "ntfs3", "fuseblk"
 NUME_OBISNUITE = re.compile(r"^(hdd|usb\d*|sd[a-z]\d*|sdcard|mmc\d*|mmcblk\d+p\d+|net|autofs|cf|hdd\d*|usb_\w{1,4})$")
 
 _ceas = [None]
+_lucreaza = [False]
 _retea = {}
 _reconectari = {}
 _discuri = {}
 _avertizat_liber = {}
+_paza_cazuta = [False]
 
 
 def _citeste(cale, implicit=""):
@@ -174,14 +179,54 @@ def verificaDiscurile(stare=None, acum=None):
 
 
 def _tic():
+	stare = None
 	try:
-		verificaReteaua()
+		stare = stareRetea()
+		verificaReteaua(stare)
 	except Exception:
 		pass
+	# paznicul Wi-Fi (Components/HdsPazaWifi.py): o placa Wi-Fi USB ramasa fara legatura isi porneste cipul din nou; cu
+	# starea citita deja aici, pe acest fir
+	if stare is not None:
+		try:
+			from Components import HdsPazaWifi
+			HdsPazaWifi.tic(stare)
+		except Exception as e:
+			# o data: un paznic stricat nu trebuie sa arate in jurnal la fel ca unul care nu are nimic de facut
+			if not _paza_cazuta[0]:
+				_paza_cazuta[0] = True
+				HdsJurnal.avert("retea", "wifi", "paznicul Wi-Fi a cazut: %r" % (e,))
 	try:
 		verificaDiscurile()
 	except Exception:
 		pass
+
+
+def _porneste_fir(tinta):
+	"""Un fir nou, fara asteptarea pornirii lui (ca Hds/DabT2/fundal.py). Probele il pot inlocui."""
+	try:
+		import _thread as fire
+	except ImportError:  # Python 2.7
+		import thread as fire
+	fire.start_new_thread(tinta, ())
+
+
+def _verificare():
+	try:
+		_tic()
+	finally:
+		_lucreaza[0] = False
+
+
+def _tic_in_fundal():
+	"""Din ceasul firului principal: verificarea pe un fir; nimic, daca cea de dinainte inca lucreaza."""
+	if _lucreaza[0]:
+		return
+	_lucreaza[0] = True
+	try:
+		_porneste_fir(_verificare)
+	except Exception:
+		_lucreaza[0] = False
 
 
 def porneste():
@@ -193,7 +238,7 @@ def porneste():
 		_ceas[0] = False
 		return
 	t = eTimer()
-	t.callback.append(_tic)
+	t.callback.append(_tic_in_fundal)
 	t.start(PAUZA_S * 1000, False)
 	_ceas[0] = t
-	_tic()
+	_tic_in_fundal()

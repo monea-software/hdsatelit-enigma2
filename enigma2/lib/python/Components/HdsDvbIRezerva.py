@@ -45,7 +45,19 @@
 #     cea care merge;
 #   - ca la internet: canalul tinut minte, istoricul si numerele din buchete raman ale omului (playService direct);
 #     OK in lista pe canalul inlocuit nu il porneste din nou (inlocuitDe); rotirea antenei, readucerea si standby-ul
-#     opresc schimbarea; o varianta aleasa de om la MENU ("Alte variante") nu se inlocuieste pana la urmatorul zap.
+#     opresc schimbarea; o varianta aleasa de om la MENU ("Alte variante") nu se inlocuieste pana la urmatorul zap;
+#   - DVJ (15.11.2026, AS30): canalul criptat si nimic care sa decripteze (niciun modul CI in slot, niciun modul de
+#     acces care ruleaza, niciunul ales care inca porneste: Mediu.faraModul) => variantele criptate (dupa lamedb) nu se
+#     mai incearca, numai cele necriptate. Inainte omul cu PRO TV HD la pornire astepta ~30 s la fiecare pornire cat
+#     rezerva trecea prin cele trei variante PRO TV, toate criptate. Un modul pornit mai tarziu decripteaza singur
+#     canalul acordat, iar la urmatorul zap variantele se incearca din nou;
+#   - DVR (15.11.2026, dupa RDS 15caf6979 care trata numai tunerul la 0%): un transponder cazut cu "fara semnal" ramane
+#     mort pana la urmatorul zap (variantele de pe el nu se mai incearca, nici dupa o varianta de pe alt transponder).
+#     Dupa MORTI_SATELIT transpondere moarte ale satelitului (variantele sunt pe acelasi satelit) restul nu se mai
+#     incearca: omul nu mai asteapta ~40 s la zap, ci ~18 s, apoi vine internetul. Polarizarea conteaza (Mediu.polarizari,
+#     dupa tensiunea LNB-ului: H si L pe 18 V, V si R pe 13 V): cand toate transponderele moarte sunt pe o singura
+#     polarizare (de pilda H mort si V viu, ca pe Octagon), variantele de pe cealalta polarizare se incearca mai departe,
+#     pana cade si una de acolo. Fara polarizare stiuta: dupa doua transpondere moarte nimic.
 #
 # Legatura cu enigma2 sta in Mediu (inlocuit in probele de pe PC); logica e in Paznic.
 from __future__ import absolute_import, unicode_literals
@@ -70,6 +82,14 @@ PRAG_VARIANTA_S = 2           # verdictul tine atatea secunde (cu mesajul ascuns
 PRAG_MERGE_S = 12             # varianta pornita de rezerva fara niciun verdict atatea secunde: notata ca buna
 CODURI_VARIANTA = ("fara_semnal", "frecventa_goala", "post_mutat", "fara_pmt", "criptat", "fara_imagine")
 CODURI_TRANSPONDER = ("fara_semnal", "frecventa_goala")   # vina transponderului: variantele de pe el sar
+# DVJ: "nimic nu decripteaza" se citeste din nou dupa atatea secunde (modulele, sloturile CI, /proc); un modul ales se
+# socoteste "in pornire" atatea secunde de la pornirea rezervei (scriptul lui poate porni procesul dupa enigma2)
+MODUL_TINUT_S = 15
+MODUL_PORNIRE_S = 120
+# DVR: atatea transpondere ale satelitului cazute cu "fara semnal" in acelasi sir de incercari opresc variantele
+MORTI_SATELIT = 2
+# polarizarea -> tensiunea LNB-ului care o da (circulara stanga ca orizontala, dreapta ca verticala)
+TENSIUNE_POLARIZARE = {"H": "H", "L": "H", "V": "V", "R": "V"}
 TIPURI_RADIO = (2, 10)
 
 
@@ -134,6 +154,8 @@ class Mediu(object):
 
 	def __init__(self, sesiune=None):
 		self.sesiune = sesiune
+		self._inceput = time.monotonic()
+		self._modul = {"t": None, "rez": None}
 
 	def acum(self):
 		return time.monotonic()
@@ -326,6 +348,60 @@ class Mediu(object):
 		except Exception as e:
 			print("[HdsDvbIRezerva] variantele: %r" % (e,))
 			return []
+
+	def varianteCriptate(self, ref):
+		"""cheile (cheie()) variantelor criptate ale canalului `ref`, dupa lamedb (HdsVarianteCanal: CAID scris)"""
+		try:
+			from Components import HdsVarianteCanal as V
+			return set(cheie(v.ref) for v in V.alternative(ref) if v.criptat)
+		except Exception as e:
+			print("[HdsDvbIRezerva] variantele criptate: %r" % (e,))
+			return set()
+
+	def polarizari(self, ref):
+		"""{cheie(): "H" sau "V"} pentru toate variantele canalului `ref` (si el), dupa transponderul din lamedb
+		("11538 H"; circulara L ca H si R ca V, dupa tensiunea LNB-ului); "" cand nu se stie (cablu, terestru)"""
+		try:
+			from Components import HdsVarianteCanal as V
+			rez = {}
+			for v in V.toate(ref):
+				p = (v.tp or "").split()
+				rez[cheie(v.ref)] = TENSIUNE_POLARIZARE.get(p[-1].upper(), "") if len(p) == 2 else ""
+			return rez
+		except Exception as e:
+			print("[HdsDvbIRezerva] polarizarile: %r" % (e,))
+			return {}
+
+	def faraModul(self):
+		"""True cand nimic de pe receptor nu poate decripta: niciun modul CI in slot, niciun modul de acces care ruleaza
+		(din lista modulelor sau pornit de alt program, Components/HdsModuleAcces) si niciunul ales care inca porneste
+		(primele MODUL_PORNIRE_S secunde); None cand nu se poate citi. Raspunsul se tine MODUL_TINUT_S secunde."""
+		acum = time.monotonic()
+		t = self._modul["t"]
+		if t is not None and 0 <= acum - t < MODUL_TINUT_S:
+			return self._modul["rez"]
+		rez = None
+		try:
+			from Components import HdsModuleAcces as M
+			rez = True
+			if M.sloturi_ci():
+				rez = False
+			else:
+				stari = M.feluri_de_aratat()
+				for st in stari:
+					if any(e.pids for e in st.emulatoare):
+						rez = False
+					elif any(e.ales for e in st.emulatoare) and acum - self._inceput < MODUL_PORNIRE_S:
+						# numai un script care exista si e cel ales (legatura spre un script sters, ramasa dupa o
+						# restaurare, nu porneste nimic)
+						rez = False
+				if rez and M.pornite_de_alt_program(stari=stari):
+					rez = False
+		except Exception as e:
+			print("[HdsDvbIRezerva] modulele de acces: %r" % (e,))
+			rez = None
+		self._modul.update(t=acum, rez=rez)
+		return rez
 
 	def mesajDinNou(self):
 		"""mesajul ecranului negru se hotaraste din nou (nu mai urmeaza nicio varianta)"""
@@ -637,7 +713,68 @@ class Paznic(object):
 		l = self.lant
 		incercate = l["incercate"] if l is not None else ()
 		tp = transponderRef(ref) if cod in CODURI_TRANSPONDER else ""
-		return [(r, tpv) for r, tpv in self.m.variante(ref) if cheie(r) not in incercate and not (tp and tpv == tp)]
+		rez = [(r, tpv) for r, tpv in self.m.variante(ref) if cheie(r) not in incercate and not (tp and tpv == tp)]
+		morti = self._morti(ref, cod) if rez else {}
+		if morti:
+			# DVR: transponderele moarte ale satelitului (si polarizarea lor) taie variantele care nu pot merge
+			pol = self._polarizari(ref) if len(morti) >= MORTI_SATELIT else {}
+			rez = [x for x in rez if not self._peMort(x, morti, pol)]
+		if rez and cod == "criptat" and self._faraModul():
+			# DVJ: nimic nu decripteaza, deci nicio varianta criptata nu poate da imagine; raman cele necriptate
+			criptate = self._criptate(ref)
+			rez = [x for x in rez if cheie(x[0]) not in criptate]
+		return rez
+
+	def _morti(self, ref, cod):
+		"""{transponder: polarizare} al transponderelor cazute cu fara_semnal in sirul de acum, plus al lui `ref` cand
+		verdictul lui e fara_semnal (inca neinscris in sir)"""
+		l = self.lant
+		morti = dict(l.get("morti") or {}) if l is not None else {}
+		if cod == "fara_semnal":
+			tp = transponderRef(ref)
+			if tp and tp not in morti:
+				morti[tp] = self._polarizare(ref)
+		return morti
+
+	def _polarizari(self, ref):
+		"""Mediu.polarizari; {} cand mediul nu stie (alte probe, alte module)"""
+		f = getattr(self.m, "polarizari", None)
+		try:
+			return dict(f(ref) or {}) if f is not None else {}
+		except Exception:
+			return {}
+
+	def _polarizare(self, ref):
+		return self._polarizari(ref).get(cheie(ref), "")
+
+	def _peMort(self, varianta, morti, pol):
+		"""True cand varianta (referinta, transponder) nu poate merge: transponderul ei e mort, sau satelitul are
+		MORTI_SATELIT transpondere moarte si polarizarea ei e moarta (H mort si V viu: variantele pe V raman)"""
+		r, tpv = varianta
+		if tpv and tpv in morti:
+			return True
+		if len(morti) < MORTI_SATELIT:
+			return False
+		moarte = set(p for p in morti.values() if p)
+		if len(moarte) != 1:
+			return True   # ambele polarizari moarte sau niciuna stiuta: satelitul nu se receptioneaza
+		p = pol.get(cheie(r), "")
+		return not p or p in moarte
+
+	def _faraModul(self):
+		"""nimic nu decripteaza (Mediu.faraModul); False cand mediul nu stie sau nu se poate citi (ca inainte)"""
+		f = getattr(self.m, "faraModul", None)
+		try:
+			return f is not None and f() is True
+		except Exception:
+			return False
+
+	def _criptate(self, ref):
+		f = getattr(self.m, "varianteCriptate", None)
+		try:
+			return set(f(ref)) if f is not None else set()
+		except Exception:
+			return set()
 
 	def _faraPurtatoare(self):
 		"""tunerul programului de acum la 0% (Mediu.nivelZero); False cand mediul nu stie sau nu se poate citi"""
@@ -709,6 +846,10 @@ class Paznic(object):
 			self.nota_purtatoare = ref
 			self._noteaza("fara purtatoare pe tuner (nivel 0%%) pentru %s: variantele de pe acelasi satelit nu se incearca"
 				% ref)
+		if not alt and cod == "criptat" and l is None and getattr(self, "nota_modul", "") != ref and \
+				self.m.variante(ref) and self._faraModul():
+			self.nota_modul = ref
+			self._noteaza("%s criptat si niciun modul de acces nu decripteaza: variantele criptate nu se incearca" % ref)
 		if not alt and l is None:
 			return False
 		if self.nu_merge is None or not acelasi(self.nu_merge[0], ref) or self.nu_merge[1] != cod:
@@ -716,8 +857,17 @@ class Paznic(object):
 		if acum - self.nu_merge[2] < (PRAG_VARIANTA_S if urmarit else PRAG_S):
 			return bool(alt)
 		if l is None:
-			l = self.lant = {"inceput": ref, "incercate": set(), "pornit": "", "pornit_la": acum, "notat": False}
+			l = self.lant = {"inceput": ref, "incercate": set(), "pornit": "", "pornit_la": acum, "notat": False,
+				"morti": {}}
 		l["incercate"].add(cheie(ref))
+		if cod == "fara_semnal":
+			morti = l.setdefault("morti", {})
+			nou = self._morti(ref, cod)
+			if len(nou) >= MORTI_SATELIT and len(morti) < MORTI_SATELIT and not alt and \
+					any(cheie(r) not in l["incercate"] for r, _tp in self.m.variante(ref)):
+				self._noteaza("fara semnal pe %d transpondere ale satelitului (%s): celelalte variante nu se mai incearca"
+					% (len(nou), ", ".join(sorted(set(p or "?" for p in nou.values())))))
+			morti.update(nou)
 		self.nu_merge = None
 		self.m.noteazaVarianta(ref, False)
 		urm = alt[0][0] if alt else None

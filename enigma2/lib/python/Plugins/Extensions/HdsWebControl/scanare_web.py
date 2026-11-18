@@ -420,7 +420,9 @@ def _valoriSatelit(S, fel, cerere):
 
 
 def _antenaSatelit(S):
-	"""(nimmanager, slot, [(pozitie, nume)], motor) pentru primul tuner de satelit; slot None fara tuner."""
+	"""(nimmanager, slot, [(pozitie, nume)], motor): primul tuner de satelit (slot, motor) si satelitii TUTUROR tunerelor
+	de satelit (ScanerSatelit.sateliti_receptor, ca pe televizor; tfrc, LinuxSat 164155: 39,0E pe al doilea tuner);
+	slot None fara tuner."""
 	nim = S._nimmanager()
 	if nim is None:
 		return None, None, [], False
@@ -431,15 +433,59 @@ def _antenaSatelit(S):
 		return nim, None, [], False
 	if slot is None:
 		return nim, None, [], False
-	return nim, slot, S.sateliti_tuner(nim, slot), S.are_motor(nim, slot)
+	sateliti = S.sateliti_receptor(nim) if hasattr(S, "sateliti_receptor") else S.sateliti_tuner(nim, slot)
+	return nim, slot, sateliti, S.are_motor(nim, slot)
+
+
+def _alegeFluxul(S, nim, slot, pozitie, ales=None):
+	"""Tunerul care are satelitul `pozitie` poate alege fluxul (ScanerSatelit.tuner_pentru, ca pe televizor); `ales` =
+	tunerul din randul "Tuner" (felul Dupa operator), cand il are."""
+	if nim is None or slot is None:
+		return False
+	try:
+		if hasattr(S, "tuner_pentru"):
+			if ales is not None:
+				return bool(S.tuner_pentru(nim, pozitie, slot, ales, dupa_serviciu=True)[2])
+			return bool(S.tuner_pentru(nim, pozitie, slot)[2])
+		return bool(S.tuner_multistream(nim, slot))
+	except Exception as eroare:
+		_jurnal("tunerul pentru %s: %s" % (pozitie, eroare))
+		return False
+
+
+def _campTuner(S, nim, v, sloturi, implicit):
+	"""Randul "Tuner" (0.7.7, SCN): aceleasi tunere si aceleasi nume ca pe televizor (ScanerSatelit.tunere_alegere),
+	numai cand sunt doua sau mai multe de ales. Alegerea tinuta minte ramane cand e una din ele, altfel `implicit`.
+	None fara rand."""
+	if nim is None or not hasattr(S, "tunere_alegere") or len(sloturi or []) < 2:
+		return None
+	optiuni = [{"cod": cod, "text": text} for cod, text in S.tunere_alegere(nim, sloturi)]
+	valoare = str(v.get("tuner", ""))
+	if valoare not in [o["cod"] for o in optiuni]:
+		valoare = "" if implicit is None else str(implicit)
+	v["tuner"] = valoare
+	return _camp("tuner", _t("Tuner"), "lista", optiuni, valoare)
+
+
+def _campTunerSatelit(S, nim, v, orbpos):
+	"""Randul "Tuner" al felurilor pe un satelit: numai cand satelitul e pe doua sau mai multe tunere (dorinelu, forum
+	795 #2793: tunerul A lasat pe 19,2E din fabrica, fara cablu, si B cu motorul); implicit tunerul canalului pornit, cand
+	are satelitul, altfel primul (ScanerSatelit.slot_pentru), ca pe televizor."""
+	if nim is None or orbpos is None or not hasattr(S, "tunere_pentru"):
+		return None
+	try:
+		sloturi = S.tunere_pentru(nim, orbpos)
+		implicit = S.slot_pentru(nim, orbpos, dupa_serviciu=True) if len(sloturi) > 1 else None
+	except Exception as eroare:
+		_jurnal("tunerele satelitului %s: %s" % (orbpos, eroare))
+		return None
+	return _campTuner(S, nim, v, sloturi, implicit)
 
 
 def _campuriSatelit(S, fel, v):
 	"""Aceleasi randuri ca ScanerSatelit._campuri, cu aceleasi texte (deci cu traducerile lor)."""
 	nim, slot, sateliti, motor = _antenaSatelit(S)
 	pozitii = [p for p, _n in sateliti]
-	# tunerul poate alege fluxul: operatorii multistream se pot cauta, ca pe televizor (ScanerSatelit.tuner_multistream)
-	ms = bool(nim is not None and slot is not None and S.tuner_multistream(nim, slot))
 	campuri = []
 	if fel in ("transponder", "satelit", "manual"):
 		camp = _camp("pozitie", _t("Satelit (poziție orbitală)"), "lista",
@@ -447,6 +493,9 @@ def _campuriSatelit(S, fel, v):
 		_valoareInLista(camp)
 		v["pozitie"] = camp["valoare"]
 		campuri.append(camp)
+		camp = _campTunerSatelit(S, nim, v, S._int(v.get("pozitie"), None))
+		if camp is not None:
+			campuri.append(camp)
 	if fel == "transponder":
 		bune = []
 		orbpos = S._int(v.get("pozitie"), None)
@@ -478,7 +527,9 @@ def _campuriSatelit(S, fel, v):
 				nume = S.nume_in_grupa(op) if hasattr(S, "nume_in_grupa") else op["nume"]
 				text = "%s, %s" % (nume, S.text_pozitie(op["pozitie"]))
 				vede = not pozitii or op["pozitie"] in pozitii
-				if op["cere_multistream"] and not ms:
+				# tunerul care are satelitul poate alege fluxul: operatorii multistream se pot cauta, ca pe televizor
+				ales = v.get("tuner") if fel == "operator" else None
+				if op["cere_multistream"] and not _alegeFluxul(S, nim, slot, op["pozitie"], ales):
 					text += " " + _t("(tunerul nu alege fluxul)")
 				elif not vede:
 					text += " " + _t("(antena nu vede satelitul)")
@@ -491,6 +542,13 @@ def _campuriSatelit(S, fel, v):
 			valoare = prima_buna or (ids[0] if ids else "")
 		v["operator"] = valoare
 		campuri.append(_camp("operator", _t("Operator"), "lista", optiuni, valoare, nota))
+		if fel == "operator" and hasattr(S, "operator_dupa_id"):
+			# randul "Tuner", ca pe televizor, cand satelitul operatorului e pe doua tunere (DVB-T2 si DAB+ nu: acordul lor
+			# isi alege singur tunerul)
+			op = S.operator_dupa_id(valoare)
+			camp = _campTunerSatelit(S, nim, v, op["pozitie"]) if op else None
+			if camp is not None:
+				campuri.append(camp)
 	elif fel == "manual":
 		for cheie, eticheta, tip, lista in S.ScanerSatelit.campuri_manual(v):
 			valoare = str(v.get(cheie, ""))
@@ -510,6 +568,20 @@ def _campuriSatelit(S, fel, v):
 	toti_permis = False
 	bife = None
 	if fel == "mai_multi":
+		# randul "Tuner", ca pe televizor (ecranul ScanSetup al felului): 0.7.7 (SCN, tfrc LinuxSat 164155), pana acum
+		# pagina cauta mereu pe primul tuner; numai cu doua sau mai multe tunere, alegerea tinuta minte
+		if nim is not None and slot is not None and hasattr(S, "tunere_mai_multi"):
+			try:
+				sloturi = S.tunere_mai_multi(nim)
+				slot = S.slot_mai_multi(nim, v.get("tuner"))
+			except Exception as eroare:
+				_jurnal("tunerele pentru mai multi sateliti: %s" % eroare)
+				sloturi = []
+			camp = _campTuner(S, nim, v, sloturi, slot)
+			if camp is not None:
+				campuri.append(camp)
+			motor = S.are_motor(nim, slot)
+			sateliti = S.sateliti_tuner(nim, slot)
 		# aceeasi lista si aceleasi bife "Bifeaza toti" ca ecranul (ScanerSatelit.sateliti_si_bife): cu motorul peste
 		# tot satellites.xml lista are satelitii de deasupra orizontului din locul antenei, iar "Bifeaza toti" ii bifeaza
 		# numai pe cei care au deja canale in lista (hotararea DSP 14.11 20:49)
@@ -1730,6 +1802,12 @@ def antena(lat=None, lon=None, doar=""):
 	except Exception as eroare:
 		_jurnal("locul antenei: %s" % eroare)
 		rez["locul"] = {"stabilit": False, "text": ""}
+	# 0.7.7: tunerul de rezerva din retea (Components/HdsTunerRezerva.py), sub tunere; alegerea in /setari?id=hds_tuner_rezerva
+	try:
+		from Components import HdsTunerRezerva
+		rez["rezerva"] = HdsTunerRezerva.stareWeb()
+	except Exception as eroare:
+		_jurnal("tunerul de rezerva: %s" % eroare)
 	return rez
 
 
@@ -2876,7 +2954,11 @@ function tunereSatelit(){
 }
 function cartelaTunere(c){
   var tunere = (S.antena && S.antena.tunere) || [];
-  if(!tunere.length){ c.appendChild(el("p", "nota", "Receptorul nu arată niciun tuner.")); return; }
+  if(!tunere.length){
+    c.appendChild(el("p", "nota", "Receptorul nu arată niciun tuner."));
+    if(S.antena && S.antena.rezerva){ randRezerva(c, S.antena.rezerva); }
+    return;
+  }
   tunere.forEach(function(t){
     c.appendChild(el("p", "subtitlu", t.descriere || ("Tuner " + t.litera)));
     var tipuri = [];
@@ -2905,10 +2987,20 @@ function cartelaTunere(c){
       }
     }
   });
+  if(S.antena.rezerva){ randRezerva(c, S.antena.rezerva); }
   c.appendChild(el("p", "nota", "Configurarea completă a tunerului se face pe televizor, în Setări tuner. Dacă LNB-ul este deja configurat, poți schimba Unicable I / II (JESS) din legătura de mai jos."));
   var unicable = el("a", "buton", "Unicable I / II (JESS)");
   unicable.href = adresa("/antena/lnb") + "#cardUnicable";
   c.appendChild(butoane([unicable]));
+}
+// tunerul de rezerva din retea (ca ultimul rand din Setari tuner): receptorul ales, starea si legatura spre alegere
+function randRezerva(c, r){
+  c.appendChild(el("p", "subtitlu", "Tuner de rezervă din rețea"));
+  linie(c, "Receptorul din casă", r.text);
+  (r.linii || []).forEach(function(t){ c.appendChild(el("p", "nota", t)); });
+  var a = el("a", "buton", "Alege receptorul");
+  a.href = adresa(r.adresa);
+  c.appendChild(butoane([a]));
 }
 // tunerul B porneste singur daca are semnal: starea probei automate, ca randul din Setari tuner, si "Încearcă din nou"
 function randAuto(c, t){
@@ -3298,6 +3390,10 @@ TEXTE_PAGINA = {
 		N_("Pornire automată"),
 		N_("Încearcă din nou"),
 		N_("Se probează..."),
+		# 0.7.7: tunerul de rezerva din retea, in cartela tunerelor
+		N_("Tuner de rezervă din rețea"),
+		N_("Receptorul din casă"),
+		N_("Alege receptorul"),
 	),
 }
 

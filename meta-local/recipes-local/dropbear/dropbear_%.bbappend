@@ -14,7 +14,12 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 # la loc. O versiune noua a lui dropbear se face numai dupa ce hdsatelit-ssh r5 e instalat pe receptoare (postinst-ul
 # lui porneste hds-ssh, care face copia; fara r5 copia lipseste). Postrm-ul nou (din 0.7.4) pastreaza cheia la actualizare: probat pe receptorul de probe (.hds2 ->
 # .hds1, aceeasi amprenta RSA).
-PR:append = ".hds1"
+# .hds2: quiet_log pe comutatorul SSH (randul 1 din files/dropbear), fara access denied in syslog la intrarea din casa
+# fara parola. Imaginea noua il are de la inceput, iar receptoarele scrise cu 0.7.4 sau mai nou au postrm-ul nou. Pe o
+# baza veche (scrisa cu 0.7.3 sau mai vechi, adusa la zi din meniu) pachetul intra in actualizare NUMAI daca
+# hdsatelit-ssh r5 a venit intr-o actualizare de dinainte (copia cheii exista); in aceeasi tranzactie cu r5 cheia RSA
+# s-ar pierde, deci acolo dropbear asteapta runda urmatoare.
+PR:append = ".hds2"
 
 # Cheia gazdei SSH la actualizare. opkg 0.8 ruleaza la actualizare postrm-ul pachetului VECHI cu "upgrade <versiune>",
 # iar postrm-ul din openembedded-core (dropbear_2026.94.bb) sterge /etc/dropbear/dropbear_rsa_host_key fara sa se uite
@@ -58,6 +63,10 @@ do_install:append() {
 		install -m 0644 ${UNPACKDIR}/dropbear ${D}${sysconfdir}/pam.d/dropbear
 		grep -q '^auth.*\[perm_denied=ignore default=2\].*pam_access.so accessfile=/etc/security/hds-ssh-retea-locala.conf' \
 			${D}${sysconfdir}/pam.d/dropbear || bbfatal "dropbear: /etc/pam.d/dropbear fara comutatorul pam_access"
+		grep -q 'hds-ssh-retea-locala.conf nodefgroup quiet_log' ${D}${sysconfdir}/pam.d/dropbear || \
+			bbfatal "dropbear: comutatorul SSH fara quiet_log"
+		[ "$(grep -v '^#' ${D}${sysconfdir}/pam.d/dropbear | grep -c 'quiet_log')" = 1 ] || \
+			bbfatal "dropbear: quiet_log numai pe comutator, verificarea retelei scrie refuzul"
 		grep -q '^auth.*\[success=ignore default=1\].*pam_access.so accessfile=/etc/security/hds-ssh-retele-locale.conf' \
 			${D}${sysconfdir}/pam.d/dropbear || bbfatal "dropbear: /etc/pam.d/dropbear fara verificarea retelei"
 		# parola numai din reteaua de acasa: randul requisite chiar inaintea lui common-auth

@@ -305,15 +305,23 @@ class RecordTimerEntry(timer.TimerEntry, object):
 				return False
 			rec_ref = self.service_ref and self.service_ref.ref
 			if rec_ref and rec_ref.flags & eServiceReference.isGroup:
-				rec_ref = getBestPlayableServiceReference(rec_ref, eServiceReference())
+				# HDSatelit: si cand toate alternativele au tunerele tinute de fluxuri cerute din retea (Navigation.grupFaraTuner)
+				rec_ref = NavigationInstance.instance.celMaiBunDinGrup(rec_ref, eServiceReference(), False, True)
 				if not rec_ref:
 					self.log(1, "'get best playable service for group... record' failed")
+					# HDSatelit: o noua incercare dupa pauza, ca la prepare cazut; altfel start_prepare ramanea in trecut si
+					# temporizatorul se reincerca fara pauza pana la sfarsit (mii de randuri pe secunda in jurnal)
+					self.do_backoff()
+					self.start_prepare = time() + self.backoff
 					return False
 				
 			self.record_service = rec_ref and NavigationInstance.instance.recordService(rec_ref)
 
 			if not self.record_service:
 				self.log(1, "'record service' failed")
+				# HDSatelit: aceeasi pauza ca mai sus (recordService a intors None: alt fel de esec decat prepare)
+				self.do_backoff()
+				self.start_prepare = time() + self.backoff
 				return False
 
 			# HDSatelit: "Decodează mai târziu": semnul trece la serviciul inregistrarii inainte de prepare (de acordare

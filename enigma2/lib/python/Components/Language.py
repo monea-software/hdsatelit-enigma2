@@ -1,6 +1,7 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
 import gettext
 import os
+import re
 
 from Tools.Directories import SCOPE_LANGUAGE, resolveFilename
 
@@ -26,6 +27,81 @@ def _puneNgettext(sursa):
 		functie = getattr(sursa, nume, None)
 		if functie is not None:
 			setattr(builtins, nume, functie)
+
+
+# Un specificator de formatare % (cu nume, stegulete, latime, precizie), ca in Python.
+_SPECIFICATOR = re.compile(r"%(?:\(([^)]*)\))?[#0 +-]*(\*|\d+)?(?:\.(\*|\d+))?[hlL]?(.)", re.S)
+_PROBA_FEL = {"d": 1, "i": 1, "o": 1, "u": 1, "x": 1, "X": 1, "c": 1, "e": 1.5, "E": 1.5, "f": 1.5, "F": 1.5,
+	"g": 1.5, "G": 1.5, "s": "x", "r": "x", "a": "x"}
+
+
+def _argumenteProba(text):
+	"""Argumentele de proba pentru textul romanesc `text` (o tupla sau un dictionar cu cate o valoare de felul fiecarui
+	specificator), sau None cand textul nu e unul de formatat cu % (fara specificatoare, cu specificatoare necunoscute,
+	ca formatele de data %H:%M, sau cu nume si fara nume amestecate)."""
+	pozitionale, cu_nume = [], {}
+	for m in _SPECIFICATOR.finditer(text):
+		nume, latime, precizie, fel = m.groups()
+		if fel == "%":
+			continue
+		if fel not in _PROBA_FEL:
+			return None
+		if nume is not None:
+			cu_nume[nume] = _PROBA_FEL[fel]
+			continue
+		pozitionale.extend([1] * ((latime == "*") + (precizie == "*")))
+		pozitionale.append(_PROBA_FEL[fel])
+	if (pozitionale and cu_nume) or not (pozitionale or cu_nume):
+		return None
+	argumente = cu_nume if cu_nume else tuple(pozitionale)
+	try:
+		text % argumente
+	except (TypeError, ValueError, KeyError, OverflowError):
+		return None
+	return argumente
+
+
+def curataCatalog(catalog):
+	"""Scoate din catalogul unei limbi (dictionarul gettext: textul romanesc -> traducerea) traducerile care nu primesc
+	argumentele textului romanesc: alta ordine a specificatoarelor fara nume, alt fel, unul in plus sau un nume
+	necunoscut. Cu ele, `_("Cheia API %d pentru %s") % (1, "DeepL")` arunca, iar o exceptie dintr-o tasta opreste
+	interfata (in turca, „%s için API anahtarı %d”: receptorul reporneste la OK pe cheia API, forum 1589, 09.11 si
+	16.11.2026). Fara intrare, ecranul arata textul romanesc, dar merge. Intoarce textele romanesti scoase. Numai textele
+	simple (nu formele de plural) si numai cele care chiar sunt de formatat; poarta constructiei
+	(verifica_limbi_complete.py) opreste deja asemenea traduceri, aici e plasa pentru orice limba si orice catalog."""
+	scoase = []
+	for text, traducere in list(catalog.items()):
+		if not isinstance(text, str) or "%" not in text or not isinstance(traducere, str) or traducere == text:
+			continue
+		argumente = _argumenteProba(text)
+		if argumente is None:
+			continue
+		try:
+			traducere % argumente
+		except (TypeError, ValueError, KeyError, OverflowError):
+			del catalog[text]
+			scoase.append(text)
+	return scoase
+
+
+# Cataloagele deja verificate (id -> dictionarul). gettext tine minte catalogul fiecarei limbi si da la fiecare activare
+# o copie cu acelasi dictionar, iar asistentul de pornire activeaza limba la fiecare STANGA / DREAPTA: verificarea se face
+# o singura data pe limba. Dictionarul tinut aici (il tine oricum si gettext) nu lasa id-ul sa fie refolosit.
+_VERIFICATE = {}
+
+
+def _verificaCatalog(catalog):
+	"""curataCatalog pe catalogul gettext al limbii activate, o data pe catalog; nimic din ce se intampla aici nu opreste
+	activarea"""
+	try:
+		intrari = catalog._catalog
+		if _VERIFICATE.get(id(intrari)) is intrari:
+			return
+		for text in curataCatalog(intrari):
+			print("[Language] traducere fara argumentele textului, ramane textul romanesc: %r" % text)
+		_VERIFICATE[id(intrari)] = intrari
+	except Exception as eroare:
+		print("[Language] verificarea catalogului: %s" % eroare.__class__.__name__)
 
 def cataloageDisponibile():
 	"""Limbile („tr”, „ro” ...) care au catalogul (po/<lang>/LC_MESSAGES/enigma2.mo) pe receptor, sau None cand dosarul
@@ -151,6 +227,7 @@ class Language:
 			lang = self.toate[index]
 			print("Activating language " + lang[0])
 			catalog = gettext.translation('enigma2', resolveFilename(SCOPE_LANGUAGE, ""), languages=[lang[1]])
+			_verificaCatalog(catalog)
 			catalog.install()
 			_puneNgettext(catalog)
 			self.activeLanguage = index

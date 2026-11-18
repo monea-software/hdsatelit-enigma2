@@ -369,6 +369,22 @@ def _pereche(intrare):
 		return -1, -1
 
 
+def _ultimaPozitieSalvata(orbital):
+	"""config.misc.lastrotorposition = pozitia confirmata de semnal (0.7.7, M30). Pana acum o scria numai releul
+	DAB+/DVB-T2 (Hds/DabT2/tuner.py), iar intoarcerea antenei printr-un zap obisnuit (SEC) n-o schimba: pe Octagonul
+	SF8008 de proba ramasese 3300 (30,0V) cu antena pe 19,2E, deci cautarea oarba fara canal, bara motorului si
+	pluginurile care o citesc (ca in OE-Alliance) aratau 30,0V (WLD). Numai la schimbare; save() o scrie cu restul
+	setarilor."""
+	try:
+		from Components.config import config
+		c = config.misc.lastrotorposition
+		if 0 <= orbital < 3600 and c.value != orbital:
+			c.value = orbital
+			c.save()
+	except Exception as e:
+		T.jurnal("ultima pozitie a motorului in setari: %r" % (e,))
+
+
 def _scrieAtomic(cale, text):
 	nou = cale + ".nou"
 	with open(nou, "w", encoding="ascii") as f:
@@ -693,6 +709,7 @@ class PozitieMotor(object):
 			nou = (-1, -1)
 		elif pe_slot and semnal:
 			nou = pereche
+			_ultimaPozitieSalvata(pereche[0])
 		elif pereche == vechi:
 			return
 		else:

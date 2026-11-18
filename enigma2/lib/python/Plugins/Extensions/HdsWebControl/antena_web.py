@@ -835,13 +835,19 @@ def motorDate(cerere=None):
 	if slot is not None and slot >= 0:
 		from Components.HdsMotorStare import gradeText
 		from Components.DishMath import orbitalToDegrees
+		# ca lista de pe televizor: numai satelitii pe care nucleul ii are (cei USALS sub orizont ar fi refuzati, d45ed988b;
+		# asistenta 457322, 15.11.2026)
 		rez["sateliti"] = [{"orbital": o, "text": "%s (%s)" % (nume, gradeText(orbitalToDegrees(o)))}
-			for o, nume in T.sateliti(slot)]
+			for o, nume in T.satelitiPrimiti(slot)]
 		L = _locul()
 		if L.stabilit():
 			rez["usals"] = _t("Locul antenei: %s") % L.textLoc()
 		# „Mergi la satelit" cere locul antenei pe acest tuner (USALS) si locul nu e stabilit
 		rez["loc_nestabilit"] = bool(L.refuzUsals(slot))
+		toti = T.sateliti(slot)
+		if toti and not rez["sateliti"] and not rez["loc_nestabilit"]:
+			# toti sub orizont din locul scris: acelasi motiv ca in banda televizorului
+			rez["sub_orizont"] = T.refuzFaraLoc(slot, toti[0][0]) or ""
 	rez["locul"] = _locul().stare()
 	if c.referinta:
 		rez["curent"] = c.referinta.get("orbital_position")
@@ -3078,7 +3084,9 @@ function incarcaInfo(){
     d.sateliti.forEach(s => { S.pozitii[s.orbital] = s.text; });
     // fara locul antenei „Mergi la satelit” nu porneste (motorul USALS calculeaza unghiul din el)
     $("usals").textContent = d.loc_nestabilit ? "Locul antenei nu e stabilit, deci „Mergi la satelit” nu pornește. Alege-l mai întâi." : (d.usals || "");
-    $("usals").classList.toggle("eroare", !!d.loc_nestabilit);
+    // toti satelitii sub orizont din locul scris (lista goala): motivul, ca in banda televizorului
+    if (!d.loc_nestabilit && d.sub_orizont) $("usals").textContent = d.sub_orizont;
+    $("usals").classList.toggle("eroare", !!(d.loc_nestabilit || d.sub_orizont));
     deseneazaComenzile(d.comenzi || {});
   }).catch(function(){});
 }

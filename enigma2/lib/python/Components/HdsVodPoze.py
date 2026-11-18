@@ -28,6 +28,16 @@ TERMEN_S = 8
 REINCEARCA_S = 600
 CALITATE = 82
 _TMDB = re.compile(r"^(https?://image\.tmdb\.org/t/p/)[^/]+(/.+)$")
+# Fundalurile: fondul temei (#0B1020) pus peste poza, mai tare unde sta textul (_intuneca). FSV (15.11.2026, LinuxSat 164155): masca
+# veche (numai stanga, 0 dupa 62% din latime, si jos de la 38%) lasa titlul si descrierea albe peste o poza luminoasa (zapada, fum)
+# aproape fara contrast (1,2..2,8:1 in cel mai rau loc). Acum fiecare text din cele trei ecrane are cel putin 3:1 si peste o poza
+# complet alba (teste/test_fsv_contrast_filme_076.py), iar etichetele au si umbra (Screens/HdsFilmeSeriale.py).
+# (intunecarea la stanga, la X1, la dreapta, X1 din latime, de unde incepe in jos, unde ajunge jos, cat jos)
+MASTI = {
+	"fundal": (0.92, 0.75, 0.58, 0.72, 0.30, 0.75, 0.92),          # acasa si pagina serialului: textul sta la stanga si sus
+	"fundal_pagina": (0.92, 0.80, 0.72, 0.72, 0.30, 0.75, 0.92),   # pagina filmului: textul ajunge pana aproape de marginea din dreapta
+}
+VERSIUNE_MASCA = 2      # intra in numele fisierului: un fundal facut cu masca veche (in /tmp, peste o repornire a interfetei) nu ramane
 _lacat = threading.Lock()
 _coada = OrderedDict()           # nume -> (adresa, latime, inaltime, fel)
 _ratate = {}                     # nume -> ora
@@ -45,7 +55,7 @@ def marimeTmdb(adresa, latime, fel):
 	m = _TMDB.match(adresa or "")
 	if not m:
 		return adresa
-	if fel == "fundal":
+	if fel in MASTI:
 		marime = "w780" if latime <= 1000 else "w1280"
 	else:
 		marime = "w185" if latime <= 190 else ("w342" if latime <= 350 else "w500")
@@ -53,7 +63,10 @@ def marimeTmdb(adresa, latime, fel):
 
 
 def _nume(adresa, latime, inaltime, fel):
-	return hashlib.sha1(("%s|%d|%d|%s" % (adresa, latime, inaltime, fel)).encode("utf-8", "replace")).hexdigest()[:24]
+	text = "%s|%d|%d|%s" % (adresa, latime, inaltime, fel)
+	if fel in MASTI:
+		text += "|m%d" % VERSIUNE_MASCA
+	return hashlib.sha1(text.encode("utf-8", "replace")).hexdigest()[:24]
 
 
 def cale(adresa, latime, inaltime, fel="poster"):
@@ -186,30 +199,38 @@ def micsoreaza(date, latime, inaltime, fel):
 	scara = max(float(latime) / l, float(inaltime) / h)
 	nl, nh = max(latime, int(l * scara + 0.5)), max(inaltime, int(h * scara + 0.5))
 	img = img.resize((nl, nh), Image.BILINEAR)
-	x, y = (nl - latime) // 2, (nh - inaltime) // 4 if fel == "fundal" else (nh - inaltime) // 2
+	x, y = (nl - latime) // 2, (nh - inaltime) // 4 if fel in MASTI else (nh - inaltime) // 2
 	img = img.crop((x, y, x + latime, y + inaltime))
-	if fel == "fundal":
-		img = _intuneca(img)
+	if fel in MASTI:
+		img = _intuneca(img, MASTI[fel])
 	iesire = io.BytesIO()
 	img.save(iesire, "JPEG", quality=CALITATE, optimize=False)
 	return iesire.getvalue()
 
 
-def _intuneca(img):
-	"""Spre stanga si spre jos, cate o masca liniara (fondul temei #0B1020), ca titlul si randurile de postere sa se citeasca."""
+def intunecare(fx, fy, masca=None):
+	"""Cat fond se pune peste poza in punctul (fx, fy), ca parte din latime si inaltime (0..1): cea mai mare dintre intunecarea spre
+	stanga (scade liniar pana la X1, apoi pana la marginea din dreapta) si cea spre jos (creste liniar de la Y0 la Y1)."""
+	stanga, la_x1, dreapta, x1, y0, y1, jos = masca or MASTI["fundal"]
+	a = stanga - (stanga - la_x1) * fx / x1 if fx <= x1 else la_x1 - (la_x1 - dreapta) * (fx - x1) / (1.0 - x1)
+	b = 0.0 if fy <= y0 else min(jos, jos * (fy - y0) / (y1 - y0))
+	return min(1.0, max(a, b))
+
+
+def _intuneca(img, masca=None):
+	"""Fondul temei (#0B1020) peste poza dupa intunecare(), ca titlul, descrierea si randurile de postere sa se citeasca oricat de
+	luminoasa e poza."""
 	from PIL import Image
 	l, h = img.size
 	ml, mh = 64, 36             # masca mica, apoi marita: pe receptor o bucla pe fiecare pixel ar tine o secunda
-	masca = Image.new("L", (ml, mh), 0)
-	px = masca.load()
+	m = Image.new("L", (ml, mh), 0)
+	px = m.load()
 	for xx in range(ml):
-		a = max(0.0, 1.0 - xx / (0.62 * ml)) * 0.92
 		for yy in range(mh):
-			b = max(0.0, (yy - 0.38 * mh) / (0.62 * mh)) * 0.95
-			px[xx, yy] = int(255 * min(1.0, max(a, b, 0.25)))
-	masca = masca.resize((l, h), Image.BILINEAR)
+			px[xx, yy] = int(255 * intunecare(xx / (ml - 1.0), yy / (mh - 1.0), masca) + 0.5)
+	m = m.resize((l, h), Image.BILINEAR)
 	fond = Image.new("RGB", (l, h), (0x0B, 0x10, 0x20))
-	return Image.composite(fond, img, masca)
+	return Image.composite(fond, img, m)
 
 
 def _fa(adresa, latime, inaltime, fel, tinta):

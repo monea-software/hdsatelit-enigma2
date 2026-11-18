@@ -107,6 +107,8 @@
 # (puse numai cat exista sesiuni): inainte de un zap sau de o inregistrare adevarata (nu verificarea unui
 # temporizator) care nu poate lua un tuner, sesiunile de pe alt transponder se opresc pe loc (tunerul e liber cand se
 # intoarce functia), iar pagina primeste motivul. Pe acelasi transponder nu se opreste nimic (tunerul e impartit).
+# La un grup de alternative fara nicio alternativa libera, Navigation.grupFaraTuner (cedeazaGrup): sesiunile care nu sunt
+# pe transponderul vreunei alternative, numai cat trebuie.
 #
 # PLAYERELE EXTERNE PLECATE (aparatele din casa: Kodi, Emby, VLC): un player care inchide legatura nu se mai intoarce
 # de obicei (oprit, alt canal cerut prin alta cerere). Sesiunea lui nu tine locul altora: de la EXTERN_PREDA_S fara
@@ -557,6 +559,50 @@ def pozitieSatelit(ref):
 
 # ---------------------------------------------------------------- ce merge in browser
 
+# DECODORUL WASM AL PAGINII (HdsWebControl/tv-wasm/hdsdec.wasm): ce decodoare are, din decodoare.txt (il scrie
+# construieste-decodor-wasm.sh langa hdsdec.wasm; un nume pe rand, # = comentariu). Fara fisier: cele de baza (MPEG-2 /
+# MPEG-1, MP2 / MP3, AC-3). Cu h264 in lista, imaginea H.264 merge si in navigatoarele fara H.264 in MediaSource (Opera
+# sau Chromium pe Linux fara codecurile sistemului): pagina trimite h264=0, iar canalul trece pe playerul wasm (peWasm);
+# cu aac in lista se aude si sunetul AAC ADTS pe playerul wasm.
+DECODOARE_WASM = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Plugins", "Extensions",
+	"HdsWebControl", "tv-wasm", "decodoare.txt")
+DECODOARE_WASM_BAZA = frozenset(("mpeg1video", "mpeg2video", "mp2float", "mp3float", "ac3"))
+_decodoare_wasm = None           # citite o data (probele il pun inapoi pe None)
+
+
+def decodoareWasm():
+	"""Numele decodoarelor din hdsdec.wasm (frozenset)."""
+	global _decodoare_wasm
+	if _decodoare_wasm is None:
+		try:
+			with open(DECODOARE_WASM) as f:
+				nume = frozenset(r.strip() for r in f if r.strip() and not r.lstrip().startswith("#"))
+		except (IOError, OSError):
+			nume = DECODOARE_WASM_BAZA
+		_decodoare_wasm = nume or DECODOARE_WASM_BAZA
+	return _decodoare_wasm
+
+
+def wasmAre(nume):
+	return nume in decodoareWasm()
+
+
+def peWasm(video, wasm, h264=True):
+	"""True cand imaginea canalului o decodeaza playerul wasm al paginii: MPEG-2 / MPEG-1 (pagina are playerul wasm),
+	sau H.264 cand browserul nu-l decodeaza prin MediaSource (h264 False) si decodorul wasm il are."""
+	video = (video or "").lower()
+	if not wasm:
+		return False
+	if video in ("mpeg2", "mpeg1"):
+		return True
+	return video == "h264" and not h264 and wasmAre("h264")
+
+
+def _seAudePeWasm(felurile):
+	"""Pe playerul wasm se aud MP2 / MP3 si AC-3, iar AAC ADTS numai cand decodorul il are."""
+	return any(f in ("MPEG", "MP2", "MP3", "AC3", "AC-3", "DD") or (f == "AAC" and wasmAre("aac")) for f in felurile)
+
+
 def potrivire(video, audio, hevc=False, ac3=False, wasm=False, h264=True):
 	"""Ce se poate reda in browser fara recodare. `video` = 'h264' | 'h265' | 'mpeg2' | ... | '' (nu se stie),
 	`audio` = felurile pistelor ('MPEG', 'AAC', 'AAC-HE', 'AC3', 'AC3+', ...), `hevc` / `ac3` = browserul le decodeaza
@@ -564,20 +610,25 @@ def potrivire(video, audio, hevc=False, ac3=False, wasm=False, h264=True):
 	`wasm` = pagina are playerul wasm (imaginea MPEG-2 / MPEG-1 si sunetul MP2 / MP3 / AC-3 se decodeaza in browser;
 	E-AC-3, AAC si HE-AAC nu sunt in decodorul lui). Cu ac3 si wasm sunetul AC-3 merge sigur.
 	`h264` = browserul decodeaza H.264 prin MediaSource (pagina trimite h264=0 cand nu: Opera sau Chromium pe Linux fara
-	codecurile sistemului, missile, LinuxSat 163972 #969322; fara parametru, ca inainte, se presupune ca da). -> (merge, text):
-	merge False = refuz, cu motivul; True cu text = merge, cu avertizarea de spus."""
+	codecurile sistemului, missile, LinuxSat 163972 #969322; fara parametru, ca inainte, se presupune ca da). Atunci, cand
+	decodorul wasm al paginii are H.264 (decodoare.txt) si pagina are playerul wasm, canalul merge pe el (peWasm), ca la
+	MPEG-2. -> (merge, text): merge False = refuz, cu motivul; True cu text = merge, cu avertizarea de spus."""
 	video = (video or "").lower()
 	felurile = [str(a or "").upper() for a in (audio or [])]
 	if video in ("mpeg2", "mpeg1"):
 		if not wasm:
 			return False, _("Acest canal trimite imaginea în MPEG-2, iar acest browser nu o poate reda (îi lipsește WebAssembly sau WebGL). Încearcă Chrome, Edge, Firefox sau Safari nou.")
-		# aceleasi alegeri ca RescrierePsi cu wasm: MP2 / MP3, apoi AC-3
-		are_mp2_ac3 = any(f in ("MPEG", "MP2", "MP3", "AC3", "AC-3", "DD") for f in felurile)
-		if felurile and not are_mp2_ac3:
+		# aceleasi alegeri ca RescrierePsi cu wasm: MP2 / MP3, (AAC cand decodorul il are), apoi AC-3
+		if felurile and not _seAudePeWasm(felurile):
 			return True, _cuImagine(textSunet(felurile, ac3, wasm, video))
 		return True, _("Imaginea acestui canal (MPEG-2) se decodează în browser, pe procesorul calculatorului.")
 	if video == "h265" and not hevc:
 		return False, _("Acest canal trimite imaginea în HEVC, iar acest browser nu o poate reda. Încearcă Chrome sau Edge pe un calculator cu placă video nouă, sau Safari.")
+	if video == "h264" and not h264 and peWasm(video, wasm, h264):
+		# browserul fara H.264 in MediaSource, decodorul wasm il are: playerul wasm, cu sunetul pe care il are el
+		if felurile and not _seAudePeWasm(felurile):
+			return True, _cuImagine(textSunet(felurile, ac3, wasm, video, h264))
+		return True, _("Imaginea acestui canal (H.264) se decodează în browser, pe procesorul calculatorului.")
 	if video == "h264" and not h264:
 		return False, _("Acest canal trimite imaginea în H.264, iar acest browser nu o poate decoda (de pildă Opera sau Chromium pe Linux, fără codecurile video ale sistemului). Încearcă Chrome, Edge sau Firefox, sau un player din casă.")
 	if video in ("vc1", "mpeg4"):
@@ -604,9 +655,10 @@ def potrivire(video, audio, hevc=False, ac3=False, wasm=False, h264=True):
 _FEL_POTRIVIRE = {"MP2": "MPEG", "AAC": "AAC", "AC3": "AC3", "HE-AAC": "AAC-HE", "E-AC3": "AC3+"}
 
 
-def _sunet(felurile, ac3=False, wasm=False, video=""):
+def _sunet(felurile, ac3=False, wasm=False, video="", h264=True):
 	"""(textul despre sunet, sunetul nu se aude): aceleasi alegeri ca potrivire() si RescrierePsi. Pe playerul wasm
-	(imaginea MPEG-2 / MPEG-1) se aud MP2 / MP3 si AC-3; altfel MP2 / MP3, AAC ADTS si AC-3 numai daca browserul il reda
+	(imaginea MPEG-2 / MPEG-1, sau H.264 cu h264 False si decodorul cu H.264: peWasm) se aud MP2 / MP3 si AC-3, plus AAC
+	ADTS cand decodorul il are; altfel MP2 / MP3, AAC ADTS si AC-3 numai daca browserul il reda
 	(ac3; cu wasm si ac3 il decodeaza pagina, deci se aude fara avertizare).
 	Formatul se spune cand se stie: AC-3, E-AC-3, HE-AAC LATM."""
 	felurile = [str(a or "").upper() for a in (felurile or [])]
@@ -615,8 +667,8 @@ def _sunet(felurile, ac3=False, wasm=False, video=""):
 	are_ac3 = any(f in ("AC3", "AC-3", "DD") for f in felurile)
 	are_eac3 = any(f in ("AC3+", "E-AC3", "E-AC-3", "EAC3", "DD+") for f in felurile)
 	are_latm = any(f.startswith("AAC-HE") or f in ("HE-AAC", "LATM") for f in felurile)
-	if wasm and (video or "").lower() in ("mpeg2", "mpeg1"):
-		if are_ac3 or any(f in ("MPEG", "MP2", "MP3") for f in felurile):
+	if peWasm(video, wasm, h264):
+		if _seAudePeWasm(felurile):
 			return "", False
 	else:
 		if any(f in ("MPEG", "MP2", "MP3", "AAC") for f in felurile):
@@ -634,9 +686,9 @@ def _sunet(felurile, ac3=False, wasm=False, video=""):
 	return _("Sunetul acestui canal nu se aude în browser."), True
 
 
-def textSunet(felurile, ac3=False, wasm=False, video=""):
+def textSunet(felurile, ac3=False, wasm=False, video="", h264=True):
 	"""Numai ce se spune despre sunet ("" cand o pista se aude), fara nimic despre imagine."""
-	return _sunet(felurile, ac3, wasm, video)[0]
+	return _sunet(felurile, ac3, wasm, video, h264)[0]
 
 
 def _cuImagine(text):
@@ -648,24 +700,26 @@ def _felurileDinPiste(piste):
 	return [_FEL_POTRIVIRE.get(p.get("fel"), p.get("fel") or "") for p in piste or []]
 
 
-def avertizarePmt(video, piste, ac3=False, wasm=False):
+def avertizarePmt(video, piste, ac3=False, wasm=False, h264=True):
 	"""Avertizarea paginii dupa PMT-ul fluxului (RescrierePsi: imaginea si pistele audio care chiar vin). La pornire se
 	stie numai ce spune baza de canale, care poate avea alte piste decat are canalul acum (Das Erste HD: numai AC-3 in
 	baza, trei piste MP2 si una AC-3 in PMT). Numai sunetul (textSunet, cu formatul) si, la MPEG-2 pe playerul wasm,
 	decodarea in browser: "Imaginea merge." o adauga pagina abia cand vin cadre adevarate si o scoate cand se opresc
 	(player.js, sunet_lipsa); la un post de radio (PMT fara imagine) nu apare deloc (proba de noapte 13-14.10)."""
 	video = (video or "").lower()
-	text = textSunet(_felurileDinPiste(piste), ac3, wasm, video)
+	text = textSunet(_felurileDinPiste(piste), ac3, wasm, video, h264)
 	if text:
 		return text
 	if wasm and video in ("mpeg2", "mpeg1"):
 		return _("Imaginea acestui canal (MPEG-2) se decodează în browser, pe procesorul calculatorului.")
+	if peWasm(video, wasm, h264):
+		return _("Imaginea acestui canal (H.264) se decodează în browser, pe procesorul calculatorului.")
 	return ""
 
 
-def sunetLipsa(video, piste, ac3=False, wasm=False):
+def sunetLipsa(video, piste, ac3=False, wasm=False, h264=True):
 	"""True cand nicio pista din PMT nu se aude in browser (pagina adauga atunci "Imaginea merge." la cadrele adevarate)."""
-	return _sunet(_felurileDinPiste(piste), ac3, wasm, video)[1]
+	return _sunet(_felurileDinPiste(piste), ac3, wasm, video, h264)[1]
 
 
 def infoCanal(ref, serviciu_tv=None, ref_tv=None, baza=None):
@@ -936,6 +990,7 @@ class Sesiune(object):
 		self.fereastra = ""              # fereastra (fila) browserului care a pornit sesiunea; "" = pagina veche, fara id
 		self.criptat = None              # imaginea iese criptata (RescrierePsi.criptat), None = nu se stie
 		self.wasm = False                # pagina are playerul wasm: la imagine MPEG-2 raman in PMT MP2 / MP3 si AC-3
+		self.h264 = True                 # browserul decodeaza H.264 prin MediaSource (h264=0: H.264 pe playerul wasm, peWasm)
 		self.video = ""                  # formatul imaginii din PMT (RescrierePsi.video): mpeg2, mpeg1, h264, h265
 		self.canal_criptat = False       # canalul e criptat (la pornire): oprirea se amana, pornirile se serializeaza
 		self.prim_octet_mon = None       # ceasul monoton al primelor date din teava (de aici se socoteste varsta)
@@ -954,10 +1009,13 @@ class Sesiune(object):
 			"piste": list(self.piste or []), "pista": self.pista, "extern": bool(self.extern),
 			"fereastra": self.fereastra, "criptat": self.criptat, "video": self.video,
 			"decriptare": self.decriptare,
+			# imaginea o decodeaza playerul wasm al paginii (MPEG-2 / MPEG-1, sau H.264 cu h264=0 si decodorul cu H.264): un canal
+			# pornit cu formatul necunoscut trece singur pe wasm cand PMT-ul arata H.264 (player.js, MI8)
+			"pe_wasm": bool(self.video and peWasm(self.video, self.wasm, self.h264)),
 			# avertizarea paginii dupa PMT-ul fluxului (None = PMT-ul nu s-a citit inca; "" = nimic de spus)
-			"avertizare": avertizarePmt(self.video, self.piste, self.ac3, self.wasm) if self.pmt_citit else None,
+			"avertizare": avertizarePmt(self.video, self.piste, self.ac3, self.wasm, self.h264) if self.pmt_citit else None,
 			# sunetul nu se aude: pagina adauga "Imaginea merge." numai cat vin cadre (player.js, paza cadrelor)
-			"sunet_lipsa": bool(self.pmt_citit and sunetLipsa(self.video, self.piste, self.ac3, self.wasm)),
+			"sunet_lipsa": bool(self.pmt_citit and sunetLipsa(self.video, self.piste, self.ac3, self.wasm, self.h264)),
 			# pachetele imaginii vazute de receptor: pagina deosebeste "canalul nu trimite imagine" de "browserul nu o
 			# poate reda" cand nu vin cadre
 			"video_pachete": int(self.video_pachete),
@@ -1197,7 +1255,7 @@ class Manager(object):
 			if acum >= self._capatVarsta(s):
 				self._opresteInregistrarea(s)
 
-	def _reiaAmanata(self, cine, ref, fereastra="", wasm=False, ac3=None):
+	def _reiaAmanata(self, cine, ref, fereastra="", wasm=False, ac3=None, h264=True):
 		"""Ultima cerere castiga: sesiunea criptata a acestui browser pe `ref`, cu oprirea inca amanata, se reia (pe
 		demux nu porneste si nu se opreste nimic). -> sesiunea sau None."""
 		for s in list(self._amanate):
@@ -1211,6 +1269,7 @@ class Manager(object):
 			if fereastra:
 				s.fereastra = fereastra
 			s.wasm = bool(wasm)
+			s.h264 = bool(h264)
 			if ac3 is not None:
 				s.ac3 = bool(ac3)
 			self.oprite.pop(cine, None)
@@ -1450,12 +1509,13 @@ class Manager(object):
 		return any(transponder(s.ref) == tp for s in self.vii() if s is not ignora)
 
 	def porneste(self, ref, nume, cine, browser="", adresa="", ac3=False, extern=False, fereastra="", preia=False,
-			wasm=False):
+			wasm=False, h264=True):
 		"""-> (sesiune, None) sau (None, motiv). Aceeasi sesiune daca browserul o are deja pe acelasi canal; altfel
 		sesiunea lui veche se opreste si porneste una noua. FERESTRELE: daca sesiunea browserului e folosita acum de alta
 		fereastra (alt `fereastra`), fara `preia` raspunsul e (None, ALTA_FEREASTRA): pagina intreaba omul, nu fura
 		transmisia pe tacute. Cu `preia`, sesiunea trece la fereastra noua, iar cea veche afla motivul. `wasm` = pagina
-		are playerul wasm (RescrierePsi pastreaza atunci sunetul pe care il decodeaza el, la imaginea MPEG-2).
+		are playerul wasm (RescrierePsi pastreaza atunci sunetul pe care il decodeaza el, la imaginea MPEG-2); `h264` False =
+		browserul nu decodeaza H.264 prin MediaSource (h264=0): H.264 merge atunci pe playerul wasm, daca decodorul il are.
 		CANALELE CRIPTATE: (None, CRIPTAT_OPRIT) cu setarea ascunsa criptate pe Nu; altfel (None, CRIPTAT_ASTEAPTA) cat
 		pornirea trebuie sa astepte (secundeCriptat()), fara sa porneasca nimic."""
 		a_mea = self.sesiunePentru(cine) if cine else None
@@ -1477,11 +1537,12 @@ class Manager(object):
 				a_mea.fereastra = fereastra
 			a_mea.wasm = bool(wasm)          # se aplica la urmatoarea legare a browserului (PMT-ul se rescrie atunci)
 			a_mea.ac3 = bool(ac3)            # la fel (pagina fara decodorul de sunet cere din nou cu ac3=0)
+			a_mea.h264 = bool(h264)          # la fel
 			self._anuleazaAsteptarea(cine)
 			return a_mea, None
 		# ultima cerere castiga: sesiunea criptata a acestui browser pe acest canal, cu oprirea inca amanata, se reia (pe
 		# demux nu porneste si nu se opreste nimic)
-		reluata = self._reiaAmanata(cine, curata, fereastra, wasm, ac3)
+		reluata = self._reiaAmanata(cine, curata, fereastra, wasm, ac3, h264)
 		if reluata is not None:
 			if a_mea is not None:
 				self._opresteAcum(a_mea, motiv_vechi, reluabila=True)
@@ -1524,6 +1585,7 @@ class Manager(object):
 		ses.ac3 = bool(ac3)
 		ses.extern = bool(extern)
 		ses.wasm = bool(wasm)
+		ses.h264 = bool(h264)
 		ses.fereastra = fereastra or ""
 		ses.canal_criptat = criptat
 		if criptat:
@@ -1871,6 +1933,53 @@ class Manager(object):
 		_jurnal("%d sesiuni oprite pentru %s: %s" % (len(alte), ref, motiv))
 		return len(alte)
 
+	def cedeazaGrup(self, alternative, liber, motiv, cod=None, tv=None):
+		"""Navigation.grupFaraTuner (0.7.7): niciuna dintre `alternative` (textele alternativelor DVB ale unui grup) n-are
+		tuner, deci zap-ul si inregistrarea nu ajung la _laZap / _laInregistrare. Ca la cedeaza, pe toate alternativele:
+		sesiunile care nu sunt pe transponderul vreuneia se opresc pe loc, intai cele cu oprirea amanata, apoi cea mai noua,
+		pana cand liber() (intrebarea Navigation) spune ca o alternativa are tuner. La o inregistrare `tv` (referinta
+		televizorului): raman si cele de pe transponderul lui (impart tunerul cu el, oprirea lor nu elibereaza nimic).
+		Fara alternative DVB nu se opreste nimic. -> cate s-au oprit."""
+		tinte = set(t for t in (transponder(a) for a in alternative or ()) if t is not None)
+		if not tinte:
+			return 0
+		raman = set(tinte)
+		tp_tv = transponder(tv) if tv else None
+		if tp_tv is not None:
+			raman.add(tp_tv)
+		vii = sorted((s for s in self.vii() if transponder(s.ref) not in raman),
+			key=lambda s: getattr(s, "inceput_mon", 0) or 0, reverse=True)
+		alte = [s for s in self._amanate if transponder(s.ref) not in raman] + vii
+		n = 0
+		for s in alte:
+			if s.oprita.is_set():
+				self._opresteInregistrarea(s)
+			else:
+				self._opresteAcum(s, motiv, fortat=True, cod=cod)
+			n += 1
+			if liber():
+				break
+		if n:
+			self._dupaSchimbare()
+			_jurnal("%d sesiuni oprite pentru grupul de alternative (%s): %s" % (n, ", ".join(alternative), motiv))
+		return n
+
+	def _laGrup(self, nav, grup, liber, inregistrare=False, *rest):
+		"""Navigation.grupFaraTuner: cedeazaGrup pe alternativele DVB ale grupului, cu motivele de la zap si de la
+		inregistrare. Fara sesiuni, alternativele nici nu se citesc. Nicio eroare nu opreste zap-ul sau inregistrarea."""
+		if not (self.vii() or self._amanate):
+			return
+		try:
+			alternative = nav.alternativeDvb(grup)
+			if inregistrare:
+				self.cedeazaGrup(alternative, liber, _("Transmisia s-a oprit: a pornit o înregistrare pe altă frecvență."),
+					cod="inregistrare", tv=self._tv())
+			else:
+				self.cedeazaGrup(alternative, liber,
+					_("Transmisia s-a oprit: televizorul a trecut pe un canal de pe altă frecvență."), cod="zap")
+		except Exception as e:
+			_jurnal("grupul de alternative: %r" % (e,))
+
 	def _laZap(self, nav, playref, *rest):
 		try:
 			# TERMENELE DECRIPTARII: de cand e televizorul pe canal
@@ -1909,22 +2018,28 @@ class Manager(object):
 				from Navigation import Navigation as nav
 			except Exception:
 				return ()
-		return ((getattr(nav, "playServiceExtensions", None), self._laZap),
-			(getattr(nav, "recordServiceExtensions", None), self._laInregistrare))
+		# (lista, functia, la inceput): la zap si la inregistrare la inceput; la grupurile de alternative la coada, dupa
+		# releele DAB+ / DVB-T2 si fluxurile 8001 (ordinea din Navigation.grupFaraTuner)
+		return ((getattr(nav, "playServiceExtensions", None), self._laZap, True),
+			(getattr(nav, "recordServiceExtensions", None), self._laInregistrare, True),
+			(getattr(nav, "grupFaraTuner", None), self._laGrup, False))
 
 	def _puneExtensiile(self):
 		if self._extensii:
 			return
-		for lista, f in self._listeNavigatie():
+		for lista, f, la_inceput in self._listeNavigatie():
 			if isinstance(lista, list) and f not in lista:
-				lista.insert(0, f)
+				if la_inceput:
+					lista.insert(0, f)
+				else:
+					lista.append(f)
 		self._extensii = True
 
 	def _scoateExtensiile(self):
 		if not self._extensii:
 			return
 		self._extensii = False
-		for lista, f in self._listeNavigatie():
+		for lista, f, _la_inceput in self._listeNavigatie():
 			while isinstance(lista, list) and f in lista:
 				lista.remove(f)
 
@@ -1934,7 +2049,7 @@ class Manager(object):
 		client, la_plecare, sincron, rest = None, None, False, b""
 		c = campuriRef(ses.ref)
 		sid = c[1] if c else None
-		pat = RescrierePsi(sid, ses.ac3, ses.pista, ses.extern, ses.wasm)
+		pat = RescrierePsi(sid, ses.ac3, ses.pista, ses.extern, ses.wasm, getattr(ses, "h264", True))
 		try:
 			while True:
 				# browserul nou se ia si inainte, si dupa asteptare: datele venite imediat dupa legare ajung la el
@@ -1947,7 +2062,7 @@ class Manager(object):
 					sincron, rest = False, b""
 					ses.cu_client = True
 					# fiecare browser legat primeste PAT-ul si PMT-ul de la capat, cu pista aleasa acum
-					pat = RescrierePsi(sid, ses.ac3, ses.pista, ses.extern, ses.wasm)
+					pat = RescrierePsi(sid, ses.ac3, ses.pista, ses.extern, ses.wasm, getattr(ses, "h264", True))
 				citite = [r] if client is None else [r, client]
 				try:
 					gata = select.select(citite, [], [], 0.5)[0]
@@ -1964,7 +2079,7 @@ class Manager(object):
 					sincron, rest = False, b""
 					ses.cu_client = True
 					# fiecare browser legat primeste PAT-ul si PMT-ul de la capat, cu pista aleasa acum
-					pat = RescrierePsi(sid, ses.ac3, ses.pista, ses.extern, ses.wasm)
+					pat = RescrierePsi(sid, ses.ac3, ses.pista, ses.extern, ses.wasm, getattr(ses, "h264", True))
 					gata = [x for x in gata if x == r]
 				if client is not None and ses.oprita.is_set():
 					# oprita pentru pagina (oprirea criptata amanata): browserul e lasat, teava se citeste in gol
@@ -2275,12 +2390,13 @@ class RescrierePsi(object):
 	PMT_LIPSA_IMAGINE_S = 6
 	PMT_CAUTARI_MAX = 200000
 
-	def __init__(self, sid, ac3=False, pista=None, intreg=False, wasm=False):
+	def __init__(self, sid, ac3=False, pista=None, intreg=False, wasm=False, h264=True):
 		self.sid = sid
 		self.ac3 = bool(ac3)
 		self.pista = pista
 		self.intreg = bool(intreg)
 		self.wasm = bool(wasm)
+		self.h264 = bool(h264)           # False: browserul fara H.264 in MediaSource (H.264 pe playerul wasm, peWasm)
 		self.piste = []
 		self.pmt_citit = False
 		self.video = ""
@@ -2657,9 +2773,11 @@ class RescrierePsi(object):
 		info = ((s[10] & 0x0F) << 8) | s[11]
 		j, sfarsit = 12 + info, len(s) - 4
 		video, audio, piste = [], [], []
-		# imaginea (primul flux video): la MPEG-2 / MPEG-1 cu playerul wasm, sunetul il decodeaza pagina
+		# imaginea (primul flux video): la MPEG-2 / MPEG-1 cu playerul wasm (si la H.264 cand browserul nu-l are, iar
+		# decodorul wasm da: peWasm), sunetul il decodeaza pagina
 		self.video = self._videoDin(s, sfarsit)
-		cu_wasm = self.wasm and self.video in ("mpeg2", "mpeg1")
+		cu_wasm = peWasm(self.video, self.wasm, self.h264)
+		aac_wasm = cu_wasm and wasmAre("aac")
 		while j + 5 <= sfarsit:
 			tip = s[j]
 			pid = ((s[j + 1] & 0x1F) << 8) | s[j + 2]
@@ -2683,7 +2801,7 @@ class RescrierePsi(object):
 				fel = "E-AC3"
 			if fel is not None:
 				if cu_wasm:
-					merge = fel in ("MP2", "AC3")
+					merge = fel in ("MP2", "AC3") or (fel == "AAC" and aac_wasm)
 				else:
 					merge = fel in ("MP2", "AAC") or (fel == "AC3" and self.ac3)
 				limba, rol = _limbaSiRol(descriptori)
@@ -2695,7 +2813,7 @@ class RescrierePsi(object):
 		for fel, pid, intrare in audio:
 			if self.pista is not None and pid == self.pista:
 				ales = (pid, intrare)
-		for dorit in (("MP2", "AC3") if cu_wasm else ("MP2", "AAC", "AC3")):
+		for dorit in (("MP2", "AC3") if cu_wasm and not aac_wasm else ("MP2", "AAC", "AC3")):
 			for fel, pid, intrare in audio:
 				if ales is None and fel == dorit:
 					ales = (pid, intrare)

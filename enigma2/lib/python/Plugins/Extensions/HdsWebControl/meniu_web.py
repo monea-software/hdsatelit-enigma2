@@ -59,6 +59,24 @@ def _jurnal(text):
 	print("[HdsWebControl] meniu: %s" % text)
 
 
+def _descriere(nod, limba=None):
+	"""0.7.7 (DRG, darog69 forum 789 #2379): descrierea scurta a intrarii (atributul description din menu.xml), tradusa ca
+	pe televizor (Screens/Menu.textDescriere): "" fara traducere cand limba nu e romana, ca sa nu apara fraze in romana."""
+	msgid = nod.get("description") or ""
+	if not msgid:
+		return ""
+	tradus = _t(msgid)
+	if tradus and tradus != msgid:
+		return tradus
+	if limba is None:
+		try:
+			from Components.Language import language
+			limba = language.getLanguage() or ""
+		except Exception:
+			limba = "ro"
+	return msgid if str(limba).lower().startswith("ro") else ""
+
+
 def _seDeschide(tinta):
 	"""(se deschide pe televizor?, motivul daca nu)."""
 	W = _sw()
@@ -96,6 +114,7 @@ def _intrare(nod):
 		"tip": "intrare",
 		"id": nod.get("entryID") or "",
 		"text": W._cuSemn(nod),
+		"descriere": _descriere(nod),
 		"web": nod.get("web") or "",
 		"pictograma": nod.get("pictograma") or "",
 		"ordine_id": _cheieIntrare(nod),
@@ -120,7 +139,7 @@ def _grup(nod, nivel, adancime):
 		copii = _cuExtensii(nod, cheie, copii)
 	copii = [c for _g, c in copii]
 	return {"tip": "grup", "id": nod.get("entryID") or nod.get("key") or "", "text": W._cuSemn(nod),
-		"web": nod.get("web") or "", "pictograma": nod.get("pictograma") or "", "cheie": cheie,
+		"descriere": _descriere(nod), "web": nod.get("web") or "", "pictograma": nod.get("pictograma") or "", "cheie": cheie,
 		"ordine_id": _cheieIntrare(nod), "copii": _ordineaOmului(cheie, copii)}
 
 
@@ -618,6 +637,9 @@ PAGINA = """<!DOCTYPE html>
   .intrare .nume{display:flex;align-items:center;gap:10px;}
   .intrare .actiuni{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
   .intrare .motiv{color:var(--text-slab);font-size:.8rem;}
+  .intrare .text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 240px;}
+  .descriere{color:var(--text-slab);font-size:.82rem;line-height:1.35;overflow-wrap:anywhere;}
+  .copii > .descriere{margin:2px 2px 6px;}
   .unic{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;margin:0 0 10px;padding:4px 14px;}
   .unic .intrare{border-top:0;}
   .unic .nume{font-size:1rem;}
@@ -631,7 +653,7 @@ PAGINA = """<!DOCTYPE html>
   form.cauta-setari button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
   .fila{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px;}
   .ascuns-semn{color:var(--text-slab);font-size:.8rem;border:1px solid var(--bordura);border-radius:6px;padding:1px 6px;}
-  .ascuns > .nume, summary.ascuns{opacity:.6;}
+  .ascuns > .nume, .ascuns > .text, summary.ascuns{opacity:.6;}
   .aranjare{display:none;gap:6px;align-items:center;flex-wrap:wrap;}
   body.aranjeaza .aranjare{display:inline-flex;}
   body.aranjeaza .actiuni-normale{display:none;}
@@ -726,7 +748,9 @@ function intrare(c, meniu, i, n){
   var nume = document.createElement("span"); nume.className = "nume"; nume.textContent = c.text;
   pictograma(c.pictograma, nume); semnAscuns(c, nume);
   if(c.extensie){ var e = document.createElement("span"); e.className = "ascuns-semn"; e.textContent = "extensie instalată"; nume.appendChild(e); }
-  div.appendChild(nume);
+  var text = document.createElement("span"); text.className = "text"; text.appendChild(nume);
+  if(c.descriere){ var ds = document.createElement("span"); ds.className = "descriere"; ds.textContent = c.descriere; text.appendChild(ds); }
+  div.appendChild(text);
   if(c.ordine_id && meniu){ div.appendChild(aranjare(c, meniu, i, n)); }
   var a = document.createElement("span"); a.className = "actiuni actiuni-normale";
   if(c.web){ a.appendChild(legatura(c.web, "Pagina web")); }
@@ -747,6 +771,7 @@ function grup(g, deschis, meniu, i, n){
   if(g.ordine_id && meniu){ s.appendChild(aranjare(g, meniu, i, n)); }
   d.appendChild(s);
   var c = document.createElement("div"); c.className = "copii";
+  if(g.descriere){ var ds = document.createElement("p"); ds.className = "descriere"; ds.textContent = g.descriere; c.appendChild(ds); }
   var k = g.copii.length;
   g.copii.forEach(function(x, j){ c.appendChild(x.tip === "grup" ? grup(x, false, g.cheie, j, k) : intrare(x, g.cheie, j, k)); });
   d.appendChild(c);

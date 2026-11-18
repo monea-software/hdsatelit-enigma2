@@ -58,21 +58,10 @@ def filtreaza(tlist):
 
 def tunere_satelit():
     """[(slot ca text, descriere)]: tunerele de satelit folosibile, dupa aceleasi reguli ca ScanSetup.createConfig
-    (fara cele puse pe „nimic”, fara cele avansate fara sateliti, fara cele legate de un tuner de acelasi fel)."""
-    rez = []
-    for n in nimmanager.nim_slots:
-        if not n.isCompatible('DVB-S'):
-            continue
-        if n.config_mode == 'nothing':
-            continue
-        if n.config_mode == 'advanced' and len(nimmanager.getSatListForNim(n.slot)) < 1:
-            continue
-        if n.config_mode in ('loopthrough', 'satposdepends'):
-            radacina = nimmanager.sec.getRoot(n.slot_id, int(n.config.connectedTo.value))
-            if n.type == nimmanager.nim_slots[radacina].type:
-                continue
-        rez.append((str(n.slot), n.friendly_full_description))
-    return rez
+    (fara cele puse pe "nimic", fara cele avansate fara sateliti, fara cele legate de un tuner de acelasi fel). 0.7.7
+    (SCN): regulile stau in ScanerSatelit.sloturi_satelit, ca randul "Tuner" din pagina web sa aiba aceleasi tunere."""
+    from Screens.ScanerSatelit import sloturi_satelit, tunere_alegere
+    return tunere_alegere(nimmanager, sloturi_satelit(nimmanager))
 
 
 def are_motor(slot):

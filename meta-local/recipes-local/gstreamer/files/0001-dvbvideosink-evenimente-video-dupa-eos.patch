@@ -1,0 +1,151 @@
+Subject: [PATCH] dvbvideosink: evenimentele video citite si dupa EOS
+
+Bucla de asteptare de dupa EOS facea poll pe video0 numai cu POLLIN, iar VIDEO_GET_EVENT se chema numai din
+video_write. Un fisier TS scurt, servit repede (TS pe HTTP de pe receptor), se scrie tot inainte ca driverul sa
+ridice evenimentul marimii: evenimentul ramanea necitit si redarea nu primea marimea imaginii (proba pe SF8008,
+15.11.2026: GST_DEBUG=dvbvideosink:6 fara VIDEO_EVENT pe fisierul scurt, cu VIDEO_EVENT pe fluxul viu).
+Citirea evenimentului trece intr-o functie (video_event_post), chemata si din bucla de dupa EOS; acolo POLLPRI
+nu mai e urmarit dupa un ioctl gol sau dupa 32 de evenimente, ca bucla sa nu se invarta fara asteptare.
+
+Upstream-Status: Pending
+---
+--- a/gstdvbvideosink.c
++++ b/gstdvbvideosink.c
+@@ -543,6 +543,58 @@ static gboolean gst_dvbvideosink_unlock_stop(GstBaseSink *basesink)
+ 	return TRUE;
+ }
+ 
++/* HD Satelit (MI7): evenimentul video al driverului (marimea, cadrele pe secunda, progresiv, gamma) citit cu
++ * VIDEO_GET_EVENT si dat mai departe ca mesaj; din video_write si din bucla de dupa EOS. FALSE cand ioctl nu da nimic. */
++static gboolean video_event_post(GstBaseSink *sink, GstDVBVideoSink *self)
++{
++	GstStructure *s;
++	GstMessage *msg;
++	struct video_event evt;
++	if (ioctl(self->fd, VIDEO_GET_EVENT, &evt) < 0)
++	{
++		g_warning("failed to ioctl VIDEO_GET_EVENT!");
++		return FALSE;
++	}
++	else
++	{
++		GST_INFO_OBJECT (self, "VIDEO_EVENT %d", evt.type);
++		if (evt.type == VIDEO_EVENT_SIZE_CHANGED) {
++			s = gst_structure_new ("eventSizeChanged",
++				"aspect_ratio", G_TYPE_INT, evt.u.size.aspect_ratio == 0 ? 2 : 3,
++				"width", G_TYPE_INT, evt.u.size.w,
++				"height", G_TYPE_INT, evt.u.size.h, NULL);
++			msg = gst_message_new_element (GST_OBJECT(sink), s);
++			gst_element_post_message (GST_ELEMENT(sink), msg);
++		}
++		else if (evt.type == VIDEO_EVENT_FRAME_RATE_CHANGED)
++		{
++			s = gst_structure_new ("eventFrameRateChanged",
++				"frame_rate", G_TYPE_INT, evt.u.frame_rate, NULL);
++			msg = gst_message_new_element (GST_OBJECT(sink), s);
++			gst_element_post_message (GST_ELEMENT(sink), msg);
++		}
++		else if (evt.type == 16 /*VIDEO_EVENT_PROGRESSIVE_CHANGED*/)
++		{
++			s = gst_structure_new ("eventProgressiveChanged",
++				"progressive", G_TYPE_INT, evt.u.frame_rate, NULL);
++			msg = gst_message_new_element (GST_OBJECT(sink), s);
++			gst_element_post_message (GST_ELEMENT(sink), msg);
++		}
++		else if (evt.type == 17 /*VIDEO_EVENT_GAMMA_CHANGED*/)
++		{
++			s = gst_structure_new ("eventGammaChanged",
++				"gamma", G_TYPE_INT, evt.u.frame_rate, NULL);
++			msg = gst_message_new_element (GST_OBJECT(sink), s);
++			gst_element_post_message (GST_ELEMENT(sink), msg);
++		}
++		else
++		{
++			g_warning ("unhandled DVBAPI Video Event %d", evt.type);
++		}
++	}
++	return TRUE;
++}
++
+ static gboolean gst_dvbvideosink_event(GstBaseSink *sink, GstEvent *event)
+ {
+ 	GstDVBVideoSink *self = GST_DVBVIDEOSINK (sink);
+@@ -596,8 +648,9 @@ static gboolean gst_dvbvideosink_event(GstBaseSink *sink, GstEvent *event)
+ 		pfd[0].fd = self->unlockfd[0];
+ 		pfd[0].events = POLLIN;
+ 		pfd[1].fd = self->fd;
+-		pfd[1].events = POLLIN;
++		pfd[1].events = POLLIN | POLLPRI;
+ 		int x = 0;
++		int evenimente = 0;
+ 		int retval = 0;
+ 		gint64 previous_pts = 0;
+ 		gint64 current_pts = 0;
+@@ -620,6 +673,15 @@ static gboolean gst_dvbvideosink_event(GstBaseSink *sink, GstEvent *event)
+ 				ret = FALSE;
+ 				break;
+ 			}
++			/* HD Satelit (MI7): fisierele TS scurte, servite repede, se scriu tot inainte ca driverul sa ridice evenimentul
++			 * marimii; fara POLLPRI aici el nu se mai citea si redarea ramanea fara marime. Dupa un ioctl gol sau dupa 32 de
++			 * evenimente POLLPRI nu se mai urmareste (fara bucla fara asteptare). */
++			else if (pfd[1].revents & POLLPRI)
++			{
++				if (!video_event_post(sink, self) || ++evenimente >= 32)
++					pfd[1].events &= ~POLLPRI;
++				continue;
++			}
+ 			/* video must first wait up on right playposition before sending eos by driver or position 
+ 			 * on fast boxes like the 4 K's the eos is send by short media (below buffer video-mem buffer lenght) to early
+ 			 * The video did not had the time to start playing.
+@@ -831,50 +893,7 @@ static int video_write(GstBaseSink *sink, GstDVBVideoSink *self, GstBuffer *buff
+ 		}
+ 		if (pfd[1].revents & POLLPRI)
+ 		{
+-			GstStructure *s;
+-			GstMessage *msg;
+-			struct video_event evt;
+-			if (ioctl(self->fd, VIDEO_GET_EVENT, &evt) < 0)
+-			{
+-				g_warning("failed to ioctl VIDEO_GET_EVENT!");
+-			}
+-			else
+-			{
+-				GST_INFO_OBJECT (self, "VIDEO_EVENT %d", evt.type);
+-				if (evt.type == VIDEO_EVENT_SIZE_CHANGED) {
+-					s = gst_structure_new ("eventSizeChanged",
+-						"aspect_ratio", G_TYPE_INT, evt.u.size.aspect_ratio == 0 ? 2 : 3,
+-						"width", G_TYPE_INT, evt.u.size.w,
+-						"height", G_TYPE_INT, evt.u.size.h, NULL);
+-					msg = gst_message_new_element (GST_OBJECT(sink), s);
+-					gst_element_post_message (GST_ELEMENT(sink), msg);
+-				}
+-				else if (evt.type == VIDEO_EVENT_FRAME_RATE_CHANGED)
+-				{
+-					s = gst_structure_new ("eventFrameRateChanged",
+-						"frame_rate", G_TYPE_INT, evt.u.frame_rate, NULL);
+-					msg = gst_message_new_element (GST_OBJECT(sink), s);
+-					gst_element_post_message (GST_ELEMENT(sink), msg);
+-				}
+-				else if (evt.type == 16 /*VIDEO_EVENT_PROGRESSIVE_CHANGED*/)
+-				{
+-					s = gst_structure_new ("eventProgressiveChanged",
+-						"progressive", G_TYPE_INT, evt.u.frame_rate, NULL);
+-					msg = gst_message_new_element (GST_OBJECT(sink), s);
+-					gst_element_post_message (GST_ELEMENT(sink), msg);
+-				}
+-				else if (evt.type == 17 /*VIDEO_EVENT_GAMMA_CHANGED*/)
+-				{
+-					s = gst_structure_new ("eventGammaChanged",
+-						"gamma", G_TYPE_INT, evt.u.frame_rate, NULL);
+-					msg = gst_message_new_element (GST_OBJECT(sink), s);
+-					gst_element_post_message (GST_ELEMENT(sink), msg);
+-				}
+-				else
+-				{
+-					g_warning ("unhandled DVBAPI Video Event %d", evt.type);
+-				}
+-			}
++			video_event_post(sink, self);
+ 		}
+ 		if (pfd[1].revents & POLLOUT)
+ 		{

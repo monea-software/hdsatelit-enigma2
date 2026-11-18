@@ -14,7 +14,12 @@
 #   clic la ridicarea butonului (alege; pe randul ales, la dublu clic sau intr-un meniu = OK; in setari doi pasi),
 #   tinut si tras = trasul pe bara de derulare a listei; dreapta = IESIRE si mijloc (clic pe rotita) = MENIU, la
 #   apasare; rotita = un rand pe pas, iar pasii adunati cat trece ROTITA_MS de la trimiterea de dinainte (o rotire
-#   repede) = o pagina (MouseEcran.rotita);
+#   repede) = o pagina (MouseEcran.rotita); la privit rotita = volumul, iar clicul pe rotita si butoanele laterale
+#   (SPATE, FATA) fac ce s-a ales in Butoane colorate si taste rapide (MouseEcran, mouse-ul ca telecomanda);
+# - navigatorul web si aplicatiile (YouTube): cat pagina are ecranul, enigma2 nu poate desena cursorul (lacatul pe fb0),
+#   deci ecranul navigatorului primeste miscarea (hdsMouseMiscare: sageata o deseneaza navigatorul) si gesturile
+#   (hdsGestMouse, prin MouseEcran), vezi HdsNavigator/lansator.py, MOUSE-UL. Cu telecomanda blocata pentru alt program
+#   (eRCInput.islocked) si fara un asemenea ecran, mouse-ul nu apasa nimic;
 # - pornit singur: porneste() se cheama la pornirea barei (Screens/InfoBar.py); un mouse pus si la cald trece prin
 #   aceeasi cale (eInputDeviceInit urmareste /dev/input), fara nicio setare. Cu un binar enigma2 mai vechi (fara
 #   getMouse) modulul nu face nimic.
@@ -34,6 +39,7 @@ MARIME_CURSOR = (32, 48)
 ZPOZITIE = 100
 IMAGINE = "hds-cursor-mouse.png"
 STANGA, DREAPTA, MIJLOC = 1, 2, 4
+SPATE, FATA = 8, 16     # butoanele laterale (lib/driver/rcmapper.cpp: BTN_SIDE/BTN_BACK, BTN_EXTRA/BTN_FORWARD)
 
 
 def jurnal(text):
@@ -93,6 +99,10 @@ class CititorMouse(object):
 			self._gest("dreapta", x=self.x, y=self.y)
 		if schimbate & MIJLOC and butoane & MIJLOC:
 			self._gest("mijloc", x=self.x, y=self.y)
+		if schimbate & SPATE and butoane & SPATE:
+			self._gest("lateral_spate", x=self.x, y=self.y)
+		if schimbate & FATA and butoane & FATA:
+			self._gest("lateral_fata", x=self.x, y=self.y)
 		if roti:
 			# REL_WHEEL > 0 = rotita impinsa spre ecran = in sus; MouseEcran vrea pasi > 0 = in jos
 			self.rotita -= roti
@@ -187,6 +197,34 @@ class MouseUsb(object):
 		if not self.tGolire.isActive():
 			self.tGolire.start(GOLIRE_MS, True)
 
+	@staticmethod
+	def _rcBlocat():
+		try:
+			from enigma import eRCInput
+			rc = eRCInput.getInstance()
+			return bool(rc is not None and hasattr(rc, "islocked") and rc.islocked())
+		except Exception:
+			return False
+
+	def _arunca(self, pachete):
+		# nimic nu se trimite; butoanele se tin minte, ca o ridicare de mai tarziu sa nu fie un clic
+		self.cititor.rotita = 0
+		self.cititor.butoane = pachete[-1][3]
+		self.cititor._apasat = None
+		self.cititor._tras = False
+		self.ascunde()
+
+	def _miscareLaEcran(self):
+		"""Ecranul de deasupra deseneaza el sageata (navigatorul web): ii da locul mouse-ului. True daca l-a luat."""
+		miscare = getattr(self._ecranCurent(), "hdsMouseMiscare", None)
+		if miscare is None:
+			return False
+		try:
+			return bool(miscare(self.cititor.x, self.cititor.y))
+		except Exception as e:
+			jurnal("miscarea spre ecran a cazut: %r" % (e,))
+			return False
+
 	def goleste(self):
 		try:
 			pachete = self.mapper.getMouse()
@@ -196,17 +234,20 @@ class MouseUsb(object):
 		if not pachete:
 			return
 		if self._inStandby():
-			# in standby nimic nu se trimite; butoanele se tin minte, ca o ridicare de dupa trezire sa nu fie un clic
-			self.cititor.rotita = 0
-			self.cititor.butoane = pachete[-1][3]
-			self.cititor._apasat = None
-			self.cititor._tras = False
-			self.ascunde()
+			# in standby nimic nu se trimite
+			self._arunca(pachete)
+			return
+		if self._rcBlocat() and getattr(self._ecranCurent(), "hdsMouseMiscare", None) is None:
+			# telecomanda e a altui program (rc.cpp lasa mouse-ul sa treaca si cu lacatul pus, pentru navigator)
+			self._arunca(pachete)
 			return
 		# intai cursorul, ca ecranul deschis de un clic sa nu-l acopere pana la pachetul urmator
 		for dx, dy, roti, butoane in pachete:
 			self.cititor.pachet(dx, dy, roti, butoane)
-		self.arata()
+		if self._miscareLaEcran():
+			self.ascunde()       # sageata navigatorului tine locul cursorului
+		else:
+			self.arata()
 		if self.cititor.rotita and not self.tRotita.isActive():
 			self.cititor.trimiteRotita()
 			self.tRotita.start(ROTITA_MS, True)

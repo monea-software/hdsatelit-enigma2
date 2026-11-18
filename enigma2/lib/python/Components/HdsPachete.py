@@ -69,6 +69,11 @@ except ImportError:  # teste pe PC
 		_spec.loader.exec_module(H)
 
 PREFIX = 'enigma2-plugin-'
+# 0.7.7 (BSC, e-mailul 6525, Vu+ Solo SE): pachetele fara prefixul extensiilor pe care imaginea le aduce singura din feed, la
+# cerere (programul Vu+ al cautarii oarbe, Components/HdsCautareOarba.InstalareVuplus). Intra in catalog (_toate: planInstalare
+# si cautarea lor dupa nume), dar nu in listele Extensiilor (se_arata cere prefixul). Pana in 0.7.6 catalogul tinea numai
+# enigma2-plugin-*, deci programul Vu+ nu se gasea niciodata: dupa descarcarea listei venea „nu e in lista de pe internet”.
+PACHETE_LA_CERERE = frozenset(('vuplus-blindscan-dvbs-utils',))
 
 def N_(text):
 	"""Marcaj pentru xgettext (po/Makefile.am, --keyword=N_), fara efect: textele se traduc la folosire, cu _t."""
@@ -344,6 +349,11 @@ def nume_scurt(nume):
 			return rest.split('-', 1)[1]
 		return rest
 	return nume
+
+
+def in_catalog(nume):
+	"""True pentru pachetele tinute in catalog (_toate): extensiile (PREFIX) si cele aduse de imagine la cerere"""
+	return nume.startswith(PREFIX) or nume in PACHETE_LA_CERERE
 
 
 def se_arata(nume):
@@ -699,7 +709,7 @@ def incarca(radacina='/'):
 		cat.surse_cu_lista.append(sursa)
 		for s in citeste_strofe(f):
 			n = s.get('package', '')
-			if not nume_valid(n) or not n.startswith(PREFIX):
+			if not nume_valid(n) or not in_catalog(n):
 				if H.e_python2_insusi(s):
 					cu_python2.add(sursa)
 				elif nume_valid(n) and H.e_pachet_python3(n) and _arhitectura_buna(s.get('architecture', ''), conf.arhitecturi):
@@ -757,7 +767,7 @@ def incarca(radacina='/'):
 			cat.python3_instalate.add(n)
 	dosar_info = _cale(radacina, conf.info_dir)
 	for n, s in instalate:
-		if not n.startswith(PREFIX) or not nume_valid(n):
+		if not in_catalog(n) or not nume_valid(n):
 			continue
 		p = toate.get(n)
 		if p is None:
@@ -1431,6 +1441,9 @@ class FisierIpk(object):
 		self.rezumat = _curat(rezumat, 120)
 		self.descriere = _curat(extins, 600)
 		self.depinde = _dependente(control.get('depends', ''))
+		# 0.7.6 (EX2): Depends intreg, cu versiunile cerute (depinde de mai sus pastreaza numai numele, pentru ecran): dupa
+		# el Extensii afla daca fisierul cere o versiune mai noua a imaginii (HdsExtensiiLucru.imagineTrasaFisier)
+		self.depinde_text = _curat(control.get('depends', ''), 4000)
 		self.citit = bool(self.nume)
 		# pachet numai pentru Python 2 (0.6.8): Components/HdsPython2.Verdict, aflat pe firul cautarii (verificaPython2)
 		# sau, daca n-a apucat, la confirmarea instalarii; None = neverificat inca

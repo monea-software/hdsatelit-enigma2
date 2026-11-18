@@ -71,12 +71,15 @@ CALE_SERVER_PROBA = "/tmp/hds-beta-server"
 
 FELURI = ("jurnale", "canale", "sistem", "utilizare", "receptor", "probe")
 FELURI_MESAJ = ("greseala", "idee", "intrebare")
+# mesajul scris PRIMUL de echipa (bin/mesaje.php scrie, TODO 15.11 10:33): vine ca raspuns, fara text al testerului
+FEL_ECHIPA = "echipa"
 
 ORA_S = 3600
 TIC_S = 60
 SCRIERE_PANA_LA_INTREBARE_S = 900
 SCRIERE_DUPA_S = 3600
 ESANTION_S = 600
+FEREASTRA_PROCESOR_S = 3 * TIC_S      # cel mult atat intre cele doua citiri /proc/stat ale procesorului ocupat
 PRIMA_CULEGERE_S = 300
 JURNALE_LA_S = 6 * 3600
 ZI_S = 24 * 3600
@@ -990,6 +993,18 @@ def curata(text):
 	return "\n".join(rez)
 
 
+# hds-zap.log (0.7.7, lib/service/hdsjurnalzap.cpp): si randurile zap-urilor reusite au la coada „| canal: nume=... ref=...”
+# (pentru asistenta, unde omul a cerut ajutorul). In pachetele testerilor canalul ramane numai pe randurile cu esec
+# („canalul care nu merge”, din nota 2); pe cele reusite (INFO) coada se taie, altfel jurnalul ar fi lista canalelor
+# privite, iar nota spune „fără listele tale de canale”.
+_ZAP_REUSIT_CANAL = re.compile(r"^(.*\[INFO\] \[zap\] .*?) \| canal: .*$")
+
+
+def faraCanaleReusite(text):
+	"""Textul lui hds-zap.log fara canalul de la coada randurilor reusite (INFO); randurile cu esec raman neschimbate."""
+	return "\n".join(_ZAP_REUSIT_CANAL.sub(r"\1", r) for r in (text or "").splitlines())
+
+
 def coada(text, maxim=JURNAL_MAX):
 	"""Ultima parte a unui text (eroarea e de obicei la sfarsit)."""
 	if len(text) <= maxim:
@@ -1151,23 +1166,58 @@ def esteMotor(nume):
 
 # stivele firelor Python ale enigma2 (faulthandler, scrise de paznic inainte sa opreasca o interfata care nu mai
 # raspunde): pleaca numai randurile formatului lui, ca in raportul pornirii (hds-raport.sh, rp_stive)
-_STIVA_FIR = re.compile(r"^(Current thread|Thread) 0x[0-9A-Fa-f]+ \(most recent call first\):$")
-_STIVA_CADRU = re.compile(r'^  File "([A-Za-z0-9_./-]+)", line ([0-9]+) in ([A-Za-z0-9_<>]+)$')
+# Antetul unui fir: pana la Python 3.13 "Thread 0x... (most recent call first):"; pe 3.14 cu numele firului intre paranteze
+# drepte ("Thread 0x... [hds-procesor] (...)"); un singur fir (faulthandler cu all_threads=False, SIGRTMIN+7 din 0.7.7):
+# "Stack (most recent call first):". Firul de stive al imaginii (HdsPaznic.textStive, 0.7.7) scrie antetul fara nume si
+# numele pe randul "# fir: <nume>" de imediat dinainte. Copia paznicului spune in cap cum au fost citite ("== stivele
+# Python (...)": din Python, deci lacatul Python era liber, sau din semnal); randul pleaca ca "stivele Python: ...", fara
+# "== " in fata, care in raportul pornirii incepe o sectiune.
+_STIVA_FIR = re.compile(r"^(Current thread|Thread) 0x[0-9A-Fa-f]+( \[(.*)\])? \(most recent call first\):$")
+_STIVA_UN_FIR = "Stack (most recent call first):"
+_STIVA_NUME = "# fir: "
+_STIVA_CUM = re.compile(r"^== stivele Python \((citite din Python|din semnal, toate firele|din semnal, semnalul [0-9]+)\)$")
+_STIVA_CADRU = re.compile(r'^  File "([A-Za-z0-9_./-]+)", line ([0-9]+|\?\?\?) in ([A-Za-z0-9_<>]+)$')
 _STIVA_PYTHON = re.compile(r"python3(\.[0-9]+)?/")
+_STIVA_NUME_SEMNE = re.compile(r"[^A-Za-z0-9 _.()-]")
+_STIVA_NUME_IP = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+")
+# cat se citeste dintr-un fisier de stive: in forma faulthandler cu toate firele firul principal ("Current thread") e
+# ULTIMUL, dupa firele vazute de nucleu si celelalte fire; cu 8 KiB se taia tocmai el la o interfata cu multe fire (cea mai
+# mare copie reala de pe receptorul de proba, cu 13 fire, are 4,8 KiB)
+STIVE_CITITE = 16384
+
+
+def numeFirStiva(nume):
+	"""Numele unui fir din antetul stivei: litere, cifre, spatiu si _ . ( ) -, o adresa IPv4 ca x.x.x.x, cel mult 40 de
+	semne; al unui modul de acces (regula cadrelor) e numai "modul-acces"."""
+	nume = _STIVA_NUME_IP.sub("x.x.x.x", _STIVA_NUME_SEMNE.sub("", nume or ""))[:40].strip()
+	if "cam" in nume.lower() or esteDeAcces(nume):
+		return "modul-acces"
+	return nume
 
 
 def stiveCurate(text):
-	"""Numai randurile stivei: firele fara adresa, cadrele ca fisier, rand si functie, calea taiata la ce urmeaza dupa
-	enigma2/python/ sau python3.N/ (alta cale: „(alt fisier)”); un cadru al unui modul de acces e numai „(modul-acces)”.
-	Fara curata(): regulile lui scot randuri intregi cu nume obisnuite de functii, iar o stiva cu goluri nu spune nimic."""
+	"""Numai randurile stivei: firele fara adresa (cu numele firului, cand il are), cadrele ca fisier, rand si functie,
+	calea taiata la ce urmeaza dupa enigma2/python/ sau python3.N/ (alta cale: "(alt fisier)"); un cadru al unui modul de
+	acces e numai "(modul-acces)". Fara curata(): regulile lui scot randuri intregi cu nume obisnuite de functii, iar o
+	stiva cu goluri nu spune nimic."""
 	rez = []
-	for rand in (text or "")[:8192].splitlines():
+	nume_fir = ""
+	for rand in (text or "")[:STIVE_CITITE].splitlines():
+		if rand.startswith(_STIVA_NUME):
+			nume_fir = rand[len(_STIVA_NUME):]
+			continue
+		inainte, nume_fir = nume_fir, ""
 		m = _STIVA_FIR.match(rand)
 		if m:
-			rez.append("%s (most recent call first):" % m.group(1))
+			nume = numeFirStiva(m.group(3) if m.group(2) else inainte)
+			rez.append("%s%s (most recent call first):" % (m.group(1), (" [%s]" % nume) if nume else ""))
 			continue
-		if rand == "  <no Python frame>":
+		if rand in (_STIVA_UN_FIR, "  <no Python frame>"):
 			rez.append(rand)
+			continue
+		m = _STIVA_CUM.match(rand)
+		if m:
+			rez.append("stivele Python: %s" % m.group(1))
 			continue
 		m = _STIVA_CADRU.match(rand)
 		if not m:
@@ -1246,6 +1296,8 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 			text = curataExceptie(text)
 		else:
 			text = curata(text)
+			if nume.startswith("hds-zap.log"):
+				text = faraCanaleReusite(text)
 		jurnale.append({"nume": nume[:120], "fel": fel, "scris": oraUtc(mtime), "text": text if crash else coada(text)})
 		vazute[nume] = semn
 		if cadere:
@@ -1499,17 +1551,48 @@ def _sus(radacina=""):
 		return None
 
 
+# Procesorul ocupat de adevarat (0.7.7). Incarcarea medie (/proc/loadavg) numara si firele care dorm in starea D: pe
+# placile HiSilicon (SF8008, Viper) firele driverelor tin load ~12-13 cu procesorul ~85% liber, deci incarcare_medie iese
+# ~300% fara sa fie ceva ocupat. ocupat_medie / ocupat_max: procentul folosit al tuturor nucleelor din diferenta /proc/stat
+# fata de citirea de la ticul dinainte (fereastra ~TIC_S, fara nicio asteptare pe firul enigma2).
+def _statProcesor(radacina=""):
+	"""Primul rand "cpu" din /proc/stat: (total, liber) in tick-uri, primele 8 campuri, liber = idle + iowait (ca
+	HdsProcesor.parseStat); None daca lipseste."""
+	text = _citesteText(_cale(radacina, "/proc/stat"), 1024) or ""
+	for rand in text.splitlines():
+		if rand.startswith("cpu "):
+			try:
+				valori = [int(x) for x in rand.split()[1:9]]
+			except ValueError:
+				return None
+			if len(valori) < 5:
+				return None
+			return sum(valori), valori[3] + valori[4]
+	return None
+
+
+def procentOcupat(inainte, acum):
+	"""Procentul folosit al procesorului (toate nucleele, o zecimala) intre doua citiri _statProcesor; None fara
+	diferenta (prima citire, contorul luat de la capat)."""
+	if inainte is None or acum is None or acum[0] <= inainte[0]:
+		return None
+	total = acum[0] - inainte[0]
+	liber = min(total, max(0, acum[1] - inainte[1]))
+	return round(100.0 * (total - liber) / total, 1)
+
+
 class Esantioane(object):
-	"""Esantioanele din zi (in memorie, la ESANTION_S): memoria disponibila, incarcarea, temperatura, memoria
-	interfetei. Dupa trimitere se iau de la capat."""
+	"""Esantioanele din zi (in memorie, la ESANTION_S): memoria disponibila, incarcarea, procesorul ocupat, temperatura,
+	memoria interfetei. Dupa trimitere se iau de la capat."""
 
 	def __init__(self):
 		self.memorie = []
 		self.incarcare = []
+		self.ocupat = []
 		self.temperatura = []
 		self.rss_max = None
 
-	def adauga(self, memorie_kb=None, incarcare=None, temperatura=None, rss_kb=None):
+	def adauga(self, memorie_kb=None, incarcare=None, temperatura=None, rss_kb=None, ocupat=None):
 		if memorie_kb is not None:
 			self.memorie.append(int(memorie_kb))
 		if incarcare is not None:
@@ -1518,10 +1601,14 @@ class Esantioane(object):
 			self.temperatura.append(float(temperatura))
 		if rss_kb is not None:
 			self.rss_max = max(self.rss_max or 0, int(rss_kb))
-		for lista in (self.memorie, self.incarcare, self.temperatura):
+		if ocupat is not None:
+			self.ocupat.append(float(ocupat))
+		for lista in (self.memorie, self.incarcare, self.ocupat, self.temperatura):
 			del lista[:-200]
 
-	def citeste(self, radacina=""):
+	def citeste(self, radacina="", stat_inainte=None):
+		"""Un esantion. stat_inainte: citirea _statProcesor de la ticul dinainte (procesorul ocupat de atunci pana acum;
+		None = fara procesor in acest esantion). -> citirea _statProcesor de acum."""
 		m = _meminfo(radacina)
 		t = None
 		try:
@@ -1529,10 +1616,13 @@ class Esantioane(object):
 			t = HdsProcesor.citesteTemperatura()[0]
 		except Exception:
 			t = None
-		self.adauga(m.get("MemAvailable"), _incarcare(radacina), t, _rssInterfata(radacina))
+		stat = _statProcesor(radacina)
+		self.adauga(m.get("MemAvailable"), _incarcare(radacina), t, _rssInterfata(radacina),
+			procentOcupat(stat_inainte, stat))
+		return stat
 
 	def gol(self):
-		return not (self.memorie or self.incarcare or self.temperatura)
+		return not (self.memorie or self.incarcare or self.ocupat or self.temperatura)
 
 
 def _medie(lista, zecimale=1):
@@ -1549,7 +1639,7 @@ def dateSistem(es, pornire_s=None, reporniri=None, radacina=""):
 			"minima_kb": min(es.memorie) if es.memorie else None,
 			"medie_kb": int(_medie(es.memorie, 0)) if es.memorie else None, "interfata_max_kb": es.rss_max},
 		"procesor": {"incarcare_medie": _medie(incarcari), "incarcare_max": max(incarcari) if incarcari else None,
-			"nuclee": nuclee},
+			"nuclee": nuclee, "ocupat_medie": _medie(es.ocupat), "ocupat_max": max(es.ocupat) if es.ocupat else None},
 		"temperatura": {"medie": _medie(es.temperatura), "max": max(es.temperatura) if es.temperatura else None},
 		"pornire_s": None if pornire_s is None else int(pornire_s),
 		"reporniri": reporniri,
@@ -2389,6 +2479,7 @@ class Lucru(threading.Thread):
 		self.rezultate = []
 		self.puse = []
 		self.mai_tarziu = False
+		self.plecate = 0
 
 	def run(self):
 		try:
@@ -2415,7 +2506,7 @@ class Lucru(threading.Thread):
 				schimbaStare(uneste)
 			if self.trimite_ and not coadaGoala():
 				t = Trimitere(inst["server"], self.posteaza)
-				_plecate, self.mai_tarziu = t.trimite()
+				self.plecate, self.mai_tarziu = t.trimite()
 				self.rezultate.extend(t.rezultate)
 		except Exception as e:
 			_jurnal("firul de lucru: %s" % e)
@@ -2622,7 +2713,8 @@ def tineRaspunsuri(raspuns):
 	vechi = citesteRaspunsuri()
 	mesaje = [m for m in (raspuns.get("mesaje") or []) if isinstance(m, dict)][:50]
 	try:
-		scrieJson(cale("raspunsuri.json"), {"cand": oraUtc(), "mesaje": mesaje, "vazute": vechi.get("vazute") or {}})
+		scrieJson(cale("raspunsuri.json"), {"cand": oraUtc(), "mesaje": mesaje, "vazute": vechi.get("vazute") or {},
+			"anuntate": vechi.get("anuntate") or {}})
 	except (OSError, IOError) as e:
 		_jurnal("raspunsurile: %s" % e)
 
@@ -2646,6 +2738,57 @@ def marcheazaVazute():
 		_jurnal("raspunsurile: %s" % e)
 
 
+def _intreg(v):
+	try:
+		return int(v)
+	except (TypeError, ValueError):
+		return 0
+
+
+def deAnuntat(r=None):
+	"""Raspunsurile echipei pe care omul nu le-a vazut nici in lista, nici in fereastra: [(mesajul, raspunsurile noi)]."""
+	r = citesteRaspunsuri() if r is None else r
+	vazute = r.get("vazute") or {}
+	anuntate = r.get("anuntate") or {}
+	noi = []
+	for m in r.get("mesaje") or []:
+		if not isinstance(m, dict):
+			continue
+		cheie = str(m.get("mesaj"))
+		rs = [x for x in m.get("raspunsuri") or [] if isinstance(x, dict)]
+		deja = max(_intreg(vazute.get(cheie)), _intreg(anuntate.get(cheie)))
+		if len(rs) > deja:
+			noi.append((m, rs[deja:]))
+	return noi
+
+
+def marcheazaAnuntate():
+	"""Ce e acum in raspunsuri.json a fost aratat in fereastra (nu se mai arata; insigna din meniu ramane pana la lista)."""
+	r = citesteRaspunsuri()
+	r["anuntate"] = dict((str(m.get("mesaj")), len(m.get("raspunsuri") or [])) for m in r.get("mesaje") or []
+		if isinstance(m, dict))
+	try:
+		scrieJson(cale("raspunsuri.json"), r)
+	except (OSError, IOError) as e:
+		_jurnal("raspunsurile: %s" % e)
+
+
+def textAnunt(noi):
+	"""Textul ferestrei cu raspunsurile noi: mesajul echipei asa cum e, raspunsul cu inceputul mesajului omului."""
+	parti = []
+	for m, rs in noi:
+		texte = "\n\n".join((x.get("text") or "") for x in rs)
+		if m.get("fel") == FEL_ECHIPA:
+			parti.append(texte)
+		else:
+			inceput = (m.get("text") or "").strip().replace("\n", " ")
+			if len(inceput) > 80:
+				inceput = inceput[:79].rstrip() + "..."
+			parti.append(_t("La mesajul tău „%s”:") % inceput + "\n" + texte)
+	parti.append(_t("Mesajele echipei rămân în meniul Beta tester, la „Răspunsurile echipei”."))
+	return "\n\n".join(parti)
+
+
 def textRaspunsuri(r=None):
 	"""Textul „Raspunsurile echipei”: fiecare mesaj cu starea lui si raspunsurile, cel mai nou sus."""
 	r = citesteRaspunsuri() if r is None else r
@@ -2657,6 +2800,14 @@ def textRaspunsuri(r=None):
 	vazute = set()
 	for m in mesaje:
 		vazute.add(m.get("local"))
+		if m.get("fel") == FEL_ECHIPA:
+			rs = [x for x in m.get("raspunsuri") or [] if isinstance(x, dict)]
+			primul = rs[0] if rs else {}
+			parti.append("%s (%s)\n%s" % (_t("Mesaj de la echipă"), (primul.get("cand") or m.get("primit") or "")[:10],
+				primul.get("text") or ""))
+			for rasp in rs[1:]:
+				parti.append("    %s %s: %s" % (_t("Echipa"), (rasp.get("cand") or "")[:10], rasp.get("text") or ""))
+			continue
 		cap = "%s (%s), %s" % (_t(FELURI_MESAJ_TEXT.get(m.get("fel"), m.get("fel", ""))), (m.get("primit") or "")[:10],
 			_t(STARI_MESAJ.get(m.get("stare"), m.get("stare", ""))))
 		parti.append(cap + "\n" + (m.get("text") or ""))
@@ -2759,7 +2910,9 @@ def limba():
 _starea = {"contor": None, "es": None, "pornire_s": None, "model": None, "nume_model": "", "lucru": None,
 	"mai_tarziu_pana": 0.0, "pornit_mono": None, "ultim_esantion": None, "intrebare_pana": 0.0, "sesiune": None,
 	"timer": None, "activ": False, "abatere_s": 0, "auto_pana": 0.0, "jurnale_pornire": False, "numar": None,
-	"numar_cand": None, "cerere_numar": None, "fir_model": None, "legare_forum": False, "email_forum": False}
+	"numar_cand": None, "cerere_numar": None, "fir_model": None, "legare_forum": False, "email_forum": False,
+	"cerere_raspunsuri": None, "raspunsuri_pornire": False, "raspunsuri_datorat": False, "de_anuntat": False,
+	"stat_procesor": None}
 
 
 def _modelTinut():
@@ -3175,15 +3328,23 @@ def _tic(acum=None):
 		if not coadaGoala() and acum >= _starea["mai_tarziu_pana"] and _starea["lucru"] is None:
 			_pornesteLucru(b, (), acord=False)
 		return
-	# esantioanele felului „sistem”
+	# esantioanele felului "sistem"; procesorul ocupat din diferenta /proc/stat fata de ticul dinainte (o citire tinuta aici,
+	# nu in Esantioane, care se ia de la capat la fiecare trimitere; mai veche de FEREASTRA_PROCESOR_S nu se foloseste)
+	inainte = _starea.get("stat_procesor")
+	if inainte is not None and not (0 < acum - inainte[0] <= FEREASTRA_PROCESOR_S):
+		inainte = None
 	if _starea["ultim_esantion"] is None or acum - _starea["ultim_esantion"] >= ESANTION_S:
 		_starea["ultim_esantion"] = acum
-		_starea["es"].citeste()
+		_starea["stat_procesor"] = (acum, _starea["es"].citeste(stat_inainte=inainte[1] if inainte else None))
+	else:
+		_starea["stat_procesor"] = (acum, _statProcesor())
 	if notaVeche(b):
 		# nimic nu pleaca; anuntul notei noi, cand omul e la televizor (o data pe zi)
 		if acum - pornit >= NOTA_ANUNT_DUPA_S and potIntreba(stare_tv) and anuntNotaDatorat(b):
 			_anuntaNota(sesiune)
 		return
+	if inscris(b):
+		_verificaRaspunsuri(b, acum, pornit, stare_tv, sesiune)
 	# acordul retrimis la prima ora (cine s-a inscris singur inainte de o ora)
 	if not b.acord_ora.value and c.secunde >= ORA_S:
 		b.acord_ora.value = True
@@ -3241,6 +3402,8 @@ def _culegeRezultate(b):
 	if lucru is None or lucru.is_alive():
 		return
 	_starea["lucru"] = None
+	if getattr(lucru, "plecate", 0):
+		_starea["raspunsuri_datorat"] = True
 	if lucru.mai_tarziu:
 		_starea["mai_tarziu_pana"] = time.monotonic() + REINCERCARE_S
 	for fel, valoare in lucru.rezultate:
@@ -3254,6 +3417,45 @@ def _culegeRezultate(b):
 		elif fel == "acord_trimis":
 			# numarul de testeri ai modelului se cere din nou, acum ca serverul are acordul
 			_starea["numar_cand"] = None
+
+
+def _verificaRaspunsuri(b, acum, pornit, stare_tv, sesiune):
+	"""Raspunsurile echipei (si mesajul scris primul de echipa) cerute la contactele care oricum au loc: o data la
+	PRIMA_CULEGERE_S dupa pornire si dupa fiecare trimitere cu pachete plecate, fara alt ceas. Ce e nou si nevazut apare
+	intr-o fereastra o singura data (anuntate, in raspunsuri.json: nici dupa o repornire), numai peste televizorul in
+	direct; altfel asteapta tic-ul urmator. Apoi ramane in lista Raspunsurile echipei."""
+	c = _starea.get("cerere_raspunsuri")
+	if c is not None:
+		if not c.gata:
+			return
+		_starea["cerere_raspunsuri"] = None
+		if 200 <= c.cod < 300 and isinstance(c.raspuns, dict):
+			tineRaspunsuri(c.raspuns)
+			_starea["de_anuntat"] = bool(deAnuntat())
+	elif _starea["raspunsuri_datorat"] or (not _starea["raspunsuri_pornire"] and acum - pornit >= PRIMA_CULEGERE_S):
+		_starea["raspunsuri_pornire"] = True
+		_starea["raspunsuri_datorat"] = False
+		c = Cerere(adresaServer(b), "raspunsuri", {"v": PROTOCOL, "id": b.id.value})
+		_starea["cerere_raspunsuri"] = c
+		c.start()
+		return
+	if _starea["de_anuntat"] and sesiune is not None and potIntreba(stare_tv):
+		_starea["de_anuntat"] = False
+		_anuntaRaspunsuri(sesiune)
+
+
+def _anuntaRaspunsuri(sesiune):
+	"""Fereastra cu raspunsurile noi; anuntate se scrie inainte (o cadere a ecranului nu o repeta la un minut)."""
+	noi = deAnuntat()
+	if not noi:
+		return
+	marcheazaAnuntate()
+	titlu = _t("Mesaj de la echipă") if any(m.get("fel") == FEL_ECHIPA for m, _rs in noi) else _t("Răspunsurile echipei")
+	try:
+		from Screens.HdsBetaTester import HdsBetaText
+		sesiune.open(HdsBetaText, titlu, textAnunt(noi))
+	except Exception as e:
+		_jurnal("fereastra raspunsurilor: %s" % e)
 
 
 def _intreaba(sesiune):

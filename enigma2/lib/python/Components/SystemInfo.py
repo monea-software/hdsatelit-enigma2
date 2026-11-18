@@ -57,8 +57,7 @@ def _functieImagine(nume):
 
 SystemInfo["HdsVfdProducator"] = _functieImagine("afisaj")
 SystemInfo["HdsCodTelecomanda"] = _functieImagine("telecomanda")
-# Receptoarele imaginii nu au codor H.265. Decodarea H.265 nu inseamna codare.
-SystemInfo["HasH265Encoder"] = False
+# HasH265Encoder si HasTranscoding: pe model, la pasul 5 de mai jos (profilul masinii si codorul placii), nu fixe.
 
 
 try:
@@ -152,6 +151,10 @@ SystemInfo["HdsDecodare"] = os.access("/usr/bin/hds-decodare", os.X_OK)
 # pluginul DabTerestru instalat (aceeasi cale ca Components/HdsDabUsb.PLUGIN). Pachetele lui nu sunt inca in feed, deci
 # randul nu mai duce la un ecran care nu are ce instala; conditia se scoate cand pachetele sunt in feed si probate.
 SystemInfo["HdsDabUsb"] = os.path.isfile("/usr/lib/enigma2/python/Plugins/Extensions/DabTerestru/plugin.py") or os.path.isfile("/usr/lib/enigma2/python/Plugins/Extensions/DabTerestru/plugin.pyc")
+# Navigatorul web (data/menu.xml, requires="HdsNavigator" la "Navigator web" si "Setari navigator web"; SNV, 0.7.6): numai
+# cu lansatorul pe receptor (aceeasi cale ca HdsNavigator/lansator.CALE_LANSATOR). Pe Vu+ Solo SE si celelalte MIPS
+# navigatorul nu e in imagine pana trece poarta WPE WebKit pentru mips32el; intrarile revin singure cand pachetul e pus.
+SystemInfo["HdsNavigator"] = os.access("/usr/bin/hds-navigator", os.X_OK)
 # Lista imaginilor din meniul de oprire: bootoptions sau kexec deja instalat.
 # Aceeasi capacitate arata lista si in interfata web.
 try:
@@ -644,6 +647,19 @@ for _slot in range(SystemInfo.get("CommonInterface") or 0):
 	SystemInfo.setdefault("CI%dSupportsHighBitrates" % _slot, _oeaAcces("/proc/stb/tsmux/ci%d_tsclk" % _slot))
 	SystemInfo.setdefault("CI%dRelevantPidsRoutingSupport" % _slot, _oeaAcces("/proc/stb/tsmux/ci%d_relevant_pids_routing" % _slot))
 SystemInfo.setdefault("InformationCommitLogs", [])
+# Codorul placii (TRC): transcodarea unui canal spre telefon (transtreamproxy pe portul 8002, pe Vu+ cu codor) si pluginurile
+# care o regleaza. Pe model: masina o declara in profil (transcoding / multitranscoding, pasul 2, din conf-ul masinii; un
+# receptor fara profil trece numai dupa placa) si driverul arata codorul (/proc/stb/encoder/0 sau /dev/bcm_enc0).
+# H.265 numai cand codorul il ofera (vcodec_choices); decodarea H.265 nu inseamna codare.
+try:
+	from Components.HdsBoxInfoModele import valori as _valoriCodor
+	_profilCunoscut = bool(_valoriCodor(_mb))
+except Exception:
+	_profilCunoscut = False
+_codorPlaca = bool(SystemInfo.get("transcoding") or SystemInfo.get("multitranscoding") or not _profilCunoscut) and (
+	os.path.isdir("/proc/stb/encoder/0") or os.path.exists("/dev/bcm_enc0"))
+SystemInfo.setdefault("HasTranscoding", _codorPlaca)
+SystemInfo.setdefault("HasH265Encoder", _codorPlaca and "h265" in _oeaRand("/proc/stb/encoder/0/vcodec_choices").lower().split())
 try:
 	updateSysSoftCam()
 except Exception as _e:

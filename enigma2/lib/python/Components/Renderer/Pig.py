@@ -19,11 +19,17 @@ class Pig(Renderer):
 
 	def applySkin(self, desktop, parent):
 		# hidePip (imaginile OE-Alliance: ascunde fereastra PiP cat se vede ecranul): se citeste si nu ajunge la eVideoWidget
+		# cornerRadius (temele altora pun colturi rotunjite pe fereastra video): nu ajunge la eVideoWidget. Cu colturi,
+		# eWidget (lib/gui/ewidget.cpp) umple fereastra cu fundalul ecranului parinte si amesteca peste el culoarea ei
+		# transparenta, deci gaura din OSD nu se mai face: peste un ecran cu fundal opac fereastra ramane neagra si imaginea
+		# canalului nu se vede. Fara colturi fereastra e o gaura dreptunghiulara (painter.clear), ca in tema imaginii.
 		self.hidePip = True
 		atribute = []
 		for (attrib, value) in self.skinAttributes:
 			if attrib == "hidePip":
 				self.hidePip = str(value).strip().lower() in ("1", "true", "yes", "on")
+			elif attrib == "cornerRadius":
+				continue
 			else:
 				atribute.append((attrib, value))
 		self.skinAttributes = atribute

@@ -125,11 +125,16 @@ SCURTATURI_IMAGINE = (
 	# vizibila, fara reclame) prin ?tv=1 si adaosul HDS-TV la agent; navigarea din taste o face tv-mod.js al site-ului (sursa:
 	# depozitul de unelte, unelte/mod-tv/). Harta "pagina": Inapoi = pagina de dinainte, facuta de navigator (merge si pe un site
 	# strain deschis dintr-o legatura; de pe prima pagina inchide aplicatia); OK pe o caseta = tastatura enigma2 (proba pe receptorul de probe).
+	# 0.7.7 (TVR, Eduard 16.11.2026 13:09): stirile HD Satelit vin de pe serverul nostru (stb.hdsatelit.com/tv/), nu de pe
+	# www.hdsatelit.com: interfata facuta pentru televizor (fara reclame, fara JavaScript, sagetile, OK, Inapoi), in limba meniului
+	# (navigatorul o trimite in Accept-Language prin --limba), cu articolele traduse; receptorul nu mai atinge gazduirea site-ului
+	# (paginile grele cadeau la 30 s pe receptoarele slabe, iar paza gazduirii punea unele receptoare la CAPTCHA). Sursa serverului:
+	# depozitul de unelte, unelte/stb/tv/.
 	{
 		"id": "hdsatelit",
 		"titlu": "HD Satelit",
 		"descriere": N_("Știrile HD Satelit pe televizor: satelit, cablu, operatori, receptoare."),
-		"url": "https://www.hdsatelit.com/?tv=1",
+		"url": "https://stb.hdsatelit.com/tv/",
 		"agent": "",
 		"adaos": "HDS-TV",
 		"script": "",
@@ -308,11 +313,18 @@ def toate(dosar=None):
 FEL_SCURTATURA, FEL_PACHET, FEL_IMAGINE = "scurtatura", "pachet", "imagine"
 # starile din magazin; None = cardul nu se arata (nici instalat, nici in feed)
 INSTALAT, ACTUALIZARE, DISPONIBIL = "instalat", "actualizare", "disponibil"
+# Navigatorul web pe receptoarele fara el in imagine (NVM, 0.7.7: Vu+ Solo SE si celelalte MIPS cu memorie interna mica):
+# cardul „Navigator web” ramane vazut; CERE_NAVIGATOR = se poate instala din feed (OK il instaleaza, fara alta intrebare,
+# prin Components/HdsLimbaRestaurare.cereNavigator, ca OCR-ul), NU_INCAPE = locul liber din radacina e prea mic (cardul o
+# spune inainte de OK, cu cifrele, in banda de jos). Dupa instalare cardul trece singur pe Instalat si apar scurtaturile.
+CERE_NAVIGATOR, NU_INCAPE = "navigator", "nu-incape"
 TEXTE_STARE = {
 	"widevine": N_("Cere modulul Widevine"),
 	INSTALAT: N_("Instalat"),
 	ACTUALIZARE: N_("Actualizare disponibilă"),
 	DISPONIBIL: N_("Disponibil"),
+	CERE_NAVIGATOR: N_("Disponibil"),
+	NU_INCAPE: N_("Nu încape"),
 }
 
 MAGAZIN_IMAGINE = (
@@ -400,12 +412,17 @@ def pluginInstalat(a, exista=os.path.exists, si_pyc=True):
 
 
 def stareMagazin(a, catalog=None, exista=os.path.exists):
-	"""INSTALAT / ACTUALIZARE / DISPONIBIL, sau None cand cardul nu se arata. Scurtaturile sunt mereu INSTALAT.
+	"""INSTALAT / ACTUALIZARE / DISPONIBIL, sau None cand cardul nu se arata. Scurtaturile sunt INSTALAT cand e pe
+	receptor programul cu care pornesc (program(): motorul lor sau navigatorul imaginii); fara niciunul (Vu+ Solo SE si
+	celelalte MIPS, unde navigatorul nu e in imagine, SNV 0.7.6) nu se arata, ca intrarea din meniu. Cardul navigatorului
+	fara program ramane vazut, cu CERE_NAVIGATOR (OK il instaleaza din feed) sau NU_INCAPE (NVM 0.7.7).
 	`catalog`: Components/HdsPachete.Catalog (None cat nu e citit: atunci numai ce se vede pe disc)."""
 	f = fel(a)
 	if a.get("vizibil") == "0" and not vizibilePrinFeed().get(a.get("id")):
 		return None
 	if f == FEL_SCURTATURA:
+		if not exista(program(a, exista)[1]):
+			return None
 		if a.get("drm") == "widevine":
 			if not exista(PROGRAME["chromium"]):
 				return None          # WPE nu are Widevine: fara HD Satelit Browser nu se arata
@@ -413,7 +430,11 @@ def stareMagazin(a, catalog=None, exista=os.path.exists):
 				return CERE_WIDEVINE
 		return INSTALAT
 	if f == FEL_IMAGINE:
-		return INSTALAT if (not a.get("program") or exista(a["program"])) else None
+		if not a.get("program") or exista(a["program"]):
+			return INSTALAT
+		if a.get("id") == "navigator" and a["program"] == PROGRAME["wpe"]:
+			return stareNavigatorLipsa()
+		return None
 	p = catalog.pachete.get(a["pachet"]) if catalog is not None else None
 	if p is not None and p.actualizare:
 		return ACTUALIZARE
@@ -430,6 +451,47 @@ def stareMagazin(a, catalog=None, exista=os.path.exists):
 	if p is not None and p.se_poate_instala:
 		return DISPONIBIL
 	return None
+
+
+def locNavigator():
+	"""(trebuie, liber) in octeti (Components/HdsLimbaRestaurare.locNavigator); (0, None) cand nu se poate afla"""
+	try:
+		from Components import HdsLimbaRestaurare
+	except ImportError:
+		return 0, None
+	return HdsLimbaRestaurare.locNavigator()
+
+
+def stareNavigatorLipsa():
+	"""CERE_NAVIGATOR sau NU_INCAPE pentru cardul navigatorului cand programul lipseste"""
+	trebuie, liber = locNavigator()
+	return NU_INCAPE if liber is not None and liber < trebuie else CERE_NAVIGATOR
+
+
+def notaNavigator(a):
+	"""Explicatia din banda de jos (si din pagina web) pentru cardul navigatorului care nu incape: cifrele si ce merge"""
+	if a.get("id") != "navigator" or a.get("stare") != NU_INCAPE:
+		return ""
+	trebuie, liber = locNavigator()
+	try:
+		from Components import HdsLimbaRestaurare
+		return HdsLimbaRestaurare.textNavigatorNuIncape(trebuie, liber or 0)
+	except ImportError:
+		return ""
+
+
+def instaleazaNavigator(session):
+	"""OK pe cardul navigatorului care lipseste (televizor si pagina web): instalarea din feedul semnat
+	(HdsLimbaRestaurare.cereNavigator). None daca a pornit (mesajele le da instalatorul), altfel textul pentru om."""
+	try:
+		from Components import HdsLimbaRestaurare
+	except ImportError:
+		return TEXT_NAVIGATOR_FARA_INSTALATOR
+	return HdsLimbaRestaurare.cereNavigator(session)
+
+
+TEXT_NAVIGATOR_FARA_INSTALATOR = N_("Navigatorul web nu se poate instala din acest receptor.")
+TEXT_NAVIGATOR_PORNIT = N_("Se instalează navigatorul web. Durează câteva minute; un mesaj îți spune când e gata.")
 
 
 def pachetDinCatalog(a, catalog):
@@ -456,6 +518,8 @@ def actiuni(a, stare_):
 	f = fel(a)
 	if stare_ == CERE_WIDEVINE:
 		return ["instaleaza-widevine"]
+	if stare_ in (CERE_NAVIGATOR, NU_INCAPE):
+		return ["instaleaza-navigator"]
 	if f != FEL_PACHET:
 		return ["porneste"]
 	if stare_ == DISPONIBIL:
@@ -634,6 +698,8 @@ def optiuniProgram(cale, citeste=None):
 	# numai ca sfarsit al altui sir (de pilda "script" in "AVERTISMENT script"), deci numele singur poate lipsi
 	semne = {"agent": (b"\x00agent\x00", b"User-Agent-ul intreg"),
 		"script": (b"\x00script\x00", b"harta tastelor unei aplicatii"),
+		# hds-navigator r10 (YTB): filmele aplicatiilor pornesc si cu sunet (tastele vin de la enigma2, nu ca gesturi)
+		"autoplay": (b"\x00autoplay\x00", b"Filmele paginii pornesc si cu sunet"),
 		# hds-chromium (CRM): dosarul modulului Widevine; fara optiune ia singur WIDEVINE_CAI (coordonatorul 09:46)
 		"widevine-cdm-path": (b"\x00widevine-cdm-path\x00",)}
 	try:
@@ -736,6 +802,8 @@ def argumenteAplicatie(scurtatura, optiuni, exista=os.path.exists, agent_tv=AGEN
 		cale = DOSAR_SCRIPTURI + "/" + script
 		if exista(cale):
 			a += ["--script", cale]
+	if "autoplay" in optiuni:
+		a.append("--autoplay")
 	if scurtatura.get("drm") == "widevine" and "widevine-cdm-path" in optiuni:
 		a += ["--widevine-cdm-path", WIDEVINE_CAI[0].rsplit("/", 1)[0]]
 	return a
@@ -749,13 +817,16 @@ def dosareProfil(id_):
 def areVideo():
 	"""True cand WebKit-ul imaginii are redarea video: raspunsul lotului video al navigatorului
 	(Components/HdsDecodorWeb.webkit_cu_video, numai ce e deja stiut, fara cautare pe firul enigma2); fara modulul
-	acela (imaginile de pana la lotul video) WebKit-ul e construit fara video, deci False."""
+	acela (imaginile de pana la lotul video) WebKit-ul e construit fara video, deci False. None cat raspunsul nu e stiut
+	inca (prima secunda dupa pornirea enigma2): cardul nu spune atunci „fara filme” (stare si notaVideo cer False), iar
+	ecranul Aplicatii intreaba din nou la urmatoarea desenare."""
 	try:
 		from Components.HdsDecodorWeb import webkit_cu_video
 	except ImportError:
 		return False
 	try:
-		return bool(webkit_cu_video(numai_stiut=True))
+		r = webkit_cu_video(numai_stiut=True)
+		return None if r is None else bool(r)
 	except Exception:
 		return False
 
@@ -778,6 +849,9 @@ def descriereIntreaga(a, traducere=None, video=None):
 	nota = notaVideo(a, video)
 	if nota:
 		parti.append(t(nota))
+	nota = notaNavigator(a)
+	if nota:
+		parti.append(nota)          # tradusa deja (are cifre)
 	return "  ".join(parti)
 
 

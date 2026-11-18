@@ -22,6 +22,14 @@
 # skinul nu a inregistrat inca niciun font; addFont pe un fisier care nu e font opreste enigma2 (lib/gdi/font.cpp),
 # deci fisierul se verifica inainte (marime si semnatura TrueType/OpenType).
 # Modulul nu importa nimic din enigma la incarcare, ca sa poata fi incercat pe PC.
+#
+# 0.7.7 (OSD; e-mailul 6416, Vu+ Solo SE; TODO 15.11 14:22): in coltul din dreapta jos „Enigma2 pornește...”, ca omul sa
+# stie ca interfata se incarca. Se pune din mytest.py dupa skin.loadSkinData (arataColt, inaintea lui arata()): o fereastra
+# mica pe desktop, cu aceleasi culori si aceeasi inaltime ca semnatura, desenata pe loc (bucla principala nu merge inca);
+# desenul poate sterge capsula, de aceea arata() vine dupa. Pleaca odata cu semnatura, la primul pas al buclei. Inainte de
+# skin (primul arata()) nu exista fonturi si stil de ferestre, deci textul apare de la incarcarea skinului pana la primul
+# ecran. Limba interfetei nu e inca activata: limba se citeste din setari (config.osd.language), traducerea din catalogul
+# gettext al ei, incarcat separat (fara sa schimbe limba interfetei); fara traducere, engleza.
 
 import os
 
@@ -40,9 +48,33 @@ LUNGIME_BUILD = 16
 # o parte a versiunii cu doua cifre (0.3.10): fiecare parte pe doua cifre (Makefile.am, HdsJurnalVersiuni)
 LUNGIME_BUILD_LUNG = 19
 
+
+def N_(text):
+	"""Marcaj pentru xgettext (po/Makefile.am, --keyword=N_), fara efect: textul se traduce in textColt."""
+	return text
+
+
+# textul din colt: cheia (romana, ca toate textele imaginii) si rezerva engleza
+# TRANSLATORS: la pornire, in coltul din dreapta jos, pana la primul ecran („Enigma2” ramane asa; in turca promis
+# „Enigma2 başlatılıyor...”)
+TEXT_COLT = N_("Enigma2 pornește...")
+TEXT_COLT_EN = "Enigma2 is starting..."
+CALE_SETARI = "/etc/enigma2/settings"
+# masurile pe 1920x1080 (ca semnatura din lib/gdi/ecranpornire.cpp: font 30, inaltime 56, 40 de jos, culorile ei);
+# 48 de la marginea din dreapta: zona sigura a ecranului (ca rotita din stanga sus, main/enigma.cpp)
+COLT_FONT = 30
+COLT_INALTIME = 56
+COLT_MARGINE_TEXT = 32
+COLT_JOS = 40
+COLT_DREAPTA = 48
+COLT_FUNDAL = (10, 14, 26, 255 - 184)   # gRGB: al patrulea = transparenta (0 plin)
+COLT_TEXT = (240, 246, 252, 0)
+COLT_Z = 100
+
 _font_pus = [False]
 _ceasuri = []
 _legaturi = []
+_colt = []      # [fereastra, eticheta] cat se vede textul din colt
 
 
 def _jurnal(text):
@@ -119,12 +151,122 @@ def arata():
 		return False
 
 
+def limbaSetari(cale=CALE_SETARI):
+	"""config.osd.language din fisierul de setari („tr_TR”), sau "" (fisier lipsa, rand lipsa: limba din fabrica)."""
+	try:
+		with open(cale, "rb") as f:
+			text = f.read(1024 * 1024).decode("utf-8", "replace")
+	except (OSError, IOError):
+		return ""
+	for rand in text.splitlines():
+		cheie, _semn, valoare = rand.partition("=")
+		if cheie.strip() == "config.osd.language":
+			return valoare.strip()
+	return ""
+
+
+def _dosarCataloage():
+	try:
+		from Tools.Directories import resolveFilename, SCOPE_LANGUAGE
+		return resolveFilename(SCOPE_LANGUAGE, "")
+	except Exception:
+		return "/usr/share/enigma2/po/"
+
+
+def textColt(limba=None, dosar=None):
+	"""„Enigma2 pornește...” in limba data (implicit cea din setari, „ro_RO” din fabrica): din catalogul gettext al limbii,
+	incarcat separat; o limba fara catalog sau fara traducere ia engleza (catalogul en, apoi TEXT_COLT_EN). Nu arunca."""
+	if limba is None:
+		limba = limbaSetari() or "ro_RO"
+	if limba.split("_")[0].lower() == "ro":
+		return TEXT_COLT
+	if dosar is None:
+		dosar = _dosarCataloage()
+	import gettext
+	for coduri in ([limba], ["en_EN"]):
+		try:
+			t = gettext.translation("enigma2", dosar, languages=coduri, fallback=True).gettext(TEXT_COLT)
+		except Exception:
+			t = TEXT_COLT
+		if t and t != TEXT_COLT:
+			return t
+	return TEXT_COLT_EN
+
+
+def arataColt(text=None):
+	"""Dupa skin.loadSkinData: textul din coltul din dreapta jos (vezi antetul), desenat pe loc. True daca s-a pus. Nu
+	arunca. Dupa el trebuie chemat arata() (desenul desktopului poate sterge capsula)."""
+	try:
+		from enigma import eWindow, eLabel, eSize, ePoint, gFont, gRGB, getDesktop
+		if text is None:
+			text = textColt()
+		_puneFont()
+		desktop = getDesktop(0)
+		marime = desktop.size()
+		lw, lh = marime.width(), marime.height()
+		if lw < 64 or lh < 64:
+			return False
+		fx, fy = lw / 1920.0, lh / 1080.0
+		inaltime = max(1, int(round(COLT_INALTIME * fy)))
+		fereastra = eWindow(desktop, COLT_Z)
+		fereastra.setFlag(eWindow.wfNoBorder)
+		try:
+			fereastra.setAnimationMode(0)
+		except Exception:
+			pass
+		eticheta = eLabel(fereastra.child())
+		# HdsRegular (aliasul semnaturii) cand s-a putut inregistra, altfel fontul obisnuit al skinului
+		eticheta.setFont(gFont(ALIAS_FONT if _font_pus[0] else "Regular", max(8, int(round(COLT_FONT * fy)))))
+		eticheta.setNoWrap(1)
+		eticheta.resize(eSize(lw, inaltime))
+		eticheta.setText(text)
+		latimeText = eticheta.calculateSize().width()
+		latime = min(lw - 2 * int(COLT_DREAPTA * fx), latimeText + 2 * int(round(COLT_MARGINE_TEXT * fx)))
+		if latimeText <= 0 or latime <= 0:
+			return False
+		fereastra.resize(eSize(latime, inaltime))
+		fereastra.move(ePoint(lw - latime - int(round(COLT_DREAPTA * fx)), lh - inaltime - int(round(COLT_JOS * fy))))
+		fereastra.setBackgroundColor(gRGB(*COLT_FUNDAL))
+		try:
+			fereastra.setCornerRadius(inaltime // 2)
+		except Exception:
+			pass
+		eticheta.move(ePoint(0, 0))
+		eticheta.resize(eSize(latime, inaltime))
+		eticheta.setHAlign(eLabel.alignCenter)
+		eticheta.setVAlign(eLabel.alignCenter)
+		eticheta.setForegroundColor(gRGB(*COLT_TEXT))
+		eticheta.setBackgroundColor(gRGB(*COLT_FUNDAL))
+		eticheta.setTransparent(1)
+		fereastra.show()
+		_colt[:] = [fereastra, eticheta]
+		desktop.paint()
+		_jurnal("textul din colt pus: %s" % text)
+		return True
+	except Exception as eroare:
+		_jurnal("textul din colt nepus: %s" % eroare)
+		return False
+
+
+def ascundeColt():
+	"""Fereastra din colt pleaca (locul ei se redeseneaza la urmatorul desen al desktopului). Nu arunca."""
+	if not _colt:
+		return
+	try:
+		_colt[0].hide()
+	except Exception as eroare:
+		_jurnal("textul din colt nu s-a ascuns: %s" % eroare)
+	del _colt[1:]     # eticheta (copilul ferestrei) intai, apoi fereastra
+	del _colt[:]
+
+
 def _ascunde():
 	try:
 		from enigma import ascundeSemnaturaPornire
 		ascundeSemnaturaPornire()
 	except Exception as eroare:
 		_jurnal("nu am putut cere redesenarea: %s" % eroare)
+	ascundeColt()
 	del _ceasuri[:]
 	del _legaturi[:]
 

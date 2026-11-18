@@ -48,6 +48,7 @@ install_PYTHON = \
 	screensaver_web.py \
 	egalizator_web.py \
 	filme_web.py \
+	flux_transcodare_web.py \
 	font_interfata_web.py \
 	forum_web.py \
 	ghid_web.py \
@@ -103,6 +104,7 @@ install_PYTHON = \
 	filme_seriale_web.py \
 	scanare_import_web.py \
 	scanare_liste_web.py \
+	liste_internet_web.py \
 	scanare_web.py \
 	setari_copie_web.py \
 	setari_web.py \
@@ -142,16 +144,19 @@ install_DATA = \
 	hds-worker.js \
 	hds-sunet.js
 
-# TV in browser, canalele MPEG-2: playerul wasm (hds-player.js, hds-worker.js, mai sus: cod propriu, GPL-2.0-only) si
-# decodorul lui, servit de tv_web.py la /tv/tv-wasm/: FFmpeg 8.1.3 (libavcodec, LGPL-2.1-or-later, fara
-# --enable-gpl) cu emscripten 6.0.9, construit gata de tv-wasm/construieste-decodor-wasm.sh din tv-wasm/hdsdec.c
-# (OpenEmbedded nu are emscripten), cu licentele lui. sha256:
-#   tv-wasm/hdsdec.wasm  099cf027855f9659157e28a26a2c3cc0e8ba46d50d387bdd2007299127ea4711
-#   tv-wasm/hdsdec.js    8688f27f8b55bada8a4e73083f01001a4753118c5a2fa62c2d149c1bf3ceb374
+# TV in browser, canalele MPEG-2 (si H.264 in browserele fara H.264 in MediaSource): playerul wasm (hds-player.js,
+# hds-worker.js, mai sus: cod propriu, GPL-2.0-only) si decodorul lui, servit de tv_web.py la /tv/tv-wasm/: FFmpeg
+# 8.1.3 (libavcodec, LGPL-2.1-or-later, fara --enable-gpl) cu emscripten 6.0.9, construit gata de
+# tv-wasm/construieste-decodor-wasm.sh din tv-wasm/hdsdec.c cu HDS_DEC_EXTRA=h264,aac (OpenEmbedded nu are
+# emscripten), cu licentele lui si lista decodoarelor din el (decodoare.txt: receptorul o citeste ca sa stie ce canale
+# merg pe playerul wasm, de pilda H.264 numai cand decodorul il are). sha256:
+#   tv-wasm/hdsdec.wasm  e835a97f572579072f36517ca9b116332e22c686149da9b0f6b449abf2d40c16
+#   tv-wasm/hdsdec.js    06803f384c5927ecba285b627e892c944772eef7856df5f3a0fb5c551192a157
 tvwasmdir = $(installdir)/tv-wasm
 tvwasm_DATA = \
 	tv-wasm/hdsdec.wasm \
 	tv-wasm/hdsdec.js \
+	tv-wasm/decodoare.txt \
 	tv-wasm/ffmpeg-licenta.txt \
 	tv-wasm/emscripten-licenta.txt \
 	tv-wasm/musl-licenta.txt \

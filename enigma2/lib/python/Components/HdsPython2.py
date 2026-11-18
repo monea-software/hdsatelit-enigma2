@@ -43,6 +43,7 @@ import io
 import os
 import re
 import struct
+import sys
 import tarfile
 import time
 import warnings
@@ -113,7 +114,7 @@ class Verdict(object):
 	cand pachetul nu are nimic pentru Python 3 (sursa care nu se compileaza, importurile): un pachet construit pentru
 	Python 3 poate avea scripturi vechi pe langa (masurat pe pachete reale, unelte/recunoastere.py)."""
 	__slots__ = ('python2', 'motive', 'dosare', 'taiat', 'python3', 'alt3', 'fisiere', 'slabe', 'altpy', 'nativ', 'traducere',
-		'dependinte', 'py_acum')
+		'dependinte', 'py_acum', 'so_fara', 'pyc_alt', 'pyc_acum', 'surse')
 
 	def __init__(self):
 		self.python2 = None
@@ -127,6 +128,16 @@ class Verdict(object):
 		self.altpy = None            # (fisierul, "3.7"): un .so legat de alta versiune de Python 3 decat a imaginii
 		self.py_acum = False         # 0.7.5: s-a vazut si un .so pentru Python-ul imaginii (dupa nume sau dupa libpython)
 		self.nativ = ''              # primul program sau biblioteca (ELF) din pachet
+		# 0.7.6 (MI5): primul modul .so (ELF) fara eticheta .cpython-3X, nelegat de libpython si nu .abi3.so (de pilda un
+		# modul Cython ca Ostende.so), oriunde in arhiva, nu numai cand e primul ELF (v.nativ): Extensii il cauta cand
+		# numele fisierului spune alt Python 3 (HdsExtensiiLucru.altPythonPachet)
+		self.so_fara = ''
+		# 0.7.5 (MI6, TODO 15.11 10:52 (pyc alt Python)): fisierele .pyc in afara lui __pycache__ (singurele pe care Python le
+		# incarca fara sursa) facute de alta versiune de Python 3: [(cale, "3.13")]; pyc_acum: unul al Python-ului imaginii;
+		# surse: caile .py din pachet (alt_python cauta sursa langa .pyc)
+		self.pyc_alt = []
+		self.pyc_acum = False
+		self.surse = set()
 		self.traducere = False       # numai semne slabe (sursa de Python 2): se instaleaza si se traduce la incarcare
 		self.dependinte = []         # pachetele Python 2 cerute in Depends (0.7.4: inlocuite la instalare cu perechile python3)
 
@@ -376,10 +387,45 @@ def _eticheta_so(nume):
 def alt_python(v):
 	""""3.7" cand pachetul are module .so facute numai pentru alt Python 3 decat al imaginii (nici unul pentru Python-ul
 	de acum, citirea neoprita la o limita), altfel ''. Un pachet cu module pentru mai multe versiuni, unul langa altul,
-	trece: la incarcare Python il alege pe al lui. Ce nu se stie nu opreste nimic."""
-	if v is None or v.python2 or v.taiat or v.py_acum or not v.altpy:
+	trece: la incarcare Python il alege pe al lui. Ce nu se stie nu opreste nimic. La fel (MI6 0.7.5) un plugin pus numai
+	ca .pyc al altui Python 3 (alt_python_pyc)."""
+	if v is None or v.python2 or v.taiat:
 		return ''
-	return v.altpy[1]
+	if v.altpy and not v.py_acum:
+		return v.altpy[1]
+	return alt_python_pyc(v)
+
+
+# primul numar magic al fiecarei versiuni de Python 3 (ca in Components/HdsAltPython.py, _MAGIC_PY3)
+_MAGIC_PY3 = ((3360, 6), (3390, 7), (3400, 8), (3420, 9), (3430, 10), (3450, 11), (3500, 12), (3550, 13), (3600, 14),
+	(3650, 15))
+_INTRARI_PLUGIN = ('plugin.pyc', '__init__.pyc')
+_MINOR_ACUM = sys.version_info[1]
+
+
+def _minor_magic(cap):
+	"""minorul Python 3 (6..15) dupa numarul magic al unui .pyc, altfel None"""
+	m = struct.unpack('<H', cap[:2])[0]
+	if not _MAGIC_PY3[0][0] <= m < 3700:
+		return None
+	minor = None
+	for inceput, v in _MAGIC_PY3:
+		if m < inceput:
+			break
+		minor = v
+	return minor
+
+
+def alt_python_pyc(v):
+	""""3.13" cand intrarea unui plugin (plugin.pyc sau __init__.pyc, in afara lui __pycache__) e compilata de alt Python
+	3 si n-are plugin.py / __init__.py langa ea, iar pachetul n-are niciun .pyc al Python-ului imaginii: pluginul nu se
+	poate incarca (IPTVPlayer cu .pyc de Python 3.13, rapoartele 399305 si 796072, SF8008). Altfel ''."""
+	if v is None or v.python2 or v.taiat or getattr(v, 'pyc_acum', False):
+		return ''
+	for cale, ver in getattr(v, 'pyc_alt', ()):
+		if cale.rsplit('/', 1)[-1] in _INTRARI_PLUGIN and cale[:-1] not in v.surse:
+			return ver
+	return ''
 
 
 def _din_data_tar(sursa, v, inceput, timp_maxim):
@@ -399,6 +445,8 @@ def _din_data_tar(sursa, v, inceput, timp_maxim):
 			if d and d not in v.dosare and len(v.dosare) < 8:
 				v.dosare.append(d)
 			nume = cale.rsplit('/', 1)[-1]
+			if nume.endswith('.py') and len(v.surse) < 4096:
+				v.surse.add(cale)
 			if _PY2_CALE.search(cale):
 				v.adauga(DOSAR, cale)
 				return
@@ -412,6 +460,13 @@ def _din_data_tar(sursa, v, inceput, timp_maxim):
 					v.python3 = True
 					if magic and cap[:4] != magic and not v.alt3:
 						v.alt3 = nume
+					if '/__pycache__/' not in cale:
+						if magic and cap[:4] == magic:
+							v.pyc_acum = True
+						elif len(v.pyc_alt) < 32:
+							minor = _minor_magic(cap)
+							if minor is not None and minor != _MINOR_ACUM:
+								v.pyc_alt.append((cale, '3.%d' % minor))
 			elif nume.endswith('.so') or '.so.' in nume:
 				minor = _eticheta_so(nume)
 				if minor is not None:
@@ -420,12 +475,15 @@ def _din_data_tar(sursa, v, inceput, timp_maxim):
 						v.py_acum = True
 					elif v.altpy is None:
 						v.altpy = (nume, '3.%d' % minor)
+				# un modul Python fara eticheta (nu o biblioteca libx.so.1, nu .abi3.so, care merge pe orice Python 3)
+				fara = not v.so_fara and minor is None and nume.endswith('.so') and not nume.endswith('.abi3.so')
 				if m.size <= _SO_OCTETI:
 					date = _citeste(t, m, _SO_OCTETI)
 					if b'libpython2.' in date:
 						v.adauga(LEGAT, nume)
 						return
 					if b'libpython3.' in date:
+						fara = False
 						v.python3 = True
 						alt = _alt_libpython3(date)
 						if alt and v.altpy is None:
@@ -434,8 +492,14 @@ def _din_data_tar(sursa, v, inceput, timp_maxim):
 							v.py_acum = True
 					if date[:4] == _ELF and not v.nativ:
 						v.nativ = nume
-				elif not v.nativ and _citeste(t, m, 4) == _ELF:
-					v.nativ = nume
+					if fara and date[:4] == _ELF:
+						v.so_fara = nume
+				elif not v.nativ or fara:
+					elf = _citeste(t, m, 4) == _ELF
+					if elf and not v.nativ:
+						v.nativ = nume
+					if elf and fara:
+						v.so_fara = nume
 			elif not v.nativ and '.' not in nume and m.size >= 52:
 				# un program fara extensie (exteplayer3, un ajutor al pluginului)
 				if _citeste(t, m, 4) == _ELF:

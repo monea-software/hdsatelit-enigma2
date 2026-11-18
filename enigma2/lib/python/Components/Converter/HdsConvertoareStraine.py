@@ -867,6 +867,13 @@ class VServiceInfo(ServiceInfo):
 	pass
 
 
+# FUR (16.11.2026): Fury-FHD 9.0 cere PumServiceInfos (SubtitlesAvailable pe bara si pe a doua bara: infobar3/4, secondinfobar3/4),
+# un convertor pe care nu-l aduce si care nu e in nicio imagine; aceleasi tipuri ca ServiceInfo, deci iconita subtitrarilor se vede
+# si omul nu mai primeste mesajul ca tema are elemente pe care receptorul nu le poate afisa (Wlad, forum 948, raportul 541919)
+class PumServiceInfos(ServiceInfo):
+	pass
+
+
 class StreamInfo(Converter, object):
 	"""Felul serviciului: Stream pentru un flux, altfel gol; boolean: e flux."""
 

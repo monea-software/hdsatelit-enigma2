@@ -26,10 +26,62 @@
 #   Tot la start, la fiecare pornire: urmarirea pasilor pornirii si raportul unei porniri ratate (/usr/bin/hds-raport.sh
 #     urmareste, tools/hds-raport.sh.in din enigma2), in fundal, cand scriptul exista (o imagine fara el: nimic).
 #     HDS_RAPORT_SINE: numai pentru probele de pe PC.
+#   Tot la start, dupa o oprire necurata (aceeasi conditie ca la copie): un rand in hds-caderi.log, "pornire dupa
+#     oprire brusca", cu ce se stie fara ghicit (rand_oprire_brusca, mai jos). Asistenta 430032 (15.11.2026): doua
+#     reporniri dupa instalari din panoul unui plugin strain n-au lasat nimic in hds-caderi.log, deci nu se vedea ca
+#     receptorul s-a oprit brusc si nici ce facea atunci.
 
 D=${HDS_JURNAL_DOSAR:-/home/root/logs}
 SEMN=$D/.oprire-curata
 CADERE=$D/messages.cadere
+CADERI=$D/hds-caderi.log
+
+# Randurile scoase din jurnale: fara caractere de control (si fara culorile nucleului, "[1;32m"), fara utilizator si
+# parola din adrese (://nume:parola@), cel mult 160 de semne pe rand.
+curata() {
+	sed -e 's/\[[0-9;]*m//g' -e 's#://[^/@ ]*@#://#g' | cut -c1-160
+}
+
+# Un rand in hds-caderi.log la pornirea dupa o oprire necurata, cu ce lasa jurnalele, fara ghicit:
+#   - ultimul rand din messages (cu ora jurnalului sistemului; dupa un reset coada poate fi goala, deci ultimul rand cu
+#     ora din ultimii 64 KiB);
+#   - ultimul rand al interfetei si ultima comanda opkg/Console pornita de ea ([Console] executing, [Ipkg] executing)
+#     din hds-interfata.log: dupa un reset coada fisierului poate avea bucati vechi, deci randul cu ora cea mai mare
+#     din ultimii 256 KiB;
+#   - ultima lucrare din Extensii (hds-extensii.log, "---- ..."), cu codul ei sau "neterminata" cand dupa ea nu e
+#     "---- cod".
+# Cauza resetului nu se pune: nucleul placilor noastre nu o da (SF8008 si V20, nucleul 4.4.35: watchdog0 al lui
+# sp805-wdt fara bootstatus, fara pstore; vazut pe receptor 15.11.2026). Ora randului e cea salvata la oprire
+# (S01fake-hwclock), ca in antetul lui messages.cadere; ceasul din retea vine dupa. Totul tine cateva citiri de cozi.
+rand_oprire_brusca() {
+	m=$(tail -c 65536 "$D/messages" 2>/dev/null | tr -d '\000-\010\013-\037\177' |
+		awk '/^[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] / { r = $0 } END { print r }' | curata)
+	f=$D/hds-interfata.log
+	[ -s "$f" ] || f=$D/hds-interfata.log.1
+	i=""
+	c=""
+	if [ -s "$f" ]; then
+		i=$(tail -c 262144 "$f" 2>/dev/null | tr -d '\000-\010\013-\037\177' |
+			awk '/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z / {
+				t = substr($0, 1, 20)
+				if (t >= ti) { ti = t; ri = $0 }
+				if ($0 ~ /\[(Console|Ipkg)\] executing/ && t >= tc) { tc = t; rc = $0 }
+			} END { print ri; print rc }' | curata)
+		c=$(printf '%s\n' "$i" | sed -n 2p)
+		i=$(printf '%s\n' "$i" | sed -n 1p)
+	fi
+	e=$(tail -c 65536 "$D/hds-extensii.log" 2>/dev/null | tr -d '\000-\010\013-\037\177' |
+		awk '$3 == "----" && $1 ~ /^[0-9][0-9][0-9][0-9]-/ {
+			if ($4 == "cod") { if (r != "" && cod == "") cod = $5 }
+			else { r = substr($0, 1, 160); cod = "" }
+		} END { if (r != "") print r (cod == "" ? " (neterminata)" : " (cod " cod ")") }' | curata)
+	r="$(date '+%Y-%m-%d %H:%M:%S') pornire dupa oprire brusca (oprirea de dinainte n-a fost curata: curentul, o repornire dura sau nucleul; ora salvata, poate fi inca nepotrivita; jurnalul sistemului de dinainte in messages.cadere)"
+	[ -n "$m" ] && r="$r; ultimul rand din messages: $m"
+	[ -n "$i" ] && r="$r; ultimul rand al interfetei: $i"
+	[ -n "$c" ] && r="$r; ultima comanda opkg/Console: $c"
+	[ -n "$e" ] && r="$r; ultima lucrare din Extensii: $e"
+	echo "$r" >> "$CADERI"
+}
 
 case "$1" in
 start)
@@ -57,6 +109,7 @@ start)
 			done
 		} > "$CADERE.nou" 2> /dev/null && mv -f "$CADERE.nou" "$CADERE"
 		rm -f "$CADERE.nou"
+		rand_oprire_brusca 2> /dev/null
 		if [ -x /sbin/hds-mountall ]; then
 			# Pe modelele cu media in fundal, salvam numai discul jurnalului.
 			sync -f "$D"

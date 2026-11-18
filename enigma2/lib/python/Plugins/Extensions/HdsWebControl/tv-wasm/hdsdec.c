@@ -4,7 +4,9 @@
 // hdsdec.c: puntea dintre playerul wasm al paginii "TV in browser" (hds-worker.js) si decodoarele din libavcodec
 // (FFmpeg 8.1.3, LGPL-2.1-or-later, construit fara --enable-gpl). Compilata la WebAssembly cu emscripten 6.0.9 de
 // construieste-decodor-wasm.sh (de langa acest fisier); iesirea, hdsdec.js si hdsdec.wasm, sta gata facuta in imagine
-// (OpenEmbedded nu are emscripten). Decodoarele din imagine: mpeg1video, mpeg2video, mp2float, mp3float, ac3.
+// (OpenEmbedded nu are emscripten). Decodoarele din imagine: mpeg1video, mpeg2video, mp2float, mp3float, ac3, h264 si
+// aac (construit cu HDS_DEC_EXTRA=h264,aac; aceeasi punte: parserul lor taie cadrele, decodorul da imaginea yuv420p si
+// sunetul float planar, ca la MPEG-2 si AC-3). Lista lor sta in decodoare.txt, langa hdsdec.wasm.
 //
 // Ce face: primeste bucati de flux elementar (continutul PES-urilor, cu PTS-ul lor in unitati de 90 kHz, deja
 // desfacut in timp continuu de hds-worker.js), le taie in cadre cu parserul libavcodec, le decodeaza si da fiecare
@@ -102,7 +104,8 @@ static int deschide_contextul(Dec *d)
 	return 0;
 }
 
-// nume: numele decodorului din libavcodec ("mpeg2video", "mpeg1video", "mp2float", "mp3float", "ac3")
+// nume: numele decodorului din libavcodec ("mpeg2video", "mpeg1video", "mp2float", "mp3float", "ac3", si "h264", "aac"
+// cand decodorul le are); NULL cand decodorul nu il are (hds-worker.js afla asa ce poate reda)
 EMSCRIPTEN_KEEPALIVE Dec *dec_open(const char *nume, int stereo)
 {
 	const AVCodec *codec = avcodec_find_decoder_by_name(nume);

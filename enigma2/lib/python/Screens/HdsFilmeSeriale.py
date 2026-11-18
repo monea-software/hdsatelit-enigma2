@@ -84,6 +84,12 @@ def textOra(secunde):
 	return "%d:%02d:%02d" % (s // 3600, s % 3600 // 60, s % 60) if s >= 3600 else "%d:%02d" % (s // 60, s % 60)
 
 
+def textCale():
+	"""Firul de sus al celor trei ecrane, in limba receptorului (FSV, 15.11.2026: ca text fix in skin ramanea „Filme și seriale” in
+	romana si pe un receptor in franceza sau engleza; numele ecranului e deja tradus)."""
+	return "HD SATELIT  ›  " + _("Filme și seriale")
+
+
 def randMeta(d):
 	parti = [d.get("an") or "", V.textDurata(d.get("durata") or 0), textNota(d.get("nota") or ""), d.get("gen") or "",
 		d.get("varsta") or ""]
@@ -139,10 +145,13 @@ class _Postere(object):
 				font=1, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=t.get("nume", ""), color=C_TEXT, color_sel=C_TEXT))
 		if progres > 0:
 			e.append(MultiContentEntryProgress(pos=(x0, y0 + self.ph - int(8 * s)), size=(self.pl, int(8 * s)),
-				percent=int(progres * 100), borderWidth=0, foreColor=C_VERDE if progres >= 1 else C_ALES, backColor=0x000000))
+				percent=int(progres * 100), borderWidth=0, foreColor=C_VERDE if progres >= 1 else C_ALES,
+				foreColorSelected=C_VERDE if progres >= 1 else C_ALES, backColor=0x000000, backColorSelected=0x000000))
 		if self.cu_titlu:
 			sub = t.get("sub") or ""
-			e.append(MultiContentEntryText(pos=(0, self.ph + 2 * y0 + int(4 * s)), size=(self.l, self.h - self.ph - 2 * y0 - int(4 * s)),
+			# cu marginea posterului de o parte si de alta: titlurile vecine nu se mai lipesc intr-un singur sir (FSV, 15.11.2026);
+			# cel ales, daca nu incape, deruleaza (lista orizontala)
+			e.append(MultiContentEntryText(pos=(x0, self.ph + 2 * y0 + int(4 * s)), size=(self.l - 2 * x0, self.h - self.ph - 2 * y0 - int(4 * s)),
 				font=0, flags=RT_HALIGN_CENTER | RT_VALIGN_TOP | RT_WRAP, text=sub or t.get("nume", ""), color=C_TEXT2, color_sel=C_TEXT))
 		return e
 
@@ -169,22 +178,22 @@ class HdsFilmeSeriale(Screen):
 	skin = """
 	<screen name="HdsFilmeSeriale" position="0,0" size="1920,1080" resolution="1920,1080" flags="wfNoBorder" backgroundColor="#000b1020" title="Filme și seriale">
 		<widget name="fundal" position="0,0" size="1920,1080" scale="1" zPosition="0" />
-		<eLabel text="HD SATELIT  ›  Filme și seriale" position="96,40" size="520,50" font="Bold;32" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
+		<widget name="cale" position="96,40" size="520,50" font="Bold;32" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
 		<widget name="surse" position="624,38" size="940,54" zPosition="2" listOrientation="horizontal" itemWidth="235" backgroundColor="#ff000000" transparent="1" scrollbarMode="showNever" />
-		<widget name="sursa" position="96,92" size="1500,28" font="Regular;22" noWrap="1" foregroundColor="#00aeb9cc" transparent="1" zPosition="2" />
+		<widget name="sursa" position="96,92" size="1500,28" font="Regular;22" noWrap="1" foregroundColor="#00aeb9cc" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
 		<widget source="global.CurrentTime" render="Label" position="1580,36" size="244,58" font="Bold;40" halign="right" valign="center" foregroundColor="#00f2f4f8" backgroundColor="#0010162a" zPosition="2">
 			<convert type="ClockToText">Default</convert>
 		</widget>
-		<widget name="titlu" position="96,120" size="1500,72" font="Bold;56" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
-		<widget name="meta" position="96,196" size="1500,40" font="Regular;28" noWrap="1" foregroundColor="#00c9d2e3" transparent="1" zPosition="2" />
-		<widget name="descriere" position="96,240" size="1180,76" font="Regular;26" foregroundColor="#00c9d2e3" transparent="1" zPosition="2" />
+		<widget name="titlu" position="96,120" size="1500,72" font="Bold;56" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="meta" position="96,196" size="1500,40" font="Regular;28" noWrap="1" foregroundColor="#00c9d2e3" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="descriere" position="96,240" size="1180,76" font="Regular;26" foregroundColor="#00c9d2e3" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
 		<widget name="file" position="96,326" size="880,56" zPosition="2" listOrientation="horizontal" itemWidth="220" backgroundColor="#ff000000" transparent="1" scrollbarMode="showNever" />
-		<widget name="stare" position="1000,334" size="824,40" font="Regular;24" halign="right" foregroundColor="#00f1c40f" transparent="1" zPosition="3" />
-		<widget name="eticheta0" position="96,396" size="1500,38" font="Bold;28" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
+		<widget name="stare" position="1000,334" size="824,40" font="Regular;24" halign="right" foregroundColor="#00f1c40f" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="3" />
+		<widget name="eticheta0" position="96,396" size="1500,38" font="Bold;28" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
 		<widget name="rand0" position="88,438" size="1744,300" zPosition="2" listOrientation="horizontal" itemWidth="170" backgroundColor="#ff000000" transparent="1" scrollbarMode="showNever" />
-		<widget name="eticheta1" position="96,744" size="1500,38" font="Bold;28" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
+		<widget name="eticheta1" position="96,744" size="1500,38" font="Bold;28" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
 		<widget name="rand1" position="88,786" size="1744,244" zPosition="2" listOrientation="horizontal" itemWidth="170" backgroundColor="#ff000000" transparent="1" scrollbarMode="showNever" />
-		<widget name="legenda" position="96,1034" size="1728,38" font="Regular;24" foregroundColor="#00aeb9cc" transparent="1" zPosition="3" />	</screen>
+		<widget name="legenda" position="96,1034" size="1728,38" font="Regular;24" foregroundColor="#00aeb9cc" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="3" />	</screen>
 	"""
 
 	def __init__(self, session, sursa_id=None, tip=V.FILME):
@@ -209,6 +218,7 @@ class HdsFilmeSeriale(Screen):
 		self["surse"] = MenuList([], content=eListboxPythonMultiContent)
 		for n in ("sursa", "titlu", "meta", "descriere", "eticheta0", "eticheta1", "stare", "legenda"):
 			self[n] = Label("")
+		self["cale"] = Label(textCale())
 		self["rand0"] = MenuList([], content=eListboxPythonMultiContent)
 		self["rand1"] = MenuList([], content=eListboxPythonMultiContent)
 		self["legenda"].setText(_("OK Deschide   ·   Verde Redă   ·   Galben Caută   ·   Albastru Favorite   ·   MENU Sursa   ·   EXIT Ieșire"))
@@ -326,7 +336,7 @@ class HdsFilmeSeriale(Screen):
 		fav = [self._dinPozitii(k, r) for k, r in Z.favorite(sid) if (r.get("tip") or V.FILME) == self.tip]
 		if fav:
 			self.randuri.append(_Rand("favorite", _(T_FAVORITE), titluri=fav))
-		if V.activ("recente"):
+		if V.activ("recente") and not getattr(self.src, "fara_recente", False):   # 0.7.7 (FLM2): un playlist nu are date
 			self.randuri.append(_Rand("recente", _(T_RECENTE)))
 		self._categorii = _Rand("categorii", "")
 		self._categorii.lucrare = V.cere("categorii", sid, self.tip)
@@ -836,19 +846,19 @@ class HdsFilmPagina(Screen):
 	skin = """
 	<screen name="HdsFilmPagina" position="0,0" size="1920,1080" resolution="1920,1080" flags="wfNoBorder" backgroundColor="#000b1020" title="Film">
 		<widget name="fundal" position="0,0" size="1920,1080" scale="1" zPosition="0" />
-		<eLabel text="HD SATELIT  ›  Filme și seriale" position="96,40" size="900,50" font="Bold;32" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
+		<widget name="cale" position="96,40" size="900,50" font="Bold;32" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
 		<widget source="global.CurrentTime" render="Label" position="1580,36" size="244,58" font="Bold;40" halign="right" valign="center" foregroundColor="#00f2f4f8" backgroundColor="#0010162a" zPosition="2">
 			<convert type="ClockToText">Default</convert>
 		</widget>
 		<widget name="poster" position="96,330" size="260,390" zPosition="2" />
-		<widget name="titlu" position="396,250" size="1430,76" font="Bold;56" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
-		<widget name="meta" position="396,330" size="1430,42" font="Regular;30" noWrap="1" foregroundColor="#00c9d2e3" transparent="1" zPosition="2" />
-		<widget name="descriere" position="396,384" size="1260,170" font="Regular;28" foregroundColor="#00c9d2e3" transparent="1" zPosition="2" />
-		<widget name="oameni" position="396,562" size="1260,84" font="Regular;26" foregroundColor="#00aeb9cc" transparent="1" zPosition="2" />
-		<widget name="piste" position="396,652" size="1430,40" font="Regular;26" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
+		<widget name="titlu" position="396,250" size="1430,76" font="Bold;56" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="meta" position="396,330" size="1430,42" font="Regular;30" noWrap="1" foregroundColor="#00c9d2e3" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="descriere" position="396,384" size="1260,170" font="Regular;28" foregroundColor="#00c9d2e3" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="oameni" position="396,562" size="1260,84" font="Regular;26" foregroundColor="#00aeb9cc" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="piste" position="396,652" size="1430,40" font="Regular;26" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
 		<widget name="butoane" position="396,712" size="1430,84" zPosition="2" listOrientation="horizontal" itemWidth="430" backgroundColor="#ff000000" transparent="1" scrollbarMode="showNever" />
-		<widget name="stare" position="396,812" size="1430,40" font="Regular;24" foregroundColor="#00f1c40f" transparent="1" zPosition="2" />
-		<widget name="legenda" position="96,1034" size="1728,38" font="Regular;24" foregroundColor="#00aeb9cc" transparent="1" zPosition="3" />
+		<widget name="stare" position="396,812" size="1430,40" font="Regular;24" foregroundColor="#00f1c40f" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="legenda" position="96,1034" size="1728,38" font="Regular;24" foregroundColor="#00aeb9cc" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="3" />
 	</screen>
 	"""
 
@@ -860,6 +870,7 @@ class HdsFilmPagina(Screen):
 		self["poster"] = Pixmap()
 		for n in ("titlu", "meta", "descriere", "oameni", "piste", "stare", "legenda"):
 			self[n] = Label("")
+		self["cale"] = Label(textCale())
 		self["butoane"] = MenuList([], content=eListboxPythonMultiContent)
 		self["legenda"].setText(_("OK Alege   ·   Verde Redă   ·   Albastru Favorite   ·   EXIT Înapoi"))
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
@@ -906,7 +917,7 @@ class HdsFilmPagina(Screen):
 		d = self.d or {}
 		s = self.scara
 		for nume, adresa, l, h, fel in (("poster", d.get("poster") or self.t.get("poza"), int(260 * s), int(390 * s), "poster"),
-				("fundal", d.get("fundal") or d.get("poster"), 960, 540, "fundal")):
+				("fundal", d.get("fundal") or d.get("poster"), 960, 540, "fundal_pagina")):
 			cale = P.cere(adresa, l, h, fel) if adresa else ""
 			if cale and getattr(self, "_c" + nume, None) != cale:
 				setattr(self, "_c" + nume, cale)
@@ -957,7 +968,8 @@ class HdsFilmPagina(Screen):
 					flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, text=text, color=C_TEXT2, color_sel=C_TEXT)]
 			if fel == "continua" and d:
 				e.append(MultiContentEntryProgress(pos=(int(16 * s), int(72 * s)), size=(lat - int(48 * s), int(6 * s)),
-					percent=int(min(1.0, float(poz) / d) * 100), borderWidth=0, foreColor=C_VERDE, backColor=C_FOND))
+					percent=int(min(1.0, float(poz) / d) * 100), borderWidth=0, foreColor=C_VERDE, foreColorSelected=C_VERDE,
+					backColor=C_FOND, backColorSelected=C_FOND))
 			intrari.append(e)
 		i = self["butoane"].getSelectionIndex() if self["butoane"].list else 0
 		self["butoane"].setList(intrari)
@@ -1001,19 +1013,19 @@ class HdsSerialPagina(Screen):
 	skin = """
 	<screen name="HdsSerialPagina" position="0,0" size="1920,1080" resolution="1920,1080" flags="wfNoBorder" backgroundColor="#000b1020" title="Serial">
 		<widget name="fundal" position="0,0" size="1920,1080" scale="1" zPosition="0" />
-		<eLabel text="HD SATELIT  ›  Filme și seriale" position="96,40" size="900,50" font="Bold;32" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
+		<widget name="cale" position="96,40" size="900,50" font="Bold;32" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
 		<widget source="global.CurrentTime" render="Label" position="1580,36" size="244,58" font="Bold;40" halign="right" valign="center" foregroundColor="#00f2f4f8" backgroundColor="#0010162a" zPosition="2">
 			<convert type="ClockToText">Default</convert>
 		</widget>
-		<widget name="titlu" position="60,110" size="1400,70" font="Bold;52" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
-		<widget name="meta" position="60,184" size="1400,40" font="Regular;28" noWrap="1" foregroundColor="#00c9d2e3" transparent="1" zPosition="2" />
-		<widget name="descriere" position="60,230" size="1300,120" font="Regular;26" foregroundColor="#00c9d2e3" transparent="1" zPosition="2" />
+		<widget name="titlu" position="60,110" size="1400,70" font="Bold;52" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="meta" position="60,184" size="1400,40" font="Regular;28" noWrap="1" foregroundColor="#00c9d2e3" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="descriere" position="60,230" size="1300,120" font="Regular;26" foregroundColor="#00c9d2e3" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
 		<widget name="sezoane" position="52,360" size="1816,56" zPosition="2" listOrientation="horizontal" itemWidth="200" backgroundColor="#ff000000" transparent="1" scrollbarMode="showNever" />
 		<widget name="episoade" position="52,440" size="1816,330" zPosition="2" listOrientation="horizontal" itemWidth="360" backgroundColor="#ff000000" transparent="1" scrollbarMode="showNever" />
-		<widget name="episod" position="60,790" size="1500,40" font="Bold;30" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" zPosition="2" />
-		<widget name="episodText" position="60,836" size="1500,150" font="Regular;26" foregroundColor="#00c9d2e3" transparent="1" zPosition="2" />
-		<widget name="stare" position="1240,790" size="620,40" font="Regular;24" halign="right" foregroundColor="#00f1c40f" transparent="1" zPosition="3" />
-		<widget name="legenda" position="60,1036" size="1800,36" font="Regular;22" foregroundColor="#00aeb9cc" transparent="1" zPosition="3" />
+		<widget name="episod" position="60,790" size="1500,40" font="Bold;30" noWrap="1" foregroundColor="#00f2f4f8" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="episodText" position="60,836" size="1500,150" font="Regular;26" foregroundColor="#00c9d2e3" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="2" />
+		<widget name="stare" position="1240,790" size="620,40" font="Regular;24" halign="right" foregroundColor="#00f1c40f" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="3" />
+		<widget name="legenda" position="60,1036" size="1800,36" font="Regular;22" foregroundColor="#00aeb9cc" transparent="1" shadowColor="#000b1020" shadowOffset="-2,-2" zPosition="3" />
 	</screen>
 	"""
 
@@ -1027,6 +1039,7 @@ class HdsSerialPagina(Screen):
 		self["fundal"] = Pixmap()
 		for n in ("titlu", "meta", "descriere", "episod", "episodText", "stare", "legenda"):
 			self[n] = Label("")
+		self["cale"] = Label(textCale())
 		self["sezoane"] = MenuList([], content=eListboxPythonMultiContent)
 		self["episoade"] = MenuList([], content=eListboxPythonMultiContent)
 		self["legenda"].setText(_("OK Redă   ·   SUS Sezoanele   ·   Galben Sezonul următor   ·   Albastru Favorite   ·   EXIT Înapoi"))

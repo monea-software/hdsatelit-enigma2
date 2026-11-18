@@ -84,6 +84,150 @@ _LACATE = {}
 _LACAT_MEMORIE = threading.Lock()
 _ceas = time.monotonic
 _dormi = time.sleep
+_perete = time.time
+
+# 0.7.7 (DRG, darog69, forum 1455 #2572: "429 Too Many Requests" de la Open-Meteo pe ambele receptoare, care ies in internet
+# pe aceeasi adresa). Limitele gratuite sunt pe adresa: 600 de cereri pe minut, 5.000 pe ora, 10.000 pe zi, iar o cerere cu
+# peste 10 variabile se socoteste ca mai multe (cererea noastra are 37, deci ~3,7). Memoria de mai sus tine cererile rare,
+# dar era numai in procesul interfetei (o repornire a interfetei cerea din nou) si dupa un refuz se incerca iar la fiecare
+# minut. Acum:
+# - dupa un refuz al serviciului (HTTP 429 sau 503) nu mai pleaca nicio cerere de prognoza pana la sfarsitul pauzei:
+#   Retry-After cand vine; altfel dupa motivul din raspuns (minutul, ora sau ziua depasite); altfel 15, 30, 60, 120 de
+#   minute; refuzurile la rand lungesc pauza. In pauza se da raspunsul bun cel mai nou (sub _VECHI_S), altfel eroarea;
+# - raspunsurile bune si pauza se tin si in _FISIER_MEMORIE (in memoria RAM a receptorului, /var/volatile), deci raman
+#   peste repornirile interfetei (nu si peste repornirea receptorului). Fara dosarul acela (probele de pe PC) nu se scrie.
+_FISIER_MEMORIE = "/var/volatile/tmp/hds-vremea-memorie.json"
+_PAUZA_INCEPUT_S = 15 * 60
+_PAUZA_TREPTE = 3
+_PAUZA_MAX_S = 24 * 60 * 60
+_PAUZA_MIN_S = 60
+_LOCURI_PE_DISC = 4
+_pauza = {"pana": 0.0, "pas": 0, "motiv": ""}
+_disc = {"citit": False}
+_LACAT_DISC = threading.Lock()
+
+
+class PauzaServiciu(ValueError):
+	"""Cererea nu pleaca: serviciul meteo a refuzat adresa receptorului si pauza nu s-a terminat."""
+	_hds_scris = True
+
+
+def _corpEroare(esec):
+	"""Corpul raspunsului unei erori HTTP (Open-Meteo pune motivul acolo), citit o singura data."""
+	if not hasattr(esec, "_hds_corp"):
+		corp = ""
+		if callable(getattr(esec, "read", None)):
+			try:
+				corp = " ".join(esec.read(300).decode("utf-8", "replace").split())
+			except Exception:
+				corp = ""
+		try:
+			esec._hds_corp = corp
+		except Exception:
+			return corp
+	return esec._hds_corp
+
+
+def _refuzServiciu(esec):
+	return getattr(esec, "code", None) in (429, 503)
+
+
+def _retryAfter(esec):
+	try:
+		valoare = (getattr(esec, "headers", None) or {}).get("Retry-After")
+		return int(str(valoare).strip()) if valoare is not None else None
+	except (TypeError, ValueError, AttributeError):
+		return None
+
+
+def durataPauzei(retry_after, motiv, pas, perete):
+	"""Secundele pauzei dupa al `pas`-lea refuz la rand (0 = primul). `perete`: ora de acum (time.time)."""
+	motiv = (motiv or "").lower()
+	trepte = _PAUZA_INCEPUT_S * (2 ** min(pas, _PAUZA_TREPTE))
+	if retry_after is not None and retry_after > 0:
+		secunde = retry_after
+	elif "minut" in motiv:
+		secunde = 65
+	elif "hour" in motiv:
+		secunde = 3600 - int(perete) % 3600 + 60
+	elif "daily" in motiv or "day" in motiv:
+		secunde = 86400 - int(perete) % 86400 + 120
+	else:
+		secunde = trepte
+	if pas >= 2:
+		# refuzat iar dupa pauza ceruta: serviciul numara altfel decat credem; nu-l mai intrebam des
+		secunde = max(secunde, _PAUZA_INCEPUT_S * (2 ** min(pas - 2, _PAUZA_TREPTE)))
+	return max(_PAUZA_MIN_S, min(int(secunde), _PAUZA_MAX_S))
+
+
+def _punePauza(esec):
+	motiv = _corpEroare(esec)
+	secunde = durataPauzei(_retryAfter(esec), motiv, _pauza["pas"], _perete())
+	_pauza.update(pana=_ceas() + secunde, pas=_pauza["pas"] + 1, motiv=motiv[:200])
+	print("[Weatherinfo] serviciul meteo a refuzat cererea (HTTP %s%s); urmatoarea cerere de prognoza peste %d minute" % (
+		getattr(esec, "code", "?"), (": " + motiv[:120]) if motiv else "", (secunde + 59) // 60))
+	return secunde
+
+
+def _inPauza():
+	return _ceas() < _pauza["pana"]
+
+
+def _citesteDisc():
+	"""O singura data: raspunsurile bune si pauza din _FISIER_MEMORIE (scrise de interfata de dinainte de repornire)."""
+	with _LACAT_DISC:
+		if _disc["citit"]:
+			return
+		_disc["citit"] = True
+		try:
+			import os
+			if not os.path.isdir(os.path.dirname(_FISIER_MEMORIE)) or not os.path.isfile(_FISIER_MEMORIE):
+				return
+			with open(_FISIER_MEMORIE, "r", encoding="utf-8") as f:
+				date = json.load(f)
+			trecut = _perete() - float(date.get("scris", 0))
+			if not 0 <= trecut < _VECHI_S:
+				return
+			acum = _ceas()
+			pauza = date.get("pauza") or {}
+			ramas = float(pauza.get("ramas", 0)) - trecut
+			if ramas > 0:
+				_pauza.update(pana=acum + min(ramas, _PAUZA_MAX_S), pas=int(pauza.get("pas", 0)), motiv=str(pauza.get("motiv", ""))[:200])
+			for loc in date.get("locuri") or []:
+				lat, lon, units = loc["cheie"]
+				varsta = float(loc["varsta"]) + trecut
+				if not 0 <= varsta < _VECHI_S or not isinstance(loc.get("date"), dict):
+					continue
+				cheie = (round(float(lat), 4), round(float(lon), 4), str(units))
+				with _LACAT_MEMORIE:
+					intrare = _MEMORIE.setdefault(cheie, {"date": None, "primit": 0.0, "raspuns": None})
+					if intrare["date"] is None:
+						intrare["date"], intrare["primit"] = loc["date"], acum - varsta
+		except Exception as e:
+			print("[Weatherinfo] memoria de pe disc: %s" % type(e).__name__)
+
+
+def _scrieDisc():
+	"""Raspunsurile bune (cele mai noi _LOCURI_PE_DISC locuri) si pauza, in _FISIER_MEMORIE; scrierea e atomica."""
+	try:
+		import os
+		dosar = os.path.dirname(_FISIER_MEMORIE)
+		if not os.path.isdir(dosar):
+			return
+		acum = _ceas()
+		with _LACAT_MEMORIE:
+			locuri = sorted(((k, dict(v)) for k, v in _MEMORIE.items() if v.get("date") is not None),
+				key=lambda kv: -kv[1]["primit"])[:_LOCURI_PE_DISC]
+		date = {"scris": _perete(), "pauza": {"ramas": max(0.0, _pauza["pana"] - acum), "pas": _pauza["pas"],
+			"motiv": _pauza["motiv"]}, "locuri": [{"cheie": list(k), "varsta": max(0.0, acum - v["primit"]), "date": v["date"]}
+			for k, v in locuri]}
+		with _LACAT_DISC:
+			nou = _FISIER_MEMORIE + ".nou"
+			with open(nou, "w", encoding="utf-8") as f:
+				json.dump(date, f, separators=(",", ":"))
+			os.replace(nou, _FISIER_MEMORIE)
+	except Exception as e:
+		print("[Weatherinfo] memoria pe disc: %s" % type(e).__name__)
 
 
 def _lacatLoc(cheie):
@@ -260,17 +404,18 @@ def _scrieEroarea(esec):
 	coordonatele orasului) si locul din cod. Pluginurile (OAWeather) tin numai numele tipului si nu-l scriu, asa ca fara
 	acest rand cauza nu se vedea nici in asistenta (darog69, AX HD51, forum 479 #2242: „paused 5 mins” la fiecare
 	cerere, fara motiv). O greseala de aici nu schimba rezultatul cererii."""
+	if getattr(esec, "_hds_scris", False):
+		# pauza dupa refuzul serviciului: motivul s-a scris o data, la refuz (_punePauza)
+		return
 	try:
 		import traceback
 		mesaj = " ".join(str(esec).split())
 		if "?" in mesaj:
 			mesaj = mesaj.split("?", 1)[0] + "?..."
-		if callable(getattr(esec, "read", None)):
-			# HTTPError: Open-Meteo spune motivul in corpul raspunsului ({"error": true, "reason": "..."})
-			try:
-				mesaj += " | " + " ".join(esec.read(300).decode("utf-8", "replace").split())
-			except Exception:
-				pass
+		# HTTPError: Open-Meteo spune motivul in corpul raspunsului ({"error": true, "reason": "..."})
+		corp = _corpEroare(esec)
+		if corp:
+			mesaj += " | " + corp
 		loc = traceback.extract_tb(esec.__traceback__)[-1] if esec.__traceback__ else None
 		unde = " (%s:%s %s)" % (loc.filename.replace("\\", "/").rsplit("/", 1)[-1], loc.lineno, loc.name) if loc else ""
 		print("[Weatherinfo] eroare: %s: %s%s" % (type(esec).__name__, mesaj[:300], unde))
@@ -642,8 +787,10 @@ class Weatherinfo:
 		secunde si niciuna cat raspunsul bun e mai nou de _PROASPAT_S. Ruleaza pe firul de lucru (poate astepta)."""
 		lat, lon = _coordonate(latitude, longitude)
 		cheie = (round(lat, 4), round(lon, 4), units)
+		_citesteDisc()
 		with _lacatLoc(cheie):
-			intrare = _MEMORIE.setdefault(cheie, {"date": None, "primit": 0.0, "raspuns": None})
+			with _LACAT_MEMORIE:
+				intrare = _MEMORIE.setdefault(cheie, {"date": None, "primit": 0.0, "raspuns": None})
 			if intrare["raspuns"] is not None:
 				asteapta = intrare["raspuns"] + _SPATIERE_S - _ceas()
 				if asteapta > 0:
@@ -652,10 +799,20 @@ class Weatherinfo:
 			intrare["raspuns"] = acum
 			if intrare["date"] is not None and acum - intrare["primit"] < _PROASPAT_S:
 				return copy.deepcopy(intrare["date"])
+			if _inPauza():
+				# 0.7.7: serviciul a refuzat adresa; nicio cerere pana la sfarsitul pauzei (vezi _FISIER_MEMORIE mai sus)
+				if intrare["date"] is not None and acum - intrare["primit"] < _VECHI_S:
+					return copy.deepcopy(intrare["date"])
+				raise PauzaServiciu("serviciul meteo a limitat cererile acestei adrese; incearca singur din nou peste %d minute"
+					% ((_pauza["pana"] - acum + 59) // 60))
 			try:
 				rezultat = self._cereVremea(lat, lon, units)
 			except Exception as esec:
 				intrare["raspuns"] = _ceas()
+				if _refuzServiciu(esec):
+					_punePauza(esec)
+					_scrieDisc()
+					esec._hds_scris = True
 				if intrare["date"] is not None and _ceas() - intrare["primit"] < _VECHI_S:
 					_scrieEroarea(esec)
 					print("[Weatherinfo] raspunsul de acum %d minute, din memorie" % ((_ceas() - intrare["primit"]) // 60))
@@ -663,6 +820,8 @@ class Weatherinfo:
 				raise
 			intrare["date"], intrare["primit"] = rezultat, _ceas()
 			intrare["raspuns"] = intrare["primit"]
+			_pauza.update(pas=0, motiv="")
+			_scrieDisc()
 			return copy.deepcopy(rezultat)
 
 	def _cereVremea(self, lat, lon, units="metric"):

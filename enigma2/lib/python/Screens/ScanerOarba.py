@@ -6,9 +6,12 @@
 Scris de la zero.
 
 Cipul tunerului cauta singur transponderele pe toata banda, fara frecvente stiute dinainte (programul nostru
-hds-blindscan). Ecranul are doua fete: alegerile (banda, polarizarile, rata minima; satelitul e cel pe care sta antena
-acum, programul nu o misca) si cautarea (progresul si lista: fiecare transponder cunoscut al satelitului cu 'găsit' /
-'se caută', cele noi cu 'nou'), apoi 'Scanează canalele' = un ServiceScan obisnuit pe cunoscute si noi.
+hds-blindscan). Ecranul are doua fete: alegerile (satelitul, banda, polarizarile, rata minima; satelitul e implicit cel
+pe care sta antena acum, iar din 0.7.7 se alege cu Stanga/Dreapta dintre cei la care se ajunge fara sa se miste antena:
+comutatorul DiSEqC / toneburst il trimite programul; la antena cu motor si satelitii la care se poate roti, iar
+antena se roteste intai) si cautarea (progresul si lista: fiecare
+transponder cunoscut al satelitului cu 'găsit' / 'se caută', cele noi cu 'nou'), apoi 'Scanează canalele' = un
+ServiceScan obisnuit pe cunoscute si noi.
 
 Tot lucrul e in Components/HdsCautareOarba.py: o singura cautare pe receptor, aceeasi pe care o vede si o porneste
 pagina web /oarba; ecranul doar o arata. EXIT in timpul cautarii o opreste curat (dupa bucata de banda in curs).
@@ -24,6 +27,8 @@ from Components import HdsCautareOarba as O
 from Components.HdsCursorLista import pune_randurile
 
 RAND_CAUTA = '_cauta'
+# 0.7.7 (M30): la antena cu motor randul "Satelit" are zeci de sateliti; de la atatia alegeri, OK deschide lista lor
+PRAG_LISTA_SATELITI = 8
 # DSG2: casetele cautarii, in ordinea din skin (HdsCautareOarba.casete)
 CASETE = ('transp', 'progres', 'durata')
 
@@ -63,6 +68,9 @@ class ScanerOarba(Screen):
                             'motor': False, 'sateliti': [], 'pozitie': None, 'slot': None}
         self._doua_benzi = O.are_doua_benzi(self._antena.get('osc'))
         self._config = dict(O.ULTIMELE)
+        # 0.7.7 (WLD, Wlad forum 948 #2359): satelitul ales in randul "Satelit" (None = cel pe care sta antena, al
+        # canalului pornit); nu intra in ULTIMELE: fiecare deschidere porneste de la canalul pornit
+        self._pozitie = None
         # fata cu lista: cand cautarea merge (pornita de aici sau din web) sau cand am pornit-o din acest ecran
         self._urmareste = self._c.in_curs()
         self._mesaj = ''
@@ -86,6 +94,9 @@ class ScanerOarba(Screen):
             'upRepeated': self._sus, 'downRepeated': self._jos,
         }, -1)
         self._c.adauga_ascultator(self._schimbare)
+        # 0.7.7 (BSC): pe Vu+ Solo SE, aducerea programului Vu+ la prima cautare: pasul cu timpul scurs si esecul, aici
+        self._i = O.instalare_vuplus()
+        self._i.adauga_ascultator(self._la_instalare)
         self.onClose.append(self._la_inchidere)
         self.setTitle(_('Căutare oarbă pe satelit'))
         self._arata()
@@ -124,11 +135,24 @@ class ScanerOarba(Screen):
         pune_randurile(self['lista'], randuri)
         self.hdsArataCasetele(None)
         self['preview'].setText(self._preview())
-        self['stare'].setText(self._mesaj or _('Sus/Jos alege rândul, Stânga/Dreapta sau OK schimbă, Verde pornește, '
-                                               'EXIT oprește.'))
+        self['stare'].setText(self._text_alegeri())
         self['key_red'].setText(_('Înapoi'))
         self['key_green'].setText(_('Caută acum') if not self._antena.get('motiv') else '')
         self['key_yellow'].setText(_('Schimbă'))
+
+    def _text_alegeri(self):
+        """Randul de stare de sub alegeri: aducerea programului Vu+ (pasul sau esecul), refuzul ultimei porniri sau ajutorul."""
+        if self._i.in_curs():
+            return self._i.text()
+        return self._mesaj or self._i.text() or _('Sus/Jos alege rândul, Stânga/Dreapta sau OK schimbă, Verde '
+                                                  'pornește, EXIT oprește.')
+
+    def _la_instalare(self, _i):
+        try:
+            if not self._fata_lista():
+                self['stare'].setText(self._text_alegeri())
+        except Exception as e:
+            print('[ScanerOarba] starea instalarii: %s' % e)
 
     def _preview(self):
         return O.text_previzualizare(self._antena, self._config)
@@ -205,10 +229,42 @@ class ScanerOarba(Screen):
     def _jos(self):
         self['lista'].selectNext()
 
+    def _alegeri_satelit(self):
+        """[(pozitie, nume, slot)] din randul "Satelit" (HdsCautareOarba.antena), cu doua sau mai multe: se alege."""
+        return self._antena.get('alegeri') or []
+
+    def _schimba_satelitul(self, pas):
+        """Stanga/Dreapta/OK pe randul "Satelit": urmatorul satelit din alegeri (comutatorul DiSEqC / toneburst al lui
+        il trimite programul; la motor antena se roteste inainte de cautare). Tunerul, LNB-ul (deci si randul Banda) si
+        nota sunt ale lui."""
+        alegeri = self._alegeri_satelit()
+        if len(alegeri) < 2:
+            return
+        pozitii = [p for p, _n, _s in alegeri]
+        cur = self._antena.get('pozitie')
+        i = pozitii.index(cur) if cur in pozitii else 0
+        self._pune_satelitul(pozitii[(i + pas) % len(pozitii)])
+
+    def _pune_satelitul(self, noua):
+        """Satelitul ales (din Stanga/Dreapta sau din lista): antena, tunerul, LNB-ul si randul Banda ale lui."""
+        try:
+            antena = O.antena(self.session, noua)
+        except Exception as e:
+            print('[ScanerOarba] satelitul ales: %s' % e)
+            return
+        self._antena = antena
+        self._pozitie = noua
+        self._doua_benzi = O.are_doua_benzi(antena.get('osc'))
+        self._mesaj = ''
+        self._arata_alegerile()
+
     def _cicleaza(self, pas):
         if self._fata_lista():
             return
         rand = self._rand()
+        if rand and rand[1] == 'pozitie':
+            self._schimba_satelitul(pas)
+            return
         optiuni = O.ALEGERI.get(rand[1]) if rand else None
         if not optiuni:
             return
@@ -225,8 +281,32 @@ class ScanerOarba(Screen):
         rand = self._rand()
         if rand and rand[1] == RAND_CAUTA:
             self.cauta()
+        elif rand and rand[1] == 'pozitie' and len(self._alegeri_satelit()) > PRAG_LISTA_SATELITI:
+            self._lista_satelitilor()
         else:
             self._cicleaza(1)
+
+    def _lista_satelitilor(self):
+        """0.7.7 (M30): OK pe randul "Satelit" cu multe alegeri (antena cu motor): lista satelitilor, cursorul pe cel de
+        acum; Stanga/Dreapta merg in continuare unul cate unul."""
+        lista = [(n, p) for p, n, _s in self._alegeri_satelit()]
+        cur = self._antena.get('pozitie')
+        sel = 0
+        for i, (_n, p) in enumerate(lista):
+            if p == cur:
+                sel = i
+                break
+        try:
+            from Screens.ChoiceBox import ChoiceBox
+            self.session.openWithCallback(self._satelit_din_lista, ChoiceBox, title=_('Satelit'), list=lista,
+                                          selection=sel)
+        except Exception as e:
+            print('[ScanerOarba] lista satelitilor: %s' % e)
+            self._schimba_satelitul(1)
+
+    def _satelit_din_lista(self, ales):
+        if ales and not self._fata_lista():
+            self._pune_satelitul(ales[1])
 
     def verde(self):
         if not self._fata_lista():
@@ -257,9 +337,11 @@ class ScanerOarba(Screen):
         if self._antena.get('motiv'):
             self['stare'].setText(self._antena['motiv'])
             return
-        refuz = O.porneste_pe_receptor(self.session, O.cerere_din(self._config))
+        refuz = O.porneste_pe_receptor(self.session, O.cerere_din(dict(self._config, pozitie=self._pozitie)))
         if refuz:
-            self._mesaj = refuz
+            # aducerea programului Vu+ isi scrie singura pasul si esecul (_text_alegeri); celelalte refuzuri raman aici
+            dela_instalare = self._i.in_curs() or (self._i.esec_recent() and refuz == self._i.eroare)
+            self._mesaj = '' if dela_instalare else refuz
             self._arata_alegerile()
             return
         self._mesaj = ''
@@ -270,3 +352,4 @@ class ScanerOarba(Screen):
     def _la_inchidere(self):
         # cautarea (daca mai merge) continua; o vede pagina web, iar la sfarsit canalul de dinainte porneste din nou
         self._c.scoate_ascultator(self._schimbare)
+        self._i.scoate_ascultator(self._la_instalare)

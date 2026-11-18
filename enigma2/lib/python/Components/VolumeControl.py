@@ -8,6 +8,8 @@ from .config import config, ConfigSubsection, ConfigInteger, ConfigYesNo
 
 profile("VolumeControl")
 
+MUT_Z = 10
+
 
 def _setariSunet():
 	"""Components/HdsSetariSunet.py (pasul volumului, volumul tinut minte pe canal), sau None: fara el pasul ramane 5."""
@@ -50,7 +52,10 @@ class VolumeControl:
 		config.audio.hds_mut.save_forced = True
 
 		self.volumeDialog = session.instantiateDialog(Volume)
-		self.muteDialog = session.instantiateDialog(Mute)
+		# HDSatelit 0.7.7 (OSD, asistenta 906594): semnul de mut deasupra barei canalului (la pornire bara sta pe ecran cat
+		# semnul; in tema Pro semnul cade peste caseta ceasului din bara si ramanea ascuns sub ea, proba pe receptor). MUT_Z sub
+		# protectia ecranului (20) si sub textul iesirii (120).
+		self.muteDialog = session.instantiateDialog(Mute, zPosition=MUT_Z)
 
 		self.hideVolTimer = eTimer()
 		self.hideVolTimer.callback.append(self.volHide)
@@ -124,13 +129,14 @@ class VolumeControl:
 		except Exception:
 			return 5000
 
-	def arataMut(self):
-		"""Semnul de mut pe ecran, cu ceasul care il ascunde (afara de "Mereu")."""
+	def arataMut(self, minimMs=0):
+		"""Semnul de mut pe ecran, cu ceasul care il ascunde (afara de "Mereu"). minimMs: cel putin atat pe ecran (0.7.7,
+		mutul pus la pornire, Components/HdsSetariSunet.MUT_PORNIRE_MIN_MS); "Mereu" ramane mereu."""
 		self.muteDialog.show()
 		self.hideMutTimer.stop()
 		ms = self.afisareMutMs()
 		if ms > 0:
-			self.hideMutTimer.start(ms, True)
+			self.hideMutTimer.start(max(ms, minimMs), True)
 
 	def mutHide(self):
 		self.muteDialog.hide()

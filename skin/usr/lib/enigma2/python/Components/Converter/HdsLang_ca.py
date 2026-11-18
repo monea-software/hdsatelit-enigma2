@@ -297,4 +297,10 @@ T = {
 	"cpu_mode": u"Mode del processador",
 	"cpu_volt": u"Tensió",
 	"cpu_steps": u"Temps per freqüència",
+	"bitrate_va": u"Taxa de bits de vídeo · àudio",
+	"br_min": u"mín",
+	"br_max": u"màx",
+	"br_avg": u"mitj",
+	"ecm_hop": u"Salts",
+	"ecm_reader": u"Lector",
 }

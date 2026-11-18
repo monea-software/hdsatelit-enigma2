@@ -25,7 +25,8 @@ _COMMANDS = ('update', 'upgrade', 'install', 'remove', 'list', 'list_installed',
 # HDSatelit 0.6.8: --download-only, packages from foreign sources are downloaded and read before they are installed
 # (Components/HdsExtensiiLucru.py, packages made only for Python 2)
 # --force-overwrite and --force-reinstall: only for skins (enigma2-plugin-skins-*), as in OE-Alliance (HdsExtensiiLucru.optiuniTema)
-_OPTIONS = ('--autoremove', '--noaction', '--force-depends', '--download-only', '--force-overwrite', '--force-reinstall')
+_OPTIONS = ('--autoremove', '--noaction', '--force-depends', '--download-only', '--force-overwrite', '--force-reinstall',
+	'--force-downgrade')
 # HDSatelit 0.7.5: the packages of the image skin (HDSatelit) are never removed from the image (the skin list and the
 # web page /skin cannot delete it, and the receiver falls back to it when the skin on screen is deleted)
 PROTECTED_REMOVE = frozenset(('hdsatelit-skin', 'enigma2', 'enigma2-hdsatelit'))

@@ -23,6 +23,7 @@
 #include <lib/dvb_ci/dvbci_mmi.h>
 #include <lib/dvb_ci/dvbci_ccmgr.h>
 #include <lib/dvb_ci/hdscica.h>
+#include <lib/dvb_ci/hdstsmux.h>
 #include <sys/stat.h>
 #include <lib/dvb/frontend.h>
 
@@ -89,20 +90,12 @@ eDVBCIInterfaces::eDVBCIInterfaces()
 	}
 
 	for (eSmartPtrList<eDVBCISlot>::iterator it(m_slots.begin()); it != m_slots.end(); ++it)
-		it->setSource(TUNER_A);
+		it->setSource(hdsTsmuxLitera(0));
 
-	if (num_ci > 1) // // FIXME .. we force DM8000 when more than one CI Slot is avail
-	{
-		setInputSource(0, TUNER_A);
-		setInputSource(1, TUNER_B);
-		setInputSource(2, TUNER_C);
-		setInputSource(3, TUNER_D);
-	}
-	else
-	{
-		setInputSource(0, TUNER_A);
-		setInputSource(1, TUNER_B);
-	}
+	/* HD Satelit: primele intrari pe litera lor, ca inainte (A-D cu doua sau mai multe sloturi, A-B cu unul) */
+	int primele = num_ci > 1 ? 4 : 2;
+	for (int tuner_no = 0; tuner_no < primele; ++tuner_no)
+		setInputSource(tuner_no, hdsTsmuxLitera(tuner_no));
 
 	eDebug("done, found %d common interface slots", num_ci);
 }
@@ -286,6 +279,53 @@ static bool canDescrambleMultipleServices(int slotid)
 	else if (str == "yes")
 		return true;
 	return false;
+}
+
+/* HD Satelit: un canal criptat care n-a primit niciun modul CI, cand cel putin un modul si-a spus CAID-urile: un rand in
+   hds-ci.log cu CAID-urile canalului si ale fiecarui modul (negru cu modulul recunoscut: CAID-uri care nu se potrivesc,
+   modul ocupat cu alt canal sau alocare de mana pe alte canale), o singura data pentru aceleasi CAID-uri si aceeasi stare a
+   modulelor; fara canalul insusi (jurnalul pleaca in pachetele testerilor, fara listele de canale ale omului) */
+template <class Lista>
+static std::string hdsCaiduriText(const Lista &lista)
+{
+	std::string text;
+	char buf[8];
+	int n = 0;
+	for (typename Lista::const_iterator i = lista.begin(); i != lista.end(); ++i)
+	{
+		if (n++ == 16)
+		{
+			text += " ...";
+			break;
+		}
+		snprintf(buf, sizeof(buf), "%s%04x", text.empty() ? "" : " ", *i);
+		text += buf;
+	}
+	return text.empty() ? std::string("-") : text;
+}
+
+static void hdsJurnalFaraModul(const CAID_LIST &caids, eSmartPtrList<eDVBCISlot> &sloturi)
+{
+	static std::string ultimul;
+	std::string module;
+	for (eSmartPtrList<eDVBCISlot>::iterator s(sloturi.begin()); s != sloturi.end(); ++s)
+	{
+		eDVBCICAManagerSession *ca = s->getCAManager();
+		if (!ca)
+			continue;
+		char buf[48];
+		snprintf(buf, sizeof(buf), "%sCI%d (%d canale): ", module.empty() ? "" : "; ", s->getSlotID(), s->getUseCount());
+		module += buf;
+		module += hdsCaiduriText(ca->getCAIDs());
+	}
+	if (module.empty())
+		return;
+	std::string mesaj = hdsCaiduriText(caids) + " | " + module;
+	if (mesaj == ultimul)
+		return;
+	ultimul = mesaj;
+	hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI: canal criptat fara modul CI, CAID-uri canal: %s; module: %s",
+		hdsCaiduriText(caids).c_str(), module.c_str());
 }
 
 void eDVBCIInterfaces::recheckPMTHandlers()
@@ -502,46 +542,44 @@ void eDVBCIInterfaces::recheckPMTHandlers()
 					++ci_it->use_count;
 					eDebug("(1)CISlot %d, usecount now %d", ci_it->getSlotID(), ci_it->use_count);
 
-					data_source ci_source=CI_A;
-					switch(ci_it->getSlotID())
-					{
-						case 0: ci_source = CI_A; break;
-						case 1: ci_source = CI_B; break;
-						case 2: ci_source = CI_C; break;
-						case 3: ci_source = CI_D; break;
-						default:
-							eDebug("try to get source for CI %d!!\n", ci_it->getSlotID());
-							break;
-					}
+					/* HD Satelit: sursele ca text, ca in OE-Alliance: CI<slot> si litera tunerului ('A' + numarul lui), si
+					   pentru tunerele de dupa D (FBC: 8 demodulatoare pe un loc; inainte ramanea A, deci modulul primea
+					   fluxul altui tuner si canalul ramanea negru) */
+					std::string ci_source = hdsTsmuxCi(ci_it->getSlotID());
 
 					if (!it->cislot)
 					{
 						int tunernum = -1;
 						eUsePtr<iDVBChannel> channel;
-						if (!pmthandler->getChannel(channel))
+						if (!pmthandler->getChannel(channel) && channel)
 						{
 							ePtr<iDVBFrontend> frontend;
-							if (!channel->getFrontend(frontend))
+							if (!channel->getFrontend(frontend) && frontend)
 							{
 								eDVBFrontend *fe = (eDVBFrontend*) &(*frontend);
 								tunernum = fe->getSlotID();
 							}
 						}
-						ASSERT(tunernum != -1);
-						data_source tuner_source = TUNER_A;
-						switch (tunernum)
-						{
-							case 0: tuner_source = TUNER_A; break;
-							case 1: tuner_source = TUNER_B; break;
-							case 2: tuner_source = TUNER_C; break;
-							case 3: tuner_source = TUNER_D; break;
-							default:
-								eDebug("try to get source for tuner %d!!\n", tunernum);
-								break;
-						}
+						std::string tuner_source = hdsTsmuxLitera(tunernum);
 						ci_it->current_tuner = tunernum;
-						setInputSource(tunernum, ci_source);
-						ci_it->setSource(tuner_source);
+						if (tuner_source.empty())
+						{
+							/* fara tuner (sau peste Z): nicio intrare tsmux de schimbat, ca in OE-Alliance */
+							hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d: canalul n-are tuner cu litera (%d), rutarea /proc/stb/tsmux ramane neatinsa",
+								ci_it->getSlotID(), tunernum);
+						}
+						else
+						{
+							setInputSource(tunernum, ci_source);
+							ci_it->setSource(tuner_source);
+							/* HD Satelit: rutarea citita inapoi din /proc, ca jurnalul CI sa arate ce a primit driverul */
+							char fin[32], fci[32];
+							snprintf(fin, sizeof(fin), "input%d", tunernum);
+							snprintf(fci, sizeof(fci), "ci%d_input", ci_it->getSlotID());
+							hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d rutare: %s=%s (cerut %s), %s=%s (cerut %s)",
+								ci_it->getSlotID(), fin, hdsTsmuxCiteste(HDS_TSMUX_DOSAR, fin).c_str(), ci_source.c_str(),
+								fci, hdsTsmuxCiteste(HDS_TSMUX_DOSAR, fci).c_str(), tuner_source.c_str());
+						}
 					}
 					else
 					{
@@ -562,6 +600,8 @@ void eDVBCIInterfaces::recheckPMTHandlers()
 				}
 			}
 		}
+		if (!it->cislot)
+			hdsJurnalFaraModul(caids, m_slots);
 	}
 }
 
@@ -693,90 +733,23 @@ int eDVBCIInterfaces::getMMIState(int slotid)
 	return slot->getMMIState();
 }
 
-int eDVBCIInterfaces::setInputSource(int tuner_no, data_source source)
+/* HD Satelit: ca in enigma2 OE-Alliance de azi (lib/dvb_ci/hdstsmux.h): „CI<slot>” sau litera tunerului in
+   /proc/stb/tsmux/input<tuner>, oricate sloturi ar fi (ramura veche DM7025 scria „CI” pe placile cu un slot) */
+/* si oricare ar fi tunerul (A..Z, si tunerele FBC de dupa D) */
+int eDVBCIInterfaces::setInputSource(int tuner_no, const std::string &source)
 {
-//	eDebug("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-//	eDebug("eDVBCIInterfaces::setInputSource(%d %d)", tuner_no, (int)source);
-	if (getNumOfSlots() > 1) // FIXME .. we force DM8000 when more than one CI Slot is avail
+	const char *sursa = source.c_str();
+	if (tuner_no < 0 || source.empty())
 	{
-		char buf[64];
-		snprintf(buf, 64, "/proc/stb/tsmux/input%d", tuner_no);
-
-		FILE *input=0;
-		if((input = fopen(buf, "wb")) == NULL) {
-			eDebug("cannot open %s", buf);
-			return 0;
-		}
-
-		if (tuner_no > 3)
-			eDebug("setInputSource(%d, %d) failed... dm8000 just have four inputs", tuner_no, (int)source);
-
-		switch(source)
-		{
-			case CI_A:
-				fprintf(input, "CI0");
-				break;
-			case CI_B:
-				fprintf(input, "CI1");
-				break;
-			case CI_C:
-				fprintf(input, "CI2");
-			break;
-			case CI_D:
-				fprintf(input, "CI3");
-				break;
-			case TUNER_A:
-				fprintf(input, "A");
-				break;
-			case TUNER_B:
-				fprintf(input, "B");
-				break;
-			case TUNER_C:
-				fprintf(input, "C");
-				break;
-			case TUNER_D:
-				fprintf(input, "D");
-				break;
-			default:
-				eDebug("setInputSource for input %d failed!!!\n", (int)source);
-				break;
-		}
-
-		fclose(input);
+		eDebug("setInputSource(%d, %s) failed!!!", tuner_no, sursa);
+		return 0;
 	}
-	else  // DM7025
-	{
-		char buf[64];
-		snprintf(buf, 64, "/proc/stb/tsmux/input%d", tuner_no);
-
-		if (tuner_no > 1)
-			eDebug("setInputSource(%d, %d) failed... dm7025 just have two inputs", tuner_no, (int)source);
-
-		FILE *input=0;
-		if((input = fopen(buf, "wb")) == NULL) {
-			eDebug("cannot open %s", buf);
-			return 0;
-		}
-
-		switch(source)
-		{
-			case CI_A:
-				fprintf(input, "CI");
-				break;
-			case TUNER_A:
-				fprintf(input, "A");
-				break;
-			case TUNER_B:
-				fprintf(input, "B");
-				break;
-			default:
-				eDebug("setInputSource for input %d failed!!!\n", (int)source);
-				break;
-		}
-
-		fclose(input);
-	}
-	eDebug("eDVBCIInterfaces->setInputSource(%d, %d)", tuner_no, (int)source);
+	char fisier[32];
+	snprintf(fisier, sizeof(fisier), "input%d", tuner_no);
+	int eroare = 0;
+	if (!hdsTsmuxScrie(HDS_TSMUX_DOSAR, fisier, sursa, &eroare))
+		eDebug("[CI] %s/%s: sursa %s refuzata: %s", HDS_TSMUX_DOSAR, fisier, sursa, strerror(eroare));
+	eDebug("eDVBCIInterfaces->setInputSource(%d) = %s", tuner_no, sursa);
 	return 0;
 }
 
@@ -1039,7 +1012,7 @@ void eDVBCIInterfaces::setCIPlusRouting(int slotid)
 {
 	eDebug("[CI] setCIRouting slotid=%d", slotid);
 	eDVBCISlot *slot = getSlot(slotid);
-	if (!slot || slotid < 0 || slotid > 3)
+	if (!slot || slotid < 0)
 		return;
 	if (m_pmt_handlers.empty())
 	{
@@ -1056,8 +1029,6 @@ void eDVBCIInterfaces::setCIPlusRouting(int slotid)
 		eDebug("[CI] setCIRouting: slotul %d are deja canale, rutarea ramane", slotid);
 		return;
 	}
-	static const data_source surse_ci[4] = {CI_A, CI_B, CI_C, CI_D};
-	static const data_source tunere[4] = {TUNER_A, TUNER_B, TUNER_C, TUNER_D};
 	for (PMTHandlerList::iterator it = m_pmt_handlers.begin(); it != m_pmt_handlers.end(); ++it)
 	{
 		if (it->cislot)  // canalul are deja un modul alocat: rutarea lui ramane neatinsa
@@ -1070,7 +1041,8 @@ void eDVBCIInterfaces::setCIPlusRouting(int slotid)
 			if (!channel->getFrontend(frontend) && frontend)
 				tunernum = ((eDVBFrontend *)&(*frontend))->getSlotID();
 		}
-		if (tunernum < 0 || tunernum > 3)  // data_source are tunerele A-D
+		std::string litera = hdsTsmuxLitera(tunernum);  // A..Z, si tunerele FBC de dupa D
+		if (litera.empty())
 			continue;
 		char cale[64];
 		std::string sursa, sursa_ci;
@@ -1080,8 +1052,8 @@ void eDVBCIInterfaces::setCIPlusRouting(int slotid)
 		snprintf(cale, sizeof(cale), "/proc/stb/tsmux/ci%d_input", slotid);
 		if (!hdsCitesteSursa(cale, sursa_ci))
 			continue;
-		setInputSource(tunernum, surse_ci[slotid]);
-		slot->setSource(tunere[tunernum]);
+		setInputSource(tunernum, hdsTsmuxCi(slotid));
+		slot->setSource(litera);
 		slot->setCIPlusRoutingParameter(tunernum, sursa, sursa_ci);
 		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d autentificare CI+: tunerul %d trecut prin modul", slotid, tunernum);
 		break;
@@ -1722,62 +1694,23 @@ void eDVBCISlot::removeService(uint16_t program_number)
 		running_services.erase(program_number);  // remove single service
 }
 
-int eDVBCISlot::setSource(data_source source)
+/* HD Satelit: ca in enigma2 OE-Alliance de azi (lib/dvb_ci/hdstsmux.h): sursa modulului in /proc/stb/tsmux/ci<slot>_input,
+   oricate sloturi ar fi (ramura veche DM7025 o scria in /proc/stb/tsmux/input2, intrarea demuxului 2) */
+int eDVBCISlot::setSource(const std::string &source)
 {
 	current_source = source;
-	if (eDVBCIInterfaces::getInstance()->getNumOfSlots() > 1) // FIXME .. we force DM8000 when more than one CI Slot is avail
+	const char *sursa = source.c_str();
+	if (source.empty())
 	{
-		char buf[64];
-		snprintf(buf, 64, "/proc/stb/tsmux/ci%d_input", slotid);
-		FILE *ci = fopen(buf, "wb");
-		switch(source)
-		{
-			case CI_A:
-				fprintf(ci, "CI0");
-				break;
-			case CI_B:
-				fprintf(ci, "CI1");
-				break;
-			case CI_C:
-				fprintf(ci, "CI2");
-				break;
-			case CI_D:
-				fprintf(ci, "CI3");
-				break;
-			case TUNER_A:
-				fprintf(ci, "A");
-				break;
-			case TUNER_B:
-				fprintf(ci, "B");
-				break;
-			case TUNER_C:
-				fprintf(ci, "C");
-				break;
-				case TUNER_D:
-				fprintf(ci, "D");
-				break;
-			default:
-				eDebug("CI Slot %d: setSource %d failed!!!\n", getSlotID(), (int)source);
-				break;
-		}
-		fclose(ci);
+		eDebug("CI Slot %d: setSource failed!!!", getSlotID());
+		return 0;
 	}
-	else // DM7025
-	{
-//		eDebug("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-//		eDebug("eDVBCISlot::enableTS(%d %d)", enable, (int)source);
-		FILE *ci = fopen("/proc/stb/tsmux/input2", "wb");
-		if(ci == NULL) {
-			eDebug("cannot open /proc/stb/tsmux/input2");
-			return 0;
-		}
-		if (source != TUNER_A && source != TUNER_B)
-			eDebug("CI Slot %d: setSource %d failed!!!\n", getSlotID(), (int)source);
-		else
-			fprintf(ci, "%s", source==TUNER_A ? "A" : "B");  // configure CI data source (TunerA, TunerB)
-		fclose(ci);
-	}
-	eDebug("CI Slot %d setSource(%d)", getSlotID(), (int)source);
+	char fisier[32];
+	snprintf(fisier, sizeof(fisier), "ci%d_input", slotid);
+	int eroare = 0;
+	if (!hdsTsmuxScrie(HDS_TSMUX_DOSAR, fisier, sursa, &eroare))
+		eDebug("[CI] %s/%s: sursa %s refuzata: %s", HDS_TSMUX_DOSAR, fisier, sursa, strerror(eroare));
+	eDebug("CI Slot %d setSource = %s", getSlotID(), sursa);
 	return 0;
 }
 

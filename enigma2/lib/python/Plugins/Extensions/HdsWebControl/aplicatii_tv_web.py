@@ -118,6 +118,10 @@ def stare(N=None, sesiune=None):
 		else:
 			text_stare = _t(A.TEXTE_STARE.get(s, ""))
 			p = A.pachetDinCatalog(a, catalog)
+			if s == A.CERE_NAVIGATOR:
+				trebuie, _liber = A.locNavigator()
+				if trebuie:
+					text_stare += " · ~%d MB" % (trebuie // 1048576)
 			if s == A.DISPONIBIL and p is not None and p.marime:
 				try:
 					from Components.HdsPachete import marime_text
@@ -135,7 +139,10 @@ def stare(N=None, sesiune=None):
 			"poza": bool(A.pozaPentru(a)),
 			"ascunsa": a["id"] not in vazute,
 		})
-	return {"result": True, "aplicatii": lista, "vazute": vazute, "instalat": N.instalat(), "video": bool(video),
+	# NVM: pe receptoarele unde navigatorul se poate instala din cardul lui, nota rosie „lipseste din imagine” nu se arata
+	de_instalat = any(x["fel_stare"] in (A.CERE_NAVIGATOR, A.NU_INCAPE) for x in lista)
+	return {"result": True, "aplicatii": lista, "vazute": vazute, "instalat": N.instalat() or de_instalat,
+		"video": bool(video),
 		"catalog_gata": catalog is not None, "lucrare": N.lucrare(), "widevine": N.widevine()}
 
 
@@ -151,6 +158,11 @@ def deschide(argumente, N=None, sesiune=None):
 	a = A.gaseste(argumente.get("id", ""))
 	if a is None:
 		return _cuStare({"result": False, "message": _t("Aplicația nu există pe acest receptor.")}, N, sesiune)
+	if A.stareMagazin(a, N.catalog()) in (A.CERE_NAVIGATOR, A.NU_INCAPE):
+		# NVM: navigatorul lipseste (Vu+ Solo SE si celelalte MIPS): butonul Instaleaza al cardului, ca OK pe televizor
+		text = A.instaleazaNavigator(sesiune)
+		return _cuStare({"result": text is None, "message": _t(A.TEXT_NAVIGATOR_PORNIT) if text is None else text},
+			N, sesiune)
 	if sesiune is None:
 		return _cuStare({"result": False, "message": _t("Interfața web nu are încă legătura cu televizorul. Încearcă peste câteva secunde.")}, N, sesiune)
 	if A.fel(a) == A.FEL_SCURTATURA and not N.instalat():
@@ -357,6 +369,7 @@ TEXTE_JS = {
 	"lucru": N_("Se lucrează: %s"),
 	"catalog": N_("Se citește lista extensiilor..."),
 	"widevine": N_("Instalează modulul Widevine pe televizor"),
+	"navigator": N_("Instalează navigatorul web"),
 }
 
 
@@ -416,6 +429,7 @@ PAGINA = """<!DOCTYPE html>
 <p class="mesaj" id="incarcare">__T_INCARCARE__</p>
 <p class="mesaj ascuns eroare" id="neinstalat">__T_NEINSTALAT__</p>
 <p class="mesaj" id="mesaj"></p>
+<div class="butoane ascuns" id="imagineBara"><button type="button" id="imagine" class="principal"></button></div>
 <p class="nota ascuns" id="lucrare"></p>
 <div id="confirmare" class="card ascuns"></div>
 <div class="grila" id="grila"></div>
@@ -433,10 +447,16 @@ function trimite(cale, campuri){
 }
 function citeste(){ cerere("/api/aplicatii-tv").then(arata).catch(nimicNuRaspunde); }
 // instalarea, actualizarea si stergerea: rutele Extensiilor, cu confirmarea comuna; apoi lucrarea se urmareste aici
+// 0.7.6 (EX2): cand aplicatia cere o versiune mai noua a imaginii, refuzul are "imagine" (legatura si textul butonului,
+// ca in /extensii): sub mesaj apare butonul spre Actualizare software
+var IMAGINE = "";
+function arataImagine(x){ IMAGINE = x && x.legatura ? x.legatura : ""; $("imagineBara").classList.toggle("ascuns", !IMAGINE); if(IMAGINE){ $("imagine").textContent = x.text; } }
 function opkg(ruta, pachet){
   var q = new URLSearchParams(); q.set("pachet", pachet);
-  cuConfirmare(ruta, q, function(){ citeste(); });
+  arataImagine(null);
+  cuConfirmare(ruta, q, function(d){ arataImagine(d && d.imagine); citeste(); });
 }
+$("imagine").addEventListener("click", function(){ if(IMAGINE){ location.href = IMAGINE; } });
 function buton(text, clasa, cand){
   var b = document.createElement("button"); b.type = "button"; b.textContent = text;
   if(clasa){ b.className = clasa; }
@@ -473,6 +493,7 @@ function arata(d){
       if(act === "porneste"){ bt = buton(TXT.deschide, "albastru", function(){ trimite("/api/aplicatii-tv-deschide", {id: a.id}); }); }
       else if(act === "instaleaza"){ bt = buton(TXT.instaleaza, "verde", function(){ opkg("/api/extensii-instaleaza", a.pachet); }); }
       else if(act === "actualizeaza"){ bt = buton(TXT.actualizeaza, "verde", function(){ opkg("/api/extensii-actualizeaza", a.pachet); }); }
+      else if(act === "instaleaza-navigator"){ bt = buton(TXT.navigator, "verde", function(){ trimite("/api/aplicatii-tv-deschide", {id: a.id}); }); }
       else if(act === "instaleaza-widevine"){ bt = buton(TXT.widevine, "verde", function(){ trimite("/api/aplicatii-tv-deschide", {id: a.id}); }); }
       else if(act === "dezinstaleaza"){ bt = buton(TXT.dezinstaleaza, "", function(){ opkg("/api/extensii-sterge", a.pachet); }); }
       if(bt){ bt.disabled = inLucru || (act === "porneste" && d.instalat === false && !a.pachet); b.appendChild(bt); }

@@ -48,7 +48,8 @@ class FrontendInfo(Converter, object):
 			elif self.source.snr is not None: #fallback to normal SNR...
 				percent = self.source.snr
 		elif self.type == self.TUNER_TYPE:
-			return self.source.frontend_type and self.frontend_type or "Unknown"
+			# the type comes from the source (session.FrontendInfo); a source without it (session.FrontendStatus) gives Unknown
+			return getattr(self.source, "frontend_type", None) or "Unknown"
 		if percent is None:
 			return "N/A"
 		return "%d %%" % (percent * 100 // 65536)
@@ -84,7 +85,7 @@ class FrontendInfo(Converter, object):
 			else:
 				return self.range
 		elif self.type == self.TUNER_TYPE:
-			type = self.source.frontend_type
+			type = getattr(self.source, "frontend_type", None)
 			if type == 'DVB-S':
 				return 0
 			elif type == 'DVB-C':

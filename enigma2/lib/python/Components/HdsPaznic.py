@@ -71,6 +71,10 @@
 #      din cod (FirOcupat). La prima bataie, un rand cu durata pornirii si pasii ei lenti (pasPornire, din
 #      PluginComponent si mytest.py), iar la orice TryQuitMainloop un rand cu codul si ecranele deschise (cerereIesire).
 #      Jurnalul paznicului pleaca mereu in pachetul beta testerului, deci urmatorul pachet spune singur cine a fost.
+#  11. STIVELE TUTUROR FIRELOR LA CEREREA PAZNICULUI (0.7.7): un fir al imaginii (StiveLaCerere, pornit din capul
+#      mytest.py) asteapta pe teava CALE_CERERE_STIVE si scrie stivele tuturor firelor citite din Python, in forma
+#      faulthandler, la coada fisierului de stive. Paznicul il intreaba intai pe el; semnalele faulthandler din mytest.py
+#      raman pentru interfata care tine lacatul Python (atunci firul acesta nu poate raspunde).
 #
 # Paznicul placii (watchdog-ul hardware, 60 s) si oprirea la un blocaj de nucleu (fir in stare D) raman mereu pornite;
 # setarea de aici priveste numai repornirea interfetei cand nu mai raspunde.
@@ -121,6 +125,9 @@ def instaleazaExceptii():
 CALE_BATAIE = "/var/run/hds-paznic.bataie"
 CALE_STARE = "/var/run/hds-paznic.stare"
 CALE_JURNAL = "/home/root/hds-watchdog.log"
+# 0.7.6 (WDG): semnul iesirii cerute, scris cand bucla principala s-a oprit (iesireInceputa); hds-watchdog.py opreste
+# procesul care nu iese in IESIRE_CERUTA_S secunde de la el (asistenta 430032, repornirea interfetei cu o tema straina)
+CALE_IESIRE = "/var/run/hds-paznic.iesire"
 
 BATAIE_S = 10                   # cat de des scrie bucla principala bataia
 DURATA_SCANARE_S = 20 * 60      # cat asteapta paznicul dupa ultima bataie a unei scanari (o mutare de motor, un acord greu)
@@ -652,21 +659,29 @@ class SupraveghetorPluginExtern(object):
 		# la PAS_FIR_S: privirea punctului 10; la PAS_PLUGIN_EXTERN_S: pas() de mai sus, ca inainte
 		pas_s = min(PAS_FIR_S, PAS_PLUGIN_EXTERN_S)
 		trecut = 0.0
+		inceput = monotonic()
 		while not self.stop.wait(pas_s):
+			# PLG 0.7.7: cat a stat firul acesta peste pas_s ca sa ruleze din nou (lacatul Python tinut de alt cod)
+			intarziere = monotonic() - inceput - pas_s
 			fir = getattr(self.b, "firOcupat", None)
 			if fir is not None:
 				try:
+					noteaza = getattr(fir, "intarzierePaznic", None)
+					if noteaza is not None:
+						noteaza(intarziere)
 					fir.privire()
 				except Exception as e:
 					_jurnal("cine tine firul principal: %r" % (e,))
 			trecut += pas_s
 			if trecut + 1e-6 < PAS_PLUGIN_EXTERN_S:
+				inceput = monotonic()
 				continue
 			trecut = 0.0
 			try:
 				self.pas()
 			except Exception as e:
 				_jurnal("supravegherea pluginurilor externe: %r" % (e,))
+			inceput = monotonic()
 
 	def porneste(self):
 		if self.fir is None:
@@ -806,6 +821,14 @@ INCA_OCUPAT_S = 60.0            # o tacere care tine atat primeste un rand pe lo
 TIC_S = 1                       # ceasul mic de pe firul principal (numai in memorie, nimic pe disc)
 PAS_FIR_S = 1                   # cat de des se uita firul de supraveghere la el
 RANDURI_FIR_MAX = 20            # cel mult atatea randuri „ocupat” pe proces
+# PLG 0.7.7 (randurile de 3,0-3,6 s cu o singura privire din pachetele 2186, 2206 si din 0.7.6: 2454, 2459, 2500): privirile
+# incepeau abia la PRAG_FIR_OCUPAT_S de tacere, deci la o tacere de 3-4 s una singura era chiar numarul asteptat si randul nu
+# putea spune nici daca firul principal lucra, nici daca astepta lacatul Python tinut de alt fir. Acum privirile incep de la
+# PRAG_PRIVIRI_S, iar randul spune si cat a stat paznicul insusi dupa lacatul Python: un fir care nu poate privi la secunda
+# inseamna ca altcineva (alt fir sau C++) tine lacatul fara pauza. Randul se scrie tot ca inainte: numai cand o privire a
+# prins tacerea la PRAG_FIR_OCUPAT_S sau mai mult (acelasi numar de randuri, plafonul RANDURI_FIR_MAX neschimbat).
+PRAG_PRIVIRI_S = 1.0
+PRAG_ASTEPTARE_PAZNIC_S = 1.0
 PRAG_PAS_PORNIRE_S = 3.0        # un pas al pornirii (importul, AUTOSTART sau SESSIONSTART al unui plugin) mai lung intra in rand
 
 
@@ -829,6 +852,9 @@ class FirOcupat(object):
 		self.altele = {}        # „numele firului locul” -> priviri (celelalte fire Python care lucrau)
 		self.anuntat = False    # randul „inca ocupat” al tacerii de acum
 		self.randuri = 0
+		self.asteptat = 0.0     # cel mai mult cat a stat paznicul dupa lacatul Python in tacerea de acum (PLG 0.7.7)
+		self._intarziere = None  # cat a stat firul paznicului inaintea privirii care urmeaza (intarzierePaznic)
+		self.pragVazut = False   # o privire a prins tacerea de acum la PRAG_FIR_OCUPAT_S sau mai mult (randul, ca inainte)
 
 	def tic(self):
 		self.ultimTic = self.ceas()
@@ -858,7 +884,7 @@ class FirOcupat(object):
 
 	def _lacat(self, durata, total):
 		"""„; lacatul Python ...” cand paznicul a privit mult mai rar decat o data pe secunda si alt fir lucra; altfel ''"""
-		asteptate = max(1.0, (durata - PRAG_FIR_OCUPAT_S + TIC_S) / float(PAS_FIR_S or 1))
+		asteptate = max(1.0, (durata - _pragPriviri() + TIC_S) / float(PAS_FIR_S or 1))
 		if total * 2 >= asteptate or not self.altele:
 			return ""
 		loc, n = max(self.altele.items(), key=lambda x: x[1])
@@ -874,7 +900,8 @@ class FirOcupat(object):
 		la = (" la %d s dupa pornirea interfetei" % int(varsta)) if varsta is not None else ""
 		priviri = (" (%d din %d priviri)" % (n, total)) if total else ""
 		fel = "inca ocupat de" if inca else "ocupat"
-		return "firul principal %s %.1f s%s: %s%s%s" % (fel, durata, la, loc, priviri, self._lacat(durata, total))
+		asteptat = ("; paznicul a asteptat lacatul Python %.1f s" % self.asteptat) if self.asteptat >= PRAG_ASTEPTARE_PAZNIC_S else ""
+		return "firul principal %s %.1f s%s: %s%s%s%s" % (fel, durata, la, loc, priviri, self._lacat(durata, total), asteptat)
 
 	def _scrie(self, rand):
 		if self.randuri >= RANDURI_FIR_MAX:
@@ -885,16 +912,27 @@ class FirOcupat(object):
 		self.scrie(rand)
 		return rand
 
+	def intarzierePaznic(self, secunde):
+		"""Din bucla paznicului, inaintea privirii: cat a stat firul lui peste pas ca sa ruleze din nou (lacatul Python)."""
+		self._intarziere = secunde
+
 	def privire(self):
 		"""O privire. -> randul scris acum, sau None."""
+		intarziere, self._intarziere = self._intarziere, None
 		tic = self.ultimTic
 		if tic is None:
 			return None
 		acum = self.ceas()
-		if acum - tic >= PRAG_FIR_OCUPAT_S:
+		if acum - tic >= _pragPriviri():
 			if self.inceput != tic:
 				self.inceput, self.priviri, self.anuntat = tic, {}, False
 				self.mijloace, self.altele = {}, {}
+				self.asteptat = 0.0
+				self.pragVazut = False
+			if intarziere is not None and intarziere > self.asteptat:
+				self.asteptat = float(intarziere)
+			if acum - tic >= PRAG_FIR_OCUPAT_S:
+				self.pragVazut = True
 			try:
 				cadru = self.cadru()
 				loc = locDinCadru(cadru)
@@ -922,11 +960,19 @@ class FirOcupat(object):
 		# tacerea s-a terminat: de la ultimul tic dinainte pana la primul de dupa, fara pasul ceasului
 		durata = max(0.0, tic - self.inceput - TIC_S)
 		rand = None
-		if durata >= PRAG_FIR_OCUPAT_S - TIC_S and not self.anuntat:
+		# (fara nicio privire in tacere, inceput pus din afara: ca inainte)
+		if durata >= PRAG_FIR_OCUPAT_S - TIC_S and not self.anuntat and (self.pragVazut or not self.priviri):
 			rand = self._scrie(self._rand(durata))
 		self.inceput, self.priviri, self.anuntat = None, {}, False
 		self.mijloace, self.altele = {}, {}
+		self.asteptat = 0.0
+		self.pragVazut = False
 		return rand
+
+
+def _pragPriviri():
+	"""de la cata tacere incep privirile (cel mult pragul randului)"""
+	return min(PRAG_PRIVIRI_S, PRAG_FIR_OCUPAT_S)
 
 
 # pasii lenti ai pornirii (inainte de prima bataie firul de supraveghere nu merge: bucla enigma2 inca nu ruleaza)
@@ -963,8 +1009,278 @@ def cerereIesire(cod, ecrane):
 			4: "actualizarea afisajului din fata", 5: "cadere"}
 		jurnalPaznic("cerere de iesire: cod %s (%s), ecranele: %s" % (cod, feluri.get(cod, "alt cod"),
 			" > ".join(ecrane) or "niciunul"))
+		_cerere[0] = (cod, list(ecrane))
 	except Exception:
 		pass
+
+
+# 0.7.6 (WDG): ultima cerere de iesire (cod, ecrane) vazuta de cerereIesire, pentru semnul iesirii
+_cerere = [None]
+
+
+def _curat(text, maxim=160):
+	"""Un singur rand, fara '=' la inceput si fara semne de control, cel mult maxim caractere (pentru semnul iesirii)."""
+	return " ".join(str(text).split())[:maxim]
+
+
+def _codIesireCeruta():
+	"""Codul iesirii care incepe: al ferestrei TryQuitMainloop inca deschise (Screens/Standby.py: inTryQuitMainloop si
+	quitMainloopCode), altfel None (quitMainloop chemat direct de un plugin, SIGTERM din afara: codul nu se stie)."""
+	try:
+		from Screens import Standby
+		if getattr(Standby, "inTryQuitMainloop", False):
+			return int(Standby.quitMainloopCode)
+		# 0.7.7 (UPD, dorinelu forum 795 #2668): fara intrebare (nicio inregistrare) TryQuitMainloop se inchide inainte sa
+		# se arate, deci inTryQuitMainloop nu se pune; codul il tine acum close(True) (Standby.iesireCeruta). Fara el,
+		# repornirea receptorului agatata la iesire ajungea dupa paznic numai repornirea interfetei.
+		cod = getattr(Standby, "iesireCeruta", None)
+		if cod is not None:
+			return int(cod)
+	except Exception:
+		pass
+	return None
+
+
+def _temaAcum():
+	try:
+		from Components.config import config
+		return config.skin.primary_skin.value
+	except Exception:
+		return ""
+
+
+def textSemnIesire(pid, ceas, cod, tema, ecrane):
+	"""Textul semnului iesirii cerute: randuri cheie=valoare, citite de hds-watchdog.py (citeste_semn_iesire)."""
+	return "pid=%d\nceruta=%.3f\ncod=%s\ntema=%s\necrane=%s\n" % (pid, ceas, "-" if cod is None else int(cod),
+		_curat(tema), _curat(" > ".join(ecrane or []), 240))
+
+
+def iesireInceputa(cale=None, ceas=None, pid=None, cod="implicit", tema=None):
+	"""Din mytest.py, imediat dupa runReactor(): bucla principala s-a oprit si incepe iesirea (salvarile, oprirea
+	modulelor, apoi oprirea Python). Semnul (pid, ceasul monoton, codul cerut, tema, ecranele) ii spune lui hds-watchdog.py
+	ca de acum procesul trebuie sa iasa; daca nu iese in IESIRE_CERUTA_S secunde, il opreste si scrie in hds-caderi.log.
+	Scris in RAM, atomic. Nu arunca."""
+	try:
+		cale = cale or CALE_IESIRE
+		if cod == "implicit":
+			cod = _codIesireCeruta()
+		ecrane = []
+		cerere = _cerere[0]
+		if cerere is not None and cod is not None and cerere[0] == cod:
+			ecrane = cerere[1]
+		text = textSemnIesire(os.getpid() if pid is None else pid, monotonic() if ceas is None else ceas, cod,
+			_temaAcum() if tema is None else tema, ecrane)
+		nou = cale + ".nou"
+		with open(nou, "w") as f:
+			f.write(text)
+		os.rename(nou, cale)
+	except Exception as e:
+		_jurnal("semnul iesirii: %r" % (e,))
+
+
+# 0.7.7 (IES, asistenta 695315): firele straine care tin iesirea. Dupa "reached rl -1" (salvarile C++ facute: lista de
+# canale, EPG) Py_Finalize cheama threading._shutdown, care asteapta FARA termen toate firele non-daemon. Un plugin sau o
+# tema straina care tine un fir non-daemon fara sfarsit (un server web, o descarcare de postere) tinea procesul viu dupa
+# iesire, iar paza WDG il oprea abia dupa IESIRE_CERUTA_S (45 s) din hds-watchdog.py: o repornire a interfetei din meniu
+# dura ~1,5 minute. pazaFirelorLaIesire (din mytest.py, dupa iesireInceputa) inlocuieste numai pasul de la coada lui
+# threading._shutdown (threading._thread_shutdown, Python 3.13 si mai nou), dupa functiile threading._register_atexit:
+# firele non-daemon sunt asteptate cel mult ASTEPTARE_FIRE_S secunde (cat ruleaza opkg, pana termina, ca la paznic);
+# firele imaginii (numele incep cu PREFIXE_FIRE_IMAGINE: lucruri cu capat, de pilda editorul de canale care scrie lista)
+# sunt asteptate mai departe, pana cu MARJA_PAZA_S inaintea pazei, ca inainte de IES; cele ramase se scriu (nume, plugin, loc) in jurnalul paznicului si in hds-caderi.log (acelasi rand o singura data pana
+# la repornirea receptorului) si nu mai sunt asteptate. Py_Finalize le trateaza apoi ca pe firele daemon (raman oprite
+# cand cer lacatul Python), iar restul iesirii merge ca inainte: functiile atexit (si golirea jurnalului interfetei),
+# golirea stdout, codul iesirii pus de enigma2. Nimic salvat nu se pierde: salvarile s-au facut inainte, in mytest.py si
+# in C++. Un fir tinut in functiile threading._register_atexit (concurrent.futures) sau alt blocaj din Py_Finalize ramane
+# la paza de 45 s.
+ASTEPTARE_FIRE_S = 5.0          # cat mai asteapta iesirea firele non-daemon dupa salvari
+PAZA_IESIRE_S = 45              # IESIRE_CERUTA_S din hds-watchdog.py, socotita de la iesireInceputa
+MARJA_PAZA_S = 5                # asteptarea se termina cu atatea secunde inaintea pazei
+PAS_FIRE_S = 0.25               # cat de des se uita la firele asteptate
+PREFIXE_FIRE_IMAGINE = ("Hds", "hds-")   # numele firelor imaginii (firele straine nu le folosesc)
+CALE_CADERI = "/home/root/logs/hds-caderi.log"
+CALE_FIRE_IESIRE = "/tmp/hds-fire-iesire.semn"   # firele ultimului rand din hds-caderi.log (RAM: pana la repornire)
+MAX_RAND_FIRE = 600
+_pazaFire = [None]              # (ceasul monoton al instalarii, threading._thread_shutdown de dinainte)
+
+
+def fireleCareTinIesirea(fire=None, eu=None):
+	"""Firele pe care threading._shutdown le-ar astepta: non-daemon, vii, altele decat firul care iese si cel principal."""
+	if fire is None:
+		fire = threading.enumerate()
+	if eu is None:
+		eu = threading.current_thread()
+	principal = threading.main_thread()
+	rez = []
+	for t in fire:
+		try:
+			if t is not eu and t is not principal and not t.daemon and t.is_alive():
+				rez.append(t)
+		except Exception:
+			pass
+	return rez
+
+
+def alImaginii(fir):
+	"""True pentru un fir al imaginii (dupa nume, PREFIXE_FIRE_IMAGINE)."""
+	return str(getattr(fir, "name", "") or "").startswith(PREFIXE_FIRE_IMAGINE)
+
+
+def asteaptaFirele(fire, termen_s, ocupat=None, ceas=None, pas=PAS_FIRE_S):
+	"""Asteapta firele cel mult termen_s secunde; dupa termen, mai departe numai cat ocupat() e adevarat (opkg ruleaza:
+	o iesire acum l-ar opri la jumatate). -> firele inca vii."""
+	ceas = ceas or monotonic
+	sfarsit = ceas() + max(0.0, termen_s)
+	while True:
+		vii = [t for t in fire if t.is_alive()]
+		if not vii:
+			return []
+		ramas = sfarsit - ceas()
+		if ramas <= 0:
+			try:
+				mai_asteapta = bool(ocupat is not None and ocupat())
+			except Exception:
+				mai_asteapta = False
+			if not mai_asteapta:
+				return vii
+			ramas = pas
+		try:
+			vii[0].join(min(pas, ramas))
+		except Exception:
+			return [t for t in fire if t.is_alive()]
+
+
+def _opkgOcupat():
+	"""True cat ruleaza opkg (Components/HdsActualizari.instalare_in_curs)."""
+	try:
+		from Components.HdsActualizari import instalare_in_curs
+		return bool(instalare_in_curs())
+	except Exception:
+		return False
+
+
+def descriereFir(fir, cadru=None, pluginDinCale=None):
+	"""Un fir ramas pe scurt: numele (fara numele modulelor de acces, ca in fisierul stivelor), pluginul extern din stiva
+	lui, unde sta acum si primul cadru din afara bibliotecii Python (al cui e codul)."""
+	text = _textFir(getattr(fir, "name", "?")) or "?"
+	if cadru is None:
+		return text
+	try:
+		plugin = pluginExternInStiva(cadru, pluginDinCale)
+	except Exception:
+		plugin = None
+	if plugin:
+		text += " [%s]" % _textFir(plugin)
+	sus = "%s:%d %s" % (_scurt(cadru.f_code.co_filename), cadru.f_lineno, cadru.f_code.co_name)
+	text += " la %s" % sus
+	c, adancime = cadru, 200
+	while c is not None and adancime > 0:
+		scurt = _scurt(c.f_code.co_filename)
+		if not _bibliotecaPython(scurt):
+			loc = "%s:%d %s" % (scurt, c.f_lineno, c.f_code.co_name)
+			if loc != sus:
+				text += " din %s" % loc
+			break
+		c = c.f_back
+		adancime -= 1
+	return text
+
+
+def textFireRamase(fire, cadre=None, pluginDinCale=None):
+	"""(cheia, textul) pentru firele ramase: cheia = descrierile lor (aceleasi fire, acelasi rand), textul = randul din
+	jurnale, cel mult MAX_RAND_FIRE caractere."""
+	if cadre is None:
+		try:
+			cadre = sys._current_frames()
+		except Exception:
+			cadre = {}
+	cheie = ", ".join(descriereFir(t, cadre.get(t.ident), pluginDinCale) for t in fire)
+	text = "enigma2 pid=%d: iesirea nu mai asteapta firele non-daemon ramase dupa salvari (%d): %s" % (
+		os.getpid(), len(fire), cheie)
+	return cheie, text[:MAX_RAND_FIRE]
+
+
+def scrieRandCaderi(text, cheie, cale=None, cale_semn=None):
+	"""Randul in hds-caderi.log ("AAAA-LL-ZZ HH:MM:SS text", ca hds-watchdog.py si enigma2.sh), cu fsync; acelasi rand
+	(aceeasi cheie) o singura data pana la repornirea receptorului, ca o repornire des a interfetei sa nu impinga caderile
+	adevarate afara din jurnal. -> True daca l-a scris. Nu arunca."""
+	cale = cale or os.environ.get("HDS_CADERI_JURNAL") or CALE_CADERI
+	cale_semn = cale_semn or CALE_FIRE_IESIRE
+	try:
+		with open(cale_semn, encoding="utf-8", errors="replace") as f:
+			if f.read() == cheie:
+				return False
+	except (OSError, IOError):
+		pass
+	try:
+		dosar = os.path.dirname(cale)
+		if dosar and not os.path.isdir(dosar):
+			os.makedirs(dosar)
+		with open(cale, "a", encoding="utf-8") as f:
+			f.write("%s %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), text))
+			f.flush()
+			os.fsync(f.fileno())
+	except (OSError, IOError):
+		return False
+	try:
+		with open(cale_semn, "w", encoding="utf-8") as f:
+			f.write(cheie)
+	except (OSError, IOError):
+		pass
+	return True
+
+
+def _asteaptaFireleLaIesire():
+	"""threading._thread_shutdown cat iese enigma2 (chemat de threading._shutdown din Py_Finalize): firele non-daemon
+	asteptate cu termen (ale imaginii pana aproape de paza); cele ramase scrise si lasate. Fara fire ramase (sau la o
+	eroare inainte de hotarare), pasul de dinainte. Hotararea nu depinde de scrierea in jurnale."""
+	if _pazaFire[0] is None:
+		return None
+	inceput, vechi = _pazaFire[0]
+	try:
+		pana_la_paza = PAZA_IESIRE_S - MARJA_PAZA_S - (monotonic() - inceput)
+		fire = fireleCareTinIesirea()
+		ramase = asteaptaFirele(fire, max(0.0, min(ASTEPTARE_FIRE_S, pana_la_paza)), _opkgOcupat) if fire else []
+		ale_imaginii = [t for t in ramase if alImaginii(t)]
+		if ale_imaginii:
+			pana_la_paza = PAZA_IESIRE_S - MARJA_PAZA_S - (monotonic() - inceput)
+			ramase = [t for t in ramase if not alImaginii(t)] + asteaptaFirele(ale_imaginii, max(0.0, pana_la_paza),
+				_opkgOcupat)
+	except Exception as e:
+		_jurnal("firele la iesire: %r" % (e,))
+		return vechi()
+	if not ramase:
+		return vechi()
+	try:
+		cheie, text = textFireRamase(ramase)
+		jurnalPaznic(text)
+		scrieRandCaderi(text, cheie)
+	except Exception as e:
+		try:
+			_jurnal("firele la iesire, jurnalul: %r" % (e,))
+		except Exception:
+			pass
+	return None
+_asteaptaFireleLaIesire._hds_iesire = True
+
+
+def pazaFirelorLaIesire(modul=None, ceas=None):
+	"""Din mytest.py, dupa iesireInceputa: pune _asteaptaFireleLaIesire in locul lui threading._thread_shutdown, pentru
+	Py_Finalize. -> False cand Python-ul nu are acel pas (inainte de 3.13): iesirea asteapta firele ca inainte. Nu arunca."""
+	modul = threading if modul is None else modul
+	try:
+		vechi = getattr(modul, "_thread_shutdown", None)
+		if not callable(vechi):
+			_jurnal("firele la iesire: fara threading._thread_shutdown (Python %s), le asteapta ca inainte"
+				% sys.version.split()[0])
+			return False
+		if getattr(vechi, "_hds_iesire", False) is True:
+			return True
+		_pazaFire[0] = (monotonic() if ceas is None else ceas, vechi)
+		modul._thread_shutdown = _asteaptaFireleLaIesire
+		return True
+	except Exception as e:
+		_jurnal("firele la iesire: %r" % (e,))
+		return False
 
 
 _unic = [None]
@@ -990,6 +1306,11 @@ def bataie():
 
 def porneste():
 	"""Din mytest.py, dupa pornirea sesiunii: setarile si bataia."""
+	# 0.7.6 (WDG): semnul iesirii ramas de la procesul de dinainte nu mai conteaza (hds-watchdog.py cere si pid-ul lui)
+	try:
+		os.remove(CALE_IESIRE)
+	except OSError:
+		pass
 	initConfig()
 	bataie().porneste()
 	_jurnal("bataia pornita (%s, la %d s)" % (bataie().cale, BATAIE_S))
@@ -1267,3 +1588,150 @@ def seteaza(interfata=None, asteptare=None, noapte=None):
 		config.hds_paznic.interfata.save()
 	configfile.save()
 	return True, _("Salvat. Paznicul folosește setarea de la următoarea verificare (cel mult 15 secunde).")
+
+
+# ---------------------------------------------------------------- punctul 11: stivele tuturor firelor, la cererea paznicului
+
+CALE_CERERE_STIVE = "/tmp/hds-stive-%d.cerere"   # teava (FIFO) pe care hds-watchdog.py cere stivele; %d = pid-ul enigma2
+PREFIX_CERERE_STIVE = "hds-stive-"
+MAX_CADRE_STIVA = 100                             # cat scrie faulthandler pentru un fir
+SFARSIT_STIVE = "# sfarsit cererea "              # ultimul rand al raspunsului, cu semnul cererii (paznicul il cauta)
+
+
+def _textFir(nume):
+	"""Numele firului pentru randul cu # (ramane in fisierul de pe receptor): litere, cifre si semnele obisnuite; al unui
+	modul de acces e numai "(modul-acces)"."""
+	nume = "".join(c for c in str(nume)[:40] if c.isalnum() or c in " _.-()[]")
+	return "(modul-acces)" if "cam" in nume.lower() else nume
+
+
+def _numeFire():
+	"""{ident: numele firului}, fara lacatul din threading (firul principal poate sta oriunde cand se cer stivele)."""
+	try:
+		return dict((t.ident, t.name) for t in list(threading._active.values()))
+	except Exception:
+		return {}
+
+
+def textStive(cadre, nume=None, principal=None, eu=None, cerere=""):
+	"""Stivele firelor (cadre: {ident: cadrul de sus}, ca sys._current_frames()) in forma faulthandler, pe care o citesc
+	raportul pornirii (tools/hds-raport.sh, rp_stive), pachetul beta testerului (HdsBetaTester.stiveCurate) si raportul de
+	procesor: antetul "Thread 0x... (most recent call first):" (firul principal "Current thread", ca in stivele paznicului
+	de pana acum), apoi '  File "cale", line N in functie', cadrul de sus primul, cel mult MAX_CADRE_STIVA, si un rand gol.
+	Firul care scrie nu apare. Numele firelor stau pe randuri cu #, pe care cititorii de mai sus le lasa deoparte. Ultimul
+	rand: SFARSIT_STIVE si semnul cererii. Numai lucruri deja incarcate: nimic importat, niciun lacat de luat."""
+	nume = nume or {}
+	r = ["# stivele tuturor firelor Python ale enigma2, citite din Python la cererea paznicului"]
+	for ident in sorted(cadre, key=lambda i: (i != principal, i)):
+		if ident == eu:
+			continue
+		adresa = ident & 0xFFFFFFFFFFFFFFFF
+		r.append("# fir: %s" % _textFir(nume.get(ident, "?")))
+		r.append("%s 0x%0*x (most recent call first):" % ("Current thread" if ident == principal else "Thread",
+			8 if adresa < (1 << 32) else 16, adresa))
+		c, n = cadre[ident], 0
+		if c is None:
+			r.append("  <no Python frame>")
+		while c is not None and n < MAX_CADRE_STIVA:
+			cod = c.f_code
+			rand = c.f_lineno
+			r.append('  File "%s", line %s in %s' % (cod.co_filename, rand if rand is not None else "???", cod.co_name))
+			c = c.f_back
+			n += 1
+		r.append("")
+	r.append(SFARSIT_STIVE + cerere)
+	return "\n".join(r) + "\n"
+
+
+def _semnCerere(date):
+	"""semnul cererii din ce a scris paznicul (ultimul cuvant, numai litere si cifre)"""
+	cuvinte = date.decode("ascii", "replace").split()
+	return "".join(c for c in cuvinte[-1] if c.isalnum())[:32] if cuvinte else ""
+
+
+class StiveLaCerere(object):
+	"""Punctul 11 (0.7.7). Un fir al imaginii asteapta cererile paznicului (hds-watchdog.py, cere_stivele) pe teava
+	CALE_CERERE_STIVE si scrie stivele tuturor firelor Python la coada fisierului de stive, acelasi pe care il primeste
+	faulthandler in mytest.py, in aceeasi forma. Citite din Python (sys._current_frames, cu lacatul Python luat), stivele
+	celorlalte fire nu se schimba sub citire; citite din manerul de semnal (faulthandler cu toate firele), cat alt fir ruleaza
+	cod Python, au oprit enigma2 (SIGSEGV in libpython, 1 din ~318 pe receptorul de proba). Cand lacatul Python e tinut (interfata chiar
+	sta), firul nu poate raspunde, iar paznicul trece la faulthandler: atunci niciun alt fir nu ruleaza cod Python."""
+
+	def __init__(self, fd, cale=None, pid=None):
+		self.fd = fd
+		self.pid = pid or os.getpid()
+		self.cale = cale or (CALE_CERERE_STIVE % self.pid)
+		self.citire = None
+		self.fir = None
+
+	def deschide(self):
+		"""Teava acestui proces, noua; tevile ramase de la procese care nu mai exista se sterg."""
+		dosar = os.path.dirname(self.cale) or "."
+		try:
+			for n in os.listdir(dosar):
+				if not (n.startswith(PREFIX_CERERE_STIVE) and n.endswith(".cerere")):
+					continue
+				try:
+					pid = int(n[len(PREFIX_CERERE_STIVE):-len(".cerere")])
+				except ValueError:
+					continue
+				if pid != self.pid and not _procesExista(pid):
+					try:
+						os.remove(os.path.join(dosar, n))
+					except OSError:
+						pass
+		except OSError:
+			pass
+		try:
+			os.remove(self.cale)
+		except OSError:
+			pass
+		os.mkfifo(self.cale, 0o600)
+		# O_RDWR: deschiderea nu asteapta un scriitor, iar citirea asteapta (nu intoarce sfarsitul) dupa ce paznicul inchide
+		self.citire = os.open(self.cale, os.O_RDWR)
+
+	def raspunde(self, cerere=""):
+		"""Stivele o data, intr-o singura scriere la coada fisierului. Nu arunca."""
+		try:
+			text = textStive(sys._current_frames(), _numeFire(), threading.main_thread().ident, threading.get_ident(),
+				cerere)
+		except Exception as e:
+			text = "# stivele nu s-au putut citi: %s\n%s%s\n" % (type(e).__name__, SFARSIT_STIVE, cerere)
+		date = text.encode("utf-8", "replace")
+		try:
+			while date:
+				date = date[os.write(self.fd, date):]
+		except OSError:
+			pass
+
+	def _bucla(self):
+		while True:
+			try:
+				date = os.read(self.citire, 256)
+			except OSError:
+				return
+			if not date:
+				return
+			self.raspunde(_semnCerere(date))
+
+	def porneste(self):
+		self.deschide()
+		self.fir = threading.Thread(target=self._bucla, name="hds-stive")
+		self.fir.daemon = True
+		self.fir.start()
+
+
+_stiveLaCerere = [None]
+
+
+def pornesteStiveLaCerere(fisier):
+	"""Din capul mytest.py, cu fisierul de stive deschis la coada (acelasi ca al faulthandler). -> StiveLaCerere sau None.
+	Nu arunca."""
+	if _stiveLaCerere[0] is None:
+		try:
+			s = StiveLaCerere(fisier if isinstance(fisier, int) else fisier.fileno())
+			s.porneste()
+			_stiveLaCerere[0] = s
+		except Exception as e:
+			_jurnal("stivele la cererea paznicului: %r" % (e,))
+	return _stiveLaCerere[0]

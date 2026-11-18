@@ -110,21 +110,144 @@ def _feluri(p):
 	return bool(getattr(p, "usb", False) or getattr(p, "sata", False)), bool(getattr(p, "sd", False))
 
 
-def _partitiiAle(hm):
-	"""Partitiile de stick/disc/card pe care le stie managerul (listate sau inca asteptand numele): {dispozitiv: p}."""
+def _partitiiAle(hm, sarite=None):
+	"""Partitiile de stick/disc/card pe care le stie managerul (listate sau inca asteptand numele): {dispozitiv: p}.
+	`sarite` (dict, optional) primeste {dispozitiv: motiv} pentru partitiile cu nume de disc lasate deoparte."""
 	H = _H()
 	rez = {}
 	for p in list(hm.partitions) + list(hm.pending.values()):
 		dev = getattr(p, "device", None)
-		if not dev or not getattr(p, "is_hotplug", False) or not dispozitivBun(dev):
+		if not dev or not dispozitivBun(dev):
 			continue
+		if getattr(p, "is_cdrom", False) or getattr(p, "has_partitions", False):
+			continue
+		motiv = ""
 		mediu, sd = _feluri(p)
-		if not (mediu or sd) or getattr(p, "is_cdrom", False) or getattr(p, "has_partitions", False):
-			continue
-		if H.isBootSlot(dev):
+		if not getattr(p, "is_hotplug", False):
+			motiv = MOTIV_FARA_HOTPLUG
+		elif not (mediu or sd):
+			motiv = "nici USB, nici SATA, nici card SD (physdev %s)" % getattr(p, "physdev", "?")
+		elif H.isBootSlot(dev):
+			motiv = "loc de pornire al unei imagini"
+		if motiv:
+			if sarite is not None and dev not in rez:
+				sarite.setdefault(dev, motiv)
 			continue
 		rez.setdefault(dev, p)
+		if sarite is not None:
+			sarite.pop(dev, None)
 	return rez
+
+
+# ------------------------------------------------------------------ discurile montate pe care managerul nu le stie
+# 0.7.7 (DRG, darog69, Vu+ Duo4K, forum 789 #2619): pagina /montare-discuri spunea "niciun disc" desi hard diskul era in
+# /media/hdd si stickul in /media/usb. Lista vine din managerul de discuri, care la pornire putea scoate o partitie din
+# liste cand pregatirea ei trecea de termen (Harddisk.retryLater o reia acum). Ca pagina si ecranul sa nu mai spuna
+# "niciun disc" cand un disc e montat: lista ia si discurile montate in /media sau /run/media pe care managerul nu le
+# stie (din /proc/mounts si /sys), iar interfata le pune singura inapoi in manager (reparaNecunoscute, fara nicio
+# apasare); in jurnal, un rand pentru fiecare disc sarit, cu motivul (o data pe disc si motiv).
+
+PAUZA_REPARARE_S = 60
+# 16.11 (DRG2, darog69 789 #2882, Vu+ Duo4K): o partitie pe care managerul o tine fara is_hotplug (partitie fixa) nu are
+# alegeri de loc; daca e montata in /media sau /run/media si e pe USB/SATA/card, apare totusi in lista (ca disc necunoscut),
+# nu se mai sare in tacere. Cele sarite pentru alt motiv (loc de pornire, nici USB nici SATA) raman sarite.
+MOTIV_FARA_HOTPLUG = "nu vine din lista de discuri conectate (is_hotplug)"
+_jurnalizate = set()
+_reparate = {}
+
+
+def _jurnalOData(dispozitiv, motiv):
+	if (dispozitiv, motiv) in _jurnalizate:
+		return
+	_jurnalizate.add((dispozitiv, motiv))
+	_jurnal("%s: %s" % (dispozitiv, motiv))
+
+
+def _felFizic(dispozitiv):
+	"""(usb, sata, sd, physdev) dupa calea din /sys a discului, ca HarddiskManager.addHotplugPartition."""
+	H = _H()
+	try:
+		# path al lui Harddisk (acelasi os.path pe receptor; probele ii dau sistemul de fisiere fals)
+		physdev = getattr(H, "path", os.path).realpath("/sys/block/" + discul(dispozitiv) + "/device")[4:]
+	except (OSError, ValueError):
+		physdev = ""
+	usb = "/usb" in physdev
+	sata = not usb and H.isSataPhysdev(physdev)
+	sd = not usb and not sata and H.isSdCard(dispozitiv)
+	return usb, sata, sd, physdev
+
+
+def _montateNecunoscute(cunoscute, hm):
+	"""{dispozitiv: [locuri]}: partitiile de stick/disc/card montate in /media sau /run/media pe care managerul nu le are
+	(nici in partitions, nici in pending). Nu discul de pe care porneste imaginea, nu un loc de pornire, nu memoria interna."""
+	H = _H()
+	locuri = {}
+	for sursa, loc in H.readMounts():
+		if not sursa.startswith("/dev/"):
+			continue
+		dev = sursa[len("/dev/"):]
+		if not dispozitivBun(dev) or dev in cunoscute:
+			continue
+		if not (loc.startswith(MEDIA) or loc.startswith(H.SYSTEM_MOUNT_BASE)):
+			continue
+		if loc not in locuri.setdefault(dev, []):
+			locuri[dev].append(loc)
+	# numele stabile facute ca legaturi (cand montarea bind n-a mers): /media/hdd -> /run/media/hdd-sda1
+	esteAlias = getattr(H, "isAliasOf", None)
+	try:
+		nume_media = sorted(getattr(H, "listdir", os.listdir)(MEDIA)) if esteAlias is not None else []
+	except OSError:
+		nume_media = []
+	for dev, l in locuri.items():
+		for nume in nume_media:
+			alias = MEDIA + nume
+			try:
+				if alias not in l and any(esteAlias(alias, x) for x in list(l)):
+					l.append(alias)
+			except Exception as e:
+				_jurnalOData(alias, "legatura necitita: %r" % (e,))
+	rez = {}
+	for dev, l in sorted(locuri.items()):
+		if discul(dev) == getattr(hm, "system_disk", None) or H.isBootSlot(dev):
+			continue
+		usb, sata, sd, physdev = _felFizic(dev)
+		if not (usb or sata or sd):
+			_jurnalOData(dev, "montat in %s, dar nu e stick, disc USB/SATA sau card SD (physdev %s)" % (", ".join(l), physdev or "?"))
+			continue
+		_jurnalOData(dev, "montat in %s, dar managerul de discuri nu-l are in liste" % ", ".join(l))
+		rez[dev] = sorted(l, key=lambda x: (not x.startswith(MEDIA), x))
+	return rez
+
+
+def reparaNecunoscute(randuri, hm=None, acum=None):
+	"""Pe firul interfetei, dupa lista(): discurile montate pe care managerul nu le stie (randurile "necunoscut") intra din
+	nou in lista lui, ca la punerea stickului, fara fereastra de cautare a fisierelor; cel mult o data pe minut pentru acelasi
+	disc. Intoarce dispozitivele puse din nou."""
+	hm = _hm(hm)
+	acum = time.monotonic() if acum is None else acum
+	puse = []
+	for r in randuri or []:
+		dev = r.get("dispozitiv")
+		if not r.get("necunoscut") or not dispozitivBun(dev) or inLucru():
+			continue
+		if dev in _reparate and acum - _reparate[dev] < PAUZA_REPARARE_S:
+			continue
+		_reparate[dev] = acum
+		try:
+			if dev in hm.pending or any(getattr(p, "device", None) == dev for p in hm.partitions):
+				continue
+			hm.addHotplugPartition(dev)
+			p = hm.pending.get(dev)
+			if p is None:
+				_jurnal("%s: managerul de discuri nu l-a primit inapoi" % dev)
+				continue
+			p.notify_mount = False
+			hm.scheduleMount(dev, 500)
+			_jurnal("%s: pus din nou in lista managerului de discuri" % dev)
+			puse.append(dev)
+		except Exception as e:
+			_jurnal("%s: punerea inapoi in lista: %r" % (dev, e))
+	return puse
 
 
 def _numele(p, dispozitiv, eticheta):
@@ -145,7 +268,10 @@ def lista(hm=None):
 		if not _prezent(dev):
 			_demontate.pop(dev, None)
 	rez = []
-	partitii = _partitiiAle(hm)
+	sarite = {}
+	partitii = _partitiiAle(hm, sarite)
+	for dev, motiv in sorted(sarite.items()):
+		_jurnalOData(dev, "sarit din lista: %s" % motiv)
 	for dev, p in sorted(partitii.items()):
 		if dev in _demontate:
 			continue
@@ -165,6 +291,19 @@ def lista(hm=None):
 		rez.append({"dispozitiv": dev, "nume": d["nume"], "eticheta": d["eticheta"], "marime": _marime(dev),
 			"sistem": H.deviceFsType(dev), "stare": "demontat", "loc": "", "locuri": H.findMountpoints(dev),
 			"ales": "", "alegeri": [], "sd": d["sd"], "poate_demonta": False, "poate_monta": not d["sd"]})
+	try:
+		sarite_de_tot = set(d for d, motiv in sarite.items() if motiv != MOTIV_FARA_HOTPLUG)
+		necunoscute = _montateNecunoscute(set(partitii) | set(_demontate) | sarite_de_tot, hm)
+	except Exception as e:
+		_jurnal("discurile montate necunoscute: %r" % (e,))
+		necunoscute = {}
+	for dev, locuri in necunoscute.items():
+		eticheta = H.deviceLabel(dev)
+		sd = _felFizic(dev)[2]
+		loc = next((x for x in locuri if x.startswith(MEDIA)), locuri[0])
+		rez.append({"dispozitiv": dev, "nume": _numele(None, dev, eticheta), "eticheta": eticheta, "marime": _marime(dev),
+			"sistem": H.deviceFsType(dev), "stare": "montat", "loc": loc, "locuri": locuri, "ales": "", "alegeri": [],
+			"sd": sd, "poate_demonta": False, "poate_monta": False, "necunoscut": True})
 	return rez
 
 

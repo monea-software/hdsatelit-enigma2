@@ -1626,6 +1626,28 @@ class HarddiskManager:
 		timer.start(delay_ms, True)
 		self.mount_timers[key] = timer
 
+	# 0.7.7 (DRG, darog69, Vu+ Duo4K, forum 789 #2619): o pregatire de montare care trece de termen (firul de lucru incet la
+	# pornire, sau prea multe fire ocupate) nu mai scoate partitia din liste: se incearca din nou dupa 5, 15 si 30 s. Abia
+	# dupa a treia incercare cazuta ramane in afara, ca inainte (un disc care chiar nu raspunde nu tine interfata ocupata).
+	MOUNT_RETRY_DELAYS_MS = (5000, 15000, 30000)
+
+	def retryLater(self, device, ce, rez=None):
+		"""True cand pregatirea partitiei `device` se mai incearca o data (scheduleMount); False dupa ultima incercare."""
+		if not hasattr(self, "mount_retries"):
+			self.mount_retries = {}
+		n = self.mount_retries.get(device, 0)
+		stare = (rez or {}).get("stare", "?")
+		if n >= len(self.MOUNT_RETRY_DELAYS_MS) or not path.exists(SYS_CLASS_BLOCK + device):
+			print("[Harddisk] %s: %s a ramas fara raspuns (%s) si dupa %d reincercari; partitia ramane in afara listei" % (
+				device, ce, stare, n))
+			self.mount_retries.pop(device, None)
+			return False
+		self.mount_retries[device] = n + 1
+		print("[Harddisk] %s: %s fara raspuns la timp (%s); incerc din nou peste %d s" % (
+			device, ce, stare, self.MOUNT_RETRY_DELAYS_MS[n] // 1000))
+		self.scheduleMount(device, self.MOUNT_RETRY_DELAYS_MS[n])
+		return True
+
 	def pendingOrder(self, device):
 		# the partition that had /media/hdd first, then fixed disks before sticks, then by name
 		p = self.pending[device]
@@ -1687,7 +1709,8 @@ class HarddiskManager:
 				return
 			if rez["stare"] != "gata":
 				self.mount_errors[device] = {"motiv": _("Discul nu răspunde la timp. Încearcă din nou."), "detalii": rez.get("eroare", ""), "numai_citire": False}
-				self.pending.pop(device, None)
+				if not self.retryLater(device, "planul de montare", rez):
+					self.pending.pop(device, None)
 				return
 			plan = rez["valoare"] or {}
 			if plan.get("exclude"):
@@ -1862,7 +1885,12 @@ class HarddiskManager:
 			if rez["stare"] != "gata":
 				self.mount_errors[device] = {"motiv": _("Discul nu răspunde la timp. Încearcă din nou."),
 					"detalii": rez.get("eroare", ""), "numai_citire": False}
+				# 0.7.7 (DRG): partitia ramane in asteptare si se anunta din nou; inainte ramanea in afara listelor pentru
+				# totdeauna, desi montarea /media/<nume> se facuse (darog69, Vu+ Duo4K: /montare-discuri fara discuri)
+				if self.retryLater(device, "anuntul montarii", rez):
+					self.pending[device] = p
 				return
+			getattr(self, "mount_retries", {}).pop(device, None)
 			if rez["valoare"]["numai_citire"]:
 				self.mount_errors[device] = {"motiv": _("Discul este montat numai pentru citire."),
 					"detalii": self.mount_errors.get(device, {}).get("detalii", ""), "numai_citire": True}
@@ -1905,6 +1933,7 @@ class HarddiskManager:
 		self.label_aliases.pop(device, None)
 		self.chosen_aliases.pop(device, None)
 		self.mount_errors.pop(device, None)
+		getattr(self, "mount_retries", {}).pop(device, None)
 		aliases = self.media_alias_targets.pop(device, {})
 		def removeAliases():
 			for alias, target in aliases.items():

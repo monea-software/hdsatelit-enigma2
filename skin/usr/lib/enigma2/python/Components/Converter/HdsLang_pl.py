@@ -305,4 +305,10 @@ T = {
 	"set_grid_value_alpha": u"Wybrany kolor: {0}, przezroczystość {1}",
 	"set_grid_help": u"Strzałki przesuwają cię po siatce, po wierszu przezroczystości i po pasku na dole; kolor widać od razu po prawej. OK lub Zielony zostawia kolor, Niebieski otwiera kod hex i R, G, B.",
 	"set_advanced": u"Zaawansowane",
+	"bitrate_va": u"Bitrate wideo · audio",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"śr",
+	"ecm_hop": u"Przeskoki",
+	"ecm_reader": u"Czytnik",
 }

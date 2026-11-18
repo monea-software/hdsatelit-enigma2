@@ -20,6 +20,29 @@ imagine.porneste; pluginul pentru alte imagini nu il foloseste):
   - serviciul nu porneste (tuner ocupat, acord cazut, referinta necunoscuta): „HTTP/1.0 400 Bad Request" in corp,
     dupa antetul 200, apoi inchidere (asa asteapta surse.CititorHttp si t2mi_decap; TunerOcupat, reincercare).
 Cel mult SESIUNI_MAX sesiuni deodata; numai referinte DVB de serviciu (fara cai de fisier, fara alte cereri).
+
+0.7.7, INTAIETATEA TELEVIZORULUI: o sesiune ceruta din retea (VLC, telefonul, alt receptor care foloseste acest receptor ca
+tuner de rezerva, Components/HdsTunerRezerva.py) tine tunerul ca o inregistrare; la zap, enigma2 nu o opreste (marcajul
+setYieldsToZap ajuta numai lista de canale). Extensia de zap la_zap (pusa de porneste) face ca televizorul sa castige:
+cand canalul cerut de televizor nu are tuner liber, sesiunile din retea de pe alt transponder, al aceluiasi fel de
+tuner (satelit / cablu si terestru), se opresc pe rand, cea mai noua intai, pana cand televizorul are tuner; un rand in
+jurnal pentru fiecare. Clientul primeste sfarsitul obisnuit al fluxului (soclul inchis dupa ultimii octeti), nu un
+raspuns de eroare. Sesiunile de pe receptor (releele DAB+ / DVB-T2, releul modulului de acces) nu se ating aici: pe ele
+le opreste extensia releelor, iar transmisia din browser are drumul ei (Components/HdsTransmisie.py).
+
+0.7.7, INTAIETATEA INREGISTRARILOR: la fel pentru o inregistrare adevarata (temporizatorul, inregistrarea pe loc), prin
+extensia de inregistrare la_inregistrare (pusa de porneste la COADA extensiilor de inregistrare, deci dupa releele DAB+ /
+DVB-T2, care isi dau tunerul oricarei inregistrari, si dupa transmisia din browser si transcodare, puse la inceput).
+Extensia ruleaza in Navigation.recordService, inainte de pnav.recordService; tunerul se aloca abia la prepare, imediat
+dupa, cand sesiunile oprite l-au lasat deja. Deosebirea fata de zap: televizorul inca ruleaza, deci o sesiune de pe
+transponderul lui imparte tunerul cu el, iar oprirea ei nu elibereaza nimic: ramane. Verificarile (simulate:
+TimerSanityCheck, importul ghidului, fereastra temporizatorului) nu opresc nimic. Temporizatoarele de zap trec prin la_zap.
+
+0.7.7, GRUPURILE DE ALTERNATIVE: la un grup, Navigation (si temporizatorul) alege intai alternativa care are tuner; cand
+niciuna n-are (toate tinute de sesiuni din retea), zap-ul si inregistrarea se opreau inainte de la_zap / la_inregistrare.
+Extensia la_grup (Navigation.grupFaraTuner, pusa de porneste) face aceeasi cedare pe toate alternativele DVB ale grupului
+(felul de tuner al oricareia, nu de pe transponderul vreuneia), cea mai noua intai, pana cand o alternativa are tuner; la
+o inregistrare raman sesiunile de pe transponderul televizorului, ca mai sus.
 """
 import collections
 import errno
@@ -27,6 +50,7 @@ import os
 import re
 import select
 import socket
+import sys
 import threading
 import time
 
@@ -61,13 +85,18 @@ PAUZE_GOL_S = (5, 10, 20, 30, 60)
 PRAG_DATE_OCTETI = 188 * 1000
 CERERE_RECENTA_S = 90        # clientul canalului fara date "inca cere" daca a cerut in ultimele atatea secunde
 EROARE_PAUZA = 'pauza dupa sesiuni fara date'
+# sfarsitul unei sesiuni din retea oprite ca receptorul sa-si ia tunerul (in jurnal, ca motivul sesiunii incheiate)
+MOTIV_TV = 'televizorul receptorului a luat tunerul'
+MOTIV_INREGISTRARE = 'o inregistrare a receptorului a luat tunerul'
 F_SETPIPE_SZ = 1031          # fcntl: marimea tevii (Linux)
 TEAVA_OCTETI = 1024 * 1024   # se cere; daca nucleul refuza ramane marimea implicita
 BLOC = 256 * 1024
 _SPLICE = getattr(os, 'splice', None)
 
+# 0.7.7: si fara doua puncte la coada ("...:0:0:0"), cum cer receptoarele OE-Alliance care folosesc acest receptor ca
+# tuner de rezerva (Components/HdsTunerRezerva.py); ref_din_cerere le pune inapoi, deci restul vede aceeasi referinta
 REF_BUNA = re.compile(r'^1:0:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:'
-                      r'[0-9A-Fa-f]{1,8}:0:0:0:$')
+                      r'[0-9A-Fa-f]{1,8}:0:0:0:?$')
 ANTET_200 = b'HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: video/mpeg\r\nServer: HDSatelit\r\n\r\n'
 RASPUNS_400 = b'HTTP/1.0 400 Bad Request\r\nConnection: Close\r\n\r\n'
 
@@ -84,7 +113,9 @@ def ref_din_cerere(date):
     if len(parti) != 3 or parti[0] != 'GET' or not parti[2].startswith('HTTP/1.') or not parti[1].startswith('/'):
         return None
     ref = parti[1][1:].replace('%3A', ':').replace('%3a', ':')
-    return ref if REF_BUNA.match(ref) else None
+    if not REF_BUNA.match(ref):
+        return None
+    return ref if ref.endswith(':') else ref + ':'
 
 
 def adresa_privata(ip):
@@ -141,6 +172,8 @@ class Sesiune(object):
         self.pornita_bine = False            # numai firul principal: inregistrarea a pornit (pentru pauza canalelor fara date)
         self.in_pauza = False                # numai firul principal: cererea a venit in pauza, fara inregistrare
         self.tuner = None                    # (tuner_number, orbital_position) citite la pornire, sau None
+        self.cedata = False                  # firul principal: oprita ca televizorul sa ia tunerul (cedeaza_televizorului)
+        self.motiv_cedare = MOTIV_TV         # sau MOTIV_INREGISTRARE (cedeaza_inregistrarii): sfarsitul sesiunii cedate
         self.fir = threading.Thread(target=self._lucreaza, name='hds8001')
         self.fir.daemon = True
 
@@ -211,7 +244,7 @@ class Sesiune(object):
                         continue
                     return 'clientul nu mai primeste (%s)' % (getattr(e, 'strerror', None) or e)
                 if not n:
-                    return 'inregistrarea a inchis teava'
+                    return self.motiv_cedare if self.cedata else 'inregistrarea a inchis teava'
                 blocat_din = None
                 self.octeti += n
 
@@ -462,7 +495,8 @@ class Server(object):
                         continue                 # cererea din pauza: nimic in jurnal (randul l-a scris inceputul pauzei)
                     jurnal.noteaza(ET, 'sesiune incheiata %s: %s, %d octeti in %d s' % (
                         ses.ref or '-', rest[0] if rest else '-', ses.octeti, int(_monoton() - ses.inceput)))
-                    self._noteaza_capatul(ses)
+                    if not ses.cedata:           # oprita pentru televizor: nu e un canal fara date
+                        self._noteaza_capatul(ses)
             except Exception:
                 jurnal.eroare(ET, ce)
         self._porneste_ceasul()
@@ -602,6 +636,56 @@ class Server(object):
             self._porneste_ceasul()
         return n
 
+    def cedeaza_televizorului(self, ref, liber):
+        """Firul principal, la zap (la_zap), dupa oprirea serviciului vechi. `ref`: textul referintei cerute de
+        televizor; `liber()`: True cand televizorul are tuner pentru ea (isPlayable). Daca n-are, sesiunile cerute din
+        retea (nu de pe receptor) de pe alt transponder, al aceluiasi fel de tuner, se opresc pe rand, cea mai noua
+        intai, pana cand liber() spune da; inregistrarea oprita inchide teava, iar firul sesiunii incheie fluxul
+        obisnuit (soclul inchis dupa ultimii octeti). `ref` poate fi si lista alternativelor unui grup (la_grup).
+        -> cate sesiuni s-au oprit."""
+        return self._cedeaza(ref, liber, 'televizorul', MOTIV_TV)
+
+    def cedeaza_inregistrarii(self, ref, liber, tv=None):
+        """Firul principal, la o inregistrare adevarata (la_inregistrare, la_grup), inainte ca ea sa ceara tunerul. Ca
+        la televizor (`liber()`: isPlayable pentru `ref`), dar televizorul inca ruleaza: sesiunile de pe transponderul
+        lui (`tv`, textul referintei redate, sau None) impart tunerul cu el, deci raman. `ref` poate fi si lista
+        alternativelor unui grup. -> cate sesiuni s-au oprit."""
+        return self._cedeaza(ref, liber, 'o inregistrare', MOTIV_INREGISTRARE, tv)
+
+    def _cedeaza(self, ref, liber, cine, motiv, ramane=None):
+        # `ref`: o referinta, sau lista alternativelor unui grup (la_grup): felul de tuner al oricareia, nu de pe
+        # transponderul vreuneia (acolo tunerul se imparte, deci oprirea n-ar elibera nimic)
+        grup = isinstance(ref, (list, tuple))
+        cerute = [r for r in (ref if grup else [ref]) if _ref_dvb_fara_cale(r)]
+        if not cerute:
+            return 0
+        if not _ref_dvb_fara_cale(ramane):
+            ramane = None
+        feluri = set(_fel_tuner(r) for r in cerute)
+        candidati = [ses for ses in self.sesiuni if ses.rec is not None and not ses.oprita.is_set()
+            and not _de_pe_receptor(ses) and _fel_tuner(ses.ref) in feluri
+            and not any(_acelasi_transponder(ses.ref, r) for r in cerute)
+            and not (ramane and _acelasi_transponder(ses.ref, ramane))]
+        if not candidati or liber():
+            return 0
+        if grup:
+            text = 'grupul de alternative (%s)' % ', '.join(_cheie_ref(r) for r in cerute)
+        else:
+            text = _cheie_ref(cerute[0])
+        n = 0
+        for ses in sorted(candidati, key=lambda x: x.inceput, reverse=True):
+            ip = ses.adresa[0] if ses.adresa else '?'
+            jurnal.noteaza(ET, '%s cere %s si n-are tuner liber: opresc fluxul %s cerut de %s (%d octeti in %d s)' % (
+                cine, text, ses.ref, ip, ses.octeti, int(_monoton() - ses.inceput)))
+            ses.cedata = True
+            ses.motiv_cedare = motiv
+            self._opreste_inregistrarea(ses)
+            n += 1
+            if liber():
+                break
+        self._porneste_ceasul()
+        return n
+
     def refuzuri(self, ref):
         """Firul principal. Cate sesiuni ale purtatorului `ref` au fost refuzate la rand (inregistrarea nu a pornit:
         tuner ocupat, acord cazut) de la ultima pornire buna. 0 dupa o pornire buna sau pentru un purtator necerut."""
@@ -685,6 +769,36 @@ def _cheie_ref(ref):
     return ':'.join(str(ref or '').split(':')[:10]).rstrip(':').lower()
 
 
+def _ref_dvb_fara_cale(ref):
+    """Textul unei referinte de canal DVB (tipul 1, cu numarul serviciului, fara cale): ce poate cere un tuner."""
+    p = str(ref or '').split(':')
+    if len(p) < 10 or p[0] != '1' or (len(p) > 10 and p[10].strip()):
+        return False
+    try:
+        return int(p[1] or '0') & (1 | 2 | 64) == 0 and int(p[3] or '0', 16) != 0
+    except ValueError:
+        return False
+
+
+def _acelasi_transponder(a, b):
+    """Doua referinte DVB pe acelasi transponder (TSID, ONID, spatiul de nume): tunerul se imparte."""
+    pa, pb = str(a or '').split(':'), str(b or '').split(':')
+    try:
+        return len(pa) > 6 and len(pb) > 6 and all(int(pa[i] or '0', 16) == int(pb[i] or '0', 16) for i in (4, 5, 6))
+    except ValueError:
+        return False
+
+
+def _fel_tuner(ref):
+    """Felul de tuner al unei referinte, dupa spatiul de nume: 'ct' cablu si terestru (FFFF..., EEEE...; tunerele
+    combinate le iau pe amandoua), 'atsc' (DDDD...), altfel 's' (satelit, pozitia orbitala in partea de sus)."""
+    try:
+        sus = int(str(ref or '').split(':')[6], 16) >> 16
+    except (IndexError, ValueError):
+        return None
+    return 'ct' if sus in (0xFFFF, 0xEEEE) else 'atsc' if sus == 0xDDDD else 's'
+
+
 def _eroare_rec(rec):
     try:
         e = rec.getError()
@@ -730,11 +844,13 @@ def _stare_tuner(rec):
     except Exception as e:
         text = 'necunoscut (%s)' % e
     try:
-        # PID-urile pe care inregistrarea le-a cerut demux-ului si demux-ul ei (eDVBServiceRecord::getStreamingData)
+        # programul din PMT si demux-ul inregistrarii (eDVBServiceRecord::getStreamingData). PID-urile tinute minte in
+        # lamedb (c:18, PID-ul de date al purtatorilor de pe 30W) nu apar aici, desi inregistrarea le pune in filtru
+        # (RECORD: PID tinut minte, in hds-interfata.log): fara acel rand, filtrul are numai ce e aici
         s = rec.stream()
         date = s.getStreamingData() if s is not None else None
         if isinstance(date, dict):
-            text += '; program %s' % str(sorted(date.items()))[:300]
+            text += '; program din PMT (fara PID-urile din lamedb) %s' % str(sorted(date.items()))[:300]
         else:
             text += '; program %r (neacordat sau fara PID-uri)' % (date,)
     except Exception as e:
@@ -776,8 +892,194 @@ def porneste():
     if s.porneste():
         _server.append(s)
         _urmareste_reteaua(s)
+        _leaga_zap()
+        _leaga_inregistrarea()
+        _leaga_grupul()
         return s
     return None
+
+
+def _tuner_liber(sref):
+    """Un tuner poate lua `sref` acum (isPlayable, nimic ignorat): la zap serviciul vechi e deja oprit cand se cheama
+    extensiile; la o inregistrare televizorul isi tine tunerul (pe acelasi transponder il imparte)."""
+    try:
+        from enigma import eServiceCenter, eServiceReference
+        info = eServiceCenter.getInstance().info(sref)
+        return bool(info and info.isPlayable(sref, eServiceReference()))
+    except Exception:
+        return True                          # nu se poate afla: nimic oprit
+
+
+def la_zap(nav, playref, *rest):
+    """Navigation.playServiceExtensions: intaietatea televizorului fata de sesiunile cerute din retea
+    (Server.cedeaza_televizorului). Referinta ramane neschimbata; nicio eroare nu opreste zap-ul."""
+    s = obtine()
+    if s is None or not s.sesiuni or playref is None:
+        return playref
+    try:
+        s.cedeaza_televizorului(playref.toString(), lambda: _tuner_liber(playref))
+    except Exception:
+        jurnal.eroare(ET, 'intaietatea televizorului')
+    return playref
+
+
+def _lista_zap():
+    try:
+        from Navigation import Navigation
+        return Navigation.playServiceExtensions
+    except Exception:
+        return None
+
+
+def _leaga_zap(lista=None):
+    """La pornirea serverului: la_zap la inceputul extensiilor de zap (inaintea releelor si a tunerului de rezerva)."""
+    lista = _lista_zap() if lista is None else lista
+    if isinstance(lista, list) and la_zap not in lista:
+        lista.insert(0, la_zap)
+
+
+def _dezleaga_zap(lista=None):
+    lista = _lista_zap() if lista is None else lista
+    while isinstance(lista, list) and la_zap in lista:
+        lista.remove(la_zap)
+
+
+def _simulata():
+    """Cererea de inregistrare e numai o verificare: variabila locala `simulate` a lui Navigation._extensiiInregistrare
+    (cadrul care cheama extensia), cautata in cel mult trei cadre deasupra extensiei. Necitita: inregistrare adevarata
+    (inregistrarea castiga), ca la releele DAB+ / DVB-T2 (pornire._simulare)."""
+    try:
+        cadru = sys._getframe(2)             # 0 aceasta functie, 1 la_inregistrare, 2 cine a chemat extensia
+        for _pas in range(3):
+            if cadru is None:
+                break
+            if 'simulate' in cadru.f_locals:
+                return bool(cadru.f_locals['simulate'])
+            cadru = cadru.f_back
+    except Exception:
+        pass
+    return False
+
+
+def _ref_tv(nav):
+    """Textul referintei redate acum de televizor, sau None (oprit, in asteptare, nu se poate afla)."""
+    try:
+        r = nav.getCurrentlyPlayingServiceReference()
+        return r.toString() if r is not None else None
+    except Exception:
+        return None
+
+
+def _in_principal():
+    try:
+        from . import fir
+        return fir.in_principal()
+    except Exception:
+        return True
+
+
+def la_inregistrare(nav, ref, *rest):
+    """Navigation.recordServiceExtensions: intaietatea inregistrarilor adevarate fata de sesiunile cerute din retea
+    (Server.cedeaza_inregistrarii). Fara sesiuni (si la fiecare verificare simulate a importului ghidului) se intoarce pe
+    loc. Din alt fir decat cel principal enigma2 nu se atinge: cedarea se face in firul principal, cat de curand, iar
+    temporizatorul o gaseste la urmatoarea incercare. Referinta ramane neschimbata; nicio eroare nu opreste inregistrarea."""
+    s = obtine()
+    if s is None or not s.sesiuni or ref is None or _simulata():
+        return ref
+    try:
+        text, tv = ref.toString(), _ref_tv(nav)
+        if not _in_principal():
+            from . import fir
+            jurnal.noteaza(ET, 'o inregistrare din alt fir cere %s: cedez in firul principal' % _cheie_ref(text))
+            fir.programeaza(s.cedeaza_inregistrarii, text, lambda: _tuner_liber(ref), tv)
+            return ref
+        s.cedeaza_inregistrarii(text, lambda: _tuner_liber(ref), tv)
+    except Exception:
+        jurnal.eroare(ET, 'intaietatea inregistrarii')
+    return ref
+
+
+def _lista_inregistrare():
+    try:
+        from Navigation import Navigation
+        return Navigation.recordServiceExtensions
+    except Exception:
+        return None
+
+
+def _leaga_inregistrarea(lista=None):
+    """La pornirea serverului: la_inregistrare la COADA extensiilor de inregistrare, dupa releele DAB+ / DVB-T2 (puse
+    inainte, la pornirea sesiunii), care isi dau tunerul oricarei inregistrari adevarate."""
+    lista = _lista_inregistrare() if lista is None else lista
+    if isinstance(lista, list) and la_inregistrare not in lista:
+        lista.append(la_inregistrare)
+
+
+def _dezleaga_inregistrarea(lista=None):
+    lista = _lista_inregistrare() if lista is None else lista
+    while isinstance(lista, list) and la_inregistrare in lista:
+        lista.remove(la_inregistrare)
+
+
+def _alternative(grup):
+    """Textele alternativelor DVB ale grupului `grup` (canalele care cer un tuner), in ordinea grupului; [] daca nu se
+    pot afla."""
+    try:
+        from enigma import eServiceCenter
+        lista = eServiceCenter.getInstance().list(grup)
+        texte = (lista and lista.getContent('S', True)) or []
+    except Exception:
+        return []
+    return [t for t in texte if _ref_dvb_fara_cale(t)]
+
+
+def la_grup(nav, grup, liber, inregistrare=False, *rest):
+    """Navigation.grupFaraTuner: niciuna dintre alternativele unui grup n-are tuner (Navigation.celMaiBunDinGrup), deci
+    zap-ul si inregistrarea nu ajung la la_zap / la_inregistrare. Aceeasi intaietate, pe toate alternativele DVB ale
+    grupului: la zap ca la televizor, la o inregistrare adevarata ca la inregistrari (sesiunile de pe transponderul
+    televizorului raman); `liber()` (dat de Navigation, aceeasi intrebare ca la alegerea alternativei) spune cand o
+    alternativa are tuner. Verificarile simulate nu ajung aici. Nicio eroare nu opreste zap-ul sau inregistrarea."""
+    s = obtine()
+    if s is None or not s.sesiuni or grup is None:
+        return
+    try:
+        alternative = _alternative(grup)
+        if not alternative:
+            return
+        if not inregistrare:
+            s.cedeaza_televizorului(alternative, liber)
+            return
+        tv = _ref_tv(nav)
+        if not _in_principal():
+            from . import fir
+            jurnal.noteaza(ET, 'o inregistrare din alt fir cere grupul de alternative (%s): cedez in firul principal' % (
+                ', '.join(_cheie_ref(r) for r in alternative)))
+            fir.programeaza(s.cedeaza_inregistrarii, alternative, liber, tv)
+            return
+        s.cedeaza_inregistrarii(alternative, liber, tv)
+    except Exception:
+        jurnal.eroare(ET, 'intaietatea pe grupul de alternative')
+
+
+def _lista_grup():
+    try:
+        from Navigation import Navigation
+        return Navigation.grupFaraTuner
+    except Exception:
+        return None
+
+
+def _leaga_grupul(lista=None):
+    """La pornirea serverului: la_grup in Navigation.grupFaraTuner (o singura data)."""
+    lista = _lista_grup() if lista is None else lista
+    if isinstance(lista, list) and la_grup not in lista:
+        lista.append(la_grup)
+
+
+def _dezleaga_grupul(lista=None):
+    lista = _lista_grup() if lista is None else lista
+    while isinstance(lista, list) and la_grup in lista:
+        lista.remove(la_grup)
 
 
 def _urmareste_reteaua(s):
@@ -791,6 +1093,9 @@ def _urmareste_reteaua(s):
 
 
 def opreste():
+    _dezleaga_zap()
+    _dezleaga_inregistrarea()
+    _dezleaga_grupul()
     while _server:
         _server.pop().opreste()
 

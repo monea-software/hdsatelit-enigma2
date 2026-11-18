@@ -24,7 +24,9 @@
 #include <lib/dvb_ci/dvbci.h>
 #include <lib/service/hdssoftcsapornire.h>
 #include <unistd.h>
+#include <fcntl.h> /* the /dev/null of the counting recorder (recorderBitrate) */
 #include <lib/service/hdsegalizator.h>
+#include <lib/dvb/volume.h>
 #if HAVE_GSTREAMER
 #include <lib/service/servicemp3.h>
 #endif
@@ -1054,11 +1056,19 @@ eDVBServicePlay::eDVBServicePlay(const eServiceReference &ref, eDVBService *serv
 eDVBServicePlay::~eDVBServicePlay()
 {
 	m_hds_radio_eliberare->stop();
+	/* the counting recorder of the bitrate (HiSilicon, encrypted) and its /dev/null, should stop() not have run */
+	releaseRecorderBitrate();
 #if HAVE_HISILICON
 	m_hds_negru_timer->stop();
 #endif
 	if (m_is_primary && eHdsEgalizator::existent())
 		eHdsEgalizator::existent()->serviciuOprit(this);
+#if HAVE_HISILICON
+	/* numai serviciul care a taiat pista (m_hds_sunet_procesor, sters de stop()): un serviciu vechi distrus dupa ce
+	   altul a preluat sunetul nu reda pista placii peste egalizatorul celui nou (vezi selectAudioStream) */
+	if (m_is_primary && m_hds_sunet_procesor)
+		eDVBVolumecontrol::getInstance()->setPistaPlaciiTacuta(false);
+#endif
 	if (m_is_pvr && !m_is_stream)
 	{
 		eDVBMetaParser meta;
@@ -1385,9 +1395,16 @@ RESULT eDVBServicePlay::start()
 
 RESULT eDVBServicePlay::stop()
 {
+	/* the bitrate counters give their demux filters back (and their threads end) before the handlers go */
+	releaseLiveBitrate();
 	/* egalizatorul din procesor lasa demultiplexorul si placa de sunet inaintea serviciului */
 	if (m_is_primary && eHdsEgalizator::existent())
 		eHdsEgalizator::existent()->serviciuOprit(this);
+#if HAVE_HISILICON
+	/* pista placii redata: urmatorul serviciu (canal, film, radio pe flux) foloseste acelasi decodor de sunet */
+	if (m_is_primary && m_hds_sunet_procesor)
+		eDVBVolumecontrol::getInstance()->setPistaPlaciiTacuta(false);
+#endif
 	m_hds_sunet_procesor = false;
 	m_hds_ceas_imagine->stop();
 	m_hds_radio_eliberare->stop();
@@ -1873,8 +1890,27 @@ RESULT eDVBServicePlay::getEvent(ePtr<eServiceEvent> &evt, int nownext)
 
 int eDVBServicePlay::getInfo(int w)
 {
+	/* HD Satelit (0.7.7): getInfo(sUser + 40) = the video PTS of the decoder (its low 31 bits), -1 when the decoder gives
+	   no PTS (the read fails or gives 0), -2 without a decoder. Components/HdsEcranNegru.py learns from two reads with
+	   different PTS that new pictures come: on Vu+ the video event comes only when the picture size changes and, with the
+	   zap mode "hold", the picture height stays the one of the channel before. A key above sUser (like sUser+17 of
+	   servicemp3), so the enum of iservice.h does not change. */
+	if (w == sUser + 40)
+	{
+		pts_t v = 0;
+		if (!m_decoder)
+			return -2;
+		if (m_decoder->getPTS(1, v) || v <= 0)
+			return -1;
+		return (int)(v & 0x7fffffff);
+	}
 	if (w == sIsSoftCSA)
 		return m_soft_active && m_csa_session ? 1 : 0;
+	/* the live bitrate (kbit/s, -1 = not measurable): counted on the demux only while somebody asks */
+	if (w == sVideoBitrate)
+		return getLiveBitrate(false);
+	if (w == sAudioBitrate)
+		return getLiveBitrate(true);
 	eDVBServicePMTHandler::program program;
 
 	if (w == sCAIDs || w == sCAIDPIDs || w == sHBBTVAit)
@@ -2181,8 +2217,12 @@ int eDVBServicePlay::selectAudioStream(int i)
 	m_current_audio_pid = apid;
 
 	/* egalizatorul din procesor: numai serviciul principal, in direct (demux -1 la inregistrari si timeshift). Cand
-	   sunetul trece prin procesor, decodorul placii primeste PID-ul -1; RDS si memoria PID-ului raman pe `apid`. */
+	   sunetul trece prin procesor, decodorul placii primeste PID-ul -1; RDS si memoria PID-ului raman pe `apid`.
+	   HiSilicon, canal TV: decodorul placii ramane pe `apid` si numai pista lui tace (hds_tacuta, mai jos). */
 	int hds_apid = apid;
+#if HAVE_HISILICON
+	bool hds_tacuta = false;
+#endif
 	if (hdsAmanaDupaRadio(false))
 	{
 		m_hds_sunet_procesor = false;
@@ -2199,7 +2239,20 @@ int eDVBServicePlay::selectAudioStream(int i)
 		m_hds_sunet_procesor = eHdsEgalizator::getInstance()->preiaSunetul(this, hds_demux, apid, apidtype,
 			program.videoStreams.empty(), sigc::mem_fun(*this, &eDVBServicePlay::hdsReaplicaSunetul));
 		if (m_hds_sunet_procesor)
-			hds_apid = -1;
+		{
+#if HAVE_HISILICON
+			/* HiSilicon: imaginea si sunetul au acelasi player. PID-ul -1 la preluare (AUDIO_STOP) si PID-ul adevarat la
+			   intoarcerea pe placa (AUDIO_PLAY) opreau imaginea 0,3-1,2 s la fiecare trecere, in mijlocul ei (SF8008, LinuxSat
+			   164155 #970749/#970821; masurat 16.11.2026 cu unelte/stb/masoara_inghetare_egalizator.py: 7 preluari din 10
+			   zap-uri, 7 opriri de 270-612 ms, apoi 6 de 670-1167 ms la intoarcerea pe placa), iar oprirea strica si sincronul
+			   egalizatorului (tv-nepotrivit). La un canal TV decodorul ramane pe PID si i se taie numai pista (lib/dvb/volume.cpp,
+			   setPistaPlaciiTacuta): nicio oprire a decodorului dupa zap. La radio (fara imagine) ramane PID-ul -1. */
+			if (!program.videoStreams.empty())
+				hds_tacuta = true;
+			else
+#endif
+				hds_apid = -1;
+		}
 		/* canal TV cu sunetul prin procesor: motorul tine sunetul dupa PTS-ul imaginii, si cat placa mai canta sunetul,
 		   inainte ca drumul din procesor sa-l preia (lib/service/hdsegalizator.h, pornirea la canalele TV) */
 		if ((m_hds_sunet_procesor || eHdsEgalizator::getInstance()->vreaCeasImagine(this)) && !program.videoStreams.empty())
@@ -2211,6 +2264,10 @@ int eDVBServicePlay::selectAudioStream(int i)
 			m_hds_ceas_imagine->stop();
 	}
 
+#if HAVE_HISILICON
+	if (m_is_primary)
+		eDVBVolumecontrol::getInstance()->setPistaPlaciiTacuta(hds_tacuta);
+#endif
 	if (m_is_primary && m_decoder->setAudioPID(hds_apid, apidtype))
 	{
 		eDebug("set audio pid failed");
@@ -2929,6 +2986,262 @@ void eDVBServicePlay::switchToTimeshift()
 	eDebug("eDVBServicePlay::switchToTimeshift, in pause mode now.");
 	pause();
 	updateDecoder(true); /* mainly to switch off PCR, and to set pause */
+}
+
+void eDVBServicePlay::releaseDemuxBitrate()
+{
+	m_vbitrate = 0;
+	m_abitrate = 0;
+	m_vbitrate_pid = -1;
+	m_abitrate_pid = -1;
+	m_vbitrate_packets = false;
+	m_abitrate_packets = false;
+}
+
+void eDVBServicePlay::releaseLiveBitrate()
+{
+	releaseDemuxBitrate();
+	releaseLoopBitrate();
+	releaseRecorderBitrate();
+	m_bitrate_demux = nullptr;
+}
+
+void eDVBServicePlay::releaseLoopBitrate()
+{
+	if (!m_loop_bitrate)
+		return;
+	m_loop_bitrate = false;
+	if (m_soft_decoder)
+	{
+		m_soft_decoder->setCountPID(0, -1);
+		m_soft_decoder->setCountPID(1, -1);
+	}
+}
+
+void eDVBServicePlay::releaseRecorderBitrate()
+{
+	if (m_bitrate_rec_timer)
+		m_bitrate_rec_timer->stop();
+	if (m_bitrate_rec)
+	{
+		/* a recording that stops: the guard of the record channel takes over first (eDVBTSRecorder::stop) */
+		m_bitrate_rec->stop();
+		m_bitrate_rec = 0;
+	}
+	if (m_bitrate_rec_fd >= 0)
+	{
+		::close(m_bitrate_rec_fd);
+		m_bitrate_rec_fd = -1;
+	}
+	m_bitrate_rec_pid[0] = m_bitrate_rec_pid[1] = -1;
+}
+
+/* kbit/s of a slot of a counting recorder, the way the demux counter does it: 0 until the first window of at least
+ * 500 ms, then the last window, the payload scaled by 99 % for the PES headers. counting == false: the slot does not
+ * count now (no recorder), -1, and the next window starts when it counts again; bytes that went back (a new recorder)
+ * start a new window. */
+int eDVBServicePlay::recorderKbps(int slot, bool counting, uint64_t bytes)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	const int64_t now_us = (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+	if (!counting)
+	{
+		m_rec_us[slot] = 0;
+		return -1;
+	}
+	if (!m_rec_us[slot] || bytes < m_rec_bytes[slot])
+	{
+		m_rec_bytes[slot] = bytes;
+		m_rec_us[slot] = now_us;
+		return m_rec_kbps[slot];
+	}
+	const int64_t delta_us = now_us - m_rec_us[slot];
+	if (delta_us >= 500000)
+	{
+		m_rec_kbps[slot] = (int)((bytes - m_rec_bytes[slot]) * 8000ULL / (uint64_t)delta_us * 99 / 100);
+		m_rec_bytes[slot] = bytes;
+		m_rec_us[slot] = now_us;
+	}
+	return m_rec_kbps[slot];
+}
+
+/* SoftCSA: the recorder of the loop reads every packet of the service already (lib/service/servicedvbsoftdecoder.h) and
+ * counts the payload of the PID there (iDVBTSRecorder::setCountPID), after the descrambler: no filter, no thread. A new
+ * recorder of the loop (writer restart, play after a pause) goes on from the bytes before (eDVBSoftDecoder keeps them);
+ * while the loop has no recorder nothing is known (-1). The counting stays on (two compares per packet in the recorder
+ * thread) until the service or the loop goes, or the PID changes. */
+int eDVBServicePlay::loopBitrate(bool audio, int pid)
+{
+	const int slot = audio ? 1 : 0;
+	m_loop_bitrate = true;
+	if (m_soft_decoder->getCountPID(slot) != pid)
+	{
+		m_soft_decoder->setCountPID(slot, pid);
+		m_rec_us[slot] = 0;
+		m_rec_kbps[slot] = 0;
+	}
+	uint64_t bytes = 0;
+	const bool counting = m_soft_decoder->getCountedBytes(slot, bytes);
+	return recorderKbps(slot, counting, bytes);
+}
+
+/* HiSilicon, encrypted service without the loop (descrambled by the hardware, or not at all): a TS tap of one PID gets
+ * nothing there and a PES tap counts wrong, so a recorder of our own counts the payload of the video and the audio PID
+ * (iDVBDemux::createCountingRecorder: PID 0 first, so it gets the data of its group; target /dev/null). For the driver
+ * it is a recording, with the guard of the record channel (no buffer lost); refused on a demux where something else
+ * records (their record groups stay free) or that the guard does not cover. Given back RECORDER_IDLE_MS after the last
+ * query, and at once when the service goes, the PIDs change or the loop starts. */
+int eDVBServicePlay::recorderBitrate(iDVBDemux *demux, const eDVBServicePMTHandler::program &program, bool audio, int pid)
+{
+	static const int RECORDER_IDLE_MS = 5000;
+	const int slot = audio ? 1 : 0;
+	int want[2] = { program.videoStreams.empty() ? -1 : program.videoStreams[0].pid, m_current_audio_pid };
+	want[slot] = pid;
+	for (int k = 0; k < 2; ++k)
+		if (want[k] <= 0 || want[k] >= 0x1fff)
+			want[k] = -1;
+	if (m_bitrate_rec && (m_bitrate_rec_pid[0] != want[0] || m_bitrate_rec_pid[1] != want[1]))
+		releaseRecorderBitrate(); /* other PIDs: a new recorder (the guard holds the record channel in between) */
+	if (!m_bitrate_rec)
+	{
+		if (demux->createCountingRecorder(m_bitrate_rec) || !m_bitrate_rec)
+		{
+			m_bitrate_rec = 0;
+			return -1;
+		}
+		m_bitrate_rec_fd = ::open("/dev/null", O_WRONLY | O_CLOEXEC);
+		if (m_bitrate_rec_fd < 0)
+		{
+			m_bitrate_rec = 0;
+			return -1;
+		}
+		m_bitrate_rec->setTargetFD(m_bitrate_rec_fd);
+		m_bitrate_rec->addPID(0); /* PID 0 first: it opens the record group whose data comes to this recorder */
+		for (int k = 0; k < 2; ++k)
+		{
+			m_rec_us[k] = 0;
+			m_rec_kbps[k] = 0;
+			if (want[k] > 0 && (k == 0 || want[1] != want[0]))
+				m_bitrate_rec->addPID(want[k]);
+			m_bitrate_rec->setCountPID(k, want[k]);
+		}
+		if (m_bitrate_rec->start() < 0)
+		{
+			eDebug("[eDVBServicePlay] bitrate: the counting recorder does not start");
+			releaseRecorderBitrate();
+			return -1;
+		}
+		m_bitrate_rec_pid[0] = want[0];
+		m_bitrate_rec_pid[1] = want[1];
+	}
+	if (!m_bitrate_rec_timer)
+	{
+		m_bitrate_rec_timer = eTimer::create(eApp);
+		CONNECT(m_bitrate_rec_timer->timeout, eDVBServicePlay::releaseRecorderBitrate);
+	}
+	m_bitrate_rec_timer->start(RECORDER_IDLE_MS, true);
+	return recorderKbps(slot, m_bitrate_rec->getCountPID(slot) == pid, m_bitrate_rec->getCountedBytes(slot));
+}
+
+/* Live bitrate of the video PID or of the audio PID that is decoded (kbit/s, -1 = not measurable).
+ * - SoftCSA loop running: counted in the recorder of the loop (loopBitrate), on every receiver.
+ * - Free service: the PES tap of the data demux, where timeshift taps the same PIDs while the decoder runs (the decode
+ *   demux can refuse a second filter on a PID the hardware decoder uses). Measured right on an Octagon SF8008 (HiSilicon,
+ *   16.11.2026): a 720p H.264 service 9-14 Mbit/s, AC-3 448 read 439-445, an MP2 radio 249-260 kbit/s.
+ * - Encrypted service without the loop (descrambled by the hardware, or not at all): the TS packets of the PID, their
+ *   payload (the TS header and the adaptation field are never scrambled), so the number is right scrambled or clear. A
+ *   PES tap of a scrambled PID gets no clear packets: on the SF8008 it counted 1-4 Mbit/s of a 1080i video and 10-70
+ *   kbit/s of a constant AC-3 track (BR2, 16.11.2026). On the TS tap of the data demux (packets mode of the counter);
+ *   on HiSilicon, where a TS tap of one PID gets nothing (the record groups of the driver, lib/dvb/hdspazademux.h), in a
+ *   counting recorder of our own (recorderBitrate). Where neither can run: -1.
+ * Nothing runs until the first query. A demux counter gives its filter back by itself when the queries stop and its
+ * next getKbps() starts it again, so no timer is needed here.
+ * -1 = nothing to measure (PVR, stream, timeshift, not tuned yet or no PMT yet, no such PID, no filter available right
+ * now, an encrypted service where no TS packets can be counted, or the demux cannot make counters at all, which is final
+ * for this service).
+ * From the GPL-2.0 sources of a public enigma2 (commits 2d5bc2b55524 and ce2af803e20f, Huevos, 10.2026); the counting in
+ * the SoftCSA recorder written again for this tree. */
+int eDVBServicePlay::getLiveBitrate(bool audio)
+{
+	ePtr<iDVBDemux> demux;
+	if (m_is_pvr || m_is_stream || m_timeshift_active || m_service_handler.getDataDemux(demux) || !demux)
+	{
+		/* drop the counters: when this is live again the data demux may be another one */
+		releaseLiveBitrate();
+		return -1;
+	}
+	if (m_bitrate_demux != demux.operator->())
+	{
+		releaseLiveBitrate();
+		m_bitrate_demux = demux.operator->();
+	}
+
+	eDVBServicePMTHandler::program program;
+	if (m_service_handler.getProgramInfo(program))
+		return -1;
+
+	int pid = -1;
+	if (audio)
+		pid = m_current_audio_pid;
+	else if (!program.videoStreams.empty())
+		pid = program.videoStreams[0].pid;
+	if (pid <= 0 || pid >= 0x2000)
+		return -1;
+
+	/* SoftCSA: the loop reads these packets anyway, the demux is left alone */
+	if (m_soft_active && m_soft_decoder && m_soft_decoder->isRunning())
+	{
+		releaseDemuxBitrate();
+		releaseRecorderBitrate();
+		return loopBitrate(audio, pid);
+	}
+	releaseLoopBitrate();
+
+	/* encrypted (same rule as sIsCrypted: CA descriptors in the PMT): TS packets, see above */
+	const bool packets = program.isCrypted();
+#if HAVE_HISILICON
+	if (packets)
+	{
+		releaseDemuxBitrate();
+		return recorderBitrate(demux, program, audio, pid);
+	}
+	releaseRecorderBitrate();
+#endif
+
+	if (m_bitrate_failed)
+		return -1;
+
+	ePtr<iDVBBitrateCounter> &counter = audio ? m_abitrate : m_vbitrate;
+	int &counter_pid = audio ? m_abitrate_pid : m_vbitrate_pid;
+	bool &counter_packets = audio ? m_abitrate_packets : m_vbitrate_packets;
+
+	if (!counter || counter_pid != pid || counter_packets != packets)
+	{
+		if (!counter && demux->createBitrateCounter(counter))
+		{
+			counter = 0;
+			m_bitrate_failed = true;
+			return -1;
+		}
+		counter_pid = pid;
+		counter_packets = packets;
+		if (counter->start(pid, packets))
+		{
+			/* no filter right now (just zapped, no free filter), or no TS packets of one PID on this demux: the next
+			   query tries again */
+			counter_pid = -1;
+			return -1;
+		}
+	}
+
+	int kbps = counter->getKbps();
+	if (kbps < 0)
+	{
+		/* the counter could not restart after it had stopped by itself: the next query starts over */
+		counter_pid = -1;
+	}
+	return kbps;
 }
 
 void eDVBServicePlay::updateDecoder(bool sendSeekableStateChanged)

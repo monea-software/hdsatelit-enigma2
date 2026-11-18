@@ -194,6 +194,25 @@ TEXTE_ASTEPTARE = {
 	'lucrare': N_('Actualizarea s-a instalat. Interfața se repornește singură după ce se termină lucrarea din fundal.'),
 	'intrebare': N_('Actualizarea s-a instalat. Pe televizor se așteaptă un răspuns la întrebarea de repornire.'),
 }
+# 0.7.7 (DRV, Eduard 15.11 22:29, TODO 15.11 12:36): driverul placii adus si prin actualizarea din meniu. Pachetele de drivere
+# (TIPARE_IMAGINE_NOUA, „drivere”) raman refuzate, afara de cele din cheia semnata „drivere_placii” a lui stare.json: acolo
+# feedul (oe-build/feed_actualizare.py, driver_placii) pune numai pachetul de drivere al placii care difera de cel din
+# imagine doar prin hi_fb.ko peticit pentru 2K (aceleasi module, acelasi vermagic, acelasi load), si numai pentru versiunea
+# veche data in „de_la” si nucleul dat in „nucleu”. Pachetul NU e in Packages: codul de dinainte de 0.7.7 nu-l vede (altfel
+# ar refuza toata actualizarea cu „Actualizarea schimbă driverele receptorului”), deci el il primeste la cautarea de dupa
+# instalarea lui 0.7.7. Aici se pune in plan numai cand versiunea instalata e in de_la, nucleul care ruleaza (uname -r) e
+# cel cerut si hi_fb.ko de pe disc e cel vechi (hifb_vechi). Fisierul sta in dosarul arhitecturii, ca celelalte pachete.
+CHEIE_DRIVERE = 'drivere_placii'
+# driverul nou se incarca numai la pornirea receptorului (/etc/init.d/loadmodules, S05), nu la repornirea interfetei: dupa
+# instalare semnul tine boot_id-ul pornirii de acum; cat e acelasi, receptorul trebuie repornit (si dupa o repornire a
+# interfetei, un Nu pe televizor sau o inregistrare); la alta pornire semnul se sterge singur
+SEMN_DRIVER_NOU = '/etc/enigma2/hds-driver-nou.json'
+BOOT_ID = '/proc/sys/kernel/random/boot_id'
+# titlul driverului in lista pachetelor (ecranul si pagina web), in locul numelui pachetului
+TITLU_DRIVER = N_('Driverul plăcii (interfața 2K)')
+TEXT_DRIVER_NOU = N_('Actualizarea a schimbat driverul plăcii. Receptorul trebuie repornit ca să-l încarce.')
+TEXT_DRIVER_DISPONIBIL = N_('Actualizare software: driverul plăcii pentru interfața 2K e gata de instalat. Îl instalezi din '
+	'Actualizare software; la sfârșit receptorul se repornește.')
 
 _BAZA = re.compile(r'^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\Z')
 # versiunea vazuta de om (si vechile nume x.y.z.N de dinainte de versiunile simple)
@@ -234,9 +253,12 @@ TEXT_STATUS_STRICAT = N_('Nu pot verifica versiunea instalată. Nu s-a instalat 
 TEXT_REINSTALARE = N_('Actualizarea de dinainte a rămas neterminată. La instalare pachetele ei se pun din nou, din feedul '
 	'HD Satelit.')
 PREFIX_IMAGINE = 'hdsatelit-'
-# fara half-configured: un postinst care cade mereu ar fi oferit la fiecare cautare (programul de la pornire il ia,
-# acolo incercarile sunt numarate)
-STARI_NETERMINATE = ('half-installed', 'unpacked')
+# 0.7.7 (UPD, TODO 15.11 18:48 FR11): si half-configured (postinst-ul cazut), ca la programul de la pornire
+# (tools/hds-actualizare-intrerupta.py). Fara el, un enigma2-hdsatelit half-configured (si pornirea care a renuntat dupa
+# 3 incercari) dadea la FIECARE cautare "Nu pot verifica versiunea instalata. Nu s-a instalat nimic.", deci receptorul nu
+# mai ajungea la nicio actualizare; acum cautarea ofera reinstalarea din feedul semnat (--force-reinstall), iar daca
+# postinst-ul cade iar, motivul lui se vede la instalare si in jurnal.
+STARI_NETERMINATE = ('half-installed', 'unpacked', 'half-configured')
 TEXT_IMAGINE_NOUA = N_('Trebuie pusă imaginea nouă de la zero, din „Imagine nouă de pe stick”. Instalată din meniu peste '
 	'imaginea de acum, actualizarea poate face receptorul instabil, de aceea aici nu se instalează.')
 
@@ -282,6 +304,9 @@ def motiv_eroare(linii, implicit):
 		ceas = None
 	if ceas:
 		return ceas
+	# solver-ul opkg: un pachet pus din alt feed, cu numele unui pachet al imaginii si versiunea mai mare (downgrade_straine)
+	if 'allow downgrade of' in t:
+		return _t('Un pachet pus din alt feed are numele unui pachet al imaginii și o versiune mai mare.')
 	if 'unknown package' in t or 'cannot find package' in t or 'no candidates to install' in t:
 		return _t('Un pachet nu se mai află pe server.')
 	if 'incompatible with the architectures' in t or 'not compatible with' in t:
@@ -651,7 +676,118 @@ def valideaza_stare(d):
 			if not isinstance(p, dict) or not P.nume_valid(p.get('nume')) or not isinstance(p.get('versiune'), str):
 				g.append('pachete')
 				break
+	# 0.7.7 (DRV): optionala; o intrare rea nu strica actualizarea, se lasa deoparte (drivere_din_stare)
+	if CHEIE_DRIVERE in d and not isinstance(d.get(CHEIE_DRIVERE), list):
+		g.append(CHEIE_DRIVERE)
 	return g
+
+
+# ---------------------------------------------------------------- driverul placii (0.7.7, DRV)
+
+def drivere_din_stare(stare):
+	"""Intrarile bune din stare.json „drivere_placii” (vezi CHEIE_DRIVERE): pachet de drivere (TIPARE_IMAGINE_NOUA),
+	versiune, arhitectura, fisier, marime, sha256, de_la (lista versiunilor vechi), nucleu; optional hifb_vechi (md5)."""
+	rez = []
+	for e in (stare or {}).get(CHEIE_DRIVERE) or []:
+		if not isinstance(e, dict) or not P.nume_valid(e.get('nume')) or motiv_imagine_noua(e.get('nume')) != 'drivere':
+			continue
+		de_la, marime = e.get('de_la'), e.get('marime')
+		if not isinstance(e.get('versiune'), str) or not isinstance(e.get('arhitectura'), str) or \
+				not _ARH.match(e['arhitectura']) or not isinstance(e.get('fisier'), str) or \
+				not _FISIER_IPK.match(e['fisier']) or not isinstance(marime, int) or isinstance(marime, bool) or marime <= 0 or \
+				not isinstance(e.get('sha256'), str) or not _SHA256.match(e['sha256']) or not isinstance(de_la, list) or \
+				not de_la or not all(isinstance(v, str) for v in de_la) or not isinstance(e.get('nucleu'), str) or \
+				not e['nucleu']:
+			continue
+		rez.append(e)
+	return rez
+
+
+def nucleul_care_ruleaza():
+	"""uname -r (de pilda 4.4.35); '' cand nu se stie"""
+	try:
+		return os.uname()[2]
+	except (AttributeError, OSError, IndexError):
+		return ''
+
+
+def _md5_fisier(cale):
+	h = hashlib.md5()
+	try:
+		with open(cale, 'rb') as f:
+			for bucata in iter(lambda: f.read(1 << 16), b''):
+				h.update(bucata)
+	except (IOError, OSError):
+		return None
+	return h.hexdigest()
+
+
+def planul_driverelor(stare, inst, arhitecturi=None, radacina='/', nucleu=None):
+	"""Intrarile de plan (ca planul()) pentru driverele placii din stare.json care se potrivesc receptorului: arhitectura
+	lui (arch.conf), pachetul instalat chiar in una din versiunile de_la, versiunea noua mai mare, nucleul care ruleaza
+	cel cerut si, cu hifb_vechi, hi_fb.ko de pe disc chiar cel vechi. Marcate driver_placii (verdict nu le refuza)."""
+	nucleu = nucleul_care_ruleaza() if nucleu is None else nucleu
+	rez = []
+	for e in drivere_din_stare(stare):
+		n = e['nume']
+		if arhitecturi and e['arhitectura'] not in arhitecturi:
+			continue
+		if n not in inst or inst[n] not in e['de_la'] or P.compara_versiuni(e['versiune'], inst[n]) <= 0:
+			continue
+		if not nucleu or nucleu != e['nucleu']:
+			continue
+		if e.get('hifb_vechi'):
+			md5 = _md5_fisier(_cale(radacina, '/lib/modules/%s/extra/hi_fb.ko' % nucleu))
+			if md5 != e['hifb_vechi']:
+				continue
+		rez.append({'nume': n, 'titlu': _t(TITLU_DRIVER), 'de_la': inst[n], 'la': e['versiune'], 'marime': e['marime'], 'depends': '',
+			'arhitectura': e['arhitectura'], 'driver_placii': True})
+	return rez
+
+
+def driver_din_stare(stare, nume, arhitectura):
+	"""Intrarea driverului placii (drivere_din_stare) cu numele si arhitectura date, sau None"""
+	gasite = [e for e in drivere_din_stare(stare) if e['nume'] == nume and e['arhitectura'] == arhitectura]
+	return gasite[0] if len(gasite) == 1 else None
+
+
+def _boot_id(radacina='/'):
+	try:
+		with open(_cale(radacina, BOOT_ID)) as f:
+			return f.read().strip()
+	except (IOError, OSError):
+		return ''
+
+
+def scrie_semnul_driverului(nume, radacina='/'):
+	"""Dupa instalarea unui driver al placii: semnul cu boot_id-ul de acum (receptorul trebuie repornit)"""
+	try:
+		cale = _cale(radacina, SEMN_DRIVER_NOU)
+		with open(cale + '.tmp', 'w') as f:
+			json.dump({'boot_id': _boot_id(radacina), 'pachete': list(nume), 'ora': int(time.time())}, f)
+		os.rename(cale + '.tmp', cale)
+		return True
+	except (IOError, OSError, ValueError):
+		return False
+
+
+def repornire_receptor_ceruta(radacina='/'):
+	"""True cat un driver al placii instalat la pornirea de acum asteapta repornirea receptorului (SEMN_DRIVER_NOU cu
+	acelasi boot_id). La alta pornire driverul nou e deja incarcat: semnul se sterge."""
+	cale = _cale(radacina, SEMN_DRIVER_NOU)
+	try:
+		with open(cale) as f:
+			semn = json.load(f)
+	except (IOError, OSError, ValueError):
+		return False
+	acum = _boot_id(radacina)
+	if isinstance(semn, dict) and acum and semn.get('boot_id') == acum:
+		return True
+	try:
+		os.remove(cale)
+	except OSError:
+		pass
+	return False
 
 
 def _cere(adresa, credentiale=None, timp=TIMP_STARE, deschide=None, maxim=MARIME_STARE_MAX, accept='application/json'):
@@ -917,7 +1053,8 @@ def verdict(stare, baza, plan, lipsa=()):
 			detalii.append(u'%s' % d)
 	for x in plan:
 		m = motiv_imagine_noua(x['nume'])
-		if m:
+		# 0.7.7 (DRV): driverul placii semnat in „drivere_placii” si potrivit receptorului (planul_driverelor)
+		if m and not (m == 'drivere' and x.get('driver_placii')):
 			adauga(m, x['nume'])
 	if lipsa:
 		adauga('biblioteci')
@@ -993,7 +1130,11 @@ def rezultat_din_liste(radacina, surse, stare, conf=None):
 	if principal != 'instalat' and PACHET_PRINCIPAL not in [x['nume'] for x in reinstalare]:
 		return {'stare': EROARE, 'eroare': _t(TEXT_STATUS_STRICAT), 'status': '%s, status %d octeti' % (principal, marime)}
 	inst = instalate(radacina, conf)
-	plan = sorted(planul(feed, inst) + reinstalare, key=lambda x: x['nume'])
+	# 0.7.7 (DRV): driverul placii nu e in liste (codul vechi nu trebuie sa-l vada), ci in stare.json semnat
+	plan = planul(feed, inst) + reinstalare
+	in_plan = set(x['nume'] for x in plan)
+	plan += [x for x in planul_driverelor(stare, inst, conf.arhitecturi, radacina) if x['nume'] not in in_plan]
+	plan = sorted(plan, key=lambda x: x['nume'])
 	rez = rezultat_cautare(stare, imaginea(radacina, conf), plan,
 		dependinte_lipsa(plan, inst, feed, furnizate(radacina, conf)))
 	if reinstalare:
@@ -1027,11 +1168,13 @@ def rezultat_cautare(stare, img, plan, lipsa, cand=None):
 		cod = LA_ZI
 	pachete = [{'nume': x['nume'], 'titlu': x['titlu'], 'de_la': x['de_la'], 'la': x['la'], 'marime': x['marime'],
 		'de_la_scurt': versiune_scurta(x['de_la']), 'la_scurt': versiune_scurta(x['la']),
-		'arhitectura': x.get('arhitectura') or '', 'reinstaleaza': bool(x.get('reinstaleaza'))} for x in plan]
+		'arhitectura': x.get('arhitectura') or '', 'reinstaleaza': bool(x.get('reinstaleaza')),
+		'driver_placii': bool(x.get('driver_placii'))} for x in plan]
 	# planul trebuie sa fie chiar actualizarea din stare.json (numele, arhitectura si versiunea): altfel listele si
-	# stare.json vin din publicari diferite
+	# stare.json vin din publicari diferite; driverul placii, din „drivere_placii” (0.7.7, DRV)
 	nepotrivite = [x['nume'] for x in plan
-		if (pachet_din_stare(stare, x['nume'], x.get('arhitectura')) or {}).get('versiune') != x['la']]
+		if ((driver_din_stare(stare, x['nume'], x.get('arhitectura')) if x.get('driver_placii') else
+			pachet_din_stare(stare, x['nume'], x.get('arhitectura'))) or {}).get('versiune') != x['la']]
 	r = {
 		'stare': cod,
 		'server': {'baza': stare.get('baza'), 'actualizare': stare.get('actualizare'),
@@ -1049,6 +1192,8 @@ def rezultat_cautare(stare, img, plan, lipsa, cand=None):
 		'poate_instala': v['poate_instala'] and not nepotrivite,
 		'nepotrivite': nepotrivite,
 		'cautat_la': int(cand or time.time()),
+		# 0.7.7 (DRV): planul schimba driverul placii, deci la sfarsit se reporneste receptorul, nu numai interfata
+		'repornire_receptor': any(x.get('driver_placii') for x in plan),
 	}
 	return r
 
@@ -1318,7 +1463,9 @@ def pachete_semnate(semnat, rezultat):
 	arhitecturi = stare.get('arhitecturi') or []
 	rez = []
 	for x in rezultat.get('pachete') or []:
-		p = pachet_din_stare(stare, x.get('nume'), x.get('arhitectura'))
+		# 0.7.7 (DRV): driverul placii are intrarea in „drivere_placii”, nu in „pachete”
+		p = driver_din_stare(stare, x.get('nume'), x.get('arhitectura')) if x.get('driver_placii') else \
+			pachet_din_stare(stare, x.get('nume'), x.get('arhitectura'))
 		if not p or p.get('versiune') != x.get('la'):
 			return None, 'pachetul %s nu e in stare.json semnat' % x.get('nume')
 		fisier, arh, marime, sha = p.get('fisier'), p.get('arhitectura'), p.get('marime'), p.get('sha256')
@@ -1418,18 +1565,78 @@ def descarca_pachete(intrari, adresa_baza, credentiale=None, dosar=None, deschid
 	return cai, None
 
 
-def argumente_instalare(cai, dosar=None, reinstaleaza=False):
+def argumente_instalare(cai, dosar=None, reinstaleaza=False, downgrade=False):
 	"""Argumentele opkg pentru pachetele verificate (install <cale>...), primite numai din dosarul lor: pe receptor /tmp
 	e o legatura spre /var/volatile/tmp, iar radacinile implicite din Components/Ipkg.py n-ar primi calea reala. None
 	cand o cale e refuzata. reinstaleaza: planul are un pachet ramas la jumatate cu aceeasi versiune (planul_reinstalarii),
-	pe care opkg l-ar refuza din cale ("matches the installed version") fara --force-reinstall."""
+	pe care opkg l-ar refuza din cale ("matches the installed version") fara --force-reinstall. downgrade: a doua
+	incercare, cand opkg a cerut sa coboare un pachet strain la versiunea din feedul HD Satelit (downgrade_straine)."""
 	from Components.Ipkg import opkgArguments
 	radacina = os.path.join(os.path.realpath(dosar or DOSAR_PACHETE), '')
 	# --force-overwrite (12.11.2026, dupa TM): o tema straina instalata ca in OE-Alliance (--force-overwrite) poate lua un fisier al
 	# imaginii in lista ei; fara optiune, actualizarea imaginii ar cadea pe aceeasi ciocnire. Pachetele imaginii sunt semnate si
 	# verificate mai sus, deci ele iau fisierul inapoi.
-	optiuni = ('--force-overwrite', '--force-reinstall') if reinstaleaza else ('--force-overwrite',)
-	return opkgArguments('install', list(cai), optiuni, (radacina,))
+	optiuni = ['--force-overwrite']
+	if reinstaleaza:
+		optiuni.append('--force-reinstall')
+	if downgrade:
+		optiuni.append('--force-downgrade')
+	return opkgArguments('install', list(cai), tuple(optiuni), (radacina,))
+
+
+# Pachetele straine cu numele unui pachet al imaginii si versiunea mai mare (14.11.2026, Vu+ Uno 4K SE, pachetele 2081 si
+# 2150): ffmpeg-182.all si exteplayer3-182.all, puse din alt feed, opreau actualizarea rapida cu cod 1 de trei ori la rand
+# ("problem with installed package ffmpeg-182.all", "Solution 1: allow downgrade of ffmpeg-182.all to
+# ffmpeg-9.0.2-r0.hds1.<arh>"). opkg nu coboara singur versiunea, iar --force-downgrade e o optiune pentru toata comanda,
+# deci nu se pune de la inceput: numai a doua incercare il are, si numai cand TOATE coborarile cerute de opkg sunt pachete
+# straine (versiunea instalata nu e in feedul nostru si e mai mare) duse chiar la versiunea din listele HD Satelit.
+_COBORARE = re.compile(r'allow downgrade of (\S+) to (\S+)')
+
+
+def downgrade_cerute(linii):
+	"""[(de_la, la)] din randurile solver-ului opkg ("allow downgrade of <nume>-<versiune>.<arh> to ..."), fara dubluri"""
+	rez = []
+	for linie in linii or []:
+		for m in _COBORARE.finditer(linie or ''):
+			if m.groups() not in rez:
+				rez.append(m.groups())
+	return rez
+
+
+def _potriveste(text, nume, versiune, arhitecturi):
+	"""True cand text e chiar <nume>-<versiune>.<arh> (asa scrie solver-ul opkg un pachet), cu arh una din arhitecturi"""
+	inceput = '%s-%s.' % (nume, versiune)
+	return bool(versiune) and text.startswith(inceput) and text[len(inceput):] in arhitecturi
+
+
+def downgrade_straine(linii, feed, inst, arhitecturi):
+	"""Coborarile cerute de opkg care sunt pachete straine puse peste numele unui pachet HD Satelit: ([(nume, de_la, la)],
+	None) cand fiecare coborare duce un pachet instalat, cu versiunea mai mare decat in feed, chiar la versiunea din
+	listele semnate ale feedului nostru (feed = pachete_din_feed); (None, motiv) altfel (nimic cerut, alt pachet, alta
+	versiune), iar atunci a doua incercare nu se face."""
+	cerute = downgrade_cerute(linii)
+	if not cerute:
+		return None, 'opkg nu cere nicio coborare de versiune'
+	arh = set(arhitecturi or ()) | set(('all', 'noarch'))
+	rez = []
+	for de_la, la in cerute:
+		gasit = None
+		for nume, s in feed.items():
+			v = s.get('version', '')
+			if _potriveste(la, nume, v, arh) and nume in inst and _potriveste(de_la, nume, inst[nume], arh) and \
+					P.compara_versiuni(inst[nume], v) > 0:
+				gasit = (nume, inst[nume], v)
+				break
+		if gasit is None:
+			return None, 'coborarea %s -> %s nu e a unui pachet strain spre feedul HD Satelit' % (de_la, la)
+		rez.append(gasit)
+	return rez, None
+
+
+def text_inlocuite(inlocuite):
+	"""Ce afla omul cand actualizarea a pus pachetele HD Satelit peste cele din alt feed (pe televizor si in pagina web)"""
+	return _t('Pachetele %s puse din alt feed au fost înlocuite cu cele HD Satelit.') % ', '.join(
+		'%s %s' % (n, versiune_scurta(de_la)) for n, de_la, _la in inlocuite[:5])
 
 
 # ---------------------------------------------------------------- config
@@ -1486,6 +1693,8 @@ class Actualizari(object):
 		self._ipkg = None
 		self._lista_ipkg = []
 		self._de_instalat = []
+		# pachetele straine inlocuite la a doua incercare (_incearca_coborarea): [(nume, de_la, la)] sau None
+		self._inlocuite = None
 		self._neconfigurate_inainte = None
 		self._partea_doua_detasa = False
 		self._partea_doua_lacat = None
@@ -1590,6 +1799,8 @@ class Actualizari(object):
 		except ImportError:
 			pass
 		if self.repornire:
+			if repornire_receptor_ceruta(self.radacina):
+				return _t(TEXT_DRIVER_NOU)
 			return _t('Actualizarea s-a instalat. Repornește interfața înainte de altceva.')
 		if self.faza != 'liber':
 			return _t('Așteaptă să se termine operația de acum.')
@@ -1904,8 +2115,18 @@ class Actualizari(object):
 			return self._descarcare_cazuta(('descarcare', 'Legaturile spre stick nu se pot detasa: %s' % e), nume)
 		self.pas = _t('Se pregătește instalarea...')
 		self._schimbat()
+		self._inlocuite = None
+		self._ruleaza_opkg(cai, nume, argumente, a_doua=False)
+
+	def _ruleaza_opkg(self, cai, nume, argumente, a_doua):
+		"""Ruleaza opkg cu argumentele date; la sfarsit verifica instalarea (_dupa_instalare) sau, o singura data, cand
+		opkg cere sa coboare un pachet strain la versiunea din feedul HD Satelit, ruleaza din nou aceleasi pachete
+		verificate cu --force-downgrade (_incearca_coborarea). Semnul instalarii in curs si al paznicului raman intre
+		cele doua incercari."""
+		from Components.Ipkg import IpkgComponent
 		ipkg = self._ipkg = IpkgComponent()
 		facute = set()
+		self._lista_ipkg = []
 
 		def eveniment(e, param):
 			if e == IpkgComponent.EVENT_LINE:
@@ -1924,11 +2145,16 @@ class Actualizari(object):
 			elif e == IpkgComponent.EVENT_DONE:
 				ipkg.removeCallback(eveniment)
 				self._ipkg = None
+				# opkg a cerut sa coboare versiunea unui pachet: poate e un pachet strain peste numele unui pachet HD
+				# Satelit (downgrade_straine); semnele raman pana se hotaraste a doua incercare
+				if not a_doua and param != 0 and downgrade_cerute(self._lista_ipkg):
+					return self._incearca_coborarea(cai, nume, param)
 				# opkg a iesit singur: rezultatul il spune verificarea de mai jos, deci semnul nu mai trebuie
 				self._sfarsit_opkg()
 				self._dupa_instalare(param)
 		ipkg.addCallback(eveniment)
-		self._inceput_opkg()
+		if not a_doua:
+			self._inceput_opkg()
 		self._jurnal('opkg %s' % ' '.join(argumente))
 		ipkg.setCurrentCommand(IpkgComponent.CMD_INSTALL)
 		try:
@@ -1941,6 +2167,39 @@ class Actualizari(object):
 			self._elibereaza_lacatul_partii_doua()
 			self._partea_doua_detasa = False
 			return self._descarcare_cazuta(('descarcare', curata(e)), nume)
+
+	def _incearca_coborarea(self, cai, nume, cod):
+		"""opkg a iesit cu `cod` si a cerut o coborare de versiune: pe un fir, se verifica in listele semnate ale feedului
+		ca toate coborarile sunt pachete straine duse la versiunea HD Satelit (downgrade_straine); atunci aceleasi pachete
+		verificate se instaleaza din nou cu --force-downgrade, altfel rezultatul primei incercari ramane"""
+		radacina = self.radacina
+		linii = list(self._lista_ipkg)
+
+		def calculeaza():
+			conf = P.citeste_configurarea(radacina)
+			_canal, surse, _baza = canalul(radacina, conf)
+			return downgrade_straine(linii, pachete_din_feed(radacina, surse, conf), instalate(radacina, conf),
+				conf.arhitecturi)
+
+		def gata(rez, eroare):
+			inlocuite, motiv = rez if rez and not eroare else (None, curata(eroare))
+			argumente = None
+			if inlocuite:
+				argumente = argumente_instalare(cai, reinstaleaza=any(p.get('reinstaleaza') for p in self._de_instalat or []),
+					downgrade=True)
+				if argumente is None:
+					motiv = 'opkg nu primeste pachetele descarcate'
+			if not argumente:
+				self._jurnal('fara a doua incercare: %s' % motiv)
+				self._sfarsit_opkg()
+				return self._dupa_instalare(cod)
+			self._inlocuite = inlocuite
+			self._jurnal('pachete puse din alt feed peste numele unor pachete HD Satelit, cu versiunea mai mare: %s; '
+				'a doua incercare cu --force-downgrade' % ', '.join('%s %s -> %s' % x for x in inlocuite))
+			self.pas = _t('Se pregătește instalarea...')
+			self._schimbat()
+			self._ruleaza_opkg(cai, nume, argumente, a_doua=True)
+		self._lucrare(calculeaza, gata)
 
 	def _inceput_opkg(self):
 		"""Inainte de opkg: semnul pe memoria interna (tools/hds-actualizare-intrerupta.py termina la pornire o instalare
@@ -2036,6 +2295,16 @@ class Actualizari(object):
 				self.rezultat = dict(self.rezultat, stare='instalata', poate_instala=False,
 					avertismente=list(straine) if cod != 0 else [])
 				self.mesaj = _t('Actualizarea s-a instalat. Interfața trebuie repornită ca să o folosească.')
+				# 0.7.7 (DRV): driverul placii se incarca numai la pornirea receptorului
+				drivere = [p['nume'] for p in planificate if p.get('driver_placii')]
+				if drivere:
+					scrie_semnul_driverului(drivere, radacina)
+					self.mesaj = _t(TEXT_DRIVER_NOU)
+					self._jurnal('driverul placii schimbat (%s): receptorul trebuie repornit' % ', '.join(drivere))
+				if self._inlocuite:
+					self.rezultat['inlocuite'] = [{'nume': n, 'de_la': d, 'la': l} for n, d, l in self._inlocuite]
+					self.rezultat['nota_inlocuite'] = text_inlocuite(self._inlocuite)
+					self.mesaj += ' ' + self.rezultat['nota_inlocuite']
 				if not parte2[0]:
 					self.mesaj += ' ' + _t('Partea a doua de pe stick nu s-a actualizat: %s') % parte2[1]
 					self._jurnal('partea a doua: ' + parte2[1])
@@ -2072,7 +2341,10 @@ class Actualizari(object):
 				# numai dupa o instalare reusita; una cazuta (chiar cu repornirea ceruta) opreste modul rapid
 				if self.rezultat.get('stare') == 'instalata':
 					self.rapid_pas = 'repornesc'
-					self.mesaj = _t('Actualizarea s-a instalat. Interfața se repornește acum.')
+					self.mesaj = _t(TEXT_DRIVER_NOU) if repornire_receptor_ceruta(radacina) else \
+						_t('Actualizarea s-a instalat. Interfața se repornește acum.')
+					if self.rezultat.get('nota_inlocuite'):
+						self.mesaj += ' ' + self.rezultat['nota_inlocuite']
 					if self.rezultat.get('nota_straine'):
 						self.mesaj += ' ' + self.rezultat['nota_straine']
 					self._programeaza_repornirea(REPORNIRE_RAPIDA_MS)
@@ -2192,6 +2464,8 @@ class Actualizari(object):
 				TEXTE_STARE else '',
 			'mesaj': self.mesaj,
 			'repornire': self.repornire,
+			# 0.7.7 (DRV): driverul placii instalat asteapta repornirea receptorului (nu numai a interfetei)
+			'repornire_receptor': bool(self.repornire and repornire_receptor_ceruta(self.radacina)),
 			# rezultatul unei actualizari oprite la jumatate, terminate (sau nu) la pornire
 			'reparare': self.reparare,
 			'rapid': self.rapid,
@@ -2220,6 +2494,23 @@ def text_anunt(stare, img):
 		cheie = '%s/%s' % (stare['baza'], v)
 		return _t('Actualizare software: este disponibilă versiunea %s. O instalezi din Actualizare software.') % v, cheie
 	return None, None
+
+
+def text_anunt_driver(stare, radacina='/', conf=None):
+	"""0.7.7 (DRV): anuntul zilnic pentru driverul placii, cand versiunea e deja la zi (driverul vine la cautarea de dupa
+	instalarea lui 0.7.7, fara versiune noua); (text, cheie) sau (None, None). Status-ul opkg se citeste numai cand
+	stare.json are un driver pe arhitecturile receptorului."""
+	drv = drivere_din_stare(stare)
+	if not drv:
+		return None, None
+	conf = conf or P.citeste_configurarea(radacina)
+	if conf.arhitecturi and not any(e['arhitectura'] in conf.arhitecturi for e in drv):
+		return None, None
+	plan = planul_driverelor(stare, instalate(radacina, conf), conf.arhitecturi, radacina)
+	if not plan:
+		return None, None
+	return _t(TEXT_DRIVER_DISPONIBIL), '%s/%s/drivere/%s' % (stare.get('baza'), versiunea_starii(stare),
+		','.join(sorted('%s=%s' % (x['nume'], x['la']) for x in plan)))
 
 
 class VerificareZilnica(object):
@@ -2266,6 +2557,12 @@ class VerificareZilnica(object):
 			# imaginea noua, cand lista imaginilor nu are una pentru acest receptor
 			if FEREASTRA_ACTIVA and not stare.get('imagine_noua'):
 				text = None
+			if not text and not stare.get('imagine_noua') and not actualizari.repornire:
+				try:
+					text, cheie = text_anunt_driver(stare, self.radacina)
+				except Exception as e:
+					print('[HdsActualizari] anuntul driverului: %r' % (e,))
+					text, cheie = None, None
 			if text and cheie != c.anuntat.value:
 				c.anuntat.value = cheie
 				c.anuntat.save()
@@ -2312,6 +2609,14 @@ def porneste():
 		arata_rezultatul_pornirii()
 	except Exception as e:
 		print('[HdsActualizari] rezultatul pornirii: %r' % (e,))
+	# 0.7.7 (DRV): driverul placii instalat la pornirea aceasta (interfata repornita, un Nu pe televizor) tot asteapta
+	# repornirea receptorului: ecranul si pagina web o cer din nou
+	try:
+		if repornire_receptor_ceruta():
+			actualizari.repornire = True
+			actualizari.mesaj = _t(TEXT_DRIVER_NOU)
+	except Exception as e:
+		print('[HdsActualizari] driverul placii: %r' % (e,))
 	if not _verificare:
 		v = VerificareZilnica()
 		_verificare.append(v)

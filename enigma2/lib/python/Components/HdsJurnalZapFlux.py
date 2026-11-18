@@ -39,6 +39,9 @@
 # se cauta aici, printre procesele aparute dupa pornire (numai pana e gasit, cel mult CAUTA_PLAYER_S), iar evEOF cu playerul
 # vazut se scrie "playerul extern (exteplayer3) s-a oprit singur". Redarea pornita: evUser+17 (servicemp3),
 # evVideoSizeChanged (oricare) sau evUpdatedInfo cu playerul extern vazut (ServiceApp il trimite la 1 s dupa PLAYBACK_PLAY).
+# Radioul redat de servicedvb (tip 1: posturile DAB+ si DVB-T2 prin releul de pe receptor, fluxurile TS de radio) n-are
+# imagine, deci nici evVideoSizeChanged: acolo pornirea se vede dupa sunet, la evUpdatedInfo cu PMT-ul citit, cu sunet si fara
+# imagine (doarSunet).
 # MESAJUL PE ECRAN: cand fluxul se opreste singur (evEOF sau eroarea playerului), o singura data pe flux, un mesaj care pleaca
 # singur dupa MESAJ_S: "Canalul nu a putut fi deschis." daca redarea n-a pornit, "Canalul s-a oprit singur." daca a mers;
 # la pornirea fluxului urmator mesajul ramas se sterge (ca HdsFilm la InfoBarFilmRefuz). Un evEOF intarziat al canalului de
@@ -114,6 +117,41 @@ def gazdaPort(cale):
 		return "local:%s" % port if port else "local"
 	except Exception:
 		return "?"
+
+
+def porturiDinTuner():
+	"""Porturile releelor DAB+ si DVB-T2 din satelit (Hds/DabT2: 8898, 8889 si porturile lor vechi). Datele lor vin din
+	tuner, prin serverul 8001 si pe lo, nu din retea: /proc/net/dev (fara lo) le vede 0 Mb/s cat fluxul merge, deci la ele
+	debitul si opririle de retea nu se masoara (asistenta 213800: "oprire: fara date ... nu vine nimic din retea" si
+	"debit 0,0" cu 12,5 Mb/s si imagine pe releul T2). Radio online (8895) si releul IPTV iau datele din retea: raman."""
+	try:
+		from Hds.DabT2 import profil
+		return set(profil.DAB.porturi_ref()) | set(profil.T2.porturi_ref())
+	except Exception:
+		return set((8889, 8898, 8888))
+
+
+def doarSunet(nav):
+	"""Serviciul pornit are PMT-ul citit, cu sunet si fara imagine: radio redat de servicedvb. La un flux tip 1 serviciul nu
+	are PID-uri tinute minte (eServiceFactoryDVB.lookupService face un eDVBService nou pentru orice cale), deci pistele vin
+	din PMT; releul DAB+ scrie PAT/PMT numai odata cu cadrele de sunet (Hds/DabT2/dab/motor/dab_edi.TsAudio.pachete), deci
+	PMT-ul citit spune ca sunetul a venit. -> bool; False la orice eroare (si fara enigma, in probele de pe PC)."""
+	try:
+		service = nav.getCurrentService()
+		if service is None:
+			return False
+		piste = service.audioTracks()
+		if piste is None or piste.getNumberOfTracks() <= 0:
+			return False
+		info = service.info()
+		if not info:
+			return False
+		from enigma import iServiceInformation
+		vpid = info.getInfo(iServiceInformation.sVideoPID)
+		# imagine = un PID video adevarat, ca in randul radio din lib/service/hdsjurnalzap.cpp
+		return not (0 < vpid < 0x2000)
+	except Exception:
+		return False
 
 
 def _durata(s):
@@ -462,6 +500,9 @@ class Urmaritor(object):
 			es = self._esantionare()
 			if es is not None and es.player:
 				self._pornitRedarea()
+			elif self.curent.get("tip") == "1" and self.curent.get("redare_ms") is None and doarSunet(nav):
+				# servicemp3 trimite evUpdatedInfo inainte sa cante (are evUser+17), ServiceApp are regula de sus
+				self._pornitRedarea()
 		elif ev - E["user"] in ERORI:
 			if not self.curent.get("motiv"):
 				self.curent["motiv"] = "eroarea playerului: %s (cod %d)" % (ERORI[ev - E["user"]], ev - E["user"])
@@ -500,9 +541,10 @@ class Urmaritor(object):
 		if "//" in nume or "@" in nume or "%3a" in nume.lower():
 			# o referinta cu ":" necodat in adresa: bucata de dupa ar fi tot adresa (cu cont), nu numele
 			nume = "?"
-		self.curent = {"t0": self.ceas(), "nume": nume, "redare_ms": None, "motiv": ""}
+		self.curent = {"t0": self.ceas(), "nume": nume, "redare_ms": None, "motiv": "", "tip": tip}
 		self._rand("INFO", "flux pornit: %s | %s | %s" % (nume, tip, gp))
-		if self._citeste is not None:
+		din_tuner = gp.startswith("local:") and gp[6:].isdigit() and int(gp[6:]) in porturiDinTuner()
+		if self._citeste is not None and not din_tuner:
 			self.curent["es"] = Esantionare(self.ceas, self._citeste, self._procese)
 			if self.temporizator is not None:
 				self.temporizator.start()

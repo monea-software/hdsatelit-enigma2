@@ -44,12 +44,25 @@ CERE, FEREASTRA, GATA, INCHIS = "cere", "fereastra", "gata", "inchis"
 MEDIU_NAVIGATOR = (("WEBKIT_GST_QUIRKS", "hdsdvb"), ("WEBKIT_GST_HOLE_PUNCH_QUIRK", "hdsdvb"),
 	("WEBKIT_GST_VIDEO_DECODING_LIMIT", "1920x1080@60"), ("WPE_SHELL_DISABLE_MEDIA_DISK_CACHE", "1"),
 	("MSE_MAX_BUFFER_SIZE", "video:30M,audio:4M,text:1M"))
+# numai in modul HbbTV, langa cele de sus: filmele DASH date direct in <video src=".mpd">, ca la televizoarele HbbTV 2.0
+# (mediatecile HbbTV 2.0: src = manifestul .mpd). WebKit 2.54 le stie numai cu aceasta variabila (GStreamerRegistryScanner, altfel
+# MEDIA_ERR_SRC_NOT_SUPPORTED); demuxerul (dashdemux2) e in imagine. HLS (WEBKIT_GST_ENABLE_HLS_SUPPORT) NU: cu segmente
+# MPEG-TS filmul se opreste dupa primele cadre pe placa (probat pe Octagon), iar fara el aplicatiile aleg alt drum.
+MEDIU_HBBTV_FLUXURI = (("WEBKIT_GST_ENABLE_DASH_SUPPORT", "1"),)
+
+
+# navigatorul fara imprumut (modul obisnuit, al modulului de acces, HbbTV fara serverul imprumutului), cu WebKit-ul cu
+# video: sink-urile placii scoase din registrul GStreamer al procesului (rangul NONE: autoaudiosink si playbin nu le mai
+# aleg), ca un sunet sau o imagine decodate pe procesor sa nu ajunga in audio0/video0 fara imprumut (pe HiSilicon, fara
+# maparea memoriei ES, prima scriere e un Oops al nucleului)
+MEDIU_FARA_PLACA = (("GST_PLUGIN_FEATURE_RANK", "dvbaudiosink:NONE,dvbvideosink:NONE"),)
 
 
 BIBLIOTECA_WEBKIT = "/usr/lib/libWPEWebKit-2.0.so.1"
 SEMN_QUIRK = b"HDS_DECODOR"          # numele variabilei citite de quirk-ul hdsdvb (peticul 0009 al WebKit-ului)
 CALE_ENV = "/usr/bin/env"
 _cache_video = {}
+_in_cautare = set()
 
 
 def _jurnal(text):
@@ -60,8 +73,11 @@ def webkit_cu_video(cale=BIBLIOTECA_WEBKIT, env=CALE_ENV, numai_stiut=False):
 	"""True numai cand WebKit-ul instalat are quirk-ul hdsdvb (video HTML5 pe placa) si /usr/bin/env exista. Fara ele
 	imprumutul nu porneste deloc, deci imaginile cu WebKit-ul fara video pornesc navigatorul HbbTV ca pana acum. Cautarea
 	in biblioteca (~60 MB, mmap; ~0,9 s pe Viper 4K V20) se face o data pentru fiecare fisier (dispozitiv, inod, marime,
-	data), pe un fir separat la pornirea enigma2 (cauta_in_fundal). numai_stiut=True (firul enigma2): fara cautare, False
-	cat raspunsul nu e stiut inca."""
+	data), pe un fir separat la pornirea enigma2 (cauta_in_fundal). numai_stiut=True (firul enigma2): fara cautare; cat
+	raspunsul nu e stiut inca (cautarea de la pornire nu s-a terminat, sau biblioteca s-a schimbat de atunci) intoarce None,
+	NU False: cine porneste navigatorul il trateaza ca pe True (serverul imprumutului si mediul quirk-ului, sau sink-urile
+	placii scoase), fiindca pe un WebKit fara video ele nu schimba nimic, iar pe unul cu video lipsa lor ar lasa filmul sa
+	scrie in video0/audio0 fara imprumut (navigatorul aplicatiilor e root)."""
 	import mmap
 	try:
 		if not os.path.exists(env):
@@ -70,18 +86,20 @@ def webkit_cu_video(cale=BIBLIOTECA_WEBKIT, env=CALE_ENV, numai_stiut=False):
 		st = os.stat(reala)
 		cheie = (reala, st.st_dev, st.st_ino, st.st_size, int(st.st_mtime))
 		if cheie not in _cache_video and numai_stiut:
-			# alt fisier decat cel cautat la pornire (actualizare, montare peste el): cautarea pleaca acum pe firul ei,
-			# urmatoarea aplicatie are raspunsul
-			cauta_in_fundal(cale, env)
-			return False
+			# cautarea de la pornire inca merge, sau alt fisier decat cel cautat atunci (actualizare, montare peste el):
+			# cautarea pleaca pe firul ei (o singura data pe fisier), urmatoarea aplicatie are raspunsul
+			if cheie not in _in_cautare:
+				cauta_in_fundal(cale, env)
+			return None
 		if cheie not in _cache_video:
 			with open(reala, "rb") as f:
 				m = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
 				try:
-					_cache_video.clear()
-					_cache_video[cheie] = m.find(SEMN_QUIRK) >= 0
+					gasit = m.find(SEMN_QUIRK) >= 0
 				finally:
 					m.close()
+			_cache_video.clear()
+			_cache_video[cheie] = gasit
 		return _cache_video[cheie]
 	except (OSError, ValueError) as e:
 		_jurnal("WebKit: %s" % e)
@@ -89,9 +107,24 @@ def webkit_cu_video(cale=BIBLIOTECA_WEBKIT, env=CALE_ENV, numai_stiut=False):
 
 
 def cauta_in_fundal(cale=BIBLIOTECA_WEBKIT, env=CALE_ENV):
-	"""webkit_cu_video() pe un fir separat (la pornirea enigma2), ca firul enigma2 sa gaseasca raspunsul gata."""
+	"""webkit_cu_video() pe un fir separat (la pornirea enigma2), ca firul enigma2 sa gaseasca raspunsul gata. Cat merge,
+	fisierul e in _in_cautare (webkit_cu_video(numai_stiut=True) nu mai porneste alt fir pentru el)."""
 	import threading
-	t = threading.Thread(target=webkit_cu_video, args=(cale, env), name="HdsDecodorWeb")
+	try:
+		reala = os.path.realpath(cale)
+		st = os.stat(reala)
+		cheie = (reala, st.st_dev, st.st_ino, st.st_size, int(st.st_mtime))
+	except OSError:
+		cheie = None
+
+	def cauta():
+		try:
+			webkit_cu_video(cale, env)
+		finally:
+			_in_cautare.discard(cheie)
+	if cheie is not None:
+		_in_cautare.add(cheie)
+	t = threading.Thread(target=cauta, name="HdsDecodorWeb")
 	t.daemon = True
 	t.start()
 	return t
@@ -117,12 +150,19 @@ def citeste_rand(rand):
 	return None
 
 
-def mediu_navigator(cale_socket):
-	"""Prefixul "/usr/bin/env VAR=..." al navigatorului cu decodor, sau [] cand calea nu e buna."""
+def mediu_navigator(cale_socket, hbbtv=False):
+	"""Prefixul "/usr/bin/env VAR=..." al navigatorului cu decodor, sau [] cand calea nu e buna. hbbtv=True (modul HbbTV)
+	adauga MEDIU_HBBTV_FLUXURI (DASH in <video src>)."""
 	if not isinstance(cale_socket, str) or not cale_socket.startswith("/tmp/") or len(cale_socket) > 100 or \
 			any(c in cale_socket for c in " \t\r\n=\"'\\"):
 		return []
-	return ["/usr/bin/env", "HDS_DECODOR=" + cale_socket] + ["%s=%s" % kv for kv in MEDIU_NAVIGATOR]
+	mediu = MEDIU_NAVIGATOR + (MEDIU_HBBTV_FLUXURI if hbbtv else ())
+	return ["/usr/bin/env", "HDS_DECODOR=" + cale_socket] + ["%s=%s" % kv for kv in mediu]
+
+
+def mediu_fara_placa():
+	"""Prefixul "/usr/bin/env GST_PLUGIN_FEATURE_RANK=..." al navigatorului cu WebKit-ul cu video, dar fara imprumut."""
+	return [CALE_ENV] + ["%s=%s" % kv for kv in MEDIU_FARA_PLACA]
 
 
 def da_drept(da, gid, dispozitive=DISPOZITIVE, chown=None):

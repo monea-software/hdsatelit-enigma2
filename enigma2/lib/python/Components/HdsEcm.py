@@ -186,6 +186,108 @@ def stare(cale=None, acum=None):
 	return _stare["val"]
 
 
+# ---------------------------------------------------------------- hop-urile si eticheta cititorului (la cerere)
+# Alegerea „Arată hop-urile și cititorul” (config.usage.hds_ecm_hopuri_cititor, oprita din fabrica): numarul de hop-uri
+# si ETICHETA cititorului (numele dat de om in modul, randul "reader:"), numai pentru ecranul receptorului si pagina web
+# locala (HdsCommon.ecm_rows / ecm_line). Niciodata adresa, portul sau randurile from/address/source. stare() ramane
+# fara eticheta (o citesc si altii: afisajul din fata, pasii decriptarii, temele straine). Eticheta nu se da deloc cat
+# ce se vede pe ecran poate pleca de pe receptor: o sesiune de asistenta pornita (echipa citeste ecranul si face
+# capturi) sau un mesaj de beta tester cu captura care asteapta sau se face (Screens/HdsBetaTester._asteptare,
+# Components/HdsBetaTester._capturiInLucru; captura vine la 15 s, ecranele se redeseneaza la 2 s).
+_RAND_CITITOR = re.compile(r"^\s*reader\s*:\s*(.+?)\s*$", re.I | re.M)
+# o eticheta cu forma de adresa (IP, gazda.cu.puncte:port, cale, URL) nu se arata
+_FORMA_ADRESA = re.compile(r"(\d{1,3}\.){3}\d{1,3}|:\d|/|@|\w\.[A-Za-z]{2,}")
+_cititor = {"t": -1000.0, "sig": None, "val": ""}
+# inainte de o captura cu tasta (Components/HdsCapturi.captureaza): eticheta nu se da ASCUNS_CAPTURA_S, iar ecranele care
+# o arata se redeseneaza pe loc (functiile date de laAscundere, HdsCommon._ecm_redeseneaza), deci nu intra in poza
+ASCUNS_CAPTURA_S = 10.0
+_ascuns = {"pana": 0.0}
+_laAscundere = []
+
+
+def laAscundere(functie):
+	"""functie() se cheama la ascundereCititorului (redesenarea ecranelor cu eticheta), pe firul enigma2."""
+	if functie not in _laAscundere:
+		_laAscundere.append(functie)
+
+
+def ascundeCititorul(secunde=ASCUNS_CAPTURA_S):
+	"""Eticheta cititorului nu se mai da `secunde` (o captura urmeaza), ecranele se redeseneaza acum. -> True cand
+	eticheta putea fi pe ecran (alegerea pornita si o eticheta citita): captura asteapta atunci redesenarea."""
+	era = bool(_cititor["val"]) and _optiuneSursa()
+	_ascuns["pana"] = time.time() + max(0.0, float(secunde))
+	for f in list(_laAscundere):
+		try:
+			f()
+		except Exception:
+			pass
+	return era
+
+
+def _optiuneSursa():
+	try:
+		from Components.config import config
+		el = getattr(config.usage, "hds_ecm_hopuri_cititor", None)
+		return bool(el is not None and el.value)
+	except Exception:
+		return False
+
+
+def _poatePleca():
+	"""Adevarat cat ce e pe ecran poate pleca de pe receptor (asistenta pornita, captura pentru un raport beta)."""
+	import sys
+	if time.time() < _ascuns["pana"]:
+		return True
+	a = sys.modules.get("Components.HdsAsistenta")
+	if a is not None and getattr(a, "_sesiune", None) is not None:
+		return True
+	s = sys.modules.get("Screens.HdsBetaTester")
+	if s is not None and (getattr(s, "_asteptare", None) or {}).get("mesaj"):
+		return True
+	b = sys.modules.get("Components.HdsBetaTester")
+	if b is not None and getattr(b, "_capturiInLucru", None):
+		return True
+	return False
+
+
+def eticheta_cititor(text):
+	"""Eticheta cititorului din textul fisierului camului (randul "reader:"), curatata, cel mult 30 de litere; "" cand
+	lipseste sau are forma unei adrese."""
+	m = _RAND_CITITOR.search(str(text or ""))
+	if not m:
+		return ""
+	t = _curat(m.group(1), 30)
+	if not t or _FORMA_ADRESA.search(t):
+		return ""
+	return t
+
+
+def sursa(cale=None, acum=None):
+	"""{"hops": n, "cititor": eticheta} pentru ecran si web, numai cu alegerea pornita si cat nimic nu pleaca de pe
+	receptor (_poatePleca); altfel {}. Eticheta se reciteste numai la schimbarea fisierului."""
+	if not _optiuneSursa() or _poatePleca():
+		return {}
+	cale = cale or FISIER
+	d = stare(cale, acum)
+	if not d:
+		return {}
+	sig = (d.get("mtime"), cale)
+	if sig != _cititor["sig"]:
+		try:
+			with open(cale, "rb") as f:
+				text = f.read(MAXIM).decode("utf-8", "replace")
+		except Exception:
+			text = ""
+		_cititor["sig"] = sig
+		_cititor["val"] = eticheta_cititor(text)
+	rez = {}
+	if d.get("hops", -1) >= 0:
+		rez["hops"] = d["hops"]
+	if _cititor["val"]:
+		rez["cititor"] = _cititor["val"]
+	return rez
+
+
 def _descriere(cale):
 	try:
 		with open(cale, "rb") as f:

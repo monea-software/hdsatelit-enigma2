@@ -544,8 +544,104 @@ def _nimmanager(nim=None):
         return None
 
 
+# felurile pe un satelit pornite cu ServiceScan pe tunerul ales de scaner: primesc randul "Tuner" cand satelitul e pe
+# doua tunere (0.7.7, SCN); DVB-T2 si DAB+ nu (acordul lor isi alege singur tunerul, Hds/DabT2/tuner.alege_slot)
+FELURI_CU_TUNER = ('transponder', 'satelit', 'manual', 'operator')
+
+
+def _legat_de_acelasi_fel(nim, n):
+    """Tunerul primeste semnalul prin altul de acelasi fel ("loopthrough" sau al doilea cablu al LNB-ului cu motor,
+    "satposdepends"): nu se cauta pe el, ca in Screens/ScanSetup.py (randul "Tuner")."""
+    if getattr(n, 'config_mode', '') not in ('loopthrough', 'satposdepends'):
+        return False
+    try:
+        radacina = nim.sec.getRoot(n.slot_id, int(n.config.connectedTo.value))
+        return n.type == nim.nim_slots[radacina].type
+    except Exception:
+        return False
+
+
+def sloturi_satelit(nim):
+    """Tunerele de satelit cu antena pusa, in ordinea lor: DVB-S si nu „nimic conectat" (config_mode 'nothing'), ca
+    alegerea tunerului la acordul DAB+ / DVB-T2 (Hds/DabT2/tuner.alege_slot). 0.7.7 (SCN, dorinelu forum 795 #2793):
+    fara tunerele avansate fara niciun satelit si fara cele legate de un tuner de acelasi fel, aceleasi reguli ca randul
+    "Tuner" din "Mai multi sateliti" (ScanerMaiMultiSateliti.tunere_satelit), altfel "Mai multi sateliti" din web si
+    cautarea oarba ramaneau pe un tuner A fara antena."""
+    rez = []
+    for n in nim.nim_slots:
+        try:
+            if not n.isCompatible('DVB-S') or getattr(n, 'config_mode', '') == 'nothing':
+                continue
+            if getattr(n, 'config_mode', '') == 'advanced' and not nim.getSatListForNim(n.slot):
+                continue
+            if _legat_de_acelasi_fel(nim, n):
+                continue
+        except Exception:
+            continue
+        rez.append(n.slot)
+    return rez
+
+
+def descriere_tuner(nim, slot):
+    """Numele tunerului pe ecran, ca in randul "Tuner" din ScanSetup ("Tuner B: ...")."""
+    for n in nim.nim_slots:
+        if n.slot == slot:
+            text = getattr(n, 'friendly_full_description', '') or ''
+            if text:
+                return text
+    return '%s %s' % (_('Tuner'), chr(ord('A') + int(slot)))
+
+
+def tunere_alegere(nim, sloturi):
+    """[(slot ca text, nume)] pentru randul "Tuner" (pe televizor si in web)."""
+    return [(str(s), descriere_tuner(nim, s)) for s in sloturi]
+
+
+def tunere_mai_multi(nim):
+    """Tunerele din randul "Tuner" al felului "Mai multi sateliti" (televizor si web): sloturi_satelit."""
+    return sloturi_satelit(nim)
+
+
+def slot_mai_multi(nim, ales=None):
+    """Tunerul pe care merge "Mai multi sateliti": cel ales de om (randul "Tuner", tinut minte), daca e inca unul bun;
+    altfel primul (slot_satelit)."""
+    sloturi = tunere_mai_multi(nim)
+    ales = _int(ales, None)
+    if ales is not None and ales in sloturi:
+        return ales
+    return slot_satelit(nim)
+
+
+def slot_serviciu(sesiune=None):
+    """(slot, pozitie) ale canalului de satelit pornit acum (frontend-ul serviciului: tuner_number si orbital_position),
+    sau (None, None): nimic pornit, canal de cablu, terestru sau din retea."""
+    try:
+        if sesiune is not None:
+            serviciu = sesiune.nav.getCurrentService()
+        else:
+            import NavigationInstance
+            serviciu = NavigationInstance.instance.getCurrentService()
+        fi = serviciu and serviciu.frontendInfo()
+        if not fi:
+            return None, None
+        date = fi.getFrontendData() or {}
+        tp = fi.getTransponderData(True) or {}
+        if 'DVB-S' not in str(tp.get('tuner_type', 'DVB-S')):
+            return None, None
+        slot, pozitie = date.get('tuner_number'), tp.get('orbital_position')
+        if slot is None or pozitie is None:
+            return None, None
+        return int(slot), int(pozitie)
+    except Exception:
+        return None, None
+
+
 def slot_satelit(nim):
-    """Primul tuner de satelit (pe Viper 4K V20 e unul singur), sau None."""
+    """Primul tuner de satelit cu antena pusa (pe Viper 4K V20 e unul singur); fara niciunul pus, primul tuner de
+    satelit; altfel None."""
+    sloturi = sloturi_satelit(nim)
+    if sloturi:
+        return sloturi[0]
     for n in nim.nim_slots:
         if n.isCompatible('DVB-S'):
             return n.slot
@@ -559,6 +655,68 @@ def sateliti_tuner(nim, slot):
     except Exception as e:
         print('[ScanerSatelit] eroare la citirea satelitilor configurati: %s' % e)
         return []
+
+
+# Satelitii receptorului sunt cei ai TUTUROR tunerelor de satelit (tfrc, LinuxSat 164155, Octagon SF8008: scanarea DAB+
+# refuza 39,0E, „antena nu vede satelitul", desi omul se uita chiar atunci la un canal de pe 39,0E; scanerul citea numai
+# primul tuner, iar 39,0E era pe al doilea). Cautarea pe un satelit merge pe tunerul care il are (slot_pentru), ca zap-ul,
+# unde nucleul ia orice tuner care are satelitul, si ca acordul DAB+ / DVB-T2 (Hds/DabT2/tuner.alege_slot).
+def sateliti_receptor(nim):
+    """[(pozitie, nume)]: satelitii primiti de cel putin un tuner de satelit, fara dubluri, in ordinea tunerelor (intai
+    cei ai primului). Cu un singur tuner e chiar sateliti_tuner(nim, slot_satelit(nim))."""
+    sloturi = sloturi_satelit(nim)
+    if not sloturi:
+        slot = slot_satelit(nim)
+        sloturi = [slot] if slot is not None else []
+    rez, vazute = [], set()
+    for slot in sloturi:
+        for p, nume in sateliti_tuner(nim, slot):
+            if p not in vazute:
+                vazute.add(p)
+                rez.append((p, nume))
+    return rez
+
+
+def tunere_pentru(nim, orbpos):
+    """Tunerele de satelit (sloturi_satelit) care au satelitul orbpos in lista lor, in ordinea lor."""
+    if orbpos is None:
+        return []
+    return [slot for slot in sloturi_satelit(nim) if orbpos in [p for p, _n in sateliti_tuner(nim, slot)]]
+
+
+def slot_pentru(nim, orbpos, ales=None, dupa_serviciu=False):
+    """Tunerul pe care se cauta satelitul orbpos, dintre cele care il au (tunere_pentru); None cand niciun tuner nu il
+    are. Implicit primul, ca nucleul la zap si ca Hds/DabT2/tuner.alege_slot. 0.7.7 (SCN, dorinelu forum 795 #2793:
+    acelasi satelit pe doua tunere, unul fara cablu): `ales` = tunerul ales de om in randul "Tuner", cand il are;
+    `dupa_serviciu` = altfel tunerul canalului pornit acum (slot_serviciu), cand are satelitul in lista lui: el are
+    sigur cablu (tunerul A lasat pe 19,2E din fabrica poate sa nu aiba)."""
+    tunere = tunere_pentru(nim, orbpos)
+    if not tunere:
+        return None
+    ales = _int(ales, None)
+    if ales is not None and ales in tunere:
+        return ales
+    if dupa_serviciu and len(tunere) > 1:
+        slot, _pozitie = slot_serviciu()
+        if slot in tunere:
+            return slot
+    return tunere[0]
+
+
+def tuner_pentru(nim, orbpos, implicit=None, ales=None, dupa_serviciu=False):
+    """(slot, motor, multistream) pentru o cautare pe orbpos: tunerul care are satelitul (slot_pentru, cu `ales` si
+    `dupa_serviciu`), cu motorul si alegerea fluxului ale lui. Cand niciun tuner nu il are: tunerul `implicit` (altfel
+    primul de satelit), motor = cel putin un tuner are motor (textul refuzului spune "lista motorului", nu "antena e
+    fixa")."""
+    slot = slot_pentru(nim, orbpos, ales, dupa_serviciu)
+    if slot is not None:
+        return slot, are_motor(nim, slot), tuner_multistream(nim, slot)
+    if implicit is None:
+        implicit = slot_satelit(nim)
+    if implicit is None:
+        return None, False, False
+    motor = any(are_motor(nim, s) for s in sloturi_satelit(nim) or [implicit])
+    return implicit, motor, tuner_multistream(nim, implicit)
 
 
 def are_motor(nim, slot):
@@ -778,6 +936,12 @@ def pregateste(fel, valori, nim=None):
     slot = slot_satelit(nim)
     if slot is None:
         return {'eroare': _('Niciun tuner de satelit disponibil.')}
+    # "Mai multi sateliti" ramane pe un singur tuner (o singura cautare, un singur feid): cel ales in randul "Tuner"
+    # (pe televizor ecranul ScanSetup, in web randul "Tuner" al paginii; 0.7.7, SCN), altfel primul. Felurile pe un
+    # satelit trec mai jos pe tunerul care il are (tuner_pentru).
+    ales = valori.get('tuner')
+    if fel == 'mai_multi':
+        slot = slot_mai_multi(nim, ales)
     sateliti = sateliti_tuner(nim, slot)
     motor = are_motor(nim, slot)
     ms = tuner_multistream(nim, slot)
@@ -823,6 +987,10 @@ def pregateste(fel, valori, nim=None):
         orbpos = _int(valori.get('pozitie'), None)
         if orbpos is None:
             return {'eroare': _('Alege un satelit din listă.')}
+        sateliti = sateliti_receptor(nim)
+        # satelitul pe doua tunere: cel ales in randul "Tuner", altfel cel al canalului pornit, altfel primul
+        slot, motor, ms = tuner_pentru(nim, orbpos, slot, ales, dupa_serviciu=True)
+        baza = {'fel': fel, 'slot': slot, 'motor': motor}
         eroare = _pozitie_nevazuta(orbpos, sateliti, motor, _('Satelitul ales'))
         if eroare:
             return {'eroare': eroare}
@@ -880,6 +1048,15 @@ def pregateste(fel, valori, nim=None):
     op = operator_dupa_id(valori.get('operator'))
     if op is None or op.get('fel') != fel_json:
         return {'eroare': _('Alege un operator din listă.')}
+    # satelitul operatorului se cauta pe tunerul care il are (tfrc, LinuxSat 164155: ERT DAB+ pe 39,0E, al doilea tuner)
+    sateliti = sateliti_receptor(nim)
+    if fel == 'operator':
+        # cautarea DVB porneste cu ServiceScan pe tunerul de aici: randul "Tuner" cand satelitul e pe doua tunere
+        slot, motor, ms = tuner_pentru(nim, op['pozitie'], slot, ales, dupa_serviciu=True)
+    else:
+        # DVB-T2 / DAB+: acordul isi alege singur tunerul (Hds/DabT2/tuner.alege_slot, primul care are satelitul)
+        slot, motor, ms = tuner_pentru(nim, op['pozitie'], slot)
+    baza = {'fel': fel, 'slot': slot, 'motor': motor}
     # intai ce vede antena: cu antena fixa pe 19,2E, mesajul despre multistream (Cipru) n-ar spune de ce nu se
     # poate cauta
     eroare = _pozitie_nevazuta(op['pozitie'], sateliti, motor, op['nume'], fel_json, ms)
@@ -964,9 +1141,31 @@ def text_scurs(secunde):
     return _('%d min %02d s') % (secunde // 60, secunde % 60)
 
 
+def pozitie_motor_nucleu(nim=None):
+    """Pozitia motorului dupa nucleu (eDVBSatelliteEquipmentControl.hdsKnownRotorPosition, aceeasi dupa care SEC-ul
+    hotaraste daca trimite comanda) pe primul tuner cu motor care o stie, altfel None (pornire, pozitie uitata, alta
+    imagine). 0.7.7 (M30): config.misc.lastrotorposition o scrie numai releul DAB+/DVB-T2 (Hds/DabT2/tuner.py), deci
+    ramane in urma cand antena se intoarce printr-un zap obisnuit: pe Octagonul SF8008 de proba era 3300 (30,0V) cu
+    antena pe 19,2E, iar cautarea oarba fara canal pornea pe 30,0V (WLD)."""
+    try:
+        nim = nim or _nimmanager()
+        if nim is None:
+            return None
+        from enigma import eDVBSatelliteEquipmentControl
+        sec = eDVBSatelliteEquipmentControl.getInstance()
+        for slot in sloturi_satelit(nim):
+            if are_motor(nim, slot):
+                p = _int(sec.hdsKnownRotorPosition(slot), None)
+                if p is not None and 0 <= p < 3600:
+                    return p
+    except Exception:
+        pass
+    return None
+
+
 def pozitie_curenta(sesiune):
-    """De unde pleaca antena: pozitia transponderului serviciului care ruleaza, altfel ultima pozitie a motorului
-    (config.misc.lastrotorposition), altfel None (nu se stie)."""
+    """De unde pleaca antena: pozitia transponderului serviciului care ruleaza, altfel pozitia motorului dupa nucleu
+    (pozitie_motor_nucleu), altfel ultima pozitie salvata (config.misc.lastrotorposition), altfel None (nu se stie)."""
     try:
         from Hds.DabT2 import scanare as hds_scanare
         tp = hds_scanare.transponder_curent(sesiune)
@@ -976,6 +1175,9 @@ def pozitie_curenta(sesiune):
                 return p
     except Exception as e:
         print('[ScanerSatelit] pozitia serviciului curent: %s' % e)
+    p = pozitie_motor_nucleu()
+    if p is not None:
+        return p
     try:
         from Components.config import config
         p = _int(config.misc.lastrotorposition.value, None)
@@ -987,15 +1189,13 @@ def pozitie_curenta(sesiune):
 
 
 def nume_pozitie(orbpos):
-    """„23,5°E Astra 3C" din satelitii tunerului de satelit; fara nume, numai pozitia."""
+    """„23,5°E Astra 3C" din satelitii tunerelor de satelit (sateliti_receptor); fara nume, numai pozitia."""
     nim = _nimmanager()
     if nim is not None:
         try:
-            slot = slot_satelit(nim)
-            if slot is not None:
-                nume = dict(sateliti_tuner(nim, slot)).get(orbpos)
-                if nume:
-                    return nume
+            nume = dict(sateliti_receptor(nim)).get(orbpos)
+            if nume:
+                return nume
         except Exception as e:
             print('[ScanerSatelit] numele satelitului %s: %s' % (orbpos, e))
     return text_pozitie(orbpos)
@@ -1252,7 +1452,8 @@ class CautareFluxuri(object):
     tunerul l-ar lua orice cerere (o sesiune a serverului local 8001, de pilda), care ar roti antena inapoi cat omul
     inca alege. Tunerul se da: sincron la asculta(i), chiar inainte de pornirea postului (acelasi transponder, fara
     rotire), la inapoi() / opreste(), la orice zap venit din alta parte (din web, din lista) si la o inregistrare
-    adevarata, prin extensiile din Navigation puse numai cat il tine, iar la o cautare de canale inainte de start
+    adevarata, prin extensiile din Navigation puse numai cat il tine (si pe un grup de alternative fara alternativa
+    libera, Navigation.grupFaraTuner), iar la o cautare de canale inainte de start
     (Components/ServiceScan.py -> elibereaza_cautarile). Invatarea prin releu (T2-MI, ETI) are nevoie de tuner:
     inainte de ea se da, dupa ea se ia din nou.
     la_stare(text) si la_gata(ok, text, numar_posturi) raman pentru apelantii vechi; ecranele se inscriu in
@@ -1677,14 +1878,15 @@ class CautareFluxuri(object):
         if nav is None:
             return ()
         return ((getattr(nav, 'playServiceExtensions', None), self._la_zap),
-                (getattr(nav, 'recordServiceExtensions', None), self._la_inregistrare))
+                (getattr(nav, 'recordServiceExtensions', None), self._la_inregistrare),
+                (getattr(nav, 'grupFaraTuner', None), self._la_grup))
 
     def _pune_extensiile(self):
         if self._extensii:
             return
         for lista, f in self._extensiile():
             if isinstance(lista, list) and f not in lista:
-                lista.insert(0, f)           # inaintea controlorilor DAB / T2, care ar cere tunerul
+                lista.insert(0, f)           # inaintea controlorilor DAB / T2 si a fluxurilor din retea
         self._extensii = True
 
     def _scoate_extensiile(self):
@@ -1716,6 +1918,16 @@ class CautareFluxuri(object):
             print('[ScanerSatelit] inregistrare: dau tunerul tinut la sfarsitul scanarii')
             self._elibereaza_tunerul()
         return ref
+
+    def _la_grup(self, nav, grup, liber, inregistrare=False, *rest):
+        """Navigation.grupFaraTuner: la un grup de alternative fara nicio alternativa libera Navigation se oprea inainte de
+        _la_zap / _la_inregistrare, deci cautarea tinea tunerul mai departe (zap-ul nu pornea nimic, temporizatorul pe grup
+        se reincerca pana la sfarsit). Aceeasi regula ca acolo: tunerul se da la zap si la o inregistrare adevarata
+        (verificarile simulate nu ajung aici); Navigation intreaba din nou dupa extensie."""
+        if self.tuner is not None:
+            print('[ScanerSatelit] %s pe un grup de alternative: dau tunerul tinut la sfarsitul scanarii'
+                  % ('inregistrare' if inregistrare else 'zap'))
+            self._elibereaza_tunerul()
 
     def _opreste_serviciul(self):
         try:
@@ -1851,6 +2063,9 @@ def _citeste_config():
         'fel': '', 'tip': '',
         'transponder': '', 'retea': '0',
         'operator': '', 'operator_dvbt2': '', 'operator_dab': '',
+        # 0.7.7 (SCN): tunerul ales in randul "Tuner" (satelitul pe doua tunere; "Mai multi sateliti" in web); gol = cel
+        # implicit (slot_pentru, slot_mai_multi)
+        'tuner': '',
     }
     if not os.path.exists(CALE_CONFIG):
         return c
@@ -1953,8 +2168,9 @@ class ScanerSatelit(Screen):
         elif 'tip' in initial or self._config.get('fel') not in CHEI_FELURI:
             self._config['fel'] = FEL_DIN_TIP.get(tip, 'satelit')
 
-        # campul 'pozitie' vine din satelitii configurati pe tunerul de satelit (getSatListForNim); din el se ia
-        # orbital_position la cautare
+        # campul 'pozitie' vine din satelitii configurati pe tunerele de satelit (getSatListForNim, toate tunerele:
+        # tfrc, LinuxSat 164155); din el se ia orbital_position la cautare, pe tunerul care are satelitul
+        self._tunere_pozitie = {}
         self._pozitii_antena, self._motor = self._citeste_antena()
         self._multistream = self._citeste_multistream()
         self._lista_sateliti = self._construieste_lista_sateliti()
@@ -2052,21 +2268,22 @@ class ScanerSatelit(Screen):
         potriveste_textul(self['preview'], *self._fonturi['preview'])
 
     def _citeste_antena(self):
-        """(pozitiile pe care le vede antena, are motor) de pe tunerul de satelit; ([], False) fara tuner."""
+        """(pozitiile pe care le vede antena, are motor) de pe toate tunerele de satelit (sateliti_receptor; motor = cel
+        putin unul are motor); ([], False) fara tuner."""
         nim = _nimmanager()
         if nim is None:
             return [], False
         try:
-            slot = slot_satelit(nim)
+            sloturi = sloturi_satelit(nim)
+            pozitii = [p for p, n in sateliti_receptor(nim)]
         except Exception as e:
             print('[ScanerSatelit] tunerele nu se pot citi: %s' % e)
             return [], False
-        if slot is None:
-            return [], False
-        return [p for p, n in sateliti_tuner(nim, slot)], are_motor(nim, slot)
+        return pozitii, any(are_motor(nim, s) for s in sloturi)
 
     def _citeste_multistream(self):
-        """Tunerul de satelit poate alege fluxul (tuner_multistream); False fara tuner."""
+        """Primul tuner de satelit poate alege fluxul (tuner_multistream); False fara tuner. Pe un operator anume
+        hotaraste tunerul care are satelitul lui (_alege_fluxul)."""
         nim = _nimmanager()
         if nim is None:
             return False
@@ -2077,20 +2294,67 @@ class ScanerSatelit(Screen):
             return False
         return slot is not None and tuner_multistream(nim, slot)
 
+    def _tuner(self, orbpos):
+        """(slot, motor, multistream) al tunerului care are satelitul orbpos (tuner_pentru), tinut minte cat sta
+        ecranul deschis; (None, False, False) fara tunere. La felurile cu randul "Tuner" (FELURI_CU_TUNER) conteaza si
+        tunerul ales acolo, ca la pregateste."""
+        ales = self._config.get('tuner') if self._fel() in FELURI_CU_TUNER else None
+        cheie = (orbpos, ales)
+        if cheie not in self._tunere_pozitie:
+            nim = _nimmanager()
+            rez = (None, False, False)
+            if nim is not None:
+                try:
+                    if ales is None:
+                        rez = tuner_pentru(nim, orbpos)
+                    else:
+                        rez = tuner_pentru(nim, orbpos, ales=ales, dupa_serviciu=True)
+                except Exception as e:
+                    print('[ScanerSatelit] tunerul pentru %s: %s' % (orbpos, e))
+            self._tunere_pozitie[cheie] = rez
+        return self._tunere_pozitie[cheie]
+
+    def _randul_tuner(self, orbpos):
+        """Randul "Tuner" (0.7.7, SCN; dorinelu forum 795 #2793): numai cand satelitul orbpos e pe doua sau mai multe
+        tunere (de pilda tunerul A lasat pe 19,2E din fabrica, fara cablu, si B cu motorul); altfel None."""
+        nim = _nimmanager()
+        if nim is None or orbpos is None:
+            return None
+        try:
+            tunere = tunere_pentru(nim, orbpos)
+        except Exception as e:
+            print('[ScanerSatelit] tunerele satelitului %s: %s' % (orbpos, e))
+            return None
+        if len(tunere) < 2:
+            return None
+        return ('tuner', _('Tuner'), 'lista', tunere_alegere(nim, tunere))
+
+    def _tuner_implicit(self, orbpos):
+        """Tunerul pus cand alegerea tinuta minte nu mai e buna: al canalului pornit, cand are satelitul, altfel primul."""
+        nim = _nimmanager()
+        try:
+            slot = slot_pentru(nim, orbpos, dupa_serviciu=True) if nim is not None else None
+        except Exception:
+            slot = None
+        return None if slot is None else str(slot)
+
+    def _alege_fluxul(self, orbpos):
+        """Tunerul care are satelitul orbpos poate alege fluxul (multistream)."""
+        return self._tuner(orbpos)[2]
+
     def _construieste_lista_sateliti(self):
-        """Satelitii CHIAR configurati pe tunerul de satelit detectat, pt campul 'pozitie'.
-        Daca nimmanager nu are niciun satelit configurat pe acest slot (LNB neconfigurat inca)
+        """Satelitii CHIAR configurati pe tunerele de satelit (sateliti_receptor: toate tunerele, fara dubluri), pt
+        campul 'pozitie'.
+        Daca nimmanager nu are niciun satelit configurat (LNB neconfigurat inca)
         sau tunerul lipseste in emulator, cade pe un singur implicit (19.2E) ca sa nu crape.
         nimmgr.satList are intrari de 3 elemente (orbpos, nume, flags), deci se indexeaza direct (sateliti_tuner),
         cu jurnal la eroare."""
         nim = _nimmanager()
         if nim is not None:
             try:
-                slot = slot_satelit(nim)
-                if slot is not None:
-                    lista = sateliti_tuner(nim, slot)
-                    if lista:
-                        return lista
+                lista = sateliti_receptor(nim)
+                if lista:
+                    return lista
             except Exception as e:
                 print('[ScanerSatelit] eroare la citirea satelitilor configurati: %s' % e)
         from Components.HdsGrade import pozitieOrbitala
@@ -2099,17 +2363,19 @@ class ScanerSatelit(Screen):
     def _lista_transpondere(self):
         """[(cheie_tp, descriere)]: transponderele bune ale satelitului ales, din satellites.xml."""
         orbpos = _int(self._config.get('pozitie'), None)
-        if orbpos not in self._cache_tp:
+        cheie = (orbpos, self._tuner(orbpos)[0])     # limitele ratei si fluxul sunt ale tunerului ales
+        if cheie not in self._cache_tp:
             bune = []
             nim = _nimmanager()
             if nim is not None and orbpos is not None:
                 try:
-                    bune, _sarite = transpondere_satelit(orbpos, nim.getTransponders(orbpos), self._multistream,
-                                                        slot_satelit(nim))
+                    # pe tunerul care are satelitul: limitele ratei si alegerea fluxului sunt ale lui
+                    slot, _motor, ms = self._tuner(orbpos)
+                    bune, _sarite = transpondere_satelit(orbpos, nim.getTransponders(orbpos), ms, slot)
                 except Exception as e:
                     print('[ScanerSatelit] transponderele satelitului %s: %s' % (orbpos, e))
-            self._cache_tp[orbpos] = [(cheie_tp(t), _descriere_tp(t)) for t in bune]
-        return self._cache_tp[orbpos]
+            self._cache_tp[cheie] = [(cheie_tp(t), _descriere_tp(t)) for t in bune]
+        return self._cache_tp[cheie]
 
     def _vede(self, orbpos):
         return not self._pozitii_antena or orbpos in self._pozitii_antena
@@ -2119,7 +2385,7 @@ class ScanerSatelit(Screen):
         deci numele se scrie fara ele (nume_in_grupa); randul e intreg (cand nu incape deruleaza, lib/gui/elabel.h)."""
         nume = nume_in_grupa(op) if sub_titlu else nume_fara_fel(op)
         sufix = ', ' + text_pozitie(op['pozitie'])
-        if op['cere_multistream'] and not self._multistream:
+        if op['cere_multistream'] and not self._alege_fluxul(op['pozitie']):
             sufix += ' ' + _('(tunerul nu alege fluxul)')
         elif not self._vede(op['pozitie']):
             sufix += ' ' + _('(antena nu vede satelitul)')
@@ -2135,11 +2401,19 @@ class ScanerSatelit(Screen):
             campuri.append(('fel', _('Felul scanării'), 'lista', FELURI))
         if fel in ('transponder', 'satelit', 'manual'):
             campuri.append(('pozitie', _('Satelit (poziție orbitală)'), 'lista', self._lista_sateliti))
+            rand = self._randul_tuner(_int(self._config.get('pozitie'), None))
+            if rand:
+                campuri.append(rand)
         if fel == 'transponder':
             campuri.append(('transponder', _('Transponder'), 'lista', self._lista_transpondere()))
             campuri.append(('retea', _('Căutare în rețea'), 'lista', DA_NU))
         elif fel in CAMP_OPERATOR:
             campuri.append((CAMP_OPERATOR[fel], _('Operator'), 'lista', self._lista_operatori(fel)))
+            if fel in FELURI_CU_TUNER:
+                op = operator_dupa_id(self._config.get(CAMP_OPERATOR[fel]))
+                rand = self._randul_tuner(op['pozitie']) if op else None
+                if rand:
+                    campuri.append(rand)
         elif fel == 'manual':
             campuri += self.campuri_manual(self._config)
         return campuri
@@ -2153,17 +2427,20 @@ class ScanerSatelit(Screen):
             schimbat = False
             for c, _e, tip, lista in self._campuri():
                 if tip != 'lista' or c not in ('fel', 'pozitie', 'transponder', 'retea', 'sistem', 'rolloff',
-                                               'multistream', 'pls_mod') + tuple(CAMP_OPERATOR.values()):
+                                               'multistream', 'pls_mod', 'tuner') + tuple(CAMP_OPERATOR.values()):
                     continue
                 coduri = [str(x[0]) for x in lista or []]
                 if not coduri or str(self._config.get(c)) in coduri:
                     continue
                 nou = coduri[0]
-                if c == 'sistem':
+                if c == 'tuner':
+                    # alegerea tinuta minte nu e a acestui satelit: al canalului pornit, altfel primul
+                    nou = self._tuner_implicit(self._pozitie_randului_tuner()) or nou
+                elif c == 'sistem':
                     nou = sistem_ales(self._config.get(c))     # un sistem scos din lista trece pe DVB-S2, nu pe DVB-S
                 elif c in CAMP_OPERATOR.values():
                     for o in operatori(self._fel()):
-                        if (self._multistream or not o['cere_multistream']) and self._vede(o['pozitie']):
+                        if (not o['cere_multistream'] or self._alege_fluxul(o['pozitie'])) and self._vede(o['pozitie']):
                             nou = o['id']
                             break
                 self._config[c] = nou
@@ -2171,6 +2448,14 @@ class ScanerSatelit(Screen):
             if not schimbat:
                 break
         self._CAMPURI = self._campuri()
+
+    def _pozitie_randului_tuner(self):
+        """Satelitul pentru care se alege tunerul: cel din randul satelitului sau al operatorului felului."""
+        fel = self._fel()
+        if fel in CAMP_OPERATOR:
+            op = operator_dupa_id(self._config.get(CAMP_OPERATOR[fel]))
+            return op['pozitie'] if op else None
+        return _int(self._config.get('pozitie'), None)
 
     def _eticheta_valoare(self, cheie, tip, lista):
         val = self._config.get(cheie, '')
@@ -2458,7 +2743,7 @@ class ScanerSatelit(Screen):
             if text is None:
                 orbpos = tp['orbital_position']
                 nume = dict(self._lista_sateliti).get(orbpos) or text_pozitie(orbpos)
-                text = text_manual(tp, nume, note, bool(flags)) + _text_motor(self._motor, orbpos)
+                text = text_manual(tp, nume, note, bool(flags)) + _text_motor(self._tuner(orbpos)[1], orbpos)
             self._porneste([tp], slot_sat, flags, text)
         except Exception as e:
             print('[ScanerSatelit] pornirea cautarii manuale: %s' % e)

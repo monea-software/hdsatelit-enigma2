@@ -9,6 +9,11 @@ import re
 import threading
 import time
 
+try:
+	import _thread as _fire_joase
+except ImportError:  # Python 2.7
+	import thread as _fire_joase
+
 from Components.HdsHdmiDate import Perechi, evenimente
 
 try:
@@ -134,43 +139,58 @@ def citeste(radacina='/'):
 	return proba
 
 
+def _porneste_fir(tinta):
+	"""Un fir nou fara asteptarea pornirii lui: threading.Thread.start asteapta ca firul nou sa primeasca lacatul Python, iar
+	cat il tine alt fir, interfata sta (FRD, pachetul 2206: 2,9 s in wait si 3,0 s in is_alive, din paza HDMI). Probele il pot
+	inlocui."""
+	_fire_joase.start_new_thread(tinta, ())
+
+
 class Cititor(object):
 	"""Un singur lot activ, inclusiv cand o citire ramane blocata in driver."""
 
 	def __init__(self, citire=citeste):
 		self._citire = citire
 		self._lacat = threading.Lock()
-		self._fir = None
+		self._activ = False  # un lot citeste acum (in locul lui is_alive pe fir)
 		self._inceput = None
 		self._rezultat = None
 
 	def porneste(self):
 		with self._lacat:
-			if self._fir is not None and self._fir.is_alive():
+			if self._activ:
 				return False
 			if self._rezultat is not None:
 				return False
 			self._inceput = time.monotonic()
-			self._fir = threading.Thread(target=self._citeste, name='HdsStareOsd')
-			self._fir.daemon = True
-			self._fir.start()
+			self._activ = True
+		try:
+			_porneste_fir(self._citeste)
+		except Exception:
+			with self._lacat:
+				self._activ = False
+			return False
 		return True
 
 	def _citeste(self):
+		proba = None
 		try:
-			proba = self._citire()
-			proba = copy.deepcopy(proba) if isinstance(proba, dict) else _gol(self._inceput)
-		except Exception:
-			proba = _gol(self._inceput)
-		sfarsit = time.monotonic()
-		if proba.get('inceput') is None:
-			proba['inceput'] = self._inceput
-		if proba.get('sfarsit') is None:
-			proba['sfarsit'] = sfarsit
-		if sfarsit - self._inceput > TIMP_LOT:
-			proba['proaspat'] = False
-		with self._lacat:
-			self._rezultat = proba
+			try:
+				proba = self._citire()
+				proba = copy.deepcopy(proba) if isinstance(proba, dict) else _gol(self._inceput)
+			except Exception:
+				proba = _gol(self._inceput)
+			sfarsit = time.monotonic()
+			if proba.get('inceput') is None:
+				proba['inceput'] = self._inceput
+			if proba.get('sfarsit') is None:
+				proba['sfarsit'] = sfarsit
+			if sfarsit - self._inceput > TIMP_LOT:
+				proba['proaspat'] = False
+		finally:
+			with self._lacat:
+				self._rezultat = proba
+				self._activ = False
 
 	def preia(self):
 		with self._lacat:
@@ -179,8 +199,7 @@ class Cititor(object):
 
 	def expirat(self, acum):
 		with self._lacat:
-			return bool(self._fir is not None and self._fir.is_alive() and self._rezultat is None
-				and acum - self._inceput > TIMP_LOT)
+			return bool(self._activ and self._rezultat is None and acum - self._inceput > TIMP_LOT)
 
 
 def actualizeaza(proba):

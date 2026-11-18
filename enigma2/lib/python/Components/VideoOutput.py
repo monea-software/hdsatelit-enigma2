@@ -407,7 +407,10 @@ def policy169Element():
 
 def zapDescription():
 	"""the help line of the zapmode row, on the screen and in the web page"""
-	return _("Ce se vede cât receptorul trece pe alt canal. Cu „lin”, canalul nou apare abia când imaginea lui e stabilă, cu o clipă mai târziu.")
+	# a doua propozitie (0.7.7): fondul negru din Screens/HdsEcranNegru.py, cand canalul nou nu da imagine; text separat,
+	# ca traducerile primei propozitii sa ramana
+	return _("Ce se vede cât receptorul trece pe alt canal. Cu „lin”, canalul nou apare abia când imaginea lui e stabilă, cu o clipă mai târziu.") + \
+		" " + _("Dacă noul canal nu dă imagine, după câteva secunde ecranul se face negru.")
 
 
 def colorLabel(value):

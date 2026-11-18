@@ -299,4 +299,10 @@ T = {
 	"set_grid_value_alpha": u"Colore scelto: {0}, trasparenza {1}",
 	"set_grid_help": u"Le frecce ti spostano sulla griglia, sulla riga della trasparenza e sulla banda in basso; il colore si vede subito a destra. OK o Verde tiene il colore, Blu apre il codice hex e R, G, B.",
 	"set_advanced": u"Avanzate",
+	"bitrate_va": u"Bitrate video · audio",
+	"br_min": u"min",
+	"br_max": u"max",
+	"br_avg": u"med",
+	"ecm_hop": u"Hop",
+	"ecm_reader": u"Lettore",
 }

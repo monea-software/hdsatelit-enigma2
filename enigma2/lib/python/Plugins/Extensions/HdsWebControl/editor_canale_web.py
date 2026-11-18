@@ -68,7 +68,28 @@ DOSAR_IMPORT = "/tmp/hds-editor-import"
 CALE_OP = b"/api/editor-canale-op"
 CALE_IMPORT = b"/api/editor-canale-import"
 _EU = re.compile(r"^[A-Za-z0-9]{6,40}$")
-_ID_BUCHET = re.compile(r"^[A-Za-z0-9_.\-]{1,120}$")
+# 0.7.7 (UTF): id-ul unui buchet e numele fisierului lui, judecat ca in editor (Components/HdsEditorCanaleDate.
+# _NUME_FISIER; scrisa si aici: fisierul nu importa alte module la incarcare): fara / \ " : %, caractere de control (si
+# C1), LS si PS, octeti care nu sunt UTF-8 si punct la inceput; cel mult 250 de octeti UTF-8. Si numele cu diacritice,
+# spatiu sau & (Türksat 42E), pe care tiparul vechi, numai ASCII, le refuza.
+MAX_OCTETI_BUCHET = 250
+_TIPAR_ID_BUCHET = re.compile('^[^.\\x00-\\x1f\\x7f-\\x9f/\\\\":%\\u2028\\u2029\\ud800-\\udfff]'
+	'[^\\x00-\\x1f\\x7f-\\x9f/\\\\":%\\u2028\\u2029\\ud800-\\udfff]*\\Z')
+
+
+class _IdBuchet(object):
+	"""_ID_BUCHET: match(id) ca la un tipar re (None sau potrivirea), cu lungimea numarata in octeti UTF-8."""
+
+	def match(self, id_):
+		if not isinstance(id_, str):
+			return None
+		m = _TIPAR_ID_BUCHET.match(id_)
+		if m is None or len(id_.encode("utf-8")) > MAX_OCTETI_BUCHET:
+			return None
+		return m
+
+
+_ID_BUCHET = _IdBuchet()
 _CHEIE = re.compile(r"^[0-9a-f]{1,8}(:[0-9a-f]{1,8}){3,4}$")
 _TP = re.compile(r"^[0-9a-f]{8}:[0-9a-f]{4}:[0-9a-f]{4}$")
 FEL_COD = {"canal": "c", "marcaj": "m", "spatiu": "g", "subbuchet": "b", "alternative": "a", "flux": "f", "altul": "x"}
@@ -120,6 +141,23 @@ def _SI():
 	except ImportError:
 		import HdsSatelitiImagine as SI
 	return SI
+
+
+def _reporneste_interfata(dupa_s=1.5):
+	"""SAT (0.7.7): TryQuitMainloop(3) pe sesiunea televizorului, peste `dupa_s` secunde (raspunsul paginii pleaca
+	intai), ca din meniul de oprire (pe televizor intreaba daca o inregistrare e in curs). -> True cand e pornita."""
+	try:
+		from . import plugin as W
+		sesiune = W._sesiune
+		if sesiune is None:
+			return False
+		from twisted.internet import reactor
+		from Screens.Standby import TryQuitMainloop
+		reactor.callLater(dupa_s, sesiune.open, TryQuitMainloop, 3)
+		return True
+	except Exception as e:
+		_jurnal("repornirea interfetei: %r" % (e,))
+		return False
 
 
 def _G():
@@ -1006,7 +1044,9 @@ def rute(baza, resource, NOT_DONE_YET=None):
 
 			def f():
 				S = _S()
-				sat = _SATELITI.get("s") or S.citeste()
+				# SAT (0.7.7): lista tinuta in pagina numai cu schimbari nesalvate; altfel cea de pe disc (o lista schimbata de mana
+				# sau o scriere cazuta nu mai ramane veche in pagina)
+				sat = _SATELITI.get("s") if _SATELITI.get("schimbat") else S.citeste()
 				_SATELITI["s"] = sat
 				r = {"result": True, "nesalvat": bool(_SATELITI.get("schimbat"))}
 				# SXP: cati sateliti ai listei imaginii lipsesc (butonul Pune la loc satelitii din imagine)
@@ -1017,6 +1057,12 @@ def rute(baza, resource, NOT_DONE_YET=None):
 					r["satelit"] = S.json_satelit(sat, a.get("poz"))
 				else:
 					r["sateliti"] = S.json(sat)
+					# SAT (0.7.7): tunerele care folosesc fiecare satelit (intrebarea stergerii spune ce se scoate de acolo)
+					SI = _SI()
+					for x in r["sateliti"]:
+						folosit = SI.scoate_de_la_tunere([x["poz"]], aplica=False)
+						if folosit:
+							x["tunere"] = SI.text_scoase(folosit)
 				return 200, r
 			return self._ruleaza(request, f)
 
@@ -1040,16 +1086,36 @@ def rute(baza, resource, NOT_DONE_YET=None):
 				if op == "renunta":
 					_SATELITI.clear()
 					return 200, {"result": True}
-				sat = _SATELITI.get("s") or S.citeste()
+				sat = _SATELITI.get("s") if _SATELITI.get("schimbat") else S.citeste()     # SAT (0.7.7): ca la GET
 				_SATELITI["s"] = sat
 				poz = o.get("poz")
 				v = o.get("valori") if isinstance(o.get("valori"), dict) else {}
 				rez = {"result": True}
+				reporneste = False
+				if op == "sterge_din_lista":
+					# SAT (0.7.7): fara Mod avansat, stergerea unui satelit se scrie pe loc (o singura intrebare in
+					# pagina), cu tunerele curatate; apoi interfata reporneste (alegerile tunerelor se fac la pornire),
+					# cand pagina o cere (editorul de canale n-are nimic nesalvat)
+					sat.sterge_satelit(poz)
+					op = "salveaza"
+					reporneste = bool(o.get("reporneste"))
 				if op == "salveaza":
+					SI = _SI()
+					inainte = set(_D().citeste_sateliti(sat.cale) if sat.cale else ())
 					rez["copie"] = S.scrie(sat)
 					rez["reincarcat"] = bool(S.reincarca())
 					_SATELITI.clear()
 					s.d.sateliti = _D().citeste_sateliti()
+					# SAT (0.7.7): satelitii scosi din fisier nu mai revin la pornire; tunerele care ii foloseau trec pe
+					# "nimic conectat" / LNB nefolosit (Components/HdsSatelitiImagine.scoate_de_la_tunere)
+					sterse = inainte - set(x.poz for x in sat.lista)
+					rez["sterse"] = len(sterse)
+					if sterse:
+						scoase = SI.scoate_de_la_tunere(sorted(sterse))
+						if scoase:
+							rez["tunere"] = SI.text_scoase(scoase)
+					if reporneste:
+						rez["reporneste"] = _reporneste_interfata()
 					return 200, rez
 				if op == "satelit_nou":
 					sat.satelit_nou(_text(o, "nume", 100), poz, _intreg(o.get("flags"), 1, 0, 255))
@@ -1930,7 +1996,12 @@ PAGINA = r"""<!DOCTYPE html>
   <span data-k="sateliti_imagine">Pune la loc sateliții din imagine</span>
   <span data-k="inapoi_imagine">Înapoi la lista sateliților imaginii</span>
   <span data-k="inapoi_imagine_nota">Lista ta de sateliți nu e lista imaginii. Transponderele noi ale imaginii se adaugă singure la sateliții tăi, la pornire. Dacă vrei lista imaginii întreagă în locul celei a ta: sateliții și transponderele puse de tine se pierd (rămân în copia de siguranță). Se scrie când salvezi satellites.xml.</span>
-  <span data-k="sateliti_imagine_nota">Lista sateliților e mai scurtă decât cea a imaginii (de obicei o aduce o listă de canale din alt panou). Sateliții lipsă se adaugă din lista imaginii; ce ai în listă rămâne. Sateliții pe care ai canale se pun singuri la pornire.</span>
+  <span data-k="sateliti_imagine_nota">Lista sateliților e mai scurtă decât cea a imaginii. Sateliții lipsă se adaugă din lista imaginii; ce ai în listă rămâne.</span>
+  <span data-k="q_sterge_din_lista">Ștergi %s din lista sateliților? Nu mai revine singur.</span>
+  <span data-k="scos_tunere">Se scoate și de la tunere: %s.</span>
+  <span data-k="repornire_dupa">Interfața repornește după ștergere.</span>
+  <span data-k="vede_dupa_repornire">Se vede peste tot după repornirea interfeței.</span>
+  <span data-k="sters_din_lista">Satelitul e șters din lista sateliților.</span>
   <span data-k="transpondere_btn">Transpondere</span>
   <span data-k="transponder_nou">Transponder nou</span>
   <span data-k="editeaza">Editează</span>
@@ -2928,10 +2999,11 @@ function satelitiXml(){
   capVedere(L("sateliti_xml"));
   var st = el("p", "", L("se_cauta")); $("vedere").appendChild(st);
   cerere("/api/editor-canale-sateliti").then(function(r){
-    st.textContent = L("sateliti_nota");
+    // fara Mod avansat stergerea se scrie pe loc: nota despre Salvează e numai pentru modul avansat (SAT, 0.7.7)
+    st.textContent = S.avansat ? L("sateliti_nota") : "";
     if(!r.result){ st.textContent = r.message || L("eroare_retea"); return; }
     var bara = el("div", "bara-vedere");
-    bara.appendChild(buton(L("satelit_nou"), function(){ editeazaSatelit(null); }, "principal"));
+    if(S.avansat){ bara.appendChild(buton(L("satelit_nou"), function(){ editeazaSatelit(null); }, "principal")); }
     if(r.nesalvat){
       bara.appendChild(buton(L("salveaza_sateliti"), salveazaSateliti, "principal"));
       bara.appendChild(buton(L("renunta_sateliti"), function(){ cerere("/api/editor-canale-sateliti-op", "POST", {op: "renunta"}).then(satelitiXml); }));
@@ -2954,13 +3026,36 @@ function satelitiXml(){
       g.appendChild(el("h3", "", s.text + (s.nume ? "  " + s.nume : "")));
       g.appendChild(el("p", "expl", L("transpondere_n") + " " + s.transpondere));
       var bt = el("div", ""); bt.style.display = "flex"; bt.style.gap = "8px"; bt.style.flexWrap = "wrap";
-      bt.appendChild(buton(L("transpondere_btn"), function(){ satelitXml(s.poz); }, "mic"));
-      bt.appendChild(buton(L("editeaza"), function(){ editeazaSatelit(s); }, "mic"));
-      bt.appendChild(buton(L("sterge"), function(){ opSateliti({op: "sterge_satelit", poz: s.poz}, satelitiXml, s.text); }, "mic rosu"));
+      if(S.avansat){
+        bt.appendChild(buton(L("transpondere_btn"), function(){ satelitXml(s.poz); }, "mic"));
+        bt.appendChild(buton(L("editeaza"), function(){ editeazaSatelit(s); }, "mic"));
+        bt.appendChild(buton(L("sterge"), function(){ opSateliti({op: "sterge_satelit", poz: s.poz}, satelitiXml, s.text); }, "mic rosu"));
+      } else {
+        // SAT (0.7.7): fara Mod avansat, numai stergerea, scrisa pe loc (nu revine singur la pornire)
+        bt.appendChild(buton(L("sterge"), function(){ stergeDinLista(s, !!r.nesalvat); }, "mic rosu"));
+      }
       g.appendChild(bt);
       $("vedere").appendChild(g);
     });
   });
+}
+function stergeDinLista(s, nesalvat){
+  // SAT (0.7.7): o intrebare (ce se scoate de la tunere, repornirea interfetei), apoi scrierea si repornirea; cu
+  // schimbari nesalvate in satellites.xml (din Mod avansat) stergerea se tine cu ele, pana la Salveaza
+  if(nesalvat){ opSateliti({op: "sterge_satelit", poz: s.poz}, satelitiXml, s.text); return; }
+  var reporneste = !S.nesalvate;
+  var text = L("q_sterge_din_lista").replace("%s", s.text + (s.nume ? " " + s.nume : ""));
+  if(s.tunere){ text += " " + L("scos_tunere").replace("%s", s.tunere); }
+  text += " " + L(reporneste ? "repornire_dupa" : "vede_dupa_repornire");
+  intreaba(text, L("sterge"), function(){
+    cerere("/api/editor-canale-sateliti-op", "POST", {op: "sterge_din_lista", poz: s.poz, reporneste: reporneste}).then(function(r){
+      if(!r.result){ mesaj(r.message || L("eroare_retea"), true); return; }
+      var m = L("sters_din_lista") + (r.tunere ? " " + L("scos_tunere").replace("%s", r.tunere) : "");
+      if(!reporneste){ mesaj(m + " " + L("vede_dupa_repornire")); satelitiXml(); return; }
+      mesaj(m + " " + L(r.reporneste ? "repornire_dupa" : "vede_dupa_repornire"));
+      if(!r.reporneste){ satelitiXml(); }
+    });
+  }, true);
 }
 function opSateliti(o, dupa, intrebare){
   function fa(){ cerere("/api/editor-canale-sateliti-op", "POST", o).then(function(r){ if(!r.result){ mesaj(r.message || L("eroare_retea"), true); return; } dupa(); }); }
@@ -2969,7 +3064,7 @@ function opSateliti(o, dupa, intrebare){
 function salveazaSateliti(){
   cerere("/api/editor-canale-sateliti-op", "POST", {op: "salveaza"}).then(function(r){
     if(!r.result){ mesaj(r.message || L("eroare_retea"), true); return; }
-    mesaj(L(r.reincarcat ? "sateliti_reincarcat" : "sateliti_repornire")); satelitiXml();
+    mesaj(L(r.reincarcat ? "sateliti_reincarcat" : "sateliti_repornire") + (r.tunere ? " " + L("scos_tunere").replace("%s", r.tunere) : "")); satelitiXml();
   });
 }
 function editeazaSatelit(s){
@@ -3953,7 +4048,7 @@ function meniuAvansat(){
     {text: L("sigle"), fa: sigle},
     {text: L("inlocuieste_nume"), fa: inlocuiesteNume},
     {text: L(S.avansat ? "avansat_pornit" : "avansat_oprit"), fa: comutaAvansat},
-    S.avansat ? {text: L("sateliti_xml"), fa: satelitiXml} : null,
+    {text: L("sateliti_xml"), fa: satelitiXml},
     {text: L("copii"), fa: copii},
     {text: L("import_arhiva"), fa: function(){ importa("arhiva"); }},
     {text: L("import_m3u"), fa: function(){ importa("m3u"); }},
@@ -4267,7 +4362,12 @@ TEXTE_PAGINA = {
 		N_("satellites.xml e salvat și receptorul îl folosește."),
 		N_("satellites.xml e salvat; se vede după repornirea interfeței."),
 		N_("Pune la loc sateliții din imagine"),
-		N_("Lista sateliților e mai scurtă decât cea a imaginii (de obicei o aduce o listă de canale din alt panou). Sateliții lipsă se adaugă din lista imaginii; ce ai în listă rămâne. Sateliții pe care ai canale se pun singuri la pornire."),
+		N_("Lista sateliților e mai scurtă decât cea a imaginii. Sateliții lipsă se adaugă din lista imaginii; ce ai în listă rămâne."),
+		N_("Ștergi %s din lista sateliților? Nu mai revine singur."),
+		N_("Se scoate și de la tunere: %s."),
+		N_("Interfața repornește după ștergere."),
+		N_("Se vede peste tot după repornirea interfeței."),
+		N_("Satelitul e șters din lista sateliților."),
 		N_("Înapoi la lista sateliților imaginii"),
 		N_("Lista ta de sateliți nu e lista imaginii. Transponderele noi ale imaginii se adaugă singure la sateliții tăi, la pornire. Dacă vrei lista imaginii întreagă în locul celei a ta: sateliții și transponderele puse de tine se pierd (rămân în copia de siguranță). Se scrie când salvezi satellites.xml."),
 		N_("Transpondere"),

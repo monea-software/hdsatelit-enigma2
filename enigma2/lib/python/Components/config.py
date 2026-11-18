@@ -392,9 +392,12 @@ class ConfigSelection(ConfigElement):
 		self.value = self.choices[(i + 1) % nchoices]
 
 	def getText(self):
+		# HDSatelit 0.7.7 (DLG): tradus la fiecare apel, ca getMulti; _descr tine descrierea netradusa,
+		# iar de la al doilea apel textul ajungea netradus (in romana) in asistenta, pe pagina web si pe afisajul din fata
 		if self._descr is not None:
-			return self._descr
-		descr = self._descr = self.description[self.value]
+			descr = self._descr
+		else:
+			descr = self._descr = self.description[self.value]
 		if descr:
 			return _(descr)
 		return descr

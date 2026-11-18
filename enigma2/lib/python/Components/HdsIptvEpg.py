@@ -6,6 +6,17 @@
 Nu pastreaza documentul XML sau programele unei surse in RAM. SAX tine doar canalul/programul curent;
 textele, dictionarele, grupurile si cache-ul C++ au limite. Nu scrie fisiere si nu jurnalizeaza URL-uri.
 Canalele pastreaza cele patru coloane istorice, urmate optional de {'tvg_id', 'logo', 'antete'}.
+
+Firul nu tine GIL-ul interfetei minute in sir. Pe un Viper 4K (0.7.6, Python 3.14) ghidul unui abonament mare (64 MB, 178.000
+de emisiuni) tinea un nucleu 130 s dupa fiecare pornire a interfetei (125 s de procesor), iar ecranele si paginile web care cer
+GIL-ul mergeau de cateva ori mai incet. Analiza citea 356.000 de ore cu datetime.strptime (care cere si locale-ul la fiecare
+apel) si aduna textele tuturor emisiunilor, si ale celor fara canal in lista, din zilele trecute sau prea departe. Acum: orele
+se citesc direct din cifre si se memoreaza (se repeta de la un canal la altul), iar emisiunile care nu pot intra (canal fara
+pereche, canal plin, terminate, peste ZILE zile, ore rele) se sar de la <programme>, fara texte: de 2,5 ori mai putin lucru (50 s
+de procesor la ceasul intreg pentru acelasi fisier). Dupa fiecare ~0,25 s de lucru firul doarme tot atat (_Ritm; pauzele nu intra
+in TERMEN_TOTAL_S). Cu pauzele ceasul procesorului coboara: firul ia ~90 s de procesor in ~210 s (in loc de 125 s in ~130 s), iar
+interfata raspunde mult mai repede cat merge (pagina principala web 455 ms in loc de 1514; 320 in repaus).
+Ce ajunge in cache-ul C++ ramane acelasi, emisiune cu emisiune.
 """
 
 import calendar
@@ -67,6 +78,12 @@ BUCATA = 65536
 LOT = 16
 MAX_LOTURI = 32                    # cel mult 512 evenimente in asteptarea importului C++
 MAX_SNAPSHOTURI = 2               # numai chei/nume/tvg-id, fara adrese de flux, logo sau antete
+PAS_LUCRU_S = 0.25                # firul lucreaza cam atat (bucati de 64 KB adunate), apoi doarme
+PAUZA_RAPORT = 1.0                # somnul = atata din lucrul adunat: GIL-ul ramane liber interfetei jumatate din timp
+PAUZA_MAX_S = 0.5                 # o pauza nu trece de atat (o bucata lunga, de pilda cand interfata a tinut GIL-ul)
+PAS_CANALE = 512                  # harta canalelor din lista (pana la I.MAX_CANALE) se face in bucati de atatea, cu pauze
+MAX_ORE = 4096                    # orele XMLTV deja citite (se repeta de la un canal la altul); peste atatea se ia de la capat
+MAX_CID = 8192                    # canalele din <programme> deja cautate dupa nume (rezultatul, si cand e gol)
 
 E_NUCLEU = N_("Ghidul TV pentru canalele de internet cere actualizarea imaginii. Actualizează imaginea și încearcă din nou.")
 E_ESUAT = N_("Ghidul TV nu s-a putut descărca. Verifică internetul și încearcă din nou.")
@@ -116,8 +133,14 @@ def _ora(text):
 	m = _DATA.match((text or "").strip())
 	if m is None:
 		return None
+	t = m.group(1)
 	try:
-		d = datetime.datetime.strptime(m.group(1), "%Y%m%d%H%M%S")
+		if t.isascii():
+			# cifrele direct, fara strptime (pe receptor era jumatate din timpul firului); datetime refuza aceleasi date ca
+			# strptime pe 14 cifre: luna 0 sau 13, ziua 31 in noiembrie, ora 24, minutul 60, secunda 60 sau 61, anul 0000
+			d = datetime.datetime(int(t[:4]), int(t[4:6]), int(t[6:8]), int(t[8:10]), int(t[10:12]), int(t[12:]))
+		else:
+			d = datetime.datetime.strptime(t, "%Y%m%d%H%M%S")  # alte cifre Unicode: ca inainte
 		secunde = calendar.timegm(d.timetuple())
 		zona = m.group(2)
 		if zona and zona != "Z":
@@ -163,7 +186,36 @@ def _nume(text):
 	return " ".join((text or "").casefold().split())[:256]
 
 
-def _bucati(f, inceput):
+def _dormi(secunde):
+	time.sleep(secunde)
+
+
+class _Ritm:
+	"""Pauzele firului EPG. GIL-ul il ia firul interfetei numai cand firul EPG il lasa: la o asteptare in retea sau intr-un somn
+	adevarat. Fara pauze, analiza il tinea aproape tot timpul, iar firul interfetei astepta GIL-ul dupa fiecare apel care il
+	elibereaza (un fisier citit, un poll), de cate ori trebuia. dupa(t) aduna timpul lucrat de la t; cand trece de PAS_LUCRU_S,
+	doarme PAUZA_RAPORT din el (cel mult PAUZA_MAX_S). Guvernatorul de frecventa vede o sarcina de ~50% si coboara ceasul (Viper
+	4K: mai mult 400-600 decat 1200 MHz), deci lucrul tine mai mult decat la ceasul intreg; cu o pauza dupa fiecare bucata de
+	64 KB era si mai rau (numai 400 MHz, ~300 s); cu bucatile de 0,25 s si cu emisiunile trecute sarite, ~210 s (efectul bucatilor
+	singure nu s-a masurat separat). pauze = somnul adunat, scos din termenul total al descarcarii."""
+
+	def __init__(self, dormi=None):
+		self.dormi = _dormi if dormi is None else dormi
+		self.pauze = 0.0
+		self.lucru = 0.0
+
+	def dupa(self, t):
+		self.lucru += time.monotonic() - t
+		if self.lucru < PAS_LUCRU_S:
+			return
+		p = min(PAUZA_MAX_S, self.lucru * PAUZA_RAPORT)
+		self.lucru = 0.0
+		if p > 0:
+			self.dormi(p)
+			self.pauze += p
+
+
+def _bucati(f, inceput, ritm=None):
 	"""Gzip cu iesire limitata la o bucata chiar si pentru o arhiva foarte comprimata."""
 	n = total = 0
 	dec = None
@@ -171,7 +223,7 @@ def _bucati(f, inceput):
 	prefix = b""
 	citeste = getattr(f, "read1", f.read)  # un singur recv: un server care picura octeti nu ascunde termenul total
 	while True:
-		if time.monotonic() - inceput > TERMEN_TOTAL_S:
+		if time.monotonic() - inceput - (ritm.pauze if ritm else 0) > TERMEN_TOTAL_S:
 			raise EroareEpg("termen")
 		b = citeste(BUCATA)
 		if not b:
@@ -195,7 +247,7 @@ def _bucati(f, inceput):
 			yield b
 		else:
 			while b:
-				if time.monotonic() - inceput > TERMEN_TOTAL_S:
+				if time.monotonic() - inceput - (ritm.pauze if ritm else 0) > TERMEN_TOTAL_S:
 					raise EroareEpg("termen")
 				if dec.eof:
 					dec = zlib.decompressobj(31)  # membri gzip concatenati
@@ -213,12 +265,15 @@ def _bucati(f, inceput):
 
 
 class _Xmltv:
-	def __init__(self, s, canale, cache, acum):
+	def __init__(self, s, canale, cache, acum, ritm=None, harta=None):
+		"""harta: (iduri, nume, larg) facute de un _Xmltv de dinainte pentru aceeasi lista (_hartaPastrata); atunci canale nu
+		se mai citeste. Harta nu se schimba dupa ce e facuta (numai se citeste), deci se poate folosi la mai multe importuri."""
 		self.sid, self.cache, self.acum = s["id"], cache, acum
 		self.iduri, self.nume, self.legate = {}, {}, {}
 		self.numar, self.loturi = {}, OrderedDict()
 		self.cu_canal = set()      # canalele din lista care au un <channel> in fisier (XMLTV le scrie inaintea emisiunilor)
 		self.pe_canal = None       # partea fiecarui canal din MAX_EVENIMENTE, socotita la prima emisiune
+		self.ore, self.dupa_nume = {}, {}   # memoria lui _ora si a cautarii dupa nume a canalului din <programme>
 		try:
 			self.alese = canaleAlese()
 		except Exception:
@@ -226,9 +281,33 @@ class _Xmltv:
 		self.total = self.importate = self.canale_xml = 0
 		self.octeti = 0
 		self.decalaj = decalaj()
-		self.larg = {} if potrivireLarga() else None   # cheia larga -> (prefixele tarilor, canalele fara tvg-id)
 		self.stiva, self.canal, self.program, self.camp, self.text = [], None, None, None, ""
-		for c in canale[:I.MAX_CANALE]:
+		if harta is not None:
+			self.iduri, self.nume, self.larg = harta
+		else:
+			self._harta(canale, ritm)
+		self.parser = expat.ParserCreate()
+		self.parser.StartElementHandler = self._incepe
+		self.parser.EndElementHandler = self._termina
+		# textul se cere numai cat e deschis un camp pastrat (_incepe/_termina): fara un apel inapoi pentru fiecare spatiu dintre
+		# elemente si pentru textele care nu se pastreaza (categorii, actori, poze)
+		self.parser.CharacterDataHandler = None
+		self.parser.StartDoctypeDeclHandler = self._doctype
+		self.parser.EntityDeclHandler = self._dtd
+		self.parser.ExternalEntityRefHandler = self._dtd
+
+	def harta(self):
+		"""(iduri, nume, larg), pentru _hartaPastrata."""
+		return self.iduri, self.nume, self.larg
+
+	def _harta(self, canale, ritm):
+		"""Harta listei: tvg-id, numele exact si cheia larga -> referintele canalelor din lista."""
+		self.larg = {} if potrivireLarga() else None   # cheia larga -> (prefixele tarilor, canalele fara tvg-id)
+		t = time.monotonic()
+		for i, c in enumerate(canale[:I.MAX_CANALE]):
+			if ritm is not None and i and not i % PAS_CANALE:
+				ritm.dupa(t)
+				t = time.monotonic()
 			if not isinstance(c, (list, tuple)) or len(c) < 4 or not I.cheieBuna(c[0]):
 				continue
 			ref = I.refCanal(self.sid, c[0])
@@ -249,13 +328,6 @@ class _Xmltv:
 					tari.add(prefix)
 					if len(refs) < MAX_LARG:
 						refs.append(ref)
-		self.parser = expat.ParserCreate()
-		self.parser.StartElementHandler = self._incepe
-		self.parser.EndElementHandler = self._termina
-		self.parser.CharacterDataHandler = self._text
-		self.parser.StartDoctypeDeclHandler = self._doctype
-		self.parser.EntityDeclHandler = self._dtd
-		self.parser.ExternalEntityRefHandler = self._dtd
 
 
 	def _largi(self, text):
@@ -291,25 +363,37 @@ class _Xmltv:
 
 
 	def _incepe(self, tag, attr):
-		self.stiva.append(tag)
-		if len(self.stiva) > MAX_ADANCIME:
+		stiva = self.stiva
+		stiva.append(tag)
+		n = len(stiva)
+		if n > MAX_ADANCIME:
 			raise EroareEpg("adancime")
-		if len(self.stiva) == 1 and tag != "tv":
+		if n == 1 and tag != "tv":
 			raise EroareEpg("radacina")
-		if len(attr) > 32 or any(len(k) > 128 or len(v) > 4096 for k, v in attr.items()):
+		if attr and (len(attr) > 32 or max(map(len, attr)) > 128 or max(map(len, attr.values())) > 4096):
 			raise EroareEpg("atribute")
-		if len(self.stiva) == 2:
+		if n == 2:
 			if tag == "channel":
 				self.canale_xml += 1
 				if self.canale_xml > MAX_CANALE_XML:
 					raise EroareEpg("canale")
 				self.canal = {"id": attr.get("id", "")[:256], "ref": None}
 			elif tag == "programme":
-				self.program = {"id": attr.get("channel", "")[:256], "start": attr.get("start", "")[:40],
-					"stop": attr.get("stop", "")[:40]}
-		if len(self.stiva) == 3 and ((self.canal is not None and tag == "display-name") or
+				if self.pe_canal is None:
+					self._imparte()      # la prima emisiune, legata sau nu, ca inainte
+				cid = attr.get("channel", "")[:256]
+				refs = self._refs(cid)
+				# fara canal legat, cu toate canalele lui pline, terminata deja, peste ZILE zile sau cu ore rele: nimic de importat,
+				# deci nici texte de adunat (abonamentele trimit si zilele trecute: pe receptor 160.000 de emisiuni pentru 17.600)
+				if refs and self.total < MAX_EVENIMENTE and any(
+						self.numar.get(ref, 0) < (PE_CANAL_ALES if ref in self.alese else self.pe_canal) for ref in refs):
+					start, stop = attr.get("start", "")[:40], attr.get("stop", "")[:40]
+					if self._fereastra(start, stop) is not None:
+						self.program = {"id": cid, "start": start, "stop": stop, "refs": refs}
+		elif n == 3 and ((self.canal is not None and tag == "display-name") or
 				(self.program is not None and tag in ("title", "sub-title", "desc"))):
 			self.camp, self.text = tag, ""
+			self.parser.CharacterDataHandler = self._text
 
 
 	def _text(self, text):
@@ -318,7 +402,8 @@ class _Xmltv:
 
 
 	def _termina(self, tag):
-		if len(self.stiva) == 3 and self.camp == tag:
+		n = len(self.stiva)
+		if n == 3 and self.camp == tag:
 			if self.canal is not None:
 				ref = self.nume.get(_nume(self.text))
 				if ref and self.canal["ref"] is None:
@@ -328,7 +413,8 @@ class _Xmltv:
 			elif self.program is not None and tag not in self.program:
 				self.program[tag] = self.text.strip()
 			self.camp, self.text = None, ""
-		if len(self.stiva) == 2:
+			self.parser.CharacterDataHandler = None
+		elif n == 2:
 			if tag == "channel" and self.canal is not None:
 				cid = self.canal["id"]
 				if cid and cid not in self.iduri and self.canal["ref"]:
@@ -344,27 +430,70 @@ class _Xmltv:
 		self.stiva.pop()
 
 
+	def _imparte(self):
+		"""Partea fiecarui canal din MAX_EVENIMENTE, la prima emisiune din fisier (canalele vazute pana atunci in <channel>)."""
+		alese = len(self.alese & self.cu_canal) if self.cu_canal else 0
+		rest = max(0, MAX_EVENIMENTE - alese * PE_CANAL_ALES)
+		altele = len(self.cu_canal) - alese if self.cu_canal else 0
+		self.pe_canal = max(MIN_PE_CANAL, min(MAX_PE_CANAL, rest // altele)) if altele > 0 else MAX_PE_CANAL
+		self.cu_canal = None
+
+
+	def _refs(self, cid):
+		"""Canalele din lista legate de channel="cid": tvg-id, apoi <channel> cu nume potrivit, apoi chiar cid ca nume (exact sau
+		larg). Cautarea dupa nume nu depinde de fisier, deci se memoreaza; legate creste cu fiecare <channel>, deci se citeste mereu."""
+		refs = self.iduri.get(cid) or self.legate.get(cid)
+		if refs:
+			return refs
+		try:
+			return self.dupa_nume[cid]
+		except KeyError:
+			pass
+		ref = self.nume.get(_nume(cid))
+		refs = [ref] if ref else (self._largi(cid) or ())   # () comun pentru cele fara pereche, de obicei cele mai multe
+		if len(self.dupa_nume) >= MAX_CID:
+			self.dupa_nume.clear()
+		self.dupa_nume[cid] = refs
+		return refs
+
+
+	def _ora(self, text):
+		try:
+			return self.ore[text]
+		except KeyError:
+			pass
+		if len(self.ore) >= MAX_ORE:
+			self.ore.clear()
+		r = self.ore[text] = _ora(text)
+		return r
+
+
+	def _fereastra(self, start, stop):
+		"""(inceput, sfarsit) in secunde, cu decalajul, sau None cand emisiunea nu intra: ore rele, durata zero, negativa sau peste
+		o zi, terminata deja ori care incepe dupa ZILE zile."""
+		start, stop = self._ora(start), self._ora(stop)
+		if start is None or stop is None:
+			return None
+		if self.decalaj:
+			start, stop = start + self.decalaj, stop + self.decalaj
+		if stop <= start or stop - start > 24 * 3600 or stop <= self.acum or start > self.acum + ZILE * 86400:
+			return None
+		return start, stop
+
+
 	def _eveniment(self, p):
 		if self.total >= MAX_EVENIMENTE:
 			return
 		if self.pe_canal is None:
-			alese = len(self.alese & self.cu_canal) if self.cu_canal else 0
-			rest = max(0, MAX_EVENIMENTE - alese * PE_CANAL_ALES)
-			altele = len(self.cu_canal) - alese if self.cu_canal else 0
-			self.pe_canal = max(MIN_PE_CANAL, min(MAX_PE_CANAL, rest // altele)) if altele > 0 else MAX_PE_CANAL
-			self.cu_canal = None
+			self._imparte()
 		cid = p["id"]
-		refs = self.iduri.get(cid) or self.legate.get(cid)
-		if not refs:
-			ref = self.nume.get(_nume(cid))
-			refs = [ref] if ref else self._largi(cid)
-		start, stop = _ora(p["start"]), _ora(p["stop"])
-		if self.decalaj and start is not None and stop is not None:
-			start, stop = start + self.decalaj, stop + self.decalaj
-		if not refs or start is None or stop is None or stop <= start or stop - start > 24 * 3600:
+		refs = p.get("refs")
+		if refs is None:
+			refs = self._refs(cid)
+		ore = self._fereastra(p["start"], p["stop"])
+		if not refs or ore is None or not p.get("title"):
 			return
-		if stop <= self.acum or start > self.acum + ZILE * 86400 or not p.get("title"):
-			return
+		start, stop = ore
 		eid = zlib.crc32((cid + "/" + str(start)).encode("utf-8")) & 65535 or 1
 		eveniment = (start, stop - start, p["title"][:240], p.get("sub-title", "")[:240], p.get("desc", "")[:1800], eid)
 		for ref in refs:
@@ -388,6 +517,35 @@ class _Xmltv:
 		return self.importate
 
 
+# 0.7.7 (EPG3): harta listei (_Xmltv._harta: tvg-id, numele exacte si cheile largi ale celor ~29.000 de canale ale unui abonament
+# mare) costa ~6,6 s de procesor pe un Viper 4K la fiecare import, si cand lista e aceeasi: la fiecare incercare reluata dupa o
+# cadere de retea (_cuIncercari) si la improspatarea zilnica a unei liste neschimbate. Se pastreaza harta ultimului import (una
+# singura: ~8 MB pe receptor la 29.000 de canale), cu cheia (sursa, potrivirea larga, semnatura octetilor fisierului listei);
+# alta lista sau alta sursa o inlocuieste. Importul de dupa o repornire a interfetei o face din nou (memoria se pierde); acolo
+# ajuta numai lucrul mai putin (HdsIptvSurse._codeaza: 5,7 s -> 4,2 s pe receptor la 29.000 de canale).
+_HARTA = [None]                    # (cheie, (iduri, nume, larg)) sau None; numai firul EPG (_bucla) o atinge
+
+
+def _cheieHarta(sid, octeti, larg):
+	if octeti is None:
+		return None
+	import hashlib
+	return (sid, bool(larg), hashlib.blake2b(octeti, digest_size=20).digest())
+
+
+def _hartaPastrata(cheie):
+	"""Harta pastrata pentru cheie, sau None; la o cheie noua cea veche se uita inainte sa se faca alta (memoria)."""
+	p = _HARTA[0]
+	if p is not None and cheie is not None and p[0] == cheie:
+		return p[1]
+	_HARTA[0] = None
+	return None
+
+
+def _pastreazaHarta(cheie, harta):
+	_HARTA[0] = (cheie, harta)
+
+
 def lucreaza(s, canale, cache=None):
 	"""O sursa pe firul EPG. Rezultat: numarul evenimentelor importate; erorile raman fara URL."""
 	adresa = adresaEpg(s)
@@ -401,16 +559,31 @@ def lucreaza(s, canale, cache=None):
 			raise EroareEpg(E_NUCLEU)
 	if cache is None or not hasattr(cache, "importEvents"):
 		raise EroareEpg(E_NUCLEU)
+	harta = cheie = None
 	if canale is None:
-		canale = I.citesteCanale(s["id"])
-	if not canale:
+		# harta de la importul de dinainte, daca fisierul listei are aceiasi octeti (atunci lista nici nu se mai citeste)
+		octeti = I.octetiCanale(s["id"])
+		cheie = _cheieHarta(s["id"], octeti, potrivireLarga())
+		harta = _hartaPastrata(cheie)
+		if harta is None:
+			# fara fisier, lista (goala) vine ca inainte, din citesteCanale
+			canale = I.canaleDinOcteti(octeti) if octeti is not None else I.citesteCanale(s["id"])
+		octeti = None
+		if harta is None and not canale:
+			return 0
+	elif not canale:
 		return 0
 	inceput = time.monotonic()
-	xml = _Xmltv(s, canale, cache, time.time())
+	ritm = _Ritm()
+	xml = _Xmltv(s, canale, cache, time.time(), ritm, harta)
 	canale = None  # dupa mapare eliberam lista citita din JSON, inclusiv toate adresele de flux
+	if cheie is not None and harta is None:
+		_pastreazaHarta((cheie[0], xml.larg is not None, cheie[2]), xml.harta())
 	with C.deschide(adresa, C.anteteSursa(s), termen=TERMEN_CITIRE_S) as f:
-		for b in _bucati(f, inceput):
+		for b in _bucati(f, inceput, ritm):
+			t = time.monotonic()
 			xml.citeste(b)
+			ritm.dupa(t)
 		xml.citeste(b"", True)
 	return xml.gata()
 

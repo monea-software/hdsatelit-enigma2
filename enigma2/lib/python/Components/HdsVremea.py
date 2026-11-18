@@ -98,9 +98,10 @@ def initConfig():
 		c.unitate = ConfigSelection(default="C", choices=[
 			("C", "Celsius"), ("F", "Fahrenheit"), ("K", "Kelvin")])
 		c.oras = ConfigText(default="", fixed_size=False)
+		# aceleasi texte ca alegerile din ecranul Vremea (Screens/HdsVremea.LOCURI), traduse la afisare
 		c.tema = ConfigSelection(default="nu", choices=[
-			("nu", "Nu"), ("bara", "Bara de informatii"),
-			("principal", "Ecranul principal"), ("ambele", "Ambele")])
+			("nu", N_("Nu")), ("bara", N_("Bara canalului")),
+			("principal", N_("Ecranul principal")), ("ambele", N_("Ambele"))])
 	return config.hds_vremea
 
 

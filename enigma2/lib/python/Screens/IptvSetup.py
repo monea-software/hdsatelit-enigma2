@@ -28,11 +28,19 @@ from Components.config import ConfigText, ConfigPassword, getConfigListEntry
 from Components import HdsIptvSurse as I
 from Components import HdsIptvClient as C
 from Components import HdsIptvLucru as L
-from Components import HdsIptvSeriale as S
+from Components import HdsVod as V
 
 
 def N_(text):
 	return text
+
+
+# 0.7.7 (FLM2, Eduard 16.11 11:01): aplicatia IPTV are pe loc tot ce da sursa: OK deschide pagina ei (IptvCont), cu Canale TV,
+# Filme si Seriale; bifele grupelor din lista de canale trec in MENU
+T_OK_SURSA = N_("OK: canalele, filmele și serialele. MENU: date de acces și grupele.")
+T_CANALE_TV = N_("Canale TV")
+T_FILME = N_("Filme")
+T_SERIALE = N_("Seriale")
 
 
 # ------------------------------------------------------------------ cartelele
@@ -161,8 +169,9 @@ def stareSursa(p, lucreaza):
 		return _("Nu merge"), "rau"
 	if not p.get("ora"):
 		return _("Se încarcă"), "lucru"
-	if p.get("fara_https"):
-		return _("Fără HTTPS"), "atentie"
+	# 0.7.7 (IPX, e-mailurile 6514 si 6520): fara HTTPS sursa tot merge (pana in 0.7.6 eticheta galbena "Fără HTTPS" statea in locul
+	# lui "Merge"); propozitia despre HTTPS ramane in randul de sus (mesajSursa). Nu si in randul mic al cartelei: acolo ar taia
+	# expirarea (masurat cu HdsRegular 25 px: 1156 px pe 1149 in romana, 1210 pe 1073 in turca)
 	return _("Merge"), "bine"
 
 
@@ -174,7 +183,8 @@ def mesajSursa(p):
 	if p.get("fara_https"):
 		parti.append(_(I.T_FARA_HTTPS))
 	if p.get("taiate"):
-		parti.append(_("Lista are prea multe canale: au intrat primele %d.") % I.MAX_CANALE)
+		# 0.7.7 (BQT, Ozgur e-mailul 6514): exact ce a intrat, canalele TV si filmele separat (acelasi text in web)
+		parti.append(C.textTaiate(p, _))
 	if p.get("sarite"):
 		parti.append(_("Câteva rânduri din listă nu se pot folosi și au fost sărite: %d.") % p["sarite"])
 	if textExpirare(p.get("expira")):
@@ -321,12 +331,10 @@ class IptvSetup(_EcranCartele):
 	def _ghid(self):
 		p = self._aleasa()
 		if p is not None:
-			if p["fel"] == "xtream":
-				taste = _("OK: grupele. MENU: date de acces și seriale.")
-			elif p["fel"] == "demo":
+			if p["fel"] == "demo":
 				taste = _("OK: despre lista demo.")
 			else:
-				taste = _("OK: grupele. MENU: date de acces.")
+				taste = _(T_OK_SURSA)
 			cont = self._stareCont(p)
 			text_cont = C.textStareCont(cont) if cont else ""
 			if text_cont:
@@ -365,24 +373,29 @@ class IptvSetup(_EcranCartele):
 		elif p["fel"] == "demo":
 			self.session.open(IptvDespre)
 		else:
-			self.session.openWithCallback(self._dupaFormular, IptvGrupe, p["id"])
+			# 0.7.7 (FLM2): pagina sursei, cu tot ce da ea (canale, filme, seriale); un canal pornit de acolo inchide si meniurile
+			self.session.openWithCallback(self._dupaCont, IptvCont, p["id"])
+
+	def _dupaCont(self, inchide=False):
+		if inchide:
+			self.close(True)
+		else:
+			self._arata()
 
 	def _meniuSursa(self):
 		p = self._aleasa()
 		if p is None or p["fel"] == "demo":
 			return
 		from Screens.ChoiceBox import ChoiceBox
-		actiuni = [(_("Date de acces"), "date")]
-		if p["fel"] == "xtream":
-			actiuni.append((_("Seriale"), "seriale"))
+		actiuni = [(_("Date de acces"), "date"), (_("Grupele"), "grupe")]
 		self.session.openWithCallback(self._alegeCont, ChoiceBox, title=p["nume"], list=actiuni)
 
 	def _alegeCont(self, ales=None):
 		p = self._aleasa()
 		if not ales or not p:
 			return
-		if ales[1] == "seriale":
-			self.session.open(IptvSeriale, p["id"])
+		if ales[1] == "grupe":
+			self.session.openWithCallback(self._dupaFormular, IptvGrupe, p["id"])
 		else:
 			self.session.openWithCallback(self._dupaFormular, IptvDateAcces, p["fel"], p["id"])
 
@@ -741,96 +754,145 @@ class IptvDateAcces(Screen, ConfigListScreen):
 		self.session.openWithCallback(lambda *a: self.close(True), MessageBox, text, MessageBox.TYPE_INFO, timeout=8)
 
 
-class IptvSeriale(_EcranCartele):
-	"""Serial, sezon, episod; numai pagini de cate 50, reteaua pe fir separat."""
+def textRandCont(fel, r):
+	"""Textul unui rand din pagina sursei (IptvCont, fara enigma2, si in probe): r = datele randului."""
+	if fel == "sectiune":
+		return u"%s  ·  %s" % (r["titlu"], r["numar"]) if r.get("numar") else r["titlu"]
+	if fel == "grupa":
+		return u"%s  ·  %s" % (r["nume"], textCanale(r["n"]))
+	if fel == "canal":
+		return r["nume"]
+	if fel == "categorie":
+		return r["nume"]
+	if fel == "sezon":
+		return _("Sezonul %s") % r["numar"]
+	if fel == "episod":
+		return u"%s%s%s" % (("%s. " % r["numar"]) if r.get("numar") else "", r["nume"],
+			(u"  ·  " + V.textDurata(r["durata"])) if r.get("durata") else "")
+	parti = [r.get("nume") or ""]
+	if r.get("nota"):
+		parti.append(r["nota"].replace(".", ","))
+	return u"  ·  ".join(parti)
+
+
+def sectiuniSursa(p):
+	"""Randurile de sus ale paginii sursei: Canale TV (cu numarul, deja stiut), Filme (la un playlist cu numarul lor), Seriale (cont
+	Xtream). Fara nimic cerut furnizorului: filmele si serialele se cer cand omul deschide randul."""
+	rez = [{"cheie": "canale", "titlu": _(T_CANALE_TV), "numar": textCanale(p["canale"]) if p.get("canale") else ""}]
+	if p.get("fel") == "xtream":
+		rez.append({"cheie": V.FILME, "titlu": _(T_FILME), "numar": ""})
+		rez.append({"cheie": V.SERIALE, "titlu": _(T_SERIALE), "numar": ""})
+	elif p.get("fel") == "m3u" and I.areFilme(p):
+		# dupa fisierul filmelor (un playlist adus inainte de 0.7.7 isi are inca filmele in lista de canale, pana la aducere)
+		rez.append({"cheie": V.FILME, "titlu": _(T_FILME), "numar": str(I.numarFilme(p))})
+	return rez
+
+
+class IptvCont(Screen):
+	"""0.7.7 (FLM2, Eduard 16.11 11:01: 'Omul cand intra in aplicatie vrea sa aiba pe toate acolo'): pagina unei surse din aplicatia
+	IPTV. Sus: Canale TV, Filme, Seriale (ce are sursa); OK deschide, EXIT urca un nivel, iar titlul spune mereu al cui e
+	('Cont de proba › Filme › Actiune'). Canale TV: grupele, apoi canalele (OK porneste canalul si inchide meniurile). Filme:
+	categoriile, apoi titlurile (OK porneste filmul de unde ai ramas, in acelasi player ca Filme si seriale, cu aceeasi pozitie).
+	Seriale: categoriile, serialele, sezoanele, episoadele (dupa un episod porneste singur urmatorul). GALBEN cauta in filme sau
+	seriale, ALBASTRU arata descrierea. Lista e compacta (STANGA / DREAPTA = pagina) si nu cere nimic furnizorului pana nu
+	deschide omul un rand; canalele se citesc din fisierul sursei pe un fir, filmele si serialele prin Components/HdsVod (pe firele
+	lui), ca in Filme si seriale. Perechea web: pagina /iptv, butonul 'Deschide' (HdsWebControl/internet_web.py)."""
 	skin = """
-	<screen name="IptvSeriale" resolution="1920,1080" position="center,center" size="1500,800" title="Seriale">
+	<screen name="IptvCont" resolution="1920,1080" position="center,center" size="1500,800" title="IPTV">
 		<widget name="ghid" position="30,20" size="1440,50" font="Regular;26" noWrap="1" valign="center" />
-		<widget name="lista" position="30,80" size="1440,620" scrollbarMode="showOnDemand" />
-		<widget name="key_red" position="30,730" size="340,50" font="Regular;24" halign="center" valign="center" backgroundColor="#9f1313" />
-		<widget name="key_green" position="390,730" size="340,50" font="Regular;24" halign="center" valign="center" backgroundColor="#1f771f" />
-		<widget name="key_yellow" position="750,730" size="340,50" font="Regular;24" halign="center" valign="center" backgroundColor="#a08000" />
-		<widget name="key_blue" position="1110,730" size="360,50" font="Regular;24" halign="center" valign="center" backgroundColor="#18188b" />
+		<widget name="lista" position="30,80" size="1440,620" font="Regular;30" itemHeight="52" scrollbarMode="showOnDemand" />
+		<widget name="key_red" position="30,730" size="340,50" zPosition="1" font="Regular;24" halign="center" valign="center" backgroundColor="#9f1313" transparent="0" />
+		<widget name="key_green" position="390,730" size="340,50" zPosition="1" font="Regular;24" halign="center" valign="center" backgroundColor="#1f771f" transparent="0" />
+		<widget name="key_yellow" position="750,730" size="340,50" zPosition="1" font="Regular;24" halign="center" valign="center" backgroundColor="#a08000" transparent="0" />
+		<widget name="key_blue" position="1110,730" size="360,50" zPosition="1" font="Regular;24" halign="center" valign="center" backgroundColor="#18188b" transparent="0" />
 	</screen>
 	"""
 
-	def __init__(self, session, sursa_id):
+	def __init__(self, session, sursa_id, sectiune=None):
 		Screen.__init__(self, session)
-		from enigma import eListboxPythonMultiContent, eTimer
+		from enigma import eTimer
 		self.sursa_id = sursa_id
-		self.serial, self.sezon, self.pagina, self.cautare = "", "", 0, ""
-		self._drum, self._randuri, self._date, self._cheie = [], [], {}, None
-		self.setTitle(_("Seriale"))
-		self["lista"] = MenuList([], content=eListboxPythonMultiContent)
+		self.p = next((x for x in I.citesteSursePublic() if x["id"] == sursa_id), {"id": sursa_id, "fel": "", "nume": ""})
+		self.numeSursa = self.p.get("nume") or _(I.NUME_FEL.get(self.p.get("fel"), "IPTV"))
+		self["lista"] = MenuList([])
 		self["ghid"] = Label("")
 		self["key_red"] = Button(_("Înapoi"))
-		self["key_green"] = Button(_("Alege"))
-		self["key_yellow"] = Button(_("Caută"))
-		self["key_blue"] = Button(_("Pagina următoare"))
+		self["key_green"] = Button(_("Deschide"))
+		self["key_yellow"] = Button("")
+		self["key_blue"] = Button("")
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions", "InfobarEPGActions"], {
 			"cancel": self._inapoi, "red": self._inapoi, "ok": self._ok, "green": self._ok,
-			"yellow": self._galben, "blue": self._urmatoarea, "left": self._precedenta, "right": self._urmatoarea,
-			"up": self._sus, "down": self._jos, "showEventInfo": self._descriere,
+			"yellow": self._cauta, "blue": self._descriere, "showEventInfo": self._descriere,
+			"up": self._sus, "down": self._jos, "left": self._paginaSus, "right": self._paginaJos,
 		}, -2)
+		# nivelurile: dict(fel, titlu, randuri, index, tip, ...); cel de sus e pe ecran
+		self._niveluri = []
+		self._cheie = None          # lucrarea HdsVod asteptata
+		self._dupaLucrare = None
+		self._fir = None            # firul care citeste canalele
+		self._canale = None         # [(grupa, [(cheie, nume, directa)])], citite o data pe deschidere
 		self._ceas = eTimer()
-		self._ceas.callback.append(self._rezultat)
-		self.onLayoutFinish.append(self._pregatesteLista)
-		self.onLayoutFinish.append(self._cere)
-		self.onClose.append(self._inchide)
+		self._ceas.callback.append(self._verifica)
+		self.onClose.append(self._laInchidere)
+		self._sectiune = sectiune
+		# metoda legata, nu lambda: GUISkin.createGUIScreen ia orice alt fel de functie din onLayoutFinish drept cod de executat
+		self.onLayoutFinish.append(self._laInceput)
 
-	def _inchide(self):
+	def _laInceput(self):
+		self._intra("sectiuni", None, [("sectiune", r) for r in sectiuniSursa(self.p)])
+		if self._sectiune:
+			self._deschideSectiune(self._sectiune)
+
+	def _laInchidere(self):
 		self._ceas.stop()
+		if self._cheie:
+			V.renunta(self._cheie)
 		self._cheie = None
+		self._canale = None
 
-	def _cere(self):
-		self._randuri, self._date = [], {}
-		self["lista"].setList([])
-		self["ghid"].setText(_("Se încarcă..."))
-		self._cheie = S.cere(self.sursa_id, self.serial, self.sezon, self.pagina, self.cautare)
-		if not self._cheie:
-			self["ghid"].setText(_(S.E_OCUPAT))
+	# ---------------------------------------------------------------- nivelurile
+
+	def _intra(self, fel, titlu, randuri, **date):
+		nivel = dict(date, fel=fel, titlu=titlu, randuri=randuri, index=0)
+		self._niveluri.append(nivel)
+		self._arata()
+
+	def _nivel(self):
+		return self._niveluri[-1] if self._niveluri else None
+
+	def _arata(self, mesaj=""):
+		n = self._nivel()
+		if n is None:
 			return
-		self._ceas.start(400, False)
-		self._rezultat()
+		drum = [self.numeSursa] + [x["titlu"] for x in self._niveluri if x["titlu"]]
+		self.setTitle(u" › ".join(drum))
+		self["lista"].setList([(textRandCont(fel, r), (fel, r)) for fel, r in n["randuri"]])
+		self["lista"].moveToIndex(min(n["index"], max(0, len(n["randuri"]) - 1)))
+		tip = n.get("tip")
+		self["key_yellow"].setText(_("Caută") if tip in (V.FILME, V.SERIALE) else "")
+		self["key_blue"].setText(_("Descriere") if n["fel"] in ("titluri", "episoade") else "")
+		self["key_green"].setText(_("Pornește") if n["fel"] in ("canale", "episoade") or (n["fel"] == "titluri" and tip == V.FILME)
+			else _("Deschide"))
+		self._ghid(mesaj)
 
-	def _rezultat(self):
-		if not self._cheie:
-			return
-		rez = S.rezultat(self._cheie)
-		if rez.get("lucreaza"):
-			return
-		self._ceas.stop()
-		if not rez.get("result"):
-			self["ghid"].setText(_(rez.get("message") or S.E_DATE))
-			return
-		self._date, self._randuri = rez, rez.get("randuri", [])
-		self.setTitle((rez.get("titlu") or _("Seriale")) + " · " + _("Pagina %d") % (self.pagina + 1))
-		self["key_green"].setText(_("Redă pe televizor") if self.sezon else _("Alege"))
-		self["key_yellow"].setText(_("Descriere") if self.serial else _("Caută"))
-		self["key_blue"].setText(_("Pagina următoare") if rez.get("altele") else "")
-		a = (self._latimeRand, self._inaltimeRand, self._scaraRand, self._culoriRand, self._margineRand)
-		c = self._culoriRand
-		self["lista"].setList([_randCartela(r["id"], self._nume(r), r.get("durata") or r.get("descriere") or "", "",
-			c["chenar_ales"], *a) for r in self._randuri])
-		self._ghid()
+	def _ales(self):
+		cur = self["lista"].getCurrent()
+		return cur[1] if cur else (None, None)
 
-	def _nume(self, rand):
-		if not self.serial:
-			return rand["nume"]
-		if not self.sezon:
-			return _("Sezonul %s") % rand["numar"]
-		return ((_('Episodul %s') % rand["numar"]) + ": " if rand.get("numar") else "") + rand["nume"]
+	def _ghid(self, mesaj=""):
+		n = self._nivel()
+		if mesaj:
+			self["ghid"].setText(mesaj)
+		elif not n["randuri"]:
+			self["ghid"].setText(_("Niciun rezultat."))
+		else:
+			fel, r = self._ales()
+			self["ghid"].setText(textRandCont(fel, r) if fel else "")
 
-	def _aleasa(self):
-		i = self["lista"].getSelectionIndex()
-		return self._randuri[i] if 0 <= i < len(self._randuri) else None
-
-	def _ghid(self):
-		r = self._aleasa()
-		text = (self._nume(r) + ". " + (r.get("descriere") or self._date.get("descriere") or "")) if r else _("Niciun rezultat.")
-		if self._date.get("message"):
-			text += " " + _(self._date["message"])
-		self["ghid"].setText(text)
+	def _tine(self):
+		n = self._nivel()
+		if n is not None and self["lista"].instance is not None:
+			n["index"] = self["lista"].getSelectionIndex()
 
 	def _sus(self):
 		self["lista"].up()
@@ -840,65 +902,201 @@ class IptvSeriale(_EcranCartele):
 		self["lista"].down()
 		self._ghid()
 
-	def _ok(self):
-		rand = self._aleasa()
-		if not rand:
-			return
-		if self.sezon:
-			ref = S.episodDinPagina(self._cheie, rand["cheie"])
-			if ref:
-				try:
-					from enigma import eServiceReference
-					serviciu = eServiceReference(ref)
-					serviciu.setName(rand["nume"])
-					self.session.nav.playService(serviciu)
-					self.close()
-				except Exception:
-					self["ghid"].setText(_("Episodul nu a pornit. Încearcă din nou."))
-			else:
-				self["ghid"].setText(_(S.E_EXPIRAT))
-			return
-		self._drum.append((self.serial, self.sezon, self.pagina, self.cautare))
-		if self.serial:
-			self.sezon = rand["id"]
-		else:
-			self.serial = rand["id"]
-		self.pagina = 0
-		self._cere()
+	def _paginaSus(self):
+		self["lista"].pageUp()
+		self._ghid()
+
+	def _paginaJos(self):
+		self["lista"].pageDown()
+		self._ghid()
 
 	def _inapoi(self):
-		if self._drum:
-			self.serial, self.sezon, self.pagina, self.cautare = self._drum.pop()
-			self._cere()
+		if self._cheie:
+			V.renunta(self._cheie)
+			self._cheie = None
+			self._ceas.stop()
+		if len(self._niveluri) > 1:
+			self._niveluri.pop()
+			self._arata()
 		else:
-			self.close()
+			self.close(False)
 
-	def _urmatoarea(self):
-		if self._date.get("altele"):
-			self.pagina += 1
-			self._cere()
+	# ---------------------------------------------------------------- asteptarile (canalele pe un fir, filmele prin HdsVod)
 
-	def _precedenta(self):
-		if self.pagina:
-			self.pagina -= 1
-			self._cere()
+	def _asteapta(self, cheie, dupa):
+		if not cheie:
+			self._ghid(_(V.E_OCUPAT))
+			return
+		self._cheie, self._dupaLucrare = cheie, dupa
+		self["ghid"].setText(_("Se încarcă..."))
+		self._ceas.start(300, False)
 
-	def _galben(self):
-		if self.serial:
-			self._descriere()
-		else:
-			from Screens.VirtualKeyBoard import VirtualKeyBoard
-			self.session.openWithCallback(self._cauta, VirtualKeyBoard, title=_("Caută seriale"), text=self.cautare)
+	def _verifica(self):
+		if self._fir is not None:
+			if self._fir.is_alive():
+				return
+			self._fir = None
+			dupa, self._dupaLucrare = self._dupaLucrare, None
+			self._ceas.stop()
+			if dupa:
+				dupa(None)
+			return
+		if not self._cheie:
+			self._ceas.stop()
+			return
+		rez = V.rezultat(self._cheie)
+		if rez.get("lucreaza"):
+			return
+		self._ceas.stop()
+		self._cheie = None
+		dupa, self._dupaLucrare = self._dupaLucrare, None
+		if not rez.get("result"):
+			self._ghid(_(rez.get("message") or V.E_NU_RASPUNDE))
+			return
+		if dupa:
+			dupa(rez)
 
-	def _cauta(self, text=None):
-		if text is not None:
-			self.cautare, self.pagina = text.strip()[:80], 0
-			self._cere()
+	def _cereCanale(self, dupa):
+		if self._canale is not None:
+			dupa(None)
+			return
+		import threading
+		s = I.sursa(self.sursa_id) or {}
+
+		def lucru():
+			try:
+				self._canale = I.grupeCanale(s) if s else []
+			except Exception as e:
+				print("[IptvCont] canalele: %s" % type(e).__name__)
+				self._canale = []
+		self._dupaLucrare = dupa
+		self["ghid"].setText(_("Se încarcă..."))
+		self._fir = threading.Thread(target=lucru, name="IptvContCanale")
+		self._fir.daemon = True
+		self._fir.start()
+		self._ceas.start(200, False)
+
+	# ---------------------------------------------------------------- OK
+
+	def _deschideSectiune(self, cheie):
+		for i, (fel, r) in enumerate(self._nivel()["randuri"]):
+			if r.get("cheie") == cheie:
+				self["lista"].moveToIndex(i)
+				self._ok()
+				return
+
+	def _ok(self):
+		fel, r = self._ales()
+		if fel is None or self._cheie or self._fir is not None:
+			return
+		self._tine()
+		if fel == "sectiune":
+			if r["cheie"] == "canale":
+				self._cereCanale(lambda _rez: self._intra("grupe", r["titlu"], [("grupa", {"nume": g, "n": len(c), "canale": c})
+					for g, c in (self._canale or [])]))
+			else:
+				tip = r["cheie"]
+				self._asteapta(V.cere("categorii", self.sursa_id, tip), lambda rez: self._intra("categorii", r["titlu"],
+					[("categorie", c) for c in rez.get("categorii") or []], tip=tip))
+		elif fel == "grupa":
+			self._intra("canale", r["nume"], [("canal", {"cheie": k, "nume": nume, "directa": d}) for k, nume, d in r["canale"]])
+		elif fel == "canal":
+			self._pornesteCanal(r)
+		elif fel == "categorie":
+			tip = self._nivel()["tip"]
+			self._asteapta(V.cere("rand", self.sursa_id, tip, r["id"]), lambda rez: self._intra("titluri", r["nume"],
+				[("titlu", t) for t in rez.get("titluri") or []], tip=tip))
+		elif fel == "titlu":
+			tip = r.get("tip") or self._nivel().get("tip") or V.FILME
+			if tip == V.SERIALE:
+				self._asteapta(V.cere("detalii", self.sursa_id, V.SERIALE, r["id"]), lambda rez: self._intra("sezoane", r["nume"],
+					[("sezon", sz) for sz in (rez.get("detalii") or {}).get("sezoane") or []], tip=V.SERIALE, serial=r,
+					detalii=rez.get("detalii") or {}))
+			else:
+				self._pornesteFilm(r)
+		elif fel == "sezon":
+			n = self._nivel()
+			self._intra("episoade", _("Sezonul %s") % r["numar"], [("episod", e) for e in r.get("episoade") or []], tip=V.SERIALE,
+				serial=n.get("serial"), detalii=n.get("detalii"), sezon=r)
+		elif fel == "episod":
+			self._pornesteEpisod(r)
+
+	def _pornesteCanal(self, r):
+		try:
+			from enigma import eServiceReference
+			serviciu = eServiceReference(I.refCanal(self.sursa_id, r["cheie"], r.get("directa")))
+			serviciu.setName(r["nume"])
+			self.session.nav.playService(serviciu)
+		except Exception as e:
+			print("[IptvCont] canalul: %s" % type(e).__name__)
+			self._ghid(_("Canalul nu a pornit. Încearcă din nou."))
+			return
+		self.close(True)
+
+	def _src(self):
+		return V.sursa(self.sursa_id)
+
+	def _pornesteFilm(self, t):
+		from Screens.HdsFilmeSeriale import reda, pozitieTitlu
+		from Components import HdsVodPozitii as Z
+		src = self._src()
+		if src is None or not t.get("cheie"):
+			self._ghid(_(V.E_LIPSA))
+			return
+		reda(self.session, src, t["cheie"], {"nume": t["nume"], "poza": t.get("poza", ""), "tip": V.FILME},
+			pozitieTitlu(src, Z.cheie(src.id, t["cheie"])), lambda *a: self._arata())
+
+	def _pornesteEpisod(self, e):
+		from Screens.HdsFilmeSeriale import reda, pozitieTitlu
+		from Components import HdsVodPozitii as Z
+		src = self._src()
+		n = self._nivel()
+		if src is None:
+			self._ghid(_(V.E_LIPSA))
+			return
+		d, serial, sz = n.get("detalii") or {}, n.get("serial") or {}, n.get("sezon") or {}
+		meta = {"nume": e["nume"], "poza": e.get("poza") or serial.get("poza", ""), "tip": V.SERIALE, "serial": serial.get("id", ""),
+			"serial_nume": d.get("nume") or serial.get("nume", ""), "sezon": sz.get("numar", ""), "numar": e.get("numar", "")}
+		ep = sz.get("episoade") or []
+		i = next((k for k, x in enumerate(ep) if x.get("cheie") == e.get("cheie")), len(ep))
+		urmatoare = [(x["cheie"], dict(meta, nume=x["nume"], numar=x.get("numar", ""))) for x in ep[i + 1:i + 30]]
+		reda(self.session, src, e["cheie"], meta, pozitieTitlu(src, Z.cheie(src.id, e["cheie"])), lambda *a: self._arata(), urmatoare)
+
+	# ---------------------------------------------------------------- GALBEN, ALBASTRU
+
+	def _cauta(self):
+		tip = (self._nivel() or {}).get("tip")
+		if tip not in (V.FILME, V.SERIALE) or self._cheie:
+			return
+		from Screens.VirtualKeyBoard import VirtualKeyBoard
+		self.session.openWithCallback(lambda text=None, tip=tip: self._dupaCautare(tip, text), VirtualKeyBoard,
+			title=_("Caută seriale") if tip == V.SERIALE else _("Caută"), text="")
+
+	def _dupaCautare(self, tip, text=None):
+		text = (text or "").strip()[:80]
+		if not text:
+			return
+		self._tine()
+		self._asteapta(V.cere("cauta", self.sursa_id, tip, text), lambda rez: self._intra("titluri", text,
+			[("titlu", dict(t, tip=tip)) for t in rez.get("titluri") or []], tip=tip))
 
 	def _descriere(self):
-		rand = self._aleasa()
-		if rand:
-			self.session.open(IptvTextSerial, self._nume(rand), rand.get("descriere") or self._date.get("descriere") or _("Nu există descriere."))
+		n = self._nivel()
+		fel, r = self._ales()
+		if n is None or n["fel"] not in ("titluri", "episoade") or fel is None or self._cheie:
+			return
+		if fel == "episod":
+			self.session.open(IptvTextSerial, textRandCont(fel, r), r.get("descriere") or _("Nu există descriere."))
+			return
+		tip = n.get("tip") or V.FILME
+
+		def arata(rez):
+			d = rez.get("detalii") or {}
+			rand = u"  ·  ".join(x for x in (d.get("an"), V.textDurata(d.get("durata")), d.get("gen")) if x)
+			self.session.open(IptvTextSerial, d.get("nume") or r["nume"], (rand + "\n\n" if rand else "") + (d.get("descriere") or
+				_("Nu există descriere.")))
+			self._ghid()
+		self._asteapta(V.cere("detalii", self.sursa_id, tip, r["id"]), arata)
 
 
 class IptvTextSerial(Screen):

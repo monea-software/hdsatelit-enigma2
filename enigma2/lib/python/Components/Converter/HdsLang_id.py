@@ -287,4 +287,10 @@ T = {
 	"cpu_mode": u"Mode prosesor",
 	"cpu_volt": u"Tegangan",
 	"cpu_steps": u"Waktu per frekuensi",
+	"bitrate_va": u"Bitrate video · audio",
+	"br_min": u"min",
+	"br_max": u"maks",
+	"br_avg": u"rerata",
+	"ecm_hop": u"Lompatan",
+	"ecm_reader": u"Pembaca",
 }

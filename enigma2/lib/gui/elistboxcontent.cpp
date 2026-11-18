@@ -744,7 +744,17 @@ void eListboxPythonConfigContent::paint(gPainter &painter, eWindowStyle &style, 
 							bbox = eRect(left + dx, offset.y(), right-left, m_itemsize.height());
 							painter.fill(bbox);
 						}
-						painter.renderPara(para, ePoint(dx, 0));
+							/* FUR: in a list centred vertically (valign center: the lists of the skins written for OE-Alliance,
+							   skin.py completareListaSetari) the value being written stays in the middle of the row like the other
+							   values, as renderText does with RT_VALIGN_CENTER; otherwise at the top, as before */
+						int dy = 0;
+						if (vflags & gPainter::RT_VALIGN_CENTER)
+						{
+							eRect box = para->getBoundBox();
+							if (box.height() > 0)
+								dy = offset.y() + (m_itemsize.height() - box.height()) / 2 - box.top();
+						}
+						painter.renderPara(para, ePoint(dx, dy));
 						if (!fits)
 							painter.clippop();
 							/* pvalue is borrowed */

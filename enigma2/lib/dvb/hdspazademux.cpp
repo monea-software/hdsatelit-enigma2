@@ -78,6 +78,15 @@ void hdsPazaRecorderStarted(int adapter, int demux)
 	}
 }
 
+int hdsPazaRecorders(int adapter, int demux)
+{
+	int k = hdspaza::slot(adapter, demux);
+	if (k < 0)
+		return -1;
+	singleLock s(g_guard_lock);
+	return g_guard[k].recorders;
+}
+
 void hdsPazaRecorderStopping(int adapter, int demux)
 {
 	int k = hdspaza::slot(adapter, demux);

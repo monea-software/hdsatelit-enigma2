@@ -19,8 +19,24 @@ si niciuna nu arunca exceptii spre ecran: ce nu se poate citi sau intelege raman
 import os
 import re
 
-NECUNOSCUT = 'necunoscut'
-TITLU = 'Informații HDMI'
+
+def N_(text):
+	"""Marcaj pentru xgettext (po/Makefile.am, --keyword=N_), fara efect: textul se traduce acolo unde se arata."""
+	return text
+
+
+def _t(text):
+	"""Traducerea enigma2 (_ din builtins); fara ea (probele de pe PC) textul ramane. None si '' raman la fel."""
+	if not text:
+		return text
+	try:
+		return _(text)  # noqa: F821
+	except NameError:
+		return text
+
+
+NECUNOSCUT = N_('necunoscut')
+TITLU = N_('Informații HDMI')
 
 # fisierele care se citesc la fiecare improspatare
 HDMI0 = 'proc/msp/hdmi0'
@@ -36,16 +52,16 @@ EDID_BINAR = 'proc/stb/hdmi/raw_edid'      # pe alte receptoare (EDID binar); pe
 
 # pagina pentru cunoscatori (textul brut, cu tasta albastra): (titlu, cale, dosar)
 PAGINI_BRUTE = (
-	('Starea driverului HDMI', HDMI0, False),
-	('Imaginea trimisă', HDMI0_VO, False),
-	('Sunetul trimis', HDMI0_AO, False),
-	('Televizorul (EDID)', HDMI0_SINK, False),
-	('Afișajul 1', 'proc/msp/disp1', False),
-	('Afișajul 0', 'proc/msp/disp0', False),
-	('Setările video Enigma2', STB_VIDEO, True),
-	('Decodorul video', STB_VMPEG, True),
-	('Setările de sunet Enigma2', STB_AUDIO, True),
-	('Ieșirea HDMI Enigma2', STB_HDMI, True),
+	(N_('Starea driverului HDMI'), HDMI0, False),
+	(N_('Imaginea trimisă'), HDMI0_VO, False),
+	(N_('Sunetul trimis'), HDMI0_AO, False),
+	(N_('Televizorul (EDID)'), HDMI0_SINK, False),
+	(N_('Afișajul 1'), 'proc/msp/disp1', False),
+	(N_('Afișajul 0'), 'proc/msp/disp0', False),
+	(N_('Setările video Enigma2'), STB_VIDEO, True),
+	(N_('Decodorul video'), STB_VMPEG, True),
+	(N_('Setările de sunet Enigma2'), STB_AUDIO, True),
+	(N_('Ieșirea HDMI Enigma2'), STB_HDMI, True),
 )
 
 MAX_OCTETI = 65536          # un fisier din /proc mai mare decat atat nu e al nostru; nu citim mai mult
@@ -564,7 +580,7 @@ def citeste_sunet(radacina, brut):
 
 
 def pagini_brute(stare):
-	"""[(titlu, cale absoluta pe receptor, text)] pentru pagina bruta; doar sursele care exista."""
+	"""[(titlu tradus, cale absoluta pe receptor, text)] pentru pagina bruta; doar sursele care exista."""
 	rez = []
 	for titlu, rel, dosar in PAGINI_BRUTE:
 		if dosar:
@@ -573,7 +589,7 @@ def pagini_brute(stare):
 		else:
 			text = stare.texte.get(rel)
 		if text and text.strip():
-			rez.append((titlu, '/' + rel, text.strip('\n')))
+			rez.append((_t(titlu), '/' + rel, text.strip('\n')))
 	return rez
 
 
@@ -586,7 +602,7 @@ def _nr(x, zecimale=3):
 
 
 def text_da_nu(v):
-	return {True: 'Da', False: 'Nu'}.get(v, NECUNOSCUT)
+	return {True: _t('Da'), False: _t('Nu')}.get(v) or _t(NECUNOSCUT)
 
 
 def text_spatiu_culoare(v):
@@ -663,13 +679,13 @@ def text_mod(mod):
 
 def _frecvente(moduri, inaltime, baleiaj):
 	f = sorted(set(m[3] for m in moduri if m[1] == inaltime and m[2] == baleiaj and m[0] < 4000))
-	return (', '.join(str(x) for x in f) + ' Hz') if f else 'Nu'
+	return (', '.join(str(x) for x in f) + ' Hz') if f else _t('Nu')
 
 
 def _text_canale(n):
 	if not n:
 		return None
-	return {1: 'mono', 2: 'stereo', 6: '5.1', 8: '7.1'}.get(n, '%d canale' % n)
+	return {1: _t('mono'), 2: _t('stereo'), 6: '5.1', 8: '7.1'}.get(n) or _t('%d canale') % n
 
 
 def _titlu(text):
@@ -678,7 +694,7 @@ def _titlu(text):
 
 def _rand(eticheta, valoare, ton=None):
 	if valoare is None or valoare == '':
-		return ('valoare', eticheta, NECUNOSCUT, STINS)
+		return ('valoare', eticheta, _t(NECUNOSCUT), STINS)
 	return ('valoare', eticheta, valoare, ton or NORMAL)
 
 
@@ -689,75 +705,76 @@ def coloane(s, ales_in_setari=None):
 		return [_coloana_iesire(s, ales_in_setari), _coloana_legatura(s), _coloana_televizor(s)]
 	except Exception as e:
 		print('[HdsHdmiDate] coloane: %s' % e)
-		return [[_titlu('Ieșire HDMI'), _rand('Stare', None)], [], []]
+		return [[_titlu(_t('Ieșire HDMI')), _rand(_t('Stare'), None)], [], []]
 
 
 def _coloana_iesire(s, ales):
 	c = []
 	lat, inalt, bal, frecv = _rezolutie_iesire(s)
-	c.append(_titlu('Ieșire HDMI'))
-	c.append(_rand('Rezoluție', ('%d x %d' % (lat, inalt)) if lat and inalt else None))
+	c.append(_titlu(_t('Ieșire HDMI')))
+	c.append(_rand(_t('Rezoluție'), ('%d x %d' % (lat, inalt)) if lat and inalt else None))
 	if frecv and bal == 'i':
 		# 1080i50 = 50 de campuri pe secunda, adica 25 de cadre intregi
-		cadre = '%s (%s câmpuri)' % (text_cadre(frecv / 2.0), text_cadre(frecv))
+		cadre = _t('%s (%s câmpuri)') % (text_cadre(frecv / 2.0), text_cadre(frecv))
 	else:
 		cadre = text_cadre(frecv)
-	c.append(_rand('Cadre pe secundă', cadre))
-	c.append(_rand('Baleiaj', {'p': 'Progresiv', 'i': 'Întrețesut'}.get(bal)))
+	c.append(_rand(_t('Cadre pe secundă'), cadre))
+	c.append(_rand(_t('Baleiaj'), {'p': _t('Progresiv'), 'i': _t('Întrețesut')}.get(bal)))
 	ales = ales or s.video.get('videomode')
 	ton = None
 	m = mod_tv(ales or '')
 	# doar rezolutia si baleiajul: frecventa (50/60 Hz) o schimba driverul singur dupa canal (videomode_50hz/60hz)
 	if m and inalt and bal and (m[1] != inalt or m[2] != bal):
 		ton = ATENTIE          # iesirea nu e ce s-a ales in setari
-	c.append(_rand('Ales în setări', text_mod(ales), ton))
+	c.append(_rand(_t('Ales în setări'), text_mod(ales), ton))
 	tmds = (s.hdmi0.val('TMDSMode', 'HWStatus') or '').upper().replace(' ', '')
 	mt = re.match(r'^HDMI(\d)\.?(\d)', tmds)
 	if mt:
 		tmds_text = 'HDMI %s.%s' % mt.groups()
 	elif tmds.startswith('DVI'):
-		tmds_text = 'DVI, fără sunet'
+		tmds_text = _t('DVI, fără sunet')
 	else:
 		tmds_text = None
-	c.append(_rand('Semnal TMDS', tmds_text))
+	c.append(_rand(_t('Semnal TMDS'), tmds_text))
 	ceas = _intreg(s.vo.val('PixelClk', 'VideoAttr'))
-	c.append(_rand('Frecvența pixelilor', (_nr(ceas / 1000.0, 3) + ' MHz') if ceas else None))
+	c.append(_rand(_t('Frecvența pixelilor'), (_nr(ceas / 1000.0, 3) + ' MHz') if ceas else None))
 
-	c.append(_titlu('Culoare'))
-	c.append(_rand('Spațiu de culoare', text_spatiu_culoare(s.vo.val('OutColorSpace', 'VedioPath', 'VideoPath')
+	c.append(_titlu(_t('Culoare')))
+	c.append(_rand(_t('Spațiu de culoare'), text_spatiu_culoare(s.vo.val('OutColorSpace', 'VedioPath', 'VideoPath')
 		or s.hdmi0.val('OutColorSpace', 'APPAttr'))))
 	b = biti_culoare(s.vo.val('OutBitDepth', 'VedioPath', 'VideoPath'), s.vo.val('DeepColorMode', 'VedioPath', 'VideoPath')
 		or s.hdmi0.val('DeepColorMode', 'APPAttr'))
-	c.append(_rand('Adâncime de culoare', ('%d biți' % b) if b else None))
+	c.append(_rand(_t('Adâncime de culoare'), (_t('%d biți') % b) if b else None))
 	q = (s.vo.val('OutQuantization', 'VedioPath', 'VideoPath') or '').upper()
-	c.append(_rand('Niveluri', 'limitate (16-235)' if q.startswith('LIMIT') else ('complete (0-255)' if q.startswith('FULL') else None)))
+	c.append(_rand(_t('Niveluri'), _t('limitate (16-235)') if q.startswith('LIMIT') else (_t('complete (0-255)') if q.startswith('FULL') else None)))
 	col = s.vo.val('Colorimetry', 'VideoAttr') or ''
 	mc = re.search(r'BT\.?\s*(709|601|2020)', col.upper())
-	c.append(_rand('Colorimetrie', ('BT.%s' % mc.group(1)) if mc else (col.strip() or None)))
-	c.append(_rand('HDR acum', _text_hdr_acum(s)))
+	c.append(_rand(_t('Colorimetrie'), ('BT.%s' % mc.group(1)) if mc else (col.strip() or None)))
+	c.append(_rand(_t('HDR acum'), _text_hdr_acum(s)))
 
-	c.append(_titlu('Imaginea decodată acum'))
+	c.append(_titlu(_t('Imaginea decodată acum')))
 	xr, yr = _intreg(s.vmpeg.get('xres'), 16), _intreg(s.vmpeg.get('yres'), 16)
 	if xr == 0 or yr == 0:
-		c.append(_rand('Rezoluția canalului', 'nicio imagine', STINS))
+		c.append(_rand(_t('Rezoluția canalului'), _t('nicio imagine'), STINS))
 	else:
-		c.append(_rand('Rezoluția canalului', ('%d x %d' % (xr, yr)) if xr and yr else None))
+		c.append(_rand(_t('Rezoluția canalului'), ('%d x %d' % (xr, yr)) if xr and yr else None))
 	p = _da(s.vmpeg.get('progressive'))
-	c.append(_rand('Baleiaj', {True: 'Progresiv', False: 'Întrețesut'}.get(p)))
+	c.append(_rand(_t('Baleiaj'), {True: _t('Progresiv'), False: _t('Întrețesut')}.get(p)))
 	fr = _intreg(s.vmpeg.get('framerate'))
-	c.append(_rand('Cadre pe secundă', text_cadre(fr / 1000.0 if fr and fr > 1000 else fr) if fr else None))
+	c.append(_rand(_t('Cadre pe secundă'), text_cadre(fr / 1000.0 if fr and fr > 1000 else fr) if fr else None))
 	if xr != 0 and yr != 0:
-		c.append(_rand('HDR în canal', text_gama(s.vmpeg.get('gamma'))))
+		c.append(_rand(_t('HDR în canal'), text_gama(s.vmpeg.get('gamma'))))
 	return c
 
 
 # gama imaginii decodate, din /proc/stb/vmpeg/0/gamma (hexazecimal, ca in decoder.cpp): aceleasi valori ca evenimentul
 # 17 al decodorului (0 gama traditionala SDR, 1 gama traditionala HDR, 2 SMPTE ST 2084 = HDR10, 3 HLG)
-GAMA = {0: 'Nu (SDR)', 1: 'HDR', 2: 'HDR10', 3: 'HLG'}
+GAMA = {0: N_('Nu (SDR)'), 1: 'HDR', 2: 'HDR10', 3: 'HLG'}
 
 
 def text_gama(v):
-	return GAMA.get(_intreg(v, 16))
+	text = GAMA.get(_intreg(v, 16))
+	return _t(text) if text == GAMA[0] else text      # numai Nu (SDR) are cuvinte; HDR, HDR10 si HLG raman
 
 
 def _text_hdr_acum(s):
@@ -770,34 +787,34 @@ def _text_hdr_acum(s):
 	if '2084' in t or 'HDR10' in t or t == 'HDR':
 		return 'HDR10'
 	if t.startswith('SDR') or mod == 'DISABLE':
-		return 'Nu (SDR)'
+		return _t('Nu (SDR)')
 	return None
 
 
 def _coloana_legatura(s):
 	c = []
 	h = s.hdmi0
-	c.append(_titlu('Legătură'))
+	c.append(_titlu(_t('Legătură')))
 	cablu = _da(h.val('HotPlug', 'HWStatus'))
-	c.append(_rand('Cablu HDMI', {True: 'conectat', False: 'neconectat'}.get(cablu), BUN if cablu else RAU))
+	c.append(_rand(_t('Cablu HDMI'), {True: _t('conectat'), False: _t('neconectat')}.get(cablu), BUN if cablu else RAU))
 	tv = _da(h.val('Rsen', 'HWStatus'))
-	c.append(_rand('Televizorul răspunde', text_da_nu(tv) if tv is not None else None, BUN if tv else ATENTIE))
+	c.append(_rand(_t('Televizorul răspunde'), text_da_nu(tv) if tv is not None else None, BUN if tv else ATENTIE))
 	iesire = _da(h.val('PhyOutputEnable', 'HWStatus'))
 	mut = _da(h.val('AvMute', 'HWStatus'))
 	if iesire is None and mut is None:
 		semnal = None
 	elif iesire is False:
-		semnal = ('Nu, ieșirea e oprită', RAU)
+		semnal = (_t('Nu, ieșirea e oprită'), RAU)
 	elif mut:
-		semnal = ('Nu, imaginea e oprită', RAU)
+		semnal = (_t('Nu, imaginea e oprită'), RAU)
 	else:
-		semnal = ('Da', BUN)
-	c.append(_rand('Semnal trimis', semnal[0] if semnal else None, semnal[1] if semnal else None))
+		semnal = (_t('Da'), BUN)
+	c.append(_rand(_t('Semnal trimis'), semnal[0] if semnal else None, semnal[1] if semnal else None))
 
 	ev = s.evenimente
-	c.append(_titlu('Evenimente de la pornire'))
-	c.append(_rand('Conectări', str(ev['HPD']) if 'HPD' in ev else None))
-	c.append(_rand('Deconectări', str(ev['UnHPD']) if 'UnHPD' in ev else None))
+	c.append(_titlu(_t('Evenimente de la pornire')))
+	c.append(_rand(_t('Conectări'), str(ev['HPD']) if 'HPD' in ev else None))
+	c.append(_rand(_t('Deconectări'), str(ev['UnHPD']) if 'UnHPD' in ev else None))
 	if 'ErrTotal' in ev:
 		n = ev['ErrTotal']
 		detalii = []
@@ -806,58 +823,64 @@ def _coloana_legatura(s):
 		if ev.get('HdcpFail'):
 			detalii.append('HDCP %d' % ev['HdcpFail'])
 		text = str(n) + (' (%s)' % ', '.join(detalii) if detalii else '')
-		c.append(_rand('Erori', text, ATENTIE if n else None))
+		c.append(_rand(_t('Erori'), text, ATENTIE if n else None))
 	else:
-		c.append(_rand('Erori', None))
+		c.append(_rand(_t('Erori'), None))
 
-	c.append(_titlu('Protecție la copiere (HDCP)'))
+	c.append(_titlu(_t('Protecție la copiere (HDCP)')))
 	activ = _da(h.val('HDCPEnable', 'SWStatus'))
-	c.append(_rand('HDCP pornit', text_da_nu(activ) if activ is not None else None))
+	c.append(_rand(_t('HDCP pornit'), text_da_nu(activ) if activ is not None else None))
 	versiune = (h.val('HDCPMode', 'SWStatus') or '').upper()
 	mv = re.search(r'(\d)\.(\d)', versiune)
 	auto = (h.val('enHDCPMode', 'APPAttr') or '').upper() == 'AUTO'
-	c.append(_rand('Versiune', ('%s.%s' % mv.groups() + (', aleasă automat' if auto else '')) if mv else None))
+	if mv:
+		versiune = '%s.%s' % mv.groups()
+		if auto:
+			versiune = _t('%s, aleasă automat') % versiune
+	c.append(_rand(_t('Versiune'), versiune if mv else None))
 	auth = _da(h.val('HDCPAuthStatus', 'SWStatus'))
 	cod = (h.val('HDCPErrCode', 'SWStatus') or '').strip()
 	if auth:
-		a = ('reușită', BUN)
+		a = (_t('reușită'), BUN)
 	elif auth is False and (cod.upper() in ('', 'UNDO', 'NONE', 'NO_ERR', 'NOERR') or activ is False):
-		a = ('nu s-a cerut', None)
+		a = (_t('nu s-a cerut'), None)
 	elif auth is False:
-		a = ('eșuată (%s)' % cod, RAU)
+		a = (_t('eșuată (%s)') % cod, RAU)
 	else:
 		a = (None, None)
-	c.append(_rand('Autentificare', a[0], a[1]))
+	c.append(_rand(_t('Autentificare'), a[0], a[1]))
 
-	c.append(_titlu('Sunet HDMI'))
+	c.append(_titlu(_t('Sunet HDMI')))
 	ao = s.ao
 	pornit = _da(ao.val('AudioEnable', 'AudioPath'))
 	mut = _da(ao.val('AudioMute', 'AudioPath'))
 	if pornit is None and mut is None:
 		trimis = (None, None)
 	elif pornit is False:
-		trimis = ('Nu, sunetul HDMI e oprit', RAU)
+		trimis = (_t('Nu, sunetul HDMI e oprit'), RAU)
 	elif mut:
-		trimis = ('Nu, sunetul e oprit', ATENTIE)
+		trimis = (_t('Nu, sunetul e oprit'), ATENTIE)
 	else:
-		trimis = ('Da', BUN)
-	c.append(_rand('Sunet trimis', trimis[0], trimis[1]))
+		trimis = (_t('Da'), BUN)
+	c.append(_rand(_t('Sunet trimis'), trimis[0], trimis[1]))
 	fmt = (ao.val('CodeType', 'AudioAttr') or '').strip().upper()
-	c.append(_rand('Format', FORMATE_SUNET.get(fmt, fmt or None)))
-	c.append(_rand('Canale', _text_canale(_intreg(ao.val('ChannelCnt', 'AudioAttr')))))
+	c.append(_rand(_t('Format'), FORMATE_SUNET.get(fmt, fmt or None)))
+	c.append(_rand(_t('Canale'), _text_canale(_intreg(ao.val('ChannelCnt', 'AudioAttr')))))
 	frec = _intreg(ao.val('SampleFreq', 'AudioAttr'))
 	adanc = _intreg(ao.val('SampleDepth', 'AudioAttr'))
-	if frec:
-		es = _nr(frec / 1000.0, 1) + ' kHz' + ((', %d biți' % adanc) if adanc else '')
+	if frec and adanc:
+		es = _t('%s kHz, %d biți') % (_nr(frec / 1000.0, 1), adanc)
+	elif frec:
+		es = _nr(frec / 1000.0, 1) + ' kHz'
 	else:
 		es = None
-	c.append(_rand('Eșantionare', es))
-	c.append(_rand('AC3 / DTS în setări', text_setari_sunet(s.audio)))
+	c.append(_rand(_t('Eșantionare'), es))
+	c.append(_rand(_t('AC3 / DTS în setări'), text_setari_sunet(s.audio)))
 	return c
 
 
 # ce scrie imaginea in /proc/stb/audio/ac3 si dts (Setari A/V, tasta AUDIO)
-SETARI_SUNET = {'downmix': 'stereo', 'passthrough': 'neschimbat', 'multichannel': 'PCM multicanal'}
+SETARI_SUNET = {'downmix': N_('stereo'), 'passthrough': N_('neschimbat'), 'multichannel': N_('PCM multicanal')}
 
 
 def text_setari_sunet(audio):
@@ -868,28 +891,28 @@ def text_setari_sunet(audio):
 	texte = []
 	for nume in ('ac3', 'dts'):
 		if nume not in audio:
-			texte.append('lipsă')
+			texte.append(_t('lipsă'))
 		else:
 			v = (audio[nume] or '').lower()
-			texte.append(SETARI_SUNET.get(v, v or 'nescris'))
+			texte.append(_t(SETARI_SUNET[v]) if v in SETARI_SUNET else (v or _t('nescris')))
 	return ' / '.join(texte)
 
 
 def _coloana_televizor(s):
-	c = [_titlu('Televizor')]
+	c = [_titlu(_t('Televizor'))]
 	sk = s.sink
-	c.append(_rand('Nume', s.edid.get('nume')))
+	c.append(_rand(_t('Nume'), s.edid.get('nume')))
 	cod = s.edid.get('producator') or (sk.val('ManufacturerName', 'BasicCap') or '').strip().upper() or None
-	c.append(_rand('Producător', (PRODUCATORI.get(cod) or ('cod %s' % cod)) if cod else None))
+	c.append(_rand(_t('Producător'), (PRODUCATORI.get(cod) or (_t('cod %s') % cod)) if cod else None))
 	an = s.edid.get('an') or _intreg(sk.val('YearOfManufacture', 'BasicCap'))
-	c.append(_rand('An de fabricație', str(an) if an and 1990 < an < 2200 else None))
+	c.append(_rand(_t('An de fabricație'), str(an) if an and 1990 < an < 2200 else None))
 	nat = mod_tv((sk.val('NativeFormat', 'VidoCap', 'VideoCap') or '').split(' ')[0])
-	c.append(_rand('Rezoluție nativă', ('%d x %d, %d Hz' % (nat[0], nat[1], nat[3])) if nat else None))
+	c.append(_rand(_t('Rezoluție nativă'), ('%d x %d, %d Hz' % (nat[0], nat[1], nat[3])) if nat else None))
 	h20 = _da(sk.val('HDMI2.0Support', 'BasicCap'))
 	h14 = _da(sk.val('HDMI1.4Support', 'BasicCap'))
 	ceas = _intreg(sk.val('MaxTMDSClock(MHz)', 'BasicCap'))
 	ver = '2.0' if h20 else ('1.4' if h14 else None)
-	c.append(_rand('Versiune HDMI', (ver + ((', %d MHz' % ceas) if ceas else '')) if ver else None))
+	c.append(_rand(_t('Versiune HDMI'), (ver + ((', %d MHz' % ceas) if ceas else '')) if ver else None))
 	if s.moduri:
 		c.append(_rand('2160p (4K)', _frecvente(s.moduri, 2160, 'p')))
 		c.append(_rand('1080p', _frecvente(s.moduri, 1080, 'p')))
@@ -899,19 +922,19 @@ def _coloana_televizor(s):
 		for inalt, bal in ((576, 'p'), (576, 'i'), (480, 'p'), (480, 'i')):
 			if any(m[1] == inalt and m[2] == bal for m in s.moduri):
 				sd.append('%d%s' % (inalt, bal))
-		c.append(_rand('SD', ', '.join(sd) if sd else 'Nu'))
+		c.append(_rand('SD', ', '.join(sd) if sd else _t('Nu')))
 	else:
-		c.append(_rand('Moduri acceptate', None))
+		c.append(_rand(_t('Moduri acceptate'), None))
 	c.append(_rand('HDR', _text_hdr_tv(s)))
-	c.append(_rand('Culoare', _text_culoare_tv(sk)))
+	c.append(_rand(_t('Culoare'), _text_culoare_tv(sk)))
 	if s.sunet_tv:
 		for i, b in enumerate(s.sunet_tv[:4]):
 			text = b['format'] + ((' ' + _text_canale(b['canale'])) if b.get('canale') else '')
-			c.append(_rand('Sunet' if i == 0 else '', text))
+			c.append(_rand(_t('Sunet') if i == 0 else '', text))
 		if len(s.sunet_tv) > 4:
-			c.append(_rand('', 'și altele (%d)' % (len(s.sunet_tv) - 4)))
+			c.append(_rand('', _t('și altele (%d)') % (len(s.sunet_tv) - 4)))
 	else:
-		c.append(_rand('Sunet', None))
+		c.append(_rand(_t('Sunet'), None))
 	return c
 
 
@@ -930,7 +953,7 @@ def _text_hdr_tv(s):
 	if hdr10 is None and hlg is None and dv is None:
 		return None
 	lista = [n for n, v in (('HDR10', hdr10), ('HLG', hlg), ('Dolby Vision', dv)) if v]
-	return ', '.join(lista) if lista else 'Nu'
+	return ', '.join(lista) if lista else _t('Nu')
 
 
 def _text_culoare_tv(sk):
@@ -942,7 +965,7 @@ def _text_culoare_tv(sk):
 		return None
 	parti = []
 	if maxim:
-		parti.append('până la %d biți' % maxim)
+		parti.append(_t('până la %d biți') % maxim)
 	if bt2020:
 		parti.append('BT.2020')
 	return ', '.join(parti)
@@ -953,9 +976,8 @@ def text_actualizat(secunde, interval=2.0):
 	o data pe secunda si reciteste la 2 s, deci normal alterneaza „acum 1 s" si „acum 2 s"). Cand citirile nu mai
 	reusesc, numarul creste si se spune de ce. None = nicio citire reusita de la deschidere."""
 	if secunde is None:
-		return 'Starea HDMI nu s-a putut citi'
+		return _t('Starea HDMI nu s-a putut citi')
 	n = int(max(0.0, secunde) + 0.25) + 1       # 0,25 s toleranta pentru bataia de ceas venita putin mai devreme
-	text = 'Actualizat acum %d s' % n
 	if secunde > 2.5 * interval:
-		text += ', starea HDMI nu se mai poate citi'
-	return text
+		return _t('Actualizat acum %d s, starea HDMI nu se mai poate citi') % n
+	return _t('Actualizat acum %d s') % n

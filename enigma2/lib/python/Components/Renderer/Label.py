@@ -11,8 +11,16 @@ class Label(VariableText, Renderer):
 
 	GUI_WIDGET = eLabel
 
+	# HDSatelit 0.7.6 (TSR, raportul 2152): Renderer.connect (Element.connectUpstream) cheama deja changed, iar aici urma inca
+	# unul, deci fiecare eticheta cerea textul convertorului de doua ori cand se construieste ecranul (readSkin). Un convertor de
+	# tema care citeste din retea in getText (NOVTemp: 10,4 s la pornire) tinea firul interfetei de doua ori mai mult. Legatura
+	# se face ca in Element.connect, fara cererea din mijloc; textul se cere o singura data, dupa ce legatura e completa (ca a
+	# doua cerere de pana acum, a carei valoare ramanea).
 	def connect(self, source):
-		Renderer.connect(self, source)
+		assert not self.SINGLE_SOURCE or self.source is None
+		self.sources.append(source)
+		self.source = source
+		source.connectDownstream(self)
 		self.changed((self.CHANGED_DEFAULT,))
 
 	def changed(self, what):

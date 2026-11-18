@@ -247,11 +247,15 @@ class Setup(ConfigListScreen, Screen):
 		# nota de sub ajutor a unui plugin (setFootnote); ascunsa la toate celelalte ecrane
 		self["footnote"] = Label("")
 		self["footnote"].visible = False
-		self["config"].onSelectionChanged.append(self.updateDescription)
 
 		if self.faceRandurileSingur():
 			self.createSetup()
-		self.changedEntry()
+		# ATL (forma OE-Alliance): mutarea cursorului cheama selectionChanged (al subclasei, daca il are; la noi
+		# Setup.selectionChanged = updateDescription), legat dupa createSetup; in __init__ numai changedEntry de baza.
+		# O subclasa a unui plugin (AtileHD) isi pune elementele DUPA Setup.__init__, iar changedEntry/selectionChanged
+		# ale ei le folosesc: chemate de aici, cadeau cu KeyError si ecranul nu se deschidea.
+		Setup.changedEntry(self)
+		self["config"].onSelectionChanged.append(self.selectionChanged)
 		self.onLayoutFinish.append(self.layoutFinished)
 		# HDSatelit: o setare cu atributul hdsStare (o functie care da randurile starii de acum, de pilda
 		# config.usage.hds_ipv6 din Components/HdsIpv6.py) isi arata starea deasupra textului de ajutor, citita din nou

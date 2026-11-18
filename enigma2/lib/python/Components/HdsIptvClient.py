@@ -42,7 +42,11 @@ TERMEN_S = 20                        # o cerere la server
 TERMEN_TOTAL_S = 180                 # descarcarea unei liste, cu tot cu server incet
 TERMEN_ADRESA_S = 8                  # adresa unui canal la pornire: omul asteapta in fata televizorului
 AGENT = "VLC/3.0.21 LibVLC/3.0.21"
-MAX_FILME = 2000
+# 0.7.7 (FLM, FLM2): fara plafonul de 2000 de filme (pus pe 04.11 fara masura). Filmele nu mai stau in lista de canale: ale unui cont
+# Xtream se citesc de la furnizor la cerere (aplicatia IPTV, Filme si seriale), ale unui playlist merg din mers in fisierul lor
+# (HdsIptvSurse.ScriitorFilme, plafonul I.MAX_FILME_SURSA) si se rasfoiesc la fel. Lista de canale pastreaza plafonul sursei,
+# I.MAX_CANALE (masurat pe Octagon SF8008: grupele IPTV se citesc in nucleu numai la deschidere, lib/dvb/db.cpp
+# isLazyBouquet, deci reincarcarea buchetelor ramane 2-6 ms si cu 30000 de intrari).
 
 # ce vede omul
 E_REFUZ = N_("Serverul a refuzat utilizatorul sau parola. Verifică-le și încearcă din nou.")
@@ -65,10 +69,15 @@ E_FORMA_MAC = N_("Adresa MAC nu este bună. Se scrie așa: 00:1A:79:12:34:56.")
 E_PREA_MULTE = N_("Ai ajuns la numărul cel mai mare de surse. Șterge una ca să poți adăuga alta.")
 E_DEMO = N_("Lista demo nu s-a putut descărca. Verifică internetul și încearcă din nou.")
 E_DEMO_LIPSA = N_("Lista demo nu este încă în feedul imaginii. Încearcă din nou mai târziu.")
-E_CONEXIUNI = N_("Sunt prea multe conexiuni deschise pe acest abonament. Oprește redarea pe celălalt aparat și încearcă din nou.")
+# 0.7.7 (IPX; LinuxSat 164155 #970837, e-mailul 6520): ce inseamna, cine poate tine conexiunile (si un plugin IPTV de pe acelasi receptor,
+# cu acelasi cont; o redare abia oprita mai e socotita cateva secunde) si ce face omul; fara cauza data ca sigura
+E_CONEXIUNI = N_("Abonamentul IPTV are toate conexiunile ocupate și nu mai permite încă o redare. Le poate folosi alt aparat (telefon, "
+	"televizor, alt receptor) sau alt program de pe acest receptor, cu același cont, iar o redare abia oprită mai contează câteva "
+	"secunde. Oprește redarea acolo, așteaptă puțin și încearcă din nou.")
 E_CANAL_LIPSA = N_("Canalul nu mai este la această adresă. Furnizorul l-a scos sau l-a mutat.")
 E_PREA_MULTE_CERERI = N_("S-au făcut prea multe cereri către server. Mai încearcă peste puțin.")
-E_REFUZ_REDARE = N_("Furnizorul a refuzat redarea acestui canal (cod %d). Dacă abonamentul permite o singură redare, oprește-o pe celălalt aparat.")
+E_REFUZ_REDARE = N_("Furnizorul a refuzat redarea acestui canal (cod %d). Dacă folosești același cont pe alt aparat sau în alt program de "
+	"pe acest receptor, oprește redarea acolo, așteaptă câteva secunde și încearcă din nou.")
 E_SERVER_CAZUT = N_("Serverul furnizorului are o problemă acum (cod %d). Mai încearcă peste puțin.")
 E_ANTETE = N_("User-Agent sau Referer nu este bun. Folosește valorile primite de la furnizor, fără rânduri noi.")
 
@@ -315,12 +324,9 @@ def citesteM3U(text):
 	return rez, info.get("sarite", 0), info.get("antet", False)
 
 
-_EXT_FILM = (".mp4", ".mkv", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".webm")
-
-
 def _eFilm(adresa):
-	"""Un film dintr-un playlist care le amesteca (dupa sfarsitul adresei, fara parametri): la plafon canalele raman intai."""
-	return adresa.split("?", 1)[0].lower().endswith(_EXT_FILM)
+	"""Un film dintr-un playlist care le amesteca (dupa sfarsitul adresei, fara parametri; I.EXT_FILM)."""
+	return I.eAdresaFilm(adresa)
 
 
 def _decodeazaRef(text):
@@ -383,29 +389,27 @@ def citesteBuchet(text):
 	return canale, sarite, True
 
 
-def canaleDinM3U(octeti, filtru=None):
+def canaleDinM3U(octeti, filtru=None, filme=None):
 	"""Un playlist M3U sau o lista Enigma2. -> (canale pentru HdsIptvSurse.scrieCanale, cate s-au taiat la plafon, cate s-au sarit).
-	Arunca EroareIptv daca nu e lista."""
+	Filmele (dupa adresa) nu intra in canale: merg in `filme` (HdsIptvSurse.ScriitorFilme; 0.7.7, FLM2). Arunca EroareIptv daca nu
+	e lista."""
 	text = _text(octeti)
 	inceput = text[:256].lstrip()
 	if inceput.startswith("<"):
 		raise EroareIptv(E_NU_E_LISTA)
+	filme = filme if filme is not None else I.ScriitorFilme()
 	if inceput.startswith("#NAME") or inceput.startswith("#SERVICE"):
 		lista, sarite, are_antet = citesteBuchet(text)
 	else:
 		import io
-		rez, info = _playlistFlux(io.BytesIO(octeti), filtru)
+		rez, info = _playlistFlux(io.BytesIO(octeti), filtru, filme)
 		return rez, info["taiate"], info["sarite"]
 	if not lista:
 		raise EroareIptv(E_FARA_CANALE if are_antet else E_NU_E_LISTA)
-	# la plafon raman intai canalele, apoi filmele
-	vii = [c for c in lista if not _eFilm(c["adresa"])]
-	filme = [c for c in lista if _eFilm(c["adresa"])]
-	ordonate = vii + filme
 	filtru = filtru or I.Filtru()
 	vazute = {}
 	rez = []
-	for c in ordonate:
+	for c in lista:
 		_directa, bun = I.adresaDirecta(c["adresa"])
 		if not bun:
 			sarite += 1
@@ -414,20 +418,26 @@ def canaleDinM3U(octeti, filtru=None):
 		# cheia, inaintea filtrului: numara duplicatele in ordinea listei, deci canalul o pastreaza orice s-ar ascunde
 		cheie = I.cheieDinNume(c["tvg_id"], nume, vazute)
 		grupa = I.numeCurat(c["grupa"])
-		if filtru.primeste(grupa, cheie, len(rez) >= I.MAX_CANALE):
+		if _eFilm(c["adresa"]):
+			# grupele ascunse de om (Grupele) raman ascunse si la filme; grupa lor sta in catalog, ca sa se poata arata iar
+			if filtru.primeste(grupa, cheie, False, film=True):
+				filme.scrie([cheie, nume, grupa, c["adresa"], {}])
+		elif filtru.primeste(grupa, cheie, len(rez) >= I.MAX_CANALE):
 			rez.append([cheie, nume, grupa, c["adresa"]])
-	if not rez and not filtru.grupe:
+	if not rez and not filme.scrise and not filtru.grupe:
 		raise EroareIptv(E_FARA_CANALE)
-	return rez, filtru.taiate, sarite
+	return rez, filtru.taiate + filme.taiate, sarite
 
 
-def _playlistFlux(flux, filtru=None):
-	info, vii, filme, vazute = {}, [], [], {}
+def _playlistFlux(flux, filtru=None, filme=None):
+	"""Playlistul citit pe bucati. 0.7.7 (FLM2, Eduard 16.11 11:01): filmele (dupa adresa) nu mai intra in lista de canale; merg
+	din mers in `filme` (HdsIptvSurse.ScriitorFilme, fisierul lor, plafonul lor) si se rasfoiesc in aplicatia IPTV, sub sursa
+	lor, si in Filme si seriale. Cheile canalelor si ale filmelor se fac impreuna (aceleasi duplicate), deci nu se calca."""
+	info, vii, vazute = {}, [], {}
 	sarite = 0
 	filtru = filtru or I.Filtru()
+	filme = filme if filme is not None else I.ScriitorFilme()
 	for c in _m3u(flux, info):
-		lista = filme if _eFilm(c["adresa"]) else vii
-		plafon = MAX_FILME if lista is filme else I.MAX_CANALE
 		if not I.adresaDirecta(c["adresa"])[1]:
 			sarite += 1
 			continue
@@ -435,15 +445,20 @@ def _playlistFlux(flux, filtru=None):
 		# cheia, inaintea filtrului: numara duplicatele in ordinea listei, deci canalul o pastreaza orice s-ar ascunde
 		cheie = I.cheieDinNume(c["tvg_id"], nume, vazute)
 		grupa = I.numeCurat(c["grupa"])
-		if not filtru.primeste(grupa, cheie, len(lista) >= plafon):
-			continue
 		meta = {"tvg_id": c["tvg_id"][:256], "logo": c["logo"][:I.MAX_ADRESA], "antete": c["antete"]}
-		lista.append([cheie, nume, grupa, c["adresa"], meta])
-	loc_filme = max(0, I.MAX_CANALE - len(vii))
-	rez = vii + filme[:loc_filme]
-	if not rez and not filtru.grupe:
+		if _eFilm(c["adresa"]):
+			# grupele ascunse de om (Grupele, de pilda una pentru adulti) raman ascunse si la filme: nici in aplicatia IPTV, nici in
+			# Filme si seriale; grupa lor sta in catalogul grupelor, ca sa se poata arata iar
+			if filtru.primeste(grupa, cheie, False, film=True):
+				filme.scrie([cheie, nume, grupa, c["adresa"], meta])
+			continue
+		if not filtru.primeste(grupa, cheie, len(vii) >= I.MAX_CANALE):
+			continue
+		vii.append([cheie, nume, grupa, c["adresa"], meta])
+	if not vii and not filme.scrise and not filtru.grupe:
 		raise EroareIptv(E_FARA_CANALE if info.get("antet") else E_NU_E_LISTA)
-	return rez, {"taiate": filtru.taiate + max(0, len(filme) - loc_filme), "sarite": sarite + info.get("sarite", 0), "epg_url": info.get("epg_url", "")}
+	return vii, {"taiate": filtru.taiate + filme.taiate, "sarite": sarite + info.get("sarite", 0), "epg_url": info.get("epg_url", ""),
+		"vii": len(vii), "filme": filme.scrise, "taiate_filme": filme.taiate}
 
 
 def aducePlaylist(s):
@@ -452,6 +467,8 @@ def aducePlaylist(s):
 	if I.adresaListaBuna(adresa) is None:
 		raise EroareIptv(E_ADRESA)
 	filtru = I.Filtru(s)
+	# 0.7.7 (FLM2): filmele listei, in fisierul lor; puse in locul celor vechi numai dupa o citire buna
+	filme = I.ScriitorFilme(s.get("id"))
 	try:
 		with open(adresa, "rb") if adresa.startswith("/") else deschide(adresa, anteteSursa(s)) as f:
 			prima, inceput = b"", time.monotonic()
@@ -467,14 +484,20 @@ def aducePlaylist(s):
 				b = flux.read(MAX_LISTA + 1)
 				if len(b) > MAX_LISTA:
 					raise EroareIptv(E_PREA_MARE)
-				canale, taiate, sarite = canaleDinM3U(b, filtru)
-				info = {"taiate": taiate, "sarite": sarite}
+				canale, taiate, sarite = canaleDinM3U(b, filtru, filme)
+				info = {"taiate": taiate, "sarite": sarite, "vii": len(canale), "filme": filme.scrise, "taiate_filme": filme.taiate}
 			else:
-				canale, info = _playlistFlux(flux, filtru)
+				canale, info = _playlistFlux(flux, filtru, filme)
 	except OSError:
+		filme.renunta()
 		raise EroareIptv(E_FISIER if adresa.startswith("/") else E_NU_RASPUNDE)
 	except ValueError as e:
+		filme.renunta()
 		raise EroareIptv(E_NU_RASPUNDE if str(e) == "termen" else E_PREA_MARE)
+	except BaseException:
+		filme.renunta()
+		raise
+	filme.gata()
 	info["fara_https"] = not adresa.startswith("/") and not I.fluxCriptat(adresa)
 	info["catalog"] = filtru.catalog()
 	return canale, info
@@ -759,7 +782,11 @@ def _conexiuni(info):
 
 
 def aduceXtream(s):
-	"""Canalele vii ale contului. -> (canale, informatii de pus in sursa)."""
+	"""Canalele vii ale contului. -> (canale, informatii de pus in sursa). Filmele si serialele nu intra in lista de canale: stau
+	toate in 'Filme și seriale' (Components/HdsVod.SursaXtream, citite la cerere, pe categorii). Pana in 0.7.6 intrau aici cel
+	mult 2000 de filme, primele din lista furnizorului, iar cartela spunea 'Filmele: au intrat 2000 din 9000' (Eduard 16.11
+	09:28: 'de ce nu intra toate?'). Un film pus de om in Favorite merge mai departe: adresa lui se face din cheie
+	(xtreamAdresa), iar randul lui ramane in canalele sursei (HdsIptvSurse.pastreazaDinBuchete)."""
 	baza, info, _srv = xtreamConecteaza(s)
 	utilizator, parola = s.get("utilizator") or "", s.get("parola") or ""
 	cont = dict(s, baza=baza)
@@ -787,56 +814,51 @@ def aduceXtream(s):
 	if not canale and not filtru.grupe:
 		raise EroareIptv(E_FARA_CANALE)
 	del fluxuri
-	_filmeXtream(baza, utilizator, parola, canale, cont, filtru)
 	try:
 		expira = int(info.get("exp_date") or 0)
 	except (TypeError, ValueError):
 		expira = 0
 	return canale, {"taiate": filtru.taiate, "sarite": sarite, "catalog": filtru.catalog(), "baza": baza, "format": _extensieVie(info),
+		"vii": len(canale), "filme": 0, "taiate_filme": 0,
 		"fara_https": not I.fluxCriptat(baza), "expira": expira, "conexiuni": _conexiuni(info),
 		"epg_url": "%s/xmltv.php?%s" % (baza, urlencode({"username": utilizator, "password": parola}))}
 
 
-def _filmeXtream(baza, utilizator, parola, canale, s=None, filtru=None):
-	try:
-		return _filmeXtreamLucru(baza, utilizator, parola, canale, s, filtru)
-	except (EroareIptv, OSError, ValueError):
-		return 0
+# 0.7.7 (BQT, Ozgur e-mailul 6514, Vu+ Solo SE): cartela unei liste taiate spune exact ce a intrat, canalele TV si filmele
+# separat; pana in 0.7.6 spunea „au intrat primele 30000” si cand se taiasera numai filmele peste 2000, iar omul credea ca
+# e o greseala. Pe televizor (Screens/IptvSetup.mesajSursa) si in pagina web (internet_web.stareIptv, taiate_text).
+T_TAIATE_CANALE = N_("Canalele TV: au intrat %(intrate)d din %(toate)d.")
+T_TAIATE_FILME = N_("Filmele: au intrat %(intrate)d din %(toate)d.")
 
 
-def _filmeXtreamLucru(baza, utilizator, parola, canale, s=None, filtru=None):
-	"""Filmele contului, dupa canale, cat incap sub plafon, in grupe cu numele categoriei. Cine nu da filme nu strica lista: canalele
-	raman. Serialele cer o cerere pentru fiecare serial, deci nu intra aici. -> cate s-au taiat."""
-	try:
-		s = s or {"baza": baza, "utilizator": utilizator, "parola": parola}
-		categorii = _categoriiXtream(s, "get_vod_categories")
-		filme = listaXtream(s, "get_vod_streams")
-	except EroareIptv as e:
-		_jurnal("filmele: %s" % type(e).__name__)
-		return 0
-	filtru = filtru or I.Filtru()
-	inainte = filtru.taiate
-	loc = min(MAX_FILME, I.MAX_CANALE - len(canale))
-	for f in filme:
-		if not isinstance(f, dict):
-			continue
-		sid = _idNumeric(f.get("stream_id"))
-		ext = str(f.get("container_extension") or "mp4").lower()
-		nume = I.numeCurat(f.get("name"))
-		if sid is None or not nume or not ext.isalnum() or len(ext) > 5:
-			continue
-		cat = categorii.get(str(f.get("category_id")), "")
-		film = _tradus(T_FILME)
-		grupa = I.numeCurat("%s: %s" % (film, cat)) if cat else film
-		cheie = "v%s.%s" % (sid, ext)
-		if not filtru.primeste(grupa, cheie, loc <= 0):
-			continue
-		loc -= 1
-		canale.append([cheie, nume, grupa, "", {"logo": str(f.get("stream_icon") or "")[:I.MAX_ADRESA]}])
-	return filtru.taiate - inainte
-
-
-T_FILME = N_("Film")
+def textTaiate(p, tr=None):
+	"""Propozitiile despre ce n-a incaput din lista sursei `p` (HdsIptvSurse.publica), "" cand nu s-a taiat nimic. O lista
+	adusa de o versiune veche (fara campurile vii / filme / taiate_filme) primeste textul general al grupelor."""
+	tr = tr or _tradus
+	taiate = int(p.get("taiate") or 0)
+	if taiate <= 0:
+		return ""
+	# 0.7.7 (FLM): filmele unui cont Xtream nu se taie (le citeste Filme si seriale de la furnizor), deci nu se socotesc taiate; o
+	# sursa Xtream adusa de 0.7.6 (fara campuri, sau cu filmele de atunci) nu mai spune nimic de filme pana la aducerea zilnica
+	catalog = p.get("fel") == "xtream"
+	if p.get("taiate_filme") is None:
+		if catalog:
+			return ""
+		canale = int(p.get("canale") or 0)
+		return tr(I.T_GRUPE_TAIATE) % {"vazute": canale, "toate": canale + taiate}
+	filme_taiate = max(0, min(taiate, int(p.get("taiate_filme") or 0)))
+	vii, filme = int(p.get("vii") or 0), int(p.get("filme") or 0)
+	if catalog:
+		taiate -= filme_taiate
+		filme = filme_taiate = 0
+		if taiate <= 0:
+			return ""
+	parti = []
+	if vii or taiate > filme_taiate:   # o lista numai cu filme nu spune „Canalele TV: 0 din 0”
+		parti.append(tr(T_TAIATE_CANALE) % {"intrate": vii, "toate": vii + taiate - filme_taiate})
+	if filme or filme_taiate:
+		parti.append(tr(T_TAIATE_FILME) % {"intrate": filme, "toate": filme + filme_taiate})
+	return " ".join(parti)
 
 
 def _tradus(text):
@@ -1273,11 +1295,18 @@ def aduce(s):
 	"""Canalele sursei de la server sau din fisier. -> (canale, informatii de pus in sursa). Arunca EroareIptv."""
 	fel = s.get("fel")
 	if fel == "m3u":
-		return aducePlaylist(s)
-	if fel == "xtream":
-		return aduceXtream(s)
-	if fel == "stalker":
-		return aduceStalker(s)
-	if fel == "demo":
-		return aduceDemo(s)
-	raise EroareIptv(E_ADRESA)
+		canale, info = aducePlaylist(s)
+	elif fel == "xtream":
+		canale, info = aduceXtream(s)
+	elif fel == "stalker":
+		canale, info = aduceStalker(s)
+	elif fel == "demo":
+		canale, info = aduceDemo(s)
+	else:
+		raise EroareIptv(E_ADRESA)
+	# 0.7.7 (BQT): campurile textului taiatelor (textTaiate) se scriu la fiecare aducere, si cu 0, fiindca sursa se
+	# actualizeaza peste cea veche (HdsIptvSurse.actualizeazaSursa): o taiere de ieri nu ramane in cartela
+	info.setdefault("taiate_filme", 0)
+	info.setdefault("filme", 0)
+	info.setdefault("vii", len(canale) - info["filme"])
+	return canale, info

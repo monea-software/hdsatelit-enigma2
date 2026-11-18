@@ -8,7 +8,10 @@
 # Pagina de pornire are numai randul scurt (A.TEXT_SCURT), randul bifat dinainte "Accept termenii și condițiile" (in
 # fraza, chiar cuvintele "termenii și condițiile" sunt legatura care deschide textul intreg, A.textTermeni, intr-o
 # fereastra peste pagina) si butonul Start. Pornita, pagina arata numai pana cand e pornita, butonul Oprește si
-# jurnalul. Codul sesiunii nu se trimite browserului: ramane intern, intre receptor, server si echipa. Cand echipa a
+# jurnalul. Oprește intreaba intai, in pagina, "Oprești asistența?" (Nu cu focus / "Da, opresc"), perechea intrebarii
+# de la Rosu de pe receptor (RCF, 15-16.11.2026: pe televizor Rosu "Oprește" sta dupa Start in locul lui "Înapoi" si a
+# oprit din greseala trei sesiuni); linkul Oprește din banda de sus a celorlalte pagini duce aici, cu intrebarea deschisa
+# (/asistenta#opreste). Codul sesiunii nu se trimite browserului: ramane intern, intre receptor, server si echipa. Cand echipa a
 # trimis concluzii (op "concluzii"), pagina le arata sub jurnal, si dupa oprire: "Ce am găsit și ce am făcut", textul
 # si multumirile (A.stareConcluzii). Cat exista copia setarilor facuta cand a intrat echipa (A.stareCopie, si dupa
 # oprire), pagina arata ziua si ora ei si butonul "Pune înapoi cum era", perechea tastei Albastre de pe receptor: o
@@ -18,7 +21,7 @@
 # Nu cere asocierea cu codul de pe televizor. HdsAsistentaSemn.pornesteWeb anunta pe receptor
 # ca a pornit din web, fara sa ceara o apasare acolo. Exteriorul ramane respins de poarta comuna.
 # Oprirea merge din orice browser acceptat. Cat asistenta e activa, paginile web au sus
-# o banda (bandaWeb, pusa de meniu_comun_web.pagina).
+# o banda (bandaWeb, pusa de meniu_comun_web.pagina), cu linkul Oprește spre intrebarea din pagina.
 #
 # Rute (poarta comuna meniu_comun_web; ce schimba ceva cere, cu cookie, POST si antetul CSRF):
 #   GET  /api/asistenta            starea, pana cand e pornita, ultimele randuri din jurnal (fara cod), ultimele
@@ -29,6 +32,9 @@
 #   POST /api/asistenta-opreste    opreste
 #   POST /api/asistenta-pune-inapoi     "Pune înapoi cum era": cere punerea la loc a copiei de asistenta si reporneste
 #                                       interfata (A.cerePunereaInapoi)
+#   POST /api/asistenta-raspunde?id=N&varianta=I   raspunsul omului la intrebarea echipei (op "intrebare", 0.7.7), perechea
+#                                       ferestrei de pe televizor: aceeasi intrebare, aceleasi variante, ca butoane in
+#                                       pagina; primul raspuns (televizor sau web) o inchide peste tot (A.raspundeIntrebare)
 #   GET  /asistenta                pagina
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul lor (A).
 
@@ -68,7 +74,9 @@ def stare(request=None, A=None, B=None):
 		"activitate": s.get("activitate") or "",
 		"concluzii": _concluzii(A),
 		# copia pentru "Pune înapoi cum era" ({"data_text", "text", "intrebare"}) sau None
-		"copie": s.get("copie")}
+		"copie": s.get("copie"),
+		# intrebarea echipei care asteapta raspunsul ({"id", "text", "variante", "ramas_s"}) sau None (op "intrebare")
+		"intrebare": s.get("intrebare")}
 
 
 def _concluzii(A):
@@ -117,6 +125,33 @@ def opreste(A=None):
 	reusit, mesaj = A.opreste("de om (web)")
 	rez = stare(None, A)
 	rez.update({"result": bool(reusit), "message": mesaj})
+	return rez
+
+
+def raspunde(argumente, A=None):
+	"""POST /api/asistenta-raspunde: raspunsul omului (indicele variantei) la intrebarea echipei, din pagina; o intrebare
+	deja inchisa (raspuns de pe televizor, timpul trecut) nu mai primeste nimic."""
+	A = _a(A)
+	try:
+		ok = A.raspundeIntrebare(int(argumente.get("id", "")), int(argumente.get("varianta", "")), "web")
+	except (TypeError, ValueError, AttributeError):
+		ok = False
+	rez = stare(None, A)
+	rez.update({"result": bool(ok), "message": "" if ok else _t(getattr(A, "TEXT_INTREBARE_INCHISA", ""))})
+	return rez
+
+
+def _argumenteRaspuns(request):
+	"""Argumentele raspunsului: id si varianta, numai cifre, taiate la o marime sigura."""
+	args = getattr(request, "args", None) or {}
+	rez = {}
+	for nume in ("id", "varianta"):
+		valori = args.get(nume.encode("ascii"))
+		if valori:
+			v = valori[0]
+			if isinstance(v, bytes):
+				v = v[:12].decode("ascii", "replace")
+			rez[nume] = v[:12] if str(v[:12]).isdigit() else ""
 	return rez
 
 
@@ -306,18 +341,16 @@ def puneInapoi(A=None, sesiune=None):
 	return rez
 
 
-# butonul "Oprește" al benzii web: opreste direct (POST /api/asistenta-opreste, cu tokenul CSRF al paginii, din CFG,
-# pus de scriptul fiecarei pagini); o pagina fara CFG duce la /asistenta, unde e butonul de oprire
-_OPRESTE_BANDA = ("var c=window.CFG||{};if(!c.csrf&&!c.jeton){location.href='/asistenta';return false;}"
-	"var h={};if(c.csrf){h['X-HDS-CSRF']=c.csrf;}"
-	"fetch('/api/asistenta-opreste'+(c.jeton?'?token='+encodeURIComponent(c.jeton):''),"
-	"{method:'POST',credentials:'same-origin',cache:'no-store',headers:h})"
-	".then(function(){location.reload();},function(){location.href='/asistenta';});return false;")
+# linkul "Oprește" al benzii web: nu mai opreste pe loc (RCF, 15-16.11.2026), duce la /asistenta cu intrebarea "Oprești
+# asistența?" deschisa (#opreste; Nu cu focus, "Da, opresc"), ca pe receptor; tokenul paginii (CFG.jeton), cand exista,
+# merge mai departe
+_OPRESTE_BANDA = ("var c=window.CFG||{};"
+	"location.href='/asistenta'+(c.jeton?'?token='+encodeURIComponent(c.jeton):'')+'#opreste';return false;")
 
 
 def bandaWeb(A=None):
 	"""Banda pusa sus pe paginile web cat asistenta e activa (HTML gata, tradus), sau "" cand nu e: ca e pornita si pana
-	cand ("până la ZZ.LL, HH:MM" / "fără sfârșit") si butonul care o opreste pe loc."""
+	cand ("până la ZZ.LL, HH:MM" / "fără sfârșit") si linkul Oprește, spre intrebarea din pagina asistentei."""
 	import html as _html
 	try:
 		A = _a(A)
@@ -333,7 +366,7 @@ def bandaWeb(A=None):
 	except Exception:
 		return ""
 	return ('<div role="status" style="background:#c0392b;color:#fff;padding:8px 14px;text-align:center;'
-		'font:600 .95rem system-ui,sans-serif;">%s · <a href="/asistenta" onclick="%s" style="color:#fff;">%s</a>'
+		'font:600 .95rem system-ui,sans-serif;">%s · <a href="/asistenta#opreste" onclick="%s" style="color:#fff;">%s</a>'
 		'</div>' % (_html.escape(text), _html.escape(_OPRESTE_BANDA, quote=True), _html.escape(_t("Oprește"))))
 
 
@@ -403,6 +436,15 @@ def rute(baza, resource, A=None):
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class RaspundeResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				return self._raspunde(request, raspunde(_argumenteRaspuns(request), A))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
 	class PaginaResource(resource.Resource):
 		isLeaf = True
 
@@ -416,6 +458,7 @@ def rute(baza, resource, A=None):
 		b"asistenta-cere": CereResource(),
 		b"asistenta-opreste": OpresteResource(),
 		b"asistenta-pune-inapoi": PuneInapoiResource(),
+		b"asistenta-raspunde": RaspundeResource(),
 	}
 	return api, {b"asistenta": PaginaResource()}
 
@@ -475,6 +518,10 @@ PAGINA = """<!DOCTYPE html>
   .intrebare button{margin:0 8px 0 0;}
   .concluzii h2{font-size:1.1rem;margin:0 0 6px;}
   .concluzii .text{white-space:pre-wrap;word-break:break-word;line-height:1.5;margin:0 0 10px;}
+  .echipa{border-color:#e0a030;}
+  .echipa h2{font-size:1.1rem;margin:0 0 8px;}
+  .echipa .text{white-space:pre-wrap;word-break:break-word;line-height:1.5;margin:0 0 12px;}
+  .echipa button{margin:0 8px 8px 0;}
   .ascuns{display:none;}
 </style>
 </head>
@@ -492,10 +539,21 @@ PAGINA = """<!DOCTYPE html>
   <p class="mesaj" id="mesaj"></p>
   <p class="ascuns" id="internet"><a id="setariInternet" href="/retea">Setările de internet</a></p>
 </section>
+<section class="card echipa ascuns" id="intrebareEchipa" role="alertdialog" aria-labelledby="intrebareTitlu">
+  <h2 id="intrebareTitlu">Întrebare de la HD Satelit</h2>
+  <p class="text" id="intrebareEchipaText"></p>
+  <div id="intrebareVariante"></div>
+  <p class="mesaj" id="mesajIntrebare"></p>
+</section>
 <section class="card ascuns" id="pornita">
   <p class="pana" id="activitate" role="status"></p>
   <p class="pana" id="stare"></p>
+  <p class="nota ascuns" id="conectatNota">Echipa se uită imediat ce poate. Poți închide pagina, asistența rămâne pornită.</p>
   <button class="rosu" id="opreste">Oprește</button>
+  <div class="intrebare ascuns" id="intrebareOprire"><p>Oprești asistența?</p>
+    <button class="gri" id="oprireNu">Nu</button>
+    <button class="rosu" id="oprireDa">Da, opresc</button>
+  </div>
   <p class="mesaj" id="mesajOprire"></p>
   <p class="nota ascuns" id="asteptare">Te anunțăm când intrăm. Poți folosi receptorul între timp.</p>
   <p class="nota ascuns" id="asteptareNuOpri">Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum.</p>
@@ -541,6 +599,12 @@ function nuRaspunde(){ return "Receptorul nu răspunde."; }
 var copiaInapoi = null;
 var eroarePornireVazuta = "";
 var startCuFocus = false;
+// deschisa din banda de sus a altei pagini (/asistenta#opreste): intrebarea opririi se arata singura, cand starea spune
+// ca asistenta merge
+var cereOprirea = location.hash === "#opreste";
+function intreabaOprirea(){ $("intrebareOprire").classList.remove("ascuns"); $("oprireNu").focus(); }
+// banda de sus e si pe pagina asta: linkul ei schimba numai #opreste, fara reincarcare
+window.addEventListener("hashchange", function(){ if(location.hash === "#opreste"){ cereOprirea = true; citeste(); } });
 function arata(d){
   var activa = !!d.stare && d.stare!=="oprit";
   $("indisponibil").classList.toggle("ascuns", !!d.disponibil || activa);
@@ -550,6 +614,10 @@ function arata(d){
   if(!activa && d.disponibil && !startCuFocus){ startCuFocus = true;
     if(!document.activeElement || document.activeElement===document.body){ $("porneste").focus(); } }
   $("pornita").classList.toggle("ascuns", !activa);
+  if(!activa){ $("intrebareOprire").classList.add("ascuns"); }
+  if(cereOprirea){ cereOprirea = false;
+    try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
+    if(activa){ intreabaOprirea(); } }
   if(d.eroare_pornire){ mesaj("mesaj", d.eroare_pornire, true); }
   else if(eroarePornireVazuta){ mesaj("mesaj", ""); }
   eroarePornireVazuta = d.eroare_pornire || "";
@@ -558,15 +626,47 @@ function arata(d){
   $("stare").textContent = d.pana_text || "";
   $("activitate").textContent = d.activitate || "";
   $("activitate").classList.toggle("ascuns", !d.activitate);
+  // conectata si echipa nu lucreaza acum: ca vine si ca pagina se poate inchide (pe receptor A.textConectat)
+  $("conectatNota").classList.toggle("ascuns", d.stare!=="conectat" || !!d.activitate);
   $("asteptare").classList.toggle("ascuns", d.stare!=="asteapta");
   $("asteptareNuOpri").classList.toggle("ascuns", d.stare!=="asteapta");
   $("jurnal").textContent = (d.jurnal||[]).join("\\n") || "Jurnalul e gol.";
   var c = d.concluzii;
   $("concluzii").classList.toggle("ascuns", !(c && c.text));
   if(c && c.text){ $("concluziiText").textContent = c.text; $("concluziiOra").textContent = c.ora_text || ""; }
+  arataIntrebarea(activa ? d.intrebare : null);
   copiaInapoi = d.copie || null;
   $("copie").classList.toggle("ascuns", !copiaInapoi);
   $("copieText").textContent = copiaInapoi ? (copiaInapoi.text || "") : "";
+}
+// intrebarea echipei (op "intrebare"): aceleasi variante ca pe receptor, ca butoane; primul raspuns o inchide peste tot
+var intrebareVazuta = null, intrebareRaspunsLa = 0;
+function arataIntrebarea(q){
+  var are = !!(q && q.variante && q.variante.length);
+  // dupa un raspuns, randul "Răspunsul a plecat la echipă." ramane cateva secunde, apoi intrebarea pleaca
+  if(!are && Date.now() - intrebareRaspunsLa < 4000){ return; }
+  $("intrebareEchipa").classList.toggle("ascuns", !are);
+  if(!are){ intrebareVazuta = null; return; }
+  if(intrebareVazuta === q.id){ return; }
+  intrebareVazuta = q.id;
+  $("intrebareEchipaText").textContent = q.text || "";
+  mesaj("mesajIntrebare", "");
+  var loc = $("intrebareVariante"); loc.textContent = "";
+  q.variante.forEach(function(v, i){
+    var b = document.createElement("button"); b.className = "gri"; b.type = "button"; b.textContent = v;
+    b.addEventListener("click", function(){ raspundeIntrebarea(q.id, i); });
+    loc.appendChild(b);
+  });
+  if(loc.firstChild){ loc.firstChild.focus(); }
+}
+function raspundeIntrebarea(id, i){
+  var q=new URLSearchParams(); q.set("id", String(id)); q.set("varianta", String(i));
+  Array.prototype.forEach.call($("intrebareVariante").children, function(b){ b.disabled = true; });
+  cerere("/api/asistenta-raspunde","POST",q).then(function(d){
+    intrebareRaspunsLa = Date.now();
+    mesaj("mesajIntrebare", d.result ? "Răspunsul a plecat la echipă." : (d.message || nuRaspunde()), !d.result);
+  }).catch(function(){ mesaj("mesajIntrebare", nuRaspunde(), true);
+    Array.prototype.forEach.call($("intrebareVariante").children, function(b){ b.disabled = false; }); });
 }
 function citeste(){
   return cerere("/api/asistenta").then(function(d){
@@ -584,7 +684,10 @@ $("porneste").addEventListener("click", function(){
   var q=new URLSearchParams(); q.set("accept","1");
   mesaj("mesaj", "Se pornește...");
   cerere("/api/asistenta-cere","POST",q).then(function(d){ var activa=!!d.stare && d.stare!=="oprit"; mesaj("mesaj", activa ? "" : d.message, !d.result); arata(d); }).catch(function(){ mesaj("mesaj", nuRaspunde(), true); }); });
-$("opreste").addEventListener("click", function(){ mesaj("mesajOprire", "Se oprește...");
+$("opreste").addEventListener("click", intreabaOprirea);
+$("oprireNu").addEventListener("click", function(){ $("intrebareOprire").classList.add("ascuns"); });
+$("oprireDa").addEventListener("click", function(){ $("intrebareOprire").classList.add("ascuns");
+  mesaj("mesajOprire", "Se oprește...");
   cerere("/api/asistenta-opreste","POST", new URLSearchParams()).then(function(d){ mesaj("mesajOprire", d.result ? "" : d.message, !d.result); if(d.result){ mesaj("mesaj", d.message); } arata(d); }).catch(function(){ mesaj("mesajOprire", nuRaspunde(), true); }); });
 $("puneInapoi").addEventListener("click", function(){
   if(!copiaInapoi){ return; }
@@ -615,6 +718,9 @@ TEXTE_PAGINA = {
 		N_("Start"),
 		N_("Setările de internet"),
 		N_("Oprește"),
+		N_("Oprești asistența?"),
+		N_("Da, opresc"),
+		N_("Echipa se uită imediat ce poate. Poți închide pagina, asistența rămâne pornită."),
 		N_("Te anunțăm când intrăm. Poți folosi receptorul între timp."),
 		N_("Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum."),
 		N_("Jurnalul asistenței"),
@@ -627,6 +733,7 @@ TEXTE_PAGINA = {
 		N_("Da, pune la loc"),
 		N_("Ce am găsit și ce am făcut"),
 		N_("Mulțumim că ne-ai lăsat să te ajutăm."),
+		N_("Întrebare de la HD Satelit"),
 	),
 	"js": (
 		N_("Receptorul nu răspunde."),
@@ -635,6 +742,7 @@ TEXTE_PAGINA = {
 		N_("Se pornește..."),
 		N_("Se oprește..."),
 		N_("Se cere punerea la loc..."),
+		N_("Răspunsul a plecat la echipă."),
 	),
 }
 

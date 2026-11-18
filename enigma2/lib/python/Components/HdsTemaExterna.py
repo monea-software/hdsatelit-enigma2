@@ -65,10 +65,11 @@ MAX_ANUNTATE = 40
 # ce dau modulele noastre, cu numele din XML
 CONVERTOARE_NOASTRE = frozenset(("ClientsStreaming", "CpuUsage", "CryptoInfo", "EventInfo", "ExtendedServiceInfo", "HddState", "LayoutInfo", "MovieReference",
 	"PliExtraInfo", "RotorPosition", "ServiceName2", "ServiceOrbitalPosition", "StreamInfo", "TransponderInfo", "VAudioInfo", "VNetSpeedInfo", "VServiceInfo",
-	"SCServicePosition", "AnalogClock", "ConfigEntryTestVisible", "ConverterRotator", "TextCase", "ReceiverInfo", "YWeather"))
+	"SCServicePosition", "AnalogClock", "ConfigEntryTestVisible", "ConverterRotator", "TextCase", "ReceiverInfo", "YWeather", "PumServiceInfos"))
 # RunningText nu e aici: imaginea il are ca fisier (Components/Renderer/RunningText.py), cu optiunile lui
 RANDATOARE_NOASTRE = frozenset(("ChannelNumber", "CiModuleControl", "NextEpgInfo", "NextEvents", "PiconBg", "Rectangle", "RegularLabel",
-	"VRunningText", "VVolumeText", "VideoSize", "VolumeText", "Cover", "AudioIcon", "SingleEpgList", "AnalogClockLCD", "RatingIconLabel", "Bhclock"))
+	"VRunningText", "VVolumeText", "VideoSize", "VolumeText", "Cover", "AudioIcon", "SingleEpgList", "AnalogClockLCD", "RatingIconLabel", "Bhclock",
+	"xtraPoster", "xtraNextEvents"))
 MODULE_NOASTRE = {"Converter": ("HdsConvertoareStraine", CONVERTOARE_NOASTRE), "Renderer": ("HdsRandatoareStraine", RANDATOARE_NOASTRE)}
 # importuri scrise pentru Python 2 in fisierele aduse de teme ("from Poll import Poll")
 IMPORTURI_VECHI = {"Poll": "Components.Converter.Poll", "Converter": "Components.Converter.Converter", "Renderer": "Components.Renderer.Renderer"}
@@ -1015,9 +1016,11 @@ def esteLista(cheie, componenta):
 	return componenta.__class__.__name__ == "List" and hasattr(componenta, "list")
 
 
-def motivEcran(ecran, element, cautaPanou, dosar=None):
+def motivEcran(ecran, element, cautaPanou, dosar=None, detaliu=None):
 	"""De ce ecranul temei nu se poate folosi: ("panou", nume), ("lista", cheie), ("componente", [nume]) sau None. Fara sa se
-	construiasca nimic, deci fara nimic de desfacut.
+	construiasca nimic, deci fara nimic de desfacut. `detaliu` (o lista, optional) primeste textul pentru raport: ce nu are
+	tema (panoul lipsa, elementele pe care le are ecranul ei), ca raportul sa nu ramana numai cu motivul (MI8, MERCUS-FHD,
+	raportul 896135: "ecranul HdsAbout: lista 'coloana1':" fara nimic dupa).
 
 	Un panou lipsa se sare, ca in OE-Alliance (Nacht: sigla 'ncht' si vremea de pe bara stau in partile la alegere ale temei,
 	cerute de aproape toate ecranele). Ecranul trece pe rezerva din cauza lui numai cand o lista a ecranului ramane fara
@@ -1048,12 +1051,38 @@ def motivEcran(ecran, element, cautaPanou, dosar=None):
 		if cheie in nume or not esteLista(cheie, ecran[cheie]):
 			continue
 		if cheie not in surse:
+			_puneDetaliu(detaliu, textDetaliuLista(cheie, panou, nume))
 			return "lista", cheie
 		if panou is not None and cheie not in surseLista:
+			_puneDetaliu(detaliu, "lipseste panoul %s (cu lista %s)" % (panou, cheie))
 			return "panou", panou
 	if lipsa and cuSursa and len(lipsa) * FRACTIE_LIPSA >= cuSursa:
+		_puneDetaliu(detaliu, "componente lipsa: %s" % ", ".join(sorted(set(lipsa))[:ELEMENTE_IN_MESAJ]))
 		return "componente", sorted(set(lipsa))
 	return None
+
+
+ELEMENTE_DETALIU = 8
+
+
+def _puneDetaliu(detaliu, text):
+	if detaliu is not None and text:
+		detaliu.append(text)
+
+
+def textDetaliuLista(cheie, panou, nume):
+	"""Pentru raport: lista ecranului pe care tema nu o are, panoul lipsa (de obicei lista statea in el) si primele elemente
+	cu nume pe care le are ecranul temei (se vede daca tema e facuta pentru alt aspect al ecranului)."""
+	bucati = ["tema nu are elementul %s (lista ecranului)" % cheie]
+	if panou is not None:
+		bucati.append("lipseste panoul %s" % panou)
+	are = sorted(nume)
+	if are:
+		rest = len(are) - ELEMENTE_DETALIU
+		bucati.append("ecranul temei are: %s%s" % (", ".join(are[:ELEMENTE_DETALIU]), (" si inca %d" % rest) if rest > 0 else ""))
+	else:
+		bucati.append("ecranul temei nu are elemente cu nume")
+	return "; ".join(bucati)
 
 
 def textMotivEcran(motiv, traducere=None):
@@ -1209,6 +1238,67 @@ def pregatesteActivarea(valoare, cale_skin, cale=None):
 		"ora": int(time.time())}, cale)
 
 
+# 0.7.5 (MI6, 15.11.2026; raportul pluginului extern 474751, ObelixFHD 4.2, Vu+ Duo 4K SE): o tema retrasa dupa caderi
+# (MOTIV_CADERE) pleca la echipa ca "refuzata: cadere " fara motiv, fiindca refuzul se hotaraste la pornirea urmatoare, cand
+# exceptia nu mai e in mana. tools/enigma2.sh scrie cauza fiecarei iesiri neasteptate: in RAM (IESIRE, ultima iesire:
+# uptime=, fel=, cauza= ca "python: Components/X.py:12 KeyError: 'a'" sau "c++: semnalul 11, in ...") si la coada randului
+# din jurnalul mic ("; cauza: ..."). cauzaCaderii o da ca detaliu al refuzului, deci raportul, jurnalul activarii si pagina
+# temei o au; textul de pe televizor ramane cel al motivului.
+IESIRE = "/tmp/hds-enigma2.iesire"
+CADERI_JURNAL = "/home/root/logs/hds-caderi.log"
+CAUZA_MAXIM = 200
+JURNAL_VECHI_S = 6 * 3600
+_FARA_CADERE = ("repornire", "oprire", "receptor", "kodi")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
+
+
+def _cauzaCurata(text):
+	text = _CONTROL.sub(" ", str(text or "")).strip()
+	if not text or text == "oprire":
+		return ""
+	return text[:CAUZA_MAXIM]
+
+
+def cauzaCaderii(pornit=None, iesire=None, jurnal=None):
+	"""Cauza ultimei opriri neasteptate a interfetei, "" cand nu se stie. pornit: secunde de uptime de la inceputul probei
+	temei; iesirea din RAM se ia numai cand e de la sau dupa el. Intai iesirea din RAM (o iesire ceruta nu e cadere), apoi
+	ultimul rand cu cauza din jurnalul mic. Nu arunca."""
+	try:
+		d = {}
+		with open(iesire or IESIRE, encoding="utf-8", errors="replace") as f:
+			for rand in f.read(4096).splitlines():
+				k, semn, v = rand.partition("=")
+				if semn:
+					d[k.strip()] = v.strip()
+		up = d.get("uptime", "")
+		if d.get("fel") not in _FARA_CADERE and (pornit is None or (up.isdigit() and int(up) >= int(pornit))):
+			c = _cauzaCurata(d.get("cauza"))
+			if c:
+				return c
+	except (IOError, OSError, ValueError, TypeError):
+		pass
+	try:
+		with open(jurnal or CADERI_JURNAL, "rb") as f:
+			f.seek(0, 2)
+			f.seek(max(0, f.tell() - 16384))
+			randuri = f.read().decode("utf-8", "replace").splitlines()
+		for rand in reversed(randuri):
+			if "s-a oprit neasteptat" in rand and "; cauza: " in rand:
+				try:
+					# un rand de acum mai bine de JURNAL_VECHI_S nu mai e al probei temei (ora mai noua: ceasul a sarit, se ia)
+					if time.time() - time.mktime(time.strptime(rand[:19], "%Y-%m-%d %H:%M:%S")) > JURNAL_VECHI_S:
+						break
+				except (ValueError, OverflowError):
+					pass
+				c = _cauzaCurata(rand.rsplit("; cauza: ", 1)[1])
+				if c:
+					return c
+				break
+	except (IOError, OSError, ValueError):
+		pass
+	return ""
+
+
 def laPornire(valoare, cale_skin, cale=None):
 	"""Inainte sa se incarce tema: None = se incarca; altfel (motiv, detaliu). Fiecare pornire in proba se tine minte, ca o
 	tema care opreste receptorul sa nu fie incarcata la nesfarsit."""
@@ -1226,7 +1316,7 @@ def laPornire(valoare, cale_skin, cale=None):
 	if acelasi and a.get("stare") == "proba":
 		incercari = int(a.get("incercari") or 0) + 1
 		if incercari > MAX_INCERCARI:
-			return MOTIV_CADERE, ""
+			return MOTIV_CADERE, cauzaCaderii()
 	nou = {"skin": valoare, "stare": "proba", "incercari": incercari, "amprenta": amprenta, "ora": int(time.time()),
 		"anuntate": a.get("anuntate", []) if acelasi else []}
 	if not scrieActivare(nou, cale):
@@ -1294,16 +1384,43 @@ def textRaport(nume, motiv, ecrane, avertismente):
 	return "\n".join(randuri)
 
 
-def trimiteRaport(nume, motiv, ecrane=None, avertismente=None, acum=None, mono=None):
-	"""Raportul temei, pe fir. Lucrul lui HdsPluginExtern (.gata, .ok), sau None cand acelasi raport a plecat deja."""
+ELEMENTE_IN_MESAJ = 5
+
+
+def detaliuLipsa(ecrane, cate=ELEMENTE_IN_MESAJ):
+	"""Primele `cate` elemente lipsa din ecrane, intr-un rand scurt: componenta (calea modulului, deci se vede daca e
+	Converter sau Renderer) si ecranul ei, altfel inceputul randului; plus cate au mai ramas. "" cand nu lipseste nimic.
+	Pentru mesajul raportului si fisierul enigma2_crash_*.log (asistenta 430032, 15.11.2026: acolo ajungea numai motivul,
+	lista ramanea in jurnalul de pe server)."""
+	vazute = []
+	for ecran in sorted(ecrane or {}):
+		for r in (ecrane[ecran] or {}).get("lipsa") or []:
+			if "No module named" in r:
+				ce = r.split("No module named", 1)[1].strip(" '\"")
+			else:
+				ce = r.split(": ", 1)[-1][:40]
+			bucata = "%s (%s)" % (ce, ecran)
+			if ce and bucata not in vazute and not any(v.startswith(ce + " (") for v in vazute):
+				vazute.append(bucata)
+	if not vazute:
+		return ""
+	rest = len(vazute) - cate
+	return ", ".join(vazute[:cate]) + ((" si inca %d" % rest) if rest > 0 else "")
+
+
+def trimiteRaport(nume, motiv, ecrane=None, avertismente=None, acum=None, mono=None, detaliu=None):
+	"""Raportul temei, pe fir. Lucrul lui HdsPluginExtern (.gata, .ok), sau None cand acelasi raport a plecat deja.
+	Semnatura ramane pe motiv (acelasi raport nu pleaca de doua ori); mesajul are si primele elemente lipsa, sau `detaliu`
+	cand e dat (ecranul pus pe rezerva: ce nu are tema, motivEcran)."""
 	from Components import HdsPluginExtern as P
 	acum = time.time() if acum is None else acum
 	mono = time.monotonic() if mono is None else mono
 	n = numeRaport(nume)
 	sem = P.semnatura(n, EroareTema, "tema:" + motiv, motiv)
-	eroare = EroareTema(motiv)
+	eroare = EroareTema(motiv, detaliu or detaliuLipsa(ecrane))
+	avertismente = list(avertismente or []) + (["Detaliu: %s" % detaliu] if detaliu else [])
 	raport = P.compuneRaport(P.FEL_TEME, n, "tema", sem, EroareTema, eroare, None, None,
-		textRaport(nume, motiv, ecrane or {}, avertismente or []), 1, acum, mono)
+		textRaport(nume, motiv, ecrane or {}, avertismente), 1, acum, mono)
 	lucru = P.Lucru(raport)
 	lucru.start()
 	return lucru
@@ -1431,10 +1548,19 @@ def _dupaRezerva():
 			if dejaAnuntat("ecran:%s:%s" % (ecran, motiv[0])):
 				continue
 			text = textMotivEcran(motiv)
-			lucru = trimiteRaport(nume, "ecranul %s: %s %r" % (ecran, motiv[0], motiv[1]))
+			lucru = trimiteRaport(nume, "ecranul %s: %s %r" % (ecran, motiv[0], motiv[1]), detaliu=detaliuRezerva(ecran))
 			anunta(mesajEcran(nume, ecran, text), lucru)
 		except Exception as e:
 			_jurnal("rezerva ecranului %s: %r" % (ecran, e))
+
+
+def detaliuRezerva(ecran):
+	"""Ce nu are tema pentru ecranul pus pe rezerva (skin.py il tine in raportTema[ecran]["detaliu"], din motivEcran), sau ""."""
+	try:
+		import skin
+		return ((getattr(skin, "raportTema", None) or {}).get(ecran) or {}).get("detaliu") or ""
+	except Exception:
+		return ""
 
 
 def dupaRefuz(refuz, text):

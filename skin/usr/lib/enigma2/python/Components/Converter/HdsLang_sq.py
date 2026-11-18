@@ -304,4 +304,10 @@ T = {
 	"cpu_mode": u"Mënyra e procesorit",
 	"cpu_volt": u"Tensioni",
 	"cpu_steps": u"Koha për frekuencë",
+	"bitrate_va": u"Bitrate video · audio",
+	"br_min": u"min",
+	"br_max": u"maks",
+	"br_avg": u"mes",
+	"ecm_hop": u"Kërcime",
+	"ecm_reader": u"Lexues",
 }

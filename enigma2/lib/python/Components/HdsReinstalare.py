@@ -36,8 +36,19 @@ REZULTAT = "reinstalare.json"
 DOSAR_CONFIG = "config-acces"
 CONFIG_ACCES = "etc/tuxbox/config"
 FEL_ACCES = "acces"
+# 0.7.6 (RSC): modulul pe care copia il are numai prin configurarile lui (etc/tuxbox/config/<modul>.*), fara pachet: nu se
+# instaleaza singur (poate l-a scos omul), ci se intreaba, cu Da, cand feedul il are
+FEL_ACCES_INTREBARE = "acces-intrebare"
 FEL_PLUGIN = "plugin"
 PREFIX_PLUGIN = "enigma2-plugin-"
+# 0.7.6 (RSC, asistenta 430032): pachetul unui modul de acces din copie se cauta in feed si dupa numele lui la noi
+# (pachet_din_feed): copia poate avea un modul pus din alt feed sau de un panou, cu alt nume pentru acelasi modul.
+# Fara niciun nume de modul scris aici (ca HdsImportExtra): pachetele modulelor se recunosc dupa categorie
+# (enigma2-plugin-<categorie>-<rest>, categoria de forma TIPAR_CATEGORIE_ACCES, ca HdsPachete), modulul dupa cuvant.
+TIPAR_CATEGORIE_ACCES = re.compile(r"^[a-z]+cams$")
+TIPAR_CUVANT_MODUL = re.compile(r"cams?d?[0-9]*$")   # ca HdsCopieSetari._nume_de_modul
+# inceputul numelui unui pachet de modul din alt feed: [enigma2-[plugin-]]<categorie, la singular sau plural>-
+TIPAR_INCEPUT_STRAIN = re.compile(r"^(?:enigma2-(?:plugin-)?)?[a-z]+cams?-")
 TIPAR_PACHET = re.compile(r"^[a-z0-9][a-z0-9+.-]{1,120}$")
 TIPAR_LEGATURA = re.compile(r"^etc/(init\.d/[A-Za-z][A-Za-z0-9_-]{0,31}|rc[0-6S]\.d/[SK][0-9]{2}[A-Za-z][A-Za-z0-9_-]{0,31})$")
 INIT_D = "/etc/init.d/"
@@ -186,6 +197,60 @@ def _in_liste(rad):
 	return nume
 
 
+def rest_acces(nume):
+	"""<rest> din enigma2-plugin-<categorie>-<rest> cand categoria e a modulelor de acces; "" altfel."""
+	parti = (nume or "").split("-")
+	if len(parti) > 3 and nume.startswith(PREFIX_PLUGIN) and TIPAR_CATEGORIE_ACCES.match(parti[2]):
+		return "-".join(parti[3:])
+	return ""
+
+
+def familie_modul(nume):
+	"""Numele modulului din numele unui pachet sau al unui fisier de configurare: ultimul cuvant terminat in cam, cams
+	sau camd (cu cifre sau nu) care nu e categoria (forma TIPAR_CATEGORIE_ACCES); "" cand nu are. Fara lista de nume."""
+	gasit = ""
+	for cuvant in re.split(r"[^a-z0-9]+", (nume or "").lower()):
+		if cuvant and TIPAR_CUVANT_MODUL.search(cuvant) and not TIPAR_CATEGORIE_ACCES.match(cuvant):
+			gasit = cuvant
+	return gasit
+
+
+def pachet_din_feed(nume, disponibile, familie=True):
+	"""Pachetul din `disponibile` pentru modulul de acces `nume` din copie (un nume de pachet sau numai numele
+	modulului), sau None: acelasi nume; pachetul nostru cu acelasi rest (<categorie straina>-<rest> ->
+	enigma2-plugin-<categoria noastra>-<rest>); apoi, cu `familie`, pachetul nostru al aceluiasi modul (restul egal cu
+	modulul, altfel primul rest <modul>-*)."""
+	if not nume:
+		return None
+	if nume in disponibile:
+		return nume
+	ale_noastre = {}
+	for n in disponibile:
+		r = rest_acces(n)
+		if r:
+			ale_noastre.setdefault(r, []).append(n)
+	m = TIPAR_INCEPUT_STRAIN.match(nume)
+	rest = rest_acces(nume) or (nume[m.end():] if m else "")
+	if rest and rest in ale_noastre:
+		return sorted(ale_noastre[rest])[0]
+	if not familie:
+		return None
+	modul = familie_modul(nume)
+	if not modul:
+		return None
+	if modul in ale_noastre:
+		return sorted(ale_noastre[modul])[0]
+	rude = sorted(n for r, lista in ale_noastre.items() if r.startswith(modul + "-") for n in lista)
+	return rude[0] if rude else None
+
+
+def tinta_acces(nume, acum, disponibile):
+	"""Ce pachet pune modulul `nume` din copie: acelasi pachet (instalat sau din feed, si sub numele nostru), altfel
+	ruda lui (acelasi modul) deja instalata, altfel ruda din feed, altfel el."""
+	return (pachet_din_feed(nume, acum, False) or pachet_din_feed(nume, disponibile, False)
+		or pachet_din_feed(nume, acum) or pachet_din_feed(nume, disponibile) or nume)
+
+
 # ---------------------------------------------------------------- coada (scrisa de punerea la loc, fara retea)
 
 def citeste(rad="/"):
@@ -202,7 +267,7 @@ def adauga(rad, pachete, legaturi=None):
 	vazute = set(p[0] for p in lista)
 	noi = 0
 	for nume, fel in pachete:
-		if fel in (FEL_ACCES, FEL_PLUGIN) and TIPAR_PACHET.match(nume or "") and nume not in vazute \
+		if fel in (FEL_ACCES, FEL_ACCES_INTREBARE, FEL_PLUGIN) and TIPAR_PACHET.match(nume or "") and nume not in vazute \
 				and len(lista) < MAX_PACHETE:
 			lista.append([nume, fel])
 			vazute.add(nume)
@@ -219,7 +284,7 @@ def adauga(rad, pachete, legaturi=None):
 	coada.setdefault("boot", "")
 	for k in ("puse", "lipsa", "nereusite", "ipk_lipsa"):
 		coada.setdefault(k, [])
-	if any(f == FEL_ACCES for _n, f in lista):
+	if any(f in (FEL_ACCES, FEL_ACCES_INTREBARE) for _n, f in lista):
 		_pastreaza_config(rad)
 	_scrie_json(os.path.join(dosar(rad), COADA), coada)
 	return noi
@@ -271,6 +336,43 @@ def _pune_config_inapoi(rad):
 			shutil.copymode(c, nou)
 			os.replace(nou, t)
 			n += 1
+	return n
+
+
+TIPAR_SCRIPT_PACHET = re.compile(r"^/?etc/init\.d/([A-Za-z][A-Za-z0-9_-]{0,31})\.([A-Za-z0-9][A-Za-z0-9._+-]{0,63})$")
+SUFIX_GOL = "None"
+
+
+def alege_scriptul(rad, pachet):
+	"""0.7.6 (RSC): legatura aleasa a felului (etc/init.d/<fel>) spre scriptul <fel>.<x> al pachetului pus acum, numai
+	cand felul n-are inca un script ales care exista (lipsa, locul gol <fel>.None sau un script care nu mai e): un
+	modul pus din feed sub numele nostru are alt script decat cel din copie, iar pachetul nu alege singur. Intoarce
+	cate legaturi a pus."""
+	n = 0
+	try:
+		with open(_c(rad, "var/lib/opkg/info/%s.list" % pachet), "r", encoding="utf-8", errors="replace") as f:
+			randuri = f.read(256 * 1024).splitlines()
+	except (OSError, IOError):
+		return 0
+	for rand in randuri:
+		m = TIPAR_SCRIPT_PACHET.match(rand.split("\t", 1)[0].strip())
+		if not m or m.group(2) == SUFIX_GOL or not os.path.isfile(_c(rad, "etc/init.d/%s.%s" % m.groups())):
+			continue
+		cale = _c(rad, "etc/init.d/" + m.group(1))
+		if os.path.lexists(cale) and not os.path.islink(cale):
+			continue
+		tinta = os.readlink(cale) if os.path.islink(cale) else ""
+		if tinta and not tinta.endswith("." + SUFIX_GOL) and os.path.isfile(_c(rad, "etc/init.d/" + os.path.basename(tinta))):
+			continue
+		try:
+			nou = cale + ".hds-nou"
+			if os.path.lexists(nou):
+				os.remove(nou)
+			os.symlink("%s.%s" % m.groups(), nou)
+			os.replace(nou, cale)
+			n += 1
+		except (OSError, NotImplementedError, AttributeError):
+			continue
 	return n
 
 
@@ -370,8 +472,21 @@ def lucreaza(rad="/", opkg=None, porneste_modulul=None):
 	pachete = sorted(coada["pachete"], key=lambda p: 0 if p[1] == FEL_ACCES else 1)
 	amanate = []
 	acces_puse = 0
+	acces_noi = []
 	for nume, fel in pachete:
-		if fel == FEL_PLUGIN:
+		if fel == FEL_ACCES_INTREBARE:
+			# numai intrebarea (rez["acces_de_pus"]), cand modulul nu e pe receptor si feedul il are
+			# orice pachet al aceluiasi modul deja instalat ajunge (copia stia numai configurarile, nu pachetul)
+			tinta = pachet_din_feed(nume, acum) or tinta_acces(nume, acum, disponibile)
+			if tinta in acum:
+				pass
+			elif tinta in disponibile:
+				coada.setdefault("de_intrebat", [])
+				if nume not in coada["de_intrebat"]:
+					coada["de_intrebat"].append(nume)
+			elif not actualizat and not ultima:
+				amanate.append([nume, fel])
+		elif fel == FEL_PLUGIN:
 			stare, schimbat = _reinstaleaza_plugin(rad, nume, comanda, disponibile, actualizat, ultima, acum)
 			if stare == "gata":
 				if schimbat and nume not in coada["puse"]:
@@ -383,10 +498,9 @@ def lucreaza(rad="/", opkg=None, porneste_modulul=None):
 					coada[stare].append(nume)
 				if stare == "lipsa" and nume not in coada["ipk_lipsa"]:
 					coada["ipk_lipsa"].append(nume)
-		elif nume in acum:
-			if fel == FEL_ACCES:
-				acces_puse += 1
-		elif nume not in disponibile:
+		elif tinta_acces(nume, acum, disponibile) in acum:
+			acces_puse += 1
+		elif tinta_acces(nume, acum, disponibile) not in disponibile:
 			# „nu exista” numai dupa o lista adusa acum; altfel poate fi o problema de retea
 			if actualizat:
 				coada["lipsa"].append(nume)
@@ -394,10 +508,15 @@ def lucreaza(rad="/", opkg=None, porneste_modulul=None):
 				coada["nereusite"].append(nume)
 			else:
 				amanate.append([nume, fel])
-		elif comanda is not None and _ruleaza(comanda + ["install", nume], TERMEN_INSTALARE_S) == 0:
-			coada["puse"].append(nume)
-			if fel == FEL_ACCES:
-				acces_puse += 1
+		elif comanda is not None and _ruleaza(comanda + ["install", tinta_acces(nume, acum, disponibile)],
+				TERMEN_INSTALARE_S) == 0:
+			tinta = tinta_acces(nume, acum, disponibile)
+			if tinta != nume:
+				_jurnal("modulul de acces din copie %s: pus din feed ca %s" % (nume, tinta))
+				coada.setdefault("inlocuite", {})[nume] = tinta
+			coada["puse"].append(tinta)
+			acces_noi.append(tinta)
+			acces_puse += 1
 		elif ultima:
 			coada["nereusite"].append(nume)
 		else:
@@ -408,6 +527,7 @@ def lucreaza(rad="/", opkg=None, porneste_modulul=None):
 		try:
 			n = _pune_config_inapoi(rad)
 			m = _pune_legaturile(rad, coada.get("legaturi"))
+			m += sum(alege_scriptul(rad, x) for x in acces_noi)
 			_jurnal("modulele de acces: %d fisiere de configurare si %d legaturi puse din nou dupa instalare" % (n, m))
 		except Exception as eroare:
 			_jurnal("configurarile modulelor: %s" % eroare.__class__.__name__)
@@ -426,12 +546,23 @@ def lucreaza(rad="/", opkg=None, porneste_modulul=None):
 		"ipk_lipsa": coada["ipk_lipsa"],
 		"pluginuri": [n for n in coada["puse"] if feluri.get(n) == FEL_PLUGIN], "cand": int(time.time()),
 		"aratat": False}
+	# modulele de acces din copie care nu sunt pe receptor: cele care exista (sau pot exista) in feed se pun la un Da
+	# (intrebarea de pe televizor si butonul din pagina web, pune_modulele); cele pe care feedul nu le are, numai spuse
+	rez["acces_de_pus"] = [n for n in coada["nereusite"] if feluri.get(n) == FEL_ACCES] + [n for n in
+		coada.get("de_intrebat") or [] if n not in coada["nereusite"]]
+	rez["acces_lipsa"] = [n for n in coada["lipsa"] if feluri.get(n) == FEL_ACCES]
+	if coada.get("inlocuite"):
+		rez["inlocuite"] = coada["inlocuite"]
+	if rez["acces_de_pus"]:
+		rez["legaturi"] = coada.get("legaturi") or {}
 	_scrie_json(os.path.join(dosar(rad), REZULTAT), rez)
 	try:
 		os.remove(cale)
 	except OSError:
 		pass
-	shutil.rmtree(os.path.join(dosar(rad), DOSAR_CONFIG), ignore_errors=True)
+	if not rez["acces_de_pus"]:
+		# configurarile pastrate raman pentru Da: instalarea de atunci le pune din nou peste ce scrie pachetul
+		shutil.rmtree(os.path.join(dosar(rad), DOSAR_CONFIG), ignore_errors=True)
 	_jurnal("gata: puse %d, nu exista pentru imaginea aceasta %d, nereusite %d" % (len(rez["puse"]), len(rez["lipsa"]),
 		len(rez["nereusite"])))
 	return rez
@@ -453,15 +584,195 @@ def nota_coada(rad="/"):
 def randuri_mesaj(rez):
 	"""Cate un rand pentru fiecare fel de rezultat, cu felul lui: [(succes / avertisment / eroare, text)]."""
 	randuri = []
+	acces_lipsa = set(rez.get("acces_lipsa") or [])
+	acces_de_pus = set(rez.get("acces_de_pus") or [])
+	lipsa = [n for n in rez.get("lipsa") or [] if n not in acces_lipsa]
+	nereusite = [n for n in rez.get("nereusite") or [] if n not in acces_de_pus]
 	if rez.get("puse"):
 		randuri.append(("succes", _("Pluginurile din copia setărilor, puse din nou: %s.") % ", ".join(_scurt(n) for n in rez["puse"])))
-	if rez.get("lipsa"):
-		randuri.append(("avertisment", _("Nu există încă pentru imaginea aceasta: %s.") % ", ".join(_scurt(n) for n in rez["lipsa"])))
+	if acces_de_pus:
+		randuri.append(("eroare", _("Modulul de acces din copie nu e instalat încă: %s.") % ", ".join(
+			_scurt(n) for n in rez["acces_de_pus"])))
+	if acces_lipsa:
+		randuri.append(("avertisment", _("Modulul de acces din copie nu există pentru imaginea aceasta: %s. Setările lui au "
+			"rămas pe receptor.") % ", ".join(_scurt(n) for n in rez["acces_lipsa"])))
+	if lipsa:
+		randuri.append(("avertisment", _("Nu există încă pentru imaginea aceasta: %s.") % ", ".join(_scurt(n) for n in lipsa)))
 	if rez.get("ipk_lipsa"):
 		randuri.append(("avertisment", _("Lipsește și fișierul .ipk din copie pentru: %s.") % ", ".join(_scurt(n) for n in rez["ipk_lipsa"])))
-	if rez.get("nereusite"):
-		randuri.append(("eroare", _("Nu s-au putut instala acum: %s.") % ", ".join(_scurt(n) for n in rez["nereusite"])))
+	if nereusite:
+		randuri.append(("eroare", _("Nu s-au putut instala acum: %s.") % ", ".join(_scurt(n) for n in nereusite)))
 	return randuri
+
+
+# ---------------------------------------------------------------- modulele de acces din copie, puse la un Da (0.7.6, RSC)
+
+def module_de_pus(rad="/"):
+	"""Modulele de acces din copie care nu s-au putut instala (reinstalarea s-a incheiat fara ele, dar feedul le poate
+	avea): numele din copie; [] fara."""
+	rez = _citeste_json(os.path.join(dosar(rad), REZULTAT)) or {}
+	return [n for n in rez.get("acces_de_pus") or [] if isinstance(n, str) and TIPAR_PACHET.match(n)]
+
+
+def intrebare_module(nume):
+	"""Intrebarea de pe televizor si din pagina web pentru modulele din `nume`; "" fara."""
+	if not nume:
+		return ""
+	scurte = ", ".join(_scurt(n) for n in nume)
+	if len(nume) == 1:
+		return _("Modulul %s din copie nu e instalat. Îl pun acum?") % scurte
+	return _("Modulele %s din copie nu sunt instalate. Le pun acum?") % scurte
+
+
+def pune_modulele(rad="/", opkg=None, porneste_modulul=None):
+	"""Raspunsul Da: opkg update, apoi fiecare modul din module_de_pus din feed (acelasi nume sau al nostru, tinta_acces),
+	configurarile pastrate puse din nou peste ce a scris instalarea, legaturile alese si modulul pornit. Rezultatul
+	reinstalarii se aduce la zi (televizorul si pagina web citesc acelasi fisier). Intoarce {"puse", "nereusite",
+	"lipsa"} (numele din copie; la puse numele pachetului pus)."""
+	rad = rad or "/"
+	cale_rez = os.path.join(dosar(rad), REZULTAT)
+	rez = _citeste_json(cale_rez) or {}
+	de_pus = module_de_pus(rad)
+	r = {"puse": [], "nereusite": [], "lipsa": []}
+	if not de_pus:
+		return r
+	comanda = _opkg(rad, opkg)
+	actualizat = comanda is not None and _ruleaza(comanda + ["update"], TERMEN_UPDATE_S) == 0
+	disponibile = _in_liste(rad)
+	acum = instalate(rad)
+	inlocuite = dict(rez.get("inlocuite") or {})
+	for nume in de_pus:
+		tinta = tinta_acces(nume, acum, disponibile)
+		if tinta in acum:
+			r["puse"].append(tinta)
+		elif tinta not in disponibile:
+			r["lipsa" if actualizat else "nereusite"].append(nume)
+			continue
+		elif comanda is not None and _ruleaza(comanda + ["install", tinta], TERMEN_INSTALARE_S) == 0:
+			r["puse"].append(tinta)
+		else:
+			r["nereusite"].append(nume)
+			continue
+		if tinta != nume:
+			inlocuite[nume] = tinta
+	if r["puse"]:
+		try:
+			n = _pune_config_inapoi(rad)
+			m = _pune_legaturile(rad, rez.get("legaturi"))
+			m += sum(alege_scriptul(rad, x) for x in r["puse"])
+			_jurnal("modulele de acces puse la cerere: %s; %d fisiere de configurare si %d legaturi puse din nou" % (
+				", ".join(r["puse"]), n, m))
+		except Exception as eroare:
+			_jurnal("configurarile modulelor: %s" % eroare.__class__.__name__)
+		if porneste_modulul is not None:
+			try:
+				porneste_modulul(rad)
+			except Exception as eroare:
+				_jurnal("pornirea modulului: %s" % eroare.__class__.__name__)
+	rez["puse"] = list(rez.get("puse") or []) + [n for n in r["puse"] if n not in (rez.get("puse") or [])]
+	rez["nereusite"] = [n for n in rez.get("nereusite") or [] if n not in de_pus] + r["nereusite"]
+	rez["lipsa"] = list(rez.get("lipsa") or []) + r["lipsa"]
+	rez["acces_lipsa"] = list(rez.get("acces_lipsa") or []) + r["lipsa"]
+	rez["acces_de_pus"] = r["nereusite"]
+	if inlocuite:
+		rez["inlocuite"] = inlocuite
+	rez["raspuns"] = "" if r["nereusite"] else "da"
+	if not r["nereusite"]:
+		rez.pop("legaturi", None)
+		shutil.rmtree(os.path.join(dosar(rad), DOSAR_CONFIG), ignore_errors=True)
+	_scrie_json(cale_rez, rez)
+	_jurnal("modulele din copie la cerere: puse %d, nu exista %d, nereusite %d" % (len(r["puse"]), len(r["lipsa"]),
+		len(r["nereusite"])))
+	return r
+
+
+def mesaj_module(r):
+	"""Textul de dupa Da (televizor si pagina web)."""
+	randuri = []
+	if r.get("puse"):
+		randuri.append(_("Modulul de acces e pus și pornit: %s.") % ", ".join(_scurt(n) for n in r["puse"]))
+	if r.get("lipsa"):
+		randuri.append(_("Modulul de acces din copie nu există pentru imaginea aceasta: %s. Setările lui au rămas pe "
+			"receptor.") % ", ".join(_scurt(n) for n in r["lipsa"]))
+	if r.get("nereusite"):
+		randuri.append(_("Modulul %s nu s-a putut instala acum (fără internet sau feedul nu răspunde). Te întreb din nou la "
+			"următoarea pornire.") % ", ".join(_scurt(n) for n in r["nereusite"]))
+	return "\n".join(randuri)
+
+
+def refuza_modulele(rad="/"):
+	"""Raspunsul Nu: televizorul nu mai intreaba; pagina web pastreaza butonul."""
+	cale_rez = os.path.join(dosar(rad), REZULTAT)
+	rez = _citeste_json(cale_rez)
+	if rez and rez.get("acces_de_pus"):
+		rez["raspuns"] = "nu"
+		_scrie_json(cale_rez, rez)
+
+
+def de_intrebat(rad="/"):
+	"""Modulele de intrebat acum pe televizor: cele de pus, daca omul n-a spus Nu si nu l-am intrebat la pornirea
+	aceasta a receptorului; [] altfel."""
+	rez = _citeste_json(os.path.join(dosar(rad), REZULTAT)) or {}
+	if rez.get("raspuns") == "nu" or (rez.get("intrebat") and rez.get("intrebat") == _boot_id(rad)):
+		return []
+	return module_de_pus(rad)
+
+
+_MODULE = []
+
+
+def module_in_lucru():
+	return bool(_MODULE)
+
+
+def porneste_modulele(la_sfarsit=None):
+	"""pune_modulele pe un fir separat (opkg poate dura minute), din intrebarea de pe televizor sau din pagina web; la
+	sfarsit o fereastra pe televizor cu mesaj_module si la_sfarsit(r). False daca lucreaza deja."""
+	if _MODULE or not module_de_pus("/"):
+		return False
+	from Components.HdsCopieSetari import _porneste_modulul
+	from Components.HdsImportSurse import Lucrare
+
+	def gata(r, eroare):
+		del _MODULE[:]
+		if eroare:
+			_jurnal("modulele la cerere s-au oprit: %s" % eroare)
+			r = {"puse": [], "lipsa": [], "nereusite": module_de_pus("/")}
+		text = mesaj_module(r or {})
+		if text:
+			from Tools import Notifications
+			from Screens.MessageBox import MessageBox
+			Notifications.AddPopup(text, MessageBox.TYPE_ERROR if (r or {}).get("nereusite") else MessageBox.TYPE_INFO,
+				20, "HdsReinstalareModule", titlu=_("Copia setărilor"))
+		if la_sfarsit is not None:
+			la_sfarsit(r)
+	_MODULE.append(Lucrare(lambda: pune_modulele("/", porneste_modulul=_porneste_modulul), gata))
+	return True
+
+
+def _intreaba_modulele(session, randuri=None):
+	"""Intrebarea cu Da pentru modulele din copie (de_intrebat), fara termen; `randuri`: randurile rezultatului de
+	aratat sub ea, cand vin in aceeasi fereastra."""
+	nume = de_intrebat("/")
+	if not nume:
+		return
+	cale_rez = os.path.join(dosar("/"), REZULTAT)
+	rez = _citeste_json(cale_rez) or {}
+	rez["intrebat"] = _boot_id("/")
+	_scrie_json(cale_rez, rez)
+	from Tools import Notifications
+	from Screens.MessageBox import MessageBox
+
+	def raspuns(da):
+		if da:
+			porneste_modulele()
+		else:
+			refuza_modulele("/")
+	optiuni = {"titlu": _("Copia setărilor")}
+	if randuri:
+		optiuni["puncte"] = randuri
+	Notifications.AddNotificationWithCallback(raspuns, MessageBox, intrebare_module(nume), type=MessageBox.TYPE_YESNO,
+		default=True, **optiuni)
 
 
 def mesaj(rez):
@@ -516,10 +827,29 @@ def _gata(session, rez, eroare):
 
 
 def _arata(session):
+	"""Rezultatul reinstalarii, o data; apoi, cata vreme un modul de acces din copie nu e instalat, intrebarea cu Da
+	(o data la fiecare pornire a receptorului, pana la Da reusit sau Nu). Cand ambele vin acum: o singura fereastra,
+	intrebarea cu randurile rezultatului sub ea."""
+	try:
+		intrebare_cu_randuri = _arata_rezultatul(session)
+	except Exception as eroare:
+		_jurnal("rezultatul: %s" % eroare.__class__.__name__)
+		intrebare_cu_randuri = None
+	if intrebare_cu_randuri is False:
+		return   # interfata reporneste pentru pluginuri: intrebarea vine la pornirea urmatoare
+	try:
+		_intreaba_modulele(session, intrebare_cu_randuri)
+	except Exception as eroare:
+		_jurnal("intrebarea modulelor: %s" % eroare.__class__.__name__)
+
+
+def _arata_rezultatul(session):
+	"""Fereastra rezultatului; intoarce randurile ei cand le ia intrebarea modulelor (o singura fereastra), False cand
+	interfata reporneste, None altfel."""
 	cale = os.path.join(dosar("/"), REZULTAT)
 	rez = _citeste_json(cale)
 	if not rez or rez.get("aratat"):
-		return
+		return None
 	rez["aratat"] = True
 	_scrie_json(cale, rez)
 	repornire = False
@@ -530,7 +860,7 @@ def _arata(session):
 		except Exception as eroare:
 			_jurnal("reincarcarea pluginurilor: %s" % eroare.__class__.__name__)
 	if not mesaj(rez):
-		return
+		return None
 	from Tools import Notifications
 	from Screens.MessageBox import MessageBox
 	if repornire:
@@ -540,6 +870,11 @@ def _arata(session):
 			from Screens.Standby import TryQuitMainloop
 			session.open(TryQuitMainloop, 3)
 		Notifications.AddNotificationWithCallback(reporneste, MessageBox, f.pop("text"), type=MessageBox.TYPE_INFO, timeout=15, **f)
-		return
+		return False
+	if de_intrebat("/"):
+		# randul "nu e instalat încă" il spune chiar intrebarea
+		randul_modulului = randuri_mesaj({"acces_de_pus": rez.get("acces_de_pus") or []})
+		return [x for x in randuri_mesaj(rez) if x not in randul_modulului]
 	f = fereastra(rez)
 	Notifications.AddPopup(f.pop("text"), MessageBox.TYPE_INFO, 20, "HdsReinstalare", **f)
+	return None
