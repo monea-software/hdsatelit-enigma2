@@ -1,0 +1,208 @@
+diff --git a/lib/dvb/frontend.cpp b/lib/dvb/frontend.cpp
+index 0f544117c5b70d195195e56bc2c241e94af79f73..514683f4596b220f7c8952bcf2b10534038da782 100644
+--- a/lib/dvb/frontend.cpp
++++ b/lib/dvb/frontend.cpp
+@@ -534,6 +534,8 @@ eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFronten
+ 
+ 	m_idleInputpower[0]=m_idleInputpower[1]=0;
+ 	m_hds_rotor_locked = false;
++	m_hds_rotor_fara_blocare = 0;
++	m_hds_rotor_blocare_vazuta = false;
+ 	m_hds_acordare.goleste();
+ 	m_hds_sistem_pus = -1;
+ 	m_hds_antena_oprita = false;
+@@ -2140,6 +2142,13 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
+ 				int signal = 0;
+ 				/* citiri directe (fara memoria tunerului): pasii motorului cer starea de acum */
+ 				int isLocked = hdsCiteste(locked, true);
++				if (isLocked)
++				{
++					m_hds_rotor_fara_blocare = 0;
++					m_hds_rotor_blocare_vazuta = true;
++				}
++				else
++					++m_hds_rotor_fara_blocare;
+ 				m_idleInputpower[0] = m_idleInputpower[1] = 0;
+ 				--m_timeoutCount;
+ 				if (!m_timeoutCount && m_retryCount > 0)
+@@ -2193,6 +2202,8 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
+ 				break;
+ 			case eSecCommand::SET_ROTOR_MOVING:
+ 				m_hds_rotor_locked = false;
++				m_hds_rotor_fara_blocare = 0;
++				m_hds_rotor_blocare_vazuta = false;
+ 				if (!m_simulate)
+ 					m_sec->setRotorMoving(m_slotid, true);
+ 				++m_sec_sequence.current();
+@@ -2372,6 +2383,29 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
+ 				++m_sec_sequence.current();
+ 				break;
+ 			}
++			case eSecCommand::HDS_REACORDARE_ROTOR:
++			{
++				/* ZGM1 (lib/dvb/hdsrotire.h): demodulatorul hi3716 (ZGEMMA H8.2H Plus) cauta o singura data: acordat cat
++				   antena inca merge, nu mai prinde nimic cand ea ajunge (stare 0, fara semnal si fara purtatoare), pana la
++				   acordarea de la timpul maxim al motorului (88 s la plecarea necunoscuta). Dupa val citiri la rand fara
++				   blocare, fara nicio blocare vazuta in bucla si cu starea 0, tunerul se acordeaza din nou pe acelasi
++				   transponder; un tuner care cauta singur sau care a vazut semnalul nu e atins. */
++				int hds_pasi = m_sec_sequence.current()->val;
++				if (!m_simulate && !m_hds_rotor_blocare_vazuta && hds_pasi > 0 && m_hds_rotor_fara_blocare >= hds_pasi)
++				{
++					int hds_err = 0;
++					unsigned int hds_stare = hdsCitesteBrut(hdscitiri::STARE, true, hds_err);
++					if (!hds_err && !(hds_stare & (FE_HAS_LOCK | FE_HAS_SIGNAL | FE_HAS_CARRIER)))
++					{
++						eDebugNoSimulate("[SEC] fara semnal de %d citiri (stare 0x%x): acordez din nou", m_hds_rotor_fara_blocare,
++							hds_stare);
++						setFrontend(false);
++					}
++					m_hds_rotor_fara_blocare = 0;
++				}
++				++m_sec_sequence.current();
++				break;
++			}
+ 			case eSecCommand::DELAYED_CLOSE_FRONTEND:
+ 			{
+ 				eDebugNoSimulate("[SEC] delayed close frontend");
+diff --git a/lib/dvb/frontend.h b/lib/dvb/frontend.h
+index b7b9013f4e84bc5dd7cb931b8717eab0ac49704a..2541a0e5414593d9d792e498e82143c37150e2ae 100644
+--- a/lib/dvb/frontend.h
++++ b/lib/dvb/frontend.h
+@@ -131,6 +131,10 @@ private:
+ 	int m_timeoutCount; // needed for timeout
+ 	int m_retryCount; // diseqc retry for rotor
+ 	bool m_hds_rotor_locked; // HDSatelit: IF_TUNER_LOCKED_GOTO a gasit semnalul dupa miscarea motorului
++	/* ZGM1: citirile IF_TUNER_LOCKED_GOTO fara blocare, la rand, de la pornirea motorului sau de la ultima acordare din
++	   bucla, si daca bucla a vazut vreo blocare (atunci nu se mai acordeaza din nou); HDS_REACORDARE_ROTOR le foloseste */
++	int m_hds_rotor_fara_blocare;
++	bool m_hds_rotor_blocare_vazuta;
+ 	/* HDSatelit (urma motorului, lib/dvb/hdsurmamotor.h): ultima acordare a tunerului, cine a cerut-o si ce a hotarat
+ 	   sec.cpp pentru motor; comenzile secventei o poarta cu ele in urma */
+ 	hdsurma::Acordare m_hds_acordare;
+diff --git a/lib/dvb/hdsrotire.cpp b/lib/dvb/hdsrotire.cpp
+index e4df1b252dd36a6b3632f2db6ddbc1d994fe3a67..6321ad022a211e2bb03e09b7e6e717fddf780b59 100644
+--- a/lib/dvb/hdsrotire.cpp
++++ b/lib/dvb/hdsrotire.cpp
+@@ -380,13 +380,15 @@ int secventaFaraMasurare(eSecCommandList &seq, const Secventa &s, const Plan &p)
+ 
+ 	cmd.direction = 1;  // check for running rotor
+ 	cmd.deltaA = 0;
+-	cmd.steps = +3;
++	cmd.steps = +4;   // peste IF_TIMEOUT_GOTO, HDS_REACORDARE_ROTOR si GOTO
+ 	cmd.okcount = 0;
+ 	seq.push_back(eSecCommand(eSecCommand::SET_TIMEOUT, bucla_s * 4));  // mrt is in seconds... our SLEEP time is 250ms.. so * 4
+ 	seq.push_back(eSecCommand(eSecCommand::SLEEP, 250));  // 250msec delay
+ 	seq.push_back(eSecCommand(eSecCommand::IF_TUNER_LOCKED_GOTO, cmd));
+-	seq.push_back(eSecCommand(eSecCommand::IF_TIMEOUT_GOTO, +5));
+-	seq.push_back(eSecCommand(eSecCommand::GOTO, -3));  // goto loop start
++	seq.push_back(eSecCommand(eSecCommand::IF_TIMEOUT_GOTO, +6));
++	/* tunerele care cauta o singura data: acordarea din nou dupa REACORDARE_PASI citiri fara nimic (frontend.cpp) */
++	seq.push_back(eSecCommand(eSecCommand::HDS_REACORDARE_ROTOR, REACORDARE_PASI));
++	seq.push_back(eSecCommand(eSecCommand::GOTO, -4));  // goto loop start
+ 	if (proba)
+ 		salt_prinsa->steps = seq.size() - poz_salt;   /* saltul probei prinse: pe comanda de mai jos */
+ 	seq.push_back(eSecCommand(eSecCommand::UPDATE_CURRENT_ROTORPARAMS));
+diff --git a/lib/dvb/hdsrotire.h b/lib/dvb/hdsrotire.h
+index aab14a1dc791c12c5f04ac4c7a01e75a8ad1a007..f91e4c2203621a1a81f77cb7845a808901004425 100644
+--- a/lib/dvb/hdsrotire.h
++++ b/lib/dvb/hdsrotire.h
+@@ -75,6 +75,12 @@ constexpr int BUCLA_MIN_S = 10;
+ /* proba de semnal inaintea comenzii: citiri la 250 ms (4 s). Din ele, 5 citiri bune la rand confirma semnalul, deci
+    tunerul are cel mult ~2,7 s sa prinda transponderul */
+ constexpr int PROBA_PASI = 16;
++/* bucla de semnal de dupa comanda: acordarea din nou dupa atatea citiri la 250 ms (3 s) fara blocare si cu starea 0
++   (fara semnal, fara purtatoare), cat bucla n-a vazut nicio blocare (HDS_REACORDARE_ROTOR, frontend.cpp). hi3716 (ZGEMMA
++   H8.2H Plus) cauta o singura data: acordat cat antena merge, nu mai prindea cand ea ajungea, ci abia la timpul maxim
++   (19,9 s in loc de ~4 s la 6,9 grade, 88 s la plecarea necunoscuta). 3 s: de doua ori cea mai lunga prindere masurata
++   fara motor pe SF8008 (1,53 s), care si el arata starea 0 pana la blocare */
++constexpr int REACORDARE_PASI = 12;
+ /* geamanul unui transponder pe alt satelit: frecventa la cel mult atatia kHz (ca HdsMotorPozitie.VERIFICARE_GEAMAN_KHZ) */
+ constexpr int GEAMAN_KHZ = 3000;
+ 
+diff --git a/lib/dvb/sec.h b/lib/dvb/sec.h
+index b9490e11a91042fc080f0be8e9ce6d0dead49a10..604742904c9886ed843d5047aa1b5b5276f59d2a 100644
+--- a/lib/dvb/sec.h
++++ b/lib/dvb/sec.h
+@@ -35,7 +35,10 @@ public:
+ 		   prinsa, fara semnal); nu schimba nimic pe fir, numai urma motorului */
+ 		HDS_PROBA_SEMNAL,
+ 		/* UNR1: asteptarea ramasa de la pornirea alimentarii fizice. */
+-		HDS_UNICABLE_PORNIRE
++		HDS_UNICABLE_PORNIRE,
++		/* ZGM1 (lib/dvb/hdsrotire.h): in bucla de semnal de dupa comanda de motor, acordarea din nou cand tunerul
++		   n-a vazut nimic de val citiri la rand (tunere care cauta o singura data, ca hi3716 pe ZGEMMA H8.2H Plus) */
++		HDS_REACORDARE_ROTOR
+ 	};
+ 	int cmd;
+ 	struct rotor
+diff --git a/lib/python/Components/NimManager.py b/lib/python/Components/NimManager.py
+index 3c84ba9eac2a8fbf0d5fbc6c099e1d8c71fc767b..d7054efe2bba09b93c7e504882f3b5d0e36a06c5 100644
+--- a/lib/python/Components/NimManager.py
++++ b/lib/python/Components/NimManager.py
+@@ -790,6 +790,51 @@ def normalizeNimType(type):
+ # "<frontend virtual pe adapter0>\t<frontend USB>\t<nume>\t<sisteme>". Lipseste cand nu e niciun tuner USB in mufa.
+ TUNERE_USB = "/tmp/hds_tunere_usb"
+ 
++SISTEME_CABLU = (1, 18)      # SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_C (linux/dvb/frontend.h)
++SISTEME_TERESTRU = (3, 16)   # SYS_DVBT, SYS_DVBT2
++SISTEME_SATELIT = (4, 5, 6, 17)  # SYS_DSS, SYS_DVBS, SYS_DVBS2, SYS_TURBO
++
++
++def hdsSistemeNucleu(frontend, adaptor=0):
++	"""Sistemele de livrare ale frontendului, cum le da nucleul (FE_GET_PROPERTY cu DTV_ENUM_DELSYS, aceeasi citire ca
++	partea C++, eDVBFrontend): lista numerelor SYS_*, sau [] la orice eroare (frontend lipsa, ioctl refuzat). Deschis
++	numai pentru citire; nucleul raspunde din datele frontendului, fara acord si fara sa atinge alimentarea LNB."""
++	import array
++	import struct
++	try:
++		import fcntl
++	except ImportError:  # probele de pe PC (Windows)
++		return []
++	p = struct.calcsize("P")
++	# struct dtv_property (packed): cmd, reserved[3], uniunea u (cel mai mare membru: buffer = data[32], len,
++	# reserved1[3], pointer), result
++	prop = array.array("B", bytes(4 + 12 + 32 + 4 + 12 + p + 4))
++	struct.pack_into("<I", prop, 0, 44)  # DTV_ENUM_DELSYS
++	# struct dtv_properties: num, apoi pointerul spre vectorul de proprietati (aliniat la 8 pe 64 de biti)
++	props = bytearray(struct.pack("<I" + ("I" if p == 4 else "4xQ"), 1, prop.buffer_info()[0]))
++	cerere = 0x80000000 | (len(props) << 16) | (0x6f << 8) | 83  # FE_GET_PROPERTY
++	try:
++		fd = os.open("/dev/dvb/adapter%d/frontend%d" % (adaptor, frontend), os.O_RDONLY | os.O_NONBLOCK)
++	except OSError:
++		return []
++	try:
++		fcntl.ioctl(fd, cerere, props, True)
++	except (OSError, ValueError):
++		return []
++	finally:
++		os.close(fd)
++	numar = struct.unpack_from("<I", prop, 16 + 32)[0]
++	return list(prop[16:16 + min(numar, 32)])
++
++
++def hdsCabluSiTerestruDinNucleu(frontend):
++	"""True cand nucleul spune ca frontendul stie si cablu (DVB-C), si terestru (DVB-T/T2), dar nu si satelit: un tuner
++	care stie si satelitul (Si2169C/D pe Dreambox) isi alege tipul prin multiType (hds_dinamic), nu de aici."""
++	sisteme = set(hdsSistemeNucleu(frontend))
++	return (bool(sisteme.intersection(SISTEME_CABLU)) and bool(sisteme.intersection(SISTEME_TERESTRU))
++		and not sisteme.intersection(SISTEME_SATELIT))
++
++
+ def tunereUsb(cale=None):
+ 	"""{frontend virtual: (nume, [sisteme])} pentru tunerele USB legate de punte; {} fara ele sau la o lista stricata.
+ 	Numele din /proc/bus/nim_sockets al unui frontend virtual il scrie driverul vtuner al placii (difera de la placa la
+@@ -1341,6 +1386,14 @@ class NimManager:
+ 			elif entry["type"] in ("DVB-T", "DVB-C") and NIM.numeCuCabluSiTerestru(name):
+ 				# SF8008 si SF8008 MINI: "Type: DVB-T2" + "Name: ATBM7821 DVB-T2/C" (vezi NIM.numeCuCabluSiTerestru)
+ 				entry["type"] = "DVB-C/T"
++			elif (entry["type"] in ("DVB-T", "DVB-C") and entry.get("frontend_device") is not None
++					and entry.get("frontend_device") not in usb and not entry.get("multi_type")
++					and hdsCabluSiTerestruDinNucleu(entry["frontend_device"])):
++				# ZGEMMA H8.2H Plus: "Type: DVB-T2" + "Name: m88dm6000", numele nu spune sistemele; nucleul da DVB-T2,
++				# DVB-T si DVB-C (DTV_ENUM_DELSYS). Ramas DVB-T, tunerul nu primea setarile de cablu, iar canalele de
++				# cablu nu porneau. Tunerele cu randuri "Mode" (multiType, de pilda Dreambox) raman pe alegerea lor.
++				entry["type"] = "DVB-C/T"
++				print("[NimManager] slotul %d (%s): cablu si terestru, dupa sistemele din nucleu" % (id, name))
+ 			if not ("i2c" in entry):
+ 				entry["i2c"] = None
+ 			if not ("has_outputs" in entry):

@@ -2,15 +2,18 @@
 # SPDX-License-Identifier: GPL-2.0-only
 SUMMARY = "HDSatelit: sursele opkg ale actualizarilor prin pachete"
 DESCRIPTION = "Fisierul /etc/opkg/hdsatelit-feed.conf: canalul public al feedului de actualizari de pe \
-stb.hdsatelit.com, legat de versiunea imaginii (DISTRO_VERSION). Monea Software pentru HD Satelit."
+stb.hdsatelit.com, legat de baza feedului (HDS_FEED_BAZA: versiunea imaginii sau feedul unic al liniei ei). Monea \
+Software pentru HD Satelit."
 LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6"
-PV = "0.1.1"
+PV = "0.1.2"
 
 # Cate o sursa src/gz pe fiecare arhitectura a imaginii (all, procesorul, masina, numele receptorului), toate sub
-#   ${DISTRO_FEED_URI}/<arh>   = https://stb.hdsatelit.com/feed/public/<versiunea imaginii>/<arh>
-# Feedul e legat de baza imaginii: o imagine noua nu ia niciodata pachetele facute pentru alta imagine. Canalul de proba
-# (numai receptoarele noastre) NU vine din imagine: /etc/opkg/hdsatelit-proba-feed.conf si parola il pune trusa
+#   ${DISTRO_FEED_URI}/<arh>   = https://stb.hdsatelit.com/feed/public/<HDS_FEED_BAZA>/<arh>
+# Feedul e legat de baza imaginii: o imagine noua nu ia niciodata pachetele facute pentru alta imagine. De la feedul
+# unic (0.7.9, UNF9; HDS_FEED_UNIC in conf/distro/hdsatelit.conf) baza feedului e HDS_FEED_BAZA: pe linia x.y a feedului
+# unic, de la el incoace, feedul unic, altfel versiunea imaginii (DISTRO_VERSION). Canalul de proba (numai receptoarele
+# noastre) NU vine din imagine: /etc/opkg/hdsatelit-proba-feed.conf si parola il pune trusa
 # (scripturi/pune-feed-proba.sh). Inainte de lansarea unei imagini cu o baza noua, pe server trebuie sa existe feedul ei
 # public (macar gol: unelte/stb/publica_feed.py public-gol <baza>), altfel opkg update da eroare.
 # Pachetul tine de masina (arhitecturile ei), nu numai de procesor. Fisierul e CONFFILES: o actualizare nu il calca daca
@@ -22,16 +25,17 @@ S = "${UNPACKDIR}"
 do_configure[noexec] = "1"
 
 HDS_FEED_ARHITECTURI = "all ${TUNE_PKGARCH} ${MACHINE_ARCH} ${MACHINEBUILD}"
-do_compile[vardeps] += "DISTRO_FEED_URI HDS_FEED_ARHITECTURI"
+do_compile[vardeps] += "DISTRO_FEED_URI HDS_FEED_ARHITECTURI HDS_FEED_BAZA"
 
 do_compile() {
 	case "${DISTRO_FEED_URI}" in
-	https://stb.hdsatelit.com/feed/public/${DISTRO_VERSION}) ;;
-	*) bbfatal "hdsatelit-feed: DISTRO_FEED_URI trebuie sa fie https://stb.hdsatelit.com/feed/public/${DISTRO_VERSION}, nu '${DISTRO_FEED_URI}'" ;;
+	https://stb.hdsatelit.com/feed/public/${HDS_FEED_BAZA}) ;;
+	*) bbfatal "hdsatelit-feed: DISTRO_FEED_URI trebuie sa fie https://stb.hdsatelit.com/feed/public/${HDS_FEED_BAZA}, nu '${DISTRO_FEED_URI}'" ;;
 	esac
+	echo "${HDS_FEED_BAZA}" | grep -Eq '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || bbfatal "hdsatelit-feed: HDS_FEED_BAZA '${HDS_FEED_BAZA}' nu e x.y.z"
 	f=${B}/hdsatelit-feed.conf
 	printf '%s\n' "# HD Satelit: actualizarile prin pachete (Meniu > Setari > Software & Firmware > Actualizare software)." \
-		"# Feedul e legat de imaginea ${DISTRO_VERSION}; imaginea urmatoare are feedul ei." > "$f"
+		"# Feedul e al bazei ${HDS_FEED_BAZA} (imaginea scrisa: ${DISTRO_VERSION})." > "$f"
 	vazute=" "
 	for arh in ${HDS_FEED_ARHITECTURI}; do
 		case "$vazute" in *" $arh "*) continue ;; esac
