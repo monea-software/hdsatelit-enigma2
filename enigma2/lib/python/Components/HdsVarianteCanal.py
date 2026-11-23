@@ -15,7 +15,10 @@ de pe cablu sau terestru ramane separat; un serviciu fara nume (numele facut la 
 Varianta aratata (prima din ordine()): intai una care nu a cazut ultima oara, apoi alegerea omului de la "Alte
 variante", apoi necriptata, apoi una care a dat imagine (notata aici de rezerva sau masurata in baza unica,
 HdsBazaCanale grupa vd), apoi cu furnizorul scris, apoi HD; la egalitate frecventa si SID-ul (aceeasi ordine la fiecare
-citire).
+citire). Notele rezervei (a cazut / a dat imagine) conteaza numai cu trecerea singura pe alta varianta pornita
+(config.usage.hds_variante_singure, _noteRezerva): cu Nu (din fabrica) rezerva nu mai scrie note, iar cele vechi (0.7.7
+le scria la fiecare canal care nu pornea, si dupa trezirea din standby cu tunerul inca neprins) ar fi tinut la
+nesfarsit alta varianta in locul celei obisnuite.
 
 Ce se tine minte (FISIER, mic, JSON): alegerea omului pe grupa si, pe canal, ora ultimei imagini si a ultimei cazute
 vazute de rezerva. Scris sigur (temporar + fsync + os.replace), numai cand se schimba ceva; un fisier care nu se poate
@@ -37,6 +40,7 @@ from __future__ import absolute_import, unicode_literals
 import json
 import os
 import re
+import sys
 import threading
 import time
 
@@ -404,6 +408,17 @@ class Stare(object):
 
 # ---------------------------------------------------------------- grupele, ordinea si listele
 
+def _noteRezerva():
+	"""True cand notele rezervei intra in ordine: setarea config.usage.hds_variante_singure (Components/HdsListaSetari.py)
+	pornita, sau fara enigma2 / fara setare (probele de pe PC, ca inainte)."""
+	c = sys.modules.get("Components.config")
+	try:
+		el = getattr(getattr(getattr(c, "config", None), "usage", None), "hds_variante_singure", None)
+		return True if el is None else bool(el.value)
+	except Exception:
+		return True
+
+
 class Variante(object):
 	"""Grupele unui lamedb, cu ordinea variantelor (stare: alegerile si notele; stiute(): cheile cu imagine masurata)."""
 
@@ -420,8 +435,8 @@ class Variante(object):
 		self._ordini = {}
 		self._versiune = None
 
-	def _cheie_ordine(self, v, ales, stiute):
-		n = self.stare.nota(v.cheie)
+	def _cheie_ordine(self, v, ales, stiute, note=True):
+		n = self.stare.nota(v.cheie) if note else None
 		cazut = bool(n and n[1] > n[0])
 		merge = bool(n and n[0] > n[1]) or (v.cheie in stiute and not cazut)
 		return (cazut, v.cheie != ales, v.criptat, not merge, not v.furnizor, not v.hd, v.frecv, v.sid)
@@ -432,14 +447,15 @@ class Variante(object):
 		if not lista:
 			return []
 		stiute = self.stiute()
-		versiune = (self.stare.versiune, id(stiute))
+		note = _noteRezerva()
+		versiune = (self.stare.versiune, id(stiute), note)
 		if versiune != self._versiune:
 			self._ordini = {}
 			self._versiune = versiune
 		o = self._ordini.get(g)
 		if o is None:
 			ales = self.stare.alegere(g)
-			o = sorted(lista, key=lambda v: self._cheie_ordine(v, ales, stiute))
+			o = sorted(lista, key=lambda v: self._cheie_ordine(v, ales, stiute, note))
 			self._ordini[g] = o
 		return o
 
@@ -569,6 +585,12 @@ def stare():
 	if not _STARE:
 		_STARE.append(Stare(cale=FISIER))
 	return _STARE[0]
+
+
+def setareSchimbata():
+	"""Trecerea singura pornita sau oprita schimba ordinea (notele rezervei, _noteRezerva): o versiune noua a starii reface
+	listele care o tin minte (ChannelSelection.hdsSemnaturaUmplerii, editorul de canale, pagina web), fara scriere pe disc."""
+	stare().versiune += 1
 
 
 def _semnatura(cale):

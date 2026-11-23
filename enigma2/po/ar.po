@@ -47431,6 +47431,10 @@ msgstr "ما يظهر أثناء انتقال جهاز الاستقبال إلى
 msgid "Recomandat: 1080p 50 Hz (Full HD) sau 2160p 50 Hz (4K UHD); canalele din Europa au 50 Hz."
 msgstr "يُنصح باستخدام: 1080p 50 Hz ‏(Full HD) أو 2160p 50 Hz ‏(4K UHD)؛ فالقنوات في أوروبا تعمل بتردد 50 Hz."
 
+#: lib/python/Screens/VideoSetup.py
+msgid "Recomandat: 1080p 50 Hz (Full HD); canalele din Europa au 50 Hz."
+msgstr "يُنصح باستخدام: 1080p 50 Hz ‏(Full HD)؛ فالقنوات في أوروبا تعمل بتردد 50 Hz."
+
 #, python-format
 msgid "Fără răspuns, setarea de dinainte revine în %d s."
 msgstr "إذا لم تستجب، سيعود الإعداد السابق خلال %d ث."
@@ -48833,6 +48837,14 @@ msgstr "تحتاج إضافات أخرى إلى هذه الإضافة. احذف�
 
 msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
 msgstr "لم تعد الإضافة موجودة في مصدر feed. نزّل القائمة مجددًا (الزر الأزرق)."
+
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "إحدى قوائم الحزم غير موجودة على الخادم. تم تنزيل القوائم الأخرى، لذا فالاتصال بالإنترنت يعمل."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "لا يحتوي الخادم على قائمة الحزم المطلوبة. الاتصال بالإنترنت يعمل؛ حاول مجددًا لاحقًا."
 
 msgid "Extensia nu este făcută pentru acest receptor."
 msgstr "هذه الإضافة غير مخصّصة لهذا الرسيفر."
@@ -67970,3 +67982,180 @@ msgstr "أنت تختار مدة تشغيلها: ساعتان أو أكثر أو
 #: lib/python/Components/HdsAfisaj.py:1364
 msgid "Scriere VFD incompletă."
 msgstr "الكتابة على VFD غير مكتملة."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "الشعار المضيء"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "الشعار، والجهاز يعمل"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "كيف يضيء الشعار الأمامي والجهاز يعمل. كإعدادات المصنع: اللون الذي يختاره الجهاز تلقائياً. يمكنك اختيار أي من اللونين، أو كلاهما معاً (درجة ثالثة)، أو إطفاؤه، أو وميض، أو انتقال سلس. يظهر اختيارك فوراً لبضع ثوانٍ."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "الشعار، في وضع الاستعداد"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "كيف يضيء الشعار والجهاز في وضع الاستعداد. كإعدادات المصنع: لون وضع الاستعداد الذي يحدده الجهاز. نبض هادئ: يضيء الشعار وينطفئ بسلاسة، كإشارة إلى أن الجهاز في وضع النوم. مطفأ: لا توجد إضاءة في الليل."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "الشعار، عند الإيقاف الكامل"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "مضاء (كإعدادات المصنع) أو مطفأ بعد إطفاء الجهاز تماماً (إيقاف كامل). في هذه الحالة، يتحكم الجهاز في الشعار تلقائياً بدون تدخل البرنامج."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "الشعار يوضح ما يفعله الجهاز"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "نعم: يغير الشعار إضاءته عندما يقوم الجهاز بمهمة ما (تحديث، البحث عن القنوات، تدوير الهوائي، التقاط الإشارة، تسجيل، المساعدة)، بناءً على الاختيارات أدناه، ثم يعود لحالته. عند وجود مهام متعددة، تظهر المهمة الأهم حسب الترتيب أدناه. لا (كإعدادات المصنع): يبقى الشعار بلون التشغيل أو وضع الاستعداد."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "أثناء تثبيت تحديث البرنامج"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "إضاءة الشعار أثناء تثبيت تحديث صورة النظام أو إضافة (plugin). في هذا الوقت، يجب عدم فصل الجهاز عن الكهرباء."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "أثناء البحث عن القنوات"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "إضاءة الشعار أثناء البحث عن القنوات (بما في ذلك البحث الأعمى على القمر الصناعي)."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "أثناء تدوير الهوائي"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "إضاءة الشعار أثناء قيام المحرك (DiSEqC 1.2 أو USALS) بتحريك الهوائي إلى قمر صناعي آخر. كل الألوان بالتناوب: يتنقل الشعار بين الدرجات الثلاث حتى يتوقف الهوائي."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "عند التقاط الإشارة"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "إضاءة الشعار لمدة 3 ثوانٍ بعد التقاط التيونر لإشارة القناة (عند تغيير القناة أو بعد توقف الهوائي)."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "أثناء التسجيل"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "إضاءة الشعار أثناء عملية تسجيل، حتى في وضع الاستعداد."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "أثناء تفعيل المساعدة"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "إضاءة الشعار أثناء تفعيل المساعدة عن بُعد، لكي ترى أن الفريق متصل."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "تختار ألوان الشعار الأمامي وكيفية إضاءته عندما يبحث الجهاز عن القنوات، أو يدير الهوائي، أو يسجل، أو يقوم بالتحديث."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "كإعدادات المصنع"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "لا يتغير"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "لون التشغيل"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "لون وضع الاستعداد"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "كلا اللونين معاً"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "مطفأ"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "وميض بلون التشغيل"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "وميض بلون وضع الاستعداد"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "وميض سريع، بكلا اللونين"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "تبديل بين اللونين"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "كل الألوان بالتناوب"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "نبض هادئ، بلون وضع الاستعداد"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "انتقال سلس بين جميع الألوان"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "مضاء"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "اضغط EXIT واستخدم الرسيفر كالمعتاد؛ ستبقى المساعدة عن بُعد مفعّلة. تعود إلى هنا من %s."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: للتلفاز"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "سيتفقد الفريق جهاز الاستقبال حالما يستطيع."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "يمكنك إغلاق الصفحة واستخدام الرسيفر كالمعتاد؛ ستبقى المساعدة عن بُعد مفعّلة. على الرسيفر تجدها في __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "جهازك يشغل بحد أقصى Full HD (1080p)، لذا سيتم تشغيل نفس القناة بدون 4K: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "هذه القناة بجودة 4K، وجهازك يشغل بحد أقصى Full HD (1080p)."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "جهازك يشغل بحد أقصى Full HD (1080p). تبدأ قناة 4K هنا بنفس القناة بدون 4K من المزود عندما تتوفر لديه؛ وإلا فلا يمكن تشغيلها."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "تضاف قنوات DVB-T2 عبر القمر الصناعي من %s (%s) تلقائيًا إلى قائمة القنوات، في %s."

@@ -75,6 +75,12 @@ constexpr int BUCLA_MIN_S = 10;
 /* proba de semnal inaintea comenzii: citiri la 250 ms (4 s). Din ele, 5 citiri bune la rand confirma semnalul, deci
    tunerul are cel mult ~2,7 s sa prinda transponderul */
 constexpr int PROBA_PASI = 16;
+/* bucla de semnal de dupa comanda: acordarea din nou dupa atatea citiri la 250 ms (3 s) fara blocare si cu starea 0
+   (fara semnal, fara purtatoare), cat bucla n-a vazut nicio blocare (HDS_REACORDARE_ROTOR, frontend.cpp). hi3716 (ZGEMMA
+   H8.2H Plus) cauta o singura data: acordat cat antena merge, nu mai prindea cand ea ajungea, ci abia la timpul maxim
+   (19,9 s in loc de ~4 s la 6,9 grade, 88 s la plecarea necunoscuta). 3 s: de doua ori cea mai lunga prindere masurata
+   fara motor pe SF8008 (1,53 s), care si el arata starea 0 pana la blocare */
+constexpr int REACORDARE_PASI = 12;
 /* geamanul unui transponder pe alt satelit: frecventa la cel mult atatia kHz (ca HdsMotorPozitie.VERIFICARE_GEAMAN_KHZ) */
 constexpr int GEAMAN_KHZ = 3000;
 

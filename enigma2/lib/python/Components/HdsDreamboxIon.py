@@ -6,9 +6,12 @@
 #
 # Numai pe Dreambox DM7080, DM820, DM900, DM920 si DM520 (configure.ac: HAVE_DREAMBOX_ION). Partea din C++
 # (lib/gdi/fb.cpp) hotaraste la pornirea interfetei, dupa fisierul /etc/enigma2/hds-dreambox-ion:
-#   - fara fisier (din fabrica): totul ca pana acum;
-#   - cu fisier: cere driverului memoria pentru doua pagini 1920x1080 inainte de singura mapare a ecranului si ia
-#     memoria motorului 2D din /dev/ion; orice esec lasa purtarea de pana acum;
+#   - mereu, cu sau fara fisier (FBD5): daca memoria ecranului de la pornire e mai mica decat doua pagini
+#     1920x1080, C++ o cere driverului inainte de singura mapare (prima pornire a interfetei dupa pornirea
+#     receptorului nu se mai opreste);
+#   - fara fisier (din fabrica): nimic altceva;
+#   - cu fisier: ia memoria motorului 2D din /dev/ion si opreste curat interfata daca driverul muta memoria
+#     ecranului; orice esec lasa purtarea de fara fisier;
 #   - semnul /etc/enigma2/hds-dreambox-ion.pornire se scrie la pornire si se sterge de aici dupa 2 minute de
 #     interfata vie (sau de C++ la iesirea curata); gasit la pornirea urmatoare = pornirea cu optiunea nu a
 #     trait, iar C++ sterge singur fisierul setarii (fara bucla de reporniri pe un receptor la care nu se uita

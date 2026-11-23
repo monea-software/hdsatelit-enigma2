@@ -544,11 +544,14 @@ def semnInainte():
 
 
 def listeBune(cod, inainte):
-	"""Dupa opkg update: True cand codul e 0 sau, cu alt cod, cand descarcarea a scris lista fiecarei surse de-ale noastre
-	(semnul ei s-a schimbat fata de `inainte`, luat cu semnInainte). opkg update iese cu 255 si cand cade numai o sursa
-	straina (pusa de om, de un plugin sau adusa de copia setarilor, cu serverul ei oprit); ce instalam singuri (modulele,
-	bibliotecile, driverele: Components/HdsDriverLipsa) vine numai din feedul nostru, deci atunci mergem mai departe, ca
-	actualizarea din meniu (Components/HdsActualizari._dupa_update), fara mesajul fals de lipsa internetului."""
+	"""Dupa opkg update: True cand codul e 0 sau, cu alt cod, cand descarcarea a scris macar o lista de-a noastra (semnul ei
+	s-a schimbat fata de `inainte`, luat cu semnInainte). opkg update iese cu 255 si cand cade numai o sursa straina (pusa de
+	om, de un plugin sau adusa de copia setarilor, cu serverul ei oprit) sau numai una de-a noastre (0.7.9, EXA7: pe ZGEMMA
+	H8.2H Plus feedul pluginurilor externe nu avea dosarul procesorului, 404); ce instalam singuri (modulele, bibliotecile,
+	driverele: Components/HdsDriverLipsa) vine numai din feedul nostru. O lista de-a noastra scrisa acum arata ca serverul
+	raspunde si internetul merge: mergem mai departe cu listele care sunt (pachetul cautat in ele, provenienta), ca actualizarea
+	din meniu (Components/HdsActualizari._dupa_update), fara mesajul fals de lipsa internetului si fara 3 incercari degeaba.
+	Niciuna scrisa (fara internet, serverul oprit): False, ca pana acum."""
 	if cod == 0:
 		return True
 	if not inainte:
@@ -558,10 +561,18 @@ def listeBune(cod, inainte):
 	except Exception as e:
 		_jurnal("listele dupa opkg update: %r" % (e,))
 		return False
-	bune = set(acum) == set(inainte) and all(acum[n] is not None and acum[n] != inainte[n] for n in acum)
-	if bune:
+	if set(acum) != set(inainte):
+		return False
+	scrise = sorted(n for n in acum if acum[n] is not None and acum[n] != inainte[n])
+	if not scrise:
+		return False
+	cazute = sorted(set(acum) - set(scrise))
+	if cazute:
+		_jurnal("opkg update: cod %s; listele noastre descarcate: %s; nedescarcate: %s (merg mai departe cu listele care sunt)" % (
+			cod, ", ".join(scrise), ", ".join(cazute)))
+	else:
 		_jurnal("opkg update: cod %s, dar listele feedului nostru s-au descarcat toate (a cazut numai o sursa straina)" % cod)
-	return bune
+	return True
 
 
 def listeVechi(conf=None, acum=None):

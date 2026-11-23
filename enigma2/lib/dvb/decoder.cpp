@@ -228,7 +228,11 @@ int eDVBAudio::startPid(int pid, int type)
 		bypass = 0x10;
 		break;
 	case aDDP:
+#ifdef HAVE_DREAMBOX_AV
+		bypass = 7; // E-AC-3 for the Dream audio driver (configure.ac: HAVE_DREAMBOX_AV)
+#else
 		bypass = 0x22; // E-AC-3; valoarea asteptata de driver pe aparatele ne-Dreambox (u57 inclus), aceeasi in dvbmediasink
+#endif
 		break;
 	}
 
@@ -463,9 +467,15 @@ eDVBVideo::eDVBVideo(eDVBDemux *demux, int dev)
 #define VIDEO_STREAMTYPE_MPEG4_Part2 4
 #define VIDEO_STREAMTYPE_VC1_SM 5
 #define VIDEO_STREAMTYPE_MPEG1 6
-/* 7 pe tot ce nu e Dreambox (acolo 22): asa e STREAMTYPE_MPEG4_H265 in
-   gstreamer1.0-plugin-dvbmediasink construit pentru u57 (--with-machine=u57, fara --with-dreambox) */
+/* H.265: 22 for the Dream video driver (configure.ac: HAVE_DREAMBOX_AV on DM7080, DM820, DM900, DM920, DM520),
+   7 on every other receiver (STREAMTYPE_MPEG4_H265 of gstreamer1.0-plugin-dvbmediasink built for u57, without
+   --with-dreambox). With 7 a DM900 played the sound of an H.265 channel (HotBird 4K1, 2160p) and showed no picture:
+   no video event, no frame. Only the number given to the driver changes; the type H265_HEVC (decoder.h) stays 7 */
+#ifdef HAVE_DREAMBOX_AV
+#define VIDEO_STREAMTYPE_H265_HEVC 22
+#else
 #define VIDEO_STREAMTYPE_H265_HEVC 7
+#endif
 /* AVS / AVS+ (stream_type 0x42): 16 duce in showiframe (e2VideoType2Hisi) la tipul AVS al decodorului HiSilicon */
 #define VIDEO_STREAMTYPE_CAVS 16
 

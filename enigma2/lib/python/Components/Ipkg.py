@@ -126,6 +126,18 @@ def _pycDupa(stare):
 		print("[Ipkg] HdsPycRamase:", e)
 
 
+def _golesteCacheOpkg(arguments):
+	"""0.7.9 (BLD8, 23.11.2026): Components/HdsCuratenie.golesteCacheOpkgDupa (pachetele descarcate de opkg stau in RAM)"""
+	try:
+		from Components import HdsCuratenie
+	except ImportError:
+		try:
+			import HdsCuratenie
+		except ImportError:
+			return
+	HdsCuratenie.golesteCacheOpkgDupa(arguments)
+
+
 def _reap(pid):
 	"""waitpid for a child just killed with SIGKILL, at most ~0.2 s (a child stuck in the kernel is left alone)"""
 	if pid is None or pid <= 0:
@@ -208,6 +220,7 @@ class IpkgComponent:
 		self._pregatesteInventar = arguments[0] in ('install', 'remove', 'upgrade') and not any(
 			optiune in arguments for optiune in ('--download-only', '--noaction'))
 		print("[Ipkg] executing", program, arguments)
+		self._argumenteCmd = list(arguments)
 		self._pycRamase = _pycInainte(arguments)
 		self._decoder = codecs.getincrementaldecoder('utf-8')('replace')
 		self.cmd.appClosed.append(self.cmdFinished)
@@ -327,6 +340,10 @@ class IpkgComponent:
 		stare, self._pycRamase = getattr(self, '_pycRamase', None), None
 		if stare:
 			_pycDupa(stare)
+		# 0.7.9 (BLD8): dupa install/upgrade/remove reale, .ipk-urile descarcate din /var/cache/opkg (RAM) se sterg
+		argumente, self._argumenteCmd = getattr(self, '_argumenteCmd', None), None
+		if argumente:
+			_golesteCacheOpkg(argumente)
 		self.callCallbacks(self.EVENT_DONE, retval)
 
 	def cmdData(self, data):

@@ -380,13 +380,15 @@ int secventaFaraMasurare(eSecCommandList &seq, const Secventa &s, const Plan &p)
 
 	cmd.direction = 1;  // check for running rotor
 	cmd.deltaA = 0;
-	cmd.steps = +3;
+	cmd.steps = +4;   // peste IF_TIMEOUT_GOTO, HDS_REACORDARE_ROTOR si GOTO
 	cmd.okcount = 0;
 	seq.push_back(eSecCommand(eSecCommand::SET_TIMEOUT, bucla_s * 4));  // mrt is in seconds... our SLEEP time is 250ms.. so * 4
 	seq.push_back(eSecCommand(eSecCommand::SLEEP, 250));  // 250msec delay
 	seq.push_back(eSecCommand(eSecCommand::IF_TUNER_LOCKED_GOTO, cmd));
-	seq.push_back(eSecCommand(eSecCommand::IF_TIMEOUT_GOTO, +5));
-	seq.push_back(eSecCommand(eSecCommand::GOTO, -3));  // goto loop start
+	seq.push_back(eSecCommand(eSecCommand::IF_TIMEOUT_GOTO, +6));
+	/* tunerele care cauta o singura data: acordarea din nou dupa REACORDARE_PASI citiri fara nimic (frontend.cpp) */
+	seq.push_back(eSecCommand(eSecCommand::HDS_REACORDARE_ROTOR, REACORDARE_PASI));
+	seq.push_back(eSecCommand(eSecCommand::GOTO, -4));  // goto loop start
 	if (proba)
 		salt_prinsa->steps = seq.size() - poz_salt;   /* saltul probei prinse: pe comanda de mai jos */
 	seq.push_back(eSecCommand(eSecCommand::UPDATE_CURRENT_ROTORPARAMS));

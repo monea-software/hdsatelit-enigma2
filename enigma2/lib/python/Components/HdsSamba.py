@@ -396,6 +396,12 @@ def instaleaza():
 	finally:
 		if iesire is not None:
 			iesire.close()
+	# 0.7.9 (BLD8): pachetele descarcate de opkg stau in /var/cache/opkg, in RAM; dupa instalare se sterg
+	try:
+		from Components import HdsCuratenie
+		HdsCuratenie.golesteCacheOpkgDupa([PROGRAME["opkg"], "install", PACHET])
+	except Exception:
+		pass
 	if cod == 0 and instalat():
 		return True, ""
 	return False, motivInstalare(_citeste(CAI["jurnal_opkg"], 262144) or "")

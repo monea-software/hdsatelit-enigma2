@@ -55260,6 +55260,14 @@ msgstr "Oare útwreidingen hawwe dizze nedich. Wiskje dy earst."
 msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
 msgstr "De útwreiding stiet net mear yn de feed. Laad de list opnij yn (blauwe toets)."
 
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "Der mist in pakketlist op de server. De oaren binne ynladen, dus de ynternetferbining wurket."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "De server hat de frege pakketlist net. De ynternetferbining wurket; besykje it letter nochris."
+
 msgid "Extensia nu este făcută pentru acest receptor."
 msgstr "De útwreiding is net makke foar dizze ûntfanger."
 
@@ -74422,3 +74430,180 @@ msgstr "Do kiest hoe lang it oan stiet: 2 oeren, langer of permanint, en do kins
 #: lib/python/Components/HdsAfisaj.py:1364
 msgid "Scriere VFD incompletă."
 msgstr "Ûnfolslein skriuwen nei VFD."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "Ferljochte logo"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "It logo, as de ûntfanger oan is"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "Hoe't it logo oan de foarkant ljochtet as de ûntfanger oan is. Standert: de kleur dy't de ûntfanger sels ynstelt. Do kinst ien fan de twa kleuren kieze, beide tagelyk (de tredde kleur), út, in knippering of in floeiende oergong. Dyn kar is fuortendaliks in pear sekonden te sjen."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "It logo, yn paraatstân"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "Hoe't it logo ljochtet as de ûntfanger yn paraatstân stiet. Standert: de paraatstân-kleur fan de ûntfanger. Sykhellet stadich: it logo giet stadich oan en út, as teken dat de ûntfanger sliept. Út: gjin ljocht nachts."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "It logo, by folsleine útskeakeling"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "Oan (standert) of út nei'tst de ûntfanger hielendal útskeakelest (folsleine útskeakeling). Dan regelt de ûntfanger it logo sels, sûnder programma."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "It logo lit sjen wat de ûntfanger docht"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "Ja: it logo feroaret fan ljocht as de ûntfanger earne mei dwaande is (softwarefernijing, kanaalsykjen, de skûtel dy't draait, sinjaal fûn, opname, help op ôfstân), neffens de karren hjirûnder, en komt dan werom. As der mear dingen tagelyk barre, sjochst it wichtichste, yn de folchoarder hjirûnder. Nee (standert): it logo bliuwt op de kleur fan oan of paraatstân."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "Wylst in softwarefernijing ynstallearre wurdt"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "It ljocht fan it logo wylst in softwarefernijing fan de image of in plugin ynstallearre wurdt. Dan mei de stekker fan de ûntfanger net út it stopkontakt."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "Wylst der nei kanalen socht wurdt"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "It ljocht fan it logo wylst it sykjen nei kanalen rint (ek by blindscan op de satellyt)."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "Wylst de skûtel draait"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "It ljocht fan it logo wylst de motor fan de skûtel (DiSEqC 1.2 of USALS) de skûtel nei in oare satellyt draait. Alle kleuren, om de beurt: it logo giet troch de trije kleuren oant de skûtel stilstiet."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "As der sinjaal fûn is"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "It ljocht fan it logo foar 3 sekonden nei't de tuner it sinjaal fan de stjoerder fynt (by it wikseljen fan stjoerder of nei't de skûtel stilstiet)."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "Wylst der in opname rint"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "It ljocht fan it logo wylst der in opname rint, ek yn paraatstân."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "Wylst help op ôfstân oan stiet"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "It ljocht fan it logo wylst help op ôfstân oan stiet, sadatst sjen kinst dat it team ferbûn is."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "Kies de kleuren fan it logo oan de foarkant en hoe't it ljochtet as de ûntfanger nei kanalen siket, de skûtel draait, in opname makket of in softwarefernijing kriget."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "Standert"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "Feroaret net"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "De kleur fan oan"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "De kleur fan paraatstân"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "Beide kleuren tagelyk"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "Út"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "Knippert yn de kleur fan oan"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "Knippert yn de kleur fan paraatstân"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "Knippert fluch, beide kleuren"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "Wikselet tusken de twa kleuren"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "Alle kleuren, om de beurt"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "Sykhellet stadich, de kleur fan paraatstân"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "Giet floeiend troch alle kleuren"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "Oan"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "Druk op EXIT en brûk de ûntfanger as gewoanlik; de help op ôfstân bliuwt oan. Do komst hjir werom fia %s."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: nei tv"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "It team sjocht dernei sa gau as it kin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "Do kinst de side slute en de ûntfanger as gewoanlik brûke; de help op ôfstân bliuwt oan. Op de ûntfanger fynst it yn __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "Dyn ûntfanger spilet op syn heechst Full HD (1080p), dus hy start itselde kanaal sûnder 4K: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "Dit kanaal is 4K, en dyn ûntfanger spilet op syn heechst Full HD (1080p)."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "Dyn ûntfanger spilet op syn heechst Full HD (1080p). In 4K-kanaal start hjir mei itselde kanaal sûnder 4K fan de oanbieder, as dy dat hat; oars kin it net ôfspile wurde."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "DVB-T2-kanalen troch sateilyt fan %s (%s) komme automaat yn 'e kenaallist, yn %s."

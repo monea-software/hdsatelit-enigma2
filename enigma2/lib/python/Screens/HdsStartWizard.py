@@ -1459,11 +1459,6 @@ class HdsStartWizard(Screen, ConfigListScreen):
     def finishWizard(self):
         """Terminare: semnele de prima pornire pe disc (asistentul nu mai porneste: StartWizard.py il
         inregistreaza pe config.misc.firstrun), apoi asistentul se inchide si interfata deschide meniul principal"""
-        from Components import HdsBetaTester as B
-        if B.acordTestNecesar():
-            from Screens.HdsBetaTester import HdsBetaConditii
-            self.session.openWithCallback(lambda *r: self.finishWizard(), HdsBetaConditii)
-            return
         print("[HdsStartWizard] asistent terminat: firstrun=False, se deschide meniul principal")
         self.opresteCeasulLimbii()
         # ConfigSubsection.__getattr__ arunca KeyError pentru o cheie lipsa, deci se cauta in content.items

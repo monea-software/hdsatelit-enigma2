@@ -90,6 +90,10 @@ def _varianteSchimbate(el):
 		if not el.value:
 			m.opresteVariantele()
 		m.actualizeazaCeas()
+	# ordinea variantelor din liste tine seama de notele rezervei numai cu Da (HdsVarianteCanal._noteRezerva)
+	v = sys.modules.get("Components.HdsVarianteCanal")
+	if v is not None:
+		v.setareSchimbata()
 
 
 # Variantele DVB: Nu fara valoare salvata.

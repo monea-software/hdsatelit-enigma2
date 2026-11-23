@@ -9,8 +9,10 @@
 # (A.TEXT_SCURT), legatura "Termenii și condițiile" (textul intreg, A.textTermeni, intr-o fereastra peste pagina) si
 # butonul Start, care porneste cu durata aleasa. Pornita, pagina arata pana cand e pornita, lista "Schimbă durata"
 # (aceleasi cinci; alegerea o schimba pe loc, socotita de acum, perechea Verde de pe receptor), butonul Oprește si
-# jurnalul. Oprește intreaba intai, in pagina, "Oprești asistența?" (Nu cu focus / "Da, opresc"), perechea intrebarii
-# de la Rosu de pe receptor (RCF, 15-16.11.2026: pe televizor Rosu "Oprește" sta dupa Start in locul lui "Înapoi" si a
+# jurnalul; sub pana cand, mereu, fraza ca pagina se poate inchide si receptorul folosi ca de obicei (iesireNota,
+# perechea randului EXIT de pe receptor), iar jurnalul ramane derulat la ultimul rand cat omul nu urca sa citeasca.
+# Oprește intreaba intai, in pagina, "Oprești asistența?" (Nu cu focus / "Da, opresc"), perechea intrebarii de la Rosu
+# de pe receptor (RCF, 15-16.11.2026: pe televizor Rosu "Oprește" sta dupa Start in locul lui "Înapoi" si a
 # oprit din greseala trei sesiuni); linkul Oprește din banda de sus a celorlalte pagini duce aici, cu intrebarea deschisa
 # (/asistenta#opreste). Codul sesiunii nu se trimite browserului: ramane intern, intre receptor, server si echipa. Cand echipa a
 # trimis concluzii (op "concluzii"), pagina le arata sub jurnal, si dupa oprire: "Ce am găsit și ce am făcut", textul
@@ -22,7 +24,8 @@
 # Nu cere asocierea cu codul de pe televizor. HdsAsistentaSemn.pornesteWeb anunta pe receptor
 # ca a pornit din web, fara sa ceara o apasare acolo. Exteriorul ramane respins de poarta comuna.
 # Oprirea merge din orice browser acceptat. Cat asistenta e activa, paginile web au sus
-# o banda (bandaWeb, pusa de meniu_comun_web.pagina), cu linkul Oprește spre intrebarea din pagina.
+# o banda (bandaWeb, pusa de meniu_comun_web.pagina), cu linkul Oprește spre intrebarea din pagina si, dedesubt, ultimul
+# mesaj al echipei din ultimele minute (A.ultimulMesaj); pagina /asistenta il are in jurnal, intreg.
 #
 # Rute (poarta comuna meniu_comun_web; ce schimba ceva cere, cu cookie, POST si antetul CSRF):
 #   GET  /api/asistenta            starea, pana cand e pornita, ultimele randuri din jurnal (fara cod), ultimele
@@ -264,11 +267,20 @@ def bandaWeb(A=None):
 			text = A.textActivitate(ses) or text
 		except Exception:
 			pass
+		mesaj = ""
+		try:
+			# ultimul mesaj al echipei (op "mesaj", din ultimele minute), ca fereastra lui de pe televizor: pe orice pagina
+			m = A.ultimulMesaj()
+			if m and m.get("text"):
+				mesaj = '<div style="font-weight:400;margin-top:4px;">%s</div>' % _html.escape(
+					"%s %s" % (_t("Mesaj de la HD Satelit:"), m["text"]))
+		except Exception:
+			pass
 	except Exception:
 		return ""
 	return ('<div role="status" style="background:#c0392b;color:#fff;padding:8px 14px;text-align:center;'
 		'font:600 .95rem system-ui,sans-serif;">%s · <a href="/asistenta#opreste" onclick="%s" style="color:#fff;">%s</a>'
-		'</div>' % (_html.escape(text), _html.escape(_OPRESTE_BANDA, quote=True), _html.escape(_t("Oprește"))))
+		'%s</div>' % (_html.escape(text), _html.escape(_OPRESTE_BANDA, quote=True), _html.escape(_t("Oprește")), mesaj))
 
 
 def _argumente(request):
@@ -465,7 +477,8 @@ PAGINA = """<!DOCTYPE html>
 <section class="card ascuns" id="pornita">
   <p class="pana" id="activitate" role="status"></p>
   <p class="pana" id="stare"></p>
-  <p class="nota ascuns" id="conectatNota">Echipa se uită imediat ce poate. Poți închide pagina, asistența rămâne pornită.</p>
+  <p class="nota" id="iesireNota">Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__.</p>
+  <p class="nota ascuns" id="conectatNota">Echipa se uită imediat ce poate.</p>
   <p class="nota ascuns" id="fundal"></p>
   <p class="durata ascuns" id="randDurata"><label for="durataNoua">Schimbă durata</label><select id="durataNoua"></select></p>
   <p class="mesaj" id="mesajDurata"></p>
@@ -567,11 +580,12 @@ function arata(d){
   $("activitate").textContent = d.activitate || "";
   $("activitate").classList.toggle("ascuns", !d.activitate);
   $("fundal").textContent = d.fundal || ""; $("fundal").classList.toggle("ascuns", !d.fundal);
-  // conectata si echipa nu lucreaza acum: ca vine si ca pagina se poate inchide (pe receptor A.textConectat)
+  // conectata si echipa nu lucreaza acum: ca vine (pe receptor randul de stare); ca pagina se poate inchide spune
+  // iesireNota, mereu la vedere cat asistenta merge
   $("conectatNota").classList.toggle("ascuns", d.stare!=="conectat" || !!d.activitate);
   $("asteptare").classList.toggle("ascuns", d.stare!=="asteapta");
   $("asteptareNuOpri").classList.toggle("ascuns", d.stare!=="asteapta");
-  $("jurnal").textContent = (d.jurnal||[]).join("\\n") || "Jurnalul e gol.";
+  puneJurnal((d.jurnal||[]).join("\\n") || "Jurnalul e gol.");
   var c = d.concluzii;
   $("concluzii").classList.toggle("ascuns", !(c && c.text));
   if(c && c.text){ $("concluziiText").textContent = c.text; $("concluziiOra").textContent = c.ora_text || ""; }
@@ -579,6 +593,16 @@ function arata(d){
   copiaInapoi = d.copie || null;
   $("copie").classList.toggle("ascuns", !copiaInapoi);
   $("copieText").textContent = copiaInapoi ? (copiaInapoi.text || "") : "";
+}
+// jurnalul (caseta cu derulare): scris numai cand se schimba; ultimul rand ramane la vedere cat omul e la capat (si la
+// deschidere), iar daca a urcat ca sa citeasca, ramane unde citeste pana coboara iar la capat (perechea ecranului de pe
+// receptor)
+function puneJurnal(text){
+  var j = $("jurnal");
+  if(j.textContent === text){ return; }
+  var laCapat = !j.textContent || j.scrollHeight - j.scrollTop - j.clientHeight < 8;
+  j.textContent = text;
+  if(laCapat){ j.scrollTop = j.scrollHeight; }
 }
 // intrebarea echipei (op "intrebare"): aceleasi variante ca pe receptor, ca butoane; primul raspuns o inchide peste tot;
 // din 0.7.8 si raspunsul scris (q.scris): campul si Trimite (Enter), ca tastatura de pe receptor; citirea starii la 3 s nu
@@ -685,7 +709,9 @@ TEXTE_PAGINA = {
 		N_("Oprește"),
 		N_("Oprești asistența?"),
 		N_("Da, opresc"),
-		N_("Echipa se uită imediat ce poate. Poți închide pagina, asistența rămâne pornită."),
+		N_("Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în "
+			"__DRUM_MENIU__."),
+		N_("Echipa se uită imediat ce poate."),
 		N_("Te anunțăm când intrăm. Poți folosi receptorul între timp."),
 		N_("Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum."),
 		N_("Jurnalul asistenței"),

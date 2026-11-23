@@ -11116,10 +11116,6 @@ msgstr "<code>GET /api/traducere-subtitrari</code>: automatický překlad textov
 msgid "ABC"
 msgstr "ABC"
 
-#: lib/python/Components/HdsBetaTester.py:177
-msgid "Această imagine este în test (alfa/beta). Folosind-o ești beta tester: echipa HD Satelit poate vedea și face orice pe receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele și parolele. Pot apărea probleme. Fără acord imaginea nu poate fi folosită."
-msgstr "Tento obraz je ve zkušebním provozu (alfa/beta). Když ho používáš, jsi betatester: tým HD Satelit může během vzdálené pomoci a testů na tvém přijímači vidět a dělat cokoli, včetně zobrazení nastavení, protokolů a hesel. Mohou se objevit problémy. Bez souhlasu nelze obraz používat."
-
 #: lib/python/Plugins/Extensions/HdsWebControl/setari_deschise_web.py:176
 msgid "Această tastă se folosește pe televizor."
 msgstr "Toto tlačítko se používá na televizi."
@@ -11366,14 +11362,6 @@ msgstr "Surový kód: 0x%X"
 msgid "Comenzi virtuale"
 msgstr "Virtuální příkazy"
 
-#: lib/python/Screens/HdsBetaTester.py:912 lib/python/Screens/HdsBetaTester.py:985
-msgid "Condițiile beta tester"
-msgstr "Podmínky betatestera"
-
-#: lib/python/Components/HdsBetaTester.py:176
-msgid "Condițiile imaginii în test"
-msgstr "Podmínky zkušebního obrazu"
-
 #: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3717
 msgid "Configurare FBC"
 msgstr "Nastavení FBC"
@@ -11573,10 +11561,6 @@ msgstr "Automatické časové pásmo pro Ukrajinu."
 msgid "Fusurile Europe/Kyiv și Europe/Kiev lipsesc din lista receptorului; fusul actual rămâne neschimbat."
 msgstr "Časová pásma Europe/Kyiv a Europe/Kiev v seznamu přijímače chybí; současné pásmo zůstává beze změny."
 
-#: lib/python/Components/HdsBetaTester.py:181
-msgid "Fără acord imaginea nu poate fi folosită. Poți trece pe o imagine finală când apare sau poți instala altă imagine. Rețeaua și actualizările rămân disponibile. Tasta POWER deschide opțiunile de recuperare și de pornire în altă imagine, dacă receptorul le permite."
-msgstr "Bez souhlasu nelze obraz používat. Až vyjde, můžeš přejít na finální obraz, nebo nainstalovat jiný obraz. Síť a aktualizace zůstávají dostupné. Tlačítko POWER otevře volby obnovy a spuštění jiného obrazu, pokud to přijímač umožňuje."
-
 #: lib/python/Screens/HdsSoftwareUpdate.py:925
 #, python-format
 msgid "Gata: partiția %d a stickului are acum tipul %s. Recovery-ul producătorului poate citi arhivele de pe el."
@@ -11615,10 +11599,6 @@ msgid ""
 msgstr ""
 "Tvůj identifikátor: %s.\n"
 "Souhlas ze dne %s, prohlášení o ochraně soukromí verze %d."
-
-#: lib/python/Components/HdsBetaTester.py:180
-msgid "Imagine în test: acordul beta tester e obligatoriu"
-msgstr "Zkušební obraz: souhlas betatestera je povinný"
 
 #: lib/python/Components/HdsPluginExtern.py:1735
 #, python-format
@@ -12041,10 +12021,6 @@ msgstr "Při Ne čeká nový seznam kanálů nalezený v /etc/enigma2 nebo na fl
 msgid "Pe butonul albastru"
 msgstr "Na modrém tlačítku"
 
-#: lib/python/Components/HdsBetaTester.py:184
-msgid "Pe o imagine finală, Beta tester este opțional. Echipa HD Satelit poate vedea și face orice pe receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele și parolele. Pot apărea probleme."
-msgstr "Na finálním obrazu je Betatester volitelný. Tým HD Satelit může během vzdálené pomoci a testů na tvém přijímači vidět a dělat cokoli, včetně zobrazení nastavení, protokolů a hesel. Mohou se objevit problémy."
-
 #: lib/python/Screens/HdsSoftwareUpdate.py:886
 #, python-format
 msgid "Pe stickul „%s” partiția %d are sistemul de fișiere %s, dar tabela de partiții o arată ca tip %s. Recovery-ul producătorului nu vede atunci arhivele de pe stick (0 MB). Repară tipul partiției: schimb numai acest octet în %s, fișierele de pe stick rămân neatinse."
@@ -12209,10 +12185,6 @@ msgstr "Přijímač se jednou restartuje do zavaděče výrobce (menu, kde se in
 #: lib/python/Components/HdsPornireMultipla.py:201
 msgid "Receptorul repornește în încărcător. Pornirea următoare revine în imaginea de acum."
 msgstr "Přijímač se restartuje do zavaděče. Další spuštění se vrátí do současného obrazu."
-
-#: lib/python/Screens/HdsBetaTester.py:1256
-msgid "Recuperare și actualizări"
-msgstr "Obnova a aktualizace"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:3200
 msgid "Refuză"
@@ -41369,6 +41341,10 @@ msgid "Recomandat: 1080p 50 Hz (Full HD) sau 2160p 50 Hz (4K UHD); canalele din 
 msgstr "Doporučeno: 1080p 50 Hz (Full HD) nebo 2160p 50 Hz (4K UHD); kanály v Evropě mají 50 Hz."
 
 #: lib/python/Screens/VideoSetup.py
+msgid "Recomandat: 1080p 50 Hz (Full HD); canalele din Europa au 50 Hz."
+msgstr "Doporučeno: 1080p 50 Hz (Full HD); kanály v Evropě mají 50 Hz."
+
+#: lib/python/Screens/VideoSetup.py
 #, python-format
 msgid "Fără răspuns, setarea de dinainte revine în %d s."
 msgstr "Bez odpovědi se za %d s vrátí předchozí nastavení."
@@ -57776,6 +57752,14 @@ msgstr "Toto rozšíření potřebují jiná rozšíření. Nejdřív je smaž."
 
 msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
 msgstr "Rozšíření už ve feedu není. Stáhni seznam znovu (modré tlačítko)."
+
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "Na serveru chybí seznam balíčků. Ostatní seznamy byly staženy, takže připojení k internetu funguje."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "Server nemá požadovaný seznam balíčků. Připojení k internetu funguje; zkus to znovu později."
 
 msgid "Extensia nu este făcută pentru acest receptor."
 msgstr "Rozšíření není určené pro tento přijímač."
@@ -76849,3 +76833,180 @@ msgstr "Vlevo/Vpravo: vybereš, jak dlouho to poběží."
 
 msgid "Tu alegi cât timp e pornită, de la 2 ore până la permanent, și poți schimba durata cât merge. O oprești oricând, de pe receptor sau din pagina web. Până atunci, echipa poate intra oricând."
 msgstr "Ty si vybereš, jak dlouho to poběží: 2 hodiny, déle nebo trvale, a délku můžeš měnit, dokud to běží. Zastavíš to kdykoli, na přijímači nebo na webové stránce. Do té doby může tým kdykoli vstoupit."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "Podsvícené logo"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "Logo při zapnutém přijímači"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "Jak svítí přední logo, když je přijímač zapnutý. Výchozí: barva, kterou přijímač nastaví sám. Můžeš si vybrat kteroukoli ze dvou barev, obě najednou (třetí odstín), vypnuto, blikání nebo plynulý přechod. Výběr se hned projeví na pár sekund."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "Logo v pohotovostním režimu"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "Jak svítí logo, když je přijímač v pohotovostním režimu. Výchozí: barva pohotovostního režimu nastavená přijímačem. Pomalé dýchání: logo se plynule rozsvěcuje a zhasíná jako znamení, že přijímač spí. Vypnuto: v noci žádné světlo."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "Logo při úplném vypnutí"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "Zapnuto (výchozí) nebo vypnuto poté, co přijímač úplně vypneš (úplné vypnutí). V tu chvíli logo ovládá přijímač sám, bez programu."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "Logo ukazuje, co přijímač dělá"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "Ano: logo změní své světlo, když přijímač na něčem pracuje (aktualizace, hledání kanálů, otáčení antény, zachycení signálu, nahrávání, vzdálená pomoc), podle voleb níže a pak se vrátí. Když se děje víc věcí najednou, zobrazí se ta nejdůležitější podle pořadí níže. Ne (výchozí): logo zůstane v barvě zapnutého stavu nebo pohotovostního režimu."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "Během instalace aktualizace"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "Světlo loga během instalace aktualizace image nebo pluginu. V tu chvíli se přijímač nesmí odpojit ze zásuvky."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "Během hledání kanálů"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "Světlo loga během hledání kanálů (i slepého hledání na satelitu)."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "Během otáčení antény"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "Světlo loga, zatímco motor antény (DiSEqC 1.2 nebo USALS) natáčí anténu na jiný satelit. Všechny barvy postupně: logo projde třemi odstíny, dokud se anténa nezastaví."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "Při zachycení signálu"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "Světlo loga na 3 sekundy poté, co tuner zachytí signál kanálu (při přepnutí kanálu nebo po zastavení antény)."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "Během nahrávání"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "Světlo loga během nahrávání, i v pohotovostním režimu."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "Během zapnuté vzdálené pomoci"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "Světlo loga během zapnuté vzdálené pomoci, abys viděl, že je tým připojen."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "Vyber si barvy předního loga a to, jak svítí, když přijímač hledá kanály, otáčí anténu, nahrává nebo se aktualizuje."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "Výchozí"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "Nemění se"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "Barva při zapnutí"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "Barva v pohotovostním režimu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "Obě barvy najednou"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "Vypnuto"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "Bliká v barvě při zapnutí"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "Bliká v barvě pohotovostního režimu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "Rychle bliká, obě barvy"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "Střídání dvou barev"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "Všechny barvy postupně"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "Pomalé dýchání, barva pohotovostního režimu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "Plynulý přechod všemi barvami"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "Zapnuto"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "Stiskni EXIT a používej přijímač jako obvykle; vzdálená pomoc zůstane zapnutá. Zpět se sem dostaneš přes %s."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: na TV"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "Tým se na to podívá, jakmile bude moct."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "Můžeš zavřít stránku a používat přijímač jako obvykle; vzdálená pomoc zůstane zapnutá. Na přijímači ji najdeš v __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "Tvůj přijímač zvládne maximálně Full HD (1080p), proto se spouští stejný kanál bez 4K: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "Tento kanál je ve 4K, ale tvůj přijímač zvládne maximálně Full HD (1080p)."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "Tvůj přijímač zvládne maximálně Full HD (1080p). 4K kanál se zde spustí jako stejný kanál bez 4K od poskytovatele, pokud ho nabízí; jinak ho nelze přehrát."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "Kanály DVB-T2 přes satelit z %s (%s) se samy přidají do seznamu kanálů, do %s."

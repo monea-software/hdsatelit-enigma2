@@ -54567,6 +54567,14 @@ msgstr "Άλλες επεκτάσεις χρειάζονται αυτή την �
 msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
 msgstr "Η επέκταση δεν υπάρχει πια στο feed. Κατέβασε ξανά τη λίστα (μπλε πλήκτρο)."
 
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "Λείπει μια λίστα πακέτων από τον διακομιστή. Οι υπόλοιπες κατέβηκαν, άρα η σύνδεση στο διαδίκτυο λειτουργεί."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "Ο διακομιστής δεν έχει τη λίστα πακέτων που ζητήθηκε. Η σύνδεση στο διαδίκτυο λειτουργεί· δοκίμασε ξανά αργότερα."
+
 msgid "Extensia nu este făcută pentru acest receptor."
 msgstr "Η επέκταση δεν προορίζεται για αυτόν τον δέκτη."
 
@@ -73738,3 +73746,180 @@ msgstr "Εσύ επιλέγεις πόσο θα είναι ενεργή: 2 ώρ�
 #: lib/python/Components/HdsAfisaj.py:1364
 msgid "Scriere VFD incompletă."
 msgstr "Ελλιπής εγγραφή στο VFD."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "Φωτισμένο λογότυπο"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "Το λογότυπο, με τον δέκτη ενεργό"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "Πώς φωτίζει το μπροστινό λογότυπο όσο ο δέκτης είναι ενεργός. Εργοστασιακή ρύθμιση: το χρώμα που βάζει ο δέκτης μόνος του. Μπορείς να επιλέξεις οποιοδήποτε από τα δύο χρώματα, και τα δύο μαζί (τρίτη απόχρωση), σβηστό, μια αναλαμπή ή μια ομαλή μετάβαση. Η επιλογή φαίνεται αμέσως για λίγα δευτερόλεπτα."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "Το λογότυπο, στην αναμονή"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "Πώς φωτίζει το λογότυπο όσο ο δέκτης είναι στην αναμονή. Εργοστασιακή ρύθμιση: το χρώμα αναμονής που ορίζει ο δέκτης. Αργή αναπνοή: το λογότυπο ανάβει και σβήνει απαλά, ως σημάδι ότι ο δέκτης κοιμάται. Σβηστό: καθόλου φως τη νύχτα."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "Το λογότυπο, στον πλήρη τερματισμό"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "Αναμμένο (εργοστασιακό) ή σβηστό αφού κλείσεις τον δέκτη τελείως (πλήρης τερματισμός). Τότε το λογότυπο το ελέγχει ο δέκτης μόνος του, χωρίς το πρόγραμμα."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "Το λογότυπο δείχνει τι κάνει ο δέκτης"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "Ναι: το λογότυπο αλλάζει φωτισμό όσο ο δέκτης κάνει κάτι (ενημέρωση, αναζήτηση καναλιών, το πιάτο που γυρίζει, λήψη σήματος, εγγραφή, απομακρυσμένη βοήθεια), σύμφωνα με τις παρακάτω επιλογές, και μετά επανέρχεται. Όταν γίνονται πολλά μαζί, φαίνεται το πιο σημαντικό, με την παρακάτω σειρά. Όχι (εργοστασιακό): το λογότυπο παραμένει στο χρώμα λειτουργίας ή αναμονής."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "Κατά την εγκατάσταση ενημέρωσης"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "Ο φωτισμός του λογότύπου όσο εγκαθίσταται μια ενημέρωση λογισμικού ή ένα πρόσθετο. Τότε ο δέκτης δεν πρέπει να βγει από την πρίζα."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "Κατά την αναζήτηση καναλιών"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "Ο φωτισμός του λογότύπου όσο γίνεται αναζήτηση καναλιών (και η τυφλή αναζήτηση στον δορυφόρο)."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "Όσο γυρίζει το πιάτο"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "Ο φωτισμός του λογότύπου όσο το μοτέρ του πιάτου (DiSEqC 1.2 ή USALS) μετακινεί το πιάτο προς άλλον δορυφόρο. Όλα τα χρώματα, με τη σειρά: το λογότυπο περνάει από τις τρεις αποχρώσεις μέχρι να σταματήσει το πιάτο."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "Όταν λαμβάνει σήμα"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "Ο φωτισμός του λογότύπου για 3 δευτερόλεπτα αφού ο δέκτης λάβει το σήμα του καναλιού (κατά την αλλαγή καναλιού ή αφού σταματήσει το πιάτο)."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "Κατά την εγγραφή"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "Ο φωτισμός του λογότύπου όσο γίνεται μια εγγραφή, ακόμα και στην αναμονή."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "Όσο είναι ενεργή η απομακρυσμένη βοήθεια"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "Ο φωτισμός του λογότύπου όσο είναι ενεργή η απομακρυσμένη βοήθεια, για να βλέπεις ότι η ομάδα είναι συνδεδεμένη."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "Επιλέγεις τα χρώματα του μπροστινού λογότυπου και πώς φωτίζει όταν ο δέκτης κάνει αναζήτηση καναλιών, γυρίζει το πιάτο, κάνει εγγραφή ή ενημερώνεται."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "Εργοστασιακή ρύθμιση"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "Δεν αλλάζει"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "Το χρώμα λειτουργίας"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "Το χρώμα αναμονής"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "Και τα δύο χρώματα μαζί"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "Σβηστό"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "Αναβοσβήνει στο χρώμα λειτουργίας"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "Αναβοσβήνει στο χρώμα αναμονής"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "Αναβοσβήνει γρήγορα, και τα δύο χρώματα"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "Εναλλαγή των δύο χρωμάτων"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "Όλα τα χρώματα, με τη σειρά"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "Αργή αναπνοή, το χρώμα αναμονής"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "Ομαλή μετάβαση σε όλα τα χρώματα"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "Αναμμένο"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "Πάτα EXIT και χρησιμοποίησε τον δέκτη όπως πάντα· η τηλεβοήθεια παραμένει ενεργή. Επιστρέφεις εδώ από το %s."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: στην TV"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "Η ομάδα θα το κοιτάξει μόλις μπορέσει."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "Μπορείς να κλείσεις τη σελίδα και να χρησιμοποιείς τον δέκτη όπως πάντα· η τηλεβοήθεια παραμένει ενεργή. Στον δέκτη τη βρίσκεις στο __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "Ο δέκτης σου αναπαράγει το πολύ Full HD (1080p), οπότε ξεκινάει το ίδιο κανάλι χωρίς 4K: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "Αυτό το κανάλι είναι 4K, ενώ ο δέκτης σου αναπαράγει το πολύ Full HD (1080p)."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "Ο δέκτης σου αναπαράγει το πολύ Full HD (1080p). Ένα κανάλι 4K ξεκινάει εδώ με το ίδιο κανάλι χωρίς 4K του παρόχου, όταν το διαθέτει. Αλλιώς δεν μπορεί να αναπαραχθεί."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "Τα κανάλια DVB-T2 μέσω δορυφόρου από %s (%s) προστίθενται αυτόματα στη λίστα καναλιών, στο %s."

@@ -29,6 +29,16 @@ _VERSIUNE_NUCLEU = re.compile(r"^\d+\.\d+\.\d+ \d{4}-\d{2}-\d{2}$")
 # regulile modelului pentru care e construita imaginea (aceleasi ca in Components/HdsPazaModel.py)
 FISIER_REGULI_MODEL = "/etc/hdsatelit-model"
 
+
+# cipurile HiSilicon din /proc/stb/info/chipset ("3798mv200", "hi3716mv430" pe ZGEMMA H8.2H Plus): numele cu firma
+_HISILICON = re.compile(r"^(?:hi)?(3[0-9]{3}[a-z]{1,2}v[0-9]{3}[a-z]?)$", re.I)
+
+
+def numeHiSilicon(cip):
+	m = _HISILICON.match((cip or "").strip())
+	return ("HiSilicon Hi%s" % m.group(1).upper()) if m else None
+
+
 class About:
 	def __init__(self):
 		pass
@@ -222,7 +232,7 @@ class About:
 		if cs:
 			if cs.lower() in ("3798mv200", "hi3798mv200"):
 				return "HiSilicon Hi3798MV200 (15000 DMIPS)"
-			return cs
+			return numeHiSilicon(cs) or cs
 		if not os.path.exists("/proc/stb") or os.uname().machine in ("x86_64", "i686", "amd64"):
 			return "Virtual / Software (Emulator PC %s)" % os.uname().machine
 		return "Nespecificat"
@@ -249,10 +259,7 @@ class About:
 		# Identificare chipset STB (HiSilicon etc.)
 		chipset = self._readFile("/proc/stb/info/chipset")
 		if chipset:
-			if chipset.lower() == "3798mv200":
-				chipset_name = "HiSilicon Hi3798MV200"
-			else:
-				chipset_name = chipset
+			chipset_name = numeHiSilicon(chipset) or chipset
 			if model and "hisilicon" not in model.lower():
 				model = "%s (%s)" % (model, chipset_name)
 			elif not model:

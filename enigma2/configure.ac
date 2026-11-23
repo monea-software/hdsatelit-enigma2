@@ -1,5 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-AC_INIT([enigma2],[0.7.8],[https://hdsatelit.com])
+AC_INIT([enigma2],[0.7.9],[https://hdsatelit.com])
 AM_INIT_AUTOMAKE([dist-bzip2 no-define tar-pax -Wno-portability])
 AC_CONFIG_HEADERS([enigma2_config.h])
 
@@ -149,12 +149,16 @@ case "$BOXTYPE" in
 esac
 
 dnl Dreambox with the Dream framebuffer driver and ION in the kernel (CONFIG_ION=y in the five defconfigs of meta-dream):
-dnl lib/gdi/fb.cpp may grow the screen memory before the one mapping and take the 2D engine memory from /dev/ion,
-dnl only when the option of Components/HdsDreamboxIon.py is on (off from the factory). Every other machine: nothing.
+dnl - HAVE_DREAMBOX_ION: lib/gdi/fb.cpp grows the screen memory before the one mapping (every start) and takes the 2D
+dnl   engine memory from /dev/ion only when the option of Components/HdsDreamboxIon.py is on (off from the factory);
+dnl - HAVE_DREAMBOX_AV: lib/dvb/decoder.cpp uses the numbers of the Dream audio/video driver: H.265 is 22 for
+dnl   VIDEO_SET_STREAMTYPE (7 on every other receiver) and E-AC-3 is 7 for AUDIO_SET_BYPASS_MODE (0x22 elsewhere).
+dnl Every other machine: nothing.
 AC_MSG_CHECKING([whether boxtype $BOXTYPE is a Dreambox with ION memory])
 case "$BOXTYPE" in
 	dm7080|dm820|dm900|dm920|dm520)
 		AC_DEFINE([HAVE_DREAMBOX_ION],[1],[Define to 1 on Dreambox DM7080, DM820, DM900, DM920 and DM520: optional ION memory for the 2D engine])
+		AC_DEFINE([HAVE_DREAMBOX_AV],[1],[Define to 1 on Dreambox DM7080, DM820, DM900, DM920 and DM520: H.265 is stream type 22 and E-AC-3 bypass 7 for the Dream driver])
 		AC_MSG_RESULT([yes])
 		;;
 	*)

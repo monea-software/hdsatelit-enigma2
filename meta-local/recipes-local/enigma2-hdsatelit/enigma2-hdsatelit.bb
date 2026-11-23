@@ -46,7 +46,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.7.8+git${SRCPV}"
+PV = "0.7.9+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe
@@ -148,6 +148,28 @@ do_configure:append:gbtrio4k() {
 		bbfatal "enigma2_config.h fara HAVE_HISILICON pe ${MACHINE}: --with-boxtype=${MACHINE} nu a ajuns la configure"
 	grep -q '^#define HAVE_HISILICON_LIBREADER 1' ${B}/enigma2_config.h || \
 		bbfatal "enigma2_config.h fara HAVE_HISILICON_LIBREADER pe ${MACHINE}: configure.ac nu stie masina in familia libreader"
+}
+# ZGEMMA H8.2H Plus (masina h8, Hi3716MV430) si H8.2H SE (masina h8se, Hi3798MV200): drivere Airdigital din meta-airdigital,
+# fara libreader si fara showiframe Dinobot, deci fara maparea de 34 611 200 o (/proc/vmallocinfo nu o are pe niciunul, citit
+# pe receptoare 23.11.2026); cu paza, orice film, flux IPTV si poza radio ar fi refuzate. configure.ac pune h8 si h8se in
+# HAVE_HISILICON, nu si in familia libreader. Randurile stau aici, nu intr-un .bbappend din meta-local: la constructia 6.0
+# oe-build/strat-60 are recipes-local/enigma2-hdsatelit/enigma2-hdsatelit.bbappend si il inlocuieste pe cel cu acelasi nume
+# (asa a iesit 0.7.8 pe H8 cu paza). PR r1: pachetul refacut din aceeasi sursa 0.7.8 trece peste cel publicat (-r0).
+CXXFLAGS:append:h8 = " -DHDS_FARA_MEMORIE_ES=1"
+CXXFLAGS:append:h8se = " -DHDS_FARA_MEMORIE_ES=1"
+PR:h8 = "r1"
+PR:h8se = "r1"
+do_configure:append:h8() {
+	grep -q 'HDS_FARA_MEMORIE_ES' ${S}/lib/dvb/hdspazavideo.h || \
+		bbfatal "lib/dvb/hdspazavideo.h nu stie HDS_FARA_MEMORIE_ES: pe ${MACHINE} filmele ar fi refuzate"
+	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || bbfatal "H8: lipseste decodorul HiSilicon"
+	! grep -q '^#define HAVE_HISILICON_LIBREADER 1' ${B}/enigma2_config.h || bbfatal "H8: libreader nu apartine acestui BSP"
+}
+do_configure:append:h8se() {
+	grep -q 'HDS_FARA_MEMORIE_ES' ${S}/lib/dvb/hdspazavideo.h || \
+		bbfatal "lib/dvb/hdspazavideo.h nu stie HDS_FARA_MEMORIE_ES: pe ${MACHINE} filmele ar fi refuzate"
+	grep -q '^#define HAVE_HISILICON 1' ${B}/enigma2_config.h || bbfatal "H8 SE: lipseste decodorul HiSilicon"
+	! grep -q '^#define HAVE_HISILICON_LIBREADER 1' ${B}/enigma2_config.h || bbfatal "H8 SE: libreader nu apartine acestui BSP"
 }
 
 # Pachetul tine de masina, nu numai de procesor: configure primeste --with-boxtype=${MACHINE} (HAVE_HISILICON pe

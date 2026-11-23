@@ -28,7 +28,8 @@ Imaginea il pune singura in /etc/opkg/hds-pluginuri-externe.conf, la pornirea in
 actualizare prin pachete, fara flash (stratul imaginii nu se schimba printr-o actualizare, iar dupa instalare interfata
 reporneste oricum), si in orice imagine urmatoare. Arhitectura nu e scrisa in cod: e cea a pachetelor de baza instalate
 (python3-core, libc6, busybox, opkg; in OE = TUNE_PKGARCH, aceeasi pe Amiko Viper 4K V10, V20, V30 si V40:
-cortexa15hf-neon-vfpv4), verificata in lista `arch` a lui opkg. Un receptor cu alt procesor primeste dosarul lui.
+cortexa15hf-neon-vfpv4), verificata in lista `arch` a lui opkg. Un receptor cu alt procesor primeste dosarul lui, numai daca
+dosarul exista pe server (ARHITECTURI_FEED, 0.7.9); altfel sursa nu se scrie.
 
 Fara surse dublate (opkg da eroare la doua surse cu acelasi nume): nu se scrie cand acelasi nume sau aceeasi adresa e deja
 in alt fisier din /etc/opkg (adaugat de om din Extensii > Surse sau cu o comanda); atunci un fisier al nostru ramas se
@@ -65,6 +66,11 @@ ANTET = '# HD Satelit: feedul pluginurilor externe (Monea Software, moneasoftwar
 # arhitectura procesorului; primul gasit hotaraste
 PACHETE_PROCESOR = ('python3-core', 'libc6', 'busybox', 'opkg')
 FARA_PROCESOR = ('all', 'any', 'noarch')
+# 0.7.9 (EXA7): dosarele de procesor care exista in feedul de pe server. Pe un procesor din afara listei sursa nu se scrie (iar un
+# fisier al nostru ramas se sterge): o sursa spre un dosar care nu exista facea opkg update sa iasa cu eroare la fiecare
+# descarcare (ZGEMMA H8.2H Plus, cortexa7hf-vfp, in 0.7.8: 404), iar omul citea „Verifică legătura la internet”. Un dosar
+# nou pe server intra aici, si ajunge pe receptoare cu actualizarea imaginii.
+ARHITECTURI_FEED = ('cortexa15hf-neon-vfpv4', 'mips32el', 'cortexa7hf-vfp')
 _ARH = re.compile(r'^[a-z0-9][a-z0-9_\-]{0,63}\Z')
 # calea unui dosar al feedului: DOSAR/<arh> (public) sau DOSAR-proba/<arh>; la fel pe GAZDA_MONEA, cu DOSAR_MONEA
 _CALE = re.compile(r'^' + re.escape(DOSAR) + r'(-proba)?/([a-z0-9][a-z0-9_\-]{0,63})/?\Z')
@@ -242,9 +248,10 @@ def _scrie(cale, text):
 
 def pune_feedul(radacina='/'):
 	"""Pune (sau tine la zi) FISIER. Intoarce (fel, detaliu): fel 'scris', 'la-zi', 'dublat' (aceeasi sursa e in alt
-	fisier; un FISIER al nostru ramas a fost sters), 'strain' (FISIER exista fara ANTET: neatins), 'fara-arhitectura'
-	sau 'eroare'. Nu porneste nimic (lista se descarca la urmatorul opkg update: Extensii la deschidere, verificarea
-	zilnica a actualizarilor)."""
+	fisier; un FISIER al nostru ramas a fost sters), 'strain' (FISIER exista fara ANTET: neatins), 'fara-arhitectura',
+	'fara-dosar' (procesorul nu are dosar in feed, ARHITECTURI_FEED; un FISIER al nostru ramas si lista lui au fost
+	sterse) sau 'eroare'. Nu porneste nimic (lista se descarca la urmatorul opkg update: Extensii la deschidere,
+	verificarea zilnica a actualizarilor)."""
 	cale = P._cale(radacina, FISIER)
 	try:
 		with open(cale, 'r', encoding='utf-8', errors='replace') as fh:
@@ -272,6 +279,14 @@ def pune_feedul(radacina='/'):
 	arh = arhitectura_procesorului(radacina, conf)
 	if not arh:
 		return 'fara-arhitectura', ''
+	if arh not in ARHITECTURI_FEED:
+		if acum is not None:
+			try:
+				os.remove(cale)
+			except OSError as e:
+				return 'eroare', str(e)
+			_sterge_lista(radacina, conf)
+		return 'fara-dosar', arh
 	text = text_fisier(arh)
 	if acum == text:
 		return 'la-zi', arh

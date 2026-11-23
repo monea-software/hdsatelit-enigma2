@@ -11150,10 +11150,6 @@ msgstr "<code>GET /api/traducere-subtitrari</code>: metin altyazılarının otom
 msgid "ABC"
 msgstr "ABC"
 
-#: lib/python/Components/HdsBetaTester.py:177
-msgid "Această imagine este în test (alfa/beta). Folosind-o ești beta tester: echipa HD Satelit poate vedea și face orice pe receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele și parolele. Pot apărea probleme. Fără acord imaginea nu poate fi folosită."
-msgstr "Bu imaj test aşamasında (alfa/beta). Kullanarak beta testçisi olursun: HD Satelit ekibi uzaktan yardım ve testler sırasında alıcında her şeyi görebilir ve yapabilir, ayarları, günlükleri ve parolaları görmek de dahil. Sorunlar çıkabilir. Onay olmadan imaj kullanılamaz."
-
 #: lib/python/Plugins/Extensions/HdsWebControl/setari_deschise_web.py:176
 msgid "Această tastă se folosește pe televizor."
 msgstr "Bu tuş televizyonda kullanılır."
@@ -11400,14 +11396,6 @@ msgstr "Ham kod: 0x%X"
 msgid "Comenzi virtuale"
 msgstr "Sanal komutlar"
 
-#: lib/python/Screens/HdsBetaTester.py:912 lib/python/Screens/HdsBetaTester.py:985
-msgid "Condițiile beta tester"
-msgstr "Beta testçisi koşulları"
-
-#: lib/python/Components/HdsBetaTester.py:176
-msgid "Condițiile imaginii în test"
-msgstr "Test imajının koşulları"
-
 #: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3717
 msgid "Configurare FBC"
 msgstr "FBC yapılandırması"
@@ -11607,10 +11595,6 @@ msgstr "Ukrayna için otomatik saat dilimi."
 msgid "Fusurile Europe/Kyiv și Europe/Kiev lipsesc din lista receptorului; fusul actual rămâne neschimbat."
 msgstr "Europe/Kyiv ve Europe/Kiev saat dilimleri alıcının listesinde yok; mevcut saat dilimi değişmeden kalır."
 
-#: lib/python/Components/HdsBetaTester.py:181
-msgid "Fără acord imaginea nu poate fi folosită. Poți trece pe o imagine finală când apare sau poți instala altă imagine. Rețeaua și actualizările rămân disponibile. Tasta POWER deschide opțiunile de recuperare și de pornire în altă imagine, dacă receptorul le permite."
-msgstr "Onay olmadan imaj kullanılamaz. Çıktığında son sürüm bir imaja geçebilir veya başka bir imaj kurabilirsin. Ağ ve güncellemeler kullanılabilir kalır. POWER tuşu, alıcı izin veriyorsa kurtarma ve başka bir imajla başlatma seçeneklerini açar."
-
 #: lib/python/Screens/HdsSoftwareUpdate.py:925
 #, python-format
 msgid "Gata: partiția %d a stickului are acum tipul %s. Recovery-ul producătorului poate citi arhivele de pe el."
@@ -11649,10 +11633,6 @@ msgid ""
 msgstr ""
 "Kimliğin: %s.\n"
 "%s tarihli onay, gizlilik bildirimi sürüm %d."
-
-#: lib/python/Components/HdsBetaTester.py:180
-msgid "Imagine în test: acordul beta tester e obligatoriu"
-msgstr "Test imajı: beta testçisi onayı zorunludur"
 
 #: lib/python/Components/HdsPluginExtern.py:1735
 #, python-format
@@ -12075,10 +12055,6 @@ msgstr "Hayır'da, /etc/enigma2 içinde veya bir USB bellekte bulunan yeni bir k
 msgid "Pe butonul albastru"
 msgstr "Mavi tuşta"
 
-#: lib/python/Components/HdsBetaTester.py:184
-msgid "Pe o imagine finală, Beta tester este opțional. Echipa HD Satelit poate vedea și face orice pe receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele și parolele. Pot apărea probleme."
-msgstr "Son sürüm bir imajda Beta testçisi isteğe bağlıdır. HD Satelit ekibi uzaktan yardım ve testler sırasında alıcında her şeyi görebilir ve yapabilir, ayarları, günlükleri ve parolaları görmek de dahil. Sorunlar çıkabilir."
-
 #: lib/python/Screens/HdsSoftwareUpdate.py:886
 #, python-format
 msgid "Pe stickul „%s” partiția %d are sistemul de fișiere %s, dar tabela de partiții o arată ca tip %s. Recovery-ul producătorului nu vede atunci arhivele de pe stick (0 MB). Repară tipul partiției: schimb numai acest octet în %s, fișierele de pe stick rămân neatinse."
@@ -12243,10 +12219,6 @@ msgstr "Alıcı, üreticinin önyükleyicisinde (USB bellekten imaj kurulan men�
 #: lib/python/Components/HdsPornireMultipla.py:201
 msgid "Receptorul repornește în încărcător. Pornirea următoare revine în imaginea de acum."
 msgstr "Alıcı önyükleyicide yeniden başlıyor. Sonraki açılış şimdiki imaja döner."
-
-#: lib/python/Screens/HdsBetaTester.py:1256
-msgid "Recuperare și actualizări"
-msgstr "Kurtarma ve güncellemeler"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:3200
 msgid "Refuză"
@@ -51272,6 +51244,10 @@ msgid "Recomandat: 1080p 50 Hz (Full HD) sau 2160p 50 Hz (4K UHD); canalele din 
 msgstr "Önerilen: 1080p 50 Hz (Full HD) veya 2160p 50 Hz (4K UHD); Avrupa’daki kanallar 50 Hz’dir."
 
 #: lib/python/Screens/VideoSetup.py
+msgid "Recomandat: 1080p 50 Hz (Full HD); canalele din Europa au 50 Hz."
+msgstr "Önerilen: 1080p 50 Hz (Full HD); Avrupa’daki kanallar 50 Hz’dir."
+
+#: lib/python/Screens/VideoSetup.py
 #, python-format
 msgid "Fără răspuns, setarea de dinainte revine în %d s."
 msgstr "Yanıt verilmezse önceki ayar %d sn içinde geri gelir."
@@ -61979,6 +61955,14 @@ msgstr "Başka eklentiler bu eklentiye ihtiyaç duyuyor. Önce onları sil."
 
 msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
 msgstr "Eklenti artık feed'de bulunmuyor. Listeyi yeniden indir (mavi tuş)."
+
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "Sunucuda bir paket listesi eksik. Diğerleri indirildi, yani İnternet bağlantısı çalışıyor."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "Sunucuda istenen paket listesi yok. İnternet bağlantısı çalışıyor; daha sonra tekrar dene."
 
 msgid "Extensia nu este făcută pentru acest receptor."
 msgstr "Bu eklenti bu alıcı için hazırlanmamış."
@@ -81007,3 +80991,180 @@ msgstr "Sol/Sağ: ne kadar açık kalacağını seçersin."
 
 msgid "Tu alegi cât timp e pornită, de la 2 ore până la permanent, și poți schimba durata cât merge. O oprești oricând, de pe receptor sau din pagina web. Până atunci, echipa poate intra oricând."
 msgstr "Ne kadar açık kalacağını sen seçersin: 2 saat, daha uzun ya da kalıcı olarak; çalışırken süreyi değiştirebilirsin. İstediğin zaman alıcıdan veya web sayfasından kapatırsın. O zamana kadar ekip istediği zaman girebilir."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "Işıklı logo"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "Alıcı açıkken logo"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "Alıcı açıkken ön taraftaki logonun nasıl yanacağı. Fabrika ayarı gibi: alıcının kendi belirlediği renk. İki renkten birini, her ikisini birden (üçüncü bir ton), kapalı, yanıp sönme veya yumuşak bir geçiş seçebilirsin. Seçimin birkaç saniye boyunca anında görünür."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "Hazırda bekletme modunda logo"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "Alıcı hazırda bekletme modundayken logonun nasıl yanacağı. Fabrika ayarı gibi: alıcının belirlediği hazırda bekletme rengi. Yavaşça nefes alır: logo, alıcının uyuduğunun bir işareti olarak yavaşça yanar ve söner. Kapalı: gece hiç ışık yanmaz."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "Tam kapatmada logo"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "Alıcıyı tamamen kapattıktan sonra (tam kapatma) açık (fabrika ayarı) veya kapalı. Bu durumda logoyu yazılım olmadan alıcının kendisi kontrol eder."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "Logo alıcının ne yaptığını gösterir"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "Evet: alıcı bir işlem yaparken (güncelleme, kanal arama, antenin dönmesi, sinyal yakalama, kayıt, yardım) logo aşağıdaki seçimlere göre ışığını değiştirir ve sonra eski haline döner. Aynı anda birden fazla işlem varsa, aşağıdaki sıraya göre en önemlisi görünür. Hayır (fabrika ayarı): logo açık renginde veya hazırda bekletme renginde kalır."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "Bir güncelleme yüklenirken"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "Bir imaj güncellemesi veya eklenti yüklenirken logonun ışığı. Bu sırada alıcının fişi çekilmemelidir."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "Kanal arama yapılırken"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "Kanal arama (ve uyduda kör tarama) yapılırken logonun ışığı."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "Anten dönerken"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "Anten motoru (DiSEqC 1.2 veya USALS) anteni başka bir uyduya taşırken logonun ışığı. Tüm renkler sırayla: anten durana kadar logo üç tondan geçer."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "Sinyal yakalandığında"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "Tuner kanal sinyalini yakaladıktan sonra (kanal değiştirirken veya anten durduktan sonra) 3 saniye boyunca logonun ışığı."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "Kayıt yapılırken"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "Hazırda bekletme modunda bile bir kayıt devam ederken logonun ışığı."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "Yardım açıkken"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "Ekibin bağlı olduğunu görebilmen için uzaktan yardım açıkken logonun ışığı."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "Ön taraftaki logonun renklerini ve alıcı kanal ararken, anteni döndürürken, kayıt yaparken veya güncellenirken nasıl yanacağını seçersin."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "Fabrika ayarı gibi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "Değişmez"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "Açık rengi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "Hazırda bekletme rengi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "Her iki renk birden"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "Kapalı"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "Açık renginde yanıp söner"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "Hazırda bekletme renginde yanıp söner"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "Her iki renkte hızlıca yanıp söner"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "İki rengi değiştirir"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "Tüm renkler sırayla"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "Hazırda bekletme renginde yavaşça nefes alır"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "Tüm renkler arasında yumuşak geçiş yapar"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "Açık"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "EXIT tuşuna bas ve alıcıyı her zamanki gibi kullan; uzaktan yardım açık kalır. Buraya %s üzerinden dönersin."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: TV'ye"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "Ekip ilk fırsatta ilgilenecek."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "Sayfayı kapatıp alıcıyı her zamanki gibi kullanabilirsin; uzaktan yardım açık kalır. Alıcıda şurada bulursun: __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "Alıcın en fazla Full HD (1080p) oynatabiliyor, bu yüzden aynı kanalın 4K olmayan hali açılıyor: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "Bu kanal 4K ama alıcın en fazla Full HD (1080p) oynatabiliyor."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "Alıcın en fazla Full HD (1080p) oynatabiliyor. Bir 4K kanal, yayıncıda aynı kanalın 4K olmayan hali varsa o haliyle açılır; yoksa oynatılamaz."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "%s üzerindeki uydu üzerinden DVB-T2 kanalları (%s) kanal listesine otomatik olarak eklenir: %s."

@@ -1997,7 +1997,9 @@
 		<widget source="dala_cifre" render="Label" position="576,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_t_text" render="Label" position="742,942" size="72,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_text" render="Label" position="822,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
-		<eLabel position="988,952" size="16,16" backgroundColor="key_yellow" zPosition="2" />
+		<widget source="dala_galben" render="FixedLabel" position="988,952" size="16,16" backgroundColor="key_yellow" zPosition="2">
+			<convert type="ConditionalShowHide" />
+		</widget>
 		<widget source="dala_galben" render="Label" position="1012,936" size="200,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="HdsMenuListaJos" position="0,0" size="1000,1000">
@@ -2009,7 +2011,9 @@
 		<widget source="dala_cifre" render="Label" position="478,936" size="104,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_t_text" render="Label" position="590,942" size="72,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_text" render="Label" position="668,936" size="104,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
-		<eLabel position="780,952" size="16,16" backgroundColor="key_yellow" zPosition="2" />
+		<widget source="dala_galben" render="FixedLabel" position="780,952" size="16,16" backgroundColor="key_yellow" zPosition="2">
+			<convert type="ConditionalShowHide" />
+		</widget>
 		<widget source="dala_galben" render="Label" position="802,936" size="166,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="MenuDale" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
@@ -2919,16 +2923,25 @@
 		<widget source="qr" render="Canvas" position="1264,120" size="440,440" zPosition="3" />
 		<widget name="adresa" position="1224,576" size="520,150" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="top" zPosition="2" />
 	</screen>
-	<!-- ajutorul de la distanta (numai din meniul testerului; numele din skinName al clasei): starea, codul mare,
-	     informarea sau jurnalul; tastele sunt StaticText cu legenda lor aici (liniuta si textul se ascund cand tasta
-	     n-are text: Verde cat sesiunea merge) -->
+	<!-- asistenta de la distanta (Meniu > Setari, pentru oricine; numele din skinName al clasei): starea, cat e pornita
+	     cele doua randuri fixe (ce face echipa; EXIT si drumul inapoi), apoi jurnalul, care se deruleaza singur la ultimul
+	     rand; aceeasi forma pentru termeni si concluzii (fara randurile fixe: conditional). Tastele sunt StaticText cu
+	     legenda in cadru (liniuta si textul se ascund cand tasta n-are text) -->
 	<screen name="HdsAjutorDistanta" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
 		<panel name="HdsCadru1776" />
 		<!-- tastele (StaticText, liniuta ascunsa cand textul e gol) le arata cadrul, in Clasic si in Pro -->
 		<widget source="antet" render="Label" position="32,104" size="1712,56" font="HdsBold;32" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<widget source="cod" render="Label" position="32,168" size="1712,112" font="HdsBold;96" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<!-- randurile fixe (nu se deruleaza cu jurnalul); cand nu incap, deruleaza in sus si inapoi -->
+		<widget source="rand_stare" render="RunningText" options="movetype=swimming,direction=top,wrap=1,startdelay=3000,steptime=60" conditional="rand_stare" position="32,164" size="1712,40" font="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="2" />
+		<widget source="rand_iesire" render="RunningText" options="movetype=swimming,direction=top,wrap=1,startdelay=3000,steptime=60" conditional="rand_iesire" position="32,208" size="1712,72" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
 		<widget name="text" position="32,288" size="1712,624" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
 		<widget source="ajutor" render="Label" position="904,936" size="840,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1" />
+		<!-- EXIT langa Rosu, in restul slotului lui ("Opreste" are cel mult 142 px in toate limbile): nu e tasta de culoare,
+		     deci nu e in cadru; liniuta gri si textul se ascund cand e gol, textul lung deruleaza -->
+		<widget source="tasta_iesire" render="FixedLabel" conditional="tasta_iesire" position="226,944" size="6,32" backgroundColor="hdsLabel" zPosition="1">
+			<convert type="ConditionalShowHide" />
+		</widget>
+		<widget source="tasta_iesire" render="RunningText" options="movetype=swimming,startdelay=2000,steptime=40" conditional="tasta_iesire" position="242,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<!-- alegerea duratei ajutorului de la distanta si lamurirea nivelului (numele din skinName al clasei) -->
 	<screen name="HdsAjutorDistantaAlege" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
@@ -2942,7 +2955,7 @@
 	     ecranul ajutorului e deasupra. Numele din skinName al clasei. -->
 	<screen name="HdsAjutorDistantaSemn" position="290,14" size="1340,40" flags="wfNoBorder" backgroundColor="hdsPanelSolid" zPosition="20">
 		<eLabel position="0,0" size="6,40" backgroundColor="hdsBad" zPosition="1" />
-		<widget source="text" render="Label" position="22,0" size="1300,40" font="HdsCond;26" halign="center" valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" noWrap="1" zPosition="2" />
+		<widget source="text" render="RunningText" options="movetype=swimming,startdelay=4000,steptime=40" position="22,0" size="1300,40" font="HdsCond;26" halign="center" valign="center" foregroundColor="hdsText" backgroundColor="hdsPanelSolid" transparent="1" noWrap="1" zPosition="2" />
 	</screen>
 	<!-- Jurnalele de cadere (Screens/HdsCrashlogAutoSubmit.py): textul de sus si lista jurnalelor; setarile: cele cateva
 	     randuri si lamurirea lunga de sub ele -->

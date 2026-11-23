@@ -59162,6 +59162,14 @@ msgstr "Aðrar viðbætur þurfa þessa viðbót. Eyddu þeim fyrst."
 msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
 msgstr "Viðbótin er ekki lengur í feed. Sæktu listann aftur (blái takkinn)."
 
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "Einn pakkalisti vantar á þjóninum. Hinum var hlaðið niður, svo nettengingin virkar."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "Þjónninn er ekki með pakkalistann sem beðið var um. Nettengingin virkar; reyndu aftur síðar."
+
 msgid "Extensia nu este făcută pentru acest receptor."
 msgstr "Viðbótin er ekki gerð fyrir þennan móttakara."
 
@@ -78291,3 +78299,180 @@ msgstr "Þú velur hversu lengi kveikt er á því: 2 klukkustundir, lengur eða
 #: lib/python/Components/HdsAfisaj.py:1364
 msgid "Scriere VFD incompletă."
 msgstr "Ófullkomin skrif á VFD."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "Upplýst merki"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "Merkið, þegar kveikt er á tækinu"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "Hvernig merkið að framan lýsir á meðan kveikt er á tækinu. Eins og frá verksmiðju: liturinn sem tækið velur sjálft. Þú getur valið hvorn litinn sem er, báða í einu (þriðji liturinn), slökkt, blikk eða mjúka breytingu. Valið sést strax í nokkrar sekúndur."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "Merkið, í biðstöðu"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "Hvernig merkið lýsir á meðan tækið er í biðstöðu. Eins og frá verksmiðju: biðstöðuliturinn sem tækið velur. Andar hægt: merkið kviknar og slokknar mjúklega, sem merki um að tækið sé að sofa. Slökkt: ekkert ljós á nóttunni."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "Merkið, við fulla stöðvun"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "Kveikt (frá verksmiðju) eða slökkt eftir að þú slekkur alveg á tækinu (full stöðvun). Þá stýrir tækið merkinu sjálft, án hugbúnaðar."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "Merkið sýnir hvað tækið gerir"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "Já: merkið breytir um ljós á meðan tækið vinnur að einhverju (uppfærsla, rásaleit, loftnetið snýst, merki næst, upptaka, aðstoð), samkvæmt valinu hér að neðan, og fer svo til baka. Þegar margt er í gangi í einu sést það mikilvægasta, í röðinni hér að neðan. Nei (frá verksmiðju): merkið helst í litnum fyrir kveikt eða biðstöðu."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "Á meðan uppfærsla er sett upp"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "Ljósið á merkinu á meðan verið er að setja upp uppfærslu á mynd eða viðbót. Þá má ekki taka tækið úr sambandi."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "Á meðan rásaleit stendur yfir"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "Ljósið á merkinu á meðan rásaleit er í gangi (líka blindleit á gervihnött)."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "Á meðan loftnetið snýst"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "Ljósið á merkinu á meðan mótor loftnetsins (DiSEqC 1.2 eða USALS) færir loftnetið á annan gervihnött. Allir litir, hver á fætur öðrum: merkið fer í gegnum litina þrjá þar til loftnetið stoppar."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "Þegar merki næst"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "Ljósið á merkinu í 3 sekúndur eftir að móttakarinn nær merki rásarinnar (við rásaskipti eða eftir að loftnetið stoppar)."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "Á meðan upptaka stendur yfir"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "Ljósið á merkinu á meðan upptaka er í gangi, líka í biðstöðu."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "Á meðan aðstoð er í gangi"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "Ljósið á merkinu á meðan fjaraðstoð er í gangi, svo þú sjáir að teymið sé tengt."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "Þú velur liti á merkinu að framan og hvernig það lýsir þegar tækið leitar að rásum, snýr loftnetinu, tekur upp eða uppfærir sig."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "Eins og frá verksmiðju"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "Breytist ekki"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "Litur þegar kveikt er"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "Biðstöðulitur"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "Báðir litir í einu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "Slökkt"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "Blikkar í litnum fyrir kveikt"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "Blikkar í biðstöðulitnum"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "Blikkar hratt, báðir litir"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "Skiptir á milli litanna tveggja"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "Allir litir, hver á fætur öðrum"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "Andar hægt, biðstöðulitur"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "Rennur mjúklega í gegnum alla liti"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "Kveikt"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "Ýttu á EXIT og notaðu móttakarann eins og venjulega; fjaraðstoðin helst í gangi. Þú kemst hingað aftur í gegnum %s."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: á TV"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "Teymið skoðar málið um leið og það getur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "Þú getur lokað síðunni og notað móttakarann eins og venjulega; fjaraðstoðin helst í gangi. Á móttakaranum finnurðu hana í __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "Móttakarinn þinn spilar að hámarki Full HD (1080p), svo hann ræsir sömu rás án 4K: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "Þessi rás er í 4K, en móttakarinn þinn spilar að hámarki Full HD (1080p)."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "Móttakarinn þinn spilar að hámarki Full HD (1080p). Hér ræsist 4K-rás með sömu rás þjónustuveitunnar án 4K, þegar hún er til; annars er ekki hægt að spila hana."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "DVB-T2 rásir um gervihnött frá %s (%s) koma sjálfkrafa inn í rásalistann, í %s."

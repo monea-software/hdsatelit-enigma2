@@ -25,6 +25,17 @@ def _jurnal(text):
 	print("[HdsAnuntRetea] %s" % text)
 
 
+def _tastaDeLaEchipa():
+	"""Tasta de acum e trimisa de echipa prin asistenta (Components/HdsAsistentaControl.apasaTasta), nu apasata de om;
+	numai din ce e deja incarcat (fara asistenta pornita, modulul nici nu e incarcat)."""
+	import sys
+	C = sys.modules.get("Components.HdsAsistentaControl")
+	try:
+		return bool(C is not None and C.tastaDeLaEchipa())
+	except Exception:
+		return False
+
+
 def _cale_poza(cheie):
 	"""retea/<cheie>@2x.png din skinul ales, altfel din skinul HDSatelit; "" cand nu e niciuna."""
 	import os
@@ -55,12 +66,16 @@ class HdsAnuntRetea(Screen):
 		self.ceas.callback.append(self.ascunde)
 		self.ceasTasta = eTimer()
 		self.ceasTasta.callback.append(self.ascunde)
+		# ascunderea la tasta pornita mai tarziu (ascunde_la_tasta in ms)
+		self.ceasLegare = eTimer()
+		self.ceasLegare.callback.append(lambda: self._leaga(True))
 		self.legat = False
 		self._marimi = None
 
 	def anunta(self, text, cheie, durata_ms=None, ascunde_la_tasta=True):
 		"""Arata textul cu pictograma cheie. durata_ms: cat sta (implicit DURATA_MS); ascunde_la_tasta=False: nu
-		dispare la prima tasta (mesajele echipei din asistenta stau tot timpul lor; tastele merg oricum mai departe)."""
+		dispare la prima tasta (tastele merg oricum mai departe); un numar (ms): dispare la prima tasta apasata dupa
+		atatea milisecunde, ca o tasta apasata chiar atunci sa nu-l stearga necitit (mesajele echipei din asistenta)."""
 		self["text"].setText(text)
 		cale = _cale_poza(cheie)
 		try:
@@ -78,7 +93,12 @@ class HdsAnuntRetea(Screen):
 		self._potriveste()
 		self.show()
 		self.ceas.start(int(durata_ms or DURATA_MS), True)
-		self._leaga(bool(ascunde_la_tasta))
+		self.ceasLegare.stop()
+		if isinstance(ascunde_la_tasta, bool) or not ascunde_la_tasta:
+			self._leaga(bool(ascunde_la_tasta))
+		else:
+			self._leaga(False)
+			self.ceasLegare.start(int(ascunde_la_tasta), True)
 
 	def _potriveste(self):
 		"""Inaltimea ferestrei dupa text: marimile din skin, iar cand textul nu incape in eticheta, eticheta si fereastra
@@ -110,6 +130,7 @@ class HdsAnuntRetea(Screen):
 	def ascunde(self):
 		self.ceas.stop()
 		self.ceasTasta.stop()
+		self.ceasLegare.stop()
 		self._leaga(False)
 		self.hide()
 
@@ -122,7 +143,10 @@ class HdsAnuntRetea(Screen):
 			self.legat = False
 
 	def _tasta(self, tasta, steag):
-		"""Orice tasta ascunde mesajul; tasta merge mai departe (0). Ascunderea se face dupa ce eActionMap a terminat."""
+		"""Orice tasta a omului ascunde mesajul; tasta merge mai departe (0). Ascunderea se face dupa ce eActionMap a
+		terminat. Tastele trimise de echipa prin asistenta (op taste, op text) nu il ascund: mesajul e pentru om."""
+		if _tastaDeLaEchipa():
+			return 0
 		self.ceasTasta.start(0, True)
 		return 0
 

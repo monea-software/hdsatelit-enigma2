@@ -57140,6 +57140,14 @@ msgstr "Iné rozšírenia potrebujú toto rozšírenie. Najprv odstráň tie."
 msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
 msgstr "Rozšírenie už nie je vo feede. Stiahni zoznam znova (modré tlačidlo)."
 
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "Na serveri chýba zoznam balíkov. Ostatné zoznamy boli stiahnuté, takže pripojenie na internet funguje."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "Server nemá požadovaný zoznam balíkov. Pripojenie na internet funguje; skús to znova neskôr."
+
 msgid "Extensia nu este făcută pentru acest receptor."
 msgstr "Rozšírenie nie je určené pre tento prijímač."
 
@@ -76275,3 +76283,180 @@ msgstr "Ty si vyberieš, ako dlho bude zapnutá: 2 hodiny, dlhšie alebo trvalo,
 #: lib/python/Components/HdsAfisaj.py:1364
 msgid "Scriere VFD incompletă."
 msgstr "Neúplný zápis na VFD."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "Podsvietené logo"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "Logo pri zapnutom prijímači"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "Ako svieti predné logo, keď je prijímač zapnutý. Výrobné nastavenie: farba, ktorú prijímač nastaví sám. Môžeš si vybrať ktorúkoľvek z dvoch farieb, obe naraz (tretí odtieň), vypnuté, blikanie alebo plynulý prechod. Výber sa okamžite na pár sekúnd zobrazí."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "Logo v pohotovostnom režime"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "Ako svieti logo, keď je prijímač v pohotovostnom režime. Výrobné nastavenie: farba pohotovostného režimu nastavená prijímačom. Pomalé dýchanie: logo sa plynule rozsvecuje a zhasína ako znamenie, že prijímač spí. Vypnuté: v noci žiadne svetlo."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "Logo pri úplnom vypnutí"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "Zapnuté (výrobné nastavenie) alebo vypnuté po tom, čo prijímač úplne vypneš (úplné vypnutie). Vtedy si logo ovláda samotný prijímač, bez programu."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "Logo ukazuje, čo prijímač robí"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "Áno: logo mení svoje svetlo, kým prijímač na niečom pracuje (aktualizácia, vyhľadávanie kanálov, otáčanie antény, zachytený signál, nahrávanie, pomoc), podľa nižšie uvedených volieb, a potom sa vráti späť. Keď sa deje viac vecí naraz, zobrazí sa tá najdôležitejšia v nižšie uvedenom poradí. Nie (výrobné nastavenie): logo zostane vo farbe zapnutého stavu alebo pohotovostného režimu."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "Počas inštalácie aktualizácie"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "Svetlo loga počas inštalácie aktualizácie softvéru alebo pluginu. Vtedy prijímač nesmieš odpojiť zo zásuvky."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "Počas vyhľadávania kanálov"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "Svetlo loga počas vyhľadávania kanálov (aj slepého vyhľadávania na satelite)."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "Počas otáčania antény"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "Svetlo loga, kým pohon antény (DiSEqC 1.2 alebo USALS) presúva anténu na iný satelit. Všetky farby postupne: logo prechádza tromi odtieňmi, kým sa anténa nezastaví."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "Pri zachytení signálu"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "Svetlo loga na 3 sekundy po tom, čo tuner zachytí signál kanála (pri prepnutí kanála alebo po zastavení antény)."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "Počas nahrávania"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "Svetlo loga počas nahrávania, aj v pohotovostnom režime."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "Počas zapnutej pomoci"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "Svetlo loga počas zapnutej vzdialenej pomoci, aby si videl, že tím je pripojený."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "Tu si vyberáš farby predného loga a to, ako svieti, keď prijímač vyhľadáva kanály, otáča anténu, nahráva alebo sa aktualizuje."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "Výrobné nastavenie"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "Nemení sa"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "Farba zapnutého stavu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "Farba pohotovostného režimu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "Obe farby naraz"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "Vypnuté"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "Bliká vo farbe zapnutého stavu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "Bliká vo farbe pohotovostného režimu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "Rýchlo bliká, obe farby"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "Strieda dve farby"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "Všetky farby postupne"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "Pomalé dýchanie, farba pohotovostného režimu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "Plynule prechádza všetkými farbami"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "Zapnuté"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "Stlač EXIT a používaj prijímač ako zvyčajne; vzdialená pomoc zostane zapnutá. Späť sa sem dostaneš cez %s."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: na TV"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "Tím sa na to pozrie hneď, ako bude môcť."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "Stránku môžeš zavrieť a používať prijímač ako zvyčajne; vzdialená pomoc zostane zapnutá. V prijímači ju nájdeš tu: __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "Tvoj prijímač prehráva maximálne Full HD (1080p), preto spúšťam ten istý kanál bez 4K: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "Tento kanál je v 4K, ale tvoj prijímač prehráva maximálne Full HD (1080p)."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "Tvoj prijímač prehráva maximálne Full HD (1080p). 4K kanál sa tu spustí ako ten istý kanál bez 4K od poskytovateľa, ak ho má; inak sa nedá prehrať."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "Kanály DVB-T2 cez satelit z %s (%s) sa same dostanú do zoznamu kanálov, do %s."

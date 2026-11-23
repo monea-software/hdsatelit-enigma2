@@ -16,6 +16,9 @@
 # REZULTATUL: hds_iptv/4k.json {"ora": cand s-a terminat ultima cautare intreaga, "canale": {"<sursa>/<cheie>": [latime, inaltime,
 # codec, hdr, ora, ref, nume]}}. Din el: grupele „4K adevărat” si „HDR” din radacina IPTV (HdsIptvSurse.scrieBuchete, grupe()) si
 # eticheta din lista de canale (eticheta(): „4K HDR10”, „de fapt 1080p”).
+# PERECHILE (receptoarele Full HD, Components/HdsIptvFullHd.py): acelasi canal fara 4K in nume, din aceeasi grupa, se citeste si el, ca
+# releul sa-l aduca in locul canalului 4K numai cand chiar trimite sub 4K (pe .129 |AR| WARNER BROS 1 trimitea tot 3840x2160). Rezultatele
+# lor stau separat, in 4k.json la "perechi" (perechi()): nu intra in grupe, etichete si listele cautarii.
 #
 # Partea de sus nu importa nimic din enigma2: probele de pe PC o folosesc ca atare.
 
@@ -50,7 +53,7 @@ _lacat = threading.Lock()
 _fir = None
 _opreste = False
 _stare = {"lucreaza": False, "facute": 0, "total": 0, "gasite": 0, "hdr": 0, "mesaj": "", "inceput": 0}
-_cache = (None, {})
+_cache = (None, ({}, {}))
 _esecuri = [0, 0.0]      # cautari la rand in care nimic n-a raspuns, si cand s-a terminat ultima (time.monotonic)
 
 
@@ -145,25 +148,72 @@ def candidati(dosar=None):
 	return rez
 
 
-def rezultate():
-	"""{"<sursa>/<cheie>": [latime, inaltime, codec, hdr, ora, ref, nume]} (citit din nou cand se schimba fisierul)."""
+def candidatiPerechi(dosar=None):
+	"""Pe receptoarele Full HD: [(sid, cheie, ref, nume)] ale canalelor fara 4K in nume care pot fi perechea unui canal cu 4K in nume din
+	aceeasi grupa (Components/HdsIptvFullHd.perechiDeMasurat), fiecare o data. Pe celelalte receptoare: []."""
+	try:
+		from Components import HdsIptvFullHd as F
+		if not F.placaFullHd():
+			return []
+	except Exception:
+		return []
+	rez, vazute = [], set()
+	for f in sorted(glob.glob(os.path.join(dosar or I.DIRECTOR, I.PREFIX_GRUPA + "*.tv"))):
+		if f.endswith((FISIER_4K, FISIER_HDR)):
+			continue
+		grupa, ref, intrari = "", None, []
+		try:
+			with open(f, encoding="utf-8", errors="replace") as fis:
+				for r in fis:
+					r = r.rstrip("\r\n")
+					if r.startswith("#NAME "):
+						grupa = r[6:]
+					elif r.startswith("#SERVICE "):
+						ref = r[9:]
+					elif r.startswith("#DESCRIPTION ") and ref:
+						sid, cheie = I.desparteCale(ref)
+						if sid is not None:
+							intrari.append(((sid, cheie), r[13:], grupa, ref))
+						ref = None
+		except (IOError, OSError):
+			continue
+		for x in F.perechiDeMasurat(intrari):
+			if x[0] not in vazute:
+				vazute.add(x[0])
+				rez.append((x[0][0], x[0][1], x[3], x[1]))
+	return rez
+
+
+def _citesteDoc():
+	"""(canale, perechi) din 4k.json, tinute minte dupa fisier."""
 	global _cache
 	try:
 		st = os.stat(_caleRezultate())
 		semn = (st.st_mtime, st.st_size)
 	except OSError:
-		return {}
+		return {}, {}
 	if _cache[0] == semn:
 		return _cache[1]
 	try:
 		with open(_caleRezultate(), encoding="utf-8") as f:
 			d = json.load(f)
-		canale = d.get("canale") if isinstance(d, dict) else None
-		canale = canale if isinstance(canale, dict) else {}
+		d = d if isinstance(d, dict) else {}
 	except (IOError, OSError, ValueError):
-		canale = {}
-	_cache = (semn, canale)
-	return canale
+		d = {}
+	canale, pp = d.get("canale"), d.get("perechi")
+	rez = (canale if isinstance(canale, dict) else {}, pp if isinstance(pp, dict) else {})
+	_cache = (semn, rez)
+	return rez
+
+
+def rezultate():
+	"""{"<sursa>/<cheie>": [latime, inaltime, codec, hdr, ora, ref, nume]} (citit din nou cand se schimba fisierul)."""
+	return _citesteDoc()[0]
+
+
+def perechi():
+	"""Ca rezultate(), pentru perechile citite pe receptoarele Full HD (vezi capul fisierului)."""
+	return _citesteDoc()[1]
 
 
 def _oraUltima():
@@ -174,13 +224,13 @@ def _oraUltima():
 		return 0
 
 
-def _scrieRezultate(canale, ora=None):
+def _scrieRezultate(canale, ora=None, pp=None):
 	global _cache
-	d = {"ora": ora if ora is not None else _oraUltima(), "canale": canale}
+	d = {"ora": ora if ora is not None else _oraUltima(), "canale": canale, "perechi": pp if pp is not None else perechi()}
 	with I._LACAT:
 		I._asiguraDosar()
 		I._scrie(_caleRezultate(), json.dumps(d, separators=(",", ":"), ensure_ascii=False).encode("utf-8"), 0o600)
-	_cache = (None, {})
+	_cache = (None, ({}, {}))
 
 
 def eticheta(cale):
@@ -329,14 +379,23 @@ def _bucla(tot, citeste, asteapta):
 	global _fir
 	try:
 		lista = candidati()
+		# pe receptoarele Full HD si perechile fara 4K ale canalelor 4K, dupa ele; rezultatele lor separat (vezi capul fisierului)
+		in_lista = set((c[0], c[1]) for c in lista)
+		perechi_lista = [c for c in candidatiPerechi() if (c[0], c[1]) not in in_lista]
+		de_pereche = set((c[0], c[1]) for c in perechi_lista)
 		vechi = dict(rezultate())
+		vechi_p = dict(perechi())
+
+		def _vechi(c):
+			return (vechi_p if (c[0], c[1]) in de_pereche else vechi).get("%s/%s" % (c[0], c[1]))
 		acum = int(time.time())
-		de_facut = [c for c in lista if tot or acum - int((vechi.get("%s/%s" % (c[0], c[1])) or [0, 0, 0, 0, 0])[4]) >= ZILE_VALABIL * 86400]
+		de_facut = [c for c in lista + perechi_lista if tot or acum - int((_vechi(c) or [0, 0, 0, 0, 0])[4]) >= ZILE_VALABIL * 86400]
 		# cele care n-au dat nimic data trecuta, la coada: un sir de canale moarte nu opreste cautarea la PRIMELE_ESUATE
-		de_facut.sort(key=lambda c: 1 if int((vechi.get("%s/%s" % (c[0], c[1])) or [1, 0, 0, 0, 1])[0]) == 0 else 0)
+		de_facut.sort(key=lambda c: 1 if int((_vechi(c) or [1, 0, 0, 0, 1])[0]) == 0 else 0)
 		with _lacat:
 			_stare["total"] = len(de_facut)
 		canale = dict((k, v) for k, v in vechi.items() if k.split("/")[0] in set(c[0] for c in lista))
+		pp = dict((k, v) for k, v in vechi_p.items() if k.split("/")[0] in set(c[0] for c in lista + perechi_lista))
 		intreaga = True
 		intrerupta = False       # oprita de om sau pentru ca omul se uita: nu e o cautare fara raspuns
 		reusite = 0
@@ -359,13 +418,14 @@ def _bucla(tot, citeste, asteapta):
 				break
 			# un canal care n-a dat nimic (mort, server cazut, internet cazut) ramane „nestiut”, cu ora 0: se incearca din nou data
 			# viitoare, nu se socoteste verificat pe o saptamana
+			tinta = pp if (sid, cheie) in de_pereche else canale
 			if c:
-				canale[k] = [c["w"], c["h"], c["cod"], c["hdr"], int(time.time()), ref, nume]
-			elif len(canale.get(k) or ()) > 3 and canale[k][0]:
+				tinta[k] = [c["w"], c["h"], c["cod"], c["hdr"], int(time.time()), ref, nume]
+			elif len(tinta.get(k) or ()) > 3 and tinta[k][0]:
 				# a raspuns alta data: ramane ce s-a citit atunci (o proba cazuta nu-l scoate din „4K adevărat”), de reluat
-				canale[k] = list(canale[k][:4]) + [0, ref, nume]
+				tinta[k] = list(tinta[k][:4]) + [0, ref, nume]
 			else:
-				canale[k] = [0, 0, "", "", 0, ref, nume]
+				tinta[k] = [0, 0, "", "", 0, ref, nume]
 			if c:
 				reusite += 1
 			with _lacat:
@@ -373,7 +433,7 @@ def _bucla(tot, citeste, asteapta):
 				_stare["gasite"] = sum(1 for v in canale.values() if v[0] >= LATIME_4K)
 				_stare["hdr"] = sum(1 for v in canale.values() if v[3])
 			if (i + 1) % SCRIE_LA == 0:
-				_scrieRezultate(canale)
+				_scrieRezultate(canale, pp=pp)
 			if not reusite and i + 1 >= PRIMELE_ESUATE:
 				# primele toate fara raspuns (cont expirat, server sau internet cazut): nu se ia lista la rand degeaba
 				with _lacat:
@@ -385,7 +445,7 @@ def _bucla(tot, citeste, asteapta):
 			_esecuri[0], _esecuri[1] = _esecuri[0] + 1, time.monotonic()    # dar dupa o pauza (deRulat)
 		elif reusite:
 			_esecuri[0] = 0
-		_scrieRezultate(canale, int(time.time()) if intreaga else None)
+		_scrieRezultate(canale, int(time.time()) if intreaga else None, pp)
 		with _lacat:
 			if intreaga:
 				_stare["mesaj"] = T_GATA

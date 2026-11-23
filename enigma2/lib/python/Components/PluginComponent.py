@@ -73,6 +73,18 @@ def numeFisierePlugin():
 _FISIERE_PLUGIN = numeFisierePlugin()
 
 
+def pluginDinAltSistem(dosar):
+	"""HDSatelit (AS130, Dreambox DM920 pornit din multiboot AlanTuring): dosarul e legat (mount) din flashul altei imagini
+	(DreamOS), numai citire, si are doar cod compilat Python 2 (plugin.pyo, fara plugin.py sau plugin.pyc). In Python 3 nu se
+	poate incarca, iar stergerea lui ar fi o scriere pe flashul celeilalte imagini; se sare fara fereastra la pornire."""
+	try:
+		if not os_path.ismount(dosar):
+			return False
+	except (OSError, ValueError):
+		return False
+	return fileExists(dosar + "/plugin.pyo") and not fileExists(dosar + "/plugin.py") and not fileExists(dosar + "/plugin.pyc")
+
+
 def areFisierPlugin(dosar):
 	"""Dosarul are un plugin de incarcat (oricare din numeFisierePlugin)."""
 	for n in _FISIERE_PLUGIN:
@@ -387,6 +399,9 @@ class PluginComponent:
 				path = directory_category + "/" + pluginname
 				if os_path.isdir(path):
 					if areFisierPlugin(path):
+						if pluginDinAltSistem(path):
+							print("[PluginComponent] sarit: %s/%s e pluginul altei imagini, legat din flash, numai Python 2 (plugin.pyo)" % (c, pluginname))
+							continue
 						if not _pluginPermis(c, pluginname):
 							self._puneEroare(c, pluginname, path, "mod_sigur")
 							continue

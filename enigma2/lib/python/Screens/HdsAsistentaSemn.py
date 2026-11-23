@@ -10,9 +10,12 @@
 #     cat ecranul asistentei e deschis (el arata starea si timpul), banda se ascunde;
 #   - Controler: un observator care arata, improspateaza (o data pe secunda) si ascunde banda; tot el culege, pe firul
 #     enigma2, ce cere operatorul pe ecran, fiindca brokerul ruleaza pe alt fir si nu are voie sa atinga interfata:
-#     mesajele (op "mesaj"), nemodale, cu HdsAnuntRetea, fiecare cel putin MESAJ_S secunde, la rand (unul nu il
-#     inlocuieste pe altul), si concluziile echipei (op "concluzii"), in fereastra modala HdsAsistentaConcluzii, care
-#     sta pana la OK: o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile; si intrebarile echipei
+#     mesajele (op "mesaj"), nemodale, cu HdsAnuntRetea, peste orice ecran, la rand (unul nu il inlocuieste pe altul
+#     mai devreme de MESAJ_S secunde); fiecare sta pana la prima tasta apasata dupa MESAJ_TASTA_MS (tasta merge mai
+#     departe, nu e luata), cel mult MESAJ_MAX_S, si ramane intreg in jurnalul asistentei (televizor si web); si
+#     concluziile echipei (op "concluzii"), in fereastra modala HdsAsistentaConcluzii, care sta pana la OK, deschisa
+#     indata peste orice ecran (nu in coada notificarilor, care o arata abia la imaginea canalului, uneori peste o sesiune
+#     noua), o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile; si intrebarile echipei
 #     (op "intrebare", 0.7.7): o fereastra Da/Nu (MessageBox) cu variantele, peste orice ecran, inchisa inainte ca
 #     raspunsul sa plece la echipa (_intrebare), cu fereastra mesajului ascunsa cat sta; din 0.7.8 si raspunsul scris
 #     ("*" in variante): randul "Scrie răspunsul" deschide tastatura de pe ecran (VirtualKeyBoard), care devine fereastra
@@ -83,8 +86,12 @@ SKIN_BANDA = """
 
 # ecranele care arata ele starea asistentei: cat sunt deasupra, banda nu se arata (le-ar acoperi titlul)
 ECRANE_FARA_BANDA = ("HdsAsistenta", "HdsAsistentaAlege", "HdsAsistentaTermeni", "HdsAsistentaConcluzii")
-# cat sta pe ecran un mesaj al echipei (op "mesaj"), cel putin; urmatorul vine dupa
+# mesajele echipei (op "mesaj"): urmatorul il inlocuieste pe cel de pe ecran abia dupa MESAJ_S secunde; fiecare sta pana
+# la prima tasta apasata dupa MESAJ_TASTA_MS (o tasta apasata chiar atunci nu-l sterge necitit; tasta merge mai departe la
+# ecranul de dedesubt), cel mult MESAJ_MAX_S; textul ramane in jurnalul asistentei
 MESAJ_S = 30
+MESAJ_TASTA_MS = 5000
+MESAJ_MAX_S = 180
 # raspunsurile ferestrei intrebarii (op "intrebare") care nu sunt ale omului: timpul ferestrei s-a terminat, sau am inchis-o
 # noi (raspuns din web, timpul intrebarii, oprirea asistentei)
 INTREBARE_TERMEN = "termen"
@@ -270,6 +277,9 @@ class Controler(object):
 		self.navigator = PesteNavigator()
 		self._coadaNav = []
 		self._dlgNav = None
+		# ferestrele concluziilor (si cea de sfarsit) care asteapta sa se poata deschide acum ((intrare, la_sfarsit)): la
+		# fiecare tic, peste orice ecran; cele ale unei sesiuni vechi nu se mai deschid (A.fereastraVeche)
+		self._amanate = []
 
 	def instaleaza(self):
 		A.adaugaObservator(self._schimbare)
@@ -307,7 +317,8 @@ class Controler(object):
 					pass
 			# sfarsitul sesiunii (fereastra concluziilor, mesajele ramase) il face _tic la urmatoarea secunda, nu aici:
 			# oprirea poate veni de pe un ecran care se inchide imediat dupa (Rosu pe ecranul asistentei)
-			if self._id_activ is not None or self._mesaje or self._concluzii or self._coadaNav or self.navigator.suspendat():
+			if self._id_activ is not None or self._mesaje or self._concluzii or self._coadaNav or self._amanate or \
+					self.navigator.suspendat():
 				self.ceas.start(1000, False)
 			else:
 				self.ceas.stop()
@@ -334,6 +345,8 @@ class Controler(object):
 			self._mesaj_liber_la = time.time() + MESAJ_S
 		while self._concluzii:
 			self._arataConcluzii(self._concluzii.pop(0))
+		# ferestrele concluziilor care n-au putut fi deschise la tic-ul de dinainte (o inchidere in curs, standby)
+		self._deschideAmanate()
 		if activa:
 			self._id_activ = getattr(ses, "id", None) or self._id_activ
 		elif self._id_activ is not None:
@@ -354,7 +367,7 @@ class Controler(object):
 		if not activa:
 			if self.banda is not None:
 				self.banda.hide()
-			if not self._mesaje and not self._coadaNav and not self.navigator.suspendat():
+			if not self._mesaje and not self._coadaNav and not self._amanate and not self.navigator.suspendat():
 				self.ceas.stop()
 			return
 		# cererea a fost aprobata (asteapta -> conectat): omul afla, oriunde ar fi pe receptor (pe ecranul asistentei
@@ -401,38 +414,74 @@ class Controler(object):
 			return False
 
 	def _arataMesaj(self, text):
-		# fereastra proprie (nu cea a anunturilor de retea, care s-ar putea pune peste ea), nemodala: nu ia tastele
-		# nimanui si nu dispare la prima tasta, sta MESAJ_S secunde
+		# fereastra proprie (nu cea a anunturilor de retea, care s-ar putea pune peste ea), nemodala, deasupra oricarui
+		# ecran: nu ia tastele nimanui; sta pana la prima tasta apasata dupa MESAJ_TASTA_MS (tasta merge mai departe),
+		# cel mult MESAJ_MAX_S
 		try:
 			from Screens import HdsAnuntRetea
 			if self.fereastraMesaj is None:
 				self.fereastraMesaj = self.session.instantiateDialog(HdsAnuntRetea.HdsAnuntRetea)
 			self.fereastraMesaj.anunta("%s %s" % (_("Mesaj de la HD Satelit:"), text), "info",
-				durata_ms=MESAJ_S * 1000, ascunde_la_tasta=False)
+				durata_ms=MESAJ_MAX_S * 1000, ascunde_la_tasta=MESAJ_TASTA_MS)
 		except Exception as e:
 			_jurnal("mesaj: %r" % (e,))
 
 	def _arataConcluzii(self, intrare, la_sfarsit=False, verifica_navigatorul=True):
-		"""Fereastra concluziilor (modala, pana la OK), prin notificari: se deschide cand omul e la imaginea canalului,
-		nu peste alt ecran modal. La sfarsitul sesiunii nu se deschide a doua oara daca e inca deschisa.
-		0.7.6 (ASF, asistenta 222923): cand omul sta chiar in ecranul asistentei (acolo asteapta raspunsul), fereastra se
-		deschide indata peste el; inainte o primea abia la imaginea canalului, la Galben sau la sfarsitul sesiunii.
-		0.7.8 (ASV4): cat navigatorul tine ecranul, fereastra vine peste el (_pesteNavigator), nu nevazuta sub el."""
+		"""Fereastra concluziilor (modala, pana la OK), deschisa indata peste orice ecran (meniu, plugin, film, imaginea
+		canalului, ecranul asistentei); cand Session.open nu poate deschide acum (o inchidere in curs, standby), la
+		tic-ul urmator (_deschideAmanate). La sfarsitul sesiunii nu se deschide a doua oara daca e inca deschisa.
+		0.7.6 (ASF, asistenta 222923): pe ecranul asistentei indata. 0.7.8 (ASV4): cat navigatorul tine ecranul, fereastra
+		vine peste el (_pesteNavigator), nu nevazuta sub el. Inainte, peste alt ecran decat al asistentei,
+		fereastra mergea in coada notificarilor si se deschidea abia la imaginea canalului: omul care oprise asistenta si o
+		pornise din nou din meniu a vazut „Asistența s-a oprit la cererea ta” al sesiunii vechi peste cea noua, 8 minute
+		mai tarziu. Acum se deschide indata, iar una a altei sesiuni decat cea care merge nu se mai deschide."""
 		if verifica_navigatorul and self.navigator.tine():
 			self._coadaNav.append(("concluzii", (intrare, la_sfarsit)))
 			return
-		try:
-			from Screens.HdsAsistenta import HdsAsistentaConcluzii
-			if la_sfarsit and HdsAsistentaConcluzii.deschise:
+		self._amanate.append((intrare, la_sfarsit))
+		self._deschideAmanate()
+
+	def _deschideAmanate(self):
+		"""Prima fereastra a concluziilor care asteapta, daca se poate deschide acum; cele ale unei sesiuni vechi (alta
+		sesiune merge acum) si cea de sfarsit cand fereastra concluziilor e deja deschisa se lasa. Ceasul controlerului
+		ramane pornit cat asteapta una."""
+		while self._amanate:
+			intrare, la_sfarsit = self._amanate[0]
+			try:
+				from Screens.HdsAsistenta import HdsAsistentaConcluzii
+				if _fereastraVeche(intrare):
+					self._amanate.pop(0)
+					_jurnal("concluziile sesiunii %s nu se mai arata: merge alta sesiune" % (intrare.get("id"),))
+					continue
+				if la_sfarsit and HdsAsistentaConcluzii.deschise:
+					self._amanate.pop(0)
+					continue
+				if not self._poateDeschideFereastra():
+					self.ceas.start(1000, False)
+					return
+			except Exception as e:
+				self._amanate.pop(0)
+				_jurnal("concluzii: %r" % (e,))
 				return
-			continut = dict(intrare, sfarsit=True) if la_sfarsit else intrare
-			if self._poateDeschidePesteAsistenta():
+			self._amanate.pop(0)
+			try:
+				continut = dict(intrare, sfarsit=True) if la_sfarsit else intrare
 				self.session.open(HdsAsistentaConcluzii, continut)
-				return
-			from Tools import Notifications
-			Notifications.AddNotification(HdsAsistentaConcluzii, continut)
-		except Exception as e:
-			_jurnal("concluzii: %r" % (e,))
+			except Exception as e:
+				_jurnal("concluzii: %r" % (e,))
+			# una pe tic: dupa o deschidere Session.open asteapta pana ruleaza fereastra noua
+			return
+
+	def _poateDeschideFereastra(self):
+		"""O fereastra a asistentei se poate deschide acum peste ecranul de sus: Session.open poate, receptorul nu e in
+		standby si intrebarea echipei (sau tastatura ei) nu e deschisa."""
+		if self.fereastraIntrebare is not None or self._deScris or not self._poateDeschide():
+			return False
+		try:
+			from Screens import Standby
+			return not Standby.inStandby
+		except Exception:
+			return True
 
 	def _poateDeschidePesteAsistenta(self):
 		"""Ecranul asistentei e sus, in executie, si nicio inchidere nu asteapta (altfel Session.open ar cadea)."""
@@ -482,7 +531,7 @@ class Controler(object):
 				if fel == "concluzii":
 					from Screens.HdsAsistenta import HdsAsistentaConcluzii
 					intrare, la_sfarsit = date
-					if la_sfarsit and HdsAsistentaConcluzii.deschise:
+					if (la_sfarsit and HdsAsistentaConcluzii.deschise) or _fereastraVeche(intrare):
 						return True
 					continut = dict(intrare, sfarsit=True) if la_sfarsit else intrare
 					self._dlgNav = self.session.openWithCallback(self._dupaFereastraNav, HdsAsistentaConcluzii, continut) or True
@@ -560,10 +609,15 @@ class Controler(object):
 		try:
 			from Screens.MessageBox import MessageBox
 			if self.fereastraMesaj is not None:
+				# mesajul inca pe ecran (omul n-a apasat nicio tasta de cand a venit) vine iar dupa intrebare (echipa trimite
+				# des mesaj, apoi intrebare); unul inchis de om ramane numai in jurnal
+				pe_ecran = getattr(self.fereastraMesaj, "shown", None)
+				if pe_ecran is None:
+					# o fereastra fara starea ei (alta decat HdsAnuntRetea): ca inainte, in primele MESAJ_S secunde
+					import time
+					pe_ecran = time.time() < self._mesaj_liber_la
 				self.fereastraMesaj.ascunde()
-				# mesajul ascuns inainte de vreme (echipa trimite des mesaj, apoi intrebare) vine iar dupa intrebare
-				import time
-				if self._mesaj_aratat is not None and time.time() < self._mesaj_liber_la:
+				if self._mesaj_aratat is not None and pe_ecran:
 					self._mesaje.insert(0, self._mesaj_aratat)
 				self._mesaj_aratat = None
 				self._mesaj_liber_la = 0.0
@@ -595,7 +649,8 @@ class Controler(object):
 				self._deScris.add(nr)
 				self._intrebari.insert(0, q)
 				self._trezesteTic()
-		elif rez is False or rez is None:
+		elif rez is False or rez is None or rez is True:
+			# True: Verde (alwaysOK al ferestrei Da/Nu) nu e o varianta; ca EXIT, ca echipa sa nu astepte degeaba tot timpul
 			A.inchideIntrebarea(nr, "exit")
 		# 0.7.8 (ASV4): pagina navigatorului inapoi, daca nu mai vine nicio fereastra a asistentei (o data)
 		self._redaDacaLiber()
@@ -710,6 +765,14 @@ def _activitate(ses):
 		return A.textActivitate(ses)
 	except Exception:
 		return ""
+
+
+def _fereastraVeche(intrare):
+	"""Fereastra concluziilor e a altei sesiuni decat cea care merge acum (A.fereastraVeche); False la orice greseala."""
+	try:
+		return bool(A.fereastraVeche(intrare))
+	except Exception:
+		return False
 
 
 def _trezeste(functie):
@@ -1285,10 +1348,18 @@ def intreabaOprirea(session, dupa):
 	ales. Pe pagina de pornire Rosu e "Înapoi", iar dupa Start, pe acelasi ecran si in acelasi loc, opreste; pe 15.11.2026
 	trei sesiuni s-au oprit asa, din greseala, la 35 s - 2 minute dupa salut (STADIU-ASX.md). dupa(da) primeste True
 	numai la "Da"; "Nu", EXIT si timpul trecut dau False. Aici, nu in Screens/HdsAsistenta.py: acolo Start porneste fara
-	nicio intrebare (regula 0.6.13). Concluziile si avertismentul dinaintea unei parole opresc tot pe loc."""
+	nicio intrebare (regula 0.6.13). Tot ea si la Rosu din fereastra concluziilor: numai Rosu + „Da” opresc
+	asistenta. Verde (alwaysOK in MsgBoxActions) ar fi inchis fereastra cu True, adica „Da” fara randul ales, iar pe
+	ecranul asistentei Verde e „Schimbă durata”: aici Verde face ce face OK pe randul ales („Nu”, ales la deschidere)."""
 	from Screens.MessageBox import MessageBox
-	session.openWithCallback(lambda da=False: dupa(da is True), MessageBox, _(TEXT_OPRESTI_ASISTENTA),
+	dlg = session.openWithCallback(lambda da=False: dupa(da is True), MessageBox, _(TEXT_OPRESTI_ASISTENTA),
 		MessageBox.TYPE_YESNO, default=False, timeout=OPRIRE_INTREBARE_S, timeout_default=False)
+	try:
+		if dlg is not None:
+			dlg["actions"].actions["alwaysOK"] = dlg.ok
+	except Exception as e:
+		_jurnal("intrebarea opririi (Verde): %r" % (e,))
+	return dlg
 
 
 def alegeDurata(session, dupa):

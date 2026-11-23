@@ -1,6 +1,6 @@
 {
  "versiune": 1,
- "actualizat": "2026-11-17",
+ "actualizat": "2026-11-23",
  "transpondere": [
   {
    "id": "p390_11760h",
@@ -35,7 +35,80 @@
      "confirmat": "2026-09-14",
      "verificat_pe_receptor": "2026-09-15",
      "stare_verificare": "merge",
-     "antena_verificare": "90 cm"
+     "antena_verificare": "90 cm",
+     "programe": [
+      {
+       "sid": 1,
+       "nume": "ALPHA ΚΥΠΡΟΥ HD",
+       "tip": 1,
+       "tsid": 1,
+       "onid": 8388
+      },
+      {
+       "sid": 2,
+       "nume": "ANT1 HD",
+       "tip": 25,
+       "tsid": 1,
+       "onid": 8388
+      },
+      {
+       "sid": 3,
+       "nume": "Omega Channel HD",
+       "tip": 25,
+       "tsid": 1,
+       "onid": 8388
+      },
+      {
+       "sid": 4,
+       "nume": "SIGMA HD",
+       "tip": 1,
+       "tsid": 1,
+       "onid": 8388
+      },
+      {
+       "sid": 5,
+       "nume": "Capital",
+       "tip": 25,
+       "tsid": 1,
+       "onid": 8388
+      },
+      {
+       "sid": 6,
+       "nume": "HS1",
+       "tip": 25,
+       "tsid": 1,
+       "onid": 8388
+      },
+      {
+       "sid": 7,
+       "nume": "HS2",
+       "tip": 25,
+       "tsid": 1,
+       "onid": 8388
+      },
+      {
+       "sid": 9,
+       "nume": "HRadio2",
+       "tip": 2,
+       "tsid": 1,
+       "onid": 8388
+      },
+      {
+       "sid": 10,
+       "nume": "HRadio3",
+       "tip": 2,
+       "tsid": 1,
+       "onid": 8388
+      },
+      {
+       "sid": 11,
+       "nume": "Extra",
+       "tip": 1,
+       "tsid": 1,
+       "onid": 8388
+      }
+     ],
+     "programe_invatate": "2026-10-04"
     }
    ]
   },
@@ -109,7 +182,94 @@
      "confirmat": "2026-09-06",
      "verificat_pe_receptor": "2026-09-15",
      "stare_verificare": "merge",
-     "antena_verificare": "90 cm"
+     "antena_verificare": "90 cm",
+     "programe": [
+      {
+       "sid": 1,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 2,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 3,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 4,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 5,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 6,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 7,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 8,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 9,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 10,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 11,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 12,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      }
+     ],
+     "programe_invatate": "2026-10-03"
     },
     {
      "id": "p235_12285v_plp0_pid4096",
@@ -160,7 +320,80 @@
      "confirmat": "2024-12-03",
      "verificat_pe_receptor": "2026-09-15",
      "stare_verificare": "merge",
-     "antena_verificare": "90 cm"
+     "antena_verificare": "90 cm",
+     "programe": [
+      {
+       "sid": 11,
+       "nume": "Перший",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      },
+      {
+       "sid": 12,
+       "nume": "1+1 Україна",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      },
+      {
+       "sid": 13,
+       "nume": "1+1 МАРАФОН",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      },
+      {
+       "sid": 14,
+       "nume": "Суспільне Культура",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      },
+      {
+       "sid": 15,
+       "nume": "ICTV",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      },
+      {
+       "sid": 16,
+       "nume": "СТБ",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      },
+      {
+       "sid": 17,
+       "nume": "Інтер",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      },
+      {
+       "sid": 18,
+       "nume": "УНІАН Серіал",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      },
+      {
+       "sid": 19,
+       "nume": "БІГУДІ",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      },
+      {
+       "sid": 20,
+       "nume": "super+",
+       "tip": 22,
+       "tsid": 100,
+       "onid": 8996
+      }
+     ],
+     "programe_invatate": "2026-10-04"
     }
    ]
   },
@@ -234,7 +467,136 @@
      "confirmat": "2026-02-16",
      "verificat_pe_receptor": "2026-09-15",
      "stare_verificare": "merge",
-     "antena_verificare": "90 cm"
+     "antena_verificare": "90 cm",
+     "programe": [
+      {
+       "sid": 1051,
+       "nume": "Rai 1 HD (provvisorio)",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1052,
+       "nume": "Rai 2 HD (provvisorio)",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1053,
+       "nume": "Rai Radio 2 Visual HD",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1054,
+       "nume": "Italiana",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1055,
+       "nume": "Rai 3 HD (provvisorio)",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1056,
+       "nume": "Rai 4 HD",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1057,
+       "nume": "Rai News 24 HD",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1059,
+       "nume": "Rai Storia HD",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1061,
+       "nume": "Rai Sport HD",
+       "tip": 22,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1062,
+       "nume": "Rai Movie HD",
+       "tip": 22,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1063,
+       "nume": "Rai 5 HD",
+       "tip": 22,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1065,
+       "nume": "Rai Gulp HD",
+       "tip": 22,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1066,
+       "nume": "Rai YoYo HD",
+       "tip": 22,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1069,
+       "nume": "Rai Play",
+       "tip": 22,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1070,
+       "nume": "Rai Play Sound",
+       "tip": 22,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1071,
+       "nume": "Rai Premium HD",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1073,
+       "nume": "RTV San Marino",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      },
+      {
+       "sid": 1074,
+       "nume": "Rai 4K",
+       "tip": 31,
+       "tsid": 2,
+       "onid": 8572
+      }
+     ],
+     "programe_invatate": "2026-10-04"
     }
    ]
   },
@@ -271,7 +633,94 @@
      "canale": "DSNS Informed (12 servicii de informare, in clar)",
      "verificat_pe_receptor": "2026-09-15",
      "stare_verificare": "merge",
-     "antena_verificare": "90 cm"
+     "antena_verificare": "90 cm",
+     "programe": [
+      {
+       "sid": 1,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 2,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 3,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 4,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 5,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 6,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 7,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 8,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 9,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 10,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 11,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      },
+      {
+       "sid": 12,
+       "nume": "DSNS Informed",
+       "tip": 22,
+       "tsid": 12,
+       "onid": 44
+      }
+     ],
+     "programe_invatate": "2026-10-04"
     }
    ]
   },

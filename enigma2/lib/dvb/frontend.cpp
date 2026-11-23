@@ -534,6 +534,8 @@ eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFronten
 
 	m_idleInputpower[0]=m_idleInputpower[1]=0;
 	m_hds_rotor_locked = false;
+	m_hds_rotor_fara_blocare = 0;
+	m_hds_rotor_blocare_vazuta = false;
 	m_hds_acordare.goleste();
 	m_hds_sistem_pus = -1;
 	m_hds_antena_oprita = false;
@@ -2140,6 +2142,13 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 				int signal = 0;
 				/* citiri directe (fara memoria tunerului): pasii motorului cer starea de acum */
 				int isLocked = hdsCiteste(locked, true);
+				if (isLocked)
+				{
+					m_hds_rotor_fara_blocare = 0;
+					m_hds_rotor_blocare_vazuta = true;
+				}
+				else
+					++m_hds_rotor_fara_blocare;
 				m_idleInputpower[0] = m_idleInputpower[1] = 0;
 				--m_timeoutCount;
 				if (!m_timeoutCount && m_retryCount > 0)
@@ -2193,6 +2202,8 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 				break;
 			case eSecCommand::SET_ROTOR_MOVING:
 				m_hds_rotor_locked = false;
+				m_hds_rotor_fara_blocare = 0;
+				m_hds_rotor_blocare_vazuta = false;
 				if (!m_simulate)
 					m_sec->setRotorMoving(m_slotid, true);
 				++m_sec_sequence.current();
@@ -2368,6 +2379,29 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 					eDVBSatelliteEquipmentControl *hds_sec = eDVBSatelliteEquipmentControl::getInstance();
 					if (hds_sec)
 						hds_sec->hdsProbaSemnal(m_slotid, hds_faza, &m_hds_acordare);
+				}
+				++m_sec_sequence.current();
+				break;
+			}
+			case eSecCommand::HDS_REACORDARE_ROTOR:
+			{
+				/* ZGM1 (lib/dvb/hdsrotire.h): demodulatorul hi3716 (ZGEMMA H8.2H Plus) cauta o singura data: acordat cat
+				   antena inca merge, nu mai prinde nimic cand ea ajunge (stare 0, fara semnal si fara purtatoare), pana la
+				   acordarea de la timpul maxim al motorului (88 s la plecarea necunoscuta). Dupa val citiri la rand fara
+				   blocare, fara nicio blocare vazuta in bucla si cu starea 0, tunerul se acordeaza din nou pe acelasi
+				   transponder; un tuner care cauta singur sau care a vazut semnalul nu e atins. */
+				int hds_pasi = m_sec_sequence.current()->val;
+				if (!m_simulate && !m_hds_rotor_blocare_vazuta && hds_pasi > 0 && m_hds_rotor_fara_blocare >= hds_pasi)
+				{
+					int hds_err = 0;
+					unsigned int hds_stare = hdsCitesteBrut(hdscitiri::STARE, true, hds_err);
+					if (!hds_err && !(hds_stare & (FE_HAS_LOCK | FE_HAS_SIGNAL | FE_HAS_CARRIER)))
+					{
+						eDebugNoSimulate("[SEC] fara semnal de %d citiri (stare 0x%x): acordez din nou", m_hds_rotor_fara_blocare,
+							hds_stare);
+						setFrontend(false);
+					}
+					m_hds_rotor_fara_blocare = 0;
 				}
 				++m_sec_sequence.current();
 				break;

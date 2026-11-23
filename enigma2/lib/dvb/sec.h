@@ -35,7 +35,10 @@ public:
 		   prinsa, fara semnal); nu schimba nimic pe fir, numai urma motorului */
 		HDS_PROBA_SEMNAL,
 		/* UNR1: asteptarea ramasa de la pornirea alimentarii fizice. */
-		HDS_UNICABLE_PORNIRE
+		HDS_UNICABLE_PORNIRE,
+		/* ZGM1 (lib/dvb/hdsrotire.h): in bucla de semnal de dupa comanda de motor, acordarea din nou cand tunerul
+		   n-a vazut nimic de val citiri la rand (tunere care cauta o singura data, ca hi3716 pe ZGEMMA H8.2H Plus) */
+		HDS_REACORDARE_ROTOR
 	};
 	int cmd;
 	struct rotor

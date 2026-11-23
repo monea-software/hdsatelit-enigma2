@@ -28,7 +28,8 @@ class fbClass
 	int m_ion_size;
 	int m_ion_fd;              /* shared buffer fd, kept open while mapped */
 	int m_ion_given;           /* 1 = already handed to gAccel (its table must not be reset) */
-	void dreamPregatesteEcranul(fb_fix_screeninfo &fix);
+	void dreamPregatesteEcranul(); /* the ION option and its start mark */
+	void dreamMaresteMemoria(fb_fix_screeninfo &fix); /* FBD5: every start on Dreambox, before the one mapping */
 	void dreamAlocaIon();
 	void dreamStare(const char *word, const char *code, const char *detail);
 	void dreamVerificaMod(const fb_fix_screeninfo &fix);

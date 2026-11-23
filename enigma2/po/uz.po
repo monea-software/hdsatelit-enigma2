@@ -25496,6 +25496,14 @@ msgstr ""
 msgid "Nu s-a putut descărca. Verifică legătura la internet."
 msgstr "Yuklab olib bo‘lmadi. Internet ulanishini tekshiring."
 
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "Serverda bitta paketlar ro‘yxati yo‘q. Qolganlari yuklab olindi, demak internet ulanishi ishlayapti."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "Serverda so‘ralgan paketlar ro‘yxati yo‘q. Internet ulanishi ishlayapti; keyinroq qayta urinib ko‘ring."
+
 msgid ""
 "Nu se află în nicio sursă, deci nu se va mai putea instala din nou de aici."
 msgstr ""
@@ -72563,3 +72571,180 @@ msgstr "Kanallar ro‘yxatiga hech narsa saqlanmadi. Ularni qo‘shish uchun Kan
 #: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
 msgid "Parola se vede și după salvare. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân."
 msgstr "Parol saqlangandan keyin ham ko‘rinadi. Agar siz xuddi shu hisobni boshqa parol bilan qayta qo‘shsangiz, Sevimlilar ro‘yxatidagi kanallar saqlanib qoladi."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "Yoritilgan logo"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "Logo, resiver yoqilgan holatda"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "Old panel displeyidagi logo resiver yoqilgan holatda qanday yoritilishi. Zavod sozlamasidek: resiver o‘zi tanlagan rang. Sen ikki rangdan birini, ikkalasini birga (uchinchi rang), o‘chirilgan, miltillash yoki silliq o‘tishni tanlashing mumkin. Tanlov bir necha soniya davomida darhol ko‘rinadi."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "Logo, kutish rejimida"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "Logo resiver kutish rejimida bo‘lganda qanday yoritilishi. Zavod sozlamasidek: resiver tomonidan o‘rnatilgan kutish rejimi rangi. Sekin nafas olish: logo resiver uxlab yotganining belgisi sifatida silliq yonadi va o‘chadi. O‘chirilgan: tunda hech qanday chiroq yonmaydi."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "Logo, to‘liq o‘chirishda"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "Resiverni butunlay o‘chirganingdan keyin (to‘liq o‘chirish) yonib turishi (zavod sozlamasi) yoki o‘chishi. Bunda logoni resiver dastursiz, o‘zi boshqaradi."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "Logo resiver nima qilayotganini ko‘rsatadi"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "Ha: resiver biror narsa bilan band bo‘lganda (yangilash, kanallarni qidirish, antenna aylanishi, signal ushlanganda, yozib olish, masofaviy yordam), logo quyidagi tanlovlarga ko‘ra rangini o‘zgartiradi va keyin qaytadi. Bir vaqtning o‘zida bir nechta jarayon bo‘lsa, quyidagi tartibda eng muhimi ko‘rinadi. Yo‘q (zavod sozlamasi): logo yoqilgan yoki kutish rejimi rangida qoladi."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "Yangilanish o‘rnatilayotgan vaqtda"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "Proshivka yangilanishi yoki plagin o‘rnatilayotgan vaqtdagi logo chirog‘i. Bunda resiverni tokdan uzmaslik kerak."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "Kanallarni qidirish vaqtida"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "Kanallarni qidirish (va sun’iy yo‘ldoshda ko‘r-ko‘rona qidirish) vaqtidagi logo chirog‘i."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "Antenna aylanayotgan vaqtda"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "Antenna motori (DiSEqC 1.2 yoki USALS) antennani boshqa sun’iy yo‘ldoshga yo‘naltirayotgan vaqtdagi logo chirog‘i. Barcha ranglar navbat bilan: antenna to‘xtaguncha logo uchta rangdan o‘tib turadi."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "Signal ushlanganda"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "Tyuner kanal signalini ushlaganidan keyin (kanalni almashtirganda yoki antenna to‘xtaganidan keyin) logo chirog‘ining 3 soniya davomida yonishi."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "Yozib olish vaqtida"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "Yozib olish jarayonidagi logo chirog‘i, kutish rejimida ham."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "Masofaviy yordam yoqilgan vaqtda"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "Masofaviy yordam yoqilgan vaqtdagi logo chirog‘i, jamoa ulanganini ko‘rishing uchun."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "Old panel displeyidagi logo ranglarini hamda resiver kanallarni qidirayotgan, antennani aylantirayotgan, yozib olayotgan yoki yangilanayotgan vaqtda qanday yoritilishini tanlaysan."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "Zavod sozlamasidek"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "O‘zgarmaydi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "Yoqilgan holatdagi rang"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "Kutish rejimi rangi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "Ikkala rang birga"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "O‘chirilgan"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "Yoqilgan holatdagi rangda miltillaydi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "Kutish rejimi rangida miltillaydi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "Ikkala rangda tez miltillaydi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "Ikki rangni almashtiradi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "Barcha ranglar navbat bilan"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "Sekin nafas olish, kutish rejimi rangi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "Barcha ranglardan silliq o‘tadi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "Yoqilgan"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "EXIT tugmasini bosing va resiverdan odatdagidek foydalaning; masofaviy yordam yoqilgan holda qoladi. Bu yerga %s orqali qaytasiz."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: TVga"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "Jamoamiz imkon topishi bilan ko‘rib chiqadi."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "Sahifani yopib, resiverdan odatdagidek foydalanishingiz mumkin; masofaviy yordam yoqilgan holda qoladi. Resiverda uni bu yerda topasiz: __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "Resivering ko‘pi bilan Full HD (1080p) sifatini ko‘rsatadi, shuning uchun xuddi shu kanalning 4K bo‘lmagan varianti yoqilmoqda: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "Bu kanal 4K formatida, resivering esa ko‘pi bilan Full HD (1080p) sifatini ko‘rsatadi."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "Resivering ko‘pi bilan Full HD (1080p) sifatini ko‘rsatadi. 4K kanal bu yerda provayderda uning 4K bo‘lmagan varianti bo‘lsagina ochiladi; aks holda uni ko‘rsatib bo‘lmaydi."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "%s dagi sun'iy yo'ldosh orqali DVB-T2 kanallari (%s) kanal ro'yxatiga avtomatik qo'shiladi: %s."

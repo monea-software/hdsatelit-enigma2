@@ -171,6 +171,36 @@ def adresa(sursa_id, cheie, activa=None):
 	return I.fluxBun(valoare)
 
 
+def inlocuireFullHd(sid, cheie):
+	"""Pe receptoarele care redau cel mult 1080p (Components/HdsIptvFullHd.py): (fel, cheia de adus, numele perechii). fel "pereche":
+	releul aduce canalul fara 4K al furnizorului in locul canalului 4K cerut; "4k": canal masurat 4K fara pereche (cheia ramane);
+	None: canalul cerut, ca inainte. Pe receptoarele 4K si la orice eroare: (None, cheie, "")."""
+	try:
+		from Components import HdsIptvFullHd as F
+		if not F.placaFullHd():
+			return None, cheie, ""
+		harta = _coloane(sid)
+		c = harta.get(cheie)
+		if not c or len(c) < 3:
+			return None, cheie, ""
+		from Components import HdsIptv4K as K
+		rez = K.rezultate()
+		v = rez.get("%s/%s" % (sid, cheie))
+		latime = v[0] if v else None
+		if not (latime and latime >= F.LATIME_4K) and not F.este4K(c[1]):
+			return None, cheie, ""      # cele mai multe canale: nimic de cautat
+		pref = sid + "/"
+		# perechile citite de cautarea 4K pe receptorul Full HD (HdsIptv4K.perechi) si canalele ei: o pereche se aduce numai masurata sub 4K
+		masurate = dict((k[len(pref):], w[0]) for k, w in list(rez.items()) + list(K.perechi().items()) if k.startswith(pref) and w)
+		fel, p = F.alegere(c[1], c[2], harta.values(), latime, masurate)
+		if fel == "pereche":
+			return fel, p, harta[p][1]
+		return fel, cheie, ""
+	except Exception as e:
+		print("[HdsIptvAdrese] Full HD: %s" % type(e).__name__)
+		return None, cheie, ""
+
+
 def antete(sursa_id, cheie):
 	o = ALTE_SURSE.get(sursa_id)
 	if o is not None:
@@ -207,6 +237,8 @@ class _Masura(object):
 		self.motiv = ""            # de ce n-a pornit, dupa raspunsul serverului (motivEroare; HdsIptvSurse.MOTIVE)
 		self.piste_hls = []
 		self.pts0 = None
+		self.full_hd = None        # inlocuireFullHd: "pereche" (vine canalul fara 4K), "4k" (masurat 4K, fara pereche) sau None
+		self.nume_full_hd = ""     # numele perechii adusa in locul canalului 4K
 
 	def adauga(self, n):
 		self.octeti += n
@@ -252,7 +284,8 @@ def stareFlux(sid=None, cheie=None):
 	tampon = m.tampon
 	tampon_s = round(tampon.octeti * 8.0 / viteza, 1) if tampon is not None and viteza > 0 and m.trimis else None
 	return {"viteza": viteza, "raspuns_ms": m.raspuns_ms, "tampon_s": tampon_s, "hls": m.hls, "eroare_sursa": m.eroare_sursa,
-		"preumplere": m.preumplere, "reconectari": m.reconectari, "trimis": m.trimis, "octeti": m.octeti, "motiv": m.motiv}
+		"preumplere": m.preumplere, "reconectari": m.reconectari, "trimis": m.trimis, "octeti": m.octeti, "motiv": m.motiv,
+		"full_hd": m.full_hd, "nume_full_hd": m.nume_full_hd}
 
 
 def primulPts(b):
@@ -608,6 +641,14 @@ def _jetonHls(jeton):
 def _listaHls(text, baza, sid, cheie):
 	# lista principala (variante, piste): adresele ei sunt sub-liste, cu jetoanele lor separate
 	principala = "#EXT-X-STREAM-INF" in text or "#EXT-X-MEDIA:" in text
+	if principala:
+		# pe receptoarele care redau cel mult 1080p playerul vede numai variantele pana la 1920x1080 (Components/HdsIptvFullHd.py)
+		try:
+			from Components import HdsIptvFullHd as F
+			if F.placaFullHd():
+				text = F.filtreazaVariante(text)
+		except Exception as e:
+			print("[HdsIptvAdrese] variantele HLS: %s" % type(e).__name__)
 	rez = []
 	for rand in text.splitlines():
 		if rand.startswith("#"):
@@ -684,27 +725,33 @@ class _Cerere(BaseHTTPRequestHandler):
 			self._raspunde(404)
 			return
 		cap = self.command == "HEAD"
+		# pe un receptor Full HD un canal 4K cu pereche vine din canalul fara 4K al furnizorului; o proba (cautarea 4K) masoara canalul insusi
+		fel_hd, cheie_flux, nume_hd = (None, cheie, "") if proba else inlocuireFullHd(sid, cheie)
 		if cap:
 			legatura, a_inchis = _Legatura(), False
 		else:
 			legatura, a_inchis = _ocupa(s, sid)
 			m = _Masura(sid, cheie)
+			m.full_hd, m.nume_full_hd = fel_hd, nume_hd
 			if not proba:
 				# o proba (cautarea canalelor 4K) are masurarea ei: bara, lista si HdsIptv4K.omulSeUita vad numai canalul omului
 				_masura = m
 				with _lacat:
 					_deschise_omului += 1
+				if fel_hd:
+					_jurnalReleu(m, "receptor Full HD, canal 4K: %s" % (("aduc perechea %s" % cheie_flux) if fel_hd == "pereche"
+						else "fara pereche fara 4K"))
 		raspuns = None
 		try:
-			a = antete(sid, cheie)
+			a = antete(sid, cheie_flux)
 			if self.headers.get("Range"):
 				a["Range"] = self.headers["Range"][:128]
 
 			def tinta_fn():
-				return adresa(sid, cheie, activa=lambda: not legatura.inchisa)
+				return adresa(sid, cheie_flux, activa=lambda: not legatura.inchisa)
 			inceput = time.monotonic()
 			raspuns = _deschideCuAsteptare(tinta_fn, a, legatura, "HEAD" if cap else None, a_inchis,
-				film=not cap and esteFilm(cheie, "Range" in a))
+				film=not cap and esteFilm(cheie_flux, "Range" in a))
 			legatura.pune(raspuns)
 			if not cap:
 				m.raspuns_ms = int((time.monotonic() - inceput) * 1000)

@@ -1111,6 +1111,14 @@ def _ruleazaOpkg(argv, termen=TERMEN_S, limita=RASPUNS_MAX):
 	if cod == 124:
 		text += ("\n(opkg lucreaza inca dupa %d s; nu il opresc, ca pachetele sa nu ramana la jumatate. Urmareste cu op "
 			"pachete si op jurnal hds-actualizari.log)" % termen)
+	else:
+		# 0.7.9 (BLD8): pachetele descarcate de opkg stau in /var/cache/opkg, in RAM; dupa o instalare reala se sterg
+		# (numai cand opkg a iesit; la termen opkg lucreaza inca si le deschide pe rand)
+		try:
+			from Components import HdsCuratenie
+			HdsCuratenie.golesteCacheOpkgDupa(argv)
+		except Exception:
+			pass
 	return cod, text
 
 

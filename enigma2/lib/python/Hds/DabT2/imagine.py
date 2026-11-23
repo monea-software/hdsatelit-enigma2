@@ -96,23 +96,67 @@ def controlor_t2():
 
 def dupa_scanare(pozitii=None):
     """Dupa o scanare obisnuita (Components/ServiceScan.py, la sfarsit): daca lista DVB-T2 are fluxuri cu programele
-    scrise in ea (felul abertis, 30W) pe una din pozitiile scanate (`pozitii`, None = oricare), buchetul lor si
+    scrise in ea (felul abertis de pe 30W si fluxurile T2-MI invatate pe receptoarele noastre: Cipru, Ucraina, Rai) sau
+    invatate de acest receptor (servicii.json) pe una din pozitiile scanate (`pozitii`, None = oricare), buchetul lor si
     purtatorii din lamedb se refac in fundal, ca transponderele prinse acum sa-si aiba canalele in lista fara alt pas.
     Nu arunca; nimic de facut = nicio scriere."""
     try:
         poz = set(int(p) % 3600 for p in pozitii) if pozitii is not None else None
         if poz is not None and not poz:
             return False                      # numai cablu sau terestru
+        from . import buchete
         c = controlor_t2()
+        invatate = set(k for k, v in buchete.citeste_servicii(c.profil).items() if (v or {}).get('servicii'))
         for tp in c.lista().get('transpondere', []):
             if (poz is None or int(tp.get('pozitie') or -1) in poz) and \
-                    any(f.get('programe') for f in tp.get('feeduri', [])):
+                    any(f.get('programe') or buchete._curata_id(f.get('id')) in invatate
+                        for f in tp.get('feeduri', [])):
                 c.reface_in_fundal()
                 jurnal.noteaza('imagine', 'dupa scanare: buchetele si purtatorii DVB-T2 refacuti in fundal')
                 return True
     except Exception:
         jurnal.eroare('imagine', 'refacerea dupa scanare')
     return False
+
+
+def buchete_dupa_scanare(pozitii, lista=None, memorate=None, prinse=None):
+    """Pentru rezumatul scanarii obisnuite (Screens/ServiceScan.hdsIndiciuT2): pe care din pozitiile scanate fluxurile
+    DVB-T2 prin satelit intra singure in lista de canale (dupa_scanare): fluxuri cu programele stiute (scrise in lista
+    sau invatate de receptor) pe un transponder pe care receptorul il prinde. -> {pozitie: {'buchete': [numele
+    buchetelor, in limba meniului], 'tp': [(frecventa kHz, polarizare 'H'/'V'/'L'/'R')]}}; pozitiile fara asa ceva
+    lipsesc. lista / memorate / prinse: pentru probe. Nu arunca."""
+    rez = {}
+    try:
+        from . import buchete, liste
+        poz = set(int(p) % 3600 for p in pozitii or () if isinstance(p, int))
+        if not poz:
+            return rez
+        prof = _profil.T2
+        if lista is None:
+            lista = controlor_t2().lista()
+        if memorate is None:
+            memorate = buchete.citeste_servicii(prof)
+        if prinse is None:
+            prinse = buchete.transpondere_prinse(prof)
+        for tp in lista.get('transpondere', []):
+            p = int(tp.get('pozitie') or -1)
+            if p not in poz or not buchete.prins(tp, prinse):
+                continue
+            for f in tp.get('feeduri', []):
+                if f.get('tip') != 't2' or f.get('stare_verificare') == liste.STARE_NEDECODABIL:
+                    continue
+                if not (f.get('programe') or (memorate.get(buchete._curata_id(f.get('id'))) or {}).get('servicii')):
+                    continue
+                nume = buchete.NUME_BUCHET_ABERTIS if buchete.e_abertis(f) else _tr(prof.nume_buchet)
+                x = rez.setdefault(p, {'buchete': [], 'tp': []})
+                if nume not in x['buchete']:
+                    x['buchete'].append(nume)
+                cheie = (int(tp.get('frecventa') or 0), tp.get('pol'))
+                if cheie not in x['tp']:
+                    x['tp'].append(cheie)
+    except Exception:
+        jurnal.eroare('imagine', 'buchetele dupa scanare')
+    return rez
 
 
 def _tine_ceva(c):

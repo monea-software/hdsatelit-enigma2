@@ -1687,6 +1687,26 @@ def _ceas_scurt(linii):
 		return None
 
 
+# Descarcarile lui opkg (wget): „wget returned 8” = serverul a raspuns cu o eroare (de pilda 404 pentru o lista care nu exista
+# pe server, cum era feedul pluginurilor externe pe un procesor fara dosar); 4 = retea, 5 = certificat. Cand serverul a raspuns,
+# internetul merge, deci mesajul de internet ar fi neadevarat. Un rand de retea in aceeasi iesire lasa mesajul de internet.
+_RE_SERVER_EROARE = re.compile(r'failed to download (\S+?),? wget returned 8\b')
+_RE_RETEA = re.compile(r'wget returned [45]\b|network is unreachable|bad address|could not resolve|timed out|connection refused')
+# randurile lui opkg update pentru o lista descarcata bine (aceleasi ca _RE_LISTA, mai jos, pe textul cu litere mici)
+_RE_LISTA_DESCARCATA = re.compile(r"updated source |updated list of available packages in ")
+
+
+def _server_a_raspuns(t):
+	"""'lista' cand serverul a raspuns cu o eroare la o lista de pachete (Packages, Packages.gz), 'pachet' la un .ipk, None
+	altfel (si cand iesirea are si un rand de retea). `t`: iesirea lui opkg, cu litere mici."""
+	adrese = _RE_SERVER_EROARE.findall(t)
+	if not adrese or _RE_RETEA.search(t):
+		return None
+	if any(a.rstrip('.').endswith('.ipk') for a in adrese):
+		return 'pachet'
+	return 'lista'
+
+
 def motiv_eroare(linii, implicit=N_('Operațiunea nu a reușit.'), ceas=True):
 	"""cel mai probabil motiv al unei erori opkg, spus simplu. ceas: si „ceasul e în urmă” (randul de stare al
 	ecranului); randurile jurnalului (linie_jurnal) nu il cer."""
@@ -1710,6 +1730,13 @@ def motiv_eroare(linii, implicit=N_('Operațiunea nu a reușit.'), ceas=True):
 	if 'mismatch' in t or 'truncated input file' in t:
 		# 'Truncated input file': arhiva descarcata pe jumatate (randul 816, jurnalele testerilor din 31.10)
 		return _t('Fișierul descărcat este deteriorat. Încearcă din nou.')
+	server = _server_a_raspuns(t)
+	if server == 'lista':
+		if _RE_LISTA_DESCARCATA.search(t):
+			return _t('O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge.')
+		return _t('Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu.')
+	if server == 'pachet':
+		return _t('Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră).')
 	if 'failed to download' in t or 'wget' in t or 'curl' in t or 'download failed' in t or 'network is unreachable' in t \
 			or 'bad address' in t or 'could not resolve' in t or 'timed out' in t or 'connection refused' in t:
 		return _t('Nu s-a putut descărca. Verifică legătura la internet.')

@@ -16,6 +16,7 @@
 # Fisierul nu importa nimic din enigma2 la incarcare; textele se traduc la folosire (N_ le marcheaza pentru xgettext).
 
 import os
+import re
 import stat
 
 NUME_EXCLUSE_TMP = frozenset((
@@ -130,6 +131,84 @@ def marimi():
 		rez.append({"cheie": cheie, "eticheta": eticheta, "cale": cale, "exista": exista, "octeti": octeti,
 			"marime": formatMB(octeti)})
 	return rez
+
+
+# 0.7.9 (BLD8, 23.11.2026; coordonatorul 14:20): opkg pastreaza in /var/cache/opkg pachetele descarcate dintr-un feed
+# (opkg.conf n-are nicio optiune de cache), iar /var/cache e tmpfs, adica RAM, pe toate receptoarele: pe ZGEMMA H8.2H Plus
+# (~335 MB vazuti de Linux) enigma2-hdsatelit de 37 MB a stat acolo pana la repornire. Dupa orice instalare, actualizare sau
+# scoatere reala (nu --download-only si nu --noaction, unde pachetele descarcate se citesc dupa aceea) se sterg pachetele de
+# acolo; numai cand niciun opkg nu mai ruleaza (o instalare cu mai multe pachete le deschide pe rand). Listele feedurilor
+# (*_Packages.gz) si orice alt fisier raman. Fara nimic pentru om: nicio fereastra, niciun text nou.
+DOSAR_CACHE_OPKG = "/var/cache/opkg"
+
+
+def opkgRuleaza(proc="/proc"):
+	"""True cand ruleaza un proces opkg (comm = opkg), altul decat acesta"""
+	eu = str(os.getpid())
+	try:
+		intrari = os.listdir(proc)
+	except OSError:
+		return False
+	for p in intrari:
+		if not p.isdigit() or p == eu:
+			continue
+		try:
+			with open(os.path.join(proc, p, "comm"), "rb") as f:
+				if f.read().strip() == b"opkg":
+					return True
+		except OSError:
+			pass
+	return False
+
+
+def schimbaPachete(argumente):
+	"""True cand argumentele opkg (fara program) instaleaza, actualizeaza sau scot de-a binelea"""
+	argumente = [a for a in (argumente or ()) if isinstance(a, str)]
+	if argumente and argumente[0].endswith("opkg"):
+		argumente = argumente[1:]
+	comenzi = [a for a in argumente if not a.startswith("-")]
+	return bool(comenzi) and comenzi[0] in ("install", "upgrade", "remove") and not any(
+		a in argumente for a in ("--download-only", "--noaction"))
+
+
+def ePachetInCache(nume):
+	"""True pentru un pachet descarcat de opkg (<suma>_<pachet>.ipk); opkg taie numele lungi, deci si fara .ipk la coada
+	(de pilda ..._streamlink_..._cortexa15hf-n). Listele feedurilor (<suma>_Packages.gz si semnaturile) raman."""
+	return not re.search(r"_Packages(\.gz|\.sig|\.asc)?$", nume)
+
+
+def golesteCacheOpkg(dosar=DOSAR_CACHE_OPKG, proc="/proc"):
+	"""Sterge pachetele din cache-ul opkg dupa o instalare: (fisiere_sterse, octeti_eliberati); (0, 0) cat ruleaza un opkg"""
+	try:
+		nume = [n for n in os.listdir(dosar) if ePachetInCache(n) and os.path.isfile(os.path.join(dosar, n))]
+	except OSError:
+		return 0, 0
+	if not nume or opkgRuleaza(proc):
+		return 0, 0
+	sterse = 0
+	eliberati = 0
+	for n in nume:
+		cale = os.path.join(dosar, n)
+		try:
+			marime = os.path.getsize(cale)
+			os.remove(cale)
+			sterse += 1
+			eliberati += marime
+		except OSError:
+			pass
+	if sterse:
+		print("[HdsCuratenie] cache-ul opkg: %d pachete sterse, %s" % (sterse, formatMB(eliberati)))
+	return sterse, eliberati
+
+
+def golesteCacheOpkgDupa(argumente):
+	"""golesteCacheOpkg() numai dupa o comanda opkg care schimba pachete (schimbaPachete); orice eroare se inghite"""
+	try:
+		if schimbaPachete(argumente):
+			return golesteCacheOpkg()
+	except Exception as e:
+		print("[HdsCuratenie] cache-ul opkg: %s" % e)
+	return 0, 0
 
 
 def goleste(cheie):

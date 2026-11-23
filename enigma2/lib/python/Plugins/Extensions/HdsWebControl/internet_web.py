@@ -1601,13 +1601,19 @@ def stareIptv4k(K=None, I=None):
 		text = textStare(st, rez)
 	except Exception:
 		text = ""
+	try:
+		from Screens.HdsIptv4K import notaFullHd
+		nota_full_hd = notaFullHd()
+	except Exception:
+		nota_full_hd = ""
 	canale = []
 	for v in sorted(rez.values(), key=lambda v: (v[6] if len(v) > 6 else "")):
 		if len(v) > 6 and v[0]:
 			canale.append({"nume": v[6], "w": v[0], "h": v[1], "cod": v[2], "hdr": v[3], "e4k": v[0] >= K.LATIME_4K,
 				"eticheta": K.eticheta4k(v)})
 	return {"result": True, "stare": st, "text": text, "canale": canale, "surse": bool(I.areSurse()),
-		"pornita": I.optiune("4k"), "mesaj_stare": _(st["mesaj"]) if st.get("mesaj") else ""}
+		"pornita": I.optiune("4k"), "mesaj_stare": _(st["mesaj"]) if st.get("mesaj") else "",
+		"nota_full_hd": nota_full_hd}
 
 
 def pornesteIptv4k(K=None, I=None):
@@ -3337,6 +3343,7 @@ PAGINA_IPTV_4K = "<!DOCTYPE html>" + _CAP + "Găsește canalele 4K reale" + _STI
   </section>
   <section class="card">
     <h2>4K adevărat</h2>
+    <p class="nota ascuns" id="notaFullHd"></p>
     <div id="buni"></div>
   </section>
   <section class="card">
@@ -3357,6 +3364,8 @@ function arata(d){
     var t = c.nume + " · " + c.w + "x" + c.h + " " + c.cod + (c.hdr ? " · " + c.hdr : "");
     (c.e4k ? buni : fals).push(rand(c.e4k ? t : c.nume + " · " + c.eticheta));
   });
+  $("notaFullHd").textContent = d.nota_full_hd || "";
+  $("notaFullHd").classList.toggle("ascuns", !d.nota_full_hd);
   pune("buni", buni.length ? buni : [gol("Niciunul încă.")]);
   pune("fals", fals.length ? fals : [gol("Niciunul.")]);
   if(st.lucreaza && !CEAS){ CEAS = setInterval(citeste, 2000); }

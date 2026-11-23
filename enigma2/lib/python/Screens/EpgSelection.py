@@ -251,7 +251,13 @@ class EPGSelection(Screen):
 				self.zapFunc(ref.ref)
 
 	def eventSelected(self):
-		self.infoKeyPressed()
+		# OK in Ghidul TV pentru mai multe canale porneste canalul, ca Rosu (Eduard, 23.11.2026: „nu porneste decat daca apas Rosu,
+		# ar trebui sa porneasca si cand apas OK, e foarte neintuitiv”). Detaliile emisiunii raman pe INFO; la canalele IPTV fara ghid
+		# OK nu facea nimic. In celelalte feluri de ghid OK deschide detaliile, ca pana acum.
+		if self.type == EPG_TYPE_MULTI and self.zapFunc and self.key_red_choice == self.ZAP:
+			self.zapTo()
+		else:
+			self.infoKeyPressed()
 
 	def yellowButtonPressed(self):
 		if self.type == EPG_TYPE_MULTI:

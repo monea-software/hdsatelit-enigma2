@@ -339,7 +339,9 @@ class ServiceScan(Screen):
 	def hdsIndiciuT2(self):
 		"""A35 (anestis1956, Cipru 39E): canalele DVB-T2 prin satelit stau in pachete T2-MI, pe care cautarea obisnuita nu
 		le desface (gaseste cel mult serviciul purtator, fara nume). Dupa o cautare pe o pozitie care are operatori DVB-T2
-		in data/operatori-satelit.json, un rand spune unde se gasesc; il vede si pagina web (scan_result)."""
+		in data/operatori-satelit.json, un rand spune unde se gasesc; il vede si pagina web (scan_result). Unde fluxurile
+		au programele stiute si transponderul lor s-a prins, ele intra singure in lista (Hds/DabT2/imagine.dupa_scanare,
+		ca fluxurile Abertis), iar randul spune in ce buchet."""
 		if getattr(self, "hdsIndiciuPus", False) or self.hdsDinAsistent():
 			return
 		self.hdsIndiciuPus = True
@@ -351,15 +353,32 @@ class ServiceScan(Screen):
 				return
 			from Components.HdsOperatoriSatelit import operatori, nume_tara
 			from Components.HdsGrade import pozitieOrbitala
-			pe = {}
-			for o in operatori("t2mi"):
-				if o.get("pozitie") in pozitii:
-					tara = nume_tara((o.get("tari") or ["?"])[0])
-					if tara not in pe.setdefault(o["pozitie"], []):
-						pe[o["pozitie"]].append(tara)
-			randuri = [_("Pe %s sunt și canale DVB-T2 prin satelit (%s), pe care căutarea obișnuită nu le vede: "
-				"Scanare > Satelit > DVB-T2 prin satelit.") % (pozitieOrbitala(p) or p, ", ".join(pe[p]))
-				for p in sorted(pe)]
+			ops = [o for o in operatori("t2mi") if o.get("pozitie") in pozitii]
+			# fluxurile cu programele stiute, pe un transponder prins acum, intra singure in lista (imagine.dupa_scanare)
+			intra = {}
+			if ops:
+				from Hds.DabT2 import imagine as hds_imagine
+				intra = hds_imagine.buchete_dupa_scanare(list(set(o["pozitie"] for o in ops)))
+
+			def intra_singur(o):
+				t = o.get("transponder") or {}
+				return any(pol == t.get("pol") and abs(khz - int(t.get("frecventa") or 0)) <= 2000
+					for khz, pol in (intra.get(o["pozitie"]) or {}).get("tp", []))
+			pe, singure = {}, {}
+			for o in ops:
+				tara = nume_tara((o.get("tari") or ["?"])[0])
+				d = singure if intra_singur(o) else pe
+				if tara not in d.setdefault(o["pozitie"], []):
+					d[o["pozitie"]].append(tara)
+			randuri = []
+			for p in sorted(set(pe) | set(singure)):
+				if singure.get(p):
+					randuri.append(_("Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s.")
+						% (pozitieOrbitala(p) or p, ", ".join(singure[p]), ", ".join("„%s”" % b for b in intra[p]["buchete"])))
+				rest = [t for t in pe.get(p, []) if t not in singure.get(p, [])]
+				if rest:
+					randuri.append(_("Pe %s sunt și canale DVB-T2 prin satelit (%s), pe care căutarea obișnuită nu le "
+						"vede: Scanare > Satelit > DVB-T2 prin satelit.") % (pozitieOrbitala(p) or p, ", ".join(rest)))
 			if randuri:
 				label = self["scan_result"]
 				label.setText("\n".join([t for t in [label.getText()] + randuri if t]))

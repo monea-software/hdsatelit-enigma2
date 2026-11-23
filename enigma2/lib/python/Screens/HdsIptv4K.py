@@ -44,7 +44,22 @@ def textLista(rez):
 	rand = [_("4K adevărat (și în lista de canale, grupa „4K adevărat”):")] + (buni or [_("niciunul")])
 	if fals:
 		rand += ["", _("%d canale au 4K în nume, dar trimit HD (semnul „de fapt 1080p” în listă).") % fals]
+	nota = notaFullHd()
+	if nota:
+		rand += ["", nota]
 	return "\n".join(rand)
+
+
+def notaFullHd():
+	"""Pe receptoarele care redau cel mult 1080p (Components/HdsIptvFullHd.py): ce se intampla cu un canal 4K. Altfel "". Aceeasi in web
+	(internet_web.stareIptv4k)."""
+	try:
+		from Components import HdsIptvFullHd as F
+		if not F.placaFullHd():
+			return ""
+	except Exception:
+		return ""
+	return _("Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda.")
 
 
 class HdsIptv4K(Screen):

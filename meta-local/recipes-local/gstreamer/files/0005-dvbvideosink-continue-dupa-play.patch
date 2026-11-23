@@ -1,0 +1,31 @@
+From 6b20f8a50fc564ebdec8b0363127b5e810aa4b27 Mon Sep 17 00:00:00 2001
+From: HD Satelit <noreply@hdsatelit.com>
+Date: Mon, 23 Nov 2026 21:28:06 +0200
+Subject: [PATCH] dvbvideosink: VIDEO_CONTINUE after VIDEO_PLAY when the caps
+ come while playing (ZGEMMA H8.2H SE)
+
+---
+ gstdvbvideosink.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/gstdvbvideosink.c b/gstdvbvideosink.c
+index 6df87e0..31075d2 100644
+--- a/gstdvbvideosink.c
++++ b/gstdvbvideosink.c
+@@ -1972,6 +1972,16 @@ static gboolean gst_dvbvideosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
+ 			if (!self->playing)
+ 			{
+ 				ioctl(self->fd, VIDEO_PLAY);
++				/* The caps can come after PAUSED_TO_PLAYING (this sink does not preroll; with no audio sink, or an
++				   audio sink that prerolls late, the pipeline is already PLAYING): the driver then got FREEZE and
++				   CONTINUE before PLAY. On the ZGEMMA H8.2H SE driver a PLAY that follows a FREEZE stays frozen
++				   until the next CONTINUE, so the decoder never starts (no picture, no error). Send that CONTINUE
++				   here when the element is already playing; while it is paused PAUSED_TO_PLAYING sends it. */
++				if (!self->paused)
++				{
++					GST_INFO_OBJECT(self, "caps after PLAYING: VIDEO_CONTINUE after VIDEO_PLAY");
++					ioctl(self->fd, VIDEO_CONTINUE);
++				}
+ 			}
+ 		}
+ 		self->playing = TRUE;

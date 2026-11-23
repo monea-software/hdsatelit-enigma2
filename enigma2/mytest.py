@@ -1107,6 +1107,13 @@ def runScreenTest():
 		HdsAfisaj.porneste(session)
 	except Exception as e:
 		print("[mytest] afisajul din fata:", e)
+	# HDSatelit (LED8): sigla luminata a ZGEMMA H8 (Components/HdsLedSigla.py); din fabrica nu scrie nimic, pe celelalte
+	# receptoare nu face nimic
+	try:
+		from Components import HdsLedSigla
+		HdsLedSigla.porneste(session)
+	except Exception as e:
+		print("[mytest] sigla luminata:", e)
 	# HDSatelit: iesirea HDMI lasata oprita de un enigma2 iesit in standby se porneste; nodul CEC dupa setari
 	# (Components/HdsStandbyTv.py); fara /proc/stb/hdmi/output nu face nimic
 	try:
@@ -1174,11 +1181,6 @@ def runScreenTest():
 
 		profile("wizards")
 		screensToRun += wizardManager.getWizards()
-
-		# The wizard handles first boot after language selection; this handles upgrades.
-		if HdsBetaTester is not None and HdsBetaTester.acordTestNecesar() and not config.misc.firstrun.value:
-			from Screens.HdsBetaTester import HdsBetaConditii
-			screensToRun.append((11, HdsBetaConditii))
 
 		screensToRun.append((100, Screens.InfoBar.InfoBar))
 
@@ -1391,6 +1393,13 @@ def runScreenTest():
 	except Exception as e:
 		print("[mytest] afisajul la oprire:", e)
 	_pasIesire("afisajul")
+	# HDSatelit (LED8): sigla luminata la driver (efectul oprit), ca in fabrica; oprirea completa o tine microcontrolerul
+	try:
+		from Components import HdsLedSigla
+		HdsLedSigla.opreste()
+	except Exception as e:
+		print("[mytest] sigla la oprire:", e)
+	_pasIesire("sigla")
 
 	config.misc.startCounter.save()
 
@@ -1497,6 +1506,13 @@ try:
 	HdsStandbyTv.initConfig()
 except Exception as _eroare_standby_tv:
 	print("[mytest] standby si televizorul: %s" % _eroare_standby_tv)
+# HDSatelit (LED8): sigla luminata a ZGEMMA H8 (Components/HdsLedSigla.py): config.hds_led_sigla si SystemInfo HdsLedSigla /
+# HdsLedSiglaCulori, inaintea meniurilor (randurile din setup.xml hds_led_sigla); pe celelalte receptoare nu face nimic
+try:
+	from Components import HdsLedSigla
+	HdsLedSigla.initConfig()
+except Exception as _eroare_sigla:
+	print("[mytest] sigla luminata: %s" % _eroare_sigla)
 
 # HDSatelit: marginile ecranului salvate (Screens/OSDCalibration.py, Components/HdsMargini.py), puse in driver la
 # pornire, dupa iesirea video; cu toate marginile 0 (din fabrica) nu se scrie nimic

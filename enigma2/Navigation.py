@@ -43,6 +43,16 @@ except ImportError:
 # atatea secunde
 REIA_MIN_S = 1.0
 
+# IPF1 (0.7.9, ZGEMMA H8.2H Plus): evBuffering (GST_MESSAGE_BUFFERING din servicemp3, la fiecare schimbare a tamponului) vine la IPTV de
+# 25-1000 de ori pe secunda (masurat pe receptor cu un contor aici: 992/s pe |RX| Cute Baby Animals, 4 Mb/s). Fiecare trecea prin
+# toti ascultatorii (Navigation.event, ServiceEventTracker, jurnalul fluxului): 0,7-1 s din fiecare secunda a firului principal,
+# deci tastele, pagina web si bataia paznicului asteptau 4-120 s (paznicul a repornit interfata dupa 125 s fara bataie). Acum
+# ajunge la ascultatori cel mult un evBuffering la RAR_TAMPON_S; cele dintre ele se aduna intr-unul singur, trimis la sfarsitul
+# ferestrei (ascultatorii citesc starea tamponului din serviciu, deci il vad pe ultimul). Celelalte evenimente trec ca inainte.
+RAR_TAMPON_S = 0.5  # Eduard 23.11.2026: 2 pe secunda (IPF1 pusese 5)
+_EV_TAMPON = getattr(iPlayableService, "evBuffering", None)
+_EV_SERVICIU_NOU = tuple(e for e in (getattr(iPlayableService, "evStart", None), getattr(iPlayableService, "evEnd", None)) if e is not None)
+
 # TODO: remove pNavgation, eNavigation and rewrite this stuff in python.
 class Navigation:
 	# Punctele de extensie ale zap-ului si ale inregistrarii (atribute de clasa; Hds/DabT2 pune aici DAB+ si DVB-T2).
@@ -97,6 +107,9 @@ class Navigation:
 		Nav.navcore = self
 		
 		self.pnav = pNavigation()
+		self._tamponLa = None        # cand a ajuns ultimul evBuffering la ascultatori (RAR_TAMPON_S)
+		self._tamponCeas = None      # eTimer: evBuffering amanat ajunge dupa fereastra
+		self._tamponAmanat = False
 		self.pnav.m_event.get().append(self.dispatchEvent)
 		self.pnav.m_record_event.get().append(self.dispatchRecordEvent)
 		self.event = [ ]
@@ -123,6 +136,42 @@ class Navigation:
 			print("[Navigation] tunerul de rezerva:", e)
 
 	def dispatchEvent(self, i):
+		if i == _EV_TAMPON and _EV_TAMPON is not None:
+			if self._tamponAmana():
+				return
+		elif i in _EV_SERVICIU_NOU:
+			# alt serviciu (sau niciunul): evBuffering amanat al celui vechi nu mai ajunge, iar primul al celui nou trece pe loc
+			if self._tamponAmanat:
+				self._tamponCeas.stop()
+				self._tamponAmanat = False
+			self._tamponLa = None
+		self._dispatch(i)
+
+	def _tamponAmana(self):
+		"""True cand evBuffering asteapta (RAR_TAMPON_S); unul singur ajunge la sfarsitul ferestrei, cu starea de atunci."""
+		acum = _monoton()
+		if self._tamponLa is None or acum - self._tamponLa >= RAR_TAMPON_S:
+			self._tamponLa = acum
+			return False
+		if not self._tamponAmanat:
+			try:
+				if self._tamponCeas is None:
+					from enigma import eTimer
+					self._tamponCeas = eTimer()
+					self._tamponCeas.callback.append(self._tamponDupa)
+				self._tamponCeas.start(max(1, int((self._tamponLa + RAR_TAMPON_S - acum) * 1000)), True)
+				self._tamponAmanat = True
+			except Exception as e:
+				print("[Navigation] evBuffering amanat:", e)
+				return False
+		return True
+
+	def _tamponDupa(self):
+		self._tamponAmanat = False
+		self._tamponLa = _monoton()
+		self._dispatch(_EV_TAMPON)
+
+	def _dispatch(self, i):
 		# hdsCazutLa dupa evenimentul serviciului redat. La un canal pornit pe un tuner ocupat (allocate Channel: res -6)
 		# evTuneFailed vine chiar din pnav.playService, dupa evStart; dupa o acordare buna vin evTunedIn si, cu PMT-ul,
 		# evUpdatedInfo

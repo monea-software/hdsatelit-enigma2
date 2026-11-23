@@ -4666,7 +4666,8 @@ def bazaImaginii():
 
 def canalSiArhitecturi():
 	"""(canal, baza, arhitecturi) dupa feedul actualizarilor de pe receptor (proba sau public); fara el: public, baza
-	din /etc/hdsatelit-model, arhitecturile imaginii."""
+	din /etc/hdsatelit-model, arhitecturile imaginii. Baza e mereu cea scrisa (0.7.9, UNF9): pachetele de extensii
+	(kernel-module-tun-<nucleu>) sunt ale nucleului imaginii scrise, nu ale feedului unic din adrese."""
 	canal, baza, arh = "public", "", []
 	try:
 		from Components import HdsActualizari as HA
@@ -4677,7 +4678,7 @@ def canalSiArhitecturi():
 			c, surse, b = HA.canalul()
 			if c:
 				canal = "proba" if c.startswith("proba") else "public"
-				baza = b
+				baza = bazaImaginii() or b
 				arh = [x[2] for x in surse if x[2] not in arh]
 		except Exception as eroare:
 			jurnal("canalul feedului: %r" % (eroare,))
@@ -4813,6 +4814,12 @@ def instaleaza(fel):
 	try:
 		from Components import HdsExtensiiLucru as X
 		X.catalogVechi()
+	except Exception:
+		pass
+	# 0.7.9 (BLD8): pachetele descarcate de opkg stau in /var/cache/opkg, in RAM; dupa instalare se sterg
+	try:
+		from Components import HdsCuratenie
+		HdsCuratenie.golesteCacheOpkgDupa([PROGRAM_OPKG, "install"] + list(nume))
 	except Exception:
 		pass
 	_MODULE_DISC.clear()

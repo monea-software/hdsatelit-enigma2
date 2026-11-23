@@ -58649,6 +58649,14 @@ msgstr "Muut laajennukset tarvitsevat tätä. Poista ensin ne."
 msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
 msgstr "Laajennusta ei enää ole feedissä. Lataa luettelo uudelleen sinisellä näppäimellä."
 
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "Yksi pakettiluettelo puuttuu palvelimelta. Muut ladattiin, joten internet-yhteys toimii."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "Palvelimella ei ole pyydettyä pakettiluetteloa. Internet-yhteys toimii; yritä myöhemmin uudelleen."
+
 msgid "Extensia nu este făcută pentru acest receptor."
 msgstr "Tätä laajennusta ei ole tehty Vast.otin-laitteelle."
 
@@ -77786,3 +77794,180 @@ msgstr "Sinä valitset, kuinka kauan se on päällä: 2 tuntia, pidempään tai 
 #: lib/python/Components/HdsAfisaj.py:1364
 msgid "Scriere VFD incompletă."
 msgstr "Keskeneräinen kirjoitus VFD:lle."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "Valaistu logo"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "Logo, kun vastaanotin on päällä"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "Miten etupaneelin logo palaa, kun vastaanotin on päällä. Kuten tehtaalta: väri, jonka vastaanotin valitsee itse. Voit valita kumman tahansa kahdesta väristä, molemmat yhtä aikaa (kolmas sävy), sammutettu, vilkunta tai pehmeä värinvaihto. Valinta näkyy heti muutaman sekunnin ajan."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "Logo valmiustilassa"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "Miten logo palaa, kun vastaanotin on valmiustilassa. Kuten tehtaalta: vastaanottimen asettama valmiustilan väri. Hengittää hitaasti: logo syttyy ja sammuu pehmeästi merkkinä siitä, että vastaanotin nukkuu. Sammutettu: ei valoa yöllä."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "Logo täydessä sammutuksessa"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "Päällä (kuten tehtaalta) tai pois päältä, kun sammutat vastaanottimen kokonaan (täysi sammutus). Silloin vastaanotin ohjaa logoa itse ilman ohjelmistoa."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "Logo näyttää, mitä vastaanotin tekee"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "Kyllä: logon valo muuttuu, kun vastaanotin tekee jotain (ohjelmistopäivitys, kanavahaku, moottori kääntää antennia, signaali löytyy, tallennus, etäapu) alla olevien valintojen mukaan, ja palaa sitten ennalleen. Kun tapahtumia on useita yhtä aikaa, näkyviin tulee tärkein alla olevan järjestyksen mukaan. Ei (kuten tehtaalta): logo pysyy päällä- tai valmiustilan värissä."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "Kun päivitystä asennetaan"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "Logon valo, kun imagen päivitystä tai liitännäistä asennetaan. Silloin vastaanotinta ei saa irrottaa pistorasiasta."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "Kun kanavahaku on käynnissä"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "Logon valo, kun kanavahaku (myös sokea haku satelliitista) on käynnissä."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "Kun antenni kääntyy"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "Logon valo, kun antennin moottori (DiSEqC 1.2 tai USALS) siirtää antennia toiselle satelliitille. Kaikki värit vuorotellen: logo käy läpi kaikki kolme sävyä, kunnes antenni pysähtyy."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "Kun signaali löytyy"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "Logon valo 3 sekunnin ajan sen jälkeen, kun viritin saa kanavan signaalin (kanavaa vaihdettaessa tai kun antenni pysähtyy)."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "Kun tallennus on käynnissä"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "Logon valo tallennuksen aikana, myös valmiustilassa."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "Kun etäapu on päällä"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "Logon valo, kun etäapu on päällä, jotta näet tiimin olevan yhteydessä."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "Valitse etupaneelin logon värit ja se, miten se palaa, kun vastaanotin tekee kanavahakua, kääntää antennia, tallentaa tai päivittää ohjelmistoa."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "Kuten tehtaalta"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "Ei muutosta"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "Päällä-tilan väri"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "Valmiustilan väri"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "Molemmat värit yhtä aikaa"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "Sammutettu"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "Vilkkuu päällä-tilan värissä"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "Vilkkuu valmiustilan värissä"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "Vilkkuu nopeasti molemmissa väreissä"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "Vaihtaa kahden värin välillä"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "Kaikki värit vuorotellen"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "Hengittää hitaasti, valmiustilan väri"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "Kulkee pehmeästi kaikkien värien läpi"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "Päällä"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "Paina EXIT ja käytä vastaanotinta normaalisti; etäapu jää päälle. Tänne pääset takaisin kohdasta %s."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: TV:hen"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "Tukitiimi tarkistaa tilanteen heti kun ehtii."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "Voit sulkea sivun ja käyttää vastaanotinta normaalisti; etäapu jää päälle. Vastaanottimessa se löytyy kohdasta __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "Vastaanottimesi toistaa enintään Full HD (1080p) -laatua, joten se avaa saman kanavan ilman 4K-laatua: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "Tämä kanava on 4K-laatuinen, ja vastaanottimesi toistaa enintään Full HD (1080p) -laatua."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "Vastaanottimesi toistaa enintään Full HD (1080p) -laatua. 4K-kanava avautuu tässä palveluntarjoajan vastaavana kanavana ilman 4K-laatua, jos sellainen on saatavilla; muuten sitä ei voi toistaa."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "Satelliitin %s DVB-T2-kanavat (%s) lisätään automaattisesti kanavaluetteloon: %s."

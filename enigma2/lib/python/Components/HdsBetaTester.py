@@ -53,7 +53,6 @@ except ImportError:
 # Nota 4: identificatorul anonim ramane local si dupa stergerea datelor personale.
 # Nota 3: modulele de acces si pauza; pragul NOTA_MODULE ramane separat.
 NOTA = 4
-ACORD_TEST = 1
 PROTOCOL = 1
 SERVER = "https://stb.hdsatelit.com/api/testeri/"
 ADRESA_NOTA = "https://stb.hdsatelit.com/testeri/confidentialitate/"
@@ -173,22 +172,6 @@ AUTOMAT = (N_("Trimite automat în fiecare zi"),
 ANTET_ACORD = N_("Datele sunt anonime: receptorul primește un identificator întâmplător, fără adresa IP, fără parole și "
 	"fără listele tale de canale. Le folosim numai ca să îmbunătățim imaginea pe modelul tău de receptor. Numele și "
 	"e-mailul sunt opționale.")
-TEST_TITLU = N_("Condițiile imaginii în test")
-TEST_CONDITII = N_("Această imagine este în test (alfa/beta). Folosind-o ești beta tester: echipa HD Satelit poate "
-	"vedea și face orice pe receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele "
-	"și parolele. Pot apărea probleme. Fără acord imaginea nu poate fi folosită.")
-TEST_OBLIGATORIU = N_("Imagine în test: acordul beta tester e obligatoriu")
-TEST_REFUZ = N_("Fără acord imaginea nu poate fi folosită. Poți trece pe o imagine finală când apare sau poți "
-	"instala altă imagine. Rețeaua și actualizările rămân disponibile. Tasta POWER deschide opțiunile de "
-	"recuperare și de pornire în altă imagine, dacă receptorul le permite.")
-TEST_FINAL = N_("Pe o imagine finală, Beta tester este opțional. Echipa HD Satelit poate vedea și face orice pe "
-	"receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele și parolele. Pot apărea probleme.")
-
-
-def textConditii():
-	return _t(TEST_CONDITII if imagineInTest() else TEST_FINAL)
-
-
 BIFA_NOTA = N_("Am citit Nota de confidențialitate și sunt de acord să trimit datele bifate mai sus.")
 INTREBARE = N_("Vrei să ajuți la îmbunătățirea imaginii pe care o folosești acum?")
 INTREBARE_RAND = N_("Ai folosit cu interes imaginea E2 HD Satelit peste o oră. Ca beta tester ne trimiți date anonime, "
@@ -495,9 +478,7 @@ def initConfig(config=None):
 		return config.hds_beta
 	from Components.config import ConfigSubsection, ConfigYesNo, ConfigText, ConfigInteger
 	b = ConfigSubsection()
-	b.activ = ConfigYesNo(default=imagineInTest())
-	# Preserve an explicit choice when the factory default changes at 1.0.
-	b.activ.save_forced = True
+	b.activ = ConfigYesNo(default=False)
 	for fel in FELURI:
 		setattr(b, fel, ConfigYesNo(default=True))
 	b.nume = ConfigText(default="", fixed_size=False)
@@ -506,16 +487,17 @@ def initConfig(config=None):
 	b.intrebare = ConfigText(default="", fixed_size=False)
 	b.id = ConfigText(default="", fixed_size=False)
 	b.nota = ConfigInteger(default=0, limits=(0, 9999))
-	b.acord_test = ConfigInteger(default=-1, limits=(-1, 9999))
 	b.acord = ConfigText(default="", fixed_size=False)
 	b.acord_ora = ConfigYesNo(default=False)
 	b.server = ConfigText(default=SERVER, fixed_size=False)
 	b.public = ConfigText(default="", fixed_size=False)
 	b.automat = ConfigYesNo(default=True)
 	config.hds_beta = b
-	# The old False default was omitted on disk, even for a paused registration.
-	if b.acord_test.value == -1 and idValid(b.id.value) and b.nota.value > 0 and b.activ.saved_value is None:
+	# 0.7.8 punea Beta tester pornit din fabrica si il scria pe disc; fara identificator nu e o alegere a omului (acordul
+	# face mereu identificatorul), deci ramane oprit, ca pe orice receptor neinscris
+	if b.activ.value and not idValid(b.id.value):
 		b.activ.value = False
+		b.activ.save()
 	_NOTA_LOCALA = int(b.nota.value)
 	_reiaStergerea(b)
 	return b
@@ -523,51 +505,6 @@ def initConfig(config=None):
 
 def _b(b=None):
 	return b if b is not None else initConfig()
-
-
-def imagineInTest(versiune=None):
-	"""0.x is development; 1.0 and later are final. No filesystem or network IO."""
-	if versiune is None:
-		try:
-			from enigma import getEnigmaVersionString
-			versiune = getEnigmaVersionString()
-		except ImportError:
-			versiune = ""
-	return bool(re.match(r"\A0\.[0-9]+\.[0-9]+(?:\s|$)", str(versiune)))
-
-
-def acordTestNecesar(b=None):
-	if not imagineInTest():
-		return False
-	b = _b(b)
-	# Migrate only the first version, never a refused or outdated agreement.
-	if b.acord_test.value == -1:
-		b.acord_test.value = ACORD_TEST if (b.activ.value and idValid(b.id.value) and b.nota.value > 0) else 0
-		b.acord_test.save()
-	return not (b.activ.value and idValid(b.id.value) and b.acord_test.value >= ACORD_TEST)
-
-
-def acceptaTest(b=None):
-	b = _b(b)
-	ok, text = acceptaAcord(bife(b), b.nume.value, b.email.value, b, de_unde="test", automat=b.automat.value)
-	return ok, text
-
-
-def refuzaTest(b=None):
-	"""Withdraw test consent without deleting identity or disabling updates."""
-	b = _b(b)
-	b.acord_test.value = 0
-	b.activ.value = False
-	salveaza(b)
-	_starea["activ"] = False
-	sesiune = _starea.get("sesiune")
-	if sesiune is not None:
-		from Screens.HdsBetaTester import HdsBetaConditii
-		if isinstance(sesiune.current_dialog, HdsBetaConditii):
-			sesiune.current_dialog.obliga()
-		else:
-			sesiune.open(HdsBetaConditii)
-	return True, _t(TEST_REFUZ)
 
 
 def salveaza(b=None):
@@ -593,7 +530,7 @@ def inscris(b=None):
 	"""Programul pornit, cu identificator si cu nota de acum acceptata (meniul testerului)."""
 	b = _b(b)
 	return (_STERGERE_DOSAR == DOSAR and _STERGERE is not None and _STERGERE.gata and _STERGERE.ok and
-		bool(b.activ.value) and idValid(b.id.value) and int(b.nota.value) >= NOTA and not acordTestNecesar(b))
+		bool(b.activ.value) and idValid(b.id.value) and int(b.nota.value) >= NOTA)
 
 
 def notaVeche(b=None):
@@ -668,8 +605,6 @@ def acceptaAcord(feluri, nume="", email="", b=None, de_unde="setari", acum=None,
 		b.id.value = identificatorNou()
 	prima_activare = not b.activ.value
 	b.activ.value = True
-	if imagineInTest():
-		b.acord_test.value = ACORD_TEST
 	b.nota.value = NOTA
 	b.acord.value = oraUtc(acum)
 	if b.intrebare.value not in ("da", "nu"):
@@ -769,11 +704,6 @@ def iesire(b=None, gata=None):
 	"""Start local deletion; completion and config access stay on main."""
 	global _STERGERE, _STERGERE_DOSAR, _GENERATIE
 	b = _b(b)
-	if imagineInTest():
-		refuzaTest(b)
-		if gata is not None:
-			gata(True, _t(TEST_REFUZ))
-		return None
 	corp = {"v": PROTOCOL, "id": b.id.value if idValid(b.id.value) else "", "nota": int(b.nota.value)}
 	if _STERGERE is not None and not _STERGERE.gata:
 		if gata is not None:
@@ -987,8 +917,6 @@ def pauza(b=None):
 	numele public si cheia profilului. Pornirea din nou (acceptaAcord) foloseste acelasi identificator, iar serverul
 	intoarce aceeasi inscriere (iesit = NULL). Coada celorlalte pachete se goleste. -> (reusit, mesaj)"""
 	b = _b(b)
-	if imagineInTest():
-		return refuzaTest(b)
 	if _STERGERE_DOSAR == DOSAR and _STERGERE is not None and not _STERGERE.gata:
 		return False, _t("Se verifică datele programului în fundal. Așteaptă puțin.")
 	if not b.activ.value or not idValid(b.id.value):

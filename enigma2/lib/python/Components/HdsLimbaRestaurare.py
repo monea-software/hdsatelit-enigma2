@@ -350,8 +350,9 @@ def _instaleaza(rad, pachete, sursa=None):
 	pc = A.P.citeste_configurarea(rad)
 	if sursa is None:
 		canal, surse, baza = A.canalul(rad, pc)
+		# 0.7.9 (UNF9): feedul din adrese poate fi si un feed unic (alta baza decat cea scrisa); stare.json hotaraste mai jos
 		if canal not in ("public", "proba") or not surse \
-				or baza != A.baza_receptorului(rad):
+				or not A.baza_feed_potrivita(baza, A.baza_receptorului(rad)):
 			return final(pachete)
 	else:
 		canal, surse, baza = "public", [], A.baza_receptorului(rad)
@@ -389,9 +390,8 @@ def _instaleaza(rad, pachete, sursa=None):
 		server, eroare = A.descarca_stare(adresa + "/stare.json", credentiale, deschide=deschide)
 		if eroare:
 			return stick_rau(server.get("eroare") or eroare) if stick else amanat()
-		if server.get("baza") != baza or server.get("imagine_noua") \
-				or server.get("canal", canal) != canal or \
-				A.P.compara_versiuni(server.get("imagine_minima", ""), baza) > 0:
+		if A.motiv_baza(server, baza, A.baza_receptorului(rad)) or server.get("imagine_noua") \
+				or server.get("canal", canal) != canal:
 			return refuzat("fișierul e pentru altă versiune (%s), receptorul are %s" % (server.get("baza"), baza))
 		if stick:
 			# arhitecturile din fisier; feedSemnat le pastreaza numai pe ale receptorului (arch.conf)

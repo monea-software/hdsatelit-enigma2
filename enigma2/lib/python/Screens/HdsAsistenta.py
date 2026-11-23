@@ -22,6 +22,12 @@
 #   fara cod, vezi Screens/HdsAsistentaSemn.cerereWeb), deschide aceeasi pagina de pornire, cu durata aleasa acolo. Cat
 #   ecranele asistentei sunt deschise, banda de semn de sus (Screens/HdsAsistentaSemn.py) se ascunde: ecranul arata el
 #   starea si pana cand e pornita.
+#   Cat e pornita, sub antet stau doua randuri fixe (nu se deruleaza cu jurnalul): randul de stare (ce face echipa, ca
+#   pe banda de sus; conectata si fara lucru: TEXT_ECHIPA_VINE) si randul EXIT (TEXT_FOLOSESTI: omul poate folosi
+#   receptorul, asistenta ramane pornita, de unde revine aici); in legenda, langa Rosu "Oprește", "EXIT: la televizor".
+#   EXIT inchide ecranul cu True cat asistenta merge: Menu.menuClosed inchide atunci si meniurile de dedesubt, deci omul
+#   ajunge direct la imaginea canalului. Jurnalul se deruleaza singur la ultimul rand cand vine unul nou, cat omul e la
+#   capatul lui; daca a urcat cu Sus ca sa citeasca, ramane acolo pana coboara iar la capat.
 #   Cand echipa a trimis concluzii (op "concluzii"), Galben "Ultimele concluzii" le deschide din nou. Cat exista copia
 #   setarilor facuta cand a intrat echipa (A.stareCopie, si dupa oprire), ziua si ora ei sunt pe primul rand al
 #   textului si Albastru "Pune înapoi cum era" o pune la loc: o intrebare (Nu ales), apoi repornirea interfetei
@@ -69,6 +75,14 @@ TEXT_SCHIMBA_DURATA = N_("Schimbă durata")
 TEXT_ASTEPTARE = N_("Te anunțăm când intrăm. Poți folosi receptorul între timp.")
 # cererea ramane valabila cat a ales omul; daca echipa nu intra imediat, omul n-o opreste prea devreme
 TEXT_NU_OPRI = N_("Dacă nu intrăm imediat, las-o pornită măcar 30 de minute: poate ajutăm pe altcineva chiar acum.")
+# randul fix de sub antet, cat asistenta merge, in orice stare: omul afla ca poate folosi receptorul fara s-o opreasca si
+# cum revine aici; %s = calea din meniu (A.drumMeniu, numele ca in limba receptorului)
+TEXT_FOLOSESTI = N_("Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s.")
+# legenda lui EXIT, langa Rosu "Oprește", cat asistenta merge
+TEXT_TASTA_IESIRE = N_("EXIT: la televizor")
+# randul de stare cat e conectata si echipa nu lucreaza acum: A.TEXT_CONECTAT fara partea cu EXIT, pe care o spune
+# randul fix TEXT_FOLOSESTI chiar dedesubt (aceeasi fraza scurta si in pagina web)
+TEXT_ECHIPA_VINE = N_("Echipa se uită imediat ce poate.")
 
 # culorile skinului HDSatelit (rolurile din skin.xml), scrise ca valori pentru skinul de rezerva
 CULORI_SKIN = {
@@ -86,11 +100,13 @@ CULORI_SKIN = {
 	"key_blue": "#3D7BE0",
 }
 
-# corpul ecranului, acelasi in skin.xml (in cadrul HdsCadru1776) si in skinul de rezerva: starea sus, randul mare
-# (gol: codul nu se arata), textul (jurnalul sau termenii) si ajutorul din dreapta jos
+# corpul ecranului, acelasi in skin.xml (in cadrul HdsCadru1776) si in skinul de rezerva: starea sus, cele doua randuri
+# fixe (numai pe ecranul asistentei, conditional: forma e si a termenilor si a concluziilor; cand nu incap, deruleaza in
+# sus si inapoi), textul (jurnalul sau termenii) si ajutorul din dreapta jos
 CORP_ASISTENTA = """
 		<widget source="antet" render="Label" position="32,104" size="1712,56" font="HdsBold;32" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<widget source="cod" render="Label" position="32,168" size="1712,112" font="HdsBold;96" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2" />
+		<widget source="rand_stare" render="RunningText" options="movetype=swimming,direction=top,wrap=1,startdelay=3000,steptime=60" conditional="rand_stare" position="32,164" size="1712,40" font="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="2" />
+		<widget source="rand_iesire" render="RunningText" options="movetype=swimming,direction=top,wrap=1,startdelay=3000,steptime=60" conditional="rand_iesire" position="32,208" size="1712,72" font="HdsRegular;26" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />
 		<widget name="text" position="32,288" size="1712,624" font="HdsRegular;26" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2" />
 		<widget source="ajutor" render="Label" position="904,936" size="840,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" noWrap="1" zPosition="1" />"""
 
@@ -121,6 +137,15 @@ LEGENDA_ALBASTRU = """
 			<convert type="ConditionalShowHide" />
 		</widget>
 		<widget source="key_blue" render="Label" conditional="key_blue" objectTypes="key_blue,StaticText" position="1332,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
+
+# EXIT langa Rosu "Oprește", in restul slotului rosu (toate patru culorile pot fi pline deodata; "Oprește" are cel mult
+# 142 px in HdsCond 28 si 163 px in Regular 28, in toate limbile): liniuta gri si textul, ascunse cand textul e gol;
+# acelasi bloc in forma din skin.xml (acolo cadrul nu-l are, nu e o tasta de culoare). Cand nu incape, deruleaza.
+LEGENDA_IESIRE = """
+		<widget source="tasta_iesire" render="FixedLabel" conditional="tasta_iesire" position="226,944" size="6,32" backgroundColor="hdsLabel" zPosition="1">
+			<convert type="ConditionalShowHide" />
+		</widget>
+		<widget source="tasta_iesire" render="RunningText" options="movetype=swimming,startdelay=2000,steptime=40" conditional="tasta_iesire" position="242,936" size="210,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
 
 CORP_ALEGE = """
 		<widget name="config" position="32,104" size="1712,60" itemHeight="60" font="HdsRegular;30" secondfont="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
@@ -165,9 +190,17 @@ def _activa(s):
 	return s.get("stare") in (A.VERIFICARE, A.INREGISTRARE, A.ASTEAPTA, A.CONECTAT, A.SE_OPRESTE)
 
 
+def _drumMeniu():
+	"""Calea spre ecranul asistentei, in limba receptorului (A.drumMeniu: numele ca in meniu)."""
+	try:
+		return A.drumMeniu()
+	except Exception:
+		return " > ".join(_(p) for p in ("Menu", "Settings", "Asistență de la distanță"))
+
+
 class HdsAsistenta(Screen):
 	skin = _rezerva("HdsAsistenta", "Asistență de la distanță", CORP_ASISTENTA + LEGENDA_ASISTENTA + LEGENDA_GALBEN +
-		LEGENDA_ALBASTRU)
+		LEGENDA_ALBASTRU + LEGENDA_IESIRE)
 
 	def __init__(self, session, din_web=None, nevoie="", detalii=""):
 		Screen.__init__(self, session)
@@ -182,8 +215,12 @@ class HdsAsistenta(Screen):
 		except (TypeError, ValueError):
 			self.durata_web = None
 		self["antet"] = StaticText("")
-		# randul mare al formei ramane gol: codul sesiunii nu se arata omului
+		# codul sesiunii nu se arata omului; "cod" ramane gol, pentru o tema mai veche care inca are randul lui
 		self["cod"] = StaticText("")
+		# cele doua randuri fixe de sub antet (randul de stare si randul EXIT) si legenda lui EXIT, cat asistenta merge
+		self["rand_stare"] = StaticText("")
+		self["rand_iesire"] = StaticText("")
+		self["tasta_iesire"] = StaticText("")
 		self["text"] = ScrollLabel("")
 		self["ajutor"] = StaticText("")
 		self["key_red"] = StaticText("")
@@ -198,8 +235,11 @@ class HdsAsistenta(Screen):
 			"yellow": self._galben,
 			"blue": self._albastru,
 		}
+		# jurnalul urmeaza ultimul rand cat omul e la capatul lui (la deschidere: da); Sus il opreste, Jos pana la capat il
+		# reporneste
+		self._laCapat = True
 		# toate actiunile hartii de directii legate (fara "unknown action" in jurnal); Sus/Jos deruleaza textul
-		for d, f in (("up", self["text"].pageUp), ("down", self["text"].pageDown), ("left", _nimic), ("right", _nimic)):
+		for d, f in (("up", self._sus), ("down", self._jos), ("left", _nimic), ("right", _nimic)):
 			actiuni[d] = f
 			actiuni[d + "Repeated"] = f
 			actiuni[d + "Up"] = _nimic
@@ -217,6 +257,8 @@ class HdsAsistenta(Screen):
 
 	def _porneste(self):
 		self.ceas.start(1000, False)
+		# asezarea (applySkin) a pus textul din nou, de sus: reface il pune iar si coboara la ultimul rand
+		self._text = None
 		self.reface()
 
 	def _laIntrare(self):
@@ -241,10 +283,73 @@ class HdsAsistenta(Screen):
 			self.close()
 
 	def _puneText(self, text):
-		# ScrollLabel se intoarce sus la fiecare setText: textul se pune numai cand se schimba
-		if text != self._text:
-			self._text = text
-			self["text"].setText(text)
+		# ScrollLabel se intoarce sus la fiecare setText: textul se pune numai cand se schimba, apoi ultimul rand jos (omul
+		# era la capat) sau locul unde citea omul
+		if text == self._text:
+			return
+		g = self._geometrie()
+		vechi = g[0] if g else 0
+		self._text = text
+		self["text"].setText(text)
+		g = self._geometrie()
+		if g is None:
+			return
+		self["text"].setPos(g[1] if self._laCapat else min(vechi, g[1]))
+
+	def _geometrie(self):
+		"""(pozitia, capatul, pagina) textului derulant in puncte; capatul = pozitia cu ultimul rand jos in caseta, pe rand
+		intreg (goBottom din ScrollLabel merge pe pagini intregi si poate lasa sus un singur rand pe o pagina goala).
+		None cand textul incape intr-o pagina sau caseta nu e inca asezata."""
+		t = self["text"]
+		eticheta = getattr(t, "long_text", None)
+		pagina = getattr(t, "pageHeight", 0) or 0
+		total = getattr(t, "total", None)
+		if eticheta is None or pagina <= 0 or total is None or not hasattr(t, "setPos"):
+			return None
+		rand = getattr(t, "lineHeight", 0) or 30
+		capat = max(0, eticheta.calculateSize().height() - pagina)
+		capat = min(-(-capat // rand) * rand, max(0, total - pagina))
+		return t.getPos(), capat, pagina
+
+	def _laCapatAcum(self):
+		g = self._geometrie()
+		return g is None or g[0] >= g[1]
+
+	def _sus(self):
+		g = self._geometrie()
+		if g is None:
+			self["text"].pageUp()
+		else:
+			self["text"].setPos(max(0, g[0] - g[2]))
+		self._laCapat = self._laCapatAcum()
+
+	def _jos(self):
+		g = self._geometrie()
+		if g is None:
+			self["text"].pageDown()
+		else:
+			self["text"].setPos(min(g[1], g[0] + g[2]))
+		self._laCapat = self._laCapatAcum()
+
+	def _randuriFixe(self, s=None):
+		"""Randul de stare si randul EXIT de sub antet, si legenda lui EXIT: pline cat asistenta merge (s), goale altfel."""
+		if s is None:
+			for nume in ("rand_stare", "rand_iesire", "tasta_iesire"):
+				self[nume].setText("")
+			return
+		# A.textConectat: ce face echipa ("lucrează acum" / "a terminat...") sau, conectata si fara lucru, TEXT_CONECTAT,
+		# aici scurtat la TEXT_ECHIPA_VINE (EXIT il spune randul de dedesubt); in asteptare gol (textele ei sunt in jurnal)
+		rand = s.get("rand_conectat") or ""
+		if rand and not s.get("activitate"):
+			rand = _(TEXT_ECHIPA_VINE)
+		self["rand_stare"].setText(rand)
+		try:
+			iesire = _(TEXT_FOLOSESTI) % _drumMeniu()
+		except (TypeError, ValueError):
+			# o traducere fara %s (sau cu doua) nu strica ecranul: fraza romaneasca
+			iesire = TEXT_FOLOSESTI % _drumMeniu()
+		self["rand_iesire"].setText(iesire)
+		self["tasta_iesire"].setText(_(TEXT_TASTA_IESIRE))
 
 	def reface(self):
 		s = A.stare()
@@ -256,6 +361,7 @@ class HdsAsistenta(Screen):
 		copie = s.get("copie")
 		self["key_blue"].setText(_(A.TEXT_PUNE_INAPOI) if copie else "")
 		sus = copie["text"] if copie else ""
+		self._randuriFixe(s if _activa(s) and s.get("disponibil") else None)
 		if not s.get("disponibil"):
 			self["antet"].setText(_("Funcția nu e disponibilă pe această imagine."))
 			self._puneText(sus)
@@ -284,10 +390,9 @@ class HdsAsistenta(Screen):
 		self["antet"].setText(s.get("pana_text") or "")
 		if s.get("stare") == A.ASTEAPTA:
 			jurnal = _(TEXT_ASTEPTARE) + "\n" + _(TEXT_NU_OPRI) + "\n\n" + jurnal
-		# conectata: deasupra jurnalului (sub ziua copiei, cand e), ce face echipa sau ca vine si ca EXIT o lasa pornita
-		# (A.textConectat)
-		rand = s.get("rand_conectat") or ""
-		self._puneText("\n\n".join(t for t in (sus, rand, jurnal) if t))
+		# ce face echipa (A.textConectat) si ca EXIT o lasa pornita stau in randurile fixe de sub antet (_randuriFixe): cu
+		# jurnalul derulat la ultimul rand, un rand pus aici ar iesi din ecran; in text raman ziua copiei si jurnalul
+		self._puneText("\n\n".join(t for t in (sus, jurnal) if t))
 		# cu legenda Albastra, ajutorul (aliniat la dreapta, peste locul ei) ramane gol
 		self["ajutor"].setText("" if copie else _("Sus/Jos: tot textul"))
 		# cat asistenta merge, Verde schimba durata (cele cinci, socotite de acum), numai cat nu se opreste
@@ -329,6 +434,10 @@ class HdsAsistenta(Screen):
 		# mesajele echipei vin peste televizor (Semn.anuntaIesirea)
 		if _activa(A.stare()):
 			Semn.anuntaIesirea(self.session)
+			# "EXIT: la televizor": close(True) inchide si meniurile de dedesubt (Menu.menuClosed), deci omul ajunge
+			# direct la imaginea canalului, nu inapoi in Setari; deschis din web (Notifications) nu are cine sa-l primeasca
+			self.close(True)
+			return
 		self.close()
 
 	def _dupaIntrebareaOpririi(self, da):
@@ -396,11 +505,17 @@ class HdsAsistentaConcluzii(Screen):
 		HdsAsistentaConcluzii.deschise = max(0, HdsAsistentaConcluzii.deschise - 1)
 
 	def _rosu(self):
-		"""Oprirea pe loc, fara intrebare (fereastra spune limpede "Oprește" de la deschidere; pe ecranul asistentei Rosu
-		intreaba, RCF), numai pentru concluziile sesiunii de acum."""
+		"""Numai pentru concluziile sesiunii de acum: aceeasi intrebare ca pe ecranul asistentei („Oprești asistența?”,
+		„Nu” ales, Semn.intreabaOprirea); numai Rosu + „Da” opresc asistenta (inainte Rosu oprea pe loc)."""
 		if self["key_red"].getText() and A.concluziiDeAcum(self.intrare):
+			Semn.intreabaOprirea(self.session, self._dupaIntrebareaOpririi)
+
+	def _dupaIntrebareaOpririi(self, da):
+		if not da:
+			return
+		if A.concluziiDeAcum(self.intrare):
 			A.opreste("de om (concluzii)")
-			self.close()
+		self.close()
 
 
 class HdsAsistentaTermeni(Screen):

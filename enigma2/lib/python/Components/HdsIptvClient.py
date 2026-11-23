@@ -1381,6 +1381,12 @@ def instaleazaDemo():
 		except (OSError, subprocess.SubprocessError) as e:
 			_jurnal("lista demo: %s" % type(e).__name__)
 			coduri.append(None)
+	# 0.7.9 (BLD8): pachetele descarcate de opkg stau in /var/cache/opkg, in RAM; dupa instalare se sterg
+	try:
+		from Components import HdsCuratenie
+		HdsCuratenie.golesteCacheOpkgDupa(["opkg", "install", PACHET_DEMO])
+	except Exception:
+		pass
 	if coduri[-1] == 0:
 		return None
 	try:

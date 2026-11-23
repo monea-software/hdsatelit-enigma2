@@ -20,20 +20,25 @@
 
 #ifdef HAVE_DREAMBOX_ION
 /*
- * HD Satelit (ION1, forum 529): Dreambox DM7080, DM820, DM900, DM920 and DM520, with the option
- * "Dreambox: memoria ecranului si accelerarea (ION)" on (Components/HdsDreamboxIon.py).
+ * HD Satelit (FBD5, ION1, forum 529): Dreambox DM7080, DM820, DM900, DM920 and DM520.
  *
  * What the Dream framebuffer driver does (bcmfb in the Dream modules; CONFIG_ION=y in all five kernels):
- * - it allocates the screen pages when a mode is set, so right after the receiver starts the memory is only as
- *   large as the boot mode and a 1920x1080 interface does not fit in the mapping made at start (the first start
- *   of the interface stops in SetMode; the second start finds the larger memory and stays up);
- * - smem_len is only the screen pages: nothing is left after them for the 2D engine.
- * What this code does, only with the option on (without it everything below is skipped and fbClass works as on
- * every other receiver):
- * 1. before the one mapping, if the memory is smaller than two 1920x1080x32 pages, the driver is asked once for
- *    that mode, so it allocates the large memory first; then the mapping is made once and never moved (no remap
- *    while the drawing thread runs). Every later SetMode checks that the driver kept the same memory (same
- *    physical start, enough length) and otherwise stops the interface cleanly (eFatal), never drawing outside;
+ * - it allocates the screen pages when a mode is set ("bcmfb: creating surface" in dmesg at every mode) and
+ *   smem_len is exactly the pages of the mode: it shrinks and grows. Right after the receiver starts the driver is
+ *   in its boot mode (DM900: 720p50, 1280x720x32 with two pages = 7372800 bytes); the old single mapping of that
+ *   size did not hold 1920x1080 (16588800 bytes), so the first start of the interface stopped in SetMode and the
+ *   second one, which found the larger memory left by the first, stayed up (report of a DM900 on 0.7.8);
+ * - nothing is left after the pages for the 2D engine.
+ * Always on these receivers (dreamMaresteMemoria, no option, no start mark, no fatal stop of its own):
+ * - before the one mapping, if the memory is smaller than two 1920x1080x32 pages, the driver is asked once for
+ *   that mode, so it allocates the large memory first; then the mapping is made once and never moved (no remap
+ *   while the drawing thread runs). The first start is then the same as the second start was before. If the
+ *   driver refuses, the mapping is the old one and verificaMemoria stops cleanly when a mode does not fit;
+ * - while the driver reports less memory than the mapping (720x576 after the growth), the memory after the pages
+ *   is not given to the 2D engine (accelIon): the next mode takes it back for its pages.
+ * Only with the option "Dreambox: memoria ecranului si accelerarea (ION)" on (Components/HdsDreamboxIon.py):
+ * 1. every SetMode checks that the driver kept the same memory (same physical start, enough length) and otherwise
+ *    stops the interface cleanly (eFatal), never drawing outside;
  * 2. the memory for the 2D engine is one buffer from /dev/ion (the BMEM heap of the Dream modules), mapped and
  *    handed to gAccel once (gFBDC::setResolution through accelIon), so changing the mode never resets the table of
  *    surfaces that still live in it. Any failure (no /dev/ion, an unknown ABI, no physical address) leaves the
@@ -125,7 +130,8 @@ fbClass::fbClass(const char *fb)
 		goto nolfb;
 	}
 #ifdef HAVE_DREAMBOX_ION
-	dreamPregatesteEcranul(fix);
+	dreamPregatesteEcranul();
+	dreamMaresteMemoria(fix);
 #endif
 
 	available=fix.smem_len;
@@ -255,9 +261,11 @@ int fbClass::SetMode(unsigned int nxRes, unsigned int nyRes, unsigned int nbpp)
 
 void fbClass::verificaMemoria(const fb_fix_screeninfo &fix)
 {
-	eWarning("[fb] memorie: inainte=%u dupa=%u mapata=%u stride=%u virtual=%ux%u bpp=%u",
+	// fizic = the physical start the driver reports now, mapat_fizic = the one of the mapping made at start
+	eWarning("[fb] memorie: inainte=%u dupa=%u mapata=%u stride=%u virtual=%ux%u bpp=%u fizic=0x%08lx mapat_fizic=0x%08lx",
 		reportedMemory, fix.smem_len, (unsigned int)available, fix.line_length,
-		screeninfo.xres_virtual, screeninfo.yres_virtual, screeninfo.bits_per_pixel);
+		screeninfo.xres_virtual, screeninfo.yres_virtual, screeninfo.bits_per_pixel,
+		(unsigned long)fix.smem_start, (unsigned long)(unsigned int)m_phys_mem);
 	reportedMemory = fix.smem_len;
 	// Include the back page: gFBDC uses it after SetMode returns. No remapping,
 	// so existing surfaces and the crash screen keep their mapped addresses.
@@ -292,7 +300,16 @@ int fbClass::accelIon(void *&addr, int &phys, int &size)
 	 * reset its table under living surfaces. Without ION the 2D engine simply has no memory (as on the Dream driver
 	 * at 1920x1080 before). */
 	if (!m_ion_virt)
+	{
+#ifdef HAVE_DREAMBOX_ION
+		/* the same without the option whenever the Dream driver reports less memory than the mapping (720x576 after
+		 * dreamMaresteMemoria, or after a start that found the larger memory): the memory after the pages is no
+		 * longer the driver's screen memory and the next mode takes it back for its pages */
+		if (reportedMemory < (unsigned int)available)
+			return 2;
+#endif
 		return m_dream_on ? 2 : 0;
+	}
 	if (m_ion_given)
 		return 2;
 	addr = m_ion_virt;
@@ -313,7 +330,7 @@ void fbClass::dreamStare(const char *word, const char *code, const char *detail)
 	}
 }
 
-void fbClass::dreamPregatesteEcranul(fb_fix_screeninfo &fix)
+void fbClass::dreamPregatesteEcranul()
 {
 	if (access(HDS_DREAM_PORNIT, F_OK) != 0)
 	{
@@ -341,7 +358,12 @@ void fbClass::dreamPregatesteEcranul(fb_fix_screeninfo &fix)
 	fclose(f);
 	m_dream_on = 1;
 	dreamStare("pornit", "memorie", "");
+}
 
+void fbClass::dreamMaresteMemoria(fb_fix_screeninfo &fix)
+{
+	/* every start, with or without the option: the driver allocates the pages when a mode is set, so ask once for
+	 * the largest interface before the one mapping; a refusal or a failed read keeps the boot memory (old way) */
 	const unsigned long long want = (unsigned long long)HDS_DREAM_X * 4 * HDS_DREAM_Y * 2;
 	if (fix.smem_len >= want)
 		return;
@@ -361,17 +383,18 @@ void fbClass::dreamPregatesteEcranul(fb_fix_screeninfo &fix)
 		mode.yres_virtual = HDS_DREAM_Y;
 		if (ioctl(fd, FBIOPUT_VSCREENINFO, &mode) < 0)
 		{
-			eWarning("[fb] Dreambox ION: driverul a refuzat %dx%d inainte de mapare", HDS_DREAM_X, HDS_DREAM_Y);
+			eWarning("[fb] Dreambox: driverul a refuzat %dx%d inainte de mapare", HDS_DREAM_X, HDS_DREAM_Y);
 			return;
 		}
 	}
 	fb_fix_screeninfo grown;
 	if (ioctl(fd, FBIOGET_FSCREENINFO, &grown) < 0)
 	{
-		eWarning("[fb] Dreambox ION: nu pot citi memoria ecranului dupa marire");
+		eWarning("[fb] Dreambox: nu pot citi memoria ecranului dupa marire");
 		return;
 	}
-	eWarning("[fb] Dreambox ION: memoria ecranului inainte de mapare %u -> %u", fix.smem_len, grown.smem_len);
+	eWarning("[fb] Dreambox: memoria ecranului inainte de mapare %u -> %u (fizic 0x%08lx -> 0x%08lx)", fix.smem_len,
+		grown.smem_len, (unsigned long)fix.smem_start, (unsigned long)grown.smem_start);
 	fix = grown;
 }
 

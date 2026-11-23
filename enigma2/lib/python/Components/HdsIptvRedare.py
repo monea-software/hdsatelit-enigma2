@@ -6,6 +6,12 @@
 # evenimentele playerului si din masuratorile releului (Components/HdsIptvAdrese.stareFlux), si noteaza canalele care n-au pornit, in fisierul
 # lor mic (HdsIptvSurse.noteazaNefunctional): lista le arata cu un semn, fara sa se atinga buchetele.
 #
+# PRIMA IMAGINE: fereastra se inchide cand PTS-ul decodorului (VIDEO_GET_PTS pe un descriptor video0 deschis numai pentru citire) se
+# misca. Unele drivere refuza ioctl-ul pe un astfel de descriptor (ZGEMMA H8.2H Plus, hi3716mv430: EPERM de fiecare data, cat
+# dvbvideosink tine decodorul); atunci fereastra statea „Pornește redarea...” 30 s si peste canalele care aveau imagine dupa 3 s.
+# Numai cand ioctl-ul e refuzat (PTS_REFUZAT), imaginea se judeca dupa ce spune playerul: marimea imaginii cunoscuta si pozitia
+# redarii care a crescut cu AVANS_FARA_PTS. Unde PTS-ul se citeste (Vu+, Viper, SF8008...) nimic nu se schimba.
+#
 # Partea de sus nu cere enigma2: hotararile (Stare) se probeaza pe PC.
 
 import time
@@ -17,17 +23,54 @@ from Components.HdsIptvSurse import N_
 PAS_MS = 400
 PRAG_ESEC_S = 30.0       # fara imagine dupa atat de la pornire: canalul nu merge (servicemp3 opreste si el la 30 s)
 PAS_PORNIT_MS = 1000
+# IPF1 (0.7.9): evBuffering (GST_MESSAGE_BUFFERING din servicemp3) vine la IPTV de 25-186 de ori pe secunda (masurat pe ZGEMMA H8.2H Plus
+# cu un contor in Navigation.dispatchEvent, |RX| Cute Baby Animals, 4 Mb/s), iar laTampon chema la fiecare _pas (serviciul, pozitia
+# din player, decodorul, subtitrarile), ~20 ms pe acel procesor: firul principal statea 0,9-1 s din fiecare secunda in ascultatori,
+# deci tastele, pagina web si bataia paznicului asteptau 4-120 s (paznicul a repornit interfata dupa 125 s fara bataie). _pas il cheama
+# oricum ceasul (PAS_MS pana la prima imagine, PAS_PORNIT_MS dupa); laTampon tine minte numai incarcarea tamponului (bara ferestrei),
+# cel mult o data la CITIRE_TAMPON_S, iar una sarita o citeste ceasul la urmatorul _pas.
+CITIRE_TAMPON_S = 0.5  # Eduard 23.11.2026: 2 pe secunda (IPF1 pusese 5)
 PRAG_OPRIT_S = 3.0       # imaginea sta pe loc (sau, cat nu se stie pozitia, releul nu mai primeste nimic): se arata iar fereastra
+PTS_REFUZAT = -1         # _ptsVideo: driverul refuza VIDEO_GET_PTS pe descriptorul de citire (None = inca nu se stie)
+AVANS_FARA_PTS = 45000   # 0,5 s (ceasul de 90 kHz): cat trebuie sa creasca pozitia redarii, cu marimea imaginii stiuta, cand PTS_REFUZAT
+# errno-urile cu care un driver spune ca nu da deloc PTS-ul pe un descriptor deschis numai pentru citire (masurat: EPERM pe ZGEMMA H8).
+# EINVAL si EBUSY nu: pot fi „nu acum”, inainte de pornirea decodorului, iar pe celelalte placi purtarea ramane cea de dinainte
+_ERRNO_REFUZ = ("EPERM", "EACCES", "ENOTTY", "EOPNOTSUPP", "ENOSYS")
 
 T_CONECTARE = N_("Se conectează la server...")
 T_INCARCARE = N_("Se încarcă canalul...")
 T_PORNIRE = N_("Pornește redarea...")
 T_REINCARCARE = N_("Se reîncarcă...")
+# canalele 4K pe receptoarele care redau cel mult 1080p (Components/HdsIptvFullHd.py, releul: HdsIptvAdrese.inlocuireFullHd)
+T_FULL_HD_PERECHE = N_("Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s.")
+# fara pereche masurata sub 4K: numai ce se stie sigur (o pereche nemasurata poate fi si ea 4K)
+T_FULL_HD_4K = N_("Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p).")
+MESAJ_FULL_HD_S = 8
+REPETARE_MESAJ_4K_S = 120  # acelasi canal 4K pornit din nou la rand (reconectarea): randul despre el nu se repeta mai des; alt canal sterge semnul
 
 _fereastra_esec_notat = False
 _executor_disc = None
 _executor_video = None
 _video_in_curs = None
+_mesaj_4k = (None, 0.0)   # (canalul 4K si ce i s-a spus, cand): REPETARE_MESAJ_4K_S
+_fond_4k = None           # fereastra neagra sub mesajul 4K (IPF1)
+
+
+def _fondNegru(session, arata):
+	"""IPF1 (0.7.9): sub mesajul "Canalul acesta e 4K..." ramanea cadrul inghetat al canalului de dinainte (Ultima imagine), de parca
+	ar fi mers acela. Acum ecran negru sub mesaj (fondul din Screens/HdsEcranNegru, nemodal, sub bare si ferestre, fara taste), pana
+	vine evEnd sau porneste orice alt serviciu (Legatura.laEnd, chemat si din laStart)."""
+	global _fond_4k
+	try:
+		if arata:
+			if _fond_4k is None:
+				from Screens.HdsEcranNegru import HdsEcranNegruFond
+				_fond_4k = session.instantiateDialog(HdsEcranNegruFond)
+			_fond_4k.show()
+		elif _fond_4k is not None:
+			_fond_4k.hide()
+	except Exception as e:
+		print("[HdsIptvRedare] fondul negru: %s" % type(e).__name__)
 
 
 def _inFundal(functie, *args):
@@ -82,8 +125,15 @@ def _notaEsuat(canal, codec):
 		print("[HdsIptvRedare] notarea esecului: %s" % type(e).__name__)
 
 
+def _refuz(eroare):
+	"""True cand OSError-ul spune ca driverul nu da PTS-ul pe un descriptor de citire (vezi _ERRNO_REFUZ)."""
+	import errno
+	return errno.errorcode.get(getattr(eroare, "errno", None)) in _ERRNO_REFUZ
+
+
 def _ptsVideo():
-	"""PTS-ul imaginii afisate, prin VIDEO_GET_PTS al decodorului nativ."""
+	"""PTS-ul imaginii afisate, prin VIDEO_GET_PTS al decodorului nativ; None cand nu se stie inca, PTS_REFUZAT cand driverul il
+	refuza pe un descriptor deschis numai pentru citire (ZGEMMA H8: EPERM)."""
 	try:
 		import array
 		import fcntl
@@ -91,10 +141,16 @@ def _ptsVideo():
 		import platform
 		# MIPS are alt bit _IOC_READ decat ARM si x86.
 		cerere = 0x40086f39 if platform.machine().lower().startswith("mips") else 0x80086f39
-		fd = os.open("/dev/dvb/adapter0/video0", os.O_RDONLY | os.O_NONBLOCK)
+		try:
+			fd = os.open("/dev/dvb/adapter0/video0", os.O_RDONLY | os.O_NONBLOCK)
+		except OSError as e:
+			return PTS_REFUZAT if _refuz(e) else None
 		try:
 			pts = array.array("Q", [0])
-			fcntl.ioctl(fd, cerere, pts, True)
+			try:
+				fcntl.ioctl(fd, cerere, pts, True)
+			except OSError as e:
+				return PTS_REFUZAT if _refuz(e) else None
 			return int(pts[0]) if pts[0] < (1 << 33) else None
 		finally:
 			os.close(fd)
@@ -155,6 +211,7 @@ class Stare(object):
 		self.tampon_procent = None
 		self.pozitie = None
 		self.ultima_pozitie = 0.0
+		self.full_hd_spus = False
 
 	def laStart(self, cale):
 		"""Un serviciu nou. -> True daca e un canal de internet al omului."""
@@ -165,10 +222,23 @@ class Stare(object):
 		self.tampon_procent = None
 		self.pozitie = None
 		self.ultima_pozitie = self.inceput
+		self.full_hd_spus = False
 		return self.sid is not None
 
 	def urmarit(self):
 		return self.sid is not None
+
+	def fullHd(self):
+		"""Ce a facut releul cu un canal 4K pe un receptor Full HD (HdsIptvAdrese.inlocuireFullHd), o singura data pe pornire:
+		("pereche", numele canalului adus) sau ("4k", "") sau None."""
+		if self.sid is None or self.full_hd_spus:
+			return None
+		f = self.flux(self.sid, self.cheie) or {}
+		fel = f.get("full_hd")
+		if fel not in ("pereche", "4k"):
+			return None
+		self.full_hd_spus = True
+		return fel, f.get("nume_full_hd") or ""
 
 	def laEnd(self):
 		self.sid = self.cheie = None
@@ -263,9 +333,13 @@ class Legatura(object):
 		self._callback_ecran = None
 		self.serviciu = self.referinta = None
 		self.pts_video = self.pozitie_audio = None
+		self.marime = False          # playerul stie marimea imaginii (sVideoWidth si sVideoHeight > 0)
+		self.baza_fara_pts = None    # pozitia de la care se masoara AVANS_FARA_PTS, cand driverul refuza PTS-ul
 		self._citire_video = None
 		self._notari = []
 		self.tip = 4097
+		self._tampon_la = None       # cand s-a citit ultima oara incarcarea tamponului (laTampon)
+		self._tampon_sarit = False   # un evBuffering sarit: il citeste ceasul la urmatorul _pas
 		if hasattr(infobar, "onClose"):
 			infobar.onClose.append(self.inchide)
 
@@ -384,6 +458,7 @@ class Legatura(object):
 	def _videoNou(self):
 		"""Culege numai o citire terminata; una singura poate astepta in coada."""
 		video, marime = self._pisteVideo()
+		self.marime = marime
 		if video == 0:
 			# Serviciul audio nu depinde de decodorul video.
 			return True, None, 0
@@ -405,13 +480,16 @@ class Legatura(object):
 			return True, None, -1
 
 	def _pisteVideo(self):
-		"""Informatii ale serviciului, capturate pe firul principal INAINTE de citirea PTS."""
+		"""Informatii ale serviciului, capturate pe firul principal INAINTE de citirea PTS: (pistele video, playerul stie marimea
+		imaginii). Marimea se cere numai cand trebuie: cat pistele nu se stiu (_citesteVideo) si, cand driverul refuza PTS-ul, pana la
+		prima imagine (_pornitFaraPts); altfel ca inainte, fara citiri in plus pe firul principal."""
 		try:
 			from enigma import iServiceInformation
 			service = self.session.nav.getCurrentService()
 			info = service and service.info()
 			video = info.getInfo(iServiceInformation.sUser + 17) if info is not None else -1
-			marime = bool(video < 0 and info is not None and info.getInfo(iServiceInformation.sVideoWidth) > 0
+			vreau = video < 0 or (self.pts_video == PTS_REFUZAT and not self.stare.pornit)
+			marime = bool(vreau and info is not None and info.getInfo(iServiceInformation.sVideoWidth) > 0
 				and info.getInfo(iServiceInformation.sVideoHeight) > 0)
 			return video, marime
 		except Exception:
@@ -433,7 +511,21 @@ class Legatura(object):
 			return False
 		vechi = self.pts_video
 		self.pts_video = pts
+		if pts == PTS_REFUZAT:
+			return self._pornitFaraPts()
 		return pts is not None and pts > 0 and vechi is not None and pts != vechi
+
+	def _pornitFaraPts(self):
+		"""Driverul nu da PTS-ul (PTS_REFUZAT): imaginea a pornit cand playerul stie marimea ei si pozitia redarii a crescut cu
+		AVANS_FARA_PTS de atunci. In pauza, fara pozitie sau fara marime se ia de la capat; o pozitie care scade e o baza noua."""
+		pozitie, pauza = self._pozitie()
+		if pauza or pozitie is None or not self.marime:
+			self.baza_fara_pts = None
+			return False
+		if self.baza_fara_pts is None or pozitie < self.baza_fara_pts:
+			self.baza_fara_pts = pozitie
+			return False
+		return pozitie - self.baza_fara_pts >= AVANS_FARA_PTS
 
 	def _cale(self):
 		ref = self.session.nav.getCurrentlyPlayingServiceReference()
@@ -486,7 +578,12 @@ class Legatura(object):
 			return
 		self.laEnd()
 		self.inchisa_de_om = False
-		if self.stare.laStart(self._cale()):
+		eIptv = self.stare.laStart(self._cale())
+		global _mesaj_4k
+		if _mesaj_4k[0] is not None and _mesaj_4k[0][:2] != (self.stare.sid, self.stare.cheie):
+			# alt canal: la intoarcerea pe canalul 4K randul se spune din nou (numai repornirile la rand ale aceluiasi canal tac)
+			_mesaj_4k = (None, 0.0)
+		if eIptv:
 			self.serviciu, self.referinta = self._identitate()
 			ref = self.session.nav.getCurrentlyPlayingServiceReference() if getattr(self.session, "nav", None) else None
 			self.tip = getattr(ref, "type", 4097)
@@ -497,10 +594,14 @@ class Legatura(object):
 			self._ascunde()
 
 	def laEnd(self):
+		# evEnd (alt canal, un film, o inregistrare redata, standby) si laStart: fondul negru al unui canal 4K pleaca
+		_fondNegru(self.session, False)
 		self._opresteSubtitrari()
 		self.stare.laEnd()
 		self.serviciu = self.referinta = None
 		self.pts_video = self.pozitie_audio = None
+		self.marime = False
+		self.baza_fara_pts = None
 		if self._citire_video is not None:
 			self._citire_video.cancel()
 			self._citire_video = None
@@ -560,8 +661,17 @@ class Legatura(object):
 		self._ascunde()
 
 	def laTampon(self):
-		if not self._curent():
-			self._ascunde()
+		"""evBuffering: numai incarcarea tamponului, cel mult o data la CITIRE_TAMPON_S; _pas vine de la ceas (vezi CITIRE_TAMPON_S)."""
+		acum = self.stare.ceas()
+		if self._tampon_la is not None and acum - self._tampon_la < CITIRE_TAMPON_S:
+			self._tampon_sarit = True
+			return
+		self._tampon_la = acum
+		self._citesteTampon()
+
+	def _citesteTampon(self):
+		self._tampon_sarit = False
+		if self.inchis or not self.stare.urmarit():
 			return
 		try:
 			service = self.session.nav.getCurrentService()
@@ -570,7 +680,6 @@ class Legatura(object):
 				self.stare.laTampon(streamed.getBufferCharge()[0])
 		except Exception as e:
 			print("[HdsIptvRedare] tamponul: %s" % type(e).__name__)
-		self._pas()
 
 	def _ascunde(self):
 		self.generatie += 1
@@ -599,16 +708,43 @@ class Legatura(object):
 			print("[HdsIptvRedare] pozitia: %s" % type(e).__name__)
 			return None, False
 
+	def _mesajFullHd(self, fel, nume):
+		"""Randul scurt despre un canal 4K pe un receptor Full HD: mesajul care pleaca singur si nu ia tastele (Screens/Toast.py)."""
+		global _mesaj_4k
+		canal, cand = _mesaj_4k
+		acum = self.stare.ceas()
+		if canal == (self.stare.sid, self.stare.cheie, fel) and acum - cand < REPETARE_MESAJ_4K_S:
+			return
+		_mesaj_4k = ((self.stare.sid, self.stare.cheie, fel), acum)
+		try:
+			from Screens.Toast import Toast
+			text = (_(T_FULL_HD_PERECHE) % nume) if fel == "pereche" else _(T_FULL_HD_4K)
+			Toast.instance.showToast(text, Toast.TYPE_INFO, MESAJ_FULL_HD_S)
+		except Exception as e:
+			print("[HdsIptvRedare] mesajul Full HD: %s" % type(e).__name__)
+
 	def _pas(self):
 		if not self._curent():
 			self._ascunde()
 			return
+		if self._tampon_sarit:
+			self._citesteTampon()
+		hd = self.stare.fullHd()
+		if hd:
+			self._mesajFullHd(*hd)
+			if hd[0] == "4k" and not self.stare.pornit:
+				# canal masurat 4K fara pereche pe un receptor Full HD: mesajul acum, nu fereastra Porneste redarea 30 s; sub el
+				# ecran negru, nu cadrul canalului de dinainte (dupa laEnd, care il ascunde)
+				self.laEnd()
+				_fondNegru(self.session, True)
+				return
 		nou, pts, video = self._videoNou()
 		if not self.stare.pornit and self._primulCadru(nou, pts, video):
 			self._confirmaPornit()
-		if not nou or (pts is None and video != 0):
+		if not nou or ((pts is None or pts == PTS_REFUZAT) and video != 0):
 			# Lipsa observatiei nu dovedeste un canal defect. La termen renuntam
 			# la fereastra, fara notare si fara a accepta rezultatele intarziate.
+			# Cu PTS_REFUZAT la fel: pozitia si marimea sunt spuse de player, nu masurate din decodor.
 			if not self.stare.pornit and self.stare.durata() >= PRAG_ESEC_S:
 				self.laEnd()
 				return

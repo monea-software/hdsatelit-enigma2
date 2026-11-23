@@ -509,7 +509,7 @@ def codRepornireDupaActualizare(sesiune=None, m=None, prag_kb=None, inregistrari
 			inregistrari = _inregistrariAcum(sesiune)
 		cod = hotarareActualizare(m, p, inregistrari != 0)
 		if cod == COD_RECEPTOR and not _cuMemorieEs():
-			_log("dupa actualizare: memoria e sub prag, dar placa nu are memoria demonului (V10): numai interfata")
+			_log("dupa actualizare: memoria e sub prag, dar placa nu are memoria demonului (V10, ZGEMMA H8): numai interfata")
 			_ultim[0] = COD_INTERFATA
 			return COD_INTERFATA
 		if cod == COD_RECEPTOR and proba().get("uscat"):
@@ -765,7 +765,7 @@ def _masuraStandby():
 
 
 def _cuMemorieEs():
-	"""HdsPlatforma.cuMemorieEs() (False pe V10); True cand modulul nu se poate incarca (purtarea de pana acum)"""
+	"""HdsPlatforma.cuMemorieEs() (False pe V10 si ZGEMMA H8); True cand modulul nu se poate incarca (purtarea de pana acum)"""
 	try:
 		try:
 			from Components import HdsPlatforma
@@ -810,7 +810,7 @@ class RepornireStandby(object):
 		self.minim = minim or citesteMinim
 		self.boot = boot or bootId
 		self.lipsaEs = lipsa_es or _memoriaEsLipsa
-		# False pe V10: placa fara memoria demonului, deci nicio repornire de aici
+		# False pe V10 si ZGEMMA H8: placa fara memoria demonului, deci nicio repornire de aici
 		self.cuMemorieEs = memorie_es or _cuMemorieEs
 		self.standbyDe = None   # ceasul monoton de la care receptorul sta in standby fara intrerupere (None = treaz)
 		self.ultima = None
@@ -1090,7 +1090,7 @@ class RefacereFilm(object):
 			if self.ceruta:
 				return FAPTA_REPORNESTE
 			if not self.cuMemorieEs():
-				self.motiv = "placa fara memoria demonului (V10)"
+				self.motiv = "placa fara memoria demonului (V10, ZGEMMA H8)"
 				_log("filmul: nu repornesc (%s)" % self.motiv)
 				return FAPTA_NIMIC
 			pr = proba(self.caleProba)

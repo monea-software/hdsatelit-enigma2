@@ -474,6 +474,7 @@ class Stare(object):
 		self.audio = {}
 		self.texte = {}            # cale relativa -> text brut (pentru pagina bruta)
 		self.cheie_conectare = None
+		self.fara_msp = False        # /proc/msp lipseste de tot (driverul HDMI nu e HiSilicon msp: ZGEMMA H8.2H Plus, Broadcom)
 
 	@property
 	def gasit(self):
@@ -492,6 +493,7 @@ def citeste(radacina='/', anterior=None, brut=False):
 	deconectat nimic intre timp, ce accepta televizorul (hdmi0_sink, cel mai lung fisier) nu se mai citeste.
 	`brut` = citeste si dosarele /proc/stb intregi, pentru pagina bruta. Nu arunca exceptii."""
 	s = Stare()
+	s.fara_msp = not os.path.isdir(cale(radacina, 'proc/msp'))
 	try:
 		t = citeste_text(cale(radacina, HDMI0))
 		s.texte[HDMI0] = t
@@ -702,10 +704,31 @@ def coloane(s, ales_in_setari=None):
 	"""Cele trei coloane ale ecranului: liste de ('titlu', text) si ('valoare', eticheta, valoare, ton).
 	`ales_in_setari` = modul din Setari (config.av.hds_videomode), daca ecranul il stie."""
 	try:
-		return [_coloana_iesire(s, ales_in_setari), _coloana_legatura(s), _coloana_televizor(s)]
+		c = [_coloana_iesire(s, ales_in_setari), _coloana_legatura(s), _coloana_televizor(s)]
 	except Exception as e:
 		print('[HdsHdmiDate] coloane: %s' % e)
 		return [[_titlu(_t('Ieșire HDMI')), _rand(_t('Stare'), None)], [], []]
+	if s.gasit and s.fara_msp and not (s.hdmi0 or s.vo or s.ao or s.sink or s.disp):
+		# /proc/msp nu exista (ZGEMMA H8.2H Plus, Hi3716MV430; si orice receptor fara driverul HDMI HiSilicon msp), dar
+		# /proc/stb se citeste (o citire msp inca in lucru pe Viper/SF8008 nu intra aici: dosarul exista): fara zeci de
+		# randuri „necunoscut”, numai ce se stie (modul din /proc/stb/video, imaginea decodata, modurile televizorului,
+		# AC3 / DTS) si un rand care spune ca restul nu vine de la receptor. Fara nicio citire, tabelul ramane intreg.
+		c = [_faraNecunoscute(x) for x in c]
+		c[1] = [_titlu(_t('Legătură')), _rand(_t('Detalii'), _t('indisponibile'), STINS)] + \
+			[r for r in c[1] if not (r[0] == 'titlu' and r[1] == _t('Legătură'))]
+	return c
+
+
+def _faraNecunoscute(col):
+	"""Coloana fara randurile „necunoscut” si fara titlurile ramase fara niciun rand sub ele."""
+	necunoscut = _t(NECUNOSCUT)
+	randuri = [r for r in col if not (r[0] == 'valoare' and r[2] == necunoscut and r[3] == STINS)]
+	rez = []
+	for i, r in enumerate(randuri):
+		if r[0] == 'titlu' and (i + 1 >= len(randuri) or randuri[i + 1][0] == 'titlu'):
+			continue
+		rez.append(r)
+	return rez
 
 
 def _coloana_iesire(s, ales):

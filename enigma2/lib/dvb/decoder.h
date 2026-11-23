@@ -56,7 +56,8 @@ private:
 	void hdsFollowAspect();
 #endif
 public:
-	/* numerotarea driverului (VIDEO_SET_STREAMTYPE), egala cu videoStream din pmt.h si cu valorile VIDEO_STREAMTYPE_* din decoder.cpp */
+	/* numerotarea driverului (VIDEO_SET_STREAMTYPE), egala cu videoStream din pmt.h si cu valorile VIDEO_STREAMTYPE_* din decoder.cpp;
+	   singura exceptie: H265_HEVC ajunge la driverul Dreambox ca 22 (decoder.cpp, HAVE_DREAMBOX_AV) */
 	enum { MPEG2, MPEG4_H264, VC1 = 3, MPEG4_Part2, VC1_SM, MPEG1, H265_HEVC, CAVS = 16 };
 	eDVBVideo(eDVBDemux *demux, int dev);
 	void stop();

@@ -899,7 +899,9 @@ def _actualizeazaContinut(radacina=None, progres=None, offline=None, cerute=(), 
 	A = _actualizari()
 	pc = A.P.citeste_configurarea(radacina)
 	canal, surse, baza = A.canalul(radacina, pc)
-	if canal not in ("public", "proba") or not surse or baza != A.baza_receptorului(radacina):
+	# 0.7.9 (UNF9): feedul din adrese poate fi si un feed unic (alta baza decat cea scrisa); stare.json hotaraste mai jos
+	scrisa = A.baza_receptorului(radacina)
+	if canal not in ("public", "proba") or not surse or not A.baza_feed_potrivita(baza, scrisa):
 		return False, _t("Sursa partii a doua lipseste sau cere o alta imagine.")
 	adresa = A.adresa_stare(canal, baza).rsplit("/", 1)[0]
 	deschide = deschide or (_localDeschide(offline, adresa) if offline else None)
@@ -910,8 +912,7 @@ def _actualizeazaContinut(radacina=None, progres=None, offline=None, cerute=(), 
 		server, eroare = A.descarca_stare(adresa + "/stare.json", credentiale, deschide=deschide)
 		if eroare:
 			raise ValueError(_t("Feedul nu poate fi verificat: ") + server.get("eroare", eroare))
-		if server.get("baza") != baza or server.get("imagine_noua") or \
-				A.P.compara_versiuni(server.get("imagine_minima", ""), baza) > 0 or \
+		if A.motiv_baza(server, baza, scrisa) or server.get("imagine_noua") or \
 				server.get("canal", canal) != canal:
 			raise ValueError(_t("Continutul cere o alta imagine sau alt canal."))
 		feed = feedSemnat(A, adresa, server, surse, pc, credentiale, deschide)

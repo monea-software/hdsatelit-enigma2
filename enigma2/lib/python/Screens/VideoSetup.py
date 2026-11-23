@@ -53,8 +53,23 @@ def notConfirmedText():
 	return _("The new video setting was not confirmed. The previous setting is back.")
 
 
+def has2160p(output=None):
+	"""the receiver can output 2160p: the driver modes VideoOutput read at start (videomode_choices, not the TV
+	modes), no new read of /proc here; unknown = yes, as before"""
+	if output is None:
+		output = VideoOutput.videoOutput
+	try:
+		modes = output.choices.get("videomode") or []
+	except AttributeError:
+		return True
+	return not modes or any(mode.startswith("2160p") for mode in modes)
+
+
 def recommendation():
-	"""the help line of the "Resolution" and "Frecventa" rows (the same advice as the start wizard)"""
+	"""the help line of the "Resolution" and "Frecventa" rows (the same advice as the start wizard); without 2160p in
+	the receiver (ZGEMMA H8.2H Plus is Full HD) only 1080p, not a mode the list does not have"""
+	if not has2160p():
+		return _("Recomandat: 1080p 50 Hz (Full HD); canalele din Europa au 50 Hz.")
 	return _("Recomandat: 1080p 50 Hz (Full HD) sau 2160p 50 Hz (4K UHD); canalele din Europa au 50 Hz.")
 
 

@@ -1047,6 +1047,14 @@ def primesteTuner(nim_obj):
 	except Exception:
 		return None
 	t2 = "T2" in str(getattr(nim_obj, "description", "") or "")
+	if not t2 and tip in ("DVB-T", "DVB-C/T"):
+		# numele nu spune T2 (ZGEMMA H8.2H Plus: "m88dm6000"): sistemele date de nucleu (SYS_DVBT2 = 16)
+		try:
+			from Components.NimManager import hdsSistemeNucleu
+			fe = getattr(nim_obj, "frontend_id", None)
+			t2 = fe is not None and 16 in hdsSistemeNucleu(fe)
+		except Exception:
+			pass
 	tipuri = [tip]
 	try:
 		if nim_obj.isMultiType():
@@ -1280,7 +1288,16 @@ def _monturiDiscuri(mounts="/proc/mounts", media="/media"):
 					gasite.append((legaturi.get(mnt, mnt), dev, fs))
 	except (IOError, OSError):
 		pass
-	return gasite
+	# acelasi dispozitiv montat de doua ori (ZGEMMA H8.2H Plus: /run/media/HDSATELIT-sda1 de sistem si /media/hdd de
+	# interfata) era scris ca doua discuri: un singur rand, cu locul din afara lui /run/media
+	unice = []
+	for loc, dev, fs in gasite:
+		la = next((i for i, g in enumerate(unice) if dev.startswith("/dev/") and g[1] == dev), None)
+		if la is None:
+			unice.append((loc, dev, fs))
+		elif unice[la][0].startswith("/run/") and not loc.startswith("/run/"):
+			unice[la] = (loc, dev, fs)
+	return unice
 
 
 def _discuriSys(sys_block="/sys/block"):

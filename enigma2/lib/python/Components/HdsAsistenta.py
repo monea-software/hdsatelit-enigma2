@@ -1250,7 +1250,14 @@ class Sesiune(object):
 		if op in ("citeste", "jurnal") and len(args) > (1 if op == "citeste" else 2) and args[-1]:
 			# "de la octetul": si omul vede de unde
 			eticheta = "%s %s" % (eticheta, _t("(de la octetul %s)") % args[-1])
-		self.jurnal.adauga("%s: %s" % (fel, eticheta))
+		if op == "mesaj" and args and isinstance(args[0], str) and args[0].strip():
+			# mesajul intreg, ca pe televizor: omul il reciteste aici si in web (pe ecran sta pana la prima lui tasta);
+			# banda paginilor web il arata si ea (ultimulMesaj)
+			text = " ".join(args[0].split())
+			_ultimulMesaj[0] = {"id": self.id, "text": text, "ora": _oraPerete()}
+			self.jurnal.adauga("%s %s" % (_t("Mesaj de la HD Satelit:"), text))
+		else:
+			self.jurnal.adauga("%s: %s" % (fel, eticheta))
 		if fel_cat not in ("citire", "proba") and not self._asteapta_copia():
 			# copia setarilor (pe firul ei) gata inaintea primei schimbari: "Pune inapoi cum era" ramane cum era (ASI7);
 			# citirile si probele (mesaj, intrebare, captura, concluzii: nu schimba nimic) nu o asteapta. Dupa Opreste
@@ -1739,6 +1746,11 @@ def porneste(nivel=NIVEL_PORNIRE, durata_min=DURATA_IMPLICITA_MIN, limba="ro", d
 		if _sesiune is not None and _sesiune.activa():
 			return False, _t("Asistența merge deja.")
 		_eroare_pornire = ""
+		# ce facea echipa in sesiunea de dinainte nu trece la cea noua (banda spunea „lucrează acum” pentru o sesiune
+		# abia pornita, inca neaprobata, cu cererile celei vechi)
+		_ultimControl[0] = None
+		_terminat[0] = None
+		_ultimulMesaj[0] = None
 		ses = Sesiune(nivel, durata_min, limba, SERVER, de_la=de_la, versiune_text=versiune_text, ctx=ctx,
 			nevoie=nevoie, detalii=detalii)
 		_sesiune = ses
@@ -1781,6 +1793,36 @@ def opritDeOm(id_sesiune):
 	"""True cand sesiunea id_sesiune s-a oprit la cererea omului (televizor, web, fereastra concluziilor)."""
 	o = _ultimaOprire[0]
 	return bool(o and id_sesiune and o.get("id") == id_sesiune and str(o.get("motiv") or "").startswith("de om"))
+
+
+def fereastraVeche(intrare):
+	"""True cand fereastra concluziilor (sau cea de sfarsit, „Asistența s-a oprit la cererea ta”) e a altei sesiuni decat
+	cea care merge acum: nu se mai deschide singura, fiindca omul ar crede ca s-a oprit asistenta de acum (oprita si
+	pornita din nou din meniu: fereastra celei vechi venea peste cea noua). Galben „Ultimele
+	concluzii” le arata oricand. O sesiune noua fara id inca (abia pornita) e tot alta sesiune."""
+	ses = _sesiune
+	if not intrare or ses is None or not ses.activa():
+		return False
+	id_f = intrare.get("id")
+	return bool(id_f) and id_f != getattr(ses, "id", None)
+
+
+# ultimul mesaj al echipei (op "mesaj") in sesiunea de acum: {"id", "text", "ora"} (banda paginilor web)
+_ultimulMesaj = [None]
+# cat timp il arata banda web dupa ce a venit
+MESAJ_WEB_S = 600
+
+
+def ultimulMesaj():
+	"""Ultimul mesaj al echipei, cand e al sesiunii care merge acum si a venit in ultimele MESAJ_WEB_S secunde:
+	{"text", "ora"}; altfel None."""
+	m = _ultimulMesaj[0]
+	ses = _sesiune
+	if not m or ses is None or not ses.activa() or m.get("id") != getattr(ses, "id", None):
+		return None
+	if _oraPerete() - m.get("ora", 0) > MESAJ_WEB_S:
+		return None
+	return {"text": m.get("text") or "", "ora": m.get("ora", 0)}
 
 
 # ---------------------------------------------------------------- concluziile echipei (op "concluzii")

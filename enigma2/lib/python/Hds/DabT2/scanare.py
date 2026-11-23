@@ -430,8 +430,10 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
         # programele scrise in lista (felul abertis) se iau ca invatate: transponderul tocmai s-a prins, iar un flux
         # criptat nu se poate citi prin releu fara modulul de acces al omului; o copie a lor de la o scanare de
         # dinainte (buchete.copie_din_lista) se scrie din nou, din lista de acum
+        # numai felul abertis: la T2-MI programele din lista intra in buchet dupa o scanare obisnuita
+        # (buchete.servicii_feed), iar aici fluxul se invata din nou prin releu, ca lista lui sa fie cea de acum
         x = (memorate.get(buchete._curata_id(feed.get('id'))) or {}).get('servicii') or []
-        if feed.get('programe') and (not x or buchete.copie_din_lista(feed, x)):
+        if feed.get('programe') and buchete.e_abertis(feed) and (not x or buchete.copie_din_lista(feed, x)):
             fid = buchete._curata_id(feed.get('id'))
             if buchete.salveaza_servicii(profil, fid, feed.get('programe')):
                 memorate[fid] = {'servicii': buchete._servicii_curate(profil, feed.get('programe'))}

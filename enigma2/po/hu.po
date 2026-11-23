@@ -11169,10 +11169,6 @@ msgstr "<code>GET /api/traducere-subtitrari</code>: a szöveges feliratok automa
 msgid "ABC"
 msgstr "ABC"
 
-#: lib/python/Components/HdsBetaTester.py:177
-msgid "Această imagine este în test (alfa/beta). Folosind-o ești beta tester: echipa HD Satelit poate vedea și face orice pe receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele și parolele. Pot apărea probleme. Fără acord imaginea nu poate fi folosită."
-msgstr "Ez a rendszerkép tesztelés alatt áll (alfa/béta). Ha használod, bétatesztelő vagy: a HD Satelit csapata a távsegítség és a tesztek alatt bármit láthat és megtehet a vevődön, beleértve a beállítások, naplók és jelszavak megtekintését. Problémák előfordulhatnak. Hozzájárulás nélkül a rendszerkép nem használható."
-
 #: lib/python/Plugins/Extensions/HdsWebControl/setari_deschise_web.py:176
 msgid "Această tastă se folosește pe televizor."
 msgstr "Ez a gomb a tévén használható."
@@ -11419,14 +11415,6 @@ msgstr "Nyers kód: 0x%X"
 msgid "Comenzi virtuale"
 msgstr "Virtuális parancsok"
 
-#: lib/python/Screens/HdsBetaTester.py:912 lib/python/Screens/HdsBetaTester.py:985
-msgid "Condițiile beta tester"
-msgstr "Bétatesztelői feltételek"
-
-#: lib/python/Components/HdsBetaTester.py:176
-msgid "Condițiile imaginii în test"
-msgstr "A tesztelés alatti rendszerkép feltételei"
-
 #: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3717
 msgid "Configurare FBC"
 msgstr "FBC beállítás"
@@ -11626,10 +11614,6 @@ msgstr "Automatikus időzóna Ukrajnához."
 msgid "Fusurile Europe/Kyiv și Europe/Kiev lipsesc din lista receptorului; fusul actual rămâne neschimbat."
 msgstr "Az Europe/Kyiv és Europe/Kiev időzóna hiányzik a vevő listájából; a jelenlegi időzóna változatlan marad."
 
-#: lib/python/Components/HdsBetaTester.py:181
-msgid "Fără acord imaginea nu poate fi folosită. Poți trece pe o imagine finală când apare sau poți instala altă imagine. Rețeaua și actualizările rămân disponibile. Tasta POWER deschide opțiunile de recuperare și de pornire în altă imagine, dacă receptorul le permite."
-msgstr "Hozzájárulás nélkül a rendszerkép nem használható. Átválthatsz egy végleges rendszerképre, amikor megjelenik, vagy telepíthetsz másik rendszerképet. A hálózat és a frissítések elérhetők maradnak. A POWER gomb megnyitja a helyreállítás és a másik rendszerképpel való indítás lehetőségeit, ha a vevő engedi."
-
 #: lib/python/Screens/HdsSoftwareUpdate.py:925
 #, python-format
 msgid "Gata: partiția %d a stickului are acum tipul %s. Recovery-ul producătorului poate citi arhivele de pe el."
@@ -11668,10 +11652,6 @@ msgid ""
 msgstr ""
 "Az azonosítód: %s.\n"
 "Hozzájárulás dátuma: %s, adatvédelmi tájékoztató %d. verzió."
-
-#: lib/python/Components/HdsBetaTester.py:180
-msgid "Imagine în test: acordul beta tester e obligatoriu"
-msgstr "Tesztelés alatti rendszerkép: a bétatesztelői hozzájárulás kötelező"
 
 #: lib/python/Components/HdsPluginExtern.py:1735
 #, python-format
@@ -12094,10 +12074,6 @@ msgstr "Nem esetén az /etc/enigma2 mappában vagy pendrive-on talált új csato
 msgid "Pe butonul albastru"
 msgstr "A kék gombon"
 
-#: lib/python/Components/HdsBetaTester.py:184
-msgid "Pe o imagine finală, Beta tester este opțional. Echipa HD Satelit poate vedea și face orice pe receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele și parolele. Pot apărea probleme."
-msgstr "Végleges rendszerképen a Bétatesztelő választható. A HD Satelit csapata a távsegítség és a tesztek alatt bármit láthat és megtehet a vevődön, beleértve a beállítások, naplók és jelszavak megtekintését. Problémák előfordulhatnak."
-
 #: lib/python/Screens/HdsSoftwareUpdate.py:886
 #, python-format
 msgid "Pe stickul „%s” partiția %d are sistemul de fișiere %s, dar tabela de partiții o arată ca tip %s. Recovery-ul producătorului nu vede atunci arhivele de pe stick (0 MB). Repară tipul partiției: schimb numai acest octet în %s, fișierele de pe stick rămân neatinse."
@@ -12262,10 +12238,6 @@ msgstr "A vevő egyszer újraindul a gyártó betöltőjébe (abba a menübe, ah
 #: lib/python/Components/HdsPornireMultipla.py:201
 msgid "Receptorul repornește în încărcător. Pornirea următoare revine în imaginea de acum."
 msgstr "A vevő újraindul a betöltőbe. A következő indítás visszatér a mostani rendszerképbe."
-
-#: lib/python/Screens/HdsBetaTester.py:1256
-msgid "Recuperare și actualizări"
-msgstr "Helyreállítás és frissítések"
 
 #: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:3200
 msgid "Refuză"
@@ -49315,6 +49287,10 @@ msgid "Recomandat: 1080p 50 Hz (Full HD) sau 2160p 50 Hz (4K UHD); canalele din 
 msgstr "Ajánlott: 1080p 50 Hz (Full HD) vagy 2160p 50 Hz (4K UHD); az európai csatornák 50 Hz-esek."
 
 #: lib/python/Screens/VideoSetup.py
+msgid "Recomandat: 1080p 50 Hz (Full HD); canalele din Europa au 50 Hz."
+msgstr "Ajánlott: 1080p 50 Hz (Full HD); az európai csatornák 50 Hz-esek."
+
+#: lib/python/Screens/VideoSetup.py
 #, python-format
 msgid "Fără răspuns, setarea de dinainte revine în %d s."
 msgstr "Válasz nélkül az előző beállítás %d mp múlva visszaáll."
@@ -60092,6 +60068,14 @@ msgstr "Más bővítményeknek szükségük van erre. Előbb azokat töröld."
 
 msgid "Extensia nu se mai află în feed. Descarcă din nou lista (tasta albastră)."
 msgstr "A bővítmény már nincs a feedben. Töltsd le újra a listát a kék gombbal."
+
+#: lib/python/Components/HdsPachete.py
+msgid "O listă de pachete lipsește de pe server. Celelalte s-au descărcat, deci internetul merge."
+msgstr "A szerverről hiányzik egy csomaglista. A többi lista letöltődött, ezért az internetkapcsolat működik."
+
+#: lib/python/Components/HdsPachete.py
+msgid "Serverul nu are lista de pachete cerută. Internetul merge; încearcă din nou mai târziu."
+msgstr "A szerveren nincs meg a kért csomaglista. Az internetkapcsolat működik; próbáld újra később."
 
 msgid "Extensia nu este făcută pentru acest receptor."
 msgstr "A bővítmény nem ehhez a vevőhöz készült."
@@ -79149,3 +79133,180 @@ msgstr "Balra/Jobbra: kiválasztod, mennyi ideig legyen bekapcsolva."
 
 msgid "Tu alegi cât timp e pornită, de la 2 ore până la permanent, și poți schimba durata cât merge. O oprești oricând, de pe receptor sau din pagina web. Până atunci, echipa poate intra oricând."
 msgstr "Te választod ki, mennyi ideig legyen bekapcsolva: 2 óra, hosszabb ideig vagy állandóan, és az időtartamot működés közben is módosíthatod. Bármikor leállíthatod, a vevőkészülékről vagy a weboldalról. Addig a csapat bármikor beléphet."
+
+#: data/setup.xml data/menu.xml
+msgid "Sigla luminată"
+msgstr "Világító logó"
+
+#: data/setup.xml
+msgid "Sigla, cu receptorul pornit"
+msgstr "A logó bekapcsolt készüléknél"
+
+#: data/setup.xml
+msgid "Cum luminează sigla din față cât receptorul e pornit. Ca din fabrică: culoarea pe care o pune receptorul singur. Poți alege oricare din cele două culori, amândouă deodată (a treia nuanță), stinsă, o clipire sau o trecere lină. Alegerea se vede pe loc câteva secunde."
+msgstr "Hogyan világítson az előlapi logó, amíg a készülék be van kapcsolva. Gyári beállítás: az a szín, amit a készülék magától beállít. Választhatsz a két szín közül bármelyiket, mindkettőt egyszerre (harmadik árnyalat), kikapcsolt állapotot, villogást vagy folyamatos átmenetet. A választásod azonnal látható lesz pár másodpercig."
+
+#: data/setup.xml
+msgid "Sigla, în standby"
+msgstr "A logó készenléti módban"
+
+#: data/setup.xml
+msgid "Cum luminează sigla cât receptorul e în standby. Ca din fabrică: culoarea de standby pusă de receptor. Respiră încet: sigla se aprinde și se stinge lin, ca un semn că receptorul doarme. Stinsă: nicio lumină noaptea."
+msgstr "Hogyan világítson a logó, amíg a készülék készenlétben van. Gyári beállítás: a készülék által beállított készenléti szín. Lassú lüktetés: a logó lassan kigyullad és kialszik, jelezve, hogy a készülék alszik. Ki: nincs fény éjszaka."
+
+#: data/setup.xml
+msgid "Sigla, la oprirea completă"
+msgstr "A logó teljes kikapcsolásnál"
+
+#: data/setup.xml
+msgid "Aprinsă (din fabrică) sau stinsă după ce oprești receptorul de tot (oprire completă). Atunci sigla o ține receptorul singur, fără program."
+msgstr "Be (gyári beállítás) vagy ki, miután teljesen kikapcsolod a készüléket (teljes kikapcsolás). Ilyenkor a logót maga a készülék vezérli, szoftver nélkül."
+
+#: data/setup.xml
+msgid "Sigla arată ce face receptorul"
+msgstr "A logó mutatja, mit csinál a készülék"
+
+#: data/setup.xml
+msgid "Da: sigla își schimbă lumina cât receptorul lucrează la ceva (actualizare, căutare de canale, antena care se rotește, semnalul prins, înregistrare, asistență), după alegerile de mai jos, apoi revine. Când sunt mai multe deodată, se vede cel mai important, în ordinea de mai jos. Nu (din fabrică): sigla rămâne pe culoarea de pornit sau de standby."
+msgstr "Igen: a logó megváltoztatja a fényét, amíg a készülék dolgozik valamin (szoftverfrissítés, csatornakeresés, az antenna forgása, jel vétele, felvétel, távsegítség), az alábbi beállítások szerint, majd visszaáll. Ha egyszerre több dolog történik, az alábbi sorrend szerint a legfontosabb látszik. Nem (gyári beállítás): a logó marad a bekapcsolt vagy a készenléti színnél."
+
+#: data/setup.xml
+msgid "Cât se instalează o actualizare"
+msgstr "Frissítés telepítése közben"
+
+#: data/setup.xml
+msgid "Lumina siglei cât se instalează o actualizare a imaginii sau un plugin. Atunci receptorul nu trebuie scos din priză."
+msgstr "A logó fénye, amíg image-frissítés vagy plugin települ. Ilyenkor nem szabad kihúzni a készüléket a konnektorból."
+
+#: data/setup.xml
+msgid "Cât caută canale"
+msgstr "Csatornakeresés közben"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o căutare de canale (și căutarea oarbă pe satelit)."
+msgstr "A logó fénye, amíg a csatornakeresés (és a műholdas vakkeresés) fut."
+
+#: data/setup.xml
+msgid "Cât se rotește antena"
+msgstr "Antennaforgatás közben"
+
+#: data/setup.xml
+msgid "Lumina siglei cât motorul antenei (DiSEqC 1.2 sau USALS) mută antena spre alt satelit. Toate culorile, pe rând: sigla trece prin cele trei nuanțe până se oprește antena."
+msgstr "A logó fénye, amíg az antenna motorja (DiSEqC 1.2 vagy USALS) egy másik műholdra állítja az antennát. Minden szín sorban: a logó végigmegy a három árnyalaton, amíg az antenna meg nem áll."
+
+#: data/setup.xml
+msgid "Când prinde semnalul"
+msgstr "Jelvételkor"
+
+#: data/setup.xml
+msgid "Lumina siglei timp de 3 secunde după ce tunerul prinde semnalul canalului (la schimbarea canalului sau după ce se oprește antena)."
+msgstr "A logó fénye 3 másodpercig, miután a tuner megtalálja a csatorna jelét (csatornaváltáskor vagy az antenna megállása után)."
+
+#: data/setup.xml
+msgid "Cât înregistrează"
+msgstr "Felvétel közben"
+
+#: data/setup.xml
+msgid "Lumina siglei cât merge o înregistrare, și în standby."
+msgstr "A logó fénye, amíg a felvétel tart, készenlétben is."
+
+#: data/setup.xml
+msgid "Cât e pornită asistența"
+msgstr "Amíg a távsegítség fut"
+
+#: data/setup.xml
+msgid "Lumina siglei cât e pornită asistența de la distanță, ca să vezi că echipa e conectată."
+msgstr "A logó fénye, amíg a távsegítség be van kapcsolva, hogy lásd, a csapat csatlakozott."
+
+#: data/menu.xml
+msgid "Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează."
+msgstr "Válaszd ki az előlapi logó színeit és azt, hogyan világítson, amikor a készülék csatornákat keres, forgatja az antennát, felvételt készít vagy frissül."
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Ca din fabrică"
+msgstr "Gyári beállítás"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Nu se schimbă"
+msgstr "Nem változik"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de pornit"
+msgstr "Bekapcsolt szín"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Culoarea de standby"
+msgstr "Készenléti szín"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Amândouă culorile deodată"
+msgstr "Mindkét szín egyszerre"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Stinsă"
+msgstr "Ki"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de pornit"
+msgstr "Villog a bekapcsolt színnel"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește în culoarea de standby"
+msgstr "Villog a készenléti színnel"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Clipește repede, amândouă culorile"
+msgstr "Gyorsan villog mindkét színnel"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Schimbă cele două culori"
+msgstr "Váltakozik a két szín"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Toate culorile, pe rând"
+msgstr "Minden szín sorban"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Respiră încet, culoarea de standby"
+msgstr "Lassú lüktetés, készenléti szín"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Trece lin prin toate culorile"
+msgstr "Folyamatos átmenet az összes színen"
+
+#: lib/python/Components/HdsLedSigla.py
+msgid "Aprinsă"
+msgstr "Be"
+
+#: lib/python/Screens/HdsAsistenta.py
+#, python-format
+msgid "Apasă EXIT și folosești receptorul ca de obicei; asistența rămâne pornită. Revii aici din %s."
+msgstr "Nyomd meg az EXIT gombot, és használd a vevőt a megszokott módon; a távsegítség bekapcsolva marad. Ide a %s menüpontból térhetsz vissza."
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "EXIT: la televizor"
+msgstr "EXIT: TV-re"
+
+#: lib/python/Screens/HdsAsistenta.py
+msgid "Echipa se uită imediat ce poate."
+msgstr "A csapat ránéz, amint teheti."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/asistenta_web.py
+msgid "Poți închide pagina și folosi receptorul ca de obicei; asistența rămâne pornită. Pe receptor o găsești în __DRUM_MENIU__."
+msgstr "Bezárhatod az oldalt, és használhatod a vevőt a megszokott módon; a távsegítség bekapcsolva marad. A vevőn itt találod: __DRUM_MENIU__."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Receptorul tău redă cel mult Full HD (1080p), așa că pornește același canal fără 4K: %s."
+msgstr "A vevőkészüléked legfeljebb Full HD (1080p) minőséget tud, ezért ugyanazt a csatornát indítja el 4K nélkül: %s."
+
+#: lib/python/Components/HdsIptvRedare.py
+msgid "Canalul acesta e 4K, iar receptorul tău redă cel mult Full HD (1080p)."
+msgstr "Ez a csatorna 4K-s, a vevőkészüléked pedig legfeljebb Full HD (1080p) minőséget tud."
+
+#: lib/python/Screens/HdsIptv4K.py
+msgid "Receptorul tău redă cel mult Full HD (1080p). Un canal 4K pornește aici cu același canal fără 4K al furnizorului, când acesta îl are; altfel nu se poate reda."
+msgstr "A vevőkészüléked legfeljebb Full HD (1080p) minőséget tud lejátszani. Egy 4K-s csatorna itt a szolgáltató 4K nélküli változatával indul el, ha van neki; különben nem lehet lejátszani."
+
+#: lib/python/Screens/ServiceScan.py
+msgid "Canalele DVB-T2 prin satelit de pe %s (%s) intră singure în lista de canale, în %s."
+msgstr "A(z) %s pozíció műholdas DVB-T2 csatornái (%s) automatikusan bekerülnek a csatornalistába: %s."

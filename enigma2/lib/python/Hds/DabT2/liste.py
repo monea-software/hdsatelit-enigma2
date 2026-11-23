@@ -643,8 +643,23 @@ def incarca(tip, director=None, incorporat=None):
     surse = [('manual', citeste_json(os.path.join(director, FISIER['manual']), tip)),
              ('scanat', citeste_json(os.path.join(director, FISIER['scanat']), tip)),
              ('descarcat', desc), ('incorporat', inc)]
-    return {'versiune': 1, 'tip': tip, 'transpondere': uneste(surse),
+    return {'versiune': 1, 'tip': tip, 'transpondere': fara_abertis_vechi(uneste(surse)),
             'surse': {s: bool(l) for s, l in surse}}
+
+
+def fara_abertis_vechi(transpondere):
+    """Un flux de pe 30W (felul abertis) pe care o lista il are cu un PLP (pachetul, cea descarcata sau o scanare noua),
+    iar o copie scanata sau descarcata inainte fara PLP (8008 pe 12583 V: din 0.7.7 PLP 0 si t2mi_pid 4096, T2-MI in T2-MI; copiile
+    vechi fara ele), ramane numai cu intrarea cu PLP: copia veche ar intra in buchet langa ea, cu acelasi PID, si s-ar
+    reda fara stratul T2-MI. Intrarile puse de mana raman. Schimba lista primita si o intoarce."""
+    for t in transpondere:
+        cu_plp = set(f.get('pid') for f in t.get('feeduri', [])
+                     if f.get('fel') == 'abertis' and f.get('plp') is not None)
+        if cu_plp:
+            t['feeduri'] = [f for f in t['feeduri'] if not (
+                f.get('fel') == 'abertis' and f.get('pid') in cu_plp and f.get('plp') is None
+                and f.get('sursa') in ('scanat', 'descarcat'))]
+    return transpondere
 
 
 STARE_NEDECODABIL = 'nu_se_decodeaza'

@@ -57,3 +57,16 @@ do_compile:append:u57() {
 	grep -q 'dvbsink_refuz_asteapta(self->unlockfd\[0\]' ${S}/gstdvbaudiosink.c || bbfatal "dvbmediasink: peticul scrierii refuzate (IPR7) lipseste din dvbaudiosink"
 	grep -q 'dvbsink_refuz_asteapta(self->unlockfd\[0\]' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul scrierii refuzate (IPR7) lipseste din dvbvideosink"
 }
+
+# SEF1 (23.11.2026): pe ZGEMMA H8.2H SE (driverul Airdigital h8se) un VIDEO_PLAY primit dupa VIDEO_FREEZE ramane inghetat pana la
+# un VIDEO_CONTINUE. dvbvideosink nu face preroll, deci cand nimic nu face preroll inaintea lui (film sau flux fara sunet, ori un
+# sunet care vine tarziu) caps-urile vin dupa PAUSED_TO_PLAYING, iar ordinea era FREEZE, CONTINUE, STREAMTYPE, PLAY: decodorul nu
+# pornea, fara nicio eroare (proba pe receptor: 3 din 3 porniri fara imagine au pornit dupa o pauza si o redare). Peticul trimite
+# CONTINUE dupa PLAY cand elementul e deja in PLAYING. Facut pe aceeasi sursa fixata, dupa 0001 si 0002; atinge numai set_caps.
+# NUMAI pe h8se, singurul driver pe care s-a masurat.
+SRC_URI:append:h8se = " file://0005-dvbvideosink-continue-dupa-play.patch"
+PR:append:h8se = ".1"
+
+do_compile:append:h8se() {
+	grep -q 'VIDEO_CONTINUE after VIDEO_PLAY' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul CONTINUE dupa PLAY (SEF1) lipseste"
+}

@@ -790,6 +790,51 @@ def normalizeNimType(type):
 # "<frontend virtual pe adapter0>\t<frontend USB>\t<nume>\t<sisteme>". Lipseste cand nu e niciun tuner USB in mufa.
 TUNERE_USB = "/tmp/hds_tunere_usb"
 
+SISTEME_CABLU = (1, 18)      # SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_C (linux/dvb/frontend.h)
+SISTEME_TERESTRU = (3, 16)   # SYS_DVBT, SYS_DVBT2
+SISTEME_SATELIT = (4, 5, 6, 17)  # SYS_DSS, SYS_DVBS, SYS_DVBS2, SYS_TURBO
+
+
+def hdsSistemeNucleu(frontend, adaptor=0):
+	"""Sistemele de livrare ale frontendului, cum le da nucleul (FE_GET_PROPERTY cu DTV_ENUM_DELSYS, aceeasi citire ca
+	partea C++, eDVBFrontend): lista numerelor SYS_*, sau [] la orice eroare (frontend lipsa, ioctl refuzat). Deschis
+	numai pentru citire; nucleul raspunde din datele frontendului, fara acord si fara sa atinge alimentarea LNB."""
+	import array
+	import struct
+	try:
+		import fcntl
+	except ImportError:  # probele de pe PC (Windows)
+		return []
+	p = struct.calcsize("P")
+	# struct dtv_property (packed): cmd, reserved[3], uniunea u (cel mai mare membru: buffer = data[32], len,
+	# reserved1[3], pointer), result
+	prop = array.array("B", bytes(4 + 12 + 32 + 4 + 12 + p + 4))
+	struct.pack_into("<I", prop, 0, 44)  # DTV_ENUM_DELSYS
+	# struct dtv_properties: num, apoi pointerul spre vectorul de proprietati (aliniat la 8 pe 64 de biti)
+	props = bytearray(struct.pack("<I" + ("I" if p == 4 else "4xQ"), 1, prop.buffer_info()[0]))
+	cerere = 0x80000000 | (len(props) << 16) | (0x6f << 8) | 83  # FE_GET_PROPERTY
+	try:
+		fd = os.open("/dev/dvb/adapter%d/frontend%d" % (adaptor, frontend), os.O_RDONLY | os.O_NONBLOCK)
+	except OSError:
+		return []
+	try:
+		fcntl.ioctl(fd, cerere, props, True)
+	except (OSError, ValueError):
+		return []
+	finally:
+		os.close(fd)
+	numar = struct.unpack_from("<I", prop, 16 + 32)[0]
+	return list(prop[16:16 + min(numar, 32)])
+
+
+def hdsCabluSiTerestruDinNucleu(frontend):
+	"""True cand nucleul spune ca frontendul stie si cablu (DVB-C), si terestru (DVB-T/T2), dar nu si satelit: un tuner
+	care stie si satelitul (Si2169C/D pe Dreambox) isi alege tipul prin multiType (hds_dinamic), nu de aici."""
+	sisteme = set(hdsSistemeNucleu(frontend))
+	return (bool(sisteme.intersection(SISTEME_CABLU)) and bool(sisteme.intersection(SISTEME_TERESTRU))
+		and not sisteme.intersection(SISTEME_SATELIT))
+
+
 def tunereUsb(cale=None):
 	"""{frontend virtual: (nume, [sisteme])} pentru tunerele USB legate de punte; {} fara ele sau la o lista stricata.
 	Numele din /proc/bus/nim_sockets al unui frontend virtual il scrie driverul vtuner al placii (difera de la placa la
@@ -1341,6 +1386,14 @@ class NimManager:
 			elif entry["type"] in ("DVB-T", "DVB-C") and NIM.numeCuCabluSiTerestru(name):
 				# SF8008 si SF8008 MINI: "Type: DVB-T2" + "Name: ATBM7821 DVB-T2/C" (vezi NIM.numeCuCabluSiTerestru)
 				entry["type"] = "DVB-C/T"
+			elif (entry["type"] in ("DVB-T", "DVB-C") and entry.get("frontend_device") is not None
+					and entry.get("frontend_device") not in usb and not entry.get("multi_type")
+					and hdsCabluSiTerestruDinNucleu(entry["frontend_device"])):
+				# ZGEMMA H8.2H Plus: "Type: DVB-T2" + "Name: m88dm6000", numele nu spune sistemele; nucleul da DVB-T2,
+				# DVB-T si DVB-C (DTV_ENUM_DELSYS). Ramas DVB-T, tunerul nu primea setarile de cablu, iar canalele de
+				# cablu nu porneau. Tunerele cu randuri "Mode" (multiType, de pilda Dreambox) raman pe alegerea lor.
+				entry["type"] = "DVB-C/T"
+				print("[NimManager] slotul %d (%s): cablu si terestru, dupa sistemele din nucleu" % (id, name))
 			if not ("i2c" in entry):
 				entry["i2c"] = None
 			if not ("has_outputs" in entry):

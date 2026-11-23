@@ -4847,10 +4847,6 @@ def _construiesteServer(radacina):
 
 		def render(self, request):
 			from . import cadru_web
-			from . import betatester_web
-			acord = betatester_web.poartaTest(request)
-			if acord is not None:
-				return acord
 			corp = cadru_web.imbracaRaspuns(request, self.resursa.render(request))
 			if isinstance(corp, bytes) and corp.startswith(b"<!DOCTYPE html>"):
 				from .asistenta_web import protejeazaScrierea

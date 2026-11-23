@@ -131,6 +131,10 @@ private:
 	int m_timeoutCount; // needed for timeout
 	int m_retryCount; // diseqc retry for rotor
 	bool m_hds_rotor_locked; // HDSatelit: IF_TUNER_LOCKED_GOTO a gasit semnalul dupa miscarea motorului
+	/* ZGM1: citirile IF_TUNER_LOCKED_GOTO fara blocare, la rand, de la pornirea motorului sau de la ultima acordare din
+	   bucla, si daca bucla a vazut vreo blocare (atunci nu se mai acordeaza din nou); HDS_REACORDARE_ROTOR le foloseste */
+	int m_hds_rotor_fara_blocare;
+	bool m_hds_rotor_blocare_vazuta;
 	/* HDSatelit (urma motorului, lib/dvb/hdsurmamotor.h): ultima acordare a tunerului, cine a cerut-o si ce a hotarat
 	   sec.cpp pentru motor; comenzile secventei o poarta cu ele in urma */
 	hdsurma::Acordare m_hds_acordare;

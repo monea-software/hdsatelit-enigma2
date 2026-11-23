@@ -439,9 +439,28 @@ def imparteTaste(text):
 	return lista, greseli
 
 
+# cate taste ale echipei (op taste, op text) se livreaza acum: fereastra mesajului echipei (Screens/HdsAnuntRetea), care se
+# ascunde la prima tasta a omului, nu se ascunde la ele (tastaDeLaEchipa)
+_tasteEchipa = [0]
+
+
+def tastaDeLaEchipa():
+	"""True cat se livreaza o tasta trimisa de echipa (apasaTasta): inject trece prin eActionMap pe loc, pe acelasi fir."""
+	return _tasteEchipa[0] > 0
+
+
 def apasaTasta(cod, lung=False):
 	"""Tasta ca de pe telecomanda receptorului: eRCMapper.inject (dispozitivul nativ, deci legaturile keymap.xml ale
-	telecomenzii), cu repetari pentru apasarea lunga; fara eRCMapper, prin harta de actiuni (la fel ca interfata web)."""
+	telecomenzii), cu repetari pentru apasarea lunga; fara eRCMapper, prin harta de actiuni (la fel ca interfata web).
+	Cat se livreaza, tastaDeLaEchipa() spune ca nu e a omului."""
+	_tasteEchipa[0] += 1
+	try:
+		_apasa(cod, lung)
+	finally:
+		_tasteEchipa[0] -= 1
+
+
+def _apasa(cod, lung):
 	try:
 		from enigma import eRCMapper
 		m = eRCMapper.getInstance()

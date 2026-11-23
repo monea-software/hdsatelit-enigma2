@@ -27,6 +27,10 @@ MASINA_V10 = "viper4k"
 # GigaBlue UHD TRIO 4K (regulile spun gbtrio4k, driverul hi-dvb.ko spune gbmv200; 93 din 105 fisiere ale driverelor sunt
 # cele Octagon sau Uclan)
 MASINI_LIBREADER = ("viper4k", "sf8008", "sf8008m", "ustym4kpro", "gbtrio4k", "gbmv200")
+# ZGEMMA H8.2H Plus (masina h8, Hi3716MV430) si H8.2H SE (masina h8se, Hi3798MV200): drivere Airdigital, fara showiframe
+# Dinobot, deci fara maparea de 34611200 o (/proc/vmallocinfo nu o are pe niciunul); enigma2 e construit acolo cu
+# HDS_FARA_MEMORIE_ES (reteta enigma2-hdsatelit), iar memoria decodorului nu reporneste nimic, ca pe V10
+MASINI_ZGEMMA_H8 = ("zgemmah82hplus", "zgemmah8se")
 NUME_V10 = "Amiko Viper 4K V10"
 FISIER_REGULI = "etc/hdsatelit-model"
 FISIER_BOXTYPE = "proc/stb/info/boxtype"
@@ -81,11 +85,19 @@ def familiaLibreader(radacina=None):
 	return _cache[cheie]
 
 
+def zgemmaH8(radacina=None):
+	"""True pe ZGEMMA H8.2H Plus si H8.2H SE: regulile imaginii (machinebuild=) spun una din MASINI_ZGEMMA_H8"""
+	cheie = "zgemmah8:" + (radacina or "")
+	if cheie not in _cache:
+		_cache[cheie] = masinaDinReguli(radacina) in MASINI_ZGEMMA_H8
+	return _cache[cheie]
+
+
 def cuMemorieEs(radacina=None):
 	"""True cand demonul platformei e showiframe Dinobot, care mapeaza memoria de 34611200 o prin care driverul video
-	primeste pozele si filmele (lib/dvb/hdspazavideo.h, Components/HdsMemorieDriver.py). Pe V10 nu exista: acolo
-	memoria decodorului nu reporneste nimic (si enigma2 nu e construit cu paza, configure.ac)."""
-	return not esteV10(radacina)
+	primeste pozele si filmele (lib/dvb/hdspazavideo.h, Components/HdsMemorieDriver.py). Pe V10 si pe ZGEMMA H8 nu
+	exista: acolo memoria decodorului nu reporneste nimic (si enigma2 e construit fara paza, HDS_FARA_MEMORIE_ES)."""
+	return not esteV10(radacina) and not zgemmaH8(radacina)
 
 
 def uita():

@@ -414,12 +414,14 @@ def citeste_lista(canal="public", credentiale=None, deschide=None):
 	return d, None
 
 
-def oferta_din_feed(stare, img, canal, rad=None):
+def oferta_din_feed(stare, img, canal, rad=None, baza_feed=None):
 	"""Oferta "versiune noua" din stare.json al feedului, sau None: numai o versiune care se instaleaza din meniu (fara
-	imagine_noua, pe baza receptorului, pe canalul lui) si mai noua decat cea care ruleaza."""
+	imagine_noua, pe baza receptorului, pe canalul lui) si mai noua decat cea care ruleaza. baza_feed: baza din adresele
+	feedului (0.7.9, UNF9: alta decat a receptorului numai pe un feed unic, HdsActualizari.motiv_baza)."""
 	if not isinstance(stare, dict) or not isinstance(img, dict) or not img.get("versiune"):
 		return None
-	if stare.get("imagine_noua") or stare.get("baza") != img.get("baza"):
+	if stare.get("imagine_noua") or \
+			_modul("HdsActualizari").motiv_baza(stare, baza_feed or img.get("baza"), img.get("baza")) == "baza":
 		return None
 	if stare.get("canal") and stare.get("canal") != canal:
 		return None
@@ -1553,7 +1555,7 @@ class ImagineOnline(object):
 						stare, cod = A.descarca_stare(A.adresa_stare(canal_feed, baza_feed or img["baza"]),
 							A.citeste_netrc(rad) if canal_feed == "proba" else None)
 						if not cod:
-							feed = oferta_din_feed(stare, img, canal_feed, rad)
+							feed = oferta_din_feed(stare, img, canal_feed, rad, baza_feed)
 							feed_la_zi = feed is None and not stare.get("imagine_noua")
 				except Exception as e:
 					_jurnal("starea feedului: %s" % e)
@@ -2094,7 +2096,7 @@ class Verificare(object):
 		def gata(rez, eroare):
 			stare, cod = rez if rez and not eroare else ({}, A.EROARE)
 			self._feed = None
-			o = None if cod else oferta_din_feed(stare, img, canal, rad)
+			o = None if cod else oferta_din_feed(stare, img, canal, rad, baza)
 			if o:
 				self.oferta_feed = o
 				self._hotaraste()

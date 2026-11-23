@@ -13,6 +13,22 @@
 # parola din /home/root/.netrc). Parola nu sta in adrese: opkg ar scrie-o in "Downloading ..."; wget-ul pornit de opkg
 # o ia din $HOME/.netrc (enigma2 are HOME=/, de aceea si legatura /.netrc), iar stare.json se cere de aici cu ea.
 #
+# Feedul unic (0.7.9, UNF9): baza din adrese (a feedului) si baza scrisa (version= din /etc/hdsatelit-model: nucleul,
+# modulele, bibliotecile de baza, care nu vin niciodata prin feed) nu mai sunt neaparat aceeasi. Un feed cu "unic": true
+# in stare.json e al tuturor bazelor scrise de la "imagine_minima" incoace, pe linia x.y a bazei lui. Trecerea o
+# porunceste stare.json semnat al feedului bazei, cu "feed_unic": <baza feedului unic>: stare_cu_feedul_unic citeste
+# atunci stare.json al feedului unic pe acelasi canal si trece numai daca e semnat, e unic, are toate arhitecturile
+# receptorului in "indexuri", imagine_minima nu e mai noua decat baza scrisa, iar baza scrisa nu e in "intoarce_baze";
+# trecerea rescrie, atomic, numai randurile feedului HD Satelit din CONF_PUBLIC si CONF_PROBA (baza din adresa).
+# "intoarce_baze" din feedul unic trimite receptorul inapoi pe feedul bazei lui scrise (adresa se reface din version=).
+# Fara texte pe ecran: totul se scrie in jurnal. Verdictul cere stare.json "baza" = baza din adrese si, cand ea nu e
+# baza scrisa, "unic": true; imagine_minima se compara cu baza scrisa.
+#
+# Numaratoarea anonima (0.7.9, UNF9): fiecare cerere stare.json are antetul ANTET_NUMARARE cu un numar aleator al
+# instalarii (FISIER_INSTALARE, facut o data cu os.urandom; nu e MAC, serie sau alt semn al aparatului), versiunea care
+# ruleaza, baza scrisa si modelul (machinebuild=); serverul numara receptoarele pe versiune
+# (unelte/stb/numara_receptoare.py).
+#
 # Cautarea: stare.json (pe un fir separat), apoi `opkg update`, apoi planul (pe un fir separat): pachetele instalate
 # pentru care sursele HD Satelit ale canalului au o versiune mai noua, cu dependintele verificate fata de ce e
 # instalat (si fata de numele date prin Provides, ca opkg). Feedul unei baze e comun mai multor masini (V10, SF8008 si
@@ -81,6 +97,7 @@ import os
 import re
 import shutil
 import socket
+import threading
 import time
 import zlib
 from functools import cmp_to_key
@@ -253,6 +270,16 @@ TEXT_DRIVER_NOU = N_('Actualizarea a schimbat driverul plăcii. Receptorul trebu
 TEXT_IMAGINE_SCHIMBATA = N_('Programul imaginii s-a schimbat. Interfața trebuie repornită ca să-l folosească.')
 TEXT_DRIVER_DISPONIBIL = N_('Actualizare software: driverul plăcii pentru interfața 2K e gata de instalat. Îl instalezi din '
 	'Actualizare software; la sfârșit receptorul se repornește.')
+# 0.7.9 (UNF9): feedul unic (vezi capul fisierului) si numaratoarea anonima
+CHEIE_FEED_UNIC = 'feed_unic'
+CHEIE_UNIC = 'unic'
+CHEIE_INTOARCE = 'intoarce_baze'
+FISIER_INSTALARE = '/etc/hds-instalare.id'
+ANTET_NUMARARE = 'X-Hds-Numarare'
+_NUMARARE = {}
+# verificarea zilnica si cea din HdsImagineOnline pornesc deodata: numarul instalarii il face un singur fir
+_LACAT_NUMARARE = threading.Lock()
+_LUCRARI_NUMARARE = []
 
 _BAZA = re.compile(r'^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\Z')
 # versiunea vazuta de om (si vechile nume x.y.z.N de dinainte de versiunile simple)
@@ -682,6 +709,134 @@ def adresa_stare(canal, baza):
 	return '%s/%s/%s/stare.json' % (ADRESA_FEED, canal, baza)
 
 
+# ---------------------------------------------------------------- feedul unic (0.7.9, UNF9)
+
+def linia(baza):
+	"""x.y al unei baze x.y.z, '' cand nu e o baza"""
+	baza = u'%s' % (baza or '')
+	return baza.rsplit('.', 1)[0] if _BAZA.match(baza) else ''
+
+
+def baza_feed_potrivita(baza_feed, baza_scrisa):
+	"""Inainte de stare.json: feedul din adrese poate fi al receptorului (baza scrisa) sau un feed unic de pe aceeasi linie
+	x.y (atunci stare.json hotaraste, motiv_baza)"""
+	if not _BAZA.match(u'%s' % (baza_feed or '')) or not _BAZA.match(u'%s' % (baza_scrisa or '')):
+		return False
+	return baza_feed == baza_scrisa or linia(baza_feed) == linia(baza_scrisa)
+
+
+def motiv_baza(stare, baza_feed, baza_scrisa):
+	"""'' cand stare.json semnat al feedului din adrese se potriveste cu imaginea scrisa; altfel 'baza' (alta imagine,
+	sau feedul altei baze fara "unic") sau 'imagine-minima' (feedul cere o imagine scrisa mai noua)"""
+	bf = baza_feed or baza_scrisa
+	if not baza_scrisa or stare.get('baza') != bf or (bf != baza_scrisa and stare.get(CHEIE_UNIC) is not True):
+		return 'baza'
+	if P.compara_versiuni(stare.get('imagine_minima') or baza_scrisa, baza_scrisa) > 0:
+		return 'imagine-minima'
+	return ''
+
+
+def intoarce_baze(stare):
+	"""Bazele scrise din "intoarce_baze" ale unui feed unic (numai cele x.y.z); [] altfel"""
+	x = (stare or {}).get(CHEIE_INTOARCE) if (stare or {}).get(CHEIE_UNIC) is True else None
+	return [b for b in x if isinstance(b, str) and _BAZA.match(b)] if isinstance(x, list) else []
+
+
+def feed_unic_potrivit(unica, baza_unica, canal, baza_scrisa, arhitecturi):
+	"""'' cand receptorul poate trece pe feedul unic `baza_unica` (stare.json lui semnat, `unica`); altfel motivul, pentru
+	jurnal"""
+	if unica.get('baza') != baza_unica:
+		return 'stare.json are baza %s, nu %s' % (curata(unica.get('baza')), baza_unica)
+	if unica.get(CHEIE_UNIC) is not True:
+		return 'feedul %s nu e unic' % baza_unica
+	if unica.get('canal') and unica.get('canal') != canal:
+		return 'stare.json e al canalului %s, nu %s' % (curata(unica.get('canal')), canal)
+	if not baza_scrisa:
+		return 'baza scrisa nu se stie'
+	if baza_scrisa in intoarce_baze(unica):
+		return 'baza %s e in %s' % (baza_scrisa, CHEIE_INTOARCE)
+	if P.compara_versiuni(unica.get('imagine_minima') or baza_unica, baza_scrisa) > 0:
+		return 'cere imaginea %s, receptorul are %s' % (curata(unica.get('imagine_minima')), baza_scrisa)
+	indexuri = unica.get('indexuri')
+	lipsa = sorted(set(arhitecturi) - set(indexuri if isinstance(indexuri, dict) else ()))
+	if not arhitecturi or lipsa:
+		return 'feedul unic nu are arhitecturile %s' % (', '.join(lipsa) or '?')
+	return ''
+
+
+def rescrie_baza_feedului(radacina, de_la, la):
+	"""In CONF_PUBLIC si CONF_PROBA, randurile src ale feedului HD Satelit cu baza `de_la` in adresa trec pe `la`, atomic
+	(fisier .nou, fsync, rename); celelalte randuri raman cum sunt. Numarul randurilor schimbate."""
+	if not _BAZA.match(u'%s' % de_la) or not _BAZA.match(u'%s' % la) or de_la == la:
+		return 0
+	schimbate = 0
+	for conf in (CONF_PUBLIC, CONF_PROBA):
+		cale = _cale(radacina, conf)
+		try:
+			with open(cale, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+				randuri = f.read().splitlines(True)
+		except (IOError, OSError):
+			continue
+		noi, aici = [], 0
+		for rand in randuri:
+			p = rand.split()
+			m = _ADRESA_FEED.match(p[2]) if len(p) >= 3 and p[0] in ('src', 'src/gz') else None
+			if m and m.group(2) == de_la:
+				adresa = '%s/%s/%s/%s' % (ADRESA_FEED, m.group(1), la, m.group(3))
+				rand = rand.replace(p[2], adresa, 1)
+				aici += 1
+			noi.append(rand)
+		if not aici:
+			continue
+		try:
+			with open(cale + '.nou', 'w', encoding='utf-8', errors='surrogateescape', newline='') as f:
+				f.write(''.join(noi))
+				f.flush()
+				os.fsync(f.fileno())
+			try:
+				os.chmod(cale + '.nou', os.stat(cale).st_mode & 0o7777)
+			except OSError:
+				pass
+			os.replace(cale + '.nou', cale)
+			schimbate += aici
+		except (IOError, OSError) as e:
+			print('[HdsActualizari] sursele %s: %s' % (conf, e))
+	return schimbate
+
+
+def stare_cu_feedul_unic(radacina, canal, baza_feed, credentiale=None, muta=True, deschide=None):
+	"""stare.json al feedului din adrese, cu trecerea pe feedul unic sau intoarcerea de pe el (capul fisierului). Pe un fir
+	separat (cereri de retea). (stare, cod, baza_feedului_dupa, nota): cod ca la descarca_stare; nota ('' cand nu s-a
+	intamplat nimic) e pentru jurnal. muta=False (alt opkg lucreaza): numai citirea."""
+	stare, cod = descarca_stare(adresa_stare(canal, baza_feed), credentiale, deschide=deschide)
+	if cod or not muta or canal not in ('proba', 'public'):
+		return stare, cod, baza_feed, ''
+	baza_scrisa = baza_receptorului(radacina)
+	if not baza_scrisa:
+		return stare, cod, baza_feed, ''
+	if stare.get(CHEIE_UNIC) is True and P.compara_versiuni(baza_scrisa, baza_feed) < 0 and \
+			baza_scrisa in intoarce_baze(stare):
+		if not rescrie_baza_feedului(radacina, baza_feed, baza_scrisa):
+			return stare, cod, baza_feed, 'intoarcerea pe baza %s: sursele nu s-au putut rescrie' % baza_scrisa
+		veche, cod_v = descarca_stare(adresa_stare(canal, baza_scrisa), credentiale, deschide=deschide)
+		return veche, cod_v, baza_scrisa, 'intors de pe feedul unic %s pe feedul bazei %s' % (baza_feed, baza_scrisa)
+	tinta = u'%s' % (stare.get(CHEIE_FEED_UNIC) or '')
+	if not _BAZA.match(tinta) or tinta == baza_feed or (baza_feed != baza_scrisa and stare.get(CHEIE_UNIC) is not True):
+		return stare, cod, baza_feed, ''
+	arhitecturi = set(s[2] for s in surse_feed(radacina)[canal])
+	unica, cod_u = descarca_stare(adresa_stare(canal, tinta), credentiale, deschide=deschide)
+	motiv = curata(unica.get('eroare') or cod_u) if cod_u else \
+		feed_unic_potrivit(unica, tinta, canal, baza_scrisa, arhitecturi)
+	if not motiv:
+		if rescrie_baza_feedului(radacina, baza_feed, tinta):
+			return unica, None, tinta, 'trecut de pe feedul bazei %s pe feedul unic %s' % (baza_feed, tinta)
+		# trecut chiar acum de alta lucrare (verificarea zilnica si cautarea deodata): sursele sunt deja pe feedul unic
+		if [s[3] for s in surse_feed(radacina)[canal]][:1] == [tinta]:
+			return unica, None, tinta, 'sursele erau deja pe feedul unic %s' % tinta
+		motiv = 'sursele nu s-au putut rescrie'
+	return stare, cod, baza_feed, 'ramane pe feedul bazei %s (feedul unic %s: %s)' % (baza_feed, tinta, motiv)
+
+
 # ---------------------------------------------------------------- stare.json
 
 def valideaza_stare(d):
@@ -836,10 +991,77 @@ def repornire_receptor_ceruta(radacina='/'):
 	return False
 
 
-def _cere(adresa, credentiale=None, timp=TIMP_STARE, deschide=None, maxim=MARIME_STARE_MAX, accept='application/json'):
+def numar_instalare(radacina='/'):
+	"""Numarul aleator al instalarii (FISIER_INSTALARE, 32 de cifre hexa), facut la prima cerere cu os.urandom si tinut
+	acolo (in afara /etc/enigma2, deci nu intra in copia setarilor); '' cand nu se poate citi sau scrie"""
+	cale = _cale(radacina, FISIER_INSTALARE)
+	try:
+		with open(cale, 'r', encoding='ascii', errors='replace') as f:
+			v = f.read(64).strip()
+		if re.match(r'^[0-9a-f]{32}\Z', v):
+			return v
+	except (IOError, OSError):
+		pass
+	v = ''.join('%02x' % b for b in bytearray(os.urandom(16)))
+	try:
+		with open(cale + '.nou', 'w', encoding='ascii') as f:
+			f.write(v + '\n')
+			f.flush()
+			os.fsync(f.fileno())
+		os.replace(cale + '.nou', cale)
+		# numarul trimis e chiar cel din fisier
+		with open(cale, 'r', encoding='ascii', errors='replace') as f:
+			citit = f.read(64).strip()
+	except (IOError, OSError) as e:
+		print('[HdsActualizari] numarul instalarii: %s' % e)
+		return ''
+	return citit if re.match(r'^[0-9a-f]{32}\Z', citit) else ''
+
+
+def _model_scris(radacina='/'):
+	"""machinebuild= din /etc/hdsatelit-model (numai litere mici, cifre, _ si -), '' cand nu se stie"""
+	try:
+		with open(_cale(radacina, FISIER_MODEL), 'r', encoding='utf-8', errors='replace') as f:
+			for rand in f:
+				if rand.startswith('machinebuild='):
+					v = rand.split('=', 1)[1].strip()
+					return v if re.match(r'^[a-z0-9][a-z0-9_\-]{0,31}\Z', v) else ''
+	except (IOError, OSError):
+		pass
+	return ''
+
+
+def _versiunea_care_ruleaza(radacina='/'):
+	"""x.y.z din /etc/image-version (Components/HdsJurnalVersiuni), fara status-ul opkg; '' cand nu se stie"""
+	try:
+		try:
+			from Components import HdsJurnalVersiuni as J
+		except ImportError:
+			import HdsJurnalVersiuni as J
+		return J.versiune_din_build(J.build_curent(_cale(radacina, J.IMAGE_VERSION))) or ''
+	except Exception:
+		return ''
+
+
+def antet_numarare(radacina='/'):
+	"""Valoarea lui ANTET_NUMARARE: i=<numar_instalare>;v=<versiunea>;b=<baza scrisa>;m=<modelul>, necunoscutul "-";
+	'' fara numarul instalarii. Se afla o data pe proces (dupa o actualizare interfata porneste din nou)."""
+	if radacina in _NUMARARE:
+		return _NUMARARE[radacina]
+	with _LACAT_NUMARARE:
+		if radacina not in _NUMARARE:
+			numar = numar_instalare(radacina)
+			_NUMARARE[radacina] = '' if not numar else 'i=%s;v=%s;b=%s;m=%s' % (numar,
+				_versiunea_care_ruleaza(radacina) or '-', baza_receptorului(radacina) or '-', _model_scris(radacina) or '-')
+	return _NUMARARE[radacina]
+
+
+def _cere(adresa, credentiale=None, timp=TIMP_STARE, deschide=None, maxim=MARIME_STARE_MAX, accept='application/json',
+		antete_in_plus=None):
 	"""(corp, None) sau (None, (cod, eroare)) pentru o cerere GET de cel mult `maxim` octeti; cod: FARA_CHEIE (401,
 	403), FARA_RASPUNS (retea, 5xx) sau EROARE"""
 	antete = {'User-Agent': UA, 'Accept': accept, 'Cache-Control': 'no-cache'}
+	antete.update(antete_in_plus or {})
 	if credentiale:
 		antete['Authorization'] = 'Basic ' + base64.b64encode(('%s:%s' % credentiale).encode('utf-8')).decode('ascii')
 	try:
@@ -879,8 +1101,15 @@ def descarca_stare(adresa, credentiale=None, timp=TIMP_STARE, deschide=None):
 	stare.json: publicarea se poate schimba intre cele doua cereri. `deschide` (probele) inlocuieste urlopen."""
 	S = _semnatura()
 	motiv = ''
+	# 0.7.9 (UNF9): numaratoarea anonima, numai la cererea lui stare.json (nu la semnatura)
+	try:
+		semn = antet_numarare()
+	except Exception as e:
+		print('[HdsActualizari] numaratoarea: %r' % (e,))
+		semn = ''
+	in_plus = {ANTET_NUMARARE: semn} if semn else None
 	for _incercare in range(2):
-		corp, problema = _cere(adresa, credentiale, timp, deschide)
+		corp, problema = _cere(adresa, credentiale, timp, deschide, antete_in_plus=in_plus)
 		if problema:
 			return {'eroare': 'stare.json prea mare' if problema[1] == 'prea mare' else problema[1]}, problema[0]
 		semnatura, problema = _cere(adresa + '.sig', credentiale, timp, deschide, MARIME_SEMNATURA_MAX, 'text/plain')
@@ -1078,8 +1307,9 @@ def dependinte_lipsa(plan, inst, feed, furn=None):
 	return rez
 
 
-def verdict(stare, baza, plan, lipsa=()):
-	"""{'motive': [...], 'detalii': [...], 'imagine_noua': bool, 'poate_instala': bool}"""
+def verdict(stare, baza, plan, lipsa=(), baza_feed=None):
+	"""{'motive': [...], 'detalii': [...], 'imagine_noua': bool, 'poate_instala': bool}. baza = baza scrisa, baza_feed =
+	baza din adresele feedului (implicit aceeasi; alta numai pentru un feed unic, motiv_baza)"""
 	motive = []
 	detalii = []
 
@@ -1088,9 +1318,10 @@ def verdict(stare, baza, plan, lipsa=()):
 			motive.append(m)
 		if detaliu:
 			detalii.append(detaliu)
-	if stare.get('baza') != baza:
+	m_baza = motiv_baza(stare, baza_feed or baza, baza)
+	if m_baza == 'baza':
 		adauga('baza', '%s / %s' % (stare.get('baza'), baza))
-	elif P.compara_versiuni(stare.get('imagine_minima') or baza, baza) > 0:
+	elif m_baza:
 		adauga('imagine-minima', stare.get('imagine_minima'))
 	if stare.get('imagine_noua'):
 		for m in stare.get('motive') or ['alt-motiv']:
@@ -1505,7 +1736,9 @@ def rezultat_din_liste(radacina, surse, stare, conf=None, repara=False):
 	plan = sorted(plan, key=lambda x: x['nume'])
 	img = imaginea(radacina, conf)
 	furn = furnizate(radacina, conf)
-	rez = rezultat_cautare(stare, img, plan, dependinte_lipsa(plan, inst, feed, furn))
+	# 0.7.9 (UNF9): baza din adresele surselor (a feedului unic, dupa trecere), pentru verdict
+	bf = surse[0][3] if surse else None
+	rez = rezultat_cautare(stare, img, plan, dependinte_lipsa(plan, inst, feed, furn), baza_feed=bf)
 	if reinstalare:
 		rez['reinstalare'] = [x['nume'] for x in reinstalare]
 	try:
@@ -1530,7 +1763,7 @@ def rezultat_din_liste(radacina, surse, stare, conf=None, repara=False):
 		mod = 'tot' if actualizare and (rep['plan'] or rep['actualizare']) else None
 	if mod == 'tot':
 		plan_tot = sorted(plan + rep['plan'], key=lambda x: x['nume'])
-		nou = rezultat_cautare(stare, img, plan_tot, dependinte_lipsa(plan_tot, inst, feed, furn))
+		nou = rezultat_cautare(stare, img, plan_tot, dependinte_lipsa(plan_tot, inst, feed, furn), baza_feed=bf)
 		if rep['plan'] and not (nou['stare'] == DISPONIBILA and nou['poate_instala']):
 			# reparatia nu are voie sa opreasca o actualizare care se putea instala: ramane actualizarea singura
 			print('[HdsActualizari] reparatia nu intra in actualizare: %s' % ', '.join(x['nume'] for x in rep['plan']))
@@ -1540,7 +1773,7 @@ def rezultat_din_liste(radacina, surse, stare, conf=None, repara=False):
 	elif mod == 'reparatia':
 		# numai reparatia: aceleasi versiuni, deja instalate, deci verdictul actualizarii (imagine noua, alta baza) nu o
 		# opreste; pachetele nucleului si ale pornirii nu sunt in ea
-		nou = rezultat_cautare(stare, img, rep['plan'], ())
+		nou = rezultat_cautare(stare, img, rep['plan'], (), baza_feed=bf)
 		nou.update(stare=DISPONIBILA, motive=[], texte_motive=[], detalii=[], repornire_receptor=False,
 			poate_instala=not nou['nepotrivite'])
 	if mod:
@@ -1572,9 +1805,9 @@ def pachet_din_stare(stare, nume, arhitectura=None):
 	return gasite[0] if len(gasite) == 1 else None
 
 
-def rezultat_cautare(stare, img, plan, lipsa, cand=None):
+def rezultat_cautare(stare, img, plan, lipsa, cand=None, baza_feed=None):
 	"""Rezultatul unei cautari reusite, cum il arata ecranul si pagina web"""
-	v = verdict(stare, img['baza'], plan, lipsa)
+	v = verdict(stare, img['baza'], plan, lipsa, baza_feed)
 	if v['imagine_noua']:
 		cod = IMAGINE_NOUA
 	elif plan:
@@ -2630,14 +2863,21 @@ class Actualizari(object):
 		radacina = self.radacina
 
 		def citeste():
-			return descarca_stare(adresa, credentiale), fara_retea(radacina)
+			# 0.7.9 (UNF9): cu trecerea pe feedul unic (sau intoarcerea), cand stare.json o cere
+			return stare_cu_feedul_unic(radacina, canal, baza, credentiale), fara_retea(radacina)
 
 		def gata(rez, eroare):
 			if generatie != self._generatie_cautare or self.faza != 'caut':
 				return
 			if eroare or rez is None:
 				return self._cautare_gata({'stare': EROARE, 'eroare': curata(eroare)})
-			(stare, cod), fara = rez
+			(stare, cod, baza_dupa, nota), fara = rez
+			if nota:
+				self._jurnal('feedul: %s' % nota)
+			if baza_dupa != baza:
+				# sursele s-au rescris: opkg update si verificarea listelor merg pe feedul cel nou
+				self._adresa, self._baza_feed = adresa_stare(canal, baza_dupa), baza_dupa
+				surse[:] = [s for s in canalul(radacina)[1] if s[3] == baza_dupa]
 			if cod == FARA_RASPUNS and fara:
 				return self._cautare_gata({'stare': FARA_RETEA})
 			if cod:
@@ -3728,10 +3968,10 @@ def cere_repornirea_imaginii(motiv=''):
 
 # ---------------------------------------------------------------- verificarea zilnica (numai anunta)
 
-def text_anunt(stare, img):
+def text_anunt(stare, img, baza_feed=None):
 	"""Textul anuntului zilnic, sau None cand nu e nimic nou de spus; cheia lui (anuntat o singura data). O versiune
-	e noua cand e mai mare (ca la opkg) decat versiunea care ruleaza."""
-	if stare.get('baza') != img['baza'] or not img['versiune']:
+	e noua cand e mai mare (ca la opkg) decat versiunea care ruleaza. baza_feed: a adreselor (feedul unic, motiv_baza)."""
+	if motiv_baza(stare, baza_feed or img['baza'], img['baza']) == 'baza' or not img['versiune']:
 		return None, None
 	v = versiunea_starii(stare)
 	if stare.get('imagine_noua'):
@@ -3787,19 +4027,24 @@ class VerificareZilnica(object):
 			return self.porneste(ZI)
 		img = imaginea(self.radacina)
 		credentiale = citeste_netrc(self.radacina) if canal == 'proba' else None
-		adresa = adresa_stare(canal, baza_feed or img['baza'])
+		baza = baza_feed or img['baza']
+		radacina = self.radacina
+		# 0.7.9 (UNF9): trecerea pe feedul unic (sau intoarcerea) numai cat nu lucreaza alt opkg sau o cautare de aici
+		muta = actualizari.faza == 'liber' and not opkg_ocupat(radacina)
 		from Components.HdsPazaModel import LucrareFundal
 
 		def gata(rez, eroare):
 			self._lucrare = None
-			stare, cod = rez if rez and not eroare else ({}, EROARE)
+			stare, cod, baza_dupa, nota = rez if rez and not eroare else ({}, EROARE, baza, '')
+			if nota:
+				actualizari._jurnal('verificarea zilnica, feedul: %s' % nota)
 			if not cod and stare.get('canal') and stare.get('canal') != canal:
 				stare, cod = {'eroare': 'stare.json e al canalului %s' % curata(stare.get('canal'))}, NESEMNATA
 			if cod:
 				print('[HdsActualizari] verificarea zilnica: %s' % (curata(stare.get('eroare')) or cod))
 				return self.porneste(REINCERCARE)
-			tine_minte_indexurile(self.radacina, canal, baza_feed or img['baza'], stare)
-			text, cheie = text_anunt(stare, img)
+			tine_minte_indexurile(self.radacina, canal, baza_dupa, stare)
+			text, cheie = text_anunt(stare, img, baza_dupa)
 			c = config_actualizari()
 			# o versiune noua are fereastra ei pe ecranul obisnuit (Components/HdsImagineOnline.py); ramane anuntul pentru
 			# imaginea noua, cand lista imaginilor nu are una pentru acest receptor
@@ -3821,7 +4066,7 @@ class VerificareZilnica(object):
 				except Exception as e:
 					print('[HdsActualizari] anuntul: %s' % e)
 			self.porneste(ZI)
-		self._lucrare = LucrareFundal(lambda: descarca_stare(adresa, credentiale), gata)
+		self._lucrare = LucrareFundal(lambda: stare_cu_feedul_unic(radacina, canal, baza, credentiale, muta), gata)
 
 
 _verificare = []
@@ -3869,3 +4114,9 @@ def porneste():
 		v = VerificareZilnica()
 		_verificare.append(v)
 		v.porneste()
+	# 0.7.9 (UNF9): antetul numaratorii (si numarul instalarii, la prima pornire) pe un fir separat
+	try:
+		from Components.HdsPazaModel import LucrareFundal
+		_LUCRARI_NUMARARE.append(LucrareFundal(antet_numarare, lambda rez, eroare: None))
+	except Exception as e:
+		print('[HdsActualizari] numaratoarea: %r' % (e,))

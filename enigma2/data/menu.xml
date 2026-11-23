@@ -683,6 +683,12 @@ deschide(self.session, "afisaj")
 			<item level="0" text="Afișajul din față" entryID="hds_afisaj" description="Alegi datele și mesajele care se succed pe cele patru cifre ale receptorului." pictograma="afisaj" weight="14" web="/afisaj" requires="HdsAfisaj">
 				<screen module="HdsAfisaj" screen="HdsAfisaj" />
 			</item>
+			<!-- LED8 (23.11.2026): sigla luminata a receptoarelor fara afisaj (ZGEMMA H8): culorile la pornit, standby si oprire
+			     si efectele dupa ce face receptorul (Components/HdsLedSigla.py, data/setup.xml hds_led_sigla); in web:
+			     /setari?id=hds_led_sigla. Ascunsa pe celelalte receptoare (SystemInfo HdsLedSigla). -->
+			<item level="0" text="Sigla luminată" entryID="hds_led_sigla" description="Alegi culorile siglei din față și cum luminează când receptorul caută canale, rotește antena, înregistrează sau se actualizează." pictograma="afisaj-luminozitate" weight="14" web="/setari?id=hds_led_sigla" requires="HdsLedSigla">
+				<setup id="hds_led_sigla" />
+			</item>
 			<!-- Montarea discurilor: și aici, unde o caută oamenii veniți din alte imagini (darog69, forum 789 #2381); locul
 			     ei rămâne în Înregistrări și stocare. Același ecran, aceeași pagină web, o singură dată în căutare (copie=). -->
 			<item level="0" text="Montarea discurilor" entryID="hds_sistem_montare_discuri" description="Alegi numele fiecărui disc în /media și îl demontezi ca să-l scoți în siguranță." copie="hds_montare_discuri" pictograma="disc" weight="15" web="/montare-discuri" stare="netestat">
