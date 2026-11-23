@@ -14,9 +14,8 @@
  * poate fi 1970 pana la ora din satelit sau din retea, de aceea primul rand scris intr-un fisier dupa pornirea
  * procesului spune si timpul de la pornirea placii ("[jurnal] pornit ... up=12.3s").
  *
- * CURATAREA (curata): mesajul ramane pe un rand (capetele de linie si semnele de control devin spatiu), adresele IPv4 si
- * MAC intregi se acopera (192.168.x.x, a8:f2:1b:xx:xx:xx), iar valoarea de dupa cheie=, parola=, jeton=, token=, key=,
- * password=, psk=, secret=, ssid= devine ***.
+ * CURATAREA (curata): mesajul ramane pe un rand, cu valorile originale.
+ * Capetele de linie si semnele de control devin spatiu.
  *
  * CONFIDENTIALITATEA (regula celor care cheama): un rand INFO are numai date tehnice (tunerul, frecventa, polarizarea,
  * rata de simboluri, sistemul, semnalul, timpii, codecul), fara canal (nume, referinta serviciului), fara ce vede sau

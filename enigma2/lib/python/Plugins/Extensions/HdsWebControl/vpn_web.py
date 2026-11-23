@@ -50,7 +50,7 @@ MAX_FISIERE = 2000
 MAX_URCARE = 6 * 1024 * 1024
 MAX_B64 = MAX_URCARE * 4 // 3 + 4 * MAX_FISIERE
 CAMPURI_ADAUGA = ("fel", "server", "nume", "parola", "psk", "protocol", "metoda", "grup_oc", "id_server", "port")
-CHEI_SETARI = ("furnizor", "profil", "mod", "oprire_totala", "la_pornire", "iptv", "adrese")
+CHEI_SETARI = ("furnizor", "profil", "mod", "oprire_totala", "la_pornire", "iptv", "adrese", "iconita_bara")
 
 
 def N_(text):
@@ -211,7 +211,7 @@ def setari(request, V=None):
 		if k.encode("ascii") not in args:
 			continue
 		v = _arg(request, k, 4096)
-		if k in ("oprire_totala", "la_pornire", "iptv"):
+		if k in ("oprire_totala", "la_pornire", "iptv", "iconita_bara"):
 			if v not in ("0", "1"):
 				return {"result": False, "message": _t("Alege da sau nu.")}
 			schimbari[k] = v == "1"
@@ -461,7 +461,7 @@ ETICHETE = {
 	"GRUP_OC": N_("Grupul (dacă serverul îl cere)"),
 	"ADAUGA_BUTON": N_("Adaugă"),
 	"DATE_ACCES": N_("Datele de acces"),
-	"DATE_NOTA": N_("După salvare nu se mai arată nicăieri, nici aici, nici pe televizor."),
+	"DATE_NOTA": N_("Datele salvate se văd și aici, și pe televizor."),
 	"CERTIFICAT": N_("Certificatul serverului"),
 	"CERTIFICAT_NOTA": N_("Serverul are un certificat pe care receptorul nu îl cunoaște. Ai încredere în el numai dacă "
 		"serverul e al tău sau al firmei tale."),
@@ -470,12 +470,12 @@ ETICHETE = {
 	"STICK_NOTA": N_("De pe stick, toate deodată: fișierele .conf sau .ovpn ori arhiva .zip a furnizorului, din "
 		"rădăcina stickului, din dosarul lor sau din dosarul hdsatelit/vpn."),
 	"CONT": N_("Numele și parola contului"),
+	"CONFIGURARE": N_("Configurarea serverului"),
 	"NUME": N_("Numele"),
 	"PAROLA": N_("Parola"),
 	"SALVEAZA": N_("Salvează"),
 	"STERGE_CONT": N_("Șterge numele și parola"),
-	"CONT_NOTA": N_("Sunt cele ale contului la furnizor (la HMA, cele ale contului HMA). După salvare nu se mai arată "
-		"nicăieri, nici aici, nici pe televizor."),
+	"CONT_NOTA": N_("Sunt cele ale contului la furnizor (la HMA, cele ale contului HMA). Datele se văd și după salvare, aici și pe televizor."),
 	"TRAFIC": N_("Ce trece prin VPN"),
 	"IPTV": N_("Sursele IPTV din liste"),
 	"ADRESE": N_("Alte adrese (nume de site-uri sau adrese IP, câte una pe rând)"),
@@ -484,6 +484,8 @@ ETICHETE = {
 	"OPRIRE_TOTALA": N_("Oprire totală la căderea VPN-ului"),
 	"OPRIRE_NOTA": N_("Dacă VPN-ul cade, receptorul nu mai iese în internet până revine. Rețeaua din casă merge."),
 	"LA_PORNIRE": N_("Pornește odată cu receptorul"),
+	"ICONITA_BARA": N_("Iconița VPN în bara canalului"),
+	"ICONITA_NOTA": N_("Verde când VPN-ul este conectat, roșu când nu este conectat. Oprită din fabrică."),
 	"LA_PORNIRE_NOTA": N_("VPN-ul pornește singur după fiecare pornire a receptorului, dacă era pornit."),
 }
 
@@ -556,7 +558,8 @@ __STIL_PAGINI__
 <h1>__T_TITLU__</h1>
 <p class="mesaj" id="incarcare">__T_INCARCARE__</p>
 <div id="continut" class="ascuns">
-  <section class="card">
+  <pre id="pwvDateSalvate" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+<section class="card">
     <h2>__T_STARE__</h2>
     <p class="stare-mare slab" id="stareMare">-</p>
     <div class="detalii" id="detalii"></div>
@@ -648,6 +651,8 @@ __STIL_PAGINI__
     <label class="bifa"><input type="checkbox" id="oprireTotala"> __T_OPRIRE_TOTALA__</label>
     <p class="nota">__T_OPRIRE_NOTA__</p>
     </div>
+    <label class="bifa"><input type="checkbox" id="iconitaBara"> __T_ICONITA_BARA__</label>
+    <p class="nota">__T_ICONITA_NOTA__</p>
     <label class="bifa"><input type="checkbox" id="laPornire"> __T_LA_PORNIRE__</label>
     <p class="nota">__T_LA_PORNIRE_NOTA__</p>
   </section>
@@ -669,6 +674,7 @@ function optiuni(sel, lista, ales){
   sel.value = ales;
 }
 function arata(d){
+  document.getElementById("pwvDateSalvate").textContent = Object.keys(d.date_acces || {}).map(function(k){return k + ": " + d.date_acces[k];}).join("\\n") + "\\n" + (d.configurare_text || "");
   D = d;
   $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
   var m = $("stareMare"); m.textContent = d.text_legatura; m.className = "stare-mare " + d.culoare;
@@ -714,6 +720,7 @@ function arata(d){
   $("ales").classList.toggle("ascuns", d.mod !== "ales");
   $("iptv").checked = !!d.iptv;
   if(!ADRESE_ATINSE && document.activeElement !== $("adrese")){ $("adrese").value = (d.adrese || []).join("\\n"); }
+  $("iconitaBara").checked = !!d.iconita_bara;
   $("oprireTotala").checked = !!d.oprire_totala; $("laPornire").checked = !!d.la_pornire;
   // in modul navigator oprirea totala e mereu (navigatorul n-are alta iesire decat tunelul)
   $("randOprire").classList.toggle("ascuns", d.mod === "navigator");
@@ -859,6 +866,7 @@ $("salveazaAdrese").addEventListener("click", function(){
 });
 $("iptv").addEventListener("change", function(){ trimite("/api/vpn-setari", {iptv: this.checked ? "1" : "0"}); });
 $("oprireTotala").addEventListener("change", function(){ trimite("/api/vpn-setari", {oprire_totala: this.checked ? "1" : "0"}); });
+$("iconitaBara").addEventListener("change", function(){ trimite("/api/vpn-setari", {iconita_bara: this.checked ? "1" : "0"}); });
 $("laPornire").addEventListener("change", function(){ trimite("/api/vpn-setari", {la_pornire: this.checked ? "1" : "0"}); });
 // fisierele din telefon: citite ca text in browser; toate odata daca incap (certificatele alaturi se potrivesc), altfel
 // cate unul

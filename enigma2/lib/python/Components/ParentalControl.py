@@ -8,6 +8,7 @@ from ServiceReference import ServiceReference
 from Tools import Notifications
 from Tools.Directories import resolveFilename, SCOPE_CONFIG
 from enigma import eTimer
+from fractions import Fraction
 import os
 import time
 
@@ -169,6 +170,18 @@ class ParentalControl:
 		bLocked = self.getProtectionLevel(service) != -1
 		return (bLocked,sImage)
 	
+	@staticmethod
+	def _pinIntervalMilliseconds(value):
+		# Round up exactly, including fractions smaller than one millisecond.
+		# Invalid legacy values must never grant a cached successful PIN.
+		try:
+			milliseconds = Fraction(value) * 60000
+			if 0 < milliseconds <= 2147483647:
+				return -(-milliseconds.numerator // milliseconds.denominator)
+		except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+			pass
+		return 0
+
 	def getConfigValues(self):	
 		#Read all values from configuration 
 		self.checkPinInterval = False
@@ -176,9 +189,9 @@ class ParentalControl:
 		self.checkSessionPin = False
 		self.checkSessionPinCancel = False
 		
-		self.sessionPinCached = False
-		self.pinIntervalSeconds = 0
-		self.pinIntervalSecondsCancel = 0
+		self.resetSessionPin()
+		self.pinIntervalMilliseconds = 0
+		self.pinIntervalMillisecondsCancel = 0
 
 		self.storeServicePin = config.ParentalControl.storeservicepin.value
 		self.storeServicePinCancel = config.ParentalControl.storeservicepincancel.value
@@ -188,24 +201,21 @@ class ParentalControl:
 		elif self.storeServicePin == "standby":
 			self.checkSessionPin = True
 		else:
-			self.checkPinInterval = True
-			iMinutes = float(self.storeServicePin)
-			iSeconds = iMinutes*60
-			self.pinIntervalSeconds = iSeconds
+			self.pinIntervalMilliseconds = self._pinIntervalMilliseconds(self.storeServicePin)
+			self.checkPinInterval = self.pinIntervalMilliseconds > 0
 	
 		if self.storeServicePinCancel == "never":
 			pass
 		elif self.storeServicePinCancel == "standby":
 			self.checkSessionPinCancel = True
 		else:
-			self.checkPinIntervalCancel = True
-			iMinutes = float(self.storeServicePinCancel)
-			iSeconds = iMinutes*60
-			self.pinIntervalSecondsCancel = iSeconds
+			self.pinIntervalMillisecondsCancel = self._pinIntervalMilliseconds(self.storeServicePinCancel)
+			self.checkPinIntervalCancel = self.pinIntervalMillisecondsCancel > 0
 	
-		self.configInitialized = True
 		# Reset PIN cache on standby: Use StandbyCounter- Config- Callback
-		config.misc.standbyCounter.addNotifier(self.standbyCounterCallback, initial_call = False)
+		if not self.configInitialized:
+			config.misc.standbyCounter.addNotifier(self.standbyCounterCallback, initial_call = False)
+		self.configInitialized = True
 
 	def standbyCounterCallback(self, configElement):
 		self.resetSessionPin()
@@ -232,7 +242,7 @@ class ParentalControl:
 			if self.checkPinInterval == True:
 				self.sessionPinCached = True
 				self.sessionPinCachedValue = True
-				self.sessionPinTimer.start(self.pinIntervalSeconds*1000,1)
+				self.sessionPinTimer.start(self.pinIntervalMilliseconds,1)
 			self.callback(ref = service)
 		else:
 			#This is the new function of caching cancelling of service pin
@@ -245,7 +255,7 @@ class ParentalControl:
 				if self.checkPinIntervalCancel == True:
 					self.sessionPinCached = True
 					self.sessionPinCachedValue = False
-					self.sessionPinTimer.start(self.pinIntervalSecondsCancel*1000,1) 
+					self.sessionPinTimer.start(self.pinIntervalMillisecondsCancel,1)
 			
 	def saveListToFile(self,sWhichList):
 		#Replaces saveWhiteList and saveBlackList: 

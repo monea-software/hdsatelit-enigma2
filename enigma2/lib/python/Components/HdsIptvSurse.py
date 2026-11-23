@@ -48,7 +48,7 @@ BUCHET_RADACINA = "userbouquet.hdsiptv.tv"
 PREFIX_GRUPA = "subbouquet.hdsiptv_"
 NUME_RADACINA = "IPTV"
 
-MAX_SURSE = 20
+MAX_SURSE = 300          # DX15: masurat pe PC cu 20, 100 si 300
 MAX_CANALE = 30000       # pe sursa: un buchet mai mare ar tine prea mult reincarcarea buchetelor
 MAX_GRUPE = 1000
 MAX_NUME = 100
@@ -73,13 +73,89 @@ LOCURI_LISTE_FTP = ("/etc/enigma2/",)
 SUBDOSAR_LISTE = "liste"
 EXTENSII_PLAYLIST = (".m3u", ".m3u8")
 
-_MAC = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+_MAC = re.compile(r"[0-9A-Fa-f]{12}\Z")
 _GAZDA = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9\-.]{0,251}[A-Za-z0-9])?$")
 _CHEIE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 _ID_SURSA = re.compile(r"^[0-9a-f]{8}$")
 _CHEIE_FILM = re.compile(r"^[ve][0-9]{1,12}\.[A-Za-z0-9]{1,5}$")   # filmele si episoadele Xtream (HdsIptvClient.xtreamAdresa)
 
 _LACAT = threading.RLock()
+_stare_piconuri = {}
+_versiune_piconuri = 0
+
+# Separat de _LACAT: o scriere lenta nu tine ticul interfetei pe loc.
+_lacat_prezenta_surse = threading.Lock()
+_prezenta_surse = (None, False)
+_versiune_prezenta_surse = 0
+_verificare_surse = None
+
+
+def _incepePrezentaSurse():
+	global _versiune_prezenta_surse
+	with _lacat_prezenta_surse:
+		_versiune_prezenta_surse += 1
+		return (_caleSurse(), _versiune_prezenta_surse)
+
+
+def _retinePrezentaSurse(cerere, exista):
+	global _prezenta_surse
+	with _lacat_prezenta_surse:
+		if cerere == (_caleSurse(), _versiune_prezenta_surse):
+			_prezenta_surse = (cerere[0], exista)
+
+
+def _actualizeazaPrezentaSurse(exista):
+	# Apelat sub lacatul scrierii; invalideaza orice citire inceputa inainte.
+	global _versiune_prezenta_surse, _prezenta_surse
+	with _lacat_prezenta_surse:
+		_versiune_prezenta_surse += 1
+		_prezenta_surse = (_caleSurse(), exista)
+
+
+def verificaSurseFundal():
+	"""Un singur stat in fundal, cerut de ceasul rar, niciodata de ticul IPTV."""
+	global _verificare_surse, _versiune_prezenta_surse
+	with _lacat_prezenta_surse:
+		if _verificare_surse is not None:
+			return
+		_versiune_prezenta_surse += 1
+		cerere = (_caleSurse(), _versiune_prezenta_surse)
+		_verificare_surse = cerere
+
+	def verifica():
+		global _verificare_surse
+		try:
+			exista = os.path.isfile(cerere[0])
+			_retinePrezentaSurse(cerere, exista)
+		finally:
+			with _lacat_prezenta_surse:
+				_verificare_surse = None
+
+	try:
+		fir = threading.Thread(target=verifica, name="HdsIptvPrezenta")
+		fir.daemon = True
+		fir.start()
+	except Exception:
+		with _lacat_prezenta_surse:
+			_verificare_surse = None
+
+
+def _starePiconuri(surse):
+	# Numai permisiuni, fara adrese sau datele conturilor.
+	return {s["id"]: (s.get("piconuri") is True, playerSursa(s), tuple(s.get("ascunse") or ()))
+		for s in surse if s.get("id")}
+
+
+def incarcaStarePiconuri():
+	"""La pornirea firului: discul se citeste fara lacatul setarilor.
+	O salvare concurenta are prioritate fata de instantaneul citit de pe disc."""
+	global _stare_piconuri
+	with _LACAT:
+		versiune = _versiune_piconuri
+	stare = _starePiconuri(citesteSurse())
+	with _LACAT:
+		if versiune == _versiune_piconuri:
+			_stare_piconuri = stare
 
 
 def N_(text):
@@ -89,6 +165,12 @@ def N_(text):
 
 NUME_FEL = {"m3u": N_("Playlist"), "xtream": N_("Cont"), "stalker": N_("Portal"), "demo": N_("Listă demo")}
 T_FARA_HTTPS = N_("Legătura cu acest server nu este criptată, fiindcă furnizorul nu are HTTPS.")
+T_SURSE_PLINE = N_("Ai %d surse din %d posibile. Șterge una ca să poți adăuga alta.")
+T_NECONECTATA = N_("Neconectată")
+
+
+def textSursePline(traduce=lambda x: x):
+	return traduce(T_SURSE_PLINE) % (len(citesteSurse()), MAX_SURSE)
 
 
 def areCatalog(p):
@@ -140,6 +222,8 @@ def _scrie(cale, octeti, mod):
 		except OSError:
 			pass
 		raise
+	if cale == _caleSurse():
+		_actualizeazaPrezentaSurse(True)
 
 
 def _asiguraDosar():
@@ -157,29 +241,73 @@ def reparaDrepturi():
 			os.chmod(cale, 0o600)
 
 
+def _sursaAcceptata(s):
+	return isinstance(s, dict) and s.get("fel") in FELURI and _ID_SURSA.match(str(s.get("id", "")))
+
+
 def citesteSurse():
 	"""Lista surselor (dict-uri cu tot ce e in fisier, parole incluse: nu se dau mai departe, vezi publica). Un fisier care nu
 	se poate citi da o lista goala."""
+	cerere = _incepePrezentaSurse()
 	try:
-		with open(_caleSurse(), encoding="utf-8") as f:
+		with open(cerere[0], encoding="utf-8") as f:
 			date = json.load(f)
 		rez = date.get("surse") if isinstance(date, dict) else None
 		if not isinstance(rez, list):
 			return []
-		return [s for s in rez if isinstance(s, dict) and s.get("fel") in FELURI and _ID_SURSA.match(str(s.get("id", "")))]
+		return [s for s in rez if _sursaAcceptata(s)]
 	except (IOError, OSError, ValueError):
 		return []
+	finally:
+		_retinePrezentaSurse(cerere, os.path.isfile(cerere[0]))
 
 
 def scrieSurse(surse):
+	global _stare_piconuri, _versiune_piconuri
 	with _LACAT:
-		_asiguraDosar()
-		_scrie(_caleSurse(), json.dumps({"surse": surse}, ensure_ascii=False).encode("utf-8"), 0o600)
+		try:
+			try:
+				with open(_caleSurse(), encoding="utf-8") as f:
+					vechi = json.load(f)
+			except (IOError, OSError, ValueError):
+				vechi = None
+			date = dict(vechi) if isinstance(vechi, dict) else {}
+			noi = list(surse)
+			if isinstance(date.get("surse"), list):
+				# Keep rows that the reader does not understand, in their original order.
+				for n, s in enumerate(date["surse"]):
+					if not _sursaAcceptata(s):
+						noi.insert(n, s)
+			date["surse"] = noi
+			# Compare JSON types too: True and 1 are different settings.
+			if json.dumps(vechi, sort_keys=True) != json.dumps(date, sort_keys=True):
+				_asiguraDosar()
+				try:
+					continut = json.dumps(date, ensure_ascii=False).encode("utf-8")
+				except UnicodeEncodeError:
+					# A lone surrogate in a kept unknown field: the ASCII form escapes it
+					# and reads back to exactly the same document.
+					continut = json.dumps(date).encode("ascii")
+				_scrie(_caleSurse(), continut, 0o600)
+			else:
+				_actualizeazaPrezentaSurse(True)
+		except Exception:
+			_actualizeazaPrezentaSurse(os.path.isfile(_caleSurse()))
+			raise
+		_stare_piconuri = _starePiconuri(surse)
+		_versiune_piconuri += 1
 
 
-def areSurse():
-	"""Un os.stat: cost mic la umplerea listei de canale."""
-	return os.path.isfile(_caleSurse())
+def areSurse(verifica=False):
+	"""Prezenta din memorie; verifica=True pastreaza verificarea de la pornire."""
+	# La pornire pastram verificarea sincrona existenta inaintea redarii.
+	if verifica:
+		cerere = _incepePrezentaSurse()
+		exista = os.path.isfile(cerere[0])
+		_retinePrezentaSurse(cerere, exista)
+		return exista
+	cale, exista = _prezenta_surse
+	return cale == _caleSurse() and exista
 
 
 def sursa(sursa_id, surse=None):
@@ -430,7 +558,40 @@ def _fara_spatii(text):
 
 
 def macBun(text):
-	return bool(_MAC.match(text or ""))
+	return macCurat(text) is not None
+
+
+def macNouaStalker():
+	"""O adresa noua pentru formular; fara salvare sau conectare la portal."""
+	import secrets
+	return "00:1A:79:" + ":".join("%02X" % b for b in secrets.token_bytes(3))
+
+
+def macReceptor(retea="/sys/class/net"):
+	"""Valoare initiala a formularului nou; nu se foloseste in cererile portalului."""
+	try:
+		placi = sorted(os.listdir(retea))
+	except OSError:
+		return ""
+	for placa in ["eth0"] + [p for p in placi if p not in ("eth0", "lo")]:
+		try:
+			with open(os.path.join(retea, placa, "address"), encoding="ascii") as f:
+				mac = macCurat(f.read(64).strip())
+			if mac and mac not in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"):
+				return mac
+		except (OSError, UnicodeError):
+			pass
+	return ""
+
+
+def macCurat(text):
+	"""Numai cele 12 cifre scrise de om; forma comuna pentru salvare si protocol."""
+	if not isinstance(text, str) or len(text) > 64:
+		return None
+	text = text.strip().replace(":", "").replace("-", "").replace(".", "")
+	if not _MAC.fullmatch(text):
+		return None
+	return ":".join(text[i:i + 2] for i in range(0, 12, 2)).upper()
 
 
 def portBun(text):
@@ -570,10 +731,10 @@ def _identitatiPlaylist():
 
 
 def _tineIdentitate(s):
-	if s.get("fel") != "m3u":
+	if s.get("fel") not in ("m3u", "stalker"):
 		return
 	date = _identitatiPlaylist()
-	k = _amprentaPlaylist(s.get("adresa") or "")
+	k = _amprentaStalker(s.get("portal"), s.get("mac")) if s.get("fel") == "stalker" else _amprentaPlaylist(s.get("adresa") or "")
 	if date.get(k) == s["id"]:
 		return
 	date.pop(k, None)
@@ -582,6 +743,18 @@ def _tineIdentitate(s):
 		del date[next(iter(date))]
 	_asiguraDosar()
 	_scrie(_cale("identitati.json"), json.dumps(date).encode("utf-8"), 0o600)
+
+
+def identitatePortal(portal):
+	d = desparteServer(portal)
+	if not d:
+		return None
+	schema = d[0] or "http"
+	return schema, d[1].lower(), d[2] or ("443" if schema == "https" else "80"), d[3]
+
+
+def _amprentaStalker(portal, mac):
+	return hashlib.sha256(repr(("stalker", identitatePortal(portal), macCurat(mac))).encode("utf-8")).hexdigest()
 
 
 def idSursa(fel, adresa, utilizator=""):
@@ -651,11 +824,19 @@ def numereCanal(sursa_id, cheie):
 	return (h & 0xFFFF) or 1, (h >> 16) or 1, (s & 0xFFFF) or 1, 0xFFFE0000 | ((s >> 16) & 0xFFFF)
 
 
-def refCanal(sursa_id, cheie, adresa_directa=None):
+PLAYERE = ("4097", "5001", "5002")
+
+
+def playerSursa(s):
+	player = str((s or {}).get("player", "4097"))
+	return player if player in PLAYERE else "4097"
+
+
+def refCanal(sursa_id, cheie, adresa_directa=None, player="4097"):
 	"""Referinta canalului, fara nume (numele sta in #DESCRIPTION). adresa_directa: numai pentru un flux care nu se poate
 	redirectiona (rtsp, rtmp, mms, udp) si nu are parola in el (adresaDirecta)."""
 	sid, tsid, onid, ns = numereCanal(sursa_id, cheie)
-	return "4097:0:1:%X:%X:%X:%X:0:0:0:%s:" % (sid, tsid, onid, ns, _codeaza(adresa_directa or caleCanal(sursa_id, cheie)))
+	return "%s:0:1:%X:%X:%X:%X:0:0:0:%s:" % (playerSursa({"player": player}), sid, tsid, onid, ns, _codeaza(adresa_directa or caleCanal(sursa_id, cheie)))
 
 
 def adresaDirecta(adresa):
@@ -874,7 +1055,7 @@ def _randuriGrupa(s, canale):
 			text.append(_rand(_refMarcaj(titluri), nume))
 			continue
 		directa = adresaDirecta(adresa)[0] if cu_adrese and adresa else None
-		r = _rand(refCanal(sursa_id, cheie, directa), nume)
+		r = _rand(refCanal(sursa_id, cheie, directa, player=playerSursa(s)), nume)
 		if max(len(x.encode("utf-8")) for x in r.split("\r\n")) > LUNGIME_RAND:
 			continue
 		text.append(r)
@@ -997,7 +1178,7 @@ def leagaIndex():
 	cale = os.path.join(DIRECTOR, "bouquets.tv")
 	rand = "#SERVICE %s\r\n" % refRadacina()
 	semn = 'FROM BOUQUET "%s"' % BUCHET_RADACINA
-	are = areSurse() and bool(citesteSurse())
+	are = bool(citesteSurse())
 	try:
 		with open(cale, encoding="utf-8", errors="surrogateescape", newline="") as f:
 			text = f.read()
@@ -1136,8 +1317,12 @@ def actualizeazaSursa(sursa_id, **campuri):
 		surse = citesteSurse()
 		for s in surse:
 			if s.get("id") == sursa_id:
+				inainte = json.dumps(dict(s, eroare=""), sort_keys=True)
 				s.update(campuri)
-				scrieSurse(surse)
+				_tineIdentitate(s)
+				# Clearing a transient playback error alone does not change the saved source.
+				if campuri.get("eroare") != "" or inainte != json.dumps(dict(s, eroare=""), sort_keys=True):
+					scrieSurse(surse)
 				return s
 	return None
 
@@ -1145,6 +1330,7 @@ def actualizeazaSursa(sursa_id, **campuri):
 def stergeSursa(sursa_id):
 	"""Sursa si canalele ei. Randurile puse de om in buchetele lui raman (nu se atinge nimic al lui). Daca adauga din nou acelasi
 	cont, merg din nou. -> True daca era."""
+	global _stare_piconuri, _versiune_piconuri
 	with _LACAT:
 		surse = citesteSurse()
 		noi = [s for s in surse if s.get("id") != sursa_id]
@@ -1165,7 +1351,11 @@ def stergeSursa(sursa_id):
 			try:
 				os.unlink(_caleSurse())
 			except OSError:
-				pass
+				_actualizeazaPrezentaSurse(os.path.isfile(_caleSurse()))
+			else:
+				_actualizeazaPrezentaSurse(False)
+		_stare_piconuri = _starePiconuri(noi)
+		_versiune_piconuri += 1
 		return True
 
 
@@ -1187,7 +1377,18 @@ def sursaNouaXtream(server, utilizator, parola, nume=""):
 
 def sursaNouaStalker(portal, mac, nume=""):
 	d = desparteServer(portal)
-	return {"id": idSursa("stalker", portal, mac.upper()), "fel": "stalker", "portal": portal, "mac": mac.upper(),
+	mac = macCurat(mac)
+	with _LACAT:
+		surse = citesteSurse()
+		sid = next((s["id"] for s in surse if s.get("fel") == "stalker" and identitatePortal(s.get("portal")) == identitatePortal(portal) and macCurat(s.get("mac")) == mac), None)
+		if sid is None:
+			sid = _identitatiPlaylist().get(_amprentaStalker(portal, mac)) or idSursa("stalker", portal, mac or "")
+			ocupate = {s["id"] for s in surse}
+			n = 0
+			while sid in ocupate:
+				n += 1
+				sid = idSursa("stalker", portal, "%s:%d" % (mac or "", n))
+	return {"id": sid, "fel": "stalker", "portal": portal, "mac": mac or "",
 		"nume": numeCurat(nume) or (d[1] if d else portal)}
 
 
@@ -1205,9 +1406,13 @@ def publica(s):
 		"grupe": len(s.get("grupe_lista") or ()), "ascunse": len(s.get("ascunse") or ()), "ora": int(s.get("ora") or 0), "eroare": s.get("eroare") or "",
 		"taiate": int(s.get("taiate") or 0), "sarite": int(s.get("sarite") or 0), "fara_https": bool(s.get("fara_https")),
 		"expira": int(s.get("expira") or 0),
+		"player": playerSursa(s), "piconuri": s.get("piconuri") is True,
 		"epg_stare": s.get("epg_stare") or "", "epg_evenimente": int(s.get("epg_evenimente") or 0),
 		"epg_mesaj": s.get("epg_mesaj") or "",
 	}
+	rez.update({k: s.get(k) or "" for k in ("adresa", "server", "portal", "utilizator", "parola", "user_agent", "referer", "x_user_agent", "stb_type")})
+	if "neconectata" in s:
+		rez["neconectata"] = bool(s["neconectata"])
 	# 0.7.7 (BQT): cate canale TV si filme au intrat si cate filme s-au taiat (HdsIptvClient.textTaiate); o sursa adusa de
 	# o versiune veche nu le are, iar textul cartelei ramane atunci cel general
 	if "taiate_filme" in s:
@@ -1504,9 +1709,12 @@ EXTENSII_FILM = (".mp4", ".mkv", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".mpg",
 SEMNE_NE_DIRECT = ("/movie/", "/series/", "/timeshift/", "/vod/", "catchup", "utc=", "lutc=", "archive=", "timeshift=")
 
 
+_PREFIXE_FLUX = tuple(s + "://" for s in SCHEME_FLUX)
+
+
 def _schemaFlux(cale):
 	c = (cale or "").lower()
-	return any(c.startswith(s + "://") for s in SCHEME_FLUX)
+	return c.startswith(_PREFIXE_FLUX)
 
 
 def fluxInDirect(tip_ref, cale):
@@ -1542,17 +1750,125 @@ def fluxInDirect(tip_ref, cale):
 # apare o data. Un buchet amestecat (si canale de satelit) ramane numai in Buchete: nucleul nu poate arata numai o parte dintr-un buchet.
 # Nimic nu se scrie: randurile sunt dosarele buchetelor omului, deja incarcate prin bouquets.tv.
 
-_MEMORIE_OM = {}       # fisier -> ((mtime, marime), rezultatul citirii)
+_MEMORIE_OM = {}       # fisier -> (semnul fisierului, rezultatul citirii)
+_MEMORII_OM = {}       # director -> vedere pregatita numai pe firul de lucru
+_LACAT_MEMORII_OM = threading.Lock()
 _GAZDE_LOCALE = ("127.0.0.1", "localhost", "[::1]")
 
 
-def _fisiereIndex(director=None):
+def _semnFisierOm(cale, erori=False):
+	try:
+		st = os.stat(cale)
+		return st.st_mtime_ns, st.st_ctime_ns, st.st_size, st.st_ino
+	except (FileNotFoundError, NotADirectoryError):
+		return None
+	except OSError:
+		if erori:
+			raise
+		return None
+
+
+class _MemorieBucheteOm:
+	"""O vedere completa, publicata dintr-o bucata; cititorii nu asteapta firul."""
+	def __init__(self, director, interval):
+		self.director = director
+		self.interval = interval
+		self.vedere = ((), (), {})
+		self.semn = None
+		self.index_semn = None
+		self.fisiere = []
+		self.stop = threading.Event()
+		self.fir = threading.Thread(target=self._bucla, name="HdsBucheteOm", daemon=True)
+
+	def opreste(self):
+		self.stop.set()
+		self.fir.join(10)
+
+	def _bucla(self):
+		while not self.stop.is_set():
+			try:
+				self._citeste()
+			except Exception as e:
+				# Nici numele fisierului, nici continutul nu intra in jurnal.
+				print("[HdsIptvSurse] memoria buchetelor: %s" % type(e).__name__)
+			self.stop.wait(self.interval)
+
+	def _citeste(self):
+		index = os.path.join(self.director, "bouquets.tv")
+		index_semn = _semnFisierOm(index, erori=True)
+		if self.semn is None or index_semn != self.index_semn:
+			fisiere = [f for f in _fisiereIndex(self.director, erori=True) if _buchetOmEligibil(f)] if index_semn is not None else []
+			if index_semn != _semnFisierOm(index, erori=True):
+				return
+			self.fisiere, self.index_semn = fisiere, index_semn
+		semne = tuple((f, _semnFisierOm(os.path.join(self.director, f), erori=True)) for f in self.fisiere)
+		semn = (index_semn, semne)
+		if self.semn == semn:
+			return
+		randuri, harta = [], {}
+		for fisier, asteptat in semne:
+			if self.stop.is_set():
+				return
+			citit_semn, citit = _citireOm(self.director, fisier, erori=True)
+			if citit_semn != asteptat:
+				return
+			if citit is None:
+				continue
+			nume, cai, amestecat = citit
+			if amestecat or not cai:
+				continue
+			nume = nume or fisier
+			randuri.append((fisier, nume, len(cai)))
+			for c in cai:
+				harta.setdefault(c, (fisier, nume))
+		# Un import poate inlocui indexul sau un buchet in timpul citirii.
+		if index_semn != _semnFisierOm(index, erori=True) or any(
+			s != _semnFisierOm(os.path.join(self.director, f), erori=True) for f, s in semne):
+			return
+		self.vedere = (tuple(randuri), semn, harta)
+		self.semn = semn
+		pastrate = {os.path.join(self.director, f) for f in self.fisiere}
+		for cale in list(_MEMORIE_OM):
+			if os.path.dirname(cale) == self.director and cale not in pastrate:
+				_MEMORIE_OM.pop(cale, None)
+
+
+def pornesteMemoriaOm(director=None, interval=2.0):
+	"""La pornire, inclusiv fara surse: analiza si urmarirea buchetelor pe fundal."""
+	director = os.path.abspath(director or DIRECTOR)
+	with _LACAT_MEMORII_OM:
+		memorie = _MEMORII_OM.get(director)
+		if memorie is None:
+			memorie = _MemorieBucheteOm(director, interval)
+			_MEMORII_OM[director] = memorie
+			try:
+				memorie.fir.start()
+			except Exception:
+				_MEMORII_OM.pop(director, None)
+				raise
+		return memorie
+
+
+def _vedereOm(director):
+	memorie = _MEMORII_OM.get(os.path.abspath(director or DIRECTOR))
+	if memorie is None and director is None:
+		memorie = pornesteMemoriaOm()
+	return memorie.vedere if memorie is not None else None
+
+
+def _buchetOmEligibil(fisier):
+	return fisier != BUCHET_RADACINA and not fisier.startswith(PREFIX_GRUPA) and fisier.endswith(".tv")
+
+
+def _fisiereIndex(director=None, erori=False):
 	"""Buchetele din bouquets.tv, in ordine, fara repetari: [nume fisier]."""
 	cale = os.path.join(director or DIRECTOR, "bouquets.tv")
 	try:
 		with open(cale, encoding="utf-8", errors="replace") as f:
 			text = f.read()
 	except (IOError, OSError):
+		if erori:
+			raise
 		return []
 	rez = []
 	for rand in text.splitlines():
@@ -1574,10 +1890,13 @@ def _caleDinRand(rest):
 	except ValueError:
 		return None
 	cale = parti[10].split(":", 1)[0] if len(parti) > 10 else ""
-	try:
-		cale = unquote(cale)
-	except Exception:
-		pass
+	if "%" in cale:
+		# Cazul obisnuit are numai separatorul schemei codat.
+		decodata = cale.replace("%3a", ":").replace("%3A", ":")
+		try:
+			cale = unquote(cale) if "%" in decodata else decodata
+		except Exception:
+			pass
 	return tip, steaguri, cale
 
 
@@ -1590,16 +1909,19 @@ def _gazdaLocala(cale):
 	return gazda in _GAZDE_LOCALE or gazda.startswith("127.")
 
 
-def citesteBuchetOm(cale):
+def citesteBuchetOm(cale, erori=False):
 	"""-> (numele buchetului, [caile canalelor de internet din afara], amestecat) dintr-un buchet al omului. amestecat: are si alte
 	servicii (satelit, cablu, terestru, fisiere, releele locale, dosare); canalele din sursele de aici (releul 8897) nu se numara, dar nici
 	nu fac buchetul amestecat."""
 	nume = ""
 	cai = []
 	amestecat = False
+	fundal = threading.current_thread() is not threading.main_thread()
 	try:
 		with open(cale, encoding="utf-8", errors="replace") as f:
-			for rand in f:
+			for nr, rand in enumerate(f):
+				if fundal and nr and not nr % 256:
+					time.sleep(.001)     # lasa loc tastelor si pe procesoarele mici
 				if rand.startswith("#NAME"):
 					nume = rand[5:].strip()
 					continue
@@ -1617,32 +1939,37 @@ def citesteBuchetOm(cale):
 					continue
 				cai.append(c)
 	except (IOError, OSError):
+		if erori:
+			raise
 		return nume, [], True
 	return nume, cai, amestecat
 
 
-def _citireOm(director, fisier):
+def _citireOm(director, fisier, erori=False):
 	cale = os.path.join(director, fisier)
-	try:
-		st = os.stat(cale)
-	except OSError:
+	semn = _semnFisierOm(cale, erori=erori)
+	if semn is None:
+		_MEMORIE_OM.pop(cale, None)
 		return None, None
-	semn = (st.st_mtime, st.st_size)
 	vechi = _MEMORIE_OM.get(cale)
 	if vechi is not None and vechi[0] == semn:
 		return semn, vechi[1]
-	rez = citesteBuchetOm(cale)
+	rez = citesteBuchetOm(cale, erori=True) if erori else citesteBuchetOm(cale)
+	if semn != _semnFisierOm(cale, erori=erori):
+		return None, None
 	_MEMORIE_OM[cale] = (semn, rez)
 	return semn, rez
 
 
 def bucheteOm(director=None):
-	"""Buchetele omului de aratat sub "IPTV", in ordinea din bouquets.tv: [(fisier, nume, cate canale)]. Recitite numai cand se schimba
-	fisierul (data si marimea)."""
+	"""Buchetele omului sub IPTV; dupa pornire, numai vederea pregatita pe fundal."""
+	vedere = _vedereOm(director)
+	if vedere is not None:
+		return list(vedere[0])
 	director = director or DIRECTOR
 	rez = []
 	for fisier in _fisiereIndex(director):
-		if fisier == BUCHET_RADACINA or fisier.startswith(PREFIX_GRUPA) or not fisier.endswith(".tv"):
+		if not _buchetOmEligibil(fisier):
 			continue
 		semn, citit = _citireOm(director, fisier)
 		if citit is None:
@@ -1664,6 +1991,9 @@ def numarCanaleOm(director=None):
 
 def semnaturaOm(director=None):
 	"""Se schimba cand se schimba bouquets.tv sau un buchet aratat sub "IPTV": lista pe sateliti se reface atunci."""
+	vedere = _vedereOm(director)
+	if vedere is not None:
+		return vedere[1]
 	director = director or DIRECTOR
 	semne = []
 	for fisier in ["bouquets.tv"] + [b[0] for b in bucheteOm(director)]:
@@ -1678,6 +2008,9 @@ def semnaturaOm(director=None):
 def harteOm(director=None):
 	"""{calea decodata a canalului: (fisier, numele buchetului)} pentru canalele din buchetele omului aratate sub "IPTV"; un canal din mai
 	multe buchete ramane la primul (fara dubluri). Pentru pagina web a listei (grupele dupa buchet); se cheama o data pe lista."""
+	vedere = _vedereOm(director)
+	if vedere is not None:
+		return vedere[2]
 	director = director or DIRECTOR
 	rez = {}
 	for fisier, nume, _n in bucheteOm(director):

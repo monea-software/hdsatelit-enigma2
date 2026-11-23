@@ -65,7 +65,7 @@
 # nucleului se socoteste dupa numele din regulile cu care se compara (_diferente, locNucleu): amprenta pastreaza toata
 # lista partitiilor si toate marimile din /proc/partitions, fiindca actualizarea din meniu citeste amprenta o data si o
 # compara cu marcajul fiecarui pachet (al unui alt model poate avea alte nume).
-# Ce nu se poate citi nu se potriveste: paza cade inchisa.
+# At startup unread fields only warn; package installation still fails closed.
 #
 # Multiboot (pornireMultiboot, aceeasi regula in garda din enigma2.sh): /proc/cmdline arata alt slot decat cel de baza
 # al regulilor cand kernel= e altul decat /dev/<kernel_part>, cand root= lipseste sau e altul decat /dev/<rootfs_part>
@@ -218,12 +218,22 @@ CHEIE_FAMILIE = "familie"
 # chip=- in regulile Broadcom: cipul nu se citeste si nu se compara (AX HD51, nodul chipset nesigur; MHD 12.11.2026)
 FARA_CIP = "-"
 FAMILIE_BROADCOM = "broadcom"
-FAMILII = (FAMILIE_BROADCOM,)
+FAMILII = (FAMILIE_BROADCOM, "hisilicon")
+
+# Startup evidence only. Unknown values remain visible as warnings; package checks stay strict.
+# Values from our hardware profiles, not a guess based on a receiver name.
+TIPURI_CUNOSCUTE = frozenset("H9Combo H9Twin h9combo h9twin H9TwinSE H9ComboSE h9combose h9twinse "
+	"zgemmah9twinse zgemmah9combose dm7020hd dm8000 dm800se dm900 dm920 duo2 duo4k duo4kse gbmv200 "
+	"gigablue h8 h8se h17 H17 h17combo H17Combo H17COMBO zgemmah17combo hd51 multiboxpro novaler4kpro "
+	"multiboxse novaler4kse osmini4k osmio4k osmio4kplus pulse4k pulse4kmini sf8008 sf8008m sh1 zgemmass "
+	"solo2 solo4k solose sx88v2 sx988 u57 u571 ultimo4k uno4kse ustym4kpro viper4k vuplus zero zero4k".split())
+CIPURI_CUNOSCUTE = frozenset("7241 7251s 7252s 72604 7278 7356 7376 7424 7444s hi3716mv430 hi3796mv200 hi3798mv200 hi3798mv300 hi3798cv200".split())
+PLACI_CUNOSCUTE = frozenset(("00000001", "U5SLIM", "U5TWIN"))
 
 # Modelul placii (cheia model_id, cifra 08 a codurilor E108 si E208). Numele scurte ale modelelor cunoscute, cum le dau
 # arborele dispozitivului (DT) si nodurile driverului, fara "vu" in fata, in ordine alfabetica (garda din enigma2.sh le
 # scrie in aceeasi ordine). Un nume generic al cipului (brcm,bcm7252s) sau unul necunoscut nu numeste niciun model.
-MODELE_CUNOSCUTE = ("duo4k", "duo4klite", "duo4kse", "gbmv200", "gbquad4k", "gbquad4kpro", "gbtrio4k", "gbue4k", "gbx34k",
+MODELE_CUNOSCUTE = ("duo4k", "duo4klite", "duo4kse", "gbmv200", "gbquad4k", "gbquad4kpro", "gbtrio4k", "gbue4k", "gbx34k", "h8", "h8se",
 	"protek4k", "sf8008", "sf8008m", "solo4k", "ultimo4k", "uno4k", "uno4kse", "ustym4kpro", "viper4k", "viper4kv20",
 	"viper4kv30", "viper4kv40", "zero4k")
 # alt nume al aceleiasi placi (/proc/stb/info/gbmodel pe GigaBlue UHD Quad 4K Pro)
@@ -231,6 +241,8 @@ ALIAS_MODELE = {"quad4kpro": "gbquad4kpro"}
 # placile cu nume pentru om si pagina pe site; model_id= din reguli poate fi numai una din ele. Tipul din driver al
 # placilor GigaBlue (gigablue) e comun mai multor modele: regulile lor cer modelul exact prin model_id=.
 MODELE_PLACI = {
+	"h8": ("ZGEMMA H8.2H PLUS", "zgemma-h8-2h-plus"),
+	"h8se": ("ZGEMMA H8.2H SE", "zgemma-h8-2h-se"),
 	"gbquad4kpro": ("GigaBlue UHD Quad 4K Pro", "gigablue-uhd-quad-4k-pro"),
 	"duo4kse": ("Vu+ Duo 4K SE", "vu-duo4k-se"),
 	"duo4k": ("Vu+ Duo 4K", "vu-duo4k"),
@@ -258,6 +270,8 @@ def modeleDinTexte(*texte):
 		if isinstance(text, bytes):
 			text = text.decode("ascii", "replace")
 		text = (text or "").encode("ascii", "replace").decode("ascii")
+		# Denumirea SE nu trebuie despartita intr-un model h8 fals.
+		text = text.lower().replace("h8.2h.se", "h8se")
 		for cuvant in re.split(r"[^a-z0-9]+", text.lower()):
 			if numeScurt(cuvant) in MODELE_CUNOSCUTE:
 				gasite.add(numeScurt(cuvant))
@@ -381,6 +395,8 @@ def reguliValide(reguli, cu_sume=False):
 	if reguli.get("format") != FORMAT or reguli.get("distro") != DISTRO:
 		return False
 	if CHEIE_FAMILIE in reguli and reguli[CHEIE_FAMILIE] not in FAMILII:
+		return False
+	if reguli.get(CHEIE_FAMILIE) == "hisilicon" and reguli.get("model_id") not in ("h8", "h8se"):
 		return False
 	if "model_id" in reguli and reguli["model_id"] not in MODELE_PLACI:
 		return False
@@ -870,7 +886,7 @@ def amprenta(radacina=None, reguli=None):
 	gbmodel = _citesteText(_cale(radacina, "proc/stb/info/gbmodel"), 64)
 	vumodel = _citesteText(_cale(radacina, "proc/stb/info/vumodel"), 64)
 	if nand(fam):
-		return amprentaNandDinTexte(
+		a = amprentaNandDinTexte(
 			chipset=_citesteText(_cale(radacina, "proc/stb/info/chipset"), 64),
 			vumodel=vumodel,
 			boxtype=_citesteText(_cale(radacina, "proc/stb/info/boxtype"), 4096),
@@ -880,6 +896,13 @@ def amprenta(radacina=None, reguli=None):
 			tip=_citesteText(_cale(radacina, "proc/stb/info/type"), 64), compatibil=dt, cmdline=cmdline,
 			partitions=_citesteText(_cale(radacina, "proc/partitions"), 65536), model_placa=model_placa,
 			gbmodel=gbmodel)
+		if broadcom(fam) and fam.get("machinebuild", "").startswith("dm") and model_placa and \
+				(a["boxtype"] in ("", "ultimo") or a["boxtype"].startswith("dm")):
+			a["boxtype"] = _simplu(model_placa.split("\n")[0]) or a["boxtype"]
+		# H8 native model nodes are measured; the display boxtype uses a different spelling.
+		if (model_placa or "").strip() in ("h8", "h8se") and a["boxtype"] not in TIPURI_CUNOSCUTE:
+			a["boxtype"] = model_placa.strip()
+		return a
 	antet = eticheta = None
 	di = _indexDeviceinfo(blkdevpartsBrut(cmdline))
 	if di is not None:
@@ -904,6 +927,12 @@ def amprenta(radacina=None, reguli=None):
 		model_placa=model_placa,
 		gbmodel=gbmodel,
 		kernel_part=(fam or {}).get("kernel_part") if broadcom(fam) else None)
+	# Dream's native node takes precedence over compatibility nodes such as vumodel=ultimo.
+	if broadcom(fam) and (fam or {}).get("machinebuild", "").startswith("dm") and model_placa and \
+			(a["boxtype"] in ("", "ultimo") or a["boxtype"].startswith("dm")):
+		a["boxtype"] = _simplu(model_placa.split("\n")[0]) or a["boxtype"]
+	if (model_placa or "").strip() in ("h8", "h8se") and a["boxtype"] not in TIPURI_CUNOSCUTE:
+		a["boxtype"] = model_placa.strip()
 	# pornirea dintr-un slot de multiboot (pornireMultiboot): partitiile descriu slotul, nu receptorul
 	a["multiboot"] = pornireMultiboot(fam, cmdline)
 	return a
@@ -952,7 +981,12 @@ def confirmat(reguli):
 
 def tipuriPlaca(reguli):
 	"""Lista din „boxtype=” („u57” -> ["u57"], „u57,u571” -> ["u57", "u571"]); fara spatii, fara intrari goale"""
-	return [t.strip() for t in ((reguli or {}).get("boxtype") or "").split(",") if t.strip()]
+	tipuri = [t.strip() for t in ((reguli or {}).get("boxtype") or "").split(",") if t.strip()]
+	# Acelasi model: nodul nativ si denumirea citita din boxtype in fabrica.
+	for nativ, denumire in (("h8", "H8.2H"), ("h8se", "H8.2H.SE")):
+		if nativ in tipuri or denumire in tipuri:
+			tipuri.extend(t for t in (nativ, denumire) if t not in tipuri)
+	return tipuri
 
 
 def limiteEmmc(reguli):
@@ -1059,14 +1093,56 @@ def avertismente(reguli, a):
 	return [(c,) + d[c] for c in CHEI_AVERTISMENT if c in d and not (c == "kernel" and "kernel_loc" in d)]
 
 
-def comparaPornire(reguli, a):
+def comparaPornire(reguli, a, dovezi=False):
 	"""compara() pentru verdictul de la pornire. La o pornire de multiboot (a["multiboot"], pornireMultiboot) partitiile
 	descriu slotul pornit: cand numai ele nu se potrivesc, receptorul trece. Daca si altceva nu se potriveste (alt
 	receptor), lista ramane intreaga, ca pana acum. Pe pornirea obisnuita partitiile raman dovada."""
 	nepotriviri = compara(reguli, a)
+	# Only the actual startup opts into evidence filtering. Restore/install callers retain strict checks.
+	if dovezi and reguliValide(reguli):
+		nepotriviri = [n for n in nepotriviri if dovadaPornire(reguli, a, n[0])]
 	if a.get("multiboot") and all(n[0] in CHEI_SLOT for n in nepotriviri):
 		return []
 	return nepotriviri
+
+
+def dovadaPornire(reguli, a, cheie):
+	"""True only for a known, read mismatch. Never use absence as board evidence."""
+	if cheie == "cip":
+		return _cipFaraBcm(a.get("cip")) in CIPURI_CUNOSCUTE
+	if cheie in ("boxtype", "eticheta"):
+		tip = (a.get("boxtype") or "") if cheie == "boxtype" else tipDinEticheta(a.get("eticheta"))
+		# Both model and mid in stb-core are build constants, not a hardware measurement.
+		if reguli.get("machinebuild", "").startswith("dm") and tip.startswith("dm"):
+			return False
+		return tip in TIPURI_CUNOSCUTE
+	if cheie == "hw":
+		return a.get("hw") in PLACI_CUNOSCUTE
+	if cheie == "partitii":
+		# A truncated table is not a mismatch; compare only entries actually read.
+		return any(n1 != n2 or (k1 is not None and k2 is not None and k1 != k2)
+			for (n1, k1), (n2, k2) in zip(partitiiDinReguli(reguli["partitions"]), a.get("partitii_lista") or []))
+	if cheie == "kernel":
+		kp, kib, rp, rkib = locNucleu(reguli, a)
+		# Each read position is independent evidence. Missing siblings cannot erase it.
+		return bool((kp and kp != reguli["kernel_part"]) or (rp and rp != reguli["rootfs_part"]) or
+			(treapta(reguli) == 1 and str(kib).isdigit() and str(kib) != reguli["kernel_kib"]))
+	if cheie == "model_id":
+		return bool(modeleDinTexte(a.get("model_id")))
+	if cheie == "emmc":
+		return str(a.get("emmc_kib", "")).isdigit()
+	return False
+
+
+def avertismentePornire(reguli, a):
+	"""Keep every unproven startup difference visible on TV and web."""
+	if not reguliValide(reguli):
+		return []
+	nep = compara(reguli, a)
+	ignorate = {n[0] for n in nep if not dovadaPornire(reguli, a, n[0])}
+	vechi = {n[0] for n in avertismente(reguli, a)}
+	d = _diferente(reguli, a)
+	return [(c,) + d[c] for c in CHEI_AMPRENTA if c in ignorate or c in vechi]
 
 
 def nucleuPornit(cmdline):
@@ -1083,10 +1159,10 @@ def nucleuPornit(cmdline):
 
 
 def textKernel(kernel_part, kernel_kib, rootfs_part):
-	"""'mmcblk0p9 32768 KiB, mmcblk0p10'; "" daca partitia nucleului nu s-a gasit (necitit)"""
-	if not kernel_part:
+	"""Keep either read position visible; an empty result means neither was read."""
+	if not kernel_part and not rootfs_part:
 		return ""
-	return "%s %s KiB, %s" % (kernel_part, kernel_kib if kernel_kib != "" else "?", rootfs_part or "-")
+	return "%s %s KiB, %s" % (kernel_part or "?", kernel_kib if kernel_kib != "" else "?", rootfs_part or "-")
 
 
 def valoareGasita(a, cheie):
@@ -1145,10 +1221,10 @@ def verifica(radacina=None, reguli=None):
 		return {"stare": STARE_NU_SE_APLICA, "reguli": None, "amprenta": {}, "nepotriviri": [], "avertismente": [],
 			"treapta": 1, "versiune": "", "versiune_baza": ""}
 	a = amprenta(radacina, reguli)
-	nepotriviri = comparaPornire(reguli, a)
+	nepotriviri = comparaPornire(reguli, a, dovezi=True)
 	# multiboot pe receptorul potrivit: partitiile slotului se arata numai informativ, cu nota slotului
 	informative = bool(a.get("multiboot")) and not nepotriviri
-	avert = [] if nepotriviri else avertismente(reguli, a)
+	avert = [] if nepotriviri else avertismentePornire(reguli, a)
 	if informative:
 		avert = [n for n in avert if n[0] not in CHEI_SLOT]
 	acum, baza = versiuni(reguli, radacina)
@@ -1183,6 +1259,7 @@ def verdict(radacina=None, cale_stare=None):
 	v["sursa"] = "acum"
 	v["amprenta_verdict"] = v["amprenta"]
 	v["nepotriviri_acum"] = list(v["nepotriviri"])
+	v["avertismente_acum"] = list(v["avertismente"])
 	if v["stare"] == STARE_NU_SE_APLICA:
 		return v
 	st = stareaPornirii(cale_stare)
@@ -1197,9 +1274,15 @@ def verdict(radacina=None, cale_stare=None):
 	v["amprenta_verdict"] = a_p
 	if st["stare"] == STARE_POTRIVIT:
 		v["nepotriviri"] = []
-		# avertismentele treptei a doua, tot din fisierul garzii (numai cand regulile sunt in treapta a doua)
-		chei = [c for c in (st.get("avertismente") or "").split() if c in CHEI_AVERTISMENT] \
-			if treapta(v["reguli"]) == 2 else []
+		# Keep only real warnings in the saved fingerprint, including unread fields in tier one.
+		permise = {n[0] for n in avertismentePornire(v["reguli"], a_p)}
+		# The guard saved kernel text, not its parsed positions. Do not validate it against today's sizes.
+		if "kernel" in st:
+			if a_p["kernel_text"] != asteptat_text(v["reguli"], "kernel"):
+				permise.add("kernel")
+			else:
+				permise.discard("kernel")
+		chei = [c for c in (st.get("avertismente") or "").split() if c in permise]
 		v["avertismente"] = [(c, asteptat_text(v["reguli"], c), valoareGasita(a_p, c)) for c in chei]
 	else:
 		chei = [c for c in (st.get("nepotriviri") or "").split() if c in CHEI_AMPRENTA] or ["cip"]
@@ -1221,17 +1304,14 @@ def inPaza(radacina=None, cale_stare=None):
 		return verifica(radacina, reguli)["stare"] == STARE_NEPOTRIVIT
 	except Exception as eroare:
 		print("[HdsPazaModel] verdictul: %s" % eroare)
-		return inchisLaEroare(radacina)
+		return inchisLaEroare(radacina, cale_stare)
 
 
-def inchisLaEroare(radacina=None):
-	"""Ce face interfata cand chiar codul pazei da o eroare (09.11.2026, coordonatorul): ramane pe ecranul pazei numai la
-	profilurile noi, cu model_id= in reguli (placi cu tip de driver comun mai multor modele). La modelele de pana acum
-	garda din enigma2.sh a oprit deja orice scriere gresita inainte de interfata, iar o greseala a acestui cod nu trebuie
-	sa lase receptorul omului fara interfata. Fara fisierul de reguli (emulatorul, alta imagine): False."""
+def inchisLaEroare(radacina=None, cale_stare=None):
+	"""A code error is not board evidence. Retain only an existing negative startup verdict."""
 	try:
-		with open(_cale(radacina, FISIER_REGULI)) as f:
-			return any(r.strip().startswith("model_id=") for r in f.read().splitlines())
+		st = stareaPornirii(cale_stare)
+		return bool(_stareValida(st) and st["stare"] == STARE_NEPOTRIVIT and st.get("nepotriviri"))
 	except Exception:
 		return False
 
@@ -1469,9 +1549,9 @@ def randuriAcum(v):
 	pornire); pagina web le arata separat, sub „Citit acum”"""
 	if v.get("sursa") != "pornire":
 		return []
-	pornire = [c for c, _a, _g in v.get("nepotriviri") or []]
-	acum = v.get("nepotriviri_acum") or []
-	if [c for c, _a, _g in acum] == pornire:
+	pornire = list(v.get("nepotriviri") or []) + list(v.get("avertismente") or [])
+	acum = list(v.get("nepotriviri_acum") or []) + list(v.get("avertismente_acum") or [])
+	if acum == pornire:
 		return []
 	if not acum:
 		return [_("Acum toate valorile se potrivesc.")]

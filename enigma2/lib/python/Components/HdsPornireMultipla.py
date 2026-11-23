@@ -95,6 +95,14 @@ import zlib
 FISIER_STARTUP = "STARTUP"
 RECOVERY = "STARTUP_RECOVERY"
 O_DATA = "STARTUP_ONCE"
+# Incarcatorul producatorului (BLD5, forum 948 #3651): pe receptoarele cu partitia bootoptions (Octagon SF8008, Amiko
+# Viper 4K V10, Uclan Ustym 4K PRO si celelalte HiSilicon cu aceeasi forma) producatorul pune STARTUP_RECOVERY cu exact
+# acest text (citit in rapoartele SF8008 si Ustym 4K PRO din 18.11.2026); cu el pornit, receptorul intra in meniul
+# incarcatorului (USB Multiboot Image Upgrade). Drumul folosit si de managerii de pornire OE-Alliance pe aceste modele:
+# STARTUP_RECOVERY copiat octet cu octet in STARTUP_ONCE (o singura pornire), STARTUP ramane neatins, deci pornirea
+# urmatoare revine in imaginea de acum. Nu se scrie nimic altceva (bootargs, loader si celelalte partitii raman neatinse).
+LOC_INCARCATOR = "incarcator"
+FORMA_INCARCATOR = re.compile(br"^boot to recovery menu\r?\n?$")
 LOC_RECOVERY = "0"
 COPIE = "STARTUP.hds-inainte"
 NOU = "STARTUP.hds-nou"
@@ -168,6 +176,14 @@ PE_STICK = N_("Imaginea de acum rulează de pe card sau stick, dar nu îi găses
 NICIUNA = N_("Nu am găsit alte imagini instalate, nici în memorie, nici pe card sau stick.")
 NOTA_O_DATA = N_("Altă imagine a cerut ca următoarea pornire să fie o singură dată în imaginea ei. Imaginea aleasă aici "
 	"pornește la repornirea de după aceea.")
+# Vu+ 4K cu kexec: pornirea a cazut pe alt loc decat cel din STARTUP (pornireCazuta, mai jos)
+NOTA_CAZUT_DISC = N_("La ultima pornire, discul imaginii alese (locul %(loc)s) nu a fost găsit la timp, așa că receptorul a "
+	"pornit imaginea din locul %(acum)s.")
+NOTA_CAZUT_DOSAR = N_("La ultima pornire, dosarul imaginii alese (locul %(loc)s) lipsea, așa că receptorul a pornit imaginea "
+	"din locul %(acum)s.")
+NOTA_CAZUT_ALEGE = N_("O poți alege din nou din listă.")
+NOTA_CAZUT_RECOVERY_USB = N_("La ultima pornire, un disc USB avea fișierul STARTUP_RECOVERY, deci receptorul a trecut pe "
+	"locul %(acum)s. Scoate fișierul sau discul, apoi alege din nou imaginea.")
 INTREBARE = N_("Receptorul repornește în imaginea %s. Continui?")
 BUTON = N_("Pornește")
 DEJA = N_("Aceasta e imaginea pornită acum.")
@@ -179,6 +195,11 @@ REFUZ_MOTIV = N_("Locul %(loc)s nu se alege: %(motiv)s.")
 NEGASIT = N_("Locul ales nu mai e în listă. Deschide din nou lista.")
 EROARE = N_("Nu am putut scrie alegerea, deci receptorul rămâne în imaginea de acum.")
 FARA_NUME = N_("Imagine fără nume")
+RAND_INCARCATOR = N_("Pornește în încărcător")
+INTREBARE_INCARCATOR = N_("Receptorul repornește o singură dată în încărcătorul producătorului (meniul în care se pun "
+	"imagini de pe stick). Pornirea următoare revine singură în imaginea de acum. Continui?")
+GATA_INCARCATOR = N_("Receptorul repornește în încărcător. Pornirea următoare revine în imaginea de acum.")
+FARA_INCARCATOR = N_("Încărcătorul nu se poate porni de aici pe acest receptor.")
 
 
 def _log(text):
@@ -913,6 +934,89 @@ def startupuri(dosar, radacina=None):
 	return rez
 
 
+# ------------------------------------------------------------------ locul pornit acum, fata de STARTUP_N
+# Unealta altei imagini poate lasa in STARTUP o pereche amestecata: nucleul unui loc si sistemul altuia (Octagon SF8008 cu
+# 11 locuri pe stick, rapoartele pornirii 761249 si 486541: tinta usb0.sda3 si kernel=/dev/sda3 ale lui STARTUP_6 cu
+# root=/dev/sda10 al lui STARTUP_9; alege() de aici copiaza STARTUP_N octet cu octet). Cand nucleul celuilalt loc poate
+# porni imaginea noastra, scrierea imaginii in locul de acum ar pune nucleul nostru peste nucleul celuilalt loc.
+# startupuriCitite citeste NUMAI fisierele STARTUP_N, din partitia de pornire montata (ro sau rw) sau montata acum numai
+# pentru citit (ro) si demontata imediat; nu scrie nimic si nu cheama locuri() (aceea monteaza partitiile locurilor si scrie
+# jurnalul listei). locPornit spune, numai din date, din ce loc sunt nucleul si sistemul de acum.
+
+def _dosarBootMontat(radacina=None):
+	"""Punctul de montare al partitiei de pornire (vfat), montata rw sau ro; None cand nu e montata."""
+	dev = _dispozitivBoot(radacina)
+	if not dev:
+		return None
+	tinta = os.path.realpath(_cale(radacina, dev))
+	for rand in _text(_cale(radacina, "proc/mounts")).splitlines():
+		c = rand.split()
+		if len(c) < 3 or c[2] != "vfat":
+			continue
+		if c[0] == dev or os.path.realpath(_cale(radacina, c[0])) == tinta:
+			return _cale(radacina, c[1].replace("\\040", " "))
+	return None
+
+
+def startupuriCitite(radacina=None, monteaza=None):
+	"""[(N, numele fisierului, octetii)] STARTUP_N de pe partitia de pornire (startupuri), NUMAI citite; None cand partitia
+	nu se poate citi. Nemontata: montata cu ro (`monteaza(dispozitiv, "vfat", "ro")`) si demontata imediat."""
+	boot, demonteaza = _dosarBootMontat(radacina), None
+	if not boot:
+		if radacina:
+			return None
+		dev = _dispozitivBoot()
+		if not dev:
+			return None
+		boot, demonteaza = (monteaza or _monteazaReal)(dev, "vfat", "ro")
+		if not boot:
+			return None
+	try:
+		try:
+			os.listdir(boot)
+		except OSError:
+			return None
+		return startupuri(boot, radacina)
+	finally:
+		if demonteaza:
+			demonteaza()
+
+
+def _nucleuTinta(st):
+	"""Partitia din care incarcatorul ia nucleul unui loc de pe stick (tinta usb0.sdaK -> /dev/sdaK); "" la alte tinte."""
+	m = TINTA_DISC.match(st["tinta"])
+	return "/dev/sda" + m.group(1) if m else ""
+
+
+def locPornit(cmd, fisiere):
+	"""Din ce loc sunt nucleul si sistemul pornite acum. `cmd`: parametrii liniei de comanda (parametri()), `fisiere`:
+	startupuriCitite(). -> {"nucleu": [N, ...] locurile care folosesc partitia din kernel= (prin tinta usb0.sdaK sau prin
+	kernel=), "sistem": [N, ...] locurile cu acelasi root= si rootsubdir=, "loc": locul pornit sau "" (toate locurile care
+	pomenesc nucleul sau sistemul de acum au chiar perechea de acum, fara alta tinta), "amestec": True cand nucleul e al
+	unui singur loc, sistemul al altui singur loc, "fara_forma": [N, ...] cele sarite}. Sfarsitul de rand Windows si spatiile de
+	la coada nu conteaza aici (se cauta numai nucleul si sistemul); STARTUP_N cu chei repetate sau fara forma `boot TINTA '...'` se sar si se
+	numesc in fara_forma."""
+	nucleu_acum, rad_acum, sub_acum = cmd.get("kernel", ""), cmd.get("root", ""), cmd.get("rootsubdir", "")
+	nucleu, sistem, perechi, fara_forma = [], [], [], []
+	for n, _nume, date in fisiere or ():
+		st = citesteStartup((date or b"").replace(b"\r", b"").rstrip() + b"\n")
+		if not st or st.get("repetate"):
+			fara_forma.append(n)
+			continue
+		p, incarcat = st["p"], _nucleuTinta(st)
+		are_nucleu = bool(nucleu_acum) and nucleu_acum in (p.get("kernel"), incarcat)
+		are_sistem = bool(rad_acum) and p.get("root") == rad_acum and p.get("rootsubdir", "") == sub_acum
+		if are_nucleu:
+			nucleu.append(n)
+		if are_sistem:
+			sistem.append(n)
+		if are_nucleu and are_sistem and p.get("kernel") == nucleu_acum and incarcat in ("", nucleu_acum):
+			perechi.append(n)
+	bun = bool(perechi) and set(nucleu) == set(perechi) and set(sistem) == set(perechi)
+	return {"nucleu": nucleu, "sistem": sistem, "loc": perechi[0] if bun else "",
+		"amestec": not bun and len(nucleu) == 1 and len(sistem) == 1 and nucleu != sistem, "fara_forma": fara_forma}
+
+
 # ------------------------------------------------------------------ lista locurilor
 
 def _montateInfo(text, radacina, sub):
@@ -1097,6 +1201,111 @@ def _locKexec(n, fisier, date, cmd, montate, radacina, monteaza, oriunde=None):
 			demonteaza()
 
 
+# ------------------------------------------------------------------ pornirea kexec cazuta pe alt loc (Vu+ 4K)
+# Initramfs-ul kexec (init-kexec.sh si init-kexec-startup.sh din kexec-multiboot, OE-Alliance) porneste locul din STARTUP
+# (o singura data STARTUP_ONCE, pe care il sterge). Cand nu gaseste la timp discul locului (rootwait= din STARTUP; fara el
+# 10 x 200 ms in initramfs-urile fara meniul de pornire care asteapta discul) sau dosarul lui, porneste radacina flash
+# (rootsubdir=linuxrootfs0, Recovery) si pune in linia de comanda error=::scan_device_fails si/sau :subdir_missing, iar
+# STARTUP ramane pe locul ales: omul ajunge in alta imagine fara sa stie de ce. Aici se citesc NUMAI linia de comanda,
+# STARTUP si randurile utile din kexec-multiboot.log (initramfs-ul il scrie la fiecare pornire in radacina flash, adica in
+# /boot); nimic nu se scrie pe partitia de pornire. Lista si pagina web spun ce s-a intamplat, jurnalul listei pastreaza
+# dovezile pentru raport. Fara error= nu se presupune nimic.
+# Incarcatoarele mai vechi (fara meniul de pornire) cauta la fiecare pornire, pe sda, sda1 ... sdd1, un fisier
+# STARTUP_RECOVERY si, daca il gasesc, copiaza STARTUP_RECOVERY din flash peste STARTUP: un stick de salvare uitat in
+# receptor il trimite in Recovery la fiecare pornire. Se vede numai in jurnal (copying STARTUP_RECOVERY into STARTUP).
+# Etapa 1 goleste jurnalul la fiecare pornire; din grija se citeste totusi numai coada lui si numai pornirea de acum
+# (de la ultimul rand al etapei 1 venit dupa randuri ale etapei 2).
+JURNAL_KEXEC = "kexec-multiboot.log"
+ERORI_KEXEC = ("scan_device_fails", "subdir_missing")
+RAND_JURNAL_KEXEC = re.compile(r"loading STARTUP|not found|fallback|booting kernel|bootmenu exit code|is not present|"
+	r"STARTUP_RECOVERY found|copying STARTUP_RECOVERY", re.I)
+RECOVERY_DE_PE_USB = "copying startup_recovery into startup"
+UUID_IN_TEXT = re.compile(r"((?:PART)?UUID=)[\"']?[0-9A-Za-z-]+")
+MAXIM_RANDURI_KEXEC = 12
+MAXIM_JURNAL_KEXEC = 65536
+
+
+def _coadaJurnalKexec(cale):
+	"""Randurile pornirii de acum din kexec-multiboot.log (ultimii MAXIM_JURNAL_KEXEC octeti), numai citite."""
+	try:
+		with open(cale, "rb") as f:
+			f.seek(0, os.SEEK_END)
+			marime = f.tell()
+			f.seek(max(0, marime - MAXIM_JURNAL_KEXEC))
+			text = f.read(MAXIM_JURNAL_KEXEC).decode("utf-8", "replace")
+	except (IOError, OSError):
+		return []
+	randuri, etapa2 = [], False
+	for rand in text.splitlines():
+		if "1ST STAGE" in rand and etapa2:
+			randuri, etapa2 = [], False
+		etapa2 = etapa2 or "2ND STAGE" in rand
+		randuri.append(rand)
+	return randuri
+
+
+def _locAles(date, fisiere):
+	"""Locul descris de STARTUP: STARTUP_N cu aceiasi octeti, apoi cu aceleasi root=, subdosar si nucleu, apoi numarul din
+	rootsubdir=...linuxrootfsN; "" cand nu se stie."""
+	if not date:
+		return ""
+	for n, _f, d in fisiere:
+		if d == date:
+			return str(n)
+	st = citesteStartup(date)
+	if not st or st["tinta"] or st.get("repetate"):
+		return ""
+	p = st["p"]
+	cheie = (p.get("root", ""), _subKexec(p.get("rootsubdir", "")), p.get("kernel", "").lstrip("/"))
+	for n, _f, d in fisiere:
+		s = citesteStartup(d)
+		if s and not s.get("repetate") and (s["p"].get("root", ""), _subKexec(s["p"].get("rootsubdir", "")),
+			s["p"].get("kernel", "").lstrip("/")) == cheie:
+			return str(n)
+	m = re.search(r"linuxrootfs([0-9]{1,3})$", p.get("rootsubdir", ""))
+	return str(int(m.group(1))) if m else ""
+
+
+def _pornireKexec(boot, fisiere, cmd):
+	"""Ce spune pornirea de acum la kexec, numai citit: {"eroare": error= din linia de comanda, "ales": locul din STARTUP,
+	"o_data": initramfs-ul a pornit din STARTUP_ONCE, "recovery_usb": STARTUP_RECOVERY copiat peste STARTUP pentru ca un
+	disc USB avea fisierul STARTUP_RECOVERY, "jurnal": randurile utile din kexec-multiboot.log, cu UUID ascuns}."""
+	jurnal, o_data, recovery_usb = [], False, False
+	for rand in _coadaJurnalKexec(os.path.join(boot, JURNAL_KEXEC)):
+		if RAND_JURNAL_KEXEC.search(rand):
+			mic = rand.lower()
+			o_data = o_data or "loading startup_once" in mic
+			recovery_usb = recovery_usb or RECOVERY_DE_PE_USB in mic
+			jurnal.append(UUID_IN_TEXT.sub(r"\1<ascuns>", rand.strip())[:200])
+	return {"eroare": cmd.get("error", ""), "ales": _locAles(_citeste(os.path.join(boot, FISIER_STARTUP),
+		MAXIM_STARTUP + 1), fisiere), "o_data": o_data, "recovery_usb": recovery_usb,
+		"jurnal": jurnal[-MAXIM_RANDURI_KEXEC:]}
+
+
+def pornireCazuta(rez, pornire):
+	"""{"loc", "acum", "fel" (disc, dosar sau recovery_usb), "alege"} cand initramfs-ul kexec a pornit alt loc decat cel
+	ales si a spus de ce: error= in linia de comanda (disc, dosar) sau STARTUP_RECOVERY copiat peste STARTUP din cauza unui
+	disc USB cu fisierul STARTUP_RECOVERY (recovery_usb, locul ales de dinainte nu se mai stie); None altfel: fara dovada,
+	cu STARTUP_ONCE folosit la pornire, cu locul din STARTUP necunoscut sau cu locul pornit negasit in lista."""
+	if not pornire or pornire.get("o_data"):
+		return None
+	lista = rez.get("locuri", [])
+	acum = [l["loc"] for l in lista if l.get("acum")]
+	if len(acum) != 1:
+		return None
+	if pornire.get("recovery_usb"):
+		return {"loc": "", "acum": acum[0], "fel": "recovery_usb", "alege": False}
+	erori = pornire.get("eroare", "").split(":")
+	if not any(e in erori for e in ERORI_KEXEC):
+		return None
+	loc = pornire.get("ales", "")
+	if not loc or acum[0] == loc:
+		return None
+	ales = [l for l in lista if l["loc"] == loc]
+	return {"loc": loc, "acum": acum[0], "fel": "disc" if "scan_device_fails" in erori else "dosar",
+		"alege": bool(ales and ales[0].get("alegere"))}
+
+
 def locuri(radacina=None, monteaza=None, numai=None):
 	"""{"locuri": [...], "pe_stick": bool, "eroare": bool}. Fiecare loc: loc, imagine, acum, alegere (se poate scrie),
 	fel (emmc / stick, adica orice nu e din memorie), strica, motiv (de ce nu se alege). Locurile goale (fara radacina) nu
@@ -1116,6 +1325,8 @@ def locuri(radacina=None, monteaza=None, numai=None):
 		# Recovery (locul 0) numai la kexec: acolo e o imagine in radacina flash; la bootoptions e meniul fabricii.
 		fisiere = _sabloane(boot) if kexec else startupuri(boot, radacina)
 		o_data = kexec and os.path.lexists(os.path.join(boot, O_DATA))
+		incarcator = None if kexec or numai is not None else _incarcatorDin(boot)
+		pornire = _pornireKexec(boot, fisiere, cmd) if kexec and numai is None else None
 	finally:
 		if demonteazaBoot:
 			demonteazaBoot()
@@ -1140,6 +1351,8 @@ def locuri(radacina=None, monteaza=None, numai=None):
 		# STARTUP_ONCE (pus de alta imagine) are intaietate la pornirea urmatoare; nu e al nostru, deci il spunem doar.
 		rez["o_data"] = o_data
 		if numai is None:
+			rez["pornire"] = pornire
+			rez["cazut"] = pornireCazuta(rez, pornire)
 			_jurnalLista(rez, cmd, montate, ascunse, [n for n, _f, _d in fisiere], radacina)
 		return rez
 	emmc, altele = [], []
@@ -1171,7 +1384,20 @@ def locuri(radacina=None, monteaza=None, numai=None):
 			"acum": True, "alegere": False, "fara_loc": True})
 	if numai is None:
 		_jurnalLista(rez, cmd, montate, ascunse, [n for n, _f, _d in fisiere], radacina)
+		if incarcator:
+			# randul de la coada listei; nu e un loc (nu intra in "locuri", deci nici in alegerea locurilor)
+			rez["incarcator"] = incarcator
 	return rez
+
+
+def _incarcatorDin(boot):
+	"""Randul "Porneste in incarcator" din partitia bootoptions deschisa, sau None cand STARTUP_RECOVERY lipseste sau nu
+	are forma producatorului."""
+	date = _citeste(os.path.join(boot, RECOVERY), MAXIM_STARTUP + 1)
+	if date is None or not FORMA_INCARCATOR.match(date):
+		return None
+	return {"loc": LOC_INCARCATOR, "fel": "incarcator", "imagine": _(RAND_INCARCATOR), "acum": False, "alegere": True,
+		"fisier": RECOVERY, "date": date}
 
 
 # ------------------------------------------------------------------ jurnalul listei (USI, 16.11.2026)
@@ -1232,7 +1458,8 @@ def _jurnalLista(rez, cmd, montate, ascunse, numere, radacina=None):
 	rele = []
 	try:
 		randuri = ["lista pornirii multiple, uptime %s" % (_text(_cale(radacina, "proc/uptime"), 64).split(" ")[0] or "?"),
-			"linia de comanda: " + " ".join("%s=%s" % (k, cmd[k]) for k in ("root", "rootsubdir", "kernel", "kexec") if k in cmd),
+			"linia de comanda: " + " ".join("%s=%s" % (k, cmd[k]) for k in ("root", "rootsubdir", "kernel", "kexec", "error")
+				if k in cmd),
 			"discul pornirii (HdsStocare.discRadacina): %s" % radacinaExterna(),
 			"/dev/.newMB-uuid: %s" % ("da" if os.path.exists(_cale(radacina, "dev/.newMB-uuid")) else "nu")]
 		randuri += ["montata: %s -> %s" % (d, m) for d, m in sorted(montate.items())]
@@ -1251,6 +1478,18 @@ def _jurnalLista(rez, cmd, montate, ascunse, numere, radacina=None):
 				parti = ["loc %s: ascuns" % n, a["de_ce"]] + ["%s=%s" % (k, a[k]) for k in
 					("partitia", "dosar", "sistem", "montata", "are_linuxrootfs") if k in a]
 			randuri.append(", ".join(str(p) for p in parti if p != ""))
+		pornire = rez.get("pornire")
+		if pornire:
+			# kexec: locul din STARTUP, pornirea cazuta pe alt loc si ce a scris initramfs-ul (pornireCazuta)
+			randuri.append("STARTUP: locul %s%s" % (pornire.get("ales") or "necunoscut",
+				", pornit din STARTUP_ONCE" if pornire.get("o_data") else ""))
+			cazut = rez.get("cazut")
+			if cazut and cazut["fel"] == "recovery_usb":
+				randuri.append("PORNIRE CAZUTA: STARTUP_RECOVERY copiat peste STARTUP (fisierul STARTUP_RECOVERY pe un disc USB), "
+					"pornit locul %(acum)s" % cazut)
+			elif cazut:
+				randuri.append("PORNIRE CAZUTA: ales locul %(loc)s, pornit locul %(acum)s (%(fel)s)" % cazut)
+			randuri += ["kexec-multiboot.log: %s" % r for r in pornire.get("jurnal", [])]
 		rele = partitiiCuToateAscunse(rez, ascunse)
 		if rele:
 			randuri.append("ANORMAL: toate locurile ascunse, fara linuxrootfs in dosarul citit: %s" % " ".join(rele))
@@ -1357,6 +1596,22 @@ def nota(stare):
 		text.append(_(PE_STICK))
 	if stare.get("o_data"):
 		text.append(_(NOTA_O_DATA))
+	cazut = stare.get("cazut")
+	if cazut:
+		# intai: e motivul pentru care omul e in alta imagine decat cea aleasa. Cand nota spune deja ce are de facut
+		# (O poti alege din nou, alege din nou imaginea), ea tine locul indemnului obisnuit (NOTA / NOTA_DISC), ca sa
+		# incapa in caseta ecranului.
+		sablon = {"disc": NOTA_CAZUT_DISC, "recovery_usb": NOTA_CAZUT_RECOVERY_USB}.get(cazut["fel"], NOTA_CAZUT_DOSAR)
+		try:
+			primul = [_(sablon) % cazut]
+		except (KeyError, ValueError, TypeError):
+			# o traducere cu alte chei nu opreste lista: textul romanesc
+			primul = [sablon % cazut]
+		if cazut.get("alege"):
+			primul.append(_(NOTA_CAZUT_ALEGE))
+		if (cazut.get("alege") or cazut["fel"] == "recovery_usb") and text and text[0] in (_(NOTA), _(NOTA_DISC)):
+			text = text[1:]
+		text = primul + text
 	return " ".join(text)
 
 
@@ -1379,7 +1634,8 @@ def publice(stare):
 			"fel": l["fel"], "strica": bool(l.get("strica")),
 			"refuz": "" if l["acum"] or l["alegere"] or not (l.get("strica") or l.get("motiv")) else textRefuz(l)}
 			for l in stare.get("locuri", [])],
-		"randuri": randuri(stare), "nota": nota(stare)}
+		"randuri": randuri(stare), "nota": nota(stare),
+		"incarcator": {"loc": LOC_INCARCATOR, "rand": _(RAND_INCARCATOR)} if stare.get("incarcator") else None}
 
 
 # ------------------------------------------------------------------ scrierea
@@ -1685,6 +1941,228 @@ def reporneste(sesiune, loc, dupa_ms=0, fabrica_ceas=None, radacina=None, montea
 		from Components import HdsAlimentare
 		HdsAlimentare.programeaza(acum, dupa_ms, fabrica_ceas, nume="pornire-multipla")
 	return True, text
+
+# ------------------------------------------------------------------ pornirea in incarcator (BLD5)
+# Runda 2: scrierea si punerea la loc ruleaza pe un fir (montare, fsync, sync nu tin interfata), rezultatul vine inapoi
+# pe firul interfetei; STARTUP_ONCE de dinainte se pastreaza intreg (pana la MAXIM_O_DATA) si o singura data pe toata
+# operatia: o a doua cerere inainte de repornire nu ia drept "vechi" comanda scrisa de prima.
+MAXIM_O_DATA = 1024 * 1024
+GATA_DEJA_INCARCATOR = N_("Pornirea în încărcător se pregătește deja.")
+NEREPUS_INCARCATOR = N_("Nu am putut anula pornirea în încărcător: la pornirea următoare receptorul poate intra în "
+	"încărcător. Încearcă din nou, din Repornește în altă imagine.")
+_OPERATIE = {}   # "lucreaza": un fir scrie acum; "vechi", "scris": starea de dinainte si ce am pus, pana la repornire sau Nu
+
+
+def _stergeTemp(boot):
+	try:
+		os.unlink(os.path.join(boot, O_DATA + ".nou"))
+	except OSError:
+		pass
+
+
+def _citesteOData(boot):
+	"""(True, octetii lui STARTUP_ONCE sau ABSENT) sau (False, None) cand fisierul exista, dar nu se poate citi intreg."""
+	cale = os.path.join(boot, O_DATA)
+	if not os.path.lexists(cale):
+		return True, ABSENT
+	try:
+		with open(cale, "rb") as f:
+			date = f.read(MAXIM_O_DATA + 1)
+	except (IOError, OSError) as e:
+		_log("incarcator: STARTUP_ONCE necitit: %r" % e)
+		return False, None
+	if len(date) > MAXIM_O_DATA:
+		return False, None
+	return True, date
+
+
+def _scrieOData(boot, date):
+	"""STARTUP_ONCE.nou, fsync, rename peste STARTUP_ONCE, sync, citit inapoi intreg. True daca e la fel."""
+	temp = os.path.join(boot, O_DATA + ".nou")
+	tinta = os.path.join(boot, O_DATA)
+	try:
+		with open(temp, "wb") as f:
+			f.write(date)
+			f.flush()
+			os.fsync(f.fileno())
+		os.replace(temp, tinta)
+		if hasattr(os, "sync"):
+			os.sync()
+	except (IOError, OSError) as e:
+		_log("incarcator: %r" % e)
+		_stergeTemp(boot)
+		return False
+	ok, citit = _citesteOData(boot)
+	return ok and citit == date
+
+
+def _puneOData(boot, vechi):
+	"""STARTUP_ONCE ca inainte: octetii vechi sau lipsa lui. True daca e cum era."""
+	if vechi == ABSENT:
+		try:
+			os.unlink(os.path.join(boot, O_DATA))
+		except FileNotFoundError:
+			pass
+		except OSError as e:
+			_log("incarcator inapoi: %r" % e)
+			return False
+		if hasattr(os, "sync"):
+			os.sync()
+		return not os.path.lexists(os.path.join(boot, O_DATA))
+	return _scrieOData(boot, vechi)
+
+
+def _alegeIncarcator(radacina, monteaza, asteptat):
+	if _dual(radacina):
+		return False, _(FARA_INCARCATOR), None
+	boot, demonteaza = _deschideBoot(radacina, monteaza)
+	if not boot:
+		return False, _(EROARE), None
+	try:
+		if boot == _dosarKexec(radacina):
+			return False, _(FARA_INCARCATOR), None
+		l = _incarcatorDin(boot)
+		if not l:
+			return False, _(FARA_INCARCATOR), None
+		if asteptat is not None and l["date"] != asteptat:
+			return False, _(NEGASIT), None
+		ok, acum = _citesteOData(boot)
+		if not ok:
+			return False, _(EROARE), None
+		if _OPERATIE.get("scris") is not None and acum == _OPERATIE["scris"]:
+			vechi = _OPERATIE["vechi"]   # o cerere de dinainte a pus-o deja: starea de la inceput ramane
+		else:
+			vechi = acum
+		if acum != l["date"] and not _scrieOData(boot, l["date"]):
+			_puneOData(boot, acum)
+			return False, _(EROARE), None
+		_log("STARTUP_ONCE = %s (incarcatorul, o singura pornire)" % RECOVERY)
+		return True, _(GATA_INCARCATOR), (vechi, l["date"])
+	finally:
+		if demonteaza:
+			demonteaza()
+
+
+def alegeIncarcator(radacina=None, monteaza=None, asteptat=None):
+	"""STARTUP_ONCE = STARTUP_RECOVERY (octet cu octet), dupa o citire din nou. (True, text, (vechi, scris)) sau (False,
+	motivul, None); `vechi` = STARTUP_ONCE de la inceputul operatiei (ABSENT cand nu era), `scris` = octetii pusi, pentru
+	inapoiIncarcator. STARTUP nu se atinge. Nu ridica exceptii (montarea, /tmp plin, citirea: motivul EROARE)."""
+	try:
+		return _alegeIncarcator(radacina, monteaza, asteptat)
+	except Exception as e:
+		_log("incarcator: %r" % e)
+		return False, _(EROARE), None
+
+
+def inapoiIncarcator(vechi, scris, radacina=None, monteaza=None):
+	"""Repornirea a fost oprita pe ecran: STARTUP_ONCE inapoi cum era, numai daca e tot cel scris de noi. STARTUP si
+	STARTUP.hds-inainte nu se ating. True daca s-a pus la loc. Nu ridica exceptii."""
+	try:
+		boot, demonteaza = _deschideBoot(radacina, monteaza)
+		if not boot:
+			return False
+		try:
+			ok, acum = _citesteOData(boot)
+			if not ok:
+				return False
+			if acum != scris:
+				# altcineva a scris intre timp STARTUP_ONCE: nu-l atingem, iar starea noastra nu mai conteaza
+				_OPERATIE.pop("vechi", None)
+				_OPERATIE.pop("scris", None)
+				return False
+			ok = _puneOData(boot, vechi)
+			_log("STARTUP_ONCE pus inapoi: %s" % ok)
+			if ok:
+				_OPERATIE.pop("vechi", None)
+				_OPERATIE.pop("scris", None)
+			return ok
+		finally:
+			if demonteaza:
+				demonteaza()
+	except Exception as e:
+		_log("incarcator inapoi: %r" % e)
+		return False
+
+
+def _pePeFir(lucru):
+	import threading
+	t = threading.Thread(target=lucru, name="HdsPornireIncarcator")
+	t.daemon = True
+	t.start()
+
+
+def _peInterfata(functie, *argumente):
+	from twisted.internet import reactor
+	reactor.callFromThread(functie, *argumente)
+
+
+def pornesteIncarcator(sesiune, dupa_ms=0, fabrica_ceas=None, radacina=None, monteaza=None, Standby=None, asteptat=None,
+		rezultat=None, fir=None, interfata=None):
+	"""Ca reporneste(), pentru incarcator. Scrierea (alegeIncarcator) ruleaza pe un fir; pe firul interfetei urmeaza
+	TryQuitMainloop(2) dupa `dupa_ms` si rezultat(ok, text). La Nu pe ecran se pune la loc numai STARTUP_ONCE, tot pe un
+	fir. Intoarce imediat (True, text) cand a pornit lucrul, (False, motivul) altfel. `fir` si `interfata`: pentru probe."""
+	if sesiune is None:
+		return False, _(EROARE)
+	if _OPERATIE.get("lucreaza"):
+		return False, _(GATA_DEJA_INCARCATOR)
+	fir = fir or _pePeFir
+	interfata = interfata or _peInterfata
+	_OPERATIE["lucreaza"] = True
+
+	def gata(ok, text, inainte):
+		_OPERATIE.pop("lucreaza", None)
+		if not ok:
+			if rezultat:
+				rezultat(False, text)
+			return
+		vechi, scris = inainte
+		_OPERATIE["vechi"], _OPERATIE["scris"] = vechi, scris
+
+		def pusLaLoc(ok):
+			_OPERATIE.pop("lucreaza", None)
+			if not ok and rezultat:
+				rezultat(False, _(NEREPUS_INCARCATOR))
+
+		def renuntat(*_a):
+			_OPERATIE["lucreaza"] = True   # o alegere noua asteapta sfarsitul punerii la loc
+
+			def pune():
+				interfata(pusLaLoc, inapoiIncarcator(vechi, scris, radacina, monteaza))
+			try:
+				fir(pune)
+			except Exception as e:
+				_log("incarcator inapoi: %r" % e)
+				pusLaLoc(False)
+
+		def acum():
+			try:
+				S = Standby
+				if S is None:
+					from Screens import Standby as S
+				sesiune.openWithCallback(renuntat, S.TryQuitMainloop, 2)
+			except Exception as e:
+				_log("repornirea: %r" % e)
+				renuntat()
+
+		if dupa_ms <= 0:
+			acum()
+		else:
+			from Components import HdsAlimentare
+			HdsAlimentare.programeaza(acum, dupa_ms, fabrica_ceas, nume="pornire-incarcator")
+		if rezultat:
+			rezultat(True, text)
+
+	def lucreaza():
+		ok, text, inainte = alegeIncarcator(radacina, monteaza, asteptat)
+		interfata(gata, ok, text, inainte)
+
+	try:
+		fir(lucreaza)
+	except Exception as e:
+		_OPERATIE.pop("lucreaza", None)
+		_log("incarcator: %r" % e)
+		return False, _(EROARE)
+	return True, _(GATA_INCARCATOR)
 
 # ------------------------------------------------------------------ instalarea pornirii multiple kexec pe Vu+ 4K
 # (KXC, 15.11.2026; forum 1269 si doi testeri Vu+ 4K). Fisierele vin din pachetul kexec-multiboot-<masina> al feedului

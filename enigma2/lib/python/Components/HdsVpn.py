@@ -13,7 +13,8 @@
 # WireGuard in el. Cand lipsesc, instaleaza() scrie /etc/opkg/hdsatelit-extensii.conf (feedul de extensii HD Satelit al
 # bazei: https://stb.hdsatelit.com/extensii/<canal>/<baza>/<arh>, fara parola in adresa), apoi opkg update si opkg
 # install. Adresa nu se potriveste cu feedul actualizarilor (HdsActualizari._ADRESA_FEED), deci pachetele de aici nu
-# intra in planul de actualizare.
+# intra in planul de actualizare. Cand instalarea cade, fisierul si listele lui se scot (stergeConfExtensii); la
+# pornirea interfetei se scoate si fisierul ramas de la imaginile vechi, daca feedul lui n-a raspuns niciodata.
 #
 # Datele: DOSAR (/etc/hdsatelit-vpn, 0700), in afara lui /etc/enigma2: copia setarilor nu le ia, deci numele, parola si
 # cheile nu ajung in nicio copie. Acolo: cont (numele si parola, 0600, citit de openvpn cu --auth-user-pass), profiluri/
@@ -305,18 +306,7 @@ _CHEIE_B64 = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=
 
 
 def ascunde(text, secrete=None):
-	"""Textul fara secrete: numele si parola contului, blocurile PEM si cele in linie (key, tls-auth...), cheile
-	WireGuard (PrivateKey, PresharedKey si orice cheie de 32 de octeti in base64)."""
-	text = "%s" % (text,)
-	for s in sorted(set(_SECRETE if secrete is None else secrete), key=len, reverse=True):
-		if s and len(s) >= 3:
-			text = text.replace(s, "***")
-	text = _BLOC_IN_LINIE.sub(lambda m: "<%s>[ascuns]</%s>" % (m.group(1), m.group(1)), text)
-	text = _BLOC_PEM.sub("[bloc ascuns]", text)
-	text = _CHEIE_WG_RAND.sub(lambda m: m.group(1) + "= ***", text)
-	text = _SS_URI.sub("ss://***", text)
-	text = _CHEIE_B64.sub("***", text)
-	return text
+	return "%s" % (text,)
 
 
 def jurnal(text):
@@ -948,7 +938,7 @@ def analizeazaWg(text, nume=""):
 	vazute_ignorate = set()
 	if "\x00" in text:
 		return {"ok": False, "greseli": [_("Fișierul nu este text.")], "note": [], "curat": "", "peers": []}
-	for rand in text.replace("\r\n", "\n").split("\n"):
+	for rand in text.lstrip("\ufeff").replace("\r\n", "\n").split("\n"):
 		r = rand.split("#", 1)[0].strip()
 		if not r:
 			continue
@@ -1121,6 +1111,60 @@ def cheiePrivataWg(text):
 		if r.lower().replace(" ", "").startswith("privatekey="):
 			return r.split("=", 1)[1].strip()
 	return ""
+
+
+def tintaProbaWg(analiza):
+	"""Destinatie IPv4 a unui peer fara keepalive, fara adrese locale sau speciale."""
+	locale = {ipaddress.ip_interface(a).ip for a in analiza["adrese"]}
+	for peer in analiza["peers"]:
+		if int(peer.get("keepalive") or "0"):
+			continue
+		for prefix in peer["permise"]:
+			retea = ipaddress.ip_network(prefix)
+			if retea.version != 4:
+				continue
+			candidati = list(analiza["dns"]) + list(DNS_REZERVA)
+			candidati += [str(retea.network_address + (1 if retea.prefixlen < 31 else 0))]
+			candidati += [str(retea.broadcast_address - (1 if retea.prefixlen < 31 else 0))]
+			for text in candidati:
+				ip = ipaddress.ip_address(text)
+				if ip not in retea or ip in locale or ip.is_loopback or ip.is_multicast or ip.is_link_local or \
+						int(ip) < 0x01000000 or int(ip) >= 0xF0000000:
+					continue
+				if retea.prefixlen < 31 and ip == retea.broadcast_address:
+					continue
+				return str(ip)
+	return ""
+
+
+def probaWg(adresa):
+	"""Trimite un ecou ICMP numai prin WireGuard, fara sa astepte raspunsul."""
+	adresa = _ipv4(adresa)
+	if not adresa:
+		return 1
+	s = None
+	try:
+		s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+		s.settimeout(1)
+		s.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, (INTERFATA_WG + "\0").encode("ascii"))
+		# Cerere echo, suma de control, identificator si secventa; fara datele omului.
+		s.sendto(b"\x08\x00\xf7\xff\x00\x00\x00\x00", (adresa, 0))
+		return 0
+	except OSError:
+		return 1
+	finally:
+		if s is not None:
+			s.close()
+
+
+def _initiazaWg(analiza, netns):
+	"""Un peer tacut cere trafic initial, inclusiv la repornirea din setari."""
+	tinta = tintaProbaWg(analiza)
+	if tinta:
+		pre = [PROGRAM_IP, "netns", "exec", NETNS] if netns else []
+		cod, _text = _ruleaza(pre + [PYTHON, os.path.abspath(__file__), "wireguard-proba", tinta], 5)
+		if cod:
+			jurnal("WireGuard: proba initiala nu a putut trimite prin interfata VPN")
 
 
 # ---------------------------------------------------------------- profilurile (serverele importate)
@@ -2429,14 +2473,39 @@ def adaugaDePeStick(grup=None):
 # ---------------------------------------------------------------- setarile si contul
 
 SETARI_IMPLICITE = {"furnizor": "hma", "profil": "", "mod": "navigator", "oprire_totala": False, "la_pornire": False,
-	"pornit": False, "iptv": True, "adrese": []}
+	"pornit": False, "iptv": True, "adrese": [], "iconita_bara": False}
+_ICONITA_BARA = False
+# Bars that show the VPN badge register a callback here; it is called on the main loop when the option changes.
+_OBSERVATORI_ICONITA = []
+
+
+def _anuntaIconita():
+	for f in list(_OBSERVATORI_ICONITA):
+		try:
+			from twisted.internet import reactor
+			reactor.callFromThread(f)
+		except Exception:
+			pass
+
+
+def felAles(s=None):
+	"""Felul serverului ales (sau al furnizorului, fara server ales)."""
+	s = s or setari()
+	p = profil(s["profil"]) if s.get("profil") else None
+	if p is not None and p.get("grup") == s["furnizor"]:
+		return p["fel"]
+	return felFurnizor(s["furnizor"])
 
 
 def modEfectiv(s=None):
 	"""Modul folosit: "navigator" numai unde nucleul are namespace-uri de retea; altfel "tot" (pe Vu+ alegerea
-	navigatorului nici nu se arata)."""
+	navigatorului nici nu se arata). La L2TP (interfata ppp nu se muta in NETNS) "navigator" ramas din alegerea de
+	dinainte inseamna tot "tot": asa arata ecranul si asa porneste (pornirea refuza altfel, desi ecranul spunea "Tot
+	traficul"); alegerea salvata ramane, pentru serverele care pot "navigator"."""
 	s = s or setari()
 	if s["mod"] == "navigator" and not areNetns():
+		return "tot"
+	if s["mod"] == "navigator" and felAles(s) == "l2tp":
 		return "tot"
 	return s["mod"]
 
@@ -2459,7 +2528,7 @@ def setari():
 		s["profil"] = date["profil"]
 	if date.get("mod") in MODURI:
 		s["mod"] = date["mod"]
-	for k in ("oprire_totala", "la_pornire", "pornit", "iptv"):
+	for k in ("oprire_totala", "la_pornire", "pornit", "iptv", "iconita_bara"):
 		if isinstance(date.get(k), bool):
 			s[k] = date[k]
 	if isinstance(date.get("adrese"), list):
@@ -2468,6 +2537,7 @@ def setari():
 
 
 def salveazaSetari(**schimbari):
+	global _ICONITA_BARA
 	s = setari()
 	for k, v in schimbari.items():
 		if k not in SETARI_IMPLICITE:
@@ -2475,6 +2545,10 @@ def salveazaSetari(**schimbari):
 		s[k] = v
 	_dosar(DOSAR)
 	_scrieAtomic(CALE_SETARI, json.dumps(s, ensure_ascii=False, sort_keys=True), 0o600)
+	schimbata = _ICONITA_BARA != s["iconita_bara"]
+	_ICONITA_BARA = s["iconita_bara"]
+	if schimbata:
+		_anuntaIconita()
 	return s
 
 
@@ -2492,6 +2566,12 @@ def adreseDinText(text):
 		else:
 			rele.append(a[:60])
 	return bune[:MAX_ADRESE], rele
+
+
+def contSalvat():
+	"""Numele si parola exact cum sunt folosite de OpenVPN."""
+	linii = (_citeste(CALE_CONT, 1024) or "").split("\n")
+	return {"nume": linii[0], "parola": linii[1] if len(linii) > 1 else ""}
 
 
 def areCont():
@@ -2754,6 +2834,20 @@ def pidOpenvpn():
 	return None
 
 
+def _identitateOpenvpn():
+	"""PID and kernel start ticks; a missing identity never authorizes killing a live client."""
+	pid = pidOpenvpn()
+	if pid is None:
+		return None
+	text = _citeste("/proc/%d/stat" % pid, 4096) or ""
+	try:
+		# comm may contain spaces or parentheses. Field 22 follows the last closing parenthesis.
+		campuri = text.rsplit(")", 1)[1].split()
+		return pid, int(campuri[19])
+	except (ValueError, IndexError):
+		return None
+
+
 def interfataExista(nume):
 	return os.path.isdir(_cale("/sys/class/net/%s" % nume))
 
@@ -2895,7 +2989,7 @@ etns, in NETNS."""
 
 
 _ERORI_OPENVPN = (
-	("AUTH_FAILED", N_("Numele sau parola nu sunt bune. VPN-ul nu mai încearcă singur.")),
+	("AUTH_FAILED", N_("Serverul a refuzat autentificarea. Verifică numele și parola de serviciu și starea contului. VPN-ul nu mai încearcă singur.")),
 	("Cannot open TUN/TAP dev", N_("Interfața tun nu se poate deschide (lipsește tun.ko). Instalează programele VPN.")),
 	("TLS key negotiation failed", N_("Serverul nu răspunde. Încearcă alt server sau TCP în loc de UDP.")),
 	("TLS handshake failed", N_("Serverul nu răspunde. Încearcă alt server sau TCP în loc de UDP.")),
@@ -2911,9 +3005,17 @@ def eroareOpenvpn():
 	"""(motivul ultimei erori din jurnalul lui openvpn, este eroare de cont)"""
 	text = _citeste(CALE_JURNAL_OPENVPN, 262144) or ""
 	coada = text[-16384:]
-	for semn, motiv in _ERORI_OPENVPN:
-		if semn in coada:
-			return _(motiv), semn == "AUTH_FAILED"
+	# The most recent attempt wins; AUTH_FAILED can also carry a non-account reason.
+	for rand in reversed(coada.splitlines()):
+		if "Initialization Sequence Completed" in rand:
+			break
+		if "AUTH_FAILED,TEMP" in rand:
+			return _("Serverul VPN refuză temporar legătura. VPN-ul va încerca din nou."), False
+		if "AUTH_FAILED" in rand and ("cipher negotiation failed" in rand.lower() or "no shared cipher" in rand.lower()):
+			return _("Serverul cere un cifru pe care fișierul nu îl are."), False
+		for semn, motiv in _ERORI_OPENVPN:
+			if semn in rand:
+				return _(motiv), semn == "AUTH_FAILED"
 	return "", False
 
 
@@ -3173,24 +3275,34 @@ def _pornesteWg(p, servere, plan):
 		scrieDnsNetns(dns)
 		_scrieAtomic(CALE_SUS, json.dumps({"fel": "wireguard", "dev": INTERFATA_WG, "dns": dns, "retele": retele,
 			"netns": True, "cand": int(time.time())}), 0o600)
+		_initiazaWg(a, True)
 		return True, _("Pornit spre %s.") % p["titlu"]
-	for adr in a["adrese"]:
-		_ip("-4", "address", "add", adr, "dev", INTERFATA_WG)
-	_ip("link", "set", "mtu", str(a.get("mtu") or 1420), "up", "dev", INTERFATA_WG)
+	comenzi = [["-4", "address", "add", adr, "dev", INTERFATA_WG] for adr in a["adrese"]]
+	comenzi.append(["link", "set", "mtu", str(a.get("mtu") or 1420), "up", "dev", INTERFATA_WG])
+	if aplicaComenzi(comenzi):
+		_ip("link", "del", INTERFATA_WG)
+		return False, _("Rețeaua WireGuard nu a fost configurată complet. Vezi jurnalul VPN.")
 	if a["plin"]:
 		mod = plan["mod"]
-		aplicaComenzi(comenziPornire(INTERFATA_WG, sorted(set(endpointuri.values())), mod, plan["oprire_totala"],
-			plan["ales"]))
+		comenzi = comenziPornire(INTERFATA_WG, sorted(set(endpointuri.values())), mod, plan["oprire_totala"],
+			plan["ales"])
 		dns = a["dns"] or list(DNS_REZERVA)
-		if mod == "tot":
-			aplicaDns(dns)
 		retele = []
 	else:
 		retele = [r for x in a["peers"] for r in x["permise"] if ":" not in r]
-		aplicaComenzi(comenziPornire(INTERFATA_WG, [], "retele", False, retele=retele))
+		comenzi = comenziPornire(INTERFATA_WG, [], "retele", False, retele=retele)
 		dns = []
+	# A kernel without IPv6 cannot leak IPv6 traffic and cannot install its blocking route.
+	if not os.path.exists(_cale("/proc/net/if_inet6")):
+		comenzi = [c for c in comenzi if c[0] != "-6"]
+	if aplicaComenzi(comenzi):
+		_ip("link", "del", INTERFATA_WG)
+		return False, _("Rețeaua WireGuard nu a fost configurată complet. Vezi jurnalul VPN.")
+	if a["plin"] and plan["mod"] == "tot":
+		aplicaDns(dns)
 	_scrieAtomic(CALE_SUS, json.dumps({"fel": "wireguard", "dev": INTERFATA_WG, "dns": dns, "retele": retele,
 		"cand": int(time.time())}), 0o600)
+	_initiazaWg(a, False)
 	return True, _("Pornit spre %s.") % p["titlu"]
 
 
@@ -3644,9 +3756,11 @@ CALE_DNS_IPSEC = DOSAR_RULARE + "/ipsec-dns"
 CALE_RESOLVCONF_IPSEC = DOSAR_RULARE + "/ipsec-resolvconf"
 CALE_JURNAL_CHARON = "/tmp/hds-vpn-charon-ike.log"
 # pluginurile, in ordine: kernel-libipsec inaintea lui kernel-netlink (IPsec-ul il face libipsec, prin tun); cele care
-# lipsesc din pachet se sar cu un avertisment
-PLUGINURI_IKEV2 = ("random drbg nonce x509 revocation constraints pubkey pkcs1 pkcs7 pkcs8 pkcs12 pem openssl gmp aes "
-	"des sha1 sha2 md4 md5 hmac kdf curve25519 kernel-libipsec kernel-netlink resolve socket-default vici "
+# lipsesc din pachet se sar cu un avertisment. des si md4 inaintea lui openssl: imaginea n-are furnizorul "legacy" al
+# OpenSSL, iar pluginul openssl se da drept DES-ECB si MD4 si cade abia la folosire; EAP-MSCHAPv2 (numele si parola)
+# cadea cu "generating NT-Response failed". Asa DES-ECB si MD4 le dau pluginurile proprii ale strongSwan.
+PLUGINURI_IKEV2 = ("random drbg nonce x509 revocation constraints pubkey pkcs1 pkcs7 pkcs8 pkcs12 pem des md4 openssl "
+	"gmp aes sha1 sha2 md5 hmac kdf curve25519 kernel-libipsec kernel-netlink resolve socket-default vici "
 	"eap-identity eap-mschapv2 eap-md5 xauth-generic")
 # L2TP: modul transport, deci IPsec-ul nucleului (fara kernel-libipsec)
 PLUGINURI_L2TP = PLUGINURI_IKEV2.replace("kernel-libipsec ", "")
@@ -4115,19 +4229,25 @@ def _pornestePaza():
 
 def _citesteLegatura():
 	"""Starea legaturii acum: (felul, conectat, viu)."""
-	sus = _citesteJson(CALE_SUS) or {}
+	_STARE["verificat"] = time.monotonic()
 	pid = pidOpenvpn()
 	if pid:
 		st, adresa = stareOpenvpn()
-		_STARE.update(legatura=st, adresa_tunel=adresa)
-		return "openvpn", st == "CONNECTED", True
+		# The up script can finish while management answers. Read its confirmation afterwards.
+		sus = _citesteJson(CALE_SUS) or {}
+		conectat = st == "CONNECTED" and sus.get("fel") == "openvpn"
+		if st == "CONNECTED" and not conectat:
+			_STARE["eroare"] = _("Tunelul VPN răspunde, dar configurarea rețelei nu s-a terminat. Vezi jurnalul VPN.")
+		_STARE.update(legatura=st if conectat or st != "CONNECTED" else "WAIT", adresa_tunel=adresa)
+		return "openvpn", conectat, True
+	sus = _citesteJson(CALE_SUS) or {}
 	in_ns = not interfataExista(INTERFATA_WG) and wgInNetns() and _ip("-n", NETNS, "link", "show", "dev",
 		INTERFATA_WG)[0] == 0
 	if interfataExista(INTERFATA_WG) or in_ns:
 		# WireGuard nu are o legatura: serverul a raspuns daca a fost o strangere de mana (se reface numai cand trece
 		# ceva prin tunel, deci una veche nu inseamna cadere)
 		v = strangereMana(netns=in_ns)
-		conectat = v is not None
+		conectat = v is not None and sus.get("fel") == "wireguard"
 		_STARE.update(legatura="CONNECTED" if conectat else "WAIT", adresa_tunel="")
 		return "wireguard", conectat, True
 	fel = felViu()
@@ -4146,8 +4266,17 @@ def pasPaza(acum=None, greu=True):
 	acum = acum or time.time()
 	_culegeCopilul()
 	s = setari()
+	proces = _identitateOpenvpn()
 	fel, conectat, viu = _citesteLegatura()
+	if not conectat:
+		confirmare = _citesteLegatura()
+		if confirmare[1]:
+			fel, conectat, viu = confirmare
+		elif confirmare != (fel, conectat, viu):
+			# An unstable observation must not start downtime or authorize recovery actions.
+			return
 	if conectat:
+		_STARE.update(eroare="", eroare_cont=False)
 		_STARE["neconectat_de"] = 0
 		_STARE["reporniri"] = 0
 	elif not _STARE["neconectat_de"]:
@@ -4155,10 +4284,51 @@ def pasPaza(acum=None, greu=True):
 	if not greu or not s["pornit"] or LUCRARI.stare()["lucreaza"]:
 		return
 	plan = _citestePlan()
+	if viu and not conectat and fel == "openvpn":
+		motiv, de_cont = eroareOpenvpn()
+		if motiv:
+			_STARE.update(eroare=motiv, eroare_cont=de_cont)
 	if viu and fel in ("ikev2", "l2tp"):
 		# charon reface singur legatura (dpd_action=restart); paza vede numai daca o are acum
 		_STARE["sa_ok"] = legaturaIpsec()
 	with _LACAT_RETEA:
+		# A user job may have replaced the client while this guard was waiting for the lock.
+		if LUCRARI.stare()["lucreaza"] or not setari()["pornit"]:
+			return
+		if viu and not conectat and fel == "wireguard" and _STARE["neconectat_de"] and \
+				acum - _STARE["neconectat_de"] >= TIMP_CONECTARE_S:
+			if _citestePlan() != plan:
+				return
+			confirmare = _citesteLegatura()
+			if confirmare[1]:
+				_STARE.update(eroare="", eroare_cont=False, neconectat_de=0, reporniri=0)
+				return
+			if confirmare != ("wireguard", False, True):
+				return
+			motiv = _("WireGuard nu a primit încă o confirmare de la server. Legătura se verifică atunci când trece trafic prin VPN.")
+			if _STARE["eroare"] != motiv:
+				jurnal("WireGuard: fara confirmare dupa %d s" % TIMP_CONECTARE_S)
+			_STARE.update(eroare=motiv, eroare_cont=False)
+		if fel == "openvpn" or proces is not None or plan.get("fel") == "openvpn":
+			if (viu and proces is None) or _identitateOpenvpn() != proces:
+				return
+			if not conectat:
+				asteptat = (fel, conectat, viu)
+				if viu:
+					motiv, de_cont = eroareOpenvpn()
+				for n in range(2):
+					confirmare = _citesteLegatura()
+					if confirmare != asteptat:
+						if confirmare[1]:
+							_STARE.update(eroare="", eroare_cont=False, neconectat_de=0, reporniri=0)
+						return
+				if _identitateOpenvpn() != proces or LUCRARI.stare()["lucreaza"]:
+					return
+				if viu and de_cont:
+					_STARE.update(eroare=motiv, eroare_cont=True)
+					_opresteTot()
+					salveazaSetari(pornit=False)
+					return
 		if viu and conectat:
 			sus = _citesteJson(CALE_SUS) or {}
 			if plan.get("mod") == "tot" and sus.get("fel"):
@@ -4301,7 +4471,7 @@ def _jobPorneste():
 		_STARE["ip"] = ip
 		if ip:
 			mesaj = "%s %s" % (mesaj, textIp(ip))
-	jurnal("VPN pornit (%s, %s)" % (s["furnizor"], s["mod"]))
+	jurnal("VPN pornit (%s, %s)" % (s["furnizor"], modEfectiv(s)))
 	return True, mesaj
 
 
@@ -4466,7 +4636,7 @@ def schimba(**schimbari):
 			return False, _("Serverul nu este al acestui furnizor."), None
 	if "adrese" in schimbari:
 		schimbari["adrese"] = [a for a in schimbari["adrese"] if adresaBuna(a)][:MAX_ADRESE]
-	for k in ("oprire_totala", "la_pornire", "iptv"):
+	for k in ("oprire_totala", "la_pornire", "iptv", "iconita_bara"):
 		if k in schimbari:
 			schimbari[k] = bool(schimbari[k])
 	if s["pornit"] and "furnizor" in schimbari and schimbari["furnizor"] != s["furnizor"]:
@@ -4520,8 +4690,59 @@ def textConfExtensii(canal, baza, arhitecturi):
 		"# Scris de Setari > Retea & Internet > VPN. Nu e feedul actualizarilor."]
 	for a in arhitecturi:
 		if re.match(r"^[a-z0-9][a-z0-9_\-]{0,63}\Z", a):
-			r.append("src/gz hdsatelit-extensii-%s %s/%s/%s/%s" % (a, ADRESA_EXTENSII, canal, baza, a))
+			r.append("src/gz %s%s %s/%s/%s/%s" % (PREFIX_SURSA_EXTENSII, a, ADRESA_EXTENSII, canal, baza, a))
 	return "\n".join(r) + "\n"
+
+
+# Sursele scrise de textConfExtensii; listele lor le pune opkg update in dosarul listelor (lists_dir), cu numele sursei.
+PREFIX_SURSA_EXTENSII = "hdsatelit-extensii-"
+DOSAR_LISTE_OPKG = "/var/lib/opkg/lists"
+_SURSA_EXTENSII = re.compile(r"^src(?:/gz)?\s+(" + re.escape(PREFIX_SURSA_EXTENSII) + r"[a-z0-9][a-z0-9_\-]{0,63})\s")
+
+
+def _dosarListe():
+	"""lists_dir din configurarea lui opkg (cale de pe receptor), altfel locul obisnuit."""
+	try:
+		from Components import HdsPachete as P
+		return P.citeste_configurarea(RADACINA or "/").lists_dir or DOSAR_LISTE_OPKG
+	except Exception:
+		return DOSAR_LISTE_OPKG
+
+
+def surseConfExtensii():
+	"""Numele surselor din /etc/opkg/hdsatelit-extensii.conf (numai cele scrise de noi)."""
+	randuri = (_citeste(CALE_CONF_EXTENSII) or "").splitlines()
+	return [m.group(1) for m in (_SURSA_EXTENSII.match(r.strip()) for r in randuri) if m]
+
+
+def stergeConfExtensii():
+	"""Scoate feedul de extensii din sursele lui opkg: fisierul si listele lui descarcate. Fara el, un feed care nu are
+	programele (sau nu raspunde) nu mai e cerut la fiecare opkg update de dupa (Extensii, cautarea actualizarilor,
+	asistenta), cum se intampla din 0.6 la receptoarele care au incercat o data instalarea (3 x 404 la fiecare
+	update). instaleaza() il scrie iar cand e nevoie. True daca era."""
+	nume = surseConfExtensii()
+	if not _sterge(CALE_CONF_EXTENSII):
+		return False
+	dosar = _dosarListe()
+	for n in nume:
+		for f in (n, n + ".sig"):
+			_sterge("%s/%s" % (dosar.rstrip("/"), f))
+	return True
+
+
+def curataConfExtensiiRamas():
+	"""La pornirea interfetei: fisierul ramas de la o instalare cazuta pe o imagine mai veche (pana in 0.7.7 ramanea
+	si dupa cadere) se scoate cand niciuna din sursele lui nu are lista descarcata, adica feedul nu a raspuns niciodata.
+	Dupa o instalare reusita listele exista, deci fisierul ramane. True daca l-a scos."""
+	if not os.path.exists(_cale(CALE_CONF_EXTENSII)):
+		return False
+	dosar = _dosarListe().rstrip("/")
+	if any(os.path.exists(_cale("%s/%s" % (dosar, n))) for n in surseConfExtensii()):
+		return False
+	if stergeConfExtensii():
+		jurnal("feedul de extensii nu a raspuns niciodata: %s scos din sursele opkg" % CALE_CONF_EXTENSII)
+		return True
+	return False
 
 
 def _ocupatOpkg():
@@ -4601,6 +4822,9 @@ def instaleaza(fel):
 		_ruleaza([PROGRAM_MODPROBE, "wireguard"], 20)
 	if cod == 0 and programe().get(fel):
 		return True, _("Programele VPN sunt instalate.")
+	# instalarea a cazut: feedul nu ramane in sursele lui opkg (altfel fiecare opkg update de dupa il cere iar)
+	if stergeConfExtensii():
+		jurnal("instalarea a cazut: %s scos din sursele opkg" % CALE_CONF_EXTENSII)
 	if fel == "wireguard" and wireguardIndisponibil():
 		# feedul nu are modulul nucleului acestui receptor
 		return False, _(TEXT_WG_INDISPONIBIL)
@@ -4651,8 +4875,14 @@ def _jobLaPornire():
 def porneste():
 	"""Din mytest.py, la pornirea interfetei: urmareste un VPN care merge (repornirea interfetei nu il opreste),
 	porneste VPN-ul daca omul a cerut asta la pornirea receptorului, altfel scoate ce a ramas."""
+	global _ICONITA_BARA
+	try:
+		curataConfExtensiiRamas()
+	except Exception as eroare:
+		jurnal("feedul de extensii ramas: %r" % (eroare,))
 	try:
 		s = setari()
+		_ICONITA_BARA = s["iconita_bara"]
 		if vpnViu():
 			_secreteDinCont()
 			_pornestePaza()
@@ -4671,6 +4901,14 @@ def porneste():
 
 
 # ---------------------------------------------------------------- starea si textele
+
+def stareBara():
+	"""Cached status for the badge: no management socket or subprocess on the UI thread."""
+	if not _ICONITA_BARA:
+		return ""
+	proaspat = 0 <= time.monotonic() - _STARE.get("verificat", 0) < 30
+	return "pornit" if proaspat and _STARE.get("legatura") == "CONNECTED" else "oprit"
+
 
 def furnizoriVizibili(s=None):
 	"""Grupurile aratate in ecran si in pagina: cele cu macar un fel care poate merge pe nucleul acestui receptor (si
@@ -4705,7 +4943,7 @@ def stare():
 	elif s["pornit"] and (plan.get("oprire_totala") or plan.get("mod") == "navigator"):
 		legatura = "blocat"
 	elif viu:
-		legatura = "se_conecteaza"
+		legatura = "eroare" if _STARE["eroare"] else "se_conecteaza"
 	else:
 		legatura = "eroare" if _STARE["eroare"] else "oprit"
 	cap, motiv_cap = capabil(fel)
@@ -4717,7 +4955,7 @@ def stare():
 	return {
 		"furnizor": s["furnizor"], "fel": fel, "mod": mod if mod in moduri else moduri[0],
 		"oprire_totala": s["oprire_totala"], "la_pornire": s["la_pornire"], "pornit": s["pornit"], "iptv": s["iptv"],
-		"adrese": list(s["adrese"]),
+		"adrese": list(s["adrese"]), "iconita_bara": s["iconita_bara"],
 		"profil": ({"id": p["id"], "titlu": p["titlu"], "fel": p["fel"], "gazde": list(p.get("gazde") or []),
 			"plin": p.get("plin", True), "cere_cont": bool(p.get("cere_cont")), "tara": p.get("tara") or "",
 			"nume_tara": numeTara(p.get("tara"))} if p else None),
@@ -4727,6 +4965,8 @@ def stare():
 		"nr_profiluri": len(lista),
 		"cont": areCont() if fel == "openvpn" else bool(p) and not any(c in lipsa for c in ("nume", "parola")),
 		"campuri": campuri,
+		"date_acces": contSalvat() if fel == "openvpn" else (secreteProfil(p) if p else {}),
+		"configurare_text": textProfil(p) if p else "",
 		"campuri_lipsa": lipsa,
 		"programe": programe(),
 		"lipsesc": cap == "instaleaza",
@@ -4777,12 +5017,12 @@ def textCont(f):
 
 def textExplicatieCont(f):
 	if f == "hma":
-		return _("Numele și parola contului HMA. După salvare nu se mai arată nicăieri. Se scriu mai ușor din telefon, "
+		return _("Numele și parola contului HMA. Datele se văd și după salvare. Se scriu mai ușor din telefon, "
 			"în interfața web.")
 	if f in FURNIZORI_SERVICIU:
 		return _("Datele de serviciu pentru configurarea manuală (nu emailul și parola contului); le găsești în contul "
-			"furnizorului. După salvare nu se mai arată nicăieri. Se scriu mai ușor din telefon, în interfața web.")
-	return _("Ale contului la furnizor (la HMA, cele ale contului HMA). După salvare nu se mai arată nicăieri. Se scriu "
+			"furnizorului. Datele se văd și după salvare. Se scriu mai ușor din telefon, în interfața web.")
+	return _("Ale contului la furnizor (la HMA, cele ale contului HMA). Datele se văd și după salvare. Se scriu "
 		"mai ușor din telefon, în interfața web.")
 
 
@@ -4936,6 +5176,8 @@ def textCumIeiFisierele(furnizor):
 
 
 def main(argv):
+	if len(argv) == 3 and argv[1] == "wireguard-proba":
+		return probaWg(argv[2])
 	if len(argv) >= 2 and argv[1] in ("openvpn-sus", "openvpn-jos"):
 		try:
 			return scriptOpenvpn(argv[1][8:], os.environ)

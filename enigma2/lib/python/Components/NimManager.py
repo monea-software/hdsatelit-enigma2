@@ -23,6 +23,49 @@ from Tools import Directories
 from Tools.Unicable import readUnicableProducts
 
 
+def hdsAlegeriTunerPreferat(nimmgr):
+	"""Sloturile cu sisteme de receptie acceptate, fara presupuneri dupa litere."""
+	choices = [("-1", _("Automată"))]
+	for slot in nimmgr.nim_slots:
+		if not slot.empty and slot.isSupported() and any(slot.isCompatible(t) for t in ("DVB-S", "DVB-C", "DVB-T")):
+			choices.append((str(slot.slot), slot.friendly_full_description))
+	return choices
+
+
+def hdsConfigTunerPreferat(nimmgr):
+	"""Pastreaza vizibila preferinta disparuta, fara schimbare sau scriere."""
+	choices = hdsAlegeriTunerPreferat(nimmgr)
+	if "usage" not in config.content.items:
+		config.usage = ConfigSubsection()
+	if "frontend_priority" in config.usage.content.items:
+		element = config.usage.frontend_priority
+		value = element.value
+	else:
+		element = None
+		value = config.usage.content.stored_values.get("frontend_priority", "-1")
+	if value not in [c[0] for c in choices]:
+		choices.append((value, _("Slot %s (indisponibil)") % value))
+	if element is None:
+		config.usage.frontend_priority = ConfigSelection(choices=choices, default="-1")
+		element = config.usage.frontend_priority
+	else:
+		element.setChoices(choices, default="-1")
+	return element
+
+
+def hdsAplicaTunerPreferat():
+	"""Aplica numai alegerea confirmata; pluginurile nu schimba valoarea salvata."""
+	element = config.usage.frontend_priority
+	value = element.default if element.saved_value is None else element.saved_value
+	manager = eDVBResourceManager.getInstance()
+	setter = getattr(manager, "setPreferredTuner", None)
+	if setter is not None:
+		try:
+			setter(int(value))
+		except (TypeError, ValueError, OverflowError):
+			setter(-1)
+
+
 def getUnicableConfig(section):
 	if section.unicable.value == "unicable_user":
 		return (section.satcrformat, section.satcruser,
@@ -391,6 +434,7 @@ class SecConfigure:
 			eDVBResourceManager.getInstance().setFrontendSlotInformations(used_nim_slots)
 		except Exception as e:
 			print("[NimManager] %s" % e)
+		hdsTrimiteTipuriAlese(nim_slots)
 
 		for slot in nim_slots:
 			x = slot.slot
@@ -422,6 +466,8 @@ class SecConfigure:
 			hw = HardwareInfo()
 			if slot.isCompatible("DVB-S"):
 				print("slot: " + str(x) + " configmode: " + str(nim.configMode.value))
+				if slot.isFBCLink() and nim.configMode.value == "advanced" and hdsEroareFbc(self.NimManager, x):
+					continue
 				if nim.configMode.value in ( "loopthrough", "satposdepends", "nothing" ):
 					pass
 				else:
@@ -565,6 +611,10 @@ class SecConfigure:
 					sec.setLNBLOFL(5150000)
 					sec.setLNBLOFH(5150000)
 					sec.setLNBThreshold(5150000)
+				elif currLnb.lof.value == "c_band_5750":
+					sec.setLNBLOFL(5750000)
+					sec.setLNBLOFH(5750000)
+					sec.setLNBThreshold(5750000)
 				elif currLnb.lof.value == "user_defined":
 					sec.setLNBLOFL(currLnb.lofl.value * 1000)
 					sec.setLNBLOFH(currLnb.lofh.value * 1000)
@@ -790,6 +840,159 @@ def hdsLegaturaImplicita(nimmgr, slot):
 	except Exception as e:
 		print("[NimManager] legatura implicita %s: %s" % (getattr(slot, "slot", "?"), e))
 	return None
+
+
+def hdsTinteleFbc(manager, slotid):
+	"""Physical inputs in the same FBC group, identified by driver capabilities."""
+	slot = manager.nim_slots[slotid]
+	if not slot.isFBCLink():
+		return []
+	return [n.slot for n in manager.nim_slots if n.isFBCRoot()
+		and n.fbc_set_id == slot.fbc_set_id and n.isCompatible("DVB-S")
+		and (slot.fbc_set_id is not None or (n.description or "").strip().lower() == (slot.description or "").strip().lower())]
+
+
+def hdsAlegeriModTuner(manager, slotid):
+	"""Shared TV/web choices. Advanced on a linked demodulator requires SCR."""
+	slot = manager.nim_slots[slotid]
+	if slot.isFBCLink():
+		choices = {"nothing": _("not configured"), "advanced": _("Avansat (numai Unicable / JESS)")}
+		if hdsTinteleFbc(manager, slotid):
+			choices["equal"] = _("equal to")
+			choices["loopthrough"] = _("loopthrough to")
+		return choices
+	choices = {"nothing": _("not configured"), "simple": _("simple"), "advanced": _("advanced")}
+	for mode, targets, text in (("equal", manager.canEqualTo, _("equal to")),
+			("satposdepends", manager.canDependOn, _("second cable of motorized LNB")),
+			("loopthrough", manager.canConnectTo, _("loopthrough to"))):
+		if targets(slotid):
+			choices[mode] = text
+	return choices
+
+
+def hdsPastreazaAlegerea(element, choices):
+	"""Keep a legacy invalid value visible without changing or saving it."""
+	choices = dict(choices)
+	if element.value not in choices:
+		choices[element.value] = _("Configurație incompatibilă: %s") % element.value
+	element.setChoices(choices, default=element.default)
+	element._descr = None
+
+
+def hdsEroareFbc(manager, slotid):
+	"""Validate active settings only; never migrate the user's stored values."""
+	slot = manager.nim_slots[slotid]
+	if not slot.isFBCLink() or not slot.isCompatible("DVB-S"):
+		return ""
+	cfg = slot.config
+	mode = cfg.configMode.value
+	if mode == "nothing":
+		return ""
+	if mode in ("equal", "loopthrough"):
+		if cfg.connectedTo.value in [str(n) for n in hdsTinteleFbc(manager, slotid)]:
+			return ""
+		return _("Alege o intrare cu mufă din același grup FBC.")
+	if mode != "advanced":
+		return _("Acest demodulator FBC nu are mufă. Leagă-l la o intrare cu mufă sau folosește modul avansat cu Unicable / JESS.")
+	try:
+		active = {sat[0] for sat in manager.satList} | set(range(3601, 3605))
+		used = {int(s.lnb.value) for pos, s in cfg.advanced.sat.items() if pos in active and int(s.lnb.value)}
+		if not used or any(cfg.advanced.lnb[n].lof.value != "unicable" for n in used):
+			return _("Pe un demodulator FBC fără mufă, modul avansat cere Unicable / JESS la fiecare LNB folosit.")
+		if any(cfg.advanced.lnb[n].diseqcMode.value == "1_2" for n in used):
+			return _("Motorul se configurează pe intrarea FBC cu mufă. Demodulatorul legat nu trimite comenzi de motor.")
+		if (getattr(cfg.advanced, "unicableconnected", None) is not None
+				and cfg.advanced.unicableconnected.value
+				and cfg.advanced.unicableconnectedTo.value not in [str(n) for n in hdsTinteleFbc(manager, slotid)]):
+			return _("Alege o intrare cu mufă din același grup FBC.")
+	except (AttributeError, KeyError, TypeError, ValueError):
+		return _("Configurația avansată FBC este incompletă. Alege LNB-ul Unicable / JESS.")
+	return ""
+
+
+HDS_MODURI_SATELIT = ("simple", "advanced", "equal", "satposdepends", "loopthrough")  # configMode de satelit
+HDS_MASCA_TIP = {"DVB-S": 1, "DVB-S2": 1, "DVB-C": 2, "DVB-T": 4, "DVB-C/T": 6}  # 1 << feSatellite/feCable/feTerrestrial
+
+
+def hdsTrimiteTipuriAlese(nim_slots):
+	"""DMV6: the C++ side only knows what the kernel can do (DTV_ENUM_DELSYS), so on a multi-system tuner without
+	/proc/stb/frontend/N/mode (Dreambox DM900/DM920/DM7080, Si2169C/D) a terrestrial channel went to the first tuner, even
+	the one set up for satellite. Tell it the type of each such tuner (the person's choice or the driver type, the same
+	one the tuner setup and the scan use); every other tuner gets -1, the old choice. When no such tuner is set for cable
+	or terrestrial, every tuner gets -1 too: an untouched receiver keeps playing cable/terrestrial channels as before.
+	The enigma.py of an older image (a test package replaces only the binary) lacks the method: then it is taken from the
+	binary module itself; an older binary without it is left as it was."""
+	manager = eDVBResourceManager.getInstance()
+	trimite = getattr(manager, "setHdsTipuriAlese", None)
+	if trimite is None:
+		try:
+			import _enigma
+			for nume in ("eDVBResourceManager_setHdsTipuriAlese", "eDVBResourceManagerPtr_setHdsTipuriAlese"):
+				functie = getattr(_enigma, nume, None)
+				if functie is not None:
+					trimite = lambda slot, masca, _f=functie: _f(manager, slot, masca)
+					break
+		except Exception as e:
+			print("[NimManager] tipurile tunerelor: %r" % (e,))
+	if trimite is None:
+		return
+	masti = {}
+	for slot in nim_slots:
+		masca = -1
+		try:
+			if getattr(slot.config.multiType, "hds_dinamic", False):
+				masca = HDS_MASCA_TIP.get(slot.getType(), -1)
+		except (AttributeError, KeyError, IndexError):
+			pass
+		masti[slot.slot] = masca
+	if not any(m > 0 and m & 6 for m in masti.values()):
+		masti = dict((slot, -1) for slot in masti)
+	print("[NimManager] tipurile tunerelor: %s" % masti)
+	for slot, masca in sorted(masti.items()):
+		try:
+			trimite(slot, masca)
+		except Exception as e:
+			print("[NimManager] tipurile tunerului %s: %r" % (slot, e))
+
+
+def hdsTipSalvatDeOm(manager, slotid):
+	"""Called only by an explicit save (TV Satconfig.keySave, web tuner save), never by a change or a cancel: on a
+	tuner without /proc/stb/frontend/N/mode the default follows the driver, so the saved choice is written even when it
+	equals the current default. Returns the previous save_forced, for a rollback; None when nothing applies."""
+	try:
+		slot = manager.nim_slots[slotid]
+		if not slot.isMultiType():
+			return None
+		element = slot.config.multiType
+	except (AttributeError, KeyError, IndexError):
+		return None
+	if not getattr(element, "hds_dinamic", False):
+		return None
+	vechi = element.save_forced
+	element.save_forced = True
+	return vechi
+
+
+def hdsAplicaTipTuner(manager, slotid, valoare):
+	"""Use the same notifier and configuration rebuild for TV and web."""
+	slot = manager.nim_slots[slotid]
+	if not slot.isMultiType() or valoare not in slot.config.multiType.choices:
+		raise ValueError(_("Tip de tuner necunoscut."))
+	element = slot.config.multiType
+	old = element.value
+	# Materialize saved settings before InitNimManager replaces their elements.
+	config.Nims.saved_value
+	try:
+		if old != valoare:
+			element.value = valoare
+		InitNimManager(manager)
+	except Exception:
+		try:
+			element.value = old
+			InitNimManager(manager)
+		except Exception:
+			raise RuntimeError(_("Tipul tunerului nu s-a putut restabili. Verifică setările tunerului."))
+		raise
 
 
 class NIM(object):
@@ -1749,6 +1952,7 @@ def InitNimManager(nimmgr):
 		"universal_lnb": _("Universal LNB"),
 		"unicable": _("Unicable"),
 		"c_band": _("C-Band"),
+		"c_band_5750": _("Banda C (5750)"),
 		"user_defined": _("User defined")}
 
 	lnb_choices_default = "universal_lnb"
@@ -1868,6 +2072,9 @@ def InitNimManager(nimmgr):
 		lnbs = nim.advanced.lnb
 		if lnb and lnb not in lnbs:
 			section = lnbs[lnb] = ConfigSubsection()
+			# New linked-FBC LNBs start with SCR. Stored configurations retain every value.
+			fresh_fbc = (nimmgr.nim_slots[x].isFBCLink() and not section.content.stored_values
+				and configElement.saved_value != str(lnb))
 			section.lofl = ConfigInteger(default=9750, limits = (0, 99999))
 			section.lofh = ConfigInteger(default=10600, limits = (0, 99999))
 			section.threshold = ConfigInteger(default=11700, limits = (0, 99999))
@@ -1875,14 +2082,15 @@ def InitNimManager(nimmgr):
 			section.increased_voltage = ConfigYesNo(False)
 			section.toneburst = ConfigSelection(advanced_lnb_toneburst_choices, "none")
 			section.longitude = ConfigNothing()
-			if lnb > 32:
+			if lnb > 32 and not nimmgr.nim_slots[x].isFBCLink():
 				tmp = ConfigSelection(advanced_lnb_allsat_diseqcmode_choices, "1_2")
 				tmp.section = section
 				configDiSEqCModeChanged(tmp)
 			else:
-				tmp = ConfigSelection(advanced_lnb_diseqcmode_choices, "none")
+				tmp = ConfigSelection(advanced_lnb_diseqcmode_choices, "1_2" if lnb > 32 and not fresh_fbc else "none")
 				tmp.section = section
 				tmp.addNotifier(configDiSEqCModeChanged)
+			tmp.save_forced = fresh_fbc and lnb > 32
 			section.diseqcMode = tmp
 			section.commitedDiseqcCommand = ConfigSelection(advanced_lnb_csw_choices)
 			section.fastDiseqc = ConfigYesNo(False)
@@ -1893,11 +2101,14 @@ def InitNimManager(nimmgr):
 			section.diseqcRepeats = ConfigSelection(advanced_lnb_diseqc_repeat_choices, "none")
 			section.prio = ConfigSelection(prio_list, "-1")
 			section.unicable = ConfigNothing()
-			tmp = ConfigSelection(lnb_choices, lnb_choices_default)
+			tmp = ConfigSelection(lnb_choices, "unicable" if fresh_fbc else lnb_choices_default)
+			tmp.save_forced = fresh_fbc
 			tmp.slot_id = x
 			tmp.lnb_id = lnb
 			tmp.addNotifier(configLOFChanged, initial_call = False)
 			section.lof = tmp
+			if fresh_fbc:
+				configLOFChanged(tmp)
 
 	def hdsSatAvansat(slot_id):
 		"""intrarea unui satelit in setarile avansate ale tunerului `slot_id` (aceeasi la crearea setarilor avansate si la
@@ -1989,14 +2200,30 @@ def InitNimManager(nimmgr):
 			except:
 				print("[info] no /sys/module/dvb_core/parameters/dvb_shutdown_timeout available")
 
-			frontend = eDVBResourceManager.getInstance().allocateRawChannel(fe_id).getFrontend()
-			frontend.closeFrontend()
-			open("/proc/stb/frontend/%d/mode" % (fe_id), "w").write(configElement.value)
-			frontend.reopenFrontend()
 			try:
-				open("/sys/module/dvb_core/parameters/dvb_shutdown_timeout", "w").write(oldvalue)
-			except:
-				print("[info] no /sys/module/dvb_core/parameters/dvb_shutdown_timeout available")
+				channel = eDVBResourceManager.getInstance().allocateRawChannel(fe_id)
+				frontend = channel.getFrontend() if channel is not None else None
+				if frontend is None:
+					raise RuntimeError(_("Tunerul este ocupat. Încearcă după oprirea înregistrării sau a redării."))
+				frontend.closeFrontend()
+				try:
+					with open(mode_file, "w") as f:
+						f.write(configElement.value)
+					frontend.reopenFrontend()
+				except Exception:
+					try:
+						with open(mode_file, "w") as f:
+							f.write(str(cur_type))
+					finally:
+						frontend.reopenFrontend()
+					raise
+			finally:
+				if "oldvalue" in locals():
+					try:
+						with open("/sys/module/dvb_core/parameters/dvb_shutdown_timeout", "w") as f:
+							f.write(oldvalue)
+					except OSError:
+						print("[info] optional DVB shutdown timeout could not be restored")
 			nimmgr.enumerateNIMs()
 		else:
 			print("tuner type is already already %d" %cur_type)
@@ -2015,11 +2242,43 @@ def InitNimManager(nimmgr):
 			for id in [*slot.getMultiTypeList().keys()]:
 				type = slot.getMultiTypeList()[id]
 				typeList.append((id, type))
-			nim.multiType = ConfigSelection(typeList, "0")
-			
+			# HDSatelit: tunerele cu mai multe sisteme fara /proc/stb/frontend/N/mode (Dreambox DM920/DM900/DM7080 cu
+			# Si2169C/D: DVB-C si DVB-T2 pe acelasi frontend, ales de nucleu dupa canal) nu au un mod de scris; "Type:" din
+			# nim_sockets e numai sistemul folosit ultima data (la pornire DVB-C pe DM920, AS78). Alegerea din Setari tuner
+			# da tipul tunerului, iar implicitul e tipul spus acum de driver, deci un tuner neatins de om ramane exact
+			# cum era. O alegere scrisa deja ramane scrisa (save_forced): implicitul se muta cu driverul, iar o valoare
+			# egala cu el s-ar sterge din settings la prima salvare. Placile cu fisierul mode raman neschimbate.
+			from os import path
+			dinamic = not path.exists("/proc/stb/frontend/%d/mode" % (x - empty_slots))
+			implicit = "0"
+			if dinamic:
+				implicit = next((id for id, tip in typeList if tip == slot.type), None)
+				dinamic = implicit is not None
+				implicit = implicit or "0"
+				# DMV6: "Type:" e sistemul folosit ultima data, deci se poate muta singur (DM900, AS106: tunerul A cu
+				# satelitul pus in Setari a pornit odata ca DVB-T si si-a pierdut satelitul). Un tuner neatins de om, cu o
+				# configurare de satelit salvata, ramane pe satelit; fara ea, tot dupa driver, ca pana acum.
+				if (dinamic and "multiType" not in nim.content.stored_values
+						and nim.content.stored_values.get("configMode") in HDS_MODURI_SATELIT):
+					implicit = next((id for id, tip in typeList if tip in ("DVB-S2", "DVB-S")), implicit)
+			nim.multiType = ConfigSelection(typeList, implicit)
+			nim.multiType.hds_dinamic = dinamic
+			if dinamic and "multiType" in nim.content.stored_values:
+				nim.multiType.save_forced = True
+
 			nim.multiType.fe_id = x - empty_slots
 			nim.multiType.addNotifier(boundFunction(tunerTypeChanged, nimmgr))
-		
+
+	# HDSatelit: tipul tunerelor dinamice dupa alegerea omului (si dupa schimbarea ei, prin hdsAplicaTipTuner, care
+	# reface configuratia), pe lista curenta de tunere, inainte de setarile fiecarui tip de mai jos
+	for slot in nimmgr.nim_slots:
+		try:
+			element = config.Nims[slot.slot].multiType
+		except (AttributeError, KeyError, IndexError):
+			continue
+		if getattr(element, "hds_dinamic", False) and element.value in slot.getMultiTypeList():
+			slot.type = slot.getMultiTypeList()[element.value]
+
 	# HDSatelit: primul tuner de satelit vine pornit, in modul simplu (DiSEqC A/B, satelitii dupa tara receptorului,
 	# satelitiReceptorului), ca scanarea si canalele sa mearga din prima, fara "Setari tuner". Pana acum implicit era "nothing"
 	# (nimic conectat) si nimic din imagine nu-l schimba (asistentul de la prima pornire nu atinge tunerele), deci pe
@@ -2184,6 +2443,11 @@ def InitNimManager(nimmgr):
 	except Exception as e:
 		print("[NimManager] locul antenei: %r" % (e,))
 
+	preferinta_noua = ("usage" not in config.content.items
+		or "frontend_priority" not in config.usage.content.items)
+	hdsConfigTunerPreferat(nimmgr)
+	if preferinta_noua:
+		hdsAplicaTunerPreferat()
 	nimmgr.sec = SecConfigure(nimmgr)
 
 nimmanager = NimManager()

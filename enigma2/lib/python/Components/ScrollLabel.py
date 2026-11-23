@@ -63,7 +63,9 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 		self.setText(self.message)
 		return ret
 
-	def setText(self, text):
+	def setText(self, text, showBottom=False):
+		# showBottom (numele din alte imagini, WarderPiconHub): textul asezat ramane derulat la capat, pe ultima pagina, ca un
+		# jurnal care creste; fara el, de la inceput, ca pana acum
 		if text is None:
 			text = ""
 		elif isinstance(text, str):
@@ -124,6 +126,8 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 			else:
 				self.scrollbar.show()
 				self.updateScrollbar()
+			if showBottom:
+				self.goBottom()
 		else:
 			self.total = None
 			self.pages = None
@@ -133,12 +137,16 @@ class ScrollLabel(HTMLComponent, GUIComponent):
 			else:
 				self.scrollbar.hide()
 
-	def appendText(self, text):
+	def appendText(self, text, showBottom=True):
+		# showBottom ca in alte imagini: textul adaugat (un jurnal care creste) se vede, deci implicit derulat la capat.
+		# setText primeste numai textul: un ScrollLabel mostenit cu setText(self, text) merge la fel.
 		old_text = self.getText() or ""
 		if len(old_text) > 0:
 			self.setText(old_text + text)
 		else:
 			self.setText(text)
+		if showBottom:
+			self.goBottom()
 
 	def updateScrollbar(self):
 		start = -self.long_text.position().y() * 100 // self.total

@@ -313,6 +313,9 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			     (Screens/HdsCalitateImagine.py, Components/HdsCalitateImagine.py). Sta langa setarile video fiindca e tot
 			     despre imaginea trimisa la televizor; numai pe placile cu /proc/msp/pq (SystemInfo HdsCalitateImagine). In web:
 			     /calitate-imagine -->
+			<item level="0" text="Claritatea imaginii" entryID="hds_claritate" description="Reglezi contururile imaginii canalelor." requires="CanScalerSharpness" web="/setari?id=hds_claritate" pictograma="calitate-imagine" weight="24">
+				<setup id="hds_claritate" />
+			</item>
 			<item level="0" text="Calitatea imaginii" entryID="hds_calitate_imagine" description="Alegi profilurile de prelucrare a imaginii și redarea cu luminozitate extinsă." pictograma="calitate-imagine" weight="25" web="/calitate-imagine" requires="HdsCalitateImagine">
 				<screen module="HdsCalitateImagine" screen="HdsCalitateImagine" />
 			</item>
@@ -353,6 +356,11 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			     ales de om, cu cheia sau adresa lui (Screens/HdsTraducereSubtitrari.py); in web: /traducere-subtitrari. -->
 			<item level="0" text="Traducerea subtitrărilor" entryID="hds_traducere_subtitrari" description="Alegi serviciul care traduce automat textul subtitrărilor." pictograma="traducere" weight="26" web="/traducere-subtitrari">
 				<screen module="HdsTraducereSubtitrari" screen="HdsTraducereSubtitrari" />
+			</item>
+			<!-- subtitrarile din vorbire (Components/HdsVorbire.py, Screens/HdsVorbire.py), oprite din fabrica: langa celelalte
+			     setari ale subtitrarilor, fara submeniu separat (ca sa nu mute cifrele grupelor din Setari); in web: /vorbire -->
+			<item level="0" text="Subtitrări din vorbire" entryID="hds_vorbire" description="Sunetul canalului devine text tradus. Sunetul pleacă direct la serviciul ales, cu cheia ta." pictograma="subtitrari-aspect" weight="26" web="/vorbire">
+				<screen module="HdsVorbire" screen="HdsVorbire" />
 			</item>
 			<!-- subtitrarile filmelor din fisierele de langa film: codarea implicita, ş ţ -> ș ț, fisierul inaintea pistei din
 			     film, subdosarele (setup.xml hds_subtitrari_filme); in web: /subtitrari-film (subtitrarea filmului de acum,
@@ -505,6 +513,9 @@ deschide(self.session, "afisaj")
 		     (Components/HdsCautaSetari.py, Intrare.dublura). În web: aceleași pagini (/antena/tuner, /scanare, /antena). -->
 		<menu key="hds_tunere_scanare" weight="60" level="0" text="Tunere și scanare" entryID="hds_tunere_scanare" description="Găsești reglajele de recepție, căutarea canalelor și orientarea antenei." pictograma="tuner">
 			<id val="hds_tunere_scanare" />
+			<item level="0" text="Așezarea setărilor tunerului" entryID="hds_tuner_aspect" description="Scrii direct coordonatele motorului sau alegi locul din lista de țări și orașe." web="/setari?id=hds_tuner_aspect" pictograma="tuner" weight="11">
+				<setup id="hds_tuner_aspect" />
+			</item>
 			<item level="0" text="Setări tuner" entryID="hds_tunere_setari_tuner" description="Alegi cum sunt conectate și folosite intrările de semnal ale receptorului." copie="hds_antena_tuner" pictograma="tuner" web="/antena/tuner" weight="10">
 				<screen module="Satconfig" screen="NimSelection" />
 			</item>
@@ -690,6 +701,9 @@ deschide(self.session, "telecomanda")
 			</item>
 			<!-- cititor de coduri, proba tastelor, asocierea altei telecomenzi (Screens/HdsTelecomenzi.py).
 			     In web: /telecomenzi. -->
+			<item level="0" text="Telecomandă Bluetooth" entryID="hds_bluetooth" requires="HdsBluetooth" description="Cauți și asociezi telecomanda fără fir a receptorului." pictograma="telecomenzi" weight="22" web="/bluetooth">
+				<screen module="HdsBluetooth" screen="HdsBluetooth" />
+			</item>
 			<item level="0" text="Telecomenzi" entryID="hds_telecomenzi" description="Probezi tastele, citești codurile și asociezi alt dispozitiv de comandă." pictograma="telecomenzi" weight="21" web="/telecomenzi" stare="netestat">
 				<screen module="HdsTelecomenzi" screen="HdsTelecomenzi" />
 			</item>
@@ -755,39 +769,7 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		</item>
 	</menu>
 
-	<!-- 5. Alimentare & Repornire. In web: /alimentare (alimentare_web.py), fiecare actiune cu confirmare in doi pasi;
-	     ?f= aduce in fata cardul intrarii. Din 0.7.5 (JAKITAKI, Satedu 190487) ULTIMA intrare a meniului principal, sub
-	     „Caută setări”, ca la alte imagini: greutatea 90 trece si de extensiile agatate de meniul principal (fara
-	     greutatea lor primesc 50, Screens/Menu.py). In web ordinea vine tot de aici (meniu_web.py). Tasta POWER lunga
-	     gaseste meniul dupa key="shutdown", nu dupa loc (Components/HdsTasteRapide.py). -->
-	<menu key="shutdown" text="Power &amp; Restart" entryID="standby_restart_list" description="Alegi standby, oprirea completă sau repornirea receptorului." pictograma="pornire" web="/alimentare" weight="90">
-		<id val="shutdown" />
-		<item text="Sleep Timer" entryID="sleep" description="Alegi după cât timp receptorul trece singur în standby sau se oprește." pictograma="oprire-programata" web="/alimentare?f=somn" weight="10">
-			<screen module="SleepTimerEdit" screen="SleepTimerEdit" />
-		</item>
-		<item text="Standby Mode" entryID="standby" description="Treci receptorul în standby până când îl folosești din nou." pictograma="standby" web="/alimentare?f=standby" weight="20">
-			<screen module="Standby" screen="Standby" />
-		</item>
-		<item text="Restart Interface" entryID="restart_enigma" description="Repornești numai interfața, fără să repornești receptorul." pictograma="repornire-interfata" web="/alimentare?f=interfata" weight="25">
-			<screen module="Standby" screen="TryQuitMainloop">3</screen>
-		</item>
-		<item text="Restart Box" entryID="restart" description="Repornești receptorul de tot, nu numai interfața." pictograma="repornire" web="/alimentare?f=receptor" weight="30">
-			<screen module="Standby" screen="TryQuitMainloop">2</screen>
-		</item>
-		<!-- Acelasi ecran pentru bootoptions, kexec instalat si sloturi GPT.
-		     Capacitatile receptorului decid daca intrarea apare.
-		     STARTUP ales si repornirea se folosesc la fel pe televizor si web. -->
-		<item text="Repornește în altă imagine" entryID="return_to_flash" description="Alegi altă imagine deja instalată și pornești receptorul cu ea." pictograma="memoria-interna" web="/alimentare?f=flash" weight="50" requires="HdsMultiboot">
-			<screen module="HdsPornireMultipla" screen="HdsPornireMultipla" />
-		</item>
-		<!-- Vu+ 4K fara pornire multipla: instalarea Kexec (pachetul kexec-multiboot-<masina> din feedul extern). -->
-		<item text="Pornire multiplă Vu+ (Kexec)" entryID="kexec_multiboot" description="Instalezi pornirea multiplă, ca să poți ține mai multe imagini pe receptor." pictograma="memoria-interna" web="/alimentare?f=kexec" weight="55" requires="HdsKexecInstalabil">
-			<screen module="HdsPornireMultipla" screen="HdsKexecInstalare" />
-		</item>
-		<item text="Deep Standby (Power Off)" entryID="deep_standby" description="Oprești receptorul complet până la următoarea pornire." pictograma="oprire" web="/alimentare?f=oprire" weight="60">
-			<screen module="Standby" screen="TryQuitMainloop">1</screen>
-		</item>
-	</menu>
+
 
 	<!-- 6. Media (din 0.2.6): playerul de fișiere (video, muzică) și pozele, de pe stick,
 	     disc sau din rețea. Înainte playerul se agăța singur de meniul principal cu greutatea 45, iar pozele erau numai
@@ -838,6 +820,12 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		<screen module="HdsAplicatii" screen="HdsAplicatii" />
 	</item>
 
+	<!-- 0.7.8 (CX5): Filme si seriale inainte de Alimentare; cifra 0, iar Alimentare ramane ultima, cu 9.
+	     Acelasi ecran ca in Setari > Surse de pe internet si cardul din Aplicatii; pereche web: /filme-seriale. -->
+	<item level="0" text="Filme și seriale" entryID="hds_filme_seriale_principal" description="Alegi ce vrei să urmărești din catalogul contului tău de televiziune prin internet." copie="hds_filme_seriale" pictograma="lista-redare" web="/filme-seriale" weight="48">
+		<screen module="HdsFilmeSeriale" screen="HdsFilmeSeriale" />
+	</item>
+
 	<!-- 7. „Caută setări” jos în meniul principal, penultima intrare (tasta 9), chiar deasupra „Alimentare”: același ecran
 	     ca prima intrare din Setări și tasta TEXT (Screens/HdsCautaSetari.py), pus și aici ca să se găsească ușor, în
 	     lista simplă și ca dală cu pictograma căutării. Singura pereche spre același ecran din meniu, hotărâtă anume;
@@ -847,5 +835,39 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 	<item level="0" text="Caută în meniu" entryID="hds_cauta_setari_principal" description="Cauți o opțiune după cuvinte și deschizi direct ecranul găsit." pictograma="cauta" weight="50" web="/cauta-setari">
 		<screen module="HdsCautaSetari" screen="HdsCautaSetari" />
 	</item>
+
+	<!-- 5. Alimentare & Repornire. In web: /alimentare (alimentare_web.py), fiecare actiune cu confirmare in doi pasi;
+	     ?f= aduce in fata cardul intrarii. Din 0.7.5 (JAKITAKI, Satedu 190487) ULTIMA intrare a meniului principal, sub
+	     „Caută setări”, ca la alte imagini: greutatea 90 trece si de extensiile agatate de meniul principal (fara
+	     greutatea lor primesc 50, Screens/Menu.py). In web ordinea vine tot de aici (meniu_web.py). Tasta POWER lunga
+	     gaseste meniul dupa key="shutdown", nu dupa loc (Components/HdsTasteRapide.py). -->
+	<menu key="shutdown" text="Power &amp; Restart" entryID="standby_restart_list" description="Alegi standby, oprirea completă sau repornirea receptorului." pictograma="pornire" web="/alimentare" weight="90">
+		<id val="shutdown" />
+		<item text="Sleep Timer" entryID="sleep" description="Alegi după cât timp receptorul trece singur în standby sau se oprește." pictograma="oprire-programata" web="/alimentare?f=somn" weight="10">
+			<screen module="SleepTimerEdit" screen="SleepTimerEdit" />
+		</item>
+		<item text="Standby Mode" entryID="standby" description="Treci receptorul în standby până când îl folosești din nou." pictograma="standby" web="/alimentare?f=standby" weight="20">
+			<screen module="Standby" screen="Standby" />
+		</item>
+		<item text="Restart Interface" entryID="restart_enigma" description="Repornești numai interfața, fără să repornești receptorul." pictograma="repornire-interfata" web="/alimentare?f=interfata" weight="25">
+			<screen module="Standby" screen="TryQuitMainloop">3</screen>
+		</item>
+		<item text="Restart Box" entryID="restart" description="Repornești receptorul de tot, nu numai interfața." pictograma="repornire" web="/alimentare?f=receptor" weight="30">
+			<screen module="Standby" screen="TryQuitMainloop">2</screen>
+		</item>
+		<!-- Acelasi ecran pentru bootoptions, kexec instalat si sloturi GPT.
+		     Capacitatile receptorului decid daca intrarea apare.
+		     STARTUP ales si repornirea se folosesc la fel pe televizor si web. -->
+		<item text="Repornește în altă imagine" entryID="return_to_flash" description="Alegi altă imagine deja instalată și pornești receptorul cu ea." pictograma="memoria-interna" web="/alimentare?f=flash" weight="50" requires="HdsMultiboot">
+			<screen module="HdsPornireMultipla" screen="HdsPornireMultipla" />
+		</item>
+		<!-- Vu+ 4K fara pornire multipla: instalarea Kexec (pachetul kexec-multiboot-<masina> din feedul extern). -->
+		<item text="Pornire multiplă Vu+ (Kexec)" entryID="kexec_multiboot" description="Instalezi pornirea multiplă, ca să poți ține mai multe imagini pe receptor." pictograma="memoria-interna" web="/alimentare?f=kexec" weight="55" requires="HdsKexecInstalabil">
+			<screen module="HdsPornireMultipla" screen="HdsKexecInstalare" />
+		</item>
+		<item text="Deep Standby (Power Off)" entryID="deep_standby" description="Oprești receptorul complet până la următoarea pornire." pictograma="oprire" web="/alimentare?f=oprire" weight="60">
+			<screen module="Standby" screen="TryQuitMainloop">1</screen>
+		</item>
+	</menu>
 </menu>
 </menuxml>

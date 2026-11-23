@@ -31,6 +31,8 @@ Nimic din enigma nu se importa aici: modulul se incarca si pe PC, in teste
 (test_cautare_canale.py).
 """
 import json
+from types import MappingProxyType
+import threading
 import os
 import re
 import time
@@ -64,6 +66,9 @@ def _(text):
 GRUPURI = ('tip', 'rez', 'acces', 'sistem', 'cod', 'poz', 'are', 'fsunet', 'msunet', 'psunet', 'lsunet', 'lsub')
 # cate canale trec intre doua opriri ale lucrului in bucati (Index.aplica_treptat): pe PC sub 1 ms, pe receptor 5-15 ms
 PAS_TREPTAT = 250
+# A waiting step lets asynchronous callers return to their event loop.
+ASTEPTARE_INDEX = object()
+_GENERATIE_INDEX = 0
 
 
 # 0.7.7 (EPG3): pauzele firului care face indexul dupa pornire (Screens/HdsCautareCanale._Pregatire, firul HdsCautareIndex).
@@ -1396,6 +1401,51 @@ def _sorteaza_pe_bucati(canale, cheie, bucata=None, ritm=None):
 	canale[:] = [vechi[i] for i in _cu_ritm(heapq.merge(*bucati, key=k), ritm)]
 
 
+def _randuri_index(bucati):
+	"""Private rows reconstructed on the worker from frozen flat batches."""
+	n = len(Canal.__slots__)
+	for bucata in bucati:
+		for i in range(0, len(bucata), n):
+			yield bucata[i:i + n]
+
+
+def _ingheata_index(x):
+	"""Immutable transport for legacy reader values."""
+	if isinstance(x, (dict, list, tuple, set, frozenset)):
+		valori = x.items() if isinstance(x, dict) else x
+		return (type(x), tuple(_ingheata_index(v) for v in valori))
+	return (None, x)
+
+
+def _dezgheata_index(x):
+	"""Restore a private value on the worker."""
+	fel, valori = x
+	return valori if fel is None else fel(_dezgheata_index(v) for v in valori)
+
+
+class _FotografieIndexSchimbata(Exception):
+	"""Retry current preparation after its previous worker has stopped."""
+	def __init__(self, gata):
+		self.gata = gata
+
+
+def _numere_optiuni(numar, ritm=None):
+	"""Aggregate masks before the owner thread attaches translated labels."""
+	cu_optiuni, pe_bit = {}, {}
+	for g, masti in numar.items():
+		total, valori = 0, {}
+		for masca, n in masti.items():
+			total += n
+			while masca:
+				if ritm is not None:
+					ritm()
+				bit = masca & -masca
+				valori[bit] = valori.get(bit, 0) + n
+				masca ^= bit
+		cu_optiuni[g], pe_bit[g] = total, valori
+	return cu_optiuni, pe_bit
+
+
 class Index(object):
 	def __init__(self, canale, complet=True, ritm=None):
 		"""complet=False: numai ordinea si bitii (fara limbi, masti si numarare), pentru un index facut pe un fir si
@@ -1495,7 +1545,7 @@ class Index(object):
 		for _pas in self._numara_treptat():
 			pass
 
-	def _numara_treptat(self, pas=None):
+	def _numara_treptat(self, pas=None, numai_numere=False):
 		"""Optiunile de aratat: doar cele cu cel putin un canal, in ordinea fixa. cu_optiuni: cate canale au cel putin
 		o optiune in fiecare grup (de ex. la cate canale se stie sunetul mono / stereo / multicanal). Generator: un yield
 		la fiecare `pas` canale; optiunile se schimba o singura data, la sfarsit."""
@@ -1509,8 +1559,15 @@ class Index(object):
 					d[m] = d.get(m, 0) + 1
 			if k % pas == pas - 1:
 				yield
+		if numai_numere:
+			yield numar
+			return
+		self._pune_numere(numar)
+
+	def _pune_numere(self, numar, pregatite=None):
+		"""Build the small set of translated labels on the owner thread."""
 		optiuni = {}
-		self.cu_optiuni = dict((g, sum(numar[g].values())) for g in GRUPURI)
+		self.cu_optiuni, pe_bit = _numere_optiuni(numar) if pregatite is None else pregatite
 		for i, g in enumerate(GRUPURI):
 			if g == 'sistem':
 				lista = [(s[0], _(_MSGID_OPTIUNI['sistem'][s[0]]) if s[0] in _MSGID_OPTIUNI['sistem'] else s[1])
@@ -1525,7 +1582,7 @@ class Index(object):
 			rez = []
 			for v, eticheta in lista:
 				bit = self.biti[g].get(v, 0)
-				n = sum(k for m, k in numar[g].items() if m & bit)
+				n = pe_bit[g].get(bit, 0)
 				if n:
 					rez.append((v, eticheta, n))
 			optiuni[g] = rez
@@ -1616,41 +1673,216 @@ class Index(object):
 
 	def aplica_treptat(self, masurari, trasaturi, versiune=None, limba_receptor=None, nume_limba=None,
 			pas=None):
-		"""Masuratorile si pistele pe tot indexul, apoi limbile, mastile si numararea, pentru un index nou, facut cu
-		complet=False si inca nefolosit. Generator: un yield la fiecare `pas` canale, ca firul enigma2 sa lucreze in
-		felii scurte (Screens/HdsCautareCanale.py). masurari si trasaturi: dictionare sau privirile bazei unice, citite
-		numai de pe firul enigma2."""
+		"""Capture on the owner thread, compute privately, publish a current generation.
+		ASTEPTARE_INDEX means that the caller should resume on a later timer tick.
+		Closing the iterator cancels publication; workers never read live views.
+		"""
+		global _GENERATIE_INDEX
+		_GENERATIE_INDEX += 1
+		generatie = _GENERATIE_INDEX
+		while True:
+			try:
+				yield from self._aplica_fotografie_treptat(masurari, trasaturi, versiune, limba_receptor,
+					nume_limba, pas, generatie)
+				return
+			except _FotografieIndexSchimbata as schimbare:
+				# Coalesce updates while the cancelled worker finishes, without blocking the owner.
+				while schimbare.gata is not None and not schimbare.gata.wait(0.001):
+					if generatie != _GENERATIE_INDEX:
+						raise RuntimeError(_('Pregătirea indexului a fost înlocuită.'))
+					yield ASTEPTARE_INDEX
+				if generatie != _GENERATIE_INDEX:
+					raise RuntimeError(_('Pregătirea indexului a fost înlocuită.'))
+				yield ASTEPTARE_INDEX
+				B = _modul_baza()
+				if versiune is not None and B is not None and isinstance(trasaturi, B.Vedere):
+					versiune = trasaturi.versiune
+
+	def _aplica_fotografie_treptat(self, masurari, trasaturi, versiune, limba_receptor, nume_limba,
+			pas, generatie):
+		"""One attempt; ordinary version changes restart the same public iterator."""
+		if generatie != _GENERATIE_INDEX:
+			raise RuntimeError(_('Pregătirea indexului a fost înlocuită.'))
 		pas = pas or PAS_TREPTAT
-		if masurari is None:
-			masurari = {}
 		self._chei_in_folosinta()
-		v = getattr(masurari, 'versiune', None)
-		aplicate = {}
-		for k, c in enumerate(self.canale):
-			if c.cheie_mas:
-				m = masurari.get(c.cheie_mas)
-				if m:
-					c.aplica_masurare(m)
-					aplicate[c.cheie_mas] = list(m)
-				c.aplica_piste(trasaturi.get(c.cheie_mas) if trasaturi is not None else None)
+		B = _modul_baza()
+		masurari = {} if masurari is None else masurari
+		piste_marcaj = (versiune, id(trasaturi) if versiune is None else None, limba_receptor)
+		v_piste = trasaturi.versiune if B is not None and isinstance(trasaturi, B.Vedere) else None
+		paze, fotografii, vederi = [], {}, []
+		for vedere in (masurari, trasaturi):
+			if B is not None and isinstance(vedere, B.Vedere):
+				baza = vedere._b
+				identitate = id(baza)
+				if identitate not in fotografii:
+					globala = B.baza_existenta() is baza
+					for _pas in baza.pregateste_index():
+						if generatie != _GENERATIE_INDEX:
+							raise RuntimeError(_('Pregătirea indexului a fost înlocuită.'))
+						yield ASTEPTARE_INDEX
+						if globala and B.baza_existenta() is not baza:
+							raise RuntimeError(_('Baza canalelor s-a schimbat în timpul pregătirii indexului.'))
+					if globala and B.baza_existenta() is not baza:
+						raise RuntimeError(_('Baza canalelor s-a schimbat în timpul pregătirii indexului.'))
+					fotografii[identitate] = baza.fotografie_index()
+					paze.append((baza, baza._c, [], globala))
+				for b, _c, versiuni, _g in paze:
+					if b is baza:
+						versiuni.append((vedere, vedere.versiune))
+				vederi.append((identitate, vedere._functie))
 			else:
-				c.aplica_piste(None)
-			if k % pas == pas - 1:
+				# Legacy dictionaries and custom readers are sampled only here.
+				date = {}
+				for i, c in enumerate(self.canale):
+					k = c.cheie_mas
+					if k and k not in date and vedere is not None:
+						date[k] = _ingheata_index(vedere.get(k))
+					if i % pas == pas - 1:
+						yield
+				vederi.append((None, MappingProxyType(date)))
+		# Loading a view may have initialized its version during capture.
+		if versiune is not None and v_piste is not None and trasaturi.versiune != v_piste:
+			piste_marcaj = (trasaturi.versiune, None, limba_receptor)
+		v = getattr(masurari, 'versiune', None)
+		marcaj = (masurari, v) if v is not None else (None, None)
+		canale, bucata = [], []
+		for i, c in enumerate(self.canale):
+			bucata.extend(getattr(c, a) for a in Canal.__slots__)
+			if i % pas == pas - 1:
+				canale.append(tuple(bucata))
+				bucata = []
 				yield
-		self.masurari_aplicate = aplicate
-		self.masurari_marcaj = (masurari, v) if v is not None else (None, None)
+		if bucata:
+			canale.append(tuple(bucata))
+		# Freeze batches, avoiding one tracked tuple allocation per channel.
+		canale = tuple(canale)
 		if nume_limba is not None:
-			self.nume_limba = nume_limba
-		self.limba_receptor = limba_receptor
-		for _pas in self._limbi_treptat(pas):
-			yield
-		for k, c in enumerate(self.canale):
-			self._masti(c)
-			if k % pas == pas - 1:
-				yield
-		for _pas in self._numara_treptat(pas):
-			yield
-		self.piste_aplicate = (versiune, id(trasaturi) if versiune is None else None, limba_receptor)
+			nume_limba(limba_receptor or '')
+		biti = _ingheata_index(self.biti)
+		fotografii = tuple(fotografii.items())
+		vederi = tuple(vederi)
+		pozitii = tuple(self.pozitii)
+		oprit, nume_gata, gata = threading.Event(), threading.Event(), threading.Event()
+		rez, nume = {}, {}
+
+		def verifica():
+			if generatie != _GENERATIE_INDEX:
+				raise RuntimeError(_('Pregătirea indexului a fost înlocuită.'))
+			for baza, randuri, versiuni, globala in paze:
+				if (baza._c is not randuri or
+						baza._stare == B.OPRIT or baza._oprire or
+						(globala and B.baza_existenta() is not baza)):
+					raise RuntimeError(_('Baza canalelor s-a schimbat în timpul pregătirii indexului.'))
+				if any(vedere.versiune != ve for vedere, ve in versiuni):
+					raise _FotografieIndexSchimbata(gata if fir.ident is not None else None)
+
+		def calculeaza():
+			# Short CPU bursts also bound GIL competition with the event loop.
+			ceas_ritm = [time.perf_counter(), 0]
+			def ritm():
+				ceas_ritm[1] += 1
+				if ceas_ritm[1] % 32 == 0 and time.perf_counter() - ceas_ritm[0] >= 0.004:
+					time.sleep(0.001)
+					ceas_ritm[0] = time.perf_counter()
+			try:
+				poz_cheie = Canal.__slots__.index('cheie_mas')
+				chei = B.tabel_chei(valori[poz_cheie] for valori in _randuri_index(canale)) if B else {}
+				decodate = {}
+				for k, f in fotografii:
+					functii = tuple(functie for identitate, functie in vederi if identitate == k)
+					decodate[k] = B.desface_fotografie_index(f, set(chei.values()), functii, oprit.is_set, ritm)
+				if oprit.is_set():
+					return
+				pozitii_vederi = {}
+				date = []
+				for identitate, functie in vederi:
+					if identitate is None:
+						date.append(dict((k, _dezgheata_index(x)) for k, x in functie.items()))
+					else:
+						pozitie = pozitii_vederi.get(identitate, 0)
+						pozitii_vederi[identitate] = pozitie + 1
+						valori = dict((k, r[pozitie]) for k, r in decodate[identitate][0].items())
+						date.append(dict((k, valori.get(canonica)) for k, canonica in chei.items()))
+				m, p = date
+				x = object.__new__(Index)
+				x.biti, x.pozitii, x.canale = _dezgheata_index(biti), pozitii, []
+				x.masurari_aplicate = {}
+				x.limba_receptor = limba_receptor
+				x.limbi = {'lsunet': [], 'lsub': []}
+				limbi = set()
+				for valori in _randuri_index(canale):
+					ritm()
+					if oprit.is_set():
+						return
+					c = object.__new__(Canal)
+					for a, valoare in zip(Canal.__slots__, valori):
+						setattr(c, a, valoare)
+					x.canale.append(c)
+					k = c.cheie_mas
+					masurare = m.get(k) if k else None
+					if masurare:
+						c.aplica_masurare(masurare)
+						x.masurari_aplicate[k] = list(masurare)
+					c.aplica_piste(p.get(k) if k else None)
+					limbi.update(c.ls)
+					limbi.update(c.lsd)
+					limbi.update(c.lst)
+				rez['limbi'] = tuple(limbi)
+				while not nume_gata.wait(0.05):
+					if oprit.is_set():
+						return
+				x.nume_limba = nume.__getitem__
+				for _ in x._limbi_treptat(pas):
+					ritm()
+					if oprit.is_set():
+						return
+				for c in x.canale:
+					ritm()
+					if oprit.is_set():
+						return
+					x._masti(c)
+				for numere in x._numara_treptat(pas, numai_numere=True):
+					ritm()
+					if oprit.is_set():
+						return
+				rez['index'], rez['numere'] = x, _numere_optiuni(numere, ritm)
+				rez['sarite'] = dict((k, v[1]) for k, v in decodate.items())
+				decodate.clear()
+				date[:] = []
+			except Exception as e:
+				rez['eroare'] = e
+			finally:
+				gata.set()
+
+		fir = threading.Thread(target=calculeaza, name='HdsIndexAplicare')
+		fir.daemon = True
+		try:
+			verifica()
+			fir.start()
+			while not gata.is_set():
+				verifica()
+				if 'limbi' in rez and not nume_gata.is_set():
+					functie = nume_limba or self.nume_limba
+					nume.update((l, functie(l)) for l in rez['limbi'])
+					nume_gata.set()
+				# Bound the wait for callers which immediately request another step.
+				gata.wait(0.001)
+				yield ASTEPTARE_INDEX
+			verifica()
+			if 'eroare' in rez:
+				raise rez['eroare']
+			x = rez['index']
+			x.nume_limba = nume_limba or self.nume_limba
+			x._pune_numere(None, pregatite=rez['numere'])
+			verifica()
+			for baza, _randuri, _v, _g in paze:
+				baza._sarite.update(rez['sarite'][id(baza)])
+			# No yield across publication: observers see the complete new state.
+			self.__dict__.update((a, getattr(x, a)) for a in ('canale', 'biti', 'limbi',
+				'optiuni', 'cu_optiuni', 'masurari_aplicate', 'nume_limba', 'limba_receptor'))
+			self.masurari_marcaj, self.piste_aplicate = marcaj, piste_marcaj
+		finally:
+			oprit.set()
 
 	def aplica_piste(self, trasaturi, versiune=None, limba_receptor=None, nume_limba=None):
 		"""trasaturi: {cheie: HdsPisteCanale.trasaturi(inregistrare)} (HdsPisteCanale.Baza.trasaturi()). versiune: a
@@ -1949,6 +2181,8 @@ def din_memorie(sem=None):
 
 
 def pune_in_memorie(sem, index):
+	global _GENERATIE_INDEX
+	_GENERATIE_INDEX += 1
 	_memorie['index'] = index
 	_memorie['semnatura'] = sem
 
@@ -1969,6 +2203,8 @@ def incarca(director=DIRECTOR, pozitii_feed=None, masurari=None, fortat=False, p
 
 
 def uita():
+	global _GENERATIE_INDEX
+	_GENERATIE_INDEX += 1
 	_memorie['semnatura'] = None
 	_memorie['index'] = None
 

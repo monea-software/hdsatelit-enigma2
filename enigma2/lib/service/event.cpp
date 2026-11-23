@@ -97,7 +97,11 @@ bool eServiceEvent::loadLanguage(Event *evt, std::string lang, int tsidonid)
 					lang = cc;  // use first found language
 				if (!strncasecmp(lang.c_str(), cc.c_str(), 3))
 				{
-					m_event_name = convertDVBUTF8(replace_all(replace_all(sed->getEventName(), "\n", " "), "\t", " "), table, tsidonid);
+					// Randul nou si tab-ul devin spatii DUPA decodare: primul octet al numelui poate fi chiar selectia tabelului
+					// (0x09 = ISO-8859-13, 0x0A = ISO-8859-14, EN 300 468 anexa A), iar in UTF-16 octetii 0x09/0x0A stau in
+					// litere. Inlocuiti inainte, selectia se pierdea (TVP pe DVB-T in Polonia: titlurile fara literele
+					// poloneze, cu un spatiu in fata). In UTF-8 octetii 0x09/0x0A sunt numai tab si rand nou.
+					m_event_name = replace_all(replace_all(convertDVBUTF8(sed->getEventName(), table, tsidonid), "\n", " "), "\t", " ");
 					m_short_description = convertDVBUTF8(sed->getText(), table, tsidonid);
 					retval=1;
 				}

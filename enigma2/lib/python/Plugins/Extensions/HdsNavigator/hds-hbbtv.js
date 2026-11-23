@@ -562,9 +562,20 @@
      * oprit), orice alt sistem false. isObjectSupported ramane false: aplicatiile care intreaba afla ca nu e DRM. H20-202 */
     var DRM_NECUNOSCUT = 5;
     var drmUltimId = 0;
+    /* MDS1 (0.7.8): sistemul DRM cerut de pagina (numai forma urn:dvb:casystemid:<numar>, altfel "nestiut"; nimic alt
+     * text al paginii), pentru jurnalul filmelor de mai jos; null daca
+     * pagina n-a cerut nicio licenta. Raspunsul dat paginii ramane acelasi (5). */
+    var drmCerut = null;
     var DRM_AGENT = {
         metode: {
-            sendDRMMessage: function () {
+            sendDRMMessage: function (tip, mesaj, sistem) {
+                if (drmCerut === null) {
+                    var s = String(sistem === undefined || sistem === null ? "" : sistem);
+                    var m = /^urn:dvb:casystemid:(\d{1,5})$/i.exec(s);
+                    drmCerut = m ? "urn:dvb:casystemid:" + m[1] : "nestiut";
+                    jurnalPagina("pagina cere o licenta DRM (sistem " + drmCerut + "); receptorul nu are DRM, raspuns " +
+                        DRM_NECUNOSCUT + " (sistem necunoscut)");
+                }
                 var id = String(++drmUltimId);
                 eveniment(this, "DRMMessageResult", { msgID: id, resultMsg: "", resultCode: DRM_NECUNOSCUT },
                     [id, "", DRM_NECUNOSCUT]);
@@ -1179,8 +1190,57 @@
         trimite.apply(null, [comanda].concat(argumente || []));
     }
 
+    /* Broadcast metadata is read-only; selection requires a native non-persistent API. */
+    var bcStare = S.config.broadcast || { piste: null };
+    function bcComponente(el, tip, active) {
+        if (!legata())
+            throw eroareSecuritate();
+        if (!Array.isArray(bcStare.piste))
+            return undefined;
+        return colectie(bcStare.piste.filter(function (p) {
+            return (tip === null || tip === undefined || p.type === tip) && (!active ||
+                (p.active && vb(el).joc === PREZENTARE));
+        }).map(function (p) {
+            var c = {};
+            ["type", "pid", "componentTag", "encoding", "encrypted", "language", "audioDescription",
+                "audioChannels", "hearingImpaired", "aspectRatio"].forEach(function (k) {
+                Object.defineProperty(c, k, { value: p[k] === null ? undefined : p[k], enumerable: true });
+            });
+            constantesBc(c);
+            return c;
+        }));
+    }
+    function constantesBc(c) {
+        constante(c, { COMPONENT_TYPE_VIDEO: 0, COMPONENT_TYPE_AUDIO: 1, COMPONENT_TYPE_SUBTITLE: 2 });
+    }
+    function bcPrimeste(p) {
+        var vechi = bcStare;
+        bcStare = p || { piste: null };
+        if (!vbActiv)
+            return;
+        [0, 1, 2].forEach(function (tip) {
+            function lista(s, active) {
+                return (s.piste || []).filter(function (c) { return c.type === tip && (!active || c.active); })
+                    .map(function (c) {
+                        var copie = {};
+                        Object.keys(c).sort().forEach(function (k) { if (k !== "active") copie[k] = c[k]; });
+                        return active ? c.id : JSON.stringify(copie);
+                    }).join("|");
+            }
+            if (lista(vechi, false) !== lista(bcStare, false))
+                eveniment(vbActiv, "ComponentChanged", { componentType: tip }, [tip]);
+            if (lista(vechi, true) !== lista(bcStare, true)) {
+                eveniment(vbActiv, "SelectedComponentChanged", { componentType: tip }, [tip]);
+                eveniment(vbActiv, "SelectedComponentChange", { componentType: tip }, [tip]);
+            }
+        });
+    }
+
     var VIDEO = {
         proprietati: {
+            COMPONENT_TYPE_VIDEO: { get: function () { return 0; } },
+            COMPONENT_TYPE_AUDIO: { get: function () { return 1; } },
+            COMPONENT_TYPE_SUBTITLE: { get: function () { return 2; } },
             playState: { get: function () { return vb(this).joc; } },
             fullScreen: { get: function () { return vb(this).ecranIntreg; } },
             currentChannel: { get: function () {
@@ -1294,6 +1354,8 @@
                     throw eroareSecuritate();
                 return { channelList: listaCanale(), favouriteLists: null, currentFavouriteList: null };
             },
+            getComponents: function (tip) { return bcComponente(this, tip, false); },
+            getCurrentActiveComponents: function (tip) { return bcComponente(this, tip, true); },
             createChannelObject: function (idType, a, b, c) {
                 var tip = intreg(idType);
                 if (arguments.length <= 3 && typeof a === "string")
@@ -1308,7 +1370,7 @@
             }
         },
         evenimente: ["onPlayStateChange", "onChannelChangeSucceeded", "onChannelChangeError", "onFullScreenChange",
-            "onProgrammesChanged"]
+            "onProgrammesChanged", "onComponentChanged", "onSelectedComponentChanged", "onSelectedComponentChange"]
     };
 
     /* --- obiectul A/V (OIPF DAE 7.14 cu anexa A.2.5): filmele aplicatiilor (mediatecile), pe playerul receptorului
@@ -2403,6 +2465,10 @@
 
     function primeste(cheie, valoare) {
         if (cheie === "ev") {
+            if (valoare && valoare.ev === "broadcast") {
+                bcPrimeste(valoare);
+                return;
+            }
             laEveniment(valoare);
             return;
         }
@@ -2417,6 +2483,7 @@
             if (!S.config || typeof S.config !== "object")
                 S.config = {};
             capabilitati = null;
+            bcPrimeste(S.config.broadcast);
             tradSetari();
         }
         if (cheie === "app")
@@ -2622,6 +2689,119 @@
         return true;
     }
 
+    /* Adaptare TVP (CR2, 0.7.8): hub-ul TVP GO si celelalte pagini ale aplicatiei TVP manager (hbb-prod.tvp.pl/apps/manager/,
+     * in afara de virtual-channel, care are reincarcarea ei de mai sus) arata "Trwa wczytywanie..." (.loading, cu animatia
+     * ellipsis) cat timp datele paginii (fetch-ul Nuxt, cererile graphql) nu s-au terminat. La un om (TVP 1 de pe satelit,
+     * hub-ul hbbtest.v3.tvp.pl/hub/index_tvp_1.php, Vu+ Uno 4K SE) incarcarea a ramas pe ecran; la noi (PC si
+     * receptor, din Romania) hub-ul se incarca sub 10 s, deci cauza nu s-a putut vedea. Aici: cand incarcarea sta pe ecran
+     * cel putin TVP_MANAGER_MS (acelasi element, vazut la verificarile din TVP_MANAGER_PAS_MS in TVP_MANAGER_PAS_MS: o
+     * incarcare noua, de la alta pagina a hub-ului, e alt element) si niciun film n-a pornit prin obiectul A/V, un rand in
+     * jurnalul paginii cu calea si cererile inca neterminate (din el aflam cauza) si o singura reincarcare a documentului
+     * (semnul din window.name al reincarcarii de pe virtual-channel: cel mult una pe navigator). O incarcare terminata sub 30 s
+     * nu schimba nimic; una legitima mai lunga (receptor foarte lent) costa o incarcare in plus, o data. */
+    var TVP_MANAGER_MS = 30000, TVP_MANAGER_PAS_MS = 15000;
+
+    function incarcareTvpPeEcran() {
+        var l = typeof document.querySelectorAll === "function" ? document.querySelectorAll(".loading") : [];
+        for (var i = 0; i < l.length; i++) {
+            if (/wczytywanie/i.test(String(l[i].textContent || "")) && window.getComputedStyle(l[i]).display !== "none")
+                return l[i];
+        }
+        return null;
+    }
+
+    function adaptareTvpManager() {
+        var loc = window.location;
+        if (!loc || !/(^|\.)tvp\.pl$/.test(loc.hostname || "") || !/^\/apps\/manager\//.test(loc.pathname || "") ||
+                /^\/apps\/manager\/virtual-channel/.test(loc.pathname || ""))
+            return false;
+        try {
+            if (String(window.name || "").indexOf(TVP_SEMN_REINCARCAT) >= 0)
+                return false;
+        } catch (x) {
+            return false;
+        }
+        var deschise = [], dela = 0, vazut = null, gata = false;
+
+        function scurt(a) {
+            return String(a || "").replace(/^[a-z]+:\/\/[^\/]+/i, "").split("?")[0].slice(0, 60);
+        }
+
+        function scoate(a) {
+            var i = deschise.indexOf(a);
+            if (i >= 0)
+                deschise.splice(i, 1);
+        }
+
+        var X = window.XMLHttpRequest;
+        if (X && X.prototype && typeof X.prototype.open === "function" && typeof X.prototype.send === "function") {
+            var deschide = X.prototype.open, trimiteX = X.prototype.send;
+            X.prototype.open = function (metoda, adresa) {
+                try {
+                    this.__hdsTvpCale = scurt(adresa);
+                } catch (x) {
+                    /* adresa ciudata: nu o urmarim */
+                }
+                return deschide.apply(this, arguments);
+            };
+            X.prototype.send = function () {
+                var x = this, a = x.__hdsTvpCale;
+                if (a) {
+                    deschise.push(a);
+                    try {
+                        x.addEventListener("loadend", function () { scoate(a); });
+                    } catch (e) {
+                        scoate(a);
+                    }
+                }
+                return trimiteX.apply(this, arguments);
+            };
+        }
+        if (typeof window.fetch === "function") {
+            var aduceTvp = window.fetch;
+            window.fetch = function (cerere) {
+                var a = scurt(cerere && typeof cerere === "object" && cerere.url ? cerere.url : cerere);
+                var p = aduceTvp.apply(this, arguments);
+                if (p && typeof p.then === "function") {
+                    deschise.push(a);
+                    p.then(function () { scoate(a); }, function () { scoate(a); });
+                }
+                return p;
+            };
+        }
+
+        function verifica() {
+            if (gata)
+                return;
+            var acum = Date.now(), el = null;
+            try {
+                el = incarcareTvpPeEcran();
+            } catch (x) {
+                /* fara DOM: nu e incarcarea */
+            }
+            if (!el || avUltimId > 0 || el !== vazut) {
+                vazut = avUltimId > 0 ? null : el;
+                dela = vazut ? acum : 0;
+            } else if (acum - dela >= TVP_MANAGER_MS) {
+                gata = true;
+                try {
+                    var nume = String(window.name || "");
+                    window.name = (nume ? nume + " " : "") + TVP_SEMN_REINCARCAT;
+                    jurnalPagina("adaptare TVP: reincarc o data, incarcarea sta de " + Math.round((acum - dela) / 1000) + " s pe " +
+                        String(loc.pathname || "").slice(0, 40) + " (" + document.readyState + "); neterminate: " +
+                        (deschise.length ? deschise.slice(0, 3).map(function (a) { return a.slice(0, 40); }).join(", ") : "niciuna"));
+                    loc.reload();
+                } catch (x) {
+                    /* nimic de facut: ramane ca fara adaptare */
+                }
+                return;
+            }
+            setTimeout(verifica, TVP_MANAGER_PAS_MS);
+        }
+        setTimeout(verifica, TVP_MANAGER_PAS_MS);
+        return true;
+    }
+
     /* ------------------------------------------------------------ animatiile cand desenul e pe procesor (0.7.7)
      * Fara placa grafica (rezerva pe procesor: GL cade pe Mali-450, deci pe SF8008 si celelalte cu Mali-450, sau --cpu)
      * pagina n-are compunere: o animatie CSS lunga (o sigla care pulseaza, un cerc care se invarte) se redeseneaza la
@@ -2709,10 +2889,80 @@
         return true;
     }
 
+    /* Jurnalul filmelor paginii (MDS1, 0.7.8): cand un element <video>/<audio> al paginii nu poate reda (evenimentul
+     * "error" al elementului, prins la capturare pe window), un rand in jurnalul paginii numai cu date controlate: codul
+     * MediaError si numele lui, felul sursei (numai din listele inchise de la felSursa, niciodata adresa) si daca pagina a cerut
+     * inainte o licenta DRM. Textul liber MediaError.message NU se scrie: poate purta adrese cu jetoane pe care nicio
+     * curatare nu le prinde sigur (paranteze, spatii, alte forme). Fara el jurnalul arata
+     * numai "promisiune respinsa: The operation is not supported." (play() respinsa de WebKit cand elementul are
+     * MEDIA_ERR_SRC_NOT_SUPPORTED), fara sa se vada ce film si de ce (asistenta 162189). Numai citire: pagina
+     * primeste aceleasi evenimente si aceleasi promisiuni ca inainte (nimic prins, nimic oprit). Cel mult un rand pe
+     * element si FILME_JURNAL_MAXIM pe document (paginile reincearca). */
+    var FILME_JURNAL_MAXIM = 4;
+    var MEDIA_ERORI = ["", "oprit de pagina", "retea", "decodare", "sursa nesuportata"];
+
+    /* Felul sursei, numai din liste inchise: nicio bucata din adresa paginii nu ajunge in jurnal. Schema: blob (MSE),
+     * http, https, data, dvb, altfel "alta"; extensia (numai la http/https): una din FILME_EXTENSII, altfel "necunoscuta". */
+    var FILME_SCHEME = { blob: "MSE (blob)", http: "http", https: "https", data: "data", dvb: "dvb" };
+    var FILME_EXTENSII = ["mpd", "m3u8", "m3u", "mp4", "m4v", "m4s", "m4a", "ts", "mpg", "mpeg", "webm", "mkv", "mov",
+        "mp3", "aac", "ogg", "opus", "wav", "flac", "ism", "isml"];
+
+    function felSursa(el) {
+        var u = "";
+        try {
+            u = String(el.currentSrc || el.getAttribute("src") || "");
+        } catch (x) {
+            u = "";
+        }
+        if (!u)
+            return "fara sursa";
+        var m = /^\s*([a-z][a-z0-9+.-]*):/i.exec(u);
+        var schema = m ? m[1].toLowerCase() : "";
+        if (!Object.prototype.hasOwnProperty.call(FILME_SCHEME, schema))
+            return m ? "alta" : "fara schema";
+        if (schema !== "http" && schema !== "https")
+            return FILME_SCHEME[schema];
+        var cale = u.split(/[?#]/)[0];
+        var e = /\.([A-Za-z0-9]{1,5})$/.exec(cale.slice(cale.lastIndexOf("/") + 1));
+        var ext = e ? e[1].toLowerCase() : "";
+        return FILME_SCHEME[schema] + " " + (FILME_EXTENSII.indexOf(ext) >= 0 ? "." + ext : "necunoscuta");
+    }
+
+    function jurnalFilme() {
+        var Media = window.HTMLMediaElement;
+        if (typeof Media !== "function" || typeof window.addEventListener !== "function")
+            return false;
+        var vazute = typeof WeakSet === "function" ? new WeakSet() : null, scrise = 0;
+        window.addEventListener("error", function (ev) {
+            try {
+                var el = ev && ev.target;
+                if (!vazute || scrise >= FILME_JURNAL_MAXIM || !(el instanceof Media) || vazute.has(el))
+                    return;
+                var er = el.error;
+                if (!er || typeof er.code !== "number")
+                    return;
+                vazute.add(el);
+                scrise++;
+                var cod = er.code | 0;
+                var t = "filmul paginii nu porneste: <" + (typeof window.HTMLVideoElement === "function" && el instanceof window.HTMLVideoElement ? "video" :
+                    "audio") +
+                    "> cod " + cod + (MEDIA_ERORI[cod] ? " (" + MEDIA_ERORI[cod] + ")" : "") + "; sursa " + felSursa(el);
+                if (drmCerut !== null)
+                    t += "; pagina a cerut inainte o licenta DRM (" + drmCerut + "): film probabil protejat";
+                jurnalPagina(t);
+            } catch (x) {
+                /* numai jurnal: pagina merge ca fara el */
+            }
+        }, true);
+        return true;
+    }
+
     Object.defineProperty(window, "__hdsHbbtvPrimeste", { value: primeste, writable: false, configurable: false,
         enumerable: false });
+    jurnalFilme();
     adaptareTvpHub();
     adaptareTvpStare();
+    adaptareTvpManager();
     animatiiPeProcesor();
     puneCaruselul();
     tradSetari();

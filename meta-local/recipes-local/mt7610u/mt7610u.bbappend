@@ -8,3 +8,16 @@
 # kcflags.inc, dat lui make prin mediu) atinge numai modulul. Pe celelalte masini reteta ramane neschimbata.
 KCFLAGS:append:u57 = " -mlong-calls"
 KCFLAGS:append:u571 = " -mlong-calls"
+
+# ZER1: driverul furnizorului avea -DDBG (nivelul implicit este numai erori).
+# Se scoate numai optiunea exacta DBG, fara atingerea optiunilor BG_FT.
+PR:append = ".hdszer1.hdsbld1"
+# BLD1: dispecerul nu poate chema functii existente numai cu DBG.
+FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+SRC_URI += " file://0001-guard-debug-ioctls.patch"
+do_configure:append() {
+    sed -i 's/ -DDBG$//' ${S}/os/linux/config.mk
+    if grep -Eq '[[:space:]]-DDBG([[:space:]]|$)' ${S}/os/linux/config.mk; then
+        bbfatal "Depanarea driverului Wi-Fi a ramas activa"
+    fi
+}

@@ -413,6 +413,12 @@ public:
 		sVideoBitrate,
 		sAudioBitrate,
 
+		/* Passive speech audio copy; main-loop reads, explicit release. */
+		sHdsSpeechAudio,
+		sHdsSpeechStop,
+		sHdsSpeechDvb,
+		sHdsSpeechEpoch,
+
 		sUser = 0x100
 	};
 	enum {

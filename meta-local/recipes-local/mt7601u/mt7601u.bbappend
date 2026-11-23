@@ -8,3 +8,37 @@
 # kcflags.inc, dat lui make prin mediu) atinge numai modulul. Pe celelalte masini reteta ramane neschimbata.
 KCFLAGS:append:u57 = " -mlong-calls"
 KCFLAGS:append:u571 = " -mlong-calls"
+
+# ZER1: driverul furnizorului avea -DDBG si RTDebugLevel=RT_DEBUG_TRACE.
+# Se scoate numai optiunea exacta DBG, fara atingerea optiunilor BG_FT.
+PR:append = ".hdszer1.hdsbld1.hdsmtd5"
+
+# CPL1: dispecerul nu poate chema functii existente numai cu DBG.
+FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+SRC_URI += " file://0001-guard-debug-ioctls.patch file://0002-debug-oprit-implicit.patch"
+do_configure:append() {
+    sed -i 's/ -DDBG$//' ${S}/os/linux/config.mk
+    if grep -Eq '[[:space:]]-DDBG([[:space:]]|$)' ${S}/os/linux/config.mk; then
+        bbfatal "Depanarea driverului Wi-Fi a ramas activa"
+    fi
+}
+
+# Modulul trebuie sa aduca profilul si cand e instalat direct, fara metapachet.
+PACKAGES =+ "${PN}-config"
+FILES:${PN}-config = "${sysconfdir}/Wireless/MT7601U"
+CONFFILES:${PN}-config = "${sysconfdir}/Wireless/MT7601U/MT7601U.dat ${sysconfdir}/Wireless/MT7601U/MT7601UCard.dat"
+# Permite mutarea numai din versiunile vechi, fara a exclude parintele curent.
+# CONFFILES pastreaza profilul modificat la transferul catre pachetul separat.
+RREPLACES:${PN}-config = "${PN} (< ${EXTENDPKGV})"
+RDEPENDS:${PN}:append = " ${PN}-config"
+PACKAGESPLITFUNCS:append = " hds_mt7601_config_depend"
+
+python hds_mt7601_config_depend() {
+    for package in (d.getVar('PACKAGES') or '').split():
+        if 'kernel-module-mt7601usta' in package:
+            d.appendVar('RDEPENDS:' + package, ' ' + d.getVar('PN') + '-config')
+}
+
+do_install:append() {
+    test -s ${D}${sysconfdir}/Wireless/MT7601U/MT7601U.dat || bbfatal "Lipseste profilul MT7601U"
+}

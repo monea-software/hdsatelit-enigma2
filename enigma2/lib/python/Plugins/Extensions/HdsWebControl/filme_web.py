@@ -81,6 +81,7 @@ SETARI = (
 	("oprire", "on_movie_stop", N_("La oprirea unui film")),
 	("sfarsit", "on_movie_eof", N_("La sfârșitul unui film")),
 	("iesire", "hds_exit_film", N_("EXIT în timpul filmului")),
+	("bara_salt", "show_infobar_on_skip", N_("Arată bara la salturi și derulare")),
 )
 # ce raspuns la intrebarea de reluare aduce pornirea din pagina (InfoBarCueSheetSupport.hdsPornireFilm)
 PORNIRI = {"loc": "resume", "inceput": "beginning"}
@@ -270,13 +271,17 @@ def _descriereFilm(sesiune, bara, F):
 	}
 
 
+def _optiuniSetare(element):
+	# ConfigYesNo has no choices; keep boolean values when saving.
+	if isinstance(element.value, bool):
+		return [(True, N_("Da")), (False, N_("Nu"))]
+	return [(x[0], x[1]) if isinstance(x, tuple) else (x, None) for x in element.choices.choices]
+
+
 def _alegeri(element):
 	rez = []
-	for x in element.choices.choices:
-		if isinstance(x, tuple):
-			rez.append([str(x[0]), _t(x[1]) if x[1] else str(x[0])])
-		else:
-			rez.append([str(x), str(x)])
+	for valoare, text in _optiuniSetare(element):
+		rez.append([str(valoare), _t(text) if text else str(valoare)])
 	return rez
 
 
@@ -394,8 +399,7 @@ def seteaza(argumente, sesiune=None, bara=None, cfg=None, F=None, configfile=Non
 			continue
 		element = getattr(c.usage, cheie)
 		valoare = None
-		for x in element.choices.choices:
-			v = x[0] if isinstance(x, tuple) else x
+		for v, _text in _optiuniSetare(element):
 			if str(v) == argumente[nume]:
 				valoare = v
 		if valoare is None:
@@ -849,11 +853,10 @@ def deschideFilmul(sesiune, cale, mod, dupaLista=False):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, fara token; numai cheile cunoscute (calea unui film pana la
-	MAX_CALE, restul pana la MAX_TEXT)."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token; numai cheile cunoscute."""
 	permise = set(x[0] for x in SETARI) | set(("fa", "secunde", "cale", "de_la", "destinatie", "confirmat", "ordine"))
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:16]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in permise:
@@ -861,7 +864,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_CALE if cheie in ("cale", "destinatie") else MAX_TEXT].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 

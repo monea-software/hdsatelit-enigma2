@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # cauta_setari_web.py: „Caută în meniu” (fost „Caută setări”) in interfata web (HdsWebControl), perechea ecranului de pe televizor
-# (Screens/HdsCautaSetari.py: pe televizor „Caută în meniu” e primul rand din orice pagina a meniului, lotul CTM).
+# Screens/HdsCautaSetari.py: cautarea este primul rand din orice pagina a meniului TV.
 #
 # Acelasi index si aceleasi reguli ca pe televizor (Components/HdsCautaSetari.py): meniurile, intrarile si randurile de
 # setari pe care le arata acum meniul receptorului (level=, requires=, conditional=), cautate in limba meniului si in
@@ -91,10 +91,11 @@ def cauta(text, config=None, SystemInfo=None):
 	text = (text or "")[:MAX_TEXT]
 	idx = C.index(config=config, SystemInfo=SystemInfo)
 	rez = [rezultat(i, C, config) for i in idx.cauta(text)]
-	return {"result": True, "text": text, "numar": len(rez), "rezultate": rez}
+	return {"result": True, "text": text, "numar": len(rez), "rezultate": rez,
+		"in_lucru": C._LECTURA_PLUGIN is not None}
 
 
-def deschide(cheie, sesiune=None, config=None, SystemInfo=None):
+def deschide(cheie, sesiune=None, config=None, SystemInfo=None, laRezultat=None):
 	"""POST /api/cauta-setari-televizor?cheie=: deschide pe televizor un rezultat din indexul de acum."""
 	C = _C()
 	idx = C.index(config=config, SystemInfo=SystemInfo)
@@ -110,11 +111,19 @@ def deschide(cheie, sesiune=None, config=None, SystemInfo=None):
 	refuz = W._ocupat(sesiune)
 	if refuz:
 		return {"result": False, "message": refuz}
+	def raspuns(dlg):
+		if dlg is None:
+			return {"result": False, "message": _t("Ecranul nu s-a deschis pe televizor. Detalii în jurnalul receptorului.")}
+		return {"result": True, "message": _t("S-a deschis pe televizor: %s.") % i.nume}
+
 	try:
-		dlg = C.deschide(sesiune, i, config=config)
+		dlg = C.deschide(sesiune, i, config=config,
+			laDeschidere=(lambda dlg: laRezultat(raspuns(dlg))) if laRezultat else None)
 	except Exception as eroare:
 		_jurnal("deschiderea %s pe televizor: %s" % (i.cheie, eroare))
 		return {"result": False, "message": _t("Ecranul nu s-a deschis pe televizor (%s).") % eroare}
+	if isinstance(dlg, C.DeschiderePlugin):
+		return dlg
 	if dlg is None:
 		return {"result": False, "message": _t("Ecranul nu s-a deschis pe televizor. Detalii în jurnalul receptorului.")}
 	return {"result": True, "message": _t("S-a deschis pe televizor: %s.") % i.nume}
@@ -122,7 +131,7 @@ def deschide(cheie, sesiune=None, config=None, SystemInfo=None):
 
 def argumente(request):
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:6]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in ("q", "cheie"):
@@ -130,7 +139,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_TEXT if cheie == "q" else MAX_CHEIE].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -147,7 +156,20 @@ def rute(baza, resource):
 
 		def render_POST(self, request):
 			try:
-				return self._raspunde(request, deschide(argumente(request).get("cheie", "")))
+				def gata(rez):
+					if not getattr(request, "_disconnected", False):
+						request.write(self._raspunde(request, rez))
+						request.finish()
+				rez = deschide(argumente(request).get("cheie", ""), laRezultat=gata)
+				if isinstance(rez, _C().DeschiderePlugin):
+					from twisted.web.server import NOT_DONE_YET
+					try:
+						request.notifyFinish().addErrback(rez.anuleaza)
+					except Exception:
+						rez.anuleaza()
+						raise
+					return NOT_DONE_YET
+				return self._raspunde(request, rez)
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -279,6 +301,7 @@ function cauta(){
     if(nr !== numarCerere){ return; }
     if(!d.result){ mesaj(d.message, true); return; }
     arata(d);
+    if(d.in_lucru){ clearTimeout(ceas); ceas = setTimeout(cauta, 200); }
   }).catch(function(){ if(nr === numarCerere){ mesaj("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.", true); } });
 }
 $("text").addEventListener("input", function(){ clearTimeout(ceas); ceas = setTimeout(cauta, 200); });

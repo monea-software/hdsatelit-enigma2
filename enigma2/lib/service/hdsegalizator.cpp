@@ -106,6 +106,13 @@ namespace
 	const char *const SYNC_PLACA = "/proc/msp/sync00";   /* sincronul placii HiSilicon (decodorul principal) */
 	const int POTRIVIRE_TV_MAX_MS = 300;
 	const int CADERI_ALSA = 20;           /* scrieri ALSA cazute la rand dupa care sunetul se intoarce pe placa */
+	/* TV pe HiSilicon: ALSA canta pe a doua pista a placii, alaturi de pista decodorului (care la preluare numai tace). A doua
+	   pista cere memorie a placii; dupa zile de mers ea lipseste: ALSA primeste ENOMEM cat timp decodorul canta, iar
+	   decodorul care nu-si ia pista (ALSA deschis inaintea lui) tine si ceasul imaginii pe loc si nu mai canta nici dupa
+	   (masurat pe SF8008). De aceea ALSA se deschide abia cand placa canta si da ceasul, la ASTEAPTA_PISTA_MS, cu atatia ms
+	   de sunet in tampon; refuzat atunci, sunetul ramane pe placa, neatins */
+	const int ASTEAPTA_PISTA_MS = 10;
+	const int PRELUARE_TAMPON_MS = 100;
 	const size_t MAX_APPSRC = 256 * 1024; /* octeti in coada appsrc (demux): peste atat bucatile se arunca */
 	const size_t MARIME_TAMPON_DEMUX = 128 * 1024;
 
@@ -667,6 +674,10 @@ public:
 		uint64_t preluare_la;
 		bool rampa_preluare;
 		unsigned long long intentie;
+		/* TV pe HiSilicon: ALSA nu e deschis inca, placa canta; firul placii il deschide cand placa da ceasul
+		   (asteaptaPista); alsa_refuzat: placa n-a avut loc pentru a doua pista, verifica() intoarce pe placa */
+		std::atomic<bool> alsa_amanat, alsa_refuzat;
+		std::string placa_amanata;
 
 		Sesiune(): motor(0),
 #if HAVE_GSTREAMER
@@ -677,7 +688,7 @@ public:
 			ultima_data_ms(0), caderi_alsa(0), eos(false), rampaJos(false), pregain_db(0.0), abatere_ppm(0.0),
 			benzi_active(0), limitari(0), versiune(0), pornit_ms(0), info_decodor(false),
 			esantionare(0), canale(0), coboara(false), pts_baza(0), pts_baza_ok(false), fd_audio0(-1), umbra(false), preluare_la(0),
-			rampa_preluare(false), intentie(0)
+			rampa_preluare(false), intentie(0), alsa_amanat(false), alsa_refuzat(false)
 		{
 		}
 	};
@@ -774,6 +785,14 @@ public:
 
 	void setTv(bool da) { m_tv = da; }
 	bool tv() const { return m_tv.load(); }
+	bool tvDeProba() const { return !m_ceas_placa; }
+	bool tvOpritLaPornire() const { return m_tv_oprit_pornire.load(); }
+	/* The processor path (GStreamer -> ALSA) is heard only where it was measured: the boards with the HiSilicon board
+	   clock. On the others (Broadcom: Vu+ Duo 4K SE with the ALSA card "VuPlus", default = OSS /dev/dsp) the PCM takes
+	   the sound and then stays in SETUP without any error the engine could see, while the board decoder has PID -1:
+	   radio and stream radio were silent until the equalizer was switched off. There radio and streams stay on the
+	   board decoder; TV keeps its trial (tvDeProba), where the board plays until the processor path takes over. */
+	bool procesorNeprobat() const { return !m_ceas_placa; }
 	void setPotrivireTv(int ms)
 	{
 		m_potrivire_tv_ms = ms < -POTRIVIRE_TV_MAX_MS ? -POTRIVIRE_TV_MAX_MS : (ms > POTRIVIRE_TV_MAX_MS ? POTRIVIRE_TV_MAX_MS : ms);
@@ -1017,9 +1036,20 @@ private:
 	void esec(Sursa s, const std::string &motiv)
 	{
 		eDebug("[HdsEgalizator] sunetul se intoarce pe placa: %s", motiv.c_str());
-		inchideSesiunea();
+		/* Un ceas neprobat: placa revine inaintea oricarei asteptari dupa ALSA/GStreamer.
+		   Intrerupatorul este numai in RAM si nu se reseteaza la zap sau la schimbarea setarilor. */
+		const bool tv_proba = s.tv && tvDeProba() && s.fisier.empty();
+		if (!tv_proba)
+			inchideSesiunea();
 		{
 			std::lock_guard<std::mutex> l(m_lacat);
+			if (tv_proba)
+			{
+				m_tv_oprit_pornire = true;
+				m_preluat_intentie = 0;
+				if (m_sesiune)
+					m_sesiune->rampaJos = true;
+			}
 			m_stare = STARE_EROARE;
 			m_motiv = motiv;
 			if (s.fisier.empty())
@@ -1029,6 +1059,8 @@ private:
 				m_sursa_dorita = Sursa();
 		}
 		trimite(s.fisier.empty() ? MESAJ_INAPOI_PE_PLACA : MESAJ_OPRIT);
+		if (tv_proba)
+			inchideSesiunea();
 	}
 
 	void citesteCeasul(int demux);
@@ -1045,6 +1077,7 @@ private:
 	void firIesire(Sesiune *s);
 	void prelucreaza(Sesiune *s, const float *date, int cadre, long long pts90);
 	int sincronTv(Sesiune *s);
+	bool asteaptaPista(Sesiune *s);
 	void impingeTv(Sesiune *s, const std::vector<uint8_t> &es, const std::vector<std::pair<size_t, uint64_t> > &pts);
 	void impingeCuPts(Sesiune *s, const uint8_t *d, size_t n, bool are_pts, uint64_t pts);
 #if HAVE_GSTREAMER
@@ -1090,6 +1123,7 @@ private:
 	CeasImagine m_ceas_imagine;
 	CeasImagine m_ceas_decodor;           /* pe HiSilicon: VIDEO_GET_PTS, numai pentru comparatie */
 	const bool m_ceas_placa;              /* exista /proc/msp/sync00: ceasul imaginii din sincronul placii */
+	std::atomic<bool> m_tv_oprit_pornire{false};
 	/* sesiunea de flux care primeste mostre; laturi: firul GStreamer al serviciului si firul de control */
 	std::mutex m_lacat_flux;
 	Sesiune *m_sesiune_flux;
@@ -1400,7 +1434,27 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 	}
 
 	std::string placa;
-	if (!deschideIesirea(s, sursa, cerut, placa))
+	if (sursa.tv && sursa.fisier.empty() && m_ceas_placa)
+	{
+		/* HiSilicon: ALSA se deschide in firul placii, abia dupa ce decodorul placii si-a luat pista (asteaptaPista) */
+		{
+			std::lock_guard<std::mutex> l(m_lacat);
+			placa = m_placa;
+		}
+		if (!alsa.incarca())
+		{
+			esec(cerut, "fara-alsa");
+			return;
+		}
+		if (alsa.iesireOprita(placa) == 1)
+		{
+			esec(cerut, "placa-oprita");
+			return;
+		}
+		s->placa_amanata = placa;
+		s->alsa_amanat = true;
+	}
+	else if (!deschideIesirea(s, sursa, cerut, placa))
 		return;
 
 	/* LATM spre decodorul LATM: cadrele LOAS le desparte firul cititor (LoasCadre), deci fara parser; LATM prin ADTS
@@ -1460,7 +1514,7 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 		return;
 	}
 	s->cititor = std::thread(&eHdsEgalizatorMotor::firCititor, this, s);
-	if (s->pcm)
+	if (s->pcm || s->alsa_amanat.load())
 		s->iesire = std::thread(&eHdsEgalizatorMotor::firIesire, this, s);
 	reiaMasurile();
 	eDebug("[HdsEgalizator] pornit: %s%s, PID %d, %s, %s%s, iesirea %s", sursa.fisier.empty() ? "demux" : sursa.fisier.c_str(),
@@ -1501,7 +1555,7 @@ bool eHdsEgalizatorMotor::deschideIesirea(Sesiune *s, const Sursa &sursa, const 
 				std::lock_guard<std::mutex> l(m_lacat);
 				s->pcm = pcm;
 			}
-			r = alsa.nonblock(pcm, sursa.flux.empty() ? 0 : 1);
+			r = alsa.nonblock(pcm, (!sursa.flux.empty() || (sursa.tv && tvDeProba())) ? 1 : 0);
 			if (r >= 0)
 				r = alsa.set_params(pcm, Alsa::S16_LE, Alsa::RW_INTRETESUT, CANALE, RATA, 1, LATENTA_ALSA_US);
 		}
@@ -1888,12 +1942,25 @@ void eHdsEgalizatorMotor::firIesire(Sesiune *s)
 	RampaIesire rampa(RAMPA_IESIRE_S);
 	while (!s->gata)
 	{
+		if (s->alsa_amanat.load())
+		{
+			/* TV pe HiSilicon, inainte de preluare: placa canta, nimic nu iese de aici */
+			if (s->rampaJos)
+				break;
+			if (!asteaptaPista(s))
+				return;
+			if (s->alsa_amanat.load())
+			{
+				usleep(ASTEAPTA_PISTA_MS * 1000);
+				continue;
+			}
+		}
 		/* TV: fara ceas, inainte de sincron sau fara PTS perioada e tacere; cu sunetul devreme, tacerea hotarata de sincron
 		   (exact), apoi sunetul */
 		int tacere = (s->sursa.tv && !s->rampaJos) ? sincronTv(s) : 0;
 		/* canal TV in umbra: placa a cantat pana acum; sunetul de aici urca in rampa de preluare, iar mesajul care opreste
 		   sunetul placii pleaca sa cada in rampa (Preluare, hdsegalizator_dsp.h) */
-		if (s->umbra && s->preluare_la)
+		if (s->umbra && s->preluare_la && !tvOpritLaPornire())
 		{
 			if (!s->rampa_preluare)
 			{
@@ -1931,7 +1998,7 @@ void eHdsEgalizatorMotor::firIesire(Sesiune *s)
 		s->conv.converteste(f.data(), b.data(), PERIOADA_ALSA * CANALE);
 		s->abatere_ppm = (s->potrivire.raport() - 1.0) * 1e6;
 		long w = alsa.writei(s->pcm, b.data(), PERIOADA_ALSA);
-		if (!s->sursa.flux.empty())
+		if (!s->sursa.flux.empty() || (s->sursa.tv && tvDeProba()))
 		{
 			/* Fluxul foloseste ALSA neblocant: oprirea nu poate ramane prinsa in writei.
 			   Scrierile partiale se termina aici; la placa blocata nu pastram date fara limita. */
@@ -1960,7 +2027,8 @@ void eHdsEgalizatorMotor::firIesire(Sesiune *s)
 		{
 			/* recover(-ESTRPIPE) poate astepta resume fara limita, chiar pe un PCM neblocant.
 			   Fluxul online revine pe decodorul placii; oprirea nu asteapta o placa suspendata. */
-			if (!s->sursa.flux.empty() && (s->gata || s->rampaJos || (w != -EPIPE && w != -EINTR)))
+			if ((!s->sursa.flux.empty() || (s->sursa.tv && tvDeProba())) &&
+				(s->gata || s->rampaJos || (w != -EPIPE && w != -EINTR)))
 			{
 				s->caderi_alsa = CADERI_ALSA;
 				alsa.drop(s->pcm);
@@ -1981,10 +2049,64 @@ void eHdsEgalizatorMotor::firIesire(Sesiune *s)
 		else
 			la_rand = 0;
 	}
+	if (!s->pcm)
+		return;
 	if (s->rampaJos)
 		golesteCuLimita(s->pcm);
 	else
 		alsa.drop(s->pcm);
+}
+
+/* TV pe HiSilicon, firul placii, cat ALSA e amanat: ceasul imaginii (placa canta, deci sincronul placii il da). Cu ceasul
+   stabil si sunet decodat in tampon ALSA se deschide alaturi de placa, apoi preluarea merge ca pe celelalte receptoare
+   (SincronTv, rampa, pista placii tace). false: placa n-are loc pentru a doua pista (ENOMEM dupa zile de mers); sunetul
+   ramane pe placa, care n-a fost atinsa (verifica() intoarce cu alsa-refuzat) */
+bool eHdsEgalizatorMotor::asteaptaPista(Sesiune *s)
+{
+	s->sincron.faraPornire = true;
+	sincronTv(s);
+	if (!s->sincron.ceasStabil() || s->potrivire.umplere() < RATA * PRELUARE_TAMPON_MS / 1000 ||
+		s->sincron.stare.load() == SincronTv::FARA_CEAS)
+	{
+		/* ceasul placii vine, dar nu se linisteste niciodata: dupa cat ar fi asteptat drumul obisnuit (fara ceas, apoi
+		   pornirea potrivita) sesiunea se opreste, ca procesorul sa nu decodeze degeaba */
+		const uint64_t de_la = acumMs() - s->pornit_ms;
+		if (s->sincron.stare.load() != SincronTv::FARA_CEAS &&
+			de_la > (uint64_t)(SincronTv::FARA_CEAS_MS + SincronTv::NEPOTRIVIT_MS))
+		{
+			eDebug("[HdsEgalizator] TV: ceasul imaginii nu s-a linistit in %llu ms; sunetul ramane pe placa",
+				(unsigned long long)de_la);
+			s->sincron.stare = SincronTv::NEPOTRIVIT;
+			return false;
+		}
+		return true;
+	}
+	void *pcm = 0;
+	int r = alsa.open(&pcm, s->placa_amanata.c_str(), Alsa::REDARE, Alsa::NEBLOCANT);
+	if (r >= 0)
+	{
+		r = alsa.nonblock(pcm, 0);
+		if (r >= 0)
+			r = alsa.set_params(pcm, Alsa::S16_LE, Alsa::RW_INTRETESUT, CANALE, RATA, 1, LATENTA_ALSA_US);
+		if (r < 0)
+			alsa.close(pcm);
+	}
+	if (r < 0)
+	{
+		eDebug("[HdsEgalizator] placa ALSA %s alaturi de placa: %s (fara loc pentru a doua pista; sunetul ramane pe placa)",
+			s->placa_amanata.c_str(), alsa.strerror(r));
+		s->alsa_refuzat = true;
+		return false;
+	}
+	{
+		std::lock_guard<std::mutex> l(m_lacat);
+		s->pcm = pcm;
+	}
+	s->sincron.faraPornire = false;
+	s->alsa_amanat = false;
+	eDebug("[HdsEgalizator] TV: placa ALSA %s deschisa alaturi de placa dupa %llu ms", s->placa_amanata.c_str(),
+		(unsigned long long)(acumMs() - s->pornit_ms));
+	return true;
 }
 
 /* TV, firul placii: -> cate cadre de tacere incep perioada; hotararea o ia SincronTv (hdsegalizator_dsp.h, probata pe
@@ -2011,8 +2133,9 @@ int eHdsEgalizatorMotor::sincronTv(Sesiune *s)
 			s->sincron.eroare_ms.load(), m_ceas_placa ? "din sincronul placii" : (unitate == 1 ? "de la decodor, in ms" :
 			"de la decodor, la 90 kHz"), (unsigned long long)(acum - s->pornit_ms));
 	else if (ev == SincronTv::NEPOTRIVIT_LA_PORNIRE)
-		eDebug("[HdsEgalizator] TV: sunetul nu s-a putut porni potrivit in %d ms (abatere %.0f ms)", SincronTv::NEPOTRIVIT_MS,
-			s->sincron.eroare_ms.load());
+		eDebug("[HdsEgalizator] TV: sunetul nu s-a putut porni potrivit in %d ms (abatere %.0f ms, drumul ALSA si placa %.0f ms, "
+			"tamponul %.0f ms)", SincronTv::NEPOTRIVIT_MS, s->sincron.eroare_ms.load(), s->sincron.intarziere_ms.load(),
+			s->potrivire.umplere() * 1000.0 / RATA);
 	else if (ev == SincronTv::PREA_MULTE_CORECTII)
 		eDebug("[HdsEgalizator] TV: %d corectii mari in %d ms (abatere %.0f ms): ceasul imaginii nu se potriveste",
 			SincronTv::CORECTII_MAX, SincronTv::CORECTII_FEREASTRA_MS, s->sincron.eroare_ms.load());
@@ -2074,7 +2197,8 @@ void eHdsEgalizatorMotor::prelucreaza(Sesiune *s, const float *date, int cadre, 
 		s->lant.prelucreaza(s->tmp, n);
 		if (spectru)
 			s->spectru.adauga(s->tmp, n);
-		if (s->pcm)
+		/* alsa_amanat intai: firul placii scrie pcm inainte sa-l stinga */
+		if (s->alsa_amanat.load() || s->pcm)
 		{
 			/* Fisier/flux: placa impune ritmul si decodarea asteapta locul liber. */
 			if (!s->sursa.fisier.empty() || !s->sursa.flux.empty())
@@ -2237,6 +2361,11 @@ void eHdsEgalizatorMotor::verifica()
 			m_sursa_dorita = Sursa();
 		}
 		trimite(MESAJ_PROBA_GATA);
+		return;
+	}
+	if (s->alsa_refuzat.load())
+	{
+		esec(s->cerut, "alsa-refuzat");
 		return;
 	}
 	if (s->caderi_alsa.load() >= CADERI_ALSA)
@@ -2428,6 +2557,8 @@ PyObject *eHdsEgalizatorMotor::stare(const std::string &post)
 	puneText(d, "placa", m_placa);
 	puneText(d, "ceas_tv", m_ceas_tv);
 	puneInt(d, "tv", m_tv.load() ? 1 : 0);
+	puneInt(d, "tv_de_proba", tvDeProba() ? 1 : 0);
+	puneInt(d, "tv_oprit_pornire", tvOpritLaPornire() ? 1 : 0);
 	puneInt(d, "potrivire_tv_ms", m_potrivire_tv_ms.load());
 	puneText(d, "ceas_imagine_sursa", m_ceas_placa ? "placa" : "decodor");
 	if (s && s->sursa.tv)
@@ -2452,6 +2583,7 @@ PyObject *eHdsEgalizatorMotor::stare(const std::string &post)
 		/* 0: placa canta inca sunetul, pana se potriveste drumul din procesor; 1: sunetul trece prin egalizator */
 		puneInt(d, "preluat", s->umbra.load() ? 0 : 1);
 		puneReal(d, "sincron_tv_ms", s->sincron.eroare_ms.load());
+		puneReal(d, "intarziere_tv_ms", s->sincron.intarziere_ms.load());
 		puneInt(d, "ceas_imagine", unitate);
 		puneInt(d, "taceri_tv", (long)s->sincron.taceri.load());
 		puneInt(d, "aruncari_tv", (long)s->sincron.aruncari.load());
@@ -2481,7 +2613,7 @@ PyObject *eHdsEgalizatorMotor::stare(const std::string &post)
 		puneReal(d, "castig_inainte_db", s->pregain_db.load());
 		puneInt(d, "benzi_active", s->benzi_active.load());
 		puneInt(d, "limitari", (long)s->limitari.load());
-		puneText(d, "iesire", s->pcm ? "alsa:" + m_placa : "wav:" + s->sursa.wav);
+		puneText(d, "iesire", (s->pcm || s->alsa_amanat.load()) ? "alsa:" + m_placa : "wav:" + s->sursa.wav);
 		puneText(d, "fisier", s->sursa.fisier);
 		puneReal(d, "secunde", (acumMs() - s->pornit_ms) / 1000.0);
 		puneInt(d, "cadre", (long)s->cadre.load());
@@ -2685,6 +2817,8 @@ bool eHdsEgalizator::preiaFlux(const void *proprietar, const std::string &adresa
 	std::string motiv, fara_decodor;
 	if (!fata.pornit)
 		motiv = "oprit";
+	else if (s.wav.empty() && m_motor->procesorNeprobat())
+		motiv = "placa-neprobata";   /* the stream keeps the sink of the player (board decoder): procesorNeprobat */
 	else if (!::decodoare().gst)
 		motiv = "fara-gstreamer";
 	else if (s.wav.empty() && !alsa.incarca())
@@ -2794,8 +2928,12 @@ bool eHdsEgalizator::preiaSunetul(const void *proprietar, int demux, int pid, in
 		motiv = "fara-sunet";
 	else if (demux < 0)
 		motiv = "inregistrare";
+	else if (radio && m_motor->procesorNeprobat())
+		motiv = "placa-neprobata";   /* radio (and TV without picture) stays on the board: procesorNeprobat */
 	else if (!radio && !m_motor->tv())
 		motiv = "tv";
+	else if (!radio && m_motor->tvOpritLaPornire())
+		motiv = "tv-oprit-pornire";
 	else if (!radio && fel != felMpeg)
 		motiv = "format";          /* la TV numai MPEG: la AAC (LATM) PTS-ul nu se tine pe cadre */
 	else if (fel != felMpeg && fel != felAacAdts && fel != felAacLatm)

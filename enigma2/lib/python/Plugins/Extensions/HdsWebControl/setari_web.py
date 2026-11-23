@@ -382,13 +382,23 @@ def _textGol(el):
 	return str(gol or "")
 
 
-def _textStare(nod, tradu=None):
+def _textStare(nod, tradu=None, plugin=None):
 	tradu = tradu or _t
 	try:
 		from Components import HdsStareMeniu
-		return HdsStareMeniu.textNod(nod, tradu)
+		text = HdsStareMeniu.textNod(nod, tradu)
 	except ImportError:
-		return tradu(nod.get("text") or "??")
+		text = tradu(nod.get("text") or "??")
+	# Ca Setup.formatItemText: data contine texte literale, dupa traducere.
+	data = nod.get("data") if plugin else None
+	if data:
+		valori = data.split(",")
+		if text.count("%s") == len(valori):
+			try:
+				return text % tuple(valori)
+			except (TypeError, ValueError):
+				pass
+	return text
 
 
 def _randuri(cheie, config, SystemInfo=None):
@@ -461,7 +471,7 @@ def _descriere(el, fel, plugin=None):
 		# un PIN nescris are valoarea "aaaa" (ConfigPIN(default=-1)) sau -1
 		v = el.value
 		v = "".join(str(x) for x in v) if isinstance(v, (list, tuple)) else str(v if v is not None else "")
-		d["valoare_text"] = _t("nepusă") if v in ("", "0", "-1", "aaaa") else _t("pusă")
+		d["valoare_text"] = v
 	elif fel == "bool":
 		d["valoare"] = "1" if el.value else "0"
 		d["alegeri"] = _alegeri(el, fel)
@@ -499,7 +509,7 @@ def ecran(cheie, config=None, SystemInfo=None):
 	stare = []
 	for i, (x, el) in enumerate(_randuriNod(nod, plugin, config, SystemInfo)):
 		r = _descriere(el, _fel(el, x, plugin), plugin)
-		r.update(nr=i, text=_textStare(x, tradu), ajutor=tradu(x.get("description")) if x.get("description") else "",
+		r.update(nr=i, text=_textStare(x, tradu, plugin), ajutor=tradu(x.get("description")) if x.get("description") else "",
 			setare=(x.text or "").strip())
 		randuri.append(r)
 		for t in _stareSetare(el):
@@ -577,9 +587,21 @@ def _valoareNoua(el, fel, text, plugin=None):
 	return None
 
 
-def seteaza(cheie, valori, config=None, SystemInfo=None, configfile=None):
+def seteaza(cheie, valori, config=None, SystemInfo=None, configfile=None, la_gata=None):
 	"""POST /api/setari-seteaza: {"r<N>": text}. Toate valorile trebuie sa fie bune, altfel nu se schimba nimic."""
+	if cheie == "hds_lista_canale" and la_gata is None:
+		from twisted.internet.defer import Deferred
+		d = Deferred()
+		rez = seteaza(cheie, valori, config, SystemInfo, configfile, d.callback)
+		if rez is not None:
+			d.callback(rez)
+		return d
 	config = _config(config)
+	if cheie == "hds_lista_canale":
+		from Components import HdsSalvareLista as S
+		if S._OCUPAT[0]:
+			return {"result": False, "message": _t("Salvarea este în curs. Încearcă din nou după câteva clipe.")}
+
 	nod, plugin = _nodEcran(cheie)
 	if nod is None:
 		return {"result": False, "message": _t("Ecranul de setări „%s” nu există.") % cheie[:40]}
@@ -620,9 +642,27 @@ def seteaza(cheie, valori, config=None, SystemInfo=None, configfile=None):
 			except Exception as eroare:
 				_jurnal("changedFinal: %s" % eroare)
 			el.last_value = el.value[:] if isinstance(el.value, list) else el.value
-		el.save()
+		try:
+			if cheie != "hds_lista_canale" or la_gata is None:
+				el.save()
+		except OSError:
+			el.cancel()
+			rez = ecran(cheie, config, SystemInfo)
+			rez.update(result=False, message=_t("Nu s-a putut salva setarea. Verifică spațiul liber și încearcă din nou."))
+			return rez
 	if configfile is None:
 		from Components.config import configfile
+	if cheie == "hds_lista_canale" and la_gata is not None:
+		from Components import HdsSalvareLista as S
+		def gata(ok):
+			if not ok:
+				for el, v in noi:
+					el.cancel()
+			rez = ecran(cheie, config, SystemInfo)
+			rez.update(result=ok, message=_t("Salvat.") if ok else _t("Nu s-a putut salva setarea. Verifică spațiul liber și încearcă din nou."))
+			la_gata(rez)
+		S.salveaza([(None, el) for el, v in noi], config, configfile, gata)
+		return None
 	configfile.save()
 	rez = ecran(cheie, config, SystemInfo)
 	rez.update(result=True, message=_t("Salvat."))
@@ -631,7 +671,7 @@ def seteaza(cheie, valori, config=None, SystemInfo=None, configfile=None):
 
 def argumente(request):
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:MAX_RANDURI + 4]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie != "id" and not (cheie.startswith("r") and cheie[1:].isdigit() and len(cheie) <= 4):
@@ -639,7 +679,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:80].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -693,6 +733,14 @@ def rute(baza, resource, chei=None):
 			if not _deschis(cheie):
 				return self._eroare(request, _t("Ecranul de setări „%s” nu e în meniu.") % cheie[:40], 404)
 			try:
+				if cheie == "hds_lista_canale":
+					from twisted.web.server import NOT_DONE_YET
+					def gata(rez):
+						if not getattr(request, "finished", False):
+							request.write(self._raspunde(request, rez))
+							request.finish()
+					rez = seteaza(cheie, a, la_gata=gata)
+					return self._raspunde(request, rez) if rez is not None else NOT_DONE_YET
 				return self._raspunde(request, seteaza(cheie, a))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
@@ -704,6 +752,10 @@ def rute(baza, resource, chei=None):
 		isLeaf = True
 
 		def render_GET(self, request):
+			if b"deschis" in request.args:
+				from .meniu_comun_web import pagina as pagina_comuna
+				from .setari_deschise_web import pagina_text as pagina_deschisa
+				return pagina_comuna(request, pagina_deschisa)
 			return pagina(request)
 
 	class TemaWebResource(baza):
@@ -738,6 +790,8 @@ def rute(baza, resource, chei=None):
 
 	api = {b"setari": StareResource(), b"setari-seteaza": SeteazaResource(), b"tema-web": TemaWebResource(),
 		b"tema-web-seteaza": TemaWebSeteazaResource()}
+	from . import setari_deschise_web
+	api.update(setari_deschise_web.rute(baza))
 	return api, PaginaResource()
 
 
@@ -888,6 +942,7 @@ PAGINA = """<!DOCTYPE html>
 <main>
 <p><a class="inapoi" id="inapoi" href="/meniu">Înapoi la meniu</a></p>
 <h1 id="titlu">Setări</h1>
+<p><a href="/setari?deschis=1">Setările deschise pe televizor</a></p>
 <form class="cauta-setari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută în meniu: scrie un cuvânt, de exemplu subtitrări" aria-label="Caută în meniu" autocomplete="off"><button type="submit">Caută</button></form>
 <p class="mesaj" id="incarcare">Se citesc setările...</p>
 <section class="card ascuns" id="lista"><ul class="ecrane" id="ecrane"></ul>
@@ -1068,7 +1123,7 @@ window.addEventListener("focus", verificaTimp);
 document.addEventListener("visibilitychange", verificaTimp);
 function notaAplicatii(d){
   ULTIMA = d;
-  var n, a, p = PAROLA || NEARATATA;
+  var n, a, p = d.parola_aplicatii || PAROLA || NEARATATA;
   if(d.aplicatii){
     n = d.parola_web
       ? "Pornit: aplicațiile obișnuite de telefon pentru receptoare Enigma2 (canale, telecomandă, ghid, înregistrări, liste m3u) intră și din casă cu utilizatorul root și parola ta (pusă în Parola receptorului)."
@@ -1436,6 +1491,7 @@ TEXTE_PAGINA = {
 
 
 TEXTE_PAGINA["html"] += (N_("Renunță"),)
+TEXTE_PAGINA["html"] += (N_("Setările deschise pe televizor"),)
 # 0.7.6 (SXW): grupa ecranelor de setari ale pluginurilor instalate (setup.xml din dosarul pluginului)
 TEXTE_PAGINA["html"] += (N_("Pluginuri"),)
 TEXTE_PAGINA["js"] += (N_("Nu s-a schimbat nimic."),)

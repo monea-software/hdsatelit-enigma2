@@ -86,7 +86,8 @@ PV = "0.1.0"
 # /tmp/hds-stive-<pid>.cerere (toate firele citite din Python, sigur); faulthandler numai daca firul nu raspunde in 2 s:
 # inaintea opririi SIGRTMIN+9 (toate firele), la pornirea fara bataie SIGRTMIN+7 (numai firul principal); un enigma2
 # mai vechi (fara SIGRTMIN+9) primeste ca pana acum SIGRTMIN+7 numai inaintea opririi. Fara importuri noi.
-PR = "r19"
+# SGK1: record the reason before SIGKILL, without changing recovery deadlines.
+PR = "r20"
 
 SRC_URI = "file://hds-watchdog.py"
 S = "${UNPACKDIR}"

@@ -8,3 +8,7 @@
 # kcflags.inc, dat lui make prin mediu) atinge numai modulul. Pe celelalte masini reteta ramane neschimbata.
 KCFLAGS:append:u57 = " -mlong-calls"
 KCFLAGS:append:u571 = " -mlong-calls"
+
+# ZER1: deja n in sursa; pastrat explicit pentru urmatoarele revizii.
+PR:append = ".hdszer1"
+EXTRA_OEMAKE:append = " CONFIG_RTW_DEBUG=n"

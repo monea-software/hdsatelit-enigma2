@@ -164,6 +164,8 @@ def _pmt(s):
     pil = ((s[10] & 0x0F) << 8) | s[11]
     i, sf = 12 + pil, len(s) - 4
     es = []
+    ca_program = [((v[0] << 8) | v[1]) for tag, v in _descriptori(s[12:12 + pil])
+                  if tag == 0x09 and len(v) >= 4]
     while i + 5 <= sf:
         st = s[i]
         pid = ((s[i + 1] & 0x1F) << 8) | s[i + 2]
@@ -171,9 +173,11 @@ def _pmt(s):
         d = s[i + 5:min(i + 5 + eil, sf)]
         i += 5 + eil
         info = {'pid': pid, 'stream_type': st, 'taguri': [], 'dbid': None, 'component_tag': None,
-                't2mi': None, 'format_id': None}
+                't2mi': None, 'format_id': None, 'caid': list(ca_program)}
         for tag, v in _descriptori(d):
             info['taguri'].append(tag)
+            if tag == 0x09 and len(v) >= 4:
+                info['caid'].append((v[0] << 8) | v[1])
             if tag in (0x66, 0x64) and len(v) >= 2:
                 info['dbid'] = (v[0] << 8) | v[1]
             elif tag == 0x52 and len(v) >= 1:
@@ -1014,7 +1018,8 @@ def detecteaza(sectiuni, pachete_ts=None, timp_max=15.0, cunoscute=None, ceas=_m
         for s in citeste(sectiuni, PID_SDT, termen(2.2),
                           lambda: ultima_sdt[0] is not None and len(sec_sdt) > ultima_sdt[0]):
             s = sectiune_valida(s)
-            if s is None or s[0] != TID_SDT or not s[1] & 0x80:
+            if (s is None or len(s) < 15 or s[0] != TID_SDT or not s[1] & 0x80
+                    or not s[5] & 1):
                 continue
             try:
                 servicii.update(_sdt(s))
@@ -1022,6 +1027,8 @@ def detecteaza(sectiuni, pachete_ts=None, timp_max=15.0, cunoscute=None, ceas=_m
                 continue
             ultima_sdt[0] = s[7]
             sec_sdt.add(s[6])
+            if s[0] == 0x42 and ((s[3] << 8) | s[4]) == stare.get('tsid'):
+                stare['onid'] = (s[8] << 8) | s[9]
         for f in rez['feeduri'] + rez['candidati']:
             srv = servicii.get(f.get('program'))
             if srv:
@@ -1031,6 +1038,15 @@ def detecteaza(sectiuni, pachete_ts=None, timp_max=15.0, cunoscute=None, ceas=_m
                     f['nume'] = srv['nume']
         rez['servicii'] = {str(k): v for k, v in sorted(servicii.items())}
 
+    # Keep the service identity even without CA descriptors (common with BISS).
+    for f in rez['feeduri'] + rez['candidati']:
+        e = es_toate.get(f.get('pid')) or {}
+        if f.get('fel') == 't2mi' and e.get('program'):
+            if 0x2600 in e.get('caid', []):
+                f['acces'] = 'BISS'
+            f['purtator'] = {'sid': e['program'], 'tsid': stare.get('tsid')}
+            if stare.get('onid') is not None:
+                f['purtator']['onid'] = stare['onid']
     durata = ceas() - start
     stare['durata_s'] = round(durata, 2)
     if ceas() >= termen_total:

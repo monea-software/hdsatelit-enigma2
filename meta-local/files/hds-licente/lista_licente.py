@@ -55,7 +55,7 @@ CLASE = ("fara", "permisiva", "binar", "copyleft-slab", "copyleft", "necunoscuta
 RANG = dict((c, i) for i, c in enumerate(CLASE))
 
 # licente fara nicio conditie la redistribuire
-FARA = set(["PD", "CC0-1.0", "Unlicense", "0BSD", "MIT-0"])
+FARA = set(["PD", "CC0-1.0", "Unlicense", "0BSD", "MIT-0", "blessing"])
 PERMISIVE = set([
 	"MIT", "ISC", "Zlib", "zlib", "curl", "Libpng", "libpng-2.0", "bzip2-1.0.6", "hdparm", "FTL", "IJG", "X11",
 	"NTP", "HPND", "BSL-1.0", "WTFPL", "OpenSSL", "SSLeay", "Unicode-TOU", "Unicode-DFS-2016", "Unicode-3.0",
@@ -70,17 +70,22 @@ PREFIXE_PERMISIVE = ("MIT", "BSD-", "Apache-", "PSF-", "Python-", "ZPL-", "AFL-"
 PREFIXE_SLABE = ("LGPL-", "MPL-", "EPL-", "CDDL-", "GFDL-", "EUPL-", "CPL-")
 # licentele Microsoft cu copyleft pe fisier (sursa se da sub aceeasi licenta): socotite ca LGPL/MPL, deci sursa lor
 # se pastreaza la construire
-SLABE = set(["MS-PL", "MS-RL"])
+SLABE = set(["MS-PL", "MS-RL", "GCR-docs"])
+EXCEPTII = set(["GCC-exception-3.1"])
 PREFIXE_COPYLEFT = ("GPL-", "AGPL-")
 
 # fisiere din dosarul unei retete care nu sunt texte de licenta: datele retetei si inlocuitorii pusi de OE pentru
 # licentele inchise
-FISIERE_FARA_TEXT = ("recipeinfo", "LICENSE-CLOSE", "generic_CLOSED", "generic_Proprietary")
+FISIERE_FARA_TEXT = ("recipeinfo", "LICENSE-CLOSE", "generic_CLOSED", "generic_Proprietary", "generic_LicenseRef-Proprietary")
 
 
 def clasa_licenta(lic):
 	"""clasa unui singur identificator de licenta"""
 	lic = lic.strip()
+	if " WITH " in lic:
+		baza, exceptie = lic.split(" WITH ", 1)
+		return clasa_licenta(baza) if exceptie in EXCEPTII else "necunoscuta"
+	lic = {"LicenseRef-Proprietary": "Proprietary", "LicenseRef-PD": "PD"}.get(lic, lic)
 	if lic in ("CLOSED", "Proprietary") or lic.startswith("Proprietary") or lic.startswith("Commercial"):
 		return "inchisa"
 	if lic.startswith("Firmware") or lic.startswith("LICENCE.") or lic.startswith("LicenseRef-Firmware"):
@@ -97,7 +102,7 @@ def clasa_licenta(lic):
 
 
 def _atomi(expresie):
-	return re.findall(r"[()&|]|[^\s()&|]+", expresie)
+	return [{"AND": "&", "OR": "|"}.get(a, a) for a in re.findall(r"[()&|]|[^\s()&|]+", expresie)]
 
 
 class _Parser(object):
@@ -139,9 +144,16 @@ class _Parser(object):
 				raise ValueError("paranteza neinchisa")
 			self.poz += 1
 			return rez
-		if a in (")", "&", "|"):
+		if a in (")", "&", "|", "WITH"):
 			raise ValueError("semn neasteptat: %s" % a)
 		self.poz += 1
+		if self._urm() == "WITH":
+			self.poz += 1
+			exceptie = self._urm()
+			if exceptie not in EXCEPTII:
+				raise ValueError("exceptie de licenta necunoscuta: %s" % exceptie)
+			self.poz += 1
+			return clasa_licenta(a), [a + " WITH " + exceptie]
 		return clasa_licenta(a), [a]
 
 
@@ -226,6 +238,18 @@ def dosar_reteta(licente_dir, reteta, arhitecturi):
 	return None
 
 
+def licenta_din_recipeinfo(dosar):
+	"""OE poate omite CLOSED din manifest; recuperam numai valoarea explicita."""
+	if not dosar:
+		return ""
+	try:
+		with io.open(os.path.join(dosar, "recipeinfo"), "r", encoding="utf-8") as f:
+			valori = set(rand.split(":", 1)[1].strip() for rand in f if rand.startswith("LICENSE:"))
+	except OSError:
+		return ""
+	return next(iter(valori)) if len(valori) == 1 else ""
+
+
 def texte_reteta(dosar):
 	"""[(nume, octeti)]: intai fisierele sursei (COPYING, LICENSE, antete), apoi textele generice SPDX"""
 	if not dosar:
@@ -305,11 +329,13 @@ def _texte_expresie(licente_comune, intrare, texte):
 	if not isinstance(ids, list):
 		ids = [ids]
 	for atom in _atomi(intrare.get("licenta") or ""):
-		if atom not in "()&|" and atom not in ids and clasa_licenta(atom) not in ("inchisa", "necunoscuta"):
+		if atom not in "()&|" and atom not in ids and (clasa_licenta(atom) not in ("inchisa", "necunoscuta") or atom in EXCEPTII):
 			ids.append(atom)
 	rez = []
 	for spdx in ids:
 		t = _text_comun(licente_comune, spdx, texte)
+		if not t and spdx in EXCEPTII:
+			raise ValueError("lipseste textul exceptiei de licenta %s" % spdx)
 		if t and t[1] not in [x[1] for x in rez]:
 			rez.append(t)
 	return rez
@@ -402,6 +428,10 @@ def construieste(license_manifest, licente_dir, arhitecturi, instalate, radacina
 	texte = {}
 	retete = {}
 	for p in pachete:
+		if not p["licenta"]:
+			p["licenta"] = licenta_din_recipeinfo(dosar_reteta(licente_dir, p["reteta"], arhitecturi))
+		if not p["licenta"]:
+			erori.append("%s: identificatorul licentei lipseste din manifest si recipeinfo" % p["reteta"])
 		try:
 			clasa, ids = evalueaza(p["licenta"]) if p["licenta"] else ("necunoscuta", [])
 		except ValueError as e:

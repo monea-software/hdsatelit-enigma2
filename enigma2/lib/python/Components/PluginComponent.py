@@ -34,6 +34,27 @@ def _pluginPermis(categorie, nume):
 		return True
 
 
+def _imagineSchimbata():
+	"""HDSatelit 0.7.8 (CM3): programul imaginii (enigma2-hdsatelit) de pe disc nu mai e cel care ruleaza
+	(Components/HdsPluginExtern.imagineSchimbataPeDisc). False la orice eroare."""
+	try:
+		from Components.HdsPluginExtern import imagineSchimbataPeDisc
+		return bool(imagineSchimbataPeDisc())
+	except Exception as exc:
+		print("[PluginComponent] programul imaginii schimbat pe disc:", exc)
+		return False
+
+
+def _cereRepornirea(amanate):
+	"""HDSatelit 0.7.8 (CM3): aceeasi stare ca dupa o actualizare instalata (repornirea ceruta, singura in standby).
+	Nu arunca."""
+	try:
+		from Components import HdsActualizari
+		HdsActualizari.cere_repornirea_imaginii("pluginuri noi: " + ", ".join(amanate))
+	except Exception as exc:
+		print("[PluginComponent] repornirea ceruta:", exc)
+
+
 def numeFisierePlugin():
 	"""Fisierele care fac dintr-un dosar un plugin: plugin.py, plugin.pyc, plugin.pyo si plugin compilat ca modul nativ (plugin.so,
 	plugin.cpython-314-<arh>.so, plugin.abi3.so: Cython, cum vin unele pluginuri externe, de pilda WireGuard VPN 16.2). Fara modulele
@@ -348,6 +369,15 @@ class PluginComponent:
 		self.eroriTaste = {}
 		self.amanate = {}
 		self.amanateToate = {}
+		# HDSatelit 0.7.8 (CM3): o citire ceruta cat interfata ruleaza (un panou strain dupa instalarea lui, schimbarea limbii,
+		# un plugin care cere lista din nou), dupa ce un opkg a schimbat programul imaginii pe disc: un plugin neimportat inca
+		# nu se mai importa in procesul vechi. Modulele lui native sunt facute pe programul nou (ServiceApp r11 pe enigma2 0.7.5:
+		# "undefined symbol: _ZN7eThread4killEv" pe 19 receptoare). Pluginul asteapta repornirea interfetei
+		# (fel repornire, ca un plugin amanat), fara fereastra de avertisment si fara raport; repornirea e ceruta ca dupa o
+		# actualizare (Components/HdsActualizari.cere_repornirea_imaginii: ecranul, pagina web, singura in standby). Pluginurile
+		# deja importate raman cum sunt; prima citire (pornirea interfetei) nu se atinge.
+		imagineNoua = not self.firstRun and _imagineSchimbata()
+		amanateImagine = []
 
 		for c in categories:
 			directory_category = directory + c
@@ -359,6 +389,10 @@ class PluginComponent:
 					if areFisierPlugin(path):
 						if not _pluginPermis(c, pluginname):
 							self._puneEroare(c, pluginname, path, "mod_sigur")
+							continue
+						if imagineNoua and ".".join(["Plugins", c, pluginname, "plugin"]) not in sys_modules:
+							self._puneEroare(c, pluginname, path, "repornire")
+							amanateImagine.append(c + "/" + pluginname)
 							continue
 						etapa = "import"
 						if semn is not None:
@@ -432,6 +466,12 @@ class PluginComponent:
 								self.eroriTaste[path] = _textEroare(exc)
 								_raporteazaIncarcare(c, pluginname, exc, "keymap")
 
+		if amanateImagine:
+			print("[PluginComponent] programul imaginii s-a schimbat pe disc sub interfata: pluginurile noi asteapta repornirea "
+				"interfetei: %s" % ", ".join(amanateImagine))
+			self.restartRequired = True
+			_cereRepornirea(amanateImagine)
+
 		# build a diff between the old list of plugins and the new one
 		# internally, the "fnc" argument will be compared with __eq__
 		plugins_added = [p for p in new_plugins if p not in self.pluginList]
@@ -500,6 +540,9 @@ class PluginComponent:
 			return _("Nu s-a încărcat: %s") % _("Nu are funcția Plugins")
 		if fel == "descriptor":
 			return _("Nu s-a încărcat: %s") % _("Descriere greșită a pluginului")
+		if fel == "repornire":
+			# 0.7.8 (CM3): neincarcat fiindca programul imaginii s-a schimbat pe disc (_citesteLista)
+			return _("Necesită repornirea interfeței")
 		if eroare.get("modul") == "fissix":
 			# motorul traducerii (python3-fissix, adus de HdsModuleLipsa cu harta): textul despre Python 2, nu "Lipsește modulul fissix"
 			return _("Nu s-a încărcat: %s") % _("scris pentru Python 2; traducătorul nu e instalat încă")

@@ -215,7 +215,19 @@ void gFBDC::setResolution(int xres, int yres)
 	eDebug("[gFBDC] interfata %dx%d: %d pagini, memoria video %d kB, accelerare %d kB", surface.x, surface.y,
 		m_enable_double_buffering ? 2 : 1, fb->Available() / 1024, (fb->Available() - fb_size) / 1024);
 
-	if (gAccel::getInstance())
+	// HD Satelit (ION1): on Dreambox with the ION option the 2D engine has its own buffer (fb.cpp), handed over
+	// once, or no memory at all when ION failed; the screen memory is then never used for it. Everywhere else (and
+	// with the option off): the memory after the pages, as before.
+	void *ion_addr = 0;
+	int ion_phys = 0, ion_size = 0;
+	const int ion = fb->accelIon(ion_addr, ion_phys, ion_size);
+	if (ion == 1)
+	{
+		eDebug("[gFBDC] accelerare din ION: %d kB", ion_size / 1024);
+		if (gAccel::getInstance())
+			gAccel::getInstance()->setAccelMemorySpace(ion_addr, ion_phys, ion_size);
+	}
+	else if (ion == 0 && gAccel::getInstance())
 		gAccel::getInstance()->setAccelMemorySpace(fb->lfb + fb_size, surface.data_phys + fb_size, fb->Available() - fb_size);
 
 	if (!surface.clut.data)

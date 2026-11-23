@@ -6,21 +6,10 @@
 # a fost deja verificata (semnatura si tiparele argumentelor) de HdsAsistenta.py; aici se ruleaza numai operatia ceruta
 # si se intoarce raspunsul, filtrat si plafonat.
 #
-# Nivelul A: numai citiri (si textul ecranului, op "ecran") si trei probe (captura video cu OSD, un mesaj pe ecran, concluziile
-# echipei pe ecran). Nivelul B ("Control complet", bifat de om pe pagina de pornire) adauga op-urile de control
-# (CONTROL: tastele telecomenzii si textul intr-un camp), refuzate aici cand ctx["nivel"] nu e "B" (fara ecrane
-# private, echipa vede ce e pe televizor; textul trimis spre noi trece in continuare prin filtrul de parole). Nimic nu scrie pe disc in afara jurnalului
-# sesiunii. Externele se cheama cu lista de argumente (execve, FARA shell), cu termen si plafon de octeti. O singura
-# operatie primeste o cale (op "citeste", din 0.6.21): numai sub RADACINI_CITIRE, verificata dupa realpath (nicio
-# legatura spre afara, spre discuri sau stick-uri) si niciodata prin LOCURI_OPRITE (fisierele de parole si cheile private)
-# sau LOCURI_NESIGURE (memoria bruta si fluxurile nucleului care nu se termina).
-#
-# Eduard, 12.11.2026 19:17 si 19:19 („cine a spus sa nu faca jurnalul despre rolele si problemele modulelor? eu am spus
-# sa fie tot, tot, tot”; „FARA PAROLE, ATAT”): asistenta vede tot, si modulele de acces (jurnalele, fisierele si dosarele
-# lor, procesele, setarile config.softcam...), si numele, gazdele, porturile, adresele MAC. Din tot ce pleaca spre echipa
-# se ascund NUMAI parolele (Components/HdsAsistentaControl.mascheazaParole). Hotararea inlocuieste nota din 01.11.2026
-# 23:40 (fara module si fara date personale in asistenta). Ce iese public pe forum (rapoartele testerilor, codurile QR)
-# ramane curatat ca inainte (HdsBetaTester.curata, HdsDiagnostic.faraDatePersonale).
+# Orice sesiune permite control complet. Datele receptorului ajung integral la echipa.
+# Citirile pastreaza numai exceptiile nodurilor care pot agata driverul sau nucleul.
+# Comenzile folosesc mecanismul existent, cu argumente separate si fara shell.
+# Asistenta nu ofera operatii de flash sau de scriere directa pe partitiile de pornire.
 #
 # Fiecare op din catalog are aici o functie (TABEL); o proba cere ca cele doua liste sa coincida. Partea de sus nu
 # importa nimic din enigma2: functiile care au nevoie de receptor (captura, mesaj, memoria decodorului, setarile)
@@ -29,18 +18,25 @@
 import os
 import re
 import subprocess
+import threading
+
+try:
+	_
+except NameError:
+	from gettext import gettext as _
 
 from Components.HdsAsistentaControl import mascheazaParole
 from Components.HdsProcFundal import nodOprit
 
-RASPUNS_MAX = 1024 * 1024           # 1 MB de raspuns (text sau captura)
+RASPUNS_MAX = 16 * 1024 * 1024      # Textul mare foloseste si citirea pe bucati existenta.
 # coada unui fisier mai mare: putin sub plafon, ca randul de inceput si stelutele sa nu taie sfarsitul (_taie)
 COADA_MAX = RASPUNS_MAX - 16 * 1024
 CAPTURA_MAX = 2 * 1024 * 1024       # o captura (JPEG mic de la 0.6.15; PNG inainte) se plafoneaza aparte
 # op-urile de control: numai la nivelul B (omul a lasat bifat "Control complet")
-CONTROL = ("taste", "text", "zap", "reporneste", "setare-scrie", "instaleaza", "dezinstaleaza", "repara-actualizarea")
+CONTROL = ("taste", "text", "zap", "reporneste", "setare-scrie", "instaleaza", "dezinstaleaza", "repara-actualizarea",
+	"repara-buchetele", "comanda", "scrie")
 TERMEN_S = 20                       # cat asteapta un extern
-MAX_RANDURI_JURNAL = 2000
+MAX_RANDURI_JURNAL = 1000000
 
 CALE_JURNALE = "/home/root/logs"
 IMAGE_VERSION = "/etc/image-version"
@@ -67,9 +63,9 @@ class Rezultat(object):
 # ---------------------------------------------------------------- filtre si plafoane
 
 def mascheaza(text):
-	"""Iesirea spre echipa: numai parolele devin *** (Eduard, 12.11.2026 19:19), plus utilizatorul din adresele de flux
-	IPTV, care e contul liniei (DSP 14.11.2026). Randurile modulelor de acces, numele de utilizator din afara adreselor,
-	gazdele, porturile si adresele MAC raman. Trece aici orice raspuns text, al oricarei operatii (ruleaza)."""
+	"""Iesirea spre echipa, intreaga: si parolele, si adresele de flux IPTV cu utilizatorul si parola (REGULA 0, Eduard
+	21.11.2026: in imagine nu se mascheaza nimic pana dupa 1.0; ASX3, ASI7). Pe 0.7.7 aici se puneau *** (/live/***/***/
+	in op canal). Trece aici orice raspuns text, al oricarei operatii (ruleaza)."""
 	return mascheazaParole(text or "")
 
 
@@ -278,7 +274,6 @@ def _temperaturi(ctx):
 # STARTUP_LINUX_<loc>_BOXMODE_<mod> (hdemmc, AX HD51; asistenta 801539, darog69, 14.11.2026: op placa arata numai STARTUP)
 STARTUP_NUME = re.compile(r"^STARTUP(_[A-Z0-9_]{1,40})?$")
 MAX_ALTE_BOOT = 100
-TEXT_BOOT_NUMAI_STARTUP = "(pe /boot se citesc numai fisierele de pornire STARTUP*; restul numai ca nume, cu citeste /boot)"
 
 
 def _textStartup(cale):
@@ -319,35 +314,6 @@ def _textePornire(ctx):
 		if len(alte) > MAX_ALTE_BOOT:
 			text += " ... inca %d" % (len(alte) - MAX_ALTE_BOOT)
 	return text
-
-
-def _citesteBoot(ctx, cerut):
-	"""op citeste pe /boot: dosarul da numai numele intrarilor (felul, marimea, numele, fara continut), iar un fisier se
-	citeste numai daca e un fisier de pornire (STARTUP_NUME, _textStartup). /boot nu e o radacina de citire: restul
-	partitiei de pornire (nucleul, arborele placii, imaginile de rezerva) ramane necitit."""
-	baza = ctx.get("boot", "/boot")
-	if cerut.rstrip("/") == "/boot":
-		import stat as S
-		try:
-			nume = sorted(os.listdir(baza))
-		except OSError as e:
-			return Rezultat(1, text="(nu se poate citi /boot: %s)" % type(e).__name__)
-		randuri = []
-		for n in nume[:MAX_INTRARI_DOSAR]:
-			try:
-				st = os.lstat(os.path.join(baza, n))
-			except OSError:
-				continue
-			fel = "d" if S.S_ISDIR(st.st_mode) else ("l" if S.S_ISLNK(st.st_mode) else ("f" if S.S_ISREG(st.st_mode) else "c"))
-			randuri.append("%s %10s  %s" % (fel, st.st_size if fel == "f" else "-", n + ("/" if fel == "d" else "")))
-		return Rezultat(0, text="/boot:\n" + ("\n".join(randuri) or "(dosar gol)"))
-	n = cerut[len("/boot/"):]
-	if "/" in n or not STARTUP_NUME.match(n):
-		return Rezultat(1, text=TEXT_BOOT_NUMAI_STARTUP)
-	text = _textStartup(os.path.join(baza, n))
-	if text is None:
-		return Rezultat(1, text="(nu exista: %s)" % cerut)
-	return Rezultat(0, text=text)
 
 
 def op_placa(ctx, args):
@@ -441,52 +407,32 @@ def op_tunere(ctx, args):
 
 
 # ---------------------------------------------------------------- citirea unui fisier sau a unui dosar (op "citeste")
-# Eduard, 01.11.2026 23:40: asistenta vede tot hardware-ul si tot ce e pe receptor; din 12.11.2026 19:19 si modulele de
-# acces si datele omului, fara parole (vezi capul fisierului). Caile primite au trecut de tiparul din catalog (numai sub RADACINI_CITIRE, fara
-# spatii); aici: realpath (legaturile simbolice si ".." se rezolva, iar locul real trebuie sa ramana sub
-# RADACINI_REALE: /proc/<pid>/fd, /proc/<pid>/root sau o legatura din /tmp spre un disc cad), apoi LOCURI_OPRITE si
-# LOCURI_NESIGURE pe calea ceruta si pe cea reala. Numai fisiere obisnuite (si cele din /proc, /sys) si dosare: un FIFO
-# sau un socket din /tmp ar tine sesiunea pe loc. Fisierul se citeste prin head (termen si plafon, ca un extern), iar
-# raspunsul trece prin mascheaza (numai parolele ca stelute). Din 12.11.2026 19:19 (Eduard: „FARA PAROLE, ATAT”) se citesc
-# si fisierele modulelor de acces (jurnalele din /tmp si /var/log, /etc/init.d, /etc/tuxbox/config, oscam.server,
-# CCcam.cfg), setarile intregi, Wi-Fi-ul, IPTV-ul, linia de comanda a proceselor: toate cu parolele mascate.
-# Din 0.7.5 si pluginurile si fisierele interfetei (asistenta 423813, NeoBoot: .location si codul unui plugin strain
-# care cade; TODO 14.11 17:55), numai citire: /usr/lib/enigma2/python/Plugins si /usr/share/enigma2. Restul lui /usr nu.
-RADACINI_USR = ("/usr/lib/enigma2/python/Plugins", "/usr/share/enigma2")
-RADACINI_CITIRE = ("/proc", "/sys", "/etc", "/var/log", "/home/root/logs", "/tmp") + RADACINI_USR
+# Eduard, 01.11.2026 23:40 si REGULA 0 (21.11.2026): asistenta vede tot ce e pe receptor, integral, inclusiv parolele.
+# Caile primite au trecut de tiparul din catalog; aici: realpath (legaturile simbolice si ".." se rezolva; in probe locul
+# real trebuie sa ramana in dosarul probei), apoi LOCURI_NESIGURE pe calea ceruta si pe cea reala (citiri care agata
+# nucleul). Numai fisiere obisnuite (si cele din /proc, /sys) si dosare: un FIFO sau un socket din /tmp ar tine sesiunea
+# pe loc. Fisierul se citeste prin head (termen si plafon, ca un extern).
+# ASP7 (REGULA 0, 22.11.2026): radacina e "/" (tot receptorul); listele de locuri oprite (RADACINI_USR, LOCURI_OPRITE,
+# LOCURI_OPRITE_USR) nu mai erau folosite si s-au scos.
+RADACINI_CITIRE = ("/",)
 # unde duc pe receptor (OE: /var/log -> /var/volatile/log, /tmp -> /var/volatile/tmp)
 RADACINI_REALE = RADACINI_CITIRE + ("/var/volatile/log", "/var/volatile/tmp")
-# sub RADACINI_USR, in plus: cheile modulelor de acces lasate de unele pluginuri (constant.cw, dosarele keys; fisierele
-# *.key sunt inchise oricum, din LOCURI_OPRITE)
-LOCURI_OPRITE_USR = re.compile(r"(?i)\.cw$|(?:^|/)keys?(?:/|$)")
-# o cale (sau tinta unei legaturi, ori locul dupa "..") din afara radacinilor: spus ca atare, nu ca fisier de parole (tinta nu
-# se scrie: poate fi numele unui film sau al unui fisier personal de pe disc)
-TEXT_IN_AFARA = ("(in afara cailor permise: calea sau tinta legaturii nu e sub /proc, /sys, /etc, /var/log, "
-	"/home/root/logs, /tmp, /usr/lib/enigma2/python/Plugins sau /usr/share/enigma2; discurile nu se citesc)")
-# Inchise raman numai fisierele care sunt ele insele parole sau chei private (formatul lor nu are o eticheta dupa care
-# sa se mascheze parola): parolele sistemului (shadow, smbpasswd, htpasswd, .netrc, chap-secrets), cheile SSH si TLS,
-# VPN-ul si WireGuard (numele, parola si cheia privata), fisierele *.key (cheile TLS si listele de chei), jetoanele si
-# secretele conturilor (tin loc de parola) si cheile noastre (/etc/enigma2/hdsatelit/*.bin, hdsatelit-ssh).
-LOCURI_OPRITE = re.compile(
-	r"(?:^|/)g?shadow(?:[.~-]|$)|smbpasswd|htpasswd|passdb\.tdb|netrc|(?:chap|pap)-secrets|"
-	r"hdsatelit-ssh|(?:^|/)\.?ssh(?:/|_|$)|dropbear|ssl/private|\.pem$|\.key$|\.p12$|\.pfx$|"
-	r"vpn|wireguard|(?:^|/)wg\d|jeton|token|secret|"
-	r"^/etc/enigma2/hdsatelit/[^/]*\.bin$")
+# o cale (sau tinta unei legaturi, ori locul dupa "..") din afara radacinii receptorului (in probe: din afara dosarului
+# probei); tinta nu se scrie
+TEXT_IN_AFARA = "(in afara radacinii receptorului)"
 # Nu tin secrete, dar nu se citesc: memoria bruta si fluxurile nucleului care nu se termina (ar tine sesiunea pana la
 # termen sau ar citi memoria altor procese).
 LOCURI_NESIGURE = re.compile(r"kcore|kmsg|pagemap|trace_pipe|(?:^|/)mem$")
 TERMEN_CITIRE_S = 10
-MAX_INTRARI_DOSAR = 2000
-TEXT_CITIRE_OPRITA = "(inchis: fisierele de parole si cheile private nu se citesc; din rest se ascund numai parolele)"
+MAX_INTRARI_DOSAR = 1000000
+TEXT_CITIRE_OPRITA = _("Nodul nu se citește: poate aștepta la nesfârșit.")
 # fisierele din /proc/stb pe care restul imaginii nu le citeste (Components/HdsProcFundal.nodOprit): numele da, continutul nu
 TEXT_NOD_OPRIT = "(necitit: pe aceasta placa citirea poate opri nucleul sau poate astepta la nesfarsit)"
 
 
 def _oprit(cale):
-	c = (cale or "").lower()
-	if LOCURI_OPRITE.search(c) or LOCURI_NESIGURE.search(c):
-		return True
-	return _sub(cale or "", RADACINI_USR) and bool(LOCURI_OPRITE_USR.search(c))
+	"""Raman oprite numai nodurile care pot agata citirea."""
+	return bool(LOCURI_NESIGURE.search((cale or "").lower()))
 
 
 def _hisilicon(ctx):
@@ -495,7 +441,7 @@ def _hisilicon(ctx):
 
 
 def _sub(cale, radacini):
-	return any(cale == r or cale.startswith(r + "/") for r in radacini)
+	return any(cale == r or cale.startswith(r.rstrip("/") + "/") for r in radacini)
 
 
 # Ghidul tinut minte (Components/HdsEpgSalvare.CALE) e binar, de 7-50 MB: in loc de octeti, op citeste da pe el limbile
@@ -558,8 +504,6 @@ def op_citeste(ctx, args):
 	de_la = _deLa(args, 1)
 	if cerut == EPG_DAT:
 		return _citesteEpgDat(ctx, radacina)
-	if _sub(cerut, ("/boot",)):
-		return _citesteBoot(ctx, cerut)
 	if _oprit(cerut):
 		return Rezultat(1, text=TEXT_CITIRE_OPRITA)
 	if not _sub(cerut, RADACINI_CITIRE):
@@ -611,6 +555,14 @@ def op_citeste(ctx, args):
 		termen=TERMEN_CITIRE_S)
 	if cod == 124:
 		return Rezultat(1, text="(%s nu s-a putut citi in %d s)" % (cerut, TERMEN_CITIRE_S))
+	if cod == 0 and not text and st.st_size > 0:
+		# Un extern gol nu dovedeste ca fisierul este gol. Reincercam prin citirile mici cu termen.
+		cod2, octeti, eroare = _citesteBucati(real_plin, max(0, st.st_size - COADA_MAX) if coada else 0,
+			COADA_MAX if coada else RASPUNS_MAX + 1, TERMEN_CITIRE_S)
+		if cod2 == 0 and octeti:
+			text = octeti.decode("utf-8", "replace")
+		else:
+			return Rezultat(1, text=_("Eroare de citire: fișierul anunțat ca nevid nu a dat date. Încearcă din nou."))
 	if cod != 0 and st.st_size == 0 and _sub(real, ("/proc", "/sys")):
 		# un driver care refuza citirea lui head (Input/output error la /proc/bus/nim_sockets pe Vu+ 4K, asistenta
 		# 636002): inca o data, cu citirile mici din Python, ca op tunere; dupa un termen (124) nu se mai incearca
@@ -861,6 +813,8 @@ def op_jurnal(ctx, args):
 		return Rezultat(0, text="%s\n%s" % (cap, "\n".join(primele)))
 	# coada fisierului, nu inceputul (asistenta 252913: hds-interfata.log are 1,5 MB pe SF8008 si se intorcea mijlocul)
 	text = _citesteCoada(real, COADA_MAX)
+	if not text and os.path.getsize(real) > 0:
+		return Rezultat(1, text=_("Eroare de citire: jurnalul anunțat ca nevid nu a dat date. Încearcă din nou."))
 	ultimele = text.splitlines()[-randuri:]
 	return Rezultat(0, text="\n".join(ultimele))
 
@@ -887,31 +841,16 @@ def op_procese(ctx, args):
 	return Rezultat(0, text="\n".join(randuri))
 
 
-# Citirea permite setarile tuturor ecranelor deschise (si ale modulelor de acces, config.softcam..., din 12.11.2026);
-# scrierea isi pastreaza lista separata din Control.
-SETARI_PERMISE = ("config.",)
-# o setare care tine o parola, un PIN (al controlului parental) sau cheia cu care receptorul trimite ca tester
-# (config.hds_beta.id, tine loc de parola la serverul nostru): valoarea intreaga devine ***; la fel cheile care se termina
-# in token (config.plugins.hdswebcontrol.token e cheia de acces a interfetei web pentru scripturi; AS12, TODO 14.11 01:25)
-_CHEIE_PAROLA = re.compile(r"(?i)(?:password|passwd|passphrase|pwd|parol|wep_key|(?:^|[._-])(?:pass|psk)[0-9]*$|pin(?:[._]?[0-9]+)?$|"
-	r"(?:^|[._-])token$|"
-	r"^config\.hds_beta\.(?:id|cod)$)")
-
-
 def op_setari(ctx, args):
+	"""Tot fisierul de setari, asa cum e (ASZ6, REGULA 0: si randurile din afara config., fara mascare; AS93, AS69)."""
 	cale = ctx.get("settings", "/etc/enigma2/settings")
-	randuri = []
-	for rand in _citeste(cale, 512 * 1024).splitlines():
-		rand = rand.strip()
-		if "=" not in rand:
-			continue
-		cheie = rand.split("=", 1)[0]
-		if not any(cheie.startswith(p) for p in SETARI_PERMISE):
-			continue
-		if _CHEIE_PAROLA.search(cheie):
-			rand = cheie + "=***"
-		randuri.append(mascheazaParole(rand))
-	return Rezultat(0, text="\n".join(randuri) or "(nicio setare in lista permisa)")
+	text = _citeste(cale, RASPUNS_MAX)
+	if len(text.encode("utf-8", "replace")) > RASPUNS_MAX:
+		# la plafon se taie la capatul ultimului rand intreg
+		text = text.rpartition("\n")[0]
+	# randurile intregi, cu capatul de rand "\n" (si fisierele scrise cu CRLF)
+	text = "\n".join(text.splitlines())
+	return Rezultat(0, text=text or "(fisierul de setari e gol)")
 
 
 def op_captura(ctx, args):
@@ -946,26 +885,15 @@ def op_ecran(ctx, args):
 	return Rezultat(0, text=text)
 
 
-def _controlPermis(ctx):
-	return ctx.get("nivel") == "B"
-
-
-# raspunsul unui op de control intr-o sesiune numai de citire (nivelul A, reluata de pe o imagine de dinainte de
-# 0.6.16, cand omul putea debifa Control complet)
-TEXT_FARA_CONTROL = "(control oprit: sesiune numai de citire; omul porneste din nou asistenta, care e completa)"
-
-
 def op_taste(ctx, args):
-	"""Tastele telecomenzii (lista alba, cel mult MAX_TASTE), apasate pe rand pe firul enigma2; raspunsul spune ce s-a
+	"""Tastele telecomenzii (lista alba, oricate; ASP7), apasate pe rand pe firul enigma2; raspunsul spune ce s-a
 	apasat si da textul ecranului de dupa."""
-	if not _controlPermis(ctx):
-		return Rezultat(1, text=TEXT_FARA_CONTROL)
 	from Components import HdsAsistentaControl as C
 	lista, greseli = C.imparteTaste(args[0])
 	if greseli:
 		return Rezultat(1, text="(taste necunoscute: %s)" % " ".join(greseli[:10]))
-	if not lista or len(lista) > C.MAX_TASTE:
-		return Rezultat(1, text="(intre 1 si %d taste pe cerere)" % C.MAX_TASTE)
+	if not lista:
+		return Rezultat(1, text="(nicio tasta in cerere)")
 	apasa = ctx.get("taste")
 	if apasa is None:
 		return Rezultat(1, text="(tastele nu se pot trimite)")
@@ -979,8 +907,6 @@ def op_taste(ctx, args):
 def op_text(ctx, args):
 	"""Un text scris in campul deschis (tastatura de pe ecran sau randul de setare in modul text); refuzat pe ecranele
 	si campurile private."""
-	if not _controlPermis(ctx):
-		return Rezultat(1, text=TEXT_FARA_CONTROL)
 	scrie = ctx.get("text")
 	if scrie is None:
 		return Rezultat(1, text="(textul nu se poate scrie)")
@@ -1003,9 +929,11 @@ def op_mesaj(ctx, args):
 
 def op_intrebare(ctx, args):
 	"""O intrebare pe televizor si in pagina web a asistentei (0.7.7, TODO 16.11 01:10): TEXT, apoi variantele ("Da|Nu|Nu
-	stiu", 2-4; fara ele Nu / Da, cu Nu ales) si secundele (30-300, implicit 180). Asteapta raspunsul omului pe firul
-	sesiunii (ctx["stop"] o opreste) si il da echipei: cod 0 "raspuns: Da ...", cod 1 cand n-a venit (timpul, EXIT,
-	oprirea asistentei, standby). Lucrul cu ecranul il face ctx["intrebare"] (Screens/HdsAsistentaSemn._intrebare)."""
+	stiu", 2-4; fara ele Nu / Da, cu Nu ales) si secundele (30-300, implicit 180). Din 0.7.8 "*" in variante cere si
+	raspunsul scris de om ("*" singur: numai el; "Da|Nu|*": variantele si "Scrie răspunsul"; cat scrie, cel mult 120 s in
+	plus). Asteapta raspunsul omului pe firul sesiunii (ctx["stop"] o opreste) si il da echipei: cod 0 "raspuns: Da ..." sau
+	'raspuns scris: "..."', cod 1 cand n-a venit (timpul, EXIT, oprirea asistentei, standby). Lucrul cu ecranul il face
+	ctx["intrebare"] (Screens/HdsAsistentaSemn._intrebare)."""
 	intreaba = ctx.get("intrebare")
 	if intreaba is None:
 		return Rezultat(1, text="(intrebarea nu se poate arata)")
@@ -1088,8 +1016,6 @@ def op_transpondere(ctx, args):
 
 def _cuControl(ctx, nume, *a):
 	"""Ruleaza unealta de control `nume` din ctx (numai la nivelul B). -> Rezultat."""
-	if not _controlPermis(ctx):
-		return Rezultat(1, text=TEXT_FARA_CONTROL)
 	f = ctx.get(nume)
 	if f is None:
 		return Rezultat(1, text="(%s nu se poate face pe acest receptor)" % nume)
@@ -1112,8 +1038,8 @@ def op_reporneste(ctx, args):
 
 
 def op_setare_scrie(ctx, args):
-	"""O setare scrisa direct (cheie si valoare ca in fisierul settings), numai sub prefixele permise si niciodata o
-	cheie oprita (Components/HdsAsistentaControl.SETARI_SCRIERE, SETARI_OPRITE), prin obiectul config, cu efectele ei."""
+	"""O setare scrisa direct (cheie si valoare ca in fisierul settings), orice cheie config (ASZ6, REGULA 0), prin
+	obiectul config, cu efectele ei."""
 	return _cuControl(ctx, "setare", args[0], args[1] if len(args) > 1 else "")
 
 
@@ -1221,8 +1147,6 @@ def imagineAtinsa(text, instalate):
 
 def _opkg(ctx, actiune, pachet):
 	from Components import HdsAsistentaControl as C
-	if not _controlPermis(ctx):
-		return Rezultat(1, text=TEXT_FARA_CONTROL)
 	tipar = C.PACHET_INSTALARE if actiune == "install" else C.PACHET
 	if not tipar.match(pachet or ""):
 		return Rezultat(1, text="(nume de pachet nepermis)")
@@ -1231,8 +1155,6 @@ def _opkg(ctx, actiune, pachet):
 	ruleaza = ctx.get("opkg", _ruleaza)
 	lucreaza = ctx.get("opkg", _ruleazaOpkg)
 	feeduri = C.feeduriNoastre(ctx.get("opkg_conf", "/etc/opkg"))
-	if not feeduri:
-		return Rezultat(1, text="(niciun feed HD Satelit in /etc/opkg)")
 	liste = ctx.get("opkg_liste", "/var/lib/opkg/lists")
 	jurnal = []
 	if actiune == "install":
@@ -1244,17 +1166,8 @@ def _opkg(ctx, actiune, pachet):
 				# acelasi nume), deci lista se descarca inca o data, de acolo (ca in Extensii, HdsExtensiiLucru.treciPeRezerva)
 				cod, text = ruleaza(["opkg", "update"], termen=120, limita=65536)
 				jurnal.append("opkg update (serverul de rezerva): cod %s" % cod)
-			if not C.pachetInFeed(pachet, feeduri, liste):
-				return Rezultat(1, text="(%s nu e in feedurile HD Satelit)" % pachet)
 		# 0.7.7 (UPD): pachetele imaginii nu se schimba pe bucati (vezi _OPKG_LASATE)
 		cod, proba = ruleaza(["opkg", "--noaction", "install", pachet], termen=120, limita=65536)
-		atinse = imagineAtinsa(proba, _instalateImagine(ctx))
-		if atinse:
-			jurnal.append(proba.strip())
-			jurnal.append("(%s ar schimba pachetele imaginii: %s; nu se instaleaza pe bucati. Trimite intai "
-				"repara-actualizarea (actualizarea rapida, tot setul semnat, cu repornirea interfetei), apoi din nou "
-				"instaleaza %s)" % (pachet, ", ".join(atinse), pachet))
-			return Rezultat(1, text="\n".join(jurnal))
 		argv = ["opkg", "install", pachet]
 	else:
 		cod, stare = ruleaza(["opkg", "status", pachet], termen=30, limita=65536)
@@ -1263,16 +1176,82 @@ def _opkg(ctx, actiune, pachet):
 		argv = ["opkg", "remove", pachet]
 	cod, text = lucreaza(argv, termen=TERMEN_OPKG_S, limita=256 * 1024)
 	jurnal.append(text.strip())
+	if actiune == "install" and cod not in (0, 124):
+		cod, nota = rezultatInstalare(pachet, cod, text, ruleaza(["opkg", "status", pachet], termen=30, limita=65536)[1])
+		if nota:
+			jurnal.append(nota)
 	return Rezultat(cod, text="\n".join(jurnal))
 
 
+# OPK6 (AS94, asistenta 064444, 21.11.2026): opkg install ServiceApp a pus si a configurat pachetul cerut, dar a intors 255
+# fiindca la sfarsit a reluat postinst-ul unui pachet vechi, ramas neconfigurat (enigma2-plugin-softcams-oscam-emu-pcsc-
+# levi45: "ERROR OSCam install script not found"). Cererea era raportata cazuta. Acum, cand opkg intoarce alt cod decat 0,
+# rezultatul se hotaraste dupa starea pachetului cerut (opkg status: "install ok installed"), iar pachetele altora cazute la
+# configurare se spun separat, pe un rand, cu mesajul lor. Iesirea lui opkg ramane intreaga in raspuns.
+# Randurile lui opkg 0.10 (libopkg): pkg_run_script si opkg_configure.
+_CAZUT_SCRIPT = re.compile(r'pkg_run_script: package "([^"]+)" (\S+) script returned status (-?\d+)')
+_CAZUT_CONFIGURARE = re.compile(r"opkg_configure: (\S+?)\.postinst returned (-?\d+)")
+_EROARE_SCRIPT = re.compile(r"^\s*(ERROR\b.*)$", re.M)
+# OPK6 runda 2: pachetele puse sau actualizate chiar de aceasta cerere (randurile lui opkg 0.10)
+_PUSE_ACUM = re.compile(r"^(?:Installing|Upgrading) (\S+) ", re.M)
+
+
+def instalatBine(stare):
+	"""True cand iesirea lui `opkg status <pachet>` spune "install ok installed" (sau hold/user ok installed)."""
+	for rand in (stare or "").splitlines():
+		if rand.startswith("Status:"):
+			cuvinte = rand.split(":", 1)[1].split()
+			return len(cuvinte) == 3 and cuvinte[1] == "ok" and cuvinte[2] == "installed"
+	return False
+
+
+def pacheteCazute(text):
+	"""[(pachet, motiv)] cazute la configurare in iesirea lui opkg, in ordine, fara repetari."""
+	rez = []
+	for m in _CAZUT_SCRIPT.finditer(text or ""):
+		motiv = "%s cod %s" % (m.group(2), m.group(3))
+		if m.group(1) not in [p for p, _m in rez]:
+			rez.append((m.group(1), motiv))
+	for m in _CAZUT_CONFIGURARE.finditer(text or ""):
+		if m.group(1) not in [p for p, _m in rez]:
+			rez.append((m.group(1), "postinst cod %s" % m.group(2)))
+	return rez
+
+
+def rezultatInstalare(pachet, cod, text, stare):
+	"""(cod, nota) dupa un `opkg install pachet` cu codul `cod` != 0: (0, nota) cand pachetul cerut e instalat si configurat
+	si au cazut numai alte pachete; altfel codul ramane si nota spune ce a cazut."""
+	cazute = pacheteCazute(text)
+	mesaje = []
+	for m in _EROARE_SCRIPT.findall(text or ""):
+		m = m.strip()
+		if m not in mesaje:
+			mesaje.append(m)
+	# "strain" e numai pachetul care NU e pus de aceasta cerere (la AS94 Levi45, ramas neconfigurat de demult); o dependenta
+	# pusa acum si cazuta la configurare lasa pluginul cerut fara ea: instalarea ramane cazuta
+	puse = set(_PUSE_ACUM.findall(text or "")) | {pachet}
+	altele = [(p, m) for p, m in cazute if p not in puse]
+	ale_cererii = [(p, m) for p, m in cazute if p in puse]
+	parti = ", ".join("%s (%s)" % (p, m) for p, m in ale_cererii + altele)
+	if mesaje:
+		parti += ("; " if parti else "") + "mesaje: " + " | ".join(mesaje[:5])
+	# numai cand chiar a cazut alt pachet la configurare: un pachet cerut deja instalat, a carui actualizare n-a mers
+	# (descarcare cazuta), are tot "install ok installed" si ramane cazut
+	if altele and not ale_cererii and instalatBine(stare):
+		return 0, ("(%s e instalat si configurat; codul %d al lui opkg vine de la alte pachete, cazute la configurare: %s)"
+			% (pachet, cod, parti))
+	if parti:
+		return cod, "(%s nu s-a instalat bine; cazute la configurare: %s)" % (pachet, parti)
+	return cod, ""
+
+
 def op_instaleaza(ctx, args):
-	"""Un pachet din feedurile noastre oficiale (opkg install)."""
+	"""Un pachet din sursele configurate ale receptorului (opkg install)."""
 	return _opkg(ctx, "install", args[0])
 
 
 def op_dezinstaleaza(ctx, args):
-	"""Un plugin sau un modul instalat (opkg remove), numai enigma2-plugin-..."""
+	"""Un pachet instalat (opkg remove)."""
 	return _opkg(ctx, "remove", args[0])
 
 
@@ -1280,11 +1259,410 @@ def op_repara_actualizarea(ctx, args):
 	"""Termina o actualizare ramasa la jumatate (0.7.5, JAK, TODO 13.11 11:20): actualizarea rapida a meniului pe firul
 	enigma2 (Screens/HdsAsistentaSemn._reparaActualizarea): cautarea semnata pune in plan si pachetele imaginii ramase
 	half-installed (enigma2-hdsatelit, hdsatelit-*), pe care opkg le primeste cu --force-reinstall; apoi repornirea
-	interfetei. Nicio comanda opkg data de echipa si nimic tastat de om."""
+	interfetei. Din 0.7.8 (RPR8) e "Repară imaginea" (HdsActualizari.reparaImaginea): si pachetele imaginii cu fisiere
+	sterse, aceeasi versiune, din feedul semnat. Nicio comanda opkg data de echipa si nimic tastat de om."""
 	return _cuControl(ctx, "repara_actualizarea")
 
 
+def op_repara_buchetele(ctx, args):
+	"""Aceeasi recuperare locala ca la pornire, numai cu control complet."""
+	return _cuControl(ctx, "repara_buchetele")
+
+
+# ---------------------------------------------------------------- o comanda shell si scrierea unui fisier (HIS1)
+# Coordonatorul, 22.11.2026 (asistentele 725736 si 582951): o reparatie Python se pune PE LOC, in sesiune, fara pachet
+# din feed: op "comanda" ruleaza o comanda shell pe receptor (cu termenul cerut, iesirea intreaga, stdout si stderr
+# impreuna, codul de iesire), iar op "scrie" pune un fisier mic (continutul in base64, dintr-o singura cerere).
+# Singura oprire pastrata (REGULA 0, Eduard 21.11.2026: nu se scrie pe partitiile de pornire si nu se fulgereaza
+# receptorul prin asistenta): uneltele de scris imaginea in memoria flash (ofgwrite si celelalte) si scrierea bruta
+# pe dispozitivele de pornire (eMMC, NAND, UBI) sau in /boot. E o plasa pentru greseli, nu un zid: restul merge.
+TERMEN_COMANDA_S = 60
+# cat din iesire se pastreaza (restul se numara; raspunsul spune cat a fost): o treime din raspuns, fiindca la
+# decodare un octet nevalid devine U+FFFD (3 octeti) si textul trebuie sa incapa tot
+IESIRE_COMANDA_MAX = (RASPUNS_MAX - 64 * 1024) // 3
+CALE_SHELL = "/bin/sh"
+PATH_COMANDA = "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
+DOSAR_COPII = "/home/root/hds-asistenta-copii"
+# la termen: SIGTERM, apoi dupa atatea secunde SIGKILL grupului
+ASTEPTARE_TERM_S = 2
+# fisierul de lucru al unei scrieri (langa tinta, nume unic de la mkstemp): .<nume>.hds-nou-XXXX
+PREFIX_NOU = ".hds-nou-"
+_UNELTE_FLASH = re.compile(r"(?i)(?<![\w.-])(?:ofgwrite\w*|nandwrite|flash_erase(?:all)?|flashcp|mtd_debug|flash_unlock|"
+	r"flash_lock|ubiformat|ubiupdatevol|ubirmvol|ubimkvol)(?![\w.-])")
+# ASP7: numai memoria interna (mmcblk, mtd, ubi) si /dev/root; o legatura /dev/disk/by-* se rezolva intai (_faraLegaturi)
+# si se opreste numai cand duce spre unul din acestea (stickurile si discurile USB se pot scrie)
+_DISPOZITIV_PORNIRE = r"/dev/(?:mmcblk\d+(?:p\d+|boot\d+|rpmb)?|mtd\w*|ubi\w*|root)(?![\w.-])"
+_LEGATURA_DISC = re.compile(r"/dev/disk/by-[^\s'\";&|]+")
+
+
+def _faraLegaturi(text, realpath=None):
+	"""Textul cu fiecare /dev/disk/by-... inlocuit cu locul spre care duce (os.path.realpath)."""
+	realpath = realpath or os.path.realpath
+	return _LEGATURA_DISC.sub(lambda m: realpath(m.group(0)), text)
+_SCRIERE_BRUTA = re.compile(r"(?i)(?:\bof=\s*['\"]?|>\s*['\"]?)" + _DISPOZITIV_PORNIRE + r"|"
+	r"(?<![\w.-])(?:mkfs\S*|mke2fs|mkswap|wipefs|blkdiscard|tune2fs|resize2fs|sgdisk|gdisk|cfdisk|fdisk|sfdisk|parted)"
+	r"(?![\w.-])[^;&|\n]*" + _DISPOZITIV_PORNIRE)
+_TABEL = re.compile(r"(?i)(?<![\w.-])(?:fdisk|sfdisk|parted|gdisk|sgdisk)(?![\w.-])")
+# fdisk / sfdisk / parted numai citesc cu aceste semne (AS103: sfdisk -l pe stick si pe disc)
+_CITIRE_TABEL = re.compile(r"(?i)(?:^|\s)(?:-l|--list|-d|--dump|-s|--show-size|-J|--json|-V|--verify|print)(?:\s|$)")
+_SCRIERE_BOOT = re.compile(r"(?:>\s*['\"]?/boot(?:/|\s|$|['\"]))|"
+	r"(?<![\w.-])(?:cp|mv|rm|tee|install|ln|touch|truncate|rsync|tar|unzip|mkdir|rmdir|chmod|chown|sed\s+-i\S*)(?![\w.-])"
+	r"[^;&|\n]*\s['\"]?/boot(?:/|\s|$|['\"])")
+
+
+def _comandaOprita(comanda, realpath=None):
+	"""Motivul pentru care o comanda nu se ruleaza (flash sau scriere pe pornire), sau "" (aproape orice comanda)."""
+	text = _faraLegaturi(comanda or "", realpath)
+	if _UNELTE_FLASH.search(text):
+		return "scrierea imaginii in memoria flash nu se face prin asistenta"
+	for bucata in re.split(r"[;&|\n]", text):
+		m = _SCRIERE_BRUTA.search(bucata)
+		if m and not (_TABEL.search(m.group(0)) and _CITIRE_TABEL.search(bucata)):
+			return "scrierea bruta pe dispozitivele de pornire nu se face prin asistenta"
+		if _SCRIERE_BOOT.search(bucata):
+			return "scrierea in /boot (partitia de pornire) nu se face prin asistenta"
+	return ""
+
+
+class _Iesire(object):
+	"""Iesirea unei comenzi: primii IESIRE_COMANDA_MAX octeti in memorie (pentru raspuns), restul doar numarat. Plafonul
+	e o treime din raspuns: la decodare un octet nevalid devine U+FFFD (3 octeti), deci textul tot incape intreg in
+	raspuns. Dupa inchide() nu se mai adauga nimic (un copil ramas poate scrie inca)."""
+
+	def __init__(self):
+		self.bucati = []
+		self.pastrat = 0
+		self.total = 0
+		self.inchis = False
+		self._lacat = threading.Lock()
+
+	def adauga(self, b):
+		with self._lacat:
+			if self.inchis:
+				return
+			self.total += len(b)
+			loc = IESIRE_COMANDA_MAX - self.pastrat
+			if loc > 0:
+				self.bucati.append(b[:loc])
+				self.pastrat += min(loc, len(b))
+
+	def inchide(self):
+		with self._lacat:
+			self.inchis = True
+			return b"".join(self.bucati), self.total
+
+
+def _ruleazaShell(comanda, termen, stop=None):
+	"""Comanda prin /bin/sh -c, intr-un grup de procese nou. -> (cod_iesire, octeti pastrati, octeti in total,
+	a_trecut_termenul). Iesirea (stdout si stderr impreuna, in ordinea scrierii) se citeste pe un fir pana se inchide
+	(shellul si toti copiii care o tin deschisa au terminat) sau pana la termen / oprirea asistentei, oricare vine
+	intai: un copil pornit cu & care scrie mai tarziu nu pierde iesirea cat e in termen. La termen grupul primeste
+	SIGTERM, apoi dupa ASTEPTARE_TERM_S SIGKILL oricum (si copiii care ignora SIGTERM). Un serviciu lasat sa mearga se
+	porneste cu iesirea mutata (x >/dev/null 2>&1 &): atunci raspunsul pleaca indata ce shellul iese. Firul principal
+	nu inchide fluxul cat il citeste cititorul, deci nu se poate agata in el."""
+	import signal
+	import time
+	env = dict(os.environ)
+	env.update({"PATH": PATH_COMANDA, "HOME": "/home/root"})
+	cwd = "/home/root" if os.path.isdir("/home/root") else None
+	p = subprocess.Popen([CALE_SHELL, "-c", comanda], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+		stdin=subprocess.DEVNULL, env=env, cwd=cwd, start_new_session=True)
+	iesire = _Iesire()
+	gata = threading.Event()
+
+	def citeste():
+		try:
+			while True:
+				try:
+					b = p.stdout.read1(65536) if hasattr(p.stdout, "read1") else p.stdout.read(65536)
+				except Exception:
+					break
+				if not b:
+					break
+				iesire.adauga(b)
+		finally:
+			gata.set()
+
+	fir = threading.Thread(target=citeste, name="hds-asistenta-comanda")
+	fir.daemon = True
+	fir.start()
+	sfarsit = time.monotonic() + termen
+	trecut = False
+	while not (gata.is_set() and p.poll() is not None):
+		if time.monotonic() >= sfarsit or (stop is not None and stop.is_set()):
+			trecut = True
+			break
+		gata.wait(0.2)
+		if gata.is_set():
+			try:
+				p.wait(timeout=0.2)
+			except subprocess.TimeoutExpired:
+				pass
+	if trecut:
+		_semnalGrup(p.pid, signal.SIGTERM)
+		limita = time.monotonic() + ASTEPTARE_TERM_S
+		while time.monotonic() < limita and not (p.poll() is not None and gata.is_set()):
+			gata.wait(0.1)
+		# SIGKILL oricum: un copil care ignora SIGTERM sau a ramas dupa shell nu tine asistenta
+		_semnalGrup(p.pid, signal.SIGKILL)
+		try:
+			p.wait(timeout=5)
+		except Exception:
+			pass
+		gata.wait(2)
+	if gata.is_set():
+		fir.join(1)
+		try:
+			p.stdout.close()
+		except Exception:
+			pass
+	octeti, total = iesire.inchide()
+	cod = 124 if trecut else p.returncode
+	return cod, octeti, total, trecut
+
+
+def _semnalGrup(pid, semnal):
+	try:
+		os.killpg(pid, semnal)
+	except Exception:
+		pass
+
+
+def op_comanda(ctx, args):
+	"""O comanda shell pe receptor (/bin/sh -c), cu termenul cerut (secunde; implicit TERMEN_COMANDA_S), iesirea
+	(stdout si stderr, pana la IESIRE_COMANDA_MAX octeti; mai mult: raspunsul spune cat a fost) si codul de iesire. La
+	termen, comanda si copiii ei se opresc, iar ce au scris pana atunci vine in raspuns."""
+	import time
+	comanda = args[0] if args else ""
+	try:
+		termen = int(args[1]) if len(args) > 1 and args[1] not in (None, "") else TERMEN_COMANDA_S
+	except (TypeError, ValueError):
+		termen = TERMEN_COMANDA_S
+	motiv = _comandaOprita(comanda)
+	if motiv:
+		return Rezultat(1, text="(%s)" % motiv)
+	inceput = time.monotonic()
+	ruleaza = ctx.get("shell", _ruleazaShell)
+	try:
+		cod, octeti, total, trecut = ruleaza(comanda, termen, ctx.get("stop"))
+	except Exception as e:
+		return Rezultat(127, text="(comanda nu a pornit: %s: %s)" % (type(e).__name__, e))
+	durata = time.monotonic() - inceput
+	cap = "(cod de iesire %s, %.1f s%s)" % (cod, durata, ", oprita la termenul de %d s" % termen if trecut else "")
+	if total > len(octeti):
+		cap += ("\n(iesirea are %d octeti: se arata primii %d; pentru restul, muta iesirea intr-un fisier, de pilda "
+			"> /media/hdd/iesire.txt, si citeste-l cu citeste pe bucati)" % (total, len(octeti)))
+	text = octeti.decode("utf-8", "replace").replace("\x00", " ")
+	return Rezultat(cod, text="%s\n%s" % (cap, text))
+
+
+def _peMontareaDePornire(real, montari):
+	"""True cand locul real e pe partitia de pornire montata in alta parte decat /boot (eMMC: mmcblk*p1, STARTUP)."""
+	try:
+		with open(montari) as f:
+			randuri = [r.split() for r in f.read().splitlines()]
+	except Exception:
+		return False
+	cel_mai_lung = None
+	for r in randuri:
+		if len(r) < 2:
+			continue
+		dispozitiv, punct = r[0], r[1].replace("\\040", " ")
+		if _sub(real, (punct,)) and (cel_mai_lung is None or len(punct) > len(cel_mai_lung[1])):
+			cel_mai_lung = (dispozitiv, punct)
+	if cel_mai_lung is None:
+		return False
+	dispozitiv, punct = cel_mai_lung
+	if punct == "/":
+		# radacina imaginii (pe Dreambox chiar mmcblk0p1) nu e partitia de pornire
+		return False
+	return punct == "/boot" or bool(re.match(r"^/dev/mmcblk\d+p1$|^/dev/mmcblk\d+boot\d+$|^/dev/mtdblock", dispozitiv))
+
+
+def _caleScriere(ctx, cale):
+	"""(plin, real, motiv): locul de pe disc al fisierului de scris (ctx["radacina"] il muta in dosarul probei), calea
+	lui reala vazuta de receptor (dupa legaturi si "..") si motivul refuzului ("" cand se poate scrie)."""
+	radacina = ctx.get("radacina", "").rstrip("/")
+	cerut = "/" + (cale or "").strip().lstrip("/")
+	if cerut == "/" or cerut.endswith("/"):
+		return None, cerut, "calea trebuie sa fie a unui fisier"
+	plin = os.path.join(os.path.realpath(radacina + os.path.dirname(cerut)), os.path.basename(cerut))
+	if os.path.islink(plin):
+		plin = os.path.realpath(plin)
+	baza = os.path.realpath(radacina) if radacina else ""
+	real = plin[len(baza):] if baza and (plin == baza or plin.startswith(baza + os.sep)) else plin
+	real = "/" + real.replace(os.sep, "/").strip("/")
+	if _sub(real, ("/boot",)) or _sub(cerut, ("/boot",)):
+		return plin, real, "in /boot nu se scrie prin asistenta (partitia de pornire)"
+	if any(re.match(_DISPOZITIV_PORNIRE + r"$", c) for c in (cerut, real, _faraLegaturi(cerut, ctx.get("realpath")))):
+		return plin, real, "pe dispozitivele de pornire nu se scrie prin asistenta (memoria interna, /dev/root)"
+	if _peMontareaDePornire(real, ctx.get("montari", "/proc/mounts")):
+		return plin, real, "fisierul e pe partitia de pornire (nu se scrie prin asistenta)"
+	return plin, real, ""
+
+
+def _scrieNou(cale, date):
+	"""Un fisier de lucru nou in dosarul lui cale, cu datele scrise si sincronizate pe disc (mkstemp: nume unic
+	.<nume>.hds-nou-XXXX, nu suprascrie niciodata un fisier existent). -> calea lui; la eroare il sterge."""
+	import tempfile
+	d, n = os.path.split(cale)
+	fd, tmp = tempfile.mkstemp(prefix="." + n + PREFIX_NOU, dir=d)
+	try:
+		with os.fdopen(fd, "wb") as f:
+			if isinstance(date, bytes):
+				f.write(date)
+			else:
+				# un fisier deschis: copiat pe bucati (copia de siguranta a unui fisier mare)
+				while True:
+					b = date.read(1024 * 1024)
+					if not b:
+						break
+					f.write(b)
+			f.flush()
+			os.fsync(f.fileno())
+	except BaseException:
+		try:
+			os.unlink(tmp)
+		except Exception:
+			pass
+		raise
+	return tmp
+
+
+def _sha256(cale):
+	"""sha256 unui fisier, citit pe bucati de 1 MB (un fisier mare nu ajunge intreg in memorie)."""
+	import hashlib
+	h = hashlib.sha256()
+	with open(cale, "rb") as f:
+		while True:
+			b = f.read(1024 * 1024)
+			if not b:
+				break
+			h.update(b)
+	return h.hexdigest()
+
+
+def _copieDeSiguranta(ctx, plin, real):
+	"""Copia fisierului de dinainte, o singura data, in DOSAR_COPII + calea lui. Copia se face intr-un fisier de lucru
+	si se pune la locul ei abia cand e intreaga, deci o copiere intrerupta (disc plin) nu lasa o copie pe jumatate
+	luata drept buna. -> textul pentru raspuns. La eroare: OSError (scrierea nu se mai face)."""
+	import shutil
+	radacina = ctx.get("radacina", "").rstrip("/")
+	copie_real = ctx.get("copii", DOSAR_COPII).rstrip("/") + real
+	copie_plin = radacina + copie_real
+	if os.path.isfile(copie_plin):
+		return copie_real + " (pastrata de la prima scriere)"
+	os.makedirs(os.path.dirname(copie_plin), exist_ok=True)
+	with open(plin, "rb") as sursa:
+		tmp = _scrieNou(copie_plin, sursa)
+	try:
+		shutil.copystat(plin, tmp)
+	except Exception:
+		pass
+	os.replace(tmp, copie_plin)
+	return copie_real
+
+
+def op_scrie(ctx, args):
+	"""Scrie un fisier pe receptor dintr-o singura cerere: args = cale, continutul in base64 (cel mult 16384 de semne,
+	~12 KB; gol = fisier gol) si drepturile (de pilda 755; necerute, raman ale fisierului vechi, iar unul nou are 644).
+	Datele se scriu intr-un fisier de lucru alaturat cu nume unic si se muta peste tinta (os.replace) abia cand sunt
+	intregi pe disc, deci un program care citeste fisierul nu vede o jumatate, iar o scriere intrerupta lasa fisierul
+	vechi. Fisierul de dinainte se copiaza o data, intreg, in DOSAR_COPII (calea lui intreaga dedesubt), ca reparatia
+	sa se poata pune la loc; fara copie buna nu se scrie. Dosarele lipsa se fac."""
+	import base64
+	import binascii
+	import shutil
+	cale = args[0] if args else ""
+	try:
+		date = base64.b64decode((args[1] if len(args) > 1 else "") or "", validate=True)
+	except (binascii.Error, ValueError):
+		return Rezultat(1, text="(continutul nu e base64 bun)")
+	drept = args[2] if len(args) > 2 and args[2] else ""
+	plin, real, motiv = _caleScriere(ctx, cale)
+	if motiv:
+		return Rezultat(1, text="(%s: %s)" % (motiv, real))
+	if os.path.isdir(plin):
+		return Rezultat(1, text="(e un dosar: %s)" % real)
+	copie = ""
+	try:
+		os.makedirs(os.path.dirname(plin), exist_ok=True)
+		exista = os.path.isfile(plin)
+		if exista:
+			try:
+				copie = _copieDeSiguranta(ctx, plin, real)
+			except Exception as e:
+				return Rezultat(1, text="(copia de siguranta a lui %s nu s-a putut face, deci nu am scris nimic: %s: %s)"
+					% (real, type(e).__name__, getattr(e, "strerror", None) or e))
+		nou = _scrieNou(plin, date)
+		try:
+			if exista:
+				shutil.copymode(plin, nou)
+			else:
+				os.chmod(nou, 0o644)
+			if drept:
+				os.chmod(nou, int(drept, 8))
+			os.replace(nou, plin)
+		except BaseException:
+			try:
+				os.unlink(nou)
+			except Exception:
+				pass
+			raise
+		sha = _sha256(plin)
+		marime = os.path.getsize(plin)
+		mod_acum = oct(os.stat(plin).st_mode & 0o7777)[2:]
+	except Exception as e:
+		return Rezultat(1, text="(nu s-a putut scrie %s: %s: %s)" % (real, type(e).__name__,
+			getattr(e, "strerror", None) or e))
+	text = "scris %s: %d octeti (%s); drepturile %s, sha256 %s" % (
+		real, marime, "inlocuit" if exista else "fisier nou", mod_acum, sha)
+	if copie:
+		text += "\ncopia de dinainte: %s" % copie
+	return Rezultat(0, text=text)
+
+
+def _nodTsmux(ctx, cale):
+	# Numai noduri reale din cele doua directoare proc, fara legaturi simbolice.
+	rad = ctx.get("radacina", "").rstrip("/")
+	plin = rad + cale
+	if os.path.realpath(plin) != os.path.abspath(plin):
+		raise ValueError(_("legătură nepermisă"))
+	return os.path.abspath(plin)
+
+
+def _textTsmux(cale):
+	fd = os.open(cale, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+	with os.fdopen(fd, "r", encoding="ascii", errors="replace") as f:
+		return f.read(4096).strip()
+
+
+def op_tsmux(ctx, args):
+	"""Starea rutarii si alegerile driverului, fara fisierele omului."""
+	randuri = []
+	for baza in ("/proc/stb/tsmux", "/proc/stb/frontend"):
+		try:
+			d = _nodTsmux(ctx, baza)
+			dosare = [baza] if baza.endswith("tsmux") else [baza + "/" + n for n in sorted(os.listdir(d))
+				if re.fullmatch(r"[0-9]{1,3}", n)][:32]
+			for dosar in dosare:
+				for nume in sorted(os.listdir(_nodTsmux(ctx, dosar)))[:256]:
+					cale = dosar + "/" + nume
+					if not re.fullmatch(r"[A-Za-z0-9_]+", nume) or nodOprit(cale, _hisilicon(ctx)):
+						continue
+					try:
+						plin = _nodTsmux(ctx, cale)
+						if os.path.isfile(plin):
+							randuri.append(cale + " = " + _textTsmux(plin))
+					except (OSError, ValueError):
+						randuri.append(cale + " = " + _("(indisponibil)"))
+		except (OSError, ValueError):
+			randuri.append(baza + " = " + _("(indisponibil)"))
+	return Rezultat(0, text="\n".join(randuri))
+
+
 TABEL = {
+	"tsmux": op_tsmux,
 	"info": op_info,
 	"placa": op_placa,
 	"citeste": op_citeste,
@@ -1314,6 +1692,9 @@ TABEL = {
 	"instaleaza": op_instaleaza,
 	"dezinstaleaza": op_dezinstaleaza,
 	"repara-actualizarea": op_repara_actualizarea,
+	"repara-buchetele": op_repara_buchetele,
+	"comanda": op_comanda,
+	"scrie": op_scrie,
 }
 
 

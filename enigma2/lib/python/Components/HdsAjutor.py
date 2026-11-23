@@ -345,13 +345,34 @@ def context_pagina(i):
 		return "live"
 	e = (index() or {}).get("ecrane") or {}
 	for clasa, context in CONTEXTE_ECRANE.items():
+		if clasa == "ConfigListScreen":
+			continue
 		if i in (e.get("clase") or {}).get(clasa, []):
 			return context
+	# A concrete page keeps its own keys, even when also indexed as generic settings.
+	if any(i in pagini for clasa, pagini in (e.get("clase") or {}).items() if clasa != "ConfigListScreen"):
+		return None
 	if i in (e.get("setup") or {}).values():
 		return "setup"
 	if i in (e.get("meniuri") or {}).values():
 		return "menu"
+	if i in (e.get("clase") or {}).get("ConfigListScreen", []):
+		return "setup"
 	return None
+
+
+def context_ajutor(dialog):
+	"""Keep a known screen's page ahead of the generic ConfigListScreen contract."""
+	from Components import HdsTasteRapide as T
+	context = T.context_ecran(dialog)
+	nume = _clase(dialog)
+	if context == "setup" and "ConfigListScreen" in nume:
+		# Explicit key profiles still apply, including the user's personal profile.
+		if not any(n != "ConfigListScreen" and n in T.CONTEXTE_ECRANE for n in nume):
+			clase = ((index() or {}).get("ecrane") or {}).get("clase") or {}
+			if any(clase.get(n) for n in nume if n != "ConfigListScreen"):
+				return None
+	return context
 
 
 def actualizeaza_taste(pg, context=None, dialog=None, config=None, pagina_key=None):
@@ -362,7 +383,7 @@ def actualizeaza_taste(pg, context=None, dialog=None, config=None, pagina_key=No
 			from Components.config import config
 		except ImportError:
 			config = T.config_fabrica()
-	context = T.context_ecran(dialog) if dialog is not None else context
+	context = context_ajutor(dialog) if dialog is not None else context
 	pagina_key = pagina_key or (pg or {}).get("taste_pagina") or ""
 	if pagina_key and pg is not None and not pg.get("taste_acces_corectat"):
 		def acces(e):
@@ -570,7 +591,8 @@ def pagina_ecranului(dialog, dedesubt=()):
 	intrare = _intrare_meniu(dedesubt[0]) if dedesubt else None
 	din_meniu = (e.get("intrari") or {}).get(intrare) if intrare else None
 	clase = e.get("clase") or {}
-	for n in nume:
+	# Generic settings are a fallback, even when their mixin comes first in the MRO.
+	for n in [n for n in nume if n != "ConfigListScreen"] + [n for n in nume if n == "ConfigListScreen"]:
 		lista = clase.get(n)
 		if not lista:
 			continue

@@ -13,7 +13,10 @@
 # raspunzi Nu, STARTUP se pune la loc. Un loc care nu se alege spune de ce pe rand, iar OK arata motivul intreg. Cat ecranul
 # e deschis, lista se reface singura cand se pune sau se scoate un disc. ROSU inchide. Aceeasi lista si aceeasi alegere in
 # web: cardul flash din /alimentare (HdsWebControl/alimentare_web.py).
-# Skinul HDSatelit: forma ecranului HdsNavigatorFavorite (lista + nota, cadrul HdsCadru1240), aceleasi nume de widgeturi.
+# Caseta notei are loc si pentru explicatia pornirii cazute, cu litere marite.
+# Pe receptoarele cu incarcatorul producatorului in STARTUP_RECOVERY (SF8008, Viper 4K V10 si inruditele) ultimul rand e
+# "Porneste in incarcator": o intrebare, apoi o singura pornire in incarcator (Components/HdsPornireMultipla.
+# pornesteIncarcator); la Nu pe ecranul de repornire se pune la loc numai STARTUP_ONCE.
 
 import threading
 import time
@@ -27,17 +30,17 @@ from Components import HdsPornireMultipla as P
 
 class HdsPornireMultipla(Screen):
 	skin = """
-	<screen name="HdsPornireMultipla" resolution="1920,1080" position="center,center" size="1240,760" title="Repornește în altă imagine">
-		<widget name="lista" position="30,25" size="1180,480" itemHeight="56" font="Regular;30" scrollbarMode="showOnDemand" />
-		<widget source="nota" render="Label" position="30,520" size="1180,170" font="Regular;24" halign="left" valign="top" />
-		<widget source="key_red" render="Label" position="30,705" size="260,40" zPosition="1" font="Regular;22" halign="center" valign="center" backgroundColor="#9f1313" transparent="0" />
-		<widget source="key_green" render="Label" position="310,705" size="260,40" zPosition="1" font="Regular;22" halign="center" valign="center" backgroundColor="#1f771f" transparent="0" />
+	<screen name="HdsPornireMultipla" resolution="1920,1080" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder" title="Repornește în altă imagine">
+		<panel name="HdsCadru1240" />
+		<widget name="lista" position="32,104" size="1176,536" itemHeight="56" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" textOffset="16,0" zPosition="2" />
+		<eLabel position="32,652" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget source="nota" render="Label" position="32,664" size="1176,252" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="top" zPosition="1" />
 	</screen>
 	"""
 
 	def __init__(self, session):
 		Screen.__init__(self, session)
-		self.skinName = ["HdsPornireMultipla", "HdsNavigatorFavorite"]
+		self.skinName = ["HdsPornireMultipla"]
 		self.setTitle(_(P.TITLU))
 		self["key_red"] = StaticText(_("Close"))
 		self["key_green"] = StaticText("")
@@ -52,6 +55,8 @@ class HdsPornireMultipla(Screen):
 		self.stare = {"locuri": []}
 		self.citire = None      # ce intoarce firul citirii cat merge
 		self.semn = None        # discurile puse la ultima citire
+		self.inchis = False
+		self._semnCompatibil = callable(getattr(P, "semnDiscuri", None))
 		self["lista"].onSelectionChanged.append(self.butoane)
 		from enigma import eTimer
 		self.ceas = eTimer()
@@ -64,53 +69,85 @@ class HdsPornireMultipla(Screen):
 		self.ceas.start(50, True)
 
 	def opresteCeasurile(self):
+		self.inchis = True
+		self.citire = None
 		self.ceas.stop()
 		self.ceasFir.stop()
 		self.ceasDiscuri.stop()
 
-	def citeste(self):
+	def citeste(self, verifica=False):
 		"""Citirea listei pe un fir: mounturile si citirile de pe card nu tin interfata pe loc."""
-		if self.citire is not None:
+		if self.inchis or self.citire is not None:
 			return
 		self.citire = citire = {}
-		self.semn = P.semnDiscuri()
+		semnVechi = self.semn
+		stareVeche = self.stare
+		semnCompatibil = self._semnCompatibil
 
 		def lucreaza():
 			inceput = time.time()
 			try:
-				stare = P.locuri()
+				semn = P.semnDiscuri() if semnCompatibil else None
+				citire["semn"] = semn
+				if verifica and semn == semnVechi and not stareVeche.get("eroare") and not stareVeche.get("indisponibil"):
+					citire["neschimbat"] = True
+					stare = stareVeche
+				elif P.disponibil():
+					stare = P.locuri()
+				else:
+					stare = {"locuri": [], "indisponibil": True}
 			except Exception as e:
-				print("[HdsPornireMultipla] %r" % (e,))
-				stare = {"locuri": [], "eroare": True}
+				print("[HdsPornireMultipla] %s" % type(e).__name__)
+				stare = {"locuri": [], "eroare": True, "verificare_esuata": True}
 			print("[HdsPornireMultipla] lista: %d locuri in %d ms" % (len(stare["locuri"]), (time.time() - inceput) * 1000))
 			citire["stare"] = stare
 
 		fir = threading.Thread(target=lucreaza, name="HdsPornireMultipla")
 		fir.daemon = True
-		fir.start()
+		try:
+			fir.start()
+		except RuntimeError:
+			citire["stare"] = {"locuri": [], "eroare": True, "verificare_esuata": True}
 		self.ceasFir.start(100, False)
 
 	def veziFirul(self):
-		if self.citire is None or "stare" not in self.citire:
+		if self.inchis or self.citire is None or "stare" not in self.citire:
 			return
 		self.ceasFir.stop()
+		self.semn = self.citire.get("semn")
+		neschimbat = self.citire.get("neschimbat", False)
 		self.stare, self.citire = self.citire["stare"], None
+		if neschimbat:
+			return
 		ales = self._ales()
 		randuri = [(text, l) for text, l in zip(P.randuri(self.stare), self.stare["locuri"])]
+		if self.stare.get("incarcator"):
+			randuri.append((self.stare["incarcator"]["imagine"], self.stare["incarcator"]))
 		self["lista"].setList(randuri)
 		if ales:
 			for i, (_text, l) in enumerate(randuri):
 				if l["loc"] == ales["loc"]:
 					self["lista"].moveToIndex(i)
 					break
-		self["nota"].setText(P.nota(self.stare))
+		if self._semnCompatibil and not self.stare.get("indisponibil") and not self.stare.get("verificare_esuata"):
+			self["nota"].setText(P.nota(self.stare))
+		else:
+			nota = P.nota(self.stare)
+			if self.stare.get("indisponibil"):
+				nota = _("Pornirea multiplă nu este disponibilă acum.")
+			elif self.stare.get("verificare_esuata"):
+				nota = _("Nu am putut verifica pornirea multiplă. Nu se poate alege altă imagine acum.")
+			if not self._semnCompatibil:
+				nota = _("Ecranul și componenta pornirii multiple nu au aceeași versiune. Lista se poate citi, dar schimbarea discurilor nu se urmărește automat.") + "\n\n" + nota
+			self["nota"].setText(nota)
 		self.butoane()
-		self.ceasDiscuri.start(2000, False)
+		if self._semnCompatibil:
+			self.ceasDiscuri.start(2000, False)
 
 	def veziDiscurile(self):
 		"""S-a pus sau s-a scos un disc: lista se reface, ca omul sa nu aiba de deschis ecranul din nou."""
-		if self.citire is None and P.semnDiscuri() != self.semn:
-			self.citeste()
+		if self._semnCompatibil:
+			self.citeste(verifica=True)
 
 	def _ales(self):
 		rand = self["lista"].getCurrent()
@@ -122,6 +159,8 @@ class HdsPornireMultipla(Screen):
 
 	def alege(self):
 		from Screens.MessageBox import MessageBox
+		if self.inchis:
+			return
 		l = self._ales()
 		if not l:
 			return
@@ -131,12 +170,32 @@ class HdsPornireMultipla(Screen):
 		if not l.get("alegere"):
 			self.session.open(MessageBox, P.textRefuz(l), MessageBox.TYPE_ERROR, timeout=10)
 			return
+		if l.get("fel") == "incarcator":
+			date = l.get("date")
+			self.session.openWithCallback(lambda da: self.confirmatIncarcator(da, date), MessageBox,
+				_(P.INTREBARE_INCARCATOR), MessageBox.TYPE_YESNO, default=True)
+			return
 		asteptat = (l.get("date"), l["imagine"])
 		self.session.openWithCallback(lambda da, loc=l["loc"]: self.confirmat(da, loc, asteptat), MessageBox,
 			_(P.INTREBARE) % l["imagine"], MessageBox.TYPE_YESNO, default=True)
 
+	def confirmatIncarcator(self, da, date):
+		if not da or self.inchis:
+			return
+		# scrierea pe un fir (Components/HdsPornireMultipla.pornesteIncarcator); o greseala vine inapoi in dupaIncarcator
+		ok, text = P.pornesteIncarcator(self.session, asteptat=date, rezultat=self.dupaIncarcator)
+		if not ok:
+			self.dupaIncarcator(ok, text)
+
+	def dupaIncarcator(self, ok, text):
+		if ok or self.inchis:
+			return
+		from Screens.MessageBox import MessageBox
+		self.session.open(MessageBox, text, MessageBox.TYPE_ERROR, timeout=10)
+		self.citeste()
+
 	def confirmat(self, da, loc, asteptat=None):
-		if not da:
+		if not da or self.inchis:
 			return
 		ok, text = P.reporneste(self.session, loc, asteptat=asteptat)
 		if not ok:

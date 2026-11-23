@@ -163,6 +163,15 @@ namespace hdster
 		return (s > ceruta ? s - ceruta : ceruta - s) > 2000000 ? ceruta : s;
 	}
 
+	/* frecventa (Hz) din datele tunerului (getTransponderData fara original, citit de cautare si de barele temelor straine
+	 * cu sursa "tuner"): aceeasi regula ca la salvare, ca datele tunerului sa spuna ce s-a salvat, nu valoarea bruta a unui
+	 * tuner combinat (2068836 pentru canalul 22, adica 2 MHz). Valoarea din driver e fara semn (__u32): peste 862 MHz e
+	 * imposibila de la inceput, deci nu mai trece prin long (pe 32 de biti ar iesi negativa). */
+	inline unsigned int frecventaTunerului(unsigned int acordata, unsigned int spusa)
+	{
+		return spusa > 862000000U ? acordata : frecventaSalvata(acordata, (long)spusa);
+	}
+
 	/* descriptorul T2 (EN 300 468, 6.4.6.3) -> valorile din structura */
 	inline int latimeDinDescriptorT2(int cod)
 	{

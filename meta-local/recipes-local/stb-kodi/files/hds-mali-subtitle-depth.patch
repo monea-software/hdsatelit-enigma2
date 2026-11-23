@@ -1,0 +1,23 @@
+From: HD Satelit <dezvoltare@hdsatelit.com>
+Subject: [PATCH] GLES: keep subtitle glyphs inside the Mali near clip plane
+
+Mali-450 drops libass glyphs submitted at NDC depth -1 even with depth
+culling disabled. Texture, vertex data, viewport and color mask are valid.
+Keep the floor slightly inside the clip volume without moving any glyph
+in X/Y or changing normal GUI depths. Only HiSilicon selects this patch.
+
+Reproduced on u57 with external SRT and two embedded MKV subtitle tracks;
+changing this shader alone makes all three visible over hardware video.
+
+Upstream-Status: Pending
+Signed-off-by: HD Satelit <dezvoltare@hdsatelit.com>
+
+diff --git a/system/shaders/GLES/2.0/gles_shader_simple.vert b/system/shaders/GLES/2.0/gles_shader_simple.vert
+--- a/system/shaders/GLES/2.0/gles_shader_simple.vert
++++ b/system/shaders/GLES/2.0/gles_shader_simple.vert
+@@ -25,3 +25,4 @@
+   // set rendering depth
+-  gl_Position.z = m_depth * gl_Position.w;
++  // Keep the glyph inside the near clip plane on legacy Mali drivers.
++  gl_Position.z = max(m_depth, -0.999) * gl_Position.w;
+   m_colour    = m_attrcol;

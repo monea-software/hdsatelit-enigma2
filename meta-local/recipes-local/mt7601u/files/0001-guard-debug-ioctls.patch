@@ -1,0 +1,38 @@
+Subject: [PATCH] mt7601u: do not call debug-only IOCTLs in a release build
+
+MAC/EEPROM helpers exist only with DBG; RF also requires RLT_RF.
+Reject only these unavailable diagnostics. Normal station operations
+and the DBG-enabled implementations retain their original paths.
+
+Upstream-Status: Pending
+
+--- a/sta/sta_cfg.c
++++ b/sta/sta_cfg.c
+@@ -8275,15 +8275,27 @@
+ 			break;
+ 
+ 		case CMD_RTPRIV_IOCTL_MAC:
++#ifdef DBG
+ 			RTMPIoctlMAC(pAd, pRequest);
++#else
++			Status = NDIS_STATUS_FAILURE;
++#endif
+ 			break;
+ 
+ 		case CMD_RTPRIV_IOCTL_E2P:
++#ifdef DBG
+ 			RTMPIoctlE2PROM(pAd, pRequest);
++#else
++			Status = NDIS_STATUS_FAILURE;
++#endif
+ 			break;
+ 
+ 		case CMD_RTPRIV_IOCTL_RF:
++#if defined(DBG) && defined(RLT_RF)
+ 			RTMPIoctlRF(pAd, pRequest);
++#else
++			Status = NDIS_STATUS_FAILURE;
++#endif
+ 			break;
+ 
+ 		case CMD_RTPRIV_IOCTL_BBP:

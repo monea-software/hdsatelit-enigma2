@@ -54,6 +54,18 @@ def readMounts(mounts = None):
 		pass
 	return result
 
+def mountPairs(mounts = None):
+	"""mounts as (source, mountpoint) pairs, like readMounts(). Plugins written for other images pass the rows of their
+	getProcMounts() (source, mountpoint, type, options, ...; the mountpoint may keep \\040 for a space) to
+	getMountedPartitions and Partition.mounted; a pair already read here stays as it is; None or a file name is read."""
+	if mounts is None or isinstance(mounts, str):
+		return readMounts(mounts)
+	perechi = []
+	for rand in mounts:
+		if isinstance(rand, (list, tuple)) and len(rand) >= 2:
+			perechi.append((rand[0], rand[1]) if len(rand) == 2 else (rand[0], unescapeMountPath(rand[1])))
+	return perechi
+
 def findMountpoints(device, mounts = None):
 	"""every place where /dev/<device> is mounted now, in /proc/mounts order; the name must match exactly (sda is not
 	sda1)"""
@@ -231,6 +243,119 @@ def deviceLabel(device):
 			if name.endswith("-" + device):
 				return decodeDeviceLabel(name[:-len(device) - 1])
 	return ""
+
+def storagePathName(place, device=None, mounts=None, detalii=None):
+	"""UI uses cached strings or plain snapshots; filesystem reads belong to a worker."""
+	if not place or not isinstance(place, str):
+		return place or ""
+	if detalii is not None:
+		# Reuse plain metadata already captured by a caller; no I/O on this path.
+		return _storagePathText(place, *detalii)
+	import threading
+	if threading.current_thread() is not threading.main_thread():
+		return _storagePathNamePeFir(place, device, mounts)
+	from Components.HdsStocareDisc import cere
+	# Freeze caller-owned rows without reading a mount-table file on the UI.
+	rows = mounts if mounts is None or isinstance(mounts, str) else tuple(tuple(row) for row in mounts)
+	result = cere(("storage-name", place, device, rows, _storageNamesGeneration),
+		lambda: _storagePathNamePeFir(place, device, rows), termen=2, varsta=30)
+	return result["valoare"] if result["stare"] == "gata" else place or ""
+
+
+_storageNamesGeneration = 0
+
+
+def storageNamesChanged():
+	global _storageNamesGeneration
+	_storageNamesGeneration += 1
+
+
+def _storagePathNamePeFir(place, device=None, mounts=None):
+	"""Display only: keep the original path as the value, never stat a remote share."""
+	if not place or not isinstance(place, str):
+		return place or ""
+	rows = mountPairs(mounts)
+	key = place.rstrip("/") or "/"
+	def owner(value):
+		return next(((s, m.rstrip("/") or "/") for s, m in sorted(rows, key=lambda r: len(r[1]), reverse=True)
+			if value == m.rstrip("/") or value.startswith(m.rstrip("/") + "/")), ("", ""))
+	source, mount = owner(key)
+	# Resolve only local aliases. A network mount is identified without touching it.
+	if source.startswith("/dev/") or not source or mount in ("/", "/media"):
+		if key.startswith(("/media/net/", "/media/autofs/", "/autofs/")):
+			return place
+		if key.startswith(("/media/", "/run/media/", "/mnt/", "/hdd")):
+			try:
+				# Inspect local components only; never lstat a remote descendant.
+				parts, current, links = key.split("/"), "", 0
+				while parts:
+					part = parts.pop(0)
+					if not part or part == ".":
+						continue
+					if part == "..":
+						current = path.dirname(current)
+						continue
+					candidate = current.rstrip("/") + "/" + part
+					source, mount = owner(candidate)
+					if candidate.startswith(("/media/net/", "/media/autofs/", "/autofs/")) or (source and
+						not source.startswith("/dev/") and mount not in ("/", "/media")):
+						break
+					if path.islink(candidate):
+						links += 1
+						if links > 40:
+							return place
+						target = readlink(candidate)
+						if target.startswith("/"):
+							current = ""
+						parts = target.split("/") + parts
+					else:
+						current = candidate
+			except (OSError, ValueError):
+				pass
+	if source.startswith("//") or ":/" in source:
+		# Only the share path is public, never the server authority or user info.
+		remote = source[2:].partition("/")[2] if source.startswith("//") else source.partition(":/")[2]
+		share = unescapeMountPath(remote).rstrip("/").rsplit("/", 1)[-1]
+		return _storagePathText(place, share, 0)
+	if not device and source.startswith("/dev/") and mount not in ("/", "/media"):
+		device = path.basename(path.realpath(source))
+	if not device or not DEVICE_NAME_RX.fullmatch(device):
+		return place
+	base = re.sub(r"p[0-9]+$", "", device) if device.startswith(("mmcblk", "nvme")) else re.sub(r"[0-9]+$", "", device)
+	model = ""
+	for root in ("/sys/block/" + base, SYS_CLASS_BLOCK + base):
+		try:
+			model = readFile(root + "/device/model")
+			if model:
+				break
+		except OSError:
+			pass
+	name = model or deviceLabel(device)
+	if not name:
+		return place
+	# Kernel sector counts are always in 512-byte units, including 4K-sector drives.
+	size = 0
+	for filename in (SYS_CLASS_BLOCK + device + "/size", "/sys/block/" + base + "/size"):
+		try:
+			size = int(readFile(filename)) * 512
+			if size > 0:
+				break
+		except (OSError, ValueError):
+			pass
+	return _storagePathText(place, name, size)
+
+
+def _storagePathText(place, name, size):
+	"""Format an immutable metadata snapshot, with no filesystem or native calls."""
+	name = " ".join((name or "").encode("utf-8", "replace").decode("utf-8").split())[:160]
+	if not name:
+		return place
+	capacity = ""
+	if size > 0:
+		unit, factor = ("TB", 10 ** 12) if size >= 10 ** 12 else ("GB", 10 ** 9)
+		capacity = ("%.1f" % (size / factor)).rstrip("0").rstrip(".").replace(".", ",") + " " + unit
+	return "%s  (%s%s)" % (place, name, ", " + capacity if capacity else "")
+
 
 def mediaLabelName(label):
 	"""A single safe path component; reserved names stay with their existing owners."""
@@ -673,10 +798,22 @@ class Harddisk:
 class Partition:
 	def __init__(self, mountpoint, device = None, description = "", force_mounted = False, is_hotplug = None):
 		self.mountpoint = mountpoint
-		self.description = description
+		self._description = description
 		self.force_mounted = force_mounted
 		self.is_hotplug = force_mounted if is_hotplug is None else is_hotplug
 		self.device = device
+
+	@property
+	def description(self):
+		place = self.mountpoint
+		if not place:
+			return self._description
+		text = storagePathName(place, self.device)
+		return text if text != place else self._description
+
+	@description.setter
+	def description(self, value):
+		self._description = value
 
 	def stat(self):
 		# 09.11.2026: apelantii vechi primesc rezultatul final al acestei citiri.
@@ -721,13 +858,13 @@ class Partition:
 		return "%s\t%s" % (self.description, self.mountpoint)
 
 	def mounted(self, mounts = None):
-		# mounts: the (source, mountpoint) pairs of readMounts(), when the caller has them already (getMountedPartitions)
+		# mounts: the (source, mountpoint) pairs of readMounts(), when the caller has them already (getMountedPartitions),
+		# or the getProcMounts() rows a plugin from another image passes (mountPairs)
 		if self.device and isBootSlot(self.device):
 			return False
 		if self.force_mounted:
 			return True
-		if mounts is None:
-			mounts = readMounts()
+		mounts = mountPairs(mounts)
 		if self.device and self.is_hotplug:
 			# hotplug partitions: the mountpoint is whatever /proc/mounts says now, unless the partition is shown under
 			# its stable name (/media/hdd, a link to where the system mounted it, or since 0.7.5 a bind of that mount: one of
@@ -744,6 +881,31 @@ class Partition:
 		return any(self.mountpoint == mountpoint and not (source.startswith("/dev/") and
 			isBootSlot(path.basename(path.realpath(source)))) for source, mountpoint in mounts)
 
+	def filesystem(self, mounts = None):
+		"""the filesystem type of this partition (ext4, vfat ...) from /proc/mounts, "" when it is not mounted; the name and
+		argument of other images (NeoBoot passes their getProcMounts() rows). The device is looked for first: here the
+		mountpoint can be /media/hdd, a link or a bind of where the system mounted it, which /proc/mounts does not show."""
+		if not self.mountpoint:
+			return ""
+		randuri = []
+		if mounts is not None and not isinstance(mounts, str):
+			# the (source, mountpoint) pairs read here have no type: then /proc/mounts is read
+			randuri = [r for r in mounts if isinstance(r, (list, tuple)) and len(r) >= 3]
+		if not randuri:
+			randuri = [r for r in getProcMounts() if len(r) >= 3]
+		if self.device:
+			dev = "/dev/" + self.device
+			for r in randuri:
+				if r[0] == dev or (r[0].startswith("/dev/") and path.realpath(r[0]) == dev):
+					return r[2]
+		loc = self.mountpoint.rstrip("/") or "/"
+		real = path.realpath(loc)
+		for r in randuri:
+			m = unescapeMountPath(r[1]).rstrip("/") or "/"
+			if m == loc or m == real:
+				return r[2]
+		return ""
+
 class SystemDiskPartition(Partition):
 	"""The partition of the external disk the image runs from, mounted a second time on a stable name (see
 	HarddiskManager.addSystemDisk). Its device is also on /, so mounted() looks at the stable name only."""
@@ -758,7 +920,7 @@ class SystemDiskPartition(Partition):
 		self.removable = removable
 
 	def mounted(self, mounts = None):
-		found = _mountpointsIn(self.device, readMounts() if mounts is None else mounts)
+		found = _mountpointsIn(self.device, mountPairs(mounts))
 		return any(self.mountpoint == m or isAliasOf(self.mountpoint, m) for m in found)
 
 DEVICEDB_SR = \
@@ -1015,6 +1177,9 @@ class HarddiskManager:
 		return error, blacklisted, removable, False, [], medium_found
 
 	def getBlockDevInfo(self, blockdev):
+		# Raw NAND views are never user disks, regardless of the driver's major.
+		if re.fullmatch(r"(?:romblock|mtdblock)[0-9]+", blockdev):
+			return False, True, False, False, [], False
 		devpath = "/sys/block/" + blockdev
 		if not path.exists(devpath) and path.exists("/sys/class/block/%s/partition" % blockdev):
 			return self.getPartitionInfo(blockdev)
@@ -1083,6 +1248,7 @@ class HarddiskManager:
 		return device in self.pending or any(x.device == device for x in self.partitions)
 
 	def addHotplugPartition(self, device, physdev = None):
+		storageNamesChanged()
 		_not_boot_slots.discard(device)
 		if not physdev:
 			dev, part = self.splitDeviceName(device)
@@ -1637,6 +1803,11 @@ class HarddiskManager:
 			self.mount_retries = {}
 		n = self.mount_retries.get(device, 0)
 		stare = (rez or {}).get("stare", "?")
+		# si textul erorii (de pilda eticheta indisponibila, din probeBootSlot): in jurnal se vede de ce pierde managerul un
+		# stick sau un disc (pagina /montare-discuri si ecranul de pe televizor ramaneau goale)
+		eroare = (rez or {}).get("eroare") or ""
+		if eroare:
+			stare = "%s: %s" % (stare, eroare)
 		if n >= len(self.MOUNT_RETRY_DELAYS_MS) or not path.exists(SYS_CLASS_BLOCK + device):
 			print("[Harddisk] %s: %s a ramas fara raspuns (%s) si dupa %d reincercari; partitia ramane in afara listei" % (
 				device, ce, stare, n))
@@ -1714,6 +1885,7 @@ class HarddiskManager:
 				return
 			plan = rez["valoare"] or {}
 			if plan.get("exclude"):
+				print("[Harddisk] %s este un loc de pornire al unei imagini; nu intra in lista discurilor" % device)
 				self.pending.pop(device, None)
 			elif plan.get("retry"):
 				self.scheduleMount(device)
@@ -1917,6 +2089,7 @@ class HarddiskManager:
 				self.lazyUnmount(mountpoint, self.unmountFinished, [mountpoint])
 
 	def removeHotplugPartition(self, device):
+		storageNamesChanged()
 		_boot_slots.discard(device)
 		_not_boot_slots.discard(device)
 		from Components.HdsStocareDisc import uita
@@ -1994,10 +2167,11 @@ class HarddiskManager:
 		"""where the device is mounted (the media player asks this for the CD drive)"""
 		return findMountpoint(device) or MEDIA_ROOT + device
 
-	def getMountedPartitions(self, onlyhotplug = False):
+	def getMountedPartitions(self, onlyhotplug = False, mounts = None):
 		# /proc/mounts read once for the whole list, not once per partition (ConfigLocations and FileList call this on the
-		# enigma2 thread); a Partition subclass from outside the image with the old mounted() signature is asked as before
-		mounts = readMounts()
+		# enigma2 thread); a Partition subclass from outside the image with the old mounted() signature is asked as before.
+		# mounts: what the caller read already, as in other images (NeoBoot passes the rows of getProcMounts())
+		mounts = mountPairs(mounts)
 		ale_noastre = (Partition.mounted, SystemDiskPartition.mounted)
 		parts = [x for x in self.partitions if (x.is_hotplug or not onlyhotplug) and
 			(x.mounted(mounts) if getattr(type(x), "mounted", None) in ale_noastre else x.mounted())]
@@ -2066,17 +2240,9 @@ class HarddiskManager:
 				self.partitions.remove(x)
 				self.on_partition_list_change("remove", x)
 
-harddiskmanager = HarddiskManager()
-
-# HDSatelit (CRF, forum 1276): primul disc mare legat primeste singur inregistrarile cand locul e pe un stick si omul n-a ales altul
-# (Components/HdsLocInregistrari.pazesteDiscMare; pe PC, fara eTimer, nu face nimic)
-try:
-	from Components.HdsLocInregistrari import pazesteDiscMare
-	pazesteDiscMare(harddiskmanager)
-except Exception as e:
-	print("[Harddisk] discul mare pentru inregistrari: %r" % (e,))
-
-# numele cerute de pluginuri
+# numele cerute de pluginuri; definite INAINTE de crearea managerului (randul harddiskmanager de mai jos): la pornire
+# managerul anunta discurile deja montate pe un fir (announceMounted foloseste getProcMounts) inainte ca restul modulului
+# sa fie citit, iar un nume definit dupa randul acela da NameError si discul iesea din lista (Montarea discurilor goala)
 def getProcMounts():
 	"""randurile din /proc/mounts, despartite; [] cand nu se poate citi"""
 	try:
@@ -2093,3 +2259,14 @@ def bytesToHumanReadable(size_bytes, binary=False):
 		if marime < baza or unitate == "TB":
 			return "%.1f %s" % (marime, unitate) if unitate != "B" else "%d B" % marime
 		marime /= baza
+
+
+harddiskmanager = HarddiskManager()
+
+# HDSatelit (CRF, forum 1276): primul disc mare legat primeste singur inregistrarile cand locul e pe un stick si omul n-a ales altul
+# (Components/HdsLocInregistrari.pazesteDiscMare; pe PC, fara eTimer, nu face nimic)
+try:
+	from Components.HdsLocInregistrari import pazesteDiscMare
+	pazesteDiscMare(harddiskmanager)
+except Exception as e:
+	print("[Harddisk] discul mare pentru inregistrari: %r" % (e,))

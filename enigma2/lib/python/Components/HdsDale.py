@@ -239,12 +239,32 @@ def sus(i, n):
 	return _laRand(r - 1 if r > 0 else randuri(n) - 1, c, n)
 
 
-def dupaCifra(numar, n):
-	"""Indexul intrarii cu cifra `numar` (1-9), None cand nu exista."""
+def cifraIntrare(i, n, principal=False):
+	"""Cifra intrarii (index de la 0, fara cautare), comuna listei si dalelor."""
+	if not 0 <= i < n:
+		return None
+	if principal and n > 9:
+		if i == n - 1:
+			return "9"
+		if i == 8:
+			return "0"
+		return str(i + 1) if i < 8 else None
+	return str(i + 1) if i < 9 else None
+
+
+def dupaCifra(numar, n, principal=False):
+	"""Indexul intrarii cu cifra `numar`, None cand nu exista."""
 	try:
-		i = int(numar) - 1
+		cifra = int(numar)
 	except (TypeError, ValueError):
 		return None
+	if principal and n > 9:
+		if cifra == 9:
+			return n - 1
+		if cifra == 0:
+			return 8
+		return cifra - 1 if 1 <= cifra <= 8 else None
+	i = cifra - 1
 	return i if 0 <= i < min(n, 9) else None
 
 

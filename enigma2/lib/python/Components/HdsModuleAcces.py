@@ -79,6 +79,20 @@ class SistemAcces(Sistem):
 	def pune_legatura(self, p, tinta):
 		"""p devine legatura spre `tinta` (un nume din acelasi dosar), dintr-o bucata: legatura noua langa ea, apoi
 		os.replace. Cine citeste in acelasi timp vede legatura veche sau pe cea noua, niciodata un gol."""
+		try:
+			from Components import HdsReinstalare as R
+		except ImportError:
+			import HdsReinstalare as R
+		with R._ZAVOR_ALEGERI:
+			try:
+				self._pune_legatura(p, tinta)
+			finally:
+				uita_felurile()
+			c = os.path.abspath(self.cale(p))
+			R._ALEGERI[c] = R._ALEGERI.get(c, 0) + 1
+
+	def _pune_legatura(self, p, tinta):
+		"""Scriere pe firul de lucru, sub zavorul comun cu restaurarea."""
 		c = self.cale(p)
 		dosar, nume = os.path.split(c)
 		nou = os.path.join(dosar, '.' + nume + '.nou')
@@ -97,10 +111,54 @@ class SistemAcces(Sistem):
 
 # ---------------------------------------------------------------- citirea
 
+# FEL6 (TODO 17.11 15:10, MG4): feluri() ruleaza pe firul enigma2 (Verde/Rosu din pagina web, Operatie.__init__,
+# pornirea), iar listarea lui /etc/init.d lasa si reia lacatul Python la fiecare intrare (80 de intrari: 0,2 ms singur,
+# 126 ms cat lucreaza alt fir Python, ~0,3 s pe receptorul de proba cat merge ghidul IPTV). Felurile se tin minte dupa (radacina,
+# mtime_ns, inode, dispozitiv) al dosarului: cat dosarul nu s-a schimbat, o chemare costa un singur os.stat. Orice pachet
+# instalat sau scos si orice legatura schimbata (os.replace) schimba mtime-ul dosarului. Un dosar schimbat in ultimele
+# FELURI_PROASPAT secunde se citeste mereu (unele sisteme de fisiere au ceasul grosier, pana la 2 s), iar alegerea unui
+# modul (pune_legatura) uita tot. Numai pentru sistemele care citesc chiar discul (listeaza si legatura din Sistem);
+# un sistem de proba cu citirile lui si SistemCuMemorie merg ca inainte.
+FELURI_PROASPAT = 2.0
+_FELURI_TINUTE = {}   # radacina -> (cheia dosarului, felurile)
+
+
+def _cheie_feluri(sistem):
+	"""(radacina, mtime_ns, inode, dispozitiv) al dosarului scripturilor, sau None cand felurile nu se pot tine minte"""
+	tip = type(sistem)
+	if getattr(tip, 'listeaza', None) is not Sistem.listeaza or getattr(tip, 'legatura', None) is not Sistem.legatura:
+		return None
+	proprii = getattr(sistem, '__dict__', {})
+	if 'listeaza' in proprii or 'legatura' in proprii:
+		return None
+	try:
+		st = os.stat(sistem.cale(DOSAR_SCRIPTURI))
+	except (OSError, ValueError, TypeError, AttributeError):
+		return None
+	if time.time() - st.st_mtime < FELURI_PROASPAT:
+		return None
+	return (sistem.radacina, st.st_mtime_ns, st.st_ino, st.st_dev)
+
+
+def uita_felurile():
+	"""Felurile tinute minte se citesc din nou la chemarea urmatoare (dupa o schimbare facuta de noi in dosar)."""
+	_FELURI_TINUTE.clear()
+
+
 def feluri(sistem=None):
 	"""Felurile modulelor de pe receptor, in ordinea din ecran (HdsInterfeteCam.feluri): intai al modulelor obisnuite,
-	apoi celelalte (serverele de carduri). Numele lor le da receptorul."""
-	return _feluri(sistem or SistemAcces())
+	apoi celelalte (serverele de carduri). Numele lor le da receptorul. Tinute minte cat nu se schimba dosarul (FEL6,
+	sus); se intoarce mereu o lista noua."""
+	sistem = sistem or SistemAcces()
+	cheie = _cheie_feluri(sistem)
+	if cheie is not None:
+		tinut = _FELURI_TINUTE.get(cheie[0])
+		if tinut is not None and tinut[0] == cheie:
+			return list(tinut[1])
+	rez = _feluri(sistem)
+	if cheie is not None:
+		_FELURI_TINUTE[cheie[0]] = (cheie, tuple(rez))
+	return rez
 
 
 def dosar_programe(fel):
@@ -300,18 +358,27 @@ def citeste(sistem=None, fel=None, procese=True):
 	return st
 
 
-def pregateste_scripturi(sistem):
+def _modul_pregatire(nume):
+	try:
+		return __import__('Components.' + nume, fromlist=[nume])
+	except ImportError:  # probe pe PC: modulul incarcat din dosarul Components
+		return __import__(nume)
+
+
+def pregateste_scripturi(sistem, reinstalare=True):
 	"""0.7.7, inainte de citirea listei: (1) modulele puse ca scripturi ale unui manager de module din Extensii (in afara
 	/etc/init.d) primesc scriptul lor <fel>.<id> scris de imagine, ca sa apara in lista ca orice modul
 	(Components/HdsAdaptorModule.py); (2) scripturile modulelor instalate din pachete, sterse de scoaterea altui pachet, se pun
-	la loc din copia lor (Components/HdsPazaScripturi.py). Nu arunca."""
+	la loc din copia lor (Components/HdsPazaScripturi.py). `reinstalare`=False (pregatirea pe un fir, PSC6): fara
+	reinstalarea automata a pachetelor, care porneste numai de pe firul enigma2 (HdsPazaScripturi.reinstaleaza_daca_lipsesc).
+	Nu arunca."""
 	for nume in ('HdsPazaScripturi', 'HdsAdaptorModule'):
 		try:
-			try:
-				m = __import__('Components.' + nume, fromlist=[nume])
-			except ImportError:  # probe pe PC: modulul incarcat din dosarul Components
-				m = __import__(nume)
-			m.sincronizeaza(sistem)
+			m = _modul_pregatire(nume)
+			if nume == 'HdsPazaScripturi':
+				m.sincronizeaza(sistem, reinstalare=reinstalare)
+			else:
+				m.sincronizeaza(sistem)
 		except Exception as e:
 			_jurnal("%s: %r" % (nume, e))
 
@@ -629,6 +696,26 @@ def port_web_din_randuri(randuri):
 	return None
 
 
+def date_web_din_randuri(randuri):
+	"""Adauga valorile pentru afisare, pastrand cititorul portului neschimbat."""
+	randuri = list(randuri)
+	rez = port_web_din_randuri(randuri)
+	if rez is None:
+		return None
+	sectiune = ""
+	for rand in randuri:
+		r = (rand.decode("utf-8", "replace") if isinstance(rand, bytes) else rand).strip()
+		antet = r.split("#", 1)[0].split(";", 1)[0].strip()
+		if antet.startswith("[") and antet.endswith("]"):
+			sectiune = antet[1:-1].strip().lower()
+		elif sectiune == "webif" and r and not r.startswith(("#", ";")) and "=" in r:
+			k, v = r.split("=", 1)
+			k = k.strip().lower()
+			if k in ("httpuser", "httppwd"):
+				rez["utilizator" if k == "httpuser" else "parola"] = v.strip()
+	return rez
+
+
 def _port_web_configurare(sistem, cale):
 	"""Citire limitata, rand cu rand; continutul configurarii nu se copiaza si nu se scrie in jurnal."""
 	def randuri(fisier):
@@ -641,7 +728,7 @@ def _port_web_configurare(sistem, cale):
 			yield rand
 	try:
 		with open(sistem.cale(cale), 'rb') as fisier:
-			return port_web_din_randuri(randuri(fisier))
+			return date_web_din_randuri(randuri(fisier))
 	except (OSError, IOError, ValueError):
 		return None
 
@@ -999,6 +1086,7 @@ class Operatie(object):
 		self._ramane_ales = False
 		self.cititor = cititor
 		self._citiri = 0
+		self._scrie_legatura = False
 
 	# ------------------------------------------------ citirea pe un fir (0.7.7)
 	# Starea unui fel (citeste: legatura, scripturile, /proc pentru fiecare proces) si scriptul unui pas (argv_script) fac pe
@@ -1022,6 +1110,7 @@ class Operatie(object):
 				return
 			self._opreste_ceasul()
 			if eroare is not None:
+				self._scrie_legatura = False
 				_jurnal("%s %s: citirea starii: %r" % (self.cerere, self.fel, eroare))
 				self._termina(False, 'necunoscut', nume=curata_nume(nume))
 				return
@@ -1034,17 +1123,23 @@ class Operatie(object):
 		except Exception as e:
 			# citirea n-a pornit (firul, ceasul): operatia se termina, ca zavorul operatiilor (in_curs) sa nu ramana luat
 			_jurnal("%s %s: citirea pe fir nu a pornit: %r" % (self.cerere, self.fel, e))
+			self._scrie_legatura = False
 			self._termina(False, 'necunoscut', nume=curata_nume(nume))
 			return
 		if not pornita:
-			# nu se intampla (o singura citire a operatiei odata); ca inainte, pe loc
+			# Refuzul firului nu muta lucrul cu discul pe firul interfetei.
 			self._opreste_ceasul()
-			mai_departe(lucru(sistem))
+			self._scrie_legatura = False
+			self._termina(False, 'ocupat')
 
 	def _termen_citire(self, semn, nume):
 		if self.gata or semn != self._citiri:
 			return
 		self._ceas = None
+		if self._scrie_legatura:
+			# Firul nu poate fi oprit in timpul scrierii. Rezervarea ramane
+			# pana vine rezultatul, ca o alegere noua sa nu fie suprascrisa.
+			return
 		self._termina(False, 'termen', nume=curata_nume(nume), secunde=int(self.limita))
 
 	# ------------------------------------------------ planul
@@ -1154,12 +1249,21 @@ class Operatie(object):
 				# scriptul nou a disparut intre timp: legatura nu se muta spre un script care nu mai e
 				self._termina(False, 'necunoscut', nume=curata_nume(sufix))
 				return
-			try:
-				self.sistem.pune_legatura(DOSAR_SCRIPTURI + '/' + self.fel, self.fel + '.' + sufix)
-			except (OSError, ValueError) as e:
-				self._termina(False, 'legatura', eroare=curata_nume(getattr(e, 'strerror', None) or str(e)))
-				return
-			self._urmatorul()
+			fel = self.fel
+			def leaga(sistem):
+				try:
+					sistem.pune_legatura(DOSAR_SCRIPTURI + '/' + fel, fel + '.' + sufix)
+					return None
+				except (OSError, ValueError) as e:
+					return curata_nume(getattr(e, 'strerror', None) or str(e))
+			def legat(eroare):
+				self._scrie_legatura = False
+				if eroare is not None:
+					self._termina(False, 'legatura', eroare=eroare)
+				else:
+					self._urmatorul()
+			self._scrie_legatura = True
+			self._pe_fir(leaga, legat, sufix)
 			return
 		self._pas = (sufix, actiune)
 		if argv is None:
@@ -1360,19 +1464,51 @@ class ModuleCitite(object):
 		return self.stari
 
 
-_pregatite = {'semn': None}
+# PSC6 (TODO 17.11 15:10, MG4): pe receptor pregatirea (HdsAdaptorModule si HdsPazaScripturi: listari, citiri de scripturi, starea
+# opkg, copii) mergea pe firul enigma2 dupa orice schimbare in /etc/init.d, din reimprospatarea ecranului modulelor, din GET
+# /acces-conditionat si din Informatii despre decriptare; fiecare apel de sistem asteapta lacatul Python cat lucreaza alt fir
+# (ghidul IPTV). Acum ea merge pe un fir (CitirePeFir), una singura odata; o schimbare vazuta cat merge se tine minte si aduce o
+# singura rulare dupa ea (oricate cereri ar veni intre timp). Pe firul enigma2 raman semn_scripturi (doua os.stat) si, la
+# sfarsit, reinstalarea automata a scripturilor sterse fara copie (HdsPazaScripturi.reinstaleaza_daca_lipsesc, eTimer-ul
+# lucrarii ei). Pregatirea nu tine de ecran: inchiderea ecranului nu o opreste (scrie numai in dosarele scripturilor). Un
+# sistem de proba (o radacina intr-un dosar, fara `cititor`) se pregateste pe loc, ca pana acum.
+_pregatite = {'semn': None, 'cititor': None, 'din_nou': False}
 
 
-def pregateste_la_schimbare(sistem):
-	"""pregateste_scripturi pe firul enigma2, numai cand s-a schimbat ceva in dosarele scripturilor (semn_scripturi, doua apeluri
-	de sistem): ecranul modulelor, pagina web si Informatii despre decriptare citesc apoi pe un fir, fara pregatire (o
-	pregatire pe fir n-ar putea porni reinstalarea scripturilor sterse, HdsPazaScripturi). Nu arunca."""
+def pregateste_la_schimbare(sistem, cititor=None):
+	"""pregateste_scripturi numai cand s-a schimbat ceva in dosarele scripturilor (semn_scripturi, doua apeluri de sistem); pe
+	receptor (sau cu `cititor`, la probe) pe un fir, vezi PSC6 sus. Ecranul modulelor, pagina web si Informatii despre
+	decriptare citesc apoi pe un fir, fara pregatire. Nu arunca."""
 	try:
 		semn = semn_scripturi(sistem)
-		if semn != _pregatite['semn']:
+		if semn == _pregatite['semn']:
+			return
+		if cititor is None and not citire_pe_fir(sistem):
 			_pregatite['semn'] = semn
 			pregateste_scripturi(sistem)
+			return
+		c = _pregatite['cititor']
+		if c is not None and c.in_curs():
+			_pregatite['din_nou'] = True
+			return
+		c = _pregatite['cititor'] = cititor or CitirePeFir()   # unul nou la fiecare pregatire (rar: numai la o schimbare)
+		_pregatite['semn'] = semn
+		_pregatite['din_nou'] = False
+
+		def gata(_rezultat, eroare):
+			if eroare is not None:
+				_jurnal("pregatirea scripturilor: %r" % (eroare,))
+			try:
+				_modul_pregatire('HdsPazaScripturi').reinstaleaza_daca_lipsesc(sistem)
+			except Exception as e:
+				_jurnal("HdsPazaScripturi: %r" % (e,))
+			if _pregatite['din_nou']:
+				_pregatite['din_nou'] = False
+				pregateste_la_schimbare(sistem, cititor)
+
+		c.porneste(lambda: pregateste_scripturi(sistem, reinstalare=False), gata)
 	except Exception as e:
+		_pregatite['semn'] = None    # pregatirea n-a pornit: cererea urmatoare incearca din nou
 		_jurnal("pregatirea scripturilor: %r" % (e,))
 
 
@@ -1417,6 +1553,9 @@ class CitirePeFir(object):
 			self._ceas.callback.append(self._verifica)
 		self._lucru = stare
 		try:
+			# Pornim urmarirea inainte de fir: un ceas refuzat nu lasa
+			# o scriere libera dupa ce apelantul a primit o eroare.
+			self._ceas.start(self.PAS_MS, False)
 			if self._fir is not None:
 				self._fir(ruleaza)
 			else:
@@ -1424,9 +1563,8 @@ class CitirePeFir(object):
 				t = threading.Thread(target=ruleaza, name='HdsModuleCitire')
 				t.daemon = True
 				t.start()
-			self._ceas.start(self.PAS_MS, False)
 		except Exception:
-			self._lucru = None
+			self.opreste()
 			raise
 		return True
 
@@ -2007,7 +2145,24 @@ def dupa_pornirea_interfetei(sistem=None, operatie=None, temporizator=None, inta
 		# receptorul de probe citirea tinea firul enigma2 0,47 s la 5 s dupa pornirea interfetei (cat lucreaza firele pornirii, fiecare
 		# apel de sistem asteapta lacatul Python). Cititorul sta in _citiri_dupa_interfata pana la apelul inapoi (ceasul lui nu are alt
 		# stapan), unul nou la fiecare verificare.
-		pregateste_la_schimbare(s)
+		# PSC6: pregatirea scripturilor (cand s-a schimbat ceva) merge pe acelasi fir, inaintea citirii, ca un script pus la loc
+		# sa fie vazut si pornit chiar la aceasta verificare; reinstalarea automata vine apoi pe firul enigma2, in apelul inapoi.
+		de_pregatit = False
+		try:
+			semn = semn_scripturi(s)
+			alt = _pregatite.get('cititor')
+			# o pregatire pornita de altcineva (pagina web, ecranul) si neterminata: o facem si aici, inaintea citirii; lacatele
+			# HdsPazaScripturi/HdsAdaptorModule o asteapta pe cealalta, iar a doua trecere nu mai schimba nimic
+			if semn != _pregatite['semn'] or (alt is not None and alt.in_curs()):
+				_pregatite['semn'] = semn
+				de_pregatit = True
+		except Exception as e:
+			_jurnal("pregatirea scripturilor: %r" % (e,))
+
+		def citeste():
+			if de_pregatit:
+				pregateste_scripturi(s, reinstalare=False)
+			return de_pornit_dupa_interfata(SistemCuMemorie(s), pregateste=False)
 		c = None
 		try:
 			c = (cititor or CitirePeFir)()
@@ -2016,14 +2171,21 @@ def dupa_pornirea_interfetei(sistem=None, operatie=None, temporizator=None, inta
 			def gata(rezultat, eroare):
 				if c in _citiri_dupa_interfata:
 					_citiri_dupa_interfata.remove(c)
+				if de_pregatit:
+					try:
+						_modul_pregatire('HdsPazaScripturi').reinstaleaza_daca_lipsesc(s)
+					except Exception as e:
+						_jurnal("HdsPazaScripturi: %r" % (e,))
 				if eroare is not None:
 					_jurnal("dupa pornirea interfetei: %r" % (eroare,))
 					return
 				porneste_pe_rand(rezultat or [], incercari)
-			c.porneste(lambda: de_pornit_dupa_interfata(SistemCuMemorie(s), pregateste=False), gata)
+			c.porneste(citeste, gata)
 		except Exception as e:
 			if c in _citiri_dupa_interfata:
 				_citiri_dupa_interfata.remove(c)
+			if de_pregatit:
+				_pregatite['semn'] = None    # pregatirea n-a pornit: verificarea urmatoare incearca din nou
 			_jurnal("dupa pornirea interfetei: %r" % (e,))
 
 	def porneste_pe_rand(ramase, incercari):

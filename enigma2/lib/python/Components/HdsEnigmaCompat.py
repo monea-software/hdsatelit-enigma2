@@ -5,7 +5,7 @@
 # HdsEnigmaCompat.py: functiile mici pe care pluginurile altor imagini le iau din modulul enigma
 # (`from enigma import getBoxType`) si pe care nucleul nostru nu le are. Sunt facute aici in Python, cu numele, argumentele si
 # valorile intoarse ca la ele, si puse in enigma la pornire (mytest.py, inainte de pluginuri). Un nume care exista deja in
-# enigma nu se schimba. Nu arunca: o greseala aici lasa numai numele nepus.
+# enigma nu se schimba, afara de stubul gol propriu al inventarului. Nu arunca: o greseala aici lasa numai numele nepus.
 #
 #   getBoxType()                 modelul (BoxInfo "model"), ca in alte imagini
 #   getBoxBrand()                marca (BoxInfo "brand")
@@ -14,7 +14,7 @@
 #                                interfata de retea (aceleasi coduri ca in alte imagini). Asteapta cel mult
 #                                timeout secunde numele (pe un fir separat) si tot atat legatura la fiecare adresa.
 #   detectImageType(cale)        felul pozei dupa primii octeti: 0 PNG, 1 JPEG, 2 BMP, 3 GIF, 4 SVG, 5 WEBP, -1 altceva
-#   getPeerStreamingBoxes()      receptoarele din retea care dau canale; aici lista e goala (nu le cautam)
+#   getPeerStreamingBoxes()      [(url, eticheta)] din inventarul tunerului de rezerva, numai din memorie
 #   setSpinnerOnOff(pornit)      pluginurile opresc rotita cat ruleaza altceva; la noi rotita o tine nucleul, deci nu face nimic
 #   getBsodCounter()            0: nucleul incheie procesul la caderea fatala, fara contor accesibil din Python
 #   getE2Rev()                   versiunea pachetului enigma2 al imaginii (din opkg), pentru rapoartele pluginurilor; "" cand nu se stie
@@ -23,8 +23,179 @@
 # completeazaTwisted(): numele HTTP vechi pentru pluginuri si adrese primite ca text.
 import os
 import socket
+import sys
 
 _DIR_RETEA = "/sys/class/net"
+
+
+class _ChannelZapAnulat(Exception):
+	pass
+
+
+class _ChannelZapProxy:
+	"""Toate operatiile pe obiectul nativ se executa pe firul principal."""
+	def __init__(self, obiect, apel):
+		self._obiect = obiect
+		self._apel = apel
+
+	def __getattr__(self, nume):
+		return self._apel(lambda: getattr(self._obiect, nume))
+
+	def __call__(self, *args, **kwargs):
+		def desface(v):
+			if isinstance(v, _ChannelZapProxy):
+				return v._obiect
+			if isinstance(v, (list, tuple)):
+				return type(v)(desface(x) for x in v)
+			if isinstance(v, dict):
+				return {k: desface(x) for k, x in v.items()}
+			return v
+		return self._apel(lambda: self._obiect(*desface(args), **desface(kwargs)))
+
+	def __bool__(self):
+		return self._apel(lambda: bool(self._obiect))
+
+	def __eq__(self, other):
+		return self._apel(lambda: self._obiect == (other._obiect if isinstance(other, _ChannelZapProxy) else other))
+
+
+def _channelZapRezolva(functii, session, service, anulat):
+	"""Numai codul resolverelor si rezultatele text; fara descriptor sau raportor."""
+	url = None
+	for functie in functii:
+		if anulat.is_set():
+			break
+		try:
+			rez = functie(session=session, service=service)
+			if url is None and isinstance(rez, tuple) and len(rez) == 2 and isinstance(rez[0], str) and rez[0]:
+				url = rez[0]
+		except _ChannelZapAnulat:
+			break
+		except Exception:
+			# Nici mesajul, nici traceback-ul, nici rezultatul nu sunt publice.
+			print("[Navigation] plugin de zap: apel esuat")
+	return url
+
+
+class ChannelZapRunner:
+	"""Cel mult doua fire si ultima cerere in asteptare.
+
+	Reteaua unui plugin nu poate fi intrerupta fortat. La anulare nu mai poate
+	atinge obiectele native sau porni playerul. Dupa un ragaz scurt, cererea
+	noua primeste un fir separat. Daca ambele fire sunt blocate, se reda
+	referinta originala: nu acumulam fire si nu blocam schimbarea canalului.
+	"""
+	def __init__(self):
+		import threading
+		from twisted.internet import reactor
+		self._threading = threading
+		self._reactor = reactor
+		self._principal = threading.get_ident()
+		self._lock = threading.Lock()
+		self._curent = self._asteapta = None
+		self._fire = 0
+		self._verificare = False
+
+	@property
+	def ocupat(self):
+		with self._lock:
+			return bool(self._fire)
+
+	def anuleaza(self):
+		with self._lock:
+			if self._curent is not None:
+				self._curent.set()
+			self._asteapta = None
+
+	def porneste(self, functii, session, service, continua):
+		self.anuleaza()
+		cerere = (self._threading.Event(), functii, session, service, continua)
+		with self._lock:
+			self._curent = cerere[0]
+			self._asteapta = cerere
+			porneste = not self._fire
+			if porneste:
+				self._fire += 1
+			verifica = not porneste and not self._verificare
+			if verifica:
+				self._verificare = True
+		if porneste:
+			return self._pornesteFir()
+		if verifica:
+			# Pe principal; rafala de taste pastreaza numai ultima cerere.
+			self._reactor.callLater(0.05, self._deblocheaza)
+		return 0
+
+	def _pornesteFir(self):
+		try:
+			fir = self._threading.Thread(target=self._lucreaza, name="HdsChannelZap", daemon=True)
+			fir.start()
+		except Exception:
+			with self._lock:
+				self._fire -= 1
+				cerere, self._asteapta = self._asteapta, None
+			print("[Navigation] resolverul de zap nu a pornit")
+			if cerere is not None:
+				return self._gata(cerere[0], cerere[4], None)
+		return 0
+
+	def _deblocheaza(self):
+		with self._lock:
+			self._verificare = False
+			if self._asteapta is None:
+				return
+			if self._fire < 2:
+				self._fire += 1
+				cerere = None
+			else:
+				cerere, self._asteapta = self._asteapta, None
+		if cerere is None:
+			self._pornesteFir()
+		else:
+			print("[Navigation] resolverele vechi ocupa firele; redare directa")
+			self._gata(cerere[0], cerere[4], None)
+
+	def _lucreaza(self):
+		while True:
+			with self._lock:
+				cerere = self._asteapta
+				self._asteapta = None
+				if cerere is None:
+					self._fire -= 1
+					return
+			try:
+				url = self._rezolva(cerere)
+			except BaseException:
+				print("[Navigation] resolverul de zap a esuat")
+				url = None
+			self._reactor.callFromThread(self._gata, cerere[0], cerere[4], url)
+
+	def _rezolva(self, cerere):
+		# Cadru separat: proxy-urile pastrate nu trec la generatia urmatoare.
+		from twisted.internet.threads import blockingCallFromThread
+		anulat, functii, session, service, continua = cerere
+
+		def apel(f):
+			def principal():
+				if anulat.is_set():
+					raise _ChannelZapAnulat()
+				return impacheteaza(f())
+			if self._threading.get_ident() == self._principal:
+				return principal()
+			return blockingCallFromThread(self._reactor, principal)
+
+		def impacheteaza(v):
+			if v is None or type(v) in (bool, int, float, str, bytes):
+				return v
+			if type(v) in (tuple, list):
+				return type(v)(impacheteaza(x) for x in v)
+			return _ChannelZapProxy(v, apel)
+
+		return _channelZapRezolva(functii, impacheteaza(session), impacheteaza(service), anulat)
+
+	def _gata(self, anulat, continua, url):
+		if not anulat.is_set():
+			return continua(url)
 
 
 def getBoxType():
@@ -149,7 +320,23 @@ def detectImageType(cale):
 
 
 def getPeerStreamingBoxes():
-	return []
+	"""Aceiasi receptori ca in alegerile tunerului; nu importa si nu porneste descoperirea."""
+	rezerva = sys.modules.get("Components.HdsTunerRezerva")
+	cautari = getattr(rezerva, "_CAUTARE", ())
+	if not cautari:
+		return []
+	st = cautari[0].rezultat()
+	return [(r["url"], rezerva.eticheta(r)) for r in st["receptoare"]]
+
+
+def setPreferredTuner(index):
+	"""Preferinta de slot in memorie, fara salvarea setarilor.
+
+	Apelantul restaureaza preferinta precedenta in finally. Un index negativ
+	alege alocarea automata. Numele native existente raman neschimbate.
+	"""
+	from enigma import eDVBResourceManager
+	eDVBResourceManager.getInstance().setPreferredTuner(index)
 
 
 def setSpinnerOnOff(pornit):
@@ -179,7 +366,7 @@ def eGetEnigmaDebugLvl():
 
 
 NUME = ("getBoxType", "getBoxBrand", "checkInternetAccess", "detectImageType", "getPeerStreamingBoxes", "setSpinnerOnOff", "getBsodCounter",
-	"getE2Rev", "eGetEnigmaDebugLvl")
+	"getE2Rev", "eGetEnigmaDebugLvl", "setPreferredTuner")
 
 
 # ------------------------------------------------------------------ twisted: adresa ca text
@@ -248,7 +435,12 @@ def completeaza(enigma=None):
 		if enigma is None:
 			import enigma
 		for nume in NUME:
-			if not hasattr(enigma, nume):
+			vechi = getattr(enigma, nume, None)
+			# Stratul propriu de pornire poate avea deja raspunsul gol, inainte de mytest.
+			stub_receptoare = (nume == "getPeerStreamingBoxes"
+				and getattr(vechi, "__module__", None) == "HdsEnigmaCompat"
+				and getattr(vechi, "__qualname__", None) == "aplica.<locals>.<lambda>")
+			if not hasattr(enigma, nume) or stub_receptoare:
 				setattr(enigma, nume, globals()[nume])
 				puse.append(nume)
 		for nume, original in ALIASURI:

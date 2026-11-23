@@ -84,6 +84,7 @@ public:
 	static void hdsSetAnimatie(int fel, int durata_ms);
 	static int hdsAnimatieFel();
 	static int hdsAnimatieDurata();
+	static void hdsAnimatieReincearca();
 		/* Session.close: schimbarea care urmeaza e o inchidere (alunecarea coboara, marirea scade) */
 	void hdsAnimatieInchidere();
 		/* Session.open/close/execDialog: ecranul care se deschide sau se inchide acum nu are animatie (bara, lista de canale,

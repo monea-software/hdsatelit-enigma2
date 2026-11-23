@@ -1,0 +1,41 @@
+Subject: [PATCH] JSC: ARMv7 keep the put_by_val profile out of the handler register
+
+Upstream-Status: Inappropriate [restore experimental ARM32 JIT]
+
+On ARMv7 the preferred fifth argument register of the put_by_val slow
+operation is r9, which is also GPRInfo::handlerGPR. The Baseline handler
+IC loads the handler into r9 before calling it, so the shared slow path
+passed the handler as the ArrayProfile and the profile update overwrote
+the handler call target (crash at pc 0x20 on the first put_by_val that
+reaches the slow path). Use the metadata table register, which Baseline
+already rematerializes after the IC on ARMv7, keep the scratch register
+off the handler register and assert no overlap.
+
+--- a/Source/JavaScriptCore/jit/BaselineJITRegisters.h
++++ b/Source/JavaScriptCore/jit/BaselineJITRegisters.h
+@@ -260,7 +260,14 @@
+     static constexpr JSValueRegs propertyJSR { preferredArgumentJSR<SlowOperation, 1>() };
+     static constexpr JSValueRegs valueJSR { preferredArgumentJSR<SlowOperation, 2>() };
+     static constexpr GPRReg propertyCacheGPR { preferredArgumentGPR<SlowOperation, 3>() };
++#if CPU(ARM_THUMB2)
++    // The preferred register is GPRInfo::handlerGPR on ARMv7, which the handler IC call
++    // overwrites with the handler pointer before the slow operation reads the profile.
++    // Use the metadata table register instead; Baseline rematerializes it after the IC.
++    static constexpr GPRReg profileGPR { GPRInfo::metadataTableRegister };
++#else
+     static constexpr GPRReg profileGPR { preferredArgumentGPR<SlowOperation, 4>() };
++#endif
+ #if USE(JSVALUE64)
+     static constexpr auto scratchRegisters = allocatedScratchRegisters<GPRInfo, baseJSR, propertyJSR, valueJSR, propertyCacheGPR, profileGPR, GPRInfo::handlerGPR>;
+     static constexpr GPRReg scratch1GPR { scratchRegisters[0] };
+@@ -268,8 +275,9 @@
+     static_assert(noOverlap(baseJSR, propertyJSR, valueJSR, propertyCacheGPR, profileGPR, scratch1GPR, GPRInfo::handlerGPR), "Required for call to slow operation");
+     static_assert(noOverlap(baseJSR, propertyJSR, valueJSR, propertyCacheGPR, profileGPR, scratch1GPR, scratch2GPR), "Required for HandlerIC");
+ #else
+-    static constexpr auto scratchRegisters = allocatedScratchRegisters<GPRInfo, baseJSR, propertyJSR, valueJSR, propertyCacheGPR, profileGPR>;
++    static constexpr auto scratchRegisters = allocatedScratchRegisters<GPRInfo, baseJSR, propertyJSR, valueJSR, propertyCacheGPR, profileGPR, GPRInfo::handlerGPR>;
+     static constexpr GPRReg scratch1GPR { scratchRegisters[0] };
++    static_assert(noOverlap(baseJSR, propertyJSR, valueJSR, propertyCacheGPR, profileGPR, scratch1GPR, GPRInfo::handlerGPR), "Required for HandlerIC");
+ #endif
+ }
+ 

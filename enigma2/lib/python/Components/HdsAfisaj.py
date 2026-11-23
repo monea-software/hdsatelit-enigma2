@@ -38,7 +38,9 @@
 # pe lista C++ a buchetului (cel mult MAX_CANALE_NUMARATE intrari); o lista care nu e buchet nu se numara deloc.
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC il folosesc direct.
 
+import errno
 import os
+import sys
 import threading
 import time
 
@@ -650,7 +652,7 @@ def caleLumina():
 	"""(nodul luminozitatii, treptele lui): lcd/oled_brightness cand exista (Viper 4K V20, V30, V40, ca inainte),
 	altfel fp/oled_brightness (primul Viper 4K, V10), altfel (None, None)"""
 	if os.path.exists(LUMINOZITATE):
-		return LUMINOZITATE, TREPTE_LUMINA
+		return LUMINOZITATE, TREPTE_LUMINA_COLOR if _lcdDuo2() is not None else TREPTE_LUMINA
 	if os.path.exists(LUMINOZITATE_FP):
 		return LUMINOZITATE_FP, TREPTE_LUMINA_FP
 	return None, None
@@ -665,6 +667,10 @@ def valoareLumina(treapta, trepte):
 
 def disponibil(cale=None):
 	"""Receptorul are afisaj in fata (dispozitivul exista)."""
+	if cale is None:
+		lcd = _lcdDuo2()
+		if lcd is not None:
+			return lcd.detected()
 	if cale is None and not esteColor():
 		try:
 			from Components.HdsFunctiiImagine import disponibil as functieImagine
@@ -674,6 +680,17 @@ def disponibil(cale=None):
 			# Un singur controler scrie afisajul: cel al producatorului.
 			return False
 	return os.path.exists(cale or DISPOZITIV) or (cale is None and esteColor())
+
+
+def _lcdDuo2():
+	# Query the existing native instance in memory; no model/device IO here.
+	clasa = getattr(sys.modules.get("enigma"), "eDBoxLCD", None)
+	if clasa is not None:
+		lcd = clasa.getInstance()
+		identifica = getattr(lcd, "isHdsDuo2", None)
+		if identifica is not None and identifica():
+			return lcd
+	return None
 
 
 def colorInfo():
@@ -1341,11 +1358,16 @@ class Afisaj(object):
 			return False
 		sir = (sir + GOL)[:LATIME]
 		try:
-			fd = os.open(self.cale, _DESCHIDERE)
-			try:
-				os.write(fd, sir.encode("latin-1"))
-			finally:
-				os.close(fd)
+			lcd = _lcdDuo2()
+			if lcd is not None:
+				if lcd.writeHdsDuo2(*mastiDinSir(sir)) != 140 * 32:
+					raise OSError(errno.EIO, _("Scriere VFD incompletă."))
+			else:
+				fd = os.open(self.cale, _DESCHIDERE)
+				try:
+					os.write(fd, sir.encode("latin-1"))
+				finally:
+					os.close(fd)
 		except (OSError, UnicodeError) as e:
 			if self.eroare != getattr(e, "errno", -1):
 				_jurnal("nu pot scrie in %s: %s" % (self.cale, e))

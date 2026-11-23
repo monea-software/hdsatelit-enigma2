@@ -5,7 +5,8 @@
 # HdsEgalizator.py: ecranul „Egalizator”. Meniu > Audio & Sound Tracks > Egalizator (si, dupa legare, tasta VERDE pe
 # ecranul radio). Setarile si motorul sunt in Components/HdsEgalizator.py; pagina web /egalizator e perechea lui.
 #
-# Doua zone: sase casete sus (ultima, La canalele TV: egalizatorul si la canalele TV, perechea setarii din pagina web),
+# Doua zone: sase casete sus (ultima, La canalele TV: egalizatorul si la canalele TV, perechea setarii din pagina web;
+# pe HiSilicon trei alegeri: Da, Prin placa (egalizatorul placii, 5 benzi, fara intarziere), Nu),
 # separat cele 10 benzi si Nivel. OK/Jos pe Reglaj manual intra la 31 Hz.
 # In coloane, stanga/dreapta aleg, sus/jos schimba cu 1 dB, OK salveaza Manual fara inchidere, EXIT renunta.
 # Tastele colorate: ROSU renunta, VERDE pastreaza, GALBEN presetarea urmatoare, ALBASTRU pornit/oprit.
@@ -166,7 +167,8 @@ class HdsEgalizator(Screen):
 		self.post = s["post"]
 		self.v = {"pornit": s["pornit"], "presetare": s["presetare"], "benzi": list(s["benzi"]),
 			"noapte": s["noapte"], "nivel": s["nivel"], "pe_post": s["pe_post"], "efect": s.get("efect", "fara"),
-			"tv": bool(s.get("tv", True))}
+			"tv": bool(s.get("tv", True)), "tv_placa": bool(s.get("tv_placa", False))}
+		self.placaPeq = bool(s.get("placa_peq"))
 		self.orig = dict(self.v, benzi=list(s["benzi"]))
 		self.poz = POZ_PRESETARE if s["pornit"] else POZ_PORNIT
 		self.salvat = False
@@ -307,7 +309,14 @@ class HdsEgalizator(Screen):
 			# pe Nu se vad (si se aud) reglajele obisnuite; pe Da cele de acum raman si devin ale postului
 			self.v = E.comutaPePost(self.v, not self.v["pe_post"])
 		elif p == POZ_TV:
-			self.v["tv"] = not self.v["tv"]
+			if self.placaPeq:
+				# Da -> Prin placa -> Nu -> Da (inapoi la pas negativ)
+				stari = [(True, False), (True, True), (False, False)]
+				acum = (self.v["tv"], self.v["tv_placa"] and self.v["tv"])
+				i = stari.index(acum) if acum in stari else 0
+				self.v["tv"], self.v["tv_placa"] = stari[(i + (1 if pas >= 0 else -1)) % len(stari)]
+			else:
+				self.v["tv"] = not self.v["tv"]
 		elif p == POZ_NIVEL:
 			self.v["nivel"] = E.limiteaza(self.v["nivel"] + pas, E.NIVEL_MIN, E.NIVEL_MAX)
 			self.v["presetare"], self.v["noapte"] = E.MANUAL, False
@@ -370,7 +379,7 @@ class HdsEgalizator(Screen):
 			self.v = self.inainteEfecte
 			self.salvat = self.salvatInainteEfecte
 			E.incearca(benzi=self.v["benzi"], noapte=self.v["noapte"], nivel=self.v["nivel"],
-				pornit=self.v["pornit"], efect=self.v["efect"], tv=self.v["tv"])
+				pornit=self.v["pornit"], efect=self.v["efect"], tv=self.v["tv"], tvPlaca=self.v["tv_placa"])
 		else:
 			self._ascultaEfect(alegere[1])
 		del self.inainteEfecte, self.salvatInainteEfecte
@@ -379,24 +388,25 @@ class HdsEgalizator(Screen):
 	def _pornit(self, pornit):
 		self.v["pornit"] = bool(pornit)
 		E.incearca(benzi=self.v["benzi"], noapte=self.v["noapte"], nivel=self.v["nivel"], pornit=self.v["pornit"],
-			efect=self.v["efect"], tv=self.v["tv"])
+			efect=self.v["efect"], tv=self.v["tv"], tvPlaca=self.v["tv_placa"])
 
 	def _dupaSchimbare(self):
 		self.salvat = False
 		E.incearca(benzi=self.v["benzi"], noapte=self.v["noapte"], nivel=self.v["nivel"], efect=self.v["efect"],
-			tv=self.v["tv"])
+			tv=self.v["tv"], tvPlaca=self.v["tv_placa"])
 		self.arataDescrierea()
 		self.deseneaza()
 
 	def _schimbat(self):
 		o = self.orig
-		return any(self.v[k] != o[k] for k in ("pornit", "noapte", "nivel", "presetare", "pe_post", "efect", "tv")) or \
+		return any(self.v[k] != o[k] for k in ("pornit", "noapte", "nivel", "presetare", "pe_post", "efect", "tv", "tv_placa")) or \
 			self.v["benzi"] != o["benzi"]
 
 	def pastreaza(self, inchide=True):
 		manual = self.poz >= POZ_BANDA0
 		s = E.seteaza(pornit=self.v["pornit"], presetare_=self.v["presetare"], benzi=self.v["benzi"],
 			noapte=self.v["noapte"], nivel=self.v["nivel"], efect=self.v["efect"], salveazaManual=manual, tv=self.v["tv"],
+			tvPlaca=self.v["tv_placa"],
 			pePost=self.v["pe_post"] if self.post.get("cheie") else None)
 		self.v.update(presetare=s["presetare"])
 		self.orig = dict(self.v, benzi=list(self.v["benzi"]))
@@ -418,6 +428,7 @@ class HdsEgalizator(Screen):
 			if m is not None:
 				E.trimiteLaMotor(E.setariEfective(self.post.get("cheie")), m)
 				m.setPornit(1 if self.orig["pornit"] else 0)
+			E.renuntaLaProba()
 		self.close(False)
 
 	# ---- textele ----
@@ -438,6 +449,8 @@ class HdsEgalizator(Screen):
 				t = _("Nu merge niciun post acum, deci reglajele se păstrează pentru toate posturile.")
 		elif p == POZ_NIVEL:
 			t = _("Nivel: potrivești tăria sunetului cu egalizator față de sunetul obișnuit, între −12 și +12 dB.")
+		elif p == POZ_TV and self.placaPeq and self.v["tv"] and self.v["tv_placa"]:
+			t = _("Prin placă: la canalele TV benzile le aplică placa de sunet, la fiecare canal și fără nicio întârziere, adunate în 5 benzi. Efectele speciale și comprimarea se aud numai la radio.")
 		elif p == POZ_TV:
 			t = _("Da: egalizatorul lucrează și la canalele TV cu sunet MPEG (MP2); la schimbarea canalului sunetul pornește pe placa de sunet și trece în egalizator după o clipă. Nu: numai la radio.")
 		elif p == POZ_EFECTE:
@@ -445,6 +458,8 @@ class HdsEgalizator(Screen):
 		else:
 			i = p - POZ_BANDA0
 			t = _("%s, %s. Sus și jos: cu 1 dB mai mult sau mai puțin, între −24 și +18 dB.") % (E.ETICHETE[i], _(DESCRIERI_BENZI[i]))
+		if p in (POZ_PORNIT, POZ_TV) and not (self.v["tv"] and self.v["tv_placa"] and self.placaPeq):
+			t = E.avertizareTv(self.stareMotor) or t
 		self["descriere"].setText(_("Reglaj salvat în presetarea „Manual”.") if self.salvat else t)
 		self.arataNota()
 
@@ -457,6 +472,8 @@ class HdsEgalizator(Screen):
 			t = _("Stânga și dreapta: alegi. Sus, jos sau OK: presetarea următoare. EXIT: ieși.")
 		elif p == POZ_MANUAL:
 			t = _("OK sau Jos: reglezi coloanele. EXIT: ieși.")
+		elif p == POZ_TV and self.placaPeq:
+			t = _("Stânga și dreapta: alegi. OK: Da, Prin placă sau Nu. EXIT: ieși.")
 		elif p in (POZ_POST, POZ_TV):
 			t = _("Stânga și dreapta: alegi. OK: da sau nu. EXIT: ieși.")
 		elif p == POZ_EFECTE:
@@ -471,7 +488,7 @@ class HdsEgalizator(Screen):
 		if self.geom is None:
 			return
 		cheie = (self.poz, self.v["pornit"], self.v["presetare"], tuple(self.v["benzi"]), self.v["noapte"],
-			self.v["nivel"], self.v["pe_post"], self.v["efect"], self.v["tv"], self.spectru, self.geom)
+			self.v["nivel"], self.v["pe_post"], self.v["efect"], self.v["tv"], self.v["tv_placa"], self.spectru, self.geom)
 		if not fortat and cheie == self.desenat:
 			return
 		self.desenat = cheie
@@ -489,13 +506,18 @@ class HdsEgalizator(Screen):
 		# casetele de sus
 		h_caseta = g["h_caseta"]
 		w_caseta = g["w_caseta"]
+		tv_valoare = _("Da") if self.v["tv"] else _("Nu")
+		if self.stareMotor and self.stareMotor.get("tv_de_proba"):
+			tv_valoare = _("Da (de probă)") if self.v["tv"] else _("Nu (de probă)")
+		if self.placaPeq and self.v["tv"] and self.v["tv_placa"]:
+			tv_valoare = _("Prin placă")
 		casete = (
 			(POZ_PORNIT, _("Egalizator"), _("Pornit") if pornit else _("Oprit")),
 			(POZ_PRESETARE, _("Presetare"), E.numePresetare(self.v["presetare"])),
 			(POZ_MANUAL, _("Reglaj manual"), _("Comprimare activă") if self.v["noapte"] else _("OK / Jos")),
 			(POZ_POST, _("Pentru acest post"), (_("Da") if self.v["pe_post"] else _("Nu")) if self.post.get("cheie") else _("Fără post")),
 			(POZ_EFECTE, _("Efecte speciale"), E.numeEfect(self.v["efect"])),
-			(POZ_TV, _("La canalele TV"), _("Da") if self.v["tv"] else _("Nu")),
+			(POZ_TV, _("La canalele TV"), tv_valoare),
 		)
 		for k, (poz, eticheta, valoare) in enumerate(casete):
 			x = k * (w_caseta + g["spatiu"])

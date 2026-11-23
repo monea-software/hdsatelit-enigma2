@@ -1,5 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-AC_INIT([enigma2],[0.7.7],[https://hdsatelit.com])
+AC_INIT([enigma2],[0.7.8],[https://hdsatelit.com])
 AM_INIT_AUTOMAKE([dist-bzip2 no-define tar-pax -Wno-portability])
 AC_CONFIG_HEADERS([enigma2_config.h])
 
@@ -84,10 +84,12 @@ dnl without this path has no sound on radio channels.
 AC_ARG_WITH(boxtype,
 	AS_HELP_STRING([--with-boxtype=NAME],[machine name (MACHINE), used to select the HiSilicon decoder path; nobox for a PC build]),
 	[BOXTYPE="$withval"],[BOXTYPE="none"])
+dnl Only these boards install the model-specific remote module and key map.
+AM_CONDITIONAL(HDS_ZGEMMA, test "$BOXTYPE" = "h8" || test "$BOXTYPE" = "h8se")
 AC_MSG_CHECKING([whether boxtype $BOXTYPE uses the HiSilicon still picture path])
 case "$BOXTYPE" in
 	u5|u5pvr|u51|u52|u54|u55|u56|u57|u571|u41|u42|u43|u45|u53|u532|u533|\
-	sf8008|sf8008m|sx988|ip8|ustym4kpro|ustym4kottpremium|ustym4ks2ottx|gbmv200|beyonwizv2|viper4k|dagsmv200|og2ott4k|og2s4k|sfx6008|sx88v2)
+	sf8008|sf8008m|sx988|ip8|ustym4kpro|ustym4kottpremium|ustym4ks2ottx|gbmv200|beyonwizv2|viper4k|dagsmv200|og2ott4k|og2s4k|sfx6008|sx88v2|h8|h8se)
 		AC_DEFINE([HAVE_HISILICON],[1],[Define to 1 on HiSilicon boxes where video0 and audio0 share one player])
 		hds_hisilicon=yes
 		AC_MSG_RESULT([yes])
@@ -143,6 +145,20 @@ case "$BOXTYPE" in
 		;;
 	*)
 		AC_MSG_RESULT([ca<demux>])
+		;;
+esac
+
+dnl Dreambox with the Dream framebuffer driver and ION in the kernel (CONFIG_ION=y in the five defconfigs of meta-dream):
+dnl lib/gdi/fb.cpp may grow the screen memory before the one mapping and take the 2D engine memory from /dev/ion,
+dnl only when the option of Components/HdsDreamboxIon.py is on (off from the factory). Every other machine: nothing.
+AC_MSG_CHECKING([whether boxtype $BOXTYPE is a Dreambox with ION memory])
+case "$BOXTYPE" in
+	dm7080|dm820|dm900|dm920|dm520)
+		AC_DEFINE([HAVE_DREAMBOX_ION],[1],[Define to 1 on Dreambox DM7080, DM820, DM900, DM920 and DM520: optional ION memory for the 2D engine])
+		AC_MSG_RESULT([yes])
+		;;
+	*)
+		AC_MSG_RESULT([no])
 		;;
 esac
 

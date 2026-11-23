@@ -401,26 +401,38 @@ class HdsTraducereTelefon(Screen):
 		self["jos"] = StaticText(_("OK sau Ieșire închide."))
 		self["actiuni"] = ActionMap(["OkCancelActions"], {"ok": self.close, "cancel": self.close}, -1)
 		self._lucrare = None
+		self._ecranInchis = False
+		self._bazaWeb = object()
+		self._stareRetea = u""
+		self._rezultat = u""
 		self._ceas = eTimer()
 		self._ceas.callback.append(self._bate)
 		self.onLayoutFinish.append(self._porneste)
 		self.onClose.append(self._inchis)
 
 	def _porneste(self):
+		if self._ecranInchis:
+			return
 		C = _C()
 		if C is not None:
 			try:
 				self._lucrare = C.configurator().stare().get("id")
 			except Exception as e:
-				print("[HdsTraducereSubtitrari] configurarea: %s" % e)
-		self._codul()
+				print("[HdsTraducereSubtitrari] configurarea: %s" % e.__class__.__name__)
+		self._bate()
 		self._ceas.start(TELEFON_MS, False)
 
 	def _codul(self):
+		if self._ecranInchis:
+			return
 		baza = _adresaWeb()
+		self._stareRetea = (u"" if baza else
+			_("Receptorul nu are legătură în rețea, deci pagina nu se poate deschide pe telefon."))
+		if baza == self._bazaWeb:
+			return
+		self._bazaWeb = baza
 		if not baza:
 			_deseneazaQr(self, "qr", u"")
-			self["stare"].setText(_("Receptorul nu are legătură în rețea, deci pagina nu se poate deschide pe telefon."))
 			self["adresa"].setText(u"")
 			return
 		_deseneazaQr(self, "qr", baza + self.DESTINATIE)
@@ -428,25 +440,24 @@ class HdsTraducereTelefon(Screen):
 		port = gazda[gazda.index(":"):] if ":" in gazda else u""
 		self["adresa"].setText(_("Sau scrie în browser: %s\nsau %s") % (baza + self.DESTINATIE,
 			"http://" + _numeLocal() + port + self.DESTINATIE))
-		self._bate()
 
 	def _bate(self):
-		randuri = []
+		if self._ecranInchis:
+			return
+		self._codul()
 		C = _C()
 		if C is not None:
 			try:
 				st = C.configurator().stare()
-				if st.get("id") != self._lucrare:
-					rez = textRezultat(st)
-					if rez:
-						randuri.append(rez)
+				self._rezultat = textRezultat(st) if st.get("id") != self._lucrare else u""
 			except Exception as e:
-				print("[HdsTraducereSubtitrari] starea configurarii: %s" % e)
-		text = u"\n".join(randuri)
+				print("[HdsTraducereSubtitrari] starea configurarii: %s" % e.__class__.__name__)
+		text = u"\n".join(t for t in (self._stareRetea, self._rezultat) if t)
 		if self["stare"].getText() != text:
 			self["stare"].setText(text)
 
 	def _inchis(self):
+		self._ecranInchis = True
 		self._ceas.stop()
 
 
@@ -742,11 +753,11 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		if are and serv in getattr(T, "CU_ADRESA", ()) and serv not in self._cheiPuse:
 			try:
 				if T.configuratia(self.setari).get("cheie_oprita"):
-					return _("pusă pentru alt server (OK o pune din nou)")
+					return " / ".join(self._listaChei(serv)) + ": " + _("pusă pentru alt server (OK o pune din nou)")
 			except Exception as e:
 				print("[HdsTraducereSubtitrari] cheia: %s" % e)
 		if are:
-			return _("pusă (OK schimbă)")
+			return " / ".join(self._listaChei(serv)) + ": " + _("pusă (OK schimbă)")
 		if "cheie" in T.CERE.get(serv, ()):
 			if hasattr(T, "textCheiDinNou") and T.chei().deDinNou():
 				return _("trebuie pusă din nou (OK o scrie)")
@@ -759,12 +770,12 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 		if idx >= len(chei_s):
 			return _("lipsește (OK o scrie)")
 		if any(c["serviciu"] == serv for c in self._cheiNoi):
-			return _("pregătită (VERDE salvează)")
+			return chei_s[idx] + ": " + _("pregătită (VERDE salvează)")
 		stari = T.chei().stare_chei(serv)
 		if idx < len(stari):
 			txt_stare = stari[idx]["stare_text"]
-			return _("pusă (%s, OK schimbă)") % txt_stare
-		return _("pusă (OK schimbă)")
+			return chei_s[idx] + ": " + _("pusă (%s, OK schimbă)") % txt_stare
+		return chei_s[idx] + ": " + _("pusă (OK schimbă)")
 
 	@staticmethod
 	def _textContor():
@@ -1187,7 +1198,7 @@ class HdsTraducereSubtitrari(Screen, ConfigListScreen):
 				self["ajutor"].setText(self._textMesaj)
 		try:
 			titlu = _titluCheie(serv, idx)
-			self.session.openWithCallback(gata, VirtualKeyBoard, title=titlu, text=u"", hdsSecret=True)
+			self.session.openWithCallback(gata, VirtualKeyBoard, title=titlu, text=(self._listaChei(serv)[idx] if idx < len(self._listaChei(serv)) else u""), hdsSecret=True)
 		except Exception as eroare:
 			print("[HdsTraducereSubtitrari] deschiderea tastaturii: %s" % eroare.__class__.__name__)
 			self._mesaj(_("Tastatura nu s-a putut deschide. Încearcă din nou."))

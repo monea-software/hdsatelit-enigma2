@@ -101,17 +101,17 @@ def alta_imagine(a, A=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, fara token."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:16]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 20:
+		if cheie == "token":
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:600].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -496,8 +496,9 @@ function desenAlta(a){
   if(rez){
     var r = a.rezumat;
     $("alta-rez-bun").classList.toggle("ascuns", !r.ok);
-    $("alta-rez-text").classList.toggle("ascuns", !!r.ok);
-    $("alta-rez-text").textContent = r.ok ? "" : (r.text || "");
+    var note = (r.note || []).join("\\n");
+    $("alta-rez-text").classList.toggle("ascuns", !!r.ok && !note);
+    $("alta-rez-text").textContent = r.ok ? note : (r.text || "");
     lista($("alta-adus"), r.adus); lista($("alta-neadus"), r.neadus);
     if(r.ok && r.pachete && r.pachete.oferite && r.pachete.oferite.length && !pluginuriVazute){
       pluginuriVazute = true; desenPluginuri(r.pachete.oferite);

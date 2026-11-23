@@ -1,0 +1,42 @@
+Subject: [PATCH] mt7601u: retain warnings and errors in normal builds
+
+The normal build already disables DBG. Its empty logging macros also
+discarded warnings and errors. Keep those diagnostics, failed status
+messages and explicit errors while compiling out INFO and TRACE.
+Reclassify the successful periodic OFDM beacon report as TRACE.
+The driver operations and real failures are unchanged.
+
+Upstream-Status: Inappropriate [release logging policy]
+Signed-off-by: HD Satelit <contact@hdsatelit.com>
+
+--- a/include/os/rt_linux.h
++++ b/include/os/rt_linux.h
+@@ -683,6 +683,19 @@
+ #else
+-#define DBGPRINT(Level, Fmt)
+-#define DBGPRINT_RAW(Level, Fmt)
+-#define DBGPRINT_S(Status, Fmt)
+-#define DBGPRINT_ERR(Fmt)
++/* Keep failures visible without compiling trace output. */
++#define DBGPRINT_RAW(Level, Fmt) \
++do { \
++    if (((Level) & 0xff) <= RT_DEBUG_WARN) \
++        printk Fmt; \
++} while (0)
++#define DBGPRINT(Level, Fmt) DBGPRINT_RAW(Level, Fmt)
++#define DBGPRINT_S(Status, Fmt) \
++do { \
++    if ((Status) != NDIS_STATUS_SUCCESS) \
++        printk Fmt; \
++} while (0)
++#define DBGPRINT_ERR(Fmt) \
++do { \
++    printk("ERROR!!! "); \
++    printk Fmt; \
++} while (0)
+ #endif
+--- a/common/frq_cal.c
++++ b/common/frq_cal.c
+@@ -205 +205 @@
+-					DBGPRINT(RT_DEBUG_ERROR, ("%s:MT7601 receive OFDM beacon.\n", __FUNCTION__));
++					DBGPRINT(RT_DEBUG_TRACE, ("%s:MT7601 receive OFDM beacon.\n", __FUNCTION__));

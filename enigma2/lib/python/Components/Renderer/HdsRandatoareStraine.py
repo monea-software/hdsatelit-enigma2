@@ -43,12 +43,9 @@ class _Eticheta(Renderer, VariableText):
 
 	# MI7 (15.11.2026), ca Label.connect (TSR): Renderer.connect cheama deja changed, deci textul se cerea de doua ori la
 	# legare. Legatura ca in Element.connect, fara cererea din mijloc; textul se cere o data, dupa legatura completa.
+	# CBS1 (0.7.8): a first request that raises undoes the link, as in Label.connect (Renderer.connectSingleRequest).
 	def connect(self, source):
-		assert not self.SINGLE_SOURCE or self.source is None
-		self.sources.append(source)
-		self.source = source
-		source.connectDownstream(self)
-		self.changed((self.CHANGED_DEFAULT,))
+		self.connectSingleRequest(source)
 
 
 class ChannelNumber(_Eticheta):

@@ -12,7 +12,8 @@
 #     un fus pe televizor (Screens/Time.py) sau in pagina web /ceas (Components/HdsCeas.seteaza); randul
 #     "Fus orar dupa internet" il intoarce la Da;
 #   - raspunsul vine de la serverul nostru (HdsLoculInternet.ADRESA, /receptor/locul): tara si coordonatele orasului.
-#     Fusul: campul "fus" daca serverul il da; altfel fusul tarii din /usr/share/zoneinfo/zone.tab (pachetul
+#     Pentru UA: Europe/Kyiv sau aliasul Europe/Kiev, daca exista in lista ecranului; altfel fusul ramane neschimbat.
+#     Pentru celelalte tari: campul "fus" daca serverul il da; altfel fusul tarii din /usr/share/zoneinfo/zone.tab (pachetul
 #     tzdata-core, pe toate modelele) cel mai apropiat de coordonate (Spania: Madrid sau Canare; Rusia: 11 fusuri).
 #     Numai fusurile din /etc/timezone.xml (lista ecranului) se pot pune. Niciun serviciu strain nu e intrebat;
 #   - la prima pornire limba asistentului (Components/HdsLimbaTara.py) intreaba deja serverul: fusul foloseste acelasi
@@ -170,6 +171,12 @@ def alegeFus(loc, zone, disponibile):
 	"""loc (din dinRaspuns), zone (citesteZone), disponibile (fusurile din timezone.xml) -> (fus, motiv); fus "" cand
 	nu se poate alege fara sa ghicim"""
 	disponibile = set(disponibile or ())
+	# Punctele din zone.tab nu delimiteaza teritoriul unui fus orar.
+	if loc["tara"] == "UA":
+		for fus in ("Europe/Kyiv", "Europe/Kiev"):
+			if fus in disponibile:
+				return fus, _t("Fusul automat pentru Ucraina.")
+		return "", _t("Fusurile Europe/Kyiv și Europe/Kiev lipsesc din lista receptorului; fusul actual rămâne neschimbat.")
 	if loc.get("fus") and loc["fus"] in disponibile:
 		return loc["fus"], "fusul dat de server"
 	ale_tarii = [z for z in zone if z[0] == loc["tara"] and z[3] in disponibile]

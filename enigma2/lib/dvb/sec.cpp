@@ -8,6 +8,7 @@
 #include <lib/dvb/hdsunicable.h>
 
 #include <set>
+#include <errno.h>
 #include <time.h>
 #include <string.h>
 
@@ -17,6 +18,7 @@
 #define FREQUENCY frequency
 #endif
 #include <lib/base/eerror.h>
+#include <lib/base/hdsjurnal.h>
 
 //#define SEC_DEBUG
 
@@ -642,6 +644,9 @@ RESULT eDVBSatelliteEquipmentControl::prepare(iDVBFrontend &frontend, FRONTENDPA
 					sec_sequence.push_back( eSecCommand(eSecCommand::SET_VOLTAGE, vlt) );
 					sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, m_params[DELAY_AFTER_ENABLE_VOLTAGE_BEFORE_SWITCH_CMDS]) );
 
+					/* UNR1: si pornirea prin comutator respecta timpul ramas al ODU. */
+					if (is_unicable)
+						sec_sequence.push_back( eSecCommand(eSecCommand::HDS_UNICABLE_PORNIRE, m_params[DELAY_AFTER_ENABLE_VOLTAGE_BEFORE_SWITCH_CMDS]) );
 					sec_sequence.push_back( eSecCommand(eSecCommand::INVALIDATE_CURRENT_SWITCHPARMS) );
 					if (needDiSEqCReset)
 					{
@@ -747,6 +752,24 @@ RESULT eDVBSatelliteEquipmentControl::prepare(iDVBFrontend &frontend, FRONTENDPA
 				csw = band;
 			}
 
+			/* Capture the cached SEC state before publishing the next switch state. */
+			if (!simulate && !is_unicable && diseqc_mode == eDVBSatelliteDiseqcParameters::V1_0)
+			{
+				const int savedErrno = errno;
+				long cachedVoltage = -1, cachedTone = -1;
+				sec_fe->getData(eDVBFrontend::CUR_VOLTAGE, cachedVoltage);
+				sec_fe->getData(eDVBFrontend::CUR_TONE, cachedTone);
+				hdsjurnal::scrief("tuner", hdsjurnal::INFO, "plan-sec",
+					"tuner=%d sec=%d lnb=%d pozitie=%d tensiune_cache=%ld ton_cache=%ld "
+					"csw_cache=%ld csw_cerut=%ld ucsw_cache=%ld ucsw_cerut=%ld burst_cache=%ld "
+					"tensiune_ceruta=%ld ton_cerut=%ld masca=%d fortat=%d reset=%d rapid=%d repetare=%d",
+					((eDVBFrontend*)&frontend)->getSlotID(), ((eDVBFrontend*)sec_fe)->getSlotID(),
+					lnb_idx, sat.orbital_position, cachedVoltage, cachedTone, lastcsw, csw,
+					lastucsw, ucsw, lastToneburst, voltage, tone, send_mask,
+					forceChanged, needDiSEqCReset, di_param.m_use_fast, di_param.m_seq_repeat);
+				errno = savedErrno;
+			}
+
 			sec_fe->setData(eDVBFrontend::NEW_CSW, csw);
 			sec_fe->setData(eDVBFrontend::NEW_UCSW, ucsw);
 			sec_fe->setData(eDVBFrontend::NEW_TONEBURST, di_param.m_toneburst_param);
@@ -761,17 +784,20 @@ RESULT eDVBSatelliteEquipmentControl::prepare(iDVBFrontend &frontend, FRONTENDPA
 				sec_sequence.push_back( eSecCommand(eSecCommand::SET_VOLTAGE, VOLTAGE(13)) );
 				sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, m_params[DELAY_AFTER_ENABLE_VOLTAGE_BEFORE_SWITCH_CMDS] ) );
 
+				/* UNR1: un zap nou nu poate scurta pornirea inceputa de cel anulat. */
+				sec_sequence.push_back( eSecCommand(eSecCommand::HDS_UNICABLE_PORNIRE, m_params[DELAY_AFTER_ENABLE_VOLTAGE_BEFORE_SWITCH_CMDS]) );
 				sec_sequence.push_back( eSecCommand(eSecCommand::SET_VOLTAGE, VOLTAGE(18)) );
 				sec_sequence.push_back( eSecCommand(eSecCommand::SET_TONE, iDVBFrontend::toneOff) );
-				sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, m_params[DELAY_AFTER_VOLTAGE_CHANGE_BEFORE_SWITCH_CMDS]) );  // wait 20 ms after voltage change
-	
+				/* UNI1: 18 V cel putin 75 ms inainte de comanda si cel putin 150 ms dupa ea (lib/dvb/hdsunicable.h) */
+				sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, hdsunicable::pauza18V(m_params[DELAY_AFTER_VOLTAGE_CHANGE_BEFORE_SWITCH_CMDS])) );
+
 				eDVBDiseqcCommand diseqc;
 				memset(diseqc.data, 0, MAX_DISEQC_LENGTH);
 				diseqc.len = unicable_cmd.len;
 				memcpy(diseqc.data, unicable_cmd.data, unicable_cmd.len);
 
 				sec_sequence.push_back( eSecCommand(eSecCommand::SEND_DISEQC, diseqc) );
-				sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, m_params[DELAY_AFTER_LAST_DISEQC_CMD]) );
+				sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, hdsunicable::pauzaDupaComanda(m_params[DELAY_AFTER_LAST_DISEQC_CMD])) );
 				sec_sequence.push_back( eSecCommand(eSecCommand::SET_VOLTAGE, VOLTAGE(13)) );
 				if ( RotorCmd != -1 && RotorCmd != lastRotorCmd && !rotor_param.m_inputpower_parameters.m_use)
 					sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, m_params[DELAY_AFTER_VOLTAGE_CHANGE_BEFORE_MOTOR_CMD]) );  // wait 150msec after voltage change
@@ -1070,7 +1096,8 @@ void eDVBSatelliteEquipmentControl::prepareTurnOffSatCR(iDVBFrontend &frontend, 
 
 	sec_sequence.push_back( eSecCommand(eSecCommand::SET_VOLTAGE, iDVBFrontend::voltage18_5) );
 	sec_sequence.push_back( eSecCommand(eSecCommand::SET_TONE, iDVBFrontend::toneOff) );
-	sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, m_params[DELAY_AFTER_VOLTAGE_CHANGE_BEFORE_SWITCH_CMDS]) );
+	/* UNI1: aceiasi timpi ca la comanda de acordare (lib/dvb/hdsunicable.h) */
+	sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, hdsunicable::pauza18V(m_params[DELAY_AFTER_VOLTAGE_CHANGE_BEFORE_SWITCH_CMDS])) );
 
 	eDVBDiseqcCommand diseqc;
 	memset(diseqc.data, 0, MAX_DISEQC_LENGTH);
@@ -1078,7 +1105,7 @@ void eDVBSatelliteEquipmentControl::prepareTurnOffSatCR(iDVBFrontend &frontend, 
 	memcpy(diseqc.data, oprire.data, oprire.len);
 
 	sec_sequence.push_back( eSecCommand(eSecCommand::SEND_DISEQC, diseqc) );
-	sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, m_params[DELAY_AFTER_LAST_DISEQC_CMD]) );
+	sec_sequence.push_back( eSecCommand(eSecCommand::SLEEP, hdsunicable::pauzaDupaComanda(m_params[DELAY_AFTER_LAST_DISEQC_CMD])) );
 	sec_sequence.push_back( eSecCommand(eSecCommand::SET_VOLTAGE, iDVBFrontend::voltage13) );
 	sec_sequence.push_back( eSecCommand(eSecCommand::DELAYED_CLOSE_FRONTEND) );
 

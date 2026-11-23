@@ -468,10 +468,10 @@ def puneCheieTmdb(valoare, cale=None):
 
 
 def stareCheieTmdb(cale=None):
-	"""Pentru ecran si pagina: daca e pusa si ultimele 4 semne, niciodata cheia."""
+	"""Cheia salvata pentru ecran si pagina."""
 	v = cheieTmdb(cale)
 	if v:
-		return {"pusa": True, "capat": v[-4:], "text": _t("Cheia ta TMDB e pusă (se termină în %s): ce lipsește din Wikidata (afișul, descrierea, notele) vine din TMDB.") % v[-4:]}
+		return {"pusa": True, "capat": v[-4:], "cheie": v, "text": _t("Cheia ta TMDB: %s. Ce lipsește din Wikidata (afișul, descrierea, notele) vine din TMDB.") % v}
 	return {"pusa": False, "capat": "", "text": _t("Fără cheie TMDB: datele vin numai din Wikidata și Wikipedia. Cheia ta gratuită de pe themoviedb.org adaugă afișul și notele care lipsesc.")}
 
 

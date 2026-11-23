@@ -55,6 +55,15 @@
  *                                  frontend-ul, iar comutatorul ramas fara curent porneste pe A)
  *   --diseqc-octet X               in loc de --diseqc-port: octetul comenzii (240..255), trimis asa cum e
  *   --toneburst A|B                mini DiSEqC dupa comanda (sau singur, la un comutator toneburst)
+ *   --diseqc-necomis X             DiSEqC 1.1: comanda necomisa e01039XX (240..255 = intrarile 1..16), trimisa
+ *                                  dupa (sau inaintea) comenzii comise, ca enigma2 (lib/dvb/sec.cpp)
+ *   --diseqc-ordine O              ordinea din setarile LNB-ului: ct (implicit), tc, cut, tcu, uct, tuc
+ *                                  (t = toneburst, c = comisa, u = necomisa; ca commandOrder din NimManager)
+ *   --diseqc-repetari N            0..3: comenzile se trimit de 2^N ori (repetarile cu e1 in loc de e0), ca enigma2
+ *   --diseqc-secventa-dubla        toata secventa (toneburst si comenzi) se trimite de doua ori
+ *   --diseqc-pauza-<nume> MS       pauza config.sec, 0..9999 ms: intre-comenzi, dupa-comanda, dupa-toneburst,
+ *                                 inainte-secventa, dupa-tensiune, dupa-alimentare, dupa-reset, dupa-pornire,
+ *                                 dupa-ton-oprit, dupa-ton. Lipsa pastreaza pauzele de pana acum.
  *                                  (comutarea merge pe calea „hife”; pe calea bibliotecii se spune numai in JURNAL)
  *   --lib CALE                     alta cale pentru biblioteca platformei
  *   --sonda                        NU porneste nimic: verifica placa, biblioteca si simbolurile, tuner_used si cine tine
@@ -390,6 +399,13 @@ static const Profil *placa_aleasa = NULL;
 static int diseqc_port = -1;       /* 0..3 = A..D: comanda DiSEqC 1.0 „committed” AA, AB, BA, BB */
 static int diseqc_octet = -1;      /* 0xF0..0xFF: octetul comenzii scris de om, trimis asa cum e */
 static int toneburst = -1;         /* 0 = A, 1 = B (mini DiSEqC) */
+/* DiSEqC 1.1 si ordinea (--diseqc-necomis, --diseqc-ordine, --diseqc-repetari, --diseqc-secventa-dubla) */
+static int diseqc_necomis = -1;    /* 0xF0..0xFF: comanda necomisa (E0 10 39 XX); -1 = nimic */
+static int diseqc_ordine = 0;      /* ordinea lui enigma2: 0 ct, 1 tc, 2 cut, 3 tcu, 4 uct, 5 tuc */
+static int diseqc_repetari = 0;    /* 0..3 repetari ale comenzilor */
+static int diseqc_secventa_dubla = 0; /* 1 = toata secventa de doua ori */
+/* Defaults of this utility; order matches the CLI table in argument_diseqc. */
+static long diseqc_pauze[] = { 120, 50, 50, 70, 20, 200, 50, 150, 0, 150 };
 
 static struct {
 	uint32_t frecventa_khz, rata_ksym, polarizare;
@@ -409,9 +425,11 @@ static int e_dublura(uint32_t f, uint32_t rata_ksym, uint32_t pol) {
 	for (int i = 0; i < nr_gasite; i++) {
 		if (gasite[i].polarizare != pol) continue;
 		uint32_t r = gasite[i].rata_ksym < rata_ksym ? gasite[i].rata_ksym : rata_ksym;
+		uint32_t dr = gasite[i].rata_ksym > rata_ksym ? gasite[i].rata_ksym - rata_ksym : rata_ksym - gasite[i].rata_ksym;
+		if (dr > (r / 10u > 100u ? r / 10u : 100u)) continue;
 		uint32_t tol = r / 4 > 1000 ? r / 4 : 1000;   /* kHz: un sfert din rata, cel putin 1 MHz */
-		/* sub 1 MSym/s purtatoarele vecine stau la ~1,2 x rata una de alta: 1 MHz le-ar lua drept dubluri */
-		if (r < 1000u) tol = r / 2u > 50u ? r / 2u : 50u;
+		/* Vecinele inguste nu se unesc la rezolutia de 1 MHz a driverului. */
+		if (r < 4000u) tol = r / 2u > 50u ? r / 2u : 50u;
 		uint32_t d = gasite[i].frecventa_khz > f ? gasite[i].frecventa_khz - f : f - gasite[i].frecventa_khz;
 		if (d <= tol) return 1;
 	}
@@ -515,7 +533,8 @@ static void *lucru(void *arg) {
 	linie("JURNAL pornire-tuner-ms %llu", (unsigned long long)(ms_acum() - t0));
 	/* pe calea bibliotecii (V20/V30/V40) comutatorul nu e inca pus: biblioteca are campul `comutator`, dar forma functiei
 	 * nu o stim; se spune in jurnal, ca sa se vada de ce o cautare cu comutator ramane pe portul A */
-	if (diseqc_port >= 0 || diseqc_octet >= 0 || toneburst >= 0) linie("JURNAL diseqc nesuportat-biblioteca");
+	if (diseqc_port >= 0 || diseqc_octet >= 0 || diseqc_necomis >= 0 || toneburst >= 0)
+		linie("JURNAL diseqc nesuportat-biblioteca");
 
 	linie("PORNIT %d %llu", nr_treceri, (unsigned long long)khz_total);
 	for (int i = 0; i < nr_treceri && !cerere_oprire; i++) {
@@ -631,6 +650,9 @@ static uint32_t sistem_din_linux(uint32_t s) {
 }
 
 static void tp_hife(const HifeTp *t, const Trecere *tr) {
+	/* Respinge IF vechi sau nevalide inainte de scaderea fara semn pentru banda C. */
+	if (t->frecventa_mhz < 950u || t->frecventa_mhz > 2150u ||
+	    t->frecventa_mhz < tr->if_start / 1000u || t->frecventa_mhz > (tr->if_stop + 999u) / 1000u) return;
 	uint32_t lo = lo_trecere_mhz(tr);
 	uint32_t f_mhz = lo < 7500 ? lo - t->frecventa_mhz : lo + t->frecventa_mhz;
 	uint32_t f = f_mhz * 1000u, rata = t->rata_ksym, pol = tr->polarizare;
@@ -654,6 +676,7 @@ static void dormi_ms(long ms) {
 
 /* o comanda DiSEqC de 3 octeti (reset e00000, power on e00003) sau 4 (e01038xx); in jurnal: octetii si errno (0 = bine) */
 static void trimite_diseqc(int fe, const uint8_t *m, int n) {
+	if (cerere_oprire) return;
 	struct dvb_diseqc_master_cmd cmd;
 	memset(&cmd, 0, sizeof cmd);
 	memcpy(cmd.msg, m, (size_t)n);
@@ -664,40 +687,79 @@ static void trimite_diseqc(int fe, const uint8_t *m, int n) {
 	linie("JURNAL diseqc %s %d", hex, r < 0 ? errno : 0);
 }
 
-/* LNB-ul si comutatorul pentru o trecere, in ordinea si cu pauzele lui enigma2 (lib/dvb/sec.cpp, valorile din fabrica
- * ale config.sec, aceleasi ca in jurnalul unei acordari pe V10): tonul oprit, tensiunea (18 V la H si L, 13 V la V si
- * R, ca enigma2: (pol & 1) == 0), comenzile DiSEqC, toneburst, apoi tonul benzii. Frontend-ul l-a inchis enigma2 inainte
- * (si i-a taiat tensiunea), deci la prima trecere comutatorul abia porneste: 200 ms, reset (e00000), power on (e00003),
- * apoi comanda portului; la urmatoarele numai comanda (octetul are si polarizarea si banda). Fara --diseqc-* si
- * --toneburst: numai tonul si tensiunea, ca inainte. */
-static void pune_lnb(int fe, const Trecere *t, int prima) {
-	int orizontal = (t->polarizare & 1u) == 0;
-	int diseqc = diseqc_port >= 0 || diseqc_octet >= 0;
-	ioctl(fe, FE_SET_TONE, SEC_TONE_OFF);
-	ioctl(fe, FE_SET_VOLTAGE, orizontal ? SEC_VOLTAGE_18 : SEC_VOLTAGE_13);
-	if (diseqc || toneburst >= 0) {
-		dormi_ms(prima ? 200 : 20);
-		if (diseqc) {
-			if (prima) {
-				static const uint8_t reset[3] = { 0xe0, 0x00, 0x00 }, pornire[3] = { 0xe0, 0x00, 0x03 };
-				trimite_diseqc(fe, reset, 3);
-				dormi_ms(50);
-				trimite_diseqc(fe, pornire, 3);
-				dormi_ms(150);
-			}
-			uint8_t port[4] = { 0xe0, 0x10, 0x38, diseqc_octet >= 0 ? (uint8_t)diseqc_octet :
-				(uint8_t)(0xf0 | (diseqc_port << 2) | (orizontal ? 2 : 0) | (t->ton22k ? 1 : 0)) };
-			trimite_diseqc(fe, port, 4);
-			dormi_ms(50);
-		}
-		if (toneburst >= 0) {
+/* Comenzile comutatorului pentru o trecere, ca enigma2 (lib/dvb/sec.cpp, ramura send_mask) cand comutatorul abia a
+ * primit tensiune (toate valorile "schimbate"): toneburst intai daca ordinea il cere (tc, tcu, tuc), altfel la sfarsit;
+ * comanda necomisa intai la uct si tuc, altfel cea comisa intai; cu repetari, fiecare comanda de 2^N ori, primul cadru
+ * e0, urmatoarele e1; pauzele din config.sec, primite prin argumente (implicit 120 ms intre comenzi, 33 ms intre
+ * comenzile alternate cu repetari, 50 dupa comanda si toneburst, 70 inaintea secventei repetate). O anulare
+ * (cerere_oprire) opreste comenzile intre cadre. Fara necomisa, ordine, repetari si secventa dubla: comanda comisa,
+ * apoi toneburst, exact ca inainte. */
+static void secventa_diseqc(int fe, uint8_t comisa, int are_comisa) {
+	int are_necomisa = diseqc_necomis >= 0;
+	int burst_intai = toneburst >= 0 && (diseqc_ordine & 1);
+	int burst_sfarsit = toneburst >= 0 && !(diseqc_ordine & 1);
+	uint8_t necomisa = are_necomisa ? (uint8_t)diseqc_necomis : 0;
+	for (int s = 0; s < (diseqc_secventa_dubla ? 2 : 1) && !cerere_oprire; s++) {
+		if (burst_intai) {
 			int r = ioctl(fe, FE_DISEQC_SEND_BURST, toneburst ? SEC_MINI_B : SEC_MINI_A);
 			linie("JURNAL toneburst %c %d", toneburst ? 'B' : 'A', r < 0 ? errno : 0);
-			dormi_ms(50);
+			dormi_ms(diseqc_pauze[2]);
 		}
+		int cadre = ((are_comisa ? 1 : 0) + (are_necomisa ? 1 : 0)) << diseqc_repetari;
+		for (int i = 0; i < cadre && !cerere_oprire; ) {
+			uint8_t m[4] = { i ? 0xe1 : 0xe0, 0x10, 0x38, comisa };
+			if (are_necomisa && ((diseqc_ordine & 4) || !are_comisa)) { m[2] = 0x39; m[3] = necomisa; }
+			trimite_diseqc(fe, m, 4);
+			i++;
+			if (i >= cadre) { dormi_ms(diseqc_pauze[1]); break; }
+			int alta = m[2] == 0x38 ? are_necomisa : are_comisa;
+			if (!alta) { dormi_ms(diseqc_pauze[0]); continue; }
+			long pauza = diseqc_repetari ? (diseqc_pauze[0] - 54) / 2 : diseqc_pauze[0];
+			if (pauza < 0) pauza = 0;
+			dormi_ms(pauza);
+			if (cerere_oprire) break;
+			if (m[2] == 0x38) { m[2] = 0x39; m[3] = necomisa; } else { m[2] = 0x38; m[3] = comisa; }
+			trimite_diseqc(fe, m, 4);
+			i++;
+			dormi_ms(i < cadre ? pauza : diseqc_pauze[1]);
+		}
+		if (burst_sfarsit && !cerere_oprire) {
+			int r = ioctl(fe, FE_DISEQC_SEND_BURST, toneburst ? SEC_MINI_B : SEC_MINI_A);
+			linie("JURNAL toneburst %c %d", toneburst ? 'B' : 'A', r < 0 ? errno : 0);
+			dormi_ms(diseqc_pauze[2]);
+		}
+		if (diseqc_secventa_dubla && s == 0 && !cerere_oprire) dormi_ms(diseqc_pauze[3]);
+	}
+}
+
+/* LNB-ul si comutatorul pentru o trecere, in ordinea si cu pauzele lui enigma2 (lib/dvb/sec.cpp, valorile din fabrica
+ * ale config.sec, aceleasi ca in jurnalul unei acordari pe V10): tonul oprit, tensiunea (18 V la H si L, 13 V la V si
+ * R, ca enigma2: (pol & 1) == 0), comenzile DiSEqC si toneburst (secventa_diseqc), apoi tonul benzii. Frontend-ul l-a
+ * inchis enigma2 inainte (si i-a taiat tensiunea), deci la prima trecere comutatorul abia porneste: 200 ms, reset
+ * (e00000), power on (e00003), apoi comenzile; la urmatoarele numai comenzile (octetul comis are si polarizarea si
+ * banda, cel necomis nu, ca in sec.cpp). Fara --diseqc-* si --toneburst: numai tonul si tensiunea, ca inainte. */
+static void pune_lnb(int fe, const Trecere *t, int prima) {
+	int orizontal = (t->polarizare & 1u) == 0;
+	int comisa = diseqc_port >= 0 || diseqc_octet >= 0;
+	int diseqc = comisa || diseqc_necomis >= 0;
+	ioctl(fe, FE_SET_TONE, SEC_TONE_OFF);
+	if ((diseqc || toneburst >= 0) && diseqc_pauze[8]) dormi_ms(diseqc_pauze[8]);
+	ioctl(fe, FE_SET_VOLTAGE, orizontal ? SEC_VOLTAGE_18 : SEC_VOLTAGE_13);
+	if (diseqc || toneburst >= 0) {
+		dormi_ms(prima ? diseqc_pauze[5] : diseqc_pauze[4]);
+		if (diseqc && prima) {
+			static const uint8_t reset[3] = { 0xe0, 0x00, 0x00 }, pornire[3] = { 0xe0, 0x00, 0x03 };
+			trimite_diseqc(fe, reset, 3);
+			dormi_ms(diseqc_pauze[6]);
+			trimite_diseqc(fe, pornire, 3);
+			dormi_ms(diseqc_pauze[7]);
+		}
+		uint8_t octet = diseqc_octet >= 0 ? (uint8_t)diseqc_octet :
+			(uint8_t)(0xf0 | ((diseqc_port > 0 ? diseqc_port : 0) << 2) | (orizontal ? 2 : 0) | (t->ton22k ? 1 : 0));
+		secventa_diseqc(fe, octet, comisa);
 	}
 	ioctl(fe, FE_SET_TONE, t->ton22k ? SEC_TONE_ON : SEC_TONE_OFF);
-	dormi_ms(150);
+	dormi_ms(diseqc_pauze[9]);
 }
 
 static void *lucru_hife(void *arg) {
@@ -800,6 +862,57 @@ static int citeste_trecere(const char *s) {
 	return 0;
 }
 
+/* Argumentele comutatorului: 0 = nu e al lui, 1 = argument fara valoare, 2 = cu valoare (consumata), -1 = valoare
+ * gresita (refuzata cu "argument-gresit", ca inainte). */
+static int argument_diseqc(const char *a, const char *v) {
+	static const char *const ordini[] = { "ct", "tc", "cut", "tcu", "uct", "tuc" };
+	static const char *const pauze[] = {
+		"--diseqc-pauza-intre-comenzi", "--diseqc-pauza-dupa-comanda", "--diseqc-pauza-dupa-toneburst",
+		"--diseqc-pauza-inainte-secventa", "--diseqc-pauza-dupa-tensiune", "--diseqc-pauza-dupa-alimentare",
+		"--diseqc-pauza-dupa-reset", "--diseqc-pauza-dupa-pornire", "--diseqc-pauza-dupa-ton-oprit",
+		"--diseqc-pauza-dupa-ton"
+	};
+	long x;
+	for (int k = 0; k < (int)(sizeof pauze / sizeof pauze[0]); k++) {
+		if (strcmp(a, pauze[k])) continue;
+		if (numar(v, &x) || x < 0 || x > 9999) return -1;
+		diseqc_pauze[k] = x;
+		return 2;
+	}
+	if (!strcmp(a, "--diseqc-port")) {
+		if (numar(v, &x) || x < 0 || x > 3) return -1;
+		diseqc_port = (int)x;
+		return 2;
+	}
+	if (!strcmp(a, "--diseqc-octet")) {
+		if (numar(v, &x) || x < 0xf0 || x > 0xff) return -1;
+		diseqc_octet = (int)x;
+		return 2;
+	}
+	if (!strcmp(a, "--toneburst")) {
+		if (!v || (strcmp(v, "A") && strcmp(v, "B"))) return -1;
+		toneburst = v[0] == 'B';
+		return 2;
+	}
+	if (!strcmp(a, "--diseqc-necomis")) {
+		if (numar(v, &x) || x < 0xf0 || x > 0xff) return -1;
+		diseqc_necomis = (int)x;
+		return 2;
+	}
+	if (!strcmp(a, "--diseqc-ordine")) {
+		for (int k = 0; v && k < (int)(sizeof ordini / sizeof ordini[0]); k++)
+			if (!strcmp(v, ordini[k])) { diseqc_ordine = k; return 2; }
+		return -1;
+	}
+	if (!strcmp(a, "--diseqc-repetari")) {
+		if (numar(v, &x) || x < 0 || x > 3) return -1;
+		diseqc_repetari = (int)x;
+		return 2;
+	}
+	if (!strcmp(a, "--diseqc-secventa-dubla")) { diseqc_secventa_dubla = 1; return 1; }
+	return 0;
+}
+
 static int zavor_proces(void) {
 	int fd = open(ZAVOR_PROCES, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
 	if (fd < 0) return -1;
@@ -827,9 +940,7 @@ int main(int argc, char **argv) {
 		else if (!strcmp(a, "--rata-min") && !numar(v, &x) && x >= 1 && x <= 45000) { rata_min_ceruta_ksym = (uint32_t)x; i++; }
 		else if (!strcmp(a, "--asteapta-frontend") && !numar(v, &x) && x >= 0 && x < 600) { asteapta_fe = x; i++; }
 		else if (!strcmp(a, "--lib") && v) { cale_lib = v; i++; }
-		else if (!strcmp(a, "--diseqc-port") && !numar(v, &x) && x >= 0 && x <= 3) { diseqc_port = (int)x; i++; }
-		else if (!strcmp(a, "--diseqc-octet") && !numar(v, &x) && x >= 0xf0 && x <= 0xff) { diseqc_octet = (int)x; i++; }
-		else if (!strcmp(a, "--toneburst") && v && (!strcmp(v, "A") || !strcmp(v, "B"))) { toneburst = v[0] == 'B'; i++; }
+		else if ((x = argument_diseqc(a, v)) > 0) i += (int)x - 1;
 		else { linie("EROARE 2 argument-gresit"); return 2; }
 	}
 	if (diseqc_port >= 0 && diseqc_octet >= 0) { linie("EROARE 2 diseqc-dublu"); return 2; }

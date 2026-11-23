@@ -135,6 +135,10 @@ static const unsigned REZUMAT = 100;
 
 void eRCDeviceInputDev::masoaraTasta(const struct input_event *ev)
 {
+	/* Power is recorded even without latency; absence from the old summary proved nothing. */
+	if (ev->code == KEY_POWER && ev->value != 2)
+		hdsjurnal::scrief("taste", hdsjurnal::INFO, "power", "cod=%d val=%d dispozitiv=%s",
+			ev->code, ev->value, id.c_str());
 	static hdsjurnal::Frana franaIntarziere(2000), franaLipite(2000);
 	struct timespec acum;
 	if (clock_gettime(CLOCK_REALTIME, &acum))

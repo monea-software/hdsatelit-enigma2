@@ -445,6 +445,16 @@ class Session:
 		except Exception as e:
 			print("[HDS-SAFE] modulul lipsa:", e)
 
+		# 0.7.8 (HB7): o actualizare instalata asteapta repornirea interfetei: ecranul a cazut fiindca fisierele noi de pe disc
+		# nu se potrivesc cu modulele vechi din memorie; repornirea pe calea sigura (fara inregistrare) il repara
+		try:
+			from Components.HdsActualizari import reporneste_dupa_ecran_cazut
+			if reporneste_dupa_ecran_cazut(self, getattr(screen, "__name__", str(screen))):
+				self.screen_error_count = 0
+				return
+		except Exception as e:
+			print("[HDS-SAFE] actualizarea nerepornita:", e)
+
 		if self.screen_error_count >= 3:
 			# 0.7.4 (actualizarea ramasa la jumatate, cologno49): cat opkg instaleaza, ecranele pot cadea fiindca fisierele
 			# se schimba sub ele; repornirea interfetei ar omori opkg (lib/base/console.cpp) si ar lasa pachete amestecate
@@ -807,8 +817,24 @@ from Screens.Ci import CiHandler
 profile("Load:VolumeControl")
 from Components.VolumeControl import VolumeControl
 
+# HDSatelit 0.7.8 (SSO, Vu+ Solo SE, e-mailul 6529): cat tine fiecare pas al iesirii interfetei (Components/HdsPaznic.py,
+# pasIesire): la sfarsitul procesului un rand in jurnalul paznicului si in hds-interfata.log spune ce a tinut ecranul
+# negru. Numai un ceas dupa fiecare pas; nu arunca.
+def _pasIesire(nume):
+	try:
+		from Components import HdsPaznic as _paznicIesire
+		_paznicIesire.pasIesire(nume)
+	except Exception:
+		pass
+
 def runScreenTest():
 	config.misc.startCounter.value += 1
+	# Queue the startup warning after the main map has recovered.
+	keymapWarning = keymapparser.recoveryMessage(_)
+	if keymapWarning:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(keymapWarning, MessageBox.TYPE_WARNING, 20, "keymap_recovery")
 
 	profile("readPluginList")
 	# HDSatelit 0.7.4: metodele barei canalului tinute minte inainte de pluginuri (Components/HdsPazaBara.py: un plugin care strica
@@ -967,6 +993,13 @@ def runScreenTest():
 		HdsFbcMutare.porneste(session)
 	except Exception as e:
 		print("[mytest] mutarea FBC:", e)
+	# HDSatelit: tunere FBC fara sincronizare de la pornirea receptorului (Components/HdsFbcFaraSincron.py, UFB8): o
+	# singura data, oferta de repornire completa. Fara FBC nu face nimic. Pornirea nu depinde de ea.
+	try:
+		from Components import HdsFbcFaraSincron
+		HdsFbcFaraSincron.porneste(session)
+	except Exception as e:
+		print("[mytest] FBC fara sincronizare:", e)
 	# HDSatelit: „Jurnal detaliat” (Components/HdsJurnale.py): enigma2-debug.log tinut sub 8 MB (un stat() la 5 minute).
 	try:
 		from Components import HdsJurnale
@@ -1128,12 +1161,9 @@ def runScreenTest():
 		paza_model = HdsPazaModel.inPaza()
 	except Exception as e:
 		print("[mytest] paza de model:", e)
-		# 09.11.2026: o eroare a pazei opreste interfata numai la profilurile noi (model_id= in reguli); la modelele de
-		# pana acum garda din enigma2.sh a oprit deja scrierile gresite (ca HdsPazaModel.inchisLaEroare)
-		import os
+		# A failed import or a code error does not identify another receiver.
 		try:
-			with open(os.path.join(os.environ.get("HDS_PAZA_RADACINA") or "/", "etc/hdsatelit-model")) as f:
-				paza_model = any(r.strip().startswith("model_id=") for r in f.read().splitlines())
+			paza_model = HdsPazaModel.inchisLaEroare()
 		except Exception:
 			paza_model = False
 	if paza_model:
@@ -1144,6 +1174,11 @@ def runScreenTest():
 
 		profile("wizards")
 		screensToRun += wizardManager.getWizards()
+
+		# The wizard handles first boot after language selection; this handles upgrades.
+		if HdsBetaTester is not None and HdsBetaTester.acordTestNecesar() and not config.misc.firstrun.value:
+			from Screens.HdsBetaTester import HdsBetaConditii
+			screensToRun.append((11, HdsBetaConditii))
 
 		screensToRun.append((100, Screens.InfoBar.InfoBar))
 
@@ -1273,8 +1308,23 @@ def runScreenTest():
 	try:
 		from Components import HdsPaznic
 		HdsPaznic.iesireInceputa()
+		# HDSatelit 0.7.8 (SSO): ceasul pasilor iesirii, de la cererea omului (Components/HdsPaznic.incepePasiiIesirii)
+		HdsPaznic.incepePasiiIesirii()
 	except Exception as e:
 		print("[mytest] semnul iesirii:", e)
+	# Finish profile IO and its main-thread callbacks before final settings saves.
+	# This does not restart the reactor or dispatch unrelated events at shutdown.
+	from Components import HdsTasteRapide
+	HdsTasteRapide.termina_la_iesire()
+	# HDSatelit 0.7.8 (ASL): cu asistenta pornita, semnul iesirii (codul cerut) intra in fisierul ei de stare, ca sesiunea
+	# reluata la pornire sa spuna de ce a tacut (repornirea interfetei, a receptorului, oprirea); fara semn = cadere.
+	# Alt nume la import: un HdsAsistenta local ar ascunde numele in toata functia.
+	try:
+		from Components import HdsAsistenta as _asistIesire
+		_asistIesire.laIesire()
+	except Exception as e:
+		print("[mytest] asistenta la iesire:", e)
+	_pasIesire("asistenta")
 	# HDSatelit 0.7.7 (IES): dupa salvari, firele straine non-daemon (un server web, o descarcare a unei teme) nu mai tin
 	# procesul viu pana la paza de 45 s: Py_Finalize le asteapta cel mult cateva secunde (Components/HdsPaznic.py)
 	try:
@@ -1282,6 +1332,7 @@ def runScreenTest():
 		HdsPaznic.pazaFirelorLaIesire()
 	except Exception as e:
 		print("[mytest] firele la iesire:", e)
+	_pasIesire("paza firelor")
 
 	# oprirea la cerere nu se numara impotriva unei teme externe aflate in proba
 	if skin.altSkinActiv():
@@ -1290,6 +1341,7 @@ def runScreenTest():
 			HdsSkinuri.iesireCeruta()
 		except Exception as e:
 			print("[mytest] jurnalul temei la oprire:", e)
+		_pasIesire("tema straina")
 
 	# HDSatelit: releele DAB+ si DVB-T2 oprite si tunerul dat inapoi la iesirea enigma2
 	try:
@@ -1297,41 +1349,48 @@ def runScreenTest():
 		HdsDabT2.opreste()
 	except Exception as e:
 		print("[mytest] DAB+ si DVB-T2 la oprire:", e)
+	_pasIesire("DAB+ si DVB-T2")
 	# HDSatelit: ora salvata in fake-hwclock si bataia oprita la iesirea enigma2
 	try:
 		from Components import HdsCeas
 		HdsCeas.laOprire()
 	except Exception as e:
 		print("[mytest] ceasul la oprire:", e)
+	_pasIesire("ceasul")
 	# HDSatelit: baza canalelor scrisa la oprire, numai daca s-a schimbat ceva (Components/HdsCulegereCanale.py)
 	try:
 		from Components import HdsCulegereCanale
 		HdsCulegereCanale.la_oprire()
 	except Exception as e:
 		print("[mytest] baza canalelor la oprire:", e)
+	_pasIesire("baza canalelor")
 	try:
 		from Components import HdsPaznic
 		HdsPaznic.opreste()
 	except Exception as e:
 		print("[mytest] bataia la oprire:", e)
+	_pasIesire("bataia")
 	# HDSatelit: contorul orei pentru beta testeri scris la iesire (numai cat il mai scrie programul)
 	try:
 		if HdsBetaTester is not None:
 			HdsBetaTester.opreste()
 	except Exception as e:
 		print("[mytest] beta tester la oprire:", e)
+	_pasIesire("beta tester")
 	# HDSatelit: plafonul procesorului pus la loc ca la fabricant (numai daca s-a scris ceva in aceasta pornire)
 	try:
 		from Components import HdsProcesor
 		HdsProcesor.laOprire()
 	except Exception as e:
 		print("[mytest] procesorul la oprire:", e)
+	_pasIesire("procesorul")
 	# HDSatelit: afisajul din fata ramane gol dupa iesirea interfetei (afara de „UPD” cat se scrie o imagine noua)
 	try:
 		from Components import HdsAfisaj
 		HdsAfisaj.opreste()
 	except Exception as e:
 		print("[mytest] afisajul la oprire:", e)
+	_pasIesire("afisajul")
 
 	config.misc.startCounter.save()
 
@@ -1363,14 +1422,18 @@ def runScreenTest():
 		recordTimerWakeupAuto = startTime[1] == 0 and startTime[2]
 	config.misc.isNextRecordTimerAfterEventActionAuto.value = recordTimerWakeupAuto
 	config.misc.isNextRecordTimerAfterEventActionAuto.save()
+	_pasIesire("ora de trezire")
 
 	profile("stopService")
 	session.nav.stopService()
+	_pasIesire("oprirea canalului")
 	profile("nav shutdown")
 	session.nav.shutdown()
+	_pasIesire("temporizatoarele")
 
 	profile("configfile.save")
 	configfile.save()
+	_pasIesire("setarile")
 
 	return 0
 
@@ -1462,7 +1525,7 @@ except Exception as e:
 
 profile("keymapparser")
 import keymapparser
-keymapparser.readKeymap(config.usage.keymap.value)
+keymapparser.readMainKeymap(config.usage.keymap.value)
 
 profile("Network")
 import Components.Network
@@ -1494,9 +1557,11 @@ try:
 	runScreenTest()
 
 	plugins.shutdown()
+	_pasIesire("pluginurile")
 
 	from Components.ParentalControl import parentalControl
 	parentalControl.save()
+	_pasIesire("controlul parental")
 except:
 	print('EXCEPTION IN PYTHON STARTUP CODE:')
 	try:

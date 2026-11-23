@@ -17,6 +17,9 @@ pentru că nu a fost apăsată; tasta merge.
 import json
 import os
 import time
+import glob
+import re
+import threading
 
 
 def N_(text):
@@ -25,6 +28,7 @@ def N_(text):
 	return text
 
 VERSIUNE_FISIER = 1
+TITLU_COMENZI_VIRTUALE = N_('Comenzi virtuale')
 CALE_ASOCIERI = '/etc/enigma2/hds-telecomenzi.json'
 CALE_IR = '/etc/enigma2/hds-ir-asocieri.txt'
 
@@ -182,6 +186,197 @@ def difera_un_bit(a, b):
 
 def e_dispozitiv_propriu(nume):
 	return isinstance(nume, str) and nume.startswith(PREFIX_PROPRIU)
+
+
+class ProfilTelecomanda(object):
+	"""Descriere locala; lipsa listei nu inseamna o telecomanda Viper."""
+	def __init__(self, model, butoane=(), dispozitive=(), viper=False, descriere=''):
+		self.model = model
+		self.butoane = tuple(butoane)
+		self.dupa_cod = dict((b[2], b) for b in self.butoane)
+		self.dupa_id = dict((b[0], b) for b in self.butoane)
+		self.dispozitive = frozenset((NATIV,) + tuple(dispozitive))
+		self.viper = viper
+		self.descriere = descriere
+
+	def propriu(self, nume):
+		return nume in self.dispozitive
+
+	def buton(self, ev):
+		cod = ev['tinta'] if ev['tinta'] >= 0 else (ev['cod'] if self.propriu(ev['dispozitiv']) else -1)
+		if self.butoane:
+			return self.dupa_cod.get(cod)
+		# Numai coduri Linux cunoscute; nu inventam taste fizice sau comenzi IR.
+		if cod in DUPA_COD:
+			b = DUPA_COD[cod]
+			return (b[0], b[3], cod, b[3], None)
+		nume = NUME_TASTE_EXTRA.get(cod)
+		return ('key%d' % cod, nume, cod, nume, None) if nume else None
+
+
+def _text_local(cale):
+	try:
+		with open(cale, 'r', encoding='utf-8', errors='replace') as f:
+			return f.read(8192)
+	except (OSError, IOError):
+		return ''
+
+
+_PROFIL_LACAT = threading.Lock()
+_PROFIL_CITIRE = None
+
+
+def profil_receptor(model=None, director=None, radacina=''):
+	"""Citire izolata; rezultatul lent ramane legat de cererea initiala."""
+	if threading.current_thread() is not threading.main_thread():
+		return _profil_receptor(model, director, radacina)
+	profil = ProfilTelecomanda(model or 'unknown', dispozitive=(('hisiir', 'hisiir/input0')
+		if model == 'gbtrio4k' else ()))
+	profil._cerere = (model, director, radacina)
+	profil._citire = None
+	_profil_cere(profil)
+	citire = profil._citire
+	if citire is not None:
+		citire['gata'].wait(0.2)
+	return profil_actual(profil)
+
+
+def _profil_cere(profil):
+	global _PROFIL_CITIRE
+	with _PROFIL_LACAT:
+		citire = _PROFIL_CITIRE
+		if citire is None or citire['gata'].is_set():
+			citire = {'cheie': profil._cerere, 'gata': threading.Event(), 'profil': None}
+			_PROFIL_CITIRE = citire
+			def incarca():
+				try:
+					citire['profil'] = _profil_receptor(*citire['cheie'])
+				except Exception:
+					# O citire nereusita ramane o proba limitata, nu opreste interfata.
+					pass
+				finally:
+					citire['gata'].set()
+			threading.Thread(target=incarca, name='HdsProfilTelecomanda', daemon=True).start()
+		if citire['cheie'] == profil._cerere:
+			profil._citire = citire
+
+
+def profil_actual(profil):
+	"""Preia numai pe firul principal; nu modifica obiectele unei sesiuni inchise."""
+	if threading.current_thread() is not threading.main_thread() or not hasattr(profil, '_cerere'):
+		return profil
+	if profil._citire is None:
+		_profil_cere(profil)
+	citire = profil._citire
+	if citire is not None and citire['gata'].is_set():
+		return citire['profil'] or ProfilTelecomanda(profil.model, dispozitive=profil.dispozitive)
+	return profil
+
+
+def _profil_receptor(model=None, director=None, radacina=''):
+	"""Modelul propriu si descrierea aferenta din imagine; fara profil, proba limitata."""
+	if model is None:
+		try:
+			from Tools.HardwareInfo import getModelName
+			model = getModelName()
+		except Exception:
+			model = 'unknown'
+	try:
+		from Components.HdsBoxInfoModele import MODELE
+		cap = MODELE.get(model, {})
+	except ImportError:
+		cap = {}
+	dispozitive = set()
+	for cale in glob.glob(os.path.join(radacina or '/', 'sys/class/rc/rc*/input*/name')):
+		nume = _text_local(cale).strip()
+		if nume:
+			dispozitive.add(nume)
+	# Numele dovedit al driverului rc-core al Trio, nu un nume de tastatura USB.
+	if model == 'gbtrio4k':
+		dispozitive.update(('hisiir', 'hisiir/input0'))
+	viper = model in ('viper4k', 'viper4kv20')
+	if viper:
+		return ProfilTelecomanda(model, BUTOANE_VIPER, dispozitive, True, 'telecomanda-viper.json')
+	rcname = cap.get('rcname', '')
+	butoane = []
+	cale = ''
+	if re.fullmatch(r'[a-zA-Z0-9_-]+', rcname):
+		if director is None:
+			director = '/usr/share/enigma2'
+		cale = os.path.join(director, 'telecomanda-%s.json' % rcname)
+		try:
+			with open(cale, 'rb') as f:
+				date = json.loads(f.read(512 * 1024).decode('utf-8'))
+			iduri, coduri = set(), set()
+			for b in date['butoane']:
+				ident, cod, nume = b['id'], b['cod'], b['nume']
+				if (not isinstance(ident, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,48}', ident)
+						or type(cod) is not int or not 0 < cod <= 767 or cod in coduri or ident in iduri
+						or not isinstance(nume, str) or not re.fullmatch(r'KEY_[A-Z0-9_]+', nume)
+						or not isinstance(b['eticheta'], str) or not 0 < len(b['eticheta']) <= 48):
+					raise ValueError('profil')
+				butoane.append((ident, b['eticheta'], cod, nume, None))
+				iduri.add(ident)
+				coduri.add(cod)
+			if not 0 < len(butoane) <= MAX_TASTE:
+				raise ValueError('profil')
+		except (OSError, ValueError, TypeError, KeyError):
+			butoane = []
+	return ProfilTelecomanda(model, butoane, dispozitive, descriere=cale if butoane else '')
+
+
+def text_proba(proba, _):
+	if proba.gata():
+		return _('Toate butoanele merg.')
+	if proba.profil.butoane:
+		return _('%d din %d de butoane verificate') % (len(proba.verificate), len(proba.profil.butoane))
+	return _('Taste cunoscute verificate: %d') % len(proba.verificate)
+
+
+def detalii_profil(profil, _):
+	if profil.butoane:
+		return []
+	return [_('Lipsește profilul complet al telecomenzii pentru acest model. Verificăm numai tastele cunoscute primite; proba nu poate confirma toate butoanele.')]
+
+
+def citeste_ir(cale=None, radacina=''):
+	"""Metadate rc-core si contoare optionale ale driverului; niciodata /dev/input sau LIRC."""
+	if cale is not None:
+		return _text_local(cale)
+	contoare, protocoale = {}, set()
+	for rc in sorted(glob.glob(os.path.join(radacina or '/', 'sys/class/rc/rc*'))):
+		p = _text_local(os.path.join(rc, 'protocols'))
+		protocoale.update(re.findall(r'\[([a-zA-Z0-9_-]+)\]', p))
+		# rc-core nu garanteaza statistici. Acceptam numai contoare numite explicit
+		# de driver; protocoalele disponibile nu dovedesc primirea unui semnal.
+		for rand in _text_local(os.path.join(rc, 'statistics')).splitlines():
+			m = re.fullmatch(r'\s*(unknown_frames|rx_frames)\s*[:=]\s*(\d+)\s*', rand)
+			if m:
+				fel = 'straine' if m[1] == 'unknown_frames' else 'cadre'
+				cheie = rc
+				if cheie not in contoare or fel == 'straine':
+					contoare[cheie] = (int(m[2]), fel)
+	legacy = '/proc/hisi/msp/ir'
+	text = _text_local(os.path.join(radacina or '/', legacy.lstrip('/')))
+	ok = ContorIR.citeste_ok(text)
+	if ok is not None:
+		# Acelasi driver poate expune ambele suprafete. Nu dublam semnalul.
+		contoare = {legacy: (ok, 'faze')}
+	return {'contoare': contoare, 'protocoale': sorted(protocoale)}
+
+
+def detalii_ir(profil, contor, _):
+	randuri = []
+	if not profil.viper:
+		if contor is not None and contor.protocoale:
+			randuri.append(_('IR rc-core: %s') % ', '.join(contor.protocoale))
+		else:
+			randuri.append(_('Protocolul și adresa IR nu sunt confirmate pentru acest model.'))
+	if contor is not None and contor.disponibil is None:
+		randuri.append(_('Se verifică dacă există un contor IR disponibil.'))
+	elif contor is None or not contor.disponibil:
+		randuri.append(_('Nu există un contor IR disponibil; semnalele străine nu pot fi numărate.'))
+	return randuri
 
 
 def nume_tasta(cod, keyids=None):
@@ -597,16 +792,26 @@ def tabel_viper():
 	return r
 
 
-def export_json(date):
-	return json.dumps({'telecomandaReceptorului': tabel_viper(), 'asocieri': de_scris(date)['telecomenzi']},
-		ensure_ascii=False, indent=1)
+def tabel_profil(profil=None):
+	"""Codurile confirmate ale profilului; IR numai pentru profilul Viper dovedit."""
+	if profil is None or profil.viper:
+		return tabel_viper()
+	return [{'id': b[0], 'eticheta': b[1], 'cod': b[2], 'codHex': '0x%X' % b[2], 'nume': b[3]}
+		for b in profil.butoane]
 
 
-def export_csv(date):
+def export_json(date, profil=None):
+	corp = {'telecomandaReceptorului': tabel_profil(profil), 'asocieri': de_scris(date)['telecomenzi']}
+	if profil is not None:
+		corp['profil'] = {'model': profil.model, 'complet': bool(profil.butoane)}
+	return json.dumps(corp, ensure_ascii=False, indent=1)
+
+
+def export_csv(date, profil=None):
 	randuri = ['sursa;dispozitiv;cod;cod_hex;nume;tinta;tinta_nume;nec_comanda;keyid']
-	for b in tabel_viper():
+	for b in tabel_profil(profil):
 		randuri.append('%s;%s;%d;%s;%s;%s;%s;%s;%s' % ('telecomanda receptorului', NATIV, b['cod'], b['codHex'],
-			b['nume'], b['id'], b['nume'], b['necComanda'], b['keyId']))
+			b['nume'], b['id'], b['nume'], b.get('necComanda', ''), b.get('keyId', '')))
 	for t in date['telecomenzi']:
 		disp = t.get('dispozitiv') or t.get('protocol', '')
 		for k, v in sorted(t['taste'].items()):
@@ -692,13 +897,32 @@ def rand_istoric(ev, ora=None, keyids=None, ancora=None, traduce=None):
 
 
 class Proba(object):
-	"""„Proba tastelor”: ce butoane Viper au venit măcar o dată (direct sau printr-o telecomandă asociată)."""
+	"""Taste primite direct sau prin asociere, limitate la profilul dovedit al modelului."""
 
-	def __init__(self):
+	def __init__(self, profil=None):
+		self.profil = profil if profil is not None else profil_receptor()
 		self.verificate = set()
 		self.ultima = None
 		self.evenimente = []
 		self.ancora = None
+		self._in_asteptare = {}
+
+	def actualizeaza_profil(self, profil):
+		if profil is self.profil:
+			return
+		vechi = self.profil
+		self.profil = profil
+		if hasattr(vechi, '_cerere'):
+			self.verificate = set()
+			self.ultima = None
+		elif profil.butoane:
+			self.verificate.intersection_update(profil.dupa_id)
+		for ev in self._in_asteptare.values():
+			b = profil.buton(ev)
+			if b is not None:
+				self.verificate.add(b[0])
+				self.ultima = b[0]
+		self._in_asteptare.clear()
 
 	def primeste(self, ev):
 		"""Întoarce id-ul butonului Viper aprins de eveniment sau None."""
@@ -713,8 +937,12 @@ class Proba(object):
 		self.evenimente = self.evenimente[-NUMAR_ISTORIC:]
 		if ev['fel'] not in (APASAT, TINUT, LUNG):
 			return None
-		cod = ev['tinta'] if ev['tinta'] >= 0 else (ev['cod'] if ev['dispozitiv'] == NATIV else -1)
-		b = DUPA_COD.get(cod)
+		if hasattr(self.profil, '_cerere'):
+			# Doar taste unice cat se incarca profilul, nu istoric nelimitat sau text.
+			cheie = (ev['dispozitiv'], ev['cod'], ev['tinta'])
+			if len(self._in_asteptare) < MAX_TASTE or cheie in self._in_asteptare:
+				self._in_asteptare[cheie] = dict(ev)
+		b = self.profil.buton(ev)
 		if b is None:
 			return None
 		self.verificate.add(b[0])
@@ -727,10 +955,10 @@ class Proba(object):
 			for ev in reversed(self.evenimente)]
 
 	def ramase(self):
-		return [b[0] for b in BUTOANE_VIPER if b[0] not in self.verificate]
+		return [b[0] for b in self.profil.butoane if b[0] not in self.verificate]
 
 	def gata(self):
-		return len(self.verificate) == NUMAR_BUTOANE
+		return bool(self.profil.butoane) and len(self.verificate) == len(self.profil.butoane)
 
 
 # repetarea și eliberarea tastei care pornește captura: 41 din 54 de apăsări Viper au o repetare,
@@ -739,14 +967,23 @@ CREDIT_TASTA_PORNIRE = 2
 
 
 class ContorIR(object):
-	"""Semnul „semnale IR pe care receptorul nu le folosește” (revizia, P16). Din /proc/hisi/msp/ir se ia OK-ul
-	din „Get(Try/OK)” (crește la apăsare, la ținut și la eliberare); pe ferestre de o secundă se scad evenimentele
-	venite de pe telecomanda receptorului. E aproximativ: un semn, nu un cod."""
+	"""Semn IR aproximativ, din contoarele disponibile ale driverului.
 
-	def __init__(self, credit=0):
+	Accepta Get(Try/OK) pentru faze HiSilicon si instantanee rc-core optionale.
+	Cadrele nu includ eliberari sintetice; absenta contorului nu inseamna zero semnale.
+	"""
+
+	def __init__(self, credit=0, profil=None):
+		self.pornit_la = time.perf_counter()
+		self.profil = profil if profil is not None else profil_receptor()
+		self.disponibil = None
+		self.protocoale = []
+		self.baze = {}
+		self.cadre_native = 0
 		self.ok = None
 		self.native = 0
 		self.straine = 0
+		self.straine_dovedite = 0
 		# tasta receptorului care a pornit captura (OK) era apasata
 		# INAINTE de captura, deci repetarea (~280 ms) si eliberarea ei (169-364 ms, masurat pe telecomanda Viper) cresc contorul
 		# fara sa fie evenimente in enigma2 (rcmapper.cpp nu face eveniment pentru o tasta apasata inainte). In prima
@@ -764,11 +1001,16 @@ class ContorIR(object):
 		return None
 
 	def nativ(self, ev):
-		if ev['dispozitiv'] == NATIV and ev['fel'] in (APASAT, TINUT, ELIBERAT):
+		if self.profil.propriu(ev['dispozitiv']) and ev['fel'] in (APASAT, TINUT, ELIBERAT):
 			self.native += 1
+			if ev['fel'] in (APASAT, TINUT):
+				self.cadre_native += 1
 
 	def fereastra(self, text):
+		if isinstance(text, dict):
+			return self._surse(text)
 		ok = self.citeste_ok(text or '')
+		self.disponibil = ok is not None
 		if ok is None:
 			return self.straine
 		if self.ok is not None:
@@ -783,12 +1025,55 @@ class ContorIR(object):
 		self.native = 0
 		return self.straine
 
+	def _surse(self, date):
+		self.protocoale = date.get('protocoale', [])
+		contoare = date.get('contoare', {})
+		self.disponibil = bool(contoare)
+		if not contoare:
+			self.baze = {}
+			self.native = self.cadre_native = 0
+			return None
+		faze, cadre, straine = 0, 0, 0
+		comune = set()
+		for sursa, (numar, fel) in contoare.items():
+			vechi = self.baze.get(sursa)
+			if vechi is None or vechi[1] != fel or numar < vechi[0]:
+				continue
+			comune.add(fel)
+			delta = numar - vechi[0]
+			if fel == 'straine':
+				straine += delta
+			elif fel == 'cadre':
+				cadre += delta
+			elif fel == 'faze':
+				faze += delta
+		if comune:
+			rest = 0
+			if 'faze' in comune:
+				rest += faze - self.native
+			if 'cadre' in comune:
+				rest += cadre - self.cadre_native
+			rest -= min(self.credit, max(0, rest))
+			self.credit = 0
+			# Creditul tastei de pornire si corectiile fazelor proprii se aplica
+			# estimarii; un contor explicit de cadre necunoscute nu se reduce.
+			estimat = max(0, self.straine - self.straine_dovedite + rest)
+			self.straine_dovedite += straine
+			self.straine = self.straine_dovedite + estimat
+		self.baze = dict(contoare)
+		self.native = self.cadre_native = 0
+		return self.straine
+
 	def reia(self, credit=0):
 		"""După o pauză fără captură (tastele receptorului din pauză nu s-au numărat): baza se ia din nou, numărul
 		de până acum rămâne. `credit`: captura pornește din nou la o tastă a receptorului (V5)."""
 		self.ok = None
+		self.pornit_la = time.perf_counter()
 		self.native = 0
 		self.credit = credit
+		self.baze = {}
+		self.cadre_native = 0
+		self.disponibil = None
 
 
 class DetectorTinere(object):

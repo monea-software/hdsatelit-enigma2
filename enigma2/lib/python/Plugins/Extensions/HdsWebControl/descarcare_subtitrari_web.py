@@ -274,23 +274,17 @@ SECRETE = ("os_utilizator", "os_parola", "os_cheie_aplicatie", "subsro_cheie", "
 
 
 def _cheiDinAdresa(request):
-	"""Numele argumentelor scrise in adresa (request.args le amesteca cu cele din corp)."""
-	uri = getattr(request, "uri", b"") or b""
-	if isinstance(uri, bytes):
-		uri = uri.decode("utf-8", "replace")
-	try:
-		from urllib.parse import urlsplit, parse_qsl
-	except ImportError:
-		return set()
-	return set(k for k, v in parse_qsl(urlsplit(uri).query, keep_blank_values=True))
+	"""Numele argumentelor scrise in adresa care se refuza acolo. REGULA 0, WEB8: niciunul;
+	parolele, cheile, PIN-urile si antetele merg si in adresa (?parola=...), ca in corp."""
+	return set()
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt, fara token; numai cheile stiute; conturile numai din corp."""
+	"""Argumentele cererii ca text, fara token; numai cheile stiute; conturile numai din corp."""
 	permise = ("text", "limbi", "index", "sterge", "fapta", "viteza") + SECRETE
 	din_adresa = _cheiDinAdresa(request)
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:16]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in permise or (cheie in SECRETE and cheie in din_adresa):
@@ -298,7 +292,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_TEXT].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -608,7 +602,7 @@ function arata(d){
   CAMPURI.forEach(function(c){
     // cheia aplicatiei OpenSubtitles pusa de imagine apare scrisa si fara cheia omului (butonul de stergere numai la aceea)
     var scrisa = !!d.conturi[c] || (c === "os_cheie_aplicatie" && !!d.conturi.os_cheie_aplicatie_imagine);
-    var s = $("st_" + c); if(s){ s.textContent = scrisa ? "(scrisă)" : "(nescrisă)"; s.classList.toggle("scrisa", scrisa); }
+    var s = $("st_" + c); if(s){ s.textContent = (d.conturi.valori || {})[c] || (scrisa ? "(scrisă)" : "(nescrisă)"); s.classList.toggle("scrisa", scrisa); }
   });
   if(document.activeElement !== $("os_utilizator") && !$("os_utilizator").value){ $("os_utilizator").value = d.conturi.os_utilizator_text || ""; }
   // valoarea salvata nu vine niciodata in pagina: campul ramane gol, cu indemnul de schimbare cand e scrisa

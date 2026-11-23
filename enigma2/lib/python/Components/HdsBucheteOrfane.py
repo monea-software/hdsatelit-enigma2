@@ -1,36 +1,13 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
-"""Lista de canale orfana: buchetele de pe disc care nu mai sunt in bouquets.tv / bouquets.radio, puse inapoi cu un OK.
+"""Paza buchetelor imaginii si uneltele de recuperare a indexului.
 
-De ce (asistenta 289712, 14.11.2026): pe un receptor erau ~1.330 de userbouquet pe disc, dar bouquets.tv avea numai
-Favorite si DVB-I, deci lista omului nu se mai vedea. Nucleul (lib/dvb/db.cpp, eDVBDB::loadBouquet) reface bouquets.tv
-gol cand nu-l poate deschide (o lista urcata prin FTP fara el, un instalator de liste care il sterge, apoi o repornire
-a interfetei); reloadBouquets pune apoi numai Favorite la loc. Fisierele buchetelor raman pe disc, nelegate.
-
-Cum merge (regula 1f: o singura fereastra, nimic de scris):
-- la pornirea interfetei, mytest.py cheama porneste(session) dupa mesajul despre Caută în meniu;
-- cautarea e ieftina pe un receptor sanatos: se citesc numai cele doua radacini si numele din /etc/enigma2. Daca in
-  radacina e macar un buchet al omului, nu se intreaba nimic (un buchet scos de om din lista ramane pe disc, iar
-  editorul de canale il arata oricum). Numai cand radacina e (aproape) goala, adica are numai buchetele imaginii
-  (Favorite, DVB-I, DAB+, IPTV, ultima scanare, locurile extensiilor), si pe disc sunt buchete nelegate, se pune
-  intrebarea: Am găsit N liste de canale care nu se văd. Le pun înapoi?;
-- Da: punerea inapoi trece prin editorul de canale (Components/HdsEditorCanale.py, leaga_toate si salveaza_fundal):
-  copia de siguranta a listei, scrierea atomica, reincarcarea buchetelor fara repornire (eDVBDB.reloadBouquets);
-- Nu sau EXIT: se tine minte multimea gasita (in hds_buchete_orfane.json, langa liste) si nu se mai intreaba pentru
-  ea; se intreaba din nou numai daca alta data lipsesc alte liste. Editorul de canale (pe televizor si in web) are
-  oricand butonul Pune înapoi toate;
-- ordinea: cea din cea mai noua copie a listei (copiile editorului, hds-copii-canale, sau bouquets.tv.bak de la alte
-  unelte) in care apar buchetele gasite; ce nu e acolo vine dupa, dupa numele fisierului;
-- buchetele imaginii ramase nelegate (DAB+ cand e oprit, DVB-I, IPTV) nu se numara si nu se pun: le leaga modulele lor.
-
-Paza buchetelor imaginii dupa o lista straina (0.7.7, pazeste mai jos): un program de liste (AutoSetting, liste urcate
-prin FTP) sterge *.tv si *.radio si pune lista lui; DVB-T2 si DAB+ din satelit, Abertis 30W si DVB-I radio nu se mai
-legau singure. Cand dintr-odata nu mai e legat niciunul din ele si s-a schimbat si restul listei, se leaga la loc, cu
-fisierele puse inapoi din copia lor; cand omul scoate unul sau mai multe (restul listei neatins), raman scoase.
-
-Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau dosarul prin parametri
-(teste/test_orf_lista_orfana_075.py, teste/test_ast2_buchete_imagine_dupa_lista_straina_077.py)."""
+La pornire si la deschiderea listei, HdsReparaBuchete cauta si recupereaza
+buchetele omului pe un fir, cu copie inainte de scriere. Nu cere reimport.
+Uneltele editorului si citirea copiilor pastreaza aici aceleasi contracte.
+Buchetele generate de imagine raman in grija modulelor care le gestioneaza.
+"""
 
 import builtins
 import hashlib
@@ -447,24 +424,21 @@ def _rezultat(fisiere, raspuns, director=DIRECTOR):
 
 
 def porneste(session, director=DIRECTOR):
-	"""Pune intrebarea in coada de notificari, daca e cazul. True daca a pus-o. Nu arunca niciodata. Porneste si paza
-	buchetelor imaginii (pornestePaza) si impaca intai indexul cu fisierele (impaca_indexul)."""
+	"""Porneste recuperarea automata si paza, fara citirea buchetelor in interfata."""
 	pornestePaza(director)
-	impaca_indexul(director)
 	try:
-		fisiere = de_propus(director)
-		if not fisiere:
-			return False
-		_jurnal("liste nelegate gasite: %d" % len(fisiere))
-		if _trezitDeCeas():
-			_jurnal("pornit de ceas (inregistrare programata): intrebarea ramane pentru pornirea urmatoare")
-			return False
-		from Tools.Notifications import AddNotificationWithIDCallback
-		AddNotificationWithIDCallback(lambda r: _rezultat(fisiere, r, director), ID_NOTITA, _ecran(fisiere))
-		return True
+		try:
+			from Components import HdsReparaBuchete
+		except ImportError:
+			import HdsReparaBuchete
+		try:
+			HdsReparaBuchete.cerere(director)
+		except ImportError:
+			# Fara Enigma2 (uneltele PC), acelasi motor sincron.
+			HdsReparaBuchete.repara(director)
 	except Exception as e:
-		_jurnal("verificarea la pornire: %s" % e)
-		return False
+		_jurnal("recuperarea buchetelor: %s" % type(e).__name__)
+	return False
 
 
 # ---------------------------------------------------------------- paza buchetelor imaginii dupa o lista straina

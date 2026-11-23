@@ -363,6 +363,17 @@ def _are_cam(nume):
 	return _nume_de_modul(nume) or _loc_acces(nume)
 
 
+def _are_cam_fisier(cale):
+	"""_are_cam pentru un fisier din lista alba (fisier_permis) dintr-o arhiva: un buchet al omului (TIPAR_BUCHET) se judeca
+	numai dupa dosarele si locul lui, nu si dupa nume. Numele vine din ce a scris omul (Webcams, Live cam) si poate avea
+	forma numelor de module, dar fisierul e o lista de canale (ca in Components/HdsCopieSetari.py). Altfel buchetul lipsea
+	din cuprinsul arhivei (numarul buchetelor aratat omului), desi scoaterea din arhiva il lua."""
+	dosar, nume = posixpath.split(cale)
+	if TIPAR_BUCHET.match(nume) or buchet_latin1(nume) is not None:
+		return bool(dosar and _nume_de_modul(dosar)) or _loc_acces(cale)
+	return _are_cam(cale)
+
+
 def _sarit(nume):
 	n = nume.lower()
 	return n.startswith(".") or n.startswith("$") or n in DOSARE_SARITE or _are_cam(n)
@@ -783,7 +794,7 @@ def _membri_arhiva(t, nume_arhiva, max_membri, termen, max_decomprimat, interioa
 		if norm is None:
 			continue
 		dosar, nume = posixpath.split(norm)
-		if fisier_permis(nume) and not _are_cam(norm):
+		if fisier_permis(nume) and not _are_cam_fisier(norm):
 			pe_dosare.setdefault(dosar, set()).add(nume)
 		elif (acces is not None and len(acces) < _extra().MAX_FISIERE_ACCES and _loc_acces_membru(norm)
 				and m.size <= _extra().MAX_FISIER_ACCES):
@@ -2001,7 +2012,7 @@ def _litera_tuner(slot):
 	return chr(ord("A") + n) if 0 <= n < 26 else slot
 
 
-def chei_tuner_imagine(chei, toate=None):
+def chei_tuner_imagine(chei, toate=None, radacini=()):
 	"""Cheile tunerelor din settings-ul altei imagini, aduse la forma acestei imagini. ({cheie: valoare}, note).
 	- unele imagini pun satelitul sub config.Nims.N.dvbs.* (cablul, terestrul, ATSC sub dvbc., dvbt., atsc.);
 	  imaginea și altele îl țin direct sub config.Nims.N. "dvbs." se scoate (cheia scrisă direct câștigă, dacă sunt
@@ -2012,7 +2023,8 @@ def chei_tuner_imagine(chei, toate=None):
 	  Pe un tuner cu chei de satelit fără configMode se pune "simple", iar fără diseqcMode (în modul simplu, la o
 	  copie a unei imagini cu "single") se pune "single": valoarea pe care o avea tunerul.
 	  O copie HD Satelit (are chei config.hds*) nu se completează: valorile ei implicite sunt ale acestei imagini.
-	`toate`: toate cheile din settings-ul sursei (semnele imaginii); implicit `chei`."""
+	`toate`: toate cheile din settings-ul sursei (semnele imaginii); implicit `chei`.
+	`radacini`: intrarile fizice de satelit dovedite de topologia receptorului."""
 	toate = chei if toate is None else toate
 	note = []
 	rez = {}
@@ -2059,6 +2071,18 @@ def chei_tuner_imagine(chei, toate=None):
 			rez[cheie_diseqc] = "single"
 			note.append(_("Tunerul %s: DiSEqC lipsea din copie; am pus un singur LNB, cum e implicit în imaginea "
 				"veche.") % _litera_tuner(slot))
+	# Numai sursa cunoscuta si radacinile fizice pot completa implicitul nescris.
+	# Nu completam o radacina cu chei explicite sau o copie cu o radacina activa.
+	if single and radacini and not any(rez.get("config.Nims.%s.configMode" % s,
+			"simple" if s == min(radacini) else "nothing") in ("simple", "advanced") for s in radacini):
+		for slot in radacini:
+			prefix = "config.Nims.%s." % slot
+			if any(k.startswith(prefix) for k in chei):
+				continue
+			rez.update({prefix + "configMode": "simple", prefix + "diseqcMode": "single",
+				prefix + "diseqcA": "192"})
+			note.append(_("Tunerul %s: copia nu avea chei salvate; am păstrat valorile implicite ale sursei: "
+				"mod simplu, un LNB, 19,2°E.") % _litera_tuner(str(slot)))
 	return rez, note
 
 
@@ -2074,7 +2098,7 @@ def _citeste_settings(cale):
 	return toate
 
 
-def chei_setari_cu_note(cale, tunere, generale):
+def chei_setari_cu_note(cale, tunere, generale, radacini=()):
 	"""({cheie: valoare}, note) din settings-ul sursei, numai cheile tunerelor (trecute prin chei_tuner_imagine).
 	Setările generale nu mai vin de aici, ci din lista albă HdsImportExtra.CHEI_SIGURE (_importa); `generale` a rămas
 	pentru apelanții vechi și nu mai adaugă nimic."""
@@ -2087,7 +2111,7 @@ def chei_setari_cu_note(cale, tunere, generale):
 		return chei, []
 	tuner = dict((k, v) for k, v in chei.items() if k.startswith(CHEI_TUNERE))
 	restul = dict((k, v) for k, v in chei.items() if not k.startswith(CHEI_TUNERE))
-	tuner, note = chei_tuner_imagine(tuner, toate)
+	tuner, note = chei_tuner_imagine(tuner, toate, radacini)
 	restul.update(tuner)
 	return restul, note
 
@@ -2432,7 +2456,8 @@ def _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa=
 		rez["reincarcat"] = True
 	cale_setari = _fisier_setari(dosar)
 	if (alegeri.get("tunere") or alegeri.get("generale")) and cale_setari:
-		chei, note_tunere = chei_setari_cu_note(cale_setari, alegeri.get("tunere"), False)
+		chei, note_tunere = chei_setari_cu_note(cale_setari, alegeri.get("tunere"), False,
+			(context or {}).get("radacini_satelit", ()))
 		mesaje.extend(note_tunere)
 		rez["setari_antena"] = len(chei)
 		if alegeri.get("generale"):
@@ -2447,6 +2472,7 @@ def _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa=
 					"neschimbate.") % eroare)
 			else:
 				rez["setari"] = len(chei)
+				rez["note_tunere"] = note_tunere
 				mesaje.append(_("Setări pregătite: %d. Se aplică după repornirea interfeței.") % len(chei))
 				if in_asteptare > len(chei):
 					mesaje.append(_("Setări importate care așteaptă repornirea interfeței: %d.") % in_asteptare)
@@ -2628,6 +2654,13 @@ def context_import(alegeri):
 	"""Pe firul enigma2, înainte de firul importului: ce nu se poate citi de pe alt fir (arborele config: valorile
 	permise ale setărilor sigure și modurile video declarate de televizor)."""
 	context = {}
+	if alegeri.get("tunere"):
+		try:
+			from Components.NimManager import nimmanager
+			context["radacini_satelit"] = tuple(t.slot for t in nimmanager.nim_slots
+				if t.isCompatible("DVB-S") and getattr(t, "fbc_role", 0) in (0, 1))
+		except Exception as eroare:
+			_jurnal("topologia tunerelor: %s" % eroare.__class__.__name__)
 	if alegeri.get("generale"):
 		try:
 			context["setari"] = _extra().context_setari()

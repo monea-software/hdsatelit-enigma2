@@ -35,17 +35,22 @@ NECUNOSCUT = "Unknown"
 # cat poate fi frecventa din lamedb departe de cea din lista operatorilor (MHz)
 TOLERANTA_MHZ = 3
 
-T_FARA_FURNIZOR = "Fără furnizor"
-T_FARA_NUME = "Furnizor fără nume"
-T_SATELIT = "Satelit %s, %s"
+
+def N_(text):
+	"""Marcaj pentru xgettext (--keyword=N_, po/Makefile.am), fara efect: textele se traduc la afisare, cu _t."""
+	return text
+
+
+# Marcate cu N_, ca xgettext sa le puna in enigma2.pot; nemarcate nu ajung in niciun po si raman in romana in orice limba.
+T_FARA_FURNIZOR = N_("Fără furnizor")
+T_FARA_NUME = N_("Furnizor fără nume")
+# TRANSLATORS: grupa din lista de canale > Furnizor pentru un transponder fara operator stiut: pozitia satelitului
+# (42,0°E) si transponderul (11250 H)
+T_SATELIT = N_("Satelit %s, %s")
 
 # grupele listei, in ordine: furnizorii adevarati (si operatorii stiuti), transponderele fara operator (de la vest la
 # est, apoi dupa frecventa), furnizorul fara nume, serviciile fara furnizor
 GRUPA_NUME, GRUPA_TRANSPONDER, GRUPA_FARA_NUME, GRUPA_FARA_FURNIZOR = range(4)
-
-
-def N_(text):
-	return text
 
 
 def _t(text):

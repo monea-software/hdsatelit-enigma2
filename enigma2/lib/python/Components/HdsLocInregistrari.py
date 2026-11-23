@@ -436,11 +436,19 @@ def mutaCaiMedia(vechi, nou, config=None, configfile=None, temporizatoare=None):
 	return schimbate
 
 
-def numeDispozitiv(descriere, dispozitiv, amovibil=None, eticheta=""):
+def numeDispozitiv(descriere, dispozitiv, amovibil=None, eticheta="", cale=None):
 	"""Numele aratat omului: eticheta discului, cand are una („HD SATELIT (sda1)”); altfel modelul citit de pe dispozitiv
 	(„Cruzer Blade (sda1)”), sau felul lui („Stick USB (sda1)”, „Hard disk (sdb1)”) cand modelul lipseste sau e unul
 	generic, fara inteles pentru om („USB_DRIVE”, „Flash Disk”; Components/HdsNavigator.isGenericModel, acelasi fel ca
 	in navigatorul de fisiere)."""
+	if cale:
+		try:
+			from Components.Harddisk import storagePathName
+			text = storagePathName(cale, dispozitiv)
+			if text != cale:
+				return text
+		except ImportError:
+			pass
 	from Components import HdsNavigator
 	model = (descriere or "").split(" (Partition")[0].strip()
 	if eticheta:
@@ -605,7 +613,7 @@ def _candidatiPeFir(hm=None, tabel=None, realpath=None, citeste=None, uuid=None)
 			# discul de pornire are numele lui, tradus acum: isGenericModel (numai litere latine) l-ar lua in rusa drept un model
 			# fara inteles, iar descrierea partitiei e facuta la incarcare
 			"nume": "%s (%s)" % (_("Discul de pornire"), dispozitiv) if getattr(p, "system_disk", False) else
-				numeDispozitiv(getattr(p, "description", ""), dispozitiv, amovibil, eticheta),
+				numeDispozitiv(getattr(p, "description", ""), dispozitiv, amovibil, eticheta, punct),
 			"eticheta": eticheta,
 			"fel": fel,
 			"id": identitate(dispozitiv, real, uuid),
@@ -757,6 +765,14 @@ def discRetinut(config=None):
 		return (s.value or "") if s is not None else ""
 	except Exception:
 		return ""
+
+
+def _identitateProvizorie(veche, noua):
+	"""O citire provizorie fara UUID nu poate inlocui un UUID deja retinut.
+	Nu deducem identitatea din calea montarii: acolo poate fi acum alt disc.
+	Inventarul urmator din fundal poate confirma UUID-ul, fara asteptare aici.
+	"""
+	return (veche or "").startswith("uuid:") and (noua or "").startswith("loc:")
 
 
 def _poateScrie(cale):
@@ -996,7 +1012,8 @@ def _adaugaLoc(element, cale, realpath=None, tabel=None):
 	return True
 
 
-def aplicaLoc(punct, pregatire, scop=SCOP_MENIU, config=None, configfile=None, realpath=None, tabel=None, ident=None):
+def aplicaLoc(punct, pregatire, scop=SCOP_MENIU, config=None, configfile=None, realpath=None, tabel=None, ident=None,
+		ales_de_om=False):
 	"""Pe firul enigma2: setarile pentru discul ales, dupa pregatirea lui. Intoarce lista setarilor schimbate; in
 	pregatire["dosar_setare"] pune dosarul inregistrarilor asa cum e scris in setare (/hdd/movie/ ramane /hdd/movie/),
 	ca textele sa scrie calea la fel peste tot. `ident` (identitate()) devine discul tinut minte."""
@@ -1049,7 +1066,8 @@ def aplicaLoc(punct, pregatire, scop=SCOP_MENIU, config=None, configfile=None, r
 		pass
 	if ident:
 		s = setareDisc(config)
-		if s is not None and s.value != ident:
+		# Alegerea explicita inlocuieste discul vechi chiar daca noul UUID lipseste.
+		if s is not None and s.value != ident and (ales_de_om or not _identitateProvizorie(s.value, ident)):
 			s.value = ident
 			s.save()
 			schimbate.append(SETARE_DISC)
@@ -1164,7 +1182,8 @@ def culege(config=None, configfile=None, realpath=None):
 		s_cine = setareCine(config)
 		cine_inainte = (s_cine.value or "") if s_cine is not None else ""
 		try:
-			schimbate = aplicaLoc(punct, rez, scop, config, configfile, realpath, ident=ident)
+			schimbate = aplicaLoc(punct, rez, scop, config, configfile, realpath, ident=ident,
+				ales_de_om=de_ce in (None, DE_CE_ALES))
 			noteazaDupaAlegere(de_ce, cine_inainte, config, configfile)
 		except Exception as eroare:
 			print("[HdsLocInregistrari] setarile pentru %s: %s" % (punct, eroare))
@@ -1838,7 +1857,7 @@ def tineMinte(cale, config=None, configfile=None, cand=None, realpath=None, tabe
 		cand = candidati()
 	punct, _radacina = disculLocului(cale, cand, realpath, tabel)
 	ident = [c.get("id") or "" for c in cand if c["punct"] == punct][:1]
-	if not ident or not ident[0] or s.value == ident[0]:
+	if not ident or not ident[0] or s.value == ident[0] or _identitateProvizorie(s.value, ident[0]):
 		return False
 	s.value = ident[0]
 	s.save()

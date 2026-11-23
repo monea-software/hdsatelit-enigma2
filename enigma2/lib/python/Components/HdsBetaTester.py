@@ -50,11 +50,10 @@ try:
 except ImportError:
 	from HdsListeText import text_lista
 
-# versiunea Notei de confidentialitate (situl-imaginii/date/nota-testeri.json); 2 = cu amprenta receptorului; 3 = cu
-# modulele de acces in datele receptorului (TODO 1389, NOTA_MODULE) si pauza care pastreaza inscrierea (TODO 1391 b).
-# Cine a acceptat nota 2 nu mai trimite pana apasa o data „Accept” (anuntul notei noi). Pastrata 2, nimic din nota 3 nu
-# pleaca (modulele cer b.nota >= NOTA_MODULE)
-NOTA = 3
+# Nota 4: identificatorul anonim ramane local si dupa stergerea datelor personale.
+# Nota 3: modulele de acces si pauza; pragul NOTA_MODULE ramane separat.
+NOTA = 4
+ACORD_TEST = 1
 PROTOCOL = 1
 SERVER = "https://stb.hdsatelit.com/api/testeri/"
 ADRESA_NOTA = "https://stb.hdsatelit.com/testeri/confidentialitate/"
@@ -174,6 +173,22 @@ AUTOMAT = (N_("Trimite automat în fiecare zi"),
 ANTET_ACORD = N_("Datele sunt anonime: receptorul primește un identificator întâmplător, fără adresa IP, fără parole și "
 	"fără listele tale de canale. Le folosim numai ca să îmbunătățim imaginea pe modelul tău de receptor. Numele și "
 	"e-mailul sunt opționale.")
+TEST_TITLU = N_("Condițiile imaginii în test")
+TEST_CONDITII = N_("Această imagine este în test (alfa/beta). Folosind-o ești beta tester: echipa HD Satelit poate "
+	"vedea și face orice pe receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele "
+	"și parolele. Pot apărea probleme. Fără acord imaginea nu poate fi folosită.")
+TEST_OBLIGATORIU = N_("Imagine în test: acordul beta tester e obligatoriu")
+TEST_REFUZ = N_("Fără acord imaginea nu poate fi folosită. Poți trece pe o imagine finală când apare sau poți "
+	"instala altă imagine. Rețeaua și actualizările rămân disponibile. Tasta POWER deschide opțiunile de "
+	"recuperare și de pornire în altă imagine, dacă receptorul le permite.")
+TEST_FINAL = N_("Pe o imagine finală, Beta tester este opțional. Echipa HD Satelit poate vedea și face orice pe "
+	"receptorul tău în timpul asistenței și al testelor, inclusiv vedea setările, jurnalele și parolele. Pot apărea probleme.")
+
+
+def textConditii():
+	return _t(TEST_CONDITII if imagineInTest() else TEST_FINAL)
+
+
 BIFA_NOTA = N_("Am citit Nota de confidențialitate și sunt de acord să trimit datele bifate mai sus.")
 INTREBARE = N_("Vrei să ajuți la îmbunătățirea imaginii pe care o folosești acum?")
 INTREBARE_RAND = N_("Ai folosit cu interes imaginea E2 HD Satelit peste o oră. Ca beta tester ne trimiți date anonime, "
@@ -185,19 +200,22 @@ NOTA_SCURTA = N_("Datele le primește Eduard Monea, persoană fizică (mărcile 
 	"modelul tău de receptor. Jurnalele se păstrează 6 luni, celelalte date 12 luni. Poți debifa oricând un fel de "
 	"date sau poți ieși din program cu ștergerea datelor. La o pornire ratată, receptorul trimite singur un raport "
 	"tehnic anonim, fără date personale. Dacă scrii pe forumul receptorului, mesajul tău apare public, cu numele "
-	"ales de tine sau cu un nume automat. Nota întreagă e la adresa de mai jos.")
+	"ales de tine sau cu un nume automat. Nota întreagă e la adresa de mai jos. "
+	"Identificatorul anonim rămâne pe receptor pe termen nedeterminat, inclusiv după ștergerea datelor personale.")
+IDENTITATE_PASTRATA = N_("Identificatorul anonim, ales întâmplător, rămâne pe receptor pe termen nedeterminat, "
+	"inclusiv după ștergerea datelor. Numele, e-mailul, numele public, legarea contului, cheia profilului și "
+	"pachetele personale se șterg; identificatorul păstrat nu păstrează profilul sau înscrierea de pe server.")
 # anuntul notei noi (receptor si web): titlul, mesajul, ce e nou fata de nota de dinainte (paragrafele notei
 # situl-imaginii/date/nota-testeri.json, cuvant cu cuvant), starea din meniul testerului si butoanele
 NOTA_ANUNT_TITLU = N_("Nota de confidențialitate s-a schimbat")
 NOTA_ANUNT = N_("Nota de confidențialitate a beta testerilor s-a schimbat. Ca receptorul să trimită mai departe "
 	"jurnalele, citește ce e nou și acceptă.")
-# ce e nou in nota 3 fata de 2, cuvant cu cuvant un paragraf al notei (test_nota_noua_anunt); amprenta si canalul care
-# nu merge (nota 2) sunt deja acceptate de toti cei cu nota 2. Pauza (TODO 1391 b) e un pas nou la „Cum renunți”, nu
-# date noi trimise
+# Noutatile includ si nota 3, pentru cine vine de la o nota mai veche.
 NOTA_NOUTATI = (
 	N_("Modulele de acces instalate: pentru fiecare, numele pachetului și versiunea lui, feedul din care se poate lua "
 		"aceeași versiune, dacă e modulul ales și dacă rulează. Fără fișierele lor de configurare, chei, servere, "
 		"cititoare sau canalele deschise cu ele."),
+	IDENTITATE_PASTRATA,
 )
 NOTA_ACCEPT_RAND = N_("Cu Accept ești de acord cu nota nouă și receptorul trimite din nou datele bifate de tine până acum.")
 NOTA_OPRITA = N_("Trimiterea e oprită până accepți nota nouă.")
@@ -209,11 +227,15 @@ NOTA_BUTOANE = {
 NOTA_ACCEPTATA = N_("Mulțumim. Receptorul trimite din nou datele bifate.")
 # dupa prima activare (televizor si web, acelasi text din acceptaAcord) si in intrebarea de la iesire: multi porneau si
 # opreau des Beta tester, crezand ca e asistenta de la distanta
-DUPA_ACTIVARE = N_("Lasă Beta tester pornit: lucrează singur, în fundal. Dacă ieși din program, datele tale se șterg "
-	"și pierzi statutul de beta tester de pe site.")
+DUPA_ACTIVARE = N_("Lasă Beta tester pornit: lucrează singur, în fundal. Dacă ieși din program cu ștergerea datelor, "
+	"datele personale se șterg și pierzi statutul de beta tester de pe site. Identificatorul anonim rămâne pe receptor.")
 NU_E_ASISTENTA = N_("Asistența de la distanță e altceva: o pornești numai când ai nevoie, din Meniu > Setări > "
 	"Asistență de la distanță.")
-LA_IESIRE = N_("Pierzi statutul de beta tester de pe site.")
+LA_IESIRE = N_("Pierzi statutul de beta tester de pe site. Identificatorul anonim rămâne pe receptor pe termen "
+	"nedeterminat; numele, e-mailul, legarea contului, cheia profilului și pachetele personale se șterg.")
+STERGERE_DISC = N_("Ștergerea nu s-a încheiat pe receptor din cauza unei erori de scriere. "
+	"Cererea salvată se reia automat; până atunci nu se trimit date personale.")
+CHEIE_DISC = N_("Cheia profilului nu poate fi citită sau salvată pe receptor. Profilul nu a fost schimbat.")
 # randul scurt de sub fiecare rand al meniului testerului si al celui neinscris (pe receptor si in web): exact ce
 # face randul
 RANDURI_MENIU = {
@@ -350,6 +372,16 @@ def scrieJson(cale_fisier, obiect):
 		separators=(",", ":")).encode("utf-8"))
 
 
+def _syncDosar(dosar):
+	"""Persist directory entries before advancing a deletion barrier."""
+	if os.name == "posix":
+		fd = os.open(dosar, os.O_RDONLY)
+		try:
+			os.fsync(fd)
+		finally:
+			os.close(fd)
+
+
 def _sterge(cale_fisier):
 	try:
 		os.remove(cale_fisier)
@@ -417,10 +449,12 @@ def amprenta(radacina=""):
 
 
 def _notaAcceptata():
-	try:
-		return int(_b(None).nota.value)
-	except Exception:
-		return 0
+	if threading.current_thread() is threading.main_thread():
+		try:
+			return int(_b(None).nota.value)
+		except Exception:
+			return 0
+	return _NOTA_LOCALA
 
 
 def cuAmprenta(corp):
@@ -452,13 +486,18 @@ def idValid(text):
 
 def initConfig(config=None):
 	"""config.hds_beta, facut la prima folosire."""
+	global _NOTA_LOCALA
 	if config is None:
 		from Components.config import config
 	if "hds_beta" in config.content.items:
+		_NOTA_LOCALA = int(config.hds_beta.nota.value)
+		_reiaStergerea(config.hds_beta)
 		return config.hds_beta
 	from Components.config import ConfigSubsection, ConfigYesNo, ConfigText, ConfigInteger
 	b = ConfigSubsection()
-	b.activ = ConfigYesNo(default=False)
+	b.activ = ConfigYesNo(default=imagineInTest())
+	# Preserve an explicit choice when the factory default changes at 1.0.
+	b.activ.save_forced = True
 	for fel in FELURI:
 		setattr(b, fel, ConfigYesNo(default=True))
 	b.nume = ConfigText(default="", fixed_size=False)
@@ -467,12 +506,18 @@ def initConfig(config=None):
 	b.intrebare = ConfigText(default="", fixed_size=False)
 	b.id = ConfigText(default="", fixed_size=False)
 	b.nota = ConfigInteger(default=0, limits=(0, 9999))
+	b.acord_test = ConfigInteger(default=-1, limits=(-1, 9999))
 	b.acord = ConfigText(default="", fixed_size=False)
 	b.acord_ora = ConfigYesNo(default=False)
 	b.server = ConfigText(default=SERVER, fixed_size=False)
 	b.public = ConfigText(default="", fixed_size=False)
 	b.automat = ConfigYesNo(default=True)
 	config.hds_beta = b
+	# The old False default was omitted on disk, even for a paused registration.
+	if b.acord_test.value == -1 and idValid(b.id.value) and b.nota.value > 0 and b.activ.saved_value is None:
+		b.activ.value = False
+	_NOTA_LOCALA = int(b.nota.value)
+	_reiaStergerea(b)
 	return b
 
 
@@ -480,9 +525,57 @@ def _b(b=None):
 	return b if b is not None else initConfig()
 
 
+def imagineInTest(versiune=None):
+	"""0.x is development; 1.0 and later are final. No filesystem or network IO."""
+	if versiune is None:
+		try:
+			from enigma import getEnigmaVersionString
+			versiune = getEnigmaVersionString()
+		except ImportError:
+			versiune = ""
+	return bool(re.match(r"\A0\.[0-9]+\.[0-9]+(?:\s|$)", str(versiune)))
+
+
+def acordTestNecesar(b=None):
+	if not imagineInTest():
+		return False
+	b = _b(b)
+	# Migrate only the first version, never a refused or outdated agreement.
+	if b.acord_test.value == -1:
+		b.acord_test.value = ACORD_TEST if (b.activ.value and idValid(b.id.value) and b.nota.value > 0) else 0
+		b.acord_test.save()
+	return not (b.activ.value and idValid(b.id.value) and b.acord_test.value >= ACORD_TEST)
+
+
+def acceptaTest(b=None):
+	b = _b(b)
+	ok, text = acceptaAcord(bife(b), b.nume.value, b.email.value, b, de_unde="test", automat=b.automat.value)
+	return ok, text
+
+
+def refuzaTest(b=None):
+	"""Withdraw test consent without deleting identity or disabling updates."""
+	b = _b(b)
+	b.acord_test.value = 0
+	b.activ.value = False
+	salveaza(b)
+	_starea["activ"] = False
+	sesiune = _starea.get("sesiune")
+	if sesiune is not None:
+		from Screens.HdsBetaTester import HdsBetaConditii
+		if isinstance(sesiune.current_dialog, HdsBetaConditii):
+			sesiune.current_dialog.obliga()
+		else:
+			sesiune.open(HdsBetaConditii)
+	return True, _t(TEST_REFUZ)
+
+
 def salveaza(b=None):
 	"""Setarile pe disc pe loc (o cadere nu face intrebarea sa apara din nou)."""
+	global _NOTA_LOCALA, _REVIZIE_ACORD
 	b = _b(b)
+	_NOTA_LOCALA = int(b.nota.value)
+	_REVIZIE_ACORD += 1
 	try:
 		b.save()
 		from Components.config import configfile
@@ -499,7 +592,8 @@ def bife(b=None):
 def inscris(b=None):
 	"""Programul pornit, cu identificator si cu nota de acum acceptata (meniul testerului)."""
 	b = _b(b)
-	return bool(b.activ.value) and idValid(b.id.value) and int(b.nota.value) >= NOTA
+	return (_STERGERE_DOSAR == DOSAR and _STERGERE is not None and _STERGERE.gata and _STERGERE.ok and
+		bool(b.activ.value) and idValid(b.id.value) and int(b.nota.value) >= NOTA and not acordTestNecesar(b))
 
 
 def notaVeche(b=None):
@@ -525,10 +619,15 @@ def adresaServer(b=None):
 	"""Adresa serverului din setarea ascunsa. Pentru probe, un fisier in RAM (CALE_SERVER_PROBA, pierdut la repornire)
 	poate da un server de proba, numai http:// spre 127.0.0.1 sau reteaua locala."""
 	b = _b(b)
+	return _adresaServer(b.server.value)
+
+
+def _adresaServer(valoare):
+	"""Resolve a captured setting; also usable without config objects on a worker."""
 	proba = (_citesteText(CALE_SERVER_PROBA, 256) or "").strip()
 	if proba.startswith("http://") and serverValid(proba):
 		return proba if proba.endswith("/") else proba + "/"
-	adresa = (b.server.value or "").strip()
+	adresa = (valoare or "").strip()
 	if not serverValid(adresa):
 		return SERVER
 	return adresa if adresa.endswith("/") else adresa + "/"
@@ -553,6 +652,10 @@ def acceptaAcord(feluri, nume="", email="", b=None, de_unde="setari", acum=None,
 	"""„Sunt de acord” (televizor sau web): bifele, numele si e-mailul, identificatorul (nou daca lipseste), nota de
 	acum. Setarile se scriu pe loc; acordul pleaca la server prin coada. -> (reusit, mesaj)"""
 	b = _b(b)
+	if not _reiaStergerea(b):
+		if _STERGERE is not None and not _STERGERE.gata:
+			return False, _t("Se verifică datele programului în fundal. Așteaptă puțin.")
+		return False, _t(STERGERE_DISC)
 	email = textNume(email, EMAIL_MAX)
 	if not emailValid(email):
 		return False, _t("Adresa de e-mail nu pare bună.")
@@ -565,6 +668,8 @@ def acceptaAcord(feluri, nume="", email="", b=None, de_unde="setari", acum=None,
 		b.id.value = identificatorNou()
 	prima_activare = not b.activ.value
 	b.activ.value = True
+	if imagineInTest():
+		b.acord_test.value = ACORD_TEST
 	b.nota.value = NOTA
 	b.acord.value = oraUtc(acum)
 	if b.intrebare.value not in ("da", "nu"):
@@ -660,39 +765,199 @@ def opresteCanalTesteri():
 		_jurnal("canalul testerilor la iesire: %s" % e)
 
 
-def iesire(b=None):
-	"""„Iesi din program si sterge datele”: cererea de stergere intra prima in coada (si ramane pana ajunge), coada
-	celorlalte pachete se goleste, setarile se fac ca din fabrica (intrebarea ramane raspunsa)."""
+def iesire(b=None, gata=None):
+	"""Start local deletion; completion and config access stay on main."""
+	global _STERGERE, _STERGERE_DOSAR, _GENERATIE
 	b = _b(b)
-	ident = b.id.value
-	cheie = citesteCheie()
-	if idValid(ident):
-		golesteCoada()
-		corp = {"v": PROTOCOL, "id": ident}
-		puneInCoada("sterge", "sterge", corp)
-	# forum-vazut.json: mesajele de pe forum vazute de tester (Components/HdsForumReceptor.FISIER_VAZUT)
-	for nume in ("ultimul.json", "trimise.json", "raspunsuri.json", "stare.json", "cheie", "forum-vazut.json"):
-		_sterge(cale(nume))
-	b.activ.value = False
-	b.id.value = ""
-	b.nota.value = 0
-	b.acord.value = ""
-	b.acord_ora.value = False
-	b.nume.value = ""
-	b.email.value = ""
-	b.public.value = ""
-	b.automat.value = True
-	for fel in FELURI:
-		getattr(b, fel).value = True
-	if b.intrebare.value == "":
-		b.intrebare.value = "nu"
-	salveaza(b)
-	_jurnal("iesire din program%s" % (" (cu cheia profilului stearsa)" if cheie else ""))
-	opresteCanalTesteri()
-	_ceruteAcum["trimite"] = True
-	_starea["numar_cand"] = None
-	_starea["activ"] = False
-	return True, _t("Ai ieșit din program. Cererea de ștergere pleacă la server; pe receptor nu mai rămâne nimic.")
+	if imagineInTest():
+		refuzaTest(b)
+		if gata is not None:
+			gata(True, _t(TEST_REFUZ))
+		return None
+	corp = {"v": PROTOCOL, "id": b.id.value if idValid(b.id.value) else "", "nota": int(b.nota.value)}
+	if _STERGERE is not None and not _STERGERE.gata:
+		if gata is not None:
+			_STERGERE.dupa.append(gata)
+		if _STERGERE.corp is None:
+			_STERGERE.cerere_noua = corp
+		return _STERGERE
+	_GENERATIE += 1
+	_STERGERE_DOSAR = DOSAR
+	_STERGERE = StergereLocala(b, corp, gata)
+	return _STERGERE
+
+
+def _reiaStergerea(b):
+	"""Only schedule IO here, never read the disk in initConfig or tic."""
+	global _STERGERE, _STERGERE_DOSAR
+	if _STERGERE_DOSAR != DOSAR or _STERGERE is None or (_STERGERE.gata and not _STERGERE.ok):
+		_STERGERE_DOSAR = DOSAR
+		_STERGERE = StergereLocala(b)
+	return _STERGERE.gata and _STERGERE.ok
+
+
+class StergereLocala:
+	"""Durable intent, main-thread reset, verified byte write, then private-file cleanup."""
+	def __init__(self, b, corp=None, gata=None):
+		self.b = b
+		self.gata = self.ok = False
+		self.mesaj = ""
+		self.dupa = [gata] if gata is not None else []
+		self.rezervare = None
+		self.corp = corp
+		self.cerere_noua = None
+		self.durabila = False
+		self._lucru(self._pregateste, self._pregatita)
+
+	def _lucru(self, functie, dupa):
+		from Components.HdsPazaModel import LucrareFundal
+		self.lucrare = LucrareFundal(functie, dupa)
+
+	def _pregateste(self):
+		with _LACAT:
+			if self.corp is None:
+				try:
+					with open(cale("stergere.json"), "r", encoding="utf-8") as f:
+						corp = json.load(f)
+				except FileNotFoundError:
+					try:
+						_syncDosar(DOSAR)
+					except FileNotFoundError:
+						pass
+					citesteStare()
+					return None
+			else:
+				corp = cuAmprenta(self.corp)
+				corp.pop("nota", None)
+				scrieJson(cale("stergere.json"), corp)
+				_syncDosar(DOSAR)
+			self.durabila = True
+			if not isinstance(corp, dict) or not isinstance(corp.get("id"), str) or \
+					(corp["id"] and not idValid(corp["id"])):
+				raise OSError("Invalid local deletion intent")
+			if not re.fullmatch(r"[0-9a-f]{16}", str(corp.get("cerere_locala", ""))):
+				corp["cerere_locala"] = os.urandom(8).hex()
+				scrieJson(cale("stergere.json"), corp)
+				_syncDosar(DOSAR)
+			return corp
+
+	def _pregatita(self, corp, eroare):
+		global _GENERATIE, _NOTA_LOCALA
+		if eroare:
+			self._termina(False)
+			return
+		if corp is None:
+			if self.cerere_noua is not None:
+				self.corp, self.cerere_noua = self.cerere_noua, None
+				self._lucru(self._pregateste, self._pregatita)
+				return
+			self._termina(True)
+			return
+		self.corp = corp
+		_GENERATIE += 1
+		b = self.b
+		# Stop personal work immediately, including when the disk must be retried.
+		b.activ.value = False
+		_ceruteAcum.clear()
+		_ceruteAcum["trimite"] = True
+		_starea.update({"activ": False, "numar_cand": None, "cerere_raspunsuri": None,
+			"raspunsuri_datorat": False, "de_anuntat": False})
+		opresteCanalTesteri()
+		import sys
+		forum = sys.modules.get("Components.HdsForumReceptor")
+		if forum is not None:
+			with forum._lacat_jeton:
+				forum._jeton.update({"jeton": "", "id": "", "expira": 0.0, "nume": "", "cont": None})
+		try:
+			from Components.config import config, configfile, TranzactieSetari, _octetiSetari
+			self.rezervare = TranzactieSetari()
+			b.id.value = corp["id"]
+			b.nota.value = 0
+			_NOTA_LOCALA = 0
+			b.acord.value = ""
+			b.acord_ora.value = False
+			b.nume.value = b.email.value = b.public.value = ""
+			b.automat.value = True
+			for fel in FELURI:
+				getattr(b, fel).value = True
+			if b.intrebare.value == "":
+				b.intrebare.value = "nu"
+			b.save()
+			self.fisier = configfile.CONFIG_FILE
+			self.octeti = _octetiSetari(config.pickle())
+			self._lucru(self._scrie, self._scrisa)
+		except Exception:
+			self._termina(False)
+
+	def _scrie(self):
+		from Components.config import _scrieSigur
+		if not self.rezervare.ruleaza(_scrieSigur, self.fisier, self.octeti):
+			raise OSError("Settings write failed")
+		with open(self.fisier, "rb") as f:
+			if f.read() != self.octeti:
+				raise OSError("Settings verification failed")
+
+	def _scrisa(self, rezultat, eroare):
+		if eroare:
+			self._termina(False)
+			return
+		try:
+			# Drain unrelated saves using fresh main-thread snapshots before releasing the reservation.
+			cereri = self.rezervare.preia()
+			if cereri:
+				self._lucru(lambda: self.rezervare.termina(cereri), self._scrisa)
+				return
+			self.rezervare.inchide()
+			self.rezervare = None
+			self._lucru(self._curata, self._curatata)
+		except Exception:
+			self._termina(False)
+
+	def _curata(self):
+		with _LACAT:
+			golesteCoada(pastreaza_stergerea=True, strict=True)
+			for nume in ("ultimul.json", "trimise.json", "raspunsuri.json", "stare.json", "cheie", "forum-vazut.json"):
+				try:
+					os.remove(cale(nume))
+				except FileNotFoundError:
+					pass
+			if idValid(self.corp["id"]):
+				marcaj = self.corp["cerere_locala"]
+				gasita = False
+				for f in _fisiereCoada(strict=True):
+					if "-sterge-" in f and f.split("-", 1)[0].endswith(marcaj):
+						with gzip.open(os.path.join(dosarCoada(), f), "rt", encoding="utf-8") as fi:
+							gasita = json.load(fi).get("id") == self.corp["id"] or gasita
+				if not gasita:
+					corp = {k: v for k, v in self.corp.items() if k != "cerere_locala"}
+					puneInCoada("sterge", "sterge", corp, marcaj=marcaj)
+				_syncDosar(dosarCoada())
+			os.remove(cale("stergere.json"))
+			_syncDosar(DOSAR)
+
+	def _curatata(self, rezultat, eroare):
+		self._termina(not eroare)
+
+	def _termina(self, ok):
+		if self.rezervare is not None:
+			self.rezervare.inchide(fortat=True)
+			self.rezervare = None
+		self.ok = ok
+		if ok:
+			self.mesaj = _t("Ai ieșit din program. Cererea de ștergere pleacă la server când ai internet. "
+				"Datele personale au fost șterse de pe receptor; identificatorul anonim rămâne pe termen nedeterminat.")
+		elif self.durabila:
+			self.mesaj = _t(STERGERE_DISC)
+		else:
+			self.mesaj = _t("Cererea de ștergere nu a putut fi salvată pe receptor. Încearcă din nou.")
+		self.gata = True
+		for dupa in self.dupa:
+			try:
+				dupa(self.ok, self.mesaj)
+			except Exception as e:
+				_jurnal("stergere, dupa: %s" % e.__class__.__name__)
+		self.dupa = []
+
 
 
 def _canalDupaPauza():
@@ -722,9 +987,13 @@ def pauza(b=None):
 	numele public si cheia profilului. Pornirea din nou (acceptaAcord) foloseste acelasi identificator, iar serverul
 	intoarce aceeasi inscriere (iesit = NULL). Coada celorlalte pachete se goleste. -> (reusit, mesaj)"""
 	b = _b(b)
+	if imagineInTest():
+		return refuzaTest(b)
+	if _STERGERE_DOSAR == DOSAR and _STERGERE is not None and not _STERGERE.gata:
+		return False, _t("Se verifică datele programului în fundal. Așteaptă puțin.")
 	if not b.activ.value or not idValid(b.id.value):
 		return False, _t("Nu ești înscris în programul de beta testeri.")
-	golesteCoada()
+	golesteCoada(pastreaza_stergerea=True)
 	puneInCoada("iesire", "iesire", {"v": PROTOCOL, "id": b.id.value})
 	b.activ.value = False
 	salveaza(b)
@@ -975,22 +1244,8 @@ def esteEcranDeAcces(nume):
 
 
 def curata(text):
-	"""Textul unui jurnal fara nimic al omului: randurile despre accesul conditionat si cele cu parole, chei, jetoane,
-	Wi-Fi scoase; adresele IP, MAC, e-mailurile, adresele web si caile spre filme inlocuite cu un semn."""
-	rez = []
-	for rand in (text or "").splitlines():
-		if esteDeAcces(rand) or _SECRET.search(rand):
-			continue
-		rand = _URL.sub("<adresa>", rand)
-		rand = _REF_IPTV.sub("<flux>", rand)
-		rand = _EMAIL_TEXT.sub("<e-mail>", rand)
-		rand = _MAC.sub("<mac>", rand)
-		rand = _IP6.sub("<ip>", rand)
-		rand = _IP4.sub(lambda m: m.group(0) if m.group(0).startswith(("0.", "127.")) else "<ip>", rand)
-		rand = _IP6_SCURT.sub(lambda m: m.group(0) if m.group(0) == "::" else "<ip>", rand)
-		rand = _FILM.sub("<fisier>", rand)
-		rez.append(rand[:1000])
-	return "\n".join(rez)
+	"""Textul integral pentru echipa."""
+	return text or ""
 
 
 # hds-zap.log (0.7.7, lib/service/hdsjurnalzap.cpp): si randurile zap-urilor reusite au la coada „| canal: nume=... ref=...”
@@ -1001,8 +1256,8 @@ _ZAP_REUSIT_CANAL = re.compile(r"^(.*\[INFO\] \[zap\] .*?) \| canal: .*$")
 
 
 def faraCanaleReusite(text):
-	"""Textul lui hds-zap.log fara canalul de la coada randurilor reusite (INFO); randurile cu esec raman neschimbate."""
-	return "\n".join(_ZAP_REUSIT_CANAL.sub(r"\1", r) for r in (text or "").splitlines())
+	"""Textul integral pentru echipa."""
+	return text or ""
 
 
 def coada(text, maxim=JURNAL_MAX):
@@ -1021,48 +1276,8 @@ _CAMP_EXCEPTIE = re.compile(r"(?<![a-z0-9_])(?:" + _CHEI_EXCEPTIE + r")\s+[^\n]*
 
 
 def curataExceptie(text):
-	"""Pastreaza cadrele si tipul exceptiei; ascunde valorile, fara eliminarea randurilor stivei."""
-	rez = []
-	stiva = False
-	for rand in (text or "").splitlines():
-		if "Traceback (most recent call last)" in rand:
-			stiva = True
-		if re.fullmatch(r'[ <0-9.>]*File "[A-Za-z0-9_./-]+", line [0-9]+(?:, in [A-Za-z0-9_<>.]+)?\s*', rand):
-			if esteDeAcces(rand):
-				rand = re.sub(r'"[^"]*"', '"(modul-acces)"', rand, count=1)
-				rand = re.sub(r", in .*", ", in (modul-acces)", rand)
-			else:
-				rand = re.sub(r'"[^\"]*/enigma2/python/', '"enigma2/python/', rand)
-		else:
-			if esteDeAcces(rand):
-				rez.append("(modul-acces: valori ascunse)")
-				continue
-			prefix = ""
-			tip = re.match(r"[A-Za-z_][A-Za-z0-9_.]*:", rand)
-			if tip and (stiva or re.match(r"[A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception|Exit|Interrupt|Warning):", rand)):
-				prefix, rand = rand[:tip.end()], rand[tip.end():]
-				stiva = False
-			rand = _VALOARE_EXCEPTIE.sub(lambda m: re.split(r"[=:]", m.group(), maxsplit=1)[0] + "=<ascuns>", rand)
-			rand = _CAMP_EXCEPTIE.sub(lambda m: m.group().split()[0] + " <ascuns>", rand)
-			# Dupa inlocuirea valorilor etichetate, orice forma sensibila ramasa se ascunde conservator.
-			bucati = rand.split("<ascuns>")
-			for i, bucata in enumerate(bucati):
-				m = _SECRET.search(bucata) or re.search(_CHEI_EXCEPTIE, bucata, re.I)
-				if m:
-					bucati[i] = bucata[:m.end()] + "<ascuns>"
-			rand = prefix + "<ascuns>".join(bucati)
-		# Regulile existente pentru valori personale raman active si aici.
-		rand = _URL.sub("<adresa>", rand)
-		rand = _REF_IPTV.sub("<flux>", rand)
-		rand = _EMAIL_TEXT.sub("<e-mail>", rand)
-		rand = _MAC.sub("<mac>", rand)
-		rand = _IP6.sub("<ip>", rand)
-		rand = _IP6_SCURT.sub(lambda m: m.group() if m.group() == "::" else "<ip>", rand)
-		rand = _IP4.sub(lambda m: m.group() if m.group().startswith(("0.", "127.")) else "<ip>", rand)
-		rand = _FILM.sub("<fisier>", rand)
-		rand = re.sub(r"eyJ[\w-]{8,}\.[\w.-]+", "<ascuns>", rand)
-		rez.append(rand)
-	return "\n".join(rez)
+	"""Textul integral pentru echipa."""
+	return text or ""
 
 
 # ------------------------------------------------------------------ felul „jurnale”
@@ -2129,6 +2344,26 @@ def instantaneu(b, contor, model="", paza=None, versiune="", limba=""):
 # ------------------------------------------------------------------ coada, „Ce am trimis”, „Ce trimit acum”
 
 _LACAT = threading.RLock()
+_RETEA = threading.RLock()
+_GENERATIE = 0
+_STERGERE = None
+_STERGERE_DOSAR = None
+_NOTA_LOCALA = 0
+_REVIZIE_ACORD = 0
+_ACORD_TRIMIS = {}
+# Immutable display snapshot, replaced under the disk lock but read without it.
+_ULTIMA_TRIMITERE = (None, None, None)
+
+
+def cerereActuala(cerere):
+	"""Un rezultat dinaintea stergerii nu mai poate reface datele, nici dupa reinscrierea cu acelasi id."""
+	return (getattr(cerere, "generatie", _GENERATIE) == _GENERATIE and
+		getattr(cerere, "revizie", _REVIZIE_ACORD) == _REVIZIE_ACORD)
+
+
+def _semnaturaAcord(corp):
+	"""Only consent fields, so viewing a profile never renews an unchanged consent."""
+	return sumaDate({k: corp.get(k) for k in ("id", "nota", "acord", "feluri", "nume", "email")})
 
 
 def dosarCoada():
@@ -2137,13 +2372,37 @@ def dosarCoada():
 
 def citesteStare():
 	with _LACAT:
-		return citesteJson(cale("stare.json"), {}) or {}
+		generatie = _GENERATIE
+		stare = citesteJson(cale("stare.json"), {}) or {}
+		if not isinstance(stare, dict):
+			stare = {}
+		_tineUltimaTrimitere(stare, generatie)
+		return stare
+
+
+def _tineUltimaTrimitere(stare, generatie):
+	"""Publish only a scalar, never the mutable state dictionary or config objects."""
+	global _ULTIMA_TRIMITERE
+	secunde = stare.get("ultima_trimitere")
+	if not isinstance(secunde, (int, float)):
+		secunde = None
+	elif secunde:
+		try:
+			time.localtime(secunde)
+		except (ValueError, OverflowError, OSError):
+			secunde = None
+	if cerereActuala(threading.current_thread()):
+		_ULTIMA_TRIMITERE = (DOSAR, generatie, secunde)
 
 
 def scrieStare(stare):
 	with _LACAT:
+		if not cerereActuala(threading.current_thread()):
+			return
+		generatie = _GENERATIE
 		try:
 			scrieJson(cale("stare.json"), stare)
+			_tineUltimaTrimitere(stare, generatie)
 		except (OSError, IOError) as e:
 			_jurnal("starea: %s" % e)
 
@@ -2165,14 +2424,24 @@ def comprima(corp):
 	return brut, b.getvalue()
 
 
-def _fisiereCoada():
+def _fisiereCoada(strict=False):
 	try:
-		return sorted(x for x in os.listdir(dosarCoada()) if x.endswith(".gz"))
+		return sorted(x for x in os.listdir(dosarCoada()) if _pachetPropriu(x))
+	except FileNotFoundError:
+		return []
 	except OSError:
+		if strict:
+			raise
 		return []
 
 
-def puneInCoada(ruta, fel, corp, limita=PACHET_MAX):
+def _pachetPropriu(nume):
+	"""Ignore unrelated files, including archives left by a person in this folder."""
+	return re.fullmatch(r"[0-9]{13}(?:[0-9a-f]{16})?-(?:acord-acord|iesire-iesire|sterge-sterge|mesaj-mesaj|"
+		r"date-(?:jurnale|canale|sistem|utilizare|receptor|probe))\.gz", nume) is not None
+
+
+def puneInCoada(ruta, fel, corp, limita=PACHET_MAX, marcaj=None):
 	"""Pachetul in coada: `ruta` = acord, date, mesaj, sterge. Peste limita pachetului nu intra (rand in jurnal);
 	peste COADA_MAX sau COADA_OCTETI pleaca intai cele mai vechi (nu si stergerea). -> numele fisierului sau None."""
 	brut, gz = comprima(cuAmprenta(corp))
@@ -2181,8 +2450,13 @@ def puneInCoada(ruta, fel, corp, limita=PACHET_MAX):
 		adaugaTrimis(fel, len(gz), "refuzat")
 		return None
 	with _LACAT:
+		if not cerereActuala(threading.current_thread()):
+			return None
 		_asiguraDosar(dosarCoada())
-		nume = "%013d-%s-%s.gz" % (int(time.time() * 1000), ruta, fel)
+		prefix = "%013d" % int(time.time() * 1000)
+		if ruta == "sterge":
+			prefix += marcaj or os.urandom(8).hex()
+		nume = "%s-%s-%s.gz" % (prefix, ruta, fel)
 		scrieAtomic(os.path.join(dosarCoada(), nume), gz)
 		_taieCoada()
 		adaugaTrimis(fel, len(gz), "coada", nume)
@@ -2208,10 +2482,25 @@ def _taieCoada():
 		_jurnal("coada plina: %s pierdut" % vechi)
 
 
-def golesteCoada():
+def golesteCoada(pastreaza_stergerea=False, strict=False):
 	with _LACAT:
-		for f in _fisiereCoada():
-			_sterge(os.path.join(dosarCoada(), f))
+		if strict:
+			try:
+				fisiere = sorted(x for x in os.listdir(dosarCoada()) if _pachetPropriu(x))
+			except FileNotFoundError:
+				fisiere = []
+		else:
+			fisiere = _fisiereCoada()
+		for f in fisiere:
+			if pastreaza_stergerea and "-sterge-" in f:
+				continue
+			if strict:
+				try:
+					os.remove(os.path.join(dosarCoada(), f))
+				except FileNotFoundError:
+					pass
+			else:
+				_sterge(os.path.join(dosarCoada(), f))
 
 
 def coadaGoala():
@@ -2334,16 +2623,23 @@ class Trimitere(object):
 	"""Trimite coada, cel mai vechi intai (stergerea inaintea tuturor). Ruleaza pe firul Lucru."""
 
 	def __init__(self, server, posteaza=None):
+		self.generatie = _GENERATIE
 		self.server = server
 		self.posteaza = posteaza or _posteazaHttp
 		self.rezultate = []
 
 	def trimite(self):
+		with _RETEA:
+			return self._trimite()
+
+	def _trimite(self):
 		"""-> (cate au plecat, oprit_pana_mai_tarziu)."""
-		fisiere = _fisiereCoada()
+		fisiere = _fisiereCoada(strict=True)
 		fisiere.sort(key=lambda f: (0 if "-sterge-" in f else 1, f))
 		plecate = 0
 		for f in fisiere:
+			if not cerereActuala(self):
+				return plecate, False
 			parti = f[:-3].split("-", 2)
 			if len(parti) != 3:
 				_sterge(os.path.join(dosarCoada(), f))
@@ -2354,43 +2650,78 @@ class Trimitere(object):
 				with open(cale_fisier, "rb") as fi:
 					gz = fi.read(PACHET_MAX + 1)
 			except (OSError, IOError):
+				if ruta == "sterge":
+					return plecate, True
 				continue
 			try:
-				cod, raspuns = self.posteaza(self.server + ruta, gz)
+				confirmata = False
+				if ruta == "sterge":
+					confirmare = {"fisier": f, "suma": hashlib.sha256(gz).hexdigest()}
+					try:
+						with open(cale("stergere-confirmata.json"), "r", encoding="utf-8") as fi:
+							confirmata = json.load(fi) == confirmare
+					except FileNotFoundError:
+						pass
+				if confirmata:
+					cod, raspuns = 200, b'{}'
+				else:
+					cod, raspuns = self.posteaza(self.server + ruta, gz)
 			except Exception as e:
 				_jurnal("trimiterea %s: %s" % (f, _mesajEroare(e)))
 				return plecate, True
-			ce, motiv = hotarareRaspuns(cod, raspuns)
-			if ce == MAI_TARZIU:
-				_jurnal("serverul a raspuns %s la %s: incerc mai tarziu" % (cod, f))
-				return plecate, True
-			_sterge(cale_fisier)
-			if ce == TRIMIS:
-				plecate += 1
-				schimbaTrimis(f, "trimis")
-				if ruta == "date":
-					schimbaStare(lambda s: s.__setitem__("ultima_trimitere", int(time.time())))
-				if ruta != "sterge":
-					try:
-						scrieAtomic(cale("ultimul.json"), gzip.decompress(gz))
-					except (OSError, IOError, EOFError) as e:
-						_jurnal("ultimul pachet: %s" % e)
-				o = _json(raspuns)
-				if ruta == "acord" and int(o.get("nota_minima") or 0) > NOTA:
-					self.rezultate.append(("nota_veche", ""))
-				if ruta == "acord":
-					self.rezultate.append(("acord_trimis", ""))
-				if ruta == "mesaj" and o.get("mesaj"):
-					self.rezultate.append(("mesaj", o.get("mesaj")))
-			else:
-				schimbaTrimis(f, "refuzat", {"motiv": motiv})
-				_jurnal("serverul a refuzat %s: %s" % (f, motiv))
-				if motiv == "nota_veche":
-					self.rezultate.append(("nota_veche", ""))
-					golesteCoadaAfaraDe("sterge")
+			with _LACAT:
+				if not cerereActuala(self):
 					return plecate, False
-				if motiv == "fara_acord" and ruta != "acord":
-					self.rezultate.append(("fara_acord", ""))
+				ce, motiv = hotarareRaspuns(cod, raspuns)
+				if ruta == "sterge" and ce != TRIMIS:
+					return plecate, True
+				if ruta == "sterge":
+					_ACORD_TRIMIS.clear()
+				if ce == MAI_TARZIU:
+					_jurnal("serverul a raspuns %s la %s: incerc mai tarziu" % (cod, f))
+					return plecate, True
+				if ruta == "sterge":
+					try:
+						# A durable acknowledgement also covers a stale queue entry after a crash.
+						scrieJson(cale("stergere-confirmata.json"), confirmare)
+						_syncDosar(DOSAR)
+						os.remove(cale_fisier)
+						_syncDosar(dosarCoada())
+					except OSError:
+						return plecate, True
+				else:
+					_sterge(cale_fisier)
+				if ce == TRIMIS:
+					plecate += 1
+					if ruta in ("sterge", "iesire"):
+						_ACORD_TRIMIS.clear()
+					schimbaTrimis(f, "trimis")
+					if ruta == "date":
+						schimbaStare(lambda s: s.__setitem__("ultima_trimitere", int(time.time())))
+					if ruta != "sterge":
+						try:
+							scrieAtomic(cale("ultimul.json"), gzip.decompress(gz))
+						except (OSError, IOError, EOFError) as e:
+							_jurnal("ultimul pachet: %s" % e)
+					o = _json(raspuns)
+					if ruta == "acord" and int(o.get("nota_minima") or 0) > NOTA:
+						self.rezultate.append(("nota_veche", ""))
+					if ruta == "acord":
+						if int(o.get("nota_minima") or 0) <= NOTA:
+							corp = _json(gzip.decompress(gz))
+							_ACORD_TRIMIS[(self.server, corp.get("id"))] = _semnaturaAcord(corp)
+						self.rezultate.append(("acord_trimis", ""))
+					if ruta == "mesaj" and o.get("mesaj"):
+						self.rezultate.append(("mesaj", o.get("mesaj")))
+				else:
+					schimbaTrimis(f, "refuzat", {"motiv": motiv})
+					_jurnal("serverul a refuzat %s: %s" % (f, motiv))
+					if motiv == "nota_veche":
+						self.rezultate.append(("nota_veche", ""))
+						golesteCoadaAfaraDe("sterge")
+						return plecate, False
+					if motiv == "fara_acord" and ruta != "acord":
+						self.rezultate.append(("fara_acord", ""))
 		return plecate, False
 
 
@@ -2465,6 +2796,7 @@ class Lucru(threading.Thread):
 	def __init__(self, inst, sarcini=(), trimite=True, es=None, utilizare=None, pornire_s=None, reporniri=None,
 			acord=False, posteaza=None, auto_zilnic=False):
 		threading.Thread.__init__(self, name="hds-beta")
+		self.generatie = _GENERATIE
 		self.daemon = True
 		self.inst = inst
 		self.sarcini = tuple(sarcini)
@@ -2483,6 +2815,8 @@ class Lucru(threading.Thread):
 
 	def run(self):
 		try:
+			if not cerereActuala(self):
+				return
 			inst = self.inst
 			if not inst.get("model") and not inst.get("paza"):
 				inst["model"], inst["paza"] = modelSiPaza()
@@ -2504,8 +2838,9 @@ class Lucru(threading.Thread):
 					if auto:
 						s["ultim_auto"] = int(time.time())
 				schimbaStare(uneste)
-			if self.trimite_ and not coadaGoala():
+			if self.trimite_ and cerereActuala(self) and not coadaGoala():
 				t = Trimitere(inst["server"], self.posteaza)
+				t.generatie = self.generatie
 				self.plecate, self.mai_tarziu = t.trimite()
 				self.rezultate.extend(t.rezultate)
 		except Exception as e:
@@ -2517,6 +2852,7 @@ class Cerere(threading.Thread):
 
 	def __init__(self, server, ruta, corp, posteaza=None):
 		threading.Thread.__init__(self, name="hds-beta-cerere")
+		self.generatie = _GENERATIE
 		self.daemon = True
 		self.url = server + ruta
 		self.corp = corp
@@ -2525,16 +2861,57 @@ class Cerere(threading.Thread):
 		self.cod = 0
 		self.raspuns = {}
 		self.eroare = ""
+		self.eroare_profil = ""
 
 	def run(self):
 		try:
-			_brut, gz = comprima(self.corp)
-			self.cod, octeti = self.posteaza(self.url, gz)
-			self.raspuns = _json(octeti)
+			with _RETEA:
+				if not cerereActuala(self):
+					return
+				acord = getattr(self, "acord", None)
+				if acord is not None:
+					self.server = _adresaServer(self.server)
+					self.url = self.server + self.ruta
+					# Keep deletion, consent and profile on the same serialized network lane.
+					t = Trimitere(self.server, self.posteaza)
+					t.generatie = self.generatie
+					_, amanat = t.trimite()
+					if amanat or any("-sterge-" in f for f in _fisiereCoada(strict=True)):
+						raise OSError("Stergerea datelor asteapta confirmarea serverului")
+					if not cerereActuala(self):
+						return
+					if not acord["model"] and not acord["paza"]:
+						acord["model"], acord["paza"] = modelSiPaza()
+					acord["versiune"] = versiuneImagine()
+					semnatura = _semnaturaAcord(acord)
+					if _ACORD_TRIMIS.get((self.server, acord["id"])) != semnatura:
+						_, gz = comprima(cuAmprenta(acord))
+						cod, octeti = self.posteaza(self.server + "acord", gz)
+						if not 200 <= cod < 300 or int(_json(octeti).get("nota_minima") or 0) > NOTA:
+							raise OSError("Acordul asteapta confirmarea serverului")
+						_ACORD_TRIMIS[(self.server, acord["id"])] = semnatura
+					with _LACAT:
+						if not cerereActuala(self):
+							return
+						try:
+							cheie = cheieProfil()
+						except (OSError, UnicodeError):
+							self.eroare_profil = "disc"
+							raise OSError("Profile key unavailable") from None
+						self.corp = dict(self.corp, cheie=cheie)
+						if not getattr(self, "fara_amprenta", False):
+							self.corp = cuAmprenta(self.corp)
+						self.corp.pop("nota", None)
+				_brut, gz = comprima(self.corp)
+				if not cerereActuala(self):
+					return
+				self.cod, octeti = self.posteaza(self.url, gz)
+				self.raspuns = _json(octeti)
 		except Exception as e:
 			self.eroare = _mesajEroare(e)
 			_jurnal("cererea %s: %s" % (self.url.rsplit("/", 1)[-1], self.eroare))
-		self.gata = True
+		finally:
+			self.gata = True
 
 
 # ------------------------------------------------------------------ mesajele testerului
@@ -2831,14 +3208,24 @@ def citesteCheie():
 def cheieProfil():
 	"""Cheia receptorului pentru profil: facuta la prima nevoie, tinuta numai in DOSAR/cheie (0600), niciodata
 	aratata."""
-	c = citesteCheie()
-	if c:
+	try:
+		with open(cale("cheie"), "r", encoding="ascii") as f:
+			c = f.read(129).strip()
+	except FileNotFoundError:
+		pass
+	else:
+		if not re.fullmatch(r"[0-9a-f]{64}", c):
+			raise OSError("Invalid saved profile key")
 		return c
 	c = os.urandom(32).hex()
 	try:
 		scrieAtomic(cale("cheie"), c.encode("ascii"), 0o600)
+		with open(cale("cheie"), "rb") as f:
+			if f.read(129) != c.encode("ascii"):
+				raise OSError("Profile key verification failed")
 	except (OSError, IOError) as e:
 		_jurnal("cheia profilului: %s" % e)
+		raise
 	return c
 
 
@@ -2850,12 +3237,35 @@ def corpProfil(ruta, b=None, **campuri):
 	return corp
 
 
+def contextProfil(b=None):
+	"""Capture config on main, without disk access; workers receive plain data."""
+	b = _b(b)
+	server = b.server.value
+	model, paza = _modelTinut()
+	acord = {"v": PROTOCOL, "id": b.id.value, "nota": int(b.nota.value), "acord": b.acord.value or None,
+		"feluri": bife(b), "model": model, "paza": paza, "ore": _oreTinute(), "limba": limba(),
+		"nume": b.nume.value, "email": b.email.value}
+	return {"server": server, "acord": acord, "generatie": _GENERATIE, "revizie": _REVIZIE_ACORD}
+
+
+def cerereProfilContext(ctx, ruta, posteaza=None, **campuri):
+	"""Prepare an unstarted request using a main-thread snapshot, also for the forum."""
+	acord = ctx["acord"]
+	c = Cerere(ctx["server"], ruta, dict({"v": PROTOCOL, "id": acord["id"], "nota": acord["nota"]}, **campuri), posteaza)
+	c.server = ctx["server"]
+	c.acord = dict(acord)
+	c.ruta = ruta
+	c.generatie = ctx["generatie"]
+	c.revizie = ctx["revizie"]
+	return c
+
+
 def cerereProfil(ruta, b=None, posteaza=None, **campuri):
 	"""Porneste cererea (pe fir) si o intoarce; ecranul sau pagina asteapta .gata."""
 	b = _b(b)
 	if not inscris(b):
 		return None
-	c = Cerere(adresaServer(b), ruta, corpProfil(ruta, b, **campuri), posteaza)
+	c = cerereProfilContext(contextProfil(b), ruta, posteaza, **campuri)
 	c.start()
 	return c
 
@@ -2880,6 +3290,12 @@ def textProfil(profil):
 
 def mesajRaspunsProfil(cerere):
 	"""Mesajul pentru om dupa o cerere de profil terminata."""
+	if not cerereActuala(cerere):
+		if getattr(cerere, "generatie", _GENERATIE) == _GENERATIE:
+			return False, _t("Setările programului s-au schimbat între timp. Cererea nu mai este valabilă.")
+		return False, _t("Cererea este de dinaintea ștergerii datelor și nu mai este valabilă.")
+	if getattr(cerere, "eroare_profil", "") == "disc":
+		return False, _t(CHEIE_DISC)
 	if cerere.eroare or not cerere.cod:
 		return False, _t("Serverul nu răspunde acum. Încearcă mai târziu.")
 	if 200 <= cerere.cod < 300:
@@ -3212,7 +3628,8 @@ def textUltimaTrimitere(secunde, acum=None):
 
 
 def randUltimaTrimitere():
-	return textUltimaTrimitere(citesteStare().get("ultima_trimitere"))
+	dosar, generatie, secunde = _ULTIMA_TRIMITERE
+	return textUltimaTrimitere(secunde if dosar == DOSAR and generatie == _GENERATIE else None)
 
 
 def trimiteAcum():
@@ -3300,6 +3717,8 @@ def tic(acum=None):
 
 def _tic(acum=None):
 	b = initConfig()
+	if not _reiaStergerea(b):
+		return
 	acum = time.monotonic() if acum is None else acum
 	sesiune = _starea.get("sesiune")
 	stare_tv = _stareTelevizor(sesiune) if sesiune is not None else {"standby": True}
@@ -3402,6 +3821,8 @@ def _culegeRezultate(b):
 	if lucru is None or lucru.is_alive():
 		return
 	_starea["lucru"] = None
+	if not cerereActuala(lucru):
+		return
 	if getattr(lucru, "plecate", 0):
 		_starea["raspunsuri_datorat"] = True
 	if lucru.mai_tarziu:
@@ -3429,7 +3850,7 @@ def _verificaRaspunsuri(b, acum, pornit, stare_tv, sesiune):
 		if not c.gata:
 			return
 		_starea["cerere_raspunsuri"] = None
-		if 200 <= c.cod < 300 and isinstance(c.raspuns, dict):
+		if cerereActuala(c) and 200 <= c.cod < 300 and isinstance(c.raspuns, dict):
 			tineRaspunsuri(c.raspuns)
 			_starea["de_anuntat"] = bool(deAnuntat())
 	elif _starea["raspunsuri_datorat"] or (not _starea["raspunsuri_pornire"] and acum - pornit >= PRIMA_CULEGERE_S):

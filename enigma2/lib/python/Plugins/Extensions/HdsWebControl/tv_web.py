@@ -317,9 +317,9 @@ def peWasm(T, video, wasm, h264):
 
 def argumente(request, chei=("ref", "id", "hevc", "h264", "ac3", "wasm", "permis", "standby", "sesiuni_max", "asteptare", "preia",
 		"pid", "l", "grup", "nume", "urmeaza")):
-	"""Argumentele cererii ca text scurt: {cheie: text}, numai cheile stiute, fara token."""
+	"""Argumentele cererii ca text: {cheie: text}, numai cheile stiute, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:12]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in chei:
@@ -328,9 +328,7 @@ def argumente(request, chei=("ref", "id", "hevc", "h264", "ac3", "wasm", "permis
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
 		text = str(v).strip()
-		# Referintele DAB/online includ adresa fluxului, mult peste lungimea DVB.
-		# O referinta prea lunga se respinge intreaga, nu se reda o adresa taiata.
-		rez[cheie] = (text if len(text) <= 8192 else "") if cheie == "ref" else text[:64]
+		rez[cheie] = text
 	return rez
 
 
@@ -387,6 +385,14 @@ def stare(cine, H=None, M=None, ref_tv=None, nume_tv=None):
 	})
 	if a_mea is not None:
 		d["a_mea"].update(dateRadio(a_mea.ref, a_mea.nume, a_mea, T, ref_tv))
+	if a_mea is not None and ref_tv and T.refCurata(a_mea.ref) == T.refCurata(ref_tv):
+		try:
+			from Components import HdsVorbireTV, HdsSubtitrariAspect
+			v = HdsVorbireTV.activ() or HdsVorbireTV.nativa()
+			if v:
+				d["vorbire"] = {"text": HdsVorbireTV.textCurent(v), "aspect": HdsSubtitrariAspect.stare()}
+		except Exception:
+			pass
 	return d
 
 
@@ -1215,9 +1221,7 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 
 	def _doarBrowser(self, request):
 		"""Pornirea si fluxul: numai din browser, niciodata cu ?token= (nicio cheie in adresa)."""
-		from . import plugin as P
-		if P.PARAM_JETON in request.args:
-			return self._eroare(request, _t("Transmisia se pornește numai din pagina TV în browser, cu browserul conectat."), 403)
+		# REGULA 0, WEB8: si cu ?token=
 		return None
 
 	def _poartaPagina(self, request):
@@ -1228,11 +1232,9 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 		if refuz is not None:
 			return refuz, None, None, None
 		secret, browser, adresa = _browser(request)
-		if browser is None or not P.obtineAsociere().csrfValid(secret, P._antet(request, P.ANTET_CSRF.encode("ascii"))):
+		# REGULA 0, WEB8: fara antetul CSRF si fara aceeasi origine; ramane numai parola pusa de om
+		if browser is None:
 			return self._eroare(request, _t("Cerere respinsă: lipsește antetul paginii."), 403), None, None, None
-		origin, referer = P._antet(request, b"origin"), P._antet(request, b"referer")
-		if (origin or referer) and not P._acelasiOriginCerere(request):
-			return self._eroare(request, _t("Cerere respinsă: nu vine dintr-o pagină a receptorului."), 403), None, None, None
 		return None, secret, browser, adresa
 
 	class StareResource(baza):
@@ -1303,11 +1305,9 @@ def rute(baza, resource, amanat, H=None, M=None, O=None, A=None):
 			if refuz is not None:
 				return refuz
 			secret, browser, adresa = _browser(request)
-			if browser is None or not P.obtineAsociere().csrfValid(secret, P._antet(request, P.ANTET_CSRF.encode("ascii"))):
+			# REGULA 0, WEB8: fara antetul CSRF si fara aceeasi origine; ramane numai parola pusa de om
+			if browser is None:
 				return self._eroare(request, _t("Cerere respinsă: lipsește antetul paginii."), 403)
-			origin, referer = P._antet(request, b"origin"), P._antet(request, b"referer")
-			if (origin or referer) and not P._acelasiOriginCerere(request):
-				return self._eroare(request, _t("Cerere respinsă: nu vine dintr-o pagină a receptorului."), 403)
 			m = _m(H, M)
 			ses = m.sesiunePentru(cineDinBrowser(browser, adresa))
 			if ses is None:

@@ -97,6 +97,7 @@ import re
 import stat
 import threading
 import time
+from types import MappingProxyType
 
 try:
 	from Components import HdsIndexCanale as _X
@@ -260,6 +261,18 @@ _RE_OBIECT_VF = re.compile(r'"vf":\{([^{}]*)\}')
 # indexului peste baza (Index.aplica_treptat cheama cheie() de doua ori pe fiecare canal: masuratorile si pistele). Un
 # index nou isi pune tabelul lui; ce nu e in tabel se calculeaza ca inainte, fara sa fie tinut minte.
 _CHEI = {}
+_HEX_CANONIC = r"(?:0|[1-9a-f][0-9a-f]{0,7})"
+_RE_CANONICA_DVB = re.compile(r"(?:0|[1-9a-f][0-9a-f]{0,7})(?::(?:0|[1-9a-f][0-9a-f]{0,7})){3}\Z")
+_RE_CANONICA_FLUX = re.compile(r"(?:0|[1-9][0-9]{0,15}):(?:0|[1-9][0-9]{0,15})(?::" + _HEX_CANONIC + r"){8}:([^:]+)\Z")
+
+
+def _cheie_canonica(k):
+	"""Recognize only fixed points of the existing key normalizer."""
+	if _RE_CANONICA_DVB.match(k):
+		return True
+	m = _RE_CANONICA_FLUX.match(k)
+	return bool(m and k == k.lower() and k == k.strip())
+
 
 
 def cheie(ref_sau_cheie):
@@ -279,7 +292,7 @@ def tabel_chei(chei):
 	for k in chei:
 		if k.__class__ is not str or k in tabel:
 			continue
-		r = _cheie_calculata(k)
+		r = k if _cheie_canonica(k) else _cheie_calculata(k)
 		if r is not None:
 			tabel[k] = k if r == k else r
 	return tabel
@@ -1362,6 +1375,7 @@ class BazaCanale(object):
 		# apelantul isi aduce firul de scriere (probele), citirea se face pe loc, daca nu-si aduce si firul ei
 		self._porneste_citire = porneste_citire or (_fir_citire_implicit if porneste_fir is None else _citire_pe_loc)
 		self._precitire = None
+		self._incarcare_index = None
 
 	def _goleste(self):
 		self._c = {}
@@ -1429,7 +1443,7 @@ class BazaCanale(object):
 		fundal cel mult ASTEPTARE_FIR_S."""
 		self._stare, self._motiv = OPRIT, None
 		fir = self._fir
-		if fir is not None and fir.is_alive():
+		if fir is not None and fir.is_alive() and not self._citire_index_activa():
 			fir.join(ASTEPTARE_FIR_S)
 		self._jurnal("scrieri oprite")
 
@@ -1833,6 +1847,65 @@ class BazaCanale(object):
 			self._jurnal("rand %s de %d o, peste %d: pastrat neatins, valorile noi pentru el nu se scriu" % (k,
 				len(text), RAND_CITIT))
 		return True
+
+	def fotografie_index(self):
+		"""Immutable text rows; called only by the owner of the database."""
+		self._asigura()
+		return (self._v_fisier, MappingProxyType(self._c.copy()))
+
+	def _citire_index_activa(self):
+		"""A cold reader owns recovery too; never wait for it on the owner thread."""
+		return self._incarcare_index is not None and not self._incarcare_index[0].is_set()
+
+	def pregateste_index(self):
+		"""Cold initialization on a private worker; publish memory only on the owner."""
+		if self._incarcat and self._incarcare_index is None:
+			return
+		if self._incarcare_index is None:
+			# Do not replace an outstanding writer in the shared thread registry.
+			while self._fir is not None and self._fir.is_alive():
+				yield
+			jurnal, gata = [], threading.Event()
+			# The private database owns all loading and recovery work, including filesystem errors.
+			acum = self._ceas()
+			privata = BazaCanale(cale=self.cale, ceas=lambda: acum, fs=self._fs,
+				jurnal=jurnal.append, imagine=self._imagine)
+			privata._precitire = self._precitire
+			lacat = self._lacat
+			def incarca():
+				try:
+					# Recovery cleanup cannot overlap a writer that started during this read.
+					with lacat:
+						privata.incarca()
+				finally:
+					gata.set()
+			fir = threading.Thread(target=incarca, name='HdsBazaIndexCitire')
+			fir.daemon = True
+			vechi_fir = self._fir
+			self._fir = fir
+			self._incarcare_index = (gata, privata, jurnal)
+			try:
+				fir.start()
+			except BaseException:
+				self._fir = vechi_fir
+				self._incarcare_index = None
+				raise
+		gata, privata, jurnal = self._incarcare_index
+		while not gata.wait(0.001):
+			yield
+		if self._stare == OPRIT or self._oprire:
+			self._incarcare_index = None
+			raise RuntimeError(_('Baza canalelor s-a schimbat în timpul pregătirii indexului.'))
+		if not self._incarcat:
+			# Preserve live runtime objects, writer state and configuration.
+			for a in ('_c', '_t', '_altele', '_octeti', '_antet', '_v_fisier', '_sarite',
+					'_rele_la_citire', '_viu_bun', '_stare', '_motiv', '_ultima_incercare',
+					'_incarcare_ms', '_ultima_scriere', 'versiune', 'versiune_scrisa',
+					'_versiune_toate', '_versiune_grupa', '_incarcat', '_precitire'):
+				setattr(self, a, getattr(privata, a))
+			for text in jurnal:
+				self._jurnal(text)
+		self._incarcare_index = None
 
 	def cauta(self, ref_sau_cheie, rezerva=False):
 		"""Randul desfacut al canalului (o copie), sau None.
@@ -2705,7 +2778,7 @@ class BazaCanale(object):
 			return False
 		fir = self._fir
 		if fir is not None and fir.is_alive():
-			if not sincron:
+			if not sincron or self._citire_index_activa():
 				return False
 			fir.join(ASTEPTARE_FIR_S)
 			if fir.is_alive():
@@ -2725,6 +2798,8 @@ class BazaCanale(object):
 		self._oprire = True
 		fir = self._fir
 		if fir is not None and fir.is_alive():
+			if self._citire_index_activa():
+				return False
 			fir.join(asteapta_s)
 			if fir.is_alive():
 				self._jurnal("scrierea din fundal nu s-a terminat; scrierea de la oprire sarita")
@@ -2915,6 +2990,29 @@ def baza_existenta():
 # ---------------------------------------------------------------- privirea adaptoarelor (fara toata baza in memorie)
 
 MEMORIE_VEDERE = 64
+
+
+def desface_fotografie_index(fotografie, chei=None, functii=(), anulat=None, ritm=None):
+	"""Decode private immutable rows without reading or changing the database."""
+	v, randuri = fotografie
+	rez, sarite = {}, set()
+	for k, text in randuri.items():
+		if ritm is not None:
+			ritm()
+		if anulat is not None and anulat():
+			break
+		if chei is not None and k not in chei:
+			continue
+		if text is None:
+			continue
+		r = _loads(text) if len(text) <= RAND_CITIT else None
+		if not isinstance(r, dict) or r.get("k") != k:
+			sarite.add(k)
+			continue
+		if v > VERSIUNE:
+			r = dict((c, x) for c, x in r.items() if c in _CHEI_CANAL)
+		rez[k] = tuple(f(r) for f in functii) if functii else r
+	return rez, sarite
 
 
 class Vedere(object):

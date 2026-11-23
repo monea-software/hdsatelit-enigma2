@@ -19,7 +19,8 @@
 //  1. Ora de la UN SINGUR multiplex se foloseste pe loc (EPG, bara), dar e PROVIZORIE: inainte poate sari oricat, inapoi
 //     nu sub limita de jos (cu TOLERANTA_S).
 //  2. Ora devine SIGURA prin NTP (confirmaInternet), printr-un RTC adevarat (rtcCredibil) sau cand DOUA multiplexuri
-//     diferite dau aceeasi ora: cel mult TOLERANTA_S intre ele, socotit pe ceasul monoton (ora transponderului minus
+//     din retele diferite, cu ONID cunoscute (nici 0, nici 0xffff), dau aceeasi ora: cel mult TOLERANTA_S intre ele,
+//     socotit pe ceasul monoton (ora transponderului minus
 //     ceasul monoton).
 //  4. Doua multiplexuri de acord castiga si impotriva orei provizorii (si inapoi, dar nu sub limita de jos);
 //     multiplexurile care nu se potrivesc cu ele sunt respinse pentru ceas pana la iesirea enigma2 (la fel dupa NTP).
@@ -108,6 +109,9 @@ namespace hdsceas
 	long long minimImagine(long long minim);
 	// un RTC e crezut numai daca ora lui e dupa data construirii, inainte de ORA_MAXIMA si la cel mult TOLERANTA_S de ceas
 	bool rtcCredibil(long long ora_rtc, long long acum_perete, long long minim);
+	// RTC-ul de la pornire face ora sigura numai cand exista (ora_rtc != 0), nu e ecoul ceasului sistemului (ecou: nodul
+	// /proc/stb/fp/rtc al driverului HiSilicon, vezi hdsRtcEcou in dvbtime.cpp) si e rtcCredibil
+	bool rtcLaPornire(long long ora_rtc, bool ecou, long long acum_perete, long long minim);
 	// starea de la pornire: ora_salvata = ultima ora sigura salvata (0 daca lipseste), minim = data construirii (0 = rezerva)
 	Ceas incepe(long long acum_perete, long long acum_mono, long long ora_salvata, bool rtc, long long minim);
 	// o citire TDT/TOT de pe multiplexul mux; acum_perete = ceasul de perete de acum (inainte de citire)

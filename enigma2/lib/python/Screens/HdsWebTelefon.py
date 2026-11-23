@@ -71,8 +71,8 @@ def numeLocal():
 	"""Numele .local publicat ACUM de avahi (hdsatelit.local, hdsatelit2.local), sau "" (nescris pe ecran: un nume care
 	nu raspunde l-ar trimite pe om exact unde nu merge)"""
 	try:
-		from Components.HdsComutareRetea import nume_local_confirmat
-		return nume_local_confirmat()
+		from Components.HdsComutareRetea import nume_local_stiut
+		return nume_local_stiut()
 	except Exception as e:
 		print("[HdsWebTelefon] numele .local: %r" % (e,))
 		return ""

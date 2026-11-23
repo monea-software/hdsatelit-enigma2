@@ -80,7 +80,7 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 
 		self._adresa = adresaWeb()
 		# parola pentru aplicatii si cheia pentru scripturi: ascunse la fiecare deschidere
-		self._arata = False
+		self._arata = True
 		self._dialogPropriu = 0
 		self._ceasArata = eTimer()
 		self._ceasArata.callback.append(self._ascundeSecrete)
@@ -190,8 +190,6 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 		except Exception as eroare:
 			print("[HdsWebControlSetup] parola pentru aplicatii: %s" % eroare)
 			parola, vazute = "?", []
-		if not self._arata:
-			parola = _neaaratata()
 		if self._parolaWeb():
 			# cu parola omului bifata la interfata web, aplicatiile o cer si acasa (aplicatii_web._poarta)
 			randuri = [_("Aplicații de telefon: și acasă scrii utilizatorul root și parola ta (pusă în Parola "
@@ -223,13 +221,13 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 
 	def _arataSecrete(self):
 		self._arata = True
-		self._ceasArata.start(5 * 60 * 1000, True)
+		self._ceasArata.stop()
 		self._actualizeazaAplicatii()
 		self._actualizeazaTextJeton()
 
 	def _ascundeSecrete(self):
 		self._ceasArata.stop()
-		self._arata = False
+		self._arata = True
 		self._actualizeazaAplicatii()
 		self._actualizeazaTextJeton()
 
@@ -300,13 +298,12 @@ class HdsWebControlSetup(Screen, ConfigListScreen):
 	def _actualizeazaTextJeton(self):
 		# cererile scripturilor catre /api/... au nevoie de aceasta cheie
 		# (parametrul token=); afisata aici ca programatorul s-o poata copia. Browserul obisnuit nu are nevoie de ea.
-		cheie = config.plugins.hdswebcontrol.token.value if self._arata else _neaaratata()
+		cheie = config.plugins.hdswebcontrol.token.value
 		self["jeton"].setText(_("Cheie pentru scripturi (doar pentru programatori): %s") % cheie)
 
 	def _alteOptiuni(self):
 		from Screens.ChoiceBox import ChoiceBox
 		self._deschideDialog(self._optiuneAleasa, ChoiceBox, title=_("Alte opțiuni"), list=[
-			(_("Ascunde parola și cheia"), "ascunde") if self._arata else (_("Arată parola și cheia"), "arata"),
 			(_("Cheie nouă pentru panoul web"), "cheie"),
 			(_("Parolă nouă pentru aplicații"), "parola_aplicatii"),
 		])

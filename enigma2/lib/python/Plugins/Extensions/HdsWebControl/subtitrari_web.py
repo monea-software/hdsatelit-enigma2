@@ -53,8 +53,6 @@ def _t(text):
 	except NameError:
 		return text
 
-MAX_TEXT = 80
-MAX_ARGUMENTE = 24
 CONTOR_WEB_S = 5
 
 def N_(text):
@@ -285,17 +283,18 @@ def implicite(M=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, fara token."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token. REGULA 0 (pana dupa 1.0): toate campurile, cu valoarea
+	intreaga, fara filtru pe numele cheilor."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:MAX_ARGUMENTE]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 20:
+		if cheie == "token":
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_TEXT].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 

@@ -5,7 +5,7 @@ intrarea standard (o comanda pe rand), starea iese pe iesirea standard (randuri 
 de enigma2, pornit la cerere; intra in imagine prin hdsatelit-base. Monea Software pentru HD Satelit."
 LICENSE = "GPL-2.0-only & MIT"
 LIC_FILES_CHKSUM = "file://hds-navigator.c;beginline=2;endline=3;md5=fb87bc14f85a0e8e73d2e038b3c2f7e1 \
-                    file://hds-hbbtv.js;beginline=2744;endline=2762;md5=a27e35cdfe59b078f9273144a89e57db"
+                    file://hds-hbbtv.js;beginline=2858;endline=2876;md5=a27e35cdfe59b078f9273144a89e57db"
 PV = "0.7.0"
 # r1: la repornirea pe procesor (GL cazut) procesele WebKit ale incercarii cu GL se culeg inainte de execv (nu mai raman
 # zombi pana la inchiderea aplicatiei)
@@ -45,7 +45,10 @@ PV = "0.7.0"
 # parinte; aplicatia ERT de pe ERT World 39,0E): elementsFromPoint nu-l intorcea, deci scena aplicatiei ramanea opaca peste
 # film (sunet, ecran negru); pe durata cautarii o regula a stratului face tinta orice element. Nota MIT neschimbata, mutata
 # cu randurile adaugate (+45).
-PR = "r15"
+# r16 (0.7.8, CR2): hds-hbbtv.js: pe paginile aplicatiei TVP manager (hub-ul TVP GO al TVP 1 de pe satelit, in afara de
+# virtual-channel) cand "Trwa wczytywanie" sta pe ecran 30 s fara film: un rand in jurnalul paginii cu cererile neterminate
+# si o singura reincarcare (asistenta 764371, Vu+ Uno 4K SE). Nota MIT neschimbata, mutata cu randurile adaugate (+114).
+PR = "r19"
 
 SRC_URI = "file://hds-navigator.c file://hds-hbbtv.js"
 S = "${UNPACKDIR}"

@@ -222,6 +222,10 @@ def InitUsageConfig():
 		("tv", N_("Ambele deschid lista TV")), ("radio_radio", N_("Ambele deschid lista radio")),
 		("zap", N_("Schimbă canalul (sus: următorul)")),
 		("zap_invers", N_("Schimbă canalul (sus: anteriorul)"))])
+	# HDSatelit CUR6 (tamiciav7, LinuxSat 164122 #971593): lista deschisa cu SUS/JOS (Screens/InfoBarGenerics.py,
+	# _hdsSageata; Components/HdsSageti.cursor_pe_canal) are cursorul pe canalul care merge. Nu din fabrica: un rand mai
+	# sus sau mai jos, ca pana acum. data/setup.xml (usage), in web /setari?id=usage
+	config.usage.hds_sageata_cursor = ConfigYesNo(default = False)
 	config.usage.hds_ok_privire = ConfigSelection(default = "bara", choices = [
 		("bara", N_("Arată bara de informații")), ("lista", N_("Deschide lista de canale"))])
 	from Components.HdsTasteRapide import initConfigProfil
@@ -229,6 +233,8 @@ def InitUsageConfig():
 	config.usage.hds_stanga_dreapta_privire = ConfigSelection(default = "actual", choices = [
 		("actual", N_("Comportamentul obișnuit")),
 		("volum", N_("Volumul (stânga mai încet, dreapta mai tare)"))])
+	# Navigarea circulara a listei; dalele isi pastreaza navigarea.
+	config.usage.hds_meniu_circular = ConfigYesNo(default=False)
 	# HDSatelit: cum se misca meniurile, listele de alegere si ecranele de setari la marginea ecranului (Components/Renderer/
 	# Listbox.py, margineDerulare -> eListbox.setScrollMargin): rand cu rand, cu doua randuri vazute sub cursor (implicit),
 	# sau pagina cu pagina, ca inainte; lista de canale si ghidul raman pe pagini. Se aplica meniurilor deschise dupa schimbare
@@ -318,7 +324,7 @@ def InitUsageConfig():
 	config.usage.hds_progres_lista_pozitie = ConfigSelection(default = "stanga", choices = [
 		("stanga", N_("Stânga (înainte de nume)")), ("dreapta", N_("Dreapta (după nume)"))])
 	config.usage.hds_randuri_lista = ConfigSelection(default = "tema", choices = [
-		("tema", N_("După temă"))] + [(str(n), str(n)) for n in (8, 10, 12, 14, 16, 18, 20)])
+		("tema", N_("După temă"))] + [(str(n), str(n)) for n in range(1, 41)])
 	# HDSatelit (0.7.5, tamiciav7, LinuxSat 164126): marimea textului in lista de canale, separata de randurile pe pagina.
 	# Fiecare pas = 10% din marimea temei (-3 = 70%, +5 = 150%) pentru nume, descriere, numar si bara de progres; cu
 	# „Rânduri pe pagină” După temă si randul creste sau scade cu textul, deci si sigla. Components/ServiceList.py (setMode)
@@ -335,14 +341,18 @@ def InitUsageConfig():
 				lista.setMode(lista.mode)
 		except Exception as e:
 			print("[UsageConfig] lista de canale: %s" % e)
-	config.usage.hds_marime_text_lista.addNotifier(_hdsListaCanaleReface, initial_call=False)
-	config.usage.hds_randuri_lista.addNotifier(_hdsListaCanaleReface, initial_call=False)
 	# HDSatelit (0.7.5, tamiciav7, LinuxSat; Eduard 13.11 22:27: optiune, nu din fabrica): aspectul listei de canale. „Obișnuit”
 	# = ecranele de pana acum ale temei; „Lista mare” = pe tot ecranul, lista pe ~2/3 in stanga, imaginea canalului si ghidul in
 	# dreapta, tastele colorate in dreapta jos (ecranele HdsListaCanaleMare* din tema). Se vede pe loc, fara repornire
 	# (Components/HdsAspectLista.py); marimea textului si randurile pe pagina se aplica si peste lista mare
 	config.usage.hds_aspect_lista = ConfigSelection(default = "obisnuit", choices = [
-		("obisnuit", N_("Obișnuit")), ("mare", N_("Lista mare"))])
+		("obisnuit", N_("Obișnuit")), ("mare", N_("Lista mare")),
+		("doua_randuri", N_("Două rânduri")), ("mare_doua_randuri", N_("Lista mare, două rânduri"))])
+	from Components.HdsAspectLista import initCompatLista
+	initCompatLista(config.usage)
+	config.usage.hds_marime_text_lista.addNotifier(_hdsListaCanaleReface, initial_call=False)
+	config.usage.hds_randuri_lista.addNotifier(_hdsListaCanaleReface, initial_call=False)
+	config.usage.hds_aspect_lista.addNotifier(_hdsListaCanaleReface, initial_call=False)
 
 	def _hdsAspectLista(configElement):
 		try:
@@ -354,6 +364,10 @@ def InitUsageConfig():
 	# HDSatelit: in lista 'Sateliți' (Screens/ChannelSelection.py, hdsUmpleSateliti) si randurile 'Furnizori' si 'Nou' ale
 	# fiecarui satelit, sub antetul lui; oprita din fabrica: un singur rand pe satelit (furnizorii pe tasta galbena)
 	config.usage.hds_lista_furnizori_nou = ConfigYesNo(default = False)
+	# HDSatelit OKP6 (yazoo, forum 1936): OK in lista de canale previzualizeaza canalul (Screens/ChannelSelection.py,
+	# hdsPrevizualizeaza); Nu din fabrica = OK porneste canalul si inchide lista, ca pana acum. In web
+	# /setari?id=hds_lista_canale (data/setup.xml)
+	config.usage.hds_ok_previzualizare = ConfigYesNo(default = False)
 	# HDSatelit (0.7.4): 'Actualizează lista de canale la privit' (data/setup.xml, sectiunea usage; in web /setari?id=usage).
 	# Pornita din fabrica, ca pana acum: la canalul privit, lib/dvb/pmt.cpp (SDTScanEvent) pune in lista ce gaseste
 	# scanarea transponderului (canalele noi, numele la zi, deci si canalele sterse de om). Oprita: lista ramane cum a
@@ -376,6 +390,11 @@ def InitUsageConfig():
 	# Oprita, functia nu mai face nimic in fundal: nicio cerere la furnizor, nicio scriere.
 	# ghidul TV cerut singur la ~90 s dupa pornirea interfetei (Components/HdsIptvLucru._zilnic)
 	config.usage.hds_iptv_ghid_pornire = ConfigYesNo(default = True)
+	config.usage.hds_iptv_fereastra = ConfigYesNo(default = True)
+	# EXL6 (22.11.2026): EXIT tinut apasat inchide fereastra pasilor pana la urmatoarea pornire a unui canal
+	# (Components/HdsIptvRedare.Legatura._tastaExit, contextul HdsIptvFereastraActions din keymap.xml); Nu din fabrica,
+	# deci EXIT ramane cum era
+	config.usage.hds_iptv_fereastra_exit = ConfigYesNo(default = False)
 	# semnul canalelor care n-au pornit ultima data, cu motivul (Components/HdsIptvSurse.noteazaNefunctional)
 	config.usage.hds_iptv_semn = ConfigYesNo(default = True)
 	# timpul mediu de pornire la ultimele 5 porniri (Components/HdsIptvSurse.notaPornire), tinut in memorie si scris rar
@@ -395,6 +414,7 @@ def InitUsageConfig():
 	# siglele canalelor de internet aduse din lista furnizorului (Components/HdsIptvSigle.py); starea contului Xtream (expira,
 	# conexiunile) citita numai cand omul deschide IPTV pe televizor sau in web (HdsIptvClient.stareContXtream)
 	config.usage.hds_iptv_reconectare = ConfigYesNo(default = True)
+	config.usage.hds_iptv_recuperare_rapida = ConfigYesNo(default = False)
 	config.usage.hds_iptv_sigle = ConfigYesNo(default = True)
 	config.usage.hds_iptv_cont = ConfigYesNo(default = True)
 	# emisiunile trecute (arhiva furnizorului Xtream), din MENU pe canal (Screens/HdsIptvArhiva.py); lista ceruta numai la deschidere
@@ -517,6 +537,15 @@ def InitUsageConfig():
 	except Exception as eroare:
 		print("[UsageConfig] HdsAccel2D: %s" % eroare)
 
+	# HDSatelit (ION1): Dreambox DM7080/DM820/DM900/DM920/DM520, memoria ecranului si accelerarea prin ION, oprita din
+	# fabrica; setarea pune sau scoate /etc/enigma2/hds-dreambox-ion, citit de lib/gdi/fb.cpp la urmatoarea pornire a
+	# interfetei; pe alte receptoare randul nu se arata (Components/HdsDreamboxIon.py)
+	try:
+		from Components import HdsDreamboxIon
+		HdsDreamboxIon.initConfig()
+	except Exception as eroare:
+		print("[UsageConfig] HdsDreamboxIon: %s" % eroare)
+
 	# HDSatelit: IPv6, oprit din fabrica; setarea pune sau scoate semnul /etc/hds-ipv6-pornit si aplica pe loc
 	# (disable_ipv6, clientul odhcp6c); aici starea semnului se aplica o data, la pornirea interfetei
 	# (Components/HdsIpv6.py)
@@ -600,6 +629,9 @@ def InitUsageConfig():
 		HdsTunerRezerva.initConfig()
 	except Exception as eroare:
 		print("[UsageConfig] HdsTunerRezerva: %s" % eroare)
+	from Components import HdsTunerAspect
+	HdsTunerAspect.initConfig()
+
 
 def updateChoices(sel, choices):
 	if choices:

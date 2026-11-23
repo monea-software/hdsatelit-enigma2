@@ -491,7 +491,7 @@ def opresteSwap(argumente, S=None, hm=None, consola=None):
 # ------------------------------------------------------------------ cererile
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt, numai cheile stiute, fara token."""
+	"""Argumentele cererii ca text, numai cheile stiute, fara token."""
 	C = _c()
 	rez = C.argumente(request, ("cale", "dosar", "parinte", "valoare", "punct"), MAX_CALE)
 	rez.update(C.argumente(request, ("nume",), MAX_NUME))

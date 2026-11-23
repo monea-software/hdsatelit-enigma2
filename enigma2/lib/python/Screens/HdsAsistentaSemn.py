@@ -14,7 +14,9 @@
 #     inlocuieste pe altul), si concluziile echipei (op "concluzii"), in fereastra modala HdsAsistentaConcluzii, care
 #     sta pana la OK: o data cand sosesc si inca o data la sfarsitul sesiunii, cu multumirile; si intrebarile echipei
 #     (op "intrebare", 0.7.7): o fereastra Da/Nu (MessageBox) cu variantele, peste orice ecran, inchisa inainte ca
-#     raspunsul sa plece la echipa (_intrebare), cu fereastra mesajului ascunsa cat sta;
+#     raspunsul sa plece la echipa (_intrebare), cu fereastra mesajului ascunsa cat sta; din 0.7.8 si raspunsul scris
+#     ("*" in variante): randul "Scrie răspunsul" deschide tastatura de pe ecran (VirtualKeyBoard), care devine fereastra
+#     intrebarii; EXIT sau un text gol intorc la intrebare;
 #   - ctxReceptor(session): settings de acum pentru copia facuta cand intra echipa („Pune înapoi cum era”, setari_acum,
 #     pe firul enigma2) si uneltele date brokerului care au nevoie de receptor: captura video cu OSD, JPEG mic, aceeasi
 #     cu ce e pe televizor (fara ecrane ascunse si fara steluțe).
@@ -25,9 +27,12 @@
 #   - porneste(...) si reia(session): pornirea unei sesiuni cu ctx-ul potrivit (de pe receptor sau din web) si reluarea
 #     dupa repornirea interfetei (chemata din mytest.py);
 #   - puneInapoi(session): Albastru "Pune înapoi cum era" de pe ecranele asistentei (intrebarea, cererea, repornirea).
+#   - PesteNavigator (0.7.8, ASV4): intrebarile, mesajele, concluziile si anunturile se vad si primesc tastele si cat
+#     navigatorul (HbbTV sau web) tine ecranul: navigatorul se ascunde inainte si revine o data dupa ultima fereastra.
 # Nu se importa la incarcarea mytest.py nimic greu; functiile se cheama la nevoie.
 
 import subprocess
+import sys
 
 from enigma import eTimer
 
@@ -97,6 +102,136 @@ TEXT_OPRESTI = N_("Oprești oricând din %s")
 TEXT_CONECTAT = N_("Echipa HD Satelit s-a conectat. Poți folosi receptorul ca de obicei.")
 
 
+# ---------------------------------------------------------------- peste navigator (HbbTV sau web)
+#
+# 0.7.8 (ASV4): navigatorul (Plugins/Extensions/HdsNavigator/lansator.py) e un proces separat
+# care, cat e pe ecran, tine stratul grafic (fbClass.lock: enigma2 nu mai deseneaza) si telecomanda (bindAction cu
+# prioritatea -0x7FFFFFFF; in modul HbbTV o leaga Components/HdsHbbtvPornire.Controlor). O fereastra a asistentei
+# deschisa atunci (intrebarea, mesajul, concluziile) era nevazuta, iar tastele mergeau la aplicatie; EXIT inchidea si
+# aplicatia HbbTV (Controlor._tasta -> inchide). Ca la pluginul HbbTV din OE-Alliance (fereastra enigma2 numai cu fb si
+# rc deblocate, apoi blocate la loc), inainte de fereastra navigatorul se ascunde prin contractul lui (ascunde/reia,
+# aceleasi ca la ferestrele cerute de pagina) si tastele Controlorului se dezleaga; dupa ultima fereastra totul se pune
+# la loc o singura data. Pagina nu afla nimic (fara evenimentul "vizibil"), aplicatia nu se inchide, canalul nu se
+# schimba. Fara navigator nimic nu se schimba fata de 0.7.7. Numai citiri de atribute in memorie (sys.modules), fara
+# importuri, disc sau asteptari pe firul enigma2.
+
+def _navigatorSiControlor():
+	"""(modulul lansator sau None, navigatorul deschis sau None, controlorul HbbTV sau None), numai din ce e deja incarcat:
+	un modul neincarcat inseamna ca nu s-a deschis nimic de la pornire."""
+	L = sys.modules.get("Plugins.Extensions.HdsNavigator.lansator")
+	nav = None
+	if L is not None:
+		try:
+			nav = L.activ()
+		except Exception:
+			nav = None
+	c = None
+	P = sys.modules.get("Components.HdsHbbtvPornire")
+	if P is not None:
+		lista = getattr(P, "_CONTROLOR", None) or []
+		c = lista[0] if lista else None
+	return L, nav, c
+
+
+class PesteNavigator(object):
+	"""Contractul ferestrelor asistentei peste navigator: gata() inainte de fiecare fereastra, reda() dupa ultima. Jetonul
+	tine minte ce am facut noi (navigatorul ascuns, tastele Controlorului dezlegate) si pe cine; reda() pune la loc numai
+	atat, o singura data, si numai daca e acelasi navigator si mai are nevoie (pagina ascunsa intre timp de aplicatie
+	ramane ascunsa, o pagina inchisa nu mai are ce relua)."""
+
+	def __init__(self, gaseste=None):
+		self._gaseste = gaseste or _navigatorSiControlor
+		self._jeton = None
+
+	@staticmethod
+	def _const(L, nume):
+		return getattr(L, nume, nume.lower())
+
+	def _lucreaza(self, L, nav, c):
+		"""Navigatorul tine ecranul (pe ecran sau ascunderea inca in curs) sau Controlorul HbbTV tine tastele."""
+		if nav is not None and (nav.stare == self._const(L, "ARATAT") or getattr(nav, "_fb_blocat", False)):
+			return True
+		return c is not None and c.nav is not None and bool(getattr(c, "_taste", False))
+
+	def tine(self):
+		"""O fereastra a asistentei deschisa acum ar fi sub navigator sau i-ar lua aplicatia tastele (sau am suspendat noi
+		navigatorul pentru o fereastra)."""
+		try:
+			L, nav, c = self._gaseste()
+			if self._jeton is not None and self._jeton["nav"] is not nav:
+				self.reda()      # navigatorul suspendat s-a inchis: nimic de pus la loc pe altul
+			return self._jeton is not None or self._lucreaza(L, nav, c)
+		except Exception as e:
+			_jurnal("navigatorul: %r" % (e,))
+			return False
+
+	def suspendat(self):
+		return self._jeton is not None
+
+	def gata(self, trezeste=None):
+		"""Inainte de o fereastra a asistentei: True cand se poate deschide acum (ecranul si tastele sunt ale enigma2);
+		False cand se asteapta (ascunderea navigatorului e in curs, trezeste() vine cand e gata, sau o aplicatie HbbTV
+		se incarca: o fereastra peste bara ar inchide-o) si se incearca la tic-ul urmator."""
+		try:
+			L, nav, c = self._gaseste()
+			j = self._jeton
+			if j is not None and j["nav"] is not nav:
+				# navigatorul de la suspendare s-a inchis (sau altul i-a luat locul): nu atingem altul
+				self._jeton = j = None
+			hbbtv = c is not None and c.nav is not None and c.nav is nav
+			if nav is not None and nav.stare in (self._const(L, "PORNIRE"), self._const(L, "INCARCARE")) and \
+					not (hbbtv and c.fundal):
+				# se incarca: la prima pagina ar lua ecranul peste fereastra (o aplicatie pornita automat ramane ascunsa)
+				return False
+			if j is None and not self._lucreaza(L, nav, c):
+				return True
+			if hbbtv and not c.fundal and not c.aratat and (not c.pornita or getattr(c, "_asteapta_arata", False)):
+				# prima pagina sau show() inca asteptate: Controlor._cereArata ar inchide aplicatia ("alta fereastra peste
+				# bara"); TERMEN_ARATA_MS (10 s) o lasa ascunsa, apoi fereastra se deschide
+				return False
+			if j is None:
+				j = self._jeton = {"nav": nav, "controlor": c if hbbtv or (c is not None and c.nav is not None) else None,
+					"ascuns": False, "taste": False}
+				_jurnal("ferestrele asistentei peste navigator: suspendat (mod %s, stare %s)" % (
+					getattr(nav, "mod", "-"), getattr(nav, "stare", "-")))
+			if c is not None and c.nav is not None and getattr(c, "_taste", False):
+				c._legaTaste(False)
+				j["taste"] = True
+				j["controlor"] = c
+			if nav is not None and nav.stare == self._const(L, "ARATAT"):
+				j["ascuns"] = True
+				nav.ascunde(trezeste)
+				return False
+			return not getattr(nav, "_fb_blocat", False) if nav is not None else True
+		except Exception as e:
+			_jurnal("suspendarea navigatorului: %r" % (e,))
+			return True
+
+	def reda(self):
+		"""Dupa ultima fereastra: tastele Controlorului legate la loc si pagina reluata, numai ce am luat noi, o data.
+		-> True cand era ceva suspendat."""
+		j, self._jeton = self._jeton, None
+		if j is None:
+			return False
+		try:
+			L, nav, c = self._gaseste()
+			c0 = j["controlor"]
+			if j["taste"] and c0 is not None and c0 is c and c.nav is not None and not c.fundal and \
+					not getattr(c, "_taste", False) and (j["nav"] is None or c.nav is j["nav"]):
+				c._legaTaste(True)
+			if j["ascuns"] and nav is not None and nav is j["nav"] and nav.stare == self._const(L, "ASCUNS"):
+				if c is not None and c.nav is nav:
+					# HbbTV: numai daca aplicatia mai vrea sa fie vazuta (un hide() al ei intre timp ramane)
+					if c.aratat and not c.fundal:
+						nav.reia()
+				else:
+					nav.reia()
+			_jurnal("ferestrele asistentei peste navigator: redat")
+		except Exception as e:
+			_jurnal("reluarea navigatorului: %r" % (e,))
+		return True
+
+
 class HdsAsistentaSemn(Screen):
 	skin = SKIN_BANDA
 
@@ -128,6 +263,13 @@ class Controler(object):
 		# intrebarile echipei (op "intrebare", A.Intrebare) de deschis pe televizor si (nr, fereastra) celei deschise
 		self._intrebari = []
 		self.fereastraIntrebare = None
+		# intrebarile (nr) la care omul a ales "Scrie răspunsul": la deschidere din coada vine tastatura, nu fereastra
+		self._deScris = set()
+		# peste navigator (0.7.8, ASV4): contractul, ferestrele de aratat cat navigatorul tine ecranul ((fel, date):
+		# "concluzii" (intrare, la_sfarsit) si "anunt" text; mesajele echipei raman in _mesaje) si fereastra deschisa
+		self.navigator = PesteNavigator()
+		self._coadaNav = []
+		self._dlgNav = None
 
 	def instaleaza(self):
 		A.adaugaObservator(self._schimbare)
@@ -165,7 +307,7 @@ class Controler(object):
 					pass
 			# sfarsitul sesiunii (fereastra concluziilor, mesajele ramase) il face _tic la urmatoarea secunda, nu aici:
 			# oprirea poate veni de pe un ecran care se inchide imediat dupa (Rosu pe ecranul asistentei)
-			if self._id_activ is not None or self._mesaje or self._concluzii:
+			if self._id_activ is not None or self._mesaje or self._concluzii or self._coadaNav or self.navigator.suspendat():
 				self.ceas.start(1000, False)
 			else:
 				self.ceas.stop()
@@ -182,8 +324,11 @@ class Controler(object):
 		if self._intrebari:
 			self._deschideIntrebarea(activa)
 		# mesajele: la rand, fiecare cel putin MESAJ_S secunde (si dupa oprire, cele ramase in coada); nu cat e deschisa o
-		# intrebare a echipei: fereastra mesajului, nemodala si deasupra, ar acoperi-o (vazut pe receptor peste Da/Nu)
-		if self._mesaje and time.time() >= self._mesaj_liber_la and self.fereastraIntrebare is None:
+		# intrebare a echipei: fereastra mesajului, nemodala si deasupra, ar acoperi-o (vazut pe receptor peste Da/Nu).
+		# Cat navigatorul tine ecranul, mesajele, concluziile si anunturile vin peste el, modale (_pesteNavigator).
+		if self._pesteNavigator():
+			pass
+		elif self._mesaje and time.time() >= self._mesaj_liber_la and self.fereastraIntrebare is None and not self._deScris:
 			self._mesaj_aratat = self._mesaje.pop(0)
 			self._arataMesaj(self._mesaj_aratat)
 			self._mesaj_liber_la = time.time() + MESAJ_S
@@ -196,25 +341,26 @@ class Controler(object):
 			id_ = self._id_activ
 			self._id_activ = None
 			c = A.ultimeleConcluzii()
+			de_om = A.opritDeOm(id_)
 			if c and c.get("id") == id_:
-				self._arataConcluzii(c, la_sfarsit=True)
+				self._arataConcluzii(dict(c, de_om=True) if de_om else c, la_sfarsit=True)
+			elif de_om:
+				# CR4 (0.7.8, Eduard 18.11 17:25): oprita de om fara concluzii: tot fereastra, cu confirmarea si multumirea
+				self._arataConcluzii({"text": "", "ora": 0, "id": id_, "de_om": True}, la_sfarsit=True)
 			# si un anunt scurt, nemodal, cand s-a oprit fara om (echipa a inchis-o, a trecut timpul): omul afla ca
 			# s-a terminat si cand fereastra concluziilor e deja deschisa sau a fost inchisa (orion_bilo, 14.11.2026)
 			self._anuntaSfarsit(id_)
+		self._redaDacaLiber()
 		if not activa:
 			if self.banda is not None:
 				self.banda.hide()
-			if not self._mesaje:
+			if not self._mesaje and not self._coadaNav and not self.navigator.suspendat():
 				self.ceas.stop()
 			return
 		# cererea a fost aprobata (asteapta -> conectat): omul afla, oriunde ar fi pe receptor (pe ecranul asistentei
 		# scrie deja "Conectat."); dupa o reluare a interfetei starea de dinainte nu se stie, deci nu se anunta
 		if self._stare_vazuta == A.ASTEAPTA and ses.stare == A.CONECTAT and not self._ecranAsistenta():
-			try:
-				from Screens import HdsAnuntRetea
-				HdsAnuntRetea.arata(self.session, _(TEXT_CONECTAT), "info")
-			except Exception as e:
-				_jurnal("anuntul conectarii: %r" % (e,))
+			self._anunta(_(TEXT_CONECTAT), "anuntul conectarii")
 		self._stare_vazuta = ses.stare
 		if self.banda is not None:
 			if self._ecranAsistenta():
@@ -229,11 +375,22 @@ class Controler(object):
 	def _anuntaSfarsit(self, id_):
 		try:
 			text = A.textSfarsit(id_)
-			if text:
-				from Screens import HdsAnuntRetea
-				HdsAnuntRetea.arata(self.session, text, "info")
 		except Exception as e:
 			_jurnal("anuntul de sfarsit: %r" % (e,))
+			return
+		if text:
+			self._anunta(text, "anuntul de sfarsit")
+
+	def _anunta(self, text, ce):
+		"""Anuntul scurt, nemodal (HdsAnuntRetea), ca pana acum; cat navigatorul tine ecranul vine peste el, modal."""
+		if self.navigator.tine():
+			self._coadaNav.append(("anunt", text))
+			return
+		try:
+			from Screens import HdsAnuntRetea
+			HdsAnuntRetea.arata(self.session, text, "info")
+		except Exception as e:
+			_jurnal("%s: %r" % (ce, e))
 
 	def _ecranAsistenta(self):
 		"""Ecranul asistentei e deasupra (arata el starea si timpul): banda nu se arata peste el."""
@@ -255,11 +412,15 @@ class Controler(object):
 		except Exception as e:
 			_jurnal("mesaj: %r" % (e,))
 
-	def _arataConcluzii(self, intrare, la_sfarsit=False):
+	def _arataConcluzii(self, intrare, la_sfarsit=False, verifica_navigatorul=True):
 		"""Fereastra concluziilor (modala, pana la OK), prin notificari: se deschide cand omul e la imaginea canalului,
 		nu peste alt ecran modal. La sfarsitul sesiunii nu se deschide a doua oara daca e inca deschisa.
 		0.7.6 (ASF, asistenta 222923): cand omul sta chiar in ecranul asistentei (acolo asteapta raspunsul), fereastra se
-		deschide indata peste el; inainte o primea abia la imaginea canalului, la Galben sau la sfarsitul sesiunii."""
+		deschide indata peste el; inainte o primea abia la imaginea canalului, la Galben sau la sfarsitul sesiunii.
+		0.7.8 (ASV4): cat navigatorul tine ecranul, fereastra vine peste el (_pesteNavigator), nu nevazuta sub el."""
+		if verifica_navigatorul and self.navigator.tine():
+			self._coadaNav.append(("concluzii", (intrare, la_sfarsit)))
+			return
 		try:
 			from Screens.HdsAsistenta import HdsAsistentaConcluzii
 			if la_sfarsit and HdsAsistentaConcluzii.deschise:
@@ -287,6 +448,77 @@ class Controler(object):
 		except Exception:
 			return False
 
+	# ---- peste navigator (0.7.8, ASV4)
+
+	def _ocupatDeNoi(self):
+		"""O fereastra a asistentei e deschisa sau urmeaza indata (intrebarea, tastatura, mesajul sau concluziile)."""
+		return self.fereastraIntrebare is not None or bool(self._deScris) or self._dlgNav is not None or \
+			bool(self._intrebari)
+
+	def _pesteNavigator(self):
+		"""Ferestrele din _coadaNav si mesajele echipei cat navigatorul tine ecranul: una cate una, modale (OK sau EXIT le
+		inchide, mesajul si singur dupa MESAJ_S), dupa ce navigatorul s-a ascuns. -> True cand s-au ocupat de ele aici
+		(aratate sau in asteptare); False: mesajele merg pe calea obisnuita, nemodala."""
+		mesaj_nav = bool(self._mesaje) and self.navigator.tine()
+		if not self._coadaNav and not mesaj_nav:
+			return False
+		if not self.navigator.tine():
+			# navigatorul s-a inchis intre timp: ferestrele asteptate se arata ca fara navigator
+			coada, self._coadaNav = self._coadaNav, []
+			for fel, date in coada:
+				if fel == "concluzii":
+					self._arataConcluzii(date[0], date[1], verifica_navigatorul=False)
+				else:
+					self._anunta(date, "anuntul")
+			return False
+		if self._ocupatDeNoi() or not self._poateDeschide():
+			return True
+		if not self.navigator.gata(self._trezesteTic):
+			return True
+		try:
+			from Screens.MessageBox import MessageBox
+			if self._coadaNav:
+				fel, date = self._coadaNav.pop(0)
+				if fel == "concluzii":
+					from Screens.HdsAsistenta import HdsAsistentaConcluzii
+					intrare, la_sfarsit = date
+					if la_sfarsit and HdsAsistentaConcluzii.deschise:
+						return True
+					continut = dict(intrare, sfarsit=True) if la_sfarsit else intrare
+					self._dlgNav = self.session.openWithCallback(self._dupaFereastraNav, HdsAsistentaConcluzii, continut) or True
+				else:
+					self._dlgNav = self.session.openWithCallback(self._dupaFereastraNav, MessageBox, date,
+						MessageBox.TYPE_INFO, timeout=MESAJ_S) or True
+				return True
+			text = self._mesaje.pop(0)
+			self._mesaj_aratat = None
+			self._dlgNav = self.session.openWithCallback(self._dupaFereastraNav, MessageBox, "%s %s" % (
+				_("Mesaj de la HD Satelit:"), text), MessageBox.TYPE_INFO, timeout=MESAJ_S) or True
+		except Exception as e:
+			_jurnal("fereastra peste navigator: %r" % (e,))
+			self._dlgNav = None
+		return True
+
+	def _dupaFereastraNav(self, *rez):
+		"""Mesajul, anuntul sau concluziile de peste navigator s-au inchis (OK, EXIT, timpul): urmatoarea, sau pagina
+		inapoi."""
+		self._dlgNav = None
+		self._redaDacaLiber()
+		if self._coadaNav or self._mesaje:
+			self._trezesteTic()
+
+	def _redaDacaLiber(self):
+		"""Navigatorul suspendat de noi primeste ecranul si tastele inapoi cand nicio fereastra a asistentei nu mai e
+		deschisa si niciuna nu asteapta sa vina peste el (doua intrebari la rand: o singura reluare)."""
+		if not self.navigator.suspendat() or self._ocupatDeNoi() or self._coadaNav or self._mesaje or self._concluzii:
+			return
+		if self._id_activ is not None:
+			ses = A.sesiune()
+			if ses is None or not ses.activa():
+				# _tic adauga intai ferestrele de sfarsit; pagina nu revine intre ele si intrebare.
+				return
+		self.navigator.reda()
+
 	# ---- intrebarea echipei (op "intrebare", 0.7.7)
 
 	def cereIntrebare(self, q):
@@ -300,11 +532,13 @@ class Controler(object):
 		q = self._intrebari[0]
 		if q.gata.is_set() or q.ramasS() <= 1 or not activa:
 			self._intrebari.pop(0)
+			self._deScris.discard(q.id)
 			return
 		try:
 			from Screens import Standby
 			if Standby.inStandby:
 				self._intrebari.pop(0)
+				self._deScris.discard(q.id)
 				A.inchideIntrebarea(q.id, "standby")
 				return
 		except Exception:
@@ -316,7 +550,13 @@ class Controler(object):
 			# acum; cea noua se deschide la tic-ul urmator (dupa o inchidere Session.open trebuie sa astepte)
 			self._inchideFereastraIntrebarii()
 			return
+		if not self.navigator.gata(self._trezesteTic):
+			# 0.7.8 (ASV4): navigatorul se ascunde intai (sau aplicatia HbbTV inca se incarca); la tic-ul urmator
+			return
 		self._intrebari.pop(0)
+		if q.id in self._deScris:
+			self._deschideTastatura(q)
+			return
 		try:
 			from Screens.MessageBox import MessageBox
 			if self.fereastraMesaj is not None:
@@ -328,6 +568,10 @@ class Controler(object):
 				self._mesaj_aratat = None
 				self._mesaj_liber_la = 0.0
 			lista = [(eticheta, str(i)) for i, eticheta in enumerate(q.etichete)]
+			if getattr(q, "scris", False):
+				# raspunsul scris (0.7.8): ultimul rand; la "*" singur e singurul, deci deja ales
+				# AST8: intrebarea de inceput are eticheta ei ("Altceva, scriu eu")
+				lista.append((getattr(q, "eticheta_scris", None) or _(A.TEXT_INTREBARE_SCRIE), A.INTREBARE_SCRIS))
 			dlg = self.session.openWithCallback(lambda rez=None, nr=q.id: self._dupaIntrebare(nr, rez), MessageBox, q.text,
 				MessageBox.TYPE_YESNO, timeout=max(1, q.ramasS()), timeout_default=INTREBARE_TERMEN, list=lista,
 				default=0, title=_(A.TEXT_INTREBARE_TITLU))
@@ -344,14 +588,82 @@ class Controler(object):
 			self.fereastraIntrebare = None
 		if isinstance(rez, str) and rez.isdigit():
 			A.raspundeIntrebare(nr, int(rez), "televizor")
+		elif rez == getattr(A, "INTREBARE_SCRIS", None):
+			# "Scrie răspunsul" (0.7.8): aceeasi intrebare se deschide din coada ca tastatura, pe firul enigma2, la tic
+			q = A.intrebareCuNr(nr)
+			if q is not None and q.scris:
+				self._deScris.add(nr)
+				self._intrebari.insert(0, q)
+				self._trezesteTic()
 		elif rez is False or rez is None:
 			A.inchideIntrebarea(nr, "exit")
+		# 0.7.8 (ASV4): pagina navigatorului inapoi, daca nu mai vine nicio fereastra a asistentei (o data)
+		self._redaDacaLiber()
+
+	def _trezesteTic(self):
+		"""_tic indata (dupa inchiderea ferestrei de acum), nu la urmatoarea secunda a ceasului; ceasul ramane plasa."""
+		try:
+			_trezeste(self._tic)
+		except Exception as e:
+			_jurnal("trezirea intrebarii: %r" % (e,))
+
+	def _deschideTastatura(self, q):
+		"""Tastatura de pe ecran pentru raspunsul scris (0.7.8): antetul e intrebarea (vazuta intreaga in fereastra de
+		dinainte), titlul "Întrebare de la HD Satelit"; Verde (Confirm) sau OK pe tasta OK trimite. Ea e acum fereastra
+		intrebarii: o inchidem noi la raspunsul din web, la timp si la oprire (inchideIntrebare). Intrebarea primeste timp
+		pentru scris (A.incepeScrisul)."""
+		self._deScris.discard(q.id)
+		try:
+			from Screens.VirtualKeyBoard import VirtualKeyBoard
+			if self.fereastraMesaj is not None:
+				self.fereastraMesaj.ascunde()
+			A.incepeScrisul(q.id)
+			dlg = self.session.openWithCallback(lambda text=None, nr=q.id: self._dupaTastatura(nr, text), VirtualKeyBoard,
+				title=q.text, text="", windowTitle=_(A.TEXT_INTREBARE_TITLU))
+			if dlg is None:
+				raise RuntimeError("tastatura nu s-a deschis")
+			dlg.hdsRaspunsScris = True
+			self.fereastraIntrebare = (q.id, dlg)
+		except Exception as e:
+			_jurnal("tastatura raspunsului: %r" % (e,))
+			A.gataScrisul(q.id)
+			# fara tastatura omul alege tot din fereastra intrebarii (variantele, sau EXIT)
+			if A.intrebareCuNr(q.id) is not None:
+				self._intrebari.insert(0, q)
+
+	def _dupaTastatura(self, nr, text=None):
+		"""Tastatura raspunsului s-a inchis. Un text (curatat, negol) e raspunsul omului; daca intrebarea s-a inchis intre
+		timp, omul afla pe ecran (nu pierde in tacere ce a scris). EXIT sau un text gol: inapoi la fereastra intrebarii, prin
+		coada (tic). O inchidere facuta de noi (close(None), dupa ce fereastraIntrebare a fost scoasa) nu face nimic."""
+		try:
+			self._dupaTastaturaIntrebarii(nr, text)
+		finally:
+			# 0.7.8 (ASV4): pagina navigatorului inapoi, daca nu mai vine nicio fereastra a asistentei (o data)
+			self._redaDacaLiber()
+
+	def _dupaTastaturaIntrebarii(self, nr, text):
+		al_nostru = self.fereastraIntrebare is not None and self.fereastraIntrebare[0] == nr
+		if al_nostru:
+			self.fereastraIntrebare = None
+		A.gataScrisul(nr)
+		text = A.curataRaspunsScris(text) if isinstance(text, str) else ""
+		if text:
+			if not A.raspundeIntrebareText(nr, text, "televizor"):
+				self._anunta(_(A.TEXT_INTREBARE_INCHISA), "anuntul intrebarii inchise")
+			return
+		if not al_nostru:
+			return
+		q = A.intrebareCuNr(nr)
+		if q is not None:
+			self._intrebari.insert(0, q)
+			self._trezesteTic()
 
 	def inchideIntrebare(self, nr):
 		"""Pe firul enigma2, dupa ce firul sesiunii a primit raspunsul (sau timpul a trecut, sau s-a raspuns din web):
 		intrebarea nr iese din coada, iar fereastra ei se inchide inainte ca echipa sa primeasca raspunsul, ca o tasta OK
 		trimisa apoi de echipa sa n-o poata alege in locul omului. -> True."""
 		self._intrebari = [q for q in self._intrebari if q.id != nr]
+		self._deScris.discard(nr)
 		if self.fereastraIntrebare is not None and self.fereastraIntrebare[0] == nr:
 			self._inchideFereastraIntrebarii()
 		return True
@@ -365,7 +677,8 @@ class Controler(object):
 			return
 		try:
 			if self.session.current_dialog is f[1]:
-				f[1].close(INTREBARE_INCHISA)
+				# tastatura raspunsului (0.7.8) da textul la inchidere: None, ca nimic sa nu para scris de om
+				f[1].close(None if getattr(f[1], "hdsRaspunsScris", False) else INTREBARE_INCHISA)
 		except Exception as e:
 			_jurnal("inchiderea intrebarii: %r" % (e,))
 
@@ -781,8 +1094,9 @@ def _reporneste(ce):
 	return _peFir.cere(lucru, TERMEN_FIR_S)
 
 
-TEXT_REPARA_PORNITA = ("pornit: cautarea in feedul HD Satelit, apoi instalarea (si pachetele imaginii ramase la jumatate, cu "
-	"--force-reinstall) si repornirea interfetei; pasii in jurnalul hds-actualizari.log, asistenta continua dupa repornire")
+TEXT_REPARA_PORNITA = ("pornit: cautarea in feedul HD Satelit, apoi instalarea (si pachetele imaginii ramase la jumatate sau cu "
+	"fisiere sterse, cu --force-reinstall, ca la Repară imaginea) si repornirea interfetei; pasii in jurnalul "
+	"hds-actualizari.log (randurile 'repara imaginea'), asistenta continua dupa repornire")
 
 
 def _reparaActualizarea():
@@ -801,11 +1115,31 @@ def _reparaActualizarea():
 		except ImportError as e:
 			gata((1, "(repornirea dupa actualizare lipseste: %s)" % e))
 			return
-		if not a.actualizeazaRapid(reporneste_rapid(_session)):
+		# 0.7.8 (RPR8): „Repară imaginea” cu actualizarea (tot=True: si actualizarea gasita, ca inainte, plus fisierele sterse
+		# ale imaginii puse la loc); un modul mai vechi in memorie: actualizarea rapida, ca inainte
+		if hasattr(a, "reparaImaginea"):
+			pornit = a.reparaImaginea(reporneste_rapid(_session), tot=True)
+		else:
+			pornit = a.actualizeazaRapid(reporneste_rapid(_session))
+		if not pornit:
 			gata((1, "(actualizarea nu a pornit: %s)" % (a.mesaj or a.poate_porni() or "?")))
 			return
 		gata((0, TEXT_REPARA_PORNITA))
 	return _peFir.cere(lucru, TERMEN_FIR_S)
+
+
+def _reparaBuchetele():
+	"""Porneste pe firul interfetei; asteapta numai firul brokerului."""
+	def lucru(gata):
+		from Components import HdsReparaBuchete as R
+		def terminat(rez):
+			if rez is None:
+				gata((1, R.mesaj_web() or _("Lista nu s-a putut repara. Nu am șters niciun buchet.")))
+			else:
+				gata((0, R.mesaj(rez) or _("Lista de buchete este în regulă. Nu am schimbat nimic.")))
+		if not R.cerere(la_gata=terminat):
+			gata((1, _("Lista de canale este în lucru. Încearcă din nou peste câteva secunde.")))
+	return _peFir.cere(lucru, 60)
 
 
 def _setare(cheie, valoare):
@@ -830,6 +1164,7 @@ def _intrebare(text, variante="", secunde="", stop=None):
 	c = _controler[0]
 	if c is None:
 		return 1, "(intrebarea nu se poate arata: interfata nu e gata)"
+	# ASP7 (REGULA 0, 22.11.2026): raspunsul scris se cere la orice intrebare, si despre parole, chei sau conturi
 	q = A.puneIntrebare(text, variante, secunde)
 	if q is None:
 		return 1, "(variante rele: intre 2 si %d, diferite, fiecare cel mult %d semne, despartite cu |)" % (
@@ -860,7 +1195,8 @@ def ctxReceptor(session):
 	ctx["captura"] = _captura
 	# settings de acum, pentru copia facuta cand intra echipa; numai ctx-ul receptorului il are (si deci face copia)
 	ctx["setari_acum"] = _setariAcum
-	ctx["ecran"] = _ecranText
+	# AST8: cu raspunsul la intrebarea de inceput deasupra (_ecranCuInceput)
+	ctx["ecran"] = _ecranCuInceput
 	ctx["taste"] = _taste
 	ctx["text"] = _text
 	ctx["canal"] = _canal
@@ -871,6 +1207,7 @@ def ctxReceptor(session):
 	ctx["reporneste"] = _reporneste
 	ctx["setare"] = _setare
 	ctx["repara_actualizarea"] = _reparaActualizarea
+	ctx["repara_buchetele"] = _reparaBuchetele
 	ctx["intrebare"] = _intrebare
 	if _controler[0] is not None:
 		ctx["mesaj"] = _controler[0].cereMesaj
@@ -898,8 +1235,12 @@ def porneste(session, nivel=None, durata_min=None, de_la="televizor", versiune_t
 	if durata_min is None:
 		durata_min = A.DURATA_IMPLICITA_MIN
 	limba = _limba()
-	return A.porneste(nivel=nivel, durata_min=durata_min, limba=limba, de_la=de_la,
+	rez = A.porneste(nivel=nivel, durata_min=durata_min, limba=limba, de_la=de_la,
 		versiune_text=versiune_text, ctx=ctxReceptor(session), nevoie=nevoie, detalii=detalii)
+	if rez[0]:
+		# AST8: "Cu ce te ajut?" indata, fara sa astepte echipa (pornesteInceput, la sfarsitul fisierului)
+		pornesteInceput()
+	return rez
 
 
 def reia(session):
@@ -950,18 +1291,48 @@ def intreabaOprirea(session, dupa):
 		MessageBox.TYPE_YESNO, default=False, timeout=OPRIRE_INTREBARE_S, timeout_default=False)
 
 
+def alegeDurata(session, dupa):
+	"""Verde "Schimbă durata" pe ecranul asistentei pornite (Screens/HdsAsistenta.py): lista celor cinci durate
+	(A.alegeriDurata), cu cea de acum aleasa; OK o schimba pe loc, socotita de acum (A.schimbaDurata), fara alta intrebare.
+	EXIT lasa durata cum era. dupa(reusit) dupa alegere (False la EXIT). Aici, ca intreabaOprirea: ecranul asistentei nu
+	deschide el ferestre de alegere."""
+	from Screens.ChoiceBox import ChoiceBox
+	alegeri = A.alegeriDurata()
+	ses = A.sesiune()
+	acum = getattr(ses, "durata_min", None)
+	minute = [m for m, t in alegeri]
+	sel = minute.index(acum) if acum in minute else 0
+
+	def gata(ales=None):
+		reusit = False
+		if ales:
+			reusit, _mesaj = A.schimbaDurata(ales[1], "televizor")
+		dupa(reusit)
+	session.openWithCallback(gata, ChoiceBox, title=_("Cât timp"), list=[(text, m) for m, text in alegeri],
+		selection=sel)
+
+
 TEXT_WEB_PE_RECEPTOR = N_("Pe receptor s-a deschis Asistența de la distanță: apasă Start acolo.")
 TEXT_WEB_NU_POT = N_("Nu pot deschide Asistența de la distanță pe receptor acum.")
 
 
-def pornesteWeb(session, nivel=None):
+def _durataAleasa(durata_min):
+	"""Durata venita din web (minute, ca text sau numar): una din A.DURATE_PRIMITE, altfel cea implicita (2 ore)."""
+	try:
+		durata_min = int(durata_min)
+	except (TypeError, ValueError):
+		return A.DURATA_IMPLICITA_MIN
+	return durata_min if durata_min in A.DURATE_PRIMITE else A.DURATA_IMPLICITA_MIN
+
+
+def pornesteWeb(session, nivel=None, durata_min=None):
 	"""Start din web, dupa poarta locala: porneste direct si anunta pe receptor.
-	Asistenta completa, durata implicita, fara intrebari. -> (reusit, mesaj)."""
+	Asistenta completa, cu durata aleasa in pagina (lipsa: 2 ore), fara intrebari. -> (reusit, mesaj)."""
 	ses = A.sesiune()
 	if ses is not None and ses.activa():
 		return False, _("Asistența merge deja.")
 	reusit, mesaj = porneste(session, nivel=nivel if nivel in A.NIVELE else A.NIVEL_PORNIRE,
-		durata_min=A.DURATA_IMPLICITA_MIN,
+		durata_min=_durataAleasa(durata_min),
 		de_la="web")
 	if reusit:
 		try:
@@ -976,8 +1347,8 @@ def pornesteWeb(session, nivel=None):
 
 
 def cerereWeb(session, nivel="A", durata_min=None, nevoie="", detalii=""):
-	"""Rezerva pentru apelurile fara incredere: deschide pagina de pornire pe receptor.
-	Porneste numai la Start apasat acolo. Parametrii raman pentru apelurile vechi.
+	"""Rezerva pentru apelurile fara incredere: deschide pagina de pornire pe receptor, cu durata aleasa in pagina web
+	pusa pe randul "Cât timp". Porneste numai la Start apasat acolo. Ceilalti parametri raman pentru apelurile vechi.
 	Ruta web locala foloseste pornesteWeb. -> (reusit, mesaj) despre deschiderea paginii."""
 	if session is None:
 		return False, _(TEXT_WEB_NU_POT)
@@ -987,7 +1358,7 @@ def cerereWeb(session, nivel="A", durata_min=None, nevoie="", detalii=""):
 	try:
 		from Tools import Notifications
 		from Screens.HdsAsistenta import HdsAsistenta
-		Notifications.AddNotification(HdsAsistenta, din_web=A.DURATA_IMPLICITA_MIN)
+		Notifications.AddNotification(HdsAsistenta, din_web=_durataAleasa(durata_min))
 		return True, _(TEXT_WEB_PE_RECEPTOR)
 	except Exception as e:
 		_jurnal("cerere web: %r" % (e,))
@@ -1000,3 +1371,239 @@ def _limba():
 		return (language.getLanguage() or "ro")[:2]
 	except Exception:
 		return "ro"
+
+
+# ---------------------------------------------------------------- intrebarea de inceput, iesirea, motivul opririi (AST8)
+#
+# 22.11.2026 (AS115, AS118, AS116): un om a pornit si a oprit asistenta de cinci ori in 19-111 s, fara sa spuna ce vrea, iar
+# altul a oprit-o dupa cinci intrebari la rand. Deci:
+# - indata ce sesiunea a pornit (porneste, inainte de inregistrare si de echipa), pe televizor si in pagina web intrebarea
+#   "Cu ce te ajut?" cu variantele mari (INCEPUT_VARIANTE) si, din 0.7.8, randul "Altceva, scriu eu" (tastatura de pe
+#   ecran, raspunsul scris); pe 0.7.7 "Altceva" e o varianta obisnuita. E aceeasi intrebare ca la op "intrebare" (A.Intrebare,
+#   un singur loc), asteptata de un fir al ei (_asteaptaInceput), nu de o cerere: firul sesiunii nu sta dupa ea. Raspunsul
+#   ajunge la echipa ca primul rand al op "ecran" (_ecranCuInceput: "intrebarea de inceput ...: raspuns: ..."; "inca
+#   deschisa" cat omul n-a ales), deci fara camp nou pe server si fara op nou in catalog;
+# - EXIT pe ecranul asistentei lasa asistenta pornita (ca pana acum) si spune asta intr-un anunt scurt (anuntaIesirea);
+# - Rosu "Oprește" + Da: o singura intrebare optionala, "De ce oprești?" (intreabaMotivul); EXIT sau timpul o sar. Motivul
+#   pleaca la server in campul "motiv" de la inchidere (tiparul lui: ASCII, cel mult 60 de semne): "de om (ecran): terminat".
+# Textele: N_ (traducerile din .po, cand vin) si, pana atunci, INCEPUT_LIMBI pentru limbile in care ne cer oamenii ajutor
+# (un pachet de proba pe 0.7.7 nu aduce .po).
+
+INCEPUT_TEXT = N_("Cu ce te ajut?")
+# (cheia pentru echipa, ASCII; eticheta pentru om)
+INCEPUT_VARIANTE = (
+	("Canale si receptie", N_("Canale și recepție")),
+	("Internet si IPTV", N_("Internet și IPTV")),
+	("Imagine si sunet", N_("Imagine și sunet")),
+	("Extensii si actualizari", N_("Extensii și actualizări")),
+)
+INCEPUT_ALTCEVA = ("Altceva", N_("Altceva"))
+INCEPUT_SCRIU = N_("Altceva, scriu eu")
+# cat sta deschisa (cat intrebarea cea mai lunga a echipei); omul o inchide oricand cu EXIT
+INCEPUT_S = 300
+TEXT_FUNDAL = N_("Asistența lucrează. Poți privi televizorul; te anunț pe ecran când am ceva.")
+TEXT_DE_CE_OPRESTI = N_("De ce oprești?")
+# (codul pentru motivul de pe server, ASCII scurt; eticheta pentru om)
+MOTIVE_OM = (
+	("terminat", N_("Am terminat")),
+	("dura-mult", N_("Durează prea mult")),
+	("nu-stiu", N_("Nu știam ce să fac")),
+	("altceva", N_("Altceva")),
+)
+# cat sta "De ce oprești?" (pe receptorul de proba, incarcat, 20 s nu ajungeau: tastele omului au mers apoi in meniu)
+MOTIV_S = 30
+# anuntul de la EXIT: cat sta (nu dispare la tasta: EXIT-ul insusi, la ridicare, l-ar ascunde indata)
+ANUNT_IESIRE_MS = 8000
+INCEPUT_RAND = "intrebarea de inceput (Cu ce te ajut?)"
+
+INCEPUT_LIMBI = {
+	"en": ("How can I help you?", "Channels and reception", "Internet and IPTV",
+		"Picture and sound", "Plugins and updates", "Something else", "Something else, I'll type it",
+		"Assistance keeps working. You can watch TV; I'll let you know on screen when I have something.",
+		"Why are you stopping?", "I'm done", "It takes too long", "I didn't know what to do"),
+	"pl": ("W czym mogę pomóc?", "Kanały i odbiór", "Internet i IPTV", "Obraz i dźwięk",
+		"Wtyczki i aktualizacje", "Coś innego", "Coś innego, napiszę",
+		"Pomoc działa dalej. Możesz oglądać telewizję; dam znać na ekranie, gdy będę coś miał.",
+		"Dlaczego wyłączasz?", "Skończyłem", "Trwa za długo", "Nie wiedziałem, co robić"),
+	"it": ("Come posso aiutarti?", "Canali e ricezione", "Internet e IPTV",
+		"Immagine e audio", "Plugin e aggiornamenti", "Altro", "Altro, lo scrivo io",
+		"L'assistenza continua a lavorare. Puoi guardare la TV; ti avviso sullo schermo quando ho qualcosa.",
+		"Perché la fermi?", "Ho finito", "Ci vuole troppo", "Non sapevo cosa fare"),
+	"de": ("Wobei kann ich helfen?", "Kanäle und Empfang", "Internet und IPTV",
+		"Bild und Ton", "Plugins und Updates", "Etwas anderes", "Etwas anderes, ich schreibe es",
+		"Die Hilfe arbeitet weiter. Du kannst fernsehen; ich melde mich auf dem Bildschirm, wenn ich etwas habe.",
+		"Warum beendest du?", "Ich bin fertig", "Dauert zu lange", "Ich wusste nicht, was ich tun soll"),
+	"fr": ("Comment puis-je t'aider ?", "Chaînes et réception",
+		"Internet et IPTV", "Image et son", "Plugins et mises à jour", "Autre chose", "Autre chose, je l'écris",
+		"L'assistance continue. Tu peux regarder la télé ; je te préviens à l'écran quand j'ai du nouveau.",
+		"Pourquoi arrêtes-tu ?", "J'ai fini", "C'est trop long", "Je ne savais pas quoi faire"),
+	"tr": ("Sana nasıl yardım edebilirim?", "Kanallar ve sinyal", "İnternet ve IPTV",
+		"Görüntü ve ses", "Eklentiler ve güncellemeler", "Başka bir şey", "Başka bir şey, yazacağım",
+		"Destek çalışmaya devam ediyor. Televizyon izleyebilirsin; bir şey olduğunda ekranda haber veririm.",
+		"Neden durduruyorsun?", "Bitirdim", "Çok uzun sürüyor", "Ne yapacağımı bilmiyordum"),
+	"ru": ("Чем могу помочь?", "Каналы и приём", "Интернет и IPTV",
+		"Изображение и звук", "Плагины и обновления", "Другое", "Другое, напишу сам",
+		"Помощь продолжает работать. Можете смотреть ТВ; я сообщу на экране, когда что-то будет.",
+		"Почему вы останавливаете?", "Я закончил", "Слишком долго", "Не знал, что делать"),
+	"es": ("¿En qué te ayudo?", "Canales y recepción", "Internet e IPTV",
+		"Imagen y sonido", "Plugins y actualizaciones", "Otra cosa", "Otra cosa, la escribo",
+		"La asistencia sigue trabajando. Puedes ver la tele; te aviso en pantalla cuando tenga algo.",
+		"¿Por qué la detienes?", "Ya terminé", "Tarda demasiado", "No sabía qué hacer"),
+	"el": ("Πώς μπορώ να σε βοηθήσω;", "Κανάλια και λήψη", "Internet και IPTV",
+		"Εικόνα και ήχος", "Πρόσθετα και ενημερώσεις", "Κάτι άλλο", "Κάτι άλλο, θα το γράψω",
+		"Η βοήθεια συνεχίζει. Μπορείς να βλέπεις τηλεόραση· θα σε ειδοποιήσω στην οθόνη όταν έχω κάτι.",
+		"Γιατί τη σταματάς;", "Τελείωσα", "Αργεί πολύ", "Δεν ήξερα τι να κάνω"),
+	"hu": ("Miben segíthetek?", "Csatornák és vétel", "Internet és IPTV",
+		"Kép és hang", "Bővítmények és frissítések", "Más", "Más, beírom",
+		"A segítség tovább dolgozik. Nézheted a tévét; szólok a képernyőn, ha van valami.",
+		"Miért állítod le?", "Végeztem", "Túl sokáig tart", "Nem tudtam, mit tegyek"),
+}
+# ordinea textelor din INCEPUT_LIMBI (textele romanesti de mai sus)
+_INCEPUT_ORDINE = (INCEPUT_TEXT,) + tuple(e for _c, e in INCEPUT_VARIANTE) + (INCEPUT_ALTCEVA[1], INCEPUT_SCRIU,
+	TEXT_FUNDAL, TEXT_DE_CE_OPRESTI) + tuple(e for _c, e in MOTIVE_OM[:3])
+
+# (sesiunea, intrebarea) pentru sesiunea pornita acum
+_inceput = [None]
+
+
+def trInceput(text):
+	"""Textul tradus: din .po cand exista; altfel, in limbile din INCEPUT_LIMBI, de acolo; altfel romana."""
+	try:
+		tradus = _(text)
+	except Exception:
+		tradus = text
+	limba = _limba()
+	if tradus != text or limba == "ro" or limba not in INCEPUT_LIMBI or text not in _INCEPUT_ORDINE:
+		return tradus
+	return INCEPUT_LIMBI[limba][_INCEPUT_ORDINE.index(text)]
+
+
+def textIesire():
+	return trInceput(TEXT_FUNDAL)
+
+
+def puneInceput():
+	"""Intrebarea de inceput, cea deschisa de acum (A.Intrebare cu variantele INCEPUT_VARIANTE si, cand imaginea stie
+	raspunsul scris, randul "Altceva, scriu eu"; altfel varianta "Altceva"). -> intrebarea."""
+	scris = hasattr(A, "INTREBARE_SCRIS")
+	chei = [c for c, _e in INCEPUT_VARIANTE] + ([] if scris else [INCEPUT_ALTCEVA[0]])
+	etichete = [trInceput(e) for _c, e in INCEPUT_VARIANTE] + ([] if scris else [trInceput(INCEPUT_ALTCEVA[1])])
+	with A._lacatIntrebare:
+		vechi = A._intrebare[0]
+		if vechi is not None and not vechi.gata.is_set():
+			vechi.fara = "inlocuita"
+			vechi.gata.set()
+		A._intrebareNr[0] += 1
+		if scris:
+			q = A.Intrebare(A._intrebareNr[0], trInceput(INCEPUT_TEXT), chei, etichete, INCEPUT_S, scris=True)
+			# eticheta randului scris, pe televizor (Controler._deschideIntrebarea) si in pagina web (public)
+			q.eticheta_scris = trInceput(INCEPUT_SCRIU)
+		else:
+			q = A.Intrebare(A._intrebareNr[0], trInceput(INCEPUT_TEXT), chei, etichete, INCEPUT_S)
+		q.inceput = True
+		A._intrebare[0] = q
+	return q
+
+
+def pornesteInceput():
+	"""Dupa Start (porneste): intrebarea de inceput pe televizor si in web, fara sa astepte echipa; firul ei o inchide la
+	raspuns, la timp sau la oprirea asistentei, ca op "intrebare". Nu arunca."""
+	try:
+		c = _controler[0]
+		ses = A.sesiune()
+		if c is None or ses is None or not ses.activa():
+			return
+		q = puneInceput()
+		_inceput[0] = (ses, q)
+		c.cereIntrebare(q)
+		try:
+			_trezeste(c._tic)
+		except Exception as e:
+			_jurnal("trezirea intrebarii de inceput: %r" % (e,))
+		import threading
+		fir = threading.Thread(target=_asteaptaInceput, args=(c, q), name="HdsAsistentaInceput")
+		fir.daemon = True
+		fir.start()
+	except Exception as e:
+		_jurnal("intrebarea de inceput: %r" % (e,))
+
+
+def _asteaptaInceput(c, q):
+	try:
+		A.asteaptaRaspuns(q)
+		_peFir.cere(lambda gata: gata(c.inchideIntrebare(q.id)), TERMEN_FIR_S)
+		_jurnal("intrebarea de inceput: %s" % A.textRaspunsIntrebare(q)[1])
+	except Exception as e:
+		_jurnal("intrebarea de inceput (fir): %r" % (e,))
+
+
+def randInceput():
+	"""Randul pentru echipa (primul rand al op "ecran"): raspunsul la intrebarea de inceput a sesiunii de acum, "inca
+	deschisa" cat omul n-a ales, sau "" cand sesiunea n-are intrebare de inceput (reluata dupa o repornire)."""
+	o = _inceput[0]
+	if o is None or o[0] is not A.sesiune():
+		return ""
+	q = o[1]
+	if not q.gata.is_set() and q.ramasS() > 0:
+		return "%s: inca deschisa pe televizor de %d s (raspunsul vine la un op ecran urmator)" % (
+			INCEPUT_RAND, max(0, int(A._acum() - q.pornita)))
+	return "%s: %s" % (INCEPUT_RAND, A.textRaspunsIntrebare(q)[1])
+
+
+def _ecranCuInceput():
+	"""Op "ecran": textul ecranului, cu randul intrebarii de inceput deasupra (cand e)."""
+	text = _ecranText()
+	rand = randInceput()
+	if not rand:
+		return text
+	return rand + "\n\n" + (text if text is not None else "(ecranul nu a raspuns la timp)")
+
+
+# ceasul anuntului de la EXIT (tinut, ca eTimer-ul sa nu dispara inainte de vreme)
+_ceasIesire = [None]
+
+
+def anuntaIesirea(session, dupa_ms=400):
+	"""EXIT pe ecranul asistentei, cat merge: asistenta ramane pornita; un anunt scurt, nemodal, spune asta. Vine dupa
+	dupa_ms, cand ecranul de dedesubt (meniul sau imaginea canalului) s-a aratat: pus inainte de inchidere, ecranul
+	aratat dupa il acoperea (vazut pe receptorul de proba, 22.11.2026)."""
+	try:
+		t = eTimer()
+		t.callback.append(lambda: _arataIesirea(session))
+		t.start(dupa_ms, True)
+		_ceasIesire[0] = t
+	except Exception as e:
+		_jurnal("anuntul iesirii (ceas): %r" % (e,))
+		_arataIesirea(session)
+
+
+def _arataIesirea(session):
+	try:
+		from Screens import HdsAnuntRetea as AR
+		# fereastra anunturilor (aceeasi ca AR.arata), dar fara ascunderea la tasta: ridicarea lui EXIT ar ascunde-o
+		# indata (vazut pe receptorul de proba, 22.11.2026)
+		if AR._fereastra[0] is None:
+			AR._fereastra[0] = session.instantiateDialog(AR.HdsAnuntRetea)
+		AR._fereastra[0].anunta(textIesire(), "info", durata_ms=ANUNT_IESIRE_MS, ascunde_la_tasta=False)
+	except Exception as e:
+		_jurnal("anuntul iesirii: %r" % (e,))
+
+
+def intreabaMotivul(session, dupa):
+	"""Dupa Rosu + Da: "De ce oprești?", o singura intrebare, optionala. dupa(cod) primeste codul (MOTIVE_OM) sau "" la
+	EXIT, la timp sau cand fereastra nu se poate deschide; oprirea se face oricum (nu e o a doua confirmare)."""
+	coduri = [c for c, _e in MOTIVE_OM]
+	try:
+		from Screens.MessageBox import MessageBox
+		lista = [(trInceput(e), c) for c, e in MOTIVE_OM[:3]] + [(trInceput(INCEPUT_ALTCEVA[1]), MOTIVE_OM[3][0])]
+		session.openWithCallback(lambda rez=None: dupa(rez if rez in coduri else ""), MessageBox,
+			trInceput(TEXT_DE_CE_OPRESTI), MessageBox.TYPE_YESNO, timeout=MOTIV_S, timeout_default="", list=lista,
+			default=0)
+	except Exception as e:
+		_jurnal("intrebarea motivului: %r" % (e,))
+		dupa("")
+
+
+def motivOprire(cod):
+	"""Motivul pentru server si jurnal: "de om (ecran)" sau "de om (ecran): terminat"."""
+	return "de om (ecran): %s" % cod if cod else "de om (ecran)"

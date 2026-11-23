@@ -9,6 +9,14 @@
 # Harta modul -> pachet: HARTA (data/hds-module-pachete.json, in /usr/share/enigma2), facuta din pachetele .ipk ale feedului de
 # lucru-sesiune/oe-60/pluginuri-compat/unelte/module_inventar.py (caile usr/lib/python3.14/...), nu scrisa de mana. Numai un modul din
 # harta porneste ceva; numele altor module nu ajung niciodata la opkg.
+# 0.7.8 (CM1, RaiPlay pe chardet, raportul 928793): harta din imagine ramanea in urma feedului (41 de pachete python3 publicate dupa
+# ea nu ajungeau singure la pluginuri). Acum feedul spune singur ce are: indexul Packages al surselor noastre are, in strofa fiecarui
+# pachet, "Python-Modules: chardet" si "Libraries: libuchardet.so.0" (scrise la fiecare publicare de oe-build/feed_actualizare.py,
+# scrie_index, din fisierele pachetului). Un modul pe care harta din imagine nu-l are se cauta in listele descarcate de opkg update
+# (_hartaFeed), numai ale surselor noastre; harta din imagine ramane pentru receptorul fara liste (fara internet inca). Tot asa,
+# un plugin al carui modul nativ (.so) nu porneste fiindca ii lipseste o biblioteca ("libuchardet.so.0: cannot open shared object
+# file") primeste biblioteca prin aceeasi coada ca modulele de acces (cereBiblioteca): cea din mesaj si cele care mai lipsesc
+# modulelor .so ale pluginului (Components/HdsBibliotecaLipsa.lipsaPlugin), apoi pluginul porneste ca dupa un modul instalat.
 #
 # Cand:
 #   - la citirea listei de pluginuri (Components/PluginComponent.py: readPluginList -> dupaCitire): pluginul cazut la import cu un modul
@@ -32,6 +40,7 @@
 import json
 import os
 import re
+import sys
 import time
 
 RADACINA = ""
@@ -42,6 +51,11 @@ HARTA = "/usr/share/enigma2/hds-module-pachete.json"
 BIBLIOTECI = {
 	"libcrypto.so.1.0.0": "openssl10-compat",
 	"libssl.so.1.0.0": "openssl10-compat",
+	# OpenSSL 1.0.2 cu numele din OE-Alliance (SONAME .so.1.0.2, programele facute pe imaginile cu 1.0.2): acelasi ABI ca bibliotecile
+	# lui openssl10-compat, iar pachetele libcrypto1.0.2/libssl1.0.2 au numai legatura spre ele. Pachete separate, fiindca pe un
+	# receptor care are deja openssl10-compat cererea lui nu mai aduce nimic (instalat) si numele .so.1.0.2 ar lipsi mai departe.
+	"libcrypto.so.1.0.2": "libcrypto1.0.2",
+	"libssl.so.1.0.2": "libssl1.0.2",
 	"libcrypto.so.1.1": "openssl11-compat",
 	"libssl.so.1.1": "openssl11-compat",
 	"libcrypto.so.3": "openssl3-compat",
@@ -65,15 +79,27 @@ DURATA_MESAJ_MS = 9000
 # (un opkg update al altcuiva, alt feed) se cauta in ele, fara descarcare. Dupa REINCERCARE_S, o incercare intreaga, ca inainte.
 LIPSA_FISIER = "/etc/enigma2/hds-module-lipsa.json"
 REINCERCARE_S = 24 * 3600
+# 0.7.8 (CM1): campurile din strofele indexului (cheile cu litere mici, ca in HdsPachete.citeste_strofe)
+CAMP_MODULE = "python-modules"
+CAMP_BIBLIOTECI = "libraries"
+MAX_PLUGIN_SO = 64
 
 _MODUL = re.compile(r"No module named '([^']+)'")
+_IMPORT_OPRIT = re.compile(r"import of ([A-Za-z_][A-Za-z0-9_.]*) halted; None in sys\.modules")
 _NUME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]{0,200}\Z")
+# numele unei biblioteci partajate (libuchardet.so.0, libsrt.so.1.5, ld-linux.so.3), fara cale
+_BIBLIOTECA = re.compile(r"^(?:lib|ld-)[A-Za-z0-9_+.\-]{0,200}\.so(?:\.[0-9]{1,9}){0,6}\Z")
+# mesajul lui dlopen (ImportError la importul unui modul .so, OSError din ctypes)
+_BIBLIOTECA_LIPSA = re.compile(r"((?:lib|ld-)[A-Za-z0-9_+.\-]{0,200}\.so(?:\.[0-9]{1,9}){0,6}): cannot open shared object file")
 
 _lipsa = [None]      # {pachet: {"cand": ora primei lipse, "semn": semnListe()}}, citit din LIPSA_FISIER o data
 _harta = [None]
+_bibliotecileHartii = [None]   # {biblioteca: pachet} din HARTA ("biblioteci", 0.7.8)
+_feed = {"semn": None, "module": {}, "biblioteci": {}}   # din listele surselor noastre, citite din nou cand se schimba
 _coada = []          # [{"pachet", "modul", "pluginuri": {cale: {"nume", "cand"}}}], in ordinea cererilor
 _rezultat = {}       # pachet -> {"stare": instalat | esuat | refuzat | lipsa | instalat_dar_cade, "motiv": text}
 _pePlugin = {}       # calea pluginului -> cate pachete i s-au instalat in sesiunea asta
+_scanate = set()     # pluginurile ale caror module .so au fost citite (cereBibliotecilePluginului), o data pe sesiune
 _stare = {"sesiune": None, "pornit": False, "ceas": None, "lucrare": None, "liste": False, "esecuri_liste": 0}
 
 
@@ -101,16 +127,78 @@ def _c(cale):
 def harta():
 	"""{modul: pachet} din HARTA, citita o data; {} cand lipseste sau e stricata"""
 	if _harta[0] is None:
-		h = {}
+		h, b = {}, {}
 		try:
 			with open(_c(HARTA), encoding="utf-8") as f:
 				date = json.load(f)
 			if date.get("format") == 1 and isinstance(date.get("module"), dict):
 				h = dict((m, p) for m, p in date["module"].items() if _NUME.match(m) and _pachetBun(p))
+				if isinstance(date.get("biblioteci"), dict):
+					b = dict((n, p) for n, p in date["biblioteci"].items() if _BIBLIOTECA.match(n) and _pachetBun(p))
 		except (OSError, ValueError, AttributeError) as e:
 			_jurnal("harta %s: %s" % (HARTA, e))
 		_harta[0] = h
+		_bibliotecileHartii[0] = b
 	return _harta[0]
+
+
+def _citesteLista(cale, module, biblioteci):
+	"""Campurile Python-Modules si Libraries dintr-o lista Packages descarcata de opkg: module[modul] = pachet (numai pachetele
+	python3-* si twistedsnmp*, ca harta), biblioteci[biblioteca] = pachet; la acelasi nume ramane primul pachet."""
+	pachet = None
+	try:
+		with open(cale, "r", encoding="utf-8", errors="replace") as fh:
+			for r in fh:
+				if not r.strip():
+					pachet = None
+					continue
+				if r[:1] in " \t" or ":" not in r:
+					continue
+				camp, valoare = r.split(":", 1)
+				camp = camp.strip().lower()
+				if camp == "package":
+					p = valoare.strip()
+					pachet = p if _pachetBun(p) else None
+				elif pachet is None:
+					continue
+				elif camp == CAMP_MODULE and pachet.startswith(("python3-", "twistedsnmp")):
+					for m in valoare.split()[:200]:
+						if _NUME.match(m):
+							module.setdefault(m, pachet)
+				elif camp == CAMP_BIBLIOTECI:
+					for b in valoare.split()[:200]:
+						if _BIBLIOTECA.match(b):
+							biblioteci.setdefault(b, pachet)
+	except (IOError, OSError) as e:
+		_jurnal("lista %s: %r" % (cale, e))
+
+
+def _hartaFeed(conf=None):
+	"""({modul: pachet}, {biblioteca: pachet}) din listele surselor noastre (_sursaNoastra), citite din nou numai cand se schimba
+	listele (semnListe); ({}, {}) cand nu se pot citi. Sursele altora nu conteaza: numai ce publicam noi."""
+	try:
+		conf = conf or _configurare()
+		semn = semnListe(conf)
+		if _feed["semn"] is not None and semn == _feed["semn"]:
+			return _feed["module"], _feed["biblioteci"]
+		module, biblioteci = {}, {}
+		for n, a in sorted(conf.surse):
+			if _sursaNoastra(conf, n, a):
+				_citesteLista(os.path.join(_c(conf.lists_dir), n), module, biblioteci)
+		_feed.update(semn=semn, module=module, biblioteci=biblioteci)
+		return module, biblioteci
+	except Exception as e:
+		_jurnal("listele feedului: %r" % (e,))
+		return {}, {}
+
+
+def _prefix(modul, h):
+	parti = modul.split(".")
+	for i in range(len(parti), 0, -1):
+		p = h.get(".".join(parti[:i]))
+		if p:
+			return p
+	return None
 
 
 def _pachetBun(nume):
@@ -122,20 +210,44 @@ def modulDinEroare(eroare):
 	if isinstance(eroare, ImportError) and getattr(eroare, "name", None) and "No module named" in str(eroare):
 		return eroare.name
 	gasit = _MODUL.search(str(eroare or ""))
+	if gasit is None:
+		gasit = _IMPORT_OPRIT.search(str(eroare or ""))
 	return gasit.group(1) if gasit else None
 
 
 def pachetPentru(modul):
-	"""pachetul din harta pentru modul (cel mai lung prefix cu puncte: Crypto.Cipher -> Crypto), sau None"""
+	"""pachetul din harta pentru modul (cel mai lung prefix cu puncte: Crypto.Cipher -> Crypto), sau None. Intai harta din
+	imagine (drumul de la pornire, fara liste); apoi listele feedului nostru (0.7.8, campul Python-Modules)."""
 	if not modul or not _NUME.match(modul):
 		return None
-	h = harta()
-	parti = modul.split(".")
-	for i in range(len(parti), 0, -1):
-		p = h.get(".".join(parti[:i]))
-		if p:
-			return p
-	return None
+	return _prefix(modul, harta()) or _prefix(modul, _hartaFeed()[0])
+
+
+def bibliotecaDinEroare(eroare):
+	"""numele bibliotecii lipsa din eroarea lui dlopen ("libuchardet.so.0: cannot open shared object file"), sau None"""
+	gasit = _BIBLIOTECA_LIPSA.search(str(eroare or ""))
+	return gasit.group(1) if gasit else None
+
+
+def pachetBiblioteca(biblioteca):
+	"""pachetul feedului nostru pentru biblioteca: BIBLIOTECI (bibliotecile vechi ale programelor altora, cu legaturile lor), harta
+	din imagine, apoi listele feedului nostru (campul Libraries); None pentru un nume rau sau necunoscut."""
+	if not biblioteca or not _BIBLIOTECA.match(biblioteca):
+		return None
+	p = BIBLIOTECI.get(biblioteca)
+	if p:
+		return p
+	harta()
+	return (_bibliotecileHartii[0] or {}).get(biblioteca) or _hartaFeed()[1].get(biblioteca)
+
+
+def hartaBiblioteci():
+	"""{biblioteca: pachet} cunoscute (pentru HdsBibliotecaLipsa.lipsaPlugin): listele feedului, harta din imagine, BIBLIOTECI peste"""
+	harta()
+	h = dict(_hartaFeed()[1])
+	h.update(_bibliotecileHartii[0] or {})
+	h.update(BIBLIOTECI)
+	return h
 
 
 def instalat(pachet):
@@ -146,14 +258,17 @@ def cere(eroare, cale, nume, cand="incarcare"):
 	"""Pachetul pus in coada pentru pluginul de la `cale`, sau None (modul in afara hartii, deja incercat, deja instalat)."""
 	try:
 		modul = modulDinEroare(eroare)
+		if modul is None:
+			# 0.7.8 (CM1): un modul .so al pluginului nu porneste fiindca ii lipseste o biblioteca
+			return cereBibliotecilePluginului(eroare, cale, nume, cand)
 		pachet = pachetPentru(modul)
 		if pachet is None:
 			return None
 		cale = cale or nume or ""
 		if instalat(pachet):
 			# pachetul e pe receptor si pluginul tot cade pe el: nu e o lipsa a imaginii; o singura data in jurnal
-			if pachet not in _rezultat:
-				_rezultat[pachet] = {"stare": "instalat_dar_cade", "motiv": ""}
+			if _rezultat.get(pachet, {}).get("stare") != "instalat_dar_cade":
+				_rezultat[pachet] = {"stare": "instalat_dar_cade", "motiv": str(eroare)}
 				_jurnal("%s e instalat, dar %s tot nu gaseste %s" % (pachet, nume, modul))
 			return None
 		if pachet in _rezultat:
@@ -166,6 +281,7 @@ def cere(eroare, cale, nume, cand="incarcare"):
 			_coada.append(el)
 			_jurnal("in coada: %s (modulul %s, pentru %s)" % (pachet, modul, nume))
 		el["pluginuri"].setdefault(cale, {"nume": nume or cale.rsplit("/", 1)[-1], "cand": cand})
+		el.setdefault("module", set()).add(modul)
 		if _stare["pornit"]:
 			_programeaza(PAS_URMATOR_MS)
 		return pachet
@@ -179,7 +295,7 @@ def cereBiblioteca(biblioteca, cale, nume, cand="program", dupa=None):
 	instalare reusita (de pilda: modulul de acces porneste din nou). Aceleasi reguli ca la cere(): o incercare pe pachet si sesiune,
 	nimic pentru un pachet deja instalat."""
 	try:
-		pachet = BIBLIOTECI.get(biblioteca)
+		pachet = pachetBiblioteca(biblioteca)
 		if pachet is None or not _pachetBun(pachet):
 			return None
 		cale = cale or nume or ""
@@ -201,6 +317,48 @@ def cereBiblioteca(biblioteca, cale, nume, cand="program", dupa=None):
 		return pachet
 	except Exception as e:
 		_jurnal("cereBiblioteca: %r" % (e,))
+		return None
+
+
+def cereBibliotecilePluginului(eroare, cale, nume, cand="incarcare"):
+	"""0.7.8 (CM1): pluginul de la `cale` a cazut fiindca un modul .so al lui nu gaseste o biblioteca. In coada: biblioteca din
+	mesajul lui dlopen (care o spune numai pe prima) si cele care mai lipsesc modulelor .so ale pluginului, cand feedul nostru le
+	are (pachetBiblioteca), fiecare o data, cu randul in jurnal, ca la modulele de acces. Dupa instalare pluginul porneste ca dupa
+	un modul instalat (dupaLucrare). Intoarce primul pachet pus in coada, sau None."""
+	try:
+		prima = bibliotecaDinEroare(eroare)
+		if prima is None:
+			return None
+		cale = cale or nume or ""
+		if _pePlugin.get(cale, 0) >= MAX_PE_PLUGIN:
+			return None
+		cerute = [prima]
+		if cale.startswith("/") and cale not in _scanate:
+			# o data pe sesiune si plugin: la recitirile listei, biblioteca din mesaj ajunge
+			_scanate.add(cale)
+			try:
+				from Components import HdsBibliotecaLipsa
+			except ImportError:
+				import HdsBibliotecaLipsa
+			for b, _p in HdsBibliotecaLipsa.lipsaPlugin(cale, hartaBiblioteci(), MAX_PLUGIN_SO):
+				if b not in cerute:
+					cerute.append(b)
+		puse = []
+		ramase = MAX_PE_PLUGIN - _pePlugin.get(cale, 0)   # si aici cel mult MAX_PE_PLUGIN pachete pentru acelasi plugin
+		for b in cerute:
+			if len(puse) >= ramase:
+				_jurnal("%s: cel mult %d pachete pentru un plugin; %s ramane" % (nume or cale, MAX_PE_PLUGIN, b))
+				break
+			p = cereBiblioteca(b, cale, nume, cand)
+			if p and p not in puse:
+				puse.append(p)
+		if not puse and pachetBiblioteca(prima) is None and ("biblioteca:" + prima) not in _rezultat:
+			# o data pe sesiune: biblioteca nu e in feedul nostru (de pilda libavcodec.so.62, ffmpeg 8)
+			_rezultat["biblioteca:" + prima] = {"stare": "lipsa", "motiv": ""}
+			_jurnal("%s cere biblioteca %s, pe care feedul nostru nu o are" % (nume or cale, prima))
+		return puse[0] if puse else None
+	except Exception as e:
+		_jurnal("cereBibliotecilePluginului: %r" % (e,))
 		return None
 
 
@@ -240,8 +398,12 @@ def dupaCitire(plugins):
 	"""Dupa readPluginList: pluginurile cazute la import pe un modul din harta (erori cu "modul")."""
 	try:
 		for e in list(getattr(plugins, "erori", {}).values()):
-			if e.get("modul"):
-				cere(ImportError("No module named '%s'" % e["modul"]), e.get("path"), e.get("nume"), "incarcare")
+			modul = e.get("modul") or modulDinEroare(e.get("mesaj"))
+			if modul:
+				cere(ImportError("No module named '%s'" % modul), e.get("path"), e.get("nume"), "incarcare")
+			elif bibliotecaDinEroare(e.get("mesaj")):
+				# 0.7.8 (CM1): un modul .so al pluginului fara biblioteca (mesajul lui dlopen, pastrat in erori)
+				cere(ImportError(e.get("mesaj")), e.get("path"), e.get("nume"), "incarcare")
 	except Exception as e:
 		_jurnal("dupaCitire: %r" % (e,))
 
@@ -263,6 +425,8 @@ def textStare(modul):
 	r = _rezultat.get(pachet)
 	if r and r["stare"] in ("esuat", "refuzat", "lipsa"):
 		return _t("Lipsește modulul %s. Nu s-a putut instala: %s") % (modul, r["motiv"])
+	if r and r["stare"] == "instalat_dar_cade" and r.get("motiv"):
+		return _t("Pachetul %s este instalat, dar modulul %s nu se încarcă: %s") % (pachet, modul, r["motiv"])
 	return None
 
 
@@ -351,6 +515,53 @@ def _sursaNoastra(conf, nume, adresa):
 	except Exception as e:
 		_jurnal("sursa %s: %r" % (nume, e))
 		return False
+
+
+def semnListeNoastre(conf=None):
+	"""{nume: (mtime_ns, marime, inode) sau None} pentru lista fiecarei surse de-ale noastre (_sursaNoastra); se ia chiar
+	inainte de opkg update, ca listeBune sa vada care liste a scris descarcarea (fara ceas: opkg rescrie lista la fiecare
+	descarcare reusita, chiar cu acelasi continut)."""
+	conf = conf or _configurare()
+	rez = {}
+	for n, a in conf.surse:
+		if not _sursaNoastra(conf, n, a):
+			continue
+		try:
+			st = os.stat(os.path.join(_c(conf.lists_dir), n))
+			rez[n] = (st.st_mtime_ns, st.st_size, st.st_ino)
+		except OSError:
+			rez[n] = None
+	return rez
+
+
+def semnInainte():
+	"""semnListeNoastre() inainte de opkg update; None cand nu se poate citi (atunci listeBune cere codul 0, ca pana acum)"""
+	try:
+		return semnListeNoastre()
+	except Exception as e:
+		_jurnal("listele inainte de opkg update: %r" % (e,))
+		return None
+
+
+def listeBune(cod, inainte):
+	"""Dupa opkg update: True cand codul e 0 sau, cu alt cod, cand descarcarea a scris lista fiecarei surse de-ale noastre
+	(semnul ei s-a schimbat fata de `inainte`, luat cu semnInainte). opkg update iese cu 255 si cand cade numai o sursa
+	straina (pusa de om, de un plugin sau adusa de copia setarilor, cu serverul ei oprit); ce instalam singuri (modulele,
+	bibliotecile, driverele: Components/HdsDriverLipsa) vine numai din feedul nostru, deci atunci mergem mai departe, ca
+	actualizarea din meniu (Components/HdsActualizari._dupa_update), fara mesajul fals de lipsa internetului."""
+	if cod == 0:
+		return True
+	if not inainte:
+		return False
+	try:
+		acum = semnListeNoastre()
+	except Exception as e:
+		_jurnal("listele dupa opkg update: %r" % (e,))
+		return False
+	bune = set(acum) == set(inainte) and all(acum[n] is not None and acum[n] != inainte[n] for n in acum)
+	if bune:
+		_jurnal("opkg update: cod %s, dar listele feedului nostru s-au descarcat toate (a cazut numai o sursa straina)" % cod)
+	return bune
 
 
 def listeVechi(conf=None, acum=None):
@@ -548,12 +759,13 @@ def _urmatorul():
 def _actualizeazaListele():
 	X = _X()
 	_jurnal("opkg update inainte de instalare")
+	inainte = semnInainte()
 	d = X.pornesteDescarcarea()
 
 	def gata(eveniment, parametru):
 		if eveniment == X.IpkgComponent.EVENT_DONE:
 			d.removeCallback(gata)
-			if parametru == 0:
+			if listeBune(parametru, inainte):
 				_stare["esecuri_liste"] = 0
 				_programeaza(PAS_URMATOR_MS)
 				return
@@ -609,7 +821,7 @@ def _pornesteLucrarea(el, versiune):
 		_rezultat[el["pachet"]] = {"stare": "esuat", "motiv": _t("Numele pachetului nu este valid.")}
 		return
 	_stare["lucrare"] = el
-	l = X.Lucrare(plan)
+	l = _lucrareModul(X, plan, el)
 
 	def ascultator(eveniment, *date):
 		if eveniment == "gata":
@@ -624,6 +836,65 @@ def _pornesteLucrarea(el, versiune):
 	else:
 		_mesaj(_t("Se instalează modulul %s pentru %s.") % (el["modul"], _numePluginuri(el)))
 	l.porneste()
+
+
+def _uitaImporturiLipsa(el):
+	"""Remove only negative entries for the requested modules after a successful install."""
+	if el.get("fel") in ("biblioteca", "pachet"):
+		return False
+	schimbat = False
+	for modul in el.get("module", (el["modul"],)):
+		if modul in sys.modules and sys.modules[modul] is None:
+			del sys.modules[modul]
+			schimbat = True
+	return schimbat
+
+
+def _lucrareModul(X, plan, el):
+	"""Scope negative import recovery to the installer's existing plugin read."""
+	if el.get("fel") in ("biblioteca", "pachet"):
+		return X.Lucrare(plan)
+
+	class LucrareModul(X.Lucrare):
+		def _gataVerificata(self, cod, verificare):
+			# Use the same verified success conditions as Lucrare, without disk IO.
+			tinte = self.plan.get("tinte") or []
+			bune, rele, acum = verificare if verificare is not None else ([], tinte, None)
+			facut = bool(bune) and len(bune) == len(tinte) and not rele
+			reusit = cod == 0 and (not tinte or facut) and not self.oprit
+			if cod == 255 and facut and self.schimbat and not self.oprit and self.neconfigurateInainte is not None:
+				reusit = (X.numaiEroriVechi(self.linii, self.neconfigurateInainte) and acum is not None and
+					bool(self.neconfigurateInainte) and not any(n not in self.neconfigurateInainte for n in acum))
+			if not reusit or self._eroareSiguranta:
+				return super()._gataVerificata(cod, verificare)
+			from Components import PluginComponent
+			importa = PluginComponent._importaPlugin
+
+			def importaReinnoit(categorie, nume, cale):
+				if cale not in el["pluginuri"]:
+					return importa(categorie, nume, cale)
+				_uitaImporturiLipsa(el)
+				incercate = set()
+				while True:
+					try:
+						return importa(categorie, nume, cale)
+					except ImportError as eroare:
+						gasit = _IMPORT_OPRIT.search(str(eroare))
+						modul = gasit.group(1) if gasit else None
+						# Only an actual negative dependency encountered by this import.
+						if not modul or modul in incercate or modul not in sys.modules or sys.modules[modul] is not None:
+							raise
+						incercate.add(modul)
+						del sys.modules[modul]
+
+			PluginComponent._importaPlugin = importaReinnoit
+			try:
+				return super()._gataVerificata(cod, verificare)
+			finally:
+				if PluginComponent._importaPlugin is importaReinnoit:
+					PluginComponent._importaPlugin = importa
+
+	return LucrareModul(plan)
 
 
 def dupaLucrare(el, lucrare, plugins=None):
@@ -652,28 +923,34 @@ def dupaLucrare(el, lucrare, plugins=None):
 			_jurnal("%s instalat pentru %s" % (el["pachet"], _numePluginuri(el)))
 			_dupaPachet(el, True)
 			return
+		pluginuri = el["pluginuri"]
 		if el.get("fel") == "biblioteca":
 			# programele (module de acces) nu sunt pluginuri de activat: fiecare porneste din nou prin dupa(), dar numai dupa ultima
 			# biblioteca pe care o mai asteapta (mgcamd cere trei pachete, deci trei elemente in coada: o pornire dupa primul ar cadea)
-			nume = []
-			for cale, v in el["pluginuri"].items():
-				if any(cale in x["pluginuri"] for x in _coada):
-					continue
-				nume.append(v["nume"])
-				if callable(v.get("dupa")):
-					try:
-						v["dupa"]()
-					except Exception as e:
-						_jurnal("dupa %s: %r" % (cale, e))
-			_jurnal("%s instalat; pornite din nou: %s" % (el["pachet"], ", ".join(sorted(set(nume))) or "-"))
-			if nume:
-				_mesaj(_t("Biblioteca %s s-a instalat; %s pornește din nou.") % (el["modul"], ", ".join(sorted(set(nume)))))
-			return
+			# 0.7.8 (CM1): bibliotecile cerute de pluginuri (cand: incarcare, deschidere) merg mai jos, ca modulele
+			programe = dict((c, v) for c, v in pluginuri.items() if v.get("cand") not in ("incarcare", "deschidere"))
+			pluginuri = dict((c, v) for c, v in pluginuri.items() if c not in programe)
+			if programe or not pluginuri:
+				nume = []
+				for cale, v in programe.items():
+					if any(cale in x["pluginuri"] for x in _coada):
+						continue
+					nume.append(v["nume"])
+					if callable(v.get("dupa")):
+						try:
+							v["dupa"]()
+						except Exception as e:
+							_jurnal("dupa %s: %r" % (cale, e))
+				_jurnal("%s instalat; pornite din nou: %s" % (el["pachet"], ", ".join(sorted(set(nume))) or "-"))
+				if nume:
+					_mesaj(_t("Biblioteca %s s-a instalat; %s pornește din nou.") % (el["modul"], ", ".join(sorted(set(nume)))))
+			if not pluginuri:
+				return
 		if plugins is None:
 			from Components.PluginComponent import plugins
 		erori = dict((e.get("path"), e) for e in getattr(plugins, "erori", {}).values())
 		gata, cad, deschide = [], [], []
-		for cale, v in el["pluginuri"].items():
+		for cale, v in pluginuri.items():
 			_pePlugin[cale] = _pePlugin.get(cale, 0) + 1
 			if v["cand"] == "deschidere":
 				deschide.append(v["nume"])
@@ -689,13 +966,23 @@ def dupaLucrare(el, lucrare, plugins=None):
 			rez.update(stare=_t("Gata"), butoane=[N_("Închide")], ales=0, repornire=False, culoare="bun")
 		texte = []
 		for cale in gata:
-			texte.append(_t("%s este gata.") % el["pluginuri"][cale]["nume"])
+			texte.append(_t("%s este gata.") % pluginuri[cale]["nume"])
 		for nume in deschide:
-			texte.append(_t("Modulul %s s-a instalat. Deschide din nou %s.") % (el["modul"], nume))
+			if el.get("fel") == "biblioteca":
+				texte.append(_t("Biblioteca %s s-a instalat. Deschide din nou %s.") % (el["modul"], nume))
+			else:
+				texte.append(_t("Modulul %s s-a instalat. Deschide din nou %s.") % (el["modul"], nume))
 		for nume, e in cad:
-			# alt modul lipsa: dupaCitire l-a pus deja in coada; altfel motivul
-			if not e.get("modul"):
-				texte.append(_t("%s tot nu pornește: %s") % (nume, ((e.get("mesaj") or "").splitlines() or [""])[0][:120]))
+			# alt modul lipsa: dupaCitire l-a pus deja in coada (si o alta biblioteca din feed, 0.7.8); altfel motivul
+			modul = e.get("modul")
+			# dupaCitire has already resolved the package; use memory only here.
+			pachet = (_prefix(modul, _harta[0] or {}) or _prefix(modul, _feed["module"])) if modul else None
+			if not any(x["pachet"] == pachet for x in _coada) and not _bibliotecaInCoada(e):
+				motiv = e.get("mesaj") or ""
+				if pachet == el["pachet"]:
+					_rezultat[pachet] = {"stare": "instalat_dar_cade", "motiv": motiv}
+				detaliu = motiv if modul else ((motiv.splitlines() or [""])[0][:120])
+				texte.append(_t("%s tot nu pornește: %s") % (nume, detaliu))
 		_jurnal("%s instalat; gata: %s; pornite acum: %d" % (el["pachet"], ", ".join(gata) or "-", len(pornite or [])))
 		_mesaj(" ".join(texte))
 	except Exception as e:
@@ -705,11 +992,21 @@ def dupaLucrare(el, lucrare, plugins=None):
 			_programeaza(PAS_URMATOR_MS)
 
 
+def _bibliotecaInCoada(eroare):
+	"""eroarea unui plugin din lista e o biblioteca lipsa al carei pachet asteapta deja in coada"""
+	b = bibliotecaDinEroare((eroare or {}).get("mesaj"))
+	p = pachetBiblioteca(b) if b else None
+	return p is not None and any(x["pachet"] == p for x in _coada)
+
+
 def _reseteaza():
 	"""numai pentru probe: starea modulului ca la pornire"""
 	_harta[0] = None
+	_bibliotecileHartii[0] = None
+	_feed.update(semn=None, module={}, biblioteci={})
 	_lipsa[0] = None
 	del _coada[:]
 	_rezultat.clear()
 	_pePlugin.clear()
+	_scanate.clear()
 	_stare.update(sesiune=None, pornit=False, ceas=None, lucrare=None, liste=False, esecuri_liste=0)

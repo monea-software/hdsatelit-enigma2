@@ -1,0 +1,30 @@
+From: HDSatelit <dev@hdsatelit.local>
+Subject: [PATCH] JSC: include declarations used by 32-bit JIT headers
+
+The LLInt offsets extractor includes these headers without the incidental
+includes supplied by the unified JIT sources. Include the fence function
+and the complete helper type before their inline uses.
+
+Upstream-Status: Pending
+---
+diff --git a/Source/JavaScriptCore/runtime/JSCJSValue.h b/Source/JavaScriptCore/runtime/JSCJSValue.h
+--- a/Source/JavaScriptCore/runtime/JSCJSValue.h
++++ b/Source/JavaScriptCore/runtime/JSCJSValue.h
+@@ -31,5 +31,6 @@
+ #include <atomic>
+ #include <cmath>
++#include <wtf/Atomics.h>
+ #include <wtf/Forward.h>
+ #include <wtf/HashFunctions.h>
+ #include <wtf/HashTraits.h>
+diff --git a/Source/JavaScriptCore/bytecode/InlineCacheCompiler.h b/Source/JavaScriptCore/bytecode/InlineCacheCompiler.h
+--- a/Source/JavaScriptCore/bytecode/InlineCacheCompiler.h
++++ b/Source/JavaScriptCore/bytecode/InlineCacheCompiler.h
+@@ -30,6 +30,7 @@
+ #if ENABLE(JIT)
+ 
+ #include "AccessCase.h"
++#include "CCallHelpers.h"
+ #include "InlineCacheHandler.h"
+ #include "JITStubRoutine.h"
+ #include "JSFunctionInlines.h"

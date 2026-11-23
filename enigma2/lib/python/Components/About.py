@@ -1,6 +1,9 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+import glob
 import os
 import re
+import sys
+import threading
 
 try:
 	from Tools.Directories import resolveFilename, SCOPE_SYSETC
@@ -289,6 +292,12 @@ class About:
 			return _("%d MB") % megabytes
 		return _("%.1f GB") % (megabytes / 1024.0)
 
+	def getPythonVersionString(self):
+		"""The Python the image runs on, from the running interpreter (no file read): "3.12.10 (32 de biti)"."""
+		vi = sys.version_info
+		biti = 64 if sys.maxsize > 2 ** 32 else 32
+		return _("%(versiune)s (%(biti)d de biți)") % {"versiune": "%d.%d.%d" % (vi[0], vi[1], vi[2]), "biti": biti}
+
 	def getUptimeString(self):
 		try:
 			seconds = int(float(self._readFile("/proc/uptime").split()[0]))
@@ -311,6 +320,181 @@ def _tipImagine(self):
 About.getImageTypeString = _tipImagine
 About.getChipSetString = lambda self: self.getChipset()
 About.getCPUString = lambda self: self.getCPUInfo()
+
+
+# ---------------------------------------------------------------- hardware details ("Receptor si procesor", TV and web)
+# Read once per enigma2 run on a daemon thread; the UI thread never reads these files. The thread hands its result over
+# by one assignment (_DETALII["gata"]); the UI thread moves it to _DETALII["date"] (detaliiHardware), so what a screen
+# has shown can only change on the UI thread. No lock, no join, no wait on the UI thread. A read that hangs in the
+# kernel keeps its thread; no second thread is started and the screens stay as before (no section).
+# Values are raw (no translated text): the screens build the rows, with a short reason for what the board does not show.
+# Only fixed nodes are read (no walk of /proc/stb, no *_apply or *event* node, no subprocess).
+RADACINA_DETALII = "/"
+_DETALII = {"fir": None, "gata": None, "date": None}
+_MTD_INTREG = ("all", "whole", "nand", "flash", "full", "complete")
+_FS_NAND = ("ubifs", "jffs2", "yaffs2", "yaffs")
+_OPKG_INFO = ("/var/lib/opkg/info", "/usr/lib/opkg/info")
+_DRIVERE = ("*-dvb-modules-*.control", "*-dvb-proxy-*.control", "*-platform-util-*.control")
+
+
+def _caleDetalii(radacina, c):
+	if not radacina or radacina == "/":
+		return c
+	return os.path.join(radacina, c.lstrip("/"))
+
+
+def _citesteDetalii(radacina, c, maxim=65536, binar=False):
+	try:
+		with open(_caleDetalii(radacina, c), "rb") as f:
+			date = f.read(maxim)
+	except (IOError, OSError):
+		return None
+	return date if binar else date.decode("utf-8", "replace")
+
+
+def _curat(text, maxim=60):
+	"""One line, printable characters only, repeated spaces folded."""
+	text = "".join(ch for ch in (text or "") if ch.isprintable())
+	return " ".join(text.split())[:maxim]
+
+
+def _detaliiCpu(radacina, d):
+	text = _citesteDetalii(radacina, "/proc/cpuinfo") or ""
+	for linie in text.splitlines():
+		k, sep, v = linie.partition(":")
+		k, v = k.strip().lower(), _curat(v)
+		if not sep or not v:
+			continue
+		if k == "cpu model" and "nucleu_cpu" not in d:
+			d["nucleu_cpu"] = v
+		elif k == "model name" and "nucleu_cpu" not in d:
+			d["nucleu_cpu"] = v
+	# cpu MHz may be the current frequency; it cannot describe the maximum.
+	khz = _citesteDetalii(radacina, "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
+	try:
+		d["mhz"] = max(0, int((khz or "").strip()) // 1000)
+	except ValueError:
+		pass
+	if not d.get("mhz"):
+		for c in ("/proc/device-tree/cpus/cpu@0/clock-frequency", "/sys/firmware/devicetree/base/cpus/cpu@0/clock-frequency"):
+			b = _citesteDetalii(radacina, c, 16, binar=True)
+			if b and len(b) in (4, 8):
+				d["mhz"] = int.from_bytes(b, "big") // 1000000
+				break
+	if not d.get("mhz"):
+		d.pop("mhz", None)
+
+
+def _detaliiFlash(radacina, d):
+	"""Type of the internal memory after the root file system, and its size: the whole eMMC chip, or the MTD partitions
+	added up (not when a partition covers the whole chip: then the sum would count it twice)."""
+	dev, fs = "", ""
+	for linie in (_citesteDetalii(radacina, "/proc/mounts") or "").splitlines():
+		parti = linie.split()
+		if len(parti) >= 3 and parti[1] == "/" and parti[2] != "rootfs":
+			dev, fs = parti[0], parti[2]
+	if not fs:
+		return
+	d["flash_fs"] = _curat(fs, 12).upper()
+	mmc = re.match(r"^/dev/(mmcblk\d+)", dev)
+	if fs in _FS_NAND or dev.startswith(("ubi", "/dev/mtdblock", "mtd")):
+		d["flash_tip"] = "NAND"
+		total = 0
+		for linie in (_citesteDetalii(radacina, "/proc/mtd") or "").splitlines():
+			m = re.match(r'^mtd\d+:\s+([0-9a-fA-F]+)\s+[0-9a-fA-F]+\s+"([^"]*)"', linie.strip())
+			if not m:
+				continue
+			if m.group(2).strip().lower() in _MTD_INTREG:
+				total = 0
+				break
+			total += int(m.group(1), 16)
+		if total:
+			d["flash_mtd_mb"] = total // (1024 * 1024)
+	elif mmc:
+		d["flash_tip"] = "eMMC"
+		try:
+			d["flash_mb"] = int((_citesteDetalii(radacina, "/sys/block/%s/size" % mmc.group(1)) or "").strip()) * 512 // (1024 * 1024)
+		except ValueError:
+			pass
+
+
+def _detaliiDrivere(radacina, d):
+	"""The date of the driver package (Version: ...-YYYYMMDD-...) and its name, from the opkg list on the receiver."""
+	for dosar in _OPKG_INFO:
+		for tipar in _DRIVERE:
+			try:
+				gasite = sorted(glob.glob(os.path.join(_caleDetalii(radacina, dosar), tipar)))
+			except Exception:
+				gasite = []
+			for cale in gasite:
+				versiune = ""
+				# cale is already under radacina (glob above)
+				for linie in (_citesteDetalii("/", cale, 8192) or "").splitlines():
+					if linie.startswith("Version:"):
+						versiune = _curat(linie[8:], 40)
+						break
+				if not versiune:
+					continue
+				d["drivere_pachet"] = _curat(os.path.basename(cale)[:-len(".control")], 50)
+				m = re.search(r"(?<!\d)(20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)", versiune)
+				d["drivere"] = "%s-%s-%s" % m.groups() if m else versiune
+				return
+
+
+def colecteazaDetalii(radacina="/"):
+	"""Background thread only: {key: raw value} for what the board shows; a missing key = the board does not show it."""
+	d = {}
+	for nume in ("vumodel", "model", "boxtype"):
+		v = _curat(_citesteDetalii(radacina, "/proc/stb/info/" + nume, 256) or "", 30)
+		if v:
+			d["placa"] = v
+			break
+	for pas in (_detaliiCpu, _detaliiFlash, _detaliiDrivere):
+		try:
+			pas(radacina, d)
+		except Exception as e:
+			print("[About] detalii hardware %s: %r" % (pas.__name__, e))
+	fp = _curat(_citesteDetalii(radacina, "/proc/stb/fp/version", 64) or "", 20)
+	if fp:
+		d["fp"] = fp
+	return d
+
+
+def _lucreazaDetalii(radacina):
+	try:
+		rez = colecteazaDetalii(radacina)
+	except Exception as e:
+		print("[About] detalii hardware: %r" % (e,))
+		rez = {}
+	_DETALII["gata"] = rez
+
+
+def detaliiHardware():
+	"""UI thread: the hardware details in memory (a dict, maybe empty, once read), or None while they are being read.
+	The first call starts the background read; a finished read is published here. No file access."""
+	if _DETALII["date"] is None:
+		gata = _DETALII["gata"]
+		if gata is not None:
+			_DETALII["date"] = gata
+		elif _DETALII["fir"] is None:
+			fir = threading.Thread(target=_lucreazaDetalii, args=(RADACINA_DETALII,), name="hds-detalii-hardware")
+			fir.daemon = True
+			_DETALII["fir"] = fir
+			try:
+				fir.start()
+			except Exception as e:
+				print("[About] detalii hardware, firul: %r" % (e,))
+	return _DETALII["date"]
+
+
+def detaliiPublicate():
+	"""UI thread: what detaliiHardware() last published (None before), without starting or publishing anything."""
+	return _DETALII["date"]
+
+
+# the screens use the about object (Screens/Information.py: from Components.About import about)
+About.detaliiHardware = lambda self: detaliiHardware()
+About.detaliiPublicate = lambda self: detaliiPublicate()
 
 
 def GetIPsFromNetworkInterfaces():

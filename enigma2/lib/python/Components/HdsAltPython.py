@@ -334,7 +334,10 @@ def altPythonPyc(exc):
 # Tabelul: numai nume a caror disparitie e sigura. _PyThreadState_UncheckedGet: functie exportata pana la 3.12, in 3.13
 # devenita PyThreadState_GetUnchecked (gh-108867, What's New 3.13, C API); Cython o cheama pentru Python 3.6..3.12
 # (__Pyx_PyThreadState_Current), deci modulul e facut pentru 3.12 sau mai vechi.
-SIMBOLURI_DISPARUTE = {"_PyThreadState_UncheckedGet": (3, 12)}
+# _PyUnicode_Ready: declarat si definit in CPython 3.11.0, absent din 3.12.0
+# (Include/cpython/unicodeobject.h si Objects/unicodeobject.c, python/cpython).
+# PyUnicode_READY, functia publica de compatibilitate din 3.12, este alt simbol.
+SIMBOLURI_DISPARUTE = {"_PyThreadState_UncheckedGet": (3, 12), "_PyUnicode_Ready": (3, 11)}
 _SIMBOL_LIPSA = re.compile(r"undefined symbol: ((?:_{1,2})?Py[A-Za-z0-9_]*)")
 _ETICHETA_SO = re.compile(r"\.cpython-3([0-9]{1,3})[a-z]*(?:-[^/]*)?\.so$")
 

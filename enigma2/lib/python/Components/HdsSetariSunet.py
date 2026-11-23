@@ -11,6 +11,10 @@
 # - pasul volumului (1..10): tastele de volum (Components/VolumeControl.py) urca si coboara cu el, pe calea obisnuita
 #   a volumului (AUDIO_SET_MIXER, lib/dvb/volume.cpp);
 # - cat sta bara volumului pe ecran dupa ultima apasare (1..10 s, 3 ca inainte), in Components/VolumeControl.py;
+# - VOL8 (ozgurc67, Vu+ Solo SE): locul barei de volum (Sus in dreapta, din fabrica, ca pana atunci / La mijloc: bara mare,
+#   jos la mijlocul ecranului, cu semnul de mut tot acolo) si numarul nivelului langa bara (Nu din fabrica: tema HD Satelit
+#   nu-l arata pana atunci); Screens/Volume.py, Screens/Mute.py, Components/VolumeControl.py. Cu o tema straina ramane
+#   bara temei (si numarul ei, ca pana atunci);
 # - mutul tinut minte (config.audio.hds_mut, din VolumeControl): pus la loc la primul canal dupa pornire (mutLaPornire);
 # - volumul tinut minte pe canal: la fiecare schimbare de volum (VolumeControl.volSave, si din web) volumul se noteaza
 #   pentru canalul de acum; la pornirea unui canal (evStart, inainte sa porneasca sunetul lui) se pune volumul tinut
@@ -68,11 +72,11 @@ AVL = "proc/stb/audio/avl"
 AVL_OPRIT = "none"
 AVL_IESIRI = ("hdmi", "spdif", "dac")    # ordinea din meniu, ca la OE-Alliance (Off, HDMI, S/PDIF, DAC)
 MAX_OCTETI_AVL = 256
-# atributele AVC pe trepte (limitele driverului: prag -40..-16 dB, castig 0..8 dB, limita -40..0 dB, atac si revenire
+# atributele AVC pe trepte (limitele driverului: prag -39..-17 dB, castig 0..8 dB, limita -16..-6 dB, atac si revenire
 # 20..2000 ms). Ordinea scrierii: fiecare comanda schimba un atribut si le verifica pe toate, deci timpii intai, apoi
 # castigul, pragul si limita (limita ramane mereu peste prag). Valorile sunt puncte de plecare, de potrivit la ascultare.
 AVC = {
-	"usor": (("attacktime", 200), ("releasetime", 2000), ("gain", 3), ("thrhd", -20), ("limit", -3)),
+	"usor": (("attacktime", 200), ("releasetime", 2000), ("gain", 3), ("thrhd", -20), ("limit", -6)),
 	"puternic": (("attacktime", 50), ("releasetime", 500), ("gain", 6), ("thrhd", -30), ("limit", -10)),
 }
 FISIER = "/etc/enigma2/hdsatelit/sunet-canale.json"
@@ -123,6 +127,11 @@ RANDURI = (
 		N_("Câte secunde rămâne bara volumului pe ecran după ultima apăsare pe tastele de volum."), None),
 	("mut", "afisare_mut", N_("Cât stă semnul de mut pe ecran"),
 		N_("Câte secunde rămâne semnul de mut pe ecran după apăsarea pe MUTE. Mereu: semnul stă până pornește din nou sunetul."), None),
+	# VOL8: locul barei si numarul (Screens/Volume.py); se schimba pe loc (Components/VolumeControl.py, notificatorii)
+	("loc", "loc_volum", N_("Locul barei de volum"),
+		N_("Sus în dreapta: ca până acum. La mijloc: bară mare, jos, la mijlocul ecranului, de văzut de departe; semnul de mut stă și el acolo. Cu o temă străină rămâne bara temei."), None),
+	("numar", "numar_volum", N_("Arată numărul lângă bara de volum"),
+		N_("Da: lângă bara de volum se vede și nivelul, de la 0 la 100."), None),
 	("canal", "volum_pe_canal", N_("Volumul ținut minte pe canal"),
 		N_("Da: fiecare canal pornește cu volumul la care l-ai lăsat. Un canal la care nu ai schimbat volumul îl păstrează pe cel de acum."), None),
 	("egal", "volum_egal", N_("Volum egal între canale"),
@@ -139,6 +148,8 @@ RANDURI = (
 		N_("La fel, pentru bara de sunet sau amplificatorul legat la ieșirea optică a receptorului."),
 		"HdsSunetIntarziere"),
 )
+LOC_VOLUM = (("dreapta", N_("Sus în dreapta")), ("mijloc", N_("La mijloc")))
+LOC_VOLUM_IMPLICIT = "dreapta"
 NUME_VOLUM_EGAL = {"oprit": N_("Oprit"), "usor": N_("Ușor"), "puternic": N_("Puternic")}
 NUME_AVL = {"hdmi": "HDMI", "spdif": N_("Optic"), "dac": N_("Analogic")}
 ETICHETA_PISTA = N_("Întârzierea pistei pe acest canal")
@@ -587,6 +598,8 @@ def initConfig():
 		c.pas_volum = ConfigSelection(choices=alegeriPas(), default=str(PAS_IMPLICIT))
 		c.afisare_volum = ConfigSelection(choices=alegeriAfisare(), default=str(AFISARE_IMPLICIT))
 		c.afisare_mut = ConfigSelection(choices=alegeriAfisareMut(), default=str(AFISARE_MUT_IMPLICIT))
+		c.loc_volum = ConfigSelection(choices=list(LOC_VOLUM), default=LOC_VOLUM_IMPLICIT)
+		c.numar_volum = ConfigYesNo(default=False)
 		c.volum_pe_canal = ConfigYesNo(default=False)
 		c.volum_egal = ConfigSelection(choices=alegeriVolumEgal(iesiri), default="oprit")
 		c.intarziere_hdmi = ConfigSelection(choices=alegeriIntarziere(), default="0")
@@ -623,6 +636,17 @@ def afisareMutMs():
 	"""Cat sta semnul de mut pe ecran (Components/VolumeControl.py), in ms; 0 = mereu; 5000 fara setari."""
 	v = limiteaza(_valoare("afisare_mut", AFISARE_MUT_IMPLICIT), 0, AFISARE_MAX)
 	return 1000 * v
+
+
+def locVolum():
+	"""VOL8: "dreapta" (sus in dreapta, din fabrica) sau "mijloc"; "dreapta" fara setari sau cu o valoare necunoscuta."""
+	v = _valoare("loc_volum", LOC_VOLUM_IMPLICIT)
+	return v if v in [k for k, t in LOC_VOLUM] else LOC_VOLUM_IMPLICIT
+
+
+def numarVolum():
+	"""VOL8: numarul nivelului langa bara de volum (tema HD Satelit); False fara setari."""
+	return bool(_valoare("numar_volum", False))
 
 
 def volumPeCanal():

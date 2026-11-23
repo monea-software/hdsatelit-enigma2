@@ -12,9 +12,8 @@
 # fisier, pentru randurile din C++ si din Python); fara el (probele de pe PC, un enigma2 mai vechi) printr-un fir Python
 # al acestui modul. Apelul nu asteapta discul in niciun caz.
 #
-# CONFIDENTIALITATEA:
-# - curata(): un singur rand; adresele IPv4 si MAC intregi acoperite (192.168.x.x, a8:f2:1b:xx:xx:xx), adresele de
-#   e-mail scoase, valoarea de dupa cheie=, parola=, jeton=, token=, key=, password=, psk=, secret=, ssid= devine ***.
+# FORMA MESAJULUI:
+# - curata(): pastreaza valorile originale; numai caracterele de control devin spatii pentru un singur rand.
 # - canalul (numele, referinta serviciului, transponderul, SID-ul, PID-urile, codecul) intra NUMAI in randurile AVERT si
 #   EROARE (un esec: ca sa se afle exact canalul care nu merge), prin argumentul canal=; un rand INFO il pierde oricum.
 #   In mesaj nu se pun numele canalelor, titluri de emisiuni, nume de fisiere ale omului, nume de retele Wi-Fi.
@@ -50,29 +49,14 @@ def cale(componenta, vechi=0):
 # ------------------------------------------------------------------ curatarea
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
-_IPV4 = re.compile(r"(?<![\d.])(\d{1,3}\.\d{1,3})\.\d{1,3}\.\d{1,3}(?!\d|\.\d)")
-_MAC = re.compile(r"(?<![0-9A-Fa-f:])([0-9A-Fa-f]{2}([:-])[0-9A-Fa-f]{2}\2[0-9A-Fa-f]{2})\2[0-9A-Fa-f]{2}\2[0-9A-Fa-f]{2}"
-	r"\2[0-9A-Fa-f]{2}(?![0-9A-Fa-f:])")
-_CHEIE = re.compile(r"(?<![A-Za-z0-9_])(password|passwd|parola|cheie|jeton|token|secret|essid|ssid|pass|psk|key)"
-	r"(?![A-Za-z0-9_])([\"']?\s*[=:]\s*[\"']?)([^\s&,;\"')}\]]*)", re.IGNORECASE)
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+")
-
-
-def _stele(m):
-	return m.group(1) + m.group(2) + "*" * min(3, len(m.group(3)))
 
 
 def curata(text):
-	"""Textul pe un rand, fara IP si MAC intregi, fara e-mail, fara valorile cheilor (vezi sus)."""
 	if text is None:
 		return ""
 	if isinstance(text, bytes):
 		text = text.decode("utf-8", "replace")
-	text = _CONTROL.sub(" ", "%s" % text)
-	text = _IPV4.sub(r"\1.x.x", text)
-	text = _MAC.sub(lambda m: m.group(1) + m.group(2) + m.group(2).join(("xx", "xx", "xx")), text)
-	text = _EMAIL.sub("***@***", text)
-	return _CHEIE.sub(_stele, text)
+	return _CONTROL.sub(" ", "%s" % text)
 
 
 _CAMPURI_CANAL = ("nume", "ref", "poz", "tp", "sistem", "sid", "vpid", "apid", "codec", "tuner")

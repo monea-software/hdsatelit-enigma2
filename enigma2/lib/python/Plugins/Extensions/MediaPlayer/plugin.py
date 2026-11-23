@@ -56,12 +56,30 @@ class MyPlayList(PlayList):
 class MediaPixmap(Pixmap):
 	def __init__(self):
 		Pixmap.__init__(self)
+		self._closed = False
+		self.noCoverPixmap = None
 		self.coverArtFileName = ""
 		self.picload = ePicLoad()
 		self.picload.PictureData.get().append(self.paintCoverArtPixmapCB)
 		self.coverFileNames = ["folder.png", "folder.jpg"]
 
+	def close(self):
+		if getattr(self, "_closed", True):
+			return
+		# Disconnect before releasing the decoder; queued callbacks also check the state.
+		self._closed = True
+		callbacks = self.picload.PictureData.get()
+		if self.paintCoverArtPixmapCB in callbacks:
+			callbacks.remove(self.paintCoverArtPixmapCB)
+		self.picload = None
+
+	def destroy(self):
+		self.close()
+		Pixmap.destroy(self)
+
 	def applySkin(self, desktop, screen):
+		if getattr(self, "_closed", True):
+			return False
 		from Tools.LoadPixmap import LoadPixmap
 		noCoverFile = None
 		if self.skinAttributes is not None:
@@ -75,17 +93,23 @@ class MediaPixmap(Pixmap):
 		return Pixmap.applySkin(self, desktop, screen)
 
 	def onShow(self):
+		if getattr(self, "_closed", True) or self.instance is None:
+			return
 		Pixmap.onShow(self)
 		sc = AVSwitch().getFramebufferScale()
 		#0=Width 1=Height 2=Aspect 3=use_cache 4=resize_type 5=Background(#AARRGGBB)
 		self.picload.setPara((self.instance.size().width(), self.instance.size().height(), sc[0], sc[1], False, 1, "#00000000"))
 
 	def paintCoverArtPixmapCB(self, picInfo=None):
+		if getattr(self, "_closed", True) or self.instance is None:
+			return
 		ptr = self.picload.getData()
 		if ptr != None:
 			self.instance.setPixmap(ptr.__deref__())
 
 	def updateCoverArt(self, path):
+		if getattr(self, "_closed", True):
+			return
 		# the folder of the file (a path without "/" has no folder: no cover, and no endless loop)
 		path = path[:path.rfind("/") + 1]
 		if not path:
@@ -104,9 +128,12 @@ class MediaPixmap(Pixmap):
 				self.showDefaultCover()
 
 	def showDefaultCover(self):
-		self.instance.setPixmap(self.noCoverPixmap)
+		if not getattr(self, "_closed", True) and self.instance is not None:
+			self.instance.setPixmap(self.noCoverPixmap)
 
 	def embeddedCoverArt(self):
+		if getattr(self, "_closed", True):
+			return
 		print("[embeddedCoverArt] found")
 		self.coverArtFileName = "/tmp/.id3coverart"
 		self.picload.startDecode(self.coverArtFileName)
@@ -167,6 +194,7 @@ class MediaPlayer(Screen, InfoBarBase, InfoBarSeek, InfoBarAudioSelection, InfoB
 		self["genretext"] = Label(_("Genre")+':')
 		self["genre"] = Label("")
 		self["coverArt"] = MediaPixmap()
+		self.onClose.append(self["coverArt"].close)
 		self["repeat"] = MultiPixmap()
 
 		self.seek_target = None
@@ -372,7 +400,7 @@ class MediaPlayer(Screen, InfoBarBase, InfoBarSeek, InfoBarAudioSelection, InfoB
 			hotplugNotifier.remove(self.hotplugCB)
 		except (ImportError, ValueError):
 			pass
-		del self["coverArt"].picload
+		self["coverArt"].close()
 		self.close()
 
 	def checkSkipShowHideLock(self):

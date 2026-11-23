@@ -1,0 +1,37 @@
+From: HD Satelit
+Subject: [PATCH] romblock: reject a failed mapping before reading NAND
+
+Mapping may return -1, -EIO or -ENOMEM. Never pass those offsets to
+the underlying MTD read operation. The partition layout is unchanged.
+
+Upstream-Status: Pending
+Signed-off-by: HD Satelit
+---
+ drivers/hisilicon/misc/romblock.c | 19 +++++++++++--------
+ 1 file changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/hisilicon/misc/romblock.c b/drivers/hisilicon/misc/romblock.c
+--- a/drivers/hisilicon/misc/romblock.c
++++ b/drivers/hisilicon/misc/romblock.c
+@@ -113,10 +113,13 @@
+ static int romblock_readsect(struct mtd_blktrans_dev *dev,
+-			     unsigned long block, char *buf)
+-{
+-	size_t retlen;
+-	loff_t from;
+-	from = map_over_bad_blocks(dev, block << 9);
+-	if (dev->mtd->_read(dev->mtd, from, 512, &retlen, buf))
+-		return 1;
+-	return 0;
++			     unsigned long block, char *buf)
++{
++	size_t retlen;
++	loff_t from;
++	from = map_over_bad_blocks(dev, block << 9);
++	/* Mapping errors must not reach the physical NAND reader. */
++	if (from < 0)
++		return 1;
++	if (dev->mtd->_read(dev->mtd, from, 512, &retlen, buf))
++		return 1;
++	return 0;
+ }

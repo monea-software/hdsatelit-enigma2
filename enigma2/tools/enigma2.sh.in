@@ -153,7 +153,16 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 			-v mi="$hds_mi" '
 			# modelele cunoscute, in ordine alfabetica (ca HdsPazaModel.MODELE_CUNOSCUTE)
 			BEGIN {
-				NM = split("duo4k duo4klite duo4kse gbmv200 gbquad4k gbquad4kpro gbtrio4k gbue4k gbx34k protek4k sf8008 sf8008m " \
+				# Known startup values, mirrored in HdsPazaModel. Unknown values only warn.
+				n = split("H9Combo H9Twin h9combo h9twin H9TwinSE H9ComboSE h9combose h9twinse " \
+					"zgemmah9twinse zgemmah9combose dm7020hd dm8000 dm800se dm900 dm920 duo2 duo4k duo4kse gbmv200 " \
+					"gigablue h8 h8se h17 H17 h17combo H17Combo H17COMBO zgemmah17combo hd51 multiboxpro novaler4kpro " \
+					"multiboxse novaler4kse osmini4k osmio4k osmio4kplus pulse4k pulse4kmini sf8008 sf8008m sh1 zgemmass " \
+					"solo2 solo4k solose sx88v2 sx988 u57 u571 ultimo4k uno4kse ustym4kpro viper4k vuplus zero zero4k", X, " ")
+				for (j = 1; j <= n; j++) TIPURI[X[j]] = 1
+				n = split("7241 7251s 7252s 72604 7278 7356 7376 7424 7444s hi3716mv430 hi3796mv200 hi3798mv200 hi3798mv300 hi3798cv200", X, " ")
+				for (j = 1; j <= n; j++) CIPURI[X[j]] = 1
+				NM = split("duo4k duo4klite duo4kse gbmv200 gbquad4k gbquad4kpro gbtrio4k gbue4k gbx34k h8 h8se protek4k sf8008 sf8008m " \
 					"solo4k ultimo4k uno4k uno4kse ustym4kpro viper4k viper4kv20 viper4kv30 viper4kv40 zero4k", LM, " ")
 				for (j = 1; j <= NM; j++) MODELE[LM[j]] = 1
 			}
@@ -161,7 +170,9 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 			function scurt(s) { s = tolower(s); sub(/^vu/, "", s); if (s == "quad4kpro") s = "gbquad4kpro"; return s }
 			# modelele cunoscute numite intr-un text, sortate, unite cu virgula (HdsPazaModel.modeleDinTexte)
 			function modele(s,   n, j, x, X, G, r) {
-				n = split(tolower(s), X, /[^a-z0-9]+/)
+				# mi a trecut deja prin tr: punctele denumirii SE pot fi spatii.
+				s = tolower(s); gsub(/h8[. ]+2h[. ]+se/, "h8se", s)
+				n = split(s, X, /[^a-z0-9]+/)
 				for (j = 1; j <= n; j++) { x = scurt(X[j]); if (x in MODELE) G[x] = 1 }
 				r = ""
 				for (j = 1; j <= NM; j++) if (LM[j] in G) r = r (r == "" ? "" : ",") LM[j]
@@ -181,6 +192,27 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				n = split(s, X, " "); r = ""
 				for (j = 1; j <= n; j++) if (X[j] != "partitii" && X[j] != "kernel") r = r " " X[j]
 				return r
+			}
+			# Only a known, actually read difference can stop startup. Package validation stays in Python.
+			function dovada(k,   t, i) {
+				if (k == "cip") { t = tolower(cip); sub(/^bcm/, "", t); return t in CIPURI }
+				if (k == "hw") return hw == "00000001" || hw == "U5SLIM" || hw == "U5TWIN"
+				if (k == "partitii") {
+					for (i = 1; i <= ne && i <= ng; i++)
+						if (GN[i] != EN[i] || (EK[i] != "" && GK[i] != "" && EK[i] != GK[i])) return 1
+					return 0
+				}
+				if (k == "kernel") return (kp != "" && kp != R["kernel_part"]) || (rp != "" && rp != R["rootfs_part"]) || \
+					(!t2 && kk "" ~ /^[0-9]+$/ && kk "" != R["kernel_kib"])
+				if (k == "model_id") return ids != ""
+				if (k == "emmc") return ek "" ~ /^[0-9]+$/
+				if (k == "boxtype" || k == "eticheta") {
+					t = (k == "boxtype") ? bt : lt
+					# Dream model and mid are constants in the loaded driver, not measured hardware.
+					if (R["machinebuild"] ~ /^dm/ && t ~ /^dm/) return 0
+					return t in TIPURI
+				}
+				return 0
 			}
 			function kib(s,   n, u) {
 				if (s !~ /^[0-9]+[KkMmGg]?$/) return -1
@@ -229,12 +261,16 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 					# the box type: boxtype, else vumodel (Vu+), else model (Dreambox: the only node its drivers give), the
 					# last one only on eMMC: on NAND boards (Zgemma H9) model is not proof of the box type
 					cip = cs; if (bt == "") bt = vm; if (bt == "" && !nand) bt = mo; et = ""
+					# Native Dream node before compatibility helpers (vumodel=ultimo).
+					if (R["machinebuild"] ~ /^dm/ && mo != "" && (bt == "" || bt == "ultimo" || bt ~ /^dm/)) bt = mo
 					# on eMMC the place comes from /proc/cmdline; on NAND (Vu+ Solo SE) from the /proc/mtd list above
 					if (!nand) {
 						rp = brp; kp = bkp; parti = ""
 						if (kp == "" && (R["kernel_part"] in S)) kp = R["kernel_part"]
 					}
 				}
+				# H8 native model before its display boxtype; known foreign types still decide.
+				if ((mo == "h8" || mo == "h8se") && !(bt in TIPURI)) bt = mo
 				kk = (kp in S) ? S[kp] : ""
 				rk = (rp in S) ? S[rp] : ""
 				# the rules: the same keys and checks as HdsPazaModel.reguliValide (without the sums)
@@ -242,11 +278,11 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				nc = split("model machinebuild chip boxtype hw partitions kernel_part rootfs_part", C, " ")
 				for (j = 1; j <= nc; j++) if (R[C[j]] == "") bune = 0
 				if (nb) bune = 0
-				if (R["familie"] != "" && !fam) bune = 0
+				if (R["familie"] != "" && !fam && !(R["familie"] == "hisilicon" && (R["model_id"] == "h8" || R["model_id"] == "h8se"))) bune = 0
 				if (R["stocare"] != "" && R["stocare"] != "nand") bune = 0
 				# model_id= poate fi numai una din placile cu pagina (HdsPazaModel.MODELE_PLACI, reguliValide)
 				if ("model_id" in R && (R["model_id"] !~ /^[a-z0-9]+$/ ||
-					index(" gbquad4kpro duo4kse duo4k duo4klite uno4kse solo4k ", " " R["model_id"] " ") == 0)) bune = 0
+					index(" gbquad4kpro duo4kse duo4k duo4klite uno4kse solo4k h8 h8se ", " " R["model_id"] " ") == 0)) bune = 0
 				ids = modele(mi)
 				ne = (fam && R["partitions"] == "-") ? 0 : split(R["partitions"], E, ",")
 				for (j = 1; j <= ne; j++) {
@@ -259,6 +295,9 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				# boxtype= may be a list (u57,u571); a single value compares as before
 				nt = split(R["boxtype"], T, ",")
 				for (j = 1; j <= nt; j++) { gsub(/^[ \t]+|[ \t]+$/, "", T[j]); if (T[j] != "") TT[T[j]] = 1 }
+				# Nodul nativ H8 si denumirea din fabrica sunt aceeasi placa.
+				if (("h8" in TT) || ("H8.2H" in TT)) { TT["h8"] = 1; TT["H8.2H"] = 1 }
+				if (("h8se" in TT) || ("H8.2H.SE" in TT)) { TT["h8se"] = 1; TT["H8.2H.SE"] = 1 }
 				# second tier (confirmat=nu, a model not yet checked on a real receiver): only the chip, the box
 				# type, the label and the place of the kernel and of the system decide; the board (HW=), the
 				# partition table and the kernel size are warnings (the interface starts and shows them)
@@ -309,6 +348,18 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				if (bune && (emi != "" || ema != "")) {
 					if (ek != "" && ((ema != "" && ek + 0 > ema + 0) || (emi != "" && ek + 0 < emi + 0))) m = m " emmc"
 				}
+				if (bune) {
+					n = split(m, X, " "); pr = ""
+					for (j = 1; j <= n; j++) if (X[j] != "") {
+						if (dovada(X[j])) pr = pr " " X[j]
+						else w = w " " X[j]
+					}
+					m = pr
+					# Stable diagnostic ordering, same as Python CHEI_AMPRENTA.
+					n = split(w, X, " "); for (j = 1; j <= n; j++) W[X[j]] = 1
+					n = split("cip hw partitii kernel boxtype eticheta model_id emmc", X, " "); w = ""
+					for (j = 1; j <= n; j++) if (X[j] in W) w = w " " X[j]
+				}
 				# multiboot (as HdsPazaModel.pornireMultiboot and comparaPornire): kernel= other than the kernel of the
 				# rules, root= missing or other than the system of the rules, or rootsubdir= other than linuxrootfs1
 				# (the base slot on HiSilicon). The partitions then describe that slot, not the receiver: when only they
@@ -335,13 +386,13 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 				}
 				if (mb) {
 					k = (sk != "") ? sk : slotkernel; r = (sr != "") ? sr : slotroot
-					kt = (k == "") ? (slotroot == "" ? "" : "?, " r) : \
+					kt = (k == "") ? (slotroot == "" ? "" : "? ? KiB, " r) : \
 						k " " ((sk != "" && (sk in S)) ? S[sk] : "?") " KiB, " (r == "" ? "-" : r)
 					print "kernel=" kt (rsd == "" ? "" : " (" rsd ")")
 				}
 				# multiboot: the kernel shown is the one of the running slot, not the first of the table
 				else if (kpo != "" && kp != "" && kpo != kp) print "kernel=" kpo " " ((kpo in S) ? S[kpo] : "?") " KiB, " (rp == "" ? "-" : rp) (rsd == "" ? "" : " (" rsd ")")
-				else print "kernel=" (kp == "" ? "" : kp " " (kk == "" ? "?" : kk) " KiB, " (rp == "" ? "-" : rp))
+				else print "kernel=" (kp == "" && rp == "" ? "" : (kp == "" ? "?" : kp) " " (kk == "" ? "?" : kk) " KiB, " (rp == "" ? "-" : rp))
 				print "boxtype=" bt
 				print "eticheta=" et
 				print "emmc=" ek
@@ -352,8 +403,8 @@ if [ -f "$HDS_PAZA_REGULI" ]; then
 			}' "$HDS_PAZA_REGULI" "$hds_pp" > "$HDS_PAZA_STARE.nou" 2>/dev/null
 		mv -f "$HDS_PAZA_STARE.nou" "$HDS_PAZA_STARE" 2>/dev/null
 	fi
-	# no verdict (awk missing, /tmp not writable) counts as a mismatch: the guard fails closed
-	[ "$(sed -n 's/^stare=//p' "$HDS_PAZA_STARE" 2>/dev/null | head -n 1)" = potrivit ] || hds_paza=nepotrivit
+	# A missing verdict is not positive board evidence; Python can retry the read for the interface.
+	[ "$(sed -n 's/^stare=//p' "$HDS_PAZA_STARE" 2>/dev/null | head -n 1)" != nepotrivit ] || hds_paza=nepotrivit
 	if [ "$hds_paza" = nepotrivit ]; then
 		# showiframe rewrites the label (erase and write through /dev/mmcblk0) only when the BOX_TYPE or the
 		# UPD_PATH it reads there (sscanf "BOX_TYPE:%s UPD_PATH:%s" on the bytes at 0x3F6000) differ from the ones it
@@ -632,8 +683,11 @@ case $hds_sf_p in
 		[ "$hds_n" = showiframe ] && hds_sf_viu=$hds_sf_p
 		;;
 esac
+# The H8 early service owns its decoder until the handoff just before the GUI.
+hds_sigla_timpurie=@sysconfdir@/init.d/hds-sigla-timpurie
 if [ "$hds_paza" != nepotrivit ] && [ -x @bindir@/showiframe -a -f @datadir@/backdrop.mvi ] && [ -z "$hds_sf_viu" ]; then
-	(
+	[ ! -x "$hds_sigla_timpurie" ] || "$hds_sigla_timpurie" refresh
+	[ -x "$hds_sigla_timpurie" ] || (
 		unset http_proxy HTTP_PROXY https_proxy HTTPS_PROXY all_proxy ALL_PROXY no_proxy NO_PROXY
 		hds_sesiune=""
 		command -v setsid > /dev/null 2>&1 && hds_sesiune=setsid
@@ -695,6 +749,40 @@ fi
 if [ -n "$hds_act" ] && [ "$hds_paza" = potrivit ] && [ -f "$HDS_ACT_PROGRAM" ] && command -v python3 > /dev/null 2>&1; then
 	echo "[hds-actualizare] an update may have been cut ($hds_act): $HDS_ACT_PROGRAM pornire"
 	python3 -I -S -B "$HDS_ACT_PROGRAM" pornire > /dev/null 2>&1
+fi
+
+# PRB8 (22.11.2026): the 0.7.7 test-fix packages (enigma2-plugin-hds-proba-*) are made harmless by the preinst of
+# enigma2-hdsatelit at the update (guards stopped, their scripts, S99 files and old copies removed), but opkg writes its
+# status back from memory at the end, so they stay listed. Their names are in HDS_PROBE_SEMN; here, before enigma2 starts
+# (no opkg runs: opkg is a child of enigma2), `opkg remove` takes them out of the list. The packages have no script left,
+# and --force-remove passes over a prerm that is still there, so no 0.7.7 file comes back. Once per start until the list
+# is clean (a failed remove is tried again at the next start); one line in the log of the updates.
+HDS_PROBE_SEMN=${HDS_PROBE_SEMN:-/etc/hds-probe-de-scos}
+if [ -s "$HDS_PROBE_SEMN" ] && [ -f "$HDS_ACT_STATUS" ]; then
+	hds_probe=""
+	while read -r hds_p; do
+		case "$hds_p" in
+		enigma2-plugin-hds-proba-*)
+			grep -q -x -F "Package: $hds_p" "$HDS_ACT_STATUS" && case " $hds_probe " in
+				*" $hds_p "*) ;;
+				*) hds_probe="$hds_probe $hds_p" ;;
+			esac
+			;;
+		esac
+	done < "$HDS_PROBE_SEMN"
+	if [ -n "$hds_probe" ]; then
+		hds_probe_r=$(opkg remove --force-depends --force-remove $hds_probe 2>&1)
+		hds_probe_c=$?
+		mkdir -p /home/root/logs
+		echo "$(date '+%Y-%m-%d %H:%M:%S') [probe 0.7.7] opkg remove (cod $hds_probe_c):$hds_probe" >> /home/root/logs/hds-actualizari.log
+		echo "$hds_probe_r" | tail -n 20 >> /home/root/logs/hds-actualizari.log
+		echo "[hds-probe] opkg remove (code $hds_probe_c):$hds_probe"
+	fi
+	hds_probe_rest=""
+	while read -r hds_p; do
+		grep -q -x -F "Package: $hds_p" "$HDS_ACT_STATUS" && hds_probe_rest=1
+	done < "$HDS_PROBE_SEMN"
+	[ -n "$hds_probe_rest" ] || rm -f "$HDS_PROBE_SEMN"
 fi
 
 # 0.7.5 (CTU, TODO 15.11 07:08; Ustym 4K PRO, report 340957): a foreign package installed with opkg replaced python3-attrs and
@@ -1169,6 +1257,11 @@ if [ "$HDS_DEPANARE" = 1 ]; then
 	case $hds_dep_m in ''|*[!0-9]*) hds_dep_m=0 ;; esac
 	[ "$hds_dep_m" -lt 8388608 ] && hds_dep=1
 fi
+# The optional logo must never prevent the GUI from starting.
+if [ -x "$hds_sigla_timpurie" ] && ! "$hds_sigla_timpurie" stop; then
+	mkdir -p "${hds_jurnal%/*}" 2>/dev/null
+	echo "$(date '+%Y-%m-%d %H:%M:%S') sigla timpurie nu s-a oprit; interfata porneste oricum" >> "$hds_jurnal" 2>/dev/null
+fi
 hds_e2_up=$(cut -d. -f1 /proc/uptime 2>/dev/null)
 if [ -n "$hds_dep" ]; then
 	mkdir -p /home/root/logs
@@ -1193,6 +1286,10 @@ ret=$?
 HDS_IESIRE=${HDS_IESIRE:-/tmp/hds-enigma2.iesire}
 hds_iesire_up=""
 read hds_iesire_up hds_iesire_x 2>/dev/null < /proc/uptime
+# 0.7.8 (SSO): the exact end too (sfarsit=), for the line "iesirea de dinainte" of the next start (Components/HdsPaznic.py)
+hds_iesire_sf=$hds_iesire_up
+case $hds_iesire_sf in [0-9]*.[0-9]*) ;; *) hds_iesire_sf="" ;; esac
+case $hds_iesire_sf in *[!0-9.]*) hds_iesire_sf="" ;; esac
 hds_iesire_up=${hds_iesire_up%%.*}
 case $hds_iesire_up in ''|*[!0-9]*) hds_iesire_up=0 ;; esac
 hds_iesire_fel=""
@@ -1207,6 +1304,7 @@ esac
 {
 	printf 'cod=%s\nuptime=%s\nparinte=%s\n' "$ret" "$hds_iesire_up" "$$"
 	[ -z "$hds_iesire_fel" ] || printf 'fel=%s\n' "$hds_iesire_fel"
+	[ -z "$hds_iesire_sf" ] || printf 'sfarsit=%s\n' "$hds_iesire_sf"
 } 2>/dev/null > "$HDS_IESIRE.nou" && mv -f "$HDS_IESIRE.nou" "$HDS_IESIRE" 2>/dev/null
 # HDS_IESIRE_END
 
@@ -1269,10 +1367,15 @@ HDS_CADERI_PAUZA=${HDS_CADERI_PAUZA:-30}
 HDS_PAZNIC_OPRIRE=${HDS_PAZNIC_OPRIRE:-/tmp/hds-paznic.oprire}
 HDS_ACCEL_LUCRU=${HDS_ACCEL_LUCRU:-/etc/enigma2/hds-accel.lucru}
 HDS_OPKG_INFO=${HDS_OPKG_INFO:-/var/lib/opkg/info}
+# ASI7 (22.11.2026, assistance 190608): who asked for the restart, written just before the SIGTERM by the one who asks
+# (the guard of the trial packages, unelte/proba_receptor/paza.py): "ora=<seconds since 1970>" and "de=<who>"; read only
+# when it is at most 120 s old, then removed
+HDS_REPORNIRE_CERUTA=${HDS_REPORNIRE_CERUTA:-/tmp/hds-repornire-ceruta}
 if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	acum=$(cut -d. -f1 /proc/uptime 2>/dev/null)
 	[ -n "$acum" ] || acum=$(date +%s)
 	tde=""
+	ceruta=""
 	# lines 1 and 2 of the state file: the word and the code of lib/gdi/accel.cpp (Components/HdsAccel2D.py)
 	tde_cuvant=$(head -n 1 "$HDS_ACCEL_STARE" 2>/dev/null)
 	case "$tde_cuvant $(sed -n 2p "$HDS_ACCEL_STARE" 2>/dev/null)" in
@@ -1401,7 +1504,21 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 	elif [ "$motiv_fel" = "eroare" ]; then
 		cauza="eroare"
 	elif [ "$ret" -eq 143 ]; then
+		# SIGTERM from outside, after which enigma2 ended cleanly: a requested restart (a package, a plugin, a trial,
+		# "init 4"), never a crash. ASI7: the line says so ("oprita la cerere, nu e o cadere"), and who asked when known;
+		# it was already not counted (the word "oprire" in HDS_CADERI)
 		cauza="oprire"
+		ceruta=" la cerere"
+		if [ -f "$HDS_REPORNIRE_CERUTA" ]; then
+			ceruta_ora=$(sed -n 's/^ora=//p' "$HDS_REPORNIRE_CERUTA" | head -n 1 | tr -cd '0-9' | cut -c1-12)
+			ceruta_de=$(sed -n 's/^de=//p' "$HDS_REPORNIRE_CERUTA" | head -n 1 | tr -cd 'A-Za-z0-9 ._+:/-' | cut -c1-80)
+			ceruta_acum=$(date +%s)
+			if [ -n "$ceruta_ora" ] && [ -n "$ceruta_de" ] && [ "$((ceruta_acum - ceruta_ora))" -ge 0 ] &&
+				[ "$((ceruta_acum - ceruta_ora))" -le 120 ]; then
+				ceruta=", ceruta de $ceruta_de"
+			fi
+			rm -f "$HDS_REPORNIRE_CERUTA"
+		fi
 	elif hds_oom_acum; then
 		cauza="memorie"
 	elif [ "$ret" -eq 137 ]; then
@@ -1418,6 +1535,7 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 		{
 			printf 'cod=%s\nuptime=%s\nparinte=%s\nfel=%s\n' "$ret" "$hds_iesire_up" "$$" "$hds_iesire_fel"
 			printf 'cauza=%s\nmotiv_fel=%s\n' "${cauza_rand:-$cauza}" "$motiv_fel"
+			[ -z "$hds_iesire_sf" ] || printf 'sfarsit=%s\n' "$hds_iesire_sf"
 		} 2>/dev/null > "$HDS_IESIRE.nou" && mv -f "$HDS_IESIRE.nou" "$HDS_IESIRE" 2>/dev/null
 	fi
 	# HDS_IESIRE_END
@@ -1465,8 +1583,14 @@ if [ "$ret" -gt 128 ] || [ "$ret" -eq 5 ]; then
 			mv -f "$HDS_CADERI_JURNAL.nou" "$HDS_CADERI_JURNAL"
 	fi
 	cand=$(date '+%Y-%m-%d %H:%M:%S')
-	echo "$cand enigma2 s-a oprit neasteptat (cod $ret$tde), $recente in ultimele 10 minute; cauza: ${cauza_rand:-$cauza}" \
-		>> "$HDS_CADERI_JURNAL"
+	if [ -n "$ceruta" ]; then
+		# ASI7: a requested restart, not an unexpected stop (Components/HdsModSigur.OPRIRE and HdsTemaExterna read both)
+		echo "$cand enigma2 oprita la cerere, nu e o cadere (cod $ret$tde${ceruta# la cerere}), $recente in ultimele 10 minute; cauza: ${cauza_rand:-$cauza}" \
+			>> "$HDS_CADERI_JURNAL"
+	else
+		echo "$cand enigma2 s-a oprit neasteptat (cod $ret$tde), $recente in ultimele 10 minute; cauza: ${cauza_rand:-$cauza}" \
+			>> "$HDS_CADERI_JURNAL"
+	fi
 	if [ "$recente_placa" -ge 3 ] && [ ! -e "$HDS_ACCEL_OPRIT" ]; then
 		{
 			echo "oprita automat: $recente_placa opriri neasteptate ale interfetei in 10 minute dupa ce placa 2D a lucrat"

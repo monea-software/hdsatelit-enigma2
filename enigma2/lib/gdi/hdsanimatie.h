@@ -20,6 +20,11 @@
  * inchide coboara), 3 marire usoara (fereastra noua creste de la 92%, cea care se inchide scade). Toate cu amestec si
  * curba lina (incetinire spre final, cubica).
  *
+ * ANI1: 4/5 slide right/left, 6/7 slide bottom/top, 8 zoom with fade, 9 centered pop, 10 crossfade.
+ * Crossfade uses both composed snapshots at once, like effect 1, without touching live video.
+ * New slides and pop keep the other snapshot as background; zoom/pop never exceed 100%.
+ * Public IDs 101..107 are separate from the driver IDs 0..14.
+ *
  * Timpul e masurat, nu numarat in cadre: un receptor lent face mai putine cadre in aceeasi durata; daca primul cadru
  * singur ia peste 60% din durata, animatia sare direct la imaginea finala (nimic mai lent decat fara animatie).
  * O tasta apasata (main/enigma.cpp, deliverKey) sau o animatie noua opresc animatia in curs: zona primeste imediat
@@ -36,7 +41,8 @@ struct gSurface;
 
 struct gHdsAnimatie
 {
-	enum { oprita = 0, treptata = 1, alunecare = 2, marire = 3 };
+	enum { oprita = 0, treptata = 1, alunecare = 2, marire = 3,
+		dinDreapta = 4, dinStanga = 5, deJos = 6, deSus = 7, marireTreptata = 8, pop = 9, incrucisata = 10 };
 	int fel;
 	int durata_ms;
 	int inchidere;		/* 1 = fereastra pleaca (alunecarea coboara, marirea scade) */
@@ -68,5 +74,9 @@ int hdsAnimatieRuleaza(gSurface *ecran, const gSurface *inainte, const gSurface 
 
 /* oprirea animatiei in curs (orice fir): zona primeste imediat imaginea finala */
 void hdsAnimatieOpreste();
+
+/* Session-only fallback; selection changes advance the generation. */
+void hdsAnimatieReincearca();
+int hdsAnimatieRezerva();
 
 #endif

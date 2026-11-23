@@ -124,7 +124,8 @@ SECRET = re.compile(
 	r"|\b(?:set-)?cookie\s*:"
 	r"|[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@)")
 RAND_JURNAL = re.compile(r"^(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)(?::(\d\d))? (.*)$")
-OPRIRE = re.compile(r"enigma2 s-a oprit neasteptat \(cod (\d+)")
+# ASI7: si randul unei reporniri cerute (cod 143, SIGTERM din afara: tools/enigma2.sh.in), aratat "oprita la cerere"
+OPRIRE = re.compile(r"enigma2 (?:s-a oprit neasteptat|oprita la cerere, nu e o cadere) \(cod (\d+)")
 CADRU = re.compile(r'File "([^"]+)", line (\d+), in (.+?)\s*$')
 EXCEPTIE = re.compile(r"^\s*(?:[<\[][^>\]]*[>\]]\s*)?([A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception|Exit|Interrupt|"
 	r"Iteration|Warning|Fault))(?::\s?(.*))?$")
@@ -633,13 +634,14 @@ def analizaEroare(jurnal):
 
 def ultimeleRanduri(jurnal, n=MAX_RANDURI_JURNAL):
 	"""Ultimele randuri ale jurnalului unei caderi fara eroare Python (un semnal in codul nativ): cele dinaintea
-	registrelor scrise de main/bsod.cpp („PC: ...”), fara randurile goale si fara secrete."""
+	registrelor scrise de main/bsod.cpp („PC: ...”), fara randurile goale; si randurile cu parole sau chei (REGULA 0, ASI7:
+	se arata numai pe receptor, pe televizor si in pagina web a modului sigur)."""
 	randuri_ = jurnal.split("\n")
 	for k in range(len(randuri_) - 1, -1, -1):
 		if randuri_[k].lstrip().startswith("PC: "):
 			randuri_ = randuri_[:k]
 			break
-	randuri_ = [r.rstrip() for r in randuri_ if r.strip() and not SECRET.search(r) and r.strip() != "-------"]
+	randuri_ = [r.rstrip() for r in randuri_ if r.strip() and r.strip() != "-------"]
 	return randuri_[-n:]
 
 
@@ -1266,18 +1268,18 @@ def titluRaport(ora):
 
 
 def paginiBrute(cu_text=True):
-	"""[(titlu, cale, text)] pentru textul brut (tasta albastra pe televizor, lista din web), fara secrete. Titlul e
+	"""[(titlu, cale, text)] pentru textul brut (tasta albastra pe televizor, lista din web), intreg (REGULA 0, ASI7). Titlul e
 	scurt (fara cale). Fara `cu_text` numai lista fisierelor (text gol), fara sa le citeasca. Cu text, citirile au cativa
 	zeci de KiB: pe receptor se cheama pe un fir (peFir)."""
 	pagini = []
 	t = _citesteText(JURNAL_CADERI, 64 * 1024) if cu_text else ""
 	pagini.append((_t("Jurnalul opririlor"), JURNAL_CADERI, "" if not cu_text else
-		(_faraSecrete(_coada(t)) if t else _t("Fișierul nu există: nicio oprire neașteptată scrisă."))))
+		(_coada(t) if t else _t("Fișierul nu există: nicio oprire neașteptată scrisă."))))
 	for cale, ora in rapoarte()[:MAX_RAPOARTE_BRUTE]:
 		t = _citesteRaport(cale) if cu_text else ""
 		if t is not None:
 			pagini.append((titluRaport(ora), cale,
-				_faraSecrete(_coada(textBrutRaport(t), MAX_BRUT_RAPORT)) if cu_text else ""))
+				_coada(textBrutRaport(t), MAX_BRUT_RAPORT) if cu_text else ""))
 	t = _citesteText(CADERI, 16 * 1024) if cu_text else ""
 	pagini.append((_t("Numărătoarea opririlor"), CADERI, "" if not cu_text else
 		(_t("Fiecare rând: secunde de la pornirea receptorului și codul opririi.") + "\n\n" + t.strip() if t and t.strip()

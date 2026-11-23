@@ -176,11 +176,14 @@ void eDVBServicePMTHandler::PMTready(int error)
 		if (m_decodare_mai_tarziu && !m_pvr_channel)
 		{
 			/* inregistrarea "decodeaza mai tarziu": fara CA PMT spre modulul de acces si fara CI; ghidul vede PMT-ul */
-			eEPGCache::getInstance()->PMTready(this);
+			if (eEPGCache *epg = eEPGCache::getInstance())
+				epg->PMTready(this);
 		}
 		else if (!m_pvr_channel) // don't send campmt to camd.socket for playbacked services
 		{
-			eEPGCache::getInstance()->PMTready(this);
+			/* dupa ~eEPGCache (iesirea) getInstance() da 0 */
+			if (eEPGCache *epg = eEPGCache::getInstance())
+				epg->PMTready(this);
 			if(!m_ca_servicePtr)
 			{
 				int demuxes[2] = {0,0};

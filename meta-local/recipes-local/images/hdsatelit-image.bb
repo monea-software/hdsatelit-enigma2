@@ -2,7 +2,7 @@ SUMMARY = "Imaginea HDSatelit"
 DESCRIPTION = "enigma2 HDSatelit pe baza OE-Alliance. Monea Software pentru HD Satelit."
 LICENSE = "MIT"
 # versiunea se tine dupa configure.ac din depozitul imaginii (AC_INIT) si dupa DISTRO_VERSION din hdsatelit.conf
-PV = "0.7.7"
+PV = "0.7.8"
 
 # hdsatelit-nume-local: numele hdsatelit.local in reteaua de acasa (avahi-publish), pe langa numele receptorului
 IMAGE_INSTALL = "hdsatelit-base hdsatelit-ssh hdsatelit-nume-local"
@@ -92,6 +92,7 @@ IMAGE_ROOTFS_SIZE:gbtrio4k = "786432"
 # recipes-linux/linux-vuplus-*/<masina>/defconfig si linux-gfutures-4.10.12/hd51/defconfig, OE-Alliance 6.0), deci modulul
 # din afara nucleului intra, ca pe viper4k; CONFIG_TUN=m pe toate, deci kernel-module-tun ramane.
 BAD_RECOMMENDATIONS:remove:vusolo4k = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
+BAD_RECOMMENDATIONS:remove:vuuno4k = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
 BAD_RECOMMENDATIONS:remove:vuultimo4k = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
 BAD_RECOMMENDATIONS:remove:vuuno4kse = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
 BAD_RECOMMENDATIONS:remove:vuzero4k = "kernel-module-wireguard kernel-module-wireguard-4.4.35 wireguard-module"
@@ -146,6 +147,7 @@ SSTATE_ALLOW_OVERLAP_FILES += "${DEPLOY_DIR_IMAGE}"
 
 export IMAGE_BASENAME = "hdsatelit-image"
 
+inherit hds-zgemma-nand
 inherit image
 inherit hds-usb-image
 
@@ -342,7 +344,8 @@ python hds_paza_imagine_mica () {
     # pe Solo SE prin USB / chkroot (hdsusb) flashmic e fals si HDS_COMPLETARI_IN_IMAGINE e 1: cele 30 de limbi si driverele,
     # fara OCR (MIPS); pe Solo SE NAND (hdsflashmic) nimic din completari
     completari = d.getVar('HDS_COMPLETARI_IN_IMAGINE') == '1' and not flashmic
-    ocr_ok = completari and not (d.getVar('TARGET_ARCH') or '').startswith('mips')
+    compact = d.getVar('HDS_NAND_COMPACT') == '1'
+    ocr_ok = completari and not (d.getVar('TARGET_ARCH') or '').startswith('mips') and not compact
     scoase = sorted(p for p in instalate if (p in (d.getVar('HDS_SCOASE_DIN_IMAGINE') or '').split()
         or p.startswith('hds-ocr-')) and not (ocr_ok and p.startswith('hds-ocr')))
     if scoase:
@@ -365,7 +368,7 @@ python hds_paza_imagine_mica () {
                 ' '.join(pachete_po) or '-'))
         asteptate = sorted(set(asteptate) | set(cu_pachet))
         asteptate_po = pachete_po
-        lipsa = [p for p in (['hds-ocr', 'hds-ocr-modele'] if ocr_ok else []) + ['hdsatelit-drivere-feed'] if p not in instalate]
+        lipsa = [p for p in (['hds-ocr', 'hds-ocr-modele'] if ocr_ok else []) + ([] if compact else ['hdsatelit-drivere-feed']) if p not in instalate]
         if lipsa or (ocr_ok and not os.access(os.path.join(rad, 'usr', 'bin', 'hds-ocr'), os.X_OK)):
             bb.fatal('paza imaginii mici: completarile in imagine, dar lipsesc: %s' % (' '.join(lipsa) or 'usr/bin/hds-ocr'))
     if not asteptate or cataloage != asteptate:
@@ -457,8 +460,8 @@ python () {
         bb.fatal('paza de model: hdsatelit-modele/%s: confirmat= poate fi numai nu (sau lipsa = confirmat)' % mb)
     # familie=broadcom (Vu+ 4K, lotul vuplus4k): garda citeste cipul, tipul placii si locul sistemului din alte noduri
     # (Components/HdsPazaModel.py si tools/enigma2.sh.in); fara cheie = HiSilicon, ca pana acum
-    if reguli.get('familie', 'broadcom') != 'broadcom':
-        bb.fatal('paza de model: hdsatelit-modele/%s: familie= poate fi numai broadcom (sau lipsa = HiSilicon)' % mb)
+    if reguli.get('familie', 'hisilicon') not in ('broadcom', 'hisilicon'):
+        bb.fatal('paza de model: hdsatelit-modele/%s: familie= poate fi broadcom sau hisilicon (lipsa = HiSilicon)' % mb)
     # stocare=nand (Vu+ Solo SE, lotul mips-solose 06.11.2026): memoria interna e NAND (partitii mtdN in /proc/mtd), nu
     # eMMC; garda citeste atunci cipul, tipul placii si partitiile din alta parte (capul lui hdsatelit-modele/vusolose).
     # Lipsa = eMMC, ca pana acum. Nucleul si sistemul trebuie sa fie partitii mtd, iar masina sa fie una cu memorie mica.
@@ -485,6 +488,7 @@ IMAGEDIR = "e2/update"
 # face _multi.zip si _recovery_emmc.zip in IMAGE_CMD:hdemmc:append). Actualizarea din meniu (Screens/HdsSoftwareUpdate.py)
 # cauta kernel.bin, deci pe Vu+ (kernel_auto.bin) nu gaseste pachetul si nu scrie nimic: imaginea se pune de pe stick.
 IMAGEDIR:vusolo4k = "vuplus/${UPDATE_DIR}"
+IMAGEDIR:vuuno4k = "vuplus/${UPDATE_DIR}"
 IMAGEDIR:vuultimo4k = "vuplus/${UPDATE_DIR}"
 IMAGEDIR:vuuno4kse = "vuplus/${UPDATE_DIR}"
 IMAGEDIR:vuzero4k = "vuplus/${UPDATE_DIR}"
@@ -1183,18 +1187,38 @@ ROOTFS_POSTPROCESS_COMMAND += "hds_marcaj_model_rootfs "
 # altor imagini. Unele imagini (Tools/MultiBoot.py, analyzeSlot si _formatSlotName) arata „displaydistro imgversion
 # (compiledate)”; fara fisier citeste etc/image-version, cauta creator= si arata „Unknown Creator”. NUMAI cheile de mai
 # jos: fara imagedir (pe Amiko Dinobot loadmodules.sh scrie /proc/stb/info/upd_path numai din imagedir=, deci fara el
-# nu scrie nimic, ca fara fisier; paza din teste/test_recuperare_hostname.py), fara model, brand sau socfamily
-# (Converter/HdsCommon.box_info ia atunci totul din boxbranding, ca fara fisier). Pe Octagon oem-info, care l-ar rescrie
-# la pornire, nu intra (BAD_RECOMMENDATIONS mai sus); pe V10 nu-l citeste niciun script al producatorului.
+# nu scrie nimic, ca fara fisier; paza din teste/test_recuperare_hostname.py), fara socfamily.
+# ZRO1 (21.11.2026, TODO 20.11 11:35 alfy81, Vu+ Zero 4K): the receiver identity, as the OE-Alliance enigma-info.bb
+# writes it: brand='${BRAND_OEM}', model='${MACHINE}', imageversion. OpenMultiBoot 1.3 (oe-alliance/openmultibootmanager,
+# OMBList.populateImagesList, until c9417c4 of 03.10.2026) reads model= from <image>/usr/lib/enigma.info and SKIPS every
+# installed image whose model differs from the model of the image in flash; without model= ours was None and never
+# appeared in its list (nor in its boot menu, same OMBList). Newer builds list it only as "Model unknown".
+# displaybrand/displaymodel are the brand and model from the model rules, split exactly like
+# Converter/HdsCommon._model_din_reguli (first word = brand), because box_info takes them from here once model= exists:
+# the name on screen stays the same as before. A rules name without a space or an empty BRAND_OEM/MACHINE: no identity
+# keys at all (the file as before). Pe Octagon oem-info, care l-ar rescrie la pornire, nu intra (BAD_RECOMMENDATIONS mai
+# sus); pe V10 nu-l citeste niciun script al producatorului.
 # checksum = md5 al randurilor de deasupra, ca la OE-Alliance (MultiBoot.checkChecksum, altfel doar un avertisment).
 hds_enigma_info_rootfs() {
-	install -d ${IMAGE_ROOTFS}${libdir}
-	f=${IMAGE_ROOTFS}${libdir}/enigma.info
+	install -d "${IMAGE_ROOTFS}${libdir}"
+	f="${IMAGE_ROOTFS}${libdir}/enigma.info"
 	printf '%s\n' "distro='hdsatelit'" "displaydistro='HD Satelit'" "imgversion='${DISTRO_VERSION}'" \
-		"compiledate='${DATE}'" > $f
-	printf 'checksum=%s\n' "$(md5sum < $f | cut -d' ' -f1)" >> $f
-	chmod 0644 $f
-	if grep -q '^imagedir' $f; then
+		"compiledate='${DATE}'" > "$f"
+	hds_nume=$(printf '%s' "${HDS_MODEL_NUME}" | tr -cd 'A-Za-z0-9 ._+()-' | sed -e 's/^ *//' -e 's/ *$//' | cut -c1-60)
+	hds_marca="${hds_nume%% *}"
+	hds_modelul=$(printf '%s' "${hds_nume#* }" | sed -e 's/^ *//' -e 's/ *$//')
+	hds_masina=$(printf '%s' "${MACHINE}" | tr -cd 'A-Za-z0-9_.-')
+	hds_oem=$(printf '%s' "${BRAND_OEM}" | tr -cd 'A-Za-z0-9_.-')
+	if [ "$hds_nume" != "$hds_marca" ] && [ -n "$hds_marca" ] && [ -n "$hds_modelul" ] && \
+			[ -n "$hds_masina" ] && [ "$hds_masina" = "${MACHINE}" ] && [ -n "$hds_oem" ] && [ "$hds_oem" = "${BRAND_OEM}" ]; then
+		printf '%s\n' "brand='$hds_oem'" "displaybrand='$hds_marca'" "displaymodel='$hds_modelul'" \
+			"imageversion='${DISTRO_VERSION}'" "model='$hds_masina'" >> "$f"
+	else
+		bbwarn "hdsatelit-image: enigma.info fara model/brand (nume '${HDS_MODEL_NUME}', MACHINE '${MACHINE}', BRAND_OEM '${BRAND_OEM}')"
+	fi
+	printf 'checksum=%s\n' "$(md5sum < "$f" | cut -d' ' -f1)" >> "$f"
+	chmod 0644 "$f"
+	if grep -q '^imagedir' "$f"; then
 		bbfatal "hdsatelit-image: enigma.info nu are voie sa aiba imagedir (ar schimba upd_path pe Dinobot)"
 	fi
 }
@@ -1276,6 +1300,7 @@ IMAGE_CMD:gigablueemmc:append = " hds_marcaj_model_zip; "
 # a lui image_types.bbclass, care se termina cu „|| [ $? -eq 1 ]”: de aceea randul incepe cu „;”. Numai pe masinile
 # acestea (tar e si la alte tipuri de imagine).
 HDS_MARCAJ_ZIP:vusolo4k = "${IMAGE_NAME}_usb.zip"
+HDS_MARCAJ_ZIP:vuuno4k = "${IMAGE_NAME}_usb.zip"
 HDS_MARCAJ_ZIP:vuultimo4k = "${IMAGE_NAME}_usb.zip"
 HDS_MARCAJ_ZIP:vuuno4kse = "${IMAGE_NAME}_usb.zip"
 HDS_MARCAJ_ZIP:vuzero4k = "${IMAGE_NAME}_usb.zip"
@@ -1296,12 +1321,14 @@ HDS_MARCAJ_ZIP:osmio4k = "${IMAGE_NAME}_usb.zip"
 # celui al masinii (masina se citeste prima), deci fisierul exista cand il copiaza masina.
 HDS_SPLASH_VUPLUS := "${THISDIR}/files/hds-splash-vuplus.bmp"
 IMAGE_CMD:tar:prepend:vusolo4k = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
+IMAGE_CMD:tar:prepend:vuuno4k = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
 IMAGE_CMD:tar:prepend:vuultimo4k = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
 IMAGE_CMD:tar:prepend:vuuno4kse = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
 IMAGE_CMD:tar:prepend:vuzero4k = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
 IMAGE_CMD:tar:prepend:vuduo4k = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
 IMAGE_CMD:tar:prepend:vuduo4kse = "install -m 0644 ${HDS_SPLASH_VUPLUS} ${DEPLOY_DIR_IMAGE}/splash_cfe_auto.bin; "
 IMAGE_CMD:tar:append:vusolo4k = "; hds_marcaj_model_zip; "
+IMAGE_CMD:tar:append:vuuno4k = "; hds_marcaj_model_zip; "
 IMAGE_CMD:tar:append:vuultimo4k = "; hds_marcaj_model_zip; "
 IMAGE_CMD:tar:append:vuuno4kse = "; hds_marcaj_model_zip; "
 IMAGE_CMD:tar:append:vuzero4k = "; hds_marcaj_model_zip; "
@@ -1325,7 +1352,14 @@ IMAGE_CMD:tar:append:vuduo4klite = "; zip -d ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}_u
 # imagine de stick. Sigla incarcatorului (BOOTLOGO_FILENAME splash.bin): a noastra, files/hds-splash-gigablue.bmp, BMP
 # Windows 3.x 720 x 576 x 24 (1244214 o, forma siglelor GigaBlue), din profilul alfa 0.7.1 (8d02d6da5).
 HDS_SPLASH_GIGABLUE := "${THISDIR}/files/hds-splash-gigablue.bmp"
-IMAGE_CMD:tar:prepend:gbquad4kpro = "install -m 0644 ${HDS_SPLASH_GIGABLUE} ${DEPLOY_DIR_IMAGE}/splash.bin; "
+# SPL6 (orion_bilo, LinuxSat comment7490, 22.11.2026): pe Quad 4K Pro sigla umple tot cadrul de 720 x 576 (aceeasi forma si
+# marime, 1244214 o, ca toate siglele gb7252 din OE-Alliance; o rezolutie mai mare nu are nicio sigla gb7252 cunoscuta), nu
+# ecranul 16:9 micsorat la 720 x 405 cu benzi negre: files/hds-splash-gbquad4kpro.bmp din reteta siglelor, facut din
+# ecranul de pornire implicit (grila, ca backdrop.mvi) cu receptor/imagine-hdsatelit/ecran-pornire/fa-splash-gbquad4kpro.py,
+# micsorat anamorfic (pentru un incarcator care intinde cadrul pe televizorul lat; nevazut inca pe un Quad 4K Pro).
+# Celelalte modele raman pe hds-splash-gigablue.bmp.
+HDS_SPLASH_GBQUAD4KPRO := "${THISDIR}/../hdsatelit-bootlogo/files/hds-splash-gbquad4kpro.bmp"
+IMAGE_CMD:tar:prepend:gbquad4kpro = "install -m 0644 ${HDS_SPLASH_GBQUAD4KPRO} ${DEPLOY_DIR_IMAGE}/splash.bin; "
 IMAGE_CMD:tar:append:gbquad4kpro = "; hds_marcaj_model_zip; "
 # GigaBlue UHD X3 4K (MGX, 12.11.2026): acelasi IMAGE_CMD:tar:prepend din gigablue-arm.inc, deci acelasi zip _usb.zip cu
 # gigablue/x34k/{kernel.bin,rootfs.tar.bz2,imageversion,splash.bin,boot.bin,gpt.bin,rescue.bin} (fara bolt_*.bin: masina
@@ -1342,6 +1376,13 @@ HDS_MARCAJ_ZIP:hd51 = "${IMAGE_NAME}_multi.zip"
 # la rand, eroare de sintaxa in do_image_tar.
 IMAGE_CMD:tar:append:dm900 = " hds_marcaj_model_zip; "
 IMAGE_CMD:tar:append:dm920 = " hds_marcaj_model_zip; "
+# Dreambox DM820 (ION1, 22.11.2026, NEPROBAT: inainte de prima constructie `bitbake -e hdsatelit-image` pe dm820):
+# dm820.conf (dreambox-mips32el, nucleul 3.4) nu face zip in IMAGE_CMD:tar, ci in CONVERSION_CMD:bz2:append: muta
+# rootfs.tar.bz2, imageversion si kernel.bin in ${IMAGEDIR}/, face ${IMAGE_NAME}_flash.zip si sterge dosarul; marcajul vine
+# dupa el, in acelasi rand. Dosarul din zip e al masinii (dm820/), ca la DM900.
+IMAGEDIR:dm820 = "dm820"
+HDS_MARCAJ_ZIP:dm820 = "${IMAGE_NAME}_flash.zip"
+CONVERSION_CMD:bz2:append:dm820 = " hds_marcaj_model_zip; "
 IMAGE_CMD:hdemmc:append = " hds_marcaj_model_zip; "
 # Zgemma H17 COMBO (MH7): IMAGE_CMD:airdigitalemmc:append din airdigital-arm.inc (meta-airdigital) face
 # ${IMAGE_NAME}_recovery_emmc.zip (disk.img, nu-l atingem) si ${IMAGE_NAME}_multi.zip cu ${IMAGEDIR}/{imageversion,

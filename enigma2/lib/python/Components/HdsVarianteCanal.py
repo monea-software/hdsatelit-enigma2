@@ -55,10 +55,63 @@ LAMEDB = "lamedb"
 FISIER = "/etc/enigma2/hds_variante_canale.json"
 MAX_NOTE = 600
 MAX_ALESE = 400
-# firul grupelor (porneste): asteapta atat dupa pornirea interfetei (pornirea tine 40-50 s pe ARM, ca
-# HdsPython2Traducere.INTARZIERE_FUNDAL_S), apoi se uita la lamedb la fiecare PAS_FIR_S
-INTARZIERE_FIR_S = 60.0
-PAS_FIR_S = 30.0
+# Firul pregateste imediat numerele si grupele; reciteste numai dupa schimbarea lamedb.
+INTARZIERE_FIR_S = 0.0
+PAS_FIR_S = 1.0
+_NUMERE = (None, {"tv": {}, "radio": {}})
+
+
+def _ascuns(date):
+	"""Steagul dxDontShow din lamedb este hexazecimal, ca in nucleu."""
+	flags = 0
+	for camp in date.split(","):
+		if camp.startswith("f:"):
+			try:
+				flags = int(camp[2:], 16)
+			except ValueError:
+				pass
+	return bool(flags & 2)
+
+
+def numere_din_lamedb(text):
+	"""Numerele antetelor, intr-o trecere, fara getName pe fiecare serviciu."""
+	rez = {"tv": {}, "radio": {}}
+	randuri = text.splitlines()
+	if not randuri or randuri[0] not in ("eDVB services /3/", "eDVB services /4/"):
+		return None
+	try:
+		i = randuri.index("services") + 1
+	except ValueError:
+		return None
+	final = next((j for j in range(i, len(randuri), 3) if randuri[j] == "end"), None)
+	if final is None:
+		return None
+	dish = frozenset((128, 133, 137, 140, 144, 145, 150, 154, 160, 163, 164, 165, 166, 167, 168, 173, 174))
+	for i in range(i, final, 3):
+		if not randuri[i + 1] or randuri[i + 1] == "(...)" or _ascuns(randuri[i + 2]):
+			continue
+		try:
+			p = randuri[i].split(":")
+			stype, poz, onid = int(p[4]), int(p[1], 16) >> 16, int(p[3], 16)
+		except (ValueError, IndexError):
+			continue
+		if stype in (1, 17, 22, 25, 31, 32, 134, 195) or (0x1001 <= onid <= 0x100b and stype in dish):
+			tip = "tv"
+		elif stype in (2, 10):
+			tip = "radio"
+		else:
+			continue
+		rez[tip][poz] = rez[tip].get(poz, 0) + 1
+	return rez
+
+
+def numere_pregatite(tip):
+	"""None fara fir; altfel ultima vedere completa, fara lacat sau citire."""
+	if _FIR["semn"] is None:
+		return None
+	return _NUMERE[1][tip]
+
+
 # tipurile cu imagine HD dupa EN 300 468 (MPEG-2 HD, H.264 HD, H.265, H.265 UHD)
 TIPURI_HD = frozenset((0x11, 0x19, 0x1F, 0x20))
 # HD / FHD / SD la coada numelui (cuvant intreg, si in paranteze): "TLC HD", "Kanal Yek SD", "Pro TV (HD)"; 4K si UHD
@@ -181,6 +234,8 @@ def grupe_din_lamedb(text):
 		nume = randuri[i + 1].rstrip("\r").strip()
 		date = randuri[i + 2].rstrip("\r")
 		i += 3
+		if _ascuns(date):
+			continue
 		p = k.split(":")
 		if len(p) < 6 or not nume:
 			continue
@@ -557,6 +612,7 @@ def variante(director=None, fundal=False):
 	"""Grupele lamedb-ului de acum (citite din nou numai cand se schimba fisierul). Sigura pe fire: o cerere venita in
 	timpul citirii altui fir (firul grupelor) asteapta rezultatul aceleia. fundal=True (firul grupelor): fara lamedb nu
 	face nimic (None)."""
+	global _NUMERE
 	cale, sem = _sem_lamedb(director)
 	m_sem, m_v = _MEMORIE["t"]
 	if sem is not None and sem == m_sem:
@@ -571,10 +627,13 @@ def variante(director=None, fundal=False):
 			return m_v
 		inceput = time.time()
 		grupe = {}
+		numere = {"tv": {}, "radio": {}}
 		if sem is not None:
 			try:
 				with open(cale, "rb") as f:
-					grupe = grupe_din_lamedb(f.read().decode("utf-8", "replace"))
+					text = f.read().decode("utf-8", "replace")
+				numere = numere_din_lamedb(text)
+				grupe = grupe_din_lamedb(text)
 			except (IOError, OSError) as e:
 				_jurnal("lamedb: %s" % e)
 		v = Variante(grupe, stare(), _stiute)
@@ -582,6 +641,12 @@ def variante(director=None, fundal=False):
 		# (sau firul, la pasul urmator) il citeste din nou pe cel intreg
 		stabil = sem is not None and _sem_lamedb(director)[1] == sem
 		_MEMORIE["t"] = (sem if stabil else None, v)
+		if stabil and numere is not None:
+			for tip in ("tv", "radio"):
+				for poz, n in v.ascunse_pe_pozitii(tip).items():
+					if numere[tip].get(poz, 0) > n:
+						numere[tip][poz] -= n
+			_NUMERE = (sem, numere)
 	durata = (time.time() - inceput) * 1000
 	_jurnal("%d grupe, %d variante in %.0f ms%s%s" % (len(grupe), sum(len(l) for l in grupe.values()), durata,
 		" (pe fir, inainte de deschiderea listei)" if fundal else "",

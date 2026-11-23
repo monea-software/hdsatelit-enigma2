@@ -30,6 +30,11 @@
  * canalele TV motorul citeste o data ceasul demultiplexorului (numai citire) si spune in stare() („ceas_tv”) daca driverul
  * il da.
  *
+ * Fara ceasul placii probat (/proc/msp/sync00), TV ramane de proba: la primul esec revenirea este anuntata
+ * inainte de curatarea sesiunii, iar alte incercari TV se opresc pana la repornirea interfetei. Radio si ceasul
+ * HiSilicon isi pastreaza purtarea. ALSA la TV de proba este neblocant, cu asteptare marginita numai pe firul iesirii.
+ * Starea comuna TV/web expune tv_de_proba si tv_oprit_pornire; setarile omului nu se schimba.
+ *
  * Legatura cu redarea (lib/service/servicedvb.cpp): la fiecare alegere a pistei de sunet a serviciului principal,
  * preiaSunetul() spune daca sunetul trece pe aici; atunci decodorul placii primeste PID-ul -1 (fara sunet), iar RDS,
  * lista de piste si memoria PID-ului raman pe PID-ul adevarat. Oprirea serviciului cheama serviciuOprit(). O schimbare

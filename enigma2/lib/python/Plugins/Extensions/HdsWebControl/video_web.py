@@ -609,9 +609,9 @@ def reporneste(V=None, S=None, sesiune=None, acum=None, ceas=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, numai cheile stiute, fara token."""
+	"""Argumentele cererii ca text: {cheie: text}, numai cheile stiute, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:16]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in ARGUMENTE:
@@ -619,7 +619,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_VALOARE].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 

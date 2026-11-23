@@ -562,6 +562,34 @@ def _acelasi_transponder(a, b):
             and abs(a['frecventa'] - b['frecventa']) <= TOLERANTA_KHZ)
 
 
+def _completeaza_purtator(tinta, sursa, actualizeaza=False):
+    # Rescans refresh learned identity; lower priority lists only fill missing fields.
+    if (any(f.get('fel') != 't2mi' for f in (tinta, sursa)) or sursa.get('acces') != 'BISS'
+            or (not actualizeaza and tinta.get('acces') != 'BISS')):
+        return
+    if actualizeaza:
+        tinta['acces'] = 'BISS'
+    nou = sursa.get('purtator')
+    if not isinstance(nou, dict):
+        return
+    nou = {k: nou[k] for k in ('sid', 'tsid', 'onid')
+           if _int(nou.get(k), 1 if k == 'sid' else 0, 65535)}
+    if not nou:
+        return
+    vechi = tinta.get('purtator')
+    vechi = dict(vechi) if isinstance(vechi, dict) else {}
+    if any(k in vechi and k in nou and vechi[k] != nou[k] for k in ('sid', 'tsid', 'onid')):
+        if not actualizeaza:
+            return
+        vechi = {}
+    if actualizeaza:
+        vechi.update(nou)
+    else:
+        for k, v in nou.items():
+            vechi.setdefault(k, v)
+    tinta['purtator'] = vechi
+
+
 def uneste(liste):
     """liste: [(sursa, lista)] in ordinea prioritatii. -> lista unita, fiecare feed cu campul 'sursa'."""
     rez = []
@@ -582,13 +610,15 @@ def uneste(liste):
                 for k, v in t.items():
                     if k != 'feeduri' and k not in tinta:
                         tinta[k] = v
-            chei = {_cheie_feed(f) for f in tinta['feeduri']}
+            chei = {_cheie_feed(f): f for f in reversed(tinta['feeduri'])}
             for f in t['feeduri']:
                 k = _cheie_feed(f)
                 if k in chei:
+                    g = chei[k]
+                    _completeaza_purtator(g, f)
                     continue
-                chei.add(k)
                 g = dict(f)
+                chei[k] = g
                 g['sursa'] = sursa
                 baza, n = g['id'], 2
                 while g['id'] in ids:
@@ -650,6 +680,13 @@ def adauga_scanat(tip, transponder, feeduri, director=None):
         return 0
     inainte = sum(len(x['feeduri']) for x in vechi['transpondere'])
     unit = uneste([('scanat', vechi), ('scanat', nou)])
+    gasite = {_cheie_feed(f): f for f in reversed(nou['transpondere'][0]['feeduri'])}
+    for x in unit:
+        if _acelasi_transponder(x, t):
+            for f in x['feeduri']:
+                gasit = gasite.get(_cheie_feed(f))
+                if gasit is not None:
+                    _completeaza_purtator(f, gasit, actualizeaza=True)
     for x in unit:
         x.pop('sursa', None)
         for f in x['feeduri']:

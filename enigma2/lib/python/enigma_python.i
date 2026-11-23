@@ -552,6 +552,34 @@ void setTunerTypePriorityOrder(int order)
 }
 %}
 
+/* HDSatelit: the font names given to addFont (the theme's and the plugins'), as a list of str, under the name of the other
+   OE-Alliance images: plugins look in it before adding their own font (FontsCockpit, MeteoForeca) */
+PyObject *getFontFaces();
+%{
+PyObject *getFontFaces()
+{
+	fontRenderClass *render = fontRenderClass::getInstance();
+	std::vector<std::string> faces;
+	if (render)
+		faces = render->getFontFaces();
+	PyObject *result = PyList_New(0);
+	if (!result)
+		return NULL;
+	for (std::vector<std::string>::const_iterator i(faces.begin()); i != faces.end(); ++i)
+	{
+		PyObject *name = PyUnicode_DecodeUTF8(i->data(), i->size(), "replace");
+		if (!name || PyList_Append(result, name) < 0)
+		{
+			Py_XDECREF(name);
+			Py_DECREF(result);
+			return NULL;
+		}
+		Py_DECREF(name);
+	}
+	return result;
+}
+%}
+
 /************** temp *****************/
 
 	/* need a better place for this, i agree. */

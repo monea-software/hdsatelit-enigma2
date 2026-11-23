@@ -102,7 +102,33 @@ def _(text):
 		return text
 
 
-def nume_local_confirmat(cale=STARE_NUME_LOCAL, proc="/proc", acum=None, init=NUME_LOCAL,
+# UIF6 (AS58, asistenta 927511): ultimul nume local citit, ca (valoare, ora monotona). Il pun citirile cu caile din
+# fabrica (firul de citire al comutatorului, la 1 s); firul interfetei il ia prin nume_local_stiut(), fara nicio citire
+# de fisier (altfel astepta lacatul Python tinut de alt fir: "firul principal ocupat 5.6 s").
+_nume_local = [None]
+NUME_LOCAL_PROASPAT_S = 30.0
+
+
+def nume_local_confirmat(*argumente, **numite):
+	"""Citirea numelui local (_nume_local_citit); cu caile din fabrica tine minte si rezultatul, pentru
+	nume_local_stiut()."""
+	nume = _nume_local_citit(*argumente, **numite)
+	if not argumente and not numite:
+		_nume_local[0] = (nume, time.monotonic())
+	return nume
+
+
+def nume_local_stiut():
+	"""Ultimul nume local citit. Pe firul interfetei fara citire de fisier, oricat de vechi; pe alt fir (lucratorul
+	HTTPS) citit din nou cand e mai vechi de NUME_LOCAL_PROASPAT_S. Inca necitit deloc: citirea pe loc, o data."""
+	stiut = _nume_local[0]
+	if stiut is not None and (threading.current_thread() is threading.main_thread()
+			or 0 <= time.monotonic() - stiut[1] < NUME_LOCAL_PROASPAT_S):
+		return stiut[0]
+	return nume_local_confirmat()
+
+
+def _nume_local_citit(cale=STARE_NUME_LOCAL, proc="/proc", acum=None, init=NUME_LOCAL,
 		serviciu_nou=SERVICIU_NUME_LOCAL):
 	"""Numele confirmat de avahi, cu ambele procese vii si o stare recenta.
 	Serviciul vechi (pachetul hdsatelit-nume-local 0.1.0, pana la 0.7.3) nu scrie fisierul de stare: cu el pe receptor
@@ -806,7 +832,7 @@ class Comutator(object):
 		rute = self.sistem.rute()
 		placi = set(c["placa"] for c in lista) | set(x[0] for x in rute)
 		return {"cai": lista, "rute": rute, "legatura": dict((p, self.lucru.legatura(p)) for p in placi),
-			"are_wifi": self._are_wifi()}
+			"are_wifi": self._are_wifi(), "nume_local": nume_local_confirmat()}
 
 	def _cai(self):
 		return self._f["cai"] if self._f is not None else self.cai_fn()
@@ -844,7 +870,7 @@ class Comutator(object):
 			"cai": [{"id": c["id"], "fel": c["fel"], "placa": c["placa"], "nume": text_cale(c)} for c in lista],
 			"activa": text_cale(self.activa), "preferata": text_cale(self.preferata), "adresa": self.adresa,
 			"lucreaza": self.lucreaza, "amanat": self.amanat, "ultimul": self.ultimul, "t_ultimul": self.t_ultimul,
-			"fara_alternative": len(lista) < 2, "nume_local": nume_local_confirmat()}
+			"fara_alternative": len(lista) < 2, "nume_local": nume_local_stiut()}
 
 	# ---- pe firul enigma2
 	def tic(self, acum=None):
@@ -1137,7 +1163,9 @@ class Comutator(object):
 	def _noteaza(self, text, cale, rau=False):
 		linii = [text]
 		if self.adresa and not rau:
-			nume = nume_local_confirmat()
+			# UIF6: numele din fotografia firului de citire; fara ea (probele, citirea pe loc) citit ca inainte
+			f = self._f
+			nume = f["nume_local"] if f is not None and "nume_local" in f else nume_local_confirmat()
 			if nume:
 				linii.append(_("Adresa receptorului: %s (sau %s).") % (self.adresa, nume))
 			else:

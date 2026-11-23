@@ -1262,7 +1262,7 @@ def _plugin():
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt (numai cheile stiute, fara token)."""
+	"""Argumentele cererii ca text (numai cheile stiute, fara token)."""
 	return _m().argumente(request, CHEI, MAX_CALE)
 
 

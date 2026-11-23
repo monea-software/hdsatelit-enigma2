@@ -29,6 +29,16 @@ def ce_face(valoare, sus):
 	return SAGETI.get(valoare, SAGETI[IMPLICIT])[0 if sus else 1]
 
 
+def cursor_pe_canal():
+	"""CUR6 (tamiciav7, LinuxSat 164122 #971593): lista deschisa cu SUS/JOS are cursorul pe canalul care merge, dupa
+	config.usage.hds_sageata_cursor (Nu din fabrica: cursorul un rand mai sus sau mai jos, ca pana acum)."""
+	try:
+		from Components.config import config
+		return bool(config.usage.hds_sageata_cursor.value)
+	except Exception:
+		return False
+
+
 def sageata(sus):
 	"""Ce face sageata acum, dupa config.usage.hds_sageata_sus."""
 	try:

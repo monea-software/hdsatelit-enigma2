@@ -47,6 +47,10 @@
 # Ce nu muta: eDVBDB.reloadServicelist/reloadBouquets (refreshBouquets de la sfarsit) raman pe firul principal, cat ar
 # tine la orice imagine; pentru ele ramane plasa paznicului (Components/HdsPaznic.py, punctul 9). Pasii care fac eTimer
 # singuri (JediMakerXtream_Update.checkactive, BMX start/_scheduleSeriesChunk) raman pe firul principal.
+#
+# A doua parte (LIMITE, 0.7.8): pluginurile care isi fac singure multe fire de procesor (siglele canalelor din Bouquet
+# Maker Xtream) primesc un plafon, o prioritate mai mica si pornirea dupa ce s-a pus toata coada; vezi sectiunea
+# "firele de procesor ale pluginurilor" de la coada fisierului. Nimic nu se muta intre fire acolo.
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC il folosesc direct.
 
 import hashlib
@@ -133,6 +137,27 @@ RETETE = (
 		fisiere=("buildbouquets.py", "globalfunctions.py", "parsem3u.py", "seriesparsem3u.py", "bouquetorder.py"),
 		amprente={"071d2b4026598f50": "1.82", "f96938ba9a3a231e": "1.82"},
 		principal=(("globalfunctions", "refreshBouquets"),)),
+)
+
+
+class LimitaFire(object):
+	"""Ecranul unui plugin care face lucru de procesor pe multe fire ale lui (sectiunea de la coada fisierului)."""
+
+	def __init__(self, plugin, modul, clasa, porneste, lucru, procesor):
+		self.plugin = plugin            # numele dosarului pluginului (jurnal)
+		self.modul = modul              # modulul ecranului, numele intreg
+		self.clasa = clasa
+		self.porneste = porneste        # metoda de pe firul principal care pune tot lucrul in coada firelor
+		self.lucru = lucru              # metoda unui lucru, pe un fir al pluginului: incepe dupa ce `porneste` s-a terminat
+		self.procesor = procesor        # partea de procesor a unui lucru: plafonul si prioritatea mica
+
+
+LIMITE = (
+	# Bouquet Maker Xtream, siglele canalelor (Picons): buildPicons pune in ThreadPoolExecutor cate un fetch_url pe sigla;
+	# fetch_url descarca si cheama makePicon (PIL: deschidere, convert, thumbnail, PNG). Aceeasi forma in toate versiunile
+	# vazute (1.79, 1.81, sursa veche); legarea se face dupa forma, nu dupa amprenta.
+	LimitaFire("BouquetMakerXtream", "Plugins.Extensions.BouquetMakerXtream.downloadpicons", "BmxDownloadPicons",
+		porneste="buildPicons", lucru="fetch_url", procesor="makePicon"),
 )
 
 _activ = [True]                 # False dupa o greseala a stratului nostru: pana la repornirea interfetei, nimic mutat
@@ -277,6 +302,12 @@ def _dupaImport(nume, modul):
 				lega(r, modul)
 			except Exception as e:
 				_jurnal("%s: %r" % (r.plugin, e))
+	for l in LIMITE:
+		if l.modul == nume:
+			try:
+				limiteaza(l, modul)
+			except Exception as e:
+				_jurnal("%s: limita firelor: %r" % (l.plugin, e))
 
 
 class _Incarcator(object):
@@ -301,7 +332,7 @@ class _Cautator(object):
 	"""In sys.meta_path: pentru modulele din RETETE ia specificatia de la ceilalti cautatori si ii pune _Incarcator."""
 
 	def __init__(self):
-		self.nume = frozenset(r.modul for r in RETETE)
+		self.nume = frozenset([r.modul for r in RETETE] + [l.modul for l in LIMITE])
 
 	def find_spec(self, nume, cale=None, tinta=None):
 		if nume not in self.nume or getattr(_local, "caut", False):
@@ -333,10 +364,10 @@ def instaleaza():
 		if _cautator[0] is None:
 			_cautator[0] = _Cautator()
 			sys.meta_path.insert(0, _cautator[0])
-		for r in RETETE:
-			m = sys.modules.get(r.modul)
+		for nume in [r.modul for r in RETETE] + [l.modul for l in LIMITE]:
+			m = sys.modules.get(nume)
 			if m is not None:
-				_dupaImport(r.modul, m)
+				_dupaImport(nume, m)
 	except Exception as e:
 		_jurnal("instalarea: %r" % (e,))
 
@@ -658,3 +689,176 @@ class _Lucrator(object):
 	def laSfarsitulPasului(self, functie, a, k):
 		self.verificaInchis()
 		self.laSfarsit.append((functie, a, k))
+
+
+# ---------------------------------------------------------------- firele de procesor ale pluginurilor (LIMITE, 0.7.8)
+#
+# De ce: Bouquet Maker Xtream face siglele canalelor cu un ThreadPoolExecutor de cfg.max_threads fire (din fabrica 20), cate
+# un lucru pe sigla: descarcarea, apoi PIL (convert, thumbnail, paste) si scrierea PNG (zlib). PIL si zlib lasa lacatul
+# Python, deci toate firele lucreaza deodata, cu aceeasi prioritate ca firul interfetei. Pe un receptor cu 2 nuclee (Vu+ Solo
+# SE, 12 000 de sigle, pachetul de jurnale 2083) 20 de fire gata de rulare au lasat firului principal ~1/10 dintr-un nucleu
+# peste o ora: orice lucru de cateva secunde de pe el (o pagina web, bucla de mai jos) a trecut de pragul paznicului (fara
+# bataie 129 s, 20 de fire in PIL, firul principal in lucru, nu blocat). In plus buildPicons face pe firul principal cate un
+# submit pentru fiecare sigla, cu firele deja pornite alaturi: 60,8 s si 34,1 s acolo.
+#
+# Cum (pluginul ramane al lui; nimic nu se muta intre fire, deci legarea se face dupa forma clasei, pe orice versiune):
+#   - `procesor` (makePicon): cel mult limitaProcesor() fire odata in tot procesul (numarul de nuclee, cel mult
+#     LIMITA_PROCESOR_MAX); celelalte asteapta adormite, cu sigla descarcata (fara procesor si fara lacatul Python). Locul se
+#     elibereaza si la exceptie. O chemare de pe firul principal trece direct, fara asteptare.
+#   - firele care intra in `procesor` primesc prioritatea NICE_SIGLE (o data pe fir; numai firele pluginului): cand firul
+#     interfetei cere procesorul, il primeste.
+#   - `lucru` (fetch_url) incepe pe firele pluginului numai dupa ce `porneste` (buildPicons) s-a terminat, deci bucla de
+#     submit de pe firul principal merge fara fire care lucreaza alaturi; cel mult ASTEPTARE_PORNIRE_S.
+#   - jurnal: un rand la legare (versiunea, amprenta fisierului, plafonul), un rand la fiecare `porneste` (cat a tinut).
+# Ce se pierde: cfg.max_threads al pluginului nu mai hotaraste cate sigle se prelucreaza deodata (hotaraste tot cate se
+# descarca deodata); siglele nu se fac mai repede cu mai multe fire decat nuclee, deci timpul total ramane cam acelasi.
+
+LIMITA_PROCESOR = 0             # 0 = numarul de nuclee (cel mult LIMITA_PROCESOR_MAX); altfel numarul dat
+LIMITA_PROCESOR_MAX = 4
+NICE_SIGLE = 10                 # prioritatea firelor care fac siglele (0 = neschimbata)
+ASTEPTARE_PORNIRE_S = 300.0     # cat asteapta un lucru sfarsitul lui `porneste`, cel mult
+
+_limitate = {}                  # (modul, clasa) -> True (legata) sau None (forma necunoscuta)
+_plafon = {"sem": None, "n": 0}
+
+
+def limitaProcesor():
+	"""Cate fire ale pluginurilor pot face lucru de procesor odata."""
+	if LIMITA_PROCESOR:
+		return max(1, int(LIMITA_PROCESOR))
+	try:
+		n = os.cpu_count() or 1
+	except Exception:
+		n = 1
+	return max(1, min(LIMITA_PROCESOR_MAX, n))
+
+
+def _semafor():
+	if _plafon["sem"] is None:
+		_plafon["n"] = limitaProcesor()
+		_plafon["sem"] = threading.BoundedSemaphore(_plafon["n"])
+	return _plafon["sem"]
+
+
+def _niceFir():
+	"""Prioritatea mai mica a firului de acum, o data pe fir. Nu arunca."""
+	if not NICE_SIGLE or getattr(_local, "nice", False):
+		return
+	_local.nice = True
+	pune = getattr(os, "setpriority", None)
+	if pune is None:
+		return
+	try:
+		pune(os.PRIO_PROCESS, threading.get_native_id(), NICE_SIGLE)
+	except Exception:
+		pass
+
+
+def _formaBuna(clasa, limita):
+	"""Lista problemelor (gol = bine): cele trei metode sunt functii ale clasei."""
+	probleme = []
+	for nume in (limita.porneste, limita.lucru, limita.procesor):
+		f = clasa.__dict__.get(nume)
+		if not getattr(getattr(f, "_hds_limita", f), "__code__", None):
+			probleme.append("%s lipseste" % nume)
+	return probleme
+
+
+def _versiunePlugin(dosar):
+	try:
+		with open(os.path.join(dosar, "version.txt")) as f:
+			return f.readline().strip() or "?"
+	except Exception:
+		return "?"
+
+
+def limiteaza(limita, modul, radacina_fisiere=None):
+	"""Leaga limita de modulul importat. -> True, sau None (pluginul ramane cum e)."""
+	cheie = (limita.modul, limita.clasa)
+	if cheie in _limitate:
+		return _limitate[cheie]
+	_limitate[cheie] = None
+	clasa = getattr(modul, limita.clasa, None)
+	if clasa is None:
+		_jurnal("%s: clasa %s lipseste, firele raman cum sunt" % (limita.plugin, limita.clasa))
+		return None
+	probleme = _formaBuna(clasa, limita)
+	if probleme:
+		_jurnal("%s %s: %s; firele raman cum sunt" % (limita.plugin, limita.clasa, "; ".join(probleme)))
+		return None
+	inlocuite = []
+	try:
+		for nume, fa in ((limita.porneste, _porneste), (limita.lucru, _lucru), (limita.procesor, _procesor)):
+			orig = clasa.__dict__[nume]
+			if getattr(orig, "_hds_limita", None):
+				continue
+			setattr(clasa, nume, fa(limita, orig))
+			inlocuite.append((nume, orig))
+	except Exception as e:
+		for nume, orig in reversed(inlocuite):
+			setattr(clasa, nume, orig)
+		_jurnal("%s %s: limita firelor nu s-a legat (%r); firele raman cum sunt" % (limita.plugin, limita.clasa, e))
+		return None
+	_limitate[cheie] = True
+	_semafor()                  # facut aici, pe firul care importa, nu de doua fire deodata la primul lucru
+	dosar = radacina_fisiere or os.path.dirname(getattr(modul, "__file__", "") or "")
+	fisier = os.path.basename(getattr(modul, "__file__", "") or "")
+	a = amprenta(dosar, (fisier,)) if fisier.endswith(".py") else None
+	_jurnal("%s %s (versiunea %s, amprenta %s): %s cel mult %d odata, fire cu nice %d, %s dupa %s"
+		% (limita.plugin, limita.clasa, _versiunePlugin(dosar), a or "fara .py", limita.procesor, limitaProcesor(),
+		NICE_SIGLE, limita.lucru, limita.porneste))
+	return True
+
+
+def _porneste(limita, orig):
+	def porneste(self, *a, **k):
+		ev = threading.Event()
+		try:
+			self.__dict__["_hdsLimitaGata"] = ev
+		except Exception:
+			ev.set()
+		inceput = time.monotonic()
+		try:
+			return orig(self, *a, **k)
+		finally:
+			ev.set()
+			_jurnal("%s %s: %s in %.1f s pe %s, %s lucruri in coada; lucrul incepe acum"
+				% (limita.plugin, limita.clasa, limita.porneste, time.monotonic() - inceput,
+				"firul principal" if _pePrincipal() else "alt fir", getattr(self, "job_total", "?")))
+	porneste._hds_limita = orig
+	porneste.__name__ = getattr(orig, "__name__", limita.porneste)
+	porneste.__doc__ = getattr(orig, "__doc__", None)
+	return porneste
+
+
+def _lucru(limita, orig):
+	def lucru(self, *a, **k):
+		if not _pePrincipal():
+			try:
+				ev = self.__dict__.get("_hdsLimitaGata")
+			except Exception:
+				ev = None
+			if ev is not None and not ev.is_set():
+				ev.wait(ASTEPTARE_PORNIRE_S)
+		return orig(self, *a, **k)
+	lucru._hds_limita = orig
+	lucru.__name__ = getattr(orig, "__name__", limita.lucru)
+	lucru.__doc__ = getattr(orig, "__doc__", None)
+	return lucru
+
+
+def _procesor(limita, orig):
+	def procesor(self, *a, **k):
+		if _pePrincipal():
+			return orig(self, *a, **k)
+		_niceFir()
+		sem = _semafor()
+		sem.acquire()
+		try:
+			return orig(self, *a, **k)
+		finally:
+			sem.release()
+	procesor._hds_limita = orig
+	procesor.__name__ = getattr(orig, "__name__", limita.procesor)
+	procesor.__doc__ = getattr(orig, "__doc__", None)
+	return procesor

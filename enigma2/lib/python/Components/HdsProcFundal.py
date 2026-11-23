@@ -12,9 +12,11 @@
 # care nu se termina in TIMP_S marcheaza driverul "blocat" cat timp firul ei e tot acolo: nu se mai porneste niciun fir
 # (altfel s-ar strange fire blocate) si se intoarce numai ce e citit deja. Cand citirea se termina, chiar tarziu, driverul
 # nu mai e blocat: o citire lenta o data (la schimbari repezi de canal) nu are voie sa tina pana la repornirea interfetei,
-# ca atunci lista imaginilor refuza tot („receptorul nu se poate verifica”). Un singur fir de citire odata.
-# Pe alte fire decat cel principal (analiza fluxului, firele web care au deja firul lor) si pentru celelalte fisiere
-# citirea ramane directa, ca inainte. Fisierul nu importa nimic din enigma2: probele de pe PC il incarca asa cum e.
+# ca atunci lista imaginilor refuza tot ("receptorul nu se poate verifica"). Un singur fir de citire odata.
+# Citirile periodice din HdsEcranNegru trec prin lucrator si pentru celelalte cai. Nu extindem aceasta regula la
+# initializarile celorlalte module: ele nu reincearca un rezultat lipsa. Pentru acestea, fisierele obisnuite isi
+# pastreaza contractul direct. Pe alte fire citirea ramane sincrona. Paza nodurilor se face in lucrator.
+# Fisierul nu importa nimic din enigma2.
 
 import os
 import threading
@@ -77,21 +79,28 @@ def nodOprit(cale, hisilicon):
 
 def blocat():
 	"""True cat timp o citire a driverului nu raspunde de mai mult de TIMP_S."""
-	_verificaFirul()
-	return _STARE["blocat"]
+	with _LACAT:
+		_verificaFirulSubLacat()
+		return _STARE["blocat"]
 
 
 def _verificaFirul():
+	with _LACAT:
+		_verificaFirulSubLacat()
+
+
+def _verificaFirulSubLacat():
+	# Apelat numai cu lacatul luat; timpul monoton nu sare la potrivirea ceasului.
 	fir = _STARE["fir"]
 	if fir is None or not fir.is_alive():
 		if _STARE["blocat"]:
 			_STARE["blocat"] = False
-			_jurnal("citirea lui %s s-a terminat dupa %.1f s: citesc din nou driverul" % (_STARE["cale"], time.time() - _STARE["pornit_t"]))
+			_jurnal("citirea lui %s s-a terminat dupa %.1f s: citesc din nou driverul" % (_STARE["cale"], time.monotonic() - _STARE["pornit_t"]))
 		return
-	if not _STARE["blocat"] and time.time() - _STARE["pornit_t"] > TIMP_S:
+	if not _STARE["blocat"] and time.monotonic() - _STARE["pornit_t"] > TIMP_S:
 		_STARE["blocat"] = True
 		_jurnal("citirea lui %s nu raspunde de %.1f s: nu mai citesc driverul cat timp nu se termina"
-			% (_STARE["cale"], time.time() - _STARE["pornit_t"]))
+			% (_STARE["cale"], time.monotonic() - _STARE["pornit_t"]))
 
 
 def _peFirulPrincipal():
@@ -101,13 +110,22 @@ def _peFirulPrincipal():
 		return isinstance(threading.current_thread(), threading._MainThread)
 
 
+def _citestePermis(functie, argumente):
+	# Numai nodurile /proc/stb cer paza; nu confundam un fisier obisnuit cu un nod relativ.
+	cale = str(argumente[0]).replace("\\", "/")
+	if "proc/stb/" in cale:
+		if nodOprit(cale, False) or (nodOprit(cale, True) and eHiSilicon()):
+			return None
+	return functie(*argumente)
+
+
 def _citesteInFir(cheie, functie, argumente):
-	t0 = time.time()
+	t0 = time.monotonic()
 	try:
-		date = functie(*argumente)
+		date = _citestePermis(functie, argumente)
 	except Exception:
 		date = None
-	durata = time.time() - t0
+	durata = time.monotonic() - t0
 	with _LACAT:
 		_CITITE[cheie] = date
 	if durata > TIMP_S:
@@ -115,25 +133,35 @@ def _citesteInFir(cheie, functie, argumente):
 
 
 def citeste(functie, cale, *argumente):
-	"""Rezultatul lui functie(cale, *argumente): pe firul principal, pentru fisierele driverului, prin firul de
-	fundal (asteptat cel mult ASTEPTARE_S, altfel ultimul rezultat stiut); altfel direct."""
-	if not eDriver(cale) or not _peFirulPrincipal():
-		return functie(cale, *argumente)
+	"""Driverul si citirile periodice HdsEcranNegru: fundal pe interfata, asteptat cel mult ASTEPTARE_S.
+	La ocupare, ultimul rezultat sau None. Restul pastreaza contractul sincron existent."""
 	toate = (cale,) + tuple(argumente)
+	if not eDriver(cale) and getattr(functie, "__module__", "") != "Components.HdsEcranNegru":
+		return functie(*toate)
+	if not _peFirulPrincipal():
+		return _citestePermis(functie, toate)
 	try:
 		cheie = (getattr(functie, "__module__", ""), getattr(functie, "__name__", ""), toate)
 		hash(cheie)
 	except TypeError:
 		cheie = (getattr(functie, "__name__", ""), str(cale))
-	_verificaFirul()
-	if not _STARE["blocat"]:
-		fir = _STARE["fir"]
-		if fir is None or not fir.is_alive():
-			fir = threading.Thread(target=_citesteInFir, args=(cheie, functie, toate), name="HdsProcFundal")
-			fir.daemon = True
-			_STARE["fir"], _STARE["pornit_t"], _STARE["cale"] = fir, time.time(), str(cale)
-			fir.start()
-			fir.join(ASTEPTARE_S)
-			_verificaFirul()
+	nou = None
+	with _LACAT:
+		_verificaFirulSubLacat()
+		if not _STARE["blocat"]:
+			fir = _STARE["fir"]
+			if fir is None or not fir.is_alive():
+				try:
+					nou = threading.Thread(target=_citesteInFir, args=(cheie, functie, toate), name="HdsProcFundal")
+					nou.daemon = True
+					_STARE["fir"], _STARE["pornit_t"], _STARE["cale"] = nou, time.monotonic(), str(cale)
+					nou.start()
+				except Exception:
+					_STARE.update({"fir": None, "pornit_t": 0.0, "blocat": False, "cale": ""})
+					nou = None
+	# Nici cititorul, nici asteptarea lui nu tin lacatul rezultatelor.
+	if nou is not None:
+		nou.join(ASTEPTARE_S)
+		_verificaFirul()
 	with _LACAT:
 		return _CITITE.get(cheie)

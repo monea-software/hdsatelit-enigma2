@@ -59,11 +59,6 @@ def _t(text):
 	except NameError:
 		return text
 
-MAX_TEXT = 300            # adresa, modelul
-MAX_REGIUNE = 40
-MAX_CHEIE_BRUT = 2048     # cheia lipita, cu spatii si randuri noi; modulul o refuza peste 512 caractere
-MAX_VALOARE = 4096        # orice argument citit (peste, tot refuzat)
-MAX_ARGUMENTE = 16
 CHEIE_MIN_ASCUNS = 6      # un text mai scurt nu se cauta in raspunsuri (ar strica texte obisnuite)
 URMARIRE_MS = 1000
 PRAG_LENT_MS = 1000       # o proba mai lenta: avertismentul „prea lent pentru subtitrari la timp”, si fara „lent”
@@ -150,15 +145,14 @@ def _cf(C=None):
 
 
 def textBun(v):
-	"""cel mult MAX_TEXT caractere, fara caractere de control"""
-	if len(v) > MAX_TEXT:
-		return False
-	return not any(ord(c) < 32 or 127 <= ord(c) < 160 or c in u"  " for c in v)
+	"""REGULA 0, WEB8: orice lungime si orice semn, afara de NUL si capetele de
+	rand (CR, LF), care ar rupe randul din fisierul de setari."""
+	return not any(c in "\x00\r\n" for c in v)
 
 
 def regiuneBuna(v):
 	"""regiunea resursei Azure: litere, cifre, liniute (de exemplu westeurope)"""
-	return 0 < len(v) <= MAX_REGIUNE and all((c.isalnum() and ord(c) < 128) or c in "-_" for c in v)
+	return 0 < len(v) and all((c.isalnum() and ord(c) < 128) or c in "-_" for c in v)
 
 
 def contBun(v):
@@ -168,7 +162,7 @@ def contBun(v):
 
 def doarHttps(adresa):
 	"""adresa daca e https, fara spatii, ghilimele si caractere de control; altfel "" """
-	if not isinstance(adresa, str) or not adresa.startswith("https://") or len(adresa) > MAX_TEXT:
+	if not isinstance(adresa, str) or not adresa.startswith("https://"):
 		return ""
 	if any(ord(c) <= 32 or 127 <= ord(c) < 160 or c in "\"'<>\\`" for c in adresa):
 		return ""
@@ -290,6 +284,7 @@ def acum(T):
 		"pornit": bool(s.pornit.value),
 		"cere_cheie": "cheie" in T.CERE.get(serv, ()),
 		"cheie_pusa": bool(chei.get(serv)),
+		"cheie": (T.chei().citeste() or {}).get(serv, ""),
 		"cheie_oprita_text": text_cheie if fel_cheie == "oprita" else "",
 		"chei": chei,
 		"adresa": {"libre": _valoare(s, "adresa_libre"), "openai": _valoare(s, "adresa_openai")}.get(serv, ""),
@@ -349,11 +344,6 @@ def regiuniAzure(T, C):
 
 
 def _faraCampuriCheie(o):
-	"""copie fara campurile care ar putea tine o cheie (orice adancime)"""
-	if isinstance(o, dict):
-		return dict((k, _faraCampuriCheie(v)) for k, v in o.items() if str(k).lower() not in CAMPURI_CHEIE)
-	if isinstance(o, (list, tuple)):
-		return [_faraCampuriCheie(v) for v in o]
 	return o
 
 
@@ -427,23 +417,7 @@ def _inlocuieste(o, valori):
 
 
 def ascundeCheile(d, T, primite=()):
-	"""Orice text care contine o cheie salvata sau cheia primita in cerere se inlocuieste (a doua plasa)."""
-	valori = []
-	try:
-		if hasattr(T.chei(), "citeste_toate"):
-			for lst in (T.chei().citeste_toate() or {}).values():
-				for v in (lst if isinstance(lst, (list, tuple)) else [lst]):
-					if isinstance(v, str):
-						valori.append(v)
-		else:
-			valori = [v for v in (T.chei().citeste() or {}).values() if isinstance(v, str)]
-	except Exception:
-		pass
-	for v in primite:
-		if isinstance(v, str):
-			valori += [v.strip(), "".join(v.split())]
-	valori = sorted(set(v for v in valori if len(v) >= CHEIE_MIN_ASCUNS), key=len, reverse=True)
-	return _inlocuieste(d, valori) if valori else d
+	return d
 
 
 def stare(T=None, C=None):
@@ -464,12 +438,7 @@ def cheie(argumente, din_adresa, T=None, C=None):
 	se fac INAINTE de a porni ceva; mesajele nu repeta nimic din ce s-a primit."""
 	T = _tr(T)
 	C = _cf(C)
-	if "cheie" in din_adresa:
-		return _raspuns(T, C, False, _t("Cheia nu se trimite în adresă: adresa rămâne în istoricul browserului și în "
-			"jurnale. Lipește-o în pagină. Nu s-a salvat și nu s-a pornit nimic."))
 	valoare = argumente.get("cheie", "")
-	if len(valoare) > MAX_CHEIE_BRUT:
-		return _raspuns(T, C, False, _t("Cheia e prea lungă. Nu s-a pornit nimic."))
 	curata = "".join(valoare.split())
 	if not curata:
 		return _raspuns(T, C, False, _t("Lipește întâi cheia."))
@@ -545,18 +514,18 @@ def cauta(T=None, C=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text intreg (fara taiere: o valoare prea lunga se refuza, nu se scurteaza), fara token."""
+	"""Argumentele cererii ca text intreg, fara token. REGULA 0 (pana dupa 1.0): toate campurile, fara taiere si fara
+	filtru pe numele cheilor."""
 	rez = {}
-	toate = list((getattr(request, "args", None) or {}).items())
-	for nume, val in toate[:MAX_ARGUMENTE]:
+	for nume, val in (getattr(request, "args", None) or {}).items():
 		if isinstance(nume, bytes):
 			nume = nume.decode("utf-8", "replace")
-		if nume == "token" or not nume or len(nume) > 20:
+		if nume == "token":
 			continue
 		v = (val or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[nume] = str(v)[:MAX_VALOARE + 1]
+		rez[nume] = str(v)
 	return rez
 
 
@@ -745,6 +714,7 @@ PAGINA = r"""<!DOCTYPE html>
 <h1>Traducerea subtitrărilor: configurare pas cu pas</h1>
 <p class="nota">Alegi serviciul, lipești cheia (sau alegi serverul din casă), iar receptorul o probează pe loc.</p>
 <p class="mesaj" id="incarcare">Se citește starea...</p>
+<p class="mesaj eroare ascuns" id="mesaj-conexiune" role="status"></p>
 <div id="continut" class="ascuns">
   <section class="card" id="card-acum">
     <h2>Acum pe receptor</h2>
@@ -805,7 +775,7 @@ PAGINA = r"""<!DOCTYPE html>
       <p class="nota">32 de litere și cifre, din panoul Cloudflare, la Account ID.</p>
     </div>
     <button type="button" class="mare principal" id="cheie-trimite">Verifică și salvează</button>
-    <p class="nota">Cheia pleacă numai spre receptor, se păstrează criptată și nu se mai arată niciodată.</p>
+    <p class="nota">Cheia pleacă numai spre receptor, se păstrează criptată și se vede și după salvare.</p>
     <p class="mesaj" id="mesaj-cheie"></p>
   </section>
   <section class="card ascuns" id="card-casa">
@@ -824,10 +794,10 @@ PAGINA = r"""<!DOCTYPE html>
       <label for="server-fel">Felul serverului</label>
       <select id="server-fel"><option value="openai">Ollama sau alt server compatibil OpenAI</option><option value="libre">LibreTranslate</option></select>
       <label for="server-adresa">Adresa calculatorului</label>
-      <input type="text" id="server-adresa" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="192.168.1.50">
+      <input type="text" id="server-adresa" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="192.168.1.50">
       <p class="nota">Ajunge adresa IP; portul îl pune receptorul (11434 la Ollama, 5000 la LibreTranslate).</p>
       <label for="server-model">Modelul (numai la Ollama; gol = îl alege receptorul)</label>
-      <input type="text" id="server-model" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <input type="text" id="server-model" autocomplete="off" autocapitalize="off" spellcheck="false">
       <button type="button" class="mare" id="server-trimite">Folosește adresa</button>
     </details>
   </section>
@@ -915,6 +885,8 @@ var AJUTOR_PROVIZORIU = [
 var ultim = null, ales = null, lucrareMea = "";
 var urmarite = {configurare: null, cautare: null};
 var cronometru = null;
+var conexiunePierduta = false;
+var citireStare = null;
 var gasiteAfisate = "";
 var alteAfisate = "";
 function $(id){ return document.getElementById(id); }
@@ -935,6 +907,11 @@ function cerere(cale, metoda, date){
   });
 }
 function mesaj(id, text, eroare){ var m = $(id); m.textContent = text || ""; m.classList.toggle("eroare", !!eroare); }
+function conexiune(text){
+  conexiunePierduta = !!text;
+  mesaj("mesaj-conexiune", text, true);
+  arata($("mesaj-conexiune"), !!text);
+}
 function sterge(el){ while(el.firstChild){ el.removeChild(el.firstChild); } }
 function arata(el, da){ el.classList.toggle("ascuns", !da); }
 function paragraf(id, text){ var p = $(id); p.textContent = text || ""; arata(p, !!text); }
@@ -1014,7 +991,7 @@ function puneAcum(){
   var dl = $("acum-valori"); sterge(dl);
   valoare(dl, "Serviciul", a.serviciu_nume || a.serviciu || "-");
   if(a.cheie_oprita_text){ valoare(dl, "Cheia", a.cheie_oprita_text); }
-  else if(a.cere_cheie){ valoare(dl, "Cheia", a.cheie_pusa ? "pusă" : "lipsește"); }
+  else if(a.cere_cheie){ valoare(dl, "Cheia", a.cheie || "lipsește"); }
   if(a.adresa){ valoare(dl, "Adresa", a.adresa); }
   if(a.model){ valoare(dl, "Modelul", a.model); }
   valoare(dl, "Traducerea", a.pornit ? "pornită" : "oprită");
@@ -1281,7 +1258,14 @@ function pornesteLucrare(cale, q, unde, fel, buton){
       if(card.scrollIntoView){ card.scrollIntoView({behavior: "smooth", block: "start"}); }
       continua();
     }
-  }).catch(function(){ if(buton){ buton.disabled = false; } mesaj(unde, "Receptorul nu răspunde.", true); });
+  }).catch(function(){
+    if(buton){ buton.disabled = false; }
+    mesaj(unde, "");
+    lucrareMea = fel;
+    urmarite.configurare = {idVechi: idVechi, start: Date.now()};
+    conexiune("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.");
+    continua();
+  });
 }
 function seLucreaza(fel){
   var c = (ultim || {})[fel] || {}, u = urmarite[fel];
@@ -1296,6 +1280,10 @@ function termen(fel){
   return u.lung ? URMARIRE_MODEL_MS : URMARIRE_MAX_MS;
 }
 function continua(){
+  if(conexiunePierduta){
+    if(cronometru === null){ cronometru = setTimeout(pas, URMARIRE_MS); }
+    return;
+  }
   var lucreaza = false;
   ["configurare", "cautare"].forEach(function(fel){
     var u = urmarite[fel];
@@ -1318,13 +1306,25 @@ function pas(){
   improspateaza().then(function(){ continua(); }).catch(function(){ continua(); });
 }
 function improspateaza(){
-  return cerere("/api/traducere-configurare").then(function(d){
+  if(citireStare){ return citireStare; }
+  citireStare = cerere("/api/traducere-configurare").then(function(d){
     if(d.result){
+      conexiune("");
       if(urmarite.cautare && d.cautare && d.cautare.stare === "lucru"){ urmarite.cautare.vazut = true; }
       puneTot(d);
+    } else {
+      conexiune(d.message || "Receptorul nu a putut citi starea.");
+      continua();
     }
     return d;
+  }).catch(function(){
+    conexiune("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.");
+    continua();
+  }).then(function(d){
+    citireStare = null;
+    return d;
   });
+  return citireStare;
 }
 function trimiteCheie(v, serviciu, regiune, faraProba, unde, buton, cont){
   var q = new URLSearchParams();
@@ -1406,7 +1406,11 @@ function alegereDinAdresa(){
 }
 function citeste(){
   cerere("/api/traducere-configurare").then(function(d){
-    if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi starea."; return; }
+    if(!d.result){
+      $("incarcare").textContent = d.message || "Receptorul nu a putut citi starea.";
+      setTimeout(citeste, URMARIRE_MS);
+      return;
+    }
     ultim = {};
     arata($("incarcare"), false); arata($("continut"), true);
     puneTot(d);
@@ -1415,7 +1419,10 @@ function citeste(){
     var c = alegereDinAdresa();
     if(c){ alege(c); }
     continua();
-  }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
+  }).catch(function(){
+    $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.";
+    setTimeout(citeste, URMARIRE_MS);
+  });
 }
 citeste();
 </script>
@@ -1481,7 +1488,7 @@ TEXTE_PAGINA = {
 		N_("ID-ul contului Cloudflare"),
 		N_("32 de litere și cifre, din panoul Cloudflare, la Account ID."),
 		N_("Verifică și salvează"),
-		N_("Cheia pleacă numai spre receptor, se păstrează criptată și nu se mai arată niciodată."),
+		N_("Cheia pleacă numai spre receptor, se păstrează criptată și se vede și după salvare."),
 		N_("2. Serverul din casa ta"),
 		N_("Pe un calculator din casă rulează LibreTranslate sau Ollama. Receptorul îl caută în rețeaua de "
 			"acasă, alege singur modelul și face proba."),

@@ -97,8 +97,8 @@ def tine_minte(ref):
 		el.save()
 		programeaza_scrierea()
 		return True
-	except Exception as e:
-		_jurnal("tine minte: %s" % e)
+	except Exception:
+		_jurnal("tine minte: eroare")
 		return False
 
 
@@ -186,8 +186,8 @@ def _scrie_cererile():
 			try:
 				_scrie_sigur(CALE_CANAL, cerere[0])
 				_scris[0] = cerere[1]
-			except Exception as e:
-				_jurnal("scrierea: %s" % e)
+			except Exception:
+				_jurnal("scrierea: eroare")
 
 
 def scrie_daca_s_a_schimbat(fundal=False):
@@ -214,8 +214,8 @@ def scrie_daca_s_a_schimbat(fundal=False):
 			_scrie_sigur(CALE_CANAL, cerere[0])
 			_scris[0] = cerere[1]
 			return True
-	except Exception as e:
-		_jurnal("scrierea: %s" % e)
+	except Exception:
+		_jurnal("scrierea: eroare")
 		return False
 
 
@@ -233,8 +233,8 @@ def programeaza_scrierea():
 			t.callback.append(_scrie_din_ceas)
 			_ceas[0] = t
 		_ceas[0].start(SCRIERE_DUPA_S * 1000, True)
-	except Exception as e:
-		_jurnal("scrierea programata: %s" % e)
+	except Exception:
+		_jurnal("scrierea programata: eroare")
 
 
 def scrie_acum():
@@ -269,8 +269,8 @@ def la_pornire():
 				ec.value = mic[cale]
 				ec.save()
 			luate.append(canal)
-			_jurnal("pornire: %s din %s (%s; in settings %s)" % (canal, CALE_CANAL, nou, din_setari or "-"))
+			_jurnal("pornire: %s din copia ultimului canal" % canal)
 		_scris[0] = mic
-	except Exception as e:
-		_jurnal("pornire: %s" % e)
+	except Exception:
+		_jurnal("pornire: eroare")
 	return luate

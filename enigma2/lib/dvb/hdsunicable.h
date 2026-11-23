@@ -99,6 +99,60 @@ inline bool calculeaza(int format, int ub, int vco, int frecventa_if,
 	return true;
 }
 
+/* UNI1 (21.11.2026): timpii comenzii pe fir, numai pentru Unicable/JESS. Secventa veche tinea 18 V doar 20 ms
+   inainte de comanda si 50 ms dupa ea (setarile generale DiSEqC, din OE-A 2016), iar o comanda EN50494 de 5 octeti
+   dureaza ~82 ms pe fir (15 ms + 5 x 9 biti x 1,5 ms). Cand driverul intoarce ioctl-ul inainte ca mesajul sa plece
+   (alte imagini Enigma2 masoara asta si adauga pana la 94 ms), 18 V coborat dupa 50 ms poate taia comanda: banda ramane pe
+   transponderul vechi ("postul nu mai emite pe aceasta frecventa") sau fara semnal (cauza probabila, nemasurata). Ca in alte
+   imagini (UNICABLE_DELAY_AFTER_CHANGE_VOLTAGE_BEFORE_SWITCH_CMDS 75, UNICABLE_DELAY_AFTER_LAST_DISEQC_CMD 150); unele au 75 si
+   100 pentru tot DiSEqC-ul. O valoare configurata mai mare ramane. DiSEqC-ul obisnuit (fara Unicable) nu e atins. */
+enum { PAUZA_18V_MS = 75, PAUZA_DUPA_COMANDA_MS = 150, REACORDARI_MAX = 1 };
+
+inline int pauza18V(int configurat)
+{
+	return configurat > PAUZA_18V_MS ? configurat : PAUZA_18V_MS;
+}
+
+inline int pauzaDupaComanda(int configurat)
+{
+	return configurat > PAUZA_DUPA_COMANDA_MS ? configurat : PAUZA_DUPA_COMANDA_MS;
+}
+
+/* UNR1: ceasul alimentarii apartine tunerului fizic, nu acordarii anulate.
+   Schimbarile 13/18 V nu repornesc ceasul; oprirea sau un refuz il invalideaza. */
+struct Alimentare
+{
+	long long pornire_ms;
+	Alimentare(): pornire_ms(-1) {}
+	void tensiune(bool pornita, bool acceptata, long long acum_ms)
+	{
+		if (!acceptata || !pornita)
+			pornire_ms = -1;
+		else if (pornire_ms < 0)
+			pornire_ms = acum_ms;
+	}
+	int ramasa(int configurat, long long acum_ms) const
+	{
+		const int durata = configurat > 2700 ? configurat : 2700;
+		if (pornire_ms < 0)
+			return 0;
+		const long long trecut = acum_ms - pornire_ms;
+		return trecut >= durata ? 0 : (trecut > 0 ? durata - (int)trecut : durata);
+	}
+};
+
+/* UNI1: o acordare Unicable/JESS esuata (fara semnal la capatul timpului de asteptare) pe un canal gestionat (zap,
+   inregistrare; nu cautarea si nu ecranele cu canal brut, care n-au parametri tinuti) se mai incearca o data, cu
+   comanda trimisa din nou, inainte sa se spuna "fara semnal" (alte imagini reacordeaza la orice esec, fara limita).
+   satelit = acordarea curenta a canalului e de satelit (din parametrii ei, nu din starea tunerului: SATCR ramane de la o
+   acordare Unicable si dupa o acordare pe cablu sau terestru pe acelasi tuner, fiindca numai sec.cpp il scrie, la satelit);
+   satcr = valoarea SATCR a tunerului, scrisa de sec.cpp la ACEASTA acordare de satelit (-1 fara Unicable), facute =
+   reacordarile deja facute pentru acordarea asta. Fara satelit cu Unicable: nimic, ca pe HEAD. */
+inline bool reacordeazaDupaEsec(bool satelit, long satcr, bool gestionat, int facute)
+{
+	return satelit && satcr != -1 && gestionat && facute >= 0 && facute < REACORDARI_MAX;
+}
+
 inline bool opreste(int stare, Comanda &c)
 {
 	c = Comanda();

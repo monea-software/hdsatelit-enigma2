@@ -3,7 +3,7 @@
 # Licenta GPL-2.0 (ca enigma2); notele autorilor raman neschimbate. Adus in imaginea HD Satelit (agentul TM, 12.11.2026): addon-ul de
 # tema cu pictogramele canalului (HD/4K, HDR, criptat, Teletext, Dolby, piste, HbbTV, inregistrare, tunere), cerut de temele E2-DarkOS
 # si Simple Ten Eighty (<widget addon="ServiceInfoBar" connection="session" .../>). Adaptat fara piese C++ noi:
-# - eStreamServer lipseste din enigma-ul nostru: pictograma „stream” nu apare (ca la OE-Alliance cand serverul lipseste);
+# - eStreamServer vine din HdsEnigmaCompat (0.7.8: serverul de pe 8001 e scris in Python, Hds/DabT2/server8001.py), numai clientii din retea;
 # - Sources.StreamService.StreamServiceList, getCurrentServiceReferenceOriginal, getIsStreamRelay, onManualNewService, tuner_mask si
 #   InfoBarGenerics.instanceInfoBarSubserviceSelection: luate numai daca exista (altfel lista goala, canalul jucat acum, fals);
 # - eAVControl vine din HdsEnigmaCompat (rezolutia din /proc); getRealRecordingsCount lipseste: numarul din getRecordings().
@@ -75,7 +75,7 @@ class ServiceInfoBar(GUIAddon):
 		self.textRenderer = Label()
 		self.permanentIcons = []
 		self.records_running = 0
-		server = getattr(enigma, "eStreamServer", None)  # HD Satelit: lipseste, deci fara pictograma „stream”
+		server = getattr(enigma, "eStreamServer", None)  # HD Satelit: din HdsEnigmaCompat (0.7.8), peste serverul de pe 8001
 		self.streamServer = server.getInstance() if server is not None else None
 		self.currentServiceSource = None
 		self.frontendInfoSource = None

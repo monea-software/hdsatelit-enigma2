@@ -31,6 +31,13 @@
 # motor (hdsegalizator.h). Setarile tv (Da din fabrica) si potrivire_tv (sunetul mai tarziu sau mai devreme fata de
 # imagine, -300..300 ms) sunt in web, la „Pentru probe și potriviri”, ca volumul si placa ALSA.
 #
+# Prin placa (numai HiSilicon, sectiunea "egalizatorul placii" de mai jos): cu tv_placa (Nu din fabrica) la canalele TV benzile
+# (adunate in 5) le aplica egalizatorul placii de sunet, fara intarziere; motorul nu mai ia sunetul TV (setTv 0), iar
+# efectele si comprimarea nu se aud la TV. Egalizatorul placii se opreste la radio, IPTV, filme, la oprirea
+# egalizatorului, in standby si la pornirea interfetei (aducerea la zero, ca nimic sa nu ramana pus dupa o cadere).
+# Dupa o intoarcere pe placa cu tv-fara-ceas pe HiSilicon, daca imaginea merge dar sunetul placii nu (placa a ramas
+# fara pista), serviciul porneste din nou o singura data (reporneste sunetul placii).
+#
 # Fara motor (nucleu fara eHdsEgalizator, PC) totul merge mai departe fara efect: setarile se tin, iar textul spune ca
 # egalizatorul lipseste din programul receptorului. Partea de sus nu importa enigma: se probeaza pe PC.
 
@@ -39,6 +46,8 @@ from __future__ import absolute_import
 import io
 import json
 import os
+import re
+import threading
 import time
 
 BENZI = 10
@@ -116,6 +125,7 @@ TEXTE_POST = {
 	"oprit": N_("Egalizatorul e oprit. Sunetul merge ca de obicei, prin placa de sunet."),
 	"pauza": N_("Pauză. Sunetul revine cu egalizator când pornești din nou."),
 	"tv": N_("La canalele TV egalizatorul e oprit din setări. Sunetul merge prin placa de sunet."),
+	"tv-oprit-pornire": N_("Proba egalizatorului la TV a eșuat pe acest model. Sunetul merge prin placa de sunet. Nu mai încearcă până la repornirea interfeței."),
 	"inregistrare": N_("La înregistrări și la pauza cu reluare (timeshift) egalizatorul nu lucrează. Sunetul merge prin placa de sunet."),
 	"format": N_("Postul acesta are sunet %s. Egalizatorul lucrează la posturile cu sunet MPEG (MP2)."),
 	"trecere": N_("Sunetul pleacă neschimbat spre bara de sunet: egalizatorul, volumul și modul de noapte le reglezi din bara de sunet."),
@@ -126,6 +136,9 @@ TEXTE_POST = {
 	"fara-decodor-mpeg": N_("Egalizatorul nu poate porni: receptorul nu are decodorul MPEG audio."),
 	"fara-gstreamer": N_("Egalizatorul nu poate porni: lipsește decodarea sunetului în procesor (GStreamer)."),
 	"fara-alsa": N_("Egalizatorul nu poate porni: placa de sunet nu se poate folosi din procesor."),
+	# placile fara ceasul placii HiSilicon (Broadcom, Vu+): drumul din procesor nu se aude acolo, deci radioul si fluxurile
+	# raman pe placa (hdsegalizator.cpp, procesorNeprobat); acelasi text ca fara-alsa, deja tradus
+	"placa-neprobata": N_("Egalizatorul nu poate porni: placa de sunet nu se poate folosi din procesor."),
 	"fara-sunet": N_("Postul acesta nu are sunet."),
 	"nimic": N_("Nu merge niciun post acum. Setările se aplică la următorul post de radio."),
 	"fara-motor": N_("Egalizatorul lipsește din programul acestui receptor. Setările se păstrează, dar nu se aud."),
@@ -160,9 +173,11 @@ TEXT_PORNESTE = N_("Pornește egalizatorul la acest post...")
 # canal TV: placa canta sunetul din primul cadru pana preia egalizatorul (stare: preluat 0; lib/service/hdsegalizator.h)
 TEXT_TV_PE_PLACA = N_("Canal TV: sunetul pornește pe placa de sunet, fără întârziere, și trece în egalizator după o clipă.")
 TEXT_FARA_DATE = N_("Postul nu mai trimite sunet. Egalizatorul așteaptă.")
+TEXT_PRIN_PLACA = N_("La canalele TV egalizatorul îl aplică placa de sunet, la fiecare canal și fără întârziere, în 5 benzi. Efectele speciale și comprimarea se aud numai la radio.")
 
 _STARE = {"memorie": None, "nav": None, "ceas": None, "incercari": 0, "pornit": False, "ascultatori": [],
-	"post": None, "legat_motor": False}
+	"post": None, "legat_motor": False, "placa": None, "placa_exista": None, "proba": None, "repornit_ref": None,
+	"verifica_muta": None, "standby": False}
 _FEL = {"ref": None, "t": 0.0, "val": (None, None)}
 
 
@@ -252,6 +267,8 @@ def initConfig():
 	# canalele TV: egalizatorul si la ele (sunetul tinut dupa imagine), cu potrivirea fata de imagine
 	c.tv = ConfigYesNo(default=True)
 	c.potrivire_tv = ConfigSelection(default="0", choices=alegeriPotrivireTv())
+	# HiSilicon: la canalele TV egalizatorul placii (5 benzi, fara intarziere) in locul drumului prin procesor
+	c.tv_placa = ConfigYesNo(default=False)
 
 
 def textMsSemn(v):
@@ -499,8 +516,307 @@ def trimiteLaMotor(setari, m=None):
 	if hasattr(m, "setTv"):
 		# setari["tv"]: proba de pe ecran (incearca), altfel setarea salvata
 		tv = setari.get("tv")
-		m.setTv(1 if (c.tv.value if tv is None else tv) else 0)
+		tv = c.tv.value if tv is None else tv
+		if _prinPlaca(setari):
+			tv = False
+		m.setTv(1 if tv else 0)
 	return True
+
+
+# ---------------------------------------------------------------- egalizatorul placii: comenzile si firul
+#
+# De ce: la canalele TV pe HiSilicon sunetul ajunge in procesor numai cu -60..+40 ms inaintea imaginii aratate (placa isi
+# porneste sunetul cu ~50 ms in tampon), iar drumul prin decodare, ALSA si placa cere peste 100 ms; asa egalizatorul din
+# procesor se prinde numai la o parte din schimbarile de canal (masurat pe SF8008, lucrarea EGZ7). Placa are insa un
+# egalizator parametric pe fiecare iesire (PEQ, 5 benzi), aplicat direct sunetului ei: fara intarziere si fara sincron.
+#
+# Cum: cele 10 benzi ale omului se aduna in 5 (perechi de benzi alaturate: raft jos, trei clopote, raft sus, +/-15 dB;
+# toata curba coboara cu cea mai mare ridicare, ca sunetul sa nu se taie), apoi se scriu pe iesirile HDMI0, DAC0 si
+# SPDIF0 prin comenzile textului /proc/msp/sound0 ("HDMI0 peq band0 freq 125", "... gain -3.500", "HDMI0 peq on") si se
+# citesc inapoi din acelasi fisier. Scrierile le face un fir separat (Lucrator); firul interfetei numai cere starea
+# dorita (cere()), ultima cerere castiga. "Oprit" pune benzile din fabrica si opreste PEQ, ca nimic sa nu ramana pus.
+
+PEQ_PROC = "/proc/msp/sound0"
+PEQ_SYNC = "/proc/msp/sync00"
+PEQ_PORTURI = ("HDMI0", "DAC0", "SPDIF0")
+PEQ_BENZI = 5
+PEQ_CASTIG_MAX = 15.0
+# benzile din fabrica ale driverului (citite pe SF8008): clopote, Q 2.0, 0 dB
+PEQ_FABRICA = (("PK", 120, 2.0, 0.0), ("PK", 500, 2.0, 0.0), ("PK", 1500, 2.0, 0.0), ("PK", 5000, 2.0, 0.0),
+	("PK", 10000, 2.0, 0.0))
+# cele 10 benzi ale egalizatorului (31 Hz .. 16 kHz) in perechi -> (tip, frecventa, Q) pe placa
+PEQ_PERECHI = (("LS", 63, 0.7), ("PK", 177, 0.7), ("PK", 707, 0.7), ("PK", 2828, 0.7), ("HS", 8000, 0.7))
+
+
+def peqExista(proc=PEQ_PROC, sync=PEQ_SYNC):
+	"""Receptor HiSilicon cu egalizatorul placii: sincronul placii si fisierul sunetului."""
+	return os.path.exists(sync) and os.path.exists(proc)
+
+
+def peqBenzi(benzi):
+	"""10 benzi (dB) -> 5 benzi de placa [(tip, frecventa, Q, castig dB)]: media fiecarei perechi, toata curba coborata
+	cu cea mai mare ridicare (fara taiere), apoi in +/-PEQ_CASTIG_MAX."""
+	b = [float(x) for x in list(benzi)[:10]] + [0.0] * max(0, 10 - len(benzi))
+	medii = [(b[2 * i] + b[2 * i + 1]) / 2.0 for i in range(PEQ_BENZI)]
+	sus = max(0.0, max(medii))
+	rez = []
+	for i, (tip, f, q) in enumerate(PEQ_PERECHI):
+		g = max(-PEQ_CASTIG_MAX, min(PEQ_CASTIG_MAX, medii[i] - sus))
+		rez.append((tip, f, q, round(g * 2.0) / 2.0))
+	return rez
+
+
+def peqTextCastig(g):
+	"""Castigul cum il citeste driverul: intreg si exact trei zecimale (5 -> "5.000", -3.5 -> "-3.500")."""
+	m = int(round(abs(g) * 1000.0))
+	return u"%s%d.%03d" % (u"-" if g < 0 and m else u"", m // 1000, m % 1000)
+
+
+def peqComenzi(benzi5):
+	"""Comenzile pentru o stare: benzi5 = lista de 5 sau None (oprit: benzile din fabrica, apoi PEQ oprit). Frecventa si Q
+	inaintea tipului, ca limitele tipului (raftul jos pana la 4 kHz, cel sus de la 4 kHz) sa fie respectate."""
+	rez = []
+	tinta = benzi5 if benzi5 is not None else PEQ_FABRICA
+	for port in PEQ_PORTURI:
+		for i, (tip, f, q, g) in enumerate(tinta):
+			rez.append(u"%s peq band%d type PK" % (port, i))
+			rez.append(u"%s peq band%d freq %d" % (port, i, int(f)))
+			rez.append(u"%s peq band%d Q %.1f" % (port, i, float(q)))
+			rez.append(u"%s peq band%d type %s" % (port, i, tip))
+			rez.append(u"%s peq band%d gain %s" % (port, i, peqTextCastig(g)))
+		rez.append(u"%s peq %s" % (port, u"on" if benzi5 is not None else u"off"))
+	return rez
+
+
+_PEQ_BANDA = re.compile(r"Band(\d)\((\w+),(\d+)Hz,(-?\d+)\.(-?\d+)dB,(\d+)\.(\d)Q\)")
+
+
+def peqCitesteInapoi(text):
+	"""Textul lui /proc/msp/sound0 -> {port: [(tip, frecventa, Q, castig)] sau None (PEQ oprit pe port)}. Driverul scrie
+	castigul negativ ca "-7.-500dB"."""
+	rez = {}
+	port = None
+	for rand in text.splitlines():
+		m = re.match(r"^(\w+): Status", rand)
+		if m:
+			port = m.group(1)
+			if port in PEQ_PORTURI:
+				rez[port] = None
+			continue
+		if port in PEQ_PORTURI and ("PEQ Attr" in rand or rez.get(port) is not None):
+			for b in _PEQ_BANDA.finditer(rand):
+				if rez.get(port) is None:
+					rez[port] = []
+				intreg, mii = int(b.group(4)), abs(int(b.group(5)))
+				neg = b.group(4).startswith("-") or b.group(5).startswith("-")
+				g = abs(intreg) + mii / 1000.0
+				rez[port].append((b.group(2), int(b.group(3)), int(b.group(6)) + int(b.group(7)) / 10.0, -g if neg else g))
+	return rez
+
+
+def peqPotrivit(citit, benzi5):
+	"""Citirea inapoi arata exact starea ceruta pe toate porturile."""
+	for port in PEQ_PORTURI:
+		v = citit.get(port, "lipsa")
+		if benzi5 is None:
+			if v is not None:
+				return False
+		elif v is None or v == "lipsa" or len(v) != len(benzi5):
+			return False
+		else:
+			for (t1, f1, q1, g1), (t2, f2, q2, g2) in zip(v, benzi5):
+				if t1 != t2 or f1 != int(f2) or abs(q1 - q2) > 0.05 or abs(g1 - g2) > 0.01:
+					return False
+	return True
+
+
+def peqCitesteFisier(proc=PEQ_PROC):
+	try:
+		with open(proc) as f:
+			return peqCitesteInapoi(f.read())
+	except (IOError, OSError):
+		return {}
+
+
+def peqScrie(benzi5, proc=PEQ_PROC):
+	"""Scrie starea (benzi5 sau None) si o citeste inapoi. -> (potrivit, comenzi refuzate)."""
+	refuzate = 0
+	for c in peqComenzi(benzi5):
+		try:
+			with open(proc, "w") as f:
+				f.write(c + "\n")
+		except (IOError, OSError):
+			refuzate += 1
+	try:
+		with open(proc) as f:
+			text = f.read()
+	except (IOError, OSError):
+		text = ""
+	return peqPotrivit(peqCitesteInapoi(text), benzi5), refuzate
+
+
+class LucratorPlaca(object):
+	"""Firul care scrie in placa. cere(benzi5 sau None): starea dorita; ultima cerere castiga, aceeasi stare nu se scrie
+	din nou. `jurnal(text)` primeste rezultatul fiecarei scrieri."""
+
+	def __init__(self, proc=PEQ_PROC, jurnal=None, scriitor=None):
+		self.proc = proc
+		self.jurnal = jurnal or (lambda t: None)
+		self.scriitor = scriitor or peqScrie
+		self.cv = threading.Condition()
+		self.dorit = None
+		self.are_cerere = False
+		self.scris = "nimic"
+		self.fir = None
+		self.cerute = 0
+		self.facute = 0
+
+	def cere(self, benzi5, fortat=False):
+		with self.cv:
+			stare = None if benzi5 is None else tuple(benzi5)
+			if not fortat and stare == self.scris and not self.are_cerere:
+				return
+			self.dorit = stare
+			self.are_cerere = True
+			self.cerute += 1
+			if self.fir is None:
+				self.fir = threading.Thread(target=self._bucla, name="hds-egal-placa")
+				self.fir.daemon = True
+				self.fir.start()
+			self.cv.notify()
+
+	def curataLaPornire(self):
+		"""La pornirea interfetei: daca placa a ramas cu PEQ pornit (dupa o cadere), il aduce la zero; altfel nu scrie."""
+		with self.cv:
+			self.dorit = "curata"
+			self.are_cerere = True
+			self.cerute += 1
+			if self.fir is None:
+				self.fir = threading.Thread(target=self._bucla, name="hds-egal-placa")
+				self.fir.daemon = True
+				self.fir.start()
+			self.cv.notify()
+
+	def asteapta(self, timp=5.0):
+		"""Numai pentru probe: pana se scrie ultima cerere."""
+		with self.cv:
+			if self.facute < self.cerute:
+				self.cv.wait_for(lambda: self.facute >= self.cerute, timp)
+
+	def _bucla(self):
+		while True:
+			with self.cv:
+				while not self.are_cerere:
+					self.cv.wait()
+				stare = self.dorit
+				self.are_cerere = False
+				numar = self.cerute
+			if stare == "curata":
+				stare = None
+				citit = peqCitesteFisier(self.proc)
+				# numai un port cu PEQ pornit se curata; un port care lipseste inca din fisier nu e pus
+				if not any(citit.get(p) for p in PEQ_PORTURI):
+					with self.cv:
+						self.scris = None
+						self.facute = numar
+						self.cv.notify_all()
+					continue
+			ok, refuzate = self.scriitor(None if stare is None else list(stare), self.proc)
+			with self.cv:
+				self.scris = stare
+				self.facute = numar
+				self.cv.notify_all()
+			if stare is None:
+				self.jurnal("egalizatorul placii oprit (benzile din fabrica)%s" % ("" if ok else ", citirea inapoi nu se potriveste"))
+			else:
+				self.jurnal("egalizatorul placii: %s%s%s" % (", ".join("%s %d Hz %s dB" % (t, f, peqTextCastig(g)) for t, f, q, g in stare),
+					"" if ok else "; citirea inapoi nu se potriveste", "; %d comenzi refuzate" % refuzate if refuzate else ""))
+
+
+def peqPlacaMuta(sync=PEQ_SYNC):
+	"""Dupa intoarcerea pe placa: imaginea merge (VidLocalTime > 0) dar sunetul placii nu (AudLocalTime <= 0)."""
+	try:
+		with open(sync) as f:
+			t = f.read()
+	except (IOError, OSError):
+		return False
+	v = re.search(r"VidLocalTime\s*:(-?\d+)", t)
+	a = re.search(r"AudLocalTime\s*:(-?\d+)", t)
+	return bool(v and a and int(v.group(1)) > 0 and int(a.group(1)) <= 0)
+
+
+# ---------------------------------------------------------------- egalizatorul placii (HiSilicon, canalele TV)
+
+def placaExista():
+	"""Receptor HiSilicon cu egalizatorul placii pe iesiri (citit o singura data)."""
+	if _STARE["placa_exista"] is None:
+		_STARE["placa_exista"] = peqExista()
+	return _STARE["placa_exista"]
+
+
+def _prinPlaca(setari=None):
+	"""Optiunea "prin placa" e aleasa (sau incercata pe ecran) pe un receptor care o are."""
+	from Components.config import config
+	c = config.hds_egalizator
+	v = (setari or {}).get("tv_placa")
+	return bool(placaExista() and (c.tv_placa.value if v is None else v))
+
+
+def _tvDirect(ref=None):
+	"""Postul de acum e un canal TV din tuner (nu radio, nu IPTV, nu film sau inregistrare)."""
+	ref = _refAcum() if ref is None else ref
+	if ref is None:
+		return False
+	try:
+		parti = ref.toString().split(":")
+		tip, fel = int(parti[0]), int(parti[2], 16)
+		cale = parti[10] if len(parti) > 10 else ""
+	except Exception:
+		return False
+	return tip == 1 and fel not in (2, 10) and not cale
+
+
+def _eRadio(ref):
+	try:
+		parti = ref.toString().split(":")
+		return int(parti[0]) == 1 and int(parti[2], 16) in (2, 10)
+	except Exception:
+		return False
+
+
+def _lucratorPlaca():
+	if _STARE["placa"] is None:
+		_STARE["placa"] = LucratorPlaca(jurnal=_jurnal)
+	return _STARE["placa"]
+
+
+def actualizeazaPlaca(setari=None, pornit=None, fortat=False):
+	"""Egalizatorul placii: pus cu benzile efective cand egalizatorul e pornit, optiunea "prin placa" aleasa si merge un
+	canal TV din tuner (nu in standby); altfel oprit. Scrierile le face firul Lucrator."""
+	if not placaExista():
+		return
+	from Components.config import config
+	c = config.hds_egalizator
+	setari = setari if setari is not None else (_STARE["proba"] or setariEfective(postAcum()[0]))
+	pornit = c.pornit.value if pornit is None else pornit
+	pus = bool(pornit and _prinPlaca(setari) and _tvDirect() and not _STARE["standby"])
+	l = _lucratorPlaca()
+	if not pus and ((l.scris in (None, "nimic") and not l.are_cerere) or (l.are_cerere and l.dorit == "curata")):
+		# oprit deja, niciodata pus sau curatarea de la pornire inca in asteptare (ea hotaraste daca e ceva de oprit):
+		# cu optiunea pe Nu placa nu primeste nicio scriere
+		return
+	l.cere(peqBenzi(setari["benzi"]) if pus else None, fortat=fortat)
+
+
+def renuntaLaProba():
+	"""Ecranul sau web-ul renunta la proba nesalvata: egalizatorul placii revine la setarile pastrate."""
+	_STARE["proba"] = None
+	actualizeazaPlaca()
+
+
+def _laStandby(intra):
+	_STARE["standby"] = bool(intra)
+	actualizeazaPlaca()
 
 
 def aplica(cheie=None, faraPost=False):
@@ -514,15 +830,17 @@ def aplica(cheie=None, faraPost=False):
 	if cheie is None and not faraPost:
 		cheie = postAcum()[0]
 	from Components.config import config
+	_STARE["proba"] = None
 	trimiteLaMotor(setariEfective(cheie), m)
 	m.setPornit(1 if config.hds_egalizator.pornit.value else 0)
+	actualizeazaPlaca(setariEfective(cheie))
 	return True
 
 
 # ---------------------------------------------------------------- schimbarile (ecranul si web-ul)
 
 def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, pePost=None, volum=None, placa=None,
-		salveaza=True, cheie=None, tv=None, potrivireTv=None, salveazaManual=False, efect=None):
+		salveaza=True, cheie=None, tv=None, potrivireTv=None, salveazaManual=False, efect=None, tvPlaca=None):
 	"""Schimba setarile; ce nu e dat ramane. `pePost` True = setarile se tin pentru postul de acum (cheie), False =
 	postul uita setarile lui (merg cele globale). O presetare pune benzile si Noapte; benzile date de mana fac
 	presetarea „manual” (sau presetarea care se potriveste). -> setarile efective de dupa."""
@@ -578,6 +896,8 @@ def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, p
 			c.placa.value = placa
 	if tv is not None:
 		c.tv.value = bool(tv)
+	if tvPlaca is not None:
+		c.tv_placa.value = bool(tvPlaca)
 	if potrivireTv is not None:
 		p = limiteaza(potrivireTv, POTRIVIRE_TV_MIN, POTRIVIRE_TV_MAX)
 		c.potrivire_tv.value = str(p - p % POTRIVIRE_TV_PAS if p >= 0 else -((-p) - (-p) % POTRIVIRE_TV_PAS))
@@ -594,21 +914,25 @@ def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, p
 		c.efect.value = s["efect"]
 		c.manual.value = json.dumps(manual, ensure_ascii=False, sort_keys=True)
 	if salveaza:
-		for el in (c.pornit, c.presetare, c.benzi, c.noapte, c.nivel, c.efect, c.manual, c.volum, c.placa, c.tv, c.potrivire_tv):
+		for el in (c.pornit, c.presetare, c.benzi, c.noapte, c.nivel, c.efect, c.manual, c.volum, c.placa, c.tv, c.potrivire_tv,
+				c.tv_placa):
 			el.save()
 		configfile.save()
 		_scrieMaiTarziu()
+	_STARE["proba"] = None
 	m = motor()
 	if m is not None:
 		_legaMotorul(m)
 		trimiteLaMotor(s, m)
 		m.setPornit(1 if c.pornit.value else 0)
+	actualizeazaPlaca(s)
 	rez = dict(s)
 	rez["pe_post"] = bool(peste_post and cheie)
 	return rez
 
 
-def incearca(benzi=None, noapte=None, nivel=None, presetare_=None, pornit=None, pePost=None, efect=None, tv=None):
+def incearca(benzi=None, noapte=None, nivel=None, presetare_=None, pornit=None, pePost=None, efect=None, tv=None,
+		tvPlaca=None):
 	"""Numai pentru ascultare (ecranul si web-ul, cat reglezi): motorul primeste valorile, nimic nu se salveaza.
 	tv: egalizatorul si la canalele TV (caseta La canalele TV de pe ecran), tot numai pentru ascultare."""
 	m = motor()
@@ -632,9 +956,14 @@ def incearca(benzi=None, noapte=None, nivel=None, presetare_=None, pornit=None, 
 		s["efect"] = curataEfect(efect)
 	if tv is not None:
 		s["tv"] = bool(tv)
+	if tvPlaca is not None:
+		s["tv_placa"] = bool(tvPlaca)
+	_STARE["proba"] = s
 	trimiteLaMotor(s, m)
 	if pornit is not None:
 		m.setPornit(1 if pornit else 0)
+	from Components.config import config
+	actualizeazaPlaca(s, config.hds_egalizator.pornit.value if pornit is None else pornit)
 
 
 def pornesteOpreste(pornit):
@@ -753,6 +1082,9 @@ def _textStare(st=None, format_pistei=None, trimis=None):
 
 
 def textStare(st=None, format_pistei=None, trimis=None):
+	st_ = stareMotor() if st is None else st
+	if st_ and st_.get("post") == "tv" and _prinPlacaActiv():
+		return _t(TEXT_PRIN_PLACA), True, u""
 	text, bine, detaliu = _textStare(st, format_pistei, trimis)
 	if bine is not True:
 		text += u" " + _t("Efectele speciale nu se aud aici.")
@@ -762,6 +1094,23 @@ def textStare(st=None, format_pistei=None, trimis=None):
 def textMotiv(motiv):
 	"""Motivul intoarcerii pe placa, in cuvinte (codul brut ramane numai in „Text brut”)."""
 	return _t(TEXTE_MOTIV.get(motiv) or MOTIV_NECUNOSCUT)
+
+
+def _prinPlacaActiv():
+	"""Egalizatorul pornit, optiunea "prin placa" aleasa si un canal TV din tuner: sunetul TV il egalizeaza placa."""
+	try:
+		from Components.config import config
+		return bool(config.hds_egalizator.pornit.value and _prinPlaca() and _tvDirect())
+	except Exception:
+		return False
+
+
+def avertizareTv(st=None):
+	"""Aceeasi explicatie pe televizor si in web, fara schimbarea alegerii omului."""
+	st = stareMotor() if st is None else st
+	if st and st.get("tv_de_proba"):
+		return _t("Pe acest model, egalizatorul la TV este de probă. La primul eșec, sunetul revine imediat pe placa de sunet și proba se oprește până la repornirea interfeței.")
+	return ""
 
 
 def _virgula(v, zecimale=1):
@@ -883,9 +1232,11 @@ def stareCompleta():
 		"manual": reglajManual(s["pe_post"], cheie), "manual_global": reglajManual(False),
 		"globale": {"presetare": g["presetare"], "benzi": g["benzi"], "noapte": g["noapte"], "nivel": g["nivel"], "efect": g["efect"]},
 		"volum": c.volum.value, "placa": c.placa.value, "tv": bool(c.tv.value),
+		"tv_placa": bool(c.tv_placa.value), "placa_peq": placaExista(),
 		"potrivire_tv": limiteaza(c.potrivire_tv.value, POTRIVIRE_TV_MIN, POTRIVIRE_TV_MAX),
 		"post": {"cheie": cheie, "nume": nume, "ref": ref},
 		"text": text, "bine": bine, "detaliu": detaliu, "motor": st, "decodoare": decodoare,
+		"avertizare_tv": avertizareTv(st),
 		"tehnic": randuriTehnice(st, tinute), "posturi_tinute": tinute,
 	}
 
@@ -932,11 +1283,69 @@ def _laSchimbareMotor(cod):
 	if cod == 3:
 		st = stareMotor() or {}
 		_jurnal("sunetul s-a intors pe placa: %s" % st.get("motiv"))
+		if st.get("motiv") == "tv-fara-ceas":
+			_verificaPlacaMuta()
 	for f in list(_STARE["ascultatori"]):
 		try:
 			f(cod)
 		except Exception as e:
 			_jurnal("ascultator: %s" % e)
+
+
+def _verificaPlacaMuta():
+	"""Dupa tv-fara-ceas pe HiSilicon: daca peste o secunda imaginea merge, dar sunetul placii nu (placa a ramas fara
+	pista cat ALSA era deschis), serviciul porneste din nou, o singura data pentru acelasi post. Citirea sincronului placii
+	o face un fir; firul interfetei numai porneste serviciul."""
+	if not placaExista():
+		return
+	ref = _refAcum()
+	if ref is None:
+		return
+	text = ref.toString()
+	if _STARE["repornit_ref"] == text:
+		return
+	import threading
+	rez = {}
+
+	def citeste():
+		# imaginea poate porni abia dupa cateva sute de ms: se asteapta pana la 5 s; placa e muta numai daca dupa
+		# inca o secunda sunetul ei tot lipseste (o pornire normala a sunetului nu se ia drept placa muta)
+		for _i in range(10):
+			time.sleep(0.5)
+			if peqPlacaMuta():
+				time.sleep(1.0)
+				rez["muta"] = peqPlacaMuta()
+				return
+		rez["muta"] = False
+
+	fir = threading.Thread(target=citeste, name="hds-egal-muta")
+	fir.daemon = True
+	fir.start()
+	try:
+		from enigma import eTimer
+	except ImportError:
+		return
+	ceas = eTimer()
+
+	def laCeas():
+		if fir.is_alive():
+			ceas.start(200, True)
+			return
+		_STARE["verifica_muta"] = None
+		r = _refAcum()
+		if not rez.get("muta") or r is None or r.toString() != text:
+			return
+		_STARE["repornit_ref"] = text
+		_jurnal("placa a ramas fara sunet dupa tv-fara-ceas: canalul porneste din nou, o data")
+		try:
+			import NavigationInstance
+			NavigationInstance.instance.playService(r, checkParentalControl=False, forceRestart=True)
+		except Exception as e:
+			_jurnal("pornirea din nou a canalului: %s" % e)
+
+	ceas.callback.append(laCeas)
+	_STARE["verifica_muta"] = ceas
+	ceas.start(1000, True)
 
 
 def _legaMotorul(m):
@@ -967,6 +1376,19 @@ def _laEveniment(ev):
 			m = motor()
 			if m is not None:
 				trimiteLaMotor(setariEfective(cheie), m)
+		ref = _refAcum()
+		if ref is not None and _STARE["repornit_ref"] not in (None, ref.toString()):
+			_STARE["repornit_ref"] = None
+		# radio -> TV: ALSA-ul radioului se inchide abia dupa ce decodorul placii a primit canalul TV (masurat pe SF8008);
+		# fara a doua pista a placii, canalul ar ramane mut, deci la primul canal TV de dupa radio placa se verifica
+		din_radio = _STARE.get("ultim_radio")
+		_STARE["ultim_radio"] = bool(ref is not None and _eRadio(ref))
+		if din_radio and _tvDirect(ref):
+			from Components.config import config
+			if config.hds_egalizator.pornit.value:
+				_verificaPlacaMuta()
+		# la fiecare serviciu nou, scris din nou (placa nu e lasata sa poarte nimic de la serviciul de dinainte)
+		actualizeazaPlaca(setariEfective(cheie), fortat=True)
 	except Exception as e:
 		_jurnal("la pornirea serviciului: %s" % e)
 
@@ -987,12 +1409,36 @@ def _legaNavigarea():
 		_STARE["ceas_nav"].start(2000, True)
 
 
+def _laIntrareStandby(_cfg=None):
+	"""La intrarea in standby egalizatorul placii se opreste; la iesire (Standby.onClose) se pune din nou."""
+	_laStandby(True)
+	try:
+		import Screens.Standby
+		inst = Screens.Standby.inStandby
+		if inst is not None and _laIesireStandby not in inst.onClose:
+			inst.onClose.append(_laIesireStandby)
+	except Exception:
+		pass
+
+
+def _laIesireStandby():
+	_laStandby(False)
+
+
 def porneste():
 	"""La pornirea interfetei (dupa config si inainte de primul serviciu): setarile in motor, legatura la servicii."""
 	if _STARE["pornit"]:
 		return
 	_STARE["pornit"] = True
 	initConfig()
+	if placaExista():
+		# la pornirea interfetei egalizatorul placii se aduce la zero (sa nu ramana pus dupa o cadere)
+		_lucratorPlaca().curataLaPornire()
+		try:
+			from Components.config import config
+			config.misc.standbyCounter.addNotifier(_laIntrareStandby, initial_call=False)
+		except Exception as e:
+			_jurnal("standby: %s" % e)
 	aplica(faraPost=True)
 	try:
 		from enigma import eTimer

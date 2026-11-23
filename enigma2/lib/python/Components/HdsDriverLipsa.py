@@ -15,7 +15,11 @@
 #   - Plugins/SystemPlugins/Hotplug: evenimentul nucleului "add" pe o interfata USB (DEVTYPE=usb_interface, cu MODALIAS);
 #     dupa ASTEPTARE_MS, daca interfata tot n-are driver (udev a incarcat deja modulul, daca era pe receptor), se cauta in
 #     harta; "add" pe dispozitivul intreg (DEVTYPE=usb_device) pentru stickurile care pornesc ca CD (COMUTARE);
-#   - la pornire, o singura trecere prin /sys/bus/usb/devices (stickul ramas in mufa), dupa INTARZIERE_PORNIRE_MS.
+#   - la pornire, o singura trecere prin /sys/bus/usb/devices (stickul ramas in mufa), dupa INTARZIERE_PORNIRE_MS;
+#     tot atunci, o interfata fara driver prinsa de un modul care e pe receptor dar nu s-a incarcat (din imagine sau
+#     din feed, adus de actualizarea din meniu ori din Extensii dupa ce placa era deja in mufa, cum e placa Wi-Fi
+#     interna a lui Vu+ Solo4K, legata pe USB) primeste o data "add" in uevent: udev incarca modulul fara repornirea
+#     receptorului (forum 1024; actualizarea reporneste numai interfata, iar udev nu mai trimite evenimentul placii).
 # Cum: aceeasi lucrare opkg ca la Extensii si la modulele Python lipsa (Components/HdsExtensiiLucru.Lucrare, acelasi jurnal
 # hds-extensii.log), una odata; cu opkg ocupat se reincearca peste PAS_ASTEPTARE_MS. Listele surselor noastre lipsa sau
 # vechi: intai opkg update. Pachetul se instaleaza numai daca cea mai noua versiune e intr-un feed HD Satelit
@@ -52,6 +56,9 @@ import time
 RADACINA = ""
 HARTA = "/usr/share/enigma2/hds-drivere-pachete.json"
 OPKG_INFO = "/var/lib/opkg/info"
+# aliasurile modulelor de pe receptor (depmod le scrie la instalarea fiecarui kernel-module-*) si nucleul care ruleaza
+MODULE_ALIAS = "/lib/modules/%s/modules.alias"
+NUCLEU = "/proc/sys/kernel/osrelease"
 ASTEPTARE_MS = 4000
 INTARZIERE_PORNIRE_MS = 25000
 PAS_ASTEPTARE_MS = 60000
@@ -70,6 +77,8 @@ _NUME_PACHET = re.compile(r"^[a-z0-9][a-z0-9+.\-]{0,120}\Z")
 _MODALIAS = re.compile(r"^usb:v[0-9A-F]{4}p[0-9A-F]{4}[0-9A-Za-z*]{0,80}\Z")
 
 _harta = [None]
+_aliasuri = [None]   # [(tipar, modul)] din modules.alias (numai usb:), citit la nevoie, o data pe trecere
+_pornite = set()     # interfetele carora trecerea la pornire le-a scris "add" pentru un modul nepornit (o data pe sesiune)
 _asteapta = {}       # devpath -> modalias, in asteptarea driverului de la udev
 _coada = []          # [{"pachet", "nume", "dispozitive": {devpath: modalias}}]
 _rezultat = {}       # pachet -> {"stare": instalat | esuat | lipsa | refuzat | nu_porneste, "motiv"}
@@ -168,6 +177,41 @@ def instalat(pachet):
 	return os.path.exists(_c("%s/%s.control" % (OPKG_INFO, pachet)))
 
 
+def aliasuriModule():
+	"""[(tipar, modul)] pentru usb: din modules.alias al nucleului care ruleaza; [] fara fisier"""
+	if _aliasuri[0] is None:
+		lista = []
+		nucleu = _citeste(NUCLEU)
+		if nucleu and "/" not in nucleu and nucleu not in (".", ".."):
+			try:
+				with open(_c(MODULE_ALIAS % nucleu), encoding="utf-8", errors="replace") as f:
+					for rand in f:
+						b = rand.split()
+						if len(b) == 3 and b[0] == "alias" and b[1].startswith("usb:"):
+							lista.append((b[1], b[2]))
+			except OSError as e:
+				_jurnal("modules.alias: %s" % e)
+		_aliasuri[0] = lista
+	return _aliasuri[0]
+
+
+def modulNepornit(modalias):
+	"""Modulul de pe receptor care prinde modaliasul unei interfete USB si nu e incarcat (/sys/module/<nume> lipsa);
+	None cand niciun modul nu-l prinde sau toate cele care il prind sunt deja incarcate (driverul a refuzat interfata,
+	deci un "add" nou n-ar schimba nimic)."""
+	if not modalias or not _MODALIAS.match(modalias):
+		return None
+	producator = modalias[5:9]
+	for tipar, modul in aliasuriModule():
+		# ~2000 de aliasuri usb: cele cu alt producator scris intreg ("usb:vXXXX...") nu se mai compara cu fnmatch
+		v = tipar[5:9]
+		if v != producator and not any(c in v for c in "*?["):
+			continue
+		if fnmatch.fnmatchcase(modalias, tipar) and not os.path.isdir(_c("/sys/module/%s" % modul.replace("-", "_"))):
+			return modul
+	return None
+
+
 def numeDispozitiv(devpath, pachet=None):
 	"""numele stickului, cum il spune el pe USB (producatorul si produsul); altfel cipul din harta"""
 	baza = "/sys" + devpath
@@ -248,14 +292,23 @@ def verifica(devpath, modalias=None, laPornire=False):
 				tunerConectat(numeDispozitiv(devpath, tuner))
 			return None
 		pachete = pachetePentru(modalias)
-		if not pachete:
-			return None
 		gata = [p for p in pachete if instalat(p)]
 		if gata and gata[0] not in _rezultat:
 			# driverul e pe receptor (de pilda instalat cand stickul nu era in mufa): udev il incarca la un "add" nou
 			_rezultat[gata[0]] = {"stare": "instalat", "motiv": ""}
 			_jurnal("%s e instalat, interfata %s fara driver: add din nou" % (gata[0], devpath))
 			_reincarca({devpath: modalias})
+			return None
+		if laPornire and devpath not in _pornite:
+			# modulul e pe receptor, dar nu s-a incarcat: l-a pus actualizarea din meniu sau Extensii dupa ce placa era deja
+			# in mufa (si driverele din imagine, care nu sunt in harta); udev il incarca la un "add" nou (forum 1024)
+			modul = modulNepornit(modalias)
+			if modul:
+				_pornite.add(devpath)
+				_jurnal("modulul %s e pe receptor, nepornit; interfata %s fara driver: add din nou" % (modul, devpath))
+				_reincarca({devpath: modalias})
+				return None
+		if not pachete:
 			return None
 		# acelasi ID in doua drivere (produsul a iesit cu doua cipuri, ca 050d:7050 la rt2500usb si rt73usb): urmatorul
 		# pachet numai cand cel dinainte e pe receptor si stickul tot n-are driver
@@ -271,6 +324,9 @@ def verifica(devpath, modalias=None, laPornire=False):
 def trecereLaPornire():
 	"""Stickurile ramase in mufa la pornire: interfetele fara driver si stickurile CD."""
 	n = 0
+	# aliasurile modulelor se citesc din nou la fiecare trecere (numai daca o interfata n-are driver): o instalare facuta
+	# in aceeasi sesiune (inainte de stickNou) le poate schimba
+	_aliasuri[0] = None
 	try:
 		dosar = _c("/sys/bus/usb/devices")
 		for nume in sorted(os.listdir(dosar)):
@@ -443,12 +499,14 @@ def _urmatorul():
 def _actualizeazaListele():
 	X = _X()
 	_jurnal("opkg update inainte de driver")
+	inainte = _M().semnInainte()
 	d = X.pornesteDescarcarea()
 
 	def gata(eveniment_, parametru):
 		if eveniment_ == X.IpkgComponent.EVENT_DONE:
 			d.removeCallback(gata)
-			if parametru == 0:
+			# o sursa straina moarta (pusa de om, de un plugin, adusa de copia setarilor) nu opreste driverul din feedul nostru
+			if _M().listeBune(parametru, inainte):
 				_stare["esecuri_liste"] = 0
 				_programeaza(PAS_URMATOR_MS)
 			else:
@@ -746,6 +804,8 @@ def stareWeb():
 def _reseteaza():
 	"""numai pentru probe: starea modulului ca la pornire"""
 	_harta[0] = None
+	_aliasuri[0] = None
+	_pornite.clear()
 	_asteapta.clear()
 	del _coada[:]
 	_rezultat.clear()

@@ -1172,6 +1172,22 @@ class LegaturaRadio(object):
 		self._harta = harta
 		self._harta.setEnabled(False)
 
+	def inchide(self):
+		"""Inchide ferestrele si ceasurile barei care se termina."""
+		self.radio = False
+		self.ascunde()
+		self._opresteAnaliza()
+		for ceas in (self.tCadru, self.tSecunda, self.tAnaliza, self.tSfarsit, self.tOkLung,
+				self.tOkScurt, self.tAnunt, self.tSalvare):
+			ceas.stop()
+		self._hartaActiva(False)
+		if _LEGATURA[0] is self:
+			_LEGATURA[0] = None
+		sterge = getattr(self.session, "deleteDialog", None)
+		if sterge is not None:
+			sterge(self.ecran)
+			sterge(self.odihna)
+
 	# ---- starea
 
 	def pornit(self):
@@ -1187,14 +1203,12 @@ class LegaturaRadio(object):
 		return self.session.current_dialog is self.infobar
 
 	def _barPrincipala(self):
-		"""Serviciul e al barei principale, nu al unui player (MoviePlayer e si el InfoBarBase). Lista radio separata
-		(ChannelSelectionRadio) e tot InfoBarBase si sta in varful stivei cat e deschisa, dar porneste posturile pentru
-		bara: o recunoaste atributul `infobar`, care e chiar bara."""
-		stiva = ServiceEventTracker.InfoBarStack
-		if not stiva:
-			return True
-		varf = stiva[-1]
-		return varf is self.infobar or getattr(varf, "infobar", None) is self.infobar
+		"""Proprietarul redarii include si pluginurile fara InfoBarBase."""
+		from Components.HdsRadioMeniu import bara_radio_proprietara, LegaturaRadioLenesa
+		leg = getattr(self.infobar, "hdsRadio", None)
+		if isinstance(leg, LegaturaRadioLenesa):
+			return leg.proprietar()
+		return bara_radio_proprietara(self.infobar)
 
 	def refRadioCurenta(self):
 		"""Textul referintei postului de radio care merge acum pe bara, sau None (canal TV, fisier, nimic)."""
@@ -1388,7 +1402,7 @@ class LegaturaRadio(object):
 	# ---- aratare, ascundere, odihna
 
 	def arata(self):
-		if self._inStandby() or not self.pornit() or self.ascuns_de_om:
+		if self._inStandby() or not self.pornit() or self.ascuns_de_om or not self._barPrincipala():
 			return
 		if not self.vizibil:
 			self.vizibil = True
@@ -1455,7 +1469,9 @@ class LegaturaRadio(object):
 			self._iesiDinOdihna()
 		if tasta in TASTE_OK:
 			if steag == STEAG_APASAT:
-				self._ok_armat = self.radio and not self.numai_sunet and self.vizibil and self.pornit() and self._inFata()
+				from Components.HdsTasteRapide import asezare_neutrino
+				profil = asezare_neutrino() and self.infobar.hdsAsezarePrivitActiva()
+				self._ok_armat = not profil and self.radio and not self.numai_sunet and self.vizibil and self.pornit() and self._inFata()
 				self._ok_lung = False
 				if self._ok_armat:
 					self.tOkLung.start(OK_LUNG_MS, True)
@@ -1767,6 +1783,12 @@ class LegaturaRadio(object):
 
 	def _pasSecunda(self):
 		acum = time.time()
+		if not self._barPrincipala():
+			# A player can reuse the current service without emitting evStart.
+			self.ascunde()
+			self._opresteAnaliza()
+			self._hartaActiva(False)
+			return
 		if self._inStandby():
 			self.ascunde()
 			return
@@ -1807,7 +1829,7 @@ class LegaturaRadio(object):
 			self.tSecunda.start(MS_SECUNDA)
 
 	def _trebuieAnaliza(self):
-		if not self.radio:
+		if not self.radio or not self._barPrincipala():
 			return False
 		if self._webActiv():
 			return True
@@ -2090,7 +2112,9 @@ class LegaturaRadio(object):
 		if not self.radio or self._listaPeRadio():
 			return 0
 		from Components.HdsSageti import sageata
-		fel = sageata(sus)
+		from Components.HdsTasteRapide import asezare_neutrino
+		profil = asezare_neutrino() and self.infobar.hdsAsezarePrivitActiva()
+		fel = "zap" if profil else sageata(sus)
 		if fel == "zap_invers":
 			return self._zap(-1 if sus else 1)
 		if fel == "zap":
@@ -2241,8 +2265,18 @@ class LegaturaRadio(object):
 
 def faLegatura(infobar):
 	"""Pentru Screens/InfoBar.py: legatura sau None (cu o linie in jurnal) daca ferestrele nu se pot face."""
+	leg = LegaturaRadio.__new__(LegaturaRadio)
 	try:
-		return LegaturaRadio(infobar)
+		LegaturaRadio.__init__(leg, infobar)
+		return leg
 	except Exception as e:
+		# The second dialog may fail after the first registered service callbacks.
+		for nume in ("ecran", "odihna"):
+			ecran = getattr(leg, nume, None)
+			if ecran is not None:
+				try:
+					infobar.session.deleteDialog(ecran)
+				except Exception:
+					ecran.hide()
 		_jurnal("ecranul radio nu se poate face, merge bara obisnuita: %s: %s" % (type(e).__name__, e))
 		return None

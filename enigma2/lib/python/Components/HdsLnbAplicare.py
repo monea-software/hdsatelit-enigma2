@@ -497,6 +497,10 @@ class _Aplicare(object):
 			return False, self._motivFaza()
 		if plan.get("oprire"):
 			return False, plan["oprire"]
+		if plan.get("schimbare_satelit"):
+			from Components import HdsCautareOarba
+			if HdsCautareOarba.cautare().in_curs():
+				return False, _("O căutare oarbă e în curs. Oprește-o înainte de a schimba satelitul.")
 		if not plan.get("tinta") or not plan.get("schimbari"):
 			return False, _("Nu ai schimbat nimic.")
 		motiv = _motivInregistrare(_navigatie())
@@ -521,13 +525,22 @@ class _Aplicare(object):
 		durata = 0
 		try:
 			inainte = set(nm.getConfiguredSats() or ())
+			asteptati = set(inainte)
+			if plan.get("schimbare_satelit"):
+				din, spre = plan["schimbare_satelit"]
+				legate = HdsLnb.tunereCuAcelasiLnb(nm, plan["slot"])
+				altele = set(p[0] for n in nm.nim_slots if n.slot not in legate
+					for p in nm.getSatListForNim(n.slot))
+				if din not in altele:
+					asteptati.discard(din)
+				asteptati.add(spre)
 			scrieValori(cfg, plan["tinta"])
 			nucleu = True
 			t0 = time.time()
 			nm.sec.update()
 			durata = int((time.time() - t0) * 1000)
 			dupa = set(nm.getConfiguredSats() or ())
-			if dupa != inainte:
+			if dupa != asteptati:
 				cauza = _("alți sateliți")
 				_jurnal("satelitii configurati s-au schimbat (%d inainte, %d dupa); intorc la ce era" % (len(inainte),
 					len(dupa)))
@@ -717,6 +730,7 @@ class _Aplicare(object):
 			# „dupa” = starea de la pastrare: „Ce era înainte” se foloseste numai cat tunerul a ramas asa (m2)
 			_scrieAtomic(CALE_INAINTE, json.dumps({"slot": self.slot, "cand": time.strftime("%d.%m.%Y %H:%M"),
 				"frunze": self.frunze, "adormite": self.adormite, "rezumat": self.plan.get("rezumat", []),
+				"schimbare_satelit": self.plan.get("schimbare_satelit"),
 				"dupa": instantaneu(cfg)[0]}, ensure_ascii=False, indent=1, sort_keys=True))
 		except Exception as eroare:
 			_jurnal("copia de dinainte (%s): %s" % (CALE_INAINTE, eroare))
@@ -870,6 +884,9 @@ class _Aplicare(object):
 		plan = {"slot": slot, "tinta": [], "schimbari": [], "rezumat": [], "avertismente": [], "oprire": "",
 			"trece_in_avansat": False, "amprenta": HdsLnb.amprenta(cfg), "sateliti": [], "lnb_schimbate": [],
 			"motor": False, "motor_schimbat": False, "fel": "inainte"}
+		pereche = date.get("schimbare_satelit")
+		if isinstance(pereche, list) and len(pereche) == 2 and all(type(p) is int and 0 <= p < 3600 for p in pereche):
+			plan["schimbare_satelit"] = (pereche[1], pereche[0])
 		for cale, text in _ordonate(tinta):
 			el = HdsLnb.element(cfg, cale)
 			acum = HdsLnb.textElement(el)

@@ -54,7 +54,8 @@ static char litera(int slot)
 int Zap::s_fara_eveniment = 0;
 
 Zap::Zap()
-	: m_citeste_pts(0), m_ctx(0), m_activ(false), m_esec(false), m_avert(false), m_t0(0), m_t_acordat(0), m_t_program(0), m_t_imagine(0),
+	: m_citeste_pts(0), m_ctx(0), m_activ(false), m_esec(false), m_avert(false), m_program_pmt(false), m_sunet_asteptat(false),
+	m_t0(0), m_t_acordat(0), m_t_program(0), m_t_imagine(0),
 	m_t_eveniment(0), m_pts(0), m_t_cadre(0), m_termen_pts(0), m_latime(-1), m_inaltime(-1), m_citiri(0), m_bune(0), m_pts_bun(false),
 	m_ceas_pts(eTimer::create(eApp)),
 	m_din_pts(false), m_t_miscare(0),
@@ -74,6 +75,7 @@ void Zap::pornire(const eServiceReferenceDVB &ref, bool masurat)
 	m_ceas_pts->stop();
 	m_activ = masurat;
 	m_esec = m_avert = false;
+	m_program_pmt = m_sunet_asteptat = false;
 	m_t0 = hdsjurnal::monotonMs();
 	m_t_acordat = m_t_program = m_t_imagine = 0;
 	m_t_eveniment = m_pts = m_t_cadre = m_termen_pts = 0;
@@ -117,7 +119,7 @@ void Zap::textAcordare(char *buf, size_t n) const
 
 void Zap::marcaj(int etapa, long long t)
 {
-	if (m_activ && etapa >= 0 && etapa < NR_MARCAJE && !m_marcaje[etapa])
+	if (m_activ && (!t || t >= m_t0) && etapa >= 0 && etapa < NR_MARCAJE && !m_marcaje[etapa])
 		m_marcaje[etapa] = t ? t : hdsjurnal::monotonMs();
 }
 
@@ -260,6 +262,8 @@ void Zap::eveniment(int ev, int slot)
 	if (m_esec)
 		return;
 	m_esec = true;
+	m_sunet_asteptat = false;
+	m_activ = false;
 	m_ceas->stop();
 	m_ceas_pts->stop();
 	scrieEsec(hdsjurnal::EROARE, motiv);
@@ -285,6 +289,23 @@ void Zap::program(const eDVBServicePMTHandler::program &p, int vpid, int vtip)
 		m_apid = m_atip = -1;
 	m_vpid = vpid;
 	m_vtip = vtip;
+	/* getProgramInfo da pmtPid=-1 pentru cache; marcajul PMT singur nu confirma aceasta lista audio. */
+	m_program_pmt = p.pmtPid > 0 && p.pmtPid < 0x1fff;
+	if (m_sunet_asteptat && (m_t_imagine || vpid <= 0 || vpid >= 0x2000))
+	{
+		if (!m_program_pmt && m_apid <= 0)
+			return;
+		m_sunet_asteptat = false;
+		m_activ = false;
+		char sunet[48];
+		textSunet(sunet, sizeof(sunet));
+		/* Aceeasi cerere, fara repetarea numelui sau a referintei canalului. */
+		hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "zap", "sunet actualizat dupa %ld ms | sunet %s | zap_t0 %lld ms",
+			(long)(hdsjurnal::monotonMs() - m_t0), sunet, m_t0);
+		return;
+	}
+	/* Un program fara video din cache putea parea radio; programul TV real isi pastreaza masurarea imaginii. */
+	m_sunet_asteptat = false;
 	if (vpid > 0 && vpid < 0x2000 && !m_avert && !m_t_eveniment && !m_ceas->isActive() && !m_ceas_pts->isActive())
 	{
 		if (m_citeste_pts && s_fara_eveniment >= INVATAT_DUPA)
@@ -308,16 +329,19 @@ void Zap::textSunet(char *buf, size_t n) const
 	if (m_apid > 0)
 		snprintf(buf, n, "%s", codecSunet(m_atip));
 	else
-		/* "fara" numai dupa PMT: memoria listei de canale nu tine sunetul la multe canale, deci nu spune nimic despre canal */
-		snprintf(buf, n, "%s", m_marcaje[PMT_PRIMIT] ? "fara" : "nestiut (PMT nesosit)");
+		/* Lista goala din cache nu dovedeste lipsa pistei. */
+		snprintf(buf, n, "%s", m_program_pmt ? "fara" : "nestiut (PMT nesosit)");
 }
 
 void Zap::programGata()
 {
-	if (!m_activ || !m_t_program || (m_vpid > 0 && m_vpid < 0x2000))
+	if (!m_activ || m_sunet_asteptat || !m_t_program || (m_vpid > 0 && m_vpid < 0x2000))
 		return;
 	/* Radio: randul final asteapta si CA PMT. */
-	m_activ = false;
+	m_ceas->stop();
+	m_ceas_pts->stop();
+	m_sunet_asteptat = m_apid <= 0 && !m_program_pmt;
+	m_activ = m_sunet_asteptat;
 	char sunet[48];
 	textSunet(sunet, sizeof(sunet));
 	char marcaje[340];
@@ -339,7 +363,7 @@ void Zap::imagine(int latime, int inaltime)
 	   schimba marimea imaginii, deci un eveniment nu spune ca il trimite la fiecare zap */
 	if (s_fara_eveniment < INVATAT_DUPA)
 		s_fara_eveniment = 0;
-	if (!m_activ || m_t_eveniment || m_t_imagine || !m_t_program)
+	if (!m_activ || m_sunet_asteptat || m_t_eveniment || m_t_imagine || !m_t_program)
 		return;
 	m_t_eveniment = hdsjurnal::monotonMs();
 	m_marcaje[EVENIMENT_VIDEO] = m_t_eveniment;
@@ -366,7 +390,7 @@ void Zap::pornesteCitiri(long long termen)
 
 void Zap::citestePts()
 {
-	if (!m_activ || m_esec || m_t_imagine || !m_citeste_pts)
+	if (!m_activ || m_sunet_asteptat || m_esec || m_t_imagine || !m_citeste_pts)
 		return;
 	long long pts = 0;
 	bool bun = m_citeste_pts(m_ctx, pts) && pts > 0;
@@ -431,7 +455,8 @@ void Zap::scrieImagine(long long t, int cum)
 	m_t_imagine = t ? t : hdsjurnal::monotonMs();
 	m_ceas->stop();
 	m_ceas_pts->stop();
-	m_activ = false;
+	m_sunet_asteptat = m_apid <= 0 && !m_program_pmt;
+	m_activ = m_sunet_asteptat;
 	/* imagine fara eveniment video: inca un zap la rand care spune ca placa nu trimite evenimentul */
 	if (cum != CU_EVENIMENT && s_fara_eveniment < INVATAT_DUPA)
 		++s_fara_eveniment;
@@ -464,7 +489,7 @@ void Zap::scrieImagine(long long t, int cum)
 
 void Zap::faraImagine()
 {
-	if (!m_activ || m_t_imagine || m_t_eveniment || m_avert || m_esec)
+	if (!m_activ || m_sunet_asteptat || m_t_imagine || m_t_eveniment || m_avert || m_esec)
 		return;
 	if (m_din_pts || m_ceas_pts->isActive())
 		return;  /* citirile de la program() au termenul lor si scriu singure avertismentul */
@@ -499,6 +524,8 @@ void Zap::oprire()
 				scrieImagine(m_citiri == 1 ? m_t_eveniment : acum, CU_EVENIMENT);
 			else
 				scrieImagine(m_t_miscare ? m_t_miscare : acum, DIN_PTS);
+			m_sunet_asteptat = false;
+			m_activ = false;
 			return;
 		}
 	}
@@ -507,6 +534,7 @@ void Zap::oprire()
 		scrieEsec(hdsjurnal::AVERT, m_t_eveniment ? "oprit fara imagine (eveniment video fara cadre noi)" :
 			"oprit fara imagine");
 	m_activ = false;
+	m_sunet_asteptat = false;
 }
 
 }

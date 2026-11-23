@@ -89,6 +89,7 @@ public:
 };
 
 class eSubtitleWidget;
+class eHdsFluxHttp;
 
 class eDVBServicePlay: public eDVBServiceBase,
 		public iPlayableService, public iPauseableService, 
@@ -233,10 +234,12 @@ protected:
 	
 		/* pvr */
 	int m_is_pvr, m_is_paused, m_timeshift_enabled, m_timeshift_active, m_timeshift_changed;
+	unsigned int m_hds_speech_epoch = 0;
 		/* a live stream over HTTP (a local relay, http://127.0.0.1:..., or a type 1 channel with an http:// address
 		   on the network, as eHttpStream in OE-Alliance): a playback channel fed by eHdsFluxHttp, without the file
 		   parts of a recording (meta, cuts, eit, seeking, pause, bookmarks) */
 	int m_is_stream;
+	ePtr<eHdsFluxHttp> m_hds_http;
 	int m_first_program_info;
 	bool m_hds_amana_gui, m_hds_seekable_amana;
 	

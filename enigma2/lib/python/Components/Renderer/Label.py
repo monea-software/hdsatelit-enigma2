@@ -16,12 +16,11 @@ class Label(VariableText, Renderer):
 	# tema care citeste din retea in getText (NOVTemp: 10,4 s la pornire) tinea firul interfetei de doua ori mai mult. Legatura
 	# se face ca in Element.connect, fara cererea din mijloc; textul se cere o singura data, dupa ce legatura e completa (ca a
 	# doua cerere de pana acum, a carei valoare ramanea).
+	# CBS1 (0.7.8): when that request raises, the link is undone (Renderer.connectSingleRequest); otherwise the label
+	# stayed in the converter's downstream list although readSkin skipped the widget, and the converter's Poll timer
+	# raised the same error from C++ every few seconds (CobaltFHD second infobar 10 and 13, FhromaExtra.py:72).
 	def connect(self, source):
-		assert not self.SINGLE_SOURCE or self.source is None
-		self.sources.append(source)
-		self.source = source
-		source.connectDownstream(self)
-		self.changed((self.CHANGED_DEFAULT,))
+		self.connectSingleRequest(source)
 
 	def changed(self, what):
 		if what[0] == self.CHANGED_CLEAR:

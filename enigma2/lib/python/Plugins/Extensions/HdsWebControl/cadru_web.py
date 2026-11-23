@@ -1324,10 +1324,14 @@ def _intrare(c):
 		comun["pictograma"] = c["pictograma"]
 	if c.get("web"):
 		return dict(comun, href=c["web"], tv=False)
+	# setup_web (setarile web ale unui plugin, FWC4) ramane numai butonul in plus din /meniu: meniul de sus duce, ca
+	# inainte, la setarile imaginii sau la randul intrarii (deschiderea pe televizor)
 	if c.get("setup"):
-		return dict(comun, href="/setari?id=" + c["setup"], tv=False)
+		from .meniu_web import hrefIntrare
+		return dict(comun, href=hrefIntrare(dict(c, setup_web="")), tv=False)
 	if c.get("televizor") and c.get("id"):
-		return dict(comun, href="/meniu#i-" + c["id"], tv=True)
+		from .meniu_web import hrefIntrare
+		return dict(comun, href=hrefIntrare(dict(c, setup_web="")), tv=True)
 	return None
 
 
@@ -1418,14 +1422,11 @@ def _gaseste(lista, cale, parinti):
 	return None
 
 
-_ID_GRUPA = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
-
-
 def _hrefGrupa(x):
 	"""O grupa din cale fara pagina ei: /meniu#g-<id> deschide grupa in meniul complet (meniu_web.py), ca toate
 	treptele caii sa fie clicabile; "" cand grupa n-are id."""
-	gid = x.get("id") or ""
-	return "/meniu#g-" + gid if _ID_GRUPA.match(gid) else ""
+	from .meniu_web import hrefIntrare
+	return hrefIntrare(dict(x, tip="grup"))
 
 
 def drumPagina(grupe, cale, titlu=""):
@@ -2083,7 +2084,9 @@ def antetHtml(ctx):
 	elemente = []
 	for i, (text, href) in enumerate(drum):
 		if i == len(drum) - 1:
-			elemente.append(u'<li class="hds-derulant" aria-current="page">%s</li>' % _e(text))
+			href = href or (cale if cale.startswith("/") and not cale.startswith("//") else "")
+			continut = u'<a href="%s">%s</a>' % (_e(_cuJeton(href, jeton)), _e(text)) if href else _e(text)
+			elemente.append(u'<li class="hds-derulant" aria-current="page">%s</li>' % continut)
 		elif href:
 			elemente.append(u'<li><a href="%s">%s</a></li>' % (_e(_cuJeton(href, jeton)), _e(text)))
 		else:
@@ -2260,6 +2263,9 @@ def caleCerere(request):
 			v = ident[0].decode("utf-8", "replace") if isinstance(ident[0], bytes) else str(ident[0])
 			if re.match(r"^[A-Za-z0-9_.-]{1,64}$", v):
 				return "/setari?id=" + v
+			if len(v) <= 80 and re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*/[A-Za-z0-9_][A-Za-z0-9_.-]*/[A-Za-z0-9_][A-Za-z0-9_.-]*", v):
+				from urllib.parse import quote
+				return "/setari?id=" + quote(v, safe="")
 	return cale or "/"
 
 

@@ -22,7 +22,7 @@ MOUNT_WAIT_MS = 2000
 # this first pass names those mounted since then, the others are mounted by enigma2 after the longer wait
 BOOT_NAMES_WAIT_MS = 300
 BOOT_MOUNT_WAIT_MS = 10000
-IGNORED_PREFIXES = ("loop", "ram", "mtdblock", "zram", "dm-", "nbd")
+IGNORED_PREFIXES = ("loop", "ram", "mtdblock", "romblock", "zram", "dm-", "nbd")
 
 hotplugNotifier = []
 

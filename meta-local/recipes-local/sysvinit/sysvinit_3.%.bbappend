@@ -5,10 +5,12 @@
 PR:append:vuduo4k = ".hds35"
 PR:append:vuuno4kse = ".hds35"
 PR:append:vusolo4k = ".hds35"
+PR:append:vuuno4k = ".hds35"
 PR:append:gbtrio4k = ".hds35"
 PACKAGE_ARCH:vuduo4k = "${MACHINE_ARCH}"
 PACKAGE_ARCH:vuuno4kse = "${MACHINE_ARCH}"
 PACKAGE_ARCH:vusolo4k = "${MACHINE_ARCH}"
+PACKAGE_ARCH:vuuno4k = "${MACHINE_ARCH}"
 PACKAGE_ARCH:gbtrio4k = "${MACHINE_ARCH}"
 
 python hds_init_timpi() {
@@ -16,7 +18,7 @@ python hds_init_timpi() {
     import re
     import textwrap
 
-    modele = {"vuduo4k", "vuuno4kse", "vusolo4k", "gbtrio4k"}
+    modele = {"vuduo4k", "vuuno4k", "vuuno4kse", "vusolo4k", "gbtrio4k"}
     # gbtrio4k e MACHINEBUILD (masina gbmv200); celelalte trei au MACHINE egal cu modelul
     if d.getVar("MACHINE") not in modele and d.getVar("MACHINEBUILD") not in modele:
         return

@@ -1,0 +1,25 @@
+From: HDSatelit <dev@hdsatelit.local>
+Subject: [PATCH] JSC: omit the DFG cache alternative in baseline-only builds
+
+The DFG cache type is incomplete and its visitors are excluded without
+DFG_JIT. Exclude its variant alternative too, so the baseline-only visitor
+is exhaustive and templates do not instantiate access to a missing type.
+
+Upstream-Status: Pending
+---
+diff --git a/Source/JavaScriptCore/jit/JITInlineCacheGenerator.h b/Source/JavaScriptCore/jit/JITInlineCacheGenerator.h
+--- a/Source/JavaScriptCore/jit/JITInlineCacheGenerator.h
++++ b/Source/JavaScriptCore/jit/JITInlineCacheGenerator.h
+@@ -55,7 +55,11 @@
+ enum class CacheType : int8_t;
+ enum class JITType : uint8_t;
+ 
+-using CompileTimePropertyInlineCache = Variant<PropertyInlineCache*, BaselineUnlinkedPropertyInlineCache*, DFG::UnlinkedPropertyInlineCache*>;
++using CompileTimePropertyInlineCache = Variant<PropertyInlineCache*, BaselineUnlinkedPropertyInlineCache*
++#if ENABLE(DFG_JIT)
++    , DFG::UnlinkedPropertyInlineCache*
++#endif
++    >;
+ 
+ class JITInlineCacheGenerator {
+ protected:

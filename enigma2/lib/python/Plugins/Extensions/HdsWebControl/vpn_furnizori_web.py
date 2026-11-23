@@ -291,7 +291,8 @@ __STIL_PAGINI__
 <h1>__T_TITLU__</h1>
 <p class="mesaj" id="incarcare">__T_INCARCARE__</p>
 <div id="continut" class="ascuns">
-  <section class="card">
+  <pre id="pwvDateSalvate" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+<section class="card">
     <div class="rand"><label for="furnizor">__T_FURNIZOR__</label><select id="furnizor"></select></div>
     <p class="nota" id="ajutor"></p>
     <p class="nota" id="indisponibil"></p>
@@ -338,6 +339,7 @@ function optiuni(sel, lista, ales){
   if(ales !== null){ sel.value = ales; }
 }
 function arata(d){
+  document.getElementById("pwvDateSalvate").textContent = Object.keys(d.date_acces || {}).map(function(k){return k + ": " + d.date_acces[k];}).join("\\n");
   D = d; ALES = d.furnizor;
   $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
   optiuni($("furnizor"), d.furnizori, d.furnizor);

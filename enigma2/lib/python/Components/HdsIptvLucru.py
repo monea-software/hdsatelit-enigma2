@@ -37,6 +37,8 @@ _de_incarcat = False
 _ascultatori = []
 _ceas = None
 _ceas_zilnic = None
+_ceas_surse = None
+_surse_prezente = False
 _erori_redare = []
 _pornit = None          # time.monotonic() la porneste(): ghidul se cere o data dupa fiecare pornire a interfetei
 _ghid_cerut = set()     # sursele al caror ghid s-a cerut de la pornire (direct sau dupa lista)
@@ -63,22 +65,44 @@ def lucreaza(sursa_id):
 	s = I.sursa(sursa_id)
 	if s is None:
 		return "", False
+	if s.get("neconectata"):
+		# Numai o cerere explicita pentru aceasta sursa activeaza actualizarea zilnica.
+		I.actualizeazaSursa(sursa_id, neconectata=False)
+		s["neconectata"] = False
 	try:
 		canale, info = C.aduce(s)
 	except C.EroareIptv as e:
 		_jurnal("sursa %s: %s" % (sursa_id, type(e).__name__))
-		return _aEsuat(s, e.pentruOm(), e.expira)
+		with I._LACAT:
+			return (None, False) if _portalSchimbat(s) else _aEsuat(s, e.pentruOm(), e.expira)
 	except Exception as e:
 		# felul, nu textul: textul poate cuprinde adresa
 		_jurnal("sursa %s: %s" % (sursa_id, type(e).__name__))
-		return _aEsuat(s, C.E_NU_RASPUNDE)
-	I.scrieCanale(sursa_id, I.pastreazaDinBuchete(sursa_id, canale))
-	del canale
-	catalog = info.pop("catalog", None)
-	if catalog is not None:
-		I.scrieCatalog(sursa_id, catalog)
-	I.actualizeazaSursa(sursa_id, eroare="", ora=I.acum(), ora_incercare=I.acum(), nou=False, esecuri=0, **info)
+		with I._LACAT:
+			return (None, False) if _portalSchimbat(s) else _aEsuat(s, C.E_NU_RASPUNDE)
+	with I._LACAT:
+		if _portalSchimbat(s):
+			return None, False
+		I.scrieCanale(sursa_id, I.pastreazaDinBuchete(sursa_id, canale))
+		del canale
+		C.cerePiconuri(s)
+		catalog = info.pop("catalog", None)
+		if catalog is not None:
+			I.scrieCatalog(sursa_id, catalog)
+		I.actualizeazaSursa(sursa_id, eroare="", ora=I.acum(), ora_incercare=I.acum(), nou=False, esecuri=0, **info)
 	return "", I.scrieBuchete()
+
+
+def _portalSchimbat(s):
+	"""Raspunsul inceput cu alte date nu rescrie canalele sau eroarea contului nou."""
+	if s.get("fel") != "stalker":
+		return False
+	acum = I.sursa(s["id"]) or {}
+	return _datePortal(s) != _datePortal(acum)
+
+
+def _datePortal(s):
+	return tuple(s.get(k) or "" for k in ("portal", "mac", "user_agent", "referer", "x_user_agent", "stb_type"))
 
 
 def _aEsuat(s, mesaj, expira=0):
@@ -104,7 +128,21 @@ def _bucla():
 				_in_lucru = None
 				return
 			_in_lucru = _coada.pop(0)
+		inceput = I.sursa(_in_lucru)
 		mesaj, schimbat = lucreaza(_in_lucru)
+		if mesaj is None:
+			continue
+		with I._LACAT:
+			acum = I.sursa(_in_lucru)
+			if inceput and acum and _portalSchimbat(inceput):
+				with _lacat:
+					_de_incarcat = _de_incarcat or schimbat
+				continue
+			with _lacat:
+				_rezultate.append((_in_lucru, mesaj, schimbat))
+				_ultimele[_in_lucru] = mesaj
+				if schimbat:
+					_de_incarcat = True
 		if not mesaj and _in_lucru != _REFACERE:
 			s = I.sursa(_in_lucru)
 			if s:
@@ -114,11 +152,6 @@ def _bucla():
 					HdsIptvSigle.cere(s, I.citesteCanale(s["id"]))
 				except Exception as e:
 					_jurnal("sigle/ghid: %s" % type(e).__name__)
-		with _lacat:
-			_rezultate.append((_in_lucru, mesaj, schimbat))
-			_ultimele[_in_lucru] = mesaj
-			if schimbat:
-				_de_incarcat = True
 
 
 def _pornesteFirul():
@@ -155,18 +188,31 @@ def ultimulMesaj(sursa_id):
 
 def adaugaSiCere(s):
 	"""Sursa scrisa de om: in lista, iar firul de lucru aduce canalele. -> sursa, sau None cand lista e plina."""
-	if I.sursa(s["id"]) is None:
-		s = dict(s, nou=True)
-	rez = I.adaugaSursa(s)
+	with I._LACAT:
+		veche = I.sursa(s["id"])
+		portal_schimbat = bool(veche and s.get("fel") == "stalker" and _datePortal(veche) != _datePortal(s))
+		if veche is None:
+			s = dict(s, nou=True)
+		rez = I.adaugaSursa(s)
+		if rez is not None:
+			C.reiaPortal(s)
+			if portal_schimbat:
+				with _lacat:
+					_rezultate[:] = [r for r in _rezultate if r[0] != rez["id"]]
+					_ultimele.pop(rez["id"], None)
 	if rez is not None:
 		pornesteCeasulZilnic()
-		cere(rez["id"])
+		if portal_schimbat:
+			cere(rez["id"], din_nou=True)
+		else:
+			cere(rez["id"])
 	return rez
 
 
 def cereToate():
 	for s in I.citesteSurse():
-		cere(s["id"])
+		if not s.get("neconectata"):
+			cere(s["id"])
 
 
 def asculta(functie):
@@ -210,7 +256,7 @@ def timpCitire(text):
 
 
 def _laTic():
-	global _de_incarcat
+	global _de_incarcat, _surse_prezente
 	try:
 		from Components import HdsIptvEpg
 		HdsIptvEpg.notifica()
@@ -250,6 +296,7 @@ def _laTic():
 			except Exception as e:
 				_jurnal("ascultator: %s" % type(e).__name__)
 	if gata and not rezultate and _ceas is not None and not I.areSurse():
+		_surse_prezente = False
 		_ceas.stop()
 
 
@@ -263,6 +310,8 @@ def _pornesteCeasul():
 		_ceas = eTimer()
 		_ceas.callback.append(_laTic)
 	_ceas.start(400, False)
+	if _ceas_zilnic is None and I.areSurse():
+		pornesteCeasulZilnic()
 
 
 def stergeSiReface(sursa_id):
@@ -296,6 +345,8 @@ def _zilnic():
 	PRIMA_DUPA_PORNIRE_S dupa pornire (altfel ramanea gol pana la improspatarea de a doua zi)."""
 	acum = time.time()
 	for s in I.citesteSurse():
+		if s.get("neconectata"):
+			continue
 		ultima = s.get("ora_incercare") or 0
 		if not 0 <= acum - ultima < INTERVAL_S:
 			cere(s["id"])
@@ -399,9 +450,12 @@ def pazaListei():
 
 
 def porneste():
-	"""La pornirea receptorului, numai cu surse: adresa locala si ceasul zilnic. Fara surse nu costa nimic."""
-	global _ceas_zilnic, _pornit
+	"""Memoria buchetelor; cu surse, si adresa locala si ceasul zilnic."""
+	global _ceas_zilnic, _pornit, _surse_prezente
+	_pornesteCeasulSurse()
 	_pornit = time.monotonic()
+	I.pornesteMemoriaOm()
+	C.pornestePiconuri()
 	try:
 		I.scoateSetarileVechi()
 	except Exception as e:
@@ -412,7 +466,7 @@ def porneste():
 		HdsIptvFisier.porneste()
 	except Exception as e:
 		_jurnal("fisierul cu adrese: %s" % type(e).__name__)
-	if not I.areSurse():
+	if not I.areSurse(verifica=True):
 		return
 	try:
 		I.reparaDrepturi()
@@ -422,6 +476,41 @@ def porneste():
 	HdsIptvAdrese.porneste()
 	_pornesteCeasul()
 	pornesteCeasulZilnic()
+	_surse_prezente = True
+
+
+def _verificaSurse():
+	"""Descopera si un fisier pus din afara dupa pornirea fara surse."""
+	I.verificaSurseFundal()
+	_aplicaPrezentaSurse()
+
+
+def _aplicaPrezentaSurse():
+	global _surse_prezente
+	prezente = I.areSurse()
+	if prezente and not _surse_prezente:
+		try:
+			from Components import HdsIptvAdrese
+			HdsIptvAdrese.porneste()
+			_pornesteCeasul()
+			pornesteCeasulZilnic()
+		except Exception as e:
+			_jurnal("prezenta surselor: %s" % type(e).__name__)
+			return
+	_surse_prezente = prezente
+
+
+def _pornesteCeasulSurse():
+	global _ceas_surse
+	if _ceas_surse is not None:
+		return
+	try:
+		from enigma import eTimer
+	except ImportError:
+		return
+	_ceas_surse = eTimer()
+	_ceas_surse.callback.append(_verificaSurse)
+	_ceas_surse.start(30000, False)
 
 
 def pornesteCeasulZilnic():

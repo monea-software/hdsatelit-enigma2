@@ -74,6 +74,7 @@
 # teste/test_semnare_actualizari.py, teste/test_actualizare_rapida.py si teste/test_actualizari_arhitectura_provides.py).
 
 import base64
+import gzip
 import hashlib
 import json
 import os
@@ -81,6 +82,7 @@ import re
 import shutil
 import socket
 import time
+import zlib
 from functools import cmp_to_key
 
 try:
@@ -162,11 +164,28 @@ ULTIMA_PAZA = {'sterse': [], 'puse_la_loc': []}
 # interfata); cat ar intreba pe televizor, se incearca din nou la atatea ms
 REPORNIRE_RAPIDA_MS = 3000
 REINCERCARE_RAPIDA_MS = 30000
+# 0.7.8 (HB7, Catalin Oancea 18.11.2026, Octagon SF8008 Supreme, dupa 0.7.6 -> 0.7.7 din meniu: HbbTV nu merge, la
+# cautarea oarba nu se poate schimba satelitul): actualizarea instalata cu interfata nerepornita (Nu pe televizor,
+# repornirea din pagina web neapasata, o inregistrare sau o lucrare in fundal care o amana cat omul foloseste receptorul)
+# lasa procesul vechi cu modulele vechi in memorie, iar ce se incarca abia acum vine nou de pe disc: navigatorul (deci
+# HbbTV) nu porneste (lansatorul nou cere HdsDecodorWeb.mediu_fara_placa), cautarea oarba nu se deschide sau ramane cea
+# veche, fara randul Satelit, desi Despre arata deja versiunea noua (reprodus pe un Octagon; dupa repornire merge tot).
+# De aceea: (1) cat repornirea e ceruta, la intrarea in standby interfata se reporneste singura dupa STANDBY_REPORNIRE_MS
+# si se intoarce in standby (HdsImagineOnline.STANDBY_DUPA_REPORNIRE), pe aceeasi cale ca repornirea rapida (fara
+# inregistrare acum sau curand, fara lucrare in fundal, fara alta intrebare; altfel din nou la STANDBY_REINCERCARE_MS cat
+# sta in standby); (2) un ecran cazut in starea asta (mytest.py, handleScreenCrash) reporneste interfata pe aceeasi cale
+# (reporneste_dupa_ecran_cazut). Omul nu face si nu confirma nimic; o inregistrare nu se rupe.
+STANDBY_REPORNIRE_MS = 60000
+STANDBY_REINCERCARE_MS = 300000
 # actualizarea oprita la jumatate (0.7.4, LinuxSat 164125 #969426): opkg e copilul enigma2 (Components/Ipkg.py,
 # eConsoleAppContainer), iar la orice iesire a enigma2 destructorul ii trimite SIGKILL (lib/base/console.cpp). De aceea:
 # SEMN_IN_CURS (pe memoria interna, ramane peste o repornire dura) se scrie inainte de opkg, cu versiunea si pachetele
 # planului, si se scoate cand opkg iese singur; tools/hds-actualizare-intrerupta.py (pornit de enigma2.sh inainte de
 # enigma2) termina la pornire ce a ramas si scrie REZULTAT_PORNIRE, aratat aici (porneste) pe televizor si in web.
+# 0.7.8 (STK, forum 1104 si 1258): opkg oprit de un semnal trimis din afara cat enigma2 merge (un `killall opkg` al altui
+# program, lipsa de memorie, o cadere a lui opkg; oprit_de_semnal) NU a iesit singur: status-ul lui nu e scris, iar
+# fisierele pot fi amestecate. Atunci semnul ramane si interfata cere repornirea, ca programul de mai sus sa termine
+# actualizarea inainte de enigma2. Pe un stick USB lent dezarhivarea tine minute, deci fereastra e cea mai lunga acolo.
 # Cat ruleaza opkg, semnul "ocupat" al paznicului (CHEIE_PAZNIC, prelungit de fiecare bataie) tine paznicul departe de
 # enigma2, iar Screens/Standby.py TryQuitMainloop asteapta sfarsitul instalarii (instalare_in_curs).
 SEMN_IN_CURS = '/etc/enigma2/hds-actualizare.in-curs'
@@ -193,7 +212,25 @@ TEXTE_ASTEPTARE = {
 	'inregistrare': N_('Actualizarea s-a instalat. Interfața se repornește singură după înregistrare.'),
 	'lucrare': N_('Actualizarea s-a instalat. Interfața se repornește singură după ce se termină lucrarea din fundal.'),
 	'intrebare': N_('Actualizarea s-a instalat. Pe televizor se așteaptă un răspuns la întrebarea de repornire.'),
+	# 0.7.8 (RIA): omul se uita in urma in timeshift (nu numai tamponul pornit)
+	'timeshift': N_('Actualizarea s-a instalat. Interfața se repornește singură după ce ieși din timeshift.'),
 }
+# 0.7.8 (RIA, dupa HB7: cu interfata nerepornita dupa actualizare unele ecrane cad, iar omul nu afla ca trebuie repornita):
+# dupa ORICE actualizare instalata (VERDE din meniu, pagina web, rapida sau Instaleaza, feedul singur, Extensii cand s-a
+# schimbat programul imaginii) interfata se reporneste singura pe drumul modului rapid (porneste_repornirea), nu numai
+# dupa actualizarea rapida. Treaz, inainte de repornire, fereastra cu textul deja tradus ("Actualizarea s-a instalat.
+# Interfata se reporneste acum.", sau al receptorului din HdsMemorieDriver.textRepornire) si numaratoarea de
+# NUMARATOARE_S: OK grabeste, EXIT amana pana la urmatoarea intrare in standby (plasa HB7 de mai jos; EXIT nu e
+# acceptare). Cand nu se poate acum (motiv_asteptare: inregistrare acum sau curand, timeshift folosit, lucrare in fundal,
+# alt opkg, o intrebare deschisa) o singura fereastra scurta cu motivul (TEXTE_ASTEPTARE, ANUNT_S), apoi, cand se
+# elibereaza, aceeasi numaratoare. In standby fara nicio fereastra: semnul intoarcerii in standby
+# (HdsImagineOnline.STANDBY_DUPA_REPORNIRE), repornirea, receptorul ramane in standby. Setarea
+# config.hds_actualizari.repornire_singura (Da din fabrica; purtarea de dinainte ramane pe Nu): pe Nu, in locul
+# numaratorii, intrebarea de dinainte ("Actualizarea s-a instalat." / "Repornesti interfata acum?"), iar in pagina web
+# butonul Reporneste interfata. Codul care reporneste e cel din memorie: purtarea noua incepe cu actualizarea de dupa
+# 0.7.8.
+NUMARATOARE_S = 10
+ANUNT_S = 8
 # 0.7.7 (DRV, Eduard 15.11 22:29, TODO 15.11 12:36): driverul placii adus si prin actualizarea din meniu. Pachetele de drivere
 # (TIPARE_IMAGINE_NOUA, „drivere”) raman refuzate, afara de cele din cheia semnata „drivere_placii” a lui stare.json: acolo
 # feedul (oe-build/feed_actualizare.py, driver_placii) pune numai pachetul de drivere al placii care difera de cel din
@@ -211,6 +248,9 @@ BOOT_ID = '/proc/sys/kernel/random/boot_id'
 # titlul driverului in lista pachetelor (ecranul si pagina web), in locul numelui pachetului
 TITLU_DRIVER = N_('Driverul plăcii (interfața 2K)')
 TEXT_DRIVER_NOU = N_('Actualizarea a schimbat driverul plăcii. Receptorul trebuie repornit ca să-l încarce.')
+# 0.7.8 (CM3): acelasi text ca in Components/HdsExtensiiLucru.TEXT_IMAGINE_SCHIMBATA (tradus din 0.7.7), pentru
+# repornirea ceruta cand programul imaginii s-a schimbat pe disc pe alt drum decat actualizarea (cere_repornirea_imaginii)
+TEXT_IMAGINE_SCHIMBATA = N_('Programul imaginii s-a schimbat. Interfața trebuie repornită ca să-l folosească.')
 TEXT_DRIVER_DISPONIBIL = N_('Actualizare software: driverul plăcii pentru interfața 2K e gata de instalat. Îl instalezi din '
 	'Actualizare software; la sfârșit receptorul se repornește.')
 
@@ -219,7 +259,6 @@ _BAZA = re.compile(r'^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\Z')
 _VERSIUNE = re.compile(r'^[0-9]{1,3}(?:\.[0-9]{1,3}){2,3}\Z')
 _ADRESA_FEED = re.compile(r'^https://stb\.hdsatelit\.com/feed/(proba|public)/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/'
 	r'([a-z0-9][a-z0-9_\-]{0,63})/?\Z')
-_PAROLA_IN_ADRESA = re.compile(r'(https?://)[^/\s@]+@')
 _SHA256 = re.compile(r'^[0-9a-f]{64}\Z')
 _FISIER_IPK = re.compile(r'^[A-Za-z0-9][A-Za-z0-9+._~\-]{0,200}\.ipk\Z')
 _ARH = re.compile(r'^[a-z0-9][a-z0-9_\-]{0,63}\Z')
@@ -285,9 +324,9 @@ TEXTE_STARE = {
 # ---------------------------------------------------------------- texte si curatenie
 
 def curata(text):
-	"""Un rand de opkg sau o eroare, fara nume si parola din adrese (https://nume:parola@gazda -> https://gazda) si
-	fara caractere de control."""
-	text = _PAROLA_IN_ADRESA.sub(r'\1', u'%s' % (text or ''))
+	"""Un rand de opkg sau o eroare, intreg (si numele si parola din adrese: REGULA 0, ASI7, in imagine nu se mascheaza
+	nimic pana dupa 1.0), fara caractere de control."""
+	text = u'%s' % (text or '')
 	return ''.join(c for c in text if c >= ' ' or c == '\t')[:400]
 
 
@@ -547,6 +586,13 @@ def sterge_semnul_in_curs(radacina='/'):
 		os.remove(_cale(radacina, SEMN_IN_CURS))
 	except OSError:
 		pass
+
+
+def oprit_de_semnal(cod):
+	"""opkg nu a iesit singur: l-a oprit un semnal trimis din afara. lib/base/console.cpp da atunci 128 + semnalul (137
+	la SIGKILL, 143 la SIGTERM, 139 la o cadere); 255 e iesirea obisnuita a lui opkg cu eroare, iar -1 inseamna ca opkg nu a
+	pornit sau l-a oprit chiar enigma2 (Ipkg.stop, nefolosit aici), deci nu sunt semnale."""
+	return isinstance(cod, int) and not isinstance(cod, bool) and 128 < cod <= 128 + 64
 
 
 def rezultat_pornire(radacina='/'):
@@ -1115,14 +1161,336 @@ def planul_reinstalarii(feed, neterminate):
 	return rez
 
 
-def rezultat_din_liste(radacina, surse, stare, conf=None):
+# ---------------------------------------------------------------- 0.7.8 (RPR8): „Repară imaginea”
+# Fisierele pachetelor imaginii sterse de pe disc (de pilda un plugin al imaginii sters de mana din Plugins/Extensions: nu e
+# pachet separat, vine in enigma2-hdsatelit, iar opkg il socoteste instalat si nu-l mai pune) se pun la loc prin reinstalarea
+# pachetului lor din feedul semnat, cu aceeasi versiune (--force-reinstall, pe drumul reinstalarii de mai sus). Se cauta
+# numai fisierele si legaturile din info/<pachet>.list care lipsesc: opkg 0.10 nu tine sume pentru fisierele obisnuite
+# (numai pentru conffiles, care raman ale omului), deci un fisier schimbat, dar prezent, nu se vede. Nu intra: dosarele,
+# dosarele golite la pornire sau ale omului (DOSARE_FARA_REPARATIE), conffiles, legaturile de pornire din /etc/rc*.d
+# (serviciile oprite raman oprite), un .pyc cu .py langa (pachetele de proba il sterg ca sa ruleze .py-ul peticit), un
+# fisier de sub o legatura spre un stick scos (partea a doua) si fisierele care lipsesc si dupa o reinstalare a aceleiasi
+# versiuni (FISIER_REPARA: le sterge chiar pachetul; altfel s-ar reinstala la fiecare cautare). Pachetele nucleului, ale
+# driverelor si ale bibliotecilor de baza (TIPARE_IMAGINE_NOUA) si cele care au fisiere in /boot sau ale caror scripturi
+# scriu pe partitiile de pornire se sar si se spun in jurnal. Pachetele puse de om din alte surse nu sunt in feedul semnat
+# cu aceeasi versiune, deci nu se ating. Inainte de opkg, fisierele din /etc ale pachetelor reinstalate si fisierele puse
+# de o proba activa (DOSAR_PROBE/*/stare.json) se copiaza, iar dupa opkg se pun inapoi cum erau; .pyc-urile care lipseau
+# langa .py se sterg din nou. Reparatia intra in plan la „Repară imaginea” (ecranul, pagina web, operatia
+# repara-actualizarea a asistentei) si singura la orice actualizare care are deja pachete de instalat; o cautare fara
+# actualizare ramane „la zi”.
+FISIER_REPARA = '/etc/enigma2/hds-repara-imaginea.json'
+DOSAR_OCROTITE = '/tmp/hds-repara-ocrotite'
+DOSAR_PROBE = '/usr/lib/hds-proba'
+# cat ruleaza opkg pentru o reparatie care reinstaleaza enigma2-hdsatelit cu aceeasi versiune: preinst-ul lui (PRB8, reteta
+# enigma2-hdsatelit.bb) nu mai scoate probele, fiindca nu e o versiune noua (la o actualizare adevarata le scoate, ca pana acum)
+MEDIU_REPARA = 'HDS_REPARA_IMAGINEA'
+DOSARE_FARA_REPARATIE = ('/tmp/', '/var/volatile/', '/run/', '/var/run/', '/var/lock/', '/var/cache/', '/var/log/',
+	'/var/tmp/', '/media/', '/mnt/', '/home/', '/proc/', '/sys/', '/dev/', '/boot/')
+_RC_PORNIRE = re.compile(r'^/etc/rc[0-6S]\.d/')
+_NUME_PORNIRE = re.compile(r'^(u-?boot|.*bootlogo|.*-bootargs|.*-loader|.*-fastboot|.*-partitions|.*-dtb|.*devicetree|'
+	r'.*-recovery|.*-initrd)')
+_SCRIPT_PORNIRE = re.compile(r'mmcblk|/dev/mtd|/dev/block/|by-partlabel|by-name|flash_erase|nandwrite|flashcp|ofgwrite|'
+	r'flash-kernel|/boot/')
+_PLUGIN_DIN_CALE = re.compile(r'/Plugins/[^/]+/([^/]+)/')
+MAX_CAI_REPARATIE = 30
+MAX_NUME_REPARATIE = 6
+TITLU_REPARA = N_('Repară imaginea')
+TEXT_REPARA_NOTA = N_('Pune la loc fișierele imaginii care au fost șterse. Setările tale rămân cum sunt.')
+TEXT_REPARA_CAUT = N_('Verific fișierele imaginii')
+TEXT_REPARA_PUN = N_('Pun la loc fișierele lipsă')
+TEXT_REPARA_INTREAGA = N_('Imaginea e întreagă.')
+TEXT_REPARA_PUSE = N_('Am pus la loc: %s.')
+TEXT_REPARA_NEPUSE = N_('Nu am putut pune la loc: %s.')
+
+
+def _sub_legatura_rupta(cale, radacina='/'):
+	"""True cand un dosar de deasupra caii e o legatura spre ceva ce lipseste (stickul partii a doua, scos)"""
+	oprire = os.path.abspath(radacina or '/')
+	d = os.path.dirname(cale)
+	while d and d != oprire and d != os.path.dirname(d):
+		if os.path.islink(d) and not os.path.exists(d):
+			return True
+		d = os.path.dirname(d)
+	return False
+
+
+def _randuri_info(radacina, conf, nume, fel):
+	return P._randuri(os.path.join(_cale(radacina, conf.info_dir), '%s.%s' % (nume, fel)))
+
+
+def fisiere_lipsa(radacina, conf, nume, ignorate=()):
+	"""Fisierele si legaturile pachetului instalat `nume` (info/<nume>.list) care lipsesc de pe disc, fara cele care nu
+	intra in reparatie (vezi mai sus) si fara `ignorate`"""
+	conffiles = set(r.split()[0] for r in _randuri_info(radacina, conf, nume, 'conffiles') if r.strip())
+	rez = []
+	for r in _randuri_info(radacina, conf, nume, 'list'):
+		parti = r.split('\t')
+		cale = parti[0].strip()
+		mod = parti[1].strip() if len(parti) > 1 else ''
+		if not cale.startswith('/') or mod.startswith('04') or cale in conffiles or cale in ignorate:
+			continue
+		if cale.startswith(DOSARE_FARA_REPARATIE) or _RC_PORNIRE.match(cale) or '/__pycache__/' in cale:
+			continue
+		disc = _cale(radacina, cale)
+		if os.path.lexists(disc):
+			continue
+		if cale.endswith(('.pyc', '.pyo')) and os.path.lexists(disc[:-1]):
+			continue
+		if _sub_legatura_rupta(disc, radacina):
+			continue
+		rez.append(cale)
+	return rez
+
+
+def pachet_de_pornire(radacina, conf, nume):
+	"""True cand pachetul tine de pornirea receptorului (nucleul, bootloaderul, sigla, partitiile), are fisiere in /boot
+	sau un script al lui scrie pe partitiile de pornire: reparatia nu-l reinstaleaza"""
+	if _NUME_PORNIRE.match(nume) or motiv_imagine_noua(nume) == 'nucleu':
+		return True
+	for r in _randuri_info(radacina, conf, nume, 'list'):
+		if r.startswith('/boot/'):
+			return True
+	for fel in ('preinst', 'postinst', 'prerm', 'postrm'):
+		if any(_SCRIPT_PORNIRE.search(r) for r in _randuri_info(radacina, conf, nume, fel)):
+			return True
+	return False
+
+
+def citeste_reparatia(radacina='/'):
+	"""FISIER_REPARA: {'ignorate': {nume: {'versiune', 'cai'}}, 'ultima': {'cand', 'puse', 'nepuse'}}"""
+	try:
+		with open(_cale(radacina, FISIER_REPARA), 'r', encoding='utf-8') as f:
+			d = json.load(f)
+	except (IOError, OSError, ValueError):
+		d = {}
+	if not isinstance(d, dict):
+		d = {}
+	if not isinstance(d.get('ignorate'), dict):
+		d['ignorate'] = {}
+	return d
+
+
+def scrie_reparatia(d, radacina='/'):
+	cale = _cale(radacina, FISIER_REPARA)
+	try:
+		os.makedirs(os.path.dirname(cale), exist_ok=True)
+		with open(cale + '.nou', 'w', encoding='utf-8') as f:
+			json.dump(d, f, ensure_ascii=False, sort_keys=True)
+		os.replace(cale + '.nou', cale)
+	except (IOError, OSError) as e:
+		print('[HdsActualizari] reparatia: %s' % e)
+
+
+def reparatia(radacina, conf, feed, inst, stare, in_plan=(), toate=False, ignorate=None):
+	"""Pachetele instalate cu fisiere lipsa (fisiere_lipsa) -> {'plan': intrarile de reinstalare (ca planul_reinstalarii,
+	'reinstaleaza'), 'actualizare': [nume] (sunt deja in planul actualizarii, cu alta versiune: numai ea le pune la loc),
+	'lipsa': {nume: [cai]}, 'sarite': [nume] (pornirea, nucleul, driverele, bibliotecile de baza), 'fara_feed': [nume]
+	(feedul semnat nu le are cu aceeasi versiune)}. Se cauta in pachetele pe care feedul semnat le are cu versiunea
+	instalata (si in stare.json, cu arhitectura lor) si in cele din `in_plan`; toate=True (Repară imaginea): in toate
+	pachetele instalate, ca sa se spuna si ce nu se poate pune la loc."""
+	if ignorate is None:
+		ignorate = citeste_reparatia(radacina)['ignorate']
+	rez = {'plan': [], 'actualizare': [], 'lipsa': {}, 'sarite': [], 'fara_feed': []}
+	for n, v in sorted(inst.items()):
+		if n in in_plan:
+			lipsa = [] if motiv_imagine_noua(n) else fisiere_lipsa(radacina, conf, n)
+			if lipsa:
+				rez['lipsa'][n] = lipsa
+				rez['actualizare'].append(n)
+			continue
+		s = feed.get(n)
+		din_feed = s is not None and s.get('version') == v and \
+			(pachet_din_stare(stare, n, s.get('architecture')) or {}).get('versiune') == v
+		if not din_feed and not toate:
+			continue
+		ign = ignorate.get(n) if isinstance(ignorate.get(n), dict) else {}
+		lipsa = fisiere_lipsa(radacina, conf, n, ign.get('cai') or () if ign.get('versiune') == v else ())
+		if not lipsa:
+			continue
+		rez['lipsa'][n] = lipsa
+		if motiv_imagine_noua(n) or pachet_de_pornire(radacina, conf, n):
+			rez['sarite'].append(n)
+		elif not din_feed:
+			rez['fara_feed'].append(n)
+		else:
+			rez['plan'].append({'nume': n, 'titlu': P.nume_scurt(n) if n.startswith(P.PREFIX) else n, 'de_la': v,
+				'la': v, 'marime': P._int(s.get('size')), 'depends': s.get('depends', ''),
+				'arhitectura': s.get('architecture', ''), 'reinstaleaza': True})
+	return rez
+
+
+def nume_din_cai(cai, cu_fisierul=()):
+	"""Ce vede omul din fisierele puse la loc: numele pluginului (Plugins/<fel>/<Nume>/...) sau numele fisierului, fara
+	dubluri, cel mult MAX_NUME_REPARATIE si „(+N)” pentru rest; pentru pluginurile din `cu_fisierul`, numele fisierului"""
+	nume = []
+	for c in cai:
+		m = _PLUGIN_DIN_CALE.search(c)
+		n = m.group(1) if m and m.group(1) not in cu_fisierul else os.path.basename(c)
+		if n and n not in nume:
+			nume.append(n)
+	text = ', '.join(nume[:MAX_NUME_REPARATIE])
+	if len(nume) > MAX_NUME_REPARATIE:
+		text += ' (+%d)' % (len(nume) - MAX_NUME_REPARATIE)
+	return text
+
+
+def text_reparatie(puse, nepuse=()):
+	"""„Am pus la loc: PicturePlayer, MediaScanner.” (si ce nu s-a putut), tradus; '' cand nu e nimic"""
+	texte = []
+	if puse:
+		texte.append(_t(TEXT_REPARA_PUSE) % nume_din_cai(puse))
+	if nepuse:
+		# un plugin pus la loc numai in parte: ce lipseste inca se spune pe fisiere
+		pluginuri = set(m.group(1) for m in (_PLUGIN_DIN_CALE.search(c) for c in puse) if m)
+		texte.append(_t(TEXT_REPARA_NEPUSE) % nume_din_cai(nepuse, pluginuri))
+	return ' '.join(texte)
+
+
+def copiaza_ocrotite(radacina, conf, pachete, dosar=None):
+	"""Inainte de reinstalarea pachetelor `pachete`: copiile fisierelor lor din /etc si ale fisierelor lor puse de o proba
+	activa -> {'copii': [(cale, copie)], 'pyc': [.pyc care lipseau langa .py], 'probe': [(stare.json, textul lui,
+	[(tinta, nou_sha256)])] ale probelor active}"""
+	dosar = dosar or _cale(radacina, DOSAR_OCROTITE)
+	shutil.rmtree(dosar, ignore_errors=True)
+	ale_probelor = set()
+	probe = []
+	for st in sorted(_glob_stari_probe(radacina)):
+		try:
+			with open(st, 'r', encoding='utf-8') as f:
+				text = f.read()
+			s = json.loads(text)
+		except (IOError, OSError, ValueError):
+			continue
+		if isinstance(s, dict) and s.get('activa'):
+			tinte = [(x['tinta'], x.get('nou_sha256') or '') for x in s.get('fisiere') or []
+				if isinstance(x, dict) and x.get('tinta')]
+			ale_probelor.update(c for c, _h in tinte)
+			probe.append((st, text, tinte))
+	rez = {'copii': [], 'pyc': [], 'probe': probe}
+	for n in pachete:
+		for r in _randuri_info(radacina, conf, n, 'list'):
+			parti = r.split('\t')
+			cale = parti[0].strip()
+			if not cale.startswith('/') or (len(parti) > 1 and parti[1].strip().startswith('04')):
+				continue
+			disc = _cale(radacina, cale)
+			if cale.endswith('.pyc') and not os.path.lexists(disc) and os.path.lexists(disc[:-1]):
+				rez['pyc'].append(disc)
+				continue
+			if not (cale.startswith('/etc/') or cale in ale_probelor):
+				continue
+			if os.path.islink(disc) or not os.path.isfile(disc):
+				continue
+			copie = os.path.join(dosar, cale.lstrip('/'))
+			try:
+				os.makedirs(os.path.dirname(copie), exist_ok=True)
+				shutil.copy2(disc, copie)
+				rez['copii'].append((disc, copie))
+			except (IOError, OSError) as e:
+				print('[HdsActualizari] copia %s: %s' % (cale, e))
+	return rez
+
+
+def _glob_stari_probe(radacina):
+	dosar = _cale(radacina, DOSAR_PROBE)
+	try:
+		return [os.path.join(dosar, d, 'stare.json') for d in os.listdir(dosar)
+			if os.path.isfile(os.path.join(dosar, d, 'stare.json'))]
+	except OSError:
+		return []
+
+
+def _la_fel(a, b):
+	try:
+		if os.path.getsize(a) != os.path.getsize(b):
+			return False
+		with open(a, 'rb') as fa, open(b, 'rb') as fb:
+			return fa.read() == fb.read()
+	except (IOError, OSError):
+		return False
+
+
+def pune_inapoi_ocrotite(ocrotite, radacina='/'):
+	"""Dupa opkg: fisierele copiate de copiaza_ocrotite inapoi, cand opkg le-a schimbat; .pyc-urile care lipseau sterse
+	din nou -> cate fisiere s-au pus inapoi"""
+	puse = 0
+	for disc, copie in (ocrotite or {}).get('copii') or []:
+		if _la_fel(disc, copie):
+			continue
+		try:
+			shutil.copy2(copie, disc)
+			puse += 1
+		except (IOError, OSError) as e:
+			print('[HdsActualizari] punerea inapoi %s: %s' % (disc, e))
+	for pyc in (ocrotite or {}).get('pyc') or []:
+		try:
+			os.unlink(pyc)
+		except OSError:
+			pass
+	# paza unei probe inca pornite (pachetele de proba din unelte/proba_receptor, paza.py) vede, cat ruleaza opkg, toate
+	# fisierele ei schimbate si isi trece starea pe "restaurat / inlocuit-de-alta-versiune", fara sa atinga fisierele;
+	# cand ele sunt iar ale probei (puse inapoi mai sus), starea de dinainte se scrie la loc
+	for st, text, tinte in (ocrotite or {}).get('probe') or []:
+		try:
+			with open(st, 'r', encoding='utf-8') as f:
+				s = json.load(f)
+			if s.get('activa') or s.get('motiv') != 'inlocuit-de-alta-versiune' or not tinte:
+				continue
+			if all(h and _sha256_simplu(_cale(radacina, c)) == h for c, h in tinte):
+				with open(st + '.nou', 'w', encoding='utf-8') as f:
+					f.write(text)
+				os.replace(st + '.nou', st)
+				print('[HdsActualizari] starea probei pusa la loc: %s' % st)
+		except (IOError, OSError, ValueError, AttributeError) as e:
+			print('[HdsActualizari] starea probei %s: %s' % (st, e))
+	shutil.rmtree(_cale(radacina, DOSAR_OCROTITE), ignore_errors=True)
+	return puse
+
+
+def _sha256_simplu(cale):
+	try:
+		h = hashlib.sha256()
+		with open(cale, 'rb') as f:
+			for bucata in iter(lambda: f.read(1024 * 1024), b''):
+				h.update(bucata)
+		return h.hexdigest()
+	except (IOError, OSError):
+		return ''
+
+
+def verifica_reparatia(radacina, conf, lipsa_inainte, inst):
+	"""Dupa reinstalare: ce s-a pus la loc si ce lipseste inca, din pachetele reparate (lipsa_inainte = {nume: [cai]},
+	cel mult MAX_CAI_REPARATIE pe pachet); tot ce lipseste inca dupa reinstalarea aceleiasi versiuni intra in FISIER_REPARA
+	(nu se mai reinstaleaza pentru el), iar rezultatul in 'ultima' (pagina web il arata si dupa repornirea interfetei)
+	-> (puse, nepuse)"""
+	d = citeste_reparatia(radacina)
+	puse, nepuse = [], []
+	for n, inainte in sorted((lipsa_inainte or {}).items()):
+		vechi = d['ignorate'].get(n) if isinstance(d['ignorate'].get(n), dict) else {}
+		stiute = set(vechi.get('cai') or ()) if vechi.get('versiune') == inst.get(n) else set()
+		acum = fisiere_lipsa(radacina, conf, n)
+		multime = set(acum)
+		puse.extend(c for c in inainte if c not in multime)
+		nepuse.extend(c for c in acum if c not in stiute)
+		if acum and inst.get(n):
+			d['ignorate'][n] = {'versiune': inst[n], 'cai': sorted(multime)}
+		else:
+			d['ignorate'].pop(n, None)
+	d['ultima'] = {'cand': int(time.time()), 'puse': puse[:MAX_CAI_REPARATIE * 4], 'nepuse': nepuse[:MAX_CAI_REPARATIE * 4]}
+	scrie_reparatia(d, radacina)
+	return puse, nepuse
+
+
+def rezultat_din_liste(radacina, surse, stare, conf=None, repara=False):
 	"""Planul si verdictul cautarii din listele surselor feedului descarcate de `opkg update` (verificate inainte fata
 	de stare.json semnat), fata de pachetele instalate si de numele date prin Provides. Fara enigma2-hdsatelit instalat
 	in status (un status stricat de o repornire dura chiar dupa opkg, o instalare oprita la jumatate) planul ar iesi gol
 	si cautarea ar spune "la zi" pe versiunea veche (09.11.2026, darog69, Ustym): atunci cautarea e o eroare cu motivul
 	spus, nu "la zi". Din 0.7.5 (JAK): pachetele imaginii ramase la jumatate in status (si enigma2-hdsatelit) intra in
 	plan ca reinstalare, cand feedul semnat le are; eroarea ramane numai cand status-ul nu are pachetul principal sau
-	feedul nu-l poate pune la loc."""
+	feedul nu-l poate pune la loc. Din 0.7.8 (RPR8): pachetele cu fisiere sterse (reparatia) intra in plan ca reinstalare
+	cand repara=True (Repară imaginea) sau cand planul are deja o actualizare de instalat; cu repara=True si o actualizare
+	care nu se poate instala din meniu, planul are numai reparatia (aceleasi versiuni, deja instalate)."""
 	conf = conf or P.citeste_configurarea(radacina)
 	principal, marime = stare_pachet_principal(radacina, conf)
 	feed = pachete_din_feed(radacina, surse, conf)
@@ -1135,10 +1503,57 @@ def rezultat_din_liste(radacina, surse, stare, conf=None):
 	in_plan = set(x['nume'] for x in plan)
 	plan += [x for x in planul_driverelor(stare, inst, conf.arhitecturi, radacina) if x['nume'] not in in_plan]
 	plan = sorted(plan, key=lambda x: x['nume'])
-	rez = rezultat_cautare(stare, imaginea(radacina, conf), plan,
-		dependinte_lipsa(plan, inst, feed, furnizate(radacina, conf)))
+	img = imaginea(radacina, conf)
+	furn = furnizate(radacina, conf)
+	rez = rezultat_cautare(stare, img, plan, dependinte_lipsa(plan, inst, feed, furn))
 	if reinstalare:
 		rez['reinstalare'] = [x['nume'] for x in reinstalare]
+	try:
+		rep = reparatia(radacina, conf, feed, inst, stare, set(x['nume'] for x in plan), toate=repara)
+	except Exception as e:
+		print('[HdsActualizari] reparatia: %s' % e)
+		rep = {'plan': [], 'actualizare': [], 'lipsa': {}, 'sarite': [], 'fara_feed': [], 'eroare': curata(e)}
+	actualizare = rez['stare'] == DISPONIBILA and rez['poate_instala']
+	# "tot": actualizarea si reparatia in aceeasi instalare (pasul automat la orice actualizare; la Repară imaginea numai
+	# cand un pachet cu fisiere lipsa are in feed alta versiune, deci numai actualizarea il pune la loc); "reparatia":
+	# numai reinstalarile cu aceeasi versiune (Repară imaginea nu aduce alte pachete noi, de pilda o biblioteca tinuta
+	# de om la alta versiune)
+	# repara='tot' (operatia repara-actualizarea a asistentei) si o actualizare ramasa la jumatate (reinstalare): planul
+	# intreg, ca inainte de RPR8, plus reparatia
+	tot = repara == 'tot' or bool(rez.get('reinstalare'))
+	if repara:
+		mod = 'tot' if actualizare and (tot or rep['actualizare']) else ('reparatia' if rep['plan'] else None)
+		if not actualizare:
+			rep['fara_feed'] = rep['fara_feed'] + rep['actualizare']
+			rep['actualizare'] = []
+	else:
+		mod = 'tot' if actualizare and (rep['plan'] or rep['actualizare']) else None
+	if mod == 'tot':
+		plan_tot = sorted(plan + rep['plan'], key=lambda x: x['nume'])
+		nou = rezultat_cautare(stare, img, plan_tot, dependinte_lipsa(plan_tot, inst, feed, furn))
+		if rep['plan'] and not (nou['stare'] == DISPONIBILA and nou['poate_instala']):
+			# reparatia nu are voie sa opreasca o actualizare care se putea instala: ramane actualizarea singura
+			print('[HdsActualizari] reparatia nu intra in actualizare: %s' % ', '.join(x['nume'] for x in rep['plan']))
+			nou = rez
+			rep['fara_feed'] = rep['fara_feed'] + [x['nume'] for x in rep['plan']]
+			rep['plan'] = []
+	elif mod == 'reparatia':
+		# numai reparatia: aceleasi versiuni, deja instalate, deci verdictul actualizarii (imagine noua, alta baza) nu o
+		# opreste; pachetele nucleului si ale pornirii nu sunt in ea
+		nou = rezultat_cautare(stare, img, rep['plan'], ())
+		nou.update(stare=DISPONIBILA, motive=[], texte_motive=[], detalii=[], repornire_receptor=False,
+			poate_instala=not nou['nepotrivite'])
+	if mod:
+		for cheie in ('reinstalare',):
+			if cheie in rez:
+				nou[cheie] = rez[cheie]
+		rez = nou
+	if rep['lipsa'] or rep.get('eroare'):
+		puse = [x['nume'] for x in rep['plan']] + (rep['actualizare'] if mod == 'tot' else []) if mod else []
+		rez['reparatie'] = {'pachete': sorted(puse), 'reinstalate': [x['nume'] for x in rep['plan']] if mod else [],
+			'lipsa': dict((n, c[:MAX_CAI_REPARATIE]) for n, c in rep['lipsa'].items()),
+			'numar': sum(len(c) for c in rep['lipsa'].values()), 'sarite': rep['sarite'], 'fara_feed': rep['fara_feed'],
+			'eroare': rep.get('eroare', '')}
 	return rez
 
 
@@ -1509,6 +1924,183 @@ def loc_liber(dosar):
 	return s.f_bavail * s.f_frsize
 
 
+def _marime_instalarii(p):
+	"""Camp adaugat compatibil in feed; lipsa lui nu inseamna crestere zero."""
+	x = p.get('instalare')
+	if not isinstance(x, dict) or type(x.get('format')) is not int or x['format'] != 1 or x.get('unitate') != 'octeti':
+		return None
+	if type(x.get('octeti')) is not int or not 0 <= x['octeti'] <= 2 * 1024 * 1024 * 1024 or \
+			type(x.get('intrari')) is not int or not 0 <= x['intrari'] <= 100000:
+		return None
+	if not x['intrari'] and x['octeti']:
+		return None
+	return x
+
+
+def _candidatii_spatiului(stare, radacina, conf):
+	"""Listele tuturor surselor, nu numai feedul actualizarii semnate."""
+	semnate = [p for p in stare.get('pachete') or [] if isinstance(p, dict) and
+		p.get('arhitectura') in conf.arhitecturi]
+	disponibile = list(semnate)
+	dosar = _cale(radacina, conf.lists_dir)
+	try:
+		for sursa, _adresa in conf.surse:
+			# Daca exista ambele forme, niciuna nu dovedeste absenta din cealalta.
+			for nume_lista in (sursa, sursa + '.gz'):
+				cale = os.path.join(dosar, nume_lista)
+				try:
+					os.lstat(cale)
+				except FileNotFoundError:
+					continue
+				# Nu folosi inventarul memorat: listele se pot schimba dupa descarcare.
+				with (gzip.open(cale, 'rb') if cale.endswith('.gz') else open(cale, 'rb')) as f:
+					date = f.read(32 * 1024 * 1024 + 1)
+				if len(date) > 32 * 1024 * 1024:
+					return None
+				for s in P.strofe_din_text(date.decode('utf-8')):
+					if s.get('architecture') not in conf.arhitecturi or not P.nume_valid(s.get('package')):
+						continue
+					q = {'nume': s['package'], 'versiune': s.get('version', ''),
+						'arhitectura': s['architecture'], 'provides': s.get('provides', '')}
+					# O versiune ori o furnizare din alt feed nu mosteneste dimensiunea semnata.
+					if not any(p['nume'] == q['nume'] and p['versiune'] == q['versiune'] and
+							p['arhitectura'] == q['arhitectura'] and p.get('sha256') == s.get('sha256sum') and
+							p.get('sha256') and p.get('depends') == ', '.join(s[c] for c in
+							('pre-depends', 'depends') if s.get(c)) and p.get('provides') == q['provides'] and
+							p.get('recommends') == s.get('recommends', '') for p in semnate):
+						disponibile.append(q)
+	except (OSError, EOFError, ValueError, zlib.error):
+		return None
+	return disponibile
+
+
+def _pachetele_spatiului(stare, rezultat, radacina, conf):
+	"""Include dependinte si recomandari, recursiv, cu toate alternativele posibile."""
+	rez, coada = {}, list(rezultat.get('pachete') or [])
+	inst = instalate(radacina, conf)
+	furn = furnizate(radacina, conf)
+	programate = {p['nume']: p['la'] for p in coada}
+	stari_vazute = {tuple(sorted(programate.items()))}
+	analizate, planuri, generatie = {}, {}, 0
+	disponibile = _candidatii_spatiului(stare, radacina, conf)
+	if disponibile is None:
+		return None
+	while coada:
+		p = coada.pop(0)
+		x = driver_din_stare(stare, p.get('nume'), p.get('arhitectura')) if p.get('driver_placii') else \
+			pachet_din_stare(stare, p.get('nume'), p.get('arhitectura'))
+		if not x or x.get('versiune') != p.get('la') or _marime_instalarii(x) is None or \
+				any(not isinstance(x.get(c), str) for c in ('depends', 'provides', 'recommends')):
+			return None
+		cheie = (x['nume'], x.get('arhitectura'))
+		if analizate.get(cheie) == generatie:
+			continue
+		analizate[cheie] = generatie
+		cerinte = []
+		for camp in ('depends', 'recommends'):
+			if not x[camp].strip():
+				continue
+			for grup in x[camp].split(','):
+				alternative = []
+				for alt in grup.split('|'):
+					citita = _dependinte(alt)
+					if len(citita) != 1 or len(citita[0]) != 1:
+						return None
+					alternative.extend(citita[0])
+				cerinte.append((camp == 'recommends', alternative))
+		rez[cheie] = x
+		planuri[cheie] = dict(p)
+		if len(rez) > PRAG_PACHETE:
+			return None
+		for optionala, alternative in cerinte:
+			def satisfacuta(n, op, v):
+				versiune = programate.get(n, inst.get(n))
+				if versiune and (not op or _satisface(versiune, op, v)):
+					return True
+				return any(not op or (dat and _satisface(dat, op, v)) for dat, sursa in furn.get(n, ())
+					if sursa not in programate)
+			if any(satisfacuta(n, op, v) for n, op, v in alternative):
+				continue
+			gasite = []
+			for n, op, v in alternative:
+				for q in disponibile:
+					potrivit = q['nume'] == n and (not op or _satisface(q['versiune'], op, v))
+					if not potrivit:
+						potrivit = any(nume == n and (not op or (dat and _satisface(dat, op, v)))
+							for nume, dat in _furnizari(q.get('provides', '')))
+					if potrivit:
+						if _marime_instalarii(q) is None:
+							return None
+						gasite.append({'nume': q['nume'], 'la': q['versiune'], 'arhitectura': q['arhitectura']})
+			if not gasite:
+				if optionala:
+					continue
+				return None
+			nou = dict(programate)
+			nou.update((q['nume'], q['la']) for q in gasite)
+			if nou != programate:
+				stare_noua = tuple(sorted(nou.items()))
+				# Un conflict intre versiuni nu trebuie sa tina lucrarea blocata.
+				if stare_noua in stari_vazute or len(stari_vazute) > PRAG_PACHETE:
+					return None
+				stari_vazute.add(stare_noua)
+				programate = nou
+				generatie += 1
+				# O dependinta noua poate inlocui o furnizare deja considerata instalata.
+				coada.extend(planuri.values())
+			coada.extend(gasite)
+	return list(rez.values())
+
+
+def _feed_fara_dimensiuni(stare):
+	"""True cand stare.json e facut fara campurile de instalare (niciun pachet nu are 'instalare'): feedurile bazelor
+	0.7.0, 0.7.1 si 0.7.3, unde stare.json trebuie sa ramana sub 256 KiB pentru codul lor (MARIME_STARE_MAX de atunci)."""
+	pachete = [p for p in stare.get('pachete') or [] if isinstance(p, dict)]
+	return bool(pachete) and not any('instalare' in p for p in pachete)
+
+
+def verifica_loc_radacina(semnat, rezultat, radacina='/'):
+	"""Intoarce (octeti necesari, problema), pentru radacina, separat de descarcare."""
+	stare = (semnat or {}).get('stare') or {}
+	conf = P.citeste_configurarea(radacina)
+	pachete = _pachetele_spatiului(stare, rezultat, radacina, conf)
+	if not pachete:
+		if _feed_fara_dimensiuni(stare):
+			# BLD8 (0.7.8): feedul unei baze vechi (0.7.0, 0.7.1, 0.7.3) n-are dimensiunile de instalare: codul acelor baze
+			# citeste cel mult 256 KiB din stare.json, iar campurile le-ar trece peste limita. Ramane purtarea de dinainte:
+			# fara verificarea radacinii (locul descarcarii il verifica descarca_pachete), ca actualizarea si Repara imaginea
+			# sa mearga si acolo. Un feed care are dimensiunile, dar nu la pachetul cerut, se refuza ca pana acum.
+			return None, None
+		return None, ('dimensiuni', 'metadate de instalare sau dependinte lipsa ori necunoscute')
+	nevoie = LOC_IN_PLUS
+	try:
+		bloc = max(4096, os.statvfs(radacina).f_frsize)
+	except (AttributeError, OSError):
+		bloc = 65536
+	for x in pachete:
+		m = _marime_instalarii(x)
+		nou = m['octeti'] + m['intrari'] * bloc
+		# Numele sterse nu elibereaza blocurile fisierelor inca deschise sau mapate.
+		# Nu putem dovedi ca vreun fisier vechi este eliberat pe durata instalarii.
+		nevoie += nou
+	liber = loc_liber(radacina)
+	if liber is None:
+		return nevoie, ('loc-necunoscut', 'statvfs radacina indisponibil')
+	if liber < nevoie:
+		return nevoie, ('loc', 'radacina: %d octeti liberi, necesari %d' % (liber, nevoie))
+	return nevoie, None
+
+
+def _text_refuz_loc(fel):
+	if fel == 'loc':
+		return _t('Nu mai este loc în memoria receptorului.')
+	if fel == 'dimensiuni':
+		return _t('Actualizarea nu are dimensiunile de instalare necesare verificării spațiului. Instalarea este oprită. Încearcă din nou după actualizarea feedului.')
+	if fel == 'loc-necunoscut':
+		return _t('Nu se poate verifica spațiul liber din memoria receptorului. Instalarea este oprită.')
+	return _t('Un fișier nu s-a putut descărca de pe server.')
+
+
 def descarca_pachete(intrari, adresa_baza, credentiale=None, dosar=None, deschide=None, timp=TIMP_PACHET):
 	"""Descarca pachetele (pachete_semnate) in `dosar` (golit intai) si le verifica: (cai, None) sau (None, (fel,
 	detaliu)); fel: 'nesemnat' (un pachet nu e chiar cel semnat: alta marime sau alta suma), 'loc' (nu incap) sau
@@ -1642,7 +2234,8 @@ def text_inlocuite(inlocuite):
 # ---------------------------------------------------------------- config
 
 def config_actualizari():
-	"""config.hds_actualizari: zilnic (verificarea zilnica, pornita din fabrica) si anuntat (ce s-a anuntat deja)"""
+	"""config.hds_actualizari: zilnic (verificarea zilnica, pornita din fabrica), anuntat (ce s-a anuntat deja) si, din
+	0.7.8 (RIA), repornire_singura (interfata se reporneste singura dupa o actualizare, Da din fabrica)"""
 	from Components.config import config, ConfigSubsection, ConfigYesNo, ConfigText
 	# nu hasattr(config, ...): Config.__getattr__ din enigma2 arunca KeyError, nu AttributeError, iar hasattr din
 	# Python 3 prinde numai AttributeError (gasit in emulator la integrarea 0.3.0.2); ca HdsAfisaj si HdsCalitateImagine
@@ -1650,6 +2243,9 @@ def config_actualizari():
 		config.hds_actualizari = ConfigSubsection()
 		config.hds_actualizari.zilnic = ConfigYesNo(default=True)
 		config.hds_actualizari.anuntat = ConfigText(default='', fixed_size=False)
+	# separat: sectiunea poate fi facuta deja de codul din memorie de dinainte de 0.7.8, fara cheia noua
+	if 'repornire_singura' not in config.hds_actualizari.content.items:
+		config.hds_actualizari.repornire_singura = ConfigYesNo(default=True)
 	return config.hds_actualizari
 
 
@@ -1670,6 +2266,165 @@ def seteaza_zilnic(pornit):
 	except Exception:
 		pass
 	return bool(c.zilnic.value)
+
+
+def repornire_singura():
+	"""0.7.8 (RIA): True = dupa actualizare interfata se reporneste singura (numaratoarea); False = intrebarea de dinainte.
+	Fara setare (o eroare): True, ca din fabrica."""
+	try:
+		return bool(config_actualizari().repornire_singura.value)
+	except Exception:
+		return True
+
+
+def seteaza_repornire_singura(pornit):
+	c = config_actualizari()
+	c.repornire_singura.value = bool(pornit)
+	c.repornire_singura.save()
+	try:
+		from Components.config import configfile
+		configfile.save()
+	except Exception:
+		pass
+	return bool(c.repornire_singura.value)
+
+
+# ---- 0.7.8 (RIA): repornirea singura dupa orice actualizare instalata (vezi NUMARATOARE_S)
+def _sesiune_globala():
+	"""Sesiunea enigma2, de oriunde (pagina web, Extensii, actualizarea): cea data lui HdsImagineOnline la pornire, altfel a
+	barei de canale; None cand nu se poate afla"""
+	try:
+		from Components.HdsImagineOnline import imagine_online
+		if getattr(imagine_online, 'session', None) is not None:
+			return imagine_online.session
+	except Exception:
+		pass
+	try:
+		from Screens.InfoBar import InfoBar
+		if InfoBar.instance is not None:
+			return InfoBar.instance.session
+	except Exception:
+		pass
+	return None
+
+
+def _reporneste_implicit(sesiune_f):
+	"""Functia de repornire a modului rapid (Plugins/Extensions/HdsWebControl/actualizari_web.reporneste_rapid), sau None
+	fara pagina web (atunci ramane calea veche: intrebarea, butonul, plasa din standby)"""
+	try:
+		from Plugins.Extensions.HdsWebControl.actualizari_web import reporneste_rapid
+	except Exception:
+		return None
+	return reporneste_rapid(sesiune_f)
+
+
+def _timeshift_folosit():
+	"""True cand omul se uita in urma in timeshift (redarea din fisierul timeshift-ului, nu numai tamponul pornit)"""
+	try:
+		from Screens.InfoBar import InfoBar
+		bara = InfoBar.instance
+		ts = bara.getTimeshift() if bara is not None else None
+		return bool(ts is not None and ts.isTimeshiftActive())
+	except Exception:
+		return False
+
+
+def motiv_asteptare(sesiune, radacina='/'):
+	"""De ce asteapta repornirea dupa actualizare ('inregistrare', 'lucrare', 'intrebare', 'timeshift') sau '' cand se
+	poate acum. Aceleasi reguli ca actualizari_web.reporneste_rapid (Components/HdsAlimentare.stareReceptor: inregistrare
+	acum sau in 6 minute, lucrari in fundal, o intrebare de repornire deschisa), plus alt opkg sau o instalare in curs
+	(iesirea interfetei l-ar opri la jumatate) si timeshift-ul folosit. Fara sesiune (probele de pe PC) numai opkg."""
+	try:
+		if actualizari.faza == 'instalez' or opkg_ocupat(radacina):
+			return 'lucrare'
+	except Exception:
+		pass
+	if sesiune is None:
+		return ''
+	try:
+		from Components.HdsAlimentare import stareReceptor
+		st = stareReceptor(sesiune)
+	except Exception:
+		st = {}
+	if st.get('intrebare_pe_tv'):
+		return 'intrebare'
+	if st.get('inregistrari') or st.get('curand'):
+		return 'inregistrare'
+	if st.get('lucrari'):
+		return 'lucrare'
+	if _timeshift_folosit():
+		return 'timeshift'
+	return ''
+
+
+def _cod_repornire(sesiune):
+	"""3 (interfata) sau 2 (receptorul: driverul placii nou sau memoria decodorului farmitata), fara rand in jurnal"""
+	try:
+		from Components.HdsMemorieDriver import codRepornireDupaActualizare
+		return codRepornireDupaActualizare(sesiune, jurnal=lambda text: None)
+	except Exception:
+		return 3
+
+
+def _text_repornire(cod):
+	"""Textul numaratorii, deja tradus (Components/HdsMemorieDriver.textRepornire)"""
+	try:
+		from Components.HdsMemorieDriver import textRepornire
+		return textRepornire(cod)
+	except Exception:
+		return _t('Actualizarea s-a instalat. Interfața se repornește acum.')
+
+
+def _cale_semnului_standby():
+	try:
+		from Components import HdsImagineOnline as I
+		return os.path.join(I._rad(), I.STANDBY_DUPA_REPORNIRE.lstrip('/'))
+	except Exception:
+		return None
+
+
+def _scrie_semnul_standby():
+	"""Semnul intoarcerii in standby dupa repornire (HdsImagineOnline.dupa_pornire); calea lui, sau None"""
+	cale = _cale_semnului_standby()
+	if not cale:
+		return None
+	try:
+		with open(cale, 'w') as f:
+			f.write('1\n')
+		return cale
+	except Exception:
+		return None
+
+
+def _sterge_semnul_standby(cale):
+	if cale:
+		try:
+			os.remove(cale)
+		except OSError:
+			pass
+
+
+def text_pana_la_repornire(a=None):
+	"""0.7.8 (RIA): randul din Informatii > Despre imagine (si pagina web /informatii/despre) cat o actualizare instalata
+	asteapta repornirea interfetei: de ce asteapta (TEXTE_ASTEPTARE) sau ca trebuie repornita; '' altfel. Textele sunt
+	cele deja traduse."""
+	a = a or actualizari
+	if not a.repornire:
+		return ''
+	if repornire_receptor_ceruta(a.radacina):
+		return _t(TEXT_DRIVER_NOU)
+	if a.rapid and a.rapid_pas in TEXTE_ASTEPTARE:
+		return _t(TEXTE_ASTEPTARE[a.rapid_pas])
+	if a.rapid:
+		return _t('Actualizarea s-a instalat. Interfața se repornește acum.')
+	return _t('Actualizarea s-a instalat. Interfața trebuie repornită ca să o folosească.')
+
+
+def reporneste_dupa_extensii():
+	"""0.7.8 (RIA): Extensii (Components/HdsExtensiiLucru.Lucrare, televizorul si pagina web) a schimbat programul imaginii pe
+	disc: aceeasi repornire singura ca dupa Actualizare software. True cand a pornit aici sau era deja pornita (modul
+	rapid)."""
+	return actualizari.porneste_repornirea('extensii') or actualizari.rapid
 
 
 # ---------------------------------------------------------------- lucrarea (o singura data, pentru ecran si web)
@@ -1712,10 +2467,21 @@ class Actualizari(object):
 		self._ceas_rapid = None
 		self._legatura_rapid = None
 		self.fabrica_ceas = None        # eTimer; probele de pe PC dau altul
+		# 0.7.8 (HB7): repornirea in standby a interfetei ramase nerepornite dupa instalare (STANDBY_REPORNIRE_MS)
+		self._ceas_standby = None
+		self._legatura_standby = None
+		self._standby_armat = False
+		self.reporneste_standby = None  # functia de repornire din standby; probele de pe PC dau alta
+		# 0.7.8 (RIA): sesiunea pentru fereastra dinaintea repornirii (numaratoarea sau intrebarea) si fereastra deschisa;
+		# probele de pe PC dau sesiunea lor
+		self.sesiune = None
+		self._fereastra = None
 		# o singura reincercare a cautarii cand listele nu se potrivesc (0.7.5, FED, _reincearca_cautarea)
 		self._reincercare_liste = False
 		self._ceas_liste = None
 		self._legatura_liste = None
+		self._generatie_cautare = 0
+		self._rezerva_incercata = False
 		# rezultatul lui tools/hds-actualizare-intrerupta.py de la pornirea aceasta (rezultat_pornire), sau None
 		self.reparare = None
 		# imaginea() tinuta minte pentru stare_publica (_imaginea_publica): cheia status-ului opkg cand s-a citit, calea lui
@@ -1724,6 +2490,12 @@ class Actualizari(object):
 		self._img_cheie = None
 		self._img_status = None
 		self._img_citire = False
+		# 0.7.8 (RPR8): „Repară imaginea” in lucru (de la apasare pana la repornire sau oprire), ce s-a pus la loc (pus in
+		# fata textului de dinaintea repornirii) si copiile fisierelor ocrotite cat ruleaza opkg (copiaza_ocrotite)
+		self.repara = ''
+		self._nota_reparatie = ''
+		self._ocrotite = None
+		self._repara_principal = False
 
 	# ---- ascultatorii (ecranul si pagina web se reimprospateaza singure)
 	def _schimbat(self):
@@ -1842,6 +2614,10 @@ class Actualizari(object):
 			self.rezultat = {'stare': FARA_CHEIE}
 			self._schimbat()
 			return False
+		self._generatie_cautare += 1
+		generatie = self._generatie_cautare
+		if not self._reincercare_liste:
+			self._rezerva_incercata = False
 		self.faza, self.pas, self.progres = 'caut', _t('Se citește starea actualizărilor de pe server...'), (1, 3)
 		self._schimbat()
 		credentiale = citeste_netrc(self.radacina) if canal == 'proba' else None
@@ -1857,6 +2633,8 @@ class Actualizari(object):
 			return descarca_stare(adresa, credentiale), fara_retea(radacina)
 
 		def gata(rez, eroare):
+			if generatie != self._generatie_cautare or self.faza != 'caut':
+				return
 			if eroare or rez is None:
 				return self._cautare_gata({'stare': EROARE, 'eroare': curata(eroare)})
 			(stare, cod), fara = rez
@@ -1878,9 +2656,12 @@ class Actualizari(object):
 		self._schimbat()
 		self._lista_ipkg = []
 		ipkg = self._ipkg = IpkgComponent()
+		generatie = self._generatie_cautare
 		inceput = time.time()
 
 		def eveniment(e, param):
+			if generatie != self._generatie_cautare or self.faza != 'caut' or self._ipkg is not ipkg:
+				return
 			if e == IpkgComponent.EVENT_LINE:
 				self._lista_ipkg.append(curata(param))
 				self._jurnal(param)
@@ -1894,7 +2675,30 @@ class Actualizari(object):
 		self._jurnal('opkg update')
 		ipkg.startCmd(IpkgComponent.CMD_UPDATE)
 
-	def _dupa_update(self, stare, surse, cod, inceput):
+	def _dupa_update(self, stare, surse, cod, inceput, rezerva_verificata=False):
+		generatie = self._generatie_cautare
+		if cod and not rezerva_verificata and not self._rezerva_incercata:
+			# Aceeasi decizie ca in Extensii; citirea si schimbarea sursei raman in fundal.
+			self._rezerva_incercata = True
+			linii, radacina = list(self._lista_ipkg), self.radacina
+
+			def verifica_rezerva():
+				if generatie != self._generatie_cautare or self.faza != 'caut':
+					return False
+				from Components import HdsPluginuriExterne
+				return HdsPluginuriExterne.dupa_update(linii, radacina)
+
+			def dupa_rezerva(reia, eroare):
+				if generatie != self._generatie_cautare or self.faza != 'caut':
+					return
+				if reia and not eroare:
+					self._jurnal('reincerc opkg update dupa trecerea feedului extern pe rezerva')
+					return self._opkg_update(stare, surse)
+				if eroare:
+					self._jurnal('rezerva feedului extern: %s' % curata(eroare))
+				self._dupa_update(stare, surse, cod, inceput, rezerva_verificata=True)
+			self._lucrare(verifica_rezerva, dupa_rezerva)
+			return
 		# opkg update da cod 255 si cand cade numai o sursa a utilizatorului: conteaza listele feedului nostru
 		conf = P.citeste_configurarea(self.radacina)
 		dosar = _cale(self.radacina, conf.lists_dir)
@@ -1908,10 +2712,11 @@ class Actualizari(object):
 			motiv = motiv_eroare(self._lista_ipkg, implicit=_t('Lista pachetelor nu s-a putut descărca.'))
 			return self._cautare_gata({'stare': EROARE if not fara_retea(self.radacina) else FARA_RETEA,
 				'eroare': curata(motiv)})
-		self.pas, self.progres = _t('Se compară pachetele...'), (3, 3)
+		self.pas, self.progres = (_t(TEXT_REPARA_CAUT) + '...') if self.repara else _t('Se compară pachetele...'), (3, 3)
 		self._schimbat()
 		radacina = self.radacina
 		canal, adresa, baza = self.canal, self._adresa, self._baza_feed
+		repara = self.repara
 
 		def calculeaza():
 			c = P.citeste_configurarea(radacina)
@@ -1935,9 +2740,11 @@ class Actualizari(object):
 				sterse, puse = pune_la_loc_sau_sterge(radacina, surse, stari, c)
 				return {'stare': NESEMNATA, 'eroare': curata('; '.join(g[:3])), 'sterse': sterse, 'puse_la_loc': puse}, None
 			tine_minte_indexurile(radacina, canal, baza, semnata)
-			return rezultat_din_liste(radacina, surse, semnata, c), semnata
+			return rezultat_din_liste(radacina, surse, semnata, c, repara=repara), semnata
 
 		def gata(rez, eroare):
+			if generatie != self._generatie_cautare or self.faza != 'caut':
+				return
 			if rez and not eroare:
 				rezultat, semnata = rez
 				if rezultat.get('stare') == NESEMNATA and 'puse_la_loc' in rezultat:
@@ -2053,14 +2860,36 @@ class Actualizari(object):
 			self._jurnal('pachete neconfigurate in receptor (opkg le configureaza din nou la sfarsit): %s' %
 				', '.join(self._neconfigurate_inainte))
 		self._jurnal('descarc si verific: %s' % ' '.join('%s %s' % (x['nume'], x['versiune']) for x in intrari))
+		# 0.7.8 (RPR8): pachetele reinstalate pentru fisierele sterse si ce lipsea din ele
+		rep = r.get('reparatie') or {}
+		reparate = [n for n in rep.get('pachete') or [] if n in nume]
+		# numai cele reinstalate cu aceeasi versiune pastreaza fisierele ocrotite (cele actualizate primesc fisierele noi)
+		reinstalate = [n for n in rep.get('reinstalate') or [] if n in nume]
+		self._ocrotite = None
+		self._repara_principal = PACHET_PRINCIPAL in reinstalate
+		if reparate:
+			self._jurnal('repara imaginea: pun la loc %s (reinstalate: %s); lipseau %s fisiere: %s' % (', '.join(reparate),
+				', '.join(reinstalate) or '-', rep.get('numar'),
+				', '.join(c for n in reparate for c in (rep.get('lipsa') or {}).get(n, [])[:10])))
+		radacina = self.radacina
 
 		def descarca():
-			return descarca_pachete(intrari, adresa, credentiale)
+			_nevoie, problema = verifica_loc_radacina(self._semnat, r, radacina)
+			if problema:
+				return None, problema
+			rez = descarca_pachete(intrari, adresa, credentiale)
+			if reinstalate and rez[1] is None:
+				# setarile din /etc ale pachetelor reinstalate si reparatiile de proba raman cum sunt (dupa opkg se pun inapoi)
+				self._ocrotite = copiaza_ocrotite(radacina, P.citeste_configurarea(radacina), reinstalate)
+			return rez
 
 		def gata(rez, eroare):
 			cai, problema = rez if rez and not eroare else (None, ('descarcare', curata(eroare)))
 			if problema:
 				return self._descarcare_cazuta(problema, nume)
+			if self._ocrotite is not None:
+				self._jurnal('repara imaginea: %d fisiere ocrotite (din /etc si ale probelor), %d .pyc lipsa raman lipsa' % (
+					len(self._ocrotite['copii']), len(self._ocrotite['pyc'])))
 			self._porneste_opkg(cai, nume)
 		self._lucrare(descarca, gata)
 		return True
@@ -2069,14 +2898,17 @@ class Actualizari(object):
 		"""Pachetele nu ajung la opkg: unul nu e cel semnat (NESEMNATA), nu incap sau nu s-au descarcat"""
 		fel, detaliu = problema
 		goleste_dosarul()
+		if self._ocrotite is not None:
+			# opkg nu a pornit: copiile fisierelor ocrotite nu mai trebuie
+			pune_inapoi_ocrotite(self._ocrotite, self.radacina)
+			self._ocrotite = None
 		self._jurnal('pachetele nu se instaleaza (%s): %s' % (fel, detaliu))
 		self.faza, self.pas, self.progres = 'liber', '', (0, 0)
 		if fel == 'nesemnat':
 			self.mesaj = ''
 			self.rezultat = dict(self.rezultat, stare=NESEMNATA, poate_instala=False, eroare=curata(detaliu))
 		else:
-			motiv = _t('Nu mai este loc în memoria receptorului.') if fel == 'loc' else \
-				_t('Un fișier nu s-a putut descărca de pe server.')
+			motiv = _text_refuz_loc(fel)
 			self.rezultat = dict(self.rezultat, stare='eroare-instalare', poate_instala=False, ramase=list(nume))
 			self.mesaj = text_eroare_instalare(motiv)
 		self._sfarsit_rapid('pachetele nu s-au instalat (%s)' % fel)
@@ -2116,7 +2948,19 @@ class Actualizari(object):
 		self.pas = _t('Se pregătește instalarea...')
 		self._schimbat()
 		self._inlocuite = None
-		self._ruleaza_opkg(cai, nume, argumente, a_doua=False)
+		self._verifica_si_ruleaza_opkg(cai, nume, argumente, a_doua=False)
+
+	def _verifica_si_ruleaza_opkg(self, cai, nume, argumente, a_doua):
+		"""Citeste listele in fundal si verifica radacina inaintea fiecarei incercari."""
+		semnat, radacina = self._semnat, self.radacina
+		plan = {'pachete': [dict(p) for p in self._de_instalat]}
+
+		def gata(rez, eroare):
+			_necesar, problema = rez if rez and not eroare else (None, ('loc-necunoscut', curata(eroare)))
+			if problema:
+				return self._refuz_loc_inainte_opkg(problema, nume, a_doua)
+			self._ruleaza_opkg(cai, nume, argumente, a_doua)
+		self._lucrare(lambda: verifica_loc_radacina(semnat, plan, radacina), gata)
 
 	def _ruleaza_opkg(self, cai, nume, argumente, a_doua):
 		"""Ruleaza opkg cu argumentele date; la sfarsit verifica instalarea (_dupa_instalare) sau, o singura data, cand
@@ -2146,11 +2990,16 @@ class Actualizari(object):
 				ipkg.removeCallback(eveniment)
 				self._ipkg = None
 				# opkg a cerut sa coboare versiunea unui pachet: poate e un pachet strain peste numele unui pachet HD
-				# Satelit (downgrade_straine); semnele raman pana se hotaraste a doua incercare
-				if not a_doua and param != 0 and downgrade_cerute(self._lista_ipkg):
+				# Satelit (downgrade_straine); semnele raman pana se hotaraste a doua incercare. Nu si dupa un semnal: atunci
+				# fisierele pot fi amestecate, iar semnul trebuie sa ramana (mai jos)
+				if not a_doua and param != 0 and not oprit_de_semnal(param) and downgrade_cerute(self._lista_ipkg):
 					return self._incearca_coborarea(cai, nume, param)
-				# opkg a iesit singur: rezultatul il spune verificarea de mai jos, deci semnul nu mai trebuie
-				self._sfarsit_opkg()
+				# opkg a iesit singur: rezultatul il spune verificarea de mai jos, deci semnul nu mai trebuie. Oprit de un
+				# semnal din afara (oprit_de_semnal): semnul ramane, programul de la pornire termina actualizarea.
+				if oprit_de_semnal(param):
+					self._sfarsit_opkg(pastreaza_semnul=param)
+				else:
+					self._sfarsit_opkg()
 				self._dupa_instalare(param)
 		ipkg.addCallback(eveniment)
 		if not a_doua:
@@ -2167,6 +3016,18 @@ class Actualizari(object):
 			self._elibereaza_lacatul_partii_doua()
 			self._partea_doua_detasa = False
 			return self._descarcare_cazuta(('descarcare', curata(e)), nume)
+
+	def _refuz_loc_inainte_opkg(self, problema, nume, a_doua):
+		"""Reface legaturile si elibereaza lacatele inclusiv dupa a doua incercare."""
+		if a_doua:
+			self._sfarsit_opkg()
+			self._jurnal('a doua incercare oprita: %s' % problema[1])
+			# Prima incercare poate sa fi schimbat pachete; pastreaza rezultatul ei.
+			return self._dupa_instalare(255, refuz_spatiu=problema[0])
+		self._refa_legaturile_partii_doua()
+		self._elibereaza_lacatul_partii_doua()
+		self._partea_doua_detasa = False
+		return self._descarcare_cazuta(problema, nume)
 
 	def _incearca_coborarea(self, cai, nume, cod):
 		"""opkg a iesit cu `cod` si a cerut o coborare de versiune: pe un fir, se verifica in listele semnate ale feedului
@@ -2198,7 +3059,7 @@ class Actualizari(object):
 				'a doua incercare cu --force-downgrade' % ', '.join('%s %s -> %s' % x for x in inlocuite))
 			self.pas = _t('Se pregătește instalarea...')
 			self._schimbat()
-			self._ruleaza_opkg(cai, nume, argumente, a_doua=True)
+			self._verifica_si_ruleaza_opkg(cai, nume, argumente, a_doua=True)
 		self._lucrare(calculeaza, gata)
 
 	def _inceput_opkg(self):
@@ -2206,14 +3067,26 @@ class Actualizari(object):
 		oprita) si semnul "ocupat" al paznicului (nu reporneste interfata, pragul lung la blocajele de nucleu)"""
 		if not scrie_semnul_in_curs((self.rezultat.get('server') or {}).get('versiune'), self._de_instalat, self.radacina):
 			self._jurnal('semnul instalarii in curs nu se poate scrie')
+		if getattr(self, '_repara_principal', False):
+			# 0.7.8 (RPR8): opkg (eConsoleAppContainer) mosteneste mediul interfetei; preinst-ul il citeste
+			os.environ[MEDIU_REPARA] = '1'
+			self._jurnal('repara imaginea: enigma2-hdsatelit cu aceeasi versiune, probele raman')
 		try:
 			from Components import HdsPaznic
 			HdsPaznic.ocupat(CHEIE_PAZNIC, HdsPaznic.MOTIV_ACTUALIZARE, DURATA_PAZNIC_S)
 		except Exception as e:
 			print('[HdsActualizari] paznicul: %r' % (e,))
 
-	def _sfarsit_opkg(self):
-		sterge_semnul_in_curs(self.radacina)
+	def _sfarsit_opkg(self, pastreaza_semnul=None):
+		"""Paznicul e liber. Semnul instalarii in curs se scoate, afara de cazul in care opkg a fost oprit de un semnal
+		(pastreaza_semnul = codul lui): atunci ramane pentru tools/hds-actualizare-intrerupta.py."""
+		os.environ.pop(MEDIU_REPARA, None)
+		self._repara_principal = False
+		if pastreaza_semnul:
+			self._jurnal('opkg oprit de semnalul %d (nu a iesit singur): semnul instalarii ramane; actualizarea se '
+				'termina la urmatoarea pornire a interfetei' % (pastreaza_semnul - 128))
+		else:
+			sterge_semnul_in_curs(self.radacina)
 		try:
 			from Components import HdsPaznic
 			HdsPaznic.liber(CHEIE_PAZNIC)
@@ -2236,12 +3109,24 @@ class Actualizari(object):
 			finally:
 				self._partea_doua_lacat = None
 
-	def _dupa_instalare(self, cod):
+	def _dupa_instalare(self, cod, refuz_spatiu=None):
 		radacina = self.radacina
 		planificate = self._de_instalat
 		inainte = self._neconfigurate_inainte
+		# 0.7.8 (RPR8): ce lipsea din pachetele reinstalate pentru fisierele sterse si copiile fisierelor ocrotite
+		rep = self.rezultat.get('reparatie') or {}
+		lipsa_rep = dict((n, (rep.get('lipsa') or {}).get(n, [])) for n in rep.get('pachete') or []
+			if n in [p['nume'] for p in planificate])
+		ocrotite, self._ocrotite = self._ocrotite, None
 
 		def verifica():
+			# setarile din /etc si reparatiile de proba inapoi chiar si dupa un opkg cazut
+			inapoi = None
+			if ocrotite is not None:
+				try:
+					inapoi = pune_inapoi_ocrotite(ocrotite, radacina)
+				except Exception as e:
+					inapoi = curata(e)
 			# status-ul opkg si fisierele noi pe eMMC inainte de orice repornire: o repornire dura (watchdogul, curentul)
 			# chiar dupa opkg lasa altfel un status vechi sau gol, iar dupa ea cautarea spunea "la zi" pe versiunea
 			# veche (09.11.2026, darog69, Ustym)
@@ -2251,6 +3136,14 @@ class Actualizari(object):
 				pass
 			conf = P.citeste_configurarea(radacina)
 			inst = instalate(radacina, conf)
+			reparatie = None
+			if lipsa_rep:
+				try:
+					reparatie = verifica_reparatia(radacina, conf, lipsa_rep, inst) + (inapoi,)
+				except Exception as e:
+					reparatie = ([], [], curata(e))
+			elif inapoi is not None:
+				reparatie = ([], [], inapoi)
 			ramase = [p['nume'] for p in planificate if inst.get(p['nume']) != p['la']]
 			try:
 				straine = [n for n in P.pachete_neconfigurate(radacina, conf) if n not in ramase]
@@ -2264,10 +3157,18 @@ class Actualizari(object):
 						lacat=self._partea_doua_lacat)
 				except Exception as e:
 					parte2 = (False, curata(e))
-			return ramase, straine, parte2
+			return ramase, straine, parte2, reparatie
 
 		def gata(rez, eroare):
-			ramase, straine, parte2 = rez if rez and not eroare else (None, None, (False, ''))
+			ramase, straine, parte2, reparatie = rez if rez and not eroare else (None, None, (False, ''), None)
+			nota_rep = ''
+			if reparatie is not None:
+				puse, nepuse, inapoi = reparatie
+				self._jurnal('repara imaginea: fisiere ocrotite puse inapoi: %s' % (inapoi if inapoi is not None else '-'))
+				if lipsa_rep:
+					self._jurnal('repara imaginea: puse la loc %d (%s); lipsesc inca %d (%s)' % (len(puse),
+						', '.join(puse[:20]) or '-', len(nepuse), ', '.join(nepuse[:20]) or '-'))
+					nota_rep = text_reparatie(puse, nepuse)
 			# Chiar si verificarea status-ului poate esua dupa o instalare partiala.
 			self._refa_legaturile_partii_doua()
 			self._elibereaza_lacatul_partii_doua()
@@ -2308,6 +3209,11 @@ class Actualizari(object):
 				if not parte2[0]:
 					self.mesaj += ' ' + _t('Partea a doua de pe stick nu s-a actualizat: %s') % parte2[1]
 					self._jurnal('partea a doua: ' + parte2[1])
+				if nota_rep:
+					# 0.7.8 (RPR8): ce a pus la loc reparatia, si in fereastra de dinaintea repornirii
+					self.rezultat['nota_reparatie'] = nota_rep
+					self._nota_reparatie = nota_rep
+					self.mesaj = nota_rep + ' ' + self.mesaj if self.repara else self.mesaj + ' ' + nota_rep
 				if cod != 0:
 					self._jurnal('opkg a iesit cu %s, dar toate pachetele actualizarii au versiunea noua: instalarea e '
 						'reusita; pachete neconfigurate in receptor (nu ale actualizarii): %s' % (cod,
@@ -2322,10 +3228,13 @@ class Actualizari(object):
 						self.rezultat['nota_straine'] = nota
 						self.mesaj += ' ' + nota
 			else:
-				motiv = motiv_eroare(self._lista_ipkg, implicit=_t('Instalarea nu a reușit.'))
+				motiv = _text_refuz_loc(refuz_spatiu) if refuz_spatiu else \
+					motiv_eroare(self._lista_ipkg, implicit=_t('Instalarea nu a reușit.'))
 				self.pas = ''
-				# fisierele unor pachete s-au schimbat: interfata trebuie repornita oricum, inainte de alta operatie
-				self.repornire = schimbat
+				# fisierele unor pachete s-au schimbat: interfata trebuie repornita oricum, inainte de alta operatie. opkg
+				# oprit de un semnal nu si-a scris status-ul (pachetele par neschimbate), dar fisierele pot fi amestecate:
+				# repornirea porneste intai programul care termina actualizarea (semnul a ramas)
+				self.repornire = schimbat or oprit_de_semnal(cod)
 				self.rezultat = dict(self.rezultat, stare='eroare-instalare', poate_instala=False,
 					ramase=list(ramase or []))
 				self.mesaj = text_eroare_instalare(motiv)
@@ -2337,6 +3246,8 @@ class Actualizari(object):
 				if vechi:
 					self._jurnal('pachete neconfigurate in receptor (nu ale actualizarii): %s' % ', '.join(vechi))
 			self._jurnal('instalare: cod %s, ramase %s' % (cod, ramase))
+			if self.repornire:
+				self._armeaza_repornirea_in_standby()
 			if self.rapid:
 				# numai dupa o instalare reusita; una cazuta (chiar cu repornirea ceruta) opreste modul rapid
 				if self.rezultat.get('stare') == 'instalata':
@@ -2347,9 +3258,22 @@ class Actualizari(object):
 						self.mesaj += ' ' + self.rezultat['nota_inlocuite']
 					if self.rezultat.get('nota_straine'):
 						self.mesaj += ' ' + self.rezultat['nota_straine']
+					if nota_rep:
+						self.mesaj = nota_rep + ' ' + self.mesaj
 					self._programeaza_repornirea(REPORNIRE_RAPIDA_MS)
 				else:
 					self._sfarsit_rapid('instalare: %s' % self.rezultat.get('stare'))
+			elif self.rezultat.get('stare') == 'instalata':
+				# 0.7.8 (RIA): si dupa o instalare pornita altfel (pagina web Instaleaza, ecranul fara pagina web)
+				if self.porneste_repornirea('instalare'):
+					# textul ca pe drumul modului rapid: driverul placii si notele instalarii (pachetele inlocuite,
+					# extensia straina) nu se pierd sub textul repornirii
+					if repornire_receptor_ceruta(radacina):
+						self.mesaj = _t(TEXT_DRIVER_NOU)
+					if self.rezultat.get('nota_inlocuite'):
+						self.mesaj += ' ' + self.rezultat['nota_inlocuite']
+					if self.rezultat.get('nota_straine'):
+						self.mesaj += ' ' + self.rezultat['nota_straine']
 			self._schimbat()
 		self._lucrare(verifica, gata)
 
@@ -2375,7 +3299,49 @@ class Actualizari(object):
 			return False
 		return True
 
+	def reparaImaginea(self, reporneste, tot=False):
+		"""0.7.8 (RPR8) „Repară imaginea” (ecranul, pagina web, operatia repara-actualizarea a asistentei): actualizarea
+		rapida cu reparatia in plan (rezultat_din_liste, repara=True): cauta, reinstaleaza din feedul semnat pachetele cu
+		fisiere sterse (si actualizarea, cand e una de instalat), spune ce a pus la loc si reporneste interfata cu
+		numaratoarea obisnuita. Fara nimic de pus la loc: „Imaginea e întreagă.” (sau ce nu se poate pune la loc), fara
+		instalare si fara repornire. tot=True (operatia repara-actualizarea a asistentei): si actualizarea gasita, ca inainte
+		de RPR8 (actualizeazaRapid), plus fisierele lipsa. False, cu mesajul, cand nu porneste (ca actualizeazaRapid)."""
+		if self.rapid:
+			self.mesaj = _t('Actualizarea rapidă este deja în lucru.')
+			self._schimbat()
+			return False
+		self.repara, self._nota_reparatie = 'tot' if tot else 'imagine', ''
+		self._jurnal('repara imaginea: pornita%s' % (' (cu actualizarea, asistenta)' if tot else ''))
+		if not self.actualizeazaRapid(reporneste):
+			self.repara = ''
+			return False
+		return True
+
 	def _rapid_dupa_cautare(self, rezultat):
+		rep = rezultat.get('reparatie') or {}
+		# operatia asistentei (repara='tot') si o actualizare ramasa la jumatate instaleaza planul intreg si fara fisiere lipsa
+		de_instalat = rezultat.get('stare') == DISPONIBILA and rezultat.get('poate_instala') and \
+			(self.repara == 'tot' or bool(rezultat.get('reinstalare')))
+		if self.repara and rezultat.get('stare') in (LA_ZI, DISPONIBILA, IMAGINE_NOUA) and not rep.get('pachete') and \
+				not de_instalat:
+			# nimic de pus la loc din feedul semnat: nu se instaleaza nimic (nici o actualizare gasita intre timp)
+			nepuse = [c for n in (rep.get('sarite') or []) + (rep.get('fara_feed') or [])
+				for c in (rep.get('lipsa') or {}).get(n, [])]
+			if rep.get('sarite'):
+				self._jurnal('repara imaginea: sarite (pornirea, nucleul, driverele, bibliotecile de baza): %s' %
+					', '.join(rep['sarite']))
+			if rep.get('fara_feed'):
+				self._jurnal('repara imaginea: nu sunt in feedul semnat cu aceeasi versiune: %s' % ', '.join(rep['fara_feed']))
+			self.mesaj = text_reparatie((), nepuse) if nepuse else _t(TEXT_REPARA_INTREAGA)
+			self.rapid_pas = 'nepusa' if nepuse else 'intreaga'
+			self._jurnal('repara imaginea: %s' % ('lipsesc %d fisiere care nu se pot pune la loc: %s' % (len(nepuse),
+				', '.join(nepuse[:20])) if nepuse else 'imaginea e intreaga'))
+			self._sfarsit_rapid('repara imaginea: nimic de pus la loc')
+			self._schimbat()
+			return
+		if self.repara and rep.get('sarite'):
+			self._jurnal('repara imaginea: sarite (pornirea, nucleul, driverele, bibliotecile de baza): %s' %
+				', '.join(rep['sarite']))
 		if rezultat.get('stare') != DISPONIBILA or not rezultat.get('poate_instala'):
 			self._sfarsit_rapid('cautare: %s' % rezultat.get('stare'))
 			self._schimbat()
@@ -2390,6 +3356,7 @@ class Actualizari(object):
 		if self.rapid:
 			self._jurnal('actualizare rapida oprita: %s' % motiv)
 		self.rapid, self._reporneste_rapid = False, None
+		self.repara = ''
 		if self._ceas_rapid is not None:
 			self._ceas_rapid.stop()
 
@@ -2408,18 +3375,43 @@ class Actualizari(object):
 		self._ceas_rapid.stop()
 		self._ceas_rapid.start(int(ms), True)
 
-	def _incearca_repornirea(self):
-		if not self.rapid:
+	def _incearca_repornirea(self, fara_fereastra=False):
+		if not self.rapid or self._fereastra is not None:
 			return
+		# 0.7.8 (RIA): intai motivele de asteptare pe care functia de repornire nu le vede (timeshift, alt opkg); treaz,
+		# fereastra dinaintea repornirii (numaratoarea sau, pe Nu, intrebarea), care cheama din nou cu fara_fereastra
+		motiv = motiv_asteptare(self.sesiunea(), self.radacina)
+		if motiv:
+			self._asteapta(motiv)
+			self._schimbat()
+			return
+		if not fara_fereastra and self._fereastra_inainte():
+			self._schimbat()
+			return
+		# in standby: semnul intoarcerii in standby (fara el interfata noua pornea treaza dupa o asteptare de inregistrare);
+		# treaz: fara el, si cand l-a pus actualizarea pornita din standby (HdsImagineOnline._feed_in_standby), iar omul a
+		# trezit receptorul intre timp si a vazut numaratoarea (altfel interfata noua s-ar intoarce singura in standby)
+		if e_in_standby():
+			semn = _scrie_semnul_standby()
+		else:
+			semn = None
+			_sterge_semnul_standby(_cale_semnului_standby())
 		f = self._reporneste_rapid
+
+		def la_refuz(*a):
+			_sterge_semnul_standby(semn)
+			self._repornire_refuzata(*a)
 		try:
-			rez = f(self._repornire_refuzata) if f is not None else ''
+			rez = f(la_refuz) if f is not None else ''
 		except Exception as e:
 			print('[HdsActualizari] repornirea rapida: %s' % e)
 			rez = ''
+		if rez != 'pornita':
+			_sterge_semnul_standby(semn)
 		if rez == 'pornita':
 			self.rapid_pas = 'repornesc'
-			self.mesaj = _t('Actualizarea s-a instalat. Interfața se repornește acum.')
+			self.mesaj = ((self._nota_reparatie + ' ') if self._nota_reparatie else '') + \
+				_t('Actualizarea s-a instalat. Interfața se repornește acum.')
 			try:
 				# cu memoria decodorului farmitata repornirea a fost a receptorului intreg (HdsMemorieDriver)
 				from Components import HdsMemorieDriver
@@ -2429,15 +3421,112 @@ class Actualizari(object):
 				pass
 			self._jurnal('actualizare rapida: repornesc interfata')
 		elif rez in TEXTE_ASTEPTARE:
-			if rez != self.rapid_pas:
-				self._jurnal('actualizare rapida: repornirea asteapta (%s)' % rez)
-			self.rapid_pas = rez
-			self.mesaj = _t(TEXTE_ASTEPTARE[rez])
-			self._programeaza_repornirea(REINCERCARE_RAPIDA_MS)
+			self._asteapta(rez)
 		else:
 			self._sfarsit_rapid('repornirea nu s-a putut porni')
 			self.mesaj = _t('Actualizarea s-a instalat. Interfața trebuie repornită ca să o folosească.')
 		self._schimbat()
+
+	def _asteapta(self, motiv):
+		"""Repornirea asteapta (TEXTE_ASTEPTARE): textul in ecran si web, din nou la REINCERCARE_RAPIDA_MS; 0.7.8 (RIA): la
+		un motiv nou, o data, si pe televizor (treaz, nu peste o intrebare deschisa)"""
+		nou = motiv != self.rapid_pas
+		if nou:
+			self._jurnal('actualizare rapida: repornirea asteapta (%s)' % motiv)
+		self.rapid_pas = motiv
+		self.mesaj = _t(TEXTE_ASTEPTARE[motiv])
+		if nou and motiv != 'intrebare' and not e_in_standby():
+			s = self.sesiunea()
+			if s is not None:
+				try:
+					from Screens.MessageBox import MessageBox
+					s.open(MessageBox, self.mesaj, type=MessageBox.TYPE_INFO, timeout=ANUNT_S,
+						title=_t('Actualizare software'))
+				except Exception as e:
+					self._jurnal('anuntul asteptarii: %s' % curata(e))
+		self._programeaza_repornirea(REINCERCARE_RAPIDA_MS)
+
+	# ---- 0.7.8 (RIA): repornirea singura dupa orice actualizare instalata (vezi NUMARATOARE_S)
+	def sesiunea(self):
+		"""Sesiunea enigma2 pentru ferestrele de pe televizor; None pe PC (probele dau self.sesiune)"""
+		return self.sesiune if self.sesiune is not None else _sesiune_globala()
+
+	def porneste_repornirea(self, motiv, reporneste=None):
+		"""Dupa o actualizare instalata altfel decat prin modul rapid (motiv: 'instalare', 'extensii'): acelasi drum ca
+		pasul de repornire al modului rapid (pagina web il urmareste la fel). True cand a pornit; False cand modul rapid e
+		deja in lucru sau nu e nicio functie de repornire (atunci ramane ce era: butonul, intrebarea, plasa din standby)."""
+		if self.rapid:
+			return False
+		f = reporneste or _reporneste_implicit(self.sesiunea)
+		if f is None:
+			return False
+		self.repornire = True
+		if not self._standby_armat:
+			# plasa HB7 pentru o repornire refuzata (Nu, EXIT); dupa Actualizare software e deja armata
+			self._armeaza_repornirea_in_standby()
+		self.rapid, self.rapid_pas, self._reporneste_rapid = True, 'repornesc', f
+		self.mesaj = _t('Actualizarea s-a instalat. Interfața se repornește acum.')
+		self._jurnal('repornirea singura dupa actualizare (%s)' % motiv)
+		self._programeaza_repornirea(REPORNIRE_RAPIDA_MS)
+		self._schimbat()
+		return True
+
+	def _fereastra_inainte(self):
+		"""Treaz, cu sesiune: numaratoarea (Da) sau intrebarea (Nu) inaintea repornirii; True cand s-a deschis. In standby
+		sau fara sesiune (probele vechi): False, repornirea merge mai departe ca pana acum."""
+		if e_in_standby():
+			return False
+		s = self.sesiunea()
+		if s is None:
+			return False
+		cod = _cod_repornire(s)
+		try:
+			from Screens.MessageBox import MessageBox
+			# 0.7.8 (RPR8): deasupra, ce a pus la loc reparatia
+			nota = self._nota_reparatie + '\n' if self._nota_reparatie else ''
+			if repornire_singura():
+				text = nota + _text_repornire(cod)
+				self.rapid_pas, self.mesaj = 'repornesc', text
+				# titlul ecranului (tradus) in locul lui "Mesaj": omul vede de unde vine repornirea
+				self._fereastra = s.openWithCallback(self._dupa_numaratoare, MessageBox, text, type=MessageBox.TYPE_INFO,
+					timeout=NUMARATOARE_S, title=_t('Actualizare software'))
+				self._jurnal('actualizare rapida: numaratoarea de %s s inainte de repornire' % NUMARATOARE_S)
+			else:
+				intrebare = _t('Repornești receptorul acum?') if cod == 2 else _t('Repornești interfața acum?')
+				self.rapid_pas, self.mesaj = 'intrebare', _t(TEXTE_ASTEPTARE['intrebare'])
+				self._fereastra = s.openWithCallback(self._dupa_intrebare, MessageBox, nota + _t('Actualizarea s-a instalat.') +
+					'\n' + intrebare, type=MessageBox.TYPE_YESNO, default=True, title=_t('Actualizare software'))
+				self._jurnal('actualizare rapida: intreb pe televizor (repornirea singura e oprita din setari)')
+		except Exception as e:
+			self._fereastra = None
+			self._jurnal('fereastra dinaintea repornirii: %s' % curata(e))
+			return False
+		if self._fereastra is None:
+			# un openWithCallback fara fereastra intoarsa (probele) tine locul cu un semn
+			self._fereastra = True
+		return True
+
+	def _dupa_numaratoare(self, raspuns=None, *_a):
+		"""OK sau timpul trecut: repornirea acum (motivele de asteptare se verifica din nou). EXIT: ca Nu la intrebare
+		(rapid_pas 'refuzata', pe care il cunoaste si postinst-ul lui enigma2-hdsatelit): repornirea ramane pentru
+		urmatoarea intrare in standby (plasa HB7, armata la instalare), fara alta fereastra."""
+		self._fereastra = None
+		if not self.rapid:
+			return
+		if raspuns is False:
+			self._jurnal('actualizare rapida: numaratoarea oprita pe televizor (EXIT)')
+			self._repornire_refuzata()
+			return
+		self._incearca_repornirea(fara_fereastra=True)
+
+	def _dupa_intrebare(self, da=None, *_a):
+		self._fereastra = None
+		if not self.rapid:
+			return
+		if not da:
+			self._repornire_refuzata()
+			return
+		self._incearca_repornirea(fara_fereastra=True)
 
 	def _repornire_refuzata(self, *_a):
 		"""TryQuitMainloop s-a inchis fara repornire: pe televizor s-a raspuns Nu"""
@@ -2447,6 +3536,63 @@ class Actualizari(object):
 		self.rapid_pas = 'refuzata'
 		self.mesaj = _t('Repornirea a fost refuzată pe televizor. Actualizarea se folosește după ce repornești interfața.')
 		self._schimbat()
+
+	# ---- 0.7.8 (HB7): interfata ramasa nerepornita dupa instalare se reporneste in standby
+	def _armeaza_repornirea_in_standby(self):
+		"""Dupa o instalare care cere repornirea: la fiecare intrare in standby (o singura legatura pe pornire), cat
+		repornirea e inca ceruta, ceasul ei porneste. Instalata chiar in standby (HdsImagineOnline._feed_in_standby): ceasul
+		porneste acum; modul rapid reporneste oricum mai devreme, iar ceasul il lasa in pace (_repornire_in_standby)."""
+		if not self._standby_armat:
+			try:
+				from Components.config import config
+				config.misc.standbyCounter.addNotifier(self._la_standby, initial_call=False)
+				self._standby_armat = True
+			except Exception as e:
+				self._jurnal('repornirea in standby: %s' % curata(e))
+		if e_in_standby():
+			self._programeaza_standby(STANDBY_REPORNIRE_MS)
+
+	def _la_standby(self, *_a):
+		if self.repornire:
+			self._programeaza_standby(STANDBY_REPORNIRE_MS)
+
+	def _programeaza_standby(self, ms):
+		if self._ceas_standby is None:
+			fabrica = self.fabrica_ceas
+			if fabrica is None:
+				from enigma import eTimer as fabrica
+			t = fabrica()
+			try:
+				self._legatura_standby = t.timeout.connect(self._repornire_in_standby)
+			except AttributeError:
+				t.callback.append(self._repornire_in_standby)
+			self._ceas_standby = t
+		self._ceas_standby.stop()
+		self._ceas_standby.start(int(ms), True)
+
+	def _repornire_in_standby(self):
+		"""Ceasul de standby: interfata nerepornita dupa o actualizare se reporneste aici si se intoarce in standby.
+		Trezit intre timp: nimic (urmatoarea intrare in standby porneste din nou ceasul)."""
+		if not self.repornire or not e_in_standby():
+			return
+		# 0.7.8 (RIA): modul rapid cu fereastra dinaintea repornirii lasata deschisa sub standby (omul a intrat in standby in
+		# timpul numaratorii sau al intrebarii): ceasul de standby reporneste el, fara mesaj
+		if self.ocupat() or (self.rapid and self._fereastra is None):
+			self._programeaza_standby(STANDBY_REINCERCARE_MS)
+			return
+		f = self.reporneste_standby or reporneste_din_standby
+		try:
+			rez = f()
+		except Exception as e:
+			self._jurnal('repornirea in standby: %s' % curata(e))
+			rez = ''
+		if rez == 'pornita':
+			self._jurnal('actualizarea instalata asteapta repornirea: repornesc interfata in standby')
+		elif rez in TEXTE_ASTEPTARE:
+			self._jurnal('repornirea in standby asteapta (%s)' % rez)
+			self._programeaza_standby(STANDBY_REINCERCARE_MS)
+		else:
+			self._jurnal('repornirea in standby nu s-a putut porni')
 
 	# ---- pentru ecran si web
 	def stare_publica(self):
@@ -2470,12 +3616,114 @@ class Actualizari(object):
 			'reparare': self.reparare,
 			'rapid': self.rapid,
 			'rapid_pas': self.rapid_pas,
+			# 0.7.8 (RPR8): „Repară imaginea” in lucru si rezultatul ultimei reparatii (FISIER_REPARA, ramane dupa repornire)
+			'repara': self.repara,
+			'reparatie_ultima': citeste_reparatia(self.radacina).get('ultima'),
 			'zilnic': zilnic_pornit(),
 			'jurnal': self.jurnal[-30:],
 		}
 
 
 actualizari = Actualizari()
+
+
+# ---- 0.7.8 (HB7): repornirea interfetei ramase nerepornite dupa instalare (vezi STANDBY_REPORNIRE_MS)
+def e_in_standby():
+	try:
+		from Screens import Standby
+		return Standby.inStandby is not None
+	except Exception:
+		return False
+
+
+def _repornire_sigura(sesiune, la_refuz=None):
+	"""Repornirea pe calea modului rapid (Plugins/Extensions/HdsWebControl/actualizari_web.reporneste_rapid): 'pornita',
+	de ce asteapta ('inregistrare', 'lucrare', 'intrebare') sau '' cand nu se poate."""
+	from Plugins.Extensions.HdsWebControl.actualizari_web import reporneste_rapid
+	return reporneste_rapid(lambda: sesiune)(la_refuz or (lambda *_a: None))
+
+
+def reporneste_din_standby():
+	"""Din standby: semnul intoarcerii in standby (HdsImagineOnline.dupa_pornire il citeste la pornire), apoi repornirea
+	sigura; semnul se scoate cand repornirea nu porneste."""
+	from Screens import Standby
+	sesiune = getattr(Standby.inStandby, 'session', None)
+	if sesiune is None:
+		return ''
+	from Components import HdsImagineOnline as I
+	cale = os.path.join(I._rad(), I.STANDBY_DUPA_REPORNIRE.lstrip('/'))
+	try:
+		with open(cale, 'w') as f:
+			f.write('1\n')
+	except (IOError, OSError):
+		pass
+
+	def sterge(*_a):
+		try:
+			os.remove(cale)
+		except OSError:
+			pass
+	rez = _repornire_sigura(sesiune, sterge)
+	if rez != 'pornita':
+		sterge()
+	return rez
+
+
+def reporneste_dupa_ecran_cazut(sesiune, nume='', repornire=None):
+	"""mytest.py (handleScreenCrash): un ecran care nu s-a putut deschide cat o actualizare instalata asteapta repornirea
+	(fisierele noi de pe disc nu se potrivesc cu modulele vechi din memorie). True = tratat aici: repornirea a pornit sau
+	asteapta o inregistrare, o lucrare ori o intrebare (mesajul ei, deja tradus); False = ca pana acum."""
+	a = actualizari
+	if not a.repornire or a.ocupat():
+		return False
+	try:
+		rez = (repornire or _repornire_sigura)(sesiune)
+	except Exception as e:
+		a._jurnal('repornirea dupa ecranul cazut: %s' % curata(e))
+		return False
+	a._jurnal('ecranul %s a cazut cu actualizarea instalata si interfata nerepornita: repornirea %s' %
+		(nume, rez or 'nu a pornit'))
+	if rez == 'pornita':
+		return True
+	if rez in TEXTE_ASTEPTARE:
+		a.mesaj = _t(TEXTE_ASTEPTARE[rez])
+		try:
+			from Screens.MessageBox import MessageBox
+			sesiune.open(MessageBox, a.mesaj, type=MessageBox.TYPE_INFO, timeout=8)
+		except Exception:
+			pass
+		a._schimbat()
+		return True
+	return False
+
+
+def cere_repornirea_imaginii(motiv=''):
+	"""0.7.8 (CM3): programul imaginii (enigma2-hdsatelit) s-a schimbat pe disc sub interfata care ruleaza pe alt drum
+	decat actualizarea din meniu (o extensie care il trage, cu ecranul inchis inainte de repornire sau din pagina web; un
+	panou strain care instaleaza si reciteste pluginurile; asistenta; linia de comanda): aceeasi stare ca dupa o
+	actualizare instalata. Repornirea e ceruta (ecranul si pagina web o arata si o ofera, nicio alta instalare pana atunci),
+	interfata se reporneste singura in standby si dupa un ecran cazut (HB7). Din Components/PluginComponent.py si
+	Components/HdsExtensiiLucru.reincarcaPluginuri. True cand starea s-a pus acum. Nu arunca."""
+	a = actualizari
+	try:
+		if a.repornire:
+			return False
+		a.repornire = True
+		if not a.mesaj:
+			a.mesaj = _t(TEXT_IMAGINE_SCHIMBATA)
+		a._jurnal('programul imaginii s-a schimbat pe disc sub interfata (%s): interfata trebuie repornita' % curata(motiv))
+		a._armeaza_repornirea_in_standby()
+		# 0.7.8 (RIA): si aici repornirea singura de dupa o actualizare instalata (treaz fereastra cu numaratoarea sau, pe
+		# Repornire singura = Nu, intrebarea; asteptarea dupa inregistrare, timeshift sau alt opkg; in standby fara mesaj).
+		# Nu cat merge o cautare sau o instalare din Actualizare software: sfarsitul ei porneste repornirea. Fara functia de
+		# repornire (fara pagina web) sau cu modul rapid deja pornit ramane starea de mai sus.
+		if a.faza == 'liber':
+			a.porneste_repornirea('imagine')
+		a._schimbat()
+		return True
+	except Exception as e:
+		print('[HdsActualizari] repornirea dupa schimbarea programului imaginii: %r' % (e,))
+		return False
 
 
 # ---------------------------------------------------------------- verificarea zilnica (numai anunta)

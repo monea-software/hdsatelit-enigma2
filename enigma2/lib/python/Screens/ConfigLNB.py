@@ -152,8 +152,14 @@ class ConfigLNB(Screen, ConfigListScreen):
 		if el is not None:
 			return el
 		if camp == "tip":
-			alegeri = [(t, HdsLnb.textTip(t)) for t in HdsLnb.TIPURI_DE_ALES]
-			el = ConfigSelection(choices=alegeri, default=lnb["tip"] if lnb["tip"] in HdsLnb.TIPURI_DE_ALES else None)
+			# Ciclul vechi al tipurilor ramane; oscilatorul de banda C are randul lui vizibil.
+			alegeri = [(t, _("Banda C") if t == HdsLnb.TIP_BANDA_C else HdsLnb.textTip(t))
+				for t in HdsLnb.TIPURI_DE_ALES if t != HdsLnb.TIP_BANDA_C_5750]
+			tip = HdsLnb.TIP_BANDA_C if lnb["tip"] == HdsLnb.TIP_BANDA_C_5750 else lnb["tip"]
+			el = ConfigSelection(choices=alegeri, default=tip if tip in HdsLnb.TIPURI_DE_ALES else None)
+		elif camp == "ol_c":
+			el = ConfigSelection(choices=[("5150", "5150"), ("5750", "5750")],
+				default="5750" if lnb["tip"] == HdsLnb.TIP_BANDA_C_5750 else "5150")
 		elif camp in ("lofl", "lofh", "prag"):
 			el = ConfigInteger(default=int(lnb[camp]), limits=(0, HdsLnb.PRAG_MEREU_JOS))
 		elif camp == "tensiune":
@@ -181,7 +187,13 @@ class ConfigLNB(Screen, ConfigListScreen):
 		if not self._model:
 			return
 		for (lnb_id, camp), el in self._el.items():
-			self._alegeri["lnb"][lnb_id][camp] = el.value
+			if camp == "satelit":
+				self._alegeri["satelit"] = el.value
+			elif camp != "ol_c":
+				self._alegeri["lnb"][lnb_id][camp] = el.value
+		for (lnb_id, camp), el in self._el.items():
+			if camp == "ol_c" and self._alegeri["lnb"][lnb_id]["tip"] == HdsLnb.TIP_BANDA_C:
+				self._alegeri["lnb"][lnb_id]["tip"] = HdsLnb.TIP_BANDA_C_5750 if el.value == "5750" else HdsLnb.TIP_BANDA_C
 		self._alegeri["diseqc13V"] = bool(self._el13V.value)
 
 	def _areSchimbari(self):
@@ -204,6 +216,8 @@ class ConfigLNB(Screen, ConfigListScreen):
 			if lnb["editabil_tip"]:
 				tip = self._element(lnb, "tip")
 				lista.append(getConfigListEntry(_("Tipul LNB-ului"), tip, "tip"))
+				if tip.value == HdsLnb.TIP_BANDA_C:
+					lista.append(getConfigListEntry(_("Oscilator bandă C (MHz)"), self._element(lnb, "ol_c"), "ol_c"))
 				if tip.value == HdsLnb.TIP_PERSONALIZAT:
 					lista.append(getConfigListEntry(_("Oscilator jos (MHz)"), self._element(lnb, "lofl"), "lofl"))
 					lista.append(getConfigListEntry(_("Oscilator sus (MHz)"), self._element(lnb, "lofh"), "lofh"))
@@ -225,8 +239,17 @@ class ConfigLNB(Screen, ConfigListScreen):
 			lista.append(getConfigListEntry(_("Comenzi DiSEqC la 13 V"), self._el13V, "diseqc13V"))
 			self._citesteCiorna()
 			dupa = HdsLnb.lnbDupaAlegeri(model, self._alegeri, lnb["id"])
+			if "satelit" in self._alegeri and HdsLnb.alegeriSatelitFix(model, _nm()):
+				dupa["sateliti"] = [int(self._alegeri["satelit"])]
+				model = dict(model, lnburi=[dupa])
 			lista.append(getConfigListEntry(_("Probă de calcul"), _doarCitit(HdsLnb.probaDeCalcul(dupa, _nm(),
 				self._serviciu, model)), "proba"))
+			pozitii = HdsLnb.alegeriSatelitFix(model, _nm())
+			if pozitii:
+				cheie = (lnb["id"], "satelit")
+				if cheie not in self._el:
+					self._el[cheie] = ConfigSelection(choices=pozitii, default=str(lnb["sateliti"][0]))
+				lista.append(getConfigListEntry(_("Satelit (antenă fixă)"), self._el[cheie], "satelit"))
 		index = self["config"].getCurrentIndex() if self.lista else 0
 		# ConfigList cheama onSelectionChanged numai pentru randuri de doua elemente (ConfigList.py:62-71), deci
 		# cheia de ajutor a fiecarui rand sta alaturi, nu in rand

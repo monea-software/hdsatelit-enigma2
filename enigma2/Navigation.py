@@ -26,11 +26,22 @@ try:
 except Exception:
 	_jurnalFlux = None
 
+# primul canal din tuner dupa un player (flux de pe internet, film) cu sunet si fara imagine: pornit din nou singur, o data
+# (Components/HdsImagineDupaPlayer.py; AX HD51, forum 676); fara modul (probele de pe PC), nimic
+try:
+	from Components.HdsImagineDupaPlayer import eveniment as _imagineDupaPlayer
+except Exception:
+	_imagineDupaPlayer = None
+
 # ce a spus driverul la pornire ramane pentru pluginuri (Tools/StbHardware.py); fara modul (probele de pe PC), nimic
 try:
 	from Tools.StbHardware import rememberFPWasTimerWakeup
 except ImportError:
 	rememberFPWasTimerWakeup = lambda wasTimerWakeup: None
+
+# acelasi serviciu cerut din nou dupa o acordare cazuta (Navigation._hdsReiaCazut) porneste din nou cel mult o data la
+# atatea secunde
+REIA_MIN_S = 1.0
 
 # TODO: remove pNavgation, eNavigation and rewrite this stuff in python.
 class Navigation:
@@ -63,6 +74,15 @@ class Navigation:
 	# canal). O pune numai tunerul de rezerva din retea (Components/HdsTunerRezerva.py, dupa prioritatea tipurilor de
 	# tuner), cat e ales; None = nimic.
 	grupFaraTunerUltima = None
+	# hdsRefDinainteDeZap: serviciul redat inainte de zap, pus de _extensiiZap numai cat ruleaza extensiile (oprirea lui
+	# trimite evEnd, care goleste currentlyPlayingServiceReference): asa afla o extensie de pe ce canal pleaca televizorul
+	# (Hds/DabT2/server8001.la_zap: sesiunile releului de pe receptor ale canalului vechi). None in afara extensiilor.
+	hdsRefDinainteDeZap = None
+	# hdsCazutLa: ora (ceasul monoton) la care acordarea serviciului redat a cazut (evTuneFailed: tuner ocupat, fara semnal,
+	# fara PAT/PMT), fara evTunedIn / evUpdatedInfo dupa ea, deci redarea n-a pornit; None altfel. Cat e pusa, cererea de a
+	# porni acelasi serviciu (OK in lista de canale, zap din web) il porneste din nou, nu se ignora (_hdsReiaCazut).
+	hdsCazutLa = None
+	_hdsReluatLa = None
 
 	def __init__(self, nextRecordTimerAfterEventActionAuto=False):
 		if NavigationInstance.instance is not None:
@@ -98,10 +118,19 @@ class Navigation:
 		try:
 			from Components import HdsTunerRezerva
 			HdsTunerRezerva.leagaZap(Navigation)
+			HdsTunerRezerva.leagaEvenimente(self)
 		except Exception as e:
 			print("[Navigation] tunerul de rezerva:", e)
 
 	def dispatchEvent(self, i):
+		# hdsCazutLa dupa evenimentul serviciului redat. La un canal pornit pe un tuner ocupat (allocate Channel: res -6)
+		# evTuneFailed vine chiar din pnav.playService, dupa evStart; dupa o acordare buna vin evTunedIn si, cu PMT-ul,
+		# evUpdatedInfo
+		P = iPlayableService
+		if i == getattr(P, "evTuneFailed", None):
+			self.hdsCazutLa = _monoton()
+		elif i in (getattr(P, "evTunedIn", None), getattr(P, "evUpdatedInfo", None), getattr(P, "evEnd", None)):
+			self.hdsCazutLa = None
 		m = _masura
 		# un plugin extern cazut intr-un ascultator nu mai opreste ceilalti ascultatori (HdsPluginExtern.ascultatorCazut)
 		if m is not None and m.activ():
@@ -124,6 +153,8 @@ class Navigation:
 						raise
 		if _jurnalFlux is not None:
 			_jurnalFlux(self, i)
+		if _imagineDupaPlayer is not None:
+			_imagineDupaPlayer(self, i)
 		if i == iPlayableService.evEnd:
 			self.currentlyPlayingServiceReference = None
 			self.currentlyPlayingService = None
@@ -133,7 +164,44 @@ class Navigation:
 		for x in self.record_event:
 			x(rec_service, event)
 
+	def hdsAcordareCazuta(self):
+		"""True cand acordarea serviciului redat a cazut si redarea n-a pornit (hdsCazutLa): lista de canale porneste
+		atunci din nou canalul ales chiar daca e cel care ruleaza (Screens/ChannelSelection.zap)."""
+		return self.hdsCazutLa is not None
+
+	def _hdsReiaCazut(self):
+		"""Cererea de a porni serviciul care ruleaza deja se ignora, ca pana acum, afara de cazul in care acordarea lui a
+		cazut (hdsCazutLa): atunci porneste din nou (OK pe canalul ramas negru dupa un tuner ocupat sau o acordare fara
+		semnal), cel mult o data la REIA_MIN_S, ca un ascultator care cere acelasi canal la fiecare cadere sa nu-l
+		porneasca in bucla. -> True cand porneste din nou (forceRestart)."""
+		acum = _monoton()
+		if self.hdsCazutLa is None or (self._hdsReluatLa is not None and acum - self._hdsReluatLa < REIA_MIN_S):
+			return False
+		self._hdsReluatLa = acum
+		self.hdsCazutLa = None
+		print("[Navigation] acordarea serviciului care ruleaza a cazut: il pornesc din nou")
+		return True
+
 	def playService(self, ref, checkParentalControl = True, forceRestart = False, adjust = True):
+		# O repetare cat resolverul lucreaza nu porneste aceeasi cerere de doua ori.
+		if ref and not forceRestart and ref == getattr(self, "_hdsChannelZapCerere", None):
+			return 0
+		self._hdsChannelZapCerere = None
+		runner = getattr(self, "_hdsChannelZapRunner", None)
+		if runner is not None:
+			runner.anuleaza()
+		# Invalideaza inlocuirea intarziata si dupa A -> B -> A sau reincercare.
+		self.hdsGeneratieZap = getattr(self, "hdsGeneratieZap", 0) + 1
+		# Keep only origin metadata across delayed starts, never caller frames.
+		from sys import modules
+		radio = modules.get("Components.HdsRadioMeniu")
+		origine = getattr(radio, "origine_redare_radio", None)
+		self._hdsRadioOrigine = None
+		if origine is not None:
+			try:
+				self._hdsRadioOrigine = (self.hdsGeneratieZap, origine(self))
+			except Exception:
+				pass
 		# MerlinMusicPlayer cere adjust=False. Zap-ul nostru nu muta selectia listei de canale,
 		# argumentul este acceptat fara o actiune suplimentara asupra listei.
 		self.originalPlayingServiceReference = ref
@@ -150,6 +218,12 @@ class Navigation:
 
 	def _playService(self, ref, checkParentalControl, forceRestart):
 		oldref = self.currentlyPlayingServiceReference
+		redirectionat = getattr(self, "_hdsChannelZapRedirectionat", None)
+		if ref and oldref and not forceRestart and (ref == oldref or (redirectionat and ref == redirectionat[0] and
+				oldref == redirectionat[1])) and self._hdsReiaCazut():
+			forceRestart = True
+		if ref and oldref and redirectionat and not forceRestart and ref == redirectionat[0] and oldref == redirectionat[1]:
+			return 0
 		if ref and oldref and ref == oldref and not forceRestart:
 			print("ignore request to play already running service(1)")
 			return 0
@@ -164,6 +238,8 @@ class Navigation:
 					oldref = eServiceReference()
 				playref = self.celMaiBunDinGrup(ref, oldref)
 				print("playref", playref)
+				if playref and oldref and playref == oldref and not forceRestart and self._hdsReiaCazut():
+					forceRestart = True
 				if playref and oldref and playref == oldref and not forceRestart:
 					print("ignore request to play already running service(2)")
 					return 0
@@ -172,26 +248,73 @@ class Navigation:
 					return 0
 			else:
 				playref = ref
-			extensii = bool(self.pnav and (Navigation.playServiceExtensions or Navigation.playServiceUltima))
-			if extensii:
-				playref, asincron = self._extensiiZap(playref)
-				if asincron:
-					return 0
-			if self.pnav:
-				t = _monoton()
-				rez = self.pnav.playService(playref)
-				if _masura is not None:
-					_masura.pas("pnav.playService", t, _monoton() - t)
-				if not rez:
-					self.currentlyPlayingServiceReference = playref
-					self._hdsNumarCanal(ref)
-					return 0
-			if extensii:
-				# pornirea a cazut: referinta ceruta pusa inaintea extensiilor nu mai e valabila
-				self.currentlyPlayingServiceReference = None
+			rez = self._pluginuriChannelZap(ref, playref)
+			if rez is not None:
+				return rez
+			return self._redaChannelZap(ref, playref)
 		else:
 			self.stopService()
 		return 1
+
+	def _redaChannelZap(self, ref, playref, redirectionat=False, generatie=None):
+		extensii = bool(self.pnav and (Navigation.playServiceExtensions or Navigation.playServiceUltima))
+		if extensii:
+			playref, asincron = self._extensiiZap(playref)
+			if asincron or (generatie is not None and generatie != self.hdsGeneratieZap):
+				return 0
+		if self.pnav:
+			t = _monoton()
+			self.hdsCazutLa = None      # o acordare noua; evTuneFailed de acum il pune din nou
+			rez = self.pnav.playService(playref)
+			if _masura is not None:
+				_masura.pas("pnav.playService", t, _monoton() - t)
+			if generatie is not None and generatie != self.hdsGeneratieZap:
+				return 0
+			if not rez:
+				self.currentlyPlayingServiceReference = playref
+				self._hdsChannelZapRedirectionat = (ref, playref) if redirectionat else None
+				self._hdsNumarCanal(ref)
+				return 0
+		if extensii:
+			self.currentlyPlayingServiceReference = None
+		return 1
+
+	def _pluginuriChannelZap(self, ref, service):
+		"""Resolver pe fir separat; referintele si playerul raman pe principal."""
+		try:
+			from Components.PluginComponent import plugins
+			from Plugins.Plugin import PluginDescriptor
+			ascultatori = plugins.getPlugins(PluginDescriptor.WHERE_CHANNEL_ZAP)
+		except ImportError:
+			return None
+		if not ascultatori:
+			return None
+		from Components.HdsEnigmaCompat import ChannelZapRunner
+		runner = getattr(self, "_hdsChannelZapRunner", None)
+		if runner is None:
+			runner = self._hdsChannelZapRunner = ChannelZapRunner()
+		infobar = getattr(getattr(sys.modules.get("Screens.InfoBar"), "InfoBar", None), "instance", None)
+		session = getattr(infobar, "session", None)
+		generatie = self.hdsGeneratieZap
+		self._hdsChannelZapCerere = ref
+
+		def continua(url):
+			if generatie != self.hdsGeneratieZap or not self.pnav:
+				return 0
+			self._hdsChannelZapCerere = None
+			nou = service
+			if url:
+				try:
+					nou = eServiceReference(service.toString())
+					nou.setPath(url)
+				except Exception:
+					print("[Navigation] adresa resolverului de zap nu a fost acceptata")
+					nou = service
+			return self._redaChannelZap(ref, nou, nou is not service, generatie)
+
+		# Descriptorul obisnuit tipareste exceptia si o trimite raportorului.
+		# Aici chemam numai functia: eroarea resolverului poate contine date private.
+		return runner.porneste([plugin.fnc for plugin in ascultatori], session, service, continua)
 
 	def celMaiBunDinGrup(self, ref, ignore, simulate=False, inregistrare=False):
 		"""Alternativa grupului `ref` care se poate reda acum (getBestPlayableServiceReference, cu aceleasi argumente pe
@@ -258,17 +381,21 @@ class Navigation:
 
 	def _extensiiZap(self, playref):
 		"""Serviciul vechi se opreste, referinta curenta devine cea ceruta (extensiile care pornesc singure serviciul o
-		compara mai tarziu), apoi extensiile pe rand. -> (playref, asincron)."""
+		compara mai tarziu), apoi extensiile pe rand; cat ruleaza ele, hdsRefDinainteDeZap e serviciul de dinainte.
+		-> (playref, asincron)."""
+		self.hdsRefDinainteDeZap = self.currentlyPlayingServiceReference
 		t = _monoton()
 		self.pnav.stopService()
 		if _masura is not None:
 			_masura.pas("oprire", t, _monoton() - t)
+		self.hdsCazutLa = None
 		self.currentlyPlayingServiceReference = playref
 		infobar = getattr(getattr(sys.modules.get("Screens.InfoBar"), "InfoBar", None), "instance", None)
 		t = _monoton()
 		try:
 			return self._extensiiPeRand(playref, infobar)
 		finally:
+			self.hdsRefDinainteDeZap = None
 			if _masura is not None:
 				_masura.pas("extensii", t, _monoton() - t)
 
@@ -378,6 +505,11 @@ class Navigation:
 		return self.currentlyPlayingService
 
 	def stopService(self):
+		self._hdsChannelZapCerere = None
+		runner = getattr(self, "_hdsChannelZapRunner", None)
+		if runner is not None:
+			runner.anuleaza()
+		self.hdsGeneratieZap = getattr(self, "hdsGeneratieZap", 0) + 1
 		print("stopService")
 		if self.pnav:
 			self.pnav.stopService()
@@ -385,6 +517,7 @@ class Navigation:
 		self.currentlyPlayingServiceReference = None
 		self.originalPlayingServiceReference = None
 		self.currentlyPlayingService = None
+		self.hdsCazutLa = None
 
 	def pause(self, p):
 		return self.pnav and self.pnav.pause(p)

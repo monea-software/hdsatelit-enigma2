@@ -282,9 +282,6 @@ _SECRETE = set()
 
 def _jurnal(text):
 	text = "%s" % (text,)
-	for s in sorted(_SECRETE, key=len, reverse=True):
-		if s and len(s) >= 3:
-			text = text.replace(s, "***")
 	_hv().jurnal("furnizori: " + text)
 
 
@@ -1046,6 +1043,7 @@ def stare(fid=""):
 	if fid in FURNIZORI:
 		f = FURNIZORI[fid]
 		rez.update({"furnizor": fid, "titlu": f.titlu, "fel": f.fel, "fel_cont": f.cont, "cont": contSalvat(fid),
+			"date_acces": (v.contSalvat() if fid != "mullvad" and contulEsteAl() == fid else (_citesteJson(CALE_MULLVAD) or {}) if fid == "mullvad" else {}),
 			"eticheta_cont": textCont(fid), "nota_cont": textNotaCont(fid), "tari": listaTarilor(fid),
 			"eroare": _STARE["eroare"].get(fid, ""), "indisponibil": indisponibil(fid), "ajutor": textAjutor(fid)})
 		if fid in CU_ALEGERE_SERVERE:

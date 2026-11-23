@@ -159,6 +159,30 @@ def randuriDebit(info, I, tip_text):
 	return rez
 
 
+# DCD6: who decodes the channel now (CI module in slot N or software module) and the coding system, the same public
+# data as the optional ECM row of the TV bar. Memory only: the converter module must already be loaded (no import),
+# and HdsCommon.decodor_memorie reads no file, no /proc and no route. Missing memory = no rows, as before.
+def randuriDecodor(service, ref, tip_text, C=None):
+	try:
+		if C is None:
+			import sys
+			C = sys.modules.get("Components.Converter.HdsCommon")
+		if C is None or service is None or not hasattr(C, "decodor_memorie"):
+			return []
+
+		class Sursa(object):
+			pass
+		sursa = Sursa()
+		sursa.service, sursa.serviceref = service, ref
+		d = C.decodor_memorie(C.Reader(sursa, None))
+		nume, sistem = C.decodor_nume(d), d.get("system", "")
+		return ([(_t("Decodează acum"), nume, tip_text)] if nume else []) + \
+			([(_t("Sistem de codare"), sistem, tip_text)] if nume and sistem else [])
+	except Exception as eroare:
+		_jurnal("decodorul: %r" % eroare)
+		return []
+
+
 def stare(mediu=None, H=None):
 	"""GET /api/informatii-canal: cele patru pagini ale ecranului, pentru canalul de acum."""
 	H = _h(H)
@@ -173,7 +197,8 @@ def stare(mediu=None, H=None):
 	rec_info = m.recInfo()
 
 	def serviciu():
-		return list(H.randuriServiciu(info, m.I, nume, refstr)) + randuriDebit(info, m.I, H.TYPE_TEXT)
+		return (list(H.randuriServiciu(info, m.I, nume, refstr)) + randuriDebit(info, m.I, H.TYPE_TEXT) +
+			([] if m.standby() else randuriDecodor(service, ref, H.TYPE_TEXT)))
 
 	def pid():
 		return H.randuriPid(info, m.I)

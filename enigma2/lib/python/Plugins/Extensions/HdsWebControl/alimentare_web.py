@@ -103,9 +103,73 @@ def _o(O=None):
 _imagini = {}
 _alegeriConfirmate = {}
 _citireImagini = [False]
+_asteptariPornire = []
 
 
-def _faraMultiboot():
+def _dupaPornire(resursa, request, lucru, SystemInfo=None, fabrica_ceas=None):
+	"""Continue once after the shared read, on the UI thread, without renewing it."""
+	SI = _si(SystemInfo)
+	if not SI.get("HdsMultibootCitire"):
+		return lucru(dict(SI))
+	import time
+	try:
+		from twisted.web.server import NOT_DONE_YET
+	except ImportError:
+		NOT_DONE_YET = 1
+	if fabrica_ceas is None:
+		from enigma import eTimer as fabrica_ceas
+	stare = {"ceas": fabrica_ceas(), "gata": False}
+	_asteptariPornire.append(stare)
+	limita = time.monotonic() + TIMP_FIR_IMAGINI_S
+
+	def opreste():
+		stare["gata"] = True
+		stare["ceas"].stop()
+		if stare in _asteptariPornire:
+			_asteptariPornire.remove(stare)
+
+	def plecat(eroare):
+		opreste()
+		return None
+
+	def verifica():
+		if stare["gata"]:
+			return
+		if getattr(request, "_disconnected", False):
+			opreste()
+			return
+		try:
+			SI = _si(SystemInfo, porneste=False)
+			if SI.get("HdsMultibootCitire"):
+				if time.monotonic() < limita:
+					return
+				opreste()
+				corp = resursa._eroare(request, _t("A durat prea mult."), 504)
+			else:
+				opreste()
+				corp = lucru(dict(SI))
+		except Exception:
+			opreste()
+			corp = resursa._eroare(request, _t("Nu am putut verifica pornirea multiplă. Nu se poate alege altă imagine acum."), 500)
+		if corp != NOT_DONE_YET:
+			request.write(corp)
+			request.finish()
+
+	try:
+		stare["ceas"].callback.append(verifica)
+	except AttributeError:
+		stare["legatura"] = stare["ceas"].timeout.connect(verifica)
+	request.notifyFinish().addErrback(plecat)
+	if not stare["gata"]:
+		stare["ceas"].start(100, False)
+	return NOT_DONE_YET
+
+
+def _faraMultiboot(SI=None):
+	if SI is not None and SI.get("HdsMultibootCitire"):
+		return _t("Verific disponibilitatea pornirii multiple...")
+	if SI is not None and SI.get("HdsMultibootEroare"):
+		return _t("Nu am putut verifica pornirea multiplă. Nu se poate alege altă imagine acum.")
 	return _t("Imaginea nu are altă memorie din care să pornească, deci intrarea nu e nici pe televizor.")
 
 
@@ -129,8 +193,11 @@ def _dinCache(PM):
 
 def imagini(PM=None, SystemInfo=None, proaspat=False):
 	"""Pentru GET /api/pornire-multipla: imaginile instalate (randurile ca pe receptor) si nota."""
-	if not _si(SystemInfo).get("HdsMultiboot"):
-		return {"result": False, "message": _faraMultiboot()}
+	SI = _si(SystemInfo)
+	if SI.get("HdsMultibootCitire"):
+		return {"result": True, "in_curs": True, "locuri": [], "randuri": [], "nota": _faraMultiboot(SI)}
+	if not SI.get("HdsMultiboot"):
+		return {"result": False, "message": _faraMultiboot(SI)}
 	import time
 	PM = _pm(PM)
 	rez = None if proaspat else _dinCache(PM)
@@ -139,6 +206,8 @@ def imagini(PM=None, SystemInfo=None, proaspat=False):
 	semn = _semnDiscuri(PM)
 	stare = PM.locuri()
 	_imagini["stare"] = PM.publice(stare)
+	if not callable(getattr(PM, "semnDiscuri", None)):
+		_imagini["stare"]["compatibilitate"] = _t("Ecranul și componenta pornirii multiple nu au aceeași versiune. Lista se poate citi, dar schimbarea discurilor nu se urmărește automat.")
 	_imagini["asteptate"] = {l["loc"]: (l.get("date"), l["imagine"]) for l in stare["locuri"]}
 	_imagini["cand"] = time.time()
 	_imagini["semn"] = semn
@@ -160,8 +229,6 @@ def imaginiLaIntrebare(PM, SI):
 def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A):
 	"""Cardul flash: alegerea imaginii din locul `loc`, in doi pasi, apoi repornirea in ea."""
 	MC = _mc()
-	if not SI.get("HdsMultiboot"):
-		return {"result": False, "message": _faraMultiboot()}
 	loc = argumente.get("loc", "")
 	if not (0 < len(loc) <= 200 and loc.isascii() and loc.isdigit()):
 		return {"result": False, "message": _t("Acțiune necunoscută.")}
@@ -171,6 +238,8 @@ def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A
 		MC.uita(CONFIRMARE, tinta)
 		_alegeriConfirmate.pop(loc, None)
 		return {"result": True, "message": _t("Nu s-a făcut nimic.")}
+	if SI.get("HdsMultibootCitire") or not SI.get("HdsMultiboot"):
+		return {"result": False, "message": _faraMultiboot(SI)}
 	if sesiune is None:
 		return {"result": False, "message": _faraSesiune()}
 	if getattr(_standby(Standby), "inTryQuitMainloop", False):
@@ -208,10 +277,15 @@ def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A
 	return {"result": True, "ce": "flash", "intreaba": bool(intreaba), "message": _dupa("flash", intreaba, text)}
 
 
-def _si(SystemInfo=None):
+def _si(SystemInfo=None, porneste=True):
 	if SystemInfo is not None:
 		return SystemInfo
-	from Components.SystemInfo import SystemInfo
+	from importlib import import_module
+	capacitate = import_module("Components.SystemInfo")
+	reciteste = getattr(capacitate, "recitestePornireMultipla", None)
+	if reciteste is not None:
+		reciteste(porneste)
+	SystemInfo = capacitate.SystemInfo
 	return SystemInfo
 
 
@@ -251,8 +325,12 @@ def _kexecRefuz(PM, st):
 	return _t(st["motiv"] or PM.KEXEC_EROARE)
 
 
-def kexec(PM=None):
+def kexec(PM=None, SystemInfo=None):
 	"""Pentru GET /api/pornire-multipla-kexec: se poate instala pornirea multipla Kexec (si de ce nu)."""
+	if PM is None:
+		SI = _si(SystemInfo)
+		if SI.get("HdsMultibootCitire") or SI.get("HdsMultibootEroare"):
+			return {"result": False, "in_curs": bool(SI.get("HdsMultibootCitire")), "message": _faraMultiboot(SI)}
 	PM = _pm(PM)
 	st = PM.kexecStare()
 	return {"result": True, "instalabil": st["aratat"], "masina": st["masina"], "fisiere": st["fisiere"],
@@ -260,8 +338,12 @@ def kexec(PM=None):
 		"intrebare": _t(PM.KEXEC_INTREBARE)}
 
 
-def kexecPachet(PM=None, ruleaza=None):
+def kexecPachet(PM=None, ruleaza=None, SystemInfo=None):
 	"""Pe un fir: aduce pachetul masinii din feedul extern, daca nu e deja (opkg poate dura)."""
+	if PM is None:
+		SI = _si(SystemInfo)
+		if SI.get("HdsMultibootCitire") or SI.get("HdsMultibootEroare"):
+			return {"result": False, "message": _faraMultiboot(SI)}
 	PM = _pm(PM)
 	st = PM.kexecStare()
 	if not st["aratat"]:   # poarta KXH: comanda directa fara pachet si fara semn nu descarca nimic
@@ -278,8 +360,12 @@ def kexecPachet(PM=None, ruleaza=None):
 	return {"result": True, "fisiere": True, "message": _t(PM.KEXEC_SCRIU)}
 
 
-def kexecInstaleaza(sesiune, PM=None, Standby=None, fabrica_ceas=None, A=None):
+def kexecInstaleaza(sesiune, PM=None, Standby=None, fabrica_ceas=None, A=None, SystemInfo=None):
 	"""Pe firul enigma2: verificarile si scrierea (o secunda sau doua), apoi repornirea dupa DUPA_MS."""
+	if PM is None:
+		SI = _si(SystemInfo)
+		if SI.get("HdsMultibootCitire") or SI.get("HdsMultibootEroare"):
+			return {"result": False, "message": _faraMultiboot(SI)}
 	PM = _pm(PM)
 	if sesiune is None:
 		return {"result": False, "message": _faraSesiune()}
@@ -328,6 +414,8 @@ def stare(A=None, sesiune=None, config=None, SystemInfo=None, Standby=None, job_
 	return {
 		"result": True,
 		"sesiune": sesiune is not None,
+		"pornire_in_curs": bool(SI.get("HdsMultibootCitire")),
+		"pornire_eroare": _faraMultiboot(SI) if SI.get("HdsMultibootEroare") else "",
 		"receptor": receptor,
 		"somn": s,
 		"actiuni_somn": A.alegeriActiune(config, SI),
@@ -567,6 +655,9 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 				return self._eroare(request, refuz, 403)
 			try:
 				arg = MC.argumente(request, CHEI_FA, 40)
+				if arg.get("ce") == "flash" and arg.get("pas") != "renunta":
+					return _dupaPornire(self, request, lambda SI: self._raspunde(request,
+						fa(arg, A, _ses(), SI, Standby, job_manager, fabrica_ceas, PM)), SystemInfo, fabrica_ceas)
 				return self._raspunde(request, fa(arg, A, _ses(), SystemInfo, Standby, job_manager, fabrica_ceas, PM))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
@@ -580,15 +671,13 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 
 		def render_GET(self, request):
 			try:
-				if not _si(SystemInfo).get("HdsMultiboot"):
-					return self._raspunde(request, imagini(PM, SystemInfo))
-				gata = _dinCache(_pm(PM))
-				if gata is not None:
-					return self._raspunde(request, gata)
+				SI = dict(_si(SystemInfo))
+				if SI.get("HdsMultibootCitire") or not SI.get("HdsMultiboot"):
+					return self._raspunde(request, imagini(PM, SI))
 				if _citireImagini[0]:
 					return self._raspunde(request, {"result": True, "in_curs": True, "locuri": [], "randuri": [],
 						"nota": _t(_pm(PM).CAUT)})
-				return MC.peFir(request, lambda: imagini(PM, SystemInfo, proaspat=True), _citireImagini, TIMP_FIR_IMAGINI_S,
+				return MC.peFir(request, lambda: imagini(PM, SI), _citireImagini, TIMP_FIR_IMAGINI_S,
 					fabrica_ceas)
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
@@ -598,7 +687,8 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 
 		def render_GET(self, request):
 			try:
-				return self._raspunde(request, kexec(PM))
+				SI = dict(_si(SystemInfo))
+				return MC.peFir(request, lambda: kexec(PM, SI), [False], TIMP_FIR_IMAGINI_S, fabrica_ceas)
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -613,9 +703,11 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 			try:
 				ce = MC.argumente(request, CHEI_KEXEC, 16).get("ce", "")
 				if ce == "pachet":
-					return MC.peFir(request, lambda: kexecPachet(PM), _descarcareKexec, TIMP_FIR_KEXEC_S, fabrica_ceas)
+					return _dupaPornire(self, request, lambda SI: MC.peFir(request, lambda: kexecPachet(PM,
+						SystemInfo=SI), _descarcareKexec, TIMP_FIR_KEXEC_S, fabrica_ceas), SystemInfo, fabrica_ceas)
 				if ce == "instaleaza":
-					return self._raspunde(request, kexecInstaleaza(_ses(), PM, Standby, fabrica_ceas, A))
+					return _dupaPornire(self, request, lambda SI: self._raspunde(request,
+						kexecInstaleaza(_ses(), PM, Standby, fabrica_ceas, A, SI)), SystemInfo, fabrica_ceas)
 				return self._eroare(request, _t("Eroare pe receptor: %s") % ce, 400)
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
@@ -826,6 +918,7 @@ function citesteImagini(){
   cerere("/api/pornire-multipla").then(function(d){
     var l = $("imaginiLista"); l.textContent = "";
     $("imaginiNota").textContent = d.result ? d.nota : (d.message || "");
+    if(d.result && d.compatibilitate){ $("imaginiNota").textContent = d.compatibilitate + " " + $("imaginiNota").textContent; }
     // o citire e deja in curs: mai intreb peste o clipa; cu mai multe discuri puse, lista se reface la urmatoarea citire a paginii
     if(d.in_curs){ setTimeout(citesteImagini, 1500); return; }
     if(d.mai_multe_discuri){ imaginiCitite = false; }
@@ -845,6 +938,7 @@ function citesteKexec(){
   kexecCitit = true;
   cerere("/api/pornire-multipla-kexec").then(function(d){
     scrie("kexecNota", d.result ? (d.instalabil ? d.despre : d.motiv) : (d.message || ""));
+    if(d.in_curs){ setTimeout(citesteKexec, 500); return; }
     kexecIntrebare = d.intrebare || "";
     $("kexecInstaleaza").classList.toggle("ascuns", !(d.result && d.instalabil));
   }).catch(function(){ scrie("kexecNota", "Receptorul nu a putut citi starea."); });
@@ -880,6 +974,8 @@ function citeste(){
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi starea."; return; }
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
     arata(d);
+    if(d.pornire_eroare){ mesaj(d.pornire_eroare, true); }
+    if(d.pornire_in_curs){ setTimeout(function(){ if(!asteapta){ citeste(); } }, 500); }
   }).catch(function(){ if(!asteapta){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; } });
 }
 function somn(fapta, minute, durata){

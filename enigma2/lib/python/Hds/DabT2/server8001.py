@@ -19,7 +19,8 @@ imagine.porneste; pluginul pentru alte imagini nu il foloseste):
     atinge numai din bucla principala; trezirea vine printr-o teava de trezire cu eSocketNotifier, nu prin twisted);
   - serviciul nu porneste (tuner ocupat, acord cazut, referinta necunoscuta): „HTTP/1.0 400 Bad Request" in corp,
     dupa antetul 200, apoi inchidere (asa asteapta surse.CititorHttp si t2mi_decap; TunerOcupat, reincercare).
-Cel mult SESIUNI_MAX sesiuni deodata; numai referinte DVB de serviciu (fara cai de fisier, fara alte cereri).
+Cel mult SESIUNI_MAX sesiuni ale clientilor din retea deodata si SESIUNI_LOCALE_MAX ale releelor receptorului (0.7.8:
+pana atunci un singur plafon pentru toate); numai referinte DVB de serviciu (fara cai de fisier, fara alte cereri).
 
 0.7.7, INTAIETATEA TELEVIZORULUI: o sesiune ceruta din retea (VLC, telefonul, alt receptor care foloseste acest receptor ca
 tuner de rezerva, Components/HdsTunerRezerva.py) tine tunerul ca o inregistrare; la zap, enigma2 nu o opreste (marcajul
@@ -29,6 +30,13 @@ tuner (satelit / cablu si terestru), se opresc pe rand, cea mai noua intai, pana
 jurnal pentru fiecare. Clientul primeste sfarsitul obisnuit al fluxului (soclul inchis dupa ultimii octeti), nu un
 raspuns de eroare. Sesiunile de pe receptor (releele DAB+ / DVB-T2, releul modulului de acces) nu se ating aici: pe ele
 le opreste extensia releelor, iar transmisia din browser are drumul ei (Components/HdsTransmisie.py).
+
+0.7.8, PLECAREA DE PE UN RELEU DE PE RECEPTOR: un canal din buchet cu adresa releului scrisa direct
+(http://127.0.0.1:<port>/<referinta>, nu din lista Stream Relay a imaginii) nu trece prin extensia releului, deci nimeni
+nu oprea sesiunea prin care releul isi lua canalul de aici: ea mai tinea tunerul ~3 s dupa zap, iar cu un singur tuner
+canalul urmator, de pe alt transponder, ramanea negru (allocate Channel: res -6). La zap, la_zap (cu serviciul de dinainte,
+nav.hdsRefDinainteDeZap) si la_grup opresc intai, pe loc, sesiunile de pe receptor ale canalului vechi, cand canalul cerut e
+pe alt transponder si nu are tuner (Server.lasa_releul_vechi); abia apoi vine intaietatea fata de clientii din retea.
 
 0.7.7, INTAIETATEA INREGISTRARILOR: la fel pentru o inregistrare adevarata (temporizatorul, inregistrarea pe loc), prin
 extensia de inregistrare la_inregistrare (pusa de porneste la COADA extensiilor de inregistrare, deci dupa releele DAB+ /
@@ -43,9 +51,14 @@ niciuna n-are (toate tinute de sesiuni din retea), zap-ul si inregistrarea se op
 Extensia la_grup (Navigation.grupFaraTuner, pusa de porneste) face aceeasi cedare pe toate alternativele DVB ale grupului
 (felul de tuner al oricareia, nu de pe transponderul vreuneia), cea mai noua intai, pana cand o alternativa are tuner; la
 o inregistrare raman sesiunile de pe transponderul televizorului, ca mai sus.
+
+0.7.8, CLIENTII PENTRU TEME SI PLUGINURI: clienti_din_retea si opreste_clientul dau ce dau la OE-Alliance
+eStreamServer.getConnectedClients / stopStreamClient / stopStream; enigma.eStreamServer (HdsEnigmaCompat.py) le citeste
+la chemare. Cererile primesc si subserviciile (campurile 8-9 ale referintei nenule), ca la OE-Alliance.
 """
 import collections
 import errno
+import gc
 import os
 import re
 import select
@@ -65,7 +78,10 @@ GAZDA = '127.0.0.1'
 # dar primeste numai adresele private (adresa_permisa); oprita, numai 127.0.0.1, ca pana acum
 GAZDA_RETEA = '0.0.0.0'
 PORT = 8001
-SESIUNI_MAX = 2
+SESIUNI_MAX = 2              # clientii din retea (VLC, Kodi, telefonul, alt receptor) deodata
+# 0.7.8: releele receptorului (Stream Relay pentru televizor, DAB+, DVB-T2), cerute de la 127.0.0.1 sau de la adresa
+# receptorului (_de_pe_receptor), au plafonul lor: doi clienti din retea nu mai lasa televizorul fara releu
+SESIUNI_LOCALE_MAX = 6
 TERMEN_CERERE_S = 5.0        # cat asteapta firul sesiunii randul GET
 TERMEN_PORNIRE_S = 15.0      # cat asteapta firul sesiunii ca firul principal sa porneasca inregistrarea
 TERMEN_GOLIRE_S = 5.0        # dupa plecarea clientului teava se goleste pana se opreste inregistrarea
@@ -88,15 +104,17 @@ EROARE_PAUZA = 'pauza dupa sesiuni fara date'
 # sfarsitul unei sesiuni din retea oprite ca receptorul sa-si ia tunerul (in jurnal, ca motivul sesiunii incheiate)
 MOTIV_TV = 'televizorul receptorului a luat tunerul'
 MOTIV_INREGISTRARE = 'o inregistrare a receptorului a luat tunerul'
+MOTIV_OPRIT = 'oprit de pe receptor (eStreamServer.stopStreamClient / stopStream)'
 F_SETPIPE_SZ = 1031          # fcntl: marimea tevii (Linux)
 TEAVA_OCTETI = 1024 * 1024   # se cere; daca nucleul refuza ramane marimea implicita
 BLOC = 256 * 1024
 _SPLICE = getattr(os, 'splice', None)
 
 # 0.7.7: si fara doua puncte la coada ("...:0:0:0"), cum cer receptoarele OE-Alliance care folosesc acest receptor ca
-# tuner de rezerva (Components/HdsTunerRezerva.py); ref_din_cerere le pune inapoi, deci restul vede aceeasi referinta
+# tuner de rezerva (Components/HdsTunerRezerva.py); ref_din_cerere le pune inapoi, deci restul vede aceeasi referinta.
+# 0.7.8: campurile 8-9 (serviciul parinte al unui subserviciu) pot fi nenule, ca la streamserverul OE-Alliance
 REF_BUNA = re.compile(r'^1:0:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:'
-                      r'[0-9A-Fa-f]{1,8}:0:0:0:?$')
+                      r'[0-9A-Fa-f]{1,8}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:0:?$')
 ANTET_200 = b'HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: video/mpeg\r\nServer: HDSatelit\r\n\r\n'
 RASPUNS_400 = b'HTTP/1.0 400 Bad Request\r\nConnection: Close\r\n\r\n'
 
@@ -104,7 +122,7 @@ RASPUNS_400 = b'HTTP/1.0 400 Bad Request\r\nConnection: Close\r\n\r\n'
 def ref_din_cerere(date):
     """Cererea HTTP (octeti, cel putin primul rand) -> referinta DVB, sau None: alt verb, alta cale, cale de fisier,
     caractere straine. Codarea %3A a doua puncte se primeste. Releele de flux termina randurile numai cu \\n, deci se
-    primesc ambele feluri."""
+    primesc ambele feluri. 0.7.8: si subserviciile (campurile 8-9 nenule, REF_BUNA)."""
     try:
         rand = bytes(date).split(b'\n', 1)[0].rstrip(b'\r').decode('ascii')
     except (UnicodeDecodeError, ValueError):
@@ -138,8 +156,8 @@ def adresa_permisa(ip, retea):
 
 
 def retea_pornita():
-    """Setarea config.misc.hds_fluxuri_retea_acasa (Components/UsageConfig.py, implicit oprita); fara ea (probele de pe
-    PC, alt cod) sau la orice eroare: oprita."""
+    """Setarea config.misc.hds_fluxuri_retea_acasa (Components/UsageConfig.py, pornita din fabrica din 0.7.4); fara
+    ea (probele de pe PC, alt cod) sau la orice eroare: oprita."""
     try:
         import sys
         return bool(sys.modules['Components.config'].config.misc.hds_fluxuri_retea_acasa.value)
@@ -174,6 +192,7 @@ class Sesiune(object):
         self.tuner = None                    # (tuner_number, orbital_position) citite la pornire, sau None
         self.cedata = False                  # firul principal: oprita ca televizorul sa ia tunerul (cedeaza_televizorului)
         self.motiv_cedare = MOTIV_TV         # sau MOTIV_INREGISTRARE (cedeaza_inregistrarii): sfarsitul sesiunii cedate
+        self.locala = None                   # 0.7.8: ceruta de pe receptor (_de_pe_receptor, tinut minte la prima citire)
         self.fir = threading.Thread(target=self._lucreaza, name='hds8001')
         self.fir.daemon = True
 
@@ -454,8 +473,11 @@ class Server(object):
                 conn.close()
                 continue
             ses = Sesiune(self, conn, adresa)
-            if len(self.sesiuni) >= self.sesiuni_max:
-                ses.eroare = 'prea multe sesiuni (%d)' % len(self.sesiuni)
+            # 0.7.8: plafonul clientilor din retea nu se umple cu releele receptorului si nici invers
+            locala = _de_pe_receptor(ses)
+            la_fel = sum(1 for s in self.sesiuni if _de_pe_receptor(s) == locala)
+            if la_fel >= (SESIUNI_LOCALE_MAX if locala else self.sesiuni_max):
+                ses.eroare = 'prea multe sesiuni (%d)' % la_fel
                 ses.pornita.set()
                 self.refuzate += 1
             self.sesiuni.append(ses)
@@ -635,6 +657,45 @@ class Server(object):
         if n:
             self._porneste_ceasul()
         return n
+
+    def lasa_releul_vechi(self, vechi, cerut, liber):
+        """Firul principal, la zap (la_zap, la_grup), cand televizorul pleaca de pe `vechi` (textul serviciului de dinainte).
+        Daca `vechi` e un canal redat printr-un releu de pe receptor (ref_releu: calea http://127.0.0.1:<orice port>/<referinta>,
+        si cu adresa scrisa direct in buchet, nu numai canalele din lista Stream Relay a imaginii), sesiunea prin care releul
+        isi ia canalul de aici mai tine tunerul cateva secunde: releul afla abia acum ca playerul a plecat si isi inchide
+        cererea dupa aceea (~3 s, cu un singur tuner), iar canalul cerut ar gasi tunerul ocupat (allocate Channel: res -6,
+        ecran negru). `cerut`: textul serviciului cerut (canal DVB sau alt canal prin releu, a carui referinta o cere apoi
+        releul) sau lista alternativelor unui grup; `liber()`: True cand televizorul are tuner pentru el. Cand niciunul
+        dintre cele cerute nu e pe transponderul canalului vechi si televizorul n-are tuner, sesiunile de pe receptor ale
+        canalului vechi se opresc pe loc; daca tunerul tot nu e liber (obiectul inregistrarii tinut de un ciclu de
+        referinte), gunoiul se strange o data. Cele din retea raman pentru cedeaza_televizorului. -> cate sesiuni s-au
+        oprit."""
+        tinta = ref_releu(vechi)
+        if not tinta:
+            return 0
+        cerute = [ref_releu(r) or r for r in (cerut if isinstance(cerut, (list, tuple)) else [cerut])]
+        cerute = [r for r in cerute if _ref_dvb_fara_cale(r)]
+        if not cerute or any(_acelasi_transponder(tinta, r) for r in cerute):
+            return 0
+        cheie = _cheie_ref(tinta)
+        ale_releului = [ses for ses in self.sesiuni if not ses.oprita.is_set() and _cheie_ref(ses.ref) == cheie
+            and _de_pe_receptor(ses)]
+        if not ale_releului or liber():
+            return 0
+        jurnal.noteaza(ET, 'televizorul pleaca de pe %s (prin releul de pe receptor) spre %s si n-are tuner liber: opresc pe '
+            'loc %d sesiuni ale releului' % (cheie, ', '.join(_cheie_ref(r) for r in cerute), len(ale_releului)))
+        for ses in ale_releului:
+            self._opreste_inregistrarea(ses)
+        self._porneste_ceasul()
+        if not liber():
+            # tunerul se elibereaza abia cand se distruge obiectul inregistrarii, nu la rec.stop(); cand il mai tine un ciclu
+            # de referinte Python, asta se intampla la strangerea gunoiului, uneori dupa minute (proba ZAP8 pe receptorul de
+            # probe SF8008: 33 s si 112 s cu ecran negru): gunoiul se strange acum, o data
+            t = _monoton()
+            n = gc.collect()
+            jurnal.noteaza(ET, 'dupa oprirea releului tunerul era tot ocupat: gunoiul strans (%d obiecte, %d ms), tuner '
+                'liber: %s' % (n, int((_monoton() - t) * 1000), 'da' if liber() else 'nu'))
+        return len(ale_releului)
 
     def cedeaza_televizorului(self, ref, liber):
         """Firul principal, la zap (la_zap), dupa oprirea serviciului vechi. `ref`: textul referintei cerute de
@@ -910,14 +971,42 @@ def _tuner_liber(sref):
         return True                          # nu se poate afla: nimic oprit
 
 
+def _tuner_liber_text(text):
+    """_tuner_liber pentru textul unei referinte DVB (canalul pe care il cere un releu de pe receptor)."""
+    try:
+        from enigma import eServiceReference
+        return _tuner_liber(eServiceReference(text))
+    except Exception:
+        return True
+
+
+def _text_serviciu(ref):
+    """Textul unei referinte (eServiceReference sau text), sau None."""
+    if ref is None:
+        return None
+    try:
+        return ref.toString()
+    except Exception:
+        return str(ref)
+
+
 def la_zap(nav, playref, *rest):
-    """Navigation.playServiceExtensions: intaietatea televizorului fata de sesiunile cerute din retea
-    (Server.cedeaza_televizorului). Referinta ramane neschimbata; nicio eroare nu opreste zap-ul."""
+    """Navigation.playServiceExtensions: intai sesiunile releului de pe receptor al canalului de pe care pleaca
+    televizorul (Server.lasa_releul_vechi, cu nav.hdsRefDinainteDeZap; nu mai au cui da fluxul), apoi intaietatea
+    televizorului fata de sesiunile cerute din retea (Server.cedeaza_televizorului). Referinta ramane neschimbata; nicio
+    eroare nu opreste zap-ul."""
     s = obtine()
     if s is None or not s.sesiuni or playref is None:
         return playref
+    text = playref.toString()
     try:
-        s.cedeaza_televizorului(playref.toString(), lambda: _tuner_liber(playref))
+        tinta = ref_releu(text)
+        liber = (lambda: _tuner_liber(playref)) if tinta is None else (lambda: _tuner_liber_text(tinta))
+        s.lasa_releul_vechi(_text_serviciu(getattr(nav, 'hdsRefDinainteDeZap', None)), text, liber)
+    except Exception:
+        jurnal.eroare(ET, 'plecarea de pe releul de pe receptor')
+    try:
+        s.cedeaza_televizorului(text, lambda: _tuner_liber(playref))
     except Exception:
         jurnal.eroare(ET, 'intaietatea televizorului')
     return playref
@@ -1047,6 +1136,8 @@ def la_grup(nav, grup, liber, inregistrare=False, *rest):
         if not alternative:
             return
         if not inregistrare:
+            # Navigation alege alternativa inainte sa opreasca serviciul vechi: televizorul inca reda canalul releului
+            s.lasa_releul_vechi(_ref_tv(nav), alternative, liber)
             s.cedeaza_televizorului(alternative, liber)
             return
         tv = _ref_tv(nav)
@@ -1123,10 +1214,14 @@ def _de_pe_receptor(ses):
         return False
     if ip in ADRESE_LOCALE:
         return True
+    stiut = getattr(ses, 'locala', None)     # 0.7.8: tinut minte, ca dupa inchiderea soclului sa ramana acelasi
+    if stiut is not None:
+        return stiut
     try:
-        return ses.conn.getsockname()[0] == ip
+        ses.locala = ses.conn.getsockname()[0] == ip
     except Exception:
         return False
+    return ses.locala
 
 
 def sesiuni_locale(ref):
@@ -1139,6 +1234,48 @@ def sesiuni_locale(ref):
         return 0
     return sum(1 for x in list(s.sesiuni) if not x.oprita.is_set() and _cheie_ref(x.ref) == cheie
         and _de_pe_receptor(x))
+
+
+def _client_din_retea(ses):
+    """Sesiunea unui client din retea care primeste (sau abia porneste) un flux: referinta citita, nerefuzata, neoprita,
+    nu un releu al receptorului."""
+    return bool(ses.ref) and not ses.eroare and not ses.in_pauza and not ses.oprita.is_set() and not _de_pe_receptor(ses)
+
+
+def clienti_din_retea():
+    """0.7.8, firul principal. Clientii din retea, in ordinea venirii, ca eStreamServer.getConnectedClients din OE-Alliance:
+    [(adresa, referinta, 0)] (0 = fara transcodare). Releele receptorului (Stream Relay pentru televizor, DAB+, DVB-T2)
+    nu sunt clienti: asa reda televizorul acele canale. [] fara server. Il citesc enigma.eStreamServer (HdsEnigmaCompat),
+    temele (convertorul ClientsStreaming, addon-ul ServiceInfoBar) si pluginurile."""
+    s = obtine()
+    if s is None:
+        return []
+    return [(str(x.adresa[0]), x.ref, 0) for x in list(s.sesiuni) if _client_din_retea(x)]
+
+
+def opreste_clientul(ip=None, ref=None):
+    """0.7.8, firul principal. Opreste primul client din retea cu adresa `ip` si referinta `ref` (aceeasi cheie ca la
+    deschise; fara ele, primul client), ca eStreamServer.stopStreamClient / stopStream. Clientul primeste sfarsitul
+    obisnuit al fluxului, tunerul e liber cand se intoarce functia. -> True daca a oprit unul."""
+    s = obtine()
+    if s is None:
+        return False
+    cheie = _cheie_ref(ref) if ref else None
+    for ses in list(s.sesiuni):
+        if not _client_din_retea(ses):
+            continue
+        if ip is not None and str(ses.adresa[0]) != str(ip):
+            continue
+        if cheie is not None and _cheie_ref(ses.ref) != cheie:
+            continue
+        jurnal.noteaza(ET, 'fluxul %s cerut de %s oprit de pe receptor (%d octeti in %d s)' % (
+            ses.ref, ses.adresa[0], ses.octeti, int(_monoton() - ses.inceput)))
+        ses.cedata = True
+        ses.motiv_cedare = MOTIV_OPRIT
+        s._opreste_inregistrarea(ses)
+        s._porneste_ceasul()
+        return True
+    return False
 
 
 def opreste_sesiunile(ref):

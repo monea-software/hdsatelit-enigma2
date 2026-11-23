@@ -12,8 +12,15 @@
 #   canalul si receptorul nu e in standby), dupa 2, 5, 10, 20, 30, 60, 60, 60 s (~4 minute: cat dureaza o repornire de router), iar
 #   dupa 60 s de redare buna numaratoarea o ia de la capat. Si o imagine care sta pe loc 30 s (mai mult decat releul, ca sa nu se
 #   bata intre ele) fara pauza ceruta de om se socoteste cadere.
-# Nu se reporneste: un canal care n-a pornit niciodata (acolo e semnul „n-a pornit”, Components/HdsIptvRedare.py), un film (cheia
-# „v...” sau o lungime cunoscuta: la sfarsitul unui film EOF e firesc), canalele de satelit.
+# Nu se reporneste: un film (cheia „v...” sau o lungime cunoscuta: la sfarsitul unui film EOF e firesc), canalele de satelit.
+#
+# PORNIREA CU RABDARE (IPT8, 0.7.8; LinuxSat 164215 #145): un canal care inca n-a dat nicio imagine si cade (servicemp3 renunta
+# la 15 s fara antete, la 25 s fara PLAYING, sau furnizorul raspunde gol cat canalul lui inca porneste) se porneste singur din
+# nou, in tacere, dupa PASI_PORNIRE_S, pana la PORNIRE_S de la alegerea canalului. Numai caderile trecatoare (evEOF, eroarea
+# fluxului fara alt motiv, felurile TRECATOARE din sUser+15); un format sau un decodor refuzat (evUser+10/11/12, restul felurilor)
+# spune pe loc, ca inainte. Cat e programata o pornire, mesajele de esec (Components/HdsJurnalZapFlux, InfoBarFilmRefuz) si
+# semnul "n-a pornit" (Components/HdsIptvRedare.py) asteapta; dupa termen raman ca inainte. Numaratoarea nu se reia la pornirea
+# noastra, ci numai la o pornire care nu e a noastra (alt canal, trezirea, intoarcerea din player).
 # Fereastra de incarcare a lui HdsIptvRedare apare singura la repornire („Se conectează la server...”): nimic de confirmat (regula 1f).
 #
 # Emisiunile din arhiva (Screens/HdsIptvArhiva.py, cheia a<id>-...) nu se pornesc din nou: cand una se termina (evEOF dupa ce a mers),
@@ -45,6 +52,20 @@ SANATOS_S = 60.0                           # atata redare buna sterge numaratoar
 OPRIT_S = 30.0                             # imaginea pe loc atat (releul renunta dupa ~16 s): cadere
 VERIFICA_MS = 2000                         # cat de des se uita la imagine, numai cat merge un canal de internet urmarit
 INAPOI_LA_DIRECT_S = 3                     # dupa sfarsitul unei emisiuni din arhiva, canalul ei in direct
+PASI_PORNIRE_S = (2, 3, 5, 5, 8, 10)       # canalul care n-a dat inca imagine: asteptarea inaintea fiecarei porniri din nou
+PORNIRE_S = 45.0                           # cat timp de la alegerea canalului se mai incearca (alte imagini: 30 s ale souphttpsrc)
+# felurile din sUser+15 (lib/service/servicemp3.cpp, refuza) dupa care un canal care n-a pornit inca se mai incearca: eroarea
+# fluxului fara alt motiv (souphttpsrc fara raspuns), sursa (legatura), formatul nedescoperit (typefind fara octeti: raspuns gol)
+TRECATOARE = ("", "eroare", "fisier", "format")
+
+
+def trecator(cod=None, fel=""):
+	"""Caderea dinaintea primei imagini se mai incearca? cod None = evEOF, 16 = alta eroare: dupa felul din sUser+15 (un evEOF venit
+	dupa un refuz al aceleiasi porniri, de pilda sourceTimeout la 25 s dupa "negociere", ramane refuz); 10, 11, 12 = sunetul sau
+	imaginea refuzate, un element lipsa: nu."""
+	if cod in (10, 11, 12):
+		return False
+	return (fel or "") in TRECATOARE
 
 
 def eCanalViu(cale):
@@ -159,6 +180,9 @@ class Decizie(object):
 		self.pozitie = None
 		self.octeti = 0
 		self.ultima_miscare = 0.0
+		self.pornire_t0 = self.ceas()   # alegerea canalului (pornirea care nu e a noastra), pentru PORNIRE_S
+		self.pornire_incercari = 0
+		self.repornim = False       # pornirea care urmeaza e a noastra (laCeas a dat True)
 
 	def laStart(self, ref, viu):
 		"""Un serviciu nou. Aceeasi referinta = pornirea noastra din nou: tinem minte ca a mers si cate incercari au fost."""
@@ -169,6 +193,11 @@ class Decizie(object):
 		if ref != self.ref:
 			self.__init__(self.ceas)
 			self.ref = ref
+		if not self.repornim:
+			# alt canal, trezirea, intoarcerea din player: canalul care n-a pornit inca are iar PORNIRE_S
+			self.pornire_t0 = acum
+			self.pornire_incercari = 0
+		self.repornim = False
 		self.asteapta = False
 		self.pornit = False
 		self.pornit_la = acum
@@ -185,9 +214,36 @@ class Decizie(object):
 		self.pornit_la = acum
 		self.ultima_miscare = acum
 
-	def laEsec(self, ref_acum, activ=True, standby=False, film=False):
-		"""Playerul a spus EOF sau o eroare. -> secundele de asteptare pana la pornirea din nou, sau None (nimic de facut)."""
-		if not activ or standby or film or self.ref is None or ref_acum != self.ref or not self.a_mers or self.asteapta:
+	def _pasPornire(self, ref_acum, activ, standby, film, trec):
+		"""Canalul n-a dat inca imagine: pasul pornirii din nou, sau None (dupa PORNIRE_S, dupa PASI_PORNIRE_S, caderea nu e trecatoare)."""
+		if not activ or standby or film or not trec or self.ref is None or ref_acum != self.ref or self.a_mers or self.asteapta:
+			return None
+		if self.pornire_incercari >= len(PASI_PORNIRE_S):
+			return None
+		pas = PASI_PORNIRE_S[self.pornire_incercari]
+		if self.ceas() + pas - self.pornire_t0 > PORNIRE_S:
+			return None
+		return pas
+
+	def pornireInCurs(self):
+		"""O pornire din nou a unui canal care n-a dat inca imagine e programata."""
+		return self.asteapta and not self.a_mers and self.ref is not None
+
+	def poateReporni(self, ref_acum, activ=True, standby=False, film=False, trec=True):
+		"""Fara sa schimbe nimic: canalul care n-a dat inca imagine se porneste singur din nou dupa caderea de acum (sau e deja
+		programat). Pentru mesajele de pe ecran, oricare ar fi ordinea ascultatorilor."""
+		return self.pornireInCurs() or self._pasPornire(ref_acum, activ, standby, film, trec) is not None
+
+	def laEsec(self, ref_acum, activ=True, standby=False, film=False, trec=True):
+		"""Playerul a spus EOF sau o eroare. -> secundele de asteptare pana la pornirea din nou, sau None (nimic de facut).
+		trec: caderea e trecatoare (trecator()); conteaza numai cat canalul n-a dat inca imagine."""
+		if not self.a_mers:
+			pas = self._pasPornire(ref_acum, activ, standby, film, trec)
+			if pas is not None:
+				self.pornire_incercari += 1
+				self.asteapta = True
+			return pas
+		if not activ or standby or film or self.ref is None or ref_acum != self.ref or self.asteapta:
 			return None
 		if self.pornit and self.ceas() - self.pornit_la >= SANATOS_S:
 			self.incercari = 0
@@ -204,7 +260,8 @@ class Decizie(object):
 		if not self.asteapta:
 			return False
 		self.asteapta = False
-		return bool(activ and not standby and self.ref is not None and ref_acum == self.ref)
+		self.repornim = bool(activ and not standby and self.ref is not None and ref_acum == self.ref)
+		return self.repornim
 
 	def pas(self, pozitie, octeti, pauza=False):
 		"""La VERIFICA_MS cat canalul are imagine. -> True cand imaginea sta pe loc de OPRIT_S (fara pauza ceruta de om).
@@ -252,10 +309,73 @@ def _standby():
 		return False
 
 
+_legaturi = []   # legaturile barelor deschise (bara canalelor, playerul de filme), pentru pornireaContinua
+
+
+def _jurnal(mesaj):
+	"""Randul in hds-zap.log (modulul "reconectare"), ca la asistenta sa se vada pornirile din nou; si in jurnalul interfetei."""
+	print("[HdsIptvReconectare] %s" % mesaj)
+	try:
+		from Components import HdsJurnal
+		HdsJurnal.info("zap", "reconectare", mesaj)
+	except Exception:
+		pass
+
+
+def _legaturaActiva():
+	"""Legatura barei care primeste acum evenimentele serviciului (varful stivei din ServiceEventTracker), altfel ultima."""
+	vii = [l for l in _legaturi if not l.inchisa]
+	if not vii:
+		return None
+	try:
+		from Components.ServiceEventTracker import ServiceEventTracker
+		varf = ServiceEventTracker.InfoBarStack[-1] if ServiceEventTracker.InfoBarStack else None
+		for l in vii:
+			if l.infobar is varf:
+				return l
+	except Exception:
+		pass
+	return vii[-1]
+
+
+def pornireaContinua(cod=None, fel=None):
+	"""Pentru mesajele de esec de pe ecran (Components/HdsJurnalZapFlux, Screens/InfoBarGenerics.InfoBarFilmRefuz): canalul de acum
+	n-a dat inca imagine si il pornim singuri din nou dupa caderea asta (cod None = evEOF, altfel N din evUser+N; fel din sUser+15,
+	citit din player cand nu se da). True = mesajul asteapta. Nu arunca niciodata."""
+	try:
+		l = _legaturaActiva()
+		return l is not None and l.pornireaContinua(cod, fel)
+	except Exception as e:
+		print("[HdsIptvReconectare] pornireaContinua: %s" % type(e).__name__)
+		return False
+
+
+def pornireInCurs(infobar=None):
+	"""O pornire din nou a canalului care n-a dat inca imagine e deja programata (laEsec a hotarat). Pentru Components/HdsIptvRedare,
+	al carui ascultator vine dupa al nostru (Screens/InfoBarGenerics._hdsLeagaIptvPe). Nu arunca niciodata."""
+	try:
+		l = None
+		if infobar is not None:
+			for x in _legaturi:
+				if x.infobar is infobar and not x.inchisa:
+					l = x
+		if l is None:
+			l = _legaturaActiva()
+		return l is not None and l.decizie.pornireInCurs()
+	except Exception:
+		return False
+
+
 class Legatura(object):
 	"""Pe bara canalelor (Screens/InfoBarGenerics._hdsLeagaIptvPe), langa fereastra de incarcare. Oprita: nu face nimic."""
 
 	def __init__(self, infobar):
+		self.inchisa = False
+		# pornirea cu rabdare numai pe bara canalelor: in playerul de filme refuzul are fereastra lui, care asteapta OK
+		self.pe_canal = getattr(infobar, "leavePlayerConfirmed", None) is None
+		_legaturi.append(self)
+		if hasattr(infobar, "onClose"):
+			infobar.onClose.append(self._inchide)
 		self.session = infobar.session
 		self.infobar = infobar
 		self.decizie = Decizie()
@@ -332,13 +452,54 @@ class Legatura(object):
 		self.decizie.laPornit()
 		self._veghe(True)
 
-	def laEsec(self):
+	def _inchide(self):
+		self.inchisa = True
+		if self in _legaturi:
+			_legaturi.remove(self)
+
+	def _felRefuz(self):
+		"""Felul refuzului spus de servicemp3 in sUser+15 ("eroare", "format", "video"...), sau "" (ServiceApp, niciun motiv)."""
+		try:
+			from enigma import iServiceInformation
+			service = self.session.nav.getCurrentService()
+			info = service and service.info()
+			motiv = info.getInfoString(iServiceInformation.sUser + 15) if info else ""
+			return (motiv or "").split("|", 1)[0]
+		except Exception:
+			return ""
+
+	def _trecator(self, cod, fel=None):
+		"""trecator() pentru pornirea de acum, plus: numai pe bara canalelor, iar la sursele noastre releul n-a spus deja motivul
+		(refuzul serverului, conexiunile ocupate, contul: are fereastra lui, HdsIptvLucru.eroareRedare, si o pornire din nou ar
+		cere iar contului care tocmai a refuzat)."""
+		if not self.pe_canal or not trecator(cod, self._felRefuz() if fel is None else fel):
+			return False
+		if self.cheie:
+			try:
+				from Components import HdsIptvAdrese as A
+				f = A.stareFlux(*self.cheie) or {}
+				if f.get("motiv") or f.get("eroare_sursa"):
+					return False
+			except Exception:
+				pass
+		return True
+
+	def pornireaContinua(self, cod=None, fel=None):
+		"""Vezi pornireaContinua() de sus: aceeasi judecata ca laEsec, fara sa schimbe nimic."""
+		if self.decizie.ref is None or not _activ():
+			return False
+		if self.decizie.pornireInCurs():
+			return True
+		return self.decizie.poateReporni(self._refText(), True, _standby(), self._film(), self._trecator(cod, fel))
+
+	def laEsec(self, cod=None):
+		"""evEOF (cod None) sau evUser+cod (10, 11, 12, 16)."""
 		if self.arhiva is not None and self.arhiva[1]:
 			self._spreDirect()
 			return
 		if self.decizie.ref is None:
 			return
-		self._caderea("evEOF/eroare")
+		self._caderea("evEOF" if cod is None else "eroarea %d" % cod, self._trecator(cod))
 
 	def _spreDirect(self):
 		"""Emisiunea din arhiva s-a terminat (sau a cazut dupa ce a mers): peste INAPOI_LA_DIRECT_S, canalul ei in direct."""
@@ -359,13 +520,22 @@ class Legatura(object):
 		from enigma import eServiceReference
 		self.session.nav.playService(eServiceReference(direct))
 
-	def _caderea(self, de_ce):
-		pas = self.decizie.laEsec(self._refText(), _activ(), _standby(), self._film())
+	def _caderea(self, de_ce, trec=True):
+		d = self.decizie
+		a_mers = d.a_mers
+		pas = d.laEsec(self._refText(), _activ(), _standby(), self._film(), trec)
 		if pas is None:
-			if self.decizie.ref is not None and self.decizie.a_mers and not self.decizie.asteapta:
-				print("[HdsIptvReconectare] %s: nu se mai porneste din nou (incercari %d)" % (de_ce, self.decizie.incercari))
+			if d.ref is not None and a_mers and not d.asteapta:
+				print("[HdsIptvReconectare] %s: nu se mai porneste din nou (incercari %d)" % (de_ce, d.incercari))
+			elif d.ref is not None and not a_mers and not d.asteapta and _activ():
+				_jurnal("%s inainte de prima imagine, dupa %d s de la alegere: %s" % (de_ce, int(d.ceas() - d.pornire_t0),
+					"nu se mai incearca (mesajul ramane)" if trec else "refuzul ramane (nu se mai incearca)"))
 			return
-		print("[HdsIptvReconectare] %s: canalul porneste din nou peste %d s (incercarea %d)" % (de_ce, pas, self.decizie.incercari))
+		if not a_mers:
+			_jurnal("%s inainte de prima imagine, dupa %d s de la alegere: canalul porneste din nou peste %d s (incercarea %d)" % (
+				de_ce, int(d.ceas() - d.pornire_t0), pas, d.pornire_incercari))
+		else:
+			print("[HdsIptvReconectare] %s: canalul porneste din nou peste %d s (incercarea %d)" % (de_ce, pas, d.incercari))
 		self._veghe(False)
 		if self.ceas_repornire is None:
 			from enigma import eTimer
@@ -375,6 +545,7 @@ class Legatura(object):
 
 	def _reporneste(self):
 		if not self.decizie.laCeas(self._refText(), _activ(), _standby()) or self.serviciu is None:
+			self.decizie.repornim = False
 			return
 		try:
 			self.session.nav.playService(self.serviciu, checkParentalControl=False, forceRestart=True, adjust=False)

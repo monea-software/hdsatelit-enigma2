@@ -246,6 +246,29 @@ def texte(verdict, adresa="", din_meniu=False, limba=None, cale_setari=None, dos
 		"randuri": D.randuri(verdict, tv=True)[:RANDURI_MAX]}
 
 
+def textePornire(verdict, radacina=None):
+	"""PMA6 (GRA, TODO 18.11 05:25): propozitiile pornirii cu nucleul altui loc, aceleasi ca pe pagina web /paza-model
+	(Components/HdsDiagnostic.pornireAmestecata si textePornireAmestecata, chemate la fel ca paza_model_web); [] cand
+	pornirea e potrivita sau verificarea nu se aplica. Citeste fisierele pornirii: numai pe firul separat."""
+	from Components import HdsDiagnostic as D
+	from Components import HdsPazaModel as M
+	stare = (verdict or {}).get("stare")
+	if stare == getattr(M, "STARE_NU_SE_APLICA", "nu-se-aplica"):
+		return []
+	# drumul din meniu spre locul bun numai cand paza a trecut, ca pe pagina web
+	return D.textePornireAmestecata(D.pornireAmestecata(radacina), interfata=stare == getattr(M, "STARE_POTRIVIT", "potrivit"))
+
+
+def puneTextePornire(texte_ecran, propozitii):
+	"""(camp, text) pentru propozitiile pornirii amestecate: dupa fraza codului, in locul rugamintii (poza nu mai e
+	ceruta), ca pe pagina de rezerva (tools/hds-rezerva-ecran.py); None fara propozitii. Masurat cu fontul skinului: in
+	romana propozitiile unei porniri (amestecul si nucleul strain, sau amestecul si drumul din meniu) iau 2 randuri din cele
+	2 ale campului."""
+	if not propozitii:
+		return None
+	return "rugaminte", " ".join(propozitii)
+
+
 def textePazaVechi(verdict, adresa="", din_meniu=False):
 	"""Rezerva lui texte(), daca diagnosticul cade (verdict neasteptat): mesajul pazei de model ca inainte, fara cod
 	si fara tabel, ca ecranul sa se vada oricum"""
@@ -571,6 +594,13 @@ class HdsPazaModel(Screen):
 				self._ceas.callback.append(self._cautaAdresa)
 			self._ceas.start(INTERVAL_ADRESA_MS, False)
 		self.onClose.append(self._laInchidere)
+		# PMA6: pornirea cu nucleul altui loc, pe un fir separat (fisierele pornirii nu se citesc pe firul interfetei)
+		self._lucrarePornire = None
+		try:
+			from Components.HdsPazaModel import LucrareFundal
+			self._lucrarePornire = LucrareFundal(lambda: textePornire(verdict), self._dupaPornire)
+		except Exception as eroare:
+			print("[HdsPazaModel] pornirea amestecata: %s" % eroare)
 		if not self.din_meniu:
 			print("[HdsPazaModel] pornirea nu a reusit: %s | %s" % (" ".join(t["coduri"]) or "-", " | ".join(
 				"%s=%s" % (r["cheie"], r["citit"]) for r in t["randuri"])))
@@ -596,9 +626,21 @@ class HdsPazaModel(Screen):
 		if adresa or self._incercari >= INCERCARI_ADRESA:
 			self._ceas.stop()
 
+	def _dupaPornire(self, propozitii, eroare):
+		self._lucrarePornire = None
+		if eroare:
+			print("[HdsPazaModel] pornirea amestecata: %s" % eroare)
+			return
+		camp = puneTextePornire(self._texte, propozitii)
+		if camp:
+			self[camp[0]].setText(camp[1])
+
 	def _laInchidere(self):
 		if self._ceas is not None:
 			self._ceas.stop()
+		if getattr(self, "_lucrarePornire", None) is not None:
+			self._lucrarePornire.opreste()
+			self._lucrarePornire = None
 
 	def nimic(self):
 		pass

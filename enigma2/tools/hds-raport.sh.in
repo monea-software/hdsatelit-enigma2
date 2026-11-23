@@ -328,11 +328,20 @@ rp_are_retea() {
 # stdin to stdout: the rules of HdsDiagnostic.faraDatePersonale (the same lines dropped whole; "user" only as a word,
 # so the syslog facility user.info stays), plus API keys, the access modules (by their form, without their names: any
 # word ending in cam, camd or cams, the card readers and servers, their ports and config folder), IPv4 a.b.x.x and the
-# MAC with its maker
+# MAC with its maker.
+# UUID=<value> and PARTUUID=<value> (hex digits and dashes, quoted or not): only the value is hidden, as UUID=<ascuns>,
+# and the line stays. A root on a USB stick is given as root=UUID=... in the kernel command line, in STARTUP and in blkid,
+# and dropping those lines whole left the reports of such receivers without any trace of how they booted. The rule of the
+# dropped lines then looks at the rest of the line, so any other use of the word uuid still drops it, and so does a value
+# that goes on after its hex digits (only part of it would have been hidden).
 rp_filtru() {
 	tr -d '\000-\010\013-\037\177' | cut -c1-600 | awk '{
+		gsub(/[Uu][Uu][Ii][Dd]="?[0-9A-Fa-f][0-9A-Fa-f-]*"?/, "UUID=<ascuns>")
 		l = tolower($0)
-		if (l ~ /pass(word|wd)?|parol|token|jeton|secret|(^|[^a-z0-9_])key|cheie|api[_-]?key|access[_-]?key|private|psk|(^|[^a-z0-9_])pin([^a-z0-9_]|$)|auth|(^|[^a-z0-9_])user(name|s)?([^a-z0-9_.]|$)|login|utilizator|ssid|wpa|wifi|wlan.*(essid|network)|serial|(^|[^a-z0-9_])s\/n([^a-z0-9_]|$)|(^|[^a-z0-9_])sn[ \t]*[=:]|cpuid|chipid|chip_id|die.?id|(^|[^a-z0-9_])uuid([^a-z0-9_]|$)|(^|[^a-z0-9_])cid([^a-z0-9_]|$)|(^|[^a-z0-9_])cw([^a-z0-9_]|$)|control.?word|(^|[^a-z0-9_])biss|(^|[^a-z0-9_])ecm([^a-z0-9_]|$)|(^|[^a-z0-9_])emm([^a-z0-9_]|$)|cookie|session/) next
+		if (l ~ /uuid=<ascuns>[a-z0-9_.-]/) next
+		t = l
+		gsub(/uuid=<ascuns>/, "", t)
+		if (t ~ /pass(word|wd)?|parol|token|jeton|secret|(^|[^a-z0-9_])key|cheie|api[_-]?key|access[_-]?key|private|psk|(^|[^a-z0-9_])pin([^a-z0-9_]|$)|auth|(^|[^a-z0-9_])user(name|s)?([^a-z0-9_.]|$)|login|utilizator|ssid|wpa|wifi|wlan.*(essid|network)|serial|(^|[^a-z0-9_])s\/n([^a-z0-9_]|$)|(^|[^a-z0-9_])sn[ \t]*[=:]|cpuid|chipid|chip_id|die.?id|(^|[^a-z0-9_])uuid([^a-z0-9_]|$)|(^|[^a-z0-9_])cid([^a-z0-9_]|$)|(^|[^a-z0-9_])cw([^a-z0-9_]|$)|control.?word|(^|[^a-z0-9_])biss|(^|[^a-z0-9_])ecm([^a-z0-9_]|$)|(^|[^a-z0-9_])emm([^a-z0-9_]|$)|cookie|session/) next
 		if (l ~ /cam[ds]?([^a-z]|$)|cardd([^a-z]|$)|card[_.-]?serv|(^|[^a-z])[gs]b[o]x|newc[s]([^a-z]|$)|cs3[0-9][0-9]x|radeg[a]st|smartcard|tuxbox\/config/) next
 		print }' | rp_adrese
 }

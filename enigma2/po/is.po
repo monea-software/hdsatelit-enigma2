@@ -12,7 +12,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Plural-Forms: nplurals=2; plural=(n % 10 != 1 || n % 100 == 11);\n"
 "X-Generator: Pootle 2.0.3\n"
 "X-Poedit-Language: Icelandic\n"
 "X-Poedit-SourceCharset: utf-8\n"
@@ -7643,7 +7643,7 @@ msgstr "Þarf á því að halda: %s"
 #, no-python-format
 msgid "Are o schimbare nesalvată."
 msgid_plural "Are %d schimbări nesalvate."
-msgstr[0] "Hefur eina óvistaða breytingu."
+msgstr[0] "Hefur %d óvistaða breytingu."
 msgstr[1] "Hefur %d óvistaðar breytingar."
 
 msgid "Are oră de sfârșit"
@@ -15808,7 +15808,7 @@ msgstr "Í gegnum netið"
 #, no-python-format
 msgid "După o oprire neașteptată și în modul sigur."
 msgid_plural "După %d opriri neașteptate și în modul sigur."
-msgstr[0] "Eftir eina óvænta stöðvun líka í öruggum ham."
+msgstr[0] "Eftir %d óvænta stöðvun líka í öruggum ham."
 msgstr[1] "Eftir %d óvæntar stöðvanir líka í öruggum ham."
 
 msgid ""
@@ -18099,7 +18099,7 @@ msgid "Fri"
 msgstr "Fös"
 
 msgid "Friday"
-msgstr "Fös"
+msgstr "Föstudagur"
 
 msgid "Frisian"
 msgstr "Frísneska"
@@ -19897,7 +19897,7 @@ msgstr "Viðmótið stoppaði við ræsingu af annarri ástæðu."
 #, no-python-format
 msgid "Interfața s-a oprit neașteptat o dată în ultimele 10 minute."
 msgid_plural "Interfața s-a oprit neașteptat de %d ori în ultimele 10 minute."
-msgstr[0] "Viðmótið stöðvaðist óvænt einu sinni á síðustu 10 mínútum."
+msgstr[0] "Viðmótið stöðvaðist óvænt %d sinni á síðustu 10 mínútum."
 msgstr[1] "Viðmótið stöðvaðist óvænt %d sinnum á síðustu 10 mínútum."
 
 msgid "Interfața se repornește."
@@ -19918,6 +19918,10 @@ msgstr ""
 
 msgid "Interfața web"
 msgstr "Vefviðmót"
+
+#: lib/python/Screens/CamSetup.py:954
+msgid "Interfața web nu a pornit."
+msgstr "Vefviðmótið ræstist ekki."
 
 msgid "Interfața web HD Satelit"
 msgstr "HD Satelit vefviðmót"
@@ -35129,7 +35133,7 @@ msgid "Saturație"
 msgstr "Litmettun"
 
 msgid "Saturday"
-msgstr "Lau"
+msgstr "Laugardagur"
 
 msgid "Sau citește pe telefon:"
 msgstr "Eða lestu í símanum:"
@@ -37226,7 +37230,7 @@ msgstr "Rautt HbbTV-merki í stiku"
 #, no-python-format
 msgid "Semnul „nou” scos de pe un canal"
 msgid_plural "Semnul „nou” scos de pe %d canale"
-msgstr[0] "Merkið „nýtt“ fjarlægt af einni rás"
+msgstr[0] "Merkið „nýtt“ fjarlægt af %d rás"
 msgstr[1] "Merkið „nýtt“ fjarlægt af %d rásum"
 
 msgid "Semnătura listei a fost verificată"
@@ -39464,7 +39468,7 @@ msgstr "TEXT: ritaðu"
 
 #. TRANSLATORS: Add here whatever should be shown in the "translator" about screen, up to 6 lines (use \n for newline)
 msgid "TRANSLATOR_INFO"
-msgstr "TRANSLATOR_INFO"
+msgstr "Íslensk þýðing: HD Satelit"
 
 msgid "TS ID:"
 msgstr "TS ID:"
@@ -42237,7 +42241,7 @@ msgstr "Rásahópur getur ekki verið settur inn í sjálfan sig."
 #, no-python-format
 msgid "Un buchet sortat"
 msgid_plural "%d buchete sortate"
-msgstr[0] "Einn rásahópur flokkaður"
+msgstr[0] "%d rásahópur flokkaður"
 msgstr[1] "%d rásahópar flokkaðir"
 
 msgid "Un buchet, cu marcaje pe grupe"
@@ -42246,13 +42250,13 @@ msgstr "Einn rásahópur með merkingum fyrir hópa"
 #, no-python-format
 msgid "Un canal adus înapoi din copie"
 msgid_plural "%d canale aduse înapoi din copie"
-msgstr[0] "Ein rás sótt aftur úr afriti"
+msgstr[0] "%d rás sótt aftur úr afriti"
 msgstr[1] "%d rásir sóttar aftur úr afriti"
 
 #, no-python-format
 msgid "Un canal adăugat"
 msgid_plural "%d canale adăugate"
-msgstr[0] "Ein rás bætt við"
+msgstr[0] "%d rás bætt við"
 msgstr[1] "%d rásir bættar við"
 
 msgid "Un canal are volumul lui."
@@ -42261,37 +42265,37 @@ msgstr "Ein rás hefur sitt eigið hljóðstyrk."
 #, no-python-format
 msgid "Un canal arătat"
 msgid_plural "%d canale arătate"
-msgstr[0] "Ein rás sýnd"
+msgstr[0] "%d rás sýnd"
 msgstr[1] "%d rásir sýndar"
 
 #, no-python-format
 msgid "Un canal ascuns"
 msgid_plural "%d canale ascunse"
-msgstr[0] "Ein rás falin"
+msgstr[0] "%d rás falin"
 msgstr[1] "%d rásir faldar"
 
 #, no-python-format
 msgid "Un canal blocat"
 msgid_plural "%d canale blocate"
-msgstr[0] "Ein rás læst"
+msgstr[0] "%d rás læst"
 msgstr[1] "%d rásir læstar"
 
 #, no-python-format
 msgid "Un canal care nu mai există, reparat"
 msgid_plural "%d canale care nu mai există, reparate"
-msgstr[0] "Ein rás sem ekki er lengur til, lagfærð"
+msgstr[0] "%d rás sem ekki er lengur til, lagfærð"
 msgstr[1] "%d rásir sem ekki eru lengur til, lagfærðar"
 
 #, no-python-format
 msgid "Un canal deblocat"
 msgid_plural "%d canale deblocate"
-msgstr[0] "Ein rás aflæst"
+msgstr[0] "%d rás aflæst"
 msgstr[1] "%d rásir aflæstar"
 
 #, no-python-format
 msgid "Un canal pus în alternative"
 msgid_plural "%d canale puse în alternative"
-msgstr[0] "Ein rás bætt við valkosti"
+msgstr[0] "%d rás bætt við valkosti"
 msgstr[1] "%d rásir bættar við valkosti"
 
 msgid ""
@@ -42305,7 +42309,7 @@ msgstr ""
 #, no-python-format
 msgid "Un canal șters din receptor"
 msgid_plural "%d canale șterse din receptor"
-msgstr[0] "Ein rás eytt úr móttakaranum"
+msgstr[0] "%d rás eytt úr móttakaranum"
 msgstr[1] "%d rásir eytt úr móttakaranum"
 
 msgid ""
@@ -42411,7 +42415,7 @@ msgstr "Auðþekkjanlegt nafn, til dæmis NAS stofa."
 #, no-python-format
 msgid "Un nume înlocuit"
 msgid_plural "%d nume înlocuite"
-msgstr[0] "Einu nafni skipt út"
+msgstr[0] "%d nafni skipt út"
 msgstr[1] "%d nöfnum skipt út"
 
 msgid "Un număr DVB al fluxului nu e bun."
@@ -42456,31 +42460,31 @@ msgstr "Lína hefur ólokaðar gæsalappir: %s"
 #, no-python-format
 msgid "Un rând copiat"
 msgid_plural "%d rânduri copiate"
-msgstr[0] "Ein lína afrituð"
+msgstr[0] "%d lína afrituð"
 msgstr[1] "%d línur afritaðar"
 
 #, no-python-format
 msgid "Un rând mutat"
 msgid_plural "%d rânduri mutate"
-msgstr[0] "Ein lína færð"
+msgstr[0] "%d lína færð"
 msgstr[1] "%d línur færðar"
 
 #, no-python-format
 msgid "Un rând șters din buchet"
 msgid_plural "%d rânduri șterse din buchet"
-msgstr[0] "Ein lína eytt úr rásahópnum"
+msgstr[0] "%d lína eytt úr rásahópnum"
 msgstr[1] "%d línur eytt úr rásahópnum"
 
 #, no-python-format
 msgid "Un satelit păstrat, restul șterse"
 msgid_plural "%d sateliți păstrați, restul șterse"
-msgstr[0] "Einn gervihnöttur geymdur, restin eytt"
+msgstr[0] "%d gervihnöttur geymdur, restin eytt"
 msgstr[1] "%d gervihnettir geymdir, restin eytt"
 
 #, no-python-format
 msgid "Un satelit șters din receptor"
 msgid_plural "%d sateliți șterși din receptor"
-msgstr[0] "Einn gervihnöttur eyddur úr móttakaranum"
+msgstr[0] "%d gervihnöttur eyddur úr móttakaranum"
 msgstr[1] "%d gervihnettir eyddir úr móttakaranum"
 
 msgid "Un serviciu apare de două ori în lista rezervelor."
@@ -43386,7 +43390,7 @@ msgid "Wed"
 msgstr "Mið"
 
 msgid "Wednesday"
-msgstr "Mið"
+msgstr "Miðvikudagur"
 
 msgid "Weekday"
 msgstr "Vikudagur"
@@ -47956,7 +47960,7 @@ msgstr "langt verk"
 
 msgid "un mesaj nou"
 msgid_plural "%d mesaje noi"
-msgstr[0] "nýtt skilaboð"
+msgstr[0] "%d nýtt skilaboð"
 msgstr[1] "%d ný skilaboð"
 
 msgid "un mesaj scris pe ecranul televizorului"
@@ -49854,7 +49858,7 @@ msgstr "og %d í viðbót"
 #, no-python-format
 msgid "și încă una"
 msgid_plural "și încă %d"
-msgstr[0] "og ein í viðbót"
+msgstr[0] "og %d í viðbót"
 msgstr[1] "og %d í viðbót"
 
 msgid "șterge din galerie"
@@ -50294,6 +50298,77 @@ msgstr "Fullt afrit frá %s"
 #: lib/python/Screens/HdsSoftwareUpdate.py
 msgid "Copia completă se pune înapoi exact cum a fost făcută; setările de acum nu se copiază."
 msgstr "Fulla afritið er sett aftur inn nákvæmlega eins og það var gert; núverandi stillingar eru ekki afritaðar."
+
+#: lib/python/Components/HdsPluginExtern.py:1735
+#, python-format
+msgid "Imaginea a tradus pluginul extern %s din Python 2. Deschide-l din nou."
+msgstr "Kerfismyndin þýddi utanaðkomandi viðbótina %s úr Python 2. Opnaðu hana aftur."
+
+#: lib/python/Components/HdsPluginExtern.py:1736
+#, python-format
+msgid "Imaginea nu a putut traduce singură pluginul extern %s din Python 2. Echipa HD Satelit are datele erorii."
+msgstr "Kerfismyndin gat ekki þýtt utanaðkomandi viðbótina %s úr Python 2 sjálf. HD Satelit-teymið er með gögn villunnar."
+
+#: lib/python/Components/HdsPluginExtern.py:1715
+msgid "Pluginul are o parte scrisă pentru imaginile vechi (Python 2). Imaginea îl traduce acum și îți spune când îl poți deschide din nou."
+msgstr "Hluti viðbótarinnar var skrifaður fyrir eldri kerfismyndir (Python 2). Kerfismyndin þýðir hann núna og lætur þig vita hvenær þú getur opnað hana aftur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:487 lib/python/Screens/ScanerSatelit.py:2169 lib/python/Screens/ScanerSatelit.py:2437
+msgid "Canale de căutat"
+msgstr "Rásir til að leita að"
+
+#: lib/python/Screens/ScanerSatelit.py:84
+msgid "Numai cele libere"
+msgstr "Aðeins opnar"
+
+#: lib/python/Screens/ScanerSatelit.py:536
+msgid "Se păstrează numai canalele libere (necodate)."
+msgstr "Aðeins opnar (óruglaðar) rásir eru geymdar."
+
+#: data/menu.xml
+msgid "Sunetul canalului devine text tradus. Sunetul pleacă direct la serviciul ales, cu cheia ta."
+msgstr "Hljóð rásarinnar verður að þýddum texta. Hljóðið fer beint til valinnar þjónustu, með lyklinum þínum."
+
+#: lib/python/Components/HdsImportSurse.py:2084
+#, python-format
+msgid "Tunerul %s: copia nu avea chei salvate; am păstrat valorile implicite ale sursei: mod simplu, un LNB, 19,2°E."
+msgstr "Móttakari %s: afritið var ekki með vistaða lykla; ég hélt sjálfgefnum gildum upprunans: einfaldur hamur, einn LNB, 19,2°E."
+
+#: data/setup.xml
+msgid "Când canalul nu pornește, treci singur pe alt canal cu același nume"
+msgstr "Ef rás fer ekki í gang, skipta sjálfkrafa yfir á aðra rás með sama nafni"
+
+#: data/setup.xml
+msgid "Nu (din fabrică): nu caută și nu pornește altă variantă DVB a postului. Da: încearcă celelalte variante ale postului de pe același satelit, inclusiv SD sau HD. Alegerea sursei DVB-I este separată, pe rândul următor. Nu schimbă singur canalul în timpul unei înregistrări, al PiP, al unui film, al pauzei live sau în standby. Variantele se pot alege oricând cu MENU > Alte variante."
+msgstr "Nei (verksmiðjustilling): leitar ekki að og ræsir ekki aðra DVB-útgáfu stöðvarinnar. Já: prófar aðrar útgáfur stöðvarinnar á sama gervihnetti, einnig SD eða HD. Val á DVB-I-uppruna er sér, í næstu línu. Skiptir ekki sjálfkrafa um rás á meðan upptaka, PiP, kvikmynd eða hlé á beinni útsendingu er í gangi, né í biðstöðu. Útgáfurnar má velja hvenær sem er með MENU > Aðrir valkostir."
+
+#: data/setup.xml
+msgid "Când canalul nu pornește, treci singur pe sursa DVB-I a postului"
+msgstr "Ef rás fer ekki í gang, skipta sjálfkrafa yfir á DVB-I-uppruna stöðvarinnar"
+
+#: data/setup.xml
+msgid "Da (din fabrică): când satelitul nu se recepționează, folosește sursa de internet a aceluiași post din lista DVB-I și revine pe satelit când semnalul se întoarce. Nu: oprește numai această trecere automată. Funcționează separat de opțiunea pentru alt canal cu același nume. DVB-I trebuie să fie activ. Nu schimbă singur canalul în timpul unei înregistrări, al PiP, al unui film, al pauzei live sau în standby."
+msgstr "Já (verksmiðjustilling): þegar gervihnötturinn næst ekki er netuppruni sömu stöðvar af DVB-I-listanum notaður og skipt aftur yfir á gervihnöttinn þegar merkið kemur aftur. Nei: stöðvar aðeins þessa sjálfvirku skiptingu. Virkar óháð valkostinum um aðra rás með sama nafni. DVB-I verður að vera virkt. Skiptir ekki sjálfkrafa um rás á meðan upptaka, PiP, kvikmynd eða hlé á beinni útsendingu er í gangi, né í biðstöðu."
+
+#: data/setup.xml
+msgid "Recuperare rapidă după întreruperi IPTV"
+msgstr "Hröð endurheimt eftir truflanir á IPTV"
+
+#: data/setup.xml
+msgid "Da: pentru canalele în direct prin releul IPTV, reface legătura după 3 secunde fără date și reumple tamponul după golire. Poate crește puțin întârzierea față de direct. Nu: păstrează redarea de până acum. Listele HLS și filmele rămân cu timpii lor."
+msgstr "Já: fyrir beinar rásir um IPTV-endurvarpann er tengingin endurnýjuð eftir 3 sekúndur án gagna og biðminnið fyllt aftur þegar það tæmist. Töfin miðað við beina útsendingu getur aukist örlítið. Nei: spilunin helst eins og hún var. HLS-listar og kvikmyndir halda sínum eigin tímamörkum."
+
+#: lib/python/Components/HdsSubtitrariInternet/ecrane.py:93
+msgid "Folosește pentru OpenSubtitles o parolă pe care nu o mai folosești în altă parte. Parola stă criptată pe receptor și se vede după salvare."
+msgstr "Notaðu fyrir OpenSubtitles lykilorð sem þú notar hvergi annars staðar lengur. Lykilorðið er geymt dulkóðað á móttakaranum og sést eftir vistun."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/antena_web.py
+msgid "Nimic nu s-a salvat în lista de canale. Ca să le adaugi, folosește Scanare."
+msgstr "Ekkert var vistað í rásalistann. Notaðu Rásaleit til að bæta þeim við."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py
+msgid "Parola se vede și după salvare. Dacă adaugi din nou același cont cu altă parolă, canalele din Favorite rămân."
+msgstr "Lykilorðið sést líka eftir vistun. Ef þú bætir sama reikningi aftur við með öðru lykilorði haldast rásirnar í Uppáhald."
 
 #~ msgid ""
 #~ "\n"
@@ -76922,3 +76997,1297 @@ msgstr "Með OK bætirðu listanum „Internetrásir (DVB-I)“ við rásalistan
 #: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2384
 msgid "Cu Nu, lista Canale de pe internet (DVB-I) iese din lista de canale și nu mai revine singură."
 msgstr "Ef þú velur „Nei“ er listinn „Internetrásir (DVB-I)“ fjarlægður úr rásalistanum og kemur ekki aftur sjálfkrafa."
+
+#: lib/python/Screens/HdsVremea.py:30 lib/python/Components/HdsVremea.py:100
+msgid "Kelvin"
+msgstr "Kelvin"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vremea_web.py:104
+msgid "Setările vremii nu se pot salva acum."
+msgstr "Ekki er hægt að vista veðurstillingarnar núna."
+
+#: lib/python/Components/Converter/HdsConvertoareStraine.py:848
+msgid "Adresa clientului"
+msgstr "Vistfang biðlarans"
+
+#: lib/python/Components/Converter/HdsConvertoareStraine.py:832
+#, python-format
+msgid "Clienți care primesc un canal: %d ( %s )"
+msgstr "Fjöldi biðlara sem taka á móti rás: %d ( %s )"
+
+#: lib/python/Components/HdsFurnizori.py:46
+msgid "Furnizor fără nume"
+msgstr "Nafnlaus veita"
+
+#. TRANSLATORS: grupa din lista de canale > Furnizor pentru un transponder fara operator stiut: pozitia satelitului
+#. (42,0°E) si transponderul (11250 H)
+#: lib/python/Components/HdsFurnizori.py:49
+#, python-format
+msgid "Satelit %s, %s"
+msgstr "Gervihnöttur %s, %s"
+
+#: lib/python/Screens/HdsSoftwareUpdate.py:1444
+#, python-format
+msgid "Instalarea este oprită: receptorul a pornit cu nucleul locului %(nucleu)s și cu sistemul locului %(sistem)s, deci ar scrie peste nucleul locului %(nucleu)s."
+msgstr "Uppsetning stöðvuð: móttakarinn ræstist með kjarna úr rými %(nucleu)s og kerfi úr rými %(sistem)s. Uppsetningin myndi skrifa yfir kjarnann í rými %(nucleu)s."
+
+#: lib/python/Screens/HdsSoftwareUpdate.py:1446
+#, python-format
+msgid "Alege locul %(sistem)s la Meniu > Standby și repornire > Repornește în altă imagine, apoi încearcă din nou."
+msgstr "Veldu rými %(sistem)s í Valmynd > Biðstaða og endurræsing > Endurræsa í aðra kerfismynd. Reyndu aftur."
+
+#: lib/python/Components/HdsDiagnostic.py:461
+#, python-format
+msgid "Receptorul a pornit cu nucleul locului %(nucleu)s și cu sistemul locului %(sistem)s; locul acestui software este %(sistem)s."
+msgstr "Móttakarinn ræstist með kjarna úr rými %(nucleu)s og kerfi úr rými %(sistem)s; þessi hugbúnaður er í rými %(sistem)s."
+
+#: lib/python/Components/HdsDiagnostic.py:462
+#, python-format
+msgid "Nucleul pornit (%(pornit)s) nu este al acestui software (%(imagine)s), deci driverele nu se încarcă."
+msgstr "Kjarninn (%(pornit)s) sem er í gangi tilheyrir ekki þessum hugbúnaði (%(imagine)s), svo reklarnir hlaðast ekki."
+
+#: lib/python/Components/HdsDiagnostic.py:464
+#, python-format
+msgid "Ca să pornească normal, alege locul %(sistem)s la Meniu > Standby și repornire > Repornește în altă imagine."
+msgstr "Til að móttakarinn ræsist eðlilega, veldu rými %(sistem)s í Valmynd > Biðstaða og endurræsing > Endurræsa í aðra kerfismynd."
+
+#: lib/python/Components/HdsPornireMultipla.py:172
+#, python-format
+msgid "La ultima pornire, discul imaginii alese (locul %(loc)s) nu a fost găsit la timp, așa că receptorul a pornit imaginea din locul %(acum)s."
+msgstr "Við síðustu ræsingu fannst diskur völdu myndarinnar (rými %(loc)s) ekki í tæka tíð, svo móttakarinn ræsti myndina í rými %(acum)s."
+
+#: lib/python/Components/HdsPornireMultipla.py:174
+#, python-format
+msgid "La ultima pornire, dosarul imaginii alese (locul %(loc)s) lipsea, așa că receptorul a pornit imaginea din locul %(acum)s."
+msgstr "Við síðustu ræsingu vantaði möppu völdu myndarinnar (rými %(loc)s), svo móttakarinn ræsti myndina í rými %(acum)s."
+
+#: lib/python/Components/HdsPornireMultipla.py:176
+msgid "O poți alege din nou din listă."
+msgstr "Þú getur valið hana aftur af listanum."
+
+#: lib/python/Components/HdsPornireMultipla.py:177
+#, python-format
+msgid "La ultima pornire, un disc USB avea fișierul STARTUP_RECOVERY, deci receptorul a trecut pe locul %(acum)s. Scoate fișierul sau discul, apoi alege din nou imaginea."
+msgstr "Við síðustu ræsingu var skráin STARTUP_RECOVERY á USB-diski, svo móttakarinn skipti yfir í rými %(acum)s. Fjarlægðu skrána eða diskinn og veldu myndina aftur."
+
+#: lib/python/Components/HdsMontareDiscuri.py:374
+msgid "Imaginea pornește de pe acest disc, de aceea rămâne montat cât merge receptorul: nu se demontează și nu i se schimbă locul de aici."
+msgstr "Myndin ræsist af þessum diski, svo hann helst tengdur meðan móttakarinn er í gangi: hér er ekki hægt að aftengja hann eða breyta staðnum."
+
+#: lib/python/Components/HdsMontareDiscuri.py:386
+#, python-format
+msgid "Înregistrările se salvează pe el, în %s."
+msgstr "Upptökurnar vistast á honum í %s."
+
+#: lib/python/Components/HdsActualizari.py:214
+msgid "Actualizarea s-a instalat. Interfața se repornește singură după ce ieși din timeshift."
+msgstr "Uppfærsla var sett upp. Viðmótið endurræsist sjálft þegar þú ferð úr tímafærslu."
+
+#: lib/python/Screens/HdsActualizari.py:245 lib/python/Plugins/Extensions/HdsWebControl/actualizari_web.py:194 lib/python/Plugins/Extensions/HdsWebControl/actualizari_web.py:408
+msgid "Repornire singură"
+msgstr "Sjálfvirk endurræsing"
+
+#: lib/python/Components/HdsActualizari.py lib/python/Screens/HdsActualizari.py lib/python/Plugins/Extensions/HdsWebControl/actualizari_web.py
+msgid "Repară imaginea"
+msgstr "Gera við image"
+
+#: lib/python/Components/HdsActualizari.py lib/python/Plugins/Extensions/HdsWebControl/actualizari_web.py
+msgid "Pune la loc fișierele imaginii care au fost șterse. Setările tale rămân cum sunt."
+msgstr "Setur aftur inn skrár úr image sem hefur verið eytt. Stillingarnar þínar haldast óbreyttar."
+
+#: lib/python/Components/HdsActualizari.py lib/python/Plugins/Extensions/HdsWebControl/actualizari_web.py
+msgid "Verific fișierele imaginii"
+msgstr "Athuga skrár í image"
+
+#: lib/python/Components/HdsActualizari.py lib/python/Plugins/Extensions/HdsWebControl/actualizari_web.py
+msgid "Pun la loc fișierele lipsă"
+msgstr "Set inn skrár sem vantar"
+
+#: lib/python/Components/HdsActualizari.py lib/python/Plugins/Extensions/HdsWebControl/actualizari_web.py
+msgid "Imaginea e întreagă."
+msgstr "Image er heilt."
+
+#: lib/python/Components/HdsActualizari.py
+#, python-format
+msgid "Am pus la loc: %s."
+msgstr "Sett aftur inn: %s."
+
+#: lib/python/Components/HdsActualizari.py
+#, python-format
+msgid "Nu am putut pune la loc: %s."
+msgstr "Ekki tókst að setja aftur inn: %s."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/actualizari_web.py:393
+msgid "Pornești actualizarea rapidă? Dacă există o actualizare, se instalează, apoi pe televizor apare întrebarea de repornire (în standby interfața se repornește singură)."
+msgstr "Virkja hraðuppfærslu? Ef uppfærsla er til, er hún sett upp og síðan birtist spurning um endurræsingu á sjónvarpinu (í biðstöðu endurræsist viðmótið sjálft)."
+
+#: lib/python/Components/HdsModuleLipsa.py:905
+#, python-format
+msgid "Biblioteca %s s-a instalat. Deschide din nou %s."
+msgstr "Forritasafnið %s er uppsett. Opnaðu %s aftur."
+
+#: lib/python/Components/HdsVremea.py:184
+msgid "Vremea apare acum în bara canalului."
+msgstr "Veðrið birtist nú á upplýsingastiku rásarinnar."
+
+#: lib/python/Components/HdsTasteRapide.py:80 lib/python/Components/HdsTasteRapide.py:302
+msgid "Bara de informații fixă (a doua apăsare o ascunde)"
+msgstr "Föst upplýsingastika (önnur ýting felur hana)"
+
+#: data/setup.xml:212
+msgid "Trecere singură pe altă variantă a canalului"
+msgstr "Sjálfvirk skipti á annan valkost rásarinnar"
+
+#: data/setup.xml:212
+msgid "Da: când un canal nu pornește (fără semnal, fără imagine, codat), receptorul trece singur, după câteva secunde, pe altă variantă a aceluiași canal de pe același satelit (de pildă varianta SD a canalului HD sau alt transponder). Nu: rămâne pe canalul ales și îți arată de ce e negru ecranul; celelalte variante le alegi tu cu MENU > Alte variante."
+msgstr "Já: þegar rás fer ekki í gang (ekkert merki, engin mynd, kóðuð), skiptir móttakarinn sjálfkrafa, eftir nokkrar sekúndur, yfir á annan valkost fyrir sömu rás á sama gervihnetti (til dæmis SD-útgáfu HD-rásarinnar eða annan sendi). Nei: hann er áfram á völdu rásinni og sýnir þér hvers vegna skjárinn er svartur; aðra valkosti velur þú með MENU > Aðrir valkostir."
+
+#: lib/python/Components/HdsAsistenta.py:261
+msgid "Asistența s-a oprit la cererea ta. Mulțumim!"
+msgstr "Fjaraðstoðin stöðvaðist að beiðni þinni. Takk!"
+
+#: lib/python/Components/HdsAsistenta.py:262
+msgid "Echipa nu a ajuns încă la concluzii."
+msgstr "Teymið hefur ekki enn komist að niðurstöðum."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1862 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2396 lib/python/Screens/IptvSetup.py:771
+msgid "4097 (implicit)"
+msgstr "4097 (sjálfgefið)"
+
+#: lib/python/Components/HdsIptvClient.py:1328
+msgid "Alege un player din listă și Da sau Nu pentru piconuri."
+msgstr "Veldu spilara af listanum og Já eða Nei fyrir picon."
+
+#: data/setup.xml:291
+msgid "Da: arată fereastra de încărcare, progresul și viteza la canalele IPTV. Nu: redarea continuă fără această fereastră."
+msgstr "Já: sýnir hleðslugluggann, framvinduna og hraðann fyrir IPTV-rásir. Nei: spilunin heldur áfram án þessa glugga."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1863 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2397 lib/python/Screens/IptvSetup.py:774
+msgid "Descarcă piconurile sursei"
+msgstr "Sækja picon upprunans"
+
+#: lib/python/Components/HdsIptvRedare.py:204
+#, python-format
+msgid "Fereastra de încărcare IPTV nu poate fi deschisă (%s); redarea continuă fără ea."
+msgstr "Ekki er hægt að opna IPTV-hleðslugluggann (%s); spilunin heldur áfram án hans."
+
+#: data/setup.xml:291
+msgid "Fereastra de încărcare la canalele IPTV"
+msgstr "Hleðslugluggi fyrir IPTV-rásir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1862 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2395 lib/python/Screens/IptvSetup.py:773
+msgid "Player în buchete"
+msgstr "Spilari í hópum"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1860 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1935 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2394 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2548 lib/python/Screens/IptvSetup.py:391 lib/python/Screens/IptvSetup.py:769
+msgid "Player și piconuri"
+msgstr "Spilari og picon"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1865 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2399 lib/python/Screens/IptvSetup.py:776
+msgid "Playerul ales trebuie să fie instalat pe receptor."
+msgstr "Valdi spilarinn þarf að vera uppsettur á móttakaranum."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1864 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2398 lib/python/Screens/IptvSetup.py:775
+msgid "Setările se aplică acestei surse. Piconurile existente se păstrează."
+msgstr "Stillingarnar gilda fyrir þennan uppruna. Picon sem eru þegar til haldast."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:867
+msgid "Setările sursei au fost salvate."
+msgstr "Stillingar upprunans hafa verið vistaðar."
+
+#: lib/python/Screens/HdsVpn.py:276 lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py:487
+msgid "Iconița VPN în bara canalului"
+msgstr "VPN-tákn á upplýsingastikunni"
+
+#: lib/python/Components/HdsWlan.py:44
+msgid "Numele rețelei Wi-Fi trebuie să aibă între 1 și 32 de octeți."
+msgstr "Heiti Wi-Fi-netsins verður að vera 1 til 32 bæti að lengd."
+
+#: lib/python/Components/HdsWlan.py:43
+msgid "Parola Wi-Fi poate avea cel mult 63 de octeți în UTF-8."
+msgstr "Wi-Fi lykilorðið má vera að hámarki 63 bæti í UTF-8."
+
+#: lib/python/Components/HdsVpn.py:2964
+msgid "Serverul VPN refuză temporar legătura. VPN-ul va încerca din nou."
+msgstr "VPN-þjónninn hafnar tengingunni tímabundið. VPN-ið reynir aftur sjálfkrafa."
+
+#: lib/python/Components/HdsVpn.py:2943
+msgid "Serverul a refuzat autentificarea. Verifică numele și parola de serviciu și starea contului. VPN-ul nu mai încearcă singur."
+msgstr "Þjónninn hafnaði innskráningunni. Athugaðu notandanafnið og lykilorðið fyrir VPN-þjónustuna og stöðu reikningsins. VPN-ið reynir ekki aftur sjálfkrafa."
+
+#: lib/python/Components/HdsVpn.py:4181
+msgid "Tunelul VPN răspunde, dar configurarea rețelei nu s-a terminat. Vezi jurnalul VPN."
+msgstr "VPN-göngin svara, en uppsetningu netsins er ekki lokið. Skoðaðu VPN-annálinn."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vpn_web.py:488 lib/python/Screens/HdsVpn.py:277
+msgid "Verde când VPN-ul este conectat, roșu când nu este conectat. Oprită din fabrică."
+msgstr "Grænt þegar VPN-ið er tengt, rautt þegar það er ekki tengt. Sjálfgefið er slökkt á þessum valkosti."
+
+#: lib/python/Components/HdsAplicatii.py:787
+#, python-format
+msgid "%s (neinstalat)"
+msgstr "%s (ekki uppsettur)"
+
+#: lib/python/Components/HdsIptvClient.py:72
+msgid "Adresa MAC trebuie să aibă 12 cifre hexazecimale (0-9, A-F). Exemplu: 00:1A:79:12:34:56. Poți folosi și liniuțe, puncte sau nicio despărțire."
+msgstr "MAC-vistfangið þarf að hafa 12 stafi í sextándakerfi (0-9, A-F). Dæmi: 00:1A:79:12:34:56. Þú getur líka notað bandstrik, punkta eða sleppt aðgreiningu."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2614 lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2690 lib/python/Screens/IptvSetup.py:736
+msgid "Adresa de dinainte:"
+msgstr "Fyrra vistfangið:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2616 lib/python/Screens/IptvSetup.py:739 lib/python/Screens/IptvSetup.py:701
+msgid "Adresa nouă trebuie dată furnizorului. Pentru un cont mutat de pe alt receptor, scrie adresa de acolo. Se păstrează numai la Salvează."
+msgstr "Þú þarft að gefa þjónustuveitandanum nýja vistfangið. Ef þú flytur reikninginn þinn af öðrum móttakara skaltu slá inn vistfangið af honum. Það vistast aðeins þegar þú velur „Vista“."
+
+#: lib/python/Components/HdsIptvSurse.py:112
+#, python-format
+msgid "Ai %d surse din %d posibile. Șterge una ca să poți adăuga alta."
+msgstr "Fjöldi uppspretta hjá þér: %d. Hámark: %d. Eyddu einni til að geta bætt annarri við."
+
+#: lib/python/Components/HdsBluetooth.py:209
+msgid "Alege telecomanda pentru asociere."
+msgstr "Veldu fjarstýringuna sem þú vilt para."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/bluetooth_web.py:82
+msgid "Asocierea tastelor"
+msgstr "Úthlutun hnappa"
+
+#: data/setup.xml:33 lib/python/Screens/Satconfig.py:778
+msgid "Așezare clasică"
+msgstr "Klassískt útlit"
+
+#: data/menu.xml:511 data/setup.xml:32 lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3240
+msgid "Așezarea setărilor tunerului"
+msgstr "Útlit móttakarastillinga"
+
+#: data/menu.xml:516
+msgid "Scrii direct coordonatele motorului sau alegi locul din lista de țări și orașe."
+msgstr "Þú slærð hnit mótorsins beint inn eða velur staðsetninguna úr lista yfir lönd og borgir."
+
+#: lib/python/Components/HdsBluetooth.py:139
+msgid "Bluetooth lucrează acum. Așteaptă să termine."
+msgstr "Bluetooth er upptekið núna. Bíddu þar til vinnslunni lýkur."
+
+#: lib/python/Components/HdsBluetooth.py:152
+msgid "Bluetooth nu a putut porni. Încearcă din nou."
+msgstr "Ekki tókst að ræsa Bluetooth. Reyndu aftur."
+
+#: lib/python/Components/HdsBluetooth.py:213
+msgid "Bluetooth nu răspunde sau asocierea nu a reușit. Pune telecomanda în modul de asociere și caută din nou."
+msgstr "Bluetooth svarar ekki eða pörunin tókst ekki. Settu fjarstýringuna í pörunarham og leitaðu aftur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_tv_web.py:369 lib/python/Screens/HdsAplicatii.py:450 lib/python/Screens/HdsAplicatii.py:494
+msgid "Browserul aplicațiilor"
+msgstr "Vafri fyrir forrit"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_tv_web.py:161
+msgid "Browserul nu se poate alege pentru această aplicație sau nu mai este instalat."
+msgstr "Ekki er hægt að velja vafrann fyrir þetta forrit eða hann er ekki lengur uppsettur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_tv_web.py:160
+msgid "Browserul s-a salvat."
+msgstr "Valið á vafra hefur verið vistað."
+
+#: data/menu.xml:699
+msgid "Cauți și asociezi telecomanda fără fir a receptorului."
+msgstr "Þú leitar að þráðlausu fjarstýringunni fyrir móttakarann og parar hana."
+
+#: data/menu.xml:316 data/setup.xml:29 data/setup.xml:30
+msgid "Claritatea imaginii"
+msgstr "Skýrleiki myndarinnar"
+
+#: lib/python/Components/HdsBluetooth.py:141
+msgid "Comandă Bluetooth necunoscută."
+msgstr "Óþekkt Bluetooth-skipun."
+
+#: data/setup.xml:123
+msgid "Da: SUS pe primul rând duce la ultimul, iar JOS pe ultimul duce la primul. Nu: navigarea obișnuită a temei. Meniurile cu dale rămân la fel."
+msgstr "Já: með UPP á fyrstu línu ferðu á þá síðustu og með NIÐUR á síðustu línu ferðu á þá fyrstu. Nei: þú ferð um valmyndirnar á venjulegan hátt í þemanu. Valmyndir með flísum breytast ekki."
+
+#: data/setup.xml:33
+msgid "Da: coordonatele motorului se scriu direct în setările tunerului, longitudinea înaintea latitudinii. Nu: alegi locul antenei din lista de țări și orașe, ca până acum."
+msgstr "Já: þú slærð hnit mótorsins beint inn í stillingum móttakarans, lengdargráðuna á undan breiddargráðunni. Nei: þú velur staðsetningu loftnetsins úr lista yfir lönd og borgir, eins og áður."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/aplicatii_tv_web.py:380 lib/python/Screens/HdsAplicatii.py:494 lib/python/Screens/HdsAplicatii.py:439
+msgid "Deschide cu..."
+msgstr "Opnaðu með..."
+
+#: lib/python/Components/HdsAplicatii.py:782
+msgid "Din fabrică (după catalog)"
+msgstr "Verksmiðjuval (úr forritaskrá)"
+
+#: lib/python/Components/HdsAplicatii.py:843
+#, python-format
+msgid "Folosește %s: aplicația cere acest browser."
+msgstr "Forritið notar %s: það þarf þennan vafra."
+
+#: lib/python/Components/HdsAplicatii.py:841
+msgid "Folosește HD Satelit Browser: redarea protejată cere Widevine."
+msgstr "Forritið notar HD Satelit Browser: afspilun varins efnis krefst Widevine."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2623
+msgid "Folosește identitatea implicită"
+msgstr "Notaðu sjálfgefið auðkenni"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2613 lib/python/Screens/IptvSetup.py:674
+msgid "Fă o adresă MAC"
+msgstr "Búðu til MAC-vistfang"
+
+#: lib/python/Components/HdsAplicatii.py:776
+msgid "HD Satelit Browser"
+msgstr "HD Satelit Browser"
+
+#: lib/python/Components/HdsAplicatii.py:776
+msgid "HD Satelit Navigator"
+msgstr "HD Satelit Navigator"
+
+#: lib/python/Components/HdsExtensiiLucru.py:1455 lib/python/Components/HdsExtensiiLucru.py:1623 lib/python/Plugins/Extensions/HdsWebControl/extensii_web.py:1645
+msgid "Instalează fișiere .ipk"
+msgstr "Settu upp .ipk-skrár"
+
+#: lib/python/Screens/Satconfig.py:415 lib/python/Screens/Satconfig.py:435
+msgid "Locul antenei s-a schimbat între timp. Închide și redeschide setările tunerului."
+msgstr "Staðsetning loftnetsins hefur breyst á meðan. Lokaðu stillingum móttakarans og opnaðu þær aftur."
+
+#: data/setup.xml:123
+msgid "Navigare circulară în meniurile cu listă"
+msgstr "Fletting í hring í listavalmyndum"
+
+#: lib/python/Components/HdsBluetooth.py:211
+msgid "Nu am găsit nicio telecomandă. Pune telecomanda în modul de asociere și pornește căutarea."
+msgstr "Engin fjarstýring fannst. Settu fjarstýringuna í pörunarham og ræstu leitina."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2624 lib/python/Screens/IptvSetup.py:630
+msgid "Pentru un abonament legat de alt receptor, scrie aici adresa MAC de pe acela. Unii furnizori nu permit două receptoare pornite în același timp cu aceeași adresă."
+msgstr "Ef áskriftin er tengd öðrum móttakara skaltu slá inn MAC-vistfangið af honum hér. Sumir þjónustuveitendur leyfa ekki að tveir móttakarar séu í gangi samtímis með sama vistfangið."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/bluetooth_web.py:81
+msgid "Pune telecomanda în modul de asociere, apoi apasă Caută."
+msgstr "Settu fjarstýringuna í pörunarham og ýttu síðan á „Leita“."
+
+#: lib/python/Screens/HdsBluetooth.py:24
+msgid "Pune telecomanda în modul de asociere, apoi apasă GALBEN. Telecomanda cu infraroșu funcționează în continuare."
+msgstr "Settu fjarstýringuna í pörunarham og ýttu síðan á GULT. Innrauða fjarstýringin virkar áfram."
+
+#: lib/python/Screens/HdsBluetooth.py:27
+msgid "ROȘU: închide   GALBEN: caută   OK: asociază"
+msgstr "RAUTT: loka   GULT: leita   OK: para"
+
+#: data/setup.xml:30 data/setup.xml:41
+msgid "Reglează contururile imaginii când receptorul îi schimbă rezoluția. Valoarea din fabrică este 13; o valoare prea mare poate adăuga contururi artificiale."
+msgstr "Stilltu útlínur myndarinnar þegar móttakarinn breytir upplausn hennar. Gildið frá verksmiðju er 13; of hátt gildi getur myndað ónáttúrulegar útlínur."
+
+#: data/menu.xml:316
+msgid "Reglezi contururile imaginii canalelor."
+msgstr "Þú stillir útlínur myndarinnar á sjónvarpsrásunum."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/bluetooth_web.py:82
+msgid "Repetarea tastelor"
+msgstr "Endurtekning hnappa"
+
+#: lib/python/Components/HdsVpn.py:3234 lib/python/Components/HdsVpn.py:3250
+msgid "Rețeaua WireGuard nu a fost configurată complet. Vezi jurnalul VPN."
+msgstr "WireGuard-netið var ekki stillt að fullu. Skoðaðu VPN-annálinn."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2625
+msgid "Scrie MAC-ul contului tău, primit de la furnizor sau copiat de pe receptorul vechi. Schimbarea lui păstrează favoritele și grupele. Sunt acceptate și liniuțe, puncte sau nicio despărțire."
+msgstr "Sláðu inn MAC-vistfang reikningsins þíns, það sem þú fékkst frá þjónustuveitandanum eða afritaðir af gamla móttakaranum. Þegar þú breytir vistfanginu haldast eftirlætið og hóparnir. Þú getur líka notað bandstrik, punkta eða sleppt aðgreiningu."
+
+#: lib/python/Components/HdsBluetooth.py:146
+msgid "Se caută telecomenzi, cel mult 20 de secunde..."
+msgstr "Leitað er að fjarstýringum í allt að 20 sekúndur..."
+
+#: lib/python/Components/HdsBluetooth.py:146
+msgid "Se verifică legătura Bluetooth..."
+msgstr "Verið er að athuga Bluetooth-tenginguna..."
+
+#: lib/python/Components/HdsAplicatii.py:782
+msgid "Setarea generală"
+msgstr "Almenna stillingin"
+
+#: lib/python/Components/HdsBluetooth.py:207
+msgid "Telecomanda este asociată și conectată."
+msgstr "Fjarstýringin er pöruð og tengd."
+
+#: lib/python/Components/HdsBluetooth.py:144
+msgid "Telecomanda nu mai este în listă. Caută din nou."
+msgstr "Fjarstýringin er ekki lengur á listanum. Leitaðu aftur."
+
+#: data/menu.xml:699 lib/python/Components/HdsBluetooth.py:177 lib/python/Plugins/Extensions/HdsWebControl/bluetooth_web.py:81 lib/python/Screens/HdsBluetooth.py:23
+msgid "Telecomandă Bluetooth"
+msgstr "Bluetooth-fjarstýring"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2621 lib/python/Screens/IptvSetup.py:685
+msgid "Tip decodor (opțional)"
+msgstr "Gerð móttakara (valfrjálst)"
+
+#: lib/python/Components/HdsVpn.py:4257
+msgid "WireGuard nu a primit încă o confirmare de la server. Legătura se verifică atunci când trece trafic prin VPN."
+msgstr "WireGuard hefur ekki enn fengið staðfestingu frá þjóninum. Tengingin er athuguð þegar umferð fer í gegnum VPN."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2620 lib/python/Screens/IptvSetup.py:685
+msgid "X-User-Agent (opțional)"
+msgstr "X-User-Agent (valfrjálst)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2622
+msgid "X-User-Agent și tipul decodorului: goale păstrează valorile salvate."
+msgstr "X-User-Agent og gerð móttakara: ef báðir reitirnir eru auðir haldast áður vistuðu gildin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/bluetooth_web.py:83 lib/python/Screens/HdsBluetooth.py:54
+msgid "asociată"
+msgstr "pöruð"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/bluetooth_web.py:83 lib/python/Screens/HdsBluetooth.py:54
+msgid "nouă"
+msgstr "ný"
+
+#: lib/python/Screens/HdsBluetooth.py:54 lib/python/Plugins/Extensions/HdsWebControl/bluetooth_web.py:69 lib/python/Plugins/Extensions/HdsWebControl/bluetooth_web.py:83
+msgid "legătură Bluetooth activă"
+msgstr "virk Bluetooth-tenging"
+
+# T86: IPTV import and key layout.
+
+#: lib/python/Components/HdsIptvSurse.py:113
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:3124
+msgid "Neconectată"
+msgstr "Ótengd"
+
+#: lib/python/Components/HdsIptvTransfer.py:49
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2950
+#, python-format
+msgid ""
+"Găsite: %d. Deja prezente sau repetate: %d. De adăugat: %d. Rânduri "
+"necitibile: %d."
+msgstr ""
+"Fundnar: %d. Þegar til staðar eða endurteknar: %d. Til að bæta við: %d. "
+"Ólæsilegar línur: %d."
+
+#: lib/python/Components/HdsIptvTransfer.py:50
+#, python-format
+msgid "Rândurile necitibile: %s."
+msgstr "Ólæsilegar línur: %s."
+
+#: lib/python/Components/HdsIptvTransfer.py:51
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2952
+#, python-format
+msgid "Ai %d surse din %d posibile. Nu mai încap: %d."
+msgstr "Þú ert með %d heimildir af %d mögulegum. Ekki meira pláss fyrir: %d."
+
+#: lib/python/Components/HdsIptvTransfer.py:52
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2951
+#, python-format
+msgid ""
+"Surse adăugate: %d. Deschide o sursă sau apasă Actualizează pe ea ca să te "
+"conectezi."
+msgstr ""
+"Heimildum bætt við: %d. Opnaðu heimild eða ýttu á Uppfæra við hana til að "
+"tengjast."
+
+#: lib/python/Components/HdsIptvTransfer.py:53
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:3127
+msgid ""
+"Fișierul e prea mare. Alege un fișier de cel mult 4 MB și 10000 de rânduri."
+msgstr "Skráin er of stór. Veldu skrá sem er að hámarki 4 MB og 10000 línur."
+
+#: lib/python/Components/HdsIptvTransfer.py:54
+msgid ""
+"Fișierul nu s-a putut citi. Alege un fișier text UTF-8 sau JSON de pe stick "
+"ori disc."
+msgstr ""
+"Ekki tókst að lesa skrána. Veldu UTF-8-textaskrá eða JSON-skrá af USB-lykli "
+"eða diski."
+
+#: lib/python/Components/HdsIptvTransfer.py:55
+msgid "Sursele salvate nu se pot citi. Nu s-a schimbat nimic."
+msgstr "Ekki er hægt að lesa vistuðu heimildirnar. Engu var breytt."
+
+#: lib/python/Components/HdsIptvTransfer.py:56
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:3126
+#, python-format
+msgid "Rândul %d: nu se poate adăuga încă: %s"
+msgstr "Lína %d: ekki er hægt að bæta við enn: %s"
+
+#: lib/python/Components/HdsIptvTransfer.py:57
+msgid "Protocolul sau tipul listei nu este acceptat de player."
+msgstr "Spilarinn styður ekki samskiptaregluna eða listagerðina."
+
+#: lib/python/Components/HdsIptvTransfer.py:58
+msgid "Sursa cere un sistem DRM care nu este disponibil."
+msgstr "Heimildin krefst DRM-kerfis sem er ekki tiltækt."
+
+#: lib/python/Components/HdsIptvTransfer.py:59
+msgid ""
+"XMLTV conține numai programul TV. Se folosește ca adresă de ghid într-un "
+"playlist, nu ca sursă de canale."
+msgstr ""
+"XMLTV inniheldur aðeins sjónvarpsdagskrána. Notaðu það sem dagskrárslóð í "
+"spilunarlista, ekki sem rásauppsprettu."
+
+#: lib/python/Components/HdsIptvTransfer.py:60
+msgid ""
+"Copia e deteriorată. Nu s-a schimbat nimic. Exportă din nou copia de pe "
+"receptorul de origine."
+msgstr ""
+"Afritið er skemmt. Engu var breytt. Flyttu afritið aftur út úr upprunalega "
+"móttakaranum."
+
+#: lib/python/Components/HdsIptvTransfer.py:61
+msgid ""
+"Lista locală nu este disponibilă pentru export. Pune fișierul original în "
+"import."
+msgstr ""
+"Staðbundni listinn er ekki tiltækur til útflutnings. Bættu upprunalegu "
+"skránni við innflutninginn."
+
+#: lib/python/Components/HdsTasteRapide.py:235
+msgid ""
+"Felul Neutrino: sus/jos schimbă canalul, stânga/dreapta volumul, OK deschide"
+" lista. Cu buchete: stânga/dreapta deschid lista și apoi schimbă buchetul. "
+"Obișnuită readuce setările tale."
+msgstr ""
+"Neutrino-hamur: upp/niður skiptir um rás, vinstri/hægri stillir hljóðstyrk, "
+"OK opnar listann. Með rásahópum: vinstri/hægri opnar listann og skiptir "
+"síðan um rásahóp. Venjuleg endurheimtir stillingarnar þínar."
+
+#: lib/python/Components/HdsTasteRapide.py:293
+msgid "Rândul anterior"
+msgstr "Fyrri röð"
+
+#: lib/python/Components/HdsTasteRapide.py:293
+msgid "Rândul următor"
+msgstr "Næsta röð"
+
+#: lib/python/Components/HdsTasteRapide.py:197
+msgid "Așezarea tastelor"
+msgstr "Hnappaskipan"
+
+#: lib/python/Components/HdsTasteRapide.py:222
+msgid "Obișnuită"
+msgstr "Venjuleg"
+
+#: lib/python/Components/HdsTasteRapide.py:222
+msgid "Felul Neutrino"
+msgstr "Neutrino-hamur"
+
+#: lib/python/Components/HdsTasteRapide.py:223
+msgid "Felul Neutrino cu buchete"
+msgstr "Neutrino með rásahópum"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2948
+msgid "Importă surse IPTV"
+msgstr "Flytja inn IPTV-heimildir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2949
+msgid "Fișier text, JSON sau HD Satelit"
+msgstr "Texta-, JSON- eða HD Satelit-skrá"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2953
+msgid "Sau lipește textul aici"
+msgstr "Eða límdu textann hér"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2954
+msgid ""
+"Formatul se recunoaște singur. Importul adaugă sursele fără să le încerce la"
+" portal. Cele existente rămân neschimbate."
+msgstr ""
+"Sniðið er greint sjálfkrafa. Innflutningurinn bætir heimildunum við án þess "
+"að prófa þær á gáttinni. Núverandi heimildir haldast óbreyttar."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2955
+#: lib/python/Screens/IptvSetup.py:591
+msgid "Adaugă sursele"
+msgstr "Bæta heimildunum við"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2956
+#: lib/python/Screens/IptvSetup.py:427
+msgid "Exportă toate sursele IPTV"
+msgstr "Flytja út allar IPTV-heimildir"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:3048
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:3129
+msgid "Completează rândul:"
+msgstr "Fylltu út línuna:"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:3125
+#, python-format
+msgid "Surse: %d din %d."
+msgstr "Heimildir: %d af %d."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1342
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1364
+msgid "Alege fișierul din pagină."
+msgstr "Veldu skrána á síðunni."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:1428
+msgid "Exportul se cere din pagină."
+msgstr "Biddu um útflutninginn á síðunni."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:756
+#: lib/python/Screens/IptvSetup.py:609
+msgid "Sursele nu s-au putut salva. Verifică spațiul liber."
+msgstr "Ekki tókst að vista heimildirnar. Athugaðu laust pláss."
+
+#: lib/python/Screens/ButtonSetup.py:42
+msgid "Alege tasta cu SUS/JOS și funcția cu OK sau STÂNGA/DREAPTA."
+msgstr "Veldu hnapp með UPP/NIÐUR og aðgerð með OK eða VINSTRI/HÆGRI."
+
+#: lib/python/Screens/IptvSetup.py:536 lib/python/Screens/IptvSetup.py:568
+#: lib/python/Screens/IptvSetup.py:427
+msgid "Importă surse IPTV din fișier"
+msgstr "Flytja inn IPTV-heimildir úr skrá"
+
+#: lib/python/Screens/IptvSetup.py:539
+msgid ""
+"Alege fișierul text, JSON sau HD Satelit de pe stick ori disc. Formatul se "
+"recunoaște singur."
+msgstr ""
+"Veldu texta-, JSON- eða HD Satelit-skrána af USB-lykli eða diski. Sniðið er "
+"greint sjálfkrafa."
+
+#: lib/python/Screens/IptvSetup.py:590
+msgid ""
+"Importul adaugă sursele fără să le încerce la portal. Cele existente rămân "
+"neschimbate."
+msgstr ""
+"Innflutningurinn bætir heimildunum við án þess að prófa þær á gáttinni. "
+"Núverandi heimildir haldast óbreyttar."
+
+#: lib/python/Screens/IptvSetup.py:428
+msgid "Surse IPTV"
+msgstr "IPTV-heimildir"
+
+#: lib/python/Screens/IptvSetup.py:462
+msgid "Exportul nu s-a putut scrie. Alege un dosar cu spațiu liber."
+msgstr "Ekki tókst að skrifa útflutninginn. Veldu möppu með lausu plássi."
+
+#: lib/python/Screens/IptvSetup.py:462
+#, python-format
+msgid "Sursele IPTV au fost exportate în %s."
+msgstr "IPTV-heimildirnar voru fluttar út í %s."
+
+#: lib/python/Screens/IptvSetup.py:384 lib/python/Screens/IptvSetup.py:386
+msgid "MENU: importă sau exportă surse IPTV."
+msgstr "MENU: flytja inn eða út IPTV-heimildir."
+
+# T87: translations after T86.
+
+#: lib/python/Components/HdsAnimatiiFerestre.py:48
+msgid "Alunecare din dreapta"
+msgstr "Renning frá hægri"
+
+#: lib/python/Components/HdsAnimatiiFerestre.py:48
+msgid "Alunecare din stânga"
+msgstr "Renning frá vinstri"
+
+#: lib/python/Components/HdsAnimatiiFerestre.py:49
+msgid "Alunecare de jos"
+msgstr "Renning að neðan"
+
+#: lib/python/Components/HdsAnimatiiFerestre.py:49
+msgid "Alunecare de sus"
+msgstr "Renning að ofan"
+
+#: lib/python/Components/HdsAnimatiiFerestre.py:50
+msgid "Mărire cu apariție treptată"
+msgstr "Aðdráttur með fade-in"
+
+#: lib/python/Components/HdsAnimatiiFerestre.py:50
+msgid "Pop din centru"
+msgstr "Popp frá miðjunni"
+
+#: lib/python/Components/HdsAnimatiiFerestre.py:51
+msgid "Trecere încrucișată"
+msgstr "Crossfade"
+
+#: lib/python/Components/HdsAsistentaBroker.py:873
+msgid ""
+"Eroare de citire: jurnalul anunțat ca nevid nu a dat date. Încearcă din nou."
+msgstr ""
+"Lesvilla: Skráin var tilkynnt sem ekki tóm en skilaði engum gögnum. Reyndu "
+"aftur."
+
+#: lib/python/Components/HdsAsistentaBroker.py:621
+msgid ""
+"Eroare de citire: fișierul anunțat ca nevid nu a dat date. Încearcă din nou."
+msgstr ""
+"Lesvilla: skráð var að skráin væri ekki tóm en skilaði engum gögnum. Reyndu "
+"aftur."
+
+#: lib/python/Components/HdsAsistentaCatalog.py:50
+msgid ""
+"pune la loc buchetele care lipsesc din listă și curăță descrierile orfane, "
+"cu copie de siguranță (numai cu Control complet)"
+msgstr ""
+"endurheimta rásahópa sem vantar á listann og fjarlægja lýsingar án hóps, með"
+" öryggisafriti (aðeins með „Full stjórn“)"
+
+#: lib/python/Components/HdsCautareOarba.py:766
+msgid "găsit prin căutare, și în listă"
+msgstr "fannst með því að skanna, einnig á listanum"
+
+#: lib/python/Components/HdsCautareOarba.py:766
+msgid "găsit prin căutare, nou"
+msgstr "fannst með skönnun, nýtt"
+
+#: lib/python/Components/HdsCautareOarba.py:767
+msgid "din listă, se caută"
+msgstr "af listanum, verið skönnuð"
+
+#: lib/python/Components/HdsCautareOarba.py:767
+msgid "din listă, negăsit"
+msgstr "af listanum, fannst ekki"
+
+#: lib/python/Components/HdsDvbISetari.py:882
+#: lib/python/Plugins/Extensions/HdsWebControl/internet_web.py:2981
+msgid ""
+"Aceeași alegere se găsește în Meniu > Setări > Setări listă de canale: „Când"
+" canalul nu pornește, treci singur pe sursa DVB-I a postului”. Este pornită "
+"din fabrică și independentă de trecerea pe alt canal cu același nume."
+msgstr ""
+"Sama val er í Valmynd > Stillingar > Stillingar rásalista: „Ef rás fer ekki "
+"í gang, skipta sjálfkrafa yfir á DVB-I-uppruna stöðvarinnar“. Það er virkt "
+"frá verksmiðju og óháð því að skipta yfir á aðra rás með sama nafni."
+
+#: lib/python/Components/HdsEditorCanale.py:415
+msgid "Lista de canale se repară acum. Încearcă din nou peste câteva secunde."
+msgstr "Verið er að gera við ráslistann. Reyndu aftur eftir nokkrar sekúndur."
+
+#: lib/python/Components/HdsEgalizator.py:119
+msgid ""
+"Proba egalizatorului la TV a eșuat pe acest model. Sunetul merge prin placa "
+"de sunet. Nu mai încearcă până la repornirea interfeței."
+msgstr ""
+"Sjónvarpsjafnaraprófið mistókst á þessari gerð. Hljóð er flutt í gegnum "
+"hljóðkortið. Það mun ekki reyna aftur fyrr en viðmótið endurræsist."
+
+#: lib/python/Components/HdsEgalizator.py:772
+msgid ""
+"Pe acest model, egalizatorul la TV este de probă. La primul eșec, sunetul "
+"revine imediat pe placa de sunet și proba se oprește până la repornirea "
+"interfeței."
+msgstr ""
+"Á þessu líkani er sjónvarpsjafnari tilraunakennt. Við fyrstu bilun fer "
+"hljóðið strax aftur á hljóðkortið og prófun hættir þar til viðmótið "
+"endurræsist."
+
+#: lib/python/Components/HdsLnb.py:66 lib/python/Components/NimManager.py:1756
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3424
+msgid "Banda C (5750)"
+msgstr "C-tíðnisvið (5750)"
+
+#: lib/python/Components/HdsLnb.py:722
+msgid "Satelitul nu se poate alege pentru acest LNB."
+msgstr "Ekki er hægt að velja gervihnött fyrir þennan LNB."
+
+#: lib/python/Components/HdsLnb.py:753
+#, python-format
+msgid "Satelit: %s în loc de %s. Antena rămâne fixă."
+msgstr "Gervihnöttur: %s í stað %s. Loftnetið helst fast."
+
+#: lib/python/Components/HdsLnbAplicare.py:503
+msgid "O căutare oarbă e în curs. Oprește-o înainte de a schimba satelitul."
+msgstr ""
+"Blindskönnun er í gangi. Stöðvaðu hana áður en þú skiptir um gervihnött."
+
+#: lib/python/Components/HdsReparaBuchete.py:55
+msgid "Am curățat descrierile rămase fără buchet în lista de canale."
+msgstr "Ég fjarlægði lýsingar án rásahóps úr rásalistanum."
+
+#: lib/python/Components/HdsReparaBuchete.py:469
+#: lib/python/Screens/ChannelSelection.py:956
+msgid "Nu am putut confirma schimbarea listei. Încearcă din nou."
+msgstr "Ég gat ekki staðfest listabreytinguna. Reyndu aftur."
+
+#: lib/python/Components/HdsReparaBuchete.py:525
+#: lib/python/Components/HdsReparaBuchete.py:509
+#: lib/python/Screens/HdsAsistentaSemn.py:897
+msgid "Lista nu s-a putut repara. Nu am șters niciun buchet."
+msgstr "Ekki tókst að laga listann. Ég eyddi engum rásahópi."
+
+#: lib/python/Components/HdsReparaBuchete.py:46
+#, python-format
+msgid " și încă %d"
+msgstr " og %d fleiri"
+
+#: lib/python/Components/HdsReparaBuchete.py:48
+#, python-format
+msgid "Am găsit un buchet care lipsea din listă și l-am pus la loc: %s"
+msgstr "Ég fann rásahóp sem vantaði á listann og setti hann aftur: %s"
+
+#: lib/python/Components/HdsReparaBuchete.py:50
+#, python-format
+msgid "Am găsit %d buchete care lipseau din listă și le-am pus la loc: %s"
+msgstr "Ég fann rásahópa sem vantaði á listann og setti þá aftur, alls %d: %s"
+
+#: lib/python/Components/HdsReparaBuchete.py:52
+msgid "Am curățat și descrierile rămase fără buchet."
+msgstr "Ég fjarlægði líka lýsingar sem voru án rásahóps."
+
+#: lib/python/Components/HdsReparaBuchete.py:534
+msgid ""
+"Lista s-a scris pe disc, dar nu s-a putut reîncărca. Repornește interfața."
+msgstr ""
+"Listinn var skrifaður á diskinn en ekki var hægt að endurhlaða hann. "
+"Endurræstu viðmótið."
+
+#: lib/python/Components/HdsReparaBuchete.py:535
+msgid ""
+"Lista s-a reparat pe disc, dar nu s-a putut reîncărca. Repornește interfața."
+msgstr ""
+"Listinn var lagfærður á diski en ekki tókst að endurhlaða hann. Endurræstu "
+"viðmótið."
+
+#: lib/python/Components/HdsStareOsd.py:251
+#, python-format
+msgid ""
+"mod %(mod)s | nod videomode %(nod)s | disp %(disp)s | OutColorSpace "
+"%(culoare)s | TMDS %(tmds)s | GP0 Output %(gp0)s | rate 50:%(hz50)s "
+"60:%(hz60)s 24:%(hz24)s | hpd %(hpd)s | rsen %(rsen)s | proaspat "
+"%(proaspat)s complet %(complet)s tranzitie %(tranzitie)s | HPD %(HPD)s UnHPD"
+" %(UnHPD)s RsenCon %(RsenCon)s RsenDis %(RsenDis)s"
+msgstr ""
+"hamur %(mod)s | hnútur videomode %(nod)s | disp %(disp)s | OutColorSpace "
+"%(culoare)s | TMDS %(tmds)s | GP0 Output %(gp0)s | tíðnir 50:%(hz50)s "
+"60:%(hz60)s 24:%(hz24)s | hpd %(hpd)s | rsen %(rsen)s | nýlegt %(proaspat)s "
+"fullgert %(complet)s skipti %(tranzitie)s | HPD %(HPD)s UnHPD %(UnHPD)s "
+"RsenCon %(RsenCon)s RsenDis %(RsenDis)s"
+
+#: lib/python/Components/HdsTasteRapide.py:334
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1227
+#: lib/python/Screens/ButtonSetup.py:51 lib/python/Screens/ButtonSetup.py:79
+#: lib/python/Screens/ButtonSetup.py:163
+msgid "Profilurile mele"
+msgstr "Sniðin mín"
+
+#: lib/python/Components/HdsTasteRapide.py:831
+#: lib/python/Components/HdsTasteRapide.py:852
+#: lib/python/Components/HdsTasteRapide.py:838
+msgid "Profilul ales nu mai există."
+msgstr "Valið snið er ekki lengur til."
+
+#: lib/python/Components/HdsTasteRapide.py:1039
+#: lib/python/Components/HdsTasteRapide.py:1099
+msgid "Setările se schimbă acum. Încearcă din nou după terminare."
+msgstr "Verið er að breyta stillingum. Reyndu aftur þegar þessu lýkur."
+
+#: lib/python/Components/HdsTasteRapide.py:659
+msgid ""
+"Numele profilului poate avea cel mult 64 de caractere, fără caractere de "
+"control."
+msgstr "Sniðnafnið getur innihaldið allt að 64 stafi, án stýristöfa."
+
+#: lib/python/Components/HdsTasteRapide.py:688
+msgid "Fișierul nu este un profil de taste HD Satelit."
+msgstr "Skráin er ekki HD Satelit-hnappasnið."
+
+#: lib/python/Components/HdsTasteRapide.py:690
+msgid ""
+"Versiunea profilului nu este acceptată. Actualizează imaginea și încearcă "
+"din nou."
+msgstr ""
+"Útgáfa sniðsins er ekki studd. Uppfærðu kerfismyndina og reyndu aftur."
+
+#: lib/python/Components/HdsTasteRapide.py:692
+#: lib/python/Components/HdsTasteRapide.py:695
+msgid "Profilul este incomplet sau conține date necunoscute."
+msgstr "Sniðið er ófullkomið eða inniheldur óþekkt gögn."
+
+#: lib/python/Components/HdsTasteRapide.py:720
+msgid "Profilul conține o setare de taste necunoscută sau nevalidă."
+msgstr "Snið inniheldur óþekkta eða ógilda hnappastillingu."
+
+#: lib/python/Components/HdsTasteRapide.py:722
+msgid "Profilul conține o setare radio nevalidă."
+msgstr "Snið inniheldur ógilda útvarpsstillingu."
+
+#: lib/python/Components/HdsTasteRapide.py:755
+msgid "Fișierul profilurilor este prea mare."
+msgstr "Sniðskráin er of stór."
+
+#: lib/python/Components/HdsTasteRapide.py:758
+msgid "Fișierul profilurilor este stricat sau are o versiune neacceptată."
+msgstr "Sniðskráin er skemmd eða hefur óstudda útgáfu."
+
+#: lib/python/Components/HdsTasteRapide.py:761
+#: lib/python/Components/HdsTasteRapide.py:765
+msgid "Lista profilurilor nu este validă."
+msgstr "Sniðlistinn er ógildur."
+
+#: lib/python/Components/HdsTasteRapide.py:804
+msgid "Ai deja 100 de profiluri. Șterge unul pentru a salva altul."
+msgstr "Þú ert nú þegar með 100 snið. Eyddu einu til að vista annað."
+
+#: lib/python/Components/HdsTasteRapide.py:810
+#: lib/python/Components/HdsTasteRapide.py:808
+#, python-format
+msgid "Profilul meu %d"
+msgstr "Sniðið mitt %d"
+
+#: lib/python/Components/HdsTasteRapide.py:823
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1231
+msgid "Profilul este prea mare (maximum 64 KiB)."
+msgstr "Snið er of stórt (hámark 64 KiB)."
+
+#: lib/python/Components/HdsTasteRapide.py:845
+msgid "Scrie numele nou al profilului."
+msgstr "Sláðu inn nýja nafnið fyrir sniðið."
+
+#: lib/python/Components/HdsTasteRapide.py:1154
+msgid "Alege ce vrei să faci cu profilul."
+msgstr "Veldu hvað á að gera við sniðið."
+
+#: lib/python/Components/HdsTasteRapide.py:698
+msgid "Profilul conține o listă de taste nevalidă."
+msgstr "Sniðið inniheldur ógildan hnappalista."
+
+#: lib/python/Components/HdsTasteRapide.py:706
+msgid "Profilul conține o acțiune necunoscută."
+msgstr "Sniðið inniheldur óþekkta aðgerð."
+
+#: lib/python/Components/HdsTasteRapide.py:738
+msgid "Fișierul de profil este stricat. Tastele au rămas neschimbate."
+msgstr "Sniðskráin er skemmd. Hnapparnir eru óbreyttir."
+
+#: lib/python/Components/HdsTasteRapide.py:746
+msgid "Fișierul profilurilor nu poate fi o legătură."
+msgstr "Sniðskráin getur ekki verið tengill."
+
+#: lib/python/Components/HdsTasteRapide.py:932
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:266
+msgid "Se lucrează la un profil. Încearcă din nou după terminare."
+msgstr "Sniðaðgerð er í gangi. Reyndu aftur þegar því lýkur."
+
+#: lib/python/Components/HdsTasteRapide.py:701
+msgid "Profilul conține o tastă nevalidă."
+msgstr "Sniðið inniheldur ógildan hnapp."
+
+#: lib/python/Components/HdsTasteRapide.py:703
+msgid "Profilul conține o valoare nevalidă."
+msgstr "Sniðið inniheldur ógilt gildi."
+
+#: lib/python/Components/HdsTasteRapide.py:750
+msgid "Fișierul profilurilor nu este un fișier obișnuit."
+msgstr "Sniðskráin er ekki venjuleg skrá."
+
+#: lib/python/Components/HdsTasteRapide.py:1018
+msgid "Nu pot salva tastele pe disc. Tastele au rămas neschimbate."
+msgstr ""
+"Ég get ekki vistað hnappastillingarnar á disknum. Hnapparnir eru óbreyttir."
+
+#: lib/python/Components/HdsTasteRapide.py:1034
+#: lib/python/Components/HdsTasteRapide.py:1021
+msgid "Salvarea tastelor pe disc nu a putut fi verificată."
+msgstr "Ekki var hægt að staðfesta að vista hnappastillingar á disk."
+
+#: lib/python/Components/HdsTasteRapide.py:1056
+msgid "Profilul conține o valoare neacceptată pe acest receptor."
+msgstr "Snið inniheldur gildi sem ekki er stutt á þessum móttakara."
+
+#: lib/python/Components/HdsTasteRapide.py:1088
+msgid ""
+"Tastele au revenit în memorie, dar nu pot confirma revenirea setărilor de pe"
+" disc. Încearcă din nou."
+msgstr ""
+"Hnapparnir voru endurheimtir í minni, en ég get ekki staðfest að "
+"stillingarnar á disknum hafi verið endurheimtar. Reyndu aftur."
+
+#: lib/python/Components/HdsTransmisie.py:2963
+msgid "Tunerul este ocupat."
+msgstr "Mælirinn er upptekinn."
+
+#: lib/python/Components/HdsTransmisie.py:1956
+msgid "Canalul nu trimite date. Starea semnalului nu se poate verifica acum."
+msgstr ""
+"Rásin er ekki að senda gögn. Ekki er hægt að athuga stöðu merkja núna."
+
+#: lib/python/Components/HdsTransmisie.py:2969
+#, python-format
+msgid "Televizorul redă: %s."
+msgstr "Sjónvarpið er að spila: %s."
+
+#: lib/python/Components/HdsTransmisie.py:2997
+#, python-format
+msgid "Fără semnal pe tunerul %s."
+msgstr "Ekkert merki á tuner %s."
+
+#: lib/python/Components/HdsVorbire.py:32
+msgid ""
+"Subtitrarea postului are prioritate și se traduce în limba ta. Dacă rămâne "
+"fără text, trece singur la vorbire și revine când reapare subtitrarea. "
+"Sunetul canalului pleacă direct la serviciul ales, cu cheia ta. Nu trece "
+"prin serverele HD Satelit și nu se păstrează pe receptor. Serviciul îl "
+"prelucrează după regulile contului tău."
+msgstr ""
+"Textar stöðvarinnar hafa forgang og eru þýddir á tungumálið þitt. Ef texta "
+"vantar er sjálfkrafa skipt yfir í talgreiningu og til baka þegar textarnir "
+"birtast aftur. Hljóð rásarinnar fer beint til þjónustunnar sem þú valdir, "
+"með lyklinum þínum. Það fer ekki um netþjóna HD Satelit og er ekki geymt á "
+"móttakaranum. Þjónustan vinnur úr því samkvæmt reglum reikningsins þíns."
+
+#: lib/python/Components/HdsVorbire.py:333 lib/python/Screens/HdsVorbire.py:61
+#: lib/python/Screens/HdsVorbire.py:64
+msgid "Se salvează setările."
+msgstr "Verið er að vista stillingar."
+
+#: lib/python/Components/HdsVorbire.py:334
+msgid "Setarea s-a salvat, dar alegerea canalului nu s-a putut păstra."
+msgstr "Stillingin var vistuð en ekki var hægt að halda rásarvalinu."
+
+#: lib/python/Components/HdsVorbireTV.py:164
+msgid "Ascult sunetul canalului."
+msgstr "Ég er að hlusta á rásarhljóðið."
+
+#: lib/python/Components/HdsVorbireTV.py:164
+msgid "Pune întâi cheia: deschide configurarea de mai jos."
+msgstr "Stilltu lykilinn fyrst: opnaðu stillingarnar hér að neðan."
+
+#: lib/python/Components/HdsVorbireTV.py:165
+msgid "Subtitrarea postului are prioritate."
+msgstr "Textar stöðvarinnar hafa forgang."
+
+#: lib/python/Components/HdsVorbireTV.py:166
+msgid "Sunetul nu este disponibil pentru această probă."
+msgstr "Hljóð er ekki tiltækt fyrir þetta próf."
+
+#: lib/python/Components/HdsVorbireTV.py:167
+msgid "Redarea acestui film are nevoie de actualizarea nucleului imaginii."
+msgstr "Til að spila þessa kvikmynd þarf að uppfæra kjarna kerfismyndarinnar."
+
+#: lib/python/Components/HdsVorbireTV.py:168
+msgid "Serviciile nu au răspuns la timp sau nu mai au cotă. Reîncerc singur."
+msgstr ""
+"Þjónustan brást ekki við í tæka tíð eða er orðin uppiskroppa með kvóta. Ég "
+"mun reyna aftur sjálfkrafa."
+
+#: lib/python/Components/HdsVorbireTV.py:169
+msgid "Subtitrările din vorbire sunt oprite."
+msgstr "Slökkt er á ræðutextum."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:4860
+msgid ""
+"Verificarea buchetelor continuă pe receptor. Reîncarcă pagina mai târziu."
+msgstr ""
+"Athugun rásahópa heldur áfram á móttakaranum. Endurhladdu síðuna síðar."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:4861
+msgid "Nu am putut afla rezultatul verificării buchetelor. Reîncarcă pagina."
+msgstr "Ég gat ekki fengið niðurstöðu athugunar rásahópa. Endurhladdu síðuna."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/canale_web.py:3176
+#: lib/python/Screens/ChannelSelection.py:960
+#: lib/python/Screens/HdsAsistentaSemn.py:901
+msgid "Lista de canale este în lucru. Încearcă din nou peste câteva secunde."
+msgstr "Verið er að vinna í ráslistanum. Reyndu aftur eftir nokkrar sekúndur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1227
+msgid ""
+"Alegerea unui profil îl aplică pe loc. Așezările predefinite rămân puncte de"
+" plecare."
+msgstr ""
+"Ef þú velur snið gildir það strax. Forstilltu skipulagin eru áfram "
+"upphafspunktar."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1228
+#: lib/python/Screens/ButtonSetup.py:174
+msgid "Numele profilului (poți lăsa gol)"
+msgstr "Nafn sniðs (þú getur skilið þetta eftir autt)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1228
+#: lib/python/Screens/ButtonSetup.py:80 lib/python/Screens/ButtonSetup.py:157
+msgid "Salvează ca profil"
+msgstr "Vista sem snið"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1228
+#: lib/python/Screens/ButtonSetup.py:162
+msgid "Redenumește profilul"
+msgstr "Endurnefna snið"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1229
+#: lib/python/Screens/ButtonSetup.py:162
+msgid "Șterge profilul"
+msgstr "Eyða snið"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1229
+msgid "Descarcă profilul"
+msgstr "Sækja snið"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1229
+msgid "Încarcă un profil"
+msgstr "Hladdu upp snið"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1229
+msgid "Sau lipește aici conținutul profilului"
+msgstr "Eða límdu innihald sniðsins hér"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1231
+msgid "Alege un profil"
+msgstr "Veldu snið"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:1231
+msgid "Fișierul nu a putut fi citit."
+msgstr "Ekki var hægt að lesa skrána."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:252
+#: lib/python/Screens/ButtonSetup.py:149
+msgid "Nu pot salva profilurile. Fișierul tău a rămas neatins."
+msgstr "Ég get ekki vistað sniðin. Skráin þín er ósnortin."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:336
+#: lib/python/Screens/ButtonSetup.py:148
+msgid "Nu pot confirma salvarea tastelor pe disc."
+msgstr ""
+"Ég get ekki staðfest að hnappastillingarnar hafi verið vistaðar á disknum."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:307
+msgid "Cererea profilului nu este validă."
+msgstr "Sniðbeiðnin er ógild."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:312
+msgid "Profilul sau numele lui este prea mare."
+msgstr "Sniðið eða nafn þess er of stórt."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/intrari_web.py:332
+#: lib/python/Screens/ButtonSetup.py:196
+#, python-format
+msgid ""
+"Profil aplicat. Setări sărite pentru taste sau funcții care lipsesc: %d."
+msgstr ""
+"Sniðl notaður. Stillingar sleppt fyrir hnappa eða aðgerðir sem vantar: %d."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/locuri_retea_web.py:751
+msgid ""
+"Nimic nu se montează singur. Pentru montare după pornire, bifează Montat și "
+"după repornire la locul dorit."
+msgstr ""
+"Ekkert er tengt sjálfkrafa. Veldu „Einnig tengt eftir endurræsingu“ við "
+"staðinn sem þú vilt tengja eftir ræsingu."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paznic_web.py:143
+msgid "Acces neautorizat."
+msgstr "Óviðkomandi aðgangur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paznic_web.py:147
+msgid "Comenzile se trimit cu POST."
+msgstr "Skipanir eru sendar með POST."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/paznic_web.py:150
+msgid "Cerere respinsă."
+msgstr "Beiðni hafnað."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/piste.py:123
+#: lib/python/Screens/AudioSelection.py:423
+msgid "Din vorbire (tradus)"
+msgstr "Úr tali (þýtt)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3425
+#: lib/python/Screens/ConfigLNB.py:252
+msgid "Satelit (antenă fixă)"
+msgstr "Gervihnöttur (fast loftnet)"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:3426
+msgid "Alege satelitul"
+msgstr "Veldu gervihnött"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/scanare_web.py:2076
+msgid "Satelitul se schimbă din pagina receptorului, cu POST."
+msgstr "Gervihnöttnum er breytt frá móttakarasíðunni með því að nota POST."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py:593
+msgid "Salvarea este în curs. Încearcă din nou după câteva clipe."
+msgstr "Verið er að vista. Reyndu aftur eftir smá stund."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py:641
+#: lib/python/Plugins/Extensions/HdsWebControl/setari_web.py:652
+#: lib/python/Screens/Setup.py:542
+msgid ""
+"Nu s-a putut salva setarea. Verifică spațiul liber și încearcă din nou."
+msgstr ""
+"Ekki tókst að vista stillinguna. Athugaðu laust plássið og reyndu aftur."
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vorbire_web.py:89
+#: lib/python/Screens/HdsVorbire.py:31 lib/python/Screens/HdsVorbire.py:38
+msgid "Subtitrări din vorbire"
+msgstr "Textar úr tali"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vorbire_web.py:89
+#: lib/python/Screens/HdsVorbire.py:39
+msgid "Limba textului"
+msgstr "Textamál"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vorbire_web.py:89
+msgid "Spune ce auzi acum pe canal"
+msgstr "Segðu hvað þú heyrir á rásinni núna"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vorbire_web.py:89
+msgid "Pune cheia în același loc ca la traducere"
+msgstr "Settu lykilinn á sama stað og fyrir þýðingar"
+
+#: lib/python/Plugins/Extensions/HdsWebControl/vorbire_web.py:89
+msgid ""
+"Groq și Gemini folosesc cheile deja puse pentru traducere. Alege unul dintre"
+" ele pe pagina cheilor."
+msgstr ""
+"Groq og Gemini nota lyklana sem þegar eru stilltir fyrir þýðingar. Veldu "
+"einn af þeim á lyklasíðunni."
+
+#: lib/python/Screens/ButtonSetup.py:201
+#, python-format
+msgid "Profil salvat: %s"
+msgstr "Snið vistað: %s"
+
+#: lib/python/Screens/ButtonSetup.py:185
+msgid "Numele profilului"
+msgstr "Nafn sniðs"
+
+#: lib/python/Screens/ConfigLNB.py:156
+msgid "Banda C"
+msgstr "C-tíðnisvið"
+
+#: lib/python/Screens/ConfigLNB.py:220
+msgid "Oscilator bandă C (MHz)"
+msgstr "Sveiflugjafi C-sviðs (MHz)"
+
+#: lib/python/Screens/HdsAsistentaSemn.py:899
+msgid "Lista de buchete este în regulă. Nu am schimbat nimic."
+msgstr "Listi rásahópa er í lagi. Ég breytti engu."
+
+#: lib/python/Screens/HdsEgalizator.py:496
+msgid "Da (de probă)"
+msgstr "Já (tilraunaverkefni)"
+
+#: lib/python/Screens/HdsEgalizator.py:496
+msgid "Nu (de probă)"
+msgstr "Nei (tilraun)"
+
+#: lib/python/Screens/HdsVorbire.py:43
+msgid "Verde: salvează. Galben: cheile traducerii. Ieșire: renunță."
+msgstr "Grænt: vista. Gulur: þýðingarlyklar. Hætta: hætta við."
+
+#: lib/python/Screens/HdsVorbire.py:39
+msgid "Serviciul care ascultă"
+msgstr "Hlustunarþjónusta"
+
+#: lib/python/Screens/HdsVorbire.py:41
+msgid ""
+"Scanează codul cu telefonul. Alegi Groq sau Gemini și pui cheia în același "
+"loc ca la traducere. Durează cam un minut."
+msgstr ""
+"Skannaðu kóðann með símanum þínum. Veldu Groq eða Gemini og stilltu lykilinn"
+" á sama stað og fyrir þýðingar. Það tekur um eina mínútu."
+
+# Asistenta de la distanta
+msgid "%d de ore"
+msgstr "%d klukkustundir"
+
+msgid "Schimbă durata"
+msgstr "Breyta lengd"
+
+msgid "Stânga/Dreapta: alegi cât timp e pornită."
+msgstr "Vinstri/Hægri: veldu hversu lengi kveikt er á því."
+
+msgid "Tu alegi cât timp e pornită, de la 2 ore până la permanent, și poți schimba durata cât merge. O oprești oricând, de pe receptor sau din pagina web. Până atunci, echipa poate intra oricând."
+msgstr "Þú velur hversu lengi kveikt er á því: 2 klukkustundir, lengur eða varanlega, og þú getur breytt lengdinni á meðan það er í gangi. Þú getur slökkt á því hvenær sem er, af móttakaranum eða af vefsíðunni. Þangað til getur teymið farið inn hvenær sem er."
+#: lib/python/Components/HdsAfisaj.py:1364
+msgid "Scriere VFD incompletă."
+msgstr "Ófullkomin skrif á VFD."

@@ -729,41 +729,131 @@ class RotorPosition(Poll, Converter, object):
 	boolean = property(getBoolean)
 
 
-def _clienti():
+def _clientiFlux():
+	"""[(adresa, referinta, cum se arata, cu codorul)]: clientii din retea ai serverului de flux de pe 8001 si telefoanele cu
+	transcodare pe 8002 (enigma.eStreamServer, pus de HdsEnigmaCompat), apoi cei care vad un canal in browser (transmisia in
+	retea a imaginii, Components/HdsTransmisie.py, aratati cu numele browserului)."""
 	import sys
+	rez = []
+	server = getattr(sys.modules.get("enigma"), "eStreamServer", None)
+	try:
+		for c in (server.getInstance().getConnectedClients() if server is not None else None) or []:
+			rez.append((str(c[0]), str(c[1]), str(c[0]), bool(c[2]) if len(c) > 2 else False))
+	except Exception:
+		pass
 	modul = sys.modules.get("Components.HdsTransmisie")
 	manageri = getattr(modul, "_MANAGER", None) if modul is not None else None
-	if not manageri:
-		return []
-	rez = []
 	try:
-		for s in manageri[0].vii():
-			nume = getattr(s, "browser", "") or getattr(s, "adresa", "") or ""
-			if nume and nume not in rez:
-				rez.append(nume)
+		for s in (manageri[0].vii() if manageri else []):
+			adresa = str(getattr(s, "adresa", "") or "")
+			rez.append((adresa, str(getattr(s, "ref", "") or ""), getattr(s, "browser", "") or adresa, False))
 	except Exception:
-		return []
+		pass
 	return rez
 
 
+def _clienti():
+	"""Numele de aratat, fara dubluri (ce dadea convertorul inainte de tipurile OE-Alliance)."""
+	rez = []
+	for _adresa, _ref, nume, _codor in _clientiFlux():
+		if nume and nume not in rez:
+			rez.append(nume)
+	return rez
+
+
+def _numeCanal(ref):
+	try:
+		from ServiceReference import ServiceReference
+		return ServiceReference(ref).getServiceName() or _("necunoscut")
+	except Exception:
+		return _("necunoscut")
+
+
+_NUME_ADRESE = {}   # adresa -> numele din DNS (sau adresa, cand nu are), cautat o data, pe un fir separat
+_CAUTATE = set()
+
+
+def _numeAdresei(adresa):
+	"""Numele unei adrese pentru INFO_RESOLVE, fara sa astepte firul enigma2: pana vine numele se arata adresa."""
+	nume = _NUME_ADRESE.get(adresa)
+	if nume is not None:
+		return nume
+	if adresa and adresa not in _CAUTATE:
+		_CAUTATE.add(adresa)
+		import threading
+
+		def cauta():
+			try:
+				from socket import gethostbyaddr
+				_NUME_ADRESE[adresa] = gethostbyaddr(adresa)[0] or adresa
+			except Exception:
+				_NUME_ADRESE[adresa] = adresa
+		fir = threading.Thread(target=cauta, name="ClientsStreaming")
+		fir.daemon = True
+		fir.start()
+	return adresa
+
+
 class ClientsStreaming(Poll, Converter, object):
-	"""Cine primeste acum un canal prin receptor (transmisia in retea a imaginii); fara transmisie, nimic."""
+	"""Cine primeste acum un canal prin receptor: clientii serverului de flux de pe 8001 (VLC, Kodi, telefonul, alt receptor)
+	si cei care vad un canal in browser. Tipurile convertorului OE-Alliance cu acelasi nume (REF, IP, NAME, ENCODER, NUMBER,
+	SHORT_ALL, ALL, INFO, INFO_RESOLVE, INFO_RESOLVE_SHORT, EXTRA_INFO, DATA), ca temele scrise pentru el sa arate la fel;
+	fara tip (sau cu altul): numele clientilor, despartite prin virgula, ca pana acum. Codorul e Da numai la telefoanele cu
+	transcodare pe 8002 (Vu+ cu codor). Numele adreselor (INFO_RESOLVE) se cauta pe un fir separat: un DNS care nu raspunde
+	nu tine ecranul."""
+
+	TIPURI = ("REF", "IP", "NAME", "ENCODER", "NUMBER", "SHORT_ALL", "ALL", "INFO", "INFO_RESOLVE", "INFO_RESOLVE_SHORT",
+		"EXTRA_INFO", "DATA")
 
 	def __init__(self, arg):
 		Converter.__init__(self, arg)
 		Poll.__init__(self)
 		self.poll_interval = 5000
 		self.poll_enabled = True
+		tip = (arg or "").strip().upper()
+		self.tip = tip if tip in self.TIPURI else ""
 
 	@cached
 	def getText(self):
-		return ", ".join(_clienti())
+		tip = self.tip
+		if not tip:
+			return ", ".join(_clienti())
+		clienti = _clientiFlux()
+		if tip == "NUMBER":
+			return str(len(clienti))
+		if tip == "IP":
+			return " ".join(c[0] for c in clienti)
+		if tip == "REF":
+			return " ".join(c[1] for c in clienti)
+		nume = [_numeCanal(c[1]) for c in clienti]
+		if tip == "NAME":
+			return " ".join(nume)
+		if tip == "SHORT_ALL":
+			return _("Clienți care primesc un canal: %d ( %s )") % (len(clienti), " ".join(nume))
+		codor = [_("Da") if c[3] else _("Nu") for c in clienti]
+		if tip == "ENCODER":
+			return "%s: %s" % (_("Transcodare"), " ".join(codor))
+		randuri = []
+		for c, canal, cod in zip(clienti, nume, codor):
+			adresa = c[0]
+			if tip in ("INFO_RESOLVE", "INFO_RESOLVE_SHORT"):
+				gasit = _numeAdresei(adresa)
+				adresa = gasit.partition(".")[0] if tip == "INFO_RESOLVE_SHORT" and gasit != adresa else gasit
+			randuri.append((adresa, canal, cod, "T" if c[3] else "S"))
+		if tip == "DATA":
+			return [(a, c, cod) for a, c, cod, _f in randuri]
+		if tip == "ALL":
+			return "\n".join("%s %s %s" % (a, c, cod) for a, c, cod, _f in randuri)
+		if tip == "EXTRA_INFO":
+			return "%s\t\t%s\t%s\n\n" % (_("Adresa clientului"), _("Transcodare"), _("Canal")) + "".join(
+				"%-8s\t%s\t%s\n" % (a, cod, c) for a, c, cod, _f in randuri)
+		return "".join("%s %-8s %s\n" % (f, a, c) for a, c, _cod, f in randuri)
 
 	text = property(getText)
 
 	@cached
 	def getBoolean(self):
-		return bool(_clienti())
+		return bool(_clientiFlux())
 
 	boolean = property(getBoolean)
 

@@ -7,7 +7,7 @@
 #include <lib/base/eerror.h>
 #include <lib/dvb_ci/dvbci_operatorprofile.h>
 
-eDVBCIOperatorProfileSession::eDVBCIOperatorProfileSession()
+eDVBCIOperatorProfileSession::eDVBCIOperatorProfileSession(): m_privateListSelected(false)
 {
 }
 
@@ -25,6 +25,13 @@ int eDVBCIOperatorProfileSession::receivedAPDU(const unsigned char *tag,const vo
 		case 0x01:
 			eDebug("[CI%d OP] operator_status", slot->getSlotID());
 			state=stateStatus;
+			/* CI+ 1.3.2, 14.7.4.2: our service lists are private lists,
+			   not a logical channel list installed from the CICAM NIT. */
+			if (len >= 2 && ((((const unsigned char *)data)[1] >> 6) == 1) && !m_privateListSelected)
+			{
+				state = stateLeaveProfile;
+				return 1;
+			}
 			break;
 		case 0x03:
 			eDebug("[CI%d OP] operator_nit", slot->getSlotID());
@@ -50,6 +57,15 @@ int eDVBCIOperatorProfileSession::doAction()
 {
 	switch (state)
 	{
+	case stateLeaveProfile:
+	{
+		const unsigned char tag[3] = {0x9f, 0x9c, 0x08};
+		sendAPDU(tag);
+		m_privateListSelected = true;
+		state = stateFinal;
+		eDebug("[CI%d OP] private service list selected, operator_exit sent", slot->getSlotID());
+		return 0;
+	}
 	case stateStatusRequest:
 	{
 		const unsigned char tag[3]={0x9F, 0x9C, 0x00};

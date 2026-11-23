@@ -303,6 +303,9 @@ def hdsFaActiuneaLunga(ecran, actiune):
 		# lista canalelor recente (Screens/HdsIstoricCanale.py); OK porneste canalul ales
 		from Screens.HdsIstoricCanale import HdsIstoricCanale
 		ecran.session.open(HdsIstoricCanale, ecran)
+	elif actiune == "infobar_fixed":
+		# prima bara fixa pe ecran pana la a doua apasare (InfoBarShowHide.hdsComutaBaraFixa, CR4 0.7.8)
+		ecran.hdsComutaBaraFixa()
 	elif actiune == "mozaic":
 		# toate canalele TV ale transponderului canalului de acum, pe 2, 4 sau 9 celule (Screens/HdsMozaic.py)
 		from Screens.HdsMozaic import HdsMozaic
@@ -346,6 +349,12 @@ def hdsFaActiuneaLunga(ecran, actiune):
 			"reboot": "receptor", "restart": "interfata"}[actiune])
 	elif actiune == "captura":
 		ecran.hdsCaptura()
+	elif actiune == "reload_skin":
+		# RLS6: tema citita din nou de pe disc, fara repornire (skin.reincarcaTema); raspunsul pe ecran, si cand nu merge
+		from skin import reincarcaTema
+		from Screens.MessageBox import MessageBox
+		bun, mesaj = reincarcaTema()
+		ecran.session.open(MessageBox, mesaj, MessageBox.TYPE_INFO if bun else MessageBox.TYPE_ERROR, timeout=6 if bun else 0)
 	elif actiune in ("zap_next", "zap_previous"):
 		# ca CH+/CH- cu "Schimba canalul": pe ecranul radio postul urmator sau anterior
 		canal = getattr(ecran, "hdsCanalDinProfil", None)
@@ -431,10 +440,18 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 			}, prio=2)
 
 		# Numai bara live. Alte ecrane isi pastreaza hartile proprii.
+		try:
+			from Components.HdsZgemma import disponibil, modelAcum
+		except ImportError:
+			pass
+		else:
+			if disponibil(modelAcum()):
+				self["HdsZgemmaActions"] = HelpableActionMap(self, "HdsZgemmaActions",
+					{"oprireProgramata": (self.hdsZgemmaSomn, _("Oprire programată"))}, prio=2)
 		from Components.HdsTasteRapide import AlocareTaste, actiuni_harta
 		self.hdsRosuLuat = False
 		self.hdsTasteAlocate = AlocareTaste(self.hdsPornesteTastaLunga,
-			self.keyNumberGlobal, self.hdsTastaDisponibila, ceas=eTimer())
+			self.keyNumberGlobal, self.hdsTastaDisponibila, ceas=eTimer(), actiune=self.hdsActiuneTasta)
 		self.onExecEnd.append(self.hdsTasteAlocate.anuleaza)
 		self["HdsAlocareTasteActions"] = HelpableActionMap(self,
 			"HdsAlocareTasteActions", actiuni_harta(self.hdsTastaAlocata), prio=-2)
@@ -470,6 +487,12 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 			self.hdsVremea = LegaturaVremea(self)
 		except Exception as e:
 			print("[InfoBar] panoul vremii nu a pornit: %s" % e)
+
+		try:
+			from Screens.HdsVpnBara import LegaturaVpn
+			self.hdsVpnBara = LegaturaVpn(self)
+		except Exception as e:
+			print("[InfoBar] iconita VPN: %s" % e)
 
 		self.current_begin_time=0
 		self.hdsRefEmisiune = None
@@ -510,24 +533,20 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 			print("[InfoBar] mouse-ul USB lipseste:", e)
 
 	def hdsPornesteEcranRadio(self):
-		"""Ecranul radio pe tot ecranul (Screens/HdsEcranRadio.py): fereastra de sub bara, aratata cat merge un post
-		de radio, si harta tastelor ei (prioritatea -1, inaintea hartilor barei), pornita numai atunci. Fara ele (skin
-		stricat, modul lipsa) bara merge ca inainte."""
+		"""Leaga numai intrarea usoara; ferestrele radio se fac la prima folosire."""
 		self.hdsListaRadioDeschisa = False
 		self.hdsRadio = None
 		try:
-			from Screens import HdsEcranRadio
+			from Components.HdsRadioMeniu import LegaturaRadioLenesa
 		except ImportError as e:
 			print("[InfoBar] ecranul radio lipseste:", e)
 			return
-		leg = HdsEcranRadio.faLegatura(self)
-		if leg is None:
-			return
-		self.hdsRadio = leg
-		# OK, EXIT, sagetile, GALBEN (vizualizarea urmatoare), ALBASTRU (culorile urmatoare): HdsEcranRadio.actiuniHarta
-		self["HdsRadioActions"] = HdsEcranRadio.HartaRadio(HdsEcranRadio.CONTEXTE_TASTE,
-			HdsEcranRadio.actiuniHarta(leg), prio=-1)
-		leg.legaHarta(self["HdsRadioActions"])
+		self.hdsRadio = LegaturaRadioLenesa(self, prio=-1)
+
+	def hdsIncarcaEcranRadio(self):
+		"""Fabrica folosita numai de legatura usoara la intrarea legitima in radio."""
+		from Screens import HdsEcranRadio
+		return HdsEcranRadio.faLegatura(self)
 
 	def __onClose(self):
 		InfoBar.instance = None
@@ -742,6 +761,10 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 		from Screens.TimerEdit import TimerEditList
 		self.session.open(TimerEditList)
 
+	def hdsZgemmaSomn(self):
+		from Screens.SleepTimerEdit import SleepTimerEdit
+		self.session.open(SleepTimerEdit)
+
 	def hdsExtensii(self):
 		InfoBarExtensions.showExtensionSelection(self)
 
@@ -774,8 +797,8 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 			elif getattr(self, "hdsRosuLuat", False):
 				return 1
 		if tasta in ("channelup", "channeldown"):
-			from Components.HdsTasteRapide import actiune_aleasa, optiune
-			profil = optiune("hds_ch_privire")
+			from Components.HdsTasteRapide import actiune_aleasa, optiune, asezare_neutrino
+			profil = "zap" if asezare_neutrino() and self.hdsAsezarePrivitActiva() else optiune("hds_ch_privire")
 			if profil != "device" and actiune_aleasa(tasta + "_short") == "default":
 				if not self.hdsTastaDisponibila(tasta):
 					return 0
@@ -783,6 +806,15 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 					self.hdsCanalDinProfil(tasta == "channelup", profil)
 				return 1
 		return self.hdsTasteAlocate.eveniment(tasta, faza)
+
+	def hdsAsezarePrivitActiva(self):
+		"""Profilul apartine privitului, inclusiv fluxurilor in direct."""
+		return not self.timeshift_enabled and (self._hdsTastePrivitActive() or self._hdsFluxInDirect())
+
+	def hdsActiuneTasta(self, buton, config=None):
+		from Components.HdsTasteRapide import actiune_efectiva, asezare_neutrino
+		return actiune_efectiva(buton, config,
+			aplica_asezare=asezare_neutrino(config) and self.hdsAsezarePrivitActiva())
 
 	def hdsCanalDinProfil(self, urmator, profil):
 		radio = getattr(self, "hdsRadio", None)
@@ -828,6 +860,12 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 			return False
 		try:
 			hdsFaActiuneaLunga(self, actiune)
+			if buton in ("left", "right") and actiune == "channellist":
+				from Components.HdsTasteRapide import optiune
+				lista = self.session.current_dialog
+				if optiune("hds_asezare_taste") == "neutrino_buchete" and hasattr(lista, "hdsLateralBuchet"):
+					# Eliberarea ramane a deschiderii; repetarile nu dau pagini in lista noua.
+					lista.hdsLateralBuchetApasat = True
 		except Exception as e:
 			print("[InfoBar] %s tinut apasat (%s): %s: %s" % (buton, actiune, type(e).__name__, e))
 		return True

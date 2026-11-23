@@ -64,9 +64,17 @@ def nume(ref):
 	return n if _NUME.match(n) else ""
 
 
+def _numeCache(ref):
+	# Cache-ul sursei are aceeasi identitate pentru cele trei playere.
+	# Piconurile standard ale omului isi pastreaza numele complet (nume()).
+	if str(ref).split(":", 1)[0] in ("5001", "5002"):
+		ref = "4097:" + str(ref).split(":", 1)[1]
+	return nume(ref)
+
+
 def cauta(ref):
 	"""Numai existenta fisierului local; nici citire de playlist, nici retea."""
-	n = nume(ref)
+	n = _numeCache(ref)
 	if n:
 		for ext in (".png", ".jpg"):
 			cale = os.path.join(dosar(), n + ext)
@@ -229,6 +237,11 @@ def _curata():
 				pass
 
 
+def descarcaSigla(s, adresa, antete=None):
+	"""Aceeasi cerere pentru cache si piconuri: antetele canalului au prioritate."""
+	return _citeste(adresa, dict(C.anteteSursa(s), **C.anteteCurate(antete)))
+
+
 def _aduce(s, canal):
 	global _generatie
 	if len(canal) < 5 or not isinstance(canal[4], dict):
@@ -250,7 +263,7 @@ def _aduce(s, canal):
 				return True
 	except OSError:
 		pass
-	date = _citeste(adresa, antete)
+	date = descarcaSigla(s, adresa, canal[4].get("antete"))
 	ext = verifica(date)
 	os.makedirs(dosar(), mode=0o700, exist_ok=True)
 	os.chmod(dosar(), 0o700)
@@ -372,4 +385,4 @@ def cereReferinte(refs):
 			continue
 		p = _LOCAL.match(unquote(parti[10]).rstrip(":"))
 		if p:
-			_pune(nume(ref), ("ref", p.group(1), p.group(2)))
+			_pune(_numeCache(ref), ("ref", p.group(1), p.group(2)))

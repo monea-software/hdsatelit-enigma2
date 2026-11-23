@@ -156,6 +156,7 @@ import errno
 import io
 import os
 import re
+import sys
 import time
 try:
 	import unicodedata          # in imagine e in lib-dynload; fara el, numai diacriticele romanesti de mai jos
@@ -927,6 +928,20 @@ def _deschideNodul(deschide, ioctl, cale):
 	return fd, None
 
 
+def _scrieNodReincearca(scrie, fd, date, oprit):
+	"""Numai pe firul CEC: cel mult cinci incercari, cu pauze intreruptibile de 40 ms."""
+	for i in range(5):
+		if oprit.is_set():
+			return 0
+		try:
+			return scrie(fd, date)
+		except OSError as e:
+			if e.errno not in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR) or i == 4:
+				raise
+		if oprit.wait(0.040):
+			return 0
+
+
 def _adreseNod(ioctl, fd):
 	"""Adresa fizica din EDID-ul televizorului (/proc/msp/hdmi0_sink, citit direct: nu e firul principal) si octetii
 	lui ioctl 1 (sau eroarea lui)."""
@@ -1004,6 +1019,10 @@ class Cec(object):
 		self.nume = nume or numeTv
 		self.inStandby = inStandby or _inStandby
 		self.fd = None
+		import threading
+		self._scriereOprita = threading.Event()
+		self._deschidereRestanta = False
+		self._redeschideDupa = False
 		self.timerAnunt = None
 		self.timerCitire = None
 		self.incercariAnunt = 0
@@ -1167,7 +1186,8 @@ class Cec(object):
 			return True
 		if not os.path.exists(CEC):
 			return False
-		if self._cuFir():
+		# Redeschiderea asteapta si close-ul vechi pus dupa o scriere EAGAIN.
+		if self._cuFir() or self._cereri or self.blocat or self._deInchis is not None:
 			return self._deschideInFir()
 		try:
 			self.fd = self.deschideFd(CEC, os.O_RDWR | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOCTTY", 0))
@@ -1176,6 +1196,8 @@ class Cec(object):
 			self.fd = None
 			return False
 		_jurnal("CEC pornit (%s)" % CEC, "cec-pornit")
+		import threading
+		self._scriereOprita = threading.Event()
 		self.tampon = bytearray()
 		self.incercariAnunt = 0
 		try:
@@ -1193,19 +1215,30 @@ class Cec(object):
 		"""deschide() pe familia libreader: open() si golirea cozii le face firul de lucru CEC. Ceasul citirii porneste
 		acum (pasii lui iau raspunsul, si opresc CEC daca open() ramane in driver), anuntul cand nodul e deschis.
 		Intoarce True / False daca raspunsul a venit pe loc, altfel None."""
+		if self._deschidereRestanta:
+			# O deschidere anulata trebuie intai preluata si inchisa, apoi cea noua.
+			if not self._seDeschide:
+				self._redeschideDupa = True
+			self._pornesteCitirea()
+			return None
 		if self._seDeschide or (self.blocat and not self._incearcaReluarea()):
 			return None
 		if self.fd is not None:
 			return True              # 0.7.5 CEZ: nodul deschis chiar de cererea intoarsa la reluarea de mai sus
 		self._seDeschide = True
+		self._deschidereRestanta = True
 		self._pornesteCitirea()
 		return self._cere("deschiderea lui", _deschideNodul, (self.deschideFd, self._ioctlPe, CEC), self._deschisInFir)
 
 	def _deschisInFir(self, rezultat, eroare):
+		self._deschidereRestanta = False
 		if not self._seDeschide:
 			# inchide() intre timp: nodul deschis acum se inchide la loc
 			if eroare is None:
 				self._cere("inchiderea lui", self.inchideFd, (rezultat[0],), self._inchis)
+			if self._redeschideDupa:
+				self._redeschideDupa = False
+				return self._deschideInFir()
 			return False
 		self._seDeschide = False
 		if isinstance(eroare, CecNefacut):
@@ -1215,6 +1248,8 @@ class Cec(object):
 			self._opresteTimer(self.timerCitire)
 			return False
 		self.fd, eroareGolire = rezultat
+		import threading
+		self._scriereOprita = threading.Event()
 		_jurnal("CEC pornit (%s)" % CEC, "cec-pornit")
 		self.tampon = bytearray()
 		self.incercariAnunt = 0
@@ -1241,6 +1276,8 @@ class Cec(object):
 			_jurnal("citirea CEC: %r" % (e,), "cec-citire-timer")
 
 	def inchide(self):
+		self._scriereOprita.set()
+		self._redeschideDupa = False
 		self.opresteTastele()
 		for t in (self.timerAnunt, self.timerCitire):
 			if t is not None:
@@ -1253,7 +1290,7 @@ class Cec(object):
 		if self.fd is None:
 			return
 		fd, self.fd = self.fd, None
-		if self._cuFir():
+		if self._cuFir() or self._cereri:
 			# familia libreader: close() il face firul de lucru CEC, dupa cererile din coada; nu-l asteapta nimeni (dupa
 			# oprirea CEC nici nu se mai face: ar astepta acelasi driver; 0.7.5 CEZ: se face la reluarea CEC)
 			if self.blocat:
@@ -1386,12 +1423,20 @@ class Cec(object):
 		if self.fd is None or self._oprit():
 			return dupa(False) if dupa is not None else False
 		date = cadru(destinatie, cod, parametri)
-		if self._cuFir():
-			return self._cere("scrierea in", self.scrieFd, (self.fd, date),
-				lambda n, eroare: self._scris(destinatie, cod, date, n, eroare, dupa))
+		oprit = self._scriereOprita
+		def rezultat(n, eroare):
+			if oprit is not self._scriereOprita or oprit.is_set():
+				return False
+			return self._scris(destinatie, cod, date, n, eroare, dupa)
+		if self._cuFir() or self._cereri:
+			return self._cere("scrierea in", _scrieNodReincearca, (self.scrieFd, self.fd, date, oprit),
+				rezultat)
 		try:
 			n, eroare = self.scrieFd(self.fd, date), None
 		except OSError as e:
+			if e.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR):
+				return self._cere("scrierea in", _scrieNodReincearca, (self.scrieFd, self.fd, date, oprit),
+					rezultat, asteapta=False)
 			n, eroare = 0, e
 		return self._scris(destinatie, cod, date, n, eroare, dupa)
 
@@ -1411,7 +1456,9 @@ class Cec(object):
 		self.ultimul = {"mesaj": NUME_MESAJ.get(cod, "%02x" % cod), "cand": self.ceas(), "trimis": trimis}
 		self.raspunde = trimis
 		if not trimis:
-			_jurnal("CEC: mesajul %s nu s-a trimis (televizorul nu raspunde la CEC)" % self.ultimul["mesaj"],
+			motiv = "driverul a ramas ocupat" if getattr(eroare, "errno", None) in (
+				errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR) else "televizorul nu raspunde la CEC"
+			_jurnal("CEC: mesajul %s nu s-a trimis (%s)" % (self.ultimul["mesaj"], motiv),
 				"cec-netrimis")
 		return dupa(trimis) if dupa is not None else trimis
 
@@ -1645,6 +1692,8 @@ class Cec(object):
 			self._iaRezultatele()
 			if not self._oprit():
 				self._imparte()
+				if self._cereri:
+					self._preiaDupa(PRELUARE_MS)
 		except Exception as e:
 			_jurnal("citirea CEC: %r" % (e,), "cec-citire")
 
@@ -2944,6 +2993,13 @@ class StandbyTv(object):
 			self._pornesteIesirea("iesirea din standby")
 		temporizator = self.trezitTemporizator
 		self.trezitTemporizator = False
+		try:
+			# Modulul este pornit de mytest; trezirea nu citeste un modul de pe disc.
+			oprire = sys.modules.get("Components.HdsOprireAutomata")
+			if oprire is not None:
+				oprire.laTrezire(temporizator)
+		except Exception as e:
+			_jurnal("oprirea automata la trezire: %r" % (e,), "oprire-auto-trezire")
 		try:
 			c = _cfg()
 			if c.cec_porneste.value and not temporizator and self.cec.deschis():

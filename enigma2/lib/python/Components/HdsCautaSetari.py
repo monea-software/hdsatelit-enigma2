@@ -45,6 +45,16 @@ import xml.etree.ElementTree as ET
 
 CALE_MENIU = None          # probele pun aici un menu.xml; pe receptor resolveFilename(SCOPE_SKIN, "menu.xml")
 CALE_SETUP = None          # la fel pentru setup.xml; pe receptor ${datadir}/enigma2/setup.xml
+CALE_PLUGINURI = None
+# Limitele ecranelor si randurilor urmeaza contractul web existent.
+MAX_PLUGINURI = 60
+MAX_RANDURI_PLUGIN = 80
+MAX_XML_PLUGIN = 512 * 1024
+MAX_XML_TOTAL_PLUGIN = 2 * 1024 * 1024
+MAX_NODURI_PLUGIN = 8192
+MAX_DOSARE_PLUGIN = 2048
+_NUME_PLUGIN = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,59}$")
+_PARTE_PLUGIN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\[(?:[0-9]{1,3}|'[A-Za-z0-9_]{1,40}'|\"[A-Za-z0-9_]{1,40}\")\])*$")
 ID_PROPRIU = "hds_cauta_setari"    # intrarea ecranului de cautare: nu se gaseste pe ea insasi
 # toate intrarile care deschid ecranul de cautare (prima din Setari si cea din meniul principal): niciuna nu se gaseste
 ID_PROPRII = frozenset((ID_PROPRIU, "hds_cauta_setari_principal"))
@@ -209,6 +219,17 @@ _VERSIUNE = [0]            # creste la fiecare inregistreaza(), ca indexul sa se
 _TR_RO = []
 _FISIERE = {}
 _INDEX = {"semn": None, "index": None}
+_XML_PLUGIN = {}
+_INDEX_PLUGIN = {}
+_LECTOR_PLUGIN = None
+_LECTURA_PLUGIN = None
+_REZULTAT_PLUGIN = ()
+_RADACINA_PLUGIN = None
+_GENERATIE_PLUGIN = 0
+_ULTIMA_SCANARE_PLUGIN = 0.0
+_CEAS_PLUGIN = None
+_CONTEXT_PLUGIN = None
+_DESCHIDERI_PLUGIN = []
 
 
 def _jurnal(text):
@@ -433,7 +454,7 @@ def seDeschideDirect(t):
 def element(cale, config=None):
 	"""Setarea pentru textul unui rand („config.av.downmix_ac3”), prin getattr, fara eval; None daca nu exista."""
 	parti = (cale or "").strip().split(".")
-	if len(parti) < 2 or parti[0] != "config" or not all(p.isidentifier() and not p.startswith("_") for p in parti):
+	if len(parti) < 2 or parti[0] != "config":
 		return None
 	if config is None:
 		try:
@@ -443,7 +464,26 @@ def element(cale, config=None):
 	obiect = config
 	for p in parti[1:]:
 		try:
-			obiect = getattr(obiect, p)
+			if p.isidentifier() and not p.startswith("_"):
+				obiect = getattr(obiect, p)
+				continue
+			nod = ast.parse(p, mode="eval").body
+			indici = []
+			while isinstance(nod, ast.Subscript):
+				k = nod.slice
+				if not isinstance(k, ast.Constant) or type(k.value) not in (str, int):
+					return None
+				if isinstance(k.value, str) and not re.fullmatch(r"[A-Za-z0-9_]{1,40}", k.value):
+					return None
+				if isinstance(k.value, int) and not 0 <= k.value <= 999:
+					return None
+				indici.append(k.value)
+				nod = nod.value
+			if not isinstance(nod, ast.Name) or nod.id.startswith("_"):
+				return None
+			obiect = getattr(obiect, nod.id)
+			for k in reversed(indici):
+				obiect = obiect[k]
 		except Exception:
 			return None
 	return obiect
@@ -474,7 +514,7 @@ def valoare(intrare, config=None):
 	if intrare is None or not intrare.setare:
 		return ""
 	el = element(intrare.setare, config)
-	if el is None or felSetare(el) not in SIMPLE:
+	if el is None or (felSetare(el) not in SIMPLE and not any(c.__name__ in ("ConfigText", "ConfigPassword", "ConfigPIN") for c in type(el).__mro__)):
 		return ""
 	try:
 		text = el.getText()
@@ -510,6 +550,15 @@ def _evalueaza(nod, config):
 		if nod.attr.startswith("_"):
 			raise _Necunoscut(nod.attr)
 		return getattr(_evalueaza(nod.value, config), nod.attr)
+	if isinstance(nod, ast.Subscript):
+		k = nod.slice
+		if not isinstance(k, ast.Constant) or type(k.value) not in (str, int):
+			raise _Necunoscut("indice")
+		if isinstance(k.value, int) and not 0 <= k.value <= 999:
+			raise _Necunoscut("indice")
+		if isinstance(k.value, str) and not re.fullmatch(r"[A-Za-z0-9_]{1,40}", k.value):
+			raise _Necunoscut("indice")
+		return _evalueaza(nod.value, config)[k.value]
 	if isinstance(nod, (ast.Tuple, ast.List)):
 		return [_evalueaza(e, config) for e in nod.elts]
 	if isinstance(nod, ast.UnaryOp) and isinstance(nod.op, ast.Not):
@@ -584,7 +633,7 @@ class Intrare(object):
 	un rand de setari („rand”). `nod` = nodul din menu.xml al meniului sau al intrarii care deschide ecranul; `parinti` =
 	meniurile de deasupra, de la meniul principal pana la cel care o contine."""
 	__slots__ = ("cheie", "fel", "titlu", "nume", "drum", "entryID", "setup", "setare", "web", "ajutor", "ordine",
-		"nod", "parinti", "_variante", "_cuvTitlu", "_drum", "_cuvDrum", "_alte")
+		"nod", "parinti", "_variante", "_cuvTitlu", "_drum", "_cuvDrum", "_alte", "_textSecret", "_configPlugin", "_siPlugin")
 
 	def __init__(self, cheie, fel, titlu, nume, drum, entryID, nod, parinti, ordine, setup="", setare="", web="",
 			ajutor="", variante=(), drumuri=(), alte=()):
@@ -681,10 +730,18 @@ class Index(object):
 		return len(self.intrari)
 
 	def dupaCheie(self, cheie):
+		self._actualizeaza()
 		return self._chei.get(cheie)
+
+	def _actualizeaza(self):
+		if getattr(self, "_pluginuri", False):
+			_actualizeazaPluginuri()
+			if _CONTEXT_PLUGIN and _CONTEXT_PLUGIN[0] is self:
+				_cuPluginuri(*_CONTEXT_PLUGIN)
 
 	def cauta(self, text, maxim=MAX_REZULTATE):
 		"""Rezultatele pentru textul cautat, cele mai potrivite intai (la egalitate, in ordinea din meniu)."""
+		self._actualizeaza()
 		intreg = normalizeaza((text or "")[:MAX_TEXT])
 		if not intreg:
 			return []
@@ -834,6 +891,332 @@ def _instantaneu(radMeniu, radSetup, SystemInfo, config):
 		tuple(conditieAdevarata(c, config) for c in conditii))
 
 
+def calePluginuri():
+	if CALE_PLUGINURI:
+		return CALE_PLUGINURI
+	try:
+		from Tools.Directories import resolveFilename, SCOPE_PLUGINS
+		return resolveFilename(SCOPE_PLUGINS)
+	except Exception:
+		return "/usr/lib/enigma2/python/Plugins"
+
+
+def _fisierPlugin(plugin, radacina):
+	# Numai cai instalate sub radacina pluginurilor, fara legaturi in afara ei.
+	parti = plugin.split("/")
+	if len(parti) != 2 or not all(_NUME_PLUGIN.fullmatch(p) for p in parti):
+		return None
+	baza = os.path.realpath(radacina)
+	cale = os.path.realpath(os.path.join(baza, *parti, "setup.xml"))
+	try:
+		return cale if os.path.commonpath((baza, cale)) == baza else None
+	except ValueError:
+		return None
+
+
+def _xmlPlugin(cale):
+	# Citire si arbore limitate; declaratiile de entitati sunt respinse inainte de parsare.
+	try:
+		st = os.stat(cale)
+		semn = (st.st_mtime_ns, st.st_size, st.st_ino)
+		vechi = _XML_PLUGIN.get(cale)
+		if vechi is not None and vechi[0] == semn:
+			return vechi[1]
+		rad = None
+		if st.st_size <= MAX_XML_PLUGIN:
+			with open(cale, "rb") as f:
+				date = f.read(MAX_XML_PLUGIN + 1)
+			# Eliminarea NUL prinde si declaratiile in UTF-16 sau UTF-32.
+			control = date.replace(b"\x00", b"").upper()
+			if len(date) <= MAX_XML_PLUGIN and b"<!DOCTYPE" not in control and b"<!ENTITY" not in control:
+				rad = ET.fromstring(date)
+				for nr, _nod in enumerate(rad.iter()):
+					if nr >= MAX_NODURI_PLUGIN:
+						rad = None
+						break
+		_XML_PLUGIN[cale] = (semn, rad)
+		return rad
+	except (ValueError, LookupError, ET.ParseError):
+		_XML_PLUGIN[cale] = (semn, None)
+		return None
+	except OSError:
+		_XML_PLUGIN.pop(cale, None)
+		return None
+
+
+class _EcranPlugin:
+	# Snapshot XML si texte gettext; nu contine obiecte Enigma2.
+	def __init__(self, nod, domeniu):
+		from gettext import dgettext
+		self.nod = nod
+		self.traduceri = {}
+		for x in nod.iter():
+			for atribut in ("title", "text", "description"):
+				text = x.get(atribut)
+				if text and text not in self.traduceri:
+					try:
+						self.traduceri[text] = dgettext(domeniu, text)
+					except Exception:
+						self.traduceri[text] = text
+
+	def get(self, *args):
+		return self.nod.get(*args)
+
+	def __iter__(self):
+		return iter(self.nod)
+
+
+def _ecranePlugin(radacina):
+	# Numai fisiere: niciun plugin importat sau chemat, nici pentru metadate.
+	rez, vazute, identificatori = [], set(), set()
+	buget = MAX_DOSARE_PLUGIN
+	octeti = MAX_XML_TOTAL_PLUGIN
+	try:
+		categorii = sorted(os.listdir(radacina))
+	except OSError:
+		categorii = []
+	for cat in categorii[:MAX_DOSARE_PLUGIN]:
+		if not _NUME_PLUGIN.fullmatch(cat):
+			continue
+		try:
+			nume = sorted(os.listdir(os.path.join(radacina, cat)))
+		except OSError:
+			continue
+		for n in nume[:buget]:
+			buget -= 1
+			cale = _fisierPlugin(cat + "/" + n, radacina)
+			if not cale or not os.path.isfile(cale):
+				continue
+			try:
+				marime = os.path.getsize(cale)
+			except OSError:
+				continue
+			if marime > MAX_XML_PLUGIN or marime > octeti:
+				continue
+			octeti -= marime
+			vazute.add(cale)
+			rad = _xmlPlugin(cale)
+			if rad is None:
+				continue
+			for x in rad.findall("setup"):
+				cheie = x.get("key") or ""
+				ident = "%s/%s/%s" % (cat, n, cheie)
+				if not _NUME_PLUGIN.fullmatch(cheie) or len(ident) > 80 or ident in identificatori:
+					continue
+				if any((y.text or "").strip().startswith("config.") for y in x.iter("item")):
+					identificatori.add(ident)
+					rez.append((ident, cat + "/" + n, _EcranPlugin(x, n)))
+				if len(rez) >= MAX_PLUGINURI:
+					break
+			if len(rez) >= MAX_PLUGINURI:
+				break
+		if len(rez) >= MAX_PLUGINURI or buget <= 0:
+			break
+	for cale in list(_XML_PLUGIN):
+		if cale not in vazute:
+			del _XML_PLUGIN[cale]
+	return rez
+
+
+def _lectorPlugin():
+	global _LECTOR_PLUGIN
+	if _LECTOR_PLUGIN is None:
+		from concurrent.futures import ThreadPoolExecutor
+		_LECTOR_PLUGIN = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hds-cauta-xml")
+	return _LECTOR_PLUGIN
+
+
+def _publicaPluginuri():
+	import time
+	# Numai firul principal publica datele si atinge obiectele config.
+	global _LECTURA_PLUGIN, _REZULTAT_PLUGIN, _ULTIMA_SCANARE_PLUGIN
+	if _LECTURA_PLUGIN is None:
+		return
+	viitor, generatie = _LECTURA_PLUGIN
+	if not viitor.done():
+		if _CEAS_PLUGIN is not None:
+			_CEAS_PLUGIN.start(50, True)
+		return
+	_LECTURA_PLUGIN = None
+	try:
+		rezultat = viitor.result()
+	except Exception:
+		rezultat = ()
+	if generatie != _GENERATIE_PLUGIN:
+		_actualizeazaPluginuri(fortat=True)
+		return
+	if generatie == _GENERATIE_PLUGIN:
+		_REZULTAT_PLUGIN = tuple(rezultat)
+		_ULTIMA_SCANARE_PLUGIN = time.monotonic()
+		if _CONTEXT_PLUGIN:
+			_cuPluginuri(*_CONTEXT_PLUGIN)
+
+
+def _actualizeazaPluginuri(fortat=False):
+	import time
+	global _LECTURA_PLUGIN, _RADACINA_PLUGIN, _GENERATIE_PLUGIN
+	global _ULTIMA_SCANARE_PLUGIN, _REZULTAT_PLUGIN, _CEAS_PLUGIN
+	radacina = calePluginuri()
+	if radacina != _RADACINA_PLUGIN:
+		_RADACINA_PLUGIN = radacina
+		_GENERATIE_PLUGIN += 1
+		_REZULTAT_PLUGIN = ()
+		_ULTIMA_SCANARE_PLUGIN = 0.0
+	_publicaPluginuri()
+	acum = time.monotonic()
+	if _LECTURA_PLUGIN is not None or (not fortat and acum - _ULTIMA_SCANARE_PLUGIN < 2.0):
+		return
+	_ULTIMA_SCANARE_PLUGIN = acum
+	_LECTURA_PLUGIN = (_lectorPlugin().submit(_ecranePlugin, radacina), _GENERATIE_PLUGIN)
+	if _CEAS_PLUGIN is None:
+		try:
+			from enigma import eTimer
+			_CEAS_PLUGIN = eTimer()
+			_CEAS_PLUGIN.callback.append(_publicaPluginuri)
+		except (ImportError, AttributeError):
+			pass
+	if _CEAS_PLUGIN is not None:
+		_CEAS_PLUGIN.start(50, True)
+
+
+def _includePlugin(nod, config, SystemInfo, conditionale=True):
+	for cerinta in (nod.get("requires") or "").split(";"):
+		cerinta = cerinta.strip()
+		if not cerinta:
+			continue
+		negat = cerinta.startswith("!")
+		nume = cerinta[1:].strip() if negat else cerinta
+		if nume.startswith("config."):
+			el = element(nume, config)
+			if el is None:
+				return False
+			v = getattr(el, "value", None)
+			activ = bool(v) and str(v).lower() not in ("0", "disable", "false", "no", "off")
+		else:
+			activ = bool(SystemInfo.get(nume, False))
+		if activ == negat:
+			return False
+	cond = nod.get("conditional")
+	return not conditionale or not cond or conditieAdevarata(cond, config)
+
+
+def _setariWebPlugin(nod, config, SystemInfo):
+	# Web-ul arata toate ramurile, cu limita comuna de 80 de randuri.
+	# Legaturile duc numai la randurile cuprinse in limita si in gramatica lui.
+	vazute = set()
+	stiva = [iter(nod)]
+	while stiva:
+		x = next(stiva[-1], None)
+		if x is None:
+			stiva.pop()
+		elif x.tag == "if":
+			stiva.append(iter(x))
+		elif x.tag == "item" and _includePlugin(x, config, SystemInfo, conditionale=False):
+			cale = (x.text or "").strip()
+			if not cale.startswith("config.") or not all(_PARTE_PLUGIN.fullmatch(p) for p in cale.split(".")[1:]):
+				continue
+			el = element(cale, config)
+			if el is not None and felSetare(el) is not None:
+				vazute.add(cale)
+				if len(vazute) >= MAX_RANDURI_PLUGIN:
+					break
+	return vazute
+
+
+def _randuriPlugin(nod, config, SystemInfo, adancime=0):
+	# Ca Setup.addIf, fara expresii arbitrare sau acces la starea ecranului.
+	if adancime > MAX_ADANCIME:
+		return
+	for x in nod:
+		if x.tag == "if":
+			activ = _includePlugin(x, config, SystemInfo)
+			gasit = activ
+			for copil in x:
+				if copil.tag == "elif":
+					activ = not gasit and _includePlugin(copil, config, SystemInfo)
+					gasit = gasit or activ
+				elif copil.tag == "else":
+					activ, gasit = not gasit, True
+				elif activ:
+					yield from _randuriPlugin([copil], config, SystemInfo, adancime + 1)
+		elif x.tag == "item" and _includePlugin(x, config, SystemInfo):
+			cale = (x.text or "").strip()
+			el = element(cale, config)
+			if el is not None and felSetare(el) is not None:
+				yield x, cale
+
+
+def _cuPluginuri(baza, config, SystemInfo, tr, trRo):
+	from hashlib import sha256
+	ecrane = []
+	for ident, plugin, nod in _REZULTAT_PLUGIN:
+		randuri, vazute = [], set()
+		web = _setariWebPlugin(nod, config, SystemInfo)
+		for x, cale in _randuriPlugin(nod, config, SystemInfo):
+			if cale in vazute or cale not in web:
+				continue
+			vazute.add(cale)
+			randuri.append((x, cale))
+			if len(randuri) >= MAX_RANDURI_PLUGIN:
+				break
+		if randuri:
+			ecrane.append((ident, plugin, nod, randuri))
+	if not hasattr(baza, "_intrariImagine"):
+		baza._intrariImagine = list(baza.intrari)
+	baza._pluginuri = True
+	if not ecrane:
+		if not getattr(baza, "_arePluginuri", False):
+			return baza
+		baza._arePluginuri = False
+		baza.intrari = list(baza._intrariImagine)
+		baza._chei = {i.cheie: i for i in baza.intrari}
+		_INDEX_PLUGIN.clear()
+		return baza
+	semn = (id(baza), tuple((ident, id(nod), tuple((id(x), cale) for x, cale in randuri))
+		for ident, plugin, nod, randuri in ecrane))
+	if _INDEX_PLUGIN.get("semn") == semn:
+		return _INDEX_PLUGIN["index"]
+	intrari = list(baza._intrariImagine)
+	for ident, plugin, nod, randuri in ecrane:
+		domeniu = plugin.split("/")[-1]
+
+		def tradu(text):
+			if not text:
+				return ""
+			try:
+				t = nod.traduceri.get(text, text)
+			except Exception:
+				t = text
+			return t if t != text else tr(text)
+
+		titlu = tradu(nod.get("title") or "")
+		drum = [tr(N_("Pluginuri")), domeniu, titlu]
+		# Tinta XML proprie pastreaza pluginul; niciun cod de plugin executat.
+		tintaPlugin = ET.Element("item", {"hdsPlugin": plugin})
+		for x, cale in randuri:
+			m = x.get("text") or ""
+			nume = tradu(m)
+			date = x.get("data")
+			if date and nume.count("%s") == len(date.split(",")):
+				try:
+					nume = nume % tuple(date.split(","))
+				except (ValueError, TypeError):
+					pass
+			ajutor = tradu(x.get("description") or "")
+			cheie = "p:%s:%s" % (ident, sha256(cale.encode("utf-8")).hexdigest()[:24])
+			intrari.append(Intrare(cheie, "rand", _textNod(x, tradu, nume), nume,
+				drum, ident, tintaPlugin, [], len(intrari) + 1, setup=ident, setare=cale, ajutor=ajutor,
+				variante=(nume, m, trRo(m)), drumuri=drum, alte=(ajutor,)))
+			intrari[-1]._textSecret = m
+			intrari[-1]._configPlugin = config
+			intrari[-1]._siPlugin = SystemInfo
+	baza._arePluginuri = True
+	baza.intrari = intrari
+	baza._chei = {i.cheie: i for i in intrari}
+	_INDEX_PLUGIN.update(semn=semn, index=baza)
+	return baza
+
+
 def index(config=None, SystemInfo=None, limba=None, tr=None, trRo=None, fortat=False):
 	"""Indexul de acum, refacut numai cand s-a schimbat ceva din ce il face (vezi capul fisierului)."""
 	if config is None:
@@ -851,22 +1234,155 @@ def index(config=None, SystemInfo=None, limba=None, tr=None, trRo=None, fortat=F
 	semn = (caleMeniu(), caleSetup(), limba, nivel, semnM, semnS, _instantaneu(radM, radS, SystemInfo, config),
 		_VERSIUNE[0])
 	if not fortat and _INDEX["index"] is not None and _INDEX["semn"] == semn:
-		return _INDEX["index"]
-	idx = construieste(radM, radS, nivel, SystemInfo, config, tr=tr, trRo=trRo or traducereRo())
-	_INDEX.update(semn=semn, index=idx)
-	return idx
+		idx = _INDEX["index"]
+	else:
+		idx = construieste(radM, radS, nivel, SystemInfo, config, tr=tr, trRo=trRo or traducereRo())
+		_INDEX.update(semn=semn, index=idx)
+	global _CONTEXT_PLUGIN
+	_actualizeazaPluginuri(fortat=fortat)
+	_CONTEXT_PLUGIN = (idx, config, SystemInfo, tr or _tr, trRo or traducereRo())
+	return _cuPluginuri(*_CONTEXT_PLUGIN)
 
 
 def uita():
 	"""Indexul se face din nou la cautarea urmatoare."""
+	global _GENERATIE_PLUGIN, _ULTIMA_SCANARE_PLUGIN, _REZULTAT_PLUGIN, _CONTEXT_PLUGIN
 	_INDEX.update(semn=None, index=None)
+	_INDEX_PLUGIN.clear()
+	_GENERATIE_PLUGIN += 1
+	_ULTIMA_SCANARE_PLUGIN = 0.0
+	_REZULTAT_PLUGIN = ()
+	_CONTEXT_PLUGIN = None
 
 
 # ------------------------------------------------------------------ deschiderea pe televizor
 
+def _vizibilPlugin(intrare, ecrane, config, si):
+	for ident, plugin, nod in ecrane:
+		if ident == intrare.setup:
+			return intrare.setare in _setariWebPlugin(nod, config, si) and any(
+				cale == intrare.setare for _x, cale in _randuriPlugin(nod, config, si))
+	return False
+
+
+def _setupPlugin(nod, configurare, si):
+	# Adaptor local: Setup ramane neschimbat pentru restul imaginii.
+	from Screens.Setup import Setup
+
+	class HdsSetupPlugin(Setup):
+		def __init__(self, sesiune, setup, plugin=None, PluginLanguageDomain=None):
+			self.hdsPlugin = plugin
+			# Fara plugin=, constructorul nu reciteste XML sau catalogul gettext.
+			Setup.__init__(self, sesiune, setup)
+			# Cheile pluginului nu activeaza actiuni speciale ale ecranelor imaginii.
+			self.setup = plugin + "/" + setup
+			self.pluginLanguageDomain = PluginLanguageDomain
+			if type(self).__name__ in self.skinName:
+				self.skinName.remove(type(self).__name__)
+
+		def refill(self, randuri):
+			self.plugin = self.hdsPlugin
+			self.xmlPlugin = ET.Element("setupxml")
+			self.xmlPlugin.append(nod.nod)
+			def tradu(text):
+				t = nod.traduceri.get(text, text)
+				return t if t != text else _tr(text)
+			self.traducere = tradu
+			skin = nod.get("skin")
+			if skin and skin not in self.skinName:
+				self.skinName.insert(0, skin)
+			self.pendingHeading = None
+			self.addItems(randuri, nod)
+			self.setup_title = nod.get("title", "")
+
+		def includeElement(self, x):
+			if x.get("conditional"):
+				self.conditionale = True
+			return _includePlugin(x, configurare, si)
+
+		def addIf(self, randuri, x):
+			adancime = getattr(self, "hdsAdancime", 0)
+			if adancime >= MAX_ADANCIME:
+				return
+			self.hdsAdancime = adancime + 1
+			try:
+				Setup.addIf(self, randuri, x)
+			finally:
+				self.hdsAdancime = adancime
+
+		def addItems(self, randuri, parinte):
+			# Setup primeste numai cai config validate, niciodata expresii de plugin.
+			for x in parinte:
+				if x.tag == "if":
+					self.addIf(randuri, x)
+				elif x.tag == "item":
+					cale = (x.text or "").strip()
+					if cale and (not cale.startswith("config.") or
+						not all(_PARTE_PLUGIN.fullmatch(p) for p in cale.split(".")[1:])):
+						continue
+					if cale and element(cale, configurare) is None:
+						continue
+					copie = ET.Element("item", dict(x.attrib))
+					copie.text = cale
+					# Nivelul nu ascunde setari in ecranele pluginurilor.
+					copie.set("level", "0")
+					Setup.addItems(self, randuri, [copie])
+
+	return HdsSetupPlugin
+
+
+class DeschiderePlugin:
+	# Controlul ramane pe firul principal; viitorul citeste numai XML.
+	def __init__(self, sesiune, intrare, config, deschide, laDeschidere):
+		from enigma import eTimer
+		self.sesiune, self.intrare, self.config = sesiune, intrare, config
+		self.ecran = getattr(sesiune, "current_dialog", None)
+		self.generatie = _GENERATIE_PLUGIN
+		self.deschide, self.laDeschidere = deschide, laDeschidere
+		self.terminat, self.rezultat = False, None
+		self.viitor = _lectorPlugin().submit(_ecranePlugin, calePluginuri())
+		self.ceas = eTimer()
+		self.ceas.callback.append(self.actualizeaza)
+		_DESCHIDERI_PLUGIN.append(self)
+		self.ceas.start(50, True)
+
+	def anuleaza(self, *args):
+		self.terminat = True
+		self.viitor.cancel()
+		self.ceas.stop()
+		if self in _DESCHIDERI_PLUGIN:
+			_DESCHIDERI_PLUGIN.remove(self)
+		self.deschide = self.laDeschidere = None
+
+	def actualizeaza(self):
+		if self.terminat:
+			return
+		if not self.viitor.done():
+			self.ceas.start(50, True)
+			return
+		try:
+			ecrane = self.viitor.result()
+			if (self.generatie == _GENERATIE_PLUGIN
+				and getattr(self.sesiune, "current_dialog", None) is self.ecran
+				and _vizibilPlugin(self.intrare, ecrane, self.config,
+					getattr(self.intrare, "_siPlugin", {}))):
+				nod = next(n for ident, plugin, n in ecrane if ident == self.intrare.setup)
+				self.rezultat = self.deschide(nod)
+		except Exception:
+			self.rezultat = None
+		callback = self.laDeschidere
+		self.anuleaza()
+		if callback is not None:
+			callback(self.rezultat)
+
+
 def poateDeschide(intrare):
 	"""(se deschide ecranul insusi?, felul): „ecran” (ecranul intrarii, cu randul ales), „meniu” (meniul care o
 	contine, cu cursorul pe ea: <code>, oprirea, extensiile) sau „submeniu” (un meniu)."""
+	if intrare.nod is not None and intrare.nod.get("hdsPlugin"):
+		_actualizeazaPluginuri()
+		return _vizibilPlugin(intrare, _REZULTAT_PLUGIN,
+			getattr(intrare, "_configPlugin", None), getattr(intrare, "_siPlugin", {})), "ecran"
 	if intrare.fel == "grup":
 		return True, "submeniu"
 	if intrare.fel == "extensie":
@@ -962,9 +1478,11 @@ def _salveazaLaInchidere(intrare):
 	return any(n.get("flushConfigOnClose") for n in noduri)
 
 
-def deschide(sesiune, intrare, laInchidere=None, config=None):
-	"""Deschide pe televizor ce a gasit cautarea (vezi poateDeschide). Intoarce dialogul deschis sau None. La inchidere:
-	configfile.save() daca un meniu de deasupra are flushConfigOnClose, apoi laInchidere(*rezultat)."""
+def deschide(sesiune, intrare, laInchidere=None, config=None, laDeschidere=None):
+	"""Deschide rezultatul. Pentru pluginuri intoarce o DeschiderePlugin asincrona.
+	La inchidere pastreaza salvarea meniului si callbackul laInchidere.
+	laDeschidere primeste dialogul sau None dupa verificarea XML pe disc.
+	"""
 	salveaza = _salveazaLaInchidere(intrare)
 
 	def gata(*rezultat):
@@ -978,6 +1496,23 @@ def deschide(sesiune, intrare, laInchidere=None, config=None):
 			laInchidere(*rezultat)
 
 	merge, fel = poateDeschide(intrare)
+	if intrare.nod is not None and intrare.nod.get("hdsPlugin"):
+		if not merge:
+			return None
+		if len(_DESCHIDERI_PLUGIN) >= 4:
+			return None
+		config = config if config is not None else getattr(intrare, "_configPlugin", None)
+
+		def deschidePlugin(nod):
+			plugin = intrare.nod.get("hdsPlugin")
+			ecran = _setupPlugin(nod, config, getattr(intrare, "_siPlugin", {}))
+			dlg = sesiune.openWithCallback(gata, ecran, intrare.setup.split("/")[-1], plugin=plugin,
+				PluginLanguageDomain=plugin.split("/")[-1])
+			if dlg is not None:
+				pozitioneaza(dlg, intrare, config)
+			return dlg
+
+		return DeschiderePlugin(sesiune, intrare, config, deschidePlugin, laDeschidere)
 	if fel == "submeniu":
 		from Screens.Menu import Menu
 		return sesiune.openWithCallback(gata, Menu, intrare.nod)

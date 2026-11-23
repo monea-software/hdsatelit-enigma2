@@ -67,6 +67,8 @@ TIPAR_NUME_PACHET = re.compile(r"^[a-z0-9][a-z0-9+.-]{1,120}$")
 # importul (alegerea „acces”, reinstaleaza_acces)
 CATEGORII_NEOFERITE = ("skins", "settings", "drivers")
 TIPAR_CUVANT_ACCES = re.compile(r"cams?d?[0-9]*$")
+# numele modulului din configurarea lui (enigma2-plugin-<categorie>-<modul>-config): la singular, fara "cams"
+TIPAR_CUVANT_CONFIG_ACCES = re.compile(r"camd?[0-9]*$")
 # categoria pachetelor modulelor de acces (aceeași formă ca HdsPachete.TIPAR_CATEGORIE_ACCES)
 TIPAR_CATEGORIE_ACCES = re.compile(r"^[a-z]+cams$")
 # locurile fișierelor modulelor de acces sub rădăcina unei imagini: configurările (cu subdosarele lor) și cheile
@@ -439,9 +441,23 @@ def pachet_bun(nume):
 	"""Un nume de plugin care se poate oferi: enigma2-plugin-..., nume valid, nu al unui modul de acces condiționat."""
 	if not nume.startswith(PREFIX_PLUGIN) or not TIPAR_NUME_PACHET.match(nume):
 		return False
-	if _nume_de_modul(nume):
+	if _pachet_modul_sau_config(nume):
 		return False
 	return _categorie(nume) not in CATEGORII_NEOFERITE
+
+
+def _pachet_modul_sau_config(nume):
+	"""Categoria modulelor sau configurarea unui modul; sufixul singur nu dovedeste un modul.
+	CAM6 (CP2): configurarea unui modul are numele modulului la singular (...cam, ...camd, cu cifre sau nu); pluralul
+	"cams" e in numele pachetelor numai categoria (enigma2-plugin-<categorie>-), deci un plugin de alt fel cu "cams"
+	in nume (webcams-config, livecams-config) se ofera ca orice plugin."""
+	if este_pachet_acces(nume):
+		return True
+	if not nume.endswith("-config"):
+		return False
+	# tot restul numelui (categoria, la plural, nu are forma ...cam): si configurarea unui modul pusa fara categorie
+	scurt = nume[len(PREFIX_PLUGIN):-len("-config")]
+	return any(TIPAR_CUVANT_CONFIG_ACCES.search(c) for c in re.split(r"[^a-z0-9]+", scurt.lower()))
 
 
 def _din_text(text):
@@ -481,7 +497,7 @@ def citeste_pachete(cai):
 		except (OSError, IOError):
 			continue
 	pluginuri = sorted(n for n in toate if n.startswith(PREFIX_PLUGIN) and TIPAR_NUME_PACHET.match(n)
-		and not _nume_de_modul(n))
+		and not _pachet_modul_sau_config(n))
 	return [n for n in pluginuri if pachet_bun(n)], len(pluginuri)
 
 
@@ -1138,14 +1154,21 @@ def retea_wifi_din_conf(text):
 	_p, _i, ssid, c = retele[0]
 	mgmt = set((c.get("key_mgmt") or "WPA-PSK").replace("\"", "").split())
 	psk, psk_text = _valoare_conf(c.get("psk", ""))
-	sae, _sae_text = _valoare_conf(c.get("sae_password", ""))
 	ascunsa = c.get("scan_ssid", "").strip() == "1"
 	if mgmt == {"NONE"} and not c.get("wep_key0"):
 		return ParolaWifi(ssid, WlanTools.SECURITY_OPEN, "", ascunsa), None
 	if mgmt == {"OWE"}:
 		return ParolaWifi(ssid, WlanTools.SECURITY_OWE, "", ascunsa), None
 	if "SAE" in mgmt:
-		parola = sae or (psk if psk_text else "")
+		# Quoted strings are literal; unquoted SAE values contain UTF-8 hex bytes.
+		# Never use a malformed explicit SAE value as a password or fall back to PSK.
+		sae = ""
+		if "sae_password" in c:
+			try:
+				sae = WlanTools.ssidFromConfValue(c["sae_password"]).decode("utf-8")
+			except (AttributeError, UnicodeError, ValueError):
+				return None, "neacceptata"
+		parola = sae if "sae_password" in c else (psk if psk_text else "")
 		if not parola:
 			return None, "neacceptata"
 		fel = WlanTools.SECURITY_WPA2_WPA3 if mgmt & {"WPA-PSK", "WPA-PSK-SHA256"} else WlanTools.SECURITY_WPA3

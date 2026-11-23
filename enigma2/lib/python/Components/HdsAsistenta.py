@@ -18,10 +18,11 @@
 # cheia publica sta in pachet (CHEI_ASISTENTA), nu vine de la server, deci un server spart nu poate cere nimic.
 # Fiecare cerere si raspuns apar pe ecranul omului (jurnalul sesiunii) si in web. Pe receptor se scriu numai dosarul
 # temporar al sesiunii (jurnalul) si fisierul ei de stare (STARE_FISIER), sterse amandoua la oprire, si (din 0.6.21)
-# copia setarilor facuta cand intra echipa (DOSAR_COPIE, „Pune înapoi cum era”, ramane dupa oprire). Durata: 2 ore
-# implicit, pana la o luna, sau permanent (de pe pagina de pornire: DURATA_IMPLICITA_MIN); echipa intra oricand cat e
-# pornita (codul nu are termen de aprobare). Se opreste oricand (o tasta, pagina web, banda din web) si singura la
-# sfarsitul duratei alese (niciodata la "permanent").
+# copia setarilor facuta cand intra echipa (DOSAR_COPIE, „Pune înapoi cum era”, ramane dupa oprire). Durata: aleasa de
+# om pe pagina de pornire si in web (DURATE_MIN: 2 ore, implicit, 24 de ore, o saptamana, o luna, permanent) si
+# schimbata oricand cat e pornita (schimbaDurata, socotita de atunci; serverul afla ora noua prin POST durata); echipa
+# intra oricand cat e pornita si serverul pastreaza cererea in asteptare. Se opreste oricand (o tasta, pagina web,
+# banda din web) si singura la sfarsitul duratei alese (niciodata la "permanent").
 #
 # Cererea semnata: octetii EXACTI ai JSON-ului {"args":[...],"id":...,"op":...,"seq":N} (chei sortate, fara spatii),
 # semnati pe PC cu cheia operator, stocati verbatim pe server, verificati aici cu Components/HdsSemnatura.verifica
@@ -98,12 +99,16 @@ PROTOCOL = 1
 # versiunea textului de informare aratat omului (scrisa in prima linie a jurnalului sesiunii); se schimba odata cu el
 # Regula curenta: toate meniurile sunt vizibile; valorile conturilor nu pleaca spre echipa.
 # v8 (0.6.21): informarea spune si ce trimite _cine (TEXT_CINE)
-VERSIUNE_TEXT = 9
-# durate alese de om (minute): 2 ore (implicit), 12 ore, o zi, o saptamana, o luna, permanent (DURATA_PERMANENTA:
-# fara sfarsit, pana o opreste omul); serverul le primeste pe toate (si pe cele vechi, 30 de minute pana la 4 ore)
+# v10 (0.7.8): TEXT_DURATE spune ca omul alege durata (de la 2 ore la permanent) si o poate schimba cat e pornita
+VERSIUNE_TEXT = 10
+# durate alese de om (minute), singurele aratate pe pagina de pornire, pe ecranul asistentei si in web: 2 ore (implicit),
+# 24 de ore, o saptamana, o luna, permanent (DURATA_PERMANENTA: fara sfarsit, pana o opreste omul)
 DURATA_PERMANENTA = 0
-DURATE_MIN = (120, 720, 1440, 10080, 43200, DURATA_PERMANENTA)
+DURATE_MIN = (120, 1440, 10080, 43200, DURATA_PERMANENTA)
 DURATA_IMPLICITA_MIN = 120
+# primite si din urma (o sesiune reluata dintr-un fisier de stare vechi, o pagina web veche): si 12 ore (0.6.12-0.7.7)
+# si cele de pana la 0.6.11 (30 de minute, o ora, 4 ore); serverul le primeste pe toate
+DURATE_PRIMITE = DURATE_MIN + (30, 60, 240, 720)
 # B: asistenta completa (citirile, probele si controlul: tastele telecomenzii, textul in campuri, setarile, canalele,
 # instalarile din feed, repornirea), singura care se porneste din 0.6.16 (citirea fara control e a programului Beta
 # tester); A ("numai citiri") ramane numai pentru o sesiune reluata dintr-un fisier de stare vechi
@@ -119,6 +124,25 @@ TIMP_HTTPS_PORNIRE_S = 3
 # un salt al ceasului peretelui fata de cel monoton mai mare de atat intre doua citiri muta si ora de sfarsit a sesiunii
 # (Sesiune._urmeazaCeasul)
 SALT_CEAS_S = 2
+# 0.7.8 (ASL): de ce a tacut sau s-a oprit o sesiune cand nu firul ei a oprit-o. Randul "oprita: ..." (ASX) spune numai
+# opririle facute de fir (omul, termenul, o eroare); o cadere a interfetei, o repornire (a interfetei sau a receptorului),
+# termenul trecut cat interfata era oprita sau serverul de neatins nu lasau nicio urma, iar sesiunea reluata se
+# raporta la fel ca una care n-a fost niciodata intrerupta. Acum: mytest.py pune la iesire semnul iesirii (laIesire:
+# codul cerut, Screens/Standby.QUIT_*) in fisierul de stare; reia() afla din el (sau din lipsa lui) cauza: iesirea
+# ceruta, caderea interfetei (fara semn, dosarul din /tmp inca exista) sau receptorul repornit fara iesire (fara semn,
+# /tmp gol). Cauzele se tin in fisierul de stare (RELUARI_MAX) si pleaca la POST inchide in "reluari", iar ultima si in
+# "motiv" (serverul de pana la 0.7.8 pastreaza din corp numai motiv, secunde si seq). Textele sunt numai pentru jurnal si
+# echipa (ASCII, tiparul motivului de pe server), omul nu vede nimic nou.
+CAUZE_IESIRE = {1: "oprirea receptorului", 2: "repornirea receptorului", 3: "repornirea interfetei",
+	5: "eroare la pornire", 42: "actualizare"}
+CAUZA_CADERE = "cadere a interfetei"
+CAUZA_FARA_IESIRE = "receptor repornit fara iesire"
+CAUZA_NECUNOSCUTA = "necunoscut"
+RELUARI_MAX = 10
+MOTIV_MAX = 60
+# cand fisierul de stare a ramas dupa termen (interfata sau receptorul oprit pana dupa sfarsitul ales): POST inchide pe un
+# fir separat, cu reincercari cat reteaua nu e inca pornita (secundele dintre incercari)
+PAUZE_INCHIDE_S = (10, 20, 30)
 
 # starile sesiunii
 OPRIT, VERIFICARE, INREGISTRARE, ASTEAPTA, CONECTAT, SE_OPRESTE = (
@@ -178,16 +202,15 @@ INFORMARE = N_(
 	"\n"
 	"Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere "
 	"pentru el. Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate "
-	"controla receptorul prin toate meniurile, inclusiv cele ale modulelor de acces. Numele de utilizator, parolele, "
-	"PIN-urile și cheile nu ajung la echipă. Înainte să scrii o parolă sau o cheie, oprește asistența. O poți porni "
-	"din nou după ce salvezi. Poți opri oricând.\n"
+	"controla receptorul prin toate meniurile, inclusiv cele ale modulelor de acces. Echipa vede inclusiv "
+	"numele de utilizator, parolele, PIN-urile și cheile. Poți opri oricând.\n"
 	"\n"
 	"Cât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales "
 	"se oprește singură.\n"
 	"\n"
 	"Ce date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la "
 	"cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa "
-	"ta de internet. Nu citim parole, chei, setări ale cartelelor de acces sau fișierele tale. Datele stau pe "
+	"ta de internet. Putem citi inclusiv parole, chei, setări ale cartelelor de acces și fișierele tale. Datele stau pe "
 	"serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim "
 	"numai ca să reparăm imaginea și nu le dăm altora.\n"
 	"\n"
@@ -195,9 +218,10 @@ INFORMARE = N_(
 	"ștergem datele sesiunii tale. Folosește funcția numai dacă ai cel puțin 16 ani sau ai acordul unui părinte.")
 
 
-# despre durata, pus dupa paragraful "Cât timp e pornită..." al informarii (in web si pe receptor)
-TEXT_DURATE = N_("Start o pornește pentru 2 ore. O oprești oricând, de pe receptor sau din pagina web. Cât e "
-	"pornită, echipa poate intra oricând, dar face numai ce e în lista fixă.")
+# despre durata, pus dupa paragraful "Cât timp e pornită..." al informarii (in web si pe receptor): omul alege durata pe
+# pagina de pornire (DURATE_MIN) si o schimba cat merge (schimbaDurata)
+TEXT_DURATE = N_("Tu alegi cât timp e pornită, de la 2 ore până la permanent, și poți schimba durata cât merge. O "
+	"oprești oricând, de pe receptor sau din pagina web. Până atunci, echipa poate intra oricând.")
 
 # cine cere ajutor (din 0.6.21, _cine): pus dupa paragraful "Ce date ajung la noi..." al informarii, inaintea
 # operatorului datelor (in web si pe receptor); aceleasi cuvinte despre amprenta ca nota testerilor (NOTA_SCURTA)
@@ -208,8 +232,7 @@ TEXT_CINE = N_("Ca să știm ce receptor cere ajutor, trimite și o amprentă ca
 # Regula unica pentru pornire, informare si pagina web.
 TEXT_CUM_MERGE = N_(
 	"Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate meniurile. "
-	"Numele de utilizator, parolele, PIN-urile și cheile nu ajung la echipă. Oprește asistența cât scrii o parolă sau "
-	"o cheie, până o salvezi. Poți opri oricând.")
+	"Echipa vede inclusiv numele de utilizator, parolele, PIN-urile și cheile. Poți opri oricând.")
 
 
 def textInformare():
@@ -237,6 +260,10 @@ TEXT_TERMINAT_PERMANENT = N_("HD Satelit a terminat. Oprește când vrei")
 # in fereastra concluziilor, cat sesiunea merge inca (Rosu o opreste chiar de acolo) si dupa ce s-a oprit
 TEXT_ROSU_OPRESTE = N_("Roșu: oprești asistența acum.")
 TEXT_OPRITA_GATA = N_("Asistența s-a oprit. Nu mai ai nimic de făcut.")
+# 0.7.8 (CR4, Eduard 18.11 17:25, asistenta 605562): omul care opreste asistenta primeste in mijlocul ecranului confirmarea,
+# multumirea si concluziile de pana atunci (fereastra concluziilor, Screens/HdsAsistentaSemn); in web acelasi mesaj
+TEXT_OPRITA_DE_OM = N_("Asistența s-a oprit la cererea ta. Mulțumim!")
+TEXT_FARA_CONCLUZII = N_("Echipa nu a ajuns încă la concluzii.")
 # anuntul de pe ecran cand sesiunea se opreste fara om (echipa a inchis-o sau a trecut timpul), dupa ce echipa a intrat
 TEXT_SFARSIT_ECHIPA = N_("Echipa HD Satelit a terminat și a închis asistența. Nu mai ai nimic de făcut.")
 TEXT_SFARSIT_TIMP = N_("Asistența s-a oprit singură: s-a terminat timpul ales. Nu mai ai nimic de făcut.")
@@ -294,13 +321,14 @@ def curataNevoie(nevoie, detalii):
 	return cheie, text
 
 
-# duratele cu nume (restul in ore sau minute)
+# duratele cu nume (restul in ore sau minute; 1440 = "24 de ore", cum o alege omul)
 TEXTE_DURATE = {
 	DURATA_PERMANENTA: N_("permanent"),
-	1440: N_("o zi"),
 	10080: N_("o săptămână"),
 	43200: N_("o lună"),
 }
+# orele de la 20 in sus (in romana "24 de ore"); msgid-ul "24 de ore" e luat de formatul ceasului (HdsAfisajDate)
+TEXT_ORE_DE = N_("%d de ore")
 
 
 def textDurata(minute):
@@ -310,7 +338,17 @@ def textDurata(minute):
 	if minute < 60:
 		return _t("%d minute") % minute
 	ore = minute // 60
-	return _t("o oră") if ore == 1 else _t("%d ore") % ore
+	if ore == 1:
+		return _t("o oră")
+	if ore % 100 >= 20 or ore % 100 == 0:
+		return _t(TEXT_ORE_DE) % ore
+	return _t("%d ore") % ore
+
+
+def alegeriDurata():
+	"""[(minute, text tradus)] pentru pagina de pornire, ecranul asistentei pornite si pagina web: numai DURATE_MIN,
+	in ordine, 2 ore (implicita) intai."""
+	return [(m, textDurata(m)) for m in DURATE_MIN]
 
 
 # pana cand e pornita, pe ecranul asistentei si in web (TEXT_PORNITA_*) si in benzile de sus (TEXT_BANDA_*)
@@ -370,6 +408,9 @@ def textMotiv(motiv):
 	"""Motivul opririi pentru jurnal: textul lui tradus, altfel (eroare: ...) cuvantul "eroare" tradus si numele."""
 	if motiv in MOTIVE_OPRIRE:
 		return _t(MOTIVE_OPRIRE[motiv])
+	# AST8: "de om (ecran): terminat" (de ce a oprit omul, pentru echipa): omul vede tot "de om"
+	if motiv.split(": ", 1)[0] in MOTIVE_OPRIRE:
+		return _t(MOTIVE_OPRIRE[motiv.split(": ", 1)[0]])
 	if motiv.startswith("eroare: "):
 		return "%s: %s" % (_t("eroare"), motiv[len("eroare: "):])
 	return motiv
@@ -751,7 +792,11 @@ class Sesiune(object):
 	def __init__(self, nivel, durata_min, limba, server, de_la="televizor", versiune_text=VERSIUNE_TEXT, ctx=None,
 			nevoie=NEVOIE_NIMIC, detalii=""):
 		self.nivel = nivel if nivel in NIVELE else NIVEL_PORNIRE
-		self.durata_min = int(durata_min) if int(durata_min) in DURATE_MIN else DURATA_IMPLICITA_MIN
+		self.durata_min = int(durata_min) if int(durata_min) in DURATE_PRIMITE else DURATA_IMPLICITA_MIN
+		# durata schimbata cat merge (schimbaDurata) si neajunsa inca la server: firul o trimite la inceputul fiecarei treceri
+		# (_trimiteDurata) pana raspunde serverul; ramane si in fisierul de stare, deci si dupa o repornire
+		self.durata_netrimisa = False
+		self._durata_schimbari = 0         # cate schimbari: una venita cat pleca alta nu se pierde (_trimiteDurata)
 		self.limba = (limba or "ro")[:8]
 		self.server = server if server.endswith("/") else server + "/"
 		self.de_la = de_la
@@ -770,8 +815,16 @@ class Sesiune(object):
 		# numai pentru socoteala ancorei (ramasS o cere si firul interfetei, la fiecare secunda): nu asteapta scrierea pe disc
 		self._lacat_ceas = threading.Lock()
 		self.copie_pentru = None           # id-ul sesiunii pentru care s-a incercat copia setarilor (_copia_inainte)
+		self._fir_copie = None             # firul copiei setarilor (_porneste_copia), asteptat inaintea primei schimbari
 		self._activ = _acum()              # ultima data cand s-a intamplat ceva (pornire, conectare, cerere)
 		self._pornita_mono = _acum()       # pornirea (sau reluarea) acestei sesiuni, pentru randul opririi (_scrieOprirea)
+		# 0.7.8 (ASL): reluarile dupa o iesire, o cadere sau o repornire ([{"cauza", "tacere_s"}], tinute in fisierul de
+		# stare), semnul iesirii interfetei (laIesire) si timpul fara server (_urmeazaServerul), pentru randul opririi
+		self.reluari = []
+		self.iesire = None
+		self._fara_server_din = None
+		self.fara_server_s = 0
+		self.pierderi_retea = 0
 		self.dosar = None
 		self.jurnal = None
 		self._fir = None
@@ -835,6 +888,47 @@ class Sesiune(object):
 		self.stare = stare
 		_anunta()
 
+	# -------- durata schimbata cat merge (Verde "Schimbă durata" pe ecranul asistentei, lista din pagina web)
+
+	def schimbaDurata(self, durata_min, de_la="televizor"):
+		"""Durata noua, socotita de acum: ora de sfarsit (None la permanent) si ancora ceasului, apoi fisierul de stare si
+		randul din jurnal (noul "Pornită până la ..."); serverul o afla de la fir (_trimiteDurata). Chemata de pe firul
+		interfetei (ecranul asistentei, pagina web)."""
+		with self._lacat_ceas:
+			self.durata_min = durata_min
+			self.pana_la_ora = None if self.permanenta() else _oraPerete() + durata_min * 60
+			self._ancora_ceas = (_oraPerete(), _acum())
+			self.durata_netrimisa = True
+			self._durata_schimbari += 1
+		# numai cat fisierul exista si sesiunea e activa: o oprire venita intre timp (_curata) nu se reinvie la pornire
+		if self.id:
+			self._scrie_stare(numai_daca_exista=True)
+		if self.jurnal is not None:
+			self.jurnal.adauga(textPana(self))
+		_jurnal("durata schimbata (%s): %d minute%s" % (de_la, durata_min, "" if self.permanenta() else
+			", raman %d s" % max(0, int(self.pana_la_ora - _oraPerete()))))
+		_anunta()
+
+	def _trimiteDurata(self):
+		"""Durata schimbata ajunge la server (POST durata, cu secundele ramase pe ceasul receptorului), ca sa nu inchida
+		sesiunea la ora de sfarsit de la pornire. O incearca la fiecare trecere a firului pana raspunde serverul; fara
+		retea (cod 0, 5xx) incearca din nou. Un server fara cererea aceasta (404 "ruta") sau un refuz: un rand in jurnal si
+		nu mai incearca."""
+		if not self.durata_netrimisa or not self.id or not self.secret:
+			return
+		versiune = self._durata_schimbari
+		ramas = self.ramasS()
+		cod, o = _ceruta(self.server + "durata?id=" + self.id, "POST",
+			{"durata_min": self.durata_min, "ramas_s": ramas}, {"X-Secret": self.secret})
+		if cod == 0 or cod >= 500:
+			return
+		# o alta schimbare venita cat pleca aceasta ramane de trimis la trecerea urmatoare
+		if versiune == self._durata_schimbari:
+			self.durata_netrimisa = False
+		if not (200 <= cod < 300):
+			_jurnal("durata noua refuzata de serverul asistentei: %d %s" % (cod, o.get("eroare", "")))
+		self._scrie_stare()
+
 	# -------- pornire / oprire
 
 	def porneste(self):
@@ -864,9 +958,23 @@ class Sesiune(object):
 		15.11.2026 s-au inchis la 1-3 minute dupa salut si nu s-a putut afla daca le-a oprit omul sau firul."""
 		# nimic de aici nu are voie sa opreasca curatarea (_curata sterge stare.json): la orice greseala, corpul gol
 		try:
-			oprire = {"motiv": str(self.motiv_oprire or "necunoscut")[:60],
+			# 0.7.8 (ASL): dupa o reluare, cauza ei si in motiv ("de om (ecran) (reluata: cadere a interfetei)"); serverul de
+			# pana la 0.7.8 pastreaza din corp numai motiv, secunde si seq
+			oprire = {"motiv": motivCuReluari(self.motiv_oprire, self.reluari),
 				"secunde": max(0, int(_acum() - self._pornita_mono)), "seq": int(self.ultim_seq or 0)}
-			_jurnal("oprita: %s, dupa %d s, ultima cerere %d" % (oprire["motiv"], oprire["secunde"], oprire["seq"]))
+			rest = ""
+			if self.reluari:
+				oprire["reluari"] = [dict(r) for r in self.reluari[-RELUARI_MAX:]]
+				rest += ", reluata: %s" % textReluari(self.reluari)
+			fara = self.fara_server_s
+			if self._fara_server_din is not None:
+				fara += max(0, int(_acum() - self._fara_server_din))
+				rest += ", serverul nu raspunde de %d s" % max(0, int(_acum() - self._fara_server_din))
+			if self.pierderi_retea:
+				oprire["fara_server_s"] = int(fara)
+				oprire["pierderi_retea"] = int(self.pierderi_retea)
+				rest += ", fara server %d s in total (%d pierderi)" % (fara, self.pierderi_retea)
+			_jurnal("oprita: %s, dupa %d s, ultima cerere %d%s" % (oprire["motiv"], oprire["secunde"], oprire["seq"], rest))
 			return oprire
 		except Exception:
 			return {}
@@ -876,7 +984,11 @@ class Sesiune(object):
 		# (cheia/jurnalul dispar)
 		if self.id and self.secret:
 			try:
-				_ceruta(self.server + "inchide?id=" + self.id, "POST", oprire or {}, {"X-Secret": self.secret})
+				cod, _o = _ceruta(self.server + "inchide?id=" + self.id, "POST", oprire or {}, {"X-Secret": self.secret})
+				# 0.7.8 (ASL): fara retea serverul nu afla oprirea (o vede numai tacuta); macar jurnalul o spune
+				if cod == 0 or cod >= 500:
+					_jurnal("oprirea n-a ajuns la serverul asistentei (%s)"
+						% ((getattr(_ultimaEroareHttp, "motiv", "") or "internet") if cod == 0 else "server %d" % cod))
 			except Exception:
 				pass
 		if self.dosar:
@@ -885,28 +997,39 @@ class Sesiune(object):
 			except Exception:
 				pass
 		try:
-			if os.path.exists(STARE_FISIER):
-				os.remove(STARE_FISIER)
+			# sub lacat: semnul iesirii (laIesire) nu scrie fisierul inapoi dupa stergere (_scrie_stare cu numai_daca_exista)
+			with self._lacat:
+				if os.path.exists(STARE_FISIER):
+					os.remove(STARE_FISIER)
 		except Exception:
 			pass
 
 	# -------- fisierul de stare (reluare dupa repornirea interfetei)
 
-	def _scrie_stare(self):
-		# sub lacat: o scrie si firul interfetei, dupa un salt al ceasului (_urmeazaCeasul, rar), nu numai firul sesiunii
+	def _scrie_stare(self, numai_daca_exista=False):
+		# sub lacat: o scrie si firul interfetei, dupa un salt al ceasului (_urmeazaCeasul, rar) si la iesire (laIesire),
+		# nu numai firul sesiunii. numai_daca_exista (laIesire): o sesiune activa care tocmai s-a oprit (_curata a sters
+		# fisierul) nu se reinvie la pornirea urmatoare.
 		with self._lacat:
 			try:
+				if numai_daca_exista and (not self.activa() or not os.path.exists(STARE_FISIER)):
+					return False
 				os.makedirs(os.path.dirname(STARE_FISIER), mode=0o700, exist_ok=True)
 				nou = STARE_FISIER + ".nou"
 				fd = os.open(nou, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
 				with os.fdopen(fd, "w", encoding="utf-8") as f:
+					# semn_iesire (0.7.8, ASL): scriitorul pune semnul iesirii (laIesire), deci lipsa lui "iesire" la
+					# reluare inseamna cadere; un fisier fara cheie (scris de o versiune mai veche) da cauza necunoscuta
 					json.dump({"v": PROTOCOL, "id": self.id, "secret": self.secret, "server": self.server,
 						"nivel": self.nivel, "durata_min": self.durata_min, "pana_la_ora": self.pana_la_ora,
 						"ultim_seq": self.ultim_seq, "limba": self.limba, "dosar": self.dosar, "cod": self.cod,
-						"asteapta": self.stare == ASTEAPTA, "copie": self.copie_pentru}, f)
+						"asteapta": self.stare == ASTEAPTA, "copie": self.copie_pentru,
+						"semn_iesire": 1, "iesire": self.iesire, "reluari": self.reluari[-RELUARI_MAX:],
+						"durata_netrimisa": bool(self.durata_netrimisa)}, f)
 				os.replace(nou, STARE_FISIER)
+				return True
 			except Exception:
-				pass
+				return False
 
 	# -------- firul
 
@@ -977,14 +1100,16 @@ class Sesiune(object):
 		return True
 
 	def _asteapta_aprobare(self):
-		# fara termen de aprobare: echipa intra oricand cat e pornita; se opreste numai la sfarsitul duratei alese
+		# Serverul limiteaza asteptarea; o sesiune stearsa nu se poate relua.
 		while not self._stop.is_set():
 			if self.expirata():
 				self.jurnal.adauga(_t("s-a terminat timpul ales"))
 				self.opreste("termen")
 				return False
+			self._trimiteDurata()
 			cod, o = _ceruta(self.server + "stare?id=" + self.id, "GET", None, {"X-Secret": self.secret})
-			stare = o.get("stare")
+			self._urmeazaServerul(cod)
+			stare = self._stareServer(cod, o)
 			if stare == "conectat":
 				self._activ = _acum()
 				self._pune_stare(CONECTAT)
@@ -1006,7 +1131,7 @@ class Sesiune(object):
 		(fisierul de stare, "copie") nu o mai face; copie_pentru se scrie dupa incercare, reusita sau nu, inaintea
 		primei cereri: dupa ce echipa a schimbat ceva, o copie noua n-ar mai fi „cum era”. O copie ratata e numai un
 		rand in jurnal; sesiunea merge mai departe."""
-		if self.nivel != "B" or not self.id or self.copie_pentru == self.id or self._stop.is_set():
+		if not self.id or self.copie_pentru == self.id or self._stop.is_set():
 			return
 		setari_acum = self.ctx.get("setari_acum")
 		if setari_acum is None:
@@ -1024,16 +1149,50 @@ class Sesiune(object):
 		except Exception as e:
 			ok, motiv = False, type(e).__name__
 		self.copie_pentru = self.id
-		self._scrie_stare()
+		if self._stop.is_set():
+			# ASI7: copia ruleaza pe firul ei si poate termina dupa Opreste; fisierul de stare sters de _curata nu se
+			# scrie din nou (sesiunea s-ar relua la pornirea urmatoare) si nici jurnalul sesiunii oprite
+			return
+		self._scrie_stare(numai_daca_exista=True)
 		if ok:
 			self.jurnal.adauga(_t(TEXT_COPIE_FACUTA))
 		else:
 			self.jurnal.adauga(_t(TEXT_COPIE_RATATA) % motiv)
 
+	def _porneste_copia(self):
+		"""Copia setarilor pe firul ei (ASI7, 22.11.2026, asistenta 190608: pe firul cererilor tinea 4-5 minute fara nicio
+		cerere, stick cu 25 de sloturi montate). Citirile echipei pleaca indata; prima cerere care schimba ceva o asteapta
+		(_asteapta_copia), deci copia ramane "cum era". O data pe sesiune, ca _copia_inainte."""
+		if getattr(self, "_fir_copie", None) is not None:
+			return
+		if not self.id or self.copie_pentru == self.id or self._stop.is_set():
+			return
+
+		def lucru():
+			try:
+				self._copia_inainte()
+			except Exception as e:
+				_jurnal("copia setarilor: %s" % type(e).__name__)
+		fir = threading.Thread(target=lucru, name="HdsAsistentaCopie")
+		fir.daemon = True
+		self._fir_copie = fir
+		fir.start()
+
+	def _asteapta_copia(self):
+		"""Inaintea primei cereri de control (cele care schimba ceva pe receptor): copia setarilor sa fie gata. -> False
+		dupa Opreste (cererea nu se mai face), altfel True."""
+		fir = getattr(self, "_fir_copie", None)
+		if fir is not None and fir.is_alive():
+			self.jurnal.adauga(_t(TEXT_ASTEAPTA_COPIA))
+			while fir.is_alive() and not self._stop.is_set():
+				fir.join(1)
+		return not self._stop.is_set()
+
 	def _bucla_cereri(self):
-		# copia setarilor inaintea primei cereri (si la o sesiune reluata dupa repornire, daca n-a fost incercata)
+		# copia setarilor pe firul ei (si la o sesiune reluata dupa repornire, daca n-a fost incercata); citirile nu o
+		# asteapta, prima schimbare da (_face_cerere)
 		try:
-			self._copia_inainte()
+			self._porneste_copia()
 		except Exception as e:
 			_jurnal("copia setarilor: %s" % type(e).__name__)
 		while not self._stop.is_set():
@@ -1041,10 +1200,13 @@ class Sesiune(object):
 				self.jurnal.adauga(_t("s-a terminat timpul ales"))
 				self.opreste("termen")
 				return
+			self._trimiteDurata()
 			url = "%scereri?id=%s&dupa=%d" % (self.server, self.id, self.ultim_seq)
 			cod, o = _ceruta(url, "GET", None, {"X-Secret": self.secret})
-			if o.get("stare") in ("inchis", "expirat", "respins"):
-				self.opreste(o.get("stare"))
+			self._urmeazaServerul(cod)
+			stare = self._stareServer(cod, o)
+			if stare in ("inchis", "expirat", "respins"):
+				self.opreste(stare)
 				return
 			for exterior in (o.get("cereri") or [])[:20]:
 				if self._stop.is_set():
@@ -1088,31 +1250,32 @@ class Sesiune(object):
 		if op in ("citeste", "jurnal") and len(args) > (1 if op == "citeste" else 2) and args[-1]:
 			# "de la octetul": si omul vede de unde
 			eticheta = "%s %s" % (eticheta, _t("(de la octetul %s)") % args[-1])
-		if fel_cat == "control" and self.nivel != "B":
-			self.jurnal.adauga(_t("cerere refuzată: %s") % _t("control oprit"))
-			rez = Broker.Rezultat(1, text=Broker.TEXT_FARA_CONTROL)
-		else:
-			self.jurnal.adauga("%s: %s" % (fel, eticheta))
-			if fel_cat == "control":
-				# prima schimbare a echipei: de acum "Pune înapoi cum era" are rost; inainte de rulare, fiindca o repornire
-				# a interfetei (reporneste, taste, o setare) poate veni inaintea raspunsului
-				_scoateSemnul()
-			# orice cerere (si citirile): banda spune ca echipa lucreaza
-			_ultimControl[0] = _acum()
-			if op == "reporneste":
-				# seq-ul se scrie INAINTE de repornire: sesiunea reluata dupa ea nu trebuie sa reporneasca din nou
-				self.ultim_seq = seq
-				self._scrie_stare()
-			_anunta()
-			# stop: op "intrebare" asteapta raspunsul omului si iese indata ce asistenta se opreste (asteaptaRaspuns)
-			rez = Broker.ruleaza(op, args, dict(self.ctx, nivel=self.nivel, stop=self._stop))
-			_ultimControl[0] = _acum()
-			if op == "concluzii":
-				# echipa a trimis concluziile: a terminat, pana la o alta cerere
-				if rez.cod_iesire == 0:
-					_terminat[0] = self.id
-			elif op != "mesaj":
-				_terminat[0] = None
+		self.jurnal.adauga("%s: %s" % (fel, eticheta))
+		if fel_cat not in ("citire", "proba") and not self._asteapta_copia():
+			# copia setarilor (pe firul ei) gata inaintea primei schimbari: "Pune inapoi cum era" ramane cum era (ASI7);
+			# citirile si probele (mesaj, intrebare, captura, concluzii: nu schimba nimic) nu o asteapta. Dupa Opreste
+			# cererea nu se mai face.
+			return
+		if fel_cat == "control":
+			# prima schimbare a echipei: de acum "Pune inapoi cum era" are rost; inainte de rulare, fiindca o repornire
+			# a interfetei (reporneste, taste, o setare) poate veni inaintea raspunsului
+			_scoateSemnul()
+		# orice cerere (si citirile): banda spune ca echipa lucreaza
+		_ultimControl[0] = _acum()
+		if op == "reporneste":
+			# seq-ul se scrie INAINTE de repornire: sesiunea reluata dupa ea nu trebuie sa reporneasca din nou
+			self.ultim_seq = seq
+			self._scrie_stare()
+		_anunta()
+		# stop: op "intrebare" asteapta raspunsul omului si iese indata ce asistenta se opreste (asteaptaRaspuns)
+		rez = Broker.ruleaza(op, args, dict(self.ctx, nivel=self.nivel, stop=self._stop))
+		_ultimControl[0] = _acum()
+		if op == "concluzii":
+			# echipa a trimis concluziile: a terminat, pana la o alta cerere
+			if rez.cod_iesire == 0:
+				_terminat[0] = self.id
+		elif op != "mesaj":
+			_terminat[0] = None
 		self.jurnal.adauga(_t("    răspuns: cod %d, %d octeți") % (rez.cod_iesire, rez.marime()))
 		self._trimite_raspuns(seq, op, rez)
 		self.ultim_seq = seq
@@ -1142,6 +1305,34 @@ class Sesiune(object):
 
 	def _asteapta_pas(self, s):
 		self._stop.wait(s)
+
+	def _stareServer(self, cod, raspuns):
+		# Numai erorile explicite ale protocolului inchid sesiunea disparuta.
+		if (cod == 403 and raspuns.get("eroare") == "secret") or \
+			(cod == 404 and raspuns.get("eroare") == "necunoscut"):
+			return "expirat"
+		return raspuns.get("stare") if 200 <= cod < 300 else None
+
+	def _urmeazaServerul(self, cod):
+		"""0.7.8 (ASL): cat serverul nu raspunde (fara retea, DNS, HTTPS sau server cazut: cod 0 sau 5xx), sesiunea ramane
+		pornita si intreaba mai departe, dar echipa o vede tacuta. Un rand in jurnalul interfetei la inceputul pierderii (cu
+		felul ei) si unul la revenire (cu durata), nu la fiecare intrebare; totalul pleaca la oprire (_scrieOprirea). Nu
+		arunca (e pe drumul intrebarilor)."""
+		try:
+			if cod == 0 or cod >= 500:
+				if self._fara_server_din is None:
+					self._fara_server_din = _acum()
+					self.pierderi_retea += 1
+					fel = (getattr(_ultimaEroareHttp, "motiv", "") or "internet") if cod == 0 else "server %d" % cod
+					_jurnal("reteaua: serverul asistentei nu raspunde (%s); sesiunea ramane pornita si incearca mai departe"
+						% fel)
+			elif self._fara_server_din is not None:
+				durata = max(0, int(_acum() - self._fara_server_din))
+				self._fara_server_din = None
+				self.fara_server_s += durata
+				_jurnal("reteaua: serverul asistentei raspunde din nou, dupa %d s" % durata)
+		except Exception:
+			pass
 
 
 # cand a rulat ultima cerere (ceasul monoton; orice op, din 0.7.5, nu numai cele de control): banda de sus arata
@@ -1220,32 +1411,50 @@ INTREBARE_VARIANTA_SEMNE = 40
 INTREBARE_DA_NU = (("Nu", N_("No")), ("Da", N_("Yes")))
 TEXT_INTREBARE_TITLU = N_("Întrebare de la HD Satelit")
 TEXT_INTREBARE_INCHISA = N_("Întrebarea s-a închis între timp.")
+# 0.7.8 (RSP): omul poate raspunde si cu un text scurt scris de el. Echipa il cere cu "*" in
+# variante: "*" singur = numai raspunsul scris; "Da|Nu|*" = variantele si randul "Scrie răspunsul" (ultimul; cu "*", 0-3
+# variante). Pe televizor ramane fereastra intrebarii (intrebarea se vede intreaga, la "*" singur randul e deja ales), iar
+# randul deschide tastatura de pe ecran; in pagina web un camp si "Trimite". Cat scrie omul, intrebarea ramane deschisa cel
+# putin INTREBARE_SCRIS_S, dar niciodata peste secunde + INTREBARE_SCRIS_S de la pornire. Raspunsul: un rand, cel mult
+# INTREBARE_SCRIS_SEMNE semne, trimis echipei ca "raspuns scris: ..." (trece prin filtrul secretelor brokerului).
+INTREBARE_SCRIS = "*"
+INTREBARE_SCRIS_S = 120
+INTREBARE_SCRIS_SEMNE = 200
+TEXT_INTREBARE_SCRIE = N_("Scrie răspunsul")
 
 
 class Intrebare(object):
 	"""O intrebare a echipei: textul, variantele (chei: ce primeste echipa; etichete: ce vede omul), termenul si
-	raspunsul (indicele variantei), sau de ce n-a venit (fara: termen, exit, oprita, inlocuita, standby, nearatata)."""
+	raspunsul (indicele variantei sau, cu scris, textul omului: raspunsScris), sau de ce n-a venit (fara: termen, exit,
+	oprita, inlocuita, standby, nearatata)."""
 
-	def __init__(self, nr, text, chei, etichete, secunde):
+	def __init__(self, nr, text, chei, etichete, secunde, scris=False):
 		self.id = nr
 		self.text = text
 		self.chei = list(chei)
 		self.etichete = list(etichete)
 		self.secunde = secunde
+		self.scris = bool(scris)
 		self.pornita = _acum()
 		self.pana = self.pornita + secunde
 		self.raspuns = None
+		self.raspunsScris = None
 		self.de_la = ""
 		self.dupa_s = 0
 		self.fara = ""
 		self.aratata = False
+		# tastatura raspunsului deschisa acum pe televizor (incepeScrisul / gataScrisul) si termenul mutat pentru ea
+		self.scria = False
+		self.prelungita = False
 		self.gata = threading.Event()
 
 	def ramasS(self):
 		return max(0, int(round(self.pana - _acum())))
 
 	def public(self):
-		return {"id": self.id, "text": self.text, "variante": list(self.etichete), "ramas_s": self.ramasS()}
+		# eticheta_scris (AST8): randul scris al intrebarii de inceput ("Altceva, scriu eu"); "" = cea obisnuita
+		return {"id": self.id, "text": self.text, "variante": list(self.etichete), "ramas_s": self.ramasS(),
+			"scris": self.scris, "eticheta_scris": getattr(self, "eticheta_scris", "") or ""}
 
 
 _intrebare = [None]
@@ -1265,6 +1474,28 @@ def varianteIntrebare(text):
 	return parti, parti
 
 
+def formaIntrebare(text):
+	"""Variantele si raspunsul scris cerute de echipa: (chei, etichete, scris). Fara "*": ca varianteIntrebare (scris
+	False). "*" singur: ([], [], True); "Da|Nu|*": (["Da", "Nu"], ["Da", "Nu"], True), "*" oriunde in lista. None cand
+	forma nu e buna: "*" de doua ori, peste INTREBARE_VARIANTE_MAX bucati cu tot cu "*", variante goale, prea lungi sau
+	la fel; fara "*" una singura sau niciuna ramane rea, ca pana acum."""
+	parti = [p.strip() for p in str(text).split("|")] if text else []
+	if INTREBARE_SCRIS not in parti:
+		v = varianteIntrebare(text)
+		return None if v is None else (v[0], v[1], False)
+	if parti.count(INTREBARE_SCRIS) != 1 or len(parti) > INTREBARE_VARIANTE_MAX:
+		return None
+	rest = [p for p in parti if p != INTREBARE_SCRIS]
+	if len(set(rest)) != len(rest) or any(not p or len(p) > INTREBARE_VARIANTA_SEMNE for p in rest):
+		return None
+	return rest, list(rest), True
+
+
+def cereRaspunsScris(variante):
+	"""Variantele cerute de echipa au "*" (raspunsul scris)."""
+	return INTREBARE_SCRIS in [p.strip() for p in str(variante or "").split("|")]
+
+
 def secundeIntrebare(text):
 	"""Cat sta intrebarea deschisa: secundele cerute, intre INTREBARE_MIN_S si INTREBARE_MAX_S (firul sesiunii nu ia alta
 	cerere cat asteapta); fara ele, INTREBARE_IMPLICIT_S."""
@@ -1277,8 +1508,8 @@ def secundeIntrebare(text):
 
 def puneIntrebare(text, variante="", secunde=""):
 	"""Intrebarea noua (Intrebare), cea deschisa de acum; una ramasa deschisa se inchide fara raspuns ("inlocuita").
-	None cand variantele nu au forma buna."""
-	v = varianteIntrebare(variante)
+	None cand variantele nu au forma buna (formaIntrebare: si raspunsul scris, "*")."""
+	v = formaIntrebare(variante)
 	if v is None:
 		return None
 	with _lacatIntrebare:
@@ -1287,7 +1518,7 @@ def puneIntrebare(text, variante="", secunde=""):
 			vechi.fara = "inlocuita"
 			vechi.gata.set()
 		_intrebareNr[0] += 1
-		q = Intrebare(_intrebareNr[0], str(text), v[0], v[1], secundeIntrebare(secunde))
+		q = Intrebare(_intrebareNr[0], str(text), v[0], v[1], secundeIntrebare(secunde), scris=v[2])
 		_intrebare[0] = q
 	return q
 
@@ -1316,6 +1547,68 @@ def raspundeIntrebare(nr, index, de_la="televizor"):
 		q.dupa_s = max(0, int(_acum() - q.pornita))
 		q.gata.set()
 	return True
+
+
+def curataRaspunsScris(text):
+	"""Textul scris de om, pe un singur rand: semnele de control (randuri noi, tab) devin spatii, spatiile se strang, cel
+	mult INTREBARE_SCRIS_SEMNE semne. Octetii vin din UTF-8."""
+	if isinstance(text, bytes):
+		text = text.decode("utf-8", "replace")
+	text = "".join(" " if ord(c) < 0x20 or 0x7f <= ord(c) < 0xa0 else c for c in str(text or ""))
+	return " ".join(text.split())[:INTREBARE_SCRIS_SEMNE].strip()
+
+
+def raspundeIntrebareText(nr, text, de_la="televizor"):
+	"""Raspunsul scris al omului la intrebarea nr (numai la o intrebare cu "*"), de pe televizor sau din web: primul
+	raspuns castiga (si fata de o varianta); un text gol, o intrebare inchisa sau alta nu primesc nimic. -> True cand
+	raspunsul a fost luat."""
+	text = curataRaspunsScris(text)
+	try:
+		nr = int(nr)
+	except (TypeError, ValueError):
+		return False
+	if not text:
+		return False
+	with _lacatIntrebare:
+		q = _intrebare[0]
+		if q is None or q.id != nr or not q.scris or q.gata.is_set() or q.ramasS() <= 0:
+			return False
+		q.raspunsScris = text
+		q.de_la = de_la
+		q.dupa_s = max(0, int(_acum() - q.pornita))
+		q.gata.set()
+	return True
+
+
+def intrebareCuNr(nr):
+	"""Intrebarea nr, daca e inca deschisa (pentru fereastra de pe televizor: intoarcerea de la tastatura), altfel None."""
+	q = _intrebare[0]
+	if q is None or q.id != nr or q.gata.is_set() or q.ramasS() <= 0:
+		return None
+	return q
+
+
+def incepeScrisul(nr):
+	"""Omul a deschis tastatura raspunsului pe televizor: intrebarea nr ramane deschisa cel putin INTREBARE_SCRIS_S de
+	acum, dar niciodata peste secunde + INTREBARE_SCRIS_S de la pornire (scrisul cu telecomanda e incet; firul sesiunii
+	vede termenul nou la urmatorul pas al lui asteaptaRaspuns). -> True daca era deschisa si cu raspuns scris."""
+	with _lacatIntrebare:
+		q = _intrebare[0]
+		if q is None or q.id != nr or not q.scris or q.gata.is_set():
+			return False
+		q.scria = True
+		pana = min(_acum() + INTREBARE_SCRIS_S, q.pornita + q.secunde + INTREBARE_SCRIS_S)
+		if pana > q.pana:
+			q.pana = pana
+			q.prelungita = True
+	return True
+
+
+def gataScrisul(nr):
+	"""Tastatura raspunsului s-a inchis (raspuns, EXIT, text gol): omul nu mai scrie."""
+	q = _intrebare[0]
+	if q is not None and q.id == nr:
+		q.scria = False
 
 
 def inchideIntrebarea(nr, motiv):
@@ -1349,13 +1642,20 @@ def asteaptaRaspuns(q, stop=None, pas=0.5):
 
 def textRaspunsIntrebare(q):
 	"""Raspunsul cererii, pentru echipa (romana fara diacritice, ca restul brokerului): (0, "raspuns: Da ...") sau
-	(1, "(fara raspuns ...)"); niciodata un raspuns din timpul trecut sau din EXIT."""
+	(1, "(fara raspuns ...)"); niciodata un raspuns din timpul trecut sau din EXIT. Raspunsul scris (0.7.8):
+	(0, 'raspuns scris: "..." (pe televizor, dupa N s)')."""
+	unde = "din pagina web" if q.de_la == "web" else "pe televizor"
+	if getattr(q, "raspunsScris", None) is not None:
+		return 0, 'raspuns scris: "%s" (%s, dupa %d s)' % (q.raspunsScris, unde, q.dupa_s)
 	if q.raspuns is not None:
 		return 0, "raspuns: %s (varianta %d din %d, %s, dupa %d s)" % (q.chei[q.raspuns], q.raspuns + 1, len(q.chei),
-			"din pagina web" if q.de_la == "web" else "pe televizor", q.dupa_s)
+			unde, q.dupa_s)
 	pe_tv = "" if q.aratata else "; fereastra nu s-a putut deschide pe televizor"
+	if getattr(q, "scria", False):
+		pe_tv += "; omul scria raspunsul pe televizor"
+	durata = int(round(q.pana - q.pornita)) if getattr(q, "prelungita", False) else q.secunde
 	motive = {
-		"termen": "fara raspuns in %d s; intrebarea s-a inchis%s" % (q.secunde, pe_tv),
+		"termen": "fara raspuns in %d s; intrebarea s-a inchis%s" % (durata, pe_tv),
 		"exit": "omul a inchis intrebarea fara raspuns (EXIT)",
 		"oprita": "fara raspuns: asistenta s-a oprit",
 		"inlocuita": "fara raspuns: o intrebare noua i-a luat locul",
@@ -1451,8 +1751,36 @@ def opreste(motiv="de om"):
 	ses = _sesiune
 	if ses is None or not ses.activa():
 		return False, _t("Asistența nu merge.")
+	id_ = getattr(ses, "id", None)
 	ses.opreste(motiv)
+	if str(motiv).startswith("de om"):
+		c = ultimeleConcluzii()
+		if c and id_ and c.get("id") == id_:
+			return True, _t(TEXT_OPRITA_DE_OM)
+		return True, "%s %s" % (_t(TEXT_OPRITA_DE_OM), _t(TEXT_FARA_CONCLUZII))
 	return True, _t("Asistența s-a oprit. Cheia a fost ștearsă.")
+
+
+def schimbaDurata(durata_min, de_la="televizor"):
+	"""(reusit, mesaj): durata sesiunii de acum schimbata fara s-o opreasca, socotita de acum (una din DURATE_PRIMITE; pe
+	ecran si in web se aleg numai DURATE_MIN); mesajul e noul "Pornită până la ..." (textPana). Fara intrebari."""
+	ses = _sesiune
+	if ses is None or not ses.activa() or ses.stare == SE_OPRESTE:
+		return False, _t("Asistența nu merge.")
+	try:
+		durata_min = int(durata_min)
+	except (TypeError, ValueError):
+		durata_min = -1
+	if durata_min not in DURATE_PRIMITE:
+		return False, "durata?"
+	ses.schimbaDurata(durata_min, de_la)
+	return True, textPana(ses)
+
+
+def opritDeOm(id_sesiune):
+	"""True cand sesiunea id_sesiune s-a oprit la cererea omului (televizor, web, fereastra concluziilor)."""
+	o = _ultimaOprire[0]
+	return bool(o and id_sesiune and o.get("id") == id_sesiune and str(o.get("motiv") or "").startswith("de om"))
 
 
 # ---------------------------------------------------------------- concluziile echipei (op "concluzii")
@@ -1521,6 +1849,9 @@ def textConcluzii(intrare, sfarsit=False):
 	cand merge si ca Rosu o opreste; la sfarsitul ei (sfarsit=True), ca s-a oprit si nu mai e nimic de facut."""
 	if not intrare:
 		return ""
+	if intrare.get("de_om"):
+		# oprita de om (CR4): confirmarea cu multumirea, apoi concluziile de pana atunci sau ca nu s-a ajuns la ele
+		return "%s\n\n%s" % (_t(TEXT_OPRITA_DE_OM), intrare.get("text") or _t(TEXT_FARA_CONCLUZII))
 	text = "%s\n\n%s" % (intrare.get("text") or "", _t(TEXT_MULTUMIM))
 	if sfarsit:
 		text += "\n" + _t(TEXT_OPRITA_GATA)
@@ -1552,6 +1883,8 @@ TEXT_COPIE_DIN = N_("Copia setărilor făcută când a intrat echipa: %s.")
 # randurile jurnalului sesiunii, dupa incercarea copiei
 TEXT_COPIE_FACUTA = N_("copia setărilor făcută înainte de orice schimbare")
 TEXT_COPIE_RATATA = N_("copia setărilor nu s-a putut face: %s")
+# randul jurnalului sesiunii cand prima schimbare a echipei asteapta copia (citirile au plecat deja, ASI7)
+TEXT_ASTEAPTA_COPIA = N_("aștept copia setărilor înainte de prima schimbare")
 
 
 def _copie():
@@ -1700,7 +2033,7 @@ def stare():
 		return {"stare": OPRIT, "disponibil": disponibil(), "durate": list(DURATE_MIN),
 			"eroare_pornire": _t(ERORI_PORNIRE.get(_eroare_pornire, "")),
 			"durata_implicita": DURATA_IMPLICITA_MIN, "are_concluzii": ultimeleConcluzii() is not None,
-			"copie": _stareCopie()}
+			"copie": _stareCopie(), "durata": None, "alegeri_durata": alegeriDurata()}
 	return {
 		"copie": _stareCopie(),
 		"are_concluzii": ultimeleConcluzii() is not None,
@@ -1719,6 +2052,9 @@ def stare():
 		"jurnal": ses.jurnal.ultimele(40) if ses.jurnal else [],
 		"durate": list(DURATE_MIN),
 		"durata_implicita": DURATA_IMPLICITA_MIN,
+		# durata sesiunii (minute; 0 = permanent) si alegerile cu textele lor, pentru "Schimbă durata" (ecran si web)
+		"durata": ses.durata_min,
+		"alegeri_durata": alegeriDurata(),
 		# intrebarea echipei care asteapta raspunsul (op "intrebare"), pentru pagina web, sau None
 		"intrebare": intrebareDeschisa() if ses.activa() else None,
 	}
@@ -1741,12 +2077,18 @@ def reia(ctx=None):
 		return
 	if not s.get("id") or not s.get("secret"):
 		return
+	# 0.7.8 (ASL): de ce a tacut sesiunea (iesirea ceruta, caderea, receptorul repornit), din semnul iesirii sau din lipsa lui
+	cauza, tacere = _cauzaReluarii(s)
+	reluari = _reluariDin(s) + [dict({"cauza": cauza}, **({"tacere_s": tacere} if tacere is not None else {}))]
 	pana = s.get("pana_la_ora")
 	if pana is not None and pana - _oraPerete() <= 0:
 		try:
 			os.remove(STARE_FISIER)
 		except Exception:
 			pass
+		# timpul ales a trecut cat interfata (sau receptorul) era oprita: pana in 0.7.7 fisierul se stergea fara nicio urma,
+		# iar serverul o vedea numai "expirat"; acum un rand si POST inchide, pe un fir (reteaua poate fi inca oprita)
+		_inchideDupaTermen(s, cauza, reluari)
 		return
 	try:
 		durata = int(s.get("durata_min", DURATA_IMPLICITA_MIN))
@@ -1762,6 +2104,8 @@ def reia(ctx=None):
 	ses.secret = s["secret"]
 	ses.ultim_seq = int(s.get("ultim_seq", 0))
 	ses.pana_la_ora = pana
+	# durata schimbata inainte de repornire si neajunsa la server: firul o trimite din nou (_trimiteDurata)
+	ses.durata_netrimisa = bool(s.get("durata_netrimisa"))
 	ses._ancoreazaCeasul()
 	# copia setarilor deja incercata pentru aceasta sesiune: nu se mai face (Sesiune._copia_inainte)
 	ses.copie_pentru = s.get("copie") if isinstance(s.get("copie"), str) else None
@@ -1779,9 +2123,17 @@ def reia(ctx=None):
 	if asteapta:
 		# repornirea a venit inainte de aprobare: codul ramane acelasi, receptorul asteapta mai departe
 		ses.cod = re.sub(r"\D", "", str(s.get("cod")))[:6]
+	ses.reluari = reluari[-RELUARI_MAX:]
 	with _lacat:
 		_sesiune = ses
 	ses._pune_stare(ASTEAPTA if asteapta else CONECTAT)
+	try:
+		_jurnal("reluata dupa %s%s, ultima cerere %d" % (cauza,
+			(", %d s fara interfata" % tacere) if tacere is not None else "", ses.ultim_seq))
+	except Exception:
+		pass
+	# reluarile tinute minte (si dupa inca o repornire); semnul iesirii se sterge, ca o cadere de mai tarziu sa nu para iesire
+	ses._scrie_stare()
 	ses._fir = threading.Thread(target=ses._bucla_dupa_reluare, name="HdsAsistenta")
 	ses._fir.daemon = True
 	ses._fir.start()
@@ -1802,3 +2154,141 @@ def _bucla_dupa_reluare(self):
 
 
 Sesiune._bucla_dupa_reluare = _bucla_dupa_reluare
+
+
+# ---------------------------------------------------------------- de ce a tacut sesiunea (0.7.8, ASL)
+
+def _cauzaIesire(cod):
+	"""Cauza unei iesiri cerute, dupa codul ei (Screens/Standby.QUIT_*): "repornirea interfetei", "oprirea
+	receptorului"...; "iesire cod N" pentru celelalte, "iesire fara cod" cand nu se stie (quitMainloop chemat direct)."""
+	try:
+		cod = int(cod)
+	except (TypeError, ValueError):
+		return "iesire fara cod"
+	return CAUZE_IESIRE.get(cod, "iesire cod %d" % cod)
+
+
+def _codIesire():
+	"""Codul iesirii care incepe (acelasi pe care il da HdsPaznic lui hds-watchdog.py) sau None."""
+	try:
+		from Components import HdsPaznic
+		return HdsPaznic._codIesireCeruta()
+	except Exception:
+		return None
+
+
+def laIesire(cod="implicit"):
+	"""Din mytest.py, cand bucla interfetei s-a oprit (dupa HdsPaznic.iesireInceputa): cu o sesiune activa, semnul
+	iesirii (codul cerut si ceasul monoton) intra in fisierul ei de stare, ca reia() de la pornirea urmatoare sa spuna de
+	ce a tacut sesiunea. Fara sesiune activa nu scrie nimic, iar o sesiune oprita intre timp nu se reinvie (_scrie_stare
+	cu numai_daca_exista). Fara retea, fara asteptare; nu arunca."""
+	try:
+		ses = _sesiune
+		if ses is None or not ses.activa() or not ses.id:
+			return False
+		if cod == "implicit":
+			cod = _codIesire()
+		ses.iesire = {"cod": cod, "mono": _acum()}
+		if not ses._scrie_stare(numai_daca_exista=True):
+			return False
+		_jurnal("interfata iese (%s); sesiunea se reia la pornire" % _cauzaIesire(cod))
+		return True
+	except Exception as e:
+		_jurnal("semnul iesirii: %s" % type(e).__name__)
+		return False
+
+
+def _cauzaReluarii(s):
+	"""(cauza, tacere_s sau None) pentru o sesiune gasita in fisierul de stare la pornirea interfetei: cu semnul iesirii,
+	iesirea ceruta (si, in aceeasi pornire a receptorului, cat a durat pauza, pe ceasul monoton); fara semn, dar cu
+	dosarul sesiunii din /tmp inca acolo, interfata a cazut (sau a fost oprita din afara); fara semn si fara dosar,
+	receptorul a pornit din nou fara iesirea interfetei (curentul, butonul, o cadere a sistemului). Un fisier scris de o
+	versiune fara semn (fara "semn_iesire") nu spune nimic: necunoscut."""
+	dosar = s.get("dosar")
+	aceeasi_pornire = bool(dosar) and isinstance(dosar, str) and os.path.isdir(dosar)
+	iesire = s.get("iesire")
+	if isinstance(iesire, dict):
+		tacere = None
+		if aceeasi_pornire:
+			try:
+				tacere = max(0, int(_acum() - float(iesire.get("mono"))))
+			except (TypeError, ValueError):
+				tacere = None
+		return _cauzaIesire(iesire.get("cod")), tacere
+	if not s.get("semn_iesire") or not dosar:
+		return CAUZA_NECUNOSCUTA, None
+	return (CAUZA_CADERE if aceeasi_pornire else CAUZA_FARA_IESIRE), None
+
+
+def _reluariDin(s):
+	"""Reluarile de dinainte, din fisierul de stare, curatate (o forma rea nu opreste reluarea)."""
+	rez = []
+	lista = s.get("reluari")
+	if not isinstance(lista, list):
+		return rez
+	for r in lista[-RELUARI_MAX:]:
+		if not isinstance(r, dict) or not isinstance(r.get("cauza"), str):
+			continue
+		x = {"cauza": r["cauza"][:MOTIV_MAX]}
+		if type(r.get("tacere_s")) is int and r["tacere_s"] >= 0:
+			x["tacere_s"] = r["tacere_s"]
+		rez.append(x)
+	return rez
+
+
+def textReluari(reluari):
+	"""Reluarile pentru jurnal: "repornirea interfetei (12 s), cadere a interfetei"."""
+	return ", ".join("%s (%d s)" % (r["cauza"], r["tacere_s"]) if "tacere_s" in r else r["cauza"]
+		for r in reluari[-RELUARI_MAX:])
+
+
+def motivCuReluari(motiv, reluari):
+	"""Motivul opririi pentru server si jurnal: cheia de acum ("de om (ecran)", "termen", "eroare: X"...), iar dupa o
+	reluare cu cauza stiuta si ultima cauza: "de om (ecran) (reluata: cadere a interfetei)", "(reluata 3x: ...)". Cel mult
+	MOTIV_MAX semne, ca tiparul motivului de pe server (_MOTIV_OPRIRE din server.py) sa-l pastreze."""
+	motiv = str(motiv or "necunoscut")
+	stiute = [r for r in (reluari or []) if r.get("cauza") and r.get("cauza") != CAUZA_NECUNOSCUTA]
+	if stiute:
+		n = len(reluari)
+		motiv += " (reluata%s: %s)" % (" %dx" % n if n > 1 else "", stiute[-1]["cauza"])
+	return motiv[:MOTIV_MAX]
+
+
+def _inchideDupaTermen(s, cauza, reluari):
+	"""Sesiunea din fisierul de stare a trecut de ora de sfarsit cat interfata (sau receptorul) era oprita: un rand in
+	jurnalul interfetei si POST inchide cu motivul "termen (oprita: <cauza>)", pe un fir (reteaua poate porni dupa
+	interfata: PAUZE_INCHIDE_S). Nu arunca."""
+	try:
+		seq = int(s.get("ultim_seq") or 0)
+	except (TypeError, ValueError):
+		seq = 0
+	motiv = ("termen (oprita: %s)" % cauza)[:MOTIV_MAX]
+	corp = {"motiv": motiv, "seq": seq, "reluari": [dict(r) for r in reluari[-RELUARI_MAX:]]}
+	try:
+		_jurnal("oprita: %s, timpul ales s-a terminat cat interfata era oprita, ultima cerere %d" % (motiv, seq))
+	except Exception:
+		pass
+	server = s.get("server") if isinstance(s.get("server"), str) else SERVER
+	server = server if server.endswith("/") else server + "/"
+	url = server + "inchide?id=" + str(s.get("id"))
+	antete = {"X-Secret": str(s.get("secret"))}
+
+	def trimite():
+		cod = 0
+		for pauza in (0,) + tuple(PAUZE_INCHIDE_S):
+			if pauza:
+				time.sleep(pauza)
+			try:
+				cod, _o = _ceruta(url, "POST", corp, antete)
+			except Exception:
+				cod = 0
+			if 0 < cod < 500:
+				return
+		_jurnal("oprirea n-a ajuns la serverul asistentei (%s)"
+			% ((getattr(_ultimaEroareHttp, "motiv", "") or "internet") if cod == 0 else "server %d" % cod))
+	try:
+		fir = threading.Thread(target=trimite, name="HdsAsistentaInchide")
+		fir.daemon = True
+		fir.start()
+	except Exception:
+		pass

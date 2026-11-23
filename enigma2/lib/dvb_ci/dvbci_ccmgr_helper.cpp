@@ -200,9 +200,8 @@ bool write_authdata(unsigned int slot, const uint8_t *host_id, const uint8_t *dh
 	memcpy(buf + 8 + 256, akh, 32);
 	entries++;
 
-	eDebug("[CI%d RCC] %d entries for writing filename %s", slot, entries, filename);
-
 	get_authdata_filename(filename, sizeof(filename), slot);
+	eDebug("[CI%d RCC] %d entries for writing filename %s", slot, entries, filename);
 	fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
 	if (fd < 0)
 	{

@@ -361,9 +361,14 @@ def feed_candidat_t2(candidat, tp):
         if isinstance(candidat.get('purtator'), dict):
             f['purtator'] = dict(candidat['purtator'])
         return f
-    return {'id': 'det_t2_%d_%d_%04x' % (int(tp.get('pozitie') or 0), int(tp.get('frecventa') or 0) // 1000, pid),
+    f = {'id': 'det_t2_%d_%d_%04x' % (int(tp.get('pozitie') or 0), int(tp.get('frecventa') or 0) // 1000, pid),
             'tip': 't2', 'fel': 't2mi', 'pid': pid, 'plp': 0,
             'nume': candidat.get('serviciu') or 'DVB-T2 PID %d' % pid, 'confirmat': True}
+    if isinstance(candidat.get('purtator'), dict):
+        f['purtator'] = dict(candidat['purtator'])
+        if candidat.get('acces') == 'BISS':
+            f['acces'] = 'BISS'
+    return f
 
 
 def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=None, incorporat=None,
@@ -376,22 +381,24 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
     Feed-urile care se asculta numai prin portul 8001 (T2-MI, ETI) si cele gasite fara posturi nu au inca o lista de
     posturi: intra in `de_invatat`, pe care apelantul le trece pe rand prin releu (Controlor.invata), afara de cele
     pe care servicii.json le stie deja (invatate la o scanare de dinainte sau cand au cantat): acelea intra direct
-    in `gasite`, fara inca un drum prin releu. Pe un transponder fara niciun feed al tipului in lista, PID-urile cu
-    T2MI_descriptor (candidatii) se pun in scanate.json ca feed-uri noi (`adaugat`: se scot daca invatarea nu merge).
+    in `gasite`, fara inca un drum prin releu. PID-urile noi cu T2MI_descriptor se incearca si pe transpondere deja
+    cunoscute (`adaugat`: se scot daca invatarea nu merge). Purtatorul BISS se invata din tabele, fara date de acces.
     -> {'gasite': [(feed, tp, posturi)], 'de_invatat': [(feed, tp, adaugat)], 'noi': feed-uri noi in scanate.json,
         'buchet': buchete.reface(...)}"""
     from . import buchete, liste
     feeduri = [f for f in feeduri or [] if isinstance(f, dict) and f.get('tip') == profil.tip]
     lista = liste.incarca(profil.tip, profil.director, incorporat)
-    are_in_lista = False
-    for t in lista.get('transpondere', []):
-        if liste._acelasi_transponder(t, tp) and any(f.get('tip') == profil.tip for f in t.get('feeduri', [])):
-            are_in_lista = True
-    noi = []
+    # Confirmed probes must retain the catalogue identity as well.
+    for i, f in enumerate(feeduri):
+        cunoscut, _t = cauta_in_lista(lista, tp, f)
+        if (cunoscut is not None and 'BISS' in (f.get('acces'), cunoscut.get('acces'))
+                and isinstance(f.get('purtator'), dict)):
+            feeduri[i] = dict(cunoscut, purtator=dict(f['purtator']), acces='BISS', confirmat=True)
+            if f.get('posturi'):
+                feeduri[i]['posturi'] = f['posturi']
+    noi, din_lista = [], set()
     if profil.tip == 't2':
-        # T2-MI: numai pe un transponder fara feed-uri in lista; TS in PID (abertis): orice PID pe care lista nu il are
-        # pe acest transponder (fluxurile noi de pe 30W se gasesc singure)
-        din_lista = set()
+        # Each signalled PID is independent of the other feeds on this carrier.
         for t in lista.get('transpondere', []):
             if liste._acelasi_transponder(t, tp):
                 din_lista.update(f.get('pid') for f in t.get('feeduri', []) if f.get('tip') == 't2')
@@ -401,10 +408,16 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
                 continue
             if c.get('fel') == 'abertis' and c.get('pid') in din_lista:
                 continue
-            if c.get('fel') != 'abertis' and are_in_lista:
+            if din_lista and c.get('fel') != 'abertis' and c.get('pid') not in din_lista and 't2mi_stream_id' not in c:
                 continue
             f = feed_candidat_t2(c, tp)
             if f is not None:
+                cunoscut, _t = cauta_in_lista(lista, tp, f)
+                if cunoscut is not None:
+                    if 'purtator' not in f or 'BISS' not in (f.get('acces'), cunoscut.get('acces')):
+                        continue
+                    # Keep the stable id, names and previously learned programmes.
+                    f = dict(cunoscut, purtator=f['purtator'], acces='BISS', confirmat=True)
                 vazute.add(f['pid'])
                 noi.append(f)
     n_noi = 0
@@ -438,7 +451,7 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
         elif stiute(feed_u):
             gasite.append((feed_u, tp_u, stiute(feed_u)))
         else:
-            de_invatat.append((feed_u, tp_u, f in noi))
+            de_invatat.append((feed_u, tp_u, f in noi and f.get('pid') not in din_lista))
     # feed-urile listei de pe acest transponder care vin numai prin 8001: detectorul nu le poate vedea pe receptor
     for t in lista.get('transpondere', []):
         if not liste._acelasi_transponder(t, tp):

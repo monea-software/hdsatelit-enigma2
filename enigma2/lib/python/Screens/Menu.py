@@ -57,7 +57,8 @@ mdom = xml.etree.ElementTree.parse(resolveFilename(SCOPE_SKIN, 'menu.xml'))
 
 # HDSatelit: „Caută în meniu” e primul rand pe ORICE pagina de meniu (meniul principal, Setări, orice submeniu), pus aici,
 # in Menu.__init__, ca orice meniu nou sa-l primeasca singur (Eduard, 13.11.2026). Randul nu are cifra: cifrele 1-9
-# numara randurile de sub el, ca inainte (fara scurtatura 0: apasarea ar ajunge si in campul cautarii). Intrarile din
+# numara randurile de sub el, ca inainte. 0 nu deschide cautarea: numai in principal cu peste 9 intrari deschide
+# prima intrare suplimentara, iar 9 ramane pe ultima (Components/HdsDale.py). Intrarile din
 # menu.xml care deschid acelasi ecran (Components/HdsCautaSetari.ID_PROPRII: prima din Setări, cea din meniul principal)
 # se sar pe televizor, ca sa nu apara de doua ori; raman in menu.xml pentru interfata web si index.
 ID_RAND_CAUTARE = "hds_cauta_meniu"
@@ -132,6 +133,18 @@ def _cuSemnAscuns(x):
 
 def _glifNod(nod):
 	return nod.get("pictograma")
+
+
+def ecranPlugin(x):
+	"""Ce deschide un <plugin> din meniul unui plugin strain (menu.xml al lui M3UIPTV si al altora facute pentru
+	OE-Alliance): system="Nume" -> Plugins/SystemPlugins/Nume/plugin.py, extensions="Nume" -> Plugins/Extensions/Nume/
+	plugin.py; screen= e ecranul din acel fisier (lipsa: numele pluginului), textul elementului sunt argumentele, ca la
+	<screen>. -> (modul, ecran + argumente) pentru runScreen, sau None cand nu spune ce plugin."""
+	for atribut, dosar in (("system", "SystemPlugins"), ("extensions", "Extensions")):
+		nume = (x.get(atribut) or "").strip()
+		if nume:
+			return ("Plugins.%s.%s.plugin" % (dosar, nume), (x.get("screen") or nume) + ", " + (x.text or ""))
+	return None
 
 
 def skinulAreDale():
@@ -343,6 +356,7 @@ class _MC(object):
 
 
 class Menu(Screen):
+	_pornireInchisa = True
 
 	ALLOW_SUSPEND = True
 
@@ -373,7 +387,7 @@ class Menu(Screen):
 		#        string (as we want to reference
 		#        stuff which is just imported)
 		# FIXME. somehow
-		# arg[0] si arg[1] vin din menu.xml, fisier al imaginii (nu din date externe)
+		# arg[0] si arg[1] vin din menu.xml al imaginii sau din menu.xml al unui plugin instalat (<plugin>)
 		namespace = dict(globals())
 		if arg[0] != "":
 			namespace.update(vars(importlib.import_module(arg[0])))
@@ -482,11 +496,30 @@ class Menu(Screen):
 				destList.append(intrareMeniu(_hdsTextNod(node, _, item_text), boundFunction(self.openSetup, id), entryID,
 					weight, item_text, stare, glif))
 				return
+			elif x.tag == 'plugin':
+				# HDSatelit: intrarile din meniul unui plugin strain; fara system=/extensions= se trece la urmatorul
+				# element al intrarii (un <code> pus langa el, cum face peticul M3UIPTV)
+				tinta = ecranPlugin(x)
+				if tinta is not None:
+					destList.append(intrareMeniu(_hdsTextNod(node, _), boundFunction(self.runScreen, tinta), entryID,
+						weight, simplu, stare, glif))
+					return
 		destList.append(intrareMeniu(item_text, self.nothing, entryID, weight, None, stare, glif))
 
 
 	def __init__(self, session, parent, alegere=None):
 		Screen.__init__(self, session)
+		self._pornireInchisa = False
+		self._pornireGata = False
+		self._pornireNoduri = [x for x in parent if x.get("requires", "").lstrip("!") in
+			("HdsMultiboot", "HdsKexecInstalabil")]
+		if self._pornireNoduri:
+			self._pornireActualizator = getattr(importlib.import_module("Components.SystemInfo"), "recitestePornireMultipla", None)
+			if self._pornireActualizator is not None:
+				self._pornireActualizator(proaspat=True)
+				self._pornireCapacitate = tuple(SystemInfo.get(k, False) for k in ("HdsMultiboot", "HdsKexecInstalabil"))
+				self.onLayoutFinish.append(self._pornirePregateste)
+				self.onClose.append(self._pornireInchide)
 
 		list = []
 		self.parentNode = parent
@@ -516,6 +549,8 @@ class Menu(Screen):
 								x[4], glif=HdsDale.GLIF_EXTENSIE))
 							count += 1
 
+		self._pornireRanduri = {x[2]: x for x in list if x[2] in
+			{n.get("entryID", "undefined") for n in self._pornireNoduri}}
 		if menuID is not None:
 			# plugins
 			from Components.HdsPluginuriImagine import meniuriUtilizator
@@ -584,12 +619,15 @@ class Menu(Screen):
 		else:
 			# numele coloanelor cerute de sabloanele temelor scrise pentru standardul OE-Alliance (<template> cu index="Text" /
 			# "NumberText"): titlul intrarii (randul: intrareMeniu). Cu tema noastra nu schimba nimic (n-are <template>).
-			self["menu"] = List(list, indexNames=INDEX_MENIU)
+			self["menu"] = List(self._listaAfisata(), indexNames=INDEX_MENIU)
 			if self._alesInitial is not None:
 				# o metoda, nu lambda: GUISkin cheama direct numai metodele (restul trece prin exec)
 				self.onLayoutFinish.append(self._listaAlege)
 			self["menu"].onSelectionChanged.append(self._puneDescrierea)
 			self.onLayoutFinish.append(self._puneDescrierea)
+			# Numai capetele listei; sagetile obisnuite raman la lista nativa.
+			self["lista_circulara"] = ActionMap(["HdsMeniuCircularActions"], {
+				"up": self._listaSusCircular, "down": self._listaJosCircular}, -1)
 
 		actions = {
 				"ok": self.okbuttonClick,
@@ -608,6 +646,8 @@ class Menu(Screen):
 				"cautare": self.keyCautaSetari,
 				"yellow": self.keyGalben,
 			}
+		if self._cheieMeniu == "mainmenu":
+			actions["0"] = self.keyNumberGlobal
 		contexte = ["OkCancelActions", "MenuActions", "NumberActions", "HdsCautareActions", "ColorActions"]
 		self["actions"] = NumberActionMap(contexte, actions)
 		if self._modDale:
@@ -662,8 +702,81 @@ class Menu(Screen):
 		# si titlul ferestrei (sursa Title): skinurile il deseneaza in bara de sus, iar fara el bara ramane goala
 		self.setTitle(a)
 
+	def _pornirePregateste(self):
+		if self._pornireInchisa:
+			return
+		from enigma import eTimer
+		ceas = getattr(self, "_pornireCeas", None)
+		if ceas is not None:
+			ceas.stop()
+		self._pornireCeas = eTimer()
+		self._pornireCeas.callback.append(self._pornireVerifica)
+		self._pornireCeas.start(100, True)
+
+	def _pornireVerifica(self):
+		if self._pornireInchisa or self._pornireGata:
+			return
+		if self._pornireActualizator(False):
+			self._pornireCeas.start(100, True)
+			return
+		self._pornireGata = True
+		capacitate = tuple(SystemInfo.get(k, False) for k in ("HdsMultiboot", "HdsKexecInstalabil"))
+		if capacitate == self._pornireCapacitate:
+			return
+		ales = self._intrareCurenta()
+		cheie = HdsMeniuOrdine.cheieTuplu(ales) if ales else None
+		schimbate = {k for k, vechi, nou in zip(("HdsMultiboot", "HdsKexecInstalabil"), self._pornireCapacitate,
+			capacitate) if vechi != nou}
+		noduri = [x for x in self._pornireNoduri if x.get("requires", "").lstrip("!") in schimbate]
+		# Keep a plugin's replacement for an XML entry, if it supplied one.
+		inlocuite = {x[2] for x in self._listaToata if x[2] not in self._pornireRanduri or
+			x != self._pornireRanduri[x[2]]}
+		noduri = [x for x in noduri if x.get("entryID", "undefined") not in inlocuite]
+		ids = {x.get("entryID", "undefined") for x in noduri}
+		lista = [x for x in self._listaToata if x[2] not in ids]
+		for nod in noduri:
+			if nod.tag == "menu":
+				self.addMenu(lista, nod)
+			else:
+				self.addItem(lista, nod)
+		lista.sort(key=lambda x: int(x[3]))
+		if lista != self._listaToata:
+			self._listaToata = lista
+			if ales and self._flatlist and ales == self._flatlist[0]:
+				self._puneLista(self._listaVazuta(), 0)
+			else:
+				self._refaLista(cheie)
+
+	def _pornireInchide(self):
+		self._pornireInchisa = True
+		ceas = getattr(self, "_pornireCeas", None)
+		if ceas is not None:
+			ceas.stop()
+
 	def _listaAlege(self):
 		self["menu"].setIndex(self._alesInitial)
+
+	def _listaCirculara(self, pas):
+		if getattr(self, "_mutare", None) is not None:
+			return 0
+		try:
+			pornit = config.usage.hds_meniu_circular.value
+		except AttributeError:
+			return 0
+		if not pornit:
+			return 0
+		lista = self["menu"]
+		n, i = len(lista.list), lista.index
+		if n > 1 and ((pas < 0 and i == 0) or (pas > 0 and i == n - 1)):
+			lista.index = n - 1 if pas < 0 else 0
+			return 1
+		return 0
+
+	def _listaSusCircular(self):
+		return self._listaCirculara(-1)
+
+	def _listaJosCircular(self):
+		return self._listaCirculara(1)
 
 	def descriereAleasa(self):
 		"""Descrierea intrarii alese acum (lista sau dale), tradusa; "" cand n-are."""
@@ -705,6 +818,22 @@ class Menu(Screen):
 		return None
 
 	# ------------------------------------------------------------ ordinea si ascunderea (HdsMeniuOrdine)
+	def _cifreExtinse(self):
+		return self._cheieMeniu == "mainmenu" and len(self._flatlist) - 1 > 9
+
+	def _cifraIntrare(self, i):
+		return HdsDale.cifraIntrare(i - 1, len(self._flatlist) - 1, self._cheieMeniu == "mainmenu")
+
+	def _listaAfisata(self):
+		# In lista veche nu se desenau cifre. Principalul extins le arata ca sa explice ordinea 8, 0, ..., 9.
+		if not self._cifreExtinse():
+			return self._flatlist
+		rez = []
+		for i, x in enumerate(self._flatlist):
+			cifra = self._cifraIntrare(i)
+			rez.append((("%s  %s" % (cifra, x[0])) if cifra is not None else x[0],) + x[1:])
+		return rez
+
 	def _listaVazuta(self):
 		"""Randurile de pe ecran: randul cautarii, apoi intrarile in ordinea omului, fara cele ascunse (sau cu semnul lor,
 		cand sunt aratate: "Arata intrarile ascunse" sau alese din cautare)."""
@@ -733,6 +862,9 @@ class Menu(Screen):
 	def _puneLista(self, lista, i):
 		"""Randurile `lista` pe ecran, cu cursorul pe randul i (lista sau dale: cifrele, fereastra, numele)."""
 		self._flatlist = self.list = lista
+		# in modul de mutare cifrele nu deschid nimic: linia de jos ramane cea a mutarii (_mutareTexte)
+		mut = getattr(self, "_mutare", None) is not None
+		self["dala_t_cifre"].setText("" if mut else ("0-9" if self._cifreExtinse() else "1-9"))
 		if self._modDale:
 			if not self._dalaGata:
 				self._dalaAles = i
@@ -742,7 +874,7 @@ class Menu(Screen):
 			self._dalaInceput = HdsDale.fereastra(i // HdsDale.COLOANE, self._dalaInceput, HdsDale.randuri(len(lista)))
 			self._dalaRefa()
 		else:
-			self["menu"].list = lista
+			self["menu"].list = self._listaAfisata()
 			self["menu"].setIndex(i)
 
 	def _cheiVazute(self):
@@ -864,7 +996,7 @@ class Menu(Screen):
 			print("[Menu] titlul mutarii: %s" % e)
 		self["dala_ok"].setText(_("Gata") if mut else _("Deschide"))
 		self["dala_exit"].setText(_("Renunță") if mut else _("Înapoi"))
-		self["dala_t_cifre"].setText("" if mut else "1-9")
+		self["dala_t_cifre"].setText("" if mut else ("0-9" if self._cifreExtinse() else "1-9"))
 		self["dala_cifre"].setText("" if mut else _("Direct"))
 		if mut:
 			for nume_sursa in ("dala_t_text", "dala_text", "dala_galben"):
@@ -960,7 +1092,7 @@ class Menu(Screen):
 		traduc; indiciile urmeaza scurtaturile alese acum."""
 		self["dala_t_ok"] = StaticText("OK")
 		self["dala_t_exit"] = StaticText("EXIT")
-		self["dala_t_cifre"] = StaticText("1-9")
+		self["dala_t_cifre"] = StaticText("0-9" if self._cifreExtinse() else "1-9")
 		self["dala_t_text"] = StaticText("")
 		self["dala_ok"] = StaticText(_("Deschide"))
 		self["dala_exit"] = StaticText(_("Înapoi"))
@@ -1098,7 +1230,7 @@ class Menu(Screen):
 		randuri, incape = HdsDale.rupeNume(simplu, lambda t: self._dalaLatime(t, g["nume_font"]), maxim)
 		# cifrele numara randurile de sub „Caută în meniu” (randul 0, fara cifra)
 		return {"simplu": simplu, "rupt": "\n".join(randuri), "incape": incape, "stare": stare, "glif": glif,
-			"cifra": str(i) if 0 < i <= 9 else None}
+			"cifra": self._cifraIntrare(i)}
 
 	def _dalaPictograma(self, glif, aleasa):
 		g, s = self._dalaGeom, self._dalaScara
@@ -1312,17 +1444,19 @@ class Menu(Screen):
 	# ------------------------------------------------------------ tastele
 	def keyNumberGlobal(self, number):
 		print("menu keyNumber:", number)
-		# randul 0 e „Caută în meniu”: cifra 1 e randul de sub el (index 1), ca inainte
+		# 0 nu ajunge la randul cautarii, nici la campul ecranului ei.
+		if number == 0 and not self._cifreExtinse():
+			return 0
+		i = HdsDale.dupaCifra(number, len(self._flatlist) - 1, self._cheieMeniu == "mainmenu")
+		if i is None:
+			return
 		if self._modDale:
 			# cifra tinteste intrarea din lista plata (ca in modul lista), nu randul din grila
-			i = HdsDale.dupaCifra(number, len(self._flatlist) - 1)
-			if i is not None:
-				self._dalaMuta(i + 1)
-				self.okbuttonClick()
-			return
-		if len(self["menu"].list) > number:
-			self["menu"].setIndex(number)
+			self._dalaMuta(i + 1)
 			self.okbuttonClick()
+			return
+		self["menu"].setIndex(i + 1)
+		self.okbuttonClick()
 
 	def keyGalben(self):
 		if sens_tasta("menu", "yellow", config=config) == "toggle_layout":

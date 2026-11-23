@@ -585,6 +585,8 @@ class HdsDvbIAvansat(Screen):
         self['stare'] = StaticText(S.textStare(self._config))
         self['lista'] = ListaRanduri()
         self['lista'].setList(self._randuri())
+        # DVK (15.11.2026, L4088): la o adresa proprie care nu raspunde, fraza intreaga sta in eticheta de stare
+        self['lista'].onSelectionChanged.append(self._stareAleasa)
         self['key_red'] = StaticText(_('Înapoi'))
         self['key_green'] = StaticText(_('Reîncarcă'))
         self['key_yellow'] = StaticText(_('Pornit/Oprit'))
@@ -614,6 +616,8 @@ class HdsDvbIAvansat(Screen):
         self._intrari.append((_('--- Adrese proprii ---'), None))
         # DVK (15.11.2026): adresa care nu raspunde are semnul inainte (adresa lunga deruleaza, semnul ramane vazut)
         nu = S.stariAdrese(self._config.get('url_uri', []))
+        # tinute pentru eticheta de stare: mutarea cursorului nu mai cere nimic
+        self._nu = nu
         for i, url in enumerate(self._config.get('url_uri', [])):
             # adresa intreaga: un rand care nu incape deruleaza (lib/gui/elabel.h)
             semn = '(%s) ' % _(S.TEXT_SEMN_NU_RASPUNDE) if url in nu else ''
@@ -628,8 +632,23 @@ class HdsDvbIAvansat(Screen):
         """Reconstruieste lista si actualizeaza starea."""
         self._construieste_lista()
         self['lista'].setList(self._randuri())
-        self['stare'].setText(S.textStare(self._config))
+        self['stare'].setText(self._textStare())
         _scrie_config(self._config)
+
+    def _textStare(self):
+        """Fraza intreaga (de cand nu raspunde, urmatoarea incercare) pentru adresa proprie aleasa, din starea tinuta la
+        construirea listei; altfel randul obisnuit."""
+        index = self['lista'].getSelectionIndex() if 'lista' in self else -1
+        rand = self._intrari[index] if 0 <= index < len(self._intrari) else None
+        if rand and rand[1] and rand[1][0] == 'url':
+            adrese = self._config.get('url_uri', [])
+            i = rand[1][1]
+            if 0 <= i < len(adrese) and self._nu.get(adrese[i]):
+                return self._nu[adrese[i]]
+        return S.textStare(self._config)
+
+    def _stareAleasa(self):
+        self['stare'].setText(self._textStare())
 
     def toggle_selectat(self):
         """OK pe o intrare predefinita o activeaza/dezactiveaza."""

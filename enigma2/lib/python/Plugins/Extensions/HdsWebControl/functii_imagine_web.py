@@ -119,7 +119,7 @@ def actiune(nume, argumente, F=None, S=None, sesiune=None):
 
 
 def argumente(request):
-	"""Numai campurile cunoscute, scurte; semnul apartine elementului ConfigElement."""
+	"""Numai campurile cunoscute; semnul apartine elementului ConfigElement."""
 	rez = {}
 	for cheie in ('id', 'nr', 'semn', 'valoare', 'operatie', 'pts', 'tip'):
 		valori = (getattr(request, 'args', None) or {}).get(cheie.encode('ascii'), [])
@@ -128,7 +128,7 @@ def argumente(request):
 		valoare = valori[0]
 		if isinstance(valoare, bytes):
 			valoare = valoare.decode('utf-8', 'replace')
-		rez[cheie] = str(valoare)[:120].strip()
+		rez[cheie] = str(valoare).strip()
 	return rez
 
 

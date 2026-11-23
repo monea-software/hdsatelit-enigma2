@@ -684,6 +684,37 @@ class _NotificatorCeas(object):
 
 # ------------------------------------------------------------------ serviciul
 
+def _vorbirePornita():
+	import sys
+	v = sys.modules.get("Components.HdsVorbire")
+	try:
+		return bool(v is not None and (v._alegere_nativa or v.initConfig().pornit.value))
+	except (ImportError, AttributeError):
+		return False
+
+
+class InstantaneuDisc(object):
+	# Main requests; a worker publishes plain values. No ConfigElements or UI on worker.
+	def __init__(self):
+		self.valoare = None
+		self.fir = None
+		self.la = 0
+
+	def cere(self, functie):
+		if (self.fir is None or not self.fir.is_alive()) and time.monotonic() - self.la >= 1:
+			import threading
+			def lucru():
+				try:
+					self.valoare = functie()
+				except Exception:
+					pass
+				finally:
+					self.la = time.monotonic()
+			self.fir = threading.Thread(target=lucru, name="HdsOcrDisc", daemon=True)
+			self.fir.start()
+		return self.valoare
+
+
 class Serviciu(object):
 	"""pornirea (Popen, fara sa astepte) si oprirea procesului hds-ocr"""
 
@@ -696,6 +727,11 @@ class Serviciu(object):
 		self.porniri = 0
 
 	def instalat(self):
+		if _vorbirePornita():
+			if not hasattr(self, "_disc"):
+				self._disc = InstantaneuDisc()
+			binar = self.binar
+			return bool(self._disc.cere(lambda: os.access(binar, os.X_OK)))
 		return os.access(self.binar, os.X_OK)
 
 	def porneste(self):
@@ -1325,6 +1361,21 @@ class OcrSubtitrari(object):
 	def modele(self):
 		"""modelele de pe receptor: dosarul imaginii si cele descarcate. Se citesc din nou cand depozitul spune ca s-a
 		schimbat ceva (o descarcare, o stergere); atunci si modelul pistei de acum se alege din nou."""
+		if _vorbirePornita():
+			if not hasattr(self, "_disc_modele"):
+				self._disc_modele = InstantaneuDisc()
+			tessdata, depozit = self.tessdata, self.depozit
+			def citeste():
+				modele = set(modeleDisponibile(tessdata))
+				if depozit is not None:
+					instalate = depozit.modeleInstalate()
+					depozit.puneLegaturi(instalate)
+					modele.update(instalate)
+				return frozenset(modele)
+			self._modele = self._disc_modele.cere(citeste) or frozenset()
+			if self.fel == 0 or self.poza_film:
+				self.model = modelPentruLimba(self.limba, self._modele, implicit=self.limba_ghicita)
+			return self._modele
 		gen = self.depozit.generatie() if self.depozit is not None else None
 		if self._modele is None or gen != self._generatie:
 			schimbare = self._modele is not None
@@ -1363,7 +1414,7 @@ class OcrSubtitrari(object):
 			self.fara_limba = True
 			self._ghiceste(limba)
 		self.model = modelPentruLimba(limba, self.modele(), implicit=self.limba_ghicita)
-		if self.model and self.activ() and (self.deFolos is None or self.deFolos()):
+		if not _vorbirePornita() and self.model and self.activ() and (self.deFolos is None or self.deFolos()):
 			self.client.incalzeste(self.model)
 		return self.model
 
@@ -1629,6 +1680,21 @@ class OcrSubtitrari(object):
 		return self.serviciu.opreste()
 
 
+def pozaVizibila(regiuni):
+	# Palette transparency is enough to distinguish an empty DVB page from unreadable text.
+	try:
+		for x, y, w, h, pas, paleta, pixeli in regiuni:
+			if w <= 0 or h <= 0 or pas < w or w * h > 4 * 1024 * 1024:
+				continue
+			vizibili = bytes(1 if i < len(paleta) and paleta[i][3] < 255 else 0 for i in range(256))
+			for row in range(h):
+				if b"\x01" in pixeli[row * pas:row * pas + w].translate(vizibili):
+					return True
+	except (TypeError, ValueError, IndexError):
+		pass
+	return False
+
+
 def pentruNucleu(widget, ocr=None):
 	"""Functia pe care nucleul o cheama la fiecare pagina DVB, cand „Mărirea subtitrărilor DVB" = OCR (lib/gui/
 	esubtitle.h: setOcrHandler, setOcrText, showOcrBitmap). eSubtitleWidget e facut de serviciu (enableSubtitles), nu
@@ -1647,8 +1713,17 @@ def pentruNucleu(widget, ocr=None):
 	o = ocr or instanta()
 
 	def laPagina(generatie, regiuni, intarziere_ms=-1):
+		import sys
+		HdsVorbireTV = sys.modules.get("Components.HdsVorbireTV")
+		v = HdsVorbireTV.nativa() if HdsVorbireTV is not None else None
+		legatura = (v, v.canal_prioritate, getattr(v, "epoca_nativa", 0)) if v else None
+		if v and pozaVizibila(regiuni):
+			HdsVorbireTV.pagina(["■"], legatura)
 		def gata(gen, linii, motiv):
 			try:
+				if legatura:
+					if HdsVorbireTV.pagina([l["text"] for l in linii] if linii else [], legatura) is None:
+						return
 				if linii is None:
 					widget.showOcrBitmap(gen)
 				else:
@@ -1903,6 +1978,10 @@ def puneLegatura(widget=None):
 	try:
 		if esteOcrPornit():
 			o = instanta()
+			if _vorbirePornita():
+				# Keep the picture observer installed even without models or the OCR executable.
+				pune(pentruNucleu(w, o))
+				return True
 			if o.serviciu.instalat() and o.modele():
 				asteapta = getattr(w, "setOcrWait", None)
 				if asteapta is not None:
@@ -1995,7 +2074,8 @@ def pistaAleasa(pista):
 		if esteOcrPornit():
 			o = instanta()
 			model = o.pistaAleasa(pista)
-			_dupaAlegere(o, model)
+			if not _vorbirePornita():
+				_dupaAlegere(o, model)
 			return model
 	except Exception as e:
 		_jurnal("pista aleasa: %s" % e)

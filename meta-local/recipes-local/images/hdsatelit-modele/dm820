@@ -1,0 +1,29 @@
+# HD Satelit: regulile garzii de model pentru Dreambox DM820 HD (masina dm820, MACHINEBUILD dm820), NECONFIRMAT
+# (ION1, 22.11.2026, forum 529). Stratul producatorului: meta-dream din OE-Alliance 6.0 (conf/machine/dm820.conf,
+# dreambox-mips32el.inc): cip bcm7435 (SOC_FAMILY), MIPS, eMMC de 4 GB (FLASHSIZE 4096), nucleu linux-dreambox 3.4
+# (PREFERRED_VERSION 3.4, peticul Dream 3.4-4.0), CONFIG_ION=y in linux-dreambox-3.4/dm820/defconfig.
+# Masina e simpla in OE-Alliance (fara adnotarea "# MACHINEBUILDS:"), deci mediul se pregateste cu MACHINE=dm820;
+# MACHINEBUILD=dm820 singur da "No machine config found for MACHINE= (MACHINEBUILD=dm820)" (Makefile, setupmbuild).
+# kernel_part=mmcblk0p1 si rootfs_part=mmcblk0p1: MTD_KERNEL si MTD_ROOTFS din dm820.conf sunt aceeasi partitie;
+# nucleul e fisierul /boot/vmlinux.bin, scris de flash-kernel (postinst-ul kernel-image din IMAGE_CMD:tar:prepend).
+# kernel_kib=0: NEMASURAT (nucleul nu e o partitie bruta). confirmat=nu: treapta a doua, ca DM900.
+# boxtype=dm820: NEMASURAT; tipul placii vine din /proc/stb/info/model (al treilea nod al garzii, ca la DM900).
+# chip=-: cipul nu se compara (driverele Dream nu fac /proc/stb/info/chipset dovedit).
+# familie=broadcom: fara /proc/msp/sys, fara blkdevparts, fara partitia deviceinfo; hw= si partitions= sunt "-".
+# Ce NU e facut pentru DM820 (fata de DM900/DM920, care sunt ARM pe nucleul 3.14): retetele Wi-Fi si wireguard din
+# hdsatelit-base.bbappend, hdsatelit-image.bb si hdsatelit-drivere-feed.bb sunt probate numai pe 3.14 si nu se dau
+# masinii dm820; afisajul color al DM820 (colorlcd) nu are inca HDS_AFISAJ_COLOR. Fara tester inca.
+format=1
+distro=hdsatelit
+model=Dreambox DM820
+machine=dm820
+machinebuild=dm820
+chip=-
+boxtype=dm820
+hw=-
+partitions=-
+kernel_part=mmcblk0p1
+kernel_kib=0
+rootfs_part=mmcblk0p1
+confirmat=nu
+familie=broadcom

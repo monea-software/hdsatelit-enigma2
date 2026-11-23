@@ -7,10 +7,10 @@
 # familie=broadcom: fara /proc/msp/sys, fara blkdevparts, fara partitia deviceinfo; hw= si partitions= sunt "-".
 # chip=-: cipul nu se citeste si nu se compara (ca la AX HD51). Nodul /proc/stb/info/chipset al driverelor Dream nu e
 # dovedit, iar cipul nu deosebeste DM900 de DM920 (amandoua bcm7252s); hotaraste tipul placii.
-# boxtype=dm900: NEMASURAT. Uneltele Dream din imagine (/usr/sbin/librecovery, (C) Dream Property) recunosc placa dupa
-# /proc/stb/info/mid (22 = dm900, 23 = dm920) si altfel dupa /proc/stb/info/model; partitions-by-name (OE-Alliance)
-# cauta tot in /proc/stb/info/model numele dm900. Nodul /proc/stb/info/boxtype probabil lipseste pe Dreambox; atunci
-# garda trebuie sa citeasca /proc/stb/info/model (propunerea MDM/petic_garda_model_dreambox.py). De confirmat la tester.
+# boxtype=dm900: confirmat de ecranul testerului din 19.11.2026 (DM90).
+# Imaginea DM920 s-a oprit corect cu E102 la /proc/stb/info/model=dm900.
+# Imaginea DM900 accepta numai dm900; modelul nu este un alias pentru DM920.
+# Pornirea, tunerele, afisajul si CI ale constructiei DM900 raman neprobate fizic.
 # kernel_part=mmcblk0p1 si rootfs_part=mmcblk0p2: MTD_KERNEL si MTD_ROOTFS din dm900.conf; linia de comanda a nucleului
 # (CMDLINE din linux-dreambox_3.14.bb) are root=/dev/mmcblk0p2 si nu are kernel=, deci nucleul vine din kernel_part.
 # kernel_kib=31744: tabela GPT pe care o face Rescue Mode (librecovery, dm900|dm920: partitia 1 kernel, sectoarele

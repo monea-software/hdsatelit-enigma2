@@ -170,6 +170,9 @@ QUIT_WOLSHUTDOWN = 45
 quitMainloopCode = 1
 # 0.7.7 (UPD): codul iesirii care a pornit din TryQuitMainloop (close cu True), None pana atunci
 iesireCeruta = None
+# 0.7.8 (SSO): ora (monotonic) cererii si a lui quitMainloop, pentru pasii iesirii (Components/HdsPaznic.pasIesire)
+iesireCerutaLa = None
+iesireQuitLa = None
 TVinStandby = None
 
 # HDSatelit (0.7.4, LinuxSat 164125 #969426): cat ruleaza opkg (o actualizare din meniu sau o extensie se instaleaza),
@@ -428,8 +431,9 @@ class TryQuitMainloop(MessageBox):
 			# HDSatelit 0.7.7 (UPD, dorinelu forum 795 #2668): codul iesirii care chiar porneste acum (si fara intrebare,
 			# cand fereastra nu se arata deloc), pentru semnul iesirii (Components/HdsPaznic._codIesireCeruta): dupa o
 			# iesire agatata, paznicul o opreste, iar enigma2.sh face tot ce s-a cerut (repornirea receptorului, oprirea)
-			global iesireCeruta
+			global iesireCeruta, iesireCerutaLa, iesireQuitLa
 			iesireCeruta = self.retval
+			iesireCerutaLa = monotonic()
 			# HDSatelit 0.7.7 (OSD): textul iesirii pe televizor („Receptorul se oprește...” si celelalte), desenat pe loc,
 			# inainte ca CEC si HDMI sa stinga ecranul
 			desenat = arataTextIesire(getattr(self, "session", None), self.retval)
@@ -441,6 +445,7 @@ class TryQuitMainloop(MessageBox):
 					_standbyTv("laOprire")
 				else:
 					_standbyTv("laOprire", desenat)
+			iesireQuitLa = monotonic()
 			quitMainloop(self.retval)
 		else:
 			MessageBox.close(self, True)

@@ -15,7 +15,6 @@ nu se face de aici (pe receptor il face paznicul), deci probele de pe PC nu scri
 O eroare a pluginului nu are voie sa ajunga in enigma2 (acolo ar da ecranul verde).
 """
 import os
-import re
 import threading
 import time
 import traceback
@@ -24,9 +23,6 @@ CALE = '/tmp/hdsdabt2.log'
 MARIME_MAX = 200 * 1024
 CALE_ERORI = '/home/root/logs/hds-dabt2-erori.log'
 MARIME_ERORI = 64 * 1024
-# numele si parola dintr-o adresa de flux (http://nume:parola@gazda/...) nu ajung in jurnalul de pe disc
-_PAROLA_IN_ADRESA = re.compile(r'(?i)\b((?:https?|rtsp|udp|rtp)://)[^/\s@]+@')
-
 _zavor = threading.Lock()
 _stare = {'cale': CALE, 'erori': CALE_ERORI, 'scrieri': 0}
 
@@ -40,12 +36,12 @@ def seteaza_cale(cale, erori=None):
 
 def _pastreaza_eroare(linie):
     """Linia unei erori, adaugata la jurnalul erorilor de pe memoria interna (rotit la MARIME_ERORI, o copie .1);
-    numai cand dosarul exista, fara legaturi simbolice, fara numele si parola din adresele fluxurilor. Nu arunca."""
+    numai cand dosarul exista, fara legaturi simbolice; adresele fluxurilor intregi (REGULA 0, ASI7). Nu arunca."""
     c = _stare['erori']
     try:
         if not c or not os.path.isdir(os.path.dirname(c)) or os.path.islink(c):
             return
-        date = _PAROLA_IN_ADRESA.sub(r'\1', linie).encode('utf-8', 'replace')[:MARIME_ERORI]
+        date = linie.encode('utf-8', 'replace')[:MARIME_ERORI]
         if os.path.isfile(c) and os.path.getsize(c) + len(date) > MARIME_ERORI:
             os.replace(c, c + '.1')
         fd = os.open(c, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, 'O_NOFOLLOW', 0), 0o600)

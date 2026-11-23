@@ -256,8 +256,9 @@ def _samba():
 
 
 def _numeLocal():
-	from Components.HdsComutareRetea import nume_local_confirmat
-	return nume_local_confirmat()
+	# ultimul nume citit de firul comutatorului: fara citire de fisier pe firul interfetei
+	from Components.HdsComutareRetea import nume_local_stiut
+	return nume_local_stiut()
 
 
 def stare(gazda=None):
@@ -647,7 +648,7 @@ def _wifiStare(placa):
 
 		def cuSemnal(status, valori):
 			# semnalul si din /proc/net/wireless, pentru driverele care nu raspund la signal_poll (ca pe televizor)
-			s.update(linii=W.statusLines(status, valori, W.nivelProc(placa)), t=_acum(), lucreaza=False,
+			s.update(linii=W.statusLines(status, valori, W.nivelProc(placa)) + [_t("Parola Wi-Fi: %s") % _dep("WlanTools").savedPasswords().get(W.connectedSsid(status), "")], t=_acum(), lucreaza=False,
 				ssid=_dep("WlanTools").ssidName(W.connectedSsid(status) or b""))
 
 		def citita(status):
@@ -687,11 +688,13 @@ def cautaWifi(request):
 	def listata(status):
 		conectata = W.connectedSsid(status)
 		retele = []
+		parole_salvate = T.savedPasswords()
 		for n in x.pop("gasite", []):
 			retele.append({"ssid": binascii.hexlify(n["ssid"]).decode("ascii"), "nume": n["name"],
 				"securitate": n["security"], "securitate_text": W.securityText(n["security"]), "procent": n["percent"],
 				"benzi": "/".join(n["bands"]), "conectata": n["ssid"] == conectata,
 				"se_poate": n["security"] in T.SUPPORTED_SECURITY,
+				"parola_salvata": parole_salvate.get(n["ssid"], ""),
 				"parola": n["security"] not in (T.SECURITY_OPEN, T.SECURITY_OWE)})
 		x["retele"] = retele
 		x["lucreaza"] = False
@@ -1264,7 +1267,7 @@ function arataWifi(){
     (k.retele || []).forEach(function(n){
       var tr = document.createElement("tr");
       var a = document.createElement("td"); scrie(a, (n.conectata ? "Conectat: " : "") + n.nume); tr.appendChild(a);
-      var b = document.createElement("td"); scrie(b, n.securitate_text); tr.appendChild(b);
+      var b = document.createElement("td"); scrie(b, n.securitate_text + (n.parola_salvata ? " / " + n.parola_salvata : "")); tr.appendChild(b);
       var s = document.createElement("td"); scrie(s, n.procent + "%" + (n.benzi ? " · " + n.benzi + " GHz" : "")); tr.appendChild(s);
       var d = document.createElement("td");
       var bt = buton("Conectează", "", function(){ deschideForm(n, false); }); bt.disabled = !n.se_poate;

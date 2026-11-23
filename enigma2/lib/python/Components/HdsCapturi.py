@@ -176,6 +176,14 @@ def locuri():
 	else:
 		stick = {"cheie": STICK, "nume": _t("Stick USB") if s[1] else _t("Disc USB"),
 			"dosar": s[0].rstrip("/") + "/" + NUME_DOSAR, "disponibil": True, "amovibil": s[1]}
+	if s is not None:
+		try:
+			from Components.Harddisk import storagePathName
+			text = storagePathName(s[0])
+			if text != s[0]:
+				stick["nume"] = text
+		except ImportError:
+			pass
 	memorie = {"cheie": MEMORIE, "nume": _t("Memoria receptorului"), "dosar": _proba.get("memorie", DOSAR_MEMORIE),
 		"disponibil": True, "amovibil": False}
 	return [stick, memorie]

@@ -8,3 +8,16 @@
 # kcflags.inc, dat lui make prin mediu) atinge numai modulul. Pe celelalte masini reteta ramane neschimbata.
 KCFLAGS:append:u57 = " -mlong-calls"
 KCFLAGS:append:u571 = " -mlong-calls"
+
+# ZER1: fara depanare in driverul Wi-Fi livrat.
+PR:append = ".hdszer1"
+EXTRA_OEMAKE:append = " CONFIG_RTW_DEBUG=n"
+
+# WPS6 (asistenta 906594, Octagon SF8008 V3): economia de energie oprita prin optiunile modulului, scrise de
+# kernel-module-split in /etc/modprobe.d/88x2cu.conf (pachetul kernel-module-88x2cu). Numele din sursa driverului
+# (oe-alliance-drivers/rtl8822cu, os_intfs.c: module_param rtw_power_mgnt, rtw_ips_mode, rtw_enusbss): 0 = PS_MODE_ACTIVE,
+# IPS_NONE, fara autosuspend USB. Azi sunt si valorile compilate (Makefile: CONFIG_IPS_MODE = 0, CONFIG_LPS_MODE = 0),
+# dar reteta OE-Alliance ia SRCREV ${AUTOREV}: optiunile le tin oprite oricum s-ar schimba sursa.
+KERNEL_MODULE_PROBECONF += "88x2cu"
+module_conf_88x2cu = "options 88x2cu rtw_power_mgnt=0 rtw_ips_mode=0 rtw_enusbss=0"
+PR:append = ".wps6"

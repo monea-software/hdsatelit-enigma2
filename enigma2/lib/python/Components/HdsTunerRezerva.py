@@ -213,7 +213,7 @@ def receptoare(inreg, proprii=()):
 	"""Din inregistrarile mDNS -> [{"nume", "gazda", "ip", "port", "url"}], cate unul pe adresa IP, fara adresele
 	receptorului (proprii). Instantele _e2stream._tcp au intaietate (numele gazdei nu se schimba); numele HD Satelit
 	vechi completeaza. Cele fara adresa IP raman cu ip "" (le cauta urmatoarea intrebare)."""
-	instante, srv, adrese = [], {}, {}
+	instante, srv, adrese, gazde_proprii = [], {}, {}, set()
 	sufix = "." + SERVICIU
 	for nume, tip, val in inreg:
 		if tip == TIP_PTR and nume == SERVICIU and val.lower().endswith(sufix):
@@ -223,20 +223,28 @@ def receptoare(inreg, proprii=()):
 			srv[nume] = val
 		elif tip == TIP_A:
 			adrese.setdefault(nume, val)
-	rez, vazute = [], set()
+			if val in proprii:
+				gazde_proprii.add(nume)
+	rez, vazute, gazde_vazute = [], set(), set()
 	for inst in instante:
 		port, tinta = srv.get(inst.lower(), (PORT, ""))
+		# Un anunt invalid nu revendica gazda sau IP-ul inaintea unui anunt valid.
+		if not 0 < port < 65536:
+			continue
 		eticheta = inst[:-len(sufix)]
 		ip = adrese.get(tinta, "") if tinta else ""
-		if (ip and ip in vazute) or ip in proprii:
+		if ((ip and ip in vazute) or ip in proprii or tinta in gazde_proprii
+				or (tinta and tinta in gazde_vazute)):
 			continue
 		if ip:
 			vazute.add(ip)
+		if tinta:
+			gazde_vazute.add(tinta)
 		g = tinta or ""
 		rez.append({"nume": eticheta, "gazda": g, "ip": ip, "port": port, "url": "http://%s:%d" % (g, port) if g else ""})
 	for n in NUME_HDS:
 		ip = adrese.get(n)
-		if not ip or ip in vazute or ip in proprii:
+		if not ip or ip in vazute or ip in proprii or n in gazde_proprii or n in gazde_vazute:
 			continue
 		vazute.add(ip)
 		rez.append({"nume": "HD Satelit", "gazda": n, "ip": ip, "port": PORT, "url": "http://%s:%d" % (n, PORT)})
@@ -270,7 +278,9 @@ class Cautare(object):
 	def rezultat(self):
 		with self._zavor:
 			st = dict(self.st)
-			st["receptoare"] = [dict(r) for r in self.st["receptoare"]]
+			# Expirarea foloseste acelasi ceas si prag ca reinnoirea cautarii, inclusiv in timpul ei.
+			valabil = st["cand"] is not None and 0 <= self.ceas() - st["cand"] <= VECHIME_S
+			st["receptoare"] = [dict(r) for r in self.st["receptoare"]] if valabil else []
 		return st
 
 	def veche(self):
@@ -325,7 +335,7 @@ class Cautare(object):
 		if lipsa:
 			inreg += self._intreaba(intrebare(lipsa), proprii[0])
 			gasite = receptoare(inreg, proprii)
-		gasite = [r for r in gasite if r["gazda"] and r["ip"]]
+		gasite = [r for r in gasite if r["gazda"] and r["ip"] and adresa(r["url"])]
 		for r in gasite:
 			r["primeste"] = bool(self.conecteaza(r["ip"], r["port"]))
 		return gasite
@@ -418,8 +428,11 @@ def alegeri(gasite, ales="", adresa_scrisa=""):
 	for r in gasite:
 		if r.get("url") and r["url"] not in [v for v, _x in rez]:
 			rez.append((r["url"], eticheta(r)))
-	if ales and ales not in (OPRIT, ALTA) and ales not in [v for v, _x in rez]:
-		rez.append((ales, _t(T_NEGASIT) % gazda(ales)))
+	# The last destination is retained by remote_fallback when the user selects Off.
+	# Keep it selectable even if discovery cannot currently find that receiver.
+	for candidat in (ales, adresa(adresa_scrisa) if adresa_scrisa else ""):
+		if candidat and candidat not in (OPRIT, ALTA) and candidat not in [v for v, _x in rez]:
+			rez.append((candidat, _t(T_NEGASIT) % gazda(candidat)))
 	rez.append((ALTA, _t(T_ALTA)))
 	return rez
 
@@ -446,7 +459,7 @@ def puneAlegerile():
 	except Exception:
 		return
 	ales = el.value
-	el.setChoices(alegeri(cautare().rezultat()["receptoare"], ales), default=OPRIT)
+	el.setChoices(alegeri(cautare().rezultat()["receptoare"], ales, u.remote_fallback.value), default=OPRIT)
 	if el.value != ales:
 		el.value = ales
 
@@ -481,7 +494,7 @@ def initConfig():
 	if stocat is None and u.remote_fallback_enabled.value and adresa(u.remote_fallback.value):
 		# setarile OE-Alliance aduse din alta imagine, fara alegerea noastra
 		stocat = adresa(u.remote_fallback.value)
-	u.hds_tuner_rezerva = ConfigSelection(default=OPRIT, choices=alegeri([], stocat or ""))
+	u.hds_tuner_rezerva = ConfigSelection(default=OPRIT, choices=alegeri([], stocat or "", u.remote_fallback.value))
 	if stocat and u.hds_tuner_rezerva.value != stocat:
 		u.hds_tuner_rezerva.value = stocat
 		u.hds_tuner_rezerva.save()
@@ -649,11 +662,15 @@ class Zap(object):
 		self.ceas = ceas
 		self.prin = None          # (url, cheia) canalului de acum pornit prin rezerva
 		self.asteapta = None      # (nav, playref, text, url, cheia) pana la INTARZIERE_MS
+		self.local = None
+		self.generatie = None
 
 	def peZap(self, nav, playref):
 		"""Navigation.playServiceUltima: (playref, True) cand canalul porneste prin rezerva, altfel playref."""
 		vechi, self.prin = self.prin, None
 		self.asteapta = None
+		self.local = None
+		self.generatie = None
 		url = self.url()
 		if not url:
 			return playref
@@ -662,6 +679,7 @@ class Zap(object):
 		if not k:
 			return playref
 		if self.liber(playref):
+			self.local = (nav, playref, k, getattr(nav, "hdsGeneratieZap", None))
 			return playref
 		if self.propriu(gazda(url)):
 			# numele hdsatelitN.local se pot schimba intre receptoare dupa o pornire deodata: nu se cere de la sine insusi
@@ -671,12 +689,29 @@ class Zap(object):
 		text = textRezerva(k, url, nume)
 		if vechi and vechi[0] == url and not _acelasiTransponder(k, vechi[1]):
 			self.asteapta = (nav, playref, text, url, k)
+			self.generatie = getattr(nav, "hdsGeneratieZap", None)
 			self._pornesteCeas()
 			return playref, True
 		if self.reda(nav, text):
 			self._pornit(url, k, nume)
 			return playref, True
 		return playref
+
+	def laEroare(self, nav):
+		"""Try the selected reserve once after a local tuning failure."""
+		a = self.local
+		if a is None or a[0] is not nav or a[3] != getattr(nav, "hdsGeneratieZap", None):
+			return False
+		from Components.HdsStreamRelay import cheie
+		url = self.url()
+		acum = nav.getCurrentlyPlayingServiceReference()
+		if not url or self.propriu(gazda(url)) or acum is None or cheie(acum) != a[2]:
+			return False
+		self.local = None
+		self.generatie = a[3]
+		self.asteapta = (nav, a[1], textRezerva(a[2], url, self.nume(a[1])), url, a[2])
+		self._pornesteCeas()
+		return True
 
 	def alternativa(self, nav, grup):
 		"""Navigation.grupFaraTunerUltima: la un grup de alternative fara nicio alternativa libera (nici dupa cedarile
@@ -726,6 +761,9 @@ class Zap(object):
 		if a is None:
 			return
 		nav, playref, text, url, k = a
+		if self.url() != url or (self.generatie is not None and
+				self.generatie != getattr(nav, "hdsGeneratieZap", None)):
+			return
 		from Components.HdsStreamRelay import cheie
 		try:
 			acum = nav.getCurrentlyPlayingServiceReference()
@@ -733,11 +771,21 @@ class Zap(object):
 			acum = None
 		if acum is None or cheie(acum) != k:
 			return      # alt zap intre timp
-		if self.reda(nav, text):
+		generatie = getattr(nav, "hdsGeneratieZap", None)
+		redat = self.reda(nav, text)
+		if generatie != getattr(nav, "hdsGeneratieZap", None):
+			return
+		if redat:
+			# Replacing the failed service emits evEnd, which clears Navigation's cache.
+			nav.currentlyPlayingServiceReference = playref
+			nav.currentlyPlayingService = None
 			self._pornit(url, k, self.nume(playref))
 		else:
 			try:
 				nav.pnav.playService(playref)
+				if generatie == getattr(nav, "hdsGeneratieZap", None):
+					nav.currentlyPlayingServiceReference = playref
+					nav.currentlyPlayingService = None
 			except Exception as e:
 				_jurnal("canalul nu a pornit: %r" % (e,))
 
@@ -814,6 +862,52 @@ def laZap(nav, playref, event, infobar):
 
 def laGrup(nav, grup):
 	return zap().alternativa(nav, grup)
+
+
+def leagaEvenimente(nav):
+	"""The deferred retry must not replace a service inside event dispatch."""
+	from enigma import iPlayableService
+	def eveniment(ev):
+		if ev == iPlayableService.evTuneFailed:
+			zap().laEroare(nav)
+	nav.event.append(eveniment)
+
+
+def textDiagnostic(cod):
+	if cod == 400:
+		return _t(N_("Receptorul de rezervă a refuzat canalul. Tunerul poate fi ocupat cu alt canal; preluarea nu este posibilă acum."))
+	if cod == 404:
+		return _t(N_("Receptorul de rezervă nu găsește canalul cerut (HTTP 404)."))
+	if cod == 401:
+		return _t(N_("Receptorul de rezervă cere autentificare pentru flux (HTTP 401)."))
+	if cod == 403:
+		return _t(N_("Receptorul de rezervă nu permite acest flux (HTTP 403)."))
+	if cod >= 400:
+		return _t(N_("Receptorul de rezervă nu poate trimite canalul acum (HTTP %d).")) % cod
+	if cod == -1:
+		return _t(N_("Receptorul de rezervă nu răspunde la cererea de flux."))
+	if cod == -2:
+		return _t(N_("Fluxul de la receptorul de rezervă s-a întrerupt sau nu trimite date."))
+	if cod == -4:
+		return _t(N_("Receptorul de rezervă a răspuns cu un flux care nu poate fi redat."))
+	return ""
+
+
+def diagnostic(ref, service):
+	"""Only the source's measured result, with no extra network request."""
+	try:
+		from Components.HdsStreamRelay import cheie
+		z = zap()
+		if not z.prin or not ref or cheie(ref) != z.prin[1]:
+			return ""
+		from enigma import iServiceInformation
+		info = service.info() if service is not None else None
+		# Older native players return -1 for unknown fields, not a connection failure.
+		if info is None or info.getInfo(iServiceInformation.sUser + 43) != 0x484453:
+			return ""
+		return textDiagnostic(info.getInfo(iServiceInformation.sUser + 42))
+	except (AttributeError, ImportError, TypeError):
+		return ""
 
 
 def leagaZap(navigatie=None):

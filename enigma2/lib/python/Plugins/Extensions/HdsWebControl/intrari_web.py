@@ -13,6 +13,8 @@
 #   Telecomenzi (HdsTelecomenzi, /telecomenzi) e altul: pagina pune legatura spre el;
 # - ... > Butoane colorate si taste rapide (Screens/ButtonSetup.py):
 #   tastele barei, cu aceleasi actiuni si salvare in config.hds_buttons;
+# - ... > Butoane colorate si taste rapide > Lista butonului albastru (Screens/ButtonSetup.HdsListaAlbastra): ce apare
+#   pe ALBASTRU si in ce ordine (config.hds_albastru, Components/HdsTasteRapide.schimba_albastru), pagina /lista-albastra;
 # - Meniu > Setari > Interfata & Aspect > Aspectul ecranelor (Plugins/SystemPlugins/SkinSelector): skinurile instalate cu
 #   previzualizarea lor (prev.png, servit numai pentru dosarele din lista), alegerea (config.skin.primary_skin, verificata
 #   ca pe televizor: fisierul trebuie sa fie un skin; ecranele HD Satelit se scaleaza la rezolutia lui, iar la un skin
@@ -41,7 +43,9 @@
 #   POST /api/skin-reporneste                        (+ pas / cod) repornirea interfetei
 #   POST /api/skin-sterge?nume=<skin>                (+ pas / cod) ca ROSU pe ecran: stergerea temei (Components/HdsTemaStergere.py);
 #                                                    tema de pe ecran se sterge dupa repornirea interfetei cu tema HD Satelit
-#   GET  /dispozitive-intrare, /taste-rapide, /skin  paginile
+#   GET  /api/lista-albastra                        randurile butonului ALBASTRU si tot ce se poate pune
+#   POST /api/lista-albastra-schimba?actiune=comuta|sus|jos|fabrica&id=<rand>   salvat pe loc
+#   GET  /dispozitive-intrare, /taste-rapide, /skin, /lista-albastra  paginile
 #
 # FIRUL: totul pe firul enigma2 si scurt, afara de cautarea skinurilor (os.walk prin tot dosarul, pe un fir:
 # meniu_comun_web.peFir). Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC pun in DEP modulele,
@@ -100,6 +104,11 @@ def _dep(nume):
 	if nume == "plugins":
 		from Components.PluginComponent import plugins
 		return plugins
+	if nume == "HdsPartiTema":
+		from Components import HdsPartiTema
+		return HdsPartiTema
+	if nume == "setari_web":
+		return __import__(__package__ + "." + nume, fromlist=[nume])
 	raise KeyError(nume)
 
 
@@ -205,8 +214,15 @@ def seteazaDispozitiv(request):
 
 # ------------------------------------------------------------------ butoanele colorate
 
+_PROFILURI_TASTE = []
+_EROARE_PROFILURI_TASTE = ""
+
+
 def stareTaste():
 	"""Aceeasi lista de taste si actiuni ca pe televizor."""
+	# The main parser is already loaded at startup; only read its RAM state here.
+	import sys
+	keymap = sys.modules.get("keymapparser")
 	TR = _dep("HdsTasteRapide")
 	b = TR.actualizeaza_alegeri(_dep("config"))
 	tt = lambda k, text: TR.text_tasta(k, text, _t)  # traduse acum, nu la importul listelor
@@ -220,16 +236,46 @@ def stareTaste():
 		alegeri = [["1", _t("Da")], ["0", _t("Nu")]] if isinstance(implicit, bool) else _alegeri(getattr(u, k))
 		profil.append({"cheie": k, "text": tt(k, text), "valoare": str(int(v)) if isinstance(v, bool) else str(v), "alegeri": alegeri})
 		implicite[k] = str(int(implicit)) if isinstance(implicit, bool) else str(implicit)
-	return {"result": True, "butoane": butoane, "scurte": scurte, "profil": profil,
+	return {"result": True, "keymap_avertisment": keymap.recoveryMessage(_t) if keymap else "", "butoane": butoane, "scurte": scurte, "profil": profil,
+		"profiluri_mele": list(_PROFILURI_TASTE), "profiluri_eroare": _EROARE_PROFILURI_TASTE, "poza_taste": TR.poza_profil("", _dep("config")),
+		"asezare_ajutor": tt("", TR.ASEZARE_AJUTOR),
 		"actiuni": _alegeri(getattr(b, TR.BUTOANE[0][0])), "implicite": implicite,
 		"nume_taste": dict(TR.ETICHETE_TASTE),
 		"sensuri": dict((c, TR.profil_context(c, config=_dep("config"))) for c in
 			("live", "radio", "channel_list", "movie_list", "movie", "menu", "setup", "timeshift"))}
 
 
+def cereTaste():
+	# The HTTP route refreshes the file; stareTaste itself only reads config and RAM.
+	def citit(lista):
+		global _PROFILURI_TASTE, _EROARE_PROFILURI_TASTE
+		_PROFILURI_TASTE = [{"id": x["id"], "nume": x["profile"]["name"]} for x in lista]
+		_EROARE_PROFILURI_TASTE = ""
+		return stareTaste()
+	def esec(f):
+		global _PROFILURI_TASTE, _EROARE_PROFILURI_TASTE
+		_PROFILURI_TASTE = []
+		_EROARE_PROFILURI_TASTE = _eroareProfilTaste(f.value)
+		return stareTaste()
+	return _dep("HdsTasteRapide").operatie_profil("lista").addCallbacks(citit, esec)
+
+
+def _eroareProfilTaste(e):
+	return str(e) if isinstance(e, (ValueError, _dep("HdsTasteRapide").EroareSalvareTaste)) else _t("Nu pot salva profilurile. Fișierul tău a rămas neatins.")
+
+
+def _raspunsTaste(result, message):
+	def gata(rez):
+		rez.update(result=result, message=message)
+		return rez
+	return cereTaste().addCallback(gata)
+
+
 def seteazaTaste(request):
 	"""POST /api/taste-rapide-seteaza: ca Verde pe ecran. Toate valorile trimise trebuie sa fie bune."""
 	TR = _dep("HdsTasteRapide")
+	if TR.profil_ocupat():
+		return {"result": False, "message": _t("Se lucrează la un profil. Încearcă din nou după terminare.")}
 	config = _dep("config")
 	b = TR.actualizeaza_alegeri(config)
 	u = TR.initConfigProfil(config)
@@ -262,6 +308,49 @@ def seteazaTaste(request):
 	return rez
 
 
+def _argumenteProfilTaste(request):
+	TR = _dep("HdsTasteRapide")
+	rez = {}
+	for k, values in (getattr(request, "args", None) or {}).items():
+		k = k.decode("utf-8", "strict") if isinstance(k, bytes) else k
+		if k not in ("actiune", "id", "nume", "continut"):
+			continue
+		if len(values) != 1:
+			raise ValueError(_t("Cererea profilului nu este validă."))
+		v = values[0]
+		v = v.decode("utf-8", "strict") if isinstance(v, bytes) else v
+		limita = TR.MAX_PROFIL if k == "continut" else (64 if k == "nume" else 40)
+		if len(v.encode("utf-8")) > (limita if k == "continut" else limita * 4) or (k != "continut" and len(v) > limita):
+			raise ValueError(_t("Profilul sau numele lui este prea mare."))
+		rez[k] = v
+	return rez
+
+
+def exportaProfilTaste(request):
+	a = _argumenteProfilTaste(request)
+	return _dep("HdsTasteRapide").operatie_profil("exporta", ident=a.get("id", ""))
+
+
+def profilTaste(request):
+	"""The operation finishes only after worker IO and main-thread configuration."""
+	TR = _dep("HdsTasteRapide")
+	try:
+		a = _argumenteProfilTaste(request)
+		d = TR.operatie_profil(a.get("actiune"), _dep("config"), _dep("configfile"),
+			ident=a.get("id", ""), nume=a.get("nume", ""), continut=a.get("continut"))
+	except (ValueError, OSError) as e:
+		return {"result": False, "message": _eroareProfilTaste(e)}
+	def gata(rez):
+		mesaj = (_t("Profil aplicat. Setări sărite pentru taste sau funcții care lipsesc: %d.") % rez
+			if a.get("actiune") == "aplica" else _t("Salvat."))
+		return _raspunsTaste(True, mesaj)
+	def esec(f):
+		mesaj = (_t("Nu pot confirma salvarea tastelor pe disc.") if a.get("actiune") == "aplica"
+			and isinstance(f.value, OSError) and not isinstance(f.value, TR.EroareSalvareTaste) else _eroareProfilTaste(f.value))
+		return {"result": False, "message": mesaj}
+	return d.addCallback(gata).addErrback(esec)
+
+
 # ------------------------------------------------------------------ skinul
 
 def _stergere(p):
@@ -285,7 +374,7 @@ def _lucrareTema():
 
 
 def stareSkin(skinuri, ales, aspect, aspecte, activ=None, refuz=None, stare_tema="", planuri=None, lucrare=None,
-		incomplete=()):
+		incomplete=(), parti_tema=None):
 	"""Corpul raspunsului GET /api/skin, din lista citita pe fir si din setarile citite pe firul enigma2. `incomplete`:
 	temele ramase fara skin.xml (HdsTemaStergere.incomplete), la coada listei, numai cu Sterge"""
 	S = _dep("HdsSkinuri")
@@ -298,7 +387,45 @@ def stareSkin(skinuri, ales, aspect, aspecte, activ=None, refuz=None, stare_tema
 			"imaginii": x == S.DOSAR_IMAGINE, "incompleta": x in incomplete, "stergere": _stergere(planuri.get(x))}
 			for x in list(skinuri) + incomplete],
 		"aspect": aspect, "aspecte": aspecte, "activ": activ, "refuz": refuz or "", "stare_tema": stare_tema or "",
-		"lucrare": lucrare}
+		"lucrare": lucrare, "parti_tema": parti_tema}
+
+
+def _partiTema(radacina, ales):
+	"""Read only convention data on the list worker; no theme code is loaded or run."""
+	import os
+	from urllib.parse import quote
+	S = _dep("HdsSkinuri")
+	if ales in (None, S.IMPLICIT, S.DOSAR_IMAGINE):
+		return None
+	try:
+		cale = S.caleSkin(radacina, ales)
+		if not cale:
+			return None
+		try:
+			os.listdir(os.path.join(os.path.dirname(cale), "allScreens"))
+		except (FileNotFoundError, NotADirectoryError):
+			return None
+		P = _dep("HdsPartiTema")
+		if not P.areParti(os.path.dirname(cale)):
+			return None
+		instalat = P.pluginInstalat()
+	except OSError:
+		return {"tema": ales, "instalat": None, "drum": "", "setari_web": [],
+			"mesaj": _t("Părțile temei nu pot fi citite acum.")}
+	setari = []
+	if instalat:
+		try:
+			for e in _dep("setari_web").listaPluginuri():
+				if e["id"].startswith("Extensions/AtileHD/"):
+					setari.append({"href": "/setari?id=" + quote(e["id"], safe=""),
+						"text": e.get("titlu") or e.get("text") or _t("Setările pluginului")})
+		except Exception:
+			pass
+		mesaj = _t("Pluginul de configurare este instalat.")
+		mesaj += " " + _t("Părțile temei se aleg pe televizor, în pluginul de configurare al temei.")
+	else:
+		mesaj = _t("Pluginul de configurare a părților temei nu este instalat. Imaginea îl cere automat după pornirea reușită cu această temă.")
+	return {"tema": ales, "instalat": instalat, "drum": "", "mesaj": mesaj, "setari_web": setari}
 
 
 def _planuri(skinuri, radacina, activ, ales):
@@ -321,7 +448,8 @@ def _listaSkin(radacina, ales, aspect, aspecte, activ, refuz, stare_tema, lucrar
 	skinuri = _dep("HdsSkinuri").lista(radacina)
 	incomplete = _incomplete(radacina)
 	return stareSkin(skinuri, ales, aspect, aspecte, activ, refuz, stare_tema,
-		_planuri(skinuri + [x for x in incomplete if x not in skinuri], radacina, activ, ales), lucrare, incomplete)
+		_planuri(skinuri + [x for x in incomplete if x not in skinuri], radacina, activ, ales), lucrare, incomplete,
+		_partiTema(radacina, ales))
 
 
 def _aspecte(config):
@@ -504,12 +632,63 @@ def reporneste(request):
 
 # ------------------------------------------------------------------ rutele si paginile
 
+def _corpAlbastru(st, result=True, message=""):
+	lista = st["lista"]
+	return {"result": result, "message": message, "lista": list(lista),
+		"catalog": [dict(x, ales=x["id"] in lista) for x in st["catalog"]]}
+
+
+def stareAlbastru(request=None):
+	"""GET /api/lista-albastra: aceeasi alegere ca ecranul Lista butonului albastru de pe televizor
+	(Components/HdsTasteRapide.stare_albastru)."""
+	TR = _dep("HdsTasteRapide")
+	return _corpAlbastru(TR.stare_albastru(_dep("config"), tr=_t, pluginuri=_dep("plugins")))
+
+
+def schimbaAlbastru(request):
+	"""POST /api/lista-albastra-schimba?actiune=comuta|sus|jos|fabrica&id=<rand>: ca OK, GALBEN, ALBASTRU si ROSU pe
+	ecranul de pe televizor; se salveaza pe loc."""
+	TR = _dep("HdsTasteRapide")
+	a = _mc().argumente(request, ("actiune", "id"), 200)
+	st = TR.schimba_albastru(a.get("actiune", ""), a.get("id", ""), _dep("config"), _dep("configfile"), tr=_t,
+		pluginuri=_dep("plugins"))
+	if st is None:
+		rez = stareAlbastru()
+		rez.update(result=False, message=_t("Rândul nu mai există. Am citit lista din nou."))
+		return rez
+	return _corpAlbastru(st, True, _t("Salvat."))
+
+
 def rute(baza, resource):
 	"""({nume: resursa de sub /api}, {nume: resursa paginii}). `baza` e HdsJsonResource din plugin.py."""
 
 	def _eroare(self, request, eroare):
 		_mc().jurnal("intrari: %r" % eroare)
 		return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+	def _asteapta(self, request, rez, raspunde=None):
+		raspunde = raspunde or (lambda r: self._raspunde(request, r))
+		if not hasattr(rez, "addCallbacks"):
+			return raspunde(rez)
+		from twisted.web.server import NOT_DONE_YET
+		viu = [True]
+		def inchis(f):
+			viu[0] = False
+			return None
+		request.notifyFinish().addErrback(inchis)
+		def trimite(date):
+			if viu[0]:
+				request.write(date)
+				request.finish()
+			return None
+		def gata(r):
+			if viu[0]:
+				trimite(raspunde(r))
+		def esec(f):
+			if viu[0]:
+				trimite(_eroare(self, request, f.value))
+		rez.addCallback(gata).addErrback(esec)
+		return NOT_DONE_YET
 
 	def _citire(functie):
 		class Citire(baza):
@@ -518,9 +697,9 @@ def rute(baza, resource):
 					rez = functie(request)
 				except Exception as eroare:
 					return _eroare(self, request, eroare)
-				if not isinstance(rez, dict):
-					return rez          # NOT_DONE_YET: raspunsul pleaca de pe fir
-				return self._raspunde(request, rez)
+				if not isinstance(rez, dict) and not hasattr(rez, "addCallbacks"):
+					return rez          # NOT_DONE_YET from the existing skin worker
+				return _asteapta(self, request, rez)
 		return Citire()
 
 	def _scriere(functie):
@@ -529,7 +708,7 @@ def rute(baza, resource):
 
 			def render_POST(self, request):
 				try:
-					return self._raspunde(request, functie(request))
+					return _asteapta(self, request, functie(request))
 				except Exception as eroare:
 					return _eroare(self, request, eroare)
 
@@ -549,6 +728,26 @@ def rute(baza, resource):
 			request.setHeader(b"cache-control", b"private, max-age=3600")
 			return date
 
+	class ProfilFisier(baza):
+		def render_GET(self, request):
+			import json
+			try:
+				d = exportaProfilTaste(request)
+			except (ValueError, OSError) as e:
+				return self._eroare(request, _eroareProfilTaste(e), 400)
+			def esec(f):
+				f.trap(ValueError, OSError)
+				return {"result": False, "message": _eroareProfilTaste(f.value)}
+			d.addErrback(esec)
+			def raspunde(p):
+				if p.get("result") is False:
+					return self._eroare(request, p["message"], 400)
+				request.setHeader(b"content-type", b"application/json; charset=utf-8")
+				request.setHeader(b"content-disposition", b'attachment; filename="profil-taste.json"')
+				request.setHeader(b"cache-control", b"no-store")
+				return json.dumps(p, ensure_ascii=False, indent=2).encode("utf-8")
+			return _asteapta(self, request, d, raspunde)
+
 	def _pagina(text):
 		class Pagina(resource.Resource):
 			isLeaf = True
@@ -560,8 +759,12 @@ def rute(baza, resource):
 	api = {
 		b"dispozitive-intrare": _citire(lambda r: stareDispozitive()),
 		b"dispozitive-intrare-seteaza": _scriere(seteazaDispozitiv),
-		b"taste-rapide": _citire(lambda r: stareTaste()),
+		b"taste-rapide": _citire(lambda r: cereTaste()),
 		b"taste-rapide-seteaza": _scriere(seteazaTaste),
+		b"taste-profil": _scriere(profilTaste),
+		b"taste-profil-descarca": ProfilFisier(),
+		b"lista-albastra": _citire(stareAlbastru),
+		b"lista-albastra-schimba": _scriere(schimbaAlbastru),
 		b"skin": _citire(cereSkin),
 		b"skin-poza": Poza(),
 		b"skin-alege": _scriere(alegeSkin),
@@ -572,6 +775,7 @@ def rute(baza, resource):
 	pagini = {
 		b"dispozitive-intrare": _pagina(pagina_dispozitive),
 		b"taste-rapide": _pagina(pagina_taste),
+		b"lista-albastra": _pagina(pagina_albastru),
 		b"skin": _pagina(pagina_skin),
 	}
 	return api, pagini
@@ -706,16 +910,35 @@ __STIL_PAGINI__
 <p class="sub">Alege o funcție sau un plugin instalat pentru fiecare tastă, cât te uiți la televizor. Funcția obișnuită urmează profilul curent. Cifrele lungi se alocă în afara timeshiftului.</p>
 <p class="mesaj" id="incarcare">Se citesc butoanele...</p>
 <div id="continut" class="ascuns">
+  <p class="sub" id="asezare-ajutor"></p>
+  <section class="card"><h2>Liste și meniuri</h2><div id="profil"></div></section>
+  <section class="card"><h2>Profilurile mele</h2>
+    <p class="nota">Alegerea unui profil îl aplică pe loc. Așezările predefinite rămân puncte de plecare.</p>
+    <label for="profilul-meu">Profilurile mele</label><select id="profilul-meu"></select>
+    <label for="nume-profil">Numele profilului (poți lăsa gol)</label><input id="nume-profil" maxlength="64">
+    <div class="butoane">
+      <button type="button" id="profil-salveaza">Salvează ca profil</button>
+      <button type="button" id="profil-redenumeste">Redenumește profilul</button>
+      <button type="button" id="profil-sterge">Șterge profilul</button>
+      <a id="profil-descarca" download="profil-taste.json">Descarcă profilul</a>
+    </div>
+    <label for="profil-fisier">Încarcă un profil</label><input id="profil-fisier" type="file" accept=".json,application/json">
+    <label for="profil-text">Sau lipește aici conținutul profilului</label><textarea id="profil-text" rows="4" maxlength="65536"></textarea>
+    <button type="button" id="profil-importa">Încarcă un profil</button>
+    <p class="nota" id="profil-eroare"></p>
+    <p class="nota" id="keymap-avertisment" role="status"></p>
+  </section>
   <section class="card">
     <h2>Apăsarea scurtă</h2>
     <div id="scurte"></div>
     <p class="nota">Subcanalele se pot aloca unei taste sau se găsesc în Lista extensiilor.</p>
+    <p class="nota">Ce apare în lista butonului albastru și în ce ordine alegi la</p>
+    <div class="butoane"><button type="button" id="spreAlbastru">Lista butonului albastru</button></div>
   </section>
   <section class="card">
     <h2>Apăsarea lungă</h2>
     <div id="butoane"></div>
   </section>
-  <section class="card"><h2>Liste și meniuri</h2><div id="profil"></div></section>
   <section class="card"><h2>Tastele acestui ecran</h2>
     <label for="sensContext">Context</label><select id="sensContext">
       <option value="live">TV</option><option value="radio">Radio</option><option value="channel_list">Lista de canale</option>
@@ -734,7 +957,7 @@ __STIL_PAGINI__
 </main>
 <script>
 __SCRIPT_COMUN__
-var D = null;
+var D = null, profilOcupat = false;
 function randuri(c, lista, actiuni){
   c.textContent = "";
   lista.forEach(function(b){
@@ -756,9 +979,16 @@ function arataSensuri(){
 }
 function arata(d){
   D = d;
+  $("keymap-avertisment").textContent = d.keymap_avertisment || "";
+  $("asezare-ajutor").textContent = d.asezare_ajutor || "";
   randuri($("scurte"), d.scurte || [], d.actiuni);
   randuri($("butoane"), d.butoane, d.actiuni);
   randuri($("profil"), d.profil || [], []);
+  var s = $("profilul-meu"); s.textContent = "";
+  var gol = document.createElement("option"); gol.value = ""; gol.textContent = "Alege un profil"; s.appendChild(gol);
+  (d.profiluri_mele || []).forEach(function(p){ var o = document.createElement("option"); o.value = p.id; o.textContent = p.nume; s.appendChild(o); });
+  $("profil-eroare").textContent = d.profiluri_eroare || "";
+  profilSelectat();
   arataSensuri();
 }
 function citeste(){
@@ -780,6 +1010,58 @@ $("implicite").addEventListener("click", function(){
   mesaj("Valorile implicite sunt pregătite. Apasă Salvează pentru a le păstra.");
 });
 $("sensContext").addEventListener("change", arataSensuri);
+$("spreAlbastru").addEventListener("click", function(){ location.href = adresa("/lista-albastra"); });
+function profilSelectat(){
+  var id = $("profilul-meu").value;
+  ["profil-sterge", "profil-redenumeste"].forEach(function(k){ $(k).disabled = profilOcupat || !id; });
+  var link = $("profil-descarca");
+  if(id){ link.href = "/api/taste-profil-descarca?id=" + encodeURIComponent(id); }
+  else { link.removeAttribute("href"); }
+}
+function operatieProfil(actiune, extra){
+  if(profilOcupat){ return Promise.resolve(); }
+  var q = new URLSearchParams(); q.set("actiune", actiune); q.set("id", $("profilul-meu").value);
+  q.set("nume", $("nume-profil").value);
+  if(extra !== undefined){ q.set("continut", extra); }
+  profilOcupat = true; profilBlocare();
+  return cerere("/api/taste-profil", "POST", q).then(function(d){
+    mesaj(d.message, !d.result);
+    if(d.result){
+      // Salvarea unui profil pastreaza in editor modificarile inca nesalvate.
+      var draft = {};
+      if(actiune !== "aplica"){ toate().forEach(function(b){ draft[b.cheie] = $("b-" + b.cheie).value; }); }
+      var ales = $("profilul-meu").value;
+      arata(d);
+      Object.keys(draft).forEach(function(k){ $("b-" + k).value = draft[k]; });
+      $("profilul-meu").value = ales; profilSelectat();
+    }
+  }).catch(nimicNuRaspunde).finally(function(){ profilOcupat = false; profilBlocare(); });
+}
+function profilBlocare(){
+  ["profilul-meu", "nume-profil", "profil-salveaza", "profil-importa", "profil-fisier", "profil-text",
+    "salveaza", "renunta", "implicite"].forEach(function(k){ $(k).disabled = profilOcupat; });
+  toate().forEach(function(b){ $("b-" + b.cheie).disabled = profilOcupat; });
+  profilSelectat();
+}
+$("profilul-meu").addEventListener("change", function(){ profilSelectat(); if(this.value){ operatieProfil("aplica"); } });
+$("profil-salveaza").addEventListener("click", function(){
+  var p = JSON.parse(JSON.stringify(D.poza_taste));
+  toate().forEach(function(b){
+    var grup = Object.prototype.hasOwnProperty.call(p.buttons, b.cheie) ? p.buttons : p.usage;
+    var v = $("b-" + b.cheie).value; grup[b.cheie] = typeof grup[b.cheie] === "boolean" ? v === "1" : v;
+  });
+  operatieProfil("salveaza", JSON.stringify(p));
+});
+$("profil-redenumeste").addEventListener("click", function(){ operatieProfil("redenumeste"); });
+$("profil-sterge").addEventListener("click", function(){ operatieProfil("sterge"); });
+$("profil-importa").addEventListener("click", function(){
+  var f = $("profil-fisier").files[0];
+  if(f){
+    if(f.size > 65536){ mesaj("Profilul este prea mare (maximum 64 KiB).", true); return; }
+    var r = new FileReader(); r.onload = function(){ operatieProfil("importa", String(r.result)); };
+    r.onerror = function(){ mesaj("Fișierul nu a putut fi citit.", true); }; r.readAsText(f, "UTF-8");
+  } else { operatieProfil("importa", $("profil-text").value); }
+});
 citeste();
 window.addEventListener("beforeunload", function(e){
   if(D && toate().some(function(b){ return $("b-" + b.cheie).value !== b.valoare; })){ e.preventDefault(); e.returnValue = ""; }
@@ -818,6 +1100,8 @@ __STIL_PAGINI__
 <div id="continut" class="ascuns">
   <p class="mesaj eroare ascuns" id="refuz"></p>
   <p class="mesaj ascuns" id="stareTema"></p>
+  <p class="nota ascuns" id="partiTema"></p>
+  <div class="butoane ascuns" id="setariPartiTema"></div>
   <div class="skinuri" id="skinuri"></div>
   <section class="card">
     <h2>Aspectul meniului</h2>
@@ -842,6 +1126,13 @@ __STIL_PAGINI__
 <script>
 __SCRIPT_COMUN__
 function arata(d){
+  var parti = $("partiTema"); parti.textContent = d.parti_tema ? d.parti_tema.mesaj : "";
+  parti.classList.toggle("ascuns", !d.parti_tema);
+  var setariParti = $("setariPartiTema"); setariParti.textContent = "";
+  ((d.parti_tema || {}).setari_web || []).forEach(function(x){
+    var a = document.createElement("a"); a.href = adresa(x.href); a.textContent = x.text; setariParti.appendChild(a);
+  });
+  setariParti.classList.toggle("ascuns", !setariParti.children.length);
   var c = $("skinuri"); c.textContent = "";
   d.skinuri.forEach(function(x){
     var card = document.createElement("section"); card.className = "card" + (x.ales ? " ales" : "");
@@ -1027,6 +1318,122 @@ TEXTE_PAGINA["html"] += (
 	N_("Lista de filme"), N_("Film"), N_("Timeshift"), N_("Meniu"), N_("Setări"),
 )
 TEXTE_PAGINA["js"] += (N_("Scurt:"), N_("Lung:"))
+TEXTE_PAGINA["html"] += (
+	N_("Profilurile mele"), N_("Alegerea unui profil îl aplică pe loc. Așezările predefinite rămân puncte de plecare."),
+	N_("Numele profilului (poți lăsa gol)"), N_("Salvează ca profil"), N_("Redenumește profilul"),
+	N_("Șterge profilul"), N_("Descarcă profilul"), N_("Încarcă un profil"), N_("Sau lipește aici conținutul profilului"),
+)
+TEXTE_PAGINA["js"] += (N_("Alege un profil"), N_("Profilul este prea mare (maximum 64 KiB)."), N_("Fișierul nu a putut fi citit."))
+
+
+def pagina_albastru(stil, config_pagina):
+	return _sablon(_traducePagina(PAGINA_ALBASTRU), stil, config_pagina, "hds_button_setup")
+
+
+# Lista butonului ALBASTRU (perechea ecranului Screens/ButtonSetup.HdsListaAlbastra): sus randurile listei, in ordinea
+# lor, cu Sus, Jos si Scoate; dedesubt tot ce se mai poate pune, cu cautare. Fiecare apasare se salveaza pe loc.
+PAGINA_ALBASTRU = """<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lista butonului albastru</title>
+<style>__STIL_COMUN__
+__STIL_PAGINI__
+  .sub{color:var(--text-slab);margin:0 0 14px;font-size:.92rem;line-height:1.45;}
+  .linie{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bordura);}
+  .linie:last-child{border-bottom:0;}
+  .linie .nume{flex:1;min-width:0;overflow-wrap:anywhere;}
+  .linie .grupa{display:block;color:var(--text-slab);font-size:.8rem;}
+  .linie button{min-width:44px;}
+  #cauta{width:100%;margin:0 0 8px;}
+</style>
+</head>
+<body>
+<main>
+<h1>Lista butonului albastru</h1>
+<p class="sub">Ce apare când apeși butonul albastru, cât te uiți la televizor, și în ce ordine. Fiecare schimbare se salvează pe loc.</p>
+<p class="mesaj" id="incarcare">Se citește lista...</p>
+<div id="continut" class="ascuns">
+  <section class="card"><h2>Pe butonul albastru</h2><div id="lista"></div>
+    <div class="butoane"><button type="button" id="fabrica">Lista din fabrică</button></div>
+  </section>
+  <section class="card"><h2>Adaugă</h2>
+    <input id="cauta" type="search" maxlength="60" placeholder="Caută un meniu, o funcție sau un plugin" aria-label="Caută un meniu, o funcție sau un plugin">
+    <div id="catalog"></div>
+  </section>
+  <p class="mesaj" id="mesaj"></p>
+  <p class="nota">Aceeași listă e pe televizor, în __DRUM_MENIU__, la Lista butonului albastru.</p>
+</div>
+</main>
+<script>
+__SCRIPT_COMUN__
+var D = null;
+function buton(text, actiune, id){
+  var b = document.createElement("button"); b.type = "button"; b.textContent = text;
+  b.addEventListener("click", function(){ schimba(actiune, id); });
+  return b;
+}
+function linie(x){
+  var r = document.createElement("div"); r.className = "linie";
+  var n = document.createElement("span"); n.className = "nume"; n.textContent = x.nume;
+  if(x.grupa){ var g = document.createElement("span"); g.className = "grupa"; g.textContent = x.grupa; n.appendChild(g); }
+  r.appendChild(n);
+  return r;
+}
+function arata(d){
+  D = d;
+  var dupaId = {};
+  d.catalog.forEach(function(x){ dupaId[x.id] = x; });
+  var l = $("lista"); l.textContent = "";
+  d.lista.forEach(function(id){
+    var r = linie(dupaId[id] || {nume: "Indisponibil acum", grupa: ""});
+    r.appendChild(buton("Sus", "sus", id)); r.appendChild(buton("Jos", "jos", id)); r.appendChild(buton("Scoate", "comuta", id));
+    l.appendChild(r);
+  });
+  filtreaza();
+}
+function filtreaza(){
+  if(!D){ return; }
+  var c = $("catalog"); c.textContent = "";
+  var t = $("cauta").value.trim().toLowerCase();
+  D.catalog.forEach(function(x){
+    if(x.ales){ return; }
+    if(t && (x.nume + " " + x.grupa).toLowerCase().indexOf(t) === -1){ return; }
+    var r = linie(x); r.appendChild(buton("Adaugă", "comuta", x.id)); c.appendChild(r);
+  });
+}
+function schimba(actiune, id){
+  var q = new URLSearchParams(); q.set("actiune", actiune); q.set("id", id || "");
+  cerere("/api/lista-albastra-schimba", "POST", q).then(function(d){
+    mesaj(d.message, !d.result); if(d.catalog){ arata(d); }
+  }).catch(nimicNuRaspunde);
+}
+function citeste(){
+  return cerere("/api/lista-albastra").then(function(d){
+    if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi lista."; return; }
+    $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
+    arata(d);
+  }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
+}
+$("cauta").addEventListener("input", filtreaza);
+$("fabrica").addEventListener("click", function(){ schimba("fabrica", ""); });
+citeste();
+</script>
+</body>
+</html>
+"""
+
+TEXTE_PAGINA["html"] += (
+	N_("Lista butonului albastru"),
+	N_("Ce apare când apeși butonul albastru, cât te uiți la televizor, și în ce ordine. Fiecare schimbare se salvează pe loc."),
+	N_("Se citește lista..."), N_("Pe butonul albastru"), N_("Lista din fabrică"), N_("Adaugă"),
+	N_("Caută un meniu, o funcție sau un plugin"),
+	N_("Aceeași listă e pe televizor, în __DRUM_MENIU__, la Lista butonului albastru."),
+	N_("Ce apare în lista butonului albastru și în ce ordine alegi la"),
+)
+TEXTE_PAGINA["js"] += (N_("Indisponibil acum"), N_("Sus"), N_("Jos"), N_("Scoate"), N_("Adaugă"),
+	N_("Receptorul nu a putut citi lista."))
 
 
 def _traducePagina(sablon, fel="pagina"):

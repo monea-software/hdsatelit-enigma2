@@ -16,6 +16,7 @@ import os
 import re
 import socket
 import struct
+import sys
 from .Screen import Screen
 from Components.ActionMap import ActionMap
 from Components.Label import Label
@@ -82,8 +83,9 @@ def _get_dns_servers():
 def _interfataWeb():
 	"""(adresa, nume) ale interfetei web, pentru ecranul Retea si pagina lui web /informatii/retea: http://<IP>[:port]
 	dupa ruta implicita (HdsWebControl.adresaWeb) si http://<nume .local>[:port] numai cand avahi chiar il publica acum
-	(HdsComutareRetea.nume_local_confirmat). ("", "") fara retea sau cu interfata web oprita. Adresa IP merge si pe
-	telefoanele care nu afla numele .local (Android vechi, VPN), deci e scrisa intai; codul QR (tasta galbena,
+	(HdsComutareRetea.nume_local_stiut: ultimul nume citit de firul comutatorului, fara citire de fisier pe firul
+	interfetei). ("", "") fara retea sau cu interfata web oprita. Adresa IP merge si pe telefoanele care nu afla numele
+	.local (Android vechi, VPN), deci e scrisa intai; codul QR (tasta galbena,
 	Screens/HdsWebTelefon.py) o foloseste pe ea."""
 	try:
 		from Plugins.Extensions.HdsWebControl.plugin import adresaWeb, initConfigHdsWebControl
@@ -98,8 +100,8 @@ def _interfataWeb():
 	if not adresa:
 		return "", ""
 	try:
-		from Components.HdsComutareRetea import nume_local_confirmat
-		nume = nume_local_confirmat()
+		from Components.HdsComutareRetea import nume_local_stiut
+		nume = nume_local_stiut()
 	except Exception as e:
 		print("[Information] numele .local: %r" % (e,))
 		nume = ""
@@ -137,6 +139,43 @@ _CULORI = {"titlu": ("hdsBrandLight", 0x9FB4FF), "eticheta": ("hdsLabel", 0xAEB9
 	"sina": ("hdsTrack", 0x2A3350), "umplere": ("hdsBrandLight", 0x9FB4FF), "linie": ("hdsTrack", 0x2A3350),
 	"albastru": ("hdsTesterTrimis", 0x0A5BC4), "albastru_fond": ("hdsTesterTrimisFond", 0xFFFFFF),
 	"caseta": ("hdsCell", 0x282D3F), "caseta_linie": ("hdsPanelSolid", 0x10162A)}
+
+
+def _detaliiPublicate():
+	try:
+		return about.detaliiPublicate()
+	except Exception as e:
+		print("[Information] detaliile hardware: %r" % (e,))
+		return {}
+
+
+def _randuriDetalii(d):
+	"""The "Detalii hardware" section of "Receptor si procesor" from the memory of Components/About.py
+	(about.detaliiHardware); [] while it is being read. Pure formatting, no file access: the screen adds it when the data
+	arrives and the web page (same populate) shows the same rows. What the board does not show is said, not guessed."""
+	if d is None:
+		return []
+	lipsa = _("nu se poate afla: placa nu dă această informație")
+	l = ["", _("Detalii hardware:")]
+	l.append(_rand(_("Placa (numele din driver)"), d.get("placa") or lipsa))
+	l.append(_rand(_("Nucleul procesorului"), d.get("nucleu_cpu") or lipsa))
+	l.append(_rand(_("Frecvența maximă"), ("%d MHz" % d["mhz"]) if d.get("mhz") else lipsa))
+	if d.get("flash_tip"):
+		flash = "%s (%s)" % (d["flash_tip"], d.get("flash_fs", ""))
+		if d.get("flash_mb"):
+			flash += ", " + _mb(d["flash_mb"])
+		elif d.get("flash_mtd_mb"):
+			flash += ", " + _("%s în partițiile MTD") % _mb(d["flash_mtd_mb"])
+	else:
+		flash = lipsa
+	l.append(_rand(_("Memoria flash"), flash))
+	l.append(_rand(_("Procesorul panoului frontal"), (_("versiunea %s") % d["fp"]) if d.get("fp") else lipsa))
+	if d.get("drivere"):
+		drivere = "%s (%s)" % (d["drivere"], d.get("drivere_pachet", ""))
+	else:
+		drivere = _("nu se poate afla: pachetul driverelor nu s-a găsit")
+	l.append(_rand(_("Driverele receptorului"), drivere))
+	return l
 
 
 def _culoare(cheie):
@@ -635,7 +674,23 @@ class HdsAbout(InformationBase):
 				l.append(" • %s%s" % ((_("Imaginea de bază") + ":").ljust(24), baza))
 		except Exception as e:
 			print("[Information] imaginea de baza: %r" % (e,))
+		# 0.7.8 (RIA): versiunea de sus vine de pe disc, deci arata versiunea noua si cat interfata asteapta repornirea dupa
+		# actualizare; randul spune atunci ca actualizarea se termina la repornire (si de ce asteapta). getattr: cu un
+		# Components/HdsActualizari mai vechi in memorie, fara rand
+		try:
+			from Components import HdsActualizari
+			text_repornire = getattr(HdsActualizari, "text_pana_la_repornire", lambda: "")()
+			if text_repornire:
+				l.append(" • " + text_repornire)
+		except Exception as e:
+			print("[Information] repornirea dupa actualizare: %r" % (e,))
 		l.append(rand(_("Nucleu Enigma2"), about.getEnigmaVersionString()))
+		# the Python the image runs on, from the running interpreter (Components/About.py, no file read)
+		# (try: an about object without it, an older Components/About.py in memory, leaves the screen as before)
+		try:
+			l.append(rand(_("Versiunea Python"), about.getPythonVersionString()))
+		except Exception as e:
+			print("[Information] versiunea Python: %r" % (e,))
 		# descifrarea in software a canalelor CSA-ALT (ICAM): libdvbcsa si modulul de acces legat cu protocolul 3
 		# (Components/HdsSoftCsa.py); o eroare aici nu goleste ecranul
 		try:
@@ -789,6 +844,78 @@ class HdsReceiverInfo(InformationBase):
 			self.procesorVii = HdsProcesor.InformatiiVii(self)
 		except Exception as e:
 			print("[Information] procesorul: %r" % (e,))
+		self._pornesteDetalii()
+
+	def _pornesteDetalii(self):
+		"""The "Detalii hardware" section is read once on a background thread (Components/About.py). After populate(),
+		if the data was not in memory yet, a short eTimer looks at the memory only (UI thread) and adds the section when
+		it arrives; onClose stops it and changes the generation, so late data is never written to a closed screen."""
+		self.generatieDetalii = 0
+		self.ceasDetalii = None
+		self.detaliiAfisate = False
+		self.onLayoutFinish.append(self._dupaPopulate)
+		self.onClose.append(self._inchideDetalii)
+
+	def _dupaPopulate(self):
+		# populate() has just published and used what is in memory; nothing to wait for if it was there
+		if self.detaliiAfisate or self.generatieDetalii < 0 or self.ceasDetalii is not None:
+			return
+		# Check this screen's output, not the cache another page may have published in the meantime.
+		if _("Detalii hardware:") in self["text"].ultim.splitlines():
+			self.detaliiAfisate = True
+			return
+		try:
+			from enigma import eTimer
+			self.ceasDetalii = eTimer()
+			gen = self.generatieDetalii
+			self.ceasDetalii.callback.append(lambda: self._sosireDetalii(gen))
+			self.ceasDetalii.start(200, False)
+		except Exception as e:
+			print("[Information] detaliile hardware: %r" % (e,))
+
+	def _inchideDetalii(self):
+		self.generatieDetalii = -1
+		if self.ceasDetalii is not None:
+			self.ceasDetalii.stop()
+
+	def _sosireDetalii(self, gen):
+		if gen != self.generatieDetalii:
+			if self.ceasDetalii is not None:
+				self.ceasDetalii.stop()
+			return
+		if self.detaliiAfisate:
+			if self.ceasDetalii is not None:
+				self.ceasDetalii.stop()
+			return
+		try:
+			d = about.detaliiHardware()
+		except Exception as e:
+			print("[Information] detaliile hardware: %r" % (e,))
+			self.ceasDetalii.stop()
+			return
+		if d is None:
+			# Keep waiting in memory until arrival or close, including reads longer than 30 seconds.
+			return
+		self.ceasDetalii.stop()
+		self.detaliiAfisate = True
+		if _("Detalii hardware:") in self["text"].ultim.splitlines():
+			return
+		try:
+			randuri = _randuriDetalii(d)
+			# the section is the last part of the text: added at the end of the text and of the rows kept by the live
+			# processor refresh (HdsProcesor.InformatiiVii), so its next refresh keeps it; no file is read again
+			vii = getattr(self, "procesorVii", None)
+			if vii is not None and getattr(vii, "gata", False):
+				vii.dupa = list(vii.dupa) + randuri
+			text = self["text"].ultim + "\n" + "\n".join(randuri)
+			# only the module already in memory (no import attempt, which could look on the disk)
+			textFaraSalt = getattr(sys.modules.get("Components.HdsProcesor"), "textFaraSalt", None)
+			if textFaraSalt is not None:
+				textFaraSalt(self["text"], text)
+			else:
+				self["text"].setText(text)
+		except Exception as e:
+			print("[Information] detaliile hardware: %r" % (e,))
 
 	def populate(self):
 		cpu_model, cpu_cores = about.getCPUInfo()
@@ -837,6 +964,10 @@ class HdsReceiverInfo(InformationBase):
 		l.append("")
 		l.append(_("Sistemul:"))
 		l.append(_rand(_("Nucleu Linux"), about.getKernelVersionString()))
+		try:
+			l.append(_rand(_("Versiunea Python"), about.getPythonVersionString()))
+		except Exception as e:
+			print("[Information] versiunea Python: %r" % (e,))
 		l.append(_rand(_("Timp de funcționare"), about.getUptimeString()))
 
 		try:
@@ -873,6 +1004,13 @@ class HdsReceiverInfo(InformationBase):
 				l.extend(recuperare)
 		except Exception:
 			pass
+
+		# hardware details from memory only (Components/About.py reads them on a background thread); while they are
+		# read the text is the one from before and the screen adds them when they arrive (_sosireDetalii)
+		try:
+			l.extend(_randuriDetalii(about.detaliiHardware()))
+		except Exception as e:
+			print("[Information] detaliile hardware: %r" % (e,))
 
 		text = None
 		if procesor is not None:
@@ -1192,9 +1330,11 @@ class HdsStorageInfo(InformationBase):
 
 		l.append(_("Discuri și stickuri montate"))
 		monturi = _monturiDiscuri()
+		randuri_montate, nume_cunoscute = [], {}
 		if not monturi:
 			l.append("  " + _("Niciun disc sau stick montat."))
 		for mnt, dev, fs in monturi:
+			randuri_montate.append((len(l), mnt, dev, fs))
 			l.append("  %s  (%s, %s)" % (mnt, dev, _numeSistemFisiere(fs)))
 			m_tot, m_free, m_used = about.getStorageInfo(mnt)
 			if m_tot > 0:
@@ -1210,6 +1350,7 @@ class HdsStorageInfo(InformationBase):
 		if not discuri and not sys_discuri:
 			l.append("  " + _("Niciun disc sau stick conectat."))
 		for dev, nume, marime, _stick in sys_discuri:
+			nume_cunoscute[dev] = (nume, marime * 1000000)
 			l.append(("  %s: %s" % (nume, _marimeDisc(marime))) if marime > 0 else ("  %s" % nume))
 			puncte = sorted(set(mnt for mnt, d, _fs in monturi if d.startswith(dev)))
 			l.append("    " + (_("Montat în: %s") % ", ".join(puncte) if puncte else _("Nemontat.")))
@@ -1220,6 +1361,7 @@ class HdsStorageInfo(InformationBase):
 		for hdd in discuri:
 			nume = _numeDisc(hdd)
 			marime = hdd.diskSize()
+			nume_cunoscute["/dev/" + hdd.device] = (nume, marime * 1000000)
 			l.append(("  %s: %s" % (nume, _marimeDisc(marime))) if marime > 0 else ("  %s" % nume))
 			puncte = sorted(set(p.mountpoint.rstrip("/") for p in partitii
 				if p.device and p.mountpoint and p.device.startswith(hdd.device)))
@@ -1228,6 +1370,14 @@ class HdsStorageInfo(InformationBase):
 			else:
 				l.append("    " + _("Nemontat."))
 
+		# Label the first rendering from the metadata this screen already read.
+		# TV and web share this method; formatting adds no disk reads or timers.
+		from Components.Harddisk import storagePathName
+		for index, mnt, dev, fs in randuri_montate:
+			base = next((d for d in sorted(nume_cunoscute, key=len, reverse=True)
+				if dev == d or re.fullmatch(re.escape(d) + (r"p[0-9]+" if d.startswith(("/dev/mmcblk", "/dev/nvme")) else r"[0-9]+"), dev)), None)
+			text = storagePathName(mnt, detalii=nume_cunoscute[base]) if base else storagePathName(mnt)
+			l[index] = "  %s  (%s, %s)" % (text, dev, _numeSistemFisiere(fs))
 		self["text"].setText("\n".join(l))
 
 

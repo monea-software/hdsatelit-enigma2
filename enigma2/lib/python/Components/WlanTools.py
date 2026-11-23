@@ -4,6 +4,7 @@
 # WiFi helpers for HDSatelit Image: reading wpa_cli output and writing wpa_supplicant.conf.
 # No screens and no enigma imports, so everything here can be
 # tested on a PC. Passwords are never printed and never passed on a command line.
+import errno
 import hashlib
 import os
 import re
@@ -183,27 +184,32 @@ def pskHex(password, ssid):
 
 
 def checkPassword(security, password):
-	"""None if the password can be used, else a short reason (English, translated by the screen)"""
+	"""None if the password can be used, else a short reason translated by the caller."""
 	if security in (SECURITY_OPEN, SECURITY_OWE):
 		return None
 	if security not in SUPPORTED_SECURITY:
 		return "This kind of network security is not supported"
-	if security in (SECURITY_WPA, SECURITY_WPA2) and HEX64_RX.match(password):
+	if security in (SECURITY_WPA, SECURITY_WPA2) and HEX64_RX.fullmatch(password):
 		return None
-	if any(ord(c) < 32 or ord(c) > 126 for c in password):
+	if any(ord(c) < 32 or ord(c) == 127 for c in password):
 		return "The password may only contain letters, digits and the usual signs"
-	if len(password) < 8:
+	try:
+		length = len(password.encode("utf-8"))
+	except UnicodeEncodeError:
+		return "The password may only contain letters, digits and the usual signs"
+	if length < 8:
 		return "The password must have at least 8 characters"
-	if security in (SECURITY_WPA, SECURITY_WPA2) and len(password) > 63:
+	if security in (SECURITY_WPA, SECURITY_WPA2) and length > 63:
+		if length != len(password):
+			return "Parola Wi-Fi poate avea cel mult 63 de octeți în UTF-8."
 		return "The password may have at most 63 characters"
-	if security in (SECURITY_WPA2_WPA3, SECURITY_WPA3) and ("\"" in password or "\\" in password):
-		# SAE keeps the password as a quoted string in the file
-		return "For WPA3 the password may not contain quotes or backslashes"
 	return None
 
 
 def networkBlock(ssid, security, password="", hidden=False):
 	"""network={...} block for wpa_supplicant.conf; the SSID is written as hex (exact bytes)"""
+	if not 1 <= len(ssid) <= 32:
+		raise ValueError("Numele rețelei Wi-Fi trebuie să aibă între 1 și 32 de octeți.")
 	reason = checkPassword(security, password)
 	if reason:
 		raise ValueError(reason)
@@ -215,16 +221,24 @@ def networkBlock(ssid, security, password="", hidden=False):
 	elif security == SECURITY_OWE:
 		lines += ["\tkey_mgmt=OWE", "\tieee80211w=2"]
 	else:
-		psk = password.lower() if HEX64_RX.match(password) else None
+		psk = password.lower() if HEX64_RX.fullmatch(password) else None
 		if security in (SECURITY_WPA, SECURITY_WPA2):
 			lines += ["\tkey_mgmt=WPA-PSK", "\tproto=RSN WPA", "\tpsk=%s" % (psk or pskHex(password, ssid))]
 		elif security == SECURITY_WPA2_WPA3:
 			lines += ["\tkey_mgmt=SAE WPA-PSK WPA-PSK-SHA256", "\tieee80211w=1",
-				"\tpsk=%s" % pskHex(password, ssid), "\tsae_password=\"%s\"" % password]
+				"\tpsk=%s" % pskHex(password, ssid), "\tsae_password=%s" % saePasswordValue(password)]
 		elif security == SECURITY_WPA3:
-			lines += ["\tkey_mgmt=SAE", "\tieee80211w=2", "\tsae_password=\"%s\"" % password]
+			lines += ["\tkey_mgmt=SAE", "\tieee80211w=2", "\tsae_password=%s" % saePasswordValue(password)]
 	lines.append("}")
 	return "\n".join(lines) + "\n"
+
+
+def saePasswordValue(password):
+	"""Keep the old quoted format where safe; encode complex passwords as UTF-8 hex."""
+	# Line separators and control characters (U+0085, U+2028, U+2029 included) would split the value in parseConf.
+	if '"' not in password and "\\" not in password and password.isprintable():
+		return '"%s"' % password
+	return password.encode("utf-8").hex()
 
 
 def ssidFromConfValue(value):
@@ -319,11 +333,16 @@ def writeConfAtomic(path, text):
 	"""written to a temporary file (mode 600) and moved over the old one; True on success"""
 	tmp = path + ".tmp"
 	try:
-		fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+		fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
 		try:
 			if hasattr(os, "fchmod"):
 				os.fchmod(fd, 0o600)
-			os.write(fd, text.encode("utf-8"))
+			data = text.encode("utf-8")
+			while data:
+				written = os.write(fd, data)
+				if written <= 0:
+					raise OSError(errno.EIO, os.strerror(errno.EIO))
+				data = data[written:]
 			os.fsync(fd)
 		finally:
 			os.close(fd)
@@ -358,4 +377,40 @@ def getWlanDriver(iface, sysfs="/sys/class/net", procWireless="/proc/net/wireles
 def interfaceLines(driver, conf=SUPPLICANT_CONF):
 	"""lines for the wlan stanza in /etc/network/interfaces; udhcpc keeps trying while WiFi associates"""
 	drivers = "nl80211,wext" if driver == "nl80211" else "wext"
-	return "\twpa-conf %s\n\twpa-driver %s\n\tudhcpc_opts -b\n" % (conf, drivers)
+	# WPA may finish after the first DHCP burst. Retry before the address screen rolls back.
+	return "\twpa-conf %s\n\twpa-driver %s\n\tudhcpc_opts -b -A 2\n" % (conf, drivers)
+
+
+def savedPasswords(text=None, path=SUPPLICANT_CONF):
+	"""Parolele scrise de om; la fisiere vechi cheia PSK disponibila."""
+	if text is None:
+		try:
+			with open(path, encoding="utf-8", errors="replace") as f:
+				text = f.read()
+		except OSError:
+			return {}
+	rez = {}
+	for ssid, block in parseConf(text)[1]:
+		if ssid is None:
+			continue
+		valori = {}
+		for line in block.split("\n"):
+			k, sep, v = line.strip().partition("=")
+			if sep:
+				valori[k] = v.strip()
+		if "# hds-password" in valori:
+			try:
+				rez[ssid] = bytes.fromhex(valori["# hds-password"]).decode("utf-8")
+				continue
+			except (ValueError, UnicodeError):
+				pass
+		v = valori.get("sae_password") or valori.get("psk") or valori.get("wep_key0") or ""
+		if v.startswith('"') and v.endswith('"'):
+			v = v[1:-1]
+		elif "sae_password" in valori:
+			try:
+				v = bytes.fromhex(v).decode("utf-8")
+			except (ValueError, UnicodeError):
+				pass
+		rez[ssid] = v
+	return rez

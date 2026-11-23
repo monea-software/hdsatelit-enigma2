@@ -30,11 +30,21 @@
 #     oprire brusca", cu ce se stie fara ghicit (rand_oprire_brusca, mai jos). Asistenta 430032 (15.11.2026): doua
 #     reporniri dupa instalari din panoul unui plugin strain n-au lasat nimic in hds-caderi.log, deci nu se vedea ca
 #     receptorul s-a oprit brusc si nici ce facea atunci.
+#   Tot atunci (r5, 0.7.8, asistenta 751207: 5 reporniri dure intr-o ora pe GigaBlue UHD Trio 4K): ora ultimului semn de
+#     viata (ultimul rand al interfetei, UTC, si al jurnalului sistemului, ora locala) in SEMN_BRUSC, in RAM. La prima
+#     ora sigura (NTP, HTTPS, doua multiplexuri) Components/HdsCeas.py scrie in hds-caderi.log cat a stat receptorul fara
+#     nucleu pornit (pana la pornirea nucleului = ora sigura minus uptime) si sterge semnul: o repornire a placii revine
+#     in 1-2 minute, o pauza mai lunga e curentul, butonul sau o pornire oprita inainte de nucleu. Aici nu se poate
+#     socoti: dupa reset ceasul pornirii e ora salvata. HDS_JURNAL_SEMN_BRUSC: numai pentru probele de pe PC.
 
 D=${HDS_JURNAL_DOSAR:-/home/root/logs}
 SEMN=$D/.oprire-curata
 CADERE=$D/messages.cadere
 CADERI=$D/hds-caderi.log
+SEMN_PORNIRE=$D/.pornire-jurnal
+BOOT_ID=${HDS_JURNAL_BOOT_ID:-/proc/sys/kernel/random/boot_id}
+INTERFATA_SEMN=${HDS_REZERVA_SEMN:-/etc/hds-interfata-pornita}
+SEMN_BRUSC=${HDS_JURNAL_SEMN_BRUSC:-/var/run/hds-oprire-brusca}
 
 # Randurile scoase din jurnale: fara caractere de control (si fara culorile nucleului, "[1;32m"), fara utilizator si
 # parola din adrese (://nume:parola@), cel mult 160 de semne pe rand.
@@ -75,16 +85,50 @@ rand_oprire_brusca() {
 			if ($4 == "cod") { if (r != "" && cod == "") cod = $5 }
 			else { r = substr($0, 1, 160); cod = "" }
 		} END { if (r != "") print r (cod == "" ? " (neterminata)" : " (cod " cod ")") }' | curata)
-	r="$(date '+%Y-%m-%d %H:%M:%S') pornire dupa oprire brusca (oprirea de dinainte n-a fost curata: curentul, o repornire dura sau nucleul; ora salvata, poate fi inca nepotrivita; jurnalul sistemului de dinainte in messages.cadere)"
+	r="$(date '+%Y-%m-%d %H:%M:%S') pornire dupa oprire brusca (oprirea de dinainte n-a fost curata: curentul, o repornire dura sau nucleul; ora salvata, poate fi inca nepotrivita; boot=$boot; jurnalul sistemului de dinainte in messages.cadere)"
 	[ -n "$m" ] && r="$r; ultimul rand din messages: $m"
 	[ -n "$i" ] && r="$r; ultimul rand al interfetei: $i"
 	[ -n "$c" ] && r="$r; ultima comanda opkg/Console: $c"
 	[ -n "$e" ] && r="$r; ultima lucrare din Extensii: $e"
 	echo "$r" >> "$CADERI"
+	# semnul pentru HdsCeas: numai orele, numai cand au forma asteptata
+	ti=$(printf '%s\n' "$i" | cut -c1-20)
+	tm=$(printf '%s\n' "$m" | cut -c1-15)
+	case "$ti" in
+	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;;
+	*) ti="" ;;
+	esac
+	case "$tm" in
+	[A-Z][a-z][a-z]" "[" "0-9][0-9]" "[0-9][0-9]:[0-9][0-9]:[0-9][0-9]) ;;
+	*) tm="" ;;
+	esac
+	if [ -n "$ti" ] || [ -n "$tm" ]; then
+		printf 'interfata=%s\nmessages=%s\n' "$ti" "$tm" > "$SEMN_BRUSC"
+	fi
 }
 
 case "$1" in
 start)
+	# Un start repetat in acelasi nucleu nu inseamna o oprire brusca.
+	boot=$(cat "$BOOT_ID" 2>/dev/null)
+	if [ -n "$boot" ]; then
+		# Lacat numai in RAM: dispare si dupa o oprire brusca.
+		zavor=${HDS_JURNAL_ZAVOR:-/var/run/hds-jurnal-start}
+		mkdir "$zavor" 2>/dev/null || exit 0
+		trap 'rmdir "$zavor" 2>/dev/null' EXIT
+	fi
+	vechi=$(cat "$SEMN_PORNIRE" 2>/dev/null)
+	if [ -n "$boot" ] && [ "$boot" = "$vechi" ]; then
+		# Un restart rearmeaza detectarea urmatoarei opriri necurate.
+		rm -f "$SEMN"
+		exit 0
+	fi
+	prima=0
+	[ -n "$boot" ] && [ ! -e "$SEMN_PORNIRE" ] && [ ! -e "$INTERFATA_SEMN" ] && prima=1
+	mkdir -p "$D"
+	if [ -n "$boot" ]; then
+		printf '%s\n' "$boot" > "$SEMN_PORNIRE.nou" && mv -f "$SEMN_PORNIRE.nou" "$SEMN_PORNIRE"
+	fi
 	if [ -x "${HDS_RAPORT_SINE:-/usr/bin/hds-raport.sh}" ]; then
 		"${HDS_RAPORT_SINE:-/usr/bin/hds-raport.sh}" urmareste < /dev/null > /dev/null 2>&1 &
 	fi
@@ -97,7 +141,7 @@ start)
 		rm -f "$SEMN"
 		exit 0
 	fi
-	if [ -s "$D/messages" ] || [ -s "$D/messages.0" ]; then
+	if [ "$prima" = 0 ] && { [ -s "$D/messages" ] || [ -s "$D/messages.0" ]; }; then
 		[ -f "$CADERE" ] && mv -f "$CADERE" "$CADERE.1"
 		{
 			echo "== copia jurnalului de dinainte de o oprire necurata (semnul opririi curate lipsea)"

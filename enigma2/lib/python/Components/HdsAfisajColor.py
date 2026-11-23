@@ -15,6 +15,8 @@ DOSAR = "/usr/share/enigma2/HDSatelit/afisaj-color"
 MODELE = {"vusolo4k": (480, 320, 32), "vuuno4kse": (400, 240, 32),
 	"vuduo4k": (480, 320, 32), "vuduo4kse": (480, 320, 32),
 	"gbquad4kpro": (400, 240, 16),
+	# Dream lcd.ko (20200321): 400x240, BGR_565_LE, 192000 bytes per frame.
+	"dm900": (400, 240, 16), "dm920": (400, 240, 16),
 	# Vu+ Duo 4K Lite: placa GigaBlue UHD Quad 4K Pro (colorlcd400); valorile driverului au intaietate
 	"vuduo4klite": (400, 240, 16),
 	# Vu+ Ultimo4K (colorlcd800 in vuultimo4k.conf, OE-Alliance): 800x480; valorile driverului au intaietate, iar
@@ -377,7 +379,16 @@ class Afisaj(A.Afisaj):
 		from Components import HdsAfisajRandare as R
 		self.color_scena = scena
 		self.color_imagine, self.color_text = scena.get("imagine", ""), scena.get("valoare", text)
-		self.color_cadru = R.cadru(scena, (self.infoColor["latime"], self.infoColor["inaltime"]))
+		try:
+			self.color_cadru = R.cadru(scena, (self.infoColor["latime"], self.infoColor["inaltime"]))
+		except OSError as eroare:
+			# Missing assets or a removed display must not interrupt the timer.
+			cheie = (eroare.errno, eroare.filename)
+			if getattr(self, "_eroareCadru", None) != cheie:
+				A._jurnal("nu pot pregati cadrul LCD: %s" % eroare)
+			self._eroareCadru = cheie
+			return max(ms, 1000)
+		self._eroareCadru = None
 		self.color_revizie = self.color_cadru[2]
 		R.pastreaza(self.color_cadru[1])
 		if self.ecran is not None:
@@ -464,10 +475,14 @@ class Afisaj(A.Afisaj):
 			s = dict(self.color_scena, pagina="actualizare", progres=None,
 				procent=None, valoare="", detaliu=A._("Se scrie"))
 			self.color_scena = s
-			self.color_cadru = R.cadru(s, (self.infoColor["latime"], self.infoColor["inaltime"]))
-			self.color_revizie = self.color_cadru[2]
-			if self.ecran is not None:
-				self.ecran.arataCadru(self.color_cadru[1])
+			try:
+				self.color_cadru = R.cadru(s, (self.infoColor["latime"], self.infoColor["inaltime"]))
+			except OSError as eroare:
+				A._jurnal("nu pot pregati cadrul LCD la oprire: %s" % eroare)
+			else:
+				self.color_revizie = self.color_cadru[2]
+				if self.ecran is not None:
+					self.ecran.arataCadru(self.color_cadru[1])
 		A.Afisaj.opreste(self)
 		if K.permite("live", color=True):
 			self.live.opreste()

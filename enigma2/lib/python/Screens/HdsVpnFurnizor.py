@@ -147,9 +147,9 @@ def randuri(s, tara):
 		r.append((_("Închide"), INCHIDE, s["indisponibil"]))
 		return r
 	if s["fel_cont"] == "numar":
-		cum = _("salvat") if s["cont"] else _("lipsește")
+		cum = " / ".join((s.get("date_acces") or {}).values()) if s["cont"] else _("lipsește")
 	else:
-		cum = _("salvate") if s["cont"] else _("lipsesc")
+		cum = " / ".join((s.get("date_acces") or {}).values()) if s["cont"] else _("lipsesc")
 	r.append(("%s (%s)" % (s["eticheta_cont"], cum), CONT, s["nota_cont"]))
 	nume_tara = ""
 	in_tara = 0
@@ -439,10 +439,10 @@ class HdsVpnFurnizor(Screen):
 		s = self._stare
 		if s["fel_cont"] == "numar":
 			# hdsSecret: cu asistenta pornita, prima tasta cere oprirea ei
-			self.session.openWithCallback(self._numarScris, VirtualKeyBoard, title=s["eticheta_cont"], text="",
+			self.session.openWithCallback(self._numarScris, VirtualKeyBoard, title=s["eticheta_cont"], text=(s.get("date_acces") or {}).get("numar", ""),
 				hdsSecret=True)
 		else:
-			self.session.openWithCallback(self._numeScris, VirtualKeyBoard, title=_("Numele de serviciu"), text="")
+			self.session.openWithCallback(self._numeScris, VirtualKeyBoard, title=_("Numele de serviciu"), text=(s.get("date_acces") or {}).get("nume", ""))
 
 	def _numarScris(self, numar):
 		if numar is None:
@@ -464,7 +464,7 @@ class HdsVpnFurnizor(Screen):
 			return
 		self._nume = nume
 		self.session.openWithCallback(self._parolaScrisa, VirtualKeyBoard,
-			title=_("Parola de serviciu (după salvare nu se mai arată)"), text="", hdsSecret=True)
+			title=_("Parola de serviciu"), text=(self._stare.get("date_acces") or {}).get("parola", ""), hdsSecret=True)
 
 	def _parolaScrisa(self, parola):
 		nume = getattr(self, "_nume", "")

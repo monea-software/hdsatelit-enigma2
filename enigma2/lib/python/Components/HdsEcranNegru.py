@@ -401,6 +401,8 @@ def analizeaza(d):
 		return None
 	if d.get("radio"):
 		return None
+	if d.get("rezerva") and d.get("imagine") is not True and (d.get("secunde") or 0) >= PRAG_SEMNAL:
+		return _verdict(FARA_SEMNAL, d, text=d["rezerva"], titlu=_t(N_("Tunerul de rezervă din rețea")))
 	if d.get("fel") == FEL_FLUX:
 		numit = _format_numit(d, analiza=False)
 		if numit is None and numai_sunet(d):
@@ -948,6 +950,99 @@ def ultima_stare():
 	return {"verdict": _STARE["verdict"], "vizibil": _STARE["vizibil"], "pornit": pornit(), "urmarit": leg is not None}
 
 
+class FereastraEroareVie(object):
+	"""Fereastra scurta NoPAT: refoloseste urmaritorul TV si citirile lui din fundal."""
+
+	def __init__(self, session, verdict, secunde=5, hdsSursa=None):
+		self._hdsInchis = False
+		self._hdsTimeoutPornit = False
+		self._hdsInchidereAmanata = False
+		self._hdsBaraSeInchide = False
+		self.hdsSursa = hdsSursa
+		super(FereastraEroareVie, self).__init__(session, verdict, secunde)
+		from enigma import eTimer
+		self._hdsCeas = eTimer()
+		self._hdsCeas.callback.append(self._hdsTic)
+		self.onClose.append(self._hdsOpreste)
+		callbacks = getattr(hdsSursa[0].infobar, "onClose", None)
+		if callbacks is None:
+			self.close()
+		else:
+			callbacks.append(self._hdsInchideCuBara)
+
+	def _porneste(self):
+		# Revenirea din alt dialog nu prelungeste termenul initial.
+		if not getattr(self, "_hdsInchis", True) and not self._hdsTimeoutPornit:
+			self._hdsTimeoutPornit = True
+			super(FereastraEroareVie, self)._porneste()
+			# onExecBegin ruleaza inainte de execing=True; citim la primul tic.
+			self._hdsCeas.start(1000, True)
+
+	def _hdsTic(self):
+		if getattr(self, "_hdsInchis", True):
+			return
+		try:
+			leg, ref = self.hdsSursa
+			if _STARE["legatura"] is not leg or leg._refRedata() != ref:
+				self.close()
+				return
+			# Aceeasi actualizare ca in web, fara alt urmaritor sau citiri directe de driver.
+			leg.actualizeazaAcum()
+			if getattr(self, "_hdsInchis", True):
+				return
+			if _STARE["legatura"] is not leg or leg._refRedata() != ref:
+				self.close()
+				return
+			v = leg.verdict
+			if v is None:
+				# Radioul si celelalte servicii fara verdict pastreaza eroarea scurta.
+				if leg.primesteVerdict():
+					self.close()
+					return
+			else:
+				v = dict(v, fapta=None)
+				if v != self.verdict:
+					self.verdict = v
+					self.pune(v)
+		except Exception as e:
+			# Citire esuata: pastram eroarea de dinainte si termenul initial.
+			print("[HdsEcranNegru] actualizarea ferestrei: %s: %s" % (type(e).__name__, e))
+		if not getattr(self, "_hdsInchis", True):
+			self._hdsCeas.start(1000, True)
+
+	def _hdsOpreste(self):
+		if getattr(self, "_hdsInchis", True):
+			return
+		self._hdsInchis = True
+		self._hdsCeas.stop()
+		self._hdsCeas.callback.remove(self._hdsTic)
+		if self.ceas is not None:
+			self.ceas.stop()
+			self.ceas.callback.remove(self.close)
+		leg, _ref = self.hdsSursa
+		callbacks = getattr(leg.infobar, "onClose", [])
+		# Screen.doClose parcurge lista direct: nu mutam functia urmatoare peste rand.
+		if not self._hdsBaraSeInchide and self._hdsInchideCuBara in callbacks:
+			callbacks.remove(self._hdsInchideCuBara)
+		self.hdsSursa = None
+
+	def _hdsInchideCuBara(self):
+		if not getattr(self, "_hdsInchis", True):
+			self._hdsBaraSeInchide = True
+			self.close()
+
+	def close(self, *args):
+		if not getattr(self, "_hdsInchis", True):
+			# Screen.close poate amana inchiderea pana la urmatorul execBegin.
+			self._hdsInchidereAmanata = not getattr(self, "execing", True)
+			self._hdsOpreste()
+		elif not (getattr(self, "_hdsInchidereAmanata", False) and getattr(self, "execing", False)):
+			return
+		if getattr(self, "execing", True):
+			self._hdsInchidereAmanata = False
+		super(FereastraEroareVie, self).close(*args)
+
+
 def fapta_web(fapta):
 	"""Fapta ceruta din web pe televizor: (cod HTTP, mesaj). Numai fapta verdictului de acum sau „ascunde”."""
 	leg = _STARE["legatura"]
@@ -1205,6 +1300,8 @@ class Urmaritor(object):
 				pass
 		info = r.info()
 		d["canal"] = _curat(info.getName() if info is not None else u"")
+		from Components import HdsTunerRezerva
+		d["rezerva"] = HdsTunerRezerva.diagnostic(ref, service)
 		if d["fel"] == FEL_FLUX and not d["radio"] and r.ref().get("type") == 1:
 			# fluxul IP redat prin servicedvb (tipul 1; 4097 si celelalte merg prin GStreamer, cu mesajele lor din
 			# HdsFilmRedare): numai cat trebuie pentru formatul numit (PMT citit, pistele, textul nucleului) si

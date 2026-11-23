@@ -116,7 +116,14 @@ def stare(C=None, service=None, prop=None, cu_serviciu=True):
 		eticheta = tuple(e[:4]) + (cod_limba,) + tuple(e[5:])
 		rez["subtitrari"].append({"id": id_subtitrare(e), "tip": fel, "text": C.sub_text(eticheta),
 			"limba": C.language_name(cod_limba), "pornita": pornita, "nu_vine": _nuVine(e, r) if fel == 1 else ""})
-	rez["fara_subtitrari"] = scur is None
+	try:
+		from Components import HdsVorbireTV as V
+		v = V.activ()
+		pornita = bool(v and v.lucrator and not v.doar_proba)
+		rez["subtitrari"].append({"id": "din-vorbire", "tip": -1, "text": _t("Din vorbire (tradus)"), "limba": "", "pornita": pornita})
+	except ImportError:
+		pornita = False
+	rez["fara_subtitrari"] = scur is None and not pornita
 	rez["canal_audio"] = C.piste_canal(service)
 	ex = C.sel_extras(r)
 	for tip in ("ac3", "dts"):
@@ -173,6 +180,11 @@ def alege_subtitrare(id_ales, C=None, service=None, prop=None, cu_serviciu=True)
 		service, prop = _serviciu()
 	if service is None:
 		return {"result": False, "message": _t("Nu rulează niciun canal.")}
+	if id_ales == "din-vorbire":
+		if prop is None:
+			return {"result": False}
+		from Components import HdsVorbireTV as V
+		return {"result": V.alege(prop)}
 	if id_ales == "oprit":
 		t = None
 	else:
@@ -221,17 +233,17 @@ def alege_downmix(tip, pornit, C=None, service=None, cu_serviciu=True):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}."""
+	"""Argumentele cererii ca text: {cheie: text}."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:8]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 20:
+		if cheie == "token":
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_TEXT].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 

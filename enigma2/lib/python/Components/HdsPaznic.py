@@ -63,6 +63,13 @@
 #      nu in asteptare si nu pe afisajele color (pe ele deseneaza tot firul principal). Prima bataie noua reface
 #      afisajul pe loc (HdsAfisaj.actualizeaza). Pluginurile stiute muta oricum lucrul greu pe un fir
 #      (Components/HdsFirPluginuri.py), deci la ele firul principal nu ajunge sa fie tinut.
+#      9b (0.7.8): acelasi semn cand firul principal NU e intr-un plugin extern, dar lucreaza infometat (timpul lui de
+#      procesor din /proc/self/task/<tid>/stat creste intre doua priviri, dar sub PRAG_PRINCIPAL_PLIN nuclee), iar firele unui
+#      plugin extern (stiva lor trece prin plugin) au luat intre timp cel putin PRAG_FIRE_PLUGIN nuclee: un plugin cu multe
+#      fire de procesor (siglele Bouquet Maker Xtream, 20 de fire PIL pe 2 nuclee) lasa firului principal prea putin
+#      procesor, deci o pagina web de cateva secunde trecea de 120 s si paznicul oprea o interfata care mergea. Firul principal
+#      care nu lucreaza deloc (asteapta un lacat, e blocat) sau care are procesor din plin (o bucla a noastra) nu primeste
+#      semnul: paznicul face ce facea. Aceleasi plafoane (DURATA_PLUGIN_EXTERN_S, TOTAL_PLUGIN_EXTERN_S).
 #  10. CINE TINE FIRUL PRINCIPAL (0.7.5, lotul PRN: blocajele din primele minute pe Viper 4K V10, SF8008, Trio, Ustym).
 #      Bataia de 10 s si pragul paznicului (120 s) nu vad tacerile de cateva secunde, cand tastele stau la coada si apare
 #      rotita. Un ceas de TIC_S pe firul principal (numai in memorie) si firul de supraveghere (la PAS_FIR_S) scriu un
@@ -170,6 +177,10 @@ PAS_PLUGIN_EXTERN_S = 5                    # cat de des se uita firul de suprave
 DURATA_PLUGIN_EXTERN_S = 60                # cat asteapta paznicul dupa fiecare privire in care pluginul inca lucreaza
 TOTAL_PLUGIN_EXTERN_S = 10 * 60            # cel mult atat de la ultima bataie; dupa, paznicul face ce face la orice blocaj
 TEXT_AFISAJ_PLUGIN = "bUSY"                # pe afisajul de 4 cifre cat asteapta paznicul (se citeste „busy”)
+# punctul 9b: firele unui plugin extern tin procesorul, iar firul principal lucreaza incet (0.7.8)
+PRAG_FIRE_PLUGIN = 0.5                     # cat procesor (in nuclee) iau firele pluginului intre doua priviri ca sa conteze
+PRAG_PRINCIPAL_PLIN = 0.6                  # firul principal care ia atat sau mai mult nu e infometat: tacerea e a lui
+CALE_FIR_STAT = "/proc/self/task/%d/stat"
 
 
 def _(text):
@@ -563,6 +574,43 @@ def pluginExternInStiva(cadru, pluginDinCale=None, adancime=200):
 	return None
 
 
+def _nativPrincipal():
+	"""Id-ul firului principal in nucleu (/proc/self/task/<tid>), sau None."""
+	return getattr(threading.main_thread(), "native_id", None)
+
+
+def _fireAlte():
+	"""[(id-ul in nucleu, cadrul de sus)] ale firelor Python, in afara de cel principal si de cel care priveste."""
+	cadre = sys._current_frames()
+	eu, principal = threading.get_ident(), threading.main_thread().ident
+	rez = []
+	for t in threading.enumerate():
+		if t.ident in (eu, principal):
+			continue
+		c = cadre.get(t.ident)
+		n = getattr(t, "native_id", None)
+		if c is not None and n:
+			rez.append((n, c))
+	return rez
+
+
+def _cpuFir(nativ):
+	"""Timpul de procesor al firului (utime + stime, in ticuri), sau None."""
+	try:
+		with open(CALE_FIR_STAT % nativ) as f:
+			camp = f.read().rsplit(")", 1)[1].split()
+		return int(camp[11]) + int(camp[12])
+	except Exception:
+		return None
+
+
+def _ticuriPeSecunda():
+	try:
+		return float(os.sysconf("SC_CLK_TCK")) or 100.0
+	except Exception:
+		return 100.0
+
+
 def _semnAfisaj():
 	"""Functia care scrie TEXT_AFISAJ_PLUGIN pe afisajul de 4 cifre, facuta pe firul principal (importurile aici); ea
 	insasi nu importa nimic nou. Fara afisaj de 4 cifre, in asteptare sau pe un afisaj color nu scrie nimic. Nu arunca."""
@@ -598,10 +646,17 @@ class SupraveghetorPluginExtern(object):
 	"""Punctul 9 din capul fisierului. pas() e o singura privire (testele o cheama direct); porneste() o face pe un fir
 	al lui, la fiecare PAS_PLUGIN_EXTERN_S secunde."""
 
-	def __init__(self, bataie, cadru=None, pluginDinCale=None, semn=None):
+	def __init__(self, bataie, cadru=None, pluginDinCale=None, semn=None, fire=None, cpu=None, principal=None,
+			ticuri=None):
 		self.b = bataie
 		self.cadru = cadru or _cadrulFiruluiPrincipal
 		self.semn = semn if semn is not None else _semnAfisaj()
+		# punctul 9b: celelalte fire, timpul lor de procesor, firul principal (probele le dau false)
+		self.fire = fire or _fireAlte
+		self.cpu = cpu or _cpuFir
+		self.principal = principal or _nativPrincipal
+		self.ticuri = ticuri or _ticuriPeSecunda()
+		self.esantion = None    # (ceasul, {fir: ticuri}) la privirea de dinainte, cat tace bataia
 		# hotararea se ia o data, aici, pe firul principal: firul de supraveghere nu importa nimic (firul principal poate
 		# sta chiar in importul unui plugin, cu lacatul importurilor luat)
 		if pluginDinCale is None:
@@ -626,8 +681,16 @@ class SupraveghetorPluginExtern(object):
 		acum = b.ceas()
 		ultima = b.ultimaBataie
 		if ultima is None or acum - ultima < PRAG_PLUGIN_EXTERN_S:
+			self.esantion = None
 			return "viu"
 		nume = pluginExternInStiva(self.cadru(), self.pluginDinCale)
+		fire = 0
+		if not nume:
+			try:
+				nume, fire = self._pluginPeFire(acum)
+			except Exception as e:
+				_jurnal("firele pluginurilor externe: %r" % (e,))
+				nume, fire = None, 0
 		with b.lacat:
 			if b.ultimaBataie != ultima:
 				return "viu"
@@ -639,21 +702,69 @@ class SupraveghetorPluginExtern(object):
 				self._scoate(acum)
 				if self.anuntat != (ultima, "prea-mult"):
 					self.anuntat = (ultima, "prea-mult")
-					_jurnal("%s tine firul principal de %d s, peste %d s: paznicul nu mai asteapta"
-						% (motiv, int(acum - ultima), TOTAL_PLUGIN_EXTERN_S))
+					_jurnal("%s %s de %d s, peste %d s: paznicul nu mai asteapta"
+						% (motiv, "tine procesorul cu firele lui" if fire else "tine firul principal", int(acum - ultima),
+						TOTAL_PLUGIN_EXTERN_S))
 				return "prea-mult:" + nume
 			pana = min(acum + DURATA_PLUGIN_EXTERN_S, ultima + TOTAL_PLUGIN_EXTERN_S)
 			b.ocupat[CHEIE_PLUGIN_EXTERN] = [motiv, float(DURATA_PLUGIN_EXTERN_S), ultima, pana]
 			b.scrie(acum, bataieVeche=True)
 		if self.anuntat != (ultima, nume):
 			self.anuntat = (ultima, nume)
-			_jurnal("%s tine firul principal de %d s; paznicul asteapta cel mult %d s de la ultima bataie"
-				% (motiv, int(acum - ultima), TOTAL_PLUGIN_EXTERN_S))
+			if fire:
+				_jurnal("%s: %d fire ale pluginului tin procesorul, firul principal lucreaza incet de %d s; paznicul asteapta "
+					"cel mult %d s de la ultima bataie" % (motiv, fire, int(acum - ultima), TOTAL_PLUGIN_EXTERN_S))
+			else:
+				_jurnal("%s tine firul principal de %d s; paznicul asteapta cel mult %d s de la ultima bataie"
+					% (motiv, int(acum - ultima), TOTAL_PLUGIN_EXTERN_S))
 			try:
 				self.semn()
 			except Exception:
 				pass
-		return "asteapta:" + nume
+		return ("asteapta-fire:" if fire else "asteapta:") + nume
+
+	def _pluginPeFire(self, acum):
+		"""Punctul 9b: (numele, cate fire) al pluginului extern ale carui fire au luat cel putin PRAG_FIRE_PLUGIN nuclee de
+		la privirea de dinainte, cat firul principal a lucrat si el (timpul lui de procesor a crescut); altfel (None, 0).
+		Prima privire a unei taceri numai noteaza timpii."""
+		principal = self.principal()
+		pluginuri = {}
+		for nativ, cadru in self.fire():
+			p = pluginExternInStiva(cadru, self.pluginDinCale)
+			if p:
+				pluginuri[nativ] = p
+		ticuri = {}
+		for nativ in list(pluginuri) + [principal]:
+			t = self.cpu(nativ) if nativ else None
+			if t is not None:
+				ticuri[nativ] = t
+		inainte, self.esantion = self.esantion, (acum, ticuri)
+		if inainte is None or principal not in ticuri or principal not in inainte[1]:
+			return None, 0
+		# media de la privirea de dinainte a aceleiasi taceri, oricat de departe: cand lacatul Python e foarte cautat si firul
+		# acesta priveste rar, o privire rara tot spune cine a luat procesorul
+		durata = acum - inainte[0]
+		if durata <= 0:
+			return None, 0
+		principal_s = (ticuri[principal] - inainte[1][principal]) / self.ticuri
+		if principal_s <= 0:
+			return None, 0          # firul principal n-a lucrat deloc: asteapta sau e blocat, nu e infometat
+		if principal_s >= PRAG_PRINCIPAL_PLIN * durata:
+			return None, 0          # firul principal are procesor: tacerea e a lui (o bucla a noastra), ca pana acum
+		pe = {}
+		for nativ, p in pluginuri.items():
+			if nativ in ticuri and nativ in inainte[1]:
+				d = ticuri[nativ] - inainte[1][nativ]
+				if d > 0:
+					s = pe.setdefault(p, [0, 0])
+					s[0] += d
+					s[1] += 1
+		if not pe:
+			return None, 0
+		p, (d, n) = max(pe.items(), key=lambda x: x[1][0])
+		if d / self.ticuri < PRAG_FIRE_PLUGIN * durata:
+			return None, 0
+		return p, n
 
 	def _bucla(self):
 		# la PAS_FIR_S: privirea punctului 10; la PAS_PLUGIN_EXTERN_S: pas() de mai sus, ca inainte
@@ -1233,6 +1344,8 @@ def _asteaptaFireleLaIesire():
 	"""threading._thread_shutdown cat iese enigma2 (chemat de threading._shutdown din Py_Finalize): firele non-daemon
 	asteptate cu termen (ale imaginii pana aproape de paza); cele ramase scrise si lasate. Fara fire ramase (sau la o
 	eroare inainte de hotarare), pasul de dinainte. Hotararea nu depinde de scrierea in jurnale."""
+	# 0.7.8 (SSO): aici s-au terminat salvarile C++ (~eMain: lista de canale, ghidul); randul iesirii le masoara
+	_pasiIesire["fire"] = monotonic()
 	if _pazaFire[0] is None:
 		return None
 	inceput, vechi = _pazaFire[0]
@@ -1283,6 +1396,229 @@ def pazaFirelorLaIesire(modul=None, ceas=None):
 		return False
 
 
+
+# 0.7.8 (SSO, e-mailurile 6529 si 6531, Vu+ Solo SE): CAT TINE IESIREA INTERFETEI SI CE O TINE. Omul vede ecranul negru
+# (sau textul iesirii) cat iese interfata, dar jurnalele nu spuneau ce pas tine: randul "a iesit" din hds-watchdog.py se
+# scrie la verificarea paznicului (din 15 in 15 s), nu la iesire, de unde se citise 7-15 s in loc de 3-9 s. Acum fiecare
+# pas are ceasul lui (time.monotonic), iar la atexit (dupa salvarile C++ si dupa paza firelor IES) un rand merge in
+# jurnalul paznicului (deci in pachetul beta testerului) si in hds-interfata.log:
+#   iesirea interfetei pana la curatenia Python: 1.6 s (cod 3); pasii cei mai lenti: salvarile C++ (...) 1.0 s, ...
+# DUPA atexit mai urmeaza curatenia Python din Py_Finalize si iesirea din nucleu, pe care randul nu le vede: masurat pe
+# doua receptoare ARM de proba, 0.7.7, cea mai mare parte a iesirii (3,0-3,5 s din 4,5-5,2 s), aproape toata in
+# trecerile complete ale GC peste tot heap-ul. De aceea:
+# - la atexit se scriu in semnul iesirii (CALE_IESIRE) ora cererii si ora atexit (pe /proc/uptime), iar enigma2.sh scrie
+#   ora exacta a sfarsitului procesului (sfarsit= in /tmp/hds-enigma2.iesire); la pornirea urmatoare randul
+#   "iesirea de dinainte" spune durata adevarata, de la cerere pana dispare procesul, si cat a tinut partea de dupa atexit;
+# - CURATENIE_RAPIDA: la atexit, dupa ce totul e salvat (setarile, listele, ghidul, CEC, jurnalele), gc.freeze() muta
+#   toate obiectele in generatia permanenta, deci trecerile GC din Py_Finalize nu le mai parcurg. Raman ca inainte:
+#   functiile atexit inregistrate inainte (golirea jurnalelor, logging, weakref.finalize), golirea stdout, codul iesirii
+#   pus de enigma2, golirea modulelor inca folosite de altele (obiectele lor fara cicluri se distrug prin numarare).
+#   CE SE PIERDE (Python nu garanteaza oricum finalizatorii la iesire; proba test_sso_pasi_iesire_078): nu se mai distrug
+#   obiectele prinse in cicluri care sunt gunoi la iesire (si cele ramase de mai demult, si cele care devin gunoi la
+#   golirea modulelor) si nici cele tinute numai de dictionarul unui modul pe care nu-l mai foloseste nimeni
+#   (dictionarul e in ciclu cu functiile lui), de pilda globalele din mytest.py. Memoria si
+#   fisierele deschise le elibereaza nucleul. Urmari posibile: un fisier lasat deschis de un plugin nu-si goleste
+#   tamponul, iar un proces copil pornit de un plugin printr-un eConsoleAppContainer tinut asa nu mai e oprit la
+#   repornirea interfetei (la oprire si la repornirea receptorului il opreste sistemul; pe receptoarele de proba enigma2
+#   nu avea niciun copil cand era liniste). Obiectele C++ legate de Python se distrug mai rar dupa "reached rl -1", deci
+#   si caderile 139 de la iesire vazute pe receptorul de proba au mai putine prilejuri (DEDUS).
+# Pasii: de la cererea omului (Screens/Standby.py, TryQuitMainloop.close: iesireCerutaLa) pana la quitMainloop
+# (iesireQuitLa) = "textul si CEC" (textul pe ecran, mesajele CEC si HDMI la oprire); pana la intoarcerea din runReactor =
+# "bucla"; apoi fiecare pas din mytest.py (pasIesire dupa el: timpul de la marcajul de dinainte); de la ultimul pas Python
+# pana la paza firelor din Py_Finalize = "salvarile C++ (lista de canale, ghidul)" (~eMain: lamedb, epg.dat, nivelurile
+# C++); de acolo pana la atexit = "firele ramase" (paza firelor IES; fara ea, Python vechi, cele doua intr-un pas). O
+# iesire care nu vine din TryQuitMainloop (quitMainloop chemat de un plugin, SIGTERM) se masoara de la sfarsitul buclei.
+# Numai ceasuri si un rand scris: ce se salveaza si ordinea pasilor nu se schimba.
+PRAG_PAS_IESIRE_S = 0.2         # pasii mai scurti nu se numesc in rand (intra numai in total)
+CURATENIE_RAPIDA = True         # gc.freeze() la atexit, dupa salvari (vezi mai sus)
+CALE_IESIRE_SH = "/tmp/hds-enigma2.iesire"   # semnul scris de enigma2.sh dupa iesire (cod, uptime, parinte, sfarsit)
+PASI_IESIRE_IN_RAND = 6         # cati pasi lenti se numesc
+CEREREA_VECHE_S = 120           # o ora a cererii mai veche de atat nu e a acestei iesiri
+_pasiIesire = {"inceput": None, "ultim": None, "pasi": [], "cod": None, "fire": None, "inregistrat": False}
+
+
+def _oraStandby(nume):
+	"""Ora (monotonic) pusa de Screens/Standby.py la cererea iesirii (iesireCerutaLa, iesireQuitLa), sau None."""
+	try:
+		from Screens import Standby
+		v = getattr(Standby, nume, None)
+		return None if v is None else float(v)
+	except Exception:
+		return None
+
+
+def incepePasiiIesirii(cod="implicit", ceas=None, cerere="implicit", quit_la="implicit", inregistreaza=True):
+	"""Din mytest.py, imediat dupa iesireInceputa (bucla s-a oprit): primii pasi din orele lui Standby.py si randul de la
+	sfarsit (atexit). Nu arunca: iesirea nu depinde de el."""
+	try:
+		if cod == "implicit":
+			cod = _codIesireCeruta()
+		acum = monotonic() if ceas is None else ceas
+		cerere = _oraStandby("iesireCerutaLa") if cerere == "implicit" else cerere
+		quit_la = _oraStandby("iesireQuitLa") if quit_la == "implicit" else quit_la
+		if cerere is not None and not 0 <= acum - cerere <= CEREREA_VECHE_S:
+			cerere = None
+		pasi = []
+		if cerere is not None:
+			if quit_la is not None and cerere <= quit_la <= acum:
+				pasi.append(("textul si CEC", quit_la - cerere))
+				pasi.append(("bucla", acum - quit_la))
+			else:
+				pasi.append(("bucla", acum - cerere))
+		_pasiIesire.update(inceput=acum if cerere is None else cerere, ultim=acum, pasi=pasi, cod=cod, fire=None)
+		if inregistreaza and not _pasiIesire["inregistrat"]:
+			import atexit
+			atexit.register(laSfarsitulIesirii)
+			_pasiIesire["inregistrat"] = True
+	except Exception as e:
+		_jurnal("pasii iesirii: %r" % (e,))
+
+
+def pasIesire(nume, ceas=None):
+	"""Din mytest.py, dupa fiecare pas al iesirii: timpul de la marcajul de dinainte, pe numele pasului. Nu arunca."""
+	try:
+		if _pasiIesire["ultim"] is None:
+			return
+		acum = monotonic() if ceas is None else ceas
+		_pasiIesire["pasi"].append((str(nume), max(0.0, acum - _pasiIesire["ultim"])))
+		_pasiIesire["ultim"] = acum
+	except Exception:
+		pass
+
+
+def randIesire(total, pasi, cod=None, prag=PRAG_PAS_IESIRE_S, cati=PASI_IESIRE_IN_RAND):
+	"""Textul randului iesirii: totalul pana la atexit, codul si pasii cei mai lungi peste prag (cel mai lung intai)."""
+	lungi = sorted([(s, n) for n, s in pasi if s >= prag], key=lambda x: -x[0])[:cati]
+	text = "iesirea interfetei pana la curatenia Python: %.1f s" % max(0.0, total)
+	if cod is not None:
+		text += " (cod %s)" % cod
+	if lungi:
+		return text + "; pasii cei mai lenti: " + ", ".join("%s %.1f s" % (n, s) for s, n in lungi)
+	return text + "; niciun pas peste %.1f s" % prag
+
+
+def pasiiIesirii(ceas=None):
+	"""(totalul, pasii) de pana acum, cu pasii C++ si firele socotiti din ora pazei firelor; None inainte de inceput."""
+	if _pasiIesire["inceput"] is None or _pasiIesire["ultim"] is None:
+		return None
+	acum = monotonic() if ceas is None else ceas
+	ultim, fire = _pasiIesire["ultim"], _pasiIesire["fire"]
+	pasi = list(_pasiIesire["pasi"])
+	if fire is not None and ultim <= fire <= acum:
+		pasi.append(("salvarile C++ (lista de canale, ghidul)", fire - ultim))
+		pasi.append(("firele ramase", acum - fire))
+	else:
+		pasi.append(("salvarile C++ si firele", max(0.0, acum - ultim)))
+	return acum - _pasiIesire["inceput"], pasi
+
+
+def _uptime():
+	"""/proc/uptime ca float (acelasi ceas cu enigma2.sh), sau None."""
+	try:
+		with open("/proc/uptime") as f:
+			return float(f.read().split()[0])
+	except (OSError, IOError, ValueError, IndexError):
+		return None
+
+
+def _citesteSemn(cale):
+	"""Randurile cheie=valoare ale unui semn mic din RAM, ca dict (gol daca lipseste)."""
+	d = {}
+	try:
+		with open(cale, encoding="utf-8", errors="replace") as f:
+			text = f.read(4096)
+	except (OSError, IOError):
+		return d
+	for rand in text.splitlines():
+		cheie, semn, valoare = rand.partition("=")
+		if semn:
+			d[cheie.strip()] = valoare.strip()
+	return d
+
+
+def scrieOreleIesirii(inceput, ceas=None, cale=None, up=None, parinte=None):
+	"""La atexit: ora cererii si ora atexit (pe /proc/uptime) adaugate la semnul iesirii, atomic, pentru randul de la
+	pornirea urmatoare. Cheile noi (cerere_up, atexit_up, parinte) nu schimba ce citesc hds-watchdog.py si enigma2.sh."""
+	cale = cale or CALE_IESIRE
+	acum = monotonic() if ceas is None else ceas
+	up = _uptime() if up is None else up
+	if up is None or inceput is None:
+		return False
+	try:
+		with open(cale, encoding="utf-8", errors="replace") as f:
+			text = f.read(4096)
+	except (OSError, IOError):
+		text = ""
+	randuri = [r for r in text.splitlines() if r.partition("=")[0] not in ("cerere_up", "atexit_up", "parinte")]
+	randuri += ["cerere_up=%.2f" % (up - max(0.0, acum - inceput)), "atexit_up=%.2f" % up,
+		"parinte=%d" % (os.getppid() if parinte is None else parinte)]
+	try:
+		nou = cale + ".nou"
+		with open(nou, "w") as f:
+			f.write("\n".join(randuri) + "\n")
+		os.replace(nou, cale)
+		return True
+	except (OSError, IOError):
+		return False
+
+
+def curatenieRapida(modul_gc=None):
+	"""La atexit, dupa salvari: gc.freeze() (vezi CURATENIE_RAPIDA). -> True daca s-a facut."""
+	if not CURATENIE_RAPIDA:
+		return False
+	try:
+		g = modul_gc
+		if g is None:
+			import gc as g
+		congeleaza = getattr(g, "freeze", None)
+		if congeleaza is None:
+			return False
+		congeleaza()
+		return True
+	except Exception:
+		return False
+
+
+def laSfarsitulIesirii(ceas=None, scrie=None, modul_gc=None):
+	"""atexit (ruleaza primul dintre functiile atexit, fiind inregistrat la urma): randul iesirii pana la curatenia
+	Python, orele in semnul iesirii, apoi curatenia rapida. O singura data. -> textul sau None. Nu arunca."""
+	try:
+		rez = pasiiIesirii(ceas)
+		if rez is None:
+			return None
+		inceput = _pasiIesire["inceput"]
+		_pasiIesire["inceput"] = None
+		text = randIesire(rez[0], rez[1], _pasiIesire["cod"])
+		(scrie or jurnalPaznic)(text)
+		scrieOreleIesirii(inceput, ceas)
+		curatenieRapida(modul_gc)
+		return text
+	except Exception as e:
+		try:
+			_jurnal("randul iesirii: %r" % (e,))
+		except Exception:
+			pass
+		return None
+
+
+def randIesireDeDinainte(semn=None, semn_sh=None):
+	"""La pornire (porneste, inainte sa stearga semnul): durata adevarata a iesirii procesului de dinainte, din orele
+	scrise la atexit si din sfarsitul scris de enigma2.sh (acelasi parinte). -> textul sau None."""
+	d = _citesteSemn(CALE_IESIRE) if semn is None else semn
+	sh = _citesteSemn(os.environ.get("HDS_IESIRE", CALE_IESIRE_SH)) if semn_sh is None else semn_sh
+	try:
+		if not d.get("parinte") or d.get("parinte") != sh.get("parinte"):
+			return None
+		cerere, atexit_up, sfarsit = float(d["cerere_up"]), float(d["atexit_up"]), float(sh["sfarsit"])
+	except (KeyError, ValueError):
+		return None
+	if not cerere <= atexit_up <= sfarsit or sfarsit - cerere > 600:
+		return None
+	return ("iesirea de dinainte (pid %s, cod %s): %.1f s de la cerere pana la sfarsitul procesului, din care %.1f s "
+		"dupa atexit (curatenia Python si iesirea din nucleu)" % (d.get("pid", "?"), sh.get("cod", d.get("cod", "?")),
+		sfarsit - cerere, sfarsit - atexit_up))
+
+
 _unic = [None]
 
 
@@ -1306,6 +1642,13 @@ def bataie():
 
 def porneste():
 	"""Din mytest.py, dupa pornirea sesiunii: setarile si bataia."""
+	# 0.7.8 (SSO): inainte, cat a tinut de fapt iesirea procesului de dinainte (randul "iesirea de dinainte")
+	try:
+		rand = randIesireDeDinainte()
+		if rand:
+			jurnalPaznic(rand)
+	except Exception as e:
+		_jurnal("iesirea de dinainte: %r" % (e,))
 	# 0.7.6 (WDG): semnul iesirii ramas de la procesul de dinainte nu mai conteaza (hds-watchdog.py cere si pid-ul lui)
 	try:
 		os.remove(CALE_IESIRE)

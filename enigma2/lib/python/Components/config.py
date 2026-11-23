@@ -3,8 +3,10 @@ from enigma import getPrevAsciiCode
 from Tools.NumericalTextInput import NumericalTextInput
 from Tools.Directories import resolveFilename, SCOPE_CONFIG, fileExists
 from Components.Harddisk import harddiskmanager
-from copy import copy as copy_copy
+from copy import copy as copy_copy, deepcopy as _hdsCopie
+from ast import literal_eval as _hdsLiteral
 import os
+import threading
 from os import path as os_path
 from time import localtime, strftime
 from re import compile as re_compile
@@ -83,7 +85,8 @@ class ConfigElement(object):
 		if sv is None:
 			self.value = self.default
 		else:
-			self.value = self.fromstring(sv)
+			# _hdsDinText: o clasa de plugin care citeste textul cu fromString (numele din alte imagini); altfel fromstring
+			self.value = self._hdsDinText(sv)
 
 	def tostring(self, value):
 		return str(value)
@@ -93,7 +96,8 @@ class ConfigElement(object):
 		if self.save_disabled or (self.value == self.default and not self.save_forced):
 			self.saved_value = None
 		else:
-			self.saved_value = self.tostring(self.value)
+			# _hdsInText: o clasa de plugin care scrie textul cu toString (numele din alte imagini); altfel tostring
+			self.saved_value = self._hdsInText(self.value)
 		if self.callNotifiersOnSaveAndCancel:
 			self.changed()
 
@@ -106,7 +110,7 @@ class ConfigElement(object):
 		sv = self.saved_value
 		if sv is None and self.value == self.default:
 			return False
-		return self.tostring(self.value) != sv
+		return self._hdsInText(self.value) != sv
 
 	def changed(self):
 		if self.__notifiers:
@@ -160,6 +164,39 @@ class ConfigElement(object):
 		if not self.last_value == self.value:
 			self.changedFinal()
 			self.last_value = self.value
+
+	# HDSatelit: o setare facuta de un plugin scris pentru alte imagini isi scrie si citeste uneori textul cu toString /
+	# fromString, numele de acolo (FootOnSat 1.7, cu ConfigDictionarySet-ul lui). Cand prima clasa care defineste unul din
+	# cele doua nume il are numai pe cel de acolo, load(), save() si isChanged() folosesc perechea pluginului; altfel
+	# tostring / fromstring, ca pana acum. Un text pe care fromString-ul lui nu-l intelege (scris inainte cu str()) se
+	# citeste ca pana acum.
+	def _hdsNumeStrain(self, mic, mare):
+		if mic in self.__dict__:
+			return None
+		for clasa in type(self).__mro__:
+			if mic in clasa.__dict__:
+				return None
+			if mare in clasa.__dict__:
+				return getattr(self, mare)
+		return None
+
+	def _hdsDinText(self, text):
+		f = self._hdsNumeStrain("fromstring", "fromString")
+		if f is not None:
+			try:
+				return f(text)
+			except Exception as e:
+				print("[config] %s.fromString: %r, textul citit ca pana acum" % (type(self).__name__, e))
+		return self.fromstring(text)
+
+	def _hdsInText(self, value):
+		f = self._hdsNumeStrain("tostring", "toString")
+		if f is not None:
+			try:
+				return f(value)
+			except Exception as e:
+				print("[config] %s.toString: %r, textul scris ca pana acum" % (type(self).__name__, e))
+		return self.tostring(value)
 
 KEY_LEFT = 0
 KEY_RIGHT = 1
@@ -912,7 +949,7 @@ class ConfigText(ConfigElement, NumericalTextInput):
 				else:
 					self.offset = self.marked_pos - self.visible_width + 1
 			if self.offset > 0 and self.offset + self.visible_width > textlen:
-				self.offset = max(0, len - self.visible_width)
+				self.offset = max(0, textlen - self.visible_width)
 
 	def insertChar(self, ch, pos, owr):
 		if owr or self.overwrite:
@@ -1073,54 +1110,10 @@ class ConfigText(ConfigElement, NumericalTextInput):
 		self.value = str(value)
 
 class ConfigPassword(ConfigText):
-	"""Parola, PIN-ul sau cheia scrise de om. Cat omul o scrie, se vede in clar (fara
-	stelute); dupa salvare randul nu mai arata valoarea deloc, ci numai "pusă" / "nepusă". O tasta de scris (litere,
-	cifre, stergere) incepe o parola noua, de la zero; tastatura de pe ecran porneste goala (ConfigList.deschideTastatura)
-	si pune `scrisa` dupa OK. `censor` ramane in semnatura pentru apelurile de dinainte si nu mai face nimic."""
+	"""Parola vizibila la scriere si dupa salvare; semnatura ramane compatibila."""
 	def __init__(self, default = "", fixed_size = False, visible_width = False, censor = ""):
-		ConfigText.__init__(self, default = default, fixed_size = fixed_size, visible_width = visible_width)
-		# True cat omul scrie acum parola (pana la salvare sau renuntare): atunci se vede in clar
-		self.scrisa = False
-
-	def _incepe(self):
-		if not self.scrisa:
-			self.scrisa = True
-			self.text = ""
-			self.marked_pos = 0
-			self.offset = 0
-			self.allmarked = False
-
-	def handleKey(self, key):
-		if key == KEY_ASCII or key in KEY_NUMBERS or key in (KEY_DELETE, KEY_BACKSPACE):
-			if key == KEY_ASCII or key in KEY_NUMBERS:
-				from Components.HdsAsistentaControl import cereOprirePentruSecret
-				if cereOprirePentruSecret(getattr(self, "hdsSession", None)):
-					return
-			self._incepe()
-		elif not self.scrisa and key in (KEY_LEFT, KEY_RIGHT, KEY_HOME, KEY_END, KEY_TOGGLEOW):
-			return  # nimic de mutat intr-o valoare care nu se arata
-		ConfigText.handleKey(self, key)
-
-	def getMulti(self, selected):
-		if self.scrisa:
-			return ConfigText.getMulti(self, selected)
-		return ("text", _("pusă") if self.text else _("nepusă"))
-
-	def onSelect(self, session):
-		self.hdsSession = session
-		ConfigText.onSelect(self, session)
-
-	def onDeselect(self, session):
-		self.hdsSession = None
-		ConfigText.onDeselect(self, session)
-
-	def save(self):
-		ConfigText.save(self)
-		self.scrisa = False
-
-	def cancel(self):
-		ConfigText.cancel(self)
-		self.scrisa = False
+		ConfigText.__init__(self, default=default, fixed_size=fixed_size, visible_width=visible_width)
+		self.scrisa = True
 
 # lets the user select between [min, min+stepwidth, min+(stepwidth*2)..., maxval] with maxval <= max depending
 # on the stepwidth
@@ -1868,7 +1861,110 @@ def _canalDinBaza(text, baza):
 	return "".join(rez)
 
 
+# The coordinator holds its mutex only for RAM, never across IO or callbacks.
+# A profile reserves it on main before starting IO; ordinary saves then queue
+# a fresh saved-state snapshot. Checked byte writers still report a refusal.
+_stareScrieri = threading.Lock()
+_discScrieri = threading.Lock()
+_firScrieri = threading.local()
+_tranzactieSetari = None
+_scrieriActive = 0
+
+
+def _amanaScriereSetari(filename, canal=False):
+	with _stareScrieri:
+		t = _tranzactieSetari
+		if t is not None and getattr(_firScrieri, "tranzactie", None) is not t:
+			t.cereri[filename] = t.cereri.get(filename, True) and canal
+			return True
+	return False
+
+
+class TranzactieSetari:
+	"""A short-lived IO reservation; only bytes and paths are used on workers."""
+	def __init__(self):
+		global _tranzactieSetari
+		self.cereri = {}
+		with _stareScrieri:
+			if _tranzactieSetari is not None or _scrieriActive:
+				raise RuntimeError("Settings writer busy")
+			_tranzactieSetari = self
+
+	def ruleaza(self, functie, *args):
+		precedent = getattr(_firScrieri, "tranzactie", None)
+		_firScrieri.tranzactie = self
+		try:
+			return functie(*args)
+		finally:
+			_firScrieri.tranzactie = precedent
+
+	def preia(self):
+		# Called only on main, after profile commit or memory rollback.
+		with _stareScrieri:
+			cereri, self.cereri = self.cereri, {}
+		if not cereri:
+			return []
+		data = _octetiSetari(config.pickle())
+		return [(filename, data, canal) for filename, canal in cereri.items()]
+
+	def inchide(self, fortat=False):
+		global _tranzactieSetari
+		with _stareScrieri:
+			if self.cereri and not fortat:
+				return False
+			if _tranzactieSetari is self:
+				_tranzactieSetari = None
+			return True
+
+	def termina(self, cereri):
+		return self.ruleaza(self._termina, cereri)
+
+	def _termina(self, cereri):
+		eroare = None
+		for filename, data, canal in cereri:
+			try:
+				if canal:
+					try:
+						with open(filename, "rb") as f:
+							baza = f.read().decode("utf-8", "surrogateescape")
+					except FileNotFoundError:
+						baza = ""
+					data = _octetiSetari(_canalDinBaza(data.decode("utf-8", "surrogateescape"), baza))
+				if not _scrieSigur(filename, data):
+					raise OSError("Queued settings write failed")
+				with open(filename, "rb") as f:
+					if f.read() != data:
+						raise OSError("Queued settings write could not be verified")
+			except Exception as e:
+				eroare = e
+		if eroare is not None:
+			raise eroare
+
+
 def _scrieSigur(filename, data):
+	global _scrieriActive
+	with _stareScrieri:
+		t = _tranzactieSetari
+		if t is not None:
+			if getattr(_firScrieri, "tranzactie", None) is not t:
+				# No bytes are queued on refusal: a checked caller may roll back.
+				return False
+			proprie = True
+		else:
+			proprie = False
+			_scrieriActive += 1
+	try:
+		if proprie:
+			return _scrieSigurDirect(filename, data)
+		with _discScrieri:
+			return _scrieSigurDirect(filename, data)
+	finally:
+		if not proprie:
+			with _stareScrieri:
+				_scrieriActive -= 1
+
+
+def _scrieSigurDirect(filename, data):
 	"""HDSatelit: settings written safely: a new file next to the real one (the target of a symbolic link, so the link
 	stays), flushed to the flash, with the rights of the old file, then put in its place with os.replace; then the
 	folder is flushed too, so the new name survives a power cut. A failed write (disk full, read-only, power cut)
@@ -1929,6 +2025,9 @@ class ConfigFile:
 
 	def save(self):
 #		config.save()
+		if _amanaScriereSetari(self.CONFIG_FILE):
+			self._scris = None
+			return
 		text = config.saveToFile(self.CONFIG_FILE)
 		if text is not None:
 			self._scris = text
@@ -1944,6 +2043,10 @@ class ConfigFile:
 		60 s on screen, so a channel on which the interface stopped answering within a minute is not the channel of
 		the next start; the whole writes (configfile.save()) write it as before. The first time, the text on disk is
 		read, so a start alone does not write the file. -> True if written now."""
+		# During a profile transaction even the initial read must stay off main.
+		if _amanaScriereSetari(self.CONFIG_FILE, canal=True):
+			self._scris = None
+			return False
 		if self._scris is None:
 			try:
 				with open(self.CONFIG_FILE, "rb") as f:
@@ -2107,7 +2210,91 @@ _hdsAdauga(ConfigSelection, "getDescriptions", lambda self: [self.toDisplayStrin
 _hdsAdauga(ConfigSelection, "getSelectionList", lambda self: [(x, self.toDisplayString(x)) for x in self.getChoices()])
 _hdsAdauga(ConfigSelection, "setSelectionList", lambda self, choices, default=None: self.setChoices(choices, default))
 _hdsAdauga(ConfigSequence, "getLimits", lambda self: self.limits[0] if len(self.limits) == 1 else self.limits)
+# functia chemata dupa o schimbare (handleKey(key, callback)); la ele o au toate setarile, iar clasele de setari ale
+# pluginurilor o citesc inainte s-o puna (FootOnSat 1.7: self.value = ... in __init__, apoi self.callback = None)
+_hdsAdauga(ConfigElement, "callback", None)
 descriptionsList = descriptionList
+
+
+class ConfigDictionarySet(ConfigElement):
+	"""Setarea din alte imagini (toate patru o au) care tine un dictionar de dictionare, salvat ca text: ordinea si
+	alegerile pe care un plugin le pastreaza pe intrari (FootOnSat, ordinea meniului). value = dictionarul;
+	getConfigValue / changeConfigValue / removeConfigValue lucreaza pe o intrare; callback (dat prin handleKey) e chemat
+	dupa fiecare schimbare, ca la ele. Textul salvat se citeste numai ca valoare (literal_eval), nu ca cod."""
+
+	def __init__(self, default=None):
+		ConfigElement.__init__(self)
+		if default is None:
+			default = {}
+		self.default = default
+		self.callback = None
+		self.dirs = {}
+		self.value = _hdsCopie(default)
+
+	def _schimbat(self):
+		self.changed()
+		if callable(self.callback):
+			self.callback()
+
+	def load(self):
+		sv = self.saved_value
+		self.dirs = _hdsCopie(self.default) if sv is None else self.fromstring(sv)
+
+	def save(self):
+		goale = [cheie for cheie, valoare in self.dirs.items() if isinstance(valoare, (dict, list, tuple, str)) and not valoare]
+		for cheie in goale:
+			del self.dirs[cheie]
+		if goale:
+			self._schimbat()
+		self.saved_value = None if self.save_disabled else self.tostring(self.dirs)
+		if self.callNotifiersOnSaveAndCancel:
+			self.changed()
+
+	def handleKey(self, key, callback=None):
+		self.callback = callback
+
+	def tostring(self, value):
+		return str(value)
+
+	def fromstring(self, val):
+		try:
+			valoare = _hdsLiteral(val)
+			if isinstance(valoare, dict):
+				return valoare
+		except (ValueError, SyntaxError, TypeError, MemoryError, RecursionError):
+			pass
+		print("[config] ConfigDictionarySet: textul salvat nu e un dictionar, raman valorile din fabrica")
+		return _hdsCopie(self.default)
+
+	def getValue(self):
+		return self.dirs
+
+	def setValue(self, value):
+		if isinstance(value, dict):
+			inainte = self.dirs
+			self.dirs = value
+			if value != inainte:
+				self._schimbat()
+
+	value = property(getValue, setValue)
+
+	def getConfigValue(self, value, config_key):
+		if isinstance(value, str) and isinstance(config_key, str) and value in self.dirs and config_key in self.dirs[value]:
+			return self.dirs[value][config_key]
+		return None
+
+	def changeConfigValue(self, value, config_key, config_value):
+		if isinstance(value, str) and isinstance(config_key, str):
+			if value in self.dirs:
+				self.dirs[value][config_key] = config_value
+			else:
+				self.dirs[value] = {config_key: config_value}
+			self._schimbat()
+
+	def removeConfigValue(self, value, config_key):
+		if isinstance(value, str) and isinstance(config_key, str) and value in self.dirs and config_key in self.dirs[value]:
+			del self.dirs[value][config_key]
+			self._schimbat()
 
 
 def ReadOnly(element):

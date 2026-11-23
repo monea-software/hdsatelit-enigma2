@@ -974,6 +974,8 @@ class ScaraEcran(object):
 	def valoare(self, atribut, v):
 		a = atribut.lower()
 		if self.scaleaza:
+			if atribut == "vecini":
+				return self.vecini(v)
 			if atribut in ("position", "textOffset", "shadowOffset"):
 				return self.pereche(v)
 			if atribut == "size":
@@ -1010,6 +1012,25 @@ class ScaraEcran(object):
 		if self.culori and "color" in a and v in self.culori:
 			return self.culori[v]
 		return v
+
+	def vecini(self, v):
+		"""INF6 (skier, LinuxSat 164191 #971157): regulile de loc "x,y,l,i=x2,l2|..." ale barelor (atributul vecini al
+		siglei, Components/HdsPiconBare; argumentul pictogramei internetului dupa "|", Components/HdsPictogramaBare). Ele
+		numesc elementele dupa position si size din skin, iar acestea se scaleaza la citire (GUISkin ramane 1:1), deci la
+		2K regulile nescalate nu mai gaseau nimic: numarul si numele canalului ramaneau peste sigla. Se scaleaza exact ca
+		position (x, y, x2) si size (l, i, l2); o parte care nu e regula (numele pictogramei) ramane."""
+		rez = [ ]
+		for parte in v.split("|"):
+			try:
+				stanga, dreapta = parte.split("=")
+				x, y, l, i = [int(n) for n in stanga.split(",")]
+				x2, l2 = [int(n) for n in dreapta.split(",")]
+			except ValueError:
+				rez.append(parte)
+				continue
+			rez.append("%d,%d,%d,%d=%d,%d" % (_ori(x, self.sx), _ori(y, self.sy), _marime(l, self.sx), _marime(i, self.sy),
+				_ori(x2, self.sx), _marime(l2, self.sx)))
+		return "|".join(rez)
 
 	def atribute(self, lista):
 		"""lista (atribut, valoare) a unui element -> lista noua, cu valorile schimbate; o valoare care nu se poate
@@ -2558,6 +2579,8 @@ class additionalWidget:
 
 # convertoarele imaginii pe care temele externe le folosesc cu tipuri in plus: ecranele din tema primesc clasa cu acelasi nume
 # din Components/Converter/HdsConvertoareStraine.py, derivata din cea a imaginii; ecranele imaginii, clasa imaginii neschimbata
+# INF6: convertoarele cu reguli de loc in argument ("Pictograma|x,y,l,i=x2,l2"), scalate ca atributul vecini
+CONVERTOARE_VECINI = frozenset(("HdsReteaPictograma",))
 CONVERTOARE_STRAINE = frozenset(("ServiceInfo", "EventName", "EventTime", "ClockToText", "ServiceName", "ConditionalShowHide", "TemplatedMultiContent", "FrontendInfo",
 	"RdsInfo", "MovieInfo", "TunerInfo"))
 
@@ -2653,6 +2676,8 @@ def readSourceWidget(screen, widget, name, skin_path_prefix, scara = None, strai
 		parms = (converter.text or "").strip()
 		if scara is not None and ctype == "TemplatedMultiContent":
 			parms = scara.sablon(parms)
+		elif scara is not None and scara.scaleaza and ctype in CONVERTOARE_VECINI:
+			parms = scara.vecini(parms)
 		converter_class = my_import('.'.join(("Components", "Converter", ctype))).__dict__.get(ctype)
 		if converter_class is None:
 			raise SkinError("converter %s not found" % ctype)
@@ -3190,10 +3215,150 @@ def reloadWindowStyles():
 			print("[Skin] reloadWindowStyles %s: %s" % (screenID, e))
 
 
+# RLS6 (tfrc, LinuxSat 164126 #972017 si #972226): "Reincarca tema" fara repornirea interfetei, pentru cine isi face
+# fisierul skin_user*.xml si vrea sa vada repede fiecare schimbare. Se citesc din nou de pe disc toate fisierele temei
+# incarcate la pornire, in aceeasi ordine (skin_user_<tema>.xml / skin_user.xml, tema aleasa si partile ei, Pro,
+# HDSatelit, skin_default); daca unul nu se poate citi (XML stricat), nu se schimba nimic: tema veche ramane, iar motivul
+# se da inapoi. Apoi culorile, fonturile, aliasurile, parametrii si stilul ferestrelor din fisierele noi (fara <output>:
+# rezolutia placii nu se atinge). Ecranele se fac din tema noua la urmatoarea deschidere; lista de canale TV (facuta o
+# data la pornire) se reface pe loc cand nu se vede (refaEcran). Bara canalului, facuta o data, ramane pana la repornire.
+# Numele public reloadSkins() (chemat de pluginurile temelor straine) ramane cum era (False); reincarcarea merge numai
+# prin reincarcaTema() (tasta si web), cu _reincarcaFisiereleTemei.
+_ultimaReincarcare = [ "" ]
+
+def ultimaEroareReincarcare():
+	"""motivul ultimei reincarcari nereusite ("" dupa una reusita)"""
+	return _ultimaReincarcare[0]
+
+def _faraOutput(radacina):
+	"""copia radacinii fara <output> (aceleasi noduri copil, nimic copiat adanc)"""
+	nou = xml.etree.ElementTree.Element(radacina.tag, radacina.attrib)
+	for c in radacina:
+		if c.tag != "output":
+			nou.append(c)
+	return nou
+
 def reloadSkins():
 	"""Imaginea nu reincarca temele din mers (False): schimbarile se vad dupa repornirea interfetei."""
 	print("[Skin] reloadSkins: tema se reincarca dupa repornirea interfetei")
 	return False
+
+def _reincarcaFisiereleTemei(desktop = None, citeste = None):
+	"""True cand fisierele temei s-au citit din nou si datele lor s-au aplicat; False (cu ultimaEroareReincarcare())
+	cand unul nu se poate citi: atunci dom_skins ramane exact cum era. Un fisier care nu mai e pe disc (skin_user scos
+	de om, un plugin dezinstalat) iese din lista, restul merge mai departe. `citeste` (cale -> radacina) e pentru probe."""
+	citeste = citeste or _citesteXml
+	noi = [ ]
+	for (mpath, radacina) in dom_skins:
+		nume = _surseSkin.get(id(radacina))
+		# fara nume si ecranele afisajului din fata (numele lor nu e un fisier; afisajul are alegerea lui) raman cum sunt
+		if not nume or id(radacina) in _xmlAfisaj:
+			noi.append(None)
+			continue
+		cale = path.join(mpath, path.basename(nume))
+		if not path.exists(cale):
+			noi.append(False)
+			continue
+		try:
+			nou = citeste(cale)
+			# tema straina cu <include>: includerile puse la loc ca la pornire (pregatesteTemaExterna)
+			if mpath in dosareSkinStraine and nou.find("include") is not None:
+				_Tema().puneIncluderile(nou, mpath, cale, resolveFilename(SCOPE_SKIN, ""))
+			noi.append((nou, nume))
+		except Exception as e:
+			_ultimaReincarcare[0] = "%s: %s" % (cale, e)
+			skinWarning("reincarcarea temei oprita, ramane tema de dinainte: %s" % _ultimaReincarcare[0])
+			return False
+	scoase = [ ]
+	for i, nou in enumerate(noi):
+		if nou is None:
+			continue
+		mpath, vechi = dom_skins[i]
+		if nou is False:
+			scoase.append(vechi)
+			continue
+		radacina, nume = nou
+		_surseSkin.pop(id(vechi), None)
+		dom_skins[i] = (mpath, radacina)
+		_surseSkin[id(radacina)] = nume
+		# skin_user aplicat (SK2, rezolutiaTemeiHds se uita la el): radacina noua in locul celei vechi
+		if vechi is globals().get("_radacinaSkinUser"):
+			globals()["_radacinaSkinUser"] = radacina
+	for vechi in scoase:
+		skinNotice("reincarcarea temei: %s nu mai e pe disc, iese din tema" % _surseSkin.get(id(vechi)))
+		dom_skins[:] = [x for x in dom_skins if x[1] is not vechi]
+		_surseSkin.pop(id(vechi), None)
+		if vechi is globals().get("_radacinaSkinUser"):
+			globals()["_radacinaSkinUser"] = None
+	_uitaCaiPoze()
+	if desktop is None:
+		desktop = getDesktop(GUI_SKIN_ID)
+	scara = _scaraHds[0]
+	for (p, r) in reversed(dom_skins):
+		try:
+			loadSingleSkinData(desktop, _faraOutput(r), p, scara if esteDinHds(p) else None)
+		except Exception as e:
+			skinWarning("reincarcarea temei, %s: %s" % (p, e))
+	try:
+		reloadSkinTemplates(clear=True)
+	except Exception as e:
+		skinWarning("reincarcarea temei, sabloanele: %s" % e)
+	_uitaCaiPoze()
+	_ultimaReincarcare[0] = ""
+	skinNotice("tema reincarcata din %d fisiere, fara repornire" % len([n for n in noi if n]))
+	return True
+
+def refaEcran(ecran):
+	"""Un ecran deja facut (si ascuns) primeste asezarea din tema citita acum, cu aceleasi componente si surse (acelasi
+	drum ca Components/HdsAspectLista.reface). True daca s-a refacut; un ecran care se vede ramane cum e (False)."""
+	if ecran is None or getattr(ecran, "instance", None) is None or getattr(ecran, "shown", False):
+		return False
+	desktop = ecran.desktop
+	lista = getattr(ecran, "servicelist", None)
+	curent = None
+	try:
+		curent = lista.getCurrent() if lista is not None and lista.instance is not None else None
+	except Exception:
+		curent = None
+	for r in list(getattr(ecran, "renderer", [])):
+		try:
+			r.disconnectAll()
+		except Exception as e:
+			skinWarning("refaEcran disconnectAll: %s" % e)
+		try:
+			if getattr(r, "instance", None) is not None:
+				r.GUIdelete()
+		except Exception as e:
+			skinWarning("refaEcran GUIdelete: %s" % e)
+	ecran.deleteGUIScreen()
+	ecran.instance = None
+	# ca HdsAspectLista.reface: appleturile onLayoutFinish ale temei (text) nu se aduna la fiecare refacere
+	ecran.onLayoutFinish[:] = [f for f in ecran.onLayoutFinish if callable(f)]
+	readSkin(ecran, None, ecran.skinName, desktop)
+	ecran.setDesktop(desktop)
+	ecran.applySkin()
+	try:
+		if curent is not None and curent.valid() and lista is not None and lista.instance is not None:
+			lista.setCurrent(curent)
+	except Exception as e:
+		skinWarning("refaEcran cursorul: %s" % e)
+	return True
+
+def reincarcaTema():
+	"""Actiunea "Reincarca tema" (tasta din Configurarea butoanelor si butonul din /tema-tv): (bun, mesajul pentru om)."""
+	if not _reincarcaFisiereleTemei():
+		return False, _("Tema nu s-a reîncărcat, rămâne cea de dinainte. Motivul: %s") % ultimaEroareReincarcare()
+	refacuta = False
+	try:
+		from Screens.InfoBar import InfoBar
+		if InfoBar.instance is not None:
+			refacuta = refaEcran(getattr(InfoBar.instance, "servicelist", None))
+	except Exception as e:
+		skinWarning("reincarcarea temei, lista de canale: %s" % e)
+	mesaj = _("Tema s-a reîncărcat. Ecranele se deschid cu ea de acum; bara canalului se schimbă după repornirea interfeței.")
+	if refacuta:
+		mesaj = _("Tema s-a reîncărcat, și lista de canale. Ecranele se deschid cu ea de acum; bara canalului se schimbă după repornirea interfeței.")
+	return True, mesaj
 
 
 def widgetAddon(screen, widget, name, prefix, sc=None):

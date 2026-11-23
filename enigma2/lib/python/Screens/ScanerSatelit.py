@@ -79,6 +79,10 @@ PROFIL_FEL = {'dvbt2': 't2', 'dab': 'dab'}
 
 DA_NU = [('0', _('Nu')), ('1', _('Da'))]
 
+# FTA6 (MSG1, mesajul de tester 15): randul "Canale de cautat" la felurile pe un satelit; din fabrica Toate, ca
+# pana acum. "Numai cele libere" pune steagul scanOnlyFree (lib/dvb/scan.h), ca "Only Free scan" din ScanSetup.
+CANALE_DE_CAUTAT = [('0', _('Toate')), ('1', _('Numai cele libere'))]
+
 # Randurile de actiune de la sfarsitul listei ecranului (numai sagetile si OK): la felurile din PROFIL_FEL
 # „Fluxuri și setări” (fereastra HdsComun a felului, ca Albastru), apoi „Caută acum” (ca Verde), mereu ultimul, deci
 # SUS de pe primul rand ajunge pe el. Nu sunt campuri: nu intra in _CAMPURI, in configuratia salvata sau in ce
@@ -512,6 +516,24 @@ def transponder_manual(c, transpondere_xml, slot=None):
         de_ales = [('%s %s' % (_nume_valoare(MODULATII, m), _nume_valoare(FEC_VALORI, f)), (m, f)) for m, f in potrivite]
         return tp, note, None, de_ales
     return tp, note, None, None
+
+
+def steag_libere(valori):
+    """Steagul nucleului pentru randul "Canale de cautat": scanOnlyFree cu "Numai cele libere", altfel 0."""
+    if not _da((valori or {}).get('libere')):
+        return 0
+    try:
+        from enigma import eComponentScan
+        return eComponentScan.scanOnlyFree
+    except Exception:
+        return 64                                  # lib/dvb/scan.h: scanOnlyFree = 64
+
+
+def text_libere(flags):
+    """Fraza adaugata la textul cautarii cand se pastreaza numai canalele libere."""
+    if not flags & steag_libere({'libere': '1'}):
+        return ''
+    return ' ' + _('Se păstrează numai canalele libere (necodate).')
 
 
 def text_manual(tp, nume, note, cu_retea=False):
@@ -1009,7 +1031,8 @@ def pregateste(fel, valori, nim=None):
                      'semnal.') % (nume, len(bune))
             if sarite:
                 text += ' ' + _('Sărite %d, cu parametri pe care tunerul nu îi primește.') % len(sarite)
-            return dict(baza, transpondere=bune, flags=retea, text=text + _text_motor(motor, orbpos))
+            flags = retea | steag_libere(valori)
+            return dict(baza, transpondere=bune, flags=flags, text=text + text_libere(flags) + _text_motor(motor, orbpos))
         if fel == 'transponder':
             bune, sarite = transpondere_satelit(orbpos, transpondere_xml, ms, slot)
             if not bune:
@@ -1026,7 +1049,8 @@ def pregateste(fel, valori, nim=None):
             text = _('Căutare pe transponderul %s, satelitul %s.') % (_descriere_tp(tp), nume) + ' '
             text += _('Se adaugă și transponderele anunțate în semnal.') if cu_retea \
                 else _('Numai acest transponder.')
-            return dict(baza, transpondere=[tp], flags=retea if cu_retea else 0, text=text + _text_motor(motor, orbpos))
+            flags = (retea if cu_retea else 0) | steag_libere(valori)
+            return dict(baza, transpondere=[tp], flags=flags, text=text + text_libere(flags) + _text_motor(motor, orbpos))
         tp, note, eroare, de_ales = transponder_manual(valori, transpondere_xml, slot)
         if eroare:
             return {'eroare': eroare}
@@ -1039,9 +1063,9 @@ def pregateste(fel, valori, nim=None):
                                                            tp['symbol_rate'] // 1000))
             return dict(baza, de_ales=de_ales, transponder=tp, note=note, text=text)
         cu_retea = _da(valori.get('retea'))
-        text = text_manual(tp, nume, note, cu_retea)
-        return dict(baza, transpondere=[tp], flags=retea if cu_retea else 0, note=note,
-                    text=text + _text_motor(motor, orbpos))
+        flags = (retea if cu_retea else 0) | steag_libere(valori)
+        text = text_manual(tp, nume, note, cu_retea) + text_libere(flags)
+        return dict(baza, transpondere=[tp], flags=flags, note=note, text=text + _text_motor(motor, orbpos))
 
     # operator, dvbt2, dab: un operator din data/operatori-satelit.json
     fel_json = FEL_JSON[fel]
@@ -2062,6 +2086,8 @@ def _citeste_config():
         # Cheile trebuie sa existe aici, altfel filtrul "if k in c" de mai jos le arunca la citirea fisierului.
         'fel': '', 'tip': '',
         'transponder': '', 'retea': '0',
+        # FTA6: randul "Canale de cautat"; '0' = toate (din fabrica), '1' = numai cele libere
+        'libere': '0',
         'operator': '', 'operator_dvbt2': '', 'operator_dab': '',
         # 0.7.7 (SCN): tunerul ales in randul "Tuner" (satelitul pe doua tunere; "Mai multi sateliti" in web); gol = cel
         # implicit (slot_pentru, slot_mai_multi)
@@ -2140,6 +2166,7 @@ class ScanerSatelit(Screen):
         # dorinelu (forum 795 #2462): un transponder nou, care nu e inca in satellites.xml, aduce si restul retelei
         # din NIT, ca la "Dupa transponder"; aceeasi cheie "retea" in fisierul de parametri
         campuri.append(('retea', _('Căutare în rețea'), 'lista', DA_NU))
+        campuri.append(('libere', _('Canale de căutat'), 'lista', CANALE_DE_CAUTAT))
         return campuri
 
     def __init__(self, session, fel=None, config_initial=None):
@@ -2407,6 +2434,9 @@ class ScanerSatelit(Screen):
         if fel == 'transponder':
             campuri.append(('transponder', _('Transponder'), 'lista', self._lista_transpondere()))
             campuri.append(('retea', _('Căutare în rețea'), 'lista', DA_NU))
+            campuri.append(('libere', _('Canale de căutat'), 'lista', CANALE_DE_CAUTAT))
+        elif fel == 'satelit':
+            campuri.append(('libere', _('Canale de căutat'), 'lista', CANALE_DE_CAUTAT))
         elif fel in CAMP_OPERATOR:
             campuri.append((CAMP_OPERATOR[fel], _('Operator'), 'lista', self._lista_operatori(fel)))
             if fel in FELURI_CU_TUNER:
@@ -2426,7 +2456,7 @@ class ScanerSatelit(Screen):
         for _pas in range(3):
             schimbat = False
             for c, _e, tip, lista in self._campuri():
-                if tip != 'lista' or c not in ('fel', 'pozitie', 'transponder', 'retea', 'sistem', 'rolloff',
+                if tip != 'lista' or c not in ('fel', 'pozitie', 'transponder', 'retea', 'libere', 'sistem', 'rolloff',
                                                'multistream', 'pls_mod', 'tuner') + tuple(CAMP_OPERATOR.values()):
                     continue
                 coduri = [str(x[0]) for x in lista or []]
@@ -2727,14 +2757,16 @@ class ScanerSatelit(Screen):
                                          "hds_fel": "satelit/%s" % self._fel()}])
 
     def _flags_manual(self):
-        """Steagurile cautarii manuale dupa randul "Cautare in retea" (ca pregateste, ramura manual)."""
+        """Steagurile cautarii manuale dupa randurile "Cautare in retea" si "Canale de cautat" (ca pregateste,
+        ramura manual)."""
+        flags = steag_libere(self._config)
         if not _da(self._config.get('retea')):
-            return 0
+            return flags
         try:
             from enigma import eComponentScan
-            return eComponentScan.scanNetworkSearch
+            return flags | eComponentScan.scanNetworkSearch
         except Exception:
-            return 1                                   # lib/dvb/scan.h: scanNetworkSearch = 1
+            return flags | 1                           # lib/dvb/scan.h: scanNetworkSearch = 1
 
     def _porneste_manual(self, tp, note, slot_sat, text=None, flags=0):
         """Un singur transponder; cu "Cautare in retea" pe Da (flags) si transponderele din NIT-ul lui. IS-ID, codul
@@ -2743,7 +2775,9 @@ class ScanerSatelit(Screen):
             if text is None:
                 orbpos = tp['orbital_position']
                 nume = dict(self._lista_sateliti).get(orbpos) or text_pozitie(orbpos)
-                text = text_manual(tp, nume, note, bool(flags)) + _text_motor(self._tuner(orbpos)[1], orbpos)
+                cu_retea = bool(flags & ~steag_libere({'libere': '1'}))
+                text = text_manual(tp, nume, note, cu_retea) + text_libere(flags)
+                text += _text_motor(self._tuner(orbpos)[1], orbpos)
             self._porneste([tp], slot_sat, flags, text)
         except Exception as e:
             print('[ScanerSatelit] pornirea cautarii manuale: %s' % e)

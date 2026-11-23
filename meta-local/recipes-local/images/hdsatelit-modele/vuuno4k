@@ -1,0 +1,17 @@
+# HD Satelit: Vu+ Uno 4K, alfa; own profile from the OE-Alliance BSP.
+# BCM7252S, kernel 3.14.28, own dvb-bcm7252s.ko, not the SE driver.
+# Native USB directory: vuplus/uno4k; eMMC kernel p1, rootfs p4.
+format=1
+distro=hdsatelit
+model=Vu+ Uno 4K
+machine=vuuno4k
+machinebuild=vuuno4k
+chip=7252s
+boxtype=uno4k
+hw=-
+partitions=-
+kernel_part=mmcblk0p1
+kernel_kib=0
+rootfs_part=mmcblk0p4
+confirmat=nu
+familie=broadcom

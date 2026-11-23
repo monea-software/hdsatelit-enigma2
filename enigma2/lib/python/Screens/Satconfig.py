@@ -64,9 +64,17 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			self.hdsLocSchimbat = False
 			nimmanager.sec.update()
 
+	def hdsRanduriLoc(self):
+		from Components import HdsTunerAspect
+		if not HdsTunerAspect.clasic():
+			return [self.hdsRandLoc()]
+		if getattr(self, "hdsLocDraft", None) is None:
+			self.hdsLocDraft = HdsTunerAspect.LocDraft()
+		return self.hdsLocDraft.randuri()
+
 	def createPositionerSetup(self, list):
 		nim = self.nimConfig
-		list.append(self.hdsRandLoc())
+		list.extend(self.hdsRanduriLoc())
 		if SystemInfo["CanMeasureFrontendInputPower"]:
 			self.advancedPowerMeasurement = getConfigListEntry(_("Use Power Measurement"), nim.powerMeasurement)
 			list.append(self.advancedPowerMeasurement)
@@ -86,23 +94,23 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		
 	def createConfigMode(self):
 		if self.nim.isCompatible("DVB-S"):
-			choices = { "nothing": _("not configured"),
-						"simple": _("simple"),
-						"advanced": _("advanced")}
-			#if len(nimmanager.getNimListOfType(nimmanager.getNimType(self.slotid), exception = x)) > 0:
-			#	choices["equal"] = _("equal to")
-			#	choices["satposdepends"] = _("second cable of motorized LNB")
-			if len(nimmanager.canEqualTo(self.slotid)) > 0:
-				choices["equal"] = _("equal to")
-			if len(nimmanager.canDependOn(self.slotid)) > 0:
-				choices["satposdepends"] = _("second cable of motorized LNB")
-			if len(nimmanager.canConnectTo(self.slotid)) > 0:
-				choices["loopthrough"] = _("loopthrough to")
+			from Components.NimManager import hdsAlegeriModTuner, hdsPastreazaAlegerea
+			choices = hdsAlegeriModTuner(nimmanager, self.slotid)
 			# implicitul ramane cel pus de NimManager (primul tuner de satelit: "simple"): cu "nothing" aici, alegerea
 			# "nothing" a omului ar fi fost egala cu implicitul, nu s-ar fi scris in settings si dupa repornire tunerul
 			# ar fi revenit pornit
-			implicit = getattr(self.nimConfig.configMode, "default", "nothing")
-			self.nimConfig.configMode.setChoices(choices, default = implicit if implicit in choices else "nothing")
+			if self.nim.isFBCLink():
+				hdsPastreazaAlegerea(self.nimConfig.configMode, choices)
+			else:
+				implicit = getattr(self.nimConfig.configMode, "default", "nothing")
+				self.nimConfig.configMode.setChoices(choices, default=implicit if implicit in choices else "nothing")
+
+	def hdsTintele(self, normale):
+		"""Linked FBC demodulators can use physical inputs from their own group only."""
+		if self.nim.isFBCLink():
+			from Components.NimManager import hdsTinteleFbc
+			return hdsTinteleFbc(nimmanager, self.slotid)
+		return normale(self.slotid)
 
 	def hdsCombinat(self):
 		"""Tunerul combinat DVB-T2/C (Components/NimManager.py: hds_fel)."""
@@ -122,6 +130,12 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 
 	def createSetup(self):
 		print("Creating setup")
+		if getattr(nimmanager, "hdsContractTunerActiv", False):
+			self.list = [getConfigListEntry(_("Setările se salvează acum. Încearcă din nou după terminare."), ConfigNothing())]
+			self["config"].list = self.list
+			self["config"].l.setList(self.list)
+			return
+		self.createConfigMode()
 		self.list = [ ]
 
 		self.multiType = None
@@ -155,10 +169,14 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			self.list.append(self.multiType)
 
 		if self.nim.isCompatible("DVB-S"):
+			from Components.NimManager import hdsEroareFbc
+			motiv = hdsEroareFbc(nimmanager, self.slotid)
+			if motiv:
+				self.list.append(getConfigListEntry(motiv, ConfigNothing()))
 			self.configMode = getConfigListEntry(_("Configuration Mode"), self.nimConfig.configMode)
 			self.list.append(self.configMode)
 
-			if self.nimConfig.configMode.value == "simple":			#simple setup
+			if self.nimConfig.configMode.value == "simple" and not self.nim.isFBCLink():
 				self.diseqcModeEntry = getConfigListEntry(_("Mode"), self.nimConfig.diseqcMode)
 				self.list.append(self.diseqcModeEntry)
 				# HDSatelit (LOC, 14.11.2026, orion_bilo): in modul simplu nucleul foloseste MEREU LNB-ul universal
@@ -173,11 +191,15 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 					self.createPositionerSetup(self.list)
 			elif self.nimConfig.configMode.value == "equal":
 				choices = []
-				nimlist = nimmanager.canEqualTo(self.nim.slot)
+				nimlist = self.hdsTintele(nimmanager.canEqualTo)
 				for id in nimlist:
 					#choices.append((str(id), str(chr(65 + id))))
 					choices.append((str(id), nimmanager.getNimDescription(id)))
-				self.nimConfig.connectedTo.setChoices(choices)
+				from Components.NimManager import hdsPastreazaAlegerea
+				if self.nim.isFBCLink():
+					hdsPastreazaAlegerea(self.nimConfig.connectedTo, choices)
+				else:
+					self.nimConfig.connectedTo.setChoices(choices)
 				#self.nimConfig.connectedTo = updateConfigElement(self.nimConfig.connectedTo, ConfigSelection(choices = choices))
 				self.list.append(getConfigListEntry(_("Tuner"), self.nimConfig.connectedTo))
 			elif self.nimConfig.configMode.value == "satposdepends":
@@ -192,10 +214,14 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			elif self.nimConfig.configMode.value == "loopthrough":
 				choices = []
 				print("connectable to:", nimmanager.canConnectTo(self.slotid))
-				connectable = nimmanager.canConnectTo(self.slotid)
+				connectable = self.hdsTintele(nimmanager.canConnectTo)
 				for id in connectable:
 					choices.append((str(id), nimmanager.getNimDescription(id)))
-				self.nimConfig.connectedTo.setChoices(choices)
+				from Components.NimManager import hdsPastreazaAlegerea
+				if self.nim.isFBCLink():
+					hdsPastreazaAlegerea(self.nimConfig.connectedTo, choices)
+				else:
+					self.nimConfig.connectedTo.setChoices(choices)
 				#self.nimConfig.connectedTo = updateConfigElement(self.nimConfig.connectedTo, ConfigSelection(choices = choices))
 				self.list.append(getConfigListEntry(_("Connected to"), self.nimConfig.connectedTo))
 			elif self.nimConfig.configMode.value == "nothing":
@@ -262,6 +288,8 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		if self.nim.isCompatible("DVB-S"):
 			self.list.append(getConfigListEntry(_("Unicable: modul avansat, apoi LNB și LOF Unicable."), ConfigNothing()))
 			self.list.append(getConfigListEntry(_("Pe TV: VERDE păstrează setările și reia canalul."), ConfigNothing()))
+		from Components.NimManager import hdsConfigTunerPreferat
+		self.list.append(getConfigListEntry(_("Tuner preferat"), hdsConfigTunerPreferat(nimmanager)))
 		self["config"].list = self.list
 		self["config"].l.setList(self.list)
 
@@ -272,9 +300,9 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			self.advancedType, self.advancedSCR, self.advancedManufacturer, self.advancedUnicable, self.advancedConnected, \
 			self.advancedUnicableFormat, self.advancedUnicablePositions, self.advancedUnicablePin, \
 			self.uncommittedDiseqcCommand, self.cableScanType, self.multiType, self.hdsFelEntry)
-		if self["config"].getCurrent() == self.multiType:
-			from Components.NimManager import InitNimManager
-			InitNimManager(nimmanager)
+		if self.multiType is not None and self["config"].getCurrent() == self.multiType:
+			from Components.NimManager import hdsAplicaTipTuner
+			hdsAplicaTipTuner(nimmanager, self.slotid, self.nimConfig.multiType.value)
 			self.nim = nimmanager.nim_slots[self.slotid]
 			self.nimConfig = self.nim.config
 			
@@ -310,6 +338,10 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		self.list.append(self.advancedLnbsEntry)
 
 		if currLnb:
+			if self.nim.isFBCLink():
+				from Components.NimManager import hdsPastreazaAlegerea
+				hdsPastreazaAlegerea(currLnb.lof, {"unicable": _("Unicable / JESS")})
+				hdsPastreazaAlegerea(currLnb.diseqcMode, {"none": _("None"), "1_0": "1.0", "1_1": "1.1"})
 			self.list.append(getConfigListEntry(_("Priority"), currLnb.prio))
 			self.advancedLof = getConfigListEntry(_("LOF"), currLnb.lof)
 			self.list.append(self.advancedLof)
@@ -337,7 +369,7 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 				self.list.append(getConfigListEntry(_("Increased voltage"), currLnb.increased_voltage))
 				self.list.append(getConfigListEntry(_("Tone mode"), Sat.tonemode))
 
-			if lnbnum < 33:
+			if lnbnum < 33 or self.nim.isFBCLink():
 				self.advancedDiseqcMode = getConfigListEntry(_("DiSEqC mode"), currLnb.diseqcMode)
 				self.list.append(self.advancedDiseqcMode)
 			if currLnb.diseqcMode.value != "none":
@@ -362,8 +394,8 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 					self.uncommittedDiseqcCommand = getConfigListEntry(_("Uncommitted DiSEqC command"), currLnb.uncommittedDiseqcCommand)
 					self.list.append(self.uncommittedDiseqcCommand)
 					self.list.append(getConfigListEntry(_("DiSEqC repeats"), currLnb.diseqcRepeats))
-				if currLnb.diseqcMode.value == "1_2":
-					self.list.append(self.hdsRandLoc())
+				if currLnb.diseqcMode.value == "1_2" and not self.nim.isFBCLink():
+					self.list.extend(self.hdsRanduriLoc())
 					if SystemInfo["CanMeasureFrontendInputPower"]:
 						self.advancedPowerMeasurement = getConfigListEntry(_("Use Power Measurement"), currLnb.powerMeasurement)
 						self.list.append(self.advancedPowerMeasurement)
@@ -388,7 +420,8 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 	
 
 	def fillAdvancedList(self):
-		self.list = [ ]
+		from Components.NimManager import hdsConfigTunerPreferat
+		self.list = [getConfigListEntry(_("Tuner preferat"), hdsConfigTunerPreferat(nimmanager))]
 		self.configMode = getConfigListEntry(_("Configuration Mode"), self.nimConfig.configMode)
 		self.list.append(self.configMode)
 		self.advancedSatsEntry = getConfigListEntry(_("Satellite"), self.nimConfig.advanced.sats)
@@ -398,11 +431,63 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			self.fillListWithAdvancedSatEntrys(Sat)
 		self["config"].list = self.list
 
+	def hdsSalveazaLocClasic(self):
+		from Components import HdsLocul as L
+		d = getattr(self, "hdsLocDraft", None)
+		if d is None or not d.schimbat() or not any(r[1] is d.lon for r in self.list):
+			return True
+		if L.locul() != d.initial:
+			self.session.open(MessageBox, _("Locul antenei s-a schimbat între timp. Închide și redeschide setările tunerului."), MessageBox.TYPE_ERROR)
+			return False
+		lat, lon = d.valori()
+		if abs(lat) > L.LAT_MAX or abs(lon) > L.LON_MAX:
+			self.session.open(MessageBox, _(L.MESAJ_LIMITE), MessageBox.TYPE_ERROR)
+			return False
+		def scrie(lat, lon):
+			ok, text = L.seteaza(lat, lon, sursa=L.SURSA_MANA, actualizeaza_sec=False)
+			if not ok:
+				self.session.open(MessageBox, text, MessageBox.TYPE_ERROR)
+				return False
+			d.initial = (lat, lon)
+			d.origine = d.valori()
+			self.hdsLocSchimbat = True
+			return True
+		intrebare, propus = L.intrebareDeparte(lat, lon)
+		if intrebare:
+			def raspuns(ales):
+				if ales in ("propus", "scris"):
+					if L.locul() != d.initial:
+						self.session.open(MessageBox, _("Locul antenei s-a schimbat între timp. Închide și redeschide setările tunerului."), MessageBox.TYPE_ERROR)
+						return
+					if scrie(*(propus if ales == "propus" else (lat, lon))):
+						self.keySave()
+			self.session.openWithCallback(raspuns, MessageBox, intrebare, MessageBox.TYPE_YESNO,
+				list=[(_("Da"), "propus"), (_("Nu, păstrează ce am scris"), "scris")])
+			return False
+		return scrie(lat, lon)
+
 	def keySave(self):
+		if getattr(nimmanager, "hdsContractTunerActiv", False):
+			return
+		from Components.NimManager import hdsEroareFbc
+		motiv = hdsEroareFbc(nimmanager, self.slotid)
+		if motiv:
+			self.session.open(MessageBox, motiv, MessageBox.TYPE_ERROR)
+			return
+		if not self.hdsSalveazaLocClasic():
+			return
 		# HDSatelit: omul a salvat ceva pentru tuner, chiar „neconfigurat”: proba automata nu-l mai atinge
 		_tunerB("ales_acum_de_om", self.slotid)
+		# HDSatelit: tipul ales (DVB-C / DVB-T2) al unui tuner fara fisierul mode se scrie la salvare, si cand e egal cu
+		# implicitul de acum (NimManager.hdsTipSalvatDeOm); renuntarea nu scrie nimic
+		from Components.NimManager import hdsTipSalvatDeOm
+		hdsTipSalvatDeOm(nimmanager, self.slotid)
 		old_configured_sats = nimmanager.getConfiguredSats()
+		preferat_salvat = config.usage.frontend_priority.saved_value
 		self.run()
+		if config.usage.frontend_priority.saved_value != preferat_salvat:
+			from Components.NimManager import hdsAplicaTunerPreferat
+			hdsAplicaTunerPreferat()
 		new_configured_sats = nimmanager.getConfiguredSats()
 		self.unconfed_sats = old_configured_sats - new_configured_sats
 		self.satpos_to_remove = None
@@ -500,8 +585,36 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 		self.createSetup()
 
 	def keyLeft(self):
-		ConfigListScreen.keyLeft(self)
-		self.newConfig()
+		self.hdsSchimbaRand(ConfigListScreen.keyLeft)
+
+	def hdsSchimbaRand(self, actiune):
+		"""Restore the selection if the immediate driver notifier refuses a mode."""
+		if getattr(nimmanager, "hdsContractTunerActiv", False):
+			return
+		element = self.nimConfig.multiType if self.nim.isMultiType() else None
+		if element is None:
+			actiune(self)
+			self.newConfig()
+			return
+		old = element.value if element is not None else None
+		try:
+			actiune(self)
+			self.newConfig()
+		except Exception:
+			mesaj = _("Tipul tunerului nu se poate schimba acum.")
+			try:
+				element.value = old
+				from Components.NimManager import hdsAplicaTipTuner
+				hdsAplicaTipTuner(nimmanager, self.slotid, old)
+			except Exception:
+				mesaj = _("Tipul tunerului nu s-a putut restabili. Verifică setările tunerului.")
+			try:
+				self.nim = nimmanager.nim_slots[self.slotid]
+				self.nimConfig = self.nim.config
+				self.createSetup()
+			except Exception:
+				mesaj = _("Tipul tunerului nu s-a putut restabili. Verifică setările tunerului.")
+			self.session.open(MessageBox, mesaj, MessageBox.TYPE_ERROR)
 
 	def hdsUrmarireCanal(self, event):
 		from enigma import iPlayableService
@@ -529,8 +642,7 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 			nav.playService(ref)
 
 	def keyRight(self):
-		ConfigListScreen.keyRight(self)
-		self.newConfig()
+		self.hdsSchimbaRand(ConfigListScreen.keyRight)
 		
 	def keyCancel(self):
 		if self["config"].isChanged():
@@ -553,7 +665,21 @@ class NimSetup(Screen, ConfigListScreen, ServiceStopScreen):
 	def cancelConfirm(self, result):
 		if not result:
 			return
+		if getattr(nimmanager, "hdsContractTunerActiv", False):
+			return
 
+		if self.nim.isMultiType():
+			from Components.NimManager import hdsAplicaTipTuner
+			element = self.nimConfig.multiType
+			valoare = element.default if element.saved_value is None else element.fromstring(element.saved_value)
+			try:
+				hdsAplicaTipTuner(nimmanager, self.slotid, valoare)
+			except Exception:
+				self.session.open(MessageBox, _("Tipul tunerului nu se poate schimba acum."), MessageBox.TYPE_ERROR)
+				return
+			self.nim = nimmanager.nim_slots[self.slotid]
+			self.nimConfig = self.nim.config
+			self.createSetup()
 		for x in self["config"].list:
 			x[1].cancel()
 		if self.nim.isCompatible("DVB-S") and not isinstance(
@@ -690,6 +816,10 @@ class NimSelection(Screen):
 
 	def okbuttonClick(self):
 		nim = self["nimlist"].getCurrent()
+		if nim and nim[0] == "hds_tuner_aspect":
+			from Screens.Setup import Setup
+			self.session.openWithCallback(self.updateList, Setup, "hds_tuner_aspect")
+			return
 		if nim and nim[0] == "hds_tuner_b":
 			# randul probei automate a tunerului B: proba din nou sau configurarea lui de mana
 			_tunerB("ok_din_ecran", self.session, self.updateList)
@@ -724,5 +854,8 @@ class NimSelection(Screen):
 				self.list.append(("hds_tuner_rezerva", _("Tuner de rezervă din rețea"), HdsTunerRezerva.stareScurta(), None))
 			except Exception as e:
 				print("[Satconfig] tunerul de rezerva: %s" % e)
+		if self.__class__ is NimSelection:
+			from Components import HdsTunerAspect
+			self.list.append(("hds_tuner_aspect", _("Așezare clasică"), _("Da") if HdsTunerAspect.clasic() else _("Nu"), None))
 		# la intoarcerea din setarile unui tuner cursorul ramane pe tunerul lui (cheia: slotul), nu pe primul
 		pune_randurile(self["nimlist"], self.list, cheie=0)

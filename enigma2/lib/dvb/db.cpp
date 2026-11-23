@@ -169,7 +169,9 @@ RESULT eDVBService::getName(const eServiceReference &ref, std::string &name)
 
 RESULT eDVBService::getEvent(const eServiceReference &ref, ePtr<eServiceEvent> &ptr, time_t start_time)
 {
-	return eEPGCache::getInstance()->lookupEventTime(ref, start_time, ptr);
+	/* dupa ~eEPGCache (iesirea) getInstance() da 0: fara ghid, fara emisiune */
+	eEPGCache *epg = eEPGCache::getInstance();
+	return epg ? epg->lookupEventTime(ref, start_time, ptr) : -1;
 }
 
 int eDVBService::isPlayable(const eServiceReference &ref, const eServiceReference &ignore, bool simulate)

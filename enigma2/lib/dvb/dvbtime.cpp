@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
+#include <unistd.h>
 
 // defines for DM7000 / DM7020
 #define FP_IOCTL_SET_RTC         0x101
@@ -119,6 +120,13 @@ namespace hdsceas
 		return ora_rtc >= minimImagine(minim) && ora_rtc <= ORA_MAXIMA && diferentaAbs(ora_rtc, acum_perete) <= TOLERANTA_S;
 	}
 
+	bool rtcLaPornire(long long ora_rtc, bool ecou, long long acum_perete, long long minim)
+	{
+		// ecoul spune numai ce arata ceasul sistemului, care la pornire vine din fake-hwclock: oricat de in urma ar fi
+		// ceasul, ecoul e "la 0 s" de el, deci rtcCredibil l-ar crede mereu
+		return ora_rtc != 0 && !ecou && rtcCredibil(ora_rtc, acum_perete, minim);
+	}
+
 	Ceas incepe(long long acum_perete, long long acum_mono, long long ora_salvata, bool rtc, long long minim)
 	{
 		Ceas c;
@@ -168,13 +176,31 @@ namespace hdsceas
 		return diferentaAbs(decalaj, c.ancora_perete - c.ancora_mono) <= toleranta(mono - c.ancora_mono);
 	}
 
-	// alt multiplex a dat aceeasi ora (cel mult TOLERANTA_S, pe ceasul monoton)?
+	// O valoare invalida nu devine ONID cunoscut prin trunchiere la 16 biti.
+	static unsigned int onidCunoscut(int onid)
+	{
+		return onid > 0 && onid < 0xffff ? (unsigned int)onid : 0;
+	}
+
+	// Doua TSID din aceeasi retea nu sunt confirmari independente.
+	// ONID zero sau 0xffff nu identifica o retea cunoscuta.
+	static bool reteleDiferite(Multiplex a, Multiplex b)
+	{
+		const unsigned int onid_a = onidCunoscut(a & 0xffff);
+		const unsigned int onid_b = onidCunoscut(b & 0xffff);
+		return onid_a && onid_b && onid_a != onid_b;
+	}
+
+	// Alta retea a dat aceeasi ora (cel mult TOLERANTA_S, pe ceasul monoton)?
 	static bool gasestePereche(const Ceas &c, Multiplex mux, long long decalaj, Multiplex &pereche)
 	{
 		for (std::map<Multiplex, Citire>::const_iterator it = c.citiri.begin(); it != c.citiri.end(); ++it)
 		{
-			if (it->first != mux && diferentaAbs(it->second.decalaj, decalaj) <= TOLERANTA_S)
+			if (reteleDiferite(it->first, mux) && diferentaAbs(it->second.decalaj, decalaj) <= TOLERANTA_S)
 			{
+				// La schimbarea ancorei, ambele retele trebuie sa fie numai de partea orei noi.
+				if (sigura(c.stare) && deAcordCuAncora(c, it->second.decalaj, it->second.mono))
+					continue;
 				pereche = it->first;
 				return true;
 			}
@@ -339,7 +365,7 @@ static hdsceas::Multiplex hdsMultiplex(const eDVBChannelID &id)
 {
 	return ((hdsceas::Multiplex)(unsigned int)id.dvbnamespace.get() << 32) |
 		((hdsceas::Multiplex)(id.transport_stream_id.get() & 0xffff) << 16) |
-		(hdsceas::Multiplex)(id.original_network_id.get() & 0xffff);
+		(hdsceas::Multiplex)hdsceas::onidCunoscut(id.original_network_id.get());
 }
 
 static std::string hdsTextMultiplex(hdsceas::Multiplex mux)
@@ -374,10 +400,34 @@ static const char *hdsNumeStare(int stare)
 	return "?";
 }
 
+// HDSatelit: pe HiSilicon nodul /proc/stb/fp/rtc vine din hi-dvb.ko si nu e un ceas al placii: citirea intoarce ceasul
+// sistemului (proc_fp_rtc_read: do_gettimeofday), iar scrierea muta ceasul sistemului la secunda intreaga
+// (proc_fp_rtc_write: do_settimeofday64). Asa e in driverele GigaBlue UHD Trio 4K (20230224), Octagon SF8008 (20240104)
+// si SF8008 MINI (20221108), Uclan Ustym 4K PRO (20230804), Amiko Viper 4K V10 (20201218); Viper 4K V20/V30/V40 nu au
+// nodul. Ceasul de la pornire vine deci tot din fake-hwclock, iar dupa o oprire brusca sau o pana de curent ramane in
+// urma; ecoul lui era luat drept ceas adevarat, deci ora in urma trecea drept sigura (sigura_rtc): un singur multiplex nu o
+// mai muta, iar ora prin HTTPS (Components/HdsCeas.py) nu se mai cerea (asistenta 751207, GigaBlue UHD Trio 4K: dupa 5
+// reporniri dure ceasul a pornit cu 135-1196 s in urma, "sigura_rtc" de fiecare data). Pe aceste placi RTC-ul e lipsa:
+// nici citit, nici scris.
+static bool hdsRtcEcou()
+{
+	static int ecou = -1;
+	if (ecou < 0)
+	{
+		ecou = ::access("/sys/module/hi_dvb", F_OK) == 0 ? 1 : 0;
+		if (ecou)
+			eDebug("[eDVBLocalTimerHandler] /proc/stb/fp/rtc al driverului hi_dvb e ceasul sistemului, nu un ceas al placii: nefolosit");
+	}
+	return ecou == 1;
+}
+
 static time_t prev_time;
 
 void setRTC(time_t time)
 {
+	// HDSatelit: pe HiSilicon scrierea ar muta ceasul sistemului (inapoi pana la o secunda), nu un ceas al placii
+	if (hdsRtcEcou())
+		return;
 	FILE *f = fopen("/proc/stb/fp/rtc", "w");
 	if (f)
 	{
@@ -404,6 +454,9 @@ void setRTC(time_t time)
 time_t getRTC()
 {
 	time_t rtc_time=0;
+	// HDSatelit: pe HiSilicon nodul da ceasul sistemului, nu ora placii: ca un receptor fara RTC
+	if (hdsRtcEcou())
+		return 0;
 	FILE *f = fopen("/proc/stb/fp/rtc", "r");
 	if (f)
 	{
@@ -521,11 +574,13 @@ eDVBLocalTimeHandler::eDVBLocalTimeHandler()
 	// HDSatelit: starea de pornire. Numai un RTC adevarat face ora sigura de la pornire (dupa
 	// data construirii si la cel mult 120 s de ceas: un pseudo-RTC de panou ramas in urma dupa o pana de curent nu e
 	// crezut); fara RTC (/proc/stb/fp/rtc si /dev/dbox/fp0 lipsesc pe Viper 4K V20) ora vine din fake-hwclock, e nesigura,
-	// iar limita de jos e ultima ora sigura salvata (HDS_ORA_SIGURA) sau, daca lipseste, data construirii.
+	// iar limita de jos e ultima ora sigura salvata (HDS_ORA_SIGURA) sau, daca lipseste, data construirii. Nodul
+	// HiSilicon (hdsRtcEcou) e numai ecoul ceasului sistemului: ca un receptor fara RTC.
 	const time_t la_pornire = time(0);
 	const long long minim = hdsceas::oraDinImageVersion(hdsCitesteFisier(HDS_IMAGE_VERSION));
+	const bool ecou = hdsRtcEcou();
 	const time_t ora_rtc = la_pornire >= 1072224000 ? getRTC() : 0;
-	const bool rtc = ora_rtc != 0 && hdsceas::rtcCredibil(ora_rtc, la_pornire, minim);
+	const bool rtc = hdsceas::rtcLaPornire(ora_rtc, ecou, la_pornire, minim);
 	if (ora_rtc != 0 && !rtc)
 		eDebug("[eDVBLocalTimerHandler] RTC necrezut pentru ora sigura: %s UTC, ceasul %s UTC", hdsTextOra(ora_rtc).c_str(),
 			hdsTextOra(la_pornire).c_str());

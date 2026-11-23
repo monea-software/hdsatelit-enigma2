@@ -473,6 +473,12 @@ def textStare(a=None):
 		_(t) for s, t in TXT_SERVICII_SCURT if s in a["unde"])
 
 
+def parolaSalvata(a=None):
+	"""Textul parolei existente, fara sa schimbe verificarea serviciilor."""
+	if not parolaPusa(a):
+		return ""
+	return (_citeste(CALE_PAROLA, MAX_PAROLA + 8) or "").rstrip("\r\n")
+
+
 def textParola(a=None):
-	"""Randul parolei: dupa salvare valoarea nu se mai arata."""
-	return _("pusă") if parolaPusa(a) else _("nepusă")
+	return parolaSalvata(a) or (_("Parola existentă nu are textul salvat.") if parolaPusa(a) else _("Fără parolă"))

@@ -448,6 +448,101 @@ def notaSlot(v):
 	return _t(text) if text else ""
 
 
+# ------------------------------------------------------------------ pornirea amestecata
+# Unealta altei imagini poate lasa in STARTUP nucleul unui loc si sistemul altuia (Octagon SF8008 cu 11 locuri pe stick,
+# rapoartele pornirii 761249 si 486541: nucleul lui STARTUP_6 cu sistemul lui STARTUP_9). Cu nucleul altei imagini
+# modulele nu se incarca (fara /dev/fb0 si /dev/dvb), interfata nu porneste, iar codurile spun numai ca driverele lipsesc.
+# pornireAmestecata spune ce s-a intamplat, din aceleasi date ca garda scrierii imaginii (HdsPornireMultipla.
+# startupuriCitite si locPornit): numai citire, fara nicio montare (partitia de pornire nemontata = nimic de spus despre
+# locuri), plus nucleul pornit (/proc/sys/kernel/osrelease) fata de dosarele din /lib/modules ale imaginii. Se spune
+# numai pe dovada: nucleul unui singur loc cu sistemul altui singur loc, sau un nucleu pornit fara modulele lui in
+# imagine. O pornire neclara (pe care garda scrierii o opreste) nu da nimic aici. Il folosesc pagina de rezerva
+# (tools/hds-rezerva-ecran.py), raportul pornirii ratate (textComplet prin --rezerva) si pagina web /paza-model.
+TEXT_AMESTEC = N_("Receptorul a pornit cu nucleul locului %(nucleu)s și cu sistemul locului %(sistem)s; locul acestui software este %(sistem)s.")
+TEXT_NUCLEU_STRAIN = N_("Nucleul pornit (%(pornit)s) nu este al acestui software (%(imagine)s), deci driverele nu se încarcă.")
+# numai unde interfata merge (pagina web /paza-model); pe pagina de rezerva meniul nu se poate deschide
+TEXT_ALEGE_LOCUL = N_("Ca să pornească normal, alege locul %(sistem)s la Meniu > Standby și repornire > Repornește în altă imagine.")
+
+
+def _refuzaMontarea(*_a, **_k):
+	"""Pentru startupuriCitite: partitia de pornire nemontata nu se monteaza de aici."""
+	return None, None
+
+
+def _nucleePornire(radacina=None):
+	"""(nucleul pornit, [dosarele din lib/modules]); ("", []) cand nu se pot citi. Nucleul WSL al PC-ului (emulatorul si
+	probele din chroot) nu e al niciunui receptor: acolo ("", [])"""
+	baza = radacina or "/"
+	pornit = (_citesteText(os.path.join(baza, "proc", "sys", "kernel", "osrelease"), 256) or "").strip()
+	try:
+		dosar = os.path.join(baza, "lib", "modules")
+		module = sorted(n for n in os.listdir(dosar) if os.path.isdir(os.path.join(dosar, n)))
+	except OSError:
+		module = []
+	if "microsoft" in pornit.lower():
+		return "", []
+	return pornit[:60], module
+
+
+def pornireAmestecata(radacina=None, P=None):
+	"""Ce s-a intamplat la o pornire cu nucleul altui loc, sau None cand nu e nimic de spus. Cheile: "nucleu" si "sistem"
+	(locurile, cand nucleul e al unui singur loc si sistemul al altui singur loc), "pornit" si "imagine" (nucleul pornit si
+	nucleele pentru care imaginea are module, cand nucleul pornit nu e printre ele). Numai citire, fara montare."""
+	rez = {}
+	pornit, module = _nucleePornire(radacina)
+	if pornit and module and pornit not in module:
+		rez["pornit"], rez["imagine"] = pornit, " ".join(module)[:60]
+	try:
+		if P is None:
+			try:
+				from Components import HdsPornireMultipla as P
+			except ImportError:
+				# probele de pe PC cu pachetul Components fals; pe receptor modulul e mereu in imagine
+				return rez or None
+		fisiere = P.startupuriCitite(radacina, monteaza=_refuzaMontarea)
+		if fisiere:
+			loc = P.locPornit(P.parametri(P.linieComanda(radacina)), fisiere)
+			if loc.get("amestec"):
+				rez["nucleu"], rez["sistem"] = str(loc["nucleu"][0]), str(loc["sistem"][0])
+	except Exception as e:
+		print("[HdsDiagnostic] pornirea amestecata nu s-a putut citi: %r" % (e,))
+	return rez or None
+
+
+def _formateaza(text, valori):
+	try:
+		return text % valori
+	except (KeyError, TypeError, ValueError):
+		return ""
+
+
+def textePornireAmestecata(pa, interfata=True):
+	"""Propozitiile pentru om (traduse): ce s-a intamplat si locul acestui software, nucleul fara module si, numai cand
+	interfata merge, drumul din meniu spre locul bun; [] fara pornire amestecata"""
+	if not pa:
+		return []
+	rez = []
+	if pa.get("nucleu") and pa.get("sistem"):
+		rez.append(_formateaza(_t(TEXT_AMESTEC), pa))
+	if pa.get("pornit") and pa.get("imagine"):
+		rez.append(_formateaza(_t(TEXT_NUCLEU_STRAIN), pa))
+	if interfata and pa.get("sistem"):
+		rez.append(_formateaza(_t(TEXT_ALEGE_LOCUL), pa))
+	return [x for x in rez if x]
+
+
+def datePornireAmestecata(pa):
+	"""Randurile cheie=valoare pentru noi (aceleasi in orice limba)"""
+	if not pa:
+		return []
+	rez = []
+	if pa.get("nucleu") and pa.get("sistem"):
+		rez.append("pornire_amestecata=nucleul locului %s, sistemul locului %s" % (pa["nucleu"], pa["sistem"]))
+	if pa.get("pornit") and pa.get("imagine"):
+		rez.append("nucleu_pornit=%s | module_imagine=%s" % (pa["pornit"], pa["imagine"]))
+	return rez
+
+
 def textAdresa(adresa):
 	if adresa:
 		return _t("Toate datele, în interfața web: %s") % adresa
@@ -549,15 +644,18 @@ def dateCheie(v, M=None, adresa=""):
 	return r
 
 
-def textComplet(v, M=None, adresa="", jurnale_=None):
-	"""Textul de copiat (butonul „Copiază tot”, /paza-model/text): titlul, codurile cu ce inseamna, rugamintea, apoi
-	randurile „cheie=valoare” si, daca sunt date, jurnalele"""
+def textComplet(v, M=None, adresa="", jurnale_=None, radacina=None, interfata=True):
+	"""Textul de copiat (butonul Copiaza tot, /paza-model/text): titlul, codurile cu ce inseamna, pornirea amestecata
+	(pornireAmestecata; drumul din meniu numai cu `interfata`), rugamintea, apoi randurile cheie=valoare si, daca sunt
+	date, jurnalele"""
 	M = _m(M)
 	toate = coduri(v, M)
 	titlu = titluCod(toate[0]) if toate else _t(TITLU_MENIU)
 	r = ["HD Satelit: %s" % _t(TITLU_MENIU), titlu]
 	for cod in toate:
 		r.append("%s: %s" % (cod, textCod(cod)))
+	pa = pornireAmestecata(radacina) if v.get("stare") != getattr(M, "STARE_NU_SE_APLICA", "nu-se-aplica") else None
+	r.extend(textePornireAmestecata(pa, interfata))
 	if v.get("stare") == M.STARE_NEPOTRIVIT:
 		a = v.get("amprenta_verdict") or v.get("amprenta") or {}
 		r.append(M.textPentru(v.get("reguli") or {}, v.get("versiune")))
@@ -572,6 +670,7 @@ def textComplet(v, M=None, adresa="", jurnale_=None):
 		r.append(notaSlot(v))
 	r.append("")
 	r.extend(dateCheie(v, M, adresa))
+	r.extend(datePornireAmestecata(pa))
 	for titlu_j, text_j in jurnale_ or []:
 		r.append("")
 		r.append("----- %s -----" % titlu_j)
@@ -607,6 +706,13 @@ _HEXA_LUNG = re.compile(r"(?<![0-9A-Za-z])[0-9A-Fa-f]{16,}(?![0-9A-Za-z])")
 _RAND_SCOS = re.compile(r"pass(word|wd)?|parol|token|jeton|secret|\bkey|cheie|psk|\bpin\b|auth|user|login|"
 	r"utilizator|ssid|wpa|wifi|wlan.*(essid|network)|serial|\bS/N\b|\bsn\s*[=:]|cpuid|chipid|chip_id|die.?id|\buuid\b|"
 	r"\bcid\b|\bcw\b|control.?word|\bbiss|\becm\b|\bemm\b|cookie|session", re.I)
+# UUID=<valoare> si PARTUUID=<valoare> (cifre hexa si cratime, cu sau fara ghilimele): numai valoarea se ascunde, randul ramane
+# (radacina de pe stick sta ca root=UUID=... in linia nucleului, in STARTUP si in blkid); _RAND_SCOS se uita apoi la restul
+# randului, deci orice alt fel de uuid il scoate ca pana acum, la fel o valoare care continua dupa cifrele hexa (s-ar fi ascuns
+# numai o parte din ea). Aceeasi regula in tools/hds-raport.sh.in (rp_filtru).
+_UUID_VALOARE = re.compile(r"uuid=\"?[0-9a-f][0-9a-f-]*\"?", re.I)
+_UUID_ASCUNS = "UUID=" + ASCUNS
+_UUID_LIPIT = re.compile(re.escape(_UUID_ASCUNS) + r"[a-z0-9_.-]", re.I)
 _NUCLEU = re.compile(r"error|fail|unknown symbol|disagrees|version magic|invalid|not found|hi_|hi-|dvb|frontend|"
 	r"tuner|insmod|modprobe|oops|panic|segfault|enigma2", re.I)
 
@@ -617,7 +723,8 @@ def faraDatePersonale(text):
 	sirurile lungi de cifre hexa ascunse."""
 	randuri_ = []
 	for rand in (text or "").split("\n"):
-		if _RAND_SCOS.search(rand):
+		rand = _UUID_VALOARE.sub(_UUID_ASCUNS, rand)
+		if _UUID_LIPIT.search(rand) or _RAND_SCOS.search(rand.replace(_UUID_ASCUNS, "")):
 			continue
 		rand = _URL.sub(ADRESA_ASCUNSA, rand)
 		rand = _CU_PAROLA.sub(ADRESA_ASCUNSA, rand)
@@ -747,7 +854,7 @@ def _codLimba(valoare):
 	valoare = str(valoare or "").strip()
 	if not re.fullmatch(r"[A-Za-z]{2,3}(?:[_-][A-Za-z0-9-]+)?", valoare):
 		return "en"
-	limba = re.split("[_-]", valoare, 1)[0].lower()
+	limba = re.split("[_-]", valoare, maxsplit=1)[0].lower()
 	return limba if limba in LIMBI else "en"
 
 
@@ -780,6 +887,12 @@ TEXTE_ENGLEZA = {
 	"Da": "Yes",
 	"Dacă nu se schimbă nimic, aici apare în curând codul de diagnostic.": "If nothing changes, the diagnostic code appears here soon.",
 	"Se termină actualizarea software…": "Finishing the software update…",
+	"Receptorul a pornit cu nucleul locului %(nucleu)s și cu sistemul locului %(sistem)s; locul acestui software este %(sistem)s.":
+		"The receiver started with the kernel of slot %(nucleu)s and the system of slot %(sistem)s; the slot of this software is %(sistem)s.",
+	"Nucleul pornit (%(pornit)s) nu este al acestui software (%(imagine)s), deci driverele nu se încarcă.":
+		"The running kernel (%(pornit)s) is not the one of this software (%(imagine)s), so the drivers do not load.",
+	"Ca să pornească normal, alege locul %(sistem)s la Meniu > Standby și repornire > Repornește în altă imagine.":
+		"To start normally, choose slot %(sistem)s in Menu > Standby and restart > Restart into another image.",
 	"Nu opri receptorul. Pe un stick USB poate dura câteva minute; interfața pornește singură la sfârșit.":
 		"Do not turn the receiver off. On a USB stick this can take a few minutes; the interface starts by itself at the end.",
 	"Datele despre receptor din acest software sunt stricate sau de altă versiune, deci nu se poate verifica pentru ce receptor este.": "The receiver data in this software is damaged or from another version, so we cannot check which receiver it is for.",
@@ -976,6 +1089,8 @@ def texteRezervaLimba(limba, dosar_po=DOSAR_PO):
 	for cod, _g, text in CODURI:
 		rez[cod] = tr(text)
 	rez.update((cheie, tr(text)) for cheie, text in TEXTE_PORNIRE.items())
+	# pornirea amestecata (pornireAmestecata), fara drumul din meniu: pe pagina de rezerva interfata nu merge
+	rez["amestec"], rez["nucleu_strain"] = tr(TEXT_AMESTEC), tr(TEXT_NUCLEU_STRAIN)
 	return rez
 
 
@@ -1040,7 +1155,8 @@ def main(argv=None):
 	if "--cod" in argv:
 		sys.stdout.write(codPrincipal(v, M) + "\n")
 		return 0
-	sys.stdout.write(textComplet(v, M))
+	# calea de rezerva si raportul pornirii ratate: interfata nu merge, deci fara drumul din meniu
+	sys.stdout.write(textComplet(v, M, radacina=radacina, interfata=False))
 	return 0
 
 

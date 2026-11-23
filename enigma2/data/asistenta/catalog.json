@@ -3,6 +3,13 @@
   "v": 1,
   "operatii": [
     {
+      "op": "tsmux",
+      "grup": "Semnal",
+      "fel": "citire",
+      "text": "legăturile tunerelor, valorile și alegerile driverului, numai citire",
+      "args": []
+    },
+    {
       "op": "info",
       "grup": "Informații",
       "fel": "citire",
@@ -20,9 +27,9 @@
       "op": "citeste",
       "grup": "Informații",
       "fel": "citire",
-      "text": "un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), cu parolele ascunse",
+      "text": "un fișier sau un dosar al receptorului, integral, inclusiv parolele",
       "args": [
-        {"nume": "cale", "tipar": "^(/(proc|sys|etc|var/log|home/root/logs|tmp|usr/lib/enigma2/python/Plugins|usr/share/enigma2)(/[A-Za-z0-9._+@:,()-]+)*/?|/home/root/epg\\.dat|/boot(/STARTUP[A-Z0-9_]{0,41})?/?)\\Z", "cerut": true},
+        {"nume": "cale", "tipar": "^/[^\\x00]*\\Z", "cerut": true, "max_semne": 16384},
         {"nume": "de_la", "tipar": "^[0-9]{1,12}$", "cerut": false}
       ]
     },
@@ -75,7 +82,7 @@
       "text": "ultimele rânduri dintr-un jurnal",
       "args": [
         {"nume": "nume", "tipar": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "cerut": true},
-        {"nume": "randuri", "tipar": "^[1-9][0-9]{0,3}$", "cerut": false},
+        {"nume": "randuri", "tipar": "^[1-9][0-9]{0,6}\\Z", "cerut": false},
         {"nume": "de_la", "tipar": "^[0-9]{1,12}$", "cerut": false}
       ]
     },
@@ -85,7 +92,7 @@
       "fel": "citire",
       "text": "jurnalul nucleului",
       "args": [
-        {"nume": "randuri", "tipar": "^[1-9][0-9]{0,3}$", "cerut": false}
+        {"nume": "randuri", "tipar": "^[1-9][0-9]{0,6}\\Z", "cerut": false}
       ]
     },
     {
@@ -99,7 +106,7 @@
       "op": "setari",
       "grup": "Setări",
       "fel": "citire",
-      "text": "setările receptorului, cu parolele ca steluțe",
+      "text": "setările receptorului, inclusiv parolele în clar",
       "args": []
     },
     {
@@ -125,7 +132,7 @@
       "text": "o întrebare pe ecranul televizorului; răspunsul tău (Da, Nu sau o variantă) ajunge la echipă",
       "args": [
         {"nume": "text", "tipar": "^.{1,200}$", "cerut": true},
-        {"nume": "variante", "tipar": "^[^|\\x00-\\x1f]{1,40}(?:\\|[^|\\x00-\\x1f]{1,40}){1,3}$", "cerut": false},
+        {"nume": "variante", "tipar": "^(?:\\*|[^|\\x00-\\x1f]{1,40}(?:\\|[^|\\x00-\\x1f]{1,40}){1,3})$", "cerut": false},
         {"nume": "secunde", "tipar": "^[1-9][0-9]{1,2}$", "cerut": false}
       ]
     },
@@ -142,25 +149,25 @@
       "op": "ecran",
       "grup": "Ecran",
       "fel": "citire",
-      "text": "textul ecranului, ca pe televizor; rândurile cu parole trec prin filtrul de secrete",
+      "text": "textul integral al ecranului, inclusiv câmpurile cu parole",
       "args": []
     },
     {
       "op": "taste",
       "grup": "Control",
       "fel": "control",
-      "text": "tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)",
+      "text": "tastele telecomenzii, ca și cum echipa ar ține telecomanda",
       "args": [
-        {"nume": "taste", "tipar": "^[a-z0-9+:-]{1,16}( [a-z0-9+:-]{1,16}){0,19}$", "cerut": true}
+        {"nume": "taste", "tipar": "^[a-z0-9_+:-]{1,24}( [a-z0-9_+:-]{1,24})*$", "cerut": true, "max_semne": 16384}
       ]
     },
     {
       "op": "text",
       "grup": "Control",
       "fel": "control",
-      "text": "un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)",
+      "text": "un text scris în câmpul deschis pe ecran, inclusiv parole",
       "args": [
-        {"nume": "text", "tipar": "^[^\\x00-\\x1f\\x7f]{1,200}$", "cerut": true}
+        {"nume": "text", "tipar": "^[^\\x00-\\x1f\\x7f]+\\Z", "cerut": true, "max_semne": 16384}
       ]
     },
     {
@@ -195,44 +202,44 @@
       "op": "zap",
       "grup": "Control",
       "fel": "control",
-      "text": "pornește un canal din lista ta (numai cu Control complet)",
+      "text": "pornește un canal din lista ta",
       "args": [
-        {"nume": "referinta", "tipar": "^(?:1:0:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,8}:0:0:0:|(?:1|4097):0:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,8}:0:0:0:http%3[aA]//127\\.0\\.0\\.1%3[aA](?:8889|8898)/(?:t2|dab)/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}/[0-9]{1,5}(?:\\.ts)?(?::[^:\\x00-\\x1f]{1,80})?)$", "cerut": true}
+        {"nume": "referinta", "tipar": "^[0-9]+:[^\\x00-\\x1f]*\\Z", "cerut": true, "max_semne": 4096}
       ]
     },
     {
       "op": "setare-scrie",
       "grup": "Control",
       "fel": "control",
-      "text": "schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date personale; numai cu Control complet)",
+      "text": "schimbă o setare a receptorului, inclusiv parole, chei și conturi",
       "args": [
-        {"nume": "cheie", "tipar": "^config(\\.[A-Za-z0-9_]{1,40}){1,8}$", "cerut": true},
-        {"nume": "valoare", "tipar": "^[^\\x00-\\x1f\\x7f]{0,128}$", "cerut": false}
+        {"nume": "cheie", "tipar": "^config(\\.[^.\\x00-\\x20=]+)+\\Z", "cerut": true, "max_semne": 1024},
+        {"nume": "valoare", "tipar": "^[^\\x00\\r\\n]*\\Z", "cerut": false, "max_semne": 16384}
       ]
     },
     {
       "op": "instaleaza",
       "grup": "Control",
       "fel": "control",
-      "text": "instalează un pachet din feedul oficial HD Satelit (numai cu Control complet)",
+      "text": "instalează un pachet din sursele configurate ale receptorului",
       "args": [
-        {"nume": "pachet", "tipar": "^[a-z0-9][a-z0-9+.-]{0,255}\\Z", "cerut": true}
+        {"nume": "pachet", "tipar": "^[^\\x00-\\x20\\x7f]+\\Z", "cerut": true, "max_semne": 1024}
       ]
     },
     {
       "op": "dezinstaleaza",
       "grup": "Control",
       "fel": "control",
-      "text": "dezinstalează un plugin sau un modul (numai cu Control complet)",
+      "text": "dezinstalează un pachet al receptorului",
       "args": [
-        {"nume": "pachet", "tipar": "^enigma2-plugin-[a-z0-9][a-z0-9.+-]{0,62}$", "cerut": true}
+        {"nume": "pachet", "tipar": "^[^\\x00-\\x20\\x7f]+\\Z", "cerut": true, "max_semne": 1024}
       ]
     },
     {
       "op": "reporneste",
       "grup": "Control",
       "fel": "control",
-      "text": "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control complet)",
+      "text": "repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire",
       "args": [
         {"nume": "ce", "tipar": "^(interfata|receptor)$", "cerut": true}
       ]
@@ -241,8 +248,36 @@
       "op": "repara-actualizarea",
       "grup": "Control",
       "fel": "control",
-      "text": "termină o actualizare rămasă la jumătate: caută în feedul HD Satelit, pune din nou pachetele imaginii rămase neterminate și repornește interfața (numai cu Control complet)",
+      "text": "termină o actualizare rămasă la jumătate: caută în feedul HD Satelit, pune din nou pachetele imaginii rămase neterminate și repornește interfața",
       "args": []
+    },
+    {
+      "op": "repara-buchetele",
+      "grup": "Control",
+      "fel": "control",
+      "text": "pune la loc buchetele care lipsesc din listă și curăță descrierile orfane, cu copie de siguranță",
+      "args": []
+    },
+    {
+      "op": "comanda",
+      "grup": "Control",
+      "fel": "control",
+      "text": "rulează o comandă pe receptor, cu termenul cerut și ieșirea întreagă (fără scrierea imaginii în memorie și a pornirii)",
+      "args": [
+        {"nume": "comanda", "tipar": "(?s)^.{1,16384}$", "cerut": true, "max_semne": 16384},
+        {"nume": "termen", "tipar": "^[1-9][0-9]{0,5}$", "cerut": false}
+      ]
+    },
+    {
+      "op": "scrie",
+      "grup": "Control",
+      "fel": "control",
+      "text": "scrie un fișier mic pe receptor (cel mult 12 KB, dintr-o dată), cu o copie a celui de dinainte; nu în /boot",
+      "args": [
+        {"nume": "cale", "tipar": "^/[^\\x00]*[^/\\x00]\\Z", "cerut": true, "max_semne": 4096},
+        {"nume": "continut", "tipar": "^[A-Za-z0-9+/]*={0,2}\\Z", "cerut": false, "max_semne": 16384},
+        {"nume": "drept", "tipar": "^[0-7]{3,4}$", "cerut": false}
+      ]
     }
   ]
 }

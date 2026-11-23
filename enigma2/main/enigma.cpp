@@ -93,6 +93,17 @@ static bool hdsAnimatiePlaca()
 
 void setAnimation_current(int a)
 {
+	// Random selections must respect the session fallback on the native driver too.
+	if (a > 0 && hdsAnimatieRezerva())
+		a = 1;
+	/* 101..107 are software-only IDs, outside the driver ABI (0..14).
+	 * Disable the driver first to avoid applying two effects at once. */
+	if (a >= 101 && a <= 107)
+	{
+		hdsScrieAnimatie("/proc/stb/fb/animation_current", "disable");
+		eWidgetDesktop::hdsSetAnimatie(a - 97, eWidgetDesktop::hdsAnimatieDurata());
+		return;
+	}
 	static const char *const nume[] = { "disable", "simplefade", "simplezoom", "growdrop", "growfromleft", "extrudefromleft",
 		"popup", "slidedrop", "slidefromleft", "slidelefttoright", "sliderighttoleft", "slidetoptobottom", "zoomfromleft",
 		"zoomfromright", "stripes" };

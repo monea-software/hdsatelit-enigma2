@@ -13,7 +13,11 @@
 # ce nu a mers. Tastele: ROSU inapoi, VERDE instaleaza (numai cand se poate; o singura comanda, cu efectul spus pe randul
 # de stare: actualizarea rapida cauta, instaleaza si reporneste interfata singura cand receptorul e liber), GALBEN cauta
 # din nou, ALBASTRU porneste sau opreste verificarea zilnica. Repornirea e pe calea sigura (TryQuitMainloop 3, ca
-# "Restart Interface" din meniu); pana atunci nimic altceva nu mai porneste de aici.
+# "Restart Interface" din meniu); pana atunci nimic altceva nu mai porneste de aici. Din 0.7.8 (RIA) inca un rand,
+# "Repornire singura" Da/Nu (OK schimba): Da = inainte de repornire numaratoarea pe televizor, Nu = intrebarea de dinainte
+# (Components/HdsActualizari, NUMARATOARE_S). Din 0.7.8 (RPR8) randul "Repară imaginea" (OK porneste, fara intrebari): pune la
+# loc din feedul semnat fisierele imaginii sterse (Components/HdsActualizari.reparaImaginea), spune ce a pus la loc sau ca
+# imaginea e intreaga si reporneste interfata cu numaratoarea obisnuita; perechea din pagina web e butonul cu acelasi nume.
 #
 # "Ce e nou": noutatile tuturor versiunilor de la cea instalata pana la cea de pe server,
 # grupate pe versiuni (Components/HdsActualizari.text_noutati), pot avea zeci de randuri. Textul de sub lista e un
@@ -188,6 +192,9 @@ class HdsActualizari(Screen):
 
 	def _scrieStarea(self):
 		text = self._stare
+		# 0.7.8 (RPR8): pe randul "Repară imaginea", ce face
+		if not text and self._cheie() == "repara" and getattr(A, "TEXT_REPARA_NOTA", None):
+			text = _(A.TEXT_REPARA_NOTA)
 		pagina = self._pagina()
 		if pagina:
 			semn = _("Textul de mai sus: pagina %d din %d (Stânga/Dreapta sau CH+/CH-)") % pagina
@@ -235,6 +242,15 @@ class HdsActualizari(Screen):
 			for p in pachete:
 				rand(p["titlu"], _("de la %s la %s") % (p["de_la_scurt"], p["la_scurt"]), "pachet:" + p["nume"], stins=True)
 		rand(_("Verificare zilnică"), _("Pornită") if st["zilnic"] else _("Oprită"), "zilnic")
+		# 0.7.8 (RIA): setarea repornirii singure dupa actualizare (OK schimba; eticheta scurta, ca sa incapa in coloana),
+		# perechea din pagina web; cu un Components/HdsActualizari mai vechi in memorie (interfata nerepornita dupa
+		# actualizare) randul lipseste
+		singura = _repornireSingura()
+		if singura is not None:
+			rand(_("Repornire singură"), _("Da") if singura else _("Nu"), "repornire")
+		# 0.7.8 (RPR8): "Repară imaginea" (OK); cu un Components/HdsActualizari mai vechi in memorie randul lipseste
+		if getattr(A, "TITLU_REPARA", None) and hasattr(self.a, "reparaImaginea"):
+			rand(_(A.TITLU_REPARA), _("Pornește"), "repara", stins=st["faza"] != "liber" or st["repornire"])
 		return randuri, st
 
 	def _arata(self):
@@ -277,8 +293,12 @@ class HdsActualizari(Screen):
 		elif st["repornire"]:
 			self._stare = _("Repornește interfața ca să folosești actualizarea (VERDE).")
 		elif r.get("stare") == A.DISPONIBILA and r.get("poate_instala"):
-			self._stare = _("VERDE: instalează versiunea %s. Interfața repornește apoi singură, când receptorul e liber.") % \
-				(r.get("server") or {}).get("versiune", "")
+			if _repornireSingura() is False:
+				# 0.7.8 (RIA): repornirea singura oprita din setari: la sfarsit se intreaba pe televizor
+				self._stare = _("VERDE: instalează versiunea %s.") % (r.get("server") or {}).get("versiune", "")
+			else:
+				self._stare = _("VERDE: instalează versiunea %s. Interfața repornește apoi singură, când receptorul e "
+					"liber.") % (r.get("server") or {}).get("versiune", "")
 		else:
 			self._stare = ""
 		self._scrieStarea()
@@ -367,16 +387,41 @@ class HdsActualizari(Screen):
 
 	def sus(self):
 		self["lista"].selectPrevious()
+		self._scrieStarea()
 
 	def jos(self):
 		self["lista"].selectNext()
+		self._scrieStarea()
 
 	def ok(self):
 		if self._cheie() == "zilnic":
 			self.zilnic()
+		elif self._cheie() == "repornire":
+			self.repornireSingura()
+		elif self._cheie() == "repara":
+			self.repara()
+
+	def repara(self):
+		"""0.7.8 (RPR8): "Repară imaginea", un singur pas, fara intrebari: cautarea cu reparatia, reinstalarea pachetelor cu
+		fisiere sterse si repornirea interfetei cu numaratoarea (Components/HdsActualizari.reparaImaginea)"""
+		if self.a.repornire or self.a.ocupat() or getattr(self.a, "rapid", False):
+			return
+		try:
+			from Plugins.Extensions.HdsWebControl.actualizari_web import reporneste_rapid
+			sesiune = self.session
+			self.a.reparaImaginea(reporneste_rapid(lambda: sesiune))
+		except Exception as e:
+			print("[HdsActualizari] repara imaginea: %r" % (e,))
+		self._arata()
 
 	def zilnic(self):
 		A.seteaza_zilnic(not A.zilnic_pornit())
+		self._arata()
+
+	def repornireSingura(self):
+		singura = _repornireSingura()
+		if singura is not None:
+			A.seteaza_repornire_singura(not singura)
 		self._arata()
 
 	def cauta(self):
@@ -427,7 +472,9 @@ class HdsActualizari(Screen):
 			return
 		if self._dupaInstalare in self.a.ascultatori:
 			self.a.ascultatori.remove(self._dupaInstalare)
-		if self.a.repornire:
+		# 0.7.8 (RIA): dupa o instalare reusita repornirea o duce Components/HdsActualizari (numaratoarea sau intrebarea),
+		# pe drumul modului rapid; aici numai cand nu a pornit-o (un modul mai vechi in memorie, o instalare cazuta)
+		if self.a.repornire and not getattr(self.a, "rapid", False):
 			self._intreabaRepornirea()
 
 	def _intreabaRepornirea(self):
@@ -453,6 +500,18 @@ class HdsActualizari(Screen):
 		# inregistrare, TryQuitMainloop 2 (receptorul intreg, ca Repornire din meniu): Components/HdsMemorieDriver.py
 		from Screens.Standby import TryQuitMainloop
 		self.session.open(TryQuitMainloop, _codRepornire(self.session, True))
+
+
+def _repornireSingura():
+	"""0.7.8 (RIA): setarea repornirii singure (True/False), sau None cu un Components/HdsActualizari mai vechi in memorie
+	(fisierul acesta, nou de pe disc, cat interfata asteapta repornirea dupa actualizare)"""
+	f = getattr(A, "repornire_singura", None)
+	if f is None:
+		return None
+	try:
+		return bool(f())
+	except Exception:
+		return None
 
 
 def _codRepornire(sesiune, jurnal):

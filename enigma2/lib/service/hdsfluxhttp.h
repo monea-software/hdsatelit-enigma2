@@ -105,6 +105,8 @@ public:
 	/* counters for the log */
 	uint64_t received() const { return m_received; }
 	uint64_t dropped() const { return m_dropped; }
+	/* 0 pending, HTTP code, -1 connection failure, -2 interrupted, -4 invalid reply. */
+	int status() const { return __atomic_load_n(&m_status, __ATOMIC_RELAXED); }
 
 	/* where a request goes (public for the parser, which is a free function) */
 	struct Tinta
@@ -123,6 +125,7 @@ private:
 	std::string m_headers;          /* extra request headers, "Name: value\r\n" each */
 	std::string m_label;            /* what the log shows of the address */
 	bool m_valid;
+	int m_status = 0;
 	bool m_refused;                 /* an answer 4xx: no new attempt */
 	int m_redirects;
 	int m_fd;
@@ -130,6 +133,7 @@ private:
 	int64_t m_deadline;             /* of the current step (connect, answer) */
 	int64_t m_last_data;
 	bool m_header_done;
+	bool m_body_start = true;       /* inspect only the first body bytes, before any TS packet */
 	bool m_draining;                /* the server closed a stream: its whole packets left in m_buf go out first */
 	size_t m_have;
 	unsigned char m_buf[BUFFER];
@@ -162,10 +166,11 @@ private:
 	int connectNow();
 	int finishConnect();
 	int sendRequest();
-	void disconnect(int retry_ms, const char *why);
+	void disconnect(int retry_ms, const char *why, int status = -1);
 	void endOfStream(int retry_ms, const char *why);
 	void refuse(const char *why);
 	int parseHeader();
+	int inspectBodyStart();
 	void resync();
 	int receive(int timeout_ms);
 	size_t wholePackets() const;

@@ -57,7 +57,8 @@ MAX_COPII = 10
 MAX_ANULARI = 50
 VIATA_WEB_S = 120
 LOC_MINIM = 2 * 1024 * 1024
-FISIERE_COPIE = ("lamedb", "lamedb5", "bouquets.tv", "bouquets.radio", "blacklist", "whitelist")
+FISIERE_COPIE = ("lamedb", "lamedb5", "bouquets.tv", "bouquets.radio", "blacklist", "whitelist", "hds_buchete_orfane.json",
+	"hdsdvbi.scoasa")
 # buchetele refacute de alte module ale imaginii (schimbarile facute in editor se pot pierde): cautarea DAB+ / DVB-T2
 # din satelit (Hds/DabT2), canalele de pe internet (Plugins/SystemPlugins/HdsDvbI), ultima scanare (enigma2)
 BUCHETE_AUTOMATE = {"userbouquet.hds_dab.radio": "dabt2", "userbouquet.hds_t2.tv": "dabt2",
@@ -409,6 +410,10 @@ def ocupat_de():
 
 
 def _verifica_liber(cine, id_client):
+	import sys
+	r = sys.modules.get("Components.HdsReparaBuchete")
+	if r is not None and r._LUCRU is not None:
+		raise Eroare(_t("Lista de canale se repară acum. Încearcă din nou peste câteva secunde."))
 	s = sesiune()
 	if s is None:
 		return
@@ -2459,8 +2464,7 @@ class Sesiune(object):
 
 		def pe_fir():
 			plan = pregateste_salvarea(stare, baza, originale, memorie, director)
-			plan["copie"] = fa_copie(director, desc, cine)
-			scrie_planul(plan, director)
+			scrie_planul(plan, director, copie=(desc, cine))
 			return plan
 
 		def gata(plan):
@@ -2645,6 +2649,13 @@ def pregateste_salvarea(stare, baza, originale, memorie, director):
 	text_db = db.text().encode("utf-8", "surrogateescape")
 	scris = {"lamedb": text_db}
 	scris.update(texte)
+	try:
+		from Components import HdsReparaBuchete as R
+	except ImportError:
+		import HdsReparaBuchete as R
+	refuzuri = R.plan_refuzuri(baza_b, noi_b, director)
+	if refuzuri is not None:
+		scris[R.O.FISIER_STARE] = refuzuri
 	if bl != baza_bl:
 		scris["blacklist"] = _text_lista(bl)
 	if wl != baza_wl:
@@ -2661,7 +2672,32 @@ def pregateste_salvarea(stare, baza, originale, memorie, director):
 				p = t.poz
 				tp_de_scos.append((t.ns, t.tsid, t.onid, p if isinstance(p, int) else 0))
 	return {"scris": scris, "sterse": sterse, "lamedb": db, "texte_buchete": texte, "de_scos": de_scos,
-		"tp_de_scos": tp_de_scos, "avertismente": avertismente}
+		"tp_de_scos": tp_de_scos, "avertismente": avertismente, "dvbi": _schimbari_dvbi(baza_b, noi_b)}
+
+
+def _schimbari_dvbi(baza, noi):
+	"""Numai schimbarea salvata a prezentei listei, inclusiv printr-un parinte."""
+	def legate(buchete):
+		vazute, coada = set(), ["bouquets.tv", "bouquets.radio"]
+		while coada:
+			id_ = coada.pop()
+			if id_ in vazute:
+				continue
+			vazute.add(id_)
+			b = buchete.get(id_)
+			if b is not None:
+				coada.extend(i.fisier for i in b.intrari if i.fel == "subbuchet")
+		return vazute
+	vechi, acum = legate(baza), legate(noi)
+	rez = {}
+	for id_, fel in BUCHETE_AUTOMATE.items():
+		if fel != "dvbi":
+			continue
+		if (id_ in baza and id_ not in noi) or (id_ in vechi and id_ not in acum):
+			rez[id_] = True
+		elif id_ in acum and id_ in noi and (id_ not in vechi or id_ not in baza):
+			rez[id_] = False
+	return rez
 
 
 def _scrie_sigur(cale, date):
@@ -2688,19 +2724,103 @@ def _loc_liber(dosar):
 		return None
 
 
-def scrie_planul(plan, director):
+def scrie_planul(plan, director, copie=None):
+	"""Semnul DVB-I se schimba ultimul; o eroare recupereaza si indexul, si buchetul."""
+	schimbari = plan.get("dvbi", {})
+	semn = "hdsdvbi.scoasa"
+	if not schimbari and semn not in plan["scris"] and semn not in plan["sterse"]:
+		if copie is not None:
+			plan["copie"] = fa_copie(director, *copie)
+		return _scrie_planul(plan, director)
+	# Un generator deja pornit poate fi trecut de citirea semnului. Asteptam pe firul de disc.
+	import sys
+	from contextlib import nullcontext
+	plugin = sys.modules.get("Plugins.SystemPlugins.HdsDvbI.plugin")
+	manager = getattr(plugin, "_manager", None)
+	lacat = getattr(manager, "_lacat", None)
+	with lacat if lacat is not None else nullcontext():
+		if copie is not None:
+			plan["copie"] = fa_copie(director, *copie)
+		return _scrie_planul_dvbi(plan, director)
+
+
+def _scrie_planul_dvbi(plan, director):
+	"""Fisierele si semnul apartin aceleiasi salvari; nu schimba alte buchete automate."""
+	schimbari = plan.get("dvbi", {})
+	semn = "hdsdvbi.scoasa"
+	# Citire stricta: o eroare de acces nu inseamna fisier absent.
+	def citeste(nume):
+		try:
+			with open(os.path.join(director, nume), "rb") as f:
+				return f.read()
+		except FileNotFoundError:
+			return None
+	vechi = {n: citeste(n) for n in set(plan["scris"]) | set(plan["sterse"]) | {semn}}
+	try:
+		_scrie_planul(plan, director, strict=True)
+		if schimbari:
+			try:
+				from Components import HdsDvbISetari as S
+			except ImportError:
+				import HdsDvbISetari as S
+			cale = os.path.join(director, semn)
+			for scoasa in (True, False):
+				feluri = {S.felBuchet(n) for n, da in schimbari.items() if da == scoasa}
+				if feluri:
+					S.tineMinteScoasa(feluri, scoasa, cale=cale)
+					# False poate insemna si "deja asa", si eroare: verificam rezultatul.
+					citite = S.listeScoase(cale)
+					if (scoasa and not feluri <= citite) or (not scoasa and feluri & citite):
+						raise Eroare(_t("Lista DVB-I nu s-a putut salva. Încearcă din nou."))
+			if os.path.exists(cale):
+				with open(cale, "r+b") as f:
+					os.fsync(f.fileno())
+			_sincronizeaza_dosarul(director)
+	except Exception:
+		erori = []
+		# Fisierele inaintea indexurilor: niciun rand spre un buchet inca nerecuperat.
+		for nume in sorted(vechi, key=lambda n: (n == semn, n in ("bouquets.tv", "bouquets.radio"))):
+			try:
+				date = vechi[nume]
+				if citeste(nume) == date:
+					continue
+				if date is None:
+					os.remove(os.path.join(director, nume))
+				else:
+					_scrie_sigur(os.path.join(director, nume), date)
+			except Exception as e:
+				erori.append(e)
+		if erori:
+			raise Eroare(_t("Salvarea listei a eșuat și copia de siguranță nu s-a putut pune complet la loc.")) from erori[0]
+		raise
+
+
+def _scrie_planul(plan, director, strict=False):
 	"""Fisierele scrise (lamedb ultimul: o cadere la jumatate lasa buchetele noi pe lista veche, nu invers)."""
 	marime = sum(len(v) for v in plan["scris"].values())
 	liber = _loc_liber(director)
 	if liber is not None and liber < marime + LOC_MINIM:
 		raise Eroare(_t("Nu e loc destul în memoria receptorului pentru lista de canale."))
-	for nume, date in sorted(plan["scris"].items(), key=lambda x: x[0] == "lamedb"):
+	# Alegerea omului precede dezlegarea, inclusiv daca scrierea se intrerupe.
+	semn = "hdsdvbi.scoasa"
+	for nume, date in sorted(plan["scris"].items(), key=lambda x: (x[0] != "hds_buchete_orfane.json", x[0] == "lamedb")):
+		if nume == semn:
+			continue
 		_scrie_sigur(os.path.join(director, nume), date)
-	for nume in plan["sterse"]:
+	for nume in sorted(plan["sterse"], key=lambda n: n == semn):
 		try:
 			os.remove(os.path.join(director, nume))
-		except OSError:
+		except FileNotFoundError:
 			pass
+		except OSError:
+			if strict:
+				raise
+	if semn in plan["scris"]:
+		_scrie_sigur(os.path.join(director, semn), plan["scris"][semn])
+	_sincronizeaza_dosarul(director)
+
+
+def _sincronizeaza_dosarul(director):
 	try:
 		fd = os.open(director, os.O_RDONLY)
 		try:
@@ -2914,17 +3034,26 @@ def pregateste_intoarcerea(copie_id, memorie, director=DIRECTOR, cine=""):
 		despacheteaza(cale, tmp)
 		with open(os.path.join(tmp, "lamedb"), "rb") as f:
 			db = D.citeste_lamedb(f.read())
-		fa_copie(director, _t("înainte de întoarcerea la copia din %s") % copie_id, cine)
+		desc = _t("înainte de întoarcerea la copia din %s") % copie_id
 		din_copie = set(os.listdir(tmp))
-		for f in _fisiere_de_copiat(director):
-			if f not in din_copie and f != "lamedb5":
+		sterse = [f for f in _fisiere_de_copiat(director) if f not in din_copie and f != "lamedb5"]
+		if "hdsdvbi.scoasa" in din_copie or "hdsdvbi.scoasa" in sterse:
+			# Copia recupereaza aceeasi alegere DVB-I, impreuna cu fisierele si indexurile.
+			scris = {}
+			for f in din_copie:
+				with open(os.path.join(tmp, f), "rb") as g:
+					scris[f] = g.read()
+			scrie_planul({"scris": scris, "sterse": sterse}, director, copie=(desc, cine))
+		else:
+			fa_copie(director, desc, cine)
+			for f in sterse:
 				try:
 					os.remove(os.path.join(director, f))
 				except OSError:
 					pass
-		for f in sorted(din_copie, key=lambda x: x == "lamedb"):
-			with open(os.path.join(tmp, f), "rb") as g:
-				_scrie_sigur(os.path.join(director, f), g.read())
+			for f in sorted(din_copie, key=lambda x: x == "lamedb"):
+				with open(os.path.join(tmp, f), "rb") as g:
+					_scrie_sigur(os.path.join(director, f), g.read())
 	finally:
 		shutil.rmtree(tmp, True)
 	de_scos, tp_de_scos = [], []

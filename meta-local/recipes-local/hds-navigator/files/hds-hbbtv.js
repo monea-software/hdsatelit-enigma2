@@ -2622,6 +2622,119 @@
         return true;
     }
 
+    /* Adaptare TVP (CR2, 0.7.8): hub-ul TVP GO si celelalte pagini ale aplicatiei TVP manager (hbb-prod.tvp.pl/apps/manager/,
+     * in afara de virtual-channel, care are reincarcarea ei de mai sus) arata "Trwa wczytywanie..." (.loading, cu animatia
+     * ellipsis) cat timp datele paginii (fetch-ul Nuxt, cererile graphql) nu s-au terminat. La un om (TVP 1 de pe satelit,
+     * hub-ul hbbtest.v3.tvp.pl/hub/index_tvp_1.php, Vu+ Uno 4K SE, 18.11.2026) incarcarea a ramas pe ecran; la noi (PC si
+     * receptor, din Romania) hub-ul se incarca sub 10 s, deci cauza nu s-a putut vedea. Aici: cand incarcarea sta pe ecran
+     * cel putin TVP_MANAGER_MS (acelasi element, vazut la verificarile din TVP_MANAGER_PAS_MS in TVP_MANAGER_PAS_MS: o
+     * incarcare noua, de la alta pagina a hub-ului, e alt element) si niciun film n-a pornit prin obiectul A/V, un rand in
+     * jurnalul paginii cu calea si cererile inca neterminate (din el aflam cauza) si o singura reincarcare a documentului
+     * (semnul din window.name al reincarcarii de pe virtual-channel: cel mult una pe navigator). O incarcare terminata sub 30 s
+     * nu schimba nimic; una legitima mai lunga (receptor foarte lent) costa o incarcare in plus, o data. */
+    var TVP_MANAGER_MS = 30000, TVP_MANAGER_PAS_MS = 15000;
+
+    function incarcareTvpPeEcran() {
+        var l = typeof document.querySelectorAll === "function" ? document.querySelectorAll(".loading") : [];
+        for (var i = 0; i < l.length; i++) {
+            if (/wczytywanie/i.test(String(l[i].textContent || "")) && window.getComputedStyle(l[i]).display !== "none")
+                return l[i];
+        }
+        return null;
+    }
+
+    function adaptareTvpManager() {
+        var loc = window.location;
+        if (!loc || !/(^|\.)tvp\.pl$/.test(loc.hostname || "") || !/^\/apps\/manager\//.test(loc.pathname || "") ||
+                /^\/apps\/manager\/virtual-channel/.test(loc.pathname || ""))
+            return false;
+        try {
+            if (String(window.name || "").indexOf(TVP_SEMN_REINCARCAT) >= 0)
+                return false;
+        } catch (x) {
+            return false;
+        }
+        var deschise = [], dela = 0, vazut = null, gata = false;
+
+        function scurt(a) {
+            return String(a || "").replace(/^[a-z]+:\/\/[^\/]+/i, "").split("?")[0].slice(0, 60);
+        }
+
+        function scoate(a) {
+            var i = deschise.indexOf(a);
+            if (i >= 0)
+                deschise.splice(i, 1);
+        }
+
+        var X = window.XMLHttpRequest;
+        if (X && X.prototype && typeof X.prototype.open === "function" && typeof X.prototype.send === "function") {
+            var deschide = X.prototype.open, trimiteX = X.prototype.send;
+            X.prototype.open = function (metoda, adresa) {
+                try {
+                    this.__hdsTvpCale = scurt(adresa);
+                } catch (x) {
+                    /* adresa ciudata: nu o urmarim */
+                }
+                return deschide.apply(this, arguments);
+            };
+            X.prototype.send = function () {
+                var x = this, a = x.__hdsTvpCale;
+                if (a) {
+                    deschise.push(a);
+                    try {
+                        x.addEventListener("loadend", function () { scoate(a); });
+                    } catch (e) {
+                        scoate(a);
+                    }
+                }
+                return trimiteX.apply(this, arguments);
+            };
+        }
+        if (typeof window.fetch === "function") {
+            var aduceTvp = window.fetch;
+            window.fetch = function (cerere) {
+                var a = scurt(cerere && typeof cerere === "object" && cerere.url ? cerere.url : cerere);
+                var p = aduceTvp.apply(this, arguments);
+                if (p && typeof p.then === "function") {
+                    deschise.push(a);
+                    p.then(function () { scoate(a); }, function () { scoate(a); });
+                }
+                return p;
+            };
+        }
+
+        function verifica() {
+            if (gata)
+                return;
+            var acum = Date.now(), el = null;
+            try {
+                el = incarcareTvpPeEcran();
+            } catch (x) {
+                /* fara DOM: nu e incarcarea */
+            }
+            if (!el || avUltimId > 0 || el !== vazut) {
+                vazut = avUltimId > 0 ? null : el;
+                dela = vazut ? acum : 0;
+            } else if (acum - dela >= TVP_MANAGER_MS) {
+                gata = true;
+                try {
+                    var nume = String(window.name || "");
+                    window.name = (nume ? nume + " " : "") + TVP_SEMN_REINCARCAT;
+                    jurnalPagina("adaptare TVP: reincarc o data, incarcarea sta de " + Math.round((acum - dela) / 1000) + " s pe " +
+                        String(loc.pathname || "").slice(0, 40) + " (" + document.readyState + "); neterminate: " +
+                        (deschise.length ? deschise.slice(0, 3).map(function (a) { return a.slice(0, 40); }).join(", ") : "niciuna"));
+                    loc.reload();
+                } catch (x) {
+                    /* nimic de facut: ramane ca fara adaptare */
+                }
+                return;
+            }
+            setTimeout(verifica, TVP_MANAGER_PAS_MS);
+        }
+        setTimeout(verifica, TVP_MANAGER_PAS_MS);
+        return true;
+    }
+
     /* ------------------------------------------------------------ animatiile cand desenul e pe procesor (0.7.7)
      * Fara placa grafica (rezerva pe procesor: GL cade pe Mali-450, deci pe SF8008 si celelalte cu Mali-450, sau --cpu)
      * pagina n-are compunere: o animatie CSS lunga (o sigla care pulseaza, un cerc care se invarte) se redeseneaza la
@@ -2713,6 +2826,7 @@
         enumerable: false });
     adaptareTvpHub();
     adaptareTvpStare();
+    adaptareTvpManager();
     animatiiPeProcesor();
     puneCaruselul();
     tradSetari();

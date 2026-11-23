@@ -69,6 +69,12 @@ FEL = dict([(r[0], r[2]) for r in ROLURI])
 IMPLICIT = dict([(r[0], r[1]) for r in ROLURI])
 # rolurile pe care utilizatorul le poate schimba de mana (fara transparent/black/white)
 EDITABILE = tuple([r[0] for r in ROLURI if r[2] != "fix"])
+# "Fundalul tuturor ecranelor" (forum 801 #3644): un singur rand care pune aceeasi culoare in cele trei roluri de fundal
+# (panourile cu text, meniurile pe tot ecranul, ferestrele de dialog). Nu e un rol: nu intra in ROLURI/EDITABILE, in
+# .conf sau in <colors>; se scriu tot cele trei roluri. Se compara si se schimba numai RGB: fiecare rol isi pastreaza
+# transparenta (din fabrica 0x26 / 0x00 / 0x0D), deci meniurile opace raman opace.
+FUNDAL = ("hdsPanel", "hdsPanelSolid", "hdsPanelDialog")
+ROL_FUNDAL = "fundal"
 COMENTARIU_CELULE = "celulele grilelor EPG: opace (umplerea listei scrie alfa in cadru, nu amesteca; cu alfa se vede TV-ul prin grila)"
 
 # transparenta panourilor cu text: design.md 3, minim 80% opacitate sub text
@@ -422,6 +428,26 @@ def text_conf(c):
 		if rol in c["roluri"]:
 			randuri.append("%s=%s" % (rol, hexa(c["roluri"][rol])))
 	return "\n".join(randuri) + "\n"
+
+
+def fundal_comun(pal):
+	"""RGB comun al celor trei roluri de fundal (int 0xRRGGBB) sau None cand sunt diferite (stare amestecata)."""
+	culori = set([pal[r] & 0x00FFFFFF for r in FUNDAL])
+	if len(culori) == 1:
+		return culori.pop()
+	return None
+
+
+def pune_fundal(roluri, culoare, pal, baza=None):
+	"""Pune RGB-ul `culoare` in cele trei roluri de fundal din `roluri` (dict-ul conf["roluri"]), fiecare cu
+	transparenta lui din `pal` (paleta de dinainte). Cu `baza` (paleta fara culorile puse de mana) un rol care ajunge
+	la valoarea din paleta nu ramane in .conf, ca la alegerea unui singur rol. Intoarce `roluri`."""
+	for r in FUNDAL:
+		v = cu_alfa(culoare & 0x00FFFFFF, (pal[r] >> 24) & 255)
+		roluri.pop(r, None)
+		if baza is None or v != baza[r]:
+			roluri[r] = v
+	return roluri
 
 
 def paleta_din_conf(c, palete=None):

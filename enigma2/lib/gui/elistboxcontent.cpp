@@ -305,6 +305,55 @@ void eListboxPythonStringContent::setItemHeight(int height)
 		m_listbox->setItemHeight(height);
 }
 
+/* Move only overflowing single-line ink, without changing the row or its clip.
+   A font's ascender can put the descenders below a row that would hold all
+   visible glyphs. Keep the original bottom for horizontal scrolling's clip.
+   Explicit center/bottom alignment, ink taller than its box and text that
+   already fits keep their old path. */
+static eRect listboxTextRect(gFont *font, const char *text, eRect rect, int flags)
+{
+	if (!font || !text || !*text || rect.width() <= 0 || rect.height() <= 0 ||
+		(flags & (gPainter::RT_VALIGN_CENTER | gPainter::RT_VALIGN_BOTTOM)))
+		return rect;
+	/* Match renderString's line controls, including DVB and Latin-1 input.
+	   Skip valid UTF-8 sequences so a continuation byte is not a control. */
+	bool escaped = false;
+	for (const unsigned char *p = (const unsigned char *)text; *p;)
+	{
+		unsigned int ch = *p++;
+		if (ch >= 0xC0 && ch < 0xF8)
+		{
+			int follow = ch < 0xE0 ? 1 : (ch < 0xF0 ? 2 : 3);
+			unsigned int decoded = ch & (0x3F >> follow);
+			const unsigned char *next = p;
+			int left = follow;
+			while (left && (*next & 0xC0) == 0x80)
+			{
+				decoded = (decoded << 6) | (*next++ & 0x3F);
+				--left;
+			}
+			if (!left)
+			{
+				ch = decoded;
+				p = next;
+			}
+		}
+		if (ch == '\n' || ch == 0x8A || ch == 0xE08A || (escaped && ch == 'n'))
+			return rect;
+		escaped = ch == '\\';
+	}
+	ePtr<eTextPara> para = new eTextPara(rect);
+	para->setFont(font);
+	para->renderString(text, 0);
+	eRect ink = para->getBoundBox();
+	if (ink.height() > 0 && ink.height() <= rect.height() && ink.bottom() > rect.bottom())
+	{
+		int dy = rect.top() + (rect.height() - ink.height()) / 2 - ink.top();
+		rect.setTop(rect.top() + dy);
+	}
+	return rect;
+}
+
 void eListboxPythonStringContent::paint(gPainter &painter, eWindowStyle &style, const ePoint &offset, int selected)
 {
 	ePtr<gFont> fnt = new gFont("Regular", 20);
@@ -401,7 +450,9 @@ void eListboxPythonStringContent::paint(gPainter &painter, eWindowStyle &style, 
 			/* the text box shrinks by the offset, so the text stays inside the item */
 			eSize text_size(m_itemsize.width() - (text_offset.x() - offset.x()), m_itemsize.height() - (text_offset.y() - offset.y()));
 				/* HDSatelit: a text wider than the row is cut at its edge, and scrolls on the selected row */
-			eDerulare::drawLine(painter, (local_style && local_style->m_font) ? local_style->m_font : fnt, eRect(text_offset, text_size), string, flags,
+			gFont *text_font = (local_style && local_style->m_font) ? local_style->m_font : fnt;
+			eRect text_rect = listboxTextRect(text_font, string, eRect(text_offset, text_size), flags);
+			eDerulare::drawLine(painter, text_font, text_rect, string, flags,
 				(selected && m_listbox) ? m_listbox->selectedRowScroller() : 0, true);
 			if (strstr(string, "\\c"))
 			{

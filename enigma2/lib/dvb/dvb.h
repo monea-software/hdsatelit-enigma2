@@ -18,6 +18,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <atomic>
 #include <pthread.h>
 
 #include <dvbsi++/service_description_section.h>
@@ -210,6 +211,7 @@ class eDVBResourceManager: public iObject, public sigc::trackable
 		/* zap queries open now (eDVBZapQuery): canAllocateChannel leaves out the channel uses that give way to a
 		   zap (lib/dvb/hdscedare.h) */
 	int m_zap_query;
+	std::atomic<int> m_preferred_tuner {-1};
 	void DVBChannelStateChanged(iDVBChannel*);
 	void feStateChanged();
 #ifndef SWIG
@@ -258,6 +260,12 @@ public:
 public:
 #endif
 	int canAllocateFrontend(ePtr<iDVBFrontendParameters> &feparm, bool simulate=false);
+	/* Preferinta de slot in memorie; negativ = automat. Nu rezerva si nu reacordeaza. */
+	void setPreferredTuner(int slot) { m_preferred_tuner.store(slot < 0 ? -1 : slot); }
+	int getPreferredTuner() const { return m_preferred_tuner.load(); }
+	/* Tipurile alese in Python pentru tunerul din slot (bitii 1 << feSatellite/feCable/feTerrestrial), numai pe tunerele
+	   cu mai multe sisteme fara fisierul mode; negativ = nespus, alegerea ramane ca pana acum (lib/dvb/hdstipales.h). */
+	void setHdsTipuriAlese(int slot, int masca);
 	bool canMeasureFrontendInputPower();
 	PSignal1<void,int> frontendUseMaskChanged;
 	SWIG_VOID(RESULT) allocateRawChannel(eUsePtr<iDVBChannel> &SWIG_OUTPUT, int slot_index);
@@ -367,6 +375,8 @@ private:
 	void AddUse();
 	void ReleaseUse();
 	int m_yielding_use_count;
+		/* UNI1: reacordarile Unicable/JESS facute dupa un esec, pentru acordarea curenta (lib/dvb/hdsunicable.h) */
+	int m_hds_unicable_reacordari;
 
 		/* for tsid/onid read */
 	ePyObject m_tsid_onid_callback;

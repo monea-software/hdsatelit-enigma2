@@ -196,6 +196,7 @@ static struct {
     double scara;
     double marire;
     gboolean cpu;
+    gboolean fara_jit;
     gboolean pictura_cpu;
     gboolean efemer;
     int port_certificat;
@@ -249,6 +250,7 @@ static GOptionEntry intrari_optiuni[] = {
     { "marire", 0, 0, G_OPTION_ARG_DOUBLE, &opt.marire, "Marirea paginii (zoom-level)", "F" },
     { "cpu", 0, 0, G_OPTION_ARG_NONE, &opt.cpu, "Fara accelerare: pagina desenata si compusa cu procesorul", NULL },
     { "pictura-cpu", 0, 0, G_OPTION_ARG_NONE, &opt.pictura_cpu, "Pagina desenata cu procesorul (Skia), compunerea pe GLES", NULL },
+    { "fara-jit", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt.fara_jit, NULL, NULL },
     { "efemer", 0, 0, G_OPTION_ARG_NONE, &opt.efemer, "Nimic pe disc (cookie-uri, cache)", NULL },
     { "date", 0, 0, G_OPTION_ARG_FILENAME, &opt.date, "Dosarul profilului (fara --efemer)", "CALE" },
     { "certificat-local", 0, 0, G_OPTION_ARG_INT, &opt.port_certificat, "Primeste certificatul propriu numai pentru 127.0.0.1:PORT", "PORT" },
@@ -2102,12 +2104,14 @@ static const char SCRIPT_CHENAR[] =
     "function n(v){return String(Math.round(v*10)/10);}"
     "trimite(n(x)+' '+n(y)+' '+n(w)+' '+n(h)+' '+n(vw));}"
     "function curand(){if(!cerut){cerut=1;window.requestAnimationFrame(masoara);}}"
+    "var tv=/(^|\\.)youtube\\.com$/i.test(location.hostname)&&/^\\/tv(?:\\/|$)/.test(location.pathname);"
+    "if(!tv){"
     "window.__hdsChenar=function(){ultim='';curand();};"
     "document.addEventListener('focusin',function(){ultim='';curand();},true);"
     "document.addEventListener('focusout',function(){setTimeout(curand,0);},true);"
     "document.addEventListener('scroll',curand,true);"
     "window.addEventListener('resize',curand);"
-    "setInterval(function(){if(!gol(activ()))curand();},300);"
+    "setInterval(function(){if(!gol(activ()))curand();},300);}"
     "window.addEventListener('keydown',function(ev){if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight']"
     ".indexOf(ev.key)<0)return;var a=document.activeElement;if(!a||!a.shadowRoot||!a.shadowRoot.activeElement)return;"
     "try{if(a.shadowRoot.delegatesFocus){a.shadowRoot.activeElement.blur();return;}"
@@ -2126,7 +2130,8 @@ static const char SCRIPT_TASTA_GATA[] =
  * selectorului care au :hover. Foile noi (<style>, <link> adaugate sau incarcate mai tarziu) se trec si ele, o singura
  * data fiecare; o foaie din alta origine (cssRules arunca) se sare. */
 static const char SCRIPT_MENIURI[] =
-    "(function(){if(window.__hdsMeniuri)return;window.__hdsMeniuri=1;var vazute=[],noua=null;"
+    "(function(){if(/(^|\\.)youtube\\.com$/i.test(location.hostname)&&/^\\/tv(?:\\/|$)/.test(location.pathname))return;"
+    "if(window.__hdsMeniuri)return;window.__hdsMeniuri=1;var vazute=[],noua=null;"
     "function inlocuieste(sel){var p=sel.split(','),r=[];for(var i=0;i<p.length;i++){if(p[i].indexOf(':hover')>=0)"
     "r.push(p[i].replace(/:hover/g,':focus-within'));}return r.join(',');}"
     "function treci(reguli,iesire){for(var i=0;i<reguli.length;i++){var g=reguli[i];"
@@ -2807,6 +2812,9 @@ static gboolean eroare_tls(WebKitWebView *v, const char *uri, GTlsCertificate *c
 static void proces_web_oprit(WebKitWebView *v, WebKitWebProcessTerminationReason motiv, gpointer d)
 {
     (void)v; (void)d;
+    /* The GL retry starts one more web process in this launch. Count both crashes. */
+    if (motiv == WEBKIT_WEB_PROCESS_CRASHED && !opt.fara_jit)
+        stare(opt.cpu ? "JIT-CADERE procesor" : "JIT-CADERE gl");
     if (motiv == WEBKIT_WEB_PROCESS_CRASHED && !opt.cpu) {
         /* Procesul web a cazut cu GL (driver, ecran EGL, memorie video). In modul --cpu nu se mai reporneste. */
         cere_repornire_pe_cpu("proces-web-cazut");
@@ -4396,6 +4404,20 @@ static gboolean iesire_programata(gpointer d)
     return G_SOURCE_REMOVE;
 }
 
+static void pregateste_jit(void)
+{
+    /* Set before any JSC/WebKit API; children inherit this bounded executable pool.
+     * This caps code memory, not the page heap, compiler workspace or total PSS. */
+    const char *cerut = g_getenv("JSC_useJIT");
+    if (cerut && (!g_strcmp0(cerut, "0") || !g_ascii_strcasecmp(cerut, "false")))
+        opt.fara_jit = TRUE;
+    g_setenv("JSC_useJIT", opt.fara_jit ? "0" : "1", TRUE);
+    g_setenv("JSC_useFTLJIT", "0", TRUE);
+    /* DFG crashes on ARM32, including when requested by the inherited environment. */
+    g_setenv("JSC_useDFGJIT", "0", TRUE);
+    g_setenv("JSC_jitMemoryReservationSize", "8388608", TRUE);
+}
+
 int main(int argc, char **argv)
 {
     GError *eroare = NULL;
@@ -4407,6 +4429,7 @@ int main(int argc, char **argv)
         return 2;
     }
     g_option_context_free(ctx);
+    pregateste_jit();
     url_pornire = argc > 1 ? argv[1] : NULL;
     opt.url = argc > 1 ? argv[1] : "about:blank";
     if (opt.latime < 320 || opt.inaltime < 240 || opt.scara < 0.5 || opt.scara > 4.0) {

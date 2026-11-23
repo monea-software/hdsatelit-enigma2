@@ -9,6 +9,8 @@ from .config import config, ConfigSubsection, ConfigInteger, ConfigYesNo
 profile("VolumeControl")
 
 MUT_Z = 10
+# VOL8: bara de volum la mijloc sta peste bara canalului (jos, y 802..1034), sub semnul de mut
+VOL_MIJLOC_Z = 9
 
 
 def _setariSunet():
@@ -51,7 +53,8 @@ class VolumeControl:
 		config.audio.hds_mut = ConfigYesNo(default = False)
 		config.audio.hds_mut.save_forced = True
 
-		self.volumeDialog = session.instantiateDialog(Volume)
+		self.session = session
+		self.volumeDialog = self._faVolum()
 		# HDSatelit 0.7.7 (OSD, asistenta 906594): semnul de mut deasupra barei canalului (la pornire bara sta pe ecran cat
 		# semnul; in tema Pro semnul cade peste caseta ceasului din bara si ramanea ascuns sub ea, proba pe receptor). MUT_Z sub
 		# protectia ecranului (20) si sub textul iesirii (120).
@@ -66,6 +69,50 @@ class VolumeControl:
 		vol = config.audio.volume.value
 		self.volumeDialog.setValue(vol)
 		self._volctrl = None
+		self._ascultaLocul()
+
+	def _faVolum(self):
+		"""Fereastra volumului: sus in dreapta ca pana atunci, sau la mijloc (VOL8, Screens/Volume.laMijloc) peste bara canalului."""
+		try:
+			from Screens.Volume import laMijloc
+			mijloc = laMijloc()
+		except Exception:
+			mijloc = False
+		if mijloc:
+			return self.session.instantiateDialog(Volume, zPosition=VOL_MIJLOC_Z)
+		return self.session.instantiateDialog(Volume)
+
+	def _ascultaLocul(self):
+		"""VOL8: "Locul barei de volum" si "Arată numărul lângă bara de volum" (Components/HdsSetariSunet.py) se schimba pe loc,
+		de pe televizor sau din web: ferestrele se fac din nou."""
+		try:
+			c = config.hds_setari_sunet
+			c.loc_volum.addNotifier(self.refaFerestrele, initial_call=False)
+			c.numar_volum.addNotifier(self.refaFerestrele, initial_call=False)
+		except Exception as e:
+			print("[VolumeControl] locul barei de volum: %s" % e)
+
+	def refaFerestrele(self, *args):
+		"""Bara si semnul de mut din nou, dupa locul si numarul alese; bara se arata cat stau de obicei, ca omul sa vada
+		unde e acum, iar semnul de mut ramane pe ecran daca era."""
+		# Screen.shown e True si inainte de prima aratare (already_shown False): pe ecran = amandoua
+		mutVizibil = bool(getattr(self.muteDialog, "shown", False) and getattr(self.muteDialog, "already_shown", True))
+		for d in (self.volumeDialog, self.muteDialog):
+			try:
+				self.session.deleteDialog(d)
+			except Exception as e:
+				print("[VolumeControl] fereastra veche: %s" % e)
+		self.volumeDialog = self._faVolum()
+		self.muteDialog = self.session.instantiateDialog(Mute, zPosition=MUT_Z)
+		vc = self.volctrl
+		if vc is not None:
+			self.volumeDialog.setValue(0 if vc.isMuted() else vc.getVolume())
+		else:
+			self.volumeDialog.setValue(config.audio.volume.value)
+		if mutVizibil:
+			self.muteDialog.show()
+		self.volumeDialog.show()
+		self.hideVolTimer.start(self.afisareMs(), True)
 
 	@property
 	def volctrl(self):

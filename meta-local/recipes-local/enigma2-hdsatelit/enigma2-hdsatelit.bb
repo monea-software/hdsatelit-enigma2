@@ -46,7 +46,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.7.7+git${SRCPV}"
+PV = "0.7.8+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe
@@ -292,6 +292,102 @@ RRECOMMENDS:${PN} += "hdsatelit-opensubtitles"
 RRECOMMENDS:${PN} += "hdsatelit-ajutor"
 RRECOMMENDS:${PN}:remove:hdsflashmic = "hdsatelit-ajutor"
 
+# PRB8 (22.11.2026): probele 0.7.7 (pachetele enigma2-plugin-hds-proba-*, puse de asistenta sau din Extensii) tin in
+# /usr/lib/hds-proba/<cod>/vechi copiile fisierelor 0.7.7 si o paza care le pune la loc (la cadere, la 30 de minute fara
+# confirmare, la `opkg remove` prin prerm). Paza pune la loc numai fisierele care au inca suma pusa de proba, dar multe
+# fisiere ale probelor sunt IDENTICE in 0.7.8 (cbs1077, pcn6077, dcd6077, fwc4077, cur6077, m3q6077...): dupa actualizare
+# un fisier 0.7.7 ar ajunge peste 0.7.8. De aceea, la actualizare, inainte ca opkg sa despacheteze pachetul nou si sa
+# configureze pachetele ramase neconfigurate (o proba refuzata de paza veche ramane "unpacked" si opkg ii reia postinst-ul):
+# pazele se opresc, scripturile probelor din info/ (preinst, postinst, prerm, postrm), S99hds-proba-* si copiile se sterg,
+# deci nimic nu mai poate pune la loc fisiere 0.7.7. Fisierele probelor sunt ale lui enigma2-hdsatelit si le rescrie
+# pachetul nou; un fisier al altui pachet (modulul de nucleu al unei probe) ramane cum l-a pus proba, cu un rand in jurnal.
+# opkg rescrie status-ul din memorie la sfarsit, deci pachetele raman in lista pana la urmatoarea pornire a interfetei:
+# numele lor raman in /etc/hds-probe-de-scos, iar tools/enigma2.sh le scoate cu `opkg remove` (fara niciun script).
+# Un rand pentru fiecare proba in /home/root/logs/hds-actualizari.log. Numai pe receptor ($D gol); iese mereu cu 0.
+# HDS_PROBE_USCAT=1 arata pe ecran ce ar face, fara nicio schimbare (proba pe receptor: scriptul extras din pachet).
+# RPR8 (0.7.8): „Repară imaginea” reinstaleaza enigma2-hdsatelit cu ACEEASI versiune ca sa puna la loc fisierele sterse;
+# atunci (HDS_REPARA_IMAGINEA=1 in mediul lui opkg, pus de Components/HdsActualizari.py) probele raman: nu e o versiune noua.
+pkg_preinst:${PN}() {
+if [ -n "$HDS_REPARA_IMAGINEA" ] && [ -z "$D" ]; then
+	{ mkdir -p /home/root/logs && echo "$(date '+%Y-%m-%d %H:%M:%S') [probe] repara imaginea: aceeasi versiune, probele raman" >> /home/root/logs/hds-actualizari.log; } 2>/dev/null || true
+fi
+if [ -z "$D" ] && [ -f /var/lib/opkg/status ] && [ -z "$HDS_REPARA_IMAGINEA" ]; then
+( set +e
+U=
+[ "$HDS_PROBE_USCAT" = 1 ] && U=1
+I=/var/lib/opkg/info
+jurnal() {
+	r="$(date '+%Y-%m-%d %H:%M:%S') [probe 0.7.7] $*"
+	if [ -n "$U" ]; then
+		echo "$r"
+	else
+		mkdir -p /home/root/logs
+		echo "$r" >> /home/root/logs/hds-actualizari.log
+	fi
+	}
+fa() {
+	if [ -n "$U" ]; then echo "  (uscat) $*"; else "$@"; fi
+	}
+nume=$(sed -n 's/^Package: \(enigma2-plugin-hds-proba-[a-z0-9.+-]*\)$/\1/p' /var/lib/opkg/status)
+dosare=$(ls -d /usr/lib/hds-proba/*/ 2>/dev/null)
+s99=$(ls /etc/rc?.d/S??hds-proba-* 2>/dev/null)
+if [ -n "$nume$dosare$s99" ]; then
+	# 1. pazele (numai paza.py din /usr/lib/hds-proba; reincarcarea modulelor, init 4 ... init 3, se lasa sa termine)
+	paze=
+	for p in /proc/[0-9]*; do
+		case "$(tr '\0' ' ' < $p/cmdline 2>/dev/null)" in
+		*/usr/lib/hds-proba/*/paza.py*)
+			pid=$(basename $p)
+			paze="$paze $pid"
+			fa kill -TERM $pid 2>/dev/null
+			;;
+		esac
+	done
+	if [ -n "$paze" ] && [ -z "$U" ]; then
+		sleep 1
+		for pid in $paze; do kill -KILL $pid 2>/dev/null; done
+	fi
+	jurnal "actualizare: probele 0.7.7 se scot, fisierele raman cele ale versiunii noi (pachete: $(echo $nume | wc -w), paze oprite:$paze)"
+	# 2. un rand pentru fiecare proba (info/<pachet>.list: "cale<TAB>mod" pe fiecare rand)
+	for d in $dosare; do
+		st=nepusa
+		if [ -f $d/stare.json ]; then
+			st=scoasa
+			grep -q '"activa": true' $d/stare.json && st=activa
+			grep -q '"confirmata": true' $d/stare.json && st="$st, confirmata"
+		fi
+		altele=
+		case "$st" in
+		activa*)
+			for t in $(awk -F'"' '/"tinta":/ { print $4 }' $d/stare.json | sort -u); do
+				awk -F'\t' -v t="$t" '$1 == t { g = 1; exit } END { exit !g }' $I/enigma2-hdsatelit.list 2>/dev/null ||
+					altele="$altele $t"
+			done
+			;;
+		esac
+		if [ -n "$altele" ]; then
+			jurnal "proba $(basename $d): $st; ramane cum l-a pus proba (alt pachet decat enigma2-hdsatelit):$altele"
+		else
+			jurnal "proba $(basename $d): $st"
+		fi
+	done
+	# 3. nimic nu mai porneste paza la pornire si nimic nu mai pune la loc la `opkg remove`
+	for f in $s99; do
+		fa rm -f $f
+	done
+	for n in $nume; do
+		fa rm -f $I/$n.preinst $I/$n.postinst $I/$n.prerm $I/$n.postrm
+		[ -n "$U" ] || echo $n >> /etc/hds-probe-de-scos
+	done
+	fa rm -rf /usr/lib/hds-proba
+	fa rm -f /tmp/hds-proba-*.log
+	[ -n "$U" ] || sync
+fi
+) || true
+fi
+true
+}
+
 # Urmarirea pornirii (tools/hds-rezerva.sh) priveste ca pornire in dubiu orice pornire fara semnul
 # /etc/hds-interfata-pornita. O instalare prin actualizare din meniu inseamna ca interfata a mers pe receptor, deci
 # semnul se pune atunci (numai pe receptor: la constructia imaginii $D e plin si nu se face nimic).
@@ -334,8 +430,40 @@ if [ -z "$D" ] && [ -f ${libdir}/enigma.info ] && [ -f ${sysconfdir}/image-versi
 	v=$(sed -n 's/^imageversion=//p' ${sysconfdir}/image-version | tr -cd '0-9.')
 	b=$(sed -n 's/^imagebuild=//p' ${sysconfdir}/image-version | tr -cd '0-9')
 	if [ -n "$v" ] && [ -n "$b" ]; then
+		# ZRO1 (21.11.2026): imageversion is kept current too, and a file written before 0.7.8 (no model= line) gets the
+		# receiver identity that hds_enigma_info_rootfs (hdsatelit-image.bb) writes in new images: brand, displaybrand,
+		# displaymodel (rules name split like HdsCommon._model_din_reguli, so the name on screen does not change),
+		# imageversion, model (OpenMultiBoot 1.3 skips images without it). Nothing added when a value is missing.
+		# Match keys like Converter/HdsCommon._kv_file: ignore case and surrounding whitespace.
+		# awk terminates every retained line, including an unterminated last line before new keys are appended.
 		( f=${libdir}/enigma.info
-		sed -e '/^checksum=/d' -e "s/^imgversion=.*/imgversion='$v'/" -e "s/^compiledate=.*/compiledate='$b'/" $f > $f.hds-nou &&
+		awk -v version="$v" -v build="$b" -v quote="'" '
+			{
+				key = $0
+				sub(/=.*/, "", key)
+				gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+				key = tolower(key)
+				if (index($0, "=")) {
+					if (key == "checksum") next
+					if (key == "imgversion" || key == "imageversion") { print key "=" quote version quote; next }
+					if (key == "compiledate") { print key "=" quote build quote; next }
+				}
+				print
+			}' $f > $f.hds-nou &&
+		if ! grep -q -i "^[[:space:]]*model[[:space:]]*=" $f.hds-nou && [ -f ${sysconfdir}/hdsatelit-model ]; then
+			n=$(sed -n 's/^model=//p' ${sysconfdir}/hdsatelit-model | head -n 1 | tr -cd 'A-Za-z0-9 ._+()-' |
+				sed -e 's/^ *//' -e 's/ *$//' | cut -c1-60)
+			m=$(printf '%s' "$n" | sed -e 's/^[^ ]* *//' -e 's/ *$//')
+			o="${@''.join(c for c in (d.getVar('BRAND_OEM') or '') if c.isalnum() or c in '_.-')}"
+			k="${@''.join(c for c in (d.getVar('MACHINE') or '') if c.isalnum() or c in '_.-')}"
+			# each key only when it is MISSING: values already in the file (written by the owner or by another package)
+			# stay exactly as they are; model= comes last, so a second run finds it and adds nothing
+			if [ -n "$m" ] && [ -n "$k" ] && [ -n "$o" ]; then
+				for c in "brand=$o" "displaybrand=${n%% *}" "displaymodel=$m" "imageversion=$v" "model=$k"; do
+					grep -q -i "^[[:space:]]*${c%%=*}[[:space:]]*=" $f.hds-nou || printf "%s='%s'\n" "${c%%=*}" "${c#*=}" >> $f.hds-nou
+				done
+			fi
+		fi &&
 			printf 'checksum=%s\n' "$(md5sum < $f.hds-nou | cut -d ' ' -f 1)" >> $f.hds-nou &&
 			chmod 0644 $f.hds-nou && mv -f $f.hds-nou $f ) || rm -f ${libdir}/enigma.info.hds-nou
 	fi

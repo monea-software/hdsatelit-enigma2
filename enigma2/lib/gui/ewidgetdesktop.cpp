@@ -415,7 +415,7 @@ static long hdsAcumMs()
 
 void eWidgetDesktop::hdsSetAnimatie(int fel, int durata_ms)
 {
-	s_anim_fel = (fel >= 0 && fel <= 3) ? fel : 0;
+	s_anim_fel = (fel >= 0 && fel <= gHdsAnimatie::incrucisata) ? fel : 0;
 	s_anim_durata_ms = durata_ms < 80 ? 80 : (durata_ms > 600 ? 600 : durata_ms);
 	eDebug("[HdsAnimatie] felul %d, %d ms", s_anim_fel, s_anim_durata_ms);
 }
@@ -428,6 +428,11 @@ int eWidgetDesktop::hdsAnimatieFel()
 int eWidgetDesktop::hdsAnimatieDurata()
 {
 	return s_anim_durata_ms;
+}
+
+void eWidgetDesktop::hdsAnimatieReincearca()
+{
+	::hdsAnimatieReincearca();
 }
 
 void eWidgetDesktop::hdsAnimatieInchidere()

@@ -105,9 +105,9 @@ def _scrieToate(lista):
 
 
 def publice():
-	"""Fara parola si jeton: pentru ecran si pagina web."""
+	"""Valorile salvate pentru ecran si pagina web."""
 	return [{"id": s["id"], "fel": s["fel"], "nume": s.get("nume") or NUME_FEL[s["fel"]], "adresa": s.get("adresa", ""),
-		"utilizator": s.get("utilizator", ""), "are_parola": bool(s.get("parola"))} for s in citeste()]
+		"utilizator": s.get("utilizator", ""), "are_parola": bool(s.get("parola")), "parola": s.get("parola", ""), "jeton": s.get("jeton", "")} for s in citeste()]
 
 
 def idServer(fel, adresa, utilizator):

@@ -25,6 +25,9 @@
 # pagina intreaba din nou. Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul lor (M).
 
 
+import os
+
+
 def _t(text):
 	try:
 		return _(text)  # noqa: F821
@@ -40,17 +43,17 @@ def _m(M=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, fara token."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:8]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 20:
+		if cheie == "token":
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:600].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -116,29 +119,108 @@ def _r(M):
 		return None
 
 
+# Ultimul rezultat explicit, comun TV si web; fara arhive sau date de acces.
+_REZULTAT_MODULE = None
+
+
 def stare_module(M):
-	"""Modulele de acces din copie care nu sunt instalate: aceeasi intrebare ca pe televizor, cu butonul ei."""
+	"""Citeste numai metadatele restaurarii si starea lucrarii existente."""
+	st = {"module": [], "intrebare_module": "", "module_lucreaza": False,
+		"module_mesaj": "", "module_eroare": False}
 	R = _r(M)
 	if R is None or not hasattr(R, "module_de_pus"):
-		return {"module": [], "intrebare_module": "", "module_lucreaza": False}
-	nume = R.module_de_pus()
-	return {"module": [R._scurt(n) for n in nume], "intrebare_module": R.intrebare_module(nume),
-		"module_lucreaza": bool(R.module_in_lucru())}
+		return st
+	try:
+		pe_fir = getattr(R, "stare_module_pe_fir", None)
+		snapshot = pe_fir() if pe_fir else None
+		nume = snapshot["nume"] if snapshot is not None else R.module_de_pus()
+		lucreaza = bool(R.module_in_lucru())
+		st.update(module=[R._scurt(n) for n in nume], intrebare_module=R.intrebare_module(nume),
+			module_lucreaza=lucreaza)
+		if lucreaza:
+			st["module_mesaj"] = _t("Modulul se pune acum. Durează până la câteva minute.")
+		elif _REZULTAT_MODULE and _REZULTAT_MODULE[:2] == (R, tuple(nume)):
+			st["module_mesaj"], st["module_eroare"] = _REZULTAT_MODULE[2:]
+		elif snapshot is not None:
+			st["module_mesaj"], st["module_eroare"] = snapshot["mesaj"], snapshot["eroare"]
+		elif nume and hasattr(M, "mesaj_reinstalare"):
+			st["module_mesaj"] = M.mesaj_reinstalare()
+	except Exception:
+		st.update(module_mesaj=_t("Starea modulelor din copie nu se poate citi acum. Copia a rămas păstrată."),
+			module_eroare=True)
+	return st
+
+
+def _alegere_schimbata(R):
+	"""Verifica numai metadatele restaurarii si legatura scriptului ales."""
+	if not hasattr(R, "_citeste_json"):
+		return False
+	rez = R._citeste_json(os.path.join(R.dosar("/"), R.REZULTAT)) or {}
+	for rel, tinta in (rez.get("legaturi") or {}).items():
+		if not R.TIPAR_LEGATURA.match(rel) or not rel.startswith("etc/init.d/"):
+			continue
+		cale = os.path.join("/", rel)
+		if not os.path.islink(cale):
+			continue
+		ales = os.path.basename(os.readlink(cale))
+		if ales != os.path.basename(tinta) and not ales.endswith("." + R.SUFIX_GOL):
+			if os.path.isfile(os.path.join("/etc/init.d", ales)):
+				return True
+	return False
 
 
 def module(a, M=None):
-	"""POST /api/copie-setari-module: pune modulele pe firul lor (opkg poate dura); pagina intreaba din nou."""
+	"""Porneste lucrarea existenta; rezultatul vine pe firul interfetei."""
+	global _REZULTAT_MODULE
 	M = _m(M)
 	R = _r(M)
 	if R is None or not hasattr(R, "porneste_modulele"):
 		return {"result": False, "message": _t("Imaginea aceasta nu poate pune modulele din copie.")}
-	if R.module_in_lucru():
-		return {"result": True, "message": _t("Modulul se pune acum. Durează până la câteva minute.")}
-	if not R.module_de_pus():
-		return {"result": False, "message": _t("Niciun modul din copie nu așteaptă să fie pus.")}
-	if not R.porneste_modulele():
-		return {"result": False, "message": _t("Modulul nu s-a putut porni acum. Încearcă din nou.")}
-	return {"result": True, "message": _t("Modulul se pune acum. Durează până la câteva minute.")}
+	try:
+		if hasattr(R, "stare_module_pe_fir"):
+			def gata_pe_fir(rez):
+				global _REZULTAT_MODULE
+				st = R.stare_module_pe_fir()
+				_REZULTAT_MODULE = (R, tuple(st["nume"]), R.mesaj_module(rez),
+					bool(rez.get("nereusite") or rez.get("lipsa") or rez.get("eroare")))
+			if R.module_in_lucru() or R.porneste_modulele(la_sfarsit=gata_pe_fir):
+				return {"result": True, "message": _t("Modulul se pune acum. Durează până la câteva minute.")}
+			return {"result": False, "message": _t("Modulul nu s-a putut porni acum. Încearcă din nou.")}
+		if R.module_in_lucru():
+			return {"result": True, "message": _t("Modulul se pune acum. Durează până la câteva minute.")}
+		if not R.module_de_pus():
+			return {"result": False, "message": _t("Niciun modul din copie nu așteaptă să fie pus.")}
+
+		if _alegere_schimbata(R):
+			mesaj = _t("Ai ales deja alt modul. Instalarea din copie nu a pornit, ca să păstreze alegerea ta. Copia a rămas păstrată.")
+			_REZULTAT_MODULE = (R, tuple(R.module_de_pus()), mesaj, True)
+			return {"result": False, "message": mesaj}
+
+		def gata(rez):
+			global _REZULTAT_MODULE
+			rez = rez or {}
+			nume_ramase = ()
+			try:
+				nume_ramase = tuple(R.module_de_pus())
+				_REZULTAT_MODULE = (R, nume_ramase, R.mesaj_module(rez),
+					bool(rez.get("nereusite") or rez.get("lipsa")))
+			except Exception:
+				_REZULTAT_MODULE = (R, nume_ramase,
+					_t("Starea modulelor din copie nu se poate citi acum. Copia a rămas păstrată."), True)
+
+		_REZULTAT_MODULE = None
+		pornit = R.porneste_modulele(la_sfarsit=gata)
+		if pornit or R.module_in_lucru():
+			return {"result": True, "message": _t("Modulul se pune acum. Durează până la câteva minute.")}
+	except Exception:
+		pass
+	mesaj = _t("Modulul nu s-a putut porni acum. Încearcă din nou.")
+	try:
+		nume = R.stare_module_pe_fir()["nume"] if hasattr(R, "stare_module_pe_fir") else R.module_de_pus()
+		_REZULTAT_MODULE = (R, tuple(nume), mesaj, True)
+	except Exception:
+		_REZULTAT_MODULE = None
+	return {"result": False, "message": mesaj}
 
 
 def fa(a, M=None):
@@ -431,17 +513,17 @@ function citeste(cauta){
     desenAutomat(d);
     $("cerere").classList.toggle("ascuns", !d.cerere);
     var areModule = !!(d.module && d.module.length);
-    $("card-punere").classList.toggle("ascuns", !d.punere && !areModule); $("punere").textContent = d.punere || "";
+    $("card-punere").classList.toggle("ascuns", !d.punere && !areModule && !d.module_mesaj); $("punere").textContent = d.punere || "";
     $("module").classList.toggle("ascuns", !areModule); $("intrebare-module").textContent = d.intrebare_module || "";
     $("pune-module").disabled = !!d.module_lucreaza;
-    if(d.module_lucreaza){ mesaj("mesaj-module", "Modulul se pune acum. Durează până la câteva minute."); }
+    mesaj("mesaj-module", d.module_mesaj || "", !!d.module_eroare);
     if(asteapta === "copie" && !d.lucreaza){
       asteapta = null;
       var u = d.ultimul || {mesaje: []};
       mesaj("mesaj-copie", (u.mesaje || []).join("\\n"), !u.ok);
       desenMedii(d);
     }
-    ceas = setTimeout(function(){ citeste(); }, d.cauta || d.lucreaza || asteapta ? 1000 : 3000);
+    ceas = setTimeout(function(){ citeste(); }, d.cauta || d.lucreaza || d.module_lucreaza || asteapta ? 1000 : 3000);
   }).catch(function(){
     mesaj("mesaj-copie", "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.", true);
     ceas = setTimeout(function(){ citeste(); }, 3000);

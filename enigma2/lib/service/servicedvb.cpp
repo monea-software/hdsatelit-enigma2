@@ -3,6 +3,8 @@
 #include <lib/base/object.h>
 #include <chrono>
 #include <string>
+#include <cstdlib>
+#include <cstring>
 #include <lib/service/servicedvb.h>
 #include <lib/service/hdsreleut2.h>
 #include <lib/service/hdsfluxhttp.h>
@@ -262,6 +264,15 @@ int eStaticServiceDVBBouquetInformation::isPlayable(const eServiceReference &ref
 			};
 			((const eServiceReferenceDVB&)*it).getChannelID(chid);
 			int tmp=res->canAllocateChannel(chid, chid_ignore, simulate);
+			if (tmp > 0 && tmp < 30000)
+			{
+				// DMV6: scorul nu mai spune singur tipul (lib/dvb/hdstipales.h da +1 tunerului ales pentru el),
+				// deci tipul se ia din canal; fara date despre canal ramane citirea veche, dupa scor
+				ePtr<iDVBFrontendParameters> fp;
+				int sys = -1;
+				if (!db->getChannelFrontendData(chid, fp) && fp && !fp->getSystem(sys))
+					tmp = sys == iDVBFrontend::feTerrestrial ? 1 : (sys == iDVBFrontend::feCable ? 2 : 3);
+			}
 			switch(tmp)
 			{
 				case 0:
@@ -300,7 +311,9 @@ int eStaticServiceDVBBouquetInformation::getLength(const eServiceReference &ref)
 
 RESULT eStaticServiceDVBBouquetInformation::getEvent(const eServiceReference &ref, ePtr<eServiceEvent> &ptr, time_t start_time)
 {
-	return eEPGCache::getInstance()->lookupEventTime(ref, start_time, ptr);
+	/* dupa ~eEPGCache (iesirea) getInstance() da 0 */
+	eEPGCache *epg = eEPGCache::getInstance();
+	return epg ? epg->lookupEventTime(ref, start_time, ptr) : -1;
 }
 
 class eStaticServiceDVBPVRInformation: public iStaticServiceInformation
@@ -439,7 +452,8 @@ RESULT eStaticServiceDVBPVRInformation::getEvent(const eServiceReference &ref, e
 		fara_cale.type = eServiceFactoryDVB::id;
 		fara_cale.path.clear();
 		fara_cale.name.clear();
-		return eEPGCache::getInstance() ? eEPGCache::getInstance()->lookupEventTime(fara_cale, start_time, evt) : -1;
+		eEPGCache *epg = eEPGCache::getInstance();	/* citit o singura data: iesirea il face 0 */
+		return epg ? epg->lookupEventTime(fara_cale, start_time, evt) : -1;
 	}
 	if (!ref.path.empty())
 	{
@@ -1395,6 +1409,7 @@ RESULT eDVBServicePlay::start()
 
 RESULT eDVBServicePlay::stop()
 {
+	m_hds_http = 0;
 	/* the bitrate counters give their demux filters back (and their threads end) before the handlers go */
 	releaseLiveBitrate();
 	/* egalizatorul din procesor lasa demultiplexorul si placa de sunet inaintea serviciului */
@@ -1674,6 +1689,7 @@ RESULT eDVBServicePlay::seekTo(pts_t to)
 		return -1;
 	
 	m_cue->seekTo(0, to);
+	++m_hds_speech_epoch;
 	m_dvb_subtitle_pages.clear();
 	m_subtitle_pages.clear();
 	hdsSubtitrareLiniste(hdssub::LINISTE_PORNIRE_MS);
@@ -1705,6 +1721,7 @@ RESULT eDVBServicePlay::seekRelative(int direction, pts_t to)
 		return 0;
 	
 	m_cue->seekTo(mode, to);
+	++m_hds_speech_epoch;
 	m_dvb_subtitle_pages.clear();
 	m_subtitle_pages.clear();
 	hdsSubtitrareLiniste(hdssub::LINISTE_PORNIRE_MS);
@@ -1877,19 +1894,26 @@ RESULT eDVBServicePlay::getEvent(ePtr<eServiceEvent> &evt, int nownext)
 	RESULT r = m_event_handler.getEvent(evt, nownext);
 	/* a type 1 channel over HTTP seldom carries its own EIT: the bar shows the programme of the satellite channel whose
 	   ids the reference holds, from the EPG cache (nownext 0 = now, 1 = the next one) */
-	if (r && m_is_stream && eEPGCache::getInstance())
+	eEPGCache *epg = eEPGCache::getInstance();	/* citit o singura data: iesirea il face 0 */
+	if (r && m_is_stream && epg)
 	{
 		eServiceReference fara_cale(m_reference);
 		fara_cale.type = eServiceFactoryDVB::id;
 		fara_cale.path.clear();
 		fara_cale.name.clear();
-		r = eEPGCache::getInstance()->lookupEventTime(fara_cale, -1, evt, nownext ? 1 : 0);
+		r = epg->lookupEventTime(fara_cale, -1, evt, nownext ? 1 : 0);
 	}
 	return r;
 }
 
 int eDVBServicePlay::getInfo(int w)
 {
+	/* Capability marker: unknown fields in older players also return -1. */
+	if (w == sUser + 43)
+		return 0x484453;
+	/* A non-blocking snapshot of the live source, shared with TV and web. */
+	if (w == sUser + 42)
+		return m_hds_http ? m_hds_http->status() : -3;
 	/* HD Satelit (0.7.7): getInfo(sUser + 40) = the video PTS of the decoder (its low 31 bits), -1 when the decoder gives
 	   no PTS (the read fails or gives 0), -2 without a decoder. Components/HdsEcranNegru.py learns from two reads with
 	   different PTS that new pictures come: on Vu+ the video event comes only when the picture size changes and, with the
@@ -1901,6 +1925,19 @@ int eDVBServicePlay::getInfo(int w)
 		if (!m_decoder)
 			return -2;
 		if (m_decoder->getPTS(1, v) || v <= 0)
+			return -1;
+		return (int)(v & 0x7fffffff);
+	}
+	/* HD Satelit (0.7.8): getInfo(sUser + 41) = the audio PTS of the decoder, in the same form as sUser + 40. Only for the
+	   line of Components/HdsImagineDupaPlayer.py in hds-zap.log, when the picture of the first channel after a player stays
+	   (AX HD51, assistance 905152, forum 676): a video PTS far from the audio PTS is an old picture left in the decoder, a
+	   close one is a picture that waits for the clock of the decoder. */
+	if (w == sUser + 41)
+	{
+		pts_t v = 0;
+		if (!m_decoder)
+			return -2;
+		if (m_decoder->getPTS(2, v) || v <= 0)
 			return -1;
 		return (int)(v & 0x7fffffff);
 	}
@@ -2077,6 +2114,18 @@ std::string eDVBServicePlay::getInfoString(int w)
 
 PyObject *eDVBServicePlay::getInfoObject(int w)
 {
+	if (w == sHdsSpeechEpoch)
+		return PyLong_FromUnsignedLong(m_hds_speech_epoch);
+	if (w == sHdsSpeechDvb)
+	{
+		/* A separate PES tap follows the existing playback demux. No source or decoder commands. */
+		if (!hdsRedareDinFisier() || !m_decode_demux)
+			Py_RETURN_NONE;
+		uint8_t id;
+		if (m_decode_demux->getCADemuxID(id))
+			Py_RETURN_NONE;
+		return Py_BuildValue("{s:i,s:I}", "demux", (int)id, "salt", m_hds_speech_epoch);
+	}
 	switch (w)
 	{
 	case sCAIDs:
@@ -2945,6 +2994,7 @@ ePtr<iTsSource> eDVBServicePlay::createTsSource(eServiceReferenceDVB &ref)
 	if (m_is_stream && ref.path == m_reference.path)
 	{
 		eHdsFluxHttp *s = new eHdsFluxHttp();
+		m_hds_http = s;
 		s->open(ref.path);
 		/* the start reserve (the local relays of DVB-T2 and DAB+ from satellite, and the type 1 channels with an
 		   http:// address, which need it more), from the setting of the relays' window; 400 ms when it is not there */
@@ -4143,6 +4193,16 @@ PyObject *eDVBServicePlay::getSubtitleList()
 	return l;
 }
 
+static bool hdsJurnalSubtitrariDetaliat()
+{
+	/* Same startup setting as Components/HdsJurnale.py::detaliatActiv. */
+	static const bool activ = []() {
+		const char *nivel = std::getenv("ENIGMA_DEBUG_LVL");
+		return nivel && *nivel;
+	}();
+	return activ;
+}
+
 void eDVBServicePlay::newSubtitlePage(const eDVBTeletextSubtitlePage &page)
 {
 	if (m_subtitle_widget)
@@ -4150,7 +4210,8 @@ void eDVBServicePlay::newSubtitlePage(const eDVBTeletextSubtitlePage &page)
 		pts_t pos = 0;
 		if (m_decoder)
 			m_decoder->getPTS(0, pos);
-		eDebug("got new subtitle page %lld %lld %d", (long long)pos, (long long)page.m_pts, page.m_have_pts);
+		if (hdsJurnalSubtitrariDetaliat())
+			eDebug("got new subtitle page %lld %lld %d", (long long)pos, (long long)page.m_pts, page.m_have_pts);
 		/* translation: the text goes to Components/HdsTraducereSubtitrari.py now, before its PTS, so that the translation
 		   can be ready when the page is shown */
 		m_subtitle_widget->prefetchText(page, (page.m_have_pts && pos) ? (int)((page.m_pts - pos) / 90) : 0);
@@ -4176,7 +4237,8 @@ void eDVBServicePlay::hdsSubtitrareLiniste(int ms)
 
 void eDVBServicePlay::checkSubtitleTiming()
 {
-	eDebug("checkSubtitleTiming");
+	if (hdsJurnalSubtitrariDetaliat())
+		eDebug("checkSubtitleTiming");
 	if (!m_subtitle_widget)
 		return;
 	while (1)
@@ -4215,7 +4277,9 @@ void eDVBServicePlay::checkSubtitleTiming()
 		hdssub::Hotarare h = hdssub::hotarare(stare, type != TELETEXT || page.m_have_pts, show_time);
 		m_subtitle_fara_pts_de_la_ms = stare.fara_pts_de_la_ms;
 
-		eDebug("%lld %lld: %s", (long long)pos, (long long)show_time, h.motiv);
+		if (hdsJurnalSubtitrariDetaliat() ||
+			(std::strcmp(h.motiv, "late") && std::strcmp(h.motiv, "on time") && std::strcmp(h.motiv, "subtitle delay")))
+			eDebug("%lld %lld: %s", (long long)pos, (long long)show_time, h.motiv);
 		if (h.fel == hdssub::STAI)
 		{
 			m_subtitle_sync_timer->stop();
@@ -4225,19 +4289,22 @@ void eDVBServicePlay::checkSubtitleTiming()
 		{
 			if (type == TELETEXT)
 			{
-				eDebug("display teletext subtitle page %lld", (long long)show_time);
+				if (hdsJurnalSubtitrariDetaliat())
+					eDebug("display teletext subtitle page %lld", (long long)show_time);
 				m_subtitle_widget->setPage(page);
 				m_subtitle_pages.pop_front();
 			}
 			else
 			{
-				eDebug("display dvb subtitle Page %lld", (long long)show_time);
+				if (hdsJurnalSubtitrariDetaliat())
+					eDebug("display dvb subtitle Page %lld", (long long)show_time);
 				m_subtitle_widget->setPage(dvb_page);
 				m_dvb_subtitle_pages.pop_front();
 			}
 		} else
 		{
-			eDebug("start subtitle delay %d", h.ms);
+			if (hdsJurnalSubtitrariDetaliat())
+				eDebug("start subtitle delay %d", h.ms);
 			m_subtitle_sync_timer->start(h.ms, 1);
 			break;
 		}
@@ -4251,7 +4318,8 @@ void eDVBServicePlay::newDVBSubtitlePage(const eDVBSubtitlePage &p)
 		pts_t pos = 0;
 		if (m_decoder)
 			m_decoder->getPTS(0, pos);
-		eDebug("got new subtitle page %lld %lld", (long long)pos, (long long)p.m_show_time);
+		if (hdsJurnalSubtitrariDetaliat())
+			eDebug("got new subtitle page %lld %lld", (long long)pos, (long long)p.m_show_time);
 		/* OCR: the page goes to recognition now, before its PTS, so that its text can be ready when it is shown */
 		m_subtitle_widget->prefetchPage(p, pos ? (int)((p.m_show_time - pos) / 90) : 0);
 		m_dvb_subtitle_pages.push_back(p);

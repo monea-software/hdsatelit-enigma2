@@ -448,16 +448,29 @@ rz_urm_curata() {
 	rm -f "$D/urmarire.pid"
 }
 
+# Record the sender and the startup deadline before each signal, even if the process never returns to its wrapper.
+# Diagnostic failure must not prevent the existing recovery. Only fixed text and process numbers enter the log.
+rz_jurnal_oprire() {
+	mkdir -p "${HDS_CADERI_JURNAL%/*}" 2>/dev/null
+	printf '%s ceasul pornirii: enigma2 pid=%s, parinte=%s, termenul pornirii depasit (%s s); trimite %s (up=%s)\n' \
+		"$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$2" "$HDS_REZERVA_ASTEPTARE" "$3" "$(rz_acum)" \
+		2>/dev/null >> "$HDS_CADERI_JURNAL" || :
+}
+
 # an enigma2 stuck before its interface: the mark for the block after its exit, TERM, KILL if it is still there
 rz_opreste_enigma2() {
 	printf 'parinte=%s\npid=%s\nuptime=%s\n' "$2" "$1" "$(rz_acum)" > "$D/blocat"
+	rz_jurnal_oprire "$1" "$2" SIGTERM
 	kill -TERM "$1" 2>/dev/null
 	rz_i=0
 	while [ "$rz_i" -lt "$HDS_REZERVA_OPRIRE" ] && [ -d "$HDS_PAZA_RADACINA/proc/$1" ]; do
 		sleep 1
 		rz_i=$((rz_i + 1))
 	done
-	[ -d "$HDS_PAZA_RADACINA/proc/$1" ] && kill -KILL "$1" 2>/dev/null
+	[ -d "$HDS_PAZA_RADACINA/proc/$1" ] && {
+		rz_jurnal_oprire "$1" "$2" SIGKILL
+		kill -KILL "$1" 2>/dev/null
+	}
 }
 
 rz_urmareste() {

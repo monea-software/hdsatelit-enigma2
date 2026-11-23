@@ -1,0 +1,77 @@
+Subject: [PATCH] JSC: preserve ARM32 DFG string and generic sort paths
+
+Upstream-Status: Inappropriate [restore experimental ARM32 JIT]
+
+Use a signed branch for the ARMv7 immediate clamp and the existing
+string comparison operation where the 64-bit thunk is unavailable.
+The parser already rejects the new scratch-sort lowering on 32-bit;
+keep its emitters behind the same value-representation guard and bail
+out safely should an unexpected 32-bit graph contain these nodes.
+
+--- a/Source/JavaScriptCore/dfg/DFGSpeculativeJIT.cpp
++++ b/Source/JavaScriptCore/dfg/DFGSpeculativeJIT.cpp
+@@ -1861,7 +1861,13 @@
+     if (lengthGPR != InvalidGPRReg) {
+         // size = max(0, min(length, tempGPR))
+         moveConditionally32(LessThan, lengthGPR, tempGPR, lengthGPR, tempGPR, tempGPR);
++#if CPU(ARM_THUMB2)
++        auto nonNegative = branch32(GreaterThanOrEqual, tempGPR, TrustedImm32(0));
++        move(TrustedImm32(0), tempGPR);
++        nonNegative.link(this);
++#else
+         moveConditionally32(LessThan, tempGPR, TrustedImm32(0), TrustedImm32(0), tempGPR, tempGPR);
++#endif
+     }
+ 
+     JumpList doneCases;
+@@ -7941,7 +7947,11 @@
+         setupArguments<decltype(operationCompareStringEq)>(LinkableConstant::globalObject(*this, node), leftGPR, rightGPR);
+         prepareForExternalCall();
+         emitStoreCodeOrigin(node->origin.semantic);
++#if USE(JSVALUE64)
+         nearCallThunk(CodeLocationLabel<JITThunkPtrTag>(vm().getCTIStub(stringEqualThunkGenerator).code()));
++#else
++        Base::appendOperationCall(operationCompareStringEq);
++#endif
+         auto exceptionReg = tryHandleOrGetExceptionUnderSilentSpill<decltype(operationCompareStringEq)>(savePlans, leftTempGPR);
+         setupResults(leftTempGPR);
+         silentFill(savePlans);
+@@ -15772,6 +15782,7 @@
+     storageResult(storageGPR, node);
+ }
+ 
++#if USE(JSVALUE64)
+ void SpeculativeJIT::compileGetCellButterflySlot(Node* node)
+ {
+     SpeculateCellOperand scratch(this, node->child1());
+@@ -15877,6 +15888,30 @@
+     storePtr(storageGPR, &vm().m_cachedSortScratch);
+     noResult(node);
+ }
++
++#else
++// The parser only emits the scratch-sort nodes on 64-bit platforms.
++// Abort speculative compilation if another path ever produces one on 32-bit.
++void SpeculativeJIT::compileGetCellButterflySlot(Node*)
++{
++    terminateSpeculativeExecution(Uncountable, JSValueRegs(), nullptr);
++}
++
++void SpeculativeJIT::compilePutCellButterflySlot(Node*)
++{
++    terminateSpeculativeExecution(Uncountable, JSValueRegs(), nullptr);
++}
++
++void SpeculativeJIT::compileArraySortCompact(Node*)
++{
++    terminateSpeculativeExecution(Uncountable, JSValueRegs(), nullptr);
++}
++
++void SpeculativeJIT::compileArraySortCommit(Node*)
++{
++    terminateSpeculativeExecution(Uncountable, JSValueRegs(), nullptr);
++}
++#endif
+ 
+ void SpeculativeJIT::compileNewArrayWithButterfly(Node* node)
+ {

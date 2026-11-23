@@ -22,8 +22,8 @@ PORTUL: 443. Daca e ocupat (alt program al omului), HTTPS nu porneste, iar pagin
 nu trece pe alt port pe tacute. Aceleasi resurse si aceleasi porti ca pe HTTP (adresa din casa, browserul
 asociat, CSRF, accesul din afara casei), fiindca fabrica serverului e aceeasi (plugin._construiesteServer).
 
-FIRUL: certificatul se face pe firul enigma2 (o cheie EC dureaza milisecunde); verificarea schimbarilor o data
-pe minut citeste numai fisierul mic de stare al numelui si adresele din tabela de rute.
+FIRUL: pornirea initiala ramane pe firul enigma2. Verificarea periodica pregateste numele si certificatul
+pe lucratorul reactorului; numai fotografia completa si actuala poate schimba portul pe firul enigma2.
 """
 
 import datetime
@@ -44,6 +44,14 @@ VERIFICARE_S = 60
 _stare = {"pornit": False, "motiv": "", "nume": [], "port": None}
 _fabrica = None
 _ceas = None
+_generatie = 0
+_ocupat = False
+_cerere = None
+_pregatita = None
+_oprire = None
+_inchis = False
+_inchidere = None
+_certificat = None
 
 
 def _(text):
@@ -59,10 +67,12 @@ def _jurnal(text):
 
 
 def numeLocal():
-	"""Numele .local publicat de receptor (hdsatelit.local, hdsatelit2.local) sau "" daca nu e publicat."""
+	"""Numele .local publicat de receptor (hdsatelit.local, hdsatelit2.local) sau "" daca nu e publicat. UIF6: ultimul
+	nume citit (HdsComutareRetea.nume_local_stiut): pe firul interfetei (stare(), pagina Fisiere) fara citire de fisier;
+	pe lucratorul verificarii, citit din nou cand e vechi."""
 	try:
-		from Components.HdsComutareRetea import nume_local_confirmat
-		return nume_local_confirmat() or ""
+		from Components.HdsComutareRetea import nume_local_stiut
+		return nume_local_stiut() or ""
 	except Exception:
 		return ""
 
@@ -154,7 +164,12 @@ def _scrieAtomic(cale, date, mod):
 	nou = cale + ".nou"
 	fd = os.open(nou, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mod)
 	try:
-		os.write(fd, date)
+		pozitie = 0
+		while pozitie < len(date):
+			scris = os.write(fd, date[pozitie:])
+			if scris <= 0:
+				raise OSError(_("Scriere incompletă."))
+			pozitie += scris
 		os.fsync(fd)
 	finally:
 		os.close(fd)
@@ -195,9 +210,9 @@ def facCertificat(nume, adrese, dosar=DOSAR):
 	return cert_pem, cheie_pem
 
 
-def asiguraCertificat(dosar=DOSAR):
+def asiguraCertificat(dosar=DOSAR, nume_adrese=None):
 	"""Certificatul de acum (facut din nou daca trebuie). Intoarce (cert_pem, cheie_pem, refacut)."""
-	nume, adrese = numeDorite()
+	nume, adrese = numeDorite() if nume_adrese is None else nume_adrese
 	if trebuieRefacut(nume, adrese, dosar):
 		cert_pem, cheie_pem = facCertificat(nume, adrese, dosar)
 		_jurnal("certificat nou pentru %s" % ", ".join(nume + adrese))
@@ -219,23 +234,37 @@ def optiuniTls(cert_pem, cheie_pem):
 	Numai http/1.1: canalul serverului (plugin._construiesteServer) nu vorbeste HTTP/2."""
 	from twisted.internet import ssl
 	certificat = ssl.PrivateCertificate.loadPEM(cert_pem + b"\n" + cheie_pem)
-	return ssl.CertificateOptions(privateKey=certificat.privateKey.original, certificate=certificat.original,
+	optiuni = ssl.CertificateOptions(privateKey=certificat.privateKey.original, certificate=certificat.original,
 		acceptableProtocols=[b"http/1.1"])
+	# Force lazy TLS checks, including the certificate/private-key match.
+	optiuni.getContext()
+	return optiuni
 
 
-def _asculta(reactor):
-	cert_pem, cheie_pem, unused = asiguraCertificat()
-	port = reactor.listenSSL(PORT_HTTPS, _fabrica(), optiuniTls(cert_pem, cheie_pem))
-	nume, adrese = numeDorite()
+def _asculta(reactor, fotografie=None):
+	global _certificat
+	if fotografie is None:
+		cert_pem, cheie_pem, unused = asiguraCertificat()
+		nume, adrese = numeDorite()
+		port = reactor.listenSSL(PORT_HTTPS, _fabrica(), optiuniTls(cert_pem, cheie_pem))
+	else:
+		nume, adrese, cert_pem, cheie_pem, unused, optiuni = fotografie
+		port = reactor.listenSSL(PORT_HTTPS, _fabrica(), optiuni)
+	_certificat = (cert_pem, cheie_pem)
 	_stare.update(pornit=True, motiv="", nume=nume + adrese, port=port)
 	_jurnal("pornit pe portul %d" % PORT_HTTPS)
 
 
 def porneste(reactor, fabrica):
 	"""Porneste HTTPS cu `fabrica()` (aceeasi fabrica a serverului ca pe HTTP). Niciodata o exceptie in afara."""
-	global _fabrica, _ceas
+	global _fabrica, _ceas, _generatie, _inchis, _inchidere, _pregatita, _cerere
+	_generatie += 1
+	_inchis = False
+	_pregatita = _cerere = None
 	_fabrica = fabrica
 	try:
+		if _inchidere is None:
+			_inchidere = reactor.addSystemEventTrigger("before", "shutdown", _inchide)
 		_asculta(reactor)
 	except Exception as eroare:
 		_stare.update(pornit=False, port=None, motiv=_motiv(eroare))
@@ -259,31 +288,108 @@ def _motiv(eroare):
 
 
 def verifica(reactor):
-	"""O data pe minut: daca a aparut un nume nou (sau certificatul expira), certificat nou si portul repornit."""
+	"""Cere o fotografie noua; un lucrator ocupat nu provoaca niciodata citiri pe interfata."""
+	global _generatie, _cerere, _pregatita
+	if _inchis or _fabrica is None:
+		return
+	_generatie += 1
+	_cerere = (_generatie, reactor)
+	_pregatita = None
+	_cereCitirea()
+
+
+def _cereCitirea():
+	global _ocupat, _cerere
+	if _ocupat or _cerere is None or _inchis:
+		return
+	g, reactor = _cerere
+	_cerere = None
+	_ocupat = True
 	try:
-		nume, adrese = numeDorite()
-		if not trebuieRefacut(nume, adrese):
-			if not _stare["pornit"] and _fabrica is not None:
-				_asculta(reactor)
-			return
-		port = _stare.get("port")
-		_stare.update(pornit=False, port=None)
-		if port is not None:
-			d = port.stopListening()
-			if d is not None:
-				d.addBoth(lambda unused: _reasculta(reactor))
-				return
-		_reasculta(reactor)
+		reactor.callInThread(_citesteFotografia, g, reactor)
 	except Exception as eroare:
+		_ocupat = False
 		_jurnal("verificarea: %s" % eroare)
 
 
-def _reasculta(reactor):
+def _citesteFotografia(g, reactor):
+	"""Nu modifica starea serverului; toate citirile si scrierile periodice sunt aici."""
+	fotografie = eroare = None
 	try:
-		_asculta(reactor)
+		nume, adrese = numeDorite()
+		cert, cheie, refacut = asiguraCertificat(nume_adrese=(nume, adrese))
+		optiuni = optiuniTls(cert, cheie)
+		if (nume, adrese) == numeDorite():
+			fotografie = (nume, adrese, cert, cheie, refacut, optiuni)
+	except Exception as e:
+		eroare = e
+	reactor.callFromThread(_citireaGata, g, reactor, fotografie, eroare)
+
+
+def _citireaGata(g, reactor, fotografie, eroare):
+	global _ocupat, _pregatita
+	_ocupat = False
+	if _inchis:
+		return
+	if g != _generatie:
+		_cereCitirea()
+		return
+	if eroare is not None:
+		_jurnal("verificarea: %s" % eroare)
+	elif fotografie is None:
+		# The network changed during the read. Never publish a mixed snapshot.
+		verifica(reactor)
+	else:
+		_pregatita = (g, reactor, fotografie)
+		_aplicaFotografia()
+
+
+def _aplicaFotografia():
+	global _pregatita, _oprire
+	if _inchis or _oprire is not None or _pregatita is None:
+		return
+	g, reactor, fotografie = _pregatita
+	if g != _generatie:
+		_pregatita = None
+		return
+	if not fotografie[4] and _stare["pornit"] and _certificat == fotografie[2:4]:
+		_pregatita = None
+		return
+	try:
+		port = _stare.get("port")
+		if port is not None:
+			_stare.update(pornit=False, port=None)
+			_oprire = object()
+			d = port.stopListening()
+			if d is not None:
+				d.addBoth(_portOprit)
+				return
+			_oprire = None
+		_pregatita = None
+		_asculta(reactor, fotografie)
 	except Exception as eroare:
+		_oprire = None
+		_pregatita = None
 		_stare.update(pornit=False, port=None, motiv=_motiv(eroare))
 		_jurnal("nu reporneste: %s" % eroare)
+
+
+def _portOprit(rezultat):
+	global _oprire
+	_oprire = None
+	_aplicaFotografia()
+
+
+def _inchide():
+	"""Invalideaza inclusiv rezultatele deja trimise catre reactor la inchiderea lui."""
+	global _inchis, _generatie, _cerere, _pregatita, _fabrica, _ceas
+	_inchis = True
+	_generatie += 1
+	_cerere = _pregatita = _fabrica = None
+	if _ceas is not None:
+		_ceas.stop()
+		_ceas = None
+	_stare.update(pornit=False, port=None)
 
 
 def stare(gazda_cerere=""):

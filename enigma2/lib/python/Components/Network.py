@@ -682,17 +682,24 @@ class Network:
 				else:
 					return True
 		#ifdown sometimes can't get the interface down.
+		commands = []
 		if isinstance(ifaces, (list, tuple)):
 			for iface in ifaces:
 				if checkCommandResult(iface) is False:
-					Console().ePopen(argv("ifconfig", iface, "down"))
+					commands.append(argv("ifconfig", iface, "down"))
 		else:
 			if checkCommandResult(ifaces) is False:
-				Console().ePopen(argv("ifconfig", ifaces, "down"))
+				commands.append(argv("ifconfig", ifaces, "down"))
 
 		if self.deactivateInterfaceConsole:
 			if len(self.deactivateInterfaceConsole.appContainers) == 0:
-				if callback is not None:
+				if commands:
+					# The callback may start ifup; the forced down must have finished first.
+					def downFinished(_extra):
+						if callback is not None:
+							callback(True)
+					self.deactivateInterfaceConsole.eBatch(commands, downFinished)
+				elif callback is not None:
 					callback(True)
 
 	def activateInterface(self,iface,callback = None):

@@ -4,7 +4,10 @@
 #include <lib/dvb/hdsmultistream.h>
 #include <lib/dvb/hdst2mi.h>
 #include <lib/dvb/hdsterestru.h>
+#include <lib/dvb/hdstipales.h>
 #include <lib/dvb/hdscalitate.h>
+#include <lib/dvb/hdsstatdvb5.h>
+#include <lib/base/hdsdm920.h>
 #include <lib/base/eerror.h>
 #include <lib/base/nconfig.h> // access to python config
 #include <errno.h>
@@ -502,7 +505,7 @@ static int hdsGrupFbc(int adap, int fe)
 eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFrontend *simulate_fe, const char *devicename)
 	:m_simulate(simulate), m_enabled(false), m_type(-1), m_simulate_fe(simulate_fe), m_dvbid(fe), m_slotid(fe)
 	,m_fd(-1), m_rotor_mode(false), m_need_rotor_workaround(false), m_can_handle_dvbs2(false), m_delsys_types(0)
-	,m_multistream(false), m_dvbt2(false), m_dvb_api(0), m_hds_fbc_set(hdsGrupFbc(adap, fe))
+	,m_multistream(false), m_dvbt2(false), m_dvb_api(0), m_hds_fbc_set(hdsGrupFbc(adap, fe)), m_hds_tipuri_alese(-1)
 	,m_state(stateClosed), m_timeout(0), m_tuneTimer(0)
 #if HAVE_DVB_API_VERSION < 3
 	,m_secfd(-1)
@@ -964,6 +967,12 @@ int eDVBFrontend::readFrontendData(int type)
 	return hdsCiteste(type, false);
 }
 
+/* XBS8: FE_GET_PROPERTY pentru statisticile DVBv5 (lib/dvb/hdsstatdvb5.h primeste ioctl-ul ca parametru) */
+static int hdsIoctlStat(int fd, unsigned long cerere, struct dtv_properties *p)
+{
+	return ::ioctl(fd, cerere, p);
+}
+
 /* o citire bruta prin memoria tunerului; 0 sau errno (ERANGE nu e eroare, ca inainte) */
 unsigned int eDVBFrontend::hdsCitesteBrut(int fel, bool direct, int &err)
 {
@@ -972,23 +981,44 @@ unsigned int eDVBFrontend::hdsCitesteBrut(int fel, bool direct, int &err)
 	switch (fel)
 	{
 		case hdscitiri::BER:
-			return hdscitiri::cere(m_hds_citiri, hdscitiri::BER, direct, ceas, [fd](unsigned int &v) {
+			return hdscitiri::cere(m_hds_citiri, hdscitiri::BER, direct, ceas, [fd, this](unsigned int &v) {
 				uint32_t x = 0;
 				int r = ::ioctl(fd, FE_READ_BER, &x);
 				v = x;
-				return (r < 0 && errno != ERANGE) ? (errno ? errno : EIO) : 0; }, err);
+				if (r < 0 && errno != ERANGE)
+				{
+					int e = errno ? errno : EIO;
+					/* XBS8: driverele numai DVBv5 (mn88472): erorile din DTV_STAT_* (lib/dvb/hdsstatdvb5.h) */
+					return hdsstat::erori(hdsIoctlStat, fd, m_hds_stat, v) ? e : 0;
+				}
+				return 0; }, err);
 		case hdscitiri::SNR:
-			return hdscitiri::cere(m_hds_citiri, hdscitiri::SNR, direct, ceas, [fd](unsigned int &v) {
+			return hdscitiri::cere(m_hds_citiri, hdscitiri::SNR, direct, ceas, [fd, this](unsigned int &v) {
 				uint16_t x = 0;
 				int r = ::ioctl(fd, FE_READ_SNR, &x);
 				v = x;
-				return (r < 0 && errno != ERANGE) ? (errno ? errno : EIO) : 0; }, err);
+				m_hds_stat.snr_dvb5 = false;
+				if (r < 0 && errno != ERANGE)
+				{
+					int e = errno ? errno : EIO;
+					/* XBS8: driverele numai DVBv5 (mn88472): DTV_STAT_CNR, deja in sutimi de dB */
+					if (hdsstat::calitate(hdsIoctlStat, fd, v))
+						return e;
+					m_hds_stat.snr_dvb5 = true;
+				}
+				return 0; }, err);
 		case hdscitiri::NIVEL:
 			return hdscitiri::cere(m_hds_citiri, hdscitiri::NIVEL, direct, ceas, [fd](unsigned int &v) {
 				uint16_t x = 0;
 				int r = ::ioctl(fd, FE_READ_SIGNAL_STRENGTH, &x);
 				v = x;
-				return (r < 0 && errno != ERANGE) ? (errno ? errno : EIO) : 0; }, err);
+				if (r < 0 && errno != ERANGE)
+				{
+					int e = errno ? errno : EIO;
+					/* XBS8: driverele numai DVBv5 (mn88472): DTV_STAT_SIGNAL_STRENGTH relativ, 0..65535 */
+					return hdsstat::nivel(hdsIoctlStat, fd, v) ? e : 0;
+				}
+				return 0; }, err);
 		default:
 			return hdscitiri::cere(m_hds_citiri, hdscitiri::STARE, direct, ceas, [fd](unsigned int &v) {
 #if HAVE_DVB_API_VERSION < 3
@@ -1032,6 +1062,15 @@ int eDVBFrontend::hdsCiteste(int type, bool direct)
 			snr = (uint16_t)hdsCitesteBrut(hdscitiri::SNR, direct, hds_err);
 			if (hds_err)
 				eDebug("FE_READ_SNR failed (%s)", strerror(hds_err));
+			else if (m_hds_stat.snr_dvb5)
+			{
+				// XBS8: DTV_STAT_CNR (FE_READ_SNR refuzat de driver), deja in sutimi de dB (lib/dvb/hdsstatdvb5.h)
+				ret = snr;
+			}
+			else if (hdsdm920::calitate(m_description, snr, ret))
+			{
+				// Native DM920 Silicon tuners already report hundredths of dB.
+			}
 			else if (!strcmp(m_description, "BCM4501 (internal)"))
 			{
 				float SDS_SNRE = snr << 16;
@@ -1208,7 +1247,22 @@ int eDVBFrontend::hdsCiteste(int type, bool direct)
 				if (err)
 					eDebug("FE_READ_SIGNAL_STRENGTH failed (%s)", strerror(err));
 			}
-			return strength;
+			if (!m_simulate && hdsdm920::nivelEstimat(m_description, strength))
+			{
+				// DM900/DM920 Broadcom FBC: no AGC in the driver, level estimated from the quality (lib/base/hdsdm920.h)
+				int calitate16 = hdsCiteste(signalQuality, direct);
+				int estimat = hdsdm920::nivelDinCalitate(calitate16);
+				if (hdsdm920::jurnalAcum(m_slotid, ::time(0)))
+				{
+					int snr_err = 0;
+					unsigned int snr_brut = hdsCitesteBrut(hdscitiri::SNR, false, snr_err);
+					eDebug("[eDVBFrontend%d] %s: SNR brut %u (%d,%02d dB), calitate %d/65536, nivel brut %u, nivel estimat %d/65535",
+						m_slotid, m_description, snr_brut, (int)((snr_brut * 100) >> 8) / 100, (int)((snr_brut * 100) >> 8) % 100,
+						calitate16, (unsigned int)strength, estimat);
+				}
+				return estimat;
+			}
+			return hdsdm920::nivel(m_description, strength);
 		}
 		case locked:
 		{
@@ -1532,12 +1586,14 @@ static void fillDictWithCableData(ePyObject dict, const FRONTENDPARAMETERS &parm
 }
 
 /* system si plp_id: ce a dat FE_GET_PROPERTY (DTV_DELIVERY_SYSTEM, DTV_STREAM_ID), sau ce s-a cerut la acordare cand
-   driverul nu le da; latimea in Hz din DTV_BANDWIDTH_HZ (0 = necitita: se ia cea din structura veche) */
+   driverul nu le da; latimea in Hz din DTV_BANDWIDTH_HZ (0 = necitita: se ia cea din structura veche); frecventa spusa
+   de tuner numai cand e posibila, altfel cea acordata (hdster::frecventaTunerului, aceeasi regula ca la salvarea
+   cautarii: un tuner combinat DVB-T2/C poate spune o valoare bruta) */
 static void fillDictWithTerrestrialData(ePyObject dict, const FRONTENDPARAMETERS &parm, int system, int plp_id,
-	unsigned int bandwidth_hz)
+	unsigned int bandwidth_hz, unsigned int frecventa_acordata)
 {
 	long tmp=0;
-	PutToDict(dict, "frequency", parm_frequency);
+	PutToDict(dict, "frequency", (long)hdster::frecventaTunerului(frecventa_acordata, parm_frequency));
 	if (bandwidth_hz)
 		tmp = hdster::latimeDinHz(bandwidth_hz);
 	else switch (parm_u_ofdm_bandwidth)
@@ -1794,7 +1850,7 @@ void eDVBFrontend::getTransponderData(ePyObject dest, bool original)
 					fillDictWithCableData(dest, parm);
 					break;
 				case feTerrestrial:
-					fillDictWithTerrestrialData(dest, parm, ter_system, ter_plp, ter_bw_hz);
+					fillDictWithTerrestrialData(dest, parm, ter_system, ter_plp, ter_bw_hz, oparm.ter.frequency);
 					break;
 			}
 		}
@@ -1935,6 +1991,10 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 			case eSecCommand::SLEEP:
 				delay = m_sec_sequence.current()++->msec;
 				eDebugNoSimulate("[SEC] sleep %dms", delay);
+				break;
+			case eSecCommand::HDS_UNICABLE_PORNIRE:
+				delay = sec_fe->m_hds_alimentare.ramasa(m_sec_sequence.current()++->msec, hdsjurnal::monotonMs());
+				eDebugNoSimulate("[SEC] Unicable pornire ramasa %dms", delay);
 				break;
 			case eSecCommand::GOTO:
 				if ( !setSecSequencePos(m_sec_sequence.current()->steps) )
@@ -3115,6 +3175,18 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 	}
 
 	{
+		// A multitype frontend keeps its last delivery system after terrestrial tuning.
+		// Restore satellite before prepare_sat builds the voltage and DiSEqC sequence.
+		int type;
+		if (!where.getSystem(type) && type == iDVBFrontend::feSatellite && m_type != type)
+		{
+			res = switchDeliverySystem(type);
+			if (res)
+				goto tune_error;
+		}
+	}
+
+	{
 		// a tuner that does both cable and terrestrial gets its delivery system checked on every tune, because the
 		// kernel may still be on the other one (for example after reopening); switchDeliverySystem sends it only when
 		// it differs from the one set on this open descriptor (0.7.4)
@@ -3322,7 +3394,6 @@ RESULT eDVBFrontend::setVoltage(int voltage)
 	bool increased=false;
 	fe_sec_voltage_t vlt;
 #endif
-	m_data[CUR_VOLTAGE]=voltage;
 	switch (voltage)
 	{
 	case voltageOff:
@@ -3353,14 +3424,29 @@ RESULT eDVBFrontend::setVoltage(int voltage)
 		return -ENODEV;
 	}
 	if (m_simulate)
+	{
+		m_hds_alimentare.tensiune(voltage != voltageOff, true, hdsjurnal::monotonMs());
+		m_data[CUR_VOLTAGE] = voltage;
 		return 0;
+	}
 #if HAVE_DVB_API_VERSION < 3
-	return ::ioctl(m_secfd, SEC_SET_VOLTAGE, vlt);
+	int result = ::ioctl(m_secfd, SEC_SET_VOLTAGE, vlt);
 #else
 	if (m_type == feSatellite && ::ioctl(m_fd, FE_ENABLE_HIGH_LNB_VOLTAGE, increased) < 0)
 		perror("FE_ENABLE_HIGH_LNB_VOLTAGE");
-	return ::ioctl(m_fd, FE_SET_VOLTAGE, vlt);
+	int result = ::ioctl(m_fd, FE_SET_VOLTAGE, vlt);
 #endif
+	const int err = result < 0 ? errno : 0;
+	// SEC skips an unchanged value. A refused command must stay unknown so the next tune retries it.
+	m_hds_alimentare.tensiune(voltage != voltageOff, result >= 0, hdsjurnal::monotonMs());
+	m_data[CUR_VOLTAGE] = result < 0 ? -1 : voltage;
+	static const char *const requested[] = {"0V", "13V", "18V", "13.5V", "18.5V"};
+	hdsjurnal::scrief("tuner", result < 0 ? hdsjurnal::EROARE : hdsjurnal::INFO, "lnb-ioctl",
+		"slot=%d frontend=%d tensiune ceruta=%s ioctl=%d errno=%d (acceptarea comenzii, nu masurare electrica)",
+		m_slotid, m_dvbid, requested[voltage], result, err);
+	if (err)
+		errno = err;
+	return result;
 }
 
 RESULT eDVBFrontend::getState(int &state)
@@ -3378,7 +3464,6 @@ RESULT eDVBFrontend::setTone(int t)
 #else
 	fe_sec_tone_mode_t tone;
 #endif
-	m_data[CUR_TONE]=t;
 	switch (t)
 	{
 	case toneOn:
@@ -3391,12 +3476,23 @@ RESULT eDVBFrontend::setTone(int t)
 		return -ENODEV;
 	}
 	if (m_simulate)
+	{
+		m_data[CUR_TONE] = t;
 		return 0;
+	}
 #if HAVE_DVB_API_VERSION < 3	
-	return ::ioctl(m_secfd, SEC_SET_TONE, tone);
+	int result = ::ioctl(m_secfd, SEC_SET_TONE, tone);
 #else	
-	return ::ioctl(m_fd, FE_SET_TONE, tone);
+	int result = ::ioctl(m_fd, FE_SET_TONE, tone);
 #endif
+	const int err = result < 0 ? errno : 0;
+	m_data[CUR_TONE] = result < 0 ? -1 : t;
+	hdsjurnal::scrief("tuner", result < 0 ? hdsjurnal::EROARE : hdsjurnal::INFO, "lnb-ioctl",
+		"slot=%d frontend=%d ton22k cerut=%s ioctl=%d errno=%d (acceptarea comenzii, nu masurare electrica)",
+		m_slotid, m_dvbid, t == toneOn ? "pornit" : "oprit", result, err);
+	if (err)
+		errno = err;
+	return result;
 }
 
 #if HAVE_DVB_API_VERSION < 3 && !defined(SEC_DISEQC_SEND_MASTER_CMD)
@@ -3541,7 +3637,7 @@ RESULT eDVBFrontend::setData(int num, long val)
 
 RESULT eDVBFrontend::switchDeliverySystem(int type, bool t2)
 {
-	if (type != iDVBFrontend::feCable && type != iDVBFrontend::feTerrestrial)
+	if (type != iDVBFrontend::feCable && type != iDVBFrontend::feTerrestrial && type != iDVBFrontend::feSatellite)
 		return -EINVAL;
 	if (!(m_delsys_types & (1 << type)))
 		return -EINVAL;
@@ -3551,6 +3647,9 @@ RESULT eDVBFrontend::switchDeliverySystem(int type, bool t2)
 	   cat lucreaza driverul, iar un driver cu set_property il poate duce si la tuner. Ce a pus enigma2 se tine in
 	   m_hds_sistem_pus si se uita la deschidere, la inchidere si la un refuz (atunci se trimite din nou). */
 	int sistem = type == iDVBFrontend::feCable ? SYS_DVBC_ANNEX_A : (t2 ? SYS_DVBT2 : SYS_DVBT);
+	if (type == iDVBFrontend::feSatellite)
+		sistem = SYS_DVBS;
+	const char *nume = type == iDVBFrontend::feSatellite ? "DVB-S" : (type == iDVBFrontend::feCable ? "DVB-C" : "DVB-T");
 	if (!m_simulate && sistem != m_hds_sistem_pus)
 	{
 		struct dtv_property p[2];
@@ -3564,7 +3663,7 @@ RESULT eDVBFrontend::switchDeliverySystem(int type, bool t2)
 		if (::ioctl(m_fd, FE_SET_PROPERTY, &cmdseq) < 0)
 		{
 			m_hds_sistem_pus = -1;
-			hdsjtuner::sistem(m_slotid, type == iDVBFrontend::feCable ? "DVB-C" : "DVB-T", errno);
+			hdsjtuner::sistem(m_slotid, nume, errno);
 			eWarning("frontend %d: setting the delivery system failed (%m)", m_dvbid);
 			return -EINVAL;
 		}
@@ -3572,9 +3671,9 @@ RESULT eDVBFrontend::switchDeliverySystem(int type, bool t2)
 	}
 	if (m_type != type)
 	{
-		eDebugNoSimulate("frontend %d switched to %s", m_dvbid, type == iDVBFrontend::feCable ? "cable" : "terrestrial");
+		eDebugNoSimulate("frontend %d switched to %s", m_dvbid, nume);
 		if (!m_simulate)
-			hdsjtuner::sistem(m_slotid, type == iDVBFrontend::feCable ? "DVB-C" : "DVB-T", 0);
+			hdsjtuner::sistem(m_slotid, nume, 0);
 	}
 	m_type = type;
 	return 0;
@@ -3613,10 +3712,11 @@ int eDVBFrontend::isCompatibleWith(ePtr<iDVBFrontendParameters> &feparm)
 			ret -= 1;
 		return hdsms::scorTuner(ret, sat_parm.is_id, sat_parm.pls_mode, sat_parm.pls_code, tuner_multistream);
 	}
+	// tunerul cu mai multe sisteme fara fisierul mode primeste numai ce i-a ales omul (lib/dvb/hdstipales.h)
 	else if (type == eDVBFrontend::feCable)
-		return 2;  // more prio for cable frontends
+		return hdstip::scor(type, m_hds_tipuri_alese, 2);  // more prio for cable frontends
 	else if (type == eDVBFrontend::feTerrestrial)
-		return 1;
+		return hdstip::scor(type, m_hds_tipuri_alese, 1);
 	return 0;
 }
 

@@ -1,0 +1,221 @@
+Subject: [PATCH] dvbaudiosink/dvbvideosink: asteptare dupa scrierea refuzata de driver
+
+poll() pe /dev/dvb/adapter0/audio0 si video0 raspunde POLLOUT si cand tamponul ES al driverului e plin (driverul
+HiSilicon al Viper 4K V20: fifo audio de 1 MiB, refuz peste ~5/6, fifo video de 32 MiB). write() intoarce atunci EAGAIN
+(sau 0 octeti), iar audio_write/video_write il reluau imediat. Driverul scrie un rand kern.warn la fiecare scriere
+refuzata ("audio cursize : ... > 01048576", "video cursize: ... > 33554432") si doarme ~11 ms in nucleu, deci la orice
+flux dat mai repede decat se reda (filme si VOD pe HTTP/HLS, fisiere) ieseau ~90 de randuri pe secunda in jurnalul
+nucleului si in /home/root/logs/messages, cat tinea redarea (masurat pe receptor, 22.11.2026: 5400/min audio + ~2000/min
+video, 11 minute la un film HLS, cu sunetul pornit sau pe mut). Decodorul consuma in tot acest timp (FrameNum creste,
+StreamBuf 86%), deci nu e o redare blocata: e contrapresiunea, semnalata prost.
+
+Dupa al n-lea refuz la rand sink-ul asteapta n * 20 ms (cel mult 200 ms) pe pipe-ul de oprire (unlockfd), nu cu
+sleep: o oprire, un flush sau un zap il trezesc pe loc. Tamponul e plin cand se asteapta, deci redarea nu ramane fara
+date. Seria de refuzuri se rupe numai dupa 1 s fara refuz (in potop refuzurile alterneaza cu scrieri mici reusite,
+cat se goleste decodorul). Un refuz izolat (alte drivere) asteapta 20 ms. O intrare goala din
+coada (0 octeti de scris) nu se socoteste refuz.
+
+Upstream-Status: Pending
+---
+diff --git a/common.c b/common.c
+index 955980b..1983d17 100644
+--- a/common.c
++++ b/common.c
+@@ -97,6 +97,35 @@ void gst_sleepms(uint32_t msec)
+ 	errno = olderrno;
+ }
+ 
++/* HD Satelit (IPR7, 22.11.2026): cand driverul refuza o scriere (tamponul ES plin: EAGAIN sau 0 octeti), sink-ul
++ * relua scrierea imediat, deoarece poll() pe audio0/video0 raspunde POLLOUT si cu tamponul plin (driverul HiSilicon al
++ * Viper 4K V20). Driverul scrie un rand in jurnalul nucleului la fiecare scriere refuzata ("audio cursize ... >
++ * 01048576", "video cursize ... > 33554432"), deci la fluxurile date mai repede decat se reda (filme, VOD, fisiere) iesea
++ * un potop de ~90 de randuri pe secunda, cat tinea redarea. Aici: la al n-lea refuz din seria de acum se asteapta n * PAS
++ * ms (cel mult MAX), pe pipe-ul de oprire, deci o oprire, un flush sau un zap trezesc asteptarea pe loc. Tamponul e plin,
++ * deci asteptarea nu goleste nimic. Seria nu se rupe la o scriere reusita (in potop refuzurile alterneaza cu scrieri
++ * mici reusite, cat se goleste decodorul), ci numai dupa RESET_MS fara niciun refuz. Intoarce cat a asteptat (ms). */
++int dvbsink_refuz_asteapta(int unlockfd, guint *refuzuri, gint64 *ultimul)
++{
++	struct pollfd p;
++	int ms;
++	gint64 acum = g_get_monotonic_time();
++	if (*ultimul == 0 || acum - *ultimul > (gint64)DVBSINK_REFUZ_RESET_MS * 1000)
++		*refuzuri = 0;
++	if (*refuzuri < 1000)
++		(*refuzuri)++;
++	ms = (int)(*refuzuri) * DVBSINK_REFUZ_PAS_MS;
++	if (ms > DVBSINK_REFUZ_MAX_MS)
++		ms = DVBSINK_REFUZ_MAX_MS;
++	p.fd = unlockfd;
++	p.events = POLLIN;
++	p.revents = 0;
++	/* comanda de oprire ramane in pipe; o citeste bucla de scriere */
++	poll(&p, 1, ms);
++	*ultimul = g_get_monotonic_time();
++	return ms;
++}
++
+ void gst_sleepus(uint32_t usec)
+ {
+ 	//does not interfere with signals like sleep and usleep do
+diff --git a/common.h b/common.h
+index 81e6951..ff1a614 100644
+--- a/common.h
++++ b/common.h
+@@ -30,6 +30,11 @@ int queue_front(queue_entry_t **queue_base, GstBuffer **buffer, size_t *start, s
+ 
+ void pes_set_pts(long long timestamp, unsigned char *pes_header);
+ void pes_set_payload_size(size_t size, unsigned char *pes_header);
++/* HD Satelit (IPR7): asteptarea dupa o scriere refuzata de driver (EAGAIN sau 0 octeti) */
++#define DVBSINK_REFUZ_PAS_MS 20
++#define DVBSINK_REFUZ_MAX_MS 200
++#define DVBSINK_REFUZ_RESET_MS 1000
++int dvbsink_refuz_asteapta(int unlockfd, guint *refuzuri, gint64 *ultimul);
+ 
+ void gst_sleepms(uint32_t msec);
+ void gst_sleepus(uint32_t usec);
+diff --git a/gstdvbaudiosink.c b/gstdvbaudiosink.c
+index 3b1003f..b8a7c80 100644
+--- a/gstdvbaudiosink.c
++++ b/gstdvbaudiosink.c
+@@ -1262,6 +1262,7 @@ static int audio_write(GstDVBAudioSink *self, GstBuffer *buffer, size_t start, s
+ 		}
+ 		if (pfd[1].revents & POLLOUT)
+ 		{
++			gboolean refuzat = FALSE;
+ 			size_t queuestart, queueend;
+ 			GstBuffer *queuebuffer;
+ 			GST_OBJECT_LOCK(self);
+@@ -1278,7 +1279,10 @@ static int audio_write(GstDVBAudioSink *self, GstBuffer *buffer, size_t start, s
+ 					switch(errno)
+ 					{
+ 						case EINTR:
++							break;
+ 						case EAGAIN:
++							/* IPR7: tamponul driverului plin; asteptarea se face dupa ce se elibereaza lacatul */
++							refuzat = TRUE;
+ 							break;
+ 						default:
+ 							GST_OBJECT_UNLOCK(self);
+@@ -1287,6 +1291,8 @@ static int audio_write(GstDVBAudioSink *self, GstBuffer *buffer, size_t start, s
+ 					}
+ 					if (retval < 0) break;
+ 				}
++				else if (wr == 0 && queueend > queuestart)
++					refuzat = TRUE;
+ 				else if (wr >= queueend - queuestart)
+ 				{
+ 					queue_pop(&self->queue);
+@@ -1298,6 +1304,8 @@ static int audio_write(GstDVBAudioSink *self, GstBuffer *buffer, size_t start, s
+ 					GST_INFO_OBJECT(self, "written %d queue bytes... update offset", wr);
+ 				}
+ 				GST_OBJECT_UNLOCK(self);
++				if (refuzat)
++					dvbsink_refuz_asteapta(self->unlockfd[0], &self->hds_refuzuri, &self->hds_ultimul_refuz);
+ 				continue;
+ 			}
+ 			GST_OBJECT_UNLOCK(self);
+@@ -1307,7 +1315,9 @@ static int audio_write(GstDVBAudioSink *self, GstBuffer *buffer, size_t start, s
+ 				switch(errno)
+ 				{
+ 					case EINTR:
++						continue;
+ 					case EAGAIN:
++						dvbsink_refuz_asteapta(self->unlockfd[0], &self->hds_refuzuri, &self->hds_ultimul_refuz);
+ 						continue;
+ 					default:
+ 						retval = -3;
+@@ -1315,6 +1325,8 @@ static int audio_write(GstDVBAudioSink *self, GstBuffer *buffer, size_t start, s
+ 				}
+ 				if (retval < 0) break;
+ 			}
++			if (wr == 0 && len > written)
++				dvbsink_refuz_asteapta(self->unlockfd[0], &self->hds_refuzuri, &self->hds_ultimul_refuz);
+ 			written += wr;
+ 		}
+ 	} while (written < len);
+diff --git a/gstdvbaudiosink.h b/gstdvbaudiosink.h
+index 2df521d..602f82c 100644
+--- a/gstdvbaudiosink.h
++++ b/gstdvbaudiosink.h
+@@ -125,6 +125,8 @@ struct _GstDVBAudioSink
+ 
+ 	int fd;
+ 	int unlockfd[2];
++	guint hds_refuzuri; /* IPR7: refuzurile driverului din seria de acum */
++	gint64 hds_ultimul_refuz; /* IPR7: ceasul monoton al ultimului refuz */
+ 
+ 	int skip;
+ 	t_audio_type bypass;
+diff --git a/gstdvbvideosink.c b/gstdvbvideosink.c
+index 6df87e0..05bc68f 100644
+--- a/gstdvbvideosink.c
++++ b/gstdvbvideosink.c
+@@ -897,6 +897,7 @@ static int video_write(GstBaseSink *sink, GstDVBVideoSink *self, GstBuffer *buff
+ 		}
+ 		if (pfd[1].revents & POLLOUT)
+ 		{
++			gboolean refuzat = FALSE;
+ 			int wr = 0;
+ 			size_t queuestart, queueend;
+ 			GstBuffer *queuebuffer;
+@@ -914,7 +915,10 @@ static int video_write(GstBaseSink *sink, GstDVBVideoSink *self, GstBuffer *buff
+ 					switch (errno)
+ 					{
+ 						case EINTR:
++							break;
+ 						case EAGAIN:
++							/* IPR7: tamponul driverului plin; asteptarea se face dupa ce se elibereaza lacatul */
++							refuzat = TRUE;
+ 							break;
+ 						default:
+ 							GST_OBJECT_UNLOCK(self);
+@@ -923,6 +927,8 @@ static int video_write(GstBaseSink *sink, GstDVBVideoSink *self, GstBuffer *buff
+ 					}
+ 					if (retval < 0) break;
+ 				}
++				else if (wr == 0 && queueend > queuestart)
++					refuzat = TRUE;
+ 				else if (wr >= queueend - queuestart)
+ 				{
+ 					queue_pop(&self->queue);
+@@ -934,6 +940,8 @@ static int video_write(GstBaseSink *sink, GstDVBVideoSink *self, GstBuffer *buff
+ 					GST_TRACE_OBJECT (self, "written %d queue bytes... update offset", wr);
+ 				}
+ 				GST_OBJECT_UNLOCK(self);
++				if (refuzat)
++					dvbsink_refuz_asteapta(self->unlockfd[0], &self->hds_refuzuri, &self->hds_ultimul_refuz);
+ 				continue;
+ 			}
+ 			GST_OBJECT_UNLOCK(self);
+@@ -943,7 +951,9 @@ static int video_write(GstBaseSink *sink, GstDVBVideoSink *self, GstBuffer *buff
+ 				switch (errno)
+ 				{
+ 					case EINTR:
++						continue;
+ 					case EAGAIN:
++						dvbsink_refuz_asteapta(self->unlockfd[0], &self->hds_refuzuri, &self->hds_ultimul_refuz);
+ 						continue;
+ 					default:
+ 						retval = -3;
+@@ -951,6 +961,8 @@ static int video_write(GstBaseSink *sink, GstDVBVideoSink *self, GstBuffer *buff
+ 				}
+ 				if (retval < 0) break;
+ 			}
++			if (wr == 0 && len > written)
++				dvbsink_refuz_asteapta(self->unlockfd[0], &self->hds_refuzuri, &self->hds_ultimul_refuz);
+ 			written += wr;
+ 		}
+ 	} while (written < len);
+diff --git a/gstdvbvideosink.h b/gstdvbvideosink.h
+index 2966da5..e44dd93 100644
+--- a/gstdvbvideosink.h
++++ b/gstdvbvideosink.h
+@@ -152,6 +152,8 @@ struct _GstDVBVideoSink
+ 
+ 	int fd;
+ 	int unlockfd[2];
++	guint hds_refuzuri; /* IPR7: refuzurile driverului din seria de acum */
++	gint64 hds_ultimul_refuz; /* IPR7: ceasul monoton al ultimului refuz */
+ 
+ 	gint h264_nal_len_size;
+ 	gboolean h264_initial_audelim_written;

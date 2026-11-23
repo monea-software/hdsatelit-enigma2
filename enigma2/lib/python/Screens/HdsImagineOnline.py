@@ -123,8 +123,10 @@ class HdsImagineOnline(Screen):
 			self[nume].hide()
 
 	def _loc_strain(self):
+		"""True cand oferta e o imagine si locul de scriere nu e bun; locul citit ramane in _tinta_loc (textul lui)."""
 		o = self.oferta
-		return bool(o) and o.get("fel") == "imagine" and not IO.citeste_tinta().get("bun")
+		self._tinta_loc = IO.citeste_tinta() if bool(o) and o.get("fel") == "imagine" else None
+		return self._tinta_loc is not None and not self._tinta_loc.get("bun")
 
 	def _text_stare(self):
 		r = self.io.rezultat
@@ -154,7 +156,9 @@ class HdsImagineOnline(Screen):
 			rosu = _("Close")
 		elif o:
 			if self._loc_strain():
-				text = _(IO.T_LOC_STRAIN)
+				# garda pornirii: ce s-a intamplat sus, locul bun dedesubt; altfel textul de pana acum
+				t = self._tinta_loc
+				text, pas = (t["text"], t.get("ajutor", "")) if t.get("text") else (_(IO.T_LOC_STRAIN), "")
 				rosu = _("Close")
 			else:
 				text = io.text_oferta(o)

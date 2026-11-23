@@ -178,6 +178,7 @@ class Paza(object):
 		self.placi = {}
 		self.lucreaza = False
 		self.t_amanat = None
+		self._generatie = object()
 		self.ultimul_ocupat = ""
 
 	def amana(self, acum=None):
@@ -185,10 +186,11 @@ class Paza(object):
 		pe firul interfetei, deci numai tine minte ora, fara zavor (tic tine zavorul cat citeste fisiere); tic o
 		aplica."""
 		self.t_amanat = self.ceas() if acum is None else acum
+		self._generatie = object()
 
 	def _placa(self, iface, acum):
 		return self.placi.setdefault(iface, {"jos_din": None, "legata": False, "incercari": 0, "urmatoarea": None,
-			"t_reset": None})
+			"t_reset": None, "generatie": object()})
 
 	def tic(self, stare, acum=None):
 		"""stare = HdsJurnalSistem.stareRetea(): {placa: {"wifi", "sus", "ipv4"...}}. Intoarce placa pentru care a
@@ -196,13 +198,18 @@ class Paza(object):
 		acum = self.ceas() if acum is None else acum
 		alta_merge = any(s.get("sus") and s.get("ipv4") for s in stare.values())
 		de_pornit = None
+		generatie = self._generatie
 		t_amanat = self.t_amanat
 		with self._zavor:
+			for iface, p in self.placi.items():
+				if not stare.get(iface, {}).get("wifi"):
+					p["generatie"] = object()
 			for iface, s in stare.items():
 				if not s.get("wifi"):
 					continue
 				p = self._placa(iface, acum)
 				if s.get("sus"):
+					p["generatie"] = object()
 					if p["incercari"] and p["t_reset"] is not None:
 						self.jurnal("info", "%s legata din nou dupa repornirea cipului (incercarea %d, la %d s dupa ea)"
 							% (iface, p["incercari"], int(max(0, acum - p["t_reset"]))))
@@ -236,7 +243,7 @@ class Paza(object):
 				self.ultimul_ocupat = ""
 				p["incercari"] += 1
 				self.lucreaza = True
-				de_pornit = (iface, p["incercari"], int(acum - p["jos_din"]))
+				de_pornit = (iface, p["incercari"], int(acum - p["jos_din"]), generatie, p["generatie"])
 				break
 		if de_pornit is None:
 			return None
@@ -244,21 +251,51 @@ class Paza(object):
 		self._lanseaza(*de_pornit)
 		return de_pornit[0]
 
-	def _lanseaza(self, iface, incercarea, fara_s):
+	def _valabila(self, iface, generatie, generatie_placa):
+		# Only the worker reads disk/sysfs here. The UI invalidates a queued
+		# decision without waiting for the watchdog lock or for this I/O.
+		if generatie is not self._generatie:
+			return False
+		if iface not in configurate(self.interfaces()) or not self.usb(iface) or self.ocupat():
+			return False
+		with self._zavor:
+			p = self.placi.get(iface)
+			return (generatie is self._generatie and p is not None
+				and generatie_placa is p["generatie"] and p["jos_din"] is not None)
+
+	def _anuleaza(self, iface, incercarea):
+		with self._zavor:
+			p = self.placi.get(iface)
+			if p is not None:
+				# A skipped command is not an attempt and must not increase backoff.
+				p["incercari"] = min(p["incercari"], incercarea - 1)
+			self.lucreaza = False
+		self.jurnal("info", "%s: repornirea cipului anulata, starea retelei s-a schimbat" % iface)
+
+	def _lanseaza(self, iface, incercarea, fara_s, generatie, generatie_placa):
 		usb = incercarea % 2 == 0
 		fel = "reset USB" if usb else "dezlegare/legare"
-		self.jurnal("avert", "%s fara legatura de %d s: cipul Wi-Fi pornit din nou (incercarea %d, %s)"
+		self.jurnal("avert", "%s fara legatura de %d s: repornirea cipului Wi-Fi programata (incercarea %d, %s)"
 			% (iface, fara_s, incercarea, fel))
 
 		def lucru():
 			cod, text = 126, ""
+			pornit = False
 			try:
+				if not self._valabila(iface, generatie, generatie_placa):
+					return
+				pornit = True
 				cod, text = self.program(iface, usb)
 				self.dupa()
 			except Exception as e:
 				text = text or str(e)
+				if not pornit:
+					self.jurnal("avert", "%s: reverificarea repornirii cipului a esuat" % iface)
 			finally:
-				self._gata(iface, incercarea, cod, text)
+				if pornit:
+					self._gata(iface, incercarea, cod, text)
+				else:
+					self._anuleaza(iface, incercarea)
 		try:
 			self.porneste_fir(lucru)
 		except Exception as e:
@@ -268,7 +305,7 @@ class Paza(object):
 		acum = self.ceas()
 		with self._zavor:
 			p = self.placi.get(iface)
-			if p is not None:
+			if p is not None and p["incercari"] == incercarea and p["jos_din"] is not None:
 				p["t_reset"] = acum
 				p["urmatoarea"] = acum + PAUZE_S[min(incercarea, len(PAUZE_S)) - 1]
 			self.lucreaza = False

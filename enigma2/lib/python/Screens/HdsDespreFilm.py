@@ -133,7 +133,7 @@ class HdsDespreFilm(Screen):
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
 		stare = D.stareCheieTmdb()
 		titlu = u"%s\n%s" % (stare["text"], _("Lipește sau scrie cheia API sau tokenul de citire; gol = șterge cheia."))
-		self.session.openWithCallback(self._cheieScrisa, VirtualKeyBoard, title=titlu, text=u"")
+		self.session.openWithCallback(self._cheieScrisa, VirtualKeyBoard, title=titlu, text=stare.get("cheie", u""))
 
 	def _cheieScrisa(self, text):
 		if text is None:

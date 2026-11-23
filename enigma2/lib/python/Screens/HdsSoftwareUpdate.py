@@ -638,6 +638,294 @@ def cautaCandidati(discuri=None):
 	return candidati
 
 
+# ---------------------------------------------------------------- tipul partitiei de pe stick (USB6, 22.11.2026)
+# Cazul Wlad (forum 948 #3681-#3683, asistenta 036824, STADIU-AS101, Amiko Viper 4K V10): stickul avea FAT32, dar tabela
+# MBR il arata cu tipul 07 (NTFS/exFAT). Linux il monta, deci imaginea vedea fisierele, dar recovery-ul producatorului
+# (incarcatorul) se uita dupa tipul din tabela si vedea 0 MB. Reparatia a fost un singur octet (tipul 0c).
+# Aici: pentru fiecare stick montat (/dev/sdXN, numai partitiile primare 1-4 dintr-o tabela MBR curata) se citesc 1024 de
+# octeti din discul intreg (tabela si sectorul 1, unde ar sta antetul GPT) si 512 din partitie (sectorul de pornire, unde
+# scrie FAT32 / FAT16 / FAT12). Se repara NUMAI FAT (cazul dovedit al lui Wlad; exFAT si NTFS nu se ating), numai cand si
+# felul montarii (vfat/msdos din /proc/mounts) spune FAT, numai pe tabele MBR fara nicio intrare 0xEE si fara antet
+# "EFI PART" (o tabela hibrida se sare toata), si niciodata pe discurile pornirii: discul radacinii (aflat din
+# os.stat("/").st_dev si /sys/dev/block, ca HdsStocare.discRadacina, nu din /proc/mounts, unde stau rootfs sau /dev/root),
+# discul montat pe /boot si orice disc cu fisiere STARTUP* pe oricare partitie montata; cand discul radacinii nu se poate
+# afla (overlay, loop, dm, /sys care nu raspunde), nu se propune si nu se scrie nimic. Omul afla pe ecran si in web si poate apasa „Repara tipul
+# partitiei": se scrie numai octetul tipului din tabela (ca `sfdisk --part-type <disc> <nr> <tip>`), dupa ce totul de mai
+# sus se verifica din nou chiar inainte de scriere, iar sectorul 0 al discului si sectorul partitiei trebuie sa fie
+# identice cu cele vazute (alt stick cu acelasi /dev/sdX nu e atins); fisierele raman. Memoria interna (mmcblk) nu se citeste si nu se
+# scrie niciodata. Citirile si scrierea merg pe un fir separat (ecranul de mai jos cu HdsPazaModel.LucrareFundal,
+# actualizare_web la fel), niciodata pe firul interfetei. Stau aici, nu in Components/HdsRecuperare.py, fiindca acela nu
+# deschide nimic din /dev (paza lui, test_recuperare_hostname).
+# FAT32 se pune la 0x0C (FAT32 cu LBA) si nu la 0x0B: e tipul care a mers la Wlad, il primeste orice incarcator cu LBA
+# (toate receptoarele noastre), iar 0x0B si 0x0C sunt amandoua socotite bune la verificare, deci un stick cu 0x0B nu e
+# atins. FAT16 -> 0x0E (cu LBA), FAT12 -> 0x01.
+
+# sistemul de fisiere -> (tipurile MBR potrivite, tipul pus la reparare); numai FAT
+TIPURI_BUNE = {
+	"FAT32": ((0x0b, 0x0c), 0x0c),
+	"FAT16": ((0x04, 0x06, 0x0e), 0x0e),
+	"FAT12": ((0x01,), 0x01),
+}
+# felul montarii din /proc/mounts care se potriveste cu un sistem FAT
+MONTARI_FAT = ("vfat", "msdos")
+NUME_TIP = {0x01: "FAT12", 0x04: "FAT16", 0x06: "FAT16", 0x07: "NTFS/exFAT", 0x0b: "FAT32", 0x0c: "FAT32 LBA",
+	0x0e: "FAT16 LBA", 0x83: "Linux"}
+_TIP_EXTINS_SAU_GPT = (0x00, 0x05, 0x0f, 0x85, 0xee, 0xef)
+
+
+def sistemFisiere(sector):
+	"""Sistemul de fisiere din primul sector al partitiei: "FAT32", "FAT16", "FAT12", "exFAT", "NTFS" sau ""."""
+	if not sector or len(sector) < 512:
+		return ""
+	if sector[3:11] == b"EXFAT   ":
+		return "exFAT"
+	if sector[3:11] == b"NTFS    ":
+		return "NTFS"
+	if sector[510:512] != b"\x55\xaa":
+		return ""
+	if sector[82:87] == b"FAT32":
+		return "FAT32"
+	if sector[54:59] == b"FAT16":
+		return "FAT16"
+	if sector[54:59] == b"FAT12":
+		return "FAT12"
+	return ""
+
+
+def imparteDispozitiv(dispozitiv):
+	"""'/dev/sdb1' -> ('/dev/sdb', 1); numai discurile USB/SATA sd* si partitiile 1-4; altfel (None, 0)."""
+	d = (dispozitiv or "").strip()
+	if d.startswith("/dev/"):
+		d = d[5:]
+	i = len(d)
+	while i > 0 and d[i - 1].isdigit():
+		i -= 1
+	disc, nr = d[:i], d[i:]
+	if not disc.startswith("sd") or not disc[2:].isalpha() or not nr or not 1 <= int(nr) <= 4:
+		return None, 0
+	return "/dev/" + disc, int(nr)
+
+
+def montare(punct, mounts="/proc/mounts"):
+	"""(dispozitiv, felul montarii) pentru `punct`, din /proc/mounts (ultima montare pe acel punct), sau ("", "")."""
+	punct = (punct or "").rstrip("/") or "/"
+	rez = ("", "")
+	try:
+		with open(mounts, "r") as f:
+			for rand in f:
+				parti = rand.split()
+				if len(parti) >= 3 and (parti[1].replace("\\040", " ").rstrip("/") or "/") == punct:
+					rez = (parti[0], parti[2])
+	except (IOError, OSError):
+		pass
+	return rez
+
+
+def dispozitivMontare(punct, mounts="/proc/mounts"):
+	"""Dispozitivul montat pe `punct` (din /proc/mounts), sau ""."""
+	return montare(punct, mounts)[0]
+
+
+def _citesteOcteti(cale, inceput, marime):
+	try:
+		with open(cale, "rb") as f:
+			f.seek(inceput)
+			return f.read(marime)
+	except (IOError, OSError):
+		return b""
+
+
+def tabelaMbrCurata(octeti):
+	"""True pentru o tabela MBR fara GPT: semnatura 55 AA, nicio intrare 0xEE (nici hibrida) si sectorul 1 fara antetul
+	"EFI PART". `octeti`: primii 1024 de octeti ai discului."""
+	if len(octeti) < 512 or octeti[510:512] != b"\x55\xaa":
+		return False
+	b = bytearray(octeti)
+	if any(b[446 + 16 * i + 4] == 0xee for i in range(4)):
+		return False
+	return octeti[512:520] != b"EFI PART"
+
+
+def verificaTip(disc, nr, partitie):
+	"""Tipul partitiei `nr` din tabela MBR a lui `disc` fata de sistemul de fisiere din `partitie` (cai: dispozitive sau,
+	in probe, fisiere imagine). -> dict {disc, nr, partitie, tip, fs, bun, mbr, sector} cand nu se potrivesc, altfel None.
+	Numai FAT, numai pe o tabela MBR curata (tabelaMbrCurata). "mbr" (sectorul 0 intreg: semnatura discului, toate
+	intrarile) si "sector" (sectorul de pornire al partitiei: eticheta, numarul de serie) se compara din nou chiar inainte de
+	scriere (reparaTip), ca alt stick care primeste acelasi /dev/sdX sa nu fie atins."""
+	inceput = _citesteOcteti(disc, 0, 1024)
+	if not tabelaMbrCurata(inceput):
+		return None
+	tip = bytearray(inceput)[446 + 16 * (nr - 1) + 4]
+	if tip in _TIP_EXTINS_SAU_GPT:
+		return None
+	sector = _citesteOcteti(partitie, 0, 512)
+	fs = sistemFisiere(sector)
+	if fs not in TIPURI_BUNE:
+		return None
+	potrivite, bun = TIPURI_BUNE[fs]
+	if tip in potrivite:
+		return None
+	return {"disc": disc, "nr": nr, "partitie": partitie, "tip": tip, "fs": fs, "bun": bun, "mbr": bytes(inceput[:512]),
+		"sector": bytes(sector)}
+
+
+def _discDe(dispozitiv):
+	"""'/dev/sda10' -> '/dev/sda' (orice numar de partitie), '' pentru restul."""
+	d = (dispozitiv or "").strip().rstrip("0123456789")
+	return d if d.startswith("/dev/sd") and d[7:].isalpha() and d[7:] else ""
+
+
+def discRadacina(st_dev=None, realpath=None, major=None, minor=None, mounts="/proc/mounts"):
+	"""Discul sd* de pe care ruleaza imaginea ('/dev/sda'), din numerele radacinii (os.stat("/").st_dev si
+	/sys/dev/block/<major>:<minor>), ca Components/HdsStocare.discRadacina, nu din /proc/mounts; "" numai cand e dovedit ca
+	radacina e in memoria interna (mmcblk*, mtdblock*, sau fara dispozitiv de bloc cu ubifs/jffs2); None cand nu se poate
+	afla (os.major lipsa, eroare, overlay/nfs/tmpfs, loop, dm, md, orice alt nume): atunci nu se propune si nu se scrie
+	nicio reparare."""
+	major = major or getattr(os, "major", None)
+	minor = minor or getattr(os, "minor", None)
+	if major is None or minor is None:
+		return None
+	try:
+		if st_dev is None:
+			st_dev = os.stat("/").st_dev
+		mare, mic = major(st_dev), minor(st_dev)
+		if not mare:
+			return "" if montare("/", mounts)[1] in ("ubifs", "jffs2") else None
+		parti = (realpath or os.path.realpath)("/sys/dev/block/%d:%d" % (mare, mic)).split("/")
+	except (OSError, IOError, ValueError, TypeError):
+		return None
+	if "block" not in parti or parti.index("block") + 1 >= len(parti):
+		return None
+	nume = parti[parti.index("block") + 1]
+	if nume.startswith("mmcblk") or nume.startswith("mtdblock"):
+		return ""
+	if nume.startswith("sd") and nume[2:].isalpha():
+		return "/dev/" + nume
+	return None
+
+
+def _montariSd(mounts):
+	"""[(dispozitiv, punct)] pentru fiecare rand /dev/sd* din /proc/mounts."""
+	rez = []
+	try:
+		with open(mounts, "r") as f:
+			for rand in f:
+				parti = rand.split()
+				if len(parti) >= 2 and parti[0].startswith("/dev/sd"):
+					rez.append((parti[0], parti[1].replace("\\040", " ")))
+	except (IOError, OSError):
+		pass
+	return rez
+
+
+def discuriPornire(mounts="/proc/mounts", st_dev=None, realpath=None, major=None, minor=None):
+	"""Discurile sd* ale pornirii, pe care nu se propune si nu se scrie nicio reparare: cel de pe care ruleaza imaginea
+	(discRadacina), cel montat pe /boot si orice disc care are fisiere STARTUP* pe /boot sau pe ORICARE din partitiile lui
+	montate (fiecare rand /dev/sd* din /proc/mounts). None cand discul radacinii nu se poate afla."""
+	radacina = discRadacina(st_dev, realpath, major, minor, mounts)
+	if radacina is None:
+		return None
+	rez = set()
+	if radacina:
+		rez.add(radacina)
+	d = _discDe(dispozitivMontare("/boot", mounts))
+	if d:
+		rez.add(d)
+	for dispozitiv, punct in [(dispozitivMontare("/boot", mounts), "/boot")] + _montariSd(mounts):
+		try:
+			if any(n.startswith("STARTUP") for n in os.listdir(punct)):
+				d = _discDe(dispozitiv)
+				if d:
+					rez.add(d)
+		except (IOError, OSError):
+			continue
+	return rez
+
+
+def _deReparat(punct, mounts, oprite):
+	"""(disc, nr, dispozitiv) pentru stickul montat pe `punct` daca poate primi o reparare (sd*1-4, montat vfat/msdos, nu
+	e disc al pornirii), altfel None."""
+	dispozitiv, fel = montare(punct, mounts)
+	disc, nr = imparteDispozitiv(dispozitiv)
+	if not disc or disc in oprite or fel not in MONTARI_FAT:
+		return None
+	return disc, nr, dispozitiv
+
+
+def tipuriGresite(puncte, mounts="/proc/mounts", st_dev=None, realpath=None, major=None, minor=None):
+	"""[info] pentru stickurile montate pe `puncte` cu tipul partitiei gresit (vezi verificaTip), cu "punct" in plus; fara
+	discurile pornirii (discuriPornire) si numai cu montarea FAT. Pe firul separat: citeste /proc/mounts, numele din
+	radacina fiecarui stick si cate 1,5 KB din fiecare."""
+	rez, vazute = [], set()
+	oprite = discuriPornire(mounts, st_dev, realpath, major, minor)
+	if oprite is None:
+		return []
+	for punct in puncte:
+		gasit = _deReparat(punct, mounts, oprite)
+		if gasit is None or gasit[:2] in vazute:
+			continue
+		disc, nr, dispozitiv = gasit
+		vazute.add((disc, nr))
+		try:
+			info = verificaTip(disc, nr, dispozitiv)
+		except Exception as eroare:
+			print("[HdsSoftwareUpdate] tipul partitiei %s: %s" % (dispozitiv, eroare))
+			info = None
+		if info:
+			info["punct"] = punct
+			rez.append(info)
+	return rez
+
+
+def numeTip(tip):
+	return "%02X" % tip + (" (%s)" % NUME_TIP[tip] if tip in NUME_TIP else "")
+
+
+def textTipGresit(info, nume=""):
+	"""Textul pentru om (ecran si web): ce nu se potriveste, ce urmeaza daca ramane asa si ce face reparatia."""
+	return _("Pe stickul „%s” partiția %d are sistemul de fișiere %s, dar tabela de partiții o arată ca tip %s. "
+		"Recovery-ul producătorului nu vede atunci arhivele de pe stick (0 MB). Repară tipul partiției: schimb numai acest "
+		"octet în %s, fișierele de pe stick rămân neatinse.") % (
+		nume or info.get("punct") or info["partitie"], info["nr"], info["fs"], numeTip(info["tip"]), numeTip(info["bun"]))
+
+
+def textRandTip(nume):
+	return _("Repară tipul partiției pe „%s”") % nume
+
+
+def reparaTip(info, mounts="/proc/mounts", st_dev=None, realpath=None, major=None, minor=None):
+	"""Scrie in tabela MBR numai octetul tipului partitiei (info din tipuriGresite, cu "punct", "mbr" si "sector"). Chiar
+	inainte de scriere verifica din nou tot, cu aceeasi lista intreaga ca la verificare: discul radacinii se poate afla si
+	discul nu e al pornirii (radacina, /boot, STARTUP* pe oricare partitie montata), montarea e tot FAT, sectorul partitiei
+	e acelasi octet cu octet, iar pe acelasi fisier deschis tabela e tot MBR curata, sectorul 0 e acelasi octet cu octet si
+	tipul e cel vazut. Fara oricare din ele nu scrie. -> (True, text) sau (False, text). Ruleaza pe firul separat."""
+	schimbata = _("Tabela de partiții a stickului s-a schimbat între timp. Caută din nou software-ul.")
+	if info.get("fs") not in TIPURI_BUNE or not 1 <= info.get("nr", 0) <= 4 or not info.get("punct") or \
+			len(info.get("mbr") or b"") != 512 or len(info.get("sector") or b"") != 512:
+		return False, schimbata
+	oprite = discuriPornire(mounts, st_dev, realpath, major, minor)
+	if oprite is None:
+		return False, _("Nu pot afla de pe ce disc pornește receptorul, deci nu schimb tabela stickului.")
+	if info["disc"] in oprite or _deReparat(info["punct"], mounts, oprite) != (info["disc"], info["nr"], info["partitie"]):
+		return False, schimbata
+	if _citesteOcteti(info["partitie"], 0, 512) != info["sector"]:
+		return False, schimbata
+	loc = 446 + 16 * (info["nr"] - 1) + 4
+	try:
+		with open(info["disc"], "r+b") as f:
+			inceput = f.read(1024)
+			if not tabelaMbrCurata(inceput) or inceput[:512] != info["mbr"] or bytearray(inceput)[loc] != info["tip"]:
+				return False, schimbata
+			f.seek(loc)
+			f.write(bytearray([info["bun"]]))
+			f.flush()
+			os.fsync(f.fileno())
+	except (IOError, OSError) as eroare:
+		return False, _("Tipul partiției nu s-a putut schimba: %s") % (getattr(eroare, "strerror", None) or eroare)
+	return True, _("Gata: partiția %d a stickului are acum tipul %s. Recovery-ul producătorului poate citi arhivele de pe "
+		"el.") % (info["nr"], numeTip(info["bun"]))
+
+
 def stickNumaiCitire(punct):
 	"""True cand pe `punct` se poate numai citi: aceeasi verificare ca la locul inregistrarilor (Components/HdsStocare.verificaDisc)."""
 	try:
@@ -1379,6 +1667,76 @@ def _tintaKexec(p):
 	raise ValueError(_textLocNesigur())
 
 
+# GARDA PORNIRII (rapoartele pornirii 761249 si 486541, Octagon SF8008 cu 11 locuri pe stick): la locul de
+# pe stick, -r<sdaM> -k<sdaK> vin direct din root= si kernel= ale liniei de comanda, iar programul de scriere scrie exact
+# acele partitii. Unealta altei imagini poate lasa in STARTUP nucleul unui loc cu sistemul altuia (kernel=/dev/sda3 al lui
+# STARTUP_6 cu root=/dev/sda10 al lui STARTUP_9); daca interfata porneste asa, instalarea ar pune nucleul nostru peste
+# nucleul locului 6, iar simularea ar trece. Scrierea porneste deci numai cand perechea de acum e chiar a unui STARTUP_N,
+# citite numai (Components/HdsPornireMultipla.startupuriCitite si locPornit). Fara STARTUP_N citite: refuz. STARTUP nu se
+# repara aici (scriere pe partitia de pornire, hotararea e separata).
+class RefuzPornire(ValueError):
+	"""Refuzul garzii pornirii: textul pentru om si diagnosticul (HdsPornireMultipla.locPornit, plus cheia citit)."""
+
+	def __init__(self, text, diagnostic=None):
+		ValueError.__init__(self, text)
+		self.diagnostic = diagnostic or {}
+
+
+def _textPornireNeclara():
+	return _("Pornirea receptorului este neclară. Instalarea este oprită.")
+
+
+def _startupuriPornire():
+	"""STARTUP_N de pe partitia de pornire, numai citite (HdsPornireMultipla.startupuriCitite); None cand nu se pot citi
+	sau la orice eroare. Probele o inlocuiesc, ca pe _pornireMultipla."""
+	try:
+		from Components import HdsPornireMultipla
+		return HdsPornireMultipla.startupuriCitite()
+	except Exception as eroare:
+		print("[HdsSoftwareUpdate] fisierele de pornire: %s" % eroare)
+		return None
+
+
+_gardaJurnal = [None]
+
+
+def _jurnalGarda(text):
+	"""Un rand in jurnalul interfetei, numai cand se schimba (fereastra Imagine noua de pe internet intreaba locul la fiecare
+	jumatate de secunda)."""
+	if text != _gardaJurnal[0]:
+		_gardaJurnal[0] = text
+		print("[HdsSoftwareUpdate] garda pornirii: %s" % text)
+
+
+def _gardaPornireStick(p):
+	"""Locul de pe stick (_tintaLocUsb): trece numai cand nucleul si sistemul pornite acum sunt ale aceluiasi STARTUP_N;
+	altfel RefuzPornire cu motivul pentru om (vezi GARDA PORNIRII)."""
+	fisiere = _startupuriPornire()
+	if not fisiere:
+		_jurnalGarda("fisierele STARTUP_N nu se pot citi, deci nu se scrie")
+		raise RefuzPornire(_textPornireNeclara(), {"citit": False})
+	try:
+		from Components import HdsPornireMultipla
+		d = dict(HdsPornireMultipla.locPornit(p, fisiere), citit=True)
+		pe_stick = _(HdsPornireMultipla.PE_STICK)
+	except Exception as eroare:
+		_jurnalGarda("%s" % eroare)
+		raise RefuzPornire(_textPornireNeclara(), {"citit": False})
+	_jurnalGarda("kernel=%s root=%s; locurile nucleului %s, ale sistemului %s, locul %s; STARTUP_N fara forma stiuta %s" % (
+		p.get("kernel", ""), p.get("root", ""), d["nucleu"], d["sistem"], d["loc"] or "-", d.get("fara_forma", [])))
+	if d["loc"]:
+		return d
+	if d["amestec"]:
+		# doua propozitii: ce s-a intamplat si ce face omul (fereastra de pe internet le pune in doua casete)
+		locuri = {"nucleu": d["nucleu"][0], "sistem": d["sistem"][0]}
+		d["motiv"] = _("Instalarea este oprită: receptorul a pornit cu nucleul locului %(nucleu)s și cu sistemul locului "
+			"%(sistem)s, deci ar scrie peste nucleul locului %(nucleu)s.") % locuri
+		d["ajutor"] = _("Alege locul %(sistem)s la Meniu > Standby și repornire > Repornește în altă imagine, apoi încearcă "
+			"din nou.") % locuri
+		raise RefuzPornire("%s %s" % (d["motiv"], d["ajutor"]), d)
+	raise RefuzPornire("%s %s." % (pe_stick, _("Instalarea este oprită")), d)
+
+
 def _tintaLocUsb(p, multiboot):
 	"""Locul de pe stick al pornirii multiple cu STARTUP (root=/dev/sdXM kernel=/dev/sdXK pe acelasi disc, fara rootsubdir),
 	numai pe un receptor cu pornire multipla; None altfel."""
@@ -1389,6 +1747,7 @@ def _tintaLocUsb(p, multiboot):
 		return None
 	if not (_pornireMultipla() if multiboot is None else multiboot):
 		return None
+	_gardaPornireStick(p)
 	return {"fel": "usb", "argumente": "-r%s -k%s -m0" % (root[len("/dev/"):], nucleu[len("/dev/"):]), "subdosar": "",
 		"radacina": root, "nucleu": nucleu, "loc": ""}
 
@@ -1536,6 +1895,30 @@ def textNerecunoscut():
 	return _("Software-ul nu a fost recunoscut corect de programul de instalare, deci nu se instalează. Pe receptor nu s-a schimbat nimic.")
 
 
+def textOaspete():
+	return _("Imaginea rulează ca oaspete într-un manager de multi-imagine. Instalarea de aici este oprită pentru a proteja imaginile. Folosește managerul din care ai pornit imaginea. Nu s-a scris nimic pe receptor.")
+
+
+# NEO6 (NBT, TODO 16.11 06:05): pornita ca oaspete in NeoBoot, imaginea are /.multinfo in radacina (acelasi semn ca
+# Components/HdsCopieImagine._pornireFaraPartitie). ofgwrite refuza oricum, dar omul afla numai dupa simulare, sub „A gasit
+# o eroare si s-a oprit (codul 1)”. Acum semnul se vede pe firul separat, inainte de dosarul curat si de simulare, iar omul
+# primeste direct textOaspete() (pe televizor si in pagina web, prin aceeasi metoda a ecranului).
+RADACINA_NEOBOOT = "/"
+OASPETE = "oaspete"
+
+
+def pornitCaOaspete(radacina=None):
+	"""True cand imaginea ruleaza ca oaspete in NeoBoot (/.multinfo); citire de fisier, numai pe firul separat."""
+	return os.path.exists(os.path.join(radacina or RADACINA_NEOBOOT, ".multinfo"))
+
+
+def pregatesteDacaNuEOaspete(candidat, oprit=None, progres=None):
+	"""OASPETE sub NeoBoot (nimic copiat), altfel dosarul curat al pachetului (_pregatesteDosarCurat)."""
+	if pornitCaOaspete():
+		return OASPETE
+	return _pregatesteDosarCurat(candidat, oprit=oprit, progres=progres)
+
+
 def _analizaRand(rand):
 	"""Propozitia pentru un rand al lui ofgwrite, "" daca nu e nimic de spus omului, None daca randul nu e cunoscut"""
 	m = re.match(r"Found (?:tar\.xz )?(kernel|rootfs|nfi) file: (.*)$", rand, re.I)
@@ -1567,6 +1950,8 @@ def _analizaRand(rand):
 			return _("Nucleul se va instala în memoria internă, pe partiția %s.") % loc
 		return _("Sistemul se va instala în memoria internă, pe partiția %s.") % loc
 	jos = rand.lower()
+	if 'the image runs from neoboot' in jos:
+		return textOaspete()
 	for semn, text in (
 			("no kernel file was found", _("Nu a găsit nucleul sistemului în acest software.")),
 			("no rootfs file was found", _("Nu a găsit sistemul în acest software.")),
@@ -1641,6 +2026,10 @@ class HdsSoftwareUpdate(Screen):
 		self._console = Console()
 		self._candidati = []
 		self._reparari = []   # randurile „Repară” din capul listei: [{"disc", "nume", "text"}]
+		# USB6: stickurile cu tipul partitiei gresit (tipuriGresite, citite pe un fir separat)
+		self._tipuri = []
+		self._lucrareTip = None
+		self._notaTip = ""   # textul ultimei reparari, pastrat peste redesenarea listei
 		self._candidatAles = None
 		self._ultimaIesire = ""
 		self._arataCorect = False
@@ -1737,7 +2126,12 @@ class HdsSoftwareUpdate(Screen):
 			self["detaliu"].setText(textGasite(len(self._candidati)))
 		if self._candidati:
 			repara = r is not None or (c is not None and c.get("fel") != FEL_REA and bool(c.get("disc_reparat")))
-			self._buton("key_green", _("Repară stickul") if repara else _("Verifică software-ul"))
+			self._buton("key_green", _("Repară tipul partiției") if r is not None and r.get("tip") else (
+				_("Repară stickul") if repara else _("Verifică software-ul")))
+		elif r is not None:
+			self._buton("key_green", _("Repară tipul partiției") if r.get("tip") else _("Repară stickul"))
+		elif self._reparari:
+			self._buton("key_green", "")
 
 	def _sus(self):
 		if not self._ocupat and self._faza == "lista":
@@ -1795,6 +2189,9 @@ class HdsSoftwareUpdate(Screen):
 		if self._lucrare is not None:
 			self._lucrare.opreste()
 			self._lucrare = None
+		if getattr(self, "_lucrareTip", None) is not None:
+			self._lucrareTip.opreste()
+			self._lucrareTip = None
 		if not self._scriereRealaPornita:
 			elibereazaDupaLucrare(self, lucrare)
 
@@ -1838,6 +2235,13 @@ class HdsSoftwareUpdate(Screen):
 			eroare_cautare = eroare
 		self._reparari = self._randuriReparare()
 		cauta_din_nou = self._randSimplu(_("Caută din nou software de receptor"))
+		self._arataLista(eroare_cautare, cauta_din_nou)
+		self._pornesteTipuri()
+
+	def _arataLista(self, eroare_cautare=None, cauta_din_nou=None):
+		"""Lista si textul de sus, din self._candidati si self._reparari (si dupa verificarea tipului partitiei)."""
+		if cauta_din_nou is None:
+			cauta_din_nou = self._randSimplu(_("Caută din nou software de receptor"))
 		if self._candidati:
 			self["lista"].setList(self._randuriLista())
 			self["lista"].moveToIndex(0)
@@ -1848,28 +2252,94 @@ class HdsSoftwareUpdate(Screen):
 			if self._reparari:
 				self._detaliuRand()
 		else:
-			self["lista"].setList([self._randSimplu(_("Nu am găsit software de receptor pe stick sau pe disc.")), cauta_din_nou])
-			if eroare_cautare is not None:
+			self["lista"].setList([self._randReparare(r) for r in self._reparari] +
+				[self._randSimplu(_("Nu am găsit software de receptor pe stick sau pe disc.")), cauta_din_nou])
+			self["lista"].moveToIndex(0)
+			if self._reparari:
+				self._detaliuRand()
+			elif eroare_cautare is not None:
 				self["detaliu"].setText(_("Eroare la căutare: %s") % eroare_cautare)
 			else:
 				self["detaliu"].setText(
 					_("Pune un stick cu software de receptor: arhiva .zip de pe site sau dosarul e2/update cu kernel.bin și "
 					  "rootfs.tar.bz2. Apoi apasă OK pe „Caută din nou software de receptor”.")
 				)
-			self._buton("key_green", "")
+			if not self._reparari:
+				self._buton("key_green", "")
 		self._buton("key_yellow", _("Reîncarcă"))
 
 	def _randuriReparare(self):
-		"""Cate un rand „Repară” pentru fiecare stick pe numai citire cu un pachet care s-ar putea instala si fara alt loc."""
+		"""Cate un rand „Repară” pentru fiecare stick pe numai citire cu un pachet care s-ar putea instala si fara alt loc;
+		inaintea lor, cate unul pentru fiecare stick cu tipul partitiei gresit (USB6, cu "tip")."""
 		rez = []
+		if getattr(self, "_tipuri", None):
+			rez = [{"disc": t["disc"], "nume": t.get("punct") or t["disc"], "text": textTipGresit(t), "tip": t}
+				for t in self._tipuri]
 		for c in self._candidati:
 			if c.get("fel") != FEL_REA and faraLoc(c) and c.get("disc_reparat") and not any(r["disc"] == c["disc_reparat"] for r in rez):
 				rez.append({"disc": c["disc_reparat"], "nume": numeMediu(c), "text": textStickCazut(c)})
 		return rez
 
+	def _randReparare(self, r):
+		if r.get("tip"):
+			return self._randSimplu(textRandTip(r["nume"]))
+		return self._randSimplu(_("Repară „%s”") % r["nume"])
+
 	def _randuriLista(self):
-		return [self._randSimplu(_("Repară „%s”") % r["nume"]) for r in self._reparari] + [self._randPachet(c) for c in self._candidati] + \
+		return [self._randReparare(r) for r in self._reparari] + [self._randPachet(c) for c in self._candidati] + \
 			[self._randSimplu(_("Caută din nou software de receptor"))]
+
+	# -------------------------------------------------------------- tipul partitiei de pe stick (USB6)
+
+	def _pornesteTipuri(self):
+		"""Verificarea tipului partitiei pe stickurile montate, pe un fir separat (tipuriGresite);
+		lista mediilor se ia aici, pe firul enigma2."""
+		if self._lucrareTip is not None:
+			self._lucrareTip.opreste()
+			self._lucrareTip = None
+		try:
+			puncte = [d.mountpoint for d in _discuriMontate()]
+		except Exception as eroare:
+			print("[HdsSoftwareUpdate] stickurile pentru tipul partitiei: %s" % eroare)
+			return
+		self._lucrareTip = HdsPazaModel.LucrareFundal(lambda: tipuriGresite(puncte), self._dupaTipuri)
+
+	def _dupaTipuri(self, rezultat, eroare):
+		self._lucrareTip = None
+		if eroare:
+			print("[HdsSoftwareUpdate] tipul partitiei: %s" % eroare)
+		tipuri = rezultat or []
+		nota, self._notaTip = getattr(self, "_notaTip", ""), ""
+		if tipuri == self._tipuri or self._ocupat or self._faza != "lista":
+			return
+		self._tipuri = tipuri
+		self._reparari = self._randuriReparare()
+		self._arataLista()
+		if nota:
+			self["detaliu"].setText(nota)
+
+	def _reparaTip(self, info):
+		"""Un singur OK: scrie octetul tipului pe un fir separat, apoi citeste lista din nou (si verifica din nou tipul)."""
+		if self._ocupat:
+			return
+		if self._lucrareTip is not None:
+			self._lucrareTip.opreste()
+		self._ocupat = True
+		self["detaliu"].setText(_("Repar tipul partiției de pe stick…"))
+
+		def gata(rezultat, eroare):
+			self._lucrareTip = None
+			self._ocupat = False
+			bun = bool(rezultat and rezultat[0])
+			text = rezultat[1] if rezultat else _("Tipul partiției nu s-a putut schimba: %s") % eroare
+			# dupa o reparare reusita randul dispare; dupa una nereusita ramane, iar verificarea din nou (aceleasi date)
+			# nu mai redeseneaza lista, deci textul erorii ramane sus
+			if bun:
+				self._tipuri = []
+			self._notaTip = text
+			self._reincarca()
+			self["detaliu"].setText(text)
+		self._lucrareTip = HdsPazaModel.LucrareFundal(lambda: reparaTip(info), gata)
 
 	def _reparareSelectata(self):
 		index = self["lista"].getSelectionIndex()
@@ -1913,7 +2383,10 @@ class HdsSoftwareUpdate(Screen):
 		if self._faza == "lista":
 			reparare = self._reparareSelectata()
 			if reparare is not None:
-				self._repara(reparare["disc"])
+				if reparare.get("tip"):
+					self._reparaTip(reparare["tip"])
+				else:
+					self._repara(reparare["disc"])
 				return
 			candidat = self._candidatSelectat()
 			if candidat is None:
@@ -2027,7 +2500,7 @@ class HdsSoftwareUpdate(Screen):
 		self._buton("key_green", "")
 		self._buton("key_yellow", "")
 		self._lucrare = HdsPazaModel.LucrareFundal(
-			lambda: _pregatesteDosarCurat(candidat, oprit=self._oprit, progres=progres),
+			lambda: pregatesteDacaNuEOaspete(candidat, oprit=self._oprit, progres=progres),
 			lambda cale, eroare: self._dosarGata(candidat, cale, eroare))
 
 	# -------------------------------------------------------------- pasul si procentul, o data pe secunda
@@ -2078,6 +2551,10 @@ class HdsSoftwareUpdate(Screen):
 		self._opresteePas()
 		self._lucrare = None
 		self._ocupat = False
+		if cale == OASPETE and not eroare:
+			# NEO6: sub NeoBoot nu se copiaza si nu se simuleaza nimic; textul e cel al randului NeoBoot din simulare
+			self._eroareInapoiLaLista(textOaspete())
+			return
 		if eroare or not cale:
 			# stickul a cazut pe numai citire chiar acum: lista arata ce se poate face, in locul erorii brute
 			marcheazaMediu(candidat, _discuriMontate())

@@ -26,7 +26,9 @@
  *         ora). Canalul randurilor reusite e pentru asistenta: hds-zap.log nu intra in rapoartele prin coduri QR
  *         (HdsQrRapoarte), iar in pachetele testerilor coada lor se taie (HdsBetaTester.faraCanaleReusite; nota lor
  *         spune „fără listele tale de canale”, iar canalul care nu merge era deja acceptat).
- *         sunet: codecul; "fara" numai dupa ce a sosit PMT-ul si n-are sunet; "nestiut" cand randul se scrie inaintea PMT-ului.
+ *         sunet: codecul; "fara" numai dintr-un program PMT aplicat (pmtPid valid), nu din marcajul de primire.
+ *         Fara pista in cache: "nestiut"; dupa randul video/radio datele audio tarzii completeaza acelasi zap_t0,
+ *         fara un temporizator nou. Oprirea, refuzul si urmatorul zap anuleaza asteptarea.
  *   AVERT/EROARE la esec, CU canalul (ca sa se afle exact canalul care nu merge): numele, referinta, pozitia,
  *         transponderul, sistemul, SID-ul, PID-urile si codecurile; motivul: fara resurse (tuner ocupat), fara PAT,
  *         serviciul lipsa din PAT, fara PMT, acordare esuata, configurare gresita, fara imagine dupa
@@ -100,6 +102,9 @@ private:
 	CitestePts m_citeste_pts;
 	void *m_ctx;
 	bool m_activ, m_esec, m_avert;
+	/* pmtPid valid: program citit din PMT, nu doar marcajul primit inainte de updateDecoder.
+	   Dupa randul video/radio provizoriu asteptam numai datele audio, fara un ceas nou. */
+	bool m_program_pmt, m_sunet_asteptat;
 	long long m_t0, m_t_acordat, m_t_program, m_t_imagine;
 	/* evenimentul video (timpul, marimea) si citirile PTS-ului de dupa el sau de la FARA_IMAGINE_MS */
 	long long m_t_eveniment, m_pts, m_t_cadre, m_termen_pts;

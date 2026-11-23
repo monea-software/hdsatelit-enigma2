@@ -146,6 +146,13 @@ def deviceKind(mountpoint, device = None, table = None):
 
 def deviceName(mountpoint, description = "", device = None, kind = None, table = None):
 	"""a plain name for a storage device, in the language of the menus"""
+	try:
+		from Components.Harddisk import storagePathName
+		identified = storagePathName(mountpoint, device)
+		if identified != mountpoint:
+			return identified
+	except ImportError:
+		pass
 	if kind is None:
 		kind = deviceKind(mountpoint, device, table)
 	key = mountKey(mountpoint)

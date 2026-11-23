@@ -36,9 +36,10 @@ LNB_MOTOR = 33
 TIP_UNIVERSAL = "universal"
 TIP_UN_OSCILATOR = "un_oscilator_10750"
 TIP_BANDA_C = "banda_c"
+TIP_BANDA_C_5750 = "banda_c_5750"
 TIP_PERSONALIZAT = "personalizat"
 TIP_UNICABLE = "unicable"
-TIPURI_DE_ALES = (TIP_UNIVERSAL, TIP_UN_OSCILATOR, TIP_BANDA_C, TIP_PERSONALIZAT)
+TIPURI_DE_ALES = (TIP_UNIVERSAL, TIP_UN_OSCILATOR, TIP_BANDA_C, TIP_PERSONALIZAT, TIP_BANDA_C_5750)
 
 DIFERA = "difera"
 PORTURI = ("A", "B", "C", "D")
@@ -61,6 +62,8 @@ def textTip(tip):
 		return _("Un oscilator 10750 (Ku)")
 	if tip == TIP_BANDA_C:
 		return _("Banda C (5150)")
+	if tip == TIP_BANDA_C_5750:
+		return _("Banda C (5750)")
 	if tip == TIP_PERSONALIZAT:
 		return _("Personalizat")
 	if tip == TIP_UNICABLE:
@@ -272,6 +275,8 @@ def oscilatoareKhz(lnb):
 		return 9750000, 10600000, 11700000
 	if tip == TIP_BANDA_C:
 		return 5150000, 5150000, 5150000
+	if tip == TIP_BANDA_C_5750:
+		return 5750000, 5750000, 5750000
 	if tip == TIP_UN_OSCILATOR:
 		return OSCILATOR_10750 * 1000, OSCILATOR_10750 * 1000, PRAG_MEREU_JOS * 1000
 	if tip == TIP_PERSONALIZAT:
@@ -404,6 +409,8 @@ def _tipDinConfig(sectiune):
 		return TIP_UNIVERSAL, 9750, 10600, 11700
 	if lof == "c_band":
 		return TIP_BANDA_C, 5150, 5150, 5150
+	if lof == "c_band_5750" or (lof == "user_defined" and lofl == lofh == prag == 5750):
+		return TIP_BANDA_C_5750, 5750, 5750, 5750
 	if lof == "unicable":
 		return TIP_UNICABLE, lofl, lofh, prag
 	if lofl == lofh == OSCILATOR_10750 and prag == PRAG_MEREU_JOS:
@@ -693,6 +700,61 @@ def alegeriDinModel(model):
 	return alegeri
 
 
+def alegeriSatelitFix(model, nm=None):
+	"""Lista intreaga de sateliti pentru un LNB fix, inclusiv pozitiile vestice."""
+	lnburi = model.get("lnburi") or []
+	if not model.get("editabil") or len(lnburi) != 1:
+		return []
+	l = lnburi[0]
+	if l["toti"] or l["diseqc"] == "1_2" or l["tip"] == TIP_UNICABLE or len(l["sateliti"]) != 1:
+		return []
+	if model["mod"] == "simple" and model.get("diseqcMode") != "single":
+		return []
+	nm = nm or _nimmanager()
+	return [(str(s[0]), _numeSatelit(nm, s[0])) for s in nm.satList if 0 <= s[0] < 3600]
+
+
+def _planSatelitFix(model, alegeri, nm, serviciu):
+	"""Alegerea satelitului fix, cu confirmarea si revenirea existente pentru LNB."""
+	poz = str(alegeri["satelit"])
+	permise = dict(alegeriSatelitFix(model, nm))
+	if poz not in permise:
+		return {"oprire": _("Satelitul nu se poate alege pentru acest LNB.")}
+	vechi = model["lnburi"][0]
+	din = vechi["sateliti"][0]
+	spre = int(poz)
+	nou = dict(model)
+	nou["lnburi"] = [dict(vechi, sateliti=[spre])]
+	ciorna = dict(alegeri)
+	ciorna.pop("satelit", None)
+	plan = planifica(nou, ciorna, nm, serviciu)
+	if plan["oprire"] == _("Nu ai schimbat nimic."):
+		plan["oprire"] = ""
+	if plan["oprire"]:
+		return plan
+	tinta = []
+	cfg = nm.getNimConfig(model["slot"])
+	if model["mod"] == "simple" and not plan["trece_in_avansat"]:
+		tinta.append(("diseqcA", str(spre)))
+	elif model["mod"] == "advanced":
+		tinta += [("advanced.sat.%d.lnb" % din, "0"), ("advanced.sat.%d.lnb" % spre, str(vechi["numar"]))]
+		for camp, implicit in (("voltage", "polarization"), ("tonemode", "band"), ("usals", "true"),
+				("rotorposition", "1")):
+			el = element(cfg, "advanced.sat.%d.%s" % (din, camp))
+			tinta.append(("advanced.sat.%d.%s" % (spre, camp), textElement(el) if el is not None else implicit))
+	for cale, text in tinta:
+		el = element(cfg, cale)
+		inainte = None if el is None else textElement(el)
+		plan["tinta"].append((cale, text))
+		if inainte != text:
+			plan["schimbari"].append((cale, inainte, text))
+	plan["schimbare_satelit"] = (din, spre)
+	plan["sateliti"] = [spre]
+	plan["rezumat"].insert(0, _("Satelit: %s în loc de %s. Antena rămâne fixă.") %
+		(permise[poz], _numeSatelit(nm, din)))
+	return plan
+
+
 def _lnbCuAlegeri(lnb, alegere):
 	nou = dict(lnb)
 	nou.update(alegere)
@@ -700,6 +762,8 @@ def _lnbCuAlegeri(lnb, alegere):
 		nou["lofl"], nou["lofh"], nou["prag"] = 9750, 10600, 11700
 	elif nou["tip"] == TIP_BANDA_C:
 		nou["lofl"], nou["lofh"], nou["prag"] = 5150, 5150, 5150
+	elif nou["tip"] == TIP_BANDA_C_5750:
+		nou["lofl"], nou["lofh"], nou["prag"] = 5750, 5750, 5750
 	elif nou["tip"] == TIP_UN_OSCILATOR:
 		nou["lofl"], nou["lofh"], nou["prag"] = OSCILATOR_10750, OSCILATOR_10750, PRAG_MEREU_JOS
 	return nou
@@ -733,6 +797,9 @@ def schimbate(model, alegeri):
 
 
 def areSchimbari(model, alegeri):
+	if "satelit" in alegeri and len(model.get("lnburi") or []) == 1:
+		if str(alegeri["satelit"]) != str(model["lnburi"][0]["sateliti"][0]):
+			return True
 	return bool(schimbate(model, alegeri)) or bool(alegeri.get("diseqc13V")) != bool(model["diseqc13V"])
 
 
@@ -830,6 +897,9 @@ def _campuriLof(baza, nou):
 	if tip == TIP_BANDA_C:
 		return [(baza + "lof", "c_band"), (baza + "lofl", "5150"), (baza + "lofh", "5150"),
 			(baza + "threshold", "5150")]
+	if tip == TIP_BANDA_C_5750:
+		return [(baza + "lof", "c_band_5750"), (baza + "lofl", "5750"), (baza + "lofh", "5750"),
+			(baza + "threshold", "5750")]
 	return [(baza + "lof", "user_defined"), (baza + "lofl", str(int(nou["lofl"]))),
 		(baza + "lofh", str(int(nou["lofh"]))), (baza + "threshold", str(int(nou["prag"])))]
 
@@ -876,6 +946,10 @@ def planifica(model, alegeri, nm=None, serviciu=None):
 	rezumat     - randurile pentru om; avertismente; oprire (de ce nu se poate aplica, gol daca se poate);
 	sateliti    - orbitalii serviti de LNB-urile schimbate (proba de semnal se face numai pe ei)."""
 	nm = nm or _nimmanager()
+	if "satelit" in alegeri:
+		lnburi = model.get("lnburi") or []
+		if not lnburi or not lnburi[0]["sateliti"] or str(alegeri["satelit"]) != str(lnburi[0]["sateliti"][0]):
+			return _planSatelitFix(model, alegeri, nm, serviciu)
 	cfg = nm.getNimConfig(model["slot"])
 	plan = {"slot": model["slot"], "tinta": [], "schimbari": [], "rezumat": [], "avertismente": [], "oprire": "",
 		"trece_in_avansat": False, "amprenta": model["amprenta"], "sateliti": [], "lnb_schimbate": [],

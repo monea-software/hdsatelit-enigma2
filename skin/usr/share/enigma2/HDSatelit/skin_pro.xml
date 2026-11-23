@@ -185,6 +185,9 @@
 		<eLabel text="Închide" position="1716,974" size="100,48" font="HdsRegular;24" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3" />
 	</screen>
 	<screen name="InfoBar" position="0,0" size="1920,1080" backgroundColor="transparent" flags="wfNoBorder">
+		<!-- Optional VPN badge; off by default. -->
+		<widget name="hdsVpnPornit" conditional="hdsVpnPornit" position="660,892" size="36,32" pixmap="HDSatelit/icons/vpn-on.png" alphatest="blend" scale="1" zPosition="7" />
+		<widget name="hdsVpnOprit" conditional="hdsVpnOprit" position="660,892" size="36,32" pixmap="HDSatelit/icons/vpn-off.png" alphatest="blend" scale="1" zPosition="7" />
 		<panel name="HdsInfoBarBase" />
 		<widget source="session.CurrentService" render="Label" position="704,894" size="170,44" font="HdsBold;24" foregroundColor="hdsBrandLight" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="HdsInfo">Label,next,Upper</convert></widget>
 		<widget source="session.Event_Next" render="Label" position="876,894" size="92,44" font="HdsBold;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="3"><convert type="EventTime">StartTime</convert><convert type="ClockToText">Format:%H:%M</convert></widget>
@@ -1452,7 +1455,9 @@
 		<widget source="Event" render="Progress" conditional="Event" position="1104,704" size="640,6" foregroundColor="hdsGood" backgroundColor="hdsTrack" transparent="1" zPosition="2">
 			<convert type="EventTime">Progress</convert>
 		</widget>
-		<widget source="Event" render="Label" conditional="Event" position="1104,722" size="640,150" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
+		<!-- TXT6 (Gpiupiu, forum 801 #3548): descrierea pe 4 randuri intregi de 38 px (HdsRegular 28), nu 3,95 cum era
+		     dupa LCF; cand nu incape, deruleaza in sus si inapoi (RunningText, ca descrierea meniului), nu se mai pierde -->
+		<widget source="Event" render="RunningText" options="movetype=swimming,direction=top,wrap=1,startdelay=3000,steptime=60" conditional="Event" position="1104,716" size="640,152" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
 			<convert type="EventName">FullDescription</convert>
 		</widget>
 		<!-- 0.7.5 (LCF, baderwabas): transponderul canalului ALES in lista (satelitul, frecventa, polarizarea, rata de
@@ -1623,12 +1628,13 @@
 		<widget source="Event" render="Progress" conditional="Event" position="1272,688" size="624,6" foregroundColor="hdsGood" backgroundColor="hdsTrack" transparent="1" zPosition="2">
 			<convert type="EventTime">Progress</convert>
 		</widget>
-		<widget source="Event" render="Label" conditional="Event" position="1272,704" size="624,140" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
+		<!-- TXT6: ca in lista obisnuita, 4 randuri intregi si derulare cand textul nu incape; transponderul sub ea -->
+		<widget source="Event" render="RunningText" options="movetype=swimming,direction=top,wrap=1,startdelay=3000,steptime=60" conditional="Event" position="1272,700" size="624,152" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="2">
 			<convert type="EventName">FullDescription</convert>
 		</widget>
 		<!-- 0.7.5 (LCF, baderwabas): transponderul canalului ALES in lista (satelitul, frecventa, polarizarea, rata de
 		     simboli, FEC, sistemul), din lista de canale, fara tuner; gol pe dosare si canale de internet -->
-		<widget source="hdsTpAles" render="Label" conditional="hdsTpAles" position="1272,850" size="624,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
+		<widget source="hdsTpAles" render="Label" conditional="hdsTpAles" position="1272,856" size="624,34" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
 		<!-- dreapta jos: TEXT (cautarea) si FAV pe un rand, apoi tastele colorate pe doua randuri: rosu Toate, verde Sateliți,
 		     galben Furnizori, albastru Favorite. FAV se lateste spre stanga cu textul marit (hdsFavTastaMarita, cel mult
 		     120 px): de la 1592 pana la cel mult 1472, deci nu ajunge la TEXT (1272-1464) -->

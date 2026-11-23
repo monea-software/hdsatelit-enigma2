@@ -722,8 +722,8 @@ def _dosarComun(nume):
 def dosareTeme(radacina_xml, root=None):
 	"""Dosarele de teme spre care trimite un skin deja citit (elementul <skin>), {dosar: de cate ori}: cai absolute sub
 	radacina temelor (/usr/share/enigma2/<dosar>/..., de pilda fonturile) si cai relative care incep cu dosarul unei teme
-	(<dosar>/okna/bara.png). Se numara dosarul imaginii (HDSatelit), dosarele cu skin.xml si, numai la caile absolute, cele
-	care nu mai exista (tema dezinstalata, ale carei fonturi si poze lipsesc). skin_default si piconurile nu se numara."""
+	(<dosar>/okna/bara.png). Se numara dosarul imaginii (HDSatelit) si dosarele cu skin.xml. Un dosar lipsa nu dovedeste o
+	tema dezinstalata: poate fi o cale scrisa de mana. skin_default si piconurile nu se numara."""
 	if root is None:
 		root = radacina()
 	gasite = {}
@@ -737,7 +737,7 @@ def dosareTeme(radacina_xml, root=None):
 			elif d == DOSAR_IMAGINE or os.path.isfile(os.path.join(root, d, "skin.xml")):
 				stiute[cheie] = True
 			else:
-				stiute[cheie] = absoluta and not os.path.exists(os.path.join(root, d))
+				stiute[cheie] = False
 		return stiute[cheie]
 
 	def numara(d, absoluta):
@@ -774,8 +774,7 @@ def skinUserPentruAltaTema(radacina_user, tema, root=None, radacina_tema=None, p
 	instalate = [d for d in gasite if d == DOSAR_IMAGINE or os.path.isfile(os.path.join(root, d, "skin.xml"))]
 	if not instalate and proprietar:
 		# fara cai spre o tema instalata (unealta care scrie fonturi din /usr/share/fonts): hotaraste tema straina in a carei
-		# sesiune s-a schimbat fisierul. Schimbat sub tema imaginii ("") nu hotaraste nimic: asa arata si fisierul altei teme
-		# pus la loc dintr-o copie (sau din FTP) inainte ca tema lui sa fie instalata, pe care continutul il opreste corect.
+		# sesiune s-a schimbat fisierul. Dovada ramane si dupa dezinstalarea temei; o cale lipsa singura nu e dovada.
 		if proprietar in (dosar, DOSAR_IMAGINE):
 			return None
 		if radacina_tema is not None and proprietar in dosareTeme(radacina_tema, root):
@@ -795,9 +794,9 @@ def skinUserPentruAltaTema(radacina_user, tema, root=None, radacina_tema=None, p
 # 1. Semnul de mai sus (caile spre dosarul temei) nu vede unealta unei teme care scrie skin_user.xml fara asemenea cai. Semnul
 #    in plus: imaginea tine minte, langa skin_user.xml (hds-skin-user.json), amprenta fisierului si tema care a pornit ultima
 #    data. Cand amprenta s-a schimbat in sesiunea unei teme straine, fisierul e al ei. Schimbat sub tema imaginii nu hotaraste
-#    nimic (poate fi un fisier al altei teme pus la loc dintr-o copie), deci un fisier scris de mana cu o cale spre un dosar
-#    lipsa ramane luat drept al unei teme dezinstalate, ca pana acum. Fisierul existent dinainte (fara amintire) ramane la
-#    semnul din continut. Se scrie numai cand se schimba fisierul sau tema pornita; orice greseala = nu se stie.
+#    nimic (poate fi un fisier al altei teme pus la loc dintr-o copie). O cale spre un dosar lipsa nu dovedeste o tema.
+#    Fisierul existent dinainte (fara amintire) ramane la semnul din continut.
+#    Se scrie numai cand se schimba fisierul sau tema pornita; orice greseala = nu se stie.
 # 2. Fisierul pe tema, ca in imaginile OE-Alliance (skin.py: USER_SKIN_TEMPLATE "skin_user_%s.xml" cu dosarul temei;
 #    Tools/Directories.py, SCOPE_GUISKIN): cand exista pentru tema care porneste, se aplica el in locul lui skin_user.xml.
 AMINTIRE_SKIN_USER = "hds-skin-user.json"

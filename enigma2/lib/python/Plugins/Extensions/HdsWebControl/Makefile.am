@@ -2,6 +2,7 @@ installdir = $(pkglibdir)/python/Plugins/Extensions/HdsWebControl
 
 install_PYTHON = \
 	__init__.py \
+	bluetooth_web.py \
 	accel_web.py \
 	acces_conditionat_web.py \
 	porturi_web.py \
@@ -108,6 +109,7 @@ install_PYTHON = \
 	scanare_web.py \
 	setari_copie_web.py \
 	setari_web.py \
+	setari_deschise_web.py \
 	stocare_web.py \
 	locuri_retea_web.py \
 	subtitrari_film_web.py \
@@ -128,6 +130,7 @@ install_PYTHON = \
 	asistenta_web.py \
 	subtitrari_web.py \
 	traducere_subtitrari_web.py \
+	vorbire_web.py \
 	traducere_configurare_web.py \
 	traducere_hbbtv_web.py
 

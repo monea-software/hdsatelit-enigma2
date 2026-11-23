@@ -46,6 +46,8 @@ class eDBoxLCD: public eLCD
 	static eDBoxLCD *instance;
 	unsigned char inverted;
 	int is_oled;
+	unsigned char *hds_color_buffer;
+	bool hds_duo2;
 #ifdef SWIG
 	eDBoxLCD();
 	~eDBoxLCD();
@@ -60,6 +62,8 @@ public:
 	int setLCDBrightness(int brightness);
 	void setInverted( unsigned char );
 	bool isOled() const { return !!is_oled; }
+	bool isHdsDuo2() const { return hds_duo2; }
+	int writeHdsDuo2(int first, int second, int third, int fourth);
 	void update();
 };
 

@@ -90,6 +90,10 @@ class PluginDescriptor:
 	# pluginuri. Primeste un numar nou, al lui: pluginul se incarca fara eroare (fara numele, cadea la
 	# import); intrarea de acolo nu are meniu la noi. Numerele de mai sus raman cum sunt (le folosesc ecranele noastre).
 	WHERE_VIXMENU = 29
+	# zap(session, service, **kwargs) -> (url, eroare) sau None, inaintea redarii.
+	# Separat de WHERE_PLAYSERVICE: primeste si session.
+	# Resolver asincron; operatiile session/service se trimit pe principal.
+	WHERE_CHANNEL_ZAP = 30
 	# closeMode: ce face lista pluginurilor dupa ce porneste pluginul (DO_CLOSE: se inchide; DO_CLOSE_RECURSIVE: se
 	# inchid si meniurile de sub ea). Se tine pe descriptor; lista noastra ramane deschisa, ca pana acum.
 	DO_NOT_CLOSE = 0

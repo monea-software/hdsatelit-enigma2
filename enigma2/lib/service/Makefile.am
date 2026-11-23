@@ -50,7 +50,9 @@ libenigma_service_a_SOURCES += \
 	hdssubimagini.cpp \
 	servicemp3.cpp
 serviceinclude_HEADERS += \
+	hdshttp.h \
+	hdshttporigin.h \
 	hdsradioonline.h \
 	hdssubimagini.h \
-	servicemp3.h
+	servicemp3.h hdsvorbire.h
 endif

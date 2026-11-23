@@ -1,0 +1,30 @@
+Subject: [PATCH] mt7610u: reject debug-only IOCTLs when DBG is disabled
+
+MAC and EEPROM diagnostic functions and declarations exist only with DBG.
+Keep these commands in debug builds and report failure without them.
+The RF no-op and normal BBP dispatch are unchanged.
+
+Upstream-Status: Pending
+
+--- a/sta/sta_cfg.c
++++ b/sta/sta_cfg.c
+@@ -7883,11 +7883,19 @@
+ 			break;
+ 
+ 		case CMD_RTPRIV_IOCTL_MAC:
++#ifdef DBG
+ 			RTMPIoctlMAC(pAd, pRequest);
++#else
++			Status = NDIS_STATUS_FAILURE;
++#endif
+ 			break;
+ 
+ 		case CMD_RTPRIV_IOCTL_E2P:
++#ifdef DBG
+ 			RTMPIoctlE2PROM(pAd, pRequest);
++#else
++			Status = NDIS_STATUS_FAILURE;
++#endif
+ 			break;
+ 
+ 		case CMD_RTPRIV_IOCTL_RF:

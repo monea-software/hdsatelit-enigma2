@@ -76,6 +76,8 @@ ACTIUNI_DISPONIBILE = [
 	("channel_history", _("Canale recente")),
 	# toate canalele TV ale transponderului canalului de acum pe 2, 4 sau 9 celule (Screens/HdsMozaic.py); din fabrica pe
 	# 0 tinut apasat (Eduard 14.11.2026 21:06: o tasta cand esti pe canal)
+	# prima bara de informatii fixa pe ecran pana la a doua apasare a aceleiasi taste (tfrc, LinuxSat 164191, CR4 0.7.8)
+	("infobar_fixed", _("Bara de informații fixă (a doua apăsare o ascunde)")),
 	("mozaic", _("Mozaic: toate canalele transponderului")),
 	("movies", _("Înregistrări")),
 	("record", _("Înregistrare imediată")),
@@ -89,6 +91,8 @@ ACTIUNI_DISPONIBILE = [
 	("shutdown", _("Oprire receptor")),
 	("reboot", _("Repornire receptor")),
 	("restart", _("Repornire interfață")),
+	# RLS6 (tfrc, LinuxSat 164126): fisierele temei (si skin_user*.xml) citite din nou, fara repornirea interfetei (skin.py)
+	("reload_skin", _("Reîncarcă tema")),
 	("captura", _("Captură de ecran")),
 ]
 
@@ -192,6 +196,7 @@ def _config(config=None):
 
 # Setarile gesturilor din liste si meniuri. Nu se face migrare.
 PROFIL_SETARI = (
+	("hds_asezare_taste", "obisnuita", _("Așezarea tastelor")),
 	("hds_fav_scurt_adauga", False, _("FAV scurt adaugă sau scoate canalul din Favorite")),
 	("hds_ok_lung_cauta", False, _("OK lung caută în lista de canale")),
 	("hds_text_lista_cauta", False, _("TEXT caută în lista de canale")),
@@ -216,6 +221,8 @@ PROFIL_SETARI = (
 ALEGERI_CH = (("device", N_("După telecomandă")),
 	("zap", N_("Schimbă canalul")), ("list", N_("Deschide lista de canale")))
 ALEGERI_PROFIL = {"hds_ch_privire": ALEGERI_CH,
+	"hds_asezare_taste": (("obisnuita", N_("Obișnuită")), ("neutrino", N_("Felul Neutrino")),
+		("neutrino_buchete", N_("Felul Neutrino cu buchete"))),
 	"hds_exit_film": (("hide", N_("Ascunde bara de informații")), ("ask", N_("Ask user")),
 		("movielist", N_("Return to movie list")), ("quit", N_("Return to previous service"))),
 	# up: dintr-un buchet sau dosar EXIT urca un nivel, iar in lista de sus inchide lista (ca pana acum); close: EXIT
@@ -226,6 +233,9 @@ ALEGERI_PROFIL = {"hds_ch_privire": ALEGERI_CH,
 	"hds_mouse_mijloc": (("meniu", N_("Meniu")), ("mut", N_("Sunet oprit")), ("inapoi", N_("Înapoi")), ("nimic", N_("Nimic"))),
 	"hds_mouse_spate": (("inapoi", N_("Înapoi")), ("mut", N_("Sunet oprit")), ("meniu", N_("Meniu")), ("nimic", N_("Nimic"))),
 	"hds_mouse_fata": (("mut", N_("Sunet oprit")), ("inapoi", N_("Înapoi")), ("meniu", N_("Meniu")), ("nimic", N_("Nimic")))}
+
+ASEZARE_AJUTOR = _("Felul Neutrino: sus/jos schimbă canalul, stânga/dreapta volumul, OK deschide lista. "
+	"Cu buchete: stânga/dreapta deschid lista și apoi schimbă buchetul. Obișnuită readuce setările tale.")
 
 
 def initConfigProfil(config=None):
@@ -253,12 +263,36 @@ def optiune(nume, config=None):
 		return dict((k, v) for k, v, _text in PROFIL_SETARI).get(nume)
 
 
-def actiune_efectiva(buton, config=None):
+def asezare_neutrino(config=None):
+	"""Un strat peste preferinte: nicio valoare personala nu se rescrie."""
+	return optiune("hds_asezare_taste", config) in ("neutrino", "neutrino_buchete")
+
+
+def schimba_buchet_la_zap(config=None, aplica_asezare=True):
+	"""In asezarea Neutrino sagetile raman in buchetul curent."""
+	return not (aplica_asezare and asezare_neutrino(config)) and _valoare(config, "usage", "quickzap_bouquet_change", False)
+
+
+def actiune_asezare(buton, config=None):
+	if not asezare_neutrino(config):
+		return None
+	buchete = optiune("hds_asezare_taste", config) == "neutrino_buchete"
+	return {"up_short": "zap_next", "down_short": "zap_previous", "ok_short": "channellist",
+		"left_short": "channellist" if buchete else "volume_down",
+		"right_short": "channellist" if buchete else "volume_up",
+		"channelup_short": "zap_next", "channeldown_short": "zap_previous"}.get(buton)
+
+
+def actiune_efectiva(buton, config=None, aplica_asezare=True):
+	asezare = actiune_asezare(buton, config) if aplica_asezare else None
+	if asezare is not None:
+		return asezare
 	valoare = actiune_aleasa(buton, config)
 	return FUNCTII_OBISNUITE.get(buton, "default") if valoare == "default" else valoare
 
 
 TEXTE_ACTIUNI = {
+	"move_up": _("Rândul anterior"), "move_down": _("Rândul următor"),
 	"none": _("Nimic"), "default": _("Funcția obișnuită"),
 	"hbbtv": _("HbbTV"), "record": _("Înregistrează"),
 	"eventinfo": _("Detaliile emisiunii"), "epg_multi": _("Ghidul buchetului curent"),
@@ -297,7 +331,9 @@ TEXTE_ACTIUNI = {
 	"back": _("Înapoi"),
 	"channel_history": _("Canale recente"),
 	"mozaic": _("Mozaic: toate canalele transponderului"),
+	"infobar_fixed": _("Bara de informații fixă (a doua apăsare o ascunde)"),
 	"vpn": _("VPN"),
+	"my_key_profiles": _("Profilurile mele"), "key_defaults": _("Valori implicite"),
 }
 
 # EXIT in lista de canale (sens_tasta, alegerea hds_exit_lista): aceleasi texte ca alegerile setarii
@@ -345,7 +381,13 @@ def sens_tasta(context, key, lung=False, config=None, **stare):
 				return "default"
 		setting = next((x[2 if lung else 1] for x in LEGATURI_TASTE if x[0] == key), None)
 		if setting:
-			a = actiune_efectiva(setting, config)
+			# Timeshift pastreaza tastele derularii, inclusiv alocarile manuale.
+			if context == "timeshift":
+				a = actiune_aleasa(setting, config)
+				if a == "default":
+					a = FUNCTII_OBISNUITE.get(setting, "default")
+			else:
+				a = actiune_efectiva(setting, config)
 			if a != "default":
 				return a
 		if lung:
@@ -374,6 +416,12 @@ def sens_tasta(context, key, lung=False, config=None, **stare):
 			"pause": "pause" if context == "timeshift" else "timeshift",
 			"stop": "stop_timeshift", "portal": "portal", "menu": "menu"}.get(key, "default")
 	if context == "channel_list":
+		if not lung and asezare_neutrino(config):
+			laterale = ("previous_bouquet", "next_bouquet") if optiune("hds_asezare_taste", config) == "neutrino_buchete" else ("page_up", "page_down")
+			actiune = {"up": "move_up", "down": "move_down", "left": laterale[0], "right": laterale[1],
+				"exit": "close_list"}.get(key)
+			if actiune:
+				return actiune
 		if key == "fav":
 			return "favorite_choose_bouquet" if lung else (
 				"favorite_toggle" if optiune("hds_fav_scurt_adauga", config) else "bouquets")
@@ -411,6 +459,9 @@ def sens_tasta(context, key, lung=False, config=None, **stare):
 			"channeldown": "previous_bouquet" if multi else "none"}.get(key, "default")
 	if lung:
 		return "none"
+	if context == "button_setup":
+		return {"yellow": "key_defaults", "blue": "my_key_profiles"}.get(key,
+			sens_tasta("setup", key, config=config, **stare))
 	if context == "setup":
 		return {"red": "cancel", "green": "save", "exit": "back_unsaved", "ok": "edit_value",
 			"menu": "choose_value", "channelup": "page_up", "channeldown": "page_down"}.get(key, "default")
@@ -466,8 +517,6 @@ def context_ecran(dialog):
 
 def taste_ajutor(context, config=None, **stare):
 	"""Aceleasi descrieri scurt/lung pe prima pagina HELP si in web."""
-	if context == "button_setup":
-		context = "setup"
 	rez = []
 	for row in profil_context(context, config, **stare):
 		key = ETICHETE_TASTE.get(row["key"], row["key"].upper())
@@ -599,6 +648,515 @@ def salveaza(config=None):
 		getattr(b, cheie).save()
 
 
+# Profilurile sunt copii ale setarilor existente, fara un strat nou de alocare.
+CALE_PROFILURI = "/etc/enigma2/hds-taste-profiluri.json"
+MAX_PROFILURI = 100
+MAX_PROFIL = 64 * 1024
+USAGE_TASTE = ("hds_sageata_sus", "hds_ok_privire", "hds_stanga_dreapta_privire",
+	"quickzap_bouquet_change", "on_short_powerpress", "on_long_powerpress", "on_movie_stop", "pip_zero_button")
+
+
+def _nume_profil(nume):
+	if not isinstance(nume, str) or len(nume.strip()) > 64 or any(ord(c) < 32 or ord(c) == 127 or 0xd800 <= ord(c) <= 0xdfff for c in nume):
+		raise ValueError(_tr(N_("Numele profilului poate avea cel mult 64 de caractere, fără caractere de control.")))
+	return nume.strip()
+
+
+def _elemente_profil(config=None):
+	c = _config(config)
+	b = initConfigButtonSetup(c)
+	u = initConfigProfil(c)
+	rez = {"buttons": {k: getattr(b, k) for k, _text in SCURTE + BUTOANE},
+		"usage": {k: getattr(u, k) for k, _v, _text in PROFIL_SETARI}, "radio": {}}
+	for k in USAGE_TASTE:
+		if k in u.content.items:
+			rez["usage"][k] = getattr(u, k)
+	if "hds_radio" in c.content.items and "taste_colorate" in c.hds_radio.content.items:
+		rez["radio"]["taste_colorate"] = c.hds_radio.taste_colorate
+	return rez
+
+
+def poza_profil(nume, config=None):
+	p = {"format": "hds-taste", "version": 1, "name": _nume_profil(nume)}
+	for grup, elemente in _elemente_profil(config).items():
+		p[grup] = {k: el.value for k, el in elemente.items()}
+	return p
+
+
+def verifica_profil(p):
+	"""Valideaza tot profilul inainte de schimbarea setarilor sau fisierului omului."""
+	import re
+	if not isinstance(p, dict) or p.get("format") != "hds-taste":
+		raise ValueError(_tr(N_("Fișierul nu este un profil de taste HD Satelit.")))
+	if type(p.get("version")) is not int or p["version"] != 1:
+		raise ValueError(_tr(N_("Versiunea profilului nu este acceptată. Actualizează imaginea și încearcă din nou.")))
+	if set(p) != {"format", "version", "name", "buttons", "usage", "radio"}:
+		raise ValueError(_tr(N_("Profilul este incomplet sau conține date necunoscute.")))
+	_nume_profil(p["name"])
+	if not p.get("buttons") or not isinstance(p.get("usage"), dict) or "hds_asezare_taste" not in p["usage"]:
+		raise ValueError(_tr(N_("Profilul este incomplet sau conține date necunoscute.")))
+	for grup in ("buttons", "usage", "radio"):
+		if not isinstance(p[grup], dict) or len(p[grup]) > 128:
+			raise ValueError(_tr(N_("Profilul conține o listă de taste nevalidă.")))
+		for k, v in p[grup].items():
+			if not isinstance(k, str) or not re.fullmatch(r"[a-zA-Z0-9_]{1,64}", k):
+				raise ValueError(_tr(N_("Profilul conține o tastă nevalidă.")))
+			if type(v) not in (str, bool) or (isinstance(v, str) and len(v) > 128):
+				raise ValueError(_tr(N_("Profilul conține o valoare nevalidă.")))
+	for k, v in p["buttons"].items():
+		if not isinstance(v, str) or (v not in dict(ACTIUNI_DISPONIBILE) and not re.fullmatch(r"plugin:[0-9a-f]{64}", v)):
+			raise ValueError(_tr(N_("Profilul conține o acțiune necunoscută.")))
+	# Valideaza si setarile cunoscute care lipsesc de pe receptorul de aici.
+	choices = dict(ALEGERI_PROFIL)
+	choices.update(hds_sageata_sus=[(v, v) for v in ("current", "radio", "tv_radio", "tv", "radio_radio", "zap", "zap_invers")],
+		hds_ok_privire=[(v, v) for v in ("bara", "lista")],
+		hds_stanga_dreapta_privire=[(v, v) for v in ("actual", "volum")],
+		on_short_powerpress=[(v, v) for v in ("standby", "show_menu", "shutdown")],
+		on_long_powerpress=[(v, v) for v in ("standby", "show_menu", "shutdown")],
+		on_movie_stop=[(v, v) for v in ("ask", "movielist", "quit")],
+		pip_zero_button=[(v, v) for v in ("standard", "swap", "swapstop", "stop")])
+	booleans = {k for k, v, _text in PROFIL_SETARI if isinstance(v, bool)} | {"quickzap_bouquet_change"}
+	for k, v in p["usage"].items():
+		if (k in booleans and type(v) is bool) or (k in choices and isinstance(v, str) and v in dict(choices[k])):
+			continue
+		raise ValueError(_tr(N_("Profilul conține o setare de taste necunoscută sau nevalidă.")))
+	if any(k != "taste_colorate" or type(v) is not bool for k, v in p["radio"].items()):
+		raise ValueError(_tr(N_("Profilul conține o setare radio nevalidă.")))
+	return p
+
+
+def _json_profil(text):
+	import json
+	def perechi(lista):
+		rez = {}
+		for k, v in lista:
+			if k in rez:
+				raise ValueError()
+			rez[k] = v
+		return rez
+	try:
+		return json.loads(text, object_pairs_hook=perechi)
+	except (ValueError, UnicodeError, RecursionError):
+		raise ValueError(_tr(N_("Fișierul de profil este stricat. Tastele au rămas neschimbate.")))
+
+
+def citeste_profiluri():
+	import os
+	import stat
+	try:
+		if os.path.islink(CALE_PROFILURI):
+			raise ValueError(_tr(N_("Fișierul profilurilor nu poate fi o legătură.")))
+		fd = os.open(CALE_PROFILURI, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+		with os.fdopen(fd, "rb") as f:
+			if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+				raise ValueError(_tr(N_("Fișierul profilurilor nu este un fișier obișnuit.")))
+			text = f.read(MAX_PROFILURI * MAX_PROFIL + 1)
+	except FileNotFoundError:
+		return []
+	if len(text) > MAX_PROFILURI * MAX_PROFIL:
+		raise ValueError(_tr(N_("Fișierul profilurilor este prea mare.")))
+	d = _json_profil(text)
+	if not isinstance(d, dict) or d.get("format") != "hds-taste-lista" or type(d.get("version")) is not int or d["version"] != 1:
+		raise ValueError(_tr(N_("Fișierul profilurilor este stricat sau are o versiune neacceptată.")))
+	lista = d.get("profiles")
+	if not isinstance(lista, list) or len(lista) > MAX_PROFILURI:
+		raise ValueError(_tr(N_("Lista profilurilor nu este validă.")))
+	ids = set()
+	for x in lista:
+		if not isinstance(x, dict) or set(x) != {"id", "profile"} or not isinstance(x["id"], str) or len(x["id"]) != 32 or any(c not in "0123456789abcdef" for c in x["id"]) or x["id"] in ids:
+			raise ValueError(_tr(N_("Lista profilurilor nu este validă.")))
+		ids.add(x["id"])
+		verifica_profil(x["profile"])
+	return lista
+
+
+def _scrie_profiluri(lista):
+	import json
+	import os
+	import tempfile
+	dosar = os.path.dirname(CALE_PROFILURI)
+	fd, temporar = tempfile.mkstemp(prefix=".hds-taste-", suffix=".nou", dir=dosar)
+	try:
+		with os.fdopen(fd, "w", encoding="utf-8") as f:
+			json.dump({"format": "hds-taste-lista", "version": 1, "profiles": lista}, f, ensure_ascii=False, indent=2)
+			f.flush()
+			os.fsync(f.fileno())
+		os.replace(temporar, CALE_PROFILURI)
+		# Pastreaza redenumirea pe sistemele de fisiere care permit fsync pe dosar.
+		try:
+			d = os.open(dosar, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+			try:
+				os.fsync(d)
+			finally:
+				os.close(d)
+		except OSError:
+			pass
+	finally:
+		if os.path.exists(temporar):
+			os.unlink(temporar)
+
+
+def _adauga_profil(p):
+	from copy import deepcopy
+	from uuid import uuid4
+	p = deepcopy(verifica_profil(p))
+	p["name"] = _nume_profil(p["name"])
+	lista = citeste_profiluri()
+	if len(lista) >= MAX_PROFILURI:
+		raise ValueError(_tr(N_("Ai deja 100 de profiluri. Șterge unul pentru a salva altul.")))
+	if not p["name"]:
+		nume = {x["profile"]["name"] for x in lista}
+		n = 1
+		while _tr(N_("Profilul meu %d")) % n in nume:
+			n += 1
+		p["name"] = _tr(N_("Profilul meu %d")) % n
+	x = {"id": uuid4().hex, "profile": verifica_profil(p)}
+	lista.append(x)
+	_scrie_profiluri(lista)
+	return x
+
+
+def salveaza_profil(nume="", config=None):
+	return _adauga_profil(poza_profil(nume, config))
+
+
+def importa_profil(text, config=None):
+	if not isinstance(text, str) or len(text.encode("utf-8")) > MAX_PROFIL:
+		raise ValueError(_tr(N_("Profilul este prea mare (maximum 64 KiB).")))
+	return _adauga_profil(verifica_profil(_json_profil(text)))
+
+
+def gaseste_profil(ident):
+	for x in citeste_profiluri():
+		if x["id"] == ident:
+			return x["profile"]
+	raise ValueError(_tr(N_("Profilul ales nu mai există.")))
+
+
+def sterge_profil(ident):
+	lista = citeste_profiluri()
+	noi = [x for x in lista if x["id"] != ident]
+	if len(noi) == len(lista):
+		raise ValueError(_tr(N_("Profilul ales nu mai există.")))
+	_scrie_profiluri(noi)
+
+
+def redenumeste_profil(ident, nume):
+	nume = _nume_profil(nume)
+	if not nume:
+		raise ValueError(_tr(N_("Scrie numele nou al profilului.")))
+	lista = citeste_profiluri()
+	for x in lista:
+		if x["id"] == ident:
+			x["profile"]["name"] = nume
+			_scrie_profiluri(lista)
+			return
+	raise ValueError(_tr(N_("Profilul ales nu mai există.")))
+
+
+# Only plain data crosses the worker boundary. Deferred callbacks run on Enigma2.
+_PROFIL_OCUPAT = False
+
+
+class EroareSalvareTaste(OSError):
+	pass
+
+
+def profil_ocupat():
+	return _PROFIL_OCUPAT
+
+
+# Main owns the job list and Deferreds; workers only handle plain data.
+_LUCRARI_PROFIL = []
+_EXECUTOR_PROFIL = None
+_IESIRE_PROFIL = False
+
+
+def pe_fir_profil(functie, *args):
+	from concurrent.futures import ThreadPoolExecutor
+	from twisted.internet import reactor
+	from twisted.internet.defer import Deferred, fail
+	from twisted.python.failure import Failure
+	global _EXECUTOR_PROFIL
+	class LucruDisc(Deferred):
+		def cancel(self):
+			# Disk IO cannot be interrupted. Keep the reservation until it returns.
+			pass
+	rez = LucruDisc()
+	try:
+		if _EXECUTOR_PROFIL is None:
+			_EXECUTOR_PROFIL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="hds-taste")
+		viitor = _EXECUTOR_PROFIL.submit(functie, *args)
+	except Exception:
+		eroare = Failure()
+		executor, _EXECUTOR_PROFIL = _EXECUTOR_PROFIL, None
+		if executor is not None:
+			# Thread.start can fail after submit queued the write. Cancel it too.
+			try:
+				executor.shutdown(wait=False, cancel_futures=True)
+			except Exception:
+				pass
+		return fail(eroare)
+	def livreaza():
+		# Also callable after the event loop, exactly once and always on main.
+		if lucrare not in _LUCRARI_PROFIL:
+			return
+		_LUCRARI_PROFIL.remove(lucrare)
+		try:
+			date = viitor.result()
+		except Exception:
+			date = Failure()
+		rez.callback(date)
+	lucrare = (viitor, livreaza)
+	_LUCRARI_PROFIL.append(lucrare)
+	viitor.add_done_callback(lambda _f: reactor.callFromThread(livreaza))
+	return rez
+
+
+def termina_la_iesire():
+	"""After the native loop: finish only our jobs, without running other events."""
+	from concurrent.futures import wait
+	global _IESIRE_PROFIL, _EXECUTOR_PROFIL
+	_IESIRE_PROFIL = True
+	while _LUCRARI_PROFIL:
+		viitor, livreaza = _LUCRARI_PROFIL[0]
+		wait([viitor])
+		livreaza()
+	if _EXECUTOR_PROFIL is not None:
+		_EXECUTOR_PROFIL.shutdown(wait=True)
+		_EXECUTOR_PROFIL = None
+
+
+def _exclusiv_profil(functie):
+	from twisted.internet.defer import fail, maybeDeferred
+	global _PROFIL_OCUPAT
+	if _PROFIL_OCUPAT or _IESIRE_PROFIL:
+		return fail(ValueError(_tr(N_("Se lucrează la un profil. Încearcă din nou după terminare."))))
+	_PROFIL_OCUPAT = True
+	def liber(rez):
+		global _PROFIL_OCUPAT
+		_PROFIL_OCUPAT = False
+		return rez
+	return maybeDeferred(functie).addBoth(liber)
+
+
+def _capabilitati_taste(dispozitive, legaturi):
+	import os
+	from fcntl import ioctl
+	from Components.InputDevice import EVIOCGBIT
+	coduri = set()
+	citit = False
+	for dev in dispozitive:
+		try:
+			fd = os.open("/dev/input/" + dev, os.O_RDONLY | os.O_NONBLOCK)
+			try:
+				b = ioctl(fd, EVIOCGBIT(1, 96), bytes(96))
+			finally:
+				os.close(fd)
+			if any(b):
+				citit = True
+				coduri.update(n for n in range(len(b) * 8) if b[n // 8] & (1 << (n % 8)))
+		except OSError:
+			continue
+	return {key for key, taste in legaturi.items() if taste & coduri} if citit else None
+
+
+def taste_disponibile():
+	"""Snapshot input objects on main; query device capabilities on a worker."""
+	from twisted.internet.defer import succeed
+	try:
+		from Components.InputDevice import iInputDevices
+		from Tools.KeyBindings import queryKeyBinding
+		legaturi = {key: {cod for cod, _flags in queryKeyBinding("HdsAlocareTasteActions", key + "_m")}
+			for key, _short, _long, _release in LEGATURI_TASTE}
+		dispozitive = [dev for dev, info in iInputDevices.Devices.items()
+			if info.get("type") == "remote" and dev.startswith("event") and dev[5:].isdigit()]
+		if any(legaturi.values()):
+			return pe_fir_profil(_capabilitati_taste, dispozitive, legaturi)
+	except (ImportError, AttributeError):
+		pass
+	return succeed(None)
+
+
+def _scrie_setari_profil(cale, schimbari):
+	"""Only plain bytes: unique staging file, merge latest settings, verified result."""
+	import os
+	import tempfile
+	from Components.config import _scrieSigur, _octetiSetari
+	cale = os.path.realpath(cale)
+	def citeste():
+		try:
+			with open(cale, "rb") as f:
+				return f.read()
+		except FileNotFoundError:
+			return b""
+	for _incercare in range(4):
+		baza = citeste()
+		vechi = baza.decode("utf-8", "surrogateescape")
+		anterior = {k: None for k in schimbari}
+		for rand in vechi.splitlines():
+			k, separator, v = rand.partition("=")
+			if separator and k in anterior:
+				anterior[k] = v
+		# Keep unrelated lines and unrecognised settings byte for byte.
+		randuri = [r for r in vechi.splitlines(keepends=True) if r.split("=", 1)[0] not in schimbari]
+		if randuri and not randuri[-1].endswith("\n"):
+			randuri[-1] += "\n"
+		randuri += [k + "=" + v + "\n" for k, v in schimbari.items() if v is not None]
+		date = _octetiSetari("".join(randuri))
+		fd, temporar = tempfile.mkstemp(prefix=".hds-taste-setari-", suffix=".nou", dir=os.path.dirname(cale))
+		os.close(fd)
+		try:
+			try:
+				st = os.stat(cale)
+			except FileNotFoundError:
+				st = None
+			if st is not None:
+				os.chmod(temporar, st.st_mode & 0o7777)
+				if hasattr(os, "chown"):
+					os.chown(temporar, st.st_uid, st.st_gid)
+			# Use the existing byte writer without sharing settings.nou with other saves.
+			if not _scrieSigur(temporar, date):
+				raise EroareSalvareTaste(_tr(N_("Nu pot salva tastele pe disc. Tastele au rămas neschimbate.")))
+			with open(temporar, "rb") as f:
+				if f.read() != date:
+					raise EroareSalvareTaste(_tr(N_("Salvarea tastelor pe disc nu a putut fi verificată.")))
+			if citeste() != baza:
+				continue  # Another save completed meanwhile; merge its unrelated keys too.
+			os.replace(temporar, cale)
+			try:
+				d = os.open(os.path.dirname(cale), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+				try:
+					os.fsync(d)
+				finally:
+					os.close(d)
+			except OSError:
+				pass
+			if citeste() != date:
+				raise EroareSalvareTaste(_tr(N_("Salvarea tastelor pe disc nu a putut fi verificată.")))
+			return anterior
+		finally:
+			if os.path.exists(temporar):
+				os.unlink(temporar)
+	raise EroareSalvareTaste(_tr(N_("Setările se schimbă acum. Încearcă din nou după terminare.")))
+
+
+def _aplica_profil(p, config, configfile, disponibile):
+	verifica_profil(p)
+	elemente = _elemente_profil(config)
+	fizice = {setting: key for key, short, long, _r in LEGATURI_TASTE for setting in (short, long) if setting}
+	noi = []
+	sarite = 0
+	schimbari = {}
+	for grup in ("buttons", "usage", "radio"):
+		for k, v in p[grup].items():
+			if k not in elemente[grup] or (grup == "buttons" and disponibile is not None and fizice.get(k) not in disponibile):
+				sarite += 1
+				continue
+			el = elemente[grup][k]
+			if grup != "buttons" and hasattr(el, "choices") and v not in el.choices:
+				raise ValueError(_tr(N_("Profilul conține o valoare neacceptată pe acest receptor.")))
+			salvat = None if el.save_disabled or (v == el.default and not el.save_forced) else el._hdsInText(v)
+			sectiune = {"buttons": "hds_buttons", "usage": "usage", "radio": "hds_radio"}[grup]
+			schimbari["config." + sectiune + "." + k] = salvat
+			noi.append((el, v))
+	# No value or saved flag changes before a verified write. Failure needs no rollback.
+	def aplica(anterior):
+		campuri = ("_value", "saved_value", "last_value", "default", "choices", "_descr")
+		vechi = [(el, {k: getattr(el, k) for k in campuri if hasattr(el, k)}) for el, _v in noi]
+		try:
+			for el, v in noi:
+				if isinstance(v, str) and v.startswith("plugin:") and v not in el.choices:
+					el.setChoices(_cu_indisponibile([(a, el.description[a]) for a in el.choices], [v]), default=el.default)
+				el.value = v
+				el.save()
+		except Exception:
+			from twisted.python.failure import Failure
+			f = Failure()
+			# Restore the complete state before notifying. A broken notifier must
+			# neither stop healthy notifiers nor prevent the value restoration.
+			for el, stare in vechi:
+				el.__dict__.update(stare)
+			for el, _stare in vechi:
+				for notificator in list(el.notifiers):
+					try:
+						notificator(el)
+					except Exception:
+						pass
+			for el, stare in vechi:
+				el.__dict__.update(stare)
+			if configfile is not None:
+				def esec_revenire(_f):
+					raise EroareSalvareTaste(_tr(N_("Tastele au revenit în memorie, dar nu pot confirma revenirea setărilor de pe disc. Încearcă din nou.")))
+				return pe_fir_profil(tranzactie.ruleaza, _scrie_setari_profil, configfile.CONFIG_FILE, anterior).addCallbacks(lambda _r: f, esec_revenire)
+			return f
+		return sarite
+	if configfile is None:
+		from twisted.internet.defer import succeed
+		return succeed(aplica(None))
+	from Components.config import TranzactieSetari
+	try:
+		tranzactie = TranzactieSetari()
+	except RuntimeError:
+		raise ValueError(_tr(N_("Setările se schimbă acum. Încearcă din nou după terminare.")))
+	configfile._scris = None
+	def termina(rez):
+		from twisted.python.failure import Failure
+		error = [None]
+		def pas(r=None):
+			if isinstance(r, Failure):
+				error[0] = r
+			configfile._scris = None
+			try:
+				cereri = tranzactie.preia()
+			except Exception:
+				tranzactie.inchide(fortat=True)
+				return Failure()
+			if cereri:
+				return pe_fir_profil(tranzactie.termina, cereri).addBoth(pas)
+			if tranzactie.inchide():
+				return error[0] or rez
+			return pas()
+		return pas()
+	return pe_fir_profil(tranzactie.ruleaza, _scrie_setari_profil, configfile.CONFIG_FILE, schimbari).addCallback(aplica).addBoth(termina)
+
+
+def aplica_profil(p, config=None, configfile=None, **optiuni):
+	from copy import deepcopy
+	from twisted.internet.defer import succeed
+	p = deepcopy(verifica_profil(p))
+	def porneste():
+		d = succeed(optiuni["disponibile"]) if "disponibile" in optiuni else taste_disponibile()
+		return d.addCallback(lambda disponibile: _aplica_profil(p, config, configfile, disponibile))
+	return _exclusiv_profil(porneste)
+
+
+def operatie_profil(actiune, config=None, configfile=None, ident="", nume="", continut=None):
+	"""TV and web share the same worker entry point and mutation guard."""
+	from twisted.internet.defer import maybeDeferred
+	def porneste():
+		if actiune == "lista":
+			return pe_fir_profil(citeste_profiluri)
+		if actiune == "exporta":
+			return pe_fir_profil(gaseste_profil, ident)
+		if actiune == "salveaza":
+			p = verifica_profil(_json_profil(continut)) if continut is not None else poza_profil(nume, config)
+			p["name"] = _nume_profil(nume)
+			return pe_fir_profil(_adauga_profil, p)
+		if actiune == "importa":
+			return pe_fir_profil(importa_profil, continut or "")
+		if actiune == "sterge":
+			return pe_fir_profil(sterge_profil, ident)
+		if actiune == "redenumeste":
+			return pe_fir_profil(redenumeste_profil, ident, nume)
+		if actiune == "aplica":
+			def citit(p):
+				return taste_disponibile().addCallback(lambda disponibile: _aplica_profil(p, config, configfile, disponibile))
+			return pe_fir_profil(gaseste_profil, ident).addCallback(citit)
+		raise ValueError(_tr(N_("Alege ce vrei să faci cu profilul.")))
+	return maybeDeferred(porneste) if actiune in ("lista", "exporta") else _exclusiv_profil(porneste)
+
+
 def actiune_aleasa(buton, config=None):
 	"""Valoarea curenta, fara recitirea pluginurilor la fiecare tasta."""
 	if buton not in dict(BUTOANE + SCURTE):
@@ -623,11 +1181,12 @@ class AlocareTaste(object):
 	# Lasam loc si urmatoarei repetari, fara a astepta la nesfarsit.
 	FARA_SEMN_MS = 650
 
-	def __init__(self, porneste, numar, disponibila, config=None, ceas=None):
+	def __init__(self, porneste, numar, disponibila, config=None, ceas=None, actiune=None):
 		self.porneste = porneste
 		self.numar = numar
 		self.disponibila = disponibila
 		self.config = config
+		self.actiune = actiune
 		self.lungi = set()
 		self.legaturi = dict((x[0], x[1:]) for x in LEGATURI_TASTE)
 		self.asteptata = None
@@ -685,8 +1244,9 @@ class AlocareTaste(object):
 			# Nu mai chemam hartile vechi cu aceeasi apasare.
 			return int(faza == "m" and avea_asteptare)
 		scurta, lunga, la_eliberare = self.legaturi[tasta]
-		a = actiune_efectiva(scurta, self.config) if scurta else "default"
-		l = actiune_efectiva(lunga, self.config) if lunga else "default"
+		alege = self.actiune or actiune_efectiva
+		a = alege(scurta, self.config) if scurta else "default"
+		l = alege(lunga, self.config) if lunga else "default"
 		if l == "default" and tasta in ("red", "green", "yellow", "blue"):
 			l = VALORI_IMPLICITE[tasta]
 		proprie = a != "default"
@@ -778,3 +1338,430 @@ class ApasareLunga(object):
 			self.semne.discard(buton)
 			return 1
 		return 0
+
+
+# ---------------------------------------------------------------- lista tastei ALBASTRE, la alegerea omului
+# Cererea lui tamiciav7 (LinuxSat 232449 #500990, 22.11.2026): mai multe randuri in lista butonului ALBASTRU (Lista
+# extensiilor, Screens/InfoBarGenerics.InfoBarExtensions), cu scurtaturi gata facute (actualizarea softului, informatiile
+# de sistem, procesorul, repornirea retelei, testul de viteza) si alegerea omului dintre meniuri, functii si pluginuri.
+# Pe televizor: Butoane colorate si taste rapide > Lista butonului albastru (Screens/ButtonSetup.HdsListaAlbastra); in web:
+# /lista-albastra (Plugins/Extensions/HdsWebControl/intrari_web.py). Aceeasi logica pentru amandoua, aici.
+#
+# Doua setari text, goale din fabrica: config.hds_albastru.randuri (randurile puse sau mutate de om, in ordinea lor) si
+# config.hds_albastru.ascunse (randurile care se pun singure, scoase de om). Cat amandoua sunt goale, sursa_listei intoarce
+# lista neatinsa: ALBASTRU arata exact ce arata si inainte. Identificatorii randurilor:
+#   gata:<nume>   scurtaturile gata facute (SCURTATURI_ALBASTRU)
+#   m:<entryID>   o intrare sau un grup din menu.xml, ca in Cauta setari (Components/HdsCautaSetari.index)
+#   plugin:<..>   un plugin, aceeasi cheie ca la alocarea tastelor (pluginuri_alocabile)
+#   tasta:<act>   o functie a tastelor (ACTIUNI_DISPONIBILE, pornita de Screens/InfoBar.hdsFaActiuneaLunga)
+#   imagine:<..>  randurile pe care imaginea le pune singura (Acces conditionat, Subcanale, PiP, editorul de marcaje)
+# Pluginurile care se inscriu singure in lista extensiilor (WHERE_EXTENSIONSMENU) se pun singure si ele, deci un plugin
+# instalat dupa alegere apare tot singur, dupa randurile alese. Un rand ales care nu se poate deschide acum (plugin scos,
+# meniu care nu se vede pe nivelul de acum) nu apare in lista, dar ramane in setare.
+
+MAX_RANDURI_ALBASTRU = 60
+_ID_ALBASTRU = __import__("re").compile(r"^(gata|m|plugin|tasta|imagine):[A-Za-z0-9_.:-]{1,80}$")
+
+# (identificator, textul randului, intrarea din menu.xml deschisa, SystemInfo cerut)
+SCURTATURI_ALBASTRU = (
+	("gata:actualizare", N_("Actualizare software"), "m:hds_actualizari", None),
+	("gata:informatii", N_("Informații sistem"), "m:info_screen", None),
+	("gata:procesor", N_("Procesor: frecvență, încărcare și temperatură"), "m:hds_procesor", "HdsProcesor"),
+	("gata:retea", N_("Repornește rețeaua"), None, None),
+	("gata:viteza", N_("Testul de viteză al internetului"), None, None),
+)
+
+# functiile tastelor care n-au sens intr-o lista: lista insasi, nimic, schimbarea canalului si volumul (tinute apasat),
+# "Informatii sistem" (e scurtatura gata:informatii)
+_ACTIUNI_FARA_LISTA = ("default", "none", "extensions", "zap_next", "zap_previous", "volume_up", "volume_down", "info")
+
+# randurile imaginii, dupa numele functiei pe care o pornesc (InfoBarGenerics, InfoBar.py)
+_RANDURI_IMAGINE = {"hdsAccesConditionat": "imagine:acces", "showPiP": "imagine:pip", "movePiP": "imagine:pip",
+	"swapPiP": "imagine:pip", "hdsEditorMarcaje": "imagine:marcaje"}
+
+
+def initConfigAlbastru(config=None):
+	config = _config(config)
+	if "hds_albastru" not in config.content.items:
+		from Components.config import ConfigSubsection
+		config.hds_albastru = ConfigSubsection()
+	a = config.hds_albastru
+	if "randuri" not in a.content.items:
+		from Components.config import ConfigText
+		a.randuri = ConfigText(default="", fixed_size=False)
+		a.ascunse = ConfigText(default="", fixed_size=False)
+	return a
+
+
+def ids_albastru(text):
+	"""Identificatorii dintr-o setare sau dintr-o cerere: bune, fara repetari, cel mult MAX_RANDURI_ALBASTRU."""
+	rez = []
+	for x in (text or "").split(","):
+		x = x.strip()
+		if x and x not in rez and _ID_ALBASTRU.match(x):
+			rez.append(x)
+		if len(rez) >= MAX_RANDURI_ALBASTRU:
+			break
+	return rez
+
+
+def alegere_albastru(config=None):
+	"""(randuri, ascunse): ce a ales omul; ([], []) din fabrica."""
+	a = initConfigAlbastru(config)
+	return ids_albastru(a.randuri.value), ids_albastru(a.ascunse.value)
+
+
+def salveaza_albastru(randuri, ascunse, config=None, configfile=None):
+	"""Aceeasi salvare pe televizor si in web, pe loc."""
+	a = initConfigAlbastru(config)
+	a.randuri.value = ",".join(ids_albastru(",".join(randuri)))
+	a.ascunse.value = ",".join(ids_albastru(",".join(ascunse)))
+	a.randuri.save()
+	a.ascunse.save()
+	if configfile is None:
+		try:
+			from Components.config import configfile
+		except ImportError:
+			configfile = None
+	if configfile is not None:
+		configfile.save()
+
+
+def in_lista_albastra(randuri, ascunse, automate):
+	"""Randurile bifate, in ordinea din lista: cele alese de om, apoi cele care se pun singure si n-au fost scoase."""
+	return [r for r in randuri if r not in ascunse] + [a for a in automate if a not in ascunse and a not in randuri]
+
+
+def comuta_albastru(randuri, ascunse, automate, ident):
+	"""OK pe un rand (sau bifa din web): (randuri, ascunse) noi. Un rand care se pune singur se ascunde sau se arata din
+	nou; celelalte intra la coada randurilor alese sau ies din ele."""
+	randuri, ascunse = list(randuri), list(ascunse)
+	if ident in in_lista_albastra(randuri, ascunse, automate):
+		if ident in randuri:
+			randuri.remove(ident)
+		if ident in automate and ident not in ascunse:
+			ascunse.append(ident)
+	else:
+		if ident in ascunse:
+			ascunse.remove(ident)
+		if ident not in automate and ident not in randuri:
+			randuri.append(ident)
+	return randuri, ascunse
+
+
+def muta_albastru(randuri, ascunse, automate, ident, pas):
+	"""Muta un rand bifat cu `pas` locuri (-1 sus, 1 jos). Din acel moment ordinea tuturor randurilor bifate e a omului."""
+	lista = in_lista_albastra(randuri, ascunse, automate)
+	if ident not in lista:
+		return list(randuri), list(ascunse)
+	i = lista.index(ident)
+	j = max(0, min(len(lista) - 1, i + pas))
+	lista.insert(j, lista.pop(i))
+	return lista, list(ascunse)
+
+
+def _plugin_din_rand(ext):
+	"""Pluginul unui rand din InfoBarPlugins.getPluginList (boundFunction(self.runPlugin, p)), sau None."""
+	args = getattr(ext[1], "args", None)
+	if args and hasattr(args[0], "fnc") and hasattr(args[0], "path"):
+		return args[0]
+	return None
+
+
+def id_rand_imagine(ext):
+	"""Identificatorul unui rand pus de imagine (addExtension), dupa functia lui; None pentru cele necunoscute."""
+	nume = getattr(ext[1], "__name__", "")
+	if nume in _RANDURI_IMAGINE:
+		return _RANDURI_IMAGINE[nume]
+	if nume == "<lambda>":
+		try:
+			if ext[0]() == _tr(N_("Subcanale")):
+				return "imagine:subcanale"
+		except Exception:
+			return None
+	return None
+
+
+def _scurtatura(ident):
+	for s in SCURTATURI_ALBASTRU:
+		if s[0] == ident:
+			return s
+	return None
+
+
+def _index_meniu():
+	from Components import HdsCautaSetari
+	return HdsCautaSetari.index()
+
+
+def _mesaj(sesiune, text):
+	from Screens.MessageBox import MessageBox
+	sesiune.open(MessageBox, text, MessageBox.TYPE_INFO, timeout=8)
+
+
+def _porneste_sigur(ecran, functie):
+	"""Un rand ales care nu merge pe ecranul acesta (de pilda in playerul de filme) spune asta, nu opreste interfata."""
+	def porneste():
+		try:
+			functie()
+		except Exception as e:
+			print("[HdsTasteRapide] lista albastra: %s: %s" % (type(e).__name__, e))
+			_mesaj(ecran.session, _tr(N_("Nu se poate deschide de aici.")))
+	return porneste
+
+
+def deschide_meniu_albastru(ecran, cheie):
+	from Components import HdsCautaSetari
+	intrare = _index_meniu().dupaCheie(cheie)
+	if intrare is None:
+		_mesaj(ecran.session, _tr(N_("Nu se poate deschide de aici.")))
+		return
+	ecran.session.infobar = ecran
+	HdsCautaSetari.deschide(ecran.session, intrare)
+
+
+def _mesaj_amanat(text, ident):
+	"""Un mesaj cerut de un ceas sau de sfarsitul unei lucrari: in coada notificarilor enigma2 (Tools/Notifications.AddPopup),
+	care il arata cand bara e iar ecranul de sus. Un Session.open direct de aici ar putea cadea cu "modal open are allowed
+	only from a screen which is modal" daca tocmai se inchide alt ecran."""
+	from Tools import Notifications
+	from Screens.MessageBox import MessageBox
+	Notifications.AddPopup(text, MessageBox.TYPE_INFO, 8, ident)
+
+
+def reporneste_reteaua(sesiune):
+	"""Ca "Restart network" din ecranul placii de retea (Components/HdsRetea.reporneste), cu un mesaj la inceput (din
+	randul ales, ecranul de sus e bara) si unul la sfarsit, prin coada notificarilor."""
+	from Components import HdsRetea
+	_mesaj(sesiune, _tr(N_("Repornesc rețeaua. Durează câteva secunde.")))
+	HdsRetea.reporneste(lambda *a: _mesaj_amanat(_tr(N_("Rețeaua a repornit.")), "hds_albastru_retea"))
+
+
+_CEASURI_VITEZA = []
+
+
+def testul_de_viteza(sesiune, V=None, ceas=None):
+	"""Testul de viteza din ecranul VPN (Components/HdsVpn.testViteza: prin VPN cand e pornit, altfel direct), pe firul
+	lucrarilor lui; aici se asteapta rezultatul cu un ceas pe firul enigma2. Fereastra de asteptare se inchide numai cand
+	e chiar ecranul de sus (altfel o inchide omul), iar rezultatul merge in coada notificarilor (_mesaj_amanat): din ceas
+	nu se deschide niciun ecran direct."""
+	from Screens.MessageBox import MessageBox
+	if V is None:
+		from Components import HdsVpn as V
+	numar = V.pornesteViteza()
+	if numar is None:
+		_mesaj(sesiune, _tr(N_("Așteaptă să se termine ce ai pornit înainte.")))
+		return
+	asteapta = sesiune.open(MessageBox, _tr(N_("Măsor viteza internetului, cel mult 10 secunde...")), MessageBox.TYPE_INFO)
+	if ceas is None:
+		from enigma import eTimer
+		ceas = eTimer()
+	pasi = [0]
+
+	def verifica():
+		ultima = V.LUCRARI.stare().get("ultima") or {}
+		pasi[0] += 1
+		if ultima.get("id") != numar and pasi[0] < 60:
+			ceas.start(500, True)
+			return
+		if ceas in _CEASURI_VITEZA:
+			_CEASURI_VITEZA.remove(ceas)
+		if ultima.get("id") == numar:
+			text = ultima.get("mesaj") or ""
+		else:
+			text = _tr(N_("Testul de viteză nu a mers. Verifică legătura la internet."))
+		if getattr(sesiune, "current_dialog", None) is asteapta and getattr(sesiune, "in_exec", False):
+			try:
+				asteapta.close()
+			except Exception as e:
+				print("[HdsTasteRapide] testul de viteza: fereastra de asteptare: %s" % e)
+		_mesaj_amanat(text, "hds_albastru_viteza")
+	ceas.callback.append(verifica)
+	_CEASURI_VITEZA.append(ceas)
+	ceas.start(500, True)
+
+
+def _cu_lista_canale(ecran):
+	try:
+		from Screens.InfoBarGenerics import InfoBarChannelSelection
+		return isinstance(ecran, InfoBarChannelSelection)
+	except ImportError:
+		return hasattr(ecran, "servicelist")
+
+
+def rand_ales(ecran, ident, pluginuri=None):
+	"""(numele, porneste, disponibil) pentru un rand ales de om, ca randurile puse cu addExtension; None cand nu se
+	poate deschide acum."""
+	s = _scurtatura(ident)
+	if s is not None:
+		_id, text, cheie, cere = s
+		if cere:
+			from Components.SystemInfo import SystemInfo
+			if not SystemInfo.get(cere):
+				return None
+		if cheie:
+			if _index_meniu().dupaCheie(cheie) is None:
+				return None
+			fn = lambda: deschide_meniu_albastru(ecran, cheie)
+		elif ident == "gata:retea":
+			fn = lambda: reporneste_reteaua(ecran.session)
+		else:
+			fn = lambda: testul_de_viteza(ecran.session)
+		return (lambda: _tr(text), _porneste_sigur(ecran, fn), lambda: True)
+	fel, _sep, rest = ident.partition(":")
+	if fel == "m":
+		intrare = _index_meniu().dupaCheie(ident)
+		if intrare is None:
+			return None
+		nume = intrare.nume
+		return (lambda: nume, _porneste_sigur(ecran, lambda: deschide_meniu_albastru(ecran, ident)), lambda: True)
+	if fel == "plugin":
+		p = (pluginuri if pluginuri is not None else pluginuri_alocabile()).get(ident)
+		if p is None or (p.cereListaCanale() and not _cu_lista_canale(ecran)):
+			return None
+		nume = str(p.name)
+		return (lambda: nume, _porneste_sigur(ecran, lambda: ecran.runPlugin(p)), lambda: True)
+	if fel == "tasta" and rest in dict(ACTIUNI_DISPONIBILE) and rest not in _ACTIUNI_FARA_LISTA:
+		text = dict(ACTIUNI_DISPONIBILE)[rest]
+
+		def fa():
+			from Screens.InfoBar import hdsFaActiuneaLunga
+			hdsFaActiuneaLunga(ecran, rest)
+		return (lambda: _tr(text), _porneste_sigur(ecran, fa), lambda: True)
+	return None
+
+
+def _disponibil(ext):
+	try:
+		return bool(ext[2]())
+	except Exception:
+		return False
+
+
+def sursa_listei(ecran, lista, config=None):
+	"""Lista din care InfoBarExtensions.updateExtensions face randurile si tastele lor. Fara alegerea omului: `lista`
+	insasi, neatinsa. Cu alegere: intai randurile alese, in ordinea lor (fara tasta proprie, deci cu cifrele 1, 2, ... in
+	ordine), apoi restul listei de pana acum fara cele ascunse si fara cele deja mutate sus. Elementele: (fel, rand,
+	tasta), ca in addExtension; 0 = un rand, altfel o functie care da randurile (pluginurile, lucrarile)."""
+	randuri, ascunse = alegere_albastru(config)
+	if not randuri and not ascunse:
+		return lista
+	cheiPluginuri = None
+	gasite = []        # (identificatorul sau None, elementul)
+	for x in lista:
+		if x[0] == 0:
+			gasite.append((id_rand_imagine(x[1]), x))
+		elif getattr(x[1], "__name__", "") == "getPluginList":
+			if cheiPluginuri is None:
+				toate = pluginuri_alocabile()
+				cheiPluginuri = (toate, dict((id(p), k) for k, p in toate.items()))
+			for y in x[1]():
+				p = _plugin_din_rand(y[0])
+				gasite.append((cheiPluginuri[1].get(id(p)) if p is not None else None, (0, y[0], y[1])))
+		else:
+			gasite.append((None, x))
+	alese = set(randuri)
+	rez = []
+	for ident in randuri:
+		if ident in ascunse:
+			continue
+		ale = [x for i, x in gasite if i == ident]
+		if ale:
+			# mutate in ordinea omului, fara tasta lor (ALBASTRU la PiP): numai cele care se pot deschide acum, ca un
+			# rand ascuns sa nu tina o cifra
+			rez.extend((0, x[1], None) for x in ale if _disponibil(x[1]))
+			continue
+		try:
+			r = rand_ales(ecran, ident, cheiPluginuri[0] if cheiPluginuri else None)
+		except Exception as e:
+			print("[HdsTasteRapide] lista albastra: randul %s: %s" % (ident, e))
+			r = None
+		if r is not None:
+			rez.append((0, r, None))
+	for ident, x in gasite:
+		if ident is not None and (ident in ascunse or ident in alese):
+			continue
+		rez.append(x)
+	return rez
+
+
+def catalog_albastru(config=None, pluginuri=None, SystemInfo=None, index=None, tr=None):
+	"""Tot ce se poate pune in lista ALBASTRA, pentru ecranul de alegere si pagina web: [{id, nume, grupa, automat}], in
+	ordinea: randurile care se pun singure (ca in lista de acum), scurtaturile gata, functiile tastelor, meniurile,
+	pluginurile. tr: functia de traducere a paginii web (altfel cea a enigma2)."""
+	t = (lambda x: text_tasta("", x, tr)) if tr is not None else _tr
+	if SystemInfo is None:
+		try:
+			from Components.SystemInfo import SystemInfo
+		except ImportError:
+			SystemInfo = {}
+	if pluginuri is None:
+		from Components.PluginComponent import plugins
+		pluginuri = plugins
+	from Components.HdsExtensiiLucru import pluginuriAlbastru
+	toate = pluginuri_alocabile(pluginuri.pluginuriDeDeschis())
+	chei = dict((id(p), k) for k, p in toate.items())
+	rez = [{"id": "imagine:acces", "nume": t(N_("Acces condiționat")), "grupa": t(N_("Se pune singur")), "automat": True}]
+	vazute = set(["imagine:acces"])
+	for p in sorted(pluginuriAlbastru(pluginuri), key=lambda p: str(p.name).lower()):
+		k = chei.get(id(p))
+		if k and k not in vazute:
+			vazute.add(k)
+			rez.append({"id": k, "nume": str(p.name), "grupa": t(N_("Plugin, se pune singur")), "automat": True})
+	rez.append({"id": "imagine:subcanale", "nume": t(N_("Subcanale")), "grupa": t(N_("Se pune singur")), "automat": True})
+	if SystemInfo.get("NumVideoDecoders", 1) > 1:
+		rez.append({"id": "imagine:pip", "nume": t(N_("Pornește sau oprește PiP")), "grupa": t(N_("Se pune singur")), "automat": True})
+	for ident, text, _cheie, cere in SCURTATURI_ALBASTRU:
+		if not cere or SystemInfo.get(cere):
+			rez.append({"id": ident, "nume": t(text), "grupa": t(N_("Scurtătură")), "automat": False})
+	for k, text in ACTIUNI_DISPONIBILE:
+		if k not in _ACTIUNI_FARA_LISTA:
+			rez.append({"id": "tasta:" + k, "nume": t(text), "grupa": t(N_("Funcție")), "automat": False})
+	try:
+		idx = index if index is not None else _index_meniu()
+		dubluri = set()
+		for i in idx.intrari:
+			if i.fel not in ("grup", "intrare") or i.cheie in vazute:
+				continue
+			d = i.dublura()
+			if d in dubluri:
+				continue
+			dubluri.add(d)
+			vazute.add(i.cheie)
+			rez.append({"id": i.cheie, "nume": i.nume, "grupa": i.drumText(t), "automat": False})
+	except Exception as e:
+		print("[HdsTasteRapide] lista albastra: meniurile: %s" % e)
+	for k, p in sorted(toate.items(), key=lambda x: (str(x[1].name).lower(), x[0])):
+		if k not in vazute:
+			vazute.add(k)
+			rez.append({"id": k, "nume": str(p.name), "grupa": t(N_("Plugin")), "automat": False})
+	return rez
+
+
+def stare_albastru(config=None, catalog=None, **optiuni):
+	"""{randuri, ascunse, automate, lista (bifate, in ordine), catalog}: ce arata ecranul de alegere si pagina web."""
+	catalog = catalog if catalog is not None else catalog_albastru(config, **optiuni)
+	randuri, ascunse = alegere_albastru(config)
+	automate = [x["id"] for x in catalog if x["automat"]]
+	return {"randuri": randuri, "ascunse": ascunse, "automate": automate,
+		"lista": in_lista_albastra(randuri, ascunse, automate), "catalog": catalog}
+
+
+def schimba_albastru(actiune, ident="", config=None, configfile=None, catalog=None, **optiuni):
+	"""O schimbare a omului, salvata pe loc: actiune = comuta | sus | jos | fabrica. Intoarce starea noua, sau None
+	pentru o cerere necunoscuta (un rand care nu e in catalog si nici in alegere)."""
+	st = stare_albastru(config, catalog, **optiuni)
+	randuri, ascunse, automate = st["randuri"], st["ascunse"], st["automate"]
+	cunoscute = set(x["id"] for x in st["catalog"]) | set(randuri) | set(ascunse)
+	if actiune == "fabrica":
+		randuri, ascunse = [], []
+	elif ident not in cunoscute:
+		return None
+	elif actiune == "comuta":
+		randuri, ascunse = comuta_albastru(randuri, ascunse, automate, ident)
+	elif actiune in ("sus", "jos"):
+		randuri, ascunse = muta_albastru(randuri, ascunse, automate, ident, -1 if actiune == "sus" else 1)
+	else:
+		return None
+	salveaza_albastru(randuri, ascunse, config, configfile)
+	return stare_albastru(config, st["catalog"])

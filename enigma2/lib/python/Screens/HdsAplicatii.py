@@ -150,6 +150,17 @@ class HdsAplicatii(Screen):
 			"left": lambda: self.misca("stanga"),
 			"right": lambda: self.misca("dreapta"),
 			"menu": self.meniu,
+			# RUP6 (AS52): keymap.xml trimite in DirectionActions si tasta tinuta (upRepeated...) si eliberarea (upUp...);
+			# fara ele ActionMap scria "unknown action ... typo in keymap?" la fiecare sageata. Intorc 0 (netratate), ca
+			# inainte: sagetile misca la fel, nimic nu se schimba pentru celelalte harti.
+			"upRepeated": lambda: 0,
+			"downRepeated": lambda: 0,
+			"leftRepeated": lambda: 0,
+			"rightRepeated": lambda: 0,
+			"upUp": lambda: 0,
+			"downUp": lambda: 0,
+			"leftUp": lambda: 0,
+			"rightUp": lambda: 0,
 		}, -1)
 		self.onLayoutFinish.append(self._laInceput)
 		self.onClose.append(self.ceas.stop)
@@ -435,6 +446,8 @@ class HdsAplicatii(Screen):
 			titlu = self._titlu(a)
 			for x in A.actiuni(a, a.get("stare")):
 				lista.append((_(TEXTE_ACTIUNI[x]), x))
+			if A.fel(a) == A.FEL_SCURTATURA:
+				lista.append((_("Deschide cu..."), "browser-aplicatie"))
 			if self.ales > 0:
 				lista.append((_("Mută la stânga"), "stanga"))
 			if self.ales < len(self.aplicatii) - 1:
@@ -444,6 +457,8 @@ class HdsAplicatii(Screen):
 			titlu = _("Aplicații")
 		if ascunse:
 			lista.append((_("Arată toate aplicațiile (%d ascunse)") % ascunse, "arata"))
+		if len(A.browsereDisponibile()) == 2:
+			lista.append((_("Browserul aplicațiilor"), "browser-general"))
 		if not lista:
 			return
 		self.session.openWithCallback(self._dupaMeniu, ChoiceBox, title=titlu, list=lista)
@@ -454,7 +469,9 @@ class HdsAplicatii(Screen):
 		cheie = ales[1]
 		a = self.aplicatii[self.ales] if self.aplicatii else None
 		id_ = a["id"] if a else None
-		if cheie in TEXTE_ACTIUNI and a:
+		if cheie in ("browser-general", "browser-aplicatie"):
+			self._alegeBrowser(a if cheie == "browser-aplicatie" else None)
+		elif cheie in TEXTE_ACTIUNI and a:
 			self.fa(cheie, a)
 		elif cheie in ("stanga", "dreapta") and id_:
 			# locul vecinului vazut, chiar daca intre ei sta una ascunsa sau care nu se arata acum
@@ -467,3 +484,22 @@ class HdsAplicatii(Screen):
 		elif cheie == "arata":
 			A.arataToate()
 			self.reumple(id_)
+
+	def _alegeBrowser(self, a=None):
+		if a and A.motorObligatoriu(a):
+			self._mesaj(A.notaBrowser(a, _))
+			return
+		if a is None and len(A.browsereDisponibile()) != 2:
+			return
+		id_ = a["id"] if a else None
+		ales = A.preferintaBrowser(id_) if a else A.browserGeneral()
+		lista = [(text, motor) for motor, text in A.alegeriBrowser(a is not None, id_, _)]
+
+		def salveaza(alegere=None):
+			if alegere:
+				A.salveazaBrowser(alegere[1], id_)
+				self.reumple(id_)
+
+		selectie = next((i for i, x in enumerate(lista) if x[1] == ales), 0)
+		self.session.openWithCallback(salveaza, ChoiceBox,
+			title=_("Deschide cu...") if a else _("Browserul aplicațiilor"), list=lista, selection=selectie)

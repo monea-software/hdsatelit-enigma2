@@ -7,6 +7,7 @@
 #include <lib/dvb/sec.h>
 #include <lib/dvb/specs.h>
 #include <lib/dvb/hdscedare.h>
+#include <lib/dvb/hdsunicable.h>
 
 #include <algorithm>
 #include <vector>
@@ -400,12 +401,24 @@ PyObject *eDVBResourceManager::setFrontendSlotInformations(ePyObject list)
 	Py_RETURN_NONE;
 }
 
+void eDVBResourceManager::setHdsTipuriAlese(int slot, int masca)
+{
+	for (eSmartPtrList<eDVBRegisteredFrontend>::iterator i(m_frontend.begin()); i != m_frontend.end(); ++i)
+		if (i->m_frontend->getSlotID() == slot)
+			i->m_frontend->setHdsTipuriAlese(masca);
+	for (eSmartPtrList<eDVBRegisteredFrontend>::iterator i(m_simulate_frontend.begin()); i != m_simulate_frontend.end(); ++i)
+		if (i->m_frontend->getSlotID() == slot)
+			i->m_frontend->setHdsTipuriAlese(masca);
+}
+
 RESULT eDVBResourceManager::allocateFrontend(ePtr<eDVBAllocatedFrontend> &fe, ePtr<iDVBFrontendParameters> &feparm, bool simulate)
 {
 	eSmartPtrList<eDVBRegisteredFrontend> &frontends = simulate ? m_simulate_frontend : m_frontend;
 	ePtr<eDVBRegisteredFrontend> best;
 	int bestval = 0;
 	int foundone = 0;
+	bool best_preferred = false;
+	const int preferred_tuner = getPreferredTuner();
 
 	for (eSmartPtrList<eDVBRegisteredFrontend>::iterator i(frontends.begin()); i != frontends.end(); ++i)
 	{
@@ -417,10 +430,13 @@ RESULT eDVBResourceManager::allocateFrontend(ePtr<eDVBAllocatedFrontend> &fe, eP
 		if (!i->m_inuse)
 		{
 //			eDebug("Slot %d, score %d", i->m_frontend->getSlotID(), c);
-			if (c > bestval)
+			// Preferinta conteaza numai pentru un tuner compatibil si liber.
+			bool preferred = c > 0 && i->m_frontend->getSlotID() == preferred_tuner;
+			if ((preferred && !best_preferred) || (preferred == best_preferred && c > bestval))
 			{
 				bestval = c;
 				best = i;
+				best_preferred = preferred;
 			}
 		}
 //		else
@@ -1267,7 +1283,7 @@ int eDVBChannelFilePush::filterRecordData(const unsigned char *_data, int len, s
 
 DEFINE_REF(eDVBChannel);
 
-eDVBChannel::eDVBChannel(eDVBResourceManager *mgr, eDVBAllocatedFrontend *frontend): m_state(state_idle), m_mgr(mgr), m_yielding_use_count(0)
+eDVBChannel::eDVBChannel(eDVBResourceManager *mgr, eDVBAllocatedFrontend *frontend): m_state(state_idle), m_mgr(mgr), m_yielding_use_count(0), m_hds_unicable_reacordari(0)
 {
 	m_frontend = frontend;
 
@@ -1302,6 +1318,7 @@ void eDVBChannel::frontendStateChanged(iDVBFrontend*fe)
 	if (state == iDVBFrontend::stateLock)
 	{
 		eDebug("OURSTATE: ok");
+		m_hds_unicable_reacordari = 0;
 		ourstate = state_ok;
 	} else if (state == iDVBFrontend::stateTuning)
 	{
@@ -1324,8 +1341,28 @@ void eDVBChannel::frontendStateChanged(iDVBFrontend*fe)
 		}
 	} else if (state == iDVBFrontend::stateFailed)
 	{
-		eDebug("OURSTATE: failed");
-		ourstate = state_failed;
+		/* UNI1 (lib/dvb/hdsunicable.h): pe Unicable/JESS comanda se poate pierde pe cablu (alt receptor pe acelasi
+		   convertor, LNB-ul inca ocupat); o acordare gestionata esuata se mai incearca o data, cu comanda trimisa din nou,
+		   ca reacordarea dupa pierderea semnalului de mai sus (fara "tune failed" catre serviciu cat se incearca) */
+		/* numai cand acordarea curenta e de satelit: SATCR ramas de la o acordare Unicable nu conteaza pe cablu/terestru */
+		int hds_tip = -1;
+		bool hds_satelit = m_current_frontend_parameters && !m_current_frontend_parameters->getSystem(hds_tip)
+			&& hds_tip == iDVBFrontend::feSatellite;
+		long hds_satcr = -1;
+		if (hds_satelit)
+			fe->getData(eDVBFrontend::SATCR, hds_satcr);
+		if (hdsunicable::reacordeazaDupaEsec(hds_satelit, hds_satcr, m_current_frontend_parameters, m_hds_unicable_reacordari))
+		{
+			++m_hds_unicable_reacordari;
+			eDebug("OURSTATE: failed, Unicable retune %d", m_hds_unicable_reacordari);
+			ourstate = m_frontend->get().tune(*m_current_frontend_parameters)
+				? state_failed : state_tuning;
+		}
+		else
+		{
+			eDebug("OURSTATE: failed");
+			ourstate = state_failed;
+		}
 	} else
 		eFatal("state unknown");
 
@@ -1737,6 +1774,7 @@ RESULT eDVBChannel::setChannel(const eDVBChannelID &channelid, ePtr<iDVBFrontend
 	m_channel_id = channelid;
 	m_mgr->addChannel(channelid, this);
 	m_state = state_tuning;
+	m_hds_unicable_reacordari = 0; /* UNI1: acordare noua, reacordarea Unicable din nou permisa */
 			/* if tuning fails, shutdown the channel immediately. */
 	int res;
 	res = m_frontend->get().tune(*feparm);

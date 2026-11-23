@@ -553,7 +553,7 @@ def esteMontat(loc, montari=None):
 	return False, punct
 
 
-def descrie(loc, montari=None, cu_parola=None):
+def descrie(loc, montari=None, cu_parola=None, parola_text=None):
 	"""Un loc pentru ecran si pagina: fara parola, cu starea si textele."""
 	montat, punct = esteMontat(loc, montari)
 	s = _STARE.a(loc["id"])
@@ -580,6 +580,7 @@ def descrie(loc, montari=None, cu_parola=None):
 		"adresa": adresa,
 		"utilizator": loc.get("utilizator") or u"",
 		"are_parola": bool(cu_parola),
+		"parola": (parole().parola(loc["id"]) or "") if parola_text is None else parola_text,
 		"pornire": bool(loc.get("pornire")),
 		"citire": bool(loc.get("citire")),
 		"tls_oricare": bool(loc.get("tls_oricare")),
@@ -2287,7 +2288,7 @@ def toate():
 		cu_parola = parole().citeste()
 	except Exception:
 		cu_parola = {}
-	return [descrie(l, montari, l["id"] in cu_parola) for l in locuri().lista()]
+	return [descrie(l, montari, l["id"] in cu_parola, cu_parola.get(l["id"], "")) for l in locuri().lista()]
 
 
 def dinCautare(g):

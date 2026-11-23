@@ -17,9 +17,9 @@
 # firul enigma2.
 # Designul: acelasi tipar ca "Ce aparate sunt in retea" (Screens/HdsUnelteRetea.py, din ecranul Stitch al proiectului
 # HD Satelit): lista in stanga, caseta cu explicatia si detaliile in dreapta, tastele colorate jos; un bloc cu acelasi
-# nume in HDSatelit/skin.xml are intaietate (culorile temei). Editarea foloseste skinul Setup.
+# nume in HDSatelit/skin.xml are intaietate (culorile temei). Editarea are skin propriu cu ambele note.
 
-from enigma import eListboxPythonMultiContent, eTimer, getDesktop, RT_HALIGN_LEFT, RT_HALIGN_RIGHT, RT_VALIGN_CENTER
+from enigma import eListboxPythonMultiContent, eTimer, ePoint, eSize, getDesktop, RT_HALIGN_LEFT, RT_HALIGN_RIGHT, RT_VALIGN_CENTER
 
 from Components.ActionMap import ActionMap
 from Components.ConfigList import ConfigListScreen
@@ -40,6 +40,11 @@ from Screens.VirtualKeyBoard import VirtualKeyBoard
 CITIRE_MS = 700
 # raspunsul ecranului cautarii cand omul alege GALBEN (adauga de mana un server care nu a aparut)
 DE_MANA = "de_mana"
+# NMS6 (NMT, 17.11): randurile listei locurilor de sub locurile salvate: serverele gasite in casa (cheia ("gasit", k)),
+# cautarea in curs si "Adauga de mana"; cheile locurilor salvate sunt texte (id-ul locului), deci nu se amesteca
+RAND_GASIT = "gasit"
+RAND_CAUTA = ("cauta",)
+RAND_DE_MANA = ("de_mana",)
 CULOARE_STARE ={"montat": 0x4FD18B, "eroare": 0xFF8A7A, "lucreaza": 0xF5B83D, "nemontat": 0xAEB9CC}
 
 
@@ -81,19 +86,49 @@ def _skin(nume):
 	</screen>""" % (nume, _TASTE)
 
 
+class _Nota(Label):
+	"""Protejeaza numai afisarea barelor; eTextPara ignora CR real pus dupa fiecare bara."""
+	def setText(self, text):
+		self.original = text or u""
+		Label.setText(self, self.original.replace("\\", "\\\r"))
+		aseaza = getattr(self, "aseaza", None)
+		if aseaza is not None:
+			aseaza()
+
+	def getText(self):
+		return self.original
+
+
+def _rect(inst):
+	p, s = inst.position(), inst.size()
+	return p.x(), p.y(), s.width(), s.height()
+
+
+def _pune(inst, x, y, w, h):
+	inst.move(ePoint(int(x), int(y)))
+	inst.resize(eSize(max(1, int(w)), max(1, int(h))))
+
+
+def _masoara(inst):
+	inst.setNoWrap(False)
+	inst.setVAlign(0)
+	return max(MT.marimeFont(inst) * 3 // 2, MT.inaltimeText(inst))
+
+
+_FORMULAR = """
+	<screen name="HdsLocReteaEditare" resolution="1920,1080" position="0,0" size="1920,1080" flags="wfNoBorder" backgroundColor="#000E1323">
+		<widget source="Title" render="Label" position="80,40" size="1760,80" font="Regular;40" foregroundColor="#00F2F4F8" transparent="1" />
+		<widget name="config" position="80,160" size="1760,520" scrollbarMode="showOnDemand" />
+		<widget name="description" position="80,700" size="1760,170" font="Regular;28" foregroundColor="#00F2F4F8" transparent="1" />
+		<widget name="footnote" position="80,880" size="1760,100" font="Regular;24" foregroundColor="#00AEB9CC" transparent="1" />
+		%s
+	</screen>""" % _TASTE
+
+
 
 class _ParolaLoc(ConfigPassword):
-	"""Parola locului de retea. Cat omul o scrie se vede in clar; nescrisa, randul spune numai daca e salvata o parola
-	("pusă") sau nu ("nepusă"): randul gol pastreaza parola salvata, criptata pe receptor."""
-
 	def __init__(self):
 		ConfigPassword.__init__(self, default=u"", fixed_size=False)
-		self.salvata = False
-
-	def getMulti(self, selected):
-		if not self.scrisa and not self.text:
-			return ("text", _("pusă") if self.salvata else _("nepusă"))
-		return ConfigPassword.getMulti(self, selected)
 
 class _Lista(Screen):
 	"""Baza celor trei ecrane cu lista: randuri de doua linii puse din cod (fonturile urmeaza Marimea textului)."""
@@ -105,8 +140,10 @@ class _Lista(Screen):
 		self["subtitlu"] = Label("")
 		self["lista"] = MenuList([], content=eListboxPythonMultiContent)
 		self["cum_titlu"] = Label("")
-		self["cum"] = Label("")
-		self["detalii"] = Label("")
+		self["cum"] = _Nota("")
+		self["detalii"] = _Nota("")
+		self["cum"].aseaza = self._aseazaNote
+		self["detalii"].aseaza = self._aseazaNote
 		self["key_red"] = StaticText("")
 		self["key_green"] = StaticText("")
 		self["key_yellow"] = StaticText("")
@@ -139,6 +176,23 @@ class _Lista(Screen):
 		MT.randuriCod(self["lista"], self._y(self.INALTIME))
 		self["lista"].onSelectionChanged.append(self.detalii)
 		self.pornit()
+		self._aseazaNote()
+
+	def _aseazaNote(self):
+		# Masuram dupa aplicarea temei, inclusiv la 100 la suta si sub teme externe.
+		cum, detalii = self["cum"].instance, self["detalii"].instance
+		if cum is None or detalii is None:
+			return
+		if not getattr(self, "_note_asezare", None):
+			self._note_asezare = (_rect(cum), _rect(detalii))
+		(x, y, w, h), (dx, dy, dw, dh) = self._note_asezare
+		gap = max(4, int(12 * self.f))
+		jos = dy + dh
+		nevoie = _masoara(cum)
+		inaltime = min(max(h, nevoie), max(h, jos - y - gap - MT.marimeFont(detalii) * 2))
+		_pune(cum, x, y, w, inaltime)
+		dy = max(dy, y + inaltime + gap)
+		_pune(detalii, dx, dy, dw, jos - dy)
 
 	def _y(self, v):
 		return MT.inaltimeCod(int(v * self.f))
@@ -194,6 +248,7 @@ class HdsLocuriRetea(_Lista):
 		self["key_green"].setText(_("Adaugă"))
 		self["key_blue"].setText(_("Caută în casă"))
 		self.locuri = []
+		self.gasite = []
 		self.mesaj = u""
 		self.cautare_initiala = False
 		self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "MenuActions"], {
@@ -207,24 +262,33 @@ class HdsLocuriRetea(_Lista):
 		}, -1)
 
 	def pornit(self):
-		self.citeste()
-		if not self.locuri and not self.cautare_initiala:
+		# NMS6: cautarea serverelor din casa porneste in fundal la deschidere (Components/HdsStocareRetea, pe fir), iar
+		# serverele gasite apar direct in lista, sub locurile salvate; fara al doilea ecran. Nimic nu se monteaza singur.
+		if not self.cautare_initiala:
 			self.cautare_initiala = True
-			# pornit() vine din onLayoutFinish, inainte de executie: cautarea (alt ecran) se deschide la prima executie,
-			# altfel Session.open o refuza (eroarea "modal open are allowed only from a screen which is modal")
-			self.onFirstExecBegin.append(self.cauta)
+			S.cautaInCasa()
+		self.citeste()
 
 	def citeste(self):
+		# NMS6: un pas al ceasului (cautarea in fundal) venit dupa inchidere nu mai atinge widgeturile distruse
+		if self.inchis:
+			return
 		ales = self.curent()
 		try:
 			self.locuri = S.toate()
 		except Exception as e:
 			print("[HdsLocuriRetea] lista: %s" % e)
 			self.locuri = []
-		lucreaza = any(l["stare"] == "lucreaza" for l in self.locuri)
+		try:
+			c = S.rezultatCautare()
+		except Exception as e:
+			print("[HdsLocuriRetea] cautarea: %s" % e)
+			c = {"in_lucru": False, "gasite": []}
+		self.gasite = [g for g in c.get("gasite") or [] if not g.get("adaugat")]
+		lucreaza = any(l["stare"] == "lucreaza" for l in self.locuri) or bool(c.get("in_lucru"))
 		montate = len([l for l in self.locuri if l["montat"]])
 		if not self.locuri:
-			sub = _("Niciun loc încă. VERDE: adaugă un loc; ALBASTRU: caută serverele din casă.")
+			sub = _("Niciun loc încă. Serverele găsite în casă apar mai jos: OK pe unul îl adaugă.")
 		else:
 			sub = ngettext("%d loc", "%d locuri", len(self.locuri)) % len(self.locuri)
 			if montate:
@@ -236,11 +300,22 @@ class HdsLocuriRetea(_Lista):
 			gazda = l["gazda"].split("/")[2] if l["fel"] == "dlna" and "//" in l["gazda"] else l["gazda"]
 			randuri.append(self.rand(l["id"], l["nume"], u"%s · %s" % (l["fel_scurt"], gazda), l["stare_scurt"],
 				CULOARE_STARE.get(l["stare"])))
+		for k, g in enumerate(self.gasite):
+			randuri.append(self.rand((RAND_GASIT, k), _("Găsit în casă: %s") % g["nume"],
+				u"%s · %s" % (g["fel_text"], g.get("ip") or g["gazda"]), _("OK: adaugă")))
+		if c.get("in_lucru"):
+			randuri.append(self.rand(RAND_CAUTA, _("Se caută serverele din casă..."), _("Cele găsite apar aici."),
+				culoare_jos=0xAEB9CC))
+		elif c.get("cod") and not self.gasite:
+			randuri.append(self.rand(RAND_CAUTA, _("Căutarea în casă nu a mers"), S.textEroare(c["cod"]),
+				culoare_jos=0xFF8A7A))
+		randuri.append(self.rand(RAND_DE_MANA, _("Adaugă de mână"), _("Un server care nu apare, cu adresa lui")))
 		self["lista"].setList(randuri)
 		if ales:
-			for i, l in enumerate(self.locuri):
-				if l["id"] == ales:
+			for i, rnd in enumerate(randuri):
+				if rnd[0] == ales:
 					self["lista"].moveToIndex(i)
+					break
 		self.detalii()
 		if lucreaza:
 			self.ceas.start(CITIRE_MS, True)
@@ -252,15 +327,30 @@ class HdsLocuriRetea(_Lista):
 				return l
 		return None
 
+	def _gasit(self):
+		"""Serverul gasit de sub cursor, sau None."""
+		k = self.curent()
+		if isinstance(k, tuple) and len(k) == 2 and k[0] == RAND_GASIT and k[1] < len(self.gasite):
+			return self.gasite[k[1]]
+		return None
+
 	def detalii(self):
 		l = self.loc()
 		if l is None:
-			self["detalii"].setText(u"")
+			g = self._gasit()
+			if g is not None:
+				self["detalii"].setText(u"\n".join([g["nume"], g["fel_text"], g.get("ip") or g["gazda"],
+					_("OK: îl adaugi; la SMB și NFS, VERDE îl salvează și îl montează.")]))
+			elif self.curent() == RAND_DE_MANA:
+				self["detalii"].setText(_("Scrii singur serverul (adresa sau numele lui), dosarul și, dacă trebuie, "
+					"utilizatorul și parola."))
+			else:
+				self["detalii"].setText(u"")
 			self["key_yellow"].setText(u"")
 			return
 		linii = [l["fel_text"], l["adresa"]]
 		if l["utilizator"]:
-			linii.append(_("Utilizator: %s") % l["utilizator"] + u" · " + (_("parolă salvată") if l["are_parola"]
+			linii.append(_("Utilizator: %s") % l["utilizator"] + u" · " + (l.get("parola", "") if l["are_parola"]
 				else _("fără parolă salvată")))
 		if l["montat"]:
 			linii.append(_("Montat în %s") % l["punct"])
@@ -284,6 +374,12 @@ class HdsLocuriRetea(_Lista):
 		l = self.loc()
 		if l is not None:
 			self.session.openWithCallback(lambda *a: self.citeste(), HdsLocReteaRasfoire, l["id"])
+			return
+		g = self._gasit()
+		if g is not None:
+			self.adauga(S.dinCautare(g))
+		elif self.curent() == RAND_DE_MANA:
+			self.adauga()
 
 	def monteazaSauDemonteaza(self):
 		l = self.loc()
@@ -310,7 +406,9 @@ class HdsLocuriRetea(_Lista):
 		self.citeste()
 
 	def cauta(self):
-		self.session.openWithCallback(self._ales, HdsLocReteaCautare)
+		# NMS6: ALBASTRU (si MENU > Cauta) cauta din nou in fundal, in aceeasi lista (fara al doilea ecran)
+		S.cautaInCasa()
+		self.citeste()
 
 	def _ales(self, g=None):
 		if g == DE_MANA:
@@ -601,10 +699,11 @@ class HdsLocReteaRasfoire(_Lista):
 
 class HdsLocReteaEditare(ConfigListScreen, Screen):
 	"""ident None: loc nou (date: din cautarea in casa). Inchis cu textul de aratat in lista, sau None."""
+	skin = _FORMULAR
 
 	def __init__(self, session, ident=None, date=None):
 		Screen.__init__(self, session)
-		self.skinName = ["HdsLocReteaEditare", "Setup"]
+		self.skinName = ["HdsLocReteaEditare"]
 		self.ident = ident
 		vechi = S.locuri().dupaId(ident) if ident else None
 		d = dict(vechi or {})
@@ -624,13 +723,14 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 		self.citire = ConfigYesNo(default=bool(d.get("citire")))
 		self.tls = ConfigYesNo(default=bool(d.get("tls_oricare")))
 		self.are_parola = bool(vechi and vechi.get("utilizator") and S.parole().are(ident))
-		self.parola.salvata = self.are_parola
-		self["description"] = Label(u"")
-		self["footnote"] = Label(u"")
+		self.parola.value = S.parole().parola(ident) or ""
+		self["description"] = _Nota(u"")
+		self["footnote"] = _Nota(u"")
 		self["key_red"] = StaticText(_("Renunță"))
 		self["key_green"] = StaticText(_("Salvează"))
 		self["key_yellow"] = StaticText(u"")
 		self["key_blue"] = StaticText(_("Tastatura"))
+		self._note_pregatite = False
 		ConfigListScreen.__init__(self, [], session=session, on_change=self._schimbat)
 		self["actions"] = ActionMap(["SetupActions", "ColorActions"], {
 			"cancel": self.renunta,
@@ -648,6 +748,9 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 		self._randuri()
 		self["config"].onSelectionChanged.append(self._descriere)
 		self.onLayoutFinish.append(self._descriere)
+		self.onLayoutFinish.append(self._noteDinSkin)
+		self["description"].aseaza = self._aseazaNote
+		self["footnote"].aseaza = self._aseazaNote
 		# serverul ales din cautarea in casa (SMB, NFS): lista dosarelor se cere singura, ca omul sa aleaga dosarul din ea;
 		# la prima executie (lista e alt ecran, Session.open o refuza din onLayoutFinish)
 		if not vechi and date and d.get("gazda") and d.get("fel") in S.FELURI_MONTATE and not d.get("dosar"):
@@ -655,6 +758,42 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 
 	def _inchis(self):
 		self.inchis = True
+
+	def _noteDinSkin(self):
+		# setContent anunta selectia inainte de ConfigList.applySkin. Dimensiunile
+		# initiale nu trebuie pastrate ca marime definitiva a formularului.
+		self._note_pregatite = True
+		self._aseazaNote()
+
+	def _aseazaNote(self):
+		if not self._note_pregatite:
+			return
+		config = getattr(self["config"], "instance", None)
+		desc, nota = self["description"].instance, self["footnote"].instance
+		if config is None or desc is None or nota is None:
+			return
+		if not getattr(self, "_note_asezare", None):
+			self._note_asezare = (_rect(config), _rect(desc), _rect(nota))
+		(cx, cy, cw, ch), (dx, dy, dw, dh), (nx, ny, nw, nh) = self._note_asezare
+		gap = max(4, int(12 * _factor()))
+		# Tastele StaticText nu au widget propriu; geometria este la renderer.
+		jos = min(self.instance.size().height() - gap, max(dy + dh, ny + nh))
+		taste = [self[n] for n in ("key_red", "key_green", "key_yellow", "key_blue")]
+		for renderer in getattr(self, "renderer", ()):
+			if getattr(renderer, "source", None) in taste:
+				inst = getattr(renderer, "instance", None)
+				if inst is not None and inst.position().y() > cy:
+					jos = min(jos, inst.position().y() - gap)
+		for nume in ("key_red", "key_green", "key_yellow", "key_blue"):
+			inst = getattr(self[nume], "instance", None)
+			if inst is not None and inst.position().y() > cy:
+				jos = min(jos, inst.position().y() - gap)
+		dh, nh = _masoara(desc), _masoara(nota)
+		ny = jos - nh
+		dy = ny - gap - dh
+		_pune(config, cx, cy, cw, min(ch, dy - gap - cy))
+		_pune(desc, dx, dy, dw, dh)
+		_pune(nota, nx, ny, nw, nh)
 
 	def _randuri(self):
 		fel = self.fel.value
@@ -679,6 +818,8 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 		self["config"].list = r
 		self["config"].l.setList(r)
 		self["key_yellow"].setText(_("Alege dosarul") if fel in S.FELURI_MONTATE else u"")
+		# NMS6: la SMB si NFS salvarea il si monteaza (S.salveazaSiConecteaza), deci tasta o spune
+		self["key_green"].setText(_("Salvează și montează") if fel in S.FELURI_MONTATE else _("Salvează"))
 
 	def _felSchimbat(self, element):
 		self._randuri()
@@ -709,8 +850,8 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 				"GALBEN: lista de pe server."),
 			"utilizator": _("Contul de pe server. Pe Windows: numele contului sau CASA\\nume. Gol: fără cont "
 				"(oaspete)."),
-			"parola": _("Se păstrează criptată pe receptor și nu se mai arată. Gol: rămâne parola de acum.")
-				if self.are_parola else _("Se păstrează criptată pe receptor și nu se mai arată."),
+			"parola": _("Se păstrează criptată pe receptor și se vede după salvare. Gol: rămâne parola de acum.")
+				if self.are_parola else _("Se păstrează criptată pe receptor și se vede după salvare."),
 			"port": _("0 înseamnă portul obișnuit al felului ales."),
 			"pornire": _("Da: locul se montează singur la 30 de secunde după pornire, în fundal. Trebuie pentru "
 				"înregistrările programate pe el."),
@@ -731,7 +872,7 @@ class HdsLocReteaEditare(ConfigListScreen, Screen):
 		if not c or not isinstance(c[1], ConfigText):
 			return
 		element = c[1]
-		text = u"" if element is self.parola else element.value
+		text = element.value
 		self.session.openWithCallback(lambda t: self._scris(element, t), VirtualKeyBoard,
 			title=c[0], text=text, hdsSecret=element is self.parola)
 

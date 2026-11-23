@@ -478,10 +478,127 @@ def citeste_configurarea(radacina='/'):
 	return c
 
 
+_strofe_pregatite = {}
+_generatie_strofe = 0
+
+
+def invalideaza_strofe():
+	"""Called on the UI thread when a new package command starts."""
+	global _strofe_pregatite, _generatie_strofe
+	_generatie_strofe += 1
+	_strofe_pregatite = {}
+	return _generatie_strofe
+
+
+def _semnatura_strofe(cale):
+	try:
+		s = os.stat(cale)
+	except FileNotFoundError:
+		return None
+	return (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
+
+
+def _strofe_stabile(cale):
+	"""Never keep a partial read across an atomic replacement or an in-place write."""
+	for _incercare in range(3):
+		inainte = _semnatura_strofe(cale)
+		if inainte is None:
+			return None, []
+		try:
+			with open(cale, 'r', encoding='utf-8', errors='replace') as fh:
+				text = fh.read()
+		except FileNotFoundError:
+			continue
+		strofe = strofe_din_text(text)
+		if inainte == _semnatura_strofe(cale):
+			return inainte, strofe
+	raise OSError('Package inventory changed during reading')
+
+
+def _cai_inventar(conf):
+	return (conf.status_file, conf.lists_dir, conf.info_dir, tuple(n for n, _adresa in conf.surse))
+
+
+class CitireInventar(object):
+	"""Plain Python data only; the worker never calls an Enigma object or a callback."""
+	def __init__(self):
+		self.generatie = _generatie_strofe
+		self.gata = False
+		self.strofe = {}
+		self.eroare = False
+		self.anulat = False
+		self.verificat = False
+		self.valid = False
+		self.cai = None
+
+	def porneste(self):
+		_fire.start_new_thread(self._citeste, ())
+		return self
+
+	def _citeste(self):
+		try:
+			conf = citeste_configurarea()
+			self.cai = _cai_inventar(conf)
+			cai = [conf.status_file] + [os.path.join(conf.lists_dir, s) for s, _adresa in conf.surse]
+			for cale in cai:
+				if self.anulat:
+					return
+				self.strofe[os.path.abspath(cale)] = _strofe_stabile(cale)
+			status = self.strofe[os.path.abspath(conf.status_file)][1]
+			for s in status:
+				if self.anulat:
+					return
+				n = s.get('package', '')
+				if nume_valid(n) and in_catalog(n) and 'installed' in s.get('status', '').split():
+					cale = os.path.abspath(os.path.join(conf.info_dir, n + '.control'))
+					self.strofe[cale] = _strofe_stabile(cale)
+		except Exception:
+			self.eroare = True
+		finally:
+			self.gata = True
+
+	def verifica(self):
+		"""Schedule the final disk checks without blocking the UI timer."""
+		self.gata = False
+		self.verificat = True
+		_fire.start_new_thread(self._verifica, ())
+
+	def _verifica(self):
+		try:
+			if self.anulat or self.cai != _cai_inventar(citeste_configurarea()):
+				return
+			for cale, (semnatura, _strofe) in self.strofe.items():
+				if self.anulat or semnatura != _semnatura_strofe(cale):
+					return
+			self.valid = True
+		except Exception:
+			self.eroare = True
+		finally:
+			self.gata = True
+
+	def publica(self):
+		"""UI thread only: publish already checked Python data, with no disk access."""
+		global _strofe_pregatite
+		if not self.gata or self.eroare or not self.valid or self.anulat or self.generatie != _generatie_strofe:
+			return False
+		_strofe_pregatite = self.strofe
+		return True
+
+	def retrage(self):
+		"""The snapshot is scoped to EVENT_DONE, never a persistent stale cache."""
+		global _strofe_pregatite
+		if _strofe_pregatite is self.strofe:
+			_strofe_pregatite = {}
+
+
 def citeste_strofe(cale):
 	"""Fisierele Packages / status / .control: cate un dict pe pachet (cheile cu litere mici). Randurile de
 	continuare (care incep cu spatiu) se adauga la campul de dinainte; ' .' e un rand gol."""
 	try:
+		pregatit = _strofe_pregatite.get(os.path.abspath(cale))
+		if pregatit is not None:
+			# Callers have always owned their result, including the dictionaries.
+			return [dict(s) for s in pregatit[1]]
 		with open(cale, 'r', encoding='utf-8', errors='replace') as fh:
 			text = fh.read()
 	except OSError:
@@ -1010,14 +1127,10 @@ STARI_NECONFIGURATE = ('unpacked', 'half-configured', 'half-installed')
 # sistemului pe televizor si in interfata web); fiecare cel mult MARIME_JURNAL, plus o copie veche (<nume>.1)
 DOSAR_JURNALE = '/home/root/logs'
 MARIME_JURNAL = 128 * 1024
-# numele si parola dintr-o adresa (https://nume:parola@gazda/...): opkg le scrie in "Downloading ..." si in erorile
-# wget pentru sursele adaugate de om cu ele in adresa; in jurnalele de pe disc nu ajung
-_PAROLA_IN_ADRESA = re.compile(r'(?i)\b((?:https?|ftps?)://)[^/\s@]+@')
-
-
 def fara_parola(text):
-	"""text fara numele si parola din adrese: https://nume:parola@gazda -> https://gazda"""
-	return _PAROLA_IN_ADRESA.sub(r'\1', text if isinstance(text, str) else str(text))
+	"""Textul intreg, si cu numele si parola din adrese (REGULA 0, ASI7: in imagine nu se mascheaza nimic pana dupa 1.0;
+	jurnalul extensiilor de pe receptor arata adresele surselor asa cum sunt). Numele ramane pentru cei care il cheama."""
+	return text if isinstance(text, str) else str(text)
 
 
 def pachete_neconfigurate(radacina='/', conf=None):

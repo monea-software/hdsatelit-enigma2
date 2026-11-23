@@ -226,6 +226,9 @@ KEYIDS = {
 "KEY_BRIGHTNESSUP": 225, 
 "KEY_MEDIA": 226, 
 "KEY_SWITCHVIDEOMODE": 227,
+# numele vechi al aceleiasi taste, pastrat ca in celelalte imagini pentru hartile de taste ale pluginurilor (lukatv);
+# dupa KEY_SWITCHVIDEOMODE, ca numele aratat pentru 227 (prima potrivire, HdsTelecomenziDate.nume_tasta) sa ramana acela
+"KEY_VMODE": 227,
 "KEY_UNKNOWN": 240, 
 "KEY_OK": 352, 
 "KEY_SELECT": 353, 

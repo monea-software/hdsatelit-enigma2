@@ -51,11 +51,14 @@ def _text_rezultat(IO):
 def stare(IO=None):
 	IO = _io(IO)
 	rez = IO.imagine_online.stare_publica()
-	loc_bun = True
+	loc_bun, tinta = True, None
 	if rez.get("fel") == "imagine":
-		loc_bun = bool(IO.citeste_tinta().get("bun"))
+		tinta = IO.citeste_tinta()
+		loc_bun = bool(tinta.get("bun"))
+	# acelasi text ca pe televizor: al garzii pornirii cand l-a dat (ce s-a intamplat si locul bun), altfel T_LOC_STRAIN
+	text_loc = " ".join(x for x in ((tinta or {}).get("text"), (tinta or {}).get("ajutor")) if x) or _t(IO.T_LOC_STRAIN)
 	rez.update({"result": True, "text_rezultat": _text_rezultat(IO), "loc_bun": loc_bun,
-		"text_loc": "" if loc_bun else _t(IO.T_LOC_STRAIN),
+		"text_loc": "" if loc_bun else text_loc,
 		"valori_standby": [[v, _t(t)] for v, t in IO.VALORI_STANDBY]})
 	return rez
 

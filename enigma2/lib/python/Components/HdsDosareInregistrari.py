@@ -76,6 +76,21 @@ def expert(config=None):
 
 # ------------------------------------------------------------------ alegerile (RecordPathsSettings.initConfigList)
 
+def _cuNumeDiscuri(values):
+	try:
+		from Components.Harddisk import storagePathName
+	except ImportError:
+		return values
+	result = []
+	for value in values:
+		if isinstance(value, tuple):
+			result.append(value)
+		else:
+			text = storagePathName(value)
+			result.append((value, text) if text != value else value)
+	return result
+
+
 def alegeriImplicit(config=None, valoare=None):
 	"""Dosarele tinute minte, plus valoarea de acum a locului implicit, daca lipseste din ele."""
 	config = _config(config)
@@ -84,7 +99,7 @@ def alegeriImplicit(config=None, valoare=None):
 	if valoare not in tmp:
 		tmp = tmp[:]
 		tmp.append(valoare)
-	return tmp
+	return _cuNumeDiscuri(tmp)
 
 
 def alegeriCuStiluri(valoare, config=None):
@@ -94,7 +109,7 @@ def alegeriCuStiluri(valoare, config=None):
 	if valoare not in tmp and valoare not in CHEI_STILURI:
 		tmp = tmp[:]
 		tmp.append(valoare)
-	return stiluri() + tmp
+	return stiluri() + _cuNumeDiscuri(tmp)
 
 
 def alegeriTimeshift(valoare, config=None):
@@ -104,7 +119,7 @@ def alegeriTimeshift(valoare, config=None):
 	if valoare not in tmp:
 		tmp = tmp[:]
 		tmp.append(valoare)
-	return tmp
+	return _cuNumeDiscuri(tmp)
 
 
 def _setare(rand, config):

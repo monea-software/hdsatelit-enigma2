@@ -46,7 +46,7 @@ PRIO_TASTE = -0x7FFFFFFF - 1
 STEAG_APASAT = 0
 STEAG_ELIBERAT = 1
 
-_S = {"sesiune": None, "ultima": None, "ceas": None, "legatura": None, "legat": False, "intrebare": None,
+_S = {"sesiune": None, "ultima": None, "ceas": None, "legatura": None, "legat": False, "intrebare": None, "cerere": None,
 	"inghite": None, "pornit": False}
 
 
@@ -268,6 +268,22 @@ def _laSchimbare(_element=None):
 		_rearmeaza()
 
 
+def laTrezire(temporizator=False):
+	"""Trezirea de om reia intervalul; un temporizator pastreaza termenul ales."""
+	if not _S["pornit"] or temporizator:
+		return
+	_S["ultima"] = monotonic()
+	# Invalidam raspunsul inainte de close, inclusiv daca vine dupa o alta intrebare.
+	_S["cerere"] = None
+	dlg, _S["intrebare"] = _S["intrebare"], None
+	if dlg is not None:
+		try:
+			dlg.close(False)
+		except Exception as e:
+			_jurnal("fereastra numaratorii la trezire: %r" % (e,))
+	_rearmeaza()
+
+
 def _ceas():
 	if _S["ceas"] is None:
 		from enigma import eTimer
@@ -396,19 +412,27 @@ def _intreaba(f):
 	sesiune = _S["sesiune"]
 	if sesiune is None or _S["intrebare"] is not None:
 		return
+	cerere = object()
+	_S["cerere"] = cerere
 	try:
 		from Screens.MessageBox import MessageBox
 		_ascundeProtectia()
 		_jurnal("numaratoarea de %d s pornita (%s)" % (NUMARATOARE_S, f))
-		dlg = sesiune.openWithCallback(lambda raspuns: _dupaIntrebare(f, raspuns), MessageBox, textIntrebare(f),
+		dlg = sesiune.openWithCallback(lambda raspuns: _dupaIntrebare(f, raspuns, cerere), MessageBox, textIntrebare(f),
 			type=MessageBox.TYPE_INFO, timeout=NUMARATOARE_S, timeout_default="acum")
-		_S["intrebare"] = dlg
+		if _S["cerere"] is cerere:
+			_S["intrebare"] = dlg
 	except Exception as e:
+		if _S["cerere"] is cerere:
+			_S["cerere"] = None
 		_jurnal("fereastra numaratorii: %r" % (e,))
 		_rearmeaza(AMANARE_S)
 
 
-def _dupaIntrebare(f, raspuns):
+def _dupaIntrebare(f, raspuns, cerere):
+	if _S["cerere"] is not cerere:
+		return
+	_S["cerere"] = None
 	_S["intrebare"] = None
 	if raspuns != "acum":
 		_rearmeaza()

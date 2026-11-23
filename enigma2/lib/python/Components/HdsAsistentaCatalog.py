@@ -35,7 +35,7 @@ _NUME_ARG = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 # concluziilor echipei)
 MAX_ARGUMENTE = 4
 MAX_SEMNE_ARG = 256
-MAX_SEMNE_ARG_LUNG = 2000
+MAX_SEMNE_ARG_LUNG = 16384
 
 
 def N_(text):
@@ -47,10 +47,12 @@ def N_(text):
 
 # aceleasi texte ca in catalog.json (grupuri si descrierea fiecarei operatii), ca sa fie traduse in cele 13 limbi
 TEXTE_CATALOG = (
+	N_("legăturile tunerelor, valorile și alegerile driverului, numai citire"),
+	N_('pune la loc buchetele care lipsesc din listă și curăță descrierile orfane, cu copie de siguranță'),
 	N_("Informații"), N_("Semnal"), N_("Jurnale"), N_("Setări"), N_("Probe"),
 	N_("starea receptorului (model, versiune, nucleu, memorie, disc, temperaturi)"),
 	N_("placa: procesorul, linia de comandă a nucleului, partițiile, modulele încărcate"),
-	N_("un fișier sau un dosar al sistemului (/proc, /sys, /etc, /var/log, jurnalele, /tmp), cu parolele ascunse"),
+	N_("un fișier sau un dosar al receptorului, integral, inclusiv parolele"),
 	N_("lista pachetelor instalate"),
 	N_("rețeaua, inclusiv numele Wi-Fi și adresa MAC"),
 	N_("tunerele și blocarea semnalului"),
@@ -60,28 +62,29 @@ TEXTE_CATALOG = (
 	N_("ultimele rânduri dintr-un jurnal"),
 	N_("jurnalul nucleului"),
 	N_("lista proceselor (numele, fără argumente)"),
-	N_("setările receptorului, cu parolele ca steluțe"),
+	N_("setările receptorului, inclusiv parolele în clar"),
 	N_("captură cu meniurile și imaginea canalului, ca pe televizor"),
 	N_("un mesaj scris pe ecranul televizorului"),
 	N_("o întrebare pe ecranul televizorului; răspunsul tău (Da, Nu sau o variantă) ajunge la echipă"),
 	N_("concluziile echipei (ce am găsit și ce am făcut), arătate pe receptor până apeși OK"),
 	N_("Ecran"), N_("Control"),
-	N_("textul ecranului, ca pe televizor; rândurile cu parole trec prin filtrul de secrete"),
-	N_("tastele telecomenzii, ca și cum echipa ar ține telecomanda (numai cu Control complet)"),
-	N_("un text scris în câmpul deschis pe ecran (numai cu Control complet, niciodată în parole)"),
+	N_("textul integral al ecranului, inclusiv câmpurile cu parole"),
+	N_("tastele telecomenzii, ca și cum echipa ar ține telecomanda"),
+	N_("un text scris în câmpul deschis pe ecran, inclusiv parole"),
 	N_("canalul deschis: serviciul, transponderul, tunerul, semnalul și modulul de acces"),
 	N_("fluxul prins acum de tunerul canalului deschis sau, cu un transponder dat, de un tuner liber, fără să schimbe "
 		"canalul: TSID, ONID, rețeaua și poziția satelitului din tabelele primite, numai citire"),
 	N_("transponderele din lista ta, cu numele canalelor"),
-	N_("pornește un canal din lista ta (numai cu Control complet)"),
-	N_("schimbă o setare (imagine, sunet, interfață, tunere, ora, ghid, rețea; niciodată parole, chei sau date "
-		"personale; numai cu Control complet)"),
-	N_("instalează un pachet din feedul oficial HD Satelit (numai cu Control complet)"),
-	N_("dezinstalează un plugin sau un modul (numai cu Control complet)"),
-	N_("repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire (numai cu Control "
-		"complet)"),
+	N_("pornește un canal din lista ta"),
+	N_("schimbă o setare a receptorului, inclusiv parole, chei și conturi"),
+	N_("instalează un pachet din sursele configurate ale receptorului"),
+	N_("dezinstalează un pachet al receptorului"),
+	N_("repornește interfața sau receptorul, cu anunț pe ecran; asistența continuă după repornire"),
 	N_("termină o actualizare rămasă la jumătate: caută în feedul HD Satelit, pune din nou pachetele imaginii rămase "
-		"neterminate și repornește interfața (numai cu Control complet)"),
+		"neterminate și repornește interfața"),
+	N_("rulează o comandă pe receptor, cu termenul cerut și ieșirea întreagă (fără scrierea imaginii în memorie și a "
+		"pornirii)"),
+	N_("scrie un fișier mic pe receptor (cel mult 12 KB, dintr-o dată), cu o copie a celui de dinainte; nu în /boot"),
 )
 
 

@@ -56,6 +56,9 @@
 #        un fir: 202, apoi POST ?stare=1 pana la "gata" sau "eroare" (GET numai cu ?token=, ca celelalte)
 #   POST /api/canale-stream-relay?fila=&buchet=&ref=&vrea=1|0  canalul trece prin Stream Relay (1) sau nu (0): butonul SR
 #        al randului (0.7.0, Components/HdsStreamRelay.py; aceeasi lista ca meniul listei de pe televizor)
+#   GET  /api/canale-fereastra-iptv                 fereastra pasilor la canalele IPTV (fi=1|0), config.usage.hds_iptv_fereastra
+#   POST /api/canale-fereastra-iptv-schimba?vrea=1|0  fereastra pornita (1) sau oprita (0), casuta de sus a paginii; aceeasi
+#        setare ca pe televizor (Functiile televiziunii prin internet); numai fereastra, playerul ramane neschimbat
 #   GET  /api/canale-sigla?p=<nume>                 sigla (PNG), numai un nume gasit pe disc
 #   GET  /canale                                    pagina
 #
@@ -1593,11 +1596,39 @@ def _grupa_loc(c):
 	return GRUPA_ONLINE if d is None or d.get("id") == "radioonline" else "%s:%s" % (GRUPA_ONLINE, d["id"])
 
 
+class VedereGrupe(list):
+	"""Grupele si hartile lor apartin aceleiasi publicari complete."""
+
+	def __init__(self, randuri, semn, poz, parinti, parinte, nume):
+		super().__init__(randuri)
+		self.semn_om = semn
+		self.versiune = _versiune_om(semn)
+		self.poz_grupe = poz
+		self.parinti_grupe = parinti
+		self.parinte_grupa = parinte
+		self.nume_grupe = nume
+
+
+def _versiune_om(semn):
+	"""Semn opac pentru pagina, fara nume de fisiere sau datele canalelor."""
+	return hashlib.sha256(repr(semn).encode("utf-8")).hexdigest()
+
+
 def gen_grupe(lista, X):
 	"""Grupele listei (numai „Toate canalele”), facute o data pe lista: [(cheie, nume, [randuri])], in ordinea paginii."""
-	if lista.grupe is not None:
+	semn_om = _semn_om()
+	if lista.grupe is not None and getattr(lista, "semn_om", None) == semn_om:
 		return lista.grupe
 	return (yield from gen_unul_pe_fel(("grupe", id(lista)), lambda: _gen_grupe(lista, X)))
+
+
+def _semn_om():
+	"""Semnul vederii complete din fundal, fara citiri pe firul paginii."""
+	try:
+		from Components import HdsIptvSurse as I
+		return I.semnaturaOm()
+	except Exception:
+		return None
 
 
 def _harta_om():
@@ -1624,10 +1655,11 @@ def _cale_ref(ref):
 
 
 def _gen_grupe(lista, X):
-	# O pregatire intrerupta se poate relua, fara numere ramase de la incercarea abandonata.
+	# Pregatirea ramane privata pana la ultima instructiune, inclusiv dupa o intrerupere.
+	semn_om = _semn_om()
 	om = _harta_om()
-	lista.parinti_grupe = {}
-	lista.poz_grupe = {}
+	parinti_grupe = {}
+	poz_grupe = {}
 	pe_cheie = {}
 	primul = {}
 	online = {}
@@ -1637,9 +1669,9 @@ def _gen_grupe(lista, X):
 		p = "p-" + hashlib.sha256(identitate.encode("utf-8")).hexdigest()[:24]
 		k = "g-" + hashlib.sha256(fisier.encode("utf-8")).hexdigest()[:24]
 		online[fisier] = (k, curat(nume), p)
-		lista.parinti_grupe.setdefault(p, {"g": p, "nume": curat(furnizor), "n": 0})
-	lista.parinte_grupa = {}
-	lista.nume_grupe = {}
+		parinti_grupe.setdefault(p, {"g": p, "nume": curat(furnizor), "n": 0})
+	parinte_grupa = {}
+	nume_grupe = {}
 	apartenente = {}
 	for fisier, refs in getattr(lista.index, "grupe_online_canale", {}).items():
 		meta = online.get(fisier)
@@ -1660,11 +1692,11 @@ def _gen_grupe(lista, X):
 			for j, (k, nume, p) in enumerate(metadate):
 				if j % UNITATE == UNITATE - 1:
 					yield
-				lista.parinte_grupa[k] = p
-				lista.nume_grupe[k] = nume
-				lista.parinti_grupe[p]["n"] += 1
+				parinte_grupa[k] = p
+				nume_grupe[k] = nume
+				parinti_grupe[p]["n"] += 1
 				randuri = pe_cheie.setdefault(k, [])
-				lista.poz_grupe.setdefault(r.k, (k, len(randuri)))
+				poz_grupe.setdefault(r.k, (k, len(randuri)))
 				randuri.append(r)
 				primul.setdefault(k, c)
 			continue
@@ -1673,15 +1705,15 @@ def _gen_grupe(lista, X):
 			if getattr(c, "tip", None) == "iptv":
 				# O lista veche fara metadate ramane online; numele grupei este cel din buchet.
 				k = "g-" + hashlib.sha256((c.buchet or c.ansamblu or "iptv").encode("utf-8")).hexdigest()[:24]
-				lista.nume_grupe[k] = curat(c.ansamblu) or _t("Online")
+				nume_grupe[k] = curat(c.ansamblu) or _t("Online")
 			elif om and k in (GRUPA_ALTE, GRUPA_ONLINE):
 				# un canal din buchetele de internet ale omului: grupa cu numele buchetului, ca pe televizor sub "IPTV"
 				b = om.get(_cale_ref(r.ref))
 				if b is not None:
 					k = "b-" + hashlib.sha256(b[0].encode("utf-8")).hexdigest()[:24]
-					lista.nume_grupe[k] = curat(b[1]) or b[0]
+					nume_grupe[k] = curat(b[1]) or b[0]
 		randuri = pe_cheie.setdefault(k, [])
-		lista.poz_grupe.setdefault(r.k, (k, len(randuri)))
+		poz_grupe.setdefault(r.k, (k, len(randuri)))
 		randuri.append(r)
 		primul.setdefault(k, r.canal)
 	# In grupele existente se pastreaza inclusiv ordinea si repetarile din buchetul receptorului.
@@ -1696,16 +1728,22 @@ def _gen_grupe(lista, X):
 				yield
 			r = lista.dupa_cheie.get(ref)
 			if r is not None:
-				if r.k not in vazute and lista.poz_grupe.get(r.k, (None,))[0] == k:
-					lista.poz_grupe[r.k] = (k, len(randuri))
+				if r.k not in vazute and poz_grupe.get(r.k, (None,))[0] == k:
+					poz_grupe[r.k] = (k, len(randuri))
 				vazute.add(r.k)
 				randuri.append(r)
 		pe_cheie[k] = randuri
 	ordine_online = {m[0]: i for i, m in enumerate(online.values())}
 	def ordine(k):
 		return (1, 1, ordine_online[k]) if k in ordine_online else ordine_grupa(k, X)
-	lista.grupe = [(k, lista.nume_grupe.get(k) or nume_grupa(k, primul[k], X), pe_cheie[k]) for k in sorted(pe_cheie, key=ordine)]
-	return lista.grupe
+	grupe = VedereGrupe([(k, nume_grupe.get(k) or nume_grupa(k, primul[k], X), pe_cheie[k])
+		for k in sorted(pe_cheie, key=ordine)], semn_om, poz_grupe, parinti_grupe, parinte_grupa, nume_grupe)
+	# Aliasurile vechi raman pentru cititorii sincroni. Cererile pastreaza obiectul grupe.
+	lista.poz_grupe, lista.parinti_grupe = poz_grupe, parinti_grupe
+	lista.parinte_grupa, lista.nume_grupe = parinte_grupa, nume_grupe
+	lista.semn_om = semn_om
+	lista.grupe = grupe
+	return grupe
 
 
 def filtreaza(lista, text, sel, X):
@@ -1716,17 +1754,17 @@ def filtreaza(lista, text, sel, X):
 # ---------------------------------------------------------------- cererile
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, fara token; cheile numai litere mici si „_”."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:24]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not re.match(r"^[a-z_]{1,12}$", cheie):
+		if cheie == "token":
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:(MAX_EPG * 80 if cheie == "refs" else MAX_REF)].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -1899,6 +1937,14 @@ def cere_sigla(M, nume, dupa):
 	return LA_FIR
 
 
+def _mesajReparatieBuchete():
+	try:
+		from Components import HdsReparaBuchete
+		return HdsReparaBuchete.mesaj_web()
+	except ImportError:
+		return ""
+
+
 def gen_buchete_raspuns(argumente_, M=None):
 	"""GET /api/canale-buchete -> (cod, corp)."""
 	M = _m(M)
@@ -1956,7 +2002,8 @@ def gen_buchete_raspuns(argumente_, M=None):
 		lista = lista[:1] + virtuale + lista[1:]
 		lista = [b for b in lista if b["numar"] > 0]
 	return 200, {"result": True, "tip": tip, "buchete": lista, "ales": ales, "multibuchet": bool(M.multibuchet()),
-		"poz_acum": str(poz_acum) if poz_acum not in (None, "") else None}
+		"poz_acum": str(poz_acum) if poz_acum not in (None, "") else None,
+		"reparatie_buchete": _mesajReparatieBuchete()}
 
 
 # ordinea listelor in caseta de alegere a paginii: DVB-T2 din satelit dupa canalele obisnuite, fiindca
@@ -2220,7 +2267,7 @@ def gen_lista_raspuns(argumente_, M=None):
 		gasite = next((randuri for k, _n, randuri in grupe if k == grupa), [])
 		canale = len(gasite)
 		# canalul de pe televizor ascuns ca varianta: cursorul pe randul aratat in locul lui
-		loc = lista.poz_grupe.get(lista.arata_k.get(cheie_acum, cheie_acum))
+		loc = grupe.poz_grupe.get(lista.arata_k.get(cheie_acum, cheie_acum))
 		acum_poz = loc[1] if loc is not None and loc[0] == grupa else -1
 	elif pe_grupe and lista.ascunse:
 		# lista plata a paginii, fara text si fara filtre: o singura varianta a fiecarui canal, ca pe grupe (playlisturile
@@ -2268,6 +2315,7 @@ def gen_lista_raspuns(argumente_, M=None):
 	}
 	if grupa is not None:
 		corp["grupa"] = grupa
+		corp["versiune_grupe"] = grupe.versiune
 		return 200, corp
 	gol = fel_buchet_gol(M, lista) if de_la == 0 else None
 	if gol is not None:
@@ -2357,8 +2405,8 @@ def gen_antete(M, X, lista, tip, acum, grupuri, sel):
 		if r is not None:
 			# canalul de pe televizor ascuns ca varianta: grupa randului aratat in locul lui
 			r = lista.dupa_cheie.get(lista.arata_k.get(r.k), r)
-			acum_grupa = lista.poz_grupe.get(r.k, (None, -1))[0]
-	parinti = [dict(p, nt=X.text_numar(p["n"])) for p in lista.parinti_grupe.values() if p["n"]]
+			acum_grupa = grupe.poz_grupe.get(r.k, (None, -1))[0]
+	parinti = [dict(p, nt=X.text_numar(p["n"])) for p in grupe.parinti_grupe.values() if p["n"]]
 	return {
 		"result": True,
 		"tip": tip,
@@ -2374,10 +2422,11 @@ def gen_antete(M, X, lista, tip, acum, grupuri, sel):
 		"acum": acum,
 		"acum_poz": -1,
 		"acum_grupa": acum_grupa,
-		"acum_grupa_poz": lista.poz_grupe.get(r.k, (None, -1))[1] if acum_grupa else -1,
+		"acum_grupa_poz": grupe.poz_grupe.get(r.k, (None, -1))[1] if acum_grupa else -1,
+		"versiune_grupe": grupe.versiune,
 		"parinti": parinti,
 		"grupe": [{"g": k, "nume": nume, "n": len(randuri), "nt": _text_grupa(X, len(randuri), k in neprinse),
-			"neprins": k in neprinse, "p": lista.parinte_grupa.get(k)} for k, nume, randuri in grupe],
+			"neprins": k in neprinse, "p": grupe.parinte_grupa.get(k)} for k, nume, randuri in grupe],
 		"numai_radio": numai_radio,
 		"grupuri": _grupuri_json(grupuri, sel, X),
 		"ora": int(M.acum()),
@@ -2457,7 +2506,7 @@ def stare_acum(M=None):
 	except Exception:
 		standby = False
 	a.update({"result": True, "emisiune": emisiune, "standby": standby, "ora": int(M.acum()),
-		"transmise": _transmise(M), "progres_colorat": progres_colorat()})
+		"transmise": _transmise(M), "progres_colorat": progres_colorat(), "versiune_grupe": _versiune_om(_semn_om())})
 	return 200, a
 
 
@@ -2600,6 +2649,39 @@ def gen_pornire(argumente_, M=None):
 	if vrea == "1":
 		return 200, {"result": True, "pn": 1, "message": _t("Receptorul va porni pe acest canal după o repornire.")}
 	return 200, {"result": True, "pn": 0, "message": _t("Receptorul va porni pe ultimul canal urmărit.")}
+
+
+def _setare_fereastra_iptv(C=None):
+	"""config.usage.hds_iptv_fereastra (CX6, Components/UsageConfig.py; on TV in Functiile televiziunii prin internet),
+	or None on an image without it."""
+	if C is None:
+		from Components.config import config as C
+	return getattr(getattr(C, "usage", None), "hds_iptv_fereastra", None)
+
+
+def fereastra_iptv(argumente_=None, C=None):
+	"""GET /api/canale-fereastra-iptv, POST /api/canale-fereastra-iptv-schimba?vrea=1|0 -> (cod, corp): the loading
+	window of the IPTV channels (the steps connecting / loading / starting) shown (1) or not (0), the same setting as on
+	TV. Only the window: the player, the
+	buffers, the real error messages and the times in the log stay as they are. The value is saved like Green in a
+	setup screen (el.save(), in memory); the file is written by the heartbeat of Components/HdsPaznic.py
+	(configfile.salveazaSchimbarile), so no disk write here, on the main loop."""
+	el = _setare_fereastra_iptv(C)
+	if el is None:
+		return 409, {"result": False, "message": _t("Fereastra pașilor IPTV nu se poate alege pe acest receptor.")}
+	vrea = (argumente_ or {}).get("vrea")
+	if vrea is None:
+		return 200, {"result": True, "fi": 1 if el.value else 0}
+	if vrea not in ("0", "1"):
+		return 400, {"result": False, "message": _t("Nu s-a cerut ce să se facă."), "camp": "vrea"}
+	nou = vrea == "1"
+	if bool(el.value) != nou:
+		el.value = nou
+	el.save()
+	_jurnal("fereastra pasilor IPTV din web: %s" % ("da" if nou else "nu"))
+	if nou:
+		return 200, {"result": True, "fi": 1, "message": _t("Fereastra cu pașii se arată la pornirea canalelor IPTV.")}
+	return 200, {"result": True, "fi": 0, "message": _t("Canalele IPTV pornesc fără fereastra cu pașii.")}
 
 
 def _redenumire(R=None):
@@ -3120,6 +3202,22 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 				return self._raspunde(request, corp, cod)
 			return self._porneste(request)
 
+	class ReparaBucheteResource(baza):
+		"""POST: aceeasi recuperare ca pe TV, cu poarta comuna a scrierilor."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			from Components import HdsReparaBuchete as R
+			if R._LUCRU is None and not R.cerere(la_gata=lambda rez: None):
+				return self._eroare(request, _t("Lista de canale este în lucru. Încearcă din nou peste câteva secunde."), 409)
+			return self._raspunde(request, R.stare_web(), 202)
+
+	class StareReparatieBucheteResource(baza):
+		"""GET: numai starea din memorie, fara pornire sau scriere."""
+		def render_GET(self, request):
+			from Components import HdsReparaBuchete as R
+			return self._raspunde(request, R.stare_web())
+
 	class PornesteResource(_PeFelii):
 		"""POST /api/canale-porneste: schimba canalul pe televizor; trece inaintea listelor in lucru."""
 		schimbaCeva = True
@@ -3141,8 +3239,6 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 
 		def render_POST(self, request):
 			from . import acces_extern as A, aparate_web as AW, tv_web as TV, plugin as P
-			if P.PARAM_JETON in request.args:
-				return self._eroare(request, _t("Playlistul se descarcă numai cu browserul conectat."), 403)
 			Mx = _m(M)
 			if _planificator(Mx).numar() >= MAX_LUCRARI:
 				return self._eroare(request, _t("Receptorul are prea multe cereri în lucru. Încearcă din nou."), 503)
@@ -3242,6 +3338,35 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 				return self._raspunde(request, corp, cod)
 			except Exception as e:
 				_jurnal("redenumirea buchetului: %s" % type(e).__name__)
+				return self._eroare(request, _t("Eroare pe receptor."), 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
+	class FereastraIptvResource(baza):
+		"""GET /api/canale-fereastra-iptv: numai citire, setarea ferestrei pasilor IPTV."""
+
+		def render_GET(self, request):
+			try:
+				cod, corp = fereastra_iptv()
+				return self._raspunde(request, corp, cod)
+			except Exception as e:
+				_jurnal("fereastra IPTV: %s" % type(e).__name__)
+				return self._eroare(request, _t("Eroare pe receptor."), 500)
+
+	class FereastraIptvSchimbaResource(baza):
+		"""POST /api/canale-fereastra-iptv-schimba?vrea=1|0: fereastra pasilor IPTV pornita sau oprita, ca pe televizor."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			a = argumente(request)
+			if a.get("vrea") is None:
+				a["vrea"] = ""
+			try:
+				cod, corp = fereastra_iptv(a)
+				return self._raspunde(request, corp, cod)
+			except Exception as e:
+				_jurnal("fereastra IPTV: %s" % type(e).__name__)
 				return self._eroare(request, _t("Eroare pe receptor."), 500)
 
 		def render_GET(self, request):
@@ -3358,6 +3483,8 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 
 	api = {
 		b"canale-buchete": BucheteResource(),
+		b"canale-repara-buchete": ReparaBucheteResource(),
+		b"canale-reparatie-buchete": StareReparatieBucheteResource(),
 		b"canale-lista": ListaResource(),
 		b"canale-epg": EpgResource(),
 		b"canale-acum": AcumResource(),
@@ -3369,6 +3496,8 @@ def rute(baza, resource, NOT_DONE_YET=None, M=None):
 		b"canale-pornire": PornireResource(),
 		b"canale-redenumeste-buchet": RedenumesteBuchetResource(),
 		b"canale-stream-relay": StreamRelayResource(),
+		b"canale-fereastra-iptv": FereastraIptvResource(),
+		b"canale-fereastra-iptv-schimba": FereastraIptvSchimbaResource(),
 		b"canale-sigla": SiglaResource(),
 	}
 	return api, PaginaResource()
@@ -3468,6 +3597,9 @@ PAGINA = """<!DOCTYPE html>
   .leg-editor{margin-left:auto;color:#7fb8ff;min-height:44px;display:inline-flex;align-items:center;}
   button.leg-editor{background:none;border:0;padding:0;font:inherit;cursor:pointer;}
   button.leg-editor[hidden]{display:none;}
+  .fereastra-iptv{display:inline-flex;align-items:center;gap:6px;min-height:44px;cursor:pointer;}
+  .fereastra-iptv[hidden]{display:none;}
+  .fereastra-iptv input{width:20px;height:20px;margin:0;}
   .recente{flex:1 1 100%;font-size:.92rem;}
   .recente summary{cursor:pointer;color:var(--text-slab);}
   .recente ol{list-style:none;margin:.4rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem;}
@@ -3615,11 +3747,13 @@ __LIVE_STIL__
 <main>
 <div class="sus">
   <h1>Canale</h1>
+  <p id="reparatie-buchete" role="status" hidden></p>
   <div class="pe-tv" id="peTv" aria-live="polite"></div>
   <details class="recente" id="recente"><summary>Canale recente</summary><ol id="recenteLista"></ol></details>
   <button type="button" class="leg-editor" id="redenumesteBuchet" hidden>Redenumește buchetul</button>
   <a class="leg-editor" href="/editor-canale#buchet-nou">Creează buchet nou</a>
   <a class="leg-editor" href="/editor-canale">Editează lista de canale</a>
+  <label class="fereastra-iptv" id="fereastraIptvEt" hidden><input type="checkbox" id="fereastraIptv"><span>Fereastra de încărcare la canalele IPTV</span></label>
 </div>
 <div class="bara-sus" id="baraSus">
 <div class="comenzi">
@@ -3669,7 +3803,7 @@ var S = {transmise: [], tip: "tv", buchet: null, text: "", ales: {}, randuri: []
   filtreEl: {}, semnFiltre: null,
   epg: {}, el: {}, coada: [], epgInCurs: false, ofset: 0, acum: null, acumPoz: -1, pornire: false, grupuri: [],
   fundal: 0, grupat: false, grupe: [], deschise: {}, grupaAcum: null, elGrupe: {}, spreAcum: false, coadaGrupe: [],
-  grupaInCurs: false, grupaAcumPoz: -1, bucheteGen: 0};
+  grupaInCurs: false, grupaAcumPoz: -1, bucheteGen: 0, versiuneGrupe: null};
 // emisiunile se cer numai pentru randurile care ajung aproape de ecran (o grupa inchisa sau toate grupele deschise nu
 // cer sute de canale deodata)
 var VEDERE = window.IntersectionObserver ? new IntersectionObserver(function(intrari){
@@ -3775,7 +3909,7 @@ function arataFila(){
   $("filaTv").setAttribute("aria-selected", S.tip === "tv" ? "true" : "false");
   $("filaRadio").setAttribute("aria-selected", S.tip === "radio" ? "true" : "false");
 }
-function incarcaBuchete(){
+function incarcaBuchete(doarCitire, pastreaza){
   var gen = ++S.bucheteGen, tip = S.tip;
   S.gen += 1; S.fundal += 1;
   arataFila();
@@ -3783,15 +3917,42 @@ function incarcaBuchete(){
   return cerereLista("/api/canale-buchete?fila=" + tip, function(){ return gen === S.bucheteGen && tip === S.tip; }).then(function(d){
     if(!d || gen !== S.bucheteGen){ return; }
     if(!d.result){ $("numar").textContent = d.message || "Listele nu s-au putut citi."; return; }
+    $("reparatie-buchete").textContent = d.reparatie_buchete || "";
+    $("reparatie-buchete").hidden = !d.reparatie_buchete;
     var s = $("buchet"); gol(s);
     d.buchete.forEach(function(b){
       var o = el("option", "", b.nume + " (" + b.numar + ")"); o.value = b.id; o.dataset.nume = b.nume; s.appendChild(o);
     });
     // Initial vin numai antetele din lista receptorului. Randurile se cer cand omul deschide grupa.
-    S.buchet = "toate";
-    s.value = "toate";
+    var ales = pastreaza && d.buchete.some(function(b){ return b.id === S.buchet; }) ? S.buchet : "toate";
+    S.buchet = ales;
+    s.value = ales;
     incarcaLista();
+    if(!doarCitire){ reparaBuchetele(); }
   }).catch(function(){ if(gen === S.bucheteGen){ $("numar").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; } });
+}
+function reparaBuchetele(){
+  if(S.reparatieInceputa){ return; }
+  S.reparatieInceputa = true;
+  var inceput = Date.now();
+  function arata(text){
+    $("reparatie-buchete").textContent = text || "";
+    $("reparatie-buchete").hidden = !text;
+  }
+  function pas(d){
+    if(!d.result){ arata(d.reparatie_buchete || d.message); return; }
+    if(d.ocupat){
+      if(Date.now() - inceput > 60000){ arata("Verificarea buchetelor continuă pe receptor. Reîncarcă pagina mai târziu."); return; }
+      return new Promise(function(gata){ setTimeout(gata, 250); }).then(function(){
+        return cerere("/api/canale-reparatie-buchete").then(pas);
+      });
+    }
+    MEMORIE = {};
+    return incarcaBuchete(true, true);
+  }
+  return cerere("/api/canale-repara-buchete", "POST").then(pas).catch(function(){
+    arata("Nu am putut afla rezultatul verificării buchetelor. Reîncarcă pagina.");
+  });
 }
 function cuFiltre(){ return Object.keys(S.ales).some(function(g){ return S.ales[g].length; }); }
 // "Toate canalele" fara text si fara filtre = pe grupe; altfel lista plata, peste toate canalele listei alese
@@ -3822,6 +3983,7 @@ function incarcaGrupele(gen){
     potriveste(d.ora);
     primaPagina(d);
     S.grupe = d.grupe || [];
+    S.versiuneGrupe = d.versiune_grupe;
     S.numaiRadio = d.numai_radio || [];
     S.grupaAcum = d.acum_grupa || null;
     S.grupaAcumPoz = typeof d.acum_grupa_poz === "number" ? d.acum_grupa_poz : -1;
@@ -3932,6 +4094,7 @@ function deschideGrupa(k){
 function cerereGrupa(tip, k, de_la, gen){
   var q = new URLSearchParams();
   q.set("fila", tip); q.set("buchet", "toate"); q.set("grupa", k); q.set("de_la", de_la); q.set("cate", PAGINA_GRUPA);
+  q.set("versiune_grupe", S.versiuneGrupe || "");
   var cheie = q.toString(), m = dinMemorie(cheie);
   return (m ? Promise.resolve(m) : cerereLista("/api/canale-lista?" + cheie, function(){ return gen === S.gen && S.deschise[k]; })).then(function(d){
     if(!m && gen === S.gen){ tineMinte(cheie, d); }
@@ -3966,6 +4129,7 @@ function pompaGrupe(){
   cerereGrupa(S.tip, k, de_la, gen).then(function(d){
       if(gen !== S.gen){ return; }
       if(!d){ o.cerut = false; if(o.incarcare){ o.incarcare.remove(); } gata(); return; }
+      if(d.result && d.versiune_grupe !== S.versiuneGrupe){ incarcaLista(); return; }
       if(o.incarcare && o.incarcare.parentNode){ o.incarcare.parentNode.removeChild(o.incarcare); }
       o.cerut = false;
       if(!d.result){
@@ -4402,7 +4566,11 @@ function arataEpg(o){
   puneEmisiune(o.urm, d ? d.urm : null);
   var p = procent(a);
   o.progres.classList.toggle("ascuns", p < 0);
-  if(p >= 0){ o.umplut.style.width = (p * 100).toFixed(1) + "%"; }
+  if(p >= 0){
+    o.umplut.style.width = (p * 100).toFixed(1) + "%";
+    // degradeul intins pe toata bara, nu strans in partea umpluta (ca pe televizor)
+    o.umplut.style.backgroundSize = p > 0 ? (100 / p).toFixed(2) + "% 100%" : "";
+  }
 }
 function cereEpg(refs){
   refs.forEach(function(r){ if(S.coada.indexOf(r) === -1){ S.coada.push(r); } });
@@ -4560,6 +4728,7 @@ function citesteRecente(){
   }).catch(function(){});
 }
 function citesteAcum(){
+  var gen = S.gen;
   return cerere("/api/canale-acum").then(function(d){
     if(!d.result){ return; }
     puneStilProgres(d.progres_colorat);
@@ -4567,6 +4736,7 @@ function citesteAcum(){
     arataAcum(d, d.emisiune);
     marcheaza(d.cheie);
     marcheazaTransmise(d.transmise);
+    if(gen === S.gen && S.grupat && !S.incarca && S.versiuneGrupe !== null && d.versiune_grupe !== S.versiuneGrupe){ incarcaLista(); }
   }).catch(function(){});
 }
 function laAcum(){
@@ -4672,8 +4842,29 @@ setInterval(reimprospateazaEpg, 30000);
 })();
 aseazaBara();
 if(window.ResizeObserver && document.querySelector(".hds-antet")){ new ResizeObserver(aseazaBara).observe(document.querySelector(".hds-antet")); }
+// fereastra pasilor la canalele IPTV (config.usage.hds_iptv_fereastra): aceeasi setare ca pe televizor; casuta apare
+// numai cand receptorul o are
+function citesteFereastraIptv(){
+  cerere("/api/canale-fereastra-iptv").then(function(d){
+    if(!d.result){ return; }
+    $("fereastraIptv").checked = !!d.fi;
+    $("fereastraIptvEt").hidden = false;
+  }).catch(function(){});
+}
+$("fereastraIptv").addEventListener("change", function(){
+  var c = $("fereastraIptv"), vrea = c.checked ? 1 : 0;
+  c.disabled = true;
+  var q = new URLSearchParams();
+  q.set("vrea", String(vrea));
+  cerere("/api/canale-fereastra-iptv-schimba", "POST", q).then(function(d){
+    mesaj(d.message || "Gata.", !d.result);
+    c.checked = d.result ? !!d.fi : !vrea;
+  }).catch(function(){ c.checked = !vrea; mesaj("Receptorul nu răspunde.", true); })
+    .then(function(){ c.disabled = false; });
+});
 incarcaBuchete();
 citesteAcum();
+citesteFereastraIptv();
 if($("recente")){ $("recente").addEventListener("toggle", citesteRecente); }
 </script>
 </body>
@@ -4690,6 +4881,7 @@ TEXTE_PAGINA = {
 		N_("Editează lista de canale"),
 		N_("Creează buchet nou"),
 		N_("Redenumește buchetul"),
+		N_("Fereastra de încărcare la canalele IPTV"),
 		N_("Radio"),
 		N_("Filtre<span class=\"nrf\" id=\"nrFiltre\"></span>"),
 		N_("Șterge filtrele"),
@@ -4760,6 +4952,8 @@ TEXTE_PAGINA = {
 		N_("Pe televizor:"),
 		N_("· în standby"),
 		N_("Încă nu ai schimbat canalul. Canalele văzute apar aici."),
+		N_("Verificarea buchetelor continuă pe receptor. Reîncarcă pagina mai târziu."),
+		N_("Nu am putut afla rezultatul verificării buchetelor. Reîncarcă pagina."),
 	),
 }
 

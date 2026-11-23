@@ -64,6 +64,8 @@ int eDVBCISession::parseLengthField(const unsigned char *pkt, int &len)
 
 void eDVBCISession::sendAPDU(const unsigned char *tag, const void *data, int len)
 {
+	eDebug("[CI%d TX] session %u APDU %02x %02x %02x length %d", slot->getSlotID(), session_nb,
+		tag[0], tag[1], tag[2], len);
 	unsigned char pkt[len+3+4];
 	int l;
 	memcpy(pkt, tag, 3);

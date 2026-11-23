@@ -28,6 +28,8 @@ Se cheama din HdsModuleAcces (inainte de lista aratata si dupa pornirea interfet
 radacina de proba). Nu arunca."""
 import os
 import posixpath
+import re
+import stat
 import threading
 
 try:
@@ -51,6 +53,39 @@ RUTE = '/proc/net/route'
 TERMEN_UPDATE_S = 300
 TERMEN_INSTALARE_S = 600
 _reinstalare = {'lucrare': None}
+_NUME_SCRIPT = re.compile(r'^[A-Za-z][A-Za-z0-9_-]{0,31}\.[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$')
+_DATE_ACCES = ('.conf', '.server', '.user', '.key', '.keys')
+
+
+def _drept_script(sistem, cale):
+	"""DSC7 (REGULA 0, 22.11.2026): scriptul de modul fara drept de rulare il primeste (chmod +x). Raman numai verificarile
+	de functionare: fisier obisnuit (nu legatura sau dosar), fara drept de rulare deja pus, nu e gol, opkg nu lucreaza."""
+	try:
+		st = os.stat(cale, follow_symlinks=False)
+		if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o111 or st.st_size == 0 or opkg_lucreaza(sistem):
+			return False
+		os.chmod(cale, stat.S_IMODE(st.st_mode) | 0o111)
+		return True
+	except (OSError, IOError):
+		return False
+
+
+def _drepturi_scripturi(sistem):
+	"""Dreptul de rulare pentru scripturile modulelor din /etc/init.d care nu il au (pachetele altora uita uneori chmod)."""
+	if opkg_lucreaza(sistem):
+		return []
+	try:
+		dosar = sistem.cale(DOSAR_SCRIPTURI)
+		feluri_ = feluri(sistem)
+		facute = []
+		for nume in sorted(os.listdir(dosar)):
+			if not _NUME_SCRIPT.fullmatch(nume) or nume.lower().endswith(_DATE_ACCES):
+				continue
+			if e_script_modul(nume, feluri_) and _drept_script(sistem, os.path.join(dosar, nume)):
+				facute.append(('drept de rulare', DOSAR_SCRIPTURI + '/' + nume))
+		return facute
+	except (OSError, IOError):
+		return []
 
 
 def _jurnal(text):
@@ -317,22 +352,32 @@ def _automat(sistem):
 	return sistem.radacina in ('/', '') and threading.current_thread() is threading.main_thread()
 
 
-def sincronizeaza(sistem=None):
+def reinstaleaza_daca_lipsesc(sistem):
+	"""Pe firul enigma2, dupa o sincronizare facuta pe alt fir (PSC6, HdsModuleAcces.pregateste_la_schimbare): reinstalarea
+	automata a scripturilor sterse fara copie, cu aceleasi conditii ca la sfarsitul lui sincronizeaza. Nu arunca."""
+	try:
+		if LIPSA_FARA_COPIE and _automat(sistem):
+			porneste_reinstalarea(sistem)
+	except Exception as e:
+		_jurnal("reinstalarea: %r" % (e,))
+
+
+def sincronizeaza(sistem=None, reinstalare=True):
 	"""Copiaza scripturile modulelor instalate si le pune la loc pe cele sterse (vezi sus). [(fapta, cale)]: ('copiat', ...),
-	('pus la loc', ...), ('copie stearsa', <pachet>/<nume>), ('lipsa fara copie', ...) (o data, cand apare). Nu arunca."""
+	('pus la loc', ...), ('copie stearsa', <pachet>/<nume>), ('lipsa fara copie', ...) (o data, cand apare). `reinstalare`=False:
+	fara reinstalarea automata de la sfarsit (sincronizarea merge pe alt fir; reinstaleaza_daca_lipsesc vine apoi pe firul
+	enigma2). Nu arunca."""
 	sistem = sistem or Sistem()
 	try:
 		with _lacat:
-			facute = _sincronizeaza(sistem)
+			facute = _drepturi_scripturi(sistem)
+			facute.extend(_sincronizeaza(sistem))
 	except Exception as e:
 		_jurnal("sincronizarea: %r" % (e,))
 		return []
 	for fapta, cale in facute:
 		if fapta != 'copiat':
 			_jurnal("%s %s" % (fapta, cale))
-	try:
-		if LIPSA_FARA_COPIE and _automat(sistem):
-			porneste_reinstalarea(sistem)
-	except Exception as e:
-		_jurnal("reinstalarea: %r" % (e,))
+	if reinstalare:
+		reinstaleaza_daca_lipsesc(sistem)
 	return facute

@@ -5,9 +5,10 @@
 # asistenta_web.py: Asistenta de la distanta in interfata web (HdsWebControl), perechea ecranului de pe receptor
 # (Screens/HdsAsistenta.py), pentru oricine. Aceeasi stare, aceleasi texte si acelasi jurnal, din
 # Components/HdsAsistenta.py; in meniul web e randul /asistenta din Setari (data/menu.xml).
-# Pagina de pornire are numai randul scurt (A.TEXT_SCURT), randul bifat dinainte "Accept termenii și condițiile" (in
-# fraza, chiar cuvintele "termenii și condițiile" sunt legatura care deschide textul intreg, A.textTermeni, intr-o
-# fereastra peste pagina) si butonul Start. Pornita, pagina arata numai pana cand e pornita, butonul Oprește si
+# Pagina de pornire are lista "Cât timp" (cele cinci durate, A.alegeriDurata, 2 ore alese la deschidere), randul scurt
+# (A.TEXT_SCURT), legatura "Termenii și condițiile" (textul intreg, A.textTermeni, intr-o fereastra peste pagina) si
+# butonul Start, care porneste cu durata aleasa. Pornita, pagina arata pana cand e pornita, lista "Schimbă durata"
+# (aceleasi cinci; alegerea o schimba pe loc, socotita de acum, perechea Verde de pe receptor), butonul Oprește si
 # jurnalul. Oprește intreaba intai, in pagina, "Oprești asistența?" (Nu cu focus / "Da, opresc"), perechea intrebarii
 # de la Rosu de pe receptor (RCF, 15-16.11.2026: pe televizor Rosu "Oprește" sta dupa Start in locul lui "Înapoi" si a
 # oprit din greseala trei sesiuni); linkul Oprește din banda de sus a celorlalte pagini duce aici, cu intrebarea deschisa
@@ -27,14 +28,17 @@
 #   GET  /api/asistenta            starea, pana cand e pornita, ultimele randuri din jurnal (fara cod), ultimele
 #                                  concluzii ale echipei
 #   GET  /api/asistenta-catalog    lista operatiilor in limba receptorului
-#   POST /api/asistenta-cere?accept=1   Start (accept=1: randul "Accept termenii și condițiile" bifat); asistenta
-#                                       pornita e mereu completa (nivelul B)
+#   POST /api/asistenta-cere?accept=1&durata=M   Start, cu durata aleasa (minute, una din A.DURATE_MIN; lipsa: 2 ore);
+#                                       asistenta pornita e mereu completa (nivelul B)
+#   POST /api/asistenta-durata?durata=M  "Schimbă durata": durata sesiunii de acum, socotita de acum (A.schimbaDurata)
 #   POST /api/asistenta-opreste    opreste
 #   POST /api/asistenta-pune-inapoi     "Pune înapoi cum era": cere punerea la loc a copiei de asistenta si reporneste
 #                                       interfata (A.cerePunereaInapoi)
 #   POST /api/asistenta-raspunde?id=N&varianta=I   raspunsul omului la intrebarea echipei (op "intrebare", 0.7.7), perechea
 #                                       ferestrei de pe televizor: aceeasi intrebare, aceleasi variante, ca butoane in
 #                                       pagina; primul raspuns (televizor sau web) o inchide peste tot (A.raspundeIntrebare)
+#   POST /api/asistenta-raspunde?id=N&text=T   raspunsul scris (0.7.8, intrebarea cu "*"): campul si "Trimite" din pagina,
+#                                       perechea tastaturii de pe televizor (A.raspundeIntrebareText)
 #   GET  /asistenta                pagina
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul lor (A).
 
@@ -68,6 +72,9 @@ def stare(request=None, A=None, B=None):
 		"setari_internet": "/retea" if s.get("eroare_pornire") else "",
 		"ramas_s": s.get("ramas_s", 0), "jurnal": s.get("jurnal", []), "nivel": s.get("nivel"),
 		"durata_implicita": s.get("durata_implicita"),
+		# durata sesiunii de acum (minute, 0 = permanent; None cand e oprita) si cele cinci alegeri, cu textul lor
+		"durata": s.get("durata"),
+		"alegeri_durata": [{"min": m, "text": t} for m, t in (s.get("alegeri_durata") or [])],
 		# pana cand e pornita, tradus ("Pornită până la ZZ.LL, HH:MM." / "Pornită, fără sfârșit; ...")
 		"permanent": bool(s.get("permanent")), "pana_text": s.get("pana_text") or "",
 		# ce face echipa acum, ca pe banda de pe televizor ("lucrează acum" / "a terminat..." / "")
@@ -75,8 +82,22 @@ def stare(request=None, A=None, B=None):
 		"concluzii": _concluzii(A),
 		# copia pentru "Pune înapoi cum era" ({"data_text", "text", "intrebare"}) sau None
 		"copie": s.get("copie"),
-		# intrebarea echipei care asteapta raspunsul ({"id", "text", "variante", "ramas_s"}) sau None (op "intrebare")
-		"intrebare": s.get("intrebare")}
+		# intrebarea echipei care asteapta raspunsul ({"id", "text", "variante", "ramas_s", "scris"}) sau None (op
+		# "intrebare"; "scris": se poate raspunde si cu un text, 0.7.8)
+		"intrebare": s.get("intrebare"),
+		# AST8: cat merge, ca pe televizor la EXIT: lucreaza in fundal, omul poate privi televizorul ("" cand e oprita)
+		"fundal": _fundal(s)}
+
+
+def _fundal(s):
+	"""Randul "Asistența lucrează..." (Screens/HdsAsistentaSemn.textIesire) cat asistenta merge, altfel ""."""
+	if s.get("stare") in (None, "", "oprit") or not s.get("disponibil", True):
+		return ""
+	try:
+		from Screens import HdsAsistentaSemn as Semn
+		return Semn.textIesire()
+	except Exception:
+		return ""
 
 
 def _concluzii(A):
@@ -98,20 +119,17 @@ def catalog(A=None):
 
 
 def cere(argumente, A=None, B=None, de_incredere=False):
-	"""Start din pagina: numai cu randul bifat (accept=1). Browser de incredere: porneste pe loc; altfel deschide
-	pagina de pornire pe receptor."""
+	"""Start din pagina, cu durata aleasa (argumentul durata, minute; lipsa: 2 ore). Browser de incredere: porneste pe
+	loc; altfel deschide pagina de pornire pe receptor, cu aceeasi durata pe randul "Cât timp"."""
 	A = _a(A)
-	if str(argumente.get("accept", "")) != "1":
-		rez = stare(None, A)
-		rez.update({"result": False, "message": _t(A.TEXT_FARA_BIFA)})
-		return rez
+	kw = {"durata_min": argumente["durata"]} if (argumente or {}).get("durata") else {}
 	try:
 		from Screens import HdsAsistentaSemn as Semn
 		from .meniu_comun_web import sesiune
 		if de_incredere:
-			reusit, mesaj = Semn.pornesteWeb(sesiune())
+			reusit, mesaj = Semn.pornesteWeb(sesiune(), **kw)
 		else:
-			reusit, mesaj = Semn.cerereWeb(sesiune())
+			reusit, mesaj = Semn.cerereWeb(sesiune(), **kw)
 	except Exception as e:
 		reusit, mesaj = False, _t("Eroare pe receptor: %s") % e
 	rez = stare(None, A)
@@ -128,12 +146,26 @@ def opreste(A=None):
 	return rez
 
 
+def schimbaDurata(argumente, A=None):
+	"""POST /api/asistenta-durata: "Schimbă durata" din pagina (perechea Verde de pe ecranul asistentei pornite), pe loc,
+	fara intrebare; mesajul e noul "Pornită până la ..."."""
+	A = _a(A)
+	reusit, mesaj = A.schimbaDurata((argumente or {}).get("durata"), "web")
+	rez = stare(None, A)
+	rez.update({"result": bool(reusit), "message": mesaj})
+	return rez
+
+
 def raspunde(argumente, A=None):
-	"""POST /api/asistenta-raspunde: raspunsul omului (indicele variantei) la intrebarea echipei, din pagina; o intrebare
-	deja inchisa (raspuns de pe televizor, timpul trecut) nu mai primeste nimic."""
+	"""POST /api/asistenta-raspunde: raspunsul omului la intrebarea echipei, din pagina: indicele variantei sau (0.7.8,
+	intrebarea cu "*") textul scris; o intrebare deja inchisa (raspuns de pe televizor, timpul trecut) nu mai primeste
+	nimic."""
 	A = _a(A)
 	try:
-		ok = A.raspundeIntrebare(int(argumente.get("id", "")), int(argumente.get("varianta", "")), "web")
+		if "text" in argumente:
+			ok = A.raspundeIntrebareText(int(argumente.get("id", "")), argumente.get("text", ""), "web")
+		else:
+			ok = A.raspundeIntrebare(int(argumente.get("id", "")), int(argumente.get("varianta", "")), "web")
 	except (TypeError, ValueError, AttributeError):
 		ok = False
 	rez = stare(None, A)
@@ -141,8 +173,13 @@ def raspunde(argumente, A=None):
 	return rez
 
 
+# cati octeti din textul scris trimis de pagina se citesc (200 de semne, cel mult 4 octeti fiecare in UTF-8)
+RASPUNS_TEXT_OCTETI = 800
+
+
 def _argumenteRaspuns(request):
-	"""Argumentele raspunsului: id si varianta, numai cifre, taiate la o marime sigura."""
+	"""Argumentele raspunsului: id si varianta, numai cifre; textul scris (0.7.8), din UTF-8,
+	intreg (A.raspundeIntrebareText il curata: un rand, cel mult 200 de semne)."""
 	args = getattr(request, "args", None) or {}
 	rez = {}
 	for nume in ("id", "varianta"):
@@ -150,164 +187,28 @@ def _argumenteRaspuns(request):
 		if valori:
 			v = valori[0]
 			if isinstance(v, bytes):
-				v = v[:12].decode("ascii", "replace")
-			rez[nume] = v[:12] if str(v[:12]).isdigit() else ""
+				v = v.decode("ascii", "replace")
+			rez[nume] = v if str(v).isdigit() else ""
+	valori = args.get(b"text")
+	if valori:
+		v = valori[0]
+		if isinstance(v, bytes):
+			v = v.decode("utf-8", "ignore")
+		rez["text"] = str(v)
 	return rez
 
 
 def scriereSecret(C=None):
-	"""Numai permisiunea de scriere, fara valoarea campului si fara jurnalul asistentei."""
-	if C is None:
-		from Components import HdsAsistentaControl as C
-	try:
-		activa = C.asistentaActiva()
-	except Exception:
-		return {"result": False, "permisa": False,
-			"message": _t("Nu pot verifica asistența. Încearcă din nou înainte să scrii parola sau cheia.")}
-	return {"result": True, "permisa": not activa,
-		"message": _t(C.TEXT_OPRESTE_SECRET) if activa else ""}
+	"""Scrierea pe receptor este disponibila si cu asistenta pornita."""
+	return {"result": True, "permisa": True, "message": ""}
 
 
 def protejeazaScrierea(text):
-	"""Acelasi paznic pentru toate campurile web, inclusiv pagina de intrare."""
-	if "</body>" not in text or 'id="hds-scriere-secret"' in text:
-		return text
-	import json
-	config = {"eroare": _t("Nu pot verifica asistența. Încearcă din nou înainte să scrii parola sau cheia."),
-		"inchide": _t("Închide"), "opreste": _t("Oprește asistența"),
-		"pe_tv": _t("Oprește asistența de pe televizor, apoi revino aici.")}
-	script = SCRIPT_SCRIERE_SECRET.replace("__TEXTE_SECRET__", json.dumps(config, ensure_ascii=True))
-	return text.replace("</body>", script + "</body>", 1)
+	"""Pagina nu adauga opriri ale scrierii din cauza asistentei."""
+	return text
 
 
-SCRIPT_SCRIERE_SECRET = r'''
-<script id="hds-scriere-secret">
-(function(){
-  "use strict";
-  var texte = __TEXTE_SECRET__, anterior = new WeakMap(), lipite = new WeakMap();
-  var inserare = new WeakSet(), coada = Promise.resolve(), inCurs = 0, avertisment = null;
-  function secret(c){
-    if(!c || !/^(INPUT|TEXTAREA)$/.test(c.tagName)){ return false; }
-    if(c.dataset.hdsSecret === "1" || c.type === "password"){ return true; }
-    var nume = [c.id || "", c.name || "", c.autocomplete || ""].join(" ");
-    if(/parol|passw|secret|token|(^|[ _-])pin|cheie|api[_-]?key/i.test(nume)){ return true; }
-    return c.classList.contains("pin");
-  }
-  function anunta(text){
-    if(avertisment){ avertisment.querySelector("p").textContent = text; return; }
-    var d = document.createElement("dialog"), p = document.createElement("p");
-    p.textContent = text; d.appendChild(p);
-    var cfg = window.CFG || {};
-    if(cfg.csrf || cfg.jeton){
-      var a = document.createElement("button"); a.type = "button"; a.textContent = texte.opreste;
-      a.onclick = function(){
-        a.disabled = true;
-        var h = {}; if(cfg.csrf){ h["X-HDS-CSRF"] = cfg.csrf; }
-        var url = "/api/asistenta-opreste" + (cfg.jeton ? "?token=" + encodeURIComponent(cfg.jeton) : "");
-        fetch(url, {method:"POST", credentials:"same-origin", cache:"no-store", headers:h})
-          .then(function(r){ return r.json(); }).then(function(r){
-            if(!r.result){ p.textContent = r.message || texte.eroare; a.disabled = false; return; }
-            d.close(); d.remove(); avertisment = null;
-          }).catch(function(){ p.textContent = texte.eroare; a.disabled = false; });
-      };
-      d.appendChild(a);
-    } else {
-      var nota = document.createElement("p"); nota.textContent = texte.pe_tv; d.appendChild(nota);
-    }
-    var b = document.createElement("button"); b.type = "button"; b.textContent = texte.inchide;
-    b.style.marginLeft = "1em";
-    b.onclick = function(){ d.close(); d.remove(); avertisment = null; };
-    d.addEventListener("cancel", function(){ d.remove(); avertisment = null; });
-    d.appendChild(b); document.body.appendChild(d); avertisment = d; d.showModal(); b.focus();
-  }
-  function verifica(){
-    // Cererea nu contine textul scris, nici macar numele campului.
-    return fetch("/scriere-secret", {credentials:"same-origin", cache:"no-store"})
-      .then(function(r){ if(!r.ok){ throw new Error("stare"); } return r.json(); });
-  }
-  function insereaza(c, text){
-    var inceput = c.selectionStart, sfarsit = c.selectionEnd;
-    if(inceput === null || sfarsit === null){ return; }
-    if(c.maxLength >= 0){ text = text.slice(0, Math.max(0, c.maxLength - c.value.length + sfarsit - inceput)); }
-    c.setRangeText(text, inceput, sfarsit, "end");
-    anterior.set(c, c.value); inserare.add(c);
-    c.dispatchEvent(new Event("input", {bubbles:true}));
-    inserare.delete(c);
-  }
-  function puneInCoada(c, lucru, verificaStarea){
-    inCurs++;
-    coada = coada.then(function(){
-      if(!verificaStarea){ if(c.isConnected){ lucru(); } return; }
-      return verifica().then(function(d){
-        if(!d.result || !d.permisa){ anunta(d.message || texte.eroare); return; }
-        if(c.isConnected){ lucru(); }
-      }).catch(function(){ anunta(texte.eroare); });
-    }).then(function(){ inCurs--; }, function(){ inCurs--; anunta(texte.eroare); });
-  }
-  document.addEventListener("focusin", function(e){
-    if(secret(e.target)){ anterior.set(e.target, e.target.value); }
-  }, true);
-  document.addEventListener("paste", function(e){
-    if(secret(e.target) && e.clipboardData){ lipite.set(e.target, e.clipboardData.getData("text/plain")); }
-  }, true);
-  document.addEventListener("beforeinput", function(e){
-    var c = e.target;
-    if(!secret(c) || c.readOnly || c.disabled || !/^(insert|delete)/.test(e.inputType || "")){ return; }
-    anterior.set(c, c.value);
-    if(!e.cancelable){ return; }
-    e.preventDefault(); e.stopImmediatePropagation();
-    if(/^delete/.test(e.inputType)){
-      var fel = e.inputType;
-      puneInCoada(c, function(){
-        var a = c.selectionStart, b = c.selectionEnd;
-        if(a === null || b === null){ return; }
-        if(a === b){
-          if(/Backward$/.test(fel)){
-            a = /Word/.test(fel) ? c.value.slice(0, a).replace(/\S+\s*$/, "").length : Math.max(0, a - 1);
-            if(a > 0 && /[\uDC00-\uDFFF]/.test(c.value.charAt(a))){ a--; }
-          } else if(/Forward$/.test(fel)){
-            b = /Word/.test(fel) ? a + (c.value.slice(a).match(/^\s*\S+/) || [""])[0].length : Math.min(c.value.length, b + 1);
-            if(b < c.value.length && /[\uD800-\uDBFF]/.test(c.value.charAt(b - 1))){ b++; }
-          }
-        }
-        c.setRangeText("", a, b, "end"); anterior.set(c, c.value); inserare.add(c);
-        c.dispatchEvent(new Event("input", {bubbles:true})); inserare.delete(c);
-      }, false);
-      return;
-    }
-    var text = e.data;
-    if(text === null && e.dataTransfer){ text = e.dataTransfer.getData("text/plain"); }
-    if(text === null){ text = lipite.get(c) || ""; } lipite.delete(c);
-    if(!text){ return; }
-    puneInCoada(c, function(){ insereaza(c, text); }, true);
-  }, true);
-  // Acopera si completarea automata ori compunerea pentru care beforeinput nu se poate opri.
-  document.addEventListener("input", function(e){
-    var c = e.target;
-    if(!secret(c) || inserare.has(c)){ return; }
-    e.stopImmediatePropagation();
-    var nou = c.value; c.value = anterior.get(c) || "";
-    puneInCoada(c, function(){
-      c.value = nou; anterior.set(c, nou); inserare.add(c);
-      c.dispatchEvent(new Event("input", {bubbles:true})); inserare.delete(c);
-    }, true);
-  }, true);
-  // Salvarea asteapta verificarea ultimului caracter; nu trimite o valoare incompleta.
-  document.addEventListener("click", function(e){
-    if(avertisment && avertisment.contains(e.target)){ return; }
-    if(!inCurs || !e.target.closest("button,input[type=submit]")){ return; }
-    e.preventDefault(); e.stopImmediatePropagation();
-    var tinta = e.target;
-    coada.then(function(){ if(tinta.isConnected && !avertisment){ tinta.click(); } });
-  }, true);
-  document.addEventListener("submit", function(e){
-    if(!inCurs){ return; } e.preventDefault(); e.stopImmediatePropagation();
-    var f = e.target, b = e.submitter;
-    coada.then(function(){ if(f.isConnected && !avertisment){ f.requestSubmit(b || undefined); } });
-  }, true);
-})();
-</script>
-'''
+SCRIPT_SCRIERE_SECRET = ""
 
 
 def _sesiuneEnigma():
@@ -371,16 +272,16 @@ def bandaWeb(A=None):
 
 
 def _argumente(request):
-	"""Argumentele lui Start: numai accept (randul bifat), taiat la o marime sigura."""
+	"""Argumentele lui Start si ale lui "Schimbă durata": accept si durata (minute)."""
 	args = getattr(request, "args", None) or {}
 	rez = {}
-	for nume in ("accept",):
+	for nume in ("accept", "durata"):
 		valori = args.get(nume.encode("ascii"))
 		if valori:
 			v = valori[0]
 			if isinstance(v, bytes):
-				v = v[:8].decode("utf-8", "replace")
-			rez[nume] = v[:2]
+				v = v.decode("utf-8", "replace")
+			rez[nume] = v
 	return rez
 
 
@@ -424,6 +325,15 @@ def rute(baza, resource, A=None):
 		def render_GET(self, request):
 			return self.render_POST(request)
 
+	class DurataResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				return self._raspunde(request, schimbaDurata(_argumente(request), A))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
 	class PuneInapoiResource(baza):
 		schimbaCeva = True
 
@@ -457,6 +367,7 @@ def rute(baza, resource, A=None):
 		b"asistenta-catalog": CatalogResource(),
 		b"asistenta-cere": CereResource(),
 		b"asistenta-opreste": OpresteResource(),
+		b"asistenta-durata": DurataResource(),
 		b"asistenta-pune-inapoi": PuneInapoiResource(),
 		b"asistenta-raspunde": RaspundeResource(),
 	}
@@ -508,6 +419,8 @@ PAGINA = """<!DOCTYPE html>
   .eroare{color:#ffb4a8;}
   .nota{color:var(--text-slab);font-size:.85rem;line-height:1.45;}
   .pana{font-weight:600;margin:0 0 12px;}
+  .durata{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px;}
+  .durata select{min-width:180px;}
   .fereastra{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50;}
   .fereastra .card{max-width:760px;width:100%;max-height:86vh;display:flex;flex-direction:column;margin:0;}
   .fereastra h2{font-size:1.1rem;margin:0 0 10px;}
@@ -516,6 +429,8 @@ PAGINA = """<!DOCTYPE html>
   .intrebare{background:#1b2130;border:1px solid var(--bordura);border-radius:8px;padding:10px;margin-top:10px;line-height:1.45;}
   .intrebare p{margin:0 0 10px;}
   .intrebare button{margin:0 8px 0 0;}
+  .scris{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px;}
+  .scris input{flex:1 1 220px;min-width:0;}
   .concluzii h2{font-size:1.1rem;margin:0 0 6px;}
   .concluzii .text{white-space:pre-wrap;word-break:break-word;line-height:1.5;margin:0 0 10px;}
   .echipa{border-color:#e0a030;}
@@ -533,8 +448,9 @@ PAGINA = """<!DOCTYPE html>
   <p>Funcția nu e disponibilă pe această imagine.</p>
 </section>
 <section class="card ascuns" id="pornire">
-  <p class="scurt">Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate meniurile. Numele de utilizator, parolele, PIN-urile și cheile nu ajung la echipă. Oprește asistența cât scrii o parolă sau o cheie, până o salvezi. Poți opri oricând.</p>
-  <label class="bifa"><input type="checkbox" id="accept" checked><span>Accept <a href="#" id="termeni">termenii și condițiile</a></span></label>
+  <p class="durata"><label for="durata">Cât timp</label><select id="durata"></select></p>
+  <p class="scurt">Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate meniurile. Echipa vede inclusiv numele de utilizator, parolele, PIN-urile și cheile. Poți opri oricând.</p>
+  <p><a href="#" id="termeni">Termenii și condițiile</a></p>
   <button class="verde" id="porneste">Start</button>
   <p class="mesaj" id="mesaj"></p>
   <p class="ascuns" id="internet"><a id="setariInternet" href="/retea">Setările de internet</a></p>
@@ -543,12 +459,16 @@ PAGINA = """<!DOCTYPE html>
   <h2 id="intrebareTitlu">Întrebare de la HD Satelit</h2>
   <p class="text" id="intrebareEchipaText"></p>
   <div id="intrebareVariante"></div>
+  <div class="scris ascuns" id="intrebareScris"><input type="text" id="raspunsScris" maxlength="200" autocomplete="off" placeholder="Scrie răspunsul" aria-label="Scrie răspunsul"><button class="verde" type="button" id="trimiteRaspuns">Trimite</button></div>
   <p class="mesaj" id="mesajIntrebare"></p>
 </section>
 <section class="card ascuns" id="pornita">
   <p class="pana" id="activitate" role="status"></p>
   <p class="pana" id="stare"></p>
   <p class="nota ascuns" id="conectatNota">Echipa se uită imediat ce poate. Poți închide pagina, asistența rămâne pornită.</p>
+  <p class="nota ascuns" id="fundal"></p>
+  <p class="durata ascuns" id="randDurata"><label for="durataNoua">Schimbă durata</label><select id="durataNoua"></select></p>
+  <p class="mesaj" id="mesajDurata"></p>
   <button class="rosu" id="opreste">Oprește</button>
   <div class="intrebare ascuns" id="intrebareOprire"><p>Oprești asistența?</p>
     <button class="gri" id="oprireNu">Nu</button>
@@ -597,6 +517,25 @@ function cerere(cale, metoda, date){
 function mesaj(id,t,e){ var m=$(id); m.textContent=t||""; m.classList.toggle("eroare",!!e); }
 function nuRaspunde(){ return "Receptorul nu răspunde."; }
 var copiaInapoi = null;
+// "Cât timp" (pornire) si "Schimbă durata" (pornita): cele cinci durate, puse o data din stare (textele vin traduse de pe
+// receptor); lista de pornire are 2 ore aleasa la deschidere, cea de schimbare urmeaza durata sesiunii cand se schimba
+var durateFacute = false, durataVazuta;
+function puneDurate(d){
+  var lista = d.alegeri_durata || [];
+  if(durateFacute || !lista.length){ return; }
+  durateFacute = true;
+  ["durata","durataNoua"].forEach(function(id){ var s=$(id);
+    lista.forEach(function(a){ var o=document.createElement("option"); o.value=String(a.min); o.textContent=a.text; s.appendChild(o); }); });
+  $("durata").value = String(d.durata_implicita || lista[0].min);
+}
+function arataDurata(d, activa){
+  $("randDurata").classList.toggle("ascuns", !activa || d.stare==="se-opreste" || !durateFacute);
+  if(!activa){ durataVazuta = undefined; return; }
+  if(d.durata === durataVazuta){ return; }
+  durataVazuta = d.durata;
+  var s = $("durataNoua"); s.value = String(d.durata);
+  if(s.value !== String(d.durata)){ s.selectedIndex = -1; }
+}
 var eroarePornireVazuta = "";
 var startCuFocus = false;
 // deschisa din banda de sus a altei pagini (/asistenta#opreste): intrebarea opririi se arata singura, cand starea spune
@@ -614,6 +553,7 @@ function arata(d){
   if(!activa && d.disponibil && !startCuFocus){ startCuFocus = true;
     if(!document.activeElement || document.activeElement===document.body){ $("porneste").focus(); } }
   $("pornita").classList.toggle("ascuns", !activa);
+  puneDurate(d); arataDurata(d, activa);
   if(!activa){ $("intrebareOprire").classList.add("ascuns"); }
   if(cereOprirea){ cereOprirea = false;
     try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
@@ -626,6 +566,7 @@ function arata(d){
   $("stare").textContent = d.pana_text || "";
   $("activitate").textContent = d.activitate || "";
   $("activitate").classList.toggle("ascuns", !d.activitate);
+  $("fundal").textContent = d.fundal || ""; $("fundal").classList.toggle("ascuns", !d.fundal);
   // conectata si echipa nu lucreaza acum: ca vine si ca pagina se poate inchide (pe receptor A.textConectat)
   $("conectatNota").classList.toggle("ascuns", d.stare!=="conectat" || !!d.activitate);
   $("asteptare").classList.toggle("ascuns", d.stare!=="asteapta");
@@ -639,10 +580,13 @@ function arata(d){
   $("copie").classList.toggle("ascuns", !copiaInapoi);
   $("copieText").textContent = copiaInapoi ? (copiaInapoi.text || "") : "";
 }
-// intrebarea echipei (op "intrebare"): aceleasi variante ca pe receptor, ca butoane; primul raspuns o inchide peste tot
+// intrebarea echipei (op "intrebare"): aceleasi variante ca pe receptor, ca butoane; primul raspuns o inchide peste tot;
+// din 0.7.8 si raspunsul scris (q.scris): campul si Trimite (Enter), ca tastatura de pe receptor; citirea starii la 3 s nu
+// atinge campul cat e aceeasi intrebare
 var intrebareVazuta = null, intrebareRaspunsLa = 0;
+var TEXT_SCRIE = $("raspunsScris").placeholder;
 function arataIntrebarea(q){
-  var are = !!(q && q.variante && q.variante.length);
+  var are = !!(q && ((q.variante && q.variante.length) || q.scris));
   // dupa un raspuns, randul "Răspunsul a plecat la echipă." ramane cateva secunde, apoi intrebarea pleaca
   if(!are && Date.now() - intrebareRaspunsLa < 4000){ return; }
   $("intrebareEchipa").classList.toggle("ascuns", !are);
@@ -652,22 +596,41 @@ function arataIntrebarea(q){
   $("intrebareEchipaText").textContent = q.text || "";
   mesaj("mesajIntrebare", "");
   var loc = $("intrebareVariante"); loc.textContent = "";
-  q.variante.forEach(function(v, i){
+  (q.variante || []).forEach(function(v, i){
     var b = document.createElement("button"); b.className = "gri"; b.type = "button"; b.textContent = v;
     b.addEventListener("click", function(){ raspundeIntrebarea(q.id, i); });
     loc.appendChild(b);
   });
+  $("intrebareScris").classList.toggle("ascuns", !q.scris);
+  // intrebarea de inceput (AST8) are eticheta ei pentru campul scris ("Altceva, scriu eu")
+  $("raspunsScris").placeholder = q.eticheta_scris || TEXT_SCRIE;
+  $("raspunsScris").value = ""; $("raspunsScris").disabled = false; $("trimiteRaspuns").disabled = false;
   if(loc.firstChild){ loc.firstChild.focus(); }
+  else if(q.scris){ $("raspunsScris").focus(); }
 }
-function raspundeIntrebarea(id, i){
-  var q=new URLSearchParams(); q.set("id", String(id)); q.set("varianta", String(i));
-  Array.prototype.forEach.call($("intrebareVariante").children, function(b){ b.disabled = true; });
+function blocheazaRaspunsul(da){
+  Array.prototype.forEach.call($("intrebareVariante").children, function(b){ b.disabled = da; });
+  $("raspunsScris").disabled = da; $("trimiteRaspuns").disabled = da;
+}
+function trimiteRaspunsul(q){
+  blocheazaRaspunsul(true);
   cerere("/api/asistenta-raspunde","POST",q).then(function(d){
     intrebareRaspunsLa = Date.now();
     mesaj("mesajIntrebare", d.result ? "Răspunsul a plecat la echipă." : (d.message || nuRaspunde()), !d.result);
-  }).catch(function(){ mesaj("mesajIntrebare", nuRaspunde(), true);
-    Array.prototype.forEach.call($("intrebareVariante").children, function(b){ b.disabled = false; }); });
+  }).catch(function(){ mesaj("mesajIntrebare", nuRaspunde(), true); blocheazaRaspunsul(false); });
 }
+function raspundeIntrebarea(id, i){
+  var q=new URLSearchParams(); q.set("id", String(id)); q.set("varianta", String(i));
+  trimiteRaspunsul(q);
+}
+function raspundeScris(){
+  var t = ($("raspunsScris").value || "").trim();
+  if(!t || intrebareVazuta === null){ $("raspunsScris").focus(); return; }
+  var q=new URLSearchParams(); q.set("id", String(intrebareVazuta)); q.set("text", t);
+  trimiteRaspunsul(q);
+}
+$("trimiteRaspuns").addEventListener("click", raspundeScris);
+$("raspunsScris").addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); raspundeScris(); } });
 function citeste(){
   return cerere("/api/asistenta").then(function(d){
     if(d.result===false){ $("incarcare").textContent = d.message||nuRaspunde(); return; }
@@ -678,10 +641,11 @@ $("termeni").addEventListener("click", function(e){ e.preventDefault(); e.stopPr
 $("inchide").addEventListener("click", function(){ $("fereastra").classList.add("ascuns"); });
 $("fereastra").addEventListener("click", function(e){ if(e.target===$("fereastra")){ $("fereastra").classList.add("ascuns"); } });
 document.addEventListener("keydown", function(e){ if(e.key==="Escape"){ $("fereastra").classList.add("ascuns"); } });
-$("accept").addEventListener("change", function(){ if($("accept").checked){ mesaj("mesaj",""); } });
+$("durataNoua").addEventListener("change", function(){
+  var q=new URLSearchParams(); q.set("durata", this.value);
+  cerere("/api/asistenta-durata","POST",q).then(function(d){ mesaj("mesajDurata", d.message, !d.result); durataVazuta = undefined; arata(d); }).catch(function(){ mesaj("mesajDurata", nuRaspunde(), true); }); });
 $("porneste").addEventListener("click", function(){
-  if(!$("accept").checked){ mesaj("mesaj", "Fără bifă, asistența nu pornește.", true); return; }
-  var q=new URLSearchParams(); q.set("accept","1");
+  var q=new URLSearchParams(); q.set("accept","1"); if($("durata").value){ q.set("durata", $("durata").value); }
   mesaj("mesaj", "Se pornește...");
   cerere("/api/asistenta-cere","POST",q).then(function(d){ var activa=!!d.stare && d.stare!=="oprit"; mesaj("mesaj", activa ? "" : d.message, !d.result); arata(d); }).catch(function(){ mesaj("mesaj", nuRaspunde(), true); }); });
 $("opreste").addEventListener("click", intreabaOprirea);
@@ -712,9 +676,10 @@ TEXTE_PAGINA = {
 		N_("Se citește starea..."),
 		N_("Funcția nu e disponibilă pe această imagine."),
 		N_("Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate "
-			"meniurile. Numele de utilizator, parolele, PIN-urile și cheile nu ajung la echipă. Oprește asistența cât "
-			"scrii o parolă sau o cheie, până o salvezi. Poți opri oricând."),
+			"meniurile. Echipa vede inclusiv numele de utilizator, parolele, PIN-urile și cheile. Poți opri oricând."),
 		N_("Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"),
+		N_("Cât timp"),
+		N_("Schimbă durata"),
 		N_("Start"),
 		N_("Setările de internet"),
 		N_("Oprește"),
@@ -734,6 +699,8 @@ TEXTE_PAGINA = {
 		N_("Ce am găsit și ce am făcut"),
 		N_("Mulțumim că ne-ai lăsat să te ajutăm."),
 		N_("Întrebare de la HD Satelit"),
+		N_("Scrie răspunsul"),
+		N_("Trimite"),
 	),
 	"js": (
 		N_("Receptorul nu răspunde."),

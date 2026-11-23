@@ -1,0 +1,72 @@
+From: HDSatelit <dev@hdsatelit.local>
+Subject: [PATCH] JSC: repair ARM32 cache header and slow-path selection
+
+Include complete jump-table and call-site types before their inline use.
+Use the existing property payload register accessor on JSVALUE32_64.
+The new ArrayLengthStore generator uses single-register 64-bit operations;
+ARM32 must take the existing C++ slow path for that cache case instead.
+
+Upstream-Status: Pending
+---
+diff --git a/Source/JavaScriptCore/bytecode/CodeBlockInlines.h b/Source/JavaScriptCore/bytecode/CodeBlockInlines.h
+--- a/Source/JavaScriptCore/bytecode/CodeBlockInlines.h
++++ b/Source/JavaScriptCore/bytecode/CodeBlockInlines.h
+@@ -29,6 +29,7 @@
+ #include "BytecodeStructs.h"
+ #include "CodeBlock.h"
+ #include "DFGJITCode.h"
++#include "JumpTable.h"
+ #include "UnlinkedMetadataTableInlines.h"
+ 
+ namespace JSC {
+diff --git a/Source/JavaScriptCore/jit/GCAwareJITStubRoutine.h b/Source/JavaScriptCore/jit/GCAwareJITStubRoutine.h
+--- a/Source/JavaScriptCore/jit/GCAwareJITStubRoutine.h
++++ b/Source/JavaScriptCore/jit/GCAwareJITStubRoutine.h
+@@ -25,6 +25,7 @@
+ 
+ #pragma once
+ 
++#include <JavaScriptCore/CallFrame.h>
+ #include <JavaScriptCore/DFGCodeOriginPool.h>
+ #include <JavaScriptCore/JITStubRoutine.h>
+ #include <JavaScriptCore/JSObject.h>
+diff --git a/Source/JavaScriptCore/bytecode/InlineCacheCompiler.cpp b/Source/JavaScriptCore/bytecode/InlineCacheCompiler.cpp
+--- a/Source/JavaScriptCore/bytecode/InlineCacheCompiler.cpp
++++ b/Source/JavaScriptCore/bytecode/InlineCacheCompiler.cpp
+@@ -2035,6 +2035,7 @@
+     }
+ 
+     case AccessCase::ArrayLengthStore: {
++#if USE(JSVALUE64)
+         ASSERT(!accessCase.viaGlobalProxy());
+ 
+         jit.load8(CCallHelpers::Address(baseGPR, JSCell::indexingTypeAndMiscOffset()), scratchGPR);
+@@ -2081,6 +2082,10 @@
+         } else
+             m_failAndIgnore.append(failAndIgnore);
+         return;
++#else
++        m_failAndIgnore.append(jit.jump());
++        return;
++#endif
+     }
+ 
+     case AccessCase::RegExpLastIndexStore: {
+@@ -2468,7 +2473,7 @@
+         fallThrough.append(jit.branchIfNotTrue(m_propertyCache.propertyGPR()));
+ #else
+         fallThrough.append(jit.branch32(CCallHelpers::NotEqual, m_propertyCache.propertyTagGPR(), CCallHelpers::TrustedImm32(JSValue::BooleanTag)));
+-        fallThrough.append(jit.branchTest32(CCallHelpers::Zero, m_propertyCache.propertyPayloadGPR(), CCallHelpers::TrustedImm32(1)));
++        fallThrough.append(jit.branchTest32(CCallHelpers::Zero, m_propertyCache.propertyGPR(), CCallHelpers::TrustedImm32(1)));
+ #endif
+         emitDefaultGuard();
+         break;
+@@ -2482,7 +2487,7 @@
+         fallThrough.append(jit.branchIfNotFalse(m_propertyCache.propertyGPR()));
+ #else
+         fallThrough.append(jit.branch32(CCallHelpers::NotEqual, m_propertyCache.propertyTagGPR(), CCallHelpers::TrustedImm32(JSValue::BooleanTag)));
+-        fallThrough.append(jit.branchTest32(CCallHelpers::NonZero, m_propertyCache.propertyPayloadGPR(), CCallHelpers::TrustedImm32(1)));
++        fallThrough.append(jit.branchTest32(CCallHelpers::NonZero, m_propertyCache.propertyGPR(), CCallHelpers::TrustedImm32(1)));
+ #endif
+         emitDefaultGuard();
+         break;

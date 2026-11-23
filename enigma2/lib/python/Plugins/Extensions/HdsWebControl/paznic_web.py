@@ -101,24 +101,44 @@ def seteaza(argumente, P=None, config=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, fara token."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:6]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 20:
+		if cheie == "token":
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:8].strip()
+		rez[cheie] = str(v).strip()
 	return rez
+
+
+def _cheiePagina(P):
+	"""Cheie limitata la paznic; cheia pentru scripturi nu pleaca spre pagina."""
+	import hashlib
+	import hmac
+	jeton = P._jetonConfigurat()
+	if not jeton:
+		return ""
+	return hmac.new(jeton.encode("utf-8"), b"hds-paznic-v1", hashlib.sha256).hexdigest()
 
 
 def rute(baza, resource, P=None):
 	"""Resursele: ({nume: resursa de sub /api}, resursa paginii). `baza` e HdsJsonResource din plugin.py."""
 
-	class StareResource(baza):
+	class PaznicResource(baza):
+		def render(self, request):
+			from . import plugin as Web
+			cheie = Web._antet(request, b"x-hds-paznic")
+			if not cheie or Web.PARAM_JETON in request.args:
+				return super().render(request)
+			# REGULA 0, WEB8: cu cheia paginii, fara verificarea ei, a retelei, a metodei si a
+			# antetului CSRF
+			return resource.Resource.render(self, request)
+
+	class StareResource(PaznicResource):
 		"""GET /api/paznic: numai citire."""
 
 		def render_GET(self, request):
@@ -127,7 +147,7 @@ def rute(baza, resource, P=None):
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
-	class SeteazaResource(baza):
+	class SeteazaResource(PaznicResource):
 		schimbaCeva = True
 
 		def render_POST(self, request):
@@ -144,7 +164,20 @@ def rute(baza, resource, P=None):
 		isLeaf = True
 
 		def render_GET(self, request):
-			return pagina(request)
+			corp = pagina(request)
+			from . import cadru_web, paza_model_web, plugin as Web
+			if (Web.PARAM_JETON in request.args and Web._jetonValid(request)
+					and cadru_web.deImbracat(request, corp) and not paza_model_web.inPaza()):
+				# Cadrul se face aici fara cheia pentru scripturi. Invelirea comuna
+				# primeste o pagina deja pregatita pentru afisare inline.
+				secret, _browser = Web._sesiuneDinCerere(request)
+				csrf = Web.csrfPentru(secret) if secret else ""
+				html = corp.decode("utf-8", "surrogateescape")
+				ctx = cadru_web.context(request, html, Web, "", csrf)
+				corp = cadru_web.imbraca(html, ctx).encode("utf-8", "surrogateescape")
+				# Evita o a doua citire a contextului de catre cadrul comun.
+				request.setHeader(b"content-disposition", b"inline")
+			return corp
 
 	api = {
 		b"paznic": StareResource(),
@@ -161,14 +194,17 @@ def pagina(request):
 		request.setHeader(b"content-type", b"text/plain; charset=utf-8")
 		return _t("Acces permis doar din rețeaua locală.").encode("utf-8")
 	P._anteteHtml(request)
+	request.setHeader(b"referrer-policy", b"no-referrer")
+	cheie = ""
 	if P.PARAM_JETON in request.args and P._jetonValid(request):
-		config_pagina = P._configPanou("", P._jetonConfigurat(), "")
+		cheie = _cheiePagina(P)
+		config_pagina = P._configPanou(P.csrfPentru(cheie), "", "")
 	else:
 		secret, browser = P._sesiuneDinCerere(request)
 		if browser is None:
 			return P._PAGINA_ASOCIERE.encode("utf-8")
 		config_pagina = P._configPanou(P.csrfPentru(secret), "", browser.get("nume", ""))
-	return pagina_text(P._STIL_COMUN, config_pagina).encode("utf-8", "replace")
+	return pagina_text(P._STIL_COMUN, config_pagina, cheie).encode("utf-8", "replace")
 
 
 def _drumMeniu(id_intrare):
@@ -181,9 +217,10 @@ def _drumMeniu(id_intrare):
 	return drumHtml(id_intrare)
 
 
-def pagina_text(stil, config_pagina):
+def pagina_text(stil, config_pagina, cheie=""):
+	import json
 	return _traducePagina(PAGINA).replace("__STIL_COMUN__", stil).replace("__CONFIG__",
-		config_pagina).replace("__DRUM_MENIU__",
+		config_pagina).replace("__CHEIE_PAZNIC__", json.dumps(cheie)).replace("__DRUM_MENIU__",
 		_drumMeniu("hds_paznic"))
 
 
@@ -191,6 +228,14 @@ PAGINA = """<!DOCTYPE html>
 <html lang="ro">
 <head>
 <meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<script>
+var curenta = new URL(location.href);
+if(curenta.searchParams.has("token")){
+  curenta.searchParams.delete("token");
+  history.replaceState(null, "", curenta.pathname + curenta.search + curenta.hash);
+}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Paznicul receptorului</title>
 <style>__STIL_COMUN__
@@ -246,20 +291,18 @@ PAGINA = """<!DOCTYPE html>
 </main>
 <script>
 var CFG = __CONFIG__;
+var CHEIE_PAZNIC = __CHEIE_PAZNIC__;
 function $(id){ return document.getElementById(id); }
-function adresa(cale){
-  if(!CFG.jeton){ return cale; }
-  return cale + (cale.indexOf("?") === -1 ? "?" : "&") + "token=" + encodeURIComponent(CFG.jeton);
-}
 function cerere(cale, metoda, date){
-  var optiuni = {method: metoda || "GET", cache: "no-store", credentials: "same-origin", headers: {}};
+  var optiuni = {method: metoda || "GET", cache: "no-store", credentials: "same-origin", referrerPolicy: "no-referrer", headers: {}};
+  if(CHEIE_PAZNIC){ optiuni.headers["X-HDS-Paznic"] = CHEIE_PAZNIC; }
   if(CFG.csrf){ optiuni.headers["X-HDS-CSRF"] = CFG.csrf; }
   if(date){
     optiuni.headers["Content-Type"] = "application/x-www-form-urlencoded";
     optiuni.body = date.toString();
   }
-  return fetch(adresa(cale), optiuni).then(function(r){
-    if(r.status === 401 && !CFG.jeton){ location.replace("/"); throw new Error("browser deconectat"); }
+  return fetch(cale, optiuni).then(function(r){
+    if(r.status === 401 && !CHEIE_PAZNIC){ location.replace("/"); throw new Error("browser deconectat"); }
     return r.json().catch(function(){ return {result: false, message: "Receptorul a răspuns neașteptat (HTTP " + r.status + ")."}; });
   });
 }

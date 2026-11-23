@@ -16,7 +16,11 @@
 # (care o aducea) nu e in imagine. Acum -soup cere ferm libsoup si glib-networking (TLS pentru https, prin GIO; libsoup
 # numai o recomanda). Versiunea noua a lui -soup intra singura in „Actualizare” (e instalat pe toate receptoarele), iar
 # opkg aduce odata cu ea libsoup, glib-networking si bibliotecile lor din feed.
-PR:append = ".hds2"
+PR:append = ".hds3"
+
+# Per-playback headers reach detached HLS sources and adaptive2 HTTP downloads.
+FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+SRC_URI:append = " file://0003-http-antete-pe-toate-cererile.patch"
 
 PACKAGECONFIG:remove = "soup2"
 RDEPENDS:${PN}-soup:remove = "libsoup-2.4"

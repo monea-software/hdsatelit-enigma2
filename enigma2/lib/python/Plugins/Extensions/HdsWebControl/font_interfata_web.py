@@ -77,7 +77,7 @@ def fisier(argumente, F=None, **cai):
 
 def argumente(request):
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:6]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in ("id", "rol"):
@@ -85,7 +85,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:20].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 

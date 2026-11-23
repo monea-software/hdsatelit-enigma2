@@ -60,8 +60,7 @@ class Legaturi(object):
 		return nav is not None and nav.mod != lansator.MOD_HBBTV
 
 	def instalat(self):
-		import os
-		return os.path.exists(self.A.PROGRAME[self.A.MOTOR_IMPLICIT])
+		return bool(self.A.browsereDisponibile())
 
 	def catalog(self):
 		return self.A.catalogAcum()
@@ -136,14 +135,30 @@ def stare(N=None, sesiune=None):
 			"fel_stare": s or "",
 			"actiuni": A.actiuni(a, s),
 			"pachet": a.get("pachet", "") if A.fel(a) == A.FEL_PACHET else "",
+			# 0.7.8 (CR3): aplicatiile din imagine (Filme si seriale) pornesc si fara navigator
+			"imagine": A.fel(a) == A.FEL_IMAGINE,
 			"poza": bool(A.pozaPentru(a)),
 			"ascunsa": a["id"] not in vazute,
+			"browser": A.preferintaBrowser(a["id"]),
+			"browsere": A.alegeriBrowser(True, a["id"], _t)
+				if A.fel(a) == A.FEL_SCURTATURA and not A.motorObligatoriu(a) else [],
 		})
 	# NVM: pe receptoarele unde navigatorul se poate instala din cardul lui, nota rosie „lipseste din imagine” nu se arata
 	de_instalat = any(x["fel_stare"] in (A.CERE_NAVIGATOR, A.NU_INCAPE) for x in lista)
 	return {"result": True, "aplicatii": lista, "vazute": vazute, "instalat": N.instalat() or de_instalat,
 		"video": bool(video),
-		"catalog_gata": catalog is not None, "lucrare": N.lucrare(), "widevine": N.widevine()}
+		"catalog_gata": catalog is not None, "lucrare": N.lucrare(), "widevine": N.widevine(),
+		"browser": A.browserGeneral(),
+		"browsere": [(m, _t(t)) for m, t in A.alegeriBrowser()] if len(A.browsereDisponibile()) == 2 else []}
+
+
+def browser(argumente, N=None, sesiune=None):
+	"""POST: aceeasi alegere si salvare imediata ca in meniul TV."""
+	N = _n(N)
+	id_ = argumente.get("id")
+	ok = "motor" in argumente and N.A.salveazaBrowser(argumente["motor"], id_)
+	return _cuStare({"result": ok, "message": _t(N_("Browserul s-a salvat.")) if ok else
+		_t(N_("Browserul nu se poate alege pentru această aplicație sau nu mai este instalat."))}, N, sesiune)
 
 
 def _cuStare(rez, N, sesiune):
@@ -228,10 +243,10 @@ def ascunde(argumente, N=None, sesiune=None):
 		_t("Aplicația apare din nou în meniul de pe televizor.")}, N, sesiune)
 
 
-def argumente(request, permise=("id", "pas", "da"), maxim=64):
+def argumente(request, permise=("id", "pas", "da", "motor"), maxim=64):
 	"""Argumentele cererii (adresa sau corpul formularului), fara token; numai cheile cunoscute."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:8]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in permise:
@@ -239,7 +254,7 @@ def argumente(request, permise=("id", "pas", "da"), maxim=64):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:maxim].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -281,6 +296,9 @@ def rute(baza, resource, sesiune=None, N=None):
 	class AscundeResource(_Schimba):
 		lucru = staticmethod(ascunde)
 
+	class BrowserResource(_Schimba):
+		lucru = staticmethod(browser)
+
 	class PozaResource(baza):
 		"""GET /api/aplicatii-tv-poza?id=...: poza cardului (PNG sau JPEG), dupa aceeasi poarta."""
 
@@ -304,6 +322,7 @@ def rute(baza, resource, sesiune=None, N=None):
 		b"aplicatii-tv-deschide": DeschideResource(),
 		b"aplicatii-tv-muta": MutaResource(),
 		b"aplicatii-tv-ascunde": AscundeResource(),
+		b"aplicatii-tv-browser": BrowserResource(),
 		b"aplicatii-tv-poza": PozaResource(),
 	}
 	return api, PaginaResource()
@@ -347,6 +366,7 @@ def _limba():
 
 
 ETICHETE = {
+	"BROWSER": N_("Browserul aplicațiilor"),
 	"TITLU": N_("Aplicații"),
 	"INCARCARE": N_("Se citește lista..."),
 	"NOTA": N_("Aplicațiile se deschid pe tot ecranul televizorului. Pe televizor: OK deschide, MENU arată mai multe, EXIT te întoarce în meniu."),
@@ -357,6 +377,7 @@ ETICHETE = {
 NOTA_MENIU = N_("Aceeași listă e pe televizor, în %s.")
 
 TEXTE_JS = {
+	"browser": N_("Deschide cu..."),
 	"deschide": N_("Deschide pe televizor"),
 	"instaleaza": N_("Instalează"),
 	"actualizeaza": N_("Actualizează"),
@@ -426,6 +447,7 @@ PAGINA = """<!DOCTYPE html>
 <main>
 <h1>__T_TITLU__</h1>
 <p class="nota">__T_NOTA__</p>
+<p id="browserGeneral" class="ascuns"><label>__T_BROWSER__ <select id="browserAles"></select></label></p>
 <p class="mesaj" id="incarcare">__T_INCARCARE__</p>
 <p class="mesaj ascuns eroare" id="neinstalat">__T_NEINSTALAT__</p>
 <p class="mesaj" id="mesaj"></p>
@@ -462,8 +484,22 @@ function buton(text, clasa, cand){
   if(clasa){ b.className = clasa; }
   b.addEventListener("click", cand); return b;
 }
+function alegeBrowser(select, alegeri, ales, id){
+  select.textContent = "";
+  alegeri.forEach(function(a){
+    var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; select.appendChild(o);
+  });
+  select.value = alegeri.some(function(a){ return a[0] === ales; }) ? ales : (alegeri.length ? alegeri[0][0] : "");
+  select.onchange = function(){
+    var campuri = {motor: select.value}; if(id){ campuri.id = id; }
+    trimite("/api/aplicatii-tv-browser", campuri);
+  };
+}
 function arata(d){
   if(!d || !d.aplicatii){ return; }
+  var alegeri = d.browsere || [];
+  $("browserGeneral").classList.toggle("ascuns", !alegeri.length);
+  alegeBrowser($("browserAles"), alegeri, d.browser || "");
   $("incarcare").classList.add("ascuns");
   $("neinstalat").classList.toggle("ascuns", d.instalat !== false);
   var l = d.lucrare, pl = $("lucrare");
@@ -487,6 +523,11 @@ function arata(d){
     var x = document.createElement("div"); x.className = "detalii";
     var s = document.createElement("div"); s.className = "stare " + (a.fel_stare || ""); s.textContent = a.ascunsa ? TXT.ascunsa : a.stare;
     var t = document.createElement("div"); t.className = "descriere"; t.textContent = a.descriere;
+    if(a.browsere && a.browsere.length){
+      var et = document.createElement("label"); et.textContent = TXT.browser + " ";
+      var sel = document.createElement("select"); alegeBrowser(sel, a.browsere, a.browser || "", a.id);
+      et.appendChild(sel); x.appendChild(et);
+    }
     var b = document.createElement("div"); b.className = "butoane";
     (a.actiuni || []).forEach(function(act){
       var bt;
@@ -496,7 +537,7 @@ function arata(d){
       else if(act === "instaleaza-navigator"){ bt = buton(TXT.navigator, "verde", function(){ trimite("/api/aplicatii-tv-deschide", {id: a.id}); }); }
       else if(act === "instaleaza-widevine"){ bt = buton(TXT.widevine, "verde", function(){ trimite("/api/aplicatii-tv-deschide", {id: a.id}); }); }
       else if(act === "dezinstaleaza"){ bt = buton(TXT.dezinstaleaza, "", function(){ opkg("/api/extensii-sterge", a.pachet); }); }
-      if(bt){ bt.disabled = inLucru || (act === "porneste" && d.instalat === false && !a.pachet); b.appendChild(bt); }
+      if(bt){ bt.disabled = inLucru || (act === "porneste" && d.instalat === false && !a.pachet && !a.imagine); b.appendChild(bt); }
     });
     var i = vazute.indexOf(a.id);
     if(!a.ascunsa){

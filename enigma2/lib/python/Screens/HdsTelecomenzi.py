@@ -53,7 +53,7 @@ from Tools.LoadPixmap import LoadPixmap
 START, CITITOR, PROBA, ASOCIERE, TASTE = 'start', 'cititor', 'proba', 'asociere', 'taste'
 RAND_CITITOR, RAND_PROBA, RAND_PROBA_NOUA, RAND_ASOCIERE = 'cititor', 'proba', 'proba-noua', 'asociere'
 RAND_STERGE_TOT = 'sterge-tot'
-CALE_IR = '/proc/hisi/msp/ir'
+CALE_IR = None
 
 TRANSPARENT = 0xFF000000
 APRINS = 0x38FFB23C          # chihlimbar, pe jumătate transparent (octetul de sus = transparența, 0 = opac)
@@ -164,6 +164,8 @@ class HdsTelecomenzi(Screen):
 		Screen.__init__(self, session)
 		self.setTitle(_('Telecomenzi'))
 		self.cale = cale_asocieri or D.CALE_ASOCIERI
+		self.inchis = False
+		self.profil = D.profil_receptor()
 		self.cale_desen = cale_desen or resolveFilename(SCOPE_SKIN_IMAGE, 'telecomanda-viper.json')
 		self.cale_ir = cale_ir
 		self.mapper = eRCMapper.getInstance()
@@ -171,6 +173,9 @@ class HdsTelecomenzi(Screen):
 		self._citeste_fisierul()
 		self.semn_fisier = _semn_fisier(self.cale)
 		self.desen = D.incarca_desen(self.cale_desen)
+		self.desen_viper = self.desen
+		if not self.profil.viper:
+			self.desen = None
 		self.keyids = _nume_taste()
 		self.mod = START
 		self.ultimul = 0            # numărul ultimului eveniment citit din C++
@@ -242,6 +247,8 @@ class HdsTelecomenzi(Screen):
 			if (self.fx, self.fy) != (1.0, 1.0):
 				poza = _pozaScalata(cale, self.fx, self.fy)
 			self['telecomanda'].instance.setPixmap(poza or LoadPixmap(cale))
+			if not self.profil.viper:
+				self['telecomanda'].hide()
 		except Exception as e:
 			_jurnal('desenul telecomenzii nu se poate încărca (%s)' % e)
 		try:
@@ -258,6 +265,7 @@ class HdsTelecomenzi(Screen):
 		self.arataStart()
 
 	def _laInchidere(self):
+		self.inchis = True
 		self.timer.stop()
 		if self.mapper is not None:
 			# întâi funcțiile scoase din semnale (nu se cheamă din interiorul unui semnal), apoi captura oprită, dacă
@@ -438,7 +446,7 @@ class HdsTelecomenzi(Screen):
 		if self.proba is not None and self.proba.verificate:
 			# proba începută se reia de unde a rămas; „Începe din nou” o pornește de la zero (revizia, P28)
 			randuri.append(self._rand(RAND_PROBA, '%s: %s' % (_('Proba tastelor'),
-				_('%d din %d de butoane verificate') % (len(self.proba.verificate), D.NUMAR_BUTOANE))))
+				D.text_proba(self.proba, _))))
 			randuri.append(self._rand(RAND_PROBA_NOUA, _('Începe din nou')))
 		else:
 			randuri.append(self._rand(RAND_PROBA, _('Proba tastelor')))
@@ -516,12 +524,13 @@ class HdsTelecomenzi(Screen):
 		self.istoric = []
 		self.ancora = None          # ceasul istoricului, luat la prima tastă
 		self.aprinse = set()
-		self.contor_ir = D.ContorIR(D.CREDIT_TASTA_PORNIRE) if os.path.exists(self.cale_ir) else None
+		self.contor_ir = D.ContorIR(D.CREDIT_TASTA_PORNIRE, self.profil)
 		self.ir_aratat = 0
 		self.ev_cititor = None
 		self._puneTitlu(_('Cititor de coduri'))
 		self['mare'].setText(_('Apasă orice buton.'))
 		self['detalii'].setText(_('Tastele nu fac nimic cât e deschis cititorul; se arată numai codul lor.'))
+		self._scrie_detalii_cititor()
 		self['istoric'].setText('')
 		self._vizibil(False)
 		self._culori()
@@ -535,7 +544,7 @@ class HdsTelecomenzi(Screen):
 			return
 		self.mod = PROBA
 		if noua or self.proba is None:
-			self.proba = D.Proba()
+			self.proba = D.Proba(self.profil)
 		self.aprinse = set()
 		self.semne = set(self.proba.verificate)
 		self._puneTitlu(_('Proba tastelor'))
@@ -549,21 +558,18 @@ class HdsTelecomenzi(Screen):
 	def _arataProba(self, ev):
 		p = self.proba
 		self['istoric'].setText('\n'.join(p.istoric(_)))
-		if p.gata():
-			self['mare'].setText(_('Toate butoanele merg.'))
-		else:
-			self['mare'].setText(_('%d din %d de butoane verificate') % (len(p.verificate), D.NUMAR_BUTOANE))
-		randuri = []
+		self['mare'].setText(D.text_proba(p, _))
+		randuri = D.detalii_profil(self.profil, _)
 		ramase = p.ramase()
 		if ramase:
-			randuri.append(_('Încă neapăsate: %s') % ', '.join(_(D.DUPA_ID[i][1]) for i in ramase))
-		if ev is not None and ev['dispozitiv'] != D.NATIV:
+			randuri.append(_('Încă neapăsate: %s') % ', '.join(_(self.profil.dupa_id[i][1]) for i in ramase))
+		if ev is not None and not self.profil.propriu(ev['dispozitiv']):
 			randuri.append(_('de pe: %s, cod %d') % (ev['dispozitiv'], ev['cod']))
 		self['detalii'].setText('\n'.join(randuri))
 
 	def _buton_ev(self, ev):
-		"""Butonul Viper al unui eveniment: cel în care se traduce sau, de pe telecomanda receptorului, el însuși."""
-		return D.DUPA_COD.get(ev['tinta'] if ev['tinta'] >= 0 else (ev['cod'] if ev['dispozitiv'] == D.NATIV else -1))
+		"""Butonul profilului: tinta asocierii sau codul propriu primit prin API."""
+		return self.profil.buton(ev)
 
 	def _scrie_detalii_cititor(self):
 		"""Rândurile cititorului: ultima tastă (dacă a venit vreuna) și semnul IR străin. Semnul se scrie și fără
@@ -573,21 +579,23 @@ class HdsTelecomenzi(Screen):
 		if ev is not None:
 			b = self._buton_ev(ev)
 			disp = ev['dispozitiv']
-			randuri.append(_('Dispozitiv: %s') % (_('telecomanda receptorului') + ' (%s)' % disp if disp == D.NATIV else disp))
+			randuri.append(_('Dispozitiv: %s') % (_('telecomanda receptorului') + ' (%s)' % disp if self.profil.propriu(disp) else disp))
 			if ev['fel'] != D.ASCII:
 				randuri.append(_('Cod: %d (0x%X) %s') % (ev['cod'], ev['cod'], D.nume_tasta(ev['cod'], self.keyids)))
 			randuri.append(_('Felul: %s') % _(D.FELURI.get(ev['fel'], '')))
 			if ev['scan'] >= 0:
-				randuri.append(_('Cod brut USB (HID): 0x%X') % ev['scan'])
-			if b is not None and disp != D.NATIV:
+				randuri.append((_('Cod brut: 0x%X') if self.profil.propriu(disp)
+					else _('Cod brut USB (HID): 0x%X')) % ev['scan'])
+			if b is not None and not self.profil.propriu(disp):
 				randuri.append(_('Merge ca butonul %s al telecomenzii receptorului') % _(b[1]))
-			if disp == D.NATIV and b is not None:
+			if self.profil.viper and self.profil.propriu(disp) and b is not None:
 				randuri.append(_('IR: NEC, adresa 0x02 0xCD, comanda 0x%02X, KeyId 0x%08X') % (b[4], D.keyid_viper(b[4])))
 		elif not self.ir_aratat:
 			randuri.append(_('Tastele nu fac nimic cât e deschis cititorul; se arată numai codul lor.'))
 		if self.ir_aratat:
 			randuri.append(_('Semnale IR pe care receptorul nu le folosește: %d') % self.ir_aratat)
 			randuri.append(_('Receptorul a primit un semnal de la altă telecomandă, dar nu îl poate citi încă.'))
+		randuri.extend(D.detalii_ir(self.profil, self.contor_ir, _))
 		self['detalii'].setText('\n'.join(randuri))
 
 	def _eveniment_cititor(self, ev):
@@ -641,7 +649,7 @@ class HdsTelecomenzi(Screen):
 		self.mod = ASOCIERE
 		self.aprinse, self.semne, self.cerut = set(), set(), None
 		# semnalele IR pe care receptorul nu le folosește, cât se așteaptă prima tastă
-		self.contor_ir = D.ContorIR(D.CREDIT_TASTA_PORNIRE) if os.path.exists(self.cale_ir) else None
+		self.contor_ir = D.ContorIR(D.CREDIT_TASTA_PORNIRE, self.profil)
 		self.ir_aratat = 0
 		self._puneTitlu(_('Asociază o telecomandă nouă'))
 		self._vizibil(False)
@@ -660,19 +668,26 @@ class HdsTelecomenzi(Screen):
 			_('O telecomandă cu infraroșu, alta decât a receptorului, nu se poate asocia încă.')]
 		if self.ir_aratat:
 			randuri.append(_('Receptorul primește semnalul unei telecomenzi cu infraroșu, dar nu îl poate folosi încă.'))
+		randuri.extend(D.detalii_ir(self.profil, self.contor_ir, _))
 		self['detalii'].setText('\n'.join(randuri))
 
 	def _citeste_ir(self):
 		"""O fereastră a contorului IR (bătaia de o secundă). True dacă s-a schimbat numărul arătat."""
-		if self.contor_ir is None:
+		if self.contor_ir is None or not self.captura_mea:
 			return False
-		text = _procFundal(_citesteIrText, self.cale_ir)
-		if text is None:
-			self.contor_ir = None
+		contor = self.contor_ir
+		vechi = (contor.disponibil, tuple(contor.protocoale))
+		citire = _procFundal(_citesteIrText, self.cale_ir or '/proc/hisi/msp/ir', self.cale_ir is None)
+		if self.contor_ir is not contor or not self.captura_mea:
 			return False
+		if citire is None or citire[0] <= contor.pornit_la:
+			return False
+		text = citire[1]
 		n = self.contor_ir.fereastra(text)
+		if n is None:
+			return vechi != (contor.disponibil, tuple(contor.protocoale))
 		if n == self.ir_aratat:
-			return False
+			return vechi != (contor.disponibil, tuple(contor.protocoale))
 		self.ir_aratat = n
 		return True
 
@@ -791,6 +806,7 @@ class HdsTelecomenzi(Screen):
 		try:
 			if self.mapper is None or not self.captura_mea:
 				return                  # tastele capturii pornite de pagina web sunt ale ei
+			self._actualizeaza_profil()
 			for t in self.mapper.getEvents(self.ultimul):
 				ev = D.eveniment(t)
 				if ev is None:
@@ -833,8 +849,32 @@ class HdsTelecomenzi(Screen):
 		except Exception as e:
 			_jurnal('oprirea capturii nu a putut fi arătată: %s' % e)
 
+	def _actualizeaza_profil(self):
+		if self.inchis:
+			return
+		profil = D.profil_actual(self.profil)
+		if profil is self.profil:
+			return
+		self.profil = profil
+		if self.proba is not None:
+			self.proba.actualizeaza_profil(profil)
+		if self.contor_ir is not None:
+			self.contor_ir.profil = profil
+		self.desen = self.desen_viper if profil.viper else None
+		if profil.viper:
+			self['telecomanda'].show()
+		if self.mod == PROBA and self.proba is not None:
+			self.semne = set(self.proba.verificate)
+			self._arataProba(None)
+		elif self.mod == CITITOR:
+			self._scrie_detalii_cititor()
+		self._deseneaza()
+
 	def _bate(self):
+		if self.inchis:
+			return
 		try:
+			self._actualizeaza_profil()
 			# semnul de viață numai pentru captura ecranului: una pornită de pagina web se oprește singură la 20 s
 			# după închiderea browserului, chiar dacă ecranul e deschis (revizia, P23)
 			if self.mapper is not None and self.captura_mea and self.mapper.getCaptureMode() != eRCMapper.captureOff:
@@ -1024,12 +1064,10 @@ class HdsTelecomenzi(Screen):
 		self.arataStart(ident)
 
 
-def _citesteIrText(cale):
-	try:
-		with open(cale) as f:
-			return f.read(8192)
-	except OSError:
-		return None
+def _citesteIrText(cale, automat=False):
+	# Momentul inceperii, ca un rezultat vechi din cache sa nu intre in alta captura.
+	inceput = time.perf_counter()
+	return inceput, D.citeste_ir(None if automat else cale)
 
 
 def _procFundal(functie, *argumente):

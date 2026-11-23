@@ -882,6 +882,9 @@ class HdsStartWizard(Screen, ConfigListScreen):
             -2
         )
 
+        if self.wifiLaPornire():
+            self["wifiActions"] = ActionMap(["ColorActions"], {"yellow": self.keyWifi}, -2)
+
         self.onLayoutFinish.append(self.startWizard)
 
     def are4K(self):
@@ -919,7 +922,7 @@ class HdsStartWizard(Screen, ConfigListScreen):
         else:
             self["key_red"].setText("")
             self["key_green"].setText(self.tr("btn_finish"))
-        self["key_yellow"].setText("")
+        self["key_yellow"].setText(_("Configurează Wi-Fi") if self.currentStep == self.STEP_CONFIG and self.wifiLaPornire() else "")
         self["key_blue"].setText(_("Funcțiile receptorului") if self.currentStep == self.STEP_CONFIG else "")
 
     def onLanguageChanged(self, configElement):
@@ -1357,6 +1360,31 @@ class HdsStartWizard(Screen, ConfigListScreen):
         if self.currentStep == self.STEP_CONFIG:
             self.setStep(self.STEP_PREZENTARE)
 
+    @staticmethod
+    def wifiLaPornire():
+        try:
+            from Components.HdsZgemma import disponibil, modelAcum
+            return disponibil(modelAcum())
+        except ImportError:
+            return False
+
+    def keyWifi(self):
+        # Nu terminam asistentul si nu salvam limba, tunerele sau reteaua aici.
+        if self.currentStep != self.STEP_CONFIG or not self.wifiLaPornire():
+            return
+        try:
+            from Components.Network import iNetwork
+            adaptoare = sorted(iface for iface in iNetwork.getAdapterList() if iNetwork.isWirelessInterface(iface))
+            if len(adaptoare) == 1:
+                from Screens.WlanSetup import WlanScanScreen
+                self.session.open(WlanScanScreen, adaptoare[0])
+            else:
+                from Screens.NetworkSetup import NetworkAdapterSelection
+                self.session.open(NetworkAdapterSelection)
+        except Exception:
+            from Screens.MessageBox import MessageBox
+            self.session.open(MessageBox, _("Configurarea Wi-Fi nu s-a putut deschide. Încearcă din nou."), type=MessageBox.TYPE_ERROR)
+
     def keyNimic(self):
         pass
 
@@ -1431,6 +1459,11 @@ class HdsStartWizard(Screen, ConfigListScreen):
     def finishWizard(self):
         """Terminare: semnele de prima pornire pe disc (asistentul nu mai porneste: StartWizard.py il
         inregistreaza pe config.misc.firstrun), apoi asistentul se inchide si interfata deschide meniul principal"""
+        from Components import HdsBetaTester as B
+        if B.acordTestNecesar():
+            from Screens.HdsBetaTester import HdsBetaConditii
+            self.session.openWithCallback(lambda *r: self.finishWizard(), HdsBetaConditii)
+            return
         print("[HdsStartWizard] asistent terminat: firstrun=False, se deschide meniul principal")
         self.opresteCeasulLimbii()
         # ConfigSubsection.__getattr__ arunca KeyError pentru o cheie lipsa, deci se cauta in content.items

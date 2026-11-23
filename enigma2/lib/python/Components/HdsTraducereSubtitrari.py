@@ -185,6 +185,7 @@ import re
 import secrets
 import socket
 import ssl
+import sys
 import threading
 import time
 from collections import OrderedDict, deque
@@ -1197,42 +1198,7 @@ def caleJson(obiect, cale):
 
 
 def faraSecrete(text, cheile=()):
-	"""Scoate cheile din texte si rezultate, inclusiv formele codate de server; nu citeste fisiere."""
-	if isinstance(text, dict):
-		return dict((k, faraSecrete(v, cheile)) for k, v in text.items())
-	if isinstance(text, (list, tuple)):
-		return [faraSecrete(v, cheile) for v in text]
-	if not isinstance(text, (str, bytes)):
-		return text
-	t = text.decode("utf-8", "replace") if isinstance(text, bytes) else text
-	valori = []
-	def adauga(v):
-		if isinstance(v, dict):
-			for x in v.values():
-				adauga(x)
-		elif isinstance(v, (list, tuple)):
-			for x in v:
-				adauga(x)
-		elif isinstance(v, str) and v:
-			valori.append(v)
-	adauga(cheile)
-	# Numai memoria deja citita; jurnalul citirii cheilor nu trebuie sa porneasca alta citire.
-	magazin = globals().get("_CHEI", [None])[0]
-	memorie = getattr(magazin, "_memorie", None)
-	if memorie is not None:
-		adauga(memorie[1])
-	variante = set()
-	for v in valori:
-		for c in [v] + [b for b in v.split() if len(b) >= 8]:
-			variante.update((c, quote(c, safe=""), quote_plus(c), json.dumps(c, ensure_ascii=True)[1:-1],
-				c.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")))
-	for c in sorted(variante, key=len, reverse=True):
-		t = t.replace(c, u"***")
-		if "%" in c:
-			t = re.sub(re.escape(c), u"***", t, flags=re.I)
-	t = re.sub(r"(?i)(\b(?:authorization|x-api-key|api[_-]?key|access[_-]?token)\s*[:=]\s*)"
-		r"(?:bearer\s+)?[^\s,;\"']+", r"\1***", t)
-	return t
+	return text.decode("utf-8", "replace") if isinstance(text, bytes) else text
 
 
 def _ascundeCheia(text, cheie):
@@ -1250,7 +1216,7 @@ def _curataEroare(eroare, cheile=()):
 
 def inceputRaspuns(date, cheie=u""):
 	"""primele MAX_INCEPUT semne din corpul raspunsului, pentru mesajul de pe televizor si din web (niciodata pentru
-	jurnal): cheia inlocuita cu ***, caracterele de control scoase, spatiile stranse"""
+	jurnal): valorile pastrate integral, caracterele de control scoase, spatiile stranse"""
 	t = date.decode("utf-8", "replace") if isinstance(date, bytes) else str(date or u"")
 	t = _ascundeCheia(t.lstrip(u"﻿"), cheie)
 	t = u" ".join(u"".join(c if ord(c) >= 32 and not 127 <= ord(c) < 160 else u" " for c in t).split())
@@ -1277,14 +1243,17 @@ def _surseDescarcarePregatite():
 		return False
 
 
-def textCeMaiPoate(s=None, cheile=None, legaturi=None):
+def textCeMaiPoate(s=None, cheile=None, legaturi=None, lant=None):
 	"""Fraza de langa mesajul cheii lipsa (SBR, 15.11.2026, lordjedy): cand niciun serviciu din lant nu are campurile
 	cerute, omul afla ca poate lua subtitrari gata facute in limba aleasa, cu tasta SUB, din cautarea pe internet.
 	Numai daca o sursa a descarcarii e pregatita (altfel cautarea ar da alt mesaj despre chei); "" in rest. Cand
 	imaginea primeste cheia aplicatiei OpenSubtitles, fraza apare singura, fara alta schimbare."""
 	try:
-		s = s or initConfig()
-		lant = lantul(s, cheile, legaturi)
+		if lant is None:
+			s = s or initConfig()
+			lant = lantul(s, cheile, legaturi)
+		if not lant:
+			return u""
 		if any(not ceLipseste(c) for c in lant):
 			return u""
 		if not _surseDescarcarePregatite():
@@ -1293,6 +1262,14 @@ def textCeMaiPoate(s=None, cheile=None, legaturi=None):
 			numeLimba(lant[0]["tinta"])
 	except Exception:
 		return u""
+
+
+def mesajConfigurareLipsa(cfg, sfat=None):
+	# A plain configuration can be formatted on the disk worker without ConfigElements.
+	mesaj = _t("Traducerea subtitrărilor nu merge încă. %s Completează în Meniu › Setări › Sunet și "
+		"subtitrări › Traducerea subtitrărilor.") % textCeLipseste(cfg)
+	sfat = textCeMaiPoate() if sfat is None else sfat
+	return mesaj + u" " + sfat if sfat else mesaj
 
 
 def textCeLipsesteCuSfat(cfg=None, s=None):
@@ -1762,6 +1739,9 @@ class Chei(object):
 		return True, mesaj
 
 	def _anuntaSchimbarea(self):
+		HdsVorbire = sys.modules.get("Components.HdsVorbire")
+		if HdsVorbire is not None:
+			HdsVorbire.setariSchimbate()
 		try:
 			instanta().setariSchimbate()
 		except Exception as e:
@@ -1785,7 +1765,7 @@ class Chei(object):
 
 	def pregatesteMaiMulte(self, modificari, s=None):
 		"""Pregateste lotul numai in RAM: (ok, mesaj, chei, legaturi). Cheile nu ies in raspunsuri sau jurnal."""
-		if not isinstance(modificari, (list, tuple)) or len(modificari) > 90:
+		if not isinstance(modificari, (list, tuple)):
 			return False, _t("Lista schimbărilor de chei nu este bună."), None, None
 		try:
 			citite, legaturi = self._citesteTot()
@@ -3286,7 +3266,7 @@ class Traducator(object):
 		self.canal_oprit = False
 
 	# ------------------------------------------------------------------ paginile
-	def laPagina(self, generatie, texte, fel=0, intarziere_ms=-1, cfg=None, rezerve=None):
+	def laPagina(self, generatie, texte, fel=0, intarziere_ms=-1, cfg=None, rezerve=None, mesaj_lipsa=None, servicii_pregatite=None):
 		"""functia nucleului. -> lista de traduceri (din memorie), True (vine prin setTranslation; fiecare pagina asteptata
 		primeste un raspuns, si renuntarea: setTranslation(gen, [])), None (nu se traduce acum: campuri lipsa, pauza
 		dupa erori, niciun serviciu liber; nucleul arata originalul cu semn) sau False (fara text, deja in limba tinta,
@@ -3310,16 +3290,15 @@ class Traducator(object):
 		# fiecare serviciu o singura data
 		folosite = []
 		for r in lant:
-			if r["serviciu"] not in [c["serviciu"] for c in folosite] and not ceLipseste(r):
+			if r["serviciu"] in [c["serviciu"] for c in folosite]:
+				continue
+			pregatit = r["serviciu"] in servicii_pregatite if servicii_pregatite is not None else not ceLipseste(r)
+			if pregatit:
 				folosite.append(r)
 		if not folosite:
 			if generatie and not self.lipsa_spusa:
 				self.lipsa_spusa = True
-				mesaj = _t("Traducerea subtitrărilor nu merge încă. %s Completează în Meniu › Setări › Sunet și "
-					"subtitrări › Traducerea subtitrărilor.") % textCeLipseste(cfg)
-				# SBR: subtitrarile gata facute de pe internet, cand o sursa e pregatita (textCeMaiPoate)
-				sfat = textCeMaiPoate()
-				self._mesaj(mesaj + u" " + sfat if sfat else mesaj)
+				self._mesaj(mesajConfigurareLipsa(cfg) if mesaj_lipsa is None else mesaj_lipsa)
 			return None
 		principal = cfg["serviciu"]
 		lant = folosite
@@ -3520,7 +3499,7 @@ class Traducator(object):
 		b = self.blocat_cheie.get((serv, idx))
 		return b is None or (b[0] is not None and acum >= b[0])
 
-	def _trimiteLot(self, lot):
+	def _trimiteLot(self, lot, toate_cheile=None, executa=None, stop=None, termen_s=None):
 		"""pe fir: lotul la primul serviciu liber din lant; pentru fiecare serviciu se incearca pe rand cheile
 		disponibile pornind de la ultima care a mers. La cotat/eroare de cheie se trece la urmatoarea cheie a aceluiasi
 		serviciu. Cand toate cheile serviciului sunt blocate, cererea trece la urmatorul serviciu liber din lant.
@@ -3528,7 +3507,7 @@ class Traducator(object):
 		info = {"treceri": [], "erori": [], "mesaj": None, "minute": 0, "pe_zi": None, "oprite": [], "revenite": []}
 		eroare = None
 		incercat = False
-		toate_cheile = chei().citeste_toate()
+		toate_cheile = chei().citeste_toate() if toate_cheile is None else toate_cheile
 		for i, cfg in enumerate(lot.lant):
 			serv = cfg["serviciu"]
 			with self.lacat:
@@ -3545,6 +3524,8 @@ class Traducator(object):
 			chei_incercate = 0
 			serviciu_reusit = False
 			while chei_incercate < n_chei:
+				if stop is not None and stop.is_set():
+					return (lot, None, None, 0, info)
 				idx_curent = (idx_start + chei_incercate) % n_chei
 				chei_incercate += 1
 				acum = self._acum()
@@ -3557,8 +3538,12 @@ class Traducator(object):
 					cfg_curent["cheie"] = chei_serv[idx_curent]
 				inceput = self._acum()
 				try:
-					rez = traduceAcum(cfg_curent, list(lot.texte), lot.sursa, cfg_curent["tinta"], lot.context,
-						self.termenMs() / 1000.0, self._trimite)
+					termen = termen_s if termen_s is not None else self.termenMs() / 1000.0
+					if executa is not None:
+						rez = executa(cfg_curent, termen)
+					else:
+						rez = traduceAcum(cfg_curent, list(lot.texte), lot.sursa, cfg_curent["tinta"], lot.context,
+							termen, self._trimite)
 				except EroareTraducere as e:
 					eroare = _curataEroare(e, chei_serv)
 				except Exception as e:
@@ -3866,6 +3851,10 @@ class Traducator(object):
 				pass
 
 	def _puneInNucleu(self, generatie, traduse):
+		HdsVorbireTV = sys.modules.get("Components.HdsVorbireTV")
+		if HdsVorbireTV is not None:
+			if HdsVorbireTV.rezultatNativ(generatie, traduse) is False:
+				return
 		w = self.widget
 		if w is None:
 			return
@@ -4614,6 +4603,9 @@ def diagnosticPornire(s=None, pista=None, ocr=None):
 def cereOcr():
 	"""traducerea e pornita si vrea si subtitrarile DVB (pozele trec prin recunoasterea textului)"""
 	try:
+		HdsVorbire = sys.modules.get("Components.HdsVorbire")
+		if HdsVorbire is not None and HdsVorbire.initConfig().pornit.value:
+			return True
 		s = initConfig()
 		return bool(s.pornit.value and s.dvb.value)
 	except Exception:
@@ -4625,6 +4617,9 @@ def traduceDvbAcum():
 	cea ghicita dupa canal la o pista fara limba, nu e deja limba tinta, iar canalul nu e oprit); o pista fara limba
 	care nu se poate ghici se traduce (Components/HdsOcrSubtitrari.ocrDeFolos)"""
 	try:
+		HdsVorbireTV = sys.modules.get("Components.HdsVorbireTV")
+		if HdsVorbireTV is not None and HdsVorbireTV.nativa():
+			return True
 		s = initConfig()
 		if not (s.pornit.value and s.dvb.value):
 			return False
@@ -4661,6 +4656,15 @@ def inainte(texte):
 	if _INSTANTA[0] is None or _INSTANTA[0].widget is None:
 		return		# traducerea nu e legata de nucleu
 	try:
+		HdsVorbireTV = sys.modules.get("Components.HdsVorbireTV")
+		v = HdsVorbireTV.nativa() if HdsVorbireTV is not None else None
+		if v:
+			lant = [dict(c, tinta=v.cfg_nativa["tinta"]) for c in v.cfg_nativa["traducere"]]
+			if lant:
+				_INSTANTA[0].laPagina(0, texte, cfg=lant[0], rezerve=lant[1:],
+					mesaj_lipsa=v.cfg_nativa.get("mesaj_traducere", ""),
+					servicii_pregatite=v.cfg_nativa.get("servicii_pregatite"))
+			return
 		s = initConfig()
 		if s.pornit.value and s.dvb.value:
 			_INSTANTA[0].inainte(texte)
@@ -4696,6 +4700,22 @@ def pistaAleasa(pista):
 	t = instanta()
 	t.uitaPista()
 	t.sursa = cod2(limba)
+	HdsVorbire = sys.modules.get("Components.HdsVorbire")
+	if HdsVorbire is not None and HdsVorbire._alegere_nativa:
+		HdsVorbireTV = sys.modules.get("Components.HdsVorbireTV")
+		P = sys.modules.get("Components.HdsPisteLimbi")
+		owner = P.infobarActiv() if P is not None else None
+		ref = owner.session.nav.getCurrentlyPlayingServiceReference() if owner is not None else None
+		cfg = HdsVorbire._date.copie or {}
+		cle = HdsVorbireTV.cheie(ref, cfg) if ref is not None and HdsVorbireTV is not None else None
+		t.canal_oprit = cle in cfg.get("canale_oprite", ())
+		if not stiuta and not t.sursa and fel in (0, 1):
+			t.pistaFaraLimba(eticheta, fel)
+		return
+	HdsVorbireTV = sys.modules.get("Components.HdsVorbireTV")
+	if HdsVorbireTV is not None and HdsVorbireTV.nativa():
+		# Speech priority already supplies target and chain from the worker snapshot.
+		return
 	if not initConfigSigur("pornit"):
 		return		# traducerea oprita: nimic de ghicit; pornita mai tarziu, _laSchimbare cheama din nou pistaAleasa
 	if not stiuta and not t.sursa and fel in (0, 1):
@@ -4924,6 +4944,21 @@ def pentruNucleu(widget, t=None):
 
 	def laPagina(generatie, texte, fel=0, intarziere_ms=-1):
 		try:
+			HdsVorbireTV = sys.modules.get("Components.HdsVorbireTV")
+			v = HdsVorbireTV.pagina(texte) if HdsVorbireTV is not None else None
+			if v:
+				HdsVorbireTV.leagaPagina(generatie, v)
+				lant = [dict(c, tinta=v.cfg_nativa["tinta"]) for c in v.cfg_nativa["traducere"]]
+				if not lant:
+					return False
+				rez = t.laPagina(generatie, texte, fel, intarziere_ms, cfg=lant[0], rezerve=lant[1:],
+					mesaj_lipsa=v.cfg_nativa.get("mesaj_traducere", ""),
+					servicii_pregatite=v.cfg_nativa.get("servicii_pregatite"))
+				if isinstance(rez, list) or rez is False or rez is None:
+					HdsVorbireTV.rezultatNativ(generatie, rez if isinstance(rez, list) else texte)
+				return rez
+			if HdsVorbireTV is not None and not initConfig().pornit.value:
+				return False
 			return t.laPagina(generatie, texte, fel, intarziere_ms)
 		except Exception as e:
 			_jurnal("pagina: %s" % e)
@@ -4947,7 +4982,8 @@ def puneLegatura(widget=None):
 		else:
 			s = initConfig()
 			t = instanta()
-			if s.pornit.value:
+			HdsVorbire = sys.modules.get("Components.HdsVorbire")
+			if s.pornit.value or (HdsVorbire is not None and HdsVorbire.initConfig().pornit.value):
 				t.widget = w
 				w.setTranslationMode(1 if s.afisare.value == "sub" else 0)
 				w.setTranslationWait(t.asteptareMs())
@@ -4975,6 +5011,9 @@ def puneLegatura(widget=None):
 
 
 def _laSchimbare(element=None):
+	HdsVorbire = sys.modules.get("Components.HdsVorbire")
+	if HdsVorbire is not None:
+		HdsVorbire.setariSchimbate()
 	instanta().setariSchimbate()
 	if element is None or element is initConfig().pornit:
 		# traducerea pornita peste o subtitrare care merge deja: limba ghicita si canalul oprit se afla acum

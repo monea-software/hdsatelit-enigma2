@@ -26,6 +26,11 @@
 # Ecranul: geometria din FBIOGET_VSCREENINFO / FBIOGET_FSCREENINFO (si /sys/class/graphics/fb0/stride), pixelii dupa
 # pozitiile culorilor date de driver (ARGB8888 pe HiSilicon; 16 biti merge si el), scrisi in pagina vazuta acum
 # (yoffset), cu alfa plin. Totul se compune in memorie si se scrie o data.
+# Pornirea cu nucleul altui loc (Components/HdsDiagnostic.pornireAmestecata, din --python; numai citire, fara montare):
+# in faza cod, ce s-a intamplat si locul acestui software stau imediat dupa fraza codului (pe ecran numai aceasta
+# propozitie, in pagina si in diagnostic.txt si nucleul pornit fata de cel al imaginii), iar rugamintea de poza nu se mai
+# pune (raportul pornirii ratate are deja toate datele); campurile pornire si nucleu_pornit intra in date (tabelul
+# paginii, randurile tehnice, codul QR). --radacina numai pentru probe.
 # Nimic personal: numai campurile din date.txt (fara MAC, fara serie, fara jeton) si ultimele randuri din
 # hds-caderi.log (texte fixe), curatate la ASCII si trecute prin faraAdrese (ca rz_filtru din hds-rezerva.sh): o
 # adresa cu schema (si forma %3a//), un utilizator:parola@ si o adresa MAC devin un text fix.
@@ -37,7 +42,7 @@ import struct
 import sys
 import zlib
 
-LIMBI = ('ar', 'ca', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'fy', 'hr', 'hu', 'is', 'it', 'lt', 'lv', 'nl', 'no', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sr', 'sv', 'tr', 'uk')
+LIMBI = ('ar', 'ca', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'fy', 'hr', 'hu', 'is', 'it', 'lt', 'lv', 'nl', 'no', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sr', 'sv', 'tr', 'uk', 'uz')
 CALE_SETARI = "/etc/enigma2/settings"
 FORUM = "https://stb.hdsatelit.com/forum/"
 EMAIL = "contact@hdsatelit.com"
@@ -85,6 +90,10 @@ TEXTE = {
 		"E305": "Interfața nu a apărut în 5 minute: s-a blocat la pornire.",
 		"E302": "Interfața cade și în modul sigur.",
 		"E309": "Interfața s-a oprit la pornire din alt motiv.",
+		"amestec": "Receptorul a pornit cu nucleul locului %(nucleu)s și cu sistemul locului %(sistem)s; locul acestui "
+			"software este %(sistem)s.",
+		"nucleu_strain": "Nucleul pornit (%(pornit)s) nu este al acestui software (%(imagine)s), deci driverele nu se "
+			"încarcă.",
 	},
 	"en": {
 		"titlu_E1": "Software for another receiver",
@@ -127,12 +136,18 @@ TEXTE = {
 		"E305": "The interface did not appear in 5 minutes: it got stuck at start.",
 		"E302": "The interface also crashes in safe mode.",
 		"E309": "The interface stopped at start for another reason.",
+		"amestec": "The receiver started with the kernel of slot %(nucleu)s and the system of slot %(sistem)s; the slot "
+			"of this software is %(sistem)s.",
+		"nucleu_strain": "The running kernel (%(pornit)s) is not the one of this software (%(imagine)s), so the drivers "
+			"do not load.",
 	},
 }
 
 # randurile tehnice de pe ecran: (cheia din date.txt, eticheta, cheia valorii asteptate)
 # (cele mai importante intai: pe 720p incap mai putine)
 RANDURI_TEHNICE = (
+	("pornire", "pornire", None),
+	("nucleu_pornit", "nucleu pornit", "nucleu_imagine"),
 	("model_id", "model placa", "asteptat_model_id"),
 	("cip", "cip", "asteptat_cip"),
 	("boxtype", "boxtype", "asteptat_boxtype"),
@@ -215,7 +230,7 @@ def alegeLimba(date, texte_diag, cale_setari=None):
 	valoare = setari.get("config.osd.language", "")
 	if not re.fullmatch(r"[A-Za-z]{2,3}(?:[_-][A-Za-z0-9-]+)?", valoare):
 		return "en"
-	limba = re.split("[_-]", valoare, 1)[0].lower()
+	limba = re.split("[_-]", valoare, maxsplit=1)[0].lower()
 	return limba if limba in LIMBI else "en"
 
 
@@ -227,6 +242,47 @@ def texte(limba, texte_diag):
 		if isinstance(k, str) and isinstance(v, str) and v:
 			t[k] = v
 	return t
+
+
+def pornireAmestecata(dosar_python, radacina=None):
+	"""Components/HdsDiagnostic.pornireAmestecata (nucleul unui loc cu sistemul altuia, nucleul pornit fara module in
+	imagine), sau None (fara modul, nimic de spus, orice eroare)"""
+	if not dosar_python or not os.path.isdir(os.path.join(dosar_python, "Components")):
+		return None
+	try:
+		if dosar_python not in sys.path:
+			sys.path.insert(0, dosar_python)
+		from Components import HdsDiagnostic
+		f = getattr(HdsDiagnostic, "pornireAmestecata", None)
+		return f(radacina or None) if f else None
+	except BaseException as e:
+		print("pornirea nu s-a putut citi: %r" % (e,))
+		return None
+
+
+def punePornirea(date, pa):
+	"""Campurile pornirii amestecate in date (numai litere, cifre si semne simple)"""
+	if not pa:
+		return
+	if pa.get("nucleu") and pa.get("sistem"):
+		date["pornire_nucleu"], date["pornire_sistem"] = textAscii(str(pa["nucleu"]), 8), textAscii(str(pa["sistem"]), 8)
+		date["pornire"] = "nucleul locului %s, sistemul locului %s" % (date["pornire_nucleu"], date["pornire_sistem"])
+	if pa.get("pornit") and pa.get("imagine"):
+		date["nucleu_pornit"], date["nucleu_imagine"] = textAscii(pa["pornit"], 60), textAscii(pa["imagine"], 60)
+
+
+def frazePornire(date, t):
+	"""Propozitiile pornirii amestecate, in limba ecranului; [] fara ea"""
+	rez = []
+	for cheie, valori in (("amestec", {"nucleu": date.get("pornire_nucleu"), "sistem": date.get("pornire_sistem")}),
+			("nucleu_strain", {"pornit": date.get("nucleu_pornit"), "imagine": date.get("nucleu_imagine")})):
+		if not all(valori.values()):
+			continue
+		try:
+			rez.append(t.get(cheie, "") % valori)
+		except (KeyError, TypeError, ValueError):
+			rez.append((TEXTE["en"].get(cheie) or "") % valori)
+	return [x for x in rez if x]
 
 
 def grupa(cod):
@@ -306,9 +362,13 @@ def textComplet(date, t, t_en, jurnal):
 	r = ["HD Satelit " + cod, t.get(grupa(cod), ""), ""]
 	for c in coduri:
 		r.append("%s: %s" % (c, frazaCod(c, t)))
-	r += ["", t.get("rugaminte", "")]
+	pornire, pornire_en = frazePornire(date, t), frazePornire(date, t_en)
+	r += pornire
+	# cu pornirea amestecata nu se cere poza: raportul are datele
+	r += ["", t.get("rugaminte", "")] if not pornire else []
 	if t is not t_en:
-		r += ["", t_en.get(grupa(cod), "")] + ["%s: %s" % (c, frazaCod(c, t_en)) for c in coduri] + [t_en.get("rugaminte", "")]
+		r += ["", t_en.get(grupa(cod), "")] + ["%s: %s" % (c, frazaCod(c, t_en)) for c in coduri] + pornire_en + \
+			([t_en.get("rugaminte", "")] if not pornire else [])
 	r += ["", FORUM, EMAIL, ""]
 	for k in sorted(date):
 		r.append("%s=%s" % (k, date[k]))
@@ -326,12 +386,17 @@ def scriePagina(dosar, date, t, t_en, jurnal):
 		"<style>body{font-family:sans-serif;background:#10141c;color:#eef0f8;margin:16px;max-width:60em}"
 		"h1{color:#ffd25a;font-size:1.4em}.cod{color:#ff705a;font-size:3em;font-weight:bold;margin:.2em 0}"
 		"a{color:#78c8ff}td{padding:2px 8px;vertical-align:top;word-break:break-all}"
+		".pornire{color:#ffd25a;font-weight:bold}"
 		"textarea{width:100%;height:16em;background:#0a0d12;color:#eef0f8}</style></head><body>",
 		"<h1>%s</h1>" % _esc(t.get(grupa(cod), "")),
 		'<p class="cod">%s</p>' % _esc(cod)]
 	for c in coduri:
 		h.append("<p><b>%s</b>: %s</p>" % (_esc(c), _esc(frazaCod(c, t))))
-	h.append("<p>%s</p>" % _esc(t.get("rugaminte", "")))
+	pornire = frazePornire(date, t)
+	for fraza in pornire:
+		h.append('<p class="pornire">%s</p>' % _esc(fraza))
+	if not pornire:
+		h.append("<p>%s</p>" % _esc(t.get("rugaminte", "")))
 	h.append('<p><a href="%s">%s</a> &nbsp; <a href="mailto:%s?subject=HD%%20Satelit%%20%s">%s</a></p>'
 		% (FORUM, FORUM, EMAIL, _esc(cod), EMAIL))
 	h.append("<p>%s</p>" % _esc(reincercare(t, date)))
@@ -482,6 +547,8 @@ class Litere(object):
 			for p in range(a, b + 1):
 				self.index[p] = i
 				i += 1
+		# Apostroful uzbec U+02BB foloseste desenul existent al lui U+2018.
+		self.index[0x02BB] = self.index[0x2018]
 		self.date = date
 		self.pe_rand = pe_rand
 		self.pe_litera = pe_litera
@@ -749,9 +816,16 @@ def randuriEcran(date, t, litere, coloane, cu_qr=False):
 		r.append(("%s %s" % (t.get("coduri", ""), " ".join(coduri)), 1, CULORI["gri"]))
 	for rand in potrivesteText(frazaCod(cod, t), coloane):
 		r.append((rand, 1, CULORI["text"]))
+	# pe televizor numai prima propozitie a pornirii amestecate, in locul rugamintii de poza (aceleasi randuri si la 720p, cu
+	# adresa paginii vazuta); nucleul pornit fata de cel al imaginii sta in randurile tehnice, pagina le are pe toate
+	pornire = frazePornire(date, t)[:1]
+	for fraza in pornire:
+		for rand in potrivesteText(fraza, coloane):
+			r.append((rand, 1, CULORI["titlu"]))
 	r.append((None, 1, None))
-	for rand in potrivesteText(t.get("rugaminte", ""), coloane):
-		r.append((rand, 1, CULORI["text"]))
+	if not pornire:
+		for rand in potrivesteText(t.get("rugaminte", ""), coloane):
+			r.append((rand, 1, CULORI["text"]))
 	r.append((FORUM + "   " + EMAIL, 1, CULORI["adresa"]))
 	a = adresa(date)
 	if a:
@@ -872,7 +946,8 @@ def deseneaza(cale_fb, date, t, t_en, geometrie_ceruta, qr=None):
 # ---------------------------------------------------------------- pornirea
 
 def argumente(argv):
-	a = {"--date": "", "--dosar": "", "--python": "", "--fb": "", "--jurnal": "", "--geometrie": "", "--setari": CALE_SETARI}
+	a = {"--date": "", "--dosar": "", "--python": "", "--fb": "", "--jurnal": "", "--geometrie": "", "--setari": CALE_SETARI,
+		"--radacina": ""}
 	fara_fb = False
 	i = 0
 	while i < len(argv):
@@ -897,6 +972,8 @@ def main(argv):
 	t = texte(limba, texte_diag)
 	t_en = texte("en", texte_diag) if limba != "en" else t
 	jurnal = jurnalCaderi(a["--jurnal"]) if a["--jurnal"] else []
+	if faza not in FAZE_FARA_COD:
+		punePornirea(date, pornireAmestecata(a["--python"], a["--radacina"]))
 	if a["--dosar"] and faza not in FAZE_FARA_COD:
 		try:
 			scriePagina(a["--dosar"], date, t, t_en, jurnal)

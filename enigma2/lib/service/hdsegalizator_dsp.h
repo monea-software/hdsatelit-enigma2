@@ -1346,7 +1346,7 @@ namespace hdsegal
 		static constexpr double LATENTA_PLACA_S = 0.060; /* de la ALSA la iesire: pista din placa si iesirea */
 		static constexpr double LATENTA_ALSA_S = 0.100;  /* cand ALSA nu spune intarzierea */
 
-		SincronTv(): stare(ASTEAPTA), eroare_ms(0.0), taceri(0), aruncari(0), pana_auzit_s(0.0), m_pornit_ms(0), m_ultim_ceas_bun(0),
+		SincronTv(): faraPornire(false), stare(ASTEAPTA), eroare_ms(0.0), intarziere_ms(0.0), taceri(0), aruncari(0), pana_auzit_s(0.0), m_pornit_ms(0), m_ultim_ceas_bun(0),
 			m_tacere_ramasa(0), m_ritm_t(0), m_ritm_pts(0), m_ceas_stabil(false), m_a_pornit(false), m_asteapta_de_la(0),
 			m_intarziere_s(-1.0), m_aruncat_pornire(false), m_corectie(-1),
 			m_corectie_cadre(0), m_corectii_poz(0)
@@ -1356,6 +1356,12 @@ namespace hdsegal
 		}
 
 		void porneste(uint64_t acum_ms) { m_pornit_ms = acum_ms; }
+
+		/* HiSilicon: ALSA se deschide abia dupa ce decodorul placii si-a luat pista si placa da ceasul imaginii (motorul,
+		   asteaptaPista). Cat faraPornire e true, pas() tine numai ceasul imaginii (ritmul, FARA_CEAS) si tamponul, fara
+		   hotararea primului esantion si fara socotirea NEPOTRIVIT_MS; ceasStabil() spune cand se poate deschide ALSA. */
+		bool faraPornire;
+		bool ceasStabil() const { return m_ceas_stabil; }
 
 		/* are_v / pts_v: ceasul imaginii in clipa `acum` (90 kHz); alsa_s: intarzierea spusa de ALSA (< 0: nu se stie);
 		   potrivire_s: reglajul omului (+ = sunetul mai tarziu). `coboara`: sunetul perioadei coboara la zero; `ev`: ce
@@ -1392,12 +1398,18 @@ namespace hdsegal
 				pastreazaCeleNoi(p);
 				return PERIOADA;
 			}
+			if (faraPornire)
+			{
+				pastreazaCeleNoi(p);
+				return PERIOADA;
+			}
 			if (m_tacere_ramasa > 0)
 				return dinTacere();
 			/* intarzierea pana se aude: ALSA (prin dmix sare cu cate o perioada a placii) netezita, plus placa */
 			const double a = alsa_s >= 0.0 && alsa_s < 1.0 ? alsa_s : LATENTA_ALSA_S;
 			m_intarziere_s = m_intarziere_s < 0.0 ? a : m_intarziere_s + (a - m_intarziere_s) * 0.05;
 			const double intarziere = m_intarziere_s + LATENTA_PLACA_S;
+			intarziere_ms = intarziere * 1000.0;
 			uint64_t pts_a = 0;
 
 			if (p.asteapta())
@@ -1503,6 +1515,7 @@ namespace hdsegal
 
 		std::atomic<int> stare;
 		std::atomic<double> eroare_ms;
+		std::atomic<double> intarziere_ms;   /* drumul socotit de la ALSA pana se aude (ALSA netezit + placa), pentru jurnal */
 		std::atomic<unsigned> taceri, aruncari;
 		double pana_auzit_s;   /* la PORNIT: din clipa hotararii pana se aude primul esantion (numai firul placii) */
 

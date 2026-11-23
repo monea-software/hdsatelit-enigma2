@@ -1,0 +1,276 @@
+From: HD Satelit <dev@hdsatelit.com>
+Subject: [PATCH] Scope per-playback HTTP headers to the channel origin
+
+Upstream-Status: Inappropriate [HDS playback context]
+
+diff --git a/ext/adaptivedemux2/downloadhelper.c b/ext/adaptivedemux2/downloadhelper.c
+index 6dd53ab..dcc71ef 100644
+--- a/ext/adaptivedemux2/downloadhelper.c
++++ b/ext/adaptivedemux2/downloadhelper.c
+@@ -21,6 +21,7 @@
+ 
+ #include "downloadhelper.h"
+ #include "../soup/gstsouploader.h"
++#include "../soup/hdshttporigin.h"
+ 
+ GST_DEBUG_CATEGORY_EXTERN (adaptivedemux2_debug);
+ #define GST_CAT_DEFAULT adaptivedemux2_debug
+@@ -49,6 +50,7 @@ struct DownloadHelper
+ 
+   gchar *referer;
+   gchar *user_agent;
++  GstContext *hds_context;
+   SoupCookieJar *cookie_jar;
+ };
+ 
+@@ -451,6 +453,32 @@ http_header_to_structure (const gchar * name, const gchar * value,
+   }
+ }
+ 
++/* HDS: check each new destination, including redirects, against the channel. */
++static void
++hds_http_apply_message (DownloadHelper * dh, SoupMessage * msg)
++{
++  if (!dh->hds_context)
++    return;
++  const GstStructure *headers = gst_context_get_structure (dh->hds_context);
++  gchar *uri = gst_soup_message_uri_to_string (msg);
++  gboolean allowed = hds_http_origin_matches (headers, uri);
++  SoupMessageHeaders *msg_headers = _soup_message_get_request_headers (msg);
++  g_free (uri);
++  for (gint i = 0; i < gst_structure_n_fields (headers); ++i) {
++    const gchar *key = gst_structure_nth_field_name (headers, i);
++    const gchar *value = gst_structure_get_string (headers, key);
++    if (!value)
++      continue;
++    _soup_message_headers_remove (msg_headers, key);
++    /* The upstream request event may have copied this explicit cookie to the
++     * jar. Keep it disabled for this message even when the header is denied. */
++    if (g_ascii_strcasecmp (key, "Cookie") == 0)
++      _soup_message_disable_feature (msg, _soup_cookie_jar_get_type ());
++    if (allowed || g_ascii_strcasecmp (key, "User-Agent") == 0)
++      _soup_message_headers_append (msg_headers, key, value);
++  }
++}
++
+ static void
+ soup_msg_restarted_cb (SoupMessage * msg, gpointer user_data)
+ {
+@@ -463,6 +491,7 @@ soup_msg_restarted_cb (SoupMessage * msg, gpointer user_data)
+     char *redirect_uri = gst_soup_message_uri_to_string (msg);
+     gboolean redirect_permanent = (status == SOUP_STATUS_MOVED_PERMANENTLY);
+ 
++    hds_http_apply_message (transfer->dh, msg);
+     GST_DEBUG ("%u redirect to \"%s\" (permanent %d)",
+         status, redirect_uri, redirect_permanent);
+ 
+@@ -855,10 +884,22 @@ downloadhelper_free (DownloadHelper * dh)
+ 
+   g_free (dh->referer);
+   g_free (dh->user_agent);
++  if (dh->hds_context)
++    gst_context_unref (dh->hds_context);
+ 
+   g_free (dh);
+ }
+ 
++void
++downloadhelper_set_http_context (DownloadHelper * dh, GstContext * context)
++{
++  g_mutex_lock (&dh->transfer_lock);
++  if (dh->hds_context)
++    gst_context_unref (dh->hds_context);
++  dh->hds_context = context ? gst_context_ref (context) : NULL;
++  g_mutex_unlock (&dh->transfer_lock);
++}
++
+ void
+ downloadhelper_set_referer (DownloadHelper * dh, const gchar * referer)
+ {
+@@ -1219,6 +1260,9 @@ downloadhelper_submit_request (DownloadHelper * dh,
+       _soup_message_headers_append (msg_headers, "User-Agent", dh->user_agent);
+     }
+ 
++    /* HDS: adaptive2 uses SoupMessage directly, not child source elements. */
++    hds_http_apply_message (dh, msg);
++
+     transfer_task = transfer_task_new_soup (dh, request, msg, blocking);
+ 
+     g_signal_connect (msg, "restarted", G_CALLBACK (soup_msg_restarted_cb),
+diff --git a/ext/adaptivedemux2/downloadhelper.h b/ext/adaptivedemux2/downloadhelper.h
+index f20a44c..a30075f 100644
+--- a/ext/adaptivedemux2/downloadhelper.h
++++ b/ext/adaptivedemux2/downloadhelper.h
+@@ -53,6 +53,7 @@ void downloadhelper_free (DownloadHelper * dh);
+ 
+ void downloadhelper_set_referer (DownloadHelper * dh, const gchar *referer);
+ void downloadhelper_set_user_agent (DownloadHelper * dh, const gchar *user_agent);
++void downloadhelper_set_http_context (DownloadHelper *dh, GstContext *context);
+ void downloadhelper_add_cookie (DownloadHelper * dh, const gchar *uri,
+     const gchar *cookie);
+ 
+diff --git a/ext/adaptivedemux2/gstadaptivedemux.c b/ext/adaptivedemux2/gstadaptivedemux.c
+index e7277ba..feb4790 100644
+--- a/ext/adaptivedemux2/gstadaptivedemux.c
++++ b/ext/adaptivedemux2/gstadaptivedemux.c
+@@ -746,6 +746,11 @@ gst_adaptive_demux_change_state (GstElement * element,
+             (_("Element requires a streams-aware context.")), (NULL));
+         goto fail_out;
+       }
++      /* HDS: snapshot before download threads start, with no owner reference. */
++      GstContext *hds_context = gst_element_get_context (element, "hds.http.headers");
++      downloadhelper_set_http_context (demux->download_helper, hds_context);
++      if (hds_context)
++        gst_context_unref (hds_context);
+       break;
+     case GST_STATE_CHANGE_PAUSED_TO_READY:
+       if (g_atomic_int_compare_and_exchange (&demux->running, TRUE, FALSE))
+diff --git a/ext/soup/gstsouphttpsrc.c b/ext/soup/gstsouphttpsrc.c
+index 1c19746..18cfc75 100644
+--- a/ext/soup/gstsouphttpsrc.c
++++ b/ext/soup/gstsouphttpsrc.c
+@@ -80,6 +80,7 @@
+ #include <glib/gi18n-lib.h>
+ #include "gstsoupelements.h"
+ #include "gstsouphttpsrc.h"
++#include "hdshttporigin.h"
+ #include "gstsouputils.h"
+ 
+ #include <gst/tag/tag.h>
+@@ -1968,6 +1969,22 @@ gst_soup_http_src_restarted_cb (SoupMessage * msg, GstSoupHTTPSrc * src)
+   GST_DEBUG_OBJECT (src, "%u redirect to \"%s\" (permanent %d)",
+       status, src->redirection_uri, src->redirection_permanent);
+ 
++  GstContext *hds_context =
++      gst_element_get_context (GST_ELEMENT (src), "hds.http.headers");
++  if (hds_context) {
++    const GstStructure *headers = gst_context_get_structure (hds_context);
++    if (!hds_http_origin_matches (headers, src->redirection_uri)) {
++      SoupMessageHeaders *msg_headers = _soup_message_get_request_headers (msg);
++      for (gint i = 0; i < gst_structure_n_fields (headers); ++i) {
++        const gchar *key = gst_structure_nth_field_name (headers, i);
++        if (gst_structure_get_string (headers, key) &&
++            g_ascii_strcasecmp (key, "User-Agent") != 0)
++          _soup_message_headers_remove (msg_headers, key);
++      }
++    }
++    gst_context_unref (hds_context);
++  }
++
+   if (!src->location_trusted) {
+     if (src->location && _is_cross_origin (src->location, src->redirection_uri)) {
+       SoupMessageHeaders *headers = _soup_message_get_request_headers (msg);
+@@ -2609,6 +2626,49 @@ gst_soup_http_src_start (GstBaseSrc * bsrc)
+ 
+   GST_DEBUG_OBJECT (src, "start(\"%s\")", src->location);
+ 
++  /* HDS: detached playlist sources request the same per-playback context.
++   * GstUriDownloader proxies this synchronous request through its parent.
++   * Keep values in extra_headers so existing redirect stripping still applies. */
++  GstContext *hds_context =
++      gst_element_get_context (GST_ELEMENT (src), "hds.http.headers");
++  if (!hds_context) {
++    gst_element_post_message (GST_ELEMENT (src),
++        gst_message_new_need_context (GST_OBJECT (src), "hds.http.headers"));
++    hds_context = gst_element_get_context (GST_ELEMENT (src), "hds.http.headers");
++  }
++  if (hds_context) {
++    const GstStructure *headers = gst_context_get_structure (hds_context);
++    gboolean allowed = hds_http_origin_matches (headers, src->location);
++    for (gint i = 0; i < gst_structure_n_fields (headers); ++i) {
++      const gchar *key = gst_structure_nth_field_name (headers, i);
++      const gchar *value = gst_structure_get_string (headers, key);
++      if (!value)
++        continue;
++      if (g_ascii_strcasecmp (key, "User-Agent") == 0) {
++        g_free (src->user_agent);
++        src->user_agent = g_strdup (value);
++      } else if (g_ascii_strcasecmp (key, "Cookie") == 0) {
++        g_strfreev (src->cookies);
++        src->cookies = NULL;
++        if (allowed) {
++          src->cookies = g_new0 (gchar *, 2);
++          src->cookies[0] = g_strdup (value);
++        }
++        if (src->extra_headers)
++          gst_structure_remove_field (src->extra_headers, key);
++      } else {
++        if (src->extra_headers)
++          gst_structure_remove_field (src->extra_headers, key);
++        if (allowed) {
++          if (!src->extra_headers)
++            src->extra_headers = gst_structure_new_empty ("headers");
++          gst_structure_set (src->extra_headers, key, G_TYPE_STRING, value, NULL);
++        }
++      }
++    }
++    gst_context_unref (hds_context);
++  }
++
+   g_mutex_lock (&src->session_mutex);
+   ret = gst_soup_http_src_session_open (src);
+   g_mutex_unlock (&src->session_mutex);
+diff --git a/ext/soup/hdshttporigin.h b/ext/soup/hdshttporigin.h
+new file mode 100644
+index 0000000..084b703
+--- /dev/null
++++ b/ext/soup/hdshttporigin.h
+@@ -0,0 +1,58 @@
++/* Copyright (C) 2026 moneasoftware.com & hdsatelit.com
++ * SPDX-License-Identifier: LGPL-2.0-or-later
++ * Private headers are scoped to the original HTTP scheme, host and port.
++ */
++#ifndef HDS_HTTP_ORIGIN_H
++#define HDS_HTTP_ORIGIN_H
++#include <gst/gst.h>
++
++static inline GUri *hds_http_parse_origin(const gchar *uri)
++{
++  GUri *parsed = uri ? g_uri_parse(uri, G_URI_FLAGS_NONE, NULL) : NULL;
++  const gchar *scheme = parsed ? g_uri_get_scheme(parsed) : NULL;
++  const gchar *host = parsed ? g_uri_get_host(parsed) : NULL;
++  if (!scheme || !host || !*host ||
++      (g_ascii_strcasecmp(scheme, "http") && g_ascii_strcasecmp(scheme, "https"))) {
++    if (parsed) g_uri_unref(parsed);
++    return NULL;
++  }
++  return parsed;
++}
++
++static inline gint hds_http_origin_port(GUri *uri)
++{
++  gint port = g_uri_get_port(uri);
++  return port < 0 ? (g_ascii_strcasecmp(g_uri_get_scheme(uri), "https") ? 80 : 443) : port;
++}
++
++static inline void hds_http_set_origin(GstStructure *headers, const gchar *uri)
++{
++  GUri *parsed = hds_http_parse_origin(uri);
++  if (!parsed) return;
++  GstStructure *origin = gst_structure_new("origin",
++      "scheme", G_TYPE_STRING, g_uri_get_scheme(parsed),
++      "host", G_TYPE_STRING, g_uri_get_host(parsed),
++      "port", G_TYPE_INT, hds_http_origin_port(parsed), NULL);
++  gst_structure_set(headers, "hds-origin", GST_TYPE_STRUCTURE, origin, NULL);
++  gst_structure_free(origin);
++  g_uri_unref(parsed);
++}
++
++static inline gboolean hds_http_origin_matches(const GstStructure *headers, const gchar *uri)
++{
++  const GValue *value = gst_structure_get_value(headers, "hds-origin");
++  const GstStructure *origin = value && GST_VALUE_HOLDS_STRUCTURE(value) ?
++      gst_value_get_structure(value) : NULL;
++  GUri *parsed = hds_http_parse_origin(uri);
++  const gchar *scheme = origin ? gst_structure_get_string(origin, "scheme") : NULL;
++  const gchar *host = origin ? gst_structure_get_string(origin, "host") : NULL;
++  gint port = -1;
++  gboolean allowed = parsed && scheme && host &&
++      gst_structure_get_int(origin, "port", &port) &&
++      !g_ascii_strcasecmp(scheme, g_uri_get_scheme(parsed)) &&
++      !g_ascii_strcasecmp(host, g_uri_get_host(parsed)) &&
++      port == hds_http_origin_port(parsed);
++  if (parsed) g_uri_unref(parsed);
++  return allowed;
++}
++#endif

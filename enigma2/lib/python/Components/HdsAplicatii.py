@@ -19,7 +19,8 @@
 #   script    scriptul tastelor pus in pagina (--script), numai cand programul il stie si fisierul exista;
 #   taste     harta tastelor (HARTI_TASTE), tradusa de enigma2 inainte sa ajunga la navigator;
 #   motor     "wpe" (hds-navigator, in imagine) sau "chromium" (hds-chromium, pachetul separat, cand exista);
-#             fara programul cerut, aplicatia porneste pe "wpe". Omul nu alege motorul: e al scurtaturii.
+#             preferinta catalogului din fabrica. Omul poate alege alt browser pentru scurtaturi.
+#   motor_obligatoriu: motor cerut de catalog; DRM Widevine cere intotdeauna Chromium.
 #   culoare   fondul cardului (#RRGGBB); poster = imagine optionala in DOSAR_POSTERE/<id>.png.
 # Numai servicii legale, fara DRM comercial: fara Widevine/PlayReady nu se pot reda, deci nu primesc card.
 #
@@ -158,7 +159,7 @@ SCURTATURI_IMAGINE = (
 		"id": "stb",
 		"titlu": "HD Satelit E2",
 		"descriere": N_("Imaginea HD Satelit: receptoarele, noutățile, ajutorul și forumul."),
-		"url": "https://stb.hdsatelit.com/?tv=1",
+		"url": "https://stb.hdsatelit.com/tv/imagine/",
 		"agent": "",
 		"adaos": "HDS-TV",
 		"script": "",
@@ -235,7 +236,7 @@ TEXT_FARA_VIDEO = N_("Filmele nu pornesc încă: redarea video vine cu actualiza
 
 _ID_BUN = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 _CULOARE_BUNA = re.compile(r"^#[0-9a-fA-F]{6}$")
-CAMPURI = ("id", "titlu", "descriere", "url", "agent", "adaos", "script", "taste", "motor", "culoare", "drm", "vizibil",
+CAMPURI = ("id", "titlu", "descriere", "url", "agent", "adaos", "script", "taste", "motor", "motor_obligatoriu", "culoare", "drm", "vizibil",
 	"dupa")
 
 
@@ -262,6 +263,8 @@ def scurtaturaBuna(s):
 		r["taste"] = "tv"
 	if r["motor"] not in PROGRAME:
 		r["motor"] = MOTOR_IMPLICIT
+	if r["motor_obligatoriu"] and r["motor_obligatoriu"] not in PROGRAME:
+		return None
 	if not _CULOARE_BUNA.match(r["culoare"]):
 		r["culoare"] = "#374EA1"
 	if r["drm"] not in ("", "widevine"):
@@ -328,6 +331,18 @@ TEXTE_STARE = {
 }
 
 MAGAZIN_IMAGINE = (
+	# 0.7.8 (CR3, Eduard 16.11.2026 16:25 si 18.11.2026: "nu gasesc meniul cu filme si seriale"): ecranul imaginii
+	# Screens/HdsFilmeSeriale (pana acum numai in Setari > Surse de pe internet) ca aplicatie; merge si fara navigator
+	# (Vu+ Solo SE). Titlul si descrierea sunt cele ale intrarii din meniu (deja traduse).
+	{
+		"id": "filme-seriale",
+		"fel": FEL_IMAGINE,
+		"titlu": N_("Filme și seriale"),
+		"titlu_tradus": "1",
+		"descriere": N_("Alegi ce vrei să urmărești din catalogul contului tău de televiziune prin internet."),
+		"pornire": "Screens.HdsFilmeSeriale:deschide",
+		"culoare": "#7A2E8E",
+	},
 	{
 		"id": "navigator",
 		"fel": FEL_IMAGINE,
@@ -366,6 +381,8 @@ MAGAZIN_IMAGINE = (
 )
 
 _PORNIRE_BUNA = re.compile(r"^Plugins(\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$")
+# 0.7.8 (CR3): aplicatiile din imagine (FEL_IMAGINE) pot porni si un ecran al imaginii (Screens.<Modul>:<functie>)
+_PORNIRE_ECRAN = re.compile(r"^Screens\.[A-Za-z_][A-Za-z0-9_]*:[A-Za-z_][A-Za-z0-9_]*$")
 _DOSAR_BUN = re.compile(r"^(Extensions|SystemPlugins)/[A-Za-z0-9_]+$")
 _NUME_PACHET_BUN = re.compile(r"^enigma2-plugin-[a-z0-9][a-z0-9.+-]*$")
 _POZA_BUNA = re.compile(r"^[A-Za-z0-9_.-]+\.(png|jpg)$")
@@ -386,7 +403,8 @@ def magazinBun(s):
 			return None
 		r[k] = v.strip()
 	r["fel"] = r["fel"] if r["fel"] in (FEL_PACHET, FEL_IMAGINE) else FEL_PACHET
-	if not _ID_BUN.match(r["id"]) or not r["titlu"] or not _PORNIRE_BUNA.match(r["pornire"]):
+	pornire_buna = _PORNIRE_BUNA.match(r["pornire"]) or (r["fel"] == FEL_IMAGINE and _PORNIRE_ECRAN.match(r["pornire"]))
+	if not _ID_BUN.match(r["id"]) or not r["titlu"] or not pornire_buna:
 		return None
 	if r["fel"] == FEL_PACHET and not (_NUME_PACHET_BUN.match(r["pachet"]) and _DOSAR_BUN.match(r["dosar"])):
 		return None
@@ -702,6 +720,10 @@ def optiuniProgram(cale, citeste=None):
 		"autoplay": (b"\x00autoplay\x00", b"Filmele paginii pornesc si cu sunet"),
 		# hds-chromium (CRM): dosarul modulului Widevine; fara optiune ia singur WIDEVINE_CAI (coordonatorul 09:46)
 		"widevine-cdm-path": (b"\x00widevine-cdm-path\x00",)}
+	# Lansatorul nostru Chromium este un script Python; optiunile sunt intre ghilimele.
+	if cale == PROGRAME["chromium"]:
+		for n in ("agent", "script"):
+			semne[n] += (('"%s"' % n).encode("ascii"), ("'%s'" % n).encode("ascii"))
 	try:
 		if citeste is not None:
 			date = citeste(cale)
@@ -721,13 +743,105 @@ def optiuniProgram(cale, citeste=None):
 	return _optiuni_program[cale]
 
 
+def motorObligatoriu(a):
+	"""Cerinta catalogului are prioritate fata de preferintele omului."""
+	if a.get("drm") == "widevine":
+		return "chromium"
+	return a.get("motor_obligatoriu") if a.get("motor_obligatoriu") in PROGRAME else ""
+
+
 def program(scurtatura, exista=os.path.exists):
-	"""(motorul folosit, calea programului): motorul scurtaturii daca programul lui exista, altfel "wpe"."""
-	motor = scurtatura.get("motor") or MOTOR_IMPLICIT
-	cale = PROGRAME.get(motor)
-	if cale and exista(cale):
-		return motor, cale
+	"""Cerinta, exceptia aplicatiei, alegerea generala, apoi rezerva instalata."""
+	obligatoriu = motorObligatoriu(scurtatura)
+	if obligatoriu:
+		return obligatoriu, PROGRAME[obligatoriu]
+	try:
+		motor = preferintaBrowser(scurtatura.get("id", "")) or browserGeneral()
+	except ImportError:
+		motor = ""
+	if motor not in PROGRAME:
+		motor = scurtatura.get("motor") or MOTOR_IMPLICIT
+	for m in (motor, MOTOR_IMPLICIT, "chromium"):
+		if m in PROGRAME and exista(PROGRAME[m]):
+			return m, PROGRAME[m]
 	return MOTOR_IMPLICIT, PROGRAME[MOTOR_IMPLICIT]
+
+
+def browsereDisponibile(exista=None):
+	exista = exista or os.path.exists
+	return [m for m in ("wpe", "chromium") if exista(PROGRAME[m])]
+
+
+def numeBrowser(motor):
+	return N_("HD Satelit Browser") if motor == "chromium" else N_("HD Satelit Navigator")
+
+
+def alegeriBrowser(aplicatie=False, id_=None, traducere=None):
+	t = traducere or (lambda s: s)
+	disponibile = browsereDisponibile()
+	lista = [("", t(N_("Setarea generală")) if aplicatie else t(N_("Din fabrică (după catalog)")))] + [
+		(m, t(numeBrowser(m))) for m in disponibile]
+	ales = preferintaBrowser(id_) if aplicatie and id_ else ""
+	if ales and ales not in disponibile:
+		# Pastram alegerea reala vizibila; General trebuie sa fie o schimbare explicita.
+		lista.append((ales, t(N_("%s (neinstalat)")) % t(numeBrowser(ales))))
+	return lista
+
+
+def browserGeneral():
+	m = initConfig().browser.value
+	return m if m in PROGRAME else ""
+
+
+def _browsereSalvate():
+	try:
+		d = json.loads(initConfig().browser_aplicatii.value)
+	except (ValueError, TypeError):
+		return {}
+	return {k: v for k, v in d.items() if isinstance(k, str) and _ID_BUN.match(k)
+		and isinstance(v, str) and v in PROGRAME} if isinstance(d, dict) else {}
+
+
+def preferintaBrowser(id_):
+	return _browsereSalvate().get(id_, "")
+
+
+def salveazaBrowser(motor, id_=None):
+	"""Salvare imediata, comuna TV/web. Nu schimbam o cerinta obligatorie."""
+	disponibile = browsereDisponibile()
+	c = initConfig()
+	if id_ is None:
+		if len(disponibile) != 2 or (motor != "" and motor not in disponibile):
+			return False
+		camp = c.browser
+		camp.value = motor
+	else:
+		a = gaseste(id_)
+		if a is None or fel(a) != FEL_SCURTATURA or motorObligatoriu(a):
+			return False
+		if motor != "" and motor not in disponibile:
+			return False
+		d = _browsereSalvate()
+		if motor:
+			d[id_] = motor
+		else:
+			d.pop(id_, None)
+		camp = c.browser_aplicatii
+		camp.value = json.dumps(d, sort_keys=True, separators=(",", ":"))
+	camp.save()
+	from Components.config import configfile
+	configfile.save()
+	return True
+
+
+def notaBrowser(a, traducere=None):
+	t = traducere or (lambda s: s)
+	m = motorObligatoriu(a)
+	if a.get("drm") == "widevine":
+		return t(N_("Folosește HD Satelit Browser: redarea protejată cere Widevine."))
+	if m:
+		return t(N_("Folosește %s: aplicația cere acest browser.")) % t(numeBrowser(m))
+	return ""
 
 
 DOSAR_SCRIPTURI = "/usr/share/hds-navigator/aplicatii"
@@ -834,7 +948,7 @@ def areVideo():
 def stare(scurtatura, video=None):
 	"""Textul scurt de sub card: "" = „Instalat” (din imagine sau pachet); pe aplicatiile cu filme, fara video,
 	STARE_FARA_VIDEO."""
-	if scurtatura.get("id") in CER_VIDEO and video is False:
+	if scurtatura.get("id") in CER_VIDEO and video is False and program(scurtatura)[0] == "wpe":
 		return STARE_FARA_VIDEO
 	return ""
 
@@ -852,12 +966,15 @@ def descriereIntreaga(a, traducere=None, video=None):
 	nota = notaNavigator(a)
 	if nota:
 		parti.append(nota)          # tradusa deja (are cifre)
+	nota = notaBrowser(a, t)
+	if nota:
+		parti.append(nota)
 	return "  ".join(parti)
 
 
 def notaVideo(scurtatura, video=None):
 	"""Explicatia pusa dupa descriere (banda de sub grila, pagina web) cand aplicatia are nevoie de video si nu are."""
-	if scurtatura.get("id") in CER_VIDEO and video is False:
+	if scurtatura.get("id") in CER_VIDEO and video is False and program(scurtatura)[0] == "wpe":
 		return TEXT_FARA_VIDEO
 	return ""
 
@@ -877,6 +994,9 @@ def initConfig(config=None):
 	c = ConfigSubsection()
 	c.ordine = ConfigText(default="", fixed_size=False)
 	c.ascunse = ConfigText(default="", fixed_size=False)
+	# Valoarea goala pastreaza alegerea veche a catalogului pana alege omul.
+	c.browser = ConfigText(default="", fixed_size=False)
+	c.browser_aplicatii = ConfigText(default="{}", fixed_size=False)
 	config.plugins.hdsaplicatii = c
 	_config[0] = c
 	return c

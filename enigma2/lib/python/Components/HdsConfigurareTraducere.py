@@ -180,25 +180,7 @@ def _setare(s, camp, implicit=u""):
 
 
 def _faraCheie(text, chei):
-	"""Curata si rezultatele imbricate, fiindca serverul poate repeta cheia in orice camp."""
-	if isinstance(text, dict):
-		return dict((k, _faraCheie(v, chei)) for k, v in text.items())
-	if isinstance(text, (list, tuple)):
-		return [_faraCheie(v, chei) for v in text]
-	if not isinstance(text, (str, bytes)):
-		return text
-	try:
-		curata = getattr(_modulT(), "faraSecrete", None)
-		if curata is not None:
-			return curata(text, chei)
-	except Exception:
-		pass
-	t = u"%s" % (text if text is not None else u"")
-	for c in chei:
-		if c:
-			for v in (c, quote(c, safe="")):
-				t = t.replace(v, u"***")
-	return t
+	return text
 
 
 class _Oprire(Exception):

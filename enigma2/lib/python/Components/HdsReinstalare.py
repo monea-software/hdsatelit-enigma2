@@ -29,6 +29,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import time
 
 COADA = "de-reinstalat.json"
@@ -342,8 +343,60 @@ def _pune_config_inapoi(rad):
 TIPAR_SCRIPT_PACHET = re.compile(r"^/?etc/init\.d/([A-Za-z][A-Za-z0-9_-]{0,31})\.([A-Za-z0-9][A-Za-z0-9._+-]{0,63})$")
 SUFIX_GOL = "None"
 
+# Comun cu alegerea manuala; numai operatii de disc pe firele de lucru.
+_ZAVOR_ALEGERI = threading.RLock()
+_ALEGERI = {}
 
-def alege_scriptul(rad, pachet):
+
+def _semn_alegere(cale):
+	try:
+		tinta = os.readlink(cale) if os.path.islink(cale) else ""
+		try:
+			s = os.lstat(cale)
+			semn = (s.st_dev, s.st_ino, s.st_mtime_ns)
+		except OSError:
+			semn = None
+		return tinta, semn, _ALEGERI.get(os.path.abspath(cale), 0)
+	except OSError:
+		return None, None, _ALEGERI.get(os.path.abspath(cale), 0)
+
+
+def _alegeri_acum(rad, legaturi):
+	"""Snapshot inainte de opkg; include si felurile absente din copia veche."""
+	with _ZAVOR_ALEGERI:
+		relative = {r for r in (legaturi or {}) if TIPAR_LEGATURA.match(r)}
+		try:
+			relative.update("etc/init.d/" + n for n in os.listdir(_c(rad, "etc/init.d"))
+				if TIPAR_LEGATURA.match("etc/init.d/" + n) and os.path.islink(_c(rad, "etc/init.d/" + n))
+				and os.path.basename(os.readlink(_c(rad, "etc/init.d/" + n))).startswith(n + "."))
+		except OSError:
+			pass
+		return {_c(rad, r): _semn_alegere(_c(rad, r)) for r in relative}
+
+
+def _pastreaza_alegerea(cale, alegeri, tinta=None):
+	if alegeri is None:
+		return False
+	# Apelantul tine zavorul pana dupa inlocuirea atomica.
+	acum = _semn_alegere(cale)
+	if cale in alegeri and acum != alegeri[cale]:
+		return True
+	if _ALEGERI.get(os.path.abspath(cale), 0):
+		return True
+	ales = acum[0] or ""
+	if ales.endswith("." + SUFIX_GOL) and os.path.basename(os.path.dirname(cale)) == "init.d":
+		try:
+			from Components.HdsModuleAcces import SEMN_NICIUNUL
+		except ImportError:
+			from HdsModuleAcces import SEMN_NICIUNUL
+		rad = os.path.dirname(os.path.dirname(os.path.dirname(cale)))
+		if os.path.exists(_c(rad, SEMN_NICIUNUL.lstrip("/") + os.path.basename(cale))):
+			return True
+	return bool(ales and not ales.endswith("." + SUFIX_GOL)
+		and ales != tinta and os.path.isfile(os.path.join(os.path.dirname(cale), os.path.basename(ales))))
+
+
+def alege_scriptul(rad, pachet, alegeri=None):
 	"""0.7.6 (RSC): legatura aleasa a felului (etc/init.d/<fel>) spre scriptul <fel>.<x> al pachetului pus acum, numai
 	cand felul n-are inca un script ales care exista (lipsa, locul gol <fel>.None sau un script care nu mai e): un
 	modul pus din feed sub numele nostru are alt script decat cel din copie, iar pachetul nu alege singur. Intoarce
@@ -359,24 +412,32 @@ def alege_scriptul(rad, pachet):
 		if not m or m.group(2) == SUFIX_GOL or not os.path.isfile(_c(rad, "etc/init.d/%s.%s" % m.groups())):
 			continue
 		cale = _c(rad, "etc/init.d/" + m.group(1))
-		if os.path.lexists(cale) and not os.path.islink(cale):
-			continue
-		tinta = os.readlink(cale) if os.path.islink(cale) else ""
-		if tinta and not tinta.endswith("." + SUFIX_GOL) and os.path.isfile(_c(rad, "etc/init.d/" + os.path.basename(tinta))):
-			continue
-		try:
-			nou = cale + ".hds-nou"
-			if os.path.lexists(nou):
-				os.remove(nou)
-			os.symlink("%s.%s" % m.groups(), nou)
-			os.replace(nou, cale)
-			n += 1
-		except (OSError, NotImplementedError, AttributeError):
-			continue
+		with _ZAVOR_ALEGERI:
+			if _pastreaza_alegerea(cale, alegeri):
+				continue
+			n += _alege_scriptul_la_scriere(rad, cale, m)
 	return n
 
 
-def _pune_legaturile(rad, legaturi):
+def _alege_scriptul_la_scriere(rad, cale, m):
+	"""Sub zavor: verificarea si scrierea sunt aceeasi operatie."""
+	try:
+		if os.path.lexists(cale) and not os.path.islink(cale):
+			return 0
+		tinta = os.readlink(cale) if os.path.islink(cale) else ""
+		if tinta and not tinta.endswith("." + SUFIX_GOL) and os.path.isfile(_c(rad, "etc/init.d/" + os.path.basename(tinta))):
+			return 0
+		nou = cale + ".hds-nou"
+		if os.path.lexists(nou):
+			os.remove(nou)
+		os.symlink("%s.%s" % m.groups(), nou)
+		os.replace(nou, cale)
+		return 1
+	except (OSError, NotImplementedError, AttributeError):
+		return 0
+
+
+def _pune_legaturile(rad, legaturi, alegeri=None):
 	"""Legaturile alese puse din nou. Legatura aleasa a unui fel (etc/init.d/<fel>) numai spre un script care exista
 	acum: un pachet care nu s-a instalat (nu exista in feed, sau scriptul lui are alt nume aici) nu lasa o legatura
 	spre nimic, iar alegerea de dinainte ramane."""
@@ -387,20 +448,28 @@ def _pune_legaturile(rad, legaturi):
 		if rel.startswith("etc/init.d/") and not os.path.isfile(_c(rad, "etc/init.d/" + os.path.basename(tinta))):
 			continue
 		cale = _c(rad, rel)
-		if os.path.lexists(cale) and not os.path.islink(cale):
-			continue
-		try:
-			if os.path.islink(cale) and os.readlink(cale) == tinta:
+		with _ZAVOR_ALEGERI:
+			if _pastreaza_alegerea(cale, alegeri, tinta):
 				continue
-			nou = cale + ".hds-nou"
-			if os.path.lexists(nou):
-				os.remove(nou)
-			os.symlink(tinta, nou)
-			os.replace(nou, cale)
-			n += 1
-		except (OSError, NotImplementedError, AttributeError):
-			continue
+			n += _pune_legatura_la_scriere(cale, tinta)
 	return n
+
+
+def _pune_legatura_la_scriere(cale, tinta):
+	"""Inlocuire atomica sub acelasi zavor ca alegerea manuala."""
+	try:
+		if os.path.lexists(cale) and not os.path.islink(cale):
+			return 0
+		if os.path.islink(cale) and os.readlink(cale) == tinta:
+			return 0
+		nou = cale + ".hds-nou"
+		if os.path.lexists(nou):
+			os.remove(nou)
+		os.symlink(tinta, nou)
+		os.replace(nou, cale)
+		return 1
+	except (OSError, NotImplementedError, AttributeError):
+		return 0
 
 
 # ---------------------------------------------------------------- lucrul (pe un fir separat, dupa pornirea interfetei)
@@ -457,6 +526,7 @@ def lucreaza(rad="/", opkg=None, porneste_modulul=None):
 	coada = citeste(rad)
 	if not coada or not coada.get("pachete"):
 		return None
+	alegeri = _alegeri_acum(rad, coada.get("legaturi"))
 	comanda = _opkg(rad, opkg)
 	boot = _boot_id(rad)
 	if boot != coada.get("boot") or not boot:
@@ -526,8 +596,8 @@ def lucreaza(rad="/", opkg=None, porneste_modulul=None):
 	if acces_puse or coada.get("legaturi"):
 		try:
 			n = _pune_config_inapoi(rad)
-			m = _pune_legaturile(rad, coada.get("legaturi"))
-			m += sum(alege_scriptul(rad, x) for x in acces_noi)
+			m = _pune_legaturile(rad, coada.get("legaturi"), alegeri)
+			m += sum(alege_scriptul(rad, x, alegeri) for x in acces_noi)
 			_jurnal("modulele de acces: %d fisiere de configurare si %d legaturi puse din nou dupa instalare" % (n, m))
 		except Exception as eroare:
 			_jurnal("configurarile modulelor: %s" % eroare.__class__.__name__)
@@ -636,6 +706,7 @@ def pune_modulele(rad="/", opkg=None, porneste_modulul=None):
 	r = {"puse": [], "nereusite": [], "lipsa": []}
 	if not de_pus:
 		return r
+	alegeri = _alegeri_acum(rad, rez.get("legaturi"))
 	comanda = _opkg(rad, opkg)
 	actualizat = comanda is not None and _ruleaza(comanda + ["update"], TERMEN_UPDATE_S) == 0
 	disponibile = _in_liste(rad)
@@ -656,15 +727,19 @@ def pune_modulele(rad="/", opkg=None, porneste_modulul=None):
 		if tinta != nume:
 			inlocuite[nume] = tinta
 	if r["puse"]:
+		with _ZAVOR_ALEGERI:
+			r["alegere_pastrata"] = any(_pastreaza_alegerea(c, alegeri,
+				(rez.get("legaturi") or {}).get(os.path.relpath(c, rad).replace(os.sep, "/"))) for c in alegeri
+				if os.path.dirname(c) == _c(rad, "etc/init.d"))
 		try:
 			n = _pune_config_inapoi(rad)
-			m = _pune_legaturile(rad, rez.get("legaturi"))
-			m += sum(alege_scriptul(rad, x) for x in r["puse"])
+			m = _pune_legaturile(rad, rez.get("legaturi"), alegeri)
+			m += sum(alege_scriptul(rad, x, alegeri) for x in r["puse"])
 			_jurnal("modulele de acces puse la cerere: %s; %d fisiere de configurare si %d legaturi puse din nou" % (
 				", ".join(r["puse"]), n, m))
 		except Exception as eroare:
 			_jurnal("configurarile modulelor: %s" % eroare.__class__.__name__)
-		if porneste_modulul is not None:
+		if porneste_modulul is not None and not r["alegere_pastrata"]:
 			try:
 				porneste_modulul(rad)
 			except Exception as eroare:
@@ -689,8 +764,12 @@ def pune_modulele(rad="/", opkg=None, porneste_modulul=None):
 def mesaj_module(r):
 	"""Textul de dupa Da (televizor si pagina web)."""
 	randuri = []
+	if r.get("mesaj"):
+		return r["mesaj"]
 	if r.get("puse"):
-		randuri.append(_("Modulul de acces e pus și pornit: %s.") % ", ".join(_scurt(n) for n in r["puse"]))
+		text = (_("Modulul de acces e instalat: %s. Alegerea ta a rămas păstrată.") if r.get("alegere_pastrata") else
+			_("Modulul de acces e pus și pornit: %s."))
+		randuri.append(text % ", ".join(_scurt(n) for n in r["puse"]))
 	if r.get("lipsa"):
 		randuri.append(_("Modulul de acces din copie nu există pentru imaginea aceasta: %s. Setările lui au rămas pe "
 			"receptor.") % ", ".join(_scurt(n) for n in r["lipsa"]))
@@ -719,6 +798,66 @@ def de_intrebat(rad="/"):
 
 
 _MODULE = []
+_CITIRE_MODULE = []
+_CACHE_MODULE = {"nume": [], "mesaj": "", "eroare": False, "cand": 0}
+_GENERATIE_MODULE = 0
+_ULTIM_MODULE = None
+
+
+def _citeste_starea_modulelor():
+	nume = module_de_pus("/")
+	rez = _citeste_json(os.path.join(dosar("/"), REZULTAT)) or {}
+	text, eroare = mesaj(rez) if nume else "", False
+	if _ULTIM_MODULE and _ULTIM_MODULE[0] == tuple(nume):
+		text, eroare = _ULTIM_MODULE[1:]
+	return {"nume": nume, "mesaj": text, "eroare": eroare, "cand": time.monotonic()}
+
+
+def stare_module_pe_fir():
+	"""Interfata primeste un snapshot; discul se citeste numai pe firul lucrarii."""
+	try:
+		import enigma
+	except ImportError:
+		# Consumator fara interfata Enigma2 (unelte locale).
+		return _citeste_starea_modulelor()
+	if not _CITIRE_MODULE and not _MODULE and time.monotonic() - _CACHE_MODULE["cand"] >= 1:
+		from Components.HdsImportSurse import Lucrare
+		generatie = _GENERATIE_MODULE
+		_CITIRE_MODULE.append(None)
+		def gata(st, eroare):
+			del _CITIRE_MODULE[:]
+			if not _MODULE and generatie == _GENERATIE_MODULE:
+				if eroare:
+					_CACHE_MODULE.update(mesaj=_("Starea modulelor din copie nu se poate citi acum. Copia a rămas păstrată."),
+						eroare=True, cand=time.monotonic())
+				else:
+					_CACHE_MODULE.update(st)
+		try:
+			l = Lucrare(_citeste_starea_modulelor, gata)
+			if _CITIRE_MODULE:
+				_CITIRE_MODULE[0] = l
+		except Exception:
+			del _CITIRE_MODULE[:]
+			_CACHE_MODULE.update(mesaj=_("Starea modulelor din copie nu se poate citi acum. Copia a rămas păstrată."),
+				eroare=True, cand=time.monotonic())
+	return dict(_CACHE_MODULE, nume=list(_CACHE_MODULE["nume"]))
+
+
+def _alt_modul_ales():
+	"""Numai metadate si legaturi, pe firul lucrarii, inainte de opkg."""
+	rez = _citeste_json(os.path.join(dosar("/"), REZULTAT)) or {}
+	with _ZAVOR_ALEGERI:
+		for rel, tinta in (rez.get("legaturi") or {}).items():
+			if not TIPAR_LEGATURA.match(rel) or not rel.startswith("etc/init.d/"):
+				continue
+			cale = _c("/", rel)
+			if not os.path.islink(cale):
+				continue
+			ales = os.path.basename(os.readlink(cale))
+			if ales != os.path.basename(tinta) and not ales.endswith("." + SUFIX_GOL) \
+					and os.path.isfile(_c("/", "etc/init.d/" + ales)):
+				return True
+	return False
 
 
 def module_in_lucru():
@@ -728,25 +867,49 @@ def module_in_lucru():
 def porneste_modulele(la_sfarsit=None):
 	"""pune_modulele pe un fir separat (opkg poate dura minute), din intrebarea de pe televizor sau din pagina web; la
 	sfarsit o fereastra pe televizor cu mesaj_module si la_sfarsit(r). False daca lucreaza deja."""
-	if _MODULE or not module_de_pus("/"):
+	global _GENERATIE_MODULE
+	if _MODULE:
 		return False
 	from Components.HdsCopieSetari import _porneste_modulul
 	from Components.HdsImportSurse import Lucrare
 
 	def gata(r, eroare):
+		global _ULTIM_MODULE
 		del _MODULE[:]
 		if eroare:
-			_jurnal("modulele la cerere s-au oprit: %s" % eroare)
-			r = {"puse": [], "lipsa": [], "nereusite": module_de_pus("/")}
+			_jurnal("modulele la cerere s-au oprit")
+			r = {"puse": [], "lipsa": [], "nereusite": list(_CACHE_MODULE["nume"]),
+				"mesaj": _("Modulul nu s-a putut porni acum. Încearcă din nou."), "eroare": True}
+		else:
+			r, st = r
+			_CACHE_MODULE.update(st)
 		text = mesaj_module(r or {})
+		_ULTIM_MODULE = (tuple(_CACHE_MODULE["nume"]), text,
+			bool(r.get("nereusite") or r.get("lipsa") or r.get("eroare")))
+		_CACHE_MODULE.update(mesaj=text, eroare=_ULTIM_MODULE[2], cand=time.monotonic())
 		if text:
 			from Tools import Notifications
 			from Screens.MessageBox import MessageBox
-			Notifications.AddPopup(text, MessageBox.TYPE_ERROR if (r or {}).get("nereusite") else MessageBox.TYPE_INFO,
+			Notifications.AddPopup(text, MessageBox.TYPE_ERROR if _ULTIM_MODULE[2] else MessageBox.TYPE_INFO,
 				20, "HdsReinstalareModule", titlu=_("Copia setărilor"))
 		if la_sfarsit is not None:
 			la_sfarsit(r)
-	_MODULE.append(Lucrare(lambda: pune_modulele("/", porneste_modulul=_porneste_modulul), gata))
+	def lucru():
+		if _alt_modul_ales():
+			r = {"puse": [], "lipsa": [], "nereusite": [], "eroare": True,
+				"mesaj": _("Ai ales deja alt modul. Instalarea din copie nu a pornit, ca să păstreze alegerea ta. Copia a rămas păstrată.")}
+		else:
+			r = pune_modulele("/", porneste_modulul=_porneste_modulul)
+		return r, _citeste_starea_modulelor()
+	_MODULE.append(None)
+	_GENERATIE_MODULE += 1
+	try:
+		l = Lucrare(lucru, gata)
+		if _MODULE:
+			_MODULE[0] = l
+	except Exception:
+		del _MODULE[:]
+		raise
 	return True
 
 

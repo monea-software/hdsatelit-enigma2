@@ -29,6 +29,12 @@ namespace hdscal
 	{
 		if (!descriere)
 			return false;
+		if (!strcmp(descriere, "rs6060"))
+		{
+			/* The raw 16-bit value spans 2016 hundredths of dB. */
+			ret = snr * 2 / 65;
+			return true;
+		}
 		if (!strncmp(descriere, "Si2166D", 7))
 		{
 			ret = snr;
@@ -56,6 +62,19 @@ namespace hdscal
 		{
 			ret = (int)(snr < 57500 ? (snr < 52500 ? (snr < 32200 ? 0.02640 * snr + 0.0 : 0.02604 * snr + 11.55125)
 				: 0.01310 * snr + 661.55172) : 0.02826 * snr - 210.);
+			return true;
+		}
+		/* HDSatelit (DBB7, 22.11.2026; forumul 795 #3396, Vu+ Solo4K 0.7.7): tunerul FBC al lui Vu+ Solo4K se numeste
+		 * "Vuplus DVB-S NIM(7376 FBC)" (jurnalul de configurare al testerilor vusolo4k) si da FE_READ_SNR pe scara 0..65535.
+		 * Fara formula, calitatea in dB ramanea 0x12345678: bara nu arata dB, iar procentul era SNR-ul brut. Dreapta e cea
+		 * a producatorului, din enigma2-ul lui public (GPL-2.0, lib/dvb/frontend.cpp, calculateSignalQuality, acelasi
+		 * nume): dB = snr / 655,36 * 0,185 - 0,35, aici in sutimi de dB (65535 = ~18,1 dB). Procentul se socoteste de
+		 * acum din dB fata de sat_max (16 dB = 100 %), ca la celelalte tunere cu formula. */
+		if (!strcmp(descriere, "Vuplus DVB-S NIM(7376 FBC)"))
+		{
+			ret = (int)(snr * 18.5 / 655.36 - 35.0);
+			if (ret < 0)
+				ret = 0; /* under ~0,35 dB the line goes below 0: 0 dB, not a negative percent */
 			return true;
 		}
 		return false;

@@ -405,6 +405,6 @@ def caleCadere(cale, gasite=None):
 
 
 def faraSecrete(text):
-	"""Fara randurile cu jetonul web, parole, coduri PIN, cheia Wi-Fi si alte chei (regula modului sigur)."""
-	from Components.HdsModSigur import _faraSecrete
-	return _faraSecrete(text)
+	"""Textul intreg al jurnalului (REGULA 0, ASI7: in imagine nu se mascheaza nimic pana dupa 1.0; inainte se scoteau
+	randurile cu jetonul web, parole, coduri PIN si chei). Numele ramane pentru pagina web care il cheama."""
+	return text

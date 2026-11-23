@@ -50,6 +50,8 @@ PyObject *getFrontendReadCounts();
 #include <lib/dvb/hdsurmamotor.h>
 #include <lib/dvb/hdsjurnaltuner.h>
 #include <lib/dvb/hdscitirifrontend.h>
+#include <lib/dvb/hdsstatdvb5.h>
+#include <lib/dvb/hdsunicable.h>
 class eSecCommandList;
 
 class eDVBFrontend: public iDVBFrontend, public sigc::trackable
@@ -99,6 +101,7 @@ private:
 	bool m_dvbt2;       // DTV_ENUM_DELSYS are SYS_DVBT2 (numai pentru jurnal: acordarea DVB-T2 se incearca oricum)
 	int m_dvb_api;      // DTV_API_VERSION citit din frontend (major << 8 | minor), 0 = necitit
 	int m_hds_fbc_set;  // grupul confirmat de driver, -1 fara FBC
+	int m_hds_tipuri_alese; // tipurile alese in Python pe un tuner fara fisierul mode (lib/dvb/hdstipales.h), -1 nespus
 	char m_filename[128];
 	char m_description[128];
 #if HAVE_DVB_API_VERSION < 3
@@ -133,6 +136,7 @@ private:
 	hdsurma::Acordare m_hds_acordare;
 	hdsjtuner::Stare m_hds_jurnal; // HDSatelit: jurnalul tunerului (lib/dvb/hdsjurnaltuner.h)
 	TimpiZap m_hds_timpi_zap;
+	hdsunicable::Alimentare m_hds_alimentare;
 	/* HDSatelit (0.7.4, zap-ul pe cablu): ce a pus enigma2 pe descriptorul deschis acum al tunerului, ca sa nu se mai
 	   trimita la fiecare acordare: sistemul de livrare (SYS_DVBC_ANNEX_A, SYS_DVBT, SYS_DVBT2; -1 = nestiut) si
 	   alimentarea antenei oprita ("off" scris in active_antenna_power). Se uita la deschidere, la inchidere si la un
@@ -144,6 +148,9 @@ private:
 	/* HDSatelit: memoria citirilor starii (lib/dvb/hdscitirifrontend.h): o citire a fiecarei valori pe secunda, impartita
 	   de toti cititorii; direct = fara memorie (bucla SEC, timeout()) */
 	hdscitiri::Memorie m_hds_citiri;
+	/* XBS8: de unde a venit calitatea si contoarele erorilor cand driverul da numai statistici DVBv5
+	   (lib/dvb/hdsstatdvb5.h) */
+	hdsstat::Stare m_hds_stat;
 	unsigned int hdsCitesteBrut(int fel, bool direct, int &err);
 	int hdsCiteste(int type, bool direct);
 
@@ -215,6 +222,7 @@ public:
 	int getDVBID() { return m_dvbid; }
 	int getSlotID() { return m_slotid; }
 	bool setSlotInfo(ePyObject obj); // get a tuple (slotid, slotdescr)
+	void setHdsTipuriAlese(int masca) { m_hds_tipuri_alese = masca < 0 ? -1 : masca; }
 	static void setTypePriorityOrder(int val) { PriorityOrder = val; }
 	static int getTypePriorityOrder() { return PriorityOrder; }
 

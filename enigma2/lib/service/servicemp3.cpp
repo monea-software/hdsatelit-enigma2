@@ -19,6 +19,7 @@
 #include <lib/service/servicemp3.h>
 #include <lib/service/hdsegalizator.h>
 #include <lib/service/hdsradioonline.h>
+#include <lib/service/hdshttp.h>
 #include <lib/service/service.h>
 #include <lib/gdi/gpixmap.h>
 
@@ -33,6 +34,7 @@
 #include <vector>
 
 #include <gst/gst.h>
+#include <lib/service/hdsvorbire.h>
 #include <gst/pbutils/missing-plugins.h>
 #include <sys/stat.h>
 #include <dirent.h>
@@ -119,6 +121,12 @@ struct eServiceMP3::FirFilm
 	std::mutex lacat;
 	std::condition_variable semnal;
 	GstElement *pipeline;
+	GstElement *text_sink = NULL;     /* referinta proprie pana la distrugerea cozii */
+	bool schimba_subtitrarea = false, subtitrare_in_lucru = false;
+	int subtitrare_pid = -1;
+	int subtitrare_aplicata = 0;      /* aceeasi pista initiala ca in serviciu */
+	bool subtitrare_salt = false, subtitrare_resync = false;
+	unsigned subtitrare_generatie = 0;
 	std::shared_ptr<Poarta> poarta;
 	std::string cale;			/* the film file; "<cale>.cuts" is the cue file */
 	bool citeste, citit;			/* the cue file: asked, read (cues holds it) */
@@ -144,7 +152,66 @@ struct eServiceMP3::FirFilm
 	FirFilm() : pipeline(NULL), citeste(false), citit(false), salt(false), salt_derulare(false), salt_ns(0), salt_fel(0),
 		schimba_starea(false), pauza(false), schimba_sunetul(false), sunet_nou(NULL), opreste(false), oprit(false), ms_oprire(0),
 		scrie(false) {}
+	~FirFilm() { if (text_sink) gst_object_unref(text_sink); }
 };
+
+static pts_t pozitiePistaFilm(GstElement *pipeline);
+
+/* Apelata cu lacatul cozii luat. GStreamer ruleaza numai dupa eliberarea lui:
+   interfata poate alege alta pista, relua filmul sau opri chiar in timpul schimbarii. */
+static bool schimbaPistaFilm(std::shared_ptr<eServiceMP3::FirFilm> f, std::unique_lock<std::mutex> &l)
+{
+	if (!f->schimba_subtitrarea || f->pauza)
+		return false;
+	unsigned generatie = f->subtitrare_generatie;
+	l.unlock();
+	GstState stare = GST_STATE_VOID_PENDING, tinta = GST_STATE_VOID_PENDING;
+	GstStateChangeReturn rezultat = gst_element_get_state(f->pipeline, &stare, &tinta, 0);
+	l.lock();
+	/* Pauza/pregatirea pot tine selectorul blocat. Reluarea si starea au prioritate. */
+	if (f->opreste || f->pauza || generatie != f->subtitrare_generatie ||
+			rezultat == GST_STATE_CHANGE_FAILURE || stare != GST_STATE_PLAYING || tinta != GST_STATE_VOID_PENDING)
+		return false;
+	int pid = f->subtitrare_pid;
+	bool resincronizeaza = f->subtitrare_salt;
+	f->schimba_subtitrarea = false;
+	f->subtitrare_in_lucru = true;
+	l.unlock();
+	gint veche = -1;
+	g_object_get(G_OBJECT(f->pipeline), "current-text", &veche, NULL);
+	if (veche != pid)
+	{
+		g_object_set(G_OBJECT(f->pipeline), "current-text", pid, NULL);
+		/* Golim coada veche inainte de salt; si interfata o goleste cat asteptam. */
+		for (int k = 0; f->text_sink && k < 64; ++k)
+		{
+			GstSample *mostra = NULL;
+			g_signal_emit_by_name(f->text_sink, "try-pull-sample", (GstClockTime)0, &mostra);
+			if (!mostra) break;
+			gst_sample_unref(mostra);
+		}
+	}
+	l.lock();
+	f->subtitrare_aplicata = pid;
+	f->subtitrare_resync = f->subtitrare_resync || veche != pid;
+	bool salt = resincronizeaza && f->subtitrare_resync && !f->opreste && generatie == f->subtitrare_generatie;
+	l.unlock();
+	/* Citim ceasul acum, pe firul filmului. Alegerea din pauza sau o schimbare lenta
+	   nu trebuie sa intoarca filmul la pozitia veche de la primirea cererii. */
+	pts_t pozitie = salt ? pozitiePistaFilm(f->pipeline) : -1;
+	l.lock();
+	f->subtitrare_in_lucru = false;
+	/* O alegere noua, saltul cerut de om sau oprirea au prioritate. */
+	if (!f->opreste && generatie == f->subtitrare_generatie && !f->salt && pozitie > 90000)
+	{
+		f->salt = true;
+		f->salt_derulare = false;
+		f->salt_ns = (gint64)pozitie * 11111LL;
+		f->salt_fel = GST_SEEK_FLAG_FLUSH;
+		f->subtitrare_resync = false;
+	}
+	return true;
+}
 
 /* the cue file: pairs of (position, kind), big-endian 64 + 32 bit, as the recordings have them */
 static bool citesteCues(const std::string &fisier, listaCues &cues)
@@ -238,6 +305,50 @@ static void golesteSinkurile(GstElement *pipeline)
 		}
 		gst_object_unref(sink);
 	}
+}
+
+/* Saltul unui fisier pleaca din sursa decodata, inaintea selectoarelor.
+   Trimiterea prin playbin tine lacatul reader al selectorului in apelul upstream;
+   demuxerul trimite sincron FLUSH_START inapoi si poate cere writer pe acelasi
+   selector sau poate astepta un fir EOS care cere writer. Un pad al sursei
+   decodate ajunge la acelasi demuxer fara sa tina lacatul selectorului. */
+static gboolean saltaFilm(GstElement *pipeline, gint64 ns, int fel, bool fisier)
+{
+	GstPad *iesire = NULL;
+	if (fisier)
+	{
+		GstElement *sursa = NULL;
+		g_object_get(G_OBJECT(pipeline), "source", &sursa, NULL);
+		GstObject *parinte = sursa ? gst_object_get_parent(GST_OBJECT(sursa)) : NULL;
+		GstElementFactory *fabrica = parinte && GST_IS_ELEMENT(parinte)
+			? gst_element_get_factory(GST_ELEMENT(parinte)) : NULL;
+		if (fabrica && !strcmp(GST_OBJECT_NAME(fabrica), "uridecodebin"))
+		{
+			GstIterator *it = gst_element_iterate_src_pads(GST_ELEMENT(parinte));
+			GValue pad = G_VALUE_INIT;
+			while (!iesire)
+			{
+				GstIteratorResult r = gst_iterator_next(it, &pad);
+				if (r == GST_ITERATOR_RESYNC) { gst_iterator_resync(it); continue; }
+				if (r != GST_ITERATOR_OK) break;
+				GstPad *p = GST_PAD(g_value_get_object(&pad));
+				if (gst_pad_is_linked(p)) iesire = GST_PAD(gst_object_ref(p));
+				g_value_reset(&pad);
+			}
+			if (G_VALUE_TYPE(&pad)) g_value_unset(&pad);
+			gst_iterator_free(it);
+		}
+		if (parinte) gst_object_unref(parinte);
+		if (sursa) gst_object_unref(sursa);
+	}
+	if (!iesire)
+		return gst_element_seek(pipeline, 1.0, GST_FORMAT_TIME, (GstSeekFlags)fel,
+			GST_SEEK_TYPE_SET, ns, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
+	gboolean bun = gst_pad_send_event(iesire, gst_event_new_seek(1.0, GST_FORMAT_TIME,
+		(GstSeekFlags)fel, GST_SEEK_TYPE_SET, ns, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE));
+	eDebug("[eServiceMP3] jump via decoded source pad %s: %s", GST_PAD_NAME(iesire), bun ? "done" : "failed");
+	gst_object_unref(iesire);
+	return bun;
 }
 
 static void firFilm(std::shared_ptr<eServiceMP3::FirFilm> f)
@@ -342,6 +453,10 @@ static void firFilm(std::shared_ptr<eServiceMP3::FirFilm> f)
 			f->citit = true;
 			continue;
 		}
+		if (schimbaPistaFilm(f, l))
+			continue;
+		if (f->opreste)
+			break;
 		if (f->salt)
 		{
 			f->salt = false;
@@ -349,13 +464,15 @@ static void firFilm(std::shared_ptr<eServiceMP3::FirFilm> f)
 			gint64 ns = f->salt_ns;
 			int fel = f->salt_fel;
 			l.unlock();
-			if (!gst_element_seek(f->pipeline, 1.0, GST_FORMAT_TIME, (GstSeekFlags)fel, GST_SEEK_TYPE_SET, ns,
-					GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
+			if (!saltaFilm(f->pipeline, ns, fel, f->cale.find("://") == std::string::npos))
 				eDebug("[eServiceMP3] the jump to %" GST_TIME_FORMAT " failed", GST_TIME_ARGS(ns));
 			l.lock();
 			continue;
 		}
-		f->semnal.wait(l);
+		if (f->schimba_subtitrarea && !f->pauza)
+			f->semnal.wait_for(l, std::chrono::milliseconds(20));
+		else
+			f->semnal.wait(l);
 	}
 	if (f->sunet_nou)
 	{
@@ -420,6 +537,27 @@ static GstElement *sinkFolosit(GstElement *playbin, const char *proprietate)
 	}
 	gst_object_unref(parinte);
 	return sink;
+}
+
+/* Ceasul decodorului, fara avansul citirii subtitrarilor. Numai FirFilm foloseste
+   aceasta varianta; realPlayPosition continua sa tina pozitia pentru interfata. */
+static pts_t pozitiePistaFilm(GstElement *pipeline)
+{
+	GstElement *sink = sinkFolosit(pipeline, "audio-sink");
+	if (!sink) sink = sinkFolosit(pipeline, "video-sink");
+	if (!sink) return -1;
+	gchar *nume = gst_element_get_name(sink);
+	gint64 pozitie = -1;
+	if (strstr(nume, "dvbaudiosink") || strstr(nume, "dvbvideosink"))
+		g_signal_emit_by_name(sink, "get-decoder-time", &pozitie);
+	if (!GST_CLOCK_TIME_IS_VALID((GstClockTime)pozitie) || pozitie <= 0)
+	{
+		if (!gst_element_query_position(sink, GST_FORMAT_TIME, &pozitie))
+			pozitie = -1;
+	}
+	g_free(nume);
+	gst_object_unref(sink);
+	return pozitie < 0 ? -1 : pozitie / 11111LL;
 }
 
 /* the video0 and audio0 nodes the process already holds when a film starts (the decoder of the channel before, a
@@ -787,6 +925,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 			m_sourceinfo.is_streaming = TRUE;
 
 	gchar *uri;
+	GstContext *anteteHTTP = NULL;
 
 	if ( m_sourceinfo.is_streaming )
 	{
@@ -802,6 +941,10 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 		}
 		if ( m_useragent.length() == 0 )
 			m_useragent = "Dream Multimedia Dreambox Enigma2 Mediaplayer";
+		std::string adresa(filename);
+		anteteHTTP = hdshttp::pregateste(adresa, m_useragent);
+		g_free(uri);
+		uri = g_strdup(adresa.c_str());
 	}
 	else if ( m_sourceinfo.containertype == ctCDA )
 	{
@@ -835,6 +978,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	}
 	else
 	{
+		if (anteteHTTP) gst_element_set_context(m_gst_playbin, anteteHTTP);
 		g_object_set (G_OBJECT (m_gst_playbin), "uri", uri, NULL);
 		int flags = 0x47; // ( GST_PLAY_FLAG_VIDEO | GST_PLAY_FLAG_AUDIO | GST_PLAY_FLAG_NATIVE_VIDEO | GST_PLAY_FLAG_TEXT );
 		g_object_set (G_OBJECT (m_gst_playbin), "flags", flags, NULL);
@@ -877,6 +1021,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	}
 #endif
 
+	if (anteteHTTP) gst_context_unref(anteteHTTP);
 	g_free(uri);
 
 	/* Text streams in a container that are not UTF-8 (Matroska asks for UTF-8, some files are not): the demuxer
@@ -929,11 +1074,13 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 		if ( m_sourceinfo.is_streaming )
 		{
 			g_signal_connect (G_OBJECT (m_gst_playbin), "notify::source", G_CALLBACK (gstHTTPSourceSetAgent), m_poarta.get());
+			g_signal_connect (m_gst_playbin, "source-setup", G_CALLBACK (hdshttp::sursa), NULL);
 			g_signal_connect (G_OBJECT (m_gst_playbin), "deep-element-added", G_CALLBACK (gstElementAdded), m_poarta.get());
 		}
 		/* the film thread, with its own references; it waits for its jobs */
 		m_fir = std::make_shared<FirFilm>();
 		m_fir->pipeline = GST_ELEMENT(gst_object_ref(m_gst_playbin));
+		m_fir->text_sink = subsink ? GST_ELEMENT(gst_object_ref(subsink)) : NULL;
 		m_fir->radio = m_sourceinfo.is_streaming && m_ref.getData(0) == 2;
 		m_fir->poarta = m_poarta;
 		m_fir->cale = m_ref.path;
@@ -946,6 +1093,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 
 eServiceMP3::~eServiceMP3()
 {
+	m_vorbire.reset();
 	if (m_state == stRunning)
 		stop();
 	else if (m_state == stIdle && m_fir)
@@ -1220,6 +1368,7 @@ void eServiceMP3::sourceTimeout()
 
 RESULT eServiceMP3::stop()
 {
+	m_vorbire.reset();
 	ASSERT(m_state != stIdle);
 
 	if (m_state == stStopped)
@@ -1302,6 +1451,12 @@ RESULT eServiceMP3::stop()
 	m_fir->scrie = scrie;
 	m_fir->de_scris.swap(de_scris);
 	m_fir->opreste = true;
+	m_fir->schimba_subtitrarea = false;
+	++m_fir->subtitrare_generatie;
+	/* Schimbarea inceputa poate astepta consumatorul appsink. Dupa oprire interfata
+	   nu mai trage mostre; drop trezeste producatorul fara sa asteptam schimbarea. */
+	if (m_fir->text_sink)
+		g_object_set(G_OBJECT(m_fir->text_sink), "drop", TRUE, NULL);
 	m_fir->in_oprire = true;
 	++fluxuriInOprire;
 	if (m_sourceinfo.is_streaming && m_ref.getData(0) == 2)
@@ -1609,6 +1764,7 @@ RESULT eServiceMP3::seekTo(pts_t to)
 	}
 	else
 		m_watched_to_end = false;
+	++m_hds_speech_epoch;
 	if (m_currentTrickRatio)
 	{
 		/* during fast winding a jump moves the winding itself */
@@ -2288,6 +2444,19 @@ PyObject *eServiceMP3::hdsRadioInfo()
 
 PyObject *eServiceMP3::getInfoObject(int w)
 {
+	if (w == sHdsSpeechEpoch)
+		return PyLong_FromUnsignedLong(m_hds_speech_epoch);
+	if (w == sHdsSpeechStop)
+	{
+		m_vorbire.reset();
+		Py_RETURN_NONE;
+	}
+	if (w == sHdsSpeechAudio)
+	{
+		if (m_state != stRunning || !m_gst_playbin) return PyDict_New();
+		if (!m_vorbire) m_vorbire.reset(new HdsVorbireTap());
+		return m_vorbire->read(m_gst_playbin);
+	}
 	if (w == sHdsRadioOnline)
 		return hdsRadioInfo();
 	const gchar *tag = 0;
@@ -2456,6 +2625,8 @@ RESULT eServiceMP3::getTrackInfo(struct iAudioTrackInfo &info, unsigned int i)
  	if (i >= m_audioStreams.size())
 		return -2;
 	info.m_description = m_audioStreams[i].codec;
+	// File tracks have no DVB PID; callers must not receive uninitialized memory.
+	info.m_pid = -1;
 /*	if (m_audioStreams[i].type == atMPEG)
 		info.m_description = "MPEG";
 	else if (m_audioStreams[i].type == atMP3)
@@ -2474,8 +2645,7 @@ RESULT eServiceMP3::getTrackInfo(struct iAudioTrackInfo &info, unsigned int i)
 		info.m_description = "FLAC";
 	else
 		info.m_description = "???";*/
-	if (info.m_language.empty())
-		info.m_language = m_audioStreams[i].language_code;
+	info.m_language = m_audioStreams[i].language_code;
 	return 0;
 }
 
@@ -2842,10 +3012,15 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 				m_event((iPlayableService*)this, evUser+13);
 			}
 			/* a stream that prerolled without caps on its pad (see GST_MESSAGE_ASYNC_DONE): its track comes from the tags */
-			if ( m_sourceinfo.is_streaming && m_prerolled && m_audioStreams.empty() )
+			if ( m_prerolled && m_audioStreams.empty() )
 			{
+				// Local files can also receive their audio tags after preroll.
+				gint audio_count = 0;
+				if (!m_sourceinfo.is_streaming && m_gst_playbin)
+					g_object_get(m_gst_playbin, "n-audio", &audio_count, NULL);
 				gchar *nume = NULL;
-				if ( gst_tag_list_get_string(tags, GST_TAG_AUDIO_CODEC, &nume) && nume )
+				if ((m_sourceinfo.is_streaming || audio_count > 0) &&
+					gst_tag_list_get_string(tags, GST_TAG_AUDIO_CODEC, &nume) && nume)
 				{
 					audioStream audio;
 					audio.language_code = "und";
@@ -3171,9 +3346,11 @@ void eServiceMP3::gstHTTPSourceSetAgent(GObject *object, GParamSpec *unused, gpo
 	g_object_get(_this->m_gst_playbin, "source", &source, NULL);
 	if (!source)
 		return;
-	/* only the network sources have a user agent */
-	if (g_object_class_find_property(G_OBJECT_GET_CLASS(source), "user-agent"))
-		g_object_set (G_OBJECT (source), "user-agent", _this->m_useragent.c_str(), NULL);
+	GstContext *context = gst_element_get_context(_this->m_gst_playbin, "hds.http.headers");
+	hdshttp::aplica(source, context);
+	if (!context && g_object_class_find_property(G_OBJECT_GET_CLASS(source), "user-agent"))
+		g_object_set(source, "user-agent", _this->m_useragent.c_str(), NULL);
+	if (context) gst_context_unref(context);
 	gst_object_unref(source);
 }
 
@@ -3278,6 +3455,9 @@ GstFlowReturn eServiceMP3::gstCBsubtitleAvail(GstElement *appsink, gpointer user
 
 void eServiceMP3::gstElementAdded(GstBin *bin, GstBin *sub, GstElement *element, gpointer user_data)
 {
+	GstContext *context = gst_element_get_context(GST_ELEMENT(bin), "hds.http.headers");
+	hdshttp::aplica(element, context);
+	if (context) gst_context_unref(context);
 	GstElementFactory *f = gst_element_get_factory(element);
 	if (f && !strcmp(GST_OBJECT_NAME(f), "tsdemux"))
 		g_signal_connect (element, "pad-added", G_CALLBACK (gstDemuxPadAdded), user_data);
@@ -3605,8 +3785,13 @@ static std::string textWebVtt(const std::string &bloc, bool forma_matroska, bool
 
 void eServiceMP3::pullSubtitle()
 {
-	GstElement *sink;
-	g_object_get (G_OBJECT (m_gst_playbin), "text-sink", &sink, NULL);
+	if (!m_gst_playbin || m_state != stRunning)
+		return;
+	GstElement *sink = NULL;
+	if (m_fir && m_fir->text_sink)
+		sink = GST_ELEMENT(gst_object_ref(m_fir->text_sink));
+	else
+		g_object_get (G_OBJECT (m_gst_playbin), "text-sink", &sink, NULL);
 
 	if (sink)
 	{
@@ -3618,7 +3803,13 @@ void eServiceMP3::pullSubtitle()
 		   pages of the container stream are dropped at once. */
 		static const unsigned int MAX_PAGINI = 32;
 		bool arunca = m_external_active >= 0 || m_ttx_activ >= 0;
-		while (arunca || m_subtitle_pages.size() < MAX_PAGINI)
+		if (m_fir)
+		{
+			std::lock_guard<std::mutex> l(m_fir->lacat);
+			arunca = arunca || m_fir->schimba_subtitrarea || m_fir->subtitrare_in_lucru;
+		}
+		unsigned luate = 0;
+		while ((arunca || m_subtitle_pages.size() < MAX_PAGINI) && luate++ < 64)
 		{
 			GstBuffer *buffer = NULL;
 			/* the type comes from the caps of the sample itself: after a change of stream a page of the old one can
@@ -3640,8 +3831,19 @@ void eServiceMP3::pullSubtitle()
 					if (m_subs_to_pull > 0)
 						--m_subs_to_pull;
 				}
+				if (arunca)
+				{
+					gst_sample_unref(sample);
+					continue;
+				}
 				/* the sample is owned: its buffer is kept on its own (gst_buffer_ref), unref'd below */
-				buffer = gst_buffer_ref(gst_sample_get_buffer(sample));
+				buffer = gst_sample_get_buffer(sample);
+				if (!buffer)
+				{
+					gst_sample_unref(sample);
+					continue;
+				}
+				gst_buffer_ref(buffer);
 				GstCaps *caps_mostra = gst_sample_get_caps(sample);
 				const gchar *nume_caps = caps_mostra && gst_caps_get_size(caps_mostra) > 0 ?
 					gst_structure_get_name(gst_caps_get_structure(caps_mostra, 0)) : NULL;
@@ -3688,11 +3890,11 @@ void eServiceMP3::pullSubtitle()
 				gint64 duration_ns = GST_BUFFER_DURATION(buffer);
 				size_t len = are_date ? map.size : 0;
 
-				if ( are_date && !arunca && tip != stUnknown )
+				if ( are_date && (map.data || !len) && !arunca && tip != stUnknown )
 				{
 					if ( tip == stPlainText || tip == stSSA || tip == stASS || tip == stSRT || tip == stWebVTT )
 					{
-						std::string line((const char*)map.data, len);  // GST1.0: GST_BUFFER_DATA -> GstMapInfo.data (mapat mai sus)
+						std::string line(len ? (const char*)map.data : "", len);  // GST1.0: mapped text; an empty cue may clear the previous one
 						/* lines from files written on Windows keep their "\r\n" through the demuxer; the widget splits at
 						   "\n" only */
 						line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
@@ -3767,9 +3969,12 @@ void eServiceMP3::pullSubtitle()
 			}
 		}
 		gst_object_unref(sink);
-		/* the first page waiting gets its timer (pushSubtitles pulls again when the list is empty) */
+		if (arunca && luate > 64)
+			m_subtitle_sync_timer->start(1, true);
+		/* Dispatch on the next main-loop turn: pushSubtitles can pull another batch after dropping late pages.
+		   Calling it here recursively grew the stack for every batch after a long resume or seek. */
 		if (!m_subtitle_pages.empty() && !m_subtitle_sync_timer->isActive())
-			pushSubtitles();
+			m_subtitle_sync_timer->start(1, true);
 	}
 	else
 		eDebug("no subtitle sink!");
@@ -4389,11 +4594,30 @@ void eServiceMP3::showExternalCues(const std::vector<int> &cues, int now_ms)
 	m_subtitle_widget->show();
 }
 
+RESULT eServiceMP3::cerePistaSubtitrare(int pid, bool resincronizeaza)
+{
+	if (!m_fir) return pid < 0 ? 0 : -1;
+	std::lock_guard<std::mutex> l(m_fir->lacat);
+	if (m_fir->opreste) return -1;
+	if (pid >= 0 && ((m_fir->subtitrare_pid == pid &&
+			(m_fir->schimba_subtitrarea || m_fir->subtitrare_in_lucru)) ||
+			(!m_fir->schimba_subtitrarea && !m_fir->subtitrare_in_lucru && !m_fir->subtitrare_resync &&
+			 m_fir->subtitrare_aplicata == pid)))
+		return 0;
+	++m_fir->subtitrare_generatie;
+	m_fir->schimba_subtitrarea = pid >= 0;
+	m_fir->subtitrare_pid = pid;
+	m_fir->subtitrare_salt = resincronizeaza;
+	m_fir->semnal.notify_all();
+	return 0;
+}
+
 RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 {
 	eDebug ("eServiceMP3::enableSubtitles m_currentSubtitleStream=%i this=%p",m_currentSubtitleStream, this);
+	if (!parent || !m_gst_playbin || m_state != stRunning)
+		return -1;
 	int pid;
-	gint text_pid = 0;
 
 	/* (2, stream, type, ...): at least the kind, the number and the type */
 	if (!PyTuple_Check(tuple) || PyTuple_Size(tuple) < 3 || !PyLong_Check(PyTuple_GET_ITEM(tuple, 1)) ||
@@ -4409,20 +4633,21 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 		PyErr_Print();
 		return -1;
 	}
+	if (pid < 0 || (pid < PISTA_TELETEXT && pid >= (int)m_subtitleStreams.size()))
+		return -1;
+	if ((pid >= PISTA_TELETEXT && pid < 100 &&
+			(!m_ttx || pid - PISTA_TELETEXT >= (int)m_ttx->m_found_subtitle_pages.size())) ||
+			(pid >= 100 && pid - 100 >= (int)m_external_subtitles.size()))
+		return -1;
 
 	{
-		/* No m_subs_to_pull_lock around g_object_set: the pages are handled on this thread only (pullSubtitle), the
-		   lock guards the counter, and holding it while playbin switches the stream can stop both sides (see seekTo).
-		   Pages of the old stream still queued are read by the type in their own caps and dropped as late. */
+		/* Afisarea si parserele raman aici; numai selectorul trece pe FirFilm.
+		   Respingem pistele inexistente inainte sa modificam alegerea veche. */
 		teletextOff();
 		if (pid >= PISTA_TELETEXT && pid < 100)
 		{
 			/* a teletext page: the pipeline is not touched */
-			if (!m_ttx || pid - PISTA_TELETEXT >= (int)m_ttx->m_found_subtitle_pages.size())
-			{
-				eDebug("eServiceMP3::enableSubtitles no teletext page %d", pid - PISTA_TELETEXT);
-				return -1;
-			}
+			cerePistaSubtitrare(-1, false);
 			std::set<eDVBServicePMTHandler::subtitleStream>::iterator pagina = m_ttx->m_found_subtitle_pages.begin();
 			std::advance(pagina, pid - PISTA_TELETEXT);
 			m_ttx->setPageAndMagazine(pagina->teletext_page_number, pagina->teletext_magazine_number);
@@ -4435,11 +4660,7 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 		else if (pid >= 100)
 		{
 			/* a file next to the film: the pipeline is not touched */
-			if (pid - 100 >= (int)m_external_subtitles.size())
-			{
-				eDebug("eServiceMP3::enableSubtitles no subtitle file %d", pid - 100);
-				return -1;
-			}
+			cerePistaSubtitrare(-1, false);
 			m_external_active = pid - 100;
 			m_picture_index = -1;
 			m_subtitle_pages.clear();
@@ -4447,6 +4668,10 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 		}
 		else
 		{
+			/* Pastram saltul pe loc pentru fisiere, dupa selector, pe firul filmului.
+			   Fluxurile din retea nu sunt intoarse inapoi aici. */
+			if (cerePistaSubtitrare(pid, !m_sourceinfo.is_streaming && !m_currentTrickRatio) < 0)
+				return -1;
 			m_external_active = -1;
 			m_external_timer->stop();
 			if (m_currentSubtitleStream != pid)
@@ -4455,38 +4680,15 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 				m_pgs_stream = pid;
 				m_vobsub_stream = -1;
 				m_dvbsub_stream = -1;
-				g_object_set (G_OBJECT (m_gst_playbin), "current-text", pid, NULL);
-				eDebug ("eServiceMP3::enableSubtitles g_object_set current-text = %i", pid);
-				/* what the appsink still holds came from the old stream */
-				GstElement *sink = NULL;
-				g_object_get (G_OBJECT (m_gst_playbin), "text-sink", &sink, NULL);
-				if (sink)
-				{
-					for (int k = 0; k < 64; ++k)
-					{
-						GstSample *vechi = NULL;
-						g_signal_emit_by_name (sink, "try-pull-sample", (GstClockTime)0, &vechi);
-						if (!vechi)
-							break;
-						gst_sample_unref(vechi);
-					}
-					gst_object_unref(sink);
-				}
 				m_currentSubtitleStream = pid;
 				{
 					eSingleLocker l(m_subs_to_pull_lock);
 					m_subs_to_pull = 0;
 				}
 				m_prev_decoder_time = -1;
+				m_decoder_time_valid_state = 0;
+				m_subtitle_sync_timer->stop();
 				m_subtitle_pages.clear();
-				/* A change while the film runs: the demuxer had already sent the lines of the new stream for as far as it
-				   had read ahead, and the selector dropped them. Measured on the SF8008 with a 350 kbit/s film: no line
-				   for 16 s and more after the change, the log showed the lines from 45 s ahead (the read-ahead is counted
-				   in bytes, so the loss grows as the bit rate falls). A jump to the same place makes the demuxer send them
-				   again (seekTo drops what waited here). Files only: a stream cannot go back; not in the first second. */
-				pts_t aici = 0;
-				if (!m_sourceinfo.is_streaming && m_state == stRunning && getPlayPosition(aici) == 0 && aici > 90000)
-					seekTo(aici);
 			}
 		}
 		m_external_shown.clear();
@@ -4501,8 +4703,7 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 			eDebug ("eServiceMP3::switched to subtitle file %d (%s)", m_external_active, m_external_subtitles[m_external_active].name.c_str());
 		else
 		{
-			g_object_get (G_OBJECT (m_gst_playbin), "current-text", &text_pid, NULL);
-			eDebug ("eServiceMP3::switched to subtitle stream %i", text_pid);
+			eDebug ("eServiceMP3::requested subtitle stream %i", pid);
 		}
 	}
 
@@ -4510,6 +4711,11 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 	   would call this function again from inside it, before its own state says the subtitle is on */
 	if (m_external_active >= 0)
 		externalTick();
+	/* The pages were cleared and the timer stopped above. A full appsink sends no new
+	   "new-sample", and the selector on FirFilm may wait for it to drain: ask for one
+	   pull on the next main loop turn, as the signal would (not from inside this call,
+	   which Python made; picture pages go to the OCR from there). */
+	m_pump.send(Message(2));
 
 	return 0;
 }
@@ -4517,6 +4723,7 @@ RESULT eServiceMP3::enableSubtitles(eWidget *parent, ePyObject tuple)
 RESULT eServiceMP3::disableSubtitles(eWidget *parent)
 {
 	eDebug("eServiceMP3::disableSubtitles");
+	cerePistaSubtitrare(-1, false);
 	/* "No subtitles": the widget goes; a container stream keeps flowing and its pages are dropped when their time
 	   passes (switching the text flag off in playbin during the film would reconfigure the sinks) */
 	m_subtitle_pages.clear();
@@ -4527,12 +4734,34 @@ RESULT eServiceMP3::disableSubtitles(eWidget *parent)
 	teletextOff();
 	delete m_subtitle_widget;
 	m_subtitle_widget = 0;
+	/* a selector change still running on FirFilm may wait for the full appsink (see enableSubtitles) */
+	m_pump.send(Message(2));
 	return 0;
 }
 
 PyObject *eServiceMP3::getCachedSubtitle()
 {
-	/* the choice per film is kept by Components/HdsSubtitrariFilm.py */
+	/* Alegerea salvata pe film apartine Python-ului. Raportam numai pista pornita
+	   in acest serviciu: current-text poate indica inca pista din container cand
+	   se arata un fisier extern sau dupa oprirea subtitrarilor. */
+	if (!m_subtitle_widget || m_state != stRunning)
+		Py_RETURN_NONE;
+	const int pid = m_external_active >= 0 ? 100 + m_external_active :
+		(m_ttx_activ >= 0 ? m_ttx_activ : m_currentSubtitleStream);
+	ePyObject lista = getSubtitleList();
+	if (!lista)
+		return NULL;
+	for (Py_ssize_t i = 0; i < PyList_Size(lista); ++i)
+	{
+		ePyObject pista = PyList_GET_ITEM(lista, i);
+		if (PyLong_AsLong(PyTuple_GET_ITEM(pista, 1)) == pid)
+		{
+			Py_INCREF(pista);
+			Py_DECREF(lista);
+			return pista;
+		}
+	}
+	Py_DECREF(lista);
 	Py_RETURN_NONE;
 }
 

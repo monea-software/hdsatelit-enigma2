@@ -1,5 +1,6 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
 #include <vector>
+#include <atomic>
 #include <lib/base/ebase.h>
 #include <lib/dvb/dvbapi_compat.h>
 #include <lib/base/eerror.h>
@@ -74,6 +75,17 @@ eDVBAudio::eDVBAudio(eDVBDemux *demux, int dev)
 	{
 		hdsjdecodor::eroare("audio", dev, "AUDIO_SELECT_SOURCE DEMUX", errno);
 		eDebug("AUDIO_SELECT_SOURCE DEMUX failed (%m)");
+	}
+	else
+		hdsjdecodor::sursaDemux("audio", dev);
+#elif HAVE_DVB_API_VERSION > 2
+	/* Try DEMUX before the first STOP; unsupported drivers keep the old command sequence. */
+	else if (::ioctl(m_fd, AUDIO_SELECT_SOURCE, AUDIO_SOURCE_DEMUX) < 0)
+	{
+		const int err = errno;
+		static std::atomic_flag anuntat = ATOMIC_FLAG_INIT;
+		if (!anuntat.test_and_set(std::memory_order_relaxed))
+			hdsjdecodor::eroare("audio", dev, "AUDIO_SELECT_SOURCE DEMUX", err);
 	}
 	else
 		hdsjdecodor::sursaDemux("audio", dev);

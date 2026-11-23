@@ -234,9 +234,9 @@ def televizor(sesiune=None, O=None):
 
 
 def argumente(request):
-	"""Argumentele cunoscute ale cererii ca text scurt: {cheie: text}, fara token."""
+	"""Argumentele cunoscute ale cererii ca text: {cheie: text}, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:20]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in CHEI_CERERE and cheie != CHEIE_POZITIE:
@@ -244,7 +244,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:16].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 

@@ -27,7 +27,8 @@ def InitSetupDevices():
 		language.activateLanguage(configElement.value)
 	
 	config.osd = ConfigSubsection()
-	config.osd.language = ConfigText(default = "ro_RO");
+	# Before the first wizard, use English unless a language was saved already.
+	config.osd.language = ConfigText(default = "en_EN");
 	# limba asistentului de la prima pornire dupa tara (Components/HdsLimbaTara.py): aici, cand randul din settings
 	# tocmai a fost citit (inaintea lui HdsCopieSetari.fixeaza_setari, care il scrie la fiecare pornire); la prima pornire
 	# fara limba aleasa de om, tara se cauta pe un fir, fara sa intarzie pornirea

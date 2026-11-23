@@ -27,6 +27,28 @@ C_TEXT2 = 0x00AEB9CC
 C_SEL = 0x00374EA1
 C_ALB = 0x00FFFFFF
 
+# textele noi ale panoului (randul "Fundalul tuturor ecranelor"): cheile merg in limbi-staging/*.json; pana atunci,
+# textul de aici (acelasi mecanism ca in ecrane_culoare.py)
+_IMPLICIT = {
+	"set_bg_all": u"Fundalul tuturor ecranelor",
+	"set_bg_mixed": u"diferite",
+	"set_bg_value_mixed": u"Acum au culori diferite; culoarea aleasă le înlocuiește pe toate trei",
+	"set_bg_help": u"Primul rând pune aceeași culoare în panourile cu text, în meniurile pe tot ecranul și în ferestrele "
+		u"de dialog; fiecare își păstrează transparența. Galben le întoarce pe toate trei la paletă.",
+}
+
+
+def _tf(cheie, *args):
+	"""_() cu textul romanesc de rezerva cand cheia lipseste din tabelele limbilor."""
+	s = _(cheie, *args)
+	if s == cheie or (str is bytes and s == cheie.encode("utf-8")):
+		s = _IMPLICIT.get(cheie, cheie)
+		for i, a in enumerate(args):
+			s = s.replace(u"{%d}" % i, a if isinstance(a, type(u"")) else u"%s" % (a,))
+		if str is bytes:
+			s = s.encode("utf-8")
+	return s
+
 
 def _scara():
 	try:
@@ -648,7 +670,14 @@ class HdsRoluri(Baza):
 
 	def reface(self):
 		pal = self.stare.paleta()
-		lista = []
+		roluri = self.stare.conf["roluri"]
+		# primul rand: fundalul tuturor ecranelor (cele trei roluri P.FUNDAL); "diferite" cand nu au acelasi RGB
+		comun = P.fundal_comun(pal)
+		marcaj = "* " if [r for r in P.FUNDAL if r in roluri] else ""
+		if comun is None:
+			lista = [rand(_tf("set_bg_all"), marcaj + _tf("set_bg_mixed"), sub=True)]
+		else:
+			lista = [rand(_tf("set_bg_all"), marcaj + "#%06X" % comun, culoare=comun, sub=True)]
 		for rol in P.EDITABILE:
 			v = pal[rol]
 			marcaj = "* " if rol in self.stare.conf["roluri"] else ""
@@ -657,24 +686,35 @@ class HdsRoluri(Baza):
 		self["lista"].setList(lista)
 		lista_la(self["lista"], idx)
 		self["titlu"].setText(_("set_colors"))
-		self["ajutor"].setText("")
+		self["ajutor"].setText(_tf("set_bg_help"))
 		self["tasta_rosu"].setText(_("set_exit"))
 		self["tasta_verde"].setText(_("set_edit"))
 		self["tasta_galben"].setText(_("set_from_palette"))
 		self.coloreaza(pal)
 
+	def rol_ales(self):
+		"""Randul ales: P.ROL_FUNDAL (primul rand), un rol din P.EDITABILE sau None."""
+		i = self.index()
+		if i == 0:
+			return P.ROL_FUNDAL
+		if 1 <= i <= len(P.EDITABILE):
+			return P.EDITABILE[i - 1]
+		return None
+
 	def editeaza(self):
 		# alegerea pe grila (ecrane_culoare.py); codul hex si R, V, B raman sub Albastru (Avansat) acolo
-		i = self.index()
-		if 0 <= i < len(P.EDITABILE):
+		rol = self.rol_ales()
+		if rol is not None:
 			from .ecrane_culoare import HdsAlegeCuloare
-			self.session.openWithCallback(lambda *a: self.reface(), HdsAlegeCuloare, self.stare, P.EDITABILE[i])
+			self.session.openWithCallback(lambda *a: self.reface(), HdsAlegeCuloare, self.stare, rol)
 
 	def din_paleta(self):
-		i = self.index()
-		if 0 <= i < len(P.EDITABILE):
-			self.stare.conf["roluri"].pop(P.EDITABILE[i], None)
-			self.reface()
+		rol = self.rol_ales()
+		if rol is None:
+			return
+		for r in (P.FUNDAL if rol == P.ROL_FUNDAL else (rol,)):
+			self.stare.conf["roluri"].pop(r, None)
+		self.reface()
 
 
 # ---------------------------------------------------------------- editorul unei culori

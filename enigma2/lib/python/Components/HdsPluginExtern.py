@@ -11,6 +11,8 @@
 # (inelul de 16 KiB al lui main/bsod.cpp). Daca stiva trece printr-un plugin care nu a venit cu imaginea (un dosar
 # Plugins/Extensions/<Nume>/ sau Plugins/SystemPlugins/<Nume>/ care nu e in PLUGINURI_IMAGINE), trateaza() intoarce
 # numele lui: C++ tipareste stiva in jurnal ca pana acum si merge mai departe, fara ecranul de cadere si fara repornire.
+# Exceptia iesita dintr-o mutare a cursorului unei liste (metoda selectionChanged chemata din C++, 0.7.8) primeste
+# NUME_SELECTIE: tot fara repornire, dar fara raport si fara mesaj (sectiunea "mutarea cursorului unei liste").
 # Altfel intoarce None si totul ramane ca inainte (bsodFatal). Nu arunca.
 #
 # Pluginurile imaginii: o lista fixa (PLUGINURI_IMAGINE), cu dosarele din lib/python/Plugins ale sursei si pluginul
@@ -51,8 +53,8 @@
 # inclusiv cele ale imaginii. Acelasi raport, cu cauza incarcare, fara mesaj nou
 # si fara inchiderea vreunui ecran. Numele vine din lista, nu se ghiceste din stiva.
 
+import atexit
 import errno
-import fnmatch
 import gzip
 import hashlib
 import io
@@ -60,8 +62,10 @@ import json
 import os
 import platform
 import re
+import stat
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 import traceback
@@ -104,6 +108,8 @@ CORP_MAX = 1024 * 1024
 FISIER_MAX = 5 * 1024 * 1024
 FARA_EXTENSIE_MAX = 256 * 1024
 PACHET_MAX = 20 * 1024 * 1024
+FISIERE_MAX = 2048
+INTRARI_MAX = 8192
 COADA_MAX = 10
 COADA_OCTETI = 5 * 1024 * 1024
 COADA_INCERCARI = 20
@@ -155,8 +161,6 @@ _CADRU = re.compile(r"/Plugins/(Extensions|SystemPlugins)/([^/]+)/")
 # pachetul de fisiere (specificatia, sectiunea 5)
 EXTENSII = frozenset((".py", ".pyc", ".pyo", ".so", ".xml", ".json", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".po",
 	".mo", ".txt", ".md", ".sh", ".conf", ".ini", ".cfg", ".html", ".css", ".js", ".ttf"))
-NUME_SECRETE = ("*.key", "softcam*", "oscam*", "ncam*", "cccam*", "mgcamd*", "newcamd*", "gbox*", "wicardd*", "*.pem", "*.p12",
-	"*.crt", "*.pfx", "settings", "id_rsa*", "id_ed25519*", "id_ecdsa*", ".env", "passw*", "credential*", "hds_iptv*")
 # un rand cu o parola, un jeton sau o cheie cu valoare; cheia poate fi intre ghilimele (JSON)
 _SECRET_RAND = re.compile(r"(?i)(?:pass|passwd|password|pwd|token|secret|apikey|api_key)[\"']?\s*[=:](.*)")
 
@@ -191,6 +195,8 @@ _pluginuri = {}             # nume -> {"ore": [], "erori": 0, "semnaturi": set()
 _asteptari = []             # mesajele care asteapta raspunsul serverului si firele care mai lucreaza
 _deInchis = [False]
 _ceas = [None]
+# TRD6 (MI9): mesajele "l-a tradus" / "nu a putut traduce" dupa traducerea ceruta de o cadere python2 (anuntaTraducere)
+_anunturiTraducere = []
 _ceasCoada = [None]
 _firCoada = [None]
 _opkg = {}                  # ce s-a citit o data din opkg (pe fir): "status", "dosare"
@@ -280,6 +286,85 @@ def _pluginSiCadru(stiva):
 	return gasit
 
 
+# ------------------------------------------------------------------ convertoarele si randatoarele temelor externe (0.7.8)
+# O tema externa aduce in pachetul ei si fisiere in Components/Converter, Renderer sau Sources (CobaltFHD:
+# Converter/FhromaExtra). O exceptie din ele pe un apel din C++ (cronometrul Poll al convertorului, un eveniment) nu are
+# niciun cadru in Plugins/, deci repornea interfata, iar tema era refuzata la pornirea urmatoare (Vu+ Duo 4K SE, 0.7.7,
+# FhromaExtra.py:72 AttributeError). Ca la imaginile OE-Alliance (config.crash.bsodpython oprit), eroarea se scrie in jurnal
+# si interfata merge mai departe: ramane gol numai elementul acela; raportul pleaca pe canalul temei (Teme/<dosarul ei>).
+# Fisierul e al temei cand pachetul opkg care il are nu e pachetul lui Components/Element.py (imaginea); fisierele puse de
+# mana, fara pachet, raman ca inainte. Potrivirea e pe nume, fara extensie: temele aduc des numai .pyc/.pyo, iar
+# co_filename poate fi calea de pe calculatorul autorului.
+_CADRU_COMPONENTA = re.compile(r"/Components/(Converter|Renderer|Sources)/([^/]+?)\.py[co]?$")
+PREFIX_COMPONENTE = "/usr/lib/enigma2/python/Components/"
+COMPONENTA_IMAGINE = "Element"
+FELURI_COMPONENTE = ("Converter", "Renderer", "Sources")
+# pachetele imaginii, si cand nu au Element.py (tema imaginii, compatibilitatea temelor)
+PACHETE_IMAGINE = ("enigma2-hdsatelit", "hdsatelit-", "hds-")
+
+
+def componenteTeme():
+	"""{"Converter/X": (fel, nume)} pentru fisierele din Components/{Converter,Renderer,Sources} ale pachetelor opkg care
+	nu sunt ale imaginii; (FEL_TEME, dosarul temei) cand pachetul are un dosar in /usr/share/enigma2, altfel
+	(FEL_TEME, pachetul). O data pe proces."""
+	with _lacat:
+		if "componente" in _opkg:
+			return _opkg["componente"]
+	pe_pachet = {}
+	imagine = set()
+	try:
+		liste = sorted(n for n in os.listdir(_r(OPKG_INFO)) if n.endswith(".list"))
+	except OSError:
+		liste = []
+	for n in liste:
+		text = _citeste(os.path.join(OPKG_INFO, n), 4 * 1024 * 1024)
+		if PREFIX_COMPONENTE not in text:
+			continue
+		pachet = n[:-5]
+		for rand in text.splitlines():
+			cale = rand.split("\t", 1)[0].strip()
+			if not cale.startswith(PREFIX_COMPONENTE):
+				continue
+			parti = os.path.splitext(cale[len(PREFIX_COMPONENTE):])[0].split("/")
+			if parti == [COMPONENTA_IMAGINE]:
+				imagine.add(pachet)
+			elif len(parti) == 2 and parti[0] in FELURI_COMPONENTE and parti[1] and parti[1] != "__init__":
+				pe_pachet.setdefault(pachet, set()).add(parti[0] + "/" + parti[1])
+	teme = {}
+	for cheie, pachet in dosarePachete().items():
+		if cheie.startswith(FEL_TEME + "/"):
+			teme.setdefault(pachet, cheie[len(FEL_TEME) + 1:])
+	rez = {}
+	for pachet in sorted(pe_pachet):
+		if pachet in imagine or pachet.startswith(PACHETE_IMAGINE):
+			continue
+		for cheie in pe_pachet[pachet]:
+			rez.setdefault(cheie, (FEL_TEME, teme.get(pachet) or pachet))
+	if not imagine:
+		# fara pachetul imaginii in liste (liste stricate): nu se poate deosebi, ramane ca inainte
+		rez = {}
+	with _lacat:
+		_opkg["componente"] = rez
+	return rez
+
+
+def _temaSiCadru(stiva):
+	"""(FEL_TEME, numele temei, "Components/<fel>/<fisier>", randul) pentru cel mai adanc cadru dintr-un convertor,
+	randator sau sursa adusa de o tema externa, sau None."""
+	gasit = None
+	componente = None
+	for cale, rand in cadre(stiva):
+		m = _CADRU_COMPONENTA.search((cale or "").replace("\\", "/"))
+		if m is None:
+			continue
+		if componente is None:
+			componente = componenteTeme()
+		t = componente.get(m.group(1) + "/" + m.group(2))
+		if t is not None:
+			gasit = (t[0], t[1], "Components/%s/%s.py" % (m.group(1), m.group(2)), rand)
+	return gasit
+
+
 # "Cls.metoda() missing 1 required positional argument", "f() takes 2 positional arguments but 3 were given": numele functiei chemate
 _APEL_GRESIT = re.compile(r"^([\w.<>]+)\(\) (?:missing \d+ required|takes \d+|takes from|takes no |got an unexpected keyword|got multiple values)")
 
@@ -346,19 +431,87 @@ def semnatura(nume, tip, cadru, mesaj):
 	return hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()
 
 
+# ------------------------------------------------------------------ mutarea cursorului unei liste (forum 1671, 0.7.8)
+# Semnalul C++ eListbox.selectionChanged cheama metoda selectionChanged a componentei de lista (Renderer/Listbox,
+# ConfigList, MenuList, ServiceList, EpgList, MovieList, HelpMenuList), iar ea ecranele, prin onSelectionChanged. O
+# exceptie de acolo (indexul unei liste golite, un ecran inchis, un rand fara element, o sursa pierduta) ajungea aici fara
+# plugin extern in stiva si repornea interfata, cu inregistrarile si timeshiftul pornite: peste 20 de reporniri din
+# ConfigList.handleInputHelpers la testeri pe 0.7.4, Listbox fara sursa la un SF8008 pe 0.7.6. Acum C++ scrie stiva in
+# jurnal si interfata merge mai departe (ca OE-Alliance, config.crash.bsodpython): mutarea aceea nu-si mai cheama
+# callback-urile de dupa cel cazut, urmatoarea le cheama din nou. Fara raport, fara mesaj pe ecran si fara inchiderea
+# ecranului (nu e un plugin); un plugin extern din stiva are intaietate (raportul lui). Un singur rand in jurnal pe
+# semnatura (tipul si locul), fara fisiere scrise din firul interfetei: hds-caderi.log ramane al opririlor adevarate.
+# Recunoasterea: prima rama a stivei (functia chemata din C++) e o metoda cu numele SELECTIE; toate componentele imaginii
+# legate de semnal folosesc acest nume (proba test_sel_selectie_lista_078 le cauta in sursa).
+SELECTIE = "selectionChanged"
+# numele dat lui C++ (randul "error in the external plugin %s: no restart of the user interface"); cu spatii si paranteze,
+# deci nu poate fi dosarul unui plugin
+NUME_SELECTIE = "(no plugin: list selection change)"
+SELECTIE_SCRISE_MAX = 64
+_selectieScrise = set()
+
+
+def selectieLista(tip, stiva):
+	"""(locul erorii "Fisier.py:rand", clasa) cand exceptia a iesit dintr-o mutare a cursorului unei liste, altfel None.
+	Clasa: ecranul cel mai adanc din stiva (o clasa cu Screen printre baze), altfel clasa celui mai adanc cadru cu self.
+	Numai tipurile se citesc, nu atributele obiectelor (un __getattr__ strain nu se cheama)."""
+	if stiva is None or tip is None or not issubclass(tip, Exception):
+		return None
+	if stiva.tb_frame.f_code.co_name != SELECTIE:
+		return None
+	loc, ecran, clasa = "", "", ""
+	while stiva is not None:
+		cadru = stiva.tb_frame
+		cale = cadru.f_code.co_filename.replace("\\", "/")
+		loc = "%s:%d" % (cale.rsplit("/python/", 1)[-1], stiva.tb_lineno)
+		eu = cadru.f_locals.get("self")
+		if eu is not None:
+			t = type(eu)
+			clasa = t.__name__
+			if any(b.__name__ == "Screen" for b in t.__mro__):
+				ecran = clasa
+		stiva = stiva.tb_next
+	return loc, ecran or clasa
+
+
+def _dupaSelectie(tip, valoare, loc, ecran):
+	"""Randul din jurnal, o data pe semnatura (tipul exceptiei si locul); stiva intreaga o scrie C++ dupa noi."""
+	nume = getattr(tip, "__name__", str(tip))
+	sem = (nume, loc)
+	if sem in _selectieScrise:
+		return
+	if len(_selectieScrise) < SELECTIE_SCRISE_MAX:
+		_selectieScrise.add(sem)
+	_jurnal("eroare la mutarea cursorului unei liste (%s %s: %s; in %s): interfata merge mai departe, fara repornire"
+		% (loc, nume, unRand(_text(valoare), MESAJ_MAX), ecran or "?"))
+
+
 def trateaza(tip, valoare, stiva, apel=None, jurnal=None):
-	"""Chemata din C++ (ePython::call) cu exceptia luata. Numele pluginului extern (interfata merge mai departe) sau None
-	(ca inainte: ecranul de cadere si repornirea). Nu arunca."""
+	"""Chemata din C++ (ePython::call) cu exceptia luata. Numele pluginului extern (interfata merge mai departe),
+	NUME_SELECTIE pentru o eroare la mutarea cursorului unei liste (la fel, fara raport) sau None (ca inainte: ecranul de
+	cadere si repornirea). Nu arunca."""
 	try:
 		# iesirea ceruta (sys.exit) nu e o eroare: ramane ca inainte
 		if tip is None or issubclass(tip, (SystemExit, KeyboardInterrupt)):
 			return None
-		p = _pluginSiCadru(stiva) or _pluginDinApel(tip, valoare, stiva)
+		p = _pluginSiCadru(stiva) or _pluginDinApel(tip, valoare, stiva) or _temaSiCadru(stiva)
 	except Exception as e:
 		_jurnal("stiva nu se poate citi: %r" % (e,))
 		return None
 	if p is None:
-		return None
+		try:
+			s = selectieLista(tip, stiva)
+		except Exception as e:
+			_jurnal("stiva mutarii cursorului nu se poate citi: %r" % (e,))
+			return None
+		if s is None:
+			return None
+		try:
+			_dupaSelectie(tip, valoare, s[0], s[1])
+		except Exception as e:
+			# randul din jurnal nu are voie sa duca la repornire
+			_jurnal("dupa eroarea la mutarea cursorului: %r" % (e,))
+		return NUME_SELECTIE
 	fel, nume, fisier, rand = p
 	try:
 		_dupaDecizie(fel, nume, "%s:%d" % (fisier, rand), tip, valoare, stiva, apel, jurnal)
@@ -447,9 +600,19 @@ def _dupaDecizie(fel, nume, cadru, tip, valoare, stiva, apel, jurnal,
 		# un modul Python din feedul nostru se instaleaza singur (Components/HdsModuleLipsa.py); raportul pleaca oricum
 		try:
 			from Components import HdsModuleLipsa
-			HdsModuleLipsa.dinExceptie(valoare, PREFIX_PLUGINURI + fel + "/" + nume, nume)
+			HdsModuleLipsa.dinExceptie(valoare, (PREFIX_TEME if fel == FEL_TEME else PREFIX_PLUGINURI + fel + "/") + nume, nume)
 		except Exception as e:
 			_jurnal("modulul lipsa: %r" % (e,))
+	ecran = cauzaEcran(cod, valoare)
+	if cod == "python2" and fel in FELURI:
+		# TRD6 (MI9): imaginea traduce tot pluginul pe un fir si citeste lista din nou; omul afla cand e gata (anuntaTraducere).
+		# Raportul pastreaza cauza python2 (lista fixa a serverului).
+		try:
+			from Components import HdsPython2Traducere
+			if HdsPython2Traducere.traduceDupaCadere(fel, nume, PREFIX_PLUGINURI + fel + "/" + nume, valoare):
+				ecran = "python2-traducere"
+		except Exception as e:
+			_jurnal("traducerea dupa cadere: %r" % (e,))
 	raport = compuneRaport(fel, nume, cod, sem, tip, valoare, stiva, apel, jurnal, st["erori"], acum, mono)
 	_jurnal("eroare in pluginul extern %s (%s): interfata merge mai departe; jurnalul si raportul pe fir" % (nume, cod))
 	lucru = Lucru(raport)
@@ -457,7 +620,7 @@ def _dupaDecizie(fel, nume, cadru, tip, valoare, stiva, apel, jurnal,
 	arata = not incarcare and not st["aratat"]
 	if arata:
 		st["aratat"] = True
-	_asteptari.append({"nume": nume, "cauza": cauzaEcran(cod, valoare), "lucru": lucru, "termen": mono + ASTEPTARE_RASPUNS_S,
+	_asteptari.append({"nume": nume, "cauza": ecran, "lucru": lucru, "termen": mono + ASTEPTARE_RASPUNS_S,
 		"arata": arata})
 	_programeaza()
 
@@ -628,9 +791,13 @@ def functionare(mono):
 
 
 def statusOpkg():
-	"""{pachet: versiune} din /var/lib/opkg/status (o data pe proces)."""
+	"""{pachet: versiune} din status; o instalare noua invalideaza memoria versiunilor."""
+	try:
+		stampila = _stareFisier(os.stat(_r(OPKG_STATUS)))
+	except OSError:
+		stampila = None
 	with _lacat:
-		if "status" in _opkg:
+		if "status" in _opkg and _opkg.get("status-stampila") == stampila:
 			return _opkg["status"]
 	rez = {}
 	pachet = None
@@ -643,6 +810,7 @@ def statusOpkg():
 			pachet = None
 	with _lacat:
 		_opkg["status"] = rez
+		_opkg["status-stampila"] = stampila
 	return rez
 
 
@@ -709,11 +877,10 @@ def versiunePlugin(dosar):
 	return ""
 
 
-def motivOmis(nume, cale_disc, marime):
+def motivOmis(nume, cale_disc, marime, date=None):
 	"""De ce un fisier nu intra in pachet: "posibil secret", "prea mare", "alt fel"; None daca intra."""
 	mic = nume.lower()
-	if any(fnmatch.fnmatch(mic, t) for t in NUME_SECRETE):
-		return "posibil secret"
+	# REGULA 0 (Eduard, 21.11.2026): fara filtre de secrete; fisierele pleaca asa cum sunt (FPR6 runda 2)
 	if marime > FISIER_MAX:
 		return "prea mare"
 	ext = os.path.splitext(mic)[1]
@@ -722,26 +889,7 @@ def motivOmis(nume, cale_disc, marime):
 			return "prea mare"
 	elif ext not in EXTENSII:
 		return "alt fel"
-	if areSecret(cale_disc):
-		return "posibil secret"
 	return None
-
-
-def areSecret(cale_disc):
-	"""Un fisier text cu un rand parola/jeton/cheie = valoare negoala (fisierele de configurare se citesc numai
-	pentru asta)."""
-	try:
-		with open(cale_disc, "rb") as f:
-			date = f.read(FISIER_MAX + 1)
-	except (IOError, OSError):
-		return False
-	if b"\0" in date[:8192]:
-		return False
-	for rand in date.decode("utf-8", "replace").splitlines():
-		m = _SECRET_RAND.search(rand)
-		if m and _valoare(m.group(1)):
-			return True
-	return False
 
 
 def _valoare(rest):
@@ -764,38 +912,245 @@ def sha256Fisier(cale_disc):
 	return h.hexdigest()
 
 
+def _legatura(stare):
+	return stat.S_ISLNK(stare.st_mode) or bool(getattr(stare, "st_file_attributes", 0) & 0x400)
+
+
+def _caleFaraLegaturi(cale):
+	"""Verifica si parintii, inclusiv junction pe Windows."""
+	cale = os.path.abspath(cale)
+	parti = []
+	while True:
+		parti.append(cale)
+		parinte = os.path.dirname(cale)
+		if parinte == cale:
+			break
+		cale = parinte
+	for cale in reversed(parti):
+		if _legatura(os.lstat(cale)):
+			raise OSError("legatura")
+	return os.lstat(parti[0])
+
+
+def _stareFisier(s):
+	return s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns
+
+
+def _citesteSigur(cale, maxim):
+	"""O singura citire limitata, fara legaturi; pe receptor fiecare parinte e deschis cu NOFOLLOW si dir_fd."""
+	initial = _caleFaraLegaturi(cale)
+	if not stat.S_ISREG(initial.st_mode) or initial.st_nlink != 1 or initial.st_size > maxim:
+		raise OSError("fisier nepermis sau prea mare")
+	fd = None
+	try:
+		if os.open in os.supports_dir_fd:
+			parti = os.path.abspath(cale).split(os.sep)
+			fd = os.open(os.sep, os.O_RDONLY | os.O_DIRECTORY)
+			for parte in parti[1:-1]:
+				nou = os.open(parte, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+				os.close(fd)
+				fd = nou
+			nou = os.open(parti[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+			os.close(fd)
+			fd = nou
+		else:
+			fd = os.open(cale, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+		with os.fdopen(fd, "rb") as f:
+			fd = None
+			inainte = os.fstat(f.fileno())
+			# NTFS poate tine in intrarea dosarului orele vechi pana se inchid toate manerele.
+			verifica = 3 if os.name == "nt" else 5
+			if not stat.S_ISREG(inainte.st_mode) or _stareFisier(initial)[:verifica] != _stareFisier(inainte)[:verifica]:
+				raise OSError("fisier schimbat")
+			date = f.read(maxim + 1)
+			dupa = os.fstat(f.fileno())
+		if len(date) > maxim or _stareFisier(inainte) != _stareFisier(dupa) or len(date) != dupa.st_size:
+			raise OSError("fisier schimbat la citire")
+		if _stareFisier(dupa)[:verifica] != _stareFisier(_caleFaraLegaturi(cale))[:verifica]:
+			raise OSError("cale schimbata la citire")
+		return date
+	finally:
+		if fd is not None:
+			os.close(fd)
+
+
+class _Fotografie(list):
+	"""Metadatele raportului si octetii arhivei au aceeasi durata de viata."""
+	def __init__(self):
+		list.__init__(self)
+		self.date = {}
+		self.identitate = []
+		self.completa = True
+
+
+def _manifestSkin(cale_plugin, dosar):
+	"""Identitatea skin.xml numai cu proprietar, versiune si suma instalata. Nu ghiceste dupa mtime."""
+	if not cale_plugin.startswith(FEL_TEME + "/"):
+		return None
+	pachet = dosarePachete().get(cale_plugin, "")
+	versiune = statusOpkg().get(pachet)
+	if not re.fullmatch(r"[a-z0-9][a-z0-9+.-]*", pachet) or not versiune:
+		return None
+	cale = (PREFIX_TEME + cale_plugin[len(FEL_TEME) + 1:] + "/skin.xml").lstrip("/")
+	try:
+		lista = _citesteSigur(_r(OPKG_INFO + "/" + pachet + ".list"), 4 * 1024 * 1024).decode("utf-8")
+		sume = _citesteSigur(_r(OPKG_INFO + "/" + pachet + ".md5sums"), 4 * 1024 * 1024).decode("utf-8")
+	except (OSError, UnicodeError):
+		return None
+	if cale not in [r.split("\t", 1)[0].strip().lstrip("/") for r in lista.splitlines()]:
+		return None
+	gasite = []
+	for rand in sume.splitlines():
+		m = re.fullmatch(r"([0-9a-fA-F]{32})\s+\*?(.+)", rand)
+		if m and m.group(2).removeprefix("./").lstrip("/") == cale:
+			gasite.append(m.group(1).lower())
+	if len(gasite) != 1:
+		return None
+	return gasite[0], "manifest:%s:%s:%s" % (pachet, versiune, gasite[0])
+
+
+# FPR6 (SRV): fisierele de date ale pachetului (orice afara de cod) pe care pluginul le poate rescrie singur pe fiecare receptor
+# (setari, liste, xml, skin.xml al temelor). Identitatea lor in amprenta vine din lista pachetului (.list: pachet si versiune),
+# fiindca pe receptoare .md5sums lipseste de obicei (SF8008: 0 fisiere .md5sums, 619 .list). Cand .md5sums exista, numai el
+# hotaraste ca fisierul a fost rescris local (continutul nu pleaca in arhiva); fara el continutul pleaca ca pana acum. Codul schimbat ramane vizibil (amprenta si arhiva),
+# si scripturile fara extensie (bin/unealta).
+COD_PLUGIN = frozenset((".py", ".pyc", ".pyo", ".so", ".sh", ".js", ".pl", ".lua", ""))
+
+
+def _manifestPachet(cale_plugin):
+	"""(pachet, versiune, {cale de la radacina puse de pachet}, {cale: md5}) pentru pluginul sau tema din cale_plugin, din .list
+	(obligatoriu) si .md5sums (cand exista: numai sumele unice ale fisierelor din .list), sau None fara proprietar, versiune
+	sau .list."""
+	pachet = dosarePachete().get(cale_plugin, "")
+	versiune = statusOpkg().get(pachet)
+	if not re.fullmatch(r"[a-z0-9][a-z0-9+.-]*", pachet) or not versiune:
+		return None
+	try:
+		lista = _citesteSigur(_r(OPKG_INFO + "/" + pachet + ".list"), 4 * 1024 * 1024).decode("utf-8")
+	except (OSError, UnicodeError):
+		return None
+	try:
+		sume = _citesteSigur(_r(OPKG_INFO + "/" + pachet + ".md5sums"), 4 * 1024 * 1024).decode("utf-8")
+	except (OSError, UnicodeError):
+		sume = ""
+	puse = set(r.split("\t", 1)[0].strip().lstrip("/") for r in lista.splitlines())
+	rez = {}
+	dubluri = set()
+	for rand in sume.splitlines():
+		m = re.fullmatch(r"([0-9a-fA-F]{32})\s+\*?(.+)", rand)
+		if not m:
+			continue
+		cale = m.group(2).removeprefix("./").lstrip("/")
+		if cale in rez:
+			dubluri.add(cale)
+		rez[cale] = m.group(1).lower()
+	return pachet, versiune, puse, dict((c, v) for c, v in rez.items() if c in puse and c not in dubluri)
+
+
 def fisierePlugin(cale_plugin):
-	"""[(cale relativa la Plugins/, marime, sha256 sau "omis: <motiv>", calea pe disc)] sortate; fara __pycache__ si fara
-	legaturi."""
-	baza = _r(PREFIX_PLUGINURI)
-	dosar = os.path.join(baza, cale_plugin)
-	prefix = ""
-	if cale_plugin.startswith(FEL_TEME + "/"):
-		baza = _r(PREFIX_TEME)
-		dosar = os.path.join(baza, cale_plugin[len(FEL_TEME) + 1:])
-		prefix = FEL_TEME + "/"
-	rez = []
-	for radacina, dosare, fisiere in os.walk(dosar, followlinks=False):
-		dosare[:] = [d for d in dosare if d != "__pycache__"]
-		for n in fisiere:
-			disc = os.path.join(radacina, n)
-			if os.path.islink(disc) or not os.path.isfile(disc):
-				continue
-			try:
-				marime = os.path.getsize(disc)
-			except OSError:
-				continue
-			rel = prefix + os.path.relpath(disc, baza).replace("\\", "/")
-			motiv = motivOmis(n, disc, marime)
-			try:
-				semn = "omis: " + motiv if motiv else sha256Fisier(disc)
-			except (IOError, OSError):
-				semn = "omis: necitit"
-			rez.append((rel, marime, semn, disc))
+	"""Fotografie limitata: lista compatibila cu raportul, octeti pastrati, identitate separata pentru skinul local."""
+	rez = _Fotografie()
+	parti = cale_plugin.split("/")
+	if len(parti) != 2 or parti[0] not in FELURI + (FEL_TEME,) or not parti[1] or parti[1] in (".", ".."):
+		return rez
+	if any(c in cale_plugin for c in ("\\", "\0", "\n", "\r", "\t")):
+		return rez
+	baza = _r(PREFIX_TEME if parti[0] == FEL_TEME else PREFIX_PLUGINURI)
+	dosar = os.path.join(baza, parti[1] if parti[0] == FEL_TEME else cale_plugin)
+	try:
+		if not stat.S_ISDIR(_caleFaraLegaturi(dosar).st_mode):
+			return rez
+	except OSError:
+		return rez
+	manifest = _manifestSkin(cale_plugin, dosar)
+	sume_pachet = _manifestPachet(cale_plugin)
+	# calea de la radacina receptorului a dosarului (ca in .md5sums)
+	radacina_pachet = (PREFIX_TEME + parti[1] if parti[0] == FEL_TEME else PREFIX_PLUGINURI + cale_plugin).strip("/")
+	de_vazut = [(dosar, 0)]
+	intrari = octeti = 0
+	while de_vazut and rez.completa:
+		radacina, adancime = de_vazut.pop()
+		try:
+			_caleFaraLegaturi(radacina)
+			with os.scandir(radacina) as it:
+				copii = []
+				for e in it:
+					intrari += 1
+					if intrari > INTRARI_MAX:
+						rez.completa = False
+						break
+					copii.append(e.name)
+			for n in sorted(copii):
+				if n == "__pycache__" or any(c in n for c in ("\n", "\r", "\t", "\\")):
+					continue
+				disc = os.path.join(radacina, n)
+				try:
+					s = _caleFaraLegaturi(disc)
+					if stat.S_ISDIR(s.st_mode):
+						if adancime >= 32:
+							rez.completa = False
+						else:
+							de_vazut.append((disc, adancime + 1))
+						continue
+					if not stat.S_ISREG(s.st_mode) or s.st_nlink != 1:
+						continue
+					if len(rez) >= FISIERE_MAX:
+						rez.completa = False
+						break
+					rel = cale_plugin + "/" + os.path.relpath(disc, dosar).replace("\\", "/")
+					marime, date = s.st_size, None
+					# Filtrul de nume si marime nu are nevoie de continut.
+					motiv = motivOmis(n, disc, marime, b"")
+					if not motiv:
+						if marime > PACHET_MAX - octeti:
+							rez.completa = False
+							break
+						date = _citesteSigur(disc, min(FISIER_MAX, PACHET_MAX - octeti))
+						octeti += len(date)
+						motiv = motivOmis(n, disc, marime, date)
+					sha = hashlib.sha256(date).hexdigest() if date is not None else ""
+					semn = "omis: " + motiv if motiv else sha
+					identitate = (rel, marime, sha or semn)
+					if manifest and disc == os.path.join(dosar, "skin.xml"):
+						identitate = (rel, 0, manifest[1])
+						if date is not None and hashlib.md5(date).hexdigest() != manifest[0]:
+							# Raportul pastreaza dovada schimbarii, arhiva nu ia textul local.
+							semn = "omis: rescris local sha256 " + sha
+					elif sume_pachet is not None and os.path.splitext(n.lower())[1] not in COD_PLUGIN and (radacina_pachet + "/"
+							+ os.path.relpath(disc, dosar).replace("\\", "/")) in sume_pachet[2]:
+						# FPR6: aceeasi versiune a pachetului da aceeasi amprenta pe orice receptor (identitatea din .list)
+						identitate = (rel, 0, "manifest:%s:%s" % (sume_pachet[0], sume_pachet[1]))
+						instalat = sume_pachet[3].get(radacina_pachet + "/" + os.path.relpath(disc, dosar).replace("\\", "/"))
+						if instalat is not None and date is not None and hashlib.md5(date).hexdigest() != instalat:
+							semn = "omis: rescris local sha256 " + sha
+						elif instalat is None and parti[0] == FEL_TEME and disc == os.path.join(dosar, "skin.xml") and date is not None:
+							# skin.xml al temei, fara suma de comparat: continutul nu pleaca (ca la PXR1)
+							semn = "omis: sursa neverificata sha256 " + sha
+					elif parti[0] == FEL_TEME and disc == os.path.join(dosar, "skin.xml") and date is not None:
+						# Fara original verificabil, hashul ramane distinct, continutul nu pleaca.
+						semn = "omis: sursa neverificata sha256 " + sha
+					if not semn.startswith("omis:"):
+						rez.date[rel] = date
+					rez.append((rel, marime, semn, disc))
+					rez.identitate.append(identitate)
+				except OSError:
+					rel = cale_plugin + "/" + os.path.relpath(disc, dosar).replace("\\", "/")
+					# Nu se urmareste o legatura si nu se citeste tinta ei.
+					if os.path.islink(disc):
+						continue
+					rez.append((rel, 0, "omis: necitit", disc))
+					rez.identitate.append((rel, 0, "omis: necitit"))
+		except OSError:
+			rez.completa = False
+	if not rez.completa:
+		rez.append((cale_plugin + "/<limita>", 0, "omis: limita fotografiei", ""))
+		rez.identitate.append(rez[-1][:3])
 	rez.sort(key=lambda x: x[0])
+	rez.identitate.sort()
 	return rez
 
 
+# HdsDeschidereAmanata il foloseste pentru jurnal; insotitoarele raportului nu mai trec prin el (REGULA 0, FPR6)
 def _faraSecrete(text):
 	"""Randurile cu o parola, un jeton sau o cheie cu valoare inlocuite, apoi masca datelor omului."""
 	randuri = []
@@ -818,8 +1173,6 @@ def fisiereInsotitoare(cale_plugin):
 			try:
 				if os.path.islink(disc) or not os.path.isfile(disc):
 					continue
-				if any(fnmatch.fnmatch(os.path.basename(disc).lower(), s) for s in NUME_SECRETE):
-					continue
 				marime = os.path.getsize(disc)
 				with open(disc, "rb") as f:
 					if disc.endswith(".log") and marime > JURNAL_INSOTITOR_MAX:
@@ -833,7 +1186,7 @@ def fisiereInsotitoare(cale_plugin):
 			if b"\0" in date[:8192]:
 				continue
 			cale = disc[len(RADACINA):] if RADACINA and disc.startswith(RADACINA) else disc
-			rez.append((cale.replace("\\", "/"), marime, _faraSecrete(date.decode("utf-8", "replace"))))
+			rez.append((cale.replace("\\", "/"), marime, date.decode("utf-8", "replace")))
 	return rez
 
 
@@ -843,8 +1196,9 @@ def textInsotitoare(insotitoare):
 
 
 def amprenta(fisiere):
-	"""sha256 hex al listei "cale marime sha256" (un rand pe fisier, sortata): aceeasi versiune = aceeasi amprenta."""
-	return hashlib.sha256("".join("%s %d %s\n" % f[:3] for f in fisiere).encode("utf-8", "replace")).hexdigest()
+	"""sha256 al identitatii sortate: sursa reala, cu identitatea instalata pentru skin.xml din manifest."""
+	identitate = getattr(fisiere, "identitate", fisiere)
+	return hashlib.sha256("".join("%s %d %s\n" % f[:3] for f in identitate).encode("utf-8", "replace")).hexdigest()
 
 
 def pluginuriExterne(fara, pachete, versiuni):
@@ -958,15 +1312,18 @@ def construieste(raport):
 def pachetFisiere(fisiere):
 	"""tar.gz cu fisierele care intra (caile relative la Plugins/), sau None peste PACHET_MAX."""
 	alese = [f for f in fisiere if not f[2].startswith("omis:")]
-	if sum(f[1] for f in alese) > PACHET_MAX:
+	if not isinstance(fisiere, _Fotografie) or not fisiere.completa or sum(f[1] for f in alese) > PACHET_MAX:
 		return None
 	b = io.BytesIO()
 	with tarfile.open(fileobj=b, mode="w:gz") as tar:
-		for rel, _marime, _semn, disc in alese:
-			try:
-				tar.add(disc, arcname=rel, recursive=False)
-			except (IOError, OSError):
-				pass
+		for rel, marime, semn, _disc in alese:
+			date = fisiere.date.get(rel)
+			if date is None or len(date) != marime or hashlib.sha256(date).hexdigest() != semn:
+				return None
+			info = tarfile.TarInfo(rel)
+			info.size = marime
+			info.mode = 0o644
+			tar.addfile(info, io.BytesIO(date))
 	date = b.getvalue()
 	return date if len(date) <= PACHET_MAX else None
 
@@ -1028,8 +1385,13 @@ def trimiteText(text):
 	return hotarare(cod, raspuns), raspuns
 
 
-def trimiteFisiere(cod_raport, cheie, fisiere):
+def trimiteFisiere(cod_raport, cheie, fisiere, activ=None):
+	activ = activ or (lambda: True)
+	if not activ():
+		return False
 	date = pachetFisiere(fisiere)
+	if not activ():
+		return False
 	if date is None:
 		_jurnal("pachetul de fisiere trece de %d MB: se trimite numai raportul" % (PACHET_MAX // 1048576))
 		return False
@@ -1043,13 +1405,19 @@ def _valoareAntet(text, cheie):
 	return _valoareInfo(cap, cheie)
 
 
-def dupaRaspuns(text, ce, raspuns):
-	"""Pachetul de fisiere, cand serverul il vrea (fisierele se iau de pe disc in clipa trimiterii)."""
-	if ce == TRIMIS and raspuns.get("vreau_fisierele") is True:
+def dupaRaspuns(text, ce, raspuns, fisiere=None, activ=None):
+	"""Aceeasi fotografie cu raportul; la reincercare se verifica si lista, nu numai identitatea versiunii."""
+	activ = activ or (lambda: True)
+	if activ() and ce == TRIMIS and raspuns.get("vreau_fisierele") is True:
 		cale = _valoareAntet(text, "cale")
-		dosar = _r(PREFIX_TEME + cale[len(FEL_TEME) + 1:]) if cale.startswith(FEL_TEME + "/") else _r(PREFIX_PLUGINURI + cale)
-		if cale.split("/")[0] in FELURI + (FEL_TEME,) and os.path.isdir(dosar):
-			trimiteFisiere(raspuns.get("cod", ""), _valoareAntet(text, "cheie"), fisierePlugin(cale))
+		if fisiere is None:
+			fisiere = fisierePlugin(cale)
+			lista = "\n".join("%s\t%d\t%s" % f[:3] for f in fisiere)
+			veche = text.split("\n[fisiere]\n", 1)
+			if len(veche) != 2 or veche[1].split("\n\n[", 1)[0].rstrip("\n") != lista:
+				return
+		if amprenta(fisiere) == _valoareAntet(text, "amprenta_fisiere"):
+			trimiteFisiere(raspuns.get("cod", ""), _valoareAntet(text, "cheie"), fisiere, activ)
 
 
 class Lucru(object):
@@ -1063,6 +1431,7 @@ class Lucru(object):
 		self.in_coada = False
 		self.cale_jurnal = None
 		self.text = ""
+		self.ciclu = _cicluCoada[0]
 		self.fir = threading.Thread(target=self.run, name="hds-plugin-extern")
 		self.fir.daemon = True
 
@@ -1071,16 +1440,22 @@ class Lucru(object):
 
 	def run(self):
 		try:
+			if not self.activ():
+				return
 			nume = self.raport["antet"]["plugin"]
 			self.cale_jurnal = scrieJurnalText(self.raport["jurnal_cadere"], self.raport["acum"])
 			_jurnal("jurnalul de cadere al pluginului %s: %s" % (nume, self.cale_jurnal or "nescris"))
 			completeaza(self.raport)
 			self.text = construieste(self.raport)
+			if not self.activ():
+				return
 			ce, raspuns = trimiteText(self.text)
+			if not self.activ():
+				return
 			_jurnal("raportul pluginului %s: %s%s" % (nume, ce, (", codul " + str(raspuns.get("cod"))) if ce == TRIMIS else ""))
 			if ce == TRIMIS:
 				self.ok = True
-				dupaRaspuns(self.text, ce, raspuns)
+				dupaRaspuns(self.text, ce, raspuns, self.raport["fisiere"], self.activ)
 			else:
 				self.ok = False
 				if ce == MAI_TARZIU:
@@ -1089,7 +1464,12 @@ class Lucru(object):
 			_jurnal("raportul: %r" % (e,))
 			self.ok = False
 		finally:
+			# Nu pastram pana la inchiderea interfetei octetii unei arhive deja trimise.
+			self.raport.pop("fisiere", None)
 			self.gata = True
+
+	def activ(self):
+		return not _coadaOprita[0] and self.ciclu == _cicluCoada[0]
 
 
 # ------------------------------------------------------------------ jurnalul de cadere (pe fir)
@@ -1119,11 +1499,16 @@ def scrieJurnalText(text, acum=None, dosare=None):
 # ------------------------------------------------------------------ coada (pe fir)
 
 _NUME_COADA = re.compile(r"\A(\d{10,})-([0-9a-f]{32})-(\d+)\.txt\.gz\Z")
+_lacatCoada = threading.RLock()
+_cicluCoada = [0]
+_versiuneCoada = [0]
+_coadaOprita = [False]
 
 
 def coada():
 	"""[(nume, ora, cheie, incercari)] din DOSAR_COADA, cel mai vechi intai."""
 	try:
+		_caleFaraLegaturi(_r(DOSAR_COADA))
 		nume = os.listdir(_r(DOSAR_COADA))
 	except OSError:
 		return []
@@ -1140,21 +1525,39 @@ def puneInCoada(text, cheie, acum=None):
 	"""Raportul netrimis in coada; cele mai vechi ies peste COADA_MAX rapoarte sau COADA_OCTETI. True daca a ramas."""
 	dosar = _r(DOSAR_COADA)
 	nume = "%d-%s-0.txt.gz" % (int(time.time() if acum is None else acum), cheie)
-	try:
-		if not os.path.isdir(dosar):
-			os.makedirs(dosar)
-		with open(os.path.join(dosar, nume + ".nou"), "wb") as f:
-			f.write(gzip.compress(text.encode("utf-8")))
-		os.rename(os.path.join(dosar, nume + ".nou"), os.path.join(dosar, nume))
-		_coadaGoala[0] = False
-	except (IOError, OSError) as e:
-		_jurnal("coada rapoartelor: %s" % e)
+	if not re.fullmatch(r"[0-9a-f]{32}", cheie):
 		return False
-	stricteCoada()
-	return os.path.exists(os.path.join(dosar, nume))
+	nou = None
+	with _lacatCoada:
+		try:
+			os.makedirs(dosar, exist_ok=True)
+			_caleFaraLegaturi(dosar)
+			fd, nou = tempfile.mkstemp(prefix=".hds-", suffix=".nou", dir=dosar)
+			with os.fdopen(fd, "wb") as f:
+				f.write(gzip.compress(text.encode("utf-8")))
+			os.replace(nou, os.path.join(dosar, nume))
+			with _lacat:
+				_versiuneCoada[0] += 1
+				_coadaGoala[0] = False
+		except (IOError, OSError) as e:
+			_jurnal("coada rapoartelor: %s" % e)
+			return False
+		finally:
+			if nou is not None:
+				try:
+					os.remove(nou)
+				except OSError:
+					pass
+		stricteCoada()
+		return os.path.exists(os.path.join(dosar, nume))
 
 
 def stricteCoada():
+	with _lacatCoada:
+		_stricteCoada()
+
+
+def _stricteCoada():
 	toate = coada()
 	marimi = {}
 	for n, _o, _c, _i in toate:
@@ -1168,34 +1571,54 @@ def stricteCoada():
 
 def _sterge(nume):
 	try:
+		if not _NUME_COADA.fullmatch(nume):
+			return
+		_caleFaraLegaturi(_r(DOSAR_COADA))
 		os.remove(os.path.join(_r(DOSAR_COADA), nume))
 	except OSError:
 		pass
 
 
-def trimiteCoada():
+def trimiteCoada(activ=None):
 	"""O trecere prin coada: trimis sau refuzat -> sters; altfel o incercare in plus (dupa COADA_INCERCARI, sters).
 	(trimise, ramase)."""
 	trimise = 0
+	activ = activ or (lambda: True)
 	for n, ora, cheie, incercari in coada():
+		if not activ():
+			break
 		cale = os.path.join(_r(DOSAR_COADA), n)
 		try:
-			with open(cale, "rb") as f:
-				text = gzip.decompress(f.read(COADA_OCTETI)).decode("utf-8", "replace")
+			stare = _stareFisier(os.lstat(cale))
+			date = _citesteSigur(cale, COADA_OCTETI)
+			with gzip.GzipFile(fileobj=io.BytesIO(date)) as f:
+				brut = f.read(CORP_MAX + 1)
+			if len(brut) > CORP_MAX:
+				raise ValueError("raport prea mare")
+			text = brut.decode("utf-8", "replace")
 		except (IOError, OSError, EOFError, ValueError):
-			_sterge(n)
+			if activ():
+				_sterge(n)
 			continue
+		if not activ():
+			break
 		ce, raspuns = trimiteText(text)
-		if ce == MAI_TARZIU and incercari + 1 < COADA_INCERCARI:
+		if not activ():
+			break
+		with _lacatCoada:
 			try:
-				os.rename(cale, os.path.join(_r(DOSAR_COADA), "%d-%s-%d.txt.gz" % (ora, cheie, incercari + 1)))
+				# Un raport inlocuit cat HTTP astepta ramane pentru trecerea urmatoare.
+				if _stareFisier(os.lstat(cale)) != stare:
+					continue
+				if ce == MAI_TARZIU and incercari + 1 < COADA_INCERCARI:
+					os.replace(cale, os.path.join(_r(DOSAR_COADA), "%d-%s-%d.txt.gz" % (ora, cheie, incercari + 1)))
+					continue
+				_sterge(n)
 			except OSError:
-				pass
-			continue
-		_sterge(n)
+				continue
 		if ce == TRIMIS:
 			trimise += 1
-			dupaRaspuns(text, ce, raspuns)
+			dupaRaspuns(text, ce, raspuns, activ=activ)
 	return trimise, len(coada())
 
 
@@ -1206,10 +1629,17 @@ def trimiteCoada():
 _coadaGoala = [False]
 
 
-def _lucruCoada():
+def _lucruCoada(ciclu=None):
+	ciclu = _cicluCoada[0] if ciclu is None else ciclu
+	def activ():
+		return not _coadaOprita[0] and ciclu == _cicluCoada[0]
+	with _lacat:
+		versiune = _versiuneCoada[0]
 	try:
-		trimise, ramase = trimiteCoada()
-		_coadaGoala[0] = ramase == 0
+		trimise, ramase = trimiteCoada(activ)
+		with _lacat:
+			if activ() and versiune == _versiuneCoada[0]:
+				_coadaGoala[0] = ramase == 0
 		_jurnal("coada rapoartelor: %d trimise, %d raman" % (trimise, ramase))
 	except Exception as e:
 		_jurnal("coada rapoartelor: %r" % (e,))
@@ -1219,12 +1649,35 @@ def porneste():
 	"""Din mytest.py, la pornirea interfetei: ceasul de COADA_PAS_MS, fara sa citeasca dosarul cozii aici (firul lui il
 	citeste la primul tic si opreste ceasul daca e gol). Nu arunca."""
 	try:
+		_coadaOprita[0] = False
 		_pornesteCeasCoada()
 	except Exception as e:
 		_jurnal("pornirea cozii: %r" % (e,))
 
 
+def _opresteFirele():
+	"""La iesirea interpretorului nu mai atingem obiectele interfetei."""
+	_coadaOprita[0] = True
+	_cicluCoada[0] += 1
+
+
+def opreste():
+	"""Pe firul interfetei: invalideaza lucrul si mesajele vechi, fara join sau citiri de pe disc."""
+	_opresteFirele()
+	for loc in (_ceasCoada, _ceas):
+		if loc[0] is not None:
+			loc[0].stop()
+			loc[0] = None
+	_asteptari[:] = []
+	_deInchis[0] = False
+
+
+atexit.register(_opresteFirele)
+
+
 def _pornesteCeasCoada():
+	if _coadaOprita[0]:
+		return
 	_coadaGoala[0] = False      # un raport nou in coada: ceasul nu se mai opreste dupa ce a vazut-o goala
 	if _ceasCoada[0] is None:
 		from enigma import eTimer
@@ -1235,6 +1688,8 @@ def _pornesteCeasCoada():
 
 
 def _ticCoada():
+	if _coadaOprita[0] or _ceasCoada[0] is None:
+		return
 	if _firCoada[0] is not None and _firCoada[0].is_alive():
 		return
 	if _coadaGoala[0]:
@@ -1242,7 +1697,7 @@ def _ticCoada():
 		_ceasCoada[0].stop()
 		_ceasCoada[0] = None
 		return
-	fir = threading.Thread(target=_lucruCoada, name="hds-plugin-coada")
+	fir = threading.Thread(target=_lucruCoada, args=(_cicluCoada[0],), name="hds-plugin-coada")
 	fir.daemon = True
 	_firCoada[0] = fir
 	fir.start()
@@ -1256,6 +1711,8 @@ def textCauza(cod):
 		# MI9 (TODO NB2 15.11 11:27): imaginea traduce singura pluginurile de Python 2 (la import si din sursa, la citirea
 		# listei); cauza python2 la rulare inseamna o parte pe care traducerea n-a prins-o
 		"python2": _("Pluginul are o parte scrisă pentru imaginile vechi (Python 2), pe care imaginea nu a putut-o traduce singură."),
+		# TRD6: traducerea intregului plugin a pornit dupa eroare; mesajul de dupa vine din anuntaTraducere
+		"python2-traducere": _("Pluginul are o parte scrisă pentru imaginile vechi (Python 2). Imaginea îl traduce acum și îți spune când îl poți deschide din nou."),
 		"modul-lipsa": _("Pluginului îi lipsește o componentă de care are nevoie."),
 		"tema": _("Pluginul cere un ecran pe care tema de acum nu îl are."),
 		"internet": _("Pluginul nu a putut lua date de pe internet."),
@@ -1272,6 +1729,24 @@ def textMesaj(nume, cod, primit):
 		_("Receptorul merge mai departe."), echipa)
 
 
+def textTraducere(nume, tradus):
+	"""TRD6: mesajul de dupa traducerea ceruta de o eroare python2 la rulare."""
+	if tradus:
+		return _("Imaginea a tradus pluginul extern %s din Python 2. Deschide-l din nou.") % nume
+	return _("Imaginea nu a putut traduce singură pluginul extern %s din Python 2. Echipa HD Satelit are datele erorii.") % nume
+
+
+def anuntaTraducere(nume, tradus):
+	"""TRD6: din Components/HdsPython2Traducere.py (pe firul interfetei, la citirea listei), dupa traducerea ceruta de o eroare
+	python2 la rulare: mesajul pentru om, aratat de ceasul mesajelor (dupaEroare). Nu arunca."""
+	try:
+		_anunturiTraducere.append((nume, bool(tradus)))
+		_jurnal("pluginul extern %s: %s" % (nume, "tradus din Python 2 dupa eroare" if tradus else "netradus dupa eroare"))
+		_programeaza()
+	except Exception as e:
+		_jurnal("mesajul traducerii pentru %s: %r" % (nume, e))
+
+
 def _sesiune():
 	try:
 		from Screens.InfoBar import InfoBar
@@ -1282,6 +1757,8 @@ def _sesiune():
 
 def _programeaza():
 	"""Dupa ce C++ termina apelul: ecranul ramas pe jumatate, apoi mesajele care asteapta raspunsul serverului."""
+	if _coadaOprita[0]:
+		return
 	if _ceas[0] is None:
 		from enigma import eTimer
 		t = eTimer()
@@ -1292,6 +1769,8 @@ def _programeaza():
 
 def dupaEroare(sesiune=None, mono=None):
 	"""Ceasul de pe firul enigma2. True daca mai are de asteptat (ceasul porneste din nou)."""
+	if _coadaOprita[0]:
+		return False
 	sesiune = sesiune or _sesiune()
 	if _deInchis[0]:
 		_deInchis[0] = False
@@ -1321,9 +1800,22 @@ def dupaEroare(sesiune=None, mono=None):
 					_pornesteCeasCoada()
 				except Exception as e:
 					_jurnal("coada rapoartelor: %r" % (e,))
-	if _asteptari and _ceas[0] is not None:
+	# TRD6: mesajul de dupa traducere vine dupa mesajul erorii aceluiasi plugin, nu inaintea lui
+	in_asteptare = set(a["nume"] for a in _asteptari if a["arata"])
+	for anunt in list(_anunturiTraducere):
+		nume, tradus = anunt
+		if nume in in_asteptare:
+			continue
+		_anunturiTraducere.remove(anunt)
+		try:
+			if sesiune is not None:
+				from Screens import HdsAnuntRetea
+				HdsAnuntRetea.arata(sesiune, textTraducere(nume, tradus), "", DURATA_MESAJ_MS)
+		except Exception as e:
+			_jurnal("mesajul traducerii pentru %s: %r" % (nume, e))
+	if (_asteptari or _anunturiTraducere) and _ceas[0] is not None:
 		_ceas[0].start(PAS_CEAS_MS, True)
-	return bool(_asteptari)
+	return bool(_asteptari or _anunturiTraducere)
 
 
 def inchideEcranPeJumatate(sesiune):

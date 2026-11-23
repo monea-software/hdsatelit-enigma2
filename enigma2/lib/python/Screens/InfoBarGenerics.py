@@ -273,8 +273,16 @@ class InfoBarShowHide:
 		self.showPiP()
 		return True
 
+	def hdsScoateFixarea(self):
+		# EXIT din oricare bara elibereaza numai blocarea adaugata de fixare.
+		if getattr(self, "hdsBaraFixa", False):
+			self.hdsBaraFixa = False
+			self.unlockShow()
+			self.hideTimer.stop()
+
 	def hdsIesirePrivire(self):
 		if not self.hdsInchidePipLaIesire():
+			self.hdsScoateFixarea()
 			self.hide()
 
 	def toggleShow(self):
@@ -320,6 +328,24 @@ class InfoBarShowHide:
 		self.__locked = self.__locked - 1
 		if self.execing:
 			self.startHideTimer()
+
+	def hdsComutaBaraFixa(self):
+		"""Tasta cu actiunea "Bara de informatii fixa" (Components/HdsTasteRapide, CR4 0.7.8, tfrc LinuxSat 164191, TODO
+		18.11 17:38): prima apasare arata prima bara si o tine pe ecran, si la zap-urile de dupa, fara cronometru (lockShow);
+		a doua apasare a aceleiasi taste o scoate si o ascunde. Durata barei aleasa pentru toate zap-urile ramane neatinsa.
+		EXIT o ascunde si o scoate din fixa (hdsIesirePrivire); starea nu se tine peste o repornire."""
+		if getattr(self, "hdsBaraFixa", False):
+			self.hdsBaraFixa = False
+			self.unlockShow()
+			self.hideTimer.stop()
+			self.hide()
+			return False
+		self.hdsBaraFixa = True
+		second = getattr(self, "secondInfoBarScreen", None)
+		if second is not None and second.shown:
+			second.hide()
+		self.lockShow()
+		return True
 
 #	def startShow(self):
 #		self.instance.m_animation.startMoveAnimation(ePoint(0, 600), ePoint(0, 380), 100)
@@ -1149,7 +1175,19 @@ class InfoBarChannelSelection:
 		if fel == "tv" and peRadio and getattr(self, "showTv", None) is not None:
 			self.showTv()
 			return
-		if sus:
+		import Components.HdsSageti as hds_sageti
+		pe_canal = getattr(hds_sageti, "cursor_pe_canal", None)
+		if pe_canal is not None and pe_canal():
+			# CUR6: lista se deschide cu cursorul pe canalul care merge, fara mutare. Referinta ceruta (pe un rand cu
+			# alternative grupa din buchet, nu copilul pornit, care nu e in lista), altfel cea redata
+			ceruta = getattr(self.session.nav, "getCurrentServiceReferenceOriginal", None)
+			ref = ceruta() if ceruta is not None else None
+			if ref is None or not ref.valid():
+				ref = self.session.nav.getCurrentlyPlayingServiceReference()
+			alege = getattr(self.servicelist, "hdsSelecteazaCanalul", None)
+			if ref is not None and alege is not None:
+				alege(ref)
+		elif sus:
 			self.servicelist.moveUp()
 		else:
 			self.servicelist.moveDown()
@@ -1169,15 +1207,21 @@ class InfoBarChannelSelection:
 		self.session.execDialog(self.servicelist)
 
 	def zapUp(self):
+		from Components.HdsTasteRapide import schimba_buchet_la_zap, asezare_neutrino
+		asezare = asezare_neutrino(config) and getattr(self, "hdsAsezarePrivitActiva", lambda: True)()
 		zap_radio = getattr(self, "_hdsZapRadio", None)
 		if zap_radio is not None and zap_radio(-1):
 			return
+		if asezare:
+			curent = self.servicelist.getCurrentSelection()
+			if curent is None or not curent.valid():
+				return
 		if self.servicelist.inBouquet():
 			prev = self.servicelist.getCurrentSelection()
 			if prev:
 				prev = prev.toString()
 				while True:
-					if config.usage.quickzap_bouquet_change.value:
+					if schimba_buchet_la_zap(config, asezare):
 						if self.servicelist.atBegin():
 							self.servicelist.prevBouquet()
 					self.servicelist.moveUp()
@@ -1189,15 +1233,21 @@ class InfoBarChannelSelection:
 		self.servicelist.zap()
 
 	def zapDown(self):
+		from Components.HdsTasteRapide import schimba_buchet_la_zap, asezare_neutrino
+		asezare = asezare_neutrino(config) and getattr(self, "hdsAsezarePrivitActiva", lambda: True)()
 		zap_radio = getattr(self, "_hdsZapRadio", None)
 		if zap_radio is not None and zap_radio(1):
 			return
+		if asezare:
+			curent = self.servicelist.getCurrentSelection()
+			if curent is None or not curent.valid():
+				return
 		if self.servicelist.inBouquet():
 			prev = self.servicelist.getCurrentSelection()
 			if prev:
 				prev = prev.toString()
 				while True:
-					if config.usage.quickzap_bouquet_change.value and self.servicelist.atEnd():
+					if schimba_buchet_la_zap(config, asezare) and self.servicelist.atEnd():
 						self.servicelist.nextBouquet()
 					else:
 						self.servicelist.moveDown()
@@ -1989,11 +2039,13 @@ class InfoBarSeek:
 	def checkSkipShowHideLock(self):
 		wantlock = self.seekstate != self.SEEK_STATE_PLAY
 
-		if config.usage.show_infobar_on_skip.value:
-			if self.lockedBecauseOfSkipping and not wantlock:
-				self.unlockShow()
-				self.lockedBecauseOfSkipping = False
+		# Release our own lock even if the option was switched off meanwhile
+		# (web /filme or TV menu during pause/seek); otherwise the bar stays forever.
+		if self.lockedBecauseOfSkipping and not wantlock:
+			self.unlockShow()
+			self.lockedBecauseOfSkipping = False
 
+		if config.usage.show_infobar_on_skip.value:
 			if wantlock and not self.lockedBecauseOfSkipping:
 				self.lockShow()
 				self.lockedBecauseOfSkipping = True
@@ -2377,7 +2429,17 @@ class InfoBarExtensions:
 		self.extensionsList = []
 		self.availableKeys = [ "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "red", "green", "yellow", "blue" ]
 		self.extensionKeys = {}
-		for x in self.list:
+		# randurile alese de om (Butoane colorate si taste rapide > Lista butonului albastru, web /lista-albastra); fara
+		# alegere sursa e self.list neatinsa, deci lista din fabrica e cea de pana acum
+		sursa = self.list
+		try:
+			from Components.HdsTasteRapide import sursa_listei
+			sursa = sursa_listei(self, self.list)
+		except ImportError:
+			pass
+		except Exception as e:
+			print("[InfoBarExtensions] lista albastra aleasa: %s: %s" % (type(e).__name__, e))
+		for x in sursa:
 			if x[0] == self.EXTENSION_SINGLE:
 				self.updateExtension(x[1], x[2])
 			else:
@@ -3312,11 +3374,12 @@ def _hdsLeagaIptvPe(infobar):
 				iPlayableService.evUser + 17: rec.laPornit,
 				# ServiceApp (exteplayer3, gstplayer) nu da evUser+17: evUpdatedInfo = a pornit, numai cand reda chiar el (IRC)
 				iPlayableService.evUpdatedInfo: rec.laInfo,
+				# IPT8: codul spune daca o cadere dinaintea primei imagini se mai incearca (trecator: EOF da, codecul refuzat nu)
 				iPlayableService.evEOF: rec.laEsec,
-				iPlayableService.evUser + 10: rec.laEsec,
-				iPlayableService.evUser + 11: rec.laEsec,
-				iPlayableService.evUser + 12: rec.laEsec,
-				iPlayableService.evUser + 16: rec.laEsec,
+				iPlayableService.evUser + 10: lambda: rec.laEsec(10),
+				iPlayableService.evUser + 11: lambda: rec.laEsec(11),
+				iPlayableService.evUser + 12: lambda: rec.laEsec(12),
+				iPlayableService.evUser + 16: lambda: rec.laEsec(16),
 			})
 	except Exception as e:
 		print("[InfoBarGenerics] IPTV, reconectarea:", e)
@@ -3386,6 +3449,11 @@ class InfoBarFilmRefuz:
 		verdict = HdsFilmRedare.verdictDinInfo(info, ref.getPath(), canal = peCanal)
 		if verdict is None:
 			return
+		if peCanal and verdict.refuza and self.__pornireaContinua(verdict.fel):
+			# IPT8: canalul inca n-a dat imagine si Components/HdsIptvReconectare il porneste singur din nou (furnizorul inca il
+			# porneste, souphttpsrc a renuntat la 15 s): mesajul asteapta; dupa PORNIRE_S, la caderea finala, se spune ca inainte
+			print("[InfoBarFilmRefuz] %s inainte de prima imagine: canalul porneste din nou, mesajul asteapta" % verdict.fel)
+			return
 		if HdsFilmRedare.esteDecodor(verdict) and self.__decodorFaraMesaj(HdsFilmRedare, ref, peCanal, verdict):
 			return
 		self.__filmSpus = True
@@ -3400,6 +3468,13 @@ class InfoBarFilmRefuz:
 			Notifications.AddNotificationWithCallback(self.__dupaRefuz, MessageBox, verdict.text(), MessageBox.TYPE_ERROR)
 		else:
 			Notifications.AddPopup(text = verdict.text(), type = MessageBox.TYPE_INFO, timeout = 8, id = "HdsFilm")
+
+	def __pornireaContinua(self, fel):
+		try:
+			from Components import HdsIptvReconectare
+		except ImportError:
+			return False
+		return HdsIptvReconectare.pornireaContinua(16, fel)
 
 	def __decodorFaraMesaj(self, HdsFilmRedare, ref, peCanal, verdict):
 		"""Felul "decodor" (lipseste memoria decodorului): niciun defect intern pe ecran. Receptorul isi
@@ -3566,6 +3641,12 @@ class InfoBarSubtitleSupport(object):
 		self.__semn_sunet = None
 		self.__semn_subtitrare = None
 		_hdsOcr("urmaresteOprirea")
+		self.hdsVorbire = None
+		try:
+			from Components.HdsVorbireTV import Legatura
+			self.hdsVorbire = Legatura(self)
+		except Exception:
+			pass
 		if not isinstance(self, InfoBarSubtitleSelection) and callable(getattr(self, "subtitleSelection", None)):
 			InfoBarSubtitleSelection.__init__(self, prio=-2)
 
@@ -3614,6 +3695,10 @@ class InfoBarSubtitleSupport(object):
 
 	def hdsComutaSubtitrarea(self):
 		"""Ultima pista a acestui serviciu, inclusiv subtitrarile unui film."""
+		if self.hdsVorbire and self.hdsVorbire.lucrator:
+			self.hdsVorbire.opreste()
+			self.hdsNoteazaAlegerea(None)
+			return
 		if self.subtitles_enabled:
 			self.setSubtitlesEnable(False)
 			self.hdsNoteazaAlegerea(None)
@@ -3634,6 +3719,8 @@ class InfoBarSubtitleSupport(object):
 		self.hdsNoteazaAlegerea(pista)
 
 	def __serviceStopped(self):
+		if self.hdsVorbire:
+			self.hdsVorbire.suspenda()
 		self.cached_subtitle_checked = False
 		self.__semn_sunet = None
 		self.__semn_subtitrare = None
@@ -3815,6 +3902,20 @@ class InfoBarServiceErrorPopupSupport:
 
 		self.__retry_count = getattr(self, "_InfoBarServiceErrorPopupSupport__retry_count", 0) + 1
 
+		# Pastram fereastra NoPAT deschisa sau in coada pentru acelasi urmaritor si canal.
+		# Evenimentele repetate nu o inlocuiesc si nu ii repornesc termenul.
+		hdsSursa = None
+		if error == eDVBServicePMTHandler.eventNoPAT and self.hdsEcranNegru is not None:
+			ref = self.session.nav.getCurrentlyPlayingServiceReference()
+			if ref is not None:
+				hdsSursa = (self.hdsEcranNegru, ref.toString())
+				for ident, dialog in Notifications.current_notifications:
+					if ident == "ZapError" and getattr(dialog, "hdsSursa", None) == hdsSursa:
+						return
+				for notification in Notifications.notifications:
+					if notification[4] == "ZapError" and notification[3].get("hdsSursa") == hdsSursa:
+						return
+
 		# Daca inca incearca acordarea (primele incercari), afisam mesaj prietenos
 		if error == eDVBServicePMTHandler.eventTuneFailed and self.__retry_count < 3:
 			Notifications.AddPopup(text = _("Se acordează... așteaptă"), type = MessageBox.TYPE_INFO, timeout = 3, id = "ZapError")
@@ -3836,7 +3937,12 @@ class InfoBarServiceErrorPopupSupport:
 				try:
 					from Screens.HdsEcranNegru import HdsEcranNegruFereastra
 					Notifications.RemovePopup(id = "ZapError")
-					Notifications.AddNotificationWithID("ZapError", HdsEcranNegruFereastra, verdict, 5)
+					if hdsSursa is not None:
+						class FereastraNoPAT(HdsEcranNegru.FereastraEroareVie, HdsEcranNegruFereastra):
+							pass
+						Notifications.AddNotificationWithID("ZapError", FereastraNoPAT, verdict, 5, hdsSursa=hdsSursa)
+					else:
+						Notifications.AddNotificationWithID("ZapError", HdsEcranNegruFereastra, verdict, 5)
 					return
 				except Exception as e:
 					print("[InfoBarGenerics] fereastra de eroare: %s" % e)

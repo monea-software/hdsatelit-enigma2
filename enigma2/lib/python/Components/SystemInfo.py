@@ -160,17 +160,77 @@ SystemInfo["HdsNavigator"] = os.access("/usr/bin/hds-navigator", os.X_OK)
 try:
 	from Components import HdsPornireMultipla as _pornireMultipla
 	SystemInfo["HdsMultiboot"] = _pornireMultipla.disponibil()
+	SystemInfo["HdsMultibootEroare"] = ""
 except Exception as _e:
-	print("[SystemInfo] HdsMultiboot: %r" % (_e,))
+	print("[SystemInfo] HdsMultiboot: %s" % type(_e).__name__)
 	SystemInfo["HdsMultiboot"] = False
+	SystemInfo["HdsMultibootEroare"] = type(_e).__name__
 # Vu+ 4K pornit direct din flash, fara pornire multipla: intrarea Pornire multipla Vu+ (Kexec) din meniul Putere si
 # cardul ei din /alimentare (Components/HdsPornireMultipla.py, kexecInstalabil; KXC 15.11.2026); pana la prima
 # proba a unui tester numai cu pachetul kexec-multiboot al masinii instalat sau cu /etc/enigma2/hds-kexec-proba (KXH).
 try:
-	SystemInfo["HdsKexecInstalabil"] = _pornireMultipla.kexecInstalabil()
+	if not SystemInfo["HdsMultibootEroare"] and not SystemInfo["HdsMultiboot"]:
+		SystemInfo["HdsKexecInstalabil"] = _pornireMultipla.kexecInstalabil()
+	else:
+		SystemInfo["HdsKexecInstalabil"] = False
 except Exception as _e:
 	print("[SystemInfo] HdsKexecInstalabil: %r" % (_e,))
 	SystemInfo["HdsKexecInstalabil"] = False
+
+
+# One shared reader for the menu and web; its worker only publishes a result.
+import threading as _pmThreading
+import time as _pmTime
+
+_pmZavor = _pmThreading.Lock()
+_pmCitire = None
+_pmCand = 0
+SystemInfo["HdsMultibootCitire"] = False
+
+
+def recitestePornireMultipla(porneste=True, proaspat=False):
+	"""Return pending status; publish a completed read without waiting for IO."""
+	global _pmCitire, _pmCand
+	with _pmZavor:
+		if _pmCitire is not None:
+			if "rezultat" not in _pmCitire:
+				if proaspat:
+					_pmCitire["repeta"] = True
+				return True
+			repeta = _pmCitire.get("repeta", False)
+			SystemInfo.update(_pmCitire["rezultat"])
+			_pmCitire = None
+			_pmCand = _pmTime.monotonic()
+			SystemInfo["HdsMultibootCitire"] = False
+			if not repeta and (not porneste or not proaspat):
+				return False
+			porneste, proaspat = True, True
+		if not porneste or (not proaspat and _pmTime.monotonic() - _pmCand < 2):
+			return False
+		_pmCitire = citire = {}
+		SystemInfo["HdsMultibootCitire"] = True
+		# An old false result cannot prove that installing Kexec is safe now.
+		SystemInfo["HdsKexecInstalabil"] = False
+
+		def citeste():
+			try:
+				disponibil = bool(_pornireMultipla.disponibil())
+				instalabil = bool(not disponibil and _pornireMultipla.kexecInstalabil())
+				rezultat = {"HdsMultiboot": disponibil, "HdsKexecInstalabil": instalabil, "HdsMultibootEroare": ""}
+			except Exception as eroare:
+				# Read failure is distinct from a successful unsupported result.
+				print("[SystemInfo] HdsMultiboot: %s" % type(eroare).__name__)
+				rezultat = {"HdsMultiboot": False, "HdsKexecInstalabil": False, "HdsMultibootEroare": type(eroare).__name__}
+			with _pmZavor:
+				citire["rezultat"] = rezultat
+
+		fir = _pmThreading.Thread(target=citeste, name="HdsMultiboot-capacitate")
+		fir.daemon = True
+		try:
+			fir.start()
+		except RuntimeError:
+			citire["rezultat"] = {"HdsMultiboot": False, "HdsKexecInstalabil": False, "HdsMultibootEroare": "RuntimeError"}
+		return True
 
 
 class BoxInfoClass:
@@ -578,7 +638,7 @@ for _k, _v in (
 	("VideoDestinationConfigurable", os.path.exists("/proc/stb/vmpeg/0/dst_left") or os.path.exists("/sys/class/video/axis")),
 	("XcoreVFD", False),
 	("DisplaySetup", True),
-	("DM9X0", False),
+	("DM9X0", _mb == "dm900"),
 	("dFlash", os.path.exists("/usr/lib/enigma2/python/Plugins/Extensions/dFlash")),
 	("CommonInterface", _sloturiCi),
 	("CommonInterfaceCIDelay", _oeaAcces("/proc/stb/tsmux/rmx_delay")),
@@ -656,7 +716,8 @@ try:
 	_profilCunoscut = bool(_valoriCodor(_mb))
 except Exception:
 	_profilCunoscut = False
-_codorPlaca = bool(SystemInfo.get("transcoding") or SystemInfo.get("multitranscoding") or not _profilCunoscut) and (
+# DM900 isi pastreaza detectia codorului dupa dispozitiv, ca inaintea profilului nou.
+_codorPlaca = bool(SystemInfo.get("transcoding") or SystemInfo.get("multitranscoding") or not _profilCunoscut or _mb == "dm900") and (
 	os.path.isdir("/proc/stb/encoder/0") or os.path.exists("/dev/bcm_enc0"))
 SystemInfo.setdefault("HasTranscoding", _codorPlaca)
 SystemInfo.setdefault("HasH265Encoder", _codorPlaca and "h265" in _oeaRand("/proc/stb/encoder/0/vcodec_choices").lower().split())
@@ -742,3 +803,6 @@ MACHINENAME = DISPLAYMODEL
 BOXTYPE = SystemInfo.get("boxtype", "")
 CHKROOTMB = SystemInfo.get("chkrootmb", False)
 UBIMB = SystemInfo.get("hasUBIMB", False)
+
+# Native Bluetooth pairing is visible on supported boards or with BlueZ installed.
+SystemInfo["HdsBluetooth"] = getModelName() == "gbquad4kpro" or os.path.isfile("/usr/bin/bluetoothctl")

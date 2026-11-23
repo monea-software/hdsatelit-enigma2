@@ -5,6 +5,7 @@ from enigma import eConsoleAppContainer
 from Screens.Screen import Screen
 from Components.ActionMap import ActionMap
 from Components.ScrollLabel import ScrollLabel
+from Components.Console import PregatireInstalare, instalareExterna, eroareSalvareInstalare
 
 class Console(Screen):
 	# cmdlist entries (HDSatelit):
@@ -19,7 +20,7 @@ class Console(Screen):
 		</screen>"""
 		
 	def __init__(self, session, title = "Console", cmdlist = None, finishedCallback = None, closeOnSuccess = False,
-			cmdList = None, showScripts = True, windowTitle = None, **altele):
+			cmdList = None, showScripts = True, windowTitle = None, installation = False, **altele):
 		# HDSatelit: numele din alte imagini (pluginurile scrise pentru ele): cmdList = cmdlist, windowTitle = titlul;
 		# showScripts se tine (la noi comenzile se arata oricum)
 		if altele:
@@ -31,6 +32,11 @@ class Console(Screen):
 		if isinstance(cmdlist, str):
 			cmdlist = [cmdlist]
 		self.showScripts = showScripts
+		self.installation = installation
+		self.instalare = None
+		self._inchisa = False
+		self._salvareEsuata = False
+		self._generatie = 0
 		Screen.__init__(self, session)
 
 		self.finishedCallback = finishedCallback
@@ -58,6 +64,7 @@ class Console(Screen):
 		self.container.appClosed.append(self.runFinished)
 		self.container.dataAvail.append(self.dataAvail)
 		self.onLayoutFinish.append(self.startRun) # dont start before gui is finished
+		self.onClose.append(self._inchideConsola)
 
 	def updateTitle(self):
 		self.setTitle(self.newtitle)
@@ -68,6 +75,30 @@ class Console(Screen):
 			self.runFinished(-1) # so we must call runFinished manual
 
 	def executeCommand(self, cmd):
+		if getattr(self, "_inchisa", True):
+			return 0
+		if isinstance(cmd, (list, tuple)):
+			cmd = tuple(cmd)
+		self._generatie += 1
+		generatie = self._generatie
+		if self.instalare is not None and self.instalare.stare == "salvare":
+			self.instalare.anuleaza()
+		if self.installation or instalareExterna(cmd):
+			def gata(ok):
+				if getattr(self, "_inchisa", True) or generatie != self._generatie:
+					return
+				if not ok:
+					self._salvareEsuata = True
+					self.dataAvail("\n" + eroareSalvareInstalare() + "\n")
+					return
+				if self._executa(cmd):
+					self.runFinished(-1)
+			self.instalare = PregatireInstalare(gata)
+			self.instalare.porneste()
+			return 0
+		return self._executa(cmd)
+
+	def _executa(self, cmd):
 		try:
 			# inside the try: the log (ePythonOutput) refuses a str with surrogates too
 			print("Console: executing in run", self.run, " the command:", cmd)
@@ -84,6 +115,8 @@ class Console(Screen):
 			return -1
 
 	def runFinished(self, retval):
+		if getattr(self, "_inchisa", True) or self._salvareEsuata:
+			return
 		# a cut character left at the end of a command is shown (as U+FFFD), not glued to the next command
 		self.dataAvail(self._decoder.decode(b"", True))
 		self.run += 1
@@ -95,16 +128,23 @@ class Console(Screen):
 			str += _("Execution finished!!");
 			self["text"].setText(str)
 			self["text"].lastPage()
-			if self.finishedCallback is not None:
-				self.finishedCallback()
-			if not retval and self.closeOnSuccess:
+			callback, closeOnSuccess = self.finishedCallback, self.closeOnSuccess
+			if callback is not None:
+				callback()
+			if not retval and closeOnSuccess and not getattr(self, "_inchisa", True):
 				self.cancel()
 
 	def cancel(self):
-		if self.run == len(self.cmdlist):
+		if self._salvareEsuata or (self.instalare is not None and self.instalare.stare == "salvare") or self.run == len(self.cmdlist):
 			self.close()
-			self.container.appClosed.remove(self.runFinished)
-			self.container.dataAvail.remove(self.dataAvail)
+
+	def _inchideConsola(self):
+		self._inchisa = True
+		if self.instalare is not None:
+			self.instalare.anuleaza()
+		for signal, callback in ((self.container.appClosed, self.runFinished), (self.container.dataAvail, self.dataAvail)):
+			if callback in signal:
+				signal.remove(callback)
 
 	# numele din alte imagini ale tastelor (subclasele pluginurilor le cheama)
 	def keyCancel(self):
@@ -117,6 +157,8 @@ class Console(Screen):
 		self["text"].pageDown()
 
 	def dataAvail(self, data):
+		if getattr(self, "_inchisa", True):
+			return
 		if isinstance(data, bytes):
 			data = self._decoder.decode(data)
 		if data:

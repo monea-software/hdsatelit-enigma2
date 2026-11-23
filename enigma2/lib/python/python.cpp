@@ -316,7 +316,7 @@ int ePython::call(ePyObject pFunc, ePyObject pArgs)
 			/* HDSatelit: an error in an external plugin: the traceback is in the log, the user interface goes on */
 			if (!plugin.empty())
 			{
-				eDebug("[ePython] error in the external plugin %s: no restart of the user interface", plugin.c_str());
+				eDebug("[ePython] no restart of the user interface (%s)", plugin.c_str());
 				/* nothing may stay set for the next call into Python */
 				if (PyErr_Occurred())
 					PyErr_Clear();

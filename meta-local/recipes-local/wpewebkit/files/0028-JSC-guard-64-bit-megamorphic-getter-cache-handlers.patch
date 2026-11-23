@@ -1,0 +1,37 @@
+Subject: [PATCH] JSC: keep megamorphic getter handlers on 64-bit values
+
+Upstream-Status: Inappropriate [restore experimental ARM32 JIT]
+
+ARM32 does not create the megamorphic getter cases. Guard the new
+64-bit emitter and complete the existing empty handler list for 32-bit.
+
+--- a/Source/JavaScriptCore/bytecode/InlineCacheCompiler.cpp
++++ b/Source/JavaScriptCore/bytecode/InlineCacheCompiler.cpp
+@@ -3526,6 +3526,7 @@
+     case AccessCase::LoadMegamorphicGetter:
+     case AccessCase::IntrinsicGetter: {
+         if (accessCase.m_type == AccessCase::LoadMegamorphicGetter) {
++#if USE(JSVALUE64)
+             // Resolve the GetterSetter cell from the getter cache into scratchGPR, then fall through
+             // to the shared getter-call sequence. A cache miss repatches to the generic slow path.
+             ASSERT(!accessCase.viaGlobalProxy());
+@@ -3552,6 +3553,11 @@
+                 ok.link(&jit);
+             } else
+                 m_failAndRepatch.append(slowCases);
++#else
++            // Megamorphic getter caches use the single-register value representation.
++            m_failAndIgnore.append(jit.jump());
++            return;
++#endif
+         } else {
+             Structure* currStructure = accessCase.structure();
+             if (auto* object = accessCase.tryGetAlternateBase())
+@@ -8387,6 +8393,7 @@
+ MacroAssemblerCodeRef<JITThunkPtrTag> getByIdCustomAccessorHandler(VM&) { return { }; }
+ MacroAssemblerCodeRef<JITThunkPtrTag> getByIdCustomValueHandler(VM&) { return { }; }
+ MacroAssemblerCodeRef<JITThunkPtrTag> getByIdGetterHandler(VM&) { return { }; }
++MacroAssemblerCodeRef<JITThunkPtrTag> getByIdMegamorphicGetterHandler(VM&) { return { }; }
+ MacroAssemblerCodeRef<JITThunkPtrTag> getByIdProxyObjectLoadHandler(VM&) { return { }; }
+ MacroAssemblerCodeRef<JITThunkPtrTag> getByIdModuleNamespaceLoadHandler(VM&) { return { }; }
+ MacroAssemblerCodeRef<JITThunkPtrTag> putByIdReplaceHandler(VM&) { return { }; }

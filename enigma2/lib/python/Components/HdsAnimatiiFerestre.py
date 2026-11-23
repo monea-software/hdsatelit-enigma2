@@ -21,10 +21,11 @@
 # Session.open (volumul, mesajele scurte, subtitrarile, bara la zap) nu au animatie niciodata. O tasta apasata in timpul
 # animatiei o termina imediat (main/enigma.cpp).
 #
-# Din fabrica: pornita (aparitie treptata, normala) pe receptoarele ARM; oprita pe cele mips (Vu+ Solo SE, Duo2 si celelalte:
-# procesor mai slab, nemasurat). Masurarile: STADIU-AN-ANIMATII-FERESTRE.md (uneltele noastre).
+# Din fabrica: OPRITA pe toate receptoarele (Eduard, 19.11.2026: "default sa fie dezactivate, si sa se poata activa din meniu");
+# pana la 0.7.7 era pornita (aparitie treptata) pe ARM. Cine a ales de mana un fel il pastreaza. Masurarile: STADIU-AN-ANIMATII-FERESTRE.md (uneltele noastre).
 
 import os
+import random
 
 from Components.config import ConfigSelection, config
 
@@ -43,8 +44,40 @@ FARA_ANIMATIE = frozenset((
 	"PictureInPicture", "PiPSetup", "SubtitleDisplay", "Volume", "Toast",
 ))
 
-FELURI = [("0", _("Oprită")), ("1", _("Apariție treptată")), ("7", _("Alunecare scurtă")), ("2", _("Mărire ușoară"))]
+FELURI = [("0", _("Oprită")), ("1", _("Apariție treptată")), ("7", _("Alunecare scurtă")), ("2", _("Mărire ușoară")),
+	("101", _("Alunecare din dreapta")), ("102", _("Alunecare din stânga")),
+	("103", _("Alunecare de jos")), ("104", _("Alunecare de sus")),
+	("105", _("Mărire cu apariție treptată")), ("106", _("Pop din centru")),
+	("107", _("Trecere încrucișată")), ("199", _("La întâmplare"))]
 VITEZE = [("27", _("Rapidă")), ("20", _("Normală")), ("16", _("Lentă"))]
+
+_ultimul = None
+
+
+def _arm():
+	try:
+		return os.uname()[4].lower().startswith(("arm", "aarch64"))
+	except (AttributeError, OSError):
+		return False
+
+
+def alegeri():
+	"""The TV and web keep every choice, regardless of session performance."""
+	return list(FELURI if _arm() else FELURI[:4])
+
+
+def _pentruIntamplare():
+	permise = [k for k, text in alegeri() if k not in ("0", "199", "107")]
+	# The legacy fade already blends both snapshots, just like effect 107.
+	return permise
+
+
+def _alegeIntamplare():
+	global _ultimul
+	permise = _pentruIntamplare()
+	altele = [k for k in permise if k != _ultimul]
+	_ultimul = random.choice(altele or permise) if permise else "1"
+	return _ultimul
 
 
 def _mips():
@@ -55,7 +88,7 @@ def _mips():
 
 
 def felImplicit():
-	return "0" if _mips() else "1"
+	return "0"
 
 
 def _aplica(*_):
@@ -63,18 +96,28 @@ def _aplica(*_):
 		return
 	try:
 		setAnimation_speed(int(config.misc.window_animation_speed.value))
-		setAnimation_current(int(config.misc.window_animation_default.value))
+		fel = config.misc.window_animation_default.value
+		setAnimation_current(0 if fel == "199" else int(fel))
 	except Exception as eroare:
 		print("[HdsAnimatiiFerestre] %r" % eroare)
 
 
+def _alegereSchimbata(*_):
+	"""An explicit TV/web selection retries immediately, including the same value."""
+	if getDesktop is not None:
+		getattr(getDesktop(0), "hdsAnimatieReincearca", lambda: None)()
+	_aplica()
+
+
 def initConfig():
 	if not hasattr(config.misc, "window_animation_default"):
-		config.misc.window_animation_default = ConfigSelection(default=felImplicit(), choices=FELURI)
+		config.misc.window_animation_default = ConfigSelection(default=felImplicit(), choices=alegeri())
 	if not hasattr(config.misc, "window_animation_speed"):
 		config.misc.window_animation_speed = ConfigSelection(default="20", choices=VITEZE)
 	config.misc.window_animation_speed.addNotifier(_aplica, initial_call=False)
-	config.misc.window_animation_default.addNotifier(_aplica, initial_call=True)
+	# The web saves even an unchanged selection; the same choice must retry too.
+	config.misc.window_animation_default.callNotifiersOnSaveAndCancel = True
+	config.misc.window_animation_default.addNotifier(_alegereSchimbata, initial_call=True)
 
 
 def dupaInchidere():
@@ -150,6 +193,10 @@ def laDeschidere(session, ecran):
 		elif ales < 0:
 			instanta.setAnimationMode(0x11)
 			ales = 0x11
+		if ales > 0 and (ales & 0x11) and config.misc.window_animation_default.value == "199":
+			fel = _alegeIntamplare()
+			ecran._hdsAnimationEffect = fel
+			setAnimation_current(int(fel))
 		if not (ales & 0x01):
 			_faraPas()
 	except Exception as eroare:
@@ -165,6 +212,9 @@ def laInchidere(session, ecran):
 	try:
 		mod = instanta.getAnimationMode()
 		if mod > 0 and (mod & 0x10):
+			if config.misc.window_animation_default.value == "199":
+				fel = getattr(ecran, "_hdsAnimationEffect", "1")
+				setAnimation_current(int(fel if fel in dict(alegeri()) else "1"))
 			getDesktop(0).hdsAnimatieTine()		# numai la o inchidere cu animatie: lista, ghidul se sting pe loc
 			getDesktop(0).hdsAnimatieInchidere()
 		else:

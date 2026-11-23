@@ -107,6 +107,7 @@ import errno
 import os
 import re
 import socket
+import sys
 import threading
 import time
 
@@ -362,6 +363,199 @@ def citesteLamedb(cale, alese, maxim=MAX_LAMEDB_OCTETI):
 
 # ------------------------------------------------------------------ de ce nu raspunde releul (0.7.1)
 
+_IPV4_ORICARE = socket.inet_ntoa(b"\x00\x00\x00\x00")
+
+
+def _diagnosticNecunoscut():
+	return {"cauza": "necunoscut", "asculta": None, "pornire": None,
+		"text": _t("Nu s-a putut verifica modulul de acces sau portul Stream Relay.")}
+
+
+def _raspunsDiagnostic(gazda, port):
+	"""Probe TCP acceptance only; never send a channel request."""
+	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	s.settimeout(TERMEN_VERIFICARE_S)
+	try:
+		s.connect((gazda, port))
+		return True
+	except OSError:
+		return False
+	finally:
+		s.close()
+
+
+def citesteDiagnostic(gazda, port, H, sonda=None):
+	"""Read-only worker: modules and socket ownership, no account files."""
+	rez = {"cauza": "necunoscut", "text": _t(TEXT_RELEU_OPRIT) % (gazda, port),
+		"pornire": None, "asculta": None}
+	if gazda not in ("127.0.0.1", "localhost", "::1"):
+		# A remote relay has no local module or socket owner to inspect.
+		asculta = (sonda or _raspunsDiagnostic)(gazda, port)
+		rez.update(cauza="asculta" if asculta else "fara_raspuns", asculta=asculta)
+		if asculta:
+			rez["text"] = _t("Stream Relay la %s:%d acceptă conexiuni. Răspunsul fluxului se verifică la redarea canalului.") % (gazda, port)
+		return rez
+	sistem = H.SistemAcces()
+	if hasattr(H, "SistemCuMemorie"):
+		sistem = H.SistemCuMemorie(sistem)
+	stari = H.feluri_de_aratat(sistem, pregateste=False)
+	alese = [(st.fel, e) for st in stari for e in st.emulatoare if e.ales]
+	if not alese:
+		rez.update(cauza="niciun_modul", asculta=False,
+			text=_t("Niciun modul de acces nu este ales. Alege unul din Meniu > Acces condiționat."))
+		return rez
+	if len(alese) != 1:
+		rez.update(cauza="mai_multe", text=_t("Sunt alese mai multe module de acces. Nu se poate stabili care oferă Stream Relay."))
+		return rez
+	fel, e = alese[0]
+	if not e.pids:
+		if not getattr(e, "verificabil", True):
+			return _diagnosticNecunoscut()
+		rez.update(cauza="modul_oprit", text=_t(TEXT_RELEU_FARA_MODUL) % e.sufix, asculta=False,
+			pornire={"fel": fel, "sufix": e.sufix, "text": _t("Pornește %s") % e.sufix})
+		return rez
+	if hasattr(sistem, "citeste"):
+		try:
+			sistem.citeste("/proc/net/tcp")
+		except OSError:
+			return _diagnosticNecunoscut()
+		try:
+			sistem.citeste("/proc/net/tcp6")
+		except OSError as err:
+			if err.errno != errno.ENOENT:
+				return _diagnosticNecunoscut()
+	ascultare = H.porturi_in_ascultare(sistem)
+	locale = {i: (a, p) for i, (a, p) in ascultare.items()
+		if p == port and a in (gazda, "::", "::ffff:" + gazda, _IPV4_ORICARE)}
+	port_ocupat = bool(locale)
+	proprii = H.porturi_procese(sistem, e.pids, ascultare=locale)
+	if port_ocupat and port not in proprii:
+		# Absence from a partial fd scan is not proof of another owner.
+		if hasattr(sistem, "listeaza"):
+			try:
+				for pid in e.pids:
+					baza = "/proc/%d/fd" % pid
+					for fd in sistem.listeaza(baza):
+						tinta = sistem.legatura(baza + "/" + fd)
+						if tinta.startswith("socket:[") and int(tinta[8:-1]) in locale:
+							return _diagnosticNecunoscut()
+			except (OSError, ValueError):
+				return _diagnosticNecunoscut()
+		rez.update(cauza="alt_proces", asculta=False,
+			text=_t("Portul Stream Relay %d este ocupat de alt proces, nu de modulul ales %s.") % (port, e.sufix))
+	elif not port_ocupat:
+		rez.update(cauza="port_neascultat", asculta=False,
+			text=_t("Modulul de acces %s rulează, dar nu ascultă pe portul Stream Relay %d. Verifică portul din setările Stream Relay și ale modulului.") % (e.sufix, port))
+	elif (sonda or _raspunsDiagnostic)(gazda, port):
+		rez.update(cauza="asculta", asculta=True,
+			text=_t("Modulul de acces %s ascultă pe portul %d și acceptă conexiuni. Răspunsul fluxului Stream Relay se verifică la redarea canalului.") % (e.sufix, port))
+	else:
+		rez.update(cauza="fara_raspuns", asculta=False,
+			text=_t("Modulul de acces %s are un ascultător pe portul %d, dar acesta nu acceptă conexiunea de verificare. Răspunsul fluxului Stream Relay se verifică la redarea canalului.") % (e.sufix, port))
+	return rez
+
+
+class DiagnosticReleu(object):
+	"""Demand-driven cache; worker results are published on the UI thread."""
+	def __init__(self, H=None, cititor=None, ceas=time.monotonic):
+		if H is None:
+			from Components import HdsModuleAcces as H
+		self.H, self.cititor, self.ceas = H, cititor, ceas
+		self.cheie, self.rezultat, self.cand = None, None, 0
+		self.generatie = 0
+
+	def opreste(self):
+		self.generatie += 1
+		self.cheie, self.rezultat = None, None
+		if self.cititor is not None:
+			self.cititor.opreste()
+			self.cititor = None
+
+	def stare(self, gazda, port):
+		H = self.H
+		local = gazda in ("127.0.0.1", "localhost", "::1")
+		o = H.in_curs() if local and hasattr(H, "in_curs") else None
+		g = H.generatie() if local and hasattr(H, "generatie") else 0
+		cheie = (gazda, port, g, id(o) if o is not None else None)
+		if o is not None:
+			self.opreste()
+			pornire = getattr(o, "cerere", "") in ("porneste", "reporneste")
+			return {"cauza": "pornire" if pornire else "comanda", "asculta": None, "pornire": None,
+				"text": _t("Modulul de acces este în curs de pornire. Așteaptă terminarea operației.") if pornire
+				else _t("Așteaptă să se termine comanda de acum.")}
+		if cheie != self.cheie:
+			if self.cheie is not None:
+				self.opreste()
+			self.cheie = cheie
+		acum = self.ceas()
+		if self.rezultat is not None and acum - self.cand < STARE_RECENTA_S:
+			return dict(self.rezultat)
+		if self.cititor is None:
+			try:
+				self.cititor = H.CitirePeFir()
+			except Exception:
+				self.rezultat, self.cand = _diagnosticNecunoscut(), acum
+				return dict(self.rezultat)
+		if not self.cititor.in_curs():
+			semn = self.generatie
+
+			def gata(rez, eroare):
+				if semn != self.generatie or cheie != self.cheie:
+					return
+				if local and (H.generatie() != g or H.in_curs() is not None):
+					return
+				self.rezultat = rez if eroare is None else _diagnosticNecunoscut()
+				self.cand = self.ceas()
+
+			try:
+				pornita = self.cititor.porneste(lambda: citesteDiagnostic(gazda, port, H), gata)
+			except Exception:
+				pornita = False
+			if not pornita:
+				self.rezultat, self.cand = _diagnosticNecunoscut(), acum
+		return dict(self.rezultat) if self.rezultat is not None else {
+			"cauza": "verificare", "text": _t("Se verifică modulul de acces și portul Stream Relay..."),
+			"asculta": None, "pornire": None}
+
+
+_DIAGNOSTIC = None
+_IMPORT_DIAGNOSTIC = {"pornit": False, "H": None, "eroare": False}
+
+
+def diagnosticReleu(gazda, port, H=None):
+	"""Shared receiver status, independent of a browser request or a screen."""
+	global _DIAGNOSTIC
+	# Injected read-only models on PC have no worker. ModuleCitite is a UI
+	# snapshot; its diagnostic still uses the shared receiver worker.
+	if H is not None and not hasattr(H, "CitirePeFir") and not hasattr(H, "stari"):
+		return citesteDiagnostic(gazda, port, H)
+	if _DIAGNOSTIC is None:
+		Hm = H if H is not None and hasattr(H, "CitirePeFir") else (
+			sys.modules.get("Components.HdsModuleAcces") or sys.modules.get("HdsModuleAcces") or _IMPORT_DIAGNOSTIC["H"])
+		if Hm is None or not hasattr(Hm, "CitirePeFir"):
+			if not _IMPORT_DIAGNOSTIC["pornit"]:
+				_IMPORT_DIAGNOSTIC["pornit"] = True
+
+				def incarca():
+					try:
+						from Components import HdsModuleAcces
+						_IMPORT_DIAGNOSTIC["H"] = HdsModuleAcces
+					except Exception:
+						_IMPORT_DIAGNOSTIC["eroare"] = True
+
+				t = threading.Thread(target=incarca, name="HdsRelayImport")
+				t.daemon = True
+				try:
+					t.start()
+				except Exception:
+					_IMPORT_DIAGNOSTIC["eroare"] = True
+			return {"cauza": "necunoscut" if _IMPORT_DIAGNOSTIC["eroare"] else "verificare",
+				"text": _t("Nu s-a putut verifica modulul de acces sau portul Stream Relay.") if _IMPORT_DIAGNOSTIC["eroare"]
+				else _t("Se verifică modulul de acces și portul Stream Relay..."), "asculta": None, "pornire": None}
+		_DIAGNOSTIC = DiagnosticReleu(Hm)
+	return _DIAGNOSTIC.stare(gazda, port)
+
+
 def _moduleAcces(H=None):
 	"""Modulele de acces de pe receptor, ca in ecranul „Module de acces condiționat” (toate felurile):
 	{"ruleaza": [sufixele celor care ruleaza], "alese": [sufixele celor alese care nu ruleaza]}, sau None cand nu se
@@ -401,7 +595,7 @@ def motivReleu(gazda, port, H=None):
 	return _t(TEXT_RELEU_OPRIT) % (gazda, port)
 
 
-def stare(r=None, H=None):
+def stare(r=None, H=None, cu_diagnostic=True):
 	"""Starea Stream Relay pentru ecranul setarilor si web: {"canale": numarul canalelor din lista, "numai_citire",
 	"automat" (trecerea singura pornita), "automate" (cate canale trec singure acum: tinute minte sau stiute din lamedb,
 	fara cele scoase de om), "gazda", "port", "permis" (adresa se foloseste), "asculta" (releul raspunde; None cand nu
@@ -424,15 +618,25 @@ def stare(r=None, H=None):
 		linii.append(_t(TEXT_AUTOMAT) % textCaid(alese))
 		if automate:
 			linii.append(_t(TEXT_AUTOMAT_CANALE) % (ngettext("%d canal", "%d canale", automate) % automate))
-	if chei or automate:
-		rez["asculta"] = r.asculta(gazda, port)
-		if rez["asculta"]:
-			linii.append(_t(TEXT_RELEU_MERGE) % (gazda, port))
-		else:
-			rez["motiv"] = motivReleu(gazda, port, H)
-			linii.append(rez["motiv"])
-	elif not pornit:
+	if not chei and not automate and not pornit:
 		linii.append(_t(TEXT_LISTA_GOALA))
+	# One-shot settings consumers keep the existing complete status. The new
+	# asynchronous diagnostic is delivered only to the polling access page.
+	# Also preserve the original dependency interface for read-only models.
+	if not cu_diagnostic or (H is not None and not any(hasattr(H, x) for x in ("CitirePeFir", "porturi_in_ascultare", "stari"))):
+		if chei or automate:
+			rez["asculta"] = r.asculta(gazda, port)
+			rez["motiv"] = "" if rez["asculta"] else motivReleu(gazda, port, H)
+			linii.append(_t(TEXT_RELEU_MERGE) % (gazda, port) if rez["asculta"] else rez["motiv"])
+		linii.append(_t(TEXT_DE_UNDE))
+		rez["linii"] = linii
+		return rez
+	diagnostic = diagnosticReleu(gazda, port, H)
+	rez.update(cauza=diagnostic["cauza"], pornire=diagnostic["pornire"])
+	if chei or automate:
+		rez["asculta"] = diagnostic["asculta"]
+	rez["motiv"] = "" if diagnostic["asculta"] else diagnostic["text"]
+	linii.append(diagnostic["text"])
 	linii.append(_t(TEXT_DE_UNDE))
 	rez["linii"] = linii
 	return rez
@@ -452,7 +656,7 @@ def liniiStare(ceas=time.time):
 	if cand is not None and 0 <= acum - cand < STARE_RECENTA_S:
 		return list(linii)
 	try:
-		linii = stare()["linii"]
+		linii = stare(cu_diagnostic=False)["linii"]
 	except Exception as e:
 		_jurnal("starea: %r" % (e,))
 		linii = []

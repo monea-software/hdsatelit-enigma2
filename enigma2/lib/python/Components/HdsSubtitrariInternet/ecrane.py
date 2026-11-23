@@ -90,7 +90,7 @@ CHEI_STERSE_DE_PE_TV = ("os_cheie_aplicatie", "subsro_cheie", "subdl_cheie")
 
 DESCRIERI = {
 	"os_utilizator": N_("Numele de utilizator al contului tău OpenSubtitles.com (nu adresa de e-mail). Un cont gratuit dă 20 de descărcări pe zi."),
-	"os_parola": N_("Folosește pentru OpenSubtitles o parolă pe care nu o mai folosești în altă parte. Parola stă criptată pe receptor și nu se mai arată."),
+	"os_parola": N_("Folosește pentru OpenSubtitles o parolă pe care nu o mai folosești în altă parte. Parola stă criptată pe receptor și se vede după salvare."),
 	"os_cheie_aplicatie": N_("Cheia aplicației HD Satelit la OpenSubtitles. O dă HD Satelit; nu e cheia contului tău."),
 	"subsro_cheie": N_("Cheia API din profilul tău de pe subs.ro. Fiecare cheie are o cotă de cereri pe zi."),
 	"subdl_cheie": N_("Cheia API din panoul contului tău SubDL. Parola contului SubDL nu se cere."),
@@ -144,7 +144,7 @@ class HdsDescarcareSetari(Screen, ConfigListScreen):
 		for cheie, eticheta, secret in CAMPURI:
 			if secret:
 				scrisa = stare.get(cheie) or (cheie == "os_cheie_aplicatie" and stare.get("os_cheie_aplicatie_imagine"))
-				text = _t("scrisă") if scrisa else _t("nescrisă")
+				text = (stare.get("valori") or {}).get(cheie, "") or _t("nescrisă")
 			else:
 				text = stare.get("os_utilizator_text") or _t("nescris")
 			lista.append(getConfigListEntry(_t(eticheta), _Camp(cheie, secret, text)))
@@ -199,7 +199,7 @@ class HdsDescarcareSetari(Screen, ConfigListScreen):
 
 	def _scrieCheia(self, cheie, titlu, secret):
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
-		text = "" if secret else self.conturi.stare().get("os_utilizator_text", "")
+		text = self.conturi.citeste().get(cheie, "")
 		# hdsSecret: cu asistenta pornita, prima tasta din parola sau cheie cere oprirea ei (in orice limba)
 		self.session.openWithCallback(lambda valoare: self._scris(cheie, valoare), VirtualKeyBoard,
 			title=titlu, text=text, hdsSecret=bool(secret))

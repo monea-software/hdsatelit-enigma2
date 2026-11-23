@@ -142,14 +142,16 @@ RESULT eDVBServiceRecord::prepare(const char *filename, time_t begTime, time_t e
 			if (tags)
 				meta.m_tags = tags;
 			ret = meta.updateMeta(filename) ? -255 : 0;
-			if (!ret)
+			/* dupa ~eEPGCache (iesirea) getInstance() da 0: meta scris, fara .eit */
+			eEPGCache *epg = eEPGCache::getInstance();
+			if (!ret && epg)
 			{
 				const eit_event_struct *event = 0;
-				eEPGCache::getInstance()->Lock();
+				epg->Lock();
 				if ( eit_event_id != -1 )
 				{
 					eDebug("query epg event id %d", eit_event_id);
-					eEPGCache::getInstance()->lookupEventId(ref, eit_event_id, event);
+					epg->lookupEventId(ref, eit_event_id, event);
 				}
 				if ( !event && (begTime != -1 && endTime != -1) )
 				{
@@ -162,7 +164,7 @@ RESULT eDVBServiceRecord::prepare(const char *filename, time_t begTime, time_t e
 						beg.tm_hour, beg.tm_min, beg.tm_sec,
 						end.tm_hour, end.tm_min, end.tm_sec,
 						query.tm_hour, query.tm_min, query.tm_sec);
-					eEPGCache::getInstance()->lookupEventTime(ref, queryTime, event);
+					epg->lookupEventTime(ref, queryTime, event);
 				}
 				if ( event )
 				{
@@ -180,7 +182,7 @@ RESULT eDVBServiceRecord::prepare(const char *filename, time_t begTime, time_t e
 						::close(fd);
 					}
 				}
-				eEPGCache::getInstance()->Unlock();
+				epg->Unlock();
 			}
 		}
 		return ret;

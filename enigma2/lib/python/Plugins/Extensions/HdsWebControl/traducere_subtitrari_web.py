@@ -84,12 +84,7 @@
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2 (reactorul e bucla enigma2); apelurile sunt scurte, proba
 # merge pe firul ei (in modul). Fisierul nu importa nimic la incarcare: probele de pe PC dau modulul lor (T).
 
-MAX_TEXT = 300            # regiunea, adresele, modelele, calea adresei proprii
 MAX_ADRESA_PROPRIE = 500  # adresa-sablon a adresei proprii
-MAX_CHEIE_BRUT = 2048     # cheia lipita, cu spatii si randuri noi; modulul o curata si o refuza peste 512 caractere
-MAX_VALOARE = 4096        # orice argument citit (peste, tot refuzat)
-MAX_ARGUMENTE = 32
-MAX_CHEI_NOI = 65536
 CONTOR_WEB_S = 5
 PROBA_WEB_S = 15          # cat urmareste pagina o proba
 PROBA_GARDA_S = 20        # o proba „in lucru” mai veche de atat nu mai opreste una noua
@@ -449,6 +444,12 @@ def _stareTraducator(T):
 	return st
 
 
+def _valoriChei(T):
+	if hasattr(T.chei(), "citeste_toate"):
+		return T.chei().citeste_toate()
+	return {k: [v] for k, v in T.chei().citeste().items()}
+
+
 def stare(T=None):
 	"""Pentru GET /api/traducere-subtitrari (si raspunsul celorlalte rute, cu „message”). Fara nicio cheie: din
 	configuratie (care are cheia) pleaca numai textul celor lipsa si al confidentialitatii."""
@@ -466,6 +467,7 @@ def stare(T=None):
 		"alegeri": alegeri(T, s),
 		"cere": dict((c, list(T.CERE.get(c, ()))) for c in T.SERVICII),
 		"chei": T.chei().stare(),
+		"chei_valori": _valoriChei(T),
 		"chei_din_nou": din_nou,
 		"chei_din_nou_bland": (T.textCheiDinNouBland() if hasattr(T, "textCheiDinNouBland") else "") if din_nou and
 			not cere_cheie else "",
@@ -502,10 +504,9 @@ def _cuMesaj(T, rezultat, mesaj):
 
 
 def textBun(v):
-	"""cel mult MAX_TEXT caractere, fara caractere de control"""
-	if len(v) > MAX_TEXT:
-		return False
-	return not any(ord(c) < 32 or 127 <= ord(c) < 160 or c in u"  " for c in v)
+	"""REGULA 0, WEB8: orice lungime si orice semn, afara de NUL si capetele de
+	rand (CR, LF), care ar rupe randul din fisierul de setari."""
+	return not any(c in "\x00\r\n" for c in v)
 
 
 def regiuneBuna(v):
@@ -569,19 +570,15 @@ def seteaza(argumente, T=None, configfile=None, din_adresa=(), doar_proba=False)
 	s = T.initConfig()
 	modificari = []
 	if "chei_noi" in argumente:
-		if "chei_noi" in din_adresa:
-			return _cuMesaj(T, False, _t("Cheile se trimit numai cu POST, în corpul cererii. Nu s-a salvat nimic."))
 		import json
 		try:
 			brut = argumente["chei_noi"]
-			if len(brut) > MAX_CHEI_NOI:
-				raise ValueError()
 			modificari = json.loads(brut)
-			if not isinstance(modificari, list) or len(modificari) > 90:
+			if not isinstance(modificari, list):
 				raise ValueError()
 			for m in modificari:
 				if not isinstance(m, dict) or set(m) - set(("serviciu", "valoare", "indice")) or \
-						not isinstance(m.get("valoare"), str) or len(m["valoare"]) > MAX_CHEIE_BRUT:
+						not isinstance(m.get("valoare"), str):
 					raise ValueError()
 		except (ValueError, TypeError):
 			return _cuMesaj(T, False, _t("Cheile trimise nu sunt valide. Nu s-a schimbat nimic."))
@@ -713,7 +710,8 @@ def _puneCanalele(T, canal, scoase):
 
 def _raspunsCheie(T, rezultat, mesaj):
 	"""raspunsul rutei cheii: niciodata cheia, numai care serviciu are una"""
-	return {"result": rezultat, "message": mesaj, "chei": T.chei().stare()}
+	return {"result": rezultat, "message": mesaj, "chei": T.chei().stare(),
+		"chei_valori": _valoriChei(T)}
 
 
 def cheie(argumente, din_adresa, T=None):
@@ -729,8 +727,6 @@ def cheie(argumente, din_adresa, T=None):
 		return _raspunsCheie(T, False, _t("Lipsește câmpul „cheie” (gol înseamnă ștergerea cheii). Nu s-a schimbat "
 			"nimic."))
 	valoare = argumente["cheie"]
-	if len(valoare) > MAX_CHEIE_BRUT:
-		return _raspunsCheie(T, False, _t("Cheia e prea lungă. Nu s-a schimbat nimic."))
 	indice = argumente.get("indice", None)
 	if indice is not None and indice != "":
 		try:
@@ -781,19 +777,18 @@ def contorLaZero(T=None, ce="", E=None, X=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text intreg (fara taiere: o valoare prea lunga se refuza, nu se scurteaza), fara token."""
+	"""Argumentele cererii ca text intreg, fara token. REGULA 0 (pana dupa 1.0): toate campurile, fara taiere si fara
+	filtru pe numele cheilor."""
 	rez = {}
-	toate = list((getattr(request, "args", None) or {}).items())
-	for nume, val in toate[:MAX_ARGUMENTE]:
+	for nume, val in (getattr(request, "args", None) or {}).items():
 		if isinstance(nume, bytes):
 			nume = nume.decode("utf-8", "replace")
-		if nume == "token" or not nume or len(nume) > 20:
+		if nume == "token":
 			continue
 		v = (val or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		limita = MAX_CHEI_NOI if nume == "chei_noi" else MAX_VALOARE
-		rez[nume] = str(v)[:limita + 1]
+		rez[nume] = str(v)
 	return rez
 
 
@@ -842,9 +837,6 @@ def rute(baza, resource, T=None):
 			return seteaza(argumente(request), T, din_adresa=cheiDinAdresa(request))
 
 		def render_GET(self, request):
-			if "chei_noi" in argumente(request):
-				return self._eroare(request,
-					_t("Cheile se trimit numai cu POST, în corpul cererii. Nu s-a salvat nimic."))
 			return self.render_POST(request)
 
 	class ProbaResource(_Schimba):
@@ -853,9 +845,6 @@ def rute(baza, resource, T=None):
 			return seteaza(date, T, din_adresa=cheiDinAdresa(request), doar_proba=True)
 
 		def render_GET(self, request):
-			if "chei_noi" in argumente(request):
-				return self._eroare(request,
-					_t("Cheile se trimit numai cu POST, în corpul cererii. Nu s-a salvat nimic."))
 			return self.render_POST(request)
 
 	class ZeroResource(_Schimba):
@@ -1038,14 +1027,14 @@ PAGINA = """<!DOCTYPE html>
       <p class="nota tot"><span id="cheie-stare"></span> <span id="cheie-optionala" class="ascuns">Cheia e opțională: numai dacă serverul cere cheie.</span><span id="cheie-antet" class="ascuns">Valoarea antetului, de exemplu Bearer, un spațiu și cheia ta; pleacă numai dacă ai scris numele antetului.</span></p>
       <p class="lipsa tot ascuns" id="chei-din-nou"></p>
       <div class="butoane tot"><button type="button" id="cheie-sterge">Șterge cheia</button></div>
-      <p class="nota tot">Cheia se păstrează pe receptor, criptată; nu se mai arată niciodată.</p>
+      <p class="nota tot">Cheia se păstrează pe receptor, criptată; se vede și după salvare.</p>
       <div id="chei-extra" class="tot"></div>
       <div class="butoane tot" id="cheie-adauga-bloc"><button type="button" id="cheie-adauga">Adaugă încă o cheie</button></div>
     </div>
     <div class="rand ascuns" id="rand-propriu_raspuns"><label for="alege-propriu_raspuns">Felul răspunsului</label><select id="alege-propriu_raspuns"></select></div>
     <div class="rand ascuns" id="rand-propriu_cale">
       <label for="camp-propriu_cale">Calea traducerii</label>
-      <input type="text" id="camp-propriu_cale" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="translatedText">
+      <input type="text" id="camp-propriu_cale" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="translatedText">
       <p class="nota tot">Chei și numere (de la 0) despărțite prin punct, de exemplu translatedText sau data.translations.0.translatedText; * ia toate elementele, lipite în ordine (de exemplu 0.*.0).</p>
     </div>
     <p class="nota ascuns" id="ajutor-propriu">Exemplu, un LibreTranslate al tău din casă: adresa http://192.168.1.50:5000/translate, metoda POST, corpul JSON {"q": "{text}", "source": "{sursa}", "target": "{tinta}", "format": "text"}, răspunsul JSON, calea translatedText. Fiecare rând de subtitrare pleacă într-o cerere separată. Dacă proba nu merge, mesajul arată începutul răspunsului serverului.</p>
@@ -1056,38 +1045,38 @@ PAGINA = """<!DOCTYPE html>
     </div>
     <div class="rand" id="rand-adresa_libre">
       <label for="camp-adresa_libre">Adresa serverului</label>
-      <input type="text" id="camp-adresa_libre" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://192.168.1.50:5000">
+      <input type="text" id="camp-adresa_libre" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://192.168.1.50:5000">
       <p class="nota tot">Adresa serverului LibreTranslate, de exemplu http://192.168.1.50:5000</p>
     </div>
     <div class="rand" id="rand-adresa_openai">
       <label for="camp-adresa_openai">Adresa serverului</label>
-      <input type="text" id="camp-adresa_openai" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://192.168.1.50:11434">
+      <input type="text" id="camp-adresa_openai" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="http://192.168.1.50:11434">
       <p class="nota tot">De exemplu http://192.168.1.50:11434 pentru Ollama sau http://192.168.1.50:1234 pentru LM Studio.</p>
     </div>
     <div class="rand" id="rand-model_gemini">
       <label for="camp-model_gemini">Modelul</label>
-      <input type="text" id="camp-model_gemini" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <input type="text" id="camp-model_gemini" autocomplete="off" autocapitalize="off" spellcheck="false">
       <p class="nota tot" id="nota-model_gemini"></p>
     </div>
     <div class="rand" id="rand-model_openai">
       <label for="camp-model_openai">Modelul</label>
-      <input type="text" id="camp-model_openai" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="gemma3:4b">
+      <input type="text" id="camp-model_openai" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="gemma3:4b">
       <p class="nota tot">Numele modelului de pe server, de exemplu gemma3:4b sau qwen2.5:7b.</p>
     </div>
     <div class="rand" id="rand-cont_cloudflare">
       <label for="camp-cont_cloudflare">ID-ul contului Cloudflare</label>
-      <input type="text" id="camp-cont_cloudflare" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <input type="text" id="camp-cont_cloudflare" autocomplete="off" autocapitalize="off" spellcheck="false">
       <p class="nota tot">32 de litere și cifre, din panoul Cloudflare, la Account ID.</p>
     </div>
     <div class="rand" id="rand-model_groq">
       <label for="camp-model_groq">Modelul</label>
-      <input type="text" id="camp-model_groq" maxlength="300" list="modele-groq" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <input type="text" id="camp-model_groq" list="modele-groq" autocomplete="off" autocapitalize="off" spellcheck="false">
       <datalist id="modele-groq"></datalist>
       <p class="nota tot" id="nota-model_groq"></p>
     </div>
     <div class="rand" id="rand-model_cloudflare">
       <label for="camp-model_cloudflare">Modelul</label>
-      <input type="text" id="camp-model_cloudflare" maxlength="300" list="modele-cloudflare" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <input type="text" id="camp-model_cloudflare" list="modele-cloudflare" autocomplete="off" autocapitalize="off" spellcheck="false">
       <datalist id="modele-cloudflare"></datalist>
       <p class="nota tot" id="nota-model_cloudflare"></p>
     </div>
@@ -1270,7 +1259,7 @@ function puneTot(d, fortat){
     initiale = JSON.parse(JSON.stringify(d.valori));
     d = Object.assign({}, d, {valori: Object.assign({}, d.valori, schimbari)});
   }
-  ["valori", "fabricatie", "alegeri", "cere", "chei", "chei_din_nou", "chei_din_nou_bland", "cheie_fel", "cheie_text", "texte", "lipsa_text", "confidentialitate", "instructiuni", "feluri_eroare", "implicite", "modele_propuse", "regiuni", "stare", "epg", "texte_tradus", "gata", "stari_chei", "canale"].forEach(function(k){
+  ["valori", "fabricatie", "alegeri", "cere", "chei", "chei_valori", "chei_din_nou", "chei_din_nou_bland", "cheie_fel", "cheie_text", "texte", "lipsa_text", "confidentialitate", "instructiuni", "feluri_eroare", "implicite", "modele_propuse", "regiuni", "stare", "epg", "texte_tradus", "gata", "stari_chei", "canale"].forEach(function(k){
     if(d[k] !== undefined){ ultim[k] = d[k]; }
   });
   var v = ultim.valori;
@@ -1317,6 +1306,7 @@ function puneTot(d, fortat){
   var st = $("cheie-stare");
   st.textContent = (serv === initiale.serviciu ? ultim.cheie_text : "") || (pusa ? "Cheie pusă" : "Fără cheie");
   if(cheiNoi[serv]){ st.textContent = "Cheie schimbată, încă nesalvată"; }
+  st.textContent += ((ultim.chei_valori || {})[serv] || []).length ? ": " + ((ultim.chei_valori || {})[serv] || []).join(" / ") : "";
   st.classList.toggle("cheie-pusa", pusa && !oprita); st.classList.toggle("cheie-lipsa", !pusa || oprita);
   arata($("cheie-optionala"), !propriu && cere.indexOf("cheie") === -1);
   arata($("cheie-antet"), propriu);
@@ -1517,6 +1507,7 @@ function puneCheiExtra(serv){
     et.className = "stare-cheie stare-" + (s.stare || "nefolosita");
     et.textContent = (idx + 1) + ". " + (s.stare_text || "");
     if(cheiNoi[serv] && cheiNoi[serv][idx] !== undefined){ et.textContent = (idx + 1) + ". Cheie schimbată, încă nesalvată"; }
+    et.textContent += (((ultim.chei_valori || {})[serv] || [])[idx] || "") ? ": " + ((ultim.chei_valori || {})[serv] || [])[idx] : "";
     div.appendChild(et);
     var b = document.createElement("div"); b.className = "butoane";
     var bt = document.createElement("button"); bt.type = "button"; bt.textContent = "Șterge";
@@ -1865,7 +1856,7 @@ TEXTE_PAGINA = {
 		N_("Valoarea antetului, de exemplu Bearer, un spațiu și cheia ta; pleacă numai dacă ai scris numele "
 			"antetului."),
 		N_("Șterge cheia"),
-		N_("Cheia se păstrează pe receptor, criptată; nu se mai arată niciodată."),
+		N_("Cheia se păstrează pe receptor, criptată; se vede și după salvare."),
 		N_("Adaugă încă o cheie"),
 		N_("Felul răspunsului"),
 		N_("Calea traducerii"),

@@ -38,10 +38,6 @@
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulele lor (A, D).
 
 LEGATURA = '<a href="/afisaj">Afișajul din față</a>'
-MAX_LISTA_TEXT = 2000
-MAX_TEXT = 120
-MAX_VALOARE = 40
-MAX_ARGUMENTE = 64
 # previzualizarea din pagina tine atat fara o cerere noua a paginii (pagina o reinnoieste la 10 s cat are schimbari
 # nesalvate): o pagina inchisa fara „Salvează” sau „Renunță” nu lasa afisajul pe lista nesalvata
 TERMEN_PREVIZUALIZARE_S = 120
@@ -355,20 +351,18 @@ def faraLegaturaDacaLipseste(pagina, A=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text: {cheie: text}, fara token; lista are voie mai lunga, restul e scurt."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token; "text" ramane cu spatiile lui, restul fara spatiile de
+	la capete. REGULA 0 (pana dupa 1.0): toate campurile, cu valoarea intreaga, fara filtru pe numele cheilor."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:MAX_ARGUMENTE]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 40:
+		if cheie == "token":
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		maxim = {"lista": MAX_LISTA_TEXT, "evenimente": MAX_LISTA_TEXT, "text": MAX_TEXT,
-			"tema_afisaj": 1024}.get(cheie, MAX_VALOARE)
-		rez[cheie] = u"%s" % v
-		rez[cheie] = rez[cheie][:maxim] if cheie == "text" else rez[cheie][:maxim].strip()
+		rez[cheie] = u"%s" % v if cheie == "text" else (u"%s" % v).strip()
 	return rez
 
 

@@ -815,6 +815,12 @@ def pas_sigkill(acum, pids):
     _sigterm = (pid, float("inf"))
     # enigma2.sh crede codul 137 drept oprire a paznicului numai cu sigkill= in semn (137 vine si dupa ecranul de cadere)
     scrie_semn_oprire(pid, sigkill=True)
+    # Persist the intent before signalling; the target can disappear before the success message is written.
+    try:
+        log("paznicul trimite SIGKILL catre enigma2 pid=%d; motiv=blocaj-moale, %d s dupa SIGTERM" %
+            (pid, int(acum - cand)))
+    except Exception:
+        pass
     try:
         os.kill(pid, signal.SIGKILL)
         log("enigma2 pid=%d nu a iesit la SIGTERM in %ds: SIGKILL trimis" % (pid, int(acum - cand)))
@@ -1512,6 +1518,12 @@ def pas_iesire_ceruta(acum, opkg):
             return "sigterm"
         _iesire_oprita[2] = True
         scrie_semn_oprire(pid, sigkill=True, motiv="iesire-ceruta")
+        # The exit reason must be available before the signal, including when the final log write fails.
+        try:
+            log("paznicul trimite SIGKILL catre enigma2 pid=%d; motiv=iesire-ceruta, %d s dupa SIGTERM" %
+                (pid, int(acum - cand)))
+        except Exception:
+            pass
         try:
             os.kill(pid, signal.SIGKILL)
             log("enigma2 pid=%d nu a iesit nici la SIGTERM in %d s: SIGKILL trimis" % (pid, int(acum - cand)))

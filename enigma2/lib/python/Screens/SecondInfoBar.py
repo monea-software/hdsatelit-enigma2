@@ -156,9 +156,9 @@ class SecondInfoBar(Screen):
 				"switchChannelDown": self.nextPage,
 				"openServiceList": self.nextPage,
 				"toggleShow": self.closeScreen,
-				"hide": self.closeScreen,
+				"hide": self.hdsIesire,
 				"ok": self.closeScreen,
-				"cancel": self.closeScreen,
+				"cancel": self.hdsIesire,
 				"red": self.closeScreen,
 				"green": self.closeScreen,
 				"yellow": self.closeScreen,
@@ -475,6 +475,10 @@ class SecondInfoBar(Screen):
 		return 0
 
 	def hdsInapoi(self):
+		# EXIT scoate fixarea chiar daca descrierea consuma tasta inaintea hartii de inchidere.
+		proprietar = getattr(self, "hdsProprietar", None)
+		if proprietar is not None:
+			proprietar.hdsScoateFixarea()
 		if self._descriere:
 			self._descriereInchide()
 			return None
@@ -845,6 +849,11 @@ class SecondInfoBar(Screen):
 		except Exception as e:
 			print("[SecondInfoBar] meniul emisiunii: %s" % e)
 		return None
+
+	def hdsIesire(self):
+		# EXIT ajuns la harta de inchidere pastreaza si revenirea din descriere la ghid.
+		if self.hdsInapoi() == 0:
+			self.closeScreen()
 
 	def closeScreen(self):
 		# prima bara pastreaza cronometrul ei (InfoBarShowHide.hideTimer); aici se ascunde doar a doua

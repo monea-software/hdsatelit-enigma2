@@ -24,6 +24,10 @@ from Tools.PiconResolver import (CAI_SIGLE, RADACINI_MEDIA, DOSARE_SIGLE,
 	searchPaths, TIPURI_FLUX, TIPURI_RADIO, sigle_pornite, nume_sigle,
 	nume_dupa_canal, nume_cautate_canal, nume_canal, generatie_sigle,
 	dosare_sigle, getPiconPath, resetPiconPath, cauta_sigla, getPiconName as _getPiconName)
+try:
+	from Tools.PiconResolver import revizie_index, sigla_din_index, cere_index, nume_memorat
+except ImportError:
+	revizie_index = sigla_din_index = cere_index = nume_memorat = None
 
 # Numele de modul pe care le importa pluginurile scrise pentru imaginile OE-Alliance (11.11.2026; de pilda
 # "from Components.Renderer.Picon import getPiconName"). Cautarea e tot a noastra (Tools/PiconResolver.py); mode
@@ -90,6 +94,9 @@ class Picon(Renderer):
 		self.hdsAre = False
 		self.hdsSigleGeneratie = -1
 		self.hdsSigleCeas = None
+		# PCN6: referinta afisata si revizia indexului de sigle (Tools/PiconResolver.py) vazuta la ultimul tic
+		self.hdsSref = ""
+		self.hdsIndexRevizie = -1
 		try:
 			from Components.HdsPiconBare import inregistreaza
 			inregistreaza(self)
@@ -125,8 +132,10 @@ class Picon(Renderer):
 		if self.instance:
 			pngname = ""
 			sref = ""
+			self.hdsSref = ""
 			if what[0] != self.CHANGED_CLEAR:
 				sref = self.source.text or ""
+				self.hdsSref = sref
 				if sigle_pornite():
 					try:
 						from Components import HdsIptvSigle
@@ -169,8 +178,33 @@ class Picon(Renderer):
 				self.nameCache.clear()
 				self.pngname = ""
 				self.changed((self.CHANGED_DEFAULT,))
+				return
 		except Exception:
 			pass
+		self.hdsIndexTic()
+
+	def hdsIndexTic(self):
+		"""PCN6: cat timp caseta arata imaginea implicita, o sigla aparuta in indexul din memorie se arata fara schimbarea
+		canalului. Numai memorie: fara cautare, fara fileExists, fara changed(); se incarca o singura data sigla gasita
+		(indexul are numai dosare locale)."""
+		try:
+			if self.hdsAre or not self.instance or not self.hdsSref or sigla_din_index is None or not sigle_pornite():
+				return
+			revizie = revizie_index()
+			if revizie != self.hdsIndexRevizie:
+				self.hdsIndexRevizie = revizie
+				# numele canalului numai din memorie (aflat la cautarea de la changed), niciodata cerut aici
+				png = sigla_din_index(self.hdsSref, self.path, nume_memorat(self.hdsSref, self.path))
+				if png and png != self.pngname:
+					self.instance.setPixmapFromFile(png)
+					self.pngname = png
+					self.hdsAre = True
+					if self.vecini:
+						_anunta(self)
+					return
+			cere_index(self.path)
+		except Exception as e:
+			print("[Picon] indexul siglelor: %s" % e)
 
 	def onShow(self):
 		Renderer.onShow(self)

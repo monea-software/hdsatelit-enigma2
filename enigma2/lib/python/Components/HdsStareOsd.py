@@ -223,6 +223,22 @@ def ultima():
 	return proba
 
 
+def modRaportat(proba):
+	"""Iesirea masurata are prioritate fata de nodul videomode pastrat de driver."""
+	disp = (proba.get('disp') or '').split('/', 1)[0].strip()
+	m = re.fullmatch(r'(\d+)\s*[*xX]\s*(\d+)_(\d+)', disp)
+	if m:
+		return '%sp%s' % (m[2], m[3])
+	from Components.HdsHdmiDate import mod_tv
+	if mod_tv(disp):
+		return disp
+	moduri = proba.get('moduri') or {}
+	rate = {v for k, v in moduri.items() if k != 'videomode' and v}
+	if len(rate) == 1:
+		return next(iter(rate))
+	return moduri.get('videomode')
+
+
 def textStare(proba):
 	"""Rand compact pentru compararea iesirii inainte si dupa o schimbare."""
 	if not proba:
@@ -232,8 +248,9 @@ def textStare(proba):
 	gp0 = proba.get('gp0')
 	contori = proba.get('evenimente') or {}
 	legatura = {True: _('da'), False: _('nu'), None: necunoscut}
-	return _('mod %(mod)s | disp %(disp)s | OutColorSpace %(culoare)s | TMDS %(tmds)s | GP0 Output %(gp0)s | rate 50:%(hz50)s 60:%(hz60)s 24:%(hz24)s | hpd %(hpd)s | rsen %(rsen)s | proaspat %(proaspat)s complet %(complet)s tranzitie %(tranzitie)s | HPD %(HPD)s UnHPD %(UnHPD)s RsenCon %(RsenCon)s RsenDis %(RsenDis)s') % {
-		'mod': moduri.get('videomode') or necunoscut,
+	return _('mod %(mod)s | nod videomode %(nod)s | disp %(disp)s | OutColorSpace %(culoare)s | TMDS %(tmds)s | GP0 Output %(gp0)s | rate 50:%(hz50)s 60:%(hz60)s 24:%(hz24)s | hpd %(hpd)s | rsen %(rsen)s | proaspat %(proaspat)s complet %(complet)s tranzitie %(tranzitie)s | HPD %(HPD)s UnHPD %(UnHPD)s RsenCon %(RsenCon)s RsenDis %(RsenDis)s') % {
+		'mod': modRaportat(proba) or necunoscut,
+		'nod': moduri.get('videomode') or necunoscut,
 		'disp': proba.get('disp') or necunoscut,
 		'culoare': proba.get('out_color') or necunoscut,
 		'tmds': proba.get('tmds') or necunoscut,

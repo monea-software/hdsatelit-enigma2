@@ -26,7 +26,17 @@ SRC_URI += "file://0001-dvbvideosink-evenimente-video-dupa-eos.patch"
 # (un SPS si un PPS) neschimbata. Facut pe aceeasi sursa fixata (66ff8288), dupa 0001; atinge numai set_caps.
 SRC_URI += "file://0002-dvbvideosink-avc3-fara-parametri-in-avcc.patch"
 
-PR:append = ".hds3"
+# IPR7 (22.11.2026): potopul "audio cursize ... > 01048576" / "video cursize ... > 33554432" din jurnalul nucleului
+# (Viper 4K V20, driverul DVB HiSilicon) la filmele si fluxurile VOD date mai repede decat se reda. poll() pe audio0 si
+# video0 raspunde POLLOUT si cu tamponul ES plin, write() e refuzat (EAGAIN sau 0) si sink-ul il relua imediat; driverul
+# scrie un rand la fiecare refuz (~90 pe secunda, 11 minute la un film HLS, masurat pe receptor). Peticul asteapta dupa
+# refuzurile la rand (n * 20 ms, cel mult 200 ms) pe pipe-ul de oprire, deci zap-ul si flush-ul raman pe loc. Facut pe
+# aceeasi sursa fixata, dupa 0001 si 0002; intra cu fuzz 0 si inainte, si dupa peticul DTS -> AC3 din hds-dts-ac3.
+# NUMAI pe u57 (Viper 4K V20), singurul driver pe care s-a masurat; pe celelalte placi (SF8008 HiSilicon fara printk,
+# Broadcom cu poll care asteapta) se pune abia dupa o proba pe placa aceea.
+SRC_URI:append:u57 = " file://0004-dvbsink-asteapta-dupa-scrierea-refuzata.patch"
+
+PR:append = ".hds4"
 
 do_configure:append() {
 	h=${B}/config.h
@@ -41,4 +51,9 @@ do_configure:append() {
 do_compile:append() {
 	grep -q 'video_event_post' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul evenimentelor video dupa EOS nu e aplicat"
 	grep -q 'avcC without SPS (avc3)' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul avc3 (avcC fara SPS) nu e aplicat"
+}
+
+do_compile:append:u57() {
+	grep -q 'dvbsink_refuz_asteapta(self->unlockfd\[0\]' ${S}/gstdvbaudiosink.c || bbfatal "dvbmediasink: peticul scrierii refuzate (IPR7) lipseste din dvbaudiosink"
+	grep -q 'dvbsink_refuz_asteapta(self->unlockfd\[0\]' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul scrierii refuzate (IPR7) lipseste din dvbvideosink"
 }

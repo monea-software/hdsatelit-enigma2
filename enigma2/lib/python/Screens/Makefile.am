@@ -2,7 +2,7 @@
 installdir = $(pkglibdir)/python/Screens
 
 install_PYTHON = \
-	HdsParteaDoua.py \
+	HdsBluetooth.py HdsParteaDoua.py \
 	Timers.py TagEditor.py SkinSelection.py \
 	AudioSelection.py ChannelSelection.py InfoBar.py HdsFontInterfata.py \
 	HdsTransmisie.py HdsAdaugaFeed.py \
@@ -17,7 +17,7 @@ install_PYTHON = \
 	PluginBrowser.py MinuteInput.py Scart.py PVRState.py \
 	Console.py InputBox.py ChoiceBox.py SimpleSummary.py \
 	TimerSelection.py PictureInPicture.py TimeDateInput.py \
-	SubtitleDisplay.py SubservicesQuickzap.py ParentalControlSetup.py NumericalTextInputHelpDialog.py \
+	SubtitleDisplay.py HdsVorbire.py SubservicesQuickzap.py ParentalControlSetup.py NumericalTextInputHelpDialog.py \
 	SleepTimerEdit.py Ipkg.py RdsDisplay.py Globals.py DefaultWizard.py \
 	SessionGlobals.py LocationBox.py WizardLanguage.py TaskView.py Rc.py VirtualKeyBoard.py \
 	TextBox.py FactoryReset.py RecordPaths.py UnhandledKey.py ServiceStopScreen.py \
@@ -34,7 +34,7 @@ install_PYTHON = \
 	ScanerMaiMultiSateliti.py ScanerCablu.py ScanerOarba.py \
 	HdsPisteLimbi.py HdsTelecomenzi.py HdsSubtitrariAspect.py HdsOcrLimbi.py HdsTraducereSubtitrari.py \
 	HdsPaznic.py HdsJurnaleSloturi.py HdsPornireMultipla.py HdsProcesor.py HdsLocInregistrari.py HdsMontareDiscuri.py HdsPiconuri.py HdsLicente.py HdsListeImplicite.py HdsListeInternet.py \
-	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py HdsVpnFurnizor.py \
+	HdsPazaModel.py HdsModSigur.py HdsAccesSsh.py HdsEgalizator.py HdsVpn.py HdsVpnBara.py HdsVpnFurnizor.py \
 	HdsAsistenta.py HdsAsistentaSemn.py \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py ScreenSaver.py HdsAfisaj.py \
 	HdsAfisajColor.py \

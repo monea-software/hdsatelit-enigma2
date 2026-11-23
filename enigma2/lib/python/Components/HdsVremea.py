@@ -20,6 +20,11 @@ TIMEOUT = 8
 MAX_RASPUNS = 128 * 1024
 UNITATI = ("C", "F", "K")
 TEME = ("nu", "bara", "principal", "ambele")
+ZILE = ("1", "2", "3")
+SCARI = ("100", "85", "75")
+# VRM6 (pirobi1, LinuxSat 164191 #971391): locul vremii cand e in bara canalului: "sus" langa ceas, in randul emisiunii
+# (din fabrica, ca acum), sau "jos" = panoul mai mare din coltul din dreapta al barei, cum era inainte de 0.7.7
+LOCURI_BARA = ("sus", "jos")
 POZE = "/usr/share/enigma2/vremea"
 PROGNOZA = "https://api.open-meteo.com/v1/forecast"
 GEOCODARE = "https://geocoding-api.open-meteo.com/v1/search"
@@ -91,17 +96,29 @@ def textPatru(celsius, unitate="C"):
 
 def initConfig():
 	from Components.config import config, ConfigSubsection
-	from Components.config import ConfigSelection, ConfigText
+	from Components.config import ConfigSelection, ConfigText, ConfigYesNo
 	if "hds_vremea" not in config.content.items:
 		config.hds_vremea = ConfigSubsection()
 		c = config.hds_vremea
+		# aceleasi texte ca alegerile din ecranul Vremea (Screens/HdsVremea.UNITATI si LOCURI), traduse la afisare
 		c.unitate = ConfigSelection(default="C", choices=[
-			("C", "Celsius"), ("F", "Fahrenheit"), ("K", "Kelvin")])
+			("C", N_("Celsius")), ("F", N_("Fahrenheit")), ("K", N_("Kelvin"))])
 		c.oras = ConfigText(default="", fixed_size=False)
-		# aceleasi texte ca alegerile din ecranul Vremea (Screens/HdsVremea.LOCURI), traduse la afisare
 		c.tema = ConfigSelection(default="nu", choices=[
 			("nu", N_("Nu")), ("bara", N_("Bara canalului")),
 			("principal", N_("Ecranul principal")), ("ambele", N_("Ambele"))])
+		# 0.7.8 (CR3, Ozgur 18.11.2026): omul a ales "Vremea pe TV" macar o data (pe televizor sau in web). enigma2 nu salveaza
+		# valoarea egala cu cea din fabrica, deci "Nu" ales de om nu se deosebeste altfel de "Nu" din fabrica (seteaza).
+		c.tema_aleasa = ConfigYesNo(default=False)
+	c = config.hds_vremea
+	if not hasattr(c, "zile"):
+		c.zile = ConfigSelection(default="1", choices=[
+			("1", N_("1 zi")), ("2", N_("2 zile")), ("3", N_("3 zile"))])
+	if not hasattr(c, "scara"):
+		c.scara = ConfigSelection(default="100", choices=[(v, v + "%") for v in SCARI])
+	if not hasattr(c, "loc_bara"):
+		c.loc_bara = ConfigSelection(default="sus", choices=[
+			("sus", N_("Sus, lângă ceas")), ("jos", N_("Jos în dreapta, mai mare"))])
 	return config.hds_vremea
 
 
@@ -139,16 +156,19 @@ def setari():
 	try:
 		c = initConfig()
 		rez = dict(unitate=c.unitate.value, oras=c.oras.value,
-			tema=c.tema.value, oras_nume="")
+			tema=c.tema.value, oras_nume="",
+			zile=getattr(getattr(c, "zile", None), "value", "1"),
+			scara=getattr(getattr(c, "scara", None), "value", "100"),
+			loc_bara=getattr(getattr(c, "loc_bara", None), "value", "sus"))
 		if rez["oras"]:
 			rez["oras_nume"] = _oras(rez["oras"])["nume"]
 		return rez
 	except (ImportError, KeyError, AttributeError, TypeError, ValueError):
-		return dict(unitate="C", oras="", oras_nume="", tema="nu")
+		return dict(unitate="C", oras="", oras_nume="", tema="nu", zile="1", scara="100", loc_bara="sus")
 
 
 def seteaza(valori):
-	if not isinstance(valori, dict) or set(valori) - {"unitate", "oras", "tema"}:
+	if not isinstance(valori, dict) or set(valori) - {"unitate", "oras", "tema", "zile", "scara", "loc_bara"}:
 		return False, _t("Setare necunoscută.")
 	nou = {}
 	try:
@@ -157,11 +177,38 @@ def seteaza(valori):
 				raise ValueError()
 			if k == "tema" and v not in TEME:
 				raise ValueError()
+			if k == "zile" and v not in ZILE:
+				raise ValueError()
+			if k == "scara" and v not in SCARI:
+				raise ValueError()
+			if k == "loc_bara" and v not in LOCURI_BARA:
+				raise ValueError()
 			nou[k] = codOras(v) if k == "oras" and v != "" else v
 	except (TypeError, ValueError, OverflowError):
 		return False, _t("Alegerea nu este validă.")
 	c = initConfig()
+	# Restore both active and saved values when the common writer reports failure.
+	vechi = [(e, e.value, getattr(e, "saved_value", None))
+		for e in [getattr(c, k) for k in nou] + ([c.tema] if "tema" not in nou else [])
+		+ ([c.tema_aleasa] if hasattr(c, "tema_aleasa") else [])]
+	mesaj = _t("Vremea este setată.")
+	# 0.7.8 (CR3, Ozgur 18.11.2026, regula 1f): cine alege un oras vrea sa vada vremea; cu "Vremea pe TV" lasat pe "Nu" din
+	# fabrica nu aparea nicaieri si parea o greseala. Alegerea unui oras nou o pune singura in bara canalului si o spune;
+	# un "Nu" ales de om (tema_aleasa) ramane, iar cine nu alege oras ramane cum era.
 	schimbat = False
+	# Pe televizor si in web la fel: webul trimite mereu toate cele trei campuri, deci "ales de om" = schimbat de om.
+	aleasa = getattr(c, "tema_aleasa", None)
+	tema_schimbata = "tema" in nou and nou["tema"] != c.tema.value
+	if aleasa is None:
+		pass
+	elif tema_schimbata:
+		if not aleasa.value:
+			aleasa.value = True
+			aleasa.save()
+			schimbat = True
+	elif nou.get("oras") and nou["oras"] != c.oras.value and c.tema.value == "nu" and not aleasa.value:
+		nou["tema"] = "bara"
+		mesaj = _t("Vremea apare acum în bara canalului.")
 	for k, v in nou.items():
 		e = getattr(c, k)
 		if e.value != v:
@@ -170,8 +217,23 @@ def seteaza(valori):
 			schimbat = True
 	if schimbat:
 		from Components.config import configfile
-		configfile.save()
-	return True, _t("Vremea este setată.")
+		try:
+			configfile.save()
+			# The common writer returns None on success and on disk failure.
+			# Its last-written text confirms persistence without opening user files.
+			if hasattr(configfile, "_scris"):
+				from Components.config import config
+				if hasattr(config, "pickle") and configfile._scris != config.pickle():
+					raise OSError("Weather settings were not written")
+		except (IOError, OSError):
+			for e, valoare, salvata in vechi:
+				e.value = valoare
+				if hasattr(e, "saved_value"):
+					e.saved_value = salvata
+				else:
+					e.save()
+			return False, _t("Setările vremii nu se pot salva acum.")
+	return True, mesaj
 
 
 def _citesteJson(url):

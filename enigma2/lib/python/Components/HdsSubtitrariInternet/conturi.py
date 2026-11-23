@@ -192,12 +192,18 @@ class Conturi(object):
 		return self.scrie(date)
 
 	def stare(self, date=None):
-		"""Pentru ecrane si web, fara valori secrete: {camp: True/False}, plus numele de utilizator (nu e secret).
+		"""Pentru ecrane si web: starea campurilor si valorile salvate integral.
 		`date`: campurile deja citite (o singura citire a fisierului)."""
 		date = self.citeste() if date is None else date
 		rez = dict((k, k in date) for k in CAMPURI)
 		rez["os_utilizator_text"] = date.get("os_utilizator", "")
-		# cheia aplicatiei OpenSubtitles pusa de imagine (fisierul ei): randul arata „scrisă” si fara cheie in conturi;
+		rez["valori"] = {k: date.get(k, "") for k in CAMPURI}
+		try:
+			from .surse.opensubtitles import cheieAplicatie
+			rez["valori"]["os_cheie_aplicatie"] = cheieAplicatie(date)
+		except (ImportError, UnicodeError):
+			pass
+		# Cheia din imagine ramane indicata si cand fisierul ei nu contine text valid.
 		# stergerea ramane numai pentru cheia scrisa de om (atunci se intoarce la cea din imagine)
 		rez["os_cheie_aplicatie_imagine"] = _cheieDinImagine()
 		return rez

@@ -11,6 +11,8 @@
 # Fara confirmare (nimic nu se pierde); refuzul (o inregistrare sau timeshift-ul scrie pe disc, swap pornit pe el) vine
 # cu motivul, ca pe televizor. Citirea discurilor merge pe un fir, cu termen (HdsStocareDisc.cere); pagina intreaba din
 # nou cat asteapta. Fisierul nu importa nimic din enigma2 la incarcare (probele de pe PC dau modulul M).
+# 0.7.8 (MDP): discul de pe care porneste imaginea vine fara alegeri si fara butoane, cu nota lui (M.notaRand): de ce ramane
+# montat si unde se salveaza inregistrarile; locul si demontarea lui se refuza in M.porneste, ca pe televizor.
 
 TERMEN_CITIRE_S = 3
 MAX_DISC = 40
@@ -72,8 +74,9 @@ def stare(M=None, cere=None, citireTerminata=None):
 		if repara is not None:
 			# discurile montate pe care managerul nu le stie intra din nou in lista lui (pe firul interfetei)
 			repara(rez["valoare"] or [])
+		nota = getattr(M, "notaRand", None)
 		for r in rez["valoare"] or []:
-			date["discuri"].append(dict(r, text_stare=M.textStare(r)))
+			date["discuri"].append(dict(r, text_stare=M.textStare(r), nota=nota(r) if nota is not None else ""))
 	return date
 
 
@@ -184,7 +187,8 @@ function buton(text, apasat){
 function disc(k, ocupat){
   var div = document.createElement("div"); div.className = "disc";
   var n = document.createElement("div"); n.className = "nume"; n.textContent = k.nume + (k.marime ? "  " + k.marime : ""); div.appendChild(n);
-  var m = document.createElement("div"); m.className = "mic"; m.textContent = k.text_stare + (k.sistem ? " (" + k.sistem + ")" : ""); div.appendChild(m);
+  var m = document.createElement("div"); m.className = "mic"; m.textContent = (k.loc && k.loc_afisat ? k.text_stare.replace(k.loc, k.loc_afisat) : k.text_stare) + (k.sistem ? " (" + k.sistem + ")" : ""); div.appendChild(m);
+  if(k.nota){ var o = document.createElement("div"); o.className = "mic"; o.textContent = k.nota; div.appendChild(o); }
   var camp = document.createElement("div"); camp.className = "camp";
   if(k.alegeri.length){
     var s = document.createElement("select"); s.setAttribute("aria-label", "Locul de montare");

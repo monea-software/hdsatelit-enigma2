@@ -228,12 +228,104 @@ def treceri(cerere, osc=None):
 # commitedDiseqcCommand (NimManager): AA, AB, BA, BB = porturile A..D ale unui comutator DiSEqC 1.0; '240'..'255' = octetul
 # comenzii scris de om, trimis asa cum e
 PORT_DISEQC = {'AA': 0, 'AB': 1, 'BA': 2, 'BB': 3}
+# commandOrder / commandOrder1_0 (NimManager): t = toneburst, c = comanda comisa, u = comanda necomisa; "ct" = ce
+# trimitea programul si pana acum (comisa, apoi toneburst)
+ORDINI_DISEQC = ('ct', 'tc', 'cut', 'tcu', 'uct', 'tuc')
+REPETARI_DISEQC = {'none': 0, 'one': 1, 'two': 2, 'three': 3}
+# (config.sec, argument suffix, SEC default). Only overrides travel to C so
+# missing/default config preserves the existing blindscan timing and argv.
+PAUZE_DISEQC = (
+    ('delay_between_diseqc_repeats', 'intre-comenzi', 120),
+    ('delay_after_last_diseqc_command', 'dupa-comanda', 50),
+    ('delay_after_toneburst', 'dupa-toneburst', 50),
+    ('delay_before_sequence_repeat', 'inainte-secventa', 70),
+    ('delay_after_change_voltage_before_switch_command', 'dupa-tensiune', 20),
+    ('delay_after_enable_voltage_before_switch_command', 'dupa-alimentare', 200),
+    ('delay_after_diseqc_reset_cmd', 'dupa-reset', 50),
+    ('delay_after_diseqc_peripherial_poweron_cmd', 'dupa-pornire', 150),
+    ('delay_after_continuous_tone_disable_before_diseqc', 'dupa-ton-oprit', 25),
+    ('delay_after_final_continuous_tone_change', 'dupa-ton', 10),
+)
+
+
+def _pauze_diseqc():
+    """Read only the existing SEC config in RAM, tolerating missing fields."""
+    try:
+        from Components.config import config
+        sec = config.sec
+    except Exception:
+        return {}
+    rez = {}
+    for nume, argument, implicit in PAUZE_DISEQC:
+        try:
+            valoare = getattr(sec, nume).value
+            if type(valoare) is int and 0 <= valoare <= 9999 and valoare != implicit:
+                rez[argument] = valoare
+        except Exception:
+            continue
+    return rez
+
+
+def _octet_necomis(valoare):
+    """uncommittedDiseqcCommand ('0' = nimic, '1'..'16' = intrarea) -> octetul trimis (0xF0 | (intrarea - 1)), ca
+    NimManager (setUncommittedCommand); None fara comanda sau la o valoare necunoscuta."""
+    try:
+        n = int(valoare)
+    except (TypeError, ValueError):
+        return None
+    return 0xF0 | (n - 1) if 1 <= n <= 16 else None
+
+
+def completeaza_diseqc(nim, slot, model):
+    """0.7.8 (D11T4): pune in LNB-urile modelului (Components/HdsLnb.citeste, modul avansat) ce HdsLnb nu citeste si
+    trebuie programului pentru DiSEqC 1.1: 'necomis' (octetul comenzii necomise sau None), 'ordine', 'repetari',
+    'secventa_dubla', din config.Nims[slot].advanced.lnb[N] (setarile din memorie, fara disc). slot = tunerul cu
+    setarile (la tunerul "equal", cel de care tine). Modul simplu nu are aceste comenzi avansate. Pauzele schimbate
+    din config.sec se citesc in ambele moduri. O cheie deja pusa nu se schimba; lipsa pastreaza purtarea veche."""
+    if not model:
+        return model
+    pauze = _pauze_diseqc()
+    for lnb in model.get('lnburi') or []:
+        if lnb.get('diseqc') in ('1_0', '1_1') and pauze:
+            lnb.setdefault('pauze', dict(pauze))
+    if model.get('mod') != 'advanced':
+        return model
+    try:
+        from Components import HdsLnb
+        lnburi_cfg = HdsLnb._copil(HdsLnb._copil(nim.getNimConfig(slot), 'advanced'), 'lnb')
+    except Exception as e:
+        print('[HdsCautareOarba] setarile DiSEqC ale tunerului %s: %s' % (slot, e))
+        return model
+    if lnburi_cfg is None:
+        return model
+    for lnb in model.get('lnburi') or []:
+        mod = lnb.get('diseqc')
+        if mod not in ('1_0', '1_1') or lnb.get('numar') is None:
+            continue
+        try:
+            sectiune = HdsLnb._copil(lnburi_cfg, str(lnb['numar']))
+            if sectiune is None:
+                continue
+            v = HdsLnb._valoare
+            if mod == '1_1':
+                lnb.setdefault('necomis', _octet_necomis(v(sectiune, 'uncommittedDiseqcCommand', '0')))
+                lnb.setdefault('ordine', v(sectiune, 'commandOrder', 'ct'))
+                lnb.setdefault('repetari', REPETARI_DISEQC.get(v(sectiune, 'diseqcRepeats', 'none'), 0))
+            else:
+                lnb.setdefault('ordine', v(sectiune, 'commandOrder1_0', 'ct'))
+                lnb.setdefault('repetari', 0)
+            lnb.setdefault('secventa_dubla', bool(v(sectiune, 'sequenceRepeat', False)))
+        except Exception as e:
+            print('[HdsCautareOarba] setarile DiSEqC ale LNB-ului %s: %s' % (lnb.get('numar'), e))
+    return model
 
 
 def comutare_din_lnb(lnb):
     """Comutarea LNB-ului unui satelit (Components/HdsLnb: modul simplu si cel avansat dau acelasi dictionar) ->
     {'port': 0-3} sau {'octet': 0xF0-0xFF} si/sau {'toneburst': 'A'|'B'}; None cand nu e nimic de comutat (un singur
-    LNB, motor, DiSEqC 1.1 necomandat sau Unicable: acolo programul nu trimite nimic, ca pana acum)."""
+    LNB, motor sau Unicable: acolo programul nu trimite nimic, ca pana acum).
+    0.7.8 (D11T4), din completeaza_diseqc: la DiSEqC 1.1 si 'necomis' (octetul comenzii necomise), 'repetari' (1-3);
+    la 1.0 si 1.1 'ordine' (cand nu e "ct"), 'secventa_dubla' si 'pauze'. Fara ele, exact ca pana acum."""
     if not lnb or lnb.get('diseqc') in (None, '', 'none', '1_2'):
         return None
     rez = {}
@@ -242,13 +334,26 @@ def comutare_din_lnb(lnb):
         rez['port'] = PORT_DISEQC[comanda]
     elif comanda.isdigit() and 0xF0 <= int(comanda) <= 0xFF:
         rez['octet'] = int(comanda)
+    if lnb.get('diseqc') == '1_1' and isinstance(lnb.get('necomis'), int) and 0xF0 <= lnb['necomis'] <= 0xFF:
+        rez['necomis'] = lnb['necomis']
     if lnb.get('toneburst') in ('A', 'B'):
         rez['toneburst'] = lnb['toneburst']
-    return rez or None
+    if not rez:
+        return None
+    if lnb.get('ordine') in ORDINI_DISEQC and lnb['ordine'] != 'ct':
+        rez['ordine'] = lnb['ordine']
+    if lnb.get('diseqc') == '1_1' and lnb.get('repetari') in (1, 2, 3):
+        rez['repetari'] = lnb['repetari']
+    if lnb.get('secventa_dubla') is True:
+        rez['secventa_dubla'] = True
+    if isinstance(lnb.get('pauze'), dict):
+        rez['pauze'] = dict(lnb['pauze'])
+    return rez
 
 
 def argv_comutare(comutare):
-    """Argumentele comutarii pentru hds-blindscan (numai programul nostru, nu adaptorul Vu+)."""
+    """Argumentele comutarii pentru hds-blindscan (numai programul nostru, nu adaptorul Vu+). Argumentele DiSEqC 1.1
+    si ale ordinii apar numai cand comutarea le are (altfel argv-ul e cel de pana acum)."""
     if not comutare:
         return []
     argv = []
@@ -256,8 +361,22 @@ def argv_comutare(comutare):
         argv += ['--diseqc-port', str(int(comutare['port']))]
     elif isinstance(comutare.get('octet'), int) and 0xF0 <= comutare['octet'] <= 0xFF:
         argv += ['--diseqc-octet', str(int(comutare['octet']))]
+    if isinstance(comutare.get('necomis'), int) and 0xF0 <= comutare['necomis'] <= 0xFF:
+        argv += ['--diseqc-necomis', str(int(comutare['necomis']))]
     if comutare.get('toneburst') in ('A', 'B'):
         argv += ['--toneburst', comutare['toneburst']]
+    if comutare.get('ordine') in ORDINI_DISEQC and comutare['ordine'] != 'ct':
+        argv += ['--diseqc-ordine', comutare['ordine']]
+    if comutare.get('repetari') in (1, 2, 3):
+        argv += ['--diseqc-repetari', str(int(comutare['repetari']))]
+    if comutare.get('secventa_dubla') is True:
+        argv += ['--diseqc-secventa-dubla']
+    pauze = comutare.get('pauze')
+    if isinstance(pauze, dict):
+        for _nume, argument, _implicit in PAUZE_DISEQC:
+            valoare = pauze.get(argument)
+            if type(valoare) is int and 0 <= valoare <= 9999:
+                argv += ['--diseqc-pauza-' + argument, str(valoare)]
     return argv
 
 
@@ -276,8 +395,9 @@ def alegeri_satelit(modele, slot_acum, poz_acum, cu_comanda=True):
     modele: [(slot, modelul tunerului din Components/HdsLnb.citeste)], tunerul cautarii intai. Intra satelitii la care
     programul ajunge fara sa miste antena: serviti de un LNB fix (_lnb_fix), pe un tuner cu un singur LNB (nimic de
     comutat) sau cu comutarea stiuta (comutare_din_lnb: portul DiSEqC 1.0, octetul scris de om, toneburst), pe care
-    hds-blindscan o trimite inainte de fiecare trecere; DiSEqC 1.1 numai pe un tuner cu un singur LNB (comanda necomisa
-    nu e in model si programul nu o trimite). cu_comanda=False (adaptorul Vu+, care nu trimite DiSEqC): numai
+    hds-blindscan o trimite inainte de fiecare trecere; DiSEqC 1.1 pe un tuner cu mai multe LNB-uri numai cand comanda
+    necomisa e citita (completeaza_diseqc pune cheia 'necomis'; 0.7.8, D11T4), altfel numai pe un tuner cu un singur
+    LNB, ca pana acum. cu_comanda=False (adaptorul Vu+, care nu trimite DiSEqC): numai
     tunerele cu un singur LNB. Pozitia de acum (poz_acum pe slot_acum; None = nestiuta: motor sau mai multi sateliti
     fara canal de satelit pornit) e mereu in lista, cu tunerul cautarii, ca implicitul sa ramana cautarea de pana
     acum; cand nu e printre cei fixi (motorul), e prima."""
@@ -296,8 +416,9 @@ def alegeri_satelit(modele, slot_acum, poz_acum, cu_comanda=True):
         for i, lnb in enumerate(lnburi):
             if not _lnb_fix(lnb):
                 continue
-            # DiSEqC 1.1 poate cere si comanda necomisa, pe care programul nu o trimite: numai pe un tuner cu un singur LNB
-            if len(lnburi) > 1 and (lnb.get('diseqc') == '1_1' or not (cu_comanda and comutare_din_lnb(lnb))):
+            # DiSEqC 1.1 poate cere si comanda necomisa: pe un tuner cu mai multe LNB-uri numai cand e citita din setari
+            nestiut_11 = lnb.get('diseqc') == '1_1' and 'necomis' not in lnb
+            if len(lnburi) > 1 and (nestiut_11 or not (cu_comanda and comutare_din_lnb(lnb))):
                 continue
             for p in lnb.get('sateliti') or []:
                 if al_cui.get(p) == i and p not in vazute:
@@ -308,6 +429,15 @@ def alegeri_satelit(modele, slot_acum, poz_acum, cu_comanda=True):
     else:
         rez.insert(0, (poz_acum, slot_acum))
     return rez
+
+
+def text_cerere(cerere, orbpos):
+    """Randul 'cerere' din jurnalul cautarii: tuner=N pozitie=P comutare=port:2 (sau nimic) vuplus=da|nu."""
+    cerere = cerere or {}
+    comutare = cerere.get('comutare') or {}
+    text = ','.join('%s:%s' % (k, comutare[k]) for k in sorted(comutare)) or 'nimic'
+    return 'tuner=%s pozitie=%s comutare=%s vuplus=%s' % (cerere.get('tuner') or 0, orbpos, text,
+                                                          'da' if cerere.get('vuplus') else 'nu')
 
 
 def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=0, comutare=None):
@@ -453,11 +583,16 @@ def text_previzualizare(antena, config):
 def toleranta_khz(a, b):
     rate = [int(x.get('symbol_rate') or 0) for x in (a, b) if int(x.get('symbol_rate') or 0) > 0]
     r = min(rate) if rate else 0
+    if 0 < r < 4000000:
+        return max(50, r // 2000)
     return max(TOLERANTA_MIN_KHZ, r // 4000)
 
 
 def la_fel(a, b):
-    """Acelasi transponder: aceeasi polarizare si frecventa in toleranta (max(2 MHz, rata/4))."""
+    """Potriveste polarizarea, rata si frecventa; pastreaza purtatoarele inguste vecine."""
+    ra, rb = int(a.get('symbol_rate') or 0), int(b.get('symbol_rate') or 0)
+    if ra > 0 and rb > 0 and abs(ra - rb) > max(100000, min(ra, rb) // 10):
+        return False
     return int(a['polarisation']) == int(b['polarisation']) and \
         abs(int(a['frequency']) - int(b['frequency'])) <= toleranta_khz(a, b)
 
@@ -612,7 +747,14 @@ def treceri_etapa(etapa, cunoscute, gasite, benzi, polarizari):
     lista += ferestre_goluri(goluri(gasite, benzi, polarizari), PAS_GOL_KHZ // 2 if etapa >= 3 else 0)
     ordine = dict((b['cheie'], i) for i, b in enumerate(benzi))
     lista.sort(key=lambda t: (ordine.get(t['banda'], 0), t['pol'], t['if_start']))
-    return lista
+    # Pastreaza marginile diferite pentru purtatoarele slabe; elimina numai ferestrele identice.
+    vazute, unice = set(), []
+    for t in lista:
+        cheie = (t['pol'], t['ton'], t['lo'], t['if_start'], t['if_stop'])
+        if cheie not in vazute:
+            vazute.add(cheie)
+            unice.append(t)
+    return unice
 
 
 def identifica_satelit(gasite, candidati, ales=None):
@@ -712,11 +854,14 @@ def randuri(cunoscute, gasite, rata_min=0, gata=False, oprita=False):
     lipsa = 'neverificat' if oprita else ('negasit' if gata else 'cunoscut')
     rez = []
     for c in cunoscute:
-        rez.append({'tp': c, 'stare': 'gasit' if idx.gaseste(c) is not None else lipsa})
+        g = idx.gaseste(c)
+        rez.append({'tp': g if g is not None else c, 'tp_lista': c,
+                    'provenienta': 'cautare+lista' if g is not None else 'lista',
+                    'stare': 'gasit' if g is not None else lipsa})
     idx_c = _Index(cunoscute)
     for g in gasite:
         if idx_c.gaseste(g) is None and int(g['symbol_rate']) >= int(rata_min or 0) * 1000:
-            rez.append({'tp': g, 'stare': 'nou'})
+            rez.append({'tp': g, 'stare': 'nou', 'provenienta': 'cautare'})
     rez.sort(key=lambda r: (int(r['tp']['frequency']), int(r['tp']['polarisation'])))
     return rez
 
@@ -739,7 +884,8 @@ def text_tp(tp):
                                          int(tp['symbol_rate']) // 1000)
 
 
-TEXTE_STARE = {'gasit': N_('găsit'), 'nou': N_('nou'), 'cunoscut': N_('se caută'), 'negasit': N_('negăsit'),
+TEXTE_STARE = {'gasit': N_('găsit prin căutare, și în listă'), 'nou': N_('găsit prin căutare, nou'),
+               'cunoscut': N_('din listă, se caută'), 'negasit': N_('din listă, negăsit'),
                'neverificat': N_('neverificat')}
 
 
@@ -857,6 +1003,10 @@ class Cautare(object):
         self._candidati = candidati
         self._nume_pozitii = dict(nume_pozitii or {})
         self.t_inceput = self._ceas()
+        # 0.7.8 (OB7): tunerul, satelitul si comutarea cererii, primul rand din jurnalul cautarii (CALE_JURNAL), ca la
+        # asistenta sa se vada pe ce tuner si cu ce comanda a mers cautarea
+        self.jurnal.append((0, 'cerere', text_cerere(self.cerere, orbpos)))
+        print('[HdsCautareOarba] cautarea: %s' % text_cerere(self.cerere, orbpos))
         return self._porneste_etapa(1, self.treceri1)
 
     def roteste(self, orbpos, nume_satelit='', secunde=0):
@@ -989,6 +1139,9 @@ class Cautare(object):
             print('[HdsCautareOarba] satelitii antenei: %s' % e)
             return
         poz, _n, _clasament = identifica_satelit(self.gasite, candidati, self.orbpos_ales)
+        # 0.7.8 (OB7): ce satelit arata transponderele gasite, in jurnalul cautarii
+        self.jurnal.append((self.etapa, 'satelit-aflat', 'ales=%s aflat=%s potrivite=%s clasament=%s' % (
+            self.orbpos_ales, poz, _n, ','.join('%s:%s' % (p, n) for n, p in _clasament[:4]))))
         if poz is not None and poz != self.orbpos and poz in candidati:
             self.orbpos = poz
             self.nume_satelit = self._nume_pozitii.get(poz) or self.nume_satelit
@@ -1124,6 +1277,7 @@ class Cautare(object):
                 'randuri': [{'mhz': int(r['tp']['frequency']) // 1000,
                              'pol': POLARIZARI[int(r['tp']['polarisation']) % 4],
                              'ksym': int(r['tp']['symbol_rate']) // 1000, 'stare': r['stare'],
+                             'provenienta': r['provenienta'],
                              'text_stare': text_stare(r['stare'])} for r in self.randuri_acum()]}
 
 
@@ -1293,10 +1447,88 @@ def _modele_tunere(S, nim, slot):
     rez = []
     for s in sloturi:
         try:
-            rez.append((s, HdsLnb.citeste(s, nim)))
+            rez.append((s, completeaza_diseqc(nim, s, HdsLnb.citeste(s, nim))))
         except Exception as e:
             print('[HdsCautareOarba] setarile tunerului %s: %s' % (s, e))
     return rez
+
+
+def _model_tuner(HdsLnb, nim, slot):
+    """Modelul tunerului (HdsLnb.citeste), pentru LNB-ul si comanda satelitului cautat. 0.7.8 (OB7, receptoarele cu
+    doua tunere de satelit): tunerul pus "la fel ca" altul (equal; asa il pune singur HdsTunerB cand al doilea tuner are
+    cablul lui) are cablul lui, dar LNB-urile si porturile celuilalt (ca NimManager.getSatListForNim, un singur pas pe
+    connectedTo). HdsLnb da pentru el numai "foloseste setarile tunerului A", fara LNB-uri: cu canalul pornit pe el,
+    satelitul canalului se cauta pe el fara comanda comutatorului, iar comutatorul, pornit din nou dupa inchiderea
+    tunerului, ramanea pe primul port. Alegerile (alegeri_satelit) raman ca pana acum: ceilalti sateliti, pe tunerul de
+    care tine."""
+    model = HdsLnb.citeste(slot, nim)
+    if model.get('mod') != 'equal':
+        return model
+    try:
+        spre = HdsLnb._intSauNimic(HdsLnb._valoare(nim.getNimConfig(slot), 'connectedTo', ''))
+    except Exception as e:
+        print('[HdsCautareOarba] tunerul de care tine %s: %s' % (slot, e))
+        return model
+    if spre is None or spre == slot:
+        return model
+    # DiSEqC 1.1 (D11T4): setarile LNB-urilor sunt ale tunerului de care tine
+    radacina = completeaza_diseqc(nim, spre, HdsLnb.citeste(spre, nim))
+    if radacina.get('motiv') or not radacina.get('lnburi'):
+        return model
+    rez = dict(radacina)
+    rez.update(slot=slot, litera=model.get('litera'), nume=model.get('nume'))
+    return rez
+
+
+def _model_cautare(nim, modele, slot):
+    """Modelul tunerului slot din modele (_modele_tunere); la tunerul "equal", cel al tunerului de care tine (_model_tuner)."""
+    model = dict(modele or []).get(slot)
+    if (model or {}).get('mod') != 'equal':
+        return model
+    try:
+        from Components import HdsLnb
+        return _model_tuner(HdsLnb, nim, slot)
+    except Exception as e:
+        print('[HdsCautareOarba] tunerul %s: %s' % (slot, e))
+        return model
+
+
+def comutator(model):
+    """Tunerul are mai multe LNB-uri fixe (comutator DiSEqC sau toneburst). Dupa ce enigma2 inchide tunerul (oprirea
+    canalului), comutatorul ramane fara tensiune si porneste din nou pe primul port: acolo "cel pe care sta antena
+    acum" nu inseamna nimic, iar o cautare fara comanda ajunge pe satelitul portului A (AS11, OB7)."""
+    model = model or {}
+    if model.get('motiv'):
+        return False
+    return len([l for l in model.get('lnburi') or [] if _lnb_fix(l)]) > 1
+
+
+def pozitie_ultimul_canal():
+    """Satelitul ultimului canal TV pornit (config.tv.lastservice: spatiul de nume DVB-S are pozitia in cei 16 biti de
+    sus), sau None (canal de pe internet, cablu, terestru, nimic)."""
+    try:
+        from Components.config import config
+        parti = (config.tv.lastservice.value or '').split(':')
+        poz = int(parti[6], 16) >> 16 if len(parti) > 6 and parti[6] else 0
+    except Exception:
+        return None
+    return poz if 0 < poz < 3600 else None
+
+
+def pozitie_implicita(alegeri, slot):
+    """La comutator, fara satelit stiut acum (canal de pe internet sau din cablu, nimic pornit, dupa "Scanează
+    canalele"): satelitul ultimului canal TV, daca e pe acest tuner, altfel primul port; cu comanda lui, ca satelitul
+    aratat sa fie cel cautat. alegeri = [(pozitie, slot)] din alegeri_satelit. Intoarce (pozitie, slot) sau None."""
+    toate = [(p, s) for p, s in alegeri or [] if p is not None]
+    # tunerul "equal" n-are alegeri ale lui: atunci ale tunerului de care tine
+    fixe = [(p, s) for p, s in toate if s == slot] or toate
+    if not fixe:
+        return None
+    ultimul = pozitie_ultimul_canal()
+    for p, s in fixe:
+        if p == ultimul:
+            return p, s
+    return fixe[0]
 
 
 def alegeri_motor(S, nim, slot, sateliti, alegeri):
@@ -1394,6 +1626,16 @@ def antena(sesiune, pozitie=None):
             nume = {}
         nume.update(sateliti)
         alegeri = alegeri_satelit(modele, slot, poz, cu_comanda=model_vuplus() is None)
+        # 0.7.8 (OB7): la comutator, fara satelit stiut, nu "cel pe care sta antena acum" (cautarea fara comanda ajungea
+        # pe portul A), ci un satelit anume, cu comanda lui
+        if poz is None and comutator(_model_cautare(nim, modele, slot)):
+            implicit = pozitie_implicita(alegeri, slot)
+            if implicit is not None:
+                poz, slot = implicit
+                poz_antena = poz
+                alegeri = [(p, s) for p, s in alegeri if p is not None]
+                sateliti = S.sateliti_tuner(nim, slot)
+                pozitii = [x for x, _n in sateliti]
         alegeri += alegeri_motor(S, nim, slot, sateliti, alegeri)
         rez['alegeri'] = [(p, (nume.get(p) or S.text_pozitie(p)) if p is not None else text_satelit({}), s)
                           for p, s in alegeri]
@@ -1421,7 +1663,7 @@ def antena(sesiune, pozitie=None):
     osc = None
     try:
         from Components import HdsLnb
-        model = dict(modele).get(slot)
+        model = _model_cautare(nim, modele, slot)
         lnb = HdsLnb.lnbPentruSatelit(slot, poz if poz is not None else pozitii[0], nim, model=model)
         if lnb is not None:
             osc = HdsLnb.oscilatoareKhz(lnb)

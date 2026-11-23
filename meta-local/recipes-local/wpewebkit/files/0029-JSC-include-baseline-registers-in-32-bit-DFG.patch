@@ -1,0 +1,17 @@
+Subject: [PATCH] JSC: include the register layout used by 32-bit DFG calls
+
+Upstream-Status: Inappropriate [restore experimental ARM32 JIT]
+
+The 32-bit call paths use BaselineJITRegisters just like their 64-bit
+counterpart, but did not include its declaration.
+
+--- a/Source/JavaScriptCore/dfg/DFGSpeculativeJIT32_64.cpp
++++ b/Source/JavaScriptCore/dfg/DFGSpeculativeJIT32_64.cpp
+@@ -30,6 +30,7 @@
+ #if ENABLE(DFG_JIT)
+ 
+ #include "ArrayPrototype.h"
++#include "BaselineJITRegisters.h"
+ #include "CallFrameShuffler.h"
+ #include "ClonedArguments.h"
+ #include "DFGAbstractInterpreterInlines.h"

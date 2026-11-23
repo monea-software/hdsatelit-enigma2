@@ -124,6 +124,8 @@ def randuri_interfata_web(interfata):
 	text pe randul modulului din lista si pe al celui pornit de alt program."""
 	adresa = '%s://%s:%d/' % (interfata['protocol'], gazda_interfata_web(), interfata['port'])
 	return [_("Interfața web: %s") % adresa,
+		_("Utilizator: %s") % (interfata.get("utilizator") or ""),
+		_("Parolă") + ": " + (interfata.get("parola") or ""),
 		_("Deschide adresa în browserul telefonului sau al calculatorului din aceeași rețea.")]
 
 
@@ -949,7 +951,7 @@ class CamSetup(Screen):
 			from Plugins.Extensions.HdsNavigator.plugin import deschideInterfataCam
 		except ImportError as e:
 			print("[CamSetup] navigatorul: %s" % e)
-			self["stare"].setText(_("%s nu a pornit.") % _("Interfața web"))
+			self["stare"].setText(_("Interfața web nu a pornit."))
 			return
 		self["stare"].setText("")
 		deschideInterfataCam(self.session)

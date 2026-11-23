@@ -81,11 +81,8 @@ class Mediu(object):
 
 
 def argumente(request):
-	"""{cheie: text} numai pentru cheile stiute (fara token): codul confirmarii intreg, restul scurt"""
-	rez = _comun().argumente(request, ARGUMENTE, 32)
-	for cheie in list(rez):
-		if cheie != "cod":
-			rez[cheie] = rez[cheie][:12]
+	"""{cheie: text} numai pentru cheile stiute (fara token), cu valoarea intreaga"""
+	rez = _comun().argumente(request, ARGUMENTE)
 	return rez
 
 

@@ -17,6 +17,7 @@
 #   POST /api/actualizare-instaleaza   cere ultima confirmare, fara scriere
 #   POST /api/actualizare-raspunde intrebare=<id unic>&da=0|1
 #   POST /api/actualizare-opreste  renunta dupa verificare, inainte de scriere
+#   POST /api/actualizare-repara-tip id=<stick din lista "tipuri">: scrie numai octetul tipului partitiei (USB6)
 #   GET /actualizare               pagina (aceeasi poarta ca /paznic: reteaua locala, apoi browserul asociat)
 #
 # FIRUL: lista mediilor montate se ia pe firul enigma2 (harddiskmanager nu e de atins din alt fir); citirea dosarelor si
@@ -67,6 +68,20 @@ def _h(H=None):
 		return H
 	from Components import HdsPazaModel
 	return HdsPazaModel
+
+
+def _r(R=None, U=None):
+	"""Functiile tipului partitiei (USB6): din ecranul de actualizare (Screens/HdsSoftwareUpdate), sau R din probe."""
+	return R if R is not None else _u(U)
+
+
+def tipuri(R, discuri):
+	"""Stickurile cu tipul partitiei gresit (USB6, HdsSoftwareUpdate.tipuriGresite), pe firul separat: [(rand, info)]."""
+	rez = []
+	for info in R.tipuriGresite([d.mountpoint for d in discuri]):
+		rez.append(({"nume": info.get("punct") or info["disc"], "text": R.textTipGresit(info),
+			"buton": R.textRandTip(info.get("punct") or info["disc"])}, info))
+	return rez
 
 
 def pachete(U, H, discuri, candidati=None):
@@ -268,11 +283,12 @@ def raspuns(lista, H, radacina=None):
 	}
 
 
-def rute(baza, resource, NOT_DONE_YET, U=None, H=None, sesiune=None):
+def rute(baza, resource, NOT_DONE_YET, U=None, H=None, sesiune=None, R=None):
 	"""Resursele: ({nume: resursa de sub /api}, resursa paginii). `baza` e HdsJsonResource din plugin.py."""
 
 	_lucrari = []   # lucrarile in curs; fara referinta pastrata, eTimer-ul lor e cules si raspunsul nu mai pleaca
 	_inventar = {}
+	_tipuri = {}    # USB6: id -> stickul cu tipul partitiei gresit, din ultima citire
 	_controler = []
 
 	def lucrare():
@@ -307,13 +323,22 @@ def rute(baza, resource, NOT_DONE_YET, U=None, H=None, sesiune=None):
 					if eroare:
 						corp = resursa._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 					else:
-						lista, candidati = rezultat
+						lista, candidati, gresite = rezultat
 						_inventar.clear()
 						for rand, candidat in zip(lista, candidati):
 							ident = secrets.token_hex(24)
 							rand["id"] = ident
 							_inventar[ident] = candidat
-						corp = resursa._raspunde(request, raspuns(lista, h))
+						_tipuri.clear()
+						randuri_tip = []
+						for rand, info in gresite:
+							ident = secrets.token_hex(24)
+							rand["id"] = ident
+							_tipuri[ident] = info
+							randuri_tip.append(rand)
+						corp = raspuns(lista, h)
+						corp["tipuri"] = randuri_tip
+						corp = resursa._raspunde(request, corp)
 					request.write(corp)
 					request.finish()
 				except Exception as problema:
@@ -321,7 +346,12 @@ def rute(baza, resource, NOT_DONE_YET, U=None, H=None, sesiune=None):
 
 			def citeste():
 				candidati = u.cautaCandidati(discuri)
-				return pachete(u, h, discuri, candidati), candidati
+				try:
+					gresite = tipuri(_r(R, U), discuri)
+				except Exception as problema:
+					print("[HdsWebControl] actualizare: tipul partitiei: %s" % problema)
+					gresite = []
+				return pachete(u, h, discuri, candidati), candidati, gresite
 
 			fir = h.LucrareFundal(citeste, gata)
 			pastrata.append(fir)
@@ -361,6 +391,37 @@ def rute(baza, resource, NOT_DONE_YET, U=None, H=None, sesiune=None):
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
+	class ReparaTipResource(baza):
+		"""POST /api/actualizare-repara-tip id=<stick>: octetul tipului partitiei, pe un fir separat (USB6)."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				info = _tipuri.pop(argumente(request).get("id"), None)
+				if info is None:
+					return self._eroare(request, _t("Stickul nu mai este în lista citită. Caută din nou software-ul."), 409)
+				r, h = _r(R, U), _h(H)
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+			resursa = self
+			pastrata = []
+
+			def gata(rezultat, eroare):
+				for lucrare in pastrata:
+					if lucrare in _lucrari:
+						_lucrari.remove(lucrare)
+				try:
+					bun, text = rezultat if rezultat else (False, _t("Tipul partiției nu s-a putut schimba: %s") % eroare)
+					request.write(resursa._raspunde(request, {"result": bool(bun), "message": text}))
+					request.finish()
+				except Exception as problema:
+					print("[HdsWebControl] actualizare: raspunsul nu a plecat (browser plecat?): %s" % problema)
+
+			fir = h.LucrareFundal(lambda: r.reparaTip(info), gata)
+			pastrata.append(fir)
+			_lucrari.append(fir)
+			return NOT_DONE_YET
+
 	class PaginaResource(resource.Resource):
 		"""GET /actualizare: pagina „Imagine nouă de pe stick” (actualizarile prin pachete sunt la /actualizari)."""
 		isLeaf = True
@@ -373,6 +434,7 @@ def rute(baza, resource, NOT_DONE_YET, U=None, H=None, sesiune=None):
 		r = ActiuneResource()
 		r.actiune = nume
 		api[("actualizare-" + nume).encode("ascii")] = r
+	api[b"actualizare-repara-tip"] = ReparaTipResource()
 	return api, PaginaResource()
 
 
@@ -422,6 +484,7 @@ def texte():
 		"opreste": _t("Renunță"),
 		"nu": _t("Nu"),
 		"analiza": _t("Vezi ce a analizat ofgwrite"),
+		"repar": _t("Repar tipul partiției de pe stick…"),
 	}
 
 
@@ -489,6 +552,7 @@ PAGINA = u"""<!DOCTYPE html>
 <section id="lucrare" class="card" hidden aria-live="polite"></section>
 <section id="intrebare" class="card" hidden role="alertdialog" aria-modal="false"></section>
 <div id="comenzi" class="bara"></div>
+<div id="tipuri"></div>
 <div id="lista"></div>
 </main>
 <script>
@@ -557,7 +621,26 @@ function arataStare(d){
   }
   blocheaza();
 }
+var notaTip = "";
+function arataTipuri(lista){
+  var t = $("tipuri"); t.textContent = "";
+  if(notaTip){ t.appendChild(element("p", "mesaj", notaTip)); notaTip = ""; }
+  (lista || []).forEach(function(x){
+    var c = element("section", "card rau");
+    var cap = element("div", "cap"); cap.appendChild(element("span", "semn")); cap.appendChild(element("p", "nume", x.nume));
+    c.appendChild(cap); c.appendChild(element("p", "motiv", x.text));
+    var b = buton(c, x.buton, function(){
+      if(trimite){ return; } trimite = true; blocheaza(); $("mesaj").textContent = T.repar;
+      cerere("/api/actualizare-repara-tip", {id: x.id}).then(function(r){
+        trimite = false; notaTip = r.message || T.eroare; citeste();
+      }).catch(function(){ trimite = false; $("mesaj").textContent = T.nuRaspunde; }).then(blocheaza);
+    });
+    b.className = "verifica";
+    t.appendChild(c);
+  });
+}
 function arata(d){
+  arataTipuri(d.tipuri);
   var l = $("lista"); l.textContent = "";
   var p = d.pachete || [];
   var sus = p.length ? T.gasite.replace("%d", p.length) : T.niciunul;

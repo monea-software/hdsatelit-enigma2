@@ -27,9 +27,13 @@
 # and at every change.
 # How 4:3 programmes fill a 16:9 picture is the driver file policy (config.av.hds_policy43, the "Emisiunile 4:3" row of
 # Setari > Video and of the web page /video, "Imaginea 4:3"): offered only when policy and policy_choices exist, only values of that
-# list (split on any space: the u57 list has two spaces in it). The HiSilicon driver has the names the other way
-# round for 4:3 programmes: "panscan" shows them whole with black bars at the sides (pillarbox) and "letterbox" fills
-# the screen and cuts them at the top and bottom, so the labels say what is seen (policyLabel). The A/V row "Aspect
+# list (split on any space: the u57 list has two spaces in it). The labels say what is seen (policyLabel), and the driver
+# names mean different things: on the Broadcom drivers (lib/driver/avswitch.cpp, the OE-Alliance pillarbox = driver
+# "panscan" on a wide TV) "panscan" shows 4:3 programmes whole with black bars at the sides and "letterbox" cuts them at
+# the top and bottom; the HiSilicon driver follows its SDK, measured on the SF8008 on 22.11.2026 with a 720x576 4:3 film
+# (AspectRatioConvert in /proc/msp/win0100 and a picture of the screen): "letterbox" = LetterBox, whole with black bars at
+# the sides; "panscan" = PanAndScan, enlarged and cut at the top and bottom; "bestfit" = Full; "nonlinear" = FullHori.
+# The board is known by /proc/stb/info/chipset (chipsetHisilicon). A saved choice keeps its value. The A/V row "Aspect
 # Ratio" (Components/AVSwitch.py, lib/driver/avswitch.cpp) writes policy too; until a choice is saved here nothing is
 # written and the row shows what the driver has (16:9 always = panscan); a saved choice is written at every start, at
 # every change and again after the "Aspect Ratio" row wrote its own value; with "Aspect Ratio" on a 4:3 TV the row is not
@@ -347,12 +351,14 @@ def zapLabel(value):
 	}.get(value, value)
 
 
-def policyLabel(value):
+def policyLabel(value, hisilicon=False):
 	"""the untranslated text of a policy value for 4:3 programmes, by what is seen on this driver (see the top of the
-	file); translated where it is shown, like zapLabel. A value this image does not know keeps the driver name."""
+	file: on HiSilicon letterbox and panscan mean the other way round); translated where it is shown, like zapLabel. A
+	value this image does not know keeps the driver name."""
+	intreaga, marita = N_("Întreagă, cu benzi negre în lateral"), N_("Mărită, tăiată sus și jos")
 	return {
-		"panscan": N_("Întreagă, cu benzi negre în lateral"),
-		"letterbox": N_("Mărită, tăiată sus și jos"),
+		"panscan": marita if hisilicon else intreaga,
+		"letterbox": intreaga if hisilicon else marita,
 		"bestfit": N_("Întinsă pe tot ecranul"),
 		"nonlinear": N_("Întinsă mai mult spre margini"),
 		"auto": N_("Automat"),
@@ -480,6 +486,12 @@ def chipsetBroadcom(infoDir="/proc/stb/info"):
 	return bool(text) and text.strip().lower().startswith("bcm")
 
 
+def chipsetHisilicon(infoDir="/proc/stb/info"):
+	"""True for a HiSilicon board: /proc/stb/info/chipset names a Hi37xx chip (3798mv200 on the SF8008, hi3798mv200)"""
+	text = (readText_direct(os.path.join(infoDir, "chipset")) or "").strip().lower()
+	return re.match(r"^(hi)?37[0-9]{2}", text) is not None
+
+
 def inStandby():
 	"""True while the Standby screen is open; Screens.Standby is looked up only once enigma2 has loaded it"""
 	module = sys.modules.get("Screens.Standby")
@@ -557,8 +569,12 @@ class VideoOutput:
 		# stayed at the old videomode (720p50 with 1080p50 in both rate files, darog69, assistance 829694). There videomode
 		# gets the 50 Hz mode too, after the rate files, as OE-Alliance writes it (AVSwitch.setMode)
 		# (the Vu+ Duo 4K Lite keeps its own plan, rewriteLater, measured on the board)
-		self.mainToo = not self.simulation and not self.duo4kLite and chipsetBroadcom(os.path.join(os.path.dirname(os.path.normpath(self.root)),
-			"info"))
+		infoDir = os.path.join(os.path.dirname(os.path.normpath(self.root)), "info")
+		# H8SE native driver: rate files alone left HDMI at 1080p50 even after a new video started.
+		# A direct write was verified at 720p50, 1080i50 and 1080p50 on the receiver.
+		nativeH8 = (readText_direct(os.path.join(infoDir, "model")) or "").strip().lower() in ("h8", "h8se") and \
+			(readText_direct(os.path.join(infoDir, "chipset")) or "").strip().lower() == "hi3798mv200"
+		self.mainToo = not self.simulation and not self.duo4kLite and (chipsetBroadcom(infoDir) or nativeH8)
 		if self.duo4kLite:
 			self.choices["videomode"] = list(HdsPlacaVuplus.MODURI_DUO4KLITE)
 		# rate -> modes the driver accepts in that rate file; only for the files that exist
@@ -714,7 +730,8 @@ class VideoOutput:
 	def writeModeFiles(self, rates, fallback, write=None):
 		"""writes {rate: value} in the order the u57 driver expects: videomode_50hz;
 		videomode_60hz only if the first write worked; videomode = fallback only if one of the two failed or has
-		no value; then videomode_24hz. Without rate files only videomode. [(file, value, written)] in write order."""
+		no value; then videomode_24hz. Boards with mainToo also get videomode after successful rate writes.
+		Without rate files only videomode. [(file, value, written)] in write order."""
 		write = write or self.write
 		written = []
 
@@ -740,10 +757,10 @@ class VideoOutput:
 
 	@staticmethod
 	def modeReached(written):
-		"""True if the mode got to the driver: both videomode_50hz and _60hz, or the videomode fallback (or
-		videomode alone, without rate files), and videomode_24hz when it was written"""
+		"""True when every required output was accepted: direct videomode if attempted, else both rate files,
+		and videomode_24hz when it was written."""
 		done = dict((name, ok) for name, value, ok in written)
-		reached = (done.get(RATE_FILE[50]) and done.get(RATE_FILE[60])) or done.get("videomode", False)
+		reached = done["videomode"] if "videomode" in done else (done.get(RATE_FILE[50]) and done.get(RATE_FILE[60]))
 		return bool(reached and done.get(RATE_FILE[24], True))
 
 	def writeMode(self, mode, byChannel, write=None):
@@ -1342,7 +1359,9 @@ def initPolicy(output):
 	now = output.readPolicy()
 	default = now if now in output.policyChoices else (POLICY_DEFAULT if POLICY_DEFAULT in output.policyChoices
 		else output.policyChoices[0])
-	element = ConfigSelection(choices=[(value, policyLabel(value)) for value in output.policyChoices], default=default)
+	hisilicon = chipsetHisilicon(os.path.join(os.path.dirname(os.path.normpath(output.root)), "info"))
+	element = ConfigSelection(choices=[(value, policyLabel(value, hisilicon)) for value in output.policyChoices],
+		default=default)
 	element.save_forced = True
 	setattr(config.av, POLICY_ATTR, element)
 

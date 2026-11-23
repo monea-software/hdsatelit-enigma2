@@ -312,7 +312,11 @@ def _streamRelay(H, SR=None):
 		if SR is None:
 			from Components import HdsStreamRelay as SR
 		s = SR.stare(H=H)
-		return {"canale": s["canale"], "asculta": s["asculta"], "linii": list(s["linii"])}
+		rez = {"canale": s["canale"], "asculta": s["asculta"], "linii": list(s["linii"])}
+		for cheie in ("cauza", "pornire"):
+			if cheie in s:
+				rez[cheie] = s[cheie]
+		return rez
 	except Exception as eroare:
 		_jurnal("Stream Relay: %r" % (eroare,))
 		return None
@@ -338,7 +342,7 @@ def _cuMesaj(rez, reusit, mesaj):
 	return rez
 
 
-def comanda(argumente, H=None, E=None, ceas=None, cu_stare=True):
+def comanda(argumente, H=None, E=None, ceas=None, cu_stare=True, feluri_citite=None):
 	"""POST /api/acces-conditionat-comanda. Verifica cererea, porneste HdsModuleAcces.Operatie si raspunde pe loc;
 	pasii si rezultatul (text_pas, text_rezultat) se tin aici pentru GET. Refuza cand ruleaza deja o comanda (de pe
 	televizor sau din web). Felul trebuie sa fie unul de pe receptor (HdsModuleAcces.feluri); fara fel, primul.
@@ -350,7 +354,7 @@ def comanda(argumente, H=None, E=None, ceas=None, cu_stare=True):
 	ceas = ceas or time.time
 	st = stare if cu_stare else (lambda H, E: {})
 	cerere = argumente.get("cerere") or ""
-	feluri_receptor = H.feluri(H.SistemAcces())
+	feluri_receptor = H.feluri(H.SistemAcces()) if feluri_citite is None else feluri_citite
 	fel = argumente.get("fel") or (feluri_receptor[0] if feluri_receptor else "")
 	sufix = argumente.get("sufix") or None
 	if cerere not in H.CERERI:
@@ -393,10 +397,21 @@ def comanda(argumente, H=None, E=None, ceas=None, cu_stare=True):
 	return raspuns() if cu_stare else raspuns
 
 
+def porneste_releu(argumente, citita=None, H=None, E=None):
+	"""Start the still-selected module through the existing single-operation gate."""
+	H = _h(H)
+	stari = citita["stari"] if citita is not None else H.feluri_de_aratat(H.SistemAcces())
+	alese = [(st.fel, e) for st in stari for e in st.emulatoare if e.ales]
+	if len(alese) != 1 or (alese[0][0], alese[0][1].sufix) != (argumente.get("fel"), argumente.get("sufix")):
+		return {"result": False, "message": _t("Modulul ales s-a schimbat. Starea Stream Relay se actualizează.")}
+	a = dict(argumente, cerere="porneste")
+	return comanda(a, H, E, cu_stare=False, feluri_citite=[st.fel for st in stari])
+
+
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, numai cheile stiute, fara token."""
+	"""Argumentele cererii ca text: {cheie: text}, numai cheile stiute, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:16]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in ARGUMENTE:
@@ -404,7 +419,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_VALOARE].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -428,13 +443,14 @@ def stare_chei(K=None):
 
 
 def argument_lung(request, nume, maxim):
-	"""Un argument al cererii (si din corpul unui POST de formular), taiat la `maxim`; "" cand lipseste."""
+	"""Un argument al cererii (si din corpul unui POST de formular), intreg (REGULA 0, WEB8:
+	`maxim` nu mai taie); "" cand lipseste."""
 	args = getattr(request, "args", None) or {}
 	valori = args.get(nume.encode("ascii")) or args.get(nume) or []
 	v = valori[0] if valori else b""
 	if isinstance(v, bytes):
 		v = v.decode("utf-8", "replace")
-	return str(v)[:maxim].strip()
+	return str(v).strip()
 
 
 def cerere_chei(cerere, adresa="", K=None):
@@ -516,10 +532,21 @@ def _stareDinFir(resursa, request, H=None, E=None, adaos=None, inainte=None):
 			cereri, _CITIRE_WEB["cereri"] = _CITIRE_WEB["cereri"], []
 			if eroare is not None:
 				_jurnal("citirea pe fir: %r" % (eroare,))
+			elif rezultat is not None and rezultat[0] != Hm.generatie():
+				# A stale snapshot must be read again in the worker, including POST targets.
+				for r, adaos_r, inainte_r in cereri:
+					if not getattr(r, "_disconnected", False):
+						_stareDinFir(resursa, r, H, E, adaos_r, inainte_r)
+				return
 			citita = rezultat[1] if rezultat is not None and rezultat[0] == Hm.generatie() else None
 			for r, adaos_r, inainte_r in cereri:
+				if getattr(r, "_disconnected", False):
+					continue
 				try:
-					corp = resursa._raspunde(r, _pentruCerere(H, E, citita, adaos_r, inainte_r))
+					if citita is None:
+						corp = resursa._eroare(r, _t("Nu s-a putut citi starea modulelor."), 500)
+					else:
+						corp = resursa._raspunde(r, _pentruCerere(H, E, citita, adaos_r, inainte_r))
 				except Exception as e:
 					corp = resursa._eroare(r, _t("Eroare pe receptor: %s") % e, 500)
 				try:
@@ -631,7 +658,11 @@ def rute(baza, resource, H=None, E=None, pe_fir=None):
 		def render_POST(self, request):
 			try:
 				# 0.7.7 (IPE): comanda porneste pe loc, starea modulelor din raspuns vine din citirea de pe fir
-				return _stareDinFir(self, request, H, E, adaos=comanda(argumente(request), H, E, cu_stare=False))
+				a = argumente(request)
+				if a.get("cerere") == "porneste_releu":
+					return _stareDinFir(self, request, H, E,
+						inainte=lambda citita: porneste_releu(a, citita, H, E))
+				return _stareDinFir(self, request, H, E, adaos=comanda(a, H, E, cu_stare=False))
 			except Exception as eroare:
 				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
 
@@ -878,6 +909,18 @@ var semnaturaLista = null;
 var randuriProcese = [];
 var ocupat = false;
 var astept = false;     // o comanda trimisa de aici merge inca: la sfarsit, rezultatul ei ia locul mesajului
+var trimitereInCurs = false, paginaInchisa = false;
+var paginaGeneratie = 0, ceasBucla = null;
+window.addEventListener("pagehide", function(){
+  paginaInchisa = true;
+  paginaGeneratie++;
+  clearTimeout(ceasBucla); ceasBucla = null;
+});
+window.addEventListener("pageshow", function(){
+  if(!paginaInchisa){ return; }
+  paginaInchisa = false;
+  bucla();
+});
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
@@ -986,6 +1029,7 @@ function randModul(f, m){
       var a = el("a", "buton-web hds-derulant", "Interfața web");
       a.href = adresaWeb; a.target = "_blank"; a.rel = "noopener noreferrer";
       b.appendChild(a);
+      stanga.appendChild(el("div", "detaliu", [i.utilizator, i.parola].filter(Boolean).join(" / ")));
     });
     b.appendChild(buton("Oprește", "", f.fel, "opreste", m.sufix,
       "Se oprește " + m.sufix + ": canalele criptate nu se mai văd până îl pornești din nou. Continui?"));
@@ -1055,7 +1099,7 @@ function arata(d){
     a.href = adresa("/common-interface"); p.appendChild(a); afara.appendChild(p);
   });
   var c = d.comanda || {};
-  ocupat = !!c.in_curs;
+  ocupat = trimitereInCurs || !!c.in_curs;
   if(c.in_curs){ $("comanda").textContent = c.text || ""; }
   else if(c.ultima){ $("comanda").textContent = "Ultima comandă din pagină: " + c.ultima.text; }
   else { $("comanda").textContent = ""; }
@@ -1113,6 +1157,18 @@ function arata(d){
   var sr = d.stream_relay, loc2 = $("releuStare");
   loc2.textContent = "";
   (sr && sr.linii || []).forEach(function(t, i){ loc2.appendChild(el("p", i ? "nota" : "acum", t)); });
+  if(sr && sr.pornire){
+    var pornire = sr.pornire;
+    var releuPorneste = el("button", "verde", pornire.text);
+    releuPorneste.type = "button";
+    releuPorneste.disabled = ocupat;
+    releuPorneste.addEventListener("click", function(){
+      if(ocupat || releuPorneste.disabled){ return; }
+      releuPorneste.disabled = true;
+      trimite("porneste_releu", pornire.fel, pornire.sufix);
+    });
+    loc2.appendChild(releuPorneste);
+  }
   $("releu").classList.toggle("ascuns", !sr);
 }
 $("camTv").addEventListener("click", function(){
@@ -1124,10 +1180,12 @@ var jurnalInLucru = false, jurnalCitit = 0;
 function citesteJurnal(){
   // cititoarele, clientii si jurnalul modulului care ruleaza (aceleasi randuri ca pe televizor, deja traduse); cel mult
   // o data la 10 s (receptorul cauta modulul in /proc la fiecare cerere)
-  if(jurnalInLucru || Date.now() - jurnalCitit < 10000){ return; }
+  if(paginaInchisa || jurnalInLucru || Date.now() - jurnalCitit < 10000){ return; }
+  var generatie = paginaGeneratie;
   jurnalInLucru = true;
   jurnalCitit = Date.now();
   cerere("/api/acces-conditionat-jurnal").then(function(d){
+    if(paginaInchisa || generatie !== paginaGeneratie){ return; }
     if(d.ocupat){ return; }
     var linii = d.result ? (d.linii || []) : [];
     $("jurnalCard").classList.toggle("ascuns", !linii.length);
@@ -1141,30 +1199,44 @@ function citesteJurnal(){
   }).catch(function(){}).then(function(){ jurnalInLucru = false; });
 }
 function citeste(){
+  if(paginaInchisa){ return Promise.resolve(); }
+  var generatie = paginaGeneratie;
   citesteInterfete();
   citesteDosare();
   citesteJurnal();
   return cerere("/api/acces-conditionat").then(function(d){
+    if(paginaInchisa || generatie !== paginaGeneratie){ return; }
     if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi modulele."; return; }
     $("incarcare").classList.add("ascuns"); $("continut").classList.remove("ascuns");
     arata(d);
-  }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
+  }).catch(function(){
+    if(!paginaInchisa && generatie === paginaGeneratie){
+      $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea.";
+    }
+  });
 }
 function citesteInterfete(){
-  if(interfeteInLucru){ return; }
+  if(paginaInchisa || interfeteInLucru){ return; }
+  var generatie = paginaGeneratie;
   interfeteInLucru = true;
   cerere("/api/acces-conditionat-interfete").then(function(d){
+    if(paginaInchisa || generatie !== paginaGeneratie){ return; }
     if(d.result){ INTERFETE = d.interfete || []; if(D){ arata(D); } }
   }).catch(function(){}).then(function(){ interfeteInLucru = false; });
 }
 function citesteDosare(){
-  if(dosareInLucru){ return; }
+  if(paginaInchisa || dosareInLucru){ return; }
+  var generatie = paginaGeneratie;
   dosareInLucru = true;
   return cerere("/api/acces-conditionat-dosare").then(function(d){
+    if(paginaInchisa || generatie !== paginaGeneratie){ return; }
     if(d.result){ DOSARE = d.dosare || []; dosareEroare = false; }
     else if(!d.ocupat){ dosareEroare = true; }
-  }).catch(function(){ dosareEroare = true; }).then(function(){
+  }).catch(function(){
+    if(!paginaInchisa && generatie === paginaGeneratie){ dosareEroare = true; }
+  }).then(function(){
     dosareInLucru = false;
+    if(paginaInchisa || generatie !== paginaGeneratie){ return; }
     if(D){ arata(D); }
   });
 }
@@ -1182,16 +1254,30 @@ function inlocuieste(fel, sufix, pachet){
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 }
 function trimite(cerereNume, fel, sufix){
+  if(trimitereInCurs || paginaInchisa){ return; }
+  var generatie = paginaGeneratie;
+  trimitereInCurs = true;
+  ocupat = true;
   var q = new URLSearchParams();
   q.set("cerere", cerereNume); q.set("fel", fel);
   if(sufix){ q.set("sufix", sufix); }
   mesaj("Se trimite...");
   cerere("/api/acces-conditionat-comanda", "POST", q).then(function(d){
+    trimitereInCurs = false;
+    if(paginaInchisa || generatie !== paginaGeneratie){ return; }
     mesaj(d.message, !d.result);
     astept = !!(d.result && d.comanda && d.comanda.in_curs);
     if(d.feluri){ arata(d); }
-    if(ocupat){ setTimeout(citeste, 1500); }
-  }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
+    if(ocupat){ setTimeout(function(){
+      if(generatie === paginaGeneratie){ citeste(); }
+    }, 1500); }
+  }).catch(function(){
+    trimitereInCurs = false;
+    if(paginaInchisa || generatie !== paginaGeneratie){ return; }
+    ocupat = false;
+    mesaj("Receptorul nu răspunde.", true);
+    citeste();
+  });
 }
 Array.prototype.forEach.call(document.querySelectorAll("[data-televizor]"), function(b){
   b.addEventListener("click", function(){
@@ -1202,8 +1288,13 @@ Array.prototype.forEach.call(document.querySelectorAll("[data-televizor]"), func
   });
 });
 function bucla(){
+  if(paginaInchisa){ return; }
+  var generatie = paginaGeneratie;
   var pas = ocupat ? 1500 : 5000;
-  (document.hidden ? Promise.resolve() : citeste()).then(function(){ setTimeout(bucla, ocupat ? 1500 : pas); });
+  (document.hidden ? Promise.resolve() : citeste()).then(function(){
+    if(paginaInchisa || generatie !== paginaGeneratie){ return; }
+    ceasBucla = setTimeout(bucla, ocupat ? 1500 : pas);
+  });
 }
 bucla();
 // cheile publice (SoftCam.Key): textele vin traduse de pe receptor; campul adresei nu se rescrie cat il schimba omul

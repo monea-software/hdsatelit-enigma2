@@ -7,6 +7,8 @@
 # /media/usb, /media/usb2.., /media/mmc, numele etichetei), apoi „Demontează” sau „Montează la loc”. Nimic de confirmat:
 # alegerea se aplica pe loc si ramane si dupa repornire. Logica (si pagina web /montare-discuri) e in
 # Components/HdsMontareDiscuri.py; citirea discurilor merge pe un fir, cu termen (HarddiskSetup.HdsDiscCitire).
+# 0.7.8 (MDP): discul de pe care porneste imaginea are randul Discul de pornire, fara alegeri; OK si nota de jos spun
+# de ce ramane montat si unde se salveaza inregistrarile.
 from .Screen import Screen
 from Components.ActionMap import ActionMap
 from Components.Label import Label
@@ -35,8 +37,9 @@ class HdsMontareDiscuri(Screen):
 		self.randuri = []
 		self["list"] = MenuList([_("Se citesc datele discului...")])
 		self["detalii"] = Label("")
-		self["nota"] = Label(_("OK: alege locul de montare (/media/hdd, /media/usb, /media/mmc...), demontează discul ca "
-			"să-l scoți în siguranță sau montează-l la loc. Alegerea rămâne și după repornire."))
+		self.notaImplicita = _("OK: alege locul de montare (/media/hdd, /media/usb, /media/mmc...), demontează discul ca "
+			"să-l scoți în siguranță sau montează-l la loc. Alegerea rămâne și după repornire.")
+		self["nota"] = Label(self.notaImplicita)
 		self["actions"] = ActionMap(["OkCancelActions", "DirectionActions"], {
 			"ok": self.ok,
 			"cancel": self.close,
@@ -94,7 +97,8 @@ class HdsMontareDiscuri(Screen):
 		if not self.randuri:
 			self["list"].setList([_("Niciun hard disk și niciun stick USB găsit.")])
 		else:
-			self["list"].setList(["%s   %s   %s" % (r["nume"], r["marime"], M.textStare(r)) for r in self.randuri])
+			self["list"].setList([M.textStareAfisat(r) if r.get("loc_afisat") and r["loc_afisat"] != r.get("loc") else
+				"%s   %s   %s" % (r["nume"], r["marime"], M.textStareAfisat(r)) for r in self.randuri])
 		self.arataDetalii()
 		l, self.deAratat = self.deAratat, None
 		if l is not None:
@@ -115,7 +119,7 @@ class HdsMontareDiscuri(Screen):
 		r = self.randAles()
 		text = ""
 		if r is not None:
-			parti = [M.textStare(r)]
+			parti = [M.textStareAfisat(r)]
 			if r.get("sistem"):
 				parti.append(_("Sistemul de fișiere: %s") % r["sistem"])
 			if r.get("ales"):
@@ -125,10 +129,15 @@ class HdsMontareDiscuri(Screen):
 		if l is not None:
 			text = (text + "\n" if text else "") + l["mesaj"]
 		self["detalii"].setText(text)
+		# discul de pornire: nota de jos spune de ce nu are alegeri (si unde merg inregistrarile)
+		self["nota"].setText((M.notaRand(r) if r is not None else "") or self.notaImplicita)
 
 	def ok(self):
 		r = self.randAles()
 		if r is None or M.inLucru():
+			return
+		if r.get("pornire"):
+			self.session.open(MessageBox, M.notaRand(r) or M.textStareAfisat(r), MessageBox.TYPE_INFO, timeout=10)
 			return
 		alegeri = []
 		for valoare, text in r["alegeri"]:
@@ -141,7 +150,7 @@ class HdsMontareDiscuri(Screen):
 		if r["poate_monta"]:
 			alegeri.append((_("Montează la loc"), (M.MONTARE, None)))
 		if not alegeri:
-			self.session.open(MessageBox, M.textStare(r), MessageBox.TYPE_INFO, timeout=8)
+			self.session.open(MessageBox, M.textStareAfisat(r), MessageBox.TYPE_INFO, timeout=8)
 			return
 		self.session.openWithCallback(lambda ales: self.ales(r, ales), ChoiceBox, title=r["nume"], list=alegeri)
 

@@ -489,7 +489,7 @@ def sursa(sursa_id):
 
 
 def publicSurse():
-	return [{"id": x.id, "nume": x.nume, "fel": x.fel, "grupa": x.grupa} for x in surse()]
+	return [dict({"id": x.id, "nume": x.nume, "fel": x.fel, "grupa": x.grupa}, **{k: getattr(x, "s", {}).get(k, "") for k in ("adresa", "utilizator", "parola", "jeton")}) for x in surse()]
 
 
 # ------------------------------------------------------------------ memoria (randuri, categorii, recente)

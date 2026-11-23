@@ -104,9 +104,10 @@ def codGresit():
 
 
 def argumente(request, chei, lung=200, limita=24):
-	"""{cheie: text} pentru cheile din `chei` (fara token), cel mult `lung` caractere fiecare."""
+	"""{cheie: text} pentru cheile din `chei` (fara token). REGULA 0 (pana dupa 1.0):
+	lung si limita nu mai taie nimic, raman pentru chemarile vechi."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:limita]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in chei:
@@ -114,7 +115,7 @@ def argumente(request, chei, lung=200, limita=24):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:lung].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -125,8 +126,7 @@ def numaiBrowser(request):
 		jeton = P.PARAM_JETON
 	except Exception:
 		jeton = b"token"
-	if jeton in (getattr(request, "args", None) or {}):
-		return _t("Această acțiune se face numai din browserul conectat, nu cu cheia din adresă.")
+	# REGULA 0, WEB8: si cu ?token=; numele ramane pentru modulele care il cheama
 	return None
 
 

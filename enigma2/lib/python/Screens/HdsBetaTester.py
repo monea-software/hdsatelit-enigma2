@@ -673,6 +673,8 @@ class HdsBetaTester(Screen):
 		}), -2)
 		self.randuri = []
 		self._cerere = None
+		self._stergereInchisa = False
+		self.onClose.append(self._inchideStergerea)
 		self._numar = ""
 		self._ultima = None
 		self._inscris = None
@@ -753,8 +755,11 @@ class HdsBetaTester(Screen):
 			self.ceasNumar.stop()
 
 	def _ultimaTrimitere(self):
-		if self._inscris and B.randUltimaTrimitere() != self._ultima:
-			self.reface()
+		if self._inscris:
+			rand = B.randUltimaTrimitere()
+			if rand != self._ultima:
+				self._ultima = rand
+				self["ultima"].setText(rand)
 
 	def _laInceput(self):
 		if B.notaVeche():
@@ -785,7 +790,7 @@ class HdsBetaTester(Screen):
 			return
 		self.ceas.stop()
 		self._cerere = None
-		if 200 <= c.cod < 300:
+		if B.cerereActuala(c) and 200 <= c.cod < 300:
 			B.tineRaspunsuri(c.raspuns)
 		self.reface()
 
@@ -876,6 +881,8 @@ class HdsBetaTester(Screen):
 		felul = self.RANDURI_NOTA_VECHE if veche else (self.RANDURI if inscris else
 			(self.RANDURI_PAUZA if pe_pauza else self.RANDURI_VIZITATOR))
 		for cheie, text in felul:
+			if B.imagineInTest() and cheie in ("pauza", "iesire"):
+				continue
 			if cheie == "forum" and ecranForum() is None:
 				continue
 			if cheie == "probe" and ecranProbe() is None:
@@ -902,6 +909,8 @@ class HdsBetaTester(Screen):
 			from Components import HdsQrRapoarte as R
 			randuri.append((_(R.RAND_MENIU), "qr_fara_net", _(R.RAND_MENIU_SCURT), "", "", "conexiune", ""))
 		self.randuri = randuri
+		randuri.append((_(B.TEST_OBLIGATORIU) if B.imagineInTest() else _("Condițiile beta tester"),
+			"conditii", B.textConditii(), "", "", "mod-sigur", ""))
 		self["lista"].setList(randuri)
 		self._schimbaFelul(inscris)
 		if inscris:
@@ -931,11 +940,9 @@ class HdsBetaTester(Screen):
 		self["numar"].setText(numar)
 		for nume_w in ("numar_fundal", "numar_bara", "numar"):
 			_arata(self[nume_w], bool(numar))
-		# valoarea identificatorului nu se arata (nici cu stelute); randul spune numai ca
+		# PWV1: valoarea salvata se afiseaza integral.
 		# e pus, la fel ca in pagina web (betatester_web.textIdentificator)
-		self["identificator"].setText(_("Identificatorul tău e pus.\nAcordul din %s, nota de confidențialitate "
-			"versiunea %d.\nPentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul.")
-			% (B.oraLocala(b.acord.value), int(b.nota.value)))
+		self["identificator"].setText(_("Identificatorul tău: %s.\nAcordul din %s, nota de confidențialitate versiunea %d.") % (b.id.value, B.oraLocala(b.acord.value), int(b.nota.value)))
 
 	def _invitatie(self):
 		numar = B.randNumar()
@@ -970,6 +977,12 @@ class HdsBetaTester(Screen):
 			e = _ecranQr()
 			if e is not None:
 				self.session.open(e)
+			return
+		if cheie == "conditii":
+			if B.imagineInTest():
+				self.session.open(HdsBetaConditii, True)
+			else:
+				self.session.open(HdsBetaText, _("Condițiile beta tester"), B.textConditii())
 			return
 		if cheie in ("acord", "reia"):
 			self.session.openWithCallback(self._dupaAcord, HdsBetaAcord)
@@ -1042,9 +1055,17 @@ class HdsBetaTester(Screen):
 	def _dupaIesire(self, raspuns):
 		if not raspuns:
 			return
-		_ok, text = B.iesire()
+		B.iesire(gata=self._stergereGata)
+
+	def _inchideStergerea(self):
+		self._stergereInchisa = True
+
+	def _stergereGata(self, ok, text):
+		if self._stergereInchisa:
+			return
 		self.session.open(MessageBox, text, MessageBox.TYPE_INFO, timeout=8)
-		self.close()
+		if ok:
+			self.close()
 
 
 # ------------------------------------------------------------------ acordul si datele (comutatoarele)
@@ -1149,6 +1170,110 @@ CORP_ACORD = """
 		<widget name="text_avantaj2" position="1228,620" size="500,64" font="HdsCond;22" foregroundColor="hdsLabel" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />
 		<widget name="numar" position="1160,700" size="560,72" font="HdsRegular;24" foregroundColor="hdsAmber" backgroundColor="hdsCell" transparent="1" valign="center" zPosition="2" />
 		<widget name="stare" position="1160,784" size="560,120" font="HdsRegular;24" foregroundColor="hdsText" backgroundColor="hdsCell" transparent="1" valign="top" zPosition="2" />"""
+
+
+class HdsBetaConditii(Screen):
+	skin = _rezerva("HdsBetaConditii", "Beta tester", '''
+		<widget name="text" position="60,120" size="1656,450" font="Regular;36" />
+		<widget name="stare" position="60,600" size="1656,280" font="Regular;30" />''', ("key_red", "key_green"))
+
+	def __init__(self, session, consultare=False):
+		Screen.__init__(self, session)
+		self.consultare = consultare
+		self.setTitle(_(B.TEST_TITLU))
+		self["text"] = Label(B.textConditii())
+		self["stare"] = Label(_(B.TEST_OBLIGATORIU) + "\n\n" + _(B.TEST_REFUZ))
+		self["key_green"] = Button(_("Accept"))
+		self["key_red"] = Button(_("Nu accept"))
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "GlobalActions"], {
+			"ok": self.accept, "green": self.accept, "red": self.refuz, "cancel": self.inapoi,
+			"power_down": _nimic, "power_up": self.recuperare, "power_long": _nimic,
+		}, -10)
+		self.onExecBegin.append(self.inceput)
+		self.onExecEnd.append(self.sfarsit)
+		from enigma import eTimer
+		self.ceas = eTimer()
+		self.ceas.callback.append(self.verifica)
+		self.onClose.append(self.ceas.stop)
+		self.ceas.start(500, False)
+		self.serviciu = None
+		if not consultare:
+			self.opresteCanalul()
+
+	def inceput(self):
+		from GlobalActions import globalActionMap
+		self.actiuniGlobale = globalActionMap.enabled
+		globalActionMap.setEnabled(False)
+
+	def sfarsit(self):
+		from GlobalActions import globalActionMap
+		globalActionMap.setEnabled(self.actiuniGlobale)
+
+	def opresteCanalul(self):
+		self.serviciu = self.session.nav.getCurrentlyPlayingServiceReference()
+		self.session.nav.stopService()
+
+	def verifica(self):
+		if not self.consultare and not B.acordTestNecesar() and self.session.current_dialog is self:
+			self.close()
+
+	def close(self, *args):
+		if not self.consultare and B.acordTestNecesar():
+			return
+		if self.serviciu is not None:
+			self.session.nav.playService(self.serviciu)
+			self.serviciu = None
+		Screen.close(self)
+
+	def accept(self):
+		if not B.acordTestNecesar():
+			self.close()
+			return
+		ok, text = B.acceptaTest()
+		if ok:
+			self.close()
+		else:
+			self["stare"].setText(text)
+
+	def obliga(self):
+		if self.consultare:
+			self.consultare = False
+			self.opresteCanalul()
+		self["stare"].setText(_(B.TEST_REFUZ))
+
+	def refuz(self):
+		self.obliga()
+		B.refuzaTest()
+
+	def inapoi(self):
+		if self.consultare:
+			self.close()
+		else:
+			self.refuz()
+
+	def recuperare(self):
+		from Screens.ChoiceBox import ChoiceBox
+		self.session.openWithCallback(self.alegeRecuperare, ChoiceBox, title=_("Recuperare și actualizări"), list=[
+			(_("Rețea"), "retea"), (_("Instalează o imagine de pe internet"), "imagine"),
+			(_("Repornește în altă imagine"), "slot"), (_("Repornește receptorul"), "repornire"),
+			(_("Oprește receptorul"), "oprire")])
+
+	def alegeRecuperare(self, alegere):
+		if not alegere:
+			return
+		ce = alegere[1]
+		if ce == "retea":
+			from Screens.NetworkSetup import NetworkAdapterSelection
+			self.session.open(NetworkAdapterSelection)
+		elif ce == "imagine":
+			from Screens.HdsImagineOnline import HdsImagineOnline
+			self.session.open(HdsImagineOnline)
+		elif ce == "slot":
+			from Screens.HdsPornireMultipla import HdsPornireMultipla
+			self.session.open(HdsPornireMultipla)
+		else:
+			from Screens.Standby import TryQuitMainloop, QUIT_REBOOT, QUIT_SHUTDOWN
+			self.session.open(TryQuitMainloop, QUIT_REBOOT if ce == "repornire" else QUIT_SHUTDOWN)
 
 
 class HdsBetaAcord(Screen, _Comutatoare):
@@ -1494,6 +1619,8 @@ def _capturaSiMesaj():
 		return
 
 	def trimite(captura):
+		if m.get("generatie", getattr(B, "_GENERATIE", 0)) != getattr(B, "_GENERATIE", 0):
+			return
 		ok, text = B.mesaj(m["fel"], m["text"], m["ecran"], m["jurnal"], captura, contor=B.contor())
 		print("[HdsBetaTester] mesajul cu captura: %s (%s)" % (ok, "captura" if captura else "fara captura"))
 	# grab pe un fir separat, mesajul pleaca la intoarcere, pe firul enigma2 (0.7.5 FIR: pornit de aici, pe HiSilicon
@@ -1502,6 +1629,7 @@ def _capturaSiMesaj():
 
 
 def _programeazaCaptura(mesaj_):
+	mesaj_["generatie"] = getattr(B, "_GENERATIE", 0)
 	from enigma import eTimer
 	t = _asteptare.get("timer")
 	if t is None:

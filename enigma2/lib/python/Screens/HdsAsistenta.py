@@ -7,21 +7,21 @@
 # in interfata web (/asistenta).
 #
 # Un clic, fara pasi in plus:
-# - HdsAsistentaAlege: pagina de pornire. Numai randul scurt (A.TEXT_SCURT), randul bifat dinainte "Accept termenii și
-#   condițiile" (Stanga/Dreapta schimba bifa; INFO deschide HdsAsistentaTermeni, fereastra derulanta cu textul intreg,
-#   A.textTermeni, unde Verde "Start" porneste si el) si Verde "Start". OK face ce face Start (randul 170, olo, forum
-#   1013: a bifat si a apasat OK, care deschidea termenii, si a asteptat), deci un singur pas. Start porneste pe loc
-#   asistenta completa (nivelul B: citirile si controlul prin meniuri, afara de ecranele private), fara nicio
-#   intrebare: durata A.DURATA_IMPLICITA_MIN, nevoia "Nimic anume". Fara bifa de acord, Start (si OK) nu porneste si
-#   pagina spune scurt de ce.
+# - HdsAsistentaAlege: pagina de pornire. Randul "Cât timp" (Stanga/Dreapta: cele cinci durate din A.DURATE_MIN, 2 ore
+#   alese la deschidere sau durata aleasa in pagina web), randul scurt (A.TEXT_SCURT) si Verde "Start"; INFO deschide
+#   HdsAsistentaTermeni, fereastra derulanta cu textul intreg, A.textTermeni, unde Verde "Start" porneste si el. OK face
+#   ce face Start (randul 170, olo, forum 1013), deci un singur pas. Start porneste pe loc asistenta completa (nivelul B),
+#   fara nicio intrebare, cu durata de pe rand si nevoia "Nimic anume".
 # - HdsAsistenta: intrarea din meniu. Cat asistenta e oprita deschide pe loc pagina de pornire (la prima executie,
 #   onFirstExecBegin: un ecran modal se deschide numai cand cel de dedesubt ruleaza); iesirea de pe pagina fara Start
 #   inchide si intrarea. Cat e pornita arata numai pana cand e pornita (A.textPana) si, dedesubt, jurnalul (fiecare
 #   cerere a echipei, cum promit termenii), cu Rosu "Oprește" (o intrebare scurta, "Nu" ales, Semn.intreabaOprirea: dupa
-#   Start Rosu sta in locul lui "Înapoi" de pe pagina de pornire; RCF 15.11.2026). Codul sesiunii nu se arata nicaieri: el
-#   ramane intern, intre receptor, server si echipa. Deschis la o cerere din pagina web (un browser fara cod, vezi
-#   Screens/HdsAsistentaSemn.cerereWeb), deschide aceeasi pagina de pornire. Cat ecranele asistentei sunt deschise,
-#   banda de semn de sus (Screens/HdsAsistentaSemn.py) se ascunde: ecranul arata el starea si pana cand e pornita.
+#   Start Rosu sta in locul lui "Înapoi" de pe pagina de pornire; RCF 15.11.2026) si Verde "Schimbă durata" (lista celor
+#   cinci durate, Semn.alegeDurata: OK o schimba pe loc, socotita de acum, fara s-o opreasca). Codul sesiunii nu se
+#   arata nicaieri: el ramane intern, intre receptor, server si echipa. Deschis la o cerere din pagina web (un browser
+#   fara cod, vezi Screens/HdsAsistentaSemn.cerereWeb), deschide aceeasi pagina de pornire, cu durata aleasa acolo. Cat
+#   ecranele asistentei sunt deschise, banda de semn de sus (Screens/HdsAsistentaSemn.py) se ascunde: ecranul arata el
+#   starea si pana cand e pornita.
 #   Cand echipa a trimis concluzii (op "concluzii"), Galben "Ultimele concluzii" le deschide din nou. Cat exista copia
 #   setarilor facuta cand a intrat echipa (A.stareCopie, si dupa oprire), ziua si ora ei sunt pe primul rand al
 #   textului si Albastru "Pune înapoi cum era" o pune la loc: o intrebare (Nu ales), apoi repornirea interfetei
@@ -58,8 +58,12 @@ def N_(text):
 	return text
 
 
-# sub randul bifat: OK porneste (ca Verde), INFO deschide termenii (pe receptor nu exista legatura de apasat ca in web)
+# sub randul "Cât timp": Stanga/Dreapta alege durata; OK porneste (ca Verde), INFO deschide termenii (pe receptor nu
+# exista legatura de apasat ca in web)
+TEXT_ALEGE_DURATA = N_("Stânga/Dreapta: alegi cât timp e pornită.")
 TEXT_OK_TERMENI = N_("OK sau VERDE: pornește asistența. INFO: termenii și condițiile.")
+# Verde pe ecranul asistentei pornite: lista celor cinci durate (Semn.alegeDurata)
+TEXT_SCHIMBA_DURATA = N_("Schimbă durata")
 # cat cererea asteapta echipa: omul poate iesi de pe ecran si se uita mai departe (banda de sus si anuntul de la
 # conectare ii spun ce se intampla)
 TEXT_ASTEPTARE = N_("Te anunțăm când intrăm. Poți folosi receptorul între timp.")
@@ -119,9 +123,9 @@ LEGENDA_ALBASTRU = """
 		<widget source="key_blue" render="Label" conditional="key_blue" objectTypes="key_blue,StaticText" position="1332,936" size="404,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />"""
 
 CORP_ALEGE = """
-		<widget name="config" position="32,104" size="1712,180" itemHeight="60" font="HdsRegular;30" secondfont="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
-		<eLabel position="32,300" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
-		<widget source="text" render="Label" position="32,316" size="1712,300" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />"""
+		<widget name="config" position="32,104" size="1712,60" itemHeight="60" font="HdsRegular;30" secondfont="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" zPosition="2" />
+		<eLabel position="32,180" size="1712,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget source="text" render="Label" position="32,196" size="1712,420" font="HdsRegular;28" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" valign="top" zPosition="2" />"""
 
 
 def _rezerva(nume, titlu, corp, legenda=""):
@@ -170,9 +174,13 @@ class HdsAsistenta(Screen):
 		# numele formei din skinul HDSatelit (skin.xml nu poate avea numele clasei: verificarea cuvintelor skinului)
 		self.skinName = "HdsAjutorDistanta"
 		self.setTitle(_("Asistență de la distanță"))
-		# din_web: deschis la o cerere din pagina web (orice valoare in afara de None); durata si nevoia venite de
-		# acolo nu mai conteaza: pornirea e cea de pe pagina, cu valorile implicite
+		# din_web: deschis la o cerere din pagina web (orice valoare in afara de None): durata aleasa acolo (minute) vine
+		# pe randul "Cât timp" al paginii de pornire (alta valoare: 2 ore); nevoia venita de acolo nu mai conteaza
 		self.din_web = din_web is not None
+		try:
+			self.durata_web = int(din_web) if din_web is not None and int(din_web) in A.DURATE_MIN else None
+		except (TypeError, ValueError):
+			self.durata_web = None
 		self["antet"] = StaticText("")
 		# randul mare al formei ramane gol: codul sesiunii nu se arata omului
 		self["cod"] = StaticText("")
@@ -183,7 +191,7 @@ class HdsAsistenta(Screen):
 		self["key_yellow"] = StaticText("")
 		self["key_blue"] = StaticText("")
 		actiuni = {
-			"cancel": self.close,
+			"cancel": self._iesire,
 			"ok": self._internet,
 			"red": self._rosu,
 			"green": self._verde,
@@ -217,8 +225,11 @@ class HdsAsistenta(Screen):
 			self._deschidePagina(inchide_la_iesire=True)
 
 	def _deschidePagina(self, inchide_la_iesire=False):
+		kw = {"de_la": "web" if self.din_web else "televizor"}
+		if self.din_web and self.durata_web is not None:
+			kw["minute"] = self.durata_web
 		self.session.openWithCallback(lambda pornita=None: self._dupaPagina(pornita, inchide_la_iesire),
-			HdsAsistentaAlege, de_la="web" if self.din_web else "televizor")
+			HdsAsistentaAlege, **kw)
 
 	def _dupaPagina(self, pornita, inchide_la_iesire):
 		self.din_web = False
@@ -279,8 +290,8 @@ class HdsAsistenta(Screen):
 		self._puneText("\n\n".join(t for t in (sus, rand, jurnal) if t))
 		# cu legenda Albastra, ajutorul (aliniat la dreapta, peste locul ei) ramane gol
 		self["ajutor"].setText("" if copie else _("Sus/Jos: tot textul"))
-		# cat asistenta merge, Verde nu are ce face: fara text, legenda ei nu apare
-		self["key_green"].setText("")
+		# cat asistenta merge, Verde schimba durata (cele cinci, socotite de acum), numai cat nu se opreste
+		self["key_green"].setText(_(TEXT_SCHIMBA_DURATA) if s.get("stare") != A.SE_OPRESTE else "")
 		self["key_red"].setText(_("Oprește"))
 
 	def _verde(self):
@@ -288,7 +299,11 @@ class HdsAsistenta(Screen):
 		if s.get("eroare_pornire"):
 			self._internet()
 			return
-		if s.get("disponibil") and not _activa(s):
+		if _activa(s):
+			if s.get("stare") != A.SE_OPRESTE:
+				Semn.alegeDurata(self.session, lambda reusit=False: self.reface())
+			return
+		if s.get("disponibil"):
 			self._deschidePagina()
 
 	def _internet(self):
@@ -309,12 +324,25 @@ class HdsAsistenta(Screen):
 		# (RCF, 15-16.11.2026: trei sesiuni oprite din greseala); "Nu" (si EXIT) lasa asistenta pornita si ecranul deschis
 		Semn.intreabaOprirea(self.session, self._dupaIntrebareaOpririi)
 
+	def _iesire(self):
+		# EXIT lasa asistenta pornita (si inainte de AST8); acum un anunt scurt ii spune omului ca merge in fundal si ca
+		# mesajele echipei vin peste televizor (Semn.anuntaIesirea)
+		if _activa(A.stare()):
+			Semn.anuntaIesirea(self.session)
+		self.close()
+
 	def _dupaIntrebareaOpririi(self, da):
 		if not da:
 			return
+		# AST8: o singura intrebare optionala, "De ce oprești?" (EXIT o sare); oprirea se face oricum, dupa ea, ca motivul
+		# sa plece cu inchiderea (Semn.intreabaMotivul)
+		Semn.intreabaMotivul(self.session, self._opresteCuMotiv)
+
+	def _opresteCuMotiv(self, cod=""):
 		if _activa(A.stare()):
-			# Motivul spune locul (randul "oprita:" din jurnalul interfetei, A.Sesiune._scrieOprirea); omul vede tot "de om"
-			A.opreste("de om (ecran)")
+			# Motivul spune locul (randul "oprita:" din jurnalul interfetei, A.Sesiune._scrieOprirea) si, cand omul l-a
+			# ales, de ce ("de om (ecran): terminat"); omul vede tot "de om"
+			A.opreste(Semn.motivOprire(cod))
 		self.close()
 
 	def _galben(self):
@@ -409,17 +437,22 @@ class HdsAsistentaTermeni(Screen):
 
 
 class HdsAsistentaAlege(Screen, ConfigListScreen):
-	"""Pagina de pornire: randul scurt, randul bifat dinainte si Start. -> close(True) dupa pornire."""
+	"""Pagina de pornire: randul "Cât timp", randul scurt si Start. minute: durata pusa pe rand la deschidere (din pagina
+	web); lipsa sau alta decat cele cinci: 2 ore. -> close(True) dupa pornire."""
 	skin = _rezerva("HdsAsistentaAlege", "Asistență de la distanță", CORP_ALEGE, LEGENDA_ALEGE)
 
-	def __init__(self, session, de_la="televizor", **_vechi):
+	def __init__(self, session, de_la="televizor", minute=None, **_vechi):
+		from Components.config import ConfigSelection
 		Screen.__init__(self, session)
 		self.skinName = "HdsAjutorDistantaAlege"
 		self.setTitle(_("Asistență de la distanță"))
 		self.de_la = de_la if de_la in ("televizor", "web") else "televizor"
 		# bifat dinainte: omul apasa Start si atat
 		self.accept = ConfigYesNo(default=True)
-		ConfigListScreen.__init__(self, [getConfigListEntry(_(A.TEXT_ACCEPT), self.accept)], session=session)
+		# "Cât timp": numai cele cinci durate (A.alegeriDurata), Stanga/Dreapta le schimba (ConfigListScreen)
+		implicit = minute if minute in A.DURATE_MIN else A.DURATA_IMPLICITA_MIN
+		self.durata = ConfigSelection(default=str(implicit), choices=[(str(m), t) for m, t in A.alegeriDurata()])
+		ConfigListScreen.__init__(self, [getConfigListEntry(_("Cât timp"), self.durata)], session=session)
 		self["text"] = StaticText("")
 		self["key_red"] = Button(_("Înapoi"))
 		self["key_green"] = Button(_("Start"))
@@ -444,10 +477,10 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 		self._puneText()
 
 	def _puneText(self):
-		dedesubt = A.TEXT_FARA_BIFA if self._fara_bifa and not self.accept.value else TEXT_OK_TERMENI
+		dedesubt = _(TEXT_ALEGE_DURATA) + "\n" + _(TEXT_OK_TERMENI)
 		# ziua si ora copiei pentru Albastru, la sfarsit
 		copie = ("\n\n" + self._copie["text"]) if self._copie else ""
-		self["text"].setText(_(A.TEXT_SCURT) + "\n\n" + _(dedesubt) + copie)
+		self["text"].setText(_(A.TEXT_SCURT) + "\n\n" + dedesubt + copie)
 
 	def _bifa(self, *_a):
 		if self.accept.value:
@@ -474,13 +507,16 @@ class HdsAsistentaAlege(Screen, ConfigListScreen):
 	def _albastru(self):
 		Semn.puneInapoi(self.session)
 
+	def _durataAleasa(self):
+		try:
+			minute = int(self.durata.value)
+		except (TypeError, ValueError):
+			return A.DURATA_IMPLICITA_MIN
+		return minute if minute in A.DURATE_MIN else A.DURATA_IMPLICITA_MIN
+
 	def _start(self):
-		if not self.accept.value:
-			self._fara_bifa = True
-			self._puneText()
-			return
-		# fara intrebari: asistenta completa, durata implicita, nevoia "Nimic anume"
-		reusit, mesaj = Semn.porneste(self.session, nivel=A.NIVEL_PORNIRE, durata_min=A.DURATA_IMPLICITA_MIN,
+		# fara intrebari: asistenta completa, durata de pe randul "Cât timp", nevoia "Nimic anume"
+		reusit, mesaj = Semn.porneste(self.session, nivel=A.NIVEL_PORNIRE, durata_min=self._durataAleasa(),
 			de_la=self.de_la)
 		if not reusit:
 			# de ce n-a pornit, pe pagina (o fereastra deschisa inainte de close ar lasa pagina sub ea)

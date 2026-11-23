@@ -83,10 +83,9 @@ def inPaza(M=None, radacina=None, cale_stare=None):
 		return _m(M).inPaza(radacina, cale_stare)
 	except Exception as eroare:
 		print("[HdsWebControl] paza de model: %s" % eroare)
-		# ca pe televizor (HdsPazaModel.inchisLaEroare, 09.11.2026): inchis numai la profilurile cu model_id=
+		# Same fallback as TV: an error alone is not evidence of another receiver.
 		try:
-			with open(os.path.join(radacina or os.environ.get("HDS_PAZA_RADACINA") or "/", "etc/hdsatelit-model")) as f:
-				return any(r.strip().startswith("model_id=") for r in f.read().splitlines())
+			return _m(M).inchisLaEroare(radacina, cale_stare)
 		except Exception:
 			return False
 
@@ -137,6 +136,10 @@ def stare(M=None, radacina=None, cale_stare=None, D=None, v=None):
 	if v.get("versiune_baza"):
 		informativ.append({"eticheta": _t("Imaginea de bază"), "valoare": "HD Satelit %s" % v["versiune_baza"]})
 	coduri = D.coduri(v, M)
+	# pornirea cu nucleul altui loc (Components/HdsDiagnostic.pornireAmestecata: numai citire, fara montare); drumul din meniu
+	# spre locul bun numai cand paza a trecut (cu paza oprita televizorul arata numai diagnosticul, iar panoul web nu se deschide)
+	pa = D.pornireAmestecata(radacina) if v["stare"] != M.STARE_NU_SE_APLICA else None
+	meniu = v["stare"] == M.STARE_POTRIVIT
 	return {
 		"result": True,
 		"stare": v["stare"],
@@ -162,6 +165,8 @@ def stare(M=None, radacina=None, cale_stare=None, D=None, v=None):
 		"forum": D.FORUM,
 		"email": D.EMAIL,
 		"subiect": D.subiect(v, M),
+		"pornire": D.textePornireAmestecata(pa, interfata=meniu),
+		"pornire_loc": (pa or {}).get("sistem", "") if meniu else "",
 	}
 
 
@@ -193,7 +198,7 @@ def diagnostic(M=None, radacina=None, cale_stare=None, D=None, adresa="", cu_jur
 		jurnale_ = D.jurnale() if cu_jurnale else []
 	date["adresa"] = adresa
 	date["mail"] = D.adresaMail(v, M)
-	text = D.textComplet(v, M, adresa, jurnale_)
+	text = D.textComplet(v, M, adresa, jurnale_, radacina=radacina, interfata=v.get("stare") == M.STARE_POTRIVIT)
 	date["text"] = text
 	return date, text
 
@@ -320,6 +325,11 @@ def pagina_text(stil, date, limba="ro"):
 	„Copiază tot”). Pe alt receptor („nepotrivit”) „/” da tot aceasta pagina, deci legatura spre panou nu se pune."""
 	clasa = {"nepotrivit": "rau", "potrivit": "bun"}.get(date.get("stare"), "neutru")
 	fraze = "".join(u"<p>%s</p>" % _e(f) for f in date.get("fraze") or [])
+	# pornirea cu nucleul altui loc: ce s-a intamplat si locul bun, primele; butonul duce la alegerea locului din /alimentare
+	if date.get("pornire"):
+		fraze = u"".join(u"<p><b>%s</b></p>" % _e(f) for f in date["pornire"]) + fraze
+		if date.get("pornire_loc"):
+			fraze += u'<p><a class="buton" href="/alimentare?f=flash">%s</a></p>' % _e(_t("Repornește în altă imagine"))
 	if date.get("pagina_model") and date.get("stare") == "nepotrivit":
 		fraze += u'<p><a class="buton" href="%s">%s</a></p>' % (
 			_e(date["pagina_model"]), _e(_t("Pagina receptorului tău")))

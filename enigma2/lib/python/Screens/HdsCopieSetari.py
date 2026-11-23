@@ -94,7 +94,7 @@ class HdsCopieSetariScreen(Screen):
 			"ok": self.ok,
 			"cancel": self.close,
 			"red": self.close,
-			"green": self.faCopia,
+			"green": self.verde,
 			"yellow": self.puneLaLoc,
 			"blue": self.sterge,
 			"up": self.sus,
@@ -125,6 +125,7 @@ class HdsCopieSetariScreen(Screen):
 		self.onClose.append(self._laInchidere)
 		self.onFirstExecBegin.append(self.cautaDinNou)
 		self.onLayoutFinish.append(self._potrivesteTextele)
+		self._ceas.start(1000, False)
 
 	# ---- starea comuna (ecran si web) ----
 	def cautaDinNou(self):
@@ -153,7 +154,14 @@ class HdsCopieSetariScreen(Screen):
 		if st["cauta"] or st["lucreaza"]:
 			self._arata()
 			return
-		self._ceas.stop()
+		self._ceas.start(1000, False)
+		st_module = self._stareModule()
+		module_gata = self._module["module_lucreaza"] and not st_module["module_lucreaza"]
+		# Citirea periodica nu sterge mesajele actiunilor existente.
+		if not self._cauta and not self._asteapta_copia and not self._ocupat \
+				and self.medii == list(st["medii"] or []) and self.copii == list(st["copii"] or []) \
+				and self._module == st_module:
+			return
 		self._cauta = False
 		self.medii = list(st["medii"] or [])
 		self.copii = list(st["copii"] or [])
@@ -163,7 +171,7 @@ class HdsCopieSetariScreen(Screen):
 		if st.get("ultimul") is not None and self._asteapta_copia:
 			self._rezultat = list(st["ultimul"].get("mesaje") or [])
 			self._asteapta_copia = False
-		self._arata()
+		self._arata(st_module["module_mesaj"] if module_gata else None)
 
 	_asteapta_copia = False
 
@@ -207,6 +215,9 @@ class HdsCopieSetariScreen(Screen):
 		if self._textPunere():
 			c = (C.citeste_rezultat() or {}).get("copie") or {}
 			randuri.append((_("Ultima punere la loc"), "punere", c.get("data_text") or "", self._culoare))
+		st_module = self._module
+		if st_module["module"] or st_module["module_lucreaza"] or st_module["module_mesaj"]:
+			randuri.append((_("Pune modulul") if st_module["module"] else _("Modulul din copie"), "module", ", ".join(st_module["module"]), self._culoare_nota))
 		if self._cerere():
 			randuri.append((_("Renunță la punerea la loc"), "anuleaza", "", self._culoare_nota))
 		randuri.append((_("Caută din nou"), "cauta", "", self._culoare))
@@ -218,12 +229,23 @@ class HdsCopieSetariScreen(Screen):
 		except Exception:
 			return ""
 
+	def _stareModule(self):
+		from Plugins.Extensions.HdsWebControl.copie_setari_web import stare_module
+		return stare_module(C)
+
+	def _mesajModule(self):
+		st = self._module
+		return st["module_mesaj"] if self._cheie() == "module" or st["module_lucreaza"] or st["module_eroare"] else ""
+
 	def _textPreview(self):
 		if self._rezultat:
 			return "\n".join(self._rezultat)
 		cheie = self._cheie()
 		if cheie == "punere":
 			return self._textPunere()
+		if cheie == "module":
+			st = self._module
+			return st["module_mesaj"] or st["intrebare_module"]
 		c = self.copie()
 		if c is not None:
 			return C.descriere_copie(c) + "\n" + C.text_avertisment()
@@ -257,23 +279,31 @@ class HdsCopieSetariScreen(Screen):
 			return _("OK sau GALBEN: pune la loc. ALBASTRU: șterge.")
 		if cheie == "anuleaza":
 			return _("OK: copia nu se mai pune la loc.")
+		if cheie == "module":
+			return _("OK sau VERDE: pune modulul din copie din feed, cu setările păstrate.")
 		if cheie == "punere":
 			# randul numai arata (textul e sub lista); nu face nimic la OK
 			return ""
 		return _("Caută din nou stickurile și copiile.")
 
 	def _arata(self, stare=None):
+		self._module = self._stareModule()
+		self._ocupat = C.ocupat()
 		# cursorul ramane pe randul lui dupa cheie: randurile copiilor, "nimic" si "anuleaza" apar si dispar deasupra
 		# randului "cauta", deci numarul randului nu ajunge
 		pune_randurile(self["lista"], self._randuri())
 		self["preview"].setText(self._textPreview())
-		self["stare"].setText(stare or self._ajutor())
+		self["stare"].setText(stare or self._mesajModule() or self._ajutor())
 		self._taste()
 		self._potrivesteTextele()
 
 	def _taste(self):
 		c = self.copie()
-		self["key_green"].setText(_("Fă copia") if self.mediu() is not None and not C.ocupat() else "")
+		if self._cheie() == "module":
+			st = self._module
+			self["key_green"].setText(_("Pune modulul") if st["module"] and not st["module_lucreaza"] else "")
+		else:
+			self["key_green"].setText(_("Fă copia") if self.mediu() is not None and not C.ocupat() else "")
 		self["key_yellow"].setText(_("Pune la loc") if c is not None else "")
 		self["key_blue"].setText(_("Șterge") if c is not None else "")
 
@@ -287,9 +317,10 @@ class HdsCopieSetariScreen(Screen):
 
 	# ---- tastele ----
 	def _mutat(self):
+		self._module = self._stareModule()
 		self._rezultat = []
 		self["preview"].setText(self._textPreview())
-		self["stare"].setText(self._ajutor())
+		self["stare"].setText(self._mesajModule() or self._ajutor())
 		self._taste()
 		self._potrivesteTextele()
 
@@ -347,6 +378,8 @@ class HdsCopieSetariScreen(Screen):
 		elif cheie == "anuleaza":
 			C.anuleaza_cererea()
 			self._arata(_("Copia nu se mai pune la loc."))
+		elif cheie == "module":
+			self.puneModulul()
 		elif cheie == "cauta":
 			self.cautaDinNou()
 
@@ -354,6 +387,23 @@ class HdsCopieSetariScreen(Screen):
 		if rand and rand[1] is not None:
 			self.id_mediu = rand[1]
 		self._arata()
+
+	def verde(self):
+		if self._cheie() == "module":
+			self.puneModulul()
+		else:
+			self.faCopia()
+
+	def puneModulul(self):
+		from Plugins.Extensions.HdsWebControl.copie_setari_web import module
+		self._rezultat = []
+		st = self._stareModule()
+		if not st["module"] and not st["module_lucreaza"]:
+			self._arata()
+			return
+		rez = module({}, C)
+		self._arata(rez["message"])
+		self._ceas.start(300, False)
 
 	def faCopia(self):
 		m = self.mediu()

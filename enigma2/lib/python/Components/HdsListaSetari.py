@@ -28,6 +28,7 @@
 # Fisierul se poate incarca si pe PC (probele): enigma se importa numai in functii.
 
 import re
+import sys
 import time
 
 from Components.config import config, ConfigSelection, ConfigYesNo, ConfigText
@@ -74,6 +75,91 @@ if not hasattr(c, "hds_lista_transponder"):
 # (forumul 768 #2186). Citita de Screens/ChannelSelection.hdsArataDosareleInBuchete si de pagina web /canale (canale_web).
 if not hasattr(c, "hds_lista_dosare_buchete"):
 	c.hds_lista_dosare_buchete = ConfigYesNo(default=True)
+# 0.7.8 (NUM1, tamiciav7, LinuxSat 232449 #501006, Octagon SF8008 0.7.7): "Cifrele duc la numarul canalului". Nu (din
+# fabrica, ca pana acum): in lista de canale cifrele sar la prima litera a tastei, ca tastatura unui telefon. Da: cifrele
+# duc cursorul la canalul cu acel numar (2, apoi 3 = 23), in buchetul lui (Screens/ChannelSelection.hdsCifraCanal).
+# Lista unei retele de cablu duce mereu la numarul operatorului. In web: /setari?id=hds_lista_canale.
+if not hasattr(c, "hds_lista_cifre_numar"):
+	c.hds_lista_cifre_numar = ConfigYesNo(default=False)
+
+
+def _varianteSchimbate(el):
+	# Numai lantul DVB: rezerva DVB-I isi pastreaza proba si revenirea.
+	m = sys.modules.get("Components.HdsDvbIRezerva")
+	if m is not None:
+		if not el.value:
+			m.opresteVariantele()
+		m.actualizeazaCeas()
+
+
+# Variantele DVB: Nu fara valoare salvata.
+# True salvat explicit ramane Da. Variantele manuale raman disponibile.
+# Acelasi rand setup.xml este folosit si in web.
+if not hasattr(c, "hds_variante_singure"):
+	c.hds_variante_singure = ConfigYesNo(default=False)
+	c.hds_variante_singure.addNotifier(_varianteSchimbate, initial_call=False)
+
+
+class ConfigRezervaDvbI(ConfigYesNo):
+	"""Aceeasi alegere ca in DVB-I, fara o a doua copie in settings."""
+
+	def __init__(self):
+		self._alegere = None
+		self._initializare = True
+		ConfigYesNo.__init__(self, default=True)
+		self._initializare = False
+
+	def getValue(self):
+		if self._alegere is not None:
+			return self._alegere
+		try:
+			from Components import HdsSalvareLista as S
+			return S.valoareRezerva()
+		except ImportError:
+			return True
+
+	def setValue(self, value):
+		if self._initializare:
+			return
+		vechi = self.getValue()
+		self._alegere = bool(value)
+		if vechi != self._alegere:
+			self.changed()
+			self._anunta()
+
+	value = property(getValue, setValue)
+
+	def _anunta(self):
+		m = sys.modules.get("Components.HdsDvbIRezerva")
+		if m is not None:
+			m.rezervaSchimbata(self.value)
+
+	def load(self):
+		self._alegere = None
+		self.saved_value = None
+		self._anunta()
+
+	def cancel(self):
+		self.load()
+		self.changed()
+
+	def isChanged(self):
+		if self._alegere is None:
+			return False
+		from Components import HdsSalvareLista as S
+		return self._alegere != S.valoareRezerva()
+
+	def save(self):
+		# La fel ca ConfigElement: numai pregatire in memorie.
+		# HdsSalvareLista confirma dupa scrierea si recitirea din fundal.
+		self.saved_value = None
+		if not self.isChanged():
+			self._alegere = None
+
+
+
+if not hasattr(c, "hds_dvbi_rezerva"):
+	c.hds_dvbi_rezerva = ConfigRezervaDvbI()
 # 0.7.7 (SRF, tfrc LinuxSat 164118 #970941): "Calitatea semnalului in bara canalului": dB (din fabrica, ca de la LCF
 # incoace) sau procente (ca inainte). O citesc bara intai (Components/Converter/HdsSignal QualityDb / SnrDb) si pagina de
 # start din web (HdsCommon.snr_db_serviciu), prin HdsCommon.semnal_in_db, la fiecare tic. In setup.xml in Setări listă de

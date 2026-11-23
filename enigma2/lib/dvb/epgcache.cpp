@@ -1,5 +1,6 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
 #include <lib/dvb/epgcache.h>
+#include <lib/dvb/hdsepgpoarta.h>
 #include <lib/dvb/dvb.h>
 
 #undef EPG_DEBUG  
@@ -450,6 +451,9 @@ static inline void hdsEpgSetId(std::vector<unsigned char> &data, int eventId)
 
 int eEPGCache::importEvents(ePyObject services, ePyObject events)
 {
+	/* cache-ul se distruge sau s-a distrus (iesirea interfetei): `this` poate fi deja eliberat (hdsepgpoarta.h) */
+	if (hdsepg::eInchisa())
+		return 0;
 	if (PyUnicode_Check(services) && PyList_Check(events))
 	{
 		const char *text = PyUnicode_AsUTF8(services);
@@ -473,6 +477,57 @@ int eEPGCache::importEvent(ePyObject service, ePyObject events)
 /* Calea stricta a XMLTV-ului nostru: ce se primeste si ce se refuza a ramas acelasi. Randurile se citesc din Python inainte
    de lacate, iar lacatele se iau fara GIL: lookupEvent cu convertFunc (EpgList) cheama Python sub cache_lock, deci un fir
    care ar astepta cache_lock tinand GIL-ul s-ar bloca pentru totdeauna cu firul UI. */
+/* Validarea caii fara asteptare urmareste calea stricta existenta, pastrata neatinsa. */
+static bool hdsEpgReadIptv(const std::string &reference, ePyObject events,
+	uniqueEPGKey &key, std::vector<hdsEpgRand> &rows, time_t &now)
+{
+	// Narrow public entry point: no changes to DVB service priorities or EIT reception.
+	eServiceReference ref(reference);
+	if (ref.type != 4097 || !PyList_Check(events))
+		return false;
+	key = uniqueEPGKey(ref); // SID/ONID/TSID belong to the reference also when type is 4097
+	if (key.sid <= 0 || key.sid > 65535 || key.onid <= 0 || key.onid > 65535 || key.tsid <= 0 || key.tsid > 65535)
+		return false;
+	const Py_ssize_t count = PyList_Size(events);
+	if (count < 0 || count > 128)
+		return false;
+	now = ::time(0);
+	for (Py_ssize_t i = 0; i < count; ++i)
+	{
+		ePyObject row = PyList_GET_ITEM(events, i); // borrowed
+		if (!PyTuple_Check(row) || PyTuple_Size(row) != 6)
+			continue;
+		ePyObject startObject = PyTuple_GET_ITEM(row, 0), durationObject = PyTuple_GET_ITEM(row, 1), idObject = PyTuple_GET_ITEM(row, 5);
+		if (!PyLong_Check(startObject) || !PyLong_Check(durationObject) || !PyLong_Check(idObject))
+			continue;
+		long long startValue = PyLong_AsLongLong(startObject);
+		long duration = PyLong_AsLong(durationObject), eventId = PyLong_AsLong(idObject);
+		if (PyErr_Occurred())
+		{
+			PyErr_Clear();
+			continue;
+		}
+		if (startValue < 0 || startValue > static_cast<long long>(now) + 7 * 86400 ||
+			duration <= 0 || duration > 86400 || startValue + duration <= now || eventId < 0 || eventId > 65535)
+			continue;
+		time_t start = static_cast<time_t>(startValue);
+		if (static_cast<long long>(start) != startValue)
+			continue;
+		std::string title, subtitle, description;
+		if (!hdsEpgText(PyTuple_GET_ITEM(row, 2), title, 180) || title.empty() ||
+			!hdsEpgText(PyTuple_GET_ITEM(row, 3), subtitle, 60) || !hdsEpgText(PyTuple_GET_ITEM(row, 4), description, 1800))
+			continue;
+		rows.push_back(hdsEpgRand());
+		hdsEpgRand &nou = rows.back();
+		nou.start = start;
+		nou.duration = duration;
+		nou.eventId = eventId;
+		if (!hdsEpgBuild(nou, title, subtitle, description))
+			rows.pop_back();
+	}
+	return true;
+}
+
 int eEPGCache::importIptvEvents(const std::string &reference, ePyObject events)
 {
 	// Narrow public entry point: no changes to DVB service priorities or EIT reception.
@@ -522,18 +577,78 @@ int eEPGCache::importIptvEvents(const std::string &reference, ePyObject events)
 	}
 	int imported = 0;
 	Py_BEGIN_ALLOW_THREADS
-	// Calea IPTV refuza imediat evenimentele primite daca golirea precedenta nu este confirmata.
-	if (m_flushPending.load() == 0)
+	{
+	/* numarat de poarta pana la acolada de mai jos, adica inainte de GIL: ~eEPGCache il asteapta tinand GIL-ul */
+	hdsepg::Import poarta;
+	// The static writer lock also guards every member read against destruction.
+	if (poarta.deschisa())
 	{
 		singleLock writers(import_lock);
-		if (m_flushPending.load() == 0)
+		if (!hdsepg::eInchisa())
 		{
-			singleLock lock(cache_lock);
-			imported = importIptvRows(key, rows, now);
+			if (m_flushPending.load() == 0)
+			{
+				singleLock lock(cache_lock);
+				imported = importIptvRows(key, rows, now);
+			}
+			else
+				eDebug("[EPGC] import IPTV refuzat: golirea ghidului nu este confirmata");
 		}
 	}
-	else
-		eDebug("[EPGC] import IPTV refuzat: golirea ghidului nu este confirmata");
+	}
+	Py_END_ALLOW_THREADS
+	return imported;
+}
+
+/* Un lacat incercat o singura data: destructorul il lasa inainte de revenirea la GIL. */
+class hdsEpgTryLock
+{
+	pthread_mutex_t &m_lock;
+	bool m_locked;
+public:
+	explicit hdsEpgTryLock(pthread_mutex_t &lock): m_lock(lock), m_locked(pthread_mutex_trylock(&lock) == 0) {}
+	~hdsEpgTryLock() { if (m_locked) pthread_mutex_unlock(&m_lock); }
+	bool locked() const { return m_locked; }
+private:
+	hdsEpgTryLock(const hdsEpgTryLock &);
+	hdsEpgTryLock &operator=(const hdsEpgTryLock &);
+};
+// HDS: sfarsit lacat fara asteptare
+
+int eEPGCache::tryImportEvents(ePyObject services, ePyObject events)
+{
+	if (hdsepg::eInchisa() || !PyUnicode_Check(services))
+		return 0;
+	const char *text = PyUnicode_AsUTF8(services);
+	if (!text)
+	{
+		PyErr_Clear();
+		return 0;
+	}
+	uniqueEPGKey key;
+	std::vector<hdsEpgRand> rows;
+	time_t now;
+	if (!hdsEpgReadIptv(std::string(text), events, key, rows, now))
+		return 0;
+	int imported = 0;
+	Py_BEGIN_ALLOW_THREADS
+	{
+		hdsepg::Import poarta;
+		if (poarta.deschisa())
+		{
+			hdsEpgTryLock writers(import_lock);
+			if (!writers.locked())
+				imported = hdsepg::eInchisa() ? 0 : -1;
+			else if (!hdsepg::eInchisa())
+			{
+				hdsEpgTryLock lock(cache_lock);
+				if (!lock.locked() || m_flushPending.load() != 0)
+					imported = -1;
+				else
+					imported = importIptvRows(key, rows, now);
+			}
+		}
+	}
 	Py_END_ALLOW_THREADS
 	return imported;
 }
@@ -790,36 +905,52 @@ int eEPGCache::importExternEvents(ePyObject services, ePyObject events)
 		return 0;
 	int accepted = 0;
 	Py_BEGIN_ALLOW_THREADS
-	// o golire ceruta inainte de import se termina intai, altfel ar lua si evenimentele noi
-	for (int i = 0; m_flushPending.load() > 0 && m_running && i < 3000; ++i)
+	{
+	/* ca la importIptvEvents: numarat pana la acolada de dinainte de GIL */
+	hdsepg::Import poarta;
+	// Release the writer lock between polls so the EPG thread can finish a flush/save.
+	for (int i = 0; poarta.deschisa() && !hdsepg::eInchisa() && i < 3000; ++i)
+	{
+		bool asteapta;
+		{
+			singleLock writers(import_lock);
+			if (hdsepg::eInchisa())
+				break;
+			asteapta = m_flushPending.load() > 0 && m_running;
+		}
+		if (!asteapta)
+			break;
 		usleep(10000);
-	// La termen sau la oprirea firului, un flush ramas in coada nu permite inserarea.
-	if (m_flushPending.load() == 0)
+	}
+	if (poarta.deschisa())
 	{
 		singleLock writers(import_lock);
-		// O cerere sosita cat asteptam lacatul trebuie si ea terminata inaintea acestor evenimente.
-		if (m_flushPending.load() == 0)
+		if (!hdsepg::eInchisa())
 		{
-			if (hdsEpgMemorieBuna(keys.size() * rows.size()))
+			if (m_flushPending.load() == 0)
 			{
-				singleLock lock(cache_lock);
-				for (size_t k = 0; k < keys.size(); ++k)
+				if (hdsEpgMemorieBuna(keys.size() * rows.size()))
 				{
-					for (size_t i = 0; i < rows.size(); ++i)
-						if (importExternRow(keys[k], rows[i]))
-							++accepted;
-					eventCache::iterator it = eventDB.find(keys[k]);
-					if (it != eventDB.end() && it->second.first.empty() && it->second.second.empty())
-						eventDB.erase(it);
+					singleLock lock(cache_lock);
+					for (size_t k = 0; k < keys.size(); ++k)
+					{
+						for (size_t i = 0; i < rows.size(); ++i)
+							if (importExternRow(keys[k], rows[i]))
+								++accepted;
+						eventCache::iterator it = eventDB.find(keys[k]);
+						if (it != eventDB.end() && it->second.first.empty() && it->second.second.empty())
+							eventDB.erase(it);
+					}
 				}
+				else
+					m_externPlafon += keys.size() * rows.size();
+				m_externAcceptate += accepted;
 			}
 			else
-				m_externPlafon += keys.size() * rows.size();
-			m_externAcceptate += accepted;
+				eDebug("[EPGC] import extern refuzat: golirea ghidului nu este confirmata");
 		}
 	}
-	else
-		eDebug("[EPGC] import extern refuzat: golirea ghidului nu este confirmata");
+	}
 	Py_END_ALLOW_THREADS
 	return accepted;
 }
@@ -1072,7 +1203,7 @@ bool eEPGCache::FixOverlapping(std::pair<eventMap,timeMap> &servicemap, time_t T
 #ifdef EPG_DEBUG
 			Event evt((uint8_t*)tmp->second->get());
 			eServiceEvent event;
-			event.parseFrom(&evt, service.sid<<16|service.onid);
+			event.parseFrom(&evt, service.tsid<<16|service.onid);
 			eDebug("(1)erase no more used event %04x %d\n%s %s\n%s",
 				service.sid, event_id,
 				event.getBeginTimeString().c_str(),
@@ -1107,7 +1238,7 @@ bool eEPGCache::FixOverlapping(std::pair<eventMap,timeMap> &servicemap, time_t T
 #ifdef EPG_DEBUG  
 			Event evt((uint8_t*)tmp->second->get());
 			eServiceEvent event;
-			event.parseFrom(&evt, service.sid<<16|service.onid);
+			event.parseFrom(&evt, service.tsid<<16|service.onid);
 			eDebug("(2)erase no more used event %04x %d\n%s %s\n%s",
 				service.sid, event_id,
 				event.getBeginTimeString().c_str(),
@@ -1484,8 +1615,19 @@ void eEPGCache::cleanLoop()
 
 eEPGCache::~eEPGCache()
 {
+	/* HDSatelit: firele Python ale importului (IPTV, XMLTV) tin numai pointerul din getInstance(). Intai poarta lor se
+	   inchide si se asteapta cele intrate (hdsepgpoarta.h), fara import_lock: ultima salvare, pe firul EPG, il ia si ea.
+	   Apoi getInstance() da None, nu un obiect distrus. */
+	int ramasi = hdsepg::inchide();
+	if (ramasi)
+		eDebug("[EPGC] la distrugere: %d importuri inca in lucru dupa 5 s", ramasi);
+	if (instance == this)
+		instance = 0;
 	messages.send(Message::quit);
 	kill(); // waiting for thread shutdown
+	// After the timed gate wait, drain writers before freeing any members.
+	// Late importers take this static lock and see the closed gate first.
+	singleLock writers(import_lock);
 	singleLock s(cache_lock);
 	for (eventCache::iterator evIt = eventDB.begin(); evIt != eventDB.end(); evIt++)
 		for (eventMap::iterator It = evIt->second.first.begin(); It != evIt->second.first.end(); It++)
@@ -2330,7 +2472,8 @@ RESULT eEPGCache::lookupEventTime(const eServiceReference &service, time_t t, co
 	{
 		if (t==-1)
 			t = ::time(0);
-		if (service.type == 4097)
+		// Playerele IPTV citesc aceleasi evenimente importate, cu aceeasi paza la coliziuni DVB.
+		if (service.type == 4097 || service.type == 5001 || service.type == 5002)
 		{
 			// An imported schedule can contain a single current event, or begin after the query.
 			// Never decrement begin(); an ongoing last event remains usable when lower_bound is end().
@@ -2430,7 +2573,7 @@ RESULT eEPGCache::lookupEventId(const eServiceReference &service, int event_id, 
 		eventMap::iterator i( It->second.first.find( event_id ));
 		if ( i != It->second.first.end() )
 		{
-			if (service.type == 4097 && !i->second->imported())
+			if ((service.type == 4097 || service.type == 5001 || service.type == 5002) && !i->second->imported())
 				return -1;
 			result = i->second;
 			return 0;
@@ -2489,7 +2632,7 @@ RESULT eEPGCache::startTimeQuery(const eServiceReference &service, time_t begin,
 	if ( It != eventDB.end() && It->second.second.size() )
 	{
 		m_timemap_cursor = It->second.second.lower_bound(begin);
-		if (ref.type == 4097)
+		if (ref.type == 4097 || ref.type == 5001 || ref.type == 5002)
 		{
 			for (eventMap::const_iterator item = It->second.first.begin(); item != It->second.first.end(); ++item)
 				if (!item->second->imported())
@@ -2850,7 +2993,7 @@ PyObject *eEPGCache::lookupEvent(ePyObject list, ePyObject convertFunc)
 				continue;
 			}
 			eServiceReference ref(handleGroup(eServiceReference(servicestr)));
-			if (ref.type != eServiceReference::idDVB && ref.type != 4097)
+			if (ref.type != eServiceReference::idDVB && ref.type != 4097 && ref.type != 5001 && ref.type != 5002)
 			{
 				/* An unsupported stream type has no guide in this cache. With 'X' (one result per query) it still
 				   gets its empty row, like every DVB service without an event: callers that ask for a whole bouquet

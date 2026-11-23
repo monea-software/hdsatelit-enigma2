@@ -279,7 +279,7 @@ details.cheie summary{cursor:pointer;font-weight:600;min-height:28px;}
  <summary>Cheia ta TMDB (opțional)</summary>
  <p class="mic" id="cheie-stare"></p>
  <form id="cheie-form" autocomplete="off">
-  <input id="cheie" type="password" placeholder="Cheia API sau tokenul de citire de pe themoviedb.org" aria-label="Cheia TMDB">
+  <input id="cheie" type="text" placeholder="Cheia API sau tokenul de citire de pe themoviedb.org" aria-label="Cheia TMDB">
   <button type="submit">Salvează</button>
   <button type="button" id="cheie-sterge" hidden>Șterge cheia</button>
  </form>

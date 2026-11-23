@@ -19,8 +19,17 @@
 #        ntp_server serverul NTP.
 #   2. Sincronizarea NTP la pornire si periodic, FARA sa opreasca pornirea: procesul (ntpdate daca exista, altfel ntpd din
 #      BusyBox cu -n -q) ruleaza prin eConsoleAppContainer, adica in afara firului principal, si e oprit dupa
-#      TIMP_MAXIM_NTP_S secunde (ntpd -q nu iese niciodata singur fara server). Fara retea: incercari din ce in ce mai
-#      rare (INCERCARI_S), apoi la 15 minute; dupa o reusita, la DUPA_SUCCES_S.
+#      TIMP_MAXIM_NTP_S secunde (plasa: ntpd -q din BusyBox se opreste singur cu SIGALRM, adica codul 142, cand serverul
+#      nu raspunde in 10 s; networking/ntpd.c, alarm(10)). Fara retea: incercari din ce in ce mai rare (INCERCARI_S), apoi
+#      la 15 minute; dupa o reusita, la DUPA_SUCCES_S. Dupa o incercare nereusita urmatoarea merge la alt server
+#      (serverIncercare: serverul ales, apoi SERVERE_REZERVA, pe rand); dupa o reusita iar serverul ales (0.7.8, GBT:
+#      asistenta 751207, Germania, ro.pool.ntp.org fara raspuns de trei ori la rand dupa pornire).
+#   7. Dupa o oprire brusca (0.7.8, GBT): hds-jurnal lasa in SEMN_OPRIRE_BRUSCA (RAM) ora ultimului semn de viata de
+#      dinainte (ultimul rand al interfetei si al jurnalului sistemului). La prima ora sigura a pornirii, randOprireBrusca
+#      scrie in hds-caderi.log cat a stat receptorul fara nucleu pornit: pana la pornirea nucleului (ora sigura minus
+#      uptime). Dupa reset ceasul pornirii vine din fake-hwclock, deci abia acum se poate socoti; o repornire a placii
+#      (ceasul de garda, nucleul) revine in 1-2 minute, o pauza mai lunga inseamna curentul oprit, butonul de pornire sau o
+#      pornire oprita inainte de nucleu (asistenta 751207: 5 reporniri dure intr-o ora, fara nicio urma).
 #   3. Dupa o reusita: C++ afla ca ora e buna (eDVBLocalTimeHandler.hdsConfirmTime: primul transponder nu o mai muta,
 #      EPG-ul afla), ora se salveaza in fake-hwclock, iar in „auto” ora din transponder se opreste cat NTP e proaspat.
 #   4. fake-hwclock salvat periodic (SALVARE_S), dupa fiecare sincronizare si la iesirea enigma2 (mytest.py), numai cand
@@ -53,7 +62,9 @@
 #
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC il folosesc direct.
 
+import calendar
 import os
+import re
 import time
 
 CALE_FAKE_HWCLOCK = "/etc/fake-hwclock.data"
@@ -72,6 +83,12 @@ INCERCARI_S = (20, 40, 80, 160, 300, 600, 900)   # dupa esecuri la rand; apoi la
 DUPA_SUCCES_S = 3600             # sincronizarea periodica
 NTP_RECENT_S = 3 * 3600          # in „auto”, ora din transponder sta oprita cat ultima reusita NTP e mai noua de atat
 TIMP_MAXIM_NTP_S = 30            # procesul NTP se opreste dupa atat
+COD_NTP_FARA_RASPUNS = 142       # ntpd -q din BusyBox: SIGALRM (128 + 14) dupa 10 s fara niciun raspuns
+NTP_FARA_RASPUNS_S = 10
+# dupa o incercare nereusita, pe rand (serverul ales ramane primul si revine dupa o reusita)
+SERVERE_REZERVA = ("pool.ntp.org", "time.cloudflare.com", "time.google.com")
+SEMN_OPRIRE_BRUSCA = "/var/run/hds-oprire-brusca"   # scris de hds-jurnal (stratul) dupa o oprire necurata
+CADERI = "/home/root/logs/hds-caderi.log"
 SALVARE_S = 30 * 60              # fake-hwclock salvat periodic
 
 MODURI = ("auto", "ntp", "dvb")
@@ -382,6 +399,112 @@ def salveazaOraSigura(acum=None, cale_ceas=None, cale_sigura=None):
 	return False, motiv1 if not scris1 else motiv2
 
 
+# ---------------------------------------------------------------- oprirea brusca de dinainte (punctul 7 din cap)
+
+PRAG_REPORNIRE_PLACA_S = 120     # ceasul de garda (60 s fara hranire) plus pornirea pana la nucleu
+_LUNI = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def citesteUptime(cale="/proc/uptime"):
+	"""Secundele de la pornirea nucleului sau None."""
+	try:
+		with open(cale) as f:
+			return float(f.read().split()[0])
+	except (IOError, OSError, ValueError, IndexError):
+		return None
+
+
+def oraIso(text):
+	"""2026-11-17T14:00:49Z (randurile interfetei, UTC) -> secunde, sau None."""
+	try:
+		return calendar.timegm(time.strptime((text or "").strip(), "%Y-%m-%dT%H:%M:%SZ"))
+	except (ValueError, OverflowError):
+		return None
+
+
+def oraSyslog(text, acum):
+	"""Nov 17 15:00:53 (jurnalul sistemului: ora locala, fara an) -> secunde, sau None. Anul celui de acum; anul trecut
+	cand ar iesi mai tarziu de o zi de acum (oprirea din decembrie, ora sigura in ianuarie)."""
+	m = re.match(r"^([A-Z][a-z]{2}) +(\d{1,2}) (\d\d):(\d\d):(\d\d)$", (text or "").strip())
+	if not m or m.group(1) not in _LUNI:
+		return None
+	luna = _LUNI.index(m.group(1)) + 1
+	an = time.localtime(acum).tm_year
+	for a in (an, an - 1):
+		try:
+			t = time.mktime((a, luna, int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)), 0, 0, -1))
+		except (ValueError, OverflowError):
+			return None
+		if t <= acum + 86400:
+			return t
+	return None
+
+
+def citesteSemnOprire(cale):
+	"""Semnul lui hds-jurnal (randuri cheie=valoare: interfata=, messages=) ca dictionar, sau None cand lipseste."""
+	try:
+		with open(cale) as f:
+			text = f.read(4096)
+	except (IOError, OSError):
+		return None
+	d = {}
+	for rand in text.splitlines():
+		if "=" in rand:
+			k, v = rand.split("=", 1)
+			d[k.strip()] = v.strip()
+	return d
+
+
+def randOprireBrusca(acum, uptime, semn):
+	"""Textul randului din hds-caderi.log (fara ora din fata) sau None cand nu se poate socoti. acum = ora sigura,
+	uptime = secundele nucleului, semn = citesteSemnOprire."""
+	if not semn or uptime is None or uptime < 0:
+		return None
+	interfata = oraIso(semn.get("interfata"))
+	messages = oraSyslog(semn.get("messages"), acum)
+	ultime = [t for t in (interfata, messages) if t is not None]
+	if not ultime:
+		return None
+	ultim = max(ultime)
+	pornire = acum - uptime
+	pauza = int(round(pornire - ultim))
+	surse = []
+	if interfata is not None:
+		surse.append("interfata %s UTC" % time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(interfata)))
+	if messages is not None:
+		surse.append("jurnalul sistemului %s UTC" % time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(messages)))
+	# numai un indiciu: ora ultimului semn poate fi cu pana la ~30 s inaintea opririi (randuri nescrise inca pe disc)
+	if pauza < 0:
+		fel = "ora ultimului semn e dupa pornire, deci ceasul de atunci mergea inainte: pauza nu se poate socoti"
+	elif pauza <= PRAG_REPORNIRE_PLACA_S:
+		fel = ("indiciu: se potriveste cu o repornire a placii (ceasul de garda, nucleul sau o repornire ceruta fara oprirea "
+			"curata)")
+	else:
+		fel = ("indiciu: mai lung decat o repornire a placii, deci mai degraba curentul oprit, butonul de pornire sau o "
+			"pornire oprita inainte de nucleu")
+	return ("oprirea brusca de dinainte: %d s fara nucleu pornit, de la ultimul semn de viata (%s) pana la pornirea "
+		"nucleului (%s UTC = ora sigura de acum minus uptime %d s; daca ceasul de atunci era in urma, pauza e mai mica); %s"
+		% (pauza, ", ".join(surse), time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(pornire)), int(uptime), fel))
+
+
+def scrieOprireBrusca(acum, semn=SEMN_OPRIRE_BRUSCA, caderi=CADERI, uptime=citesteUptime):
+	"""La prima ora sigura a pornirii: daca hds-jurnal a lasat semnul opririi bruste, randul in hds-caderi.log si
+	semnul sters (o singura data, si cand nu se poate socoti). Intoarce textul scris sau None."""
+	d = citesteSemnOprire(semn)
+	if d is None:
+		return None
+	text = randOprireBrusca(acum, uptime(), d)
+	try:
+		os.remove(semn)
+	except OSError:
+		pass
+	if not text:
+		return None
+	with open(caderi, "a") as f:
+		f.write("%s %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(acum)), text))
+	return text
+
+
 class Sincronizator(object):
 	def __init__(self, fabrica_timer=None, executor=None, mono=None, perete=None, handler=None, cale_ceas=None,
 			exista=None, config=None, cale_sigura=None, citeste_data_https=None, pune_ceas=None, fir=None, pe_fir=None):
@@ -391,6 +514,10 @@ class Sincronizator(object):
 		self.fir = fir or _firNou
 		self.pe_fir = pe_fir or _peFirulPrincipal
 		self.https_in_curs = False
+		# oprirea brusca de dinainte (punctul 7 din cap); caile si uptime-ul se schimba numai in probe
+		self.semn_oprire = SEMN_OPRIRE_BRUSCA
+		self.caderi = CADERI
+		self.uptime = citesteUptime
 		self.https = {"rezultat": "niciuna", "ora": 0, "program": PROGRAM_HTTPS, "server": GAZDA_HTTPS, "pas_s": 0.0,
 			"motiv": "", "detaliu": "", "mutat": False}
 		self.fabrica_timer = fabrica_timer or _timerEnigma
@@ -435,6 +562,13 @@ class Sincronizator(object):
 
 	def server(self):
 		return (self.cfg().ntp_server.value or "").strip()
+
+	def serverIncercare(self):
+		"""Serverul incercarii de acum: cel ales; dupa esecuri la rand, pe rand si SERVERE_REZERVA (fara cel ales), apoi
+		iar cel ales. Dupa o reusita (esecuri = 0) iar cel ales. Nicio setare noua: omul isi vede serverul ales ca inainte."""
+		ales = self.server()
+		lista = [ales] + [x for x in SERVERE_REZERVA if x != ales]
+		return lista[self.esecuri % len(lista)]
 
 	def handler(self):
 		return self._handler if self._handler is not None else _handler()
@@ -501,10 +635,10 @@ class Sincronizator(object):
 			return True, _("Sincronizarea este deja în curs.")
 		if self.mod() == "dvb":
 			return False, _("Sursa aleasă este numai transponderul: ora se ia la acordul pe un canal.")
-		server = self.server()
-		if not serverValid(server):
-			self._rezultat("esuat", server, "", _("Numele serverului NTP nu este valid."))
+		if not serverValid(self.server()):
+			self._rezultat("esuat", self.server(), "", _("Numele serverului NTP nu este valid."))
 			return False, self.ultima["motiv"]
+		server = self.serverIncercare()
 		argv = comandaNtp(server, self.exista)
 		if argv is None:
 			self._rezultat("esuat", server, "", _("Imaginea nu are niciun program NTP (ntpdate sau ntpd)."))
@@ -526,7 +660,7 @@ class Sincronizator(object):
 		return True, _("Se sincronizează ora cu %s.") % server
 
 	def _limita(self):
-		"""Procesul NTP a trecut de TIMP_MAXIM_NTP_S (ntpd -q fara server nu iese niciodata singur).
+		"""Procesul NTP a trecut de TIMP_MAXIM_NTP_S (plasa: ntpd -q din BusyBox iese singur dupa 10 s, ntpdate dupa -t).
 		eConsoleAppContainer.kill() (lib/base/console.cpp) inchide tevile inainte ca procesul sa iasa, deci nu mai trimite
 		niciodata appClosed si nici nu face waitpid (proces zombi): ar ramane „in curs” pe veci, fara reincercari. De aceea:
 		  1. SIGKILL direct procesului (grupului lui, ca in console.cpp), cu tevile deschise: tevile se inchid, containerul
@@ -585,6 +719,7 @@ class Sincronizator(object):
 			if not scris:
 				_jurnal("fake-hwclock: %s" % motiv)
 			self.stare_vazuta = stareOra(h)
+			self._oprireBrusca()
 			self.aplicaSursa()
 			_jurnal("NTP reusit (%s, %s), ceasul mutat cu %.1f s" % (server, program, pas if abs(pas) >= 0.05 else 0.0))
 			self._programeaza(True)
@@ -596,10 +731,15 @@ class Sincronizator(object):
 			except Exception as e:
 				_jurnal("fusul dupa NTP: %r" % (e,))
 		else:
-			motiv = (_("Serverul nu a răspuns în %d de secunde (fără rețea sau fără acces la Internet).") % TIMP_MAXIM_NTP_S
-				if self.expirat else _("Programul NTP a ieșit cu codul %s.") % cod)
+			fara_raspuns = cod == COD_NTP_FARA_RASPUNS and program == "ntpd"
+			if self.expirat or fara_raspuns:
+				motiv = _("Serverul nu a răspuns în %d de secunde (fără rețea sau fără acces la Internet).") % (
+					TIMP_MAXIM_NTP_S if self.expirat else NTP_FARA_RASPUNS_S)
+			else:
+				motiv = _("Programul NTP a ieșit cu codul %s.") % cod
 			self._rezultat("esuat", server, program, motiv)
-			_jurnal("NTP nereusit (%s, %s): %s" % (server, program, "timp depasit" if self.expirat else "cod %s" % cod))
+			_jurnal("NTP nereusit (%s, %s): %s" % (server, program, "timp depasit" if self.expirat else
+				("fara raspuns in %d s (cod %s)" % (NTP_FARA_RASPUNS_S, cod) if fara_raspuns else "cod %s" % cod)))
 			self._programeaza(False)
 			self._dupaEsecNtp()
 
@@ -676,6 +816,7 @@ class Sincronizator(object):
 		if not scris:
 			_jurnal("fake-hwclock: %s" % motiv)
 		self.stare_vazuta = stareOra(h)
+		self._oprireBrusca()
 		self._rezultatHttps("reusit", pas=pas, mutat=mutat)
 		if mutat:
 			_jurnal("ora prin HTTPS (%s, sursa a treia, NTP nereusit): ceasul mutat cu %.0f s (dus-intors %.2f s)" % (
@@ -741,6 +882,16 @@ class Sincronizator(object):
 		if cod is not None and cod >= SIGURA_INTERNET and cod != inainte:
 			_jurnal("ora sigura (%s): salvata" % NUME_STARI[cod])
 			self._salveazaSigur("trecerea la ora sigura")
+			self._oprireBrusca()
+
+	def _oprireBrusca(self):
+		"""La ora sigura: randul opririi bruste de dinainte in hds-caderi.log, o data (semnul din RAM se sterge)."""
+		try:
+			scris = scrieOprireBrusca(self.perete(), semn=self.semn_oprire, caderi=self.caderi, uptime=self.uptime)
+			if scris:
+				_jurnal(scris)
+		except Exception as e:
+			_jurnal("oprirea brusca de dinainte: %r" % (e,))
 
 	def _laOraNoua(self):
 		"""Din C++ (m_timeUpdated), pe firul enigma2, dupa ce ceasul sau starea lui s-a schimbat."""

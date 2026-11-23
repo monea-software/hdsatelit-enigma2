@@ -13,7 +13,9 @@
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/culori-skin                                         rolurile, culorile, paleta
 #   POST /api/culori-skin-seteaza?rol=<rol>&culoare=%23RRGGBB[&alfa=0..90]   culoarea unui rol, salvata
-#   POST /api/culori-skin-paleta?rol=<rol>|toate                  inapoi la culoarea din paleta
+#   POST /api/culori-skin-seteaza?rol=fundal&culoare=%23RRGGBB    "Fundalul tuturor ecranelor": acelasi RGB in
+#        hdsPanel, hdsPanelSolid si hdsPanelDialog, fiecare cu transparenta lui (ca randul de pe televizor)
+#   POST /api/culori-skin-paleta?rol=<rol>|fundal|toate           inapoi la culoarea din paleta
 #   POST /api/culori-skin-reporneste                              reporneste interfata (TryQuitMainloop 3)
 #   GET  /culori-skin                                             pagina
 #
@@ -44,6 +46,21 @@ def _module(P=None, G=None, T=None):
 	return P, G, (T or (lambda cheie: cheie))
 
 
+# "Fundalul tuturor ecranelor": aceleasi trei roluri ca paleta.FUNDAL din pluginul skinului (scrise si aici, ca pagina sa
+# mearga si cu un plugin mai vechi, care nu are randul)
+FUNDAL = ("hdsPanel", "hdsPanelSolid", "hdsPanelDialog")
+ROL_FUNDAL = "fundal"
+
+
+def _fundal(P, G, c, pal):
+	"""Starea randului de fundal: RGB comun sau amestecat (cele trei roluri difera ca RGB; alfa nu se compara)."""
+	culori = sorted(set([pal[r] & 0x00FFFFFF for r in FUNDAL]))
+	comun = culori[0] if len(culori) == 1 else None
+	return {"rol": ROL_FUNDAL, "nume": _t("Fundalul tuturor ecranelor"), "roluri": list(FUNDAL),
+		"amestecat": comun is None, "rgb": G.hex6(comun).lower() if comun is not None else "",
+		"modificat": bool([r for r in FUNDAL if r in c["roluri"]])}
+
+
 def _baza(P, c, palete):
 	p = P.paleta_dupa_id(c["paleta"], palete, c["alfa"])
 	return p if p is not None else P.implicita(c["alfa"])
@@ -66,7 +83,7 @@ def stare(P=None, G=None, T=None, conf=None, skin_xml=None):
 		roluri.append({"rol": rol, "nume": T("role_" + rol), "culoare": P.hexa(v), "rgb": G.hex6(v).lower(),
 			"alfa": G.procent_din_alfa((v >> 24) & 255) if G.are_alfa(rol) else 0, "are_alfa": G.are_alfa(rol),
 			"modificat": rol in c["roluri"], "paleta": P.hexa(baza[rol])})
-	return {"result": True, "paleta": c["paleta"], "roluri": roluri, "alfe": list(G.ALFE),
+	return {"result": True, "paleta": c["paleta"], "roluri": roluri, "alfe": list(G.ALFE), "fundal": _fundal(P, G, c, pal),
 		"banda": [G.hex6(x).lower() for x in G.banda("", c, pal, pal.get("hdsBrand", 0))],
 		"previzualizare": dict((r, G.hex6(pal[r]).lower()) for r in G.ROLURI_BANDA + ("hdsPanel", "hdsSelText", "hdsDisabled") if r in pal)}
 
@@ -86,7 +103,7 @@ def seteaza(argumente, P=None, G=None, T=None, conf=None, skin_xml=None):
 	except ImportError:
 		return stare(P, G, T, conf, skin_xml)
 	rol = argumente.get("rol", "")
-	if rol not in P.EDITABILE:
+	if rol not in P.EDITABILE and rol != ROL_FUNDAL:
 		rez = stare(P, G, T, conf, skin_xml)
 		rez.update({"result": False, "message": _t("Rolul acesta nu există.")})
 		return rez
@@ -94,6 +111,22 @@ def seteaza(argumente, P=None, G=None, T=None, conf=None, skin_xml=None):
 	if v is None or len(argumente.get("culoare", "").lstrip("#")) != 6:
 		rez = stare(P, G, T, conf, skin_xml)
 		rez.update({"result": False, "message": _t("Culoarea se dă ca #RRGGBB.")})
+		return rez
+	if rol == ROL_FUNDAL:
+		# aceeasi alegere ca pe televizor: RGB-ul in toate trei, transparenta fiecarui rol pastrata; o singura scriere
+		c = P.citeste_conf(conf)
+		palete = P.citeste_palete()
+		pal = P.paleta_din_conf(c, palete)
+		baza = _baza(P, c, palete)
+		for r in FUNDAL:
+			nou = P.cu_alfa(v & 0x00FFFFFF, (pal[r] >> 24) & 255)
+			c["roluri"].pop(r, None)
+			if nou != baza[r]:
+				c["roluri"][r] = nou
+		_salveaza(P, c, conf, skin_xml)
+		rez = stare(P, G, T, conf, skin_xml)
+		rez.update({"result": True, "message": _t("Salvat în toate trei: panouri, meniuri pe tot ecranul și ferestre de "
+			"dialog. Culoarea nouă se vede pe televizor după repornirea interfeței.")})
 		return rez
 	a = 0
 	if G.are_alfa(rol):
@@ -128,6 +161,9 @@ def din_paleta(argumente, P=None, G=None, T=None, conf=None, skin_xml=None):
 	c = P.citeste_conf(conf)
 	if rol == "toate":
 		c["roluri"] = {}
+	elif rol == ROL_FUNDAL:
+		for r in FUNDAL:
+			c["roluri"].pop(r, None)
 	elif rol in P.EDITABILE:
 		c["roluri"].pop(rol, None)
 	else:
@@ -151,7 +187,7 @@ def reporneste(sesiune):
 
 def argumente(request):
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:8]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in ("rol", "culoare", "alfa"):
@@ -159,7 +195,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:24].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -340,9 +376,24 @@ function trimite(cale, q){
   return cerere(cale, "POST", q).then(function(d){ if(d.roluri){ arata(d); } mesaj(d.message, !d.result); })
     .catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 }
+function randFundal(s, f){
+  var rd = document.createElement("div"); rd.className = "rand"; rd.id = "fundal";
+  var n = document.createElement("label"); n.className = "nume"; n.htmlFor = "c_fundal"; n.textContent = f.nume;
+  var sm = document.createElement("small");
+  sm.textContent = (f.amestecat ? "culori diferite acum" : f.rgb.toUpperCase()) + (f.modificat ? " · aleasă de tine" : " · din paletă") + " · aceeași culoare în panouri, meniuri și ferestre";
+  n.appendChild(sm);
+  var i = document.createElement("input"); i.type = "color"; i.id = "c_fundal"; i.value = f.rgb || c("hdsPanelSolid");
+  var a = document.createElement("span");
+  var b = document.createElement("button"); b.type = "button"; b.textContent = "Din paletă"; b.disabled = !f.modificat;
+  i.addEventListener("input", function(){ f.roluri.forEach(function(r){ var x = $("c_" + r); if(x){ x.value = i.value; } }); previzualizare(); });
+  i.addEventListener("change", function(){ var q = new URLSearchParams(); q.set("rol", f.rol); q.set("culoare", i.value); trimite("/api/culori-skin-seteaza", q); });
+  b.addEventListener("click", function(){ var q = new URLSearchParams(); q.set("rol", f.rol); trimite("/api/culori-skin-paleta", q); });
+  rd.appendChild(n); rd.appendChild(i); rd.appendChild(a); rd.appendChild(b); s.appendChild(rd);
+}
 function arata(d){
   STARE = d;
   var s = $("roluri"); s.textContent = "";
+  if(d.fundal){ randFundal(s, d.fundal); }
   d.roluri.forEach(function(r){
     var rd = document.createElement("div"); rd.className = "rand";
     var n = document.createElement("label"); n.className = "nume"; n.htmlFor = "c_" + r.rol; n.textContent = r.nume;
@@ -418,6 +469,8 @@ TEXTE_PAGINA = {
 		N_("Din paletă"),
 		N_("Receptorul nu a putut citi culorile."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
+		N_("culori diferite acum"),
+		N_("· aceeași culoare în panouri, meniuri și ferestre"),
 	),
 }
 

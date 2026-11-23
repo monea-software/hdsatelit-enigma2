@@ -41,6 +41,7 @@ class WlanScanScreen(Screen):
 
 	def __init__(self, session, iface):
 		Screen.__init__(self, session)
+		self.inchis = False
 		self.skin = scaledSkin(self.SKIN)
 		self.skinName = ["WlanScanScreen"]
 		self.iface = iface
@@ -62,23 +63,37 @@ class WlanScanScreen(Screen):
 				"blue": self.hiddenNetwork,
 			}, -1)
 		self.onLayoutFinish.append(self.layoutFinished)
-		self.onClose.append(self.control.stop)
+		self.onClose.append(self.cleanup)
+
+	def cleanup(self):
+		self.inchis = True
+		control = getattr(self, "control", None)
+		if control is not None:
+			control.stop()
 
 	def layoutFinished(self):
+		if self.inchis:
+			return
 		self.setTitle(_("WiFi networks"))
 		self.rescan()
 
 	def rescan(self):
+		if self.inchis:
+			return
 		self["status"].setText(_("Searching for networks..."))
 		self.control.ensureSupplicant(self.supplicantReady)
 
 	def supplicantReady(self, ok):
+		if self.inchis:
+			return
 		if not ok:
 			self["status"].setText(_("The WiFi adapter could not be started."))
 			return
 		self.control.scan(self.scanned)
 
 	def scanned(self, networks):
+		if self.inchis:
+			return
 		if networks is None:
 			self["status"].setText(_("Searching failed. Press yellow to try again."))
 			return
@@ -86,6 +101,8 @@ class WlanScanScreen(Screen):
 		self.control.status(self.showList)
 
 	def showList(self, status):
+		if self.inchis:
+			return
 		connected = HdsWlan.connectedSsid(status)
 		entries = []
 		for network in self.networks:
@@ -101,6 +118,8 @@ class WlanScanScreen(Screen):
 			self["status"].setText(_("No networks found. Press yellow to try again."))
 
 	def connect(self):
+		if self.inchis:
+			return
 		current = self["list"].getCurrent()
 		if current is None:
 			return
@@ -108,9 +127,13 @@ class WlanScanScreen(Screen):
 		self.askPassword(network["ssid"], network["security"], False)
 
 	def hiddenNetwork(self):
+		if self.inchis:
+			return
 		self.session.openWithCallback(self.hiddenName, VirtualKeyBoard, title=_("Name of the hidden network"), text="")
 
 	def hiddenName(self, name):
+		if self.inchis:
+			return
 		if not name:
 			return
 		ssid = name.encode("utf-8")
@@ -122,10 +145,14 @@ class WlanScanScreen(Screen):
 			title=_("Security of the hidden network"), list=choices)
 
 	def hiddenSecurity(self, ssid, choice):
+		if self.inchis:
+			return
 		if choice:
 			self.askPassword(ssid, choice[1], True)
 
 	def askPassword(self, ssid, security, hidden):
+		if self.inchis:
+			return
 		if security not in WlanTools.SUPPORTED_SECURITY:
 			self.session.open(MessageBox, reasonText("This kind of network security is not supported"), MessageBox.TYPE_ERROR, timeout=10)
 			return
@@ -134,9 +161,11 @@ class WlanScanScreen(Screen):
 			return
 		# hdsSecret: cu asistenta pornita, prima tasta din parola cere oprirea ei (titlul tradus nu se mai cauta)
 		self.session.openWithCallback(boundFunction(self.passwordEntered, ssid, security, hidden), VirtualKeyBoard,
-			title=_("Password for %s") % WlanTools.ssidName(ssid), text="", hdsSecret=True)
+			title=_("Password for %s") % WlanTools.ssidName(ssid), text=WlanTools.savedPasswords().get(ssid, ""), hdsSecret=True)
 
 	def passwordEntered(self, ssid, security, hidden, password):
+		if self.inchis:
+			return
 		if password is None:
 			return
 		reason = WlanTools.checkPassword(security, password)
@@ -146,11 +175,15 @@ class WlanScanScreen(Screen):
 		self.startConnect(ssid, security, password, hidden)
 
 	def startConnect(self, ssid, security, password, hidden):
+		if self.inchis:
+			return
 		self.control.stop()
 		self.control = WlanControl(self.iface)
 		self.session.openWithCallback(self.connectDone, WlanConnectScreen, self.iface, ssid, security, password, hidden)
 
 	def connectDone(self, result=None):
+		if self.inchis:
+			return
 		if result:
 			self.close(True)
 		else:
@@ -166,6 +199,7 @@ class WlanConnectScreen(Screen):
 
 	def __init__(self, session, iface, ssid, security, password, hidden=False):
 		Screen.__init__(self, session)
+		self.inchis = False
 		self.skin = scaledSkin(self.SKIN)
 		self.skinName = ["WlanConnectScreen"]
 		self.iface = iface
@@ -183,20 +217,31 @@ class WlanConnectScreen(Screen):
 		self.onClose.append(self.cleanup)
 
 	def cleanup(self):
-		self.connection.stop()
+		self.inchis = True
+		connection = getattr(self, "connection", None)
+		if connection is not None:
+			connection.stop()
 
 	def begin(self):
+		if self.inchis:
+			return
 		self.setTitle(_("WiFi connection"))
 		self.connection.begin()
 
 	def connectionFinished(self, result):
+		if self.inchis:
+			return
 		self["key_red"].setText(_("Close"))
 
 	def keyOk(self):
+		if self.inchis:
+			return
 		if self.connection.result is not None:
 			self.close(self.connection.result)
 
 	def keyCancel(self):
+		if self.inchis:
+			return
 		if self.connection.running:
 			self.connection.cancel()
 		elif self.connection.result is not None:
@@ -212,6 +257,7 @@ class WlanStatusScreen(Screen):
 
 	def __init__(self, session, iface):
 		Screen.__init__(self, session)
+		self.inchis = False
 		self.skin = scaledSkin(self.SKIN)
 		self.skinName = ["WlanStatusScreen"]
 		self.iface = iface
@@ -231,21 +277,32 @@ class WlanStatusScreen(Screen):
 		self.onClose.append(self.cleanup)
 
 	def layoutFinished(self):
+		if self.inchis:
+			return
 		self.setTitle(_("WiFi status"))
 		self.refresh()
 		self.timer.start(STATUS_REFRESH_MS, False)
 
 	def cleanup(self):
-		self.timer.stop()
-		self.control.stop()
+		self.inchis = True
+		timer = getattr(self, "timer", None)
+		if timer is not None:
+			timer.stop()
+		control = getattr(self, "control", None)
+		if control is not None:
+			control.stop()
 
 	def refresh(self):
+		if self.inchis:
+			return
 		if self.pending:
 			return
 		self.pending = True
 		self.control.status(self.gotStatus)
 
 	def gotStatus(self, status):
+		if self.inchis:
+			return
 		if not status:
 			self.pending = False
 			self["info"].setText(_("WiFi is not active on %s.") % self.iface)
@@ -253,6 +310,8 @@ class WlanStatusScreen(Screen):
 		self.control.signal(boundFunction(self.showStatus, status))
 
 	def showStatus(self, status, values):
+		if self.inchis:
+			return
 		self.pending = False
 		# the signal also from /proc/net/wireless, for drivers that do not answer signal_poll
-		self["info"].setText("\n".join(HdsWlan.statusLines(status, values, HdsWlan.nivelProc(self.iface))))
+		self["info"].setText("\n".join(HdsWlan.statusLines(status, values, HdsWlan.nivelProc(self.iface)) + [_("Parola Wi-Fi: %s") % WlanTools.savedPasswords().get(HdsWlan.connectedSsid(status), "")]))

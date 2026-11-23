@@ -44,7 +44,7 @@ def stare(V=None):
 def seteaza(argumente, V=None):
 	V = _v(V)
 	V.initConfig()
-	alegeri = {k: v for k, v in argumente.items() if k in ("unitate", "oras", "tema")}
+	alegeri = {k: v for k, v in argumente.items() if k in ("unitate", "oras", "tema", "zile", "scara", "loc_bara")}
 	bun, mesaj = V.seteaza(alegeri)
 	rez = stare(V)
 	rez.update(result=bool(bun), message=_t(mesaj))
@@ -65,23 +65,24 @@ def cauta(nume, V=None):
 
 
 def argumente(request):
-	limite = {"unitate": 8, "oras": 1024, "tema": 16, "q": 80}
+	chei = ("unitate", "oras", "tema", "zile", "scara", "loc_bara", "q")
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:8]:
+	for cheie, valori in list((getattr(request, "args", None) or {}).items()):
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie not in limite:
+		if cheie not in chei:
 			continue
 		valoare = (valori or [b""])[0]
 		if isinstance(valoare, bytes):
 			valoare = valoare.decode("utf-8", "replace")
-		rez[cheie] = str(valoare)[:limite[cheie]].strip()
+		rez[cheie] = str(valoare).strip()
 	return rez
 
 
 def rute(baza, resource, V=None, pe_fir=None, neterminat=None):
 	"""Rutele paginii si ale API, cu aceeasi poarta ca restul setarilor."""
 	def eroare(resursa, request, text, cod=503):
+		# text = N_("...") (sau mesajCautare): xgettext il pune in po, iar aici se traduce
 		return resursa._eroare(request, _t(text), cod)
 
 	class StareResource(baza):
@@ -90,7 +91,7 @@ def rute(baza, resource, V=None, pe_fir=None, neterminat=None):
 				return self._raspunde(request, stare(V))
 			except Exception as e:
 				print("[HdsWebControl] vremea: %s" % type(e).__name__)
-				return eroare(self, request, "Setările vremii nu se pot citi acum.")
+				return eroare(self, request, N_("Setările vremii nu se pot citi acum."))
 
 	class SeteazaResource(baza):
 		schimbaCeva = True
@@ -100,7 +101,7 @@ def rute(baza, resource, V=None, pe_fir=None, neterminat=None):
 				return self._raspunde(request, seteaza(argumente(request), V))
 			except Exception as e:
 				print("[HdsWebControl] salvare vremea: %s" % type(e).__name__)
-				return eroare(self, request, "Setările vremii nu se pot salva acum.")
+				return eroare(self, request, N_("Setările vremii nu se pot salva acum."))
 
 		def render_GET(self, request):
 			return self.render_POST(request)
@@ -109,7 +110,7 @@ def rute(baza, resource, V=None, pe_fir=None, neterminat=None):
 		def render_GET(self, request):
 			nume = argumente(request).get("q", "")
 			if len(nume) < 2:
-				return eroare(self, request, "Scrie cel puțin două litere din numele orașului.", 400)
+				return eroare(self, request, N_("Scrie cel puțin două litere din numele orașului."), 400)
 			try:
 				W = _v(V)
 				W.initConfig()
@@ -207,7 +208,27 @@ PAGINA = """<!DOCTYPE html>
       <option value="ambele">În ambele locuri</option>
     </select>
   </div>
-  <div class="butoane"><button type="submit" id="salveaza" class="principal">Salvează</button></div>
+  <div class="rand">
+    <label for="zile">Prognoza din colț</label>
+    <select id="zile">
+      <option value="1">1 zi</option><option value="2">2 zile</option><option value="3">3 zile</option>
+    </select>
+  </div>
+  <div class="rand">
+    <label for="scara">Scara panoului meteo</label>
+    <select id="scara">
+      <option value="100">100%</option><option value="85">85%</option><option value="75">75%</option>
+    </select>
+  </div>
+  <div class="rand">
+    <label for="loc_bara">Locul vremii în bara canalului</label>
+    <select id="loc_bara">
+      <option value="sus">Sus, lângă ceas</option>
+      <option value="jos">Jos în dreapta, mai mare</option>
+    </select>
+  </div>
+  <div class="butoane"><button type="submit" id="salveaza" class="principal">Salvează</button>
+    <button type="button" id="anuleaza">Anulează</button></div>
   <p class="nota">Pe afișajul din față, alege vremea din lista de rotire.</p>
 </form>
 <p class="nota"><button type="button" id="orasAcum" class="ascuns" aria-controls="nume"
@@ -220,15 +241,20 @@ PAGINA = """<!DOCTYPE html>
 <script>
 __SCRIPT_COMUN__
 var salvate = null;
+var ultimaStare = null;
 var cautareInitiala = (new URLSearchParams(window.location.search).get("q") || "").slice(0, 80);
 function optiune(valoare, nume){
   var o = document.createElement("option"); o.value = valoare; o.textContent = nume;
   return o;
 }
 function arata(d){
+  ultimaStare = d;
   salvate = d.setari;
   $("unitate").value = salvate.unitate;
   $("tema").value = salvate.tema;
+  $("zile").value = salvate.zile || "1";
+  $("scara").value = salvate.scara || "100";
+  $("loc_bara").value = salvate.loc_bara || "sus";
   var s = $("oras");
   while(s.options.length > 1){ s.remove(1); }
   if(salvate.oras){ s.appendChild(optiune(salvate.oras, salvate.oras_nume)); }
@@ -274,17 +300,20 @@ $("cauta").addEventListener("click", cauta);
 $("nume").addEventListener("keydown", function(e){
   if(e.key === "Enter"){ e.preventDefault(); if(!$("cauta").disabled){ cauta(); } }
 });
+$("anuleaza").addEventListener("click", function(){
+  if(ultimaStare){ arata(ultimaStare); $("rezultate").textContent = ""; }
+});
 $("setari").addEventListener("submit", function(e){
   e.preventDefault();
   var q = new URLSearchParams();
-  ["unitate", "oras", "tema"].forEach(function(k){ q.set(k, $(k).value); });
-  $("salveaza").disabled = true; $("cauta").disabled = true;
+  ["unitate", "oras", "tema", "zile", "scara", "loc_bara"].forEach(function(k){ q.set(k, $(k).value); });
+  $("salveaza").disabled = true; $("cauta").disabled = true; $("anuleaza").disabled = true;
   mesaj("Se salvează...");
   cerere("/api/vremea-seteaza", "POST", q).then(function(d){
     if(d.result){ arata(d); $("rezultate").textContent = ""; }
     mesaj(d.message || (d.result ? "Setările au fost salvate." : "Setările nu au fost salvate."), !d.result);
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); })
-    .finally(function(){ $("salveaza").disabled = false; $("cauta").disabled = false; });
+    .finally(function(){ $("salveaza").disabled = false; $("cauta").disabled = false; $("anuleaza").disabled = false; });
 });
 $("temaLegatura").href = adresa("/tema-tv");
 $("afisajLegatura").href = adresa("/afisaj");
@@ -321,6 +350,15 @@ TEXTE_PAGINA = {
 		N_("În bara canalului"),
 		N_("Pe ecranul principal"),
 		N_("În ambele locuri"),
+		N_("Prognoza din colț"),
+		N_("Scara panoului meteo"),
+		N_("Locul vremii în bara canalului"),
+		N_("Sus, lângă ceas"),
+		N_("Jos în dreapta, mai mare"),
+		N_("1 zi"),
+		N_("2 zile"),
+		N_("3 zile"),
+		N_("Anulează"),
 		N_("Salvează"),
 		N_("Pe afișajul din față, alege vremea din lista de rotire."),
 		N_("Tema interfeței"),

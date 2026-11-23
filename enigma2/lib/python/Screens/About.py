@@ -141,37 +141,48 @@ class About(Screen):
 	def showTranslationInfo(self):
 		self.session.open(TranslationInfo)
 
+def _translationName(value):
+	value = value.strip()
+	name = value.split("<", 1)[0].strip()
+	if name.casefold() in ("", "none", "automatically generated"):
+		return ""
+	if name.casefold().startswith("mailto:"):
+		return ""
+	if "://" in name and not any(c.isspace() for c in name):
+		return ""
+	if "@" in name and not any(c.isspace() for c in name):
+		return ""
+	return value
+
+
+def getTranslationInfo():
+	from Components.Language import language
+	romanian = language.getLanguage().replace("-", "_").split("_", 1)[0].lower() == "ro"
+	# TRANSLATORS: Credits shown in the translation screen, up to six lines.
+	info = _("TRANSLATOR_INFO")
+	if not info.strip() or info == "TRANSLATOR_INFO":
+		info = _("Localizare și optimizare pentru limba română:\nHD Satelit (https://hdsatelit.com)") if romanian else "HD Satelit"
+
+	# The empty gettext key is the catalog header; keep it out of xgettext.
+	header_key = ""
+	infomap = {}
+	for line in _(header_key).split("\n"):
+		key, separator, value = line.partition(":")
+		if separator:
+			infomap[key.strip()] = value.strip()
+	translator_name = (_translationName(infomap.get("Language-Team", "")) or
+		_translationName(infomap.get("Last-Translator", "")))
+	if not translator_name:
+		translator_name = _("Echipa HD Satelit") if romanian else "HD Satelit"
+	return info, translator_name
+
+
 class TranslationInfo(Screen):
 	def __init__(self, session):
 		Screen.__init__(self, session)
 		self.setTitle(_("Translation"))
-		# don't remove the string out of the _(), or it can't be "translated" anymore.
-
-		# TRANSLATORS: Add here whatever should be shown in the "translator" about screen, up to 6 lines (use \n for newline)
-		info = _("TRANSLATOR_INFO")
-
-		if info == "TRANSLATOR_INFO":
-			info = "Localizare și optimizare pentru limba română:\nHD Satelit (https://hdsatelit.com)"
-
-		# gettext("") intoarce antetul fisierului de traduceri (echipa, traducator);
-		# cheia goala trece printr-o variabila ca xgettext sa nu o extraga
-		header_key = ""
-		infolines = _(header_key).split("\n")
-		infomap = {}
-		for x in infolines:
-			l = x.split(': ')
-			if len(l) != 2:
-				continue
-			(type, value) = l
-			infomap[type] = value
-
+		info, translator_name = getTranslationInfo()
 		self["TranslationInfo"] = StaticText(info)
-
-		translator_name = infomap.get("Language-Team", "none")
-		if translator_name in ("none", ""):
-			translator_name = infomap.get("Last-Translator", "")
-		if not translator_name or translator_name == "none":
-			translator_name = "Echipa HD Satelit"
 
 		self["TranslatorName"] = StaticText(translator_name)
 		self["key_red"] = StaticText(_("Închide"))

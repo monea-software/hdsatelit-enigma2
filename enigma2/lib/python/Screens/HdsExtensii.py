@@ -45,6 +45,10 @@ except ImportError:  # probe pe PC: dosarul Components in sys.path
 	import HdsExtensiiLucru as L
 # descarcarea sursei unui plugin (0.6.6): modulul luat prin HdsExtensiiLucru (acelasi si pentru pagina web)
 S = L.S
+try:
+	from Components import HdsMeniuOrdine as O
+except ImportError:
+	import HdsMeniuOrdine as O
 from Tools.Directories import resolveFilename, SCOPE_PLUGINS, SCOPE_SKIN_IMAGE
 
 def _t(text):
@@ -616,6 +620,7 @@ class HdsExtensii(Screen, HelpableScreen):
 			self.session.open(MessageBox, text=text.strip(), type=MessageBox.TYPE_WARNING)
 
 	def _laInchidere(self):
+		self._inchisSortare = True
 		self.timerSemn.stop()
 		self.timerSchimbari.stop()
 		self.timerIntoarcere.stop()
@@ -646,7 +651,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		_jurnal('catalog: %d pachete, %d surse (%d cu lista), %d pluginuri, %.0f ms' % (len(self.catalog.pachete),
 			len(self.catalog.configurare.surse), len(self.catalog.surse_cu_lista), len(self.pluginuri), (time.time() - t) * 1000))
 		self.semnCatalog = self._semnCatalog()
-		self.semnOrdine = L.ordineExtensii()
+		self.semnOrdine = (L.ordineExtensii(), O.sortareExtensii(L))
 		self._construiesteFile()
 
 	def _semnCatalog(self):
@@ -672,7 +677,7 @@ class HdsExtensii(Screen, HelpableScreen):
 			return
 		self._verificaLocuriFisiere()
 		# ordinea sau pluginurile ascunse schimbate din pagina web (0.7.5): lista se reface, fila si randul raman
-		ordine = L.ordineExtensii()
+		ordine = (L.ordineExtensii(), O.sortareExtensii(L))
 		if ordine != getattr(self, 'semnOrdine', ordine):
 			self.semnOrdine = ordine
 			self._construiesteFile()
@@ -775,8 +780,11 @@ class HdsExtensii(Screen, HelpableScreen):
 				rez.append(('retea', None, None))
 			return rez
 		# randurile care trec de filtru (0.6.7), apoi, in Disponibile, numai cele din dosarele deschise (0.7.5)
-		rez = L.cuRandFiltru(self.catalog, L.randuri(self.catalog, fila, self.pluginuri, plugins, self.cautare),
+		randuri = O.aplicaSortareExtensii(L, L.randuri(self.catalog, fila, self.pluginuri, plugins, self.cautare), fila)
+		rez = L.cuRandFiltru(self.catalog, randuri,
 			self.filtru, fila)
+		if fila == 'instalate' and not self.cautare:
+			rez.insert(0, ('dinfisier', None, None))
 		if fila == 'disponibile':
 			rez = L.strangeDosare(rez, self.dosare, L.dosareDeschiseImplicit(rez, self.filtru, fila))
 		return rez
@@ -1007,10 +1015,17 @@ class HdsExtensii(Screen, HelpableScreen):
 
 	def _arataFila(self, pastreaza=True):
 		fid = self._idFila()
+		az = O.sortareExtensii(L) if fid == 'instalate' else False
+		dupaPlugin = fid == 'instalate' and (az or getattr(self, '_sortareAratata', False))
+		id_ = O.identitateExtensie(L, self._selectat(), self.pluginuri) if pastreaza and dupaPlugin and getattr(self, '_filaAratata', None) == fid else ''
 		# randul tinut minte se citeste inainte de setList: setList anunta o schimbare de selectie (_laSchimbare), care
 		# scria in pozitii[fila noua] randul ales in fila de dinainte (prima intrare intr-o fila nu incepea sus)
 		i = self.pozitii.get(fid, 0) if pastreaza else 0
 		self.randuri = self._randuriFila(fid)
+		if id_:
+			i = next((k for k, r in enumerate(self.randuri) if O.identitateExtensie(L, r, self.pluginuri) == id_), i)
+		self._filaAratata = fid
+		self._sortareAratata = az
 		self['lista'].setList(list(self.randuri))
 		self._deseneazaFile()
 		if self.randuri:
@@ -1523,6 +1538,9 @@ class HdsExtensii(Screen, HelpableScreen):
 
 	def keyOk(self):
 		fel, obj, extra = self._selectat()
+		if fel == 'dinfisier':
+			self._deschideFila('fisiere')
+			return
 		if fel == 'plugin':
 			self._pornestePlugin(obj)
 		elif fel == 'indisponibil':
@@ -1671,10 +1689,14 @@ class HdsExtensii(Screen, HelpableScreen):
 		lista = []
 		titlu = _t(TITLU)
 		if self._idFila() == 'instalate' and not self.cautare:
+			az = O.sortareExtensii(L)
 			if fel == 'plugin':
 				titlu = obj.name or titlu
 				id_ = L.idPlugin(getattr(obj, 'path', ''))
-				lista += [(_t(L.TEXTE_ORDINE[pas]), (pas, id_)) for pas in L.pasiPosibili(self._toateInstalate(), id_)]
+				lista += [(_t(L.TEXTE_ORDINE[pas]), (pas, id_)) for pas in L.pasiPosibili(self._toateInstalate(), id_)
+					if not az or pas == 'ascunde']
+			lista.append((_t('Sortare automată A-Z: %s') % (_t('Da') if az else _t('Nu')),
+				('sortare-nu' if az else 'sortare-da', L.idRand(self._selectat()))))
 			n = L.nrAscunse(self.pluginuri, plugins)
 			if n:
 				lista.append((L.textArataToate(n), ('arata', None)))
@@ -1699,13 +1721,29 @@ class HdsExtensii(Screen, HelpableScreen):
 			self._actualizeazaTot()
 			return
 		fid = self._idFila()
-		if pas == 'arata':
+		if pas in ('sortare-da', 'sortare-nu'):
+			def gata(ok):
+				if getattr(self, '_inchisSortare', False):
+					return
+				if ok:
+					self._refaceOrdinea('sortare', None)
+				else:
+					self._mesaj(_t('Sortarea nu s-a putut confirma. Încearcă din nou.'), 'rau')
+			O.salveazaSortareExtensii(L, pas == 'sortare-da').addCallback(gata)
+			return
+		elif O.sortareExtensii(L) and pas in L.PASI_ORDINE and pas != 'ascunde':
+			return
+		elif pas == 'arata':
 			schimbat = L.arataToateExtensiile()
 		else:
 			schimbat = L.schimbaOrdinea(self._toateInstalate(), id_, pas)
 		if not schimbat:
 			return
-		self.semnOrdine = L.ordineExtensii()
+		self._refaceOrdinea(pas, id_)
+
+	def _refaceOrdinea(self, pas, id_):
+		fid = self._idFila()
+		self.semnOrdine = (L.ordineExtensii(), O.sortareExtensii(L))
 		self._construiesteFile()
 		randuri = self._randuriFila(fid)
 		if pas != 'ascunde':
@@ -2328,10 +2366,11 @@ class HdsExtensiiActiune(Screen):
 		# dupa o instalare care cere repornire e ales Mai tarziu: un OK apasat in timpul instalarii (ca sa vezi daca
 		# s-a terminat) nu reporneste interfata; repornirea ramane la Stanga + OK sau la verde
 		self._butoane(r['butoane'], r['ales'])
-		if r.get('imagine_schimbata'):
+		if r.get('imagine_schimbata') and not r.get('repornire_singura'):
 			# 0.7.7 (UPD, TODO 16.11 00:10): programul imaginii s-a schimbat pe disc; procesul vechi nu mai poate incarca
 			# pluginurile noi, deci interfata reporneste singura dupa ce omul a apucat sa citeasca (TryQuitMainloop intreaba
-			# numai cand o inregistrare e in curs)
+			# numai cand o inregistrare e in curs). Din 0.7.8 (RIA) o face Components/HdsActualizari (repornire_singura in
+			# rezultat), cu numaratoarea pe televizor; ceasul de aici ramane numai cu un modul mai vechi in memorie
 			self.repornireImagine = eTimer()
 			self.repornireImagine.callback.append(self._repornireImagineAcum)
 			self.repornireImagine.start(REPORNIRE_IMAGINE_MS, True)

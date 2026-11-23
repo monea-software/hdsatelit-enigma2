@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # HdsGasireSemnal.py - logica pentru „Găsire semnal”: tunerele, sateliții, transponderele, luarea tunerului,
-# oprirea și punerea la loc a canalului, acordul (DVB-S și DVB-S2), așteptarea motorului, citirea semnalului,
-# verdictul și textele. Ecranul de pe televizor (Screens/Satfinder.py) și pagina web citesc același dicționar
+# oprirea și punerea la loc a canalului, acordul (DVB-S și DVB-S2; din GST7 și DVB-T/T2 și DVB-C), așteptarea
+# motorului, citirea semnalului, verdictul și textele. Ecranul de pe televizor (Screens/Satfinder.py) și pagina web citesc același dicționar
 # (Masurare.stare()), ca să nu existe două adevăruri.
 #
 # Acordul se face într-un singur loc: LuareTuner și acordeaza() de
@@ -53,6 +53,21 @@ MESAJ_SCURT_S = 6
 # se spune nimic: si calitatea e taiata la 98, iar un prag sub care ar fi rea nu e masurat.
 NIVEL_PLAFON = 98 * 655
 
+# TRL6 (dnevnik, forum 683 #3576): lista canalelor de pe transponderul prins, citita din PAT si SDT actual (ETSI EN
+# 300 468), fara scanare si fara nicio scriere in lista de canale. Doua filtre de sectiune pe demuxul canalului brut
+# (SursaDemux din Components/HdsAnalizaFlux.py, deschise fara blocare); un eTimer la PAS_CANALE_MS ia ce s-a strans,
+# cel mult CANALE_CITIRI_PE_PAS citiri pe filtru, fara nicio asteptare (ca restul modulului: niciun fir, niciun sleep).
+# Fiecare filtru se inchide cand tabelul lui e intreg; totul se inchide la CANALE_TERMEN_S, la transponder nou, la
+# oprire si la cedare.
+CANALE_TERMEN_S = 6.0         # SDT actual se repeta cel putin o data la 2 s, PAT de cateva ori pe secunda
+PAS_CANALE_MS = 100
+CANALE_CITIRI_PE_PAS = 16
+PID_PAT, PID_SDT = 0x0000, 0x0011
+TID_PAT, TID_SDT = 0x00, 0x42
+# service_type din descriptorul 0x48 (EN 300 468, tabelul 87)
+TIPURI_TV = (0x01, 0x11, 0x16, 0x19, 0x1F, 0x20)
+TIPURI_RADIO = (0x02, 0x0A)
+
 # timer.py:9-10 (TimerEntry.StateWaiting, StatePrepared)
 TIMER_ASTEPTARE, TIMER_PREGATIT = 0, 1
 
@@ -66,6 +81,20 @@ NUME_FEC = {1: "1/2", 2: "2/3", 3: "3/4", 4: "5/6", 5: "7/8", 6: "8/9", 7: "3/5"
 NUME_MODULATIE = {1: "QPSK", 2: "8PSK", 4: "16APSK", 5: "32APSK"}
 NUME_ROLLOFF = {0: "0,35", 1: "0,25", 2: "0,20"}
 
+# GST7 (Tolek7, Satedu, 22.11.2026): si tunerele terestre (DVB-T/T2) si de cablu (DVB-C), incorporate sau USB. Lista
+# tunerelor ia sistemul pe care e pus acum tunerul: tipul ales in Setari tuner la tunerele cu mai multe tipuri
+# (NimManager pune slot.type), iar la tunerul combinat DVB-T2/C ce e legat la el (config.Nims[n].hds_fel).
+# Transponderul lor e in unitatile nucleului, facut de Components/HdsListeCabluTerestru.py (tp_terestru: frecventa in
+# Hz; tp_cablu: frecventa in kHz, rata in simboluri/s), cu campurile structurilor eDVBFrontendParametersTerrestrial si
+# ...Cable. Felul se vede din campuri (fel_tp), deci transponderul de satelit ramane exact cum era, fara nicio cheie
+# in plus. Alimentarea de 5 V a antenei terestre o pune nucleul la acord, din Setari tuner (frontend.cpp,
+# config.Nims.N.terrestrial_5V); aici numai se spune cum e setata.
+FEL_SATELIT, FEL_TERESTRU, FEL_CABLU = "S", "T", "C"
+SECUNDE_PRINDERE_TC = 5       # frontend.cpp, calcLockTimeout: 5 s la cablu si la terestru
+SR_CABLU_LISTA_GOALA = 6900000  # rata cea mai folosita in Europa, pentru rasterul de cablu fara furnizor
+NUME_LATIME = {0: "8 MHz", 1: "7 MHz", 2: "6 MHz", 4: "5 MHz", 5: "1,712 MHz", 6: "10 MHz"}
+NUME_QAM_CABLU = {1: "QAM16", 2: "QAM32", 3: "QAM64", 4: "QAM128", 5: "QAM256"}
+
 
 def _reguli():
 	"""Regulile nucleului, scrise o singură dată în Screens/ScanerSatelit.py (numai funcțiile fără ecran)."""
@@ -76,6 +105,39 @@ def _reguli():
 def _nim():
 	from Components.NimManager import nimmanager
 	return nimmanager
+
+
+def _liste():
+	"""Listele si regulile de cablu si terestru (frecventele, ce primeste nucleul), scrise o singura data."""
+	from Components import HdsListeCabluTerestru
+	return HdsListeCabluTerestru
+
+
+def fel_tp(tp):
+	"""S (satelit), T (terestru) sau C (cablu), dupa campurile transponderului."""
+	if tp and "bandwidth" in tp:
+		return FEL_TERESTRU
+	if tp and "fec_inner" in tp:
+		return FEL_CABLU
+	return FEL_SATELIT
+
+
+def campuri_tp(tp):
+	"""Campurile structurii din nucleu pentru felul transponderului."""
+	fel = fel_tp(tp)
+	if fel == FEL_TERESTRU:
+		return _liste().CAMPURI_TERESTRU + _liste().CAMPURI_DVBT2
+	if fel == FEL_CABLU:
+		return _liste().CAMPURI_CABLU
+	return CAMPURI_NUCLEU
+
+
+def copie_tp(tp):
+	"""Numai campurile nucleului. La satelit toate trebuie sa fie (ca pana acum); la terestru system si plp_id pot
+	lipsi (None = nestiut)."""
+	if fel_tp(tp) == FEL_SATELIT:
+		return dict((k, tp[k]) for k in CAMPURI_NUCLEU)
+	return dict((k, tp.get(k)) for k in campuri_tp(tp))
 
 
 def _nav():
@@ -137,6 +199,8 @@ def text_pozitie(poz):
 
 def text_transponder(tp):
 	"""„11766 V 27500 DVB-S2 8PSK 3/4” sau „10758 V 22000 DVB-S 3/4” (cifre și prescurtări)."""
+	if fel_tp(tp) != FEL_SATELIT:
+		return text_tc(tp)
 	pol = "HVLR"[tp["polarisation"]] if 0 <= tp["polarisation"] <= 3 else "?"
 	fec = _("Auto") if tp["fec"] == 0 else NUME_FEC.get(tp["fec"], str(tp["fec"]))
 	if tp["system"] == SISTEM_DVB_S2:
@@ -145,8 +209,40 @@ def text_transponder(tp):
 	return "%d %s %d DVB-S %s" % (tp["frequency"] // 1000, pol, tp["symbol_rate"] // 1000, fec)
 
 
+def text_tc(tp):
+	"""Terestru: „474 MHz, canalul 21, 8 MHz, DVB-T2” (fara sistem stiut: „DVB-T2/T”); cablu: „346 MHz, 6900 kSymb/s,
+	QAM256”."""
+	L = _liste()
+	if fel_tp(tp) == FEL_TERESTRU:
+		parti = ["%s MHz" % L.mhz(tp.get("frequency", 0))]
+		canal = L.canal_din_frecventa(tp.get("frequency", 0))
+		if canal is not None:
+			parti.append(_("canalul %d") % canal)
+		parti.append(NUME_LATIME.get(tp.get("bandwidth"), _("lățime Auto")))
+		sistem = tp.get("system")
+		parti.append({L.SISTEM_DVBT: "DVB-T", L.SISTEM_DVBT2: "DVB-T2"}.get(sistem, "DVB-T2/T"))
+		return ", ".join(parti)
+	return "%s MHz, %d kSymb/s, %s" % (L.mhz(tp.get("frequency", 0) * 1000), tp.get("symbol_rate", 0) // 1000,
+		NUME_QAM_CABLU.get(tp.get("modulation"), _("modulație Auto")))
+
+
+def latimi():
+	"""Latimile de banda terestre pe care le primeste nucleul (ca scanerul terestru: 8, 7, 6 MHz si Auto)."""
+	return [(0, "8 MHz"), (1, "7 MHz"), (2, "6 MHz"), (3, _("Auto"))]
+
+
+def sisteme_terestre():
+	return [(1, "DVB-T2"), (0, "DVB-T")]
+
+
+def modulatii_cablu():
+	return [(0, _("Auto"))] + sorted(NUME_QAM_CABLU.items())
+
+
 def timp_prindere_s(tp):
 	"""Cât așteaptă nucleul prinderea, după rata de simbol (lib/dvb/frontend.cpp, calcLockTimeout)."""
+	if fel_tp(tp) != FEL_SATELIT:
+		return SECUNDE_PRINDERE_TC
 	sr = tp.get("symbol_rate", 0) if tp else 0
 	if sr > 20000000:
 		return 5
@@ -236,6 +332,10 @@ def tunere():
 	rez = []
 	for s in nim.nim_slots:
 		if not s.isCompatible("DVB-S"):
+			fel = _fel_tuner(s)
+			if fel is not None:
+				rez.append({"slot": s.slot, "nume": s.friendly_full_description, "fel": fel, "s2": False,
+					"motor": False, "sateliti": []})
 			continue
 		motor = bool(nim.getRotorSatListForNim(s.slot))
 		loc = _loc_antena(s.slot) if motor else None
@@ -246,9 +346,168 @@ def tunere():
 				nevazuti.append({"poz": poz, "nume": x[1], "vizibil": False})
 			else:
 				vazuti.append({"poz": poz, "nume": x[1], "vizibil": True})
-		rez.append({"slot": s.slot, "nume": s.friendly_full_description, "s2": s.isCompatible("DVB-S2"),
-			"motor": motor, "sateliti": vazuti + nevazuti})
+		rez.append({"slot": s.slot, "nume": s.friendly_full_description, "fel": FEL_SATELIT,
+			"s2": s.isCompatible("DVB-S2"), "motor": motor, "sateliti": vazuti + nevazuti})
 	return sorted(rez, key=lambda t: not t["sateliti"])
+
+
+def _fel_tuner(s):
+	"""T, C sau None pentru un tuner care nu e de satelit. isCompatible urmeaza tipul ales acum (NimManager pune
+	slot.type dupa Setari tuner); tunerul combinat DVB-T2/C (tipul „DVB-C/T”) e pe ce a spus omul ca e legat la el."""
+	t, c = s.isCompatible("DVB-T"), s.isCompatible("DVB-C")
+	if t and c:
+		try:
+			from Components.config import config
+			ales = config.Nims[s.slot].hds_fel.value
+		except (AttributeError, IndexError, KeyError, TypeError):
+			ales = "terestru"
+		return FEL_CABLU if ales == "cablu" else FEL_TERESTRU
+	if t:
+		return FEL_TERESTRU
+	if c:
+		return FEL_CABLU
+	return None
+
+
+def alimentare_5v(slot):
+	"""True / False: alimentarea de 5 V a antenei terestre, cum e in Setari tuner (o pune nucleul la acord); None
+	cand tunerul nu are setarea."""
+	try:
+		from Components.config import config
+		return bool(config.Nims[slot].terrestrial_5V.value)
+	except (AttributeError, IndexError, KeyError, TypeError):
+		return None
+
+
+def _unic(lista):
+	vazute, rez = set(), []
+	for tp in lista:
+		cheie = tuple(sorted(tp.items()))
+		if cheie not in vazute:
+			vazute.add(cheie)
+			rez.append(tp)
+	return rez
+
+
+def frecvente_tc(slot, fel):
+	"""Frecventele de ales pentru un tuner terestru sau de cablu: ([{"tp", "text"}], numele listei).
+	Terestru: regiunea aleasa in Setari tuner (terrestrial.xml); fara ea, tabelul canalelor (VHF III 5-12, UHF 21-69).
+	Cablu: furnizorul ales in Setari tuner (cables.xml, cand tipul cautarii e „Furnizor”); altfel prima lista din tara
+	receptorului; altfel rasterul de
+	8 MHz de la 122 la 858 MHz, cu 6900 kSymb/s si modulatia Auto."""
+	L = _liste()
+	nim = _nim()
+	try:
+		from Components.config import config
+		n = config.Nims[slot]
+		if fel == FEL_TERESTRU:
+			nume = nim.terrestrialsList[n.terrestrial.index][0]
+		elif n.cable.scan_type.value == "provider":
+			# ca NimManager.getTranspondersCable: furnizorul conteaza numai cand e ales la „Tipul cautarii”
+			nume = nim.cablesList[n.cable.scan_provider.index][0]
+		else:
+			nume = ""
+	except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+		nume = ""
+	try:
+		toate = L.liste_terestre() if fel == FEL_TERESTRU else L.liste_cablu()
+	except Exception as e:
+		print("[HdsGasireSemnal] listele de frecvente: %s" % e)
+		toate = []
+	gasita = next((x for x in toate if nume and x.get("nume") == nume and x.get("transpondere")), None)
+	if gasita is None and fel == FEL_CABLU:
+		try:
+			tara = L.tara_alfa3()
+		except Exception:
+			tara = None
+		gasita = next((x for x in toate if tara and x.get("tara") == tara and x.get("transpondere")), None)
+	if gasita is not None:
+		lista, nume = list(gasita["transpondere"]), gasita.get("nume", nume)
+	elif fel == FEL_TERESTRU:
+		lista, nume = [L.tp_canal(c) for c in L.canale(True)], _("canalele terestre (VHF 5-12, UHF 21-69)")
+	else:
+		lista = [L.tp_cablu(f * 1000, SR_CABLU_LISTA_GOALA, L.CAB_MOD_AUTO) for f in L.FRECVENTE_CABLU_MHZ]
+		nume = _("frecvențele de cablu 122-858 MHz")
+	lista = [copie_tp(tp) for tp in _unic(lista) if fel_tp(tp) == fel]
+	return [{"tp": tp, "text": text_transponder(tp)} for tp in lista], nume
+
+
+def potriveste_tc(tp, lista):
+	"""Indicele frecventei din lista care e cea a lui tp (la 1 MHz), sau -1; la cablu si aceeasi rata."""
+	if tp is None:
+		return -1
+	fel = fel_tp(tp)
+	unitate = 1000000 if fel == FEL_TERESTRU else 1000
+	for i, e in enumerate(lista):
+		t = e["tp"]
+		if fel_tp(t) != fel or abs(t.get("frequency", 0) - tp.get("frequency", 0)) > unitate:
+			continue
+		if fel == FEL_CABLU and abs(t.get("symbol_rate", 0) - tp.get("symbol_rate", 0)) > 1000:
+			continue
+		return i
+	return -1
+
+
+def transponder_din_campuri_tc(valori, fel):
+	"""Frecventa scrisa de mana: (tp, "") sau (None, text pentru om). Terestru: frecventa (MHz, cu virgula sau punct),
+	latime, sistem (0 DVB-T, 1 DVB-T2), PLP automat. Cablu: frecventa (MHz), sr (kSymb/s), mod."""
+	L = _liste()
+	hz = L.hz_din_mhz(valori.get("frecventa"))
+	if fel == FEL_TERESTRU:
+		if not hz:
+			return None, _("Introdu frecvența în MHz, de exemplu 474.")
+		sistem = _int(valori.get("sistem"))
+		latime = _int(valori.get("latime"))
+		tp = L.tp_terestru(hz, latime if latime is not None else L.TER_BW_8,
+			sistem=sistem if sistem in (0, 1) else L.SISTEM_DVBT2)
+		motiv = L.motiv_refuz_terestru(tp)
+	else:
+		sr = _int(valori.get("sr"))
+		if not hz or not sr or sr <= 0:
+			return None, _("Introdu frecvența (MHz) și rata de simbol (kSymb/s).")
+		mod = _int(valori.get("mod"))
+		tp = L.tp_cablu(hz // 1000, sr * 1000, mod if mod is not None else L.CAB_MOD_AUTO)
+		motiv = L.motiv_refuz_cablu(tp)
+	if motiv:
+		return None, _("Frecvență pe care tunerul nu o poate acorda: %s") % motiv
+	return copie_tp(tp), ""
+
+
+def transponder_din_serviciu_tc(serviciu, fel, slot):
+	"""Frecventa canalului terestru sau de cablu care merge pe acest tuner, citita inainte de oprirea lui, sau None
+	(cheile: frontend.cpp, PutTerrestrialDataToDict / PutCableDataToDict)."""
+	if serviciu is None:
+		return None
+	info = serviciu.frontendInfo()
+	if info is None:
+		return None
+	d = info.getTransponderData(True)
+	if not d or d.get("tuner_type") != ("DVB-T" if fel == FEL_TERESTRU else "DVB-C"):
+		return None
+	try:
+		fe = info.getFrontendData() or {}
+	except Exception:
+		fe = {}
+	if fe.get("tuner_number") not in (None, slot):
+		return None
+	L = _liste()
+	if fel == FEL_TERESTRU:
+		sistem = d.get("system")
+		plp = d.get("plp_id")
+		tp = L.tp_terestru(d.get("frequency", 0), d.get("bandwidth", L.TER_BW_AUTO),
+			d.get("constellation", L.TER_MOD_AUTO), sistem=sistem if sistem in (0, 1) else None,
+			plp=plp if sistem == L.SISTEM_DVBT2 and isinstance(plp, int) and 0 <= plp <= 255 else None)
+		if tp["bandwidth"] not in L.TER_BENZI:
+			tp["bandwidth"] = L.TER_BW_AUTO
+		if tp["modulation"] not in L.TER_MODULATII:
+			tp["modulation"] = L.TER_MOD_AUTO
+		motiv = L.motiv_refuz_terestru(tp)
+	else:
+		tp = L.tp_cablu(d.get("frequency", 0), d.get("symbol_rate", 0), d.get("modulation", L.CAB_MOD_AUTO))
+		if tp["modulation"] not in L.CAB_MODULATII:
+			tp["modulation"] = L.CAB_MOD_AUTO
+		motiv = L.motiv_refuz_cablu(tp)
+	return None if motiv else copie_tp(tp)
 
 
 def text_satelit(sat):
@@ -371,12 +630,186 @@ def acordeaza(frontend, tp):
 	setDVBS(parm, False) (motorul se mișcă singur prin SEC, ca la orice schimbare de canal), apoi frontend.tune.
 	Întoarce codul nucleului: 0 = secvența a pornit; altceva = refuz înainte de orice mișcare (satelit fără
 	configurare, frecvența intermediară în afara benzii LNB-ului, DVB-S2 fără FEC real)."""
+	if fel_tp(tp) != FEL_SATELIT:
+		return acordeaza_tc(frontend, tp)
 	from enigma import eDVBFrontendParametersSatellite, eDVBFrontendParameters
 	parm = _reguli().in_parametri(eDVBFrontendParametersSatellite, dict((k, tp[k]) for k in CAMPURI_NUCLEU))
 	fp = eDVBFrontendParameters()
 	fp.setDVBS(parm, False)
 	cod = frontend.tune(fp)
 	return 0 if cod is None else int(cod)
+
+
+def acordeaza_tc(frontend, tp):
+	"""Acordul terestru (setDVBT) sau de cablu (setDVBC) pe canalul brut, cu structura facuta de
+	HdsListeCabluTerestru.in_parametri. La terestru tp are mereu sistemul (Masurare il alege cand lista nu il spune);
+	PLP-ul fara valoare ramane cel implicit al structurii (No_PLP_Id)."""
+	from enigma import eDVBFrontendParameters
+	L = _liste()
+	t = copie_tp(tp)
+	fp = eDVBFrontendParameters()
+	if fel_tp(tp) == FEL_TERESTRU:
+		from enigma import eDVBFrontendParametersTerrestrial
+		if t.get("system") not in (L.SISTEM_DVBT, L.SISTEM_DVBT2):
+			t["system"] = L.SISTEM_DVBT2
+		if t["system"] != L.SISTEM_DVBT2:
+			t["plp_id"] = None
+		parm, _nepuse = L.in_parametri(eDVBFrontendParametersTerrestrial, t)
+		fp.setDVBT(parm)
+	else:
+		from enigma import eDVBFrontendParametersCable
+		parm, _nepuse = L.in_parametri(eDVBFrontendParametersCable, t)
+		fp.setDVBC(parm)
+	cod = frontend.tune(fp)
+	return 0 if cod is None else int(cod)
+
+
+# ---------------------------------------------------------------- canalele de pe transponder (TRL6)
+class TabelCanale(object):
+	"""Sectiunile unui tabel (PAT sau SDT actual) dintr-un transport: aceeasi extensie, aceeasi versiune, current_next
+	1; o versiune noua o ia de la capat. intreg() = toate numerele de sectiune pana la last_section_number."""
+
+	def __init__(self, tid):
+		self.tid = tid
+		self.cheie = None
+		self.ultima = None
+		self.sectiuni = {}
+
+	def primeste(self, date):
+		from Components.HdsAnalizaFlux import antet, sectiune
+		s = sectiune(date)
+		if s is None or s[0] != self.tid or len(s) < 12 or not s[5] & 1:
+			return
+		_tid, ext, ver, nr, ultima = antet(s)
+		onid = ((s[8] << 8) | s[9]) if self.tid == TID_SDT and len(s) >= 15 else None
+		if nr > ultima:
+			return
+		if (ext, ver, ultima, onid) != self.cheie:
+			self.cheie, self.ultima, self.sectiuni = (ext, ver, ultima, onid), ultima, {}
+		self.sectiuni[nr] = s
+
+	def intreg(self):
+		return self.ultima is not None and all(k in self.sectiuni for k in range(self.ultima + 1))
+
+	def lista(self):
+		return [self.sectiuni[k] for k in sorted(self.sectiuni)]
+
+
+def servicii_sdt(sectiuni):
+	"""Sectiunile SDT actual -> {sid: {"nume", "furnizor", "tip", "codat"}}. "codat" e free_CA_mode din bucla
+	serviciului (1 = cel putin o componenta e codata)."""
+	from Components.HdsAnalizaFlux import descriptori, sectiune, text_dvb
+	rez = {}
+	for date in sectiuni or []:
+		s = sectiune(date)
+		if s is None or s[0] != TID_SDT or len(s) < 15:
+			continue
+		i, sfarsit = 11, len(s) - 4
+		for _pas in range(len(s)):
+			if i + 5 > sfarsit:
+				break
+			sid = (s[i] << 8) | s[i + 1]
+			n = ((s[i + 3] & 0x0F) << 8) | s[i + 4]
+			rec = {"nume": u"", "furnizor": u"", "tip": None, "codat": bool(s[i + 3] & 0x10)}
+			for tag, c in descriptori(s, i + 5, min(i + 5 + n, sfarsit)):
+				if tag == 0x48 and len(c) >= 2:
+					rec["tip"] = c[0]
+					np = c[1]
+					rec["furnizor"] = text_dvb(c[2:2 + np], 60)
+					j = 2 + np
+					if j < len(c):
+						rec["nume"] = text_dvb(c[j + 1:j + 1 + c[j]], 60)
+			rez[sid] = rec
+			i += 5 + n
+	return rez
+
+
+def programe_pat(sectiuni):
+	"""Sectiunile PAT -> (tsid, [program_number]) fara programul 0 (NIT); (None, []) fara PAT."""
+	from Components.HdsAnalizaFlux import citeste_pat
+	tsid, programe = None, set()
+	for date in sectiuni or []:
+		d = citeste_pat(date)
+		if d is None:
+			continue
+		tsid = d["tsid"]
+		programe.update(d["programe"])
+	return tsid, sorted(programe)
+
+
+def fel_serviciu(tip):
+	if tip in TIPURI_TV:
+		return "tv"
+	if tip in TIPURI_RADIO:
+		return "radio"
+	return "date" if tip is not None else ""
+
+
+def lista_canale(programe, servicii, are_sdt):
+	"""Randurile listei: serviciile din PAT (ce chiar se emite) si cele din SDT actual, o data fiecare. Cu SDT, dupa
+	nume (fara nume la coada); fara SDT numai numerele din PAT, codarea necunoscuta (None)."""
+	rez = []
+	for sid in sorted(set(programe or []) | set(servicii or {})):
+		s = (servicii or {}).get(sid) or {}
+		rez.append({"sid": sid, "nume": s.get("nume") or u"", "furnizor": s.get("furnizor") or u"",
+			"fel": fel_serviciu(s.get("tip")), "codat": s.get("codat") if are_sdt and s else None,
+			"in_pat": sid in (programe or [])})
+	rez.sort(key=lambda r: (not r["nume"], r["nume"].lower(), r["sid"]))
+	return rez
+
+
+def rezultat_canale(pat, sdt):
+	"""Cele doua tabele stranse (TabelCanale) -> {"canale", "tsid", "onid", "pat", "sdt", "sdt_intreg"}."""
+	tsid, programe = programe_pat(pat.lista())
+	are_sdt = bool(sdt.sectiuni)
+	cheie = sdt.cheie or (None, None, None, None)
+	return {"canale": lista_canale(programe, servicii_sdt(sdt.lista()), are_sdt),
+		"tsid": tsid if tsid is not None else cheie[0], "onid": cheie[3], "pat": bool(pat.sectiuni), "sdt": are_sdt,
+		"sdt_intreg": sdt.intreg()}
+
+
+def text_canal(c):
+	"""Un rand al listei: numele (sau numarul serviciului), felul si codarea."""
+	nume = c["nume"] or (_("Serviciul %d") % c["sid"])
+	semne = []
+	if c["fel"] == "tv":
+		semne.append(_("TV"))
+	elif c["fel"] == "radio":
+		semne.append(_("radio"))
+	elif c["fel"] == "date":
+		semne.append(_("date"))
+	if c["codat"] is True:
+		semne.append(_("codat"))
+	elif c["codat"] is False:
+		semne.append(_("liber"))
+	return "%s (%s)" % (nume, ", ".join(semne)) if semne else nume
+
+
+def text_canale(stare):
+	"""Textul ferestrei "Canalele de aici" de pe televizor, din Masurare.stare(): starea citirii, apoi lista."""
+	cs = stare.get("canale_stare") or ""
+	if cs == "se_citeste":
+		return _("Se citesc canalele de pe transponder...")
+	if cs == "necitit":
+		return stare.get("canale_mesaj") or _("Canalele nu s-au putut citi.")
+	if cs != "citit":
+		return _("Canalele se citesc după ce semnalul e recepționat.")
+	randuri = [stare.get("canale_rezumat") or ""]
+	randuri += [text_canal(c) for c in stare.get("canale") or []]
+	randuri.append("")
+	randuri.append(_("Nimic nu s-a salvat în lista de canale. Ca să le adaugi, apasă verde (Caută canale)."))
+	return "\n".join(randuri)
+
+
+def rezumat_canale(rez):
+	canale = rez.get("canale") or []
+	if not canale:
+		return _("Transponderul nu anunță niciun canal.")
+	if not rez.get("sdt"):
+		return _("Servicii pe transponder: %d. Numele lipsesc: transponderul nu trimite tabelul SDT, se văd numai "
+			"numerele din PAT.") % len(canale)
+	codate = len([c for c in canale if c["codat"] is True])
+	return _("Canale pe transponder: %d (libere: %d, codate: %d).") % (len(canale), len(canale) - codate, codate)
 
 
 def anunta_motorul(text):
@@ -669,6 +1102,15 @@ class Masurare(object):
 		self.tsid = self.onid = None
 		self.tsid_stare = ""           # "", "se_citeste", "citit", "necitit"
 		self._tsid_in_asteptare = False
+		# TRL6: canalele de pe transponder (cere_canale); _canale_jeton se schimba la orice transponder nou sau oprire
+		self.canale = None
+		self.canale_stare = ""         # "", "se_citeste", "citit", "necitit"
+		self.canale_mesaj = ""
+		self.canale_rezumat = ""
+		self._canale_jeton = 0
+		self._canale_lucru = None      # {"sursa", "fd": {fd: pid}, "rest", "tabele", "pornit"}
+		self._ceas_canale = None
+		self.sursa_canale = None       # demux -> sursa (probele dau una falsa); implicit SursaDemux
 		self._tp_dupa_motor = None
 		self._mesaj = ""               # detaliul fazei (refuzul, standby, înregistrarea)
 		self._mesaj_scurt = ("", 0.0)  # un rând pentru câteva secunde (galbenul în mersul motorului)
@@ -688,6 +1130,7 @@ class Masurare(object):
 		# canalul oprit de măsurare și rămas fără stăpân după o cedare, cu paza lui (verificarea finală, Mediu A)
 		self._program_datorat = None
 		self._ceas_datorie = None
+		self._sistem_acordat = None    # GST7: DVB-T sau DVB-T2 trimis ultima data, cand lista nu spune sistemul
 		self._goleste()
 
 	# ---- ceasuri
@@ -735,6 +1178,7 @@ class Masurare(object):
 		self.nivel = None
 		self.nivel_afisat = None
 		self.calitate = None
+		self.calitate_db = None
 		self.ber = None
 		self.blocat = False
 		self.stare_tuner = ""
@@ -744,18 +1188,24 @@ class Masurare(object):
 			self._plafon_din = None
 
 	def _seteaza_tp(self, tp, extra):
-		schimbat = self.tp is None or any(self.tp.get(k) != tp.get(k) for k in CAMPURI_NUCLEU)
-		self.tp = dict((k, tp[k]) for k in CAMPURI_NUCLEU)
+		schimbat = self.tp is None or fel_tp(self.tp) != fel_tp(tp) or any(self.tp.get(k) != tp.get(k)
+			for k in campuri_tp(tp))
+		self.tp = copie_tp(tp)
 		self.extra = dict(extra or {})
 		if schimbat:
 			self._generatie_tp += 1
 			self.tsid = self.onid = None
 			self.tsid_stare = ""
+			self.uita_canalele()
 
 	def _faza(self, faza):
 		self.faza = faza
 
 	def _verifica(self, tp):
+		fel = fel_tp(tp)
+		if fel != FEL_SATELIT:
+			motiv = _liste().motiv_refuz_terestru(tp) if fel == FEL_TERESTRU else _liste().motiv_refuz_cablu(tp)
+			return _("Frecvență pe care tunerul nu o poate acorda: %s") % motiv if motiv else ""
 		if tp["system"] == SISTEM_DVB_S2 and not self.s2:
 			return _("Tunerul nu are DVB-S2. Alege un transponder DVB-S.")
 		motiv = _reguli().motiv_refuz(tp)
@@ -866,8 +1316,8 @@ class Masurare(object):
 			self._tp_dupa_motor = None
 			self._refuz(eroare)
 			return False, eroare
-		if (self.faza == "motor" and self.tp is not None and self.tuner.are_tuner()
-				and tp["orbital_position"] == self.tp["orbital_position"]):
+		if (self.faza == "motor" and self.tp is not None and self.tuner.are_tuner() and fel_tp(tp) == FEL_SATELIT
+				and fel_tp(self.tp) == FEL_SATELIT and tp["orbital_position"] == self.tp["orbital_position"]):
 			# același satelit cât merge motorul: un acord acum ar uita poziția de plecare (estimarea dispare,
 			# timpul maxim devine 6 minute); se acordează după oprire (revizia, punctul 4)
 			self._tp_dupa_motor = (dict((k, tp[k]) for k in CAMPURI_NUCLEU), dict(extra or {}))
@@ -929,6 +1379,7 @@ class Masurare(object):
 			self._preia_datoria()
 		self.tuner.elibereaza(reda_canalul)
 		self._goleste()
+		self.uita_canalele()
 		self._motor, self._motor_era = {}, False
 		self._faza("oprita")
 		self._notifica()
@@ -973,6 +1424,8 @@ class Masurare(object):
 		self._goleste(si_varful=faza == "acord")
 		m = self._stare_motor()
 		se_misca = bool(m.get("se_misca"))
+		if fel_tp(self.tp) != FEL_SATELIT:
+			return self._acordeaza_tc(faza)
 		anunta_motorul("%s: %s" % (self.cine or "web", ce))
 		cod = acordeaza(self.tuner.frontend, self.tp)
 		if cod != 0:
@@ -986,6 +1439,39 @@ class Masurare(object):
 			# TUNING, citirile nu intră în vârful calității
 			self._varf_asteapta = True
 		self._in_driver = (self.tuner.frontend, dict(self.tp))
+		self._motor_la_refuz = False
+		self._mesaj = ""
+		self.incercari += 1
+		self._t_acord = self._t_baza = time.monotonic()
+		self._faza(faza)
+		self._notifica()
+		self._porneste_citirea()
+		return True, ""
+
+	def _tp_acordat(self):
+		"""Transponderul cum a plecat ultima data spre nucleu: la terestrul fara sistem in lista, cu DVB-T2 sau DVB-T
+		cel incercat acum (pentru texte)."""
+		if self.tp is None or self._sistem_acordat is None or fel_tp(self.tp) != FEL_TERESTRU:
+			return self.tp
+		return dict(self.tp, system=self._sistem_acordat)
+
+	def _acordeaza_tc(self, faza):
+		"""Acordul terestru sau de cablu (fara motor, fara LNB). Cand lista nu spune daca e DVB-T sau DVB-T2, incercarile
+		le iau pe rand: intai DVB-T2 (cele mai multe retele de acum), apoi DVB-T, la fiecare reacordare singura.
+		self.tp ramane cel ales (fara sistem), ca ecranul sa nu vada alt transponder la fiecare incercare."""
+		L = _liste()
+		tp = self.tp
+		self._sistem_acordat = None
+		if fel_tp(tp) == FEL_TERESTRU and tp.get("system") not in (L.SISTEM_DVBT, L.SISTEM_DVBT2):
+			self._sistem_acordat = (L.SISTEM_DVBT2, L.SISTEM_DVBT)[self.incercari % 2]
+			tp = dict(tp, system=self._sistem_acordat)
+		cod = acordeaza(self.tuner.frontend, tp)
+		if cod != 0:
+			self._motor_la_refuz = False
+			self._refuz(_("Tunerul nu poate acorda %s.") % text_transponder(tp))
+			return False, self._mesaj
+		self._varf_asteapta = True
+		self._in_driver = (self.tuner.frontend, dict(tp))
 		self._motor_la_refuz = False
 		self._mesaj = ""
 		self.incercari += 1
@@ -1048,6 +1534,7 @@ class Masurare(object):
 		self.nivel_afisat = d.get("tuner_signal_power")
 		self.nivel = d.get("tuner_signal_power_raw", self.nivel_afisat)
 		self.calitate = d.get("tuner_signal_quality")
+		self.calitate_db = d.get("tuner_signal_quality_db")
 		self.ber = d.get("tuner_bit_error_rate")
 		self._motor = self._stare_motor()
 		if self.stare_tuner != "TUNING":
@@ -1131,6 +1618,146 @@ class Masurare(object):
 			self.tsid, self.onid, self.tsid_stare = int(tsid), int(onid), "citit"
 		self._notifica()
 
+	# ---- canalele de pe transponder (TRL6)
+	def cere_canale(self, cine="web"):
+		"""Deschide doua filtre (PAT, SDT actual) pe demuxul canalului brut; un eTimer le citeste fara asteptare
+		(_citeste_canalele). Rezultatul vine in stare() (canale, canale_stare) si la ascultatori. Nimic nu se scrie in
+		lista de canale. Intoarce (reusit, text)."""
+		refuz = self._refuz_pentru(cine)
+		if refuz:
+			return False, refuz
+		if self.faza != "prins" or self.tuner.canal is None:
+			return False, _("Canalele se citesc după ce semnalul e recepționat.")
+		if self.canale_stare == "se_citeste":
+			return True, ""
+		self.uita_canalele()
+		jeton = self._canale_jeton
+		try:
+			demux = self.tuner.canal.reserveDemux()
+			if isinstance(demux, (tuple, list)):
+				demux = demux[0] if demux else -1
+		except Exception as e:
+			print("[HdsGasireSemnal] demuxul pentru canale: %s" % e)
+			demux = -1
+		if not isinstance(demux, int) or demux < 0:
+			self._canale_gata(jeton, None, _("Nu am demux liber pentru citirea canalelor. Încearcă din nou."))
+			return False, self.canale_mesaj
+		lucru = {"sursa": None, "fd": {}, "rest": {}, "tabele": {PID_PAT: TabelCanale(TID_PAT),
+			PID_SDT: TabelCanale(TID_SDT)}, "pornit": time.monotonic(), "canal": self.tuner.canal}
+		try:
+			if self.sursa_canale is not None:
+				lucru["sursa"] = self.sursa_canale(demux)
+			else:
+				from Components.HdsAnalizaFlux import SursaDemux
+				lucru["sursa"] = SursaDemux(demux)
+			for pid, tid in ((PID_PAT, TID_PAT), (PID_SDT, TID_SDT)):
+				fd = lucru["sursa"].sectiuni(pid, tid)
+				lucru["fd"][fd], lucru["rest"][fd] = pid, b""
+		except Exception as e:
+			self._canale_lucru = lucru
+			self.uita_canalele()
+			self._canale_gata(self._canale_jeton, None, _("Canalele nu se pot citi: %s") % e)
+			return False, self.canale_mesaj
+		self._canale_lucru = lucru
+		self.canale_stare = "se_citeste"
+		self._ceas("_ceas_canale", self._citeste_canalele).start(PAS_CANALE_MS, True)
+		self._notifica()
+		return True, ""
+
+	def _inchide_filtrele(self, lucru):
+		for fd in list(lucru["fd"]):
+			try:
+				lucru["sursa"].inchide(fd)
+			except Exception as e:
+				print("[HdsGasireSemnal] filtrul canalelor: %s" % e)
+		lucru["fd"].clear()
+
+	def uita_canalele(self):
+		"""Transponder nou, oprire sau cedare: filtrele se inchid, lista de dinainte nu mai e a acestui transponder."""
+		lucru, self._canale_lucru = self._canale_lucru, None
+		if lucru is not None:
+			self._inchide_filtrele(lucru)
+		if self._ceas_canale is not None:
+			self._ceas_canale.stop()
+		self._canale_jeton += 1
+		self.canale = None
+		self.canale_stare = ""
+		self.canale_mesaj = self.canale_rezumat = ""
+
+	def _citeste_canalele(self):
+		"""Din eTimer: un pas al citirii (_citeste_canalele_pas). O eroare neasteptata (date ciudate in imparte,
+		TabelCanale.primeste, rezultat_canale) nu lasa citirea agatata in "se_citeste" cu filtrele deschise: filtrele
+		se inchid, temporizatorul se opreste, iar omul vede ca nu s-au putut citi."""
+		try:
+			self._citeste_canalele_pas()
+		except Exception as e:
+			print("[HdsGasireSemnal] citirea canalelor: %r" % (e,))
+			if self.canale_stare != "se_citeste":
+				return  # rezultatul era deja pus (a cazut un ascultator din _notifica): ramane
+			self.uita_canalele()
+			self._canale_gata(self._canale_jeton, None, _("Canalele nu se pot citi: %s") % e)
+			self._notifica()
+
+	def _citeste_canalele_pas(self):
+		"""Ce s-a strans in filtre, fara asteptare (filtrele sunt deschise fara blocare), cel mult
+		CANALE_CITIRI_PE_PAS citiri pe filtru. Filtrul unui tabel intreg se inchide pe loc."""
+		lucru = self._canale_lucru
+		if lucru is None:
+			return
+		if self.tuner.canal is not lucru["canal"]:
+			# tunerul a fost dat inapoi sau luat din nou pe alt drum (alt slot): tabelele nu mai sunt ale lui
+			self.uita_canalele()
+			self._notifica()
+			return
+		from Components.HdsAnalizaFlux import imparte
+		eroare = ""
+		for fd, pid in list(lucru["fd"].items()):
+			tabel = lucru["tabele"][pid]
+			for _i in range(CANALE_CITIRI_PE_PAS):
+				try:
+					buf = lucru["sursa"].citeste(fd)
+				except Exception as e:
+					eroare = str(e)
+					buf = None
+				if not buf:
+					if buf == b"":
+						lucru["rest"][fd] = b""          # tamponul filtrului a fost depasit: se ia de la sectiunea urmatoare
+					break
+				bucati, lucru["rest"][fd] = imparte(buf, lucru["rest"][fd])
+				for s in bucati:
+					tabel.primeste(s)
+			if tabel.intreg() or eroare:
+				try:
+					lucru["sursa"].inchide(fd)
+				except Exception:
+					pass
+				del lucru["fd"][fd]
+		expirat = time.monotonic() - lucru["pornit"] >= CANALE_TERMEN_S
+		if lucru["fd"] and not expirat:
+			self._ceas("_ceas_canale", self._citeste_canalele).start(PAS_CANALE_MS, True)
+			return
+		self._inchide_filtrele(lucru)
+		self._canale_lucru = None
+		pat, sdt = lucru["tabele"][PID_PAT], lucru["tabele"][PID_SDT]
+		if not pat.sectiuni and not sdt.sectiuni:
+			mesaj = _("Canalele nu se pot citi: %s") % eroare if eroare else _("Nu a venit niciun tabel de pe transponder "
+				"în %d s. Semnalul poate fi prea slab; încearcă din nou.") % int(CANALE_TERMEN_S)
+			self._canale_gata(self._canale_jeton, None, mesaj)
+		else:
+			self._canale_gata(self._canale_jeton, rezultat_canale(pat, sdt), "")
+		self._notifica()
+
+	def _canale_gata(self, jeton, rez, mesaj):
+		if jeton != self._canale_jeton:
+			return
+		if rez is None:
+			self.canale, self.canale_stare, self.canale_mesaj, self.canale_rezumat = None, "necitit", mesaj, ""
+			return
+		self.canale = rez["canale"]
+		self.canale_stare = "citit"
+		self.canale_mesaj = ""
+		self.canale_rezumat = rezumat_canale(rez)
+
 	# ---- paza: înregistrări, pagina web
 	def _pazeste(self):
 		acum = time.time()
@@ -1188,6 +1815,7 @@ class Masurare(object):
 		self._opreste_citirea()
 		self._opreste_paza()
 		self._goleste()
+		self.uita_canalele()
 		self._datoreaza(self.tuner.uita_canalul())
 		self._mesaj = _("Tunerul a fost cerut de altă funcție a receptorului. Apasă galben ca să măsori din nou.")
 		self._ocupat_transmisie = False
@@ -1297,10 +1925,24 @@ class Masurare(object):
 		fara_lista = _("Satelitul nu are transpondere în lista lui: se măsoară valorile bătute de mână.") \
 			if self.extra.get("fara_lista") else ""
 		interval = interval_incercare_s(self.tp)
+		fel = fel_tp(self.tp)
+		if f == "fara_semnal" and fel != FEL_SATELIT:
+			lista += [inregistrare, _("Niciun semnal în %d s. Se încearcă singur din nou la fiecare %d s (încercarea %d).") % (
+				timp_prindere_s(self.tp), interval, max(1, self.incercari))]
+			if self._sistem_acordat is not None:
+				lista.append(_("Lista nu spune dacă frecvența e DVB-T sau DVB-T2: încerc pe rând amândouă."))
+			if fel == FEL_TERESTRU and alimentare_5v(self.slot) is False:
+				lista.append(_("Alimentarea antenei (5 V) e oprită în Setări tuner. O antenă cu amplificator are nevoie de ea."))
+			lista.append(text_varf)
+			return [x for x in lista if x][:DETALII_MAXIM]
 		if f == "fara_tuner":
 			lista.append(_("Receptorul nu are niciun tuner de satelit, deci aici nu se poate măsura semnalul."))
 		elif f == "fara_sateliti":
 			lista.append(_("Tunerul nu are niciun satelit configurat. Configurează antena în „Setări tuner”, apoi revino aici."))
+		elif f == "ocupat" and fel != FEL_SATELIT:
+			lista.append(self._mesaj or _("Tunerul e folosit de o transmisie în rețea sau de o extensie. Oprește-o, apoi apasă galben."))
+		elif f == "inregistrare" and fel != FEL_SATELIT:
+			lista.append(_("Tunerul înregistrează acum. Găsirea semnalului merge după terminarea înregistrării."))
 		elif f == "ocupat":
 			lista.append(self._mesaj or _("Tunerul de satelit e folosit de o transmisie în rețea sau de o extensie. Oprește-o, apoi apasă galben."))
 		elif f == "inregistrare":
@@ -1340,6 +1982,11 @@ class Masurare(object):
 		"""Semnul de semnal prea puternic sau de interferenta (intrare_prea_puternica), pentru acum."""
 		return intrare_prea_puternica(self.faza, getattr(self, "_plafon_din", None), time.monotonic())
 
+	def _calitate_db_tc(self):
+		if fel_tp(self.tp) == FEL_SATELIT or not isinstance(self.calitate_db, int):
+			return None
+		return round(self.calitate_db / 100.0, 1)
+
 	def _text_retea(self):
 		if self.tsid_stare != "citit":
 			return ""
@@ -1364,6 +2011,10 @@ class Masurare(object):
 	def _text_antena(self):
 		if self.tp is None:
 			return ""
+		if fel_tp(self.tp) == FEL_TERESTRU:
+			return _("terestră (DVB-T/T2)")
+		if fel_tp(self.tp) == FEL_CABLU:
+			return _("cablu (DVB-C)")
 		m = self._motor
 		if self.faza == "motor" and m.get("la_orbital", -1) >= 0:
 			return "%s %s" % (_("spre"), text_pozitie(m["la_orbital"]))
@@ -1384,7 +2035,10 @@ class Masurare(object):
 			"detinator": self.cine,
 			"slot": self.slot,
 			"tp": dict(self.tp) if self.tp else None,
-			"tp_text": text_transponder(self.tp) if self.tp else "",
+			"tp_text": text_transponder(self._tp_acordat()) if self.tp else "",
+			# GST7: felul tunerului masurat (S, T, C) si, la terestru, alimentarea antenei din Setari tuner
+			"fel": fel_tp(self.tp) if self.tp else "",
+			"alimentare_5v": alimentare_5v(self.slot) if self.tp and fel_tp(self.tp) == FEL_TERESTRU else None,
 			"pozitie_text": self._text_antena(),
 			# pe ecran si in web: 0 fara semnal prins, ca in bara de informatii (SEM 0.7.5)
 			"nivel_brut": self.nivel_afisat if citeste else None,
@@ -1392,6 +2046,8 @@ class Masurare(object):
 			"nivel_la_suta": la_suta(self.nivel_afisat) if citeste else None,
 			"calitate_la_suta": la_suta(self.calitate) if citeste else None,
 			"calitate_db": None,   # nucleul nu are formula pentru tunerul nostru (frontend.cpp, 0x12345678)
+			# GST7: la terestru si cablu, calitatea in dB cand tunerul o da (sutimi de dB din frontend.cpp); altfel None
+			"calitate_db_tc": self._calitate_db_tc() if citeste else None,
 			"ber": self.ber if citeste else None,
 			"blocat": bool(self.blocat) if citeste else False,
 			"stare_tuner": self.stare_tuner if citeste else "",
@@ -1409,6 +2065,12 @@ class Masurare(object):
 			"onid_text": self._text_id(self.onid),
 			"tsid_asteptat": self.extra.get("tsid", -1),
 			"onid_asteptat": self.extra.get("onid", -1),
+			# TRL6: canalele de pe transponder, citite la cerere (cere_canale)
+			"canale": [dict(c) for c in self.canale] if self.canale is not None else None,
+			"canale_stare": self.canale_stare,
+			"canale_mesaj": self.canale_mesaj,
+			"canale_rezumat": self.canale_rezumat,
+			"canale_se_pot_citi": self.faza == "prins",
 			"canal_oprit": bool(self.tuner.am_oprit_canalul),
 			"canal_datorat": self._program_datorat is not None,
 			"iesirea_opreste_antena": self.iesirea_opreste_antena(),

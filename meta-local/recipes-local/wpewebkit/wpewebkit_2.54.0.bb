@@ -134,8 +134,10 @@ RRECOMMENDS:${PN} += "ca-certificates virtual-egl virtual-libgles2"
 # Vu+ 4K (lotul vuplus4k): eglplatform.h din vuplus-libgles-<masina> cere BROADCOM_PLATFORM (altfel include X11/Xlib.h),
 # ca la libepoxy_1.5.10.bbappend; desenul ramane pe procesor (peticul 0006), deci EGL nu se foloseste la rulare.
 CFLAGS:append:vusolo4k = " -DBROADCOM_PLATFORM"
+CFLAGS:append:vuuno4k = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuultimo4k = " -DBROADCOM_PLATFORM"
 CXXFLAGS:append:vusolo4k = " -DBROADCOM_PLATFORM"
+CXXFLAGS:append:vuuno4k = " -DBROADCOM_PLATFORM"
 CXXFLAGS:append:vuultimo4k = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuuno4kse = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuzero4k = " -DBROADCOM_PLATFORM"

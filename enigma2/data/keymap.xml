@@ -123,6 +123,9 @@
 	     Viper nu o are) si KEY_SYSRQ (Print Screen pe o tastatura USB) fac captura ecranului: legarea globala din
 	     Components/HdsCapturi.py (pe orice ecran, in afara de standby) le ia inaintea oricarei harti; legatura de aici
 	     ramane pentru bara cand legarea globala lipseste. -->
+	<map context="HdsZgemmaActions">
+		<key id="KEY_SLEEP" mapto="oprireProgramata" flags="b" />
+	</map>
 	<map context="HdsInfobarActions">
 		<key id="KEY_INFO" mapto="ghidProgram" flags="l" />
 		<key id="KEY_EPG" mapto="ghidProgram" flags="m" />
@@ -493,6 +496,14 @@
 		<key id="KEY_ENTER" mapto="toggleShow" flags="m" />
 		<key id="KEY_EXIT" mapto="hide" flags="m" />
 		<key id="KEY_ESC" mapto="hide" flags="m" />
+	</map>
+
+	<!-- EXL6 (22.11.2026): EXIT tinut apasat inchide fereastra pasilor IPTV (Components/HdsIptvRedare.Legatura._tastaExit).
+	     Legat numai cat fereastra se vede si numai cu Da la config.usage.hds_iptv_fereastra_exit (Nu din fabrica); numai
+	     apasarea lunga, deci apasarea scurta (hide de mai sus) ramane neschimbata. -->
+	<map context="HdsIptvFereastraActions">
+		<key id="KEY_EXIT" mapto="inchideFereastra" flags="l" />
+		<key id="KEY_ESC" mapto="inchideFereastra" flags="l" />
 	</map>
 
 	<map context="InfobarActions">
@@ -996,6 +1007,10 @@
 		<key id="KEY_ESC" mapto="cancel" flags="m" />
 	</map>
 	
+	<map context="HdsMeniuCircularActions">
+		<key id="KEY_UP" mapto="up" flags="mr" />
+		<key id="KEY_DOWN" mapto="down" flags="mr" />
+	</map>
 	<map context="DirectionActions">
 		<key id="KEY_UP" mapto="up" flags="m" />
 		<key id="KEY_DOWN" mapto="down" flags="m" />

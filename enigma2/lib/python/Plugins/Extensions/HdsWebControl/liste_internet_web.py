@@ -37,15 +37,15 @@ def _m(M=None):
 
 def argumente(request):
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:8]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 20:
+		if cheie == "token":
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:300].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -73,6 +73,12 @@ def stare(a, M=None):
 def instaleaza(a, M=None):
 	"""POST /api/liste-internet-instaleaza."""
 	M = _m(M)
+	if "automat" in a:
+		if a.get("automat") not in ("da", "nu") or a.get("id"):
+			return {"result": False, "message": _t("Alege Da sau Nu pentru actualizarea automată.")}
+		fel, _l = M.porneste_setare_automat(a["automat"] == "da")
+		return {"result": fel == "pornit", "message": _t("Se salvează alegerea...") if fel == "pornit" else
+			_t("Un import e deja în curs. Așteaptă să se termine.")}
 	fel, _l = M.porneste_instalarea(a.get("id", ""))
 	if fel == "necunoscuta":
 		M.porneste_citirea(fortat=True)
@@ -97,6 +103,8 @@ def pune_la_loc(a, M=None):
 
 def rute(baza, resource, M=None):
 	"""Resursele: ({nume: resursa de sub /api}, resursa paginii). `baza` e HdsJsonResource din plugin.py."""
+
+	_m(M).demareaza_automat()
 
 	class StareResource(baza):
 		def render_GET(self, request):
@@ -203,6 +211,7 @@ PAGINA = """<!DOCTYPE html>
     <span id="instalata"></span>
     <button id="pune" type="button" hidden>Pune la loc lista de dinainte</button>
   </div>
+  <p><label>Actualizare automată <select id="automat"><option value="nu">Nu</option><option value="da">Da</option></select></label></p>
   <div id="liste"></div>
 </section>
 <p class="mesaj" id="mesaj"></p>
@@ -256,6 +265,8 @@ function arata(d){
   $("instalata").textContent = d.instalata_text || "";
   $("pune").hidden = !d.poate_pune_la_loc;
   $("pune").disabled = !!d.lucreaza;
+  $("automat").value = d.automat ? "da" : "nu";
+  $("automat").disabled = !!d.lucreaza || !d.automat_incarcat;
   deseneaza();
   var m = [];
   if(d.citeste){ m.push(d.texte.citeste); }
@@ -263,7 +274,7 @@ function arata(d){
   if(!d.lucreaza && d.ultimul && d.ultimul.mesaje){ m = m.concat(d.ultimul.mesaje.slice(0, 2)); }
   if(m.length || !d.lucreaza){ mesaj(m.join(" "), d.ultimul && !d.ultimul.ok && !d.lucreaza); }
   clearTimeout(asteapta);
-  if(d.citeste || d.lucreaza){ asteapta = setTimeout(citeste, 1500); }
+  if(d.citeste || d.lucreaza || !d.automat_incarcat){ asteapta = setTimeout(citeste, 1500); }
 }
 function citeste(forta){
   cerere("/api/liste-internet" + (forta ? "?citeste=1" : "")).then(function(d){
@@ -282,6 +293,7 @@ function instaleaza(id){ porneste("/api/liste-internet-instaleaza?id=" + encodeU
 $("fel").onchange = function(){ felAles = this.value; deseneaza(); };
 $("autor").onchange = function(){ autorAles = this.value; deseneaza(); };
 $("pune").onclick = function(){ porneste("/api/liste-internet-pune-la-loc"); };
+$("automat").onchange = function(){ this.disabled = true; porneste("/api/liste-internet-instaleaza?automat=" + this.value); };
 citeste(false);
 </script>
 </body>
@@ -303,6 +315,9 @@ TEXTE_PAGINA = {
 		N_("Sateliți"),
 		N_("Autor"),
 		N_("Pune la loc lista de dinainte"),
+		N_("Actualizare automată"),
+		N_("Da"),
+		N_("Nu"),
 	),
 	"js": (
 		N_("browser deconectat"),

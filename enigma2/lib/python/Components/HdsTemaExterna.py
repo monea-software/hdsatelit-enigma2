@@ -9,8 +9,12 @@
 #
 # INCLUDERILE (puneIncluderile): <include filename="..." conditional="..."/> de la radacina se inlocuieste, pe locul lui, cu
 # copiii radacinii fisierului inclus. Fisierul se cauta langa cel care il include, apoi langa tema, apoi in dosarul temelor.
-# O conditie falsa lasa includerea deoparte; un fisier lipsa, stricat sau inclus in cerc e o tema stricata (EroareTema).
-# Primul ecran cu un nume castiga (ca in tot restul incarcarii).
+# O conditie falsa lasa includerea deoparte; conditia stie BoxInfo/SystemInfo si, ca eval-ul din OE-Alliance, isfile(...) si
+# open(...).read() (numai citire). Un fisier stricat, inclus in cerc sau lipsa fara conditie e o tema stricata (EroareTema);
+# lipsa cu conditie adevarata se sare, ca in OE-Alliance.
+# Un nume de ecran scris in mai multe fisiere ale temei ramane o singura data, cel pe care il foloseste OE-Alliance
+# (ecraneCaInOeAlliance: al fisierului temei, apoi includerea de mai jos); in acelasi fisier castiga primul, iar intre tema si
+# rezerva HD Satelit castiga tema, ca pana acum.
 #
 # POZITIILE (rezolvaRelative): position="fill", "e-10", "c-624", "50%", "20*f" si orice expresie cu + - * / si paranteze,
 # fata de parinte (televizorul pentru un <screen>, ecranul pentru elementele lui). Se socoteste pe arborele expresiei, fara
@@ -119,13 +123,74 @@ def _t(text, traducere=None):
 
 # ------------------------------------------------------------------ includerile
 
+# OE-Alliance face eval(conditional) in skin.py, unde isfile si pathExists sunt la indemana, iar open e al lui Python; temele
+# scrise pentru el isi aleg asa fisierele (Obsidian-FHD: bara vremii numai cu convertorul OAWeather pe receptor, fonturile
+# sistemului sau ale temei, stilurile alese in setarile ei). Aici se stiu numai aceste intrebari despre fisiere, cu calea
+# data ca text, si citirea unui fisier (open(cale).read(), cel mult CITIRE_CONDITIE caractere); nimic nu se scrie si nu se ruleaza.
+FUNCTII_FISIERE = {"isfile": os.path.isfile, "isdir": os.path.isdir, "exists": os.path.exists, "pathExists": os.path.exists,
+	"fileExists": os.path.exists}
+CITIRE_CONDITIE = 65536
+# o tema intreaba de fisierul unui convertor sau randator ca sa stie daca il are receptorul (Obsidian-FHD: linia rotorului numai
+# cu RotorPosition); cele date de modulele noastre (MODULE_NOASTRE) nu au fisier, dar sunt pe receptor
+_CALE_COMPONENTA = re.compile(r"/usr/lib/enigma2/python/Components/(Converter|Renderer)/(\w+)\.pyc?$")
+
+
+def _fisierCeruta(functie, cale):
+	"""Raspunsul la isfile(cale) & co.; True si pentru fisierul unei componente date de modulele noastre."""
+	if functie(cale):
+		return True
+	m = _CALE_COMPONENTA.search(cale) if functie is not os.path.isdir else None
+	return bool(m and m.group(1) in MODULE_NOASTRE and m.group(2) in MODULE_NOASTRE[m.group(1)][1])
+
+
+def _functieFisier(func):
+	"""Functia de fisiere ceruta (isfile, os.path.isfile, pathExists...) sau None."""
+	import ast
+	if isinstance(func, ast.Name):
+		return FUNCTII_FISIERE.get(func.id)
+	if isinstance(func, ast.Attribute) and func.attr in ("isfile", "isdir", "exists") and isinstance(func.value, ast.Attribute) \
+			and func.value.attr == "path" and isinstance(func.value.value, ast.Name) and func.value.value.id == "os":
+		return FUNCTII_FISIERE[func.attr]
+	return None
+
+
+def _citireFisier(nod, cutie):
+	"""Textul fisierului pentru open(cale).read() sau open(cale, "r").read(); None cand nodul nu e asa."""
+	import ast
+	if not (isinstance(nod, ast.Call) and isinstance(nod.func, ast.Attribute) and nod.func.attr == "read" and not nod.args
+			and not nod.keywords):
+		return None
+	d = nod.func.value
+	if not (isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "open" and not d.keywords and 1 <= len(d.args) <= 2):
+		return None
+	cale = _valoareConditie(d.args[0], cutie)
+	mod = _valoareConditie(d.args[1], cutie) if len(d.args) == 2 else "r"
+	if not isinstance(cale, str) or mod not in ("r", "rt"):
+		raise ValueError("citire nepermisa")
+	# un fisier lipsa ridica eroarea, ca in Python: conditia e atunci falsa (conditieIncludere)
+	with open(cale, encoding="utf-8", errors="replace") as f:
+		return f.read(CITIRE_CONDITIE)
+
+
 def _valoareConditie(nod, cutie):
 	import ast
 	if isinstance(nod, ast.Expression):
 		return _valoareConditie(nod.body, cutie)
 	if isinstance(nod, ast.BoolOp):
-		valori = [_valoareConditie(v, cutie) for v in nod.values]
-		return all(valori) if isinstance(nod.op, ast.And) else any(valori)
+		# ca in Python: and se opreste la primul fals, or la primul adevarat (un open() dupa un isfile fals nu se mai citeste)
+		sau = isinstance(nod.op, ast.Or)
+		for v in nod.values:
+			if bool(_valoareConditie(v, cutie)) == sau:
+				return sau
+		return not sau
+	if isinstance(nod, ast.Call) and not nod.keywords and len(nod.args) == 1 and _functieFisier(nod.func) is not None:
+		cale = _valoareConditie(nod.args[0], cutie)
+		if not isinstance(cale, str):
+			raise ValueError("cale nepermisa")
+		return _fisierCeruta(_functieFisier(nod.func), cale)
+	text = _citireFisier(nod, cutie)
+	if text is not None:
+		return text
 	if isinstance(nod, ast.UnaryOp) and isinstance(nod.op, ast.Not):
 		return not _valoareConditie(nod.operand, cutie)
 	if isinstance(nod, ast.Compare) and len(nod.ops) == 1:
@@ -149,7 +214,7 @@ def _valoareConditie(nod, cutie):
 	# str(...), (...).startswith("7."): numai atat din apeluri; altceva nu se ruleaza
 	if isinstance(nod, ast.Call) and isinstance(nod.func, ast.Name) and nod.func.id == "str" and len(nod.args) == 1 and not nod.keywords:
 		return str(_valoareConditie(nod.args[0], cutie))
-	if isinstance(nod, ast.Call) and isinstance(nod.func, ast.Attribute) and nod.func.attr in ("startswith", "endswith", "lower", "upper") and not nod.keywords:
+	if isinstance(nod, ast.Call) and isinstance(nod.func, ast.Attribute) and nod.func.attr in ("startswith", "endswith", "lower", "upper", "strip") and not nod.keywords:
 		v = _valoareConditie(nod.func.value, cutie)
 		if isinstance(v, str):
 			return getattr(v, nod.func.attr)(*[_valoareConditie(x, cutie) for x in nod.args])
@@ -157,8 +222,8 @@ def _valoareConditie(nod, cutie):
 
 
 def conditieIncludere(expresie, cutie=None):
-	"""True daca includerea se ia (expresia peste BoxInfo/SystemInfo e adevarata); False pentru o expresie falsa sau pe care
-	nu o stim: fisierele facute anume pentru alte imagini raman deoparte."""
+	"""True daca includerea se ia (expresia peste BoxInfo/SystemInfo si fisierele receptorului e adevarata); False pentru o
+	expresie falsa sau pe care nu o stim: fisierele facute anume pentru alte imagini raman deoparte."""
 	try:
 		import ast
 		if cutie is None:
@@ -297,11 +362,14 @@ def _citesteXml(cale):
 	return citesteXml(cale)
 
 
-def puneIncluderile(radacina, dosar_tema, fisier_tema, dosar_teme=None, cutie=None, _lant=None, _vazute=None, _dosar=None):
+def puneIncluderile(radacina, dosar_tema, fisier_tema, dosar_teme=None, cutie=None, _lant=None, _vazute=None, _dosar=None, _ordine=None):
 	"""Inlocuieste <include> cu copiii fisierelor incluse (si ale includerilor lor). EroareTema la un fisier lipsa, stricat,
-	inclus in cerc sau prea adanc."""
+	inclus in cerc sau prea adanc. Un ecran cu acelasi nume in mai multe fisiere ramane o singura data, cel pe care il
+	foloseste OE-Alliance (ecraneCaInOeAlliance); in acelasi fisier ramane primul, ca pana acum."""
 	lant = _lant if _lant is not None else (os.path.realpath(fisier_tema),)
 	vazute = _vazute if _vazute is not None else set(lant)
+	ordine = [] if _ordine is None else _ordine
+	proprii = _primeleDinFisier(radacina)
 	for el in list(radacina.findall("include")):
 		poz = list(radacina).index(el)
 		radacina.remove(el)
@@ -311,6 +379,10 @@ def puneIncluderile(radacina, dosar_tema, fisier_tema, dosar_teme=None, cutie=No
 			continue
 		cale = caleInclus(fisier, [_dosar, dosar_tema], dosar_teme)
 		if cale is None:
+			if conditie:
+				# cu conditie adevarata si fara fisier: se sare, ca in OE-Alliance (un rand in jurnal, tema merge mai departe)
+				_jurnal("include %s: conditia e adevarata, dar fisierul lipseste; se sare" % fisier)
+				continue
 			raise EroareTema(MOTIV_INCLUDE, fisier)
 		real = os.path.realpath(cale)
 		if real in lant:
@@ -325,9 +397,47 @@ def puneIncluderile(radacina, dosar_tema, fisier_tema, dosar_teme=None, cutie=No
 			raise EroareTema(MOTIV_INCLUDE, "%s: %s" % (fisier, str(e)[:160]))
 		vazute.add(real)
 		if inclus.find("include") is not None:
-			puneIncluderile(inclus, dosar_tema, fisier_tema, dosar_teme, cutie, lant + (real,), vazute, os.path.dirname(cale))
+			puneIncluderile(inclus, dosar_tema, fisier_tema, dosar_teme, cutie, lant + (real,), vazute, os.path.dirname(cale), ordine)
+		else:
+			ordine.extend(_primeleDinFisier(inclus))
 		for i, copil in enumerate(list(inclus)):
 			radacina.insert(poz + i, copil)
+	ordine.extend(proprii)
+	if _ordine is None:
+		ecraneCaInOeAlliance(radacina, ordine)
+
+
+def _primeleDinFisier(radacina):
+	"""Ecranele unui fisier al temei, fiecare nume (cu id-ul lui) o singura data: primul, ca pana acum la noi."""
+	vazute, rez = set(), []
+	for x in radacina:
+		if x.tag != "screen":
+			continue
+		k = (x.attrib.get("name"), x.attrib.get("id"))
+		if k not in vazute:
+			vazute.add(k)
+			rez.append(x)
+	return rez
+
+
+def ecraneCaInOeAlliance(radacina, ordine):
+	"""Intre fisierele temei, ca in OE-Alliance (skin.py, loadSkin: intai ecranele fisierelor incluse, in ordinea lor, apoi ale
+	fisierului insusi, iar acelasi nume il inlocuieste pe cel de dinainte): castiga ecranul fisierului temei, apoi cel din
+	includerea de mai jos. Temele se bizuie pe asta (Obsidian-FHD: skin_weather.xml pune bara vremii peste locul gol din
+	skin_templates.xml, stilul Floating inlocuieste lista canalelor; o alta tema: meniul principal al ei, nu ecranul
+	cu acelasi nume al unui plugin dintr-un fisier inclus). In acelasi fisier ramane primul, ca pana acum. Aici, unde castiga primul
+	ecran gasit, cele care pierd se scot. `ordine`: ecranele in ordinea inregistrarii; acelasi nume cu alt id (alt afisaj)
+	ramane separat."""
+	castig = {}
+	for x in ordine:
+		if x.attrib.get("name"):
+			castig[(x.attrib.get("name"), x.attrib.get("id"))] = x
+	for x in list(radacina):
+		if x.tag != "screen":
+			continue
+		ales = castig.get((x.attrib.get("name"), x.attrib.get("id")))
+		if ales is not None and ales is not x:
+			radacina.remove(x)
 
 
 # ------------------------------------------------------------------ pozitiile
@@ -1283,7 +1393,8 @@ def cauzaCaderii(pornit=None, iesire=None, jurnal=None):
 			f.seek(max(0, f.tell() - 16384))
 			randuri = f.read().decode("utf-8", "replace").splitlines()
 		for rand in reversed(randuri):
-			if "s-a oprit neasteptat" in rand and "; cauza: " in rand:
+			# ASI7: si randul unei reporniri cerute (cauza oprire, deci "" mai jos, ca inainte)
+			if ("s-a oprit neasteptat" in rand or "oprita la cerere" in rand) and "; cauza: " in rand:
 				try:
 					# un rand de acum mai bine de JURNAL_VECHI_S nu mai e al probei temei (ora mai noua: ceasul a sarit, se ia)
 					if time.time() - time.mktime(time.strptime(rand[:19], "%Y-%m-%d %H:%M:%S")) > JURNAL_VECHI_S:

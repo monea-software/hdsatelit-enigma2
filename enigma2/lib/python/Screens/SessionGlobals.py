@@ -51,7 +51,9 @@ class SessionGlobals(Screen):
 			FrontpanelLed(which=0, boolean=False, propriu=True,
 				patterns=[PATTERN_OFF, PATTERN_BLINK, PATTERN_OFF, PATTERN_BLINK]).connect(combine)
 		elif nr_leds == 2:
-			FrontpanelLed(which=0, boolean=False, propriu=True,
+			# DM900/DM920: channel 0 is blue, channel 1 red (opposite to the legacy pair).
+			rosu, pornit = (1, 0) if SystemInfo.get("machinebuild") in ("dm900", "dm920") else (0, 1)
+			FrontpanelLed(which=rosu, boolean=False, propriu=True,
 				patterns=[PATTERN_OFF, PATTERN_BLINK, PATTERN_ON, PATTERN_BLINK]).connect(combine)
-			FrontpanelLed(which=1, boolean=False, propriu=True,
+			FrontpanelLed(which=pornit, boolean=False, propriu=True,
 				patterns=[PATTERN_ON, PATTERN_ON, PATTERN_OFF, PATTERN_OFF]).connect(combine)

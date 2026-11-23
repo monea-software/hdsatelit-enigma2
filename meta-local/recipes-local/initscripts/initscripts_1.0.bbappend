@@ -8,6 +8,7 @@ HDS_MONTARI_FUNDAL:vuduo4kse = "1"
 HDS_MONTARI_FUNDAL:vuuno4kse = "1"
 HDS_MONTARI_FUNDAL:vuzero4k = "1"
 HDS_MONTARI_FUNDAL:vusolo4k = "1"
+HDS_MONTARI_FUNDAL:vuuno4k = "1"
 HDS_MONTARI_FUNDAL:vuultimo4k = "1"
 HDS_MONTARI_FUNDAL:gbtrio4k = "1"
 SRC_URI:append = " ${@'file://hds-mountall' if d.getVar('HDS_MONTARI_FUNDAL') == '1' else ''}"
@@ -17,6 +18,7 @@ PACKAGE_ARCH:vuduo4kse = "${MACHINE_ARCH}"
 PACKAGE_ARCH:vuuno4kse = "${MACHINE_ARCH}"
 PACKAGE_ARCH:vuzero4k = "${MACHINE_ARCH}"
 PACKAGE_ARCH:vusolo4k = "${MACHINE_ARCH}"
+PACKAGE_ARCH:vuuno4k = "${MACHINE_ARCH}"
 PACKAGE_ARCH:vuultimo4k = "${MACHINE_ARCH}"
 PACKAGE_ARCH:gbtrio4k = "${MACHINE_ARCH}"
 
@@ -77,3 +79,45 @@ python hds_umountfs_locuri_cu_spatiu() {
     cale.write_text(text.replace(vechi, nou))
 }
 do_install[postfuncs] += " hds_umountfs_locuri_cu_spatiu"
+
+# HDSatelit 0.7.8 (SSO, Vu+ Solo SE, e-mailurile 6529 si 6531): la oprirea completa (rc0) umountfs din OE-Alliance dormea
+# 5 s FARA CONDITIE dupa sdparm --command=stop ("problematic HDD park"), deci si pe receptoarele fara disc, cu un stick
+# sau cu discul de pornire sarit: 5 s de ecran negru la fiecare oprire, inainte ca receptorul sa se stinga. Acum cele 5 s
+# raman numai dupa ce un disc care se roteste si nu e detasabil a primit oprirea cu succes: /sys/block/sdX/queue/rotational
+# diferit de 0 si /sys/block/sdX/removable diferit de 1 (un stick USB spune rotational=1, dar removable=1; un disc USB
+# spune de obicei removable=0; necitit = disc, deci pauza). E cazul pentru care a fost pusa pauza (discul de pe USB,
+# inclusiv cel de pornire cand /proc/mounts nu-l arata cu numele lui, de pilda /dev/root). Repornirea (rc6) nu avea pauza
+# si ramane asa. Pentru toate modelele.
+PR:append = ".hdsso1"
+
+python hds_umountfs_parcare_numai_cu_disc() {
+    import pathlib
+    cale = pathlib.Path(d.getVar('D') + d.getVar('sysconfdir') + '/init.d/umountfs')
+    text = cale.read_text()
+    vechi = ('      echo "Stopping $dev..."\n'
+             '      sdparm --command=stop "$dev"\n'
+             '    else\n'
+             '      echo "Skipping root device $dev"\n'
+             '    fi\n'
+             '  done\n'
+             '\n'
+             '  sleep 5\n'
+             'fi\n')
+    if text.count(vechi) != 1 or text.count('for dev in /dev/sd?; do\n') != 1:
+        bb.fatal('umountfs s-a schimbat; trebuie verificat din nou (pauza de parcare)')
+    nou = ('      echo "Stopping $dev..."\n'
+           '      # HDSatelit: pauza de parcare numai dupa un disc care se roteste si nu e detasabil, oprit cu succes\n'
+           '      sdparm --command=stop "$dev" && [ "$(cat /sys/block/$(basename "$dev")/queue/rotational 2>/dev/null)" != 0 ] &&\n'
+           '        [ "$(cat /sys/block/$(basename "$dev")/removable 2>/dev/null)" != 1 ] && parcare=1\n'
+           '    else\n'
+           '      echo "Skipping root device $dev"\n'
+           '    fi\n'
+           '  done\n'
+           '\n'
+           '  [ -z "$parcare" ] || sleep 5\n'
+           'fi\n')
+    text = text.replace(vechi, nou)
+    text = text.replace('for dev in /dev/sd?; do\n', 'parcare=""\n  for dev in /dev/sd?; do\n', 1)
+    cale.write_text(text)
+}
+do_install[postfuncs] += " hds_umountfs_parcare_numai_cu_disc"

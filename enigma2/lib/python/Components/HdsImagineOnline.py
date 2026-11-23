@@ -582,11 +582,23 @@ def _loc_pornire_multipla(cmdline):
 	try:
 		t = tintaScrierii(cmdline)
 	except ValueError as e:
-		return _refuz_loc("stick sau kexec: %s" % e)
+		r = _refuz_loc("stick sau kexec: %s" % e)
+		# garda pornirii: la nucleul unui loc pornit cu sistemul altuia omul afla ce s-a intamplat (text) si locul bun (ajutor)
+		d = getattr(e, "diagnostic", None) or {}
+		if d.get("amestec"):
+			r["text"], r["ajutor"] = d.get("motiv") or str(e), d.get("ajutor", "")
+		return r
 	if t.get("fel") not in FELURI_PORNIRE_MULTIPLA:
 		return _refuz_loc("stick")
 	return {"bun": True, "fel": t["fel"], "kernel": t["nucleu"], "radacina": t["radacina"], "subdosar": t["subdosar"],
 		"loc": int(t["loc"] or 0), "argumente": t["argumente"].split()}
+
+
+def text_loc(tinta=None):
+	"""Textul pentru om cand locul de scriere nu e bun: al garzii pornirii (nucleul unui loc pornit cu sistemul altuia, apoi
+	locul bun), altfel T_LOC_STRAIN, ca pana acum. Fara `tinta` se citeste locul de acum."""
+	t = citeste_tinta() if tinta is None else tinta
+	return " ".join(x for x in (t.get("text"), t.get("ajutor")) if x) or _t(T_LOC_STRAIN)
 
 
 def pe_tinta(tinta, dispozitiv):
@@ -1613,7 +1625,7 @@ class ImagineOnline(object):
 		tinta = citeste_tinta()
 		if not tinta.get("bun"):
 			_jurnal("locul nu e bun: %s" % tinta.get("motiv"))
-			return _t(T_LOC_STRAIN), None
+			return text_loc(tinta), None
 		punct, text = alege_stick(o["imagine"])
 		if not punct:
 			return text, None
@@ -1659,8 +1671,9 @@ class ImagineOnline(object):
 		if self.ocupat():
 			self.mesaj = self.pas or _t(P_CAUT)
 			return False
-		if not citeste_tinta().get("bun"):
-			self.mesaj = _t(T_LOC_STRAIN)
+		tinta = citeste_tinta()
+		if not tinta.get("bun"):
+			self.mesaj = text_loc(tinta)
 			return False
 		imagine = dict(x[0], masina=masina_acum())
 		punct, text = alege_stick(imagine)

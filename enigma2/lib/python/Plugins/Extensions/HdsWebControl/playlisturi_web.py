@@ -371,8 +371,6 @@ def rute(baza, resource, M=None, C=None, AW=None, A=None, H=None):
 
 		def render_POST(self, request):
 			from . import plugin as P
-			if P.PARAM_JETON in request.args:
-				return self._eroare(request, _t("Playlisturile se fac numai din pagina lor, cu browserul conectat."), 403)
 			_secret, browser = P._sesiuneDinCerere(request)
 			adresa = P._adresaClient(request) or ""
 			if browser is None:

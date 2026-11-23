@@ -478,11 +478,12 @@ class HdsAjutorCuprins(HdsAjutorLista):
 class HdsAjutorPagina(_Baza):
 	"""O pagina de ajutor, fara poze."""
 
-	def __init__(self, session, pagina, ecran=_DIN_MENIU):
+	def __init__(self, session, pagina, ecran=_DIN_MENIU, taste_formular=None):
 		_Baza.__init__(self, session, ecran)
 		self.skin = self._skinImplicit()
 		self.i = pagina
 		self.setTitle(A.titlu_pagina(pagina, self.limba) or self.T("ajutor"))
+		self._tasteFormular = taste_formular
 		self.blocuri = []           # [(prima linie selectabila, [liniile blocului], legatura, inceputul cu titlul)]
 		self._randuri = []          # randurile desenate ale listei
 		self._linii = []            # linia (bucatile) din care s-a desenat fiecare rand, pentru redesenare
@@ -668,6 +669,10 @@ class HdsAjutorPagina(_Baza):
 	def construieste(self):
 		pg = A.pagina(self.i, self.limba)
 		pg = A.actualizeaza_taste(pg, dialog=self.ecran)
+		if (self._tasteFormular is None and pg is not None and not pg.get("taste_context")
+			and "ConfigListScreen" in A._clase(self.ecran)):
+			# Reuse the loaded source page; BLUE must not read it again.
+			self._tasteFormular = tuple(next((r for p, r in (pg or {}).get("p", []) if p == "taste"), []))
 		f = _factor()
 		self.x0 = max(4, int(8 * f))
 		self.spatiu = max(8, int(16 * f))
@@ -825,11 +830,19 @@ class HdsAjutorPagina(_Baza):
 			return
 		bloc = self._blocAles()
 		if bloc and bloc[2] >= 0 and bloc[2] != self.i:
-			self.session.openWithCallback(self.dupaCopil, HdsAjutorPagina, bloc[2], ecran=self.ecran)
+			self.session.openWithCallback(self.dupaCopil, HdsAjutorPagina, bloc[2], ecran=self.ecran, taste_formular=self._tasteFormular)
 
 	def tasteleEcranului(self):
 		from Components.HdsTasteRapide import context_ecran, taste_ajutor
 		context = context_ecran(self.ecran)
+		if self._tasteFormular is not None and "ConfigListScreen" in A._clase(self.ecran):
+			context = None
+			taste = self._tasteFormular
+			if taste:
+				from Screens.ChoiceBox import ChoiceBox
+				lista = [("%s: %s" % (r[0], r[1]), None) for r in taste]
+				self.session.open(ChoiceBox, title=_("Tastele acestui ecran"), list=lista, keys=[""] * len(lista))
+				return
 		if context is not None:
 			from Screens.ChoiceBox import ChoiceBox
 			lista = [("%s: %s" % (tasta, descriere), None)

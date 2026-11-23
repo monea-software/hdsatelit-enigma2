@@ -48,7 +48,9 @@
 # dinainte nu ajunge la cel nou: eNavigation::stopService taie legatura evenimentelor (m_service_event_conn = 0) inainte ca
 # bucla principala sa livreze mesajul stop al lui ServiceApp.
 # Nu apare: in stand-by; cand servicemp3 a dat motivul (InfoBarFilmRefuz are mesajul lui, HdsFilmRedare.verdictDinInfo); la
-# sfarsitul unui film (lungime cunoscuta); la un canal al omului care a mers si pe care HdsIptvReconectare il porneste singur.
+# sfarsitul unui film (lungime cunoscuta); la un canal al omului care a mers si pe care HdsIptvReconectare il porneste singur;
+# la un canal care n-a dat inca imagine si pe care HdsIptvReconectare il porneste singur din nou (pornirea cu rabdare, IPT8):
+# T_NEDESCHIS vine numai la caderea finala, dupa HdsIptvReconectare.PORNIRE_S.
 
 import os
 import time
@@ -424,12 +426,13 @@ class Esantionare(object):
 		return " | ".join(parti)
 
 
-def deAnuntat(pornit, standby=False, refuz=False, film=False, reconectare=False):
-	"""Textul mesajului pe ecran cand fluxul s-a oprit singur, sau None (vezi sus: cand nu apare)."""
+def deAnuntat(pornit, standby=False, refuz=False, film=False, reconectare=False, pornire=False):
+	"""Textul mesajului pe ecran cand fluxul s-a oprit singur, sau None (vezi sus: cand nu apare). pornire: canalul n-a dat inca
+	imagine si HdsIptvReconectare il porneste singur din nou (IPT8): "nu a putut fi deschis" asteapta caderea finala."""
 	if standby or refuz:
 		return None
 	if not pornit:
-		return T_NEDESCHIS
+		return None if pornire else T_NEDESCHIS
 	if film or reconectare:
 		return None
 	return T_OPRIT
@@ -647,10 +650,19 @@ def _reconectare(ref):
 		return False
 
 
+def _pornire(cod):
+	"""Canalul n-a dat inca imagine si Components/HdsIptvReconectare il porneste singur din nou dupa caderea asta (IPT8)."""
+	try:
+		from Components import HdsIptvReconectare as R
+		return R.pornireaContinua(cod)
+	except Exception:
+		return False
+
+
 def _anuntaPeEcran(nav, pornit, cod):
 	ref = nav.getCurrentlyPlayingServiceReference()
 	text = deAnuntat(pornit, standby=_standby(), refuz=_refuzServicemp3(nav, ref), film=pornit and _film(nav),
-		reconectare=pornit and _reconectare(ref))
+		reconectare=pornit and _reconectare(ref), pornire=not pornit and _pornire(cod))
 	if text is None:
 		return
 	from Screens.MessageBox import MessageBox

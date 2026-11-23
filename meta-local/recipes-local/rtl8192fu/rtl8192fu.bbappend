@@ -8,3 +8,13 @@
 # kcflags.inc, dat lui make prin mediu) atinge numai modulul. Pe celelalte masini reteta ramane neschimbata.
 KCFLAGS:append:u57 = " -mlong-calls"
 KCFLAGS:append:u571 = " -mlong-calls"
+
+# ZER1: fara depanare in driverul Wi-Fi livrat.
+PR:append = ".hdszer1"
+EXTRA_OEMAKE:append = " CONFIG_RTW_DEBUG=n"
+do_configure:append() {
+    sed -i '/^#define CONFIG_DEBUG[[:space:]]/d' ${S}/include/autoconf.h
+    if grep -Eq '^#define CONFIG_DEBUG([[:space:]]|$)' ${S}/include/autoconf.h; then
+        bbfatal "Depanarea rtl8192fu a ramas activa"
+    fi
+}

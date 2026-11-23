@@ -60,6 +60,7 @@
 #     pana cade si una de acolo. Fara polarizare stiuta: dupa doua transpondere moarte nimic.
 #
 # Legatura cu enigma2 sta in Mediu (inlocuit in probele de pe PC); logica e in Paznic.
+# Variantele DVB cer hds_variante_singure (Nu); rezerva DVB-I ramane separata (Da).
 from __future__ import absolute_import, unicode_literals
 
 import sys
@@ -137,6 +138,12 @@ def acelasi(a, b):
 	return bool(a) and bool(b) and cheie(a) == cheie(b)
 
 
+def canalDvb(ref):
+	"""Canal DVB in direct; un film poate avea tipul 1, dar are cale."""
+	k = cheie(ref)
+	return len(k) == 11 and k[0] == 1 and not k[10] and not k[1]
+
+
 def transponderRef(ref):
 	""""ns:tsid:onid" (hex, fara zerouri) al unei referinte DVB, ca HdsVarianteCanal.Varianta.tpk; "" altfel"""
 	k = cheie(ref)
@@ -159,6 +166,32 @@ class Mediu(object):
 
 	def acum(self):
 		return time.monotonic()
+
+	def varianteSingure(self):
+		"""Inlocuirea automata este oprita pana o porneste omul."""
+		try:
+			from Components import HdsListaSetari  # noqa: F401  (pune setarea, daca lista n-a fost inca deschisa)
+			from Components.config import config
+			return bool(config.usage.hds_variante_singure.value)
+		except Exception:
+			return False
+
+	def generatieZap(self):
+		return getattr(self._nav(), "hdsGeneratieZap", 0)
+
+	def schimbarePermisa(self):
+		"""Nu ia resurse si nu schimba redarea in timpul altor activitati."""
+		try:
+			if self.standby() or self.sesiune is None or getattr(self.sesiune, "pipshown", False):
+				return False
+			nav = self._nav()
+			if nav is None or nav.getRecordings():
+				return False
+			service = nav.getCurrentService()
+			ts = service and service.timeshift()
+			return not (ts and ts.isTimeshiftActive())
+		except Exception:
+			return False
 
 	def _nav(self):
 		try:
@@ -234,8 +267,13 @@ class Mediu(object):
 		return eServiceReference(ref_text)
 
 	def setari(self):
-		from Components import HdsDvbISetari as S
-		return S.citeste()
+		from Components import HdsSalvareLista as S
+		rez = S.setariMemorie()
+		c = sys.modules.get("Components.config")
+		el = getattr(c.config.usage, "hds_dvbi_rezerva", None) if c is not None else None
+		if el is not None:
+			rez["rezerva"] = "da" if el.value else "nu"
+		return rez
 
 	def legatura(self, ref):
 		from Components import HdsDvbIDate as D
@@ -449,7 +487,9 @@ class Mediu(object):
 	def proba(self, slot, tp, la_gata):
 		"""transponderul canalului incercat pe tunerul liber, fara comanda de motor; la_gata(True / False) pe firul enigma2.
 		Nu opreste nimic: daca tunerul nu se poate lua fara oprirea programului, raspunsul e False."""
-		Proba(slot, tp, la_gata).porneste()
+		p = Proba(slot, tp, la_gata)
+		p.porneste()
+		return p
 
 
 class Proba(object):
@@ -498,7 +538,8 @@ class Proba(object):
 		elif self.citiri * 0.5 >= ASTEPTARE_PROBA_S:
 			self._termina(False)
 
-	def _termina(self, prins):
+	def anuleaza(self):
+		"""Opreste ceasul si lasa tunerul fara a chema rezultatul."""
 		if self.gata:
 			return
 		self.gata = True
@@ -506,6 +547,11 @@ class Proba(object):
 			self.ceas.stop()
 		# canalul brut se lasa: frontendul se inchide singur (lib/dvb/dvb.h, dec_use)
 		self.canal = self.fe = None
+
+	def _termina(self, prins):
+		if self.gata:
+			return
+		self.anuleaza()
 		try:
 			self.la_gata(prins)
 		except Exception as e:
@@ -533,6 +579,51 @@ class Paznic(object):
 		self.fara_variante = ""
 		self.nu_merge = None
 		self.ales_de_om = ""
+		self.manuala = ""
+		self.generatie = self._generatieZap()
+
+	def _generatieZap(self):
+		f = getattr(self.m, "generatieZap", None)
+		return f() if f is not None else None
+
+	def _porneste(self, ref):
+		# Zap-ul nostru apartine incercarii; orice alta cerere o invalideaza.
+		self.m.porneste(ref)
+		self.generatie = self._generatieZap()
+
+	def _permisa(self):
+		return not self.m.standby() and getattr(self.m, "schimbarePermisa", lambda: True)()
+
+	def _variantePornite(self):
+		return getattr(self.m, "varianteSingure", lambda: False)()
+
+	def _uitaVariantele(self):
+		self.lant = None
+		self.nu_merge = None
+		self.fara_variante = self.manuala
+
+	def _suspendaProba(self):
+		# Pastreaza originea DVB, dar invalideaza orice rezultat deja programat.
+		a = self.activa
+		if a is not None:
+			a["bilet_proba"] = object()
+			proba = a.pop("sarcina_proba", None)
+			if proba is not None:
+				proba.anuleaza()
+			a["proba"] = False
+
+	def _uitaIncercarea(self):
+		"""Anuleaza fara zap inapoi si fara scrierea setarilor omului."""
+		a = self.activa
+		self.activa = None
+		proba = a.get("sarcina_proba") if a is not None else None
+		if proba is not None:
+			proba.anuleaza()
+		self._uitaVariantele()
+		self.fara_de = None
+		self.fara_trecere = ""
+		self.astept_rotirea = False
+		self.anuntata = None
 
 	def _noteaza(self, text):
 		print("[HdsDvbIRezerva] %s" % text)
@@ -600,6 +691,34 @@ class Paznic(object):
 	def bate(self):
 		acum = self.m.acum()
 		ref = self.m.refCurent()
+		generatie = self._generatieZap()
+		if generatie != self.generatie:
+			self.generatie = generatie
+			self.manuala = ""
+			self._uitaIncercarea()
+			self.urmarit = ""
+		if self.ales_de_om and acelasi(ref, self.ales_de_om):
+			self.manuala = self.fara_variante = ref
+			self.ales_de_om = ""
+		if not ref.startswith("4097:"):
+			self.dvbi_vazut = ""
+		pornite = self._variantePornite()
+		if not pornite:
+			self._uitaVariantele()
+		if (pornite or self.pornita()) and not self._permisa():
+			if self.activa is not None and acelasi(ref, self.activa["internet"]):
+				self._suspendaProba()
+				self._uitaVariantele()
+				return
+		if not (pornite or self.pornita()) or not self._permisa():
+			if self.activa is not None:
+				self.dvbi_vazut = ref
+			self._uitaIncercarea()
+			self.urmarit = ref
+			# Un canal DVB-I ales manual pastreaza mesajul opririi pe tara.
+			if ref.startswith("4097:") and not self.m.standby():
+				self._canalDvbI(acum, ref)
+			return
 		if self.activa is not None:
 			self._bateInternet(acum, ref)
 			return
@@ -611,7 +730,7 @@ class Paznic(object):
 			self._varianteLaZap(ref, acum)
 		if not ref:
 			return
-		if ref.startswith("1:") and not acelasi(ref, self.fara_variante) and self._bateVariante(acum, ref):
+		if pornite and canalDvb(ref) and not acelasi(ref, self.fara_variante) and self._bateVariante(acum, ref):
 			# o varianta urmeaza sau tocmai a pornit: trecerea pe internet asteapta
 			self.fara_de = None
 			return
@@ -621,10 +740,13 @@ class Paznic(object):
 			self._canalDvbI(acum, ref)
 			return
 		self.dvbi_vazut = ""
-		if not ref.startswith("1:"):
+		if not canalDvb(ref):
+			return
+		if not self.pornita():
+			self.fara_de = None
 			return
 		leg = self.m.legatura(ref)
-		if leg is None or not self.pornita() or self.m.standby():
+		if leg is None or self.m.standby():
 			self.fara_de = None
 			return
 		slot, blocat = self.m.semnal()
@@ -671,7 +793,7 @@ class Paznic(object):
 			"urmatoarea": acum + PASI_S[0], "proba": False, "prinse": 0}
 		self.fara_de = None
 		self._noteaza("fara semnal pe %s de %d s: trece pe internet (%s)" % (leg["nume"], PRAG_S, leg["url"]))
-		self.m.porneste(internet)
+		self._porneste(internet)
 		self.m.anunta(_t(T_PE_INTERNET) % leg["nume"])
 
 	# ---- variantele aceluiasi canal pe acelasi satelit
@@ -683,15 +805,18 @@ class Paznic(object):
 		# zap-ul omului (sau alt program): sirul de incercari se termina
 		self.lant = None
 		self.nu_merge = None
-		self.fara_variante = ""
 		if self.ales_de_om and acelasi(ref, self.ales_de_om):
-			self.fara_variante = ref   # aleasa de om la MENU: ramane pana la urmatorul zap
+			self.manuala = ref
+		elif not acelasi(ref, self.manuala):
+			self.manuala = ""
+		self.fara_variante = self.manuala
 		self.ales_de_om = ""
 
 	def alesDeOm(self, ref):
 		"""varianta aleasa de om la MENU ("Alte variante"): nu se inlocuieste pana la urmatorul zap"""
 		self.ales_de_om = ref
 		if acelasi(self.m.refCurent(), ref):
+			self.manuala = ref
 			self.urmarit = self.m.refCurent()
 			self.fara_de = None
 			self.fara_trecere = ""
@@ -699,7 +824,6 @@ class Paznic(object):
 			self.lant = None
 			self.nu_merge = None
 			self.fara_variante = ref
-			self.ales_de_om = ""
 
 	def _candidati(self, ref, cod=None):
 		"""variantele inca neincercate ale programului `ref`, in ordine; cand vina e a transponderului (cod), fara cele
@@ -786,12 +910,18 @@ class Paznic(object):
 
 	def variantaUrmeaza(self, ref, cod=None):
 		"""True cand programul `ref` mai are o varianta de incercat (mesajul ecranului negru asteapta)"""
-		if not ref or not ref.startswith("1:") or acelasi(ref, self.fara_variante) or self.activa is not None:
+		if not canalDvb(ref) or acelasi(ref, self.fara_variante) or self.activa is not None:
+			return False
+		if not self._variantePornite() or not self._permisa():
+			return False
+		if self.generatie != self._generatieZap() or not acelasi(ref, self.m.refCurent()):
 			return False
 		return bool(self._candidati(ref, cod))
 
 	def inlocuitDe(self, ref):
 		"""programul pornit aici in locul canalului `ref` (varianta care merge), sau None"""
+		if not self._variantePornite() or self.generatie != self._generatieZap():
+			return None
 		l = self.lant
 		if l is None or not l["pornit"] or not acelasi(ref, l["inceput"]) or acelasi(ref, l["pornit"]):
 			return None
@@ -880,11 +1010,13 @@ class Paznic(object):
 				return False
 			self._noteaza("nicio varianta nu merge (%s): inapoi pe %s" % (cod, l["inceput"]))
 			l["pornit"], l["pornit_la"], l["notat"] = l["inceput"], acum, True
-			self.m.porneste(l["inceput"])
+			self._porneste(l["inceput"])
 			return True
 		self._noteaza("%s nu merge (%s): trece pe varianta %s" % (ref, cod, urm))
+		# Si un playService refuzat este o incercare; nu repeta tinta la infinit.
+		l["incercate"].add(cheie(urm))
 		l["pornit"], l["pornit_la"], l["notat"] = urm, acum, False
-		self.m.porneste(urm)
+		self._porneste(urm)
 		return True
 
 	def _rotireInCurs(self, slot, acum):
@@ -935,11 +1067,20 @@ class Paznic(object):
 		if self.m.motorMerge(a["slot"]):
 			return
 		a["proba"] = True
-		self.m.proba(a["slot"], a["tp"], self._dupaProba)
+		bilet = a["bilet_proba"] = object()
+		a["sarcina_proba"] = self.m.proba(a["slot"], a["tp"], lambda prins: self._dupaProba(prins, a, bilet))
 
-	def _dupaProba(self, prins):
+	def _dupaProba(self, prins, incercare=None, bilet=None):
 		a = self.activa
-		if a is None:
+		if a is None or (incercare is not None and a is not incercare):
+			return
+		if bilet is not None and a.get("bilet_proba") is not bilet:
+			return
+		if not self.pornita() or self.generatie != self._generatieZap():
+			self._uitaIncercarea()
+			return
+		if not self._permisa():
+			self._suspendaProba()
 			return
 		a["proba"] = False
 		acum = self.m.acum()
@@ -956,7 +1097,7 @@ class Paznic(object):
 		self.urmarit = a["sat"]
 		self._noteaza("inapoi pe satelit (%s): %s" % (a["nume"], motiv))
 		if acelasi(self.m.refCurent(), a["internet"]):
-			self.m.porneste(a["sat"])
+			self._porneste(a["sat"])
 			self.m.anunta(_t(T_INAPOI) % a["nume"])
 
 	# ---- canalele DVB-I pornite (mesajul pentru cele oprite pe tara)
@@ -1022,6 +1163,60 @@ class Paznic(object):
 # ------------------------------------------------------------------ instanta (o sesiune)
 _PAZNIC = [None]
 _CEAS = [None]
+_CEAS_PORNIT = [False]
+_DIAGNOSTIC = [None]
+
+
+def actualizeazaCeas():
+	"""Nicio bataie de inlocuire cand ambele optiuni sunt oprite."""
+	p, c = _PAZNIC[0], _CEAS[0]
+	if p is None or c is None:
+		return
+	pornit = p._variantePornite() or p.pornita()
+	if pornit and not _CEAS_PORNIT[0]:
+		c.start(BATAIE_MS, False)
+	elif not pornit and _CEAS_PORNIT[0]:
+		c.stop()
+	_CEAS_PORNIT[0] = bool(pornit)
+
+
+def _serviciuSchimbat(eveniment):
+	"""Diagnosticul DVB-I manual se trezeste la zap, fara ceas de inlocuire."""
+	from enigma import iPlayableService
+	p = _PAZNIC[0]
+	if p is None:
+		return
+	if eveniment == iPlayableService.evEnd:
+		p.dvbi_vazut = ""
+	elif eveniment == iPlayableService.evStart and not _CEAS_PORNIT[0]:
+		from enigma import eTimer
+		if _DIAGNOSTIC[0] is None:
+			c = eTimer()
+			c.callback.append(_bateSigur)
+			_DIAGNOSTIC[0] = c
+		_DIAGNOSTIC[0].start(0, True)
+
+
+def opresteVariantele():
+	"""Oprirea variantelor DVB nu opreste rezerva DVB-I."""
+	p = _PAZNIC[0]
+	if p is not None:
+		p._uitaVariantele()
+		p.m.mesajDinNou()
+
+
+def rezervaSchimbata(pornita):
+	"""Anuleaza numai proba DVB-I; lantul DVB ramane independent."""
+	p = _PAZNIC[0]
+	if p is not None:
+		p._setari = (0, None)
+		p.fara_de = None
+		if not pornita and p.activa is not None:
+			a, p.activa = p.activa, None
+			proba = a.get("sarcina_proba")
+			if proba is not None:
+				proba.anuleaza()
+		actualizeazaCeas()
 
 
 def porneste(sesiune):
@@ -1034,8 +1229,12 @@ def porneste(sesiune):
 		from enigma import eTimer
 		c = eTimer()
 		c.callback.append(_bateSigur)
-		c.start(BATAIE_MS, False)
 		_CEAS[0] = c
+		_CEAS_PORNIT[0] = False
+		nav = p.m._nav()
+		if nav is not None:
+			nav.event.append(_serviciuSchimbat)
+		actualizeazaCeas()
 	except Exception as e:
 		print("[HdsDvbIRezerva] ceasul: %r" % (e,))
 	return p

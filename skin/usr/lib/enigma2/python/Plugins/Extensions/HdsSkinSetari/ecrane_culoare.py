@@ -10,6 +10,10 @@
 # colorata pe loc. Verde (sau OK) pastreaza culoarea, Rosu renunta, Galben = din paleta, Albastru = Avansat (codul hex si
 # R, V, B, transparenta: HdsEditorCuloare). Culorile ecranului sunt scrise direct si fonturile sunt Regular/Bold, ca
 # panoul sa se deschida si cand skinul activ nu e HDSatelit. Merge pe Python 2.7 si 3.x.
+# Cu rol = paleta.ROL_FUNDAL ("Fundalul tuturor ecranelor") acelasi ecran alege o singura culoare pentru cele trei roluri
+# paleta.FUNDAL, fara randul transparentei (fiecare rol isi pastreaza transparenta). Cand cele trei sunt diferite, la
+# deschidere nu se scrie nimic: abia prima sageata (sau codul din Avansat) le face la fel; OK fara alegere nu schimba,
+# Rosu pune la loc exact ce era in toate trei.
 from enigma import ePoint, eSize, gRGB
 from Components.ActionMap import ActionMap
 from Components.Label import Label
@@ -17,7 +21,7 @@ from Screens.Screen import Screen
 
 from . import grila as G
 from . import paleta as P
-from .ecrane import Previzualizare, skin_previzualizare, skin_taste, _scaleaza, _px
+from .ecrane import Previzualizare, skin_previzualizare, skin_taste, _scaleaza, _px, _tf
 from .texte import tr_str as _
 
 # textele noi ale ecranului: cheile merg in limbi-staging/*.json; pana atunci, textul de aici
@@ -92,17 +96,30 @@ class HdsAlegeCuloare(Screen, Previzualizare):
 		self.skinName = "HdsAlegeCuloare"
 		self.stare = stare
 		self.rol = rol
-		self.cu_alfa = G.are_alfa(rol)
-		self.inainte = stare.conf["roluri"].get(rol)
-		self.acum = stare.paleta()[rol]
+		pal = stare.paleta()
+		# grupul de fundal: cele trei roluri, cu valorile de dinainte (None = din paleta) si transparenta fiecaruia
+		self.grup = P.FUNDAL if rol == P.ROL_FUNDAL else None
+		self.atins = False
+		if self.grup:
+			self.cu_alfa = False
+			self.inainte = dict((r, stare.conf["roluri"].get(r)) for r in self.grup)
+			self.pal_inainte = dict((r, pal[r]) for r in self.grup)
+			comun = P.fundal_comun(pal)
+			self.amestecat = comun is None
+			self.acum = pal["hdsPanelSolid"] & 0x00FFFFFF if comun is None else comun
+		else:
+			self.cu_alfa = G.are_alfa(rol)
+			self.inainte = stare.conf["roluri"].get(rol)
+			self.amestecat = False
+			self.acum = pal[rol]
 		self.alfa = (self.acum >> 24) & 255 if self.cu_alfa else 0
 		self.rgb = G.rgb(self.acum)
-		self.banda = G.banda(rol, stare.conf, stare.paleta(), self.acum)
+		self.banda = G.banda(rol, stare.conf, pal, self.acum)
 		self.zona = "banda"
 		self.col, self.rand = G.cea_mai_apropiata(self.acum)
 		self.i_alfa = G.treapta_alfa(self.alfa)
 		self.i_banda = 0
-		self["titlu"] = Label(_("role_" + rol))
+		self["titlu"] = Label(_tf("set_bg_all") if self.grup else _("role_" + rol))
 		self["eticheta"] = Label(_("set_colors"))
 		for col in range(G.COLOANE):
 			for rand in range(G.RANDURI):
@@ -192,11 +209,18 @@ class HdsAlegeCuloare(Screen, Previzualizare):
 		self._fund("ales", P.peste(c, 0x00808080) if self.zona == "alfa" else c)
 		self["ales"].setText(G.text_procent(self.alfa) if self.zona == "alfa" else "")
 		self._alfe()
-		if self.cu_alfa:
+		if self.grup and self.amestecat and not self.atins:
+			# stare amestecata, nimic ales inca: nu se uniformizeaza nimic
+			self["valoare"].setText(_tf("set_bg_value_mixed"))
+		elif self.cu_alfa:
 			self["valoare"].setText(_t("set_grid_value_alpha", G.hex6(c), G.text_procent(self.alfa)))
 		else:
 			self["valoare"].setText(_t("set_grid_value", G.hex6(c)))
-		self.stare.conf["roluri"][self.rol] = c
+		if self.grup:
+			if self.atins:
+				P.pune_fundal(self.stare.conf["roluri"], c, self.pal_inainte)
+		else:
+			self.stare.conf["roluri"][self.rol] = c
 		self.coloreaza(self.stare.paleta())
 
 	def culoare(self):
@@ -204,6 +228,14 @@ class HdsAlegeCuloare(Screen, Previzualizare):
 
 	# ------------------------------------------------------------ taste
 	def sageata(self, s):
+		# grupul de fundal: "atins" numai dupa o mutare reala (o sageata care nu muta nimic nu alege o culoare)
+		inainte = (self.zona, self.col, self.rand, self.i_alfa, self.i_banda, self.rgb)
+		self._sageata(s)
+		if (self.zona, self.col, self.rand, self.i_alfa, self.i_banda, self.rgb) != inainte:
+			self.atins = True
+		self.reface()
+
+	def _sageata(self, s):
 		zone = ["grila"] + (["alfa"] if self.cu_alfa else []) + ["banda"]
 		if s in ("left", "right"):
 			d = -1 if s == "left" else 1
@@ -232,16 +264,33 @@ class HdsAlegeCuloare(Screen, Previzualizare):
 				self.alfa = G.alfa_din_procent(G.ALFE[self.i_alfa])
 		elif self.banda:
 			self.rgb = G.rgb(self.banda[self.i_banda])
-		self.reface()
+
+	def _pune_la_loc(self):
+		"""Grupul de fundal: cele trei roluri exact ca la deschidere (si lipsa lor din .conf)."""
+		for r in self.grup:
+			if self.inainte[r] is None:
+				self.stare.conf["roluri"].pop(r, None)
+			else:
+				self.stare.conf["roluri"][r] = self.inainte[r]
 
 	def pastreaza(self):
 		c = self.culoare()
+		if self.grup:
+			self._pune_la_loc()
+			if self.atins:
+				P.pune_fundal(self.stare.conf["roluri"], c, self.pal_inainte, self.stare.paleta_baza())
+			self.close(self.atins)
+			return
 		self.stare.conf["roluri"].pop(self.rol, None)
 		if c != self.stare.paleta()[self.rol]:
 			self.stare.conf["roluri"][self.rol] = c
 		self.close(True)
 
 	def renunta(self):
+		if self.grup:
+			self._pune_la_loc()
+			self.close(False)
+			return
 		if self.inainte is None:
 			self.stare.conf["roluri"].pop(self.rol, None)
 		else:
@@ -249,13 +298,31 @@ class HdsAlegeCuloare(Screen, Previzualizare):
 		self.close(False)
 
 	def din_paleta(self):
-		self.stare.conf["roluri"].pop(self.rol, None)
+		for r in (self.grup or (self.rol,)):
+			self.stare.conf["roluri"].pop(r, None)
 		self.close(True)
 
 	def avansat(self):
+		if self.grup:
+			# fundalul: numai codul RRGGBB (transparenta ramane a fiecarui rol), pe tastatura virtuala
+			from Screens.VirtualKeyBoard import VirtualKeyBoard
+			try:
+				self.session.openWithCallback(self._dupaHex, VirtualKeyBoard, title=_tf("set_bg_all"), text=G.hex6(self.culoare()))
+			except Exception:
+				pass
+			return
 		from .ecrane import HdsEditorCuloare
 		self.stare.conf["roluri"][self.rol] = self.culoare()
 		self.session.openWithCallback(self._dupaAvansat, HdsEditorCuloare, self.stare, self.rol)
+
+	def _dupaHex(self, text=None):
+		v = P.citeste_culoare(text) if text else None
+		if v is not None:
+			self.rgb = G.rgb(v)
+			self.atins = True
+			self.zona = "grila"
+			self.col, self.rand = G.cea_mai_apropiata(self.rgb)
+		self.reface()
 
 	def _dupaAvansat(self, *args):
 		c = self.stare.paleta()[self.rol]

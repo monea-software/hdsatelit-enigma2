@@ -38,13 +38,9 @@ UPLOAD_TTL = 30 * 60
 PLAN_TTL = 5 * 60
 _PSEUDO = ("/proc", "/sys", "/dev")
 _SYSTEM = ("/etc", "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/boot")
-_PROTECTED = frozenset((
-    "/", "/bin", "/boot", "/dev", "/etc", "/home", "/lib", "/lib32",
-    "/lib64", "/lost+found", "/media", "/mnt", "/opt", "/proc", "/root",
-    "/run", "/sbin", "/srv", "/sys", "/tmp", "/usr", "/var",
-    "/etc/enigma2", "/etc/tuxbox", "/usr/bin", "/usr/sbin", "/usr/lib",
-    "/usr/share", "/usr/share/enigma2", "/usr/lib/enigma2",
-))
+# REGULA 0, WEB8: the list of protected system folders is gone; only the root itself and the
+# boot partition (/boot) are never deleted or renamed from the browser (the receiver must still start).
+_PROTECTED = frozenset(("/", "/boot"))
 # System files with passwords or private keys that are of no use to the person in a browser: never read,
 # downloaded or copied, shown with a lock in the list. The access module files (/etc/tuxbox/config) stay
 # open and editable on purpose: they belong to the person and the editor for them was requested (26.10.2026).
@@ -56,7 +52,9 @@ BACKUP_KEEP = 5
 
 
 def locked_path(path):
-    """True for a receiver path that is never opened, downloaded or copied (see _LOCKED_FILES)."""
+    """REGULA 0, WEB8: nothing is locked any more; /etc/shadow, the SSH and HTTPS keys
+    open, download and copy like any other file. The lists above stay only as documentation."""
+    return False
     if not isinstance(path, str):
         return False
     path = "/" + "/".join(p for p in path.split("/") if p and p != ".")

@@ -11,7 +11,7 @@ Desenul: design-web-stitch/skin-pro/vod (vod-acasa, vod-film, vod-serial), culor
 Datele vin numai din Components/HdsVod.py (stratul de sursa), posterele din HdsVodPoze, pozitiile din HdsVodPozitii.
 Navigarea: sagetile si OK; nimic de pus sau de confirmat.
 """
-from enigma import eListboxPythonMultiContent, eServiceReference, eTimer, gFont, RT_HALIGN_LEFT, RT_HALIGN_CENTER, \
+from enigma import eListboxPythonMultiContent, eServiceReference, eTimer, eLabel, eSize, fontRenderClass, RT_HALIGN_LEFT, RT_HALIGN_CENTER, \
 	RT_VALIGN_CENTER, RT_VALIGN_TOP, RT_WRAP
 
 from Components.ActionMap import ActionMap
@@ -27,6 +27,7 @@ from Tools.LoadPixmap import LoadPixmap
 from Components import HdsVod as V
 from Components import HdsVodPoze as P
 from Components import HdsVodPozitii as Z
+from Components import HdsMarireText as MT
 import time
 
 
@@ -67,12 +68,12 @@ C_VERDE = 0x4FD18B
 FEREASTRA = 14                  # cate postere se tin incarcate de o parte si de alta a celui ales
 
 
-def _fontNume(gros=False):
-	try:
-		import skin
-		return skin.fontHds("Bold" if gros else "Regular")
-	except Exception:
-		return "Bold" if gros else "Regular"
+def _inaltimeRand(lista, baza):
+	"""Rand orizontal: textul creste numai in caseta disponibila din skin."""
+	h = MT.inaltimeCod(baza)
+	if MT.marit():
+		h = min(h, lista.instance.size().height())
+	return h
 
 
 def textNota(nota):
@@ -114,45 +115,91 @@ class _Postere(object):
 	def __init__(self, lista, latime, inaltime, scara, cu_titlu=True, lat=False):
 		self.lista, self.scara = lista, scara
 		self.lat = lat
-		self.l, self.h = latime, inaltime
-		self.pl = int(latime - 8 * scara)
-		self.ph = int(self.pl * 9 / 16) if lat else int(self.pl * 3 / 2)
+		self.l, self._inaltime = latime, inaltime
 		self.cu_titlu = cu_titlu
 		self.date = []
 		self.incarcate = set()
 		l = lista.l
-		l.setFont(0, gFont(_fontNume(), int(22 * scara)))
-		l.setFont(1, gFont(_fontNume(True), int(24 * scara)))
-		l.setItemHeight(inaltime)
+		self._fonturi = [MT.fontCod("Regular", int(22 * scara)), MT.fontCod("Bold", int(24 * scara))]
+		for n, font in enumerate(self._fonturi):
+			l.setFont(n, font)
+		self._marimi()
+
+	def _marimi(self):
+		"""Pastreaza proportia pozelor si loc pentru doua randuri de titlu marit."""
+		s = self.scara
+		veche = getattr(self, "h", None)
+		self.h = _inaltimeRand(self.lista, self._inaltime)
+		self.pl = int(self.l - 8 * s)
+		raport = 9 / 16 if self.lat else 3 / 2
+		if MT.marit():
+			rezerva = int(4 * s) + MT.inaltimeCod(int(64 * s)) if self.cu_titlu else 0
+			loc = self.h - 2 * int(4 * s) - rezerva
+			self.pl = min(self.pl, max(1, int(loc / raport)))
+		self.ph = int(self.pl * raport)
+		if self.h != veche:
+			self.lista.l.setItemHeight(self.h)
+
+	def _text(self, pos, size, font, flags, text, **culori):
+		"""Pastreaza desenul care incape; numai depasirea trece pe o linie derulabila."""
+		if not text:
+			return MultiContentEntryText(pos=pos, size=size, font=font, flags=flags, text=text, **culori)
+		f = self._fonturi[font]
+		x, y = pos
+		w, h = size
+		limita = min(self.h, self.lista.instance.size().height())
+		masura = eLabel.calculateTextSize(f, text, eSize(w, h), not bool(flags & RT_WRAP))
+		# calculateTextSize masoara literele, fara spatiul de deasupra lor la valign top.
+		nevoie = masura.height() + (f.pointSize * 45 // 100 + 2 if flags & RT_VALIGN_TOP else 2)
+		if text and (masura.width() > w or nevoie > min(h, limita - y)):
+			text = text.replace("\r", " ").replace("\n", " ")
+			linie = fontRenderClass.getInstance().getLineHeight(f)
+			h = max(int(linie + 1), (f.pointSize * 3 + 1) // 2) + max(2, int(4 * self.scara))
+			# Nu micsoram posterul: daca titlul de jos iese din widget, il suprapunem pe baza lui.
+			nou_y = max(0, min(y, limita - h))
+			if nou_y != y:
+				culori.update(backcolor=C_PANOU, backcolor_sel=C_PANOU)
+			y = nou_y
+			flags = (flags & ~(RT_WRAP | RT_VALIGN_TOP)) | RT_VALIGN_CENTER
+		return MultiContentEntryText(pos=(x, y), size=(w, h), font=font, flags=flags, text=text, **culori)
 
 	def _intrare(self, t, cu_poza, progres=0.0):
 		s = self.scara
 		x0, y0 = int(4 * s), int(4 * s)
-		e = [None,
+		px0 = (self.l - self.pl) // 2 if MT.marit() else x0
+		# 0.7.8 (CR3, Ozgur 18.11.2026): primul element e True, nu None. eListboxPythonMultiContent socoteste intrarea cu None
+		# in cap "de neales", iar moveSelection (STANGA/DREAPTA intre episoadele serialului, HdsSerialPagina._muta) se
+		# intorcea pe loc; randurile ecranului principal mutau cu moveToIndex, de aceea acolo mergea.
+		e = [True,
 			MultiContentEntryRectangle(pos=(0, 0), size=(self.l, self.ph + 2 * y0), backgroundColor=C_FOND,
 				backgroundColorSelected=C_ALES),
-			MultiContentEntryText(pos=(x0, y0), size=(self.pl, self.ph), font=1, flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER | RT_WRAP,
+			self._text(pos=(px0, y0), size=(self.pl, self.ph), font=1, flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER | RT_WRAP,
 				text=t.get("nume", ""), color=C_TEXT2, color_sel=C_TEXT, backcolor=C_PANOU, backcolor_sel=C_PANOU)]
+		px = None
 		if cu_poza and t.get("poza"):
 			p = P.cere(t["poza"], self.pl, self.ph, "lat" if self.lat else "poster")
 			if p:
 				px = LoadPixmap(p)
 				if px:
-					e.append(MultiContentEntryPixmapAlphaBlend(pos=(x0, y0), size=(self.pl, self.ph), png=px))
+						e.append(MultiContentEntryPixmapAlphaBlend(pos=(px0, y0), size=(self.pl, self.ph), png=px))
 		if self.lat and t.get("sub"):
 			# placa lata (desenul Stitch): titlul pe placa, jos; sub placa ramane „mai sunt ...”
-			e.append(MultiContentEntryText(pos=(x0 + int(12 * s), y0 + self.ph - int(54 * s)), size=(self.pl - int(24 * s), int(40 * s)),
+			h = MT.inaltimeCod(int(40 * s))
+			y = y0 + self.ph - (int(14 * s) + h if MT.marit() else int(54 * s))
+			e.append(self._text(pos=(px0 + int(12 * s), y), size=(self.pl - int(24 * s), h),
 				font=1, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=t.get("nume", ""), color=C_TEXT, color_sel=C_TEXT))
 		if progres > 0:
-			e.append(MultiContentEntryProgress(pos=(x0, y0 + self.ph - int(8 * s)), size=(self.pl, int(8 * s)),
+			e.append(MultiContentEntryProgress(pos=(px0, y0 + self.ph - int(8 * s)), size=(self.pl, int(8 * s)),
 				percent=int(progres * 100), borderWidth=0, foreColor=C_VERDE if progres >= 1 else C_ALES,
 				foreColorSelected=C_VERDE if progres >= 1 else C_ALES, backColor=0x000000, backColorSelected=0x000000))
 		if self.cu_titlu:
 			sub = t.get("sub") or ""
 			# cu marginea posterului de o parte si de alta: titlurile vecine nu se mai lipesc intr-un singur sir (FSV, 15.11.2026);
 			# cel ales, daca nu incape, deruleaza (lista orizontala)
-			e.append(MultiContentEntryText(pos=(x0, self.ph + 2 * y0 + int(4 * s)), size=(self.l - 2 * x0, self.h - self.ph - 2 * y0 - int(4 * s)),
+			e.append(self._text(pos=(x0, self.ph + 2 * y0 + int(4 * s)), size=(self.l - 2 * x0, self.h - self.ph - 2 * y0 - int(4 * s)),
 				font=0, flags=RT_HALIGN_CENTER | RT_VALIGN_TOP | RT_WRAP, text=sub or t.get("nume", ""), color=C_TEXT2, color_sel=C_TEXT))
+		if px:
+			del e[2]
 		return e
 
 	def pune(self, titluri, i, progres=None):
@@ -245,11 +292,13 @@ class HdsFilmeSeriale(Screen):
 			_Postere(self["rand1"], int(170 * self.scara), int(300 * self.scara), self.scara)]
 		self._formaRand = [None, None]
 		f = self["file"].l
-		f.setFont(0, gFont(_fontNume(True), int(28 * self.scara)))
-		f.setItemHeight(int(52 * self.scara))
+		f.setFont(0, MT.fontCod("Bold", int(28 * self.scara)))
+		self._hFile = _inaltimeRand(self["file"], int(52 * self.scara))
+		f.setItemHeight(self._hFile)
 		g = self["surse"].l
-		g.setFont(0, gFont(_fontNume(True), int(24 * self.scara)))
-		g.setItemHeight(int(50 * self.scara))
+		g.setFont(0, MT.fontCod("Bold", int(24 * self.scara)))
+		self._hSurse = _inaltimeRand(self["surse"], int(50 * self.scara))
+		g.setItemHeight(self._hSurse)
 		self._surseRand()
 		self._file()
 		if self.src is None:
@@ -267,7 +316,7 @@ class HdsFilmeSeriale(Screen):
 		lat = int(220 * s)
 		intrari = []
 		for t in (T_FILME, T_SERIALE, T_CAUTA):
-			intrari.append([t, MultiContentEntryText(pos=(0, 0), size=(lat - int(12 * s), int(52 * s)), font=0,
+			intrari.append([t, MultiContentEntryText(pos=(0, 0), size=(lat - int(12 * s), self._hFile), font=0,
 				flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, text=_(t), color=C_ETICHETA, color_sel=C_TEXT, backcolor=C_FOND,
 				backcolor_sel=C_ALES)])
 		self["file"].setList(intrari)
@@ -282,7 +331,7 @@ class HdsFilmeSeriale(Screen):
 		lat = int(235 * s)
 		intrari = []
 		for grupa, text in V.GRUPE:
-			intrari.append([grupa, MultiContentEntryText(pos=(0, 0), size=(lat - int(10 * s), int(50 * s)), font=0,
+			intrari.append([grupa, MultiContentEntryText(pos=(0, 0), size=(lat - int(10 * s), self._hSurse), font=0,
 				flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, text=_(text), color=C_ETICHETA, color_sel=C_TEXT, backcolor=C_FOND,
 				backcolor_sel=C_ALES)])
 		self["surse"].setList(intrari)
@@ -468,8 +517,7 @@ class HdsFilmeSeriale(Screen):
 		s = self.scara
 		d.lat = lat
 		d.l = int((300 if lat else 170) * s)
-		d.pl = int(d.l - 8 * s)
-		d.ph = int(d.pl * 9 / 16) if lat else int(d.pl * 3 / 2)
+		d._marimi()
 		self["rand%d" % n].instance.setItemWidth(d.l)
 
 	def _titluAles(self):
@@ -684,6 +732,7 @@ class HdsFilmeSeriale(Screen):
 		if self.grupa in ("emby", "jellyfin"):
 			lista.append((_(T_ADAUGA_SERVER) % nume, "adauga"))
 			if self.src is not None:
+				lista.append((_("Datele de acces: %s") % " / ".join(self.src.s.get(k, "") for k in ("utilizator", "parola", "jeton")), "date"))
 				lista.append((_(T_SCHIMBA_SERVER), "schimba"))
 				lista.append((_(T_SCOATE_SERVER) % self.src.nume, "scoate"))
 		elif self.grupa == "disc" and self.src is not None:
@@ -698,9 +747,12 @@ class HdsFilmeSeriale(Screen):
 			return
 		if ales[1] == "adauga":
 			self._adaugaServer(self.grupa)
+		elif ales[1] == "date":
+			from Screens.TextBox import TextBox
+			self.session.open(TextBox, text="\n".join(self.src.s.get(k, "") for k in ("utilizator", "parola", "jeton")), title=_("Datele de acces"))
 		elif ales[1] == "schimba":
 			# aceeasi adresa, utilizatorul si parola scrise din nou (logarea noua inlocuieste serverul vechi daca merge)
-			self._server = {"fel": self.grupa, "faza": "caut", "vechi": self.src.id}
+			self._server = {"fel": self.grupa, "faza": "caut", "vechi": self.src.id, "utilizator": self.src.s.get("utilizator", ""), "parola": self.src.s.get("parola", "")}
 			self._serverAdresa(self.src.adresa)
 		elif ales[1] == "scoate":
 			from Components import HdsVodServere
@@ -803,7 +855,7 @@ class HdsFilmeSeriale(Screen):
 			return
 		self._server["adresa"] = adresa
 		nume = HdsVodServere.NUME_FEL[self._server["fel"]]
-		self.session.openWithCallback(self._serverUtilizator, VirtualKeyBoard, title=_(T_UTILIZATOR) % nume, text="")
+		self.session.openWithCallback(self._serverUtilizator, VirtualKeyBoard, title=_(T_UTILIZATOR) % nume, text=self._server.get("utilizator", ""))
 
 	def _serverUtilizator(self, utilizator=None):
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
@@ -811,7 +863,7 @@ class HdsFilmeSeriale(Screen):
 			self._server = None
 			return
 		self._server["utilizator"] = utilizator.strip()
-		self.session.openWithCallback(self._serverParola, VirtualKeyBoard, title=_(T_PAROLA), text="")
+		self.session.openWithCallback(self._serverParola, VirtualKeyBoard, title=_(T_PAROLA), text=self._server.get("parola", ""))
 
 	def _serverParola(self, parola=None):
 		from Components import HdsVodServere
@@ -840,6 +892,11 @@ class HdsFilmeSeriale(Screen):
 		self._ceasDetalii.stop()
 		P.uita()
 		Z.scrie()
+
+
+def deschide(session, **kwargs):
+	"""Cardul "Filme si seriale" din Aplicatii (Components/HdsAplicatii.MAGAZIN_IMAGINE, 0.7.8 CR3, Eduard 18.11.2026 16:25)."""
+	return session.open(HdsFilmeSeriale)
 
 
 class HdsFilmPagina(Screen):
@@ -886,8 +943,9 @@ class HdsFilmPagina(Screen):
 	def _pregateste(self):
 		self.scara = self["butoane"].instance.size().width() / 1430.0
 		b = self["butoane"].l
-		b.setFont(0, gFont(_fontNume(True), int(28 * self.scara)))
-		b.setItemHeight(int(84 * self.scara))
+		b.setFont(0, MT.fontCod("Bold", int(28 * self.scara)))
+		self._hButoane = _inaltimeRand(self["butoane"], int(84 * self.scara))
+		b.setItemHeight(self._hButoane)
 		self["titlu"].setText(self.t.get("nume", ""))
 		if self.d is None:
 			self._lucrare = V.cere("detalii", self.src.id, V.FILME, self.t["id"])
@@ -962,9 +1020,10 @@ class HdsFilmPagina(Screen):
 		d = (self.d or {}).get("durata") or 0
 		intrari = []
 		for fel, text in self._actiuni:
-			e = [fel, MultiContentEntryRectangle(pos=(0, 0), size=(lat - int(16 * s), int(84 * s)), backgroundColor=C_PANOU,
+			e = [fel, MultiContentEntryRectangle(pos=(0, 0), size=(lat - int(16 * s), self._hButoane), backgroundColor=C_PANOU,
 				backgroundColorSelected=C_ALES),
-				MultiContentEntryText(pos=(int(16 * s), 0), size=(lat - int(48 * s), int(78 * s)), font=0,
+				MultiContentEntryText(pos=(int(16 * s), 0), size=(lat - int(48 * s),
+					min(self._hButoane, MT.inaltimeCod(int(78 * s)))), font=0,
 					flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, text=text, color=C_TEXT2, color_sel=C_TEXT)]
 			if fel == "continua" and d:
 				e.append(MultiContentEntryProgress(pos=(int(16 * s), int(72 * s)), size=(lat - int(48 * s), int(6 * s)),
@@ -1058,8 +1117,9 @@ class HdsSerialPagina(Screen):
 		self.scara = self["episoade"].instance.size().width() / 1816.0
 		s = self.scara
 		z = self["sezoane"].l
-		z.setFont(0, gFont(_fontNume(True), int(26 * s)))
-		z.setItemHeight(int(56 * s))
+		z.setFont(0, MT.fontCod("Bold", int(26 * s)))
+		self._hSezoane = _inaltimeRand(self["sezoane"], int(56 * s))
+		z.setItemHeight(self._hSezoane)
 		self.desen = _Postere(self["episoade"], int(360 * s), int(330 * s), s, lat=True)
 		self["titlu"].setText(self.t.get("nume", ""))
 		self["stare"].setText(_(T_INCARCA))
@@ -1116,7 +1176,7 @@ class HdsSerialPagina(Screen):
 		self["meta"].setText("  ·  ".join(x for x in meta if x))
 		self["descriere"].setText(d.get("descriere", ""))
 		lat = int(200 * s)
-		self["sezoane"].setList([[i, MultiContentEntryText(pos=(0, 0), size=(lat - int(12 * s), int(56 * s)), font=0,
+		self["sezoane"].setList([[i, MultiContentEntryText(pos=(0, 0), size=(lat - int(12 * s), self._hSezoane), font=0,
 			flags=RT_HALIGN_CENTER | RT_VALIGN_CENTER, text=_("Sezonul %s") % sz["numar"], color=C_ETICHETA, color_sel=C_TEXT,
 			backcolor=C_FOND, backcolor_sel=C_ALES)] for i, sz in enumerate(sezoane)])
 		self["sezoane"].moveToIndex(self.sezon)

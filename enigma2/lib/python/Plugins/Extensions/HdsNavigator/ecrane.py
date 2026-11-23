@@ -287,7 +287,12 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 	# ------------------------------------------------ inceputul
 
 	def _incepe(self):
-		if not instalat():
+		if self.mod == L.MOD_APLICATIE:
+			from Components import HdsAplicatii as A
+			prezent = os.path.exists(A.program(self.aplicatie)[1])
+		else:
+			prezent = instalat()
+		if not prezent:
 			self._faraNavigator("lipsa")
 			return
 		self._continua()
@@ -381,8 +386,6 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 				os.makedirs(date, 0o700)
 		except OSError as e:
 			print("[HdsNavigator] dosarul aplicatiei: %s" % e)
-		if motor != (s.get("motor") or A.MOTOR_IMPLICIT):
-			print("[HdsNavigator] aplicatia %s: motorul %s lipseste, porneste pe %s" % (s["id"], s.get("motor"), motor))
 		# setari.py ramas din interfata dinainte de actualizare nu are agent_tv (moduleVechi): agentul implicit
 		agent = getattr(S.initConfig(), "agent_tv", None)
 		aplicatie = {"program": program, "argumente": A.argumenteAplicatie(s, A.optiuniProgram(program),
@@ -539,6 +542,7 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		date = intrare_cam.date_intrare(self.interfata.get("port"))
 		if date is None:
 			return False
+		self["nota"].setText(_("Utilizator: %s. Parola: %s") % (date[0], date[1]))
 		self.nav.autentificare(date[0], date[1])
 		date = None
 		self.nav.continuaIncarcarea()

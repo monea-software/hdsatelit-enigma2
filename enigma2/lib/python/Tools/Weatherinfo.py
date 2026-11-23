@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Pluginul cere prognoza redusa, datele pentru detalii si cautarea localitatilor.
 # Toate modurile folosesc Open-Meteo pe un fir de lucru, fara cheie.
+# Prognoza redusa are forma Weatherinfo-ului OE-Alliance: valorile ca text (vezi _textNumar), aceleasi chei, start(..., cityID).
 
 import builtins
 import copy
@@ -255,6 +256,20 @@ def _valoare(valoare, implicit=""):
 	return implicit
 
 
+def _textNumar(valoare, zecimale=0, implicit=""):
+	"""Un numar al prognozei reduse ca TEXT, cum il da Weatherinfo-ul OE-Alliance ("{:.0f}"): pluginurile si temele scrise
+	pentru el il pun direct pe o eticheta (eLabel.setText primeste numai text: cu un numar ecranul cadea ziua, cand indicele UV
+	trece de 0) sau fac int() pe vant cand il arata in m/s (cu "12.9" vantul ramanea gol). Fara "-0" (iarna, "-0 °C");
+	cu zecimale (precipitatiile in mm sau inch), fara zerourile de la coada. O valoare lipsa da `implicit`."""
+	valoare = _valoare(valoare, None)
+	if valoare is None:
+		return implicit
+	text = "{:.{}f}".format(valoare, zecimale)
+	if zecimale:
+		text = text.rstrip("0").rstrip(".")
+	return "0" if text == "-0" else text
+
+
 def _element(date, cheie, index, implicit=""):
 	lista = date.get(cheie, [])
 	if isinstance(lista, list) and 0 <= index < len(lista):
@@ -287,15 +302,19 @@ def _direction(grade):
 
 
 def _perioada():
+	# Toate valorile sunt text (vezi _textNumar), afara de isNight; cheile ProviderCode, dayText, daySummary1 si nightSummary1
+	# le da si Weatherinfo-ul OE-Alliance (o tema care le cere vedea "n/a").
 	date = dict.fromkeys((
-		"date", "day", "shortDay", "text", "daySummary0", "nightSummary0",
+		"date", "day", "shortDay", "dayText", "text", "daySummary0", "nightSummary0",
+		"daySummary1", "nightSummary1",
 		"source", "observationPoint", "observationTime", "sunrise", "sunset",
 		"moonrise", "moonset", "temp", "feelsLike", "humidity", "raintext",
 		"windDir", "uvIndex", "visibility", "pressure", "maxTemp", "minTemp",
 		"maxFeelsLike", "minFeelsLike", "domWindDir", "maxUvIndex",
-		"maxVisibility", "precipitation", "umbrellaIndex", "yahooCode", "meteoCode",
+		"maxVisibility", "precipitation", "umbrellaIndex", "ProviderCode", "yahooCode", "meteoCode",
 	), "")
-	date.update(dict.fromkeys(("windSpeed", "windGusts", "maxWindSpeed", "maxWindGusts"), 0))
+	# vantul: "0" cand lipseste, fiindca pluginul face int() pe el cand il arata in m/s
+	date.update(dict.fromkeys(("windSpeed", "windGusts", "maxWindSpeed", "maxWindGusts"), "0"))
 	date.update({"isNight": False, "windDirSign": " ", "domWindDirSign": " "})
 	return date
 
@@ -327,12 +346,20 @@ def _detalii_ready(info, mode):
 
 
 def _redus(native, geodata, units):
+	# Prognoza redusa pentru pluginuri (OAWeather si temele cu convertorul lui), cu valorile ca TEXT, ca Weatherinfo-ul
+	# OE-Alliance: intregi rotunjite ("{:.0f}"), precipitatiile in mm (inch) cu o zecimala (doua), isNight bool.
 	curent, zilnic, orar = native["current"], native["daily"], native["hourly"]
 	imperial = units == "imperial"
 	divizor = 1609.344 if imperial else 1000
+	zecimale_ploaie = 2 if imperial else 1
+
 	def vizibilitate(val):
 		val = _valoare(val, None)
-		return round(val / divizor, 2) if val is not None else ""
+		return _textNumar(val / divizor) if val is not None else ""
+
+	def ziText(moment, scurt):
+		# ca "%a, %d." din OE-Alliance, cu ziua tradusa
+		return "%s, %02d." % (scurt, moment.day)
 
 	def agregat(cheie, data, functie):
 		valori = [
@@ -351,24 +378,26 @@ def _redus(native, geodata, units):
 			moment = datetime.fromisoformat(data)
 			zi["day"] = getattr(builtins, "_", gettext)(moment.strftime("%A"))
 			zi["shortDay"] = getattr(builtins, "_", gettext)(moment.strftime("%a"))
+			zi["dayText"] = ziText(moment, zi["shortDay"])
 		for cheie, camp in (
 			("maxTemp", "temperature_2m_max"), ("minTemp", "temperature_2m_min"),
 			("maxFeelsLike", "apparent_temperature_max"), ("minFeelsLike", "apparent_temperature_min"),
-			("maxUvIndex", "uv_index_max"), ("precipitation", "precipitation_sum"),
-			("umbrellaIndex", "precipitation_probability_max"),
+			("maxUvIndex", "uv_index_max"), ("umbrellaIndex", "precipitation_probability_max"),
 		):
-			zi[cheie] = _valoare(_element(zilnic, camp, i))
-		zi["maxWindSpeed"] = _valoare(_element(zilnic, "wind_speed_10m_max", i), 0)
-		zi["maxWindGusts"] = _valoare(_element(zilnic, "wind_gusts_10m_max", i), 0)
+			zi[cheie] = _textNumar(_element(zilnic, camp, i))
+		zi["precipitation"] = _textNumar(_element(zilnic, "precipitation_sum", i), zecimale_ploaie)
+		zi["maxWindSpeed"] = _textNumar(_element(zilnic, "wind_speed_10m_max", i), implicit="0")
+		zi["maxWindGusts"] = _textNumar(_element(zilnic, "wind_gusts_10m_max", i), implicit="0")
 		grade = _valoare(_element(zilnic, "wind_direction_10m_dominant", i))
-		zi["domWindDir"] = _sir(grade)
+		zi["domWindDir"] = _textNumar(grade)
 		zi["domWindDirSign"] = zi["windDirSign"] = _direction(grade)
 		for cheie in ("sunrise", "sunset"):
 			zi[cheie] = _sir(_element(zilnic, cheie, i))
 		cod = _element(zilnic, "weather_code", i)
 		zi.update(_icons(cod))
+		zi["ProviderCode"] = _textNumar(cod)
 		zi["text"] = _text(cod)
-		zi["pressure"] = agregat("pressure_msl", data, lambda v: round(sum(v) / len(v), 1)) if data else ""
+		zi["pressure"] = _textNumar(agregat("pressure_msl", data, lambda v: sum(v) / len(v))) if data else ""
 		zi["maxVisibility"] = vizibilitate(agregat("visibility", data, max)) if data else ""
 		prognoza[i] = zi
 
@@ -378,24 +407,28 @@ def _redus(native, geodata, units):
 		"observationTime": _sir(curent.get("time")),
 		"isNight": curent.get("is_day") == 0,
 		"windDirSign": _direction(curent.get("wind_direction_10m")),
-		"windDir": _sir(_valoare(curent.get("wind_direction_10m"))),
+		"windDir": _textNumar(curent.get("wind_direction_10m")),
 		"visibility": vizibilitate(curent.get("visibility")),
 	})
 	for cheie, camp in (
 		("temp", "temperature_2m"), ("feelsLike", "apparent_temperature"),
 		("humidity", "relative_humidity_2m"), ("pressure", "pressure_msl"),
-		("uvIndex", "uv_index"), ("precipitation", "precipitation"),
-		("umbrellaIndex", "precipitation_probability"),
+		("uvIndex", "uv_index"), ("umbrellaIndex", "precipitation_probability"),
 	):
-		acum[cheie] = _valoare(curent.get(camp))
-	acum["windSpeed"] = _valoare(curent.get("wind_speed_10m"), 0)
-	acum["windGusts"] = _valoare(curent.get("wind_gusts_10m"), 0)
+		acum[cheie] = _textNumar(curent.get(camp))
+	acum["precipitation"] = _textNumar(curent.get("precipitation"), zecimale_ploaie)
+	acum["windSpeed"] = _textNumar(curent.get("wind_speed_10m"), implicit="0")
+	acum["windGusts"] = _textNumar(curent.get("wind_gusts_10m"), implicit="0")
 	acum.update(_icons(curent.get("weather_code")))
+	acum["ProviderCode"] = _textNumar(curent.get("weather_code"))
 	acum["text"] = _text(curent.get("weather_code"))
 	return {
-		"name": _sir(geodata[0]), "pressunit": "hPa", "tempunit": "°F" if imperial else "°C",
+		"source": "Open-Meteo", "name": _sir(geodata[0]),
+		"longitude": _sir(native.get("longitude")) or _sir(geodata[1]),
+		"latitude": _sir(native.get("latitude")) or _sir(geodata[2]),
+		"pressunit": "hPa", "tempunit": "°F" if imperial else "°C",
 		"windunit": "mph" if imperial else "km/h", "visibiliyunit": "mile" if imperial else "km",
-		"precunit": "inch" if imperial else "mm", "current": acum, "forecast": prognoza,
+		"precunit": "inch" if imperial else "mm", "uvindexunit": "", "current": acum, "forecast": prognoza,
 	}
 
 
@@ -708,8 +741,10 @@ class Weatherinfo:
 			return _icons(code.split(":", 1)[1])
 		return _icons(code) if str(source).upper() == "OMW" else _icons(None)
 
-	def start(self, geodata=None, units="metric", scheme="en-GB", reduced=True, callback=None):
+	def start(self, geodata=None, units="metric", scheme="en-GB", reduced=True, callback=None, cityID=None):
 		# Resetarea vine si de pe worker. Callbackul poate cere o noua localitate.
+		# cityID: primit si lasat deoparte, ca in Weatherinfo-ul OE-Alliance ("left only for compatibility"); versiunile mai
+		# vechi ale pluginului OAWeather il trimit, iar fara el fiecare improspatare cadea cu TypeError si vremea nu venea.
 		with self._lock:
 			return self._start(geodata, units, scheme, reduced, callback)
 

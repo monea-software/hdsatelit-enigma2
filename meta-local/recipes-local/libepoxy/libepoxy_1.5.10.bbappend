@@ -8,6 +8,7 @@ REQUIRED_DISTRO_FEATURES:remove = "opengl"
 # include X11/Xlib.h daca nu e definit BROADCOM_PLATFORM (randurile 100-120 ale fisierului din recipe-sysroot); cu el
 # tipurile native sunt void *, ca la imaginile altor echipe pe Vu+. Prima constructie Solo 4K a cazut aici (06.11, 10:00).
 CFLAGS:append:vusolo4k = " -DBROADCOM_PLATFORM"
+CFLAGS:append:vuuno4k = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuultimo4k = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuuno4kse = " -DBROADCOM_PLATFORM"
 CFLAGS:append:vuzero4k = " -DBROADCOM_PLATFORM"

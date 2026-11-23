@@ -1,0 +1,45 @@
+From: HDSatelit <dev@hdsatelit.local>
+Subject: [PATCH] JSC: allow the existing ARMv7 backends in an opt-in build
+
+The 2.54 release archive still contains the ARMv7 assembler and 32/64
+baseline and DFG implementations. PlatformEnable.h overrides the CMake
+options on every JSVALUE32_64 build. Restrict that override to targets
+other than Linux Thumb2 hard-float. FTL remains unavailable on ARM32.
+
+Assert the effective options when the recipe explicitly requests them;
+a successful build must not silently ship an interpreter as a JIT package.
+
+Upstream-Status: Inappropriate [experimental product configuration]
+---
+diff --git a/Source/WTF/wtf/PlatformEnable.h b/Source/WTF/wtf/PlatformEnable.h
+--- a/Source/WTF/wtf/PlatformEnable.h
++++ b/Source/WTF/wtf/PlatformEnable.h
+@@ -725,7 +725,7 @@
+ #define ENABLE_JIT 1
+ #endif
+ 
+-#if USE(JSVALUE32_64)
++#if USE(JSVALUE32_64) && !(CPU(ARM_THUMB2) && CPU(ARM_HARDFP) && OS(LINUX))
+ #undef ENABLE_JIT
+ #define ENABLE_JIT 0
+ #endif
+@@ -757,9 +757,19 @@
+ #if USE(JSVALUE32_64)
+ #undef ENABLE_FTL_JIT
+ #define ENABLE_FTL_JIT 0
++#if !(CPU(ARM_THUMB2) && CPU(ARM_HARDFP) && OS(LINUX))
+ #undef ENABLE_DFG_JIT
+ #define ENABLE_DFG_JIT 0
+ #endif
++#endif
++
++#if defined(HDS_REQUIRE_JIT) && !ENABLE(JIT)
++#error "HDS requested JIT but the effective upstream configuration disables it"
++#endif
++
++#if defined(HDS_REQUIRE_DFG_JIT) && !ENABLE(DFG_JIT)
++#error "HDS requested DFG JIT but the effective upstream configuration disables it"
++#endif
+ 
+ /* If possible, try to enable a disassembler. This is optional. We proceed in two
+    steps: first we try to find some disassembler that we can use, and then we

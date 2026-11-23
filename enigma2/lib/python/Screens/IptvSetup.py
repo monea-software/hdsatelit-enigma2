@@ -23,7 +23,7 @@ from Components.Label import Label
 from Components.Button import Button
 from Components.ConfigList import ConfigListScreen
 from Components.Sources.StaticText import StaticText
-from Components.config import ConfigText, ConfigPassword, getConfigListEntry
+from Components.config import ConfigText, ConfigPassword, ConfigSelection, ConfigYesNo, getConfigListEntry
 
 from Components import HdsIptvSurse as I
 from Components import HdsIptvClient as C
@@ -33,6 +33,37 @@ from Components import HdsVod as V
 
 def N_(text):
 	return text
+
+
+def _transferInFir(ecran, lucru, gata):
+	"""Fisierele mari nu tin firul interfetei; inchiderea opreste callbackul."""
+	import threading
+	from enigma import eTimer
+	if getattr(ecran, '_transferOcupat', False):
+		return
+	ecran._transferOcupat = True
+	stare = {'inchis': False, 'gata': False}
+	ceas = eTimer()
+	def inchide():
+		stare['inchis'] = True
+		ceas.stop()
+	def verifica():
+		if not stare['gata']:
+			return
+		ceas.stop()
+		ecran._transferOcupat = False
+		if not stare['inchis']:
+			gata(stare['rezultat'])
+	def fir():
+		try:
+			stare['rezultat'] = lucru()
+		except Exception:
+			stare['rezultat'] = None
+		stare['gata'] = True
+	ceas.callback.append(verifica)
+	ecran.onClose.append(inchide)
+	ceas.start(100, False)
+	threading.Thread(target=fir, name='IptvTransfer', daemon=True).start()
 
 
 # 0.7.7 (FLM2, Eduard 16.11 11:01): aplicatia IPTV are pe loc tot ce da sursa: OK deschide pagina ei (IptvCont), cu Canale TV,
@@ -152,6 +183,9 @@ def detaliuSursa(p):
 	parti = [_(I.NUME_FEL.get(p["fel"], p["fel"]))]
 	if p.get("gazda"):
 		parti.append(p["gazda"])
+	parti.extend(p[k] for k in ("adresa", "server", "portal", "utilizator", "parola") if p.get(k))
+	if p.get("mac"):
+		parti.append(_("Adresa MAC") + ": " + p["mac"])
 	if p.get("canale"):
 		parti.append(textCanale(p["canale"]))
 	if p.get("ora"):
@@ -165,6 +199,8 @@ def stareSursa(p, lucreaza):
 	"""(eticheta, cheia culorii): ce se vede in dreapta cartelei."""
 	if lucreaza:
 		return _("Se încarcă"), "lucru"
+	if p.get("neconectata"):
+		return _(I.T_NECONECTATA), "atentie"
 	if p.get("eroare"):
 		return _("Nu merge"), "rau"
 	if not p.get("ora"):
@@ -276,14 +312,14 @@ class IptvSetup(_EcranCartele):
 
 	def _stareCont(self, p):
 		"""Starea contului sursei alese: din memoria ecranului, altfel cerere pe un fir (o data pe deschidere). -> dict sau None."""
-		if p is None or p.get("fel") != "xtream":
+		if p is None or p.get("fel") != "xtream" or p.get("neconectata"):
 			return None
 		sid = p["id"]
 		if sid in self._conturi:
 			return self._conturi[sid]
 		self._conturi[sid] = None
 		s = I.sursa(sid)
-		if s is None:
+		if s is None or s.get("neconectata"):
 			return None
 		import threading
 
@@ -315,6 +351,8 @@ class IptvSetup(_EcranCartele):
 			rand.append(_randCartela(p["id"], p["nume"] or _(I.NUME_FEL.get(p["fel"], "IPTV")), detaliuSursa(p), eticheta.upper(), c[culoare], *a,
 				pe_eticheta=c["alb"] if culoare in ("lucru",) else c["inchis"]))
 		rand.append(_randCartela("adauga", _("Adaugă o listă, un cont sau un portal"), "", "", c["chenar_ales"], *a))
+		# space71 (19.11.2026): preluarea automata a listelor M3U gasite si cererile in asteptare (IptvPreluare)
+		rand.append(_randCartela("liste_m3u", _("Liste M3U găsite"), "", "", c["chenar_ales"], *a))
 		self["lista"].setList(rand)
 		self["lista"].moveToIndex(index)
 		self._ghid()
@@ -328,7 +366,18 @@ class IptvSetup(_EcranCartele):
 		i = self["lista"].getSelectionIndex() if self["lista"].instance is not None else 0
 		return self._surse[i] if 0 <= i < len(self._surse) else None
 
+	def _peListeM3u(self):
+		"""Cursorul pe randul listelor M3U gasite (cel de dupa randul de adaugare)."""
+		try:
+			lista = self["lista"]
+			return lista.instance is not None and lista.getSelectionIndex() == len(self._surse) + 1
+		except (KeyError, TypeError, AttributeError):
+			return False
+
 	def _ghid(self):
+		if self._peListeM3u():
+			self["ghid"].setText(_("OK: alegi dacă listele M3U găsite intră singure în IPTV."))
+			return
 		p = self._aleasa()
 		if p is not None:
 			if p["fel"] == "demo":
@@ -346,9 +395,9 @@ class IptvSetup(_EcranCartele):
 			if p.get("fel") == "xtream" and self._conturi.get(p["id"], 0) is None and self._ceasCont is not None:
 				self._ceasCont.start(700, True)
 		elif self._surse:
-			self["ghid"].setText(_("Canalele apar în lista de canale, la Sateliți, pe rândul IPTV."))
+			self["ghid"].setText(_("MENU: importă sau exportă surse IPTV.") + " " + _("Canalele apar în lista de canale, la Sateliți, pe rândul IPTV."))
 		else:
-			self["ghid"].setText(_("Adaugă lista sau contul primit de la furnizorul tău. Canalele apar singure în lista de canale."))
+			self["ghid"].setText(_("MENU: importă sau exportă surse IPTV.") + " " + _("Adaugă lista sau contul primit de la furnizorul tău. Canalele apar singure în lista de canale."))
 
 	def _sus(self):
 		self["lista"].up()
@@ -368,7 +417,9 @@ class IptvSetup(_EcranCartele):
 
 	def _ok(self):
 		p = self._aleasa()
-		if p is None:
+		if p is None and self._peListeM3u():
+			self.session.openWithCallback(self._dupaFormular, IptvPreluare)
+		elif p is None:
 			self._adauga()
 		elif p["fel"] == "demo":
 			self.session.open(IptvDespre)
@@ -384,24 +435,52 @@ class IptvSetup(_EcranCartele):
 
 	def _meniuSursa(self):
 		p = self._aleasa()
-		if p is None or p["fel"] == "demo":
-			return
 		from Screens.ChoiceBox import ChoiceBox
-		actiuni = [(_("Date de acces"), "date"), (_("Grupele"), "grupe")]
-		self.session.openWithCallback(self._alegeCont, ChoiceBox, title=p["nume"], list=actiuni)
+		actiuni = []
+		if p is not None and p["fel"] != "demo":
+			actiuni = [(_("Date de acces"), "date"), (_("Grupele"), "grupe")]
+			actiuni.append((_("Player și piconuri"), "optiuni"))
+		actiuni.extend([(_("Importă surse IPTV din fișier"), "import_stalker"), (_("Exportă toate sursele IPTV"), "export_stalker")])
+		self.session.openWithCallback(self._alegeCont, ChoiceBox, title=p["nume"] if p else _("Surse IPTV"), list=actiuni)
 
 	def _alegeCont(self, ales=None):
+		if ales and ales[1] == "import_stalker":
+			self.session.openWithCallback(self._importStalker, IptvFisierStalker)
+			return
+		if ales and ales[1] == "export_stalker":
+			from Screens.HdsEditorCanaleUnelte import HdsEditorCanaleFisier
+			self.session.openWithCallback(self._exportStalker, HdsEditorCanaleFisier, "dosar")
+			return
 		p = self._aleasa()
 		if not ales or not p:
 			return
 		if ales[1] == "grupe":
 			self.session.openWithCallback(self._dupaFormular, IptvGrupe, p["id"])
+		elif ales[1] == "optiuni":
+			self.session.openWithCallback(self._dupaFormular, IptvOptiuni, p["id"])
 		else:
 			self.session.openWithCallback(self._dupaFormular, IptvDateAcces, p["fel"], p["id"])
 
+	def _importStalker(self, cale=None):
+		if cale:
+			from Components import HdsIptvTransfer as F
+			self['ghid'].setText(_("Se încarcă"))
+			def gata(date):
+				self.session.openWithCallback(self._dupaFormular, IptvImportStalker, date or dict(surse=[], rele=[], eroare=F.T_CITIRE))
+			_transferInFir(self, lambda: F.citesteFisier(cale), gata)
+
+	def _exportStalker(self, ales=None):
+		if not ales or ales[0] != "dosar":
+			return
+		from Components import HdsIptvTransfer as F
+		self['ghid'].setText(_("Se încarcă"))
+		def gata(cale):
+			self['ghid'].setText(_("Sursele IPTV au fost exportate în %s.") % cale if cale else _("Exportul nu s-a putut scrie. Alege un dosar cu spațiu liber."))
+		_transferInFir(self, lambda: F.exportaFisier(ales[1]), gata)
+
 	def _adauga(self):
 		if len(self._surse) >= I.MAX_SURSE:
-			self["ghid"].setText(_(C.E_PREA_MULTE))
+			self["ghid"].setText(I.textSursePline(_))
 			return
 		self.session.openWithCallback(self._alesFel, IptvAlege)
 
@@ -452,6 +531,103 @@ def textRandGrupa(r):
 	if r.get("partial"):
 		parti.append(_(I.T_GRUPE_PARTE))
 	return u"  ·  ".join(parti)
+
+
+class IptvFisierStalker(Screen):
+	"""Alegere locala. EXIT nu citeste si nu schimba nimic."""
+	skin = """
+	<screen name="IptvFisierStalker" resolution="1920,1080" position="center,center" size="1240,700" title="IPTV">
+		<widget name="hds_cale" position="10,10" size="1220,36" font="Regular;22" noWrap="1" />
+		<widget name="lista" position="10,52" size="1220,480" scrollbarMode="showOnDemand" />
+		<widget name="hds_stare" position="10,52" size="1220,480" font="Regular;22" halign="center" valign="center" transparent="1" zPosition="2" />
+		<widget name="ghid" position="10,540" size="1220,90" font="Regular;24" />
+		<widget name="key_red" position="10,650" size="300,40" font="Regular;24" />
+		<widget name="key_green" position="320,650" size="300,40" font="Regular;24" />
+	</screen>"""
+
+	def __init__(self, session):
+		Screen.__init__(self, session)
+		from Components.FileList import FileList
+		from Components.HdsNavigator import HdsPanouFisiere
+		self.setTitle(_("Importă surse IPTV din fișier"))
+		self["lista"] = FileList(None)
+		self.panou = HdsPanouFisiere(self, self["lista"], details=False)
+		self["ghid"] = Label(_("Alege fișierul text, JSON sau HD Satelit de pe stick ori disc. Formatul se recunoaște singur."))
+		self["key_red"] = Button(_("Înapoi"))
+		self["key_green"] = Button(_("Alege"))
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
+			"ok": self._alege, "green": self._alege, "red": self.close, "cancel": self.close}, -2)
+
+	def _alege(self):
+		lista = self["lista"]
+		if lista.canDescent():
+			lista.descent()
+			return
+		nume = lista.getFilename()
+		if nume:
+			self.close(nume if os.path.isabs(nume) else os.path.join(lista.getCurrentDirectory() or "", nume))
+
+
+class IptvImportStalker(Screen):
+	"""Rezumatul este singurul pas inaintea adaugarii lotului."""
+	skin = """
+	<screen name="IptvImportStalker" resolution="1920,1080" position="center,center" size="1240,700" title="IPTV">
+		<widget name="text" position="20,20" size="1200,570" font="Regular;28" />
+		<widget name="key_red" position="20,630" size="450,50" font="Regular;26" />
+		<widget name="key_green" position="650,630" size="550,50" font="Regular;26" />
+	</screen>"""
+
+	def __init__(self, session, date):
+		Screen.__init__(self, session)
+		from Components.ScrollLabel import ScrollLabel
+		from Components import HdsIptvTransfer as F
+		self.setTitle(_("Importă surse IPTV din fișier"))
+		self.date = date
+		self.gata = False
+		self["text"] = ScrollLabel(_("Se încarcă"))
+		self["key_red"] = Button(_("Înapoi"))
+		self["key_green"] = Button("")
+		self._pregatit = False
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
+			"ok": self._adauga, "green": self._adauga, "cancel": self.close, "red": self.close,
+			"up": self["text"].pageUp, "down": self["text"].pageDown}, -2)
+		self.onLayoutFinish.append(self._pregateste)
+
+	def _pregateste(self):
+		from Components import HdsIptvTransfer as F
+		_transferInFir(self, lambda: F.rezumat(self.date), self._dupaRezumat)
+
+	def _dupaRezumat(self, rez):
+		from Components import HdsIptvTransfer as F
+		if rez is None:
+			self['text'].setText(_(F.T_SURSE_CITIRE))
+			return
+		self._pregatit = bool(rez['noi'] and not rez.get('eroare'))
+		self['text'].setText(F.textRezumat(rez, _) + "\n\n" + _("Importul adaugă sursele fără să le încerce la portal. Cele existente rămân neschimbate."))
+		self['key_green'].setText(_("Adaugă sursele") if self._pregatit else "")
+
+	def _adauga(self):
+		if getattr(self, '_transferOcupat', False):
+			return
+		if self.gata:
+			self.close()
+			return
+		if not self._pregatit:
+			return
+		from Components import HdsIptvTransfer as F
+		date = self.date
+		self['text'].setText(_("Se încarcă"))
+		_transferInFir(self, lambda: F.adauga(date), self._dupaImport)
+
+	def _dupaImport(self, rez):
+		from Components import HdsIptvTransfer as F
+		if rez is None:
+			self['text'].setText(_("Sursele nu s-au putut salva. Verifică spațiul liber."))
+			return
+		self.gata = True
+		self.date = None
+		self["text"].setText(F.textRezumat(rez, _))
+		self["key_green"].setText(_("Înapoi"))
 
 
 class IptvGrupe(Screen):
@@ -614,7 +790,7 @@ _TITLURI = {"m3u": N_("Playlist"), "xtream": N_("Cont"), "stalker": N_("Portal")
 _GHID = {
 	"m3u": N_("Scrie adresa listei sau alege fișierul de pe stick cu tasta galbenă. OK deschide tastatura."),
 	"xtream": N_("Scrie datele primite de la furnizor. OK deschide tastatura."),
-	"stalker": N_("Scrie adresa portalului și adresa MAC primite de la furnizor. OK deschide tastatura."),
+	"stalker": N_("Pentru un abonament legat de alt receptor, scrie aici adresa MAC de pe acela. Unii furnizori nu permit două receptoare pornite în același timp cu aceeași adresă."),
 }
 
 
@@ -630,6 +806,7 @@ class IptvDateAcces(Screen, ConfigListScreen):
 		<widget name="config" position="30,30" size="1440,420" font="Regular;30" secondfont="Regular;28" itemHeight="64" scrollbarMode="showOnDemand" />
 		<widget source="ghid" render="Label" position="30,470" size="1440,50" font="Regular;26" noWrap="1" valign="center" />
 		<widget name="stare" position="30,530" size="1440,170" font="Regular;28" valign="top" />
+		<widget name="mac_vechi" conditional="mac_vechi" position="30,660" size="1440,45" font="Regular;26" />
 		<widget source="key_red" render="Label" position="30,730" size="340,50" zPosition="1" font="Regular;24" halign="center" valign="center" backgroundColor="#9f1313" transparent="0" />
 		<widget source="key_green" render="Label" position="390,730" size="340,50" zPosition="1" font="Regular;24" halign="center" valign="center" backgroundColor="#1f771f" transparent="0" />
 		<widget name="key_yellow" conditional="key_yellow" position="750,730" size="340,50" zPosition="1" font="Regular;24" halign="center" valign="center" backgroundColor="#a08000" transparent="0" />
@@ -637,6 +814,10 @@ class IptvDateAcces(Screen, ConfigListScreen):
 	"""
 
 	def __init__(self, session, fel="m3u", sursa_id=None):
+		if fel == "stalker":
+			self.skin = self.skin.replace('size="1440,170"', 'size="1440,120"')
+			self.skin = self.skin.replace('position="30,470" size="1440,50"', 'position="30,452" size="1440,96"').replace('noWrap="1"', 'noWrap="0"')
+			self.skin = self.skin.replace('position="30,530" size="1440,120"', 'position="30,552" size="1440,100"')
 		Screen.__init__(self, session)
 		# fara sesiune: fara fereastra de ajutor a tastelor cu cifre, care ar sta pe marginea ecranului; textul se scrie cu tastatura (OK)
 		ConfigListScreen.__init__(self, [], session=None)
@@ -652,6 +833,10 @@ class IptvDateAcces(Screen, ConfigListScreen):
 		self["key_green"] = StaticText(_("Salvează"))
 		if fel == "m3u":
 			self["key_yellow"] = Label(_("De pe stick"))
+		elif fel == "stalker":
+			self["key_yellow"] = Label(_("Fă o adresă MAC"))
+			self["mac_vechi"] = Label("")
+			self.mac_dinainte = None
 		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
 			"cancel": self.close,
 			"red": self.close,
@@ -660,17 +845,23 @@ class IptvDateAcces(Screen, ConfigListScreen):
 		}, -2)
 		self.campuri = {}
 		lista = []
-		for cheie, nume, e_parola in _RANDURI.get(fel, ()) + _ANTETE:
+		identitate = (("x_user_agent", N_("X-User-Agent (opțional)"), False), ("stb_type", N_("Tip decodor (opțional)"), False)) if fel == "stalker" else ()
+		for cheie, nume, e_parola in _RANDURI.get(fel, ()) + _ANTETE + identitate:
 			if e_parola:
-				el = _ParolaNoua(default="", fixed_size=False)
+				el = _ParolaNoua(default=self.vechi.get(cheie) or "", fixed_size=False)
 			else:
-				el = ConfigText(default=self.vechi.get(cheie) or "", fixed_size=False)
+				# kreidlerboy, LinuxSat #971520: derulam antetele lungi fara a taia valoarea salvata.
+				implicit = I.macReceptor() if cheie == "mac" and fel == "stalker" and not sursa_id else ""
+				el = ConfigText(default=self.vechi.get(cheie) or implicit, fixed_size=False,
+					visible_width=60 if cheie in ("user_agent", "referer", "x_user_agent", "stb_type") else False)
 			self.campuri[cheie] = el
 			lista.append(getConfigListEntry(_(nume), el))
 		self.list = lista
 		self["config"].list = self.list
 		if vechi and fel == "xtream":
-			self["stare"].setText(_("Parola nu se arată. Un rând gol o lasă cum e."))
+			self["stare"].setText(_("Parola se vede și după salvare. Un rând gol o lasă cum e."))
+		elif fel == "stalker":
+			self["stare"].setText(_("Adresa nouă trebuie dată furnizorului. Pentru un cont mutat de pe alt receptor, scrie adresa de acolo. Se păstrează numai la Salvează."))
 		self["ghid"].setText(_(_GHID.get(fel, "")) + " " + _("Agent utilizator și Referer: goale folosesc valorile implicite."))
 		L.asculta(self._laRezultat)
 		self.onClose.append(self._laInchidere)
@@ -689,15 +880,28 @@ class IptvDateAcces(Screen, ConfigListScreen):
 			if text is None:
 				return
 			el.value = text if e_parola else text.strip()
+			el.validateMarker()
 			if e_parola:
 				el.scrisa = True
 			self["config"].invalidate(rand)
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
-		self.session.openWithCallback(gata, VirtualKeyBoard, title=x[0], text="" if e_parola else el.value,
+		self.session.openWithCallback(gata, VirtualKeyBoard, title=x[0], text=el.value,
 			hdsSecret=e_parola)
 
 	def galben(self):
-		if self.fel != "m3u" or self.astept:
+		if self.astept:
+			return
+		if self.fel == "stalker":
+			mac = I.macNouaStalker()
+			if not self.mac_dinainte:
+				self.mac_dinainte = self.campuri["mac"].value
+			if self.mac_dinainte:
+				self["mac_vechi"].setText(_("Adresa de dinainte:") + " " + self.mac_dinainte)
+			self.campuri["mac"].value = mac
+			self["config"].list = self.list
+			self["stare"].setText(_("Adresa nouă trebuie dată furnizorului. Pentru un cont mutat de pe alt receptor, scrie adresa de acolo. Se păstrează numai la Salvează."))
+			return
+		if self.fel != "m3u":
 			return
 		from Screens.HdsEditorCanaleUnelte import HdsEditorCanaleFisier
 		self.session.openWithCallback(self._fisierAles, HdsEditorCanaleFisier, "import")
@@ -724,17 +928,20 @@ class IptvDateAcces(Screen, ConfigListScreen):
 	def salveaza(self):
 		if self.astept:
 			return
-		sursa, eroare = C.verificaDate(self.fel, self._date())
+		if self.fel == "stalker":
+			sursa, eroare = C.verificaDate(self.fel, self._date(), sursa_id=self.sursa_id)
+		else:
+			sursa, eroare = C.verificaDate(self.fel, self._date())
 		if eroare:
 			self["stare"].setText(_(eroare))
 			return
 		self.astept = sursa["id"]
 		if L.adaugaSiCere(sursa) is None:
 			self.astept = None
-			self["stare"].setText(_(C.E_PREA_MULTE))
+			self["stare"].setText(I.textSursePline(_))
 			return
 		if self.sursa_id and self.sursa_id != sursa["id"]:
-			# altă adresă sau alt utilizator: e altă sursă, iar cea veche pleacă
+			# Alta adresa sau alt utilizator: e alta sursa, iar cea veche pleaca.
 			L.stergeSiReface(self.sursa_id)
 			self.sursa_id = None
 		self["stare"].setText(_(T_SE_VERIFICA))
@@ -752,6 +959,94 @@ class IptvDateAcces(Screen, ConfigListScreen):
 		if s.get("fara_https"):
 			text += "\n" + _(I.T_FARA_HTTPS)
 		self.session.openWithCallback(lambda *a: self.close(True), MessageBox, text, MessageBox.TYPE_INFO, timeout=8)
+
+
+class IptvPreluare(Screen, ConfigListScreen):
+	"""Preluarea automata a listelor M3U gasite (Da din fabrica) si cererile in asteptare, ca in pagina web /iptv.
+	Totul din memorie (Components/HdsIptvFisier): nimic de pe disc pe firul interfetei."""
+	skin = IptvDateAcces.skin
+
+	def __init__(self, session):
+		from Components import HdsIptvFisier as F
+		Screen.__init__(self, session)
+		ConfigListScreen.__init__(self, [], session=None)
+		self.setTitle(_("Liste M3U găsite"))
+		# camp temporar: Renunta lasa setarea cum era
+		self.automat = ConfigYesNo(default=F.preluareAutomata())
+		self["config"].list = [getConfigListEntry(_(F.T_AUTOMAT), self.automat)]
+		self["ghid"] = StaticText(_(F.T_NOTA_AUTOMAT))
+		self["stare"] = Label("")
+		self["key_red"] = StaticText(_("Renunță"))
+		self["key_green"] = StaticText(_("Salvează"))
+		self["key_yellow"] = Button(_("Liste în așteptare"))
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
+			"cancel": self.close, "red": self.close, "green": self.salveaza,
+			"ok": self.keyRight, "yellow": self._cereri}, -2)
+		self.onLayoutFinish.append(self._arataStare)
+
+	def _arataStare(self, mesaj=""):
+		from Components import HdsIptvFisier as F
+		n = len(F.stareListe()["cereri"])
+		text = _("Liste în așteptare: %d.") % n if n else _("Nu sunt liste în așteptare.")
+		self["stare"].setText(("%s %s" % (mesaj, text)).strip())
+
+	def salveaza(self):
+		from Components import HdsIptvFisier as F
+		F.seteazaPreluare(self.automat.value)
+		self.close(True)
+
+	def _cereri(self):
+		from Components import HdsIptvFisier as F
+		from Screens.ChoiceBox import ChoiceBox
+		cereri = F.stareListe()["cereri"]
+		if not cereri:
+			self._arataStare()
+			return
+		self.session.openWithCallback(self._aleasa, ChoiceBox, title=_("Liste în așteptare"),
+			list=[(r["nume"], r) for r in cereri])
+
+	def _aleasa(self, ales=None):
+		if not ales:
+			return
+		from Components import HdsIptvFisier as F
+		from Screens.MessageBox import MessageBox
+		r = ales[1]
+
+		def raspuns(da=None):
+			if da in ("da", "nu"):
+				self._arataStare(F.raspunde(r["jeton"], da == "da")["message"])
+		self.session.openWithCallback(raspuns, MessageBox, r["text"], type=MessageBox.TYPE_YESNO,
+			list=[(_(F.T_DA), "da"), (_(F.T_NU), "nu"), (_(F.T_TARZIU), "tarziu")])
+
+
+class IptvOptiuni(Screen, ConfigListScreen):
+	"""Aceleasi doua optiuni pe televizor si in web, fara rescrierea datelor de acces."""
+	skin = IptvDateAcces.skin
+
+	def __init__(self, session, sursa_id):
+		Screen.__init__(self, session)
+		ConfigListScreen.__init__(self, [], session=None)
+		self.sursa_id = sursa_id
+		s = I.sursa(sursa_id) or {}
+		self.setTitle(_("Player și piconuri"))
+		self.player = ConfigSelection(default=I.playerSursa(s), choices=[
+			("4097", _("4097 (implicit)")), ("5001", "5001 (gstreamer)"), ("5002", "5002 (exteplayer3)")])
+		self.piconuri = ConfigYesNo(default=s.get("piconuri") is True)
+		self["config"].list = [getConfigListEntry(_("Player în buchete"), self.player),
+			getConfigListEntry(_("Descarcă piconurile sursei"), self.piconuri)]
+		self["ghid"] = StaticText(_("Setările se aplică acestei surse. Piconurile existente se păstrează."))
+		self["stare"] = Label(_("Playerul ales trebuie să fie instalat pe receptor."))
+		self["key_red"] = StaticText(_("Renunță"))
+		self["key_green"] = StaticText(_("Salvează"))
+		self["actiuni"] = ActionMap(["OkCancelActions", "ColorActions"], {
+			"cancel": self.close, "red": self.close, "green": self.salveaza, "ok": self.keyRight}, -2)
+
+	def salveaza(self):
+		eroare = C.salveazaOptiuni(self.sursa_id, {"player": self.player.value, "piconuri": self.piconuri.value})
+		if eroare:
+			self["stare"].setText(_(eroare))
+		else:
+			self.close(True)
 
 
 def textRandCont(fel, r):
@@ -839,6 +1134,8 @@ class IptvCont(Screen):
 		self.onLayoutFinish.append(self._laInceput)
 
 	def _laInceput(self):
+		if self.p.get("neconectata"):
+			L.cere(self.sursa_id)
 		self._intra("sectiuni", None, [("sectiune", r) for r in sectiuniSursa(self.p)])
 		if self._sectiune:
 			self._deschideSectiune(self._sectiune)
@@ -911,6 +1208,7 @@ class IptvCont(Screen):
 		self._ghid()
 
 	def _inapoi(self):
+		self._dupaConectare = None
 		if self._cheie:
 			V.renunta(self._cheie)
 			self._cheie = None
@@ -932,6 +1230,17 @@ class IptvCont(Screen):
 		self._ceas.start(300, False)
 
 	def _verifica(self):
+		if getattr(self, "_dupaConectare", None):
+			if L.inLucru(self.sursa_id):
+				return
+			dupa, self._dupaConectare = self._dupaConectare, None
+			self._ceas.stop()
+			s = I.sursa(self.sursa_id) or {}
+			if s.get("eroare"):
+				self._ghid(_(s["eroare"]))
+			else:
+				self._cereCanale(dupa)
+			return
 		if self._fir is not None:
 			if self._fir.is_alive():
 				return
@@ -957,6 +1266,11 @@ class IptvCont(Screen):
 			dupa(rez)
 
 	def _cereCanale(self, dupa):
+		if "neconectata" in self.p and not self.p.get("canale") and L.inLucru(self.sursa_id):
+			self._dupaConectare = dupa
+			self["ghid"].setText(_("Se încarcă..."))
+			self._ceas.start(300, False)
+			return
 		if self._canale is not None:
 			dupa(None)
 			return
@@ -987,7 +1301,7 @@ class IptvCont(Screen):
 
 	def _ok(self):
 		fel, r = self._ales()
-		if fel is None or self._cheie or self._fir is not None:
+		if fel is None or self._cheie or self._fir is not None or getattr(self, "_dupaConectare", None):
 			return
 		self._tine()
 		if fel == "sectiune":

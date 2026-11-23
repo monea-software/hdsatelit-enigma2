@@ -3,16 +3,23 @@ from enigma import eDVBFrontendParametersSatellite, eDVBFrontendParametersCable,
 from Components.NimManager import nimmanager
 
 def ConvertToHumanReadable(tp, type = None):
+	if tp is None:
+		return {}
+
+	def text(cheie, tabel):
+		v = tp.get(cheie)
+		return "" if v is None else tabel.get(v, str(v))
+
 	ret = { }
 	if type is None:
 		type = tp.get("tuner_type", "None")
 	if type == "DVB-S":
 		ret["tuner_type"] = _("Satellite")
-		ret["inversion"] = {
+		ret["inversion"] = text("inversion", {
 			eDVBFrontendParametersSatellite.Inversion_Unknown : _("Auto"),
 			eDVBFrontendParametersSatellite.Inversion_On : _("On"),
-			eDVBFrontendParametersSatellite.Inversion_Off : _("Off")}[tp["inversion"]]
-		ret["fec_inner"] = {
+			eDVBFrontendParametersSatellite.Inversion_Off : _("Off")})
+		ret["fec_inner"] = text("fec_inner", {
 			eDVBFrontendParametersSatellite.FEC_None : _("None"),
 			eDVBFrontendParametersSatellite.FEC_Auto : _("Auto"),
 			eDVBFrontendParametersSatellite.FEC_1_2 : "1/2",
@@ -23,46 +30,52 @@ def ConvertToHumanReadable(tp, type = None):
 			eDVBFrontendParametersSatellite.FEC_3_5 : "3/5",
 			eDVBFrontendParametersSatellite.FEC_4_5 : "4/5",
 			eDVBFrontendParametersSatellite.FEC_8_9 : "8/9",
-			eDVBFrontendParametersSatellite.FEC_9_10 : "9/10"}[tp["fec_inner"]]
-		ret["modulation"] = {
+			eDVBFrontendParametersSatellite.FEC_9_10 : "9/10"})
+		ret["modulation"] = text("modulation", {
 			eDVBFrontendParametersSatellite.Modulation_Auto : _("Auto"),
 			eDVBFrontendParametersSatellite.Modulation_QPSK : "QPSK",
 			eDVBFrontendParametersSatellite.Modulation_QAM16 : "QAM16",
 			eDVBFrontendParametersSatellite.Modulation_8PSK : "8PSK",
 			eDVBFrontendParametersSatellite.Modulation_16APSK : "16APSK",
-			eDVBFrontendParametersSatellite.Modulation_32APSK : "32APSK"}[tp["modulation"]]
-		ret["orbital_position"] = nimmanager.getSatName(int(tp["orbital_position"]))
-		ret["polarization"] = {
+			eDVBFrontendParametersSatellite.Modulation_32APSK : "32APSK"})
+		position = tp.get("orbital_position")
+		try:
+			position = int(position)
+		except (TypeError, ValueError, OverflowError):
+			ret["orbital_position"] = ""
+		else:
+			ret["orbital_position"] = nimmanager.getSatName(position)
+		ret["polarization"] = text("polarization", {
 			eDVBFrontendParametersSatellite.Polarisation_Horizontal : _("Horizontal"),
 			eDVBFrontendParametersSatellite.Polarisation_Vertical : _("Vertical"),
 			eDVBFrontendParametersSatellite.Polarisation_CircularLeft : _("Circular left"),
-			eDVBFrontendParametersSatellite.Polarisation_CircularRight : _("Circular right")}[tp["polarization"]]
-		ret["system"] = {
+			eDVBFrontendParametersSatellite.Polarisation_CircularRight : _("Circular right")})
+		ret["system"] = text("system", {
 			eDVBFrontendParametersSatellite.System_DVB_S : "DVB-S",
-			eDVBFrontendParametersSatellite.System_DVB_S2 : "DVB-S2"}[tp["system"]]
+			eDVBFrontendParametersSatellite.System_DVB_S2 : "DVB-S2"})
 		if ret["system"] == "DVB-S2":
-			ret["rolloff"] = {
+			ret["rolloff"] = text("rolloff", {
 				eDVBFrontendParametersSatellite.RollOff_alpha_0_35 : "0.35",
 				eDVBFrontendParametersSatellite.RollOff_alpha_0_25 : "0.25",
-				eDVBFrontendParametersSatellite.RollOff_alpha_0_20 : "0.20"}[tp["rolloff"]]
-			ret["pilot"] = {
+				eDVBFrontendParametersSatellite.RollOff_alpha_0_20 : "0.20"})
+			ret["pilot"] = text("pilot", {
 				eDVBFrontendParametersSatellite.Pilot_Unknown : _("Auto"),
 				eDVBFrontendParametersSatellite.Pilot_On : _("On"),
-				eDVBFrontendParametersSatellite.Pilot_Off : _("Off")}[tp["pilot"]]
+				eDVBFrontendParametersSatellite.Pilot_Off : _("Off")})
 	elif type == "DVB-C":
 		ret["tuner_type"] = _("Cable")
-		ret["modulation"] = {
+		ret["modulation"] = text("modulation", {
 			eDVBFrontendParametersCable.Modulation_Auto: _("Auto"),
 			eDVBFrontendParametersCable.Modulation_QAM16 : "QAM16",
 			eDVBFrontendParametersCable.Modulation_QAM32 : "QAM32",
 			eDVBFrontendParametersCable.Modulation_QAM64 : "QAM64",
 			eDVBFrontendParametersCable.Modulation_QAM128 : "QAM128",
-			eDVBFrontendParametersCable.Modulation_QAM256 : "QAM256"}[tp["modulation"]]
-		ret["inversion"] = {
+			eDVBFrontendParametersCable.Modulation_QAM256 : "QAM256"})
+		ret["inversion"] = text("inversion", {
 			eDVBFrontendParametersCable.Inversion_Unknown : _("Auto"),
 			eDVBFrontendParametersCable.Inversion_On : _("On"),
-			eDVBFrontendParametersCable.Inversion_Off : _("Off")}[tp["inversion"]]
-		ret["fec_inner"] = {
+			eDVBFrontendParametersCable.Inversion_Off : _("Off")})
+		ret["fec_inner"] = text("fec_inner", {
 			eDVBFrontendParametersCable.FEC_None : _("None"),
 			eDVBFrontendParametersCable.FEC_Auto : _("Auto"),
 			eDVBFrontendParametersCable.FEC_1_2 : "1/2",
@@ -70,18 +83,19 @@ def ConvertToHumanReadable(tp, type = None):
 			eDVBFrontendParametersCable.FEC_3_4 : "3/4",
 			eDVBFrontendParametersCable.FEC_5_6 : "5/6",
 			eDVBFrontendParametersCable.FEC_7_8 : "7/8",
-			eDVBFrontendParametersCable.FEC_8_9 : "8/9"}[tp["fec_inner"]]
+			eDVBFrontendParametersCable.FEC_8_9 : "8/9"})
 	elif type == "DVB-T":
 		# valorile DVB-T2 (256QAM, 1/128, 32k...) sunt in structura dupa Auto; o valoare necunoscuta se arata ca numar,
 		# nu opreste ecranul
 		T = eDVBFrontendParametersTerrestrial
-		def text(cheie, tabel):
-			v = tp.get(cheie)
-			return tabel.get(v, str(v))
 		t2 = tp.get("system") == T.System_DVB_T2
 		ret["tuner_type"] = _("Terrestrial")
-		ret["system"] = "DVB-T2" if t2 else "DVB-T"
-		ret["plp_id"] = (str(tp["plp_id"]) if t2 and tp.get("plp_id", -1) >= 0 else _("Auto"))
+		ret["system"] = text("system", {T.System_DVB_T: "DVB-T", T.System_DVB_T2: "DVB-T2"})
+		ret["plp_id"] = ""
+		if t2:
+			ret["plp_id"] = text("plp_id", {-1: _("Auto")})
+		elif tp.get("system") == T.System_DVB_T:
+			ret["plp_id"] = _("Auto")
 		ret["bandwidth"] = text("bandwidth", {
 			T.Bandwidth_Auto : _("Auto"),
 			T.Bandwidth_8MHz : "8 MHz",

@@ -88,7 +88,7 @@ def _parametruTastatura(nume, implicit):
 	return implicit
 
 
-def _tasteNative(keys, selectedKey, shiftMode, latimi):
+def _tasteNative(keys, selectedKey, shiftMode, latimi, marime=100):
 	culori = _parametruTastatura("VirtualKeyboardNativeColors", (0x00202020, 0x00404040, 0x00ffffff, 0x00ffffff, 0x00cc4444, 0x0044cc66, 0x00ddcc44, 0x004488cc))
 	fond, ales, chenar, text, rosu, verde, galben, albastru = [culoare(c) for c in culori]
 	geometrie = _parametruTastatura("VirtualKeyboardNativeGeometry", (4, 6, 2))
@@ -106,7 +106,7 @@ def _tasteNative(keys, selectedKey, shiftMode, latimi):
 	glife = dict((n, c) for n, c in zip(_NUME_GLIFE, coduri) if codBun(c))
 	glife.setdefault("CLEARICON", glife.get("DELETEICON"))
 	sublinieri = {"EXIT": rosu, "OK": verde, "SHIFT": albastru if shiftMode else galben}
-	inaltime = 45
+	inaltime = 45 * marime // 100
 	res = [(keys)]
 	x = 0
 	for count, key in enumerate(keys):
@@ -124,6 +124,9 @@ def _tasteNative(keys, selectedKey, shiftMode, latimi):
 			eticheta, font = chr(cod), 2
 		else:
 			eticheta = "\u25cc" + key if len(key) == 1 and "\u064b" <= key <= "\u0652" else key
+			if marime != 100:
+				eticheta = {"EXIT": _("Ieșire"), "BACKSPACE": _("Șterge"), "CLEAR": _("Gol"),
+					"SHIFT": _("ABC"), "SPACE": _("Spațiu"), "OK": _("OK")}.get(key, eticheta)
 			font = 0 if len(eticheta) <= 2 else 1
 		# textul pe toata tasta (ca in tastatura obisnuita), dreptunghiul cu spatiul din jur
 		res.append(MultiContentEntryText(pos=(x, 0), size=(latime, inaltime), font=font, text=eticheta,
@@ -131,7 +134,7 @@ def _tasteNative(keys, selectedKey, shiftMode, latimi):
 		x += latime
 	return res
 
-def VirtualKeyBoardEntryComponent(keys, selectedKey,shiftMode=False):
+def VirtualKeyBoardEntryComponent(keys, selectedKey,shiftMode=False, marime=100):
 	key_backspace = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_backspace.png"))
 	key_bg = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_bg.png"))
 	key_clr = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_clr.png"))
@@ -141,12 +144,12 @@ def VirtualKeyBoardEntryComponent(keys, selectedKey,shiftMode=False):
 	key_shift = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_shift.png"))
 	key_shift_sel = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_shift_sel.png"))
 	key_space = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/vkey_space.png"))
-	if nativ("VirtualKeyboardNative"):
+	if marime != 100 or nativ("VirtualKeyboardNative"):
 		poze = {"EXIT": key_esc, "BACKSPACE": key_backspace, "CLEAR": key_clr, "SHIFT": key_shift, "SPACE": key_space, "OK": key_ok}
 		def latimi(key):
 			poza = poze.get(key, key_bg)
-			return poza.size().width() if poza is not None else 45
-		return _tasteNative(keys, selectedKey, shiftMode, latimi)
+			return (poza.size().width() if poza is not None else 45) * marime // 100
+		return _tasteNative(keys, selectedKey, shiftMode, latimi, marime)
 	res = [ (keys) ]
 	
 	x = 0
@@ -202,6 +205,7 @@ def VirtualKeyBoardEntryComponent(keys, selectedKey,shiftMode=False):
 
 
 class VirtualKeyBoard(Screen):
+	hdsTastaturaEditabila = True
 
 	def __init__(self, session, title="", text="", *extra, **optiuni):
 		# HDSatelit: pluginurile altor imagini dau si maxSize, visible_width, type, currPos, allMarked, style, windowTitle; aici nu schimba
@@ -210,8 +214,11 @@ class VirtualKeyBoard(Screen):
 		from Components.HdsAsistentaControl import campSecret
 		self.hdsCampSecret = bool(optiuni.get("hdsSecret") or campSecret(eticheta=title))
 		titlu = optiuni.get("windowTitle")
+		self._titluFereastra = titlu
 		if titlu:
-			self.onLayoutFinish.append(lambda: self.setTitle(titlu))
+			# o metoda, nu lambda: GUISkin.createGUIScreen cheama numai metodele, restul il ruleaza ca cod din skin (exec), deci
+			# lambda dadea "exec() arg 1 must be a string" in jurnal si titlul nu se punea (0.7.8, RSP)
+			self.onLayoutFinish.append(self._puneTitlulCerut)
 		self.keys_list = []
 		self.shiftkeys_list = []
 		self.lang = language.getLanguage()
@@ -224,6 +231,9 @@ class VirtualKeyBoard(Screen):
 		self.modTastatura = False
 		# locul si marimea ferestrei din skin (pozitia de dat lui move, marimea fara rama), tinute minte la prima strangere
 		self.locSkin = None
+		self.marimeText = 100
+		self._editText = None
+		self._geometrieMarime = None
 		
 		self["country"] = StaticText("")
 		self["key_green"] = StaticText(_("Confirm"))
@@ -235,7 +245,7 @@ class VirtualKeyBoard(Screen):
 		self["text"] = CampText(self.text)
 		self["list"] = VirtualKeyBoardList([])
 		
-		self["actions"] = ActionMap(["OkCancelActions", "WizardActions", "ColorActions", "KeyboardInputActions", "InputBoxActions", "InputAsciiActions"],
+		self["actions"] = ActionMap(["OkCancelActions", "WizardActions", "ColorActions", "KeyboardInputActions", "InputBoxActions", "InputAsciiActions", "MenuActions"],
 			{
 				"gotAsciiCode": self.keyGotAscii,
 				"ok": self.okClicked,
@@ -247,6 +257,9 @@ class VirtualKeyBoard(Screen):
 				"red": self.backClicked,
 				"green": self.ok,
 				"yellow": self.switchLang,
+				"menu": self.meniuText,
+				"home": lambda: self.comandaText("inceput"),
+				"end": lambda: self.comandaText("sfarsit"),
 				"deleteBackward": self.backClicked,
 				"back": self.exit				
 			}, -2)
@@ -255,7 +268,134 @@ class VirtualKeyBoard(Screen):
 		self.onLayoutFinish.append(self.buildVirtualKeyBoard)
 		self.onLayoutFinish.append(self._antetPesteCamp)
 		self.onLayoutFinish.append(self._laDeschidere)
+		getattr(self, "onClose", []).append(self._inchideEditare)
 		self._titluCerut = bool(titlu)
+
+	def optiuniText(self):
+		return [(_("Început de rând"), "inceput"), (_("Sfârșit de rând"), "sfarsit"),
+			(_("Cuvânt înapoi"), "cuvant-inapoi"), (_("Cuvânt înainte"), "cuvant-inainte"),
+			(_("Mărime tastatură: 100% (din fabrică)"), "marime-100"),
+			(_("Mărime tastatură: 125%"), "marime-125"), (_("Mărime tastatură: 150%"), "marime-150")]
+
+	def meniuText(self):
+		from Screens.ChoiceBox import ChoiceBox
+		self.session.openWithCallback(self._alesText, ChoiceBox, title=_("Tastatură: editare și mărime"), list=self.optiuniText())
+
+	def _alesText(self, alegere):
+		if alegere:
+			self.comandaText(alegere[1])
+
+	def _campEditare(self):
+		from Components.Input import Input
+		text = self["text"].getText()
+		camp = getattr(self, "_editText", None)
+		if camp is None:
+			camp = Input(text=text)
+			camp.hdsSecret = bool(getattr(self, "hdsCampSecret", False))
+			camp.hdsSession = getattr(self, "session", None)
+			self._editText = camp
+			camp.currPos = len(text)
+			camp.allmarked = False
+		elif camp.getText() != text:
+			camp.setText(text)
+			camp.currPos = len(text)
+			camp.allmarked = False
+		return camp
+
+	def comandaText(self, comanda):
+		if comanda in ("marime-100", "marime-125", "marime-150"):
+			self.alegeMarime(int(comanda.split("-")[1]))
+		elif comanda in ("inceput", "sfarsit", "cuvant-inapoi", "cuvant-inainte", "caracter-inapoi", "caracter-inainte"):
+			self._campEditare().deplaseazaText(comanda)
+			self._arataEditare()
+
+	def scrieText(self, text):
+		if self._secretOprit():
+			return
+		if getattr(self, "_editText", None) is None:
+			self.text = self["text"].getText() + text
+			self["text"].setText(self.text)
+		else:
+			self._campEditare().insereazaText(text)
+			self._arataEditare()
+
+	def _arataEditare(self):
+		camp = self._editText
+		self.text = camp.getText()
+		self["text"].setText(self.text)
+		inst = getattr(self["text"], "instance", None)
+		if inst is None:
+			return
+		# A display-only caret avoids confusing logical offsets with bidi glyph indices.
+		granite = camp.graniteText(self.text)
+		poz = max(p for p in granite if p <= camp.currPos)
+		idx = granite.index(poz)
+		a, b = max(0, idx - 12), min(len(granite) - 1, idx + 12)
+		while True:
+			vizibil = (("…" if a else "") + self.text[granite[a]:poz] + "\u2066|\u2069" +
+				self.text[poz:granite[b]] + ("…" if b < len(granite) - 1 else ""))
+			inst.setText(("\u200f" if getattr(self["text"], "rtl", False) else "") + vizibil)
+			if inst.calculateSize().width() <= inst.size().width() or a == b:
+				break
+			if idx - a >= b - idx and a < idx:
+				a += 1
+			elif b > idx:
+				b -= 1
+			else:
+				break
+
+	def _inchideEditare(self):
+		if self._editText is not None:
+			self._editText.nextKey()
+			self._editText = None
+
+	def alegeMarime(self, marime):
+		"""Per-dialog size choice, bounded by the desktop, no configuration IO."""
+		from enigma import ePoint, eSize, getDesktop
+		inst = getattr(self, "instance", None)
+		if inst is None or marime not in (100, 125, 150):
+			return
+		if self._geometrieMarime is None:
+			if self.locSkin is None:
+				self._potrivesteFereastra()
+			poz, mar = self.locSkin
+			elemente = []
+			for w in list(self.values()) + list(getattr(self, "additionalWidgets", [])) + list(getattr(self, "renderer", [])):
+				e = getattr(w, "instance", None)
+				if e is not None and hasattr(e, "move") and hasattr(e, "resize"):
+					f = e.getFont() if hasattr(e, "getFont") else None
+					font = (f.family, f.pointSize) if f is not None else None
+					elemente.append((e, e.position(), e.size(), font))
+			self._geometrieMarime = (poz, mar, elemente)
+		poz, mar, elemente = self._geometrieMarime
+		desktop = getDesktop(0).size()
+		factor = max(100, min(marime, desktop.width() * 100 // mar.width(),
+			max(1, desktop.height() - 60) * 100 // mar.height()))
+		self.marimeText = marime
+		self._factorMarime = factor
+		for e, p, s, font in elemente:
+			e.move(ePoint(p.x() * factor // 100, p.y() * factor // 100))
+			e.resize(eSize(s.width() * factor // 100, s.height() * factor // 100))
+			if font is not None:
+				e.setFont(gFont(font[0], font[1] * factor // 100))
+		latime, inaltime = mar.width() * factor // 100, mar.height() * factor // 100
+		self.locSkin = (ePoint(max(0, poz.x() - (latime - mar.width()) // 2),
+			max(0, poz.y() - (inaltime - mar.height()) // 2)), eSize(latime, inaltime))
+		if factor == 100:
+			self.locSkin = (poz, mar)
+		self["list"].l.setItemHeight(45 * factor // 100)
+		self["list"].l.setFont(0, gFont("Regular", 28 * factor // 100))
+		self["list"].l.setFont(1, gFont("Regular", 28 * 5 // 9 * factor // 100))
+		spatiu = _parametruTastatura("VirtualKeyboardNativeGeometry", (4, 6, 2))[0]
+		self["list"].l.setFont(2, fontPictograme("VirtualKeyboardIcons", 28 * factor // 100, max(12, 45 - 2 * int(spatiu)) * factor // 100))
+		self._potrivesteFereastra()
+		self.buildVirtualKeyBoard()
+		if self._editText is not None:
+			self._arataEditare()
+
+	def _puneTitlulCerut(self):
+		"""Titlul ferestrei dat la deschidere (windowTitle: pluginurile altor imagini, intrebarea echipei in asistenta)."""
+		self.setTitle(self._titluFereastra)
 
 	def _antetPesteCamp(self):
 		"""0.7.4 (forumul 768, JAKITAKI, o tema din afara): unele teme pun eticheta („header”) chiar peste campul de text,
@@ -344,12 +484,14 @@ class VirtualKeyBoard(Screen):
 		self.lang = self.nextLang
 		self.setLang()
 		self.buildVirtualKeyBoard(self.selectedKey)
+		if self._editText is not None:
+			self._arataEditare()
 
 	def setLang(self):
 		# Codurile scurte si cele cu cratima folosesc aceeasi asezare ca limba completa.
 		cod = (self.lang or "en_EN").replace('-', '_').split('_', 1)[0].lower()
 		self.lang = {"ar": "ar_AE", "de": "de_DE", "es": "es_ES", "fi": "fi_FI", "sv": "sv_SE",
-			"sk": "sk_SK", "cs": "cs_CZ", "uk": "uk_UA", "ru": "ru_RU", "ro": "ro_RO"}.get(cod, "en_EN")
+			"sk": "sk_SK", "cs": "cs_CZ", "uk": "uk_UA", "ru": "ru_RU", "ro": "ro_RO", "fr": "fr_FR"}.get(cod, "en_EN")
 		if self.lang.replace('-', '_').split('_', 1)[0].lower() == 'ar':
 			self.lang = 'ar_AE'
 			self.keys_list = [
@@ -378,6 +520,22 @@ class VirtualKeyBoard(Screen):
 				["A", "S", "D", "F", "G", "H", "J", "K", "L", "Ö", "Ä", "'"],
 				[">", "Y", "X", "C", "V", "B", "N", "M", ";", ":", "_", "CLEAR"],
 				["SHIFT", "SPACE", "?", "\\", "OK"]]
+			self.nextLang = 'fr_FR'
+		elif self.lang == 'fr_FR':
+			# HDSatelit (AS114, 22.11.2026): tastatura franceza (AZERTY, cu e/a/u cu accent, c cu sedila si vocalele cu
+			# circumflex); fara ea meniul in franceza pornea tastatura in engleza. Tot randuri de cel mult 12 taste.
+			self.keys_list = [
+				["EXIT", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "BACKSPACE"],
+				["a", "z", "e", "r", "t", "y", "u", "i", "o", "p", "é", "è"],
+				["q", "s", "d", "f", "g", "h", "j", "k", "l", "m", "à", "ç"],
+				["w", "x", "c", "v", "b", "n", ",", ".", "'", "-", "ù", "CLEAR"],
+				["SHIFT", "SPACE", "@", "ê", "â", "ô", "î", "û", "/", "OK"]]
+			self.shiftkeys_list = [
+				["EXIT", "!", '"', "#", "$", "%", "&", "*", "(", ")", "=", "BACKSPACE"],
+				["A", "Z", "E", "R", "T", "Y", "U", "I", "O", "P", "É", "È"],
+				["Q", "S", "D", "F", "G", "H", "J", "K", "L", "M", "À", "Ç"],
+				["W", "X", "C", "V", "B", "N", ";", ":", "?", "_", "Ù", "CLEAR"],
+				["SHIFT", "SPACE", "€", "Ê", "Â", "Ô", "Î", "Û", "+", "OK"]]
 			self.nextLang = 'es_ES'
 		elif self.lang == 'es_ES':
 			#still missing keys (u"ùÙ")
@@ -518,7 +676,7 @@ class VirtualKeyBoard(Screen):
 		self["country"].setText(self.lang)
 		nume = {"en_EN": _("English"), "de_DE": _("German"), "es_ES": _("Spanish"), "fi_FI": _("Finnish"),
 			"sv_SE": _("Swedish"), "sk_SK": _("Slovakian"), "cs_CZ": _("Czech"), "uk_UA": _("Ukrainian"),
-			"ru_RU": _("Russian"), "ro_RO": _("Romanian"), "ar_AE": _("Arabic")}[self.lang]
+			"ru_RU": _("Russian"), "ro_RO": _("Romanian"), "ar_AE": _("Arabic"), "fr_FR": _("French")}[self.lang]
 		self["language"].setText(nume)
 		self["key_yellow"].setText(nume)
 		if hasattr(self["text"], "setRtl"):
@@ -527,6 +685,11 @@ class VirtualKeyBoard(Screen):
 
 	def buildVirtualKeyBoard(self, selectedKey=None):
 		list = []
+		factor = getattr(self, "_factorMarime", 100)
+		def intrare(keys, selected, shift=False):
+			if factor == 100:
+				return VirtualKeyBoardEntryComponent(keys, selected, shift)
+			return VirtualKeyBoardEntryComponent(keys, selected, shift, marime=factor)
 		if selectedKey is None:
 			selectedKey = self.selectedKey
 		self.k_list = self.shiftkeys_list if self.shiftMode else self.keys_list
@@ -541,22 +704,26 @@ class VirtualKeyBoard(Screen):
 			self.k_list = self.shiftkeys_list
 			for keys in self.k_list:
 				if selectedKey < 12 and selectedKey > -1:
-					list.append(VirtualKeyBoardEntryComponent(keys, selectedKey,True))
+					list.append(intrare(keys, selectedKey,True))
 				else:
-					list.append(VirtualKeyBoardEntryComponent(keys, -1,True))
+					list.append(intrare(keys, -1,True))
 				selectedKey -= 12
 		else:
 			self.k_list = self.keys_list
 			for keys in self.k_list:
 				if selectedKey < 12 and selectedKey > -1:
-					list.append(VirtualKeyBoardEntryComponent(keys, selectedKey))
+					list.append(intrare(keys, selectedKey))
 				else:
-					list.append(VirtualKeyBoardEntryComponent(keys, -1))
+					list.append(intrare(keys, -1))
 				selectedKey -= 12
 		
 		self["list"].setList(list)
 	
 	def backClicked(self):
+		if getattr(self, "_editText", None) is not None:
+			self._campEditare().stergeInainteCursor()
+			self._arataEditare()
+			return
 		self.text = stergeUltimaLitera(self["text"].getText())
 		self["text"].setText(self.text)
 			
@@ -594,6 +761,9 @@ class VirtualKeyBoard(Screen):
 		elif text == "CLEAR":
 			self.text = ""
 			self["text"].setText(self.text)
+			if self._editText is not None:
+				self._campEditare()
+				self._arataEditare()
 		
 		elif text == "SHIFT":
 			if self.shiftMode:
@@ -604,16 +774,17 @@ class VirtualKeyBoard(Screen):
 			self.buildVirtualKeyBoard(self.selectedKey)
 		
 		elif text == "SPACE":
-			self.text += " "
-			self["text"].setText(self.text)
+			if self._editText is None:
+				self.text += " "
+				self["text"].setText(self.text)
+			else:
+				self.scrieText(" ")
 		
 		elif text == "OK":
 			self.close(self["text"].getText())
 		
 		else:
-			self.text = self["text"].getText()
-			self.text += text
-			self["text"].setText(self.text)
+			self.scrieText(text)
 
 	def ok(self):
 		self.close(self["text"].getText())
@@ -622,6 +793,8 @@ class VirtualKeyBoard(Screen):
 		self.close(None)
 
 	def left(self):
+		if self.modTastatura and _dinTastatura() and getattr(self, "_editText", None) is not None:
+			return self.comandaText("caracter-inapoi")
 		if self._sageata():
 			return
 		self.selectedKey -= 1
@@ -640,6 +813,8 @@ class VirtualKeyBoard(Screen):
 		self.showActiveKey()
 
 	def right(self):
+		if self.modTastatura and _dinTastatura() and getattr(self, "_editText", None) is not None:
+			return self.comandaText("caracter-inainte")
 		if self._sageata():
 			return
 		self.selectedKey += 1
@@ -700,8 +875,7 @@ class VirtualKeyBoard(Screen):
 		if not self.modTastatura:
 			self.punModTastatura(True)
 		if char >= " ":
-			self.text = self["text"].getText() + char
-			self["text"].setText(self.text)
+			self.scrieText(char)
 
 	def _secretOprit(self):
 		from Components.HdsAsistentaControl import cereOprirePentruSecret

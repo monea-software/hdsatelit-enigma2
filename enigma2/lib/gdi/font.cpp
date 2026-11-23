@@ -32,6 +32,7 @@
 #include <fribidi/fribidi.h>
 
 #include <map>
+#include <algorithm>
 
 fontRenderClass *fontRenderClass::instance;
 
@@ -268,6 +269,18 @@ int fontRenderClass::getFont(ePtr<Font> &font, const std::string &face, int size
 	}
 	font = new Font(this, id, size * ((fontListEntry*)id)->scale / 100, tabwidth);
 	return 0;
+}
+
+std::vector<std::string> fontRenderClass::getFontFaces()
+{
+	/* the list holds the newest font first and has an entry for each addFont, so a name added again (a theme adds
+	   Regular again) would come twice: each name once, the newest first */
+	std::vector<std::string> faces;
+	singleLock s(ftlock);
+	for (fontListEntry *f = font; f; f = f->next)
+		if (std::find(faces.begin(), faces.end(), f->face) == faces.end())
+			faces.push_back(f->face);
+	return faces;
 }
 
 void addFont(const char *filename, const char *alias, int scale_factor, int is_replacement, int renderflags)

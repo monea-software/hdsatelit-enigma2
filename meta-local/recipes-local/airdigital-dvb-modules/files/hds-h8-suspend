@@ -1,0 +1,11 @@
+#!/bin/sh
+# Copyright (C) 2026 moneasoftware.com & hdsatelit.com
+# SPDX-License-Identifier: GPL-2.0-only
+# SysV level zero powers off H8. Reboot and normal startup do not.
+nivel=$(runlevel 2>/dev/null)
+nivel=${nivel##* }
+[ "$nivel" = 0 ] || exit 0
+
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+exec /usr/bin/turnoff_power

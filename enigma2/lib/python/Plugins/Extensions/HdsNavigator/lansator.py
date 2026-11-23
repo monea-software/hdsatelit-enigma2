@@ -18,6 +18,8 @@
 #      „arata”;
 #   4. la inchidere: „iesire”, apoi SIGTERM si SIGKILL pe grupul de procese daca nu iese; lacatele se ridica la
 #      sfarsitul procesului (sau imediat, daca a cazut).
+# Cu marginile ecranului puse de om, odata cu lacatul pe fb0 stratul grafic trece pe tot ecranul, iar la ridicarea
+# lacatului marginile se pun la loc (Navigator._osdPlin, 0.7.8).
 # Tastele care ajung la enigma2 cat navigatorul e pe ecran (telecomanda din interfata web, tastatura emulatorului)
 # se prind cu o legatura pe toate tastele si se trimit lansatorului („tasta <cod> <1|0|2>”).
 #
@@ -480,6 +482,32 @@ class Mediu(object):
 		s = getDesktop(0).size()
 		return s.width(), s.height()
 
+	# dosarul driverului pentru marginile ecranului; None = cel din Components/HdsMargini (probele de pe PC dau altul)
+	CALE_FB = None
+
+	def margini_ecran(self):
+		"""Marginile ecranului alese de om (Components/HdsMargini: sus, dreapta, jos, stanga, in pixelii ecranului);
+		{} fara modul sau la o eroare."""
+		try:
+			from Components import HdsMargini
+			latime, inaltime = self.marime_ecran()
+			return HdsMargini.citeste(latime, inaltime)
+		except Exception as e:
+			_jurnal("marginile ecranului: %s" % e)
+			return {}
+
+	def osd_pe_tot_ecranul(self, da):
+		"""da=True: stratul grafic pe tot ecranul (/proc/stb/fb/dst_* = 0 0 720 576); da=False: marginile omului puse la
+		loc. True daca s-a scris in driver (Components/HdsMargini.aplica)."""
+		try:
+			from Components import HdsMargini
+			latime, inaltime = self.marime_ecran()
+			margini = HdsMargini.implicite() if da else self.margini_ecran()
+			return HdsMargini.aplica(margini, latime, inaltime, cale=self.CALE_FB or HdsMargini.CALE_FB)
+		except Exception as e:
+			_jurnal("marginile ecranului: %s" % e)
+			return False
+
 	def intrari(self):
 		try:
 			cai = sorted(os.path.join("/dev/input", n) for n in os.listdir("/dev/input") if n.startswith("event"))
@@ -746,6 +774,7 @@ class Navigator(object):
 		self._decodoare = {}        # un decodor UTF-8 pe teava (iesirea si erorile vin ca octeti, vezi _text)
 		self._fb_blocat = False
 		self._rc_blocat = False
+		self._osd_plin = False      # stratul grafic pus pe tot ecranul peste marginile omului (_osdPlin)
 		self._taste_legate = False
 		self._oprit_de_noi = False
 		self._dupa_ascuns = None
@@ -783,6 +812,11 @@ class Navigator(object):
 			k = latime / 1920.0
 			mx = int(round(MARGINE_X_1080 * k))
 			my = int(round(MARGINE_Y_1080 * inaltime / 1080.0))
+			# 0.7.8 (CRM): cat navigatorul tine ecranul, stratul grafic e pe tot ecranul (_osdPlin); pagina ramane in
+			# marginile ecranului alese de om cand ele sunt mai mari decat ale temei
+			mo = self._marginiOm()
+			mx = max(mx, int(mo.get("stanga", 0)), int(mo.get("dreapta", 0)))
+			my = max(my, int(mo.get("sus", 0)), int(mo.get("jos", 0)))
 			latime, inaltime = latime - 2 * mx, inaltime - 2 * my
 			latime_css = int(round(latime / (SCARA_PAGINA_1080 * k)))
 			scara = latime / float(latime_css)
@@ -1385,6 +1419,29 @@ class Navigator(object):
 		if not self._fb_blocat:
 			fb.lock()
 			self._fb_blocat = True
+		self._osdPlin(True)
+
+	def _osdPlin(self, da):
+		"""0.7.8 (CRM, forum 1304): cu marginile ecranului puse (Interfata si aspect > Marginile ecranului) stratul
+		grafic e micsorat in driver (/proc/stb/fb/dst_*), iar canalul, care merge mai departe sub navigator, se vedea pe
+		margini in jurul paginii si al aplicatiilor; in HbbTV fereastra filmului (socotita pe tot ecranul) nu se mai potrivea
+		cu gaura din pagina. Cat navigatorul tine ecranul, stratul e pe tot ecranul; la orice dare inapoi (o fereastra
+		enigma2 peste navigator, EXIT, oprire, cadere: _deblocheaza) marginile omului se pun la loc, inainte ca enigma2 sa
+		deseneze din nou. Fara margini (din fabrica) nu se scrie nimic, ca pana acum."""
+		if da == self._osd_plin:
+			return
+		if da and not any(self._marginiOm().values()):
+			return
+		scris = getattr(self.m, "osd_pe_tot_ecranul", lambda da: False)(da)
+		self._osd_plin = bool(da and scris)
+		_jurnal("stratul grafic %s" % ("pe tot ecranul" if self._osd_plin else "in marginile ecranului"))
+
+	def _marginiOm(self):
+		"""Marginile ecranului alese de om ({} fara ecran de tip framebuffer, ca in emulator, sau fara ele in mediu)."""
+		citeste = getattr(self.m, "margini_ecran", None)
+		if citeste is None or self.m.fb() is None:
+			return {}
+		return citeste() or {}
 
 	def _deblocheaza(self):
 		if self._rc_blocat:
@@ -1392,6 +1449,7 @@ class Navigator(object):
 			if rc is not None:
 				rc.unlock()
 			self._rc_blocat = False
+		self._osdPlin(False)
 		if self._fb_blocat:
 			fb = self.m.fb()
 			if fb is not None:

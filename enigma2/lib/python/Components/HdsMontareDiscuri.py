@@ -5,8 +5,9 @@
 # HdsMontareDiscuri.py: „Montarea discurilor” (0.7.5, cererea tamiciav7 si darog69: un stick apare ca /media/hdd si omul
 # nu are cum sa-l treaca pe /media/usb sau /media/mmc, nici sa-l demonteze). O singura logica pentru ecranul de pe
 # televizor (Screens/HdsMontareDiscuri.py) si pagina web /montare-discuri (HdsWebControl/montare_web.py):
-#   - lista(): stick-urile, hard diskurile USB/SATA si cardurile SD ale receptorului (nu memoria interna si nici discul
-#     de pe care porneste imaginea), cu locul de acum din /media si alegerile de loc;
+#   - lista(): stick-urile, hard diskurile USB/SATA si cardurile SD ale receptorului (nu memoria interna), cu locul de
+#     acum din /media si alegerile de loc; discul de pe care porneste imaginea are un rand numai de citit (vezi mai jos,
+#     sectiunea discul de pornire);
 #   - porneste(LOC, disc, nume): locul ales se tine minte dupa UUID (Harddisk.setMediaName, /etc/enigma2/hds-media-names.json,
 #     ramane si dupa repornire) si se aplica ACUM: discul iese si intra din nou in lista lui Harddisk, pe aceeasi cale ca la
 #     scoaterea si punerea stickului (montarea sistemului din /run/media ramane neatinsa); dosarele inregistrarilor,
@@ -90,16 +91,23 @@ def discul(dispozitiv):
 
 
 def _marime(dispozitiv):
+	"""3,8 GB / 224 GB / 734 MB, ca in Locul inregistrarilor si in navigatorul de fisiere (HdsNavigator.formatSize): o
+	zecimala sub 10, cu virgula. Inainte zecimalele se taiau si un stick de 4 GB (3,8 GB) aparea ca 3 GB."""
 	try:
 		with open(SYS_BLOCK + dispozitiv + "/size") as f:
-			octeti = int(f.read().strip()) * 512
+			n = float(int(f.read().strip()) * 512)
 	except (OSError, ValueError):
 		return ""
-	for unitate in ("B", "KB", "MB", "GB"):
-		if octeti < 1024:
-			return "%d %s" % (octeti, unitate)
-		octeti /= 1024.0
-	return "%.1f TB" % octeti
+	for unitate in ("B", "kB", "MB", "GB"):
+		if n < 1024:
+			break
+		n /= 1024.0
+	else:
+		unitate = "TB"
+	if unitate == "B":
+		return "%d B" % n
+	text = ("%.1f" % n) if n < 10 else ("%d" % round(n))
+	return "%s %s" % (text.replace(".", ","), unitate)
 
 
 def _prezent(dispozitiv):
@@ -215,8 +223,22 @@ def _montateNecunoscute(cunoscute, hm):
 			_jurnalOData(dev, "montat in %s, dar nu e stick, disc USB/SATA sau card SD (physdev %s)" % (", ".join(l), physdev or "?"))
 			continue
 		_jurnalOData(dev, "montat in %s, dar managerul de discuri nu-l are in liste" % ", ".join(l))
-		rez[dev] = sorted(l, key=lambda x: (not x.startswith(MEDIA), x))
+		rez[dev] = sorted(l, key=_ordineLoc)
 	return rez
+
+
+def _ordineLoc(loc):
+	"""Locul aratat intai: un nume stabil din /media (hdd, usb, usb2.., mmc; acolo merg inregistrarile), apoi celelalte din
+	/media, apoi /run/media; la acelasi fel montarea adevarata inaintea legaturii. Inainte ordinea era alfabetica, iar la un
+	stick pierdut de manager si montat pe /media/hdd locul aratat era legatura etichetei (/media/HDSATELIT), nu /media/hdd."""
+	H = _H()
+	nume = loc[len(MEDIA):].rstrip("/") if loc.startswith(MEDIA) else ""
+	try:
+		# path al lui Harddisk (acelasi os.path pe receptor; probele ii dau sistemul de fisiere fals)
+		legatura = getattr(H, "path", os.path).islink(loc)
+	except OSError:
+		legatura = False
+	return (not loc.startswith(MEDIA), nume not in getattr(H, "BIND_NAMES", ()), legatura, loc)
 
 
 def reparaNecunoscute(randuri, hm=None, acum=None):
@@ -228,6 +250,19 @@ def reparaNecunoscute(randuri, hm=None, acum=None):
 	puse = []
 	for r in randuri or []:
 		dev = r.get("dispozitiv")
+		if r.get("pornire"):
+			# discul de pornire iesit din manager: montat din nou pe drumul de la pornire (Harddisk.addSystemDisk)
+			if not r.get("nemontat") or not dispozitivBun(dev) or inLucru():
+				continue
+			if dev in _reparate and acum - _reparate[dev] < PAUZA_REPARARE_S:
+				continue
+			_reparate[dev] = acum
+			try:
+				if _monteazaPornirea(hm, dev):
+					puse.append(dev)
+			except Exception as e:
+				_jurnal("%s: montarea discului de pornire: %r" % (dev, e))
+			continue
 		if not r.get("necunoscut") or not dispozitivBun(dev) or inLucru():
 			continue
 		if dev in _reparate and acum - _reparate[dev] < PAUZA_REPARARE_S:
@@ -248,6 +283,108 @@ def reparaNecunoscute(randuri, hm=None, acum=None):
 		except Exception as e:
 			_jurnal("%s: punerea inapoi in lista: %r" % (dev, e))
 	return puse
+
+
+# ------------------------------------------------------------------ discul de pornire
+# 0.7.8 (MDP; Vu+ 4K pornit dintr-un loc kexec de pe un disc USB, la fel orice loc de pe disc cu rootsubdir): discul de pe
+# care porneste imaginea e montat a doua oara, intreg, pe un nume din /media (Harddisk.addSystemDisk), iar managerul il tine
+# ca SystemDiskPartition, cu is_hotplug. Lista il lua ca pe un stick, cu alegerile locului si Demonteaza: un loc ales il
+# scotea din manager (umount -l /media/hdd), iar managerul nu-l mai primea inapoi (discul sistemului e pe lista lui neagra),
+# deci discul ramanea demontat pana la repornirea interfetei si inregistrarile n-aveau unde merge. Acum randul lui e numai
+# de citit (numele Discul de pornire, locul, unde se salveaza inregistrarile), locul si demontarea se refuza si in web,
+# iar cand nu e montat pe niciun nume din /media (prima montare cazuta) se monteaza singur la loc, pe drumul de la pornire.
+
+def _partitiaPornirii(hm):
+	"""Partitia discului de pe care porneste imaginea (Harddisk: system_partition, din HdsStocare.discRadacina) sau None."""
+	dev = getattr(hm, "system_partition", None)
+	return dev if dispozitivBun(dev) else None
+
+
+def estePornirea(dispozitiv, hm=None, p=None):
+	"""Partitia e a discului de pe care porneste imaginea: semnul partitiei din manager (SystemDiskPartition) sau numele
+	tinut de manager, si cand partitia a iesit din liste."""
+	if p is not None and getattr(p, "system_disk", False):
+		return True
+	hm = _hm(hm)
+	if not dispozitivBun(dispozitiv):
+		return False
+	return dispozitiv == _partitiaPornirii(hm) or discul(dispozitiv) == getattr(hm, "system_disk", None)
+
+
+def _pornireInLucru(hm, dispozitiv):
+	"""Montarea discului de pornire e pornita (comanda mount sau planul ei in coada managerului)."""
+	if dispozitiv in (getattr(hm, "busy", None) or {}):
+		return True
+	return any(t and t[0] == ("sistem", dispozitiv) for t in list(getattr(hm, "_mount_plan_queue", None) or []))
+
+
+def _randPornire(H, dispozitiv, p, listat):
+	"""Randul discului de pornire: fara alegeri si fara demontare. `p` None: partitia nu e in manager (nemontata)."""
+	loc = (getattr(p, "mountpoint", "") or "") if listat else ""
+	rand = {"dispozitiv": dispozitiv, "nume": "%s (%s)" % (_("Discul de pornire"), dispozitiv),
+		"eticheta": H.deviceLabel(dispozitiv), "marime": _marime(dispozitiv), "sistem": H.deviceFsType(dispozitiv),
+		"stare": "montat" if listat else "se_monteaza", "loc": loc,
+		"locuri": [m for m in H.findMountpoints(dispozitiv) if m.startswith(MEDIA)], "ales": "", "alegeri": [],
+		"sd": False, "poate_demonta": False, "poate_monta": False, "pornire": True}
+	if p is None:
+		rand["nemontat"] = True
+	return rand
+
+
+def _monteazaPornirea(hm, dispozitiv):
+	"""Pe firul interfetei: discul de pornire, iesit din manager, se monteaza din nou pe drumul de la pornire
+	(Harddisk.addSystemDisk: numele lui din /media, dupa ce e montat intra in manager ca Discul de pornire)."""
+	if dispozitiv in hm.pending or any(getattr(p, "device", None) == dispozitiv for p in hm.partitions):
+		return False
+	if _pornireInLucru(hm, dispozitiv):
+		return False
+	radacina = hm.externalRoot()
+	if not radacina or radacina.get("partitie") != dispozitiv:
+		_jurnalOData(dispozitiv, "discul de pornire nemontat, dar nu stiu de unde porneste imaginea")
+		return False
+	if hm.addSystemDisk(radacina) is False:
+		return False
+	_jurnal("%s: discul de pornire nu era montat in /media; il montez la loc" % dispozitiv)
+	return True
+
+
+def _locInregistrari():
+	"""Locul inregistrarilor din setari (config.usage.default_path), pe firul interfetei; sir gol cand nu se poate citi."""
+	try:
+		from Components.config import config
+		return config.usage.default_path.value or ""
+	except Exception:
+		return ""
+
+
+def _peLoc(cale, rand):
+	"""`cale` (/hdd/movie/ sau /media/hdd/movie/) sta pe unul din locurile din /media ale randului."""
+	t = (cale or "").rstrip("/")
+	if t == "/hdd" or t.startswith("/hdd/"):
+		t = HDD + t[len("/hdd"):]
+	for loc in [rand.get("loc") or ""] + list(rand.get("locuri") or []):
+		loc = loc.rstrip("/")
+		if loc.startswith(MEDIA) and (t == loc or t.startswith(loc + "/")):
+			return True
+	return False
+
+
+def textPornire():
+	"""De ce discul de pornire nu are alegeri (nota lui si refuzul locului si al demontarii)."""
+	return _("Imaginea pornește de pe acest disc, de aceea rămâne montat cât merge receptorul: nu se demontează și "
+		"nu i se schimbă locul de aici.")
+
+
+def notaRand(rand, locInregistrari=None):
+	"""Nota unui rand, pe firul interfetei (ecranul si pagina web): la discul de pornire, de ce nu are alegeri si, cand e
+	cazul, ca inregistrarile se salveaza pe el; altfel sir gol."""
+	if not (rand or {}).get("pornire"):
+		return ""
+	text = textPornire()
+	cale = (locInregistrari or _locInregistrari)()
+	if cale and rand.get("stare") == "montat" and _peLoc(cale, rand):
+		text += " " + _("Înregistrările se salvează pe el, în %s.") % cale
+	return text
 
 
 def _numele(p, dispozitiv, eticheta):
@@ -272,12 +409,18 @@ def lista(hm=None):
 	partitii = _partitiiAle(hm, sarite)
 	for dev, motiv in sorted(sarite.items()):
 		_jurnalOData(dev, "sarit din lista: %s" % motiv)
+	pornire = _partitiaPornirii(hm)
+	if pornire:
+		_demontate.pop(pornire, None)
 	for dev, p in sorted(partitii.items()):
 		if dev in _demontate:
 			continue
+		listat = p in hm.partitions
+		if estePornirea(dev, hm, p):
+			rez.append(_randPornire(H, dev, p, listat))
+			continue
 		eticheta = H.deviceLabel(dev)
 		mediu, sd = _feluri(p)
-		listat = p in hm.partitions
 		loc = (getattr(p, "mountpoint", "") or "") if listat else ""
 		info = hm.mediaNameInfo(dev) if mediu else {"valoare": "", "alegeri": []}
 		alegeri = []
@@ -287,6 +430,14 @@ def lista(hm=None):
 			"sistem": H.deviceFsType(dev), "stare": "montat" if listat else "se_monteaza", "loc": loc,
 			"locuri": [m for m in H.findMountpoints(dev)], "ales": info.get("valoare", ""), "alegeri": alegeri, "sd": sd,
 			"poate_demonta": listat, "poate_monta": False})
+	if pornire and pornire not in partitii and _prezent(pornire):
+		# lasat deoparte de _partitiiAle (de pilda pe un card SD) sau iesit din manager (prima montare cazuta, ori scos din
+		# liste): in al doilea caz reparaNecunoscute il monteaza la loc
+		p = next((x for x in hm.partitions if getattr(x, "device", None) == pornire), None) or hm.pending.get(pornire)
+		rand = _randPornire(H, pornire, p, p is not None and p in hm.partitions)
+		if p is None and _pornireInLucru(hm, pornire):
+			rand.pop("nemontat", None)
+		rez.append(rand)
 	for dev, d in sorted(_demontate.items()):
 		rez.append({"dispozitiv": dev, "nume": d["nume"], "eticheta": d["eticheta"], "marime": _marime(dev),
 			"sistem": H.deviceFsType(dev), "stare": "demontat", "loc": "", "locuri": H.findMountpoints(dev),
@@ -304,6 +455,8 @@ def lista(hm=None):
 		rez.append({"dispozitiv": dev, "nume": _numele(None, dev, eticheta), "eticheta": eticheta, "marime": _marime(dev),
 			"sistem": H.deviceFsType(dev), "stare": "montat", "loc": loc, "locuri": locuri, "ales": "", "alegeri": [],
 			"sd": sd, "poate_demonta": False, "poate_monta": False, "necunoscut": True})
+	for row in rez:
+		row["loc_afisat"] = getattr(H, "storagePathName", lambda p, d: p)(row.get("loc", ""), row.get("dispozitiv"))
 	return rez
 
 
@@ -321,6 +474,11 @@ def textStare(rand):
 
 
 # ------------------------------------------------------------------ cine foloseste discul
+
+def textStareAfisat(rand):
+	text = textStare(rand)
+	return text.replace(rand["loc"], rand.get("loc_afisat", rand["loc"])) if rand.get("loc") else text
+
 
 def motivRefuz(dispozitiv, fel, hm=None, folosire=None):
 	"""Textul refuzului, sau "" cand se poate. Pe firul interfetei (inregistrarile si timeshift-ul enigma2). `folosire`:
@@ -461,6 +619,9 @@ def porneste(fel, dispozitiv, nume=None, hm=None, cere=None, ceas=None):
 	hm = _hm(hm)
 	if fel not in FELURI or not dispozitivBun(dispozitiv):
 		return False, _("Discul ales nu mai este conectat. Alege din nou.")
+	if fel in (LOC, DEMONTARE) and estePornirea(dispozitiv, hm, _partitiiAle(hm).get(dispozitiv)):
+		# 0.7.8 (MDP): si din web; discul de pornire ramane montat (vezi sectiunea discul de pornire)
+		return False, textPornire()
 	if inLucru():
 		return False, _("Se lucrează deja la un disc. Așteaptă să se termine.")
 	if fel == MONTARE:

@@ -79,9 +79,6 @@ TINTE_ANTENA = {
 # Fluxul (ISI) si secventa PLS se cer ca pe televizor: randurile vin din ScanerSatelit.campuri_manual (cu
 # „Multistream” pe Da). T2-MI PLP-ID nu e aici: DVB-T2 prin satelit are felul lui.
 
-MAX_ARGUMENTE = 60
-MAX_POZITII = 400
-MAX_TEXT_ARGUMENT = 200
 
 # LNB-ul pe care il pune nucleul in modul simplu (Components/NimManager.py, addLNBSimple: 9750/10600/11700 MHz)
 LNB_UNIVERSAL = {"lof_jos": 9750, "lof_sus": 10600, "prag": 11700}
@@ -482,6 +479,17 @@ def _campTunerSatelit(S, nim, v, orbpos):
 	return _campTuner(S, nim, v, sloturi, implicit)
 
 
+def _campLibere(S, v, campuri):
+	"""FTA6: randul "Canale de cautat" (Toate / Numai cele libere), ca ScanerSatelit._campuri; fara rand pe un
+	ScanerSatelit mai vechi, care nu-l are."""
+	if not hasattr(S, "CANALE_DE_CAUTAT"):
+		return
+	camp = _camp("libere", _t("Canale de căutat"), "lista", _optiuni(S.CANALE_DE_CAUTAT), str(v.get("libere", "0")))
+	_valoareInLista(camp)
+	v["libere"] = camp["valoare"]
+	campuri.append(camp)
+
+
 def _campuriSatelit(S, fel, v):
 	"""Aceleasi randuri ca ScanerSatelit._campuri, cu aceleasi texte (deci cu traducerile lor)."""
 	nim, slot, sateliti, motor = _antenaSatelit(S)
@@ -513,6 +521,9 @@ def _campuriSatelit(S, fel, v):
 		_valoareInLista(camp)
 		v["retea"] = camp["valoare"]
 		campuri.append(camp)
+		_campLibere(S, v, campuri)
+	elif fel == "satelit":
+		_campLibere(S, v, campuri)
 	elif fel in S.CAMP_OPERATOR:
 		optiuni, prima_buna, ids = [], None, []
 		nota = ""
@@ -1447,7 +1458,8 @@ def _valoareConfig(sectiune, nume, implicit=None):
 
 
 # tipul din Components/HdsLnb.py -> valoarea lui advanced.lnb[k].lof, ca in cartela
-_FEL_DIN_TIP = {"universal": "universal_lnb", "banda_c": "c_band", "unicable": "unicable"}
+_FEL_DIN_TIP = {"universal": "universal_lnb", "banda_c": "c_band", "banda_c_5750": "c_band_5750",
+	"unicable": "unicable"}
 
 
 def _lnbDinModel(slot):
@@ -1459,7 +1471,7 @@ def _lnbDinModel(slot):
 	for l in HdsLnb.citeste(slot)["lnburi"]:
 		intrare = {"numar": l["numar"], "fel": _FEL_DIN_TIP.get(l["tip"], "user_defined"), "sateliti": list(l["sateliti"]),
 			"toti": bool(l["toti"]), "lof_jos": l["lofl"], "lof_sus": l["lofh"], "prag": l["prag"]}
-		if l["tip"] == "banda_c":
+		if l["tip"] in ("banda_c", "banda_c_5750"):
 			intrare["prag"] = None
 		rez.append(intrare)
 	return rez
@@ -1500,6 +1512,8 @@ def _lnbTuner(cfg, mod, pozitii, slot=None):
 			intrare.update(LNB_UNIVERSAL)
 		elif fel == "c_band":
 			intrare.update(lof_jos=5150, lof_sus=5150, prag=None)
+		elif fel == "c_band_5750":
+			intrare.update(lof_jos=5750, lof_sus=5750, prag=None)
 		elif fel == "user_defined":
 			intrare.update(lof_jos=_valoareConfig(lnb, "lofl"), lof_sus=_valoareConfig(lnb, "lofh"),
 				prag=_valoareConfig(lnb, "threshold"))
@@ -1546,6 +1560,16 @@ def _tunere():
 			except Exception:
 				pass
 		# tunerul combinat DVB-T2/C: ce e legat la el (Components/NimManager.py: hds_fel), ales ca pe televizor
+		if getattr(n, "isMultiType", lambda: False)():
+			element = n.config.multiType
+			t["tip"] = element.value
+			t["tip_alegeri"] = [{"valoare": v, "text": d} for v, d in element.choices.choices]
+		if getattr(n, "isFBCLink", lambda: False)():
+			from Components.NimManager import hdsAlegeriModTuner, hdsTinteleFbc, hdsEroareFbc
+			t["mod_alegeri"] = [{"valoare": v, "text": d} for v, d in hdsAlegeriModTuner(nimmanager, n.slot).items()]
+			t["intrari_fbc"] = [{"valoare": str(v), "text": nimmanager.getNimDescription(v)} for v in hdsTinteleFbc(nimmanager, n.slot)]
+			t["intrare_fbc"] = n.config.connectedTo.value
+			t["eroare_fbc"] = hdsEroareFbc(nimmanager, n.slot)
 		fel = _felCombinat(nims, n.slot)
 		if fel is not None:
 			t["combinat"] = True
@@ -1586,6 +1610,14 @@ def _tunere():
 					# perechea ferestrei din Setari tuner (Satconfig.hdsCereLocul): motorul USALS fara locul antenei
 					t["loc_nestabilit"] = True
 				t["lnb"] = _lnbTuner(cfg, t["mod"], [p for p, _n in sateliti], n.slot)
+			try:
+				from Components import HdsLnb
+				m = HdsLnb.citeste(n.slot, nimmanager)
+				t["satelit_fix_alegeri"] = HdsLnb.alegeriSatelitFix(m, nimmanager)
+				if t["satelit_fix_alegeri"]:
+					t["satelit_fix"] = str(m["lnburi"][0]["sateliti"][0])
+			except Exception:
+				pass
 		tunere.append(t)
 	# tunerul B porneste singur daca are semnal (Components/HdsTunerB.py): aceeasi stare ca randul din Setari tuner
 	try:
@@ -1629,6 +1661,163 @@ def _felCombinat(nims, slot):
 	return fel if isinstance(fel, ConfigSelection) else None
 
 
+def _discContractTuner(cale, text):
+	"""Worker: atomic settings write and readback, with no Enigma2 objects."""
+	from Components.config import _scrieSigur, _octetiSetari, _canalDinBaza
+	tinta = os.path.realpath(cale)
+	try:
+		with open(cale, "rb") as f:
+			baza = f.read()
+	except FileNotFoundError:
+		baza = None
+	text = _canalDinBaza(text, (baza or b"").decode("utf-8", "surrogateescape"))
+	data = _octetiSetari(text)
+	if not _scrieSigur(cale, data):
+		raise OSError("Tuner settings write failed")
+	try:
+		with open(cale, "rb") as f:
+			if f.read() != data:
+				raise OSError("Tuner settings verification failed")
+	except Exception:
+		# Restore only our own bytes, never a file replaced by somebody else.
+		with open(cale, "rb") as f:
+			actual = f.read()
+		if os.path.realpath(cale) == tinta and actual == data:
+			if baza is None:
+				os.unlink(tinta)
+			elif not _scrieSigur(cale, baza):
+				raise OSError("Tuner settings rollback failed")
+		raise
+	return text
+
+
+def seteazaContractTuner(slot, cerere):
+	"""Apply on main; return a Deferred for verified settings IO on a worker."""
+	from Components import NimManager as N
+	from Components import config as C
+	from twisted.internet.defer import Deferred
+	from twisted.internet.threads import deferToThread
+	configfile = C.configfile
+	preferat = "preferat" in cerere
+	try:
+		if not preferat:
+			slot = int(slot)
+			if slot < 0:
+				raise ValueError()
+			n = N.nimmanager.nim_slots[slot]
+	except (TypeError, ValueError, IndexError):
+		return {"result": False, "message": _t("Tunerul nu e dat.")}
+	# TV edits and web writes must not replace one another's pending choices.
+	if any(type(d).__name__ == "NimSetup" for d in _dialoguri(_sesiune())):
+		return {"result": False, "message": _t("Închide întâi setările tunerului de pe televizor.")}
+	elements = []
+	tip = cerere.get("tip")
+	if preferat:
+		element = N.hdsConfigTunerPreferat(N.nimmanager)
+		elements = [element]
+	elif tip is not None:
+		if not n.isMultiType() or tip not in n.config.multiType.choices:
+			return {"result": False, "message": _t("Tip de tuner necunoscut.")}
+		elements = [n.config.multiType]
+	else:
+		if not n.isFBCLink() or cerere.get("mod") not in N.hdsAlegeriModTuner(N.nimmanager, slot):
+			return {"result": False, "message": _t("Alege un mod valabil pentru acest tuner FBC.")}
+		elements = [n.config.configMode, n.config.connectedTo]
+	if "anterior" in cerere and cerere["anterior"] != elements[0].value:
+		return {"result": False, "message": _t("Setarea tunerului s-a schimbat între timp. Reîncarcă pagina.")}
+	if not preferat and "intrare_anterioara" in cerere and cerere["intrare_anterioara"] != n.config.connectedTo.value:
+		return {"result": False, "message": _t("Setarea tunerului s-a schimbat între timp. Reîncarcă pagina.")}
+	old = [(e, e.value, e.saved_value) for e in elements]
+	fortat = [None]  # save_forced de dinainte al tipului (NimManager.hdsTipSalvatDeOm), pentru revenire
+	try:
+		tranzactie = C.TranzactieSetari()
+	except RuntimeError:
+		return {"result": False, "message": _t("Setările se salvează acum. Încearcă din nou după terminare.")}
+	N.nimmanager.hdsContractTunerActiv = True
+	rez = Deferred()
+	def revenire(mesaj=None):
+		try:
+			for e, value, saved in old:
+				e.saved_value = saved
+				e.value = value
+			if fortat[0] is not None:
+				n.config.multiType.save_forced = fortat[0]
+			if preferat:
+				pass  # Preferinta se aplica numai dupa confirmarea scrierii.
+			elif tip is not None:
+				N.hdsAplicaTipTuner(N.nimmanager, slot, old[0][1])
+			else:
+				N.nimmanager.sec.update()
+		except Exception:
+			return {"result": False, "message": _t("Tipul tunerului nu s-a putut restabili. Verifică setările tunerului.")}
+		return {"result": False, "message": mesaj or _t("Salvarea tunerului nu s-a putut verifica. Verifică setările tunerului.")}
+	def termina(corp):
+		# Drain other saved changes only after committing or rolling back our RAM.
+		configfile._scris = None
+		try:
+			cereri = tranzactie.preia()
+			if cereri:
+				def esec(_f):
+					termina({"result": False, "message": _t("Unele setări nu s-au putut scrie. Verifică setările tunerului.")})
+				deferToThread(tranzactie.termina, cereri).addCallbacks(lambda _: termina(corp), esec)
+				return
+			tranzactie.inchide()
+		except Exception:
+			tranzactie.inchide(fortat=True)
+			corp = {"result": False, "message": _t("Unele setări nu s-au putut scrie. Verifică setările tunerului.")}
+		N.nimmanager.hdsContractTunerActiv = False
+		# A TV form opened during the write has no editable stale objects.
+		for d in _dialoguri(_sesiune()):
+			if type(d).__name__ == "NimSetup":
+				try:
+					d.nim = N.nimmanager.nim_slots[d.slotid]
+					d.nimConfig = d.nim.config
+					d.createSetup()
+				except Exception:
+					pass
+		rez.callback(corp)
+	try:
+		if preferat:
+			element.value = cerere["preferat"]
+		elif tip is not None:
+			N.hdsAplicaTipTuner(N.nimmanager, slot, tip)
+		else:
+			n.config.configMode.value = cerere["mod"]
+			if "intrare" in cerere:
+				if cerere["intrare"] not in [str(v) for v in N.hdsTinteleFbc(N.nimmanager, slot)]:
+					raise ValueError(_t("Alege o intrare cu mufă din același grup FBC."))
+				n.config.connectedTo.value = cerere["intrare"]
+			motiv = N.hdsEroareFbc(N.nimmanager, slot)
+			if motiv:
+				raise ValueError(motiv)
+			N.nimmanager.sec.update()
+		if not preferat and tip is not None:
+			# salvarea ceruta din web: tipul se scrie ca la salvarea de pe televizor
+			fortat[0] = N.hdsTipSalvatDeOm(N.nimmanager, slot)
+		for e in elements:
+			e.save()
+		noi = [(e, e.saved_value) for e in elements]
+		text = C.config.pickle()
+		for e, value, saved in old:
+			e.saved_value = saved
+	except Exception as eroare:
+		termina(revenire(str(eroare)))
+		return rez
+	def gata(_text):
+		for e, saved in noi:
+			e.saved_value = saved
+		if preferat and noi[0][1] != old[0][2]:
+			N.hdsAplicaTunerPreferat()
+		termina({"result": True})
+	def esec(_f):
+		termina(revenire())
+	try:
+		deferToThread(tranzactie.ruleaza, _discContractTuner, configfile.CONFIG_FILE, text).addCallbacks(gata, esec)
+	except Exception:
+		esec(None)
+	return rez
+
+
 def seteazaLegat(slot, valoare):
 	"""POST /api/tuner-legat?slot=&fel=terestru|cablu: ce e legat la tunerul combinat, ca randul "Legat la" din ecranul
 	tunerului de pe televizor (Screens/Satconfig.py). Numai alegerea se schimba: tunerul ramane bun pentru amandoua."""
@@ -1652,6 +1841,28 @@ def seteazaLegat(slot, valoare):
 	fel.save()
 	configfile.save()
 	return {"result": True, "legat": fel.value, "legat_text": fel.getText()}
+
+
+def seteazaSatelitFix(slot, pozitie):
+	"""Proba comuna LNB; pagina existenta de LNB confirma sau revine la ce era."""
+	from Components import HdsLnb as L, HdsLnbAplicare as A
+	try:
+		slot = int(slot)
+	except (TypeError, ValueError):
+		return {"result": False, "message": _t("Tunerul nu e dat.")}
+	if slot not in L.tunereSatelit():
+		return {"result": False, "message": _t("Tunerul nu e dat.")}
+	motiv = A.motivOcupat(_sesiune())
+	if motiv:
+		return {"result": False, "message": motiv}
+	model = L.citeste(slot)
+	alegeri = L.alegeriDinModel(model)
+	alegeri["satelit"] = str(pozitie)
+	plan = L.planifica(model, alegeri)
+	if plan.get("oprire"):
+		return {"result": False, "message": plan["oprire"]}
+	bun, mesaj = A.aplica(plan, "web")
+	return {"result": bun, "message": mesaj, "pagina": "/antena/lnb"}
 
 
 def _semnal():
@@ -1790,6 +2001,13 @@ def antena(lat=None, lon=None, doar=""):
 	except Exception as eroare:
 		_jurnal("tunerele: %s" % eroare)
 		rez["tunere"] = []
+	try:
+		from Components import NimManager as N
+		el = N.hdsConfigTunerPreferat(N.nimmanager)
+		rez["preferat"] = {"valoare": el.value, "alegeri": [
+			{"valoare": v, "text": text} for v, text in el.getSelectionList()]}
+	except Exception as eroare:
+		_jurnal("tunerul preferat: %s" % eroare)
 	rez["semnal"] = _semnal()
 	try:
 		rez["calculator"] = _calculator(lat, lon)
@@ -1814,18 +2032,19 @@ def antena(lat=None, lon=None, doar=""):
 # ------------------------------------------------------------------ cererea HTTP
 def argumente(request):
 	"""Argumentele cererii (adresa si corpul formularului), ca text: {cheie: text}, iar "pozitii" ca lista. Fara
-	jeton, cel mult MAX_ARGUMENTE chei, numai chei scurte din litere mici, cifre si _."""
+	jeton. REGULA 0 (pana dupa 1.0): toate cheile si toate pozitiile, cu valoarea intreaga, fara filtru pe numele
+	cheilor."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:MAX_ARGUMENTE]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 40 or not all(c.islower() or c.isdigit() or c == "_" for c in cheie):
+		if cheie == "token":
 			continue
 		texte = []
-		for v in (valori or [])[:MAX_POZITII]:
+		for v in (valori or []):
 			if isinstance(v, bytes):
 				v = v.decode("utf-8", "replace")
-			texte.append(str(v)[:MAX_TEXT_ARGUMENT].strip())
+			texte.append(str(v).strip())
 		if cheie == "pozitii":
 			rez[cheie] = texte
 		else:
@@ -2038,6 +2257,21 @@ def rute(baza, resource, NOT_DONE_YET):
 
 		def render_POST(self, request):
 			cerere = argumente(request)
+			if "tip" in cerere or "mod" in cerere or "preferat" in cerere:
+				rez = seteazaContractTuner(cerere.get("slot"), cerere)
+				if isinstance(rez, dict):
+					return self._raspunde(request, rez)
+				def trimite(corp):
+					try:
+						date = self._raspunde(request, corp)
+						request.write(date)
+						request.finish()
+					except Exception:
+						pass
+				rez.addCallback(trimite)
+				return NOT_DONE_YET
+			if cerere.get("fel") == "satelit":
+				return self._raspunde(request, seteazaSatelitFix(cerere.get("slot"), cerere.get("pozitie")))
 			return self._raspunde(request, seteazaLegat(cerere.get("slot"), cerere.get("fel", "")))
 
 		def render_GET(self, request):
@@ -2189,6 +2423,7 @@ PAGINA = """<!DOCTYPE html>
 <body>
 <main>
 <h1>Scanare și antenă</h1>
+<p><a href="/setari?id=hds_tuner_aspect">Așezarea setărilor tunerului</a></p>
 <div class="file" role="tablist" id="sectiuni"></div>
 <div class="mesaj" id="incarcare" role="status">Se citește meniul receptorului...</div>
 
@@ -2881,7 +3116,7 @@ var MODURI = {simple: "simplu", advanced: "avansat", nothing: "oprit (nimic cone
   satposdepends: "depinde de alt tuner", equal: "la fel ca alt tuner", enabled: "pornit"};
 var DISEQC = {single: "un singur satelit", toneburst_a_b: "Toneburst A/B", diseqc_a_b: "DiSEqC A/B",
   diseqc_a_b_c_d: "DiSEqC A/B/C/D", positioner: "motor (USALS)", positioner_select: "motor, sateliți aleși"};
-var LNB = {universal_lnb: "universal", c_band: "banda C", user_defined: "definit de utilizator", unicable: "Unicable",
+var LNB = {universal_lnb: "universal", c_band: "banda C", c_band_5750: "Banda C (5750)", user_defined: "definit de utilizator", unicable: "Unicable",
   jess: "JESS"};
 
 function incarcaAntena(lat, lon){
@@ -2953,6 +3188,7 @@ function tunereSatelit(){
   return ((S.antena && S.antena.tunere) || []).filter(function(t){ return t.satelit; });
 }
 function cartelaTunere(c){
+  if(S.antena && S.antena.preferat){ randTunerPreferat(c, S.antena.preferat); }
   var tunere = (S.antena && S.antena.tunere) || [];
   if(!tunere.length){
     c.appendChild(el("p", "nota", "Receptorul nu arată niciun tuner."));
@@ -2967,6 +3203,8 @@ function cartelaTunere(c){
     if(t.terestru){ tipuri.push("terestru"); }
     linie(c, "Recepție", tipuri.join(", "));
     linie(c, "Mod", MODURI[t.mod] || t.mod);
+    if(t.tip_alegeri){ randContractTuner(c, t, true); }
+    if(t.mod_alegeri){ randContractTuner(c, t, false); }
     if(t.combinat){ randLegat(c, t); }
     if(t.auto){ randAuto(c, t); }
     if(t.fbc){ c.appendChild(el("p", "nota", t.fbc)); }
@@ -2985,6 +3223,26 @@ function cartelaTunere(c){
         linie(c, "Sateliți", t.motor ? t.sateliti.length + " (toți din lista motorului)" :
           t.sateliti.map(function(s){ return s.text; }).join(", "));
       }
+      if(t.satelit_fix_alegeri && t.satelit_fix_alegeri.length){
+        var select = el("select", "");
+        select.setAttribute("aria-label", "Satelit (antenă fixă)");
+        t.satelit_fix_alegeri.forEach(function(s){
+          var option = el("option", "", s[1]); option.value = s[0]; select.appendChild(option);
+        });
+        select.value = t.satelit_fix;
+        var aplica = el("button", "buton", "Alege satelitul");
+        var stare = el("p", "nota");
+        aplica.type = "button";
+        aplica.onclick = function(){
+          aplica.disabled = true;
+          var p = new URLSearchParams({slot: t.slot, fel: "satelit", pozitie: select.value});
+          cerere("/api/tuner-legat", "POST", p).then(function(d){
+            if(d.result){ location.href = adresa(d.pagina); return; }
+            mesaj(stare, d.message, true); aplica.disabled = false;
+          }).catch(function(){ mesaj(stare, "Receptorul nu răspunde.", true); aplica.disabled = false; });
+        };
+        c.appendChild(select); c.appendChild(aplica); c.appendChild(stare);
+      }
     }
   });
   if(S.antena.rezerva){ randRezerva(c, S.antena.rezerva); }
@@ -2992,6 +3250,36 @@ function cartelaTunere(c){
   var unicable = el("a", "buton", "Unicable I / II (JESS)");
   unicable.href = adresa("/antena/lnb") + "#cardUnicable";
   c.appendChild(butoane([unicable]));
+}
+var PREFERAT = {generatie: 0, activ: true};
+window.addEventListener("pagehide", function(){ PREFERAT.activ = false; PREFERAT.generatie++; });
+window.addEventListener("pageshow", function(e){
+  PREFERAT.activ = true;
+  if(e.persisted && S.sectiune === "antena" && S.antena && S.antena.preferat){ incarcaAntena(); }
+});
+function randTunerPreferat(c, p){
+  c.appendChild(el("p", "subtitlu", "Tuner preferat"));
+  var select = el("select", ""); select.setAttribute("aria-label", "Tuner preferat");
+  (p.alegeri || []).forEach(function(a){
+    var o = el("option", "", a.text); o.value = a.valoare; select.appendChild(o);
+  });
+  select.value = p.valoare;
+  var salvare = el("button", "buton", "Păstrează alegerea"); salvare.type = "button";
+  var anulare = el("button", "buton", "Anulează"); anulare.type = "button";
+  var stare = el("p", "nota");
+  anulare.onclick = function(){ select.value = p.valoare; mesaj(stare, ""); };
+  salvare.onclick = function(){
+    var generatie = PREFERAT.generatie;
+    function actual(){ return PREFERAT.activ && generatie === PREFERAT.generatie && c.isConnected && S.sectiune === "antena"; }
+    salvare.disabled = anulare.disabled = select.disabled = true;
+    cerere("/api/tuner-legat", "POST", new URLSearchParams({preferat: select.value, anterior: p.valoare})).then(function(d){
+      if(!actual()){ return; }
+      if(d.result){ incarcaAntena(); } else { mesaj(stare, d.message, true); }
+    }).catch(function(){ if(actual()){ mesaj(stare, "Receptorul nu răspunde.", true); } }).finally(function(){
+      if(actual()){ salvare.disabled = anulare.disabled = select.disabled = false; }
+    });
+  };
+  c.appendChild(select); c.appendChild(butoane([salvare, anulare])); c.appendChild(stare);
 }
 // tunerul de rezerva din retea (ca ultimul rand din Setari tuner): receptorul ales, starea si legatura spre alegere
 function randRezerva(c, r){
@@ -3021,6 +3309,38 @@ function randAuto(c, t){
   c.appendChild(stare);
 }
 // tunerul combinat DVB-T2/C: "Legat la" (antena terestra sau cablu), aceeasi alegere ca pe televizor
+function randContractTuner(c, t, tip){
+  var titlu = tip ? "Tipul tunerului" : "Configurare FBC";
+  var select = el("select", ""); select.setAttribute("aria-label", titlu);
+  (tip ? t.tip_alegeri : t.mod_alegeri).forEach(function(a){
+    var o = el("option", "", a.text); o.value = a.valoare; select.appendChild(o);
+  });
+  select.value = tip ? t.tip : t.mod;
+  var intrare = el("select", ""); intrare.setAttribute("aria-label", "Intrare FBC cu mufă");
+  (t.intrari_fbc || []).forEach(function(a){
+    var o = el("option", "", a.text); o.value = a.valoare; intrare.appendChild(o);
+  });
+  intrare.value = t.intrare_fbc || "";
+  function arataIntrare(){ intrare.hidden = tip || ["equal", "loopthrough"].indexOf(select.value) < 0; }
+  select.onchange = arataIntrare; arataIntrare();
+  var b = el("button", "buton", "Păstrează alegerea"), stare = el("p", "nota");
+  b.type = "button";
+  b.onclick = function(){
+    b.disabled = true;
+    var p = new URLSearchParams({slot: t.slot});
+    p.set(tip ? "tip" : "mod", select.value);
+    p.set("anterior", tip ? t.tip : t.mod);
+    if(!tip){ p.set("intrare_anterioara", t.intrare_fbc); }
+    if(!intrare.hidden){ p.set("intrare", intrare.value); }
+    cerere("/api/tuner-legat", "POST", p).then(function(d){
+      if(d.result){ incarcaAntena(); return; }
+      mesaj(stare, d.message, true); b.disabled = false;
+    }).catch(function(){ mesaj(stare, "Receptorul nu răspunde.", true); b.disabled = false; });
+  };
+  var eticheta = el("label", "", titlu); eticheta.appendChild(select);
+  c.appendChild(eticheta); c.appendChild(intrare); c.appendChild(b); c.appendChild(stare);
+  if(t.eroare_fbc){ c.appendChild(el("p", "nota eroare", t.eroare_fbc)); }
+}
 function randLegat(c, t){
   linie(c, "Legat la", t.legat_text);
   var stare = el("p", "nota");
@@ -3236,6 +3556,7 @@ pornestePagina();
 # nou sau schimbat in sablon se scrie si aici (proba textelor paginilor web il cere).
 TEXTE_PAGINA = {
 	"html": (
+		N_("Așezarea setărilor tunerului"),
 		N_("Scanare și antenă"),
 		N_("Se citește meniul receptorului..."),
 		N_("Caută totuși"),
@@ -3362,6 +3683,9 @@ TEXTE_PAGINA = {
 		N_("În modul simplu receptorul folosește LNB-ul universal de mai sus."),
 		N_("Tipul, oscilatoarele, tensiunea, tonul și portul se schimbă pe pagina Configurare LNB, cu "
 			"verificarea semnalului înainte de păstrare."),
+		N_("Banda C (5750)"),
+		N_("Satelit (antenă fixă)"),
+		N_("Alege satelitul"),
 		N_("Latitudine (grade, nord +)"),
 		N_("Longitudine (grade, est +)"),
 		N_("Pe antena ta"),
@@ -3384,7 +3708,13 @@ TEXTE_PAGINA = {
 		N_("Meniul receptorului nu se poate citi."),
 		N_("Meniul receptorului nu se poate citi, deci nu am ce arăta. Detalii în jurnalul receptorului."),
 		# tunerul combinat DVB-T2/C (cartela tunerelor): randul "Legat la" si salvarea alegerii
+		N_("Tuner preferat"),
+		N_("Anulează"),
 		N_("Legat la"),
+		N_("Tipul tunerului"),
+		N_("Configurare FBC"),
+		N_("Intrare FBC cu mufă"),
+		N_("Păstrează alegerea"),
 		N_("Se salvează..."),
 		# 0.7.4 (lotul h2 al traducerilor): textele sablonului care lipseau din lista
 		N_("Pornire automată"),

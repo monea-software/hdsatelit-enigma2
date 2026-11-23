@@ -525,6 +525,28 @@ class Setup(ConfigListScreen, Screen):
 
 	def keySave(self):
 		"""Ca la ConfigListScreen; in plus, o setare cu restart= (setup.xml) schimbata intreaba de repornire."""
+		if self.setup == "hds_lista_canale":
+			if getattr(self, "hdsSalvareInCurs", False):
+				return
+			from Components import HdsSalvareLista as S
+			from Components.config import configfile
+			self.hdsSalvareInCurs = True
+			self.suspendAllActionMaps()
+			def gata(ok):
+				self.hdsSalvareInCurs = False
+				self.resumeAllActionMaps()
+				if ok:
+					self.close()
+				else:
+					from Screens.MessageBox import MessageBox
+					self.session.open(MessageBox, _("Nu s-a putut salva setarea. Verifică spațiul liber și încearcă din nou."), MessageBox.TYPE_ERROR)
+			try:
+				for notifier in list(self.__dict__.get("onSave", ())):
+					notifier()
+				S.salveaza(self["config"].list, config, configfile, gata)
+			except Exception:
+				gata(False)
+			return
 		fel = None
 		for rand in self["config"].list:
 			if len(rand) > 1 and id(rand[1]) in self.repornire and rand[1].isChanged():
@@ -537,6 +559,10 @@ class Setup(ConfigListScreen, Screen):
 		from Screens.MessageBox import MessageBox
 		text = _("Repornești receptorul acum?") if fel == "system" else self.restartMsg
 		self.session.openWithCallback(lambda da: self.__repornire(da, 2 if fel == "system" else 3), MessageBox, text, MessageBox.TYPE_YESNO)
+
+	def keyCancel(self):
+		if not getattr(self, "hdsSalvareInCurs", False):
+			return ConfigListScreen.keyCancel(self)
 
 	def __repornire(self, da, cod):
 		if da:

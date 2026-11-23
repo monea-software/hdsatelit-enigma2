@@ -33,7 +33,9 @@ public:
 		HDS_ROTIRE_GATA,
 		/* HDSatelit (lib/dvb/hdsrotire.h): proba de semnal pe tinta inaintea comenzii de motor (val: pornita,
 		   prinsa, fara semnal); nu schimba nimic pe fir, numai urma motorului */
-		HDS_PROBA_SEMNAL
+		HDS_PROBA_SEMNAL,
+		/* UNR1: asteptarea ramasa de la pornirea alimentarii fizice. */
+		HDS_UNICABLE_PORNIRE
 	};
 	int cmd;
 	struct rotor

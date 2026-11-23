@@ -21,6 +21,8 @@
 
 import re
 import time
+from gettext import gettext as _
+from threading import Event
 
 from Components.HdsAnalizaFlux import SursaDemux, antet, citeste_pat, descriptori, imparte, sectiune, text_dvb, _u16
 
@@ -200,6 +202,8 @@ SISTEM_S, SISTEM_S2 = 0, 1
 TOLERANTA_KHZ = 2000                          # satellites.xml si lista pot diferi cu cativa kHz (HdsGasireSemnal)
 FARA_INREGISTRARE_S = 60                      # nicio luare de tuner cu o inregistrare programata mai devreme de atat
 PAZA_S = TERMEN_S + 20                        # tunerul se elibereaza singur dupa atat, daca sesiunea nu o face
+ACORD_S = 15.0
+_acord_activ = None
 EXEMPLU = "flux 19.2E 11494 H 22000"
 
 
@@ -307,13 +311,83 @@ def _primul(x):
 	return x
 
 
+class AcordFlux(object):
+	"""Starea nucleului se aplica numai din evenimentul timerului interfetei."""
+
+	def __init__(self, canal, fe, param, timer):
+		self.canal, self.fe, self.param = canal, fe, param
+		self.timer = timer
+		self.pornit = _monoton()
+		self.gata = Event()
+		self.oprit = Event()
+		self.inchis = False
+		timer.callback.append(self.tic)
+		timer.start(PAS_MS, False)
+
+	def inchide(self, motiv=None):
+		"""Numai pe firul interfetei; nu lasa referinte native pe firul sesiunii."""
+		global _acord_activ
+		if self.inchis:
+			return
+		self.inchis = True
+		if motiv:
+			self.param["eroare"] = motiv
+		self.param["demux"] = None
+		self.oprit.set()
+		self.timer.stop()
+		self.timer.callback.remove(self.tic)
+		self.canal = self.fe = None
+		if _acord_activ is self:
+			_acord_activ = None
+		self.gata.set()
+
+	def tic(self):
+		if self.inchis:
+			return
+		if self.oprit.is_set():
+			self.inchide()
+			return
+		try:
+			stare = _primul(self.fe.getState())
+			# Nucleul publica stateLock dupa FE_HAS_LOCK, nu la intoarcerea tune().
+			if stare == 3:
+				if not self.gata.is_set():
+					demux = _primul(self.canal.reserveDemux())
+					if not isinstance(demux, int) or demux < 0:
+						self.inchide(_("Nu s-a putut lua demuxul după acordarea tunerului."))
+						return
+					self.param["demux"] = demux
+					self.gata.set()
+			elif self.gata.is_set() or stare in (2, 4, 5):
+				self.inchide(_("Tunerul nu are acord stabil pe transponderul cerut."))
+			elif _monoton() - self.pornit >= ACORD_S:
+				self.inchide(_("Tunerul nu s-a acordat la timp pe transponderul cerut."))
+		except Exception as e:
+			self.inchide(_("Acordarea tunerului nu se poate verifica: %s") % _eroare(e))
+
+
+class DetinatorFlux(object):
+	"""Referinta tinuta de apelantul de pe firul interfetei, inclusiv paza lui."""
+
+	def __init__(self, acord):
+		self.acord = acord
+
+	def __del__(self):
+		self.acord.inchide(None if self.acord.oprit.is_set() else _("Citirea fluxului a fost anulată."))
+
+
 def ia_tuner_liber(cerut, tunere, transpondere, aloca, acordeaza, motiv_refuz=None, pozitie_motor=None,
 		inregistrare_curand=False):
-	"""Pe firul enigma2: un tuner liber, setat pentru pozitia ceruta, acordat pe transponder, cu demuxul luat.
+	"""Pe firul enigma2: cere acordul unui tuner liber; acordul ramane asincron in rezultat["acord"].
 	tunere = HdsGasireSemnal.tunere(); transpondere(poz, s2) = HdsGasireSemnal.transpondere; aloca(slot) = canalul brut
 	sau None (ocupat); acordeaza(frontend, tp) = codul nucleului; pozitie_motor(slot) = unde e antena tunerului cu motor
 	(None / -1 = nestiut). -> (rezultat, canal): rezultat {"demux", "slot", "litera", "tuner", "tp", "de_unde", "ales"}
-	sau {"eroare": text}; canal = referinta care tine tunerul (None la eroare: nimic tinut)."""
+	sau {"eroare": text}; demux ramane None pana la stateLock. Canal este detinatorul eliberat pe firul interfetei.
+	CitesteText asteapta semnalul numai pe firul sesiunii. Paza apelantului inchide si acordul neterminat."""
+	global _acord_activ
+	if _acord_activ is not None:
+		_acord_activ.inchide(_("Citirea fluxului a fost înlocuită de o operație nouă."))
+		_acord_activ = None
 	poz, unde = cerut["poz"], cerut["text_pozitie"]
 	if inregistrare_curand:
 		return {"eroare": "(o inregistrare programata incepe in mai putin de %d s: tunerul nu se ia acum)" %
@@ -353,11 +427,13 @@ def ia_tuner_liber(cerut, tunere, transpondere, aloca, acordeaza, motiv_refuz=No
 		if cod != 0:
 			return {"eroare": "(nucleul a refuzat acordul pe tunerul %s, codul %s: %s)" % (litera(slot), cod,
 				text_tp(tp))}, None
-		demux = _primul(canal.reserveDemux())
-		if not isinstance(demux, int) or demux < 0:
-			return {"eroare": "(tunerul %s e acordat, dar nu s-a putut lua un demux)" % litera(slot)}, None
-		return {"demux": demux, "slot": slot, "litera": litera(slot), "tuner": t.get("nume") or "", "tp": tp,
-			"de_unde": de_unde, "ales": cerut, "ref": None}, canal
+		from enigma import eTimer
+		rez = {"demux": None, "slot": slot, "litera": litera(slot), "tuner": t.get("nume") or "", "tp": tp,
+			"de_unde": de_unde, "ales": cerut, "ref": None}
+		acord = AcordFlux(canal, fe, rez, eTimer())
+		rez["acord"] = acord
+		_acord_activ = acord
+		return rez, DetinatorFlux(acord)
 	parti = []
 	if ocupate:
 		parti.append("ocupat: %s (canalul deschis, o inregistrare sau o transmisie)" % ", ".join(ocupate))
@@ -374,39 +450,72 @@ def ia_tuner_liber(cerut, tunere, transpondere, aloca, acordeaza, motiv_refuz=No
 class Tabel(object):
 	"""Sectiunile unui tabel (toate numerele de sectiune ale aceleiasi versiuni, cu acelasi table_id_extension)."""
 
-	def __init__(self, tid):
+	def __init__(self, tid, acordat=False):
+		# acordat: citire dupa o acordare noua (flux cu transponder ales); altfel purtarea veche a canalului deschis
 		self.tid = tid
+		self.acordat = acordat
 		self.ext = None
 		self.versiune = None
 		self.ultima = None
 		self.sectiuni = {}
+		self.onid = None
 
 	def primeste(self, s):
 		s = sectiune(s)
 		if s is None or s[0] != self.tid or len(s) < 12:
 			return
 		tid, ext, ver, nr, ultima = antet(s)
-		if self.ext is None:
-			self.ext = ext
-		elif ext != self.ext:
+		if not self.acordat:
+			if self.ext is None:
+				self.ext = ext
+			elif ext != self.ext:
+				return
+			if self.versiune is not None and ver != self.versiune:
+				self.sectiuni = {}
+			self.versiune, self.ultima = ver, ultima
+			self.sectiuni[nr] = s
 			return
-		if self.versiune is not None and ver != self.versiune:
+		if not s[5] & 1 or nr > ultima:
+			return
+		onid = _u16(s, 8) if self.tid == TID_SDT and len(s) >= 15 else None
+		if (ext, ver, ultima, onid) != (self.ext, self.versiune, self.ultima, self.onid):
 			self.sectiuni = {}
+		self.ext, self.onid = ext, onid
 		self.versiune, self.ultima = ver, ultima
 		self.sectiuni[nr] = s
 
 	def gata(self):
-		return self.ultima is not None and len(self.sectiuni) >= self.ultima + 1
+		if not self.acordat:
+			return self.ultima is not None and len(self.sectiuni) >= self.ultima + 1
+		return self.ultima is not None and all(k in self.sectiuni for k in range(self.ultima + 1))
 
 	def lista(self):
 		return [self.sectiuni[k] for k in sorted(self.sectiuni)]
 
 
-def citeste(sursa, termen=TERMEN_S, ceas=None):
+def _nit_al_transportului(nit, pat, sdt):
+	"""NIT actual include transportul receptionat: perechea TSID/ONID din SDT actual sau, fara SDT, TSID-ul din PAT.
+	-> True / False, sau None cand nu exista PAT/SDT cu care sa se compare (NIT ramane folosit, ca inainte)."""
+	if sdt.sectiuni and sdt.onid is not None:
+		cheie = lambda t: t["tsid"] == sdt.ext and t["onid"] == sdt.onid
+	elif pat.sectiuni and pat.ext is not None:
+		cheie = lambda t: t["tsid"] == pat.ext
+	else:
+		return None
+	for s in nit.lista():
+		d = citeste_nit_livrare(s)
+		if d is not None and any(cheie(t) for t in d["transporturi"]):
+			return True
+	return False
+
+
+def citeste(sursa, termen=TERMEN_S, ceas=None, anulat=None, acordat=False):
 	"""Citeste PAT, SDT actual si NIT actual prin `sursa` (SursaDemux sau una falsa), cel mult `termen` secunde.
+	acordat=True (tuner acordat acum pe transponderul cerut): sectiunile altei generatii se arunca, iar PAT, SDT si
+	NIT trebuie sa descrie acelasi transport. Altfel (canalul deschis) purtarea veche, neschimbata.
 	-> {"pat", "sdt", "nit", "secunde", "erori"} (tabelele neprimite raman None)."""
 	ceas = ceas or _monoton
-	tabele = {PID_PAT: Tabel(TID_PAT), PID_SDT: Tabel(TID_SDT), PID_NIT: Tabel(TID_NIT)}
+	tabele = {PID_PAT: Tabel(TID_PAT, acordat), PID_SDT: Tabel(TID_SDT, acordat), PID_NIT: Tabel(TID_NIT, acordat)}
 	tid = {PID_PAT: TID_PAT, PID_SDT: TID_SDT, PID_NIT: TID_NIT}
 	deschise, resturi, erori = {}, {}, []
 	pornit = ceas()
@@ -419,6 +528,10 @@ def citeste(sursa, termen=TERMEN_S, ceas=None):
 			except Exception as e:
 				erori.append("filtrul PID 0x%04X: %s" % (pid, _eroare(e)))
 		while deschise and ceas() - pornit < termen:
+			if anulat is not None and anulat():
+				tabele = {pid: Tabel(tid[pid], acordat) for pid in tid}
+				erori.append(_("Citirea fluxului a fost întreruptă înainte de terminare."))
+				break
 			for fd in sursa.asteapta(list(deschise), PAS_MS):
 				pid = deschise.get(fd)
 				if pid is None:
@@ -434,16 +547,40 @@ def citeste(sursa, termen=TERMEN_S, ceas=None):
 					bucati, resturi[fd] = imparte(buf, resturi[fd])
 					for s in bucati:
 						tabele[pid].primeste(s)
-				if tabele[pid].gata():
+				if not acordat and tabele[pid].gata():
 					sursa.inchide(fd)
 					del deschise[fd]
+			pat, sdt = tabele[PID_PAT], tabele[PID_SDT]
+			if (acordat and all(t.gata() for t in tabele.values()) and pat.ext == sdt.ext and
+					_nit_al_transportului(tabele[PID_NIT], pat, sdt)):
+				break
 	finally:
 		for fd in list(deschise):
 			sursa.inchide(fd)
+	if anulat is not None and anulat():
+		tabele = {pid: Tabel(tid[pid], acordat) for pid in tid}
+		if not erori:
+			erori.append(_("Citirea fluxului a fost întreruptă înainte de terminare."))
+	pat, sdt = tabele[PID_PAT], tabele[PID_SDT]
+	if acordat and pat.sectiuni and sdt.sectiuni and pat.ext != sdt.ext:
+		erori.append(_("PAT și SDT provin din transporturi diferite; citirea trebuie repetată."))
+		tabele = {pid: Tabel(tid[pid], acordat) for pid in tid}
+	if (acordat and tabele[PID_NIT].sectiuni and
+			_nit_al_transportului(tabele[PID_NIT], tabele[PID_PAT], tabele[PID_SDT]) is False):
+		erori.append(_("NIT nu conține transportul PAT/SDT primit; datele lui nu sunt folosite."))
+		tabele[PID_NIT] = Tabel(TID_NIT, acordat)
 	rez = {"pat": None, "sdt": None, "nit": None, "secunde": round(ceas() - pornit, 1), "erori": erori}
 	t = tabele[PID_PAT]
-	if t.sectiuni:
+	if t.sectiuni and not acordat:
 		rez["pat"] = citeste_pat(t.lista()[0])
+	elif t.sectiuni:
+		for s in t.lista():
+			d = citeste_pat(s)
+			if d is not None:
+				if rez["pat"] is None:
+					rez["pat"] = d
+				else:
+					rez["pat"]["programe"].update(d["programe"])
 	t = tabele[PID_SDT]
 	if t.sectiuni:
 		sdt = None
@@ -612,6 +749,21 @@ def text(rez, param):
 
 
 def citesteText(param, sursa=None, termen=TERMEN_S, ceas=None):
+	"""Pe firul sesiunii, asteapta semnalul acordarii; interfata ramane libera."""
+	acord = param.get("acord") if param else None
+	try:
+		if acord is not None:
+			if not acord.gata.wait(ACORD_S + 1):
+				return 1, _("Tunerul nu s-a acordat la timp pe transponderul cerut.")
+			if acord.oprit.is_set() or param.get("eroare"):
+				return 1, param.get("eroare") or _("Citirea fluxului a fost anulată.")
+		return _citesteText(param, sursa, termen, ceas)
+	finally:
+		if acord is not None:
+			acord.oprit.set()
+
+
+def _citesteText(param, sursa=None, termen=TERMEN_S, ceas=None):
 	"""Operatia "flux" cu parametrii serviciului (HdsAnalizaFlux.parametri) sau ai tunerului liber acordat pe
 	transponderul cerut (ia_tuner_liber: "ales", "demux", "litera", "tp"). -> (cod, text)."""
 	if not param or not (param.get("ref") or param.get("ales")):
@@ -624,6 +776,10 @@ def citesteText(param, sursa=None, termen=TERMEN_S, ceas=None):
 			sursa = SursaDemux(param["demux"])
 		except Exception as e:
 			return 1, "(demuxul %s nu se poate deschide: %s)" % (param.get("demux"), _eroare(e))
-	rez = citeste(sursa, termen=termen, ceas=ceas)
+	acord = param.get("acord")
+	rez = citeste(sursa, termen=termen, ceas=ceas, anulat=acord.oprit.is_set if acord is not None else None,
+		acordat=bool(param.get("ales")))
+	if acord is not None and acord.oprit.is_set():
+		return 1, param.get("eroare") or _("Citirea fluxului a fost anulată.")
 	cod = 0 if (rez.get("pat") or rez.get("sdt") or rez.get("nit")) else 1
 	return cod, text(rez, param)

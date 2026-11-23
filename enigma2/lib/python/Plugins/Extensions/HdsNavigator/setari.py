@@ -44,7 +44,9 @@ import shutil
 # 0.7.7 (TVR, Eduard 16.11.2026 13:09): stirile HD Satelit facute pentru televizor de serverul nostru, in limba meniului, nu
 # www.hdsatelit.com (pagina grea, cu reclame, paza gazduirii). Cine n-a schimbat pagina primeste adresa noua singur (enigma2
 # nu salveaza valoarea egala cu cea din fabrica); cine si-a ales alta pagina o pastreaza.
-PAGINA_IMPLICITA = "https://stb.hdsatelit.com/tv/"
+# 0.7.8 (CR3, Eduard 18.11.2026 17:13 si 17:15): navigatorul din Aplicatii si din Media porneste pe Google; stirile HD Satelit
+# raman cardul lor din Aplicatii (HdsAplicatii, stb.hdsatelit.com/tv/). Aceeasi regula: cine si-a ales alta pagina o pastreaza.
+PAGINA_IMPLICITA = "https://www.google.com/"
 DOSAR_DATE = "/home/root/.local/share/hds-navigator"
 DOSAR_CACHE = "/tmp/hds-navigator-cache"
 # datele aplicatiilor HbbTV (Components/HdsHbbtvPornire.DOSAR_DATE si DOSAR_CACHE), ale utilizatorului hdsnav

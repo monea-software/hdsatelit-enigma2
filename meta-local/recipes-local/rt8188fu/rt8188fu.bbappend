@@ -78,3 +78,13 @@ KCFLAGS:append:u57 = " -mlong-calls"
 KCFLAGS:append:u571 = " -mlong-calls"
 PR:append:u57 = ".hds1"
 PR:append:u571 = ".hds1"
+
+# ZER1: CONFIG_DEBUG era definit direct in antetul furnizorului.
+PR:append = ".hdszer1"
+do_configure:append() {
+    # Pastram log_level pentru hookul sincron hds-wifi-jurnal, fara mesajele DEBUG.
+    sed -i '/^#define CONFIG_DEBUG[[:space:]]/d' ${S}/include/autoconf.h
+    if grep -Eq '^#define CONFIG_DEBUG([[:space:]]|$)' ${S}/include/autoconf.h; then
+        bbfatal "Depanarea rtl8188fu a ramas activa"
+    fi
+}

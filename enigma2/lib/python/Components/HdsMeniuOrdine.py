@@ -19,6 +19,7 @@
 #   semnul lor, ca sa poata fi aratate din nou. Cautarea in meniu le gaseste oricum.
 
 import json
+import unicodedata
 
 ID_CAUTARE = "hds_cauta_meniu"
 MAX_CHEIE = 120
@@ -249,3 +250,175 @@ def nrAscunse(meniu, chei=None):
 	if chei is not None:
 		a = a & set(chei)
 	return len(a)
+
+
+def _configSortareExtensii(lucru):
+	"""Completeaza setarile existente, fara sa atinga ordinea manuala."""
+	c = lucru.configExtensii()
+	if c is None:
+		return None
+	if not hasattr(c, 'sortare_az'):
+		try:
+			from Components.config import ConfigYesNo
+			c.sortare_az = ConfigYesNo(default=False)
+		except ImportError:
+			return None
+	return c.sortare_az
+
+
+def sortareExtensii(lucru):
+	e = _configSortareExtensii(lucru)
+	return bool(e.value) if e is not None else False
+
+
+def identitateExtensie(lucru, rand, pluginuri):
+	"""Identitatea intrarii; ordinea si ascunderea raman pe dosarul pluginului."""
+	id_ = lucru.idRand(rand)
+	if not id_ or rand[0] != 'plugin':
+		return id_
+	vecini = [p for p in pluginuri if lucru.idPlugin(getattr(p, 'path', '')) == id_]
+	if len(vecini) <= 1:
+		return id_
+	def semn(p):
+		f = getattr(p, 'fnc', None)
+		if isinstance(f, dict):
+			f = f.get(2)
+		return (str(getattr(p, 'name', '') or ''), str(getattr(p, 'description', '') or ''),
+			getattr(f, '__module__', ''), getattr(f, '__qualname__', ''))
+	s = semn(rand[1])
+	# Identical descriptors still need distinct rows during this inventory's life.
+	sufix = ':%x' % id(rand[1]) if sum(semn(p) == s for p in vecini) > 1 else ''
+	return id_ + ':' + json.dumps(s, ensure_ascii=True, separators=(',', ':')) + sufix
+
+
+def _scrieSortareExtensii(cale, da, scrie):
+	"""Worker: schimba numai cheia proprie, atomic, apoi verifica octetii de pe disc."""
+	exista = True
+	try:
+		with open(cale, 'rb') as f:
+			vechi = f.read()
+	except FileNotFoundError:
+		vechi = b''
+		exista = False
+	cheie = b'config.plugins.hdsextensii.sortare_az='
+	text = b''.join(r for r in vechi.splitlines(keepends=True) if not r.startswith(cheie))
+	if da:
+		if text and not text.endswith(b'\n'):
+			text += b'\n'
+		text += cheie + b'true\n'
+	ok = True
+	if not exista or text != vechi:
+		ok = scrie(cale, text)
+	try:
+		with open(cale, 'rb') as f:
+			citit = f.read()
+	except FileNotFoundError:
+		return False, ''
+	return bool(ok and citit == text), citit.decode('utf-8', 'surrogateescape')
+
+
+def _cacheSortareExtensii(cale, functie, *args):
+	"""Worker: intoarce si textul citit, fara obiecte config."""
+	try:
+		ok = functie(*args)
+	except Exception:
+		ok = False
+	try:
+		with open(cale, 'rb') as f:
+			text = f.read().decode('utf-8', 'surrogateescape')
+	except FileNotFoundError:
+		text = ''
+	except OSError:
+		return False, None
+	return ok, text
+
+
+def salveazaSortareExtensii(lucru, da):
+	"""Intoarce Deferred(bool); config numai pe main, IO numai pe worker."""
+	from twisted.internet.defer import Deferred, succeed
+	from twisted.internet.threads import deferToThread
+	from Components import config as C
+	e = _configSortareExtensii(lucru)
+	if e is None:
+		return succeed(False)
+	da = bool(da)
+	tranzactie = None
+	cache = C.configfile._scris
+	try:
+		if C._amanaScriereSetari(C.configfile.CONFIG_FILE):
+			return succeed(False)
+		tranzactie = C.TranzactieSetari()
+		cale = C.configfile.CONFIG_FILE
+		d = deferToThread(tranzactie.ruleaza, _scrieSortareExtensii, cale, da, C._scrieSigur)
+	except Exception:
+		if tranzactie is not None:
+			tranzactie.inchide(fortat=True)
+		return succeed(False)
+	rez = Deferred()
+	def confirmaCache(text):
+		nonlocal cache
+		if text is not None:
+			cache = text
+		if cache is not None:
+			C.configfile._scris = cache
+			# Same verified lines in pickle order avoid a redundant heartbeat write.
+			# Keep disk's channel values and never hide a saved RAM change.
+			try:
+				ram = C._canalDinBaza(C.config.pickle(), cache)
+				def valori(t):
+					return sorted(r for r in t.split('\n') if r and not r.startswith('#'))
+				if valori(ram) == valori(cache):
+					C.configfile._scris = ram
+			except Exception:
+				pass
+	def termina(ok):
+		# Other saves made during IO are flushed from a fresh snapshot on main.
+		try:
+			cereri = tranzactie.preia()
+			if cereri:
+				def confirma(r):
+					_, text = r
+					confirmaCache(text)
+					termina(ok)
+				def esec(_f):
+					# Saved RAM stays queued for the ordinary settings heartbeat.
+					confirmaCache(None)
+					tranzactie.inchide(fortat=True)
+					rez.callback(ok)
+				deferToThread(_cacheSortareExtensii, cale, tranzactie.termina, cereri).addCallbacks(confirma, esec)
+				return
+			tranzactie.inchide()
+		except Exception:
+			tranzactie.inchide(fortat=True)
+		rez.callback(ok)
+	def gata(r):
+		ok, text = r
+		if ok:
+			e.value = da
+			e.save()
+		confirmaCache(text)
+		termina(bool(ok))
+	def esec(_f):
+		confirmaCache(None)
+		termina(False)
+	d.addCallbacks(gata, esec)
+	return rez
+
+
+def _cheieAlfabeticaExtensie(nume):
+	"""Comparare Unicode fara diferente de majuscule, cu accente secundare, fara locale."""
+	nume = unicodedata.normalize('NFKD', (nume or '').casefold())
+	baza = ''.join(c for c in nume if not unicodedata.combining(c))
+	return baza, nume
+
+
+def aplicaSortareExtensii(lucru, randuri, fila, az=None):
+	"""Sorteaza doar locurile pluginurilor obisnuite; actualizarile si restul raman."""
+	if fila != 'instalate' or not (sortareExtensii(lucru) if az is None else az):
+		return randuri
+	locuri = [i for i, r in enumerate(randuri) if r[0] == 'plugin' and not lucru._areActualizare(r)]
+	ordonate = sorted((randuri[i] for i in locuri), key=lambda r: _cheieAlfabeticaExtensie(r[1].name))
+	rez = list(randuri)
+	for i, r in zip(locuri, ordonate):
+		rez[i] = r
+	return rez

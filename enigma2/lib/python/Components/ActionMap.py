@@ -32,6 +32,12 @@ SUFIX_STRAINE = ".straine"
 # la noi intarzierea ramane doar unde chiar e nevoie de ea. Eliberarea porneste scurta din <context>.straine numai in
 # harta care a amanat-o la apasare (altfel ar porni a doua oara). In sursele pluginurilor OE-Alliance (1151 de harti,
 # paralel-1111b/OEA17) nicio harta nu tine varianta lunga fara cea scurta, deci „aceeasi harta” ajunge.
+# Actiunile pe care keymap.xml le trimite in plus la tasta tinuta (r) si la eliberare (b); o harta care leaga numai
+# apasarea (m) nu le vrea: raman netratate (0), ca pana acum, dar fara randul "unknown action" in jurnal.
+ACTIUNI_TINERE_ELIBERARE = {
+	"DirectionActions": frozenset(("upRepeated", "downRepeated", "leftRepeated", "rightRepeated",
+		"upUp", "downUp", "leftUp", "rightUp")),
+}
 PRIORITATE_PAZITOR = -0x7FFFFFFF - 1
 STEAG_APASARE = 1  # bitul lui „m” (1 << flagMake)
 STEAG_ELIBERARE = 2  # bitul lui „b” in steagurile din keymap (1 << flagBreak)
@@ -221,7 +227,8 @@ class ActionMap:
 				return res
 			return 1
 		else:
-			print("unknown action %s/%s! typo in keymap?" % (context, action))
+			if action not in ACTIUNI_TINERE_ELIBERARE.get(context, ()):
+				print("unknown action %s/%s! typo in keymap?" % (context, action))
 			return 0
 
 	def destroy(self):

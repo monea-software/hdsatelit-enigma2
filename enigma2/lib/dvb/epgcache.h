@@ -347,6 +347,9 @@ public:
 	//   pluginurile de ghid. Servicii DVB si 4097; fluxul DVB castiga la coliziune, importul umple golurile.
 	// Sigure de pe orice fir Python: GIL-ul nu se tine cat se asteapta lacatele.
 	int importEvents(SWIG_PYOBJECT(ePyObject) services, SWIG_PYOBJECT(ePyObject) events);
+	// Numai forma stricta IPTV de mai sus: -1 = ocupat (reluati lotul), 0 = nimic importat sau inchidere.
+	// Nu asteapta niciun lacat si nu face disc; importEvents isi pastreaza contractul pentru pluginuri.
+	int tryImportEvents(SWIG_PYOBJECT(ePyObject) services, SWIG_PYOBJECT(ePyObject) events);
 	int importEvent(SWIG_PYOBJECT(ePyObject) service, SWIG_PYOBJECT(ePyObject) events);
 	// Pe firul ghidului, revin imediat (nimic pe firul UI): salvarea, ca requestSave (in Python: save, enigma_python.i), si
 	// golirea intregului ghid. load si timeUpdated raman private: load arunca tot ce nu vine din fisier, timeUpdated

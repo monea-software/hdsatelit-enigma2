@@ -123,15 +123,19 @@ def _tip_cheie(cheie):
         return None
 
 
-def _alege_tp(p, sid, tp_reali):
+def _alege_tp(p, sid, tp_reali, identitate=None):
     """Transponderul purtatorului dintre cele din lamedb cu aceeasi pozitie, polarizare, frecventa (+-2 MHz) si is_id:
     intai cel pe care e deja purtatorul nostru pentru SID, apoi cel cu orice serviciu pe SID, apoi cel mai apropiat ca
     frecventa, cel cu namespace-ul frecventei si cel mai mic namespace. Ordinea din fisier nu conteaza (enigma2 rescrie
-    lamedb in ordinea lui). -> (ns, tsid, onid) sau None."""
+    lamedb in ordinea lui). identitate: campurile T2-MI invatate filtreaza candidatii.
+    -> (ns, tsid, onid) sau None."""
     ns_sat = _ns_satelit(p)
     randuri = tp_reali.get('randuri') or {}
     alese = []
     for t in tp_reali.get('tp') or []:
+        # Identitatea T2-MI invatata are prioritate fata de lamedb vechi.
+        if identitate and any(k in identitate and identitate[k] != t[k] for k in ('tsid', 'onid')):
+            continue
         if t['poz'] == p['orbital_position'] and t['pol'] == p['polarisation'] and \
                 abs(t['khz'] - p['frequency']) <= 2000 and (t['is_id'] < 0 or p['is_id'] < 0 or t['is_id'] == p['is_id']):
             r = randuri.get((sid, t['ns'], t['tsid'], t['onid'])) or ()
@@ -144,13 +148,16 @@ def _alege_tp(p, sid, tp_reali):
     return t['ns'], t['tsid'], t['onid']
 
 
-def _tip_purtator(randuri, pid):
+def _tip_purtator(randuri, pid, dupa_pid=False):
     """Tipul purtatorului nostru pe cheia lui. randuri: [(tip, pid-uri, al_nostru, strain)] de pe cheie, in ordinea din
     fisier. Tipurile randurilor pastrate (_rand_pastrat) nu se iau niciodata. -> (tip, inlocuieste, strain):
     inlocuieste = pe cheie e deja purtatorul nostru sau un serviciu scanat pe care il inlocuim; strain = pe cheie nu e
     nimic de inlocuit, iar referinta de date (tipul 100) e chiar a altui automat si tine minte PID-ul de date: releul o
     foloseste pe aceea, nimic scris (listele lor scriu tipul 1, deci la ei nu se intampla; probele mai vechi o au)."""
     pastrate = set(r[0] for r in randuri if not r[2] and (r[3] or pid in r[1]))
+    if dupa_pid:
+        # A carrier owned by another PID has its own service reference.
+        pastrate.update(r[0] for r in randuri if r[2] and pid not in r[1])
     proprii = sorted(set(r[0] for r in randuri if r[2]) - pastrate)
     if proprii:
         return proprii[0], True, False
@@ -159,7 +166,10 @@ def _tip_purtator(randuri, pid):
         return scanate[0], True, False
     if any(r[0] == TIP_DATE and not r[2] and pid in r[1] for r in randuri):
         return TIP_DATE, False, True
-    for t in TIPURI_DE_REZERVA:
+    tipuri = TIPURI_DE_REZERVA
+    if dupa_pid:
+        tipuri += tuple(t for t in range(1, 256) if t not in tipuri)
+    for t in tipuri:
         if t not in pastrate:
             return t, False, False
     return None, False, False
@@ -175,7 +185,7 @@ def _purtator_real(f, p, pid, cheie, tp_reali, doar_scanat=False):
     tp_reali = tp_reali or {}
     pt = f.get('purtator') or {}
     sid = abertis.sid_purtator(f)
-    ales = _alege_tp(p, sid, tp_reali)
+    ales = _alege_tp(p, sid, tp_reali, identitate=pt if f.get('fel') == 't2mi' else None)
     if ales is None:
         ns = _ns_satelit(p)
         tsid, onid = pt.get('tsid'), pt.get('onid')
@@ -185,13 +195,19 @@ def _purtator_real(f, p, pid, cheie, tp_reali, doar_scanat=False):
         tsid, onid = int(tsid) & 0xFFFF, int(onid) & 0xFFFF
     except (TypeError, ValueError):
         return None
-    tip, inlocuieste, strain = _tip_purtator((tp_reali.get('randuri') or {}).get((sid, ns, tsid, onid)) or (), pid)
+    randuri = (tp_reali.get('randuri') or {}).get((sid, ns, tsid, onid)) or ()
+    if f.get('fel') == 't2mi':
+        # Keep every existing personal service; use a free reference type.
+        randuri = [(t, pids, ours, True) for t, pids, ours, _s in randuri]
+    tip, inlocuieste, strain = _tip_purtator(randuri, pid, dupa_pid=f.get('fel') == 't2mi')
     if tip is None or (doar_scanat and not inlocuieste and not strain):
         return None
     x = {'cheie': cheie, 'parametri': p, 'pid': pid, 'ns': ns, 'tsid': tsid, 'onid': onid, 'sid': sid, 'tip': tip,
          'nume': _nume_purtator(f, pid), 'furnizor': FURNIZOR_ABERTIS, 'real': True,
          'biss': str(f.get('acces') or '').upper() == 'BISS',
          'ref': '1:0:%X:%X:%X:%X:%X:0:0:0:' % (tip, sid, tsid, onid, ns)}
+    if f.get('fel') == 't2mi':
+        x.update(nume='%s %d' % (FURNIZOR, pid), furnizor=FURNIZOR, pastreaza=True)
     if strain:
         x.update(strain=True, real=False)       # referinta lor, nimic scris (compune4/compune5 il sar)
     return x
@@ -227,7 +243,7 @@ def tp_reali_din(text4):
             continue
         rez['sv'][k] = tip
         rez['randuri'].setdefault(k, []).append((tip, _pid_uri_tinute_minte(b[2]),
-                                                 _al_nostru_furnizor(b[2], (FURNIZOR_ABERTIS,)), _rand_strain(b[2])))
+                                                 _al_nostru_furnizor(b[2], (FURNIZOR_ABERTIS, FURNIZOR)), _rand_strain(b[2])))
     return rez
 
 
@@ -251,6 +267,15 @@ def _pid_uri_tinute_minte(rand_p):
     return rez
 
 
+def _t2mi_biss_real(f):
+    # Never infer a T2-MI SID from the data PID.
+    pt = f.get('purtator') or {}
+    return (f.get('fel') == 't2mi' and f.get('acces') == 'BISS' and isinstance(pt, dict)
+            and isinstance(pt.get('sid'), int) and not isinstance(pt['sid'], bool) and 0 < pt['sid'] < 65536
+            and all(isinstance(pt[k], int) and not isinstance(pt[k], bool) and 0 <= pt[k] < 65536
+                    for k in ('tsid', 'onid') if k in pt))
+
+
 def purtatori(lista, active=None, tip='t2', tp_reali=None, straine=None):
     """Lista unita de feed-uri -> purtatorii necesari (unul pe transponder + PID T2-MI), in ordine stabila.
 
@@ -262,10 +287,13 @@ def purtatori(lista, active=None, tip='t2', tp_reali=None, straine=None):
     fluxurile de care se ocupa alt automat se scrie purtatorul nostru, langa randurile lor, pe care nu le atinge (0.7.7;
     strain=True numai in cazul din _tip_purtator); `straine` ramane numai pentru cei care o dau inca."""
     rez, vazute = [], set()
+    # Reserve references locally, without changing the caller's lamedb snapshot.
+    tp_reali = dict(tp_reali or {})
+    tp_reali['randuri'] = {k: list(v) for k, v in (tp_reali.get('randuri') or {}).items()}
     for tp in lista.get('transpondere', []):
         feeduri = [f for f in tp.get('feeduri', []) if _al_tipului(f, tip) and f.get('pid') is not None
                    and (active is None or _curata_id(f.get('id')) in active
-                        or (tip == 't2' and str(f.get('fel') or '') == 'abertis' and tp_reali is not None))]
+                        or (tip == 't2' and (str(f.get('fel') or '') == 'abertis' or _t2mi_biss_real(f))))]
         if not feeduri:
             continue
         p = tuner.parametri(tp)
@@ -278,11 +306,16 @@ def purtatori(lista, active=None, tip='t2', tp_reali=None, straine=None):
             if cheie in vazute:
                 continue
             vazute.add(cheie)
-            if tip == 't2' and str(f.get('fel') or '') == 'abertis':
+            if tip == 't2' and (str(f.get('fel') or '') == 'abertis' or _t2mi_biss_real(f)):
                 activ = active is None or _curata_id(f.get('id')) in active
-                real = _purtator_real(f, p, pid, cheie, tp_reali, doar_scanat=not activ)
+                t2mi = f.get('fel') == 't2mi'
+                real = _purtator_real(f, p, pid, cheie, tp_reali, doar_scanat=not activ and not t2mi)
                 if real is not None:
-                    rez.append(real)
+                    if t2mi:
+                        k = (real['sid'], real['ns'], real['tsid'], real['onid'])
+                        tp_reali['randuri'].setdefault(k, []).append((real['tip'], {pid}, True, False))
+                    if activ or not t2mi:
+                        rez.append(real)
                     continue
                 if not activ:
                     continue
@@ -304,9 +337,13 @@ def purtator_pentru(lista, tp, feed, cale4=None, radacina_cam='/'):
                                 int(feed.get('pid') or 0) & 0x1FFF)
     tip = 'dab' if feed.get('tip') == 'dab' else 't2'
     tp_reali = None
-    if tip == 't2' and str(feed.get('fel') or '') == 'abertis':
+    if tip == 't2' and (str(feed.get('fel') or '') == 'abertis' or _t2mi_biss_real(feed)):
         tp_reali = tp_reali_din(_text_sau_gol(_citeste(cale4 or CALE4)))
-    for x in purtatori({'transpondere': [dict(tp, feeduri=[feed])]}, tip=tip, tp_reali=tp_reali):
+    contexte = {'transpondere': [dict(tp, feeduri=[feed])]}
+    if _t2mi_biss_real(feed):
+        # Reserve siblings exactly as when saving, including inactive feeds.
+        contexte = dict(lista, transpondere=list(lista.get('transpondere') or []) + contexte['transpondere'])
+    for x in purtatori(contexte, tip=tip, tp_reali=tp_reali):
         if x['cheie'] == cheie:
             return x
     return None
@@ -443,6 +480,8 @@ def compune4(text, lista_purtatori, furnizor=FURNIZOR):
         x = reali.get(_cheie_sv(b[0]))
         if x is None:
             return True
+        if x.get('pastreaza'):
+            return True
         # pe referinta noastra (acelasi tip) nu ramane nimic: enigma2 ar tine primul rand din fisier
         return _tip_cheie(b[0]) != x.get('tip', TIP_DATE) and _rand_pastrat(b[2], x['pid'])
     sv_straine = [b for b in sv if ramane(b)]
@@ -459,7 +498,12 @@ def compune4(text, lista_purtatori, furnizor=FURNIZOR):
         if k in ale_noastre or (onid_nostru and k not in folosite):
             continue
         tp_pastrate.append(b)
-    noi_tp = [bloc_transponder4(x) for x in lista_purtatori if not x.get('fara_tp')]
+    noi_tp, scrise_tp = [], set()
+    for x in lista_purtatori:
+        b = bloc_transponder4(x)
+        if not x.get('fara_tp') and b[0] not in scrise_tp:
+            scrise_tp.add(b[0])
+            noi_tp.append(b)
     noi_sv = [bloc_serviciu4(x) for x in lista_purtatori]
     randuri = [antet, 'transponders']
     for b in tp_pastrate + noi_tp:
@@ -492,6 +536,8 @@ def compune5(text, lista_purtatori, furnizor=FURNIZOR):
         x = reali.get(_cheie_sv(parti[0]))
         if x is None:
             return False
+        if x.get('pastreaza'):
+            return False
         return _tip_cheie(parti[0]) == x.get('tip', TIP_DATE) or \
             not _rand_pastrat(parti[1] if len(parti) > 1 else '', x['pid'])
     pastrate_s, t_linii, altele = [], [], []
@@ -523,7 +569,13 @@ def compune5(text, lista_purtatori, furnizor=FURNIZOR):
     # ordinea fisierului se pastreaza (comentariile raman unde le-a pus enigma2); ale noastre vin dupa ultima linie
     # de acelasi fel
     sterse_t = set(r for r in t_linii) - set(t_pastrate)
-    noi_t = [linie_transponder5(x) for x in lista_t]
+    noi_t, scrise_t = [], set()
+    for x in lista_t:
+        r = linie_transponder5(x)
+        k = r.split(',', 1)[0]
+        if k not in scrise_t:
+            scrise_t.add(k)
+            noi_t.append(r)
     noi_s = [linie_serviciu5(x) for x in lista_purtatori]
     rez = [randuri[0]]
     ultim_t = ultim_s = None

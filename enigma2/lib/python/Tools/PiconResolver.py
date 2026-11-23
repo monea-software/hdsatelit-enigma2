@@ -5,7 +5,7 @@
 # Pentru sablonul picon se cauta numai picon, pe discurile montate si in locurile fixe.
 # Un alt set se cauta numai cand rendererul lui cere explicit dosarul respectiv.
 from collections import OrderedDict
-from threading import RLock
+from threading import Lock, RLock
 from Tools.Directories import fileExists, eEnv
 import os
 import time
@@ -317,6 +317,140 @@ def resetPiconPath():
 		_generatie += 1
 		_dosare.clear()
 		_cautari.clear()
+		# indexul se reciteste la prima lipsa de dupa (fara pauza): discurile s-au schimbat
+		_index.clear()
+		_index_cerut.clear()
+
+
+# HDSatelit 0.7.8 (PCN6, raportul robiul, forum 1591 #3354): sigle numite dupa referinta, dar scrise altfel decat o cere
+# cautarea exacta (litere mici in campurile hex, .PNG, zerouri in fata) nu se vedeau. Cautarea exacta de mai sus ramane
+# neschimbata. In plus, un fir de fundal citeste dosarele de sigle locale (os.listdir; montarile de retea nu) si tine in
+# memorie un index: numele normalizat -> calea fisierului. Firul interfetei NU face niciun acces la disc pentru index: il citeste numai cand cautarea
+# exacta n-a gasit nimic, iar o potrivire din index nu intra in memoria rezultatelor (nicio verificare in plus la apelul
+# urmator). Cat timp indexul nu e gata, rezultatul e exact cel vechi. Indexul nu goleste memoria si nu schimba generatia.
+_index = {}             # dosar -> (generatie, ceas, [tabela nume normalizat -> cale, ...], toate dosarele aflate)
+_fire_index = {}        # dosar -> firul care citeste indexul
+_index_cerut = {}       # dosar -> ceasul ultimei porniri a firului
+_zavor_index = Lock()   # numai acquire(False): firul interfetei nu asteapta niciodata
+_revizie_index = [0]    # creste cand un index publicat difera de cel dinainte
+VIATA_INDEXULUI = 60    # secunde; dupa atat indexul se reciteste in fundal, la urmatoarea cerere
+PAUZA_INDEXULUI = 1.5   # secunde intre doua porniri ale firului pentru acelasi dosar
+
+
+def _normalizat(baza):
+	"""Cheia de index a unui nume de fisier fara extensie: campurile hex fara zerouri in fata, cu litere mari;
+	orice alt nume cu litere mici. Aceeasi functie pentru fisiere si pentru numele cautate."""
+	campuri = baza.split("_")
+	if len(campuri) > 1:
+		try:
+			return "_".join("%X" % int(c, 16) for c in campuri)
+		except ValueError:
+			pass
+	return baza.lower()
+
+
+def revizie_index():
+	"""Numarul schimbarilor indexului de sigle; numai memorie."""
+	return _revizie_index[0]
+
+
+def _citeste_index(dosar):
+	"""Pe firul de fundal: listeaza dosarele de sigle LOCALE si publica indexul, daca discurile nu s-au schimbat intre timp.
+	Dosarele de pe montari de retea nu intra in index: acolo ramane numai cautarea exacta de pe HEAD."""
+	try:
+		generatie = _generatie
+		dosare = dosare_sigle(dosar)
+		retea = _montari_retea()
+		tabele = []
+		for cale in dosare:
+			# dosarul insusi poate fi o legatura spre o montare de retea: conteaza calea lui reala
+			radacina = os.path.realpath(cale)
+			if _e_retea(cale, retea) or _e_retea(radacina, retea):
+				continue
+			try:
+				with os.scandir(cale) as it:
+					# numai fisiere obisnuite din dosar: o legatura simbolica (de pilda spre o sigla de pe NAS) nu intra
+					# in index, fiindca firul interfetei ar deschide-o la incarcare
+					intrari = sorted(e.name for e in it if not e.is_symlink() and e.is_file(follow_symlinks=False))
+			except OSError:
+				continue
+			tabela = {}
+			for n in intrari:
+				baza, extensie = os.path.splitext(n)
+				if extensie.lower() == ".png" and baza:
+					tabela.setdefault(_normalizat(baza), cale + n)
+			tabele.append(tabela)
+		if generatie != _generatie:
+			return
+		vechi = _index.get(dosar)
+		_index[dosar] = (generatie, time.monotonic(), tabele, tuple(dosare))
+		if vechi is None or vechi[2] != tabele:
+			_revizie_index[0] += 1
+	except Exception as e:
+		print("[PiconResolver] indexul siglelor: %s" % e)
+	finally:
+		_fire_index.pop(dosar, None)
+
+
+def cere_index(dosar="picon"):
+	"""Porneste citirea indexului in fundal cand lipseste sau e vechi. Fara disc si fara asteptare: numai memorie si,
+	cel mult o data la PAUZA_INDEXULUI secunde, pornirea unui fir."""
+	acum = time.monotonic()
+	e = _index.get(dosar)
+	# dosarele aflate intre timp (de pilda o montare de retea gasita in fundal) cer recitirea indexului
+	d = _dosare.get(dosar)
+	if (e is not None and e[0] == _generatie and 0 <= acum - e[1] < VIATA_INDEXULUI
+			and (d is None or tuple(d[1]) == e[3])):
+		return False
+	ultima = _index_cerut.get(dosar)
+	if ultima is not None and 0 <= acum - ultima < PAUZA_INDEXULUI:
+		return False
+	if not _zavor_index.acquire(False):
+		return False
+	try:
+		if dosar in _fire_index:
+			return False
+		import threading
+		fir = threading.Thread(target=_citeste_index, args=(dosar,), name="HdsIndexSigle")
+		fir.daemon = True
+		_fire_index[dosar] = fir
+		_index_cerut[dosar] = acum
+	finally:
+		_zavor_index.release()
+	try:
+		fir.start()
+	except Exception as e:
+		_fire_index.pop(dosar, None)
+		print("[PiconResolver] firul indexului: %s" % e)
+		return False
+	return True
+
+
+def sigla_din_index(sref, dosar="picon", nume=None):
+	"""Calea siglei din indexul din memorie (numai dosare locale), sau "". Fara niciun acces la disc, fara zavor si fara
+	servicii enigma: numele canalului se primeste deja aflat (nume), nu se cere aici; eServiceCenter.info() pe o
+	inregistrare (/media/net/.../film.ts) citeste .meta de pe disc. Referintele cu cale de fisier nu folosesc indexul:
+	pentru ele ramane numai ce gaseste cautarea HEAD."""
+	e = _index.get(dosar)
+	if e is None or e[0] != _generatie:
+		return ""
+	campuri = str(sref or "").split(":", 10)
+	if len(campuri) > 10 and campuri[10].startswith("/"):
+		return ""
+	cautate = [_normalizat(n) for n in nume_sigle(sref)]
+	cautate.extend(_normalizat(n) for n in nume_cautate_canal(nume or "") if n)
+	for cheie in cautate:
+		for tabela in e[2]:
+			cale = tabela.get(cheie)
+			if cale:
+				return cale
+	return ""
+
+
+def nume_memorat(sref, dosar="picon"):
+	"""Numele canalului aflat de ultima cautare a acestei referinte (memoria rezultatelor), sau None. Numai memorie."""
+	mem = _cautari.get((sref, dosar, None))
+	return mem[2] if mem is not None and len(mem) > 2 else None
 
 
 def _dosare_locuri():
@@ -330,6 +464,9 @@ def _dosare_locuri():
 
 def cauta_sigla(sref, dosar="picon", nume=None):
 	"""Calea siglei unui serviciu, sau "" cand nu e niciuna. Dupa referinta, apoi dupa numele explicit sau aflat."""
+	if sref and not isinstance(sref, str) and hasattr(sref, "toString"):
+		# eServiceReference primit direct: str() nu da referinta
+		sref = sref.toString()
 	sref = str(sref or "")
 	cheie = (sref, dosar, nume)
 	acum = time.monotonic()
@@ -339,18 +476,37 @@ def cauta_sigla(sref, dosar="picon", nume=None):
 			_cautari.move_to_end(cheie)
 	if mem is not None and 0 <= acum - mem[0] < VIATA_CAUTARII:
 		if not mem[1]:
-			return _sigla_extensiei(sref, dosar)
+			return _din_index(sref, dosar, mem[2] if len(mem) > 2 else nume) or _sigla_extensiei(sref, dosar)
 		if fileExists(mem[1]):
 			return mem[1]
 	g = generatie_sigle()
 	png = _cauta_locala(sref, dosar, nume)
+	# numele canalului aflat la o lipsa se tine langa ea: indexul nu-l mai cere o data
+	canal = _canal_aflat.pop(sref, nume) if nume is None else nume
 	with _zavor:
 		if g == _generatie:
-			_cautari[cheie] = (acum, png)
+			_cautari[cheie] = (acum, png, canal)
 			_cautari.move_to_end(cheie)
 			while len(_cautari) > MAX_CAUTARI:
 				_cautari.popitem(last=False)
-	return png or _sigla_extensiei(sref, dosar)
+	if png:
+		return png
+	return _din_index(sref, dosar, canal) or _sigla_extensiei(sref, dosar)
+
+
+def _din_index(sref, dosar, nume):
+	"""Dupa o lipsa a cautarii exacte: potrivirea din indexul din memorie (fara disc); cere recitirea lui in fundal
+	cand e vechi (o sigla stearsa iese din index la urmatoarea citire)."""
+	try:
+		png = sigla_din_index(sref, dosar, nume)
+		cere_index(dosar)
+		return png
+	except Exception as e:
+		print("[PiconResolver] indexul siglelor: %s" % e)
+		return ""
+
+
+_canal_aflat = {}       # referinta -> numele canalului aflat de _cauta_locala, luat indata de cauta_sigla
 
 
 def _cauta_locala(sref, dosar, nume):
@@ -371,7 +527,10 @@ def _cauta_locala(sref, dosar, nume):
 		png = gaseste(candidat)
 		if png:
 			return png
-	for candidat in nume_cautate_canal(nume_canal(sref) if nume is None else nume):
+	if nume is None:
+		nume = nume_canal(sref)
+		_canal_aflat[sref] = nume
+	for candidat in nume_cautate_canal(nume):
 		if candidat:
 			png = gaseste(candidat)
 			if png:

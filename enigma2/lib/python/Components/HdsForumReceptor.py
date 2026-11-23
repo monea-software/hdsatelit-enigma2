@@ -150,6 +150,8 @@ ERORI = {
 
 def textEroare(cod):
 	"""Textul scurt pentru om al unui cod de eroare (al serverelor sau al clientului)."""
+	if cod == "disc":
+		return _t(_beta().CHEIE_DISC)
 	return _t(ERORI.get(cod) or ERORI["server"])
 
 
@@ -301,16 +303,39 @@ def uitaJetonul():
 	"""Jetonul (si numele stiut odata cu el) se uita: urmatoarea cerere ia unul nou, cu numele de acum (dupa o
 	schimbare a numelui public, si din Aparitia publica)."""
 	with _lacat_jeton:
-		_jeton.update({"jeton": "", "id": "", "expira": 0.0, "nume": ""})
+		_jeton.update({"jeton": "", "id": "", "expira": 0.0, "nume": "", "cont": None})
 
 
 def _context():
-	"""Ce trebuie firelor din setari, citit pe firul care cheama (firul enigma2)."""
+	"""Capture config on main; defer all disk access to the worker."""
 	B = _beta()
 	b = B.initConfig()
 	inscris = B.inscris(b)
-	return {"inscris": inscris, "id": b.id.value if inscris else "", "cheie": B.cheieProfil() if inscris else "",
-		"testeri": B.adresaServer(b), "forum": adresaForum(), "limba": limbaForum(), "model": B._modelTinut()[0]}
+	return {"inscris": inscris, "id": b.id.value if inscris else "", "profil": B.contextProfil(b),
+		"limba": limbaForum(), "model": B._modelTinut()[0]}
+
+
+def _actual(ctx):
+	"""Reject work captured before deletion or a changed consent."""
+	B = _beta()
+	p = ctx.get("profil")
+	if p is not None and (p["generatie"] != B._GENERATIE or p["revizie"] != B._REVIZIE_ACORD):
+		raise EroareForum("neinscris")
+
+
+def _cerereTesteri(ctx, ruta, cu_amprenta=False, **campuri):
+	"""Use the shared deletion/consent/profile lane, on this worker only."""
+	B = _beta()
+	_actual(ctx)
+	c = B.cerereProfilContext(ctx["profil"], ruta, **campuri)
+	c.fara_amprenta = not cu_amprenta
+	c.run()
+	_actual(ctx)
+	if c.eroare_profil:
+		raise EroareForum(c.eroare_profil)
+	if c.eroare:
+		raise EroareForum("fara_internet")
+	return c.cod, c.raspuns
 
 
 def _model(ctx):
@@ -323,8 +348,7 @@ def _model(ctx):
 
 def _faProfil(ctx):
 	"""Profilul receptorului la serverul testerilor (ruta `profil`), fara nume public si fara e-mail."""
-	cod, raspuns = _posteaza(ctx["testeri"] + "profil", {"v": PROTOCOL, "id": ctx["id"], "cheie": ctx["cheie"],
-		"nume_public": None, "email": None})
+	cod, raspuns = _cerereTesteri(ctx, "profil", nume_public=None, email=None)
 	if not (200 <= cod < 300):
 		eroare = codDinRaspuns(cod, raspuns)
 		_jurnal("profil: %s %s" % (cod, eroare))
@@ -337,16 +361,20 @@ def jeton(ctx, nou=False, acum=None, doarme=None):
 	ctx["asteapta_acord"], la fara_acord mai incearca de INCERCARI_ACORD ori (acordul abia dat e inca in coada)."""
 	if not ctx.get("inscris"):
 		raise EroareForum("neinscris")
+	_actual(ctx)
 	doarme = doarme or time.sleep
 	acum_ = time.monotonic() if acum is None else acum
+	p = ctx["profil"]
+	identitate = (p["server"], p["generatie"], p["revizie"])
 	with _lacat_jeton:
-		if not nou and _jeton["jeton"] and _jeton["id"] == ctx["id"] and acum_ < _jeton["expira"] - JETON_REZERVA_S:
+		_actual(ctx)
+		if not nou and _jeton["jeton"] and _jeton["id"] == ctx["id"] and \
+				_jeton.get("identitate") == identitate and acum_ < _jeton["expira"] - JETON_REZERVA_S:
 			return _jeton["jeton"]
 	profil_facut = False
 	asteptari = 0
 	while True:
-		cod, raspuns = _posteaza(ctx["testeri"] + "forum-jeton", {"v": PROTOCOL, "id": ctx["id"],
-			"cheie": ctx["cheie"]})
+		cod, raspuns = _cerereTesteri(ctx, "forum-jeton")
 		if 200 <= cod < 300 and raspuns.get("ok") is True and isinstance(raspuns.get("jeton"), str):
 			break
 		eroare = codDinRaspuns(cod, raspuns)
@@ -369,17 +397,21 @@ def jeton(ctx, nou=False, acum=None, doarme=None):
 	nume = raspuns.get("nume") if isinstance(raspuns.get("nume"), str) else ""
 	cont = raspuns.get("cont") if isinstance(raspuns.get("cont"), str) else None
 	with _lacat_jeton:
-		_jeton.update({"jeton": raspuns["jeton"][:4096], "id": ctx["id"], "expira": acum_ + expira_s, "cont": cont})
+		_actual(ctx)
+		_jeton.update({"jeton": raspuns["jeton"][:4096], "id": ctx["id"], "expira": acum_ + expira_s,
+			"cont": cont, "identitate": identitate})
 		if nume:
 			_jeton["nume"] = nume[:80]
 		return _jeton["jeton"]
 
 
-def _tineNumeleForumului(raspuns):
+def _tineNumeleForumului(raspuns, ctx=None):
 	"""`nume` din raspunsul `subiect` cu jeton: numele cu care apare receptorul (si cel dat de forum)."""
 	nume = raspuns.get("nume") if isinstance(raspuns, dict) else None
 	if isinstance(nume, str) and nume.strip():
 		with _lacat_jeton:
+			if ctx is not None:
+				_actual(ctx)
 			_jeton["nume"] = nume.strip()[:80]
 
 
@@ -422,7 +454,15 @@ def _porneste(functie, nume, porneste=True):
 	return l
 
 
+def _forum(ctx):
+	"""Resolve the test address on the worker and reuse it for this operation."""
+	if "forum" not in ctx:
+		ctx["forum"] = adresaForum()
+	return ctx["forum"]
+
+
 def _citeste(lucrare, ctx, inainte):
+	_forum(ctx)
 	model = _model(ctx)
 	corp = {"v": PROTOCOL, "model": model, "limba": ctx["limba"]}
 	if inainte is not None:
@@ -442,7 +482,8 @@ def _citeste(lucrare, ctx, inainte):
 		corp["jeton"] = jeton(ctx, nou=True)
 		r = cereForum("subiect", corp, ctx["forum"])
 	if "jeton" in corp:
-		_tineNumeleForumului(r)
+		_actual(ctx)
+		_tineNumeleForumului(r, ctx)
 	return r
 
 
@@ -558,13 +599,16 @@ def verificaMesajeNoi(dupa_s=VERIFICARE_WEB_S):
 		return False
 	_noi["lucreaza"] = True
 	_noi["cand"] = time.monotonic()
+	ctx = _context()
 
 	def lucru():
 		try:
-			l = citeste(porneste=False)
+			l = _porneste(lambda task: _citeste(task, ctx, None), "hds-forum-citeste", False)
 			l.run()
 			if l.reusit:
-				mesajeNoi(l.rezultat)
+				with _beta()._LACAT:
+					_actual(ctx)
+					mesajeNoi(l.rezultat)
 		except Exception as e:
 			_jurnal("mesajele noi: %s" % e)
 		finally:
@@ -583,6 +627,7 @@ def cereJetonul(porneste=True):
 	def lucru(_l):
 		jeton(ctx)
 		with _lacat_jeton:
+			_actual(ctx)
 			return {"nume": _jeton["nume"], "cont": _jeton["cont"]}
 	return _porneste(lucru, "hds-forum-jeton", porneste)
 
@@ -634,6 +679,7 @@ def _urcaPoza(ctx, cale_poza, ritm=None):
 
 
 def _trimite(lucrare, ctx, text, cai_poze, ritm=None):
+	_forum(ctx)
 	text = curataText(text)
 	if not (TEXT_MIN <= len(text) <= TEXT_MAX):
 		raise EroareForum("text")
@@ -671,21 +717,23 @@ def trimite(text, cai_poze, porneste=True, ritm=None):
 def _schimbaNume(ctx, nume):
 	if not ctx.get("inscris"):
 		raise EroareForum("neinscris")
-	cod, raspuns = _posteaza(ctx["testeri"] + "profil", ctx["profil"])
+	cod, raspuns = _cerereTesteri(ctx, "profil", cu_amprenta=True, nume_public=nume)
 	if not (200 <= cod < 300):
 		eroare = codDinRaspuns(cod, raspuns)
 		_jurnal("profil: %s %s" % (cod, eroare))
 		raise EroareForum(eroare)
 	uitaJetonul()
 	with _lacat_jeton:
+		_actual(ctx)
 		_jeton["nume"] = nume
 	# un jeton nou si o citire a subiectului: forumul afla numele nou pe loc (si la mesajele vechi)
 	try:
 		corp = {"v": PROTOCOL, "model": _model(ctx), "limba": ctx["limba"], "jeton": jeton(ctx, nou=True)}
-		_tineNumeleForumului(cereForum("subiect", corp, ctx["forum"]))
+		_tineNumeleForumului(cereForum("subiect", corp, _forum(ctx)), ctx)
 	except EroareForum as e:
 		_jurnal("numele nou la forum: %s" % e.cod)
 	with _lacat_jeton:
+		_actual(ctx)
 		return {"nume": _jeton["nume"] or nume}
 
 
@@ -702,8 +750,6 @@ def schimbaNume(nume, porneste=True):
 		l.gata = True
 		return l
 	ctx = _context()
-	if ctx.get("inscris"):
-		ctx["profil"] = B.corpProfil("profil", nume_public=nume)
 	return _porneste(lambda _l: _schimbaNume(ctx, nume), "hds-forum-nume", porneste)
 
 

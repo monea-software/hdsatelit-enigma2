@@ -83,7 +83,7 @@ def eMesaj(screen):
 
 
 def textCerut(screen, arguments, kwargs):
-	"""Textul unui MessageBox cerut, pe un rand, cu randurile cu parole ascunse (inainte de unire) si datele omului mascate;
+	"""Textul unui MessageBox cerut, pe un rand, intreg (REGULA 0, ASI7: si parolele, adresele si datele omului);
 	"" la alt ecran, fara text sau cand curatarea nu se poate face. HDSatelit 0.7.7 (NBT, TODO 15.11 10:30 NBM): NeoBoot v10
 	pune aici ultimul rand scris de switch_image.py cand schimbarea imaginii iese cu eroare; altundeva nu ramane (iesirea
 	scriptului sta numai in memoria pluginului, nu intra in /tmp/neoboot-aurora-sync.log), iar cu amanarea nu mai pleaca
@@ -94,8 +94,8 @@ def textCerut(screen, arguments, kwargs):
 		brut = _textFereastra(None, arguments, kwargs)
 		if not brut:
 			return ""
-		from Components import HdsPluginExtern
-		return _unRand(HdsPluginExtern._faraSecrete("%s" % (brut,)))
+		# intreg, si cu adresele si parolele (REGULA 0, ASI7: in imagine nu se mascheaza nimic pana dupa 1.0)
+		return _unRand("%s" % (brut,))
 	except Exception:
 		return ""
 

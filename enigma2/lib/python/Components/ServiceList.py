@@ -407,6 +407,8 @@ class ServiceList(HTMLComponent, GUIComponent):
 			self.onSelectionChanged.remove(fnc)
 
 	def selectionChanged(self):
+		if getattr(self, "hdsFiltrareVariante", False):
+			return
 		self.hdsSigle()
 		for x in self.onSelectionChanged:
 			x()
@@ -571,16 +573,23 @@ class ServiceList(HTMLComponent, GUIComponent):
 			if not ascunse:
 				return
 			l = self.l
-			for s in ascunse:
-				r = eServiceReference(s)
-				l.setCurrent(r)
-				c = eServiceReference()
-				l.getCurrent(c)
-				if c.valid() and c == r:
-					l.removeCurrent()
+			# Moving to each hidden row emits selectionChanged twice per removal. The intermediate rows are not
+			# user selections: only notify after the final cursor and the hidden-to-visible map are ready.
+			filtrare_veche = getattr(self, "hdsFiltrareVariante", False)
+			self.hdsFiltrareVariante = True
+			try:
+				for s in ascunse:
+					r = eServiceReference(s)
+					l.setCurrent(r)
+					c = eServiceReference()
+					l.getCurrent(c)
+					if c.valid() and c == r:
+						l.removeCurrent()
+			finally:
+				self.hdsFiltrareVariante = filtrare_veche
+			self.hdsAscunse = dict((s, eServiceReference(a)) for s, a in ascunse.items() if a)
 			# cursorul pe primul rand, ca dupa o umplere noua (cine deschide lista il pune apoi unde trebuie)
 			l.FillFinished()
-			self.hdsAscunse = dict((s, eServiceReference(a)) for s, a in ascunse.items() if a)
 		except Exception as e:
 			print("[ServiceList] variantele: %s" % e)
 
@@ -882,8 +891,12 @@ class ServiceList(HTMLComponent, GUIComponent):
 		latime = self.instance.size().width()
 		inaltime_lista = getattr(self, "hdsDimensiuneTema", (latime, None))[1]
 		randuri = getattr(getattr(config.usage, "hds_randuri_lista", None), "value", "tema")
+		doua = getattr(getattr(config.usage, "hds_aspect_lista", None), "value", "obisnuit") in (
+			"doua_randuri", "mare_doua_randuri")
 		font_nume, font_info, font_numar = self.ServiceNameFont, self.ServiceInfoFont, self.ServiceNumberFont
 		inaltime = self.ItemHeight
+		if doua:
+			inaltime *= 2
 		# HDSatelit 0.7.5: marimea textului (config.usage.hds_marime_text_lista), 10% pe pas fata de tema: 100 la
 		# „După temă”, 70..150 la -3..+5
 		marime = getattr(getattr(config.usage, "hds_marime_text_lista", None), "value", "tema")
@@ -905,13 +918,13 @@ class ServiceList(HTMLComponent, GUIComponent):
 				return procent
 		p_nume, p_info, p_bara = _procent("hds_lista_marime_nume"), _procent("hds_lista_marime_info"), _procent("hds_lista_marime_bara")
 		procente = (p_nume, p_info, procent)
-		if randuri in ("8", "10", "12", "14", "16", "18", "20"):
+		if randuri in tuple(str(n) for n in range(1, 41)):
 			if inaltime_lista is None:
 				inaltime_lista = self.instance.size().height()
 			inaltime = max(1, inaltime_lista // int(randuri))
 			inaltime_lista = inaltime * int(randuri)
 			# Loc pentru accente si literele care coboara sub rand, inclusiv chirilice.
-			limita_font = max(1, (inaltime - 4) * 7 // 10)
+			limita_font = max(1, ((inaltime // 2 if doua else inaltime) - 4) * 7 // 10)
 			# randul e dat de numarul ales: textul creste numai cat incape in el
 			font_nume, font_info, font_numar = (gFont(f.family, max(1, min(f.pointSize * pr // 100, limita_font)))
 				for f, pr in zip((font_nume, font_info, font_numar), procente))
@@ -924,6 +937,15 @@ class ServiceList(HTMLComponent, GUIComponent):
 			inaltime_lista = max(inaltime, inaltime_lista // inaltime * inaltime)
 			font_nume, font_info, font_numar = (gFont(f.family, max(1, f.pointSize * pr // 100))
 				for f, pr in zip((font_nume, font_info, font_numar), procente))
+		if doua:
+			if inaltime_lista is None:
+				inaltime_lista = self.instance.size().height()
+			inaltime = max(1, min(inaltime, inaltime_lista))
+			inaltime_lista = max(inaltime, inaltime_lista // inaltime * inaltime)
+			limita = max(1, (inaltime // 2 - 4) * 7 // 10)
+			font_nume, font_info, font_numar = (gFont(f.family, min(f.pointSize, limita))
+				for f in (font_nume, font_info, font_numar))
+		self.hdsInaltimeCeruta = inaltime if randuri != "tema" else None
 		if inaltime_lista is not None and self.instance.size().height() != inaltime_lista:
 			from enigma import eSize
 			self.instance.resize(eSize(latime, inaltime_lista))
@@ -970,6 +992,11 @@ class ServiceList(HTMLComponent, GUIComponent):
 			start = inceput + (bara + 10 if bara and not dreapta else 0)
 			coloane = getattr(getattr(u, "hds_lista_coloane", None), "value", False)
 			self.l.setInfoColumn(start + max(0, inceput + latime_nume - start) * 45 // 100 if coloane else 0)
+		self.hdsDouaRanduri = None
+		if doua:
+			from Components.HdsAspectLista import sablonDouaRanduri
+			self.hdsDouaRanduri = sablonDouaRanduri(latime, inaltime,
+				(font_nume, font_info, font_numar), nr, progres)
 		self.hdsSablonActualizeaza()
 
 	# inaltimea barei de progres a temei (progressbarHeight; 6 = cea a nucleului listei, cand tema n-o da)
@@ -988,7 +1015,9 @@ class ServiceList(HTMLComponent, GUIComponent):
 			from Components.HdsServiceListSablon import sablonAles, SablonListaCanale, felulListei
 			# numai lista principala de canale (ChannelSelection pune hdsSablonPermis); listele simple (alegerea canalului din
 			# pluginuri, ghid, PiP) raman clasice, ca in standard
-			element, _ecran = sablonAles() if self.instance is not None and self.hdsSablonPermis else (None, None)
+			element = getattr(self, "hdsDouaRanduri", None)
+			if element is None:
+				element, _ecran = sablonAles() if self.instance is not None and self.hdsSablonPermis else (None, None)
 			if element is None:
 				if self.hdsSablon is not None:
 					self.hdsSablon = None
@@ -996,8 +1025,15 @@ class ServiceList(HTMLComponent, GUIComponent):
 					self.setMode(self.mode)
 				return False
 			latime = self.instance.size().width()
-			if self.hdsSablon is None or self.hdsSablon.element is not element or self.hdsSablon.latime != latime:
-				self.hdsSablon = SablonListaCanale(element, latime, getattr(self, "hdsScara", None))
+			ceruta = getattr(self, "hdsInaltimeCeruta", None)
+			if (self.hdsSablon is None or self.hdsSablon.element is not element or self.hdsSablon.latime != latime
+				or getattr(self, "hdsSablonInaltime", None) != ceruta):
+				self.hdsSablon = SablonListaCanale(element, latime,
+					None if getattr(self, "hdsDouaRanduri", None) is not None else getattr(self, "hdsScara", None))
+				self.hdsSablonInaltime = ceruta
+				if ceruta and getattr(self, "hdsDouaRanduri", None) is None:
+					from Components.HdsAspectLista import potrivesteSablon
+					potrivesteSablon(self.hdsSablon, ceruta)
 				for i, f in enumerate(self.hdsSablon.fonturi):
 					self.l.setTemplateFont(i, f)
 			self.hdsModSablon = felulListei(getattr(self, "root", None))

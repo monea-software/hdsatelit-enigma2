@@ -27,10 +27,14 @@ def N_(text):
 	return text
 
 
-UNITATI = (("C", "Celsius"), ("F", "Fahrenheit"), ("K", "Kelvin"))
+UNITATI = (("C", N_("Celsius")), ("F", N_("Fahrenheit")), ("K", N_("Kelvin")))
 # "Bara canalului": vremea mica in bara (pictograma si temperatura), in locul pus de tema; pe temele fara el, panoul plutitor
 LOCURI = (("nu", N_("Nu")), ("bara", N_("Bara canalului")),
 	("principal", N_("Ecranul principal")), ("ambele", N_("Ambele")))
+ZILE = (("1", N_("1 zi")), ("2", N_("2 zile")), ("3", N_("3 zile")))
+SCARI = (("100", "100%"), ("85", "85%"), ("75", "75%"))
+# VRM6: unde sta vremea cand e in bara canalului (Components/HdsVremea.LOCURI_BARA); "sus" din fabrica
+LOCURI_BARA = (("sus", N_("Sus, lângă ceas")), ("jos", N_("Jos în dreapta, mai mare")))
 
 # Locul vremii in bara canalului (tema HDSatelit, Clasic si Pro): doua widgeturi cu nume in ecranul InfoBar al temei, cu
 # conditional="..." (o alta clasa care ia acelasi ecran din skin nu le cere). Pictograma sta in stanga locului, temperatura
@@ -43,7 +47,7 @@ def locOsd(mod, bara):
 	"""Locul panoului acum, sau nimic cand alegerea il ascunde."""
 	if bara and mod in ("bara", "ambele"):
 		return "bara"
-	if not bara and mod in ("principal", "ambele"):
+	if bara and mod == "principal":
 		return "principal"
 	return ""
 
@@ -98,13 +102,17 @@ def _cautaFir(nume, rezultat):
 	rezultat.put(V.cautaOraseRezultat(nume))
 
 
+def _semnalInchis():
+	pass
+
+
 SKIN_SETARI = """
 <screen name="HdsVremea" position="48,27" size="1184,666"
 	backgroundColor="#0D10162A" flags="wfNoBorder" title="Vremea">
 	<widget source="Title" render="Label" position="24,12" size="1100,48"
 		font="Bold;28" foregroundColor="#00F2F4F8" transparent="1" />
 	<eLabel position="24,68" size="1136,1" backgroundColor="#99FFFFFF" />
-	<widget name="lista" position="24,96" size="660,180" itemHeight="60"
+	<widget name="lista" position="24,96" size="660,288" itemHeight="48"
 		font="Regular;23" foregroundColor="#00F2F4F8" backgroundColor="#0D10162A"
 		backgroundColorSelected="#00374EA1" foregroundColorSelected="#00FFFFFF"
 		transparent="1" scrollbarMode="showNever" />
@@ -118,9 +126,9 @@ SKIN_SETARI = """
 	<widget name="prognoza" position="704,420" size="456,128" font="Regular;21"
 		foregroundColor="#00C9D2E3" transparent="1" />
 	<widget name="masura" position="24,96" size="660,60" font="Regular;23" noWrap="1" />
-	<widget name="nota" position="24,310" size="660,190" font="Regular;22"
+	<widget name="nota" position="24,396" size="660,150" font="Regular;22"
 		foregroundColor="#00C9D2E3" transparent="1" />
-	<widget name="mesaj" position="24,520" size="1136,72" font="Regular;22"
+	<widget name="mesaj" position="24,550" size="1136,60" font="Regular;22"
 		foregroundColor="#00F5B83D" transparent="1" />
 	<eLabel position="24,612" size="1136,1" backgroundColor="#99FFFFFF" />
 	<widget name="key_red" position="24,626" size="250,32" font="Regular;21"
@@ -153,7 +161,7 @@ class HdsVremea(Screen):
 		self["key_red"] = Label(_("Închide"))
 		self["key_yellow"] = Label(_("Oraș automat"))
 		self["key_blue"] = Label(_("Caută oraș"))
-		self["nota"].setText(_("OK alege. Stânga și Dreapta schimbă unitatea sau locul afișării. "
+		self["nota"].setText(_("OK alege. Stânga și Dreapta schimbă opțiunea. "
 			"Alegerile se păstrează imediat.\n\n"
 			"Unitatea și orașul sunt comune cu afișajul din față și cu interfața web."))
 		actiuni = {"ok": self.alege, "cancel": self.close, "red": self.close,
@@ -204,7 +212,10 @@ class HdsVremea(Screen):
 		textOras = _textScurt(self["masura"], _("Oraș: %s") % oras, latime)
 		self["lista"].setList([textOras,
 			_("Unitate: %s") % _(dict(UNITATI).get(s.get("unitate"), "Celsius")),
-			_("Vremea pe TV: %s") % _(dict(LOCURI).get(s.get("tema"), "Nu"))])
+			_("Vremea pe TV: %s") % _(dict(LOCURI).get(s.get("tema"), "Nu")),
+			_("Prognoza din colț: %s") % _(dict(ZILE).get(s.get("zile", "1"), "1 zi")),
+			_("Scara panoului meteo: %s") % dict(SCARI).get(s.get("scara", "100"), "100%"),
+			_("Locul vremii în bara canalului: %s") % _(dict(LOCURI_BARA).get(s.get("loc_bara", "sus"), "Sus, lângă ceas"))])
 		self["lista"].moveToIndex(index)
 		d = V.date()
 		unitate = s.get("unitate", "C")
@@ -254,7 +265,8 @@ class HdsVremea(Screen):
 
 	def _alegeriRand(self):
 		index = self["lista"].getSelectionIndex() or 0
-		return ("unitate", UNITATI) if index == 1 else ("tema", LOCURI)
+		return {1: ("unitate", UNITATI), 2: ("tema", LOCURI),
+			3: ("zile", ZILE), 4: ("scara", SCARI), 5: ("loc_bara", LOCURI_BARA)}.get(index, ("tema", LOCURI))
 
 	def schimba(self, pas):
 		if self.cautare is not None:
@@ -351,16 +363,40 @@ SKIN_OSD = """
 </screen>"""
 
 
+def skinOsd(zile, scara):
+	"""Build geometry once, preserving the compact default exactly."""
+	from xml.etree import ElementTree as ET
+	root = ET.fromstring(SKIN_OSD)
+	root.set("size", "352,%d" % (120 + 32 * (int(zile) - 1)))
+	for i, nume in enumerate(("maine", "poimaine")[:int(zile) - 1]):
+		ET.SubElement(root, "widget", name=nume, position="10,%d" % (122 + i * 32),
+			size="332,28", font="Regular;19", foregroundColor="#00C9D2E3", transparent="1", noWrap="1")
+	factor = int(scara) / 100.0
+	if factor != 1:
+		for el in root.iter():
+			for atribut in ("size", "position"):
+				if el.get(atribut):
+					el.set(atribut, ",".join(str(round(int(v) * factor)) for v in el.get(atribut).split(",")))
+			if el.get("font"):
+				font, marime = el.get("font").split(";")
+				el.set("font", "%s;%d" % (font, round(int(marime) * factor)))
+	return ET.tostring(root, encoding="unicode")
+
+
 class HdsVremeaOsd(Screen):
 	"""Panou mic, fara taste proprii, folosit de bara principala."""
 
-	def __init__(self, session):
-		self.skin = scaledSkin(SKIN_OSD)
+	def __init__(self, session, zile=None, scara=None):
+		s = V.setari()
+		self.zile = zile or (s.get("zile", "1") if s.get("tema") == "principal" else "1")
+		self.scara = scara or s.get("scara", "100")
+		self.skin = scaledSkin(skinOsd(self.zile, self.scara))
 		Screen.__init__(self, session)
-		for nume in ("temperatura", "oras", "stare"):
+		for nume in ("temperatura", "oras", "stare") + ("maine", "poimaine")[:int(self.zile) - 1]:
 			self[nume] = Label("")
 		self["pictograma"] = Pixmap()
 		self.ultimele = None
+		self.pozitie = None
 
 	def actualizeaza(self, date, unitate):
 		texte = (V.textTemperatura(date["temperatura"], unitate),
@@ -370,6 +406,9 @@ class HdsVremeaOsd(Screen):
 				_textScurt(self[nume], text)
 			self.ultimele = texte
 		_poza(self["pictograma"], date.get("pictograma", ""))
+		for nume, titlu in (("maine", _("Mâine")), ("poimaine", _("Poimâine")))[:int(self.zile) - 1]:
+			interval = _interval(date, nume, unitate)
+			_textScurt(self[nume], "%s: %s" % (titlu, interval) if interval else "")
 
 	def aseaza(self, loc, bara):
 		if self.instance is None:
@@ -388,7 +427,9 @@ class HdsVremeaOsd(Screen):
 				y = p.y() + s.height() + int(8 * f)
 		x = max(0, min(x, marime.width() - latime))
 		y = max(0, min(y, marime.height() - inaltime))
-		self.instance.move(ePoint(x, y))
+		if (x, y) != self.pozitie:
+			self.instance.move(ePoint(x, y))
+			self.pozitie = (x, y)
 
 
 def _cutie(inst):
@@ -474,7 +515,7 @@ def asezareInBara(loc, latimeText, limita):
 class LegaturaVremea(object):
 	"""Vremea traieste cat bara; niciun fir de retea nu atinge fereastra. Cu "Bara canalului" (sau "Ambele", cat se vede
 	bara) vremea sta in bara, in locul pus de tema (NUME_POZA, NUME_TEXT); o tema fara loc (temele straine) primeste
-	panoul plutitor, ca inainte. "Ecranul principal" ramane panoul din colt, cat bara nu se vede."""
+	panoul plutitor, ca inainte. Panoul din colt urmeaza prima bara."""
 
 	def __init__(self, bara):
 		self.bara = bara
@@ -482,19 +523,55 @@ class LegaturaVremea(object):
 		bara[NUME_TEXT] = Label("")
 		self.loc = None
 		self.inBara = None
+		self.geometrie = None
 		self.panou = bara.session.instantiateDialog(HdsVremeaOsd)
 		self.panou.hide()
 		self.ceas = eTimer()
 		self.ceas.callback.append(self.actualizeaza)
-		bara.onLayoutFinish.append(self._dupaSkin)
-		bara.onShow.append(self.actualizeaza)
-		bara.onHide.append(self.ascunde)
-		bara.onClose.append(self.inchide)
+		self.legaturi = []
+		self._leaga(bara, "onLayoutFinish", self._dupaSkin)
+		self._leaga(bara, "onShow", self.actualizeaza)
+		self._leaga(bara, "onHide", self.ascunde)
+		self._leaga(bara, "onExecEnd", self.ascunde)
+		self._leaga(bara, "onClose", self.inchide)
+		self._leaga(bara.session.nav, "event", self._serviciu)
+		second = getattr(bara, "secondInfoBarScreen", None)
+		self._leaga(second, "onShow", self.ascunde)
+		self._leaga(second, "onHide", self.actualizeaza)
+		self.standby = None
+		try:
+			from Components.config import config
+			self.standby = config.misc.standbyCounter
+			self.standby.addNotifier(self._standby, initial_call=False)
+		except (ImportError, AttributeError):
+			self.standby = None
 		self.ceas.start(1000, False)
+
+	def _leaga(self, obiect, nume, functie):
+		lista = getattr(obiect, nume, None)
+		if lista is not None:
+			lista.append(functie)
+			self.legaturi.append((lista, functie))
+
+	def _standby(self, element):
+		self.ascunde()
+
+	def _serviciu(self, eveniment):
+		from enigma import iPlayableService
+		if eveniment == iPlayableService.evEnd:
+			self.ascunde()
+		elif eveniment == iPlayableService.evStart:
+			self.actualizeaza()
 
 	def _dupaSkin(self):
 		"""Locul din tema, citit o data: numai cand tema are amandoua widgeturile."""
+		self.ascunde()
+		self.loc = None
+		self.inBara = None
+		self.geometrie = None
 		b = self.bara
+		if b is None:
+			return
 		try:
 			poza, text = b[NUME_POZA].instance, b[NUME_TEXT].instance
 		except (KeyError, AttributeError, TypeError):
@@ -519,10 +596,25 @@ class LegaturaVremea(object):
 
 	def inchide(self):
 		self.ceas.stop()
-		if self.panou is not None:
-			self.bara.session.deleteDialog(self.panou)
-			self.panou = None
+		if self.actualizeaza in self.ceas.callback:
+			self.ceas.callback.remove(self.actualizeaza)
+		for lista, functie in self.legaturi:
+			if functie in lista:
+				if self.bara is not None and lista is self.bara.onClose:
+					# Screen iterates this list directly; preserve the next callback's index.
+					lista[lista.index(functie)] = _semnalInchis
+				else:
+					lista.remove(functie)
+		self.legaturi = []
+		if self.standby is not None:
+			self.standby.removeNotifier(self._standby)
+			self.standby = None
+		b, panou = self.bara, self.panou
+		self.ascunde()
 		self.bara = None
+		self.panou = None
+		if b is not None and panou is not None:
+			b.session.deleteDialog(panou)
 
 	def actualizeaza(self):
 		try:
@@ -557,11 +649,21 @@ class LegaturaVremea(object):
 		if not d or d.get("temperatura") is None:
 			self.ascunde()
 			return
-		if loc == "bara" and self.loc is not None:
+		# VRM6: "Jos in dreapta, mai mare" = panoul din coltul barei (ca pe temele fara loc), nu randul din bara
+		if loc == "bara" and self.loc is not None and s.get("loc_bara", "sus") != "jos":
 			self.panou.hide()
 			self._arataInBara(d, s.get("unitate", "C"))
 			return
 		self._ascundeInBara()
+		zile = s.get("zile", "1") if loc == "principal" else "1"
+		scara = s.get("scara", "100")
+		if (getattr(self.panou, "zile", "1"), getattr(self.panou, "scara", "100")) != (zile, scara):
+			vechi = self.panou
+			vechi.hide()
+			# A failed instantiation leaves the old panel available for a retry.
+			nou = b.session.instantiateDialog(HdsVremeaOsd, zile=zile, scara=scara)
+			self.panou = nou
+			b.session.deleteDialog(vechi)
 		self.panou.actualizeaza(d, s.get("unitate", "C"))
 		self.panou.aseaza(loc, b)
 		self.panou.show()
@@ -586,8 +688,11 @@ class LegaturaVremea(object):
 			self._ascundeInBara()
 			return
 		from enigma import eSize
-		text.instance.move(ePoint(xText, yt))
-		text.instance.resize(eSize(latimeCasetei, it))
+		geometrie = (text.instance, xText, yt, latimeCasetei, it)
+		if geometrie != self.geometrie:
+			text.instance.move(ePoint(xText, yt))
+			text.instance.resize(eSize(latimeCasetei, it))
+			self.geometrie = geometrie
 		cale = date.get("pictograma", "") if ce == "tot" else ""
 		if cale:
 			_poza(poza, cale)

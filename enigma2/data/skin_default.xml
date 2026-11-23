@@ -253,12 +253,12 @@
 	</screen>
 	<!-- Choice box -->
 	<!-- Canale recente (Screens/HdsIstoricCanale.py), pentru temele fara ecranul lor; randul (cheie, numar, nume, emisiune, "acum") -->
-	<screen name="HdsIstoricCanale" position="60,80" size="560,560" title="Canale recente">
-		<widget source="list" render="Listbox" position="10,10" size="540,500" scrollbarMode="showOnDemand">
+	<screen name="HdsIstoricCanale" position="60,40" size="560,500" title="Canale recente">
+		<widget source="list" render="Listbox" position="10,10" size="540,400" scrollbarMode="showOnDemand">
 			<convert type="TemplatedMultiContent">{"template": [MultiContentEntryText(pos=(5, 0), size=(30, 50), font=1, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=1), MultiContentEntryText(pos=(45, 2), size=(400, 26), font=0, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=2), MultiContentEntryText(pos=(45, 28), size=(490, 20), font=1, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER, text=3), MultiContentEntryText(pos=(450, 2), size=(85, 26), font=1, flags=RT_HALIGN_RIGHT | RT_VALIGN_CENTER, text=4)], "fonts": [gFont("Regular", 22), gFont("Regular", 17)], "itemHeight": 50}</convert>
 		</widget>
 		<widget source="gol" render="Label" position="10,10" size="540,100" font="Regular;20" />
-		<widget source="hint" render="Label" position="10,520" size="540,30" font="Regular;18" />
+		<widget source="hint" render="Label" position="10,420" size="540,70" font="Regular;18" />
 	</screen>
 	<screen name="ChoiceBox" position="center,center" size="550,400" title="Input">
 		<widget name="text" position="10,10" size="550,25" font="Regular;20" />

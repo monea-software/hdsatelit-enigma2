@@ -133,7 +133,7 @@ def _randuriInPlus(J):
 
 
 def _text(J, text):
-	"""Textul fara secrete si cate randuri s-au scos."""
+	"""Textul intreg (REGULA 0, ASI7) si cate randuri s-au scos (0)."""
 	curat = J.faraSecrete(text)
 	return curat, max(0, text.count("\n") - curat.count("\n"))
 
@@ -289,7 +289,7 @@ def seteazaCadere(argumente, J=None, config=None, configfile=None):
 # ------------------------------------------------------------------ cererile
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt, numai cheile stiute, fara token."""
+	"""Argumentele cererii ca text, numai cheile stiute, fara token."""
 	rez = _c().argumente(request, ("nume", "pas", "cod"), MAX_NUME)
 	rez.update(_c().argumente(request, ("cale",), MAX_CALE))
 	rez.update(_c().argumente(request, ("anonim", "retea", "pornit"), 4))

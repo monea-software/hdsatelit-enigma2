@@ -583,6 +583,10 @@
     var radioBareStare = el("div", "hp-radio-bare-stare", tx("radio_bare_asteapta"));
     radioViz.appendChild(radioBenzi); radioViz.appendChild(radioBareStare); radio.appendChild(radioViz);
     cadru.appendChild(radio);
+    var vorbire = el("div", "hp-vorbire"), vorbireText = el("span");
+    vorbire.appendChild(vorbireText);
+    vorbire.style.cssText = "position:absolute;left:5%;right:5%;bottom:8%;text-align:center;white-space:pre-line;pointer-events:none;z-index:4;color:white;font-size:26px;text-shadow:1px 1px 2px black";
+    ecran.appendChild(vorbire);
     var mesaj = el("div", "hp-mesaj hp-ascuns");
     mesaj.setAttribute("role", "status");
     // semnul trecerii pe alt canal: roata, titlul (ce se intampla) si numele canalului
@@ -649,7 +653,7 @@
     r.appendChild(extra);
     gazda.appendChild(r);
 
-    this.e = {radacina: r, ecran: ecran, cadru: cadru, video: video, imagine: imagine, canvas: canvas, mesaj: mesaj, bara: bara, reda: bReda,
+    this.e = {vorbire: vorbire, vorbireText: vorbireText, radacina: r, ecran: ecran, cadru: cadru, video: video, imagine: imagine, canvas: canvas, mesaj: mesaj, bara: bara, reda: bReda,
       mut: bMut, volum: volum, pista: selPista, sub: selSub, bifa: bifa, comutator: comutator, plin: bPlin, stop: bStop,
       stare: stare, detalii: detalii, tehnic: tehnic, extra: extra, semn: semn, semnTitlu: semnTitlu, semnSub: semnSub,
       pasi: pasi, audio: audio, radio: radio, radioNume: radioNume, radioDetalii: radioDetalii, radioSigla: radioSigla,
@@ -734,6 +738,7 @@
     this._butoane();
     this._piste([]);
     this._subtitrari(null);
+    this.e.vorbireText.textContent = "";
   };
 
   // ------------------------------------------------------------ cererile
@@ -1521,6 +1526,7 @@
     this.ultimAfisat = 0;
     this._piste([]);
     this._subtitrari(null);
+    this.e.vorbireText.textContent = "";
     this.mesaj("");
     if(trimite && d && d.id && !d.online){ this._elibereaza(d.id, pleaca); }
   };
@@ -1746,6 +1752,26 @@
       // o pornire in lucru sau un canal criptat care asteapta: starea veche nu mai conteaza
       if(!d.result || !self.pornit || self.inLucru || self._reia || porniri !== self._porniri){ return; }
       self.ultimaStare = d;
+      var v = d.vorbire || {}, vs = v.aspect || {};
+      self.e.vorbireText.textContent = v.text || "";
+      clearTimeout(self._vorbireCeas);
+      if(v.text){self._vorbireCeas=setTimeout(function(){self.e.vorbireText.textContent="";},8000);}
+      self.e.vorbire.style.bottom = (parseInt(vs.jos,10)||8) + "%";
+      self.e.vorbire.style.fontSize = (26 * (parseInt(vs.marime,10)||100) / 100) + "px";
+      self.e.vorbire.style.color = /^#[0-9a-f]{6}$/i.test(vs.culoare||"") ? vs.culoare : "white";
+      self.e.vorbire.style.fontWeight = /ingrosata/.test(vs.grosime||"") ? "bold" : "normal";
+      self.e.vorbire.style.lineHeight = String(1.2 * (parseInt(vs.spatiere,10)||100) / 100);
+      var contur={fara:0,subtire:1,normal:2,gros:3,foarte_gros:4}[vs.contur]||0;
+      var culoareContur=/^#[0-9a-f]{6}$/i.test(vs.culoare_contur||"")?vs.culoare_contur:"black";
+      self.e.vorbire.style.webkitTextStroke=contur+"px "+culoareContur;
+      self.e.vorbire.style.paintOrder="stroke fill";
+      self.e.vorbire.style.textShadow=vs.umbra?"2px 2px 3px "+(/^#[0-9a-f]{6}$/i.test(vs.culoare_umbra||"")?vs.culoare_umbra:"black"):"none";
+      self.e.vorbireText.style.backgroundColor="transparent";
+      if(vs.fundal&&vs.fundal!=="niciunul"&&/^#[0-9a-f]{6}$/i.test(vs.culoare_fundal||"")){
+        var bc=vs.culoare_fundal;
+        self.e.vorbireText.style.backgroundColor="rgba("+parseInt(bc.slice(1,3),16)+","+parseInt(bc.slice(3,5),16)+","+parseInt(bc.slice(5,7),16)+","+(parseInt(vs.opacitate_fundal,10)||60)/100+")";
+        self.e.vorbireText.style.boxDecorationBreak="clone";
+      }
       var a = d.a_mea;
       if(!a){
         if(self.urmeaza){ self._faraSesiune(d); return; }
@@ -1884,7 +1910,7 @@
     }
     var acum = Date.now();
     self._reporniri = (self._reporniri || []).filter(function(t){ return acum - t < 60000; });
-    if((o.cod === "zap" || o.cod === "fara_date") && d.permis && !d.in_standby && tv.ref && self._reporniri.length < REPORNIRI_MAX){
+    if((o.cod === "zap" || o.cod === "fara_date" || o.cod === "fara_semnal") && d.permis && !d.in_standby && tv.ref && self._reporniri.length < REPORNIRI_MAX){
       self._reporniri.push(acum);
       self._opresteJucatorul();
       self.pornit = false;

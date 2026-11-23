@@ -20,6 +20,9 @@
 # rezolutia lui, iesirea HDMI e cea pusa la pornirea Kodi (pluginul o trece pe 2160p cand televizorul o prefera).
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 SRC_URI:append = " file://media-center"
+# Mali-450 clips subtitle glyphs placed exactly on the near plane. Keep the
+# fix local to HiSilicon; ordinary GUI depths and other platforms stay intact.
+SRC_URI:append = "${@' file://hds-mali-subtitle-depth.patch' if d.getVar('HISI_STB') == '1' else ''}"
 
 PACKAGECONFIG:remove = "lto"
 
@@ -92,4 +95,4 @@ RDEPENDS:${PN} += "media-center-ffmpeg"
 # failed” la fiecare redare (proba a doua pe receptorul de probe)
 RDEPENDS:${PN} += "glibc-gconv-macintosh"
 
-PR:append = ".hds4"
+PR:append = ".hds5"

@@ -40,6 +40,8 @@ def securityText(security):
 
 def reasonText(reason):
 	return {
+		"Parola Wi-Fi poate avea cel mult 63 de octeți în UTF-8.": _("Parola Wi-Fi poate avea cel mult 63 de octeți în UTF-8."),
+		"Numele rețelei Wi-Fi trebuie să aibă între 1 și 32 de octeți.": _("Numele rețelei Wi-Fi trebuie să aibă între 1 și 32 de octeți."),
 		"This kind of network security is not supported": _("This kind of network security is not supported"),
 		"The password may only contain letters, digits and the usual signs": _("The password may only contain letters, digits and the usual signs"),
 		"The password must have at least 8 characters": _("The password must have at least 8 characters"),
@@ -236,7 +238,7 @@ class ConectareWlan(object):
 		self.timer.start(POLL_MS, False)
 
 	def poll(self):
-		if self.pending:
+		if self.closed or not self.running or self.pending:
 			return
 		self.seconds += 1
 		self.pending = True

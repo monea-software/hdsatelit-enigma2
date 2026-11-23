@@ -16,6 +16,7 @@
 # Fisierul nu importa nimic din enigma2: probele de pe PC il folosesc ca atare, cu un server propriu pe 127.0.0.1.
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -23,6 +24,9 @@ import socket
 import ssl
 import subprocess
 import time
+import threading
+import math
+from email.utils import parsedate_to_datetime
 
 try:
 	from urllib.request import Request, HTTPRedirectHandler, HTTPSHandler, HTTPHandler, build_opener
@@ -65,7 +69,7 @@ E_CERTIFICAT = N_("Serverul are un certificat de securitate nevalid, așa că le
 E_NUME = N_("Numele nu este bun. Scrie un nume mai scurt, fără semne speciale.")
 E_UTILIZATOR = N_("Scrie utilizatorul primit de la furnizor.")
 E_PAROLA = N_("Scrie parola primită de la furnizor.")
-E_FORMA_MAC = N_("Adresa MAC nu este bună. Se scrie așa: 00:1A:79:12:34:56.")
+E_FORMA_MAC = N_("Adresa MAC trebuie să aibă 12 cifre hexazecimale (0-9, A-F). Exemplu: 00:1A:79:12:34:56. Poți folosi și liniuțe, puncte sau nicio despărțire.")
 E_PREA_MULTE = N_("Ai ajuns la numărul cel mai mare de surse. Șterge una ca să poți adăuga alta.")
 E_DEMO = N_("Lista demo nu s-a putut descărca. Verifică internetul și încearcă din nou.")
 E_DEMO_LIPSA = N_("Lista demo nu este încă în feedul imaginii. Încearcă din nou mai târziu.")
@@ -144,11 +148,19 @@ def anteteSursa(s):
 
 
 def _dupa(antete):
-	"""Retry-After in secunde; forma cu data nu se foloseste la un zap."""
+	"""Retry-After: cel mult 300 s; data HTTP cere un ceas deja pus."""
 	try:
-		return max(0, int((antete.get("Retry-After") or "0").strip()))
-	except (AttributeError, TypeError, ValueError):
-		return 0
+		valoare = (antete.get("Retry-After") or "0").strip()
+		if valoare.isdigit():
+			cifre = valoare.lstrip("0") or "0"
+			return 300 if len(cifre) > 3 else min(300, int(cifre))
+		acum = time.time()
+		if time.gmtime(acum).tm_year < 2025:
+			return 60
+		diferenta = parsedate_to_datetime(valoare).timestamp() - acum
+		return int(math.ceil(diferenta)) if 0 <= diferenta <= 300 else 60
+	except (AttributeError, TypeError, ValueError, OverflowError, OSError):
+		return 60
 
 
 def deschide(adresa, antete=None, termen=TERMEN_S, metoda=None):
@@ -195,14 +207,15 @@ def descarca(adresa, antete=None, maxim=MAX_LISTA, termen=TERMEN_S, total=TERMEN
 	except EroareIptv:
 		raise
 	except HTTPError as e:
-		if e.code in (429, 453):
-			e.close()
-			raise EroareIptv(E_CONEXIUNI)
-		if e.code in (401, 403):
-			e.close()
-			raise EroareIptv(E_REFUZ)
-		_jurnal("raspuns %d de la %s" % (e.code, I.gazdaAdresei(adresa)))
-		raise EroareIptv(E_NU_E_LISTA if e.code == 404 else E_NU_RASPUNDE)
+		cod = e.code
+		dupa = _dupa(e.headers)
+		e.close()
+		if cod in (429, 453):
+			raise EroareIptv(E_CONEXIUNI, cod=cod, dupa=dupa)
+		if cod in (401, 403):
+			raise EroareIptv(E_REFUZ, cod=cod, dupa=dupa)
+		_jurnal("raspuns %d de la %s" % (cod, I.gazdaAdresei(adresa)))
+		raise EroareIptv(E_NU_E_LISTA if cod == 404 else E_NU_RASPUNDE, cod=cod, dupa=dupa)
 	except URLError as e:
 		motiv = getattr(e, "reason", None)
 		if isinstance(motiv, ssl.SSLError):
@@ -1014,9 +1027,11 @@ _CAI_API = ("/portal.php", "/server/load.php", "/stalker_portal/server/load.php"
 
 
 def _antetePortal(s, baza, jeton=None):
-	mac = s.get("mac") or ""
+	mac = I.macCurat(s.get("mac")) or ""
 	antete = {
-		"User-Agent": s.get("user_agent") or _AGENT_PORTAL, "X-User-Agent": "Model: MAG250; Link: WiFi", "Referer": s.get("referer") or baza + "/",
+		"User-Agent": s.get("user_agent") or _AGENT_PORTAL,
+		"X-User-Agent": s.get("x_user_agent") or "Model: %s; Link: WiFi" % (s.get("stb_type") or "MAG250"),
+		"Referer": s.get("referer") or baza + "/",
 		"Cookie": "mac=%s; stb_lang=en; timezone=Europe/Bucharest" % quote(mac, safe=":"),
 	}
 	if jeton:
@@ -1037,9 +1052,18 @@ def _bazePortal(portal):
 	return rez
 
 
-def _cerePortal(s, api, baza, parametri, jeton=None, maxim=MAX_LISTA, termen=TERMEN_S):
-	date = dict(parametri, JsHttpRequest="1-xml")
-	octeti = descarca("%s?%s" % (api, urlencode(date)), antete=_antetePortal(s, baza, jeton), maxim=maxim, termen=termen)
+def _cerePortal(s, api, baza, parametri, jeton=None, maxim=MAX_LISTA, termen=TERMEN_S, activa=None):
+	stare = _starePortal(s)
+	with stare["lacat"]:
+		_verificaPornirePortal(activa)
+		_verificaPauzaPortal(stare)
+		date = dict(parametri, JsHttpRequest="1-xml")
+		try:
+			octeti = descarca("%s?%s" % (api, urlencode(date)), antete=_antetePortal(s, baza, jeton), maxim=maxim, termen=termen)
+		except EroareIptv as e:
+			if e.dupa:
+				stare["pauza"] = (time.monotonic(), min(300, e.dupa), e.mesaj, e.cod)
+			raise
 	r = _json(octeti, E_NU_E_PORTAL)
 	if not isinstance(r, dict) or "js" not in r:
 		raise EroareIptv(E_NU_E_PORTAL)
@@ -1048,6 +1072,19 @@ def _cerePortal(s, api, baza, parametri, jeton=None, maxim=MAX_LISTA, termen=TER
 
 def stalkerConecteaza(s, termen=TERMEN_S):
 	"""Strangerea de mana: gaseste calea API a portalului si cere jetonul, apoi profilul. -> (baza, api, jeton)."""
+	stare = _starePortal(s)
+	with stare["lacat"]:
+		if stare.pop("reia", False):
+			stare["pauza"] = None
+		_verificaPauzaPortal(stare)
+		stare["sesiune"] = None
+		stare["stream"] = True
+		sesiune = _conecteazaPortal(s, termen)
+		stare["sesiune"] = sesiune
+		return sesiune
+
+
+def _conecteazaPortal(s, termen, activa=None):
 	if not I.macBun(s.get("mac") or ""):
 		raise EroareIptv(E_MAC)
 	eroare = None
@@ -1055,19 +1092,40 @@ def stalkerConecteaza(s, termen=TERMEN_S):
 		for cale in _CAI_API:
 			api = baza + cale
 			try:
-				js = _cerePortal(s, api, baza, {"type": "stb", "action": "handshake", "token": ""}, termen=termen)
+				js = _cerePortal(s, api, baza, {"type": "stb", "action": "handshake", "token": ""}, termen=termen, activa=activa)
 				jeton = js.get("token") if isinstance(js, dict) else None
 				if not jeton:
 					raise EroareIptv(E_MAC)
-				profil = _cerePortal(s, api, baza, {"type": "stb", "action": "get_profile", "hd": "1"}, jeton, termen=termen)
-				if isinstance(profil, dict) and str(profil.get("status", "0")) not in ("0", ""):
+				parametri = {"type": "stb", "action": "get_profile", "hd": "1"}
+				if s.get("stb_type"):
+					parametri["stb_type"] = s["stb_type"]
+				profil = _cerePortal(s, api, baza, parametri, jeton, termen=termen, activa=activa)
+				# Reparatia lui kreidlerboy, LinuxSat #971520: 0 si 1 pot insemna amandoua un cont activ.
+				if _profilPortalRefuzat(profil):
 					raise EroareIptv(E_MAC)
 				return baza, api, jeton
 			except EroareIptv as e:
-				if e.mesaj == E_MAC:
+				_verificaPornirePortal(activa)
+				if e.mesaj == E_MAC or e.cod in (401, 403, 429) or e.dupa:
 					raise
 				eroare = e
 	raise eroare or EroareIptv(E_NU_E_PORTAL)
+
+
+def _profilPortalRefuzat(profil):
+	"""Numarul din status singur nu deosebeste un cont refuzat pe toate portalurile."""
+	if not isinstance(profil, dict):
+		if profil is None or profil is False:
+			return True
+		raise EroareIptv(E_NU_E_PORTAL)
+	if str(profil.get("error") or "").strip().lower() not in ("", "0", "false"):
+		return True
+	for cheie in ("blocked", "is_blocked"):
+		if str(profil.get(cheie, "")).strip().lower() in ("1", "true", "yes"):
+			return True
+	if "auth" in profil and str(profil["auth"]).strip().lower() in ("0", "false"):
+		return True
+	return str(profil.get("status", "")).strip().lower() in ("blocked", "disabled", "expired", "rejected", "error")
 
 
 def aduceStalker(s):
@@ -1098,7 +1156,13 @@ def aduceStalker(s):
 		grupa = grupe.get(str(c.get("tv_genre_id")), "")
 		if not filtru.primeste(grupa, "c" + cid, len(canale) >= I.MAX_CANALE):
 			continue
-		canale.append(["c" + cid, nume, grupa, comanda])
+		logo = c.get("logo")
+		meta = {}
+		if isinstance(logo, str) and logo and len(logo) <= I.MAX_ADRESA:
+			logo = urljoin(baza.rstrip("/") + "/", logo)
+			if I.fluxBun(logo) and logo.lower().startswith(("http://", "https://")):
+				meta["logo"] = logo
+		canale.append(["c" + cid, nume, grupa, comanda] + ([meta] if meta else []))
 	if not canale and not filtru.grupe:
 		raise EroareIptv(E_FARA_CANALE)
 	return canale, {"taiate": filtru.taiate, "sarite": sarite, "catalog": filtru.catalog(), "baza": baza, "fara_https": not I.fluxCriptat(baza)}
@@ -1106,6 +1170,8 @@ def aduceStalker(s):
 
 def _adresaDinComanda(text):
 	"""Raspunsul create_link: 'ffmpeg http://...' sau numai adresa. -> adresa buna sau None."""
+	if not isinstance(text, str):
+		return None
 	text = (text or "").strip()
 	if " " in text:
 		text = text.rsplit(" ", 1)[-1]
@@ -1113,44 +1179,131 @@ def _adresaDinComanda(text):
 
 
 _SESIUNI = {}
+_LACAT_SESIUNI = threading.Lock()
 
 
-def stalkerAdresa(s, comanda):
+def _starePortal(s):
+	"""Memorie numai in RAM, pe sursa; schimbarea datelor uita jetonul si forma cererii."""
+	date = tuple(s.get(k) or "" for k in ("portal", "mac", "user_agent", "referer", "x_user_agent", "stb_type"))
+	cheie = s.get("id") or date
+	with _LACAT_SESIUNI:
+		stare = _SESIUNI.get(cheie)
+		if stare is None or stare["date"] != date:
+			stare = {"date": date, "sesiune": None, "stream": True, "pauza": None, "lacat": threading.RLock()}
+			_SESIUNI[cheie] = stare
+		return stare
+
+
+def _verificaPauzaPortal(stare):
+	pauza = stare["pauza"]
+	if pauza:
+		ramas = pauza[1] - int(math.floor(time.monotonic() - pauza[0]))
+		if ramas > 0:
+			raise EroareIptv(pauza[2], cod=pauza[3], dupa=ramas)
+		stare["pauza"] = None
+
+
+def reiaPortal(s):
+	"""Formularul TV/web cere explicit o noua incercare, fara pauza veche."""
+	if s.get("fel") == "stalker":
+		stare = _starePortal(s)
+		stare["pauza"] = None
+		# Si cererea deja in mers poate aduce o pauza pana ajunge formularul in coada.
+		stare["reia"] = True
+
+
+def _verificaPornirePortal(activa):
+	if activa is not None and not activa():
+		raise EroareIptv(E_NU_RASPUNDE)
+
+
+def _streamDinComanda(comanda):
+	"""Ia valoarea stream din comanda, decodata o data, inainte de urlencode al cererii API."""
+	# Reparatia lui kreidlerboy, LinuxSat #971520.
+	m = re.search(r"[?&]stream=([^&#\s]+)", comanda or "")
+	return parse_qsl("stream=" + m.group(1))[0][1] if m else ""
+
+
+def _legaturaPortal(s, api, baza, jeton, comanda, stare, buget, activa=None):
+	parametri = {"type": "itv", "action": "create_link", "cmd": comanda, "series": "",
+		"forced_storage": "0", "disable_ad": "0", "download": "0"}
+	stream = _streamDinComanda(comanda)
+	forme = (stare["stream"], not stare["stream"]) if stream else (False,)
+	for separat in forme:
+		if buget[0] <= 0:
+			break
+		buget[0] -= 1
+		try:
+			js = _cerePortal(s, api, baza, dict(parametri, stream=stream) if separat else parametri,
+				jeton, maxim=256 * 1024, termen=TERMEN_ADRESA_S, activa=activa)
+			_verificaPornirePortal(activa)
+			if _adresaDinComanda(js.get("cmd") if isinstance(js, dict) else None):
+				if stream:
+					stare["stream"] = separat
+				return js
+		except EroareIptv as e:
+			_verificaPornirePortal(activa)
+			# Rezerva numai pentru forma incompatibila; niciun refuz de acces sau Retry-After nu se repeta aici.
+			if e.dupa or e.cod == 429 or (e.cod not in (400, 405, 422) and e.mesaj != E_NU_E_PORTAL):
+				raise
+			if buget[0] <= 0:
+				raise
+	raise EroareIptv(E_NU_E_PORTAL)
+
+
+def stalkerAdresa(s, comanda, activa=None):
 	"""Adresa unui canal la pornire (create_link): se schimba de fiecare data, deci nu se tine nicaieri. Jetonul se tine in memorie
 	si se cere din nou o data, cand portalul nu-l mai primeste. Termen scurt: omul asteapta in fata televizorului."""
-	cheie = s.get("id")
-	for incercare in (1, 2):
-		sesiune = _SESIUNI.get(cheie)
-		if sesiune is None:
-			baza, api, jeton = stalkerConecteaza(s, termen=TERMEN_ADRESA_S)
-			sesiune = _SESIUNI[cheie] = (baza, api, jeton)
-		baza, api, jeton = sesiune
-		try:
-			js = _cerePortal(s, api, baza, {"type": "itv", "action": "create_link", "cmd": comanda, "series": "",
-				"forced_storage": "0", "disable_ad": "0", "download": "0"}, jeton, maxim=256 * 1024, termen=TERMEN_ADRESA_S)
-			adresa = _adresaDinComanda(js.get("cmd") if isinstance(js, dict) else None)
-			if adresa:
-				return adresa
-		except EroareIptv:
-			if incercare == 2:
-				raise
-		_SESIUNI.pop(cheie, None)
-	raise EroareIptv(E_NU_RASPUNDE)
+	stare = _starePortal(s)
+	if not stare["lacat"].acquire(timeout=10):
+		raise EroareIptv(E_NU_RASPUNDE)
+	try:
+		_verificaPornirePortal(activa)
+		_verificaPauzaPortal(stare)
+		# Cel mult doua create_link cu jetonul vechi si unul singur dupa reinnoire.
+		buget = [2]
+		for incercare in (1, 2):
+			if stare["sesiune"] is None:
+				stare["sesiune"] = _conecteazaPortal(s, TERMEN_ADRESA_S, activa=activa)
+			baza, api, jeton = stare["sesiune"]
+			try:
+				js = _legaturaPortal(s, api, baza, jeton, comanda, stare, buget, activa=activa)
+				return _adresaDinComanda(js["cmd"])
+			except EroareIptv as e:
+				_verificaPornirePortal(activa)
+				jeton_refuzat = e.cod in (401, 403) or (not e.cod and e.mesaj == E_NU_E_PORTAL)
+				if jeton_refuzat:
+					stare["sesiune"] = None
+				if e.dupa or not jeton_refuzat or incercare == 2:
+					raise
+				buget = [1]
+		raise EroareIptv(E_NU_RASPUNDE)
+	finally:
+		stare["lacat"].release()
 
 
 # ------------------------------------------------------------------ ce a scris omul
 
-def verificaDate(fel, date):
+def verificaDate(fel, date, sursa_id=None):
 	s, eroare = _verificaDate(fel, date)
 	if eroare:
 		return s, eroare
+	# Editarea MAC-ului pastreaza referintele canalelor si setarile sursei.
+	if fel == "stalker" and sursa_id:
+		veche = I.sursa(sursa_id)
+		if veche and veche.get("fel") == fel and I.identitatePortal(veche.get("portal")) == I.identitatePortal(s["portal"]):
+			s["id"] = sursa_id
 	if fel == "m3u":
 		for v in I.citesteSurse():
 			if v.get("fel") == "m3u" and I.identitatePlaylist(v.get("adresa")) == I.identitatePlaylist(s.get("adresa")):
 				s["id"] = v["id"]
 				break
 	veche = I.sursa(s["id"]) or {}
-	for cheie in ("user_agent", "referer"):
+	optiuni, eroare = verificaOptiuni(date, veche)
+	if eroare:
+		return None, eroare
+	s.update(optiuni)
+	for cheie in ("user_agent", "referer", "x_user_agent", "stb_type"):
 		v = date.get(cheie, veche.get(cheie, ""))
 		if not isinstance(v, str) or not I.textBun(v, 2048):
 			return None, E_ANTETE
@@ -1185,10 +1338,10 @@ def _verificaDate(fel, date):
 		return I.sursaNouaXtream(server, utilizator, parola, nume), None
 	if fel == "stalker":
 		portal = (date.get("portal") or "").strip()
-		mac = (date.get("mac") or "").strip()
+		mac = I.macCurat(date.get("mac"))
 		if I.desparteServer(portal) is None:
 			return None, E_ADRESA
-		if not I.macBun(mac):
+		if mac is None:
 			return None, E_FORMA_MAC
 		return I.sursaNouaStalker(portal, mac, nume), None
 	return None, E_ADRESA
@@ -1310,3 +1463,402 @@ def aduce(s):
 	info.setdefault("filme", 0)
 	info.setdefault("vii", len(canale) - info["filme"])
 	return canale, info
+
+
+# Optiunile apartin sursei; datele de acces nu trebuie rescrise pentru a le schimba.
+E_OPTIUNI = N_("Alege un player din listă și Da sau Nu pentru piconuri.")
+
+
+def verificaOptiuni(date, veche=None):
+	veche = veche or {}
+	player = str(date.get("player", I.playerSursa(veche)))
+	piconuri = date.get("piconuri", veche.get("piconuri") is True)
+	if player not in I.PLAYERE or str(piconuri).lower() not in ("true", "false", "1", "0"):
+		return None, E_OPTIUNI
+	return {"player": player, "piconuri": str(piconuri).lower() in ("true", "1")}, None
+
+
+def salveazaOptiuni(sursa_id, date):
+	s = I.sursa(sursa_id)
+	if not s:
+		return N_("Sursa aleasă nu mai e în listă. Pagina se încarcă din nou.")
+	optiuni, eroare = verificaOptiuni(date, s)
+	if eroare:
+		return eroare
+	s = I.actualizeazaSursa(sursa_id, **optiuni)
+	from Components import HdsIptvLucru as L
+	L.cere(L._REFACERE, din_nou=True)
+	cerePiconuri(s)
+	return None
+
+
+# Un singur fir, independent de aducerea listelor si de firul televizorului.
+# PNG standard, maximum 64 MiB pentru IPTV propriu. Siglele valide se pastreaza.
+MAX_PICONURI_OCTETI = 64 * 1024 * 1024
+MAX_PERECHI_PICONURI = 2048
+MAX_PERECHI_OCTETI = 1024 * 1024
+MAX_REGISTRU_PICONURI = 8192
+_PICON_PROPRIU = re.compile(r"^(4097|5001|5002)_0_1_[0-9A-F]+_[0-9A-F]+_[0-9A-F]+_FFFE[0-9A-F]{4}_0_0_0[.]png$")
+_picon_lacat = threading.Lock()
+_picon_coada = {}
+_picon_fir = None
+_picon_stop = threading.Event()
+_picon_iesire_legata = False
+
+
+def _dosarPiconuri():
+	for cale in ("/media/hdd/picon", "/media/usb/picon", "/usr/share/enigma2/picon"):
+		if os.path.isdir(cale) and os.access(cale, os.W_OK):
+			return cale
+	return "/usr/share/enigma2/picon"
+
+
+def _perechiPiconuri(s, canale):
+	"""O singura sursa, referinta, logo si antete, cel mult 1 MiB de text.
+	Lista completa este eliberata inaintea primei cereri de retea."""
+	ascunse = frozenset(s.get("ascunse") or ())
+	perechi, octeti = [], 0
+	for c in canale:
+		if _picon_stop.is_set():
+			break
+		if len(c) < 5 or not isinstance(c[4], dict) or I._eFilmSursei(c) or I._DESPARTIRE.match(c[1] or ""):
+			continue
+		if I.eAscunsa(ascunse, c[2] or I.numeSursa(s)):
+			continue
+		logo = c[4].get("logo")
+		if not isinstance(logo, str) or len(logo) > I.MAX_ADRESA or not logo.lower().startswith(("http://", "https://")):
+			continue
+		ref = I.refCanal(s["id"], c[0], player=I.playerSursa(s))
+		antete = anteteCurate(c[4].get("antete"))
+		cost = (len(ref.encode("utf-8")) + len(logo.encode("utf-8")) +
+			len(json.dumps(antete, ensure_ascii=False, sort_keys=True).encode("utf-8")))
+		if len(perechi) >= MAX_PERECHI_PICONURI or octeti + cost > MAX_PERECHI_OCTETI:
+			break
+		perechi.append((ref, logo, antete))
+		octeti += cost
+	return perechi
+
+
+def _canalePiconuri(sid):
+	"""Citire din mers a listei JSON proprii: un rand, tampon de maximum 64 KiB.
+	O lista incompleta sau un rand prea mare opreste numai aceasta incercare."""
+	decodor = json.JSONDecoder()
+	try:
+		with open(I._caleCanale(sid), encoding="utf-8") as f:
+			tampon = f.read(16384).lstrip()
+			if not tampon.startswith("["):
+				return
+			tampon = tampon[1:]
+			for n in range(I.MAX_CANALE):
+				while True:
+					tampon = tampon.lstrip()
+					if tampon.startswith("]") or _picon_stop.is_set():
+						return
+					try:
+						canal, capat = decodor.raw_decode(tampon)
+						break
+					except ValueError:
+						if len(tampon) >= 49152:
+							return
+						bucata = f.read(16384)
+						if not bucata:
+							return
+						tampon += bucata
+				if isinstance(canal, list) and len(canal) >= 4:
+					yield canal
+				tampon = tampon[capat:].lstrip()
+				while not tampon:
+					tampon = f.read(16384).lstrip()
+					if not tampon:
+						return
+				if not tampon.startswith(","):
+					return
+				tampon = tampon[1:]
+	except (OSError, UnicodeError):
+		return
+
+
+def _piconValid(cale):
+	from PIL import Image
+	try:
+		if os.path.islink(cale):
+			return False
+		with Image.open(cale) as im:
+			if im.format != "PNG":
+				return False
+			im.verify()
+		return True
+	except Image.DecompressionBombError:
+		# Nu interpretam o imagine enorma drept permisiune de a o sterge.
+		return True
+	except (OSError, ValueError, SyntaxError):
+		return False
+
+
+def _caleRegistruPiconuri(dosar):
+	# Cate un registru pentru fiecare destinatie, numai in dosarul privat IPTV.
+	semn = hashlib.sha256(os.path.abspath(dosar).encode("utf-8")).hexdigest()[:16]
+	return os.path.join(I.DOSAR, "piconuri-%s.json" % semn)
+
+
+def _registruPiconuri(dosar):
+	try:
+		with open(_caleRegistruPiconuri(dosar), "rb") as f:
+			date = f.read(4 * 1024 * 1024 + 1)
+		if len(date) > 4 * 1024 * 1024:
+			return {}
+		date = json.loads(date)
+		if not isinstance(date, dict) or len(date) > MAX_REGISTRU_PICONURI:
+			return {}
+		return {n: v for n, v in date.items() if _PICON_PROPRIU.fullmatch(n) and
+			isinstance(v, list) and len(v) == 4 and all(type(x) is int for x in v[:3]) and
+			isinstance(v[3], str) and re.fullmatch(r"[0-9a-f]{64}", v[3])}
+	except (OSError, ValueError, TypeError):
+		return {}
+
+
+def _poateScriePicon(cale, nota):
+	if not os.path.lexists(cale):
+		return True
+	return bool(nota and _identitatePicon(cale) == nota and not _piconValid(cale))
+
+
+def _identitatePicon(cale):
+	"""Dovada completa, inclusiv marime si suma; nu adoptam un fisier modificat."""
+	import stat
+	try:
+		st = os.lstat(cale)
+		if not stat.S_ISREG(st.st_mode) or not st.st_ino or st.st_size > 256 * 1024:
+			return None
+		with open(cale, "rb") as f:
+			citit = os.fstat(f.fileno())
+			date = f.read(256 * 1024 + 1)
+		if (st.st_dev, st.st_ino, st.st_size) != (citit.st_dev, citit.st_ino, len(date)):
+			return None
+		return [st.st_dev, st.st_ino, len(date), hashlib.sha256(date).hexdigest()]
+	except OSError:
+		return None
+
+
+def _permitePicon(s):
+	# Sub lacatul comun se consulta EXCLUSIV memoria, nici callback-uri cu disc.
+	with I._LACAT:
+		return not _picon_stop.is_set() and I._stare_piconuri.get(s["id"]) == (
+			True, I.playerSursa(s), tuple(s.get("ascunse") or ()))
+
+
+def _curataTemporarePiconuri(dosar):
+	import stat
+	try:
+		with os.scandir(dosar) as intrari:
+			for intrare in intrari:
+				if intrare.name.startswith(".hds-picon-"):
+					try:
+						st = intrare.stat(follow_symlinks=False)
+						if stat.S_ISREG(st.st_mode) and st.st_mtime < time.time() - 600:
+							os.unlink(intrare.path)
+					except OSError:
+						pass
+	except OSError:
+		pass
+
+
+def _octetiTemporarePiconuri(dosar):
+	# Inclusiv temporarele proaspete ramase de la o iesire brusca.
+	total = 0
+	with os.scandir(dosar) as intrari:
+		for i in intrari:
+			try:
+				if i.name.startswith(".hds-picon-") and i.is_file(follow_symlinks=False):
+					total += i.stat(follow_symlinks=False).st_size
+			except FileNotFoundError:
+				pass  # un alt proces tocmai a strans un temporar
+	return total
+
+
+def _publicaPicon(nou, cale):
+	"""Exclusiv: o destinatie aparuta intre verificari ramane neatinsa.
+	Dovada vine din descriptorul nostru, niciodata din destinatia redeschisa."""
+	with open(nou, "rb") as f:
+		date = f.read(256 * 1024 + 1)
+		st = os.fstat(f.fileno())
+	if len(date) > 256 * 1024:
+		return None
+	suma = hashlib.sha256(date).hexdigest()
+	try:
+		os.link(nou, cale)
+		return [st.st_dev, st.st_ino, len(date), suma]
+	except FileExistsError:
+		return None
+	except OSError:
+		# FAT si sisteme fara hardlink: O_EXCL arbitreaza cursa, fara rename.
+		try:
+			fd = os.open(cale, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+		except FileExistsError:
+			return None
+		with os.fdopen(fd, "wb") as f:
+			f.write(date)
+			f.flush()
+			os.fsync(f.fileno())
+			st = os.fstat(f.fileno())
+		return [st.st_dev, st.st_ino, len(date), suma]
+
+
+def descarcaPiconuri(s, canale, dosar=None, continua=None, perechi=None):
+	"""Numai pe fir de lucru. Sursa da logo-ul, numele vine din referinta buchetului.
+	PNG/JPEG mici verificate, convertite la PNG; nicio adresa in nume sau jurnal.
+	Optiunea oprita nu creeaza dosare si nu foloseste reteaua."""
+	rez = {"scrise": 0}
+	if not s or s.get("piconuri") is not True:
+		return rez
+	from Components import HdsIptvSigle as S
+	from PIL import Image
+	import io
+	import shutil
+	import tempfile
+	dosar = dosar or _dosarPiconuri()
+	os.makedirs(dosar, exist_ok=True)
+	registru = {n: v for n, v in _registruPiconuri(dosar).items()
+		if os.path.lexists(os.path.join(dosar, n))}
+	# Numai fisierele proprii, neschimbate: o colectie a omului nu consuma plafonul.
+	total = _octetiTemporarePiconuri(dosar)
+	for n, nota in registru.items():
+		cale = os.path.join(dosar, n)
+		if _identitatePicon(cale) == nota:
+			total += nota[2]
+	if perechi is None:
+		perechi = _perechiPiconuri(s, canale)
+	for ref, adresa, antete in perechi:
+		if _picon_stop.is_set() or (continua and not continua()) or not _permitePicon(s):
+			break
+		if total >= MAX_PICONURI_OCTETI:
+			break
+		nume = S.nume(ref)
+		if not nume:
+			continue
+		cale = os.path.join(dosar, nume + ".png")
+		if not _poateScriePicon(cale, registru.get(nume + ".png")):
+			continue
+		nou = None
+		try:
+			if shutil.disk_usage(dosar).free < 16 * 1024 * 1024:
+				break
+			date = S.descarcaSigla(s, adresa, antete)
+			S.verifica(date)
+			with Image.open(io.BytesIO(date)) as im:
+				im.load()
+				im = im.convert("RGBA")
+				im.thumbnail((220, 132))
+				out = io.BytesIO()
+				im.save(out, "PNG")
+			date = out.getvalue()
+			if total + len(date) > MAX_PICONURI_OCTETI:
+				break
+			with tempfile.NamedTemporaryFile(dir=dosar, prefix=".hds-picon-", delete=False) as f:
+				nou = f.name
+				f.write(date)
+				f.flush()
+				os.fsync(f.fileno())
+				st_propriu = os.fstat(f.fileno())
+			os.chmod(nou, 0o644)
+			nota = registru.get(nume + ".png")
+			if not _poateScriePicon(cale, nota):
+				continue
+			if nume + ".png" not in registru and len(registru) >= MAX_REGISTRU_PICONURI:
+				break
+			if (continua and not continua()) or not _permitePicon(s):
+				break
+			# Dupa acest control poate ramane cel mult un picon suplimentar.
+			if nota and not _piconValid(cale) and _identitatePicon(cale) == nota:
+				# Numai refacerea unui fisier propriu cu toate dovezile neschimbate.
+				# Verificarea completa este IMEDIAT inainte de replace, fara unlink.
+				os.replace(nou, cale)
+				dovada = [st_propriu.st_dev, st_propriu.st_ino, len(date), hashlib.sha256(date).hexdigest()]
+			else:
+				dovada = _publicaPicon(nou, cale)
+			if dovada:
+				registru[nume + ".png"] = dovada
+				I._asiguraDosar()
+				I._scrie(_caleRegistruPiconuri(dosar), json.dumps(registru, sort_keys=True).encode("utf-8"), 0o600)
+				total += len(date)
+				rez["scrise"] += 1
+		except Exception:
+			# O sigla lipsa sau gresita nu impiedica urmatorul canal.
+			pass
+		finally:
+			if nou and os.path.exists(nou):
+				os.unlink(nou)
+	if rez["scrise"]:
+		try:
+			from Tools.PiconResolver import resetPiconPath
+			resetPiconPath()
+		except ImportError:
+			pass
+	return rez
+
+
+def _piconBucla():
+	global _picon_fir
+	try:
+		os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 10)
+	except (AttributeError, OSError):
+		pass
+	# O singura curatare pe rularea firului, fara niciun lacat comun tinut.
+	I.incarcaStarePiconuri()
+	_curataTemporarePiconuri(_dosarPiconuri())
+	while True:
+		with _picon_lacat:
+			if _picon_stop.is_set() or not _picon_coada:
+				if _picon_stop.is_set():
+					_picon_coada.clear()
+				_picon_fir = None
+				return
+			sid = next(iter(_picon_coada))
+			_picon_coada.pop(sid)
+		try:
+			# Setarile cele mai noi, inclusiv oprirea facuta cat astepta in coada.
+			s = I.sursa(sid)
+			if s and s.get("piconuri") is True:
+				perechi = _perechiPiconuri(s, _canalePiconuri(sid))
+				descarcaPiconuri(s, None, perechi=perechi)
+				del perechi
+		except Exception as e:
+			_jurnal("piconuri: %s" % type(e).__name__)
+
+
+def cerePiconuri(s, canale=None):
+	"""Coada are numai identificatori. Lista de pe disc este deja salvata de apelant.
+	Parametrul vechi canale este acceptat, dar nu se retine in memorie."""
+	global _picon_fir
+	if not s or s.get("piconuri") is not True:
+		return
+	with _picon_lacat:
+		if s["id"] not in _picon_coada and len(_picon_coada) >= I.MAX_SURSE:
+			_picon_coada.pop(next(iter(_picon_coada)))
+		if _picon_stop.is_set():
+			return
+		_picon_coada[s["id"]] = None
+		if _picon_fir is None:
+			_picon_fir = threading.Thread(target=_piconBucla, name="HdsIptvPiconuri", daemon=True)
+			_picon_fir.start()
+
+
+def oprestePiconuri():
+	# Numai semnal: nici lacat, nici disc, nici join pe calea de iesire.
+	# Firul daemon verifica semnalul sub I._LACAT inaintea publicarii.
+	_picon_stop.set()
+
+
+def pornestePiconuri():
+	"""Legat o data pe firul principal, si cand nu exista inca surse."""
+	global _picon_iesire_legata
+	if _picon_iesire_legata:
+		return
+	import atexit
+	atexit.register(oprestePiconuri)
+	try:
+		from twisted.internet import reactor
+		reactor.addSystemEventTrigger("before", "shutdown", oprestePiconuri)
+	except ImportError:
+		pass
+	_picon_iesire_legata = True

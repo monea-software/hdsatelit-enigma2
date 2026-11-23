@@ -394,7 +394,7 @@ def argumente(request, permise=SETARI + ("adresa", "titlu", "index", "confirmat"
 		maxim=MAX_VALOARE):
 	"""Argumentele cererii (adresa sau corpul formularului), fara token; numai cheile cunoscute."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:16]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in permise:
@@ -402,7 +402,7 @@ def argumente(request, permise=SETARI + ("adresa", "titlu", "index", "confirmat"
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:maxim].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -436,8 +436,6 @@ def rute(baza, resource, sesiune=None, N=None):
 		schimbaCeva = True
 
 		def render_POST(self, request):
-			if cuJeton(request):
-				return self._eroare(request, _t("Textul se trimite numai dintr-un browser (nu cu cheia pentru scripturi)."), 403)
 			try:
 				arg = argumente(request, permise=("text",), maxim=MAX_TEXT + 1)
 				return self._raspunde(request, trimiteText(arg, N, _ses()))
@@ -605,6 +603,12 @@ def _json(obiect):
 def pagina_text(stil, config_pagina):
 	import html
 	text = _traducePagina(PAGINA)
+	try:
+		from Plugins.Extensions.HdsatelitBrowser import margini_web
+	except ImportError:
+		pass
+	else:
+		text = text.replace("<main>", "<main>" + margini_web.legatura())
 	for cheie, eticheta in ETICHETE.items():
 		text = text.replace("__T_%s__" % cheie, html.escape(_t(eticheta), quote=False))
 	nota = html.escape(_t(NOTA_MENIU), quote=False)

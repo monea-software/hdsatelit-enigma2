@@ -10,7 +10,7 @@ from Screens.MessageBox import MessageBox
 # HDSatelit: tastatura de pe ecran la orice camp de text. In orice ecran cu ConfigListScreen
 # (Setup din setup.xml si ecranele care nu-si leaga singure OK), OK si tasta TEXT pe un camp de text (ConfigText,
 # ConfigPassword; nu numerele si nu dosarele) deschid Screens/VirtualKeyBoard cu valoarea de acum (la parola goala:
-# parola veche nu se arata, iar o parola goala lasa parola cum era). Scrierea cu cifrele, ca la SMS, ramane. Ecranele
+# valoarea salvata se arata, iar o parola goala lasa parola cum era). Scrierea cu cifrele, ca la SMS, ramane. Ecranele
 # cu OK propriu cheama deschideTastatura(session, element, titlu, gata).
 
 def esteTextDeScris(el):
@@ -70,7 +70,7 @@ def deschideTastatura(session, el, titlu="", gata=None):
 		if gata is not None:
 			gata(text)
 	return session.openWithCallback(laInchidere, VirtualKeyBoard, title=titlu,
-		text="" if parola else (el.value or ""), hdsSecret=secret)
+		text=el.value or "", hdsSecret=secret)
 
 
 class ConfigList(HTMLComponent, GUIComponent, object):
@@ -83,11 +83,18 @@ class ConfigList(HTMLComponent, GUIComponent, object):
 		self.onSelectionChanged = [ ]
 		self.current = None
 		self.session = session
+		# EST1: chemate la fiecare pornire a ecranului (ConfigListScreen imbraca aici OK-ul hartilor pluginului)
+		self.hdsLaPornire = [ ]
 
 	def execBegin(self):
 		rcinput = eRCInput.getInstance()
 		rcinput.setKeyboardMode(rcinput.kmAscii)
 		self.timer.callback.append(self.timeout)
+		for f in list(getattr(self, "hdsLaPornire", ())):
+			try:
+				f()
+			except Exception as e:
+				print("[ConfigList] la pornire: %r" % (e,))
 
 	def execEnd(self):
 		rcinput = eRCInput.getInstance()
@@ -283,6 +290,11 @@ class ConfigListScreen:
 		
 		if not self.handleInputHelpers in self["config"].onSelectionChanged:
 			self["config"].onSelectionChanged.append(self.handleInputHelpers)
+		# EST1: OK pe un camp de text deschide tastatura si cand harta pluginului ia OK si nu face nimic pe rand
+		try:
+			self["config"].hdsLaPornire.append(self._imbracaOkStrain)
+		except Exception:
+			pass
 		# temele din alte imagini asaza aici „HelpWindow” (poza tastaturii); numai sub o tema straina (HdsNumeStandard)
 		try:
 			from Components.HdsNumeStandard import adauga
@@ -442,6 +454,76 @@ class ConfigListScreen:
 		except Exception:
 			return False
 		return False
+
+	# EST1 (22.11.2026; Mihai, Octagon SF8008 0.7.7, EStalker "Add Playlist": OK pe "Server URL" nu deschidea tastatura).
+	# Un plugin strain care isi leaga singur OK (harta lui ia OK inaintea config_actions, vezi FUR) si pe un rand de
+	# text nu face nimic lasa omul fara tastatura (ramanea numai tasta TEXT). Functia "ok" a hartilor lui se imbraca la
+	# pornirea ecranului: intai ruleaza a pluginului, neschimbata; daca n-a facut nimic (aceeasi fereastra in fata,
+	# ecranul tot pornit, aceeasi lista, acelasi rand, aceeasi valoare) si randul e un text de scris, se deschide
+	# tastatura de pe ecran, ca la TEXT. Ce face pluginul cu OK (o fereastra, alt rand, alta valoare) ramane al lui.
+	def _imbracaOkStrain(self):
+		try:
+			from skin import modulImagine
+			if modulImagine(self.__class__.__module__):
+				return
+		except Exception:
+			return
+		proprii = (self.get("config_actions"), self.get("VirtualKB"))
+		for nume, harta in list(self.items()):
+			if nume in ("config_actions", "VirtualKB") or any(harta is p for p in proprii if p is not None):
+				continue
+			actiuni = getattr(harta, "actions", None)
+			if not isinstance(actiuni, dict) or "ok" not in actiuni:
+				continue
+			f = actiuni["ok"]
+			if not callable(f) or getattr(f, "hdsOkTastatura", False):
+				continue
+			if getattr(f, "__func__", None) in (ConfigListScreen.keyOK, ConfigListScreen.KeyText, ConfigListScreen.keySelect, ConfigListScreen.keyText) and getattr(f, "__self__", None) is self:
+				continue      # OK-ul nostru, mostenit: deschide deja tastatura
+			actiuni["ok"] = self._okImbracat(f)
+
+	def _okImbracat(self, f):
+		ecran = self
+
+		def ok(*a, **k):
+			try:
+				inainte = ecran._stareOk()
+			except Exception:
+				inainte = None   # OK-ul pluginului ruleaza oricum, ca pana acum
+			res = f(*a, **k)
+			if res == 0:
+				return res     # tasta merge mai departe (config_actions -> keyOK)
+			try:
+				if inainte is not None and ecran._stareOk() == inainte:
+					ecran._tastaturaDupaOk()
+			except Exception as e:
+				print("[ConfigList] tastatura dupa OK: %r" % (e,))
+			return res
+		ok.hdsOkTastatura = True
+		ok.hdsOkOriginal = f
+		return ok
+
+	def _stareOk(self):
+		"""Ce se vede din ecran inainte si dupa OK-ul pluginului; None cand randul nu e un text de scris."""
+		lista = self["config"]
+		cur = lista.getCurrent()
+		if cur is None or len(cur) < 2 or not esteTextDeScris(cur[1]):
+			return None
+		sesiune = getattr(self, "session", None)
+		try:
+			index = lista.getCurrentIndex()
+		except Exception:
+			index = None
+		return (id(getattr(sesiune, "current_dialog", None)), getattr(self, "execing", True), id(lista.list),
+			len(lista.list or ()), index, id(cur[1]), cur[1].value)
+
+	def _tastaturaDupaOk(self):
+		"""Ce face keyOK al nostru pe un rand de text: Enter de la o tastatura adevarata scrie in camp, OK de pe
+		telecomanda deschide tastatura de pe ecran."""
+		if _dinTastatura():
+			self["config"].handleKey(KEY_OK)
+			return
+		self.KeyText()
 
 	def keyMenu(self):
 		"""MENU: toate valorile unui ConfigSelection, fara salvarea paginii."""

@@ -52,13 +52,12 @@ import hashlib
 import json
 import os
 
-# limitele formularului (aceleasi ca in scanare_web.argumente, plus refuzul limpede cand sunt prea multe campuri)
-MAX_ARGUMENTE = 60
-MAX_TEXT_ARGUMENT = 200
-
 TENSIUNI = ("polarization", "13V", "18V")
 TONURI = ("band", "on", "off")
 CAMPURI_MANUAL = ("frecventa", "sr", "pol", "sistem", "fec", "mod", "rolloff", "pilot")
+# GST7: frecventa terestra sau de cablu scrisa de mana (numele din cerere -> numele din transponder_din_campuri_tc)
+CAMPURI_MANUAL_TC = (("frecventa", "frecventa"), ("latime", "latime"), ("sistem_t", "sistem"), ("sr", "sr"),
+	("mod_c", "mod"))
 ACTIUNI_CU_INTREBARE = {"memoreaza": "memoreaza", "limita_est": "limita_est", "limita_vest": "limita_vest",
 	"limite_oprite": "limite_oprite"}
 ECRAN_MOTOR = "HdsDishMotorEcran"
@@ -148,21 +147,19 @@ def _ecranDeschis(nume_clasa):
 
 
 def argumente(request):
-	"""Argumentele cererii (adresa si corpul formularului): (dict cheie -> text, eroare). Numai chei scurte din litere
-	mici, cifre si _ (fara „token”); prea multe chei = refuz limpede, nu taiere pe tacute."""
-	brute = getattr(request, "args", None) or {}
-	if len(brute) > MAX_ARGUMENTE + 1:
-		return {}, _t("Cererea are prea multe câmpuri.")
+	"""Argumentele cererii (adresa si corpul formularului): (dict cheie -> text, None). Toate campurile, cu valoarea
+	intreaga, fara "token" (al formularului, nu un camp). REGULA 0: pana dupa 1.0 fara limite din
+	precautie, deci fara refuz peste un numar de campuri, fara taierea valorilor si fara filtru pe numele cheilor."""
 	rez = {}
-	for cheie, valori in brute.items():
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 40 or not all(c.islower() or c.isdigit() or c == "_" for c in cheie):
+		if cheie == "token":
 			continue
 		v = (valori or [""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_TEXT_ARGUMENT].strip()
+		rez[cheie] = str(v).strip()
 	return rez, None
 
 
@@ -663,8 +660,17 @@ def _tuneriSemnal(G):
 		sateliti = [{"poz": s["poz"], "nume": s["nume"], "vizibil": bool(s.get("vizibil", True)),
 			"text": G.text_satelit(s)} for s in t["sateliti"]]
 		tunere.append({"slot": t["slot"], "nume": t["nume"], "s2": bool(t["s2"]), "motor": bool(t["motor"]),
-			"sateliti": sateliti})
+			"sateliti": sateliti, "fel": t.get("fel", "S")})
 	return tunere
+
+
+def _listaTC(G, tuner, tp=None):
+	"""GST7: frecventele unui tuner terestru sau de cablu (lista din Setari tuner, ca pe televizor), cu cea a lui tp
+	aleasa; aceleasi chei ca _listaTranspondere, plus numele listei."""
+	lista, nume = G.frecvente_tc(tuner["slot"], tuner["fel"])
+	ales = G.potriveste_tc(tp, lista) if tp is not None else (0 if lista else -1)
+	return {"transpondere": [{"text": e["text"], "tp": e["tp"], "tsid": -1, "onid": -1} for e in lista], "sarite": 0,
+		"text_sarite": "", "ales": ales, "lista_nume": nume}
 
 
 def _listaTranspondere(G, tuner, poz, tp=None):
@@ -707,7 +713,10 @@ def semnalDate():
 		serviciu = _serviciuCurent()
 		for t in tunere:
 			try:
-				tp = G.transponder_din_serviciu(serviciu, [s["poz"] for s in t["sateliti"]])
+				if t["fel"] != "S":
+					tp = G.transponder_din_serviciu_tc(serviciu, t["fel"], t["slot"])
+				else:
+					tp = G.transponder_din_serviciu(serviciu, [s["poz"] for s in t["sateliti"]])
 			except Exception as eroare:
 				_jurnal("transponderul programului: %s" % eroare)
 				tp = None
@@ -718,12 +727,18 @@ def semnalDate():
 			initial = {"slot": m.slot, "tp": dict(m.tp), "din": "masurare"}
 	if initial is not None:
 		tuner = [t for t in tunere if t["slot"] == initial["slot"]]
-		if tuner and initial["tp"].get("orbital_position") in [s["poz"] for s in tuner[0]["sateliti"]]:
+		if tuner and tuner[0]["fel"] != "S":
+			if G.fel_tp(initial["tp"]) == tuner[0]["fel"]:
+				initial.update(_listaTC(G, tuner[0], initial["tp"]))
+			else:
+				initial = None
+		elif tuner and initial["tp"].get("orbital_position") in [s["poz"] for s in tuner[0]["sateliti"]]:
 			initial.update(_listaTranspondere(G, tuner[0], initial["tp"]["orbital_position"], initial["tp"]))
 		else:
 			initial = None
 	liste = {"polarizari": G.polarizari(), "sisteme": G.sisteme(True), "fec_dvbs": G.fec_dvbs(),
-		"fec_dvbs2": G.fec_dvbs2(), "modulatii": G.modulatii_dvbs2(), "rolloffuri": G.rolloffuri(), "piloti": G.piloti()}
+		"fec_dvbs2": G.fec_dvbs2(), "modulatii": G.modulatii_dvbs2(), "rolloffuri": G.rolloffuri(), "piloti": G.piloti(),
+		"latimi": G.latimi(), "sisteme_t": G.sisteme_terestre(), "modulatii_c": G.modulatii_cablu()}
 	return {"result": True, "tunere": tunere, "initial": initial, "liste": liste, "stare": semnalStare(False),
 		"sistem_s2": G.SISTEM_DVB_S2}
 
@@ -742,6 +757,10 @@ def semnalTranspondere(cerere):
 	if t is None:
 		return {"result": False, "message": _t("Tunerul ales nu mai este printre tunerele de satelit. Reîncarcă "
 			"pagina.")}
+	if t["fel"] != "S":
+		rez = _listaTC(G, t)
+		rez["result"] = True
+		return rez
 	poz = _int(cerere.get("poz"))
 	if poz not in [s["poz"] for s in t["sateliti"]]:
 		return {"result": False, "message": _t("Satelitul ales nu este în setările acestui tuner.")}
@@ -759,6 +778,8 @@ def semnalPorneste(cerere):
 	m = G.masurare()
 	slot = _int(cerere.get("slot"))
 	t = _tunerSemnal(G, slot)
+	if t is not None and t["fel"] != "S":
+		return _semnalPornesteTC(G, m, slot, t, cerere)
 	_anuntaMotor("web: gasire semnal")
 	if t is None:
 		return {"result": False, "message": _t("Tunerul ales nu mai este printre tunerele de satelit. Reîncarcă "
@@ -796,10 +817,49 @@ def semnalPorneste(cerere):
 	return {"result": bool(reusit), "message": text or "", "stare": semnalStare()}
 
 
+def _semnalPornesteTC(G, m, slot, t, cerere):
+	"""GST7: ca semnalPorneste, pe un tuner terestru sau de cablu: frecventa din lista (tp=<numarul>) sau scrisa de
+	mana (tp=manual: frecventa, latime, sistem_t / sr, mod_c). Fara motor, deci fara anuntul motorului."""
+	lista, _nume = G.frecvente_tc(slot, t["fel"])
+	extra = {"tsid": -1, "onid": -1, "sarite": 0, "fara_lista": False}
+	ales = cerere.get("tp", "")
+	if ales not in ("", "manual"):
+		i = _int(ales, 0, len(lista) - 1)
+		if i is None:
+			return {"result": False, "message": _t("Lista frecvențelor s-a schimbat. Alege din nou."),
+				"stare": semnalStare(False)}
+		tp = lista[i]["tp"]
+	else:
+		valori = dict((nou, cerere.get(vechi)) for vechi, nou in CAMPURI_MANUAL_TC)
+		tp, eroare = G.transponder_din_campuri_tc(valori, t["fel"])
+		if eroare:
+			reusit, text = m.arata_refuz(eroare, slot, cine="web")
+			return {"result": False, "message": eroare if reusit else text, "stare": semnalStare(False)}
+	if m.cine == "web" and m.slot == slot and m.tuner.slot == slot and (m.tuner.are_tuner() or m.tuner.asteapta()):
+		if m.tp == tp and m.faza not in ("oprita", "refuzat"):
+			return {"result": True, "message": "", "stare": semnalStare()}
+		reusit, text = m.schimba(tp, extra, cine="web")
+	else:
+		reusit, text = m.porneste(slot, tp, "web", _sesiune(), extra, False)
+	return {"result": bool(reusit), "message": text or "", "stare": semnalStare()}
+
+
 def semnalReacordeaza(cerere):
-	"""POST /api/gasire-semnal-reacordeaza: acelasi transponder, din nou (tasta galbena de pe televizor)."""
-	_anuntaMotor("web: gasire semnal, reacordare")
+	"""POST /api/gasire-semnal-reacordeaza: acelasi transponder, din nou (tasta galbena de pe televizor); cu ce=canale,
+	canalele de pe transponder (semnalCanale, TRL6)."""
+	if (cerere or {}).get("ce") == "canale":
+		return semnalCanale(cerere)
+	if _gasire().fel_tp(_gasire().masurare().tp) == "S":
+		_anuntaMotor("web: gasire semnal, reacordare")
 	reusit, text = _gasire().masurare().reacordeaza(cine="web")
+	return {"result": bool(reusit), "message": text or "", "stare": semnalStare()}
+
+
+def semnalCanale(cerere):
+	"""POST /api/gasire-semnal-reacordeaza cu ce=canale: citeste canalele de pe transponderul prins (PAT si SDT), fara
+	scanare si fara salvare (tasta albastra de pe televizor, TRL6). Lista vine in stare: canale, canale_stare,
+	canale_rezumat. Pe ruta reacordarii, ca sa nu ceara o ruta noua in plugin.py."""
+	reusit, text = _gasire().masurare().cere_canale(cine="web")
 	return {"result": bool(reusit), "message": text or "", "stare": semnalStare()}
 
 
@@ -1328,9 +1388,6 @@ def rute(baza, resource, NOT_DONE_YET, pagina_antena=None):
 		schimbaCeva = True
 
 		def render_POST(self, request):
-			P = _plugin()
-			if P.PARAM_JETON in request.args:
-				return self._eroare(request, _t(MESAJ_DOAR_BROWSER), 403)
 			cerere, eroare = argumente(request)
 			if eroare:
 				return self._eroare(request, eroare)
@@ -1376,8 +1433,6 @@ def rute(baza, resource, NOT_DONE_YET, pagina_antena=None):
 		def render_POST(self, request):
 			global _UNICABLE_LUCRU
 			session, service, stopped, martor = None, None, False, None
-			if _plugin().PARAM_JETON in request.args:
-				return self._eroare(request, _t(MESAJ_DOAR_BROWSER), 403)
 			cerere, error = argumente(request)
 			if error:
 				return self._eroare(request, error)
@@ -2445,9 +2500,11 @@ PAGINA_SEMNAL = """<!DOCTYPE html>
     <label class="eticheta" for="tuner">Tuner</label>
     <select id="tuner"></select>
   </div>
-  <label class="eticheta" for="satelit">Satelit</label>
-  <select id="satelit"></select>
-  <label class="eticheta" for="transponder">Transponder</label>
+  <div id="randSatelit">
+    <label class="eticheta" for="satelit">Satelit</label>
+    <select id="satelit"></select>
+  </div>
+  <label class="eticheta" for="transponder" id="etichetaTransponder">Transponder</label>
   <select id="transponder"></select>
   <p class="nota" id="sarite"></p>
   <div id="manual" class="ascuns">
@@ -2467,9 +2524,21 @@ PAGINA_SEMNAL = """<!DOCTYPE html>
     </div>
     <div id="randS1"><label class="eticheta" for="fec1">FEC</label><select id="fec1"></select></div>
   </div>
+  <div id="manualTC" class="ascuns">
+    <label class="eticheta" for="frecventaTC">Frecvența (MHz)</label><input class="text" id="frecventaTC" inputmode="decimal">
+    <div id="randT" class="doua">
+      <div><label class="eticheta" for="latime">Lățimea de bandă</label><select id="latime"></select></div>
+      <div><label class="eticheta" for="sistemT">Sistem</label><select id="sistemT"></select></div>
+    </div>
+    <div id="randC" class="doua">
+      <div><label class="eticheta" for="srC">Rata de simbol (kSymb/s)</label><input class="text" id="srC" inputmode="numeric"></div>
+      <div><label class="eticheta" for="modC">Modulație</label><select id="modC"></select></div>
+    </div>
+  </div>
   <div class="butoane">
     <button type="button" class="buton" id="masoara">Pornește măsurarea</button>
     <button type="button" class="buton secundar" id="reacord">Acordează din nou</button>
+    <button type="button" class="buton secundar" id="canale">Canalele de aici</button>
     <button type="button" class="buton secundar" id="opreste">Oprește măsurarea</button>
   </div>
   <div class="intrebare ascuns" id="intrebare"></div>
@@ -2484,6 +2553,12 @@ PAGINA_SEMNAL = """<!DOCTYPE html>
   <div id="linii"></div>
   <ul class="lista" id="detalii"></ul>
   <p class="mesaj avert" id="eveniment"></p>
+  <div id="cutieCanale" class="ascuns">
+    <h2>Canalele de aici</h2>
+    <p class="nota" id="canaleRezumat"></p>
+    <ul class="lista" id="canaleLista"></ul>
+    <p class="nota">Nimic nu s-a salvat în lista de canale. Ca să le adaugi, folosește Scanare.</p>
+  </div>
 </div>
 
 """ + _SUBSOL + """
@@ -2498,6 +2573,32 @@ function tunerAles(){
   for(var i = 0; i < t.length; i++){ if(String(t[i].slot) === $("tuner").value){ return t[i]; } }
   return t[0];
 }
+// GST7: S satelit, T terestru (DVB-T/T2), C cablu (DVB-C)
+function felAles(){ return tunerAles().fel || "S"; }
+function arataManual(){
+  var man = $("transponder").value === "manual", tc = felAles() !== "S";
+  arata($("manual"), man && !tc);
+  arata($("manualTC"), man && tc);
+}
+function puneFelul(){
+  var fel = felAles();
+  arata($("randSatelit"), fel === "S");
+  $("etichetaTransponder").textContent = fel === "S" ? "Transponder" : "Frecvența";
+  arata($("randT"), fel === "T");
+  arata($("randC"), fel === "C");
+  arataManual();
+}
+function umpleManualTC(tp){
+  if(tp.bandwidth !== undefined){
+    $("frecventaTC").value = String(Math.round(tp.frequency / 100000) / 10).replace(".", ",");
+    $("latime").value = String(tp.bandwidth);
+    $("sistemT").value = (tp.system === 0 || tp.system === 1) ? String(tp.system) : "1";
+  } else if(tp.fec_inner !== undefined){
+    $("frecventaTC").value = String(Math.round(tp.frequency / 100) / 10).replace(".", ",");
+    $("srC").value = String(Math.round(tp.symbol_rate / 1000));
+    $("modC").value = String(tp.modulation);
+  }
+}
 function aWebului(){
   var s = S.stare;
   return !!s && s.detinator === "web" && !s.ecran_deschis && ["oprita", "standby", "fara_tuner", "fara_sateliti"].indexOf(s.faza) === -1;
@@ -2510,6 +2611,11 @@ function puneListe(){
   optiuni($("rolloff"), L.rolloffuri, "0");
   optiuni($("pilot"), L.piloti, "2");
   optiuni($("fec1"), L.fec_dvbs, "0");
+  optiuni($("latime"), L.latimi || [], "0");
+  optiuni($("sistemT"), L.sisteme_t || [], "1");
+  optiuni($("modC"), L.modulatii_c || [], "0");
+  $("frecventaTC").value = "474";
+  $("srC").value = "6900";
 }
 function puneSistemele(){
   var t = tunerAles();
@@ -2534,6 +2640,7 @@ function umpleManual(tp){
 }
 function puneSatelitii(pozitie){
   var t = tunerAles();
+  if(felAles() !== "S"){ goleste($("satelit")); return; }
   optiuni($("satelit"), t.sateliti.map(function(s){ return [s.poz, s.text]; }), pozitie);
   if(!t.sateliti.length){ mesaj($("mesaj"), "Tunerul nu are niciun satelit configurat. Configurează antena în „Setări tuner”, apoi revino aici."); }
 }
@@ -2542,14 +2649,15 @@ function puneTranspondere(d, tp){
   var lista = d.transpondere.map(function(e, i){ return [i, e.text]; });
   lista.push(["manual", "Introdus de mână"]);
   optiuni($("transponder"), lista, d.ales >= 0 ? d.ales : "manual");
-  $("sarite").textContent = d.text_sarite || "";
-  if(d.ales < 0 && tp){ umpleManual(tp); }
+  $("sarite").textContent = d.text_sarite || (d.lista_nume ? "Lista: " + d.lista_nume : "");
+  if(felAles() !== "S"){ if(d.ales < 0 && tp){ umpleManualTC(tp); } }
+  else if(d.ales < 0 && tp){ umpleManual(tp); }
   else if(!d.transpondere.length){ mesaj($("mesaj"), "Satelitul nu are transpondere în lista lui: scrie valorile de mână."); }
-  arata($("manual"), $("transponder").value === "manual");
+  arataManual();
 }
 function incarcaTranspondere(){
   var t = tunerAles();
-  if(!t.sateliti.length){ S.lista = []; optiuni($("transponder"), [["manual", "Introdus de mână"]], "manual"); arata($("manual"), true); return Promise.resolve(); }
+  if(felAles() === "S" && !t.sateliti.length){ S.lista = []; optiuni($("transponder"), [["manual", "Introdus de mână"]], "manual"); arataManual(); return Promise.resolve(); }
   var cale = "/api/gasire-semnal-transpondere?slot=" + t.slot + "&poz=" + encodeURIComponent($("satelit").value);
   return cerere(cale).then(function(d){
     if(!d.result){ mesaj($("mesaj"), d.message, true); return; }
@@ -2559,8 +2667,19 @@ function incarcaTranspondere(){
 function parametri(){
   var p = new URLSearchParams();
   p.set("slot", String(tunerAles().slot));
-  p.set("poz", $("satelit").value);
   var ales = $("transponder").value;
+  if(felAles() !== "S"){
+    p.set("tp", ales);
+    if(ales === "manual"){
+      p.set("frecventa", $("frecventaTC").value.trim());
+      p.set("latime", $("latime").value);
+      p.set("sistem_t", $("sistemT").value);
+      p.set("sr", $("srC").value.trim());
+      p.set("mod_c", $("modC").value);
+    }
+    return p;
+  }
+  p.set("poz", $("satelit").value);
   p.set("tp", ales);
   if(ales === "manual"){
     var s2 = $("sistem").value === String(S.date.sistem_s2);
@@ -2604,9 +2723,12 @@ function deseneazaStarea(s){
   procent("calitate", "baraCalitate", s.calitate_la_suta);
   var l = $("linii"); goleste(l);
   if(s.blocat !== undefined && s.faza !== "oprita"){ linie(l, "Blocat", s.blocat ? "da" : "nu"); }
+  // GST7: la terestru si cablu, calitatea in dB cand tunerul o da, si alimentarea antenei terestre din Setari tuner
+  if(s.calitate_db_tc !== null && s.calitate_db_tc !== undefined){ linie(l, "Calitate în dB", String(s.calitate_db_tc).replace(".", ",") + " dB"); }
   linie(l, "BER", s.ber);
   linie(l, "Antena", s.pozitie_text);
-  linie(l, "Transponder", s.tp_text);
+  if(s.alimentare_5v === true || s.alimentare_5v === false){ linie(l, "Alimentare antenă 5 V", s.alimentare_5v ? "pornită" : "oprită (din Setări tuner)"); }
+  linie(l, s.fel === "T" || s.fel === "C" ? "Frecvența" : "Transponder", s.tp_text);
   if(s.tsid_text){ linie(l, "TS ID", s.tsid_text); }
   if(s.onid_text){ linie(l, "ON ID", s.onid_text); }
   if(s.varf_calitate_10s !== null && s.varf_calitate_10s !== undefined){ linie(l, "Cea mai bună calitate (10 s)", s.varf_calitate_10s + "%"); }
@@ -2614,13 +2736,33 @@ function deseneazaStarea(s){
   var d = $("detalii"); goleste(d);
   (s.detalii || []).forEach(function(x){ d.appendChild(el("li", "", x)); });
   $("eveniment").textContent = s.eveniment || "";
+  deseneazaCanalele(s);
   var web = aWebului();
   var comenzi = !!CFG.csrf && !s.ecran_deschis;
   $("masoara").textContent = web ? "Măsoară acest transponder" : "Pornește măsurarea";
   $("masoara").disabled = !comenzi;
   $("reacord").disabled = !comenzi || !web;
   $("opreste").disabled = !comenzi || !web;
+  $("canale").disabled = !comenzi || !web || !s.canale_se_pot_citi || s.canale_stare === "se_citeste";
   if(s.ecran_deschis){ mesaj($("mesaj"), "Găsirea semnalului e deschisă pe televizor. De aici se vede măsurarea de acolo."); }
+}
+// TRL6: canalele de pe transponder, citite la cerere (PAT si SDT), ca fereastra albastra de pe televizor
+function textCanal(c){
+  var semne = [];
+  if(c.fel === "tv"){ semne.push("TV"); } else if(c.fel === "radio"){ semne.push("radio"); } else if(c.fel === "date"){ semne.push("date"); }
+  if(c.codat === true){ semne.push("codat"); } else if(c.codat === false){ semne.push("liber"); }
+  var nume = c.nume || ("Serviciul %d").replace("%d", c.sid);
+  return semne.length ? nume + " (" + semne.join(", ") + ")" : nume;
+}
+function deseneazaCanalele(s){
+  var cs = s.canale_stare || "";
+  arata($("cutieCanale"), cs !== "");
+  if(cs === ""){ return; }
+  var l = $("canaleLista"); goleste(l);
+  if(cs === "se_citeste"){ $("canaleRezumat").textContent = "Se citesc canalele de pe transponder..."; return; }
+  if(cs === "necitit"){ $("canaleRezumat").textContent = s.canale_mesaj || "Canalele nu s-au putut citi."; return; }
+  $("canaleRezumat").textContent = s.canale_rezumat || "";
+  (s.canale || []).forEach(function(c){ l.appendChild(el("li", "", textCanal(c))); });
 }
 function planifica(ms){
   if(S.ceas){ clearTimeout(S.ceas); }
@@ -2634,18 +2776,24 @@ function citeste(){
   }).catch(function(){ planifica(3000); });
 }
 
-$("tuner").addEventListener("change", function(){ puneSistemele(); puneSatelitii(null); incarcaTranspondere().then(laSchimbare); });
+$("tuner").addEventListener("change", function(){ puneSistemele(); puneFelul(); puneSatelitii(null); incarcaTranspondere().then(laSchimbare); });
 $("satelit").addEventListener("change", function(){ incarcaTranspondere().then(laSchimbare); });
 $("transponder").addEventListener("change", function(){
-  arata($("manual"), $("transponder").value === "manual");
-  if($("transponder").value === "manual" && S.lista && S.lista.length && S.stare && S.stare.tp){ umpleManual(S.stare.tp); }
+  arataManual();
+  if($("transponder").value === "manual" && S.lista && S.lista.length && S.stare && S.stare.tp){
+    if(felAles() !== "S"){ umpleManualTC(S.stare.tp); }
+    else if(S.stare.tp.orbital_position !== undefined){ umpleManual(S.stare.tp); }
+  }
   laSchimbare();
 });
+["frecventaTC", "srC"].forEach(function(id){ $(id).addEventListener("input", laSchimbare); });
+["latime", "sistemT", "modC"].forEach(function(id){ $(id).addEventListener("change", laSchimbare); });
 ["frecventa", "sr"].forEach(function(id){ $(id).addEventListener("input", laSchimbare); });
 ["pol", "mod", "fec1", "fec2", "rolloff", "pilot"].forEach(function(id){ $(id).addEventListener("change", laSchimbare); });
 $("sistem").addEventListener("change", function(){ arataSistemul(); laSchimbare(); });
 $("masoara").addEventListener("click", masoara);
 $("reacord").addEventListener("click", function(){ trimite("/api/gasire-semnal-reacordeaza"); });
+$("canale").addEventListener("click", function(){ trimite("/api/gasire-semnal-reacordeaza", new URLSearchParams({ce: "canale"})); });
 $("opreste").addEventListener("click", function(){
   if(S.stare && S.stare.iesirea_opreste_antena){
     intreaba($("intrebare"), "Antena se rotește încă. Dacă oprești acum, motorul se oprește din drum, iar antena merge unde trebuie la următorul canal de satelit. Oprești măsurarea?",
@@ -2675,6 +2823,7 @@ function porneste(){
     optiuni($("tuner"), d.tunere.map(function(t){ return [t.slot, t.nume]; }), slot);
     puneListe();
     puneSistemele();
+    puneFelul();
     if(d.initial){
       puneSatelitii(d.initial.tp.orbital_position);
       puneTranspondere(d.initial, d.initial.tp);
@@ -3227,6 +3376,7 @@ incarcaInfo().then(() => programeaza(0));
 TEXTE_PAGINA = {
 	"html": (
 		N_("Locul antenei"),
+		N_("Nimic nu s-a salvat în lista de canale. Ca să le adaugi, folosește Scanare."),
 		N_("Motorul USALS calculează unghiul spre fiecare satelit din locul tău. Același loc ca pe "
 			"televizor."),
 		N_("Acum"),
@@ -3274,6 +3424,7 @@ TEXTE_PAGINA = {
 		N_("Polarizare"),
 		N_("Sistem"),
 		N_("Modulație"),
+		N_("Lățimea de bandă"),
 		N_("Roll-off"),
 		N_("Pilot"),
 		N_("Pornește măsurarea"),
@@ -3311,6 +3462,8 @@ TEXTE_PAGINA = {
 		N_("Pas mai mic"),
 		N_("Pas mai mare"),
 		N_("Satelitul"),
+		# Gasire semnal: canalele de pe transponder (aceleasi texte ca pe televizor, Components/HdsGasireSemnal.py)
+		N_("Canalele de aici"),
 	),
 	"js": (
 		N_("browser deconectat"),
@@ -3361,6 +3514,12 @@ TEXTE_PAGINA = {
 			"aici."),
 		N_("Introdus de mână"),
 		N_("Satelitul nu are transpondere în lista lui: scrie valorile de mână."),
+		N_("Frecvența"),
+		N_("Lista:"),
+		N_("Calitate în dB"),
+		N_("Alimentare antenă 5 V"),
+		N_("pornită"),
+		N_("oprită (din Setări tuner)"),
 		N_("Blocat"),
 		N_("Antena"),
 		N_("Transponder"),
@@ -3432,6 +3591,9 @@ TEXTE_PAGINA = {
 		N_(": recepționat"),
 		N_(": fără semnal"),
 		N_("Poziția trebuie să fie un număr între 1 și 255."),
+		N_("Serviciul %d"),
+		N_("Se citesc canalele de pe transponder..."),
+		N_("Canalele nu s-au putut citi."),
 	),
 }
 

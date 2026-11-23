@@ -24,6 +24,14 @@
 # descarca listele furnizorului si pluginurile IPTV straine. iptv.txt care e chiar o lista de canale si fisierul ales in pagina web
 # se copiaza in /etc/enigma2/hds_iptv/liste/. Locurile din retea (NFS, SMB) nu se cerceteaza: o partajare cazuta ar bloca firul.
 #
+# Preluarea automata se poate opri (space71, 19.11.2026): config.plugins.hds_iptv_fisiere.automat, Da din fabrica (purtarea
+# de mai sus, neschimbata). Pe Nu, firul interfetei nu mai priveste dosarele: un fir de fundal (unul singur odata) le priveste,
+# citeste inceputul listelor si lasa cererile in memorie; televizorul si pagina web intreaba omul. Raspunsul e numai memorie;
+# fisierul se verifica din nou tot pe fir, iar sursa se adauga pe calea obisnuita (verificaDate, adaugaSiCere). Lista luata intra
+# in fisier-preluat.json (scris numai de firul interfetei, ca la orice lista luata), deci nu revine. Lista refuzata intra in
+# liste-refuzate.json, citit si scris numai de firul de fundal: pe Nu nu se mai cere; pe Da se ia, ca pe HEAD.
+# iptv.txt ramane automat: e fisierul pus anume de om ca sa fie luat.
+#
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau caile si functiile lor.
 
 import hashlib
@@ -31,6 +39,8 @@ import json
 import os
 import re
 import shutil
+import threading
+from collections import deque
 
 CALE = "/etc/enigma2/iptv.txt"
 NUME_TINUTE = "fisier-preluat.json"
@@ -141,7 +151,7 @@ def scrieTinute(dosar, tinute):
 
 def _uneltele():
 	from Components import HdsIptvClient as C, HdsIptvLucru as L, HdsIptvSurse as I
-	return C.verificaDate, L.adaugaSiCere, I.DOSAR, C.E_PREA_MULTE
+	return C.verificaDate, L.adaugaSiCere, I.DOSAR, lambda: I.textSursePline(_t)
 
 
 def preiaText(text, fisier=CALE, verifica=None, adauga=None, dosar=None, e_plin=None, tine_minte=True):
@@ -181,7 +191,7 @@ def preiaText(text, fisier=CALE, verifica=None, adauga=None, dosar=None, e_plin=
 	if rez["gresite"]:
 		rez["mesaje"].append(_t(T_GRESITE) % {"fisier": fisier, "n": rez["gresite"]})
 	if rez["plin"]:
-		rez["mesaje"].append(_t(e_plin))
+		rez["mesaje"].append(_t(e_plin() if callable(e_plin) else e_plin))
 	return rez
 
 
@@ -268,7 +278,7 @@ def _mesajeLista(rez, e_plin):
 		nume = ", ".join(rez["adaugate"][:3]) + (", ..." if len(rez["adaugate"]) > 3 else "")
 		rez["mesaje"].append(_t(T_LISTE_ADAUGATE) % {"nume": nume})
 	if rez["plin"] and e_plin:
-		rez["mesaje"].append(_t(e_plin))
+		rez["mesaje"].append(_t(e_plin() if callable(e_plin) else e_plin))
 
 
 def preiaPlaylistText(text, fisier, verifica, adauga, dosar, e_plin, tine_minte=True, rez=None):
@@ -487,6 +497,360 @@ class Paznic(object):
 		return rez
 
 
+# ------------------------------------------------------------------ acordul omului pentru listele gasite (space71, 19.11.2026)
+# Firul interfetei atinge aici numai memoria: _cereri, _inLucru, _refuzate, cozile _deFacut si _gata (deque, fara zavor). Discul
+# (stat, listdir, inceputul listelor de pe stick, liste-refuzate.json) il atinge numai firul de fundal _lucreaza, cate unul odata,
+# pornit fara asteptare. Singura scriere ramasa pe firul interfetei e fisier-preluat.json dupa adaugarea unei liste aprobate
+# (in /etc/enigma2, nu pe stick), ca la fiecare lista luata pe HEAD; asa fisierul are un singur scriitor.
+
+T_AUTOMAT = N_("Preia automat listele M3U găsite")
+T_NOTA_AUTOMAT = N_("Pe Nu, o listă de canale nouă găsită în /etc/enigma2 sau pe un stick așteaptă acordul tău pe televizor sau în pagina IPTV.")
+T_ACORD = N_("Am găsit lista de canale %s. O pun în IPTV?")
+T_DA = N_("Da, pune-o în IPTV")
+T_NU = N_("Nu, las-o pe disc")
+T_TARZIU = N_("Mai târziu")
+T_TRIMIS = N_("Lista %s se verifică și se pune în IPTV.")
+T_REFUZAT = N_("Lista %s rămâne pe disc, fără IPTV.")
+T_REZOLVAT = N_("Cererea a fost deja rezolvată.")
+T_SCHIMBATA = N_("Lista %s s-a schimbat sau nu mai e acolo. Dacă e tot acolo, o vezi din nou aici în cel mult un minut.")
+T_GRESITA = N_("Lista %s nu s-a putut pune în IPTV.")
+
+MAX_CERERI = 50
+NUME_REFUZATE = "liste-refuzate.json"
+PAS_FIR_MS = 500          # cat lucreaza firul de fundal, rezultatele se culeg la atat
+PAS_FIR_LUNG_MS = 5000    # dupa PRIVIRI_REPEDE culegeri (un stick care nu raspunde), mai rar
+PRIVIRI_REPEDE = 20
+
+_cereri = {}              # jeton -> cererea in asteptare (numai firul interfetei)
+_inLucru = {}             # jeton -> cererea aprobata, verificata acum de fir
+_intrebate = set()        # jetoanele intrebate deja pe televizor
+_refuzate = set()         # semnele refuzate in aceasta sesiune (firul le scrie in liste-refuzate.json)
+_luate = set()            # semnele listelor aprobate si incercate in aceasta sesiune (o cautare veche nu le mai cere)
+_uita = [True]            # firul trebuie sa priveasca din nou toate dosarele (trecere pe Nu, cerere lasata deoparte)
+_intrebareDeschisa = [False]
+_deFacut = deque()        # sarcinile firului de fundal (puse numai de firul interfetei)
+_gata = deque()           # rezultatele lui (puse de fir, luate numai de firul interfetei)
+_fir = [None]
+_ceasFir = [None]
+_priviri = [0]
+_cautaFir = [None]        # PaznicListe al firului de fundal; firul interfetei nu-l atinge
+
+
+def optiuneAutomata():
+	"""Setarea Da/Nu, ca orice config.*: salvata de mecanismul obisnuit al imaginii."""
+	from Components.config import config, ConfigSubsection, ConfigYesNo
+	if not hasattr(config, "plugins"):
+		config.plugins = ConfigSubsection()
+	if not hasattr(config.plugins, "hds_iptv_fisiere"):
+		config.plugins.hds_iptv_fisiere = ConfigSubsection()
+	if not hasattr(config.plugins.hds_iptv_fisiere, "automat"):
+		config.plugins.hds_iptv_fisiere.automat = ConfigYesNo(default=True)
+	return config.plugins.hds_iptv_fisiere.automat
+
+
+def preluareAutomata():
+	"""True = purtarea de pe HEAD (si cand setarea nu se poate citi)."""
+	try:
+		return bool(optiuneAutomata().value)
+	except Exception:
+		return True
+
+
+def seteazaPreluare(da):
+	"""TV si web: valoarea si save() ale elementului; fisierul setarilor il scrie mecanismul obisnuit."""
+	el = optiuneAutomata()
+	if el.value != bool(da):
+		el.value = bool(da)
+	el.save()
+	if el.value:
+		_cereri.clear()
+		_uita[0] = True
+	else:
+		_cereCautare()
+
+
+def _idFisier(st):
+	return (st.st_size, getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)), st.st_ino, st.st_dev)
+
+
+def _dosar():
+	return _uneltele()[2]
+
+
+def _anunta(text):
+	if text:
+		_anuntaPeTelevizor(text)
+
+
+# ---- firul de fundal: nu atinge eTimer, config, Notifications sau _()
+
+def _citesteRefuzate(dosar):
+	try:
+		with open(os.path.join(dosar, NUME_REFUZATE), "rb") as f:
+			date = json.loads(f.read().decode("utf-8"))
+		return [x for x in date if isinstance(x, str)] if isinstance(date, list) else []
+	except (OSError, ValueError):
+		return []
+
+
+def _noteazaRefuzat(dosar, semn):
+	"""Numai pe firul de fundal (singurul care citeste si scrie liste-refuzate.json); scriere atomica, 0600."""
+	refuzate = _citesteRefuzate(dosar)
+	if semn in refuzate:
+		return
+	refuzate = (refuzate + [semn])[-MAX_TINUTE:]
+	try:
+		if not os.path.isdir(dosar):
+			os.makedirs(dosar, 0o700)
+		cale = os.path.join(dosar, NUME_REFUZATE)
+		fd = os.open(cale + ".nou", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+		with os.fdopen(fd, "wb") as f:
+			f.write(json.dumps(refuzate).encode("utf-8"))
+		os.replace(cale + ".nou", cale)
+	except OSError as e:
+		print("[HdsIptvFisier] nu am putut tine minte refuzul: %s" % type(e).__name__)
+
+
+def _cautaInFir(dosar):
+	"""Listele noi din dosarele schimbate: [("gasit", cererea)]. Scrie numai liste-refuzate.json (nimic aici)."""
+	p = _cautaFir[0]
+	if p is None:
+		p = _cautaFir[0] = PaznicListe()
+	tinute = set(citesteTinute(dosar)) | set(_citesteRefuzate(dosar))
+	rez = []
+	for cale, _copiaza, st in p.fisiereNoi():
+		semn = semnLista(cale, st)
+		if semn in tinute:
+			continue
+		try:
+			with open(cale, "rb") as f:
+				inceput = f.read(CITIRE_PROBA)
+		except OSError:
+			continue
+		if not areFluxuri(inceput.decode("utf-8", "replace")):
+			continue
+		rez.append(("gasit", {"cale": cale, "nume": numeLista(cale), "semn": semn, "id": _idFisier(st)}))
+	return rez
+
+
+def _verificaInFir(cerere):
+	"""Fisierul aprobat e tot acela (marime, ora, inod)? -> stat sau None."""
+	import stat as S
+	try:
+		st = os.stat(cerere["cale"])
+	except OSError:
+		return None
+	if not S.S_ISREG(st.st_mode) or _idFisier(st) != cerere["id"]:
+		return None
+	return st
+
+
+def _lucreaza():
+	while True:
+		try:
+			sarcina = _deFacut.popleft()
+		except IndexError:
+			return
+		try:
+			if sarcina[0] == "cauta":
+				_gata.extend(_cautaInFir(sarcina[1]))
+			elif sarcina[0] == "verifica":
+				_gata.append(("verificat", sarcina[1], _verificaInFir(sarcina[1])))
+			elif sarcina[0] == "uita" and _cautaFir[0] is not None:
+				_cautaFir[0].ore = {}
+			elif sarcina[0] == "refuz":
+				_noteazaRefuzat(sarcina[1], sarcina[2])
+		except Exception as e:
+			print("[HdsIptvFisier] firul listelor: %r" % (e,))
+			if sarcina[0] == "verifica":
+				_gata.append(("verificat", sarcina[1], None))
+
+
+# ---- firul interfetei: numai memorie (si fisier-preluat.json, ca pe HEAD)
+
+def _pornesteFir():
+	"""Porneste firul de fundal daca nu e viu si ceasul care ii culege rezultatele. Nu asteapta niciodata firul."""
+	f = _fir[0]
+	if (f is None or not f.is_alive()) and _deFacut:
+		f = threading.Thread(target=_lucreaza, name="HdsIptvListe")
+		f.daemon = True
+		try:
+			f.start()
+		except RuntimeError as e:
+			print("[HdsIptvFisier] firul listelor nu porneste: %r" % (e,))
+			return
+		_fir[0] = f
+	_priviri[0] = 0
+	if _ceasFir[0] is not None:
+		_ceasFir[0].start(PAS_FIR_MS, True)
+
+
+def _culege():
+	"""Ceasul firului interfetei: ia rezultatele; reporneste firul daca au ramas sarcini."""
+	f = _fir[0]
+	viu = f is not None and f.is_alive()
+	_aplica()
+	if not viu:
+		if _deFacut:
+			_pornesteFir()
+		return
+	_priviri[0] += 1
+	if _ceasFir[0] is not None:
+		_ceasFir[0].start(PAS_FIR_MS if _priviri[0] < PRIVIRI_REPEDE else PAS_FIR_LUNG_MS, True)
+
+
+def _cereCautare():
+	"""Pe Nu, la fiecare tic: o privire la dosare, pe fir. Cat timp firul inca lucreaza (stick lent), nu se cere alta."""
+	f = _fir[0]
+	if f is not None and f.is_alive():
+		return
+	if not _deFacut:
+		try:
+			dosar = _dosar()
+		except Exception as e:
+			print("[HdsIptvFisier] dosarul listelor: %r" % (e,))
+			return
+		if _uita[0]:
+			# dupa Da sau dupa o cerere lasata deoparte, firul nu are voie sa sara dosarele "neschimbate"
+			_uita[0] = False
+			_deFacut.append(("uita",))
+		_deFacut.append(("cauta", dosar))
+	_pornesteFir()
+
+
+def _aplica(unelte=None):
+	# listele aprobate din acest apel se noteaza in fisier-preluat.json o singura data, la sfarsit (o citire, o scriere, ca HEAD)
+	de_tinut = {}
+	while True:
+		try:
+			r = _gata.popleft()
+		except IndexError:
+			break
+		try:
+			if r[0] == "gasit":
+				_adaugaCerere(r[1])
+			elif r[0] == "verificat":
+				_dupaVerificare(r[1], r[2], unelte, de_tinut)
+		except Exception as e:
+			print("[HdsIptvFisier] cererea listei: %r" % (e,))
+	for dosar, semne in de_tinut.items():
+		_tine(dosar, semne)
+	_intreaba()
+
+
+def _adaugaCerere(c):
+	if preluareAutomata():
+		_uita[0] = True
+		return
+	if c["semn"] in _refuzate or c["semn"] in _luate:
+		return
+	for j, v in list(_cereri.items()) + list(_inLucru.items()):
+		if v["semn"] == c["semn"] and v["cale"] != c["cale"]:
+			# acelasi semn in alt loc (stick si /etc/enigma2): HEAD il ia o singura data, deci si cererea e una
+			return
+		if v["cale"] == c["cale"]:
+			if v["id"] == c["id"]:
+				return
+			# fisierul schimbat e o cerere noua; cea veche nu mai poate fi aprobata
+			_cereri.pop(j, None)
+	if len(_cereri) >= MAX_CERERI:
+		_uita[0] = True
+		return
+	c = dict(c, jeton=os.urandom(8).hex())
+	_cereri[c["jeton"]] = c
+
+
+def _tine(dosar, semne):
+	"""Semnele listelor luate, adaugate in fisier-preluat.json dintr-o data: o citire si cel mult o scriere."""
+	tinute = citesteTinute(dosar)
+	noi = []
+	for x in semne:
+		# si repetitiile din acelasi lot (acelasi nume, marime si ora in /etc/enigma2 si pe stick): o data, in ordine
+		if x not in tinute and x not in noi:
+			noi.append(x)
+	if noi:
+		scrieTinute(dosar, tinute + noi)
+
+
+def _dupaVerificare(c, st, unelte=None, de_tinut=None):
+	if _inLucru.get(c["jeton"]) is c:
+		del _inLucru[c["jeton"]]
+	if st is None:
+		_anunta(_t(T_SCHIMBATA) % c["nume"])
+		_deFacut.append(("uita",))
+		_pornesteFir()
+		return
+	verifica, adauga, dosar, e_plin = unelte or _uneltele()
+	rez = {"adaugate": [], "gresite": 0, "plin": False, "playlist": True, "mesaje": []}
+	if not _adaugaLista(c["cale"], c["nume"], verifica, adauga, rez):
+		# lista surselor e plina: cererea ramane, ca pe HEAD fisierul ramane neincercat
+		_cereri[c["jeton"]] = c
+	else:
+		_luate.add(c["semn"])
+		if de_tinut is None:
+			_tine(dosar, [c["semn"]])
+		else:
+			de_tinut.setdefault(dosar, []).append(c["semn"])
+		if rez["gresite"]:
+			rez["mesaje"].append(_t(T_GRESITA) % c["nume"])
+	_mesajeLista(rez, e_plin)
+	_anunta(" ".join(rez["mesaje"]))
+
+
+def raspunde(jeton, da, unelte=None):
+	"""TV si web, pe firul interfetei. Jetonul se consuma o singura data (pop); al doilea raspuns afla ca s-a rezolvat."""
+	c = _cereri.pop(jeton, None) if isinstance(jeton, str) else None
+	if c is None:
+		return {"result": False, "message": _t(T_REZOLVAT)}
+	if not da:
+		# numai memorie aici; firul scrie refuzul in liste-refuzate.json
+		_refuzate.add(c["semn"])
+		_deFacut.append(("refuz", (unelte or _uneltele())[2], c["semn"]))
+		_pornesteFir()
+		return {"result": True, "message": _t(T_REFUZAT) % c["nume"]}
+	_inLucru[c["jeton"]] = c
+	_deFacut.append(("verifica", c))
+	_pornesteFir()
+	return {"result": True, "message": _t(T_TRIMIS) % c["nume"]}
+
+
+def stareListe():
+	"""Ce arata televizorul si pagina web: setarea si cererile, numai din memorie (numele listei, fara cale sau adresa)."""
+	automat = preluareAutomata()
+	cereri = [] if automat else [{"jeton": j, "nume": c["nume"], "text": _t(T_ACORD) % c["nume"]}
+		for j, c in list(_cereri.items())]
+	return {"automat": automat, "cereri": cereri, "in_lucru": len(_inLucru)}
+
+
+def _intreaba():
+	"""O singura intrebare deschisa pe televizor; fiecare cerere se intreaba o data (apoi ramane in ecranul IPTV si pe web)."""
+	if _intrebareDeschisa[0] or not _cereri or preluareAutomata():
+		return
+	noi = [c for j, c in list(_cereri.items()) if j not in _intrebate]
+	if not noi:
+		return
+	c = noi[0]
+	_intrebate.add(c["jeton"])
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+	except ImportError:
+		return
+
+	def raspuns(ales=None):
+		_intrebareDeschisa[0] = False
+		if ales in ("da", "nu"):
+			_anunta(raspunde(c["jeton"], ales == "da")["message"])
+		_intreaba()
+	_intrebareDeschisa[0] = True
+	try:
+		Notifications.AddNotificationWithCallback(raspuns, MessageBox, _t(T_ACORD) % c["nume"], type=MessageBox.TYPE_YESNO,
+			list=[(_t(T_DA), "da"), (_t(T_NU), "nu"), (_t(T_TARZIU), "tarziu")])
+	except Exception as e:
+		_intrebareDeschisa[0] = False
+		print("[HdsIptvFisier] intrebarea: %r" % (e,))
+
+
 _paznic = None
 _paznicListe = None
 _ceas = None
@@ -511,7 +875,13 @@ def _tic():
 		print("[HdsIptvFisier] verificarea: %r" % (e,))
 	try:
 		if _paznicListe is not None:
-			_paznicListe.verifica()
+			if preluareAutomata():
+				_cereri.clear()
+				_uita[0] = True
+				_paznicListe.verifica()
+			else:
+				# pe Nu firul interfetei nu priveste dosarele: le priveste firul de fundal
+				_cereCautare()
 	except Exception as e:
 		print("[HdsIptvFisier] listele de canale: %r" % (e,))
 
@@ -525,8 +895,14 @@ def porneste():
 		from enigma import eTimer
 	except ImportError:
 		return
+	try:
+		optiuneAutomata()
+	except Exception as e:
+		print("[HdsIptvFisier] setarea: %r" % (e,))
 	_paznic = Paznic(anunta=_anuntaPeTelevizor)
 	_paznicListe = PaznicListe(anunta=_anuntaPeTelevizor)
+	_ceasFir[0] = eTimer()
+	_ceasFir[0].callback.append(_culege)
 	_ceas = eTimer()
 	_ceas.callback.append(_tic)
 	_ceas.start(PRIMA_S * 1000, True)

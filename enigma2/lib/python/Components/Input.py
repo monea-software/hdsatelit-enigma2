@@ -6,6 +6,7 @@ from .VariableText import VariableText
 from enigma import eLabel
 
 from Tools.NumericalTextInput import NumericalTextInput
+import unicodedata
 
 class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 	TEXT = 0
@@ -143,6 +144,90 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 			self.currPos = len(self.Text) - 1
 		else:
 			self.currPos = len(self.Text)
+		self.update()
+
+	@staticmethod
+	def graniteText(text):
+		"""Logical editing boundaries, including marks and joined emoji."""
+		granite = [0]
+		regionale = 0
+		for i, c in enumerate(text):
+			cod = ord(c)
+			regional = 0x1f1e6 <= cod <= 0x1f1ff
+			lipit = (unicodedata.category(c).startswith("M") or 0x1f3fb <= cod <= 0x1f3ff
+				or c == "\u200d" or (i and text[i - 1] == "\u200d")
+				or (i and text[i - 1] == "\r" and c == "\n")
+				or (regional and regionale % 2))
+			if i and not lipit:
+				granite.append(i)
+			regionale = regionale + 1 if regional else 0
+		if text:
+			granite.append(len(text))
+		return granite
+
+	def deplaseazaText(self, comanda):
+		"""Move in logical text order; never reverse offsets for RTL."""
+		if self.type == self.TEXT:
+			self.timeout()
+		text = self.Text
+		poz = max(0, min(self.currPos, len(text)))
+		granite = self.graniteText(text)
+		poz = max(p for p in granite if p <= poz)
+		def cuvant(c):
+			return c == "_" or unicodedata.category(c)[0] in "LNM"
+		if comanda == "inceput":
+			poz = max(text.rfind("\n", 0, poz), text.rfind("\r", 0, poz)) + 1
+		elif comanda == "sfarsit":
+			poz = min([p for p in (text.find("\n", poz), text.find("\r", poz)) if p >= 0] + [len(text)])
+		elif comanda == "cuvant-inapoi":
+			while poz and not cuvant(text[poz - 1]):
+				poz -= 1
+			while poz and cuvant(text[poz - 1]):
+				poz -= 1
+		elif comanda == "cuvant-inainte":
+			while poz < len(text) and not cuvant(text[poz]):
+				poz += 1
+			while poz < len(text) and cuvant(text[poz]):
+				poz += 1
+		elif comanda == "caracter-inapoi":
+			poz = max([p for p in granite if p < poz] or [0])
+		elif comanda == "caracter-inainte":
+			poz = min([p for p in granite if p > poz] or [len(text)])
+		else:
+			return
+		poz = min([p for p in granite if p >= poz] or [len(text)])
+		limita = max(0, len(text) - 1) if self.maxSize else len(text)
+		self.currPos = max(p for p in granite if p <= min(poz, limita))
+		self.allmarked = False
+		self.update()
+
+	def insereazaText(self, text):
+		"""Insert at the logical cursor using the existing input contract."""
+		if self._secretOprit():
+			return
+		if self.type == self.TEXT:
+			self.timeout()
+		if self.allmarked:
+			self.deleteAllChars()
+			self.allmarked = False
+		for c in text:
+			self.insertChar(c, self.currPos, False, False)
+			self.innerright()
+		self.update()
+
+	def stergeInainteCursor(self):
+		"""Delete one complete editing unit before the cursor."""
+		if self.type == self.TEXT:
+			self.timeout()
+		if self.allmarked:
+			self.deleteAllChars()
+			self.allmarked = False
+		elif self.currPos > 0:
+			poz = min(self.currPos, len(self.Text))
+			inceput = max(p for p in self.graniteText(self.Text) if p < poz)
+			for _ in range(poz - inceput):
+				self.deleteChar(inceput)
+			self.currPos = inceput
 		self.update()
 
 	def insertChar(self, ch, pos, owr, ins):

@@ -51,7 +51,23 @@ def _wifi_dbm(iface, proc="/proc/net/wireless"):
 		p = rand.replace(":", " ").split()
 		if len(p) >= 4 and p[0] == iface:
 			try:
-				return int(float(p[3].rstrip(".")))
+				nivel = int(float(p[3].rstrip(".")))
+				if 128 <= nivel <= 255:
+					nivel -= 256
+				return nivel if -120 <= nivel < 0 else None
+			except ValueError:
+				return None
+	return None
+
+
+def _wifi_calitate(iface, proc="/proc/net/wireless"):
+	"""Calitatea data de driver, fara conversie presupusa in dBm."""
+	for rand in _citeste(proc).splitlines()[2:]:
+		p = rand.replace(":", " ").split()
+		if len(p) >= 3 and p[0] == iface:
+			try:
+				v = int(float(p[2].rstrip(".")))
+				return v if 0 <= v <= 100 else None
 			except ValueError:
 				return None
 	return None
@@ -82,7 +98,11 @@ def stareRetea(sys_net="/sys/class/net"):
 		if sus:
 			s["ipv4"] = _are_ipv4(i)
 		if wifi and sus:
-			s["dbm"] = _wifi_dbm(i)
+			modul = os.path.basename(os.path.realpath(os.path.join(d, "device/driver/module"))).lower()
+			if modul in ("mt7601usta", "mt7650u_sta"):
+				s["calitate"] = _wifi_calitate(i)
+			else:
+				s["dbm"] = _wifi_dbm(i)
 		stare[i] = s
 	return stare
 
@@ -95,6 +115,8 @@ def _text_iface(i, s):
 		parti.append("%s Mb/s %s" % (s["viteza"], s.get("duplex") or ""))
 	if s.get("dbm") is not None:
 		parti.append("semnal %d dBm" % s["dbm"])
+	if s.get("calitate") is not None:
+		parti.append("calitate Wi-Fi %d%%" % s["calitate"])
 	parti.append("adresa IPv4 %s" % ("da" if s.get("ipv4") else "nu"))
 	return " ".join(p.strip() for p in parti)
 
@@ -115,9 +137,13 @@ def verificaReteaua(stare=None):
 			HdsJurnal.info("retea", "legatura", _text_iface(i, s))
 		elif s.get("dbm") is not None and v.get("dbm") is not None and abs(s["dbm"] - v["dbm"]) >= PRAG_DBM:
 			HdsJurnal.info("retea", "wifi", "%s semnal %d dBm (era %d dBm)" % (i, s["dbm"], v["dbm"]))
+		elif s.get("calitate") is not None and v.get("calitate") is not None and abs(s["calitate"] - v["calitate"]) >= 10:
+			HdsJurnal.info("retea", "wifi", "%s calitate Wi-Fi %d%% (era %d%%)" % (i, s["calitate"], v["calitate"]))
 		else:
 			if s.get("dbm") is not None and v.get("dbm") is not None:
 				s["dbm"] = v["dbm"]  # se compara cu ultimul scris
+			if s.get("calitate") is not None and v.get("calitate") is not None:
+				s["calitate"] = v["calitate"]
 		_retea[i] = s
 	for i in list(_retea):
 		if i not in stare:

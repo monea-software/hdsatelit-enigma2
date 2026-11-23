@@ -86,6 +86,7 @@
 #define FEREASTRA_MS  120000
 #define SOCLU_SURSA   (1024 * 1024)
 #define JSON_MAX      16384u
+#define TERMEN_FARA_DATE_MS  90000  /* Dupa primele date, -w ramane numai pentru motor. */
 
 /* ------------------------------------------------------------------ CRC pe tabele */
 
@@ -354,7 +355,7 @@ static void goleste(void)
     } else if (!iesire_moarta) {
         const uint8_t *p = iesire;
         size_t n = iesire_len;
-        while (n > 0) {
+        while (n > 0 && !opreste) {
             ssize_t w = write(fd_out, p, n);
             if (w > 0) {
                 p += w;
@@ -1819,7 +1820,7 @@ static void h_tic(int64_t t)
     case H_DATE:
         if (!vrea)
             h_inchide_liniste(t);
-        else if (t - h_ultima_data > (int64_t)opt_termen * 1000)
+        else if (t - h_ultima_data > TERMEN_FARA_DATE_MS)
             h_termina(t, "fluxul s-a oprit", NULL, 0);
         break;
     default:

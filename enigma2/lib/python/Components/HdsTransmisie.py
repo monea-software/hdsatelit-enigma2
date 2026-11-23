@@ -1473,7 +1473,7 @@ class Manager(object):
 			if not liber:
 				if dab:
 					return False, self._mesajTunerDab()
-				return False, _("Tunerul e folosit acum pe altă frecvență (de televizor sau de o înregistrare). Alege un canal de pe aceeași frecvență cu televizorul.")
+				return False, mesajTunerOcupat(curata)
 		return True, None
 
 	def _mesajTunerDab(self):
@@ -1780,7 +1780,10 @@ class Manager(object):
 				self._opresteAcum(s, text or _("Canalul nu mai poate fi primit (tunerul s-a pierdut sau a fost luat)."),
 					fortat=True, cod="tuner")
 			elif (s.ultim_octet_mon or s.inceput_mon) + (PREGATIRE_DAB_S if s.dab_abonament and not s.prim_octet_mon else FARA_DATE_S) < acum and not self._faraDateCriptat(s):
-				self._opresteAcum(s, _("Canalul nu mai trimite date."), cod="fara_date")
+				v = None if s.releu or s.dab_abonament else diagnosticReceptie(s.rec, s.ref, acum - s.inceput_mon,
+					inregistrari=numeInregistrarilor())
+				self._opresteAcum(s, v["text"] if v else _("Canalul nu mai trimite date."),
+					fortat=v is not None, cod=v["cod"] if v else "fara_date")
 			elif not s.cu_client and s.fara_spectator_din + self._asteptareFara(s) < acum:
 				self._opresteAcum(s, _("Nimeni nu se mai uita."), cod="fara_spectator")
 		self._decriptarea()
@@ -1835,6 +1838,8 @@ class Manager(object):
 				tot, minim = acum - (baza if s.decriptare_din else self._bazaDecriptare(s, baza)), DECRIPTARE_MIN_S
 				termen = DECRIPTARE_FARA_RASPUNS_S if raspuns is None else DECRIPTARE_MAX_S
 			if raspuns == "refuzat" or (trecut >= minim and tot >= termen):
+				if not self._receptieInainteDeCriptare(s, acum):
+					continue
 				s.decriptare = DECRIPTARE_NU
 				_jurnal("sesiune %s %s: nedecriptata (%s, %.0f s, %.0f s de la zap)" % (s.id, s.ref,
 					raspuns or "fara raspuns", trecut, tot))
@@ -1932,6 +1937,26 @@ class Manager(object):
 		self._dupaSchimbare()
 		_jurnal("%d sesiuni oprite pentru %s: %s" % (len(alte), ref, motiv))
 		return len(alte)
+
+	def _receptieInainteDeCriptare(self, s, acum):
+		"""Lipsa datelor nu dovedeste criptarea. Citim tunerul sesiunii, nu tunerul TV."""
+		if s.releu or s.dab_abonament:
+			return True
+		stare = _stareReceptie(s.rec)
+		v = diagnosticReceptie(s.rec, s.ref, acum - s.inceput_mon, stare=stare,
+			inregistrari=numeInregistrarilor())
+		if v is not None:
+			self._opresteAcum(s, v["text"], fortat=True, cod=v["cod"])
+			return False
+		if s.criptat is True or s.prim_octet_mon is not None:
+			return True
+		# Semnalul necunoscut nu este dovada unui refuz al cardului.
+		from Components.HdsEcranNegru import semnal_prins
+		if semnal_prins(stare.get("tuner_locked", -1), stare.get("tuner_state")) is not True:
+			self._opresteAcum(s, _("Canalul nu trimite date. Starea semnalului nu se poate verifica acum."),
+				fortat=True, cod="fara_date")
+			return False
+		return True
 
 	def cedeazaGrup(self, alternative, liber, motiv, cod=None, tv=None):
 		"""Navigation.grupFaraTuner (0.7.7): niciuna dintre `alternative` (textele alternativelor DVB ale unui grup) n-are
@@ -2903,6 +2928,76 @@ def crc32Mpeg(date):
 
 # ---------------------------------------------------------------- legaturile cu enigma2 (firul principal)
 
+def _stareReceptie(rec):
+	"""Datele frontendului acestei sesiuni; fara memo comun cu televizorul sau alte sesiuni."""
+	try:
+		fe = rec.frontendInfo() if rec is not None else None
+		if fe is None:
+			return {}
+		d = dict(fe.getFrontendStatus() or {})
+		if "tuner_number" not in d:
+			try:
+				d.update(fe.getFrontendData() or {})
+			except Exception:
+				pass
+		return d
+	except Exception:
+		return {}
+
+
+
+def numeInregistrarilor():
+	"""Aceleasi nume de emisiuni ca in explicatia televizorului, fara citirea vreunui fisier."""
+	try:
+		import NavigationInstance
+		from Components.HdsEcranNegru import _inregistrari
+		return _inregistrari(NavigationInstance.instance)
+	except Exception:
+		return []
+
+
+def mesajTunerOcupat(ref):
+	"""Analiza comuna si folosirile cunoscute acum, fara a presupune care cablu este legat."""
+	from Components import HdsEcranNegru as E
+	v = diagnosticReceptie(None, ref, 0, eroare=E.E_FARA_TUNER, inregistrari=numeInregistrarilor())
+	text = v["text"] if v is not None else _("Tunerul este ocupat.")
+	try:
+		service = serviciuTv()
+		info = service.info() if service else None
+		nume = info.getName() if info else None
+		if nume:
+			text += "\n" + _("Televizorul redă: %s.") % nume
+	except Exception:
+		pass
+	return text
+
+
+def diagnosticReceptie(rec, ref, secunde, eroare=None, inregistrari=(), stare=None):
+	"""Verdictul receptiei, din aceeasi analiza ca televizorul. Nicio presupunere despre card."""
+	from Components import HdsEcranNegru as E
+	d = _stareReceptie(rec) if stare is None else stare
+	if eroare is None:
+		try:
+			err = rec.getError() if rec is not None else 0
+			if isinstance(err, (tuple, list)):
+				err = err[-1] if err else 0
+			eroare = {-255: E.E_ACORDARE, -256: E.E_CONFIGURARE, -257: E.E_FARA_TUNER}.get(err)
+		except Exception:
+			pass
+	prins = E.semnal_prins(d.get("tuner_locked", -1), d.get("tuner_state"))
+	if eroare is None and prins is not False:
+		return None
+	fel = {"sat": "s", "cablu": "c", "teren": "t"}.get(familie(ref))
+	v = E.analizeaza({"fel": fel, "secunde": secunde, "eroare": eroare,
+		"lock": d.get("tuner_locked", -1), "stare_tuner": d.get("tuner_state"),
+		"inregistrari": list(inregistrari)})
+	if v is not None and v["cod"] == E.FARA_SEMNAL:
+		n = d.get("tuner_number", -1)
+		if isinstance(n, int) and 0 <= n < 26:
+			v["text"] = _("Fără semnal pe tunerul %s.") % chr(65 + n) + " " + v["text"]
+	return v
+
+
 class InregistrareInTeava(object):
 	"""Inregistrarea enigma2 scrisa intr-o teava (ca Hds/DabT2/server8001.py)."""
 
@@ -2933,7 +3028,7 @@ class InregistrareInTeava(object):
 			if rez == -5:            # lib/dvb/dvb.h: errChannelNotInList
 				return _("Canalul nu este în lista de servicii a receptorului. Refă lista de canale și încearcă din nou.")
 			if rez == -6:            # errAllSourcesBusy
-				return _("Tunerul este ocupat de televizor sau de o înregistrare. Încearcă din nou după eliberarea lui.")
+				return mesajTunerOcupat(ses.ref)
 			_jurnal("pregatirea inregistrarii refuzata: %d" % rez)
 			return _("Canalul nu se poate primi acum. Verifică lista de canale și dacă tunerul este liber.")
 		rez = rec.start()
@@ -3261,7 +3356,9 @@ class InregistrareSauReleu(object):
 			if abonament.get("mesaj"):
 				return _(abonament["mesaj"])
 			return _("Redarea DAB+ s-a oprit. Verifică semnalul purtătorului și dacă tunerul este liber.")
-		return None
+		v = diagnosticReceptie(ses.rec, ses.ref, max(0, monoton() - ses.inceput_mon),
+			inregistrari=numeInregistrarilor())
+		return v["text"] if v is not None else None
 
 
 def folosiriCanalelor():

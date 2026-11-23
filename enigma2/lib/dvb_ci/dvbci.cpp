@@ -92,10 +92,13 @@ eDVBCIInterfaces::eDVBCIInterfaces()
 	for (eSmartPtrList<eDVBCISlot>::iterator it(m_slots.begin()); it != m_slots.end(); ++it)
 		it->setSource(hdsTsmuxLitera(0));
 
-	/* HD Satelit: primele intrari pe litera lor, ca inainte (A-D cu doua sau mai multe sloturi, A-B cu unul) */
+	/* HD Satelit: fiecare tuner pe litera lui, ca in OE-Alliance; primele intrari ca inainte (A-D cu doua sau mai multe
+	   sloturi, A-B cu unul), iar de la E numai intrarile pe care placa le are (input<N>_choices): tunerele FBC (Vu+ 4K)
+	   ramase legate de un modul CI dintr-o rulare oprita nu mai trec prin modul dupa repornirea interfetei */
 	int primele = num_ci > 1 ? 4 : 2;
-	for (int tuner_no = 0; tuner_no < primele; ++tuner_no)
-		setInputSource(tuner_no, hdsTsmuxLitera(tuner_no));
+	for (int tuner_no = 0; tuner_no < HDS_TSMUX_TUNERE; ++tuner_no)
+		if (hdsTsmuxIntrareLaPornire(HDS_TSMUX_DOSAR, tuner_no, primele))
+			setInputSource(tuner_no, hdsTsmuxLitera(tuner_no));
 
 	eDebug("done, found %d common interface slots", num_ci);
 }

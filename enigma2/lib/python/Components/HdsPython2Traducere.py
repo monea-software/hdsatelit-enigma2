@@ -22,7 +22,8 @@ Cum:
   - un fisier care se compileaza deja in Python 3 se traduce cu gramatica fara instructiunea print (print(a, b) ramane apel);
   - numele pe care traducerea nu le repara (cmp, file, coerce, impartirea) vin din Components/HdsPython2Compat.py, printr-un singur
     rand pus numai in fisierele traduse care le folosesc; Python-ul celorlalte pluginuri ramane neatins;
-  - totul sau nimic: daca un fisier nu se poate traduce sau nu se compileaza dupa traducere, nu se scrie nimic;
+  - totul sau nimic: daca un fisier nu se poate traduce sau nu se compileaza dupa traducere, nu se scrie nimic; un fisier
+    care nu se poate importa ca modul (plugin~.py, copia unui editor) si nu se traduce ramane cum e (CM3, importabil);
   - originalul ramane langa traducere (<nume>.py2); traducerea se tine minte dupa suma SHA-256 a fisierelor (STARE): un fisier
     deja tradus nu se traduce a doua oara; o actualizare a pluginului (opkg scrie din nou originalul) se traduce din nou;
   - in jurnal: "tradus din Python 2: <plugin>"; daca pluginul tot cade dupa traducere, raportul obisnuit al pluginurilor externe
@@ -36,8 +37,10 @@ import ast
 import hashlib
 import io
 import json
+import keyword
 import os
 import re
+import stat
 import sys
 import threading
 import time
@@ -395,6 +398,15 @@ def _globaleInCorp(corp):
 	return rez
 
 
+def _singurPeRand(r, nod):
+	"""instructiunea nod e singura pe randul r: inainte numai spatii, dupa numai spatii sau un comentariu. CM3 (0.7.8, pachetul
+	public IPTVupdater 1.5, raportul 977353): `global HD ## Warning: Unused global`, cum lasa un verificator de cod in pluginurile
+	vechi; inainte comentariul oprea mutarea, iar fisierul nu se traducea. Coloanele din ast sunt in octeti UTF-8."""
+	b = r.encode("utf-8", "surrogateescape")
+	inainte, dupa = b[:nod.col_offset], b[nod.end_col_offset:].strip()
+	return not inainte.strip() and (not dupa or dupa.startswith(b"#"))
+
+
 def ridicaGlobal(text, cale):
 	"""Python 2 primea `global x` si dupa ce x era folosit in functie (cu un avertisment): declaratia tine pentru toata functia.
 	Python 3 o refuza. Declaratiile mutate la inceputul corpului functiei au acelasi inteles. Numai cand fiecare global e singur
@@ -419,7 +431,7 @@ def ridicaGlobal(text, cale):
 		de_sters = []
 		for g in glob:
 			r = randuri[g.lineno - 1]
-			if g.end_lineno != g.lineno or r.strip() != r[g.col_offset:g.end_col_offset].strip() or r[:g.col_offset].strip():
+			if g.end_lineno != g.lineno or not _singurPeRand(r, g):
 				return text
 			de_sters.append(g.lineno - 1)
 		nume = []
@@ -432,7 +444,7 @@ def ridicaGlobal(text, cale):
 	# la nivelul modulului global nu face nimic (in Python 2 nici repetat dupa o atribuire); devine pass
 	for g in _globaleInCorp(arbore.body):
 		r = randuri[g.lineno - 1]
-		if g.end_lineno != g.lineno or r.strip() != r[g.col_offset:g.end_col_offset].strip() or r[:g.col_offset].strip():
+		if g.end_lineno != g.lineno or not _singurPeRand(r, g):
 			return text
 		mutari.append((None, "", [], [g.lineno - 1]))
 	if not mutari:
@@ -1117,17 +1129,54 @@ def _numaiCompilate(cale):
 	return False
 
 
-def _scrie(cale, date):
-	tmp = cale + ".hds-tmp"
-	with open(tmp, "wb") as f:
-		f.write(date)
-		f.flush()
-		os.fsync(f.fileno())
+_scriereAsteptata = threading.local()
+
+
+def _scrieVerificat(cale, date, asteptat):
+	"""Leaga scrierea de continutul din plan, inclusiv la revenirea dupa eroare."""
+	vechi = getattr(_scriereAsteptata, "intrare", None)
+	_scriereAsteptata.intrare = (cale, asteptat)
 	try:
-		os.chmod(tmp, os.stat(cale).st_mode & 0o7777)
-	except OSError:
-		pass
-	os.replace(tmp, cale)
+		_scrie(cale, date)
+	finally:
+		_scriereAsteptata.intrare = vechi
+
+
+def _scrie(cale, date):
+	import tempfile
+	# BPY2: verifica destinatia dupa pregatirea si fsync-ul temporarului.
+	# Include identitatea, ca o inlocuire cu acelasi continut sa nu fie pierduta.
+	def citeste():
+		try:
+			with open(cale, "rb") as f:
+				s = os.fstat(f.fileno())
+				if not stat.S_ISREG(s.st_mode) or os.path.islink(cale):
+					raise OSError("destinatie nesigura")
+				return (s.st_ino, s.st_mtime_ns, s.st_ctime_ns, s.st_mode, f.read(MAX_PLAN_TRADUCERE + 1))
+		except FileNotFoundError:
+			return None
+	asteptat = citeste()
+	plan = getattr(_scriereAsteptata, "intrare", None)
+	if plan is not None and plan[0] == cale and (None if asteptat is None else asteptat[-1]) != plan[1]:
+		raise OSError("destinatia nu mai corespunde planului")
+	fd, tmp = tempfile.mkstemp(prefix=".hds-py2-", dir=os.path.dirname(cale))
+	try:
+		with os.fdopen(fd, "wb") as f:
+			f.write(date)
+			f.flush()
+			os.fsync(f.fileno())
+		try:
+			os.chmod(tmp, os.stat(cale).st_mode & 0o7777)
+		except OSError:
+			os.chmod(tmp, 0o644)
+		if citeste() != asteptat:
+			raise OSError("destinatie schimbata in timpul scrierii")
+		os.replace(tmp, cale)
+	finally:
+		try:
+			os.remove(tmp)
+		except FileNotFoundError:
+			pass
 
 
 def sintaxaPython2(f, date=None):
@@ -1184,7 +1233,21 @@ def _ePython2(f, vecine, date=None):
 		return False
 
 
-def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None, pauza=0.0):
+def importabil(rel):
+	"""CM3 (0.7.8): fisierul .py (calea relativa la plugin) se poate importa ca modul: fiecare dosar si numele fisierului sunt
+	nume Python (nu plugin~.py, copia de rezerva a unui editor, nici "plugin (2).py" sau "x-vechi.py"). Traducerea e totul
+	sau nimic numai peste fisierele care se pot importa: pe IPTVupdater 1.5 (raportul 977353, pachetul public) copia
+	plugin~.py, pe care n-o importa nimeni, oprea traducerea intregului plugin la fiecare citire a listei."""
+	parti = rel.replace("\\", "/")[:-3].split("/") if rel.endswith(".py") else [""]
+	return all(p.isidentifier() and not keyword.iskeyword(p) for p in parti)
+
+
+def _lasat(cale, rel, motiv):
+	"""un fisier care nu se poate importa ca modul (importabil) si nu se traduce ramane cum e; pluginul se traduce mai departe"""
+	_jurnal("%s: %s ramane netradus (nu se importa ca modul): %s" % (_cheie(cale), rel, motiv))
+
+
+def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None, pauza=0.0, _plan=None):
 	"""traduce pluginul din dosarul cale (vezi antetul). Intoarce Rezultat. tot: True = tot pluginul (s-a vazut ca nu se incarca in
 	Python 3: e un plugin de Python 2), None = dupa sintaxa lui plugin.py (pluginul s-a incarcat, deci partea lui Python 3 nu se atinge).
 	pauza: secunde de asteptare inaintea fiecarui fisier dupa primul (pe firul de verificare, ca interfata sa ia lacatul Python)."""
@@ -1221,6 +1284,9 @@ def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None, pauza=0.0):
 		except OSError as exc:
 			return Rezultat(NETRADUS, motiv="%s: %s" % (rel, exc))
 		if len(date) > MAX_OCTETI:
+			if not importabil(rel):
+				_lasat(cale, rel, "%d octeti" % len(date))
+				continue
 			return Rezultat(PREA_MARE, motiv="%s: %d octeti" % (rel, len(date)))
 		suma = _suma(date)
 		stiut = stiute.get(rel)
@@ -1249,9 +1315,15 @@ def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None, pauza=0.0):
 			try:
 				text, codare, cookie = _decodeaza(date)
 			except UnicodeDecodeError as exc:
+				if not importabil(rel):
+					_lasat(cale, rel, exc)
+					continue
 				return Rezultat(NETRADUS, motiv="%s: %s" % (rel, exc))
 			nou, eroare = traduceText(text, f, numai_importuri)
 			if eroare is not None:
+				if not importabil(rel):
+					_lasat(cale, rel, "randul %s: %s" % (eroare[0], eroare[1]))
+					continue
 				return Rezultat(NETRADUS, motiv="%s, randul %s: %s" % (rel, eroare[0], eroare[1]))
 			if time.monotonic() - inceput > timp_maxim:
 				return Rezultat(NETRADUS, motiv="timpul (%d s)" % timp_maxim, secunde=time.monotonic() - inceput)
@@ -1270,6 +1342,11 @@ def traduceDosar(cale, timp_maxim=TIMP_MAXIM, tot=None, pauza=0.0):
 			continue
 		de_scris.append((f, rel, date, iesire))
 	secunde = time.monotonic() - inceput
+	if _plan is not None:
+		# BPY1: copilul pregateste traducerea, fara scrieri in plugin sau STARE.
+		_plan.update(de_scris=de_scris, pastrate=pastrate, vechi=bool(traduse_vechi), secunde=secunde)
+		return Rezultat(TRADUS if de_scris else (DEJA if pastrate else NIMIC),
+			fisiere=len(de_scris), secunde=secunde, detalii=[v[1] for v in de_scris])
 	if not de_scris:
 		if traduse_vechi and pastrate:
 			# traducerea veche era deja cea de acum: tinuta minte cu versiunea noua (nu se mai verifica la fiecare pornire)
@@ -1309,22 +1386,203 @@ def _stergeCompilate(f):
 			pass
 
 
-def puneOriginalele(cale):
-	"""pluginul din cale inapoi cum a venit (fisierele .py2 peste traduceri) si scos din STARE. Intoarce cate fisiere."""
-	n = 0
-	for radacina, dosare, fisiere in os.walk(cale):
-		dosare[:] = [d for d in dosare if d != "__pycache__"]
-		for f in fisiere:
-			if f.endswith(SUFIX_ORIGINAL):
-				vechi = os.path.join(radacina, f)
+def puneOriginalele(cale, _cerere=None, _nativ=None):
+	"""Reface numai traducerile proprii neschimbate. Intoarce numarul fisierelor."""
+	cerere = _cerere or {"anulat": threading.Event(), "asteapta": anuleazaTraducerea(cale)}
+	for activa in cerere["asteapta"]:
+		if not activa["gata"].wait(2):
+			_jurnal("originalele asteapta oprirea scrierii traducerii")
+			return 0
+	cheie = _cheie(cale)
+	scrise = []
+	with _lacatStare:
+		stare = _citesteStare()
+		intrare_veche = stare["pluginuri"].get(cheie)
+		if not intrare_veche or cerere["anulat"].is_set():
+			return 0
+		if _nativ is None and intrare_veche.get("nativ"):
+			_nativ = _nativPastrat(cale)
+		ramase = dict(intrare_veche.get("fisiere") or {})
+		try:
+			for rel, sume in list(ramase.items()):
+				if cerere["anulat"].is_set():
+					raise OSError("refacerea originalelor a fost anulata")
+				f = os.path.join(cale, rel)
 				try:
-					os.replace(vechi, vechi[:-len(SUFIX_ORIGINAL)] + ".py")
-					_stergeCompilate(vechi[:-len(SUFIX_ORIGINAL)] + ".py")
-					n += 1
-				except OSError as exc:
-					_jurnal("%s: %s" % (vechi, exc))
-	_actualizeaza(lambda stare: stare["pluginuri"].pop(_cheie(cale), None) is not None)
-	return n
+					with open(f, "rb") as fh:
+						actual = fh.read()
+					with open(f + "2", "rb") as fh:
+						original = fh.read()
+				except OSError:
+					continue
+				if _suma(actual) != sume.get("tradus") or _suma(original) != sume.get("original"):
+					continue
+				_scrieVerificat(f, original, actual)
+				scrise.append((f, original, actual))
+				ramase.pop(rel)
+			if cerere["anulat"].is_set():
+				raise OSError("refacerea originalelor a fost anulata")
+			if _nativ is not None:
+				noua = dict(intrare_veche, stare=NETRADUS, fisiere=ramase,
+					nativ=_nativ, versiune_nativa=_semnVersiuneNativa(cale, _nativ))
+				stare["pluginuri"][cheie] = noua
+			elif ramase:
+				noua = dict(intrare_veche, stare=NETRADUS, fisiere=ramase)
+				stare["pluginuri"][cheie] = noua
+			else:
+				noua = None
+				stare["pluginuri"].pop(cheie, None)
+			if noua != intrare_veche:
+				for camp in ("verificate", "semne", "progres"):
+					stare.get(camp, {}).pop(cheie, None)
+				_scrieStare(stare)
+				if _citesteStare()["pluginuri"].get(cheie) != noua:
+					raise OSError("starea originalelor nu a fost salvata")
+				cerere["schimbat"] = True
+		except OSError as exc:
+			for f, original, actual in reversed(scrise):
+				try:
+					_scrieVerificat(f, actual, original)
+				except OSError as eroare:
+					_jurnal("%s: %s" % (f, eroare))
+			_jurnal("originalele nu s-au refacut: %s" % exc)
+			return 0
+	for f, _original, _actual in scrise:
+		_stergeCompilate(f)
+	return len(scrise)
+
+
+_restaurariOriginale = {}
+
+
+def _dateEroareNativa(exc):
+	return {"mesaj": str(exc), "name": getattr(exc, "name", None), "path": getattr(exc, "path", None),
+		"hdsAltPython": getattr(exc, "hdsAltPython", None)}
+
+
+def _eroareNativa(date):
+	exc = ImportError(date["mesaj"], name=date.get("name"), path=date.get("path"))
+	if date.get("hdsAltPython"):
+		exc.hdsAltPython = date["hdsAltPython"]
+	return exc
+
+
+# unde cauta incarcatorul o biblioteca numita fara cale ("libx.so.1: cannot open shared object file")
+_DOSARE_BIBLIOTECI = ("/lib", "/usr/lib")
+
+
+def _fisiereNative(cale, nativ):
+	"""Fisierele numite de eroarea nativa: path si cel de la inceputul textului (ca in nativNeincarcat).
+	Un nume fara cale se cauta in dosarul pluginului si in dosarele bibliotecilor, niciodata fata de dosarul curent."""
+	if not nativ:
+		return []
+	m = _NATIV_TEXT.match(nativ.get("mesaj") or "")
+	locuri = []
+	for f in (nativ.get("path"), m.group(1) if m else None):
+		if not f:
+			continue
+		for loc in [f] if os.path.isabs(f) else [os.path.normpath(os.path.join(d, f)) for d in (cale,) + _DOSARE_BIBLIOTECI]:
+			if loc not in locuri:
+				locuri.append(loc)
+	return locuri
+
+
+def _semnVersiuneNativa(cale, nativ=None):
+	"""Versiunea surselor si binarelor, plus a modulului nativ cazut (si cand e in alt dosar);
+	se citeste numai pe firul de lucru."""
+	h = hashlib.sha256()
+	h.update(repr(tuple(sys.version_info[:2])).encode("ascii"))
+	for f in _fisiereNative(cale, nativ):
+		try:
+			s = os.stat(f)
+			semn = (s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
+		except OSError:
+			semn = None
+		h.update(repr(("nativ", f, semn)).encode("utf-8", "surrogateescape"))
+	for rad, dosare, fisiere in os.walk(cale):
+		dosare[:] = sorted(d for d in dosare if d != "__pycache__")
+		for nume in sorted(fisiere):
+			if not (nume.endswith((".py", ".py2")) or _fisierNativ(nume)):
+				continue
+			f = os.path.join(rad, nume)
+			s = os.stat(f)
+			h.update(repr((os.path.relpath(f, cale), s.st_ino, s.st_size,
+				s.st_mtime_ns, s.st_ctime_ns)).encode("utf-8", "surrogateescape"))
+	return h.hexdigest()
+
+
+def _nativPastrat(cale):
+	"""Motivul nativ ramane valabil numai pentru versiunea restaurata."""
+	e = intrare(cale) or {}
+	if e.get("nativ") and e.get("versiune_nativa") == _semnVersiuneNativa(cale, e["nativ"]):
+		return e["nativ"]
+	return None
+
+
+def _cereOriginalele(cale, exc):
+	"""La importul nativ cazut, pe interfata se pune numai cererea in memorie."""
+	cheie = _cheie(cale)
+	with _lacat:
+		if _inchideTraducerile or cheie in _restaurariOriginale:
+			return
+		asteapta = anuleazaTraducerea(cale)
+		cerere = {"anulat": threading.Event(), "asteapta": asteapta, "nativ": _dateEroareNativa(exc)}
+		_restaurariOriginale[cheie] = cerere
+	fir = _FirVerificare()
+	fir.originale = (cale, cheie, cerere)
+	try:
+		_pornesteFir(_refaceOriginalele, fir)
+	except Exception:
+		with _lacat:
+			_restaurariOriginale.pop(cheie, None)
+		raise
+	_pornestePompa()
+
+
+def _cereOriginaleleCadere(cale):
+	"""TRD6: traducerea ceruta dupa o cadere a facut pluginul sa nu se mai incarce: originalele inapoi pe un fir de lucru, apoi
+	verdictul "fara semn" pentru fisierele refacute, ca verificarea din fundal sa nu-l traduca din nou in bucla. Pe interfata
+	numai cererea in memorie."""
+	cheie = _cheie(cale)
+	with _lacat:
+		if _inchideTraducerile or cheie in _restaurariOriginale:
+			return
+		cerere = {"anulat": threading.Event(), "asteapta": [], "nativ": None, "cadere": True}
+		_restaurariOriginale[cheie] = cerere
+	fir = _FirVerificare()
+	fir.originale = (cale, cheie, cerere)
+	try:
+		_pornesteFir(_refaceOriginalele, fir)
+	except Exception as exc:
+		with _lacat:
+			_restaurariOriginale.pop(cheie, None)
+		_jurnal("originalele dupa cadere nu s-au cerut: %r" % (exc,))
+		return
+	_pornestePompa()
+
+
+def _refaceOriginalele(fir):
+	"""Refacerea pe fir de lucru; pompa publica rezultatul pe interfata."""
+	cale, cheie, cerere = fir.originale
+	try:
+		for activa in cerere["asteapta"]:
+			while not activa["gata"].wait(0.1):
+				if cerere["anulat"].is_set():
+					return
+		cerere["asteapta"] = []
+		puneOriginalele(cale, _cerere=cerere, _nativ=cerere["nativ"])
+		if cerere.get("cadere") and cerere.get("schimbat") and not cerere["anulat"].is_set():
+			_tineMinteVerdict(cheie, semnatura(cale), None)
+		with _lacat:
+			if cerere.get("schimbat") and not cerere["anulat"].is_set() and not _inchideTraducerile:
+				_fundal["gasite"].append(cheie)
+	except Exception as exc:
+		_jurnal("originalele nu s-au refacut: %r" % (exc,))
+	finally:
+		with _lacat:
+			if _restaurariOriginale.get(cheie) is cerere:
+				_restaurariOriginale.pop(cheie, None)
+		fir.terminat()
 
 
 # ---------------------------------------------------------------- legatura cu incarcarea pluginurilor
@@ -1337,8 +1595,13 @@ def _pluginImagine(categorie, nume):
 		return categorie == "Extensions" and nume.startswith("Hds")
 
 
-def _scoateModulele(prefix):
-	for n in [n for n in sys.modules if n == prefix or n.startswith(prefix + ".")]:
+def _scoateModulele(prefix, cale=None):
+	import types
+	for n, m in list(sys.modules.items()):
+		fisier = m.__dict__.get("__file__") if isinstance(m, types.ModuleType) else None
+		if not (n == prefix or n.startswith(prefix + ".") or
+			(cale is not None and isinstance(fisier, str) and _subDosar(fisier, cale))):
+			continue
 		sys.modules.pop(n, None)
 	try:
 		import importlib
@@ -1415,7 +1678,7 @@ def semnatura(cale):
 			s = os.stat(f)
 		except OSError:
 			continue
-		h.update(("%s\0%d\0%d\n" % (os.path.relpath(f, cale), s.st_size, int(s.st_mtime))).encode("utf-8", "surrogateescape"))
+		h.update(("%s\0%d\0%d\n" % (os.path.relpath(f, cale), s.st_size, s.st_mtime_ns)).encode("utf-8", "surrogateescape"))
 	return h.hexdigest()
 
 
@@ -1424,6 +1687,49 @@ def semnatura(cale):
 _CANDIDAT = re.compile(br"^[ \t]*print(?:[ \t]+[^\s(=.]|[ \t]*$)|except[ \t]+[^:\n#]+,[ \t]*\w+[ \t]*:|`|<>|"
 	br"(?<![\w.:\"'%-])0[0-7]{2,}(?![\w.:])|"
 	br"\b[uU][rR]['\"]|^[ \t]*exec[ \t]+[^\s(=]|^[ \t]*raise[ \t]+[\w.]+[ \t]*,|^(?: +\t|\t+ )", re.M)
+
+# Sirurile si comentariile nu sunt cod. Expresia include si sirurile Python 2
+# ur'', pe care tokenize din Python 3 le vede ca un nume ur urmat de STRING.
+_TEXT_FARA_COD = re.compile(br"(?P<ur>\b[uU][rR])?(?P<format>\b(?:[fF][rR]?|[rR][fF]))?(?:\"\"\"(?:\\[\s\S]|(?!\"\"\")[^\\])*(?:\"\"\"|\Z)|"
+	br"'''(?:\\[\s\S]|(?!''')[^\\])*(?:'''|\Z)|"
+	br'"(?:\\[\s\S]|[^"\\\r\n])*"|\'(?:\\[\s\S]|[^\'\\\r\n])*\')|\#[^\r\n]*')
+
+
+def _numaiCod(date):
+	"""Mascheaza continutul sirurilor si comentariile, pastrand randurile si ur."""
+	def ascunde(m):
+		s = m.group()
+		if m.group("format"):
+			return _codSirFormatat(s)
+		nou = re.sub(br"[^\r\n]", b" ", s)
+		if m.group("ur"):
+			return s[:3] + nou[3:]
+		# Un operand sir trebuie sa ramana vizibil pentru print/exec fara paranteze.
+		if not s.startswith(b"#"):
+			return b"x" + nou[1:]
+		return nou
+	return _TEXT_FARA_COD.sub(ascunde, date)
+
+
+def _codSirFormatat(s):
+	"""In f-string numai expresiile sunt cod, nu textul afisat."""
+	import tokenize
+	if not hasattr(tokenize, "FSTRING_START"):
+		return s  # Python mai vechi: filtru conservator, fara semne pierdute.
+	text = s.decode("latin-1")
+	randuri = text.splitlines(True)
+	offset = [0]
+	for r in randuri:
+		offset.append(offset[-1] + len(r))
+	nou = bytearray(re.sub(br"[^\r\n]", b" ", s))
+	try:
+		for t in tokenize.generate_tokens(io.StringIO(text).readline):
+			if t.type in (tokenize.NAME, tokenize.NUMBER, tokenize.OP, tokenize.ERRORTOKEN):
+				a, b = offset[t.start[0] - 1] + t.start[1], offset[t.end[0] - 1] + t.end[1]
+				nou[a:b] = s[a:b]
+	except (tokenize.TokenError, IndentationError, IndexError):
+		return s
+	return bytes(nou)
 
 
 TIMP_DEPASIT = ("", "timpul")   # verificarea din sursa oprita de timp (nu terminata)
@@ -1471,9 +1777,10 @@ def semneStatice(cale, timp_maxim=30.0, de_la=0, la_pas=None, pauza=0.0):
 			continue
 		if len(date) > MAX_OCTETI:
 			continue
-		forma = _CANDIDAT.search(date) is not None
-		importuri = imp is not None and imp.search(date) is not None
-		nume_vechi = _NUME_CANDIDAT.search(date) is not None
+		cod = _numaiCod(date)
+		forma = _CANDIDAT.search(cod) is not None
+		importuri = imp is not None and imp.search(cod) is not None
+		nume_vechi = _NUME_CANDIDAT.search(cod) is not None
 		if not (forma or importuri or nume_vechi):
 			continue
 		rel = os.path.relpath(f, cale).replace("\\", "/")
@@ -1535,14 +1842,19 @@ _fundal = {"fir": None, "acum": None, "coada": [], "gasite": [], "pompa": None, 
 # Semnul usor e statul lui plugin.py (inode, marime, ora): opkg scrie din nou toate fisierele pachetului la orice instalare
 # sau actualizare, deci si plugin.py. Un fisier schimbat de mana fara plugin.py se vede la pornirea urmatoare a interfetei.
 _semnaturi = {}
+_citireInitiala = True
 
 
 def _semnUsor(st):
-	return (getattr(st, "st_ino", 0), st.st_size, int(st.st_mtime))
+	return (getattr(st, "st_ino", 0), st.st_size, st.st_mtime_ns)
 
 
 def incepeCitirea():
 	"""Din Components/PluginComponent.py, la inceputul fiecarei citiri a listei de pluginuri: bugetul verificarii din sursa"""
+	global _citireInitiala
+	# Pastreaza faza citirii: firstRun devine False inainte sa termine copilul.
+	componenta = sys.modules.get("Components.PluginComponent")
+	_citireInitiala = bool(getattr(getattr(componenta, "plugins", None), "firstRun", False))
 	_buget["ramas"] = BUGET_CITIRE_S
 
 
@@ -1632,14 +1944,19 @@ def _pornesteFir(tinta, fir):
 	_fire_joase.start_new_thread(tinta, (fir,))
 
 
-def _cereVerificarea(categorie, nume, cale, cheie, sem, usor=None):
+def _cereVerificarea(categorie, nume, cale, cheie, sem, usor=None, reia=False):
 	"""pune pluginul la coada firului de verificare (o data) si porneste firul, daca nu ruleaza. sem None: semnatura o afla
 	firul (FRD), cu semnul usor `usor` pentru memoria _semnaturi. Firul porneste fara threading.Thread.start (MI8: start
 	astepta lacatul Python, o data pe citirea listei cand firul nu rula)."""
 	fir_nou = None
 	with _lacat:
-		if _fundal["acum"] == cheie or any(c[3] == cheie for c in _fundal["coada"]):
+		if _inchideTraducerile:
 			return
+		if ((_fundal["acum"] == cheie and not reia) or any(c[3] == cheie for c in _fundal["coada"])
+			or cheie in _proceseTraducere or cheie in _publicariTraducere
+			or cheie in _validariTraducere or cheie in _publicariGata):
+			return
+		_anulateTraducere.discard(cheie)
 		_fundal["coada"].append((categorie, nume, cale, cheie, sem, usor))
 		fir = _fundal["fir"]
 		if fir is None or not fir.is_alive():
@@ -1668,7 +1985,8 @@ def _lucreaza(fir=None):
 			os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), NICE_FUNDAL)
 		except (AttributeError, OSError):
 			pass
-		if INTARZIERE_FUNDAL_S > 0:
+		if INTARZIERE_FUNDAL_S > 0 and not any(len(c) < 3 for c in list(_cereriCadere.values())):
+			# TRD6: dupa o cadere la rulare omul asteapta pluginul tradus; asteptarea e numai pentru pornirea interfetei
 			time.sleep(INTARZIERE_FUNDAL_S)
 		while True:
 			with _lacat:
@@ -1692,6 +2010,47 @@ def _lucreaza(fir=None):
 
 
 def _verificaInFundal(categorie, nume, cale, cheie, sem, usor=None):
+	with _lacat:
+		if _inchideTraducerile or cheie in _anulateTraducere:
+			return
+		cerere_import = _cereriImportTraducere.pop(cheie, None)
+		cerere_cadere = _cereriCadere.pop(cheie, None)
+	if cerere_cadere is not None and cerere_import is None:
+		# TRD6: cadere "python2" la rulare: tot pluginul, si fisierele care se compileaza in Python 3 (traduceDupaCadere)
+		if not motorDisponibil():
+			# fara python3-fissix cererea ramane (si mesajul promis); prima data rezultatul FARA_MOTOR ajunge la dupaImport,
+			# care cere motorul (Components/HdsModuleLipsa.py); citirea listei de dupa instalare o ia de aici, fara alta cadere.
+			# Urmatoarele treceri fara motor nu mai publica nimic (fara citiri ale listei in bucla).
+			with _lacat:
+				if not _inchideTraducerile and cheie in _cadereAnunt:
+					_cereriCadere[cheie] = cerere_cadere[:2] + ("motor",)
+					if len(cerere_cadere) < 3:
+						_fundal["traduse"][cheie] = (Rezultat(FARA_MOTOR), cerere_cadere[:2])
+						_fundal["gasite"].append(cheie)
+			return
+		# pluginul s-a incarcat in Python 3: regula de acum (tot=None), deci fisierele lui de Python 3 raman neatinse
+		_jurnal("%s/%s: cadere Python 2 la rulare (%s): traduc partile vechi ale pluginului" % (categorie, nume, cerere_cadere[1]))
+		_traduceInFundal(categorie, nume, cale, cheie, cerere_cadere[:2])
+		return
+	nativ = _nativPastrat(cale)
+	if nativ is not None:
+		with _lacat:
+			if cerere_import is not None and not _inchideTraducerile and cheie not in _anulateTraducere:
+				_importuriDeActivat.discard(cheie)
+				_fundal["traduse"][cheie] = (Rezultat("nativ_incompatibil", detalii=nativ), None)
+				_fundal["gasite"].append(cheie)
+		return
+	if cerere_import is not None:
+		e = intrare(cale)
+		vechi = bool(e and e.get("stare") == TRADUS and e.get("versiune") != VERSIUNE)
+		semn = vechi or semnPython2(cerere_import[2], cale)
+		if not semn and cerere_import[4] is None:
+			with _lacat:
+				_importuriDeActivat.discard(cheie)
+			return
+		_traduceInFundal(categorie, nume, cale, cheie, cerere_import[:2], echec=cerere_import[2],
+			importa=cerere_import[3], verificat=cerere_import[4], forteaza=bool(semn))
+		return
 	proaspata = semnatura(cale)
 	if proaspata != sem:
 		# FRD: semnatura se afla aici, nu pe firul care citeste lista (sem None: prima data; alta: pluginul s-a schimbat de la
@@ -1720,6 +2079,9 @@ def _verificaInFundal(categorie, nume, cale, cheie, sem, usor=None):
 
 	t0 = time.monotonic()
 	in_proces, semn = _semneInProces(cale, TIMP_FUNDAL_S, gata[0], la_pas)
+	with _lacat:
+		if _inchideTraducerile or cheie in _anulateTraducere:
+			return
 	if not in_proces:
 		semn = semneStatice(cale, timp_maxim=TIMP_FUNDAL_S, de_la=gata[0], la_pas=la_pas, pauza=PAUZA_FUNDAL_S)
 	durata = time.monotonic() - t0
@@ -1785,6 +2147,11 @@ def _semneInProces(cale, timp_maxim, de_la, la_pas):
 	ceas = threading.Timer(timp_maxim + TIMP_PROCES_IN_PLUS_S, p.kill)
 	ceas.daemon = True
 	ceas.start()
+	cheie = _cheie(cale)
+	with _lacat:
+		_proceseVerificare[cheie] = p
+		if _inchideTraducerile or cheie in _anulateTraducere:
+			p.kill()
 	gasit, semn = False, None
 	try:
 		for rand in p.stdout:
@@ -1815,6 +2182,12 @@ def _semneInProces(cale, timp_maxim, de_la, la_pas):
 				p.wait(5)
 			except Exception:
 				pass
+		with _lacat:
+			if _proceseVerificare.get(cheie) is p:
+				_proceseVerificare.pop(cheie, None)
+	with _lacat:
+		if _inchideTraducerile or cheie in _anulateTraducere:
+			return True, TIMP_DEPASIT
 	if not gasit:
 		_jurnal("verificarea in proces separat nu a dat semnul (cod %s): o fac pe fir" % (p.returncode,))
 		return False, None
@@ -1823,14 +2196,543 @@ def _semneInProces(cale, timp_maxim, de_la, la_pas):
 	return True, semn
 
 
-def _traduceInFundal(categorie, nume, cale, cheie, semn):
+_proceseTraducere = {}
+_proceseVerificare = {}
+_anulateTraducere = set()
+_publicariTraducere = {}
+_validariTraducere = {}
+_publicariGata = {}
+_importuriDeActivat = set()
+_asteaptaActivarea = set()
+_cereriImportTraducere = {}
+# TRD6 (MI9): caderile cu cauza "python2" la rulare (Components/HdsPluginExtern.py). _cereriCadere: cheie -> semnul, pentru
+# firul de verificare (traducerea intregului plugin); _cadereCerute: cheile cerute in sesiunea interfetei (o data pe plugin);
+# _cadereAnunt: cheile care asteapta mesajul pentru om dupa traducere (dupaImport, pe firul interfetei)
+_cereriCadere = {}
+_cadereCerute = set()
+_cadereAnunt = {}
+_inchideTraducerile = False
+MEMORIE_TRADUCERE = 512 * 1024 * 1024
+MAX_PLAN_TRADUCERE = 64 * 1024 * 1024
+_REIMPORT = "reimport-verificat"
+
+
+class _SchimbariPlugin:
+	"""Notificari ale nucleului, fara citiri de disc la interogarea de pe interfata."""
+	def __init__(self, cale, recursiv=True):
+		import ctypes
+		self.maner = None
+		self.schimbare = False
+		self.recursiv = recursiv
+		self.program = None
+		self.terminat = threading.Event()
+		if sys.platform == "win32":
+			from ctypes import wintypes
+			class Overlapped(ctypes.Structure):
+				_fields_ = [("Internal", ctypes.c_size_t), ("InternalHigh", ctypes.c_size_t),
+					("Offset", wintypes.DWORD), ("OffsetHigh", wintypes.DWORD), ("hEvent", wintypes.HANDLE)]
+			self.api = ctypes.WinDLL("kernel32", use_last_error=True)
+			self.api.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+				wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+			self.api.CreateFileW.restype = wintypes.HANDLE
+			self.api.CreateEventW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.BOOL, wintypes.LPCWSTR]
+			self.api.CreateEventW.restype = wintypes.HANDLE
+			self.api.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+			self.api.CloseHandle.argtypes = [wintypes.HANDLE]
+			self.api.CancelIoEx.argtypes = [wintypes.HANDLE, wintypes.LPVOID]
+			self.api.GetOverlappedResult.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.LPVOID, wintypes.BOOL]
+			self.api.ReadDirectoryChangesW.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD,
+				wintypes.BOOL, wintypes.DWORD, wintypes.LPVOID, wintypes.LPVOID, wintypes.LPVOID]
+			h = self.api.CreateFileW(cale, 1, 7, None, 3, 0x42000000, None)
+			if h in (None, ctypes.c_void_p(-1).value):
+				raise OSError("notificarile pluginului nu au pornit")
+			self.maner = h
+			self.operatie = Overlapped()
+			self.operatie.hEvent = self.api.CreateEventW(None, True, False, None)
+			self.tampon = ctypes.create_string_buffer(65536)
+			if not self.operatie.hEvent or not self.api.ReadDirectoryChangesW(h, self.tampon,
+				len(self.tampon), recursiv, 0x1F, None, ctypes.byref(self.operatie), None):
+				self.elibereaza()
+				raise OSError("coada notificarilor nu a pornit")
+		elif sys.platform.startswith("linux"):
+			self.api = ctypes.CDLL(None, use_errno=True)
+			self.api.inotify_add_watch.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
+			fd = self.api.inotify_init1(os.O_NONBLOCK | os.O_CLOEXEC)
+			if fd < 0:
+				raise OSError("notificarile pluginului nu au pornit")
+			self.maner = fd
+			try:
+				for rad, dosare, _fisiere in (os.walk(cale) if recursiv else [(cale, [], [])]):
+					dosare[:] = [d for d in dosare if d != "__pycache__" and not os.path.islink(os.path.join(rad, d))]
+					if len(dosare) > MAX_FISIERE * 6:
+						raise OSError("prea multe dosare pentru notificari")
+					if self.api.inotify_add_watch(fd, os.fsencode(rad), 0xFC6) < 0:
+						raise OSError("notificarile unui dosar nu au pornit")
+			except Exception:
+				self.elibereaza()
+				raise
+		else:
+			raise OSError("notificarile pluginului nu sunt disponibile")
+
+	def schimbat(self):
+		if self.maner is None or self.schimbare or self.terminat.is_set():
+			return True
+		if self.program is not None and self.program.schimbat():
+			self.schimbare = True
+			return True
+		if sys.platform == "win32":
+			self.schimbare = self.api.WaitForSingleObject(self.operatie.hEvent, 0) != 258
+		else:
+			import struct
+			try:
+				for _lot in range(4):
+					# Coada de evenimente a nucleului, nu fisierele pluginului.
+					date = os.read(self.maner, 65536)
+					if not date:
+						self.schimbare = True
+						break
+					poz = 0
+					while poz < len(date):
+						_wd, masca, _cookie, n = struct.unpack_from("iIII", date, poz)
+						nume = date[poz + 16:poz + 16 + n].split(b"\0", 1)[0]
+						poz += 16 + n
+						if not self.recursiv or (masca & 0xEC00) or (masca & 0x40000000 and nume != b"__pycache__") or nume.endswith((b".py", b".py2", b".so", b".pyd")):
+							self.schimbare = True
+					if self.schimbare:
+						break
+				else:
+					self.schimbare = True
+			except BlockingIOError:
+				pass
+			except OSError:
+				self.schimbare = True
+		return self.schimbare
+
+	def inchide(self):
+		# Firul interfetei semnaleaza doar; eliberarea nativa poate astepta discul.
+		self.terminat.set()
+		if self.program is not None:
+			self.program.inchide()
+
+	def elibereaza(self):
+		if self.program is not None:
+			self.program.elibereaza()
+		maner, self.maner = self.maner, None
+		if maner is not None:
+			if sys.platform == "win32":
+				import ctypes
+				from ctypes import wintypes
+				n = wintypes.DWORD()
+				self.api.CancelIoEx(maner, ctypes.byref(self.operatie))
+				self.api.GetOverlappedResult(maner, ctypes.byref(self.operatie), ctypes.byref(n), True)
+				self.api.CloseHandle(maner)
+				if self.operatie.hEvent:
+					self.api.CloseHandle(self.operatie.hEvent)
+			else:
+				os.close(maner)
+		self.terminat.set()
+
+
+def _pazesteImportul(notificari):
+	"""Numai in fundal: CM3 si notificari pana la consumul de pe principal."""
+	import importlib
+	HdsPluginExtern = importlib.import_module("Components.HdsPluginExtern")
+	if HdsPluginExtern.imagineSchimbataPeDisc():
+		return False
+	try:
+		cale = os.readlink(getattr(HdsPluginExtern, "EXECUTABIL_PORNIT", "/proc/self/exe"))
+	except (OSError, ValueError, NotImplementedError):
+		# Pe PC nu ruleaza enigma2; contractul CM3 ramane acelasi.
+		cale = ""
+	if os.path.basename(cale.removesuffix(" (deleted)")) == "enigma2":
+		notificari.program = _SchimbariPlugin(os.path.dirname(cale.removesuffix(" (deleted)")), recursiv=False)
+	# Acopera si inlocuirea programului dinaintea armarii notificarii.
+	return not HdsPluginExtern.imagineSchimbataPeDisc()
+
+
+def _amprentaTraducere(cale):
+	"""Metadate precise, inclusiv originale si module native; fara urmarit legaturi."""
+	rez = []
+	if os.path.islink(cale) or not os.path.isdir(cale):
+		raise OSError("dosarul pluginului nu este sigur")
+	s = os.stat(cale)
+	rez.append([".", s.st_ino, 0, 0, 0, s.st_mode])
+	for rad, dosare, fisiere in os.walk(cale):
+		dosare[:] = sorted(d for d in dosare if d != "__pycache__")
+		for n in dosare + sorted(fisiere):
+			f = os.path.join(rad, n)
+			if os.path.islink(f):
+				if n.endswith((".py", ".py2")):
+					raise OSError("legatura in sursele pluginului")
+				continue
+			if n in dosare or n.endswith((".py", ".py2", ".so", ".pyd")):
+				s = os.stat(f)
+				rez.append([os.path.relpath(f, cale), s.st_ino, 0 if n in dosare else s.st_size,
+					0 if n in dosare else s.st_mtime_ns, 0 if n in dosare else s.st_ctime_ns, s.st_mode])
+				if len(rez) > MAX_FISIERE * 6:
+					raise OSError("prea multe fisiere in plugin")
+	return rez
+
+
+def anuleazaTraducerea(cale=None):
+	"""Anuleaza o cerere sau inchide traducerile; copilul este oprit si cules."""
+	global _inchideTraducerile
+	cheie = _cheie(cale) if cale is not None else None
+	anulate = []
+	with _lacat:
+		if cheie is None:
+			_inchideTraducerile = True
+		else:
+			_anulateTraducere.add(cheie)
+		for k, cerere in list(_restaurariOriginale.items()):
+			if cheie is None or k == cheie:
+				cerere["anulat"].set()
+		for k, p in list(_proceseVerificare.items()):
+			if cheie is None or k == cheie:
+				try:
+					p.kill()
+				except OSError:
+					pass
+		for k, cerere in list(_proceseTraducere.items()):
+			if cheie is None or k == cheie:
+				anulate.append(cerere)
+				cerere["anulat"].set()
+				p = cerere.get("proces")
+				if p is not None and p.poll() is None:
+					try:
+						p.kill()
+					except OSError:
+						pass
+		for k in list(_publicariTraducere):
+			if cheie is None or k == cheie:
+				_publicariTraducere.pop(k)[2][4]["anulat"].set()
+		for registru in (_validariTraducere, _publicariGata):
+			for k, v in list(registru.items()):
+				if cheie is None or k == cheie:
+					v[2][4]["anulat"].set()
+					if registru is _publicariGata:
+						v[4].inchide()
+						registru.pop(k, None)
+		_importuriDeActivat.difference_update([k for k in _importuriDeActivat if cheie is None or k == cheie])
+		_asteaptaActivarea.difference_update([k for k in _asteaptaActivarea if cheie is None or k == cheie])
+		for k in list(_fundal["traduse"]):
+			if cheie is None or k == cheie:
+				_fundal["traduse"].pop(k, None)
+		for registru in (_cereriImportTraducere, _cereriCadere, _cadereAnunt):
+			for k in list(registru):
+				if cheie is None or k == cheie:
+					registru.pop(k, None)
+		_fundal["gasite"][:] = [k for k in _fundal["gasite"] if cheie is not None and k != cheie]
+		_fundal["coada"][:] = [c for c in _fundal["coada"] if cheie is not None and c[3] != cheie]
+	return anulate
+
+
+_COPIL_TRADUCERE = '''import sys
+sys.path.insert(0, sys.argv[1])
+if sys.argv[2]:
+    sys.path.insert(0, sys.argv[2])
+from Components import HdsPython2Traducere as T
+T._pregatesteTraducerea(sys.argv[3], float(sys.argv[4]), int(sys.argv[5]))
+'''
+
+
+def _dovadaImport(exc, cale):
+	"""Pe firul de lucru: numai sintaxa intrarii, fara presupuneri despre dependente."""
+	sintaxa = []
+	intrari = {os.path.abspath(os.path.join(cale, n)) for n in ("plugin.py", "__init__.py")}
+	for eroare in _lant(exc):
+		# Un modul conditionat poate sa nu mai fie importat dupa actualizare.
+		if isinstance(eroare, SyntaxError) and eroare.filename and os.path.abspath(eroare.filename) in intrari:
+			sintaxa.append(eroare.filename)
+	return {"sintaxa": sintaxa}
+
+
+def _importNeschimbat(cale, dovada):
+	"""Numai in copil: sintaxa actuala; stiva nu confirma modulele deja importate."""
+	def citeste(f):
+		if not _subDosar(f, cale) or os.path.islink(f):
+			raise OSError("sursa importului nu este sigura")
+		with open(f, "rb") as fh:
+			date = fh.read(MAX_OCTETI + 1)
+		if len(date) > MAX_OCTETI:
+			raise OSError("sursa importului este prea mare")
+		return compile(date, f, "exec", dont_inherit=True)
+	try:
+		# O eroare de sintaxa veche nu este dovada despre versiunea de acum.
+		for f in dovada["sintaxa"]:
+			try:
+				citeste(f)
+			except SyntaxError as exc:
+				if semnPython2(exc, cale):
+					return True
+	except (OSError, SyntaxError, ValueError, TypeError):
+		return False
+	return False
+
+
+def _pregatesteTraducerea(dosar, timp, parinte):
+	"""Intrarea copilului izolat: resurse limitate, numai analiza sursei."""
+	import math
+	if sys.platform.startswith("linux"):
+		# Kernelul opreste copilul si daca parintele moare in timpul unui apel C.
+		import ctypes
+		import signal
+		if ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGKILL, 0, 0, 0) != 0:
+			raise OSError("paza procesului copil nu a pornit")
+		if os.getppid() != parinte:
+			return
+	try:
+		import resource
+		resource.setrlimit(resource.RLIMIT_AS, (MEMORIE_TRADUCERE, MEMORIE_TRADUCERE))
+		resource.setrlimit(resource.RLIMIT_CPU, (max(1, int(math.ceil(timp))), max(2, int(math.ceil(timp)) + 1)))
+		resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_PLAN_TRADUCERE, MAX_PLAN_TRADUCERE))
+		resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+		os.nice(max(0, NICE_FUNDAL - os.nice(0)))
+	except ImportError:
+		pass  # PC Windows: termenul este impus si de parinte.
+	def paznic():
+		limita = time.monotonic() + timp
+		while time.monotonic() < limita and os.getppid() == parinte:
+			time.sleep(0.1)
+		os._exit(124)
+	threading.Thread(target=paznic, daemon=True).start()
+	with open(os.path.join(dosar, "cerere.json"), encoding="utf-8") as f:
+		cerere = json.load(f)
+	cale = cerere["cale"]
+	if _amprentaTraducere(cale) != cerere["amprenta"]:
+		return
+	_citeste = cerere["stare"]
+	global _citesteStare
+	_citesteStare = lambda: _citeste
+	plan = {}
+	tot = cerere["tot"]
+	dovada = cerere.get("import")
+	if dovada is not None:
+		# La o cerere depasita ramane numai analiza sursei actuale.
+		tot = True if _importNeschimbat(cale, dovada) else None
+	if cerere.get("fara_traducere"):
+		r = Rezultat(NIMIC)
+	else:
+		r = traduceDosar(cale, timp_maxim=timp, tot=tot, _plan=plan)
+	if _amprentaTraducere(cale) != cerere["amprenta"]:
+		return
+	date = {"rezultat": {k: getattr(r, k) for k in Rezultat.__slots__}, "fisiere": [], "intrare": None}
+	pastrate = plan.get("pastrate", {})
+	total = 0
+	for i, (f, rel, original, tradus) in enumerate(plan.get("de_scris", [])):
+		total += len(original) + len(tradus)
+		if total > MAX_PLAN_TRADUCERE:
+			return
+		with open(f, "rb") as fh:
+			actual = _suma(fh.read(MAX_OCTETI + 1))
+		for sufix, continut in (("in", original), ("out", tradus)):
+			with open(os.path.join(dosar, "%d.%s" % (i, sufix)), "wb") as fh:
+				fh.write(continut)
+		date["fisiere"].append([rel, actual])
+		pastrate[rel] = {"original": _suma(original), "tradus": _suma(tradus)}
+	if r.stare == TRADUS or (plan.get("vechi") and pastrate):
+		date["intrare"] = {"stare": TRADUS, "versiune": VERSIUNE, "cand": int(time.time()),
+			"secunde": round(r.secunde, 2), "fisiere": pastrate}
+	with open(os.path.join(dosar, "rezultat.json"), "w", encoding="utf-8") as f:
+		json.dump(date, f)
+
+
+def _aplicaTraducerea(cale, dosar, date, amprenta, cerere):
+	"""Pe firul de lucru: verificare din nou, scrieri atomice, revenire la eroare."""
+	if cerere["anulat"].is_set() or _amprentaTraducere(cale) != amprenta:
+		return False
+	plan = []
+	for i, (rel, suma) in enumerate(date["fisiere"]):
+		f = os.path.abspath(os.path.join(cale, rel))
+		if os.path.commonpath([os.path.abspath(cale), f]) != os.path.abspath(cale) or not f.endswith(".py"):
+			return False
+		with open(f, "rb") as fh:
+			actual = fh.read(MAX_OCTETI + 1)
+		if _suma(actual) != suma:
+			return False
+		with open(os.path.join(dosar, "%d.in" % i), "rb") as fh:
+			original = fh.read(MAX_OCTETI + 1)
+		with open(os.path.join(dosar, "%d.out" % i), "rb") as fh:
+			tradus = fh.read(MAX_PLAN_TRADUCERE + 1)
+		try:
+			with open(f + "2", "rb") as fh:
+				rezerva = fh.read(MAX_OCTETI + 1)
+		except FileNotFoundError:
+			rezerva = None
+		if rezerva is not None and len(rezerva) > MAX_OCTETI:
+			return False
+		plan.append((f, actual, original, tradus, rezerva))
+	scrise = []
+	try:
+		for f, actual, original, tradus, rezerva in plan:
+			if cerere["anulat"].is_set():
+				raise OSError("traducere anulata")
+			# Actualizarea pluginului nu este suprascrisa nici intre doua scrieri.
+			with open(f, "rb") as fh:
+				if fh.read(MAX_OCTETI + 1) != actual:
+					raise OSError("plugin schimbat")
+			scrise.append((f, actual, tradus, rezerva, original))
+			_scrieVerificat(f + "2", original, rezerva)
+			with open(f, "rb") as fh:
+				if fh.read(MAX_OCTETI + 1) != actual:
+					raise OSError("plugin schimbat inaintea inlocuirii")
+			_scrieVerificat(f, tradus, actual)
+			_stergeCompilate(f)
+		if cerere["anulat"].is_set():
+			raise OSError("traducere anulata")
+		# Nu publica o traducere daca alt fisier a fost actualizat la aplicare.
+		atinse = set(os.path.relpath(f, cale) for f, _a, _o, _t, _r in plan)
+		atinse.update(n + "2" for n in list(atinse))
+		atinse.update(n[:-3] + ext for n in list(atinse) if n.endswith(".py") for ext in (".pyc", ".pyo"))
+		acum = _amprentaTraducere(cale)
+		vechi = {a[0]: a for a in amprenta if not stat.S_ISDIR(a[-1]) and a[0] not in atinse}
+		nou = {a[0]: a for a in acum if not stat.S_ISDIR(a[-1]) and a[0] not in atinse}
+		if vechi != nou:
+			raise OSError("plugin schimbat la aplicare")
+		for f, _actual, original, tradus, _rezerva in plan:
+			with open(f, "rb") as fh:
+				if fh.read(MAX_PLAN_TRADUCERE + 1) != tradus:
+					raise OSError("traducere schimbata la aplicare")
+			with open(f + "2", "rb") as fh:
+				if fh.read(MAX_OCTETI + 1) != original:
+					raise OSError("original schimbat la aplicare")
+		return acum
+	except OSError:
+		for f, actual, tradus, rezerva, original in reversed(scrise):
+			try:
+				with open(f, "rb") as fh:
+					inca_tradus = fh.read(MAX_PLAN_TRADUCERE + 1) == tradus
+				if inca_tradus:
+					_scrieVerificat(f, actual, tradus)
+				with open(f + "2", "rb") as fh:
+					inca_original = fh.read(MAX_OCTETI + 1) == original
+				if inca_original:
+					if rezerva is None:
+						os.remove(f + "2")
+					else:
+						_scrieVerificat(f + "2", rezerva, original)
+			except OSError:
+				pass
+		return False
+
+
+def _traduceInProces(cale, timp, tot=None, echec=None, importa=None, verificat=None, forteaza=False):
+	"""Un copil per plugin; fara reluarea muncii grele pe fir la eroare."""
+	import subprocess
+	import tempfile
+	import importlib.util
+	cheie = _cheie(cale)
+	cerere = {"anulat": threading.Event(), "gata": threading.Event(), "proces": None, "importa": importa}
+	with _lacat:
+		if _inchideTraducerile or cheie in _anulateTraducere or cheie in _proceseTraducere or cheie in _publicariTraducere:
+			return None
+		_proceseTraducere[cheie] = cerere
+	p = None
+	reusit = False
+	try:
+		if not os.access(PYTHON3, os.X_OK):
+			return None
+		amprenta = _amprentaTraducere(cale)
+		if verificat is not None and amprenta != verificat:
+			return None
+		dovada = _dovadaImport(echec, cale) if echec is not None and verificat is None else None
+		if dovada is not None and not dovada["sintaxa"]:
+			# Numai cache regenerabil; importul nou trebuie sa citeasca sursa actuala.
+			# Pregatirea nu necesita un copil si ramane pe firul de lucru.
+			fisiere = _fisierePy(cale)
+			if len(fisiere) > MAX_FISIERE:
+				return None
+			for sursa in fisiere:
+				cache = importlib.util.cache_from_source(sursa)
+				if os.path.islink(os.path.dirname(cache)):
+					raise OSError("legatura in cache-ul pluginului")
+				for f in (cache, sursa[:-3] + ".pyc", sursa[:-3] + ".pyo"):
+					try:
+						os.remove(f)
+					except FileNotFoundError:
+						pass
+			if cerere["anulat"].is_set() or _amprentaTraducere(cale) != amprenta:
+				return None
+			sem = semnatura(cale)
+			reusit = True
+			return Rezultat(_REIMPORT), None, amprenta, sem, cerere
+		with tempfile.TemporaryDirectory(prefix="hds-py2-") as dosar:
+			with open(os.path.join(dosar, "cerere.json"), "w", encoding="utf-8") as f:
+				json.dump({"cale": cale, "tot": forteaza if verificat is not None else tot,
+					"stare": _citesteStare(), "amprenta": amprenta,
+					"fara_traducere": verificat is not None and not forteaza,
+					"import": dovada}, f)
+			spec = importlib.util.find_spec(MOTOR)
+			motor = os.path.dirname(os.path.dirname(spec.origin)) if spec and spec.origin else ""
+			rad = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+			p = subprocess.Popen([PYTHON3, "-I", "-B", "-c", _COPIL_TRADUCERE, rad, motor, dosar,
+				repr(float(timp)), str(os.getpid())], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+				stderr=subprocess.DEVNULL, close_fds=True)
+			with _lacat:
+				cerere["proces"] = p
+			limita = time.monotonic() + timp
+			while p.poll() is None:
+				if cerere["anulat"].is_set() or time.monotonic() >= limita:
+					_jurnal("traducerea in proces separat a fost anulata sau a depasit timpul")
+					p.kill()
+					p.wait()
+					return None
+				cerere["anulat"].wait(min(0.1, max(0.001, limita - time.monotonic())))
+			if p.returncode or cerere["anulat"].is_set():
+				_jurnal("traducerea in proces separat s-a oprit (cod %s)" % p.returncode)
+				return None
+			with open(os.path.join(dosar, "rezultat.json"), encoding="utf-8") as f:
+				date = json.load(f)
+			r = Rezultat(**date["rezultat"])
+			amprenta_noua = _aplicaTraducerea(cale, dosar, date, amprenta, cerere)
+			if amprenta_noua is False:
+				return None
+			amprenta = amprenta_noua
+			sem = semnatura(cale)
+			reusit = True
+			return r, date["intrare"], amprenta, sem, cerere
+	except (OSError, ValueError, TypeError, KeyError) as e:
+		_jurnal("traducerea in proces separat nu s-a terminat: %r" % (e,))
+		return None
+	finally:
+		if p is not None:
+			if p.poll() is None:
+				try:
+					p.kill()
+				except OSError:
+					pass
+			p.wait()
+		with _lacat:
+			if not reusit and _proceseTraducere.get(cheie) is cerere:
+				_proceseTraducere.pop(cheie, None)
+		cerere["gata"].set()
+
+
+def _traduceInFundal(categorie, nume, cale, cheie, semn, tot=None, echec=None, importa=None, verificat=None, forteaza=False):
 	"""Pe firul de verificare (FRZ 0.7.7): traducerea pluginului cu semnul gasit. Rezultatul ramane in _fundal["traduse"] pana la
 	citirea listei ceruta de pompa, cand dupaImport (pe firul interfetei) face numai ce cere enigma: modulul tradus importat din
 	nou, ori cererea motorului (python3-fissix). Semnatura fisierelor traduse se tine minte aici, ca dupaImport sa nu mai ceara
 	nimic dupa aceea."""
 	t0 = time.monotonic()
+	if PROCES:
+		gata = _traduceInProces(cale, TIMP_TRADUCERE_FUNDAL_S, tot=tot, echec=echec,
+			importa=importa, verificat=verificat, forteaza=forteaza)
+		if gata is not None:
+			with _lacat:
+				if not gata[4]["anulat"].is_set() and not _inchideTraducerile:
+					_publicariTraducere[cheie] = (cale, semn, gata)
+					_fundal["gasite"].append(cheie)
+				if _proceseTraducere.get(cheie) is gata[4]:
+					_proceseTraducere.pop(cheie, None)
+		elif cheie in _cadereAnunt:
+			# TRD6: traducerea ceruta dupa o cadere nu s-a facut (procesul, timpul): omul afla, la citirea listei, ca nu s-a putut
+			with _lacat:
+				if not _inchideTraducerile and cheie not in _anulateTraducere:
+					_fundal["traduse"][cheie] = (Rezultat(NETRADUS, motiv="traducerea nu s-a terminat"), semn)
+					_fundal["gasite"].append(cheie)
+		return
 	try:
-		r = traduceDosar(cale, timp_maxim=TIMP_TRADUCERE_FUNDAL_S, pauza=PAUZA_FUNDAL_S)
+		r = traduceDosar(cale, timp_maxim=TIMP_TRADUCERE_FUNDAL_S, tot=tot, pauza=PAUZA_FUNDAL_S)
 	except Exception as e:
 		_jurnal("%s/%s: traducerea din fundal a cazut: %r" % (categorie, nume, e))
 		return
@@ -1888,19 +2790,179 @@ def _recitesteLista():
 		return
 	from Components.PluginComponent import plugins
 	from Tools.Directories import resolveFilename, SCOPE_PLUGINS
+	from Components import HdsModuleLipsa
+	sesiune = HdsModuleLipsa._stare.get("sesiune")
+	if _asteaptaActivarea and sesiune is None:
+		# Importul de control nu pastreaza in cache o versiune pana la sesiune.
+		for cale in list(_asteaptaActivarea):
+			prefix = "Plugins." + ".".join(cale.replace("\\", "/").split("/")[-2:])
+			_scoateModulele(prefix, cale)
+		return
+	cai = set(_asteaptaActivarea) if sesiune is not None else set()
+	inainte = list(plugins.pluginList) if cai else []
 	importlib.invalidate_caches()
 	plugins.readPluginList(resolveFilename(SCOPE_PLUGINS))
+	if cai:
+		# needsRestart=False intra deja in lista; si el trebuie sa primeasca SESSIONSTART.
+		for cale in cai:
+			noi = [p for p in plugins.pluginList if p.path == cale and p not in inainte]
+			amanati = plugins.amanateToate.setdefault(cale, [])
+			amanati.extend(p for p in noi if p not in amanati)
+		plugins.activeazaAcum(cai, sesiune)
+		_importuriDeActivat.difference_update(cai)
+		_asteaptaActivarea.difference_update(cai)
+
+
+def _valideazaPublicarea(fir):
+	"""Disc numai in fundal; pompa primeste doar rezultatul din memorie."""
+	cheie, publicare = fir.publicare
+	cale, semn, gata = publicare
+	r, intrare_noua, amprenta, sem, cerere = gata
+	notificari = None
+	publicat = False
+	anterioara = None
+	try:
+		notificari = _SchimbariPlugin(cale)
+		if r.stare == _REIMPORT and not _pazesteImportul(notificari):
+			cerere["anulat"].set()
+			_jurnal("importul de control este amanat: programul imaginii s-a schimbat pe disc (interfata trebuie repornita)")
+			return
+		actuala = _amprentaTraducere(cale)
+		if cerere["anulat"].is_set() or actuala != amprenta or notificari.schimbat():
+			return
+		anterioara = _citesteStare() if r.stare != _REIMPORT else None
+		if intrare_noua is not None:
+			_punePlugin(cheie, intrare_noua)
+			# Scrierea existenta jurnalizeaza erorile; recitirea confirma rezultatul.
+			if _citesteStare()["pluginuri"].get(cheie) != intrare_noua:
+				raise OSError("starea traducerii nu a fost salvata")
+		if r.stare == FARA_MOTOR:
+			_uitaVerificarea(cale)
+		elif r.stare != _REIMPORT:
+			_tineMinteVerdict(cheie, sem, None)
+		if cerere["anulat"].is_set() or _amprentaTraducere(cale) != amprenta:
+			return
+		try:
+			usor = _semnUsor(os.stat(os.path.join(cale, "plugin.py")))
+		except OSError:
+			usor = None
+		with _lacat:
+			if not cerere["anulat"].is_set() and not _inchideTraducerile:
+				_publicariGata[cheie] = (cale, semn, gata, usor, notificari)
+				publicat = True
+	except Exception as exc:
+		_jurnal("rezultatul traducerii nu se publica: %r" % (exc,))
+	finally:
+		if notificari is not None:
+			if publicat:
+				# Windows anuleaza notificarea cand firul care a creat-o se termina.
+				# Firul asteapta numai consumul pompei, cu un termen propriu.
+				if not notificari.terminat.wait(60):
+					cerere["anulat"].set()
+			notificari.elibereaza()
+		if anterioara is not None and (not publicat or cerere["anulat"].is_set() or notificari.schimbare):
+			def revine(stare):
+				schimbat = False
+				for camp, asteptat in (("pluginuri", intrare_noua), ("verificate", sem)):
+					d = stare.setdefault(camp, {})
+					if asteptat is not None and d.get(cheie) == asteptat:
+						veche = anterioara.get(camp, {}).get(cheie)
+						if veche is None:
+							d.pop(cheie, None)
+						else:
+							d[cheie] = veche
+						schimbat = True
+				return schimbat
+			_actualizeaza(revine)
+		with _lacat:
+			if r.stare == _REIMPORT and (not publicat or cerere["anulat"].is_set() or notificari.schimbare):
+				_importuriDeActivat.discard(cheie)
+			if _validariTraducere.get(cheie) is publicare:
+				_validariTraducere.pop(cheie, None)
+		fir.terminat()
 
 
 def pompa(reciteste=None):
 	"""Pe firul interfetei: dupa semnele gasite in fundal, lista pluginurilor se citeste din nou (PluginComponent.
 	readPluginList, ca dupa opkg): dupaImport gaseste semnul in STARE, traduce si importa din nou pe loc. Intoarce True cand a
 	cerut citirea. Ceasul se opreste cand firul s-a terminat si nu mai e nimic de facut."""
+	if PROCES and not _ePrincipal():
+		return False
 	with _lacat:
 		gasite = list(_fundal["gasite"])
 		del _fundal["gasite"][:]
+		publicari = [(k, _publicariTraducere.pop(k)) for k in gasite if k in _publicariTraducere]
+		pregatite = list(_publicariGata.items())
+		_publicariGata.clear()
 		fir = _fundal["fir"]
-		viu = fir is not None and fir.is_alive()
+		viu = bool(_restaurariOriginale) or (fir is not None and fir.is_alive())
+	for cheie, publicare in publicari:
+		gasite = [k for k in gasite if k != cheie]
+		validare = _FirVerificare()
+		validare.publicare = (cheie, publicare)
+		with _lacat:
+			_validariTraducere[cheie] = publicare
+		try:
+			_pornesteFir(_valideazaPublicarea, validare)
+		except Exception as exc:
+			with _lacat:
+				_validariTraducere.pop(cheie, None)
+			_jurnal("validarea traducerii nu a pornit: %r" % (exc,))
+	for cheie, (cale, semn, gata, usor, notificari) in pregatite:
+		r, _intrare, _amprenta, sem, cerere = gata
+		if cerere["anulat"].is_set() or notificari.schimbat():
+			cerere["anulat"].set()
+			with _lacat:
+				_importuriDeActivat.discard(cheie)
+			notificari.inchide()
+			continue
+		if r.stare == _REIMPORT:
+			# Importul si obiectele Enigma2 raman numai pe firul principal.
+			# Modulele vechi din cache nu pot confirma noua versiune a dependentei.
+			try:
+				prefix = "Plugins." + ".".join(cheie.replace("\\", "/").split("/")[-2:])
+				_scoateModulele(prefix, cale)
+				fara_cache = sys.dont_write_bytecode
+				try:
+					sys.dont_write_bytecode = True
+					# Curatarea cache-ului poate lasa timp unei actualizari opkg.
+					if cerere["anulat"].is_set() or notificari.schimbat():
+						cerere["anulat"].set()
+						notificari.inchide()
+						continue
+					cerere["importa"]()
+				finally:
+					sys.dont_write_bytecode = fara_cache
+			except Exception as exc:
+				_scoateModulele(prefix, cale)
+				if not notificari.schimbat():
+					categorie, nume = cheie.replace("\\", "/").split("/")[-2:]
+					with _lacat:
+						if not cerere["anulat"].is_set() and not _inchideTraducerile and cheie not in _anulateTraducere:
+							_validariTraducere.pop(cheie, None)
+							_cereriImportTraducere[cheie] = ("plugin.py", "import Python 2", exc, cerere["importa"], _amprenta)
+							_cereVerificarea(categorie, nume, cale, cheie, None, reia=True)
+				notificari.inchide()
+				continue
+			if notificari.schimbat() or cerere["anulat"].is_set():
+				_scoateModulele(prefix, cale)
+				notificari.inchide()
+				continue
+			r = Rezultat(NIMIC)
+		with _lacat:
+			_semnaturi[cheie] = (usor, sem)
+			_fundal["traduse"][cheie] = (r, semn, notificari)
+			if cheie in _importuriDeActivat and r.stare in (TRADUS, DEJA, NIMIC):
+				_asteaptaActivarea.add(cheie)
+		gasite.append(cheie)
+	with _lacat:
+		fir = _fundal["fir"]
+		viu = (viu or (fir is not None and fir.is_alive()) or
+			bool(_validariTraducere or _publicariGata or _publicariTraducere or _asteaptaActivarea))
+		if reciteste is None and _asteaptaActivarea:
+			from Components import HdsModuleLipsa
+			if HdsModuleLipsa._stare.get("sesiune") is not None:
+				gasite.extend(k for k in _asteaptaActivarea if k not in gasite)
 	if not viu and not gasite and _fundal["pompa"] is not None:
 		try:
 			_fundal["pompa"].stop()
@@ -1914,7 +2976,22 @@ def pompa(reciteste=None):
 		reciteste()
 	except Exception as e:
 		_jurnal("citirea listei dupa verificare: %r" % (e,))
+	finally:
+		# Rezultatele validate sunt valabile numai pentru aceasta citire a listei.
+		with _lacat:
+			for cheie, _publicare in pregatite:
+				_fundal["traduse"].pop(cheie, None)
+				_publicare[4].inchide()
 	return True
+
+
+def _iaTraducerea(cale, cheie):
+	"""Consuma in memorie rezultatul verificat de firul de lucru pentru aceasta citire."""
+	with _lacat:
+		gata = _fundal["traduse"].pop(cheie, None)
+	if gata is not None and len(gata) > 2 and gata[2].schimbat():
+		return None
+	return gata
 
 
 def dupaImport(categorie, nume, cale, plugin, importa):
@@ -1926,17 +3003,29 @@ def dupaImport(categorie, nume, cale, plugin, importa):
 	try:
 		if _pluginImagine(categorie, nume):
 			return plugin
-		try:
-			st_plugin = os.stat(os.path.join(cale, "plugin.py"))
-		except OSError:
+		if not (FUNDAL and PROCES):
+			try:
+				st_plugin = os.stat(os.path.join(cale, "plugin.py"))
+			except OSError:
+				return plugin
+		gata = _iaTraducerea(cale, _cheie(cale)) if FUNDAL else None
+	except Exception as e:
+		_jurnal("%s/%s: verificarea a cazut: %r" % (categorie, nume, e))
+		return plugin
+	# Eroarea reimportului apartine incarcatorului, inclusiv dependenta lipsa.
+	if gata is not None:
+		return _dupaTraducere(categorie, nume, cale, plugin, importa, gata[0])
+	try:
+		if FUNDAL and _cheie(cale) in _cereriCadere:
+			# TRD6: o cerere dupa cadere care asteapta motorul (python3-fissix) se reia la fiecare citire a listei
+			_cereVerificarea(categorie, nume, cale, _cheie(cale), None)
+			return plugin
+		if FUNDAL and PROCES:
+			cheie = _cheie(cale)
+			_cereVerificarea(categorie, nume, cale, cheie, None)
 			return plugin
 		cheie = _cheie(cale)
 		if FUNDAL:
-			# FRZ 0.7.7: pluginul tradus pe firul de verificare; aici numai importul din nou
-			with _lacat:
-				gata_tradus = _fundal["traduse"].pop(cheie, None)
-			if gata_tradus is not None:
-				return _dupaTraducere(categorie, nume, cale, plugin, importa, gata_tradus[0])
 			# FRD: pe firul care citeste lista numai statul lui plugin.py; semnatura vine din memoria facuta de firul de verificare
 			usor = _semnUsor(st_plugin)
 			tinut = _semnaturi.get(cheie)
@@ -1976,9 +3065,56 @@ def dupaImport(categorie, nume, cale, plugin, importa):
 	return _dupaTraducere(categorie, nume, cale, plugin, importa, r)
 
 
+def traduceDupaCadere(categorie, nume, cale, exc):
+	"""TRD6 (MI9): din Components/HdsPluginExtern.py, pe firul enigma2, la o eroare cu cauza "python2" la rulare intr-un plugin
+	extern care s-a incarcat (o parte scrisa in Python 2 pe care traducerea de la incarcare n-a prins-o). Numai cererea: tot
+	pluginul se traduce pe firul de verificare (traduceDosar cu regula de acum: partea de Python 3 neatinsa), pompa cere citirea listei, dupaImport importa pluginul
+	tradus si abia atunci omul primeste mesajul (HdsPluginExtern.anuntaTraducere). O data pe plugin in sesiunea interfetei.
+	Fara disc pe firul care cheama. True cand cererea e la coada (mesajul va veni), altfel False. Nu arunca."""
+	try:
+		if not FUNDAL or _pluginImagine(categorie, nume):
+			return False
+		cheie = _cheie(cale)
+		with _lacat:
+			if _inchideTraducerile or cheie in _cadereCerute:
+				return False
+			_cadereCerute.add(cheie)
+			cerere = ("rulare", "%s: %s" % (exc.__class__.__name__, str(exc)[:200]))
+			_cereriCadere[cheie] = cerere
+			_cadereAnunt[cheie] = nume
+		_cereVerificarea(categorie, nume, cale, cheie, None, reia=True)
+		with _lacat:
+			la_coada = _fundal["acum"] == cheie or any(c[3] == cheie for c in _fundal["coada"])
+			# luata deja de fir: nu mai e aceeasi cerere (scoasa sau pusa inapoi ca asteptare de motor)
+			if not la_coada and _cereriCadere.get(cheie) is cerere:
+				# alta lucrare pe acelasi plugin (traducere, validare): cererea nu intra; o cadere urmatoare o poate face
+				_cereriCadere.pop(cheie, None)
+				_cadereAnunt.pop(cheie, None)
+				_cadereCerute.discard(cheie)
+				return False
+		return True
+	except Exception as e:
+		_jurnal("%s/%s: traducerea dupa cadere nu s-a cerut: %r" % (categorie, nume, e))
+		return False
+
+
+def _anuntaCadere(cale, tradus):
+	"""TRD6: mesajul pentru om dupa traducerea ceruta de o cadere (pe firul interfetei, din _dupaTraducere)"""
+	with _lacat:
+		nume = _cadereAnunt.pop(_cheie(cale), None)
+	if nume is None:
+		return
+	try:
+		from Components.HdsPluginExtern import anuntaTraducere
+		anuntaTraducere(nume, tradus)
+	except Exception as e:
+		_jurnal("mesajul traducerii dupa cadere: %r" % (e,))
+
+
 def _dupaTraducere(categorie, nume, cale, plugin, importa, r):
 	"""pe firul care citeste lista, dupa traducerea pluginului (pe loc sau pe firul de verificare): ce cere enigma"""
 	if r.stare == FARA_MOTOR:
+		# TRD6: fara motor nu e un raspuns: cererea de dupa o cadere asteapta python3-fissix (_verificaInFundal), mesajul ramane
 		# fara motor: pluginul ramane cum e (s-a incarcat); verificarea se reia dupa ce vine python3-fissix
 		_jurnal("%s/%s: lipseste traducatorul (python3-fissix)" % (categorie, nume))
 		try:
@@ -1990,10 +3126,23 @@ def _dupaTraducere(categorie, nume, cale, plugin, importa, r):
 	if r.stare != TRADUS:
 		if r.stare in (COMPILAT, PREA_MARE, NETRADUS):
 			_jurnal("%s/%s: scris pentru Python 2, netradus: %s" % (categorie, nume, r.motiv))
+		_anuntaCadere(cale, False)
 		return plugin
 	_jurnal("tradus din Python 2: %s/%s (%d fișiere, %.1f s)" % (categorie, nume, r.fisiere, r.secunde))
 	_scoateModulele(".".join(["Plugins", categorie, nume]))
-	return importa()
+	try:
+		modul = importa()
+	except Exception:
+		with _lacat:
+			dupa_cadere = _cheie(cale) in _cadereAnunt
+		if dupa_cadere:
+			# TRD6: pluginul se incarca inainte de traducere; tradus nu se mai incarca: originalele inapoi pe un fir (drumul
+			# existent, _refaceOriginalele), lista se citeste din nou si pluginul ramane cum era; mesajul "nu a putut" e adevarat
+			_cereOriginaleleCadere(cale)
+		_anuntaCadere(cale, False)
+		raise
+	_anuntaCadere(cale, True)
+	return modul
 
 
 def _uitaVerificarea(cale):
@@ -2024,17 +3173,42 @@ def incearca(categorie, nume, cale, exc, importa):
 		# Python 3.13"): fara traducere si fara python3-fissix; lista pluginurilor spune ca e facut pentru alta versiune de Python
 		# (Components/PluginComponent.py, alt_python, din Components/HdsAltPython.py)
 		if nativNeincarcat(exc):
+			if FUNDAL:
+				_cereOriginalele(cale, exc)
+			else:
+				puneOriginalele(cale, _nativ=_dateEroareNativa(exc))
 			return None
-		# tradus de o versiune mai veche a traducatorului si tot cade (orice eroare, de pilda "unknown location" din raportul
-		# 781623): se traduce din nou din originale; altfel numai la semnele lui Python 2
-		e = intrare(cale)
-		tradus_vechi = bool(e and e.get("stare") == TRADUS and e.get("versiune") != VERSIUNE)
-		if not tradus_vechi and not semnPython2(exc, cale):
-			return None
-		r = traduceDosar(cale, tot=True)
+		with _lacat:
+			if _cheie(cale) in _restaurariOriginale:
+				return None
+		gata = _iaTraducerea(cale, _cheie(cale)) if FUNDAL and PROCES else None
+		if FUNDAL and PROCES:
+			if gata is not None:
+				r = gata[0]
+			else:
+				cheie = _cheie(cale)
+				with _lacat:
+					_cereriImportTraducere[cheie] = ("plugin.py", "import Python 2", exc, importa, None)
+					if _citireInitiala:
+						_importuriDeActivat.add(cheie)
+				_cereVerificarea(categorie, nume, cale, cheie, None)
+				return None
+		else:
+			# Traducerea veche cazuta se reface din originale.
+			nativ = _nativPastrat(cale)
+			if nativ is not None:
+				r = Rezultat("nativ_incompatibil", detalii=nativ)
+			else:
+				e = intrare(cale)
+				tradus_vechi = bool(e and e.get("stare") == TRADUS and e.get("versiune") != VERSIUNE)
+				if not tradus_vechi and not semnPython2(exc, cale):
+					return None
+				r = traduceDosar(cale, tot=True)
 	except Exception as e:
 		_jurnal("%s/%s: traducerea a cazut: %r" % (categorie, nume, e))
 		return None
+	if r.stare == "nativ_incompatibil":
+		raise _eroareNativa(r.detalii) from exc
 	if r.stare == FARA_MOTOR:
 		_jurnal("%s/%s: scris pentru Python 2; lipseste traducatorul (python3-fissix)" % (categorie, nume))
 		eroare = ModuleNotFoundError("No module named '%s'" % MOTOR, name=MOTOR)
@@ -2049,3 +3223,19 @@ def incearca(categorie, nume, cale, exc, importa):
 	_jurnal("tradus din Python 2: %s/%s (%d fișiere, %.1f s)" % (categorie, nume, r.fisiere, r.secunde))
 	_scoateModulele(".".join(["Plugins", categorie, nume]))
 	return importa()
+
+
+def _inchidereTraduceri():
+	anuleazaTraducerea()
+	with _lacat:
+		procese = [c.get("proces") for c in _proceseTraducere.values()] + list(_proceseVerificare.values())
+	for p in procese:
+		if p is not None:
+			try:
+				p.wait(2)
+			except Exception:
+				pass
+
+
+import atexit
+atexit.register(_inchidereTraduceri)

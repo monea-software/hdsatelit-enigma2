@@ -29,8 +29,9 @@
 #   chei-gazda-dropbear.tar.gz     cheile gazdei SSH (/etc/dropbear/dropbear_{rsa,ecdsa,ed25519}_host_key, 0600), puse la loc
 #                             numai pe acelasi receptor, ca dupa o imagine noua clientii SSH sa nu vada "host key changed";
 #   sistem.json             setarile omului din afara /etc/enigma2 (stare_sistem): regulile parolei pentru SSH si FTP,
-#                             sursele de pachete adaugate de om, interfata implicita cand sunt doua
-#                             configurate (/etc/default_gw); numai valori verificate, fara parole; scris cand e ceva;
+#                             sursele de pachete adaugate de om (din Extensii si cele puse altfel: surse_alte), interfata
+#                             implicita cand sunt doua configurate (/etc/default_gw); numai valori verificate, fara parole;
+#                             scris cand e ceva;
 #   parola-locala.json        alegerea parolei din casa si bifele; numai cand e pusa, textul si hash-ul root (0600).
 #                             Numai pe acelasi receptor; restul lui /etc/shadow nu intra in copie;
 #   acces-conditionat.tar.gz  modulele de acces conditionat instalate, gasite dupa conventia pachetelor (fisiere in
@@ -38,6 +39,10 @@
 #                             pachetul .ipk daca e pe receptor, altfel fisierele lui dupa lista opkg
 #                             (info/<pachet>.list = „opkg files”), informatiile opkg ale pachetului, /etc/tuxbox/config
 #                             si legaturile de pornire; in fisier nu e scris niciun nume de modul sau de fel;
+#   chei-module.tar.gz        cheile modulelor din dosarele comune (/usr/keys, /var/keys: SoftCam.Key si celelalte fisiere
+#                             ale omului, ca cele din /etc/tuxbox/config), puse la loc numai pe receptorul copiei, dupa
+#                             pachetele modulelor si inainte de pornirea lor; arhiva separata, ca o imagine mai veche sa
+#                             nu refuze din cauza ei acces-conditionat.tar.gz (fisierul necunoscut e sarit acolo);
 #   pluginuri.tar.gz          configurarile modificate si datele create in dosarele extensiilor puse de om,
 #                             dupa .list si .conffiles; fara module de acces, legaturi, pyc sau __pycache__;
 #                             cel mult 8 MiB pe fisier de date, cu limitele totale ale celorlalte arhive;
@@ -56,7 +61,7 @@
 #     (FISIERE_PROPRII: browserele asociate, parola pentru aplicatiile de telefon, pozitia si viteza motorului,
 #     temporizatoarele, discul ales, treapta probata a procesorului si fisierele criptate cu identitatea receptorului:
 #     cheile de traducere, conturile subtitrarilor; Niciunul ales la modulele de acces: SEMNE_ALEGERE_MODUL),
-#     machine-id, cheile SSH, sistem.json si modulele de acces conditionat NUMAI pe receptorul copiei (aceeasi amprenta
+#     machine-id, cheile SSH, sistem.json, modulele de acces si cheile lor NUMAI pe receptorul copiei (aceeasi amprenta
 #     si acelasi model); din sistem.json, „Fără parolă în rețeaua locală” oprita se pune numai cand e alegerea omului
 #     (regula_ssh_aleasa: copia de la VERSIUNE_FARA_PAROLA_PORNITA incoace), iar repara_regula_ssh (din porneste)
 #     porneste o data regula oprita numai cu dovada restaurarii si fara o alegere proprie;
@@ -129,6 +134,16 @@ FIS_PAROLA = "parola-locala.json"
 # imagine noua (flash, alt loc de pornire) porneste cu /etc/dropbear gol si dropbear face chei noi; oricine intrase prin SSH
 # primea "REMOTE HOST IDENTIFICATION HAS CHANGED". DSS nu: e scos din dropbear 2026. Valorile nu intra in jurnale.
 ARH_CHEI_GAZDA = "chei-gazda-dropbear.tar.gz"
+# Cheile modulelor de acces din dosarele comune, unde le cauta modulele dupa dosarul configurarii lor (ca
+# Components/HdsCheiPublice.DOSARE_COMUNE, fara etc/tuxbox/config, care intra in acces-conditionat.tar.gz): SoftCam.Key adus
+# cu un OK sau pus de om si celelalte fisiere de acolo. Inainte nu intrau in copie, iar dupa o imagine noua trebuiau aduse
+# din nou. Un dosar care e o legatura (sau are una pe drum) se sare la copie: fisierele lui intra o data, prin dosarul
+# adevarat. Arhiva e separata de acces-conditionat.tar.gz: _permis_acces al unei imagini mai vechi n-ar sti locul si ar
+# refuza toata copia modulelor.
+ARH_CHEI_MODULE = "chei-module.tar.gz"
+DOSARE_CHEI_MODULE = ("usr/keys", "var/keys")
+MAX_FISIER_CHEI = 4 * 1024 * 1024
+MAX_FISIERE_CHEI = 500
 CHEI_GAZDA = ("etc/dropbear/dropbear_rsa_host_key", "etc/dropbear/dropbear_ecdsa_host_key",
 	"etc/dropbear/dropbear_ed25519_host_key")
 # copia RSA tinuta de hds-ssh (hdsatelit-ssh r5) pentru postrm-ul vechi al lui dropbear: adusa la zi odata cu cheia
@@ -136,7 +151,7 @@ COPIE_RSA_GAZDA = "etc/dropbear/.dropbear_rsa_host_key.pastrata"
 MAX_CHEIE_GAZDA = 16 * 1024
 # o imagine mai veche sare randul md5 al unui fisier pe care nu-l stie (citeste_descriere): copia ramane buna acolo
 FISIERE_COPIE = (ARH_SETARI, ARH_RETEA, ARH_ACCES, ARH_PLUGINURI, FIS_MASINA, FIS_CHEI, FIS_SISTEM, FIS_PAROLA,
-	ARH_CHEI_GAZDA)
+	ARH_CHEI_GAZDA, ARH_CHEI_MODULE)
 SETTINGS_COPIE = "etc/enigma2/settings-fara-token"
 
 DOSAR_RESTAURARE = "home/root/hds-restaurare"
@@ -178,7 +193,9 @@ TIPAR_BUCHET = re.compile(r"^(?:userbouquet|subbouquet)\.[A-Za-z0-9_.+-]{1,200}\
 # semnele unei porniri sau probe in curs: placa 2D (hds-accel.*), placa video (hds-gpu.pornire, lib/gdi/hdsgpu.cpp: ramas
 # = „pornirea de data trecuta nu s-a terminat”), proba procesorului (hds-procesor.proba cu boot_id: alt boot_id = o
 # pornire cazuta cu procesorul accelerat, Components/HdsProcesor.py); nu intra in copie
-SEMNE_PORNIRE = ("hds-accel.pornire", "hds-accel.lucru", "hds-gpu.pornire", "hds-procesor.proba")
+# semnul de pornire al memoriei Dreambox prin ION (hds-dreambox-ion.pornire, Components/HdsDreamboxIon.py)
+SEMNE_PORNIRE = ("hds-accel.pornire", "hds-accel.lucru", "hds-gpu.pornire", "hds-procesor.proba",
+	"hds-dreambox-ion.pornire")
 # pe niciun receptor (nici din copiile mai vechi): SEMNE_PORNIRE, oprirea automata a placilor (hds-fara-accel,
 # hds-fara-gpu), vechiul comutator al accelerarii, lacatul de proba al motorului (hds-fara-motor,
 # Components/HdsMotorTuner.py) si evenimentul paznicului (hds-paznic.eveniment, aratat o data la pornirea sesiunii,
@@ -208,7 +225,27 @@ VERSIUNE_FARA_PAROLA_PORNITA = (0, 7, 1)
 # semnul (in DOSAR_RESTAURARE) verificarii facute o singura data dupa actualizare: regula oprita pusa la loc dintr-o
 # copie veche de o imagine care inca o punea (repara_regula_ssh)
 SEMN_REGULA_SSH = "regula-ssh-verificata"
+# Sursele adaugate de om din Extensii > Surse (sistem.json, surse_pachete). La punere lista copiei se UNESTE cu cea de acum
+# (pune_surse_pachete): sursele de acum raman toate; din copie se adauga numai cele al caror nume si adresa nu sunt deja in
+# etc/opkg si care nu sunt un feed pus singur de imagine (sursa_feed_imagine). Pana in 0.7.7 lista copiei inlocuia fisierul:
+# pusa la loc din meniu, o copie mai veche stergea sursele adaugate dupa ea (forum 1267).
 FIS_SURSE = "etc/opkg/hds-surse-utilizator.conf"
+# Sursele de pachete puse de om altfel decat din Extensii (scriptul de instalare al autorului unui plugin, sau de mana): un
+# fisier etc/opkg/<nume>.conf care nu e al niciunui pachet instalat si nu e scris de imagine (FISIERE_SURSE_IMAGINII si
+# numele care incep cu hds: hds-surse-utilizator.conf, hds-pluginuri-externe.conf, hdsatelit-*.conf). Dupa o imagine noua se
+# pierdeau, iar pluginurile din ele nu se mai puteau pune din nou din feed. In sistem.json (surse_alte) intra numai
+# randurile src / src/gz cu nume si adresa verificate (fara parola sau parametri in adresa, fara alte optiuni, fara sursele
+# imaginii: GAZDE_IMAGINII); se pun la loc cu acelasi nume de fisier, numai pe receptorul copiei, numai cand imaginea nu are
+# fisierul si numai sursele al caror nume si adresa nu sunt deja in etc/opkg (opkg nu primeste doua surse cu acelasi nume).
+DOSAR_SURSE = "etc/opkg"
+FISIERE_SURSE_IMAGINII = ("opkg.conf", "arch.conf", "all-feed.conf")
+# domeniile surselor imaginii (Components/HdsPachete.DOMENIU_HDS, Components/HdsPluginuriExterne.GAZDA; un test le compara)
+GAZDE_IMAGINII = ("hdsatelit.com", "moneasoftware.com")
+TIPAR_FISIER_SURSE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,63}\.conf\Z")
+TIPAR_NUME_SURSA = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,63}\Z")
+TIPAR_ADRESA_SURSA = re.compile(r"^https?://([A-Za-z0-9][A-Za-z0-9.-]{0,252})(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%/+-]*)?\Z")
+MAX_FISIERE_SURSE = 20
+ANTET_SURSE_ALTE = "# Pus la loc din copia setarilor: sursele de pachete de dinainte de imaginea noua."
 FIS_POARTA = "etc/default_gw"
 TIPAR_INTERFATA = re.compile(r"^[A-Za-z0-9._-]{1,15}\n?\Z")
 MAX_SURSE = 50
@@ -612,6 +649,14 @@ def _medii_de_proba():
 def nume_mediu(mediu):
 	fel = mediu.get("fel")
 	nume = mediu.get("eticheta") or mediu.get("punct") or ""
+	try:
+		from Components.Harddisk import storagePathName
+		place = mediu.get("punct") or ""
+		text = storagePathName(place)
+		if text != place:
+			nume = text
+	except ImportError:
+		pass
 	if fel == "disc":
 		text = _("Disc „%s”") % nume
 	elif (mediu.get("dispozitiv") or "").startswith("/dev/mmcblk"):
@@ -1201,13 +1246,14 @@ def _configurari_plugin(rad, nume):
 	return rez
 
 
-def _ipk_plugin(rad, nume, punct):
-	strofa = _strofe_status(rad).get(nume, "")
-	versiune = _camp(strofa, "Version").split(":", 1)[-1]
-	arh = _camp(strofa, "Architecture")
-	if not versiune or not arh or not re.match(r"^[A-Za-z0-9.+_~-]+$", versiune + arh):
-		return None
-	cautat = "%s_%s_%s.ipk" % (nume, versiune, arh)
+def _index_ipk(rad, punct):
+	"""{nume.ipk: cale} din locurile in care se cauta pachetele pluginurilor (DOSARE_IPK, mediul copiei, apoi mediile
+	montate), fiecare loc parcurs O SINGURA DATA pe copie, cu regulile cautarii de dinainte: pana la adancimea 5, fara
+	copii-setari, dosare cu punct si legaturi, cel mult 10000 de intrari pe loc; la acelasi nume castiga primul gasit (locul
+	dinainte, apoi ordinea parcurgerii), numai fisiere obisnuite de cel mult MAX_ARHIVA. ASI7 (22.11.2026, asistenta 190608,
+	stick cu 25 de sloturi montate): pana acum fiecare plugin parcurgea din nou toate locurile, iar copia de la intrarea
+	echipei tinea minute (pe PC, 30 de pluginuri si 25 de medii mici: 83 s, 99% aici)."""
+	index = {}
 	dosare = [_c(rad, d) for d in DOSARE_IPK] + [punct]
 	dosare += [m["punct"] for m in medii(rad)]
 	for baza in dict.fromkeys(dosare):
@@ -1221,10 +1267,27 @@ def _ipk_plugin(rad, nume, punct):
 			vazute += len(fisiere) + len(sub)
 			if vazute > 10000:
 				break
-			cale = os.path.join(d, cautat)
-			if cautat in fisiere and not os.path.islink(cale) and os.path.isfile(cale) and os.path.getsize(cale) <= MAX_ARHIVA:
-				return cale
-	return None
+			for f in fisiere:
+				if not f.endswith(".ipk") or f in index:
+					continue
+				cale = os.path.join(d, f)
+				if not os.path.islink(cale) and os.path.isfile(cale) and os.path.getsize(cale) <= MAX_ARHIVA:
+					index[f] = cale
+	return index
+
+
+def _ipk_plugin(rad, nume, punct, index=None, strofe=None):
+	"""Pachetul .ipk al pluginului (numele, versiunea si arhitectura din status), sau None. index (_index_ipk) si strofe
+	(_strofe_status) se dau de _date_pluginuri, facute o data pe copie; fara ele se fac aici, pentru un singur plugin."""
+	strofa = (strofe if strofe is not None else _strofe_status(rad)).get(nume, "")
+	versiune = _camp(strofa, "Version").split(":", 1)[-1]
+	arh = _camp(strofa, "Architecture")
+	if not versiune or not arh or not re.match(r"^[A-Za-z0-9.+_~-]+$", versiune + arh):
+		return None
+	cautat = "%s_%s_%s.ipk" % (nume, versiune, arh)
+	if index is None:
+		index = _index_ipk(rad, punct)
+	return index.get(cautat)
 
 
 def dosar_ipk_refacute(punct):
@@ -1384,6 +1447,9 @@ def _date_pluginuri(rad, nume_pluginuri, punct, reface_pachete=False):
 	total = 0
 	total_ipk = 0
 	in_feeduri = set()
+	# o singura citire a status si o singura parcurgere a locurilor .ipk pe copie (ASI7, _index_ipk)
+	strofe = _strofe_status(rad) if nume_pluginuri else {}
+	index_ipk = None
 	if reface_pachete and nume_pluginuri:
 		try:
 			in_feeduri = set(_reinstalare()._in_liste(rad))
@@ -1443,7 +1509,9 @@ def _date_pluginuri(rad, nume_pluginuri, punct, reface_pachete=False):
 				if rel not in surse:
 					surse[rel] = cale
 					total += st.st_size
-			ipk = _ipk_plugin(rad, nume, punct)
+			if index_ipk is None:
+				index_ipk = _index_ipk(rad, punct)
+			ipk = _ipk_plugin(rad, nume, punct, index_ipk, strofe)
 			refacut = False
 			if not ipk and reface_pachete and nume not in in_feeduri and not intrare["fara_lista"]:
 				ipk = _ipk_refacut(rad, nume, dosar_ipk_refacute(punct))
@@ -1767,6 +1835,7 @@ def _fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, refac
 	dosar_copii = os.path.join(punct, *DOSAR_PE_MEDIU.split("/"))
 	fisiere = _fisiere_setari(rad)
 	module = module_acces(rad)
+	chei_module = fisiere_chei_module(rad)
 	pluginuri = _pluginuri_de_pus(rad, module)
 	try:
 		meta_pluginuri, surse_pluginuri = _date_pluginuri(rad, pluginuri, punct, reface_pachete)
@@ -1781,6 +1850,7 @@ def _fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, refac
 		marimi.extend(_c(rad, rel) for rel in p["fisiere"])
 		if p["ipk"]:
 			marimi.append(p["ipk"])
+	marimi.extend(_c(rad, rel) for rel in chei_module)
 	for cale in marimi:
 		try:
 			necesar += os.path.getsize(cale)
@@ -1857,6 +1927,9 @@ def _fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, refac
 			are.append("acces")
 		elif os.path.exists(os.path.join(part, ARH_ACCES)):
 			os.remove(os.path.join(part, ARH_ACCES))
+		# cheile din /usr/keys si /var/keys tin de modulele de acces: pe ecran apar sub acelasi rand al modulelor
+		if _scrie_chei_module(rad, os.path.join(part, ARH_CHEI_MODULE), chei_module) and "acces" not in are:
+			are.append("acces")
 		while True:
 			try:
 				_scrie_pluginuri(os.path.join(part, ARH_PLUGINURI), meta_pluginuri, surse_pluginuri)
@@ -1985,6 +2058,114 @@ def _reporneste_ssh(rad):
 		return False
 
 
+# ---------------------------------------------------------------- cheile modulelor (chei-module.tar.gz)
+
+def fisiere_chei_module(rad=None):
+	"""Fisierele din DOSARE_CHEI_MODULE care intra in copie: [rel], numai fisiere obisnuite de cel mult MAX_FISIER_CHEI,
+	fara legaturi; un dosar care e legatura sau are una pe drum se sare (fisierele lui intra prin dosarul adevarat).
+	Continutul nu se citeste. Numai citire."""
+	rad = radacina(rad)
+	rez = []
+	sarite = 0
+	for rel_d in DOSARE_CHEI_MODULE:
+		d = _c(rad, rel_d)
+		if not _fara_legaturi(rad, rel_d) or not os.path.isdir(d):
+			continue
+		for dosar, dosare, fisiere in os.walk(d):
+			dosare[:] = sorted(x for x in dosare if not os.path.islink(os.path.join(dosar, x)))
+			rel_dosar = os.path.relpath(dosar, _c(rad, "")).replace("\\", "/")
+			for n in sorted(fisiere):
+				try:
+					st = os.lstat(os.path.join(dosar, n))
+				except OSError:
+					continue
+				if not stat.S_ISREG(st.st_mode):
+					continue
+				if st.st_size > MAX_FISIER_CHEI or len(rez) >= MAX_FISIERE_CHEI:
+					sarite += 1
+					continue
+				rez.append(rel_dosar + "/" + n)
+	if sarite:
+		_jurnal("cheile modulelor: %d fisiere sarite (peste %d MiB sau peste %d fisiere)" % (sarite,
+			MAX_FISIER_CHEI // (1024 * 1024), MAX_FISIERE_CHEI))
+	return rez
+
+
+def _scrie_chei_module(rad, cale, gasite=None):
+	"""chei-module.tar.gz: fisierele `gasite` (implicit fisiere_chei_module), octet cu octet, cu drepturile lor. Intoarce
+	cate au intrat; fara niciunul arhiva nu se scrie. Un fisier care nu se mai poate citi sau a crescut peste limita se
+	sare."""
+	if gasite is None:
+		gasite = fisiere_chei_module(rad)
+	if not gasite:
+		return 0
+	n = 0
+	f, tf = _deschide_tar_scriere(cale)
+	try:
+		for rel in gasite:
+			c = _c(rad, rel)
+			try:
+				st = os.lstat(c)
+				if stat.S_ISREG(st.st_mode):
+					_adauga_fisier(tf, c, rel, st, MAX_FISIER_CHEI)
+					n += 1
+			except (OSError, LimitaCopie) as eroare:
+				_jurnal("cheile modulelor: un fisier sarit (%s)" % eroare.__class__.__name__)
+	finally:
+		_inchide_tar_scriere(f, tf)
+	if not n:
+		os.remove(cale)
+	return n
+
+
+def _permis_chei_module(nume, m):
+	"""Locurile permise in chei-module.tar.gz: numai fisiere obisnuite (si dosarele lor) sub DOSARE_CHEI_MODULE."""
+	if m.isdir():
+		return nume in ("usr", "var") or any(nume == d or nume.startswith(d + "/") for d in DOSARE_CHEI_MODULE)
+	return m.isreg() and m.size <= MAX_FISIER_CHEI and any(nume.startswith(d + "/") for d in DOSARE_CHEI_MODULE)
+
+
+def _dosar_chei_bun(rad, rel):
+	"""Dosarul fisierului `rel` din chei-module.tar.gz se poate scrie: fara legaturi pe drum, sau cu o legatura care duce
+	tot intr-un dosar al cheilor sau in dosarul configurarii modulelor, sub aceeasi radacina si existent (o imagine cu
+	/var/keys legat spre /usr/keys primeste cheile acolo, unde le cauta modulele)."""
+	dosar = rel.rsplit("/", 1)[0]
+	if _fara_legaturi(rad, dosar):
+		return True
+	try:
+		baza = os.path.realpath(_c(rad, ""))
+		real = os.path.realpath(_c(rad, dosar))
+		if not os.path.isdir(real):
+			return False
+		rel_real = os.path.relpath(real, baza).replace("\\", "/")
+	except (OSError, ValueError):
+		return False
+	if rel_real == ".." or rel_real.startswith("../"):
+		return False
+	locuri = DOSARE_CHEI_MODULE + (DOSAR_CONFIG_ACCES.rstrip("/"),)
+	return any(rel_real == d or rel_real.startswith(d + "/") for d in locuri)
+
+
+def _pune_chei_module(rad, membri):
+	"""Cheile modulelor din copie puse la loc peste cele de acum, octet cu octet (ca etc/tuxbox/config), cu drepturile
+	lor. Intoarce (puse, sarite); se sare un fisier al carui loc e o legatura sau un dosar, sau al carui dosar duce in
+	afara locurilor cheilor (_dosar_chei_bun)."""
+	pus = sarite = 0
+	for nume, m, date in membri:
+		if not m.isreg() or date is None:
+			continue
+		tinta = _c(rad, nume)
+		if not _dosar_chei_bun(rad, nume) or os.path.islink(tinta) or os.path.isdir(tinta):
+			sarite += 1
+			continue
+		d = os.path.dirname(tinta)
+		if not os.path.isdir(d):
+			os.makedirs(d)
+		_scrie_atomic(tinta, date, _mod_fisier(m, 0o644))
+		pus += 1
+	return pus, sarite
+
+
 def chei_bune(date):
 	"""authorized_keys: text, fara cheie privata, fiecare rand negol o cheie publica (cu sau fara optiuni)."""
 	try:
@@ -2013,11 +2194,167 @@ def _modul_imagine(nume):
 		return None
 
 
+def fisier_surse_al_imaginii(nume):
+	"""Numele unui fisier din etc/opkg scris de imagine (sau de opkg), nu de om: FISIERE_SURSE_IMAGINII si cele care incep
+	cu hds."""
+	return nume in FISIERE_SURSE_IMAGINII or nume.lower().startswith("hds")
+
+
+def sursa_imaginii(adresa):
+	"""Adresa unei surse a imaginii (GAZDE_IMAGINII si subdomeniile lor): pe acelea le pune imaginea noua singura."""
+	m = TIPAR_ADRESA_SURSA.match(adresa or "")
+	gazda = m.group(1).lower().rstrip(".") if m else ""
+	return any(gazda == g or gazda.endswith("." + g) for g in GAZDE_IMAGINII)
+
+
+def sursa_alta_buna(s):
+	"""[tip, nume, adresa] are forma unei surse puse de om: src sau src/gz, numele si adresa dupa tipare (fara spatii,
+	fara parola sau parametri in adresa), nu e o sursa a imaginii."""
+	return (isinstance(s, list) and len(s) == 3 and all(isinstance(x, str) for x in s) and s[0] in ("src", "src/gz")
+		and bool(TIPAR_NUME_SURSA.match(s[1])) and len(s[2]) <= 300 and bool(TIPAR_ADRESA_SURSA.match(s[2]))
+		and not sursa_imaginii(s[2]))
+
+
+def randuri_surse(text):
+	"""[[tip, nume, adresa]] din textul unui fisier de surse opkg: numai randurile src / src/gz cu trei cuvinte care trec
+	sursa_alta_buna; comentariile, optiunile (arch, option, dest) si randurile rele raman afara."""
+	rez = []
+	for rand in (text or "").splitlines():
+		parti = rand.split()
+		if len(parti) == 3 and sursa_alta_buna(parti):
+			rez.append(parti)
+	return rez
+
+
+def _cai_ale_pachetelor(rad, cai):
+	"""Care dintre caile `cai` (relative la radacina) sunt in lista vreunui pachet instalat (var/lib/opkg/info/*.list)."""
+	cautate = set(cai)
+	gasite = set()
+	info = _c(rad, "var/lib/opkg/info")
+	try:
+		liste = sorted(n for n in os.listdir(info) if n.endswith(".list"))
+	except OSError:
+		return gasite
+	for n in liste:
+		for rel in _lista_opkg(os.path.join(info, n)):
+			if rel in cautate:
+				gasite.add(rel)
+		if gasite == cautate:
+			break
+	return gasite
+
+
+def surse_alte(rad=None):
+	"""Sursele de pachete puse de om altfel decat din Extensii (vezi DOSAR_SURSE): [[fisier, [[tip, nume, adresa]]]], in
+	ordinea numelor; cel mult MAX_FISIERE_SURSE fisiere si MAX_SURSE surse; [] cand nu e niciuna. Numai citire."""
+	rad = radacina(rad)
+	if not _fara_legaturi(rad, DOSAR_SURSE):
+		return []
+	dosar = _c(rad, DOSAR_SURSE)
+	try:
+		nume = sorted(os.listdir(dosar))
+	except OSError:
+		return []
+	candidati = []
+	for n in nume:
+		cale = os.path.join(dosar, n)
+		if TIPAR_FISIER_SURSE.match(n) and not fisier_surse_al_imaginii(n) and os.path.isfile(cale) \
+				and not os.path.islink(cale):
+			candidati.append(n)
+	if not candidati:
+		return []
+	ale_pachetelor = _cai_ale_pachetelor(rad, [DOSAR_SURSE + "/" + n for n in candidati])
+	rez = []
+	total = 0
+	for n in candidati:
+		if DOSAR_SURSE + "/" + n in ale_pachetelor or len(rez) >= MAX_FISIERE_SURSE:
+			continue
+		date = _citeste_mic(os.path.join(dosar, n), 64 * 1024)
+		randuri = randuri_surse(date.decode("utf-8", "replace") if date else "")[:MAX_SURSE - total]
+		if randuri:
+			rez.append([n, randuri])
+			total += len(randuri)
+	return rez
+
+
+def pune_surse_alte(rad, alte):
+	"""Pune la loc fisierele surselor puse altfel de om (sistem.json, surse_alte), cu acelasi nume, numai cand imaginea nu
+	are fisierul (nici ca legatura) si numai sursele al caror nume si adresa nu sunt deja in etc/opkg (si nici mai sus in
+	copie). Intoarce (fisiere puse, surse puse, surse sarite)."""
+	P = _modul_imagine("Components.HdsPachete")
+	toate = sum(len(r) for _f, r in alte)
+	if P is None or not _fara_legaturi(rad, DOSAR_SURSE):
+		return 0, 0, toate
+	conf = P.citeste_configurarea(rad)
+	nume_acum = set(n for n, _a in conf.surse)
+	adrese_acum = set(a.rstrip("/") for _n, a in conf.surse)
+	dosar = _c(rad, DOSAR_SURSE)
+	fisiere = puse = 0
+	for fisier, randuri in alte:
+		tinta = os.path.join(dosar, fisier)
+		if os.path.lexists(tinta):
+			continue
+		de_scris = []
+		for tip, nume, adresa in randuri:
+			if nume in nume_acum or adresa.rstrip("/") in adrese_acum:
+				continue
+			nume_acum.add(nume)
+			adrese_acum.add(adresa.rstrip("/"))
+			de_scris.append("%s %s %s" % (tip, nume, adresa))
+		if not de_scris:
+			continue
+		os.makedirs(dosar, exist_ok=True)
+		_scrie_atomic(tinta, ("\n".join([ANTET_SURSE_ALTE] + de_scris) + "\n").encode("ascii"), 0o644)
+		fisiere += 1
+		puse += len(de_scris)
+	return fisiere, puse, toate - puse
+
+
+def sursa_feed_imagine(adresa):
+	"""Adresa unui feed pe care imaginea il pune singura, in fisierul ei: feedul actualizarilor
+	(https://stb.hdsatelit.com/feed/<canal>/<baza>/<arh>, Components/HdsActualizari) si feedul pluginurilor externe, si cu
+	adresa de pana in 0.7.7 si cu a bazelor 0.6.x (Components/HdsPluginuriExterne). Scrisa de mana in Surse si adusa dintr-o
+	copie de pe alta baza, o asemenea sursa ar tine actualizarea din meniu si Extensii pe pachetele altei baze."""
+	A = _modul_imagine("Components.HdsActualizari")
+	tipar = getattr(A, "_ADRESA_FEED", None)
+	if tipar is not None and tipar.match(adresa or ""):
+		return True
+	E = _modul_imagine("Components.HdsPluginuriExterne")
+	return E is not None and bool(E.e_feed_extern(adresa) or E.e_feed_extern_vechi(adresa))
+
+
+def pune_surse_pachete(rad, din_copie):
+	"""Pune sursele adaugate de om din Extensii (sistem.json, surse_pachete) PESTE cele de acum (vezi FIS_SURSE): cele de
+	acum raman toate, in ordinea lor; din copie se adauga dupa ele numai sursele al caror nume si adresa nu sunt deja in
+	vreun fisier din etc/opkg (opkg nu primeste doua surse cu acelasi nume) si care nu sunt un feed al imaginii
+	(sursa_feed_imagine), cel mult MAX_SURSE in total. Fara nimic de adaugat, fisierul nu se scrie.
+	Intoarce (puse, sarite) sau None cand fisierul nu s-a putut scrie."""
+	P = _modul_imagine("Components.HdsPachete")
+	if P is None:
+		return None
+	acum = list(P.citeste_surse_utilizator(rad))
+	conf = P.citeste_configurarea(rad)
+	nume_acum = set(n for n, _a in conf.surse)
+	adrese_acum = set(a.rstrip("/") for _n, a in conf.surse)
+	noi = []
+	for nume, adresa in din_copie:
+		if nume in nume_acum or adresa.rstrip("/") in adrese_acum or len(acum) + len(noi) >= MAX_SURSE \
+				or sursa_feed_imagine(adresa):
+			continue
+		nume_acum.add(nume)
+		adrese_acum.add(adresa.rstrip("/"))
+		noi.append((nume, adresa))
+	if noi and P.scrie_surse_utilizator(acum + noi, rad) is not None:
+		return None
+	return len(noi), len(din_copie) - len(noi)
+
+
 def stare_sistem(rad=None):
 	"""Setarile omului din afara /etc/enigma2, pentru sistem.json; {} cand nu e nimic de pus. Numai citire.
 	  ssh_fara_parola, ftp_fara_parola: cand fisierul regulii exista, True = o regula - (fara parola in casa);
 	  surse_pachete     [[nume, adresa]]: sursele adaugate de om, numai randurile care trec verificarea
 						(citeste_surse_utilizator din Components/HdsPachete.py: fara spatii, fara parole in adresa);
+	  surse_alte        [[fisier, [[tip, nume, adresa]]]]: sursele puse de om altfel decat din Extensii (surse_alte);
 	  poarta_implicita  interfata din /etc/default_gw, octet cu octet (Screens/NetworkSetup.py o scrie fara rand nou)."""
 	rad = radacina(rad)
 	rez = {}
@@ -2031,6 +2368,9 @@ def stare_sistem(rad=None):
 			surse = [[n, a] for n, a in pachete.citeste_surse_utilizator(rad)][:MAX_SURSE]
 			if surse:
 				rez["surse_pachete"] = surse
+	alte = surse_alte(rad)
+	if alte:
+		rez["surse_alte"] = alte
 	poarta = _citeste_mic(_c(rad, FIS_POARTA), 64)
 	if poarta is not None:
 		text = poarta.decode("ascii", "replace")
@@ -2080,6 +2420,20 @@ def _sistem_din_copie(dosar):
 					return None, "o sursa de pachete nu trece verificarea"
 				vazute.append(s[0])
 			rez["surse_pachete"] = [list(s) for s in surse]
+	if "surse_alte" in d:
+		alte = d["surse_alte"]
+		if not isinstance(alte, list) or len(alte) > MAX_FISIERE_SURSE:
+			return None, "sursele puse altfel nu sunt o lista buna"
+		bune = []
+		for x in alte:
+			if (not isinstance(x, list) or len(x) != 2 or not isinstance(x[0], str) or not TIPAR_FISIER_SURSE.match(x[0])
+					or fisier_surse_al_imaginii(x[0]) or x[0] in [f for f, _r in bune] or not isinstance(x[1], list)
+					or not x[1] or not all(sursa_alta_buna(s) for s in x[1])):
+				return None, "o sursa pusa altfel nu trece verificarea"
+			bune.append([x[0], [list(s) for s in x[1]]])
+		if sum(len(r) for _f, r in bune) > MAX_SURSE:
+			return None, "sursele puse altfel sunt prea multe"
+		rez["surse_alte"] = bune
 	return rez, None
 
 
@@ -2702,6 +3056,12 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		if acces is None:
 			_jurnal("copia modulelor de acces conditionat refuzata; restul se pune")
 			note.append(Nota.N_("Copia modulelor de acces condiționat nu e bună (%s); nu s-a pus la loc.", eroare))
+	chei_module = None
+	if acest and ARH_CHEI_MODULE in d["md5"]:
+		chei_module, eroare = _citeste_arhiva(os.path.join(dosar, ARH_CHEI_MODULE), _permis_chei_module)
+		if chei_module is None:
+			_jurnal("copia cheilor modulelor refuzata; restul se pune")
+			note.append(Nota.N_("Copia modulelor de acces condiționat nu e bună (%s); nu s-a pus la loc.", eroare))
 	sistem = None
 	sistem_refuzat = False
 	if acest and FIS_SISTEM in d["md5"]:
@@ -2970,15 +3330,28 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 		if "poarta" in sistem_puse:
 			_jurnal("reteaua: interfata implicita pusa la loc (/etc/default_gw)")
 		if sistem and sistem.get("surse_pachete"):
-			pachete_surse = _modul_imagine("Components.HdsPachete")
-			surse = [tuple(s) for s in sistem["surse_pachete"]]
-			if pachete_surse is not None and pachete_surse.citeste_surse_utilizator(rad) != surse:
-				motiv_surse = pachete_surse.scrie_surse_utilizator(surse, rad)
-				if motiv_surse is None:
+			# unite cu cele de acum: o sursa adaugata dupa copie ramane (forum 1267)
+			try:
+				rez_surse = pune_surse_pachete(rad, [tuple(s) for s in sistem["surse_pachete"]])
+			except Exception as eroare:
+				rez_surse = None
+				_jurnal("sursele de pachete adaugate de om: %s" % eroare.__class__.__name__)
+			if rez_surse is None:
+				_jurnal("sursele de pachete nu s-au scris")
+			else:
+				if rez_surse[0]:
 					sistem_puse.append("surse")
-					_jurnal("sursele de pachete adaugate de om: %d puse la loc" % len(surse))
-				else:
-					_jurnal("sursele de pachete nu s-au scris")
+				_jurnal("sursele de pachete adaugate de om: %d puse la loc, %d sarite (numele sau adresa exista deja, "
+					"sau e un feed pus de imagine)" % rez_surse)
+		if sistem and sistem.get("surse_alte"):
+			try:
+				fisiere_surse, surse_puse, surse_sarite = pune_surse_alte(rad, sistem["surse_alte"])
+				if surse_puse and "surse" not in sistem_puse:
+					sistem_puse.append("surse")
+				_jurnal("sursele de pachete puse altfel de om: %d surse puse la loc in %d fisiere, %d sarite (fisierul, "
+					"numele sau adresa exista deja)" % (surse_puse, fisiere_surse, surse_sarite))
+			except Exception as eroare:
+				_jurnal("sursele de pachete puse altfel de om nu s-au scris (%s)" % eroare.__class__.__name__)
 		if sistem_puse:
 			pus.append("sistem")
 	except Exception as eroare:
@@ -3004,9 +3377,10 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 	if baza_alta:
 		_jurnal("copia e de pe alta baza a imaginii (%s, acum %s): binarele ei nu se copiaza, pachetele se pun din nou "
 			"din feeduri" % (d.get("versiune") or "?", versiune_imagine(rad)[1] or "?"))
+	# modulul se porneste dupa cheile lui (chei-module.tar.gz), ca sa le citeasca de la prima pornire
 	if acces:
 		try:
-			n, motive = _pune_acces(rad, acces, pachete, porneste_modulele and not baza_alta, baza_alta)
+			n, motive = _pune_acces(rad, acces, pachete, False, baza_alta)
 			if n:
 				pus.append("acces")
 				_jurnal("modulele de acces conditionat: %d fisiere puse la loc" % n)
@@ -3015,6 +3389,16 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 			_jurnal("modulele de acces conditionat: %s" % eroare.__class__.__name__)
 			note.append(Nota.N_("Modulele de acces condiționat nu s-au putut pune la loc."))
 			return rez
+	if chei_module:
+		try:
+			n, sarite = _pune_chei_module(rad, chei_module)
+			if n and "acces" not in pus:
+				pus.append("acces")
+			_jurnal("cheile modulelor (/usr/keys, /var/keys): %d fisiere puse la loc, %d sarite" % (n, sarite))
+		except Exception as eroare:
+			_jurnal("cheile modulelor nu s-au pus la loc (%s); restul merge mai departe" % eroare.__class__.__name__)
+	if acces and porneste_modulele and not baza_alta:
+		_porneste_modulul(rad)
 	# Datele necriptate si conturile pluginurilor urmeaza stickul.
 	if d.get("pluginuri") and (acest or any(p["fisiere"] for p in meta_pluginuri)):
 		try:

@@ -54,7 +54,7 @@ def _t(text):
 MOD_NIMIC, MOD_CITITOR, MOD_PROBA, MOD_ASOCIERE = "", "cititor", "proba", "asociere"
 CALE_DESEN_SVG = None      # probele pun aici desenul; pe receptor: resolveFilename(SCOPE_SKIN_IMAGE, ...)
 CALE_ASOCIERI = None       # probele pun aici fisierul; pe receptor: D.CALE_ASOCIERI
-CALE_IR = "/proc/hisi/msp/ir"
+CALE_IR = None
 MAPPER = None              # probele pun aici un eRCMapper fals
 AMANA = None               # probele pun aici amanarea (altfel un eTimer de 0 ms)
 ANUNTA = None              # probele pun aici anuntul de pe televizor (altfel Notifications.AddPopup)
@@ -125,6 +125,7 @@ class _Stare(object):
 		self.proba = None           # proba se pastreaza intre porniri, ca pe televizor cat e deschis ecranul (P28)
 
 	def goleste(self):
+		self.profil = None
 		self.mod = MOD_NIMIC
 		self.captura = False        # captura din C++ e pornita de pagina
 		self.ultimul = 0
@@ -146,6 +147,21 @@ class _Stare(object):
 
 
 S = _Stare()
+
+
+def _profil(D):
+	if S.profil is None:
+		S.profil = D.profil_receptor()
+	profil = D.profil_actual(S.profil)
+	if profil is not S.profil:
+		S.profil = profil
+		if S.proba is not None:
+			S.proba.actualizeaza_profil(profil)
+		if S.contor_ir is not None:
+			S.contor_ir.profil = profil
+	return S.profil
+
+
 _LEGAT = {"da": False}
 _CEASURI = []
 
@@ -215,8 +231,8 @@ def _captura_televizor(m):
 
 # ------------------------------------------------------------------ tastele (din C++)
 def _buton_ev(D, ev):
-	"""Butonul Viper al unui eveniment: cel in care se traduce sau, de pe telecomanda receptorului, el insusi."""
-	return D.DUPA_COD.get(ev["tinta"] if ev["tinta"] >= 0 else (ev["cod"] if ev["dispozitiv"] == D.NATIV else -1))
+	"""Butonul profilului: tinta asocierii sau codul propriu primit prin API."""
+	return _profil(D).buton(ev)
 
 
 def _aprinde(D, ev, b):
@@ -363,11 +379,11 @@ def porneste(fel):
 		S.captura = True
 		if fel == "cititor":
 			S.mod = MOD_CITITOR
-			S.contor_ir = D.ContorIR(0) if _exista(_cale_ir()) else None
+			S.contor_ir = D.ContorIR(0, _profil(D))
 		else:
 			S.mod = MOD_PROBA
 			if fel == "proba-noua" or S.proba is None:
-				S.proba = D.Proba()
+				S.proba = D.Proba(_profil(D))
 		_anunta(_("Pagina web vede tastele apăsate."))
 		return dict(stare(), result=True, message="")
 	# asocierea: fisierul citit din nou (ecranul poate sa-l fi schimbat), copia de dinainte pentru „nu pastra”
@@ -381,7 +397,7 @@ def porneste(fel):
 		return _raspuns(dict(stare(), result=False, message=_("Asocierea nu poate porni acum.")), 409)
 	S.captura = True
 	S.mod = MOD_ASOCIERE
-	S.contor_ir = D.ContorIR(0) if _exista(_cale_ir()) else None
+	S.contor_ir = D.ContorIR(0, _profil(D))
 	_anunta(_("Asociere pornită din browser"))
 	return dict(stare(), result=True, message="")
 
@@ -585,26 +601,31 @@ def _procFundal(functie, *argumente):
 	return HdsProcFundal.citeste(functie, *argumente)
 
 
-def _citesteIrText(cale):
-	try:
-		with open(cale) as f:
-			return f.read(8192)
-	except (OSError, IOError):
-		return None
+def _citesteIrText(cale, automat=False):
+	# Momentul inceperii, ca un rezultat vechi din cache sa nu intre in alta captura.
+	inceput = time.perf_counter()
+	return inceput, _d().citeste_ir(None if automat else cale)
 
 
 def _citeste_ir():
-	if S.contor_ir is None:
+	if S.contor_ir is None or not S.captura:
 		return
-	text = _procFundal(_citesteIrText, _cale_ir())
-	if text is None:
-		S.contor_ir = None
+	contor = S.contor_ir
+	cale = _cale_ir()
+	citire = _procFundal(_citesteIrText, cale or '/proc/hisi/msp/ir', cale is None)
+	if S.contor_ir is not contor or not S.captura:
 		return
-	S.ir = S.contor_ir.fereastra(text)
+	if citire is None or citire[0] <= contor.pornit_la:
+		return
+	text = citire[1]
+	n = S.contor_ir.fereastra(text)
+	if n is not None:
+		S.ir = n
 
 
 def _captura_cititor(D):
 	randuri = []
+	profil = _profil(D)
 	ev = S.ev
 	mare = _("Apasă orice buton.")
 	if ev is not None:
@@ -616,36 +637,35 @@ def _captura_cititor(D):
 		else:
 			mare = D.nume_tasta(ev["cod"], _nume_taste()) or (_("cod %d") % ev["cod"])
 		disp = ev["dispozitiv"]
-		randuri.append(_("Dispozitiv: %s") % (_("telecomanda receptorului") + " (%s)" % disp if disp == D.NATIV else disp))
+		randuri.append(_("Dispozitiv: %s") % (_("telecomanda receptorului") + " (%s)" % disp if profil.propriu(disp) else disp))
 		if ev["fel"] != D.ASCII:
 			randuri.append(_("Cod: %d (0x%X) %s") % (ev["cod"], ev["cod"], D.nume_tasta(ev["cod"], _nume_taste())))
 		randuri.append(_("Felul: %s") % _(D.FELURI.get(ev["fel"], "")))
 		if ev["scan"] >= 0:
-			randuri.append(_("Cod brut USB (HID): 0x%X") % ev["scan"])
-		if b is not None and disp != D.NATIV:
+			randuri.append((_("Cod brut: 0x%X") if profil.propriu(disp)
+				else _("Cod brut USB (HID): 0x%X")) % ev["scan"])
+		if b is not None and not profil.propriu(disp):
 			randuri.append(_("Merge ca butonul %s al telecomenzii receptorului") % _(b[1]))
-		if disp == D.NATIV and b is not None:
+		if profil.viper and profil.propriu(disp) and b is not None:
 			randuri.append(_("IR: NEC, adresa 0x02 0xCD, comanda 0x%02X, KeyId 0x%08X") % (b[4], D.keyid_viper(b[4])))
 	else:
 		randuri.append(_("Tastele merg și pe televizor cât ascultă pagina; aici se arată codul lor."))
 	if S.ir:
 		randuri.append(_("Semnale IR pe care receptorul nu le folosește: %d") % S.ir)
 		randuri.append(_("Receptorul a primit un semnal de la altă telecomandă, dar nu îl poate citi încă."))
+	randuri.extend(D.detalii_ir(profil, S.contor_ir, _))
 	return {"titlu": _("Cititor de coduri"), "mare": mare, "detalii": randuri, "istoric": list(reversed(S.istoric))}
 
 
 def _captura_proba(D):
 	p = S.proba
-	if p.gata():
-		mare = _("Toate butoanele merg.")
-	else:
-		mare = _("%d din %d de butoane verificate") % (len(p.verificate), D.NUMAR_BUTOANE)
-	randuri = []
+	mare = D.text_proba(p, _)
+	randuri = D.detalii_profil(p.profil, _)
 	ramase = p.ramase()
 	if ramase:
-		randuri.append(_("Încă neapăsate: %s") % ", ".join(_(D.DUPA_ID[i][1]) for i in ramase))
+		randuri.append(_("Încă neapăsate: %s") % ", ".join(_(p.profil.dupa_id[i][1]) for i in ramase))
 	ev = S.ev
-	if ev is not None and ev["dispozitiv"] != D.NATIV:
+	if ev is not None and not p.profil.propriu(ev["dispozitiv"]):
 		randuri.append(_("de pe: %s, cod %d") % (ev["dispozitiv"], ev["cod"]))
 	return {"titlu": _("Proba tastelor"), "mare": mare, "detalii": randuri, "istoric": p.istoric(_)}
 
@@ -672,6 +692,7 @@ def _captura_asociere(D):
 			_("O telecomandă cu infraroșu, alta decât a receptorului, nu se poate asocia încă.")]
 		if S.ir:
 			randuri.append(_("Receptorul primește semnalul unei telecomenzi cu infraroșu, dar nu îl poate folosi încă."))
+		randuri.extend(D.detalii_ir(_profil(D), S.contor_ir, _))
 		if S.rezultat == "propriu":
 			randuri.insert(0, _("Aceasta e telecomanda receptorului. Apasă un buton pe cealaltă telecomandă."))
 		if S.asteapta:
@@ -722,9 +743,18 @@ def _captura_asociere(D):
 		"cerut": b[0] if b is not None and not S.asteapta else None}
 
 
+def taste_model():
+	try:
+		from Components.HdsZgemma import taste, modelAcum
+	except ImportError:
+		return []
+	return [{"eticheta": _(text), "cod": cod} for text, cod in taste(modelAcum())]
+
+
 def stare():
 	"""Pentru GET /api/telecomenzi. Prelucreaza tastele venite si da semnul de viata numai pentru captura paginii."""
 	D = _d()
+	_profil(D)
 	m = _mapper()
 	if m is not None and S.captura:
 		if m.getCaptureMode() == m.captureOff:
@@ -762,19 +792,69 @@ def stare():
 		"aprinse": sorted(S.aprinse),
 		"semne": semne,
 		"proba_inceputa": bool(S.proba is not None and S.proba.verificate),
-		"proba_text": (_("%d din %d de butoane verificate") % (len(S.proba.verificate), D.NUMAR_BUTOANE)
+		"proba_text": (D.text_proba(S.proba, _)
 			if S.proba is not None and S.proba.verificate else ""),
 		"telecomenzi": _telecomenzi(D, date),
 		"mesaj_fisier": mesaj,
-		"butoane_viper": [{"id": b[0], "eticheta": _(b[1]), "cod": b[2]} for b in D.BUTOANE_VIPER],
+		"butoane_viper": [{"id": b[0], "eticheta": _(b[1]), "cod": b[2]} for b in _profil(D).butoane],
+		"profil": {"model": _profil(D).model, "complet": bool(_profil(D).butoane)},
+		"desen_svg": _desen(),
+		"taste_model": taste_model(),
 	}
 
 
 # ------------------------------------------------------------------ rutele
+def _tastaturaAcum():
+	from . import plugin
+	ecran = getattr(plugin._sesiune, "current_dialog", None)
+	return ecran if getattr(ecran, "hdsTastaturaEditabila", False) else None
+
+
+_GENERATIE_TASTATURA = 0
+
+
+def tastaturaText(comanda="", text="", ecran=""):
+	"""Operate on the active TV keyboard, never on a separate web text buffer."""
+	k = _tastaturaAcum()
+	if k is None:
+		return {"result": not bool(comanda), "activa": False}
+	global _GENERATIE_TASTATURA
+	if not hasattr(k, "_generatieTextWeb"):
+		_GENERATIE_TASTATURA += 1
+		k._generatieTextWeb = str(_GENERATIE_TASTATURA)
+	ident = k._generatieTextWeb
+	if comanda and ecran != ident:
+		return {"result": False, "activa": False}
+	if comanda == "scrie":
+		k.scrieText(text)
+	elif comanda == "sterge":
+		k.backClicked()
+	elif comanda == "salveaza":
+		k.ok()
+		return {"result": True, "activa": False}
+	elif comanda == "anuleaza":
+		k.exit()
+		return {"result": True, "activa": False}
+	elif comanda:
+		k.comandaText(comanda)
+	camp = getattr(k, "_editText", None)
+	secret = bool(getattr(k, "hdsCampSecret", False))
+	return {"result": True, "activa": True, "ecran": ident, "secret": secret,
+		"text": k["text"].getText(),
+		"cursor": camp.currPos if camp is not None else len(k["text"].getText()),
+		"rtl": k.lang == "ar_AE", "marime": getattr(k, "marimeText", 100),
+		"comenzi": [{"text": label, "comanda": cmd} for label, cmd in k.optiuniText()]}
+
+
+def _argumentText(request, nume):
+	v = (request.args.get(nume.encode("ascii")) or [b""])[0]
+	return v.decode("utf-8", "replace") if isinstance(v, bytes) else str(v)
+
+
 def argumente(request):
 	permise = ("fel", "pas", "pastreaza", "actiune", "id", "cod", "nume", "confirmat", "format")
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:12]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in permise:
@@ -782,7 +862,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:64].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -796,6 +876,8 @@ def rute(baza, resource):
 
 	class StareResource(baza):
 		def render_GET(self, request):
+			if _argumentText(request, "tastatura"):
+				return self._raspunde(request, tastaturaText())
 			try:
 				return self._raspunde(request, stare())
 			except Exception as eroare:
@@ -827,6 +909,12 @@ def rute(baza, resource):
 			return pas(a.get("pas", ""), a.get("pastreaza"))
 
 	class SchimbaResource(_Schimba):
+		def render_POST(self, request):
+			if _argumentText(request, "comanda"):
+				return self._raspunde(request, tastaturaText(_argumentText(request, "comanda"),
+					_argumentText(request, "text"), _argumentText(request, "ecran")))
+			return _Schimba.render_POST(self, request)
+
 		def lucru(self, a):
 			return schimba(a.get("actiune", ""), a.get("id", ""), a.get("cod", ""), a.get("nume", ""), a.get("confirmat", ""))
 
@@ -840,9 +928,9 @@ def rute(baza, resource):
 				return self._eroare(request, _t("Se alege format=json sau format=csv."))
 			date, _mesaj = _incarca(D)
 			if fel == "json":
-				corp, tip = D.export_json(date), b"application/json; charset=utf-8"
+				corp, tip = D.export_json(date, _profil(D)), b"application/json; charset=utf-8"
 			else:
-				corp, tip = D.export_csv(date), b"text/csv; charset=utf-8"
+				corp, tip = D.export_csv(date, _profil(D)), b"text/csv; charset=utf-8"
 			request.setResponseCode(200)
 			request.setHeader(b"content-type", tip)
 			request.setHeader(b"cache-control", b"no-store")
@@ -866,8 +954,14 @@ def rute(baza, resource):
 
 
 # ------------------------------------------------------------------ pagina
-def _desen():
+_DESEN_CITIRE = None
+
+
+def _desen(reincarca=False):
 	"""Desenul SVG al telecomenzii (fisierul imaginii, al nostru); '' daca lipseste sau nu e SVG."""
+	import threading
+	if not _profil(_d()).viper:
+		return ""
 	cale = CALE_DESEN_SVG
 	if cale is None:
 		try:
@@ -875,6 +969,26 @@ def _desen():
 			cale = resolveFilename(SCOPE_SKIN_IMAGE, "telecomanda-viper.svg")
 		except Exception:
 			cale = "/usr/share/enigma2/telecomanda-viper.svg"
+	global _DESEN_CITIRE
+	citire = _DESEN_CITIRE
+	if citire is None or citire['cale'] != cale or (reincarca and citire['gata'].is_set()):
+		# Un singur lucrator; o alta cale asteapta terminarea citirii existente.
+		if citire is not None and not citire['gata'].is_set():
+			return ""
+		citire = {'cale': cale, 'svg': '', 'gata': threading.Event()}
+		_DESEN_CITIRE = citire
+		def incarca():
+			try:
+				citire['svg'] = _citesteDesen(cale)
+			finally:
+				citire['gata'].set()
+		threading.Thread(target=incarca, name='HdsDesenTelecomanda', daemon=True).start()
+		citire['gata'].wait(0.2)
+	return citire['svg'] if citire['gata'].is_set() else ""
+
+
+def _citesteDesen(cale):
+	"""Citeste numai fisierul imaginii, pe lucrator, fara obiecte Enigma2."""
 	try:
 		with open(cale, "rb") as f:
 			text = f.read(256 * 1024).decode("utf-8", "replace")
@@ -914,15 +1028,40 @@ def _drumMeniu(id_intrare):
 	return drumHtml(id_intrare)
 
 
+def _comenzi_virtuale():
+	"""Catalogul existent de comenzi Linux, fara a pretinde un profil fizic sau IR."""
+	from html import escape
+	D = _d()
+	randuri = ['<p class="nota">%s</p>' % escape(_(D.TITLU_COMENZI_VIRTUALE)),
+		'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 %d">' %
+		(48 * ((len(D.BUTOANE_VIPER) + 2) // 3))]
+	for i, b in enumerate(D.BUTOANE_VIPER):
+		x, y = 80 * (i % 3), 48 * (i // 3)
+		eticheta = escape(_(b[1]))
+		randuri.append('<g class="buton" id="b-%s" data-cod="%d" tabindex="0" role="button" aria-label="%s">'
+			'<title>%s</title><polygon points="%d,%d %d,%d %d,%d %d,%d" fill="#242a33" stroke="#9fb4d6"/>'
+			'<text x="%d" y="%d" text-anchor="middle" fill="#ffffff" font-size="10">%s</text></g>' %
+			(b[0], b[2], eticheta, eticheta, x + 2, y + 2, x + 78, y + 2,
+				x + 78, y + 46, x + 2, y + 46, x + 40, y + 28, eticheta))
+	return ''.join(randuri) + '</svg>'
+
+
 def pagina_text(stil, config_pagina, desen=None):
-	svg = _desen() if desen is None else desen
+	from html import escape
+	import json
+	wifi = '<p><a href="/retea">%s</a></p>' % escape(_("Configurează Wi-Fi")) if taste_model() else ""
+	svg = _desen(reincarca=True) if desen is None else desen
 	if not svg:
-		# pus dupa traducerea paginii, deci tradus aici
-		svg = "<p class=\"nota\">%s</p>" % _t("Desenul telecomenzii lipsește din imagine.").replace("&", "&amp;").replace(
-			"<", "&lt;")
-	return _traducePagina(PAGINA).replace("__STIL_COMUN__", stil).replace("__DESEN__", svg).replace("__CONFIG__",
+		svg = _comenzi_virtuale()
+		if _profil(_d()).viper:
+			svg = '<p class="nota">%s</p>' % escape(_t("Desenul telecomenzii lipsește din imagine.")) + svg
+	return _traducePagina(PAGINA).replace("__TASTATURA_TITLU__", _t("Tastatură: editare și mărime")).replace(
+		"__TASTATURA_SCRIE__", _t("Scrie în câmp")).replace("__TEXTE_KBD__", json.dumps({
+		"sterge": _t("Șterge înaintea cursorului"), "salveaza": _t("Salvează"), "anuleaza": _t("Anulează"),
+		"esec": _t("Textul nu a ajuns la receptor.")}, ensure_ascii=True)).replace(
+		"__STIL_COMUN__", stil).replace("__DESEN__", svg).replace("__CONFIG__",
 		config_pagina).replace(
-		"__DRUM_MENIU__", _drumMeniu("hds_telecomenzi"))
+		"__DRUM_MENIU__", _drumMeniu("hds_telecomenzi")).replace("__WIFI_MODEL__", wifi)
 
 
 PAGINA = """<!DOCTYPE html>
@@ -953,6 +1092,7 @@ PAGINA = """<!DOCTYPE html>
   button.galben{background:var(--galben);border-color:var(--galben);color:#241d00;}
   button.albastru{background:var(--albastru);border-color:var(--albastru);color:#fff;}
   .butoane{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;}
+  #tasteModel:empty{display:none;}
   .tel{border-top:1px solid var(--bordura);padding:10px 0;}
   .tel:first-child{border-top:0;}
   .tel .nume{font-size:1rem;margin:0 0 6px;}
@@ -975,9 +1115,19 @@ PAGINA = """<!DOCTYPE html>
 <div class="grila">
   <div>
     <div class="desen" id="desen">__DESEN__</div>
+    <div class="butoane" id="tasteModel"></div>
+    __WIFI_MODEL__
     <p class="nota">Apasă un buton pe desen: receptorul îl primește ca de pe telecomanda lui. Ținut apăsat = apăsare lungă.</p>
   </div>
   <div>
+    <section class="card ascuns" id="tastaturaText">
+      <h2>__TASTATURA_TITLU__</h2>
+      <p id="textTv" dir="auto" style="white-space:pre-wrap"></p>
+      <p id="marimeTv"></p>
+      <div class="butoane" id="comenziText"></div>
+      <form id="scrieText"><input id="textNou" autocomplete="off" aria-label="__TASTATURA_SCRIE__"><button>__TASTATURA_SCRIE__</button></form>
+      <div class="butoane" id="gataText"></div>
+    </section>
     <section class="card" id="cardCaptura">
       <h2 id="titluCaptura">Utilitare</h2>
       <div id="captura" class="ascuns">
@@ -1009,6 +1159,8 @@ PAGINA = """<!DOCTYPE html>
 var CFG = __CONFIG__;
 var DATE = null;
 var CEAS = null;
+var TASTATURA = null;
+var TEXT_KBD = __TEXTE_KBD__;
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
@@ -1028,6 +1180,42 @@ function cerere(cale, metoda, date){
 }
 function mesaj(text, eroare){ var m = $("mesaj"); m.textContent = text || ""; m.classList.toggle("eroare", !!eroare); }
 function buton(text, clasa, f){ var b = document.createElement("button"); b.type = "button"; b.textContent = text; if(clasa){ b.className = clasa; } b.addEventListener("click", f); return b; }
+function arataTastatura(d){
+  TASTATURA = d.activa ? d : null;
+  $("tastaturaText").classList.toggle("ascuns", !TASTATURA);
+  if(!TASTATURA){ return; }
+  $("textTv").textContent = d.text;
+  $("textTv").dir = d.rtl ? "rtl" : "ltr";
+  var p = Array.from(d.text), n = d.cursor;
+  $("textTv").textContent = p.slice(0,n).join("") + "\\u2066|\\u2069" + p.slice(n).join("");
+  $("marimeTv").textContent = String(d.marime) + "%";
+  $("textNou").type = "text";
+  var b = $("comenziText"); b.textContent = "";
+  (d.comenzi || []).forEach(function(c){ b.appendChild(buton(c.text, "", function(){ comandaTastatura(c.comanda); })); });
+  b = $("gataText"); b.textContent = "";
+  [[TEXT_KBD.sterge,"sterge"],[TEXT_KBD.salveaza,"salveaza"],[TEXT_KBD.anuleaza,"anuleaza"]].forEach(function(c){
+    b.appendChild(buton(c[0], "", function(){ comandaTastatura(c[1]); }));
+  });
+}
+var KBD_IN_CURS = false, KBD_REV = 0;
+function comandaTastatura(comanda, text){
+  if(!TASTATURA || KBD_IN_CURS){ return; }
+  KBD_IN_CURS = true; KBD_REV++;
+  var q = new URLSearchParams(); q.set("ecran", TASTATURA.ecran); q.set("comanda", comanda); q.set("text", text || "");
+  return cerere("/api/telecomenzi-schimba", "POST", q).then(function(d){ arataTastatura(d); return d.result; }).catch(function(){
+    mesaj(TEXT_KBD.esec, true); return false;
+  }).finally(function(){ KBD_IN_CURS = false; });
+}
+$("scrieText").addEventListener("submit", function(e){
+  e.preventDefault(); if(KBD_IN_CURS){ return; }
+  if(!TASTATURA){ return; }
+  var text = $("textNou").value;
+  comandaTastatura("scrie", text).then(function(ok){ if(ok && $("textNou").value === text){ $("textNou").value = ""; } });
+});
+function citesteTastatura(){
+  var rev = KBD_REV;
+  if(!KBD_IN_CURS){ cerere("/api/telecomenzi?tastatura=1").then(function(d){ if(rev === KBD_REV && !KBD_IN_CURS){ arataTastatura(d); } }).catch(function(){}); }
+}
 function post(cale, valori){
   var q = new URLSearchParams(); Object.keys(valori || {}).forEach(function(k){ q.set(k, valori[k]); });
   return cerere(cale, "POST", q).then(function(d){
@@ -1120,6 +1308,19 @@ function arataLista(d){
 }
 function arata(d){
   DATE = d;
+  var desen = $("desen");
+  if(d.desen_svg && desen.innerHTML !== d.desen_svg && desen.dataset.svg !== d.desen_svg){
+    ANULARI_DESEN.forEach(function(f){ f(); });
+    desen.innerHTML = d.desen_svg; desen.dataset.svg = d.desen_svg;
+    leagaDesen(); sensuriTelecomanda();
+  }
+  var modelTaste = $("tasteModel"), semnTaste = JSON.stringify(d.taste_model || []);
+  if(modelTaste.dataset.semn !== semnTaste){
+    modelTaste.dataset.semn = semnTaste; modelTaste.textContent = "";
+    (d.taste_model || []).forEach(function(k){
+      modelTaste.appendChild(buton(k.eticheta, "", function(){ tasta(k.cod, false); }));
+    });
+  }
   arataCaptura(d);
   arataLista(d);
   clasa(d.aprinse, "aprins");
@@ -1151,11 +1352,14 @@ function sensuriTelecomanda(){
     });
   }).catch(function(){});
 }
-(function(){
+var ANULARI_DESEN = [];
+function leagaDesen(){
+  ANULARI_DESEN = [];
   document.querySelectorAll("#desen g.buton").forEach(function(g){
     var cod = parseInt(g.getAttribute("data-cod"), 10);
     var tinut = null, apasat = false, lung = false;
     function lasa(){ if(tinut){ clearTimeout(tinut); tinut = null; } apasat = false; }
+    ANULARI_DESEN.push(lasa);
     g.addEventListener("pointerdown", function(e){
       if(e.button){ return; } e.preventDefault(); lasa(); apasat = true; lung = false;
       tinut = setTimeout(function(){ tinut = null; lung = true; tasta(cod, true); }, 700);
@@ -1164,11 +1368,14 @@ function sensuriTelecomanda(){
     g.addEventListener("pointerleave", lasa); g.addEventListener("pointercancel", lasa);
     g.addEventListener("keydown", function(e){ if((e.key === "Enter" || e.key === " ") && !e.repeat){ e.preventDefault(); tasta(cod, false); } });
   });
-})();
+}
+leagaDesen();
 $("stergeTot").addEventListener("click", function(){ post("/api/telecomenzi-schimba", {actiune: "sterge-tot"}); });
 $("exportJson").href = adresa("/api/telecomenzi-export?format=json");
 $("exportCsv").href = adresa("/api/telecomenzi-export?format=csv");
 citeste();
+citesteTastatura();
+setInterval(citesteTastatura, 1000);
 sensuriTelecomanda();
 setInterval(sensuriTelecomanda, 2000);
 </script>

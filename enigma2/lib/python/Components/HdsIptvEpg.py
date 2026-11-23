@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
-"""EPG XMLTV propriu: retea, gzip, analiza si import pe un singur fir separat.
+"""EPG XMLTV propriu: retea, gzip si analiza pe un singur fir separat.
 
 Nu pastreaza documentul XML sau programele unei surse in RAM. SAX tine doar canalul/programul curent;
 textele, dictionarele, grupurile si cache-ul C++ au limite. Nu scrie fisiere si nu jurnalizeaza URL-uri.
@@ -22,6 +22,7 @@ Ce ajunge in cache-ul C++ ramane acelasi, emisiune cu emisiune.
 import calendar
 import datetime
 import re
+import queue
 import threading
 import time
 import zlib
@@ -31,6 +32,7 @@ from xml.parsers import expat
 
 from Components import HdsIptvSurse as I
 from Components import HdsIptvClient as C
+from Components import HdsEpgSalvare as S
 from Components.HdsIptvSurse import N_
 
 MAX_COMPRIMAT = 192 * 1024 * 1024  # intrarea se analizeaza din mers (SAX), deci marimea costa timp, nu memorie; termenul o margineste
@@ -46,7 +48,7 @@ MAX_ALESE = 300                    # cel mult atatea canale alese primesc partea
 
 
 def canaleAlese(director=None):
-	"""Referintele (4097, releul local) ale canalelor de internet din buchetele omului (userbouquet.*, in afara de cele IPTV ale
+	"""Referintele echivalente 4097 ale canalelor din releul local, din buchetele omului (userbouquet.*, in afara de cele IPTV ale
 	imaginii): ele primesc ghidul intai, PE_CANAL_ALES emisiuni, iar restul isi imparte ce ramane din MAX_EVENIMENTE."""
 	import glob
 	import os
@@ -57,7 +59,7 @@ def canaleAlese(director=None):
 		try:
 			with open(f, encoding="utf-8", errors="replace") as fis:
 				for r in fis:
-					if r.startswith("#SERVICE 4097") and "8897" in r:
+					if r.startswith(("#SERVICE 4097:", "#SERVICE 5001:", "#SERVICE 5002:")) and "8897" in r:
 						sid, cheie = I.desparteCale(r)
 						if sid is not None:
 							rez.add(I.refCanal(sid, cheie))
@@ -97,6 +99,138 @@ _ultimele = OrderedDict()
 _fir = None
 _in_lucru = None
 _de_notificat = False
+_cereri_cache = queue.Queue(MAX_LOTURI)
+_lot_ocupat = None
+_stare_de_refacut = None
+_lacat_trezire = threading.Lock()
+_trezire_cache = False
+
+
+class _Oprit(Exception):
+	pass
+
+
+def _verificaOprire():
+	if S.inchis():
+		raise _Oprit()
+
+
+class _CachePrincipal:
+	"""Lucratorul trimite loturi limitate; numai notifica() atinge cache-ul C++."""
+	def __init__(self):
+		self.total = 0
+		self.eroare = None
+		self.pauze = 0.0
+
+	def _executa(self, ref, lot, gata):
+		try:
+			_verificaOprire()
+			if self.eroare is not None:
+				raise self.eroare
+			cache = S._cache()
+			_verificaOprire()
+			incearca = getattr(cache, "tryImportEvents", None)
+			if not callable(incearca):
+				raise EroareEpg(E_NUCLEU)
+			if ref is not None:
+				n = incearca(ref, lot)
+				if n == -1:
+					return False
+				self.total += n
+		except Exception as e:
+			self.eroare = e
+		gata.set()
+		return True
+
+	def _trimite(self, ref=None, lot=None, asteapta=False):
+		_verificaOprire()
+		if self.eroare is not None:
+			raise self.eroare
+		gata = threading.Event()
+		if threading.current_thread() is threading.main_thread():
+			if not self._executa(ref, lot, gata):
+				# Calea normala este lucratorul; un apel sincron nu poate astepta UI-ul.
+				raise EroareEpg(E_NUCLEU)
+		else:
+			t = time.monotonic()
+			while True:
+				_verificaOprire()
+				try:
+					_cereri_cache.put((self, ref, lot, gata), timeout=0.1)
+					break
+				except queue.Full:
+					pass
+			self.pauze += time.monotonic() - t
+			_trezesteCache()
+		if asteapta:
+			t = time.monotonic()
+			while not gata.wait(0.1):
+				_verificaOprire()
+			self.pauze += time.monotonic() - t
+		_verificaOprire()
+		if self.eroare is not None:
+			raise self.eroare
+
+	def importEvents(self, ref, lot):
+		self._trimite(ref, lot)
+		return 0
+
+	def gata(self):
+		self._trimite(asteapta=True)
+		return self.total
+
+
+def _importaPePrincipal():
+	global _lot_ocupat
+	if threading.current_thread() is not threading.main_thread():
+		return
+	inceput = time.monotonic()
+	for _i in range(MAX_LOTURI):
+		if _lot_ocupat is None:
+			try:
+				_lot_ocupat = _cereri_cache.get_nowait()
+			except queue.Empty:
+				break
+		cache, ref, lot, gata = _lot_ocupat
+		if not cache._executa(ref, lot, gata):
+			break
+		_lot_ocupat = None
+		if time.monotonic() - inceput >= 0.01:
+			break
+
+
+def _trezesteCache():
+	global _trezire_cache
+	with _lacat_trezire:
+		if _trezire_cache or S.inchis():
+			return
+		_trezire_cache = True
+	try:
+		from twisted.internet import reactor
+		reactor.callFromThread(_ticCache)
+	except (ImportError, AttributeError):
+		with _lacat_trezire:
+			_trezire_cache = False
+
+
+def _ticCache():
+	"""Un singur apel programat, loturi marginite, fara dependenta de ceasul listelor."""
+	global _trezire_cache
+	_importaPePrincipal()
+	with _lacat_trezire:
+		if (_cereri_cache.empty() and _lot_ocupat is None) or S.inchis():
+			_trezire_cache = False
+			return
+	try:
+		from twisted.internet import reactor
+		repeta = getattr(reactor, "callLater", None)
+		if repeta is not None:
+			repeta(0.05 if _lot_ocupat is not None else 0.001, _ticCache)
+		else:
+			reactor.callFromThread(_ticCache)
+	except (ImportError, AttributeError):
+		with _lacat_trezire:
+			_trezire_cache = False
 
 
 class EroareEpg(Exception):
@@ -158,6 +292,7 @@ def _ora(text):
 # nu se potrivesc deloc; variantele de calitate ale aceluiasi canal (RO: PRO TV HD, RO: PRO TV FHD) primesc acelasi ghid (cel mult 8).
 _CALITATE = re.compile(r"(?<![a-z0-9])(?:u?hd|fhd|sd|4k|8k|uhd|hevc|h\.?26[45]|hdr(?:10)?|raw|backup|multi(?:sub|audio)?|\d{2,3}\s?fps|1080[pi]?|720[pi]?|2160p?)(?![a-z0-9])")
 _PREFIX = re.compile(r"^\s*(?:[\[(|]\s*)?([a-z]{2,3})\s*(?:[\])|:]|\s-\s|\s\|)\s*")
+_SEMNE_NUME = re.compile(r"[^a-z0-9]+")
 MAX_LARG = 8
 
 
@@ -172,14 +307,20 @@ def potrivireLarga():
 
 def _numeLarg(text):
 	"""-> (prefixul tarii sau "", cheia larga) ; cheia "" cand nu ramane nimic."""
-	import unicodedata
-	t = unicodedata.normalize("NFKD", (text or "")[:256]).encode("ascii", "ignore").decode("ascii").casefold()
+	t = (text or "")[:256]
+	if not t.isascii():
+		import unicodedata
+		t = unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode("ascii")
+	t = t.casefold()
+	if t.isalnum():
+		# Dupa conversia ASCII, limitele unui cuvant sunt numai capetele lui.
+		return "", "" if _CALITATE.fullmatch(t) else t
 	m = _PREFIX.match(t)
 	prefix = ""
 	if m:
 		prefix, t = m.group(1), t[m.end():]
 	t = _CALITATE.sub(" ", t)
-	return prefix, re.sub(r"[^a-z0-9]+", "", t)
+	return prefix, _SEMNE_NUME.sub("", t)
 
 
 def _nume(text):
@@ -223,6 +364,7 @@ def _bucati(f, inceput, ritm=None):
 	prefix = b""
 	citeste = getattr(f, "read1", f.read)  # un singur recv: un server care picura octeti nu ascunde termenul total
 	while True:
+		_verificaOprire()
 		if time.monotonic() - inceput - (ritm.pauze if ritm else 0) > TERMEN_TOTAL_S:
 			raise EroareEpg("termen")
 		b = citeste(BUCATA)
@@ -305,6 +447,7 @@ class _Xmltv:
 		self.larg = {} if potrivireLarga() else None   # cheia larga -> (prefixele tarilor, canalele fara tvg-id)
 		t = time.monotonic()
 		for i, c in enumerate(canale[:I.MAX_CANALE]):
+			_verificaOprire()
 			if ritm is not None and i and not i % PAS_CANALE:
 				ritm.dupa(t)
 				t = time.monotonic()
@@ -548,15 +691,13 @@ def _pastreazaHarta(cheie, harta):
 
 def lucreaza(s, canale, cache=None):
 	"""O sursa pe firul EPG. Rezultat: numarul evenimentelor importate; erorile raman fara URL."""
+	_verificaOprire()
 	adresa = adresaEpg(s)
 	if adresa is None:
 		return 0
 	if cache is None:
-		try:
-			from enigma import eEPGCache
-			cache = eEPGCache.getInstance()
-		except ImportError:
-			raise EroareEpg(E_NUCLEU)
+		cache = _CachePrincipal()
+		cache._trimite(asteapta=True)
 	if cache is None or not hasattr(cache, "importEvents"):
 		raise EroareEpg(E_NUCLEU)
 	harta = cheie = None
@@ -579,13 +720,24 @@ def lucreaza(s, canale, cache=None):
 	canale = None  # dupa mapare eliberam lista citita din JSON, inclusiv toate adresele de flux
 	if cheie is not None and harta is None:
 		_pastreazaHarta((cheie[0], xml.larg is not None, cheie[2]), xml.harta())
-	with C.deschide(adresa, C.anteteSursa(s), termen=TERMEN_CITIRE_S) as f:
-		for b in _bucati(f, inceput, ritm):
-			t = time.monotonic()
-			xml.citeste(b)
-			ritm.dupa(t)
-		xml.citeste(b"", True)
-	return xml.gata()
+	try:
+		with C.deschide(adresa, C.anteteSursa(s), termen=TERMEN_CITIRE_S) as f:
+			for b in _bucati(f, inceput, ritm):
+				_verificaOprire()
+				t = time.monotonic()
+				pauze = cache.pauze if isinstance(cache, _CachePrincipal) else 0
+				xml.citeste(b)
+				asteptare = cache.pauze - pauze if isinstance(cache, _CachePrincipal) else 0
+				# Coada nu este retea sau analiza si nu cere inca o pauza de procesor.
+				ritm.pauze += asteptare
+				ritm.dupa(t + asteptare)
+			xml.citeste(b"", True)
+		n = xml.gata()
+		return cache.gata() if isinstance(cache, _CachePrincipal) else n
+	finally:
+		# Un document intrerupt nu lasa loturi pentru un import terminat deja.
+		if isinstance(cache, _CachePrincipal):
+			cache.eroare = _Oprit()
 
 
 def _deReluat(e):
@@ -603,41 +755,128 @@ def _deReluat(e):
 def _cuIncercari(s, canale, asteapta=time.sleep):
 	"""lucreaza() de cel mult INCERCARI ori. Emisiunile importate inainte de cadere raman; a doua trecere le scrie peste ele."""
 	for i in range(INCERCARI):
+		_verificaOprire()
 		try:
 			return lucreaza(s, canale)
 		except Exception as e:
+			_verificaOprire()
 			if i + 1 >= INCERCARI or not _deReluat(e):
 				raise
 			print("[HdsIptvEpg] sursa %s: %s, din nou peste %d s" % (s.get("id"), type(e).__name__, PAUZA_INCERCARE_S))
-			asteapta(PAUZA_INCERCARE_S)
+			if asteapta is time.sleep:
+				S._oprire.wait(PAUZA_INCERCARE_S)
+			else:
+				asteapta(PAUZA_INCERCARE_S)
 
 
 def _stare(sid, stare, n=0, mesaj=""):
 	try:
-		I.actualizeazaSursa(sid, epg_stare=stare, epg_evenimente=n, epg_mesaj=mesaj, epg_ora=int(time.time()))
+		return I.actualizeazaSursa(sid, epg_stare=stare, epg_evenimente=n, epg_mesaj=mesaj, epg_ora=int(time.time()))
 	except Exception as e:
 		print("[HdsIptvEpg] salvarea starii: %s" % type(e).__name__)
 
 
+_CAMPURI_STARE = ("epg_stare", "epg_evenimente", "epg_mesaj", "epg_ora")
+
+
+def _revine(sid, inainte, scris):
+	try:
+		_refaceStarea(sid, inainte, scris)
+	except Exception as e:
+		print("[HdsIptvEpg] refacerea starii: %s" % type(e).__name__)
+
+
+def _refaceLaIesire():
+	# Reteaua poate ramane blocata. Refacerea nu depinde de revenirea ei.
+	incercare = _stare_de_refacut
+	if incercare is not None:
+		threading.Thread(target=_revine, args=incercare, name="HdsEpgStare", daemon=True).start()
+
+
+S._la_oprire.append(_refaceLaIesire)
+
+
+def _refaceStarea(sid, inainte, scris):
+	"""Reface numai starea proprie intrerupta, fara a rescrie modificarile altcuiva."""
+	if inainte is None or scris is None:
+		return
+	with I._LACAT:
+		surse = I.citesteSurse()
+		for s in surse:
+			if s.get("id") != sid:
+				continue
+			if any(s.get(k) != scris.get(k) for k in _CAMPURI_STARE):
+				return
+			for k in _CAMPURI_STARE:
+				if k in inainte:
+					s[k] = inainte[k]
+				else:
+					s.pop(k, None)
+			I.scrieSurse(surse)
+			return
+
+
 def _bucla():
-	global _fir, _in_lucru, _de_notificat
+	global _fir, _in_lucru
+	try:
+		_lucreazaCoada()
+	finally:
+		with _lacat:
+			if _fir is threading.current_thread():
+				_fir, _in_lucru = None, None
+
+
+def _lucreazaCoada():
+	global _fir, _in_lucru, _de_notificat, _stare_de_refacut
 	while True:
 		with _lacat:
+			if S.inchis():
+				_coada.clear()
+				_de_notificat = False
 			if not _coada:
 				_fir, _in_lucru = None, None
 				return
 			_in_lucru, (s, canale) = _coada.popitem(last=False)
-		_stare(_in_lucru, "lucreaza")
+		with I._LACAT:
+			if S.inchis():
+				continue
+			inainte = I.sursa(_in_lucru)
+			scris = _stare(_in_lucru, "lucreaza")
+			_stare_de_refacut = (_in_lucru, inainte, scris)
 		try:
+			_verificaOprire()
 			n = _cuIncercari(s, canale)
+			_verificaOprire()
 			mesaj = ""
-			_stare(_in_lucru, "gata", n, E_GATA if n else E_GOL)
+			with I._LACAT:
+				_verificaOprire()
+				scris = _stare(_in_lucru, "gata", n, E_GATA if n else E_GOL)
+				_stare_de_refacut = (_in_lucru, inainte, scris)
+				_verificaOprire()
+		except _Oprit:
+			_revine(_in_lucru, inainte, scris)
+			continue
 		except Exception as e:
+			if S.inchis():
+				_revine(_in_lucru, inainte, scris)
+				continue
 			n, mesaj = 0, E_NUCLEU if isinstance(e, EroareEpg) and e.mesaj == E_NUCLEU else E_ESUAT
 			print("[HdsIptvEpg] sursa %s: %s %s" % (_in_lucru, type(e).__name__, e.mesaj if isinstance(e, EroareEpg) else ""))
-			_stare(_in_lucru, "eroare", n, mesaj)
+			with I._LACAT:
+				if S.inchis():
+					_revine(_in_lucru, inainte, scris)
+					continue
+				scris = _stare(_in_lucru, "eroare", n, mesaj)
+				_stare_de_refacut = (_in_lucru, inainte, scris)
+				if S.inchis():
+					_revine(_in_lucru, inainte, scris)
+					continue
+		finally:
+			_stare_de_refacut = None
 		canale = None  # nu pastram lista sursei terminate cat timp incepe urmatoarea
 		with _lacat:
+			if S.inchis():
+				continue
 			_ultimele[_in_lucru] = (n, mesaj)
 			if n:
 				_de_notificat = True
@@ -647,7 +886,7 @@ def _bucla():
 
 
 def cere(s, canale=None):
-	"""Pune sursa in coada proprie si revine imediat. Reteaua/analiza/importul nu tin firul listelor sau UI."""
+	"""Pune sursa in coada si revine imediat. Reteaua si analiza nu tin firul UI."""
 	global _fir
 	if not isinstance(s, dict) or not I._ID_SURSA.match(s.get("id", "")):
 		return False
@@ -657,6 +896,8 @@ def cere(s, canale=None):
 	except Exception:
 		return False
 	with _lacat:
+		if S.inchis():
+			return False
 		if s["id"] not in _coada and len(_coada) >= I.MAX_SURSE:
 			return False
 		# Apelul obisnuit da None: lista se citeste abia in worker, o singura sursa mare in RAM.
@@ -686,6 +927,15 @@ def ultimul(sid):
 def notifica():
 	"""Pe firul UI, din HdsIptvLucru._laTic: reface acum/urmeaza dupa un import nou."""
 	global _de_notificat
+	if threading.current_thread() is not threading.main_thread():
+		return False
+	_importaPePrincipal()
+	if _de_notificat:
+		S._cache()
+	if S.inchis():
+		with _lacat:
+			_de_notificat = False
+		return False
 	with _lacat:
 		if not _de_notificat:
 			return False

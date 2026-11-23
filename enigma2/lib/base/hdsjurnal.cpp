@@ -54,9 +54,6 @@ long long monotonMs()
 }
 
 static int cifra(char c) { return c >= '0' && c <= '9'; }
-static int hexa(char c) { return cifra(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
-static int litera(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || cifra(c) || c == '_'; }
-static char mica(char c) { return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c; }
 
 int numeBun(const char *c)
 {
@@ -75,100 +72,6 @@ int numeBun(const char *c)
 
 /* ------------------------------------------------------------------ curatarea */
 
-/* IPv4 la s: 4 grupuri de 1..3 cifre despartite de '.', fara cifra sau '.' inainte si dupa; lungimea sau 0 */
-static size_t ipv4(const char *s, const char *inceput, size_t poz[4])
-{
-	if (s > inceput && (cifra(s[-1]) || s[-1] == '.'))
-		return 0;
-	size_t i = 0;
-	for (int g = 0; g < 4; ++g)
-	{
-		size_t n = 0;
-		poz[g] = i;
-		while (cifra(s[i]) && n < 4)
-		{
-			++i;
-			++n;
-		}
-		if (n == 0 || n > 3)
-			return 0;
-		if (g < 3)
-		{
-			if (s[i] != '.')
-				return 0;
-			++i;
-		}
-	}
-	if (cifra(s[i]) || (s[i] == '.' && cifra(s[i + 1])))
-		return 0;
-	return i;
-}
-
-/* MAC la s: 6 grupuri de 2 semne hexa despartite de ':' sau '-' (acelasi), fara semn hexa inainte si dupa */
-static size_t mac(const char *s, const char *inceput)
-{
-	if (s > inceput && (hexa(s[-1]) || s[-1] == ':'))
-		return 0;
-	char desp = 0;
-	size_t i = 0;
-	for (int g = 0; g < 6; ++g)
-	{
-		if (!hexa(s[i]) || !hexa(s[i + 1]))
-			return 0;
-		i += 2;
-		if (g < 5)
-		{
-			if (s[i] != ':' && s[i] != '-')
-				return 0;
-			if (desp && s[i] != desp)
-				return 0;
-			desp = s[i];
-			++i;
-		}
-	}
-	if (hexa(s[i]) || s[i] == ':')
-		return 0;
-	return i;
-}
-
-static const char *const CHEI[] = {
-	"password", "passwd", "parola", "cheie", "jeton", "token", "secret", "essid", "ssid", "pass", "psk", "key", 0
-};
-
-/* cheie secreta la s ("token=", "parola: ", ghilimele "key": ghilimele): lungimea pana la valoare, 0 daca nu e */
-static size_t cheie(const char *s, const char *inceput)
-{
-	if (s > inceput && litera(s[-1]))
-		return 0;
-	for (int k = 0; CHEI[k]; ++k)
-	{
-		size_t n = strlen(CHEI[k]), i = 0;
-		while (i < n && mica(s[i]) == CHEI[k][i])
-			++i;
-		if (i < n || litera(s[i]))
-			continue;
-		if (s[i] == '"' || s[i] == '\'')
-			++i;
-		while (s[i] == ' ')
-			++i;
-		if (s[i] != '=' && s[i] != ':')
-			continue;
-		++i;
-		while (s[i] == ' ')
-			++i;
-		if (s[i] == '"' || s[i] == '\'')
-			++i;
-		return i;
-	}
-	return 0;
-}
-
-static int capatValoare(char c)
-{
-	return !c || c == ' ' || c == '&' || c == ',' || c == ';' || c == '"' || c == '\'' || c == ')' || c == '}' ||
-		c == ']';
-}
-
 size_t curata(char *m)
 {
 	if (!m)
@@ -176,56 +79,7 @@ size_t curata(char *m)
 	for (char *p = m; *p; ++p)
 		if ((unsigned char)*p < 0x20 || *p == 0x7f)
 			*p = ' ';
-	/* scrierea (w) nu trece niciodata de citire (r): fiecare inlocuire e cel mult cat textul inlocuit */
-	size_t r = 0, w = 0;
-	while (m[r])
-	{
-		size_t poz[4];
-		size_t n = ipv4(m + r, m, poz);
-		if (n)
-		{
-			memmove(m + w, m + r, poz[2]);
-			w += poz[2];
-			m[w++] = 'x';
-			m[w++] = '.';
-			m[w++] = 'x';
-			r += n;
-			continue;
-		}
-		n = mac(m + r, m);
-		if (n)
-		{
-			char desp = m[r + 2];
-			memmove(m + w, m + r, 9);
-			w += 9;
-			for (int g = 0; g < 3; ++g)
-			{
-				m[w++] = 'x';
-				m[w++] = 'x';
-				if (g < 2)
-					m[w++] = desp;
-			}
-			r += n;
-			continue;
-		}
-		n = cheie(m + r, m);
-		if (n)
-		{
-			memmove(m + w, m + r, n);
-			w += n;
-			r += n;
-			size_t v = 0;
-			while (!capatValoare(m[r + v]))
-				++v;
-			for (size_t i = 0; i < v && i < 3; ++i)
-				m[w++] = '*';
-			r += v;
-			continue;
-		}
-		m[w++] = m[r++];
-	}
-	m[w] = 0;
-	return w;
+	return strlen(m);
 }
 
 /* ------------------------------------------------------------------ randul */

@@ -147,7 +147,7 @@ def numeCanal(cale, nume):
 	return c[1] if c and len(c) > 1 and c[1] else nume
 
 
-def adresa(sursa_id, cheie):
+def adresa(sursa_id, cheie, activa=None):
 	"""Adresa adevarata a canalului, sau None. Rezultatul nu se scrie nicaieri."""
 	s = I.sursa(sursa_id, _sursele())
 	if s is None or not I.cheieBuna(cheie):
@@ -164,7 +164,7 @@ def adresa(sursa_id, cheie):
 	valoare = c[3]
 	if fel == "stalker":
 		# un portal care nu da adresa nu inseamna un canal scos din lista
-		rez = C.stalkerAdresa(s, valoare)
+		rez = C.stalkerAdresa(s, valoare, activa=activa)
 		if not rez:
 			raise C.EroareIptv(C.E_NU_RASPUNDE)
 		return rez
@@ -340,6 +340,9 @@ def _ocupa(s, sid):
 	with _lacat:
 		lista = _legaturi.setdefault(sid, [])
 		de_inchis = lista[:max(0, len(lista) - limita + 1)]
+		# Marcajul devine vizibil inainte sa poata porni noul canal.
+		for v in de_inchis:
+			v.inchisa = True
 		del lista[:len(de_inchis)]
 		lista.append(noua)
 		inchisa = _inchise.get(sid)
@@ -448,11 +451,16 @@ def _deschideCuAsteptare(tinta_fn, a, legatura, metoda=None, a_inchis=False, fil
 	incercari = REINCERCARI_CONEXIUNE
 	termen = time.monotonic() + ASTEPTARE_FILM_S if film and a_inchis else None
 	retea = 1
+	if legatura.inchisa:
+		raise C.EroareIptv(C.E_NU_RASPUNDE)
+	# Rezolvam portalul o singura data: reincercarea fluxului nu repeta create_link si nu ocoleste pauza API.
+	tinta = tinta_fn()
+	if not tinta:
+		raise C.EroareIptv(C.E_CANAL_LIPSA)
 	while True:
+		if legatura.inchisa:
+			raise C.EroareIptv(C.E_NU_RASPUNDE)
 		try:
-			tinta = tinta_fn()
-			if not tinta:
-				raise C.EroareIptv(C.E_CANAL_LIPSA)
 			return C.deschide(tinta, a, TERMEN_CITIRE_S, metoda)
 		except C.EroareIptv as e:
 			# un 403 dupa ce tocmai am inchis o legatura e tot conexiunea veche; altfel e un refuz adevarat si nu mai asteptam. Un server cazut
@@ -477,18 +485,60 @@ def _deschideCuAsteptare(tinta_fn, a, legatura, metoda=None, a_inchis=False, fil
 			time.sleep(pauza)
 
 
+def recuperareRapida():
+	"""Opt-in for live TS only; existing streams keep their original behaviour."""
+	try:
+		from Components.config import config
+		return bool(config.usage.hds_iptv_recuperare_rapida.value)
+	except (ImportError, AttributeError, KeyError):
+		return False
+
+
+def _termenViu(raspuns, rapid):
+	"""Change only the body read timeout, after live TS has been identified."""
+	if rapid:
+		try:
+			raspuns.fp.raw._sock.settimeout(3.0)
+		except (AttributeError, OSError):
+			pass
+
+
+def _jurnalReleu(m, mesaj):
+	try:
+		from Components import HdsJurnal
+		HdsJurnal.info("zap", "releu", "%s/%s: %s" % (m.sid, m.cheie, mesaj))
+	except Exception:
+		pass
+
+
+def _iaViu(tampon, legatura, rapid):
+	"""After an underrun, collect a bounded reserve without losing queued bytes."""
+	b = tampon.iaTot(1.0)
+	if b is None and rapid and not tampon.sfarsit and not legatura.inchisa:
+		tampon.asteapta(PREUMPLERE_OCTETI, PREUMPLERE_S, lambda: legatura.inchisa)
+		b = tampon.iaTot(0)
+	return b
+
+
 def _citesteViu(raspuns, tampon, legatura, tinta_fn, a, m, plecat):
 	"""Firul cititor al unui flux viu: bucati in tampon; la sfarsit sau la tacere, legatura se reface. Se termina cand s-a inchis legatura,
 	playerul a plecat sau nu se mai poate reface."""
 	esecuri = 0
 	ultima_buna = time.monotonic()
+	rapid = recuperareRapida()
+	_termenViu(raspuns, rapid)
+	_jurnalReleu(m, "citire pornita: recuperare rapida %s, termen %s s" %
+		("Da" if rapid else "Nu", "3" if rapid else str(TERMEN_CITIRE_S)))
 	try:
 		while not legatura.inchisa and not plecat():
+			motiv = "EOF"
 			try:
 				b = raspuns.read1(65536)
-			except (OSError, ValueError, AttributeError, HTTPException):
+			except (OSError, ValueError, AttributeError, HTTPException) as eroare:
 				# 13.11.2026, pe receptorul de probe: IncompleteRead scapa si oprea firul (fara refacerea legaturii, cu Traceback in jurnal)
+				# read1 already returns body bytes; partial may be HTTP chunk framing.
 				b = b""
+				motiv = type(eroare).__name__
 			if b:
 				m.adauga(len(b))
 				if not tampon.pune(b):
@@ -499,6 +549,10 @@ def _citesteViu(raspuns, tampon, legatura, tinta_fn, a, m, plecat):
 					ultima_buna = time.monotonic()
 				continue
 			# serverul a inchis sau tace: refacem legatura; playerul vede numai o pauza
+			if legatura.inchisa or plecat():
+				return
+			_jurnalReleu(m, "citire %s, fara octeti %.1f s, tampon %d B, partial %d B" %
+				(motiv, time.monotonic() - m.ultim, tampon.octeti, len(b)))
 			_inchideRaspuns(raspuns)
 			while True:
 				if legatura.inchisa or plecat():
@@ -513,7 +567,10 @@ def _citesteViu(raspuns, tampon, legatura, tinta_fn, a, m, plecat):
 				except C.EroareIptv:
 					continue
 				legatura.pune(raspuns)
+				_termenViu(raspuns, rapid)
 				m.reconectari += 1
+				_jurnalReleu(m, "reconectare %d, incercare %d, tampon %d B" %
+					(m.reconectari, esecuri, tampon.octeti))
 				ultima_buna = time.monotonic()
 				break
 	finally:
@@ -644,7 +701,7 @@ class _Cerere(BaseHTTPRequestHandler):
 				a["Range"] = self.headers["Range"][:128]
 
 			def tinta_fn():
-				return adresa(sid, cheie)
+				return adresa(sid, cheie, activa=lambda: not legatura.inchisa)
 			inceput = time.monotonic()
 			raspuns = _deschideCuAsteptare(tinta_fn, a, legatura, "HEAD" if cap else None, a_inchis,
 				film=not cap and esteFilm(cheie, "Range" in a))
@@ -655,14 +712,16 @@ class _Cerere(BaseHTTPRequestHandler):
 		except (ConnectionError, socket.timeout):
 			pass
 		except C.EroareIptv as e:
-			# HEAD nu e redarea omului (nu ocupa legatura, nu inchide fluxul pornit): un refuz al lui nu deschide fereastra peste film
-			if not proba and not cap:
+			# HEAD nu e redarea omului (nu ocupa legatura, nu inchide fluxul pornit): un refuz al lui nu deschide fereastra peste film.
+			# O cerere mai veche decat a playerului de acum (IPT8: pornirea din nou a unui canal care n-a pornit inca, pe un cont cu mai
+			# multe conexiuni, unde legatura veche nu se inchide) nu mai spune nimic: raspunde cererea noua.
+			if not proba and not cap and not legatura.inchisa and _masura is m:
 				self._anunta(sid, e)
 			self._raspunde(503)
 		except Exception as e:
 			# numai felul erorii: textul ei ar putea cuprinde adresa
 			print("[HdsIptvAdrese] %s/%s: %s" % (sid, cheie, type(e).__name__))
-			if not proba and not cap:
+			if not proba and not cap and not legatura.inchisa and _masura is m:
 				# o proba cazuta (cautarea 4K, canal mort) nu e a omului: fara fereastra pe ecran, fara eroare pe cartela sursei
 				self._anunta(sid, e)
 			if not self._trimis:
@@ -715,6 +774,7 @@ class _Cerere(BaseHTTPRequestHandler):
 		fir = threading.Thread(target=_citesteViu, args=(f, tampon, legatura, tinta_fn, a, m, plecat.is_set), name="HdsIptvCitire")
 		fir.daemon = True
 		fir.start()
+		rapid = recuperareRapida()
 		try:
 			inceput = time.monotonic()
 
@@ -725,7 +785,7 @@ class _Cerere(BaseHTTPRequestHandler):
 			m.preumplere = 100
 			m.trimis = True
 			while not legatura.inchisa:
-				b = tampon.iaTot(1.0)
+				b = _iaViu(tampon, legatura, rapid)
 				if b is None:
 					if tampon.sfarsit and not tampon.octeti:
 						break

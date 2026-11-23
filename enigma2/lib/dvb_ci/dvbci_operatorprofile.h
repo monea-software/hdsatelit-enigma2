@@ -11,8 +11,10 @@ class eDVBCIOperatorProfileSession: public eDVBCISession
 	enum {
 		stateStatusRequest=statePrivate,
 		stateStatus,
+		stateLeaveProfile,
 		stateFinal
 	};
+	bool m_privateListSelected;
 
 	int receivedAPDU(const unsigned char *tag, const void *data, int len);
 	int doAction();

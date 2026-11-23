@@ -139,6 +139,15 @@ def _reap(pid):
 		time.sleep(0.01)
 
 
+def _pachete():
+	"""The package reader, also when this module is loaded alone by PC tools."""
+	try:
+		from Components import HdsPachete
+	except ImportError:
+		import HdsPachete
+	return HdsPachete
+
+
 class IpkgComponent:
 	EVENT_INSTALL = 0
 	EVENT_DOWNLOAD = 1
@@ -170,6 +179,10 @@ class IpkgComponent:
 		self._decoder = None
 		# HDSatelit 0.7.5: what opkg remove leaves behind (.pyc, __pycache__) is cleaned at the end, before EVENT_DONE
 		self._pycRamase = None
+		self._inventarToken = 0
+		self._inventar = None
+		self._inventarCeas = None
+		self._pregatesteInventar = True
 		self.setCurrentCommand()
 
 	def setCurrentCommand(self, command = None):
@@ -177,15 +190,23 @@ class IpkgComponent:
 
 	def runCmd(self, arguments):
 		"""arguments: the list from opkgArguments(); a string is not accepted any more (it went through the shell)"""
+		self._anuleazaInventar()
+		_pachete().invalideaza_strofe()
 		self.retval = None
 		self.cache = None
 		program = opkgProgram()
 		if not isinstance(arguments, (list, tuple)) or not arguments or program is None:
 			print("[Ipkg] not run:", arguments, "(opkg missing)" if program is None else "(refused)")
+			token = self._inventarToken
 			self.callCallbacks(self.EVENT_ERROR, None)
-			self.retval = -1
-			self.callCallbacks(self.EVENT_DONE, -1)
+			if token == self._inventarToken:
+				self.retval = -1
+				self.callCallbacks(self.EVENT_DONE, -1)
 			return
+		# Feed updates have ordered guards that may replace a list during EVENT_DONE.
+		# Keep that path and read-only/download-only commands as before this repair.
+		self._pregatesteInventar = arguments[0] in ('install', 'remove', 'upgrade') and not any(
+			optiune in arguments for optiune in ('--download-only', '--noaction'))
 		print("[Ipkg] executing", program, arguments)
 		self._pycRamase = _pycInainte(arguments)
 		self._decoder = codecs.getincrementaldecoder('utf-8')('replace')
@@ -212,7 +233,10 @@ class IpkgComponent:
 			arguments = None
 		self.runCmd(arguments)
 
-	def cmdFinished(self, retval):
+	def cmdFinished(self, retval, oprit = False):
+		if self._inventar is not None:
+			return
+		token = self._inventarToken
 		try:
 			self.cmd.appClosed.remove(self.cmdFinished)
 			self.cmd.dataAvail.remove(self.cmdData)
@@ -226,6 +250,78 @@ class IpkgComponent:
 		if self.cache:
 			rest, self.cache = self.cache, None
 			self.parseLine(rest)
+		if token != self._inventarToken:
+			return
+		if oprit or not self._pregatesteInventar:
+			self._termina(retval)
+			return
+		# EVENT_DONE consumers read status and feed lists. Prepare those on a worker,
+		# then deliver the same events on the UI thread, with a validated snapshot.
+		try:
+			HdsPachete = _pachete()
+			from enigma import eTimer
+			self._inventarCeas = eTimer()
+			self._inventarCeas.callback.append(self._verificaInventar)
+			self._inventar = (self._inventarToken, retval, HdsPachete.CitireInventar().porneste(), 0)
+			self._inventarCeas.start(20, True)
+			return
+		except Exception:
+			self._anuleazaInventar()
+			token = self._inventarToken
+			self.callCallbacks(self.EVENT_ERROR, None)
+			if token != self._inventarToken:
+				return
+			retval = retval or -1
+		self._termina(retval)
+
+	def _anuleazaInventar(self):
+		self._inventarToken += 1
+		if self._inventar is not None:
+			self._inventar[2].anulat = True
+		self._inventar = None
+		if self._inventarCeas is not None:
+			self._inventarCeas.stop()
+			self._inventarCeas.callback.remove(self._verificaInventar)
+			self._inventarCeas = None
+
+	def _verificaInventar(self):
+		pending = self._inventar
+		if pending is None:
+			return
+		token, retval, citire, incercare = pending
+		if token != self._inventarToken:
+			return
+		if not citire.gata:
+			self._inventarCeas.start(20, True)
+			return
+		try:
+			if citire.eroare:
+				raise OSError('Package inventory could not be read')
+			if not citire.verificat:
+				citire.verifica()
+				self._inventarCeas.start(20, True)
+				return
+			if not citire.publica():
+				if incercare >= 2:
+					raise OSError('Package inventory keeps changing')
+				HdsPachete = _pachete()
+				self._inventar = (token, retval, HdsPachete.CitireInventar().porneste(), incercare + 1)
+				self._inventarCeas.start(20, True)
+				return
+		except Exception:
+			self._anuleazaInventar()
+			token = self._inventarToken
+			self.callCallbacks(self.EVENT_ERROR, None)
+			if token == self._inventarToken:
+				self._termina(retval or -1)
+			return
+		self._anuleazaInventar()
+		try:
+			self._termina(retval)
+		finally:
+			citire.retrage()
+
+	def _termina(self, retval):
 		self.retval = retval
 		# before EVENT_DONE: the callers reload the plugin list then (a plugin.pyc left behind would still be a plugin)
 		stare, self._pycRamase = getattr(self, '_pycRamase', None), None
@@ -234,6 +330,7 @@ class IpkgComponent:
 		self.callCallbacks(self.EVENT_DONE, retval)
 
 	def cmdData(self, data):
+		token = self._inventarToken
 		if isinstance(data, bytes):
 			if self._decoder is None:
 				self._decoder = codecs.getincrementaldecoder('utf-8')('replace')
@@ -254,11 +351,16 @@ class IpkgComponent:
 				iteration = splitcache[:-1]
 				self.cache = splitcache[-1]
 			for mydata in iteration:
+				if token != self._inventarToken:
+					break
 				if mydata != '':
 					self.parseLine(mydata)
 
 	def parseLine(self, data):
+		token = self._inventarToken
 		self.callCallbacks(self.EVENT_LINE, data)
+		if token != self._inventarToken:
+			return
 		if self.currentCommand == self.CMD_LIST:
 			item = data.split(' - ', 2)
 			self.fetchedList.append(item)
@@ -291,7 +393,10 @@ class IpkgComponent:
 				pass
 
 	def callCallbacks(self, event, param = None):
+		token = self._inventarToken
 		for callback in self.callbackList[:]:
+			if token != self._inventarToken:
+				break
 			callback(event, param)
 
 	def addCallback(self, callback):
@@ -308,15 +413,20 @@ class IpkgComponent:
 		# HDSatelit: eConsoleAppContainer.kill() closes the pipes without appClosed (lib/base/console.cpp), so the
 		# callers never got EVENT_DONE and waited for ever (the progress window of HdsExtensii stayed open, every key
 		# ignored) and the killed opkg stayed a zombie. Now the end is reported here and the child is reaped.
+		pending = self._inventar is not None
+		if pending:
+			self._anuleazaInventar()
 		running = self.cmd.running()
 		pid = self.cmd.getPID() if running else -1
 		self.cmd.kill()
 		if running:
 			_reap(pid)
-			self.cmdFinished(-1)
+			self.cmdFinished(-1, oprit = True)
+		elif pending:
+			self._termina(-1)
 
 	def isRunning(self):
-		return self.cmd.running()
+		return self.cmd.running() or self._inventar is not None
 
 	def write(self, what):
 		if what:

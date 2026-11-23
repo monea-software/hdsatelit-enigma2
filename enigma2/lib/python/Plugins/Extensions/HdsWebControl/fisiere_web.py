@@ -189,22 +189,13 @@ def _same_origin(request, P):
 
 def gate(request, P, sessions=SESSIONS, require_login=True, download=False):
     address = P._adresaClient(request)
-    # Accesul extern al aplicatiilor nu autorizeaza implicit exploratorul.
-    if not P._esteAdresaLocala(address) and not getattr(P, "fisiereAfara", lambda: False)():
-        raise FisiereError("network", _("Accesul la fișiere din afara casei este oprit."), 403)
-    if P.PARAM_JETON in request.args or P._antet(request, b"authorization"):
-        raise FisiereError("browser", _("Fișierele se deschid numai din browser."), 403)
+    # REGULA 0, WEB8: fara reteaua locala, fara refuzul lui ?token=, al originii si al
+    # antetului CSRF; ramane numai parola pusa de om.
     if request.method not in (b"GET", b"POST"):
         raise FisiereError("method", _("Metoda cererii nu este permisă."), 405)
-    if request.method == b"POST" and not P._antet(request, b"origin"):
-        raise FisiereError("origin", _("Lipsește originea cererii."), 403)
-    if not _same_origin(request, P):
-        raise FisiereError("origin", _("Cererea nu vine din pagina receptorului."), 403)
     secret, browser = P._sesiuneDinCerere(request)
     if browser is None:
         raise FisiereError("panel", _("Conectează browserul la panoul receptorului."), 401)
-    if not download and not P.obtineAsociere().csrfValid(secret, P._antet(request, b"x-hds-csrf")):
-        raise FisiereError("csrf", _("Cererea nu are codul de protecție al panoului."), 403)
     session = sessions.get(_cookie(request), address)
     if session is None and P._esteAdresaLocala(address):
         # in casa, fara parola; cu parola pusa pentru interfata web, browserul a scris-o deja la intrare
@@ -571,8 +562,8 @@ def rute(resource, P, service=None, timer_factory=None, salturi=SALTURI):
                     return respond(request, {"result": True, "adresa": https["adresa"] + "?" + SALT_PARAM.decode("ascii") + "=" + semn,
                                              "secunde": SALT_SECUNDE})
                 if action == "access":
-                    if not P._esteAdresaLocala(P._adresaClient(request)) or not isinstance(data.get("permis"), bool):
-                        raise FisiereError("local", _("Accesul extern se schimbă numai din casă."), 403)
+                    if not isinstance(data.get("permis"), bool):
+                        raise FisiereError("local", _("Accesul extern se schimbă numai din casă."), 400)
                     setting = P.config.plugins.hdswebcontrol.fisiere_afara
                     setting.value = data["permis"]
                     setting.save()
@@ -667,8 +658,6 @@ def rute(resource, P, service=None, timer_factory=None, salturi=SALTURI):
     class Page(resource.Resource):
         isLeaf = True
         def render_GET(self, request):
-            if (not P._esteAdresaLocala(P._adresaClient(request)) and not P.fisiereAfara()) or P.PARAM_JETON in request.args:
-                return respond(request, {"result": False, "message": _("Accesul la fișiere din afara casei este oprit sau cererea nu vine din browser.")}, 403)
             P._anteteHtml(request)
             secret, browser = None, None
             if request.isSecure() and SALT_PARAM in request.args:

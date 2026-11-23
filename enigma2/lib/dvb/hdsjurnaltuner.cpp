@@ -190,9 +190,13 @@ void ton(Stare &s, int t)
 	lnb(s, t ? "22k" : "fara22k");
 }
 
+/* valorile lui eDVBSatelliteDiseqcParameters::t_toneburst_param (sec.h): NO=0, A=1, B=2; pana in 0.7.8 se scria
+   "toneburstB" pentru orice valoare nenula, deci si toneburst A aparea ca B (ZGT7, ZGEMMA H8.2H SE, 22.11.2026) */
+enum { TONEBURST_A = 1, TONEBURST_B = 2 };
+
 void toneburst(Stare &s, int b)
 {
-	lnb(s, b ? "toneburstB" : "toneburstA");
+	lnb(s, b == TONEBURST_B ? "toneburstB" : "toneburstA");
 }
 
 void diseqc(Stare &s, const unsigned char *d, int len)

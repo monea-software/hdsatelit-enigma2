@@ -105,6 +105,97 @@ void hdsAnimatieCadru(uint32_t *dst, int pas_dst, const uint32_t *inainte, const
 		p = 256;
 	unsigned f = (unsigned)p;
 	static const uint32_t gol[1] = { 0 };
+	/* Exact endpoints also avoid transforming an invisible image. */
+	if (p == 0 || p == 256)
+	{
+		const uint32_t *src = p ? dupa : inainte;
+		for (int y = 0; y < h; ++y)
+			memcpy(dst + (long)y * pas_dst, src + (long)y * pas_src, (size_t)w * 4);
+		return;
+	}
+
+	if (fel >= gHdsAnimatie::dinDreapta && fel <= gHdsAnimatie::deSus)
+	{
+		/* Move the incoming/outgoing snapshot over the stationary other screen.
+		 * Only contiguous spans are copied; no per-pixel branch or extra frame. */
+		bool orizontal = fel <= gHdsAnimatie::dinStanga;
+		int distanta = orizontal ? w : h;
+		int dep = (int)(((long long)distanta * (inchidere ? p : 256 - p) + 128) >> 8);
+		if (fel == gHdsAnimatie::dinStanga || fel == gHdsAnimatie::deSus)
+			dep = -dep;
+		const uint32_t *fix = inchidere ? dupa : inainte;
+		const uint32_t *mis = inchidere ? inainte : dupa;
+		for (int y = 0; y < h; ++y)
+		{
+			uint32_t *dr = dst + (long)y * pas_dst;
+			const uint32_t *fr = fix + (long)y * pas_src;
+			int sy = orizontal ? y : y - dep;
+			if (sy < 0 || sy >= h)
+			{
+				memcpy(dr, fr, (size_t)w * 4);
+				continue;
+			}
+			const uint32_t *mr = mis + (long)sy * pas_src;
+			int x0 = orizontal && dep > 0 ? dep : 0;
+			int x1 = orizontal && dep < 0 ? w + dep : w;
+			if (x0)
+				memcpy(dr, fr, (size_t)x0 * 4);
+			memcpy(dr + x0, mr + x0 - (orizontal ? dep : 0), (size_t)(x1 - x0) * 4);
+			if (x1 < w)
+				memcpy(dr + x1, fr + x1, (size_t)(w - x1) * 4);
+		}
+		return;
+	}
+
+	if (fel == gHdsAnimatie::marireTreptata || fel == gHdsAnimatie::pop)
+	{
+		/* Fit the whole window inside a centered rectangle, never overshoot.
+		 * Precompute columns once, then gather contiguous destination rows. */
+		int baza = fel == gHdsAnimatie::pop ? 192 : 230;
+		int s = baza + (((256 - baza) * (inchidere ? 256 - p : p)) >> 8);
+		int mw = (int)(((long long)w * s + 128) >> 8);
+		int mh = (int)(((long long)h * s + 128) >> 8);
+		if (mw < 1) mw = 1;
+		if (mh < 1) mh = 1;
+		int x0 = (w - mw) / 2, y0 = (h - mh) / 2;
+		int *col = tabel;
+		for (int x = 0; x < mw; ++x)
+			col[x] = (int)((long long)x * w / mw);
+		uint32_t *rand_mis = (uint32_t *)(tabel + w + h);
+		const uint32_t *fix = inchidere ? dupa : inainte;
+		const uint32_t *mis = inchidere ? inainte : dupa;
+		for (int y = 0; y < h; ++y)
+		{
+			uint32_t *dr = dst + (long)y * pas_dst;
+			const uint32_t *fr = fix + (long)y * pas_src;
+			if (y < y0 || y >= y0 + mh)
+			{
+				memcpy(dr, fr, (size_t)w * 4);
+				continue;
+			}
+			const uint32_t *mr = mis + (long)((long long)(y - y0) * h / mh) * pas_src;
+			for (int x = 0; x < mw; ++x)
+				rand_mis[x0 + x] = mr[col[x]];
+			if (fel == gHdsAnimatie::pop)
+			{
+				memcpy(dr, fr, (size_t)x0 * 4);
+				memcpy(dr + x0, rand_mis + x0, (size_t)mw * 4);
+				memcpy(dr + x0 + mw, fr + x0 + mw, (size_t)(w - x0 - mw) * 4);
+			}
+			else
+			{
+				/* Blend full rows: aligned video writes avoid the large penalty
+				 * of interleaved NEON stores at a moving, unaligned rectangle. */
+				memcpy(rand_mis, fr, (size_t)x0 * 4);
+				memcpy(rand_mis + x0 + mw, fr + x0 + mw, (size_t)(w - x0 - mw) * 4);
+				if (inchidere)
+					amestecaRand(dr, rand_mis, fr, w, f);
+				else
+					amestecaRand(dr, fr, rand_mis, w, f);
+			}
+		}
+		return;
+	}
 
 	if (fel == gHdsAnimatie::alunecare)
 	{
@@ -202,11 +293,48 @@ void hdsAnimatieOpreste()
 #include <time.h>
 #include <unistd.h>
 
-static long acumUs()
+// Only the render thread owns streaks. A UI retry invalidates in-flight samples.
+static unsigned s_paza_generatie = 0;
+static unsigned s_rezerva_generatie = ~0u;
+static unsigned s_masurare_generatie = ~0u;
+static unsigned char s_lente[11] = {};
+
+void hdsAnimatieReincearca()
+{
+	__atomic_add_fetch(&s_paza_generatie, 1u, __ATOMIC_ACQ_REL);
+}
+
+int hdsAnimatieRezerva()
+{
+	return __atomic_load_n(&s_rezerva_generatie, __ATOMIC_ACQUIRE) ==
+		__atomic_load_n(&s_paza_generatie, __ATOMIC_ACQUIRE);
+}
+
+static void verificaPerformanta(int fel, int cadre, int64_t total, int oprita, unsigned generatie)
+{
+	if (generatie != __atomic_load_n(&s_paza_generatie, __ATOMIC_ACQUIRE) || hdsAnimatieRezerva())
+		return;
+	if (s_masurare_generatie != generatie)
+	{
+		memset(s_lente, 0, sizeof(s_lente));
+		s_masurare_generatie = generatie;
+	}
+	if (fel < 1 || fel > 10 || oprita == 1 || cadre <= 0 || total <= 0)
+		return;
+	if ((int64_t)cadre * 1000000 >= total * 20)
+		s_lente[fel] = 0;
+	else if (++s_lente[fel] >= 3)
+	{
+		__atomic_store_n(&s_rezerva_generatie, generatie, __ATOMIC_RELEASE);
+		eDebug("[HdsAnimatie] efect %d: trei animatii consecutive sub 20 FPS; aparitie treptata pana la repornire sau realegere", fel);
+	}
+}
+
+static int64_t acumUs()
 {
 	struct timespec t;
 	clock_gettime(CLOCK_MONOTONIC, &t);
-	return (long)t.tv_sec * 1000000L + t.tv_nsec / 1000;
+	return (int64_t)t.tv_sec * 1000000 + t.tv_nsec / 1000;
 }
 
 /* HDS_ANIM_PROBA=<dosar> in mediu (numai pentru probe): cadrul de la mijloc si cel final, ca PAM, in dosar */
@@ -273,11 +401,15 @@ int hdsAnimatieRuleaza(gSurface *ecran, const gSurface *inainte, const gSurface 
 	/* cadrul se scrie direct in pagina vazuta (memoria video primeste scrieri late fara cost mare: pe receptorul de proba, 7 MB in ~5 ms); ce
 	   costa e citirea celor doua imagini din RAM: masurat pe receptorul de proba, 1920x1080 = 31 ms pe cadru cu NEON, 44 fara, cu procesorul
 	   liber, deci banda memoriei hotaraste; un tampon in plus ar mai adauga o scriere si o citire de marimea zonei */
-	long start = acumUs(), primul = 0, calcul = 0;
+	int64_t start = acumUs(), primul = 0, calcul = 0;
 	int cadre = 0, oprita = 0, mijloc = 0;
+	// Queued effects use fade too; no config value or file is changed.
+	const unsigned paza_generatie = __atomic_load_n(&s_paza_generatie, __ATOMIC_ACQUIRE);
+	const bool rezerva = hdsAnimatieRezerva();
+	const int fel = rezerva && a.fel > 0 ? (int)gHdsAnimatie::treptata : a.fel;
 	for (;;)
 	{
-		long t = acumUs() - start;
+		int64_t t = acumUs() - start;
 		if (t >= durata)
 			break;
 		if (__atomic_load_n(&s_oprire_generatie, __ATOMIC_SEQ_CST) != generatie)
@@ -286,8 +418,8 @@ int hdsAnimatieRuleaza(gSurface *ecran, const gSurface *inainte, const gSurface 
 			break;
 		}
 		int p = hdsAnimatieCurba(t, durata);
-		long c0 = acumUs();
-		hdsAnimatieCadru(de, pas_e, ia, du, pas_s, w, h, a.fel, a.inchidere, p, tabel);
+		int64_t c0 = acumUs();
+		hdsAnimatieCadru(de, pas_e, ia, du, pas_s, w, h, fel, a.inchidere, p, tabel);
 		calcul += acumUs() - c0;
 		if (arata)
 			arata(ctx);
@@ -316,11 +448,13 @@ int hdsAnimatieRuleaza(gSurface *ecran, const gSurface *inainte, const gSurface 
 		memcpy(de + (long)y * pas_e, du + (long)y * pas_s, (size_t)w * 4);
 	if (arata)
 		arata(ctx);
-	long total = acumUs() - start;
+	int64_t total = acumUs() - start;
+	if (!rezerva && !getenv("HDS_ANIM_PROBA"))
+		verificaPerformanta(fel, cadre, total, oprita, paza_generatie);
 	scrieProba("cadru-final", de, pas_e, w, h);
 	eDebug("[HdsAnimatie] fel %d %s zona %dx%d: %d cadre in %ld ms (primul cadru %ld ms, in medie %ld ms pe cadru)%s",
-		a.fel, a.inchidere ? "inchidere" : "deschidere", w, h, cadre, total / 1000, primul / 1000,
-		cadre ? calcul / cadre / 1000 : 0,
+		a.fel, a.inchidere ? "inchidere" : "deschidere", w, h, cadre, (long)(total / 1000), (long)(primul / 1000),
+		cadre ? (long)(calcul / cadre / 1000) : 0,
 		oprita == 1 ? ", oprita (tasta sau alta animatie)" : oprita == 2 ? ", sarita (cadrul prea lent)" : "");
 	return cadre;
 }

@@ -921,6 +921,16 @@ class Mediu(object):
 
 	def __init__(self, session):
 		self.session = session
+		# Numai cheile native, fara a tine playerii in viata prin proxy-uri SWIG.
+		self._inregistrari = None
+		self._inregistrari_necunoscute = True
+		self._inregistrari_sesiune = None
+		self._inregistrari_nav = None
+		self._inregistrari_callback = None
+		self._inregistrari_generatie = None
+		self._inregistrari_delta = None
+		self._inregistrari_delta_eroare = False
+		self._inregistrari_ceas = None
 
 	def lansator(self):
 		from Plugins.Extensions.HdsNavigator import lansator
@@ -1160,6 +1170,67 @@ class Mediu(object):
 		a.selectTrack(i)
 		return True
 
+	def broadcast_componente(self):
+		"""Read live service tracks only; omit metadata not exposed by the service API."""
+		s = self._serviciu()
+		if s is None:
+			return None
+		from enigma import iServiceInformation as I
+		from Screens.InfoBar import InfoBar
+		bara = InfoBar.instance
+		info = s.info()
+		def stiut(nume):
+			cod = getattr(I, nume, None)
+			v = info.getInfo(cod) if info is not None and cod is not None else -1
+			return v if isinstance(v, int) and v >= 0 else None
+		def limba(v):
+			v = str(v or "").split("/")[0].lower()
+			return v if re.fullmatch("[a-z]{3}", v) else "und"
+		rez = []
+		criptat = stiut("sIsCrypted")
+		vpid = stiut("sVideoPID")
+		if vpid is not None and 0 < vpid < 8191:
+			p = {"id": "v", "type": 0, "pid": vpid, "active": True}
+			vtype = stiut("sVideoType")
+			if vtype in (0, 6):
+				p["encoding"] = "video/mpeg"
+			elif vtype in (1, 4, 7):
+				p["encoding"] = "video/mp4"
+			rez.append(p)
+		a = s.audioTracks()
+		if a is not None:
+			cur = a.getCurrentTrack()
+			formate = {"MPEG": "audio/mpeg", "AC3": "audio/ac3", "AC3+": "audio/eac3",
+				"AAC": "audio/mp4", "AAC-HE": "audio/mp4", "DTS": "audio/vnd.dts", "DTS-HD": "audio/vnd.dts.hd"}
+			for i in range(min(a.getNumberOfTracks(), AV_PISTE_MAXIM)):
+				t = a.getTrackInfo(i)
+				p = {"id": "a%d" % i, "type": 1, "language": limba(t.getLanguage()), "active": i == cur}
+				pid = t.getPID()
+				if 0 < pid < 8191:
+					p["pid"] = pid
+				codec = str(t.getDescription() or "").split(" ")[0]
+				if codec in formate:
+					p["encoding"] = formate[codec]
+				rez.append(p)
+		sub = s.subtitle()
+		selectata = getattr(bara, "selected_subtitle", None) if bara is not None else None
+		pornita = bool(getattr(bara, "subtitles_enabled", False))
+		for i, t in enumerate((sub.getSubtitleList() if sub is not None else []) or []):
+			if i >= AV_PISTE_MAXIM:
+				break
+			if len(t) < 5 or t[0] not in (0, 1):
+				continue
+			p = {"id": "s%d" % i, "type": 2, "language": limba(t[4]),
+				"encoding": "DVB-SUBT" if t[0] == 0 else "EBU-SUBT",
+				"active": pornita and bool(selectata) and tuple(selectata[:4]) == tuple(t[:4])}
+			if 0 < t[1] < 8191:
+				p["pid"] = t[1]
+			rez.append(p)
+		for p in rez:
+			if criptat is not None:
+				p["encrypted"] = bool(criptat)
+		return rez if rez else None
+
 	def av_evenimente(self):
 		"""Evenimentele playerului: {"eof", "bufer", "info", "erori": {eveniment: cod}} (erorile: evUser+10/11/12/16)."""
 		from enigma import iPlayableService as E
@@ -1181,10 +1252,111 @@ class Mediu(object):
 			return False
 
 	def inregistrare_pornita(self):
+		if self._inregistrari_sesiune is not self.session or self._inregistrari_nav is not self.session.nav:
+			self._leagaInregistrari()
+		return self._inregistrari_necunoscute or bool(self._inregistrari)
+
+	def _leagaInregistrari(self):
+		# Sesiunea noua nu mosteneste starea si callback-urile celei vechi.
+		generatie = object()
+		self._inregistrari_generatie = generatie
+		if self._inregistrari_ceas is not None:
+			self._inregistrari_ceas.stop()
+			self._inregistrari_ceas = None
+		if self._inregistrari_callback is not None:
+			try:
+				self._inregistrari_nav.record_event.remove(self._inregistrari_callback)
+			except (AttributeError, ValueError):
+				pass
+		sesiune, nav = self.session, self.session.nav
+		self._inregistrari_sesiune, self._inregistrari_nav = sesiune, nav
+		self._inregistrari_callback = None
+		self._inregistrari = set()
+		self._inregistrari_necunoscute = True
+		self._inregistrari_delta = None
+		if nav is None:
+			return
+
+		def laInregistrare(serviciu, eveniment):
+			if (self._inregistrari_generatie is generatie and self.session is sesiune and
+					self.session.nav is nav):
+				self._laInregistrare(serviciu, eveniment)
+
+		self._inregistrari_callback = laInregistrare
+		nav.record_event.append(laInregistrare)
+		self._citesteInregistrari()
+
+	def _citesteInregistrari(self):
+		# Evenimentele reentrante se aplica DUPA instantaneul nativ, fara recitire.
+		if self._inregistrari_nav is None or self._inregistrari_delta is not None:
+			return
+		generatie = self._inregistrari_generatie
+		delta = {}
+		self._inregistrari_delta = delta
+		self._inregistrari_delta_eroare = False
 		try:
-			return bool(self.session.nav.getRecordings())
+			stare = set(s.getPtrString() for s in (self._inregistrari_nav.getRecordings() or ()))
+			necunoscute = False
 		except Exception:
-			return False
+			stare = set(self._inregistrari)
+			necunoscute = True
+		if self._inregistrari_generatie is not generatie:
+			return
+		if self._inregistrari_sesiune is not self.session or self._inregistrari_nav is not self.session.nav:
+			self._leagaInregistrari()
+			return
+		for cheie, prezenta in delta.items():
+			if prezenta:
+				stare.add(cheie)
+			else:
+				stare.discard(cheie)
+		self._inregistrari = stare
+		self._inregistrari_necunoscute = necunoscute or self._inregistrari_delta_eroare
+		self._inregistrari_delta = None
+		if self._inregistrari_necunoscute:
+			self._reiaInregistrari()
+		elif self._inregistrari_ceas is not None:
+			self._inregistrari_ceas.stop()
+			self._inregistrari_ceas = None
+
+	def _reiaInregistrari(self):
+		# Numai dupa eroare: o recitire rara pe firul interfetei, nu la fiecare tic HbbTV.
+		if self._inregistrari_ceas is None:
+			generatie = self._inregistrari_generatie
+			sesiune, nav = self._inregistrari_sesiune, self._inregistrari_nav
+
+			def reia():
+				if (self._inregistrari_ceas is ceas and self._inregistrari_generatie is generatie and self.session is sesiune and
+						self.session.nav is nav and self._inregistrari_necunoscute):
+					self._citesteInregistrari()
+
+			ceas = self.ceas(reia)
+			self._inregistrari_ceas = ceas
+		self._inregistrari_ceas.start(5000, True)
+
+	def _laInregistrare(self, serviciu, eveniment):
+		# Navigation trimite numai serviciile reale. evEnd vine dupa scoaterea din lista;
+		# celelalte evenimente vin cat serviciul inca ocupa tunerul, inclusiv dupa stop().
+		if self._inregistrari is None:
+			return
+		try:
+			from enigma import iRecordableService
+			cheie = serviciu.getPtrString()
+			if self._inregistrari_delta is not None:
+				self._inregistrari_delta[cheie] = eveniment != iRecordableService.evEnd
+				return
+			if eveniment == iRecordableService.evEnd:
+				self._inregistrari.discard(cheie)
+			else:
+				self._inregistrari.add(cheie)
+			if self._inregistrari_necunoscute:
+				self._citesteInregistrari()
+		except Exception:
+			self._inregistrari_necunoscute = True
+			if self._inregistrari_delta is not None:
+				self._inregistrari_delta_eroare = True
+			else:
+				self._reiaInregistrari()
 
 	def utilizator(self):
 		"""(nume, uid, gid) al utilizatorului fara root, sau None daca imaginea nu il are."""
@@ -1547,6 +1719,7 @@ class Controlor(object):
 	def _gol(self):
 		"""Starea stratului H3 (aplicatia, masca, canalul oprit de ea, zap-ul cerut de ea)."""
 		self.strat = False             # stratul JS e in pagina ("HBBTV strat 1")
+		self._bc_stare = None
 		self.masca = None              # masca Keyset (None: fara strat, tastele ca in H2)
 		self.pornita = False           # prima pagina a venit
 		self._asteapta_arata = False   # prima pagina a venit ascunsa, se asteapta show()
@@ -1611,6 +1784,7 @@ class Controlor(object):
 		c = self._din_mediu("config_hbbtv", {})
 		c = _aplicatii().config_cu_profil(c, self._profil) if self._profil else c
 		info = self._infoCarusel()
+		c = dict(c, broadcast=self._broadcast())
 		return dict(c, carusel=info) if info else c
 
 	def _configPagina(self):
@@ -2194,6 +2368,8 @@ class Controlor(object):
 		if anunta:
 			self._avStare()
 		self._av = None
+		self._av_fereastra = None
+		self._av_ecran_intreg = False
 		self._aplicaFereastra()
 		_jurnal("film %s" % ("terminat" if joc == AV_GATA else "oprit" if joc == AV_OPRIT else "cazut (%s)" % eroare))
 
@@ -2398,6 +2574,24 @@ class Controlor(object):
 		if c:
 			self._ccid[c["ccid"]] = ref
 		return c
+
+	def _broadcast(self):
+		"""Read a snapshot only while the application owns the current broadcast service."""
+		ref = self._din_mediu("ref_curent", "")
+		p = None
+		if self.legata and not self.serviciu_oprit and not self._avActiv() and not self._decodor_imprumutat and not self._zap and not self._zap_om and ref == self.ref:
+			p = self._din_mediu("broadcast_componente", None)
+		return {"piste": p}
+
+	def _broadcastTrimite(self):
+		if self.nav is None or not self.strat:
+			return
+		if not callable(getattr(self.m, "broadcast_componente", None)):
+			return
+		p = self._broadcast()
+		if p != self._bc_stare:
+			self._bc_stare = p
+			self._ev(dict(p, ev="broadcast"))
 
 	def _lista(self):
 		rez = []
@@ -2867,10 +3061,13 @@ class Controlor(object):
 
 	def _tasta(self, cod, flag):
 		if self.nav is None:
-			if self._car_asteapta is not None and cod == KEY_EXIT:
-				if flag == 0:
-					self._anuleazaCarusel(motiv="EXIT")
-				return 1                           # caruselul se incarca: EXIT renunta
+			if self._car_asteapta is not None:
+				if cod == KEY_EXIT:
+					if flag == 0:
+						self._anuleazaCarusel(motiv="EXIT")
+					return 1                       # caruselul se incarca: EXIT renunta
+				if tasta_la_incarcare(cod) == NIMIC:
+					return 1
 			return 0
 		ascunsa = self._ascunsa()
 		if not self.aratat and not ascunsa and not self.fundal:
@@ -2986,6 +3183,7 @@ class Controlor(object):
 				if self._car_asteapta is not None and ev in self._ev_canal:
 					self._anuleazaCarusel(motiv="canalul schimbat")
 				return
+			self._broadcastTrimite()
 			if self._av is not None and self._avEveniment(ev):
 				return
 			if ev in self._ev_canal:
@@ -3018,6 +3216,7 @@ class Controlor(object):
 			self._ceas.stop()
 			return
 		try:
+			self._broadcastTrimite()
 			if self.m.in_standby() or self.m.in_timeshift():
 				self.inchide(motiv="standby sau timeshift")
 				return
@@ -3267,7 +3466,22 @@ def cheieTraducere():
 
 def controlor(session):
 	if not _CONTROLOR:
-		_CONTROLOR.append(Controlor(Mediu(session)))
+		mediu = Mediu(session)
+		c = Controlor(mediu)
+		mediu.inregistrare_pornita()
+		_CONTROLOR.append(c)
+	elif _CONTROLOR[0].m.session is not session:
+		c = _CONTROLOR[0]
+		vechi = getattr(getattr(c.m.session, "nav", None), "event", ())
+		nou = getattr(getattr(session, "nav", None), "event", None)
+		if vechi is not nou:
+			for functie in tuple(vechi):
+				if getattr(functie, "__self__", None) is c:
+					vechi.remove(functie)
+					if nou is not None and functie not in nou:
+						nou.append(functie)
+		c.m.session = session
+		c.m.inregistrare_pornita()
 	return _CONTROLOR[0]
 
 

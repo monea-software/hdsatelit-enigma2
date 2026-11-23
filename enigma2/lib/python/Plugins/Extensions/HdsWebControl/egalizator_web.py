@@ -14,7 +14,8 @@
 #                                    cuvinte, datele tehnice pe randuri („tehnic”), starea motorului (bruta, pentru
 #                                    „Text brut”)
 #   POST /api/egalizator-seteaza     pornit=0|1, presetare=<cheie>, benzi=b0,...,b9 (-24..18), noapte=0|1, nivel=-12..12,
-#                                    pe_post=0|1, volum=auto|aici|placa, placa=<nume ALSA>, tv=0|1 (si la canalele TV),
+#                                    pe_post=0|1, volum=auto|aici|placa, placa=<nume ALSA>, tv=0|1|placa (si la canalele
+#                                    TV; "placa" numai pe HiSilicon: egalizatorul placii, 5 benzi, fara intarziere),
 #                                    potrivire_tv=-300..300 (ms, din 10 in 10: sunetul fata de imagine la TV); cu
 #                                    incearca=1 valorile
 #                                    se aud pe loc fara sa se salveze (glisoarele, cat le misti); renunta=1 pune inapoi
@@ -79,6 +80,13 @@ def _intreg(text, jos, sus):
 def _citeste(argumente, E):
 	"""Argumentele -> (valorile bune, None) sau (None, mesajul de eroare)."""
 	v = {}
+	if argumente.get("tv") == "placa":
+		if not getattr(E, "placaExista", lambda: False)():
+			return None, _t("Egalizatorul plăcii de sunet există numai pe receptoarele HiSilicon.")
+		v["tv_placa"] = True
+		argumente = dict(argumente, tv="1")
+	elif "tv" in argumente:
+		v["tv_placa"] = False
 	for cheie in ("pornit", "noapte", "pe_post", "incearca", "renunta", "tv", "salveaza_manual"):
 		if cheie in argumente:
 			if argumente[cheie] not in ("0", "1"):
@@ -137,13 +145,15 @@ def seteaza(argumente, E=None):
 		return rez
 	if v.get("incearca"):
 		E.incearca(benzi=v.get("benzi"), noapte=v.get("noapte"), nivel=v.get("nivel"), presetare_=v.get("presetare"),
-			pornit=v.get("pornit"), pePost=v.get("pe_post"), efect=v.get("efect"))
+			pornit=v.get("pornit"), pePost=v.get("pe_post"), efect=v.get("efect"), tv=v.get("tv"), tvPlaca=v.get("tv_placa"))
 		rez = stare(E)
 		rez.update({"result": True, "message": _t("Se aude acum. Apasă „Păstrează” ca să rămână.")})
 		return rez
 	valori = dict((k, v[k]) for k in ("pornit", "benzi", "noapte", "nivel", "volum", "placa", "tv", "efect") if k in v)
 	if "potrivire_tv" in v:
 		valori["potrivireTv"] = v["potrivire_tv"]
+	if "tv_placa" in v:
+		valori["tvPlaca"] = v["tv_placa"]
 	if "presetare" in v:
 		valori["presetare_"] = v["presetare"]
 	if "pe_post" in v:
@@ -162,7 +172,7 @@ def seteaza(argumente, E=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, fara token; numai cheile cunoscute."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token; numai cheile cunoscute."""
 	rez = {}
 	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
@@ -181,12 +191,12 @@ def argumente(request):
 					v = v.decode("utf-8")
 				except UnicodeDecodeError:
 					v = None
-			rez[cheie] = v if isinstance(v, str) and len(v) <= MAX_TEXT else None
+			rez[cheie] = v if isinstance(v, str) else None
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_TEXT].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -335,7 +345,9 @@ PAGINA = """<!DOCTYPE html>
       <button type="button" id="manual">Reglaj manual</button>
       <label class="comutator" id="rand_post"><input type="checkbox" id="pe_post"> <span id="text_post">Pentru acest post</span></label>
       <label class="comutator">Efecte speciale <select id="efecte"></select></label>
-      <label class="comutator">La canalele TV <select id="tv"><option value="1">Da</option><option value="0">Nu</option></select></label>
+      <label class="comutator">La canalele TV <select id="tv"><option value="1">Da</option><option value="placa" id="tv_placa" hidden>Prin placă</option><option value="0">Nu</option></select></label>
+      <p class="nota ascuns" id="nota_placa">Prin placă: la canalele TV benzile le aplică placa de sunet, la fiecare canal și fără nicio întârziere, adunate în 5 benzi. Efectele speciale și comprimarea se aud numai la radio.</p>
+      <p class="nota" id="avertizare_tv"></p>
     </div>
     <p class="nota">Oprit din fabrică. Lucrează numai la posturile cu sunet MPEG (MP2), radio și TV. Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l.</p>
     <p class="nota ascuns" id="comprimare">Comprimare activă. Alegi altă presetare sau modifici o coloană pentru a o opri.</p>
@@ -461,7 +473,9 @@ function arataReglaje(d){
   $("pe_post").checked = d.pe_post; $("pe_post").disabled = !d.post.cheie;
   $("text_post").textContent = d.post.cheie ? ("Numai pentru " + (d.post.nume || "acest post")) : "Pentru acest post (nu merge niciun post)";
   $("volum").value = d.volum; $("placa").value = d.placa;
-  $("tv").value = d.tv ? "1" : "0"; $("potrivire_tv").value = String(d.potrivire_tv);
+  $("tv_placa").hidden = !d.placa_peq;
+  $("tv").value = d.tv ? ((d.placa_peq && d.tv_placa) ? "placa" : "1") : "0"; $("potrivire_tv").value = String(d.potrivire_tv);
+  $("nota_placa").classList.toggle("ascuns", $("tv").value !== "placa");
   presetari(d); SCHIMBAT = false; $("nepastrat").textContent = "";
   $("comprimare").classList.toggle("ascuns", !NOAPTE);
 }
@@ -469,6 +483,7 @@ function arataStarea(d){
   var a = $("acum"); a.textContent = d.text || "";
   a.classList.toggle("bine", d.bine === true); a.classList.toggle("rau", d.bine === false);
   $("detaliu").textContent = d.detaliu || "";
+  $("avertizare_tv").textContent = d.avertizare_tv || "";
   $("reglaje").classList.toggle("stins", !$("pornit").checked);
   var m = d.motor || {}, t = $("tehnic"); t.textContent = "";
   // datele pe randuri, in cuvinte (Components/HdsEgalizator.randuriTehnice); cele brute numai in „Text brut”
@@ -608,7 +623,7 @@ $("renunta").addEventListener("click", function(){
 });
 $("volum").addEventListener("change", function(){ trimite({volum: $("volum").value}).then(function(d){ if(d && d.result){ mesaj(d.message); } }); });
 $("pune_placa").addEventListener("click", function(){ trimite({placa: $("placa").value}).then(function(d){ if(d && d.result){ mesaj(d.message); } }); });
-$("tv").addEventListener("change", function(){ trimite({tv: $("tv").value}).then(function(d){ if(d && d.result){ mesaj(d.message); } }); });
+$("tv").addEventListener("change", function(){ $("nota_placa").classList.toggle("ascuns", $("tv").value !== "placa"); trimite({tv: $("tv").value}).then(function(d){ if(d && d.result){ mesaj(d.message); } }); });
 $("potrivire_tv").addEventListener("change", function(){ trimite({potrivire_tv: $("potrivire_tv").value}).then(function(d){ if(d && d.result){ mesaj(d.message); } }); });
 $("brut").addEventListener("click", function(){ $("text_brut").classList.toggle("ascuns"); });
 window.addEventListener("resize", deseneaza);
@@ -652,6 +667,9 @@ TEXTE_PAGINA = {
 		N_("La canalele TV"),
 		N_("Da"),
 		N_("Nu"),
+		N_("Prin placă"),
+		N_("Prin placă: la canalele TV benzile le aplică placa de sunet, la fiecare canal și fără nicio întârziere, "
+			"adunate în 5 benzi. Efectele speciale și comprimarea se aud numai la radio."),
 		N_("Potrivirea cu imaginea la TV"),
 		N_("Automat: receptorul vede singur dacă volumul telecomenzii se aplică și sunetului cu egalizator. "
 			"Placa de sunet rămâne „default”, afară de probe."),

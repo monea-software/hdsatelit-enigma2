@@ -67,7 +67,8 @@ def _arg(request, nume, maxim=200):
 	v = valori[0]
 	if isinstance(v, bytes):
 		v = v.decode("utf-8", "replace")
-	return str(v)[:maxim]
+	# REGULA 0, WEB8: valoarea intreaga, `maxim` nu mai taie
+	return str(v)
 
 
 def _lucrare(nume):
@@ -87,6 +88,7 @@ def stare(A=None):
 		"result": True,
 		"fel_parola": s["fel_parola"],
 		"parola_pusa": bool(s["parola_pusa"]),
+		"parola": s.get("parola", ""),
 		"unde": s["unde"],
 		"locuri": [{"cheie": k, "text": _t(v)} for k, v in P.TXT_SERVICII],
 		"program": s["program"],
@@ -306,8 +308,7 @@ ETICHETE = {
 	"PUNE": N_("Pune parola"),
 	"STERGE_PAROLA": N_("Șterge parola"),
 	"PAROLA_NOUA": N_("Parola ta"),
-	"PAROLA_NOUA_NOTA": N_("Orice text (și 123), o singură dată; se vede cât o scrii. După salvare nu se mai arată "
-		"nicăieri. Prima dată se cere peste tot; apoi alegi mai jos unde."),
+	"PAROLA_NOUA_NOTA": N_("Orice text (și 123); parola se vede și după salvare. Prima dată se cere peste tot; apoi alegi mai jos unde."),
 	"UNDE": N_("Unde se cere parola ta"),
 	"TOATE": N_("Toate"),
 	"CUM": N_("Cum te conectezi"),

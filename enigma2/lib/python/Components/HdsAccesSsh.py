@@ -774,6 +774,7 @@ def stare():
 	return {
 		"fel_parola": felParola(),
 		"parola_pusa": pusa,
+		"parola": P.parolaSalvata(a),
 		"unde": [s for s in P.SERVICII if s in a["unde"]],
 		"ftp": ftpPornit(),
 		"program": os.access(PROGRAM_PAROLA, os.X_OK),
@@ -796,8 +797,7 @@ def textParola(s):
 
 
 def textParolaScurt(s):
-	"""Randul mare al parolei: dupa salvare parola nu se mai arata, randul spune numai daca e pusa."""
-	return _("pusă") if s.get("parola_pusa") else _("nepusă")
+	return s.get("parola") or _parolaLocala().textParola()
 
 
 def textAlarme(s):

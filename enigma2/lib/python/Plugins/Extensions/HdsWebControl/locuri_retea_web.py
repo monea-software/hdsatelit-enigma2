@@ -213,11 +213,11 @@ def reda(a, sesiune=None, S=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt, numai cheile cunoscute; parola numai din corp, fara token."""
+	"""Argumentele cererii ca text, numai cheile cunoscute; parola numai din corp, fara token."""
 	from .descarcare_subtitrari_web import _cheiDinAdresa
 	din_adresa = _cheiDinAdresa(request)
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:32]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in CAMPURI or (cheie == "parola" and cheie in din_adresa):
@@ -225,7 +225,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_TEXT] if cheie == "parola" else str(v)[:MAX_TEXT].strip()
+		rez[cheie] = str(v) if cheie == "parola" else str(v).strip()
 	return rez
 
 
@@ -346,7 +346,8 @@ PAGINA = """<!DOCTYPE html>
   .bife label{display:flex;gap:10px;align-items:center;color:var(--text);}
   .bife input{width:auto;min-height:0;}
   .rand{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;}
-  .nota{color:var(--text-slab);font-size:.85rem;margin:6px 0 0;line-height:1.45;}
+  .rand>div{min-width:0;}
+  .nota{color:var(--text-slab);font-size:.85rem;margin:6px 0 0;line-height:1.45;overflow-wrap:anywhere;}
   .mesaj{margin:10px 0 0;line-height:1.45;font-size:.92rem;}
   .eroare{color:#ffb4a8;}
   .ascuns{display:none;}
@@ -394,7 +395,7 @@ PAGINA = """<!DOCTYPE html>
         <div id="d_dosar"><label for="f_dosar">Dosarul</label><input id="f_dosar" maxlength="400"><div class="actiuni" style="margin-top:6px"><button type="button" id="alegeDosar">Alege din lista serverului</button></div></div>
       </div>
       <div class="rand" id="d_cont">
-        <div><label for="f_utilizator">Utilizatorul (gol: fără cont)</label><input id="f_utilizator" maxlength="120" autocomplete="off"></div>
+        <div><label for="f_utilizator">Utilizatorul (gol: fără cont)</label><input id="f_utilizator" maxlength="120" autocomplete="off" aria-describedby="contNota"><p class="nota" id="contNota">Contul de pe server. Pe Windows: numele contului sau CASA\\nume. Gol: fără cont (oaspete).</p></div>
         <div><label for="f_parola">Parola</label><input id="f_parola" type="text" maxlength="256" autocomplete="off" autocapitalize="off" spellcheck="false"><p class="nota ascuns" id="parolaNota">Este salvată o parolă. Lasă câmpul gol ca să rămână aceeași.</p></div>
       </div>
       <div class="rand">
@@ -412,7 +413,8 @@ PAGINA = """<!DOCTYPE html>
       <div id="mesajFormular" class="mesaj"></div>
     </form>
   </section>
-  <p class="nota">Locurile SMB și NFS se montează pe receptor: apar și în Player media, ca un disc. Folosește pt. înregistrări verifică scrierea și viteza, apoi alege locul pentru înregistrări. Parolele stau criptate pe receptor și nu se arată nicăieri.</p>
+  <p class="nota">Locurile SMB și NFS se montează pe receptor: apar și în Player media, ca un disc. Folosește pt. înregistrări verifică scrierea și viteza, apoi alege locul pentru înregistrări. Parolele stau criptate pe receptor și se văd în lista de mai sus.</p>
+  <p class="nota">Nimic nu se montează singur. Pentru montare după pornire, bifează Montat și după repornire la locul dorit.</p>
   <p class="nota">Același ecran este pe televizor, în __DRUM_MENIU__.</p>
 </div>
 </main>
@@ -472,7 +474,7 @@ function arata(d){
     var n = document.createElement("div"); n.className = "nume"; n.textContent = l.nume;
     var e = document.createElement("span"); e.className = "eticheta"; e.textContent = l.fel_scurt; n.appendChild(e);
     info.appendChild(n);
-    var a = document.createElement("div"); a.className = "mic"; a.textContent = l.adresa + (l.utilizator ? " · " + l.utilizator : ""); info.appendChild(a);
+    var a = document.createElement("div"); a.className = "mic"; a.textContent = l.adresa + (l.utilizator ? " · " + l.utilizator : "") + (l.parola ? " / " + l.parola : ""); info.appendChild(a);
     if(l.montat){ var p = document.createElement("div"); p.className = "mic"; p.textContent = l.punct; info.appendChild(p); }
     var s = document.createElement("div"); s.className = "stare " + l.stare; s.textContent = l.stare_text; info.appendChild(s);
     card.appendChild(info);
@@ -508,7 +510,8 @@ function arata(d){
   programeaza(lucreaza ? 1000 : 15000);
   if(!CAUTARE_INITIALA){
     CAUTARE_INITIALA = true;
-    if(!(d.locuri || []).length && !cs.in_lucru){ cautaServere(); }
+    // NMS6: ca pe televizor, cautarea in casa porneste la fiecare deschidere, iar serverele gasite apar dedesubt
+    if(!cs.in_lucru){ cautaServere(); }
   }
 }
 function programeaza(ms){ if(CEAS){ clearTimeout(CEAS); } CEAS = setTimeout(citeste, ms); }
@@ -552,6 +555,8 @@ function potriveste(){
   $("d_citire").classList.toggle("ascuns", fel !== "smb" && fel !== "nfs");
   $("d_tls").classList.toggle("ascuns", fel !== "ftps" && fel !== "webdavs");
   $("alegeDosar").classList.toggle("ascuns", fel !== "smb" && fel !== "nfs");
+  // NMS6: la SMB si NFS salvarea il si monteaza, ca VERDE de pe televizor
+  $("salveaza").textContent = (fel === "smb" || fel === "nfs") ? "Salvează și montează" : "Salvează locul";
   $("ajutorFel").textContent = AJUTOR[fel] || "";
 }
 function goleste(){
@@ -732,6 +737,7 @@ TEXTE_PAGINA = {
 		N_("Dosarul"),
 		N_("Alege din lista serverului"),
 		N_("Utilizatorul (gol: fără cont)"),
+		N_("Contul de pe server. Pe Windows: numele contului sau CASA\\nume. Gol: fără cont (oaspete)."),
 		N_("Parola"),
 		N_("Este salvată o parolă. Lasă câmpul gol ca să rămână aceeași."),
 		N_("Portul (0: cel obișnuit)"),
@@ -743,8 +749,9 @@ TEXTE_PAGINA = {
 		N_("Renunță"),
 		N_("Locurile SMB și NFS se montează pe receptor: apar și în Player media, ca un disc. Folosește pt. "
 			"înregistrări verifică scrierea și viteza, apoi alege locul pentru înregistrări. Parolele stau "
-			"criptate pe receptor și nu se arată nicăieri."),
+			"criptate pe receptor și se văd în lista de mai sus."),
 		N_("Același ecran este pe televizor, în __DRUM_MENIU__."),
+		N_("Nimic nu se montează singur. Pentru montare după pornire, bifează Montat și după repornire la locul dorit."),
 	),
 	"js": (
 		N_("Calculatorul cu Windows sau NAS-ul: scrie numele dosarului partajat (de pildă Filme). Pe Windows, "
@@ -766,6 +773,8 @@ TEXTE_PAGINA = {
 		N_("Ștergi locul"),
 		N_("? Fișierele de pe server nu se ating."),
 		N_("Se caută serverele din casă..."),
+		N_("Salvează și montează"),
+		N_("Salvează locul"),
 		N_("adăugat deja"),
 		N_("Adaugă"),
 		N_("Receptorul nu a putut citi locurile."),

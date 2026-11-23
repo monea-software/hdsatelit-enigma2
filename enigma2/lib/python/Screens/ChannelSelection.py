@@ -650,6 +650,11 @@ class ChannelSelectionEPG:
 
 class ChannelSelectionEdit:
 	def __init__(self):
+		try:
+			from Components import HdsReparaBuchete
+			HdsReparaBuchete.inregistreaza_lista(self)
+		except ImportError:
+			pass
 		self.entry_marked = False
 		self.movemode = False
 		self.bouquet_mark_edit = OFF
@@ -682,6 +687,9 @@ class ChannelSelectionEdit:
 			})
 
 	def getMutableList(self, root=eServiceReference()):
+		from Components import HdsReparaBuchete as R
+		if R._LUCRU is not None:
+			return None
 		if not self.mutableList is None:
 			return self.mutableList
 		serviceHandler = eServiceCenter.getInstance()
@@ -721,6 +729,9 @@ class ChannelSelectionEdit:
 			cnt+=1
 
 	def addAlternativeServices(self):
+		from Components import HdsReparaBuchete as R
+		if R._LUCRU is not None:
+			return
 		cur_service = ServiceReference(self.getCurrentSelection())
 		root = self.getRoot()
 		cur_root = root and ServiceReference(root)
@@ -754,6 +765,9 @@ class ChannelSelectionEdit:
 			print("bouquetlist is not editable")
 
 	def addBouquet(self, bName, services):
+		from Components import HdsReparaBuchete as R
+		if R._LUCRU is not None:
+			return
 		serviceHandler = eServiceCenter.getInstance()
 		mutableBouquetList = serviceHandler.list(self.bouquet_root).startEdit()
 		if mutableBouquetList:
@@ -797,6 +811,9 @@ class ChannelSelectionEdit:
 		self.addBouquet(providerName, services and services.getContent('R', True))
 
 	def removeAlternativeServices(self):
+		from Components import HdsReparaBuchete as R
+		if R._LUCRU is not None:
+			return
 		cur_service = ServiceReference(self.getCurrentSelection())
 		root = self.getRoot()
 		cur_root = root and ServiceReference(root)
@@ -817,6 +834,11 @@ class ChannelSelectionEdit:
 		self.servicelist.moveUp()
 
 	def removeBouquet(self):
+		from Components import HdsReparaBuchete as R
+		if R._LUCRU is not None:
+			return
+		if self.hdsDezleagaBuchet(sterge=True):
+			return
 		refstr = self.getCurrentSelection().toString()
 		print("removeBouquet", refstr)
 		self.bouquetNumOffsetCache = { }
@@ -843,6 +865,9 @@ class ChannelSelectionEdit:
 
 #  multiple marked entry stuff ( edit mode, later multiepg selection )
 	def startMarkedEdit(self, type):
+		from Components import HdsReparaBuchete as R
+		if R._LUCRU is not None:
+			return
 		self.savedPath = self.servicePath[:]
 		if type == EDIT_ALTERNATIVES:
 			self.enterPath(self.getCurrentSelection())
@@ -908,7 +933,37 @@ class ChannelSelectionEdit:
 		else:
 			self.servicelist.addMarked(ref)
 
+	def hdsDezleagaBuchet(self, sterge=False):
+		"""Buchetele personale scoase din Avansat raman scoase, cu copie pe fir."""
+		from Components import HdsReparaBuchete as R
+		root, ref = self.getRoot(), self.servicelist.getCurrent()
+		if root is None or ref is None or not root.valid() or not ref.valid():
+			return False
+		parinte = R.O._nume_rand("#SERVICE " + root.toString())
+		nume = next(iter(R._trimiteri("#SERVICE " + ref.toString())), None)
+		# Listele generate si alternativele isi pastreaza gestionarii de pana acum.
+		if not nume or R._generat(nume):
+			return False
+		if parinte and "%" in parinte:
+			parinte = R.unquote(parinte, errors="surrogateescape")
+		session = self.session
+		def gata(rez):
+			if rez is None:
+				session.open(MessageBox, R.mesaj_web(), type=MessageBox.TYPE_ERROR, timeout=15)
+		try:
+			pornit = parinte and R.dezleaga(parinte, nume, gata, sterge=sterge)
+		except Exception:
+			self.session.open(MessageBox, R.mesaj_web() or _("Nu am putut confirma schimbarea listei. Încearcă din nou."),
+				type=MessageBox.TYPE_ERROR, timeout=15)
+			return True
+		if not pornit:
+			self.session.open(MessageBox, _("Lista de canale este în lucru. Încearcă din nou peste câteva secunde."),
+				type=MessageBox.TYPE_ERROR, timeout=10)
+		return True
+
 	def removeCurrentService(self):
+		if self.hdsDezleagaBuchet():
+			return
 		ref = self.servicelist.getCurrent()
 		mutableList = self.getMutableList()
 		if ref.valid() and mutableList is not None:
@@ -948,6 +1003,9 @@ class ChannelSelectionEdit:
 			if cur_root and cur_root == self.bouquet_root:
 				self.bouquetNumOffsetCache = { }
 		else:
+			from Components import HdsReparaBuchete as R
+			if R._LUCRU is not None:
+				return
 			self.mutableList = self.getMutableList()
 			self.movemode = True
 			self.pathChangeDisabled = True # no path change allowed in movemode
@@ -2124,8 +2182,30 @@ class ChannelSelectionBase(Screen):
 				ref = eServiceReference(refstr)
 				currentRoot = self.getRoot()
 				if currentRoot is None or currentRoot != ref:
+					ales = self.getCurrentSelection()
 					self.clearPath()
 					self.enterPath(ref)
+					self.hdsToateLaCanal(ales)
+
+	def hdsToateLaCanal(self, ales):
+		"""ROSU "Toate" (CR4, 0.7.8, tfrc LinuxSat 164191, TODO 18.11 17:38): lista tuturor canalelor ramane pe canalul ales,
+		nu pe primul canal al tuturor satelitilor. Intai canalul de sub cursor dinainte (din buchet, satelit, furnizor),
+		apoi canalul care ruleaza (ca in OE-Alliance); un dosar, un marcaj sau un canal care nu e in lista sare."""
+		alese = []
+		if ales is not None and ales.valid() and not (ales.flags & (eServiceReference.isDirectory | eServiceReference.isMarker)):
+			alese.append(ales)
+		try:
+			ruleaza = self.session.nav.getCurrentlyPlayingServiceOrGroup()
+		except Exception:
+			ruleaza = None
+		if ruleaza is not None and ruleaza.valid():
+			alese.append(ruleaza)
+		for r in alese:
+			self.setCurrentSelection(r)
+			acum = self.getCurrentSelection()
+			if acum is not None and acum == r:
+				return True
+		return False
 
 	def showSatellites(self):
 		"""Tasta VERDE si pastila „Sateliți” din capul listei: lista clasica a satelitilor, toti inchisi (si cel al
@@ -2173,6 +2253,12 @@ class ChannelSelectionBase(Screen):
 		canonic (implicit cand nu e prev): deschis numai locul canalului de acum; altfel raman locurile deschise de om.
 		Cursorul: pe cursor, daca e in lista; altfel pe prev (intoarcerea dintr-un dosar); altfel pe canal (implicit
 		canalul de acum), sau pe randul locului lui."""
+		self.hdsSemnIptvUmplut = self.hdsSemnIptv()
+		try:
+			from Components import HdsVarianteCanal as V
+			self.hdsNumereVedere = V._NUMERE
+		except (ImportError, AttributeError):
+			self.hdsNumereVedere = None
 		inceput = time.time()
 		if canonic is None:
 			canonic = prev is None
@@ -2615,6 +2701,14 @@ class ChannelSelectionBase(Screen):
 		"""{loc: cate canale} pentru antetele inchise, din lista 'Toate' a modului (sau a tipurilor date; o singura cerere la
 		nucleu, apoi numai textele referintelor); tinute minte pana se schimba lamedb (data si marimea fisierului)."""
 		tipuri = tipuri or self.service_types
+		try:
+			from Components import HdsVarianteCanal as V
+			if tipuri in (service_types_tv, service_types_radio):
+				pr = V.numere_pregatite("radio" if tipuri == service_types_radio else "tv")
+				if pr is not None:
+					return pr
+		except (ImportError, AttributeError):
+			pass
 		sem = hds_semnatura_lamedb()
 		cheie = (tipuri, sem)
 		if sem is not None and cheie in _hds_numere:
@@ -2633,7 +2727,7 @@ class ChannelSelectionBase(Screen):
 		# randuri are locul deschis
 		try:
 			from Components import HdsVarianteCanal
-			tip = "radio" if self.service_types == service_types_radio else "tv"
+			tip = "radio" if tipuri == service_types_radio else "tv"
 			for poz, n in HdsVarianteCanal.ascunse_pe_pozitii(tip).items():
 				if numere.get(poz, 0) > n:
 					numere[poz] -= n
@@ -2865,6 +2959,9 @@ class ChannelSelectionBase(Screen):
 	def close(self, *retval):
 		# lista s-a inchis: la urmatoarea folosire e deschis iar numai locul canalului de acum (hdsNormalizeaza)
 		self.hdsProaspata = True
+		# OKP6: previzualizarea tine pana la inchiderea listei, nu se pierde la intoarcerea dintr-un ecran deschis peste
+		# ea (codul parental, meniul, EPG-ul, cautarea); hdsTastaExit si channelSelected o folosesc inainte de close
+		self.hdsPrevOriginal = None
 		Screen.close(self, *retval)
 
 	def hdsCanalulCurent(self):
@@ -3113,6 +3210,10 @@ class ChannelSelectionBase(Screen):
 			# lista unei retele: cifrele duc cursorul la numarul operatorului (2, apoi 3 = 23), nu la o litera
 			self.hdsCifraRetea(number)
 			return
+		if self.hdsCifreLaNumar():
+			# 0.7.8 (NUM1, tamiciav7, LinuxSat 232449 #501006): setarea "Cifrele duc la numarul canalului" pornita
+			self.hdsCifraCanal(number)
+			return
 		unichar = self.numericalTextInput.getKey(number)
 		if len(unichar.encode("utf-8")) == 1:
 			self.servicelist.moveToChar(unichar)
@@ -3188,12 +3289,107 @@ class ChannelSelectionBase(Screen):
 	def hdsUitaCifrele(self):
 		self.hdsCifreText = ""
 
+	def hdsCifreLaNumar(self):
+		"""0.7.8 (NUM1, tamiciav7, LinuxSat 232449 #501006, Octagon SF8008 0.7.7): config.usage.hds_lista_cifre_numar
+		(Components/HdsListaSetari, Setari lista de canale si web /setari?id=hds_lista_canale). Da: cifrele din lista duc
+		cursorul la canalul cu acel numar (aceeasi numerotare ca in lista si ca pe bara). Nu (din fabrica, ca pana acum):
+		cifrele sar la prima litera a tastei (NumericalTextInput). La mutarea unui canal cifrele raman ca pana acum."""
+		s = getattr(config.usage, "hds_lista_cifre_numar", None)
+		if s is None or s.value is not True:
+			return False
+		return not getattr(self, "movemode", False)
+
+	def hdsCifraCanal(self, cifra):
+		"""O cifra in lista cu setarea pornita: numarul tastat pana acum (cel mult 4 cifre, ca fereastra NumberZap de pe
+		bara) duce cursorul la canalul cu acel numar, in buchetul lui (lista intra in buchet, ca zapToNumber, dar fara
+		zap: OK porneste canalul). O cifra care nu continua un numar existent incepe unul nou; un numar fara canal nu muta
+		cursorul. Dupa HDS_CIFRE_MS fara cifra, numarul se uita."""
+		text = (getattr(self, "hdsCifreText", "") + str(cifra))[-4:]
+		ref, buchet = self.hdsCautaNumarCanal(int(text))
+		# un numar fara canal (lipsa sau semn numerotat Fast Scan) ramane inceput de numar cat timp exista un canal cu numar
+		# mai lung (12 semn, 123 canal: 1, 2, 3 = 123); altfel cifra incepe un numar nou
+		if ref is None and len(text) > 1 and not self.hdsNumarPoateContinua(text):
+			text = str(cifra)
+			ref, buchet = self.hdsCautaNumarCanal(cifra)
+		self.hdsCifreText = text.lstrip("0")
+		if ref is not None:
+			self.hdsMergiLaCanal(ref, buchet)
+		ceas = getattr(self, "hdsCeasCifre", None)
+		if ceas is None:
+			ceas = self.hdsCeasCifre = eTimer()
+			ceas.callback.append(self.hdsUitaCifrele)
+		ceas.start(self.HDS_CIFRE_MS, True)
+
+	def hdsCautaNumarCanal(self, numar):
+		"""Canalul cu numarul `numar` si buchetul lui, fara semne. Intai in buchetul aratat, cu numerele din stanga randurilor
+		(getBouquetNumOffset: dosarele extensiilor si grupele incep de la 1), apoi in toata numerotarea, ca pe bara
+		(hdsCanalLaNumar). -> (ref sau None, buchet sau None)."""
+		if numar <= 0:
+			return None, None
+		try:
+			root = self.getRoot()
+			if root is not None and getattr(self.servicelist, "mode", None) == ServiceList.MODE_FAVOURITES:
+				k = numar - self.getBouquetNumOffset(root)
+				if k > 0:
+					ref, rest = hds_canal_in_buchet(eServiceCenter.getInstance(), root, k)
+					if not rest:
+						# numarul e al unui rand din buchetul aratat: canalul, sau (None, 0) un semn numerotat Fast Scan, care
+						# tine numarul fara sa porneasca ceva; lista ramane aici (nu trece la alt buchet cu acelasi numar)
+						if ref is not None and ref.valid() and not (ref.flags & eServiceReference.isMarker):
+							return ref, None
+						return None, None
+			ref, buchet = self.hdsCanalLaNumar(numar)
+		except Exception as e:
+			print("[ChannelSelection] cifrele in lista: %r" % (e,))
+			return None, None
+		if ref is None or not ref.valid() or (ref.flags & eServiceReference.isMarker):
+			return None, None
+		return ref, buchet
+
+	def hdsNumarPoateContinua(self, text):
+		"""True cand `text` (cifrele tastate) poate inca deveni numarul unui canal cu o cifra in plus: sub 4 cifre si cel putin
+		int(text) * 10 canale numerotate, in buchetul aratat (cu numerele din stanga lui) sau in toata numerotarea. Buchetele
+		se numara numai pana la prag (hds_numara_urmatorul, cu numaratoarea tinuta minte), nu toate la fiecare cifra."""
+		if len(text) >= 4:
+			return False
+		prag = int(text) * 10
+		try:
+			serviceHandler = eServiceCenter.getInstance()
+			root = self.getRoot()
+			if root is not None and getattr(self.servicelist, "mode", None) == ServiceList.MODE_FAVOURITES:
+				if self.getBouquetNumOffset(root) + hds_numar_canale(serviceHandler, root) >= prag:
+					return True
+			if not config.usage.multibouquet.value:
+				return hds_numar_canale(serviceHandler, self.bouquet_root) >= prag
+			stare = hds_stare_numerotare(self.bouquetNumOffsetCache, serviceHandler, self.bouquet_root)
+			while stare["n"] < prag and stare["i"] < len(stare["buchete"]):
+				hds_numara_urmatorul(self.bouquetNumOffsetCache, serviceHandler, stare)
+			return stare["n"] >= prag
+		except Exception as e:
+			print("[ChannelSelection] cifrele in lista, numarul mai lung: %r" % (e,))
+			return False
+
+	def hdsMergiLaCanal(self, ref, buchet):
+		"""Cursorul pe `ref`; daca lista arata alt loc decat buchetul lui, lista intra intai in buchet (ca zapToNumber)."""
+		if buchet is not None:
+			root = self.getRoot()
+			if root is None or root != buchet:
+				self.clearPath()
+				if self.bouquet_root != buchet:
+					self.enterPath(self.bouquet_root)
+				self.enterPath(buchet)
+		self.setCurrentSelection(ref)
+
 	def keyNumber0(self, num):
 		hdsCapLaLista(self)
 		self.hdsReteaLaZi()
 		if getattr(self, "hdsNumereRetea", None) and getattr(self, "hdsCifreText", ""):
 			# lista retelei: 0 dupa alta cifra face parte din numar (10, 20, 1001)
 			self.hdsCifraRetea(0)
+			return
+		if getattr(self, "hdsCifreText", "") and self.hdsCifreLaNumar():
+			# setarea "Cifrele duc la numarul canalului": 0 dupa alta cifra face parte din numar (10, 20, 100)
+			self.hdsCifraCanal(0)
 			return
 		if len(self.servicePath) > 1:
 			self.keyGoUp()
@@ -3225,6 +3421,9 @@ class ChannelSelectionBase(Screen):
 				return
 			if self.hdsInapoi():
 				return
+		anuleaza = getattr(self, "hdsAnuleazaPrevizualizarea", None)
+		if anuleaza is not None:
+			anuleaza()
 		inchide = getattr(self, "cancel", None)
 		if inchide is None:
 			inchide = self.close
@@ -3485,7 +3684,8 @@ class ChannelSelectionBase(Screen):
 
 	def hdsIndiciuCautare(self):
 		text = sens_tasta("channel_list", "text", config=config) == "search_channels"
-		lung = sens_tasta("channel_list", "ok", lung=True, config=config) == "search_channels"
+		lung = sens_tasta("channel_list", "ok", lung=True, config=config) == "search_channels" \
+			and not self.hdsOkPrevizualizeaza()
 		if text and lung:
 			return _("TEXT sau OK ținut apăsat")
 		if text:
@@ -3604,22 +3804,55 @@ class ChannelSelectionBase(Screen):
 		self.hdsCapInLista()
 
 	def hdsCapSus(self):
+		self.hdsLateralBuchetApasat = False
+		if self.hdsNeutrinoInLista():
+			return 0
 		return self.hdsCapFapta(self.hdsCap.sus(self.hdsCapActiv(), self.hdsCapLaInceput(), self.hdsGrupaCurenta()))
 
 	def hdsCapJos(self):
+		self.hdsLateralBuchetApasat = False
+		if self.hdsNeutrinoInLista():
+			return 0
 		return self.hdsCapFapta(self.hdsCap.jos(self.hdsCapActiv(), self.hdsGrupaCurenta()))
 
 	def hdsCapStanga(self):
+		self.hdsNeutrinoInLista()
+		self.hdsLateralBuchetApasat = self.hdsLateralBuchet(-1)
+		if self.hdsLateralBuchetApasat:
+			return 1
 		fapta = self.hdsCap.lateral(self.hdsCapActiv(), -1)
 		if fapta == HdsCapLista.TRECE and self.hdsPaginaPesteCapat(-1):
 			return 1
 		return self.hdsCapFapta(fapta)
 
 	def hdsCapDreapta(self):
+		self.hdsNeutrinoInLista()
+		self.hdsLateralBuchetApasat = self.hdsLateralBuchet(1)
+		if self.hdsLateralBuchetApasat:
+			return 1
 		fapta = self.hdsCap.lateral(self.hdsCapActiv(), 1)
 		if fapta == HdsCapLista.TRECE and self.hdsPaginaPesteCapat(1):
 			return 1
 		return self.hdsCapFapta(fapta)
+
+	def hdsNeutrinoInLista(self):
+		from Components.HdsTasteRapide import asezare_neutrino
+		if not asezare_neutrino(config) or not self.hdsPoateCauta():
+			return False
+		if self.hdsCap.focus is not HdsCapLista.LISTA:
+			self.hdsCapInLista()
+		return True
+
+	def hdsLateralBuchet(self, pas):
+		from Components.HdsTasteRapide import optiune
+		if optiune("hds_asezare_taste", config) != "neutrino_buchete" or not self.hdsPoateCauta():
+			return False
+		self.hdsCapInLista()
+		if pas < 0:
+			self.prevBouquet()
+		else:
+			self.nextBouquet()
+		return True
 
 	def hdsPaginaPesteCapat(self, pas):
 		"""HDSatelit (cererea de la 16:35): STANGA / DREAPTA in lista (focusul in ea) dau pagina sus / jos; de pe
@@ -3657,16 +3890,39 @@ class ChannelSelectionBase(Screen):
 		return self.hdsCapDreapta()
 
 	def hdsCapRepetat(self):
+		from Components.HdsTasteRapide import optiune
+		if (getattr(self, "hdsLateralBuchetApasat", False) and
+				optiune("hds_asezare_taste", config) == "neutrino_buchete" and self.hdsPoateCauta()):
+			# Un buchet pe apasare; tinerea nu trebuie sa porneasca paginarea.
+			return 1
 		return self.hdsCapFapta(self.hdsCap.repetat(self.hdsCapActiv()))
 
 	def hdsCapOkApasat(self):
+		self.hdsNeutrinoInLista()
 		self.hdsCap.okApasare()
 		return 1
 
 	def hdsCapOkLung(self):
+		if self.hdsOkPrevizualizeaza() and self.hdsPoateCauta() and self.hdsCap.okApasat and not self.hdsCap.okLung \
+			and self.hdsCap.ok(self.hdsCapActiv()) == HdsCapLista.OK_LISTA:
+			# OKP6 (yazoo, forum 1936): cu previzualizarea, OK lung face canalul ales canal curent si inchide lista;
+			# eliberarea de dupa nu mai face nimic (okLung)
+			self.hdsCap.okLung = True
+			self.hdsDeseneazaCapul()
+			self.hdsFaraPrevizualizare = True
+			try:
+				self.channelSelected()
+			finally:
+				self.hdsFaraPrevizualizare = False
+			return 1
 		poate = self.hdsPoateCauta() and sens_tasta("channel_list", "ok", lung=True,
 			config=config) == "search_channels"
 		return self.hdsCapFapta(self.hdsCap.okTinut(poate))
+
+	def hdsOkPrevizualizeaza(self):
+		"""OKP6: "OK previzualizeaza canalul in lista de canale" (config.usage.hds_ok_previzualizare, Nu din fabrica),
+		numai in lista barei (ChannelSelection); celelalte liste (radio, alegerea simpla) raman ca inainte."""
+		return False
 
 	def hdsCapOkEliberat(self):
 		return self.hdsCapFapta(self.hdsCap.okEliberare(self.hdsCapActiv()))
@@ -3674,6 +3930,7 @@ class ChannelSelectionBase(Screen):
 	def hdsOkDirect(self):
 		"""OK din OkCancelActions: ENTER de la o tastatura (tasta OK a telecomenzii trece prin HdsCapActions)."""
 		if self.hdsCapPornit:
+			self.hdsNeutrinoInLista()
 			self.hdsCapFapta(self.hdsCap.ok(self.hdsCapActiv()))
 		else:
 			self.channelSelected()
@@ -3984,6 +4241,11 @@ class ChannelSelectionBase(Screen):
 
 	def hdsPornesteVeghea(self):
 		"""La fiecare intrare a listei in fata (onExecBegin): ceasul care tine lista retelei la zi cat lista e in fata."""
+		try:
+			from Components import HdsReparaBuchete
+			HdsReparaBuchete.cerere()
+		except Exception:
+			pass
 		self.hdsCeasRetea.start(self.HDS_VEGHE_RETEA_MS, False)
 
 	def hdsVegheRetea(self):
@@ -3993,6 +4255,17 @@ class ChannelSelectionBase(Screen):
 			self.hdsCeasRetea.stop()
 			return
 		self.hdsReteaLaZi()
+		try:
+			from Components import HdsVarianteCanal as V
+			if (getattr(self, "hdsNumereVedere", None) is not V._NUMERE and self.hdsPeRadacinaSateliti()
+					and not getattr(self, "movemode", False) and getattr(self, "bouquet_mark_edit", OFF) == OFF):
+				self.hdsRefaSateliti(cursor=self.getCurrentSelection())
+		except (ImportError, AttributeError):
+			pass
+		# Memoria IPTV se poate termina dupa prima deschidere a listei.
+		if not getattr(self, "movemode", False) and getattr(self, "bouquet_mark_edit", OFF) == OFF and self.hdsPeRadacinaSateliti():
+			if getattr(self, "hdsSemnIptvUmplut", None) != self.hdsSemnIptv():
+				self.hdsRefaSateliti(cursor=self.getCurrentSelection())
 
 	def hdsAdaugaBucheteFluxuri(self, adauga=True):
 		"""Dosarele buchetelor DAB+ (lista radio) / DVB-T2 (lista TV) din satelit, la coada listei "Sateliți" (numai cu
@@ -4768,17 +5041,34 @@ class ChannelSelection(ChannelSelectionBase, ChannelSelectionEdit, ChannelSelect
 			self.hdsActualizeazaAcum()
 
 	def hdsRedeseneazaDupaCanalVechi(self):
-		"""Dupa un zap nucleul tine canalul de dinainte inca 3 s (lib/dvb/dvb.cpp, m_releaseCachedChannelTimer); cat il
-		tine, canalele de pe alte transpondere nu se pot porni si lista le deseneaza gri. O singura redesenare dupa ce
-		canalul vechi a fost lasat, ca randurile sa nu ramana gri pana la schimbarea paginii."""
+		"""Recheck frontend availability after the old channel's three-second cache expires.
+		Only a changed tuner mask needs the delayed repaint; without TunerInfo keep the old behavior."""
+		generatie = self.hdsGeneratieGri = getattr(self, "hdsGeneratieGri", 0) + 1
+		try:
+			self.hdsMascaGri = self.session.screen["TunerInfo"].getTunerUseMask()
+		except (AttributeError, KeyError, TypeError):
+			self.hdsMascaGri = None
 		ceas = getattr(self, "hdsCeasGri", None)
 		if ceas is None:
 			ceas = self.hdsCeasGri = eTimer()
-			ceas.callback.append(self.hdsRedeseneazaGri)
+		ceas.callback[:] = [lambda: self.hdsRedeseneazaGri(generatie)]
 		ceas.start(3500, True)
 
-	def hdsRedeseneazaGri(self):
-		# acelasi serviciu de ignorat, pus din nou: lista se redeseneaza toata (setIgnoreService)
+	def hdsRedeseneazaGri(self, generatie=None):
+		# A callback from a previous zap must not publish over the current service.
+		if generatie is not None and generatie != getattr(self, "hdsGeneratieGri", 0):
+			return
+		if generatie is not None:
+			self.hdsGeneratieGri = generatie + 1
+		if not getattr(self, "execing", True):
+			return
+		try:
+			masca = self.session.screen["TunerInfo"].getTunerUseMask()
+		except (AttributeError, KeyError, TypeError):
+			masca = None
+		# Releasing a frontend changes availability; an unchanged mask needs no repaint.
+		if masca is not None and masca == getattr(self, "hdsMascaGri", None):
+			return
 		ref = eServiceReference()
 		service = self.session.nav.getCurrentService()
 		info = service and service.info()
@@ -4787,6 +5077,7 @@ class ChannelSelection(ChannelSelectionBase, ChannelSelectionEdit, ChannelSelect
 		self.servicelist.setPlayableIgnoreService(ref)
 
 	def __evServiceEnd(self):
+		self.hdsGeneratieGri = getattr(self, "hdsGeneratieGri", 0) + 1
 		self.servicelist.setPlayableIgnoreService(eServiceReference())
 		if self.execing:
 			self.hdsActualizeazaAcum(oprit=True)
@@ -4862,22 +5153,100 @@ class ChannelSelection(ChannelSelectionBase, ChannelSelectionEdit, ChannelSelect
 		elif not (ref.flags & eServiceReference.isMarker): # no marker
 			root = self.getRoot()
 			if not root or not (root.flags & eServiceReference.isGroup):
+				if self.hdsPrevizualizeaza(ref):
+					return
+				previzualizat = self.hdsPrevOriginal is not None and \
+					self.session.nav.getCurrentlyPlayingServiceReference() == ref
 				self.zap()
+				self.hdsConfirmaPrevizualizarea(previzualizat)
 				self.asciiOff()
 				# un post de radio (si cel care merge deja) apare pe tot ecranul, cu ecranul radio
 				hds_ecran_radio_dupa_ok()
 				self.close(ref)
 
-	#called from infoBar and channelSelected
-	def zap(self):
-		self.revertMode=None
+	# OKP6 (21.11.2026, yazoo, forum 1936, Vu+ Zero4K): "OK previzualizeaza canalul in lista de canale"
+	# (config.usage.hds_ok_previzualizare, Nu din fabrica; Setari lista de canale, in web /setari?id=hds_lista_canale).
+	# Da: OK scurt porneste canalul ales cu zap(preview_zap=True), lista ramane deschisa; al doilea OK pe canalul care
+	# merge sau OK lung il face canal curent (ultimul canal, istoric) si inchide lista; EXIT care inchide lista intoarce
+	# canalul de dinainte. Controlul parental si conflictele cu inregistrarile raman ale lui playService, ca la orice zap.
+	hdsPrevOriginal = None
+	hdsFaraPrevizualizare = False
+
+	def hdsOkPrevizualizeaza(self):
+		try:
+			return bool(config.usage.hds_ok_previzualizare.value)
+		except (AttributeError, KeyError):
+			return False
+
+	def hdsPrevizualizeaza(self, ref):
+		"""OK scurt cu previzualizarea: porneste canalul fara sa inchida lista. True cand l-a pornit."""
+		if self.hdsFaraPrevizualizare or not self.hdsOkPrevizualizeaza() or self.dopipzap:
+			return False
+		curent = self.session.nav.getCurrentlyPlayingServiceReference()
+		if curent is not None and curent == ref:
+			return False
+		# un rand cu alternative: pornit e copilul, ceruta (si randul din lista) e grupa
+		ceruta = getattr(self.session.nav, "getCurrentServiceReferenceOriginal", None)
+		ceruta = ceruta() if ceruta is not None else None
+		if ceruta is not None and ceruta == ref:
+			return False
+		if self.hdsPrevOriginal is None:
+			self.hdsPrevOriginal = curent if curent is not None else eServiceReference()
+		self.zap(preview_zap=True)
+		return True
+
+	def hdsConfirmaPrevizualizarea(self, previzualizat):
+		"""Lista se inchide cu un canal ales. previzualizat: canalul ales era cel previzualizat, deci zap() nu l-a mai
+		pornit si nu l-a pus ca ultimul canal: se pune aici. Altfel zap() a facut deja totul."""
+		self.hdsPrevOriginal = None
+		if not previzualizat:
+			return
 		ref = self.session.nav.getCurrentlyPlayingServiceReference()
-		nref = self.getCurrentSelection()
+		if ref is not None and ref.valid():
+			self.saveRoot()
+			self.saveChannel(ref)
+			config.servicelist.lastmode.save()
+			self.addToHistory(ref)
+
+	def hdsAnuleazaPrevizualizarea(self):
+		"""EXIT inchide lista: canalul de dinainte de previzualizare porneste din nou (fara alt cod parental)."""
+		inainte = self.hdsPrevOriginal
+		self.hdsPrevOriginal = None
+		if inainte is None:
+			return
+		curent = self.session.nav.getCurrentlyPlayingServiceReference()
+		if not inainte.valid():
+			if curent is not None:
+				self.session.nav.stopService()
+		elif curent is None or curent != inainte:
+			self.session.nav.playService(inainte, checkParentalControl=False)
+
+	#called from infoBar and channelSelected
+	# HDSatelit: argumentele cu care il cheama pluginurile scrise pentru alte imagini (AutoCamSetup il inlocuieste si cheama
+	# zap-ul de aici cu cinci argumente; MediaPlayer-ul lor da enable_pipzap=True). Fara ele, totul ca pana acum.
+	#   enable_pipzap         canalul porneste in fereastra PiP, cand PiP e deschis si lista e pusa pe PiP (dopipzap; imaginea
+	#                         nu o pune singura, numai un plugin): hdsZapInPip
+	#   preview_zap           canalul porneste, dar nu devine ultimul canal si nu intra in istoric (previzualizarea)
+	#   checkParentalControl  False: canalul porneste fara codul parental (cel care cheama l-a cerut deja)
+	#   ref                   canalul dat, in locul celui ales in lista
+	#   doPlay                False: lista, ultimul canal si istoricul se pun, canalul nu porneste (il porneste cine cheama)
+	#   recordingHandoff      predarea tunerului de la o inregistrare, din alte imagini; la noi nu exista, deci i se spune
+	#                         numai daca s-a schimbat canalul (finish)
+	def zap(self, enable_pipzap=False, preview_zap=False, checkParentalControl=True, ref=None, doPlay=True, recordingHandoff=None):
+		self.revertMode=None
+		ales = ref
+		ref = self.session.nav.getCurrentlyPlayingServiceReference()
+		nref = ales if ales is not None else self.getCurrentSelection()
 		if nref is not None and nref.valid() and (nref.flags & (eServiceReference.isDirectory|eServiceReference.isMarker)):
 			# HDSatelit: un dosar (satelit, buchet), un antet sau primul rand al listei pe sateliti si un
 			# marcaj nu se pornesc: se merge la „ultimul canal”, ca la HEAD (tasta TV, tasta RADIO in modul e1like, P+
 			# cu un flux pornit); garda ref != nref de mai jos nu reporneste canalul care ruleaza.
 			nref = None
+		if enable_pipzap and self.dopipzap and getattr(self.session, "pipshown", False):
+			schimbat = self.hdsZapInPip(nref, checkParentalControl)
+			if recordingHandoff is not None and hasattr(recordingHandoff, "finish"):
+				recordingHandoff.finish(schimbat)
+			return
 		if (nref is None or not nref.valid()) and self.lastservice.value:
 			lastservice = eServiceReference(self.lastservice.value)
 			if lastservice.valid():
@@ -4886,14 +5255,46 @@ class ChannelSelection(ChannelSelectionBase, ChannelSelectionEdit, ChannelSelect
 			# rezerva a trecut singura pe o varianta a canalului care merge (Components/HdsDvbIRezerva.py): OK pe
 			# canal nu il porneste din nou
 			nref = ref
+		schimbat = False
+		cazut = getattr(self.session.nav, "hdsAcordareCazuta", None)
 		if nref is not None and nref.valid() and (ref is None or ref != nref):
 			self.hdsIntraInSatelitulCanalului(nref)
 			self.new_service_played = True
-			self.session.nav.playService(nref)
-			self.saveRoot()
-			self.saveChannel(nref)
-			config.servicelist.lastmode.save()
-			self.addToHistory(nref)
+			if doPlay and checkParentalControl:
+				self.session.nav.playService(nref)
+			elif doPlay:
+				self.session.nav.playService(nref, checkParentalControl=False)
+			if not preview_zap:
+				self.saveRoot()
+				self.saveChannel(nref)
+				config.servicelist.lastmode.save()
+				self.addToHistory(nref)
+			schimbat = True
+		elif nref is not None and nref.valid() and doPlay and cazut is not None and cazut() is True:
+			# canalul care ruleaza, dar acordarea lui a cazut (tuner ocupat, fara semnal): OK pe el il porneste din nou
+			# (Navigation._hdsReiaCazut); ultimul canal si istoricul raman cum erau
+			if checkParentalControl:
+				self.session.nav.playService(nref)
+			else:
+				self.session.nav.playService(nref, checkParentalControl=False)
+			schimbat = True
+		if recordingHandoff is not None and hasattr(recordingHandoff, "finish"):
+			recordingHandoff.finish(schimbat)
+
+	def hdsZapInPip(self, nref, checkParentalControl=True):
+		"""zap(enable_pipzap=True) cu lista pusa pe PiP: canalul porneste in fereastra mica; ecranul mare, ultimul canal si
+		istoricul raman cum erau. True cand a pornit."""
+		pip = getattr(self.session, "pip", None)
+		if pip is None or nref is None or not nref.valid():
+			return False
+		curent = pip.getCurrentService()
+		if curent is not None and curent == nref:
+			return False
+		if checkParentalControl:
+			from Components.ParentalControl import parentalControl
+			if not parentalControl.isServicePlayable(nref, lambda ref=nref: self.zap(enable_pipzap=True, checkParentalControl=False, ref=ref)):
+				return False
+		return bool(pip.playService(nref))
 
 	def hdsLaCanal(self, canal):
 		"""Canalul ales in cautare: lista se pune pe el, apoi ca zap() + channelSelected(), dar cu referinta aleasa
@@ -5278,17 +5679,34 @@ class ChannelSelectionRadio(ChannelSelectionBase, ChannelSelectionEdit, ChannelS
 			self.hdsActualizeazaAcum()
 
 	def hdsRedeseneazaDupaCanalVechi(self):
-		"""Dupa un zap nucleul tine canalul de dinainte inca 3 s (lib/dvb/dvb.cpp, m_releaseCachedChannelTimer); cat il
-		tine, canalele de pe alte transpondere nu se pot porni si lista le deseneaza gri. O singura redesenare dupa ce
-		canalul vechi a fost lasat, ca randurile sa nu ramana gri pana la schimbarea paginii."""
+		"""Recheck frontend availability after the old channel's three-second cache expires.
+		Only a changed tuner mask needs the delayed repaint; without TunerInfo keep the old behavior."""
+		generatie = self.hdsGeneratieGri = getattr(self, "hdsGeneratieGri", 0) + 1
+		try:
+			self.hdsMascaGri = self.session.screen["TunerInfo"].getTunerUseMask()
+		except (AttributeError, KeyError, TypeError):
+			self.hdsMascaGri = None
 		ceas = getattr(self, "hdsCeasGri", None)
 		if ceas is None:
 			ceas = self.hdsCeasGri = eTimer()
-			ceas.callback.append(self.hdsRedeseneazaGri)
+		ceas.callback[:] = [lambda: self.hdsRedeseneazaGri(generatie)]
 		ceas.start(3500, True)
 
-	def hdsRedeseneazaGri(self):
-		# acelasi serviciu de ignorat, pus din nou: lista se redeseneaza toata (setIgnoreService)
+	def hdsRedeseneazaGri(self, generatie=None):
+		# A callback from a previous zap must not publish over the current service.
+		if generatie is not None and generatie != getattr(self, "hdsGeneratieGri", 0):
+			return
+		if generatie is not None:
+			self.hdsGeneratieGri = generatie + 1
+		if not getattr(self, "execing", True):
+			return
+		try:
+			masca = self.session.screen["TunerInfo"].getTunerUseMask()
+		except (AttributeError, KeyError, TypeError):
+			masca = None
+		# Releasing a frontend changes availability; an unchanged mask needs no repaint.
+		if masca is not None and masca == getattr(self, "hdsMascaGri", None):
+			return
 		ref = eServiceReference()
 		service = self.session.nav.getCurrentService()
 		info = service and service.info()
@@ -5297,6 +5715,7 @@ class ChannelSelectionRadio(ChannelSelectionBase, ChannelSelectionEdit, ChannelS
 		self.servicelist.setPlayableIgnoreService(ref)
 
 	def __evServiceEnd(self):
+		self.hdsGeneratieGri = getattr(self, "hdsGeneratieGri", 0) + 1
 		self.servicelist.setPlayableIgnoreService(eServiceReference())
 		if self.execing:
 			self.hdsActualizeazaAcum(oprit=True)

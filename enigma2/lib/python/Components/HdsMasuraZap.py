@@ -69,7 +69,9 @@ class Zap(object):
 	"""Masuratoarea unui zap: pasii (nume, inceput, durata) si ascultatorii {(eveniment, functie): durata}."""
 
 	def __init__(self, ref, t0):
-		self.ref = ref
+		# Calea si numele pot contine adrese cu parametri privati.
+		parti = ref.split(":", 10)
+		self.ref = ":".join(parti[:10]) + ":[cale]" if len(parti) > 10 and parti[10] else ref
 		self.t0 = t0
 		self.pasi = []
 		self.nav = {}          # (ev, f) -> secunde, ascultatorii din Navigation.event

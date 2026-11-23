@@ -289,7 +289,7 @@ class HdsAccesSsh(Screen):
 			return
 		self._stare = s
 		self["eticheta"].setText(A.textEticheta(s))
-		# dupa salvare parola nu se mai arata: numai "pusă" / "nepusă"
+		# PWV1: valoarea salvata se afiseaza integral.
 		self["parola"].setText(A.textParolaScurt(s))
 		self["despre"].setText(A.textParola(s))
 		self["cum"].setText(A.textCum(self._adresa, s.get("ftp")))
@@ -397,9 +397,9 @@ class HdsAccesSsh(Screen):
 		elif actiune == BRUT:
 			self.albastru()
 		elif actiune == SCHIMBA:
-			# tastatura pleaca goala (parola pusa nu se arata) si scrie in clar
+			# PWV1: valoarea salvata se afiseaza integral.
 			self.session.openWithCallback(self._parolaScrisa, VirtualKeyBoard,
-				title=_("Parola ta: orice text, se vede cât o scrii"), text="", hdsSecret=True)
+				title=_("Parola ta: orice text, se vede cât o scrii"), text=(self._stare or {}).get("parola", ""), hdsSecret=True)
 		elif actiune == STERGE_PAROLA:
 			# fara intrebare (a doua parere): o parola stearsa se pune la loc la fel de simplu
 			self._porneste_lucrare(A.pornesteStergeParola)

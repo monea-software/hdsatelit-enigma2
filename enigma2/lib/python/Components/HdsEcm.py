@@ -186,6 +186,15 @@ def stare(cale=None, acum=None):
 	return _stare["val"]
 
 
+def instantaneu():
+	"""Copy of the last stare() result for the standard file, from memory only: no stat, open or read."""
+	try:
+		val = _stare.get("val")
+		return dict(val) if _stare.get("cale") == FISIER and isinstance(val, dict) else {}
+	except Exception:
+		return {}
+
+
 # ---------------------------------------------------------------- hop-urile si eticheta cititorului (la cerere)
 # Alegerea „Arată hop-urile și cititorul” (config.usage.hds_ecm_hopuri_cititor, oprita din fabrica): numarul de hop-uri
 # si ETICHETA cititorului (numele dat de om in modul, randul "reader:"), numai pentru ecranul receptorului si pagina web

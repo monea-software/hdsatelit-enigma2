@@ -419,8 +419,10 @@ CAID_TABLE = (
 	(0x4AE5, 0x4AE5, u"IK SATPROF"),
 	(0x4AEA, 0x4AEA, u"Cryptoguard"),
 	(0x4AEB, 0x4AEB, u"Abel DRM"),
+	(0x4AED, 0x4AED, u"Unitend"),
 	(0x4AEE, 0x4AEE, u"BulCrypt"),
 	(0x4AEF, 0x4AEF, u"NetUP"),
+	(0x4AF0, 0x4AF0, u"ABV"),
 	(0x4AF6, 0x4AF6, u"Tongfang"),
 	(0x4AF8, 0x4AF8, u"Griffin"),
 	(0x4AFC, 0x4AFC, u"Panaccess"),
@@ -430,7 +432,9 @@ CAID_TABLE = (
 	(0x4B0A, 0x4B0B, u"Sumavision"),
 	(0x4B13, 0x4B14, u"Microsoft"),
 	(0x4B20, 0x4B22, u"Multikom Deltasat"),
+	(0x4B26, 0x4B26, u"Unitend"),
 	(0x4B42, 0x4B43, u"CI Plus"),
+	(0x4B4B, 0x4B4D, u"ABV"),
 	(0x4B64, 0x4B64, u"TVKey"),
 	(0x5347, 0x5347, u"GkWare"),
 	(0x5501, 0x551A, u"Griffin"),
@@ -449,8 +453,11 @@ _caid_memo = {}
 def caid_name(caid):
 	"""Numele sistemului, sau None daca nu e in tabel."""
 	try:
-		caid = int(caid) & 0xFFFF
+		caid = int(caid)
 	except Exception:
+		return None
+	# a value outside 16 bits is not a CAID (masking it could name another system, e.g. 0x14AF0 -> ABV)
+	if not 0 <= caid <= 0xFFFF:
 		return None
 	if caid in _caid_memo:
 		return _caid_memo[caid]
@@ -1273,6 +1280,11 @@ _tuner_names = {}
 def _fe_const(name):
 	try:
 		mod = sys.modules.get("enigma")
+		# The Dreambox API calls the relative SNR signalQuality, not snrValue.
+		if name == "snrValue" and not hasattr(mod.iFrontendInformation, name):
+			from Components.SystemInfo import SystemInfo
+			if SystemInfo.get("machinebuild") in ("dm900", "dm920"):
+				return getattr(mod.iFrontendInformation, "signalQuality", None)
 		return getattr(mod.iFrontendInformation, name)
 	except Exception:
 		return None
@@ -5056,7 +5068,91 @@ def cam_source(r):
 				return ("ci", slot)
 		return ("other", -1)
 	v = r._memo("cam", fn)
+	_sursa_tinuta_pune(r, v if v else ("", -1))
 	return v if v else ("", -1)
+
+
+# Last result of cam_source, stamped with the service and the CI/service generation. Only the existing CAM field
+# fills it (same reads as before); the optional ECM row and the web page only read it (no disk, no /proc, no import).
+_sursa_tinuta = [None]
+
+
+def _stampila(r):
+	return (norm_ref(r.sref()), _cam.get("gen"), _cam.get("t_start"), _cam.get("start"))
+
+
+def _sursa_tinuta_pune(r, v):
+	try:
+		_sursa_tinuta[0] = (_stampila(r), v)
+	except Exception:
+		_sursa_tinuta[0] = None
+
+
+def _(text):
+	"""Interface translation (builtins._ set by enigma2); unchanged text on PC or other images."""
+	try:
+		import builtins
+		f = getattr(builtins, "_", None)
+		return (f(text) if f is not None and text else text) or text
+	except Exception:
+		return text
+
+
+def _ci_sistem(r, slot):
+	"""System name of the CAIDs common to the service and the module in the slot; empty when none or ambiguous.
+	Native memory only (readCICaIds), no file read."""
+	try:
+		ci = _ci_if()
+		if ci is None:
+			return u""
+		caps = clean_caids(ci.readCICaIds(slot))
+		names = set(caid_name(c) or (u"0x%04X" % c) for c in _service_caids(r) if c in caps)
+		return names.pop() if len(names) == 1 else u""
+	except Exception:
+		return u""
+
+
+def decodor_memorie(r):
+	"""Who decodes the playing service now, from memory only: {"kind": "ci", "slot", "system"},
+	{"kind": "other", "slot": -1, "name", "system"} or {}. Never reads a file, /proc, the route or imports a module,
+	and never asks the reception kind (no transponder or relay lookups): the proof is the stamped result of the
+	existing CAM field for this same service (it already checked kind, crypted, picture and CI). "ci" gives the slot;
+	"other" (picture decoded without a CI module) becomes "software" only with the ECM snapshot already read by the
+	existing consumers (bar row, access page), belonging to this service and written after its start.
+	Missing or stale memory = {} (nothing new shown, as before). Native calls only: service info strings/objects."""
+	try:
+		if r.info() is None or _cam.get("start") is False:
+			return {}
+		t = _sursa_tinuta[0]
+		if t is None or t[1][0] not in ("ci", "other") or t[0] != _stampila(r):
+			return {}
+		if t[1][0] == "ci":
+			slot = t[1][1]
+			return {"kind": "ci", "slot": slot, "system": _ci_sistem(r, slot)}
+		m = _ecm_mod[0]
+		if not m or not hasattr(m, "instantaneu"):
+			return {}
+		d = m.instantaneu()
+		caid = _ecm_caid(r, d)
+		t0 = _cam.get("t_start")
+		if caid <= 0 or t0 is None or d.get("mtime", 0.0) < t0:
+			return {}
+		return {"kind": "other", "slot": -1, "name": _clean_name(d.get("cam") or u""),
+			"system": ecm_system_name(caid, d)}
+	except Exception as e:
+		log_once("decodor_memorie", e)
+		return {}
+
+
+def decodor_nume(d):
+	"""Public label of a decodor_memorie result: "CI <n>: <module>", "Modul software[: <name>]" or empty."""
+	kind, slot = d.get("kind", ""), d.get("slot", -1)
+	if kind == "ci":
+		return _("CI %d: %s") % (slot + 1, ci_module_name(slot))
+	if kind == "other":
+		name = d.get("name", u"")
+		return (_("Modul software: %s") % name) if name else _("Modul software")
+	return u""
 
 
 def cam_name(r):
@@ -5144,6 +5240,31 @@ def ecm_active(r):
 		return caid
 	except Exception as e:
 		log_once("ecm_active", e)
+		return -1
+
+
+def _ecm_caid(r, d):
+	"""The checks of ecm_active on an already read ECM dictionary (no file access): CAID or -1."""
+	try:
+		caid = d.get("caid", -1)
+		if caid <= 0:
+			return -1
+		mtime = d.get("mtime", 0.0)
+		acum = _now()
+		if not -5.0 <= acum - mtime <= ECM_FRESH_S:
+			return -1
+		t0 = _cam.get("t_start")
+		if t0 is not None and t0 <= acum + 5.0 and _cam.get("start") is not False and mtime < t0 - 1.0:
+			return -1
+		caids = _service_caids(r)
+		if not caids or caid not in caids:
+			return -1
+		pid = d.get("pid", 0)
+		pids = [p for c, p in r.caidpids() if c == caid and 0 < p < 0x1FFF]
+		if pid > 0 and pids and pid not in pids:
+			return -1
+		return caid
+	except Exception:
 		return -1
 
 
@@ -5250,6 +5371,10 @@ def ecm_line(r, cititor=True):
 		return u""
 	caid = ecm_active(r)
 	if caid <= 0:
+		# no ECM for this service: a CI module proven by the CAM field (memory only)
+		dec = decodor_memorie(r)
+		if dec.get("kind") == "ci":
+			return join([decodor_nume(dec), dec.get("system", u"")])
 		return u""
 	d = ecm_info()
 	parts = [ecm_system_name(caid, d), u"CAID %04X" % caid]
@@ -5262,6 +5387,8 @@ def ecm_line(r, cititor=True):
 		parts.append(u"%s: %d" % (tr("ecm_hop"), src["hops"]))
 	if src.get("cititor"):
 		parts.append(src["cititor"])
+	# who decodes: from memory only (the ECM snapshot read just above, the CAM field result)
+	parts.append(decodor_nume(decodor_memorie(r)))
 	return join(parts)
 
 

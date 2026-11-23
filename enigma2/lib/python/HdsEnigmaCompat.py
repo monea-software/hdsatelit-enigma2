@@ -19,10 +19,17 @@ Ce pune (de ce, cine il cere):
   iRecordableService pe care receptorul nostru nu le trimite (numere care nu se intalnesc niciodata: pluginul care le
   asculta nu mai cade la deschidere, iar evenimentul nu vine, ca pana acum);
 - eDVBDB.setLoadUnlinkedUserbouquets si saveIptvServicelist (fara efect: listele noastre nu au aceste parti);
-- RT_HALIGN_BIDI (= alinierea implicita).
+- RT_HALIGN_BIDI (= alinierea implicita);
+- eStreamServer (0.7.8: getInstance; getConnectedClients, stopStreamClient, stopStream): serverul de flux de pe portul
+  8001 al imaginii e scris in Python (Hds/DabT2/server8001.py), nu in C++, deci numele lipsea. Il cer temele straine
+  (convertorul ClientsStreaming, pictograma "stream" din addon-ul ServiceInfoBar), pluginurile si cateva module ale
+  noastre. Lista are numai clientii din retea: releele receptorului (Stream Relay pentru televizor, DAB+, DVB-T2) sunt
+  felul in care televizorul reda acele canale, nu clienti (OE-Alliance le numara si pe ele, de pe 127.0.0.1). La coada,
+  telefoanele cu un canal transcodat pe 8002 (Vu+ cu codor), cu semnul 1 al codorului, ca la OE-Alliance.
 """
 
 _PROC_VMPEG = "/proc/stb/vmpeg/0/"
+_SERVER_FLUX = "Hds.DabT2.server8001"
 
 
 def _citeste(cale):
@@ -82,6 +89,102 @@ def _faAVControl(g):
 	return eAVControl
 
 
+def _serverFlux():
+	"""Modulul serverului de flux, numai daca l-a incarcat deja imaginea (fara import: enigma.py e inca la jumatate cand
+	se pune stratul, iar un plugin care cheama mai devreme primeste lista goala, ca la un server fara clienti)."""
+	import sys
+	return sys.modules.get(_SERVER_FLUX)
+
+
+_PROC_TCP = ("/proc/net/tcp", "/proc/net/tcp6")
+_PORT_TRANSCODARE = 8002
+_TRANSCODARE = "Plugins.Extensions.HdsWebControl.flux_transcodare_web"
+
+
+def _adresaHex(text):
+	"""Adresa din /proc/net/tcp (cuvinte de 32 de biti in ordinea masinii, little-endian pe receptoare) ca text."""
+	import socket
+	b = bytes.fromhex(text)
+	b = b"".join(b[i:i + 4][::-1] for i in range(0, len(b), 4))
+	if len(b) == 16 and b[:12] == b"\0" * 10 + b"\xff\xff":
+		b = b[12:]
+	return socket.inet_ntop(socket.AF_INET if len(b) == 4 else socket.AF_INET6, b)
+
+
+def _clientiTranscodare():
+	"""[(adresa, referinta, 1)] pentru telefoanele care primesc un canal transcodat pe 8002 (transtreamproxy, Vu+ cu
+	codor; legaturile stabilite din /proc/net/tcp si tcp6, fara cele de pe receptor). Referinta e a sesiunii de
+	transcodare (HdsWebControl/flux_transcodare_web.py) cand e una singura, altfel goala. 1 = cu codorul, ca la OE-Alliance.
+	Ca acestea sa se numere ca inainte in HdsCommon.stream_clients (care le citea din /proc cat lipsea eStreamServer)."""
+	import sys
+	rez = []
+	for cale in _PROC_TCP:
+		text = _citeste(cale)
+		for rand in (text or "").splitlines()[1:]:
+			parti = rand.split()
+			if len(parti) < 4 or parti[3] != "01":
+				continue
+			try:
+				adresa, port = parti[1].rsplit(":", 1)
+				if int(port, 16) != _PORT_TRANSCODARE:
+					continue
+				client = _adresaHex(parti[2].rsplit(":", 1)[0])
+			except (ValueError, OSError):
+				continue
+			if client.startswith("127.") or client == "::1":
+				continue
+			rez.append(client)
+	m = sys.modules.get(_TRANSCODARE)
+	sesiuni = list(getattr(m, "_SESIUNI", None) or []) if m is not None else []
+	ref = str(getattr(sesiuni[0], "ref", "") or "") if len(sesiuni) == 1 else ""
+	return [(client, ref, 1) for client in rez]
+
+
+def _faStreamServer():
+	class eStreamServer(object):
+		"""Ca eStreamServer din OE-Alliance, peste serverul Python de pe 8001 (Hds/DabT2/server8001.py). Se cheama din
+		firul enigma2, ca acolo."""
+		_instanta = None
+
+		@classmethod
+		def getInstance(cls):
+			if cls._instanta is None:
+				cls._instanta = cls()
+			return cls._instanta
+
+		def getConnectedClients(self):
+			"""[(adresa, referinta, 0)] pentru fiecare client din retea al serverului 8001 (0 = fara transcodare), apoi
+			[(adresa, referinta, 1)] pentru telefoanele cu canal transcodat pe 8002."""
+			m = _serverFlux()
+			try:
+				rez = list(m.clienti_din_retea()) if m is not None else []
+			except Exception:
+				rez = []
+			try:
+				rez.extend(_clientiTranscodare())
+			except Exception:
+				pass
+			return rez
+
+		def stopStreamClient(self, remotehost, serviceref):
+			m = _serverFlux()
+			try:
+				return bool(m.opreste_clientul(remotehost, serviceref)) if m is not None else False
+			except Exception:
+				return False
+
+		def stopStream(self):
+			"""Opreste primul client (ca la OE-Alliance), nu pe toti."""
+			m = _serverFlux()
+			try:
+				if m is not None:
+					m.opreste_clientul()
+			except Exception:
+				pass
+
+	return eStreamServer
+
+
 def _listbox(eListbox):
 	"""Numele noi ale directiilor, puse pe cele pe care le avem (lista noastra e verticala: stanga/dreapta = cate un rand)."""
 	directii = {
@@ -139,6 +242,7 @@ def aplica(g):
 	versiune = g.get("getEnigmaVersionString")
 	pune("getE2Rev", (lambda: versiune()) if versiune else (lambda: ""))
 	pune("getPeerStreamingBoxes", lambda: [])
+	pune("eStreamServer", _faStreamServer())
 	if "RT_HALIGN_LEFT" in g:
 		pune("RT_HALIGN_BIDI", g["RT_HALIGN_LEFT"])
 

@@ -320,6 +320,7 @@ def fa_rezumatul(rez, alegeri, sursa, dosar_etc=None):
 		"setari": setari,
 		"setari_antena": int(rez.get("setari_antena", setari) or 0) if setari else 0,
 		"setari_generale": int(rez.get("setari_generale") or 0) if setari else 0,
+		"note_tunere": [str(m)[:300] for m in (rez.get("note_tunere") or [])][:16] if setari else [],
 		"picon": int(rez.get("picon") or 0),
 		"retea": bool(retea.get("adus")),
 		"retea_intoarsa": bool(retea.get("intors")),
@@ -450,7 +451,8 @@ def text_rezumat(r):
 		randuri += [m for m in r.get("mesaje") or [] if m][-2:]
 		randuri.append(_("Canalele se pot aduce oricând din Meniu, Scanare, Import canale și setări."))
 		return "\n".join(randuri)
-	return "\n".join([_("Am adus: %s.") % ", ".join(adus), _("Nu am adus: %s.") % ", ".join(neadus)])
+	return "\n".join([_("Am adus: %s.") % ", ".join(adus), _("Nu am adus: %s.") % ", ".join(neadus)]
+		+ (r.get("note_tunere") or []))
 
 
 def fereastra_rezumat(r):
@@ -462,7 +464,8 @@ def fereastra_rezumat(r):
 	semn = "\x01"
 	fraza = _("Am adus: %s.") % semn
 	sus = fraza.split(semn)[0].rstrip() or fraza.replace(semn, "").strip()
-	puncte = [t[:1].upper() + t[1:] for t in adus] + [("nota", _("Nu am adus: %s.") % ", ".join(neadus))]
+	nota = "\n".join([_("Nu am adus: %s.") % ", ".join(neadus)] + (r.get("note_tunere") or []))
+	puncte = [t[:1].upper() + t[1:] for t in adus] + [("nota", nota)]
 	return {"text": sus, "titlu": _("Canalele din altă imagine"), "fel": "succes", "puncte": puncte}
 
 
@@ -502,6 +505,7 @@ def stare_publica(rad=None):
 		adus, neadus = parti_rezumat(r)
 		rez["rezumat"] = {"ok": bool(r.get("ok")) and bool(adus), "adus": adus, "neadus": neadus,
 			"text": text_rezumat(r), "repornire": bool(r.get("repornire")),
+			"note": r.get("note_tunere") or [],
 			"pachete": {"oferite": r.get("pachete_oferite") or [], "fara_lista": bool(r.get("pachete_fara_lista"))}}
 	return rez
 
@@ -597,7 +601,7 @@ def _pune_intrebarea(sursa):
 def _raspuns_tv(da=None):
 	if da is None:
 		return    # inchisa din web sau la o noua cautare
-	ok, mesaj = raspunde(bool(da), "televizor")
+	ok, mesaj = raspunde(da, "televizor")
 	if not ok and mesaj:
 		from Tools import Notifications
 		from Screens.MessageBox import MessageBox
@@ -610,13 +614,17 @@ def _dupa_cautare(rad=None):
 	st = citeste_starea(rad)
 	if st.get("stare") not in DESCHISE:
 		return
-	sursa = alege_sursa(HdsImportSurse.stare().get("surse") or [])
+	# Intrebarea deschisa ramane a copiei alese, chiar daca termina alta cautare.
+	sursa = st.get("sursa") if st.get("stare") == INTREBARE else None
+	if not isinstance(sursa, dict):
+		sursa = alege_sursa(HdsImportSurse.stare().get("surse") or [])
 	if sursa is None:
 		_schimba(rad, stare=NIMIC, sursa=None)
 		_jurnal("nicio copie a altei imagini pe stick-uri, discuri sau in alt loc al memoriei; nimic de intrebat")
 		_leaga_discurile(rad)
 		return
-	_schimba(rad, stare=INTREBARE, sursa=sursa)
+	if not scrie_starea(dict(st, stare=INTREBARE, sursa=sursa, cand=int(time.time())), rad):
+		return
 	_jurnal("copie a altei imagini gasita: %s (%s); intreb" % (_rel(sursa), sursa.get("mediu")))
 	_pune_intrebarea(sursa)
 
@@ -716,11 +724,14 @@ def _dupa_liniste():
 
 def raspunde(da, de_unde="web", rad=None):
 	"""Raspunsul la intrebare, de pe televizor sau din web, pe firul enigma2. (ok, mesaj)."""
+	if type(da) is not bool:
+		return False, _("Alege Da sau Nu pentru transferul setărilor.")
 	st = citeste_starea(rad)
 	if st.get("stare") != INTREBARE:
 		return False, _("Întrebarea nu mai este deschisă.")
 	if not da:
-		_schimba(rad, stare=NU)
+		if not scrie_starea(dict(st, stare=NU, cand=int(time.time())), rad):
+			return False, _("Răspunsul nu s-a putut salva. Încearcă din nou.")
 		_scoate_din_coada()
 		_jurnal("raspunsul: nu (%s)" % de_unde)
 		return True, _("Bine. Canalele se pot aduce oricând din Meniu, Scanare, Import canale și setări.")
@@ -745,8 +756,14 @@ def raspunde(da, de_unde="web", rad=None):
 		except Exception as eroare:
 			_jurnal("dupa import: %s" % eroare)
 
-	_schimba(rad, stare=DA)
-	lucrare = HdsImportSurse.porneste_importul(sursa, alegeri, la_sfarsit)
+	if not scrie_starea(dict(st, stare=DA, cand=int(time.time())), rad):
+		return False, _("Răspunsul nu s-a putut salva. Încearcă din nou.")
+	try:
+		lucrare = HdsImportSurse.porneste_importul(sursa, alegeri, la_sfarsit)
+	except Exception as eroare:
+		_jurnal("pornirea importului: %s" % eroare.__class__.__name__)
+		_schimba(rad, stare=INTREBARE)
+		return False, _("Transferul nu a pornit. Încearcă din nou.")
 	if lucrare is None:
 		_schimba(rad, stare=INTREBARE)
 		return False, _("Un import e deja în curs. Așteaptă să se termine.")

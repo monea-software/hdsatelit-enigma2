@@ -14,7 +14,9 @@ PV = "0.1.0"
 # r4 (0.7.6, asistenta 430032): dupa o oprire necurata, un rand "pornire dupa oprire brusca" in hds-caderi.log, cu
 #     ultimul rand din messages, ultimul rand al interfetei, ultima comanda opkg/Console si ultima lucrare din Extensii
 #     (proba: teste/test_rfu_oprire_brusca_075.py)
-PR = "r4"
+# r5 (0.7.8, GBT, asistenta 751207): tot dupa o oprire necurata, ora ultimului semn de viata in /var/run/hds-oprire-brusca;
+#     HdsCeas scrie la prima ora sigura cat a stat receptorul fara nucleu pornit (proba: teste/test_gbt_semn_oprire_078.py)
+PR = "r6"
 
 SRC_URI = "file://hds-jurnal file://hds-wifi-jurnal file://hds-rtl8188fu.conf"
 S = "${UNPACKDIR}"

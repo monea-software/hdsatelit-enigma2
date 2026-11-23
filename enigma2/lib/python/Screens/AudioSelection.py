@@ -416,8 +416,14 @@ class AudioSelection(Screen, ConfigListScreen):
 				sel = None
 
 			# primul rand: „Fără subtitrări” (vezi FARA_SUBTITRARI), pornit cand nu merge nicio subtitrare
-			streams.append((FARA_SUBTITRARI, "", "", _("Fără subtitrări"), "", "" if sel else _pistaActiva()))
-			idx = 1
+			vorbire = getattr(self.infobar, "hdsVorbire", None)
+			vorbire_activa = bool(vorbire and vorbire.lucrator and not vorbire.doar_proba)
+			streams.append((FARA_SUBTITRARI, "", "", _("Fără subtitrări"), "", "" if sel or vorbire_activa else _pistaActiva()))
+			if vorbire is not None:
+				streams.append(("din-vorbire", "", "", _("Din vorbire (tradus)"), "", _pistaActiva() if vorbire_activa else ""))
+				if vorbire_activa:
+					selectedidx = 1
+			idx = len(streams)
 
 			subtitlelist = self.getSubtitleList()
 			try:
@@ -715,6 +721,16 @@ class AudioSelection(Screen, ConfigListScreen):
 				self.__updatedInfo()
 			if self.settings.menupage.getValue() == PAGE_SUBTITLES and cur[0] == ALEGE_FISIER:
 				self.alegeFisier()
+				return
+			if self.settings.menupage.getValue() == PAGE_SUBTITLES and cur[0] == "din-vorbire":
+				from Components.HdsVorbireTV import alege
+				alege(self.infobar)
+				from Components import HdsVorbire
+				if not any(c.get("cheie") for c in (HdsVorbire._date.copie or {}).get("recunoastere", [])):
+					from Screens.HdsVorbire import HdsVorbire as EcranVorbire
+					self.session.openWithCallback(lambda *args: self.close(), EcranVorbire)
+					return
+				self.close()
 				return
 			if self.settings.menupage.getValue() == PAGE_SUBTITLES and cur[0] == FARA_SUBTITRARI:
 				# „Fără subtitrări”: oprita si tinuta minte pe canal, si cand era deja oprita (ca pagina 3)

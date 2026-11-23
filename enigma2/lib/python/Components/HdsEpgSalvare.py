@@ -38,6 +38,43 @@
 
 import os
 import shutil
+import threading
+
+_oprire = threading.Event()
+_cache_vazut = False
+_iesire_legata = False
+_la_oprire = []
+
+
+def inchis():
+	"""Semnal Python, citibil si de lucratori fara a atinge obiectele enigma2."""
+	return _oprire.is_set()
+
+
+def _opreste():
+	# Fara join, disc sau asteptarea lucratorilor pe calea de iesire.
+	if inchis():
+		return
+	_oprire.set()
+	for f in tuple(_la_oprire):
+		try:
+			f()
+		except Exception as e:
+			print("[HdsEpgSalvare] oprirea: %s" % type(e).__name__)
+
+
+def _leaga_iesirea():
+	global _iesire_legata
+	if _iesire_legata:
+		return
+	import atexit
+	atexit.register(_opreste)
+	try:
+		from twisted.internet import reactor
+		reactor.addSystemEventTrigger("before", "shutdown", _opreste)
+	except ImportError:
+		pass
+	_iesire_legata = True
 
 CALE = "/home/root/epg.dat"
 CALE_VECHE = "/hdd/epg.dat"
@@ -94,8 +131,7 @@ def salveaza():
 	"""Cere firului ghidului sa scrie fisierul acum (lib/dvb/epgcache.cpp, Message::save). -> True daca s-a cerut;
 	False fara fir pornit (ora inca nevalida) sau cu un enigma fara requestSave."""
 	try:
-		from enigma import eEPGCache
-		cache = eEPGCache.getInstance()
+		cache = _cache()
 		cere = getattr(cache, "requestSave", None)
 		if cere is None:
 			return False
@@ -259,11 +295,20 @@ def fisier_citibil(cale):
 
 
 def _cache():
+	global _cache_vazut
+	if inchis() or threading.current_thread() is not threading.main_thread():
+		return None
+	_leaga_iesirea()
 	try:
 		from enigma import eEPGCache
-		return eEPGCache.getInstance()
+		cache = eEPGCache.getInstance()
 	except Exception:
 		return None
+	if cache is not None:
+		_cache_vazut = True
+	elif _cache_vazut:
+		_opreste()
+	return cache
 
 
 def _anunta(problema):
@@ -338,6 +383,9 @@ def _sterge_ramas(tinta):
 def aplica(motiv="auto"):
 	"""Pune ghidul pe locul ales (config.misc.hds_epg_loc), daca se poate, altfel pe CALE. motiv: "alegere" (omul a
 	salvat: ghidul din memorie se muta acolo) sau "auto" (pornire, disc pus sau scos, ceas, standby). -> calea efectiva."""
+	cache = _cache()
+	if inchis() or threading.current_thread() is not threading.main_thread():
+		return _stare["cale"]
 	try:
 		from Components.config import config
 		loc = config.misc.hds_epg_loc.value
@@ -357,7 +405,6 @@ def aplica(motiv="auto"):
 		_stare["anuntat"] = None
 	if tinta == actuala:
 		return tinta
-	cache = _cache()
 	if actuala is None:
 		# pornirea: ghidul ramas pe /hdd/epg.dat (versiunile vechi) sau in memoria interna inainte de a alege discul
 		muta_vechiul(tinta, CALE_VECHE)
@@ -510,6 +557,18 @@ def _verifica():
 
 def _la_disc(*argumente):
 	# discurile se monteaza si se scot pe firul lor: se verifica acum si inca o data peste 3 s
+	if inchis():
+		return
+	if threading.current_thread() is not threading.main_thread():
+		try:
+			from twisted.internet import reactor
+			reactor.callFromThread(_la_disc, *argumente)
+		except ImportError:
+			pass
+		return
+	_cache()
+	if inchis():
+		return
 	_reimprospateaza()
 	_verifica()
 	try:
@@ -568,6 +627,9 @@ def _laStandby(element=None):
 def porneste():
 	"""Scrierea rara a ghidului: o data la SALVARE_ORE ore si la intrarea in standby; discurile si pluginurile (_leaga).
 	Chemata o data, din mytest.py, dupa citirea pluginurilor."""
+	_cache()
+	if inchis() or threading.current_thread() is not threading.main_thread():
+		return
 	try:
 		from enigma import eTimer
 		if _stare["ceas"] is None:

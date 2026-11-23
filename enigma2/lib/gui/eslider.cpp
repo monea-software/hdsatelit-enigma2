@@ -103,9 +103,15 @@ int eSlider::event(int event, void *data, void *data2)
 		else if (style_set & 1)
 			painter.setForegroundColor(style_fg);
 		
-		if (!m_pixmap && ((m_gradient_enabled && !m_gradient.empty()) || getCornerRadius()))
+		bool degrade = m_gradient_enabled && !m_gradient.empty();
+		if (!m_pixmap && (degrade || getCornerRadius()))
 		{
-			const eRect &r = m_currently_filled.extends;
+			/* Cu degrade, culorile se intind pe toata bara si se vede numai partea umpluta (semnalul slab ramane
+			   rosu): forma e toata bara, iar partea umpluta e taierea. Desenul netezit leaga degradeul de forma,
+			   nu de taiere. */
+			const eRect r = degrade ? eRect(ePoint(0, 0), s) : m_currently_filled.extends;
+			if (degrade)
+				painter.clip(m_currently_filled);
 			gDesenNetezit forma;
 			forma.forma = gDesenNetezit::dreptunghi;
 			forma.x0 = r.left(); forma.y0 = r.top(); forma.x1 = r.right(); forma.y1 = r.bottom();
@@ -115,6 +121,8 @@ int eSlider::event(int event, void *data, void *data2)
 				forma.gradient = m_gradient;
 			forma.gradient_vertical = m_gradient_vertical;
 			painter.desenNetezit(forma);
+			if (degrade)
+				painter.clippop();
 		}
 		else if (!m_pixmap)
 			painter.fill(m_currently_filled);

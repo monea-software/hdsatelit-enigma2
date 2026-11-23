@@ -84,6 +84,9 @@
 from __future__ import absolute_import
 
 import json
+import threading
+from collections import deque
+from copy import deepcopy
 import os
 import re
 import time
@@ -113,6 +116,7 @@ MAX_PISTE = 32         # nu se citesc mai multe piste (un PMT normal are 1-8)
 PREF_RECEPTOR = "receptor"
 PREF_CANAL = "canal"   # doar la sunet: pista implicita a canalului
 PREF_NIMIC = "nimic"   # doar la subtitrari: loc nefolosit
+VORBIRE = "vorbire"
 OPRIT = "oprit"        # alegerea de mana tinuta minte: fara subtitrare pe canalul acesta
 
 PREF_AUDIO_IMPLICITE = (PREF_RECEPTOR, "eng", PREF_CANAL)
@@ -631,6 +635,8 @@ def alegeSubtitrare(subtitrari, preferinte=PREF_SUBTITRARE_IMPLICITE, limbaRecep
 		memorat=None):
 	"""-> (subtitrarea de pornit in forma comuna, sau None pentru nicio subtitrare; motiv).
 	Motive: memorat, memorat-oprit, niciodata, preferinta-1/2/3, fara-potrivire."""
+	if memorat == VORBIRE:
+		return (None, "vorbire")
 	if memorat == OPRIT:
 		return (None, "memorat-oprit")
 	if memorat and subtitrari:
@@ -690,6 +696,8 @@ def alegeSubtitrareTradusa(subtitrari, tinta, preferinte=PREF_SUBTITRARE_IMPLICI
 	lui), raman preferintele (d.), ca fara traducere.
 	-> (subtitrarea in forma comuna sau None; motiv). Motive: memorat, memorat-oprit, niciodata, traducere-tinta,
 	traducere-teletext, traducere-dvb, apoi cele din alegeSubtitrare (preferinta-1/2/3, fara-potrivire)."""
+	if memorat == VORBIRE:
+		return (None, "vorbire")
 	if memorat == OPRIT:
 		return (None, "memorat-oprit")
 	if memorat and subtitrari:
@@ -833,8 +841,8 @@ def _curataAudio(v):
 
 
 def _curataSub(v):
-	if v == OPRIT:
-		return OPRIT
+	if isinstance(v, str) and v in (OPRIT, VORBIRE):
+		return v
 	if not isinstance(v, dict):
 		return None
 	fel = v.get("fel")
@@ -877,6 +885,57 @@ def _taieVechi(date, maxCanale):
 		return date
 	pastrate = sorted(date.items(), key=lambda kv: (kv[1].get("t", 0), kv[0]), reverse=True)[:maxCanale]
 	return dict(pastrate)
+
+
+_stareAlegeri = threading.Lock()
+_scrieriAlegeri = {}
+
+
+def _serieAlegeri(memorie, functie, args, asteapta=False):
+	# Reserve RAM briefly. A concurrent UI choice queues a plain delta, never waits on IO.
+	cale = os.path.normcase(os.path.abspath(memorie.cale))
+	raspuns = None
+	with _stareAlegeri:
+		coada = _scrieriAlegeri.get(cale)
+		if coada is not None:
+			if asteapta:
+				return 0
+			raspuns = [threading.Event(), False]
+			coada.append((memorie, functie, deepcopy(args), raspuns))
+		else:
+			coada = _scrieriAlegeri[cale] = deque()
+	if raspuns is not None:
+		if threading.current_thread() is threading.main_thread():
+			return True
+		raspuns[0].wait()
+		return raspuns[1]
+	rezultat = None
+	esec = False
+	r = False
+	try:
+		while True:
+			memorie._semn = None
+			r = functie(*args)
+			if raspuns is not None:
+				raspuns[1] = r
+				raspuns[0].set()
+				raspuns = None
+			if rezultat is None:
+				rezultat = r
+			esec = esec or r is False
+			with _stareAlegeri:
+				if not coada:
+					del _scrieriAlegeri[cale]
+					return False if esec else rezultat
+				memorie, functie, args, raspuns = coada.popleft()
+	finally:
+		if raspuns is not None:
+			raspuns[0].set()
+		with _stareAlegeri:
+			if _scrieriAlegeri.get(cale) is coada:
+				for m, f, a, rez in coada:
+					rez[0].set()
+				del _scrieriAlegeri[cale]
 
 
 class MemorieAlegeri(object):
@@ -974,6 +1033,9 @@ class MemorieAlegeri(object):
 		return self._noteaza(cheie, "s", _curataSub(amprenta))
 
 	def _noteaza(self, cheie, camp, valoare):
+		return _serieAlegeri(self, self._noteazaDirect, (cheie, camp, valoare))
+
+	def _noteazaDirect(self, cheie, camp, valoare):
 		if not cheie or len(cheie) > MAX_CHEIE or valoare is None:
 			return False
 		date = dict(self._citeste())
@@ -984,6 +1046,9 @@ class MemorieAlegeri(object):
 		return self._scrie(date)
 
 	def uita(self, cheie=None):
+		return _serieAlegeri(self, self._uitaDirect, (cheie,), asteapta=True)
+
+	def _uitaDirect(self, cheie=None):
 		"""Sterge alegerile unui canal (sau ale tuturor, cheie=None). Intoarce cate canale s-au sters."""
 		date = dict(self._citeste())
 		if cheie is None:
@@ -1043,6 +1108,9 @@ class MemoriePartiAudio(MemorieAlegeri):
 		return intrare["p"] if intrare else None
 
 	def pune(self, cheie, parte):
+		return _serieAlegeri(self, self._puneDirect, (cheie, parte))
+
+	def _puneDirect(self, cheie, parte):
 		"""parte None = se sterge. -> True daca fisierul are ce trebuie (se scrie numai la o schimbare)."""
 		if not cheie or len(cheie) > MAX_CHEIE or isinstance(parte, bool) or (parte is not None and parte not in _PARTI_TINUTE):
 			return False
@@ -1640,7 +1708,7 @@ def _deAsteptatPagina(infobar, cheie):
 		s = memorie().alegere(cheie).get("s")
 	except Exception:
 		return False
-	if not s or s == OPRIT:
+	if not s or s in (OPRIT, VORBIRE):
 		return False
 	if infobar.subtitles_enabled:
 		return not esteFisierPeCanal(infobar.selected_subtitle) and \
@@ -1856,6 +1924,15 @@ def esteFisierPeCanal(tuplu):
 
 def noteazaSubtitrare(session, tuplu):
 	"""Omul a pornit de mana subtitrarea `tuplu` (sau a oprit-o: None) pe serviciul care merge."""
+	import sys
+	HdsVorbireTV = sys.modules.get("Components.HdsVorbireTV")
+	v = (HdsVorbireTV.activ() or HdsVorbireTV.nativa()) if HdsVorbireTV is not None else None
+	if v:
+		v.invalideazaNativa()
+		referinta = session.nav.getCurrentlyPlayingServiceReference()
+		if tuplu is None:
+			v.anulat = referinta.toString() if referinta is not None else ""
+		v.opreste()
 	ref = session.nav.getCurrentlyPlayingServiceReference()
 	cheie = cheieCanal(ref)
 	if cheie and esteFisierPeCanal(tuplu) and _filmSubtitrari(ref) is None:

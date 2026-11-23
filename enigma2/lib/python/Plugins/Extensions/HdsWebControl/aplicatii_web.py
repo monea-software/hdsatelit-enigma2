@@ -17,6 +17,8 @@
 # Versiunea raportata (e2webifversion, webifver) e VERSIUNE_WEBIF, numai cifre: Kodi ramane pe setul clasic /web/*, iar
 # dreamDroid porneste toate functiile lui (acum/urmeaza, comenzile prin POST). Fara niciun nume in fata cifrelor.
 #
+# REGULA 0, WEB8: bariera de mai jos s-a scos; rutele raspund oricui, ramane
+# numai parola pusa de om (vezi _poarta). Punctele 2-6b descriu bariera de dinainte.
 # BARIERA (_poarta, pentru fiecare ruta de aici, inaintea oricarei citiri):
 # pornite din fabrica si fara parola din casa; din internet nimic, pana nu porneste omul accesul din afara casei.
 # 1. setarea „Aplicații de telefon” (config.plugins.hdswebcontrol.aplicatii) e pornita din
@@ -231,7 +233,8 @@ FEREASTRA_GRESELI_S = 600
 MAX_ADRESE = 256
 MAX_VAZUTE = 20
 PORT_FLUX = 8001
-MAX_REF = 600
+# Adresele semnate pot depasi 4000 de caractere; pastram prelucrarea plafonata.
+MAX_REF = 8192
 # powerstate 3: TryQuitMainloop dupa atatea milisecunde, ca raspunsul catre aplicatie sa plece inainte (ca /alimentare)
 DUPA_REPORNIRE_MS = 1500
 MAX_ARG = 2048
@@ -277,8 +280,10 @@ TIPURI_REDARE = {
 	"ogg": b"audio/ogg", "oga": b"audio/ogg", "opus": b"audio/ogg", "wav": b"audio/wav", "wma": b"audio/x-ms-wma",
 	"ac3": b"audio/ac3", "mka": b"audio/x-matroska",
 }
-# setarile citite de aplicatii (Kodi cere marginile inregistrarilor); NICIODATA altele: nici cheile, nici parolele
+# setarile citite de aplicatii (Kodi cere marginile inregistrarilor), date si cand au valoarea din fabrica; REGULA 0, WEB8:
+# /web/settings da si toate celelalte setari din /etc/enigma2/settings, cu cheile si parolele, ca in fisier
 SETARI_PERMISE = ("config.recording.margin_before", "config.recording.margin_after", "config.usage.default_path")
+CALE_SETARI = "/etc/enigma2/settings"
 
 # steagurile referintei care nu sunt canale (eServiceReference: isDirectory, isMarker, isNumberedMarker, isInvisible)
 DOSAR = 1
@@ -544,8 +549,8 @@ def caleLocala(ref):
 
 
 def fisierPermis(cale, locuri):
-	"""Un fisier pornit pe televizor din aplicatii (/web/zap, /api/zap): numai dintr-un loc al inregistrarilor sau
-	dintr-un subdosar al lui. Se verifica numai textul, fara disc (zap-ul vine pe firul enigma2): cale absoluta, fara
+	"""Un fisier dintr-un loc al inregistrarilor sau dintr-un subdosar al lui (stergerea filmelor, /file; /web/zap si
+	/api/zap nu il mai folosesc din ZAP7). Se verifica numai textul, fara disc (zap-ul vine pe firul enigma2): cale absoluta, fara
 	„..”, fara caractere de control, cel mult MAX_CALE."""
 	if not cale or len(cale) > MAX_CALE or any(ord(ch) < 0x20 or 0x7f <= ord(ch) <= 0x9f for ch in cale):
 		return False
@@ -975,64 +980,28 @@ def _noteazaAplicatia(adresa, user_agent, M):
 
 
 def _poarta(request, L, M):
-	"""None daca cererea trece; altfel (cod HTTP, text, antete)."""
+	"""None daca cererea trece; altfel (cod HTTP, text, antete).
+	REGULA 0, WEB8: rutele raspund oricui, din casa si din afara, din aplicatii si din
+	browser, cu orice antet Host; fara refuzul cererilor din pagini, fara numaratoarea greselilor si fara blocare. Ramane
+	numai parola pusa de om pentru interfata web (L.codAcasa, din fabrica nu e pusa): atunci se cere HTTP Basic cu parola
+	lui sau cu parola pentru aplicatii (sau ?token=)."""
 	if not L.activ():
 		return (404, "Not found", None)
 	adresa = L.adresaClient(request) or ""
-	acasa = esteReteaLocala(adresa)
 	if _fluxTranscodare(request, L, adresa):
 		return None
-	if not acasa and not L.afara():
-		return (403, _t("Acces permis doar din rețeaua locală."), None)
-	if _dinPagina(request, L):
-		return (403, _t("Cerere respinsă: vine dintr-o pagină web, nu dintr-o aplicație."), None)
-	if b"token" in request.args and L.jetonValid(request):
-		return None
 	user_agent = L.antet(request, b"user-agent") or ""
-	# din casa: cu Host-ul receptorului (punctul 4) sau dintr-o aplicatie, oricare ar fi numele din Host (punctul 4b)
-	din_casa = acasa and (L.gazdaProprie(request) or _faraPagina(request, L))
-	if din_casa and not L.codAcasa():
-		# fara parola pusa de om pentru interfata web: fara parola; ce e scris in Utilizator / Parola nu se verifica si
-		# nu se numara. Comenzile insa nu dintr-un browser fara pagina receptorului (punctul 6b)
-		if esteComanda(request) and _comandaDinBrowserStrain(request, L):
-			_jurnalComandaRefuzata(request, adresa, user_agent, CEAS())
-			return (403, _t("Cerere respinsă: vine dintr-o pagină web, nu dintr-o aplicație."), None)
+	if not L.codAcasa() or (b"token" in request.args and L.jetonValid(request)):
 		_noteazaAplicatia(adresa, user_agent, M)
 		return None
-	acum = CEAS()
-	# din casa, cu numele receptorului in adresa, greselile nu se numara si nu blocheaza (nicio paza intre om
-	# si receptorul lui); cu alt nume in Host (o pagina de pe internet re-legata prin DNS, din browserul omului, sau o
-	# cerere care numai arata a aplicatie) se numara ca inainte: aici e o parola adevarata, pusa de om
-	fara_numarare = acasa and L.gazdaProprie(request)
-	ramas = 0 if fara_numarare else _ramasBlocat(adresa, acum)
-	if ramas:
-		return (429, _t("Prea multe parole greșite. Încearcă din nou peste câteva minute."),
-			{b"retry-after": str(ramas).encode("ascii")})
 	provocare = None if "mozilla/" in user_agent.lower() else {b"www-authenticate": PROVOCARE}
-	antet = L.antet(request, b"authorization")
-	if not antet:
-		if acasa and L.codAcasa():
-			return (401, _t("Scrie în aplicație utilizatorul root și parola pusă pe receptor."), provocare)
-		return (401, _t("Scrie în aplicație utilizatorul root și parola pentru aplicații de pe receptor."), provocare)
-	primita = _parolaDinAntet(antet)
-	if primita is not None and (_parolaBuna(primita, L.jeton()) or (acasa and _parolaLocalaBuna(primita))):
-		_GRESELI.pop(adresa, None)
+	primita = _parolaDinAntet(L.antet(request, b"authorization"))
+	if primita is None:
+		return (401, _t("Scrie în aplicație utilizatorul root și parola pusă pe receptor."), provocare)
+	if _parolaBuna(primita, L.jeton()) or _parolaLocalaBuna(primita):
 		_noteazaAplicatia(adresa, user_agent, M)
 		return None
-	if fara_numarare:
-		return (401, _t("Parola e greșită."), provocare)
-	if _greseala(adresa, acum):
-		nume = numeAplicatie(user_agent)
-		_jurnal("parola gresita de %d ori de la %s (%s): oprit %d s" % (GRESELI_MAX, nume, adresa, BLOCARE_S))
-		try:
-			M.popup(_t("Parolă greșită de %d ori de la %s (%s): am oprit cererile ei pentru %d minute. Parola bună o vezi "
-				"în ecranul interfeței web.") % (GRESELI_MAX, _t(nume), adresa, BLOCARE_S // 60), 15, "hds_aplicatie_blocata")
-		except Exception as eroare:
-			_jurnal("mesajul blocarii: %s" % eroare)
-		return (429, _t("Prea multe parole greșite. Încearcă din nou peste câteva minute."),
-			{b"retry-after": str(BLOCARE_S).encode("ascii")})
-	return (401, _t("Parola pentru aplicații e greșită."), provocare)
-
+	return (401, _t("Parola e greșită."), provocare)
 
 def esteCaleAplicatii(cale):
 	"""Calea (fara ?...) e a unei rute de aici."""
@@ -1451,7 +1420,19 @@ class _Furnizor(object):
 	def setari(self):
 		from Components.config import config
 		rez = []
+		vazute = set()
+		try:
+			with open(CALE_SETARI, encoding="utf-8", errors="replace") as f:
+				for rand in f:
+					cheie, egal, valoare = rand.rstrip("\r\n").partition("=")
+					if egal and cheie.startswith("config.") and cheie not in vazute:
+						vazute.add(cheie)
+						rez.append((cheie, valoare))
+		except (IOError, OSError) as eroare:
+			_jurnal("setarile: %s" % eroare)
 		for nume in SETARI_PERMISE:
+			if nume in vazute:
+				continue
 			try:
 				obiect = config
 				for parte in nume.split(".")[1:]:
@@ -1862,6 +1843,18 @@ def evenimentul(M, ref, fel):
 	return None
 
 
+def fluxuriInRetea():
+	"""Cati clienti din retea primesc acum un canal de pe portul 8001 (enigma.eStreamServer, pus de HdsEnigmaCompat peste
+	Hds/DabT2/server8001.py; releele receptorului nu se numara). 0 fara el. Pentru isStreaming din statusinfo (0.7.8;
+	pana atunci mereu "false")."""
+	import sys
+	server = getattr(sys.modules.get("enigma"), "eStreamServer", None)
+	try:
+		return len(server.getInstance().getConnectedClients() or []) if server is not None else 0
+	except Exception:
+		return 0
+
+
 def statusinfo(M):
 	try:
 		vol, mut = M.volum()
@@ -1874,7 +1867,8 @@ def statusinfo(M):
 		inregistreaza = False
 	ref = M.ref_acum() or ""
 	rez = {"result": True, "inStandby": "true" if standby else "false", "isRecording": "true" if inregistreaza else "false",
-		"isStreaming": "false", "transcoding": False, "volume": vol, "muted": mut, "currservice_serviceref": ref,
+		"isStreaming": "true" if fluxuriInRetea() else "false", "transcoding": False, "volume": vol, "muted": mut,
+		"currservice_serviceref": ref,
 		"currservice_station": "", "currservice_name": "", "currservice_description": "",
 		"currservice_fulldescription": "", "currservice_begin": "", "currservice_end": "",
 		"currservice_begin_timestamp": 0, "currservice_end_timestamp": 0, "currservice_id": 0,
@@ -1898,20 +1892,22 @@ def h_statusinfo(c):
 
 
 def h_zap(c):
-	ref = c.arg("sRef", maxim=MAX_REF).strip()
+	# Un caracter in plus detecteaza depasirea inainte de strip si validare.
+	ref = c.arg("sRef", maxim=MAX_REF + 1)
+	if len(ref) > MAX_REF:
+		return _comanda(c, False, _t("Textul este prea lung (cel mult %d de semne).") % MAX_REF)
+	ref = ref.strip()
 	if not ref_buna(ref):
 		return _comanda(c, False, _t("Canalul nu are o referință bună."))
-	cale = caleLocala(ref)
-	if cale is not None and not fisierPermis(cale, _locuri(c.M)):
-		# fara parola din casa: o aplicatie nu porneste pe televizor orice fisier de pe receptor, numai inregistrarile
-		_jurnal("zap: fisier in afara locurilor inregistrarilor, refuzat")
-		return _comanda(c, False, _t("Dosarul cerut nu este printre locurile înregistrărilor."))
+	# ZAP7 (REGULA 0, 22.11.2026): orice fisier de pe receptor sau de pe stick porneste pe televizor; ce nu exista da
+	# eroarea playerului ("Canalul nu a pornit.")
 	if c.M.standby():
 		return _comanda(c, False, _t("Receptorul e în standby. Pornește-l, apoi alege canalul."))
 	try:
 		bun, text, _cod = c.L.zap(ref)
-	except Exception as eroare:
-		_jurnal("zap: %s" % eroare)
+	except Exception:
+		# Exceptia playerului poate include adresa intreaga si parametrii privati.
+		_jurnal("zap: eroare la pornirea canalului")
 		bun, text = False, ""
 	if not bun:
 		return _comanda(c, False, _t("Canalul nu a pornit."))
@@ -3592,10 +3588,25 @@ def _m3u(request, randuri, nume_fisier):
 	return "".join(parti).encode("utf-8")
 
 
+def ipPentruFlux(c):
+	"""Adresa receptorului din listele m3u (0.7.8): cea pe care a venit cererea, daca e o adresa IPv4 din casa (clientul
+	a ajuns deja la ea, deci si VLC sau Kodi ajung). Inainte era adresa iesirii implicite, adica Wi-Fi-ul cand receptorul
+	are si cablu si Wi-Fi, chiar daca omul intrase pe cablu (sau pe o retea Wi-Fi pe care telefonul nu o vede). O cerere
+	de pe receptor (127.0.0.1), din afara casei sau fara adresa: ca pana acum, M.ip()."""
+	try:
+		h = str(c.r.getHost().host or "")
+	except Exception:
+		h = ""
+	o, _g = _formaAdresei(h)
+	if o is not None and esteReteaLocala(h) and not esteReceptorul(h):
+		return "%d.%d.%d.%d" % tuple(o)
+	return c.M.ip()
+
+
 def h_streamm3u(c):
 	M = c.M
 	ref = (c.arg("ref", maxim=MAX_REF) or c.arg("sRef", maxim=MAX_REF)).strip()
-	adresa = adresaFlux(ref, M.ip()) if eCanal(ref) else None
+	adresa = adresaFlux(ref, ipPentruFlux(c)) if eCanal(ref) else None
 	if adresa is None:
 		return _m3u(c.r, [], "stream.m3u")
 	nume = curat(c.arg("name")) or curat(M.nume_serviciu(ref)) or ref
@@ -3605,7 +3616,7 @@ def h_streamm3u(c):
 def h_servicesm3u(c):
 	M = c.M
 	b = _bref(c)
-	ip = M.ip()
+	ip = ipPentruFlux(c)
 	randuri = []
 	for r, n in (_canale(M, b) if b else []):
 		adresa = adresaFlux(r, ip)
@@ -3617,7 +3628,7 @@ def h_servicesm3u(c):
 def h_streamcurrentm3u(c):
 	M = c.M
 	ref = M.ref_acum() or ""
-	adresa = adresaFlux(ref, M.ip()) if eCanal(ref) else None
+	adresa = adresaFlux(ref, ipPentruFlux(c)) if eCanal(ref) else None
 	return _m3u(c.r, [(curat(M.nume_serviciu(ref)) or ref, adresa)] if adresa else [], "stream.m3u")
 
 

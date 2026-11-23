@@ -77,9 +77,10 @@ class HdsListeInternet(Screen):
 			"downRepeated": self.jos,
 			"left": self.felInapoi,
 			"right": self.felInainte,
+			"menu": self.actualizareAutomata,
 		}
 		taste.update((nume, _nimic) for nume in TASTE_RIDICATE)
-		self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], taste, -1)
+		self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions", "MenuActions"], taste, -1)
 		self.setTitle(_t("Liste de canale de pe internet"))
 		self.onLayoutFinish.append(self._porneste)
 		self.onClose.append(self._inchis)
@@ -88,6 +89,9 @@ class HdsListeInternet(Screen):
 
 	def _porneste(self):
 		M = _M()
+		M.demareaza_automat()
+		if self._deseneaza not in M._AUTO_ABONATI:
+			M._AUTO_ABONATI.append(self._deseneaza)
 		self._deseneaza()
 		l = M.porneste_citirea(self._citit)
 		if l is not None:
@@ -100,6 +104,9 @@ class HdsListeInternet(Screen):
 		# lucrarile raman in viata in modul (HdsListeInternet._VII) pana la capat; ecranul nu mai vrea raspunsul
 		self._deschis = False
 		self._lucrari = []
+		M = _M()
+		if self._deseneaza in M._AUTO_ABONATI:
+			M._AUTO_ABONATI.remove(self._deseneaza)
 
 	def _citit(self):
 		if not self._deschis:
@@ -147,7 +154,7 @@ class HdsListeInternet(Screen):
 		instalata = M.text_instalata(M.ultima_instalare()[1])
 		if instalata:
 			jos += "\n" + instalata
-		self["preview"].setText(sus + "\n" + jos)
+		self["preview"].setText(sus + "\n" + jos + "\n" + M.text_automat())
 		from Screens.ScanerCablu import potriveste_textul
 		for nume in ("preview", "stare"):
 			try:
@@ -206,6 +213,18 @@ class HdsListeInternet(Screen):
 			self._lucrari.append(lucrare)
 			self._stare(_t("Se descarcă și se instalează %s...") % ("%s: %s" % (l["autor_nume"], l["nume"])))
 
+	def actualizareAutomata(self):
+		M = _M()
+		if not M.stare_publica(self._ant)["automat_incarcat"]:
+			self._stare(_t("Se citește opțiunea de actualizare automată..."))
+			return
+		fel, lucrare = M.porneste_setare_automat(not M.stare_publica(self._ant)["automat"], self._gata)
+		if fel == "ocupat":
+			self._stare(_t("Un import e deja în curs. Așteaptă să se termine."))
+		elif fel == "pornit":
+			self._lucrari.append(lucrare)
+			self._stare(_t("Se salvează alegerea..."))
+
 	def puneLaLoc(self):
 		M = _M()
 		fel, lucrare = M.porneste_punerea_la_loc(self._gata)
@@ -223,4 +242,4 @@ class HdsListeInternet(Screen):
 		mesaje = (rezultat or {}).get("mesaje") or []
 		self._deseneaza()
 		# primul mesaj spune ce s-a intamplat (al doilea, buchetele pastrate, cand sunt); restul sta in jurnal
-		self._stare(" ".join(mesaje[:2 if (rezultat or {}).get("pastrate") else 1]))
+		self._stare(" ".join(mesaje[:2 if any((rezultat or {}).get(k) for k in ("pastrate", "ct_pastrate", "baza_stricata")) else 1]))

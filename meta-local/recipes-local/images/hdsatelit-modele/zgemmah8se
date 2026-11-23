@@ -1,0 +1,18 @@
+# H8 NAND: valori citite din fabrica pe 19.11.2026.
+# Familia HiSilicon este independenta de stocarea NAND.
+format=1
+distro=hdsatelit
+model=ZGEMMA H8.2H SE
+machine=h8se
+machinebuild=zgemmah8se
+chip=hi3798mv200
+boxtype=H8.2H.SE
+model_id=h8se
+hw=-
+partitions=boot:1024K,bootargs:1024K,baseparam:1024K,pqparam:1024K,logo:1024K,deviceinfo:1024K,bootoptions:3072K,recovery:24576K,kernel:12288K,rootfs:454656K,others:23552K
+kernel_part=mtd8
+kernel_kib=12288
+rootfs_part=mtd9
+stocare=nand
+confirmat=nu
+familie=hisilicon

@@ -218,10 +218,10 @@ def fps(argumente, F=None, L=None, sesiune=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, fara token; numai cheile cunoscute."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token; numai cheile cunoscute."""
 	permise = ("id", "ms", "pas", "cod", "numar", "fps")
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:12]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in permise:
@@ -229,7 +229,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_TEXT].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 

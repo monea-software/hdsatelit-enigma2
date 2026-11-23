@@ -666,8 +666,8 @@ class Wizard(Screen):
 		from Screens.VirtualKeyBoard import VirtualKeyBoard
 		self.currentConfigIndex = self["config"].getCurrentIndex()
 		el = self["config"].getCurrent()[1]
-		# o parola salvata nu se arata nici in tastatura (porneste goala); cea scrisa acum se vede in clar
-		text = "" if isinstance(el, ConfigPassword) else el.getValue()
+		# Tastatura arata valoarea salvata, inclusiv parola.
+		text = el.getValue()
 		from Components.HdsAsistentaControl import campSecret
 		self.session.openWithCallback(self.VirtualKeyBoardCallback, VirtualKeyBoard,
 			title=self["config"].getCurrent()[0], text=text,

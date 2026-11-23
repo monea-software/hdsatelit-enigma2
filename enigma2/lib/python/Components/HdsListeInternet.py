@@ -37,6 +37,8 @@
 # incarcare: probele de pe PC il folosesc direct.
 
 import glob
+import datetime
+import hashlib
 import html
 import io
 import json
@@ -44,6 +46,7 @@ import os
 import re
 import shutil
 import ssl
+import tempfile
 import threading
 import time
 import zipfile
@@ -77,6 +80,8 @@ TINUT_MINTE_S = 30 * 60
 PAUZA_S = 3 * 60                      # dupa o citire cazuta, alta numai cerut de om (fortat) sau dupa pauza
 TOLERANTA = 6                         # zecimi de grad: 19E al unui autor e 19.2E al altuia
 MAX_LISTE = 200
+OPTIUNE_AUTO = "hds-liste-actualizare.json"
+INTERVAL_AUTO_S = 6 * 60 * 60
 
 TIPAR_CIEFP = re.compile(r"^ciefp-E2-(?:(\d+)sat[A-Za-z]?-)?((?:[0-9.]+[EeWw]-?)+)-(\d{2})\.(\d{2})\.(\d{4})\.zip$")
 TIPAR_MORPHEUS = re.compile(r"^E2_Morph883_([A-Za-z0-9.\-]+)_(\d{2})(\d{2})(\d{2})\.zip$")
@@ -84,7 +89,7 @@ TIPAR_POZ = re.compile(r"^([0-9]{1,3}(?:\.[0-9])?)([EeWw])$")
 TIPAR_RAND_VH = re.compile(r'<td>\s*<a href="(autosetting/download\.php\?id=(\d{1,4})&(?:amp;)?action=download)">(.+?)</a>\s*</td>'
 	r'\s*<td>\s*(\d{6})\s*</td>', re.S | re.I)
 TIPAR_NUMAR_VH = re.compile(r"([0-9]{1,3}(?:[.,][0-9])?)\s*(?:°|&deg;|\xb0)?\s*([EW])?", re.I)
-TIPAR_RAND_INDEX = re.compile(r'^#SERVICE\s+1:7:\d+:.*FROM BOUQUET\s+"([^"]+)"', re.I)
+TIPAR_RAND_INDEX = re.compile(r'^#SERVICE:?\s+1:7:\d+:.*FROM BOUQUET\s+"([^"]+)"', re.I)
 
 
 class _TiparBuchet(object):
@@ -267,8 +272,8 @@ def liste_ciefp(intrari, autor=None):
 	"""Lista fisierelor din depozitul lui Ciefp (raspunsul api.github.com/.../contents) -> listele cunoscute."""
 	autor = autor or _autor("ciefp")
 	rez = []
-	for e in intrari or []:
-		if not isinstance(e, dict) or e.get("type") != "file":
+	for e in _intrari_valide(intrari):
+		if e.get("type") != "file":
 			continue
 		nume = e.get("name") or ""
 		m = TIPAR_CIEFP.match(nume)
@@ -279,6 +284,8 @@ def liste_ciefp(intrari, autor=None):
 			continue
 		motor = not m.group(1)
 		zi, luna, an = int(m.group(3)), int(m.group(4)), int(m.group(5))
+		if not _data_valida(zi, luna, an):
+			continue
 		if motor:
 			scurt = _("Motor %s - %s") % (text_pozitie(poz[0]), text_pozitie(poz[-1]))
 			poz_lista = []
@@ -288,6 +295,7 @@ def liste_ciefp(intrari, autor=None):
 		url = RAW_GITHUB % (autor["depozit"], autor["ramura"], quote(nume))
 		rez.append(_lista(autor, nume, scurt, url, zi, luna, an, poz_lista, motor, e.get("size"),
 			extra=(" - " if motor else ", ").join(text_pozitie(p) for p in poz)))
+		rez[-1]["sha"] = e.get("sha", "")
 	return rez
 
 
@@ -295,25 +303,63 @@ def liste_morpheus(intrari, autor=None):
 	"""Lista fisierelor din depozitul lui Morpheus883 -> listele cunoscute (pachetul tuturor listelor se sare)."""
 	autor = autor or _autor("morpheus883")
 	rez = []
-	for e in intrari or []:
-		if not isinstance(e, dict) or e.get("type") != "file":
+	for e in _intrari_valide(intrari):
+		if e.get("type") != "file":
 			continue
 		nume = e.get("name") or ""
 		m = TIPAR_MORPHEUS.match(nume)
 		if not m:
 			continue
 		zi, luna, an = int(m.group(2)), int(m.group(3)), 2000 + int(m.group(4))
+		if not _data_valida(zi, luna, an):
+			continue
 		url = RAW_GITHUB % (autor["depozit"], autor["ramura"], quote(nume))
 		corp = m.group(1)
 		if corp.lower() == "motor":
 			rez.append(_lista(autor, nume, _("Motor"), url, zi, luna, an, [], True, e.get("size")))
+			rez[-1]["sha"] = e.get("sha", "")
 			continue
 		poz = [pozitie(t) for t in corp.split("-") if t]
 		if not poz or None in poz:
 			continue
 		rez.append(_lista(autor, nume, _scurt(poz), url, zi, luna, an, poz, False, e.get("size"),
 			extra=", ".join(text_pozitie(p) for p in poz)))
+		rez[-1]["sha"] = e.get("sha", "")
 	return rez
+
+
+def _data_valida(zi, luna, an):
+	try:
+		datetime.date(an, luna, zi)
+		return True
+	except ValueError:
+		return False
+
+
+def _intrari_valide(intrari):
+	for e in intrari or []:
+		if not isinstance(e, dict) or not isinstance(e.get("name"), str):
+			continue
+		marime = e.get("size", 0)
+		if not isinstance(marime, int) or isinstance(marime, bool) or not 0 <= marime <= MAX_DESCARCARE:
+			continue
+		sha = e.get("sha", "")
+		if not isinstance(sha, str) or (sha and not re.match(r"^[0-9a-f]{40}$", sha)):
+			continue
+		yield e
+
+
+def varianta(lista):
+	"""Stable author variant, including A/B distinctions, without the release date."""
+	id_lista = lista.get("id", "")
+	if not isinstance(id_lista, str) or ":" not in id_lista:
+		return ""
+	autor, nume = id_lista.split(":", 1)
+	if autor == "ciefp" and TIPAR_CIEFP.match(nume):
+		return autor + ":" + nume.rsplit("-", 1)[0]
+	if autor == "morpheus883" and TIPAR_MORPHEUS.match(nume):
+		return autor + ":" + nume.rsplit("_", 1)[0]
+	return ""
 
 
 def _pozitii_vhannibal(nume):
@@ -529,12 +575,9 @@ def _randuri(cale):
 
 def _servicii(text):
 	"""Randurile #SERVICE care nu sunt etichete (1:64)."""
-	rez = []
-	for r in (text or "").splitlines():
-		r = r.strip()
-		if r.upper().startswith("#SERVICE ") and not re.match(r"^#SERVICE\s+1:64:", r, re.I):
-			rez.append(r)
-	return rez
+	D = _date_lamedb()
+	return ["#SERVICE " + i._ref_brut for i in D.citeste_buchet("", text or "", lambda: 0).intrari
+		if i.fel not in ("marcaj", "spatiu")]
 
 
 def _fara_lista(servicii):
@@ -556,7 +599,9 @@ def buchete_de_pastrat(dest=CALE_ETC):
 	vazute = set()
 	for index in INDEXURI:
 		text = _randuri(os.path.join(dest, index)) or ""
-		for rand in text.splitlines():
+		for rand in text.split("\n"):
+			if rand in ("", "\r"):
+				break
 			m = TIPAR_RAND_INDEX.match(rand.strip())
 			if not m:
 				continue
@@ -570,6 +615,189 @@ def buchete_de_pastrat(dest=CALE_ETC):
 	for nume in FAVORITE:
 		if nume not in vazute and _servicii(_randuri(os.path.join(dest, nume))):
 			rez.append(("bouquets.radio" if nume.endswith(".radio") else "bouquets.tv", nume, None))
+	return rez
+
+
+def _date_lamedb():
+	from Components import HdsEditorCanaleDate
+	return HdsEditorCanaleDate
+
+
+def _citeste_baza(dest):
+	D = _date_lamedb()
+	for nume in ("lamedb", "lamedb5"):
+		cale = os.path.join(dest, nume)
+		if os.path.lexists(cale):
+			if os.path.islink(cale) or not os.path.isfile(cale):
+				raise ValueError("lamedb link")
+			with open(cale, "rb") as f:
+				return D.citeste_lamedb(f.read())
+	return D.Lamedb()
+
+
+def _scrie_atomic(cale, date):
+	"""Fisier temporar propriu, apoi inlocuire; nu refoloseste temporarele omului."""
+	fd, nou = tempfile.mkstemp(prefix=".hds-lista-", dir=os.path.dirname(cale))
+	try:
+		with os.fdopen(fd, "wb") as f:
+			f.write(date)
+			f.flush()
+			os.fsync(f.fileno())
+		if os.path.isfile(cale) and not os.path.islink(cale):
+			shutil.copymode(cale, nou)
+		os.replace(nou, cale)
+	finally:
+		if os.path.exists(nou):
+			os.remove(nou)
+
+
+def _uneste_ct(pregatit, vechi):
+	"""Pastreaza C/T dupa identitatea completa; satelitii raman cei ai listei alese."""
+	noi = _citeste_baza(pregatit)
+	chei = {k for k, t in vechi.transpondere.items() if t.fel in ("c", "t")}
+	for k in chei:
+		if k in noi.transpondere and noi.transpondere[k].fel not in ("c", "t"):
+			raise ValueError("transponder conflict")
+		noi.transpondere[k] = vechi.transpondere[k]
+	servicii = {k: s for k, s in vechi.servicii.items() if s.tp_cheie in chei}
+	noi.servicii.update(servicii)
+	if chei or noi.versiune != 4 or not os.path.isfile(os.path.join(pregatit, "lamedb")):
+		_scrie_atomic(os.path.join(pregatit, "lamedb"), noi.text().encode("utf-8", "surrogateescape"))
+	# Se importa numai formatul nativ, fara o a doua lista cu date diferite.
+	cale5 = os.path.join(pregatit, "lamedb5")
+	if os.path.isfile(cale5):
+		os.remove(cale5)
+	return set(servicii)
+
+
+def _buchete_ct(dest, chei, pastrate):
+	"""Pastreaza buchetele mixte, parintii si copiii lor, inclusiv alternativele si ciclurile."""
+	D = _date_lamedb()
+	legaturi, ct = {}, set()
+	def local(nume):
+		return bool(D._NUME_FISIER.match(nume))
+
+	pendinte = [n for n in os.listdir(dest) if local(n) and n.endswith((".tv", ".radio"))
+		and n.startswith(("userbouquet.", "subbouquet.", "alternatives."))]
+	indexuri = {}
+	for index in INDEXURI:
+		cale = os.path.join(dest, index)
+		text = ""
+		if os.path.lexists(cale):
+			if os.path.islink(cale) or not os.path.isfile(cale):
+				raise ValueError("index not regular")
+			with io.open(cale, "r", encoding="utf-8", errors="surrogateescape", newline="") as f:
+				text = f.read()
+		intrari = D.citeste_buchet(index, text, lambda: 0).intrari
+		indexuri[index] = [(i.fisier, "#SERVICE " + i._ref_brut) for i in intrari
+			if i.fisier and local(i.fisier) and i.fel in ("subbuchet", "alternative")]
+		pendinte.extend(n for n, _r in indexuri[index])
+	while pendinte:
+		nume = pendinte.pop()
+		if nume in legaturi:
+			continue
+		cale = os.path.join(dest, nume)
+		if os.path.islink(cale):
+			raise ValueError("bouquet link")
+		if not os.path.exists(cale):
+			continue
+		if not os.path.isfile(cale):
+			raise ValueError("bouquet not regular")
+		copii = set()
+		with io.open(cale, "r", encoding="utf-8", errors="surrogateescape", newline="") as f:
+			text = f.read()
+		for intrare in D.citeste_buchet(nume, text, lambda: 0).intrari:
+			r = intrare.r
+			if r.k5() in chei:
+				ct.add(nume)
+			f = r.fisier()
+			if f and local(f) and r.fel() in ("subbuchet", "alternative"):
+				copii.add(f)
+		legaturi[nume] = copii
+		pendinte.extend(copii - legaturi.keys())
+	# Parintii raman si cand numai un sub-buchet contine canale C/T.
+	while True:
+		parinti = {n for n, copii in legaturi.items() if copii & ct} - ct
+		if not parinti:
+			break
+		ct.update(parinti)
+	rez = list(pastrate)
+	vazute = {n for _i, n, _r in rez}
+	for index in INDEXURI:
+		for nume, rand in indexuri[index]:
+			if nume in ct and nume not in vazute:
+				vazute.add(nume)
+				rez.append((index, nume, rand))
+	# Cele nelegate raman nelegate, dar fisierele lor nu se suprascriu nici la acelasi nume.
+	vazute.update(ct)
+	# Numai graful C/T primeste protectia noua; ceilalti sateliti se inlocuiesc ca inainte.
+	pendinte = list(ct)
+	parcurse = set(ct)
+	while pendinte:
+		for nume in legaturi.get(pendinte.pop(), ()):
+			if nume in legaturi and nume not in parcurse:
+				parcurse.add(nume)
+				vazute.add(nume)
+				pendinte.append(nume)
+	# Indexurile principale raman cele ale listei alese, chiar intr-un ciclu.
+	return rez, vazute - set(INDEXURI)
+
+
+def _importa_sigur(pregatit, dest, text_setari, sursa, dupa_import=None):
+	"""Foloseste copia exacta a importului; pune la loc toate fisierele atinse la eroare."""
+	I = _I()
+	plan = fisiere_lista(pregatit) | set(INDEXURI) | {I.NUME_ORIGINE}
+	for nume in plan:
+		cale = os.path.join(dest, nume)
+		if os.path.lexists(cale + ".nou") or os.path.islink(cale) or (os.path.lexists(cale) and not os.path.isfile(cale)):
+			raise ValueError("destination unavailable")
+	inainte = {n for n in plan if os.path.isfile(os.path.join(dest, n))}
+	copie = []
+
+	def salveaza(d):
+		r = I.copie_de_siguranta(d, text_setari=text_setari)
+		if not r[2]:
+			copie.append(r[0])
+		return r
+
+	try:
+		rez = I.importa(pregatit, {"canale": True}, dest=dest, text_setari=text_setari, sursa=sursa, copie=salveaza)
+		if rez.get("ok"):
+			if dupa_import is not None:
+				dupa_import(copie[0])
+			return rez
+	except Exception:
+		if not copie:
+			raise
+	if copie:
+		erori = []
+		for nume in sorted(plan, key=lambda n: n == "lamedb"):
+			try:
+				cale = os.path.join(dest, nume)
+				if nume in inainte:
+					with open(os.path.join(copie[0], nume), "rb") as f:
+						date = f.read()
+					aceleasi = False
+					if os.path.isfile(cale):
+						with open(cale, "rb") as f:
+							aceleasi = f.read() == date
+					if not aceleasi:
+						_scrie_atomic(cale, date)
+				elif os.path.isfile(cale):
+					os.remove(cale)
+				if os.path.isfile(cale + ".nou"):
+					os.remove(cale + ".nou")
+			except OSError:
+				erori.append(nume)
+		if erori:
+			return {"ok": False, "canale": 0, "mesaje": [_("Instalarea s-a oprit. Punerea la loc nu s-a terminat; "
+				"copia de siguranță este în %s.") % os.path.basename(copie[0])]}
+		# Keep the previous installation and its undo visible after a complete rollback.
+		try:
+			_scrie_atomic(os.path.join(copie[0], SEMN), b'{"esec_revenit": true}')
+		except OSError:
+			pass
+		return {"ok": False, "canale": 0, "mesaje": [_("Instalarea nu a mers. Lista de dinainte a fost pusă la loc.")]}
 	return rez
 
 
@@ -601,18 +829,20 @@ def pastrate_in_pregatire(dosar, pastrate):
 		text = _randuri(cale_index)
 		if text is None:
 			continue
-		are = set(m.group(1) for m in (TIPAR_RAND_INDEX.match(r.strip()) for r in text.splitlines()) if m)
+		randuri = text.splitlines()
+		# Enigma2 nu citeste randurile aflate dupa primul rand gol.
+		sfarsit = next((i for i, r in enumerate(randuri) if not r), len(randuri))
+		are = set(m.group(1) for m in (TIPAR_RAND_INDEX.match(r.strip()) for r in randuri[:sfarsit]) if m)
 		nume_pastrate.append(nume)
 		if nume in are:
 			continue
 		capat = "\r\n" if "\r\n" in text else "\n"
-		randuri = text.splitlines()
 		rand_nou = rand or _rand_index(index, nume)
 		if nume in FAVORITE:
 			loc = 1 if randuri and randuri[0].upper().startswith("#NAME") else 0
 			randuri.insert(loc, rand_nou)
 		else:
-			randuri.append(rand_nou)
+			randuri.insert(sfarsit, rand_nou)
 		with io.open(cale_index + ".nou", "w", encoding="utf-8", errors="surrogateescape", newline="") as f:
 			f.write(capat.join(randuri) + capat)
 		os.replace(cale_index + ".nou", cale_index)
@@ -638,9 +868,7 @@ def _copii(dest):
 
 
 def _scrie_semn(dosar_copie, date):
-	with io.open(os.path.join(dosar_copie, SEMN + ".nou"), "w", encoding="utf-8") as f:
-		json.dump(date, f, ensure_ascii=False, sort_keys=True)
-	os.replace(os.path.join(dosar_copie, SEMN + ".nou"), os.path.join(dosar_copie, SEMN))
+	_scrie_atomic(os.path.join(dosar_copie, SEMN), json.dumps(date, ensure_ascii=False, sort_keys=True).encode("utf-8"))
 
 
 def ultima_instalare(dest=CALE_ETC):
@@ -652,13 +880,16 @@ def ultima_instalare(dest=CALE_ETC):
 		if os.path.isdir(d) and not os.path.islink(d))
 	if not copii:
 		return None, None
-	dosar = copii[-1]
-	try:
-		with io.open(os.path.join(dosar, SEMN), "r", encoding="utf-8") as f:
-			semn = json.load(f)
-	except (OSError, IOError, ValueError):
-		return None, None
-	return (dosar, semn) if isinstance(semn, dict) else (None, None)
+	for dosar in reversed(copii):
+		try:
+			with io.open(os.path.join(dosar, SEMN), "r", encoding="utf-8") as f:
+				semn = json.load(f)
+		except (OSError, IOError, ValueError):
+			return None, None
+		if isinstance(semn, dict) and semn.get("esec_revenit") is True:
+			continue
+		return (dosar, semn) if isinstance(semn, dict) else (None, None)
+	return None, None
 
 
 def _salveaza_arhiva(lista, date, dosar):
@@ -687,62 +918,98 @@ def sursa_descarcata(lista, cale, dosar):
 		adancime=0, max_arhiva=MAX_DESCARCARE)
 	for s in gasite:
 		# o lista de canale are lamedb; buchetele singure ar lasa lista veche cu indexul altei liste
-		if s.get("cale") == cale and s.get("canale") and s.get("lamedb"):
+		if s.get("cale") == cale and s.get("canale"):
 			s["mediu"] = "internet"
 			s["mediu_nume"] = _("Descărcată de pe internet")
 			return s
 	return None
 
 
-def instaleaza(lista, text_setari=None, dest=CALE_ETC, dosar=DOSAR_DESCARCARI, citeste_url=None, dest_tmp=None):
+def instaleaza(lista, text_setari=None, dest=CALE_ETC, dosar=DOSAR_DESCARCARI, citeste_url=None, dest_tmp=None, anulat=None):
+	"""Tine importul ocupat pana se termina pregatirea, revenirea si semnul copiei."""
+	with _I()._InLucru():
+		return _instaleaza(lista, text_setari, dest, dosar, citeste_url, dest_tmp, anulat)
+
+
+def _instaleaza(lista, text_setari, dest, dosar, citeste_url, dest_tmp, anulat=None):
 	"""Pe firul instalarii: descarcarea, verificarea, apoi importul canalelor (copia de siguranta, scrierea), cu
 	favoritele si buchetele de internet ale omului pastrate, si semnul in copie. Lista nu se reincarca aici
 	(incheie_importul, pe firul enigma2). Intoarce rezultatul importului, cu "lista" si "pastrate"."""
 	I = _I()
 	dest_tmp = dest_tmp or I.DOSAR_TMP
 	citeste_url = citeste_url or citeste
+	lucru = None
 	try:
 		try:
 			date = citeste_url(lista["url"], MAX_DESCARCARE, total_s=TERMEN_TOTAL_S)
-			cale = _salveaza_arhiva(lista, date, dosar)
+			if anulat and anulat():
+				return _fara_actualizare()
+			if lista.get("sha"):
+				sha = hashlib.sha1(b"blob " + str(len(date)).encode("ascii") + b"\0" + date).hexdigest()
+				if sha != lista["sha"]:
+					raise EroareDescarcare(text_schimbata())
+			lucru = tempfile.mkdtemp(prefix=os.path.basename(dosar) + "-", dir=os.path.dirname(dosar))
+			cale = _salveaza_arhiva(lista, date, lucru)
 		except EroareDescarcare as eroare:
 			return {"ok": False, "mesaje": [_("Descărcarea nu a mers: %s") % eroare]}
 		except (OSError, IOError):
 			return {"ok": False, "mesaje": [_("Descărcarea nu a mers: %s") %
 				_("Fișierul descărcat nu se poate scrie pe receptor.")]}
-		sursa = sursa_descarcata(lista, cale, dosar)
+		sursa = sursa_descarcata(lista, cale, lucru)
 		if sursa is None:
 			return {"ok": False, "mesaje": [_("Fișierul descărcat nu are o listă de canale.")]}
 		pastrate = buchete_de_pastrat(dest)
 		inainte = fisiere_lista(dest)
-		copii_inainte = _copii(dest)
 		try:
 			pregatit, motiv = I.pregateste(sursa, dest_tmp)
 			if pregatit is None:
 				return {"ok": False, "mesaje": [_("Importul nu a pornit: %s.") % motiv]}
+			baza_stricata = False
+			try:
+				vechi = _citeste_baza(dest)
+			except _date_lamedb().Stricat:
+				# O lista valida poate repara baza locala; copia pastreaza octetii originali.
+				vechi = _date_lamedb().Lamedb()
+				baza_stricata = True
+			chei_ct = _uneste_ct(pregatit, vechi)
+			pastrate, protejate = _buchete_ct(dest, chei_ct, pastrate)
+			for nume in protejate:
+				cale_b = os.path.join(pregatit, nume)
+				if os.path.isfile(cale_b):
+					os.remove(cale_b)
 			nume_pastrate = pastrate_in_pregatire(pregatit, pastrate)
-			rez = I.importa(pregatit, {"canale": True}, dest=dest, text_setari=text_setari, sursa=sursa)
+			lista_instalata = {"id": lista["id"], "autor": lista["autor_nume"], "nume": lista["nume"], "data": lista["data"]}
+			lista_instalata.update(varianta=varianta(lista), sha=lista.get("sha", ""), timp=lista.get("timp", 0))
+			def semn_instalare(copie):
+				_scrie_semn(copie, {"lista": lista_instalata,
+					"cand": int(time.time()), "fisiere_noi": sorted(fisiere_lista(dest) - inainte)})
+
+			if anulat and anulat():
+				return _fara_actualizare()
+			rez = _importa_sigur(pregatit, dest, text_setari, sursa, semn_instalare)
+		except (OSError, ValueError):
+			return {"ok": False, "mesaje": [_("Instalarea nu a pornit: listele de canale nu s-au putut pregăti în siguranță.")]}
 		finally:
 			I.curata_tmp(dest_tmp)
-		rez["lista"] = {"id": lista["id"], "autor": lista["autor_nume"], "nume": lista["nume"], "data": lista["data"]}
+		rez["lista"] = lista_instalata
 		rez["pastrate"] = nume_pastrate
+		rez["ct_pastrate"] = len(chei_ct) if rez.get("ok") else 0
 		if rez.get("canale"):
-			noi = sorted(_copii(dest) - copii_inainte)
-			if noi:
-				try:
-					_scrie_semn(noi[-1], {"lista": rez["lista"], "cand": int(time.time()),
-						"fisiere_noi": sorted(fisiere_lista(dest) - inainte)})
-				except (OSError, IOError) as eroare:
-					_jurnal("semnul copiei: %s" % eroare)
 			mesaje = rez.setdefault("mesaje", [])
 			mesaje.insert(0, _("Lista %s e instalată. Lista de dinainte e păstrată și se poate pune la loc.")
 				% ("%s: %s" % (lista["autor_nume"], lista["nume"])))
-			if nume_pastrate:
+			if baza_stricata:
+				rez["baza_stricata"] = True
+				mesaje.insert(1, _("Lista locală era deteriorată. Am păstrat copia exactă, dar canalele de cablu și terestre nu au putut fi recuperate."))
+			elif chei_ct:
+				mesaje.insert(1, _("Am păstrat canalele tale de cablu și terestre și buchetele care le folosesc."))
+			elif nume_pastrate:
 				mesaje.insert(1, _("Am păstrat favoritele și buchetele tale de internet: %s.")
 					% ", ".join(nume_buchet(dest, n) for n in nume_pastrate))
 		return rez
 	finally:
-		shutil.rmtree(dosar, ignore_errors=True)
+		if lucru is not None:
+			shutil.rmtree(lucru, ignore_errors=True)
 
 
 def _in_index(dest):
@@ -791,6 +1058,192 @@ def pune_la_loc(dosar_copie, semn, text_setari=None, dest=CALE_ETC):
 
 
 # ---------------------------------------------------------------- starea comuna (televizor si web)
+
+_AUTOMAT = False
+_AUTO_GENERATIE = 0
+_AUTO_CEAS = None
+_AUTO_CITESTE = False
+_AUTO_INCARCAT = False
+_AUTO_ABONATI = []
+
+
+def text_automat():
+	if not _AUTO_INCARCAT:
+		return _("Se citește opțiunea de actualizare automată...")
+	return _("Actualizare automată: %s (MENU)") % (_("Da") if _AUTOMAT else _("Nu"))
+
+
+def citeste_automat(dest=CALE_ETC):
+	cale = os.path.join(dest, OPTIUNE_AUTO)
+	if not os.path.lexists(cale):
+		return False
+	if os.path.islink(cale) or not os.path.isfile(cale):
+		raise ValueError("automatic option not regular")
+	with open(cale, "rb") as f:
+		date = f.read(1025)
+	if len(date) > 1024:
+		raise ValueError("automatic option too large")
+	date = json.loads(date.decode("utf-8"))
+	if not isinstance(date, dict) or type(date.get("automat")) is not bool:
+		raise ValueError("automatic option invalid")
+	return date["automat"]
+
+
+def salveaza_automat(activ, dest=CALE_ETC):
+	"""Worker only; private atomic file, no global settings rewrite."""
+	if type(activ) is not bool:
+		raise ValueError("automatic option invalid")
+	cale = os.path.join(dest, OPTIUNE_AUTO)
+	if os.path.lexists(cale) and (os.path.islink(cale) or not os.path.isfile(cale)):
+		raise ValueError("automatic option not regular")
+	try:
+		vechi = citeste_automat(dest)
+	except (ValueError, UnicodeError):
+		vechi = None
+	if activ != vechi:
+		_scrie_atomic(cale, json.dumps({"automat": activ}).encode("ascii"))
+	return {"ok": True, "automat": activ, "mesaje": [_("Actualizarea automată este pornită.") if activ else
+		_("Actualizarea automată este oprită.")]}
+
+
+def _fara_actualizare():
+	return {"ok": True, "mesaje": []}
+
+
+def _cauta_actualizarea(dest, citeste_catalog=None):
+	if not citeste_automat(dest):
+		return None
+	_dosar, semn = ultima_instalare(dest)
+	instalata = (semn or {}).get("lista") or {}
+	cheie = varianta(instalata)
+	if not cheie:
+		return None
+	autor = _autor(cheie.split(":", 1)[0])
+	noi = (citeste_catalog or catalog_autor)(autor)
+	aceleasi = [l for l in noi if varianta(l) == cheie]
+	if not aceleasi:
+		return None
+	noua = max(aceleasi, key=lambda l: l["timp"])
+	vechi = time.mktime(time.strptime(instalata["data"], "%d.%m.%Y"))
+	zi_noua = time.mktime(time.strptime(noua["data"], "%d.%m.%Y"))
+	if instalata.get("sha") and noua.get("sha") == instalata["sha"]:
+		return None
+	if zi_noua < vechi or (zi_noua == vechi and (not instalata.get("sha") or not noua.get("sha"))):
+		return None
+	return noua
+
+
+def actualizeaza(text_setari=None, dest=CALE_ETC, dosar=DOSAR_DESCARCARI, citeste_url=None,
+		dest_tmp=None, citeste_catalog=None, anulat=None):
+	"""Fresh author catalog, exact installed variant, shared backup and C/T import."""
+	with _I()._InLucru():
+		try:
+			if (anulat and anulat()) or not citeste_automat(dest):
+				return _fara_actualizare()
+			noua = _cauta_actualizarea(dest, citeste_catalog)
+			if noua is None:
+				return _fara_actualizare()
+			if anulat and anulat():
+				return _fara_actualizare()
+			return instaleaza(noua, text_setari, dest, dosar, citeste_url, dest_tmp, anulat)
+		except (OSError, ValueError, KeyError, EroareDescarcare):
+			return {"ok": False, "mesaje": [_("Actualizarea automată nu a mers. Lista instalată a rămas neschimbată.")]}
+
+
+def porneste_setare_automat(activ, la_sfarsit=None):
+	global _AUTO_GENERATIE
+	if type(activ) is not bool:
+		return "invalid", None
+
+	def gata(rez):
+		global _AUTOMAT, _AUTO_INCARCAT
+		if rez and rez.get("ok"):
+			_AUTOMAT = activ
+			_AUTO_INCARCAT = True
+			_anunta_automat()
+			if activ and _AUTO_CEAS is not None:
+				_AUTO_CEAS.start(1000, True)
+		if la_sfarsit:
+			la_sfarsit(rez)
+
+	l = _porneste_lucrul("optiune", lambda text: salveaza_automat(activ), gata, cu_setari=False)
+	if l is not None:
+		_AUTO_GENERATIE += 1
+	return ("pornit" if l is not None else "ocupat"), l
+
+
+def porneste_actualizarea():
+	"""Timer callback on the main thread; all file and network IO is on Lucrare."""
+	global _AUTO_CITESTE
+	if _AUTO_CITESTE:
+		return None
+	_AUTO_CITESTE = True
+	generatie = _AUTO_GENERATIE
+	lucrare, terminat = [], []
+
+	def lucru():
+		activ = citeste_automat()
+		try:
+			return activ, _cauta_actualizarea(CALE_ETC) if activ else None, False
+		except (OSError, ValueError, KeyError, EroareDescarcare):
+			return activ, None, True
+
+	def gata(rez, eroare):
+		global _AUTOMAT, _AUTO_CITESTE, _AUTO_INCARCAT
+		terminat.append(True)
+		_AUTO_CITESTE = False
+		for l in lucrare:
+			_scoate(l)
+		if generatie != _AUTO_GENERATIE:
+			return
+		_AUTO_INCARCAT = True
+		if isinstance(rez, tuple):
+			_AUTOMAT, noua, esuat = rez
+			if noua is not None:
+				_porneste_lucrul("actualizare", lambda text: actualizeaza(text,
+					citeste_catalog=lambda a: [noua], anulat=lambda: generatie != _AUTO_GENERATIE), None)
+		else:
+			esuat = True
+		if esuat:
+			_STARE["ultimul"] = {"ok": False, "mesaje": [_("Actualizarea automată nu a mers. Lista instalată a rămas neschimbată.")]}
+		_anunta_automat()
+
+	try:
+		l = _I().Lucrare(lucru, gata)
+	except Exception:
+		_AUTO_CITESTE = False
+		raise
+	lucrare.append(l)
+	_tine(l, terminat)
+	return l
+
+
+def _anunta_automat():
+	for functie in list(_AUTO_ABONATI):
+		try:
+			functie()
+		except Exception:
+			pass
+
+
+def demareaza_automat():
+	"""One process timer, also when the TV list screen has never been opened."""
+	global _AUTO_CEAS
+	if _AUTO_CEAS is not None:
+		return
+	try:
+		from enigma import eTimer
+		ceas = eTimer()
+		def tic():
+			try:
+				porneste_actualizarea()
+			finally:
+				ceas.start(INTERVAL_AUTO_S * 1000, True)
+		ceas.callback.append(tic)
+		_AUTO_CEAS = ceas
+		ceas.start(1000, True)
+	except ImportError:
+		return
 
 _STARE = {"liste": [], "erori": {}, "cand": 0, "incercat": 0, "citeste": False, "lucreaza": "", "ultimul": None}
 _ZAVOR = threading.Lock()
@@ -872,7 +1325,7 @@ def porneste_citirea(la_sfarsit=None, fortat=False):
 	return l
 
 
-def _porneste_lucrul(fel, functie, la_sfarsit):
+def _porneste_lucrul(fel, functie, la_sfarsit, cu_setari=True):
 	I = _I()
 	if not I.ocupa():
 		return None
@@ -892,7 +1345,7 @@ def _porneste_lucrul(fel, functie, la_sfarsit):
 		I.incheie_importul(rez, eroare, dupa=dupa)
 
 	try:
-		text = I.text_setari_acum()
+		text = I.text_setari_acum() if cu_setari else None
 		l = I.Lucrare(lambda: functie(text), _gata)
 	except Exception as eroare:
 		_STARE["lucreaza"] = ""
@@ -933,6 +1386,8 @@ def stare_publica(ant=None):
 	ultimul = _STARE.get("ultimul") or None
 	erori = _STARE.get("erori") or {}
 	return {
+		"automat": _AUTOMAT,
+		"automat_incarcat": _AUTO_INCARCAT,
 		"citeste": _STARE["citeste"],
 		"lucreaza": _STARE["lucreaza"],
 		"liste": [lista_publica(l, ant) for l in filtreaza(_STARE["liste"], "toate", "", ant)],

@@ -75,3 +75,16 @@ nobase_dist_pkgdata_DATA = \
 # Copia din pachet ramane disponibila pentru revenirea din galerie.
 sigleoriginaledir = $(pkgdatadir)/sigle-pornire
 dist_sigleoriginale_DATA = sigle-pornire/radio.mvi
+
+# Dosarul temelor de afisaj (/usr/share/enigma2/display) pe orice receptor, si pe cele fara afisaj: pluginurile de teme
+# (UserSkin, generateLCDskin) scriu acolo skin_LCD_<tema>.xml fara sa-l faca singure si cadeau la OK in setari (Vu+ Uno
+# 4K SE, 0.7.7). Gol in pachet (FILES ${datadir}/enigma2 din reteta il ia); SystemInfo["LCDSKIN"] il vede.
+install-data-hook:
+	$(MKDIR_P) $(DESTDIR)$(pkgdatadir)/display
+if !HDS_ZGEMMA
+	sed '/<map context="HdsZgemmaActions">/,/<\/map>/d' $(DESTDIR)$(pkgdatadir)/keymap.xml > $(DESTDIR)$(pkgdatadir)/keymap.xml.tmp
+	mv $(DESTDIR)$(pkgdatadir)/keymap.xml.tmp $(DESTDIR)$(pkgdatadir)/keymap.xml
+endif
+# Keep the model-specific map in the same package for automatic recovery.
+	$(MKDIR_P) $(DESTDIR)$(pkgdatadir)/keymap-original
+	cp $(DESTDIR)$(pkgdatadir)/keymap.xml $(DESTDIR)$(pkgdatadir)/keymap-original/keymap.xml

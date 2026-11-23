@@ -66,6 +66,39 @@ def _mc():
 	return meniu_comun_web
 
 
+def rutaTestPermisa(cale):
+	"""Keep recovery, networking, updates and user-started support reachable."""
+	if isinstance(cale, bytes):
+		cale = cale.decode("ascii", "replace")
+	p = cale.split("?", 1)[0].strip("/").split("/")
+	if p[0] == "api":
+		nume = p[1] if len(p) > 1 else ""
+		return any(nume == r or nume.startswith(r + "-") for r in (
+			"beta-tester", "retea", "dns", "stare-retea", "actualizare", "actualizari", "imagine-online",
+			"alimentare", "pornire-multipla", "asistenta", "asociere", "setari", "comutare-retea"))
+	return p[0] in ("beta-tester", "retea", "dns", "actualizare", "actualizari", "imagine-online", "alimentare",
+		"asistenta", "intra", "t", "deconectare", "cadru", "favicon.ico", "fonturi")
+
+
+def poartaTest(request, B=None):
+	B = _b(B)
+	if not B.acordTestNecesar() or rutaTestPermisa(request.path):
+		return None
+	request.setHeader(b"cache-control", b"no-store")
+	if request.path.startswith(b"/api/"):
+		request.setResponseCode(403)
+		request.setHeader(b"content-type", b"application/json; charset=utf-8")
+		return json.dumps({"result": False, "message": _t(B.TEST_OBLIGATORIU)}, ensure_ascii=False).encode("utf-8")
+	request.setResponseCode(302)
+	destinatie = b"/beta-tester"
+	jeton = getattr(request, "args", {}).get(b"token", [])
+	if jeton:
+		from urllib.parse import urlencode
+		destinatie += b"?" + urlencode({"token": jeton[0]}).encode("ascii")
+	request.setHeader(b"location", destinatie)
+	return b""
+
+
 def stare(B=None, b=None):
 	"""Pentru GET /api/beta-tester."""
 	B = _b(B)
@@ -76,6 +109,14 @@ def stare(B=None, b=None):
 	rez = {
 		"result": True,
 		"inscris": inscris,
+		"imagine_in_test": B.imagineInTest(),
+		"beta_tester": bool(b.activ.value),
+		"acord_test_necesar": B.acordTestNecesar(b),
+		"conditii": B.textConditii(),
+		"test_obligatoriu": _t(B.TEST_OBLIGATORIU),
+		"test_refuz": _t(B.TEST_REFUZ),
+		"accept": _t("Accept"),
+		"nu_accept": _t("Nu accept"),
 		"nota_veche": B.notaVeche(b),
 		"pauza": pauza,
 		"feluri": [{"fel": f, "eticheta": B.eticheta(f), "rand": B.randScurt(f),
@@ -114,6 +155,7 @@ def stare(B=None, b=None):
 		rez.update({
 			# identificatorul salvat nu pleaca spre browser, nici cu stelute; numai ca e pus
 			"id_pus": bool(b.id.value),
+			"id": b.id.value,
 			"acord": B.oraLocala(b.acord.value),
 			"nota": int(b.nota.value),
 			"trimise": [list(r) for r in B.randuriTrimise()],
@@ -306,29 +348,12 @@ BANDA_NOTA = """<section id="hdsNotaNoua" role="alert" style="margin:0 0 16px;pa
 
 
 def textIdentificator(B, b):
-	"""Textul de jos din meniul testerului. Valoarea identificatorului nu se arata (nici cu
-	stelute); randul spune numai ca e pus."""
-	return _t("Identificatorul tău e pus.\nAcordul din %s, nota de confidențialitate versiunea %d.\n"
-		"Pentru ștergerea datelor fără receptor, scrie la contact@hdsatelit.com cu identificatorul.") % (
-		B.oraLocala(b.acord.value), int(b.nota.value))
+	return _t("Identificatorul tău: %s.\nAcordul din %s, nota de confidențialitate versiunea %d.") % (
+		b.id.value, B.oraLocala(b.acord.value), int(b.nota.value))
 
 
 def _ultimulDeAfisat(B, b):
-	"""Copia pentru pagina a ultimului pachet, inclusiv un pachet al inscrierii vechi: in locul identificatorului
-	testerului scrie numai "(identificatorul tău)", care spune ca e acolo, fara valoarea lui."""
-	text = B.ultimulPachet()
-	if not text:
-		return text
-	in_loc = _t("(identificatorul tău)")
-	try:
-		pachet = json.loads(text)
-	except (TypeError, ValueError):
-		# Un mesaj vechi ramane proza; identificatorul cunoscut nu pleaca nici din el.
-		return text.replace(b.id.value, in_loc) if b.id.value else text
-	if isinstance(pachet, dict) and "id" in pachet:
-		pachet["id"] = in_loc
-		return json.dumps(pachet, ensure_ascii=False, indent=1, sort_keys=False)
-	return text
+	return B.ultimulPachet()
 
 
 def _bife(arg, B):
@@ -362,6 +387,15 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 	B = _b(B)
 	b = b if b is not None else B.initConfig()
 	ce = arg.get("fa", "")
+	if getattr(B, "imagineInTest", lambda: False)():
+		if ce == "accepta-test":
+			ok, mesaj = B.acceptaTest(b)
+			return {"result": ok, "message": mesaj}
+		if ce in ("refuza-test", "pauza", "iesire"):
+			ok, mesaj = B.refuzaTest(b)
+			return {"result": ok, "message": mesaj}
+		if B.acordTestNecesar(b):
+			return {"result": False, "message": _t(B.TEST_OBLIGATORIU)}
 	if ce == "acord":
 		if arg.get("nota") != "1":
 			return {"result": False, "message": _t("Bifează întâi „%s”") % _t(B.BIFA_NOTA)}
@@ -402,8 +436,12 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 			ok, mesaj = B.mesaj(fel, text, ecran, jurnal, None, b)
 			return {"result": ok, "message": mesaj}
 		lucrare_ = _MesajCuCaptura()
+		generatie = getattr(B, "_GENERATIE", 0)
 
 		def trimite(poza):
+			if generatie != getattr(B, "_GENERATIE", 0):
+				lucrare_.termina(False, _t("Cererea este de dinaintea ștergerii datelor și nu mai este valabilă."))
+				return
 			ok, mesaj = B.mesaj(fel, text, ecran, jurnal, poza, b)
 			if ok and poza is None:
 				mesaj += " " + _t("Captura nu s-a putut face; mesajul pleacă fără ea.")
@@ -450,8 +488,7 @@ def fa(arg, B=None, b=None, mc=None, captura=None):
 				_t(B.NU_E_ASISTENTA), _t("Da, ieși și șterge"))
 		if not mc.verifica("beta-iesire", "", arg.get("cod", "")):
 			return mc.codGresit()
-		ok, mesaj = B.iesire(b)
-		return {"result": ok, "message": mesaj}
+		return _lucrare(B.iesire(b), "stergere")
 	return {"result": False, "message": _t("Cerere necunoscută.")}
 
 
@@ -470,7 +507,7 @@ def lucrare(arg, B=None, b=None):
 	if not c.gata:
 		return {"result": True, "gata": False}
 	_LUCRARI.pop(n, None)
-	if ruta == "mesaj":
+	if ruta in ("mesaj", "stergere"):
 		return {"result": c.ok, "gata": True, "message": c.mesaj}
 	ok, mesaj = B.mesajRaspunsProfil(c)
 	rez = {"result": ok, "gata": True, "message": mesaj}
@@ -618,6 +655,14 @@ __STIL_PAGINI__
 <body>
 <main class="beta">
 <header class="cap"><h1>Beta tester</h1></header>
+<section class="card" id="conditiiTest">
+  <label id="testBifaRand"><input type="checkbox" id="testBifa" disabled> Beta tester</label>
+  <p class="banda" id="testObligatoriu"></p>
+  <p class="intrebare" id="testConditii"></p>
+  <p class="nota" id="testRefuz"></p>
+  <div class="butoane" id="testButoane"><button type="button" class="principal" id="testAccept"></button><button type="button" class="rosu" id="testNuAccept"></button></div>
+  <div class="butoane" id="testRecuperare"><a class="buton" href="/retea">Rețea</a><a class="buton" href="/imagine-online">Instalează o imagine de pe internet</a><a class="buton" href="/alimentare">Repornește în altă imagine</a></div>
+</section>
 <p class="mesaj" id="incarcare">Se citește starea...</p>
 <section class="card ascuns" id="faraNet">
   <h2 id="faraNetTitlu"></h2>
@@ -792,6 +837,16 @@ function avantaje(lista){
 }
 function arata(d){
   STARE = d;
+  $("testConditii").textContent = d.conditii;
+  $("testBifaRand").classList.toggle("ascuns", !d.imagine_in_test);
+  $("testBifa").checked = !!d.beta_tester;
+  $("testObligatoriu").textContent = d.imagine_in_test ? d.test_obligatoriu : "";
+  $("testRefuz").textContent = d.acord_test_necesar ? d.test_refuz : "";
+  $("testButoane").classList.toggle("ascuns", !d.imagine_in_test);
+  $("testAccept").textContent = d.accept; $("testNuAccept").textContent = d.nu_accept;
+  $("testRecuperare").classList.toggle("ascuns", !d.imagine_in_test);
+  $("testRecuperare").querySelectorAll("a").forEach(function(a){ a.href = adresa(a.getAttribute("href").split("?")[0]); });
+  ["r-pauza", "r-iesire", "iesireVeche", "iesirePauza"].forEach(function(id){ $(id).classList.toggle("ascuns", d.imagine_in_test); });
   $("incarcare").classList.add("ascuns");
   var fn = d.fara_net || {};
   $("faraNet").classList.toggle("ascuns", !(fn.rapoarte && fn.rapoarte.length));
@@ -804,6 +859,10 @@ function arata(d){
   $("meniu").classList.toggle("ascuns", !d.inscris);
   var nv = d.nota_noua;
   $("notaNoua").classList.toggle("ascuns", !nv);
+  if(d.acord_test_necesar){
+    ["acord", "meniu", "notaNoua"].forEach(function(id){ $(id).classList.add("ascuns"); });
+    return;
+  }
   if(nv){
     // nota acceptata e mai veche: nimic nu pleaca pana la Accept (acordul nou cu alegerile de dinainte)
     $("acord").classList.add("ascuns"); $("meniu").classList.add("ascuns");
@@ -907,6 +966,8 @@ $("deAcord").addEventListener("click", function(){
   q.set("automat", $("automat").checked ? "1" : "0");
   fa(q);
 });
+$("testAccept").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "accepta-test"); fa(q); });
+$("testNuAccept").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "refuza-test"); fa(q); });
 $("renunt").addEventListener("click", function(){ mesaj("Nu s-a trimis nimic."); });
 $("salveazaBife").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("fa", "bife"); bifeDin($("feluriMeniu"), q);
@@ -938,10 +999,11 @@ $("codLegare").addEventListener("click", function(){
     if(d.adresa){ var a = document.createElement("a"); a.href = d.adresa; a.target = "_blank"; a.rel = "noopener"; a.textContent = d.adresa; p.appendChild(a); }
   });
 });
-$("iesire").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, function(){ citeste(); }); });
+function dupaStergere(d){ if(d.lucrare){ asteapta(d.lucrare); }else{ citeste(); } }
+$("iesire").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, dupaStergere); });
 $("pauza").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "pauza"); fa(q); });
-$("iesirePauza").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, function(){ citeste(); }); });
-$("iesireVeche").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, function(){ citeste(); }); });
+$("iesirePauza").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, dupaStergere); });
+$("iesireVeche").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "iesire"); cuConfirmare("/api/beta-tester-fa", q, dupaStergere); });
 $("notaAccept").addEventListener("click", function(){ var q = new URLSearchParams(); q.set("fa", "accepta-nota"); fa(q); });
 citeste();
 setInterval(function(){ if(STARE && STARE.inscris){ citeste(); } }, 30000);
@@ -961,6 +1023,9 @@ def N_(text):
 
 TEXTE_PAGINA = {
 	"html": (
+		N_("Rețea"),
+		N_("Instalează o imagine de pe internet"),
+		N_("Repornește în altă imagine"),
 		N_("Beta tester"),
 		N_("Se citește starea..."),
 		N_("Devino beta tester"),

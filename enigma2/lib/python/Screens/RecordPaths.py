@@ -8,6 +8,7 @@ from Components.ConfigList import ConfigListScreen
 from Components.ActionMap import ActionMap
 from Components.UsageConfig import preferredPath
 from Components import HdsDosareInregistrari as HDI
+from enigma import eTimer
 
 # HDSatelit: alegerile randurilor, verificarea dosarului si salvarea sunt in Components/HdsDosareInregistrari.py,
 # folosit si de pagina web /locuri-inregistrari (HdsWebControl/disc_web.py).
@@ -88,6 +89,31 @@ class RecordPathsSettings(Screen,ConfigListScreen):
 			else:
 				self.timeshift_entry = intrare
 		self["config"].setList(self.list)
+		if not hasattr(self, "storageNamesTimer"):
+			self.storageNamesTimer = eTimer()
+			self.storageNamesTimer.callback.append(self.refreshStorageNames)
+			self.storageNamesTimer.start(500, False)
+			self.onClose.append(self.disableStorageNames)
+
+	def refreshStorageNames(self):
+		# Update display labels only; keep pending choices and save/cancel state.
+		for element, choices in ((self.default_dirname, HDI.alegeriImplicit(config, self.default_dirname.value)),
+			(self.timer_dirname, HDI.alegeriCuStiluri(self.timer_dirname.value, config)),
+			(self.instantrec_dirname, HDI.alegeriCuStiluri(self.instantrec_dirname.value, config)),
+			(self.timeshift_dirname, HDI.alegeriTimeshift(self.timeshift_dirname.value, config))):
+			old = [(v, element.description[v]) for v in element.choices]
+			new = [(v[0], v[1]) if isinstance(v, tuple) else (v, v) for v in choices]
+			if old != new:
+				value = element.value
+				element.setChoices(choices, default=element.default)
+				element.value = value
+				for entry in self.list:
+					if entry[1] is element:
+						self["config"].invalidate(entry)
+
+	def disableStorageNames(self):
+		self.storageNamesTimer.stop()
+		self.storageNamesTimer.callback.remove(self.refreshStorageNames)
 
 	def ok(self):
 		currentry = self["config"].getCurrent()

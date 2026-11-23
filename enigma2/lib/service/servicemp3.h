@@ -66,6 +66,8 @@ typedef enum { stUnknown, stPlainText, stSSA, stASS, stSRT, stVOB, stPGS,
 	stWebVTT, stMicroDVD, stSubViewer, stMPL2, stTMPlayer, stSAMI, stDVB, stTeletext } subtype_t;
 typedef enum { ctNone, ctMPEGTS, ctMPEGPS, ctMKV, ctAVI, ctMP4, ctVCD, ctCDA } containertype_t;
 
+struct HdsVorbireTap;
+
 class eServiceMP3: public iPlayableService, public iPauseableService,
 	public iServiceInformation, public iSeekableService, public iAudioTrackSelection, public iAudioChannelSelection, 
 	public iSubtitleOutput, public iStreamedService, public iAudioDelay, public iCueSheet, public sigc::trackable
@@ -273,6 +275,8 @@ private:
 	void startTimeout();
 	int m_n_video;			/* video streams at the last ASYNC_DONE, -1 unknown */
 	std::shared_ptr<Poarta> m_poarta;
+	std::unique_ptr<HdsVorbireTap> m_vorbire;
+	unsigned int m_hds_speech_epoch = 0;
 	std::shared_ptr<FirFilm> m_fir;
 	friend class eServiceFactoryMP3;
 	eServiceReference m_ref;
@@ -380,6 +384,7 @@ private:
 	gulong m_subs_to_pull_handler_id;
 
 	RESULT seekToImpl(pts_t to);
+	RESULT cerePistaSubtitrare(int pid, bool resincronizeaza);
 
 	/* Subtitle files next to the film, read in Python (Components/HdsSubtitrariFilm.py) and handed over as lines
 	   with their times. They are listed after the container streams with the numbers 100, 101, ... and shown by

@@ -15,6 +15,7 @@ from Tools.BoundFunction import boundFunction
 from Tools.Directories import *
 from Components.config import config
 import os
+from Components.Harddisk import storagePathName
 
 # Quickselect
 from Tools.NumericalTextInput import NumericalTextInput
@@ -99,7 +100,7 @@ class LocationBox(Screen, NumericalTextInput, HelpableScreen):
 		self.hdsPanou = HdsPanouFisiere(self, self["filelist"])
 
 		# Initialize BookList
-		self["booklist"] = MenuList(self.bookmarks)
+		self["booklist"] = MenuList(self.bookmarkRows())
 
 		# Buttons
 		self["key_green"] = Button(_("OK"))
@@ -198,6 +199,30 @@ class LocationBox(Screen, NumericalTextInput, HelpableScreen):
  
 		# Make sure we remove our callback
 		self.onClose.append(self.disableTimer)
+		self.storageNamesTimer = eTimer()
+		self.storageNamesTimer.callback.append(self.refreshStorageNames)
+		self.storageNamesTimer.start(500, False)
+		self.onClose.append(self.disableStorageNames)
+
+	def disableStorageNames(self):
+		self.storageNamesTimer.stop()
+		self.storageNamesTimer.callback.remove(self.refreshStorageNames)
+
+	def refreshStorageNames(self):
+		rows = self.bookmarkRows()
+		if rows != self["booklist"].list:
+			current = self.bookmarkPath()
+			self["booklist"].setList(rows)
+			if current in self.bookmarks:
+				self["booklist"].moveToIndex(self.bookmarks.index(current))
+		self.updateTarget()
+
+	def bookmarkRows(self):
+		return [(storagePathName(p), p) for p in self.bookmarks]
+
+	def bookmarkPath(self):
+		row = self["booklist"].getCurrent()
+		return row[1] if isinstance(row, tuple) else row
 
 	def switchToFileListOnStart(self):
 		if self.realBookmarks and self.realBookmarks.value:
@@ -239,11 +264,11 @@ class LocationBox(Screen, NumericalTextInput, HelpableScreen):
 			if folder is not None and not folder in self.bookmarks:
 				self.bookmarks.append(folder)
 				self.bookmarks.sort()
-				self["booklist"].setList(self.bookmarks)
+				self["booklist"].setList(self.bookmarkRows())
 		else:
 			# remove bookmark
 			if not self.userMode:
-				name = self["booklist"].getCurrent()
+				name = self.bookmarkPath()
 				self.session.openWithCallback(
 					boundFunction(self.removeBookmark, name),
 					MessageBox,
@@ -255,7 +280,7 @@ class LocationBox(Screen, NumericalTextInput, HelpableScreen):
 			return
 		if name in self.bookmarks:
 			self.bookmarks.remove(name)
-			self["booklist"].setList(self.bookmarks)
+			self["booklist"].setList(self.bookmarkRows())
 
 	def createDir(self):
 		if self["filelist"].current_directory != None:
@@ -362,7 +387,7 @@ class LocationBox(Screen, NumericalTextInput, HelpableScreen):
 			# XXX: We might want to change this for parent folder...
 			return (self["filelist"].getSelection() or (None,))[0]
 		else:
-			return self["booklist"].getCurrent()
+			return self.bookmarkPath()
 
 	def selectConfirmed(self, ret):
 		if ret:
@@ -433,7 +458,7 @@ class LocationBox(Screen, NumericalTextInput, HelpableScreen):
 		# Write Combination of Folder & Filename when Folder is valid
 		currFolder = self.getPreferredFolder()
 		if currFolder is not None:
-			self["target"].setText(''.join((currFolder, self.filename)))
+			self["target"].setText(storagePathName(''.join((currFolder, self.filename))))
 		# Display a Warning otherwise
 		else:
 			self["target"].setText(_("Invalid Location"))

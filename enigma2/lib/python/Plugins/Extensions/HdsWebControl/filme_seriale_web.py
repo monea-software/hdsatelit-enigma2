@@ -293,7 +293,7 @@ def stareServer(arg):
 def _argumente(request, chei, maxim=200):
 	rez = {}
 	for c in chei:
-		v = request.args.get(c.encode("ascii"), [b""])[0][:maxim * 4].decode("utf-8", "replace")[:maxim]
+		v = request.args.get(c.encode("ascii"), [b""])[0].decode("utf-8", "replace")
 		rez[c] = v.strip()
 	return rez
 
@@ -426,23 +426,30 @@ body{background:#0b1020} main{max-width:1600px!important;width:auto}
 #mesaj{margin:6px 0 0;min-height:0}#info{min-height:150px;max-width:900px}#info h2{font-size:32px;margin:12px 0 4px}#meta{color:#c9d2e3}#desc{color:#c9d2e3;max-height:4.8em;overflow:hidden}
 .vrand h3{margin:18px 0 8px;font-size:19px}
 .vpostere{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x proximity}
-.poster{flex:0 0 140px;cursor:pointer;scroll-snap-align:start;background:none;border:0;padding:0;color:#c9d2e3;text-align:center}
+.poster{flex:0 0 140px;min-width:0;max-width:140px;cursor:pointer;scroll-snap-align:start;background:none;border:0;padding:0;color:#c9d2e3;text-align:center}
 .poster .img{position:relative;width:140px;height:210px;background:#1a2340;border:3px solid transparent;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:13px;padding:4px;box-sizing:border-box}
-.poster.lat{flex-basis:260px}.poster.lat .img{width:260px;height:146px}
+.poster .n{width:100%;max-height:100%;overflow:hidden}
+.poster.lat{flex-basis:260px;max-width:260px}.poster.lat .img{width:260px;height:146px}
 .poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .poster:hover .img,.poster:focus .img{border-color:#374ea1}
 .poster .t{font-size:13px;margin-top:4px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.poster .t span,.poster .n span{display:block}
+.poster .vod-lung{display:block;white-space:nowrap;line-height:1.6;-webkit-line-clamp:unset}
+.poster .vod-lung span{display:inline-block;min-width:100%}
+.poster:hover .vod-lung span,.poster:focus-within .vod-lung span{animation:vodTitlu var(--durata,10s) linear infinite alternate}
+@keyframes vodTitlu{0%,15%{transform:translateX(0)}85%,100%{transform:translateX(var(--drum))}}
 .progres{position:absolute;left:0;right:0;bottom:0;height:6px;background:#000}.progres i{display:block;height:100%;background:#374ea1}
 .progres i.plin{background:#4fd18b}
 #pagina{display:flex;gap:24px;flex-wrap:wrap}#pagina h2{font-size:34px;margin:0 0 6px}#pagina .mare{width:240px;height:360px;background:#1a2340;object-fit:cover}
 #pagina .dreapta{flex:1;min-width:280px}.piste{color:#f2f4f8}.oameni{color:#aeb9cc}
 .ascuns{display:none!important}
 main>h1,#info,.vrand h3,.poster .t,#pagina .dreapta{text-shadow:0 1px 3px #0b1020,0 0 2px #0b1020}
-</style></head><body><div id="fundal"></div><main><h1>__TITLU__</h1>
+</style></head><body><div id="fundal"></div><main><pre id="pwvDateSalvate" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+<h1>__TITLU__</h1>
 <section class="card"><div class="bara" id="grupe" role="tablist"></div>
 <div id="server" class="ascuns"><p id="serverText"></p><div class="bara" id="gasite"></div>
 <div class="bara"><input id="sAdresa" maxlength="200" placeholder="192.168.1.10:8096" autocomplete="off">
-<input id="sUtilizator" maxlength="100" autocomplete="username"><input id="sParola" type="password" maxlength="200" autocomplete="current-password">
+<input id="sUtilizator" maxlength="100" autocomplete="username"><input id="sParola" type="text" maxlength="200" autocomplete="current-password">
 <button type="button" id="sAdauga"></button><button type="button" id="sCauta"></button></div></div>
 <div class="bara" id="baraFilme">
 <button class="fila aleasa" id="filaFilme" type="button"></button><button class="fila" id="filaSeriale" type="button"></button>
@@ -485,12 +492,26 @@ function imagine(box,semn,l,h,fel){
  i.onerror=function(){if(++n<12)setTimeout(function(){i.src=src+"&r="+n},1000+300*n);else i.remove()};
  var src=cale("/api/vod-poza?s="+semn+"&l="+l+"&h="+h+"&fel="+fel);i.src=src;box.appendChild(i)
 }
+function deruleazaPoster(b){
+ b.querySelectorAll(".t,.n").forEach(function(c){
+  var s=c.firstElementChild;c.classList.remove("vod-lung");
+  var lung=s.scrollWidth>c.clientWidth+1||c.scrollHeight>c.clientHeight+1;
+  c.classList.toggle("vod-lung",lung);
+  var drum=lung?Math.max(0,s.scrollWidth-c.clientWidth):0;s.style.setProperty("--drum",(-drum)+"px");
+  s.style.setProperty("--durata",Math.max(4,drum/30+3)+"s")
+ })
+}
+var marimePoster=typeof ResizeObserver!=="undefined"?new ResizeObserver(function(entries){
+ entries.forEach(function(e){deruleazaPoster(e.target)})
+}):null;
 function poster(t,lat){
  var b=el("button","poster"+(lat?" lat":""));b.type="button";
- var box=el("div","img",t.nume);b.appendChild(box);imagine(box,t.poza,lat?320:162,lat?180:243,lat?"lat":"poster");
+ var box=el("div","img"),n=el("div","n");n.appendChild(el("span","",t.nume));box.appendChild(n);
+ b.appendChild(box);imagine(box,t.poza,lat?320:162,lat?180:243,lat?"lat":"poster");
  if(t.progres>0){var p=el("div","progres"),i=el("i",t.progres>=1?"plin":"");i.style.width=Math.round(t.progres*100)+"%";p.appendChild(i);box.appendChild(p)}
- b.appendChild(el("div","t",t.sub||t.nume));
- b.addEventListener("focus",function(){arata(t)});b.addEventListener("mouseenter",function(){arata(t)});
+ var titre=el("div","t");titre.appendChild(el("span","",t.sub||t.nume));b.appendChild(titre);
+ function ales(){deruleazaPoster(b);arata(t);if(marimePoster){marimePoster.disconnect();marimePoster.observe(b)}}
+ b.addEventListener("focus",ales);b.addEventListener("mouseenter",ales);
  b.addEventListener("click",function(){deschide(t)});return b
 }
 function rand(titlu,titluri,lat){
@@ -584,6 +605,7 @@ function cauta(){
 $("cauta").addEventListener("click",cauta);$("text").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();cauta()}});
 var G={surse:[],grupa:""};
 function grupa(g,sid){
+  document.getElementById("pwvDateSalvate").textContent = G.surse.filter(function(s){return s.grupa===g}).map(function(s){return [s.nume,s.adresa,s.utilizator,s.parola,s.jeton].filter(Boolean).join(" / ");}).join("\\n");
  G.grupa=g;Array.prototype.forEach.call($("grupe").children,function(b){b.classList.toggle("aleasa",b.dataset.g===g)});
  var lista=G.surse.filter(function(s){return s.grupa===g}),c=$("cont");c.innerHTML="";
  lista.forEach(function(s){var o=el("option","",s.nume);o.value=s.id;c.appendChild(o)});

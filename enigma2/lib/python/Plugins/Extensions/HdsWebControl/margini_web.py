@@ -59,7 +59,7 @@ def seteaza(argumente, M=None, config=None, latime=None, inaltime=None, cale=Non
 
 def argumente(request):
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:8]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in ("sus", "dreapta", "jos", "stanga"):
@@ -67,7 +67,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:6].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 

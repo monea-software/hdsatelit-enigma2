@@ -15,11 +15,13 @@
 # 0.7.7 (VOL, forum 795 #2702/#2704): „Volum egal între canale” are doua randuri in RANDURI, unul pe driver (HiSilicon:
 # Oprit/Ușor/Puternic, HdsSunetAvc; Broadcom: Oprit si iesirile Auto Volume Level, HdsSunetAvl), cu aceeasi cheie „egal”;
 # se arata si se schimba numai cel al driverului de pe receptor.
+# VOL8 (ozgurc67, Vu+ Solo SE): „Locul barei de volum” (dreapta|mijloc) si „Arată numărul lângă bara de volum” (da|nu),
+# randuri in RANDURI ca celelalte; bara se muta pe televizor pe loc (Components/VolumeControl.py, notificatorii).
 #
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat; ce schimba
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/volum-intarziere                       setarile, placa, canalul si pista de acum
-#   POST /api/volum-intarziere-seteaza?pas=1..10&afisare=1..10&mut=0..10&canal=da|nu&egal=oprit|usor|puternic&hdmi=0..500&optic=0..500
+#   POST /api/volum-intarziere-seteaza?pas=1..10&afisare=1..10&mut=0..10&loc=dreapta|mijloc&numar=da|nu&canal=da|nu&egal=oprit|usor|puternic&hdmi=0..500&optic=0..500
 #                                 &pista=-250..250&uita=volume
 #                                 (egal pe Broadcom: oprit si iesirile driverului, hdmi|spdif|dac)
 #                                                oricare dintre ele; toate verificate inainte de orice schimbare
@@ -30,7 +32,7 @@
 # cateva comenzi in /proc/msp/sound0. Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul
 # lor (S = Components.HdsSetariSunet), config-ul, SystemInfo, sesiunea si fisierul de setari.
 
-ARGUMENTE = ("pas", "afisare", "mut", "canal", "egal", "hdmi", "optic", "pista", "uita")
+ARGUMENTE = ("pas", "afisare", "mut", "loc", "numar", "canal", "egal", "hdmi", "optic", "pista", "uita")
 MAX_VALOARE = 12
 ECRANE_OCUPATE = ("AudioSelection",)
 SETUP_OCUPAT = "hds_setari_sunet"
@@ -116,8 +118,13 @@ def _altRandVizibil(S, si, cheie):
 	return any(k == cheie and _vizibil(si, c) for k, a, e, d, c in S.RANDURI)
 
 
+def _daNu(element):
+	"""Randurile Da/Nu (ConfigYesNo: volumul tinut minte pe canal, numarul langa bara), trimise ca da|nu."""
+	return isinstance(getattr(element, "value", None), bool)
+
+
 def _rand(cheie, element, eticheta, descriere):
-	if cheie == "canal":
+	if _daNu(element):
 		valoare = "da" if element.value else "nu"
 		alegeri = [[v, _t(t)] for v, t in DA_NU]
 	else:
@@ -163,7 +170,7 @@ def _cuMesaj(rez, reusit, mesaj):
 
 def _valoareNoua(cheie, el, text, S):
 	"""Textul primit -> valoarea setarii, sau None cand nu e una din alegerile ei."""
-	if cheie == "canal":
+	if _daNu(el):
 		return {"da": True, "nu": False}.get(text)
 	return text if text in [str(v) for v in el.choices] else None
 
@@ -227,9 +234,9 @@ def seteaza(argumente, S=None, cfg=None, sesiune=None, configfile=None, si=None)
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, numai cheile stiute, fara token."""
+	"""Argumentele cererii ca text: {cheie: text}, numai cheile stiute, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:16]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in ARGUMENTE:
@@ -237,7 +244,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:MAX_VALOARE].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -457,7 +464,7 @@ function trimite(q){
 }
 $("salveaza").addEventListener("click", function(){
   var q = new URLSearchParams();
-  ["pas", "afisare", "mut", "canal", "egal", "hdmi", "optic"].forEach(function(n){ if(valoare(n) !== null){ q.set(n, valoare(n)); } });
+  ["pas", "afisare", "mut", "loc", "numar", "canal", "egal", "hdmi", "optic"].forEach(function(n){ if(valoare(n) !== null){ q.set(n, valoare(n)); } });
   trimite(q);
 });
 $("r_pista").addEventListener("change", function(){ var q = new URLSearchParams(); q.set("pista", $("r_pista").value); trimite(q); });

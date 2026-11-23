@@ -378,8 +378,9 @@ bool eHdsFluxHttp::ownedByCaller()
 	return owned;
 }
 
-void eHdsFluxHttp::disconnect(int retry_ms, const char *why)
+void eHdsFluxHttp::disconnect(int retry_ms, const char *why, int status)
 {
+	__atomic_store_n(&m_status, status, __ATOMIC_RELAXED);
 	if (m_fd >= 0)
 		::close(m_fd);
 	if (!m_failure_logged || m_header_done)
@@ -406,7 +407,7 @@ void eHdsFluxHttp::disconnect(int retry_ms, const char *why)
 void eHdsFluxHttp::endOfStream(int retry_ms, const char *why)
 {
 	size_t keep = wholePackets();
-	disconnect(retry_ms, why);
+	disconnect(retry_ms, why, -2);
 	m_have = keep;
 	m_draining = keep > 0;
 }
@@ -643,6 +644,7 @@ int eHdsFluxHttp::sendRequest()
 	m_draining = false;
 	m_header_done = false;
 	m_deadline = nowMs() + ANSWER_MS;
+	m_body_start = true;
 	m_last_data = nowMs();
 	return 0;
 }
@@ -673,6 +675,7 @@ int eHdsFluxHttp::parseHeader()
 	int code = 0;
 	if (status.compare(0, 7, "HTTP/1.") == 0 && status.size() >= 12 && status[8] == ' ')
 		code = atoi(status.substr(9, 3).c_str());
+	__atomic_store_n(&m_status, code >= 100 && code <= 599 ? code : -4, __ATOMIC_RELAXED);
 	/* the headers this source needs: Location and Transfer-Encoding */
 	std::string location;
 	bool chunked = false;
@@ -703,6 +706,7 @@ int eHdsFluxHttp::parseHeader()
 	{
 		if (chunked)
 		{
+			__atomic_store_n(&m_status, -4, __ATOMIC_RELAXED);
 			/* a server may not send chunks to an HTTP/1.0 request; the chunk sizes would break the packets */
 			eDebug("[eHdsFluxHttp] %s: the server answers in chunks, which an HTTP/1.0 request does not allow", m_label.c_str());
 			return -1;
@@ -773,6 +777,33 @@ int eHdsFluxHttp::parseHeader()
 		return 3;
 	}
 	eDebug("[eHdsFluxHttp] %s: answer \"%s\"", m_label.c_str(), status.c_str());
+	return -1;
+}
+
+/* Some stream servers send an error status line inside an already accepted 200 body.
+   Keep a split prefix until its status line arrives; never inspect bytes inside a TS. */
+int eHdsFluxHttp::inspectBodyStart()
+{
+	const char prefix[] = "HTTP/1.";
+	size_t n = m_have < sizeof(prefix) - 1 ? m_have : sizeof(prefix) - 1;
+	if (memcmp(m_buf, prefix, n) != 0)
+	{
+		m_body_start = false;
+		return 1;
+	}
+	size_t line = 0;
+	while (line < m_have && line < 80 && m_buf[line] != '\n')
+		++line;
+	if (line == m_have && line < 80)
+		return 0;
+	m_body_start = false;
+	if (line < 14 || line >= 80 || (m_buf[7] != '0' && m_buf[7] != '1') ||
+		m_buf[8] != ' ' || m_buf[9] < '4' || m_buf[9] > '5' ||
+		m_buf[10] < '0' || m_buf[10] > '9' || m_buf[11] < '0' || m_buf[11] > '9' || m_buf[12] != ' ')
+		return 1;
+	int code = (m_buf[9] - '0') * 100 + (m_buf[10] - '0') * 10 + m_buf[11] - '0';
+	/* This used to be a 200 followed by EOF: retain its recovery retries. */
+	disconnect(RETRY_MS, "error status inside the HTTP body", code);
 	return -1;
 }
 
@@ -850,7 +881,7 @@ int eHdsFluxHttp::receive(int timeout_ms)
 		}
 		if (h < 0)
 		{
-			disconnect(RETRY_MAX_MS / 2, "no usable answer");
+			disconnect(RETRY_MAX_MS / 2, "no usable answer", status());
 			errno = EAGAIN;
 			return -1;
 		}
@@ -859,6 +890,11 @@ int eHdsFluxHttp::receive(int timeout_ms)
 			errno = EAGAIN;
 			return -1;
 		}
+	}
+	if (m_body_start && inspectBodyStart() <= 0)
+	{
+		errno = EAGAIN;
+		return -1;
 	}
 	resync();
 	return 0;
@@ -1011,21 +1047,21 @@ ssize_t eHdsFluxHttp::read(off_t offset, void *buf, size_t count)
 	if (!m_target.local)
 	{
 		int64_t now = nowMs();
-		if (!m_header_done && now >= m_deadline)
+		if ((!m_header_done || (m_body_start && m_have)) && now >= m_deadline)
 		{
-			disconnect(m_retry_ms, "no answer from the server");
+			disconnect(m_retry_ms, "no answer from the server", m_header_done ? -4 : -1);
 			errno = EAGAIN;
 			return -1;
 		}
 		if (m_header_done && now - m_last_data >= SILENCE_MS)
 		{
-			disconnect(RETRY_MS, "the server sends nothing");
+			disconnect(RETRY_MS, "the server sends nothing", -2);
 			errno = EAGAIN;
 			return -1;
 		}
 	}
 	/* packets already in the buffer are served at once, with only a look (no wait) for more */
-	bool buffered = m_header_done && m_have >= (size_t)PACKET;
+	bool buffered = m_header_done && !m_body_start && m_have >= (size_t)PACKET;
 	if (receive(buffered ? 0 : (int)WAIT_MS) < 0 && (!buffered || errno == EINTR || m_fd < 0))
 	{
 		/* the time of a reserve also runs out while the relay sends nothing */

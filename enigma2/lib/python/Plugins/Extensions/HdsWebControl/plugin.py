@@ -27,6 +27,11 @@
 # retea putea injecta taste/schimba serviciul curent, exact tipul de risc cunoscut
 # (receptoare compromise prin imagini nesecurizate).
 #
+# REGULA 0, WEB8: interfata web raspunde oricui ajunge la ea, din casa sau din afara, cu
+# orice antet Host, fara asociere si fara jetonul CSRF; ?token= gresit nu mai opreste cererea (trece ca browser).
+# Ramane numai parola pusa de om, daca o pune el (Setari > Retea > Parola receptorului; din fabrica nu e pusa).
+# Notele de mai jos descriu poarta de dinainte.
+#
 # FARA COD SI FARA PAROLA IN CASA ("totul fara parole pe local"):
 # http://<receptor>/ (portul 80; 8080 trimite spre el) duce direct la panou, de pe orice adresa din reteaua de acasa
 # (Components/HdsParolaLocala.esteAdresaLocala: 10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, ::1, fe80::/10,
@@ -390,7 +395,8 @@ def corpMareMedia(are_cookie, adresa, aceeasi_origine):
 	limita, nu autentificare: toate corpurile au si plafonul comun MAX_RAM_CORPURI, iar accesul se verifica in ruta."""
 	if are_cookie:
 		return True
-	return bool(aceeasi_origine) and _esteAdresaLocala(adresa) and not parolaWebCeruta()
+	# REGULA 0, WEB8: fara conditia de origine si de adresa
+	return not parolaWebCeruta()
 
 
 def _esteAdresaLocala(gazda):
@@ -398,8 +404,9 @@ def _esteAdresaLocala(gazda):
 	legatura locala si bucla, IPv6 ::1, fe80::/10, fc00::/7 si IPv4 scrise ca IPv6). Inainte numai RFC1918 si 127/8:
 	un telefon pe IPv6 sau pe 169.254 primea 403 in casa (nimic nu opreste programele
 	din casa)."""
-	from Components.HdsParolaLocala import esteAdresaLocala
-	return esteAdresaLocala(gazda)
+	# REGULA 0, WEB8: poarta "numai din reteaua locala" s-a scos; numele ramane pentru
+	# modulele care il cheama. Daca o adresa e din casa spune Components/HdsParolaLocala.esteAdresaLocala.
+	return True
 
 
 def _adresaClient(request):
@@ -607,16 +614,8 @@ def _gazdaPermisaCerere(request):
 	jetonul, iar scripturile care folosesc un nume dat de router merg mai departe), sau, spre rutele aplicatiilor de
 	telefon, o aplicatie din casa (fara Origin, Referer si User-Agent de browser) ori o cerere cu antet Basic
 	(aplicatii_web.gazdaPermisa; parola o verifica bariera lor, cu numaratoarea greselilor). La orice eroare: respins."""
-	try:
-		if gazdaPermisa(_antet(request, b"host"), _numeProprii()):
-			return True
-		if PARAM_JETON in request.args and _jetonValid(request):
-			return True
-		from . import aplicatii_web
-		return aplicatii_web.gazdaPermisa(request)
-	except Exception as eroare:
-		_jurnal("verificarea antetului Host a esuat: %s" % eroare)
-		return False
+	# REGULA 0, WEB8: orice antet Host trece
+	return True
 
 
 def _mesajGazdaStraina():
@@ -645,22 +644,13 @@ def _verificaAcces(request, schimba_ceva=False):
 	(None, (cod_http, mesaj)). Ordinea: reteaua locala (403), apoi ?token= daca e dat (scripturi, ca inainte),
 	altfel cookie-ul browserului asociat; cu cookie, o comanda care schimba ceva mai cere POST, Origin/Referer
 	egal cu Host si antetul CSRF al panoului."""
-	if not _esteAdresaLocala(_adresaClient(request)):
-		return None, (403, "acces permis doar din reteaua locala/loopback")
-	if PARAM_JETON in request.args:
-		if _jetonValid(request):
-			return "jeton", None
-		return None, (401, "parametrul token e gresit (vezi /programatori)")
+	# REGULA 0, WEB8: fara reteaua locala, fara POST/origine/antet CSRF; ?token= gresit
+	# trece ca browser. Ramane numai parola pusa de om (401 pana o scrie).
+	if PARAM_JETON in request.args and _jetonValid(request):
+		return "jeton", None
 	secret, browser = _sesiuneDinCerere(request)
 	if browser is None:
 		return None, (401, "browserul nu este conectat; deschide pagina principala a receptorului")
-	if schimba_ceva:
-		if request.method != b"POST":
-			return None, (405, "din browser, comenzile se trimit cu POST, din panou")
-		if not _acelasiOriginCerere(request):
-			return None, (403, "cerere respinsa: nu vine dintr-o pagina a receptorului")
-		if not obtineAsociere().csrfValid(secret, _antet(request, ANTET_CSRF.encode("ascii"))):
-			return None, (403, "cerere respinsa: lipseste antetul " + ANTET_CSRF + " al panoului")
 	return "browser", None
 
 
@@ -2102,7 +2092,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/subtitrari-aspect-implicite</code>: toate înapoi la valorile de la început</li>
   <li><code>GET /api/subtitrari-ocr</code>: contorul recunoașterii textului din subtitrările DVB (pagini citite ca text, rămase imagine și de ce, timpul mediu, ultimele pagini, viteza serviciului)</li>
   <li><code>POST /api/subtitrari-ocr-zero</code>: contorul recunoașterii textului pus la zero</li>
-  <li><code>GET /api/traducere-subtitrari</code>: traducerea automată a subtitrărilor text: valorile (<code>pornit</code>, <code>serviciu</code>, <code>limba</code>, <code>afisare</code>, <code>tarziu</code>, <code>citire</code>, <code>dvb</code>, <code>bara</code>, <code>epg</code>, <code>regiune</code>, <code>adresa_libre</code>, <code>adresa_openai</code>, <code>model_gemini</code>, <code>model_openai</code>, <code>model_groq</code>, <code>model_cloudflare</code>, <code>cont_cloudflare</code> și, pentru adresa proprie, <code>propriu_adresa</code>, <code>propriu_metoda</code>, <code>propriu_corp</code>, <code>propriu_tip_corp</code>, <code>propriu_antet</code>, <code>propriu_raspuns</code>, <code>propriu_cale</code>), alegerile posibile (<code>alegeri</code>), ce cere fiecare serviciu (<code>cere</code>), care serviciu are cheie (<code>chei</code>, niciodată cheia), dacă cheile trebuie puse din nou (<code>chei_din_nou</code>, textul notei, gol când nu e cazul), starea cheii serviciului ales, ca pe televizor (<code>cheie_fel</code> și <code>cheie_text</code>: pusă, pusă pentru alt server, lipsă), textele paginii în limba receptorului (<code>texte</code>), ce lipsește, confidențialitatea, instrucțiunile pas cu pas (cu <code>pagina_cheie</code>, adresa oficială pentru codul QR) și starea (contorul, proba, pauza după erori)</li>
+  <li><code>GET /api/traducere-subtitrari</code>: traducerea automată a subtitrărilor text: valorile (<code>pornit</code>, <code>serviciu</code>, <code>limba</code>, <code>afisare</code>, <code>tarziu</code>, <code>citire</code>, <code>dvb</code>, <code>bara</code>, <code>epg</code>, <code>regiune</code>, <code>adresa_libre</code>, <code>adresa_openai</code>, <code>model_gemini</code>, <code>model_openai</code>, <code>model_groq</code>, <code>model_cloudflare</code>, <code>cont_cloudflare</code> și, pentru adresa proprie, <code>propriu_adresa</code>, <code>propriu_metoda</code>, <code>propriu_corp</code>, <code>propriu_tip_corp</code>, <code>propriu_antet</code>, <code>propriu_raspuns</code>, <code>propriu_cale</code>), alegerile posibile (<code>alegeri</code>), ce cere fiecare serviciu (<code>cere</code>), care serviciu are cheie (<code>chei</code>) și valorile salvate (<code>chei_valori</code>), dacă cheile trebuie puse din nou (<code>chei_din_nou</code>, textul notei, gol când nu e cazul), starea cheii serviciului ales, ca pe televizor (<code>cheie_fel</code> și <code>cheie_text</code>, cu valoarea întreagă), textele paginii în limba receptorului (<code>texte</code>), ce lipsește, confidențialitatea, instrucțiunile pas cu pas (cu <code>pagina_cheie</code>, adresa oficială pentru codul QR) și starea (contorul, proba, pauza după erori)</li>
   <li><code>POST /api/traducere-subtitrari-seteaza?pornit=0|1&amp;serviciu=&lt;gemini|libre|openai|azure|deepl|groq|cloudflare|google|propriu&gt;&amp;limba=&lt;meniu|ro|en|de|...&gt;&amp;afisare=&lt;inlocuieste|sub&gt;&amp;tarziu=&lt;inlocuieste|sare&gt;&amp;citire=&lt;normal|lung|foarte_lung&gt;&amp;dvb=0|1&amp;bara=0|1&amp;epg=0|1&amp;regiune=..&amp;adresa_libre=..&amp;adresa_openai=..&amp;model_gemini=..&amp;model_openai=..&amp;model_groq=..&amp;model_cloudflare=..&amp;cont_cloudflare=..&amp;propriu_adresa=..&amp;propriu_metoda=GET|POST&amp;propriu_corp=..&amp;propriu_tip_corp=json|formular&amp;propriu_antet=..&amp;propriu_raspuns=json|text&amp;propriu_cale=..</code>: schimbă și salvează oricare dintre ele (valorile exacte sunt în <code>alegeri</code>); o valoare greșită refuză tot. Adresa proprie: adresa e un șablon cu <code>{text}</code>, <code>{sursa}</code>, <code>{tinta}</code> (http:// numai pentru un server din rețeaua de acasă); adresa receptorului însuși (127.0.0.1, localhost, IP-ul lui) e refuzată, și la <code>adresa_libre</code> și <code>adresa_openai</code>; calea în JSON are chei și numere despărțite prin punct, <code>*</code> = toate elementele</li>
   <li><code>POST /api/traducere-subtitrari-cheie</code>, corpul <code>serviciu=&lt;cod&gt;&amp;cheie=&lt;cheia&gt;</code>: pune cheia unui serviciu (goală = o șterge); la <code>serviciu=propriu</code> cheia este valoarea antetului adresei proprii (de exemplu <code>Bearer</code> și cheia); numai în corpul cererii, niciodată în adresă; răspunsul spune doar care serviciu are cheie</li>
   <li><code>POST /api/traducere-subtitrari-proba</code>: probează traducerea cu serviciul ales; rezultatul vine în <code>stare.proba</code> din <code>GET /api/traducere-subtitrari</code></li>
@@ -2140,7 +2130,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/calitate-imagine-seteaza?profil=hd_sdr&amp;claritate=0..100&amp;...&amp;pornit=0|1[&amp;incearca=1|&amp;renunta=1]</code>: salvează reglajele unui profil (multipli de 5); cu <code>incearca=1</code> se văd pe loc fără să se salveze, <code>renunta=1</code> pune înapoi ce e salvat; <code>POST /api/calitate-imagine-implicite?profil=&lt;profil&gt;|toate</code>; <code>POST /api/calitate-imagine-hdr?iesire=auto|hdr10|hlg|none</code> (canalul pornește din nou, întrebarea apare pe televizor); <code>POST /api/calitate-imagine-comparatie?reglaj=&lt;cheie&gt;&amp;pornit=0|1</code> (jumătate de ecran, 60 s)</li>
   <li><code>GET /api/afisaj[?grupa=ceas|receptor|...][&amp;catalog=1][&amp;orase=1]</code>: afișajul din față: ce arată acum (măștile celor 4 cifre și textul), lista de rotire, mesajele scurte, așteptarea, setările, minutarul și cronometrul; cu <code>grupa</code> alegerile grupei cu desenul valorii de acum, cu <code>catalog=1</code> toate alegerile (căutarea), cu <code>orase=1</code> fusurile pentru ora din alt oraș</li>
   <li><code>POST /api/afisaj-seteaza?lista=ceas.ora:24@5,canal.nume:derulat&amp;evenimente=evenimente.volum:n&amp;asteptare=ora|ora_data|rec|stins&amp;viteza=200|300|450|600&amp;luminozitate=neschimbat|1..7&amp;luminozitate_noapte=la_fel|1..7&amp;noapte_de_la=18..23|0&amp;noapte_pana_la=5..9&amp;text=...&amp;oras=Asia/Tokyo</code>: salvează și aplică pe loc (oricare dintre ele); <code>previzualizare=1&amp;lista=...</code> arată lista pe afișaj fără salvare (cel mult 2 minute fără o cerere nouă), <code>previzualizare=0</code> revine; <code>minutar=0|1..120</code> și <code>cronometru=porneste|opreste|zero</code> pornesc ceasurile afișajului pe loc; <code>functionare=ora|canal|stins</code> merge ca înainte</li>
-  <li><code>GET /api/acces-ssh</code>: parola din rețeaua de acasă: dacă e pusă (<code>parola_pusa</code>, fără parola însăși), unde se cere (<code>unde</code>), dacă merge FTP (<code>ftp</code>), cheile SSH (tipul, amprenta, comentariul), stările neobișnuite (<code>alarme</code>), lucrarea în curs și rezultatul ultimei comenzi</li>
+  <li><code>GET /api/acces-ssh</code>: parola din rețeaua de acasă: dacă e pusă (<code>parola_pusa</code> și <code>parola</code>), unde se cere (<code>unde</code>), dacă merge FTP (<code>ftp</code>), cheile SSH (tipul, amprenta, comentariul), stările neobișnuite (<code>alarme</code>), lucrarea în curs și rezultatul ultimei comenzi</li>
   <li><code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code>: fișierele serverelor SSH și FTP ca text (fără /etc/shadow și fără parolă)</li>
   <li><code>POST /api/acces-ssh-pune</code> (corp: <code>parola=</code>): parola ta, orice text (prima dată se cere peste tot); <code>POST /api/acces-ssh-sterge-parola</code>: parola ștearsă; <code>POST /api/acces-ssh-unde?unde=web,ftp,ssh,module,pluginuri</code>: unde se cere</li>
   <li><code>POST /api/acces-ssh-adauga</code> (corp: <code>cheie=</code>), <code>POST /api/acces-ssh-stick</code>, <code>POST /api/acces-ssh-sterge?amprenta=SHA256:..&amp;confirmat=1</code>: cheile publice lipite, cele din dosarul hdsatelit/ssh de pe stick, ștergerea unei chei</li>
@@ -2253,7 +2243,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>GET /api/actualizari</code>, <code>POST /api/actualizari-cauta</code>, <code>POST /api/actualizari-instaleaza?actualizare=&lt;n&gt;</code>, <code>POST /api/actualizari-zilnic?zilnic=0|1</code>, <code>POST /api/actualizari-reporneste</code>: actualizările prin pachete de pe stb.hdsatelit.com (starea, căutarea, instalarea, verificarea zilnică, repornirea interfeței după instalare)</li>
 </ul>
 <h2>Acces</h2>
-<p>Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus (GET sau POST). Cheia pentru scripturi e ascunsă și se vede numai la cerere: pe receptor, în ecranul interfeței web (Albastru, Alte opțiuni, Arată parola și cheia), sau în pagina Interfața web (butonul Arată). Tot acolo se poate face o cheie nouă.</p>
+<p>Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus (GET sau POST). Cheia pentru scripturi se vede întreagă pe receptor și în pagina Interfața web. Tot acolo se poate face o cheie nouă.</p>
 <p>Din browser: din rețeaua de acasă intri direct (cu parola ta numai dacă ai pus-o pentru interfața web). Comenzile care schimbă ceva (<code>remotecontrol</code>, <code>zap</code>) se trimit din browser cu POST, dintr-o pagină a receptorului, cu antetul <code>X-HDS-CSRF</code> primit în panou (așa nu le poate trimite o pagină de pe internet).</p>
 <p>Comenzile care mișcă motorul, pornesc măsurarea semnalului sau schimbă LNB-ul (<code>lnb-aplica</code>, <code>lnb-raspuns</code>, <code>gasire-semnal-porneste</code>, <code>-reacordeaza</code>, <code>-opreste</code>, <code>motor-comanda</code>) se dau numai din paginile receptorului, cu browserul conectat: cu POST, cu antetul <code>X-HDS-CSRF</code>, fără cheia pentru scripturi.</p>
 <p>Adresele de mai sus răspund numai din rețeaua locală.</p>
@@ -2296,6 +2286,8 @@ def stareInterfataWeb(browser=None):
 	# /api/interfata-web-secrete, la butonul "Arată")
 	from . import aplicatii_web
 	rez.update(aplicatii_web.stareSetari(aplicatiiPornite(), aplicatiiAfara()))
+	rez["parola_aplicatii"] = aplicatii_web.parola(creeaza=False)
+	rez["cheie"] = str(config.plugins.hdswebcontrol.token.value or "")
 	rez["captura_interval"] = intervalCaptura()
 	return rez
 
@@ -3038,10 +3030,10 @@ def zapReferinta(sref_text):
 		from Hds.DabT2.buchete import repara_cale_decodata
 		reparat = repara_cale_decodata(sref_text)
 		if reparat is not None:
-			_jurnal("zap: sRef cu adresa decodata, redat ca %s" % reparat[:120])
+			_jurnal("zap: sRef cu adresa decodata, redat in forma corecta")
 			sref_text = reparat
-	except Exception as eroare:
-		_jurnal("zap: verificarea adresei din sRef: %s" % eroare)
+	except Exception:
+		_jurnal("zap: verificarea adresei din sRef: eroare")
 	nav = NavigationInstance.instance
 	if nav is None:
 		return False, "navigatia nu e initializata inca", 503
@@ -3056,8 +3048,8 @@ def zapReferinta(sref_text):
 				nume = HdsIptvSurse.numeDinBuchete(ref.getPath())
 				if nume:
 					ref.setName(nume)
-			except Exception as eroare:
-				_jurnal("zap: numele canalului de internet: %s" % eroare)
+			except Exception:
+				_jurnal("zap: numele canalului de internet: eroare")
 		nav.playService(ref)
 	except Exception as eroare:
 		return False, "zap esuat: %s" % eroare, 500
@@ -3066,8 +3058,8 @@ def zapReferinta(sref_text):
 	try:
 		from Components.HdsCanalTinut import tine_minte
 		tine_minte(ref)
-	except Exception as eroare:
-		_jurnal("zap: canalul tinut minte: %s" % eroare)
+	except Exception:
+		_jurnal("zap: canalul tinut minte: eroare")
 	return True, sref_text, 200
 
 
@@ -3481,11 +3473,7 @@ def _construiesteResurse():
 		putea incerca parole prin browserul omului. De aceea: doar din reteaua locala si
 		doar dintr-o pagina servita chiar de receptor (Origin/Referer egal cu Host). Intoarce None sau
 		raspunsul de eroare gata facut."""
-		if not _esteAdresaLocala(_adresaClient(request)):
-			return _json(request, {"result": False, "mesaj": _t("Acces permis doar din rețeaua locală.")}, 403)
-		if not _acelasiOriginCerere(request):
-			return _json(request, {"result": False, "mesaj": _t("Cerere respinsă: nu vine din pagina receptorului.")},
-				403)
+		# REGULA 0, WEB8: fara reteaua locala si fara aceeasi origine
 		return None
 
 	class IntraResource(resource.Resource):
@@ -3575,9 +3563,7 @@ def _construiesteResurse():
 		schimbaCeva = True
 
 		def render_POST(self, request):
-			if PARAM_JETON in request.args:
-				return self._raspunde(request, {"result": False,
-					"message": _t("Parola și cheia se văd numai dintr-un browser.")}, 403)
+			# REGULA 0, WEB8: si cu ?token=
 			ce = request.args.get(b"ce", [b""])[0]
 			if isinstance(ce, bytes):
 				ce = ce.decode("ascii", "replace")
@@ -3909,6 +3895,8 @@ def _construiesteResurse():
 	# Pagina deschisa si de telefonul care scaneaza codul QR de pe televizor (adresa simpla a paginii): recunoasterea
 	# cheii, proba pe loc, cautarea serverului din casa (Components/HdsConfigurareTraducere.py); cheia numai din
 	# corpul POST.
+	from . import vorbire_web
+	_VORBIRE, _VORBIRE_PAGINA = vorbire_web.rute(HdsJsonResource, resource)
 	from . import traducere_configurare_web
 	_CONFIGURARE, _CONFIGURARE_PAGINA = traducere_configurare_web.rute(HdsJsonResource, resource)
 	# ---------------------------------------------------------------- Traducerea paginilor HbbTV (traducere_hbbtv_web.py)
@@ -4060,6 +4048,13 @@ def _construiesteResurse():
 	# ---------------------------------------------------------------- navigatorul web (navigator_web.py)
 	from . import navigator_web
 	_NAVIGATOR, _NAVIGATOR_PAGINA = navigator_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
+	_BROWSER_MARGINI, _BROWSER_MARGINI_PAGINA = {}, None
+	try:
+		from Plugins.Extensions.HdsatelitBrowser import margini_web
+	except ImportError:
+		pass
+	else:
+		_BROWSER_MARGINI, _BROWSER_MARGINI_PAGINA = margini_web.rute(HdsJsonResource, resource, sesiune=lambda: _sesiune)
 	# ---------------------------------------------------------------- meniul „Aplicații” (aplicatii_tv_web.py, 0.7.5)
 	# Perechea ecranului Screens/HdsAplicatii.py (cardurile, „Deschide pe televizor”, ordinea, ascunderea).
 	from . import aplicatii_tv_web
@@ -4273,6 +4268,9 @@ def _construiesteResurse():
 		jetonValid=_jetonValid, jeton=_jetonConfigurat, trimiteTasta=_trimiteTasta, zap=zapReferinta,
 		captura=ScreenshotResource))
 
+	from . import bluetooth_web
+	_BLUETOOTH, _BLUETOOTH_PAGINA = bluetooth_web.rute(HdsJsonResource, resource)
+
 	# ---------------------------------------------------------------- cadrul paginilor (cadru_web.py)
 	# Antetul, meniul pe grupe si temele se pun pe pagini in _CerereHds.render; aici numai /cadru, fonturile skinului.
 	from . import cadru_web
@@ -4283,6 +4281,8 @@ def _construiesteResurse():
 			resource.Resource.__init__(self)
 			# aceleasi trei rute si pentru aplicatiile de telefon (fara cheia, antetul si cookie-ul panoului: forma
 			# ceruta de aplicatii)
+			for nume, resursa in _BLUETOOTH.items():
+				self.putChild(nume, resursa)
 			self.putChild(b"statusinfo", _APLICATII["alege"](b"statusinfo", StatusInfoResource()))
 			self.putChild(b"remotecontrol", _APLICATII["alege"](b"remotecontrol", RemoteControlResource()))
 			self.putChild(b"taste-context", TasteContextResource())
@@ -4359,6 +4359,8 @@ def _construiesteResurse():
 			self.putChild(b"subtitrari-ocr", _SUBTITRARI[b"subtitrari-ocr"])
 			self.putChild(b"subtitrari-ocr-zero", _SUBTITRARI[b"subtitrari-ocr-zero"])
 			# traducerea subtitrarilor (traducere_subtitrari_web.py)
+			for nume, resursa in _VORBIRE.items():
+				self.putChild(nume, resursa)
 			self.putChild(b"traducere-subtitrari", _TRADUCERE[b"traducere-subtitrari"])
 			self.putChild(b"traducere-subtitrari-seteaza", _TRADUCERE[b"traducere-subtitrari-seteaza"])
 			self.putChild(b"traducere-subtitrari-cheie", _TRADUCERE[b"traducere-subtitrari-cheie"])
@@ -4482,6 +4484,8 @@ def _construiesteResurse():
 				self.putChild(nume_ruta, resursa)
 			for nume_ruta, resursa in _ASPECT_API.items():
 				self.putChild(nume_ruta, resursa)
+			for nume_ruta, resursa in _BROWSER_MARGINI.items():
+				self.putChild(nume_ruta, resursa)
 			for nume_ruta, resursa in _FISIERE_API.items():
 				self.putChild(nume_ruta, resursa)
 			# ajutorul (ajutor_web.py): /api/ajutor, /api/ajutor-pagina, /api/ajutor-cauta, /api/ajutor-ecran
@@ -4523,6 +4527,7 @@ def _construiesteResurse():
 			self.putChild(b"motor", MotorPaginaResource())
 			self.putChild(b"fonturi", FonturiPaginaResource())
 			self.putChild(b"ecrane", _ECRANE_PAGINA)
+			self.putChild(b"bluetooth", _BLUETOOTH_PAGINA)
 			self.putChild(b"sigle-pornire", _ECRANE_PAGINA)
 			self.putChild(b"piconuri", _PICONURI_PAGINA)
 			self.putChild(b"mozaic", _MOZAIC_PAGINA)
@@ -4538,6 +4543,7 @@ def _construiesteResurse():
 			self.putChild(b"antena", _ANTENA_PAGINA)
 			self.putChild(b"piste", _PISTE_PAGINA)
 			self.putChild(b"subtitrari", _SUBTITRARI_PAGINA)
+			self.putChild(b"vorbire", _VORBIRE_PAGINA)
 			self.putChild(b"traducere-subtitrari", _TRADUCERE_PAGINA)
 			self.putChild(b"traducere-configurare", _CONFIGURARE_PAGINA)
 			self.putChild(b"ocr-limbi", _OCR_LIMBI_PAGINA)
@@ -4568,6 +4574,8 @@ def _construiesteResurse():
 			self.putChild(b"liste-internet", _LISTE_INTERNET_PAGINA)
 			self.putChild(b"limbi", _LIMBI_PAGINA)
 			self.putChild(b"navigator", _NAVIGATOR_PAGINA)
+			if _BROWSER_MARGINI_PAGINA is not None:
+				self.putChild(b"browser-margini", _BROWSER_MARGINI_PAGINA)
 			self.putChild(b"aplicatii-tv", _APLICATII_TV_PAGINA)
 			self.putChild(b"acces-ssh", _ACCES_SSH_PAGINA)
 			self.putChild(b"egalizator", _EGALIZATOR_PAGINA)
@@ -4839,6 +4847,10 @@ def _construiesteServer(radacina):
 
 		def render(self, request):
 			from . import cadru_web
+			from . import betatester_web
+			acord = betatester_web.poartaTest(request)
+			if acord is not None:
+				return acord
 			corp = cadru_web.imbracaRaspuns(request, self.resursa.render(request))
 			if isinstance(corp, bytes) and corp.startswith(b"<!DOCTYPE html>"):
 				from .asistenta_web import protejeazaScrierea
@@ -5121,10 +5133,10 @@ TEXTE_PAGINA = {
 			"<code>propriu_adresa</code>, <code>propriu_metoda</code>, <code>propriu_corp</code>, "
 			"<code>propriu_tip_corp</code>, <code>propriu_antet</code>, <code>propriu_raspuns</code>, "
 			"<code>propriu_cale</code>), alegerile posibile (<code>alegeri</code>), ce cere fiecare serviciu "
-			"(<code>cere</code>), care serviciu are cheie (<code>chei</code>, niciodată cheia), dacă cheile "
+			"(<code>cere</code>), care serviciu are cheie (<code>chei</code>) și valorile salvate (<code>chei_valori</code>), dacă cheile "
 			"trebuie puse din nou (<code>chei_din_nou</code>, textul notei, gol când nu e cazul), starea "
-			"cheii serviciului ales, ca pe televizor (<code>cheie_fel</code> și <code>cheie_text</code>: "
-			"pusă, pusă pentru alt server, lipsă), textele paginii în limba receptorului "
+			"cheii serviciului ales, ca pe televizor (<code>cheie_fel</code> și <code>cheie_text</code>, "
+			"cu valoarea întreagă), textele paginii în limba receptorului "
 			"(<code>texte</code>), ce lipsește, confidențialitatea, instrucțiunile pas cu pas (cu "
 			"<code>pagina_cheie</code>, adresa oficială pentru codul QR) și starea (contorul, proba, pauza "
 			"după erori)"),
@@ -5224,8 +5236,7 @@ TEXTE_PAGINA = {
 			"<code>orase=1</code> fusurile pentru ora din alt oraș"),
 		N_("<code>POST "
 			"/api/afisaj-seteaza?lista=ceas.ora:24@5,canal.nume:derulat&amp;evenimente=evenimente.volum:n&amp;asteptare=ora|ora_data|rec|stins&amp;viteza=200|300|450|600&amp;luminozitate=neschimbat|1..7&amp;luminozitate_noapte=la_fel|1..7&amp;noapte_de_la=18..23|0&amp;noapte_pana_la=5..9&amp;text=...&amp;oras=Asia/Tokyo</code>: salvează și aplică pe loc (oricare dintre ele); <code>previzualizare=1&amp;lista=...</code> arată lista pe afișaj fără salvare (cel mult 2 minute fără o cerere nouă), <code>previzualizare=0</code> revine; <code>minutar=0|1..120</code> și <code>cronometru=porneste|opreste|zero</code> pornesc ceasurile afișajului pe loc; <code>functionare=ora|canal|stins</code> merge ca înainte"),
-		N_("<code>GET /api/acces-ssh</code>: parola din rețeaua de acasă: dacă e pusă (<code>parola_pusa</code>,"
-			" fără parola însăși), unde se cere (<code>unde</code>), dacă merge FTP (<code>ftp</code>), cheile SS"
+		N_("<code>GET /api/acces-ssh</code>: parola din rețeaua de acasă: dacă e pusă (<code>parola_pusa</code> și <code>parola</code>), unde se cere (<code>unde</code>), dacă merge FTP (<code>ftp</code>), cheile SS"
 			"H (tipul, amprenta, comentariul), stările neobișnuite (<code>alarme</code>), lucrarea în curs și rez"
 			"ultatul ultimei comenzi"),
 		N_("<code>GET /api/acces-ssh-brut?pagina=&lt;n&gt;</code>: fișierele serverelor SSH și FTP ca text (fără"
@@ -5518,9 +5529,7 @@ TEXTE_PAGINA = {
 			"zilnică, repornirea interfeței după instalare)"),
 		N_("Acces"),
 		N_("Din scripturi: adaugă parametrul <code>token=&lt;cheie&gt;</code> la oricare adresă de mai sus "
-			"(GET sau POST). Cheia pentru scripturi e ascunsă și se vede numai la cerere: pe receptor, în "
-			"ecranul interfeței web (Albastru, Alte opțiuni, Arată parola și cheia), sau în pagina Interfața "
-			"web (butonul Arată). Tot acolo se poate face o cheie nouă."),
+			"(GET sau POST). Cheia pentru scripturi se vede întreagă pe receptor și în pagina Interfața web. Tot acolo se poate face o cheie nouă."),
 		N_("Din browser: din rețeaua de acasă intri direct (cu parola ta numai dacă ai pus-o pentru interfața we"
 			"b). Comenzile care schimbă ceva (<code>remotecontrol</code>, <code>zap</code>) se trimit din browser"
 			" cu POST, dintr-o pagină a receptorului, cu antetul <code>X-HDS-CSRF</code> primit în panou (așa nu "

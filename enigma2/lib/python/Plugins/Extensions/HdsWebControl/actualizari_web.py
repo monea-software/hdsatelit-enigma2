@@ -12,12 +12,17 @@
 #   POST /api/actualizari-instaleaza      instaleaza planul; actualizare=<N> = numarul intern al publicarii aratate in
 #                                         pagina (cu versiunea ei), altfel nimic
 #   POST /api/actualizari-zilnic          zilnic=1|0: verificarea zilnica (numai anunta)
+#   POST /api/actualizari-repornire-singura  repornire_singura=1|0: dupa actualizare interfata se reporneste singura,
+#                                         cu numaratoarea pe televizor (1, din fabrica), sau se intreaba (0); 0.7.8 RIA
 #   POST /api/actualizari-reporneste      reporneste interfata pe calea sigura (TryQuitMainloop 3), numai dupa instalare;
 #                                         cu memoria decodorului farmitata si fara inregistrare tot receptorul
 #                                         (TryQuitMainloop 2, Components/HdsMemorieDriver.py; la fel actualizarea rapida)
 #   POST /api/actualizari-rapid           actualizarea rapida: cauta, instaleaza ce gaseste si reporneste interfata,
 #                                         totul pe receptor (Components/HdsActualizari.actualizeazaRapid); pagina numai
 #                                         urmareste pasii si asteapta sa revina interfata cu versiunea noua
+#   POST /api/actualizari-repara          "Repară imaginea" (0.7.8, RPR8): pune la loc din feedul semnat fisierele imaginii
+#                                         sterse si reporneste interfata (Components/HdsActualizari.reparaImaginea), ca
+#                                         randul cu acelasi nume de pe televizor; fara intrebari, pagina urmareste pasii
 #   GET  /actualizari                     pagina (aceeasi poarta ca /paznic)
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul lor (A) si sesiunea.
 
@@ -71,8 +76,27 @@ def stare(A=None):
 	# 0.7.4: o repornire (sau oprire) ceruta cat ruleaza opkg asteapta pe televizor sfarsitul instalarii
 	# (Screens/Standby.py TryQuitMainloop); pagina o spune pe un rand
 	rez["asteapta_instalarea"] = _asteapta_instalarea()
+	# 0.7.8 (RIA): setarea repornirii singure dupa actualizare (perechea randului de pe televizor); None cu un
+	# Components/HdsActualizari mai vechi in memorie (randul si butonul lipsesc atunci)
+	rez["repornire_singura"] = _repornire_singura(A)
+	# 0.7.8 (RPR8): rezultatul ultimei reparatii, tradus (pagina il arata dupa repornirea interfetei); fara butonul
+	# "Repară imaginea" cu un Components/HdsActualizari mai vechi in memorie
+	rez["poate_repara"] = hasattr(A.actualizari, "reparaImaginea")
+	ultima = rez.get("reparatie_ultima") or {}
+	rez["text_reparatie"] = (A.text_reparatie(ultima.get("puse") or [], ultima.get("nepuse") or []) or
+		_t(A.TEXT_REPARA_INTREAGA)) if ultima and hasattr(A, "text_reparatie") else ""
 	rez["result"] = True
 	return rez
+
+
+def _repornire_singura(A):
+	f = getattr(A, "repornire_singura", None)
+	if f is None:
+		return None
+	try:
+		return bool(f())
+	except Exception:
+		return None
 
 
 def _intrebare_pe_tv():
@@ -113,17 +137,17 @@ def _pachete(n, marime=None):
 
 
 def argumente(request):
-	"""Argumentele cererii ca text scurt: {cheie: text}, fara token."""
+	"""Argumentele cererii ca text: {cheie: text}, fara token."""
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:6]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
-		if cheie == "token" or not cheie or len(cheie) > 20:
+		if cheie == "token":
 			continue
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:8].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -159,6 +183,24 @@ def zilnic(arg, A=None):
 	A.seteaza_zilnic(v == "1")
 	rez = stare(A)
 	rez["message"] = _t("Verificarea zilnică este pornită.") if v == "1" else _t("Verificarea zilnică este oprită.")
+	return rez
+
+
+def repornire_singura(arg, A=None):
+	"""POST /api/actualizari-repornire-singura: repornire_singura=1 (din fabrica: dupa actualizare interfata se reporneste
+	singura, cu numaratoarea pe televizor) sau 0 (se intreaba pe televizor si ramane butonul din pagina)"""
+	A = _a(A)
+	v = arg.get("repornire_singura")
+	f = getattr(A, "seteaza_repornire_singura", None)
+	if v not in ("0", "1") or f is None:
+		rez = stare(A)
+		# fara text nou pentru o cerere gresita (numai scripturile o pot trimite); cu modulul vechi din memorie, ce lipseste
+		rez.update({"result": False, "message": "" if f is not None else
+			_t("Actualizarea s-a instalat. Repornește interfața înainte de altceva.")})
+		return rez
+	f(v == "1")
+	rez = stare(A)
+	rez["message"] = "%s: %s" % (_t("Repornire singură"), _t("Da") if v == "1" else _t("Nu"))
 	return rez
 
 
@@ -201,6 +243,23 @@ def rapid(sesiune, A=None):
 	in lucru (sau o actualizare instalata asteapta repornirea), raspunsul spune asta si nu porneste nimic."""
 	A = _a(A)
 	pornit = A.actualizari.actualizeazaRapid(reporneste_rapid(sesiune))
+	rez = stare(A)
+	rez["result"] = bool(pornit) or rez["rezultat"].get("stare") in (A.FARA_SURSA, A.FARA_CHEIE)
+	rez["message"] = A.actualizari.mesaj if not pornit else ""
+	return rez
+
+
+def repara(sesiune, A=None):
+	"""POST /api/actualizari-repara (0.7.8, RPR8): "Repară imaginea", pe receptor (Components/HdsActualizari.reparaImaginea):
+	cauta, pune la loc din feedul semnat fisierele imaginii sterse, spune ce a pus si reporneste interfata; pagina numai
+	urmareste pasii. Cand alta operatie e in lucru, raspunsul spune asta si nu porneste nimic."""
+	A = _a(A)
+	f = getattr(A.actualizari, "reparaImaginea", None)
+	if f is None:
+		rez = stare(A)
+		rez.update({"result": False, "message": _t("Actualizarea s-a instalat. Repornește interfața înainte de altceva.")})
+		return rez
+	pornit = f(reporneste_rapid(sesiune))
 	rez = stare(A)
 	rez["result"] = bool(pornit) or rez["rezultat"].get("stare") in (A.FARA_SURSA, A.FARA_CHEIE)
 	rez["message"] = A.actualizari.mesaj if not pornit else ""
@@ -276,8 +335,10 @@ def rute(baza, resource, sesiune=None, A=None):
 		b"actualizari-cauta": actiune(lambda arg: cauta(A)),
 		b"actualizari-instaleaza": actiune(lambda arg: instaleaza(arg, A)),
 		b"actualizari-zilnic": actiune(lambda arg: zilnic(arg, A)),
+		b"actualizari-repornire-singura": actiune(lambda arg: repornire_singura(arg, A)),
 		b"actualizari-reporneste": actiune(lambda arg: reporneste(sesiune, A)),
 		b"actualizari-rapid": actiune(lambda arg: rapid(sesiune, A)),
+		b"actualizari-repara": actiune(lambda arg: repara(sesiune, A)),
 	}
 	return api, PaginaResource()
 
@@ -354,6 +415,10 @@ def texte():
 		# actualizarea rapida: intrebarea, pasii si ce se vede dupa repornire
 		"rapidIntrebare": _t("Pornești actualizarea rapidă? Dacă există o actualizare, se instalează, apoi interfața se "
 			"repornește singură."),
+		# 0.7.8 (RIA): pe Repornire singura = Nu intrebarea nu promite repornirea singura (treaz se intreaba pe televizor),
+		# iar nota de sub buton se ascunde
+		"rapidIntrebareNu": _t("Pornești actualizarea rapidă? Dacă există o actualizare, se instalează, apoi pe televizor "
+			"apare întrebarea de repornire (în standby interfața se repornește singură)."),
 		"pasCaut": _t("Caut actualizarea"),
 		"pasInstalez": _t("Instalez versiunea %s"),
 		"pasInstalezFara": _t("Instalez actualizarea"),
@@ -366,6 +431,13 @@ def texte():
 		"nerepornita": _t("Interfața nu s-a repornit. Apasă Repornește interfața."),
 		"asteaptaInstalarea": _t("Se instalează pachete software. Repornirea cerută așteaptă pe televizor sfârșitul "
 			"instalării."),
+		# 0.7.8 (RIA): randul si butonul setarii repornirii singure, ca pe televizor
+		"repornireSingura": _t("Repornire singură"),
+		"da": _t("Da"),
+		"nu": _t("Nu"),
+		# 0.7.8 (RPR8): pasii lui "Repară imaginea"
+		"pasVerific": _t("Verific fișierele imaginii"),
+		"pasPun": _t("Pun la loc fișierele lipsă"),
 	}
 
 
@@ -382,6 +454,8 @@ def pagina_text(stil, config_pagina, limba="ro"):
 		"__T_RAPID__": _e(_t("Actualizează rapid")),
 		"__T_RAPID_NOTA__": _e(_t("Un singur clic caută actualizarea, o instalează dacă există și repornește interfața.")),
 		"__T_INSTALEAZA__": _e(_t("Instalează")),
+		"__T_REPARA__": _e(_t("Repară imaginea")),
+		"__T_REPARA_NOTA__": _e(_t("Pune la loc fișierele imaginii care au fost șterse. Setările tale rămân cum sunt.")),
 		"__T_REPORNESTE__": _e(_t("Repornește interfața")),
 		"__T_ZILNIC_PORNESTE__": _e(_t("Pornește verificarea zilnică")),
 		"__T_ZILNIC_OPRESTE__": _e(_t("Oprește verificarea zilnică")),
@@ -450,12 +524,15 @@ PAGINA = u"""<!DOCTYPE html>
 <div class="bara">
   <button id="rapid" type="button" class="principal ascuns">__T_RAPID__</button>
   <button id="cauta" type="button">__T_CAUTA__</button>
+  <button id="repara" type="button" class="ascuns">__T_REPARA__</button>
 </div>
 <p class="nota ascuns" id="rapidNota">__T_RAPID_NOTA__</p>
+<p class="nota ascuns" id="reparaNota">__T_REPARA_NOTA__</p>
 <div class="bara">
   <button id="instaleaza" type="button" class="principal ascuns">__T_INSTALEAZA__</button>
   <button id="reporneste" type="button" class="principal ascuns">__T_REPORNESTE__</button>
   <button id="zilnic" type="button"></button>
+  <button id="repornireSingura" type="button" class="ascuns"></button>
 </div>
 <p class="nota">__T_ZILNIC_NOTA__</p>
 <section class="card"><p class="nota">__T_JURNAL__</p><pre id="jurnal"></pre></section>
@@ -518,6 +595,8 @@ function pasRapid(R, d, acum){
   // interfata pornita din nou: alt proces, fara modul rapid si fara repornirea ceruta
   if(R.pas >= 2 && !d.rapid && !d.repornire && (R.cazut || d.imagine_text !== R.inainte || x.stare === "necautat")){
     var v = d.imagine_text || "";
+    // 0.7.8 (RPR8): dupa "Repară imaginea" ce a pus la loc (rezultatul scris pe receptor inainte de repornire)
+    if(R.repara && d.reparatie_ultima && d.reparatie_ultima.cand !== R.ultimaVeche){ return {pas: 4, bun: true, text: d.text_reparatie || "", peste: 0}; }
     if(R.tinta && v !== R.tinta){ return {pas: 3, rau: true, text: T.altaVersiune.replace("%s", v || "?").replace("%s", R.tinta), peste: 0}; }
     return {pas: 4, bun: true, text: T.actualizat.replace("%s", v), peste: 0};
   }
@@ -540,7 +619,8 @@ function pasRapid(R, d, acum){
     R.repornire = 0;
     return {pas: 3, text: d.mesaj || "", peste: 5000};
   }
-  // modul rapid s-a oprit pe receptor
+  // modul rapid s-a oprit pe receptor; "Repară imaginea" fara nimic de pus la loc: textul receptorului
+  if(R.repara && R.pas <= 1 && (d.rapid_pas === "intreaga" || d.rapid_pas === "nepusa")){ return {pas: 0, bun: d.rapid_pas === "intreaga", rau: d.rapid_pas !== "intreaga", text: d.mesaj || "", peste: 0}; }
   if(R.pas <= 1 && x.stare === "la-zi"){ return {pas: 0, bun: true, text: d.text_stare || "", peste: 0}; }
   if(R.pas === 3 || x.stare === "instalata"){
     return {pas: 3, rau: true, text: d.rapid_pas === "refuzata" ? (d.mesaj || "") : T.nerepornita, peste: 0};
@@ -551,7 +631,9 @@ function pasRapid(R, d, acum){
 function arataRapid(r){
   var l = $("pasi"); l.textContent = "";
   if(r.pas){
-    [T.pasCaut, RAPID.tinta ? T.pasInstalez.replace("%s", RAPID.tinta) : T.pasInstalezFara, T.pasRepornesc].forEach(function(t, i){
+    var pasi = RAPID.repara ? [T.pasVerific, T.pasPun, T.pasRepornesc] :
+      [T.pasCaut, RAPID.tinta ? T.pasInstalez.replace("%s", RAPID.tinta) : T.pasInstalezFara, T.pasRepornesc];
+    pasi.forEach(function(t, i){
       var n = i + 1;
       var li = element("li", n < r.pas ? "facut" : (n === r.pas ? (r.rau ? "rau" : "acum") : ""));
       var e = element("div", "", t);
@@ -564,7 +646,7 @@ function arataRapid(r){
 }
 function arata(d){
   ULTIMA = d;
-  if(d.rapid && !RAPID){ RAPID = {inainte: d.imagine_text || "", pas: 1}; }
+  if(d.rapid && !RAPID){ RAPID = {inainte: d.imagine_text || "", pas: 1, repara: !!d.repara, ultimaVeche: -1}; }
   var rr = RAPID ? pasRapid(RAPID, d, Date.now()) : null;
   var r = $("randuri"); r.textContent = "";
   var i = d.imagine || {}, x = d.rezultat || {}, s = x.server || {};
@@ -582,6 +664,7 @@ function arata(d){
     p.forEach(function(q){ rand(r, q.titlu, T.deLaLa.replace("%s", q.de_la_scurt).replace("%s", q.la_scurt), "pachet"); });
   }
   rand(r, T.zilnic, d.zilnic ? T.pornita : T.oprita);
+  if(d.repornire_singura === true || d.repornire_singura === false){ rand(r, T.repornireSingura, d.repornire_singura ? T.da : T.nu); }
   var jos = [];
   if(d.mesaj){ jos.push(d.mesaj); }
   if(d.asteapta_instalarea){ jos.push(T.asteaptaInstalarea); }
@@ -617,6 +700,11 @@ function arata(d){
   var rapid = !lucreaza && !d.repornire && !d.rapid;
   $("rapid").className = "principal" + (rapid ? "" : " ascuns");
   $("rapidNota").className = "nota" + (rapid ? "" : " ascuns");
+  // 0.7.8 (RPR8): "Repară imaginea", cand se poate porni (si numai cu modulul nou in memorie)
+  $("repara").className = rapid && d.poate_repara ? "" : "ascuns";
+  $("reparaNota").className = "nota" + (rapid && d.poate_repara ? "" : " ascuns");
+  // 0.7.8 (RIA): pe Repornire singura = Nu nota, care promite repornirea singura, se ascunde (treaz se intreaba pe televizor)
+  if(d.repornire_singura === false){ $("rapidNota").className = "nota ascuns"; }
   $("instaleaza").className = "principal" + (!lucreaza && !d.repornire && x.poate_instala ? "" : " ascuns");
   // cat interfata se reporneste singura, nu; cat asteapta o inregistrare, da (repornirea de acum, cu intrebarea de pe
   // televizor)
@@ -624,6 +712,9 @@ function arata(d){
   $("reporneste").className = "principal" + (d.repornire && !lucreaza && !(d.rapid && d.rapid_pas === "repornesc" && !(rr && rr.reporneste)) ? "" : " ascuns");
   $("cauta").disabled = lucreaza || d.repornire;
   $("zilnic").textContent = d.zilnic ? "__T_ZILNIC_OPRESTE__" : "__T_ZILNIC_PORNESTE__";
+  var singura = d.repornire_singura === true || d.repornire_singura === false;
+  $("repornireSingura").textContent = singura ? T.repornireSingura + ": " + (d.repornire_singura ? T.da : T.nu) : "";
+  $("repornireSingura").className = singura ? "" : "ascuns";
   $("jurnal").textContent = (d.jurnal || []).join("\\n");
   if(CEAS){ clearTimeout(CEAS); CEAS = null; }
   var peste = rr && rr.peste ? rr.peste : (lucreaza ? 1500 : 0);
@@ -649,7 +740,9 @@ function trimite(cale, date){
   }).catch(function(){ $("mesaj").textContent = T.nuRaspunde; });
 }
 $("rapid").addEventListener("click", function(){
-  if(!confirm(T.rapidIntrebare)){ return; }
+  // 0.7.8 (RIA): pe Repornire singura = Nu intrebarea spune ca repornirea se intreaba pe televizor
+  var nu = !!(ULTIMA && ULTIMA.repornire_singura === false);
+  if(nu ? !confirm(T.rapidIntrebareNu) : !confirm(T.rapidIntrebare)){ return; }
   var inainte = (ULTIMA && ULTIMA.imagine_text) || "";
   cerere("/api/actualizari-rapid", "POST", new URLSearchParams()).then(function(d){
     RAPID = d.result ? {inainte: d.imagine_text || inainte, pas: 1} : null;
@@ -658,6 +751,16 @@ $("rapid").addEventListener("click", function(){
   }).catch(function(){ $("mesaj").textContent = T.nuRaspunde; });
 });
 $("cauta").addEventListener("click", function(){ RAPID = null; trimite("/api/actualizari-cauta", new URLSearchParams()); });
+// 0.7.8 (RPR8): "Repară imaginea", un singur pas, fara intrebare
+$("repara").addEventListener("click", function(){
+  var inainte = (ULTIMA && ULTIMA.imagine_text) || "";
+  var veche = (ULTIMA && ULTIMA.reparatie_ultima && ULTIMA.reparatie_ultima.cand) || 0;
+  cerere("/api/actualizari-repara", "POST", new URLSearchParams()).then(function(d){
+    RAPID = d.result ? {inainte: d.imagine_text || inainte, pas: 1, repara: true, ultimaVeche: veche} : null;
+    if(d.rezultat){ arata(d); }
+    if(d.message){ $("mesaj").textContent = d.message; }
+  }).catch(function(){ $("mesaj").textContent = T.nuRaspunde; });
+});
 $("instaleaza").addEventListener("click", function(){
   var s = (ULTIMA && ULTIMA.rezultat && ULTIMA.rezultat.server) || {};
   var cuReceptor = !!(ULTIMA && ULTIMA.rezultat && ULTIMA.rezultat.repornire_receptor);
@@ -667,6 +770,10 @@ $("instaleaza").addEventListener("click", function(){
   trimite("/api/actualizari-instaleaza", q);
 });
 $("reporneste").addEventListener("click", function(){ trimite("/api/actualizari-reporneste", new URLSearchParams()); });
+$("repornireSingura").addEventListener("click", function(){
+  var q = new URLSearchParams(); q.set("repornire_singura", ULTIMA && ULTIMA.repornire_singura ? "0" : "1");
+  trimite("/api/actualizari-repornire-singura", q);
+});
 $("zilnic").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("zilnic", ULTIMA && ULTIMA.zilnic ? "0" : "1");
   trimite("/api/actualizari-zilnic", q);

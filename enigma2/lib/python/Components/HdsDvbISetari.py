@@ -24,6 +24,7 @@
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau pluginul lor.
 
 import os
+import sys
 import time
 
 CALE_CONFIG = "/etc/enigma2/hdsdvbi.conf"
@@ -104,6 +105,8 @@ def citeste(cale=None, tara_receptorului=None):
 	config = implicit()
 	cale = cale or CALE_CONFIG
 	if not os.path.exists(cale):
+		if cale == CALE_CONFIG:
+			_memoreaza(config)
 		return _cuTaraReceptorului(config, tara_receptorului)
 	scrisa = False
 	try:
@@ -140,10 +143,30 @@ def citeste(cale=None, tara_receptorului=None):
 		print("[HdsDvbISetari] citirea %s: %s" % (cale, eroare))
 	if not scrisa:
 		_cuTaraReceptorului(config, tara_receptorului)
+	if cale == CALE_CONFIG:
+		_memoreaza(config)
 	return config
 
 
+def _memoreaza(config):
+	from Components import HdsSalvareLista
+	HdsSalvareLista.memoreaza(config)
+
+
 def scrie(config, cale=None, plugin=None):
+	"""Nu suprapune salvarea paginii existente peste salvarea listei."""
+	from Components import HdsSalvareLista as L
+	if (cale is None or cale == CALE_CONFIG) and L._OCUPAT[0]:
+		return False
+	if not L._ZAVOR.acquire(False):
+		return False
+	try:
+		return _scrie(config, cale, plugin)
+	finally:
+		L._ZAVOR.release()
+
+
+def _scrie(config, cale=None, plugin=None):
 	"""Scrie setarile in formatul pluginului. -> True daca s-au scris."""
 	cale = cale or CALE_CONFIG
 	chei = ", ".join(c for c, _d, _a, _t in listePredefinite(plugin))
@@ -180,6 +203,18 @@ def scrie(config, cale=None, plugin=None):
 		with open(nou, "w", encoding="utf-8") as f:
 			f.write("\n".join(linii) + "\n")
 		os.replace(nou, cale)
+		if cale == CALE_CONFIG:
+			def notifica():
+				_memoreaza(config)
+				m = sys.modules.get("Components.HdsDvbIRezerva")
+				if m is not None:
+					m.rezervaSchimbata(rezervaPornita(config))
+			import threading
+			if threading.current_thread() is threading.main_thread():
+				notifica()
+			else:
+				from twisted.internet import reactor
+				reactor.callFromThread(notifica)
 		return True
 	except (IOError, OSError) as eroare:
 		print("[HdsDvbISetari] scrierea %s: %s" % (cale, eroare))
@@ -843,7 +878,8 @@ def randuriSetari(config, registru=None, stare=None, rez=None, incercare=None, s
 		"dacă furnizorul le lasă și din țara ta."), None))
 	r.append(("%s %s" % (_("Trecere singură pe internet când satelitul nu se recepționează:"),
 		_("da") if rezervaPornita(config) else _("nu")), R_REZERVA, None,
-		_("Când satelitul unui canal nu se recepționează, imaginea vine singură de pe internet, dacă lista are canalul; se întoarce pe satelit când semnalul revine."), None))
+		_("Când satelitul unui canal nu se recepționează, imaginea vine singură de pe internet, dacă lista are canalul; se întoarce pe satelit când semnalul revine.") + " " +
+		_("Aceeași alegere se găsește în Meniu > Setări > Setări listă de canale: „Când canalul nu pornește, treci singur pe sursa DVB-I a postului”. Este pornită din fabrică și independentă de trecerea pe alt canal cu același nume."), None))
 	r.append((textIncercari(rez or {}, incercare), R_INCERCARI, None,
 		_("OK încearcă din nou toate canalele, din casa ta. Cele oprite pentru țara ta se pot vedea cu VPN-ul receptorului pornit.")
 		+ " " + textAscunse(stare), None))

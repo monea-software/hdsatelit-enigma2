@@ -13,6 +13,7 @@
 #   GET  /api/tema-tv                        temele, tema aleasa, tema de pe ecran acum, daca trebuie repornit
 #   POST /api/tema-tv-seteaza?tema=clasic|pro   alege tema (se vede pe televizor dupa repornirea interfetei)
 #   POST /api/tema-tv-reporneste             reporneste interfata (TryQuitMainloop 3)
+#   POST /api/tema-tv-reincarca              RLS6: tema citita din nou (si skin_user*.xml), fara repornire (skin.reincarcaTema)
 #   GET  /api/tema-tv-poza?id=clasic|pro     previzualizarea temei (JPEG din pachetul skinului)
 #   POST /api/tema-tv-rezolutie?rezolutie=auto|1080|1440&aplicare=acum|pornire   0.7.5: rezolutia interfetei temei HD
 #                                            Satelit, 1080p sau 2K (Components/HdsRezolutieTv.py; perechea ecranului
@@ -157,6 +158,15 @@ def reporneste(sesiune, dupa_ms=1500):
 	return {"result": True, "message": _t("Interfața se repornește. Pagina se reîncarcă singură în câteva secunde.")}
 
 
+def reincarca(functie=None):
+	"""POST /api/tema-tv-reincarca: aceeasi actiune ca tasta "Reincarca tema" (skin.reincarcaTema), pe firul interfetei
+	(cererile web ruleaza in bucla enigma2)."""
+	if functie is None:
+		from skin import reincarcaTema as functie
+	bun, mesaj = functie()
+	return {"result": bool(bun), "message": mesaj}
+
+
 def poza(argumente, T=None, dosar=None):
 	"""(octetii JPEG, None) sau (None, motivul). Numai cele doua previzualizari din pachetul skinului."""
 	T = _tema(T)
@@ -175,7 +185,7 @@ def poza(argumente, T=None, dosar=None):
 
 def argumente(request):
 	rez = {}
-	for cheie, valori in list((getattr(request, "args", None) or {}).items())[:6]:
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
 			cheie = cheie.decode("utf-8", "replace")
 		if cheie not in ("tema", "id", "aplicare", "rezolutie", "fundal"):
@@ -183,7 +193,7 @@ def argumente(request):
 		v = (valori or [b""])[0]
 		if isinstance(v, bytes):
 			v = v.decode("utf-8", "replace")
-		rez[cheie] = str(v)[:48 if cheie == "fundal" else 12].strip()
+		rez[cheie] = str(v).strip()
 	return rez
 
 
@@ -313,6 +323,7 @@ def rute(baza, resource, T=None):
 
 	return ({b"tema-tv": StareResource(), b"tema-tv-seteaza": _scrie(lambda a: seteaza(a, T, sesiune=_sesiune())),
 		b"tema-tv-reporneste": _scrie(lambda a: reporneste(_sesiune())), b"tema-tv-poza": PozaResource(),
+		b"tema-tv-reincarca": _scrie(lambda a: reincarca()),
 		b"tema-tv-rezolutie": _scrie(lambda a: seteazaRezolutie(a, sesiune=_sesiune())),
 		b"tema-tv-fundal": StareFundalResource(), b"tema-tv-fundal-alege": _scrie(lambda a: alegeFundal(a, sesiune=_sesiune())),
 		b"tema-tv-fundal-poza": PozaFundalResource()},
@@ -400,6 +411,10 @@ PAGINA = """<!DOCTYPE html>
   <div class="repornire ascuns" id="repornire">
     <span id="repornire_text"></span>
     <button type="button" id="reporneste">Repornește interfața acum</button>
+  </div>
+  <div class="repornire">
+    <span>Ai schimbat fișierul temei (skin_user)? Îl vezi fără repornire.</span>
+    <button type="button" id="reincarca">Reîncarcă tema</button>
   </div>
   <section class="card rezolutie ascuns" id="rezolutie">
     <h2>Rezoluția interfeței</h2>
@@ -570,6 +585,12 @@ $("reporneste").addEventListener("click", function(){
     if(d.result){ setTimeout(function(){ location.reload(); }, 15000); }
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 });
+$("reincarca").addEventListener("click", function(){
+  mesaj("Se reîncarcă tema...");
+  cerere("/api/tema-tv-reincarca", "POST", new URLSearchParams()).then(function(d){
+    mesaj(d.message, !d.result);
+  }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
+});
 citeste();
 </script>
 </body>
@@ -594,6 +615,8 @@ TEXTE_PAGINA = {
 			"paginilor web e o altă setare și rămâne cum e."),
 		N_("Se citește tema..."),
 		N_("Repornește interfața acum"),
+		N_("Ai schimbat fișierul temei (skin_user)? Îl vezi fără repornire."),
+		N_("Reîncarcă tema"),
 		N_("Rezoluția interfeței"),
 		N_("Fundalul temei Pro"),
 		N_("Alegerea repornește interfața. La 2K animațiile ferestrelor pot fi puțin mai lente. Dacă 2K nu pornește, receptorul "
@@ -619,6 +642,7 @@ TEXTE_PAGINA = {
 		N_("Se salvează tema..."),
 		N_("Receptorul nu răspunde."),
 		N_("Se repornește interfața..."),
+		N_("Se reîncarcă tema..."),
 		N_("Se salvează rezoluția..."),
 		# 0.7.5 (PRB, 14.11.2026): textele sablonului care lipseau din lista
 		N_("pe ecran acum"),

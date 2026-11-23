@@ -1,0 +1,19 @@
+From: HDSatelit <dev@hdsatelit.local>
+Subject: [PATCH] JSC: include the compilation result before its enumerators
+
+The baseline-only JIT build otherwise sees only the forward declaration
+of CompilationResult in setupJIT. Include its complete definition directly.
+
+Upstream-Status: Pending
+---
+diff --git a/Source/JavaScriptCore/runtime/ScriptExecutable.cpp b/Source/JavaScriptCore/runtime/ScriptExecutable.cpp
+--- a/Source/JavaScriptCore/runtime/ScriptExecutable.cpp
++++ b/Source/JavaScriptCore/runtime/ScriptExecutable.cpp
+@@ -26,6 +26,7 @@
+ #include "config.h"
+ 
+ #include "CodeBlock.h"
++#include "CompilationResult.h"
+ #include "Debugger.h"
+ #include "EvalCodeBlock.h"
+ #include "FunctionCodeBlock.h"

@@ -5135,6 +5135,10 @@ def ecm_line(r, cititor=True):
 		return u""
 	caid = ecm_active(r)
 	if caid <= 0:
+		# no ECM for this service: a CI module proven by the CAM field (memory only)
+		dec = decodor_memorie(r)
+		if dec.get("kind") == "ci":
+			return join([decodor_nume(dec), dec.get("system", u"")])
 		return u""
 	d = ecm_info()
 	parts = [ecm_system_name(caid, d), u"CAID %04X" % caid]
@@ -5147,6 +5151,8 @@ def ecm_line(r, cititor=True):
 		parts.append(u"%s: %d" % (tr("ecm_hop"), src["hops"]))
 	if src.get("cititor"):
 		parts.append(src["cititor"])
+	# who decodes: from memory only (the ECM snapshot read just above, the CAM field result)
+	parts.append(decodor_nume(decodor_memorie(r)))
 	return join(parts)
 
 

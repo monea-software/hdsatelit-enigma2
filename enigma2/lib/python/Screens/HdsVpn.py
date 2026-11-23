@@ -165,6 +165,7 @@ STICK = "stick"
 MOD = "mod"
 OPRIRE = "oprire"
 LA_PORNIRE = "la_pornire"
+ICONITA_BARA = "iconita_bara"
 IP = "ip"
 TARA = "tara"
 REPORNESTE = "reporneste"
@@ -175,7 +176,7 @@ STERGE_CONT = "sterge_cont"
 INCHIDE = "inchide"
 # randurile care pornesc o lucrare (cat merge alta, OK spune intai sa astepti)
 CU_LUCRARE = (COMUTA, INSTALEAZA, STICK, IP, ADAUGA, REPORNESTE, VITEZA)
-CU_SAGETI = (FURNIZOR, TARA, SERVER, MOD, OPRIRE, LA_PORNIRE)
+CU_SAGETI = (FURNIZOR, TARA, SERVER, MOD, OPRIRE, LA_PORNIRE, ICONITA_BARA)
 
 
 def _da(v):
@@ -241,13 +242,15 @@ def randuri(s):
 		r.append((_("Serverul: niciunul ales"), SERVER, _("OK: lista serverelor (%d). Fără servere, importă întâi fișierele.")
 			% s["nr_profiluri"]))
 	if fel == "openvpn":
-		r.append(("%s (%s)" % (V.textCont(s["furnizor"]), _("salvate") if s["cont"] else _("lipsesc")), CONT,
+		r.append(("%s (%s)" % (V.textCont(s["furnizor"]), (" / ".join((s.get("date_acces") or {}).values()) or _("salvate")) if s["cont"] else _("lipsesc")), CONT,
 			V.textExplicatieCont(s["furnizor"])))
 	elif s["profil"] and s.get("campuri"):
 		lipsa = s.get("campuri_lipsa") or []
-		r.append(("%s (%s)" % (_("Datele de acces"), _("lipsesc") if lipsa else _("salvate")), DATE_ACCES,
-			_("OK: scrii %s. După salvare nu se mai arată nicăieri. Se scriu mai ușor din telefon, în interfața web.")
+		r.append(("%s (%s)" % (_("Datele de acces"), " / ".join((s.get("date_acces") or {}).values()) or _("lipsesc")), DATE_ACCES,
+			_("OK: scrii %s. Datele se văd și după salvare. Se scriu mai ușor din telefon, în interfața web.")
 			% ", ".join(V.textCamp(c) for c in s["campuri"])))
+	if s.get("configurare_text"):
+		r.append((_("Configurarea serverului"), "configurare", s["configurare_text"]))
 	if s.get("pin_propus"):
 		r.append((_("Ai încredere în certificatul serverului?"), CERTIFICAT,
 			_("Serverul are un certificat pe care receptorul nu îl cunoaște. OK, dacă e serverul tău sau al firmei tale.")))
@@ -272,6 +275,8 @@ def randuri(s):
 	if s["nr_profiluri"]:
 		r.append(("%s (%d)" % (_("Șterge toate serverele acestui furnizor"), s["nr_profiluri"]), STERGE_TOATE,
 			_("Șterge de pe receptor toate fișierele importate pentru acest furnizor.")))
+	r.append(("%s: %s" % (_("Iconița VPN în bara canalului"), _da(s.get("iconita_bara", False))), ICONITA_BARA,
+		_("Verde când VPN-ul este conectat, roșu când nu este conectat. Oprită din fabrică.")))
 	if fel == "openvpn" and s["cont"]:
 		r.append((_("Șterge numele și parola"), STERGE_CONT, _("Șterge de pe receptor numele și parola contului.")))
 	r.append((_("Închide"), INCHIDE, ""))
@@ -304,6 +309,8 @@ class HdsVpn(Screen):
 		self._stare = None
 		self._vazuta = None
 		self._mesajPana = 0
+		# dupa Adauga VPN: la citirea urmatoare, daca lipsesc programele, se alege randul "Instaleaza programele VPN"
+		self._dupaAdaugare = False
 		self["actiuni"] = ActionMap(["OkCancelActions", "DirectionActions", "ColorActions"], {
 			"ok": self.ok,
 			"cancel": self.close,
@@ -314,11 +321,52 @@ class HdsVpn(Screen):
 			"green": self.verde,
 			"yellow": self.galben,
 		}, -1)
+		# The channel bar loses its action maps while this menu is open.
+		self._capturaApasata = None
+		self._capturaLunga = False
+		self["capturaTaste"] = ActionMap(["HdsAlocareTasteActions"], {
+			c + "_" + f: (lambda c=c, f=f: self._tastaCaptura(c, f))
+			for c in ("red", "green", "yellow", "blue") for f in ("m", "r", "l", "b")}, -2)
+		getattr(self, "onExecEnd", []).append(self._anuleazaCaptura)
 		self["list"].onSelectionChanged.append(self._randAles)
 		self._ceas = eTimer()
 		self._ceas.callback.append(self._citeste)
 		self.onLayoutFinish.append(self._porneste)
 		self.onClose.append(self._ceas.stop)
+
+	def _anuleazaCaptura(self):
+		self._capturaApasata = None
+		self._capturaLunga = False
+
+	def _tastaCaptura(self, culoare, faza):
+		from Components.HdsTasteRapide import actiune_efectiva
+		if self._capturaApasata != culoare and actiune_efectiva(culoare) != "captura":
+			return 0
+		if faza == "m":
+			self._capturaApasata = culoare
+			self._capturaLunga = False
+		elif self._capturaApasata != culoare:
+			return 0
+		elif faza == "l" and not self._capturaLunga:
+			self._capturaLunga = True
+			self.captura()
+		elif faza == "b":
+			lung = self._capturaLunga
+			self._anuleazaCaptura()
+			if not lung:
+				if culoare == "green":
+					self.verde()
+				elif culoare == "yellow":
+					self.galben()
+		return 1
+
+	def captura(self):
+		try:
+			from Components import HdsCapturi
+			return HdsCapturi.captureaza(self.session)
+		except Exception as eroare:
+			print("[HdsVpn] captura: %s" % type(eroare).__name__)
+			return False
 
 	def _porneste(self):
 		ultima = V.LUCRARI.stare()["ultima"]
@@ -348,15 +396,20 @@ class HdsVpn(Screen):
 		self._ceas.start(CITIRE_MS, True)
 
 	def _puneRanduri(self, noi):
+		# randul instalarii apare sus, iar lista ramanea derulata pe "Adauga VPN": omul nu vedea pasul urmator
+		instalarea = self._dupaAdaugare and bool(noi) and noi[0][1] == INSTALEAZA
+		self._dupaAdaugare = False
 		if [r[:2] for r in noi] == [r[:2] for r in self._randuri]:
 			self._randuri = noi
+			if instalarea:
+				self["list"].moveToIndex(0)
 			self._randAles()
 			return
 		ales = self._randAlesAcum()
 		self._randuri = noi
 		self["list"].setList([r[0] for r in noi])
 		index = 0
-		if ales is not None:
+		if ales is not None and not instalarea:
 			for i, r in enumerate(noi):
 				if r[1] == ales[1]:
 					index = i
@@ -383,6 +436,8 @@ class HdsVpn(Screen):
 		if ultima and ultima["id"] != self._vazuta:
 			self._vazuta = ultima["id"]
 			self._mesaj(ultima["mesaj"])
+			if ultima["nume"] == V.LUCRARE_STICK and ultima["reusit"]:
+				self._dupaAdaugare = True
 			# dupa Adauga VPN de pe stick: daca serverul ales cere nume, parola sau cheie, tastatura vine singura
 			if ultima["nume"] == V.LUCRARE_STICK and getattr(self, "_asteptCampuri", False):
 				self._asteptCampuri = False
@@ -445,6 +500,8 @@ class HdsVpn(Screen):
 			self._schimba(oprire_totala=not s["oprire_totala"])
 		elif a == LA_PORNIRE:
 			self._schimba(la_pornire=not s["la_pornire"])
+		elif a == ICONITA_BARA:
+			self._schimba(iconita_bara=not s.get("iconita_bara", False))
 
 	def _schimba(self, **schimbari):
 		try:
@@ -498,8 +555,11 @@ class HdsVpn(Screen):
 			ids = [p["id"] for p in servere]
 			ales = ids.index(s["profil"]["id"]) if (s["profil"] and s["profil"]["id"] in ids) else 0
 			self.session.openWithCallback(self._serverAles, ChoiceBox, title=_("Serverul"), list=lista, selection=ales)
+		elif a == "configurare":
+			from Screens.TextBox import TextBox
+			self.session.open(TextBox, text=s.get("configurare_text", ""), title=_("Configurarea serverului"))
 		elif a == CONT:
-			self.session.openWithCallback(self._numeScris, VirtualKeyBoard, title=_("Numele contului VPN"), text="")
+			self.session.openWithCallback(self._numeScris, VirtualKeyBoard, title=_("Numele contului VPN"), text=(s.get("date_acces") or {}).get("nume", ""))
 		elif a == STICK:
 			self._lucrare(V.pornesteStick)
 		elif a == FARA_FISIERE:
@@ -513,7 +573,7 @@ class HdsVpn(Screen):
 		elif a == CERTIFICAT:
 			self._intreaba(_("Ai încredere în certificatul serverului? Alege Da numai dacă serverul e al tău sau al "
 				"firmei tale."), self._confirmaCertificat)
-		elif a in (MOD, OPRIRE, LA_PORNIRE):
+		elif a in (MOD, OPRIRE, LA_PORNIRE, ICONITA_BARA):
 			self._sageata(1)
 		elif a == IP:
 			self.galben()
@@ -608,6 +668,7 @@ class HdsVpn(Screen):
 		except Exception as eroare:
 			reusit, mesaj, d = False, _("Eroare pe receptor: %s") % eroare, {}
 		self._mesaj(mesaj)
+		self._dupaAdaugare = bool(reusit)
 		self._citeste()
 		if reusit and d.get("lipsesc"):
 			self._cereCampuri(list(d["lipsesc"]))
@@ -628,9 +689,9 @@ class HdsVpn(Screen):
 			self._citeste()
 			return
 		c = self._campuri[0]
-		titlu = {"nume": _("Numele contului VPN"), "parola": _("Parola contului VPN (după salvare nu se mai arată)"),
-			"psk": _("Cheia comună (PSK, după salvare nu se mai arată)")}[c]
-		self.session.openWithCallback(self._campScris, VirtualKeyBoard, title=titlu, text="", hdsSecret=c != "nume")
+		titlu = {"nume": _("Numele contului VPN"), "parola": _("Parola contului VPN"),
+			"psk": _("Cheia comună (PSK)")}[c]
+		self.session.openWithCallback(self._campScris, VirtualKeyBoard, title=titlu, text=(self._stare.get("date_acces") or {}).get(c, ""), hdsSecret=c != "nume")
 
 	def _campScris(self, text):
 		if text is None:
@@ -668,7 +729,7 @@ class HdsVpn(Screen):
 		self._nume = nume
 		# hdsSecret: cu asistenta pornita, prima tasta din parola cere oprirea ei (titlul tradus nu se mai cauta)
 		self.session.openWithCallback(self._parolaScrisa, VirtualKeyBoard,
-			title=_("Parola contului VPN (după salvare nu se mai arată)"), text="", hdsSecret=True)
+			title=_("Parola contului VPN"), text=(self._stare.get("date_acces") or {}).get("parola", ""), hdsSecret=True)
 
 	def _parolaScrisa(self, parola):
 		nume = getattr(self, "_nume", "")
