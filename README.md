@@ -53,6 +53,10 @@ navigatorul web (WPE WebKit) s-a compilat cu 8 fire în aproximativ 22 GB.
    make MACHINEBUILD=viper4kv20 DISTRO=hdsatelit init
    ```
 
+   Pentru alt receptor pui mașina lui în locul lui `MACHINEBUILD=viper4kv20`, de pildă `make MACHINE=dm820 DISTRO=hdsatelit init`
+   (dosarul de construire e atunci `builds/hdsatelit/release/dm820`). Rețetele celorlalți producători din `meta-local/` le
+   sare singur BBMASK-ul din `conf/distro/hdsatelit.conf`, când stratul lor OE-Alliance nu e în `bblayers.conf`.
+
 3. Sursele locale cerute de rețete: `enigma2-hdsatelit` ia codul din depozitul git `/hds/hdsatelit-image`, ramura
    `main`, iar `hdsatelit-skin` ia skinul din `/hds/skin`:
 
@@ -166,6 +170,10 @@ the web browser (WPE WebKit) was compiled with 8 threads in about 22 GB.
    cp -a /path/to/hdsatelit-enigma2/meta-local meta-local
    make MACHINEBUILD=viper4kv20 DISTRO=hdsatelit init
    ```
+
+   For another receiver, use its machine instead of `MACHINEBUILD=viper4kv20`, for example `make MACHINE=dm820 DISTRO=hdsatelit init`
+   (the build folder is then `builds/hdsatelit/release/dm820`). The recipes of the other manufacturers in `meta-local/` are
+   skipped by the BBMASK in `conf/distro/hdsatelit.conf` when their OE-Alliance layer is not in `bblayers.conf`.
 
 3. The local sources the recipes expect: `enigma2-hdsatelit` takes the code from the git repository
    `/hds/hdsatelit-image`, branch `main`, and `hdsatelit-skin` takes the skin from `/hds/skin`:
