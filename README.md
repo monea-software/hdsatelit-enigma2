@@ -57,6 +57,10 @@ navigatorul web (WPE WebKit) s-a compilat cu 8 fire în aproximativ 22 GB.
    (dosarul de construire e atunci `builds/hdsatelit/release/dm820`). Rețetele celorlalți producători din `meta-local/` le
    sare singur BBMASK-ul din `conf/distro/hdsatelit.conf`, când stratul lor OE-Alliance nu e în `bblayers.conf`.
 
+   `make init` poate scrie „Remote branch HEAD not found” și „distro-versions repo not available, using fallback
+   versions”: sunt fără urmări. El pune în `site.conf` (în rădăcina mediului) `BB_NUMBER_THREADS` și `PARALLEL_MAKE`
+   cât numărul de procesoare; cu mai puțin de ~3 GB de memorie pe fir, coboară-le acolo (noi am construit cu 8).
+
 3. Sursele locale cerute de rețete: `enigma2-hdsatelit` ia codul din depozitul git `/hds/hdsatelit-image`, ramura
    `main`, iar `hdsatelit-skin` ia skinul din `/hds/skin`:
 
@@ -66,11 +70,14 @@ navigatorul web (WPE WebKit) s-a compilat cu 8 fire în aproximativ 22 GB.
    cp -a /calea/spre/hdsatelit-enigma2/enigma2 /hds/hdsatelit-image
    cd /hds/hdsatelit-image
    git init -b main
+   git config user.name "HD Satelit"
+   git config user.email build@hdsatelit.invalid
    git add -A -f
    GIT_COMMITTER_DATE="2026-11-23 22:53:55 +0200" git commit -m "HD Satelit 0.7.9"
    ```
 
-   `-f` adaugă și fișierele pe care `.gitignore` din cod le-ar sări. Data comiterii intră în `/etc/image-version`
+   `-f` adaugă și fișierele pe care `.gitignore` din cod le-ar sări; `git config` e numai pentru `git commit` pe un
+   sistem fără nume git (numele nu intră în imagine). Data comiterii intră în `/etc/image-version`
    (versiunea arătată pe receptor); cu data de mai sus iese la fel ca în imaginea publicată.
 
 4. Construirea:
@@ -175,6 +182,11 @@ the web browser (WPE WebKit) was compiled with 8 threads in about 22 GB.
    (the build folder is then `builds/hdsatelit/release/dm820`). The recipes of the other manufacturers in `meta-local/` are
    skipped by the BBMASK in `conf/distro/hdsatelit.conf` when their OE-Alliance layer is not in `bblayers.conf`.
 
+   `make init` may print "Remote branch HEAD not found" and "distro-versions repo not available, using fallback
+   versions": both are harmless. It sets `BB_NUMBER_THREADS` and `PARALLEL_MAKE` in `site.conf` (in the root of the
+   environment) to the number of processors; with less than ~3 GB of memory per thread, lower them there (we built
+   with 8).
+
 3. The local sources the recipes expect: `enigma2-hdsatelit` takes the code from the git repository
    `/hds/hdsatelit-image`, branch `main`, and `hdsatelit-skin` takes the skin from `/hds/skin`:
 
@@ -184,11 +196,14 @@ the web browser (WPE WebKit) was compiled with 8 threads in about 22 GB.
    cp -a /path/to/hdsatelit-enigma2/enigma2 /hds/hdsatelit-image
    cd /hds/hdsatelit-image
    git init -b main
+   git config user.name "HD Satelit"
+   git config user.email build@hdsatelit.invalid
    git add -A -f
    GIT_COMMITTER_DATE="2026-11-23 22:53:55 +0200" git commit -m "HD Satelit 0.7.9"
    ```
 
-   `-f` also adds the files that the code's `.gitignore` would skip. The commit date goes into `/etc/image-version`
+   `-f` also adds the files that the code's `.gitignore` would skip; `git config` is only there so that `git commit`
+   works on a system without a git identity (the name does not go into the image). The commit date goes into `/etc/image-version`
    (the version shown on the receiver); with the date above it comes out the same as in the published image.
 
 4. The build:

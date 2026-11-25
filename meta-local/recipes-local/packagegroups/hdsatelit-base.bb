@@ -241,8 +241,13 @@ RDEPENDS:${PN} = "\
     exfatprogs \
     ntfs-3g \
     openvpn \
-    wireguard-tools \
+    ${HDS_WIREGUARD} \
     kernel-module-tun \
 "
+# wireguard-tools numai pe nucleele de la 3.10 in sus, ca in OE-Alliance (packagegroup-oea-feed-core): pe nucleele mai vechi
+# (Dreambox DM820, DM7080, DM520: linux-dreambox 3.4) WireGuard nu e nici in nucleu, iar modulul din afara lui (wireguard-module,
+# recomandat de wireguard-tools) cade la compilare ("WireGuard requires Linux >= 3.10"). Fara versiune de nucleu ramane in imagine.
+HDS_WIREGUARD = "${@'' if bb.utils.vercmp_string_op(d.getVar('PREFERRED_VERSION_%s' % (d.getVar('PREFERRED_PROVIDER_virtual/kernel') or '')) or '99', '3.10', '<') else 'wireguard-tools'}"
+
 # modulele Python mici cerute de pluginurile altor echipe (comentariul de sus, 06.11.2026)
 RDEPENDS:${PN} += "python3-sqlite3 python3-xmlrpc python3-zoneinfo python3-tmdbsimple python3-backports-lzma python3-mutagen"

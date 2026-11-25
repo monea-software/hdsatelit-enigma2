@@ -257,6 +257,13 @@ do_install:append() {
     [ "$v" = "$p" ] || bbfatal "enigma2-hdsatelit: /etc/image-version spune $v (AC_INIT din configure.ac la ${SRCREV}), pachetul e ${PV}: AC_INIT si PV trebuie sa fie aceeasi versiune"
 }
 
+# /usr/lib/enigma.info: Makefile.am il scrie la instalare, dar in imagine il scrie hds_enigma_info_rootfs (hdsatelit-image.bb,
+# cu modelul receptorului), iar la actualizare postinst-ul de mai jos; pachetul nu-l da (o actualizare l-ar suprascrie cu unul
+# fara model), deci se scoate aici, altfel QA installed-vs-shipped.
+do_install:append() {
+    rm -f ${D}${libdir}/enigma.info
+}
+
 # t2mi_decap (decapsulatorul T2-MI) sta sub python/Hds/DabT2/t2/bin: .debug-ul lui, altfel QA debug-files
 FILES:${PN}-dbg += "${libdir}/enigma2/python/.debug ${libdir}/enigma2/python/*/.debug \
     ${libdir}/enigma2/python/Hds/DabT2/t2/bin/.debug"
