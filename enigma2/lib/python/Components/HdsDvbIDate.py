@@ -14,7 +14,8 @@
 #                   EPG2 (0.7.7): canalele care n-au trecut incercarea din casa raman aici cu "ascuns" (starea) si
 #                   "nr" None (nu sunt in buchet); "scoase": {"clip": n, "proba": n} = adresele din liste care nu sunt
 #                   canale (clipuri, imagini de proba), care nu intra nici in buchet, nici aici.
-#   CALE_INCERCARI  scris de incercarea fluxurilor din casa (Components/HdsDvbIIncercare): {url: [stare, cod, ora]}.
+#   CALE_INCERCARI  scris de incercarea fluxurilor din casa (Components/HdsDvbIIncercare): {url: [stare, cod, ora, fel]}
+#                   (DRM1, 0.8.0: fel = FEL_INCERCARE; imaginile de dinainte scriau numai [stare, cod, ora]).
 #                   Dupa adresa, nu dupa id: o reincarcare nu pierde ce s-a aflat.
 #
 # Citirile tin minte fisierul dupa data si marime (un os.stat pe apel); fara fisier, totul e gol. Fisierul nu importa
@@ -151,6 +152,29 @@ def canalUrl(url, cale=None):
 	return _INDEX["dupa_url"].get(url)
 
 
+# DVI2 (0.8.0, Eduard 26.11.2026 17:34): canalele oprite pentru tara omului raman in lista (se pot porni cu VPN-ul), cu
+# eticheta "merge doar în <țara>" cand lista lor e a altei tari decat cea aleasa ("tara" la canal, scris de pluginul
+# DVB-I); altfel eticheta veche, "oprit în țara ta"
+T_DOAR_IN = N_("merge doar în %s")
+
+
+def doarIn(url, cale=None, stare=None):
+	"""DVI2: numele tarii (tradus) pentru eticheta "merge doar în <țara>" a unui canal oprit pentru tara omului, sau ""
+	(alta stare, tara listei necunoscuta sau chiar tara aleasa). stare: starea incercarii, cand cel care cheama o are deja
+	(lista de canale: o citire de fisier mai putin pe rand)"""
+	if (stare if stare is not None else stareUrl(url)[0]) != "oprit_tara":
+		return ""
+	c = canalUrl(url, cale)
+	tara = (c or {}).get("tara") or ""
+	if not tara:
+		return ""
+	try:
+		from Components.HdsDvbISetari import numeTara
+		return numeTara(tara)
+	except Exception:
+		return tara
+
+
 def esteDvbI(ref, cale=None):
 	"""True cand referinta e un canal DVB-I redat prin internet (din buchetul DVB-I sau din trecerea pe internet)"""
 	return canalUrl(urlDinRef(ref), cale) is not None
@@ -182,9 +206,55 @@ def incercari(cale=None):
 def stareUrl(url, cale=None):
 	"""(stare, cod, ora) pentru adresa fluxului; ("", 0, 0) cand n-a fost incercata"""
 	v = incercari(cale).get(url)
-	if isinstance(v, list) and len(v) == 3:
+	if isinstance(v, list) and len(v) >= 3:
 		return v[0], v[1], v[2]
 	return "", 0, 0
+
+
+# DRM1: al patrulea camp al unei incercari = felul ei; FEL_INCERCARE: incercarea care se uita si in manifest dupa DRM.
+# O incercare cu trei campuri e scrisa de o imagine de dinainte (0.7.9 si mai vechi): "merge" al ei nu stie de DRM.
+FEL_INCERCARE = 2
+
+
+def incercareVeche(url, cale=None):
+	"""True cand adresa are o incercare scrisa inainte ca incercarea sa se uite dupa DRM (trei campuri)"""
+	v = incercari(cale).get(url)
+	return isinstance(v, list) and len(v) == 3
+
+
+STARE_DRM = "drm"   # Components/HdsDvbIIncercare.DRM (aici fara import: lista de canale si playerul intreaba des)
+
+
+def protejatDrm(url, cale=None):
+	"""DRM1: True cand incercarea din casa a gasit fluxul canalului DVB-I criptat cu DRM (playerul spune atunci
+	"Canal protejat (DRM)" si nu-l mai porneste din nou). url poate veni din calea unei referinte (cu %3a)."""
+	if not url:
+		return False
+	try:
+		inc = incercari(cale)
+		for u in _formeUrl(url):
+			v = inc.get(u)
+			if isinstance(v, list) and len(v) >= 3:
+				return v[0] == STARE_DRM
+		return False
+	except Exception:
+		return False
+
+
+def _formeUrl(url):
+	"""adresa asa cum e data, apoi decodata ca la scrierea buchetului (%3a, %20, %25: urlDinRef), apoi decodata intreaga
+	(calea unei referinte poate veni decodata de nucleu); fara repetari"""
+	forme = [url, url.replace("%3a", ":").replace("%3A", ":").replace("%20", " ").replace("%25", "%")]
+	try:
+		from urllib.parse import unquote
+	except ImportError:  # Python 2
+		from urllib import unquote
+	forme.append(unquote(url))
+	rez = []
+	for f in forme:
+		if f not in rez:
+			rez.append(f)
+	return rez
 
 
 def noteazaIncercari(rezultate, cale=None, acum=None):
@@ -193,7 +263,7 @@ def noteazaIncercari(rezultate, cale=None, acum=None):
 	acum = int(time.time() if acum is None else acum)
 	d = dict(incercari(cale))
 	for url, (st, cod) in rezultate.items():
-		d[url] = [st, int(cod), acum]
+		d[url] = [st, int(cod), acum, FEL_INCERCARE]
 	if len(d) > MAX_INCERCARI:
 		# cele mai vechi pleaca
 		for url in sorted(d, key=lambda u: d[u][2])[:len(d) - MAX_INCERCARI]:

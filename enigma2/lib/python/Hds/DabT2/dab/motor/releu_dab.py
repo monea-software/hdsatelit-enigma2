@@ -52,6 +52,10 @@ for _d in (os.path.normpath(os.path.join(AICI, '..', '..')),
 import dab_edi                     # noqa: E402
 import releu_http as H             # noqa: E402
 import surse                       # noqa: E402
+try:                               # 0.8.0: textul (DLS) si imaginile (MOT SlideShow) posturilor; fara el, numai sunetul
+    import pad as _pad             # noqa: E402
+except Exception:                  # pragma: no cover
+    _pad = None
 
 if sys.version_info[0] < 3:        # Python 2.7: aceleasi nume ca pe Python 3
     from compat import (monoton as _monoton, ceas_procesor as _ceas_procesor, citeste_fd as _citeste_fd,  # noqa: E402
@@ -233,6 +237,11 @@ RITM_SALT_90K = 10 * 90000         # PTS mutat cu mai mult de 10 s: alt flux, se
 # decodarea software a DAB+ (sunet_software): peste atatea AU, daca faad2 strica mai mult de jumatate, postul trece pe
 # decodorul placii (AudioSpecificConfig gresit sau flux pe care faad2 nu-l stie)
 RENUNTA_DUPA_AU = 50
+# 0.8.0, PAD (pad.py): textul si imaginea fiecarui post cerut ajung in pad.RADACINA/<feed>-<SID>/, de unde le citesc
+# ecranul radio si pagina web. Setarea „Imaginile posturilor DAB” pe Nu pune fisierul de mai jos (Components/HdsRadioSetari);
+# atunci imaginile nu se mai strang deloc, iar textul ramane. Releul se uita la el la fiecare atatea cadre (~6 s).
+FARA_IMAGINI = '/tmp/hds-dab-fara-imagini'
+PAD_VERIFICA_CADRE = 250
 
 
 class RitmPcr(object):
@@ -373,6 +382,8 @@ class ReleuDab(object):
         self.sunet_motiv = ''
         self.transcodoare = {}                           # cheie dabts:<sid> -> sunet_software.Transcodor
         self._sunet_nou = False                          # setarea schimbata prin /sunet/<setare>
+        self.paduri = {}                                 # sid -> pad.DecodorPad (textul si imaginile postului cerut)
+        self.pad_radacina = None                         # pad.RADACINA, schimbata numai in probe
         self.Dispozitiv = DemuxFisier if arg.sursa_falsa else None
         if arg.sursa_falsa:
             DemuxFisier.cale = arg.sursa_falsa
@@ -450,6 +461,7 @@ class ReleuDab(object):
                 'eti': dict(self.stare_eti) if self.stare_eti else None,
                 'au': dict((('%04X' % sid), [d.au_bune, d.au_rele]) for sid, d in list(self.decodoare.items())),
                 'ritm': dict((k, r.stare()) for k, r in list(self.ritmuri.items())) or None,
+                'pad': dict((('%04X' % sid), p.stare()) for sid, p in list(self.paduri.items())) or None,
                 'sunet': {'setare': self.sunet_setare, 'mod': self.sunet_mod, 'motiv': self.sunet_motiv,
                           'transcodoare': dict((k, t.stare()) for k, t in list(self.transcodoare.items())) or None},
                 'ansamblu': self.ans.nume, 'complet': bool(self.ans.complet()), 'posturi': len(self.ans.posturi),
@@ -609,8 +621,43 @@ class ReleuDab(object):
                         sursa.close()
                     except Exception:
                         pass
+                if oprire.is_set():
+                    for sid in list(self.paduri):        # sursa oprita: textul si imaginea pleaca odata cu ea
+                        self._pad_uita(sid)
+
+    # ------------------------------------------------------------ PAD (textul si imaginile postului)
+    def _pad_post(self, sid):
+        """Decodorul PAD al postului `sid` (facut la prima cerere), sau None fara pad.py."""
+        p = self.paduri.get(sid)
+        if p is None and _pad is not None:
+            p = self.paduri[sid] = _pad.DecodorPad(_pad.dosar_post(self.feed_id, sid, self.pad_radacina),
+                                                   imagini=not os.path.exists(FARA_IMAGINI))
+        return p
+
+    def _pad_uita(self, sid):
+        p = self.paduri.pop(sid, None)
+        if p is not None:
+            _pad.sterge_dosar(p.dosar)
+
+    def _pad_curata(self):
+        """La pornirea sursei: textele si imaginile ramase de la un releu de dinainte al aceluiasi feed (oprit sau cazut)
+        nu au voie sa apara peste alt post. Dosarele altui feed (al doilea tuner) raman."""
+        self.paduri = {}
+        if _pad is None:
+            return
+        rad = self.pad_radacina or _pad.RADACINA
+        prefix = _pad.curata_id(self.feed_id) + '-'
+        try:
+            nume = os.listdir(rad)
+        except OSError:
+            return
+        for n in nume:
+            if n.startswith(prefix):
+                _pad.sterge_dosar(os.path.join(rad, n))
 
     def _bucla(self, cadre, oprire):
+        self._pad_curata()
+        paduri = self.paduri
         ans = self.ans
         server = self.server
         publica = server.publica
@@ -650,16 +697,25 @@ class ReleuDab(object):
             self.cadre += 1
             if n % 42 == 1:
                 self.lungimi = dict((k, len(v)) for k, v in mst.items())
+            if paduri and n % PAD_VERIFICA_CADRE == 0:
+                imagini = not os.path.exists(FARA_IMAGINI)
+                for x in paduri.values():
+                    x.imagini = imagini
             ab = self.abonamente
             if not ab:
                 if decodoare:
                     decodoare.clear()
+                if paduri:
+                    for sid in list(paduri):
+                        self._pad_uita(sid)              # nimeni nu mai asculta: textul si imaginea nu raman vechi
                 continue
             if ab is not ab_vechi:
                 ab_vechi = ab
                 vii = set(sid for sid, _ in ab)
                 for sid in [s for s in decodoare if s not in vii]:
                     del decodoare[sid]
+                for sid in [s for s in paduri if s not in vii]:
+                    self._pad_uita(sid)                  # alt post: textul si imaginea celui vechi pleaca
                 for k in [k for k in muxere if k not in set(c for _, c in ab)]:
                     del muxere[k]
                     ritmuri.pop(k, None)
@@ -689,12 +745,19 @@ class ReleuDab(object):
                     if d is None:
                         d = decodoare[sid] = dab_edi.DABPlus()
                         d.cu_brute = bool(sw)                    # AU brute pentru faad2 (numai in modul software)
+                        d.pad = self._pad_post(sid)              # PAD-ul din DSE-ul fiecarui AU bun
                     iesire = d.adauga(v)
                     if not iesire:
                         continue
                     brut = iesire[0] if len(iesire) == 1 else b''.join(iesire)
                 else:
                     brut = v
+                    pd = paduri.get(sid) or self._pad_post(sid)
+                    if pd is not None:
+                        try:
+                            pd.din_mp2(v)                        # PAD-ul de la coada cadrului MP2
+                        except Exception:                        # PAD stricat: sunetul merge mai departe
+                            pass
                 for cheie in chei:
                     if not cheie.startswith('dabts:'):
                         publica(cheie, brut)

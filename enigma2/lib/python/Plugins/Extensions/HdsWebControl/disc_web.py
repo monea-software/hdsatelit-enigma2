@@ -285,6 +285,19 @@ def _lucruDisc(D, acum=None):
 		"termen": int(l.get("termen") or 0)}
 
 
+def _acumDisc(hdd, sys_block="/sys/block", mounts=None, A=None):
+	"""Randul "Acum: FAT32, montat in ..." al unui disc; "" cand nu se afla. Numai pe receptor (cu /sys si
+	/proc/mounts adevarate) sau cu modulul dat de probe."""
+	try:
+		if A is None:
+			if sys_block != "/sys/block" or mounts is not None:
+				return ""
+			from Components import HdsAnuntStocare as A
+		return A.textStareDisc(A.citesteDisc(hdd.device)) or ""
+	except Exception:
+		return ""
+
+
 def stareDiscuri(D=None, hm=None, sys_block="/sys/block", mounts=None, inregistrare=None, unelte=None):
 	"""Pentru GET /api/discuri: hard diskurile si stick-urile USB oferite, felul lor, sistemele de fisiere de ales la
 	formatare, lucrarea de acum si inregistrarile care ar opri o lucrare pornita de aici."""
@@ -300,6 +313,8 @@ def stareDiscuri(D=None, hm=None, sys_block="/sys/block", mounts=None, inregistr
 		d["magistrala_text"] = _t(d["magistrala"])
 		d["felul"] = _t("USB Stick") if d["detasabil"] else _t("Harddisk")
 		d["sisteme"] = _textSisteme(D, hdd)
+		# 0.8.0 (STK1): ce sistem de fisiere are discul acum si, la FAT32, limita de 4 GB (ca pe pagina discului de pe receptor)
+		d["acum"] = _acumDisc(hdd, sys_block, mounts)
 		d["eticheta"] = d.get("eticheta") or etichetaDispozitiv(hdd.device)
 		for p in d.get("partitii") or []:
 			p["eticheta"] = p.get("eticheta") or etichetaDispozitiv(p["nume"], next(iter(p.get("montare") or []), ""))
@@ -1012,6 +1027,7 @@ function arata(d){
       var r = document.createElement("div"); r.textContent = x.nume + (x.montare.length ? " în " + x.montare.join(", ") : " (nemontată)"); p.appendChild(r);
       if(x.eticheta){ var et = document.createElement("div"); et.className = "mic"; et.textContent = "Eticheta: " + x.eticheta; p.appendChild(et); }
     });
+    if(k.acum){ var ac = document.createElement("div"); ac.className = "mic"; ac.textContent = k.acum; p.appendChild(ac); }
     var a = celula(tr, "", "actiuni");
     var oprit = ocupat || opriri.length > 0;
     var b;

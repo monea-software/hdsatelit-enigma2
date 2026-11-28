@@ -1478,10 +1478,13 @@
 	</screen>
 
 	<!-- ========== Ecrane mici ========== -->
-	<screen name="Volume" position="1440,54" size="384,72" backgroundColor="hdsPanel" flags="wfNoBorder">
+	<!-- VOL1 (tamiciav7, 0.8.0): "100" HdsBold;36 are 63 px, dar cu Marimea textului la 130% (config.osd.fontscale) 78 px;
+	     caseta de 66 il taia de la 115%. Caseta numarului are acum 90 px; ecranul creste cu 24 px spre stanga (iconita si
+	     bara merg cu el), marginea dreapta (1824) si numarul raman pe loc. -->
+	<screen name="Volume" position="1416,54" size="408,72" backgroundColor="hdsPanel" flags="wfNoBorder">
 		<ePixmap pixmap="icon/vol.png" position="14,12" size="48,48" alphatest="blend" zPosition="1" />
 		<widget name="Volume" conditional="Volume" position="74,31" size="224,10" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" zPosition="1" />
-		<widget name="VolumeText" conditional="VolumeText" position="304,6" size="66,60" font="HdsBold;36" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" zPosition="1" />
+		<widget name="VolumeText" conditional="VolumeText" position="304,6" size="90,60" font="HdsBold;36" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" zPosition="1" />
 	</screen>
 
 	<screen name="Mute" position="1752,54" size="72,72" backgroundColor="hdsPanel" flags="wfNoBorder">
@@ -2006,7 +2009,9 @@
 		<widget source="dala_cifre" render="Label" position="576,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_t_text" render="Label" position="742,942" size="72,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_text" render="Label" position="822,936" size="150,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
-		<eLabel position="988,952" size="16,16" backgroundColor="key_yellow" zPosition="2" />
+		<widget source="dala_galben" render="FixedLabel" position="988,952" size="16,16" backgroundColor="key_yellow" zPosition="2">
+			<convert type="ConditionalShowHide" />
+		</widget>
 		<widget source="dala_galben" render="Label" position="1012,936" size="200,48" font="HdsCond;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="HdsMenuListaJos" position="0,0" size="1000,1000">
@@ -2018,7 +2023,9 @@
 		<widget source="dala_cifre" render="Label" position="478,936" size="104,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_t_text" render="Label" position="590,942" size="72,36" font="HdsBold;22" foregroundColor="hdsText2" backgroundColor="hdsTrack" halign="center" valign="center" noWrap="1" zPosition="2" />
 		<widget source="dala_text" render="Label" position="668,936" size="104,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
-		<eLabel position="780,952" size="16,16" backgroundColor="key_yellow" zPosition="2" />
+		<widget source="dala_galben" render="FixedLabel" position="780,952" size="16,16" backgroundColor="key_yellow" zPosition="2">
+			<convert type="ConditionalShowHide" />
+		</widget>
 		<widget source="dala_galben" render="Label" position="802,936" size="166,48" font="HdsCond;24" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="MenuDale" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">

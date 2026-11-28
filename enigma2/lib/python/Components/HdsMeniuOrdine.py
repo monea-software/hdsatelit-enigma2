@@ -146,11 +146,58 @@ def ordoneaza(chei, salvata):
 	return [r[2] for r in ranguri]
 
 
-def aplica(meniu, intrari, cheie=cheieTuplu, aratate=()):
+def numeTuplu(t):
+	"""The name shown for a menu tuple of Menu.py (titlu_simplu, else titlu)."""
+	if len(t) > 4 and isinstance(t[4], str) and t[4]:
+		return t[4]
+	return t[0] if t and isinstance(t[0], str) else ""
+
+
+# 0.8.0 FX3: "Sortare automată A-Z" for every menu (Nu from the factory): the
+# entries in alphabetical order of their shown name, in place of the person's order (kept, it comes back with Nu);
+# hidden entries stay hidden. The same on TV (MENU in a menu) and on the web page /meniu (fila Aranjează).
+def _sortare():
+	c = setari()
+	if c is None:
+		return None
+	if not hasattr(c, "sortare_az"):
+		try:
+			from Components.config import ConfigYesNo
+			c.sortare_az = ConfigYesNo(default=False)
+		except Exception:
+			return None
+	return c.sortare_az
+
+
+def sortareAZ():
+	e = _sortare()
+	return bool(e is not None and e.value)
+
+
+def seteazaSortareAZ(da):
+	e = _sortare()
+	if e is None:
+		return False
+	e.value = bool(da)
+	e.save()
+	_salveazaFisierul()
+	return True
+
+
+def ordineaAZ(nume):
+	"""Indices of `nume` in alphabetical order (Unicode, without case and accents; equal names keep their order)."""
+	return sorted(range(len(nume)), key=lambda i: (_cheieAlfabeticaExtensie(nume[i]), i))
+
+
+def aplica(meniu, intrari, cheie=cheieTuplu, aratate=(), nume=numeTuplu):
 	"""(intrarile in ordinea omului, lista lui ascunsa_sau_nu pentru fiecare). Fara "Arata intrarile ascunse" si in
-	afara de cele din `aratate`, intrarile ascunse lipsesc din prima lista."""
+	afara de cele din `aratate`, intrarile ascunse lipsesc din prima lista. Cu Sortare automata A-Z, ordinea e dupa
+	nume (nume(x) = numele aratat)."""
 	chei = [cheie(x) for x in intrari]
-	ordinea = ordoneaza(chei, ordine(meniu))
+	if sortareAZ():
+		ordinea = ordineaAZ([nume(x) for x in intrari])
+	else:
+		ordinea = ordoneaza(chei, ordine(meniu))
 	asc = ascunse(meniu)
 	arata = aratAscunse()
 	rez, semne = [], []

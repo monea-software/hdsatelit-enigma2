@@ -15,14 +15,21 @@
  *
  * Ce primeste driverul:
  *   - pana la DVB API 5.10 o singura proprietate, DTV_STREAM_ID = ISI | Gold << 8 | mod << 26. Modul trimis e mereu
- *     Gold (1): driverul tunerului u57 nu reinitializeaza secventa cand primeste Root cu ISI 0. Valorile 0 si
- *     0xFFFFFFFF inseamna „fara filtru si fara PLS", deci cu PLS si fara ISI se trimite ISI 0 (cu modul Gold pus,
- *     valoarea nu poate fi 0);
+ *     Gold (1): driverul tunerului u57 nu reinitializeaza secventa cand primeste Root cu ISI 0. Valoarea
+ *     0xFFFFFFFF inseamna „fara filtru si fara PLS" (pe unele drivere si 0; pe Dreambox DM820 0 e „fluxul 0, PLS
+ *     Root 0", o secventa care nu prinde nimic), deci cu PLS si fara ISI se trimite ISI 0 (cu modul Gold pus, valoarea
+ *     nu poate fi 0);
  *   - de la 5.11 PLS-ul are proprietatea lui (DTV_SCRAMBLING_SEQUENCE_INDEX, codul Gold), iar DTV_STREAM_ID e numai
  *     ISI-ul (sau NO_STREAM_ID_FILTER).
  * Pe un nucleu 5.10 proprietatea 70 nu exista si face sa cada tot apelul FE_SET_PROPERTY (acordul nu se mai face),
  * iar antetele din sysroot pot fi mai noi decat nucleul de pe receptor: forma se alege dupa versiunea citita din
  * frontend (DTV_API_VERSION), nu dupa antete.
+ *
+ * Transponderul obisnuit (fara flux si fara PLS cerut): de la DVB API 5.9 (Linux 3.7) DTV_CLEAR pune singur
+ * NO_STREAM_ID_FILTER si nu se mai trimite nimic. Pana la 5.6 (Linux 3.6) proprietatea 42 se numea DTV_ISDBS_TS_ID si
+ * DTV_CLEAR o pune pe 0; un driver cu multistream scris pentru un asemenea nucleu (Dreambox DM820: nucleu 3.4, API 5.5)
+ * citeste 0 ca „fluxul 0, PLS Root 0", gaseste purtatoarea si nu se mai sincronizeaza pe niciun transponder DVB-S2.
+ * Acolo se trimite anume DTV_STREAM_ID = NO_STREAM_ID_FILTER (fluxImplicitDeTrimis), ca OE-Alliance.
  */
 
 #ifndef __lib_dvb_hdsmultistream_h
@@ -43,6 +50,7 @@ namespace hdsms
 		PLS_MASCA = 0x3FFFF,
 		PLS_PERIOADA = 262143,           /* 2^18 - 1 */
 		API_PLS_SEPARAT = 0x050B,        /* 5.11: DTV_SCRAMBLING_SEQUENCE_INDEX exista */
+		API_CLEAR_FARA_FILTRU = 0x0509,  /* 5.9 (Linux 3.7): de aici DTV_CLEAR pune NO_STREAM_ID_FILTER in DTV_STREAM_ID */
 		PROPRIETATE_PLS = 70,            /* DTV_SCRAMBLING_SEQUENCE_INDEX */
 		T2MI_FARA_PLP = -1,
 		T2MI_PID_IMPLICIT = 4096,
@@ -205,6 +213,17 @@ namespace hdsms
 	inline bool plsSeparat(int versiune_api)
 	{
 		return versiune_api >= API_PLS_SEPARAT;
+	}
+
+	/* Transponder DVB-S2 fara flux cerut: trebuie trimis anume „fara filtru" (DTV_STREAM_ID = NO_STREAM_ID_FILTER, adica
+	   streamIdImpachetat(ISI_FARA_FILTRU, MOD_GOLD, 0))? Da numai pe un tuner cu multistream (singurul care citeste
+	   proprietatea) si un nucleu cu DVB API citit si mai vechi de 5.9: acolo DTV_CLEAR lasa 0, iar driverul il ia drept
+	   „fluxul 0, PLS Root 0". Versiunea necitita (0), tunerele fara multistream si nucleele de la 5.9 in sus raman cum
+	   erau: nu se trimite nimic. Intre 5.6 (Linux 3.6) si 5.9 (Linux 3.7) nu exista nucleu publicat; acolo valoarea
+	   trimisa e aceeasi cu cea pusa de DTV_CLEAR, deci nu schimba nimic. */
+	inline bool fluxImplicitDeTrimis(int versiune_api, bool tuner_multistream)
+	{
+		return tuner_multistream && versiune_api > 0 && versiune_api < API_CLEAR_FARA_FILTRU;
 	}
 
 	/* Randul unui transponder de satelit din lamedb, fara „\ts " din fata:

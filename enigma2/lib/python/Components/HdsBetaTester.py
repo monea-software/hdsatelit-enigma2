@@ -100,12 +100,23 @@ CADERI_PE_ZI = 6
 # limita lor pe zi, in afara celor obisnuite: altfel cele scrise des (hds-interfata, hds-zap, hds-tuner, hds-hdmi) le luau
 # locul si nu ajungeau niciodata la noi (greselile 1122 si 1123, Uclan Ustym 4K PRO, 09.11.2026)
 JURNALE_RARE = ("hds-actualizari", "hds-actualizare", "hds-imagine-online", "hds-restaurare")
-RARE_PE_ZI = 2
+# chiar pe zi (rare_azi e in starea scrisa de firul Lucru); 6 = cat pleaca azi in ziua unei actualizari (varful masurat
+# pe pachetele testerilor, 23-25.11.2026: 6 pe zi), ca limita sa nu taie jurnalele actualizarii
+RARE_PE_ZI = 6
 # urma comenzilor de motor (lib/dvb/hdsurmamotor.cpp) are si ea locul ei pe zi: fara ea nu se vede cine a mutat antena si cand
 # a ajuns (Viper 4K V40, pachetul 1719: o cautare cu motorul cu "fara semnal" in rafala, iar hds-motor.log pierdea cele 3
 # locuri in fata lui hds-interfata, hds-zap si hds-tuner). Separat de cele rare: pe un receptor cu motor se schimba des.
 JURNALE_MOTOR = ("hds-motor.log",)
-MOTOR_PE_ZI = 2
+# chiar pe zi (motor_azi e in starea scrisa); un singur fisier, deci cel mult unul pe pachet: 12 = cate pachete cu jurnale
+# primeste serverul pe zi (varful masurat pe un receptor cu motor tot 12), deci pleaca in orice pachet in care s-a schimbat,
+# dar o bucla de reporniri nu umple ziua numai cu el
+MOTOR_PE_ZI = 12
+# modul video aplicat, conectarea televizorului si trecerea HDMI (Components/HdsJurnalAfisaj.py) au si ele locul lor pe zi:
+# fara el nu se vede ce s-a intamplat cu imaginea la trezirea din standby (SF8008, receptorul 00d90fe7: ecran negru cu
+# sunet dupa standby, iar in pachetele lui hds-hdmi.log pierdea cele 3 locuri in fata lui hds-interfata, hds-zap si
+# hds-decodor). Un singur fisier, deci cel mult o data pe pachet: practic in fiecare pachet in care s-a schimbat.
+JURNALE_HDMI = ("hds-hdmi.log",)
+HDMI_PE_ZI = 6
 PAZNIC_RANDURI = 1000
 ECRANE_MAX = 150
 MESAJE_PE_ZI = 10
@@ -1172,8 +1183,9 @@ def esteEcranDeAcces(nume):
 
 
 def curata(text):
-	"""Textul integral pentru echipa."""
-	return text or ""
+	"""Textul intreg pentru echipa, numai cu parolele *** (0.8.0, Eduard 24.11.2026 11:39; in 0.7.8 si 0.7.9 pleca in clar)."""
+	from Components.HdsAsistentaControl import mascheazaParole
+	return mascheazaParole(text or "")
 
 
 # hds-zap.log (0.7.7, lib/service/hdsjurnalzap.cpp): si randurile zap-urilor reusite au la coada „| canal: nume=... ref=...”
@@ -1204,8 +1216,8 @@ _CAMP_EXCEPTIE = re.compile(r"(?<![a-z0-9_])(?:" + _CHEI_EXCEPTIE + r")\s+[^\n]*
 
 
 def curataExceptie(text):
-	"""Textul integral pentru echipa."""
-	return text or ""
+	"""Textul intreg pentru echipa, numai cu parolele *** (ca la curata)."""
+	return curata(text)
 
 
 # ------------------------------------------------------------------ felul „jurnale”
@@ -1307,6 +1319,11 @@ def esteMotor(nume):
 	return nume in JURNALE_MOTOR
 
 
+def esteHdmi(nume):
+	"""Jurnalul HDMI: modul aplicat, conectarea televizorului, trecerea (limita HDMI_PE_ZI, langa celelalte)."""
+	return nume in JURNALE_HDMI
+
+
 # stivele firelor Python ale enigma2 (faulthandler, scrise de paznic inainte sa opreasca o interfata care nu mai
 # raspunde): pleaca numai randurile formatului lui, ca in raportul pornirii (hds-raport.sh, rp_stive)
 # Antetul unui fir: pana la Python 3.13 "Thread 0x... (most recent call first):"; pe 3.14 cu numele firului intre paranteze
@@ -1392,10 +1409,12 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 		stare["caderi_azi"] = 0
 		stare["rare_azi"] = 0
 		stare["motor_azi"] = 0
+		stare["hdmi_azi"] = 0
 	ramase = max(0, maxim - int(stare.get("jurnale_azi", 0)))
 	ramase_caderi = max(0, CADERI_PE_ZI - int(stare.get("caderi_azi", 0)))
 	ramase_rare = max(0, RARE_PE_ZI - int(stare.get("rare_azi", 0)))
 	ramase_motor = max(0, MOTOR_PE_ZI - int(stare.get("motor_azi", 0)))
+	ramase_hdmi = max(0, HDMI_PE_ZI - int(stare.get("hdmi_azi", 0)))
 	noi = []
 	try:
 		nume_fisiere = os.listdir(dosar_logs)
@@ -1418,12 +1437,15 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 	# intai caderile si blocajele (limita lor), apoi jurnalele obisnuite (limita lor); in fiecare grup, cele mai noi intai
 	noi.sort(key=lambda x: (not esteCadere(x[1]), -x[0]))
 	jurnale = []
-	obisnuite = caderi = rare = motor = 0
+	obisnuite = caderi = rare = motor = hdmi = 0
 	for mtime, nume, cale_fisier, semn in noi:
 		cadere = esteCadere(nume)
 		rar = not cadere and esteRar(nume)
 		de_motor = not cadere and not rar and esteMotor(nume)
-		if (cadere and caderi >= ramase_caderi) or (rar and rare >= ramase_rare) or 				(de_motor and motor >= ramase_motor) or (not cadere and not rar and not de_motor and obisnuite >= ramase):
+		de_hdmi = not cadere and not rar and not de_motor and esteHdmi(nume)
+		if ((cadere and caderi >= ramase_caderi) or (rar and rare >= ramase_rare) or
+				(de_motor and motor >= ramase_motor) or (de_hdmi and hdmi >= ramase_hdmi) or
+				(not cadere and not rar and not de_motor and not de_hdmi and obisnuite >= ramase)):
 			continue
 		crash = nume.startswith("enigma2_crash_")
 		text = _citesteCadere(cale_fisier) if crash else _citesteCoada(cale_fisier, 4 * JURNAL_MAX)
@@ -1449,6 +1471,8 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 			rare += 1
 		elif de_motor:
 			motor += 1
+		elif de_hdmi:
+			hdmi += 1
 		else:
 			obisnuite += 1
 	# numele care nu mai exista ies din stare
@@ -1462,6 +1486,7 @@ def culegeJurnale(stare, dosar_logs=None, cale_paznic=None, acum=None, maxim=JUR
 	stare["caderi_azi"] = int(stare.get("caderi_azi", 0)) + caderi
 	stare["rare_azi"] = int(stare.get("rare_azi", 0)) + rare
 	stare["motor_azi"] = int(stare.get("motor_azi", 0)) + motor
+	stare["hdmi_azi"] = int(stare.get("hdmi_azi", 0)) + hdmi
 	return {"jurnale": jurnale, "paznic": paznic}
 
 
@@ -1975,7 +2000,7 @@ def _procesor(radacina=""):
 def _hdmi(radacina=""):
 	moduri = (_citesteMic(_cale(radacina, "/proc/stb/video/videomode_choices")) or "").split()
 	hdr = (_citesteMic(_cale(radacina, "/proc/stb/video/hdmi_hdrtype_choices")) or "").split()
-	cec = any(os.path.exists(_cale(radacina, c)) for c in ("/dev/hdmi_cec", "/dev/cec0"))
+	cec = any(os.path.exists(_cale(radacina, c)) for c in ("/dev/hdmi_cec", "/dev/cec0", "/dev/misc/hdmi_cec0"))
 	return {"moduri": [_txt(x, 20) for x in moduri[:32]], "hdr": [_txt(x, 20) for x in hdr[:16]], "cec": cec}
 
 
@@ -2755,8 +2780,8 @@ class Lucru(threading.Thread):
 				stare = citesteStare()
 				self.puse = culegeSiPune(inst, self.sarcini, stare, self.es, self.utilizare_, self.pornire_s,
 					self.reporniri, cerut=not self.auto_zilnic and len(self.sarcini) > 1)
-				chei = ("jurnale", "jurnale_zi", "jurnale_azi", "caderi_azi", "paznic", "canale_semn", "receptor_suma",
-					"probe_suma", "ultim")
+				chei = ("jurnale", "jurnale_zi", "jurnale_azi", "caderi_azi", "rare_azi", "motor_azi", "hdmi_azi", "paznic",
+					"canale_semn", "receptor_suma", "probe_suma", "ultim")
 				auto = self.auto_zilnic
 
 				def uneste(s):

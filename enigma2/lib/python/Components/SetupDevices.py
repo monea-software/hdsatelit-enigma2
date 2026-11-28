@@ -47,6 +47,14 @@ def InitSetupDevices():
 	except Exception as e:
 		print("[SetupDevices] fusul dupa internet: %r" % (e,))
 
+	# locul antenei dupa internet (Components/HdsLoculInternet.py, LOC2): numai cat omul nu a ales singur locul; dupa fus,
+	# ca sa foloseasca acelasi raspuns al serverului; pe un fir, locul se scrie pe firul enigma2 dupa pornire
+	try:
+		from Components import HdsLoculInternet
+		HdsLoculInternet.laPornire()
+	except Exception as e:
+		print("[SetupDevices] locul dupa internet: %r" % (e,))
+
 	# marimea fonturilor (Screens/FontSetup.py, config.osd.fontscale) se pune de la pornire, inaintea primului ecran:
 	# skin.parseFont o foloseste la fiecare ecran construit; fara apelul acesta valoarea salvata se vedea numai dupa
 	# Salveaza in ecranul ei. config.osd tocmai a fost facut din nou, deci elementul se face aici din valoarea salvata.

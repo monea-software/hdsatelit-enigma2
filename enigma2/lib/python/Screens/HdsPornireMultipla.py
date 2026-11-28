@@ -290,3 +290,206 @@ class HdsKexecInstalare(Screen):
 			return
 		from Screens.Standby import TryQuitMainloop
 		self.session.open(TryQuitMainloop, 2)
+
+
+class HdsPornireStick(Screen):
+	"""Imagini pe stick, numai pe ZGEMMA H8.2H Plus / H8.2H SE (SystemInfo["HdsPornireStick"]; Components/HdsPornireStick.py).
+	Lista: memoria interna si locurile linuxrootfsN de pe stick, cu numele si versiunea fiecarei imagini. OK/VERDE: porneste
+	imaginea de acum inainte (repornire); GALBEN: o singura data; ALBASTRU: sterge locul; MENU: pune o imagine intr-un loc
+	liber (din feedul nostru, dintr-o arhiva de pe stick sau de la o adresa; cu sau fara setarile de acum) sau pregateste
+	stickul (singura intrebare: sterge stickul). Citirea listei si lucrarile lungi merg pe fire; nota arata progresul.
+	Aceleasi lucruri in web: cardul stick din /alimentare (HdsWebControl/alimentare_web.py)."""
+	skin = """
+	<screen name="HdsPornireStick" resolution="1920,1080" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder" title="Imagini pe stick">
+		<panel name="HdsCadru1240" />
+		<widget name="lista" position="32,104" size="1176,560" itemHeight="56" font="HdsRegular;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" textOffset="16,0" zPosition="2" />
+		<eLabel position="32,676" size="1176,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget source="nota" render="Label" position="32,688" size="1176,228" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="top" zPosition="1" />
+	</screen>
+	"""
+
+	def __init__(self, session):
+		Screen.__init__(self, session)
+		from Components import HdsPornireStick as S
+		self.S = S
+		self.skinName = ["HdsPornireStick"]
+		self.setTitle(_(S.TITLU))
+		self["key_red"] = StaticText(_("Close"))
+		self["key_green"] = StaticText("")
+		self["key_yellow"] = StaticText("")
+		self["key_blue"] = StaticText("")
+		self["key_menu"] = StaticText(_("Mai mult"))
+		self["lista"] = MenuList([])
+		self["nota"] = StaticText(_(S.CAUT))
+		self["actions"] = ActionMap(["SetupActions", "ColorActions", "MenuActions"], {
+			"ok": lambda: self.porneste(False),
+			"green": lambda: self.porneste(False),
+			"yellow": lambda: self.porneste(True),
+			"blue": self.sterge,
+			"menu": self.meniu,
+			"cancel": self.close,
+			"red": self.close,
+		}, -2)
+		self.stare = {"locuri": []}
+		self.citire = None
+		self.inchis = False
+		self.lucram = False
+		self.rezultat = ""
+		self["lista"].onSelectionChanged.append(self.butoane)
+		from enigma import eTimer
+		self.ceas = eTimer()
+		self.ceas.callback.append(self.veziFirul)
+		self.onClose.append(self.opreste)
+		if self.S.stareLucrare()["lucreaza"]:
+			self.lucram = True
+			self.ceas.start(500, False)
+		else:
+			self.citeste()
+
+	def opreste(self):
+		self.inchis = True
+		self.ceas.stop()
+
+	def citeste(self):
+		if self.inchis or self.citire is not None:
+			return
+		self.citire = citire = {}
+
+		def lucreaza():
+			try:
+				citire["stare"] = self.S.locuri()
+			except Exception as e:
+				print("[HdsPornireStick] %r" % (e,))
+				citire["stare"] = {"locuri": [], "eroare": True}
+		fir = threading.Thread(target=lucreaza, name="HdsPornireStick")
+		fir.daemon = True
+		fir.start()
+		self.ceas.start(300, False)
+
+	def veziFirul(self):
+		if self.inchis:
+			return
+		l = self.S.stareLucrare()
+		if l["lucreaza"]:
+			self.lucram = True
+			self["nota"].setText(l["text"])
+			return
+		if self.lucram:
+			# lucrarea s-a terminat: rezultatul ramane deasupra notei, lista se reciteste
+			self.lucram = False
+			self.rezultat = l["text"]
+			self.citire = None
+			self.citeste()
+			return
+		if self.citire is None or "stare" not in self.citire:
+			return
+		self.stare, self.citire = self.citire["stare"], None
+		self.ceas.stop()
+		ales = self._ales()
+		randuri = list(zip(self.S.randuri(self.stare), self.stare["locuri"]))
+		self["lista"].setList(randuri)
+		if ales:
+			for i, (_t, x) in enumerate(randuri):
+				if x["loc"] == ales["loc"]:
+					self["lista"].moveToIndex(i)
+		nota = self.S.nota(self.stare)
+		self["nota"].setText((self.rezultat + "\n" + nota) if self.rezultat else nota)
+		self.rezultat = ""
+		self.butoane()
+
+	def _ales(self):
+		r = self["lista"].getCurrent()
+		return r[1] if r else None
+
+	def butoane(self):
+		l = self._ales() or {}
+		de_acum = l.get("porneste") or (l.get("acum") and not l.get("implicit") and self.stare.get("stick"))
+		self["key_green"].setText(_("Pornește de acum") if de_acum else "")
+		self["key_yellow"].setText(_("Pornește o dată") if l.get("porneste") else "")
+		self["key_blue"].setText(_("Șterge locul") if l.get("sterge") else "")
+
+	def porneste(self, o_data):
+		from Screens.MessageBox import MessageBox
+		l = self._ales()
+		if not l or self.lucram:
+			return
+		if l.get("acum") and (o_data or l.get("implicit")):
+			self.session.open(MessageBox, _(self.S.DEJA), MessageBox.TYPE_INFO, timeout=5)
+			return
+		if not l.get("acum") and not l.get("porneste"):
+			self.session.open(MessageBox, _(self.S.NU_PORNESTE) % l["loc"], MessageBox.TYPE_ERROR, timeout=8)
+			return
+		# fara intrebare (Eduard: singura intrebare e la stergerea stickului); TryQuitMainloop intreaba singur la o
+		# inregistrare in curs, iar Nu acolo pune la loc STARTUP (HdsPornireStick.inapoi)
+		ok, text = self.S.reporneste(self.session, l["loc"], o_data, dupa_ms=2500)
+		self.session.open(MessageBox, text, MessageBox.TYPE_INFO if ok else MessageBox.TYPE_ERROR, timeout=3 if ok else 8)
+		if not ok or l.get("acum"):
+			self.citeste()
+
+	def sterge(self):
+		l = self._ales()
+		if not l or not l.get("sterge") or self.lucram:
+			return
+		loc = l["loc"]
+		self._lucreaza("sterge", lambda: self.S.stergeLoc(loc))
+
+	def _lucreaza(self, ce, functie):
+		from Screens.MessageBox import MessageBox
+		ok, text = self.S.pornesteLucrare(ce, functie)
+		if not ok:
+			self.session.open(MessageBox, text, MessageBox.TYPE_ERROR, timeout=5)
+			return
+		self.lucram = True
+		self["nota"].setText(text)
+		self.ceas.start(500, False)
+
+	def meniu(self):
+		if self.lucram:
+			return
+		from Screens.ChoiceBox import ChoiceBox
+		alegeri = []
+		if self.stare.get("stick"):
+			alegeri += [(_(self.S.SURSA_FEED), "feed"), (_(self.S.SURSA_ZIP), "zip"), (_(self.S.SURSA_ADRESA), "adresa")]
+		for d in self.stare.get("discuri", []):
+			alegeri.append(("%s %s (%s, %s)" % (_("Pregătește stickul"), d["disc"], d["nume"] or "USB",
+				self.S._marimeText(d["marime"])), "pregateste:" + d["disc"]))
+		if not alegeri:
+			from Screens.MessageBox import MessageBox
+			self.session.open(MessageBox, _(self.S.NICIUN_DISC), MessageBox.TYPE_INFO, timeout=5)
+			return
+		self.session.openWithCallback(self.meniuAles, ChoiceBox, title=_(self.S.TITLU), list=alegeri)
+
+	def meniuAles(self, ales):
+		if not ales:
+			return
+		from Screens.MessageBox import MessageBox
+		from Screens.ChoiceBox import ChoiceBox
+		ce = ales[1]
+		if ce.startswith("pregateste:"):
+			disc = ce.split(":", 1)[1]
+			d = [x for x in self.stare.get("discuri", []) if x["disc"] == disc]
+			if not d:
+				return
+			text = _(self.S.INTREBARE_PREGATIRE) % {"disc": ("%s %s" % (disc, d[0]["nume"])).strip(),
+				"marime": self.S._marimeText(d[0]["marime"])}
+			self.session.openWithCallback(lambda da: da and self._lucreaza("pregateste",
+				lambda: self.S.pregatesteStick(disc)), MessageBox, text, MessageBox.TYPE_YESNO, default=False)
+		elif ce == "feed":
+			self.cuSetari({"fel": "feed"})
+		elif ce == "zip":
+			zipuri = self.S.zipuri()
+			if not zipuri:
+				self.session.open(MessageBox, _(self.S.NICIUN_ZIP), MessageBox.TYPE_INFO, timeout=6)
+				return
+			self.session.openWithCallback(lambda a: a and self.cuSetari({"fel": "zip", "cale": a[1]}), ChoiceBox,
+				title=_(self.S.SURSA_ZIP), list=[("%s (%s)" % (z["nume"], z["marime"]), z["cale"]) for z in zipuri])
+		elif ce == "adresa":
+			from Screens.VirtualKeyBoard import VirtualKeyBoard
+			self.session.openWithCallback(lambda a: a and self.cuSetari({"fel": "adresa", "adresa": a.strip()}),
+				VirtualKeyBoard, title=_(self.S.SURSA_ADRESA), text="https://")
+
+	def cuSetari(self, sursa):
+		from Screens.ChoiceBox import ChoiceBox
+		self.session.openWithCallback(lambda a: a and self._lucreaza("instaleaza",
+			lambda: self.S.instaleaza(sursa, "", a[1])), ChoiceBox, title=_(self.S.TITLU),
+			list=[(_(self.S.CU_SETARI), True), (_(self.S.FARA_SETARI), False)])

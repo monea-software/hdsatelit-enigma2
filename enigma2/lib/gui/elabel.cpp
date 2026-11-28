@@ -250,10 +250,12 @@ static void hdsRenderColorText(gPainter &painter, gFont *font, const eRect &rect
 	hdsRenderColorPara(painter, font, rect, text, flags, para, ePoint(0, dy));
 }
 
-	/* HDSatelit: the scroll of a one-line text that does not fit (elabel.h). A tick every 50 ms moves the text by 2 px
-	   (40 px per second, slow enough to read while it moves); the two stops last 40 ticks (2 s). An overflow of at most
-	   1 px (rounding of the glyph edges) counts as fitting. */
-static const int scrollTickMs = 50, scrollStepPx = 2, scrollHoldTicks = 40, scrollTolerancePx = 1;
+	/* HDSatelit: the scroll of a one-line text that does not fit (elabel.h). A tick every 40 ms moves the text by 1 px
+	   (25 px per second, easy to read while it moves). 0.8.0 (SCR1): before, 2 px every 50 ms (20 steps per second) was
+	   seen as a text that trembles; a 1 px step every second frame of a 50 Hz (or 25 Hz) picture moves evenly, and a copy
+	   to the screen caught in the middle of a frame shifts the two halves by 1 px only, which the eye does not see. The two
+	   stops last 50 ticks (2 s). An overflow of at most 1 px (rounding of the glyph edges) counts as fitting. */
+static const int scrollTickMs = 40, scrollStepPx = 1, scrollHoldTicks = 50, scrollTolerancePx = 1;
 	/* never freed: a label destroyed while the program ends must still find it */
 static std::set<eDerulare*> &scrollRunning = *new std::set<eDerulare*>;
 static eTimer *scrollTimer = 0;

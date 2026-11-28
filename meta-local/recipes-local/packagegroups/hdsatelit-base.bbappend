@@ -440,7 +440,8 @@ PR:append = ".1"
 # gstreamer1.0-plugins-bad-faad (~30 KB, GPL-2.0, recipes-local/gstreamer/gstreamer1.0-plugins-bad_%.bbappend) intra NUMAI pe
 # masinile care au deja libfaad2 pentru DAB+ (aceeasi lista ca mai sus), deci nicio biblioteca noua de decodare pe receptor.
 # Posturile cu HE-AAC semnalat (SBR/PS in configuratia LATM) le refuza motorul si raman pe placa (aprobarea din 28.09.2026 e numai
-# pentru AAC-LC); restul masinilor (HiSilicon) raman fara faad pana hotaraste Eduard (runda-0013/STADIU-MA8.md).
+# pentru AAC-LC); restul masinilor (HiSilicon) raman fara faad pana hotaraste Eduard (runda-0013/STADIU-MA8.md), afara de ZGEMMA H8.2H
+# Plus (h8) si H8.2H SE (h8se), unde faad decodeaza sunetul AAC pe care sink-ul placii nu-l ia (blocurile de la coada fisierului).
 RDEPENDS:${PN}:append:vuuno4kse = " gstreamer1.0-plugins-bad-faad"
 RDEPENDS:${PN}:append:vuzero4k = " gstreamer1.0-plugins-bad-faad"
 RDEPENDS:${PN}:append:vuduo4klite = " gstreamer1.0-plugins-bad-faad"
@@ -494,9 +495,17 @@ PR:append:vuduo4klite = ".1"
 # The board provides its internal adapter driver and firmware.
 RDEPENDS:${PN}:append:gbquad4kpro = " bluez5 gigablue-aic8800-driver"
 
-# H8 NAND: lasam loc pentru setari. Aplicatiile mari raman in feed.
-RDEPENDS:${PN}:remove:h8 = "hds-navigator hds-ocr hds-ocr-modele"
-RDEPENDS:${PN}:remove:h8se = "hds-navigator hds-ocr hds-ocr-modele"
+# H8 NAND: lasam loc pentru setari. Recunoasterea textului ramane in feed.
+# NAV9 (0.8.0, Eduard 26.11 22:02 si 22:08: „orice imagine are si navigator webkit inclus”; 0.8.0 nu iese pe ZGEMMA fara
+# navigator si HbbTV): navigatorul (WPE WebKit, si HbbTV-ul, care e tot el) intra in imagine si pe H8.2H Plus si pe H8.2H SE.
+# Pe h8 cere furnizorul EGL din conf/distro/hdsatelit.conf (libglvnd); pe h8se EGL e Mali-ul producatorului. Locul: radacina
+# UBIFS de 444 MB (comprimata) avea ~210 MB liberi pe 0.7.8 (.129); WebKit + ICU sunt ~90 MB desfacute, mai putin pe UBIFS.
+# De masurat df / dupa constructie: daca raman sub 64 MB, navigatorul se muta inapoi in feed (cardul NAV8 il pune pe stick).
+RDEPENDS:${PN}:remove:h8 = "hds-ocr hds-ocr-modele"
+RDEPENDS:${PN}:remove:h8se = "hds-ocr hds-ocr-modele"
+# pachetul de grup are acum navigatorul: PR nou, ca actualizarea din meniu sa-l aduca (se adauga la .1 de mai jos)
+PR:append:h8 = ".1"
+PR:append:h8se = ".1"
 # WLAN masurat pe ambele placi: USB 0bda:f192, 8192fu cu firmware inclus.
 # Pastram si suportul adaptoarelor USB deja selectate in ZG1.
 RDEPENDS:${PN}:append:h8 = " rtl8192eu firmware-rtl8192eu rtl8192fu kernel-module-mt7601u firmware-mt7601u kernel-module-r8188eu firmware-rtl8188eu kernel-module-rtl8192cu firmware-rtl8192cu"
@@ -504,3 +513,21 @@ RDEPENDS:${PN}:append:h8se = " rtl8192eu firmware-rtl8192eu rtl8192fu kernel-mod
 # Only these NAND models use the frame utility, not a platform daemon.
 RDEPENDS:${PN}:append:h8 = " hdsatelit-sigla-timpurie"
 RDEPENDS:${PN}:append:h8se = " hdsatelit-sigla-timpurie"
+
+# ZGEMMA H8.2H Plus (h8): sunetul AAC pe care placa nu-l ia. dvbaudiosink (sursa fixata 66ff8288) primeste numai AAC cu
+# profile=lc (si LOAS); un flux IPTV sau un film cu AAC Main (ADTS cu profilul Main) nu avea niciun element care sa-l ia si se
+# oprea cu eroarea 12 (decodor lipsa). Aceleasi doua pachete ca pe Broadcom: libfaad2 (~0,27 MB) si gstreamer1.0-plugins-bad-faad
+# (~22 KB). Cu sink-ul pus de servicemp3, playbin da placii tot ce ia sink-ul (AAC-LC, HE-AAC, LOAS), iar faad decodeaza in procesor
+# numai ce refuza sink-ul (Main, SSR, LTP); PCM-ul iesit il recodeaza in MP3 dvbaudiosink-ul lui h8 (peticul 0006 din
+# recipes-local/gstreamer), fiindca placa nu ia PCM. Elementul faad il vede si egalizatorul (posturile AAC-LC, ca pe Broadcom).
+# Releul DAB ramane pe placa (fara twolame pe H8). Pentru h8se, blocul urmator. Revizia urca pe h8, ca actualizarea din
+# meniu sa aduca pachetele; blocul sta la coada fisierului (numai adaugarea pusa ultima face revizia mai mare).
+RDEPENDS:${PN}:append:h8 = " libfaad2 gstreamer1.0-plugins-bad-faad"
+PR:append:h8 = ".1"
+
+# ZGEMMA H8.2H SE (h8se): acelasi sink (AAC numai profile=lc si LOAS), deci canalele IPTV cu AAC Main erau refuzate la fel
+# (missing_codec mpegversion=4 profile=main), iar drumul PCM al placii e mut si aici (masurat pe receptor). De aceea faad intra
+# impreuna cu recodarea in MP3 din dvbaudiosink-ul lui h8se (peticul 0006, blocul h8se din recipes-local/gstreamer). Pachetele
+# pentru cortexa15hf-neon-vfpv4 sunt cele ale Vu+ 4K. Revizia urca pe h8se; blocul sta la coada fisierului.
+RDEPENDS:${PN}:append:h8se = " libfaad2 gstreamer1.0-plugins-bad-faad"
+PR:append:h8se = ".1"

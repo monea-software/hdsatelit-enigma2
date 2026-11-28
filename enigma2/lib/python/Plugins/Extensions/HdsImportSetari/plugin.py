@@ -5,7 +5,7 @@
 # HdsImportSetari: ecranul „Import canale și setări” (meniul Scanare, din data/menu.xml). Aduce canalele, buchetele,
 # înregistrările programate, setările antenei, rețeaua și Wi-Fi-ul, piconurile, setările generale sigure și modulele de
 # acces (fișierele lor copiate ca atare, pachetele instalate din nou, modulul ales) dintr-o copie și oferă pluginurile
-# ei aflate în sursele receptorului (instaleaza_pluginuri, câte unul, cu confirmarea de la Extensii și aplicații);
+# ei aflate în sursele receptorului (instaleaza_pluginuri, câte unul, cu confirmarea de la Extensii);
 # skinul nu. Copia vine: de pe un stick sau un disc (dosarul etc/enigma2 al
 # altei imagini, o copie plată, o arhivă .tar.gz), din altă partiție a memoriei interne sau dintr-o copie de siguranță
 # a receptorului. Sursele, dezarhivarea și importul stau în Components/HdsImportSurse.py, folosit și de pagina web
@@ -57,10 +57,23 @@ def _nota_surse(catalog):
 	return nota
 
 
+def deschide_cand_se_poate(session, la_inchidere, ecran, *argumente):
+	"""Deschide `ecran` acum dacă deasupra e un ecran în execuție, altfel imediat ce este (coada din
+	Components/HdsDeschidereAmanata, cea a pluginurilor străine). De ce: următorul plugin se deschide din răspunsul de
+	închidere al celui dinainte, iar fereastra rămasă dedesubt poate fi una marcată de închis cât era acoperită (un anunț
+	cu id înlocuit între timp, de pildă „canalul nu se prinde”): Screen.execBegin o închide pe loc, sesiunea rămâne fără
+	ecran în execuție și session.open aruncă „modal open are allowed only from a screen which is modal!”, adică
+	interfața cădea în mijlocul instalării pluginurilor din copie."""
+	from Components import HdsDeschidereAmanata as A
+	if A.poateDeschide(session):
+		return session.openWithCallback(la_inchidere, ecran, *argumente)
+	return A.amana(session, "HdsImportSetari", la_inchidere, ecran, argumente, {})
+
+
 def instaleaza_pluginuri(session, nume, la_sfarsit=None):
 	"""Pluginurile `nume` (din copie, aflate în sursele receptorului), câte unul, fiecare cu confirmarea și lucrarea de
-	la Extensii și aplicații (Screens/HdsExtensii.HdsExtensiiActiune); la_sfarsit() după ultimul. Catalogul se citește
-	pe un fir (fișierele opkg pot avea câțiva MB)."""
+	la Extensii (Screens/HdsExtensii.HdsExtensiiActiune); la_sfarsit() după ultimul. Catalogul se citește
+	pe un fir (fișierele opkg pot avea câțiva MB). Fiecare ecran se deschide cu deschide_cand_se_poate."""
 	from Components import HdsExtensiiLucru as L
 	from Components import HdsPachete as P
 	from Components.Ipkg import opkgArguments
@@ -84,7 +97,7 @@ def instaleaza_pluginuri(session, nume, la_sfarsit=None):
 				continue
 			plan.setdefault("titluri", L.titluri(catalog))
 			from Screens.HdsExtensii import HdsExtensiiActiune
-			session.openWithCallback(lambda *_r: urmatorul(catalog), HdsExtensiiActiune, plan)
+			deschide_cand_se_poate(session, lambda *_r: urmatorul(catalog), HdsExtensiiActiune, plan)
 			return
 		sfarsit()
 
@@ -280,7 +293,7 @@ class HdsImportSetariScreen(Screen):
 		if ajutor_alegere(cheie):
 			return ajutor_alegere(cheie)
 		if cheie == "pluginuri":
-			return _("Câte unul, cu întrebarea de la Extensii și aplicații.")
+			return _("Câte unul, cu întrebarea de la Extensii.")
 		if cheie == "reporneste":
 			return _("Setările importate intră după repornirea interfeței: câteva secunde, apoi canalul pornește iar.")
 		if len(self.surse) > 1:
@@ -429,8 +442,8 @@ class HdsImportSetariScreen(Screen):
 		self._rezultat = list(rezultat.get("mesaje") or [])
 		self._oferite = list((rezultat.get("pachete") or {}).get("oferite") or [])
 		if (rezultat.get("pachete") or {}).get("fara_lista"):
-			self._rezultat.append(_("Lista surselor de pachete nu e descărcată încă: o descarci din Meniu, Extensii și "
-				"aplicații."))
+			self._rezultat.append(_("Lista surselor de pachete nu e descărcată încă: o descarci din Meniu, "
+				"Extensii."))
 		self._arata(_("Import terminat.") if rezultat.get("ok") else _("Importul nu s-a făcut."))
 
 	def _laInchidere(self):

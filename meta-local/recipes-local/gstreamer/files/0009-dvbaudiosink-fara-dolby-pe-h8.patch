@@ -1,0 +1,33 @@
+Subject: [PATCH] dvbaudiosink: no AC-3 / E-AC-3 caps when the board has no Dolby decoder (HDS_FARA_DOLBY)
+
+On ZGEMMA H8.2H Plus the platform media server has no Dolby decoder (AC3 only as AC3PASSTHROUGH, no E-AC-3 at all):
+AC-3 and E-AC-3 written to audio0 stay silent and the playback never ends, with HDMI on PCM and on passthrough. With
+HDS_FARA_DOLBY the sink does not offer audio/x-ac3 and audio/x-eac3, so playbin plugs the FFmpeg decoder (avdec_ac3,
+avdec_eac3) and the sound reaches the sink as PCM (re-encoded to MP3 for the board by HDS_PCM_MP3). Without the define
+nothing changes.
+
+Upstream-Status: Inappropriate [board specific]
+---
+ gstdvbaudiosink.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/gstdvbaudiosink.c b/gstdvbaudiosink.c
+--- a/gstdvbaudiosink.c
++++ b/gstdvbaudiosink.c
+@@ -148,6 +148,16 @@
+ 		"audio/x-private1-eac3, " \
+ 		"framed =(boolean) true; "
+ 
++#ifdef HDS_FARA_DOLBY
++/* Placa nu decodeaza Dolby (ZGEMMA H8: in bibliotecile platformei AC3 apare numai ca AC3PASSTHROUGH, E-AC-3 deloc; masurat:
++ * fisierele AC-3 si E-AC-3 raman mute si fara sfarsit, pe PCM si pe trecere directa). Sink-ul nu le mai cere, deci playbin pune
++ * decodorul din FFmpeg (avdec_ac3, avdec_eac3) si sunetul ajunge aici ca PCM (recodat in MP3 pentru placa, HDS_PCM_MP3). */
++#undef AC3CAPS
++#define AC3CAPS ""
++#undef EAC3CAPS
++#define EAC3CAPS ""
++#endif
++
+ #define LPCMCAPS \
+ 		"audio/x-private1-lpcm; "
+ 

@@ -438,8 +438,9 @@ def opreste(punct, gata=None, consola=None, hm=None):
 def _ruleaza(args):
 	"""Comanda ca lista de argumente, fara shell, cu termen (numai pe firul de lucru)."""
 	import subprocess
-	p = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30,
-		check=False)
+	# dd de 512 MB pe un stick lent dureaza ~45 s (ZGEMMA H8.2H Plus, 11,5 MB/s)
+	p = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+		timeout=600 if args[:1] == ["dd"] else 30, check=False)
 	return p.returncode, p.stdout.decode("utf-8", "replace")
 
 
@@ -501,7 +502,10 @@ def pornesteSingur(ruleaza=None, cale_swaps=None, radacina=None, cale_mounts=Non
 	radacina = _radacinaUsb() if radacina is None else radacina
 	disc = radacina.get("disc") if radacina.get("fel") == "usb" else None
 	try:
-		cod, text = ruleaza(["blkid"])
+		# numai discurile externe: blkid fara argumente citeste si capatul lui romblock9 (flash-ul NAND al ZGEMMA H8, cu 2
+		# blocuri rele marcate din fabrica) si umple dmesg de „I/O error, dev romblock9”
+		discuri = discuriBlkid()
+		cod, text = ruleaza(["blkid"] + (discuri or [])) if discuri != [] else (2, "")
 	except Exception as eroare:
 		cod, text = -1, str(eroare)
 	erori = []
@@ -520,7 +524,126 @@ def pornesteSingur(ruleaza=None, cale_swaps=None, radacina=None, cale_mounts=Non
 			return dict(urma, stare="pornit", swap=swap, fel=FEL_PARTITIE if estePartitie(swap) else FEL_FISIER,
 				erori=erori)
 		erori.append("swapon %s: %s %s" % (swap, cod, (text or "").strip()[:120]))
+	# 0.8.0 (Eduard, 26.11.2026 22:37, ZGEMMA H8.2H Plus cu 334 MB si fara swap: „să faci, nu accept eșec”): pe
+	# receptoarele cu memorie putina, daca nu s-a gasit niciun swap, swapfile.hds se face singur pe primul disc extern
+	# cu loc (ext2/3/4, xfs), apoi swapon; la urmatoarea pornire il gaseste fisiereSwap.
+	if memorieTotalaMb() < PRAG_MEMORIE_SWAP_AUTOMAT_MB:
+		facut = faSingur(ruleaza, cale_mounts, radacina)
+		if facut.get("swap"):
+			return dict(urma, stare="pornit", swap=facut["swap"], fel=FEL_FISIER, facut=True, erori=erori)
+		erori += facut.get("erori", [])
 	return dict(urma, stare="nimic", erori=erori)
+
+
+PRAG_MEMORIE_SWAP_AUTOMAT_MB = 768
+# NAV10 (0.8.0): si stickurile FAT32 asa cum vin din magazin (vfat are bmap, deci swapon merge pe un fisier facut cu dd),
+# ca omul sa nu fie nevoit sa formateze nimic
+_FS_SWAP_AUTOMAT = ("ext2", "ext3", "ext4", "xfs", "vfat")
+
+
+def discuriBlkid():
+	"""/dev/sd* pe receptor; None in afara lui (probele de pe PC: blkid fara argumente)."""
+	import glob
+	if not os.path.isfile("/proc/partitions"):
+		return None
+	return sorted(glob.glob("/dev/sd*"))
+
+
+def memorieTotalaMb(cale="/proc/meminfo"):
+	try:
+		with open(cale) as f:
+			for linie in f:
+				if linie.startswith("MemTotal:"):
+					return int(linie.split()[1]) // 1024
+	except (OSError, ValueError, IndexError):
+		pass
+	return 1 << 30
+
+
+def textStick():
+	# NAV10: si pe FAT32 (_FS_SWAP_AUTOMAT), iar stickul pus dupa pornire e folosit pe loc (laStick)
+	return _("Receptorul are putina memorie (%d MB), iar aplicatiile mari (navigatorul, HbbTV, YouTube) pot merge greu "
+		"sau se pot inchide. Pune in receptor un stick USB sau un disc cu cel putin 1 GB liber: receptorul isi face "
+		"singur memoria de schimb pe el, fara nimic de apasat.") % memorieTotalaMb()
+
+
+def anuntaStick():
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(textStick(), MessageBox.TYPE_INFO, 30, "HdsSwapStick")
+	except Exception as e:
+		print("[HdsSwap] anuntul pentru stick: %s" % e)
+
+
+def _puncteSwapAutomat(linii, radacina=None):
+	"""[(dispozitiv, punct)] unde se poate face swapfile.hds singur: intai radacina, cand imaginea merge de pe un stick
+	(NAV10: Vu+ Solo SE din imaginea pentru USB are 559 MB si nu are alt disc; radacina e montata ca /dev/root), apoi
+	partitiile externe /dev/sd* montate rw, cu un sistem de fisiere din _FS_SWAP_AUTOMAT, fara / si /boot."""
+	rez = []
+	for linie in linii:
+		p = linie.split()
+		if len(p) < 4 or p[2] not in _FS_SWAP_AUTOMAT or "ro" in p[3].split(","):
+			continue
+		punct = _decodeaza(p[1])
+		if punct == "/":
+			if (radacina or {}).get("fel") == "usb" and ("/", "/") not in rez:
+				rez.insert(0, ("/", "/"))
+			continue
+		if not estePartitie(p[0]) or punct in EXCLUSE:
+			continue
+		rez.append((p[0], punct))
+	return rez
+
+
+def faSingur(ruleaza=None, cale_mounts=None, radacina=None):
+	"""Pe firul de lucru: swapfile.hds de MARIME_MB_IMPLICITA MB pe discul imaginii (radacina pe USB) sau pe prima
+	partitie externa montata (ext2/3/4, xfs, vfat) cu loc pentru fisier si MARJA_MB, cu dd, chmod 600, mkswap, swapon.
+	{"swap": cale} sau {"erori": [...]}."""
+	ruleaza = ruleaza or _ruleaza
+	erori = []
+	try:
+		with open(cale_mounts or CALE_MOUNTS, encoding="utf-8", errors="surrogateescape") as f:
+			linii = f.read().splitlines()
+	except OSError as e:
+		return {"erori": ["mounts: %s" % e]}
+	vazute = set()
+	for disp, punct in _puncteSwapAutomat(linii, radacina):
+		if disp in vazute:
+			continue
+		vazute.add(disp)
+		if (_liber(punct) or 0) < (MARIME_MB_IMPLICITA + MARJA_MB) * 1024 * 1024:
+			erori.append("%s: loc putin" % punct)
+			continue
+		cale = caleSwap(punct)
+		if os.path.lexists(cale):
+			continue
+		cod, text = ruleaza(["dd", "if=/dev/zero", "of=" + cale, "bs=1M", "count=%d" % MARIME_MB_IMPLICITA])
+		if cod != 0:
+			erori.append("dd %s: %s %s" % (cale, cod, (text or "").strip()[-120:]))
+			try:
+				os.remove(cale)
+			except OSError:
+				pass
+			continue
+		try:
+			os.chmod(cale, 0o600)
+		except OSError:
+			pass
+		for comanda in (["mkswap", cale], ["swapon", cale]):
+			cod, text = ruleaza(comanda)
+			if cod != 0:
+				erori.append("%s: %s %s" % (comanda[0], cod, (text or "").strip()[:120]))
+				# NAV10: fisierul care nu merge ca swap (de pilda un sistem de fisiere fara bmap) nu ramane pe stick
+				try:
+					os.remove(cale)
+				except OSError:
+					pass
+				break
+		else:
+			print("[HdsSwap] swap facut singur: %s" % cale)
+			return {"swap": cale}
+	return {"erori": erori or ["niciun disc extern cu loc"]}
 
 
 _pornire = {"ceas": None, "lucru": None, "pas": 0}
@@ -529,10 +652,67 @@ _pornire = {"ceas": None, "lucru": None, "pas": 0}
 CALE_SEMN_PORNIRE = "/tmp/hds-swap-pornire-facuta"
 
 
+# NAV10 (0.8.0): stickul pus DUPA pornire (anuntul spune „fara nimic de apasat”): pe receptoarele cu memorie putina si fara
+# swap, la STICK_ASTEPTARE_S dupa ce Hotplug il anunta (montarea vine dupa), aceeasi pornesteSingur pe un fir
+STICK_ASTEPTARE_S = 15
+_stick = {"ceas": None}
+
+
+def _legaHotplug():
+	try:
+		from Plugins.SystemPlugins.Hotplug.plugin import hotplugNotifier
+	except Exception as e:
+		print("[HdsSwap] hotplug: %r" % (e,))
+		return
+	if laStick not in hotplugNotifier:
+		hotplugNotifier.append(laStick)
+
+
+def trebuieSwapAcum(cale_swaps=None):
+	"""Receptor cu memorie putina si fara niciun swap pe disc pornit (zram nu conteaza)."""
+	if memorieTotalaMb() >= PRAG_MEMORIE_SWAP_AUTOMAT_MB:
+		return False
+	return not [a for a in swapuriActive(cale_swaps) if not _neluat(a)]
+
+
+def laStick(device, stare):
+	"""hotplugNotifier: "1" = stick sau disc bagat, inainte de montare"""
+	if stare != "1" or not trebuieSwapAcum():
+		return
+	try:
+		from enigma import eTimer
+		if _stick["ceas"] is None:
+			_stick["ceas"] = eTimer()
+			try:
+				_stick["legatura"] = _stick["ceas"].timeout.connect(_dupaStick)
+			except AttributeError:
+				_stick["ceas"].callback.append(_dupaStick)
+		_stick["ceas"].start(STICK_ASTEPTARE_S * 1000, True)
+	except Exception as e:
+		print("[HdsSwap] stick: %r" % (e,))
+
+
+def _dupaStick():
+	if inLucru() or _pornire["lucru"] is not None or not trebuieSwapAcum():
+		return
+	from Components.HdsImportSurse import Lucrare
+
+	def gata(rez, eroare):
+		global _revizie_inventar
+		_pornire["lucru"] = None
+		print("[HdsSwap] stick pus: %s" % (eroare or rez))
+		if rez and rez.get("stare") == "pornit":
+			_inventar["semn"] = None
+			_revizie_inventar += 1
+	_pornire["lucru"] = Lucrare(pornesteSingur, gata)
+
+
 def porneste():
 	"""Chemat din mytest.py: la INTARZIERI_PORNIRE_S dupa pornire (a doua oara pentru discurile care apar mai tarziu),
 	pornesteSingur pe un fir; o data pe pornirea receptorului (CALE_SEMN_PORNIRE), nu la fiecare repornire a
-	interfetei. Pe firul enigma2 numai un ceas; nimic pe ecran, rezultatul in jurnal."""
+	interfetei. Pe firul enigma2 numai un ceas; nimic pe ecran, rezultatul in jurnal. NAV10: ascultatorul stickurilor
+	(laStick) se pune la fiecare pornire a interfetei."""
+	_legaHotplug()
 	if os.path.exists(CALE_SEMN_PORNIRE):
 		print("[HdsSwap] pornirea singura s-a facut deja la aceasta pornire a receptorului")
 		return
@@ -567,6 +747,9 @@ def _dupaIncercare(rez, eroare):
 	if (eroare or not rez or rez.get("stare") not in ("pornit", "deja")) and pas < len(INTARZIERI_PORNIRE_S):
 		_pornire["ceas"].start((INTARZIERI_PORNIRE_S[pas] - INTARZIERI_PORNIRE_S[pas - 1]) * 1000, True)
 		return
+	if (rez or {}).get("stare") == "nimic" and memorieTotalaMb() < PRAG_MEMORIE_SWAP_AUTOMAT_MB:
+		# Eduard, 26.11.2026 22:41: „să anunțe utilizatorul să bage stick dacă nu are”
+		anuntaStick()
 	try:
 		with open(CALE_SEMN_PORNIRE, "w") as f:
 			f.write("%s\n" % (rez or {}).get("stare", "eroare"))

@@ -1,0 +1,457 @@
+Subject: [PATCH] dvbaudiosink: PCM recodat in MP3 pentru placa (HDS_PCM_MP3)
+
+Pe ZGEMMA H8 (hi3716mv430) serverul media al platformei nu are drum pentru PCM (AUDIOTYPE_RAW, LPCM): tamponul audio0 se
+umple, PTS-ul ramane 0 si redarea sta. Cu HDS_PCM_MP3, audio/x-raw (S16, 1-2 canale, 32/44,1/48 kHz) se recodeaza in MP3
+(libmp3lame incarcata la nevoie, 320 kb/s stereo, 160 mono) si pleaca placii ca AUDIOTYPE_MP3, cu PTS pe fiecare PES.
+Fara HDS_PCM_MP3 nimic nu se schimba; fara libmp3lame ramane drumul vechi.
+
+Upstream-Status: Inappropriate [specific imaginii HD Satelit]
+---
+ gstdvbaudiosink.c | 348 +++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ gstdvbaudiosink.h |  11 ++
+ 2 files changed, 358 insertions(+), 1 deletion(-)
+
+diff --git a/gstdvbaudiosink.c b/gstdvbaudiosink.c
+index 00ec958..6cc032b 100644
+--- a/gstdvbaudiosink.c
++++ b/gstdvbaudiosink.c
+@@ -77,6 +77,10 @@
+ #include "gstdvbaudiosink.h"
+ #include "gstdvbsink-marshal.h"
+ 
++#ifdef HDS_PCM_MP3
++#include <dlfcn.h>
++#endif
++
+ GST_DEBUG_CATEGORY_STATIC(dvbaudiosink_debug);
+ #define GST_CAT_DEFAULT dvbaudiosink_debug
+ 
+@@ -189,7 +193,15 @@ static guint gst_dvbaudiosink_signals[LAST_SIGNAL] = { 0 };
+ 		"rate = (int) {8000, 16000}, channels = (int) 1; "
+ 
+ #define XRAW "audio/x-raw"
+-#if defined(DREAMBOX) || defined(MAX_PCMRATE_48K)
++#if defined(HDS_PCM_MP3)
++/* PCM-ul se recodeaza in MP3 (hds_mp3_*): numai ce ia codorul MPEG-1 Layer III, restul il face playsink (audioconvert,
++ * audioresample) */
++#define PCMCAPS \
++		"audio/x-raw, " \
++		"format = (string) "GST_AUDIO_NE(S16)", " \
++		"layout = (string) interleaved, " \
++		"rate = (int) { 32000, 44100, 48000 }, " "channels = (int) [ 1, 2 ]; "
++#elif defined(DREAMBOX) || defined(MAX_PCMRATE_48K)
+ #define PCMCAPS \
+ 		"audio/x-raw, " \
+ 		"format = (string) { "GST_AUDIO_NE(S32)", "GST_AUDIO_NE(S24)", "GST_AUDIO_NE(S16)", S8, "GST_AUDIO_NE(U32)", "GST_AUDIO_NE(U24)", "GST_AUDIO_NE(U16)", U8 }, " \
+@@ -262,6 +274,303 @@ t_audio_type bypass_to_encoding (t_audio_type bypass)
+ 	return AUDIO_ENCODING_UNKNOWN;
+ }
+ 
++#ifdef HDS_PCM_MP3
++/*
++ * PCM recodat in MP3 pentru placa (hds-pcm-mp3).
++ *
++ * Pe ZGEMMA H8 (hi3716mv430) sunetul trece prin serverul media al platformei, care decodeaza formatele comprimate (AAC, MP2,
++ * MP3; AC3 si DTS apar in bibliotecile lui numai ca trecere spre iesirea digitala); pentru AUDIOTYPE_RAW si LPCM nu are niciun
++ * drum: driverul ia ~512 KB in tampon, PTS-ul ramane 0 si scrierea sta pentru totdeauna. Deci tot ce se decodeaza in procesor (FLAC, Vorbis,
++ * Opus, WMA, ALAC, TrueHD, AAC prin faad) era fara sunet, iar redarea ramanea la a doua secunda.
++ *
++ * Aici audio/x-raw (S16, 1-2 canale, 32/44,1/48 kHz; playsink converteste restul) trece prin codorul MP3 din libmp3lame
++ * (LGPL, incarcata la prima nevoie; fara ea ramane drumul vechi) si pleaca placii ca AUDIOTYPE_MP3: MPEG-1 Layer III CBR,
++ * 320 kb/s stereo, 160 kb/s mono, lame -q 7. Decodorul MP3 al placii il reda sincron cu imaginea, ca pe orice film cu sunet MP3.
++ *
++ * Timpul: PTS-ul primului buffer dupa deschidere e ancora; cadrul MP3 k incepe cu esantionul k * 1152, iar sunetul iese mai
++ * tarziu cu intarzierea codorului (lame_get_encoder_delay) si a decodorului (529 de esantioane), deci PTS(k) = ancora +
++ * (k * 1152) / rata - intarzierea (cel putin 0). Cadrele intregi pleaca in PES-uri de cel mult HDS_MP3_CADRE_PES cadre, fiecare
++ * cu PTS-ul primului cadru. Un salt de timp peste HDS_MP3_SALT, golirea (FLUSH_STOP) si caps-urile noi inchid codorul; buffer-ul
++ * urmator il deschide cu ancora noua. La EOS se golesc cadrele ramase in codor (lame_encode_flush).
++ */
++#define HDS_MP3_LIB "libmp3lame.so.0"
++#define HDS_MP3_KBIT_STEREO 320
++#define HDS_MP3_KBIT_MONO 160
++#define HDS_MP3_CALITATE 7
++#define HDS_MP3_ESANTIOANE_CADRU 1152
++#define HDS_MP3_INTARZIERE_DECODOR 529
++#define HDS_MP3_SALT (100 * GST_MSECOND)
++#define HDS_MP3_BUCATA 4096
++#define HDS_MP3_LOC_IESIRE (HDS_MP3_BUCATA * 5 / 4 + 7200)
++#define HDS_MP3_CADRE_PES 16
++
++/* MPEG_mode din lame.h */
++#define HDS_LAME_JOINT_STEREO 1
++#define HDS_LAME_MONO 3
++
++static struct
++{
++	gboolean ok;
++	void *(*init)(void);
++	int (*set_in_samplerate)(void *, int);
++	int (*set_out_samplerate)(void *, int);
++	int (*set_num_channels)(void *, int);
++	int (*set_mode)(void *, int);
++	int (*set_brate)(void *, int);
++	int (*set_VBR)(void *, int);
++	int (*set_quality)(void *, int);
++	int (*set_bWriteVbrTag)(void *, int);
++	int (*init_params)(void *);
++	int (*get_encoder_delay)(const void *);
++	int (*encode_buffer)(void *, const short *, const short *, const int, unsigned char *, const int);
++	int (*encode_buffer_interleaved)(void *, short *, int, unsigned char *, int);
++	int (*encode_flush)(void *, unsigned char *, int);
++	int (*close)(void *);
++} hds_lame;
++
++/* libmp3lame se incarca o singura data; TRUE daca are toate functiile */
++static gboolean hds_lame_incarca(void)
++{
++	static gsize gata = 0;
++	if (g_once_init_enter(&gata))
++	{
++		void *h = dlopen(HDS_MP3_LIB, RTLD_NOW | RTLD_LOCAL);
++		if (h)
++		{
++#define HDS_LAME_FN(camp, nume) *(void **)(&hds_lame.camp) = dlsym(h, nume)
++			HDS_LAME_FN(init, "lame_init");
++			HDS_LAME_FN(set_in_samplerate, "lame_set_in_samplerate");
++			HDS_LAME_FN(set_out_samplerate, "lame_set_out_samplerate");
++			HDS_LAME_FN(set_num_channels, "lame_set_num_channels");
++			HDS_LAME_FN(set_mode, "lame_set_mode");
++			HDS_LAME_FN(set_brate, "lame_set_brate");
++			HDS_LAME_FN(set_VBR, "lame_set_VBR");
++			HDS_LAME_FN(set_quality, "lame_set_quality");
++			HDS_LAME_FN(set_bWriteVbrTag, "lame_set_bWriteVbrTag");
++			HDS_LAME_FN(init_params, "lame_init_params");
++			HDS_LAME_FN(get_encoder_delay, "lame_get_encoder_delay");
++			HDS_LAME_FN(encode_buffer, "lame_encode_buffer");
++			HDS_LAME_FN(encode_buffer_interleaved, "lame_encode_buffer_interleaved");
++			HDS_LAME_FN(encode_flush, "lame_encode_flush");
++			HDS_LAME_FN(close, "lame_close");
++#undef HDS_LAME_FN
++			hds_lame.ok = hds_lame.init && hds_lame.set_in_samplerate && hds_lame.set_out_samplerate &&
++				hds_lame.set_num_channels && hds_lame.set_mode && hds_lame.set_brate && hds_lame.set_VBR &&
++				hds_lame.set_quality && hds_lame.set_bWriteVbrTag && hds_lame.init_params &&
++				hds_lame.get_encoder_delay && hds_lame.encode_buffer && hds_lame.encode_buffer_interleaved &&
++				hds_lame.encode_flush && hds_lame.close;
++		}
++		GST_INFO("hds-pcm-mp3: %s %s", HDS_MP3_LIB, hds_lame.ok ? "incarcata" : (h ? "fara toate functiile" : dlerror()));
++		g_once_init_leave(&gata, 1);
++	}
++	return hds_lame.ok;
++}
++
++/* inchide codorul si uita ce era in lucru (ancora, contoarele, octetii ramasi) */
++static void hds_mp3_inchide(GstDVBAudioSink *self)
++{
++	if (self->hds_mp3)
++		hds_lame.close(self->hds_mp3);
++	self->hds_mp3 = NULL;
++	if (self->hds_mp3_iesire)
++		g_byte_array_set_size(self->hds_mp3_iesire, 0);
++	self->hds_mp3_ancora = GST_CLOCK_TIME_NONE;
++	self->hds_mp3_esantioane = self->hds_mp3_cadre = 0;
++}
++
++static gboolean hds_mp3_deschide(GstDVBAudioSink *self)
++{
++	gint rata = self->hds_mp3_rata, canale = self->hds_mp3_canale;
++	void *g;
++	hds_mp3_inchide(self);
++	g = hds_lame.init();
++	if (!g)
++		return FALSE;
++	if (hds_lame.set_in_samplerate(g, rata) < 0 || hds_lame.set_out_samplerate(g, rata) < 0 ||
++		hds_lame.set_num_channels(g, canale) < 0 ||
++		hds_lame.set_mode(g, canale == 1 ? HDS_LAME_MONO : HDS_LAME_JOINT_STEREO) < 0 ||
++		hds_lame.set_brate(g, canale == 1 ? HDS_MP3_KBIT_MONO : HDS_MP3_KBIT_STEREO) < 0 ||
++		hds_lame.set_VBR(g, 0) < 0 || hds_lame.set_quality(g, HDS_MP3_CALITATE) < 0 ||
++		hds_lame.set_bWriteVbrTag(g, 0) < 0 || hds_lame.init_params(g) < 0)
++	{
++		hds_lame.close(g);
++		return FALSE;
++	}
++	self->hds_mp3 = g;
++	self->hds_mp3_intarziere = gst_util_uint64_scale_int(hds_lame.get_encoder_delay(g) + HDS_MP3_INTARZIERE_DECODOR,
++		GST_SECOND, rata);
++	GST_INFO_OBJECT(self, "hds-pcm-mp3: codor deschis, %d Hz, %d canale, %d kb/s, intarziere %" GST_TIME_FORMAT, rata, canale,
++		canale == 1 ? HDS_MP3_KBIT_MONO : HDS_MP3_KBIT_STEREO, GST_TIME_ARGS(self->hds_mp3_intarziere));
++	return TRUE;
++}
++
++/* caps audio/x-raw: TRUE daca sunetul se recodeaza in MP3 (bypass AUDIOTYPE_MP3), FALSE = drumul vechi */
++static gboolean hds_mp3_set_caps(GstDVBAudioSink *self, GstStructure *structure)
++{
++	gint rata = 0, canale = 0;
++	const gchar *format = gst_structure_get_string(structure, "format");
++	const gchar *layout = gst_structure_get_string(structure, "layout");
++	gst_structure_get_int(structure, "rate", &rata);
++	gst_structure_get_int(structure, "channels", &canale);
++	if (!format || strcmp(format, GST_AUDIO_NE(S16)) || (layout && strcmp(layout, "interleaved")) ||
++		(canale != 1 && canale != 2) || (rata != 32000 && rata != 44100 && rata != 48000))
++	{
++		GST_WARNING_OBJECT(self, "hds-pcm-mp3: format neasteptat (%s, %d Hz, %d canale), drumul vechi", format, rata, canale);
++		return FALSE;
++	}
++	if (!hds_lame_incarca())
++	{
++		GST_WARNING_OBJECT(self, "hds-pcm-mp3: fara %s, drumul vechi", HDS_MP3_LIB);
++		return FALSE;
++	}
++	hds_mp3_inchide(self);
++	if (!self->hds_mp3_iesire)
++		self->hds_mp3_iesire = g_byte_array_new();
++	self->hds_mp3_rata = rata;
++	self->hds_mp3_canale = canale;
++	self->hds_mp3_activ = TRUE;
++	self->bypass = AUDIOTYPE_MP3;
++	GST_INFO_OBJECT(self, "hds-pcm-mp3: audio/x-raw %d Hz %d canale recodat in MP3 pentru placa", rata, canale);
++	return TRUE;
++}
++
++/* lungimea cadrului MPEG-1 Layer III de la p (0 = nu incepe un cadru aici) */
++static guint hds_mp3_lungime_cadru(const guint8 *p)
++{
++	static const guint16 kbit[16] = { 0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0 };
++	static const guint32 rate[4] = { 44100, 48000, 32000, 0 };
++	guint b, r;
++	if (p[0] != 0xff || (p[1] & 0xfe) != 0xfa)
++		return 0;
++	b = kbit[p[2] >> 4];
++	r = rate[(p[2] >> 2) & 3];
++	if (!b || !r)
++		return 0;
++	return 144000 * b / r + ((p[2] >> 1) & 1);
++}
++
++/* trimite placii cadrele intregi din hds_mp3_iesire, in PES-uri cu PTS; ce nu face un cadru intreg ramane pentru data viitoare */
++static GstFlowReturn hds_mp3_trimite(GstDVBAudioSink *self)
++{
++	GByteArray *a = self->hds_mp3_iesire;
++	GstFlowReturn ret = GST_FLOW_OK;
++	guint poz = 0;
++	while (ret == GST_FLOW_OK)
++	{
++		guint inceput = poz, n = 0, l = 0;
++		GstBuffer *b;
++		while (n < HDS_MP3_CADRE_PES && poz + 4 <= a->len && (l = hds_mp3_lungime_cadru(a->data + poz)) && poz + l <= a->len)
++		{
++			poz += l;
++			n++;
++		}
++		if (!n)
++		{
++			if (poz + 4 <= a->len && !l)
++			{
++				/* nu e antet de cadru: se sare pana la urmatorul (paza, codorul da numai cadre intregi la rand) */
++				GST_WARNING_OBJECT(self, "hds-pcm-mp3: octet fara antet de cadru la %u, sarit", poz);
++				poz++;
++				continue;
++			}
++			break;
++		}
++		b = gst_buffer_new_memdup(a->data + inceput, poz - inceput);
++		if (GST_CLOCK_TIME_IS_VALID(self->hds_mp3_ancora))
++		{
++			GstClockTime t = self->hds_mp3_ancora + gst_util_uint64_scale_int(self->hds_mp3_cadre * HDS_MP3_ESANTIOANE_CADRU,
++				GST_SECOND, self->hds_mp3_rata);
++			GST_BUFFER_PTS(b) = t > self->hds_mp3_intarziere ? t - self->hds_mp3_intarziere : 0;
++		}
++		GST_BUFFER_DURATION(b) = gst_util_uint64_scale_int(n * HDS_MP3_ESANTIOANE_CADRU, GST_SECOND, self->hds_mp3_rata);
++		/* PTS-ul fiecarui PES vine din buffer, nu din extrapolarea lui push_buffer */
++		self->timestamp = GST_CLOCK_TIME_NONE;
++		ret = gst_dvbaudiosink_push_buffer(self, b);
++		gst_buffer_unref(b);
++		self->hds_mp3_cadre += n;
++	}
++	if (poz)
++		g_byte_array_remove_range(a, 0, poz);
++	return ret;
++}
++
++/* render pentru audio/x-raw recodat in MP3 */
++static GstFlowReturn hds_mp3_render(GstDVBAudioSink *self, GstBuffer *buffer)
++{
++	GstClockTime pts = GST_BUFFER_PTS(buffer);
++	gint canale = self->hds_mp3_canale;
++	GstMapInfo map;
++	guint8 *iesire;
++	gsize n, facut = 0;
++	GstFlowReturn ret = GST_FLOW_OK;
++
++	if (self->hds_mp3 && GST_CLOCK_TIME_IS_VALID(pts) && GST_CLOCK_TIME_IS_VALID(self->hds_mp3_ancora))
++	{
++		GstClockTime asteptat = self->hds_mp3_ancora + gst_util_uint64_scale_int(self->hds_mp3_esantioane, GST_SECOND,
++			self->hds_mp3_rata);
++		if (pts + HDS_MP3_SALT < asteptat || pts > asteptat + HDS_MP3_SALT)
++		{
++			GST_INFO_OBJECT(self, "hds-pcm-mp3: salt de timp %" GST_TIME_FORMAT " -> %" GST_TIME_FORMAT ", codorul de la capat",
++				GST_TIME_ARGS(asteptat), GST_TIME_ARGS(pts));
++			hds_mp3_inchide(self);
++		}
++	}
++	if (!self->hds_mp3)
++	{
++		if (!hds_mp3_deschide(self))
++		{
++			GST_ELEMENT_ERROR(self, STREAM, ENCODE, (NULL), ("hds-pcm-mp3: codorul MP3 nu porneste"));
++			return GST_FLOW_ERROR;
++		}
++		self->hds_mp3_ancora = pts;
++	}
++
++	if (!gst_buffer_map(buffer, &map, GST_MAP_READ))
++		return GST_FLOW_ERROR;
++	n = map.size / (2 * canale);
++	iesire = g_malloc(HDS_MP3_LOC_IESIRE);
++	while (facut < n)
++	{
++		int bucata = (int)MIN(n - facut, HDS_MP3_BUCATA);
++		short *pcm = (short *)map.data + facut * canale;
++		int r = canale == 1 ? hds_lame.encode_buffer(self->hds_mp3, pcm, pcm, bucata, iesire, HDS_MP3_LOC_IESIRE)
++			: hds_lame.encode_buffer_interleaved(self->hds_mp3, pcm, bucata, iesire, HDS_MP3_LOC_IESIRE);
++		if (r < 0)
++		{
++			GST_ELEMENT_ERROR(self, STREAM, ENCODE, (NULL), ("hds-pcm-mp3: codorul MP3 a intors %d", r));
++			ret = GST_FLOW_ERROR;
++			break;
++		}
++		if (r > 0)
++			g_byte_array_append(self->hds_mp3_iesire, iesire, r);
++		facut += bucata;
++	}
++	g_free(iesire);
++	gst_buffer_unmap(buffer, &map);
++	self->hds_mp3_esantioane += facut;
++	if (ret == GST_FLOW_OK)
++		ret = hds_mp3_trimite(self);
++	return ret;
++}
++
++/* EOS: cadrele ramase in codor (ultimul completat cu liniste) pleaca inainte de asteptarea sfarsitului */
++static void hds_mp3_goleste(GstDVBAudioSink *self)
++{
++	guint8 *iesire;
++	int r;
++	if (!self->hds_mp3_activ || !self->hds_mp3)
++		return;
++	iesire = g_malloc(HDS_MP3_LOC_IESIRE);
++	r = hds_lame.encode_flush(self->hds_mp3, iesire, HDS_MP3_LOC_IESIRE);
++	if (r > 0)
++		g_byte_array_append(self->hds_mp3_iesire, iesire, r);
++	g_free(iesire);
++	hds_mp3_trimite(self);
++	GST_INFO_OBJECT(self, "hds-pcm-mp3: EOS, %" G_GUINT64_FORMAT " cadre MP3 trimise", self->hds_mp3_cadre);
++	hds_mp3_inchide(self);
++}
++#endif
++
+ static void gst_dvbaudiosink_init(GstDVBAudioSink *self);
+ static void gst_dvbaudiosink_dispose(GObject *obj);
+ static void gst_dvbaudiosink_reset(GObject *obj);
+@@ -386,6 +695,13 @@ static void gst_dvbaudiosink_init(GstDVBAudioSink *self)
+ 	self->unlockfd[0] = self->unlockfd[1] = -1;
+ 	self->rate = 1.0;
+ 	self->timestamp = GST_CLOCK_TIME_NONE;
++#ifdef HDS_PCM_MP3
++	self->hds_mp3_activ = FALSE;
++	self->hds_mp3 = NULL;
++	self->hds_mp3_iesire = NULL;
++	self->hds_mp3_ancora = GST_CLOCK_TIME_NONE;
++	self->hds_mp3_esantioane = self->hds_mp3_cadre = 0;
++#endif
+ #ifdef AUDIO_SET_ENCODING
+ 	self->use_set_encoding = TRUE;
+ #else
+@@ -654,6 +970,11 @@ static gboolean gst_dvbaudiosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
+ 		self->codec_data = NULL;
+ 	}
+ 
++#ifdef HDS_PCM_MP3
++	hds_mp3_inchide(self);
++	self->hds_mp3_activ = FALSE;
++#endif
++
+ 	if (!strcmp(type, "audio/mpeg"))
+ 	{
+ 		gint mpegversion;
+@@ -893,6 +1214,12 @@ static gboolean gst_dvbaudiosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
+ 		GST_INFO_OBJECT(self, "MIMETYPE %s",type);
+ 		self->bypass = AUDIOTYPE_AMR;
+ 	}
++#ifdef HDS_PCM_MP3
++	else if (!strcmp(type, XRAW) && hds_mp3_set_caps(self, structure))
++	{
++		GST_INFO_OBJECT(self, "MIMETYPE %s recodat in MP3", type);
++	}
++#endif
+ 	else if (!strcmp(type, XRAW))
+ 	{
+ 		guint8 *data;
+@@ -1052,6 +1379,10 @@ static gboolean gst_dvbaudiosink_event(GstBaseSink *sink, GstEvent *event)
+ 			self->cache = NULL;
+ 		}
+ 		GST_OBJECT_UNLOCK(self);
++#ifdef HDS_PCM_MP3
++		/* dupa cautare codorul porneste de la capat, cu ancora din primul buffer nou */
++		hds_mp3_inchide(self);
++#endif
+ 		/* flush while media is playing requires a delay before rendering */
+ 		if(self->using_dts_downmix && (!self->paused || self->first_paused))
+ 		{
+@@ -1066,6 +1397,9 @@ static gboolean gst_dvbaudiosink_event(GstBaseSink *sink, GstEvent *event)
+ 	case GST_EVENT_EOS:
+ 	{
+ 		GST_INFO_OBJECT (self, "GST_EVENT_EOS");
++#ifdef HDS_PCM_MP3
++		hds_mp3_goleste(self);
++#endif
+ #ifdef AUDIO_FLUSH
+ 		if (self->fd >= 0) ioctl(self->fd, AUDIO_FLUSH, 1/*NONBLOCK*/); //Notify the player that no addionional data will be injected
+ #endif
+@@ -1567,6 +1901,11 @@ static GstFlowReturn gst_dvbaudiosink_render(GstBaseSink *sink, GstBuffer *buffe
+ 		self->fixed_buffertimestamp = GST_CLOCK_TIME_NONE;
+ 	}
+ 
++#ifdef HDS_PCM_MP3
++	if (self->hds_mp3_activ)
++		return hds_mp3_render(self, buffer);
++#endif
++
+ 	disposebuffer = buffer;
+ 	/* grab an additional ref, because we need to return the buffer with the same refcount as we got it */
+ 	gst_buffer_ref(buffer);
+@@ -1720,6 +2059,13 @@ static gboolean gst_dvbaudiosink_stop(GstBaseSink * basesink)
+ 	{
+ 		queue_pop(&self->queue);
+ 	}
++#ifdef HDS_PCM_MP3
++	hds_mp3_inchide(self);
++	self->hds_mp3_activ = FALSE;
++	if (self->hds_mp3_iesire)
++		g_byte_array_unref(self->hds_mp3_iesire);
++	self->hds_mp3_iesire = NULL;
++#endif
+ 
+ 	GST_INFO_OBJECT(self, "stop if self->unlockfd[1] >= 0");
+ 	/* close write end first */
+diff --git a/gstdvbaudiosink.h b/gstdvbaudiosink.h
+index 2df521d..c81b655 100644
+--- a/gstdvbaudiosink.h
++++ b/gstdvbaudiosink.h
+@@ -146,6 +146,17 @@ struct _GstDVBAudioSink
+ 
+ 	queue_entry_t *queue;
+ 	gint audio_channel;
++#ifdef HDS_PCM_MP3
++	/* audio/x-raw recodat in MP3 pentru placa (gstdvbaudiosink.c, hds_mp3_*) */
++	gboolean hds_mp3_activ;        /* caps-urile sunt audio/x-raw si codorul MP3 e folosit */
++	void *hds_mp3;                 /* codorul libmp3lame deschis (NULL = inchis) */
++	gint hds_mp3_rata, hds_mp3_canale;
++	GstClockTime hds_mp3_ancora;   /* PTS-ul primului esantion dat codorului de la deschidere */
++	guint64 hds_mp3_esantioane;    /* esantioane pe canal date codorului de la ancora */
++	guint64 hds_mp3_cadre;         /* cadre MP3 trimise placii de la ancora */
++	GstClockTime hds_mp3_intarziere; /* intarzierea codorului si a decodorului MP3 */
++	GByteArray *hds_mp3_iesire;    /* octetii iesiti din codor care nu fac inca un cadru intreg */
++#endif
+ };
+ 
+ struct _GstDVBAudioSinkClass

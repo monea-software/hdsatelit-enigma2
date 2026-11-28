@@ -34,7 +34,7 @@ from __future__ import absolute_import, unicode_literals
 import os
 
 from Screens.Screen import Screen
-from Components.ActionMap import ActionMap
+from Components.ActionMap import ActionMap, NumberActionMap
 from Components.Label import Label
 from Components.Sources.List import List
 from Components.Sources.StaticText import StaticText
@@ -789,6 +789,10 @@ class EcranScaner(Screen):
         # ridicarea tastelor, fara efect, ca jurnalul sa nu scrie „unknown action”
         actiuni.update((nume, _nimic) for nume in TASTE_RIDICATE)
         self['tastatura'] = ActionMap(['ColorActions', 'OkCancelActions', 'DirectionActions'], actiuni, -1)
+        # Maumixio (Digital-Forum 224632, 26.11): on a number row the remote digits write the value directly, no
+        # keyboard; the first digit starts a new value, the next ones are added, another row or key ends it
+        self._cifre_camp = None
+        self['cifre'] = NumberActionMap(['NumberActions'], dict((str(i), self._cifra) for i in range(10)), -1)
         self._actualizeaza_preview()
         self.setTitle(self.titlu_fel(self._config['fel']))
         self.onLayoutFinish.append(self._potriveste_textele)
@@ -881,10 +885,26 @@ class EcranScaner(Screen):
 
     # ---- tastele ----
     def _sus(self):
+        self._cifre_camp = None
         self['lista'].selectPrevious()
 
     def _jos(self):
+        self._cifre_camp = None
         self['lista'].selectNext()
+
+    CIFRE_MAXIM = 9
+
+    def _cifra(self, numar):
+        """A remote digit on a 'numeric' row: the value written directly (first digit replaces, the next ones add)."""
+        camp = self._camp_curent()
+        if not camp or camp[2] != 'numeric':
+            return
+        cheie = camp[0]
+        val = self._config.get(cheie, '') if self._cifre_camp == cheie else ''
+        self._config[cheie] = (val + str(numar))[:self.CIFRE_MAXIM]
+        self._cifre_camp = cheie
+        self.scrie_stare(self.ajutor())
+        self._reactualizeaza()
 
     def _cicleaza(self, pas):
         camp = self._camp_curent()
@@ -922,6 +942,7 @@ class EcranScaner(Screen):
     def schimba_valoare(self):
         """OK: alegerile randului luminat (fereastra de alegere; tastatura la numere); pe randul "Caută acum" porneste
         cautarea, ca Verde."""
+        self._cifre_camp = None
         selectat = self['lista'].getCurrent()
         if selectat and selectat[1] == RAND_CAUTA:
             self.cauta()

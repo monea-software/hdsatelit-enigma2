@@ -1,4 +1,6 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
+# Facut dupa enigma2 OE-Alliance, lib/python/Components/SkinIcon.py (clasa SkinIcon si loadSkinIcon); GNU General
+# Public License, versiunea 2. Ale noastre: nativ, culoare, pictograma, fontPictograme si rezerva skin_default.
 """Pictogramele listelor desenate in Python, ca in OE-Alliance (aceeasi cale de import, Components.SkinIcon).
 
 O tema care cere pictogramele din fontul ei (sau din enigma2icons al imaginii) scrie in <parameters>:

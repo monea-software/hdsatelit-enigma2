@@ -173,6 +173,14 @@ private:
 	bool m_hds_e_scanare;
 	ePtr<eTimer> m_hds_scan_verificare;
 	void hdsScanVerifica();
+	/* HDSatelit (0.8.0): o comanda refuzata de driver (FE_SET_PROPERTY / FE_SET_FRONTEND) sau o prindere departe de
+	   frecventa ceruta (lib/dvb/hdsscanreguli.h): pana la comanda urmatoare (setFrontend) nicio prindere nu se ia in seama,
+	   evenimentele tunerului se citesc si se arunca, iar acordarea cade cand secventa SEC si-a terminat pasii (m_timeout la
+	   0 ms). */
+	bool m_hds_fara_prindere;
+	void hdsComandaRefuzata();
+	void hdsCadeLaSfarsitulSecventei();
+	bool hdsPrindereDeparte();
 	bool setSecSequencePos(int steps);
 	RESULT switchDeliverySystem(int type, bool t2 = false);
 	static int PriorityOrder;

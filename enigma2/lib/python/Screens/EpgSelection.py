@@ -133,9 +133,29 @@ class EPGSelection(Screen):
 					ret[1]()
 			self.session.openWithCallback(ales, ChoiceBox, title=_("Ghid TV"), list=[
 				(_("Editează înregistrarea"), self.timerEdit), (_("Alege ziua și ora"), self.enterDateTime),
-				(_("Ghidul TV din internet"), self.hdsGhidInternet)])
+				(_("Ghid grafic"), self.hdsGhidGrafic), (_("Ghidul TV din internet"), self.hdsGhidInternet)])
 		else:
 			self.timerEdit()
+
+	def hdsGhidGrafic(self):
+		"""MENU > 'Ghid grafic' (RW2): aceleasi canale in grila (Screens/HdsGhidGrafic.py), peste ghidul in lista"""
+		from Screens.HdsGhidGrafic import HdsGhidGrafic
+		optiuni = {}
+		try:
+			from Screens.InfoBar import InfoBar
+			bara = InfoBar.instance
+			if bara is not None and hasattr(bara, "hdsAlegeBuchetGrila"):
+				buchete = bara.servicelist.getBouquetList() or []
+				actual = getattr(bara, "epg_bouquet", None)
+				nume = ""
+				if actual is not None:
+					cheie = actual.toCompareString()
+					nume = next((n for n, b in buchete if b.toCompareString() == cheie), "") or \
+						ServiceReference(actual).getServiceName()
+				optiuni = {"buchete": buchete, "alegeBuchet": bara.hdsAlegeBuchetGrila, "numeBuchet": nume}
+		except Exception:
+			optiuni = {}
+		self.session.open(HdsGhidGrafic, self.services, self.zapFunc, None, self.bouquetChangeCB, **optiuni)
 
 	def hdsGhidInternet(self):
 		from Screens.HdsGhidInternet import HdsGhidInternet

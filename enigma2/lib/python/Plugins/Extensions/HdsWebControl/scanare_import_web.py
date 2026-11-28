@@ -18,7 +18,7 @@
 #   POST /api/import?sursa=<id>&canale=1&tunere=1&temporizatoare=0&retea=0&picon=1&generale=1&acces=1&pachete=1
 #                                          pornește importul (modulele de acces: fișierele copiate ca atare și
 #                                          pachetele instalate din nou, ca pe televizor; pluginurile: numai oferta,
-#                                          instalate apoi prin /api/extensii-instaleaza, ca la Extensii și aplicații)
+#                                          instalate apoi prin /api/extensii-instaleaza, ca la Extensii)
 #   POST /api/import-alta-imagine?raspuns=da|nu|ascunde   răspunsul la întrebarea primei porniri (copia altei imagini,
 #                                          Components/HdsImportAltaImagine.py) sau ascunderea rezumatului ei
 #   POST /api/import-incarca?nume=<fisier>  arhiva de copie trimisa din calculator, octeti bruti in corp
@@ -388,7 +388,7 @@ PAGINA = """<!DOCTYPE html>
 </section>
 <section class="card ascuns" id="card-pluginuri" aria-live="polite">
   <h2>Pluginurile din copie</h2>
-  <p class="nota">Sunt în sursele receptorului și nu sunt instalate. Fiecare are întrebarea lui, ca la Extensii și aplicații.</p>
+  <p class="nota">Sunt în sursele receptorului și nu sunt instalate. Fiecare are întrebarea lui, ca la Extensii.</p>
   <div id="pluginuri"></div>
   <p class="mesaj" id="mesaj-pluginuri"></p>
 </section>
@@ -641,7 +641,7 @@ TEXTE_PAGINA = {
 		N_("Importă"),
 		N_("Setările importate"),
 		N_("Pluginurile din copie"),
-		N_("Sunt în sursele receptorului și nu sunt instalate. Fiecare are întrebarea lui, ca la Extensii și aplicații."),
+		N_("Sunt în sursele receptorului și nu sunt instalate. Fiecare are întrebarea lui, ca la Extensii."),
 		N_("<a href=\"/setari-din-copie\">Setările importate</a>: starea lor și repornirea interfeței."),
 		N_("Înainte de import, receptorul păstrează canalele și setările de acum într-o copie de siguranță, "
 			"care apare apoi în lista de mai sus („Copiile de siguranță de pe receptor”; se păstrează "

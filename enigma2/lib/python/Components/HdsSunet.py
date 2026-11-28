@@ -343,6 +343,58 @@ def decodoare(rad=None):
 	return rez
 
 
+BIBLIOTECI_PLACA = "usr/lib/hisilicon"     # ZGEMMA H8 (h8): decodoarele platformei, fara /proc/msp
+_FARA_DOLBY = {}
+
+
+def faraDolby(rad=None):
+	"""True cand placa nu are decodor AC-3 / E-AC-3: AUD LIB (avplay00) spune ac3 False, sau, fara /proc/msp (ZGEMMA H8.2H
+	Plus, masurat la DLB1), in usr/lib/hisilicon sunt decodoare libHA.AUDIO.*.decode.so dar niciunul Dolby (numai
+	AC3PASSTHROUGH). Bibliotecile se citesc numai fara /proc/msp; cu /proc/msp si AUD LIB inca necitit raspunsul e False si nu
+	se tine minte. Un raspuns sigur se afla o data pe pornire (bibliotecile nu se schimba cat merge interfata)."""
+	cheie = rad or radacina()
+	if cheie in _FARA_DOLBY:
+		return _FARA_DOLBY[cheie]
+	d = decodoare(rad).get("ac3")
+	if d is not None:
+		rez = not d
+	elif os.path.isdir(_cale(rad, "proc/msp")):
+		return False
+	else:
+		try:
+			nume = os.listdir(_cale(rad, BIBLIOTECI_PLACA))
+		except OSError:
+			nume = []
+		dec = set(m.group(1).upper() for m in
+			(re.match(r"libHA\.AUDIO\.([A-Za-z0-9_]+)\.(?:decode|codec)\.so$", n) for n in nume) if m)
+		rez = bool(dec) and not any(x in dec for x in DECODOARE["ac3"])
+	_FARA_DOLBY[cheie] = rez
+	return rez
+
+
+def pistaFaraDolby(piste, index, curenta, motiv=None, rad=None):
+	"""Dupa alegerea dupa limba (index None = ramane `curenta`): pe placa fara decodor Dolby, cu AC-3 decodat de receptor
+	(comutatorul ac3 nu e pe trimitere neschimbata), pista AC3 / AC3+ aleasa e muta (canalele DVB nu trec prin FFmpeg).
+	Atunci o pista care nu e Dolby, intai cu aceeasi prima limba, apoi oricare (fara descrierea audio); fara alta pista,
+	`index` neschimbat."""
+	if not piste or not faraDolby(rad) or efectiv("ac3") == TRECERE:
+		return index
+	ales = index if index is not None else curenta
+	pista = None
+	for p in piste:
+		if p.get("index") == ales:
+			pista = p
+			break
+	if pista is None or (pista.get("fel") or "").upper() not in FELURI_AC3:
+		return index
+	limba = _limbaPistei(pista)
+	cand = [p for p in piste if (p.get("fel") or "").upper() not in FELURI_AC3 and not p.get("descriere")]
+	if not cand:
+		return index
+	cand.sort(key=lambda p: (0 if limba and _limbaPistei(p) == limba else 1, p.get("index")))
+	return cand[0]["index"]
+
+
 def formatIesire(rad=None):
 	"""Ce arata driverul ca pleaca acum pe HDMI si pe optic (/proc/msp/sound0: „DataFormat(PCM)”):
 	{"hdmi": "PCM", "optic": "PCM"}, cu None unde nu se stie."""

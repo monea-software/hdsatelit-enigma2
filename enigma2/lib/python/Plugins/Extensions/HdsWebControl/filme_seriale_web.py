@@ -209,8 +209,13 @@ def poza(arg, P=None):
 	cale = P.cere(adresa, l, h, fel)
 	if not cale:
 		return None, 404
-	with open(cale, "rb") as f:
-		return f.read(2 * 1024 * 1024), None
+	try:
+		with open(cale, "rb") as f:
+			return f.read(2 * 1024 * 1024), None
+	except (IOError, OSError):
+		# stickul scos: poza iese din cache si se aduce din nou (pagina incearca iar la 404)
+		P.lipsa(cale)
+		return None, 404
 
 
 # ------------------------------------------------------------------ serverele Emby / Jellyfin
@@ -537,7 +542,10 @@ function porneste(){
   if(d.continua.length)cont.insertBefore(rand(T.continua,d.continua,false),cont.firstChild);
   if(d.favorite.length)cont.insertBefore(rand(T.favorite,d.favorite,false),cont.children[d.continua.length?1:0]||null)});
  var rec=rand(T.recente,null,false);cont.appendChild(rec);
- lucrare(cere("recente","")).then(function(d){if(tura!==S.cereri)return;if(d.oprit){rec.remove();return}cont.replaceChild(rand(T.recente,d.result?d.titluri:[],false),rec)});
+ rec.style.display="none";
+ lucrare(cere("recente","")).then(function arata(d){if(tura!==S.cereri)return;if(d.oprit){rec.remove();return}var t=d.result?d.titluri:[];
+  if(!t.length&&d.aduce){var q=new URLSearchParams();q.set("id",S.sid);q.set("cerere",d.aduce);return lucrare(q).then(function(x){x.aduce="";return arata(x)})}
+  if(!t.length){rec.remove();return}cont.replaceChild(rand(T.recente,t,false),rec)});
  lucrare(cere("categorii","")).then(function(d){if(tura!==S.cereri)return;if(!d.result){mesaj(d.message);return}S.cat=d.categorii;if(!S.cat.length&&G.grupa==="disc")mesaj(T.faraDisc);maiMulte()})
 }
 function maiMulte(){

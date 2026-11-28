@@ -36,7 +36,7 @@ def date(s):
 		"surse": [" ".join(d.split()) for d in s["surse_tarii"]], "bifate": len(s["bifate"]),
 		"pe_satelit": s.get("pe_satelit", False), "sateliti": s.get("sateliti", []),
 		"programat": s["programat"], "ora": s["ora"], "ultimul": s["ultimul"], "faza": s["faza"], "mesaj": s["mesaj"],
-		"in_lucru": s["in_lucru"]}
+		"in_lucru": s["in_lucru"], "plin": _G().textPlin(s.get("refuzate", 0))}
 
 
 def rute(baza, resource):
@@ -152,6 +152,7 @@ function deseneaza(){
  rand(i,S.instalat?"EPG Import este instalat.":"EPG Import se instalează la pornire.",true);
  if(S.programat&&S.bifate){rand(i,"Importul se face zilnic la "+S.ora+".",true);}
  if(S.ultimul){rand(i,"Ultimul import: "+S.ultimul,true);}
+ if(S.plin){rand(i,S.plin,true);}
  var sel=el("tara");
  if(!sel.options.length){
   var primele=S.candidati.filter(function(c){return c.are;}).map(function(c){return c.cod;});

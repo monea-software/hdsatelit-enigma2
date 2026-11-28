@@ -127,6 +127,13 @@ def writeAudioChoice(name, value, root=None):
 		return False
 	AUDIO_SCRIS[name] = value
 	print("[AVSwitch] %s = %s" % (path, value))
+	if name == "ac3":
+		# egalizatorul ia sunetul AC-3 / E-AC-3 numai cand nu pleaca neschimbat spre amplificator (HdsEgalizator)
+		try:
+			from Components import HdsEgalizator
+			HdsEgalizator.laComutatorAc3()
+		except Exception as err:
+			print("[AVSwitch] egalizatorul la comutatorul ac3: %s" % err)
 	return True
 
 

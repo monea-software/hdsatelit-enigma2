@@ -287,13 +287,19 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 	# ------------------------------------------------ inceputul
 
 	def _incepe(self):
+		cale = L.CALE_LANSATOR
 		if self.mod == L.MOD_APLICATIE:
 			from Components import HdsAplicatii as A
-			prezent = os.path.exists(A.program(self.aplicatie)[1])
+			cale = A.program(self.aplicatie)[1]
+			prezent = os.path.exists(cale)
 		else:
 			prezent = instalat()
 		if not prezent:
-			self._faraNavigator("lipsa")
+			# NAV10: navigatorul imaginii lipseste (Vu+ Solo SE pe NAND): se instaleaza acum din feed, fara alta intrebare
+			if cale == L.CALE_LANSATOR and L.cereInstalareaNavigatorului():
+				self._faraNavigator("se-instaleaza")
+			else:
+				self._faraNavigator("lipsa")
 			return
 		self._continua()
 
@@ -478,7 +484,10 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 			MessageBox.TYPE_INFO if ok else MessageBox.TYPE_ERROR, timeout=4)
 
 	def laOprit(self, motiv):
-		if self.inchis:
+		# NAV11: navigatorul oprit cu SIGKILL cat filmul tinea decodorul -> canalul abia dupa eliberare (_decodorOpreste);
+		# getattr: dupa Screen.doClose (self.__dict__ golit) un navigator care inca iesea poate chema aici
+		self._dec_fortat = bool(getattr(getattr(self, "nav", None), "fortat_cu_film", False))
+		if getattr(self, "inchis", True):
 			return
 		self.nav = None
 		if motiv is None:
@@ -766,6 +775,13 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		self.cautare = None
 		if self.nav is not None and self.nav.stare != L.OPRIT:
 			self.nav.opreste()
+			if self.nav is not None and self.nav.stare != L.OPRIT and self.laDecodorTinut():
+				# NAV11: filmul inca tine decodorul si navigatorul inca iese: canalul nu porneste peste el. Screen.doClose
+				# goleste ecranul imediat dupa, deci decodorul, serverul si canalul trec la IesireAmanata (ascultatorul
+				# navigatorului si al serverului de acum), care le face la laOprit.
+				print("[HdsNavigator] ecranul inchis cu filmul pe decodor: canalul dupa iesirea navigatorului")
+				IesireAmanata(self, self.nav)
+				return
 		self._decodorOpreste()
 
 	# ------------------------------------------------ filmele aplicatiei pe placa (Components/HdsDecodorWeb.py)
@@ -784,6 +800,7 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		self._dec_imprumutat = False
 		self._dec_ref = None
 		self._dec_server = None
+		self._dec_fortat = False
 		try:
 			from Components import HdsHbbtvPornire as H
 			from Components import HdsDecodorWeb as D
@@ -805,22 +822,32 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		m = getattr(self, "_dec_mediu", None)
 		if m is None:
 			return
+		# NAV11: intai ce a mai trimis WebKit ("gata" sau legatura inchisa), cat laDecodorGata inca se poate face
+		self._decodorCitesteRamase()
 		self._dec_mediu = None
-		try:
-			s, self._dec_server = getattr(self, "_dec_server", None), None
-			if s is not None:
-				s.opreste()
-			m.decodor_opreste()
-			if self._dec_imprumutat or self._dec_ref is not None:
-				from Components import HdsHbbtvPornire as H
-				H.scrie_fereastra_video(None)
-			self._dec_imprumutat = False
-			if self._dec_ref:
-				print("[HdsNavigator] canalul de dinainte porneste din nou")
-				m.porneste_serviciu(self._dec_ref)
-		except Exception as e:
-			print("[HdsNavigator] decodorul inapoi: %s" % e)
+		s, self._dec_server = getattr(self, "_dec_server", None), None
+		decodorInapoi(m, s, self._dec_ref, self._dec_imprumutat, getattr(self, "_dec_fortat", False))
+		self._dec_imprumutat = False
 		self._dec_ref = None
+		self._dec_fortat = False
+
+	def _decodorCitesteRamase(self):
+		"""NAV11: Server.citeste_ramase (randurile si inchiderea legaturii care n-au ajuns inca la notificator)."""
+		s = getattr(self, "_dec_server", None)
+		f = getattr(s, "citeste_ramase", None)
+		if f is None:
+			return
+		try:
+			f()
+		except Exception as e:
+			print("[HdsNavigator] decodorul, citirea ramasa: %s" % e)
+
+	def laDecodorTinut(self):
+		"""lansator.Ascultator (NAV11): True cat filmul aplicatiei tine decodorul; intai se citeste ce a ramas pe socket."""
+		if getattr(self, "_dec_mediu", None) is None:
+			return False
+		self._decodorCitesteRamase()
+		return bool(getattr(self, "_dec_imprumutat", False))
 
 	def laDecodorCere(self):
 		"""HdsDecodorWeb.Ascultator: True (decodorul e al navigatorului) sau motivul refuzului (un cuvant)."""
@@ -832,6 +859,14 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		if not m.decodor_memorie_ok():
 			print("[HdsNavigator] filmul aplicatiei: memoria decodorului lipseste, refuzat")
 			return "memorie"
+		if self._dec_ref is None:
+			# NAV11: un canal care astepta eliberarea decodorului dupa aplicatia de dinainte nu mai porneste peste filmul
+			# acesta; ramane canalul de dinainte, pornit la iesirea din aplicatia de acum
+			for c in list(_asteptari_canal):
+				c.anuleaza()
+				if self._dec_ref is None and c.ref:
+					self._dec_ref = c.ref
+					print("[HdsNavigator] canalul care astepta decodorul ramane oprit pana la iesirea aplicatiei")
 		if self._dec_ref is None:
 			self._dec_ref = m.opreste_serviciu() or ""
 		self._dec_imprumutat = True
@@ -854,6 +889,201 @@ class HdsNavigatorEcran(Screen, L.Ascultator):
 		from Components import HdsHbbtvPornire as H
 		H.scrie_fereastra_video(None)
 		print("[HdsNavigator] decodorul inapoi de la aplicatie")
+		# NAV11: daca navigatorul iese si astepta filmul, iesirea merge mai departe
+		f = getattr(getattr(self, "nav", None), "decodorEliberat", None)
+		if f is not None:
+			f()
+
+
+# ---------------------------------------------------------------- NAV11: canalul dupa o oprire fortata cu filmul pe decodor
+
+# Dupa SIGKILL pe navigator cat filmul lui era pe decodor (AS262, Vu+ Solo SE, Broadcom MIPS): canalul de dinainte nu porneste
+# pe loc, ci dupa cel putin CANAL_DUPA_FORTAT_MIN_S si dupa ce niciun alt proces decat enigma2 nu mai tine video0/audio0
+# (HdsDecodorWeb.tinute_de_altii), verificat la CANAL_DUPA_FORTAT_PAS_MS; dupa CANAL_DUPA_FORTAT_MAX_S porneste oricum (cu un
+# rand in jurnal: cine tine inca decodorul). Nimeni nu e omorat aici: procesele navigatorului au murit odata cu grupul.
+CANAL_DUPA_FORTAT_MIN_S = 3
+CANAL_DUPA_FORTAT_MAX_S = 10
+CANAL_DUPA_FORTAT_PAS_MS = 500
+_asteptari_canal = []        # ceasurile traiesc dupa inchiderea ecranului
+_iesiri_amanate = []         # IesireAmanata: navigatoarele care inca ies cu filmul pe decodor, dupa inchiderea ecranului
+
+
+def _numeProcese(pids):
+	try:
+		from Components import HdsDecodorWeb as D
+		return D.nume_procese(pids)
+	except Exception:
+		return ",".join(str(p) for p in pids)
+
+
+def decodorInapoi(m, s, ref, tinut, fortat):
+	"""Sfarsitul imprumutului la iesirea din aplicatie: serverul oprit, dispozitivele inapoi (m.decodor_opreste), imaginea
+	pe tot ecranul si canalul de dinainte (ref). tinut: filmul nu trimisese "gata"; fortat (NAV11): navigatorul a fost
+	omorat cu SIGKILL cat filmul tinea decodorul (luat inainte de omorare: legatura inchisa de moartea procesului se citeste
+	tot ca "gata"). Dupa fortat, sau cand alt proces decat enigma2 tine inca video0/audio0, canalul porneste prin
+	CanalDupaEliberare, nu pe loc."""
+	try:
+		if s is not None:
+			s.opreste()
+		if tinut and not fortat:
+			print("[HdsNavigator] navigatorul a iesit fara \"gata\" de la film")
+		m.decodor_opreste()
+		if tinut or ref is not None:
+			from Components import HdsHbbtvPornire as H
+			H.scrie_fereastra_video(None)
+		asteapta = bool(fortat)
+		if ref and not asteapta:
+			try:
+				from Components import HdsDecodorWeb as D
+				altii = D.tinute_de_altii()
+			except Exception as e:
+				print("[HdsNavigator] decodorul, cine il tine: %s" % e)
+				altii = []
+			if altii:
+				asteapta = True
+				print("[HdsNavigator] decodorul tinut inca de %s la iesirea aplicatiei" % _numeProcese(altii))
+		if ref and asteapta:
+			# NAV11 (AS262): procesul web omorat cu filmul pe decodor n-a facut VIDEO_STOP; canalul pornit pe loc peste el a
+			# dus pe Broadcom MIPS la un Oops in driver. Canalul porneste abia dupa eliberarea dispozitivelor.
+			print("[HdsNavigator] %s: canalul porneste dupa eliberarea decodorului" %
+				("navigatorul oprit fortat cu filmul pe decodor" if fortat else "decodorul inca ocupat"))
+			CanalDupaEliberare(m, ref).porneste()
+		elif ref:
+			print("[HdsNavigator] canalul de dinainte porneste din nou")
+			m.porneste_serviciu(ref)
+	except Exception as e:
+		print("[HdsNavigator] decodorul inapoi: %s" % e)
+
+
+class IesireAmanata(L.Ascultator):
+	"""NAV11: ecranul aplicatiei s-a inchis cat navigatorul inca iesea cu filmul pe decodor. Screen.doClose goleste
+	ecranul (self.__dict__), deci mediul, serverul imprumutului si canalul de dinainte trec aici, iar obiectul acesta
+	devine ascultatorul navigatorului (laDecodorTinut, laOprit) si al serverului (laDecodorGata). La laOprit: decodorInapoi."""
+
+	def __init__(self, ecran, nav):
+		self.m, ecran._dec_mediu = ecran._dec_mediu, None
+		self.s, ecran._dec_server = getattr(ecran, "_dec_server", None), None
+		self.ref, ecran._dec_ref = ecran._dec_ref, None
+		self.tinut, ecran._dec_imprumutat = bool(ecran._dec_imprumutat), False
+		self.nav = nav
+		nav.a = self
+		if self.s is not None:
+			self.s.a = self
+		_iesiri_amanate.append(self)
+
+	def _citeste(self):
+		f = getattr(self.s, "citeste_ramase", None)
+		if f is not None:
+			try:
+				f()
+			except Exception as e:
+				print("[HdsNavigator] decodorul, citirea ramasa: %s" % e)
+
+	# HdsDecodorWeb.Ascultator
+	def laDecodorCere(self):
+		return "aplicatie"
+
+	def laDecodorFereastra(self, argumente):
+		pass
+
+	def laDecodorGata(self):
+		if not self.tinut:
+			return
+		self.tinut = False
+		from Components import HdsHbbtvPornire as H
+		H.scrie_fereastra_video(None)
+		print("[HdsNavigator] decodorul inapoi de la aplicatie")
+		f = getattr(self.nav, "decodorEliberat", None)
+		if f is not None:
+			f()
+
+	# lansator.Ascultator
+	def laDecodorTinut(self):
+		self._citeste()
+		return self.tinut
+
+	def laOprit(self, motiv):
+		fortat = bool(getattr(self.nav, "fortat_cu_film", False))
+		self._citeste()
+		self.nav = None
+		if self in _iesiri_amanate:
+			_iesiri_amanate.remove(self)
+		decodorInapoi(self.m, self.s, self.ref, self.tinut, fortat)
+		self.tinut = False
+
+
+class CanalDupaEliberare(object):
+	"""Porneste canalul ref (mediu.porneste_serviciu) dupa eliberarea decodorului. ceas_nou, timp si tinute se inlocuiesc
+	la probele de pe PC."""
+
+	def __init__(self, mediu, ref, ceas_nou=None, timp=None, tinute=None):
+		import time
+		self.m = mediu
+		self.ref = ref
+		self.timp = timp or getattr(time, "monotonic", time.time)
+		self.tinute = tinute
+		self.ceas = (ceas_nou or self._ceasEnigma)(self._verifica)
+		self.inceput = None
+		self.gata = False
+
+	@staticmethod
+	def _ceasEnigma(functie):
+		t = eTimer()
+		t.callback.append(functie)
+		return t
+
+	def _tinute(self):
+		if self.tinute is not None:
+			return self.tinute()
+		from Components import HdsDecodorWeb as D
+		return D.tinute_de_altii()
+
+	def porneste(self):
+		self.inceput = self.timp()
+		_asteptari_canal.append(self)
+		self.ceas.start(CANAL_DUPA_FORTAT_PAS_MS, False)
+		return self
+
+	def anuleaza(self):
+		"""Fara canal: alt film a cerut intre timp decodorul (laDecodorCere ia ref-ul)."""
+		self.gata = True
+		self.ceas.stop()
+		if self in _asteptari_canal:
+			_asteptari_canal.remove(self)
+
+	def _verifica(self):
+		if self.gata:
+			return
+		trecut = self.timp() - self.inceput
+		if trecut < CANAL_DUPA_FORTAT_MIN_S:
+			return
+		try:
+			tinute = self._tinute()
+		except Exception as e:
+			print("[HdsNavigator] decodorul dupa oprirea fortata: %s" % e)
+			tinute = []
+		if tinute and trecut < CANAL_DUPA_FORTAT_MAX_S:
+			return
+		self.gata = True
+		self.ceas.stop()
+		if self in _asteptari_canal:
+			_asteptari_canal.remove(self)
+		try:
+			acum = getattr(self.m, "ref_curent", lambda: None)()
+		except Exception:
+			acum = None
+		if acum:
+			print("[HdsNavigator] dupa oprirea fortata un canal ruleaza deja (ales intre timp): nu-l schimb")
+			return
+		if tinute:
+			print("[HdsNavigator] decodorul tinut inca de %s dupa %d s: canalul porneste oricum" %
+				(_numeProcese(tinute), CANAL_DUPA_FORTAT_MAX_S))
+		else:
+			print("[HdsNavigator] decodorul liber dupa %.1f s: canalul de dinainte porneste din nou" % trecut)
+		try:
+			self.m.porneste_serviciu(self.ref)
+		except Exception as e:
+			print("[HdsNavigator] canalul dupa oprirea fortata: %s" % e)
 
 
 # ---------------------------------------------------------------- rezerva: codul QR spre interfata web

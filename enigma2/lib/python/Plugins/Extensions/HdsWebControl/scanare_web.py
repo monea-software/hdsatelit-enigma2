@@ -803,7 +803,8 @@ def _dialogScanare(sesiune):
 	except Exception:
 		return None, False
 	for d in deschise:
-		if isinstance(d, ServiceScan):
+		# OPS9: cautarea dupa un operator M7 prin FastScan (ScanerSatelit.HdsScanareOperator) se vede ca ServiceScan
+		if isinstance(d, ServiceScan) or getattr(d, "hdsScanareOperator", False):
 			_urmareste(d)
 			return d, False
 	return None, False
@@ -877,6 +878,8 @@ def _reteaGasita(cscan):
 def _citesteDialog(dlg):
 	"""Starea unei ferestre ServiceScan: aceleasi texte pe care le arata televizorul (etichetele ei) si numerele din
 	Components/ServiceScan.py. Numai citire: nu cheama nimic care schimba starea (de ex. etaSeconds)."""
+	if hasattr(dlg, "hdsStareWeb"):
+		return dlg.hdsStareWeb()            # OPS9: ScanerSatelit.HdsScanareOperator (FastScan), aceleasi chei
 	st = {
 		"fel_lucru": "dvb",
 		"stare_text": _textEticheta(dlg, "scan_state"),
@@ -1096,15 +1099,22 @@ def _ocupat(sesiune):
 		return _t("O scanare DAB+ sau DVB-T2 e deschisă pe televizor. Așteaptă să se termine sau oprește-o.")
 	dlg, _din_web = _dialogScanare(sesiune)
 	if dlg is not None:
-		try:
-			gata = bool(dlg.get("scan") is not None and dlg["scan"].isDone())
-		except Exception:
-			gata = False
+		gata = _gataDialog(dlg)
 		if gata:
 			return (_t("Pe televizor e încă deschis rezultatul căutării de dinainte. Închide-l (butonul din pagină sau "
 				"tasta Exit), apoi pornește căutarea nouă."))
 		return _t("O căutare e deja în curs pe receptor. Așteaptă să se termine sau oprește-o.")
 	return None
+
+
+def _gataDialog(dlg):
+	"""Cautarea din fereastra s-a terminat (ServiceScan: CScan.isDone; FastScan: hdsStareWeb)."""
+	try:
+		if hasattr(dlg, "hdsStareWeb"):
+			return bool(dlg.hdsStareWeb().get("gata"))
+		return bool(dlg.get("scan") is not None and dlg["scan"].isDone())
+	except Exception:
+		return False
 
 
 def _salveazaConfigSatelit(S, fel, v):
@@ -1319,8 +1329,12 @@ def porneste(scaner, fel, cerere=None, confirmat=False):
 					lista = treceri
 		else:
 			lista = M.cerere_scanare(rez)
-		from Screens.ServiceScan import ServiceScan
-		dlg = sesiune.open(ServiceScan, lista)
+		if scaner == "satelit" and "fastscan" in rez:
+			# OPS9: operatorii M7 prin tabelele lor FastScan, acelasi ecran ca din telecomanda
+			dlg = sesiune.open(M.HdsScanareOperator, rez)
+		else:
+			from Screens.ServiceScan import ServiceScan
+			dlg = sesiune.open(ServiceScan, lista)
 	except Exception as eroare:
 		# Session.open cade daca televizorul e chiar intre doua ferestre (in_exec fals); se poate incerca din nou
 		_jurnal("ServiceScan nu s-a deschis: %s" % eroare)
@@ -1372,10 +1386,7 @@ def opreste():
 		# Session.close cere ca fereastra sa fie cea din fata; altfel s-ar inchide abia cand iese cea de deasupra
 		return {"result": False, "message": (_t("Pe televizor e deschisă altă fereastră peste căutare. Închide-o "
 			"întâi (tasta Exit), apoi încearcă din nou.")), "stare": stare()}
-	try:
-		gata = bool(dlg.get("scan") is not None and dlg["scan"].isDone())
-	except Exception:
-		gata = False
+	gata = _gataDialog(dlg)
 	try:
 		dlg.close()
 	except Exception as eroare:

@@ -2,9 +2,9 @@
 # Copyright (C) 2026 moneasoftware.com & hdsatelit.com
 # SPDX-License-Identifier: GPL-2.0-only
 
-"""Jurnal mic al iesirii interfetei, intreg (REGULA 0, ASX3 si ASI7: din 0.7.8 nici parolele, nici adresele de flux IPTV
-nu se mai ascund; filtrul de mai jos, mascheazaParole, intoarce textul neschimbat. Pe 0.7.7 adresele IPTV ieseau
-/live/***/***/ in hds-interfata.log).
+"""Jurnal mic al iesirii interfetei, cu parolele (si contul din adresele de flux IPTV) ascunse inainte sa ajunga pe disc,
+ca in 0.7.7: jurnalul pleaca spre echipa sau il pune omul pe forum. In 0.7.8 si 0.7.9 erau in clar (REGULA 0); puse la loc
+in 0.8.0 (Eduard, 24.11.2026 11:39).
 
 Eduard, 12.11.2026 19:17 si 19:19 („eu am spus sa fie tot, tot, tot”; „FARA PAROLE, ATAT”): jurnalul de pe receptor
 pastreaza tot (randurile modulelor de acces, ECM, utilizatorii, adresele, MAC-urile, caile), numai parolele devin ***

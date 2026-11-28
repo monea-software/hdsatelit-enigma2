@@ -348,6 +348,8 @@ TYPES = {
 	"ReceptionName": ("_reception_name", False, M_BASE),
 	"Video": ("_video", False, M_VIDEO),
 	"VideoCodec": ("_video_codec", False, M_VIDEO),
+	# 0.8.0 (FX1): the codec under the resolution label of the channel bar, only with "Codecul video în bara canalului"
+	"VideoCodecBar": ("_video_codec_bar", False, M_VIDEO),
 	"Resolution": ("_resolution", False, M_VIDEO),
 	"Format": ("_format", False, M_VIDEO),
 	"Audio": ("_audio", False, M_BASE),
@@ -1562,6 +1564,11 @@ class HdsInfo(Converter):
 		if self._radio(r):
 			return u""
 		return C.VIDEO_CODEC.get(r.geti("sVideoType"), u"")
+
+	def _video_codec_bar(self, r):
+		if not C.optiune_usage("hds_codec_bara", False):
+			return u""
+		return self._video_codec(r)
 
 	def _scan(self, r, h, fps):
 		"""Litera p / i / "" dupa inaltime.

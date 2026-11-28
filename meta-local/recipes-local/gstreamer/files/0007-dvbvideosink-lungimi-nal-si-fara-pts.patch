@@ -1,0 +1,38 @@
+Subject: [PATCH] dvbvideosink: NAL length prefixes become start codes also without a PTS
+
+render() replaced the NAL length prefixes (stream-format avc, hvc1) with start codes only for the buffers with a valid
+timestamp. GStreamer 1.28 h264parse gives avc to this sink for transport streams too; for interlaced H.264 coded as field
+pairs, where the second field carries the PTS of the first one, the second field comes without PTS and was written with the
+length prefixes: the decoder lost the second field of every reference picture (macro blocks on the whole picture).
+
+Upstream-Status: Pending
+---
+ gstdvbvideosink.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/gstdvbvideosink.c b/gstdvbvideosink.c
+index 6df87e0..609528e 100644
+--- a/gstdvbvideosink.c
++++ b/gstdvbvideosink.c
+@@ -1057,13 +1057,20 @@ static GstFlowReturn gst_dvbvideosink_render(GstBaseSink *sink, GstBuffer *buffe
+ 		}
+ 	}
+ 
+-	if (GST_BUFFER_PTS_IS_VALID(buffer) || (self->use_dts && GST_BUFFER_DTS_IS_VALID(buffer)))
++	gboolean has_timestamp = GST_BUFFER_PTS_IS_VALID(buffer) || (self->use_dts && GST_BUFFER_DTS_IS_VALID(buffer));
++	if (has_timestamp)
+ 	{
+ 		pes_header[7] = 0x80; /* pts */
+ 		pes_header[8] = 5; /* pts size */
+ 		pes_header_len += 5;
+ 		pes_set_pts(GST_BUFFER_PTS_IS_VALID(buffer) ? GST_BUFFER_PTS(buffer) : GST_BUFFER_DTS(buffer), pes_header);
++	}
+ 
++	/* NAL length prefixes (avc, hvc1) become start codes in every access unit, also in the ones without a timestamp: the
++	   second field of an interlaced picture can come with the PTS of the first field, and h264parse then pushes it without
++	   PTS. Written with the prefixes the decoder loses that field, so the reference pictures break (macro blocks). */
++	if (has_timestamp || ((self->codec_type == CT_H264 || self->codec_type == CT_H265) && self->h264_nal_len_size > 0))
++	{
+ 		if (self->codec_data)
+ 		{
+ 			if (self->must_send_header)

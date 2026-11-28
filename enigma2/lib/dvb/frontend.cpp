@@ -2,6 +2,7 @@
 #include <lib/dvb/dvb.h>
 #include <lib/dvb/frontendparms.h>
 #include <lib/dvb/hdsmultistream.h>
+#include <lib/dvb/hdsscanreguli.h>
 #include <lib/dvb/hdst2mi.h>
 #include <lib/dvb/hdsterestru.h>
 #include <lib/dvb/hdstipales.h>
@@ -526,6 +527,7 @@ eDVBFrontend::eDVBFrontend(int adap, int fe, int &ok, bool simulate, eDVBFronten
 	CONNECT(m_tuneTimer->timeout, eDVBFrontend::tuneLoop);
 
 	m_hds_e_scanare = false;
+	m_hds_fara_prindere = false;
 	m_hds_scan_verificare = eTimer::create(eApp);
 	CONNECT(m_hds_scan_verificare->timeout, eDVBFrontend::hdsScanVerifica);
 
@@ -834,6 +836,14 @@ void eDVBFrontend::feEvent(int w)
 		if (w < 0)
 			continue;
 
+		/* comanda refuzata sau prindere departe (m_hds_fara_prindere): pana la comanda urmatoare evenimentele se citesc si
+		   se arunca (o prindere ramasa de la transponderul de dinainte nu mai trece drept prinderea celui cerut) */
+		if (m_hds_fara_prindere)
+		{
+			eDebug("(%d)fe event: status %x aruncat (comanda refuzata sau prindere departe)", m_dvbid, event.status);
+			continue;
+		}
+
 #if HAVE_DVB_API_VERSION < 3
 		if (event.type == FE_COMPLETION_EV)
 #else
@@ -841,6 +851,13 @@ void eDVBFrontend::feEvent(int w)
 		if (event.status & FE_HAS_LOCK)
 #endif
 		{
+			if (m_state == stateTuning && hdsPrindereDeparte())
+			{
+				/* prinsa departe de frecventa ceruta: pierduta ca o acordare fara semnal, prin timeout() pe ceas (fara
+				   alta acordare pornita din interiorul acestei bucle) */
+				hdsCadeLaSfarsitulSecventei();
+				continue;
+			}
 			state = stateLock;
 			m_tuning = 0;
 			m_timeout->stop();
@@ -892,11 +909,21 @@ void eDVBFrontend::timeout()
 	m_hds_scan_verificare->stop();
 	if (m_state == stateTuning)
 	{
+		if (m_hds_fara_prindere)
+		{
+			/* comanda refuzata sau prindere departe: motivul e deja in jurnal; starea driverului poate fi a transponderului
+			   de dinainte, deci nu se mai citeste */
+			m_hds_jurnal.pornit_ms = 0;
+			m_hds_citiri.goleste();
+			m_state = stateFailed;
+			m_stateChanged(this);
+			return;
+		}
 		// Lock-ul poate fi deja in driver, iar evenimentul inca in coada.
 		int hds_err = 0;
 		bool hds_citeste = !m_simulate && m_fd >= 0;
 		int hds_stare = hds_citeste ? (int)hdsCitesteBrut(hdscitiri::STARE, true, hds_err) : -1;
-		if (hds_citeste && !hds_err && (hds_stare & FE_HAS_LOCK))
+		if (hds_citeste && !hds_err && (hds_stare & FE_HAS_LOCK) && !hdsPrindereDeparte())
 		{
 			if (m_hds_timpi_zap.pornire_ms && !m_hds_timpi_zap.lock_ms)
 				m_hds_timpi_zap.lock_ms = hdsjurnal::monotonMs();
@@ -1242,12 +1269,15 @@ int eDVBFrontend::hdsCiteste(int type, bool direct)
 		case signalPower:
 		{
 			uint16_t strength=0;
+			bool citit = false;
 			if (!m_simulate)
 			{
 				int err = 0;
 				strength = (uint16_t)hdsCitesteBrut(hdscitiri::NIVEL, direct, err);
 				if (err)
 					eDebug("FE_READ_SIGNAL_STRENGTH failed (%s)", strerror(err));
+				else
+					citit = true;
 			}
 			if (!m_simulate && hdsdm920::nivelEstimat(m_description, strength))
 			{
@@ -1264,6 +1294,9 @@ int eDVBFrontend::hdsCiteste(int type, bool direct)
 				}
 				return estimat;
 			}
+			// o citire cazuta (sau frontendul simulat) ramane 0: pe DM820 octetul e castigul AGC, iar 0 ar iesi nivel plin
+			if (!citit)
+				return 0;
 			return hdsdm920::nivel(m_description, strength);
 		}
 		case locked:
@@ -2141,7 +2174,8 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 				}
 				int signal = 0;
 				/* citiri directe (fara memoria tunerului): pasii motorului cer starea de acum */
-				int isLocked = hdsCiteste(locked, true);
+				/* dupa o comanda refuzata starea driverului poate fi a transponderului de dinainte */
+				int isLocked = m_hds_fara_prindere ? 0 : hdsCiteste(locked, true);
 				if (isLocked)
 				{
 					m_hds_rotor_fara_blocare = 0;
@@ -2174,6 +2208,13 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 							m_hds_timpi_zap.lock_ms = hdsjurnal::monotonMs();
 							if (!m_hds_timpi_zap.sec_gata_ms)
 								m_hds_timpi_zap.sec_gata_ms = m_hds_timpi_zap.lock_ms;
+						}
+						/* antena a ajuns, dar prinderea e departe de frecventa ceruta: nu se anunta; pasii de dupa (pozitia
+						   motorului tinuta minte, oprirea lui) merg mai departe, iar acordarea cade la sfarsitul secventei */
+						if (hdsPrindereDeparte())
+						{
+							hdsCadeLaSfarsitulSecventei();
+							break;
 						}
 						hdsjtuner::prins(m_hds_jurnal, m_slotid, signal);
 						m_state = stateLock;
@@ -2421,6 +2462,12 @@ int eDVBFrontend::tuneLoopInt()  // called by m_tuneTimer
 		if (!m_simulate)
 			m_tuneTimer->start(delay,true);
 	}
+	else if (!m_simulate && m_hds_fara_prindere && m_state == stateTuning)
+	{
+		/* secventa s-a terminat dupa o comanda refuzata sau o prindere departe (hdsCadeLaSfarsitulSecventei) */
+		m_hds_scan_verificare->stop();
+		m_timeout->start(0, true);
+	}
 	if (regFE)
 		regFE->dec_use();
 	if (m_simulate && m_sec_sequence.current() != m_sec_sequence.end())
@@ -2534,11 +2581,75 @@ void eDVBFrontend::hdsComandaTuner(bool recvEvents)
 		m_hds_timpi_zap.sec_gata_ms = m_hds_timpi_zap.comanda_ms;
 }
 
+/* HDSatelit (0.8.0): driverul a refuzat comanda (parametri pe care nu-i poate, tuner ocupat). Pana acum se scria numai
+   perror si acordarea astepta 5-20 s; intre timp o prindere ramasa de la transponderul de dinainte (eveniment sau citirea
+   din timeout()) trecea drept prinderea celui cerut, iar cautarea ii scria tabelele sub parametrii gresiti. Acum nicio
+   prindere nu se ia in seama pana la comanda urmatoare (setFrontend sterge steagul), iar acordarea cade imediat ce
+   secventa SEC si-a terminat pasii: pe zap si la cautarea fara motor comanda e ultimul pas, deci pe loc; la motor dupa
+   pozitia tinuta minte si oprirea lui. O comanda de dupa (un pas al motorului acordat din nou) poate inca prinde. */
+void eDVBFrontend::hdsComandaRefuzata()
+{
+	hdsCadeLaSfarsitulSecventei();
+}
+
+/* nicio prindere pana la comanda urmatoare; acordarea cade prin timeout() pe ceas (fara alta acordare pornita din
+   interiorul buclei evenimentelor sau a secventei), acum daca secventa s-a terminat, altfel la sfarsitul ei (tuneLoopInt) */
+void eDVBFrontend::hdsCadeLaSfarsitulSecventei()
+{
+	m_hds_fara_prindere = true;
+	if (m_simulate || m_state != stateTuning)
+		return;
+	m_hds_scan_verificare->stop();
+	if (!m_sec_sequence || m_sec_sequence.current() == m_sec_sequence.end())
+		m_timeout->start(0, true);
+}
+
+/* HDSatelit (0.8.0, lib/dvb/hdsscanreguli.h): la prinderea unei acordari a cautarii pe satelit (motivul "scanare"),
+   frecventa citita de la driver (FE_GET_FRONTEND, frecventa intermediara) fata de cea ceruta, scrisa in randul "prins" din
+   hds-tuner.log. Departe (peste max(20 MHz, 2 x rata)) si driverul in lista din HDS_FISIER_PRINDERE_DEPARTE: prinderea se
+   da pierduta, ca tabelele altei purtatori sa nu intre in lista sub parametrii celei cerute. Din fabrica fisierul lipseste,
+   deci numai jurnalul: fiecare driver se masoara intai, iar unul care raporteaza frecventa altfel nu are voie sa piarda
+   canale. Zap-ul si inregistrarile nu sunt atinse (o citire in plus numai la cautare). */
+#define HDS_FISIER_PRINDERE_DEPARTE "/etc/enigma2/hds-prindere-departe"
+bool eDVBFrontend::hdsPrindereDeparte()
+{
+	if (m_simulate || m_fd < 0 || m_type != feSatellite || strcmp(m_hds_acordare.motiv, "scanare"))
+		return false;
+	/* Unicable/JESS: orice transponder vine pe aceeasi frecventa a benzii utilizatorului, deci citirea nu deosebeste nimic */
+	if (m_data[SATCR] != -1)
+		return false;
+	long ceruta = (long)parm_frequency, citita = 0;
+	FRONTENDPARAMETERS citit;
+	memset(&citit, 0, sizeof(citit));
+	if (::ioctl(m_fd, FE_GET_FRONTEND, &citit) == 0)
+		citita = (long)citit.frequency;
+	long rata = (long)oparm.sat.symbol_rate;
+	int p = hdsscanreguli::prindere(ceruta, citita, rata);
+	bool pierduta = false;
+	if (p == hdsscanreguli::PRINDERE_DEPARTE)
+	{
+		FILE *f = fopen(HDS_FISIER_PRINDERE_DEPARTE, "r");
+		if (f)
+		{
+			char lista[512];
+			size_t n = fread(lista, 1, sizeof(lista) - 1, f);
+			lista[n] = 0;
+			fclose(f);
+			pierduta = hdsscanreguli::driverInLista(lista, m_description);
+		}
+	}
+	hdsjtuner::frecventaCitita(m_hds_jurnal, m_slotid, ceruta, citita, hdsscanreguli::pragDeparteKhz(rata), p, pierduta);
+	eDebug("[SEC] scanare: frecventa citita %ld kHz, ceruta %ld kHz (%s)%s", citita, ceruta, hdsscanreguli::textPrindere(p),
+		pierduta ? ": prinderea se da pierduta" : "");
+	return pierduta;
+}
+
 void eDVBFrontend::setFrontend(bool recvEvents)
 {
 	if (!m_simulate)
 	{
 		eDebug("setting frontend %d", m_dvbid);
+		m_hds_fara_prindere = false;  /* comanda noua: prinderile ei se iau iar in seama */
 		if (recvEvents)
 			m_sn->start();
 		feEvent(-1); // flush events
@@ -2606,7 +2717,8 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 				int n = 9;
 				if (flux)
 				{
-					// DTV_CLEAR a pus deja „fara filtru"; se trimite numai ce schimba (lib/dvb/hdsmultistream.h)
+					// se trimite numai ce schimba fata de „fara filtru" (lib/dvb/hdsmultistream.h); „fara filtru" il pune
+					// DTV_CLEAR de la DVB API 5.9, iar pe nucleele mai vechi ramura de mai jos (fluxImplicitDeTrimis)
 					p[n].cmd = DTV_STREAM_ID;
 					if (hdsms::plsSeparat(m_dvb_api))
 					{
@@ -2628,6 +2740,17 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 					eDebug("frontend %d: flux %d, PLS %d/%d -> DTV_STREAM_ID 0x%x (DVB API %d.%d)", m_dvbid,
 						hdsms::isiNormalizat(oparm.sat.is_id), oparm.sat.pls_mode, oparm.sat.pls_code, p[9].u.data,
 						m_dvb_api >> 8, m_dvb_api & 0xFF);
+				}
+				else if (hdsms::fluxImplicitDeTrimis(m_dvb_api, m_multistream))
+				{
+					// transponder obisnuit pe un nucleu cu DVB API sub 5.9 (Dreambox DM820: 5.5): acolo DTV_CLEAR lasa
+					// proprietatea pe 0, iar driverul o citeste ca „fluxul 0, PLS Root 0" si nu se mai sincronizeaza pe
+					// niciun transponder DVB-S2. Se trimite ce pune DTV_CLEAR pe nucleele noi: NO_STREAM_ID_FILTER
+					p[n].cmd = DTV_STREAM_ID;
+					p[n].u.data = hdsms::streamIdImpachetat(0, hdsms::MOD_GOLD, 0);  // AS236: 0x04000000 (fluxul 0, PLS Gold 0); 0xFFFFFFFF dadea tune timeout pe DM820
+					eDebug("frontend %d: fara flux -> DTV_STREAM_ID 0x%x trimis anume (DVB API %d.%d)", m_dvbid, p[n].u.data,
+						m_dvb_api >> 8, m_dvb_api & 0xFF);
+					++n;
 				}
 #if defined DTV_ISDBT_SB_SEGMENT_IDX
 				// T2-MI catre driver, ca in OE-Alliance (acelasi camp nefolosit la satelit, aceeasi forma): driverele care stiu
@@ -2659,6 +2782,7 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 			{
 				hdsjtuner::refuzat(m_hds_jurnal, m_slotid, "FE_SET_PROPERTY", errno);
 				perror("FE_SET_PROPERTY failed");
+				hdsComandaRefuzata();
 				return;
 			}
 		}
@@ -2698,7 +2822,9 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 			if (ioctl(m_fd, FE_SET_PROPERTY, &cmdseq) == -1)
 			{
 				m_hds_sistem_pus = -1;
+				hdsjtuner::refuzat(m_hds_jurnal, m_slotid, "FE_SET_PROPERTY", errno);
 				perror("FE_SET_PROPERTY failed");
+				hdsComandaRefuzata();
 				return;
 			}
 			/* DTV_DELIVERY_SYSTEM de mai sus a schimbat sistemul nucleului: acordarea urmatoare pe cablu il pune din nou */
@@ -2712,6 +2838,7 @@ void eDVBFrontend::setFrontend(bool recvEvents)
 			{
 				hdsjtuner::refuzat(m_hds_jurnal, m_slotid, "FE_SET_FRONTEND", errno);
 				perror("FE_SET_FRONTEND failed");
+				hdsComandaRefuzata();
 				return;
 			}
 		}
@@ -3192,6 +3319,7 @@ RESULT eDVBFrontend::tune(const iDVBFrontendParameters &where)
 	m_timeout->stop();
 	m_hds_scan_verificare->stop();
 	m_hds_e_scanare = false;
+	m_hds_fara_prindere = false;
 
 	int res=0;
 

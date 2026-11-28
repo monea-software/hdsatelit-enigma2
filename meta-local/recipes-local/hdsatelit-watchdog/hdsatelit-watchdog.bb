@@ -87,7 +87,10 @@ PV = "0.1.0"
 # inaintea opririi SIGRTMIN+9 (toate firele), la pornirea fara bataie SIGRTMIN+7 (numai firul principal); un enigma2
 # mai vechi (fara SIGRTMIN+9) primeste ca pana acum SIGRTMIN+7 numai inaintea opririi. Fara importuri noi.
 # SGK1: record the reason before SIGKILL, without changing recovery deadlines.
-PR = "r20"
+# r21 (25.11.2026, 0.8.0, WDG0, gol gasit de JHD9): o tema straina in proba (/tmp/hds-skin-proba) care nu ajunge la prima
+# bataie in 360 s de la incarcare e oprita ca un blocaj moale (semnul paznicului), iar la pornirea urmatoare tema e
+# refuzata si revine HD Satelit. Fara importuri noi.
+PR = "r24"
 
 SRC_URI = "file://hds-watchdog.py"
 S = "${UNPACKDIR}"

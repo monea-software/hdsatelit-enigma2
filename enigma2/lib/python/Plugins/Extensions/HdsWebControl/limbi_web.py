@@ -6,8 +6,9 @@
 #
 # Orice ecran sau setare de pe receptor are pereche in interfata web.
 # Pe televizor: Meniu > Setari > Audio & Sound Tracks > Limba sunetului si a subtitrarilor (Screens/HdsPisteLimbi.py).
-# Aici: aceleasi 8 setari (cate 3 preferinte pentru sunet si subtitrare, „Fără subtitrări niciodată”, „Tradu automat din
-# orice subtitrare disponibilă”, care conteaza cu traducerea subtitrarilor pornita), cu aceleasi
+# Aici: aceleasi 9 setari (cate 3 preferinte pentru sunet si subtitrare, „Fără subtitrări niciodată”, „Tradu automat din
+# orice subtitrare disponibilă”, care conteaza cu traducerea subtitrarilor pornita, „Mesaj când canalul nu trimite
+# subtitrarea”), cu aceleasi
 # alegeri (luate chiar din setarile config.hds_piste, nu scrise a doua oara), randurile subtitrarii ascunse la
 # „niciodata” ca pe televizor, ce se tine minte pe canalul care merge, lista canalelor cu alegeri de mana si „Uită”.
 # Dupa salvare preferintele se aplica pe loc pe canalul care merge (reaplicaAcum), ca la Verde pe televizor.
@@ -28,8 +29,8 @@
 
 SETARI_AUDIO = ("audio1", "audio2", "audio3")
 SETARI_SUB = ("sub1", "sub2", "sub3")
-DA_NU = ("fara_subtitrari", "tradu_orice")
-SETARI = SETARI_AUDIO + ("fara_subtitrari",) + SETARI_SUB + ("tradu_orice",)
+DA_NU = ("fara_subtitrari", "tradu_orice", "mesaj_lipsa")
+SETARI = SETARI_AUDIO + ("fara_subtitrari",) + SETARI_SUB + ("tradu_orice", "mesaj_lipsa")
 
 
 def N_(text):
@@ -47,6 +48,7 @@ ETICHETE = {
 	"sub2": N_("Subtitrare, a doua alegere"),
 	"sub3": N_("Subtitrare, a treia alegere"),
 	"tradu_orice": N_("Tradu automat din orice subtitrare disponibilă"),
+	"mesaj_lipsa": N_("Mesaj când canalul nu trimite subtitrarea"),
 }
 
 # tipurile de serviciu incercate pentru numele unui canal din cheie (cheia nu tine tipul): TV HD, TV SD, alte HD, radio
@@ -226,6 +228,7 @@ def seteaza(argumente, L=None, sesiune=None, configfile=None):
 	for nume, valoare in noi.items():
 		element = getattr(c, nume)
 		element.value = valoare
+		element.save_forced = True    # ca Verde pe televizor: se scrie si cand e egala cu valoarea din fabrica
 		element.save()
 	_salveazaFisierul(configfile)
 	if sesiune is not None:

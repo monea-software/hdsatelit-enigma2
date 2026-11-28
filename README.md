@@ -1,13 +1,13 @@
-# HD Satelit 0.7.9 beta pentru Amiko Viper 4K V20
+# HD Satelit 0.8.0 beta pentru Amiko Viper 4K V20
 
-Sursa imaginii Enigma2 HD Satelit 0.7.9 (beta) pentru receptorul de satelit Amiko Viper 4K V20, făcută de Monea
+Sursa imaginii Enigma2 HD Satelit 0.8.0 (beta) pentru receptorul de satelit Amiko Viper 4K V20, făcută de Monea
 Software pentru HD Satelit. Interfața e enigma2 pe Python 3, cu skinul HDSatelit și interfața web proprie.
 
-Aceeași sursă este a tuturor modelelor cu imaginea 0.7.9: Amiko Viper 4K V10, V20, V30 și V40, Octagon SF8008 4K UHD, Octagon SF8008 MINI 4K, Uclan Ustym 4K PRO, Protek 4K X2, GigaBlue UHD TRIO 4K, Vu+ Solo4K, Vu+ Uno4K SE, Vu+ Duo4K și Vu+ Solo SE. Rețetele lor sunt în `meta-local/`.
+Aceeași sursă este a tuturor modelelor cu imaginea 0.8.0: Amiko Viper 4K V10, V20, V30 și V40, Octagon SF8008 4K UHD, Octagon SF8008 MINI 4K, Uclan Ustym 4K PRO, Protek 4K X2, GigaBlue UHD TRIO 4K, Vu+ Solo4K, Vu+ Uno4K SE, Vu+ Duo4K și Vu+ Solo SE. Rețetele lor sunt în `meta-local/`.
 
 Imaginea gata construită și pașii de instalare de pe stick: https://stb.hdsatelit.com/receptoare/amiko-viper-4k-v20/
 
-[English below](#hd-satelit-079-beta-for-the-amiko-viper-4k-v20)
+[English below](#hd-satelit-080-beta-for-the-amiko-viper-4k-v20)
 
 ## Ce e în depozit
 
@@ -17,8 +17,8 @@ Imaginea gata construită și pașii de instalare de pe stick: https://stb.hdsat
 | `meta-local/` | stratul OpenEmbedded HD Satelit: distribuția `hdsatelit`, imaginea `hdsatelit-image` și celelalte rețete |
 | `skin/usr/` | skinul HDSatelit (rețeta `hdsatelit-skin`) |
 
-Sunt fișierele din care s-a construit versiunea 0.7.9. Arborele git al dosarului `enigma2/` este
-`53610a2d8a837eb8c126c4a7741cd2b5b9d9e56d`, același cu cel construit (`git rev-parse HEAD:enigma2`). Depozitul are câte un comit pe versiune.
+Sunt fișierele din care s-a construit versiunea 0.8.0. Arborele git al dosarului `enigma2/` este
+`30d494814eab3901ff4290fbed6494bb3bea3dcf`, același cu cel construit (`git rev-parse HEAD:enigma2`). Depozitul are câte un comit pe versiune.
 
 ## Construirea
 
@@ -73,7 +73,7 @@ navigatorul web (WPE WebKit) s-a compilat cu 8 fire în aproximativ 22 GB.
    git config user.name "HD Satelit"
    git config user.email build@hdsatelit.invalid
    git add -A -f
-   GIT_COMMITTER_DATE="2026-11-23 22:53:55 +0200" git commit -m "HD Satelit 0.7.9"
+   GIT_COMMITTER_DATE="2026-11-28 07:25:40 +0200" git commit -m "HD Satelit 0.8.0"
    ```
 
    `-f` adaugă și fișierele pe care `.gitignore` din cod le-ar sări; `git config` e numai pentru `git commit` pe un
@@ -88,7 +88,7 @@ navigatorul web (WPE WebKit) s-a compilat cu 8 fire în aproximativ 22 GB.
    bitbake hdsatelit-image
    ```
 
-   Rezultatul: `tmp/deploy/images/u57/hdsatelit-0.7.9-viper4kv20-<data>_mmc.zip`.
+   Rezultatul: `tmp/deploy/images/u57/hdsatelit-0.8.0-viper4kv20-<data>_mmc.zip`.
 
 Componentele fabricantului receptorului (driverele și bibliotecile Dinobot) sunt arhive binare închise. Le descarcă
 rețetele OE-Alliance la construire; nu sunt în acest depozit.
@@ -110,7 +110,7 @@ permite licența originală a acelei versiuni. Detalii în [enigma2/LICENSE](eni
 Fiecare rețetă din `meta-local/` are licența scrisă în ea (`LICENSE = ...`); programele altora aduse de rețete au
 licența lor.
 Componentele HD Satelit `hdsatelit-bootlogo`, `hdsatelit-netguard`, `hdsatelit-noduri`, `hdsatelit-opensubtitles`, `hdsatelit-partea-doua`, `hdsatelit-pornire-stick`, `hdsatelit-radacina-usb`, `hdsatelit-skin` și `hdsatelit-watchdog` sunt publicate sub licența GPLv2, ca restul imaginii (hotărârea din
-23.10.2026). În rețetele versiunii 0.7.9 scrie încă `LICENSE = "CLOSED"`; se corectează în versiunea următoare.
+23.10.2026). În rețetele versiunii 0.8.0 scrie încă `LICENSE = "CLOSED"`; se corectează în versiunea următoare.
 Tot așa, nota din [enigma2/README.md](enigma2/README.md) după care skinul HDSatelit e „declarat deocamdată închis” nu
 mai e valabilă: skinul, din `skin/` și din `enigma2/HDSatelit/`, e sub GPLv2.
 
@@ -123,13 +123,13 @@ contact@hdsatelit.com
 
 ---
 
-# HD Satelit 0.7.9 beta for the Amiko Viper 4K V20
+# HD Satelit 0.8.0 beta for the Amiko Viper 4K V20
 
-Source code of the HD Satelit Enigma2 image 0.7.9 (beta) for the Amiko Viper 4K V20 satellite receiver, made by
+Source code of the HD Satelit Enigma2 image 0.8.0 (beta) for the Amiko Viper 4K V20 satellite receiver, made by
 Monea Software for HD Satelit. The user interface is enigma2 on Python 3, with the HDSatelit skin and its own web
 interface.
 
-The same source covers all models with the 0.7.9 image: Amiko Viper 4K V10, V20, V30 and V40, Octagon SF8008 4K UHD, Octagon SF8008 MINI 4K, Uclan Ustym 4K PRO, Protek 4K X2, GigaBlue UHD TRIO 4K, Vu+ Solo4K, Vu+ Uno4K SE, Vu+ Duo4K and Vu+ Solo SE. Their recipes are in `meta-local/`.
+The same source covers all models with the 0.8.0 image: Amiko Viper 4K V10, V20, V30 and V40, Octagon SF8008 4K UHD, Octagon SF8008 MINI 4K, Uclan Ustym 4K PRO, Protek 4K X2, GigaBlue UHD TRIO 4K, Vu+ Solo4K, Vu+ Uno4K SE, Vu+ Duo4K and Vu+ Solo SE. Their recipes are in `meta-local/`.
 
 The ready-built image and the steps to install it from a USB stick:
 https://stb.hdsatelit.com/receptoare/amiko-viper-4k-v20/
@@ -142,7 +142,7 @@ https://stb.hdsatelit.com/receptoare/amiko-viper-4k-v20/
 | `meta-local/` | the HD Satelit OpenEmbedded layer: distro `hdsatelit`, image `hdsatelit-image` and the other recipes |
 | `skin/usr/` | the HDSatelit skin (recipe `hdsatelit-skin`) |
 
-These are the files version 0.7.9 was built from. The git tree of the `enigma2/` folder is `53610a2d8a837eb8c126c4a7741cd2b5b9d9e56d`,
+These are the files version 0.8.0 was built from. The git tree of the `enigma2/` folder is `30d494814eab3901ff4290fbed6494bb3bea3dcf`,
 the same as the one that was built (`git rev-parse HEAD:enigma2`). The repository has one commit per version.
 
 ## Building
@@ -199,7 +199,7 @@ the web browser (WPE WebKit) was compiled with 8 threads in about 22 GB.
    git config user.name "HD Satelit"
    git config user.email build@hdsatelit.invalid
    git add -A -f
-   GIT_COMMITTER_DATE="2026-11-23 22:53:55 +0200" git commit -m "HD Satelit 0.7.9"
+   GIT_COMMITTER_DATE="2026-11-28 07:25:40 +0200" git commit -m "HD Satelit 0.8.0"
    ```
 
    `-f` also adds the files that the code's `.gitignore` would skip; `git config` is only there so that `git commit`
@@ -214,7 +214,7 @@ the web browser (WPE WebKit) was compiled with 8 threads in about 22 GB.
    bitbake hdsatelit-image
    ```
 
-   The result: `tmp/deploy/images/u57/hdsatelit-0.7.9-viper4kv20-<date>_mmc.zip`.
+   The result: `tmp/deploy/images/u57/hdsatelit-0.8.0-viper4kv20-<date>_mmc.zip`.
 
 The receiver manufacturer's components (the Dinobot drivers and libraries) are closed binary archives. The OE-Alliance
 recipes download them during the build; they are not in this repository.
@@ -236,7 +236,7 @@ the authors in [enigma2/AUTHORS](enigma2/AUTHORS) and [enigma2/CREDITS](enigma2/
 Each recipe in `meta-local/` states its license (`LICENSE = ...`); the third-party programs brought in by the recipes
 keep their own licenses.
 The HD Satelit components `hdsatelit-bootlogo`, `hdsatelit-netguard`, `hdsatelit-noduri`, `hdsatelit-opensubtitles`, `hdsatelit-partea-doua`, `hdsatelit-pornire-stick`, `hdsatelit-radacina-usb`, `hdsatelit-skin` and `hdsatelit-watchdog` are published under the GPLv2 license, like the rest of the image
-(decision of 23.10.2026). The recipes of version 0.7.9 still say `LICENSE = "CLOSED"`; this is corrected in the
+(decision of 23.10.2026). The recipes of version 0.8.0 still say `LICENSE = "CLOSED"`; this is corrected in the
 next version. Likewise, the note in [enigma2/README.md](enigma2/README.md) that the HDSatelit skin is "declared closed
 for now" no longer applies: the skin, in `skin/` and in `enigma2/HDSatelit/`, is under the GPLv2.
 

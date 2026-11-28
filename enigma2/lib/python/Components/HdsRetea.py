@@ -184,13 +184,100 @@ def aplicaPlaca(placa, sus, dhcp, ip, masca, poarta, stare_veche, gata, R=None, 
 	R.writeNetworkConfig()
 
 
-def scrieDns(servere, R=None):
-	"""OK in "Nameserver settings": lista noua (fara dubluri, ca addNameserver) scrisa in /etc/resolv.conf."""
+def scrieDns(servere, R=None, pastreaza=False, cale_salvat=None):
+	"""OK in "Nameserver settings": lista noua (fara dubluri, ca addNameserver) scrisa in /etc/resolv.conf.
+	pastreaza=True (numai ecranul de pe televizor si pagina web /dns, adica alegerea omului): lista se pastreaza si in
+	/etc/enigma2/nameserversdns.conf (PRM1, 26.11.2026: altfel, cu DHCP, udhcpc rescria resolv.conf la pornire si la
+	reinnoire cu serverele routerului si cele puse de mana se pierdeau; numele fisierului e cel din OE-Alliance). Importul
+	setarilor nu pastreaza (lista lui vine din resolv.conf-ul altei imagini, adica de obicei serverele vechiului router).
+	OK fara nicio schimbare, cand nu exista inca o lista pastrata, nu pastreaza nimic (altfel s-ar fixa serverele DHCP)."""
 	R = retea(R)
+	inainte = [list(x) for x in (getattr(R, "nameservers", None) or [])]
 	R.clearNameservers()
 	for server in servere:
 		R.addNameserver(server)
 	R.writeNameserverConfig()
+	if not pastreaza:
+		return
+	cale = cale_salvat or CALE_DNS_SALVAT
+	dupa = [list(x) for x in (getattr(R, "nameservers", None) or servere)]
+	if dupa == inainte and not os.path.exists(cale):
+		return
+	try:
+		salveazaDns(dupa, cale)
+	except (IOError, OSError) as e:
+		print("[HdsRetea] serverele de nume nu s-au putut pastra: %s" % e)
+
+
+# PRM1 (26.11.2026, Babadem, SF8008 si SF8008 Supreme pe DHCP): serverele de nume puse de om raman dupa repornire.
+# Fisierul il scrie numai OK in "Nameserver settings" (ecran, web, importul setarilor); scrierea retelei din alte ecrane nu-l
+# atinge, deci serverele routerului nu se fixeaza niciodata singure. Lista goala = fisierul sters = serverele de la DHCP.
+# Il citesc udhcpc (/etc/udhcpc.d/50default, la pornire si la fiecare reinnoire) si iNetwork la pornirea interfetei.
+CALE_DNS_SALVAT = "/etc/enigma2/nameserversdns.conf"
+
+
+def _ip_dns(server):
+	"""[a, b, c, d] (forma lui iNetwork) sau "a.b.c.d" -> "a.b.c.d"; None daca nu e o adresa IPv4."""
+	try:
+		parti = [int(x) for x in (server.split(".") if isinstance(server, str) else server)]
+	except (TypeError, ValueError):
+		return None
+	if len(parti) != 4 or not all(0 <= x <= 255 for x in parti) or parti == [0, 0, 0, 0]:
+		return None
+	return "%d.%d.%d.%d" % tuple(parti)
+
+
+def salveazaDns(servere, cale=None):
+	"""Pastreaza lista omului (fara dubluri, in ordine); lista goala sterge fisierul."""
+	cale = cale or CALE_DNS_SALVAT
+	ip = []
+	for server in servere or []:
+		a = _ip_dns(server)
+		if a and a not in ip:
+			ip.append(a)
+	if not ip:
+		try:
+			os.remove(cale)
+		except OSError:
+			pass
+		return []
+	tmp = cale + ".nou"
+	with open(tmp, "w") as f:
+		f.write("".join("nameserver %s\n" % a for a in ip))
+	os.rename(tmp, cale)
+	return ip
+
+
+def citesteDnsSalvat(cale=None):
+	"""Serverele pastrate ("a.b.c.d"), [] daca fisierul lipseste sau n-are niciun server bun."""
+	ip = []
+	for rand in (_citeste(cale or CALE_DNS_SALVAT) or "").splitlines():
+		bucati = rand.split()
+		if len(bucati) >= 2 and bucati[0] == "nameserver":
+			a = _ip_dns(bucati[1])
+			if a and a not in ip:
+				ip.append(a)
+	return ip
+
+
+def aplicaDnsSalvat(cale=None, cale_resolv="/etc/resolv.conf"):
+	"""La pornirea interfetei: daca omul a pus servere si resolv.conf are altele (udhcpc vechi le-a rescris), resolv.conf
+	primeste lista lui. Intoarce lista pusa sau [] daca n-a fost nimic de facut."""
+	ip = citesteDnsSalvat(cale)
+	if not ip:
+		return []
+	acum = []
+	for rand in (_citeste(cale_resolv) or "").splitlines():
+		bucati = rand.split()
+		if len(bucati) >= 2 and bucati[0] == "nameserver":
+			acum.append(bucati[1])
+	if acum == ip:
+		return []
+	alte = [r for r in (_citeste(cale_resolv) or "").splitlines() if r.split()[:1] and r.split()[0] != "nameserver"]
+	# scris pe loc, ca Network.writeNameserverConfig (resolv.conf poate fi o legatura spre /var/run)
+	with open(cale_resolv, "w") as f:
+		f.write("".join(r + "\n" for r in alte) + "".join("nameserver %s\n" % a for a in ip))
+	return ip
 
 
 def legaturaEthtool(text):

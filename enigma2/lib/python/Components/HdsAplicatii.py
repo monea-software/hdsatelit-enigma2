@@ -378,6 +378,33 @@ MAGAZIN_IMAGINE = (
 		"pornire": "Plugins.Extensions.HdsMediaCenter.plugin:porneste",
 		"culoare": "#1F3A5F",
 	},
+	# CTV1 (Eduard, 26.11.2026 22:02 si 22:49): "Legal Online TV Channels", lista de canale TV gratuite din feedul extern
+	# Monea Software, ca aplicatie cu Instaleaza / Instalat. Pachetul pune acelasi card in DOSAR_PACHETE (cu el cardul apare
+	# dupa instalare si fara randul asta); randul de aici il arata si INAINTE, cand pachetul e numai in feed.
+	{
+		"id": "legal-online-tv",
+		"fel": FEL_PACHET,
+		"titlu": "Legal Online TV Channels",
+		"descriere": N_("Canale TV gratuite de pe internet, din paginile oficiale ale televiziunilor, verificate la două zile."),
+		"pachet": "enigma2-plugin-extensions-legalonlinetv",
+		"dosar": "Extensions/LegalOnlineTV",
+		"pornire": "Plugins.Extensions.LegalOnlineTV.plugin:porneste",
+		"culoare": "#0B7A55",
+	},
+	# RAD1 (Eduard, 26.11.2026 23:42): "Radio online al nostru sa se instaleze tot in si din Aplicatii": pluginul
+	# RadioOnline din feedul extern Monea Software, cu Instaleaza / Instalat si pornire din card.
+	{
+		"id": "radio-online",
+		"fel": FEL_PACHET,
+		"titlu": N_("Radio online"),
+		"titlu_tradus": "1",
+		"descriere": N_("Posturi de radio de pe internet"),
+		"pachet": "enigma2-plugin-extensions-radioonline",
+		"dosar": "Extensions/RadioOnline",
+		"pornire": "Plugins.Extensions.RadioOnline.plugin:_porneste",
+		"poza": "plugin.png",
+		"culoare": "#B4442E",
+	},
 )
 
 _PORNIRE_BUNA = re.compile(r"^Plugins(\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$")
@@ -429,6 +456,12 @@ def pluginInstalat(a, exista=os.path.exists, si_pyc=True):
 	return exista(baza + "py") or (si_pyc and exista(baza + "pyc"))
 
 
+def youtubeNativ(exista=os.path.exists):
+	"""True cand ecranul YouTube nativ e in imagine (YTN1)"""
+	baza = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Screens", "HdsYouTube.")
+	return exista(baza + "py") or exista(baza + "pyc")
+
+
 def stareMagazin(a, catalog=None, exista=os.path.exists):
 	"""INSTALAT / ACTUALIZARE / DISPONIBIL, sau None cand cardul nu se arata. Scurtaturile sunt INSTALAT cand e pe
 	receptor programul cu care pornesc (program(): motorul lor sau navigatorul imaginii); fara niciunul (Vu+ Solo SE si
@@ -438,6 +471,10 @@ def stareMagazin(a, catalog=None, exista=os.path.exists):
 	f = fel(a)
 	if a.get("vizibil") == "0" and not vizibilePrinFeed().get(a.get("id")):
 		return None
+	if a.get("id") == "youtube" and youtubeNativ(exista):
+		# YTN9 (0.8.0, Eduard 26.11 21:50): YouTube nativ (Screens/HdsYouTube) nu cere navigatorul, deci cardul se arata
+		# si pe receptoarele fara navigator (ZGEMMA H8, Vu+ Solo SE si celelalte MIPS)
+		return INSTALAT
 	if f == FEL_SCURTATURA:
 		if not exista(program(a, exista)[1]):
 			return None
@@ -451,6 +488,9 @@ def stareMagazin(a, catalog=None, exista=os.path.exists):
 		if not a.get("program") or exista(a["program"]):
 			return INSTALAT
 		if a.get("id") == "navigator" and a["program"] == PROGRAME["wpe"]:
+			# ZGEMMA H8 (ZGA1): feedurile masinii nu au hds-navigator, deci cardul nu se arata (fara „Disponibil ~170 MB”)
+			if navigatorInFeed() is False:
+				return None
 			return stareNavigatorLipsa()
 		return None
 	p = catalog.pachete.get(a["pachet"]) if catalog is not None else None
@@ -480,10 +520,84 @@ def locNavigator():
 	return HdsLimbaRestaurare.locNavigator()
 
 
+LISTE_OPKG = "/var/lib/opkg/lists"
+PACHET_NAVIGATOR = b"hds-navigator"
+_NAVIGATOR_FEED = {}     # semnul listelor (nume, mtime, marime) -> True/False
+
+
+def navigatorInFeed(dosar=None):
+	"""True / False dupa listele descarcate de opkg update (o strofa „Package: hds-navigator”), None fara nicio lista.
+	Rezultatul se tine cat listele raman aceleasi (cardul se reface des)."""
+	dosar = dosar or LISTE_OPKG
+	try:
+		nume = sorted(os.listdir(dosar))
+	except OSError:
+		return None
+	semn = []
+	for n in nume:
+		cale = os.path.join(dosar, n)
+		try:
+			st = os.stat(cale)
+		except OSError:
+			continue
+		if os.path.isfile(cale):
+			semn.append((n, int(st.st_mtime), st.st_size))
+	if not semn:
+		return None
+	semn = (dosar, tuple(semn))
+	if semn in _NAVIGATOR_FEED:
+		return _NAVIGATOR_FEED[semn]
+	cauta = re.compile(rb"(?m)^Package:[ \t]*" + re.escape(PACHET_NAVIGATOR) + rb"[ \t\r]*$")
+	gasit = False
+	for n, _m, _s in semn[1]:
+		try:
+			with open(os.path.join(dosar, n), "rb") as f:
+				if cauta.search(f.read(64 * 1024 * 1024)):
+					gasit = True
+					break
+		except (IOError, OSError):
+			continue
+	_NAVIGATOR_FEED.clear()
+	_NAVIGATOR_FEED[semn] = gasit
+	return gasit
+
+
+def _restaurare():
+	try:
+		from Components import HdsLimbaRestaurare
+		return HdsLimbaRestaurare
+	except ImportError:
+		return None
+
+
 def stareNavigatorLipsa():
-	"""CERE_NAVIGATOR sau NU_INCAPE pentru cardul navigatorului cand programul lipseste"""
-	trebuie, liber = locNavigator()
-	return NU_INCAPE if liber is not None and liber < trebuie else CERE_NAVIGATOR
+	"""CERE_NAVIGATOR sau NU_INCAPE pentru cardul navigatorului cand programul lipseste. NAV8 (0.8.0, Eduard 26.11.2026
+	07:50): cand nu incape in memoria interna, se instaleaza pe un stick sau disc USB ext4 (CERE_NAVIGATOR, cardul spune
+	unde); NU_INCAPE numai fara niciun loc (cardul spune ce stick trebuie) sau cand stickul cu navigatorul nu e pus.
+	Navigatorul de pe un stick pus abia acum (montat dupa pornirea interfetei) se leaga aici si cardul trece pe Instalat."""
+	L = _restaurare()
+	if L is None:
+		trebuie, liber = locNavigator()
+		return NU_INCAPE if liber is not None and liber < trebuie else CERE_NAVIGATOR
+	S = L._stick()
+	if S.idLegat() and S.gasesteStick():
+		S.repara()
+		if os.access(PROGRAME["wpe"], os.X_OK):
+			return INSTALAT
+	_trebuie, liber = locNavigator()
+	return CERE_NAVIGATOR if L.planNavigator(liber_intern=liber)["unde"] in (S.INTERN, S.STICK) else NU_INCAPE
+
+
+def sufixNavigator(stare_):
+	"""Ce se adauga pe cardul navigatorului care se poate instala (televizor si pagina web): marimea si unde merge
+	(„~170 MB · pe stick (/media/hdd)”)"""
+	if stare_ != CERE_NAVIGATOR:
+		return ""
+	trebuie, _liber = locNavigator()
+	text = " · ~%d MB" % (trebuie // 1048576) if trebuie else ""
+	L = _restaurare()
+	unde = L.textUndeNavigator() if L is not None else ""
+	return text + (" · " + unde if unde else "")
 
 
 def notaNavigator(a):

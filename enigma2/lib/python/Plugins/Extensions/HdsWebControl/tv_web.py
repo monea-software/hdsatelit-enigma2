@@ -532,8 +532,9 @@ def porneste(argumente_, cine, browser_nume, adresa, H=None, M=None, ref_tv=None
 	if not merge:
 		return {"result": False, "message": text, "nume": nume, "ref": ref}
 	# h264=False numai cand pagina a trimis h264=0 (sesiunea pune atunci H.264 pe playerul wasm, daca decodorul il are)
+	# ZAP1: urmeaza = pagina care urmeaza televizorul (la zap transmisia ei lasa tunerul inaintea canalului nou)
 	ses, motiv = m.porneste(ref, nume, cine, browser_nume, adresa, ac3=ac3, fereastra=fereastra,
-		preia=argumente_.get("preia") == "1", wasm=wasm, **({} if h264 else {"h264": False}))
+		preia=argumente_.get("preia") == "1", wasm=wasm, urmeaza=urmeaza, **({} if h264 else {"h264": False}))
 	if ses is None:
 		if motiv == T.ALTA_FEREASTRA:
 			return {"result": False, "alta_fereastra": True,

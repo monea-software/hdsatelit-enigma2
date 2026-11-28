@@ -461,7 +461,7 @@ PAGINA = """<!DOCTYPE html>
 </section>
 <section class="card ascuns" id="pornire">
   <p class="durata"><label for="durata">Cât timp</label><select id="durata"></select></p>
-  <p class="scurt">Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate meniurile. Echipa vede inclusiv numele de utilizator, parolele, PIN-urile și cheile. Poți opri oricând.</p>
+  <p class="scurt">Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate meniurile. Poți opri oricând.</p>
   <p><a href="#" id="termeni">Termenii și condițiile</a></p>
   <button class="verde" id="porneste">Start</button>
   <p class="mesaj" id="mesaj"></p>
@@ -700,7 +700,7 @@ TEXTE_PAGINA = {
 		N_("Se citește starea..."),
 		N_("Funcția nu e disponibilă pe această imagine."),
 		N_("Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate "
-			"meniurile. Echipa vede inclusiv numele de utilizator, parolele, PIN-urile și cheile. Poți opri oricând."),
+			"meniurile. Poți opri oricând."),
 		N_("Accept <a href=\"#\" id=\"termeni\">termenii și condițiile</a>"),
 		N_("Cât timp"),
 		N_("Schimbă durata"),

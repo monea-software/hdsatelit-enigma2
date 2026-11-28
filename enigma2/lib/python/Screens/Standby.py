@@ -44,6 +44,8 @@ def stergeStandbyDinCoada():
 class Standby(Screen):
 	def Power(self):
 		print("leave standby")
+		# 0.8.0: motivul trezirii (tasta, web, asistenta, CEC) aflat pe loc, din stiva apelului (HdsStandbyTv.laPower)
+		_standbyTv("laPower")
 		self.close(True)
 
 	def setMute(self):
@@ -459,3 +461,82 @@ class TryQuitMainloop(MessageBox):
 	def __onHide(self):
 		global inTryQuitMainloop
 		inTryQuitMainloop = False
+
+
+# HDSatelit 0.8.0 (RBT0; Vu+ Duo 4K Lite, 3 blocaje pe 2 receptoare, STADIU-CEC9): un plugin chema `reboot` direct (in
+# forma care face pe loc apelul de sistem) cat enigma2 inca mergea; driverul Vu+ elibera atunci CEC-ul si video-ul de
+# sub enigma2 (Oops in nexus) si receptorul ramanea blocat. /sbin/reboot, /sbin/halt si /sbin/poweroff sunt acum
+# hds-oprire-curata (reteta hdsatelit-oprire-curata din strat): cu enigma2 pornit scriu CERERE_OPRIRE (cod=2 repornirea,
+# cod=1 oprirea; de= cine a cerut) si trimit SIGUSR2 lui enigma2. Aici semnalul porneste aceeasi iesire ca din meniu
+# (codul tinut pentru paznic, canalul tinut minte, CEC la oprire, quitMainloop), deci enigma2 se opreste curat, apoi
+# tools/enigma2.sh face repornirea sau oprirea ceruta. Fara fereastra de intrebare. Repornirea din meniu nu trece pe aici.
+# Semnalul se prinde numai pe firul principal (signal.signal); handlerul Python ruleaza intre doi pasi ai interpretorului,
+# iesirea se face apoi dintr-un eTimer, nu din handler.
+CERERE_OPRIRE = "/tmp/hds-oprire-ceruta"
+_cerereOprire = {"timer": None}
+
+
+def citesteCerereaDeOprire(cale=None):
+	"""(cod, cine) din CERERE_OPRIRE (fisier mic in RAM), sters dupa citire; cod 2 cand lipseste sau nu e 1 / 2."""
+	cale = cale or CERERE_OPRIRE
+	cod, cine = QUIT_REBOOT, ""
+	try:
+		with open(cale, "r") as f:
+			for rand in f.read(4096).splitlines():
+				k, _s, v = rand.partition("=")
+				if k == "cod" and v.strip() in ("1", "2"):
+					cod = int(v.strip())
+				elif k == "de":
+					cine = v.strip()[:120]
+		os.remove(cale)
+	except Exception:
+		pass
+	return cod, cine
+
+
+def iesireCerutaDinAfara(cod=None, cine=""):
+	"""Iesirea ceruta de hds-oprire-curata: ca TryQuitMainloop.close(True), fara intrebare."""
+	global iesireCeruta, iesireCerutaLa, iesireQuitLa
+	if cod is None:
+		cod, cine = citesteCerereaDeOprire()
+	print("[Standby] %s ceruta din afara (%s) cu interfata pornita: enigma2 se opreste intai curat (cod %d)" % (
+		"repornirea" if cod == QUIT_REBOOT else "oprirea", cine or "necunoscut", cod))
+	try:
+		from Components.HdsCanalTinut import scrie_acum
+		scrie_acum()
+	except Exception as e:
+		print("[Standby] canalul tinut minte: %r" % (e,))
+	iesireCeruta = cod
+	iesireCerutaLa = monotonic()
+	# la oprire televizorul primeste prin CEC mesajul de standby, ca la oprirea din meniu (fara textul de pe ecran: aici nu
+	# e nicio sesiune la indemana, iar iesirea nu depinde de el)
+	if cod == QUIT_SHUTDOWN:
+		_standbyTv("laOprire")
+	iesireQuitLa = monotonic()
+	quitMainloop(cod)
+
+
+def _laSemnalulDeOprire(semnal=None, cadru=None):
+	t = _cerereOprire.get("timer")
+	if t is not None:
+		t.start(0, True)
+	else:
+		iesireCerutaDinAfara()
+
+
+def pornestePrimireaOpririi():
+	"""SIGUSR2 -> iesireCerutaDinAfara (pe firul principal, la import). Intoarce True daca semnalul e prins."""
+	try:
+		import signal
+		from enigma import eTimer
+		t = eTimer()
+		t.callback.append(iesireCerutaDinAfara)
+		_cerereOprire["timer"] = t
+		signal.signal(signal.SIGUSR2, _laSemnalulDeOprire)
+		return True
+	except Exception as e:
+		print("[Standby] cererea de oprire din afara (SIGUSR2): %r" % (e,))
+		return False
+
+
+pornestePrimireaOpririi()

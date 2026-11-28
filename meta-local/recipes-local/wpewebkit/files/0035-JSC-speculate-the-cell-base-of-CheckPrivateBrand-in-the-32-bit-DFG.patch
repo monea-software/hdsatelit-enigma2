@@ -1,0 +1,60 @@
+From: HDSatelit <dev@hdsatelit.local>
+Subject: [PATCH] JSC: speculate the cell base of CheckPrivateBrand in the 32-bit DFG
+
+Upstream-Status: Inappropriate [restore experimental ARM32 JIT]
+
+The fixup phase gives the base of CheckPrivateBrand a CellUse edge, and
+the 64-bit backend and the 32-bit compileSetPrivateBrand() speculate it.
+The 32-bit compileCheckPrivateBrand() still read the base as a plain
+JSValue and sent non-cells to the slow path, so the edge was never
+proven and the DFG stopped with "Edge verification error ... was
+expected to have type Cell" as soon as a private method call on a
+value of unknown type was compiled (stress/private-method-untyped-use.js).
+
+Speculate the cell like the other two; a non-cell base now leaves
+through an OSR exit and the baseline code throws the TypeError.
+---
+diff --git a/Source/JavaScriptCore/dfg/DFGSpeculativeJIT32_64.cpp b/Source/JavaScriptCore/dfg/DFGSpeculativeJIT32_64.cpp
+index 53d2a81..ae6e9bb 100644
+--- a/Source/JavaScriptCore/dfg/DFGSpeculativeJIT32_64.cpp
++++ b/Source/JavaScriptCore/dfg/DFGSpeculativeJIT32_64.cpp
+@@ -5417,10 +5417,13 @@ void SpeculativeJIT::compilePutPrivateNameById(Node* node)
+ 
+ void SpeculativeJIT::compileCheckPrivateBrand(Node* node)
+ {
+-    JSValueOperand base(this, node->child1());
++    // The fixup phase gives the base a CellUse edge; speculate it like the 64-bit backend
++    // and compileSetPrivateBrand() do, so the edge is proven for the abstract interpreter.
++    ASSERT(node->child1().useKind() == CellUse);
++    SpeculateCellOperand base(this, node->child1());
+     SpeculateCellOperand brandValue(this, node->child2());
+ 
+-    JSValueRegs baseRegs = base.jsValueRegs();
++    GPRReg baseGPR = base.gpr();
+     GPRReg brandGPR = brandValue.gpr();
+ 
+     speculateSymbol(node->child2(), brandGPR);
+@@ -5430,13 +5433,10 @@ void SpeculativeJIT::compileCheckPrivateBrand(Node* node)
+     RegisterSet usedRegisters = this->usedRegisters();
+ 
+     JumpList slowCases;
+-    if (needsTypeCheck(node->child1(), SpecCell))
+-        slowCases.append(branchIfNotCell(baseRegs));
+-
+     auto [ propertyCache, propertyCacheConstant ] = addPropertyInlineCache();
+     JITPrivateBrandAccessGenerator gen(
+         codeBlock(), propertyCache, JITType::DFGJIT, codeOrigin, callSite, AccessType::CheckPrivateBrand, usedRegisters,
+-        baseRegs, JSValueRegs::payloadOnly(brandGPR), InvalidGPRReg);
++        JSValueRegs::payloadOnly(baseGPR), JSValueRegs::payloadOnly(brandGPR), InvalidGPRReg);
+ 
+     WTF::visit([&](auto* propertyCache) {
+         propertyCache->propertyIsSymbol = true;
+@@ -5446,7 +5446,7 @@ void SpeculativeJIT::compileCheckPrivateBrand(Node* node)
+     slowCases.append(gen.slowPathJump());
+     auto slowPath = slowPathCall(
+         slowCases, this, operationCheckPrivateBrandOptimize, NoResult,
+-        baseRegs, CellValue(brandGPR), TrustedImmPtr(gen.propertyCache()));
++        CellValue(baseGPR), CellValue(brandGPR), TrustedImmPtr(gen.propertyCache()));
+ 
+     addPrivateBrandAccess(gen, slowPath.get());
+     addSlowPathGenerator(WTF::move(slowPath));

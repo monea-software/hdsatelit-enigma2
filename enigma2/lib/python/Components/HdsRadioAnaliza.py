@@ -58,6 +58,7 @@ DMX_SET_PES_FILTER = _IOC(_IOC_WRITE, "o", 44, PES_FILTRU.size)
 DMX_SET_BUFFER_SIZE = _IOC(_IOC_NONE, "o", 45, 0)
 DMX_IN_FRONTEND = 0
 DMX_OUT_TAP = 1
+DMX_OUT_TSDEMUX_TAP = 3     # pachetele TS ale PID-ului (subtitrarile din vorbire, cand filtrul PES tace)
 DMX_PES_OTHER = 20
 DMX_IMMEDIATE_START = 4
 MARIME_TAMPON = 64 * 1024
@@ -1214,9 +1215,10 @@ class AnalizorOnline(object):
 class SursaDemux(object):
 	"""Filtrul PES pe PID-ul audio, pe unul din demultiplexoarele date (in ordine)."""
 
-	def __init__(self, pid, cai, os_mod=os, fcntl_mod=None, select_mod=None):
+	def __init__(self, pid, cai, os_mod=os, fcntl_mod=None, select_mod=None, iesire=DMX_OUT_TAP):
 		self.pid = pid
 		self.cai = list(cai)
+		self.iesire = iesire
 		self.os = os_mod
 		self.fcntl = fcntl_mod
 		self.select = select_mod
@@ -1246,7 +1248,7 @@ class SursaDemux(object):
 			except (OSError, IOError):
 				pass            # ca in nucleu: tamponul implicit ramane, filtrul merge si asa
 			self.fcntl.ioctl(fd, DMX_SET_PES_FILTER,
-				PES_FILTRU.pack(self.pid, DMX_IN_FRONTEND, DMX_OUT_TAP, DMX_PES_OTHER, DMX_IMMEDIATE_START))
+				PES_FILTRU.pack(self.pid, DMX_IN_FRONTEND, self.iesire, DMX_PES_OTHER, DMX_IMMEDIATE_START))
 		except (OSError, IOError) as e:
 			try:
 				self.os.close(fd)

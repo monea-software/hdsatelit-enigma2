@@ -854,7 +854,7 @@ def reinstaleaza_acces(nume, rad_sistem="/", opkg=None):
 	if not de_pus:
 		return rez
 	comanda = R._opkg(rad_sistem, opkg)
-	actualizat = comanda is not None and R._ruleaza(comanda + ["update"], R.TERMEN_UPDATE_S) == 0
+	actualizat = comanda is not None and R._ruleaza(comanda + _argumenteUpdate(rad_sistem), R.TERMEN_UPDATE_S) == 0
 	disponibile = R._in_liste(rad_sistem)
 	for n in de_pus:
 		if n not in disponibile:
@@ -1280,3 +1280,16 @@ def descriere_retea(plan):
 		else:
 			rez.append("%s: %s" % (eticheta, fel))
 	return rez
+
+
+def _argumenteUpdate(rad="/"):
+	"""OPK1 (0.8.0): ['update'], or ['-f', <conf>, 'update'] when a dead foreign source is skipped (HdsSurseOpkg)"""
+	try:
+		try:
+			from Components import HdsSurseOpkg
+		except ImportError:
+			import HdsSurseOpkg
+		return HdsSurseOpkg.argumente_update(rad)
+	except Exception as e:
+		print("[HdsSurseOpkg] %r" % (e,))
+		return ["update"]

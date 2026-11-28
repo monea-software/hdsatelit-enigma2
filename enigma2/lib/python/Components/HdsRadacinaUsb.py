@@ -96,7 +96,12 @@ def _numarBloc(cale):
 
 def _swap(rad, info, ruleaza, bloc):
     """Un singur swap de pe discul radacinii, cu UUID unic intre discuri."""
-    cod, text = ruleaza(["blkid"])
+    # numai discurile externe: blkid fara argumente citeste si capatul lui romblock9 (I/O error in dmesg pe ZGEMMA H8)
+    import glob
+    discuri = sorted(glob.glob("/dev/sd*")) if os.path.isfile("/proc/partitions") else []
+    if not discuri and os.path.isfile("/proc/partitions"):
+        return None
+    cod, text = ruleaza(["blkid"] + discuri)
     if cod:
         return None
     volume = []

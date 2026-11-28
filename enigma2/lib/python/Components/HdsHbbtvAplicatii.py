@@ -10,6 +10,9 @@ fara schema, cu gazda in litere mici (adresa_scurta, gaseste). Listele: compatib
 consimtamant. Fara fisier sau cu el stricat: DATE_IMPLICITE.
 
 COMPATIBILITATEA (alege_agent, config_cu_profil): compatibilitate cu aplicatiile din lista "compatibilitate".
+VERSIUNEA NOUA (alege_agent, lista "versiune_noua"): aplicatiile care pornesc filmul numai cand receptorul se declara
+HbbTV/1.5.1 (VERSIUNE_NOUA) primesc agentul receptorului cu acea versiune; celelalte raman pe VERSIUNE_SUSTINUTA din
+Components/HdsHbbtv.py (ADN PLAY trece de la 1.3 in sus pe MediaSource, unde filmul nu merge).
 
 TASTA DE PORNIRE (tasta_pornire): aplicatiile din lista "albastru" (sau cu blueButton=true in adresa) se deschid cu
 ALBASTRU, nu cu ROSU: la ROSU-ul omului receptorul le trimite VK_BLUE in locul lui VK_RED (Components/HdsHbbtvPornire).
@@ -59,7 +62,12 @@ except ImportError:  # Python 2 (numai la probe vechi)
 
 CALE_DATE = "/usr/share/enigma2/hbbtv-aplicatii.json"
 CALE_OM = "/etc/enigma2/hbbtv-aplicatii.json"
-LISTE = ("compatibilitate", "audienta", "albastru", "consimtamant")
+LISTE = ("compatibilitate", "audienta", "albastru", "consimtamant", "versiune_noua")
+# AS201 (0.8.0, Lanus, SF8008, asistenta 263769, 25.11.2026): launcherul RaiPlay (Rai, Rai Movie de pe DVB-T) nu cere niciun
+# film cand agentul spune HbbTV/1.2.1; cu HbbTV/1.5.1 cere fluxul DASH pe obiectul A/V (proba A/B pe receptorul lui).
+# Redarea acelui flux pe player si restul aplicatiilor Rai: neprobate la om.
+VERSIUNE_NOUA = (1, 5, 1)
+_VERSIUNE_AGENT = re.compile(r"^HbbTV/[0-9]+\.[0-9]+\.[0-9]+")
 MAX_INTRARI = 500
 MAX_FISIER = 256 * 1024
 
@@ -72,6 +80,7 @@ DATE_IMPLICITE = {
 	"audienta": [{"adresa": "hbbtv-ikosystem.ikomg.com/"}],
 	"albastru": [{"adresa": "france24.tv.dotscreen.com/", "contine": "bluebutton=true"}],
 	"consimtamant": [{"adresa": "r9.hbbtv.media/"}],
+	"versiune_noua": [{"adresa": "www.raiplay.it/hbbtv/"}],
 }
 
 # motivele (cheile textelor din Components/HdsHbbtvPornire.TEXTE: "motiv-" + cod)
@@ -275,13 +284,20 @@ def tasta_pornire(url, date):
 	return TASTA_ROSU
 
 
+def cu_versiune(agent, versiune=VERSIUNE_NOUA):
+	"""Partea HbbTV a User-Agent-ului cu alta versiune declarata ("HbbTV/1.2.1 (...)" -> "HbbTV/1.5.1 (...)")."""
+	return _VERSIUNE_AGENT.sub("HbbTV/%d.%d.%d" % tuple(versiune), agent or "", count=1)
+
+
 def alege_agent(url, agent_receptor, date):
 	"""(partea HbbTV a User-Agent-ului, profilul sau None) pentru aplicatia de la `url`: compatibilitate cu aplicatiile
-	din lista."""
+	din lista; cu adresa in "versiune_noua", versiunea declarata e VERSIUNE_NOUA."""
+	noua = gaseste(url, (date or {}).get("versiune_noua")) is not None
 	if gaseste(url, (date or {}).get("compatibilitate")) is None:
-		return agent_receptor, None
+		return (cu_versiune(agent_receptor) if noua else agent_receptor), None
 	p = _profil(date.get("profil")) or dict(PROFIL_IMPLICIT)
-	return agent_profil(p), p
+	agent = agent_profil(p)
+	return (cu_versiune(agent) if noua else agent), p
 
 
 def config_cu_profil(config, profil):

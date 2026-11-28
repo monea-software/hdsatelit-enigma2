@@ -461,6 +461,16 @@
 		<widget source="session.CurrentService" render="Label" position="920,33" size="70,30" font="HdsBold;22" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" halign="center" valign="center" noWrap="1" zPosition="4">
 			<convert type="HdsInfo">Flag,uhd</convert>
 		</widget>
+		<!-- 0.8.0 (FX1, Lanus): the video codec under the resolution label, only with "Codecul video în bara canalului"
+		     (config.usage.hds_codec_bara, off by default); the 19 px between the label row and the programme row -->
+		<widget source="session.CurrentService" render="Label" position="910,63" size="90,19" font="HdsCond;18" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" halign="center" valign="center" noWrap="1" zPosition="4">
+			<convert type="HdsInfo">VideoCodecBar</convert>
+		</widget>
+		<!-- 0.8.0 (FX1, tamiciav7): processor, memory and temperature under the labels on the right, only with "Procesorul,
+		     memoria și temperatura în bara canalului" (config.usage.hds_bara_sistem, off by default) -->
+		<widget source="session.CurrentService" render="Label" position="1154,63" size="436,19" font="HdsCond;18" foregroundColor="hdsText2" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" noWrap="1" zPosition="4">
+			<convert type="HdsSignal">SysBar</convert>
+		</widget>
 		<widget source="session.CurrentService" render="Label" position="998,33" size="70,30" font="HdsBold;22" foregroundColor="hdsDisabled" backgroundColor="hdsPanel" transparent="1" halign="center" valign="center" noWrap="1" zPosition="3">
 			<convert type="HdsInfo">Label,flag_hdr</convert>
 		</widget>
@@ -1478,10 +1488,13 @@
 	</screen>
 
 	<!-- ========== Ecrane mici ========== -->
-	<screen name="Volume" position="1440,54" size="384,72" backgroundColor="hdsPanel" flags="wfNoBorder">
+	<!-- VOL1 (tamiciav7, 0.8.0): "100" HdsBold;36 are 63 px, dar cu Marimea textului la 130% (config.osd.fontscale) 78 px;
+	     caseta de 66 il taia de la 115%. Caseta numarului are acum 90 px; ecranul creste cu 24 px spre stanga (iconita si
+	     bara merg cu el), marginea dreapta (1824) si numarul raman pe loc. -->
+	<screen name="Volume" position="1416,54" size="408,72" backgroundColor="hdsPanel" flags="wfNoBorder">
 		<ePixmap pixmap="icon/vol.png" position="14,12" size="48,48" alphatest="blend" zPosition="1" />
 		<widget name="Volume" conditional="Volume" position="74,31" size="224,10" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" zPosition="1" />
-		<widget name="VolumeText" conditional="VolumeText" position="304,6" size="66,60" font="HdsBold;36" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" zPosition="1" />
+		<widget name="VolumeText" conditional="VolumeText" position="304,6" size="90,60" font="HdsBold;36" foregroundColor="hdsText" backgroundColor="hdsPanel" transparent="1" halign="right" valign="center" zPosition="1" />
 	</screen>
 
 	<screen name="Mute" position="1752,54" size="72,72" backgroundColor="hdsPanel" flags="wfNoBorder">
@@ -3387,6 +3400,13 @@
 		<widget source="scris" render="Label" position="32,488" size="1176,48" font="HdsBold;32" foregroundColor="hdsWarn" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
 		<widget source="nota" render="Label" position="32,548" size="1176,364" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
 	</screen>
+	<!-- lista tarilor si a oraselor, cu cautarea dupa litere (LOC1, 0.8.0): randul cautarii, indiciul, lista -->
+	<screen name="HdsLoculAlegere" position="72,40" size="1240,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<panel name="HdsCadru1240" />
+		<widget source="cautare" render="Label" position="32,100" size="1176,60" font="HdsBold;34" foregroundColor="hdsText" backgroundColor="hdsBrand" transparent="0" valign="center" noWrap="1" zPosition="1" />
+		<widget source="indiciu" render="Label" position="32,166" size="1176,76" font="HdsRegular;26" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" zPosition="1" />
+		<widget name="lista" position="32,248" size="1176,660" itemHeight="60" font="HdsRegular;32" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" textOffset="16,0" zPosition="2" />
+	</screen>
 
 	<!-- Paza modelului (Screens/HdsPazaModel.py): intrebarea si refuzul dinaintea scrierii unui pachet; asezarea din
 	     cod, culorile si fonturile skinului. Ecranul diagnosticului pornirii (fostul HdsPazaModel pe tot ecranul) isi
@@ -4588,6 +4608,27 @@
 			<convert type="ConditionalShowHide" />
 		</widget>
 		<widget source="key_blue" render="Label" position="1332,506" size="380,48" font="HdsCond;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+	</screen>
+	<!-- Calitatea imaginii, fereastra mica sus in stanga (randul Fereastra = Mică, sus în stânga, FX4 0.8.0): aceleasi
+	     elemente fara descriere, ca imaginea sa se vada cat se regleaza. -->
+	<screen name="HdsCalitateImagineColt" position="48,48" size="820,470" backgroundColor="hdsPanelDialog" flags="wfNoBorder">
+		<eLabel position="0,0" size="820,2" backgroundColor="hdsLine" zPosition="1" />
+		<widget source="Title" render="Label" position="24,8" size="772,44" font="HdsBold;30" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<widget source="acum" render="Label" position="24,52" size="772,32" font="HdsCond;22" foregroundColor="hdsAmber" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="24,90" size="772,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget name="config" position="24,96" size="772,264" itemHeight="44" font="HdsRegular;26" secondfont="HdsBold;24" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" backgroundColorSelected="hdsBrand" foregroundColorSelected="white" transparent="1" scrollbarMode="showOnDemand" enableWrapAround="1" zPosition="2" />
+		<eLabel position="24,366" size="772,1" backgroundColor="hdsDivider" zPosition="1" />
+		<widget source="nota" render="Label" position="24,372" size="772,40" font="HdsCond;20" foregroundColor="hdsLabel" backgroundColor="hdsPanelDialog" transparent="1" valign="center" zPosition="1" />
+		<eLabel position="24,420" size="6,30" backgroundColor="key_red" zPosition="1" />
+		<widget source="key_red" render="Label" position="38,414" size="180,42" font="HdsCond;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="222,420" size="6,30" backgroundColor="key_green" zPosition="1" />
+		<widget source="key_green" render="Label" position="236,414" size="180,42" font="HdsCond;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<eLabel position="420,420" size="6,30" backgroundColor="key_yellow" zPosition="1" />
+		<widget source="key_yellow" render="Label" position="434,414" size="180,42" font="HdsCond;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
+		<widget source="key_blue" render="FixedLabel" position="618,420" size="6,30" backgroundColor="key_blue" zPosition="1">
+			<convert type="ConditionalShowHide" />
+		</widget>
+		<widget source="key_blue" render="Label" position="632,414" size="164,42" font="HdsCond;22" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="1" />
 	</screen>
 	<!-- Afisajul din fata (Screens/HdsAfisaj.py), pe tot ecranul: sus desenul mare al celor 4 cifre (previzualizare,
 	     desenat din cod, netransparent, ca animatia sa nu clipeasca) si numele, formatul si nota randului ales; dedesubt
@@ -7868,6 +7909,9 @@
 		<widget name="piesa" position="296,506" size="1544,96" font="HdsBold;38" foregroundColor="hdsAmber" backgroundColor="hdsRadioBack" transparent="1" valign="top" zPosition="1" />
 		<widget name="radiotext" position="296,556" size="1544,80" font="HdsRegular;30" foregroundColor="hdsText2" backgroundColor="hdsRadioBack" transparent="1" valign="top" zPosition="1" />
 		<widget source="bare" render="Canvas" position="112,628" size="1728,236" zPosition="1" />
+		<!-- imaginea trimisa de un post DAB (sigla, coperta, stiri): in locul barelor, centrata si cat incape;
+		     Screens/HdsEcranRadio.py o muta si o micsoreaza dupa locul panoului -->
+		<widget name="imaginePost" position="112,628" size="1728,236" alphatest="blend" zPosition="1" />
 		<widget name="zonaBareMari" position="112,316" size="1728,548" backgroundColor="hdsRadioBack" transparent="1" zPosition="0" />
 		<!-- mesajul barelor, in mijlocul panoului (628-864) -->
 		<widget name="mesajBare" position="112,724" size="1728,44" font="HdsRegular;30" foregroundColor="hdsLabel" backgroundColor="hdsRadioBack" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2" />

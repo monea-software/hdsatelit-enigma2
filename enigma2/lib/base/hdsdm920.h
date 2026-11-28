@@ -9,6 +9,12 @@
  * Quality: raw * 100 / 256 hundredths of dB (same unit as the BCM4505/BCM4506 branch of frontend.cpp).
  * Level: when the driver gives no AGC (0..255), estimated from the quality percent with the usual three-segment
  * curve (under 35 % x1.8; under 70 % 63 + 0.8 per point; above 91 + 0.3 per point).
+ *
+ * Dreambox DM820 (Si2166D tuners, si2183 driver of the 3.4 kernel): FE_READ_SIGNAL_STRENGTH gives one byte, the AGC
+ * gain, so it falls when the signal rises. Read on a receiver: 255 idle, 238-239 while tuning with no cable, 124 on a
+ * locked transponder, 131-137 on the second tuner fed through the internal switch. Divided by 65535 the level bar stood
+ * at 0 %; the level is (255 - raw) on the byte scale. Only the level, and only the measured tuner name ("Si2166D"): the
+ * quality of this board stays the one given by the tuner name (lib/dvb/hdscalitate.h).
  */
 #ifndef __lib_base_hdsdm920_h
 #define __lib_base_hdsdm920_h
@@ -31,6 +37,27 @@ namespace hdsdm920
 			return valid && (!strcmp(model, "dm900") || !strcmp(model, "dm920"));
 		}();
 		return nativ;
+	}
+
+	/* DM820: the level byte is the AGC gain (see the header) */
+	inline bool esteDm820()
+	{
+		static const bool da = []() {
+			char model[32] = {0};
+			FILE *f = fopen("/proc/stb/info/model", "r");
+			if (!f)
+				return false;
+			bool valid = fscanf(f, "%31s", model) == 1;
+			fclose(f);
+			return valid && !strcmp(model, "dm820");
+		}();
+		return da;
+	}
+
+	/* AGC gain byte (255 = no signal) -> level on the 0..65535 scale */
+	inline int nivelDinCastig(int raw)
+	{
+		return raw < 0 || raw > 255 ? 0 : (255 - raw) * 257;
 	}
 
 	inline bool tunerSilicon(const char *name)
@@ -98,6 +125,8 @@ namespace hdsdm920
 
 	inline int nivel(const char *name, int raw)
 	{
+		if (esteDm820() && name && !strcmp(name, "Si2166D") && raw >= 0 && raw <= 255)
+			return nivelDinCastig(raw);
 		// These drivers return one AGC byte through the uint16 DVB ioctl.
 		return esteModel() && tunerSilicon(name) && raw >= 0 && raw <= 255 ? raw * 257 : raw;
 	}

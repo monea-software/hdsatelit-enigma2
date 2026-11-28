@@ -63,10 +63,36 @@ class Rezultat(object):
 # ---------------------------------------------------------------- filtre si plafoane
 
 def mascheaza(text):
-	"""Iesirea spre echipa, intreaga: si parolele, si adresele de flux IPTV cu utilizatorul si parola (REGULA 0, Eduard
-	21.11.2026: in imagine nu se mascheaza nimic pana dupa 1.0; ASX3, ASI7). Pe 0.7.7 aici se puneau *** (/live/***/***/
-	in op canal). Trece aici orice raspuns text, al oricarei operatii (ruleaza)."""
-	return mascheazaParole(text or "")
+	"""Iesirea spre echipa: numai parolele devin ***, plus utilizatorul din adresele de flux IPTV (contul liniei). In 0.7.8
+	si 0.7.9 pleca totul in clar (REGULA 0); pusa la loc in 0.8.0 (Eduard, 24.11.2026 11:39). Randurile modulelor de acces,
+	numele de utilizator din afara adreselor, gazdele, porturile si adresele MAC raman. Trece aici orice raspuns text, al
+	oricarei operatii (ruleaza)."""
+	return faraParolaLocala(mascheazaParole(text or ""))
+
+
+# Fisierele care sunt ele insele parole, fara eticheta dupa care sa se scoata valoarea: parola de acasa (hdsatelit-ssh),
+# numele si parola VPN-ului, .netrc, chap-secrets. Continutul lor nu pleaca, nici cu op citeste, nici cu op comanda
+# (Eduard, 24.11.2026 11:58: „sa nu mai ajunga la noi parole”). Restul caii raman de citit.
+_FISIERE_PAROLE = re.compile(r"(?i)hdsatelit-ssh/parola(?![\w-])|\.netrc\b|(?:chap|pap)-secrets|"
+	r"(?:^|[/\s\"'])(?:auth|userpass|credentials|login)(?:[._-][\w.-]*)?\.(?:txt|pass|conf|up)\b|/auth-user-pass\b")
+TEXT_FISIER_PAROLE = "(fisier cu parole: continutul nu pleaca de pe receptor)"     # pentru echipa, ca celelalte raspunsuri
+CALE_PAROLA_LOCALA = "/etc/hdsatelit-ssh/parola"
+_PAROLE_BANALE = frozenset(("root", "admin", "pass", "password", "parola", "1234", "12345", "123456", "enigma2", "hdsatelit"))
+
+
+def faraParolaLocala(text):
+	"""Parola de acasa pusa de om, oriunde apare fara eticheta. Una scurta sau obisnuita (root, 1234) se scoate numai cand e
+	tot randul: altfel s-ar strica jurnalele."""
+	try:
+		with open(CALE_PAROLA_LOCALA, encoding="utf-8", errors="replace") as f:
+			parola = f.read(300).strip("\r\n")
+	except OSError:
+		return text
+	if not parola.strip() or parola not in text:
+		return text
+	if len(parola) >= 6 and parola.lower() not in _PAROLE_BANALE:
+		return text.replace(parola, "***")
+	return "\n".join("***" if r.strip() == parola else r for r in text.split("\n"))
 
 
 def _taie(text, limita=RASPUNS_MAX):
@@ -1026,9 +1052,36 @@ def _cuControl(ctx, nume, *a):
 	return Rezultat(cod, text=text)
 
 
+def referinta_din_buchete(ctx, referinta):
+	"""PRT9 (0.8.0): o referinta IPTV asa cum o vede echipa (contul liniei *** dupa mascheaza, in buchete si in iesirea
+	canalului) devine cea adevarata din buchetele receptorului, ca op zap sa porneasca canalul fara adresa intreaga
+	(AS188, 24.11.2026: agentul a ocolit prin /api/zap). Fara *** sau fara pereche: referinta ramane cum e."""
+	if "***" not in referinta:
+		return referinta
+	cautata = referinta.strip()
+	# partea dinaintea primului *** e neschimbata de mascare: numai randurile care o au trec prin mascheaza (buchete mari)
+	inceput = cautata.split("***", 1)[0]
+	dosar = ctx.get("buchete") or os.path.dirname(ctx.get("lamedb", "/etc/enigma2/lamedb"))
+	try:
+		nume = sorted(os.listdir(dosar))
+	except OSError:
+		return referinta
+	for n in nume:
+		if not n.endswith((".tv", ".radio")):
+			continue
+		text = _citeste(os.path.join(dosar, n), 8 * 1024 * 1024)
+		for rand in (text or "").splitlines():
+			if not rand.startswith("#SERVICE ") or inceput not in rand:
+				continue
+			adevarata = rand[len("#SERVICE "):].strip()
+			if mascheaza(adevarata).strip() == cautata or mascheaza(rand)[len("#SERVICE "):].strip() == cautata:
+				return adevarata
+	return referinta
+
+
 def op_zap(ctx, args):
-	"""Porneste canalul cu referinta data (ca din lista de canale)."""
-	return _cuControl(ctx, "zap", args[0])
+	"""Porneste canalul cu referinta data (ca din lista de canale); o referinta IPTV cu *** se ia din buchete."""
+	return _cuControl(ctx, "zap", referinta_din_buchete(ctx, args[0]))
 
 
 def op_reporneste(ctx, args):
@@ -1167,12 +1220,12 @@ def _opkg(ctx, actiune, pachet):
 	jurnal = []
 	if actiune == "install":
 		if not C.pachetInFeed(pachet, feeduri, liste):
-			cod, text = ruleaza(["opkg", "update"], termen=120, limita=65536)
+			cod, text = ruleaza(["opkg"] + _argumenteUpdate(), termen=120, limita=65536)
 			jurnal.append("opkg update: cod %s" % cod)
 			if cod != 0 and _treciPeRezerva(ctx, text):
 				# moneasoftware.com nu raspunde: sursa pluginurilor externe a trecut pe serverul de rezerva (aceeasi sursa,
 				# acelasi nume), deci lista se descarca inca o data, de acolo (ca in Extensii, HdsExtensiiLucru.treciPeRezerva)
-				cod, text = ruleaza(["opkg", "update"], termen=120, limita=65536)
+				cod, text = ruleaza(["opkg"] + _argumenteUpdate(), termen=120, limita=65536)
 				jurnal.append("opkg update (serverul de rezerva): cod %s" % cod)
 		# 0.7.7 (UPD): pachetele imaginii nu se schimba pe bucati (vezi _OPKG_LASATE)
 		cod, proba = ruleaza(["opkg", "--noaction", "install", pachet], termen=120, limita=65536)
@@ -1596,6 +1649,14 @@ def op_scrie(ctx, args):
 	try:
 		os.makedirs(os.path.dirname(plin), exist_ok=True)
 		exista = os.path.isfile(plin)
+		if exista and b"***" in date:
+			# echipa citeste parolele ca *** (mascheaza): un fisier citit, schimbat si scris inapoi ar pune *** peste parola
+			# omului. Un fisier fara parole poate avea *** in el.
+			with open(plin, "rb") as f:
+				vechi = f.read(RASPUNS_MAX).decode("utf-8", "surrogateescape")
+			if mascheaza(vechi) != vechi:
+				return Rezultat(1, text="(nu am scris %s: textul are *** in locul unei parole din fisier; schimba numai randul, "
+					"cu op comanda, de pilda sed -i)" % real)
 		if exista:
 			try:
 				copie = _copieDeSiguranta(ctx, plin, real)
@@ -1720,5 +1781,20 @@ def ruleaza(op, args, ctx=None):
 		return Rezultat(1, text="(eroare la %s: %s)" % (op, type(e).__name__))
 	if rez.text is not None:
 		# orice text, si cel al unui raspuns cu alt tip: _trimite_raspuns il trimite cand lipsesc octetii
+		if op in ("citeste", "comanda") and rez.text and _FISIERE_PAROLE.search(" ".join(str(a) for a in (args or ())[:1])):
+			rez.text = TEXT_FISIER_PAROLE
 		rez.text = _taie(mascheaza(rez.text))
 	return rez
+
+
+def _argumenteUpdate(rad="/"):
+	"""OPK1 (0.8.0): ['update'], or ['-f', <conf>, 'update'] when a dead foreign source is skipped (HdsSurseOpkg)"""
+	try:
+		try:
+			from Components import HdsSurseOpkg
+		except ImportError:
+			import HdsSurseOpkg
+		return HdsSurseOpkg.argumente_update(rad)
+	except Exception as e:
+		print("[HdsSurseOpkg] %r" % (e,))
+		return ["update"]

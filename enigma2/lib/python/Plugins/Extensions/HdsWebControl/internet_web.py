@@ -179,12 +179,16 @@ def _canaleDvbi(DD):
 		return [], {}
 	rez = []
 	n = {}
+	doar = getattr(DD, "doarIn", None)
 	for c in DD.canale():
 		st, cod, ora = DD.stareUrl(c.get("url", ""))
 		n[st] = n.get(st, 0) + 1
+		# DVI2: oprit pentru tara, cu tara listei cand se stie: eticheta gata tradusa, ca in lista de canale
+		tara = doar(c.get("url", ""), stare=st) if doar is not None and st == "oprit_tara" else ""
 		rez.append({"id": c.get("id"), "nr": c.get("nr"), "lcn": c.get("lcn"), "nume": c.get("nume", ""),
 			"tip": c.get("tip", "tv"), "url": c.get("url", ""), "sat": bool(c.get("sat")), "stare": st, "cod": cod,
-			"ora": ora, "ascuns": bool(c.get("ascuns"))})
+			"ora": ora, "ascuns": bool(c.get("ascuns")),
+			"eticheta": (_t(DD.T_DOAR_IN) % tara) if tara else ""})
 	return rez, n
 
 
@@ -226,6 +230,8 @@ def stareDvbi(D=None, cale=None, DD=None, registru=None):
 			else "") for l in D.listeleTarii(cfg, reg)],
 		"rezerva": D.rezervaPornita(cfg),
 		"toate_tarile": D.toateTarilePornit(cfg) if hasattr(D, "toateTarilePornit") else None,
+		# DVI2: si listele de proba ale registrelor, din toate tarile (ca randul de pe televizor)
+		"liste_proba": D.probaPornit(cfg) if hasattr(D, "probaPornit") else None,
 		# lista DVB-I in lista de canale (scoasa de om, nu mai revine singura), ca randul de pe televizor
 		"in_lista": D.inListaDeCanale() if hasattr(D, "inListaDeCanale") else None,
 		"liste_alte_tari": [dict(l, canale=D.canaleLista(stare, l["adresa"]), nu_raspunde=nu(l["adresa"]),
@@ -323,6 +329,15 @@ def seteazaDvbi(arg, D=None, cale=None):
 			return _cuMesaj(stareDvbi(D, cale), False, _t("Se alege cu toate_tarile=0 sau 1."))
 		if v != D.toateTarilePornit(cfg):
 			D.comutaToateTarile(cfg)
+		mesaj = _t("Salvat. Listele se descarcă din nou.")
+		reincarca = True
+	elif "liste_proba" in arg and hasattr(D, "comutaProba"):
+		# DVI2: listele de proba ale registrelor, din toate tarile (randul "Și listele de probă" de pe televizor)
+		v = _bool(arg["liste_proba"])
+		if v is None:
+			return _cuMesaj(stareDvbi(D, cale), False, _t("Nu s-a trimis nicio setare."))
+		if v != D.probaPornit(cfg):
+			D.comutaProba(cfg)
 		mesaj = _t("Salvat. Listele se descarcă din nou.")
 		reincarca = True
 	elif "in_lista" in arg and hasattr(D, "puneInLista"):
@@ -693,7 +708,9 @@ def N_(text):
 	return text
 
 
-CHEI_IPTV = ("fel", "nume", "adresa", "server", "utilizator", "parola", "portal", "mac", "user_agent", "referer", "x_user_agent", "stb_type")
+# XTP0 (0.8.0): "player" (4097/5001/5002) se alege si la adaugare, ca pe televizor (HdsIptvClient.verificaOptiuni)
+CHEI_IPTV = ("fel", "nume", "adresa", "server", "utilizator", "parola", "portal", "mac", "user_agent", "referer", "x_user_agent", "stb_type",
+	"player")
 
 
 def macNouIptv():
@@ -1304,7 +1321,7 @@ def rute(baza, resource, D=None, S=None, I=None, P=None, config=None, configfile
 
 	def dvbi_seteaza(request):
 		return seteazaDvbi(_argumente(request, ("activ", "predefinita", "bifata", "adauga_url", "tara", "regiune", "lista",
-			"rezerva", "toate_tarile", "in_lista"), 1024), D, cale_dvbi)
+			"rezerva", "toate_tarile", "liste_proba", "in_lista"), 1024), D, cale_dvbi)
 
 	def dvbi_incearca(request):
 		return incearcaDvbi(D, cale_dvbi)
@@ -1741,6 +1758,9 @@ PAGINA_DVBI = "<!DOCTYPE html>" + _CAP + "DVB-I: Configurare" + _STIL + """<h1>C
       <div class="rand"><label for="toate_tarile">Liste din toate țările, după cele ale țării tale</label>
         <select id="toate_tarile"><option value="1">Da</option><option value="0">Nu</option></select></div>
       <p class="nota">După listele țării tale vin cele ale celorlalte țări, grupate pe țări: canalele merg dacă furnizorul le lasă și din țara ta.</p>
+      <div class="rand"><label for="liste_proba">Și listele de probă</label>
+        <select id="liste_proba"><option value="1">Da</option><option value="0">Nu</option></select></div>
+      <p class="nota">Listele de probă ale registrelor, din toate țările, intră și ele: canalele lor pot să nu meargă.</p>
       <ul id="listeAlteTari"></ul>
     </section>
     <section class="card">
@@ -1754,7 +1774,7 @@ PAGINA_DVBI = "<!DOCTYPE html>" + _CAP + "DVB-I: Configurare" + _STIL + """<h1>C
     <section class="card" id="cardListe">
       <h2>Listele țării</h2>
       <div id="listeTarii"></div>
-      <p class="nota">Listele adevărate ale țării sunt bifate singure; cele de probă ale registrelor le bifezi numai dacă vrei să le încerci.</p>
+      <p class="nota">Toate listele țării sunt bifate singure, și cele de probă cât timp sunt pornite listele de probă; bifele rămân și când schimbi țara.</p>
     </section>
     <section class="card" id="cardReincarcare">
       <h2>Reîncărcare</h2>
@@ -1792,7 +1812,7 @@ PAGINA_DVBI = "<!DOCTYPE html>" + _CAP + "DVB-I: Configurare" + _STIL + """<h1>C
 </div>
 """ + _COADA + """var DATE = "", PORNIT_SINGUR = false, CEAS = null;
 var STARI = {"merge": ["Merge", "bine"], "oprit_tara": ["Oprit pentru țara ta", "chihlimbar"],
-  "adresa_moarta": ["Adresă moartă", "rau"], "nu_raspunde": ["Nu răspunde", "slab"], "": ["Neîncercat", "slab gol"]};
+  "adresa_moarta": ["Adresă moartă", "rau"], "nu_raspunde": ["Nu răspunde", "slab"], "drm": ["Protejat (DRM)", "rau"], "": ["Neîncercat", "slab gol"]};
 function insigna(text, fel){ var s = document.createElement("span"); s.className = "dvbi-insigna " + fel; s.textContent = text; return s; }
 function optiuni(sel, lista, ales){
   if(document.activeElement === sel){ return; }
@@ -1847,7 +1867,7 @@ function arataListe(d){
 function arataCanale(d){
   var n = d.rezumat || {}, c = d.canale || [], p = [];
   if(d.incercare && d.incercare.in_curs){ p.push(insigna("Se încearcă: " + d.incercare.facute + " din " + d.incercare.total, "chihlimbar")); }
-  [["merge", "merg"], ["oprit_tara", "oprite pentru țara ta"], ["adresa_moarta", "adrese moarte"], ["nu_raspunde", "fără răspuns"], ["", "neîncercate"]].forEach(function(k){
+  [["merge", "merg"], ["oprit_tara", "oprite pentru țara ta"], ["adresa_moarta", "adrese moarte"], ["nu_raspunde", "fără răspuns"], ["drm", "protejate (DRM)"], ["", "neîncercate"]].forEach(function(k){
     if(n[k[0]]){ p.push(insigna(n[k[0]] + " " + k[1], STARI[k[0]][1])); }
   });
   if(d.ascunse){ p.push(insigna(d.ascunse + " " + "ascunse din lista de canale până merg din nou", "slab")); }
@@ -1862,7 +1882,7 @@ function arataCanale(d){
     if(x.sat){ sat.appendChild(insigna("și pe satelit", "albastru")); }
     r.appendChild(sat);
     var st = STARI[x.stare] || STARI[""];
-    var stare = document.createElement("span"); stare.className = "dvbi-st"; stare.appendChild(insigna(st[0] + (x.cod && x.stare !== "merge" ? " (" + x.cod + ")" : ""), st[1]));
+    var stare = document.createElement("span"); stare.className = "dvbi-st"; stare.appendChild(insigna((x.eticheta || st[0]) + (x.cod && x.stare !== "merge" && x.stare !== "drm" ? " (" + x.cod + ")" : ""), st[1]));
     if(x.ascuns){ stare.appendChild(insigna("nu e în lista de canale", "slab gol")); }
     r.appendChild(stare);
     var b = document.createElement("a"); b.className = "dvbi-priveste"; b.textContent = "Privește"; b.target = "_blank"; b.rel = "noopener";
@@ -1886,6 +1906,7 @@ function arata(d){
   if(document.activeElement !== $("activ")){ $("activ").value = d.activ ? "1" : "0"; }
   if(document.activeElement !== $("rezerva")){ $("rezerva").value = d.rezerva === false ? "0" : "1"; }
   if(document.activeElement !== $("toate_tarile")){ $("toate_tarile").value = d.toate_tarile === false ? "0" : "1"; }
+  if(document.activeElement !== $("liste_proba")){ $("liste_proba").value = d.liste_proba === false ? "0" : "1"; }
   if(document.activeElement !== $("in_lista")){ $("in_lista").value = d.in_lista === false ? "0" : "1"; }
   var ua = $("listeAlteTari"); ua.textContent = "";
   (d.liste_alte_tari || []).forEach(function(l){ var li = document.createElement("li"); li.textContent = (l.tara_nume ? l.tara_nume + ": " : "") + (l.lista || l.adresa) + (l.canale !== null && l.canale !== undefined ? " · " + l.canale : "") + (l.nu_raspunde ? " · " + l.nu_raspunde : ""); if(l.nu_raspunde){ li.className = "dvbi-nu"; } ua.appendChild(li); });
@@ -1929,7 +1950,7 @@ function citeste(){
   }).catch(faraRaspuns);
 }
 function reincarca(){ trimite("/api/dvb-i-reincarca", new URLSearchParams()); }
-["activ", "rezerva", "toate_tarile", "in_lista", "tara", "regiune"].forEach(function(id){
+["activ", "rezerva", "toate_tarile", "liste_proba", "in_lista", "tara", "regiune"].forEach(function(id){
   $(id).addEventListener("change", function(){ var q = new URLSearchParams(); q.set(id, $(id).value); trimite("/api/dvb-i-seteaza", q); });
 });
 $("reincarca").addEventListener("click", reincarca);
@@ -1963,12 +1984,12 @@ PAGINA_DVBI_PRIVESTE = "<!DOCTYPE html>" + _CAP + "DVB-I: Privește" + _STIL + "
   <p class="nota"><a href="/dvb-i">Înapoi la canalele de pe internet</a>. Aceleași setări sunt pe televizor, în __DRUM_MENIU__.</p>
 </div>
 """ + _COADA + """var STARI = {"merge": "Merge din casa receptorului", "oprit_tara": "Oprit pentru țara receptorului",
-  "adresa_moarta": "Adresa nu mai răspunde", "nu_raspunde": "Nu a răspuns la ultima încercare", "": "Neîncercat încă din casa receptorului"};
+  "adresa_moarta": "Adresa nu mai răspunde", "nu_raspunde": "Nu a răspuns la ultima încercare", "drm": "Canal protejat (DRM)", "": "Neîncercat încă din casa receptorului"};
 function nuMerge(text){ $("nuMerge").textContent = text; $("nuMerge").classList.remove("ascuns"); }
 function arataCanal(c){
   document.title = c.nume + " · DVB-I";
   $("titlu").textContent = c.nume;
-  $("stareCanal").textContent = (STARI[c.stare] || STARI[""]) + (c.cod && c.stare !== "merge" ? " (cod " + c.cod + ")" : "") + ".";
+  $("stareCanal").textContent = (STARI[c.stare] || STARI[""]) + (c.cod && c.stare !== "merge" && c.stare !== "drm" ? " (cod " + c.cod + ")" : "") + ".";
   $("adresaFlux").value = c.url;
   // adresa vine dintr-o lista din internet: numai adrese de flux, ca un javascript: din lista sa nu ruleze in pagina receptorului
   if(/^(https?|rtsp|rtmp|mms|udp):/i.test(c.url)){ $("deschide").href = c.url; } else { $("deschide").classList.add("ascuns"); }
@@ -2110,6 +2131,7 @@ PAGINA_IPTV = "<!DOCTYPE html>" + _CAP + "IPTV" + _STIL + """<h1>IPTV</h1>
       <p id="macVechi" class="nota"></p></div>
     <div class="rand" id="rNume"><label for="nume">Nume (opțional)</label>
       <input type="text" id="nume" maxlength="100" autocomplete="off"></div>
+    <div class="rand" id="rPlayer"><label for="playerNou">Player în buchete</label><select id="playerNou"><option value="4097">4097 (implicit)</option><option value="5001">5001 (gstreamer)</option><option value="5002">5002 (exteplayer3)</option></select></div>
     <div class="rand" id="rAgent"><label for="user_agent">Agent utilizator (opțional)</label>
       <input type="text" id="user_agent" maxlength="2048" autocomplete="off"></div>
     <div class="rand" id="rReferer"><label for="referer">Referer (opțional)</label>
@@ -2319,7 +2341,7 @@ function urmareste(){
       var r = d.rezultat;
       if(ASTEPT && r && !r.lucreaza){
         ASTEPT = null;
-        if(r.result){ mesaj("Gata. Canalele sunt în lista de canale, la Sateliți, pe rândul IPTV."); MAC_NOU_REV++; $("macVechi").textContent = ""; ["adresa", "server", "utilizator", "parola", "portal", "mac", "nume", "user_agent", "referer", "x_user_agent", "stb_type"].forEach(function(c){ $(c).value = ""; }); $("mac").value = d.mac_receptor || ""; }
+        if(r.result){ mesaj("Gata. Canalele sunt în lista de canale, la Sateliți, pe rândul IPTV."); MAC_NOU_REV++; $("macVechi").textContent = ""; ["adresa", "server", "utilizator", "parola", "portal", "mac", "nume", "user_agent", "referer", "x_user_agent", "stb_type"].forEach(function(c){ $(c).value = ""; }); $("mac").value = d.mac_receptor || ""; $("playerNou").value = "4097"; }
         else { mesaj(r.message, true); }
       }
       dupa(d);
@@ -2330,6 +2352,7 @@ function arataCampuri(){
   var f = $("fel").value;
   $("adauga").textContent = f === "stalker" ? "Salvează" : "Adaugă";
   $("rNume").classList.toggle("ascuns", f === "demo");
+  $("rPlayer").classList.toggle("ascuns", f === "demo");
   $("rAgent").classList.toggle("ascuns", f === "demo");
   $("rReferer").classList.toggle("ascuns", f === "demo");
   document.querySelectorAll(".camp").forEach(function(r){ r.classList.toggle("ascuns", r.getAttribute("data-fel") !== f); });
@@ -2377,6 +2400,7 @@ $("adauga").addEventListener("click", function(){
   MAC_NOU_REV++;
   var f = $("fel").value, q = new URLSearchParams();
   q.set("fel", f); q.set("nume", $("nume").value.trim());
+  if(f !== "demo" && $("playerNou").value !== "4097"){ q.set("player", $("playerNou").value); }  // 4097: sursa adaugata din nou isi pastreaza playerul
   q.set("user_agent", $("user_agent").value.trim()); q.set("referer", $("referer").value.trim());
   document.querySelectorAll(".camp").forEach(function(r){
     if(r.getAttribute("data-fel") === f){ r.querySelectorAll("input").forEach(function(i){ q.set(i.id, i.id === "parola" ? i.value : i.value.trim()); }); }
@@ -3026,6 +3050,10 @@ citeste();""" + _SFARSIT
 # nou sau schimbat in sablon se scrie si aici (proba textelor paginilor web il cere).
 TEXTE_PAGINA = {
 	"html": (
+		# 0.8.0 DVI2: listele de proba din toate tarile, pornite din fabrica
+		N_("Și listele de probă"),
+		N_("Listele de probă ale registrelor, din toate țările, intră și ele: canalele lor pot să nu meargă."),
+		N_("Toate listele țării sunt bifate singure, și cele de probă cât timp sunt pornite listele de probă; bifele rămân și când schimbi țara."),
 		N_("Preia automat listele M3U găsite"),
 		N_("Pe Nu, o listă de canale nouă găsită în /etc/enigma2 sau pe un stick așteaptă acordul tău pe televizor sau în pagina IPTV."),
 		N_("Importă surse IPTV"),
@@ -3224,6 +3252,10 @@ TEXTE_PAGINA = {
 		N_("Adresă moartă"),
 		N_("Nu răspunde"),
 		N_("Neîncercat"),
+		# 0.8.0 DRM1: canalele DVB-I criptate cu DRM
+		N_("Protejat (DRM)"),
+		N_("protejate (DRM)"),
+		N_("Canal protejat (DRM)"),
 		N_("Nicio țară (numai adresele puse de mână)"),
 		N_("· liste:"),
 		N_("· numai liste de probă"),

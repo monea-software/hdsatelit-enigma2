@@ -15,7 +15,8 @@ class FanControl:
 		else:
 			self.fancount = 0
 		self.createConfig()
-		config.misc.standbyCounter.addNotifier(self.standbyCounterChanged, initial_call = False)
+		# HDSatelit (RW1): standby-ul nu mai schimba ventilatorul (vlt 5 / pwm 0 din fabrica); il regleaza driverul
+		# config.misc.standbyCounter.addNotifier(self.standbyCounterChanged, initial_call = False)
 
 	def setVoltage_PWM(self):
 		for fanid in range(self.getFanCount()):
@@ -67,8 +68,9 @@ class FanControl:
 			fan.pwm = ConfigSlider(default = 0, increment = 5, limits = (0, 255))
 			fan.vlt_standby = ConfigSlider(default = 5, increment = 5, limits = (0, 255))
 			fan.pwm_standby = ConfigSlider(default = 0, increment = 5, limits = (0, 255))
-			fan.vlt.addNotifier(boundFunction(setVlt, self, fanid))
-			fan.pwm.addNotifier(boundFunction(setPWM, self, fanid))
+			# HDSatelit (RW1): fara scriere la incarcare; ventilatorul ramane al driverului (Components/HdsVentilator.py)
+			fan.vlt.addNotifier(boundFunction(setVlt, self, fanid), initial_call = False)
+			fan.pwm.addNotifier(boundFunction(setPWM, self, fanid), initial_call = False)
 			config.fans.append(fan)
 	
 	def getConfig(self, fanid):

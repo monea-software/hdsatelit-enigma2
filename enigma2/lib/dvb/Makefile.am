@@ -73,6 +73,7 @@ dvbinclude_HEADERS = \
 	hdscalitate.h \
 	hdscedare.h \
 	hdscitirifrontend.h \
+	hdsepgloc.h \
 	hdsepgpoarta.h \
 	hdsgrad.h \
 	hdslistetext.h \
@@ -85,6 +86,7 @@ dvbinclude_HEADERS = \
 	hdspazavideo.h \
 	hdsretea.h \
 	hdsrotire.h \
+	hdsscanreguli.h \
 	hdsspectru.h \
 	hdsspectru_tabele.h \
 	hdsstatdvb5.h \
@@ -93,6 +95,7 @@ dvbinclude_HEADERS = \
 	hdstipales.h \
 	hdsurmamotor.h \
 	hdsunicable.h \
+	hdsvct.h \
 	hdsvtuner.h \
 	idemux.h \
 	idvb.h \

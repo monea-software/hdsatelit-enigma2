@@ -926,6 +926,34 @@ def _desparteEndpoint(text):
 	return m.group(1), m.group(2)
 
 
+# NWG1 (25.11.2026, tamiciav7): fisierele WireGuard de la NordVPN au Endpoint = <oras>.<tara>.wg.nordhold.net, un nume
+# rotit prin DNS pe mai multe servere din oras, fiecare cu alta cheie publica; cheia din fisier e numai a serverului din
+# numele fisierului (fr1167.nordvpn.com.conf, fr1167-nordvpn.conf). Cu numele orasului strangerea de mana reuseste numai
+# cand rotatia nimereste acel server, altfel serverul tace. La pornire se foloseste <server>.nordvpn.com (fisierul ramane
+# neschimbat); daca acel nume nu se rezolva, ramane numele din fisier.
+_NORD_SERVER = re.compile(r"(?i)^([a-z]{2}(?:-[a-z]{2})?\d+)[-_.]nordvpn")
+
+
+def gazdaNordvpn(gazda, nume_fisier):
+	"""<server>.nordvpn.com cand `gazda` e un nume NordVPN de oras (*.nordhold.net) si numele fisierului incepe cu
+	serverul; altfel None."""
+	if not str(gazda).lower().endswith(".nordhold.net"):
+		return None
+	m = _NORD_SERVER.match(os.path.basename(str(nume_fisier or "")))
+	return (m.group(1).lower() + ".nordvpn.com") if m else None
+
+
+def rezolvaWg(gazda, p):
+	"""Adresele IPv4 ale serverului WireGuard al profilului `p`, cu serverul NordVPN din numele fisierului (gazdaNordvpn)."""
+	nord = gazdaNordvpn(gazda, (p or {}).get("nume_fisier", ""))
+	if nord:
+		ips = rezolva(nord)
+		if ips:
+			jurnal("WireGuard: %s -> %s (serverul din numele fisierului)" % (gazda, nord))
+			return ips
+	return rezolva(gazda)
+
+
 def analizeazaWg(text, nume=""):
 	"""Fisierul WireGuard verificat: {"ok", "greseli", "note", "curat" (fara cheile refuzate), "adrese" (IPv4),
 	"dns", "mtu", "peers": [{"cheie", "psk", "permise", "endpoint": (gazda, port), "keepalive"}], "cheie_privata",
@@ -1385,6 +1413,24 @@ def _membriArhiva(nume, date, greseli):
 	return rez
 
 
+def _refaProfil(lista, id_p, a):
+	"""The profile `id_p` from `lista` gets the content of the import again when its file differs (or is missing): the
+	file, its hosts and remotes in the index entry. True when something was written."""
+	p = next((x for x in lista if x.get("id") == id_p), None)
+	if p is None or not p.get("fisier"):
+		return False
+	cale = _caleProfil(p)
+	if _citeste(cale) == a["curat"]:
+		return False
+	_dosar(DOSAR)
+	_dosar(DOSAR_PROFILURI)
+	_scrieAtomic(cale, a["curat"], 0o600)
+	if a.get("remote"):
+		p["gazde"] = ["%s:%s" % (r[0], r[1]) for r in a["remote"]][:16]
+		p["remote"] = [list(r) for r in a["remote"]][:16]
+	return True
+
+
 def importa(fisiere, grup):
 	"""Importa fisierele (lista de (nume, octeti)): .ovpn, .conf, .zip si fisierele de alaturi (.crt, .key, .pem...).
 	(reusit, mesaj, {"adaugate", "la_fel", "refuzate", "motive"})."""
@@ -1415,7 +1461,7 @@ def importa(fisiere, grup):
 	lista = profiluri()
 	ids = set(p["id"] for p in lista)
 	titluri = set(p["titlu"] for p in lista if p.get("grup") == grup)
-	adaugate = la_fel = refuzate = 0
+	adaugate = la_fel = refuzate = refacute = 0
 	motive = list(greseli)
 	ids_rez = []
 	feluri = feluriGrup(grup)
@@ -1437,6 +1483,10 @@ def importa(fisiere, grup):
 			if id_p not in ids_rez:
 				la_fel += 1
 				ids_rez.append(id_p)
+				# AS205: the profile file on the receiver may have been changed since the first import; the imported
+				# file is the one the user wants, so it is written again (same id, same title)
+				if _refaProfil(lista, id_p, a):
+					refacute += 1
 			continue
 		if len(lista) >= MAX_PROFILURI:
 			refuzate += 1
@@ -1461,8 +1511,10 @@ def importa(fisiere, grup):
 		titluri.add(titlu)
 		ids_rez.append(id_p)
 		adaugate += 1
-	if adaugate:
+	if adaugate or refacute:
 		_scrieIndex(lista)
+	if refacute:
+		jurnal("import %s: %d profiluri schimbate pe receptor scrise din nou din fisierul importat" % (grup, refacute))
 	parti = []
 	if adaugate:
 		parti.append(_("Servere adăugate: %d.") % adaugate)
@@ -3116,7 +3168,7 @@ def _rezolvaServere(p):
 	for gazda, port, proto in remote:
 		if not (_gazdaBuna(str(gazda)) and _PORT(str(port)) and str(proto) in PROTOCOALE):
 			continue
-		ips = rezolva(gazda)
+		ips = rezolvaWg(gazda, p) if p.get("fel") == "wireguard" else rezolva(gazda)
 		if not ips:
 			nerezolvate.append(gazda)
 		for ip in ips[:4]:
@@ -3232,7 +3284,12 @@ def _pornesteWg(p, servere, plan):
 	endpointuri = {}
 	for x in a["peers"]:
 		g, pt = x["endpoint"]
-		ips = rezolva(g)
+		# NWG1: wg primeste aceeasi adresa ca regulile planului (servere, rezolvate o data in _pornesteAcum); un nume rotit
+		# rezolvat a doua oara poate da alt server, iar in modul tot legatura criptata spre el ar intra in tunel
+		ips = [ip for ip, port, _x in servere if port == pt] if len(a["peers"]) == 1 else []
+		if not ips:
+			ips = rezolvaWg(g, p)
+			ips = [i for i in ips if i in (plan.get("servere") or [])] or ips
 		if not ips:
 			return False, _("Nu găsesc adresa serverului %s. Verifică legătura la internet.") % g
 		endpointuri[(g, pt)] = ips[0]
@@ -4305,7 +4362,10 @@ def pasPaza(acum=None, greu=True):
 				return
 			if confirmare != ("wireguard", False, True):
 				return
-			motiv = _("WireGuard nu a primit încă o confirmare de la server. Legătura se verifică atunci când trece trafic prin VPN.")
+			# AS205 (tamiciav7): a "new" file from the same city had the same Endpoint; what works is the file of one server
+			# with its name kept (the server is read from the name, NWG1)
+			motiv = _("Serverul WireGuard nu răspunde. Ia de la furnizor fișierul unui server anume și lasă-i numele "
+				"cum vine (de pildă fr1258-nordvpn.conf).")
 			if _STARE["eroare"] != motiv:
 				jurnal("WireGuard: fara confirmare dupa %d s" % TIMP_CONECTARE_S)
 			_STARE.update(eroare=motiv, eroare_cont=False)
@@ -4804,7 +4864,7 @@ def instaleaza(fel):
 		iesire = None
 	try:
 		jurnal("opkg update, apoi opkg install %s" % " ".join(nume))
-		cod, _t = _ruleaza([PROGRAM_OPKG, "update"], TIMP_OPKG_UPDATE_S, iesire)
+		cod, _t = _ruleaza([PROGRAM_OPKG] + _argumenteUpdate(RADACINA or "/"), TIMP_OPKG_UPDATE_S, iesire)
 		if cod != 0:
 			jurnal("opkg update: cod %s" % cod)
 		cod, _t = _ruleaza([PROGRAM_OPKG, "install", "--no-install-recommends"] + nume, TIMP_OPKG_INSTALL_S, iesire)
@@ -5201,6 +5261,19 @@ def main(argv):
 			return 0
 	print("folosire: %s openvpn-sus | openvpn-jos (pornit de openvpn)" % argv[0])
 	return 2
+
+
+def _argumenteUpdate(rad="/"):
+	"""OPK1 (0.8.0): ['update'], or ['-f', <conf>, 'update'] when a dead foreign source is skipped (HdsSurseOpkg)"""
+	try:
+		try:
+			from Components import HdsSurseOpkg
+		except ImportError:
+			import HdsSurseOpkg
+		return HdsSurseOpkg.argumente_update(rad)
+	except Exception as e:
+		print("[HdsSurseOpkg] %r" % (e,))
+		return ["update"]
 
 
 if __name__ == "__main__":

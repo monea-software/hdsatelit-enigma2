@@ -194,8 +194,29 @@ def maturare_cablu(sr_uri=SR_CABLU_OBISNUITE, modulatii=(CAB_QAM256, CAB_QAM64),
     return [tp_cablu(f * 1000, sr * 1000, m) for f in frecvente_mhz for sr in sr_uri for m in modulatii]
 
 
-def maturare_terestru(cu_vhf=True):
-    return [tp_canal(c) for c in canale(cu_vhf)]
+# UHF9 (0.8.0, Maumixio, forum 531): tarile in care banda 700 MHz (694-790 MHz, canalele 49-60; 61-69 erau date mai
+# demult, banda 800) a trecut de la televiziune la telefonia mobila. Acolo televiziunea terestra sta pe 470-694 MHz,
+# canalele 21-48 (Decizia UE 2017/899), deci "Toata banda" nu mai cauta 21-69.
+# Sursa: RSPG23-018 FINAL (Comisia Europeana, Radio Spectrum Policy Group, 14.06.2023, "State of play regarding award
+# of 5G pioneer bands"), coloana "700 MHz / Award": banda atribuita. Lipsesc cele unde nu era atribuita: Bulgaria,
+# Malta, Polonia, Serbia. O regiune din lista (felul "Regiune") cauta mai departe frecventele ei, oricare ar fi.
+TARI_FARA_BANDA_700 = frozenset((
+    'AT', 'BE', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'NL', 'PT',
+    'RO', 'SK', 'SI', 'ES', 'SE', 'NO', 'IS', 'MK', 'LI'))
+ULTIMUL_CANAL_FARA_700 = 48
+
+
+def ultimul_canal_uhf(tara=None):
+    """Ultimul canal UHF cautat de "Toata banda" in tara data (implicit a receptorului, dupa limba meniului): 48 unde
+    banda 700 MHz e a telefoniei mobile (TARI_FARA_BANDA_700), altfel 69."""
+    if tara is None:
+        tara = tara_utilizatorului()
+    return ULTIMUL_CANAL_FARA_700 if (tara or '').upper() in TARI_FARA_BANDA_700 else CANALE_UHF[-1]
+
+
+def maturare_terestru(cu_vhf=True, tara=None):
+    ultimul = ultimul_canal_uhf(tara)
+    return [tp_canal(c) for c in canale(cu_vhf) if c <= ultimul]
 
 
 def cu_ambele_sisteme(transpondere):

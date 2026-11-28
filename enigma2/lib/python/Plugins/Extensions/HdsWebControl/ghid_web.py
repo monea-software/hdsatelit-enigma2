@@ -402,9 +402,157 @@ def temporizator(argumente_, C=None, T=None, nav=None, rt=None, fabrica=None):
 	return 500, {"result": False, "message": _t("Temporizatorul nu s-a putut pune.")}
 
 
+# ---------------------------------------------------------------- ghidul grafic (grila canale x ore, RW2 26.11.2026)
+# Perechea ecranului Screens/HdsGhidGrafic.py, cu aceeasi logica (Components/HdsGhidGrila.py): un singur apel la cache
+# pentru canalele cerute si fereastra de ore. GET /api/ghid-grila?buchet=&de_la=&ore=&de=&cate=
+#   buchet: referinta buchetului (implicit cel din lista de pe televizor, altfel primul); de_la: inceputul ferestrei
+#   (aliniat la jumatate de ora, nu inainte de acum); ore: 1-6 (implicit 3); de, cate: randurile (cel mult 40 odata).
+GRILA_MAX_CANALE = 40
+GRILA_IMPLICIT_CANALE = 20
+GRILA_MAX_ORE = 6
+GRILA_IMPLICIT_ORE = 3
+_BUCHETE_TV = '1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "bouquets.tv" ORDER BY bouquet'
+_VIATA_CANALE = 60
+
+
+class SursaCanale(object):
+	"""Buchetele si canalele lor din lista de pe receptor (eServiceCenter); canalele unui buchet tinute 60 s."""
+
+	def __init__(self):
+		self._canale = {}
+
+	def _lista(self, ref):
+		from enigma import eServiceCenter, eServiceReference
+		lista = eServiceCenter.getInstance().list(eServiceReference(ref))
+		rez = []
+		if lista is None:
+			return rez
+		while True:
+			s = lista.getNext()
+			if not s.valid():
+				break
+			rez.append(s)
+		return rez
+
+	def buchete(self):
+		from enigma import eServiceCenter, eServiceReference
+		rez = []
+		try:
+			for s in self._lista(_BUCHETE_TV):
+				if s.flags & eServiceReference.isDirectory:
+					i = eServiceCenter.getInstance().info(s)
+					rez.append((s.toString(), curat(i.getName(s) if i else "", 128)))
+		except Exception as e:
+			print("[HdsWebControl] ghid grila buchete: %s" % e)
+		return rez
+
+	def buchetulTv(self):
+		"""buchetul listei de pe televizor (radacina listei de canale), sau ''"""
+		try:
+			from Screens.InfoBar import InfoBar
+			r = InfoBar.instance.servicelist.getRoot()
+			return r.toString() if r is not None else ""
+		except Exception:
+			return ""
+
+	def canale(self, buchet):
+		"""[(ref pentru cache, ref intreaga, numele)] fara dosare si semne"""
+		acum = time.time()
+		e = self._canale.get(buchet)
+		if e is not None and 0 <= acum - e[0] < _VIATA_CANALE:
+			return e[1]
+		from enigma import eServiceCenter, eServiceReference
+		rez = []
+		centru = eServiceCenter.getInstance()
+		for s in self._lista(buchet):
+			if s.flags & (eServiceReference.isDirectory | eServiceReference.isMarker):
+				continue
+			i = centru.info(s)
+			rez.append((s.toCompareString(), s.toString(), i.getName(s) if i else ""))
+		if len(self._canale) > 8:
+			self._canale.clear()
+		self._canale[buchet] = (acum, rez)
+		return rez
+
+
+_SURSA = [None]
+
+
+def _sursa(S=None):
+	if S is not None:
+		return S
+	if _SURSA[0] is None:
+		_SURSA[0] = SursaCanale()
+	return _SURSA[0]
+
+
+def _grila_logica():
+	from Components import HdsGhidGrila
+	return HdsGhidGrila
+
+
+def _cache_epg(C):
+	f = getattr(C, "epg_cache", None)
+	if f is not None:
+		return f()
+	from enigma import eEPGCache
+	return eEPGCache.getInstance()
+
+
+def grila(argumente_, C=None, S=None, epg=None, acum=None, E=None, GL=None):
+	"""GET /api/ghid-grila -> (cod, corp)."""
+	C = _c(C)
+	E = _epg(E)
+	S = _sursa(S)
+	GL = GL or _grila_logica()
+	acum = int(time.time() if acum is None else acum)
+	buchete = S.buchete()
+	buchet = argumente_.get("buchet") or ""
+	if buchet and buchet not in [b[0] for b in buchete]:
+		return 400, {"result": False, "message": _t("Buchetul nu e în lista receptorului."), "camp": "buchet"}
+	if not buchet:
+		tv = S.buchetulTv()
+		buchet = tv if tv in [b[0] for b in buchete] else (buchete[0][0] if buchete else "")
+	if not buchet:
+		return 409, {"result": False, "message": _t("Receptorul nu are niciun buchet de canale.")}
+	ore = max(1, min(GRILA_MAX_ORE, _intreg(argumente_.get("ore"), GRILA_IMPLICIT_ORE)))
+	minim = GL.aliniaza(acum)
+	de_la = _intreg(argumente_.get("de_la"), 0)
+	if de_la > acum + ZILE * 86400:
+		return 400, {"result": False, "message": _t("Ghidul are cel mult 7 zile."), "camp": "de_la"}
+	t0 = max(minim, GL.aliniaza(de_la)) if de_la else minim
+	t1 = t0 + ore * 3600
+	de = max(0, _intreg(argumente_.get("de"), 0))
+	cate = max(1, min(GRILA_MAX_CANALE, _intreg(argumente_.get("cate"), GRILA_IMPLICIT_CANALE)))
+	toate = S.canale(buchet)
+	felie = toate[de:de + cate]
+	date = GL.citeste(epg if epg is not None else _cache_epg(C), [c[0] for c in felie], t0, t1)
+	timers = C._timer_list()
+	marcaje = GL.marcajeTemporizatoare(timers)
+	canale = []
+	in_lucru = 0
+	for n, (cheie, ref, nume) in enumerate(felie):
+		emisiuni = []
+		for e in GL.vizibile(date.get(cheie, []), t0, t1):
+			original = curat(e[3], 200)
+			arata, tradus, lucru = _tradus(E, "titlu", original)
+			in_lucru += 1 if lucru else 0
+			emisiuni.append({
+				"id": e[0], "inceput": e[1], "durata": e[2], "titlu": curat(arata, 200),
+				"titlu_original": original if tradus else "", "ora": C.hhmm(e[1]),
+				"acum": e[1] <= acum < GL.sfarsitul(e), "temporizator": GL.felTemporizator(marcaje, cheie, e),
+			})
+		canale.append({"ref": ref, "numar": de + n + 1, "nume": curat(nume, 128), "emisiuni": emisiuni})
+	return 200, {"result": True, "acum": acum, "t0": t0, "t1": t1, "ore": ore, "minim": minim,
+		"zi": _zi(C, t0, acum), "marcaje": [{"t": t, "text": text} for t, text in GL.ore(t0, t1)],
+		"buchet": buchet, "buchete": [{"ref": r, "nume": nm} for r, nm in buchete],
+		"nume_buchet": next((nm for r, nm in buchete if r == buchet), ""), "de": de, "total": len(toate),
+		"canale": canale, "in_lucru": in_lucru}
+
+
 def argumente(request):
 	"""Argumentele cererii ca text: {cheie: text}, fara token; numai cheile cunoscute."""
-	permise = ("ref", "de_la", "cate", "id", "fel")
+	permise = ("ref", "de_la", "cate", "id", "fel", "buchet", "ore", "de")
 	rez = {}
 	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
@@ -452,6 +600,9 @@ def rute(baza, resource, C=None, T=None, nav=None):
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class GrilaResource(_Citire):
+		lucru = staticmethod(grila)
+
 	class PaginaResource(resource.Resource):
 		"""GET /ghid: pagina „Ghidul canalului”."""
 		isLeaf = True
@@ -459,15 +610,28 @@ def rute(baza, resource, C=None, T=None, nav=None):
 		def render_GET(self, request):
 			return pagina(request)
 
+	class PaginaGraficResource(resource.Resource):
+		"""GET /ghid-grafic: pagina 'Ghid grafic' (grila canale x ore)."""
+		isLeaf = True
+
+		def render_GET(self, request):
+			return pagina(request, grafic=True)
+
+	global PAGINA_GRAFIC_RESURSA
+	PAGINA_GRAFIC_RESURSA = PaginaGraficResource()
 	api = {
 		b"ghid": GhidResource(),
 		b"ghid-emisiune": EmisiuneResource(),
 		b"ghid-temporizator": TemporizatorResource(),
+		b"ghid-grila": GrilaResource(),
 	}
 	return api, PaginaResource()
 
 
-def pagina(request):
+PAGINA_GRAFIC_RESURSA = None
+
+
+def pagina(request, grafic=False):
 	"""Aceeasi poarta ca /limbi si /paznic."""
 	from . import plugin as P
 	if not P._esteAdresaLocala(P._adresaClient(request)):
@@ -482,11 +646,12 @@ def pagina(request):
 		if browser is None:
 			return P._PAGINA_ASOCIERE.encode("utf-8")
 		config_pagina = P._configPanou(P.csrfPentru(secret), "", browser.get("nume", ""))
-	return pagina_text(P._STIL_COMUN, config_pagina).encode("utf-8", "replace")
+	return pagina_text(P._STIL_COMUN, config_pagina, grafic).encode("utf-8", "replace")
 
 
-def pagina_text(stil, config_pagina):
-	return _traducePagina(PAGINA).replace("__STIL_COMUN__", stil).replace("__CONFIG__", config_pagina)
+def pagina_text(stil, config_pagina, grafic=False):
+	text = _traducePagina(PAGINA_GRAFIC) if grafic else _traducePagina(PAGINA)
+	return text.replace("__STIL_COMUN__", stil).replace("__CONFIG__", config_pagina)
 
 
 PAGINA = """<!DOCTYPE html>
@@ -556,6 +721,7 @@ PAGINA = """<!DOCTYPE html>
   </section>
 </div>
 <p class="slab">Pe televizor: apasă OK de două ori pe un canal; prima pagină a barei este ghidul canalului.</p>
+<p class="slab"><a href="/ghid-grafic">Ghid grafic: toate canalele buchetului, pe ore</a></p>
 </main>
 <script>
 var CFG = __CONFIG__;
@@ -753,6 +919,202 @@ citeste(false);
 """
 
 
+PAGINA_GRAFIC = """<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghid grafic</title>
+<style>__STIL_COMUN__
+  main{max-width:1400px;margin:0 auto;}
+  h1{font-size:1.25rem;margin:0 0 8px;}
+  .bara{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px;}
+  .bara select{min-height:44px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;padding:0 10px;max-width:100%;}
+  .zi{color:#ffc34d;font-weight:bold;margin-left:4px;}
+  button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--bordura);background:#242a33;color:var(--text);font:inherit;cursor:pointer;}
+  button.rosu{background:#b3322a;border-color:#b3322a;color:#fff;}
+  button.verde{background:#1f7a44;border-color:#1f7a44;color:#fff;}
+  button:disabled{opacity:.5;cursor:default;}
+  .grila{position:relative;overflow-x:auto;border:1px solid var(--bordura);border-radius:10px;background:#10162a;}
+  .interior{position:relative;}
+  .rigla,.rand{position:relative;height:52px;border-bottom:1px solid #1c2440;}
+  .rigla{height:34px;}
+  .canal{position:sticky;left:0;z-index:3;width:170px;height:100%;background:#10162a;display:flex;align-items:center;gap:8px;padding:0 10px;box-sizing:border-box;border-right:1px solid #2a3350;}
+  .canal .nr{color:var(--text-slab);font-size:.8rem;min-width:24px;text-align:right;font-variant-numeric:tabular-nums;}
+  .canal .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:bold;}
+  .ora{position:absolute;top:0;height:34px;line-height:34px;padding-left:8px;border-left:2px solid #2a3350;color:var(--text-slab);font-size:.85rem;white-space:nowrap;}
+  .bloc{position:absolute;top:2px;height:48px;box-sizing:border-box;padding:0 10px;background:#282d3f;border-radius:4px;display:flex;align-items:center;gap:6px;cursor:pointer;overflow:hidden;white-space:nowrap;}
+  .bloc span{overflow:hidden;text-overflow:ellipsis;}
+  .bloc.acum{background:#404555;}
+  .bloc.ales{background:#374ea1;outline:2px solid #9fb4ff;color:#fff;}
+  .bloc .semn{flex:none;width:10px;height:10px;border-radius:50%;}
+  .semn.inregistrare{background:#e5484d;}
+  .semn.comutare{background:#f5b83d;}
+  .gol{position:absolute;top:2px;height:48px;line-height:48px;padding-left:12px;color:var(--text-slab);background:#1a2034;border-radius:4px;}
+  .linie{position:absolute;top:0;bottom:0;width:3px;background:#f5b83d;z-index:2;pointer-events:none;}
+  .card{background:var(--panou);border:1px solid var(--bordura);border-radius:10px;padding:14px;margin:12px 0;}
+  .titlu-mare{font-size:1.15rem;font-weight:bold;margin:0 0 4px;word-break:break-word;}
+  .orele{color:#ffc34d;margin:0 0 8px;}
+  .text{white-space:pre-wrap;line-height:1.45;margin:0 0 8px;word-break:break-word;max-height:12rem;overflow:auto;}
+  .butoane{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+  .mesaj{margin:10px 0 0;line-height:1.45;font-size:.92rem;min-height:1.3em;}
+  .eroare{color:#ffb4a8;}
+  .ascuns{display:none;}
+  .slab{color:var(--text-slab);}
+</style>
+</head>
+<body>
+<main>
+<h1>Ghid grafic</h1>
+<div class="bara">
+  <select id="buchet" aria-label="Buchetul"></select>
+  <button type="button" id="ziInapoi">Ziua anterioară</button>
+  <button type="button" id="inapoi">◄ Mai devreme</button>
+  <button type="button" id="acum">Acum</button>
+  <button type="button" id="inainte">Mai târziu ►</button>
+  <button type="button" id="ziInainte">Ziua următoare</button>
+  <span class="zi" id="zi"></span>
+</div>
+<p class="slab" id="incarcare">Se citește ghidul...</p>
+<div class="grila ascuns" id="grila"><div class="interior" id="interior"></div></div>
+<div class="butoane"><button type="button" id="mai" class="ascuns">Mai multe canale</button></div>
+<section class="card ascuns" id="detalii" aria-live="polite">
+  <p class="titlu-mare" id="titlu"></p>
+  <p class="orele" id="orele"></p>
+  <p class="text" id="descriere"></p>
+  <div class="butoane">
+    <button type="button" class="rosu" id="inregistreaza">Înregistrează</button>
+    <button type="button" id="aminteste">Amintește-mi</button>
+    <button type="button" id="scoate" class="ascuns">Scoate temporizatorul</button>
+    <button type="button" class="verde" id="porneste">Pornește canalul pe televizor</button>
+  </div>
+  <p class="mesaj" id="mesaj"></p>
+</section>
+<p class="slab">Pe televizor: tasta EPG, apoi MENU, Ghid grafic; sau setarea Ghidul TV ca grilă.</p>
+<p class="slab"><a href="/ghid">Ghidul canalului de pe televizor</a></p>
+</main>
+<script>
+var CFG = __CONFIG__;
+var PX_MIN = 6, LATIME_CANAL = 170;
+var STARE = {buchet: "", de_la: 0, ore: 3, canale: [], total: 0, date: null, ales: null}, CERERE = 0;
+function $(id){ return document.getElementById(id); }
+function adresa(cale){
+  if(!CFG.jeton){ return cale; }
+  return cale + (cale.indexOf("?") === -1 ? "?" : "&") + "token=" + encodeURIComponent(CFG.jeton);
+}
+function cerere(cale, metoda, date){
+  var optiuni = {method: metoda || "GET", cache: "no-store", credentials: "same-origin", headers: {}};
+  if(CFG.csrf){ optiuni.headers["X-HDS-CSRF"] = CFG.csrf; }
+  if(date){ optiuni.headers["Content-Type"] = "application/x-www-form-urlencoded"; optiuni.body = date.toString(); }
+  return fetch(adresa(cale), optiuni).then(function(r){
+    if(r.status === 401 && !CFG.jeton){ location.replace("/"); throw new Error("browser deconectat"); }
+    return r.json().catch(function(){ return {result: false, message: "Receptorul a răspuns neașteptat (HTTP " + r.status + ")."}; });
+  });
+}
+function q(obj){ var p = new URLSearchParams(); Object.keys(obj).forEach(function(k){ if(obj[k] !== "" && obj[k] !== null){ p.set(k, obj[k]); } }); return p; }
+function mesaj(text, eroare){ var m = $("mesaj"); m.textContent = text || ""; m.classList.toggle("eroare", !!eroare); }
+function x(t){ var d = STARE.date; return LATIME_CANAL + Math.round((Math.max(t, d.t0) - d.t0) / 60 * PX_MIN); }
+function deseneaza(){
+  var d = STARE.date, c = $("interior"); c.textContent = "";
+  var latime = LATIME_CANAL + Math.round((d.t1 - d.t0) / 60 * PX_MIN);
+  c.style.width = latime + "px";
+  var rigla = document.createElement("div"); rigla.className = "rigla";
+  var cap = document.createElement("div"); cap.className = "canal"; rigla.appendChild(cap);
+  d.marcaje.forEach(function(m){ var o = document.createElement("div"); o.className = "ora"; o.style.left = x(m.t) + "px"; o.textContent = m.text; rigla.appendChild(o); });
+  c.appendChild(rigla);
+  STARE.canale.forEach(function(ch){
+    var r = document.createElement("div"); r.className = "rand";
+    var cn = document.createElement("div"); cn.className = "canal";
+    var nr = document.createElement("span"); nr.className = "nr"; nr.textContent = ch.numar;
+    var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = ch.nume; nm.title = ch.nume;
+    cn.appendChild(nr); cn.appendChild(nm); r.appendChild(cn);
+    if(!ch.emisiuni.length){
+      var g = document.createElement("div"); g.className = "gol"; g.style.left = LATIME_CANAL + "px"; g.style.width = (latime - LATIME_CANAL) + "px";
+      g.textContent = "Fără program în ghid"; r.appendChild(g);
+    }
+    ch.emisiuni.forEach(function(e){
+      var a = x(e.inceput), b = x(Math.min(e.inceput + Math.max(e.durata, 60), d.t1));
+      var bl = document.createElement("div"); bl.className = "bloc" + (e.acum ? " acum" : "") + (STARE.ales && STARE.ales.e.id === e.id && STARE.ales.ch.ref === ch.ref ? " ales" : "");
+      bl.style.left = a + "px"; bl.style.width = Math.max(3, b - a - 2) + "px"; bl.tabIndex = 0; bl.setAttribute("role", "button");
+      var t = document.createElement("span"); t.textContent = e.titlu; bl.title = e.ora + " " + e.titlu; bl.appendChild(t);
+      if(e.temporizator){ var s = document.createElement("i"); s.className = "semn " + e.temporizator; bl.appendChild(s); }
+      bl.addEventListener("click", function(){ alege(ch, e); });
+      bl.addEventListener("keydown", function(ev){ if(ev.key === "Enter"){ alege(ch, e); } });
+      r.appendChild(bl);
+    });
+    c.appendChild(r);
+  });
+  if(d.acum >= d.t0 && d.acum < d.t1){ var l = document.createElement("div"); l.className = "linie"; l.style.left = x(d.acum) + "px"; c.appendChild(l); }
+  $("zi").textContent = d.zi;
+  $("mai").classList.toggle("ascuns", STARE.canale.length >= STARE.total);
+  $("inapoi").disabled = d.t0 <= d.minim; $("ziInapoi").disabled = d.t0 <= d.minim;
+}
+function citeste(maiMulte){
+  var p = {buchet: STARE.buchet, de_la: STARE.de_la || "", ore: STARE.ore, de: maiMulte ? STARE.canale.length : 0, cate: 20};
+  var nr = ++CERERE;
+  return cerere("/api/ghid-grila?" + q(p)).then(function(d){
+    if(nr !== CERERE){ return; }
+    if(!d.result){ $("incarcare").textContent = d.message || "Receptorul nu a putut citi ghidul."; return; }
+    STARE.date = d; STARE.buchet = d.buchet; STARE.de_la = d.t0; STARE.total = d.total;
+    STARE.canale = maiMulte ? STARE.canale.concat(d.canale) : d.canale;
+    var s = $("buchet");
+    if(!s.options.length){ d.buchete.forEach(function(b){ var o = document.createElement("option"); o.value = b.ref; o.textContent = b.nume; s.appendChild(o); }); }
+    s.value = d.buchet;
+    $("incarcare").classList.add("ascuns"); $("grila").classList.remove("ascuns");
+    if(!STARE.canale.length){ $("incarcare").textContent = "Buchetul nu are canale."; $("incarcare").classList.remove("ascuns"); }
+    deseneaza();
+  }).catch(function(){ $("incarcare").textContent = "Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."; });
+}
+function muta(secunde){ STARE.de_la = Math.max(STARE.date.minim, STARE.date.t0 + secunde); citeste(false); }
+function butoane(fel){
+  $("inregistreaza").classList.toggle("ascuns", !!fel); $("aminteste").classList.toggle("ascuns", !!fel);
+  $("scoate").classList.toggle("ascuns", !fel);
+}
+function alege(ch, e){
+  STARE.ales = {ch: ch, e: e}; deseneaza(); mesaj("");
+  $("detalii").classList.remove("ascuns");
+  $("titlu").textContent = ch.nume + ": " + e.titlu; $("orele").textContent = e.ora; $("descriere").textContent = "";
+  butoane(e.temporizator);
+  cerere("/api/ghid-emisiune?" + q({ref: ch.ref, id: e.id})).then(function(d){
+    if(!d.result || !STARE.ales || STARE.ales.e.id !== e.id){ return; }
+    $("orele").textContent = d.emisiune.linie;
+    $("descriere").textContent = [d.emisiune.scurta, d.emisiune.lunga].filter(function(t){ return t; }).join("\\n");
+    butoane(d.emisiune.temporizator);
+  });
+}
+function trimite(fel){
+  var a = STARE.ales; if(!a){ return; }
+  mesaj("Se trimite...");
+  cerere("/api/ghid-temporizator", "POST", q({ref: a.ch.ref, id: a.e.id, fel: fel})).then(function(d){
+    var t = d.message || "";
+    if(d.suprapuse && d.suprapuse.length){ t += " " + d.suprapuse.map(function(s){ return s.nume; }).join(", "); }
+    citeste(false).then(function(){ mesaj(t, !d.result); });
+  }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
+}
+$("buchet").addEventListener("change", function(){ STARE.buchet = this.value; STARE.ales = null; citeste(false); });
+$("inapoi").addEventListener("click", function(){ muta(-STARE.ore * 1800); });
+$("inainte").addEventListener("click", function(){ muta(STARE.ore * 1800); });
+$("ziInapoi").addEventListener("click", function(){ muta(-86400); });
+$("ziInainte").addEventListener("click", function(){ muta(86400); });
+$("acum").addEventListener("click", function(){ STARE.de_la = 0; citeste(false); });
+$("mai").addEventListener("click", function(){ citeste(true); });
+$("inregistreaza").addEventListener("click", function(){ trimite("inregistrare"); });
+$("aminteste").addEventListener("click", function(){ trimite("comutare"); });
+$("scoate").addEventListener("click", function(){ trimite("scoate"); });
+$("porneste").addEventListener("click", function(){
+  var a = STARE.ales; if(!a){ return; }
+  mesaj("Se trimite...");
+  cerere("/api/zap", "POST", q({sRef: a.ch.ref})).then(function(d){ mesaj(d.result ? "Canalul pornește pe televizor." : (d.message || "Canalul nu a pornit."), !d.result); })
+    .catch(function(){ mesaj("Receptorul nu răspunde.", true); });
+});
+if(window.innerWidth < 720){ STARE.ore = 2; }
+citeste(false);
+</script>
+</body>
+</html>
+"""
+
+
 # ---------------------------------------------------------------- traducerea paginilor
 # Textele sabloanelor de mai sus, traduse la cerere in limba receptorului (traducere_pagini.py). Un text
 # nou sau schimbat in sablon se scrie si aici (proba textelor paginilor web il cere).
@@ -773,6 +1135,20 @@ TEXTE_PAGINA = {
 		N_("Pornește canalul pe televizor"),
 		N_("Mai departe"),
 		N_("Pe televizor: apasă OK de două ori pe un canal; prima pagină a barei este ghidul canalului."),
+
+		# ghidul grafic (/ghid-grafic, RW2)
+		N_("Ghid grafic: toate canalele buchetului, pe ore"),
+		N_("Ghid grafic"),
+		N_("Buchetul"),
+		N_("Ziua anterioară"),
+		N_("◄ Mai devreme"),
+		N_("Acum"),
+		N_("Mai târziu ►"),
+		N_("Ziua următoare"),
+		N_("Mai multe canale"),
+		N_("Amintește-mi"),
+		N_("Pe televizor: tasta EPG, apoi MENU, Ghid grafic; sau setarea Ghidul TV ca grilă."),
+		N_("Ghidul canalului de pe televizor"),
 	),
 	"js": (
 		N_("Textul tradus"),
@@ -794,6 +1170,8 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu răspunde."),
 		N_("Canalul pornește pe televizor."),
 		N_("Canalul nu a pornit."),
+		N_("Fără program în ghid"),
+		N_("Buchetul nu are canale."),
 	),
 }
 

@@ -34,5 +34,9 @@ dist_install_DATA = \
 # fallback.font: fontul de rezerva (al treilea, dupa fontul textului si Replacement), numai pentru simbolurile cerute de
 # pluginuri (sageti, buline, barele de nivel U+2581-2587, chenare). Legatura spre DejaVu Sans Mono Bold, care le are (licenta langa el,
 # DejaVuSansMono-Bold.license): niciun octet in plus. lib/gdi/font.cpp il incarca singur; pluginurile il cer pe nume.
+# nmsbd.ttf: fontul implicit al pluginului LCD4linux (il au si imaginile OE-Alliance); fara el pluginul cade la primul
+# desen si afisajul color ramane negru (Vu+ Duo2, asistenta din 24.11). Legatura spre PT Sans Bold, al nostru.
+# (Comentariile stau inaintea regulii: un rand cu tab si # in regula opreste automake, "comment at start of rule is unportable".)
 install-data-hook:
 	cd $(DESTDIR)$(installdir) && rm -f fallback.font && ln -s DejaVuSansMono-Bold.ttf fallback.font
+	cd $(DESTDIR)$(installdir) && rm -f nmsbd.ttf && ln -s PT_Sans-Web-Bold.ttf nmsbd.ttf

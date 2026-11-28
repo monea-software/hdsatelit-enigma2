@@ -59,6 +59,14 @@ def ciplusMesajCheieRefuzata(slot):
 	return _("Modulul CI+ din slotul %d funcționează, dar receptorul nu poate folosi cheia lui de protecție, așa că pe canalele protejate CI+ imaginea se oprește după câteva secunde. Receptorul a încercat singur toate căile de descifrare pe care le cunoaște. Este o greșeală a noastră și o reparăm într-o actualizare; nu trebuie să faci nimic.") % (slot + 1)
 
 
+def _arataMesaje(slot):
+	"""Setarea Arata mesajele CI a slotului (din fabrica Da)."""
+	try:
+		return bool(config.ci[slot].show_ci_messages.value)
+	except Exception:
+		return True
+
+
 def anuntaCheieRefuzata(slot, acum=None, standby=None):
 	"""Mesajul pe ecran cand starea CI+ a slotului e „cheia refuzata”; True cand l-a aratat."""
 	try:
@@ -67,6 +75,10 @@ def anuntaCheieRefuzata(slot, acum=None, standby=None):
 	except Exception:
 		return False
 	if (_inStandby() if standby is None else standby):
+		return False
+	# Arata mesajele CI oprit: nici mesajul cheii CI+ nu mai sare pe ecran (ca mesajele MMI ale modulului; cu Stream
+	# Relay modulul primeste canalul la fiecare zap si mesajul s-ar repeta); starea ramane in ecranul CI si in web
+	if not _arataMesaje(slot):
 		return False
 	acum = time.time() if acum is None else acum
 	if acum - _anuntCheieLa.get(slot, -CIPLUS_ANUNT_SECUNDE) < CIPLUS_ANUNT_SECUNDE:
@@ -102,6 +114,197 @@ def resetModuleCiplus(motiv):
 				eDVBCI_UI.getInstance().setReset(slot)
 		except Exception as e:
 			print("[Ci] repornirea modulului %d: %r" % (slot, e))
+
+
+# Certificatele CI+ lipsa, gasite singure (TODO 25.11 00:34, asistenta: dupa o imagine noua modulul CI+ nu mai era
+# recunoscut, iar certificatele erau inca in imaginea de dinainte, pe cardul SD): alte imagini din multiboot, stick, disc.
+# Cautarea merge pe un fir separat (Components.HdsImportSurse.Lucrare), niciodata pe firul interfetei; intrebarea Da/Nu
+# o data pe pornire, cand apare un modul in slot; nimic copiat fara Da.
+CIPLUS_CAUTARE = ("/media/*/etc/ciplus", "/media/*/*/etc/ciplus")
+CIPLUS_MAX_FISIER = 64 * 1024
+_ciplusGasit = {"cautat": False, "lucru": None, "copiaza": None, "gasit": "", "intrebat": False}
+
+
+def ciplusCauta(tipare=None, dosar=None):
+	"""Dosarele cu toate cele patru fisiere CI+, altele decat /etc/ciplus (numai citire; pe firul apelantului)."""
+	import glob
+	tinta = os.path.realpath(dosar or CIPLUS_DOSAR)
+	gasite = []
+	for tipar in tipare or CIPLUS_CAUTARE:
+		for d in sorted(glob.glob(tipar)):
+			if os.path.realpath(d) == tinta or d in gasite or not os.path.isdir(d):
+				continue
+			if not ciplusFisiereLipsa(d):
+				gasite.append(d)
+	return gasite
+
+
+def ciplusLoc(dosar):
+	"""Locul aratat omului: imaginea sau stickul, fara /etc/ciplus de la coada."""
+	coada = "/etc/ciplus"
+	return dosar[:-len(coada)] if dosar.endswith(coada) and len(dosar) > len(coada) else dosar
+
+
+def ciplusIntrebare(dosar):
+	return _("Am găsit certificatele CI+ în %s. Le folosesc?") % ciplusLoc(dosar)
+
+
+def ciplusCopiaza(sursa, dosar=None):
+	"""Cele patru fisiere din `sursa` in /etc/ciplus (dosarul 0700, fisierele 0600, intai alaturi, apoi mutate);
+	autentificarile tinute minte (ci_auth_slot_N.bin) raman, le reface modulul. Intoarce numarul fisierelor puse."""
+	dosar = dosar or CIPLUS_DOSAR
+	date = {}
+	for nume in CIPLUS_FISIERE:
+		with open(os.path.join(sursa, nume), "rb") as f:
+			continut = f.read(CIPLUS_MAX_FISIER + 1)
+		if not continut or len(continut) > CIPLUS_MAX_FISIER:
+			raise IOError("%s: marime nepotrivita" % nume)
+		date[nume] = continut
+	if not os.path.isdir(dosar):
+		os.makedirs(dosar, 0o700)
+	os.chmod(dosar, 0o700)
+	for nume in CIPLUS_FISIERE:
+		nou = os.path.join(dosar, "." + nume + ".nou")
+		fd = os.open(nou, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
+		try:
+			os.write(fd, date[nume])
+			os.fsync(fd)
+		finally:
+			os.close(fd)
+		os.chmod(nou, 0o600)
+		os.replace(nou, os.path.join(dosar, nume))
+	return len(date)
+
+
+def ciplusGasit():
+	"""Dosarul gasit de ultima cautare, cat certificatele inca lipsesc ("" altfel)."""
+	return _ciplusGasit["gasit"]
+
+
+def _modulInSlot():
+	"""Un modul in vreun slot (starea 1 sau 2), din starea tinuta de nucleu (nimic citit de pe disc)."""
+	try:
+		ui = eDVBCI_UI.getInstance()
+		return any(ui.getState(slot) in (1, 2) for slot in range(MAX_NUM_CI))
+	except Exception:
+		return False
+
+
+def ciplusPornesteCautarea(la_sfarsit=None):
+	"""Cautarea pe un fir separat; la sfarsit, pe firul enigma2: intrebarea (o data pe pornire, cand e un modul in slot)
+	si la_sfarsit(gasit). False cand merge deja una."""
+	if _ciplusGasit["lucru"] is not None:
+		return False
+
+	def lucru():
+		if not ciplusFisiereLipsa():
+			return None
+		return ciplusCauta()
+
+	def gata(rez, eroare):
+		_ciplusGasit["lucru"] = None
+		if eroare:
+			print("[Ci] cautarea certificatelor CI+: %s" % eroare)
+		if rez is None:
+			_ciplusGasit["gasit"] = ""
+			return
+		_ciplusGasit["cautat"] = True
+		_ciplusGasit["gasit"] = rez[0] if rez else ""
+		print("[Ci] certificatele CI+ lipsesc; gasite in alt loc: %s" % (", ".join(rez) if rez else "nicaieri"))
+		# oricine a pornit cautarea (modulul, ecranul CI, pagina web): cu un modul in slot omul e intrebat pe receptor
+		if _ciplusGasit["gasit"] and _modulInSlot():
+			_ciplusIntreaba(_ciplusGasit["gasit"])
+		if la_sfarsit is not None:
+			la_sfarsit(_ciplusGasit["gasit"])
+
+	from Components.HdsImportSurse import Lucrare
+	_ciplusGasit["lucru"] = Lucrare(lucru, gata)
+	return True
+
+
+def ciplusFolosesteGasit(sursa=None, la_sfarsit=None):
+	"""Raspunsul Da (ecran sau web): certificatele copiate pe un fir separat (sursa poate fi un disc oprit sau un stick
+	scos), apoi modulele repornite; la_sfarsit(reusit, text) pe firul enigma2. Intoarce False cand nu e nimic de pus."""
+	sursa = sursa or _ciplusGasit["gasit"]
+	_ciplusGasit["intrebat"] = True
+	if not sursa or _ciplusGasit["copiaza"] is not None:
+		return False
+
+	def lucru():
+		# pusa intre timp (alt raspuns Da, pagina web): nimic de copiat
+		if not ciplusFisiereLipsa():
+			return 0
+		return ciplusCopiaza(sursa)
+
+	def gata(rez, eroare):
+		_ciplusGasit["copiaza"] = None
+		if eroare or rez is None:
+			print("[Ci] copierea certificatelor CI+ din %s: %s" % (sursa, eroare))
+			reusit, text = False, _("Certificatele CI+ din %s nu s-au putut copia.") % ciplusLoc(sursa)
+		else:
+			_ciplusGasit["gasit"] = ""
+			if rez:
+				print("[Ci] certificatele CI+ copiate din %s in %s" % (sursa, CIPLUS_DOSAR))
+				resetModuleCiplus("certificatele CI+ gasite si puse")
+			reusit, text = True, _("Toate certificatele CI+ sunt puse. Modulul repornește și se autentifică singur.")
+		if la_sfarsit is not None:
+			la_sfarsit(reusit, text)
+
+	from Components.HdsImportSurse import Lucrare
+	_ciplusGasit["copiaza"] = Lucrare(lucru, gata)
+	return True
+
+
+def _ciplusMesaj(reusit, text):
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(text, MessageBox.TYPE_INFO if reusit else MessageBox.TYPE_ERROR, 10, id="CiCiplusGasit")
+	except Exception as e:
+		print("[Ci] mesajul certificatelor CI+: %r" % (e,))
+
+
+def _ciplusRaspuns(sursa, da):
+	if not da:
+		print("[Ci] certificatele CI+ gasite in %s: omul a ales Nu" % sursa)
+		return
+	ciplusFolosesteGasit(sursa, _ciplusMesaj)
+
+
+def _ciplusIntreaba(gasit):
+	if not gasit or _ciplusGasit["intrebat"]:
+		return False
+	if _inStandby():
+		# intrebarea vine la iesirea din standby
+		try:
+			import Screens.Standby
+			Screens.Standby.inStandby.onClose.append(lambda g=gasit: _ciplusIntreaba(g) if ciplusGasit() else None)
+		except Exception as e:
+			print("[Ci] intrebarea certificatelor CI+ dupa standby: %r" % (e,))
+		return False
+	_ciplusGasit["intrebat"] = True
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddNotificationWithCallback(lambda da, s=gasit: _ciplusRaspuns(s, da), MessageBox,
+			ciplusIntrebare(gasit), MessageBox.TYPE_YESNO, default=True)
+	except Exception as e:
+		print("[Ci] intrebarea certificatelor CI+: %r" % (e,))
+		return False
+	return True
+
+
+def ofertaCiplusLaModul(slot):
+	"""Un modul a aparut in slot (starea 1 sau 2): cand certificatele CI+ lipsesc, cautarea porneste pe fir si intreaba
+	o data pe pornire. Nimic citit de pe disc aici."""
+	if _ciplusGasit["intrebat"] or _ciplusGasit["lucru"] is not None:
+		return False
+	try:
+		if eDVBCI_UI.getInstance().getState(slot) not in (1, 2):
+			return False
+	except Exception:
+		return False
+	return ciplusPornesteCautarea()
 
 
 _ciplusTimere = {}
@@ -180,6 +383,10 @@ def InitCiConfig():
 	# CI+ Helper (OE-Alliance): programul extern /usr/bin/ciplushelper il porneste scriptul lui, dupa aceasta setare
 	# (cere repornire); imaginea nu-l are, randul apare numai cand omul l-a pus
 	config.cimisc.cihelperenabled = ConfigYesNo(default=True)
+	# un canal pe o singura cale (lib/dvb_ci/hdscicale.h): Da = un canal luat de un modul CI nu mai merge si la
+	# modulul de acces; nucleul o citeste la fiecare PMT (se aplica de la urmatorul canal, fara repornire). Nu din
+	# fabrica (purtarea veche).
+	config.cimisc.numai_ci = ConfigYesNo(default=False)
 	if SystemInfo.get("CommonInterfaceCIDelay"):
 		config.cimisc.dvbCiDelay = ConfigSelection(default="256", choices=[(x, x) for x in ("16", "32", "64", "128", "256")])
 		config.cimisc.dvbCiDelay.addNotifier(setdvbCiDelay)
@@ -550,6 +757,12 @@ class CiMessageHandler:
 	def ciStateChanged(self, slot):
 		# cheia CI+ refuzata de driver (starea 3): mesajul pe ecran, si cu ecranul CI deschis
 		anuntaCheieRefuzata(slot)
+		# certificatele CI+ lipsa, gasite in alta imagine sau pe stick: o intrebare Da/Nu o data pe pornire; o greseala aici
+		# nu opreste mesajele modulului de mai jos
+		try:
+			ofertaCiplusLaModul(slot)
+		except Exception as e:
+			print("[Ci] cautarea certificatelor CI+ la modul: %r" % (e,))
 		if slot in self.ci:
 			self.ci[slot](slot)
 		else:
@@ -565,11 +778,7 @@ class CiMessageHandler:
 					return
 				if raspundeCuPinPastrat(slot, screen, handler):
 					return
-				arata = True
-				try:
-					arata = bool(config.ci[slot].show_ci_messages.value)
-				except Exception:
-					pass
+				arata = _arataMesaje(slot)
 				if screen[0][0] == "ENQ" and any(x[0] == "PIN" for x in screen):
 					arata = True
 				if arata and not _inStandby():
@@ -632,7 +841,10 @@ class CiSelection(Screen):
 		if not cur or len(cur) < 4:
 			return
 		if cur[3] is None:
-			self["text"].setText(_("Setări comune"))
+			if cur[1] is getattr(config.cimisc, "numai_ci", None):
+				self["text"].setText(_("Da: un canal luat de modulul CI nu mai merge și la modulul de acces. Folosește-l când imaginea îngheață cu amândouă pornite. Se aplică de la următorul canal."))
+			else:
+				self["text"].setText(_("Setări comune"))
 			return
 		slot = cur[3]
 		ajutor = {
@@ -673,6 +885,7 @@ class CiSelection(Screen):
 		self.list.append((_("Întârzierea pornirii CI"), config.cimisc.bootDelay, None, None))
 		if SystemInfo.get("CIPlusHelper"):
 			self.list.append((_("Ajutorul CI+ (cere repornirea receptorului)"), config.cimisc.cihelperenabled, None, None))
+		self.list.append((_("Canalele modulului CI numai prin CI"), config.cimisc.numai_ci, None, None))
 
 	def appendEntries(self, slot, state):
 		self.state[slot] = state
@@ -790,8 +1003,15 @@ class CiSelection(Screen):
 			elif action == "ciplus":
 				from Screens.MessageBox import MessageBox
 				lipsa = ciplusFisiereLipsa()
+				gasit = ciplusGasit() if lipsa else ""
+				if gasit:
+					# certificatele gasite in alta imagine sau pe stick: aceeasi intrebare Da/Nu ca la aparitia modulului
+					self.session.openWithCallback(lambda da, s=gasit: self.ciplusRaspuns(s, da), MessageBox,
+						ciplusTextLipsa(lipsa) + "\n" + ciplusIntrebare(gasit), MessageBox.TYPE_YESNO, default=True)
+					return
 				if lipsa:
 					text = ciplusTextLipsa(lipsa)
+					ciplusPornesteCautarea()
 				else:
 					text = "%s\n%s" % (self.textCiplus(slot), _("Certificatele aparatului sunt în /etc/ciplus. Un modul CI+ se autentifică singur după pornire; Reset șterge autentificarea ținută minte."))
 				self.session.open(MessageBox, text, MessageBox.TYPE_INFO)
@@ -809,6 +1029,21 @@ class CiSelection(Screen):
 				self["text"].setText(_("Codul PIN păstrat a fost șters."))
 			elif action == 2 and self.state[slot] == 2:
 				self.dlg = self.session.openWithCallback(self.dlgClosed, MMIDialog, slot, action)
+
+	def ciplusRaspuns(self, sursa, da):
+		if not da:
+			return
+		if ciplusFolosesteGasit(sursa, self.ciplusPuse):
+			self["text"].setText(_("Pun certificatele CI+..."))
+
+	def ciplusPuse(self, reusit, text):
+		# ecranul poate fi deja inchis cand copierea se termina
+		try:
+			self.updateState()
+			self["text"].setText(text)
+		except Exception as e:
+			print("[Ci] ecranul CI dupa certificatele CI+: %r" % (e,))
+			_ciplusMesaj(reusit, text)
 
 	def pinScris(self, slot, text):
 		if text is None:

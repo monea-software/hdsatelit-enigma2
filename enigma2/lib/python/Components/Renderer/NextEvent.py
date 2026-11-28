@@ -1,37 +1,74 @@
 # -*- coding: utf-8 -*-
-# Luat din sursele GPL enigma2 (OE-Alliance), commitul 29d951a6ec2e (12.11.2026), fisierul lib/python/Components/Renderer/NextEvent.py.
-# Licenta GPL-2.0 (ca enigma2); notele autorilor de mai jos raman neschimbate. Adus in imaginea HD Satelit (lotul TOT,
-# 12.11.2026) ca temele si pluginurile scrise pentru imaginile OE-Alliance sa-si gaseasca toate componentele.
-#######################################################################
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
 #
-#
-#    Next Event Renderer for Dreambox/Enigma-2
-#    Coded by Vali (c)2010
-#    Support: www.dreambox-tools.info
-#
-#
-#  This plugin is licensed under the Creative Commons
-#  Attribution-NonCommercial-ShareAlike 3.0 Unported License.
-#  To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-sa/3.0/
-#  or send a letter to Creative Commons, 559 Nathan Abbott Way, Stanford, California 94305, USA.
-#
-#  Alternatively, this plugin may be distributed and executed on hardware which
-#  is licensed by Dream Multimedia GmbH.
-#
-#
-#  This plugin is NOT free software. It is open source, you are allowed to
-#  modify it (if you keep the license), but it may not be commercially
-#  distributed other than under the conditions noted above.
-#
-#
-#######################################################################
+# NextEvent.py: randatorul cu emisiunea care urmeaza pe canalul ales, cu numele pe care il cer temele scrise pentru
+# OE-Alliance (render="NextEvent", de obicei cu source="ServiceEvent", in lista de canale, sub descrierea emisiunii).
+# Scris de HD Satelit de la zero pe 24.11.2026 (TODO 24.11 17:35), in locul fisierului adus pe 12.11, care avea o licenta
+# necomerciala (vezi doc/REMOVED-FILES). Tema vede aceeasi purtare: o eticheta (eLabel) cu atributele obisnuite si textul
+#   Urmează: 21:30  45 min
+#   Titlul emisiunii
+# iar cand ghidul nu are emisiunea urmatoare, textul e gol. Fara exceptii: o sursa fara serviciu, un serviciu fara ghid,
+# radioul, fluxurile si o sursa nepotrivita dau text gol. In plus: merge si cu serviciul care ruleaza
+# (source="session.CurrentService"). Grupurile de alternative din favorite le rezolva ghidul (handleGroup din epgcache.cpp).
+import time
 
-from time import localtime
+from enigma import eEPGCache, eLabel, iServiceInformation
 
-from enigma import eEPGCache, eLabel
-
-from Components.VariableText import VariableText
 from Components.Renderer.Renderer import Renderer
+from Components.VariableText import VariableText
+
+# lookupEvent: tipul 1 = prima emisiune care incepe dupa momentul dat (deci cea de dupa emisiunea de acum, sau cea care vine
+# dupa o pauza din ghid); momentul -1 = acum
+_URMATOAREA = 1
+_ACUM = -1
+
+
+def referintaSursei(sursa):
+	"""Referinta serviciului din sursa, ca sir, sau "" cand sursa nu are un serviciu bun pentru ghid."""
+	try:
+		serviciu = getattr(sursa, "service", None)
+		if not serviciu:
+			return ""
+		if hasattr(serviciu, "toString"):
+			# referinta (ServiceEvent, lista de canale); la ServiceEvent info None = serviciu necunoscut
+			if hasattr(sursa, "info") and getattr(sursa, "info") is None:
+				return ""
+			return serviciu.toString() or ""
+		# serviciul care ruleaza (session.CurrentService): referinta se cere informatiei lui
+		info = serviciu.info() if callable(getattr(serviciu, "info", None)) else None
+		if info is None:
+			return ""
+		return info.getInfoString(iServiceInformation.sServiceref) or ""
+	except Exception:
+		return ""
+
+
+def textUrmatoare(inceput, durata, titlu):
+	"""Cele doua randuri pentru emisiunea urmatoare sau "" cand lipseste ceva (titlul, ora sau durata)."""
+	titlu = (titlu or "").strip()
+	if not titlu or inceput is None or durata is None:
+		return ""
+	try:
+		ora = time.strftime("%H:%M", time.localtime(int(inceput)))
+		minute = max(0, int(durata)) // 60
+	except (TypeError, ValueError, OverflowError, OSError):
+		return ""
+	return "%s %s  %d min\n%s" % (_("It follows:"), ora, minute, titlu)
+
+
+def urmatoareaDinGhid(ref):
+	"""(inceput, durata, titlu) pentru emisiunea de dupa cea de acum, sau None."""
+	if not ref:
+		return None
+	try:
+		gasite = eEPGCache.getInstance().lookupEvent(["BDT", (ref, _URMATOAREA, _ACUM)])
+	except Exception:
+		return None
+	for rand in gasite or ():
+		if rand and len(rand) >= 3:
+			return rand[0], rand[1], rand[2]
+	return None
 
 
 class NextEvent(Renderer, VariableText):
@@ -40,18 +77,10 @@ class NextEvent(Renderer, VariableText):
 	def __init__(self):
 		Renderer.__init__(self)
 		VariableText.__init__(self)
-		self.epgcache = eEPGCache.getInstance()
 
 	def changed(self, what):
-		ref = self.source.service
-		info = ref and self.source.info
-		if info is None:
+		if what and what[0] == self.CHANGED_CLEAR:
 			self.text = ""
 			return
-		ENext = ""
-		eventNext = self.epgcache.lookupEvent(["IBDCTSERNX", (ref.toString(), 1, -1)])
-		if eventNext and eventNext[0][4]:
-			t = localtime(eventNext[0][1])
-			duration = "%d min" % (eventNext[0][2] / 60)
-			ENext = "%s %02d:%02d  %s\n%s" % (_("It follows:"), t[3], t[4], duration, eventNext[0][4])
-		self.text = ENext
+		gasita = urmatoareaDinGhid(referintaSursei(self.source))
+		self.text = textUrmatoare(*gasita) if gasita else ""

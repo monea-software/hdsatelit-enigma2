@@ -158,6 +158,16 @@ def _arataMesaj(text):
 		print("[HdsSubtitrareLipsa] mesajul nu s-a putut arata: %s" % e)
 
 
+def _mesajPornit():
+	"""The setting "Mesaj când canalul nu trimite subtitrarea" (config.hds_piste.mesaj_lipsa,
+	Components/HdsPisteLimbi.py); on when it cannot be read, as before the setting existed."""
+	try:
+		from Components import HdsPisteLimbi
+		return HdsPisteLimbi.mesajLipsa()
+	except Exception:
+		return True
+
+
 def _temporizator(functie):
 	from enigma import eTimer
 	t = eTimer()
@@ -169,8 +179,9 @@ class Paza(object):
 	"""O subtitrare teletext aleasa: verificata la ASTEPTARE_S, apoi la VERIFICARE_S cat nu se stie, pana la
 	RENUNTA_S. Mesajul o singura data pe (canal, pagina) cat ruleaza interfata."""
 
-	def __init__(self, arata=None, temporizator=None, nucleu_dat=None, ceas=None):
+	def __init__(self, arata=None, temporizator=None, nucleu_dat=None, ceas=None, pornit=None):
 		self.arata = arata or _arataMesaj
+		self.pornit = pornit or _mesajPornit
 		self.nucleu_dat = nucleu_dat
 		self.ceas = ceas or time.monotonic
 		self.observator = Observator(self.ceas)
@@ -218,7 +229,8 @@ class Paza(object):
 				return
 			self.aratate.add(semn)
 			print("[HdsSubtitrareLipsa] pagina %s aleasa, dar canalul nu o trimite" % pagina)
-			self.arata(text_nu_vine(pagina))
+			if self.pornit():
+				self.arata(text_nu_vine(pagina))
 
 
 _PAZA = None

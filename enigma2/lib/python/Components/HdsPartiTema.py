@@ -182,9 +182,66 @@ def dupaInstalare(nume, reusit, session=None, plugins=None):
 	anunta(nume, session)
 
 
+# AS140 (0.8.0): tema straina care cere sursa session.OAWeather sau convertoarele OAWeather (MERCUS-FHD, Vu+ Uno 4K, 23.11.2026):
+# fara pluginul OAWeather ecranele ei cadeau pe aspectul de rezerva ("stil amestecat"). Pluginul e in feedul extern; vine singur,
+# in liniste, prin aceeasi coada; sursa lui apare la urmatoarea pornire a interfetei.
+PACHET_VREME = "enigma2-plugin-extensions-oaweather"
+DOSAR_VREME = "/usr/lib/enigma2/python/Plugins/Extensions/OAWeather"
+SEMN_VREME = b"OAWeather"
+MAX_XML_VREME = 8 * 1024 * 1024
+
+
+def cereVremea(dosar_tema):
+	"""fisierele .xml din radacina temei (si din mySkin/) pomenesc OAWeather"""
+	for sub in ("", "mySkin"):
+		d = os.path.join(dosar_tema, sub)
+		try:
+			nume = sorted(os.listdir(d))
+		except OSError:
+			continue
+		for n in nume:
+			cale = os.path.join(d, n)
+			if not n.endswith(".xml") or not os.path.isfile(cale):
+				continue
+			try:
+				if os.path.getsize(cale) > MAX_XML_VREME:
+					continue
+				with open(cale, "rb") as f:
+					if SEMN_VREME in f.read():
+						return True
+			except (IOError, OSError):
+				continue
+	return False
+
+
+def vremeaInstalata():
+	d = _c(DOSAR_VREME)
+	return os.path.isfile(os.path.join(d, "plugin.py")) or os.path.isfile(os.path.join(d, "plugin.pyc"))
+
+
+def dupaPornireVremea(valoare, M=None):
+	"""tema a pornit bine: pluginul OAWeather pus in coada, daca tema il cere si lipseste. Intoarce pachetul cerut sau None."""
+	try:
+		nume = numeTema(valoare)
+		if nume is None or vremeaInstalata() or not cereVremea(os.path.join(_c(DOSAR_SKINURI), nume)):
+			return None
+		if M is None:
+			from Components import HdsModuleLipsa as M
+
+		def dupa(reusit):
+			_jurnal("OAWeather pentru %s: %s" % (nume, "instalat, sursa vine la urmatoarea pornire a interfetei" if reusit
+				else "nu s-a instalat"))
+		return M.cerePachet(PACHET_VREME, "tema-vreme:" + nume, nume, dupa=dupa)
+	except Exception as e:
+		_jurnal("dupaPornireVremea: %r" % (e,))
+		return None
+
+
 def dupaPornire(valoare, M=None):
 	"""tema a pornit bine: pluginul de setari pus in coada, daca tema il cere si lipseste. Intoarce pachetul cerut sau None.
-	Cu pluginul deja pe receptor (de pilda adus de alta tema): numai mesajul, o singura data pe tema."""
+	Cu pluginul deja pe receptor (de pilda adus de alta tema): numai mesajul, o singura data pe tema. OAWeather, daca tema il
+	cere (dupaPornireVremea), separat."""
+	dupaPornireVremea(valoare, M)
 	try:
 		nume = deCerut(valoare)
 		if nume is None:

@@ -11,6 +11,12 @@ _activ = None
 _vechi = []
 _proba = {"text": "", "lucreaza": False, "pana": 0}
 _pagini = {}
+LIPSA_S = 10		# seconds the missing-key message stays on the TV
+LIPSA_DIN_NOU_S = 600.0	# and again after this long while the key is still missing (or after speech is turned on again)
+# A reader that gets no sound right after a zap is tried again: some drivers give nothing to a PES filter opened while
+# the decoder starts (ZGEMMA H8.2H Plus), and a slow internet stream may need more than the reader waits (measured:
+# 8 s to PLAYING). Pauses before each new try; after the last one the channel is left alone until the next zap.
+PAUZE_REINCERCARE = (2.0, 4.0, 8.0)
 
 
 def textCurent(v):
@@ -189,6 +195,8 @@ class Legatura(object):
 		self.ultima_auto = None
 		self.pcm = bytearray()
 		self.cadre = None
+		self.lipsa = None
+		self.lipsa_dupa = 0
 		self.timer = eTimer()
 		self.timer.callback.append(self.pasSigur)
 		from Components.config import config
@@ -242,6 +250,22 @@ class Legatura(object):
 			self.widget.clearPage()
 			self.widget.hide()
 
+	def mesajLipsa(self):
+		# Speech on, no key for any service: a message on the TV says where to put it, instead of an empty screen.
+		# Only while the person is watching (the bar is the dialog in front, not the screen with the code), not while
+		# a key check started from the web page runs; once, then again after LIPSA_DIN_NOU_S or after Off and On.
+		canal = getattr(self, "lipsa", None)
+		acum = time.monotonic()
+		if canal is None or acum < V._cheie_asteptata or acum < getattr(self, "lipsa_dupa", 0):
+			return
+		if getattr(self.owner.session, "current_dialog", self.owner) is not self.owner:
+			return
+		self.lipsa_dupa = acum + LIPSA_DIN_NOU_S
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(V.textLipsaCheie(), MessageBox.TYPE_INFO, LIPSA_S, "HdsVorbireCheie")
+		V._jurnal("missing key message shown on %s" % canal)
+
 	def restauraNativa(self):
 		origine = getattr(self, "origine_nativa", None)
 		self.origine_nativa = None
@@ -254,11 +278,23 @@ class Legatura(object):
 		self.ultima_auto = None
 
 	def pasSigur(self):
+		self.lipsa = None
 		try:
 			self.pas()
-		except Exception:
+		except Exception as e:
 			self.suspenda()
 			self.motiv = "sunet"
+			try:
+				import os
+				import traceback
+				f = traceback.extract_tb(e.__traceback__)[-1]
+				self.jurnalSunet("step", "%s: %s at %s:%d" % (e.__class__.__name__, str(e)[:120], os.path.basename(f[0]), f[1]))
+			except Exception:
+				pass
+		try:
+			self.mesajLipsa()
+		except Exception as e:
+			self.jurnalSunet("message", "%s: %s" % (e.__class__.__name__, str(e)[:120]))
 
 	def suspenda(self):
 		if not getattr(self, "suspendat", False):
@@ -284,6 +320,8 @@ class Legatura(object):
 			self.suspenda()
 			if not s.pornit.value:
 				self.canal_prioritate = None
+				self.lipsa_dupa = 0
+				self.anulat = self.esec = None
 			return
 		viteza = getattr(self.owner, "seekstate", None)
 		if isinstance(viteza, tuple) and viteza[:3] != (0, 0, 0):
@@ -315,8 +353,14 @@ class Legatura(object):
 		if not proba and mem != P.VORBIRE and P.faraSubtitrariNiciodata():
 			self.opreste()
 			return
-		if not proba and (mem == P.OPRIT or self.anulat == canal):
+		if self.anulat and self.anulat != canal:
+			self.anulat = None		# a channel left alone is tried again after a zap away and back
+		if not proba and mem == P.OPRIT:
 			self.opreste()
+			return
+		if not proba and self.anulat == canal:
+			self.opreste()
+			self.motiv = "sunet"
 			return
 		pid = RD.pid_audio(service)
 		demux = RD.demux_serviciu(service)
@@ -343,6 +387,7 @@ class Legatura(object):
 			if getattr(self, "canal_prioritate", None) != canal:
 				self.invalideazaNativa()
 				self.canal_prioritate = canal
+				self.esec = None		# the failures of another visit do not count here
 				self.text_post = ""
 				self.index_pista = self.pista_la = 0
 				self.origine_nativa = (canal, self.owner.subtitles_enabled, getattr(self.owner, "selected_subtitle", None))
@@ -375,6 +420,10 @@ class Legatura(object):
 				return
 		online = caleAudio(canal, ref.getPath(), pid, demux)
 		nou = (canal, pid, demux, s.serviciu.value, tinta, cfg["recunoastere"], cfg["traducere"])
+		esec = getattr(self, "esec", None)
+		if self.semn != nou and not proba and esec and esec[0] == canal and time.monotonic() < esec[2]:
+			self.motiv = "sunet"
+			return
 		if self.semn != nou:
 			proba_pana = self.proba_pana
 			self.opreste()
@@ -388,11 +437,19 @@ class Legatura(object):
 				return
 			if not any(c.get("cheie") for c in cfg["recunoastere"]):
 				self.motiv = "cheie"
+				if not proba:
+					self.lipsa = canal
 				return
 			# For DVB use only the service demux, with a separately opened PES filter.
 			# No guessing of demux0: it might belong to a recording or another channel.
 			if online is None:
 				self.motiv = "sunet"
+				# right after a zap the PMT (pid, demux) is not there yet: logged only when it lasts
+				fara = getattr(self, "fara_cale", None)
+				if not fara or fara[0] != canal:
+					self.fara_cale = (canal, time.monotonic())
+				elif time.monotonic() - fara[1] > 5:
+					self.jurnalSunet(canal, "no audio path: pid=%s demux=%s path=%s" % (pid, demux, ref.getPath()[:60]))
 				return
 			self.lucrator = V.Lucrator(cfg)
 			self.lucrator.fir.start()
@@ -404,6 +461,7 @@ class Legatura(object):
 				self.cititor = V.CititorPlayer(self.lucrator)
 				self.cititor.fir.start()
 				self.tap_info = service.info()
+				self.tap_stat = {"apeluri": 0, "goale": 0, "octeti": 0, "fel": ""}
 				self.cadre = True
 			self.semn = nou
 			self.pornit_la = time.monotonic()
@@ -421,9 +479,17 @@ class Legatura(object):
 		if not proba:
 			self.nativ_ok = True
 		if self.cititor and self.cititor.motiv:
+			detaliu = getattr(self.cititor, "detaliu", "") or self.cititor.motiv
+			if isinstance(self.cititor, V.CititorPlayer) and getattr(self, "tap_stat", None):
+				detaliu += "; tap %(apeluri)d reads, %(goale)d empty, %(octeti)d bytes, codec %(fel)s" % self.tap_stat
+			self.jurnalSunet(canal, detaliu)
 			self.bifat = self.semn
 			self.opreste()
-			self.anulat = canal
+			n = esec[1] + 1 if esec and esec[0] == canal else 1
+			if not proba and n <= len(PAUZE_REINCERCARE):
+				self.esec = (canal, n, time.monotonic() + PAUZE_REINCERCARE[n - 1])
+			else:
+				self.anulat = canal
 			self.motiv = "sunet"
 			return
 		if self.cadre is not None:
@@ -436,6 +502,7 @@ class Legatura(object):
 				text, delay, serv = rez[:3]
 			except queue.Empty:
 				break
+			self.esec = None		# sound reached the recogniser: later failures start counting again
 			if text:
 				if proba:
 					_proba.update(text=text, lucreaza=False)
@@ -448,6 +515,12 @@ class Legatura(object):
 				self.motiv = "serviciu"
 		if self.text and time.monotonic() >= self.expira:
 			self.sterge()
+
+	def jurnalSunet(self, canal, detaliu):
+		# One log line per channel and reason: why speech subtitles have no sound (support and model ports).
+		if getattr(self, "spus_sunet", None) != (canal, detaliu):
+			self.spus_sunet = (canal, detaliu)
+			V._jurnal("no sound on %s: %s" % (canal, detaliu))
 
 	def invalideazaNativa(self):
 		self.epoca_nativa = getattr(self, "epoca_nativa", 0) + 1
@@ -484,6 +557,14 @@ class Legatura(object):
 			self.motiv = "nucleu"
 			return
 		d = self.tap_info.getInfoObject(cod)
+		st = getattr(self, "tap_stat", None)
+		if st is not None:
+			st["apeluri"] += 1
+			if isinstance(d, dict) and d:
+				st["octeti"] += len(d.get("date") or b"")
+				st["fel"] = d.get("fel") or st["fel"]
+			else:
+				st["goale"] += 1
 		if isinstance(d, dict):
 			if d.get("salt"):
 				self.invalideazaNativa()
@@ -500,16 +581,24 @@ class Legatura(object):
 				d["versiune"] = self.lucrator.versiune
 				V.puneUltima(self.cititor.intrare, d)
 
-	def afiseaza(self, text, delay):
+	def arata(self, text):
+		# The window and the widget visible first (above the service's own subtitle widget), then the text.
 		from enigma import eSubtitleWidget, ePoint, eSize
 		window = self.owner.subtitle_window
 		if self.widget is None:
 			self.widget = eSubtitleWidget(window.instance)
 			self.widget.move(ePoint(0, 0))
 			self.widget.resize(eSize(window.instance.size().width(), window.instance.size().height()))
+			self.widget.setZPosition(1)
+		window.show()
+		# measured on ZGEMMA H8.2H Plus: the window may say shown while its instance is hidden (isVisible 0)
+		if not window.instance.isVisible():
+			window.instance.show()
+		self.widget.show()
+		self.widget.showSample(text)
+
+	def afiseaza(self, text, delay):
 		self.text, self.intarziere = text, delay
 		self.expira = time.monotonic() + min(8, max(3.2, len(text) / 20.0))
-		self.widget.showSample(text + ("\n~%.0f s" % delay if time.monotonic() - self.pornit_la < 8 else ""))
-		self.widget.show()
-		window.show()
+		self.arata(text + ("\n~%.0f s" % delay if time.monotonic() - self.pornit_la < 8 else ""))
 		self.motiv = "ascult"

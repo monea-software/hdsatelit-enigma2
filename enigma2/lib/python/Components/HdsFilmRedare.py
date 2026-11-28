@@ -169,6 +169,19 @@ TXT_CANAL_NIMIC = N_("Canalul nu trimite imagine sau sunet pe care receptorul s�
 TXT_CANAL_NU_ACUM = N_("Canalul nu poate porni acum.")
 TXT_CANAL_PORNESTE = N_("Canalul pornește imediat.")
 TXT_CANAL_FARA_RETEA = N_("Canalele de pe internet au nevoie de o componentă de rețea care lipsește din programul receptorului.")
+# 0.8.0 FX3: the server of a stream answered with an HTTP error, or its name was not found
+# (lib/service/servicemp3.cpp hdsDetaliuFlux: "stream-error http-407", "stream-error dns"); the person thought the
+# receiver was at fault
+TXT_HTTP_REFUZ = N_("Serverul a refuzat legătura (HTTP %d). Verifică la furnizor dacă linia ta este activă.")
+TXT_HTTP_LIPSA = N_("Serverul nu mai are acest flux (HTTP %d). Lista poate fi veche: ia-o din nou de la furnizor.")
+TXT_HTTP_SERVER = N_("Serverul are o problemă (HTTP %d). Internetul tău merge; încearcă mai târziu.")
+TXT_HTTP_ALTA = N_("Serverul a răspuns cu eroarea HTTP %d. Încearcă mai târziu sau întreabă furnizorul.")
+TXT_DNS = N_("Numele serverului nu se găsește. Verifică adresa din listă și internetul receptorului.")
+# 0.8.0 DRM1: a DVB-I stream found encrypted with DRM (Widevine/PlayReady in the manifest) by the home check
+# (Components/HdsDvbIIncercare.DRM, stored in HdsDvbIDate); GStreamer has no decryptor, the person saw "another error"
+TXT_DRM_TITLU = N_("Canal protejat (DRM)")
+TXT_DRM = N_("Televiziunea trimite acest canal criptat (DRM), iar receptorul nu îl poate decripta.")
+_HTTP = re.compile(r"\bhttp-(\d{3})\b")
 PENTRU_CANAL = {
 	TXT_REFUZ: TXT_CANAL_REFUZ,
 	TXT_FARA_IMAGINE: TXT_CANAL_REFUZ,
@@ -264,13 +277,48 @@ def _fourcc(capuri):
 	return ""
 
 
+def _camp(c, cheie):
+	"""Valoarea unui camp din capurile fara spatii („mpegversion=(int)4” -> „4”, fara tip si ghilimele, litere mici), sau „”."""
+	m = re.search(r"(?:^|,)" + re.escape(cheie) + r"=(?:\([^)]*\))?([^,;]*)", c)
+	return m.group(1).strip('"').lower() if m else ""
+
+
+# audio/mpeg cu mpegversion 2 sau 4: profilul din capuri (aacparse, qtdemux, tsdemux) -> numele aratat
+PROFILE_AAC = {
+	"lc": "AAC",
+	"main": "AAC Main",
+	"he-aac": "HE-AAC",
+	"he-aac-v1": "HE-AAC",
+	"he-aac-v2": "HE-AAC v2",
+	"ssr": "AAC SSR",
+	"ltp": "AAC LTP",
+}
+STRATURI_MPEG = {"1": "MP1", "2": "MP2", "3": "MP3"}
+VERSIUNI_VIDEO_MPEG = {"1": "MPEG-1", "2": "MPEG-2", "4": "MPEG-4"}
+
+
+def _numeMpeg(c):
+	"""audio/mpeg si video/mpeg spun mai multe formate: numele dupa mpegversion, layer si profil (MP3, MP2, AAC, AAC Main,
+	HE-AAC; MPEG-1, MPEG-2, MPEG-4), sau „” cand campurile lipsesc (ramane numele general din tabel)."""
+	if c == "audio/mpeg" or c.startswith("audio/mpeg,"):
+		versiune = _camp(c, "mpegversion")
+		if versiune == "1":
+			return STRATURI_MPEG.get(_camp(c, "layer"), "")
+		if versiune in ("2", "4"):
+			return PROFILE_AAC.get(_camp(c, "profile") or _camp(c, "base-profile"), "AAC")
+		return ""
+	if (c == "video/mpeg" or c.startswith("video/mpeg,")) and _camp(c, "systemstream") not in ("true", "1"):
+		return VERSIUNI_VIDEO_MPEG.get(_camp(c, "mpegversion"), "")
+	return ""
+
+
 def numeFormat(capuri):
 	"""Numele formatului dintr-un tip GStreamer; o pista AVI necunoscuta dupa codul ei de patru litere; „” pentru un tip
 	fara nume cunoscut (audio/x-unknown, un tip nou): pe ecran el devine „un format necunoscut”."""
 	c = _fara_spatii(capuri)
 	if not c:
 		return ""
-	nume = _cauta(FORMATE_VIDEO, c) or _cauta(FORMATE_SUNET, c)
+	nume = _numeMpeg(c) or _cauta(FORMATE_VIDEO, c) or _cauta(FORMATE_SUNET, c)
 	if nume:
 		return nume
 	return _fourcc(c)
@@ -308,11 +356,12 @@ def _sunet(nume):
 	return _t(TXT_FORMAT_SUNET) % nume if nume else _t(TXT_SUNET_NECUNOSCUT)
 
 
-def verdict(motiv, codec_video="", codec_sunet="", flux=False, canal=False):
+def verdict(motiv, codec_video="", codec_sunet="", flux=False, canal=False, server=True):
 	"""Verdictul pentru motivul din sUser+15 (None cand nu e nimic de spus). codec_video si codec_sunet sunt etichetele
 	din fisier (sTagVideoCodec, sTagAudioCodec), folosite cand tipul fara drum nu se stie; flux: filmul vine de pe
 	internet (o eroare de citire e atunci reteaua, nu stick-ul); canal: un canal din lista de canale (bara principala),
-	deci frazele spun 'canalul', nu 'filmul' (PENTRU_CANAL)."""
+	deci frazele spun 'canalul', nu 'filmul' (PENTRU_CANAL); server: the stream comes straight from its server (not
+	through a relay on the receiver, whose own HTTP answer is not the server's)."""
 	_t = _tCanal if canal else _tFilm
 	fel, capuri, video, detaliu = desparte(motiv)
 	if not fel:
@@ -355,6 +404,10 @@ def verdict(motiv, codec_video="", codec_sunet="", flux=False, canal=False):
 		return Verdict(fel, True, _t(TXT_REFUZ), _t(TXT_FORMATE_NECUNOSCUTE), detaliu)
 	if fel == "format":
 		return Verdict(fel, True, _t(TXT_REFUZ), _t(TXT_NEDESCHIS), detaliu)
+	if flux and server and fel in ("fisier", "eroare"):
+		server = textServerFlux(detaliu)
+		if server:
+			return Verdict(fel, True, _t(TXT_REFUZ), server, detaliu)
 	if fel == "fisier":
 		return Verdict(fel, True, _t(TXT_REFUZ), _t(TXT_RETEA) if flux else _t(TXT_NECITIT), detaliu)
 	if fel == "pornire":
@@ -364,6 +417,27 @@ def verdict(motiv, codec_video="", codec_sunet="", flux=False, canal=False):
 	if fel == "pipeline":
 		return Verdict(fel, True, _t(TXT_REFUZ), _t(TXT_FARA_REDARE), "")
 	return Verdict(fel, True, _t(TXT_REFUZ), formate, detaliu)
+
+
+def textServerFlux(detaliu):
+	"""The sentence for a stream whose server answered with an HTTP error or whose name was not found (the detail of
+	sUser+15 from servicemp3: "stream-error http-NNN" / "stream-error dns"), or "" when the detail says neither."""
+	d = detaliu or ""
+	m = _HTTP.search(d)
+	if m:
+		cod = int(m.group(1))
+		if cod in (401, 402, 403, 407, 451):
+			return _t(TXT_HTTP_REFUZ) % cod
+		if cod in (404, 410):
+			return _t(TXT_HTTP_LIPSA) % cod
+		if 500 <= cod <= 599:
+			return _t(TXT_HTTP_SERVER) % cod
+		if 300 <= cod <= 499:
+			return _t(TXT_HTTP_ALTA) % cod
+		return ""
+	if re.search(r"\bstream-error dns\b", d):
+		return _t(TXT_DNS)
+	return ""
 
 
 def verdictRefacere(tehnic="", canal=False):
@@ -391,10 +465,33 @@ def verdictDinInfo(info, cale="", canal=False):
 	except Exception as e:
 		print("[HdsFilmRedare] motivul nu se poate citi: %s" % e)
 		return None
-	v = verdict(motiv, video, sunet, esteFlux(cale) or canal, canal)
+	v = verdict(motiv, video, sunet, esteFlux(cale) or canal, canal, not _adresaLocala(cale))
 	if v is not None and v.refuza and v.fel not in ("decodor", "pipeline") and _releuServer(cale):
 		v = verdictServer(v, cale)
+	if v is not None and v.refuza and v.fel not in ("decodor", "pipeline") and esteFlux(cale) and _protejatDrm(cale):
+		v = verdictDrm(v.tehnic)
 	return v
+
+
+def verdictDrm(tehnic=""):
+	"""DRM1: the stream of a DVB-I channel is encrypted with DRM (found by the home check): "Canal protejat (DRM)"
+	instead of the generic refusal; felul "drm" is not transient, so Components/HdsIptvReconectare does not retry."""
+	return Verdict("drm", True, _t(TXT_DRM_TITLU), _t(TXT_DRM), tehnic)
+
+
+def _protejatDrm(cale):
+	try:
+		from Components import HdsDvbIDate as D
+		return D.protejatDrm(cale)
+	except Exception as e:
+		print("[HdsFilmRedare] DRM: %s" % type(e).__name__)
+		return False
+
+
+def _adresaLocala(cale):
+	"""The stream goes through a relay on the receiver (127.0.0.1 / localhost): the HTTP answer is the relay's."""
+	c = (cale or "").replace("%3a", ":").replace("%3A", ":").lower()
+	return "://127." in c or "://localhost" in c or "://[::1]" in c
 
 
 def _releuServer(cale):

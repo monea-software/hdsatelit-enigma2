@@ -126,8 +126,10 @@ def campuri(fel):
     if fel == 'automat':
         return [('canal', _('Canalul de pornire'), 'alegere', None)]
     if fel == 'banda':
+        # UHF9: ultimul canal dupa tara receptorului (48 unde banda 700 MHz e a telefoniei mobile)
+        fara_700 = liste.ultimul_canal_uhf() == liste.ULTIMUL_CANAL_FARA_700
         return [('cu_vhf', _('Și banda VHF (canalele 5-12)'), 'lista',
-                 [('da', _('Da')), ('nu', _('Nu, numai UHF 21-69'))])]
+                 [('da', _('Da')), ('nu', _('Nu, numai UHF 21-48') if fara_700 else _('Nu, numai UHF 21-69'))])]
     if fel == 'regiune':
         return [('regiune', _('Regiunea sau operatorul'), 'alegere', None)]
     return [('sistem', _('Sistem'), 'lista', SISTEME),
@@ -219,12 +221,14 @@ def pregateste(fel, valori, nimmanager=None, clasa=None, cale_xml=None, cale_rom
             note.append(_('Pe acest canal emite MUX1 în: %s.') % liste.text_judete(judete))
     elif fel == 'banda':
         cu_vhf = valori.get('cu_vhf', 'da') != 'nu'
+        fara_700 = liste.ultimul_canal_uhf() == liste.ULTIMUL_CANAL_FARA_700
         tps = liste.maturare_terestru(cu_vhf)
         flags = retea
         # fiecare canal se incearca DVB-T2 si DVB-T (mai jos), deci timpul cel mai lung e dublu
         incercari = len(tps) * (2 if liste.nucleul_stie_dvbt2(clasa) else 1)
         text = _('Toată banda terestră: %d canale (%s), cel mult %d minute, plus rețelele găsite în semnal.') % (
-            len(tps), _('VHF 5-12 și UHF 21-69') if cu_vhf else _('UHF 21-69'), liste.minute_maxime(incercari))
+            len(tps), (_('VHF 5-12 și UHF 21-48') if cu_vhf else _('UHF 21-48')) if fara_700 else
+            (_('VHF 5-12 și UHF 21-69') if cu_vhf else _('UHF 21-69')), liste.minute_maxime(incercari))
     elif fel == 'regiune':
         lista = liste.gaseste(liste.liste_terestre(cale_xml, cale_romania), valori.get('regiune'))
         if lista is None:

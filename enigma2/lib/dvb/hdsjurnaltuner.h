@@ -46,6 +46,7 @@ struct Stare
 	int prins_o_data;       /* a fost semnal dupa ultima acordare (pentru "semnal pierdut") */
 	char parametri[160];
 	char lnb[160];
+	char frecventa[96];     /* frecventa citita la prinderea unei acordari a cautarii, pentru randul "prins" (0.8.0) */
 	hdsjurnal::Frana frana_reacordare;
 	hdsjurnal::Frana frana_pierdut;
 	Stare();
@@ -80,6 +81,11 @@ void prins(Stare &s, int slot, int snr_db100);
 void faraSemnal(Stare &s, int slot, int status, int nivel = -1);
 void pierdut(Stare &s, int slot);
 void refuzat(Stare &s, int slot, const char *apel, int err);
+/* la prinderea unei acordari a cautarii (0.8.0, lib/dvb/hdsscanreguli.h): frecventa intermediara ceruta si cea citita de la
+   driver (kHz, 0 = necitita), pragul, verdictul (PRINDERE_*); fara pierdere se scrie la coada randului "prins" urmator
+   ("frecventa citita C kHz, ceruta R kHz, abatere A kHz, prag P: aproape / departe / necunoscuta"), cu pierdere un rand
+   AVERT "prinsa departe de frecventa ceruta ... data pierduta" in locul lui */
+void frecventaCitita(Stare &s, int slot, long ceruta_khz, long citita_khz, long prag_khz, int verdict, bool pierduta);
 
 /* tunerul combinat: sistemul schimbat (spre = "DVB-C" / "DVB-T"), err = 0 reusit */
 void sistem(int slot, const char *spre, int err);
@@ -92,8 +98,9 @@ void textParametri(char *buf, size_t n, iDVBFrontendParameters *p);
 namespace hdsjscan
 {
 
-/* tabelele unui transponder prins, in ordinea din randul de jurnal (SC2, 15.11.2026) */
-enum Tabel { TABEL_PAT, TABEL_SDT, TABEL_PMT, TABEL_NIT, TABEL_BAT, NR_TABELE };
+/* tabelele unui transponder prins, in ordinea din randul de jurnal (SC2, 15.11.2026); VCT-ul ATSC (0.8.0) apare numai
+   cand transponderul are PSIP, deci in Europa randul ramane cum era */
+enum Tabel { TABEL_PAT, TABEL_SDT, TABEL_PMT, TABEL_NIT, TABEL_BAT, TABEL_VCT, NR_TABELE };
 
 /* starea jurnalului unei scanari (membru in eDVBScan) */
 struct Stare

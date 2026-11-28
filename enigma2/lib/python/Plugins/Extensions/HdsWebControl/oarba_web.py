@@ -10,11 +10,19 @@
 # aceeasi lista (fiecare transponder cunoscut al satelitului cu 'găsit' / 'se caută', cele noi cu 'nou'), apoi
 # 'Scanează canalele' (ServiceScan pe televizor, ca la celelalte scanari).
 #
+# 0.8.0 (AMR4, el bandido, LegitFTA post-110268): ca pe televizor, lista nu mai amesteca ce a gasit cautarea cu ce era
+# in lista satelitului: cat merge cautarea numai purtatoarele gasite pana acum (cea mai noua sus, cu sistemul) si
+# cronometrul in caseta Durata; la sfarsit sectiunile Noi (cu bifa „se păstrează”, din fabrica pusa), Deja în listă,
+# Căzute la acordare (dupa 'Scanează canalele') si Din listă, negăsite, fiecare cu numaratoarea.
+#
 # Rute (poarta comuna a HdsJsonResource; ce schimba ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF):
 #   GET  /api/oarba                                       alegerile, previzualizarea si starea cautarii
 #   POST /api/oarba-porneste?banda=&polarizari=&trepte=&rata_min=  porneste cautarea (pe televizor si ecranul ei)
 #   POST /api/oarba-opreste                               o opreste curat (dupa bucata de banda in curs)
 #   POST /api/oarba-scaneaza                              'Scanează canalele' pe televizor
+#   POST /api/oarba-pastreaza?cheie=&da=1|0               0.8.0 (AMR4): o purtatoare noua din raport se pastreaza sau
+#                                                         nu (merge sau nu la 'Scanează canalele'); aceeasi alegere ca
+#                                                         Albastru pe televizor
 #   POST /api/oarba-televizor                             deschide ecranul pe televizor
 #   GET  /oarba                                           pagina
 #
@@ -209,6 +217,39 @@ def opreste(sesiune=None, O=None):
 		"stare": stare(sesiune, O)}
 
 
+def pastreaza(argumente, sesiune=None, O=None):
+	"""0.8.0 (AMR4): bifa unei purtatori noi din raport (cheie = HdsCautareOarba.cheie_tp, da = 1 pastreaza, 0 nu)."""
+	O = _o(O)
+	cheie = (argumente or {}).get("cheie") or ""
+	da = (argumente or {}).get("da")
+	if da not in ("0", "1"):
+		return {"result": False, "message": _t("Valoare necunoscută pentru %s.") % "da", "stare": stare(sesiune, O)}
+	c = O.cautare()
+	if c.pastreaza(cheie, da == "1"):
+		return {"result": True, "message": "", "stare": stare(sesiune, O)}
+	ales = [r for s in (c.stare().get("sectiuni") or []) if s.get("cheie") == "noi" for r in s.get("randuri") or []
+		if r.get("cheie") == cheie]
+	if ales and ales[0].get("pastrat") == (da == "1"):
+		return {"result": True, "message": "", "stare": stare(sesiune, O)}
+	return {"result": False, "message": _t("Alegerea se poate schimba numai după căutare, la transponderele noi."),
+		"stare": stare(sesiune, O)}
+
+
+def argumente_alegere(request):
+	"""0.8.0 (AMR4): cheia si bifa din cererea /api/oarba-pastreaza, ca text."""
+	rez = {}
+	for cheie, valori in (getattr(request, "args", None) or {}).items():
+		if isinstance(cheie, bytes):
+			cheie = cheie.decode("utf-8", "replace")
+		if cheie not in ("cheie", "da"):
+			continue
+		v = (valori or [b""])[0]
+		if isinstance(v, bytes):
+			v = v.decode("utf-8", "replace")
+		rez[cheie] = str(v).strip()
+	return rez
+
+
 def scaneaza(sesiune=None, O=None):
 	O = _o(O)
 	if sesiune is None:
@@ -298,6 +339,15 @@ def rute(baza, resource, sesiune=None, O=None):
 		def render_GET(self, request):
 			return self.render_POST(request)
 
+	class PastreazaResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			return _cu_eroare(self, request, lambda: pastreaza(argumente_alegere(request), _sesiune(), O))
+
+		def render_GET(self, request):
+			return self.render_POST(request)
+
 	class TelevizorResource(baza):
 		schimbaCeva = True
 
@@ -319,6 +369,7 @@ def rute(baza, resource, sesiune=None, O=None):
 		b"oarba-porneste": PornesteResource(),
 		b"oarba-opreste": OpresteResource(),
 		b"oarba-scaneaza": ScaneazaResource(),
+		b"oarba-pastreaza": PastreazaResource(),
 		b"oarba-televizor": TelevizorResource(),
 	}
 	return api, PaginaResource()
@@ -383,6 +434,9 @@ PAGINA = """<!DOCTYPE html>
   .gasit{color:var(--text);}
   .nou{color:var(--galben);font-weight:600;}
   .cunoscut,.negasit,.neverificat{color:var(--text-slab);}
+  tr.sectiune td{color:var(--text);font-weight:700;padding-top:14px;}
+  td label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;}
+  td input[type=checkbox]{width:18px;height:18px;}
   .mesaj{margin:10px 0 0;line-height:1.45;font-size:.92rem;min-height:1.3em;}
   .eroare{color:#ffb4a8;}
   .ascuns{display:none;}
@@ -417,7 +471,7 @@ PAGINA = """<!DOCTYPE html>
     <p class="acum" id="stare" role="status"></p>
     <div class="bara"><div id="progres"></div></div>
     <table id="tabel" class="ascuns">
-      <thead><tr><th>Frecvența (MHz)</th><th>Polarizarea</th><th>Rata (kSym/s)</th><th>Starea</th></tr></thead>
+      <thead><tr><th>Frecvența (MHz)</th><th>Polarizarea</th><th>Rata (kSym/s)</th><th>Sistemul</th><th>Starea</th></tr></thead>
       <tbody id="randuri"></tbody>
     </table>
   </section>
@@ -490,21 +544,43 @@ function deseneaza(d){
   $("scaneaza").disabled = !c.poate_scana || d.standby;
   $("televizor").disabled = d.standby;
   Array.prototype.forEach.call(document.querySelectorAll("#campuri select"), function(s){ s.disabled = c.in_curs; });
-  var semn = JSON.stringify(c.randuri);
+  // 0.8.0 (AMR4): cat merge cautarea numai ce s-a gasit (cea mai noua sus); la sfarsit sectiunile, fiecare cu
+  // numaratoarea, iar la cele noi bifa (se pastreaza sau nu la 'Scanează canalele')
+  var sectiuni = (c.sectiuni && c.sectiuni.length) ? c.sectiuni : [{cheie: "gasite", titlu: "", randuri: c.gasite_acum || []}];
+  var semn = JSON.stringify(sectiuni);
   if(semn !== S.semn){
     S.semn = semn;
     var corp = $("randuri"); corp.textContent = "";
-    c.randuri.forEach(function(r){
-      var tr = el("tr", r.stare);
-      tr.appendChild(el("td", "numar", String(r.mhz)));
-      tr.appendChild(el("td", "", r.pol));
-      tr.appendChild(el("td", "numar", String(r.ksym)));
-      tr.appendChild(el("td", "", r.text_stare));
-      corp.appendChild(tr);
+    var n = 0;
+    sectiuni.forEach(function(s){
+      if(s.titlu && (s.randuri.length || s.cheie === "noi" || s.cheie === "in_lista")){
+        var cap = el("tr", "sectiune"), td = el("td", "", s.titlu);
+        td.colSpan = 5; cap.appendChild(td); corp.appendChild(cap); n++;
+      }
+      s.randuri.forEach(function(r){
+        var tr = el("tr", r.stare);
+        tr.appendChild(el("td", "numar", String(r.mhz)));
+        tr.appendChild(el("td", "", r.pol));
+        tr.appendChild(el("td", "numar", String(r.ksym)));
+        tr.appendChild(el("td", "", r.sistem || ""));
+        var st = el("td");
+        if(r.alege){
+          var l = el("label"), b = el("input");
+          b.type = "checkbox"; b.checked = !!r.pastrat; b.dataset.cheie = r.cheie;
+          b.addEventListener("change", function(){ pastreaza(this.dataset.cheie, this.checked); });
+          l.appendChild(b); l.appendChild(document.createTextNode(r.text_pastrat)); st.appendChild(l);
+        } else {
+          st.textContent = s.cheie === "in_lista" || s.cheie === "cazute" ? "" : r.text_stare;
+        }
+        tr.appendChild(st);
+        corp.appendChild(tr); n++;
+      });
     });
-    arata($("tabel"), c.randuri.length > 0);
+    arata($("tabel"), n > 0);
   }
   if((c.in_curs || ins.in_curs) && !S.urmarire){ S.urmarire = setTimeout(function(){ S.urmarire = null; citeste(); }, 1500); }
+  // 0.8.0 (AMR4): si dupa sfarsit, mai rar: alegerea facuta pe televizor si cazutele de dupa 'Scanează canalele' apar singure
+  else if((c.faza === "gata" || c.faza === "oprit") && !S.urmarire){ S.urmarire = setTimeout(function(){ S.urmarire = null; citeste(); }, 4000); }
 }
 function alese(){
   var q = new URLSearchParams();
@@ -525,6 +601,11 @@ function trimite(cale, q, text){
     if(d.stare){ deseneaza(d.stare); }
     return d;
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
+}
+function pastreaza(cheie, da){
+  var q = new URLSearchParams(); q.set("cheie", cheie); q.set("da", da ? "1" : "0");
+  S.semn = "";
+  trimite("/api/oarba-pastreaza", q, " ");
 }
 $("cauta").addEventListener("click", function(){ trimite("/api/oarba-porneste", alese(), "Se pornește căutarea..."); });
 $("opreste").addEventListener("click", function(){ trimite("/api/oarba-opreste", null, "Se oprește..."); });
@@ -562,6 +643,7 @@ TEXTE_PAGINA = {
 		N_("Frecvența (MHz)"),
 		N_("Polarizarea"),
 		N_("Rata (kSym/s)"),
+		N_("Sistemul"),
 		N_("Starea"),
 	),
 	"js": (

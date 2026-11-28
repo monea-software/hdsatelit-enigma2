@@ -604,8 +604,10 @@ class HdsDishMotor(Screen):
 			# motorul sta: EXIT-ul omului s-a terminat odata cu mutarea
 			self._inchis_de_om = False
 		# `showdish` oprit: starea s-a citit numai ca sa se invete viteza; nimic pe ecran
+		# `tacut` (MOT1): tinta e ultima pozitie prinsa cu semnal, deci o mutare de siguranta; panoul nu apare (nici peste
+		# ecranul de pornire); o mutare terminata fara semnal arata mesajul obisnuit
 		if not (self._panouPornit and stare["activ"] and self._in_fata) or self._inchis_de_om or \
-				self._fara_semnal == LINISTIT:
+				self._fara_semnal == LINISTIT or (self.AUTOMAT and stare.get("tacut")):
 			self._ascunde()
 			return MS_IN_ASTEPTARE
 		self._arata()
@@ -627,10 +629,17 @@ class HdsDishMotor(Screen):
 	def _scrie(self, stare):
 		self._pune("titlu", stare["stare_text"])
 
-		plecare = gradeText(stare["de_la_grade"])
-		if stare["de_la_nume"]:
-			plecare = "%s\n%s" % (plecare, stare["de_la_nume"])
-		self._pune("plecare", "%s\n%s" % (_("De la"), plecare))
+		if stare.get("plecare_nestiuta"):
+			# MOT1: fara "De la / necunoscut"; plecarea estimata (ultima pozitie prinsa cu semnal), cand e
+			if stare.get("plecare_estimata_grade") is not None:
+				self._pune("plecare", "%s\n%s" % (_("De la (estimat)"), gradeText(stare["plecare_estimata_grade"])))
+			else:
+				self._pune("plecare", "")
+		else:
+			plecare = gradeText(stare["de_la_grade"])
+			if stare["de_la_nume"]:
+				plecare = "%s\n%s" % (plecare, stare["de_la_nume"])
+			self._pune("plecare", "%s\n%s" % (_("De la"), plecare))
 
 		tinta = gradeText(stare["la_grade"])
 		if stare["la_nume"]:
@@ -640,6 +649,11 @@ class HdsDishMotor(Screen):
 		if stare.get("curent_text"):
 			# dupa o miscare manuala nici plecarea, nici tinta nu mai spun unde e antena (revizia m2)
 			self._pune("curent", stare["curent_text"])
+		elif stare["pozitie_grade"] is None and stare.get("pozitie_estimata_grade") is not None:
+			self._pune("curent", "%s\n%s" % (_("Acum (estimat)"), gradeText(stare["pozitie_estimata_grade"])))
+		elif stare["pozitie_grade"] is None and stare.get("plecare_nestiuta"):
+			# randul de jos spune deja ca pozitia de dinainte nu e cunoscuta
+			self._pune("curent", "")
 		elif stare["pozitie_grade"] is None:
 			self._pune("curent", _("Pozitia de plecare nu e cunoscuta"))
 		else:
@@ -668,10 +682,17 @@ class HdsDishMotor(Screen):
 				HdsGrade.numar(stare["grade_ramase"], 1), secundeText(stare["secunde_ramase"])))
 
 		bucati = []
-		if stare["comanda_text"]:
+		# octetii DiSEqC (E0 31 6E ...) numai in ecranul "Rotirea antenei" si in pagina web, nu pe panoul pus automat
+		# peste program (MOT1)
+		if stare["comanda_text"] and not self.AUTOMAT:
 			bucati.append(_("comanda %s") % stare["comanda_text"])
 		if stare["unghi_motor"] is not None:
-			bucati.append(_("unghi motor %s") % gradeText(stare["unghi_motor"]))
+			# unghiul motorului explicat: 0 = sudul locului, cu semn spre est sau spre vest
+			unghi = HdsGrade.numar(abs(stare["unghi_motor"]), 1)
+			if stare["unghi_motor"] >= 0:
+				bucati.append(_("antena la %s° spre est de sud") % unghi)
+			else:
+				bucati.append(_("antena la %s° spre vest de sud") % unghi)
 		if stare["grade_total"] is not None:
 			if stare.get("unghi_real"):
 				# gradele de motor (unghiul orar USALS), nu diferenta pozitiilor orbitale
@@ -706,6 +727,15 @@ class HdsDishMotor(Screen):
 			# cu arcul miscarii de dinainte; acum arata numai directia, daca se stie
 			self._deseneazaFaraTinta(panza, stare)
 			return
+		procent = stare["procent"]
+		if de_la is None and acum is None and stare.get("plecare_estimata_grade") is not None and \
+				stare.get("pozitie_estimata_grade") is not None:
+			# plecarea nestiuta, dar estimata din ultima pozitie prinsa cu semnal (MOT1): antena se misca pe arc dupa
+			# viteza motorului, ca la o mutare stiuta
+			de_la, acum = stare["plecare_estimata_grade"], stare["pozitie_estimata_grade"]
+		if procent < 0 and stare.get("procent_estimat", -1) >= 0:
+			# bara estimata (din drumul estimat sau, fara plecare, din timp)
+			procent = stare["procent_estimat"]
 		plecare = de_la is not None
 		if de_la is None:
 			de_la = la
@@ -720,7 +750,7 @@ class HdsDishMotor(Screen):
 		bolta = self._bolta(stare, de_la, la, acum)
 		panza.clear()
 		panza.fill(0, 0, self._s(PANZA_L), self._s(PANZA_I), FOND)
-		deseneazaRotirea(panza, self._factor, de_la, la, acum, stare["procent"], stare["a_ajuns"],
+		deseneazaRotirea(panza, self._factor, de_la, la, acum, procent, stare["a_ajuns"],
 			stare["secunde_trecute"], sateliti=self._satelitiPeArc(stare), antena=not fara_antena, plecare=plecare,
 			sosit=bool(stare["a_ajuns"]) and not stare.get("manual") and not stare.get("fara_semnal_la_sosire"),
 			eticheta=self._eticheta if self._font is not None else None, din_spate=din_spate, sud=sud, bolta=bolta)
@@ -755,7 +785,7 @@ class HdsDishMotor(Screen):
 		"""bolta intreaga pentru deseneazaRotirea (locul stabilit), sau None: geometria (HdsMotorStare.boltaVizibila) si
 		satelitii cu canale se iau o data pe miscare, unghiurile plecarii, tintei si pozitiei la fiecare cadru"""
 		# elevatia minima a desenului (setarea, 0.7.7) intra in cheie: schimbata, capetele se socotesc din nou
-		cheie = (stare["slot"], stare["de_la_orbital"], stare["la_orbital"], elevatieDesen())
+		cheie = (stare["slot"], stare["de_la_orbital"], stare["la_orbital"], stare.get("plecare_estimata_orbital", -1), elevatieDesen())
 		if getattr(self, "_bolta_cheie", None) != cheie:
 			self._bolta_cheie = cheie
 			b = boltaVizibila(stare["slot"])
@@ -764,7 +794,7 @@ class HdsDishMotor(Screen):
 				cu_canale = pozitiiCuCanale()
 				sateliti = []
 				for orbital, grade in satelitiPeArc(stare["slot"]):
-					if orbital in cu_canale and orbital not in (stare["de_la_orbital"], stare["la_orbital"]):
+					if orbital in cu_canale and orbital not in (stare["de_la_orbital"], stare["la_orbital"], stare.get("plecare_estimata_orbital", -1)):
 						unghi, afara = unghiPeBolta(grade, b)
 						if unghi is not None:
 							sateliti.append((unghi, afara))
@@ -782,11 +812,11 @@ class HdsDishMotor(Screen):
 	def _satelitiPeArc(self, stare):
 		"""gradele celorlalti sateliti din lista tunerului (fara plecare si tinta). Lista se ia o data pe miscare, nu de
 		doua ori pe secunda."""
-		cheie = (stare["slot"], stare["de_la_orbital"], stare["la_orbital"])
+		cheie = (stare["slot"], stare["de_la_orbital"], stare["la_orbital"], stare.get("plecare_estimata_orbital", -1))
 		if self._sateliti_cheie != cheie:
 			self._sateliti_cheie = cheie
 			self._sateliti = [grade for orbital, grade in satelitiPeArc(stare["slot"])
-				if orbital not in (stare["de_la_orbital"], stare["la_orbital"])]
+				if orbital not in (stare["de_la_orbital"], stare["la_orbital"], stare.get("plecare_estimata_orbital", -1))]
 		return self._sateliti
 
 

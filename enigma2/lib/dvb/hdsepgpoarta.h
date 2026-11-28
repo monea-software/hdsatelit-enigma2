@@ -1,4 +1,7 @@
-/* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
+/*
+ * Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+ * SPDX-License-Identifier: GPL-2.0-only
+ */
 #ifndef __lib_dvb_hdsepgpoarta_h
 #define __lib_dvb_hdsepgpoarta_h
 

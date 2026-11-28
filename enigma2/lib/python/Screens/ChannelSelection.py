@@ -226,6 +226,10 @@ class ChannelContextMenu(Screen):
 						menu.append(ChoiceEntryComponent(text = (_("Pornește pe acest canal"), boundFunction(self.hdsPornire, current.toString()))))
 				except Exception as e:
 					print("[ChannelContextMenu] canalul de pornire: %s" % type(e).__name__)
+				# 0.8.0 (FX1, AS203): the channel under the cursor renamed directly, without the way through the Editor
+				# (Components/HdsRedenumireCanal.py, the editor's functions; web: /editor-canale)
+				if hds_editor_disponibil():
+					menu.append(ChoiceEntryComponent(text = (_("Redenumește canalul"), self.hdsRedenumesteCanal)))
 			# 0.7.5 (LCS, Ozgur e-mailul 6323): tot aspectul listei intr-un ecran, la vedere (data/setup.xml hds_lista_canale)
 			menu.append(ChoiceEntryComponent(text = (_("Setări"), self.hdsSetari)))
 
@@ -377,6 +381,10 @@ class ChannelContextMenu(Screen):
 	def hdsRedenumesteBuchet(self):
 		# la fel: tastatura cu numele buchetului se deschide din lista, dupa ce meniul s-a inchis
 		self.close(("hdsRedenumesteBuchet",))
+
+	def hdsRedenumesteCanal(self):
+		# the keyboard with the channel name opens from the list, after the menu has closed
+		self.close(("hdsRedenumesteCanal",))
 
 	def hdsVariante(self):
 		# la fel: alegerea variantei se deschide din lista, dupa ce meniul s-a inchis
@@ -1105,6 +1113,9 @@ class ChannelSelectionEdit:
 		if close == ("hdsRedenumesteBuchet",):
 			hds_redenumeste_buchet(self)
 			return
+		if close == ("hdsRedenumesteCanal",):
+			hds_redenumeste_canal(self)
+			return
 		if close == ("hdsVariante",):
 			self.hdsAlegeVarianta()
 			return
@@ -1781,6 +1792,49 @@ def hds_redenumeste_buchet(csel):
 			return
 		from Components.HdsRedenumireBuchet import redenumeste
 		redenumeste(fisier, nume, reface, eroare)
+	csel.session.openWithCallback(numeNou, VirtualKeyBoard, title=_("Numele nou"), text=vechi)
+
+
+def hds_redenumeste_canal(csel):
+	"""MENU > Redenumește canalul (0.8.0, FX1): the keyboard with the current name, then the editor's rename
+	(Components/HdsRedenumireCanal.redenumeste): in a user bouquet only there, elsewhere in the receiver list. The list
+	stays on the same channel; only an error (the editor busy in the web interface, for instance) opens a window."""
+	ref = csel.getCurrentSelection()
+	if ref is None or not ref.valid() or ref.flags & (eServiceReference.isDirectory | eServiceReference.isMarker):
+		return
+	try:
+		info = eServiceCenter.getInstance().info(ref)
+		vechi = (info.getName(ref) if info is not None else "") or ""
+	except Exception:
+		vechi = ""
+	# DVB emphasis marks (0x86, 0x87) in broadcaster names are not part of the name the person edits
+	vechi = vechi.replace(u"\u0086", u"").replace(u"\u0087", u"")
+	try:
+		radacina = csel.getRoot()
+		radacina = radacina.toString() if radacina is not None else ""
+	except Exception:
+		radacina = ""
+	from Screens.VirtualKeyBoard import VirtualKeyBoard
+
+	def reface(*a):
+		try:
+			r = csel.getRoot()
+			if r is not None and r.valid():
+				csel.setRoot(r)
+			csel.setCurrentSelection(ref)
+		except Exception as e:
+			print("[ChannelSelection] lista dupa redenumirea canalului: %s" % e)
+
+	def eroare(text):
+		reface()
+		csel.session.open(MessageBox, text or _("Canalul nu s-a putut redenumi."), MessageBox.TYPE_ERROR, timeout=10)
+
+	def numeNou(nume=None):
+		nume = (nume or "").strip()
+		if not nume or nume == vechi:
+			return
+		from Components.HdsRedenumireCanal import redenumeste
+		redenumeste(ref.toString(), radacina, nume, reface, eroare)
 	csel.session.openWithCallback(numeNou, VirtualKeyBoard, title=_("Numele nou"), text=vechi)
 
 

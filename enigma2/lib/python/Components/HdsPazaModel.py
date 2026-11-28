@@ -74,7 +74,11 @@
 # nu se potrivesc, receptorul trece (comparaPornire), iar diagnosticul arata slotul pornit si o nota daca nu s-a putut
 # citi. Daca si altceva nu se potriveste (alt receptor), verdictul si lista raman ca pana acum. Pe pornirea obisnuita
 # (slotul de baza), fara cmdline citit si pe NAND partitiile raman dovada, ca inainte. La verificarea unui pachet,
-# compara() pastreaza cerintele stricte din marcaj.
+# compara() pastreaza cerintele stricte din marcaj. Instalarea in locul care ruleaza (verificaPachetLoc: Imagine noua de
+# pe stick si de pe internet, ca si copia completa) primeste aceeasi toleranta ca garda, NUMAI pe Broadcom pe eMMC: acolo
+# locul nucleului si al radacinii vine din kernel= si root= ale locului pornit (AX HD51 locurile 2-4, Duo 4K Lite
+# locurile 2-8), nu din marcaj. Pe HiSilicon locul se ia dupa numele partitiilor din blkdevparts, nu dupa locul pornit;
+# acolo si pe NAND toleranta nu se aplica.
 #
 # Doua trepte. Treapta intai (modelul confirmat pe un receptor adevarat; regulile fara „confirmat=nu”, cum sunt toate
 # cele scrise pana acum): toate cheile de mai sus hotarasc. Treapta a doua (un model nou, cu regulile inca neverificate
@@ -1576,6 +1580,21 @@ def verificaPachet(text_marcaj, radacina=None, a=None):
 		cod = REFUZ_NECITIT if necitit(nep) else REFUZ_ALT_RECEPTOR
 		return cod, textRefuz(cod, marcaj, a, nep), marcaj
 	return PACHET_BUN, "", marcaj
+
+
+def verificaPachetLoc(text_marcaj, radacina=None, a=None):
+	"""verificaPachet pentru un pachet care se scrie in locul care ruleaza acum (Imagine noua de pe stick, Imagine noua
+	de pe internet). Pe Broadcom pe eMMC pornit dintr-un loc de multiboot (a["multiboot"]) nucleul si radacina sunt ale
+	locului pornit (kernel=, root=), nu cele de baza din marcaj: daca numai ele difera (comparaPornire, ca garda de la
+	pornire), pachetul e bun. Alt receptor (cip, tipul placii, modelul), un marcaj stricat sau fara sume, ce nu s-a putut
+	citi si orice pornire obisnuita raman refuzate ca la verificaPachet; HiSilicon si NAND nu se schimba."""
+	if a is None:
+		a = amprenta(radacina)
+	cod, text, marcaj = verificaPachet(text_marcaj, radacina=radacina, a=a)
+	if cod == REFUZ_ALT_RECEPTOR and a.get("multiboot") and broadcom(marcaj) and not nand(marcaj) and \
+			not comparaPornire(marcaj, a):
+		return PACHET_BUN, "", marcaj
+	return cod, text, marcaj
 
 
 def textRefuz(cod, marcaj=None, a=None, nepotriviri=None, fisier=None):

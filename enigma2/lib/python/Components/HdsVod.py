@@ -11,6 +11,13 @@ adresa posterului (care merge la HdsVodPoze, nu la pagina web).
 Masurat pe 13.11.2026 cu un cont Xtream real (145.656 de filme, 44.127 de seriale): lista intreaga a filmelor cere 44 s, o
 categorie 0,5 s, pagina unui film 0,3 s. Deci randurile se cer pe categorie, la nevoie; lista intreaga se citeste numai pentru
 „Adăugate recent” (o data pe zi, in fundal, se tin minte primele 60) si pentru cautare (din mers, primele 100 gasite).
+
+„Adăugate recent” nu mai trece fiecare titlu prin json: pe un receptor ARMv7 cu 2 nuclee lista de 146.075 de filme (49,8 MB) cerea
+~207 s de procesor (0,34 ms json + 1,08 ms _titlu pe titlu), trecea de termenul citirii si nu se scria niciodata, iar fiecare
+deschidere a ecranului o lua de la capat cu un nucleu plin. Acum data adaugarii se cauta cu o expresie pe octeti (C) si numai
+cele cateva zeci de titluri din frunte se citesc cu json, la sfarsit (_fruntea): pe acelasi receptor lista intreaga vine in 32-43 s
+(reteaua) cu ~13 s de procesor pe firul ei, iar o tasta apasata intre timp raspunde in 0,1-1,4 s. Lista din disc se arata pe loc
+(0,7 s), iar improspatarea merge pe coada ei, fara sa intarzie cautarea sau randurile categoriilor.
 """
 import heapq
 import json
@@ -37,11 +44,28 @@ def _tradus(text):
 
 
 FILME, SERIALE = "filme", "seriale"
+
+
+def _memorieMica():
+	"""Receptoarele cu mai putin de 600 MB (ZGEMMA H8.2H: 334 MB vazuti de sistem) tin mai putine randuri in memorie."""
+	try:
+		with open("/proc/meminfo") as f:
+			for rand in f:
+				if rand.startswith("MemTotal:"):
+					return int(rand.split()[1]) < 600 * 1024
+	except (IOError, OSError, ValueError, IndexError):
+		pass
+	return False
+
+
 MAX_RAND = 3000                 # titluri tinute dintr-o categorie (cea mai mare la furnizorul probat: 2.408)
-MAX_RANDURI = 16                # categorii tinute in memorie
+MAX_RANDURI = 6 if _memorieMica() else 16   # categorii tinute in memorie (o categorie de 3.000 de titluri: ~1,6 MB pe PC)
 PASTREAZA_S = 3600
 MAX_RECENTE = 60
 RECENTE_S = 24 * 3600
+RECENTE_PAUZA_S = 3600          # dupa o citire cazuta, urmatoarea incercare peste o ora, nu la fiecare deschidere a ecranului
+MAX_LISTA_INTREAGA = 512 * 1024 * 1024   # lista intreaga trece prin memorie numai pe bucati: plafonul e numai pentru un server stricat
+TERMEN_LISTA_S = 20 * 60        # lista intreaga pe o legatura lenta (50 MB la 1 Mbit/s = ~7 min); o cerere care tace cade dupa C.TERMEN_S
 MAX_CAUTARE = 100
 TERMEN_CAUTARE_S = 90
 MAX_EPISOADE = 3000
@@ -85,9 +109,12 @@ def _nota(v):
 	return "%.1f" % n if 0 < n <= 10 else ""
 
 
+_AN_ORIUNDE = re.compile(r"(19[0-9]{2}|20[0-9]{2})")
+
+
 def _an(*valori):
 	for v in valori:
-		m = re.search(r"(19[0-9]{2}|20[0-9]{2})", str(v or ""))
+		m = _AN_ORIUNDE.search(str(v or ""))
 		if m:
 			return m.group(1)
 	return ""
@@ -350,6 +377,11 @@ class SursaXtream(Sursa):
 			if inchide:
 				inchide()
 
+	def recenteNoi(self, tip, maxim=MAX_RECENTE):
+		"""Primele `maxim` titluri dupa data adaugarii, din lista intreaga citita ca octeti (_fruntea)."""
+		with C.fluxXtream(self.s, self._ACTIUNI[tip][1]) as r:
+			return _fruntea(_bucati(r), tip, maxim, lambda o: self._titlu(tip, o))
+
 	def detalii(self, tip, titlu_id):
 		actiune, cheie = self._ACTIUNI[tip][2], self._ACTIUNI[tip][3]
 		d = C.dateXtream(self.s, actiune, {cheie: titlu_id})
@@ -540,13 +572,158 @@ def recenteDinDisc(sid, tip):
 	return 0, []
 
 
+# Campul cu data adaugarii in lista intreaga (get_vod_streams / get_series). In JSON valid ghilimelele dintr-un nume sunt scrise
+# \", deci expresia nu poate prinde un text din interiorul unui nume, numai cheia.
+_CAMP_DATA = {FILME: "added", SERIALE: "last_modified"}
+_DATA = dict((tip, re.compile(b'"' + camp.encode("ascii") + b'"\\s*:\\s*"?([0-9]{1,12})')) for tip, camp in _CAMP_DATA.items())
+_FRUNTE_INAPOI = 16384          # cat se tine din urma: un titlu intreg (~360 de octeti la filme, cativa KB la seriale) incape oricum
+_FRUNTE_POTRIVIRE = 48          # cel mai lung camp de data cu valoarea lui ("last_modified" : "123456789012")
+
+
+def _bucati(raspuns, maxim=None, termen=None):
+	"""Octetii unui raspuns, pe bucati de 64 KB, cu plafon de marime si de timp (fiecare citire are si termenul ei, C.TERMEN_S)."""
+	maxim = MAX_LISTA_INTREAGA if maxim is None else maxim
+	sfarsit = time.monotonic() + (TERMEN_LISTA_S if termen is None else termen)
+	citire = getattr(raspuns, "read1", raspuns.read)
+	n = 0
+	while True:
+		b = citire(65536)
+		if not b:
+			return
+		n += len(b)
+		if n > maxim or time.monotonic() > sfarsit:
+			raise C.EroareIptv(E_NU_RASPUNDE)
+		yield b
+
+
+def _titluLa(tampon, p, camp, valoare, dec, titlu):
+	"""Titlul (obiectul JSON din lista) care tine campul de data gasit la octetul p, prin `titlu` (_titlu), sau None. Inceputul e
+	una din acoladele de dinainte: prima de la care se citeste un obiect care trece de p, cu aceeasi data si cu un id bun (o
+	acolada dintr-un nume nu da JSON valid; un obiect dinauntru n-are id, deci se cauta mai departe)."""
+	capat = p
+	jos = max(0, p - _FRUNTE_INAPOI)
+	for _incercare in range(16):
+		s = tampon.rfind(b"{", jos, capat)
+		if s < 0:
+			return None
+		capat = s
+		for lung in (4096, 2 * _FRUNTE_INAPOI):
+			text = tampon[s:s + lung].decode("utf-8", "ignore")
+			try:
+				obj, gata = dec.raw_decode(text)
+			except ValueError as e:
+				if getattr(e, "pos", 0) >= len(text) - 2 and lung < 2 * _FRUNTE_INAPOI:
+					continue            # taiat de felie: inca o data, cu felia mare
+				break
+			if not isinstance(obj, dict) or s + len(text[:gata].encode("utf-8")) <= p:
+				break
+			if _numar(obj.get(camp)) and int(_numar(obj.get(camp))) == valoare:
+				t = titlu(obj)
+				if t:
+					return t
+			break
+	return None
+
+
+def _fruntea(bucati, tip, maxim, titlu):
+	"""Din octetii listei intregi (bucati: un iterator), titlurile cu cea mai mare data de adaugare, cele mai noi intai; la date
+	egale, ordinea din lista (ca heapq.nlargest). Data fiecarui titlu se cauta cu o expresie (C), fara json; o fereastra in care
+	nicio data nu bate fruntea de acum se sare cu totul. Pentru cele care intra in frunte se tine numai locul (tamponul de atunci si
+	pozitia, fara copie), iar json se face la sfarsit, numai pentru cele `maxim` ramase. Memoria: tamponul (~100 KB) si cel mult
+	`maxim` tampoane vechi tinute de frunte."""
+	expr, camp = _DATA[tip], _CAMP_DATA[tip]
+	cheie = b'"' + camp.encode("ascii") + b'"'
+	gramada = []                # (data, -al catelea, tamponul, pozitia)
+	tampon, baza, de_la, n = b"", 0, 0, 0
+	inceput = False
+	bucati = iter(bucati)
+	while True:
+		b = next(bucati, None)
+		if b:
+			tampon += b
+			if not inceput:
+				primul = tampon.lstrip(b"\xef\xbb\xbf \t\r\n")[:1]
+				if not primul:
+					continue
+				if primul != b"[":
+					raise C.EroareIptv(C.E_NU_E_CONT)
+				inceput = True
+		limita = len(tampon) if b is None else len(tampon) - _FRUNTE_INAPOI
+		poz = max(0, de_la - baza)
+		if limita > poz:
+			if b is not None:
+				# un camp taiat de capatul ferestrei (cheia sau numai valoarea) ramane intreg pentru fereastra urmatoare: ultima cheie
+				# care incepe inainte de capat, daca n-are loc toata pana la el, muta capatul la inceputul ei
+				ultim = tampon.rfind(cheie, poz, limita + len(cheie) - 1)
+				if ultim >= 0 and ultim + _FRUNTE_POTRIVIRE > limita:
+					limita = ultim
+			valori = expr.findall(tampon, poz, limita)
+			if valori and (len(gramada) < maxim or max(map(int, valori)) > gramada[0][0]):
+				for k, m in enumerate(expr.finditer(tampon, poz, limita)):
+					v = int(m.group(1))
+					if len(gramada) < maxim:
+						heapq.heappush(gramada, (v, -(n + k), tampon, m.start()))
+					elif v > gramada[0][0]:
+						heapq.heapreplace(gramada, (v, -(n + k), tampon, m.start()))
+			n += len(valori)
+			de_la = baza + limita
+		if b is None:
+			break
+		taie = max(0, de_la - baza - _FRUNTE_INAPOI)
+		if taie:
+			tampon, baza = tampon[taie:], baza + taie
+	if not inceput:
+		raise C.EroareIptv(C.E_NU_E_CONT)
+	dec = json.JSONDecoder()
+	rez = []
+	for v, _n, t, p in sorted(gramada, key=lambda x: (x[0], x[1]), reverse=True):
+		x = _titluLa(t, p, camp, v, dec, titlu)
+		if x:
+			rez.append(x)
+	return rez
+
+
+_esecRecente = {}               # (sid, tip) -> ora (monoton) ultimei citiri cazute
+
+
+def _ascii(text):
+	"""Textul unei erori fara diacritice, pentru jurnalul interfetei."""
+	import unicodedata
+	return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode("ascii")
+
+
+def recenteInPauza(sid, tip):
+	return time.monotonic() - _esecRecente.get((sid, tip), -RECENTE_PAUZA_S) < RECENTE_PAUZA_S
+
+
 def _recenteNoi(src, tip):
-	cele = heapq.nlargest(MAX_RECENTE, src.toate(tip), key=lambda t: t.get("adaugat") or 0)
+	"""Citeste lista intreaga si scrie primele MAX_RECENTE pe disc. -> titlurile, sau None daca citirea a cazut (se incearca din
+	nou abia dupa RECENTE_PAUZA_S; lista veche de pe disc ramane)."""
+	cheie = (src.id, tip)
+	if recenteInPauza(src.id, tip):
+		return None
+	inceput = time.monotonic()
+	try:
+		if hasattr(src, "recenteNoi"):
+			cele = src.recenteNoi(tip)
+		else:
+			cele = heapq.nlargest(MAX_RECENTE, src.toate(tip), key=lambda t: t.get("adaugat") or 0)
+	except C.EroareIptv as e:
+		_esecRecente[cheie] = time.monotonic()
+		print("[HdsVod] recente %s: %s (cod %s), dupa %d s" % (tip, _ascii(e.mesaj), e.cod or "-", time.monotonic() - inceput))
+		return None
+	except Exception as e:
+		# exceptiile HTTP pot avea adresa cu parola in ele: numai felul lor ajunge in jurnal
+		_esecRecente[cheie] = time.monotonic()
+		print("[HdsVod] recente %s: %s, dupa %d s" % (tip, type(e).__name__, time.monotonic() - inceput))
+		return None
+	_esecRecente.pop(cheie, None)
+	print("[HdsVod] recente %s: %d titluri in %d s" % (tip, len(cele), time.monotonic() - inceput))
 	try:
 		os.makedirs(I.DOSAR, mode=0o700, exist_ok=True)
 		I._scrie(_caleRecente(src.id, tip), json.dumps({"ora": time.time(), "titluri": cele}, ensure_ascii=False).encode("utf-8"), 0o600)
-	except (IOError, OSError):
-		pass
+	except (IOError, OSError) as e:
+		print("[HdsVod] recente %s: nu pot scrie (%s)" % (tip, type(e).__name__))
 	return cele
 
 
@@ -601,10 +778,17 @@ def lucreaza(fel, sid, tip="", arg="", gasite=None):
 				return {"result": True, "titluri": [], "oprit": True}
 			if src.cu_recente_locale:
 				return {"result": True, "titluri": src.recente(tip)}
+			if arg == "aduce":
+				# coada ei („recente”): lista intreaga, apoi fisierul; o citire cazuta lasa lista veche
+				nou = _recenteNoi(src, tip)
+				return {"result": True, "titluri": nou if nou is not None else recenteDinDisc(sid, tip)[1]}
+			# coada scurta: numai fisierul, pe loc; cand e vechi sau lipseste, improspatarea porneste pe coada ei, iar cine
+			# vrea lista noua (ecranul, cand n-are niciuna) asteapta lucrarea din „aduce”
 			ora, v = recenteDinDisc(sid, tip)
-			if arg == "aduce" or not v:
-				v = _recenteNoi(src, tip)
-			return {"result": True, "titluri": v}
+			rez = {"result": True, "titluri": v}
+			if not (0 <= time.time() - ora < RECENTE_S) and not recenteInPauza(sid, tip):
+				rez["aduce"] = cere("recente", sid, tip, "aduce")
+			return rez
 		if fel == "detalii":
 			if not src.idBun(arg):
 				return {"result": False, "message": E_LIPSA}
@@ -627,9 +811,17 @@ def lucreaza(fel, sid, tip="", arg="", gasite=None):
 
 _lacat = threading.Lock()
 _lucrari = OrderedDict()
-_cozi = {"scurt": [], "lung": []}
+# scurt: categoriile, randurile, pagina titlului si „Adăugate recent” din fisier; lung: cautarea; recente: lista intreaga pentru
+# „Adăugate recent” (zeci de secunde pe un receptor slab), pe firul ei, ca sa nu intarzie nici randurile, nici cautarea
+_cozi = {"scurt": [], "lung": [], "recente": []}
 _fire = {}
-LUNGI = ("recente", "cauta")
+LUNGI = ("cauta",)
+
+
+def _coada(fel, arg):
+	if fel == "recente" and arg == "aduce":
+		return "recente"
+	return "lung" if fel in LUNGI else "scurt"
 
 
 def _bucla(coada):
@@ -658,7 +850,7 @@ def _curata():
 def cere(fel, sid, tip="", arg=""):
 	"""Cheia lucrarii, imediat (rezultatul il citeste ecranul cu rezultat(cheie)); gol = prea multe lucrari."""
 	argumente = (fel, sid, tip, _text(arg, 80))
-	coada = "lung" if fel in LUNGI else "scurt"
+	coada = _coada(fel, argumente[3])
 	with _lacat:
 		_curata()
 		for cheie, l in _lucrari.items():

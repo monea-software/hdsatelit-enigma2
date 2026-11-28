@@ -425,7 +425,10 @@ def oferta_din_feed(stare, img, canal, rad=None, baza_feed=None):
 		return None
 	if stare.get("canal") and stare.get("canal") != canal:
 		return None
-	v = _modul("HdsActualizari").versiunea_starii(stare)
+	A = _modul("HdsActualizari")
+	# ZGO9 (0.8.0): versiunea pentru arhitectura receptorului (un model lasat pe dinafara nu primeste oferta)
+	pe_model = getattr(A, "versiunea_receptorului", None)
+	v = pe_model(stare, img.get("arhitecturi")) if pe_model else A.versiunea_starii(stare)
 	if not v or compara(v, img["versiune"]) <= 0:
 		return None
 	return {"fel": "feed", "versiune": v, "data": stare.get("data") or "", "acum": img["versiune"],
@@ -1084,6 +1087,14 @@ def citeste_marcaj(dosar):
 		return None
 
 
+def _verifica_marcajul(H, text_marcaj, rad):
+	"""Marcajul fata de receptor pentru locul care ruleaza (HdsPazaModel.verificaPachetLoc: pe Broadcom pornit din alt loc
+	de multiboot, AX HD51 sau Duo 4K Lite, nucleul si radacina sunt ale locului pornit). O paza mai veche, fara ea (puntea),
+	verifica strict."""
+	verifica = getattr(H, "verificaPachetLoc", None) or H.verificaPachet
+	return verifica(text_marcaj, radacina=rad)
+
+
 def verifica_pachetul(dosar, imagine, rad=None, oprit=None):
 	"""(semnul fisierelor, None) sau (None, textul pentru om): marcajul pentru acest receptor, versiunea si modelul cele din
 	lista semnata, sumele din marcaj, citite de pe stick."""
@@ -1092,7 +1103,7 @@ def verifica_pachetul(dosar, imagine, rad=None, oprit=None):
 	straina = imagine.get("straina")
 	if straina and text_marcaj is None:
 		return H.semnFisiere(dosar), None
-	cod, _text, marcaj = H.verificaPachet(text_marcaj, radacina=rad or RADACINA)
+	cod, _text, marcaj = _verifica_marcajul(H, text_marcaj, rad or RADACINA)
 	if cod != H.PACHET_BUN:
 		_jurnal("marcajul: %s" % cod)
 		return None, _t(T_ALT_RECEPTOR)
@@ -1882,7 +1893,7 @@ class ImagineOnline(object):
 			return _t(T_FARA_COPIE)
 		text_marcaj = citeste_marcaj(dosar)
 		if not ((self._imagine or {}).get("straina") and text_marcaj is None):
-			cod, _text, _marcaj = H.verificaPachet(text_marcaj, radacina=RADACINA)
+			cod, _text, _marcaj = _verifica_marcajul(H, text_marcaj, RADACINA)
 			if cod != H.PACHET_BUN:
 				return _t(T_ALT_RECEPTOR)
 		if H.semnFisiere(dosar) != self._semn:
@@ -2113,6 +2124,10 @@ class Verificare(object):
 			return
 		if in_standby():
 			return self._incearca_standby(o)
+		# 0.8.0 (AUT1): cu Actualizari automate pornite o versiune din feed nu mai intreaba treaz: se instaleaza singura in
+		# standby sau noaptea (HdsActualizari.VerificareZilnica); fereastra pentru o imagine noua ramane
+		if o["fel"] == "feed" and getattr(_modul("HdsActualizari"), "fereastra_feed_ascunsa", lambda: False)():
+			return
 		cheie = (o["fel"], o["versiune"])
 		if self.aratata != cheie:
 			self.aratata = cheie
@@ -2155,7 +2170,8 @@ class Verificare(object):
 			if motiv:
 				return _jurnal("in standby nu pornesc: %s" % motiv)
 			self.io.porneste(din_standby=True)
-		else:
+		elif getattr(_modul("HdsActualizari"), "automat_pornit", lambda: True)():
+			# 0.8.0 (AUT1): pachetele din feed se pun singure numai cu Actualizari automate pornite
 			self._feed_in_standby()
 
 	def _feed_in_standby(self):

@@ -2132,7 +2132,7 @@ def N_(text):
 
 
 _ETICHETE_DVBI = {"oprit_tara": N_("oprit în țara ta"), "adresa_moarta": N_("adresă moartă"), "nu_raspunde": N_("nu "
-	"răspunde")}
+	"răspunde"), "drm": N_("protejat (DRM)")}
 
 
 _IPTV_DATE = [0.0, None]
@@ -2196,7 +2196,12 @@ def _eticheta_dvbi(ref):
 		return "DVB-I"
 	url = DD.urlDinRef(ref)
 	if url and DD.canalUrl(url) is not None:
-		return _t(_ETICHETE_DVBI.get(DD.stareUrl(url)[0], ""))
+		# DVI2: oprit pentru tara, cu tara listei cand se stie, ca in lista de pe televizor
+		st = DD.stareUrl(url)[0]
+		tara = DD.doarIn(url, stare=st) if st == "oprit_tara" and hasattr(DD, "doarIn") else ""
+		if tara:
+			return _t(DD.T_DOAR_IN) % tara
+		return _t(_ETICHETE_DVBI.get(st, ""))
 	return ""
 
 

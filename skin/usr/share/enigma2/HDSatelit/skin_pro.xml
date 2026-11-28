@@ -257,7 +257,7 @@
 		<eLabel position="538,2" size="2,116" backgroundColor="hdsTrack" zPosition="1" />
 		<ePixmap pixmap="icon/vol.png" position="20,12" size="48,48" alphatest="blend" zPosition="2" />
 		<eLabel text="Volum" position="84,14" size="300,44" font="HdsBold;28" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" valign="center" noWrap="1" zPosition="2" />
-		<widget name="VolumeText" conditional="VolumeText" position="396,6" size="124,60" font="HdsBold;52" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" zPosition="2" />
+		<widget name="VolumeText" conditional="VolumeText" position="386,6" size="134,60" font="HdsBold;52" foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" zPosition="2" />
 		<eLabel position="20,80" size="500,22" backgroundColor="hdsTrack" zPosition="1" />
 		<widget name="Volume" conditional="Volume" position="22,82" size="496,18" foregroundColor="hdsBrandLight" backgroundColor="hdsTrack" zPosition="2" />
 	</screen>
@@ -1179,7 +1179,7 @@
 		<eLabel position="1448,944" size="52,32" backgroundColor="hdsCell" zPosition="2" />
 		<widget source="dala_t_cifre" render="Label" position="1448,944" size="52,32" font="HdsBold;20" foregroundColor="hdsText2" backgroundColor="hdsCell" transparent="1" halign="center" valign="center" noWrap="1" zPosition="3" />
 		<widget source="dala_cifre" render="Label" position="1506,936" size="100,48" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
-		<eLabel position="1614,952" size="16,16" backgroundColor="key_yellow" zPosition="2" />
+		<widget source="dala_galben" render="FixedLabel" position="1614,952" size="16,16" backgroundColor="key_yellow" zPosition="2"><convert type="ConditionalShowHide" /></widget>
 		<widget source="dala_galben" render="Label" position="1636,936" size="108,48" font="HdsCond;22" foregroundColor="hdsText2" backgroundColor="hdsPanelDialog" transparent="1" halign="left" valign="center" noWrap="1" zPosition="2" />
 	</screen>
 	<screen name="MenuDale" position="72,40" size="1776,1000" backgroundColor="hdsPanelDialog" flags="wfNoBorder">

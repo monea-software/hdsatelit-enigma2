@@ -44,6 +44,7 @@ class HdsButtonSetup(Screen, ConfigListScreen):
 		HdsTasteRapide.initConfigProfil(config)
 		self["ghid"] = StaticText(_(
 			"Alege tasta cu SUS/JOS și funcția cu OK sau STÂNGA/DREAPTA.") + " " +
+			HdsTasteRapide.text_tasta("", HdsTasteRapide.NOTA_APASARE_LUNGA) + " " +
 			HdsTasteRapide.text_tasta("", HdsTasteRapide.ASEZARE_AJUTOR))
 		self["key_red"] = StaticText(_("Cancel"))
 		self["key_green"] = StaticText(_("Save"))

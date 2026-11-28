@@ -124,6 +124,9 @@ private:
 	long long m_t_miscare;
 	static int s_fara_eveniment;
 	long long m_marcaje[NR_MARCAJE], m_t_comanda, m_t_blocare;
+	/* cand a ajuns cererea la tuner (eDVBFrontend::tune, TimpiZap.pornire_ms): desparte o intarziere dinaintea acordarii
+	   (alocarea canalului, bucla principala ocupata dupa iesirea dintr-un film) de una din secventa SEC */
+	long long m_t_acordare_ceruta;
 	long m_sec_ms;
 	int m_slot, m_vpid, m_vtip, m_apid, m_atip, m_criptat, m_sid;
 	/* canalul vine prin releul T2-MI local (hdsEsteReleuT2 pe calea referintei, la pornire) */

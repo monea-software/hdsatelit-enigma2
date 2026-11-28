@@ -65,7 +65,7 @@ Zap::Zap()
 	CONNECT(m_ceas->timeout, Zap::faraImagine);
 	CONNECT(m_ceas_pts->timeout, Zap::citestePts);
 	memset(m_marcaje, 0, sizeof(m_marcaje));
-	m_t_comanda = m_t_blocare = 0;
+	m_t_comanda = m_t_blocare = m_t_acordare_ceruta = 0;
 	m_sec_ms = -1;
 }
 
@@ -85,7 +85,7 @@ void Zap::pornire(const eServiceReferenceDVB &ref, bool masurat)
 	m_din_pts = false;
 	m_t_miscare = 0;
 	memset(m_marcaje, 0, sizeof(m_marcaje));
-	m_t_comanda = m_t_blocare = 0;
+	m_t_comanda = m_t_blocare = m_t_acordare_ceruta = 0;
 	m_sec_ms = -1;
 	m_slot = m_vpid = m_vtip = m_apid = m_atip = m_criptat = -1;
 	m_sid = 0;
@@ -129,6 +129,7 @@ void Zap::acordare(const eDVBFrontend::TimpiZap &t)
 	if (!m_activ || t.pornire_ms < m_t0 || t.comanda_ms < m_t0)
 		return;
 	m_t_comanda = t.comanda_ms;
+	m_t_acordare_ceruta = t.pornire_ms;
 	m_t_blocare = t.lock_ms;
 	if (t.sec_start_ms >= m_t0 && t.sec_gata_ms >= t.sec_start_ms)
 		m_sec_ms = (long)(t.sec_gata_ms - t.sec_start_ms);
@@ -137,10 +138,12 @@ void Zap::acordare(const eDVBFrontend::TimpiZap &t)
 void Zap::textMarcaje(char *buf, size_t n) const
 {
 	snprintf(buf, n, " | zap_t0 %lld ms | marcaje: pmt %ld ms, decodor %ld ms, ca_pmt %ld ms, "
-		"comanda_tuner %ld ms, sec %ld ms, blocare %ld ms, pachet_video -1 ms, eveniment_video %ld ms, cadre %ld ms",
+		"comanda_tuner %ld ms, sec %ld ms, blocare %ld ms, pachet_video -1 ms, eveniment_video %ld ms, cadre %ld ms, "
+		"acordare_ceruta %ld ms",
 		m_t0, dupa(m_t0, m_marcaje[PMT_PRIMIT]), dupa(m_t0, m_marcaje[DECODOR_PREGATIT]),
 		dupa(m_t0, m_marcaje[CA_PMT_TRIMIS]), dupa(m_t0, m_t_comanda), m_sec_ms,
-		dupa(m_t0, m_t_blocare), dupa(m_t0, m_marcaje[EVENIMENT_VIDEO]), dupa(m_t0, m_t_cadre));
+		dupa(m_t0, m_t_blocare), dupa(m_t0, m_marcaje[EVENIMENT_VIDEO]), dupa(m_t0, m_t_cadre),
+		dupa(m_t0, m_t_acordare_ceruta));
 }
 
 std::string Zap::numeCanal()

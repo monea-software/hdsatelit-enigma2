@@ -677,12 +677,15 @@ def fluxBun(adresa):
 	return adresa
 
 
+# caracterele de control si semnele de marcaj HTML din nume: o expresie (C) in locul unei bucle pe fiecare litera; un titlu dintr-o
+# lista de filme trecea pe un receptor ARMv7 prin ~1 ms de Python numai aici si in _titlu
+_CONTROL_SI_MARCAJ = re.compile(r"[\x00-\x1f\x7f<>]")
+
+
 def numeCurat(text, implicit=""):
 	"""Un nume dintr-o lista (date neincredere): fara caractere de control, fara semne de marcaj HTML, scurtat dupa octeti. Se
 	arata ca text obisnuit, pe televizor si in pagina web."""
-	text = "".join(" " if ord(c) < 32 or ord(c) == 127 else c for c in str(text or ""))
-	text = text.replace("<", " ").replace(">", " ")
-	text = " ".join(text.split())
+	text = " ".join(_CONTROL_SI_MARCAJ.sub(" ", str(text or "")).split())
 	octeti = text.encode("utf-8")[:MAX_NUME]
 	text = octeti.decode("utf-8", "ignore").strip()
 	return text or implicit

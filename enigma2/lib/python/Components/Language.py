@@ -14,7 +14,7 @@ LIMBI_COMPLETE = ("ro_RO", "en_EN", "de_DE", "fr_FR", "es_ES", "it_IT", "hu_HU",
 	"ru_RU", "tr_TR",
 	"sk_SK", "hr_HR", "sr_YU", "sl_SI", "el_GR", "sv_SE", "da_DK", "no_NO", "fi_FI", "et_EE", "lt_LT", "lv_LV",
 	"ca_AD", "is_IS", "fy_x-FY", "uk_UA", "ar_AE",
-	"uz_UZ")  # UZB 14.11.2026: uzbeca (latin), a 31-a
+	"uz_UZ", "sq_AL", "bg_BG")  # UZB 14.11.2026: uzbeca (latin), a 31-a; SQI0 25.11.2026: albaneza, a 32-a; BGR1 26.11.2026: bulgara, a 33-a
 # Limba meniurilor cand cea salvata (config.osd.language) e ascunsa sau necunoscuta, ca in Converter/HdsLang.py
 # (limba necunoscuta: engleza). Valoarea salvata nu se schimba: tara si limba pistelor o folosesc mai departe, iar cand
 # limba ei intra in LIMBI_COMPLETE, meniurile revin singure in ea.
@@ -197,6 +197,8 @@ class Language:
 		self.addLanguage(_("Turkish"), "tr", "TR")
 		self.addLanguage(_("Ukrainian"), "uk", "UA")
 		self.addLanguage(_("Uzbek"), "uz", "UZ")  # UZB 14.11.2026: alfabetul latin
+		self.addLanguage(_("Albanian"), "sq", "AL")  # SQI0 25.11.2026
+		self.addLanguage(_("Bulgarian"), "bg", "BG")  # BGR1 26.11.2026 (pepi73)
 		self.addLanguage(_("Frisian"), "fy", "x-FY") # there is no separate country for frisian
 
 		self.callbacks = []

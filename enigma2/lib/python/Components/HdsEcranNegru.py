@@ -48,7 +48,10 @@
 # NUMAI_SUNET, fara asteptare: la DVB (si la fluxurile IP prin servicedvb) dupa PMT (fara pista video, fara pista video
 # necunoscuta numita de nucleu, cu pista audio), la fluxurile prin GStreamer (4097 si celelalte) dupa numarul pistelor
 # video spus de servicemp3 (getInfo(sUser+17), -1 cat nu se stie) si pistele audio; fara numarul pistelor (alt serviciu
-# de redare), dupa PRAG_SUNET_FLUX secunde fara imagine si fara codec video. Verdictul il primeste Screens/HdsEcranNegru.py:
+# de redare), dupa PRAG_SUNET_FLUX secunde fara imagine si fara codec video; NU si prin gstplayer-ul lui ServiceApp
+# (player_fara_marime: 5001, sau 4097 inlocuit de ServiceApp cu gstplayer), care la fluxurile vii nu trimite niciodata
+# marimea imaginii, desi decodorul o arata (0.8.0, OZG1, ozgurc67: ecranul radio peste un canal IPTV care mergea, fara
+# sa se mai inchida). Verdictul il primeste Screens/HdsEcranNegru.py:
 # ecranul radio ca fundal (Screens/HdsEcranRadio.py, numaiSunet) si protectia ecranului (Screens/ScreenSaver.py), dupa
 # setarea „La canalele numai cu sunet” (Components/HdsRadioSetari.py); mesajul se vede numai fara ecranul radio.
 # Analiza fluxului (Components/HdsAnalizaFlux.py) se leaga la verdictele „date” si „format”: fapta F_ANALIZA, iar
@@ -210,10 +213,10 @@ TEXTE = {
 T_T2_PORNESTE_SEC = N_("Receptorul pornește fluxul DVB-T2 din satelit. Tunerul se conectează în %d secunde.")
 T_ANTENA_SPRE = N_("Antena se rotește spre %s. Imaginea apare după ce ajunge.")
 T_ANTENA = N_("Antena se rotește. Imaginea apare după ce ajunge.")
-# plecarea antenei nu se stie (dupa pornire, dupa flash, dupa o pozitie uitata): se stie numai ca a plecat comanda
-T_COMANDA_TITLU = N_("Comanda a plecat spre motor")
-T_COMANDA_SPRE = N_("Receptorul a trimis motorului comanda spre %s. De unde pleacă antena nu se știe. Receptorul așteaptă semnalul.")
-T_COMANDA = N_("Receptorul a trimis comanda motorului. De unde pleacă antena nu se știe. Receptorul așteaptă semnalul.")
+# plecarea antenei nu se stie (dupa pornire, dupa flash, dupa o pozitie uitata): se spune calm unde merge antena (MOT1)
+T_COMANDA_TITLU = N_("Antena se mută")
+T_COMANDA_SPRE = N_("Antena se mută pe %s. Poziția de dinainte nu e cunoscută; imaginea apare după ce ajunge.")
+T_COMANDA = N_("Antena se mută. Poziția de dinainte nu e cunoscută; imaginea apare după ce ajunge.")
 T_DOAR_SUNET = N_("Se aude doar sunetul.")
 T_CRIPTAT_ECM = N_("Canalul este criptat. Accesul condiționat răspunde, dar imaginea nu se decriptează.")
 T_INREGISTREAZA = N_("Se înregistrează: %s")
@@ -259,6 +262,9 @@ T_SEMNAL = N_("Semnal")
 T_CALITATE = N_("Calitate")
 T_INDEMN = N_("EXIT ascunde mesajul")
 # antena cu motor e la locul ei (alt transponder al satelitului se prinde), dar transponderul canalului nu emite
+# MOT1 (26.11 23:05, ploaie): antena dovedita la locul ei, receptorul reacordeaza fara sa roteasca antena
+T_SEMNAL_SLAB_TITLU = N_("Semnal slab")
+T_SEMNAL_SLAB = N_("Semnal slab (posibil vreme rea), reîncerc...")
 T_TP_NU_EMITE = N_("Transponderul acestui canal nu emite acum. Antena e la locul ei: alt transponder al aceluiași satelit se recepționează.")
 D_TP_PRINS = N_("alt transponder se recepționează: %s")
 # antena pe alt satelit (AS26, asistenta la un GigaBlue UHD Quad 4K Pro): tunerul prinde semnal pe doua sau mai multe frecvente ale satelitului,
@@ -434,7 +440,7 @@ def analizeaza(d):
 	if d.get("rotor") and d.get("fel") == "s":
 		spre = _curat(d.get("rotor_spre") or u"", 60)
 		if d.get("rotor_plecare_nestiuta"):
-			# plecarea nu se stie: nici ca antena se roteste, nici cand ajunge; numai ca a plecat comanda
+			# plecarea nu se stie: nici directia, nici cand ajunge; textul ramane calm (MOT1)
 			text = _t(T_COMANDA_SPRE) % spre if spre else _t(T_COMANDA)
 			return _verdict(ANTENA, d, text=text, titlu=_t(T_COMANDA_TITLU))
 		text = _t(T_ANTENA_SPRE) % spre if spre else _t(T_ANTENA)
@@ -471,6 +477,10 @@ def analizeaza(d):
 		if d.get("tp_nu_emite"):
 			text = _t(T_TP_NU_EMITE)
 			parti.append(_t(D_TP_PRINS) % _curat(d["tp_nu_emite"], 60))
+		elif d.get("semnal_slab"):
+			# antena a avut semnal aici dupa ultima mutare: nu e o eroare, receptorul reacordeaza singur (MOT1)
+			return _verdict(FARA_SEMNAL, d, text=_t(T_SEMNAL_SLAB), titlu=_t(T_SEMNAL_SLAB_TITLU), detaliu=_detaliu(*parti),
+				bare=True)
 		return _verdict(FARA_SEMNAL, d, text=text, detaliu=_detaliu(*parti), bare=True)
 	if prins is False:
 		return None
@@ -531,6 +541,9 @@ def numai_sunet(d):
 		n = d.get("piste_video")
 		if n is not None and n >= 0:
 			return n == 0
+		if d.get("fara_marime"):
+			# gstplayer (ServiceApp) nu spune marimea imaginii la fluxurile vii: lipsa ei nu inseamna ca nu e imagine
+			return False
 		return not d.get("codec_video") and (d.get("secunde") or 0.0) >= PRAG_SUNET_FLUX
 	if not d.get("pmt") or d.get("video_necunoscut"):
 		return False
@@ -1327,6 +1340,7 @@ class Urmaritor(object):
 			d["piste_video"] = _piste_video(info)
 			d["piste_audio"] = _piste_audio(service)
 			d["codec_video"] = bool(r.gets("sTagVideoCodec"))
+			d["fara_marime"] = player_fara_marime(r.ref().get("type"))
 			return d
 		if d["radio"] or d["fel"] not in FEL_DVB:
 			_pasi_uita()
@@ -1374,6 +1388,7 @@ class Urmaritor(object):
 				d["rotor_spre"] = C.sat_full(poz) if poz >= 0 else u""
 				d["rotor_plecare_nestiuta"] = plecare_nestiuta()
 			d["tp_nu_emite"] = transponder_nu_emite()
+			d["semnal_slab"] = semnal_slab_reincerc()
 			d["alt_satelit"] = _alt_satelit(d, tp, C, acum)
 		if d["eroare"] == E_FARA_TUNER:
 			d["inregistrari"] = _inregistrari(nav)
@@ -1405,6 +1420,18 @@ def readucere_in_curs():
 	import sys
 	m = sys.modules.get("Components.HdsMotorStare")
 	f = getattr(m, "readucereInCurs", None) if m is not None else None
+	try:
+		return bool(f()) if f is not None else False
+	except Exception:
+		return False
+
+
+def semnal_slab_reincerc():
+	"""True cand antena e dovedita la locul ei si receptorul numai reacordeaza (Components/HdsMotorPozitie.semnalSlab,
+	MOT1); fara import"""
+	import sys
+	m = sys.modules.get("Components.HdsMotorPozitie")
+	f = getattr(m, "semnalSlab", None) if m is not None else None
 	try:
 		return bool(f()) if f is not None else False
 	except Exception:
@@ -1672,6 +1699,30 @@ def _piste_video(info):
 		return int(v) if v is not None else -1
 	except Exception:
 		return -1
+
+
+def player_fara_marime(tip, serviceapp=None):
+	"""True cand fluxul merge prin gstplayer-ul lui ServiceApp: tipul 5001, sau 4097 cand ServiceApp inlocuieste servicemp3
+	si playerul lui e gstplayer (`serviceapp` = (inlocuieste, player), din config.plugins.serviceapp.servicemp3 cand
+	lipseste). La un flux viu gstplayer nu trimite marimea imaginii (fara „v_c”, deci fara evVideoSizeChanged si cu
+	sVideoHeight 0), iar ServiceApp nu da numarul pistelor video (sUser+17 = -1), desi decodorul arata imaginea (masurat pe
+	receptor, 0.8.0, OZG1: /proc/stb/vmpeg/0 720x576, iar ServiceApp 0x0). Atunci „numai sunet” nu se poate afla."""
+	try:
+		tip = int(tip)
+	except (TypeError, ValueError):
+		return False
+	if tip == 5001:
+		return True
+	if tip != 4097:
+		return False
+	if serviceapp is None:
+		try:
+			from Components.config import config
+			s = config.plugins.serviceapp.servicemp3
+			serviceapp = (bool(s.replace.value), s.player.value)
+		except Exception:
+			return False
+	return bool(serviceapp[0]) and serviceapp[1] == "gstplayer"
 
 
 def _piste_audio(service):

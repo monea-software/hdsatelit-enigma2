@@ -2,8 +2,8 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# extensii_web.py: "Extensii și aplicații" in interfata web (HdsWebControl), perechea ecranului de pe televizor
-# Meniu > Extensii si aplicatii (Screens/PluginBrowser.py = Screens/HdsExtensii.py, entryID plugin_selection).
+# extensii_web.py: "Extensii" (msgid "Plugins") in interfata web (HdsWebControl), perechea ecranului de pe televizor
+# Meniu > Extensii (Screens/PluginBrowser.py = Screens/HdsExtensii.py, entryID plugin_selection).
 #
 # Aceleasi file (Pe receptor, Disponibile, Instaleaza de pe stick, Surse, cautarea), aceleasi randuri cu
 # aceleasi insigne si detalii, aceleasi actiuni (instalare, actualizare, actualizeaza tot, stergere, fisier .ipk de pe
@@ -536,7 +536,9 @@ def stare(arg, M, catalog, date=None):
 			"cand": P.text_varsta(ultima.get("cand")) if ultima.get("cand") else "",
 			# ce contine lista descarcata ultima oara (0.6.6), acelasi text ca pe televizor
 			"rezumat": L.textDescarcare(catalog, ultima, ultima.get("inainte")) if ultima.get("cand") and not descarcare
-			else "", "id": int(ultima.get("cand") or 0)},
+			else "", "id": int(ultima.get("cand") or 0),
+			# OPK1: dead foreign sources skipped and the wait for another opkg (live while it runs, then the result)
+			"note": list(L.STARE.get("note_descarcare") or []) if descarcare else list(ultima.get("note") or [])},
 		# Actualizeaza toate (0.6.6): din orice fila, cand sunt cel putin doua
 		"toate": len(toate), "text_toate": _t("Actualizează toate (%d)") % len(toate) if len(toate) >= 2 else "",
 		"cautare_fisiere": cf,
@@ -1277,7 +1279,7 @@ PAGINA = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Extensii și aplicații</title>
+<title>Plugins</title>
 <style>__STIL_COMUN__
 __STIL_PAGINI__
   .file{margin:0 0 12px;}
@@ -1308,7 +1310,7 @@ __STIL_PAGINI__
 </head>
 <body>
 <main>
-<h1>Extensii și aplicații</h1>
+<h1>Plugins</h1>
 <p><a href="/setari?deschis=1">Setările deschise pe televizor</a></p>
 <p class="nota">Extensiile de pe receptor și din feeduri. Fișierele .ipk de pe stick, disc, din /tmp sau din rețea. Actualizările imaginii sunt în pagina <a href="/actualizari" id="legaturaActualizari">Actualizare software</a>.</p>
 <p class="mesaj" id="incarcare">Se citește lista...</p>
@@ -1416,6 +1418,7 @@ function arataStare(d){
   if(d.mod_sigur){ p.push(d.mod_sigur); }
   if(d.repornire_ceruta){ p.push("Extensiile noi apar după repornirea interfeței."); }
   if(!d.opkg){ p.push("Instalarea extensiilor nu este disponibilă în această imagine."); }
+  if(d.descarcare.note && d.descarcare.note.length){ p.push(d.descarcare.note.join(" ")); }
   if(!d.descarcare.in_curs && d.descarcare.cod !== null && d.descarcare.cod !== undefined && d.descarcare.cod !== 0 && d.descarcare.motiv){ p.push("Ultima descărcare (" + d.descarcare.cand + "): " + d.descarcare.motiv); }
   $("stareText").textContent = p.join(" ");
   $("descarca").disabled = d.descarcare.in_curs || !d.surse || !d.opkg;
@@ -1696,7 +1699,7 @@ TEXTE_PAGINA = {
 	"html": (
 		N_("Setările deschise pe televizor"),
 		N_("Instalează fișiere .ipk"),
-		N_("Extensii și aplicații"),
+		N_("Plugins"),
 		N_("Extensiile de pe receptor și din feeduri. Fișierele .ipk de pe stick, disc, din /tmp sau din rețea. "
 			"Actualizările imaginii sunt în pagina <a href=\"/actualizari\" "
 			"id=\"legaturaActualizari\">Actualizare software</a>."),

@@ -436,8 +436,9 @@ class HdsEgalizator(Screen):
 	def arataDescrierea(self):
 		p = self.poz
 		if p == POZ_PORNIT:
-			# oprit din fabrica; textul spune la ce posturi lucreaza (numai sunet MPEG) si ca pe unele receptoare poate intrerupe sunetul
-			t = _("Oprit din fabrică. Lucrează numai la posturile cu sunet MPEG (MP2), radio și TV. Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l.")
+			# oprit din fabrica; textul spune la ce posturi lucreaza (radio: MPEG, AAC, Dolby cand imaginea are decodoarele; TV: MPEG)
+			# si ca pe unele receptoare poate intrerupe sunetul
+			t = _("Oprit din fabrică. Lucrează la posturile de radio și la canalele TV cu sunet MPEG, AAC sau Dolby (AC-3, E-AC-3). Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l.")
 		elif p == POZ_PRESETARE:
 			t = _("Presetarea pune singură toate benzile; apoi le poți potrivi una câte una. Barele din spate: cât de tare se aude acum fiecare bandă.")
 		elif p == POZ_MANUAL:
@@ -452,7 +453,7 @@ class HdsEgalizator(Screen):
 		elif p == POZ_TV and self.placaPeq and self.v["tv"] and self.v["tv_placa"]:
 			t = _("Prin placă: la canalele TV benzile le aplică placa de sunet, la fiecare canal și fără nicio întârziere, adunate în 5 benzi. Efectele speciale și comprimarea se aud numai la radio.")
 		elif p == POZ_TV:
-			t = _("Da: egalizatorul lucrează și la canalele TV cu sunet MPEG (MP2); la schimbarea canalului sunetul pornește pe placa de sunet și trece în egalizator după o clipă. Nu: numai la radio.")
+			t = _("Da: egalizatorul lucrează și la canalele TV; la schimbarea canalului sunetul pornește pe placa de sunet și trece în egalizator după o clipă. Nu: numai la radio.")
 		elif p == POZ_EFECTE:
 			t = _("OK: deschizi lista de efecte. Sus și jos în listă: asculți pe loc. OK păstrează alegerea, EXIT revine la efectul anterior.")
 		else:

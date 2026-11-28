@@ -232,8 +232,14 @@ class Setup(ConfigListScreen, Screen):
 		#check for list.entries > 0 else self.close
 		self["key_red"] = StaticText(_("Cancel"))
 		self["key_green"] = StaticText(_("Save"))
+		# AS140 (0.8.0): temele straine (MERCUS-FHD) asaza in Setup si <widget name="key_yellow"> / "key_blue" (jurnalul:
+		# "component 'key_yellow' not found (Setup)"); fara ele ecranul cadea pe aspectul de rezerva. Label gol, ca la InfoBar,
+		# numai sub o tema straina si numai daca ecranul nu le are deja.
+		from Components.HdsNumeStandard import adauga
+		for nume in ("key_yellow", "key_blue"):
+			adauga(self, nume, Label)
 
-		self["actions"] = NumberActionMap(["SetupActions"], 
+		self["actions"] = NumberActionMap(["SetupActions"],
 			{
 				"cancel": self.keyCancel,
 				"save": self.keySave,

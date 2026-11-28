@@ -311,7 +311,7 @@ def pune(rad, fel, sufix, opkg=None, al_nostru=None, ruleaza=None, pachet=None):
 	if comanda is None:
 		rez["motiv"] = "fara_opkg"
 		return rez
-	cod, iesire = ruleaza(comanda + ["update"], TERMEN_UPDATE_S)
+	cod, iesire = ruleaza(comanda + _argumenteUpdate(rad), TERMEN_UPDATE_S)
 	if cod != 0:
 		_jurnal("opkg update: cod %s (%s)" % (cod, _scurt(iesire)))
 	if pachet:
@@ -598,7 +598,7 @@ def reface(rad, comanda, a_noastra=None, ruleaza=None, ocupat=None):
 		conf = _conf(rad)
 		if not _feed["update_facut"] and listeVechi(rad, conf, a_noastra) and not ocupat(rad):
 			_feed["update_facut"] = True
-			cod, iesire = ruleaza(comanda + ["update"], TERMEN_UPDATE_S)
+			cod, iesire = ruleaza(comanda + _argumenteUpdate(rad), TERMEN_UPDATE_S)
 			_jurnal("modulele din feed: opkg update, cod %s%s" % (cod, (" (%s)" % _scurt(iesire)) if cod else ""))
 			conf = _conf(rad)
 		semn = semnListe(rad, conf)
@@ -661,3 +661,16 @@ def textOfertaFeed(x):
 
 def randOkFeed(x):
 	return _("Apasă OK: %s.") % textOfertaFeed(x)
+
+
+def _argumenteUpdate(rad="/"):
+	"""OPK1 (0.8.0): ['update'], or ['-f', <conf>, 'update'] when a dead foreign source is skipped (HdsSurseOpkg)"""
+	try:
+		try:
+			from Components import HdsSurseOpkg
+		except ImportError:
+			import HdsSurseOpkg
+		return HdsSurseOpkg.argumente_update(rad)
+	except Exception as e:
+		print("[HdsSurseOpkg] %r" % (e,))
+		return ["update"]

@@ -5,9 +5,11 @@
 
 cere(sursa, canale) anticipeaza primele 24 de sigle. cereReferinte(refs) aduce numai
 randurile vizibile ale listei (si canalul din bara). Cache separat de piconurile
-omului: hds_iptv/sigle, 16 MiB / 256 fisiere. Numele este cel standard, obtinut
+omului: hds_iptv/sigle, oricate fisiere (0.8.0, PCN9: plafonul de 256 de fisiere / 16 MiB scotea siglele unui buchet
+mare); cele mai vechi pleaca numai cand pe disc raman sub pragul HdsIptvClient.pragLiber (memoria interna lasa loc listelor
+si actualizarilor). Numele este cel standard, obtinut
 din I.refCanal, astfel ca aceeasi sigla apare si in Favorite. Nu pastram URL-uri
-in numele fisierelor, in index ori in jurnal. PNG si JPEG, maximum 256 KiB,
+in numele fisierelor, in index ori in jurnal. PNG si JPEG, maximum 1 MiB,
 512 x 512 si 262144 pixeli; celelalte formate pastreaza pictograma obisnuita.
 """
 import hashlib
@@ -25,11 +27,12 @@ from urllib.parse import unquote
 from Components import HdsIptvSurse as I
 from Components import HdsIptvClient as C
 
-MAX_OCTETI = 256 * 1024
+# 25.11.2026 (AS206, pe receptorul unui om): siglele unei surse erau PNG 512x512 de 272-350 KB; la 256 KiB ramaneau
+# 108 canale fara sigla. MAX_PIXELI da voie la 512x512, deci plafonul de octeti il urmeaza: 1 MiB.
+MAX_OCTETI = 1024 * 1024
 MAX_LATURA = 512
 MAX_PIXELI = 262144
-MAX_CACHE = 16 * 1024 * 1024
-MAX_SIGLE = 256
+LIBER_OCTETI = None               # None: pragul HdsIptvClient.pragLiber al discului (o proba il poate pune de mana)
 MAX_ANTICIPATE = 24
 MAX_COADA = 64
 TERMEN_S = 4
@@ -218,23 +221,36 @@ def _citeste(adresa, antete):
 			bucati.append(b)
 
 
+def _liber(cale):
+	import shutil
+	try:
+		return shutil.disk_usage(cale).free
+	except OSError:
+		return None
+
+
 def _curata():
-	"""Numai fisierele cache-ului propriu; nu atingem niciun dosar picon al omului."""
+	"""Numai fisierele cache-ului propriu; nu atingem niciun dosar picon al omului. Cele mai vechi pleaca numai cat discul
+	are sub prag liberi."""
+	liber = _liber(dosar())
+	prag = LIBER_OCTETI if LIBER_OCTETI is not None else C.pragLiber(dosar())
+	if liber is None or liber >= prag:
+		return
 	fisiere = []
 	for f in os.scandir(dosar()):
 		if f.is_file(follow_symlinks=False) and f.name.endswith((".png", ".jpg")) and _NUME.match(f.name[:-4]):
 			st = f.stat(follow_symlinks=False)
 			fisiere.append((st.st_mtime, st.st_size, f.path))
-	fisiere.sort(reverse=True)
-	total = 0
-	for i, (_ora, marime, cale) in enumerate(fisiere):
-		total += marime
-		if i >= MAX_SIGLE or total > MAX_CACHE:
-			os.unlink(cale)
-			try:
-				os.unlink(cale[:-4] + ".suma")
-			except OSError:
-				pass
+	fisiere.sort()
+	for _ora, marime, cale in fisiere[:-1]:      # cea mai noua (sigla de acum) ramane
+		if liber >= prag:
+			break
+		os.unlink(cale)
+		try:
+			os.unlink(cale[:-4] + ".suma")
+		except OSError:
+			pass
+		liber += marime
 
 
 def descarcaSigla(s, adresa, antete=None):

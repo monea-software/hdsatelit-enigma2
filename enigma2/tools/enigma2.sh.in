@@ -20,6 +20,23 @@ case ",$NO_PROXY," in
 esac
 export no_proxy NO_PROXY
 
+# HD Satelit 0.8.x (BOOT1, Eduard 27.11.2026): the start progress bar (Components/HdsBaraPornire.py) begins here, at the
+# start of this script: on a restart of the interface the ~10 s before enigma2 (the old one stopping, the logo, the model
+# guard) are covered too. At boot the helper already runs (rcS); the step "sh" is only added. See also the block before
+# enigma2 below (pause, OSD generation, "e2").
+hds_bara=@libdir@/enigma2/python/Components/HdsBaraPornire.py
+hds_bara_d=/run/hds-bara-pornire
+if [ -f "$hds_bara" ] && [ ! -e /etc/enigma2/hds-bara-pornire.oprita ] && mkdir -p "$hds_bara_d" 2>/dev/null; then
+	hds_bara_pid=$(cat "$hds_bara_d/pid" 2>/dev/null)
+	if [ -n "$hds_bara_pid" ] && [ -d "/proc/$hds_bara_pid" ]; then
+		echo "$(cut -d' ' -f1 /proc/uptime 2>/dev/null) sh" >> "$hds_bara_d/pasi" 2>/dev/null
+	else
+		rm -f "$hds_bara_d/pauza"
+		echo "$(cut -d' ' -f1 /proc/uptime 2>/dev/null) sh" > "$hds_bara_d/pasi" 2>/dev/null
+		nice -n 10 python3 -I -S -B "$hds_bara" porneste interfata < /dev/null > /dev/null 2>&1 &
+	fi
+fi
+
 # SysRq off: a USB keyboard plugged into the receiver is not taken by enigma2 (its letters reach the text fields
 # through the console), so the kernel would also act on Alt+PrintScreen+B (an instant restart, without saving) and the
 # other SysRq keys. The kernel has them on (sysrq=1). The rule is a line kernel.sysrq in /etc/sysctl.conf, applied at
@@ -494,6 +511,20 @@ fi
 # only the name is looked at, as before, so a board that stays in the check does not wait at every restart. These cases
 # also go, with the time, to the log of the falls (HDS_LIBREADER_JURNAL, the one the reports collect). enigma2 itself
 # also writes the delay only while /dev/phi is held (lib/dvb/hdspazaphi.h).
+# Before that restart (only when neither mark is there, so a board on which libreader never comes up does not wait at
+# every restart of the interface), a second chance. Seen up to 25.11.2026: only on the SF8008, 3 restarts of the board
+# for this in the reports of the testers (and 1 on ours) against roughly 1700 restarts of the interface, each about 30 s
+# after an exit that had stopped libreader; on two of them and on ours libreader held /dev/phi again after the restart
+# (on one board it never did again). A good fresh one holds /dev/phi within 1-3 s, so one that does not in 20 s is not
+# just late; why it misses is not known (dead, stuck, or the device still taken). While a libreader is still alive (files
+# open) it is waited for HDS_LIBREADER_TINE_LUNG more seconds; when it still does not hold /dev/phi (or none is alive),
+# the ones left are stopped (their end and HDS_LIBREADER_PAUZA waited, as after an exit), one more is started and waited
+# for HDS_LIBREADER_TINE (when its launcher stays in the board check, no restart, as at the first launch). Only then the
+# restart. What was seen goes with the
+# line (hds_lr_stare: the libreader processes with their state and open files, every holder of /dev/phi with its flags,
+# uptime and load), so a restart of the board for this is never without a reason in the log. A fresh one that held
+# /dev/phi only at the second chance writes one line to the log of the watchdog (HDS_LIBREADER_JURNAL_PAZNIC, which the
+# reports also collect), not to the log of the falls: the interface did not stop.
 HDS_LIBREADER=${HDS_LIBREADER:-@bindir@/libreader}
 HDS_LIBREADER_PAUZA=${HDS_LIBREADER_PAUZA:-5}
 HDS_LIBREADER_ASTEAPTA=${HDS_LIBREADER_ASTEAPTA:-60}
@@ -506,11 +537,18 @@ HDS_LIBREADER_JURNAL=${HDS_LIBREADER_JURNAL:-${HDS_CADERI_JURNAL:-/home/root/log
 HDS_LIBREADER_REPORNIRE=${HDS_LIBREADER_REPORNIRE:-/sbin/reboot}
 HDS_LIBREADER_REPORNIT=${HDS_LIBREADER_REPORNIT:-/tmp/hds-libreader.repornit}
 HDS_LIBREADER_REPORNIT_FLASH=${HDS_LIBREADER_REPORNIT_FLASH:-/home/root/logs/hds-libreader-repornit.semn}
+HDS_LIBREADER_TINE_LUNG=${HDS_LIBREADER_TINE_LUNG:-30}
+HDS_LIBREADER_JURNAL_PAZNIC=${HDS_LIBREADER_JURNAL_PAZNIC:-/home/root/hds-watchdog.log}
 # one line with the time in the log of the falls (and the same on the console)
 hds_lr_jurnal() {
 	echo "[hds-libreader] $*"
 	mkdir -p "${HDS_LIBREADER_JURNAL%/*}" 2>/dev/null
 	echo "$(date '+%Y-%m-%d %H:%M:%S') libreader: $*" >> "$HDS_LIBREADER_JURNAL" 2>/dev/null
+}
+# one line with the time in the log of the watchdog (a case that did not stop the interface; the reports collect it too)
+hds_lr_paznic() {
+	echo "[hds-libreader] $*"
+	echo "$(date '+%Y-%m-%d %H:%M:%S') libreader: $*" >> "$HDS_LIBREADER_JURNAL_PAZNIC" 2>/dev/null
 }
 # the pids of the processes named libreader, a zombie left out (it holds nothing and is only waiting to be reaped)
 hds_lr_pids() {
@@ -545,6 +583,53 @@ hds_lr_cititor() {
 		done
 	done
 	return 1
+}
+# the pids of the libreader processes that still have a file open (alive; one in its exit has none)
+hds_lr_vii() {
+	hds_sep=""
+	for hds_p in $(hds_lr_pids); do
+		for hds_f in "$HDS_LIBREADER_PROC/$hds_p"/fd/*; do
+			[ -e "$hds_f" ] || [ -L "$hds_f" ] || continue
+			printf '%s%s' "$hds_sep" "$hds_p"
+			hds_sep=" "
+			break
+		done
+	done
+}
+# what is seen when no libreader holds /dev/phi, for the line in the log (only on that path, it walks all of /proc):
+# each libreader "pid/state/open files", every process holding /dev/phi "comm pid flags", uptime and load
+hds_lr_stare() {
+	hds_st=""
+	for hds_p in $(hds_lr_pids); do
+		hds_s="?"
+		while read -r hds_k hds_v hds_rest; do
+			[ "$hds_k" = "State:" ] && { hds_s=$hds_v; break; }
+		done 2>/dev/null < "$HDS_LIBREADER_PROC/$hds_p/status"
+		hds_n=0
+		for hds_f in "$HDS_LIBREADER_PROC/$hds_p"/fd/*; do
+			[ -e "$hds_f" ] || [ -L "$hds_f" ] || continue
+			hds_n=$((hds_n + 1))
+		done
+		hds_st="$hds_st $hds_p/$hds_s/$hds_n"
+	done
+	hds_ti=""
+	for hds_f in "$HDS_LIBREADER_PROC"/[0-9]*/fd/*; do
+		[ "$(readlink "$hds_f" 2>/dev/null)" = "$HDS_LIBREADER_PHI" ] || continue
+		hds_d=${hds_f%/fd/*}
+		hds_c="?"
+		read -r hds_c 2>/dev/null < "$hds_d/comm"
+		hds_fl="?"
+		while read -r hds_k hds_v hds_rest; do
+			[ "$hds_k" = "flags:" ] && { hds_fl=$hds_v; break; }
+		done 2>/dev/null < "$hds_d/fdinfo/${hds_f##*/}"
+		hds_ti="$hds_ti $hds_c/${hds_d##*/}/$hds_fl"
+	done
+	hds_up=""
+	read -r hds_up hds_rest 2>/dev/null < "$HDS_LIBREADER_PROC/uptime"
+	hds_inc=""
+	read -r hds_inc hds_rest 2>/dev/null < "$HDS_LIBREADER_PROC/loadavg"
+	printf 'libreader:%s; tin %s:%s; uptime %s s, incarcarea %s' "${hds_st:- niciunul}" "$HDS_LIBREADER_PHI" \
+		"${hds_ti:- nimeni}" "${hds_up:-?}" "${hds_inc:-?}"
 }
 if [ -x "$HDS_LIBREADER" ]; then
 	hds_lr=""
@@ -607,14 +692,75 @@ if [ -x "$HDS_LIBREADER" ]; then
 				sleep 1
 				hds_t=$((hds_t + 1))
 			done
+			hds_lr_prima=""
+			hds_lr_blocat=""
+			hds_lr_cum=""
+			if [ -z "$(hds_lr_cititor)" ] && [ ! -e "$HDS_LIBREADER_REPORNIT" ] && [ ! -e "$HDS_LIBREADER_REPORNIT_FLASH" ]; then
+				# the second chance (see the comment at the variables): a live one is waited for longer, then the
+				# ones left are stopped and one more is started
+				hds_lr_prima=$(hds_lr_stare)
+				hds_t2=0
+				while [ -n "$(hds_lr_vii)" ] && [ -z "$(hds_lr_cititor)" ] && [ "$hds_t2" -lt "$HDS_LIBREADER_TINE_LUNG" ]; do
+					sleep 1
+					hds_t2=$((hds_t2 + 1))
+				done
+				hds_lr_cum="asteptat inca ${hds_t2} s"
+				hds_t=$((hds_t + hds_t2))
+				if [ -z "$(hds_lr_cititor)" ]; then
+					hds_vechi=$(hds_lr_pids)
+					hds_t2=0
+					if [ -n "$hds_vechi" ]; then
+						# as after the exit of enigma2: its real end, then the pause before a new copy opens the
+						# same devices (a copy opening them while another was still closing them oopsed the kernel)
+						kill -9 $hds_vechi 2>/dev/null
+						while [ -n "$(hds_lr_pids)" ] && [ "$hds_t2" -lt "$HDS_LIBREADER_IESIRE" ]; do
+							sleep 1
+							hds_t2=$((hds_t2 + 1))
+						done
+						sleep "$HDS_LIBREADER_PAUZA"
+						hds_t2=$((hds_t2 + HDS_LIBREADER_PAUZA))
+					fi
+					hds_t3=0
+					if [ -n "$(hds_lr_pids)" ]; then
+						# one that does not end even after kill -9 (stuck in the kernel): no second copy beside it, the
+						# restart of the board below is the way out
+						hds_lr_cum="$hds_lr_cum, apoi oprit $hds_vechi, dar ramas in iesire: fara al doilea"
+					else
+						"$HDS_LIBREADER" 720P_50 &
+						hds_lrp=$!
+						hds_t4=0
+						while kill -0 "$hds_lrp" 2>/dev/null && [ "$hds_t4" -lt "$HDS_LIBREADER_ASTEAPTA" ]; do
+							sleep 1
+							hds_t4=$((hds_t4 + 1))
+						done
+						hds_t2=$((hds_t2 + hds_t4))
+						if kill -0 "$hds_lrp" 2>/dev/null; then
+							# the second one stays in the board check: as at the first launch, no restart (it would not help)
+							hds_lr_blocat=1
+							echo "libreader_blocat=enigma2.sh ${hds_t4}" > "$HDS_LIBREADER_SEMN" 2>/dev/null
+						fi
+						while [ -z "$(hds_lr_cititor)" ] && [ "$hds_t3" -lt "$HDS_LIBREADER_TINE" ]; do
+							sleep 1
+							hds_t3=$((hds_t3 + 1))
+						done
+						hds_lr_cum="$hds_lr_cum, apoi oprit ${hds_vechi:-niciunul ramas} si pornit altul"
+					fi
+					hds_t=$((hds_t + hds_t2 + hds_t3))
+				fi
+				if [ -n "$(hds_lr_cititor)" ]; then
+					hds_lr_paznic "cel nou tine $HDS_LIBREADER_PHI abia dupa ${hds_t} s ($hds_lr_cum; la ${HDS_LIBREADER_TINE} s: $hds_lr_prima): fara repornirea receptorului"
+				fi
+			fi
 			if [ -n "$(hds_lr_cititor)" ]; then
 				echo "[hds-libreader] libreader $(hds_lr_cititor) holds $HDS_LIBREADER_PHI after ${hds_t} s"
 				[ -e "$HDS_LIBREADER_REPORNIT_FLASH" ] && rm -f "$HDS_LIBREADER_REPORNIT_FLASH"
+			elif [ -n "$hds_lr_blocat" ]; then
+				hds_lr_jurnal "cel nou nu tine $HDS_LIBREADER_PHI dupa ${hds_t} s, iar al doilea nu a devenit demon in ${HDS_LIBREADER_ASTEAPTA} s (verificarea placii?): fara repornire, interfata porneste asa ($hds_lr_cum; la ${HDS_LIBREADER_TINE} s: $hds_lr_prima)"
 			elif [ -e "$HDS_LIBREADER_REPORNIT" ] || [ -e "$HDS_LIBREADER_REPORNIT_FLASH" ]; then
-				hds_lr_jurnal "cel nou nu tine $HDS_LIBREADER_PHI dupa ${hds_t} s, din nou dupa repornirea facuta pentru asta: fara alta repornire, interfata porneste asa (intarzierea sunetului nu se scrie)"
+				hds_lr_jurnal "cel nou nu tine $HDS_LIBREADER_PHI dupa ${hds_t} s, din nou dupa repornirea facuta pentru asta: fara alta repornire, interfata porneste asa (intarzierea sunetului nu se scrie); $(hds_lr_stare)"
 				echo "libreader_fara_phi=enigma2.sh ${hds_t}" >> "$HDS_LIBREADER_SEMN" 2>/dev/null
 			else
-				hds_lr_jurnal "cel nou nu tine $HDS_LIBREADER_PHI dupa ${hds_t} s: receptorul se reporneste o data"
+				hds_lr_jurnal "cel nou nu tine $HDS_LIBREADER_PHI dupa ${hds_t} s, nici dupa a doua incercare ($hds_lr_cum): receptorul se reporneste o data; la ${HDS_LIBREADER_TINE} s: $hds_lr_prima; la sfarsit: $(hds_lr_stare)"
 				mkdir -p "${HDS_LIBREADER_REPORNIT_FLASH%/*}" 2>/dev/null
 				touch "$HDS_LIBREADER_REPORNIT" "$HDS_LIBREADER_REPORNIT_FLASH" 2>/dev/null
 				sync
@@ -749,6 +895,30 @@ fi
 if [ -n "$hds_act" ] && [ "$hds_paza" = potrivit ] && [ -f "$HDS_ACT_PROGRAM" ] && command -v python3 > /dev/null 2>&1; then
 	echo "[hds-actualizare] an update may have been cut ($hds_act): $HDS_ACT_PROGRAM pornire"
 	python3 -I -S -B "$HDS_ACT_PROGRAM" pornire > /dev/null 2>&1
+fi
+
+# The network guard (Components/HdsPazaWifi.py run by itself, 0.8.0): a process of its own, outside enigma2, that brings
+# back a WiFi stick dropped off USB at boot (power off and on of that one USB port) and starts again a network card left
+# without an address or without its DHCP client or wpa_supplicant (a router that comes up minutes after a power cut).
+# The setting "Repara singur reteaua" (Yes from the factory) stops it through a sign file it reads itself. It starts
+# here, before enigma2, at every start of this script (inittab respawns it), in a session of its own, so it outlives
+# enigma2 and works when enigma2 does not; enigma2 starts it too, once, if it is not running. A guard already running
+# (its pid file and command line) costs two reads and no Python; the program keeps one guard at a time (flock). On
+# another receiver (model guard), on the PC or in the enigma2 emulator (no /proc/stb: ifup would touch the network of the
+# computer) nothing runs. The variables are only for the tests on the PC; init sets none of them.
+HDS_PAZA_RETEA_PROGRAM=${HDS_PAZA_RETEA_PROGRAM:-@libdir@/enigma2/python/Components/HdsPazaWifi.py}
+HDS_PAZA_RETEA_PID=${HDS_PAZA_RETEA_PID:-/var/run/hds-paza-retea.pid}
+hds_pz=""
+[ -f "$HDS_PAZA_RETEA_PID" ] && read -r hds_pz < "$HDS_PAZA_RETEA_PID"
+case "$hds_pz" in
+	""|*[!0-9]*) hds_pz=x ;;
+esac
+[ -f "$HDS_PAZA_RETEA_PROGRAM" ] || HDS_PAZA_RETEA_PROGRAM=${HDS_PAZA_RETEA_PROGRAM}c
+if [ "$hds_paza" != nepotrivit ] && [ -d "${HDS_PAZA_RETEA_STB:-/proc/stb}" ] && [ -f "$HDS_PAZA_RETEA_PROGRAM" ] &&
+	command -v python3 > /dev/null 2>&1 &&
+	! grep -q HdsPazaWifi "/proc/$hds_pz/cmdline" 2>/dev/null; then
+	echo "[hds-paznic-retea] the network guard starts"
+	( setsid python3 -I -S -B "$HDS_PAZA_RETEA_PROGRAM" paznic < /dev/null > /dev/null 2>&1 & )
 fi
 
 # PRB8 (22.11.2026): the 0.7.7 test-fix packages (enigma2-plugin-hds-proba-*) are made harmless by the preinst of
@@ -1261,6 +1431,26 @@ fi
 if [ -x "$hds_sigla_timpurie" ] && ! "$hds_sigla_timpurie" stop; then
 	mkdir -p "${hds_jurnal%/*}" 2>/dev/null
 	echo "$(date '+%Y-%m-%d %H:%M:%S') sigla timpurie nu s-a oprit; interfata porneste oricum" >> "$hds_jurnal" 2>/dev/null
+fi
+# HD Satelit 0.8.x (BOOT1, Eduard 27.11.2026): the start progress bar (Components/HdsBaraPornire.py). A small helper
+# draws the bar, the percentage and the current step straight into /dev/fb0 until the first screen. At boot it was
+# started from rcS (hds-bara-pornire); on a restart of the interface it is started here. Before enigma2: the step "e2",
+# a pause (gFBDC changes the OSD mode and clears it) and a new OSD generation; then the lock taken once, so that no frame
+# is being written while enigma2 opens the framebuffer. Python lifts the pause at PYTHON_START. Never blocks the start.
+hds_bara=@libdir@/enigma2/python/Components/HdsBaraPornire.py
+hds_bara_d=/run/hds-bara-pornire
+if [ -f "$hds_bara" ] && [ ! -e /etc/enigma2/hds-bara-pornire.oprita ] && mkdir -p "$hds_bara_d" 2>/dev/null; then
+	hds_bara_t=$(cut -d' ' -f1 /proc/uptime 2>/dev/null)
+	: > "$hds_bara_d/pauza" 2>/dev/null
+	echo "$hds_bara_t" > "$hds_bara_d/gen" 2>/dev/null
+	hds_bara_pid=$(cat "$hds_bara_d/pid" 2>/dev/null)
+	if [ -n "$hds_bara_pid" ] && [ -d "/proc/$hds_bara_pid" ]; then
+		echo "$hds_bara_t e2" >> "$hds_bara_d/pasi" 2>/dev/null
+	else
+		echo "$hds_bara_t e2" > "$hds_bara_d/pasi" 2>/dev/null
+		nice -n 10 python3 -I -S -B "$hds_bara" porneste interfata < /dev/null > /dev/null 2>&1 &
+	fi
+	flock -w 1 "$hds_bara_d/lock" true < /dev/null > /dev/null 2>&1
 fi
 hds_e2_up=$(cut -d. -f1 /proc/uptime 2>/dev/null)
 if [ -n "$hds_dep" ]; then

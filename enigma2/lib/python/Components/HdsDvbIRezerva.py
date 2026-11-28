@@ -77,7 +77,8 @@ PRINDERI = 2                  # citiri cu semnal la rand pentru intoarcere
 ASTEPTARE_PROBA_S = 8         # cat se asteapta semnalul la o incercare
 MESAJ_PAUZA_S = 30 * 60       # acelasi canal oprit pe tara: mesajul cel mult o data in atat
 REINCERCARE_S = 10 * 60       # la pornirea unui canal DVB-I, o incercare mai veche de atat se face din nou
-STARI_FARA_TRECERE = ("oprit_tara", "adresa_moarta")
+# DRM1: nici pe varianta de internet criptata cu DRM (Components/HdsDvbIIncercare.DRM): receptorul n-o poate reda
+STARI_FARA_TRECERE = ("oprit_tara", "adresa_moarta", "drm")
 # variantele: verdictele ecranului negru (Components/HdsEcranNegru) dupa care programul trece pe alta varianta
 PRAG_VARIANTA_S = 2           # verdictul tine atatea secunde (cu mesajul ascuns cat urmeaza o varianta)
 PRAG_MERGE_S = 12             # varianta pornita de rezerva fara niciun verdict atatea secunde: notata ca buna

@@ -102,6 +102,9 @@ ORDINE = dict((c, n) for n, (c, _e, _i) in enumerate(CATEGORII))
 # pachete care nu se arata (se instaleaza doar ca dependente): codul comun al pluginurilor HD Satelit
 ASCUNSE = frozenset(('enigma2-plugin-extensions-hdsatelit-comun',))
 SUFIXE_ASCUNSE = ('-dev', '-dbg', '-doc', '-src', '-staticdev', '-po', '-meta')
+# team test packages (unelte/proba_receptor) live in the public feed but are put only by the remote help; listed only when
+# already installed on this receiver (pirobi1, LinuxSat 164215 #973188)
+PREFIX_PROBA = 'enigma2-plugin-hds-proba-'
 
 # un nume de pachet opkg: litere mici, cifre si + - . ; niciodata un inceput cu '-' (ar fi citit ca optiune)
 # (acelasi tipar ca in Components/Ipkg.py, care il verifica din nou chiar inainte de pornirea opkg)
@@ -110,6 +113,8 @@ _NUME = re.compile(r'^[a-z0-9][a-z0-9+.\-]{0,120}\Z')
 
 # sursele HD Satelit: adresa pe hdsatelit.com (sau un subdomeniu); celelalte sunt surse externe
 DOMENIU_HDS = 'hdsatelit.com'
+# OPK1: prefix of the lines the image adds to the opkg output (same value as Components/HdsSurseOpkg.PREFIX_NOTA)
+PREFIX_NOTA = '[HDS] '
 # fisierul cu sursele adaugate de utilizator (scris doar de gestionar)
 FISIER_SURSE_UTILIZATOR = '/etc/opkg/hds-surse-utilizator.conf'
 _NUME_SURSA = re.compile(r'^[a-z0-9][a-z0-9_.\-]{0,31}\Z')
@@ -943,7 +948,7 @@ def incarca(radacina='/'):
 		p.din_imagine = n in din_imagine
 	cat._toate = toate
 	cat.pachete = dict((n, p) for n, p in toate.items()
-		if se_arata(n) and not p.din_imagine and n not in interne)
+		if se_arata(n) and not p.din_imagine and n not in interne and not (n.startswith(PREFIX_PROBA) and not p.instalat))
 	return cat
 
 
@@ -1290,9 +1295,17 @@ def _tinta_radacinii(radacina, cale, sare):
 	return cale
 
 
-def cauta_fisiere_ipk(radacina='/', radacini=RADACINI_FISIERE, adancime=4, maxim=300, maxim_dosare=4000, info=None,
+def e_plugin_ipk(cale, nume=''):
+	"""True for an enigma2 plugin package (enigma2-plugin-*), from the package name or else the file name"""
+	baza = (nume or posixpath.basename(cale or '')).lower()
+	return baza.startswith('enigma2-plugin-')
+
+
+def cauta_fisiere_ipk(radacina='/', radacini=RADACINI_FISIERE, adancime=5, maxim=300, maxim_dosare=4000, info=None,
 		maxim_nume=3000, retea=None):
-	"""[(cale, marime, data)] ale fisierelor .ipk din radacini, cele mai noi primele. Nu urmeaza legaturile, sare
+	"""[(cale, marime, data)] ale fisierelor .ipk din radacini, intai pluginurile (enigma2-plugin-*), apoi cele mai noi.
+	adancime 5 (was 4): /media is level 0 and the stick level 1, so the files four folders down on a stick are found
+	(three before). Nu urmeaza legaturile, sare
 	peste dosarele ascunse si peste cele care nu se pot citi; se opreste la `maxim_nume` nume gasite sau `maxim_dosare`
 	dosare si intoarce cele mai noi `maxim` (asa un dosar cu mii de .ipk vechi nu ascunde pachetul abia copiat).
 	Locurile de retea (locuri_retea) nu se deschid: un dosar de retea care nu raspunde tinea cautarea zeci de secunde,
@@ -1368,7 +1381,9 @@ def cauta_fisiere_ipk(radacina='/', radacini=RADACINI_FISIERE, adancime=4, maxim
 		if coada and dosare >= maxim_dosare:
 			taiat = True
 	rez = list(gasite.values())
-	rez.sort(key=lambda x: (-x[2], x[0]))
+	# plugins first, then the newest: a stick with a copy of a feed (hundreds of newer python3-* libraries) hid the
+	# person's plugins at the end of the list or past the cut (FAA7MED, GigaBlue UHD TRIO 4K, forum 588 #3880)
+	rez.sort(key=lambda x: (not e_plugin_ipk(x[0]), -x[2], x[0]))
 	if len(rez) > maxim:
 		taiat = True
 		rez = rez[:maxim]
@@ -1415,7 +1430,7 @@ class CautareIpk(object):
 				fisiere.append(f)
 			# o singura atribuire: cele gasite acum raman pentru cautarea urmatoare de acelasi fel
 			_citite[fel] = noi
-			fisiere.sort(key=lambda f: (not f.citit, -f.data, f.cale))
+			fisiere.sort(key=lambda f: (not f.citit, not e_plugin_ipk(f.cale, f.nume), -f.data, f.cale))
 			# pachetele numai pentru Python 2 (0.6.8), tot pe fir: cele mai noi intai, cel mult TIMP_PYTHON2 secunde in
 			# total; cele ramase se verifica la confirmarea instalarii (planFisier)
 			for f in fisiere:
@@ -1618,6 +1633,18 @@ def _baza_adresei(adresa):
 	return a.rsplit('/', 1)[-1] or a
 
 
+def cu_versiune(titlu, versiune):
+	"""titlul cu versiunea dupa el ("DAB+ din satelit 0.1.6"); cand titlul are deja versiunea ("Radio online 0.2.5"),
+	numai titlul. Aceeasi regula ca HdsExtensiiLucru.numeCuVersiune (INS2, 0.8.0)."""
+	v = (versiune or '').split(':')[-1]
+	baza = v.rsplit('-', 1)[0] if re.search(r'-r[0-9]', v) else v
+	cifre = re.findall(r'[0-9]+', baza)
+	titlu = titlu or ''
+	if not cifre or '.'.join(cifre[:2]) in titlu:
+		return titlu
+	return ('%s %s' % (titlu, baza)).strip()
+
+
 def linie_jurnal(linie, titluri=None):
 	"""(fel, text) pentru jurnalul scurt al progresului: fel 'pas', 'eroare' sau '' (rand fara rost aici).
 	Textul din iesirea opkg e doar afisat (curatat de caractere de control). `titluri`: nume pachet -> titlul aratat
@@ -1626,6 +1653,9 @@ def linie_jurnal(linie, titluri=None):
 
 	def t(nume):
 		return titluri.get(nume) or nume_scurt(nume)
+	# OPK1: lines of the image itself (Components/HdsSurseOpkg.PREFIX_NOTA), already translated
+	if isinstance(linie, str) and linie.startswith(PREFIX_NOTA):
+		return 'pas', _curat(linie[len(PREFIX_NOTA):], 200)
 	l = _curat(linie, 200)
 	if not l or l == 'Collected errors:':
 		return '', ''
@@ -1647,7 +1677,8 @@ def linie_jurnal(linie, titluri=None):
 		return 'pas', _t('Se actualizează %s de la %s la %s') % (t(m.group(1)), m.group(2), m.group(3))
 	m = _RE_INSTALEZ.match(l)
 	if m:
-		return 'pas', _t('Se instalează %s %s') % (t(m.group(1)), m.group(2))
+		# INS2 (0.8.0): titlul din feed are uneori versiunea ("Radio online 0.2.5"); ea nu se mai scrie de doua ori
+		return 'pas', _t('Se instalează %s') % cu_versiune(t(m.group(1)), m.group(2))
 	m = _RE_STERG.match(l)
 	if m:
 		return 'pas', _t('Se șterge %s') % t(m.group(1).rstrip('.'))

@@ -1,0 +1,58 @@
+From: HDSatelit <dev@hdsatelit.local>
+Subject: [PATCH] JSC: keep the Map and Set fast iteration out of the 32-bit DFG
+
+Upstream-Status: Inappropriate [restore experimental ARM32 JIT]
+
+The fast iteration protocol for Map and Set (for-of over a Map or a Set,
+added after the ARMv7 JIT was disabled upstream) lowers iterator_open and
+iterator_next to MapStorage and the map iteration nodes. Those nodes have
+no JSVALUE32_64 backend: DFGSpeculativeJIT32_64.cpp answers MapStorage
+with "unexpected node in DFG backend" and the process aborts as soon as
+a function with such a loop reaches the DFG. The Map and Set intrinsics
+of the bytecode parser already return early on 32-bit; the iteration
+modes did not get that guard.
+
+Drop the FastMap and FastSet modes on 32-bit exactly where the parser
+already drops them when the iterator protocol watchpoint has fired: the
+remaining modes are compiled, the generic path already checks that next
+is an object, and with no mode left the code takes a forced OSR exit and
+the loop runs in the baseline tier.
+---
+diff --git a/Source/JavaScriptCore/dfg/DFGByteCodeParser.cpp b/Source/JavaScriptCore/dfg/DFGByteCodeParser.cpp
+index 2430b94..fac6469 100644
+--- a/Source/JavaScriptCore/dfg/DFGByteCodeParser.cpp
++++ b/Source/JavaScriptCore/dfg/DFGByteCodeParser.cpp
+@@ -11610,13 +11610,14 @@ void ByteCodeParser::handleIteratorOpen(const JSInstruction* currentInstruction,
+     }
+     if (!globalObject->stringIteratorProtocolWatchpointSet().isStillValid())
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastString);
+-    if (!globalObject->mapIteratorProtocolWatchpointSet().isStillValid()) {
++    // The Map and Set fast iteration modes lower to MapStorage, which has no JSVALUE32_64 backend.
++    if (!is64Bit() || !globalObject->mapIteratorProtocolWatchpointSet().isStillValid()) {
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastMap);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastMapKeys);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastMapValues);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastMapEntries);
+     }
+-    if (!globalObject->setIteratorProtocolWatchpointSet().isStillValid()) {
++    if (!is64Bit() || !globalObject->setIteratorProtocolWatchpointSet().isStillValid()) {
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastSet);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastSetValues);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastSetEntries);
+@@ -12244,13 +12245,14 @@ void ByteCodeParser::handleIteratorNext(const JSInstruction* currentInstruction,
+     }
+     if (!globalObject->stringIteratorProtocolWatchpointSet().isStillValid())
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastString);
+-    if (!globalObject->mapIteratorProtocolWatchpointSet().isStillValid()) {
++    // The Map and Set fast iteration modes lower to MapStorage, which has no JSVALUE32_64 backend.
++    if (!is64Bit() || !globalObject->mapIteratorProtocolWatchpointSet().isStillValid()) {
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastMap);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastMapKeys);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastMapValues);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastMapEntries);
+     }
+-    if (!globalObject->setIteratorProtocolWatchpointSet().isStillValid()) {
++    if (!is64Bit() || !globalObject->setIteratorProtocolWatchpointSet().isStillValid()) {
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastSet);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastSetValues);
+         seenModes &= ~static_cast<uint32_t>(IterationMode::FastSetEntries);

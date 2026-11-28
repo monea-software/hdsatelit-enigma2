@@ -67,10 +67,12 @@ def handleEvent(event):
 		harddiskmanager.addHotplugPartition(device, event.get("DEVPATH"))
 		harddiskmanager.scheduleMount(device, MOUNT_WAIT_MS)
 		notifyListeners(device, "1")
+		storageNotice("add", device)
 	elif action == "remove":
 		print("[Hotplug] removed %s" % device)
 		harddiskmanager.removeHotplugPartition(device)
 		notifyListeners(device, "0")
+		storageNotice("remove", device)
 	elif action == "change" and event.get("DISK_MEDIA_CHANGE") == "1":
 		# card readers and optical drives: the medium changed, the device stays
 		print("[Hotplug] medium changed on %s" % device)
@@ -78,6 +80,17 @@ def handleEvent(event):
 		harddiskmanager.addHotplugPartition(device, event.get("DEVPATH"))
 		harddiskmanager.scheduleMount(device, MOUNT_WAIT_MS)
 		notifyListeners(device, "1")
+		storageNotice("add", device)
+
+
+def storageNotice(action, device):
+	"""0.8.0: the notice on screen when a stick, disk or card is plugged in or removed (Components/HdsAnuntStocare)"""
+	try:
+		from Components import HdsAnuntStocare
+		HdsAnuntStocare.eveniment(action, device)
+	except Exception:
+		print("[Hotplug] storage notice failed for %s:" % device)
+		print_exc()
 
 
 def usbEvent(event):
@@ -168,6 +181,11 @@ def sessionstart(reason, session=None, **kwargs):
 		try:
 			from Components import HdsDriverLipsa
 			HdsDriverLipsa.porneste(session)
+		except Exception:
+			print_exc()
+		try:
+			from Components import HdsAnuntStocare
+			HdsAnuntStocare.porneste(session)
 		except Exception:
 			print_exc()
 

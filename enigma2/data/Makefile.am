@@ -1,5 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-SUBDIRS = countries fonts defaults extensions keymaps skin_default
+SUBDIRS = countries fonts defaults extensions keymaps skin_default hds-bara-pornire
 
 # SoftCSA (lib/dvb/cahandler.h): semnul ca enigma2 serveste /tmp/.listen.camd.socket si ia cuvintele de control prin
 # protocolul 3. Scriptul de pornire al modulelor de acces trece atunci singur pe pmt_mode = 6 si extended_cw_api = 1
@@ -29,6 +29,7 @@ dist_pkgdata_DATA = \
 	hds-cursor-mouse.png \
 	hds-protectie-sigla.png \
 	hds-drivere-pachete.json \
+	hds-locuri.tsv.gz \
 	hds-module-pachete.json \
 	hds-producatori-mac.txt.gz \
 	hbbtv-aplicatii.json \

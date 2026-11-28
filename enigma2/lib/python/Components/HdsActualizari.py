@@ -47,9 +47,12 @@
 # numai a feedului si se arata ca detaliu ("Imaginea de bază" in "Despre" si la avertizarea de imagine noua). Campul
 # "actualizare" din stare.json e un numar intern (creste la fiecare publicare): leaga pagina web de rezultatul vazut.
 #
-# Verificarea zilnica (VerificareZilnica, pornita din mytest.py): numai stare.json, la 5 minute dupa pornire si apoi o
-# data pe zi; anunta o singura data fiecare actualizare noua (sau imagine noua), nu instaleaza nimic; se opreste din
-# ecran sau din pagina web (config.hds_actualizari.zilnic).
+# Verificarea zilnica (VerificareZilnica, pornita din mytest.py la fiecare pornire a interfetei, deci si dupa o
+# actualizare si la prima pornire a unei imagini noi): numai stare.json, la 5 minute dupa pornire si apoi o data pe zi,
+# numai cu internetul activ (FARA_RETEA_S); anunta o singura data fiecare actualizare noua (sau imagine noua); se opreste
+# din ecran sau din pagina web (config.hds_actualizari.zilnic). Din 0.8.0 (AUT1), cu Actualizari automate pornite
+# (config.hds_actualizari.automat, Da), o versiune noua din feed nu se mai anunta: se instaleaza singura in standby sau
+# noaptea, iar la prima folosire de dupa se arata pe scurt ce s-a schimbat (vezi AUTO_CEAS_S).
 #
 # "Ce e nou": stare.json are si campul "versiuni" (scris de oe-build/feed_actualizare.py din
 # jurnalul imaginii): noutatile fiecarei versiuni publicate pe baza aceasta, in romana si in engleza. La cautare se
@@ -151,6 +154,33 @@ TIMP_STARE_PAZA = 6
 PRIMA_VERIFICARE = 300
 ZI = 24 * 3600
 REINCERCARE = 3 * 3600
+# 0.8.0 (AUT1, Eduard 27.11.2026 22:03): verificarea numai cu internetul activ. Fara ruta implicita (fara_retea, o citire
+# din /proc) nu se cere si nu se anunta nimic, iar verificarea se reia la FARA_RETEA_S; cu ruta, dar fara raspuns de la
+# server (routerul fara internet, DNS-ul cazut), la PAUZA_SERVER_S, dublata la fiecare cadere, cel mult REINCERCARE.
+FARA_RETEA_S = 60
+PAUZA_SERVER_S = 300
+# Actualizarile automate (config.hds_actualizari.automat, Da din fabrica): o versiune noua din feed (nu o imagine noua) se
+# instaleaza singura pe drumul actualizarii rapide (actualizeazaRapid: semnatura, verdictul, pachetele de pornire si de
+# nucleu refuzate, repornirea interfetei cu motiv_asteptare), cand receptorul e in standby sau noaptea (ORE_NOAPTE, ora
+# locala, ceasul pus) treaz, dar fara nicio tasta de FARA_TASTE_S. Conditiile se verifica la AUTO_CEAS_S cat e ceva de
+# instalat. O singura incercare pe versiune la o pornire: dupa una cazuta ramane anuntul obisnuit.
+AUTO_CEAS_S = 180
+# dupa o incercare cazuta (retea, verdictul din plan, loc), alta abia la verificarea de dupa REINCERCARE_AUTO_S; pana atunci
+# fereastra din HdsImagineOnline (si anuntul) revin pentru versiunea aceea. Un receptor care nu sta in standby si e oprit
+# noaptea nu prinde prilejul niciodata: dupa ASTEPTARE_MAX_S de la prima vedere a versiunii (config.hds_actualizari.
+# asteptare, ramane peste reporniri) fereastra de azi revine si ea, iar instalarea singura ramane pregatita.
+REINCERCARE_AUTO_S = 20 * 3600
+ASTEPTARE_MAX_S = 2 * ZI
+ORE_NOAPTE = (3, 5)
+FARA_TASTE_S = 10 * 60
+AN_MINIM = 2024
+# dupa o instalare automata reusita (sau una facuta in standby): versiunea si cateva randuri din noutati; la prima tasta de
+# dupa pornire, cu receptorul treaz, un mesaj scurt (NOTA_S secunde, nu blocheaza nimic), apoi semnul se sterge
+FISIER_NOTA_AUTOMATA = '/etc/enigma2/hds-actualizare-automata.json'
+MAX_RANDURI_NOTA = 5
+NOTA_S = 30
+NOTA_DUPA_TASTA_MS = 3000
+TEXT_AUTOMAT_NOTA = N_('Receptorul instalează singur actualizările în standby sau noaptea, apoi arată ce s-a schimbat.')
 UA = 'hdsatelit-receptor/1'
 FORMAT = 1
 RANDURI_JURNAL = 200
@@ -423,6 +453,34 @@ def versiunea_starii(stare):
 	return baza if not n else '%s.%d' % (baza, n)
 
 
+def versiunea_receptorului(stare, arhitecturi):
+	"""Versiunea din stare.json pentru receptorul cu `arhitecturi` (arch.conf): a pachetului imaginii (enigma2-hdsatelit)
+	facut pentru arhitectura lui, cand e mai veche decat versiunea feedului. Feedul e comun mai multor modele, iar un model
+	lasat pe dinafara unei versiuni (24.11.2026: ZGEMMA H8.2H Plus si SE raman pe 0.7.8 pana la 0.8.0, celelalte au 0.7.9)
+	are acolo tot pachetul vechi. Fara arhitecturi sau fara pachetul lor: versiunea_starii, ca inainte."""
+	v = versiunea_starii(stare)
+	arh = set(arhitecturi or ())
+	if not arh or not isinstance(stare, dict):
+		return v
+	ale_lui = [versiune_din_pachet(p.get('versiune')) for p in stare.get('pachete') or []
+		if isinstance(p, dict) and p.get('nume') == PACHET_PRINCIPAL and p.get('arhitectura') in arh]
+	ale_lui = [x for x in ale_lui if x and _VERSIUNE.match(x)]
+	if not ale_lui:
+		return v
+	cea_veche = sorted(ale_lui, key=cmp_to_key(P.compara_versiuni))[0]
+	return cea_veche if P.compara_versiuni(cea_veche, v) < 0 else v
+
+
+def imagine_noua_pentru(stare, arhitecturi):
+	"""VAN0 (0.8.0): stare.json cere imaginea noua (imagine_noua) si pentru acest receptor. Un model lasat pe dinafara
+	unei versiuni (versiunea_receptorului mai veche decat a feedului: pachetul imaginii pentru arhitectura lui a ramas
+	cel vechi) nu are imagine noua de pus: nici anuntul zilnic, nici verdictul IMAGINE_NOUA. Fara arhitecturi sau fara
+	pachetul lor in stare.json: ca inainte (imagine_noua asa cum e)."""
+	if not isinstance(stare, dict) or not stare.get('imagine_noua'):
+		return False
+	return P.compara_versiuni(versiunea_receptorului(stare, arhitecturi), versiunea_starii(stare)) >= 0
+
+
 # ---------------------------------------------------------------- receptorul
 
 def _cale(radacina, cale):
@@ -489,10 +547,13 @@ def versiune_din_pachet(versiune):
 
 
 def imaginea(radacina='/', conf=None):
-	"""{'baza' (imaginea de pe stick), 'versiune' (vazuta de om, None daca nu se stie), 'pachet' (enigma2-hdsatelit)}"""
+	"""{'baza' (imaginea de pe stick), 'versiune' (vazuta de om, None daca nu se stie), 'pachet' (enigma2-hdsatelit),
+	'arhitecturi' (arch.conf, pentru versiunea_receptorului; aceeasi configurare pe care o citea si instalate)}"""
+	conf = conf or P.citeste_configurarea(radacina)
 	baza = baza_receptorului(radacina)
 	v = instalate(radacina, conf).get(PACHET_PRINCIPAL, '')
-	return {'baza': baza, 'versiune': versiune_din_pachet(v), 'pachet': v}
+	return {'baza': baza, 'versiune': versiune_din_pachet(v), 'pachet': v,
+		'arhitecturi': list(getattr(conf, 'arhitecturi', None) or [])}
 
 
 def baza_pentru_despre(radacina='/'):
@@ -1177,13 +1238,14 @@ def versiuni_stare(stare):
 	return rez
 
 
-def versiuni_noi(stare, instalata):
-	"""Versiunile din stare.json mai noi decat cea instalata (toate, cand nu se stie), pana la cea de pe server, de la
-	cea mai noua; None cand stare.json nu are noutatile pe versiuni (sau le are stricate)."""
+def versiuni_noi(stare, instalata, pana_la=None):
+	"""Versiunile din stare.json mai noi decat cea instalata (toate, cand nu se stie), pana la cea de pe server (sau
+	pana la `pana_la`, versiunea_receptorului), de la cea mai noua; None cand stare.json nu are noutatile pe versiuni (sau
+	le are stricate)."""
 	toate = versiuni_stare(stare)
 	if toate is None:
 		return None
-	pe_server = versiunea_starii(stare)
+	pe_server = pana_la or versiunea_starii(stare)
 	return [v for v in toate if P.compara_versiuni(v['versiune'], pe_server) <= 0 and
 		(not instalata or P.compara_versiuni(v['versiune'], instalata) > 0)]
 
@@ -1307,9 +1369,10 @@ def dependinte_lipsa(plan, inst, feed, furn=None):
 	return rez
 
 
-def verdict(stare, baza, plan, lipsa=(), baza_feed=None):
+def verdict(stare, baza, plan, lipsa=(), baza_feed=None, arhitecturi=None):
 	"""{'motive': [...], 'detalii': [...], 'imagine_noua': bool, 'poate_instala': bool}. baza = baza scrisa, baza_feed =
-	baza din adresele feedului (implicit aceeasi; alta numai pentru un feed unic, motiv_baza)"""
+	baza din adresele feedului (implicit aceeasi; alta numai pentru un feed unic, motiv_baza); arhitecturi: ale
+	receptorului (VAN0: imagine_noua numai cand e si pentru el, imagine_noua_pentru)"""
 	motive = []
 	detalii = []
 
@@ -1323,7 +1386,7 @@ def verdict(stare, baza, plan, lipsa=(), baza_feed=None):
 		adauga('baza', '%s / %s' % (stare.get('baza'), baza))
 	elif m_baza:
 		adauga('imagine-minima', stare.get('imagine_minima'))
-	if stare.get('imagine_noua'):
+	if imagine_noua_pentru(stare, arhitecturi):
 		for m in stare.get('motive') or ['alt-motiv']:
 			adauga(m if m in TEXT_MOTIV else 'alt-motiv')
 		for d in stare.get('detalii') or []:
@@ -1807,7 +1870,11 @@ def pachet_din_stare(stare, nume, arhitectura=None):
 
 def rezultat_cautare(stare, img, plan, lipsa, cand=None, baza_feed=None):
 	"""Rezultatul unei cautari reusite, cum il arata ecranul si pagina web"""
-	v = verdict(stare, img['baza'], plan, lipsa, baza_feed)
+	v = verdict(stare, img['baza'], plan, lipsa, baza_feed, img.get('arhitecturi'))
+	# ZGO9 (0.8.0): versiunea pentru arhitectura receptorului; un model lasat pe dinafara nu vede numarul si noutatile
+	# versiunii celorlalte
+	v_rec = versiunea_receptorului(stare, img.get('arhitecturi'))
+	pe_dinafara = P.compara_versiuni(v_rec, versiunea_starii(stare)) < 0
 	if v['imagine_noua']:
 		cod = IMAGINE_NOUA
 	elif plan:
@@ -1826,11 +1893,11 @@ def rezultat_cautare(stare, img, plan, lipsa, cand=None, baza_feed=None):
 	r = {
 		'stare': cod,
 		'server': {'baza': stare.get('baza'), 'actualizare': stare.get('actualizare'),
-			'versiune': versiunea_starii(stare),
-			'data': stare.get('data') or '', 'ce_e_nou': list(stare.get('ce_e_nou') or []),
+			'versiune': v_rec,
+			'data': '' if pe_dinafara else stare.get('data') or '', 'ce_e_nou': [] if pe_dinafara else list(stare.get('ce_e_nou') or []),
 			# alese acum, fata de versiunea instalata la cautare: dupa instalare ea e deja cea noua, iar "Ce e nou"
 			# trebuie sa ramana cel vazut inainte
-			'versiuni': versiuni_noi(stare, img.get('versiune')),
+			'versiuni': versiuni_noi(stare, img.get('versiune'), v_rec),
 			'imagine_recomandata': stare.get('imagine_recomandata') or ''},
 		'pachete': pachete,
 		'marime': sum(x['marime'] for x in plan),
@@ -2479,7 +2546,33 @@ def config_actualizari():
 	# separat: sectiunea poate fi facuta deja de codul din memorie de dinainte de 0.7.8, fara cheia noua
 	if 'repornire_singura' not in config.hds_actualizari.content.items:
 		config.hds_actualizari.repornire_singura = ConfigYesNo(default=True)
+	# 0.8.0 (AUT1): Actualizari automate (Da din fabrica); separat, ca repornire_singura
+	if 'automat' not in config.hds_actualizari.content.items:
+		config.hds_actualizari.automat = ConfigYesNo(default=True)
+	if 'asteptare' not in config.hds_actualizari.content.items:
+		# "<cheia versiunii> <ora la care a fost vazuta prima data>" (ASTEPTARE_MAX_S)
+		config.hds_actualizari.asteptare = ConfigText(default='', fixed_size=False)
 	return config.hds_actualizari
+
+
+def automat_pornit():
+	"""0.8.0 (AUT1): True = versiunile noi din feed se instaleaza singure (standby sau noaptea). Fara setare: True."""
+	try:
+		return bool(config_actualizari().automat.value)
+	except Exception:
+		return True
+
+
+def seteaza_automat(pornit):
+	c = config_actualizari()
+	c.automat.value = bool(pornit)
+	c.automat.save()
+	try:
+		from Components.config import configfile
+		configfile.save()
+	except Exception:
+		pass
+	return bool(c.automat.value)
 
 
 def zilnic_pornit():
@@ -2729,6 +2822,8 @@ class Actualizari(object):
 		self._nota_reparatie = ''
 		self._ocrotite = None
 		self._repara_principal = False
+		# 0.8.0 (AUT1): actualizarea rapida pornita de actualizarile automate (VerificareZilnica._incearca_auto)
+		self._automat = False
 
 	# ---- ascultatorii (ecranul si pagina web se reimprospateaza singure)
 	def _schimbat(self):
@@ -2903,7 +2998,12 @@ class Actualizari(object):
 			if generatie != self._generatie_cautare or self.faza != 'caut' or self._ipkg is not ipkg:
 				return
 			if e == IpkgComponent.EVENT_LINE:
-				self._lista_ipkg.append(curata(param))
+				if isinstance(param, str) and param.startswith(P.PREFIX_NOTA):
+					# OPK1: a skipped dead source or the wait for another opkg, shown as the step on the screen
+					self.pas = curata(param[len(P.PREFIX_NOTA):])
+					self._schimbat()
+				else:
+					self._lista_ipkg.append(curata(param))
 				self._jurnal(param)
 			elif e == IpkgComponent.EVENT_DONE:
 				ipkg.removeCallback(eveniment)
@@ -3486,6 +3586,9 @@ class Actualizari(object):
 				if vechi:
 					self._jurnal('pachete neconfigurate in receptor (nu ale actualizarii): %s' % ', '.join(vechi))
 			self._jurnal('instalare: cod %s, ramase %s' % (cod, ramase))
+			if self.rezultat.get('stare') == 'instalata':
+				# 0.8.0 (AUT1): instalata singura (sau in standby): ce s-a schimbat se arata la prima folosire de dupa
+				nota_dupa_instalare(self)
 			if self.repornire:
 				self._armeaza_repornirea_in_standby()
 			if self.rapid:
@@ -3586,6 +3689,12 @@ class Actualizari(object):
 			self._sfarsit_rapid('cautare: %s' % rezultat.get('stare'))
 			self._schimbat()
 			return
+		if self._automat and rezultat.get('repornire_receptor'):
+			# 0.8.0 (AUT1): driverul placii cere repornirea receptorului intreg, iar dupa ea semnul intoarcerii in standby
+			# (din /tmp) se pierde: receptorul ar porni treaz noaptea. Singur nu se instaleaza; ramane anuntul.
+			self._sfarsit_rapid('actualizarea automata: driverul placii cere repornirea receptorului, ramane anuntul')
+			self._schimbat()
+			return
 		self.rapid_pas = 'instalez'
 		if not self.instaleaza((rezultat.get('server') or {}).get('actualizare')):
 			self._sfarsit_rapid('instalarea nu a pornit')
@@ -3597,6 +3706,7 @@ class Actualizari(object):
 			self._jurnal('actualizare rapida oprita: %s' % motiv)
 		self.rapid, self._reporneste_rapid = False, None
 		self.repara = ''
+		self._automat = False
 		if self._ceas_rapid is not None:
 			self._ceas_rapid.stop()
 
@@ -3860,6 +3970,8 @@ class Actualizari(object):
 			'repara': self.repara,
 			'reparatie_ultima': citeste_reparatia(self.radacina).get('ultima'),
 			'zilnic': zilnic_pornit(),
+			# 0.8.0 (AUT1)
+			'automat': automat_pornit(),
 			'jurnal': self.jurnal[-30:],
 		}
 
@@ -3973,8 +4085,8 @@ def text_anunt(stare, img, baza_feed=None):
 	e noua cand e mai mare (ca la opkg) decat versiunea care ruleaza. baza_feed: a adreselor (feedul unic, motiv_baza)."""
 	if motiv_baza(stare, baza_feed or img['baza'], img['baza']) == 'baza' or not img['versiune']:
 		return None, None
-	v = versiunea_starii(stare)
-	if stare.get('imagine_noua'):
+	v = versiunea_receptorului(stare, img.get('arhitecturi'))
+	if imagine_noua_pentru(stare, img.get('arhitecturi')):
 		cheie = '%s/%s/imagine' % (stare['baza'], v)
 		return _t('Actualizare software: pentru noutățile HD Satelit trebuie pusă imaginea nouă de la zero. Detalii '
 			'în Actualizare software.'), cheie
@@ -4001,22 +4113,238 @@ def text_anunt_driver(stare, radacina='/', conf=None):
 		','.join(sorted('%s=%s' % (x['nume'], x['la']) for x in plan)))
 
 
+def _acum():
+	"""Ora de acum (probele de pe PC dau alta)"""
+	return time.time()
+
+
+def _monoton():
+	"""Ceasul monoton (ora corectata la pornire nu-l strica); probele dau altul"""
+	try:
+		return time.monotonic()
+	except AttributeError:
+		return time.time()
+
+
+# 0.8.0 (AUT1): ultima tasta (orice tasta, ascultator inaintea tuturor hartilor, care nu opreste nimic) si mesajul de dupa
+# o instalare automata, cat asteapta prima tasta
+_TASTE = {'ultima': _monoton(), 'legat': False, 'nota': None, 'ceas': None, 'legatura': None}
+# prioritatea ascultatorului: langa cea a protectiei ecranului (Screens/ScreenSaver.py, Components/HdsOprireAutomata.py)
+PRIO_TASTE = -0x7FFFFFFF
+
+
+def leaga_tastele():
+	"""Ascultatorul tastelor (o singura data pe pornire); fara enigma (PC) nimic"""
+	if _TASTE['legat']:
+		return
+	try:
+		from enigma import eActionMap
+		eActionMap.getInstance().bindAction('', PRIO_TASTE, _tasta)
+		_TASTE['legat'] = True
+	except Exception as e:
+		print('[HdsActualizari] tastele: %r' % (e,))
+
+
+def _tasta(key, flag):
+	"""Tine minte ora; cu un mesaj de dupa o instalare automata in asteptare, il arata la NOTA_DUPA_TASTA_MS (ca trezirea
+	din standby sa se termine). Nu opreste tasta (0)."""
+	_TASTE['ultima'] = _monoton()
+	if _TASTE['nota'] is not None:
+		try:
+			if _TASTE['ceas'] is None:
+				from enigma import eTimer
+				t = eTimer()
+				try:
+					_TASTE['legatura'] = t.timeout.connect(arata_nota_automata)
+				except AttributeError:
+					t.callback.append(arata_nota_automata)
+				_TASTE['ceas'] = t
+			_TASTE['ceas'].start(NOTA_DUPA_TASTA_MS, True)
+		except Exception as e:
+			print('[HdsActualizari] mesajul actualizarii automate: %r' % (e,))
+	return 0
+
+
+def fara_taste_de():
+	"""Secundele de la ultima tasta (sau de la pornire)"""
+	return max(0, _monoton() - _TASTE['ultima'])
+
+
+def noaptea(acum=None):
+	"""True intre ORE_NOAPTE (ora locala), numai cu ceasul pus (anul cel putin AN_MINIM)"""
+	t = time.localtime(_acum() if acum is None else acum)
+	return t.tm_year >= AN_MINIM and ORE_NOAPTE[0] <= t.tm_hour < ORE_NOAPTE[1]
+
+
+def instalare_automata_posibila(a=None):
+	"""Actualizarile automate pornite si drumul actualizarii rapide disponibil (functia de repornire a paginii web)"""
+	a = a or actualizari
+	return automat_pornit() and _reporneste_implicit(a.sesiunea) is not None
+
+
+def tine_minte_asteptarea(cheie):
+	"""Ora la care versiunea `cheie` a fost vazuta prima data (numai cu ceasul pus), in config: ramane peste reporniri"""
+	try:
+		c = config_actualizari().asteptare
+		if (c.value or '').split(' ')[0] == cheie:
+			return
+		acum = _acum()
+		if time.localtime(acum).tm_year < AN_MINIM:
+			return
+		c.value = '%s %d' % (cheie, int(acum))
+		c.save()
+	except Exception as e:
+		print('[HdsActualizari] asteptarea actualizarii automate: %r' % (e,))
+
+
+def asteapta_de_prea_mult():
+	"""True cand versiunea de instalat singura asteapta de mai mult de ASTEPTARE_MAX_S (prilejul nu vine)"""
+	try:
+		cheie, cand = config_actualizari().asteptare.value.split(' ')
+		v = _verificare[0] if _verificare else None
+		if v is not None and v.de_instalat and v.de_instalat != cheie:
+			return False
+		return _acum() - int(cand) > ASTEPTARE_MAX_S
+	except Exception:
+		return False
+
+
+def fereastra_feed_ascunsa():
+	"""0.8.0 (AUT1): Components/HdsImagineOnline nu mai deschide treaz fereastra pentru o versiune din feed (ar intreba):
+	o instaleaza actualizarile automate. Fereastra revine cand instalarea singura a cazut pentru versiunea aceea sau
+	asteapta de prea mult (asteapta_de_prea_mult). Fereastra pentru o imagine noua ramane."""
+	try:
+		if not instalare_automata_posibila():
+			return False
+		v = _verificare[0] if _verificare else None
+		if v is not None and v.cazuta:
+			return False
+		return not asteapta_de_prea_mult()
+	except Exception:
+		return False
+
+
+def text_nota_automata(versiune, randuri):
+	"""„Am actualizat receptorul la versiunea 0.8.1:” si cel mult MAX_RANDURI_NOTA randuri din noutati, cu buline"""
+	randuri = [r for r in randuri or [] if r][:MAX_RANDURI_NOTA]
+	if not randuri:
+		return _t('Am actualizat receptorul la versiunea %s.') % versiune
+	return _t('Am actualizat receptorul la versiunea %s:') % versiune + '\n' + '\n'.join(u'• %s' % r for r in randuri)
+
+
+def scrie_nota_automata(versiune, server, radacina='/', limba=None):
+	"""Semnul de dupa o instalare automata: versiunea si primele randuri din noutatile instalate (in limba receptorului),
+	scris atomic pe memoria interna (ramane dupa repornire). True cand s-a scris."""
+	randuri = []
+	for _v, rs in noutati(server or {}, limba):
+		randuri.extend(rs)
+		if len(randuri) >= MAX_RANDURI_NOTA:
+			break
+	d = {'versiune': curata(versiune or ''), 'randuri': [curata(r) for r in randuri[:MAX_RANDURI_NOTA]],
+		'cand': int(_acum())}
+	cale = _cale(radacina, FISIER_NOTA_AUTOMATA)
+	try:
+		dosar = os.path.dirname(cale)
+		if not os.path.isdir(dosar):
+			os.makedirs(dosar)
+		with open(cale + '.nou', 'w', encoding='utf-8') as f:
+			json.dump(d, f, ensure_ascii=False)
+			f.flush()
+			os.fsync(f.fileno())
+		os.replace(cale + '.nou', cale)
+		return True
+	except Exception as e:
+		print('[HdsActualizari] semnul actualizarii automate: %r' % (e,))
+		return False
+
+
+def nota_dupa_instalare(a, versiune=None):
+	"""Din _dupa_instalare, la o instalare reusita: semnul mesajului cand a pornit-o actualizarea automata sau cand
+	receptorul e in standby (nu se uita nimeni). True cand s-a scris."""
+	automata, a._automat = a._automat, False
+	if not automata and not e_in_standby():
+		return False
+	server = (a.rezultat or {}).get('server') or {}
+	v = versiune or server.get('versiune') or ''
+	if not v:
+		return False
+	a._jurnal('actualizarea %s instalata singura; ce s-a schimbat se arata la prima folosire' % v)
+	return scrie_nota_automata(v, server, a.radacina)
+
+
+def pregateste_nota_automata(radacina='/'):
+	"""La pornire: semnul de dupa o instalare automata asteapta prima tasta (receptorul treaz). True cand e unul."""
+	try:
+		with open(_cale(radacina, FISIER_NOTA_AUTOMATA), 'r', encoding='utf-8') as f:
+			d = json.load(f)
+		v = curata(d.get('versiune') or '')
+		randuri = [curata(r) for r in d.get('randuri') or [] if isinstance(r, str)]
+	except (IOError, OSError, ValueError, AttributeError, TypeError):
+		return False
+	if not v:
+		return False
+	_TASTE['nota'] = (radacina, text_nota_automata(v, randuri))
+	leaga_tastele()
+	return True
+
+
+def arata_nota_automata(radacina=None):
+	"""Mesajul scurt de dupa instalarea automata (AddPopup cu timp, nu blocheaza nimic), o singura data, numai treaz;
+	in standby asteapta urmatoarea tasta. Dupa el semnul se sterge."""
+	nota = _TASTE['nota']
+	if nota is None or e_in_standby():
+		return False
+	_TASTE['nota'] = None
+	rad, text = nota
+	try:
+		os.remove(_cale(radacina or rad, FISIER_NOTA_AUTOMATA))
+	except OSError:
+		pass
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(text, MessageBox.TYPE_INFO, NOTA_S, 'HdsActualizariAutomate')
+	except Exception as e:
+		print('[HdsActualizari] mesajul actualizarii automate: %r' % (e,))
+	return True
+
+
 class VerificareZilnica(object):
-	"""La 5 minute dupa pornire si apoi o data pe zi: stare.json al canalului; un anunt pentru fiecare actualizare
-	noua (o singura data). Nu porneste opkg si nu instaleaza nimic."""
+	"""La 5 minute dupa pornire si apoi o data pe zi, numai cu internetul activ: stare.json al canalului; un anunt
+	pentru fiecare actualizare noua (o singura data). Nu porneste opkg. Din 0.8.0 (AUT1), cu Actualizari automate
+	pornite, o versiune noua din feed se tine minte (de_instalat) si se instaleaza singura cand receptorul e in standby
+	sau noaptea, nefolosit (_incearca_auto)."""
 
 	def __init__(self, radacina='/'):
 		from enigma import eTimer
 		self.radacina = radacina
 		self.ceas = eTimer()
+		self.ceas_auto = eTimer()
 		try:
 			self._legatura = self.ceas.timeout.connect(self.verifica)
+			self._legatura_auto = self.ceas_auto.timeout.connect(self._incearca_auto)
 		except AttributeError:
 			self.ceas.callback.append(self.verifica)
+			self.ceas_auto.callback.append(self._incearca_auto)
 		self._lucrare = None
+		# pauza de dupa o cadere a serverului (cu ruta implicita), dublata la fiecare cadere
+		self._pauza = 0
+		self._fara_retea = False
+		# cheia versiunii de instalat singura (ca la anuntat); cea a ultimei incercari cazute si ora ei (o noua incercare
+		# abia dupa REINCERCARE_AUTO_S, ca o cadere de retea noaptea sa nu opreasca actualizarea singura pentru totdeauna)
+		self.de_instalat = None
+		self.cazuta = None
+		self.cazuta_la = 0
 
 	def porneste(self, intarziere=PRIMA_VERIFICARE):
 		self.ceas.startLongTimer(int(intarziere))
+
+	def _fara_internet(self):
+		"""Fara ruta implicita: nimic cerut, nimic anuntat, din nou la FARA_RETEA_S (o citire din /proc)"""
+		if not self._fara_retea:
+			self._fara_retea = True
+			print('[HdsActualizari] verificarea zilnica: fara internet; reiau cand vine')
+		self.porneste(FARA_RETEA_S)
 
 	def verifica(self):
 		self.ceas.stop()
@@ -4025,6 +4353,9 @@ class VerificareZilnica(object):
 		canal, _surse, baza_feed = canalul(self.radacina)
 		if canal not in ('proba', 'public'):
 			return self.porneste(ZI)
+		if fara_retea(self.radacina):
+			return self._fara_internet()
+		self._fara_retea = False
 		img = imaginea(self.radacina)
 		credentiale = citeste_netrc(self.radacina) if canal == 'proba' else None
 		baza = baza_feed or img['baza']
@@ -4040,17 +4371,39 @@ class VerificareZilnica(object):
 				actualizari._jurnal('verificarea zilnica, feedul: %s' % nota)
 			if not cod and stare.get('canal') and stare.get('canal') != canal:
 				stare, cod = {'eroare': 'stare.json e al canalului %s' % curata(stare.get('canal'))}, NESEMNATA
+			if cod == FARA_RASPUNS:
+				# 0.8.0 (AUT1): internetul a plecat intre timp, sau ruta e, dar internetul nu (serverul nu raspunde)
+				if fara_retea(self.radacina):
+					return self._fara_internet()
+				self._pauza = min(REINCERCARE, self._pauza * 2 if self._pauza else PAUZA_SERVER_S)
+				print('[HdsActualizari] verificarea zilnica: %s; reiau peste %d s' % (curata(stare.get('eroare')) or cod,
+					self._pauza))
+				return self.porneste(self._pauza)
 			if cod:
 				print('[HdsActualizari] verificarea zilnica: %s' % (curata(stare.get('eroare')) or cod))
 				return self.porneste(REINCERCARE)
+			self._pauza = 0
 			tine_minte_indexurile(self.radacina, canal, baza_dupa, stare)
 			text, cheie = text_anunt(stare, img, baza_dupa)
 			c = config_actualizari()
 			# o versiune noua are fereastra ei pe ecranul obisnuit (Components/HdsImagineOnline.py); ramane anuntul pentru
 			# imaginea noua, cand lista imaginilor nu are una pentru acest receptor
-			if FEREASTRA_ACTIVA and not stare.get('imagine_noua'):
+			imagine_noua = imagine_noua_pentru(stare, img.get('arhitecturi'))
+			# 0.8.0 (AUT1): o versiune noua din feed se instaleaza singura (fara anunt si fara sa intrebe), o singura
+			# incercare pe pornire; dupa una cazuta (sau cu actualizarile automate oprite) ramane anuntul de azi
+			self.de_instalat = None
+			if self.cazuta and (cheie != self.cazuta or _acum() - self.cazuta_la >= REINCERCARE_AUTO_S):
+				self.cazuta = None
+			if text and cheie and not imagine_noua and cheie != self.cazuta and instalare_automata_posibila():
+				self.de_instalat = cheie
 				text = None
-			if not text and not stare.get('imagine_noua') and not actualizari.repornire:
+				tine_minte_asteptarea(cheie)
+				actualizari._jurnal('actualizarea automata: versiunea noua (%s) se instaleaza singura in standby sau '
+					'noaptea' % cheie)
+				self.ceas_auto.start(AUTO_CEAS_S * 1000, True)
+			if FEREASTRA_ACTIVA and not imagine_noua:
+				text = None
+			if not text and not imagine_noua and not actualizari.repornire and not self.de_instalat:
 				try:
 					text, cheie = text_anunt_driver(stare, self.radacina)
 				except Exception as e:
@@ -4067,6 +4420,79 @@ class VerificareZilnica(object):
 					print('[HdsActualizari] anuntul: %s' % e)
 			self.porneste(ZI)
 		self._lucrare = LucrareFundal(lambda: stare_cu_feedul_unic(radacina, canal, baza, credentiale, muta), gata)
+
+	# ---- 0.8.0 (AUT1): instalarea singura
+	def motiv_auto(self):
+		"""De ce nu se instaleaza singura acum, sau '' cand se poate: alta lucrare, o actualizare care asteapta repornirea,
+		o imagine care se scrie, o inregistrare (acum sau curand), timeshift, o intrebare deschisa (motiv_asteptare);
+		apoi standby, sau noaptea fara taste de FARA_TASTE_S."""
+		a = actualizari
+		if a.rapid or a.ocupat() or a.repornire:
+			return 'ocupat'
+		try:
+			if a.poate_porni():
+				return 'ocupat'
+		except Exception:
+			return 'ocupat'
+		try:
+			from Components.HdsImagineOnline import imagine_online
+			if imagine_online.ocupat():
+				return 'imagine'
+		except Exception:
+			pass
+		s = a.sesiunea()
+		if s is None:
+			return 'fara sesiune'
+		m = motiv_asteptare(s, a.radacina)
+		if m:
+			return m
+		if e_in_standby():
+			return ''
+		if not noaptea():
+			return 'ziua'
+		if fara_taste_de() < FARA_TASTE_S:
+			return 'folosit'
+		return ''
+
+	def _incearca_auto(self):
+		self.ceas_auto.stop()
+		if not self.de_instalat or not automat_pornit():
+			self.de_instalat = None
+			return
+		if self.motiv_auto():
+			self.ceas_auto.start(AUTO_CEAS_S * 1000, True)
+			return
+		a = actualizari
+		f = _reporneste_implicit(a.sesiunea)
+		cheie, self.de_instalat = self.de_instalat, None
+		if f is None:
+			return
+		a._jurnal('actualizarea automata: instalez %s (%s)' % (cheie, 'standby' if e_in_standby() else 'noaptea'))
+
+		def cazuta(motiv):
+			# fereastra si anuntul de azi revin pentru aceasta versiune (fereastra_feed_ascunsa); alta incercare peste o zi
+			a._automat = False
+			self.cazuta, self.cazuta_la = cheie, _acum()
+			a._jurnal('actualizarea automata nu s-a instalat (%s); ramane anuntul' % motiv)
+
+		def urmareste():
+			if a.rapid or a.ocupat():
+				return
+			if urmareste in a.ascultatori:
+				a.ascultatori.remove(urmareste)
+			if (a.rezultat or {}).get('stare') != 'instalata':
+				cazuta((a.rezultat or {}).get('stare'))
+		a.ascultatori.append(urmareste)
+		a._automat = True
+		try:
+			pornita = a.actualizeazaRapid(f)
+		except Exception as e:
+			print('[HdsActualizari] actualizarea automata: %r' % (e,))
+			pornita = False
+		if not pornita:
+			if urmareste in a.ascultatori:
+				a.ascultatori.remove(urmareste)
+			cazuta('nu a pornit')
 
 
 _verificare = []
@@ -4114,6 +4540,13 @@ def porneste():
 		v = VerificareZilnica()
 		_verificare.append(v)
 		v.porneste()
+	# 0.8.0 (AUT1): ultima tasta (noaptea se instaleaza numai pe un receptor nefolosit) si mesajul de dupa o instalare
+	# automata, aratat la prima tasta
+	try:
+		leaga_tastele()
+		pregateste_nota_automata()
+	except Exception as e:
+		print('[HdsActualizari] actualizarile automate: %r' % (e,))
 	# 0.7.9 (UNF9): antetul numaratorii (si numarul instalarii, la prima pornire) pe un fir separat
 	try:
 		from Components.HdsPazaModel import LucrareFundal

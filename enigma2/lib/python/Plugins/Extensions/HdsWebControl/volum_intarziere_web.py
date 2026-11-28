@@ -32,7 +32,7 @@
 # cateva comenzi in /proc/msp/sound0. Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulul
 # lor (S = Components.HdsSetariSunet), config-ul, SystemInfo, sesiunea si fisierul de setari.
 
-ARGUMENTE = ("pas", "afisare", "mut", "loc", "numar", "canal", "egal", "hdmi", "optic", "pista", "uita")
+ARGUMENTE = ("pas", "pas_lung", "afisare", "mut", "loc", "numar", "canal", "egal", "hdmi", "optic", "pista", "uita")
 MAX_VALOARE = 12
 ECRANE_OCUPATE = ("AudioSelection",)
 SETUP_OCUPAT = "hds_setari_sunet"
@@ -464,7 +464,7 @@ function trimite(q){
 }
 $("salveaza").addEventListener("click", function(){
   var q = new URLSearchParams();
-  ["pas", "afisare", "mut", "loc", "numar", "canal", "egal", "hdmi", "optic"].forEach(function(n){ if(valoare(n) !== null){ q.set(n, valoare(n)); } });
+  ["pas", "pas_lung", "afisare", "mut", "loc", "numar", "canal", "egal", "hdmi", "optic"].forEach(function(n){ if(valoare(n) !== null){ q.set(n, valoare(n)); } });
   trimite(q);
 });
 $("r_pista").addEventListener("change", function(){ var q = new URLSearchParams(); q.set("pista", $("r_pista").value); trimite(q); });

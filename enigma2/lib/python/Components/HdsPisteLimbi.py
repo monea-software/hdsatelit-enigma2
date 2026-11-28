@@ -1162,6 +1162,9 @@ def initConfig():
 		c = config.hds_piste
 		if "tradu_orice" not in c.content.items:
 			c.tradu_orice = ConfigYesNo(default=True)
+		if "mesaj_lipsa" not in c.content.items:
+			c.mesaj_lipsa = ConfigYesNo(default=True)
+		_scrieMereu(c)
 		return c
 	limbi = sorted(((cod, _(nume)) for cod, nume in LIMBI_MENIU), key=lambda x: _faraDiacritice(x[1]))
 	receptor = (PREF_RECEPTOR, _("Limba receptorului"))
@@ -1178,7 +1181,34 @@ def initConfig():
 	# cu traducerea subtitrarilor pornita: Da = se alege si o subtitrare in alta limba (teletext, apoi DVB cu OCR), ca sa
 	# fie tradusa; Nu = numai una in limba traducerii, apoi preferintele de mai sus
 	config.hds_piste.tradu_orice = ConfigYesNo(default=True)
+	# 0.8.0 (tfrc, LinuxSat 164126 #973065): the short message "the channel is not sending subtitles on page N"
+	# (Components/HdsSubtitrareLipsa.py) can be switched off; on by default, as before
+	config.hds_piste.mesaj_lipsa = ConfigYesNo(default=True)
+	_scrieMereu(config.hds_piste)
 	return config.hds_piste
+
+
+# cele 9 setari ale ecranului Limba sunetului si a subtitrarilor (si ale paginii web /limbi)
+SETARI_CONFIG = ("audio1", "audio2", "audio3", "fara_subtitrari", "sub1", "sub2", "sub3", "tradu_orice", "mesaj_lipsa")
+
+
+def _scrieMereu(c):
+	"""Ce a salvat omul o data (Verde in ecran, Salveaza in web) ramane scris in settings si cand e egal cu valoarea din
+	fabrica (save_forced pe setarile care au deja randul lor). config.py nu scrie o valoare egala cu implicitul, iar
+	implicitul primei subtitrari s-a schimbat la 0.7.5 din "Limba receptorului" in "Nimic": cine alesese atunci
+	"Limba receptorului" nu avea randul in settings si dupa actualizare a primit "Nimic" (forum 451 #3449).
+	Setarile nesalvate niciodata nu au rand si nu primesc (nici la un config.save() pe tot arborele), deci urmeaza
+	implicitul imaginii."""
+	for nume in SETARI_CONFIG:
+		element = c.content.items.get(nume)
+		if element is not None and element.saved_value is not None:
+			element.save_forced = True
+
+
+def salveazaAlegerea(element):
+	"""Salvarea unei setari din ecran sau din web: se scrie in settings si cand e egala cu implicitul de acum."""
+	element.save_forced = True
+	element.save()
 
 
 def preferinteAudio():
@@ -1198,6 +1228,11 @@ def faraSubtitrariNiciodata():
 def traduOrice():
 	"""„Tradu automat din orice subtitrare disponibilă” (Da din fabrica)."""
 	return bool(initConfig().tradu_orice.value)
+
+
+def mesajLipsa():
+	"""„Mesaj când canalul nu trimite subtitrarea” (Da din fabrica)."""
+	return bool(initConfig().mesaj_lipsa.value)
 
 
 def limbaTraducerii():
@@ -1344,6 +1379,26 @@ def _pista51(piste, index, curenta, motiv):
 		return HdsSunet.pistaPreferata(piste, index, curenta, motiv)
 	except Exception as e:
 		print("[HdsPisteLimbi] pista AC3: %s" % e)
+		return index
+
+
+def _pistaFaraDolby(piste, index, curenta, motiv, ref=None):
+	"""Components/HdsSunet.py: placa fara decodor Dolby (ZGEMMA H8.2H Plus) si AC-3 decodat de receptor: pista AC3 / AC3+
+	ar fi muta, deci alta pista, cand canalul are una. Numai la serviciile DVB (tipul 1: canale, inregistrari, fluxuri 1:0),
+	care merg pe decodorul placii; filmele (4097, 5001, 5002) au AC-3 decodat de FFmpeg (DLB1)."""
+	try:
+		if ref is None or ref.type != 1:
+			return index
+	except Exception:
+		return index
+	try:
+		from Components import HdsSunet
+	except ImportError:
+		return index
+	try:
+		return HdsSunet.pistaFaraDolby(piste, index, curenta, motiv)
+	except Exception as e:
+		print("[HdsPisteLimbi] pista fara Dolby: %s" % e)
 		return index
 
 
@@ -1494,6 +1549,10 @@ def aplicaAudio(session, semn=None):
 	preferinte, limba = preferinteAudio(), limbaReceptor()
 	index, motiv = alegePistaAudio(piste, preferinte, limba, curenta, memorat, preferaAC3())
 	index = _pista51(piste, index, curenta, motiv)
+	inainte = index
+	index = _pistaFaraDolby(piste, index, curenta, motiv, ref)
+	if index != inainte:
+		motiv = "fara-dolby"
 	if index is not None and index != curenta:
 		audio = service.audioTracks()
 		audio.selectTrack(index)

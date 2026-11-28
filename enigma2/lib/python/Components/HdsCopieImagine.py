@@ -55,7 +55,18 @@
 # nici instalarea din meniu, nici incarcatorul acestor receptoare nu o citesc. Un Broadcom fara forma cunoscuta in
 # DOSARE_MODEL nu are copie (NU_FORMA), cu textul modelelor fara copie: o arhiva fara dosarul bun nu s-ar putea pune inapoi.
 # NU inca: stocare=nand (Vu+ Solo SE, Solo2, Duo2, Zero: copia ar cere mkfs.ubifs/ubinize/nanddump, care nu sunt in
-# imagine) si pornirile al caror nucleu nu sta intr-o partitie (kexec, NeoBoot: nucleul e un fisier al locului).
+# imagine) si NeoBoot (/.multinfo: nucleul e un fisier al lui, pe care nu il stim gasi).
+# Vu+ 4K cu pornirea multipla kexec (OE-Alliance kexec-multiboot; din 0.8.0, marci70, LinuxSat 164248 #973647, Ultimo 4K
+# locul 2): orice loc porneste prin nucleul kexec din partitia nucleului (mmcblk0p1 pe Solo/Uno/Ultimo 4K), deci
+# /proc/cmdline are mereu kexec=1, iar nucleul imaginii pornite e FISIERUL kernel= din STARTUP_N, socotit de la radacina
+# partitiei din root=: /linuxrootfsN/zImage (memoria), <model>/linuxrootfsN/zImage (USB), /zImage (Recovery, locul 0,
+# rootsubdir=linuxrootfs0 = radacina flash). Cu rootsubdir=linuxrootfsN, sistemul pornit e chiar dosarul locului, deci
+# nucleul e /zImage in sistemul care ruleaza (aceeasi cale o copiaza unealta de copii OE-Alliance: cp /zImage). Copia ia
+# fisierul intreg (nucleuLocKexec, citesteNucleuFisier), nu partitia nucleului, care e a nucleului kexec. Din Recovery
+# dosarele celorlalte locuri (linuxrootfsN din radacina flash) nu intra in arhiva. Forma ramane a stickului Vu+;
+# textGata si textPunere spun ca, pusa cu stickul, copia inlocuieste pornirea multipla (scrie si partitia nucleului,
+# unde sta nucleul kexec).
+# Refuzul (NU_KEXEC) ramane numai cand fisierul nucleului nu se gaseste sau nu are antet zImage/uImage.
 # NU: imaginea pornita dintr-un dosar de pe disc sau stick de un program de pornire multipla al imaginii din memorie (MOH
 # Boot: / pe disc, imaginea din memorie pe /oldroot, moh_image= in /proc/cmdline). Nucleul care ruleaza e al imaginii din
 # memorie, iar arhiva imaginii nu are nucleul ei (fara /boot), deci o copie completa ar avea nucleul altei imagini.
@@ -161,6 +172,10 @@ NU_NAND = "nand"
 NU_LOC = "loc-fara-partitie"
 NU_DOSAR = "pornire-din-dosar"
 NU_FORMA = "fara-forma"  # Broadcom fara forma arhivei cunoscuta (DOSARE_MODEL)
+NU_KEXEC = "kexec-fara-nucleu"  # Vu+ 4K kexec: fisierul nucleului locului nu s-a gasit (nucleuLocKexec)
+
+# dosarele locurilor kexec din radacina flash (Recovery): ale altor imagini, nu intra in copia Recovery-ului
+_LOC_KEXEC_RX = re.compile(r"^linuxrootfs[0-9]+$")
 
 # ce a gasit verificarea din pasul 3 (EroareCopie.fisier): fisierul stricat ramane sub numele de lucru, cel intreg sub numele lui
 FISIER_STRICAT = "stricat"
@@ -236,6 +251,72 @@ def _pornireFaraPartitie(radacina, cmdline):
 	return are and not kp
 
 
+def _kexec(cmdline):
+	"""True cand pornirea e prin nucleul kexec al pornirii multiple Vu+ 4K (kexec=1 in /proc/cmdline, in orice loc)."""
+	return "kexec=1" in (cmdline or "").split()
+
+
+def _parametru(cmdline, cheie):
+	"""Valoarea primului cheie= din /proc/cmdline; "" cand lipseste."""
+	for cuvant in (cmdline or "").split():
+		if cuvant.startswith(cheie + "="):
+			return cuvant[len(cheie) + 1:]
+	return ""
+
+
+def _subdosarKexec(cmdline):
+	"""rootsubdir= al locului kexec, fara / la capete; "" la Recovery (linuxrootfs0 sau lipsa: radacina flash)."""
+	sub = _parametru(cmdline, "rootsubdir").strip("/")
+	return "" if sub in ("", "linuxrootfs0") else sub
+
+
+def _nucleuFisierBun(cale):
+	"""Fisierul are antet zImage sau uImage, iar marimea din antet incape in fisier (fisierul e cel mult NUCLEU_MAXIM)."""
+	try:
+		marime_fisier = os.path.getsize(cale)
+		with open(cale, "rb") as f:
+			marime = marimeUimage(f.read(ANTET_NUCLEU))
+	except OSError:
+		return False
+	return marime is not None and ANTET_NUCLEU < marime <= marime_fisier <= NUCLEU_MAXIM
+
+
+def nucleuLocKexec(radacina, cmdline):
+	"""Calea fisierului nucleului locului kexec pornit, in sistemul care ruleaza: kernel= fara subdosarul locului
+	(rootsubdir=linuxrootfs2, kernel=/linuxrootfs2/zImage -> /zImage; Recovery: kernel=/zImage -> /zImage); fara kernel=
+	in linia de comanda (unele initramfs nu il pastreaza), /zImage, ca in forma kexec-multiboot. "" fara kexec=1, cand
+	kernel= sta in afara dosarului locului, cand fisierul lipseste sau nu are antetul unui nucleu."""
+	if not _kexec(cmdline):
+		return ""
+	sub = _subdosarKexec(cmdline)
+	kernel = _parametru(cmdline, "kernel").lstrip("/")
+	if not kernel:
+		rel = "zImage"
+	elif not sub:
+		rel = kernel
+	elif kernel.startswith(sub + "/"):
+		rel = kernel[len(sub) + 1:]
+	else:
+		return ""
+	if any(p in ("", ".", "..") for p in rel.split("/")):
+		return ""
+	cale = _cale(radacina, rel)
+	return cale if os.path.isfile(cale) and _nucleuFisierBun(cale) else ""
+
+
+def locuriKexecVecine(radacina_arhivei, cmdline):
+	"""Pornita din Recovery-ul kexec (radacina flash), radacina are dosarele celorlalte locuri (linuxrootfsN): caile lor,
+	ca sa nu intre in copie. [] in orice alt loc (sistemul pornit e chiar dosarul locului) si fara kexec."""
+	if not _kexec(cmdline) or _subdosarKexec(cmdline):
+		return []
+	try:
+		nume = os.listdir(radacina_arhivei)
+	except OSError:
+		return []
+	return [os.path.join(radacina_arhivei, n) for n in sorted(nume)
+		if _LOC_KEXEC_RX.match(n) and os.path.isdir(os.path.join(radacina_arhivei, n))]
+
+
 def _dispozitivRadacina(radacina=None):
 	"""Dispozitivul montat pe / (ultimul rand pentru / din /proc/mounts, nu rootfs-ul de la pornire); "" cand lipseste."""
 	dispozitiv = ""
@@ -270,7 +351,15 @@ def suport(radacina=None):
 	if forma(reguli) is None:
 		return False, NU_FORMA
 	cmdline = _citesteText(_cale(radacina, "proc/cmdline"), 4096) or ""
-	if _pornireFaraPartitie(radacina, cmdline):
+	if os.path.exists(_cale(radacina, ".multinfo")):
+		return False, NU_LOC
+	if _kexec(cmdline):
+		# Vu+ 4K: nucleul locului e un fisier al lui; fara el (sau pe alt receptor decat Vu+) nu se face
+		if forma(reguli)["fel"] != FORMA_VUPLUS["fel"]:
+			return False, NU_LOC
+		if not nucleuLocKexec(radacina, cmdline):
+			return False, NU_KEXEC
+	elif _pornireFaraPartitie(radacina, cmdline):
 		return False, NU_LOC
 	if _pornireDinDosar(radacina, cmdline):
 		return False, NU_DOSAR
@@ -284,6 +373,10 @@ def textSuport(motiv):
 	if motiv == NU_LOC:
 		return _("Imaginea rulează dintr-un loc de pornire multiplă al cărui nucleu nu stă într-o partiție, deci copia ei "
 			"nu s-ar putea pune înapoi. Pornește imaginea HD Satelit din memoria receptorului și fă copia de acolo.")
+	if motiv == NU_KEXEC:
+		return _("Imaginea rulează dintr-un loc de pornire multiplă Vu+, dar fișierul nucleului acestui loc (zImage din "
+			"dosarul locului) nu s-a găsit, deci copia nu s-ar putea pune înapoi. Fă copia setărilor (Meniu, Setări, "
+			"Software & Firmware, Copia setărilor): ea păstrează canalele, setările și pluginurile.")
 	if motiv == NU_DOSAR:
 		return _("Imaginea rulează dintr-un dosar de pe disc sau de pe stick (pornire multiplă, de pildă MOH Boot), cu "
 			"nucleul imaginii din memoria receptorului, deci o copie completă nu s-ar putea pune înapoi corect. Fă copia "
@@ -345,6 +438,21 @@ def citesteNucleu(cale_dispozitiv):
 	except OSError:
 		raise EroareCopie(_("Nucleul receptorului nu se poate citi, deci copia nu se poate face."))
 	if len(date) != marime:
+		raise EroareCopie(_("Nucleul receptorului nu se poate citi, deci copia nu se poate face."))
+	return date
+
+
+def citesteNucleuFisier(cale):
+	"""Nucleul locului kexec (fisierul zImage al locului), INTREG, ca la unealta de copii OE-Alliance (cp /zImage): un
+	fisier nu are rest de partitie de taiat. EroareCopie cand lipseste, nu se poate citi sau nu are antetul unui nucleu."""
+	if not cale or not _nucleuFisierBun(cale):
+		raise EroareCopie(_("Nucleul receptorului nu are forma cunoscută, deci copia nu se poate face."))
+	try:
+		with open(cale, "rb") as f:
+			date = f.read(NUCLEU_MAXIM + 1)
+	except OSError:
+		raise EroareCopie(_("Nucleul receptorului nu se poate citi, deci copia nu se poate face."))
+	if not ANTET_NUCLEU < len(date) <= NUCLEU_MAXIM or marimeUimage(date[:ANTET_NUCLEU]) is None:
 		raise EroareCopie(_("Nucleul receptorului nu se poate citi, deci copia nu se poate face."))
 	return date
 
@@ -490,7 +598,7 @@ def numaraRadacina(radacina_arhivei, exclus=()):
 	vazute = set()  # legaturile tari se citesc o singura data
 	for dosar, dosare, fisiere in os.walk(radacina_arhivei):
 		dosare.sort()
-		_tai(radacina_arhivei, dosar, dosare)
+		_tai(radacina_arhivei, dosar, dosare, exclus)
 		for nume in dosare + fisiere:
 			intrari += 1
 			cale = os.path.join(dosar, nume)
@@ -509,11 +617,12 @@ def numaraRadacina(radacina_arhivei, exclus=()):
 	return octeti, intrari + 1
 
 
-def _tai(radacina_arhivei, dosar, dosare):
-	"""os.walk nu mai intra in dosarele GOALE (ele intra in arhiva numai ca dosar)."""
+def _tai(radacina_arhivei, dosar, dosare, exclus=()):
+	"""os.walk nu mai intra in dosarele GOALE (ele intra in arhiva numai ca dosar) si nici in cele din `exclus` (ele nu
+	intra deloc: dosarele celorlalte locuri kexec, locuriKexecVecine)."""
 	rel = os.path.relpath(dosar, radacina_arhivei)
 	baza = "." if rel == "." else "./" + rel.replace(os.sep, "/")
-	dosare[:] = [d for d in dosare if baza + "/" + d not in GOALE]
+	dosare[:] = [d for d in dosare if baza + "/" + d not in GOALE and os.path.join(dosar, d) not in exclus]
 
 
 def scrieArhiva(tar, radacina_arhivei, progres=None, oprit=None, exclus=()):
@@ -559,7 +668,7 @@ def scrieArhiva(tar, radacina_arhivei, progres=None, oprit=None, exclus=()):
 			if cale in exclus:
 				continue
 			adauga(cale, baza + "/" + nume)
-		_tai(radacina_arhivei, dosar, dosare)
+		_tai(radacina_arhivei, dosar, dosare, exclus)
 	return vazute, sarite
 
 
@@ -681,10 +790,15 @@ def faCopia(punct, progres=None, oprit=None, radacina=None, radacina_arhivei=Non
 	# pasul 1: nucleul
 	pas(PAS_NUCLEU)
 	cmdline = _citesteText(_cale(radacina, "proc/cmdline"), 4096) or ""
-	kp = dispozitivNucleu(reguli, cmdline)
-	if not kp:
-		raise EroareCopie(_("Nucleul receptorului nu se poate citi, deci copia nu se poate face."))
-	nucleu = citesteNucleu(_cale(radacina, "dev/" + kp))
+	kexec = _kexec(cmdline)
+	if kexec:
+		# Vu+ 4K kexec: fisierul nucleului locului (partitia nucleului e a nucleului kexec)
+		nucleu = citesteNucleuFisier(nucleuLocKexec(radacina, cmdline))
+	else:
+		kp = dispozitivNucleu(reguli, cmdline)
+		if not kp:
+			raise EroareCopie(_("Nucleul receptorului nu se poate citi, deci copia nu se poate face."))
+		nucleu = citesteNucleu(_cale(radacina, "dev/" + kp))
 	verificaOprit()
 
 	legat = False
@@ -693,6 +807,7 @@ def faCopia(punct, progres=None, oprit=None, radacina=None, radacina_arhivei=Non
 			radacina_arhivei = legaRadacina()
 			legat = True
 		exclus = set(os.path.join(radacina_arhivei, s.lstrip("/")) for s in _swapuri(radacina))
+		exclus.update(locuriKexecVecine(radacina_arhivei, cmdline))
 		octeti, _intrari = numaraRadacina(radacina_arhivei, exclus)
 		necesar = len(nucleu) + int(octeti * RAPORT_LOC) + REZERVA_LOC
 		liber = _octetiLiberi(punct)
@@ -743,7 +858,7 @@ def faCopia(punct, progres=None, oprit=None, radacina=None, radacina_arhivei=Non
 		_sterge(cale_lucru)
 		raise
 	return {"cale": cale_zip, "nume": os.path.basename(cale_zip), "marime": os.path.getsize(cale_zip),
-		"secunde": time.time() - inceput, "sarite": sarite, "fel": fel["fel"]}
+		"secunde": time.time() - inceput, "sarite": sarite, "fel": fel["fel"], "kexec": kexec}
 
 
 def _fsyncDosar(punct):
@@ -873,11 +988,20 @@ def textPas(progres, acum=None):
 	return text + (" " + procent if procent else "")
 
 
+def textKexec():
+	"""Cum se pune inapoi o copie facuta dintr-un loc kexec Vu+ 4K: stickul scrie partitia nucleului (acolo sta nucleul
+	kexec, kexec-multiboot-recovery OE-Alliance: mmcblk0p1 pe Solo/Uno/Ultimo 4K) si sistemul din memorie, deci inlocuieste
+	pornirea multipla. Dedus din scriptul OE-Alliance, nemasurat pe un aparat. Scurt: sta si in randul fix al ecranului."""
+	return _("Copia e făcută dintr-un loc de pornire multiplă: pusă cu stickul, se scrie în memoria principală și "
+		"înlocuiește pornirea multiplă (celelalte locuri nu mai pornesc).")
+
+
 def textGata(r):
 	if r.get("fel") == "vuplus":
-		return _("Copia e gata: %s (%d MB), făcută în %s. Se pune înapoi ca imaginea Vu+ de pe site: dezarhivezi fișierul "
+		text = _("Copia e gata: %s (%d MB), făcută în %s. Se pune înapoi ca imaginea Vu+ de pe site: dezarhivezi fișierul "
 			"pe un stick FAT32 (dosarul vuplus ajunge în rădăcina stickului), oprești receptorul, pui stickul și îl pornești."
 			) % (r["nume"], (r["marime"] + 1024 * 1024 - 1) // (1024 * 1024), _textDurata(r["secunde"]))
+		return text + (" " + textKexec() if r.get("kexec") else "")
 	return _("Copia e gata: %s (%d MB), făcută în %s. Se pune înapoi din Meniu, Setări, Software & Firmware, Imagine nouă "
 		"de pe stick.") % (r["nume"], (r["marime"] + 1024 * 1024 - 1) // (1024 * 1024), _textDurata(r["secunde"]))
 
@@ -894,8 +1018,11 @@ def textPunere(radacina=None):
 	f = forma(P.citesteReguli(radacina))
 	if not f or f["fel"] != FORMA_VUPLUS["fel"]:
 		return ""
-	return _("Pe Vu+ copia se pune înapoi ca imaginea de pe site: dezarhivezi fișierul pe un stick FAT32, oprești "
+	text = _("Pe Vu+ copia se pune înapoi ca imaginea de pe site: dezarhivezi fișierul pe un stick FAT32, oprești "
 		"receptorul, pui stickul și îl pornești.")
+	if _kexec(_citesteText(_cale(radacina, "proc/cmdline"), 4096)):
+		text += " " + textKexec()
+	return text
 
 
 def textParole():

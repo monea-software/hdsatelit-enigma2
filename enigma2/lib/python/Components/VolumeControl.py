@@ -11,6 +11,8 @@ profile("VolumeControl")
 MUT_Z = 10
 # VOL8: bara de volum la mijloc sta peste bara canalului (jos, y 802..1034), sub semnul de mut
 VOL_MIJLOC_Z = 9
+# a volume key repeat arrives every ~100-200 ms while held; two separate presses are slower than this
+REPETARE_S = 0.35
 
 
 def _setariSunet():
@@ -34,6 +36,10 @@ def _inStandby():
 #TODO .. move this to a own .py file
 class VolumeControl:
 	instance = None
+	# HDSatelit 0.8.0 (VLY0): cine vrea sa stie volumul nou dupa VOL+/VOL-/MUTE (fn(nivel, mut, ms)). Cat navigatorul web tine
+	# ecranul (aplicatia YouTube si celelalte din Aplicatii) enigma2 nu poate desena (fbClass.lock), deci bara de volum o
+	# deseneaza navigatorul (Plugins/Extensions/HdsNavigator/lansator.py); pasii si MUTE raman cei de aici.
+	ascultatori = []
 	"""Volume control, handles volUp, volDown, volMute actions and display
 	a corresponding dialog"""
 	def __init__(self, session):
@@ -194,11 +200,28 @@ class VolumeControl:
 	def volDown(self):
 		self.setVolume(-1)
 
+	def pasTinut(self, direction, acum=None):
+		"""0.8.0 (tamiciav7): the step for this press. A volume key held down repeats (keymap flags "mr"); a call in the
+		same direction within REPETARE_S of the previous one is a repeat and uses "Pasul volumului cât ții tasta apăsată"
+		(HdsSetariSunet.pasVolumLung, equal to the normal step by default). The first press keeps the normal step."""
+		import time
+		acum = time.monotonic() if acum is None else acum
+		ultim = getattr(self, "_ultimaApasare", None)
+		self._ultimaApasare = (direction, acum)
+		tinut = ultim is not None and ultim[0] == direction and 0 <= acum - ultim[1] <= REPETARE_S
+		if not tinut:
+			return self.pas()
+		s = _setariSunet()
+		try:
+			return s.pasVolumLung() if s is not None else self.pas()
+		except Exception:
+			return self.pas()
+
 	def setVolume(self, direction):
 		if not self.volctrl:
 			return
 		oldvol = self.volctrl.getVolume()
-		pas = self.pas()
+		pas = self.pasTinut(direction)
 		if direction > 0:
 			self.volctrl.volumeUp(pas, pas)
 		else:
@@ -216,6 +239,21 @@ class VolumeControl:
 			self.volumeDialog.setValue(self.volctrl.getVolume())
 		self.volSave()
 		self.hideVolTimer.start(self.afisareMs(), True)
+		self.anuntaVolum()
+
+	def anuntaVolum(self):
+		"""VLY0: volumul de acum (0 cat e pe mut, ca bara), mutul si cat sta bara, la ascultatori; o eroare a unuia nu
+		strica volumul."""
+		if not VolumeControl.ascultatori or not self.volctrl:
+			return
+		mut = bool(self.volctrl.isMuted())
+		nivel = 0 if mut else int(self.volctrl.getVolume())
+		ms = self.afisareMs()
+		for f in list(VolumeControl.ascultatori):
+			try:
+				f(nivel, mut, ms)
+			except Exception as e:
+				print("[VolumeControl] ascultatorul volumului: %s" % e)
 
 	def volHide(self):
 		self.volumeDialog.hide()
@@ -235,3 +273,4 @@ class VolumeControl:
 				self.muteDialog.hide()
 				self.volumeDialog.setValue(vol)
 			self.mutSave()
+			self.anuntaVolum()

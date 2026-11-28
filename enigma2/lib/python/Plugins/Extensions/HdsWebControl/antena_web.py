@@ -657,8 +657,9 @@ def _serviciuCurent():
 def _tuneriSemnal(G):
 	tunere = []
 	for t in G.tunere():
+		# GSW2 D: "departe" = in afara cursei motorului, prea jos sau sub orizont (se intreaba inainte de comanda)
 		sateliti = [{"poz": s["poz"], "nume": s["nume"], "vizibil": bool(s.get("vizibil", True)),
-			"text": G.text_satelit(s)} for s in t["sateliti"]]
+			"departe": s.get("departe") or "", "text": G.text_satelit(s)} for s in t["sateliti"]]
 		tunere.append({"slot": t["slot"], "nume": t["nume"], "s2": bool(t["s2"]), "motor": bool(t["motor"]),
 			"sateliti": sateliti, "fel": t.get("fel", "S")})
 	return tunere
@@ -710,21 +711,14 @@ def semnalDate():
 	if m.slot is not None and m.slot >= 0 and m.tp is not None and m.faza not in ("oprita", "fara_tuner", "fara_sateliti"):
 		initial = {"slot": m.slot, "tp": dict(m.tp), "din": "masurare"}
 	else:
-		serviciu = _serviciuCurent()
-		for t in tunere:
-			try:
-				if t["fel"] != "S":
-					tp = G.transponder_din_serviciu_tc(serviciu, t["fel"], t["slot"])
-				else:
-					tp = G.transponder_din_serviciu(serviciu, [s["poz"] for s in t["sateliti"]])
-			except Exception as eroare:
-				_jurnal("transponderul programului: %s" % eroare)
-				tp = None
-			if tp is not None:
-				initial = {"slot": t["slot"], "tp": tp, "din": "program"}
-				break
+		prog = _programAcum(G, tunere)
+		if prog is not None:
+			initial = {"slot": prog["slot"], "tp": prog["tp"], "din": "program"}
 		if initial is None and m.slot is not None and m.slot >= 0 and m.tp is not None:
 			initial = {"slot": m.slot, "tp": dict(m.tp), "din": "masurare"}
+		if initial is None:
+			# GSW2 D: programul nu e pe satelit (IPTV, fisier, nimic): satelitul pe care sta antena, nu primul din lista
+			initial = _initialFaraProgram(G, tunere)
 	if initial is not None:
 		tuner = [t for t in tunere if t["slot"] == initial["slot"]]
 		if tuner and tuner[0]["fel"] != "S":
@@ -732,8 +726,11 @@ def semnalDate():
 				initial.update(_listaTC(G, tuner[0], initial["tp"]))
 			else:
 				initial = None
+		elif initial.get("din") == "pozitie":
+			pass
 		elif tuner and initial["tp"].get("orbital_position") in [s["poz"] for s in tuner[0]["sateliti"]]:
 			initial.update(_listaTranspondere(G, tuner[0], initial["tp"]["orbital_position"], initial["tp"]))
+			initial["poz"] = initial["tp"]["orbital_position"]
 		else:
 			initial = None
 	liste = {"polarizari": G.polarizari(), "sisteme": G.sisteme(True), "fec_dvbs": G.fec_dvbs(),
@@ -741,6 +738,88 @@ def semnalDate():
 		"latimi": G.latimi(), "sisteme_t": G.sisteme_terestre(), "modulatii_c": G.modulatii_cablu()}
 	return {"result": True, "tunere": tunere, "initial": initial, "liste": liste, "stare": semnalStare(False),
 		"sistem_s2": G.SISTEM_DVB_S2}
+
+
+def _programAcum(G, tunere=None):
+	"""Programul de acum si transponderul lui (HdsGasireSemnal.program_acum), cu programul oprit de masurare daca e
+	cazul (butonul „Transponderul canalului de acum” dupa o masurare pe alt transponder), sau None."""
+	m = G.masurare()
+	oprit = getattr(m.tuner, "oldref", None) if getattr(m.tuner, "am_oprit_canalul", False) else None
+	try:
+		return G.program_acum(tunere if tunere is not None else G.tunere(), oprit=oprit,
+			date_oprit=getattr(m.tuner, "date_oprit", None) if oprit is not None else None)
+	except Exception as eroare:
+		_jurnal("transponderul programului: %s" % eroare)
+		return None
+
+
+def _initialFaraProgram(G, tunere):
+	"""Primul tuner de satelit cu sateliti, pe satelitul de la HdsGasireSemnal.pozitie_implicita, cu primul lui
+	transponder ales (pagina doar il arata; masurarea porneste numai la apasare)."""
+	for t in tunere:
+		if t["fel"] != "S" or not t["sateliti"]:
+			continue
+		poz = G.pozitie_implicita(t)
+		if poz is None:
+			return None
+		rez = {"slot": t["slot"], "tp": None, "din": "pozitie", "poz": poz}
+		rez.update(_listaTranspondere(G, t, poz))
+		return rez
+	return None
+
+
+def _alegereProgram(G, prog):
+	"""Ce trebuie aratat in pagina pentru transponderul programului: tunerul, satelitul, lista si cel ales."""
+	t = _tunerSemnal(G, prog["slot"])
+	if t is None:
+		return None
+	rez = {"slot": prog["slot"], "tp": prog["tp"], "din": "program"}
+	if t["fel"] != "S":
+		rez.update(_listaTC(G, t, prog["tp"]))
+	else:
+		rez.update(_listaTranspondere(G, t, prog["tp"]["orbital_position"], prog["tp"]))
+		rez["poz"] = prog["tp"]["orbital_position"]
+	return rez
+
+
+def semnalProgram(cerere):
+	"""POST /api/gasire-semnal-porneste cu tp=program (butonul „Transponderul canalului de acum”, GSW2 B): alege
+	tunerul, satelitul si transponderul programului de acum si porneste masurarea; pe transponderul lui masurarea nu
+	ia tunerul si programul merge mai departe (modul A)."""
+	G = _gasire()
+	m = G.masurare()
+	prog = _programAcum(G)
+	if prog is None:
+		return {"result": False, "message": _t("Programul de acum nu vine de pe un tuner (de exemplu IPTV sau o "
+			"înregistrare), deci nu are transponder de măsurat."), "stare": semnalStare(False)}
+	alegere = _alegereProgram(G, prog)
+	t = _tunerSemnal(G, prog["slot"])
+	extra = {"tsid": -1, "onid": -1, "sarite": 0, "fara_lista": False}
+	if t is not None and t["fel"] == "S":
+		_anuntaMotor("web: gasire semnal, transponderul canalului de acum")
+		if alegere and alegere.get("ales", -1) >= 0:
+			e = alegere["transpondere"][alegere["ales"]]
+			extra = {"tsid": e["tsid"], "onid": e["onid"], "sarite": alegere.get("sarite", 0), "fara_lista": False}
+	if (getattr(m, "din_program", False) and m.cine == "web" and m.slot == prog["slot"] and G.acelasi_transponder(m.tp, prog["tp"])
+			and m.faza not in ("oprita", "refuzat")):
+		return {"result": True, "message": "", "stare": semnalStare(), "alegere": alegere}
+	reusit, text = m.porneste(prog["slot"], prog["tp"], "web", _sesiune(), extra, bool(t and t["s2"]))
+	return {"result": bool(reusit), "message": text or "", "stare": semnalStare(), "alegere": alegere}
+
+
+def _intrebareDeparte(G, m, t, poz, cerere):
+	"""GSW2 D: textul intrebarii cand satelitul e in afara cursei motorului, prea jos sau sub orizont si cererea nu
+	are confirmat=1; "" cand se poate trimite (satelit bun, confirmat, sau masurarea e deja pe el)."""
+	if not t.get("motor") or (cerere.get("confirmat") or "") == "1":
+		return ""
+	if (m.tp is not None and G.fel_tp(m.tp) == "S" and m.tp.get("orbital_position") == poz and m.slot == t["slot"]
+			and m.faza not in ("oprita", "refuzat", "fara_tuner", "fara_sateliti")):
+		return ""
+	for x in G.tunere():
+		if x["slot"] == t["slot"]:
+			sat = G.satelit_din(x, poz)
+			return G.text_departe(sat) if sat else ""
+	return ""
 
 
 def _tunerSemnal(G, slot):
@@ -774,12 +853,18 @@ def semnalPorneste(cerere):
 	(tp=manual, cu campurile lui), exact cum e ales. Daca masurarea web-ului merge pe acelasi tuner, schimba
 	transponderul (Masurare.schimba); altfel o porneste (Masurare.porneste). Cat e deschis ecranul pe televizor,
 	modulul refuza cu motivul lui."""
+	if (cerere or {}).get("tp") == "program":
+		return semnalProgram(cerere)
 	G = _gasire()
 	m = G.masurare()
 	slot = _int(cerere.get("slot"))
 	t = _tunerSemnal(G, slot)
 	if t is not None and t["fel"] != "S":
 		return _semnalPornesteTC(G, m, slot, t, cerere)
+	if t is not None:
+		intrebare = _intrebareDeparte(G, m, t, _int(cerere.get("poz")), cerere)
+		if intrebare:
+			return {"result": False, "message": "", "intrebare": intrebare, "stare": semnalStare(False)}
 	_anuntaMotor("web: gasire semnal")
 	if t is None:
 		return {"result": False, "message": _t("Tunerul ales nu mai este printre tunerele de satelit. Reîncarcă "
@@ -808,6 +893,9 @@ def semnalPorneste(cerere):
 		extra = {"tsid": -1, "onid": -1, "sarite": sarite, "fara_lista": not lista}
 	# acelasi tuner = tunerul tinut chiar pe slotul cerut, nu numai slotul aratat (dupa un refuz pe alt slot, m.slot e
 	# cel nou, iar tunerul poate fi inca al celui vechi; verificarea finala, Mediu 1)
+	if m.cine == "web" and m.slot == slot and getattr(m, "din_program", False) and m.tp == tp and m.faza not in ("oprita", "refuzat"):
+		# GSW2 A: acelasi transponder al programului, masurat deja din tunerul lui
+		return {"result": True, "message": "", "stare": semnalStare()}
 	if m.cine == "web" and m.slot == slot and m.tuner.slot == slot and (m.tuner.are_tuner() or m.tuner.asteapta()):
 		if m.tp == tp and m.faza not in ("oprita", "refuzat"):
 			return {"result": True, "message": "", "stare": semnalStare()}
@@ -1155,6 +1243,10 @@ def _textReaducere(r, ora, cine):
 			unde, cate)
 	elif faza == "refuzata":
 		text = "readucerea spre %s nu a pornit (codul nucleului %s)" % (unde, r.get("cod", 0))
+	elif faza == "oprita":
+		cate = _t("o încercare") if inc == 1 else _t("%s încercări") % inc
+		text = _t("readucerea spre %s s-a oprit după %s fără semnal (%s fără semnal); pornește din nou la alt canal, "
+			"alt satelit sau din Găsire semnal") % (unde, cate, _durataUrma(r.get("fara_semnal_ms")))
 	elif faza == "ocolire":
 		text = _t("readucerea antenei spre %s prin altă poziție, încercarea %s, după %s fără semnal (%s)") % (unde, inc,
 			_durataUrma(r.get("fara_semnal_ms")), cine)
@@ -1276,8 +1368,15 @@ def _stareInternet():
 	"""starea cautarii dupa internet (aceeasi ca pe televizor) si daca receptorul are ruta spre internet (citita
 	local, fara nicio conexiune)"""
 	I = _loculInternet()
+	L = _locul()
 	st = I.CAUTARE.stare()
 	st["retea"] = bool(I.retea())
+	# LOC2: locul dupa internet e cel implicit; "automat" = pagina il afla singura la deschidere (si cu VPN pe receptor:
+	# cererea iese direct, LOC3), "fel" = textul
+	st["automat"] = bool(L.automat())
+	st["fel"] = I.textFel()
+	if st["stare"] == I.GASIT and st.get("scris"):
+		st["mesaj_scris"] = _t("Locul antenei este acum: %s") % L.textLoc()
 	return st
 
 
@@ -1285,8 +1384,11 @@ def loculDate(cerere=None):
 	"""GET /api/locul[?tara=RO]: locul de acum, tarile si (cu tara=) orasele tarii, din tabelul din imagine (nicio
 	cerere pe internet), plus starea cautarii dupa internet (internet.retea spune daca pagina arata optiunea)"""
 	L = _locul()
-	tari = L.tari()
-	rez = {"result": True, "locul": L.stare(), "tari": [[cod, nume] for cod, nume in tari], "sursa_date": L.ATRIBUIRE}
+	# toata lumea (LOC1, 0.8.0): numele tarilor in limba meniului, in ordinea lor; "implicita" = tara aleasa data trecuta
+	# sau tara limbii meniului (pagina nu mai porneste pe Romania pentru oricine)
+	tari = L.tariAfisate()
+	rez = {"result": True, "locul": L.stare(), "tari": [[cod, nume] for cod, nume in tari], "sursa_date": L.ATRIBUIRE,
+		"implicita": L.taraImplicita()}
 	rez["sursa_text"] = _t(_loculInternet().NOTA_SURSA) % L.ATRIBUIRE
 	rez["internet"] = _stareInternet()
 	tara = (cerere or {}).get("tara", "")
@@ -1296,25 +1398,37 @@ def loculDate(cerere=None):
 		rez["tara"] = tara
 		# al patrulea camp: coordonatele scrise ca pe televizor (lista oraselor din Screens/HdsLocul.py), in limba
 		# meniului; pagina nu le mai scrie singura
-		rez["orase"] = [[nume, lat / 1000.0, lon / 1000.0, L.textCoordonate(lat, lon)] for nume, lat, lon in L.orase(tara)]
+		# LOC2: mii de orase intr-o tara mare, deci limba coordonatelor se afla o singura data (textCoordonateLista)
+		orase = L.orase(tara)
+		rez["orase"] = [[nume, lat / 1000.0, lon / 1000.0, text]
+			for (nume, lat, lon), text in zip(orase, L.textCoordonateLista(orase))]
 	return rez
 
 
 def loculInternetPorneste(cerere=None):
-	"""POST /api/locul-internet: porneste cautarea locului dupa internet. Fara ruta spre internet nu pleaca nicio
-	cerere (starea spune de ce). Nu scrie nimic: locul se scrie abia cu /api/locul-seteaza si internet=<semn>."""
-	_loculInternet().CAUTARE.porneste()
-	return {"result": True, "internet": _stareInternet()}
+	"""POST /api/locul-internet: porneste cautarea locului dupa internet; locul gasit se scrie singur, fara intrebare
+	(LOC2, ca pe televizor). Fara ruta spre internet nu pleaca nicio cerere (starea spune de ce). Cu singur=1 (pagina
+	abia deschisa) numai cat locul e cel dupa internet (cu VPN pe receptor cererea iese direct); fara el (butonul)
+	locul redevine cel dupa internet."""
+	I = _loculInternet()
+	L = _locul()
+	if (cerere or {}).get("singur"):
+		if L.automat():
+			I.CAUTARE.porneste(scrie=True)
+	else:
+		L.alegeInternet()
+		I.CAUTARE.porneste(scrie=True)
+	return {"result": True, "internet": _stareInternet(), "locul": L.stare()}
 
 
 def loculInternetStare(cerere=None):
-	"""GET /api/locul-internet-stare: starea cautarii (pagina o intreaba cat timp se cauta)"""
-	return {"result": True, "internet": _stareInternet()}
+	"""GET /api/locul-internet-stare: starea cautarii (pagina o intreaba cat timp se cauta) si locul de acum"""
+	return {"result": True, "internet": _stareInternet(), "locul": _locul().stare()}
 
 
 def loculSeteaza(cerere):
 	"""POST /api/locul-seteaza: tara= si oras= (din tabel), lat= si lon= (grade, nord si est pozitive) sau internet=
-	(semnul locului gasit dupa internet, confirmat in pagina). Acelasi HdsLocul.seteaza ca pe televizor: locul unic,
+	(semnul locului gasit dupa internet; paginile de pana la 0.8.0). Acelasi HdsLocul.seteaza ca pe televizor: locul unic,
 	copiile din Setari tuner, settings, nucleul."""
 	L = _locul()
 	if cerere.get("internet"):
@@ -1824,17 +1938,20 @@ PAGINA_LOCUL = """<!DOCTYPE html>
 </div>
 <div class="card ascuns" id="cardInternet">
   <h2>Află locul după internet</h2>
-  <p class="nota">Receptorul întreabă serverul HD Satelit ce oraș arată adresa lui de internet. Locul se schimbă numai după ce îl confirmi.</p>
+  <p class="nota" id="felInternet"></p>
   <div class="butoane"><button type="button" class="buton" id="cautaInternet">Află locul după internet</button></div>
   <p class="mesaj" id="mesajInternet" role="status"></p>
-  <div class="intrebare ascuns" id="intrebareInternet"></div>
   <p class="nota">Orașul după adresa de internet: <a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">IP Geolocation by DB-IP</a>, licența CC BY 4.0. Serverul nu păstrează adresa de internet.</p>
 </div>
 <p class="nota avert ascuns" id="faraInternet">Receptorul nu are internet acum: alege țara și orașul din listă.</p>
 <div class="card" id="cardOras">
   <h2>Țara și orașul</h2>
+  <label class="eticheta" for="cautaTara">Caută țara</label>
+  <input class="text" id="cautaTara" autocomplete="off" placeholder="Scrie primele litere">
   <label class="eticheta" for="tara">Țara</label>
   <select id="tara"></select>
+  <label class="eticheta" for="cautaOras">Caută orașul</label>
+  <input class="text" id="cautaOras" autocomplete="off" placeholder="Scrie primele litere">
   <label class="eticheta" for="oras">Orașul</label>
   <select id="oras"></select>
   <p class="nota">Alege orașul cel mai apropiat: câțiva kilometri nu contează pentru unghiul antenei.</p>
@@ -1855,8 +1972,42 @@ PAGINA_LOCUL = """<!DOCTYPE html>
 """ + _SUBSOL + """
 </main>
 <script>""" + _JS_COMUN + """
-var S = {tari: [], ultim: null};
+var S = {tari: [], orase: [], ultim: null};
 var IMPLICIT = {RO: "București", MD: "Chișinău"};
+// cautarea dupa litere (LOC1, 0.8.0: toata lumea, ~245 de tari): fara semne si fara spatii, ca "sao" sa gaseasca "São Paulo"
+// literele fara descompunere (ø, ł, đ, ı, æ, œ, þ, ð, ß) trec in literele de baza, ca in HdsLocul.faraSemne
+var LIGATURI = {"ß": "ss", "æ": "ae", "œ": "oe", "ø": "o", "ł": "l", "đ": "d", "ð": "d", "ı": "i", "þ": "th"};
+function faraSemne(t){
+  return String(t || "").toLowerCase().replace(/[ßæœøłđðıþ]/g, function(c){ return LIGATURI[c]; }).normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g, "").replace(/[^0-9a-z\\u0370-\\u03ff\\u0400-\\u04ff\\u0590-\\u06ff]/g, "");
+}
+// ca pe televizor (HdsLocul.filtreaza): intai numele care incep cu literele (sau au un cuvant care incepe cu ele), apoi restul;
+// `i` = coloana numelui (tarile: 1, numele aratat; orasele: 0, numele fara coordonate)
+function filtru(lista, text, i){
+  const c = faraSemne(text);
+  if (!c) return lista;
+  // intai numele care incep cu literele, apoi cele cu un cuvant care incepe cu ele, apoi restul (LOC2: mii de locuri pe tara)
+  const intai = [], cuvinte = [], apoi = [];
+  lista.forEach(function(x){
+    const n = String(x[i]), f = faraSemne(n);
+    if (f.indexOf(c) < 0) return;
+    if (f.indexOf(c) === 0){ intai.push(x); return; }
+    const cuvant = n.replace(/-/g, " ").split(/\\s+/).some(function(w){ return faraSemne(w).indexOf(c) === 0; });
+    (cuvant ? cuvinte : apoi).push(x);
+  });
+  return intai.concat(cuvinte, apoi);
+}
+function arataTari(ales){
+  const lista = filtru(S.tari, $("cautaTara").value, 1);
+  optiuni($("tara"), lista, ales);
+  return lista;
+}
+function arataOrase(ales){
+  const lista = filtru(S.orase, $("cautaOras").value, 0);
+  optiuni($("oras"), lista, ales);
+  // cu literele scrise, primul oras potrivit e cel ales (Salvează locul ia orasul vazut)
+  if (lista.length && !lista.some(function(o){ return o[0] === $("oras").value; })) $("oras").value = lista[0][0];
+}
 function arataLocul(l){
   const acum = $("acum");
   S.ultim = l.stabilit + "|" + l.text;
@@ -1870,7 +2021,9 @@ function incarcaOrase(tara, ales){
   return cerere("/api/locul?tara=" + encodeURIComponent(tara)).then(function(d){
     if (!d.result){ mesaj($("mesaj"), d.message, true); return; }
     // coordonatele vin scrise de receptor, ca pe televizor (literele si separatorul limbii meniului)
-    optiuni($("oras"), d.orase.map(o => [o[0], o[0] + "  (" + (o[3] || "") + ")"]), ales);
+    S.orase = d.orase.map(o => [o[0], o[0] + "  (" + (o[3] || "") + ")"]);
+    $("cautaOras").value = "";
+    arataOrase(ales);
   }).catch(function(){ mesaj($("mesaj"), "Receptorul nu răspunde.", true); });
 }
 function trimite(p){
@@ -1893,13 +2046,8 @@ function arataInternet(i){
   const are = !!(i && i.retea);
   arata($("cardInternet"), are);
   arata($("faraInternet"), !are);
-}
-function alegeDinLista(tara, oras){
-  if (S.tari.some(function(t){ return t[0] === tara; })){
-    $("tara").value = tara;
-    incarcaOrase(tara, oras || IMPLICIT[tara] || "");
-  }
-  $("cardOras").scrollIntoView({block: "nearest"});
+  // felul locului (LOC2): se afla singur dupa internet sau l-a ales omul; textul vine tradus de la receptor
+  if (i && i.fel) $("felInternet").textContent = i.fel;
 }
 function cautareCazuta(){
   $("cautaInternet").disabled = false;
@@ -1914,28 +2062,39 @@ function urmaresteInternet(d){
     return;
   }
   $("cautaInternet").disabled = !CFG.csrf;
+  arataInternet(i);
   if (i.stare === "gasit" && i.gasit){
-    mesaj($("mesajInternet"), "");
-    // "Alege din listă": lista se deschide pe orasul din tabel cel mai apropiat de locul gasit (orasul gasit poate lipsi din tabel)
-    intreaba($("intrebareInternet"), i.intrebare, "Folosește acest loc", "Alege din listă", function(){
-      const p = new URLSearchParams();
-      p.set("internet", i.semn);
-      trimite(p);
-    }, function(){ alegeDinLista(i.gasit.tara_lista || i.gasit.tara, i.gasit.oras_lista); });
+    // locul gasit e deja scris de receptor, fara intrebare (LOC2); "Acum" si listele trec pe el
+    // scris null: omul a ales intre timp singur locul, care ramane al lui (fara mesaj)
+    mesaj($("mesajInternet"), i.scris ? (i.mesaj_scris || "") : (i.mesaj_scris || ""), i.scris === false);
+    if (d.locul) locSchimbat(d.locul);
     return;
   }
-  // fara internet, serverul nu raspunde, raspuns stricat: mesajul si lista, ca pana acum
+  if (d.locul) arataLocul(d.locul);
+  // fara internet, serverul nu raspunde, raspuns stricat: mesajul; locul ramane cel de pana acum
+  if (i.stare === "nimic") return;
   mesaj($("mesajInternet"), i.mesaj, true);
-  if (i.stare === "fara_retea"){ arataInternet(i); mesaj($("mesaj"), i.mesaj, true); }
-  $("cardOras").scrollIntoView({block: "nearest"});
+  if (i.stare === "fara_retea"){ mesaj($("mesaj"), i.mesaj, true); }
 }
-$("cautaInternet").addEventListener("click", function(){
-  arata($("intrebareInternet"), false);
-  this.disabled = true;
+function cautaInternet(singur){
+  $("cautaInternet").disabled = true;
   mesaj($("mesajInternet"), "Se caută...");
-  cerere("/api/locul-internet", "POST", new URLSearchParams()).then(urmaresteInternet).catch(cautareCazuta);
-});
+  const p = new URLSearchParams();
+  if (singur) p.set("singur", "1");
+  cerere("/api/locul-internet", "POST", p).then(urmaresteInternet).catch(cautareCazuta);
+}
+$("cautaInternet").addEventListener("click", function(){ cautaInternet(false); });
 $("tara").addEventListener("change", function(){ incarcaOrase(this.value, IMPLICIT[this.value] || ""); });
+// literele scrise strang lista; cand tara aleasa iese din lista, se trece pe prima potrivita si i se incarca orasele
+$("cautaTara").addEventListener("input", function(){
+  const inainte = $("tara").value;
+  const lista = arataTari(inainte);
+  if (lista.length && !lista.some(function(t){ return t[0] === inainte; })){
+    $("tara").value = lista[0][0];
+    incarcaOrase(lista[0][0], IMPLICIT[lista[0][0]] || "");
+  }
+});
+$("cautaOras").addEventListener("input", function(){ arataOrase($("oras").value); });
 $("salveazaOras").addEventListener("click", function(){
   if (!$("oras").value) return;
   const p = new URLSearchParams();
@@ -1953,8 +2112,10 @@ $("salveazaMana").addEventListener("click", function(){
 function locSchimbat(l){
   arataLocul(l);
   const a = document.activeElement;
-  if (l.tara && a !== $("tara") && a !== $("oras") && S.tari.some(function(t){ return t[0] === l.tara; })){
-    $("tara").value = l.tara;
+  if (l.tara && a !== $("tara") && a !== $("oras") && a !== $("cautaTara") && a !== $("cautaOras")
+      && S.tari.some(function(t){ return t[0] === l.tara; })){
+    $("cautaTara").value = "";
+    arataTari(l.tara);
     incarcaOrase(l.tara, l.oras || IMPLICIT[l.tara] || "");
   }
 }
@@ -1972,12 +2133,16 @@ cerere("/api/locul").then(function(d){
   arataLocul(d.locul);
   $("sursa").textContent = d.sursa_text || ("Coordonatele orașelor: " + d.sursa_date + ".");
   arataInternet(d.internet);
-  const tara = d.locul.tara || "RO";
-  optiuni($("tara"), d.tari, tara);
+  // tara de data trecuta, altfel tara limbii meniului (d.implicita), altfel prima din lista
+  const tara = d.locul.tara || d.implicita || (d.tari[0] || [""])[0];
+  arataTari(tara);
   incarcaOrase(tara, d.locul.oras || IMPLICIT[tara] || "");
   if (!CFG.csrf){
     $("salveazaOras").disabled = $("salveazaMana").disabled = $("cautaInternet").disabled = true;
     mesaj($("mesaj"), "Locul se schimbă numai dintr-un browser (nu cu cheia pentru scripturi). Aici se vede numai locul de acum.");
+  } else if (d.internet && d.internet.automat && d.internet.retea){
+    // locul dupa internet e cel implicit (LOC2): pagina abia deschisa il afla din nou, ca ecranul de pe televizor
+    cautaInternet(true);
   }
   urmaresteLocul();
 }).catch(function(){ mesaj($("acum"), "Receptorul nu răspunde.", true); });
@@ -2537,24 +2702,27 @@ PAGINA_SEMNAL = """<!DOCTYPE html>
   </div>
   <div class="butoane">
     <button type="button" class="buton" id="masoara">Pornește măsurarea</button>
+    <button type="button" class="buton secundar" id="programAcum">Transponderul canalului de acum</button>
     <button type="button" class="buton secundar" id="reacord">Acordează din nou</button>
-    <button type="button" class="buton secundar" id="canale">Canalele de aici</button>
+    <button type="button" class="buton secundar" id="canale">Televiziunile de pe această frecvență</button>
     <button type="button" class="buton secundar" id="opreste">Oprește măsurarea</button>
+    <button type="button" class="buton secundar" id="bip" aria-pressed="true">Sunet: bip</button>
   </div>
   <div class="intrebare ascuns" id="intrebare"></div>
-  <p class="nota" id="notaPornire">Măsurarea ia tunerul: programul de pe televizor se oprește dacă folosește același tuner și pornește la loc când oprești măsurarea sau închizi pagina.</p>
+  <p class="nota" id="notaPornire">Pe transponderul programului de acum măsurarea citește tunerul lui, iar programul merge mai departe. Pe alt transponder măsurarea ia tunerul: programul se oprește dacă folosește același tuner și pornește la loc când oprești măsurarea sau închizi pagina.</p>
   <div class="mesaj" id="mesaj" role="status"></div>
 </div>
 
 <div class="card ascuns" id="cardSemnal">
   <div class="verdict" id="verdict" role="status"></div>
+  <p class="nota" id="modMasurare"></p>
   <div class="masura"><span class="nume">Nivel</span><div class="bara"><div id="baraNivel"></div></div><span class="cifra" id="nivel">-</span></div>
   <div class="masura"><span class="nume">Calitate</span><div class="bara calitate"><div id="baraCalitate"></div></div><span class="cifra" id="calitate">-</span></div>
   <div id="linii"></div>
   <ul class="lista" id="detalii"></ul>
   <p class="mesaj avert" id="eveniment"></p>
   <div id="cutieCanale" class="ascuns">
-    <h2>Canalele de aici</h2>
+    <h2>Televiziunile de pe această frecvență</h2>
     <p class="nota" id="canaleRezumat"></p>
     <ul class="lista" id="canaleLista"></ul>
     <p class="nota">Nimic nu s-a salvat în lista de canale. Ca să le adaugi, folosește Scanare.</p>
@@ -2695,14 +2863,30 @@ function parametri(){
   return p;
 }
 function trimite(cale, p){
-  return cerere(cale, "POST", p || new URLSearchParams()).then(function(d){
+  p = p || new URLSearchParams();
+  return cerere(cale, "POST", p).then(function(d){
+    // GSW2 D: satelit in afara cursei motorului, prea jos sau sub orizont: comanda pleaca numai dupa „Da”
+    if(d.intrebare){
+      mesaj($("mesaj"), "");
+      intreaba($("intrebare"), d.intrebare, "Da, trimite comanda", "Nu", function(){ p.set("confirmat", "1"); trimite(cale, p); });
+      return d;
+    }
     mesaj($("mesaj"), d.message, !d.result);
+    if(d.alegere){ puneAlegerea(d.alegere); }
     if(d.stare){ deseneazaStarea(d.stare); }
     planifica(500);
     return d;
   }).catch(function(){ mesaj($("mesaj"), "Receptorul nu răspunde.", true); });
 }
 function masoara(){ return trimite("/api/gasire-semnal-porneste", parametri()); }
+// GSW2 B: tunerul, satelitul si transponderul programului de acum, alese dintr-o apasare
+function puneAlegerea(a){
+  if(S.ceasAcord){ clearTimeout(S.ceasAcord); S.ceasAcord = null; }
+  if(String(a.slot) !== $("tuner").value){ $("tuner").value = String(a.slot); puneSistemele(); puneFelul(); }
+  puneSatelitii(a.poz !== undefined ? a.poz : (a.tp ? a.tp.orbital_position : null));
+  puneTranspondere(a, a.tp);
+}
+function masoaraProgramul(){ return trimite("/api/gasire-semnal-porneste", new URLSearchParams({tp: "program"})); }
 // ca pe televizor: cat merge masurarea, alta alegere se acordeaza singura (dupa o mica pauza, nu la fiecare tasta)
 function laSchimbare(){
   if(S.ceasAcord){ clearTimeout(S.ceasAcord); S.ceasAcord = null; }
@@ -2718,6 +2902,7 @@ function deseneazaStarea(s){
   arata($("cardSemnal"), true);
   var v = $("verdict");
   v.textContent = s.verdict;
+  $("modMasurare").textContent = s.mod_text || "";
   v.className = "verdict" + (s.faza === "prins" ? " prins" : (RAU[s.faza] ? " rau" : (ASTEPTARE[s.faza] ? " asteapta" : "")));
   procent("nivel", "baraNivel", s.nivel_la_suta);
   procent("calitate", "baraCalitate", s.calitate_la_suta);
@@ -2741,6 +2926,7 @@ function deseneazaStarea(s){
   var comenzi = !!CFG.csrf && !s.ecran_deschis;
   $("masoara").textContent = web ? "Măsoară acest transponder" : "Pornește măsurarea";
   $("masoara").disabled = !comenzi;
+  $("programAcum").disabled = !comenzi;
   $("reacord").disabled = !comenzi || !web;
   $("opreste").disabled = !comenzi || !web;
   $("canale").disabled = !comenzi || !web || !s.canale_se_pot_citi || s.canale_stare === "se_citeste";
@@ -2758,22 +2944,134 @@ function deseneazaCanalele(s){
   var cs = s.canale_stare || "";
   arata($("cutieCanale"), cs !== "");
   if(cs === ""){ return; }
+  if(S.duLaCanale){
+    // coboara la lista (sub antetul fix al paginii); ramane pana cand lista e gata, ca sa nu fuga de sub ochi
+    if(cs !== "se_citeste"){ S.duLaCanale = false; }
+    var antet = document.querySelector("header");
+    var sus = $("cutieCanale").getBoundingClientRect().top + window.scrollY - (antet ? antet.getBoundingClientRect().height : 0) - 12;
+    window.scrollTo({top: Math.max(0, sus), behavior: "smooth"});
+  }
   var l = $("canaleLista"); goleste(l);
   if(cs === "se_citeste"){ $("canaleRezumat").textContent = "Se citesc canalele de pe transponder..."; return; }
   if(cs === "necitit"){ $("canaleRezumat").textContent = s.canale_mesaj || "Canalele nu s-au putut citi."; return; }
   $("canaleRezumat").textContent = s.canale_rezumat || "";
   (s.canale || []).forEach(function(c){ l.appendChild(el("li", "", textCanal(c))); });
 }
+// BIP1 (Eduard 27.11.2026 16:28 si 16:33): sunetul pentru reglarea antenei, ca la un aparat de reglat. Bip: cu semnal
+// prins e mai ascutit si mai des cu cat calitatea e mai mare, la 100% continuu; fara semnal, un tic rar si jos. Voce: spune
+// „calitate 70, semnal 74” (vocea romaneasca a telefonului) cand se schimba cifrele, cel mult o data la ~2,5 s. Butonul
+// trece prin Bip / Voce / Bip si voce / Oprit (tinut minte in telefon); din fabrica: Bip. Sunetul porneste dupa prima
+// apasare pe pagina (regula navigatoarelor).
+var MODURI_SUNET = [["bip", "Sunet: bip"], ["voce", "Sunet: voce"], ["bip_voce", "Sunet: bip și voce"], ["oprit", "Sunet: oprit"]];
+var BIP = {mod: "bip", ctx: null, ceas: null, ultima: null, rostit: "", laRostit: 0};
+try { var m0 = localStorage.getItem("hdsSunetSemnal"); if(m0 && MODURI_SUNET.some(function(m){ return m[0] === m0; })){ BIP.mod = m0; } } catch(e){}
+function areBip(){ return BIP.mod === "bip" || BIP.mod === "bip_voce"; }
+function areVoce(){ return BIP.mod === "voce" || BIP.mod === "bip_voce"; }
+function bipButon(){
+  var b = $("bip"); if(!b){ return; }
+  b.textContent = MODURI_SUNET.filter(function(m){ return m[0] === BIP.mod; })[0][1];
+  b.setAttribute("aria-pressed", BIP.mod === "oprit" ? "false" : "true");
+}
+function bipContext(){
+  if(!BIP.ctx){
+    var C = window.AudioContext || window.webkitAudioContext;
+    if(!C){ return null; }
+    try { BIP.ctx = new C(); } catch(e){ return null; }
+  }
+  if(BIP.ctx.state === "suspended"){ BIP.ctx.resume(); }
+  return BIP.ctx;
+}
+function activ(s){ return s && ["oprita", "fara_tuner"].indexOf(s.faza) < 0 && !document.hidden; }
+// Eduard 16:36: „sunetul nu-mi place, e stresant; un sunet gen jocurile cu Mario”: note scurte de joc video (unda
+// triunghi, doua note care urca), nu bipul ascutit de aparat. Mai sus si mai des cu calitatea; la 100% o mica melodie
+// care urca, in bucla. Sunete facute aici, nu luate din vreun joc.
+function bipNota(frecventa, cand, durata, volum){
+  var c = bipContext(); if(!c){ return; }
+  var o = c.createOscillator(), g = c.createGain(), t = c.currentTime + cand;
+  o.type = "triangle"; o.frequency.setValueAtTime(frecventa, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(volum || 0.28, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + durata);
+  o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + durata + 0.02);
+}
+// treptele unei game majore (do, re, mi, sol, la), urcand cu calitatea: suna placut la orice pas
+var GAMA = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880, 1047, 1175, 1319, 1568];
+function notaPentru(q){ return GAMA[Math.min(GAMA.length - 2, Math.floor(q / 100 * (GAMA.length - 2)))]; }
+function bipPas(){
+  BIP.ceas = null;
+  var s = BIP.ultima;
+  if(!areBip() || !activ(s)){ return; }
+  var q = s.blocat ? (s.calitate_la_suta || 0) : 0;
+  if(s.blocat && q >= 100){
+    [784, 988, 1175, 1568].forEach(function(f, i){ bipNota(f, i * 0.09, 0.12); });
+    BIP.ceas = setTimeout(bipPas, 420);
+  } else if(s.blocat){
+    var i = GAMA.indexOf(notaPentru(q));
+    bipNota(GAMA[i], 0, 0.07); bipNota(GAMA[i + 1], 0.07, 0.1);
+    BIP.ceas = setTimeout(bipPas, Math.max(220, 1000 - q * 7.5));
+  } else {
+    bipNota(196, 0, 0.09, 0.15);
+    BIP.ceas = setTimeout(bipPas, 1500);
+  }
+}
+var VOCE_RO = null;
+function voceRomana(){
+  if(VOCE_RO || !window.speechSynthesis){ return VOCE_RO; }
+  VOCE_RO = (speechSynthesis.getVoices() || []).filter(function(v){ return /^ro/i.test(v.lang); })[0] || null;
+  return VOCE_RO;
+}
+if(window.speechSynthesis){ speechSynthesis.onvoiceschanged = function(){ VOCE_RO = null; voceRomana(); }; }
+function voceSpune(s){
+  if(!areVoce() || !activ(s) || !window.speechSynthesis){ return; }
+  var text = s.blocat ? ("calitate " + (s.calitate_la_suta || 0) + ", semnal " + (s.nivel_la_suta || 0)) : "fără semnal";
+  var acum = Date.now();
+  if(speechSynthesis.speaking || acum - BIP.laRostit < 2500){ return; }
+  if(text === BIP.rostit && acum - BIP.laRostit < 6000){ return; }
+  var u = new SpeechSynthesisUtterance(text);
+  u.lang = "ro-RO"; var v = voceRomana(); if(v){ u.voice = v; }
+  u.rate = 1.15;
+  BIP.rostit = text; BIP.laRostit = acum;
+  speechSynthesis.speak(u);
+}
+function bipStare(s){
+  BIP.ultima = s;
+  if(areBip() && !BIP.ceas){ bipPas(); }
+  voceSpune(s);
+}
+$("bip").addEventListener("click", function(){
+  var i = MODURI_SUNET.map(function(m){ return m[0]; }).indexOf(BIP.mod);
+  BIP.mod = MODURI_SUNET[(i + 1) % MODURI_SUNET.length][0];
+  try { localStorage.setItem("hdsSunetSemnal", BIP.mod); } catch(e){}
+  bipButon();
+  if(areBip()){ bipContext(); if(!BIP.ceas){ bipPas(); } }
+  else if(BIP.ceas){ clearTimeout(BIP.ceas); BIP.ceas = null; }
+  if(!areVoce() && window.speechSynthesis){ speechSynthesis.cancel(); }
+  BIP.rostit = ""; BIP.laRostit = 0;
+});
+$("masoara").addEventListener("click", function(){ bipContext(); });
+document.addEventListener("click", function(){ if(BIP.mod !== "oprit"){ bipContext(); } }, {once: true});
+bipButon();
 function planifica(ms){
   if(S.ceas){ clearTimeout(S.ceas); }
   S.ceas = setTimeout(citeste, ms);
 }
 function citeste(){
   S.ceas = null;
+  var jeton = S.jeton = (S.jeton || 0) + 1;
+  // o cerere care nu se mai intoarce (Wi-Fi schimbat, interfata repornita) nu mai tine pagina pe starea veche
+  var paza = setTimeout(function(){
+    if(jeton !== S.jeton){ return; }
+    S.jeton++;
+    $("verdict").textContent = "Receptorul nu răspunde";
+    $("verdict").className = "verdict rau";
+    planifica(1000);
+  }, 6000);
   cerere("/api/gasire-semnal-stare").then(function(s){
-    if(s.result){ deseneazaStarea(s); }
+    clearTimeout(paza);
+    if(jeton !== S.jeton){ return; }
+    if(s.result){ deseneazaStarea(s); bipStare(s); }
     planifica(document.hidden ? 5000 : 500);
-  }).catch(function(){ planifica(3000); });
+  }).catch(function(){ clearTimeout(paza); if(jeton === S.jeton){ planifica(3000); } });
 }
 
 $("tuner").addEventListener("change", function(){ puneSistemele(); puneFelul(); puneSatelitii(null); incarcaTranspondere().then(laSchimbare); });
@@ -2792,8 +3090,10 @@ $("transponder").addEventListener("change", function(){
 ["pol", "mod", "fec1", "fec2", "rolloff", "pilot"].forEach(function(id){ $(id).addEventListener("change", laSchimbare); });
 $("sistem").addEventListener("change", function(){ arataSistemul(); laSchimbare(); });
 $("masoara").addEventListener("click", masoara);
+$("programAcum").addEventListener("click", masoaraProgramul);
 $("reacord").addEventListener("click", function(){ trimite("/api/gasire-semnal-reacordeaza"); });
-$("canale").addEventListener("click", function(){ trimite("/api/gasire-semnal-reacordeaza", new URLSearchParams({ce: "canale"})); });
+// Eduard 27.11 17:51: lista apare jos, neintuitiv; dupa apasare pagina coboara singura la ea
+$("canale").addEventListener("click", function(){ S.duLaCanale = true; trimite("/api/gasire-semnal-reacordeaza", new URLSearchParams({ce: "canale"})); });
 $("opreste").addEventListener("click", function(){
   if(S.stare && S.stare.iesirea_opreste_antena){
     intreaba($("intrebare"), "Antena se rotește încă. Dacă oprești acum, motorul se oprește din drum, iar antena merge unde trebuie la următorul canal de satelit. Oprești măsurarea?",
@@ -2816,7 +3116,8 @@ function porneste(){
       $("subtitlu").textContent = "Receptorul nu are niciun tuner de satelit, deci aici nu se poate măsura semnalul.";
       return;
     }
-    $("subtitlu").textContent = d.initial && d.initial.din === "program" ? "Pornește de la transponderul programului de pe televizor." : "";
+    $("subtitlu").textContent = d.initial && d.initial.din === "program" ? "Pornește de la transponderul programului de acum." :
+      (d.initial && d.initial.din === "pozitie" ? "Programul de acum nu e de pe satelit: pornește de la satelitul pe care stă antena." : "");
     arata($("cardAlegere"), true);
     arata($("randTuner"), d.tunere.length > 1);
     var slot = d.initial ? d.initial.slot : d.tunere[0].slot;
@@ -2825,7 +3126,7 @@ function porneste(){
     puneSistemele();
     puneFelul();
     if(d.initial){
-      puneSatelitii(d.initial.tp.orbital_position);
+      puneSatelitii(d.initial.poz !== undefined ? d.initial.poz : (d.initial.tp ? d.initial.tp.orbital_position : null));
       puneTranspondere(d.initial, d.initial.tp);
     } else {
       puneSatelitii(null);
@@ -3061,6 +3362,12 @@ function deseneaza(d){
     }
     return `<svg viewBox="0 0 860 250" role="img" aria-label="Antena și drumul ei">${s}</svg>`;
   }
+  // plecarea nestiuta, estimata din ultima pozitie prinsa cu semnal (MOT1): antena se misca pe arc dupa viteza motorului
+  if (d.de_la_grade === null && d.pozitie_grade === null && d.plecare_estimata_grade !== null && d.plecare_estimata_grade !== undefined &&
+      d.pozitie_estimata_grade !== null && d.pozitie_estimata_grade !== undefined)
+    d = Object.assign({}, d, {de_la_grade: d.plecare_estimata_grade, pozitie_grade: d.pozitie_estimata_grade,
+      de_la_scurt: d.plecare_estimata_scurt, de_la_orbital: d.plecare_estimata_orbital,
+      bolta: d.bolta ? Object.assign({}, d.bolta, {de_la: d.bolta.de_la_estimat, acum: d.bolta.acum_estimat}) : null});
   const plecare = d.de_la_grade !== null, de_la = plecare ? d.de_la_grade : d.la_grade, la = d.la_grade;
   const [jos, sus] = capeteBolta(de_la, la, d.din_spate, d.sud_grade);
   // 180 = stanga, 360 = dreapta; vazut din spate, oglinda (estul in stanga), ca HdsDishMotor._unghi
@@ -3151,6 +3458,8 @@ function notaReaducere(d){
     return "Readucerea antenei pe " + unde + " după pierderea semnalului: încercarea " + r.incercari + ", prin " + prin + ", în curs.";
   }
   if (r.in_curs) return "Readucerea antenei pe " + unde + " după pierderea semnalului: încercarea " + r.incercari + ", în curs.";
+  // oprita dupa 3 incercari fara semnal (HdsMotorPozitie, READUCERE_INCERCARI_MAX): antena nu se mai misca singura
+  if (r.oprita) return "Antena nu prinde semnal pe " + unde + " nici după " + r.incercari + " încercări de readucere, așa că receptorul nu o mai mișcă. Verifică antena, LNB-ul și cablul. Când alegi alt canal sau deschizi Găsire semnal, receptorul încearcă din nou.";
   const u = r.ultima || {};
   if (r.semnal_revenit) {
     let t = "Semnalul a revenit pe " + unde + " după readucerea antenei (încercarea " + r.incercari + ")";
@@ -3181,11 +3490,15 @@ function afiseaza(d){
   titlu.textContent = d.stare_text || "Rotirea antenei";
   continut.insertAdjacentHTML("beforeend", deseneaza(d));
   const randuri = el("div", "randuri");
-  randuri.appendChild(celula("De la", d.de_la_text, d.de_la_nume, "plecare"));
-  randuri.appendChild(celula("Acum (estimat)", d.pozitie_grade === null ? (d.curent_text || d.pozitie_text) : d.pozitie_text, "", "acum"));
+  // plecarea nestiuta (MOT1): fara "necunoscut"; plecarea estimata, cand e
+  if (d.plecare_nestiuta) randuri.appendChild(celula(d.plecare_estimata_text ? "De la (estimat)" : "", d.plecare_estimata_text || "", "", "plecare"));
+  else randuri.appendChild(celula("De la", d.de_la_text, d.de_la_nume, "plecare"));
+  randuri.appendChild(celula("Acum (estimat)", d.pozitie_grade === null ? (d.pozitie_estimata_text || d.curent_text ||
+    (d.plecare_nestiuta ? "" : d.pozitie_text)) : d.pozitie_text, "", "acum"));
   randuri.appendChild(celula("Până la", d.la_text, d.la_nume, "tinta"));
   continut.appendChild(randuri);
-  const proc = d.procent < 0 ? 0 : d.procent;
+  // plecarea nestiuta: bara estimata (din drumul estimat sau din timp, MOT1)
+  const proc = d.procent >= 0 ? d.procent : (d.procent_estimat >= 0 ? d.procent_estimat : 0);
   const bara = el("div", "bara"), plin = el("span");
   plin.style.width = proc + "%";
   bara.appendChild(plin);
@@ -3202,7 +3515,8 @@ function afiseaza(d){
     continut.appendChild(el("div", "ramas", "Oprire singură în " + secunde(d.oprire_automata_s)));
   const det = [];
   if (d.comanda_text) det.push("comanda " + d.comanda_text);
-  if (d.unghi_motor !== null) det.push("unghi motor " + nr(Math.abs(d.unghi_motor)) + " grade " + (d.unghi_motor >= 0 ? "Est" : "Vest"));
+  // unghiul motorului explicat (MOT1): 0 = sudul locului
+  if (d.unghi_motor !== null) det.push("antena la " + nr(Math.abs(d.unghi_motor)) + (d.unghi_motor >= 0 ? "° spre est de sud" : "° spre vest de sud"));
   // gradele de motor (unghiul orar USALS) cand se stiu coordonatele, altfel diferenta pozitiilor orbitale
   if (d.grade_total !== null) det.push((d.unghi_real ? "rotire " : "drum total ") + nr(d.grade_total) + " grade");
   det.push("tuner " + (d.slot + 1));
@@ -3382,13 +3696,14 @@ TEXTE_PAGINA = {
 		N_("Acum"),
 		N_("Se încarcă..."),
 		N_("Află locul după internet"),
-		N_("Receptorul întreabă serverul HD Satelit ce oraș arată adresa lui de internet. Locul se schimbă "
-			"numai după ce îl confirmi."),
 		N_("Orașul după adresa de internet: <a href=\"https://db-ip.com\" target=\"_blank\" rel=\"noopener "
 			"noreferrer\">IP Geolocation by DB-IP</a>, licența CC BY 4.0. Serverul nu păstrează adresa de "
 			"internet."),
 		N_("Receptorul nu are internet acum: alege țara și orașul din listă."),
 		N_("Țara și orașul"),
+		N_("Caută țara"),
+		N_("Caută orașul"),
+		N_("Scrie primele litere"),
 		N_("Țara"),
 		N_("Orașul"),
 		N_("Alege orașul cel mai apropiat: câțiva kilometri nu contează pentru unghiul antenei."),
@@ -3464,8 +3779,19 @@ TEXTE_PAGINA = {
 		N_("Satelitul"),
 		# Gasire semnal: canalele de pe transponder (aceleasi texte ca pe televizor, Components/HdsGasireSemnal.py)
 		N_("Canalele de aici"),
+		N_("Televiziunile de pe această frecvență"),
+		# GSW2: transponderul programului de acum
+		N_("Transponderul canalului de acum"),
+		N_("Pe transponderul programului de acum măsurarea citește tunerul lui, iar programul merge mai departe. Pe alt "
+			"transponder măsurarea ia tunerul: programul se oprește dacă folosește același tuner și pornește la loc când "
+			"oprești măsurarea sau închizi pagina."),
 	),
 	"js": (
+		# GSW2: Gasire semnal
+		N_("Da, trimite comanda"),
+		N_("Receptorul nu răspunde"),
+		N_("Pornește de la transponderul programului de acum."),
+		N_("Programul de acum nu e de pe satelit: pornește de la satelitul pe care stă antena."),
 		N_("browser deconectat"),
 		N_("Receptorul a răspuns neașteptat (HTTP"),
 		N_("Nu"),
@@ -3476,8 +3802,6 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu răspunde."),
 		N_("Aplică sau renunță întâi la schimbările LNB-ului."),
 		N_("Se salvează..."),
-		N_("Folosește acest loc"),
-		N_("Alege din listă"),
 		N_("Se caută..."),
 		N_("Coordonatele orașelor:"),
 		N_("Locul se schimbă numai dintr-un browser (nu cu cheia pentru scripturi). Aici se vede numai locul de "
@@ -3568,6 +3892,10 @@ TEXTE_PAGINA = {
 		N_("Aproape gata, se așteaptă semnalul pe satelitul nou"),
 		N_("Oprire singură în"),
 		N_("unghi motor"),
+		N_("antena la"),
+		N_("° spre est de sud"),
+		N_("° spre vest de sud"),
+		N_("De la (estimat)"),
 		N_("grade"),
 		N_("Est"),
 		N_("Vest"),

@@ -55,11 +55,12 @@ ACTIUNI_DISPONIBILE = [
 	("epg", _("Alegerea tipului de ghid (EPG)")),
 	("epg_multi", _("Ghidul buchetului curent")),
 	("epg_single", _("Ghidul canalului curent")),
+	("epg_grafic", _("Ghid grafic")),
 	("eventinfo", _("Detaliile emisiunii")),
 	("subtitle_toggle", _("Pornește sau oprește ultima subtitrare")),
 	("portal", _("Portal")),
 	("menu", _("Meniu principal")),
-	("plugins", _("Plugins & Applications")),
+	("plugins", _("Plugins")),
 	("extensions", _("Lista extensiilor (ca ALBASTRU)")),
 	("info", _("Informații sistem")),
 	# ecranul VPN (Screens/HdsVpn.py, Setari > Retea & Internet > VPN) dintr-o tasta (tamiciav7, LinuxSat 164122
@@ -204,6 +205,9 @@ PROFIL_SETARI = (
 	("hds_meniu_text_cauta", False, _("TEXT caută setări în meniu")),
 	("hds_filme_culori_vechi", False, _("Culorile vechi în lista de filme")),
 	("hds_ch_privire", "device", _("CH+ și CH- la privit")),
+	# NEU9 (skovemi, LinuxSat 164248 #972834): EXIT la privit, fara nimic pe ecran, arata bara (pentru asezarea Neutrino);
+	# din fabrica o ascunde, ca pana acum (Screens/InfoBarGenerics.hdsIesirePrivire)
+	("hds_exit_privire", "hide", _("EXIT cât te uiți la TV")),
 	("hds_exit_film", "hide", _("EXIT în timpul filmului")),
 	# 0.7.7 (LST, tamiciav7, LinuxSat 164182 #970755): EXIT in lista de canale; aceeasi setare si in Setări listă de canale
 	# (data/setup.xml hds_lista_canale). Din fabrica ca pana acum (Screens/ChannelSelection.hdsTastaExit)
@@ -223,6 +227,7 @@ ALEGERI_CH = (("device", N_("După telecomandă")),
 ALEGERI_PROFIL = {"hds_ch_privire": ALEGERI_CH,
 	"hds_asezare_taste": (("obisnuita", N_("Obișnuită")), ("neutrino", N_("Felul Neutrino")),
 		("neutrino_buchete", N_("Felul Neutrino cu buchete"))),
+	"hds_exit_privire": (("hide", N_("Ascunde bara de informații")), ("arata", N_("Arată bara când nu e nimic pe ecran"))),
 	"hds_exit_film": (("hide", N_("Ascunde bara de informații")), ("ask", N_("Ask user")),
 		("movielist", N_("Return to movie list")), ("quit", N_("Return to previous service"))),
 	# up: dintr-un buchet sau dosar EXIT urca un nivel, iar in lista de sus inchide lista (ca pana acum); close: EXIT
@@ -233,6 +238,10 @@ ALEGERI_PROFIL = {"hds_ch_privire": ALEGERI_CH,
 	"hds_mouse_mijloc": (("meniu", N_("Meniu")), ("mut", N_("Sunet oprit")), ("inapoi", N_("Înapoi")), ("nimic", N_("Nimic"))),
 	"hds_mouse_spate": (("inapoi", N_("Înapoi")), ("mut", N_("Sunet oprit")), ("meniu", N_("Meniu")), ("nimic", N_("Nimic"))),
 	"hds_mouse_fata": (("mut", N_("Sunet oprit")), ("inapoi", N_("Înapoi")), ("meniu", N_("Meniu")), ("nimic", N_("Nimic")))}
+
+# KEY1 (tamiciav7): cat se tine tasta pentru randurile de apasare lunga; apasarea lunga vine dupa 4 repetari
+# (main/enigma.cpp), cam o secunda. Acelasi text sub lista din Butoane colorate si in pagina web /taste-rapide.
+NOTA_APASARE_LUNGA = _("Apăsare lungă: ține tasta apăsată ~1 s.")
 
 ASEZARE_AJUTOR = _("Felul Neutrino: sus/jos schimbă canalul, stânga/dreapta volumul, OK deschide lista. "
 	"Cu buchete: stânga/dreapta deschid lista și apoi schimbă buchetul. Obișnuită readuce setările tale.")
@@ -297,6 +306,7 @@ TEXTE_ACTIUNI = {
 	"hbbtv": _("HbbTV"), "record": _("Înregistrează"),
 	"eventinfo": _("Detaliile emisiunii"), "epg_multi": _("Ghidul buchetului curent"),
 	"epg_single": _("Ghidul canalului curent"), "epg": _("Alegerea tipului de ghid (EPG)"),
+	"epg_grafic": _("Ghid grafic"),
 	"subtitle_toggle": _("Pornește sau oprește ultima subtitrare"), "subtitle": _("Lista subtitrărilor"),
 	"subservices": _("Subcanale"), "audio": _("Selectare pistă audio"),
 	"extensions": _("Lista extensiilor"), "portal": _("Portal"),
@@ -319,6 +329,7 @@ TEXTE_ACTIUNI = {
 	"teletext": _("Teletext"), "help": _("Tastele acestui ecran"),
 	"standby": _("Standby"), "shutdown_menu": _("Meniul de oprire"),
 	"pip_close": _("Oprește PiP"), "hide": _("Ascunde bara de informații"),
+	"exit_arata": _("Arată bara când nu e nimic pe ecran"),
 	"next_bouquet": _("Buchetul următor"), "previous_bouquet": _("Buchetul anterior"),
 	"page_up": _("Pagina anterioară"), "page_down": _("Pagina următoare"),
 	"list_tv": _("Lista de canale TV"), "list_radio": _("Lista de canale radio"),
@@ -412,7 +423,8 @@ def sens_tasta(context, key, lung=False, config=None, **stare):
 				return "volume_up" if key == "right" else "volume_down"
 			return "zap_next" if key == "right" else "zap_previous"
 		return {"red": "default", "fav": "bouquets", "text": "teletext", "audio": "audio",
-			"exit": "pip_close" if stare.get("pip") else "hide", "play": "play",
+			"exit": "pip_close" if stare.get("pip") else ("exit_arata" if optiune("hds_exit_privire", config) == "arata" else "hide"),
+			"play": "play",
 			"pause": "pause" if context == "timeshift" else "timeshift",
 			"stop": "stop_timeshift", "portal": "portal", "menu": "menu"}.get(key, "default")
 	if context == "channel_list":

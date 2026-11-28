@@ -284,7 +284,7 @@ __STIL_PAGINI__
 main{max-width:880px;margin:auto}.rand{overflow-wrap:anywhere}input,select{width:100%;min-width:0}button{min-height:44px}
 @media(max-width:560px){main{padding-bottom:110px}}
 </style></head><body><main>
-<p><a href="/meniu">Meniu</a> · <a href="/extensii">Extensii și aplicații</a> · <a href="/">Telecomandă</a></p>
+<p><a href="/meniu">Meniu</a> · <a href="/extensii">Plugins</a> · <a href="/">Telecomandă</a></p>
 <h1 id="titlu">Setările deschise pe televizor</h1>
 <p class="nota">Aceeași listă ca pe televizor. Schimbările rămân în ecran până folosești tasta lui de salvare. Confirmările și alegătoarele se folosesc pe televizor.</p>
 <p id="mesaj" role="status"></p><section id="randuri" class="card"></section>
@@ -364,7 +364,7 @@ citeste();
 
 TEXTE_PAGINA = {
 	"html": (
-		N_("Setările deschise pe televizor"), N_("Meniu"), N_("Extensii și aplicații"), N_("Telecomandă"),
+		N_("Setările deschise pe televizor"), N_("Meniu"), N_("Plugins"), N_("Telecomandă"),
 		N_("Aceeași listă ca pe televizor. Schimbările rămân în ecran până folosești tasta lui de salvare. Confirmările și alegătoarele se folosesc pe televizor."),
 		N_("Tasta verde a ecranului"), N_("Tasta roșie a ecranului"), N_("Reîncarcă lista"),
 	),

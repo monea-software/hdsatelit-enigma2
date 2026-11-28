@@ -263,7 +263,7 @@ def motivEroare(e):
 	mesaj = getattr(e, "mesaj", "")
 	if mesaj == C.E_CONEXIUNI or cod in C.COD_CONEXIUNI:
 		return "conexiuni"
-	if cod in (401, 403, 451) or mesaj == C.E_REFUZ:
+	if cod in (401, 403, 407, 451) or mesaj == C.E_REFUZ:
 		return "refuz"
 	if cod in (404, 410):
 		return "adresa"
@@ -712,6 +712,11 @@ class _Cerere(BaseHTTPRequestHandler):
 		if m is not None and m.sid == sid:
 			if isinstance(e, C.EroareIptv):
 				m.motiv = motivEroare(e)
+				# 0.8.0 FX3: the real cause in hds-zap.log (HTTP code of the provider, or the name not found)
+				if getattr(e, "cod", 0):
+					_jurnalReleu(m, "serverul listei a raspuns HTTP %d" % e.cod)
+				elif getattr(e, "dns", False):
+					_jurnalReleu(m, "numele serverului listei nu se gaseste (DNS)")
 			if al_sursei:
 				m.eroare_sursa = True
 		from Components import HdsIptvLucru as L

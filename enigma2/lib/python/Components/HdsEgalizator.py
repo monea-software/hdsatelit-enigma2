@@ -27,7 +27,7 @@
 # „Pentru acest post” pe Nu: postul uita reglajele lui si foloseste reglajele obisnuite, pe care ecranul si web-ul le
 # arata din acel moment (comutaPePost); reglajele obisnuite se schimba numai daca omul le schimba dupa aceea.
 #
-# Canalele TV: egalizatorul merge si la canalele TV cu sunet MPEG, tinut dupa ceasul imaginii in
+# Canalele TV: egalizatorul merge si la canalele TV (MPEG, AAC, AC-3 / E-AC-3 cand imaginea are decodorul), tinut dupa ceasul imaginii in
 # motor (hdsegalizator.h). Setarile tv (Da din fabrica) si potrivire_tv (sunetul mai tarziu sau mai devreme fata de
 # imagine, -300..300 ms) sunt in web, la „Pentru probe și potriviri”, ca volumul si placa ALSA.
 #
@@ -127,12 +127,9 @@ TEXTE_POST = {
 	"tv": N_("La canalele TV egalizatorul e oprit din setări. Sunetul merge prin placa de sunet."),
 	"tv-oprit-pornire": N_("Proba egalizatorului la TV a eșuat pe acest model. Sunetul merge prin placa de sunet. Nu mai încearcă până la repornirea interfeței."),
 	"inregistrare": N_("La înregistrări și la pauza cu reluare (timeshift) egalizatorul nu lucrează. Sunetul merge prin placa de sunet."),
-	"format": N_("Postul acesta are sunet %s. Egalizatorul lucrează la posturile cu sunet MPEG (MP2)."),
+	# TV cu alt sunet decat MPEG, radio cu un sunet fara decodor pe acest receptor (de pilda AC-3 pe o imagine fara el), DTS
+	"format": N_("Postul acesta are sunet %s, pe care egalizatorul nu îl poate lua aici. Sunetul merge prin placa de sunet."),
 	"trecere": N_("Sunetul pleacă neschimbat spre bara de sunet: egalizatorul, volumul și modul de noapte le reglezi din bara de sunet."),
-	# posturile AAC pe receptoarele fara decodorul AAC (faad, numai unde e libfaad2 pentru DAB+); sunetul merge prin placa
-	"fara-decodor-aac": N_("La acest post (AAC) egalizatorul nu e disponibil din motive de licențiere a brevetelor AAC."),
-	# posturile cu HE-AAC semnalat (SBR/PS): decodorul din imagine e aprobat numai pentru AAC-LC; sunetul merge prin placa
-	"aac-he": N_("La acest post (HE-AAC) egalizatorul nu e disponibil din motive de licențiere a brevetelor HE-AAC."),
 	"fara-decodor-mpeg": N_("Egalizatorul nu poate porni: receptorul nu are decodorul MPEG audio."),
 	"fara-gstreamer": N_("Egalizatorul nu poate porni: lipsește decodarea sunetului în procesor (GStreamer)."),
 	"fara-alsa": N_("Egalizatorul nu poate porni: placa de sunet nu se poate folosi din procesor."),
@@ -153,10 +150,10 @@ TEXTE_MOTIV = {
 	"eroare-gstreamer": N_("decodorul nu a pornit"),
 	"fara-decodor-aac": N_("receptorul nu are decodor AAC"),
 	"fara-decodor-mpeg": N_("receptorul nu are decodorul MPEG audio"),
+	"fara-decodor-dolby": N_("receptorul nu are decodor pentru acest sunet Dolby"),
 	"fara-gstreamer": N_("lipsește decodarea sunetului în procesor"),
 	"fara-alsa": N_("placa de sunet nu se poate folosi din procesor"),
 	"latm-nesuportat": N_("felul acesta de AAC nu se poate decoda încă"),
-	"aac-he": N_("postul folosește HE-AAC"),
 	"format-necunoscut": N_("felul sunetului nu s-a recunoscut"),
 	"fisier-lipsa": N_("fișierul probei nu există"),
 	"wav-refuzat": N_("fișierul probei nu s-a putut scrie"),
@@ -495,6 +492,49 @@ def setariEfective(cheie=None):
 	return g
 
 
+# Casca / boxa Bluetooth (Components/HdsBluetoothSunet.py scrie aici dispozitivul ALSA bluealsa cat casca e legata):
+# sunetul canalelor TV si al radioului din satelit il ia motorul (citit din demultiplexor, decodat in procesor, tinut dupa
+# ceasul imaginii cu intarzierea raportata de ALSA) si il trimite in casca, nu pe placa. Pe placile care nu dau o copie a
+# sunetului lor (HiSilicon) altfel nu exista cale. Egalizatorul ramane alegerea omului: oprit = benzi drepte, fara efecte.
+FISIER_BLUETOOTH = "/var/run/hds-bt-sunet"
+
+
+CEAS_PLACA = "/proc/msp/sync00"            # placile HiSilicon cu ceasul placii: drumul TV al motorului e masurat acolo
+NOD_BTAUDIO = "/proc/stb/audio/btaudio"    # placile care trimit singure sunetul in casca (Vu+ 4K, Dream ONE/TWO)
+
+
+def cascaPrinMotor():
+	"""True unde sunetul canalelor ajunge in casca numai prin motor: fara nodul btaudio al placii si cu ceasul placii
+	HiSilicon (pe celelalte, de pilda H8 sau Broadcom, motorul nu se tine dupa imagine la TV)."""
+	return os.path.exists(CEAS_PLACA) and not os.path.exists(NOD_BTAUDIO)
+
+
+def dispozitivBluetooth():
+	"""Dispozitivul ALSA al castii legate (bluealsa:DEV=...,PROFILE=a2dp) sau None; None si pe placile unde casca nu
+	trece prin motor (cascaPrinMotor)."""
+	if not cascaPrinMotor():
+		return None
+	try:
+		with open(FISIER_BLUETOOTH) as f:
+			d = f.read(256).strip()
+	except (IOError, OSError):
+		return None
+	return d or None
+
+
+def _pornitMotor(pornit):
+	"""Motorul merge cand egalizatorul e pornit de om sau cand sunetul pleaca spre casca Bluetooth."""
+	return 1 if (pornit or dispozitivBluetooth()) else 0
+
+
+def _intarziereBluetooth():
+	try:
+		from Components.config import config
+		return int(config.hds_bt_sunet.intarziere.value)
+	except Exception:
+		return 0
+
+
 def trimiteLaMotor(setari, m=None):
 	"""Benzile, Noapte, nivelul, efectul, volumul si placa -> motor (fara pornit)."""
 	m = m if m is not None else motor()
@@ -502,25 +542,109 @@ def trimiteLaMotor(setari, m=None):
 		return False
 	from Components.config import config
 	c = config.hds_egalizator
+	bt = dispozitivBluetooth()
+	if bt and not c.pornit.value and _STARE.get("proba") is None:
+		# numai pentru casca: sunetul trece neschimbat (benzi drepte, fara Noapte, fara efect)
+		setari = dict(setari, benzi=[0.0] * len(setari["benzi"]), noapte=False, nivel=0.0, efect="fara")
 	for i, v in enumerate(setari["benzi"]):
 		m.setBanda(i, float(v))
 	m.setNoapte(1 if setari["noapte"] else 0)
 	m.setNivel(float(setari["nivel"]))
 	if hasattr(m, "setEfect"):
 		m.setEfect(CHEI_EFECTE.index(curataEfect(setari.get("efect"))))
-	m.setVolumAici(VOLUM_MOTOR.get(c.volum.value, 0))
-	m.setPlacaAlsa(c.placa.value or "default")
+	# in casca volumul il aplica motorul (placa nu mai atinge sunetul care pleaca spre bluealsa)
+	m.setVolumAici(1 if bt else VOLUM_MOTOR.get(c.volum.value, 0))
+	m.setPlacaAlsa(bt or c.placa.value or "default")
 	# un motor mai vechi (fara canalele TV) nu are aceste doua functii
 	if hasattr(m, "setPotrivireTv"):
-		m.setPotrivireTv(limiteaza(c.potrivire_tv.value, POTRIVIRE_TV_MIN, POTRIVIRE_TV_MAX))
+		m.setPotrivireTv(limiteaza(limiteaza(c.potrivire_tv.value, POTRIVIRE_TV_MIN, POTRIVIRE_TV_MAX) +
+			(_intarziereBluetooth() if bt else 0), POTRIVIRE_TV_MIN, POTRIVIRE_TV_MAX))
+	if hasattr(m, "setDolbyDecodat"):
+		# in casca sunetul Dolby se decodeaza oricum (casca nu primeste fluxul neschimbat)
+		m.setDolbyDecodat(1 if (bt or dolbyDecodat()) else 0)
 	if hasattr(m, "setTv"):
 		# setari["tv"]: proba de pe ecran (incearca), altfel setarea salvata
 		tv = setari.get("tv")
 		tv = c.tv.value if tv is None else tv
 		if _prinPlaca(setari):
 			tv = False
+		if bt:
+			tv = True       # casca: si canalele TV
 		m.setTv(1 if tv else 0)
 	return True
+
+
+def dolbyDecodat():
+	"""True cand egalizatorul poate decoda in procesor sunetul AC-3 / E-AC-3 al unui post: comutatorul AC3
+	(/proc/stb/audio/ac3, HdsSunet.efectiv; E-AC-3 il urmeaza) e pe downmix. Pe trecere spre amplificator sunetul
+	pleaca neschimbat, ca pana acum. Cand driverul are comutatorul, dar valoarea nu se stie, tot pe placa."""
+	try:
+		from Components import HdsSunet
+		v = HdsSunet.efectiv("ac3")
+	except Exception:
+		return False
+	if v == HdsSunet.TRECERE:
+		return False
+	if v == HdsSunet.DOWNMIX:
+		return True
+	try:
+		from Components.AVSwitch import AUDIO_CHOICES
+		if not AUDIO_CHOICES.get("ac3"):
+			return True             # fara comutator
+	except Exception:
+		return False
+	# pe HiSilicon comutatorul nu se citeste: inca nescris de imagine = setarea omului (Da din fabrica = downmix)
+	try:
+		from Components.config import config
+		return bool(config.av.downmix_ac3.value)
+	except Exception:
+		return False
+
+
+def laBluetooth():
+	"""Casca s-a legat sau s-a desfacut (Components/HdsBluetoothSunet.py, de pe orice fir): setarile se pun din nou pe
+	firul enigma2, iar serviciul alege iar pista (sunetul trece in casca sau inapoi pe placa)."""
+	try:
+		from twisted.internet import reactor
+		reactor.callFromThread(_aplicaBluetooth)
+	except Exception:
+		_aplicaBluetooth()
+
+
+def laIntarziereBluetooth():
+	"""Alta intarziere a castii (din ecranul sau pagina Bluetooth): numai potrivirea TV se pune din nou, fara oprire."""
+	try:
+		from twisted.internet import reactor
+		reactor.callFromThread(aplica)
+	except Exception:
+		aplica()
+
+
+def _aplicaBluetooth():
+	try:
+		# alta iesire ALSA: sesiunea de acum se inchide (setPornit 0 alege iar pista, pe placa), apoi aplica porneste una
+		# noua spre iesirea de acum (casca sau placa); setPlacaAlsa singur se vede numai la urmatoarea sesiune
+		m = motor()
+		if m is not None:
+			m.setPornit(0)
+		aplica()
+	except Exception as e:
+		_jurnal("casca Bluetooth: %s" % e)
+
+
+def laComutatorAc3():
+	"""Din Components/AVSwitch.writeAudioChoice, dupa o scriere in comutatorul AC3: motorul afla daca mai poate lua
+	sunetul Dolby (numai daca motorul exista deja; la pornire il pune aplica)."""
+	try:
+		from enigma import eHdsEgalizator
+		m = eHdsEgalizator.existent()
+	except Exception:
+		return
+	if m is not None and hasattr(m, "setDolbyDecodat"):
+		try:
+			m.setDolbyDecodat(1 if (dispozitivBluetooth() or dolbyDecodat()) else 0)
+		except Exception as e:
+			_jurnal("comutatorul AC3: %s" % e)
 
 
 # ---------------------------------------------------------------- egalizatorul placii: comenzile si firul
@@ -755,11 +879,16 @@ def placaExista():
 
 
 def _prinPlaca(setari=None):
-	"""Optiunea "prin placa" e aleasa (sau incercata pe ecran) pe un receptor care o are."""
+	"""Optiunea "prin placa" e aleasa (sau incercata pe ecran) pe un receptor care o are. Ca pe ecran si in web, "Prin placa"
+	inseamna La canalele TV = Da si tv_placa = Da: cu La canalele TV = Nu placa nu egalizeaza TV, oricum ar fi ramas tv_placa
+	(setarea schimbata pe alta cale decat ecranul sau web-ul)."""
 	from Components.config import config
 	c = config.hds_egalizator
-	v = (setari or {}).get("tv_placa")
-	return bool(placaExista() and (c.tv_placa.value if v is None else v))
+	setari = setari or {}
+	v = setari.get("tv_placa")
+	tv = setari.get("tv")
+	tv = c.tv.value if tv is None else tv
+	return bool(placaExista() and tv and (c.tv_placa.value if v is None else v))
 
 
 def _tvDirect(ref=None):
@@ -832,7 +961,7 @@ def aplica(cheie=None, faraPost=False):
 	from Components.config import config
 	_STARE["proba"] = None
 	trimiteLaMotor(setariEfective(cheie), m)
-	m.setPornit(1 if config.hds_egalizator.pornit.value else 0)
+	m.setPornit(_pornitMotor(config.hds_egalizator.pornit.value))
 	actualizeazaPlaca(setariEfective(cheie))
 	return True
 
@@ -924,7 +1053,7 @@ def seteaza(pornit=None, presetare_=None, benzi=None, noapte=None, nivel=None, p
 	if m is not None:
 		_legaMotorul(m)
 		trimiteLaMotor(s, m)
-		m.setPornit(1 if c.pornit.value else 0)
+		m.setPornit(_pornitMotor(c.pornit.value))
 	actualizeazaPlaca(s)
 	rez = dict(s)
 	rez["pe_post"] = bool(peste_post and cheie)
@@ -961,7 +1090,7 @@ def incearca(benzi=None, noapte=None, nivel=None, presetare_=None, pornit=None, 
 	_STARE["proba"] = s
 	trimiteLaMotor(s, m)
 	if pornit is not None:
-		m.setPornit(1 if pornit else 0)
+		m.setPornit(_pornitMotor(pornit))
 	from Components.config import config
 	actualizeazaPlaca(s, config.hds_egalizator.pornit.value if pornit is None else pornit)
 
@@ -1045,12 +1174,11 @@ def _textStare(st=None, format_pistei=None, trimis=None):
 		return _t(TEXTE_POST["fara-motor"]), None, u""
 	post = st.get("post") or "nimic"
 	# un post AAC fara decodor (direct, sau ca motiv al intoarcerii pe placa): acelasi text; un motiv ramas de la o
-	# incercare veche langa starea „merge” nu il aduce
+	# incercare veche langa starea „merge” nu il aduce. Pana la 0.8.0 textul spunea ca e din motive de licentiere: cu
+	# hotararea pentru 0.8.0 (AAC intreg, cu HE-AAC) decodorul vine cu FFmpeg-ul imaginii, deci postul ramane pe placa
+	# numai cand receptorul chiar nu are decodorul (imagine veche).
 	if post == "fara-decodor-aac" or (st.get("motiv") == "fara-decodor-aac" and (post == "esuat" or st.get("stare") == "eroare")):
-		return _t(TEXTE_POST["fara-decodor-aac"]), False, u""
-	# HE-AAC semnalat (motorul il refuza inainte de decodare sau cand postul trece pe el): textul lui, la fel
-	if st.get("motiv") == "aac-he" and (post == "esuat" or st.get("stare") == "eroare"):
-		return _t(TEXTE_POST["aac-he"]), False, u""
+		return _t(TEXT_ESUAT) % textMotiv("fara-decodor-aac"), False, u""
 	stare = st.get("stare") or "oprit"
 	if post in ("da", "proba"):
 		if stare == "merge" and st.get("sesiune_tv") and st.get("preluat") == 0:
@@ -1097,10 +1225,11 @@ def textMotiv(motiv):
 
 
 def _prinPlacaActiv():
-	"""Egalizatorul pornit, optiunea "prin placa" aleasa si un canal TV din tuner: sunetul TV il egalizeaza placa."""
+	"""Egalizatorul pornit, optiunea "prin placa" aleasa (sau incercata pe ecran) si un canal TV din tuner: sunetul TV il
+	egalizeaza placa."""
 	try:
 		from Components.config import config
-		return bool(config.hds_egalizator.pornit.value and _prinPlaca() and _tvDirect())
+		return bool(config.hds_egalizator.pornit.value and _prinPlaca(_STARE["proba"]) and _tvDirect())
 	except Exception:
 		return False
 

@@ -8,7 +8,7 @@ LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=730404357c1f5cc99e543a52ded00509 \
                     file://LICENSE.GPLv2;md5=eb723b61539feef013de476e68b5c50a \
                     file://LICENSE.original-2011;md5=c9e255efa454e0155c1fd758df7dcaf3 \
-                    file://doc/REMOVED-FILES;md5=4b261c5f2ba30fec67f20d8740294e27"
+                    file://doc/REMOVED-FILES;md5=50dd6b76008893f9dbfb075109c73463"
 
 # dependintele cerute de configure.ac din depozitul nostru
 # GStreamer PORNIT (21.09.2026, pilot automat): servicemp3.cpp a fost portat de la GStreamer 0.10 la
@@ -46,7 +46,7 @@ inherit autotools-brokensep pkgconfig python3native python3targetconfig
 # git; vezi README.md). Pentru o constructie fixata, SRCREV poate primi comiterea acelui depozit in locul lui ${AUTOREV}.
 SRC_URI = "git:///hds/hdsatelit-image;protocol=file;branch=main"
 SRCREV = "${AUTOREV}"
-PV = "0.7.9+git${SRCPV}"
+PV = "0.8.0+git${SRCPV}"
 
 # --with-boxtype=${MACHINE}: configure.ac defineste HAVE_HISILICON pentru masinile HiSilicon (u57 si celelalte u5x/u4x,
 # familia sf8008). Pe ele video0 si audio0 duc la acelasi player: lib/dvb/decoder.cpp pune atunci poza radio/RaSS pe
@@ -157,8 +157,12 @@ do_configure:append:gbtrio4k() {
 # (asa a iesit 0.7.8 pe H8 cu paza). PR r1: pachetul refacut din aceeasi sursa 0.7.8 trece peste cel publicat (-r0).
 CXXFLAGS:append:h8 = " -DHDS_FARA_MEMORIE_ES=1"
 CXXFLAGS:append:h8se = " -DHDS_FARA_MEMORIE_ES=1"
-PR:h8 = "r1"
-PR:h8se = "r1"
+# REL80 (28.11.2026): 0.8.0 se publica cu imaginile intregi din lant (enigma2 0.8.0+git0+4d3bb21c95-r0) si cu o actualizare a
+# bazei 0.8.0 din varful de dupa lant: PR r1 (r2 pe ZGEMMA) face pachetul nou sa treaca peste cel din imagine oricum ar iesi
+# prefixul hash-ului git (opkg compara hash-ul ca text si cifre: 3f... ar fi mai vechi decat 4d...).
+PR = "r1"
+PR:h8 = "r2"
+PR:h8se = "r2"
 do_configure:append:h8() {
 	grep -q 'HDS_FARA_MEMORIE_ES' ${S}/lib/dvb/hdspazavideo.h || \
 		bbfatal "lib/dvb/hdspazavideo.h nu stie HDS_FARA_MEMORIE_ES: pe ${MACHINE} filmele ar fi refuzate"

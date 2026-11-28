@@ -112,6 +112,43 @@ class _Postere(object):
 	"""Desenul unui rand orizontal (MenuList cu listOrientation="horizontal"): posterul, chenarul albastru pe cel ales,
 	titlul sub el si, la „Continuă”, bara de progres. Pozele se incarca numai in fereastra din jurul celui ales."""
 
+	_masuri = {}                     # (font, marime, text, latime, inaltime, rand unic) -> (latime, inaltime), pentru toate randurile
+	_pixmapi = {}                    # cale -> pixmap, in ordinea folosirii: posterele randurilor vazute, refolosite la redesenare
+	MAX_MASURI = 4000
+	MAX_PIXMAPI = 64                 # 2 randuri x 29 de postere in fereastra, plus cateva
+
+	@classmethod
+	def uita(cls):
+		"""Ecranul s-a inchis: masuratorile si pozele tinute minte nu mai ocupa memorie."""
+		cls._masuri.clear()
+		cls._pixmapi.clear()
+
+	def _masura(self, f, font, text, w, h, flags):
+		"""eLabel.calculateTextSize, tinut minte: acelasi titlu se masura din nou la fiecare desen al randului."""
+		cheie = (font, f.pointSize, text, w, h, not bool(flags & RT_WRAP))
+		m = self._masuri.get(cheie)
+		if m is None:
+			if len(self._masuri) >= self.MAX_MASURI:
+				self._masuri.clear()
+			r = eLabel.calculateTextSize(f, text, eSize(w, h), cheie[5])
+			m = self._masuri[cheie] = (r.width(), r.height())
+		return m
+
+	def _pixmap(self, cale):
+		"""LoadPixmap, tinut minte pentru posterele randurilor vazute: un rand redesenat nu mai decodeaza iar 29 de JPEG-uri."""
+		px = self._pixmapi.pop(cale, None)
+		if px is None:
+			px = LoadPixmap(cale)
+			if not px:
+				lipsa = getattr(P, "lipsa", None)
+				if lipsa:
+					lipsa(cale)
+				return px
+		self._pixmapi[cale] = px
+		while len(self._pixmapi) > self.MAX_PIXMAPI:
+			del self._pixmapi[next(iter(self._pixmapi))]
+		return px
+
 	def __init__(self, lista, latime, inaltime, scara, cu_titlu=True, lat=False):
 		self.lista, self.scara = lista, scara
 		self.lat = lat
@@ -119,11 +156,16 @@ class _Postere(object):
 		self.cu_titlu = cu_titlu
 		self.date = []
 		self.incarcate = set()
+		self.cuPoza = set()             # id-urile titlurilor din fereastra desenate cu poster
+		self.progres = lambda t: 0.0
+		self._pus = None                # (titluri, cate, latime, inaltime, progres) ale desenului de acum; None = de refacut
 		l = lista.l
 		self._fonturi = [MT.fontCod("Regular", int(22 * scara)), MT.fontCod("Bold", int(24 * scara))]
 		for n, font in enumerate(self._fonturi):
 			l.setFont(n, font)
 		self._marimi()
+		self._fond = MultiContentEntryRectangle(pos=(0, 0), size=(self.l, self.ph + 2 * int(4 * scara)), backgroundColor=C_FOND,
+			backgroundColorSelected=C_ALES)
 
 	def _marimi(self):
 		"""Pastreaza proportia pozelor si loc pentru doua randuri de titlu marit."""
@@ -137,6 +179,7 @@ class _Postere(object):
 			loc = self.h - 2 * int(4 * s) - rezerva
 			self.pl = min(self.pl, max(1, int(loc / raport)))
 		self.ph = int(self.pl * raport)
+		self._pus = None
 		if self.h != veche:
 			self.lista.l.setItemHeight(self.h)
 
@@ -148,10 +191,10 @@ class _Postere(object):
 		x, y = pos
 		w, h = size
 		limita = min(self.h, self.lista.instance.size().height())
-		masura = eLabel.calculateTextSize(f, text, eSize(w, h), not bool(flags & RT_WRAP))
+		latime, inaltime = self._masura(f, font, text, w, h, flags)
 		# calculateTextSize masoara literele, fara spatiul de deasupra lor la valign top.
-		nevoie = masura.height() + (f.pointSize * 45 // 100 + 2 if flags & RT_VALIGN_TOP else 2)
-		if text and (masura.width() > w or nevoie > min(h, limita - y)):
+		nevoie = inaltime + (f.pointSize * 45 // 100 + 2 if flags & RT_VALIGN_TOP else 2)
+		if text and (latime > w or nevoie > min(h, limita - y)):
 			text = text.replace("\r", " ").replace("\n", " ")
 			linie = fontRenderClass.getInstance().getLineHeight(f)
 			h = max(int(linie + 1), (f.pointSize * 3 + 1) // 2) + max(2, int(4 * self.scara))
@@ -179,9 +222,9 @@ class _Postere(object):
 		if cu_poza and t.get("poza"):
 			p = P.cere(t["poza"], self.pl, self.ph, "lat" if self.lat else "poster")
 			if p:
-				px = LoadPixmap(p)
+				px = self._pixmap(p)
 				if px:
-						e.append(MultiContentEntryPixmapAlphaBlend(pos=(px0, y0), size=(self.pl, self.ph), png=px))
+					e.append(MultiContentEntryPixmapAlphaBlend(pos=(px0, y0), size=(self.pl, self.ph), png=px))
 		if self.lat and t.get("sub"):
 			# placa lata (desenul Stitch): titlul pe placa, jos; sub placa ramane „mai sunt ...”
 			h = MT.inaltimeCod(int(40 * s))
@@ -200,23 +243,57 @@ class _Postere(object):
 				font=0, flags=RT_HALIGN_CENTER | RT_VALIGN_TOP | RT_WRAP, text=sub or t.get("nume", ""), color=C_TEXT2, color_sel=C_TEXT))
 		if px:
 			del e[2]
+			self.cuPoza.add(id(t))
 		return e
 
+	def _gol(self):
+		"""Intrarea din afara ferestrei: numai fondul, fara text si fara poza (nu se vede; fereastra trece de marginile randului
+		vazut). Un rand de 3.000 de titluri nu mai cere 6.000 de masuratori de text la fiecare tasta."""
+		return [True, self._fond]
+
 	def pune(self, titluri, i, progres=None):
+		semn = (titluri, len(titluri or ()), self.l, self.ph, progres)
+		if titluri and self._pus is not None and titluri is self._pus[0] and semn[1:] == self._pus[1:]:
+			# acelasi rand, deja desenat (o alta lucrare s-a terminat): numai locul celui ales
+			if self.lista.getSelectionIndex() != i:
+				self.lista.moveToIndex(min(i, len(self.date) - 1))
+				self.fereastra(i)
+			return
+		self._pus = semn
 		self.date = titluri or []
 		self.progres = progres or (lambda t: 0.0)
+		self.cuPoza = set()
+		self._fond = MultiContentEntryRectangle(pos=(0, 0), size=(self.l, self.ph + 2 * int(4 * self.scara)), backgroundColor=C_FOND,
+			backgroundColorSelected=C_ALES)
 		self.incarcate = set(range(max(0, i - FEREASTRA), min(len(self.date), i + FEREASTRA + 1)))
-		self.lista.setList([self._intrare(t, n in self.incarcate, self.progres(t)) for n, t in enumerate(self.date)])
+		intrari = [None] * len(self.date)
+		# cele mai departe de cel ales intai: pozele cerute ultimele se aduc primele (HdsVodPoze, coada cu cea mai noua intai)
+		for n in sorted(self.incarcate, key=lambda n: -abs(n - i)):
+			intrari[n] = self._intrare(self.date[n], True, self.progres(self.date[n]))
+		self.lista.setList([e if e is not None else self._gol() for e in intrari])
 		if self.date:
 			self.lista.moveToIndex(min(i, len(self.date) - 1))
 
 	def fereastra(self, i, toate=False):
-		"""Muta fereastra pozelor in jurul lui i; toate=True reface si posterele deja incarcate (au venit poze noi)."""
+		"""Muta fereastra in jurul lui i: cele care intra se fac intregi, cele care ies raman numai cu fondul. toate=True (au venit
+		poze noi): se refac numai intrarile din fereastra care inca n-au posterul si al caror poster e acum gata."""
 		noi = set(range(max(0, i - FEREASTRA), min(len(self.date), i + FEREASTRA + 1)))
-		de_facut = (noi | self.incarcate) if toate else (noi ^ self.incarcate)
-		for n in de_facut:
+		de_facut = noi - self.incarcate
+		if toate:
+			# P.cere si pentru cele care inca nu sunt gata: o cerere iesita din coada (plina) se pune iar, cea de langa cel ales ultima
+			fel = "lat" if self.lat else "poster"
+			for n in sorted(noi & self.incarcate, key=lambda n: -abs(n - i)):
+				t = self.date[n]
+				if t.get("poza") and id(t) not in self.cuPoza and P.cere(t["poza"], self.pl, self.ph, fel):
+					de_facut.add(n)
+		for n in self.incarcate - noi:
 			if 0 <= n < len(self.date):
-				self.lista.list[n] = self._intrare(self.date[n], n in noi, self.progres(self.date[n]))
+				self.cuPoza.discard(id(self.date[n]))
+				self.lista.list[n] = self._gol()
+				self.lista.l.invalidateEntry(n)
+		for n in sorted(de_facut, key=lambda n: -abs(n - i)):
+			if 0 <= n < len(self.date):
+				self.lista.list[n] = self._intrare(self.date[n], True, self.progres(self.date[n]))
 				self.lista.l.invalidateEntry(n)
 		self.incarcate = noi
 
@@ -260,6 +337,8 @@ class HdsFilmeSeriale(Screen):
 		self._detalii = {}           # (tip, id) -> detalii (numai ultimele cateva)
 		self._lucrareDetalii = ""
 		self._deDetaliat = None
+		self._recente = ""           # lucrarea „Adăugate recent” (din fisier, apoi, daca lipseste, lista intreaga)
+		self._miscat = False         # omul a mers prin randuri (sus, jos, stanga, dreapta) de la deschiderea filei
 		self["fundal"] = Pixmap()
 		self["file"] = MenuList([], content=eListboxPythonMultiContent)
 		self["surse"] = MenuList([], content=eListboxPythonMultiContent)
@@ -361,6 +440,9 @@ class HdsFilmeSeriale(Screen):
 
 	def _grupaGoala(self):
 		"""O sursa fara cont sau server: ce are omul de facut, scris pe ecran (la Emby/Jellyfin, OK incepe adaugarea)."""
+		if self._recente:
+			V.renunta(self._recente)
+		self._recente = ""
 		self.randuri = []
 		self._categorii = _Rand("categorii", "")
 		nume = dict(V.GRUPE).get(self.grupa, "")
@@ -373,10 +455,15 @@ class HdsFilmeSeriale(Screen):
 		self["fundal"].hide()
 
 	def _pornesteTip(self):
-		"""Randurile de pe ecran pentru filme sau seriale: cele locale (fara retea) imediat, apoi recente si categoriile."""
+		"""Randurile de pe ecran pentru filme sau seriale: cele locale (fara retea) imediat, apoi recente si categoriile.
+		„Adăugate recent” vine din fisier, pe loc; randul apare numai cand are titluri (cand fisierul lipseste, dupa lista intreaga,
+		in fundal), fara „Se încarcă...” cat se citeste lista."""
 		for r in self.randuri:
 			if r.lucrare:
 				V.renunta(r.lucrare)
+		if self._recente:
+			V.renunta(self._recente)
+		self._recente = ""
 		self.randuri = []
 		sid = self.src.id
 		cont = [self._dinPozitii(k, r) for k, r in Z.continua(sid) if (r.get("tip") or V.FILME) == self.tip]
@@ -386,10 +473,11 @@ class HdsFilmeSeriale(Screen):
 		if fav:
 			self.randuri.append(_Rand("favorite", _(T_FAVORITE), titluri=fav))
 		if V.activ("recente") and not getattr(self.src, "fara_recente", False):   # 0.7.7 (FLM2): un playlist nu are date
-			self.randuri.append(_Rand("recente", _(T_RECENTE)))
+			self._recente = V.cere("recente", sid, self.tip)
 		self._categorii = _Rand("categorii", "")
 		self._categorii.lucrare = V.cere("categorii", sid, self.tip)
 		self.ales, self.sus = 0, 0
+		self._miscat = False
 		self._arata()
 
 	def _dinPozitii(self, k, r):
@@ -436,6 +524,16 @@ class HdsFilmeSeriale(Screen):
 				else:
 					self["stare"].setText(_(rez.get("message") or V.E_NU_RASPUNDE))
 				schimbat = True
+		if self._recente:
+			rez = V.rezultat(self._recente)
+			if not rez.get("lucreaza"):
+				self._recente = ""
+				if rez.get("result") and rez.get("titluri"):
+					self._masura("randul recente")
+					self._puneRecente(rez["titluri"])
+					schimbat = True
+				elif rez.get("aduce"):
+					self._recente = rez["aduce"]      # fisierul lipseste: lista intreaga se citeste in fundal
 		for r in self.randuri:
 			if r.lucrare:
 				rez = V.rezultat(r.lucrare)
@@ -468,6 +566,15 @@ class HdsFilmeSeriale(Screen):
 				if r is not None and r.titluri:
 					d.fereastra(r.i, toate=True)
 			self._fundal()
+
+	def _puneRecente(self, titluri):
+		"""Randul „Adăugate recent” la locul lui (dupa rezultatele cautarii, Continuă si Favorite). Cat omul n-a mers prin randuri,
+		alesul ramane pe acelasi loc, deci randul nou se vede si e ales; dupa ce a mers, randul ales ramane acelasi pe ecran."""
+		i = sum(1 for r in self.randuri if r.fel in ("cautare", "continua", "favorite"))
+		self.randuri.insert(i, _Rand("recente", _(T_RECENTE), titluri=titluri))
+		if self._miscat and self.ales >= i:
+			self.ales += 1
+			self.sus = max(0, self.ales)
 
 	# ------------------------------------------------------------ desenul
 
@@ -565,6 +672,9 @@ class HdsFilmeSeriale(Screen):
 				self["fundal"].instance.setPixmap(px)
 				self["fundal"].show()
 			else:
+				if cale:
+					P.lipsa(cale)
+					self._caleFundal = None
 				self["fundal"].hide()
 
 	# ------------------------------------------------------------ tastele
@@ -595,6 +705,7 @@ class HdsFilmeSeriale(Screen):
 		r = self.randuri[self.ales] if 0 <= self.ales < len(self.randuri) else None
 		if not r or not r.titluri:
 			return
+		self._miscat = True
 		r.i = max(0, min(len(r.titluri) - 1, r.i + pas))
 		n = self.ales - self.sus
 		self["rand%d" % n].moveToIndex(r.i)
@@ -618,6 +729,7 @@ class HdsFilmeSeriale(Screen):
 			return
 		self.ales -= 1
 		self.sus = max(0, self.ales)
+		self._miscat = True
 		self._arata()
 
 	def _jos(self):
@@ -627,6 +739,7 @@ class HdsFilmeSeriale(Screen):
 			return
 		self.ales += 1
 		self.sus = max(0, self.ales)    # randul ales sta sus, ca in bibliotecile media; dedesubt se vede urmatorul
+		self._miscat = True
 		self._arata()
 
 	def _ok(self):
@@ -675,6 +788,8 @@ class HdsFilmeSeriale(Screen):
 				self.randuri[self.ales].i = min(ales.i, max(0, len(self.randuri[self.ales].titluri or []) - 1))
 		self.ales = max(0 if self.ales >= 0 else self.ales, min(self.ales, len(self.randuri) - 1))
 		self.sus = max(0, self.ales)
+		for d in self.desen:
+			d._pus = None               # progresul titlurilor s-a putut schimba si in randurile pastrate
 		self._arata()
 
 	def _reda(self):
@@ -892,6 +1007,7 @@ class HdsFilmeSeriale(Screen):
 		self._ceasDetalii.stop()
 		P.uita()
 		Z.scrie()
+		_Postere.uita()
 
 
 def deschide(session, **kwargs):
@@ -978,8 +1094,12 @@ class HdsFilmPagina(Screen):
 				("fundal", d.get("fundal") or d.get("poster"), 960, 540, "fundal_pagina")):
 			cale = P.cere(adresa, l, h, fel) if adresa else ""
 			if cale and getattr(self, "_c" + nume, None) != cale:
-				setattr(self, "_c" + nume, cale)
-				self[nume].instance.setPixmap(LoadPixmap(cale))
+				px = LoadPixmap(cale)
+				if px:
+					setattr(self, "_c" + nume, cale)
+					self[nume].instance.setPixmap(px)
+				else:
+					P.lipsa(cale)          # stickul scos: poza se aduce din nou
 
 	def _arata(self):
 		d = self.d or {}
@@ -1216,8 +1336,12 @@ class HdsSerialPagina(Screen):
 		adresa = d.get("fundal") or d.get("poster") or self.t.get("poza")
 		cale = P.cere(adresa, 960, 540, "fundal") if adresa else ""
 		if cale and cale != getattr(self, "_cf", None):
-			self._cf = cale
-			self["fundal"].instance.setPixmap(LoadPixmap(cale))
+			px = LoadPixmap(cale)
+			if px:
+				self._cf = cale
+				self["fundal"].instance.setPixmap(px)
+			else:
+				P.lipsa(cale)
 
 	def _muta(self, pas):
 		if self.pe_sezoane:
@@ -1297,6 +1421,10 @@ def reda(session, src, cheie, meta, de_la_s=0, dupa=None, urmatoare=None):
 		session.open(HdsVodPlayer, serviciu, Z.cheie(src.id, cheie), meta, de_la_s, src, urmatoare)
 
 
+# the picture of wide films on Broadcom: Components/HdsAspectFilm (moved there for the channel list too, AIP0)
+from Components.HdsAspectFilm import aspectFereastra, AspectFilm, comun as aspectComun  # noqa: F401
+
+
 class HdsVodPlayer(MoviePlayer):
 	"""Playerul de filme, pentru un film sau episod din internet: porneste de unde ai ramas, tine minte pozitia (in memorie la
 	30 s, pe flash cel mult o data la 5 minute si la oprire), pistele audio si subtitrarile vazute, si se inchide fara
@@ -1313,10 +1441,27 @@ class HdsVodPlayer(MoviePlayer):
 		self.hdsIncercari = 0
 		MoviePlayer.__init__(self, session, serviciu)
 		self.skinName = "MoviePlayer"
+		self.hdsAspect = aspectComun()     # the same as the channel list's (Components/HdsAspectFilm, AIP0)
 		self.hdsCeasVod = eTimer()
 		self.hdsCeasVod.callback.append(self.hdsPasVod)
 		self.hdsCeasVod.start(1000, False)
 		self.onClose.append(self.hdsLaInchidere)
+		self.onExecBegin.append(self.hdsAspect.reaplica)
+
+	def hdsPasAspect(self):
+		"""the window of a wide film on Broadcom (AspectFilm), read again every second: the size can come late"""
+		try:
+			from enigma import iServiceInformation
+			ref = self.session.nav.getCurrentlyPlayingServiceReference()
+			s = self.session.nav.getCurrentService()
+			info = s and s.info()
+			if ref is None or ref.type != 4097 or not info:
+				self.hdsAspect.pas(False, 0, 0, 0)
+				return
+			self.hdsAspect.pas(True, info.getInfo(iServiceInformation.sVideoWidth), info.getInfo(iServiceInformation.sVideoHeight),
+				info.getInfo(iServiceInformation.sAspect))
+		except Exception as e:
+			print("[HdsVodPlayer] aspect: %s" % type(e).__name__)
 
 	def hdsVerificaCanalul(self):
 		# filmul nostru e o referinta fara cale de disc: nu e un „canal pornit peste film”
@@ -1337,6 +1482,7 @@ class HdsVodPlayer(MoviePlayer):
 		return poz, lung
 
 	def hdsPasVod(self):
+		self.hdsPasAspect()
 		poz, lung = self.hdsPozitie()
 		if not self.hdsCautat:
 			self.hdsIncercari += 1
@@ -1454,4 +1600,5 @@ class HdsVodPlayer(MoviePlayer):
 
 	def hdsLaInchidere(self):
 		self.hdsCeasVod.stop()
+		self.hdsAspect.laSfarsit()
 		Z.scrie()

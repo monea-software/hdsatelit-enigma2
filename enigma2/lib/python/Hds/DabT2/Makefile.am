@@ -12,7 +12,7 @@ install_PYTHON = \
 
 # releele (procese separate, pornite cu python3 <cale>) si listele de frecvente venite cu imaginea
 nobase_install_PYTHON = \
-	dab/motor/releu_dab.py dab/motor/dab_edi.py dab/motor/eti.py \
+	dab/motor/releu_dab.py dab/motor/dab_edi.py dab/motor/eti.py dab/motor/pad.py \
 	t2/motor/releu_t2.py t2/motor/t2mi.py
 
 nobase_dist_install_DATA = \

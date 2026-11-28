@@ -123,6 +123,9 @@ def _jurnal(text):
 RANDURI = (
 	("pas", "pas_volum", N_("Pasul volumului"),
 		N_("Cât crește sau scade volumul la o apăsare pe tastele de volum (volumul merge de la 0 la 100)."), None),
+	# 0.8.0 (FX1, tamiciav7 LinuxSat 232449 #501374): a separate step while the key is held (Components/VolumeControl.py)
+	("pas_lung", "pas_volum_lung", N_("Pasul volumului cât ții tasta apăsată"),
+		N_("Cât crește sau scade volumul la fiecare repetare cât ții apăsată tasta de volum. Ca pasul volumului: la fel ca la o apăsare."), None),
 	("afisare", "afisare_volum", N_("Cât stă volumul pe ecran"),
 		N_("Câte secunde rămâne bara volumului pe ecran după ultima apăsare pe tastele de volum."), None),
 	("mut", "afisare_mut", N_("Cât stă semnul de mut pe ecran"),
@@ -177,6 +180,11 @@ def alegeriPista():
 
 def alegeriPas():
 	return [(str(v), str(v)) for v in range(PAS_MIN, PAS_MAX + 1)]
+
+
+def alegeriPasLung():
+	"""„Ca pasul volumului” (0, from the factory: the same step as a single press), then 1 ... 10."""
+	return [("0", N_("Ca pasul volumului"))] + alegeriPas()
 
 
 def alegeriAfisare():
@@ -596,6 +604,7 @@ def initConfig():
 		c = config.hds_setari_sunet
 		# textele alegerilor raman netraduse aici (limba nu e inca pusa); ConfigSelection si web-ul le traduc la afisare
 		c.pas_volum = ConfigSelection(choices=alegeriPas(), default=str(PAS_IMPLICIT))
+		c.pas_volum_lung = ConfigSelection(choices=alegeriPasLung(), default="0")
 		c.afisare_volum = ConfigSelection(choices=alegeriAfisare(), default=str(AFISARE_IMPLICIT))
 		c.afisare_mut = ConfigSelection(choices=alegeriAfisareMut(), default=str(AFISARE_MUT_IMPLICIT))
 		c.loc_volum = ConfigSelection(choices=list(LOC_VOLUM), default=LOC_VOLUM_IMPLICIT)
@@ -625,6 +634,12 @@ def _valoare(atribut, implicit=None):
 def pasVolum():
 	"""Pasul tastelor de volum (1..10); 5 fara setari."""
 	return limiteaza(_valoare("pas_volum", PAS_IMPLICIT), PAS_MIN, PAS_MAX)
+
+
+def pasVolumLung():
+	"""The step while a volume key is held (1..10); "0" (from the factory) = pasVolum()."""
+	v = limiteaza(_valoare("pas_volum_lung", 0), 0, PAS_MAX)
+	return v if v > 0 else pasVolum()
 
 
 def afisareVolumMs():
@@ -1020,6 +1035,16 @@ def _laCeasVerificare():
 def laSchimbareaPistei():
 	"""Din ecranul AUDIO, dupa alegerea altei piste."""
 	programeaza(VERIFICARI_PISTA)
+	_sincronRadio()
+
+
+def _sincronRadio():
+	"""Radioul care nu porneste cu sincronul placii pe PCR (placile cu libreader): Components/HdsSincronRadio.py."""
+	try:
+		from Components import HdsSincronRadio
+		HdsSincronRadio.incepe(_STARE["nav"])
+	except Exception as e:
+		_jurnal("sincronul radioului: %s" % e)
 
 
 # ---------------------------------------------------------------- evenimentele
@@ -1043,8 +1068,10 @@ def _laEveniment(ev):
 		# acordarii, citirea lui /proc/msp/sound0 (de doua ori, prin firul de fundal) tinea ascultatorul ~11 ms pe receptorul de proba
 		_STARE["placa_de_verificat"] = True
 		programeaza(VERIFICARI_START)
+		_sincronRadio()
 	elif ev == getattr(iPlayableService, "evUpdatedInfo", -1):
 		programeaza(VERIFICARI_PISTA)
+		_sincronRadio()
 
 
 def _reverificaPlaca():
@@ -1079,6 +1106,11 @@ def _laStandby(el):
 	try:
 		from Components import HdsJurnalZapAudio
 		HdsJurnalZapAudio.inchide()
+	except Exception:
+		pass
+	try:
+		from Components import HdsSincronRadio
+		HdsSincronRadio.opreste()
 	except Exception:
 		pass
 	try:

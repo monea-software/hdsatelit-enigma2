@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
 # HDSatelit 0.7.4: listele desenate dintr-un sablon XML, forma standardului OE-Alliance pe care o folosesc temele si
 # pluginurile scrise pentru el (documentatia pentru dezvoltatori: network/list-templates, advanced/template-reference):
 #

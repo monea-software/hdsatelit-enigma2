@@ -66,7 +66,8 @@ def N_(text):
 	return text
 
 
-TITLU = N_('Extensii')
+# acelasi nume ca randul din meniu (data/menu.xml, plugin_selection: msgid "Plugins", in romana "Extensii")
+TITLU = N_('Plugins')
 JURNAL_OPKG = L.JURNAL_OPKG
 DESCARCARE_AUTOMATA = 3600          # lista se descarca singura cel mult o data pe ora, la deschiderea ecranului
 PAS_CAUTARE = 100                   # ms: cat de des se uita ecranul daca a terminat cautarea fisierelor .ipk (in fundal)
@@ -783,7 +784,7 @@ class HdsExtensii(Screen, HelpableScreen):
 		randuri = O.aplicaSortareExtensii(L, L.randuri(self.catalog, fila, self.pluginuri, plugins, self.cautare), fila)
 		rez = L.cuRandFiltru(self.catalog, randuri,
 			self.filtru, fila)
-		if fila == 'instalate' and not self.cautare:
+		if fila == 'instalate' and not self.cautare and not getattr(L, 'randIpkAscuns', lambda: False)():
 			rez.insert(0, ('dinfisier', None, None))
 		if fila == 'disponibile':
 			rez = L.strangeDosare(rez, self.dosare, L.dosareDeschiseImplicit(rez, self.filtru, fila))
@@ -1380,6 +1381,11 @@ class HdsExtensii(Screen, HelpableScreen):
 
 	def _evenimentDescarcare(self, eveniment, parametru):
 		if eveniment == IpkgComponent.EVENT_LINE:
+			nota = L.notaImagine(parametru)
+			if nota is not None:
+				# OPK1: a dead foreign source skipped, or waiting for another opkg: on the status line while it runs
+				self['stare'].setText(nota)
+				return
 			self.liniiDescarcare.append(parametru)
 		elif eveniment == IpkgComponent.EVENT_DONE:
 			d, self.descarca = self.descarca, None
@@ -1401,10 +1407,16 @@ class HdsExtensii(Screen, HelpableScreen):
 				self._arataFila()
 				L.laRezerva(self._preiaRezerva)
 				return
-			if parametru == 0:
+			# OPK1: the dead foreign sources skipped by this download stay named on the status line
+			sarite = L.noteSarite()
+			if parametru == 0 and sarite:
+				self._mesaj(' '.join(sarite), 'chihlimbar')
+			elif parametru == 0:
 				self.mesajStare = ''
 			else:
 				motiv = P.motiv_eroare(self.liniiDescarcare)
+				if sarite:
+					motiv = ' '.join(sarite) + ' ' + motiv
 				if self.catalog.surse_cu_lista:
 					motiv += ' ' + _t('Se folosește lista din %s.') % P.text_varsta(self.catalog.varsta_liste)
 				self._mesaj(motiv, 'chihlimbar')
@@ -1695,6 +1707,8 @@ class HdsExtensii(Screen, HelpableScreen):
 				id_ = L.idPlugin(getattr(obj, 'path', ''))
 				lista += [(_t(L.TEXTE_ORDINE[pas]), (pas, id_)) for pas in L.pasiPosibili(self._toateInstalate(), id_)
 					if not az or pas == 'ascunde']
+			elif fel == 'dinfisier':
+				lista.append((_t('Ascunde „%s”') % _t('Instalează fișiere .ipk'), ('ascunde-rand-ipk', None)))
 			lista.append((_t('Sortare automată A-Z: %s') % (_t('Da') if az else _t('Nu')),
 				('sortare-nu' if az else 'sortare-da', L.idRand(self._selectat()))))
 			n = L.nrAscunse(self.pluginuri, plugins)
@@ -1735,6 +1749,9 @@ class HdsExtensii(Screen, HelpableScreen):
 			return
 		elif pas == 'arata':
 			schimbat = L.arataToateExtensiile()
+		elif pas == 'ascunde-rand-ipk':
+			schimbat = L.ascundeRandIpk()
+			pas = 'ascunde'
 		else:
 			schimbat = L.schimbaOrdinea(self._toateInstalate(), id_, pas)
 		if not schimbat:
@@ -2161,12 +2178,20 @@ class HdsExtensiiActiune(Screen):
 			self.latimeSemn = self['semn'].instance.size().width()
 		except Exception:
 			self.latimeButoane, self.latimeJurnal, self.pozSemn = 1160, 1160, None
-		ptr = icoana(self.plan.get('icoana') or 'altele', 160)
-		if ptr is not None:
-			try:
-				self['icoana'].instance.setPixmap(ptr)
-			except Exception:
-				pass
+		try:
+			inst = self['icoana'].instance
+			self.chenarIcoana = (inst.position(), inst.size())
+		except Exception:
+			self.chenarIcoana = None
+		# INS2: plugin.png al pachetului cand e pe receptor (stergere, actualizare), altfel icoana categoriei; la o instalare
+		# icoana pluginului apare la sfarsit (_gata)
+		if not self._icoanaPachet():
+			ptr = icoana(self.plan.get('icoana') or 'altele', 160)
+			if ptr is not None:
+				try:
+					self['icoana'].instance.setPixmap(ptr)
+				except Exception:
+					pass
 		if self.plan.get('nota'):
 			self._setCuloare('nota', self.plan.get('notaCuloare') or 'chihlimbar')
 		# valorile, acum ca widgeturile au marimea (in __init__ nu o au inca); ce nu incape deruleaza
@@ -2183,6 +2208,34 @@ class HdsExtensiiActiune(Screen):
 			self[nume].instance.setForegroundColor(gRGB(self.c[cheie]))
 		except Exception:
 			pass
+
+	def _icoanaPachet(self):
+		"""plugin.png al singurului pachet din plan (dosarul din info/<pachet>.list), scalat in chenarul icoanei, centrat;
+		False cand nu e (pachet neinstalat, fara plugin, mai multe pachete)"""
+		tinte = self.plan.get('tinte') or []
+		if len(tinte) != 1 or getattr(self, 'chenarIcoana', None) is None:
+			return False
+		dosar = L.dosarPluginPachet(tinte[0].get('nume'))
+		if not dosar:
+			return False
+		try:
+			from Tools.LoadPixmap import LoadPixmap
+			ptr = LoadPixmap(os.path.join(dosar, 'plugin.png'), cached=False)
+			pw, ph = _marime_pixmap(ptr) if ptr is not None else (0, 0)
+			if not (pw and ph):
+				return False
+			poz, cutie = self.chenarIcoana
+			scara = min(float(cutie.width()) / pw, float(cutie.height()) / ph)
+			pw, ph = max(1, int(pw * scara)), max(1, int(ph * scara))
+			inst = self['icoana'].instance
+			inst.move(ePoint(poz.x() + (cutie.width() - pw) // 2, poz.y() + (cutie.height() - ph) // 2))
+			inst.resize(eSize(pw, ph))
+			inst.setScale(1)
+			inst.setPixmap(ptr)
+			return True
+		except Exception as e:
+			_jurnal('icoana pachetului: %s' % e)
+			return False
 
 	def _butoane(self, texte, ales=0):
 		self.butoane = texte
@@ -2360,6 +2413,8 @@ class HdsExtensiiActiune(Screen):
 		self.faza = 'gata'
 		# textele de la sfarsit (aceleasi si in pagina web): Components/HdsExtensiiLucru.Lucrare._gata
 		r = self.lucrare.rezultat
+		if r.get('reusit') and self.plan.get('fel') in ('instaleaza', 'fisier'):
+			self._icoanaPachet()       # INS2: pluginul abia pus are acum plugin.png pe disc
 		self['titlu'].setText(r['titlu'])
 		self['stare'].setText(r['stare'])
 		self._setCuloare('stare', r['culoare'])

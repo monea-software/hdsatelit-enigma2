@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 # Afisaj color: aceleasi date si evenimente, cu iesire pe desktopul LCD.
 # Video merge prin driver. Nu capturam si nu comprimam cadre in Python.
@@ -25,6 +26,9 @@ MODELE = {"vusolo4k": (480, 320, 32), "vuuno4kse": (400, 240, 32),
 LIVE = ("nu", "imagine", "osd")
 VERIFICA_S = 5.0          # cat de des recitim nodurile live ale driverului (doua citiri mici din /proc)
 PICON = ("nu", "singur", "nume_ora")
+# imaginea TV prin pluginul HdsLcdTv, pe afisajele fara imagine live in driver (vezi IesireLive)
+SOFT_ALEGERE = "/etc/enigma2/hdslcdtv"
+SOFT_PLUGIN = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Plugins", "Extensions", "HdsLcdTv")
 
 
 def _citeste(cale):
@@ -162,6 +166,12 @@ class IesireLive(object):
 			inainte = [(live, "disable")] if os.path.exists(live) and not alegeri and not moduri else []
 			self.plan = {"nu": inainte + [(mode, "0")], "imagine": inainte + [(mode, "1")],
 				"osd": inainte + [(mode, "3")]}
+		# Dreambox DM900/DM920 (0.8.0, facut si confirmat pe DM900-ul unui om): driverul nu are live_enable / sd_detach,
+		# deci alegerea avea numai „Nu”. Pluginul HdsLcdTv copiaza imaginea (grab) pe afisaj si citeste alegerea din
+		# /etc/enigma2/hdslcdtv (0 nu, 1 imaginea, 3 cu OSD). Numai pe afisajul Dream (colorformat BGR_565_LE).
+		if len(self.plan) == 1 and _citeste(os.path.join(radacina, "colorformat")) == "BGR_565_LE" and \
+				os.path.isdir(SOFT_PLUGIN):
+			self.plan = {"nu": [(SOFT_ALEGERE, "0")], "imagine": [(SOFT_ALEGERE, "1")], "osd": [(SOFT_ALEGERE, "3")]}
 		self._verificatLa = 0.0
 		self._asteptat = {}     # ce arata driverul dupa scrierea noastra (unele drivere afiseaza alt format decat primesc)
 

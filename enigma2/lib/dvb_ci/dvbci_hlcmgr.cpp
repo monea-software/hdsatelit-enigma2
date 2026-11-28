@@ -84,6 +84,7 @@ std::map<std::string, std::string> eDVBCIHostLanguageAndCountrySession::createLa
 	m["th_TH"] = "tha";
 	m["tr_TR"] = "tur";
 	m["uk_UA"] = "ukr";
+	m["sq_AL"] = "sqi";
 	m["uz_UZ"] = "uzb";
 	m["vi_VN"] = "vie";
 	m["zh_CN"] = "zho";

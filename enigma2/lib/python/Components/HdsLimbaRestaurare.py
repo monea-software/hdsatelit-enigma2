@@ -26,6 +26,7 @@ Components/HdsDriverLipsa (instaleazaDinStick), numai pe al lui, nu toate driver
 
 import os
 import re
+import sys
 import time
 import zipfile
 
@@ -161,7 +162,33 @@ def _instalate(rad):
 		cale = _c(rad, P.montare(conf).lstrip("/") + "/var/lib/opkg/status")
 		inst.update(s["package"] for s in A.P.citeste_strofe(cale)
 			if s.get("status", "").split()[-1:] == ["installed"])
+	# NAV8 (0.8.0): si aplicatiile instalate pe stick (Components/HdsAplicatiiStick: opkg -d hdsstick), ca sa nu se
+	# instaleze inca o data in memoria interna
+	inst.update(_stick().instalate(rad))
 	return inst
+
+
+def _stick():
+	try:
+		return _modul("HdsAplicatiiStick")
+	except ImportError:
+		# probele de pe PC incarca modulele dupa cale, fara pachetul Components
+		m = sys.modules.get("Components.HdsAplicatiiStick")
+		if m is None:
+			import importlib.util
+			spec = importlib.util.spec_from_file_location("Components.HdsAplicatiiStick",
+				os.path.join(os.path.dirname(os.path.abspath(__file__)), "HdsAplicatiiStick.py"))
+			m = importlib.util.module_from_spec(spec)
+			spec.loader.exec_module(m)
+			sys.modules["Components.HdsAplicatiiStick"] = m
+		return m
+
+
+def planNavigator(rad="/", liber_intern=None):
+	"""Unde se instaleaza navigatorul (NAV8): memoria interna, stickul ales, fara stick bun sau stickul legat lipseste
+	(HdsAplicatiiStick.planLoc); acelasi raspuns pentru card, pagina web si instalare. liber_intern in octeti (None: citit)"""
+	return _stick().planLoc(NAVIGATOR_NEVOIE, rad,
+		liber_intern=None if liber_intern is None else liber_intern // (1024 * 1024))
 
 
 def stare(rad="/", text_setari=None):
@@ -390,7 +417,9 @@ def _instaleaza(rad, pachete, sursa=None):
 		server, eroare = A.descarca_stare(adresa + "/stare.json", credentiale, deschide=deschide)
 		if eroare:
 			return stick_rau(server.get("eroare") or eroare) if stick else amanat()
-		if A.motiv_baza(server, baza, A.baza_receptorului(rad)) or server.get("imagine_noua") \
+		# VAN1 (0.8.0): imagine_noua numai cand e si pentru acest receptor (un model lasat pe dinafara de o versiune nu are
+		# imagine noua de pus, deci limbile lui vin din feed ca inainte); arhitecturile din arch.conf
+		if A.motiv_baza(server, baza, A.baza_receptorului(rad)) or A.imagine_noua_pentru(server, pc.arhitecturi) \
 				or server.get("canal", canal) != canal:
 			return refuzat("fișierul e pentru altă versiune (%s), receptorul are %s" % (server.get("baza"), baza))
 		if stick:
@@ -427,6 +456,21 @@ def _instaleaza(rad, pachete, sursa=None):
 			return refuzat(eroare or "pachete pentru alt model")
 		nevoie = sum(_desfacut(feed.get(x["nume"]) or {}, x["marime"]) for x in intrari) + LOC_REZERVA
 		liber = A.loc_liber(rad or "/")
+		# NAV8 (0.8.0): navigatorul care nu incape in memoria interna merge pe stick sau pe discul USB (opkg -d, apoi
+		# legaturile din /usr spre stick); acolo se socoteste si locul
+		S = _stick()
+		pe_stick = None
+		if any(n in NAVIGATOR for n in pachete):
+			loc = S.planLoc(max(nevoie - LOC_REZERVA, NAVIGATOR_NEVOIE), rad)
+			if loc["unde"] == S.STICK:
+				ok, pe_stick = S.leaga(loc["punct"], rad)
+				if not ok:
+					rez["loc"] = (nevoie, liber or 0)
+					return final(pachete)
+				liber = S.liberMib(_c(rad, pe_stick.lstrip("/"))) * 1024 * 1024
+			elif loc["unde"] in (S.STICK_LIPSA, S.FARA_STICK) and S.idLegat(rad):
+				rez["loc"] = (nevoie, liber or 0)
+				return final(pachete)
 		if liber is not None and liber < nevoie:
 			rez["loc"] = (nevoie, liber)
 			return final(pachete)
@@ -442,7 +486,12 @@ def _instaleaza(rad, pachete, sursa=None):
 			return final(pachete)
 		if A.opkg_ocupat(rad) or _actualizare_in_lucru(A):
 			return amanat()
-		_r()._ruleaza(comanda + ["install"] + cai, 600)
+		if pe_stick:
+			S.puneDestinatiaOpkg(rad, True)
+			_r()._ruleaza(comanda + ["install", "-d", S.DEST] + cai, 1800)
+			S.dupaInstalare(rad)
+		else:
+			_r()._ruleaza(comanda + ["install"] + cai, 600)
 		dupa = _instalate(rad)
 		rez["puse"] = sorted(set(rez["puse"]) | (set(pachete) & dupa))
 		# ce n-a pus opkg (alt pachet ar scrie peste fisierele lui, o dependinta refuzata) nu se reia la 5 minute
@@ -714,7 +763,10 @@ class _Ceas:
 					f()
 				except Exception as e:
 					print("[HdsLimbaRestaurare] dupa navigator: %r" % (e,))
-			_mesaj(_t("Navigatorul web este instalat. Îl găsești în Aplicații și în Media > Navigator web."))
+			text = _t("Navigatorul web este instalat. Îl găsești în Aplicații și în Media > Navigator web.")
+			if "hds-navigator" in _stick().instalate():
+				text += " " + _t("Este pe stick: lasă stickul în receptor ca să pornească.")
+			_mesaj(text)
 			return True
 		if rez.get("loc"):
 			_CERERI["navigator"] = False
@@ -739,10 +791,14 @@ def porneste(session=None, rezultat_copie=None):
 		_SESIUNE[0] = session
 	aleasa = _aleasa()
 	pastreaza(limba=aleasa)
+	# NAV8: aplicatiile de pe stick legate iar la pornirea interfetei (stickul poate fi montat altundeva decat data trecuta)
+	_stick().repara()
 	_legaHotplug()
 	if not _CEAS:
 		# limba aleasa fara catalog (actualizare din meniu pe o baza veche, copie pusa pe imaginea mica): des, de la inceput
 		_CEAS.append(_Ceas(repede=not os.path.isfile(_catalog("/", aleasa))))
+	# NAV10: navigatorul care lipseste vine singur la prima incercare a ceasului (dupa ce reteaua e sus)
+	navigatorAutomat()
 
 
 def cereAcum(session=None, spus=False):
@@ -792,11 +848,40 @@ def _soloSe(rad="/"):
 
 
 def textNavigatorNuIncape(trebuie, liber, rad="/"):
+	"""Ce vede omul cand navigatorul nu are unde merge (NAV8: si ce sa faca: stickul de cel putin X GB, ext4)"""
+	S = _stick()
+	loc = planNavigator(rad)
+	if loc["unde"] == S.STICK_LIPSA:
+		if S.peStickLipsa("hds-navigator", rad):
+			return _t("Navigatorul web e instalat pe stick, dar stickul nu e pus acum. Pune stickul la loc și apasă din nou OK.")
+		return _t("Aplicațiile mari se instalează pe stickul folosit deja de receptor, iar el nu e pus acum. Pune stickul la loc "
+			"și apasă din nou OK.")
+	if loc["unde"] == S.FARA_STICK and loc["punct"]:
+		return _t("Pe stickul de la %s nu mai e loc pentru navigatorul web: trebuie %d MB liberi.") % (
+			loc["punct"], loc["trebuie_mib"] + S.REZERVA_STICK_MIB)
 	text = _t("Navigatorul web nu încape în memoria internă: trebuie %d MB liberi, sunt %d MB.") % (
 		trebuie // 1048576 + 1, liber // 1048576)
 	if _soloSe(rad):
 		text += " " + _t("Are loc în imaginea pentru stick (USB) a lui Vu+ Solo SE.")
+	fat = loc.get("fara_legaturi") or []
+	if fat:
+		text += " " + _t("Stickul de la %s este %s, iar navigatorul are nevoie de ext4. Din Meniu > Discuri îl poți formata ext4 "
+			"(se șterge tot de pe el), apoi apasă din nou OK.") % (fat[0]["punct"], S.numeFs(fat[0]["fs"]))
+	else:
+		text += " " + _t("Se poate instala pe un stick sau un disc USB cu cel puțin %d GB liberi, formatat ext4: pune-l în "
+			"receptor și apasă din nou OK.") % loc["gb"]
 	return text
+
+
+def textUndeNavigator(rad="/"):
+	"""Scurt, pe cardul navigatorului care se poate instala: unde va merge (NAV8)"""
+	S = _stick()
+	loc = planNavigator(rad)
+	if loc["unde"] == S.STICK:
+		return _t("pe stick (%s)") % loc["punct"]
+	if loc["unde"] == S.INTERN:
+		return _t("în memoria internă")
+	return ""
 
 
 def cereNavigator(session=None, rad="/"):
@@ -808,8 +893,10 @@ def cereNavigator(session=None, rad="/"):
 	if not navigatorLipsa(rad):
 		return _t("Navigatorul web este deja instalat.")
 	trebuie, liber = locNavigator(rad)
-	if liber is not None and liber < trebuie:
-		return textNavigatorNuIncape(trebuie, liber)
+	# NAV8: memoria interna sau stickul (planNavigator); numai fara niciunul omul primeste explicatia cu ce sa faca
+	S = _stick()
+	if planNavigator(rad, liber)["unde"] not in (S.INTERN, S.STICK):
+		return textNavigatorNuIncape(trebuie, liber or 0)
 	_CERERI["navigator"] = True
 	# o cerere a omului: un refuz de mai devreme (fara loc, lipsa din feed) se incearca din nou
 	_FINALE.difference_update(NAVIGATOR)
@@ -823,6 +910,29 @@ def cereNavigator(session=None, rad="/"):
 
 def navigatorInLucru():
 	return bool(_CERERI["navigator"])
+
+
+def navigatorAutomat(rad="/", grabeste=False):
+	"""NAV10 (0.8.0, Eduard 26.11.2026 22:08 si 23:55: fara navigator nu se lanseaza, si pe receptoarele slabe): pe
+	receptorul unde navigatorul nu e in imagine (Vu+ Solo SE pe NAND: pe V1 nu incape langa imagine) el se instaleaza
+	SINGUR, fara OK in Aplicatii, cand are unde: in memoria interna (Solo SE V2) sau pe un stick ext4 (Solo SE V1). Se
+	cheama la pornirea interfetei si la fiecare stick pus. Anuntul de inceput si mesajul de sfarsit le da _Ceas, ca la
+	cererea omului. True cand s-a cerut instalarea."""
+	try:
+		if not navigatorLipsa(rad) or _CERERI["navigator"] or set(NAVIGATOR) & _FINALE:
+			return False
+		S = _stick()
+		trebuie, liber = locNavigator(rad)
+		if planNavigator(rad, liber)["unde"] not in (S.INTERN, S.STICK):
+			return False
+	except Exception as e:
+		print("[HdsLimbaRestaurare] navigatorul automat: %r" % (e,))
+		return False
+	print("[HdsLimbaRestaurare] navigatorul lipseste si are loc: se instaleaza singur")
+	_CERERI["navigator"] = True
+	if grabeste:
+		_porneste_sau_grabeste()
+	return True
 
 
 def laNavigatorInstalat(functie):
@@ -858,6 +968,8 @@ def _legaHotplug():
 def laStick(device, stare):
 	"""hotplugNotifier: "1" = stick sau disc bagat, inainte de montare; mai multe partitii = o singura privire"""
 	if stare != "1":
+		# NAV8: stickul cu aplicatii scos: destinatia opkg se scoate (actualizarile nu scriu nimic pe un stick lipsa)
+		_stick().repara()
 		return
 	# un stick bagat din nou se citeste din nou
 	_FOLOSITE.clear()
@@ -878,6 +990,10 @@ def _intarzieStick(ms):
 
 def stickMontat():
 	"""dupa montare: daca stickul are fisierul de completari, limba (si ce mai lipseste) si driverul stickului Wi-Fi"""
+	# NAV8: stickul cu aplicatii (navigatorul) pus la loc, oriunde l-a montat sistemul: legaturile duc iar la el
+	_stick().repara()
+	# NAV10: un stick ext4 pus pe un receptor fara navigator (Solo SE V1): navigatorul se instaleaza singur pe el
+	navigatorAutomat(grabeste=True)
 	gasit = bool(candidatiStick())
 	if not gasit and _STICK["a_doua"]:
 		_STICK["a_doua"] = False

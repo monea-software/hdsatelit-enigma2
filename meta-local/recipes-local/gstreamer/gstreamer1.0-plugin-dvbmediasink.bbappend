@@ -5,7 +5,8 @@
 # - fara --with-wma: driverul nu are decodor WMA, deci sunetul WMA 1/2 nu se trimite comprimat placii; il decodeaza pe
 #   procesor gstreamer1.0-libav (peste FFmpeg-ul LGPL al imaginii) si placa primeste PCM;
 # - --with-aac-loas: AAC in LOAS/LATM (filme si fluxuri IPTV) merge la decodorul placii ca AAC HE, acelasi decodor care
-#   reda AAC-ul canalelor; in imagine nu intra niciun decodor AAC;
+#   reda AAC-ul canalelor. Sink-ul ia AAC numai cu profile=lc (si LOAS); AAC-ul refuzat (Main, SSR, LTP) il decodeaza in procesor
+#   elementul faad, numai pe masinile care il au (Broadcom si ZGEMMA H8.2H Plus, packagegroups/hdsatelit-base.bbappend);
 # - --with-vb6: VP6 (fisiere FLV vechi) la decodorul placii. Codul optiunii se atinge numai pentru fluxurile
 #   video/x-vp6 si video/x-vp6-flash (caps-urile si STREAMTYPE_VB6 din gstdvbvideosink.c, in ramura comuna cu VP8, VP9
 #   si Spark, deja pornite pe masina), deci celelalte formate raman neschimbate; driverul placii are decodorul VP6
@@ -69,4 +70,89 @@ PR:append:h8se = ".1"
 
 do_compile:append:h8se() {
 	grep -q 'VIDEO_CONTINUE after VIDEO_PLAY' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul CONTINUE dupa PLAY (SEF1) lipseste"
+}
+
+# ZGEMMA H8.2H Plus (h8, hi3716mv430): serverul media al platformei (pornit de modulul driverului, cu decodoarele din
+# airdigital-libs) nu are drum pentru PCM. AUDIOTYPE_RAW si LPCM (DVD sau Blu-ray) sunt primite de audio0, dar tamponul se umple
+# si nu se mai goleste (PTS 0), deci orice sunet decodat in procesor (FLAC, Vorbis, Opus, WMA, ALAC, TrueHD, AAC prin faad) era
+# mut, iar redarea ramanea la a doua secunda. Peticul 0006 recodeaza audio/x-raw in MP3 (libmp3lame, deja in imagine prin
+# gstreamer1.0-plugins-good-lame; 320 kb/s stereo, 160 mono) si il trimite placii ca AUDIOTYPE_MP3, cu PTS pe fiecare PES, deci
+# sunetul ramane sincron cu imaginea si redarea ajunge la sfarsit. MP3 si nu AC3: in bibliotecile platformei AC3 apare numai ca
+# trecere spre iesirea digitala (AC3PASSTHROUGH), fara decodor. Facut pe aceeasi sursa fixata, dupa 0001 si 0002 (si dupa peticul DTS -> AC3); atinge numai gstdvbaudiosink.c/.h,
+# iar codul intra numai cu HDS_PCM_MP3. Pe h8 si pe h8se (blocul urmator), singurele drivere pe care s-a masurat.
+SRC_URI:append:h8 = " file://0006-dvbaudiosink-pcm-recodat-in-mp3.patch"
+CFLAGS:append:h8 = " -DHDS_PCM_MP3"
+RDEPENDS:${PN}:append:h8 = " libmp3lame"
+PR:append:h8 = ".1"
+
+do_compile:append:h8() {
+	grep -q 'hds-pcm-mp3' ${S}/gstdvbaudiosink.c || bbfatal "dvbmediasink: peticul PCM recodat in MP3 lipseste"
+	grep -aq 'hds-pcm-mp3: codor deschis' ${B}/.libs/libgstdvbaudiosink.so || bbfatal "dvbmediasink: codul HDS_PCM_MP3 nu e in libgstdvbaudiosink.so"
+}
+
+# ZGP8 (0.8.0, H8V1 24.11.2026): peticul SEF1 0005 (VIDEO_CONTINUE dupa VIDEO_PLAY cand caps-urile vin in PLAYING) si pe h8:
+# driverul Airdigital h8 se poarta ca h8se; masurat pe ZGEMMA H8.2H Plus cu gst-launch, film fara sunet: 0 din 8 porniri cu
+# imagine fara el, 8 din 8 cu el. Pozitia in lant ca pe h8se (inainte de 0007 si 0008); 0006 atinge numai sink-ul de sunet.
+SRC_URI:append:h8 = " file://0005-dvbvideosink-continue-dupa-play.patch"
+PR:append:h8 = ".1"
+
+do_compile:append:h8() {
+	grep -q 'VIDEO_CONTINUE after VIDEO_PLAY' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul CONTINUE dupa PLAY (SEF1) lipseste pe h8"
+}
+
+# ZGEMMA H8.2H SE (h8se, hi3798mv200): acelasi lucru masurat pe receptor cu dvbmediasink-ul de acum (r1.hds4.1): un FLAC trimis
+# placii ca PCM e mut si redarea sta la a doua secunda, iar AAC-LC (decodat de placa) se aude. Acelasi petic 0006, peste 0005
+# (care atinge numai gstdvbvideosink.c). Revizia urca peste ".1" de la 0005; blocul sta la coada fisierului.
+SRC_URI:append:h8se = " file://0006-dvbaudiosink-pcm-recodat-in-mp3.patch"
+CFLAGS:append:h8se = " -DHDS_PCM_MP3"
+RDEPENDS:${PN}:append:h8se = " libmp3lame"
+PR:append:h8se = ".1"
+
+do_compile:append:h8se() {
+	grep -q 'hds-pcm-mp3' ${S}/gstdvbaudiosink.c || bbfatal "dvbmediasink: peticul PCM recodat in MP3 lipseste"
+	grep -aq 'hds-pcm-mp3: codor deschis' ${B}/.libs/libgstdvbaudiosink.so || bbfatal "dvbmediasink: codul HDS_PCM_MP3 nu e in libgstdvbaudiosink.so"
+}
+
+# H.264 intretesut cu cele doua campuri separate (PAFF) in care al doilea camp poarta PTS-ul primului (canale SD de internet):
+# GStreamer 1.28 da sink-ului H.264-ul din TS ca avc (tsdemux nu spune alignment, iar h264parse fixeaza prima forma a capsurilor
+# sink-ului), iar al doilea camp al cadrelor de referinta vine fara PTS. render() inlocuia lungimile NAL cu start code numai la
+# bufferele cu PTS, deci decodorul pierdea campul: blocuri pe toata imaginea (masurat pe H8.2H Plus, pe Viper 4K V20 si pe Octagon
+# SF8008; acelasi flux ca byte-stream era curat pe toate trei). Peticul 0007 le inlocuieste in orice buffer; PES-ul fara PTS ramane
+# fara PTS. Facut pe aceeasi sursa fixata, dupa 0001 si 0002; atinge numai render() din gstdvbvideosink.c, cod comun tuturor
+# masinilor (nimic din el nu tine de driver), deci e pe toate; pe Broadcom (Vu+, Dreambox, GigaBlue) nemasurat inca pe receptor.
+SRC_URI:append = " file://0007-dvbvideosink-lungimi-nal-si-fara-pts.patch"
+PR:append = ".1"
+
+do_compile:append() {
+	grep -q 'if (has_timestamp ||' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul lungimilor NAL fara PTS lipseste"
+}
+
+# Prima secunda dupa pornire sau zap pe acelasi H.264 pe campuri: tsdemux incepe segmentul la primul PTS, iar campul al doilea al
+# primului IDR (fara PTS, cu DTS-ul inaintea segmentului) era aruncat de basesink, care taie dupa DTS cand lipseste PTS-ul: tot primul
+# GOP avea blocuri (masurat pe Octagon SF8008: un singur buffer video aruncat, "out of clipping segment"). Peticul 0008 pastreaza
+# bufferul fara PTS cand cel cu PTS dinaintea lui a ramas (ii sterge DTS-ul, nefolosit de render() fara use_dts); PES-ul scris ramane
+# acelasi. Facut pe aceeasi sursa fixata, dupa 0007; atinge numai gstdvbvideosink.c/.h, pe toate masinile.
+SRC_URI:append = " file://0008-dvbvideosink-camp-fara-pts-pastrat.patch"
+PR:append = ".1"
+
+do_compile:append() {
+	grep -q 'gst_dvbvideosink_camp_fara_pts' ${S}/gstdvbvideosink.c || bbfatal "dvbmediasink: peticul campului fara PTS pastrat lipseste"
+}
+
+# ZGEMMA H8.2H Plus (h8): placa nu decodeaza Dolby (DLB1, 25.11.2026, masurat pe receptor: in bibliotecile platformei AC3 apare numai
+# ca AC3PASSTHROUGH, E-AC-3 deloc; canalul ZDF HD pe pista AC-3 si fisierele AC-3 / E-AC-3 raman mute, iar fisierele nu ajung la
+# sfarsit, pe PCM si pe trecere directa). Peticul 0009 scoate audio/x-ac3 si audio/x-eac3 din capsurile sink-ului cu HDS_FARA_DOLBY,
+# deci playbin pune decodorul din FFmpeg (avdec_ac3, avdec_eac3, din 0.8.0) si sunetul vine ca PCM, recodat in MP3 de 0006. Numai pe
+# h8: pe Octagon SF8008 placa decodeaza AC-3 si E-AC-3 (decodorul producatorului), iar pe h8se nu s-a masurat. Canalele DVB nu trec
+# prin GStreamer, deci nu se schimba aici. Atinge numai gstdvbaudiosink.c, dupa 0006.
+SRC_URI:append:h8 = " file://0009-dvbaudiosink-fara-dolby-pe-h8.patch"
+CFLAGS:append:h8 = " -DHDS_FARA_DOLBY"
+RDEPENDS:${PN}:append:h8 = " gstreamer1.0-libav"
+PR:append:h8 = ".1"
+
+do_compile:append:h8() {
+	grep -q 'HDS_FARA_DOLBY' ${S}/gstdvbaudiosink.c || bbfatal "dvbmediasink: peticul fara Dolby (DLB1) lipseste"
+	if grep -aq 'audio/x-eac3, framed' ${B}/.libs/libgstdvbaudiosink.so; then
+		bbfatal "dvbmediasink: libgstdvbaudiosink.so mai ofera audio/x-eac3 in capsuri pe h8"
+	fi
 }

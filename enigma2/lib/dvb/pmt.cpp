@@ -12,6 +12,7 @@
 #include <lib/dvb/scan.h>
 #include <lib/dvb/hdscedare.h>
 #include <lib/dvb_ci/dvbci_session.h>
+#include <lib/dvb_ci/hdscicale.h>
 #include <dvbsi++/ca_descriptor.h>
 #include <dvbsi++/ca_program_map_section.h>
 #include <dvbsi++/teletext_descriptor.h>
@@ -28,7 +29,8 @@ eDVBServicePMTHandler::eDVBServicePMTHandler()
 	:m_ca_servicePtr(0), m_dvb_scan(0), m_decode_demux_num(0xFF), m_no_pat_entry_delay(eTimer::create()),
 	m_ait_wanted(false), m_ait_pid(-1), m_ait_version(-1), m_ait_retry(eTimer::create()), m_ait_signal(eTimer::create()),
 	m_yields_to_zap(false), m_yielding_channel(0), m_yielding_uses(0),
-	m_ca_din_memorie(false), m_ca_din_memorie_trimis(false), m_info_live_amana(false), m_decodare_mai_tarziu(false)
+	m_ca_din_memorie(false), m_ca_din_memorie_trimis(false), m_info_live_amana(false), m_decodare_mai_tarziu(false),
+	m_ca_prin_ci(false)
 {
 	m_use_decode_demux = 0;
 	m_pmt_pid = -1;
@@ -184,7 +186,16 @@ void eDVBServicePMTHandler::PMTready(int error)
 			/* dupa ~eEPGCache (iesirea) getInstance() da 0 */
 			if (eEPGCache *epg = eEPGCache::getInstance())
 				epg->PMTready(this);
-			if(!m_ca_servicePtr)
+			/* un canal pe o singura cale (lib/dvb_ci/hdscicale.h): cu optiunea pornita, intai se afla daca un modul CI
+			   ia serviciul; daca il ia, serviciul nu se inscrie (sau se scoate) de la modulul de acces. Cu optiunea
+			   oprita (din fabrica) hotararea e cea veche: inscriere cand nu e inscris. */
+			bool numai_ci = hdsNumaiCi();
+			if (numai_ci && !m_ca_servicePtr)
+				eDVBCIInterfaces::getInstance()->recheckPMTHandlers();
+			bool ci_alocat = numai_ci && eDVBCIInterfaces::getInstance()->isHandlerAssigned(this);
+			hdsCaleCa cale = hdsCaleModulAcces(numai_ci, ci_alocat, m_ca_servicePtr != 0);
+			m_ca_prin_ci = ci_alocat;
+			if (cale == HDS_CALE_INSCRIE)
 			{
 				int demuxes[2] = {0,0};
 				uint8_t tmp;
@@ -198,6 +209,8 @@ void eDVBServicePMTHandler::PMTready(int error)
 				urmaresteCaPmt();
 				eDVBCIInterfaces::getInstance()->recheckPMTHandlers();
 			}
+			else if (cale == HDS_CALE_RENUNTA)
+				renuntaLaModululDeAcces();
 			else if (m_ca_din_memorie_trimis)
 			{
 				/* inscrierea s-a facut la zap, cu CA PMT-ul din memorie: CI-ul se reverifica acum, ca la prima inscriere */
@@ -277,6 +290,12 @@ void eDVBServicePMTHandler::trimiteCaDinMemorie()
 	   demuxurilor ar iesi alta decat cea a PMT-ului adevarat, iar inscrierea nu s-ar mai reface */
 	if (m_decode_demux_num == 0xFF)
 		return;
+	/* un modul CI a luat deja serviciul (alocat la tune) si canalul merge numai prin CI (lib/dvb_ci/hdscicale.h) */
+	if (hdsNumaiCi() && eDVBCIInterfaces::getInstance()->isHandlerAssigned(this))
+	{
+		m_ca_prin_ci = true;
+		return;
+	}
 	/* PMT-ul adevarat a venit deja: drumul obisnuit (PMTready) */
 	ePtr<eTable<ProgramMapSection> > curent;
 	if (!m_PMT.getCurrent(curent))
@@ -309,6 +328,68 @@ void eDVBServicePMTHandler::urmaresteCaPmt()
 void eDVBServicePMTHandler::caPmtTrimis(long long t)
 {
 	etapaZap(zapCaPmtTrimis, t);
+}
+
+void eDVBServicePMTHandler::renuntaLaModululDeAcces()
+{
+	m_ca_prin_ci = true;
+	if (!m_ca_servicePtr || !m_demux)
+		return;
+	int demuxes[2] = {0,0};
+	uint8_t tmp;
+	m_demux->getCADemuxID(tmp);
+	demuxes[0] = tmp;
+	demuxes[1] = m_decode_demux_num != 0xFF ? m_decode_demux_num : demuxes[0];
+	/* daca serviciul ramane si la altcineva (o inregistrare a lui), acela primeste CA PMT-ul fara demuxul acesta */
+	ePtr<eTable<ProgramMapSection> > ptr;
+	if (m_PMT.getCurrent(ptr))
+	{
+		ptr = 0;
+		/* inscris din memorie, inainte de PMT-ul adevarat: CA PMT-ul pentru ceilalti se face din PMT-ul tinut minte */
+		if (m_ca_din_memorie_trimis)
+		{
+			PmtTinute::iterator it = pmtTinute().find(m_reference);
+			if (it != pmtTinute().end())
+				ptr = it->second;
+		}
+	}
+	m_ca_timpi_connection.disconnect();
+	eDVBCAService::unregister_service(m_reference, demuxes, ptr);
+	m_ca_servicePtr = 0;
+	m_ca_din_memorie_trimis = false;
+	hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI: %s merge numai prin modulul CI, scos de la modulul de acces",
+		m_reference.toString().c_str());
+}
+
+void eDVBServicePMTHandler::ciALuatCanalul()
+{
+	if (m_pvr_channel || m_decodare_mai_tarziu || !hdsNumaiCi())
+		return;
+	renuntaLaModululDeAcces();
+}
+
+void eDVBServicePMTHandler::ciAPlecat()
+{
+	/* numai serviciul tinut departe de modulul de acces din cauza CI-ului; fara PMT il inscrie PMTready */
+	if (!m_ca_prin_ci || m_ca_servicePtr || m_pvr_channel || m_decodare_mai_tarziu || !m_demux)
+		return;
+	m_ca_prin_ci = false;
+	ePtr<eTable<ProgramMapSection> > ptr;
+	if (m_PMT.getCurrent(ptr))
+		return;
+	int demuxes[2] = {0,0};
+	uint8_t tmp;
+	m_demux->getCADemuxID(tmp);
+	demuxes[0] = tmp;
+	demuxes[1] = m_decode_demux_num != 0xFF ? m_decode_demux_num : demuxes[0];
+	eDVBCAService::register_service(m_reference, demuxes, m_ca_servicePtr);
+	if (!m_ca_servicePtr)
+		return;
+	urmaresteCaPmt();
+	hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI: modulul CI nu mai are %s, inscris iar la modulul de acces",
+		m_reference.toString().c_str());
+	m_ca_servicePtr->buildCAPMT(ptr);
+	tinePmtMinte(ptr);
 }
 
 void eDVBServicePMTHandler::notificaInfoLive()
@@ -1145,6 +1226,7 @@ int eDVBServicePMTHandler::tuneExt(eServiceReferenceDVB &ref, int use_decode_dem
 	/* the yielding uses counted on the channel of a former tune go back before m_channel changes */
 	clearYieldingUses();
 	m_ca_din_memorie_trimis = false;
+	m_ca_prin_ci = false;
 	m_hds_pmt_devreme = -1;
 	m_reference = ref;
 	m_use_decode_demux = use_decode_demux;
@@ -1315,6 +1397,7 @@ void eDVBServicePMTHandler::free()
 		m_ca_servicePtr = 0;
 	}
 	m_ca_din_memorie_trimis = false;
+	m_ca_prin_ci = false;
 
 	if (m_channel)
 		eDVBCIInterfaces::getInstance()->removePMTHandler(this);

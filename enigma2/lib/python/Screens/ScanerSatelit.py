@@ -247,6 +247,16 @@ def are_multistream(tp):
     return not _pls_implicit(_int(tp.get('pls_mode'), 1), _int(tp.get('pls_code'), 0))
 
 
+def cere_tuner_multistream(tp):
+    """Transponderul are nevoie de un tuner care alege fluxul: un flux 1..255 sau o secventa PLS aleasa. Fluxul 0 cu
+    secventa implicita (ce scriu unele liste pentru un transponder obisnuit) nu cere asa ceva: orice tuner il prinde,
+    acordat fara filtru. Aceeasi regula ca in nucleu (lib/dvb/hdsmultistream.h, cereTunerMultistream)."""
+    if not are_multistream(tp):
+        return False
+    return not (_int(tp.get('is_id'), -1) == 0
+                and _pls_implicit(_int(tp.get('pls_mode'), 1), _int(tp.get('pls_code'), 0)))
+
+
 def text_multistream(tp):
     """„flux 11 PLS Gold 131070", „flux 10", „PLS Root 8"; '' fara multistream."""
     if not are_multistream(tp):
@@ -379,7 +389,8 @@ def transpondere_satelit(orbpos, transpondere_xml, multistream=True, slot=None):
     SR simb/s, pol, fec, sistem, modulatie, inversare, rolloff, pilot, tsid, onid, is_id, pls_mode, pls_code,
     t2mi_plp_id, t2mi_pid). Frecventa e deja in kHz si SR in simboluri/s, deci aici NU se mai inmulteste cu 1000.
     Transponderele multistream primesc is_id, pls_mode si pls_code; cu multistream=False (tunerul nu poate alege
-    fluxul) ele trec la sarite. Intoarce (bune, sarite), sarite = [(tp, motiv)]."""
+    fluxul) cele care cer un tuner multistream (cere_tuner_multistream: nu si fluxul 0 cu secventa implicita) trec la
+    sarite. Intoarce (bune, sarite), sarite = [(tp, motiv)]."""
     bune, sarite = [], []
     for x in transpondere_xml or []:
         if x[0] != 0:
@@ -391,7 +402,7 @@ def transpondere_satelit(orbpos, transpondere_xml, multistream=True, slot=None):
               'rolloff': x[8] if x[8] in ROLLOFF_VALIDE else 0, 'pilot': x[9] if x[9] in (0, 1, 2) else 2}
         tp.update(_multistream_din_xml(x))
         motiv = motiv_refuz(tp, slot)
-        if not motiv and not multistream and are_multistream(tp):
+        if not motiv and not multistream and cere_tuner_multistream(tp):
             motiv = _('multistream, iar tunerul nu poate alege fluxul')
         if motiv:
             sarite.append((tp, motiv))
@@ -1054,7 +1065,7 @@ def pregateste(fel, valori, nim=None):
         tp, note, eroare, de_ales = transponder_manual(valori, transpondere_xml, slot)
         if eroare:
             return {'eroare': eroare}
-        if are_multistream(tp) and not ms:
+        if cere_tuner_multistream(tp) and not ms:
             return {'eroare': _('Transponderul are multistream (%s), iar tunerul de satelit al acestui receptor nu '
                                 'poate alege fluxul.') % text_multistream(tp)}
         if de_ales:
@@ -1093,6 +1104,17 @@ def pregateste(fel, valori, nim=None):
     if motiv:
         return {'eroare': _('Transponderul operatorului %s nu poate fi acordat: %s.') % (op['nume'], motiv)}
     baza['operator'] = op['id']
+    fs = op.get('fastscan') if fel == 'operator' else None
+    if fs:
+        # OPS9 (0.8.0): operatorii M7 (Skylink, HD Austria...) isi trimit lista in tabelele FastScan: numai canalele
+        # lor, in ordinea lor, intr-un buchet al operatorului (eFastScan, lib/dvb/hdsfastscan.h). Cautarea in retea
+        # dupa NIT aducea si canalele altora de pe aceleasi transpondere (zvonar11, forum 787).
+        text = _('Căutare după operator: %s, pe %s. Se citește lista operatorului de pe transponderul %s: numai '
+                 'canalele lui, în ordinea lui, în buchetul „%s”.') % (op['nume'], text_pozitie(op['pozitie']),
+                                                                     _descriere_tp(tp), buchet_fastscan(op))
+        return dict(baza, transpondere=[tp], flags=retea,
+                    fastscan={'pid': int(fs['pid']), 'nume': buchet_fastscan(op)},
+                    text=text + _text_motor(motor, op['pozitie']))
     if fel == 'operator':
         text = _('Căutare după operator: %s, pe %s. Se pornește de la transponderul %s, restul vin din ce anunță '
                  'operatorul în semnal.') % (op['nume'], text_pozitie(op['pozitie']), _descriere_tp(tp))
@@ -1132,7 +1154,8 @@ def profil_hdscomun(tip):
 TIMP_ACORD_S = 5            # prinderea semnalului dupa ce antena s-a oprit
 TIMP_DETECTOR_T2_S = 10     # la DVB-T2 detectorul citeste numai PAT si PMT (pachetele T2-MI vin prin portul 8001)
 TIMP_INVATARE_S = 45        # lista programelor prin releu: pornirea lui + Hds/DabT2/pornire.TERMEN_RELEU_S
-INVATARI_MAX = 4            # cate feed-uri se invata prin releu la o scanare, pe rand (tunerul e unul)
+INVATARI_MAX = 4            # cate feed-uri ale multiplexurilor surori se invata prin releu la o scanare, pe rand
+                            # (tunerul e unul); ale transponderului cautat se invata toate (T2P9, scanare.py)
 ROTIRE_NECUNOSCUTA_S = 25   # tuner.secunde_asezare(40 de grade): cand nu se stie de unde pleaca antena
 
 
@@ -2124,6 +2147,126 @@ def _scrie_config(c):
 
 
 # ---------------------------------------------------------------- ecran scaner
+def buchet_fastscan(op):
+    """Numele buchetului facut din tabelele FastScan ale operatorului (eFastScan: userbouquet.<nume fara spatii>.tv)."""
+    fs = op.get('fastscan') or {}
+    return str(fs.get('buchet') or op['nume'])
+
+
+class HdsScanareOperator(Screen):
+    """OPS9 (0.8.0): cautarea dupa un operator M7 prin tabelele lui FastScan (eFastScan, lib/dvb/hdsfastscan.h):
+    tunerul ales de scaner, transponderul operatorului si PID-ul lui; lamedb primeste transponderele si canalele
+    operatorului, iar buchetul lui se umple in ordinea numerelor lui. Canalul de dinainte se opreste (tunerul) si
+    porneste din nou la inchidere. Pentru interfata web aceeasi stare ca ServiceScan (hdsStareWeb)."""
+    hdsScanareOperator = True
+    skin = """
+    <screen name="HdsScanareOperator" position="center,center" size="1160,420" title="Căutare după operator">
+        <widget name="scan_state" position="30,25" size="1100,210" font="Regular;30" valign="top" />
+        <widget name="scan_result" position="30,245" size="1100,110" font="Regular;28" valign="top" />
+        <widget name="progres" position="30,375" size="1100,16" borderWidth="2" />
+    </screen>"""
+
+    def __init__(self, session, rez, fabrica=None):
+        Screen.__init__(self, session)
+        from Components.ProgressBar import ProgressBar
+        self.setTitle(_('Căutare după operator'))
+        self.rez = rez
+        self.fabrica = fabrica                    # in probe: functia care face obiectul eFastScan
+        self.scan = None
+        self.gata = False
+        self.eroare = False
+        self.canale = None
+        self.procent = 0
+        self.inainte = None
+        self['scan_state'] = Label(rez.get('text', ''))
+        self['scan_result'] = Label('')
+        self['progres'] = ProgressBar()
+        self['actions'] = ActionMap(['OkCancelActions'], {'ok': self.ok, 'cancel': self.close}, -1)
+        self.onFirstExecBegin.append(self.porneste)
+        self.onClose.append(self._laInchidere)
+
+    def _fa_scan(self):
+        if self.fabrica is not None:
+            return self.fabrica(self.rez)
+        from enigma import eFastScan, eDVBFrontendParametersSatellite
+        parm = in_parametri(eDVBFrontendParametersSatellite, self.rez['transpondere'][0])
+        fs = self.rez['fastscan']
+        # numerele operatorului pastrate, numele din tabela nu se fixeaza, fara buchet radio, transponderele de pe
+        # sateliti nesetati la tuner sarite (aceleasi implicite ca pluginul FastScan din OE-Alliance)
+        return eFastScan(fs['pid'], fs['nume'], parm, True, False, False, True)
+
+    def porneste(self):
+        try:
+            nav = self.session.nav
+            self.inainte = nav.getCurrentlyPlayingServiceOrGroup()
+            nav.stopService()                     # tunerul pentru transponderul operatorului
+        except Exception as e:
+            print('[ScanerSatelit] oprirea canalului inainte de FastScan: %s' % e)
+        try:
+            self.scan = self._fa_scan()
+            self.scan.scanProgress.get().append(self._progres)
+            self.scan.scanCompleted.get().append(self._gata)
+            self.scan.start(int(self.rez.get('slot') or 0))
+        except Exception as e:
+            print('[ScanerSatelit] FastScan nu a pornit: %s' % e)
+            self._gata(-1)
+
+    def _progres(self, procent):
+        self.procent = max(0, min(100, int(procent)))
+        self['progres'].setValue(self.procent)
+
+    def _gata(self, rezultat):
+        self.gata = True
+        self.procent = 100
+        self['progres'].setValue(100)
+        if rezultat < 0:
+            self.eroare = True
+            text = _('Lista operatorului nu s-a putut citi: verifică antena și semnalul pe satelitul lui, apoi '
+                     'încearcă din nou.')
+        else:
+            self.canale = int(rezultat)
+            text = ngettext('Gata: %d canal al operatorului, în buchetul „%s”.',
+                            'Gata: %d canale ale operatorului, în buchetul „%s”.', self.canale) % (
+                self.canale, self.rez['fastscan']['nume'])
+        self['scan_result'].setText(text + ' ' + _('OK sau EXIT închide.'))
+        print('[ScanerSatelit] FastScan %s: %s' % (self.rez['fastscan']['nume'], rezultat))
+
+    def ok(self):
+        if self.gata:
+            self.close()
+
+    def _laInchidere(self):
+        if self.scan is not None:
+            try:
+                self.scan.scanProgress.get().remove(self._progres)
+                self.scan.scanCompleted.get().remove(self._gata)
+            except Exception:
+                pass
+            self.scan = None                      # oprit la jumatate: obiectul eliberat opreste citirea
+        if self.gata and not self.eroare:
+            try:
+                from enigma import eDVBDB
+                eDVBDB.getInstance().reloadBouquets()
+                from Components.ServiceList import refreshServiceList
+                refreshServiceList()
+            except Exception as e:
+                print('[ScanerSatelit] buchetele dupa FastScan: %s' % e)
+        if self.inainte is not None:
+            try:
+                self.session.nav.playService(self.inainte)
+            except Exception as e:
+                print('[ScanerSatelit] canalul de dinainte dupa FastScan: %s' % e)
+
+    def hdsStareWeb(self):
+        """Starea pentru pagina web, cu aceleasi chei ca ServiceScan (HdsWebControl/scanare_web._citesteDialog)."""
+        rezultat = self['scan_result'].getText()
+        return {'fel_lucru': 'dvb', 'stare_text': self['scan_state'].getText(), 'timp_ramas': '',
+                'transpondere_text': '', 'retea': '', 'transponder': '', 'trecere': '',
+                'procent': self.procent, 'canale': self.canale, 'transpondere': None, 'gata': self.gata,
+                'eroare': self.eroare, 'rezultat': [rezultat] if rezultat else [], 'casete': None, 'ultimele': [],
+                'secunde_ramase': None}
+
+
 class ScanerSatelit(Screen):
     """Scanerul de satelit: cele sapte feluri (FELURI). fel=None: ecranul cu randul „Fel de scanare".
     Fereastra: ecranul ScanerSatelit din skinul HDSatelit (cadrul HdsCadru1240, ca scanerele de cablu si terestru);
@@ -2713,6 +2856,9 @@ class ScanerSatelit(Screen):
             if 'hdscomun' in rez:
                 self._porneste_fluxuri(rez)
                 return
+            if 'fastscan' in rez:
+                self._porneste_fastscan(rez)
+                return
             if fel == 'manual':
                 self._porneste_manual(rez['transpondere'][0], rez.get('note') or [], rez['slot'], rez['text'],
                                       rez['flags'])
@@ -2782,6 +2928,16 @@ class ScanerSatelit(Screen):
         except Exception as e:
             print('[ScanerSatelit] pornirea cautarii manuale: %s' % e)
             self.scrie_stare(_('Căutarea nu a putut porni. %s') % motiv_eroare(e))
+
+    def _porneste_fastscan(self, rez):
+        """OPS9: operatorii M7, prin tabelele lor FastScan (HdsScanareOperator); aceeasi poarta motiv_refuz."""
+        tp = rez['transpondere'][0]
+        motiv = motiv_refuz(tp, rez['slot'])
+        if motiv:
+            self._eroare(_('Transponderul %s nu poate fi căutat: %s.') % (_descriere_tp(tp), motiv))
+            return
+        self.scrie_stare(rez['text'])
+        self.session.open(HdsScanareOperator, rez)
 
     # ---- DVB-T2 si DAB+ prin satelit
     def _porneste_fluxuri(self, rez):

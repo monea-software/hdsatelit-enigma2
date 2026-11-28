@@ -89,6 +89,7 @@
 # Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC il folosesc direct.
 
 import os
+import re
 import sys
 import threading
 import time
@@ -943,6 +944,182 @@ PRAG_ASTEPTARE_PAZNIC_S = 1.0
 PRAG_PAS_PORNIRE_S = 3.0        # un pas al pornirii (importul, AUTOSTART sau SESSIONSTART al unui plugin) mai lung intra in rand
 
 
+# OPK0 (25.11.2026, tamiciav7: tastele raspund dupa 2-3 s, uneori 10-15 s; jurnalele aveau numai locul din cod): langa
+# randul "ocupat" si cand incarcarea sare, starea receptorului din /proc, citita pe firul de supraveghere (nimic pe firul
+# principal): incarcarea (/proc/loadavg), cat la suta din procesor a stat dupa disc (iowait, /proc/stat), sectoarele scrise
+# pe discuri (/proc/diskstats) si primele 3 procese dupa procesor (/proc/<pid>/stat), pe ultimele ~10 s sau pe tacere.
+PAS_SISTEM_S = 5                # cat de des se ia o mostra a sistemului (de pe firul de supraveghere)
+FEREASTRA_SISTEM_S = 10         # pe cat timp se socotesc diferentele, cand nu e o tacere
+SALT_INCARCARE = 1.0            # incarcarea pe 1 minut creste atat fata de cea mai mica din ultimele ~30 s: un rand
+PAUZA_SALT_S = 120              # cel mult un rand de salt la atatea secunde
+RANDURI_SALT_MAX = 20           # si cel mult atatea pe proces
+_ROOT_PROC = "/proc"
+
+
+def _citeste(cale):
+	with open(cale, "r") as f:
+		return f.read()
+
+
+def mostraSistem(proc=None, ceas=None):
+	"""O mostra: {t, load (3 valori), cpu (total, iowait in tic-uri), scris (sectoare), procese {pid: (nume, tic-uri)}}.
+	Ce nu se poate citi lipseste din dict (fara exceptii)."""
+	proc = proc or _ROOT_PROC
+	m = {"t": (ceas or monotonic)()}
+	try:
+		m["load"] = [float(x) for x in _citeste(proc + "/loadavg").split()[:3]]
+	except Exception:
+		pass
+	try:
+		for rand in _citeste(proc + "/stat").splitlines():
+			if rand.startswith("cpu "):
+				v = [int(x) for x in rand.split()[1:]]
+				m["cpu"] = (sum(v), v[4] if len(v) > 4 else 0)
+				break
+	except Exception:
+		pass
+	try:
+		scris = 0
+		for rand in _citeste(proc + "/diskstats").splitlines():
+			c = rand.split()
+			# discurile intregi si partitiile lor ar numara de doua ori: numai cele fara cifra la coada (sda, mmcblk0)
+			# sau mmcblkN (fara pN)
+			if len(c) > 9 and (not c[2][-1:].isdigit() or (c[2].startswith("mmcblk") and "p" not in c[2][6:])):
+				scris += int(c[9])
+		m["scris"] = scris
+	except Exception:
+		pass
+	procese = {}
+	try:
+		for n in os.listdir(proc):
+			if not n.isdigit():
+				continue
+			try:
+				t = _citeste("%s/%s/stat" % (proc, n))
+				nume = t[t.index("(") + 1:t.rindex(")")]
+				c = t[t.rindex(")") + 2:].split()
+				procese[int(n)] = (nume, int(c[11]) + int(c[12]))
+			except Exception:
+				continue
+		m["procese"] = procese
+	except Exception:
+		pass
+	return m
+
+
+def textSistem(veche, noua):
+	"""Textul "sistem: incarcarea 1.20 0.80 0.50, iowait 35%, scris 2.4 MB in 10 s, procese: opkg 80%, enigma2 20%"
+	(diferentele intre doua mostre); '' cand nu e nimic de spus"""
+	parti = []
+	if noua.get("load"):
+		parti.append("incarcarea %s" % " ".join("%.2f" % x for x in noua["load"]))
+	dt = noua.get("t", 0) - veche.get("t", 0) if veche else 0
+	if veche and dt > 0:
+		if veche.get("cpu") and noua.get("cpu"):
+			total = noua["cpu"][0] - veche["cpu"][0]
+			if total > 0:
+				parti.append("iowait %d%%" % int(round(100.0 * (noua["cpu"][1] - veche["cpu"][1]) / total)))
+		if "scris" in veche and "scris" in noua:
+			parti.append("scris %.1f MB in %d s" % ((noua["scris"] - veche["scris"]) * 512 / 1048576.0, int(round(dt))))
+		vp, np_ = veche.get("procese") or {}, noua.get("procese") or {}
+		if np_:
+			try:
+				tic = float(os.sysconf("SC_CLK_TCK"))
+			except Exception:
+				tic = 100.0
+			crestere = []
+			for pid, (nume, t) in np_.items():
+				if pid in vp and vp[pid][0] == nume:
+					if t > vp[pid][1]:
+						crestere.append((t - vp[pid][1], nume))
+				elif t > 0:
+					# pornit intre cele doua mostre (opkg, un script): tot procesorul lui e din fereastra
+					crestere.append((t, nume))
+			crestere.sort(reverse=True)
+			if crestere:
+				parti.append("procese: " + ", ".join("%s %d%%" % (n, int(round(100.0 * d / tic / dt))) for d, n in crestere[:3]))
+	return ("sistem: " + ", ".join(parti)) if parti else ""
+
+
+# OPK1 (25.11.2026, tamiciav7: tastele raspund dupa 2-3 s, uneori 10-15 s): tasta intarziata in jurnalul paznicului.
+# lib/driver/rcinput.cpp (masoaraTasta) compara deja ora pusa de nucleu in fiecare eveniment al telecomenzii cu ora la care
+# enigma2 il citeste si scrie "[intarziere] ... intarziere=N ms" in hds-taste.log (de la 300 ms). Jurnalul acela se bate pe
+# cele 3 locuri pe zi ale pachetului de tester, deci nu ajunge la noi; jurnalul paznicului pleaca mereu. Pe firul de
+# supraveghere (nimic pe firul principal), la PAS_TASTE_S, se citeste numai ce s-a adaugat in hds-taste.log de la privirea
+# dinainte; o intarziere de cel putin PRAG_TASTA_MS da un rand in jurnalul paznicului, cel mult unul la PAUZA_TASTA_S
+# (cele dintre ele se numara in randul urmator).
+CALE_TASTE = "hds-taste.log"
+PRAG_TASTA_MS = 1000
+PAUZA_TASTA_S = 10
+PAS_TASTE_S = 5
+CITIRE_TASTE_MAX = 64 * 1024
+_RAND_INTARZIERE = re.compile(r"^(\S+) \[AVERT\] \[intarziere\] cod=(\d+) val=(\d+) intarziere=(\d+) ms")
+
+
+def _caleTaste():
+	return os.path.join(os.environ.get("HDS_JURNAL_DIR") or "/home/root/logs", CALE_TASTE)
+
+
+class TasteIntarziate(object):
+	"""Din FirOcupat.privire (firul de supraveghere). pas() -> randul scris acum, sau None."""
+
+	def __init__(self, ceas=None, scrie=None, cale=None):
+		self.ceas = ceas or monotonic
+		self.scrie = scrie or jurnalPaznic
+		self.cale = cale or _caleTaste()
+		self.loc = None          # pana unde s-a citit (None: inca nimic; prima privire sare ce era dinainte)
+		self.ultimaPrivire = None
+		self.ultimRand = None
+		self.sarite = 0
+		self.rest = ""
+
+	def pas(self):
+		acum = self.ceas()
+		if self.ultimaPrivire is not None and acum - self.ultimaPrivire < PAS_TASTE_S:
+			return None
+		self.ultimaPrivire = acum
+		try:
+			marime = os.path.getsize(self.cale)
+		except OSError:
+			self.loc, self.rest = 0, ""
+			return None
+		if self.loc is None:
+			self.loc = marime
+			return None
+		if marime < self.loc:      # fisierul s-a rotit (.log.1) sau a fost sters: de la inceputul celui nou
+			self.loc, self.rest = 0, ""
+		if marime == self.loc:
+			return None
+		inceput = max(self.loc, marime - CITIRE_TASTE_MAX)
+		with open(self.cale, "rb") as f:
+			f.seek(inceput)
+			date = f.read(marime - inceput)
+		self.loc = inceput + len(date)
+		text = self.rest + date.decode("utf-8", "replace")
+		randuri = text.split("\n")
+		self.rest = randuri.pop()[-1024:]
+		gasite = []
+		for r in randuri:
+			m = _RAND_INTARZIERE.match(r)
+			if m and int(m.group(4)) >= PRAG_TASTA_MS:
+				gasite.append((int(m.group(4)), m.group(1), int(m.group(2)), int(m.group(3))))
+		if not gasite:
+			return None
+		if self.ultimRand is not None and acum - self.ultimRand < PAUZA_TASTA_S:
+			self.sarite += len(gasite)
+			return None
+		ms, ora, cod, val = max(gasite)
+		sarite = self.sarite + len(gasite) - 1
+		self.sarite = 0
+		self.ultimRand = acum
+		rand = "tasta intarziata: cod=%d val=%d citita de interfata la %.1f s dupa ora nucleului (%s; firul principal ocupat)" % (
+			cod, val, ms / 1000.0, ora)
+		if sarite:
+			rand += "; inca %d intarziate peste %.0f s de la randul dinainte" % (sarite, PRAG_TASTA_MS / 1000.0)
+		self.scrie(rand)
+		return rand
+
+
 class FirOcupat(object):
 	"""Punctul 10. tic() pe firul principal (eTimer la TIC_S); privire() pe firul de supraveghere, la PAS_FIR_S. Cand
 	firul principal tace peste PRAG_FIR_OCUPAT_S, fiecare privire ia locul lui din stiva (locDinCadru); cand tacerea se
@@ -950,11 +1127,18 @@ class FirOcupat(object):
 	cod Python (firul principal tine lacatul Python in C++, deci firul de supraveghere nu poate rula), randul spune „in
 	C++”: atunci stivele paznicului (hds-watchdog.py, peste 120 s) au si firele vazute de nucleu. Nimic pe ecran."""
 
-	def __init__(self, ceas=None, cadru=None, scrie=None, varsta=None, alteFire=None):
+	def __init__(self, ceas=None, cadru=None, scrie=None, varsta=None, alteFire=None, mostra=None, taste=None):
 		self.ceas = ceas or monotonic
+		# OPK0: mostrele sistemului (cele din ultimele ~30 s) si randurile de salt al incarcarii
+		self.mostra = mostra or (lambda: mostraSistem(ceas=self.ceas))
+		self.mostre = []
+		self.ultimSalt = None
+		self.randuriSalt = 0
 		self.cadru = cadru or _cadrulFiruluiPrincipal
 		self.scrie = scrie or jurnalPaznic
 		self.varsta = varsta or _secundeDeLaPornire
+		# OPK1: tasta intarziata (hds-taste.log, rcinput.cpp) in jurnalul paznicului
+		self.taste = taste or TasteIntarziate(ceas=self.ceas, scrie=self.scrie)
 		self.alteFire = alteFire or _cadreleAltorFire
 		self.ultimTic = None
 		self.inceput = None     # ultimTic de dinaintea tacerii de acum
@@ -1012,7 +1196,53 @@ class FirOcupat(object):
 		priviri = (" (%d din %d priviri)" % (n, total)) if total else ""
 		fel = "inca ocupat de" if inca else "ocupat"
 		asteptat = ("; paznicul a asteptat lacatul Python %.1f s" % self.asteptat) if self.asteptat >= PRAG_ASTEPTARE_PAZNIC_S else ""
-		return "firul principal %s %.1f s%s: %s%s%s%s" % (fel, durata, la, loc, priviri, self._lacat(durata, total), asteptat)
+		sistem = self._sistem(self.inceput)
+		sistem = ("; " + sistem) if sistem else ""
+		return "firul principal %s %.1f s%s: %s%s%s%s%s" % (fel, durata, la, loc, priviri, self._lacat(durata, total), asteptat,
+			sistem)
+
+	def _sistem(self, deLa=None):
+		"""OPK0: starea sistemului de la mostra luata inainte de deLa (inceputul tacerii) sau de acum ~10 s, pana acum"""
+		try:
+			acum = self.mostra()
+			veche = None
+			limita = deLa if deLa is not None else acum["t"] - FEREASTRA_SISTEM_S
+			for m in self.mostre:
+				if m["t"] <= limita:
+					veche = m
+			if veche is None and self.mostre:
+				veche = self.mostre[0]
+			return textSistem(veche, acum)
+		except Exception:
+			return ""
+
+	def esantion(self):
+		"""OPK0: din privire(), pe firul de supraveghere: o mostra la PAS_SISTEM_S; un rand cand incarcarea pe 1 minut sare
+		cu SALT_INCARCARE fata de cea mai mica din mostrele de acum 10-30 s (cel mult unul la PAUZA_SALT_S). -> randul"""
+		acum = self.ceas()
+		if self.mostre and acum - self.mostre[-1]["t"] < PAS_SISTEM_S:
+			return None
+		m = self.mostra()
+		# mostra cu incarcarea cea mai mica dintre cele de acum 10-30 s (incarcarea pe 1 minut urca incet: 3 procese care
+		# iau tot procesorul o urca cu ~1 in 30 s)
+		veche = None
+		for x in self.mostre:
+			if x["t"] <= m["t"] - FEREASTRA_SISTEM_S and x.get("load") and (veche is None or x["load"][0] < veche["load"][0]):
+				veche = x
+		self.mostre.append(m)
+		self.mostre = [x for x in self.mostre if m["t"] - x["t"] <= 3 * FEREASTRA_SISTEM_S]
+		if veche is None or not veche.get("load") or not m.get("load"):
+			return None
+		if m["load"][0] - veche["load"][0] < SALT_INCARCARE:
+			return None
+		if self.randuriSalt >= RANDURI_SALT_MAX or (self.ultimSalt is not None and acum - self.ultimSalt < PAUZA_SALT_S):
+			return None
+		self.ultimSalt = acum
+		self.randuriSalt += 1
+		rand = "incarcarea a sarit de la %.2f la %.2f in %d s; %s" % (veche["load"][0], m["load"][0],
+			int(round(m["t"] - veche["t"])), textSistem(veche, m))
+		self.scrie(rand)
+		return rand
 
 	def _scrie(self, rand):
 		if self.randuri >= RANDURI_FIR_MAX:
@@ -1030,6 +1260,14 @@ class FirOcupat(object):
 	def privire(self):
 		"""O privire. -> randul scris acum, sau None."""
 		intarziere, self._intarziere = self._intarziere, None
+		try:
+			self.esantion()
+		except Exception:
+			pass
+		try:
+			self.taste.pas()
+		except Exception:
+			pass
 		tic = self.ultimTic
 		if tic is None:
 			return None

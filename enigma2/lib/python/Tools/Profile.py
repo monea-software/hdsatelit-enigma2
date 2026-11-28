@@ -9,6 +9,7 @@ PERCENTAGE_END = 100
 profile_start = time.time()
 
 profile_data = {}
+_bara = [None]
 total_time = 1
 profile_file = None
 
@@ -30,6 +31,16 @@ except IOError:
 	print("WARNING: couldn't open profile file!")
 
 def profile(id):
+	# HDSatelit 0.8.x (BOOT1): fiecare pas ajunge si la bara de pe ecranul de pornire (Components/HdsBaraPornire.py);
+	# fara ajutorul barei (/run/hds-bara-pornire lipsa) nu face nimic
+	if _bara[0] is None:
+		try:
+			from Components import HdsBaraPornire
+			_bara[0] = HdsBaraPornire.pas
+		except Exception:
+			_bara[0] = False
+	if _bara[0]:
+		_bara[0](id)
 	now = time.time() - profile_start
 	if profile_file:
 		profile_file.write("%.2f\t%s\n" % (now, id))

@@ -27,7 +27,8 @@
 # noua porneste inainte ca cea veche sa se opreasca (canalul de inregistrare ramane deschis, nu se pierde nimic), iar
 # o sesiune fara browser mai traieste `asteptare` secunde (o reincarcare a paginii o refoloseste). Oprirea nu
 # elibereaza nimic, deci paza memoriei e la pornire: o sesiune noua se refuza cand dupa ea ar ramane sub
-# sesiuni8001.PRAG_LIBER_KB liberi sau un gol mai mic de PRAG_GOL_KB, sau cand sesiuni8001.stare() cere repornirea.
+# sesiuni8001.PRAG_LIBER_KB liberi sau un gol mai mic de PRAG_GOL_KB (aceste doua numai pe HiSilicon, sesiuni8001.hisilicon),
+# sau cand sesiuni8001.stare() cere repornirea.
 # Fiecare inregistrare noua se numara in contorul comun cu releele DAB+ / DVB-T2 (sesiuni8001.noteaza).
 #
 # ANTENA CU MOTOR: o transmisie nu porneste
@@ -178,6 +179,7 @@ PAUZA_CRIPTAT_S = 2             # implicit: cel putin atat intre ultima oprire c
 PAUZE_CRIPTAT_S = (0, 120)
 LAMEDB = "/etc/enigma2/lamedb"
 URMEAZA_S = 25                 # cat ramane deschisa cererea lunga a unei pagini care urmeaza televizorul
+URMARIRE_PAUZA_S = 10          # ZAP1: o pagina fara cerere deschisa (intre doua cereri) inca urmeaza televizorul atat
 URMARITORI_MAX = 16            # cate cereri lungi odata (peste: raspuns pe loc, pagina intreaba din nou peste o secunda)
 DECRIPTARE_ASTEAPTA = "asteapta"
 DECRIPTARE_MERGE = "merge"
@@ -988,6 +990,7 @@ class Sesiune(object):
 		self.pmt_citit = False           # firul sesiunii a citit PMT-ul fluxului (piste si video sunt ale lui)
 		self.extern = False              # player extern (VLC, Kodi): PMT-ul trece intreg
 		self.fereastra = ""              # fereastra (fila) browserului care a pornit sesiunea; "" = pagina veche, fara id
+		self.urmeaza_tv = None           # ZAP1: True / False = pornita cu / fara urmeaza=1 (tv_web); None = nu se stie
 		self.criptat = None              # imaginea iese criptata (RescrierePsi.criptat), None = nu se stie
 		self.wasm = False                # pagina are playerul wasm: la imagine MPEG-2 raman in PMT MP2 / MP3 si AC-3
 		self.h264 = True                 # browserul decodeaza H.264 prin MediaSource (h264=0: H.264 pe playerul wasm, peWasm)
@@ -1077,6 +1080,7 @@ class Manager(object):
 		self._observatori = []           # cine vrea sa afle cand se schimba transmise() (lista, barele, pagina)
 		self._transmise = ()             # transmise() la ultimul anunt
 		self._zap_tv = None              # (refCurata, ceasul monoton) al ultimului zap vazut (_laZap): TERMENELE DECRIPTARII
+		self._urmaritori_vazuti = {}     # ZAP1: cheia paginii (browserul, fereastra) -> ceasul ultimei cereri de urmarire
 
 	# ------------------------------------------------------------ firul principal: trezirea si ceasul
 	def _pornesteTrezirea(self):
@@ -1330,6 +1334,11 @@ class Manager(object):
 		inlocuieste pe cea veche, care primeste starea de acum. -> intrarea (pentru renuntaUrmarirea) sau None cand sunt
 		deja URMARITORI_MAX (functia nu se cheama)."""
 		ref, standby = self.starePentruUrmarire()
+		if cheie is not None:
+			acum = self._monoton()
+			self._urmaritori_vazuti = dict((k, t) for k, t in self._urmaritori_vazuti.items()
+				if acum - t <= URMEAZA_S + URMARIRE_PAUZA_S)
+			self._urmaritori_vazuti[cheie] = acum
 		for vechi in [u for u in self._urmaritori if cheie is not None and u.cheie == cheie]:
 			self._urmaritori.remove(vechi)
 			self._cheamaUrmaritor(vechi, ref, standby)
@@ -1509,6 +1518,19 @@ class Manager(object):
 		return any(transponder(s.ref) == tp for s in self.vii() if s is not ignora)
 
 	def porneste(self, ref, nume, cine, browser="", adresa="", ac3=False, extern=False, fereastra="", preia=False,
+			wasm=False, h264=True, urmeaza=None):
+		"""_porneste, plus ZAP1: `urmeaza` True / False = pagina a pornit canalul urmand televizorul (urmeaza=1) sau
+		l-a ales de mana; se tine in sesiune (urmeaza_tv), iar o alegere de mana sterge urmarirea vazuta a ferestrei, ca
+		un zap de dupa ea sa nu opreasca canalul ales. None (playerele externe, apelurile vechi): ca inainte."""
+		if urmeaza is not None and not urmeaza and cine:
+			self._urmaritori_vazuti.pop((cine, fereastra or ""), None)
+		ses, motiv = self._porneste(ref, nume, cine, browser, adresa, ac3=ac3, extern=extern, fereastra=fereastra,
+			preia=preia, wasm=wasm, h264=h264)
+		if ses is not None and urmeaza is not None:
+			ses.urmeaza_tv = bool(urmeaza)
+		return ses, motiv
+
+	def _porneste(self, ref, nume, cine, browser="", adresa="", ac3=False, extern=False, fereastra="", preia=False,
 			wasm=False, h264=True):
 		"""-> (sesiune, None) sau (None, motiv). Aceeasi sesiune daca browserul o are deja pe acelasi canal; altfel
 		sesiunea lui veche se opreste si porneste una noua. FERESTRELE: daca sesiunea browserului e folosita acum de alta
@@ -2005,12 +2027,53 @@ class Manager(object):
 		except Exception as e:
 			_jurnal("grupul de alternative: %r" % (e,))
 
+	def urmeazaTv(self, s):
+		"""ZAP1: sesiunea `s` e a unei pagini care urmeaza televizorul: marcata la pornire (urmeaza_tv True) sau pagina ei
+		(browserul si fereastra) are cererea lunga de urmarire deschisa acum ori a avut-o de curand (intre doua cereri);
+		la una pornita de mana (urmeaza_tv False) conteaza numai urmarirea ceruta dupa pornire."""
+		marcat = getattr(s, "urmeaza_tv", None)
+		if marcat:
+			return True
+		cheie = (s.cine, s.fereastra)
+		vazut = self._urmaritori_vazuti.get(cheie)
+		proaspat = vazut is not None and self._monoton() - vazut <= URMEAZA_S + URMARIRE_PAUZA_S
+		if marcat is None:
+			return proaspat or any(u.cheie == cheie for u in self._urmaritori)
+		# pornita fara urmeaza=1, dar pagina a cerut urmarirea DUPA pornire ("Vezi live" pe canalul televizorului porneste
+		# intai canalul, apoi urmeaza televizorul); alegerea de mana a sters urmarirea de dinainte
+		return proaspat and vazut >= (getattr(s, "inceput_mon", 0) or 0)
+
+	def lasaTunerulUrmaritorilor(self, ref, motiv, cod=None):
+		"""ZAP1 (AS69, marci70): inainte de alocarea tunerului pentru `ref` (zap), sesiunile paginilor care urmeaza
+		televizorul si sunt pe alt transponder se opresc pe loc, chiar daca exista alt tuner liber. Pagina oricum trece pe
+		canalul nou dupa zap, deci nu se pierde nimic, iar tunerul lor (de obicei cel al televizorului, A) e liber pentru
+		canalul nou; altfel acesta ajungea pe alt tuner (B), care poate sa nu prinda frecventa (Vu+ FBC, B legat de A).
+		Transmisiile pe un canal ales separat raman (cedeaza le opreste numai fara tuner liber). -> cate s-au oprit."""
+		tp = transponder(ref)
+		if tp is None:
+			return 0
+		alte = [s for s in self.vii() + self._amanate if transponder(s.ref) not in (None, tp) and self.urmeazaTv(s)]
+		for s in alte:
+			if s.oprita.is_set():
+				self._opresteInregistrarea(s)
+			else:
+				self._opresteAcum(s, motiv, fortat=True, cod=cod)
+		if alte:
+			self._dupaSchimbare()
+			_jurnal("%d sesiuni care urmeaza televizorul oprite inainte de zap pe %s" % (len(alte), ref))
+		return len(alte)
+
 	def _laZap(self, nav, playref, *rest):
 		try:
 			# TERMENELE DECRIPTARII: de cand e televizorul pe canal
 			self._zap_tv = (refCurata(_refText(playref)), self._monoton())
 		except Exception as e:
 			_jurnal("zap, ora: %r" % (e,))
+		try:
+			self.lasaTunerulUrmaritorilor(_refText(playref),
+				_("Transmisia s-a oprit: televizorul a trecut pe un canal de pe altă frecvență."), cod="zap")
+		except Exception as e:
+			_jurnal("zap, paginile care urmeaza televizorul: %r" % (e,))
 		try:
 			self.cedeaza(_refText(playref), _("Transmisia s-a oprit: televizorul a trecut pe un canal de pe altă frecvență."),
 				cod="zap")
@@ -3468,7 +3531,8 @@ def memorieDriver():
 	v = st.get("vmalloc") or {}
 	liber, gol = v.get("liber_kb"), v.get("gol_max_kb")
 	ramase = None
-	if liber is not None:
+	# vmalloc liber si golul mare numai unde decodorul video ia memorie din vmalloc (HiSilicon, sesiuni8001.hisilicon)
+	if liber is not None and st.get("paza_liber", True):
 		ramase = max(0, (liber - S.PRAG_LIBER_KB) // ZONA_KB)
 		# gol 0 = adresele ascunse (kptr_restrict, unele nuclee): nu se stie, nu "plin"
 		if gol and gol < PRAG_GOL_KB + ZONA_KB:

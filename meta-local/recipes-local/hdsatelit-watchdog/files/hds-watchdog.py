@@ -195,6 +195,7 @@ import signal
 import stat
 import struct
 import subprocess
+import _thread
 import sys
 import time
 
@@ -317,6 +318,19 @@ _iesire_oprita = None        # [pid, ceas monoton al SIGTERM-ului, SIGKILL trimi
 PRIMA_BATAIE_LUNGA_S = 90    # numai o prima bataie mai tarzie de atat are rand propriu in jurnal
 STIVE_FARA_BATAIE_S = 180    # prima copie a stivelor, de la pornirea procesului, daca nu a batut deloc
 STIVE_FARA_BATAIE_DIN_NOU_S = 600  # a doua si ultima copie pentru acelasi proces fara nicio bataie
+# 0.8.0 (WDG0, gol gasit de JHD9): o tema straina care ingheata interfata INAINTE de prima bataie (incarcarea temei,
+# pluginurile ei, pornirea sesiunii) nu era oprita de nimeni: fara bataie nivelul 3 nu reporneste nimic. Semnul probei
+# temei (Components/HdsSkinuri.py, skinDePornit: {"skin": ..., "pornit": <uptime>}) sta in RAM numai cat o tema straina e
+# in proba (pornireReusita il sterge dupa 60 s de mers; tema HD Satelit nu-l scrie). Cand semnul e al procesului de acum
+# si acesta n-a batut deloc in TEMA_FARA_BATAIE_S de la incarcarea temei, paznicul il opreste ca la un blocaj moale
+# (semnul opririi, deci „paznic” in /tmp/hds-enigma2.caderi), iar la pornirea urmatoare skinDePornit refuza tema si
+# incarca HD Satelit, cu motivul spus pe ecran. Masurat: prima bataie cu tema noastra vine in cel mult 46 s de la
+# pornirea procesului pe ZGEMMA H8.2H Plus (22 de porniri) si 31 s pe V20 si Octagon SF8008 (160 si 100 de porniri), dar
+# in rapoartele oamenilor si 133 s si 186 s (Vu+ Duo 4K SE, prima pornire dupa o actualizare): pragul e dublul celei mai
+# lungi, ca o pornire lenta dar buna cu o tema straina sa nu fie oprita si tema refuzata pe nedrept.
+SKIN_PROBA_PATH = os.environ.get("HDS_WATCHDOG_SKIN_PROBA", "/tmp/hds-skin-proba")
+SKIN_IMAGINE = "HDSatelit/skin.xml"
+TEMA_FARA_BATAIE_S = 360
 
 _viata_enigma2 = None        # pid, parinte, pornit_la (/proc/uptime), prima_bataie (intarziere), stive (0..2)
 # 0.7.5 (PRN): uptime-ul primei treceri a acestui paznic. Un enigma2 pornit inainte de el (paznicul repornit de
@@ -462,6 +476,10 @@ CEAS_TOLERANTA_S = 300       # pornirea socotita pe ceas (acum - uptime) atat de
 WDIOC_GETSUPPORT = 0x80045700
 WDIOC_GETTIMEOUT = 0x80045707
 WDIOC_KEEPALIVE = 0x80045705
+WDIOC_SETTIMEOUT = 0xC0045706
+# INST1 27.11.2026: pe ZGEMMA H8 (sp805_wdt, nowayout) V nu dezarmeaza placa; la oprirea curata se pune intai
+# timeout-ul cel mai mare primit de driver, ca scrierea imaginii (init 2) sa nu fie taiata dupa 60 s.
+TIMEOUT_OPRIRE_S = (3600, 1800, 1200, 900, 600, 420, 300, 240, 180, 120)
 
 _tracking = {}          # (pid, tid) -> (wchan, numaratoarea la rand, schimbarile de context sau None)
 _running = True
@@ -764,6 +782,81 @@ def hotarare_blocaj_moale(acum, pid_enigma2, bataie, interfata_pornita, asteptar
                          "HdsWebControl nu raspunde" if web_activ else "HdsWebControl oprit din setari"))
 
 
+def citeste_proba_temei(cale=None):
+    """Semnul probei temei straine: {"skin": text, "pornit": uptime intreg} sau None (lipsa, stricat, tema HD Satelit).
+    Fisierul e JSON scris de skin.py; se citeste fara json (paznicul n-are importuri noi), marginit la 4 KB."""
+    try:
+        with open(cale or SKIN_PROBA_PATH, encoding="utf-8", errors="replace") as f:
+            text = f.read(4096)
+    except OSError:
+        return None
+
+    def valoare(cheie):
+        i = text.find('"%s"' % cheie)
+        if i < 0:
+            return None
+        rest = text[i + len(cheie) + 2:].lstrip()
+        if not rest.startswith(":"):
+            return None
+        return rest[1:].lstrip()
+
+    skin, pornit = valoare("skin"), valoare("pornit")
+    if not skin or not skin.startswith('"') or pornit is None:
+        return None
+    sfarsit = skin.find('"', 1)
+    cifre = ""
+    for c in pornit:
+        if not c.isdigit():
+            break
+        cifre += c
+    if sfarsit < 2 or not cifre:
+        return None
+    nume = skin[1:sfarsit]
+    if nume == SKIN_IMAGINE:
+        return None
+    return {"skin": nume, "pornit": int(cifre)}
+
+
+def hotarare_tema_inghetata(up, pid_enigma2, pornit_la, proba, opkg):
+    """WDG0, fara efecte: (True, detaliu) cand enigma2 de acum, fara nicio bataie, are o tema straina in proba incarcata
+    de el (semnul scris dupa pornirea lui) de cel putin TEMA_FARA_BATAIE_S secunde si nu ruleaza opkg; altfel
+    (False, motiv). up si pornit_la sunt pe /proc/uptime."""
+    if proba is None:
+        return False, "fara tema straina in proba"
+    if up is None or pornit_la is None:
+        return False, "pornirea procesului nu se stie"
+    if proba["pornit"] + 1 < pornit_la:
+        return False, "semnul temei e de la un proces de dinainte"
+    if opkg:
+        return False, "opkg ruleaza"
+    varsta = up - proba["pornit"]
+    if varsta < TEMA_FARA_BATAIE_S:
+        return False, "tema %s in proba de %ds" % (proba["skin"], max(0, int(varsta)))
+    return True, ("TEMA STRAINA INGHETATA: enigma2 pid=%d fara nicio bataie de %ds de la incarcarea temei %s (prag %ds)"
+                  % (pid_enigma2, int(varsta), proba["skin"], TEMA_FARA_BATAIE_S))
+
+
+def pas_tema_inghetata(acum, pid_enigma2):
+    """Ramura „fara-bataie” a nivelului 3: SIGTERM cu semnul paznicului pentru tema straina inghetata la pornire.
+    Intoarce detaliul cand a oprit (sau asteapta iesirea dupa SIGTERM), altfel None."""
+    if _sigterm is not None and _sigterm[0] == pid_enigma2:
+        return "asteapta iesirea enigma2 pid=%d dupa SIGTERM" % pid_enigma2
+    proba = citeste_proba_temei()
+    if proba is None:
+        return None
+    if _viata_enigma2 is not None and _viata_enigma2["pid"] == pid_enigma2 and _viata_enigma2["pornit_la"] is not None:
+        pornit_la = _viata_enigma2["pornit_la"]
+    else:
+        pornire = citeste_pornirea_enigma2(pid_enigma2)
+        pornit_la = pornire[1] if pornire else None
+    da, detaliu = hotarare_tema_inghetata(uptime_precis(), pid_enigma2, pornit_la, proba, gaseste_opkg())
+    if not da:
+        return None
+    log(detaliu)
+    force_soft_recovery(detaliu, acum)
+    return detaliu
+
+
 def pas_blocaj_moale(acum, pid_enigma2, bataie):
     """Pasul nivelului 3 din bucla principala: hotararea, o linie in jurnal numai la schimbare si, la „blocat”, SIGTERM.
     Intoarce (fel, detaliu, interfata_pornita, asteptare_s)."""
@@ -776,6 +869,9 @@ def pas_blocaj_moale(acum, pid_enigma2, bataie):
         if _fara_bataie_anuntat != pid_enigma2:
             _fara_bataie_anuntat = pid_enigma2
             log("nivelul 3: %s; interfata nu se reporneste pana nu vine o bataie" % detaliu)
+        oprit = pas_tema_inghetata(acum, pid_enigma2)
+        if oprit:
+            fel, detaliu = "blocat", oprit
     elif fel == "web-raspunde":
         if _web_raspunde_anuntat != pid_enigma2:
             _web_raspunde_anuntat = pid_enigma2
@@ -963,6 +1059,14 @@ def disarm_and_close(fd):
     init la schimbare de runlevel), NU la blocaj. 'V' (magic close) cere driverului sa dezarmeze."""
     if fd is None:
         return
+    for t in TIMEOUT_OPRIRE_S:
+        try:
+            fcntl.ioctl(fd, WDIOC_SETTIMEOUT, struct.pack("I", t))
+            os.write(fd, b"\0")
+            log("oprire curata: timeout-ul placii pus la %ds inainte de V (sp805 cu nowayout nu dezarmeaza)" % t)
+            break
+        except OSError:
+            continue
     try:
         os.write(fd, b"V")
     except OSError:
@@ -1684,6 +1788,38 @@ def force_hard_reboot(reason):
     except OSError as e:
         log("scrierea 'b' in sysrq-trigger a esuat: %s -- watchdogul HW ramane singura plasa "
             "(va expira in max %ds de la ultima hranire)" % (e, PET_INTERVAL_S * CONFIRM_HANG_CHECKS))
+        if not os.path.exists("/dev/watchdog"):
+            _repornire_fara_sysrq()
+
+
+def _repornire_fara_sysrq():
+    """AS219 (26.11.2026, Vu+ Solo SE, nucleul 3.13.5): fara /proc/sysrq-trigger si fara /dev/watchdog repornirea dura
+    nu se facea deloc (receptorul ramanea blocat pana la buton dupa un oops in driverul video). Rezerva: sync cu termen
+    de 5 s (poate sta in acelasi blocaj), apoi reboot(2) direct, apoi /sbin/reboot -f -n. Nu arunca."""
+    import subprocess
+    scrie_jurnal_caderi("paznicul: sysrq si watchdogul HW lipsesc, repornesc prin reboot(2) (rezerva AS219)")
+    try:
+        p = subprocess.Popen(["sync"])
+        for _ in range(10):
+            if p.poll() is not None:
+                break
+            time.sleep(0.5)
+        log("rezerva: sync %s" % ("gata" if p.poll() is not None else "inca in lucru dupa 5 s, merg mai departe"))
+    except Exception as e:
+        log("rezerva: sync a esuat: %s" % e)
+    try:
+        import ctypes
+        libc = ctypes.CDLL(None, use_errno=True)
+        log("rezerva: reboot(2) direct (RB_AUTOBOOT)")
+        r = libc.reboot(0x01234567)
+        log("rezerva: reboot(2) a intors %s, errno %s" % (r, ctypes.get_errno()))
+    except Exception as e:
+        log("rezerva: reboot(2) a esuat: %s" % e)
+    try:
+        log("rezerva: %s -f -n" % REBOOT_BIN)
+        subprocess.Popen([REBOOT_BIN, "-f", "-n"])
+    except Exception as e:
+        log("rezerva: reboot -f -n a esuat: %s" % e)
 
 
 def _ng_ip_bin():
@@ -2856,6 +2992,147 @@ def pas_servicii(acum):
     return _srv_stare
 
 
+# ---- r22 (0.8.0, RPN1): urma tacerii interfetei, inaintea unei reporniri fara urma ----
+# Asistenta AS197 (SF8008 4749700c, 0.7.9, 24.11.2026): interfata a tacut ~70 s, apoi placa a repornit fara niciun rand
+# in nucleu si fara randul paznicului (force_hard_reboot si reporneste_receptorul scriu intai in hds-caderi.log). La ~70 s
+# de tacere niciun nivel de aici nu reporneste (nivelul 2 cere firul in D 4 verificari, nivelul 3 asteapta 60-300 s), deci
+# repornirea a venit de la ceasul hardware (nimeni nu l-a mai hranit: paznicul insusi oprit, de pilda intr-o scriere pe
+# memoria interna agatata) sau de la nucleu. Ca urmatoarea data sa ramana o urma: cand bataia enigma2-ului de acum e mai
+# veche de URMA_TACERE_S, fara semn "ocupat" si fara opkg, o singura data pe tacere, un rand in jurnalul paznicului
+# (LOG_PATH, pe memoria interna, trecut pe disc cu fsync; pleaca mereu in pachetul testerului): cat tace interfata, starea
+# firului principal in nucleu, ce procese au luat procesorul in ultimele secunde, incarcarea si ultimul rand din
+# hds-interfata.log. Nu in hds-caderi.log: acolo stau numai opririle adevarate (interfata isi poate reveni singura dupa
+# randul acesta). Randul se scrie pe un fir separat, ca o scriere agatata sa nu opreasca hranirea ceasului hardware (cand
+# reporneste paznicul nu se schimba). Mostra proceselor se ia de la URMA_MOSTRA_S de tacere. Cum se citeste dupa o
+# repornire fara urma: randul de aici prezent = paznicul era viu si hranea ceasul la peste 45 s de tacere (repornirea a
+# venit dupa, de la ceas sau nucleu); randul absent = bucla paznicului se oprise deja (semnul cel mai tare pentru ceasul
+# hardware nehranit).
+URMA_TACERE_S = 45
+URMA_MOSTRA_S = 30
+_urma = {"cheie": None, "mostra": None, "mostra_cheie": None}
+
+
+def cpu_procese(radacina=None):
+    """{pid: (nume, tacuri utime+stime)} din /proc/<pid>/stat. Nu arunca."""
+    radacina = radacina or PROC_DIR
+    rez = {}
+    try:
+        intrari = os.listdir(radacina)
+    except OSError:
+        return rez
+    for n in intrari:
+        if not n.isdigit():
+            continue
+        stat = _citeste_scurt("%s/%s/stat" % (radacina, n), 512)
+        if ")" not in stat:
+            continue
+        nume = stat[stat.find("(") + 1:stat.rfind(")")]
+        campuri = stat.rsplit(")", 1)[1].split()
+        try:
+            rez[int(n)] = (nume, int(campuri[11]) + int(campuri[12]))
+        except (IndexError, ValueError):
+            pass
+    return rez
+
+
+def text_procese(veche, noua, secunde, n=3):
+    """'procesorul in ultimele N s: a(pid) 2.1 s, ...' = timpul de procesor luat intre doua mostre (primele n), sau ''."""
+    try:
+        tac = float(os.sysconf("SC_CLK_TCK"))
+    except (AttributeError, ValueError, OSError):
+        tac = 100.0
+    dif = []
+    for pid, (nume, t) in noua.items():
+        if pid in veche and t >= veche[pid][1]:
+            dif.append((t - veche[pid][1], nume, pid))
+    dif = [x for x in sorted(dif, reverse=True)[:n] if x[0] > 0]
+    if not dif:
+        return ""
+    return "procesorul in ultimele %d s: %s" % (int(secunde), ", ".join("%s(%d) %.1f s" % (nume, pid, d / tac)
+                                                                       for d, nume, pid in dif))
+
+
+def ultimul_rand(cale, maxim=4096):
+    """Ultimul rand plin dintr-un fisier text (cel mult 200 de semne), sau ''."""
+    try:
+        with open(cale, "rb") as f:
+            f.seek(0, 2)
+            marime = f.tell()
+            f.seek(max(0, marime - maxim))
+            date = f.read(maxim).decode("utf-8", "replace")
+    except OSError:
+        return ""
+    for rand in reversed(date.splitlines()):
+        if rand.strip():
+            return " ".join(rand.split())[:200]
+    return ""
+
+
+def rand_urma_tacere(tacere, pid, principal, procese, incarcare, ultim):
+    parti = ["interfata (enigma2 pid %d) tace de %d s, fara semn ocupat" % (pid, int(tacere))]
+    if principal:
+        parti.append("firul principal: %s" % principal)
+    if procese:
+        parti.append(procese)
+    if incarcare:
+        parti.append("incarcarea %s" % incarcare)
+    if ultim:
+        parti.append("ultimul rand din hds-interfata.log: %s" % ultim)
+    parti.append("daca dupa acest rand receptorul a repornit fara alt rand al paznicului, l-a repornit ceasul hardware "
+                 "(nimeni nu l-a mai hranit) sau nucleul")
+    return "; ".join(parti)
+
+
+def _scrie_urma(tacere, pid, veche, t_veche, acum):
+    """Pe firul separat: citirile si scrierea randului in jurnalul paznicului, trecut pe disc (fsync)."""
+    try:
+        _text, principal = fire_in_nucleu(pid, PROC_DIR)
+        procese = text_procese(veche, cpu_procese(), acum - t_veche) if veche is not None else ""
+        incarcare = " ".join(_citeste_scurt(os.path.join(PROC_DIR, "loadavg"), 128).split()[:3])
+        ultim = ultimul_rand(os.path.join(CRASH_LOG_DIR, "hds-interfata.log"))
+        rand = rand_urma_tacere(tacere, pid, principal, procese, incarcare, ultim)
+        log("urma tacerii: " + rand)
+        fd = os.open(LOG_PATH, os.O_WRONLY | os.O_APPEND)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except Exception as e:
+        try:
+            log("urma tacerii: %r" % (e,))
+        except Exception:
+            pass
+
+
+def pas_urma_tacere(acum, pid_enigma2, bataie, ocupat, fir=True):
+    """Din un_pas: hotararea (fara disc, afara de mostra din /proc) si, o data pe tacere, pornirea firului care scrie
+    randul. Intoarce True cand randul a fost cerut acum. bataie = bataia enigma2-ului de acum (sau None); ocupat = semnul
+    ocupat valabil sau opkg."""
+    if bataie is None or pid_enigma2 is None or bataie.get("pid") != pid_enigma2:
+        _urma["mostra"] = None
+        return False
+    tacere = acum - bataie["bataie"]
+    cheie = (pid_enigma2, bataie["bataie"])
+    if ocupat or tacere < URMA_MOSTRA_S:
+        _urma["mostra"] = None
+        return False
+    if _urma["mostra_cheie"] != cheie or _urma["mostra"] is None:
+        _urma["mostra"], _urma["mostra_cheie"] = (cpu_procese(), acum), cheie
+    if tacere < URMA_TACERE_S or _urma["cheie"] == cheie:
+        return False
+    veche, t_veche = _urma["mostra"]
+    if acum - t_veche < 1:
+        veche = None
+    argumente = (tacere, pid_enigma2, veche, t_veche, acum)
+    if fir:
+        # _thread (in nucleul Python), nu threading: pachetul python3-threading nu e in RDEPENDS-ul retetei
+        _thread.start_new_thread(_scrie_urma, argumente)
+    else:
+        _scrie_urma(*argumente)
+    _urma["cheie"] = cheie     # dupa pornirea firului: un fir care nu porneste lasa randul pentru pasul urmator
+    return True
+
+
 def un_pas(fd, confirmed, urmatoarea_netguard):
     """O verificare (la fiecare PET_INTERVAL_S). Intoarce (confirmed, urmatoarea_netguard). Separata de main(),
     ca probele sa poata rula verificari cu /proc, /dev/watchdog si fisierele inlocuite.
@@ -2895,6 +3172,13 @@ def un_pas(fd, confirmed, urmatoarea_netguard):
         # NU mai hranim de aici incolo -- fie sysrq a reusit deja (receptorul reporneste),
         # fie watchdogul HW expira oricum, garantat, in max PET_INTERVAL_S * CONFIRM_HANG_CHECKS
         # secunde de la ultima hranire reala de mai sus.
+
+    # r22 (RPN1): urma tacerii interfetei, inaintea unei eventuale reporniri fara urma (pe un fir; nimic nu se asteapta)
+    if not confirmed:
+        try:
+            pas_urma_tacere(acum, pid_enigma2, proprie, bool(motive) or bool(opkg))
+        except Exception as e:
+            log("eroare interna la urma tacerii: %r" % (e,))
 
     fel, detaliu = "repornire-dura", detail
     try:

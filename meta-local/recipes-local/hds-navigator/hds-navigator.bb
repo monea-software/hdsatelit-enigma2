@@ -5,7 +5,7 @@ intrarea standard (o comanda pe rand), starea iese pe iesirea standard (randuri 
 de enigma2, pornit la cerere; intra in imagine prin hdsatelit-base. Monea Software pentru HD Satelit."
 LICENSE = "GPL-2.0-only & MIT"
 LIC_FILES_CHKSUM = "file://hds-navigator.c;beginline=2;endline=3;md5=fb87bc14f85a0e8e73d2e038b3c2f7e1 \
-                    file://hds-hbbtv.js;beginline=2858;endline=2876;md5=a27e35cdfe59b078f9273144a89e57db"
+                    file://hds-hbbtv.js;beginline=4391;endline=4409;md5=a27e35cdfe59b078f9273144a89e57db"
 PV = "0.7.0"
 # r1: la repornirea pe procesor (GL cazut) procesele WebKit ale incercarii cu GL se culeg inainte de execv (nu mai raman
 # zombi pana la inchiderea aplicatiei)
@@ -48,7 +48,45 @@ PV = "0.7.0"
 # r16 (0.7.8, CR2): hds-hbbtv.js: pe paginile aplicatiei TVP manager (hub-ul TVP GO al TVP 1 de pe satelit, in afara de
 # virtual-channel) cand "Trwa wczytywanie" sta pe ecran 30 s fara film: un rand in jurnalul paginii cu cererile neterminate
 # si o singura reincarcare (asistenta 764371, Vu+ Uno 4K SE). Nota MIT neschimbata, mutata cu randurile adaugate (+114).
-PR = "r19"
+# r19 (0.7.8, NAVJ4): JSC_useDFGJIT=0 impus si cand vine din mediu; JIT-ul de baza cerut (JSC_useJIT=1) cand WebKit-ul il are.
+# r20 (dupa 0.7.8, JIT8): rezerva fara JIT in lansator: dupa doua porniri la rand cu procesul web cazut pe procesor (caderea cu
+# GL nu se numara) navigatorul porneste pe interpretor; /etc/enigma2/hds-navigator-jit-cazut tine numarul (0, 1, 2), facut de
+# root cu scriere pentru toti (modul HbbTV ruleaza fara root). Vine in feed impreuna cu WebKit-ul cu JIT (r0.video3.jit3).
+# Tot r20: JSC_useRegExpJIT=1 langa JSC_useJIT=1 (pe 32 de biti JIT-ul expresiilor regulate e oprit din fabrica), 0 in rezerva.
+# Tot r20: cand rezerva a pus pornirea pe interpretor si procesul web cade si acolo, numaratoarea se sterge (pagina cade si fara JIT).
+# r21 (0.8.0, HBB9): copia de rezerva hds-hbbtv.js adusa la zi cu cea din enigma2 (era ramasa la r16; intre timp AS191 si
+# altele): <video>/<audio> HTML5 cu sursa http(s) HLS/DASH/MP4/TS/MP3 pe playerul receptorului prin comenzile "av" (si
+# sursa scrisa in HTML: src, <source>, autoplay), pause()/resume() pe obiectul A/V (ADN Play). Nota MIT neschimbata,
+# mutata cu randurile adaugate (randurile 3368-3386).
+# r22 (0.8.0, VLY0): comanda "volum <0-100> <0|1> <ms>": bara de volum desenata de lansator in strat, sus in dreapta, cat
+# lansatorul tine ecranul (aplicatia YouTube si celelalte); enigma2 nu poate desena atunci (lacatul pe fb0).
+# r23 (0.8.0, YTS0): --marire-la-copiere si in afara HbbTV cand desenul e pe procesor (aplicatiile pe Vu+ Solo SE si
+# celelalte placi fara EGL folosibil: pagina desenata la 1280x720, nu 1920x1080); stratul isi ia zonele inapoi la scara copiei.
+# r24 (0.8.0, LAN1): copia de rezerva hds-hbbtv.js adusa la zi: canPlayType pe <video>/<audio> spune "maybe" la tipurile
+# playerului receptorului; hls.js si dash.js care nu pot reda aici (fara MediaSource cu decodor) primesc o punte mica spre
+# <video>, deci spre playerul receptorului (Rubidia: Video Mediterraneo, Video Regione; wedo tv pe 13E). Nota MIT neschimbata,
+# mutata cu randurile adaugate (randurile 3763-3781).
+# r26 (JITD; r25 e pastrat pentru lotul WVN1): treapta rapida a compilatorului JavaScript (DFG) pornita pe ARMv7 (JSC_useDFGJIT=1; cere libwpewebkit ...jit4,
+# cu peticul 0033; o biblioteca fara DFG compilat nu ia in seama variabila). Rezerva pe trepte: fisierul numaratorii tine doua
+# cifre; doua porniri la rand cazute cu treapta rapida -> numai treapta de baza ("JIT-REZERVA baza"), inca doua -> interpretor.
+# r27 (0.8.0, WVN1; r25 a fost numele de proba): Encrypted Media Extensions pornite in setarile paginii (webkit_settings_set_enable_encrypted_media): in WPE
+# sunt oprite din fabrica, deci filmele protejate (Netflix si celelalte, prin libocdm) nu ar avea EME nici cu WebKit-ul cu EME.
+# Tot r27 (WVN1): cererea de permisiune EME (WebKitMediaKeySystemPermissionRequest) acceptata; WebKit refuza implicit orice
+# permisiune, deci requestMediaKeySystemAccess dadea NotSupportedError (vazut pe Octagon 25.11).
+# r29 (0.8.0, HBL1): copia de rezerva hds-hbbtv.js adusa la zi cu reparatiile facute de mana la Lanus (Octagon SF8008,
+# AS211, AS218): puntea hls.js / dash.js pusa mereu (si cu MediaSource cu decodorul imprumutat; filmele protejate raman la
+# biblioteca), fundalul propriu al <video> transparent cat filmul merge pe playerul receptorului, bara ADN PLAY ascunsa cat
+# filmul reda, anuntul receptorului in pagina (ev "anunt"), paginile XHTML cu greseli de XML citite iar ca HTML (AS220, CLUB TV).
+# Nota MIT neschimbata, mutata cu randurile adaugate (4307-4325).
+# r32 (0.8.0, HBW1): copia de rezerva hds-hbbtv.js adusa la zi cu reparatiile facute de mana la Lanus (AS244, wedo tv
+# de pe 13E), facute generale: bindToCurrentChannel() urmat de stop() in acelasi pas cat un film al paginii tine playerul
+# receptorului nu mai opreste filmul ("leaga" amanat pana la sfarsitul pasului, anulat de stop()); aplicatiile Lightning fara
+# WebGL (desen pe procesor) au optiunile readPixels* false (altfel gl.readPixels cu gl null, rotita); plasa rotitei wedo
+# numai pe hbbtv.amtecco.com. Nota MIT neschimbata, mutata cu randurile adaugate (4391-4409).
+# r33 (0.8.0, WKT1): pe ARM fara NEON (ZGEMMA H8.2H Plus, vfpv3d16) navigatorul porneste direct pe interpretorul
+# JavaScript (getauxval AT_HWCAP; bitii lipsa = JIT ca inainte): pe .129 DFG oprea procesul web (abort) la ZDF HbbTV, iar treapta de baza lasa
+# aplicatia ZDF goala la 66%; pe interpretor ZDF si ARD merg. Nota de licenta neschimbata (randurile 2-3).
+PR = "r33"
 
 SRC_URI = "file://hds-navigator.c file://hds-hbbtv.js"
 S = "${UNPACKDIR}"

@@ -319,6 +319,14 @@ class Network:
 		ipPattern = re_compile(ipRegexp)
 
 		resolv = []
+		# PRM1 (26.11.2026): serverele puse de om in "Nameserver settings" (/etc/enigma2/nameserversdns.conf) trec inaintea
+		# celor scrise de udhcpc la pornire, ca sa nu se piarda la repornire pe DHCP
+		try:
+			from Components.HdsRetea import aplicaDnsSalvat
+			if aplicaDnsSalvat():
+				print("[Network.py] resolv.conf: serverele de nume ale omului puse la loc")
+		except Exception as e:
+			print("[Network.py] serverele de nume pastrate nu s-au putut pune: %s" % e)
 		try:
 			fp = open('/etc/resolv.conf', 'r')
 			resolv = fp.readlines()

@@ -77,6 +77,7 @@ _NUME_PACHET = re.compile(r"^[a-z0-9][a-z0-9+.\-]{0,120}\Z")
 _MODALIAS = re.compile(r"^usb:v[0-9A-F]{4}p[0-9A-F]{4}[0-9A-Za-z*]{0,80}\Z")
 
 _harta = [None]
+_index = [None]      # (map, machine, {vendor: [(package, alias)]}, [(package, alias)]) for pachetePentru
 _aliasuri = [None]   # [(tipar, modul)] din modules.alias (numai usb:), citit la nevoie, o data pe trecere
 _pornite = set()     # interfetele carora trecerea la pornire le-a scris "add" pentru un modul nepornit (o data pe sesiune)
 _asteapta = {}       # devpath -> modalias, in asteptarea driverului de la udev
@@ -165,12 +166,41 @@ def masina():
 	return _stare["masina"] or None
 
 
+def _aliasuriPeProducator(m):
+	"""({vendor: [(package, alias)]}, [(package, alias)]) for machine m, built once per map. An alias whose vendor
+	field (usb:vXXXX) is literal can only match a modalias with the same vendor, so pachetePentru compares only those plus
+	the few aliases with a wildcard vendor. Brute force over all the machine's aliases (over a thousand on sf8008, 8565 in
+	the map) compiled every pattern with fnmatch and held
+	the main thread ~3 s at the boot pass on sf8008 (AS131, hds-taste.log: keys delayed up to 2917 ms)."""
+	h = harta()
+	idx = _index[0]
+	if idx is None or idx[0] is not h or idx[1] != m:
+		pe = {}
+		oricare = []
+		for p, d in sorted(h.items()):
+			if m not in d["masini"]:
+				continue
+			for a in d["alias"]:
+				v = a[5:9] if a.startswith("usb:v") else ""
+				if len(v) == 4 and not any(c in v for c in "*?["):
+					pe.setdefault(v, []).append((p, a))
+				else:
+					oricare.append((p, a))
+		idx = _index[0] = (h, m, pe, oricare)
+	return idx[2], idx[3]
+
+
 def pachetePentru(modalias):
 	"""pachetele din harta care prind modaliasul unei interfete USB, pe masina receptorului"""
 	m = masina()
 	if not m or not modalias or not _MODALIAS.match(modalias):
 		return []
-	return [p for p, d in sorted(harta().items()) if m in d["masini"] and any(fnmatch.fnmatchcase(modalias, a) for a in d["alias"])]
+	pe, oricare = _aliasuriPeProducator(m)
+	gasite = set()
+	for p, a in pe.get(modalias[5:9], []) + oricare:
+		if p not in gasite and fnmatch.fnmatchcase(modalias, a):
+			gasite.add(p)
+	return sorted(gasite)
 
 
 def instalat(pachet):
@@ -804,6 +834,7 @@ def stareWeb():
 def _reseteaza():
 	"""numai pentru probe: starea modulului ca la pornire"""
 	_harta[0] = None
+	_index[0] = None
 	_aliasuri[0] = None
 	_pornite.clear()
 	_asteapta.clear()

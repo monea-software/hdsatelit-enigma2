@@ -123,10 +123,23 @@ def randuri_interfata_web(interfata):
 	"""Randurile detaliilor cu adresa interfetei web a unui modul (un element din HdsModuleAcces.interfete_web): acelasi
 	text pe randul modulului din lista si pe al celui pornit de alt program."""
 	adresa = '%s://%s:%d/' % (interfata['protocol'], gazda_interfata_web(), interfata['port'])
-	return [_("Interfața web: %s") % adresa,
-		_("Utilizator: %s") % (interfata.get("utilizator") or ""),
-		_("Parolă") + ": " + (interfata.get("parola") or ""),
-		_("Deschide adresa în browserul telefonului sau al calculatorului din aceeași rețea.")]
+	randuri = [_("Interfața web: %s") % adresa]
+	# the user and password rows only when the module's configuration sets them (an empty "Password:" row made
+	# people think they need one; AS207)
+	if interfata.get("utilizator"):
+		randuri.append(_("Utilizator: %s") % interfata["utilizator"])
+	if interfata.get("parola"):
+		randuri.append(_("Parolă") + ": " + interfata["parola"])
+	randuri.append(_("Deschide adresa în browserul telefonului sau al calculatorului din aceeași rețea."))
+	return randuri
+
+
+def randuri_panou_oprit(x):
+	"""0.8.0 OSC0: randurile modulului care ruleaza fara panou web, pentru ca configurarea lui nu il are (un element din
+	HdsModuleAcces.fara_panou_web): de ce adresa nu se deschide si tasta care il porneste."""
+	return [_("Panoul web e oprit în configurarea modulului (%s), de aceea adresa lui nu se deschide.") % x["cale"],
+		_("Albastru: pornește panoul web pe portul %d. Restul configurării rămâne la fel, iar copia veche stă lângă ea.") %
+		HdsModuleAcces.PANOU_PORT]
 
 
 def _liniiStreamRelay(stari=None):
@@ -319,6 +332,20 @@ def _anunta_dupa_inchidere(r):
 # Galben schimba adresa de unde se aduc.
 RAND_CHEI = "*chei"
 RANDURI_SPECIALE = RANDURI_SPECIALE + (RAND_CHEI,)
+# 0.8.0: the last row, "add your own program (OSCam or NCam)" (Components/HdsModulPropriu.py): OK searches the stick, the
+# disk, /tmp and /usr/softcam on a thread, then the chosen file is copied and gets its start script (FAA7MED, forum 588)
+RAND_PROPRIU = "*propriu"
+RANDURI_SPECIALE = RANDURI_SPECIALE + (RAND_PROPRIU,)
+
+
+def _propriu():
+	"""Components.HdsModulPropriu, or None when it cannot be loaded (then the row does not show)"""
+	try:
+		from Components import HdsModulPropriu
+		return HdsModulPropriu
+	except Exception as e:
+		print("[CamSetup] programul propriu: %r" % (e,))
+		return None
 
 
 def _cheiPublice():
@@ -385,6 +412,10 @@ class CamSetup(Screen):
 		self.paginaDetalii = 0      # cate pagini s-au derulat in detalii (Stanga / Dreapta), pusa la loc dupa o rescriere
 		self.operatie = None
 		self.interfeteWeb = []
+		self.faraPanou = []      # 0.8.0 OSC0: modulele care ruleaza fara panou web in configurare
+		self.rezultatPanou = None
+		self.ceasPanou = eTimer()
+		self.ceasPanou.callback.append(self.verificaPanoul)
 		self.rezultatWeb = None
 		self.ceasWeb = eTimer()
 		self.ceasWeb.callback.append(self.verificaInterfeteWeb)
@@ -428,6 +459,8 @@ class CamSetup(Screen):
 		self.ceas.stop()
 		self.ceasWeb.stop()
 		del self.ceasWeb.callback[:]
+		self.ceasPanou.stop()
+		del self.ceasPanou.callback[:]
 		del self.ceas.callback[:]
 		if self.operatie is not None and not self.operatie.gata:
 			self.operatie.desprinde(_anunta_dupa_inchidere)
@@ -523,7 +556,17 @@ class CamSetup(Screen):
 			randuri.append((RAND_CI, slot))
 			texte.append(text_ci(slot, cod, nume))
 		self.adaugaRandChei(randuri, texte)
-		if texte != self.texte or randuri != self.randuri:
+		MP = _propriu()
+		if MP is not None:
+			randuri.append((RAND_PROPRIU, None))
+			texte.append(_(MP.TEXT_RAND))
+		dorit = getattr(self, "randDorit", None)
+		muta = dorit is not None and dorit in randuri
+		if muta:
+			# the module just added: the cursor goes to its row
+			self.randDorit = None
+			ales_acum = dorit
+		if texte != self.texte or randuri != self.randuri or muta:
 			self.randuri, self.texte = randuri, texte
 			self["lista"].setList([(t, r) for t, r in zip(texte, randuri)])
 			if ales_acum in randuri:
@@ -550,9 +593,14 @@ class CamSetup(Screen):
 
 		def citeste():
 			try:
-				rezultat['gata'] = HdsModuleAcces.interfete_web(stari=stari)
+				interfete = HdsModuleAcces.interfete_web(stari=stari)
 			except Exception:
-				rezultat['gata'] = []
+				interfete = []
+			try:
+				rezultat['fara'] = HdsModuleAcces.fara_panou_web(stari=stari, interfete=interfete)
+			except Exception:
+				rezultat['fara'] = []
+			rezultat['gata'] = interfete
 		try:
 			fir = threading.Thread(target=citeste)
 			fir.daemon = True
@@ -567,6 +615,7 @@ class CamSetup(Screen):
 			return
 		self.ceasWeb.stop()
 		self.interfeteWeb = rezultat['gata']
+		self.faraPanou = rezultat.get('fara') or []
 		self.rezultatWeb = None
 		self.arataDetalii()
 
@@ -616,8 +665,16 @@ class CamSetup(Screen):
 	def arataDetaliiSpeciale(self, rand):
 		"""Detaliile randurilor RAND_ALT, RAND_CI si RAND_FEED; tastele colorate nu au acolo nicio comanda a modulelor."""
 		fel, cheie = rand
+		self["key_blue"].setText(_("Interfața web"))
 		if fel == RAND_CHEI:
 			self.arataDetaliiChei(rand)
+			return
+		if fel == RAND_PROPRIU:
+			self["key_red"].setText("")
+			self["key_yellow"].setText("")
+			self["key_green"].setText(_("Adaugă"))
+			MP = _propriu()
+			self.scrieDetalii(_(MP.TEXT_DETALII) if MP is not None else "", rand)
 			return
 		randuri = []
 		if fel == RAND_FEED:
@@ -666,6 +723,7 @@ class CamSetup(Screen):
 			return
 		self["key_red"].setText(_("Oprește"))
 		self["key_yellow"].setText(_("Repornește"))
+		self["key_blue"].setText(_("Interfața web"))
 		e = st.emulator(sufix) if sufix is not None else None
 		randuri = []
 		if e is not None:
@@ -682,6 +740,11 @@ class CamSetup(Screen):
 				for interfata in self.interfeteWeb:
 					if interfata['fel'] == fel and interfata['sufix'] == sufix:
 						randuri += randuri_interfata_web(interfata)
+				x = self.panouOprit(fel, sufix)
+				if x is not None:
+					randuri += randuri_panou_oprit(x)
+					# Blue starts the web panel on this row (albastru), so the label says that
+					self["key_blue"].setText(_("Pornește panoul web"))
 			else:
 				randuri.append(_("Nu rulează."))
 				# 0.7.7: de ce nu poate porni si ce se poate face dintr-o apasare (Components/HdsModulNepornit.py)
@@ -773,6 +836,9 @@ class CamSetup(Screen):
 			return
 		if rand is not None and rand[0] == RAND_CHEI:
 			self.aduChei()
+			return
+		if rand is not None and rand[0] == RAND_PROPRIU:
+			self.cautaPropriu()
 			return
 		if rand is not None and rand[0] == RAND_FEED:
 			self.puneDinFeed()
@@ -888,6 +954,59 @@ class CamSetup(Screen):
 		self.textDetalii = None
 		self.arataDetalii()
 
+	# ------------------------------------------------ the person's own program (Components/HdsModulPropriu.py)
+	def _firPropriu(self):
+		if getattr(self, "firPropriu", None) is None:
+			self.firPropriu = HdsModuleAcces.CitirePeFir()
+			self.onClose.append(self.firPropriu.opreste)
+		return self.firPropriu
+
+	def cautaPropriu(self):
+		"""OK or Green on the last row: the program files are searched on a thread, then a list to choose from"""
+		MP = _propriu()
+		if MP is None:
+			return
+		fir = self._firPropriu()
+		if fir.in_curs() or not fir.porneste(MP.candidati, self.dupaCautarePropriu):
+			self["stare"].setText(_("Așteaptă să se termine comanda de acum."))
+			return
+		self["stare"].setText(_("Caut programul pe stick, pe disc și în /tmp..."))
+
+	def dupaCautarePropriu(self, lista, eroare):
+		if eroare is not None:
+			print("[CamSetup] programul propriu: %r" % (eroare,))
+		MP = _propriu()
+		if not lista or MP is None:
+			self["stare"].setText(_(MP.TEXT_NIMIC) if MP is not None else "")
+			return
+		self["stare"].setText("")
+		alegeri = [("%s  (%d KB)" % (x["cale"], max(1, x["marime"] // 1024)), x["cale"]) for x in lista]
+		self.session.openWithCallback(self.dupaAlegerePropriu, _alegere(), title=_(MP.TEXT_RAND), list=alegeri)
+
+	def dupaAlegerePropriu(self, alegere):
+		if not alegere:
+			return
+		cale = alegere[1]
+		MP = _propriu()
+		fir = self._firPropriu()
+		if MP is None or fir.in_curs() or not fir.porneste(lambda: MP.adauga(cale), self.dupaAdaugarePropriu):
+			self["stare"].setText(_("Așteaptă să se termine comanda de acum."))
+			return
+		self["stare"].setText(_("Adaug %s...") % cale)
+
+	def dupaAdaugarePropriu(self, rez, eroare):
+		MP = _propriu()
+		if MP is None:
+			return
+		if eroare is not None or rez is None:
+			self["stare"].setText(MP.textRezultat({"motiv": "script", "eroare": str(eroare)}))
+			return
+		self["stare"].setText(MP.textRezultat(rez))
+		if rez.get("ok"):
+			self.randDorit = (rez["fel"], rez["sufix"])
+			HdsModuleAcces.uita_felurile()
+			self.reimprospateaza()
+
 	def deschideCi(self):
 		"""Ecranul Common Interface (meniul Acces condiționat, intrarea ci_setup din data/menu.xml)."""
 		try:
@@ -917,6 +1036,8 @@ class CamSetup(Screen):
 				self.puneDinFeed()
 			elif rand[0] == RAND_CHEI:
 				self.aduChei()
+			elif rand[0] == RAND_PROPRIU:
+				self.cautaPropriu()
 			return
 		fel, sufix = rand
 		st = self.stare(fel)
@@ -939,10 +1060,63 @@ class CamSetup(Screen):
 		if rand is not None and not self.randSpecial(rand):
 			self.pornesteOperatia("reporneste", rand[0])
 
+	def panouOprit(self, fel, sufix):
+		"""0.8.0 OSC0: elementul din fara_panou_web al modulului (fel, sufix), sau None."""
+		for x in self.faraPanou:
+			if x.get("fel") == fel and x.get("sufix") == sufix:
+				return x
+		return None
+
+	def pornestePanoul(self, x):
+		"""0.8.0 OSC0: [webif] adaugat in configurare pe un fir (HdsModuleAcces.porneste_panou_web), apoi modulul repornit
+		(verificaPanoul)."""
+		if self.rezultatPanou is not None:
+			return
+		rezultat = {"x": x}
+		self.rezultatPanou = rezultat
+
+		def scrie():
+			try:
+				rezultat["ok"] = HdsModuleAcces.porneste_panou_web(x["cale"])
+			except Exception:
+				rezultat["ok"] = False
+		try:
+			fir = threading.Thread(target=scrie)
+			fir.daemon = True
+			fir.start()
+			self.ceasPanou.start(150, False)
+		except Exception:
+			self.rezultatPanou = None
+
+	def verificaPanoul(self):
+		rezultat = self.rezultatPanou
+		if rezultat is None or "ok" not in rezultat:
+			return
+		self.ceasPanou.stop()
+		self.rezultatPanou = None
+		x = rezultat["x"]
+		if not rezultat["ok"]:
+			self["stare"].setText(_("Panoul web nu a putut fi pornit în %s.") % x["cale"])
+			return
+		self.faraPanou = [y for y in self.faraPanou if y is not x]
+		if (self.operatie is not None and not self.operatie.gata) or HdsModuleAcces.in_curs() is not None:
+			# alta comanda e in curs: configurarea are panoul, modulul il citeste la repornire
+			self["stare"].setText(_("Panoul web e pornit pe portul %d. Apasă Repornește ca modulul să-l citească.") %
+				HdsModuleAcces.PANOU_PORT)
+			return
+		self.pornesteOperatia("reporneste", x["fel"], x["sufix"])
+		self["stare"].setText(_("Panoul web e pornit pe portul %d; modulul repornește.") % HdsModuleAcces.PANOU_PORT)
+
 	def albastru(self):
 		"""Interfata web a modulului care ruleaza, pe televizor (navigatorul imaginii, modul cam). Modulul il gaseste
 		navigatorul, la rulare, dupa portul pe care asculta; cand ruleaza mai multe module cu pagina web, le arata pe
-		toate ca sa alegi. Ecranul acesta nu afla si nu tine nicio adresa, niciun utilizator si nicio parola."""
+		toate ca sa alegi. Ecranul acesta nu afla si nu tine nicio adresa, niciun utilizator si nicio parola.
+		0.8.0 OSC0: pe randul unui modul al carui panou web e oprit in configurare, Albastru il porneste."""
+		rand = self.randCurent()
+		x = self.panouOprit(rand[0], rand[1]) if rand is not None else None
+		if x is not None:
+			self.pornestePanoul(x)
+			return
 		if not any(st.pornite() for st in self.stari) and not self.alte:
 			self["stare"].setText(_("Niciun modul nu rulează."))
 			return

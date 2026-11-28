@@ -536,7 +536,7 @@ def lucreaza(rad="/", opkg=None, porneste_modulul=None):
 	ultima = coada["incercari"] >= MAX_INCERCARI
 	coada.setdefault("ipk_lipsa", [])
 	coada.setdefault("feluri", dict(coada["pachete"]))
-	actualizat = comanda is not None and _ruleaza(comanda + ["update"], TERMEN_UPDATE_S) == 0
+	actualizat = comanda is not None and _ruleaza(comanda + _argumenteUpdate(rad), TERMEN_UPDATE_S) == 0
 	disponibile = _in_liste(rad)
 	acum = instalate(rad)
 	pachete = sorted(coada["pachete"], key=lambda p: 0 if p[1] == FEL_ACCES else 1)
@@ -708,7 +708,7 @@ def pune_modulele(rad="/", opkg=None, porneste_modulul=None):
 		return r
 	alegeri = _alegeri_acum(rad, rez.get("legaturi"))
 	comanda = _opkg(rad, opkg)
-	actualizat = comanda is not None and _ruleaza(comanda + ["update"], TERMEN_UPDATE_S) == 0
+	actualizat = comanda is not None and _ruleaza(comanda + _argumenteUpdate(rad), TERMEN_UPDATE_S) == 0
 	disponibile = _in_liste(rad)
 	acum = instalate(rad)
 	inlocuite = dict(rez.get("inlocuite") or {})
@@ -1041,3 +1041,16 @@ def _arata_rezultatul(session):
 	f = fereastra(rez)
 	Notifications.AddPopup(f.pop("text"), MessageBox.TYPE_INFO, 20, "HdsReinstalare", **f)
 	return None
+
+
+def _argumenteUpdate(rad="/"):
+	"""OPK1 (0.8.0): ['update'], or ['-f', <conf>, 'update'] when a dead foreign source is skipped (HdsSurseOpkg)"""
+	try:
+		try:
+			from Components import HdsSurseOpkg
+		except ImportError:
+			import HdsSurseOpkg
+		return HdsSurseOpkg.argumente_update(rad)
+	except Exception as e:
+		print("[HdsSurseOpkg] %r" % (e,))
+		return ["update"]

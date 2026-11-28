@@ -937,6 +937,7 @@ __STIL_PAGINI__
   </section>
   <section class="card">
     <h2>Apăsarea lungă</h2>
+    <p class="nota">Apăsare lungă: ține tasta apăsată ~1 s.</p>
     <div id="butoane"></div>
   </section>
   <section class="card"><h2>Tastele acestui ecran</h2>
@@ -1258,6 +1259,7 @@ TEXTE_PAGINA = {
 		N_("Apăsarea scurtă"),
 		N_("Subcanalele se pot aloca unei taste sau se găsesc în Lista extensiilor."),
 		N_("Apăsarea lungă"),
+		N_("Apăsare lungă: ține tasta apăsată ~1 s."),
 		N_("Salvează"),
 		N_("Renunță"),
 		N_("Aspectul ecranelor"),

@@ -412,10 +412,12 @@ def cine_asculta(sistem, ordine=None, dorite=None, pids_intai=()):
 					adauga(pid, p)
 	return dict((port, sorted(pids)) for port, pids in rez.items())
 
-def _al_serviciului(sistem, s, pid):
+def _al_serviciului(sistem, s, pid, servicii=None):
 	"""procesul `pid` e serviciul `s`? (un pid al modulului; altfel dosarul din linia de comanda a procesului e dosarul
 	fisierului, sau procesul n-are dosar si numele lui da numele fisierului; asa se recunoaste si un modul al carui
 	proces nu l-a gasit ecranul modulelor)"""
+	# `servicii`: all services; when several module configs share the process directory (e.g. third-party packages
+	# that keep every config flat in one folder), the config name must match the process name as well.
 	if pid in s['pids']:
 		return True
 	if s['fel'] != 'modul':
@@ -423,9 +425,14 @@ def _al_serviciului(sistem, s, pid):
 	comm, exe, dosar = _proces(sistem, pid)
 	if comm is None:
 		return False
+	nume_bun = posixpath.basename(s['cale']) in M.nume_configurari_web(comm, exe)
 	if dosar is not None:
-		return dosar.rstrip('/') == s['dosar']
-	return posixpath.basename(s['cale']) in M.nume_configurari_web(comm, exe)
+		if dosar.rstrip('/') != s['dosar']:
+			return False
+		# Several configs in the same directory: the directory alone cannot tell which one this process reads.
+		vecini = [x for x in (servicii or ()) if x['fel'] == 'modul' and x['dosar'] == s['dosar']]
+		return nume_bun or len(vecini) <= 1
+	return nume_bun
 
 
 def detinator(sistem, port, pids, servicii, rezervate, interfata_acum=None):
@@ -434,10 +441,12 @@ def detinator(sistem, port, pids, servicii, rezervate, interfata_acum=None):
 	if not pids:
 		return None
 	propriu = sistem.pid_propriu in pids
-	for s in servicii:
-		if s['fel'] == 'extensie':
-			continue
-		if any(_al_serviciului(sistem, s, p) for p in pids if p != sistem.pid_propriu):
+	straine = [p for p in pids if p != sistem.pid_propriu]
+	# Exact pid ownership first (a running module), then the directory/name heuristics, so a stopped module whose
+	# config sits in the same directory is never reported as the holder of a running module's port.
+	module = [s for s in servicii if s['fel'] != 'extensie']
+	for s in [x for x in module if set(x['pids']) & set(straine)] + module:
+		if any(_al_serviciului(sistem, s, p, servicii) for p in straine):
 			return {'cheie': s['id'], 'nume': s['nume'], 'serviciu': s['id'], 'imagine': None}
 	if propriu:
 		# interfata noastra si extensiile au acelasi proces: portul pe care asculta interfata acum (scris de ea) e al ei

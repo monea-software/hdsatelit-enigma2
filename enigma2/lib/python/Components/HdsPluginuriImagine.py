@@ -82,9 +82,19 @@ ID_MENIU_REFERINTA = {
 }
 
 
+# Meniul principal are numai intrarile din menu.xml: intrarile puse de extensii pe "mainmenu" (WHERE_MENU) nu apar acolo,
+# nici pe televizor, nici in web, nici in cautarea din meniu. Extensia se deschide din Extensii (plugin_selection): randul
+# ei din lista pluginurilor (WHERE_PLUGINMENU) sau, fara el, randul pachetului din Instalate, al carui OK cheama intrarea
+# de meniu a pluginului direct (Components/HdsExtensiiLucru.intrareMeniu), deci si pe cea de pe "mainmenu".
+MENIU_PRINCIPAL = "mainmenu"
+
+
 def meniuriUtilizator(plugins, menuid):
 	"""Intrarile de meniu adaugate de pluginurile omului, in ordinea lor (si cele cerute pe id-urile de referinta ale
-	meniului; o intrare data de acelasi plugin pe doua id-uri apare o singura data)."""
+	meniului; o intrare data de acelasi plugin pe doua id-uri apare o singura data). Pentru meniul principal: niciuna
+	(MENIU_PRINCIPAL)."""
+	if menuid == MENIU_PRINCIPAL:
+		return []
 	from Plugins.Plugin import PluginDescriptor
 	iduri = (menuid,) + ID_MENIU_REFERINTA.get(menuid, ())
 	rez = []

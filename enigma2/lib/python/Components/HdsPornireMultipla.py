@@ -454,14 +454,30 @@ def _radacinaDisc(referinta, radacina=None):
 		gasite = ["/dev/" + n for n in part
 			if _text(_cale(radacina, fals + n)).strip().lower() == valoare]
 	else:
+		# Toate dispozitivele din /proc/partitions afara de vederile brute ale NAND-ului (romblock*, mtdblock*), ca
+		# unicitatea sa se judece intre aceleasi dispozitive ca pana acum: blkid fara dispozitive citeste si capatul
+		# romblock9 (ZGEMMA H8), unde driverul da I/O error la fiecare cautare.
+		toate = _dispozitiveFaraNand()
+		if not toate:
+			return ""
 		try:
 			date = subprocess.check_output(["blkid", "-c", "/dev/null",
-				"-t", cheie + "=" + valoare, "-o", "device"],
+				"-t", cheie + "=" + valoare, "-o", "device"] + toate,
 				stderr=subprocess.DEVNULL, timeout=5)
 			gasite = date.decode("ascii").split()
 		except (OSError, ValueError, subprocess.SubprocessError):
 			return ""
 	return gasite[0] if len(gasite) == 1 and PARTITIE_SCOASA.fullmatch(gasite[0]) else ""
+
+
+def _dispozitiveFaraNand():
+	"""/dev/<nume> pentru tot ce e in /proc/partitions, fara romblock* si mtdblock* (blkid le-ar citi capatul)."""
+	rez = []
+	for rand in _text("/proc/partitions").splitlines():
+		c = rand.split()
+		if len(c) == 4 and c[2].isdigit() and not re.match(r"^(?:romblock|mtdblock)[0-9]+$", c[3]):
+			rez.append("/dev/" + c[3])
+	return rez
 
 
 def _uuidDovedit(st, cmd, radacina):
@@ -747,14 +763,17 @@ def _partitieNume(nume, radacina=None):
 		partitii_ = os.listdir(dosar)
 	except OSError:
 		partitii_ = []
-	for part in partitii_:
-		if re.fullmatch(r"mmcblk0p[1-9][0-9]*", part) and _cheiValori(
-			_text(os.path.join(dosar, part, "uevent"))).get("PARTNAME") == nume:
+	emmc = sorted(part for part in partitii_ if re.fullmatch(r"mmcblk0p[1-9][0-9]*", part))
+	for part in emmc:
+		if _cheiValori(_text(os.path.join(dosar, part, "uevent"))).get("PARTNAME") == nume:
 			gasite.append("/dev/" + part)
-	if not gasite and not radacina:
+	# Numai partitiile eMMC, date explicit: blkid fara dispozitive citeste si capatul romblock9 pe NAND (ZGEMMA H8:
+	# 3 randuri I/O error si ~0,5 s pe firul principal la fiecare cautare, 4 cautari la pornirea interfetei).
+	if not gasite and not radacina and emmc:
 		try:
 			date = subprocess.check_output(["blkid", "-c", "/dev/null", "-t",
-				"PARTLABEL=" + nume, "-o", "device"], stderr=subprocess.DEVNULL, timeout=5)
+				"PARTLABEL=" + nume, "-o", "device"] + ["/dev/" + p for p in emmc],
+				stderr=subprocess.DEVNULL, timeout=5)
 			gasite = [dev for dev in date.decode("ascii").split()
 				if re.fullmatch(r"/dev/mmcblk0p[1-9][0-9]*", dev)]
 		except (OSError, ValueError, subprocess.SubprocessError):

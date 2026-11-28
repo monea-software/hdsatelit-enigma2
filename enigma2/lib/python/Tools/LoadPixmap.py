@@ -1,3 +1,5 @@
+from os.path import isfile
+
 from enigma import loadPNG, loadJPG
 
 pixmap_cache = {}
@@ -5,6 +7,12 @@ pixmap_cache = {}
 def LoadPixmap(path, desktop = None, cached = False, width = 0, height = 0, scaletoFit = 0, align = 0, autoDetect = False, size = None):
 	# width/height/scaletoFit/align/autoDetect/size: argumentele trimise de pluginurile scrise pentru celelalte imagini Enigma2 (acolo
 	# pentru SVG). Imaginea noastra incarca PNG si JPG la marimea lor; argumentele sunt primite, ca apelul sa nu cada.
+	# O cale luata din tema poate avea dupa „#” optiunile incarcatorului din C++ (skin.py, ScaraEcran.imagine pune „#size=LxI”
+	# pe temele marite); un plugin care citeste atributul pixmap din skinAttributes o da aici asa cum e (Player media cadea
+	# la deschidere pe tema 2560x1440, asistenta AS197). Se incarca fisierul de dinaintea optiunilor; un fisier care chiar
+	# are „#” in nume ramane cum e.
+	if "#" in path and not isfile(path):
+		path = path.partition("#")[0]
 	if autoDetect and path[-4:] not in (".png", ".jpg"):
 		try:
 			with open(path, "rb") as f:

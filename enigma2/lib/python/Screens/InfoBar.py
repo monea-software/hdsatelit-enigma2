@@ -219,8 +219,9 @@ def hdsHbbtvDisponibil(ecran):
 			return False
 		if H.OPRESTE_LA_INREGISTRARE and mediu.inregistrare_pornita():
 			return False
-		memorie = mediu.memorie_libera_kb()
-		return not isinstance(memorie, int) or memorie >= H.MEMORIE_ROSU_KB
+		# NAV10 (0.8.0): memoria nu mai ascunde ROSU; cu putina memorie aplicatia porneste oricum, cu anuntul pentru stick
+		# (HdsHbbtvPornire._memoriePutina)
+		return True
 	except Exception:
 		return False
 
@@ -258,6 +259,8 @@ def hdsFaActiuneaLunga(ecran, actiune):
 		ecran.hdsGhidBuchetCurent()
 	elif actiune == "epg_single":
 		ecran.openSingleServiceEPG()
+	elif actiune == "epg_grafic":
+		ecran.hdsGhidGrafic()
 	elif actiune == "eventinfo":
 		ecran.openEventView()
 	elif actiune == "menu":
@@ -805,7 +808,32 @@ class InfoBar(InfoBarBase, InfoBarShowHide,
 				if faza == "m":
 					self.hdsCanalDinProfil(tasta == "channelup", profil)
 				return 1
+		if tasta in ("left", "right") and faza == "m" and self.hdsSagetiPeFlux(tasta):
+			return 1
 		return self.hdsTasteAlocate.eveniment(tasta, faza)
+
+	def hdsSagetiPeFlux(self, tasta):
+		"""LRI9: pe un flux de internet in direct STANGA/DREAPTA schimba canalul ca pe satelit, inaintea hartii derularii
+		(Components/HdsSageti.stanga_dreapta_pe_flux). True daca a schimbat canalul."""
+		try:
+			from Components.HdsSageti import stanga_dreapta_pe_flux
+			alegere = getattr(getattr(config.usage, "hds_stanga_dreapta_privire", None), "value", "actual")
+			derulare = self.get("SeekActions")
+			zap = stanga_dreapta_pe_flux(tasta, self.hdsActiuneTasta(tasta + "_short"), alegere,
+				self.hdsTastaDisponibila(tasta) and self._hdsFluxInDirect(), derulare is not None and derulare.enabled)
+		except Exception as e:
+			print("[InfoBar] sagetile pe flux: %s: %s" % (type(e).__name__, e))
+			return False
+		if zap is None:
+			return False
+		print("[InfoBar] %s pe fluxul in direct: %s" % (tasta, zap))
+		# o actiune scurta inca in asteptare (alta tasta apasata chiar inainte) porneste intai, ca la orice apasare noua
+		try:
+			self.hdsTasteAlocate._scurta_asteptata("apasare noua")
+		except Exception as e:
+			print("[InfoBar] actiunea in asteptare: %s" % e)
+		getattr(self, zap)()
+		return True
 
 	def hdsAsezarePrivitActiva(self):
 		"""Profilul apartine privitului, inclusiv fluxurilor in direct."""

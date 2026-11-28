@@ -371,6 +371,27 @@ def feed_candidat_t2(candidat, tp):
     return f
 
 
+def stergeri_plp0_vechi(profil, lista, tp):
+    """T2P9 (0.8.0): o cautare de dinainte punea in scanate.json, pentru fiecare PID din tabele, un feed cu PLP 0
+    (det_t2_...), si cand lista avea deja PID-ul cu PLP-ul lui adevarat (53E 10909: 5 dubluri, care luau toate locurile
+    la invatare, in fata lui Krasnodar si Sochi). Pe transponderul cautat, dublura cu PLP 0 a unui PID pe care lista il
+    are si cu alt PLP, dintr-un feed care nu e det_, se scoate din scanate.json. -> cate s-au scos"""
+    from . import liste
+    scoase = 0
+    for t in (lista or {}).get('transpondere', []):
+        if not liste._acelasi_transponder(t, tp):
+            continue
+        feeds = [f for f in t.get('feeduri', []) if isinstance(f, dict) and f.get('tip') == 't2']
+        adevarate = set(f.get('pid') for f in feeds
+                        if not str(f.get('id') or '').startswith('det_') and f.get('plp') not in (None, 0))
+        for f in feeds:
+            if (str(f.get('id') or '').startswith('det_t2_') and f.get('fel') == 't2mi' and f.get('plp') == 0
+                    and f.get('pid') in adevarate):
+                if liste.scoate_scanat(profil.tip, f['id'], profil.director):
+                    scoase += 1
+    return scoase
+
+
 def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=None, incorporat=None,
                         cu_nedecodabile=False, invatari_max=4):
     """Blocant: se cheama din fir de fundal, sub zavorul scrierilor (pornire._sub_zavor). Ce a gasit detectorul
@@ -418,8 +439,15 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
                         continue
                     # Keep the stable id, names and previously learned programmes.
                     f = dict(cunoscut, purtator=f['purtator'], acces='BISS', confirmat=True)
+                elif f.get('fel') == 't2mi' and f['pid'] in din_lista:
+                    # T2P9 (0.8.0): PID-ul e deja in lista cu PLP-urile lui (53E 10909: Krasnodar PLP 1 si Sochi PLP 2
+                    # pe PID 4105); un feed nou cu PLP 0 ar fi o dublura si ar lua locul unei invatari. Feed-urile
+                    # listei vin mai jos, fiecare cu PLP-ul lui.
+                    continue
                 vazute.add(f['pid'])
                 noi.append(f)
+    if profil.tip == 't2' and stergeri_plp0_vechi(profil, lista, tp):
+        lista = liste.incarca(profil.tip, profil.director, incorporat)
     n_noi = 0
     if feeduri or noi:
         n_noi = liste.adauga_scanat(profil.tip, tp, feeduri + noi, profil.director)
@@ -468,6 +496,9 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
                 gasite.append((f, t, stiute(f)))
             else:
                 de_invatat.append((f, t, False))
+    # T2P9 (0.8.0): feed-urile din lista ale transponderului cautat se invata toate (53E 10909 are 6: limita de 4 le
+    # taia pe ultimele doua, Krasnodar si Sochi); limita ramane pentru PID-urile noi si multiplexurile surori de mai jos
+    proprii = len(de_invatat)
     # multiplexurile surori (cererea unui tester, Cipru 39E): acelasi operator are si alte transpondere pe aceeasi
     # pozitie (Hellas Sat DTT mux 1 pe 11760 H, mux 2 pe 11778,5 H). Cautarea pornita de pe unul il invata si pe celalalt:
     # aceeasi pozitie, aceeasi tara, verificat pe receptor („merge”), ascultat prin 8001. Pana acum al doilea mux se
@@ -497,4 +528,6 @@ def salveaza_rezultatul(profil, tp, feeduri, candidati=None, director_enigma2=No
     if gasite or os.path.exists(os.path.join(director_enigma2 or buchete.DIRECTOR_ENIGMA2, profil.buchet)):
         pentru_buchet = lista if cu_nedecodabile else liste.fara_nedecodabile(lista)
         rez_b = buchete.reface(profil, pentru_buchet, director_enigma2, reincarca=False)
-    return {'gasite': gasite, 'de_invatat': de_invatat[:invatari_max], 'noi': n_noi, 'buchet': rez_b}
+    din_lista_aici = [x for x in de_invatat[:proprii] if not x[2]]
+    de_invatat = din_lista_aici + ([x for x in de_invatat[:proprii] if x[2]] + de_invatat[proprii:])[:invatari_max]
+    return {'gasite': gasite, 'de_invatat': de_invatat, 'noi': n_noi, 'buchet': rez_b}

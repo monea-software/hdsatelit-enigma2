@@ -14,6 +14,8 @@ Formele recunoscute (din listele publice):
   DVB-T2 prin decapsulator: 1:0:<tip>:<SID>:<TSID>:<ONID>:0:0:0:0:http%3a//<0.0.0.0|localhost|127.0.0.1>%3a9999/<cale>:<nume>
                             (in afara de /abertis/pidN, de care se ocupa abertis.py): programul se cauta dupa
                             SID/TSID/ONID in posturile invatate ale feed-urilor noastre.
+                            Lists without the real multiplex ids (TSID 0x3157 + ONID = T2-MI PID, or TSID = MHz +
+                            ONID = orbital position) are matched by PID, frequency in the path, position and SID.
 Feed-ul DAB se alege dupa pozitie (NS >> 16), PID si fel (la EDI si adresa, portul); la mai multi, cel cu acelasi SID
 parinte. Totul fara disc si fara enigma2 (lista si posturile invatate le da apelantul), in afara de
 driver_decapsuleaza_t2mi si tunerele T2-MI (tunere_t2mi, tunere_satelit, tunere_amestecate), care se uita o data in
@@ -131,7 +133,9 @@ def t2_din_ref(text, lista, servicii):
     """Referinta unui program DVB-T2 dintr-o lista facuta pentru un decapsulator (portul 9999, alta cale decat
     /abertis/) -> (feed, {'sid', 'tsid', 'onid', 'tip', 'nume'}), daca programul (SID, TSID, ONID) e intre posturile
     invatate ale unui feed T2 din lista. servicii: {id feed: [{'sid', 'tsid', 'onid', ...}]} (invatate pe receptor,
-    apoi cele de pe stb). None altfel."""
+    apoi cele de pe stb). None altfel.
+    Without an exact match, the forms that do not carry the real multiplex ids (TSID 0x3157 + ONID = T2-MI PID, or
+    TSID = MHz + ONID = orbital position) are matched by PID / frequency / position and SID (_t2_dupa_forma)."""
     parti = str(text or '').split(':')
     if len(parti) < 11 or parti[0] not in ('1', '4097', '5001', '5002'):
         return None
@@ -145,26 +149,146 @@ def t2_din_ref(text, lista, servicii):
     tip, sid, tsid, onid = valori
     if not sid:
         return None
+    nume = ':'.join(parti[11:])
+    feeduri = _feeduri_t2(lista, servicii)
+    # 1. exact SID/TSID/ONID among the learned programs (receiver, then stb), then those shipped in the list
+    for f, _tp, posturi in feeduri:
+        for s in posturi:
+            if _ids(s) == (sid, tsid, onid):
+                return f, {'sid': sid, 'tsid': tsid, 'onid': onid, 'tip': tip or 1, 'nume': nume}
+    # 2. lists built for other decapsulators do not carry the real TSID/ONID of the T2 multiplex:
+    #    TSID 0x3157 + ONID = T2-MI PID (ciefp form), the frequency often in the path (krrt/12285krrt801);
+    #    TSID = frequency in MHz + ONID = orbital position (krrt/12285krrt800 as 1:0:1:3:2FFD:EB:...).
+    x = _t2_dupa_forma(feeduri, m.group(1), sid, tsid, onid, nume)
+    if x is None:
+        return None
+    f, s = x
+    return f, {'sid': sid, 'tsid': s[0], 'onid': s[1], 'tip': tip or s[2] or 1, 'nume': nume}
+
+
+TSID_DECAPSULATOR = 0x3157
+_MHZ_IN_CALE = re.compile(r'(?<!\d)(\d{4,5})(?!\d)')
+
+
+def _ids(s):
+    try:
+        return int(s.get('sid')), int(s.get('tsid')), int(s.get('onid'))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _feeduri_t2(lista, servicii):
+    """[(feed, transponder, programs)] for every T2 feed of the list, in list order. programs: learned on the receiver
+    or published on stb (servicii, keyed by feed id; a list or {'servicii': [...]}) if any, else the feed's own
+    'programe'."""
     from .buchete import _curata_id
-    feeduri = {}
-    for tp in (lista or {}).get('transpondere', []):
-        for f in tp.get('feeduri', []):
-            if f.get('tip') == 't2':
-                feeduri[_curata_id(f.get('id'))] = f
+    invatate = {}
     for feed_id, posturi in (servicii or {}).items():
-        f = feeduri.get(_curata_id(feed_id))
         if isinstance(posturi, dict):
             posturi = posturi.get('servicii')
-        if f is None or not isinstance(posturi, list):
-            continue
-        for s in posturi:
-            try:
-                if int(s.get('sid')) == sid and int(s.get('tsid')) == tsid and int(s.get('onid')) == onid:
-                    return f, {'sid': sid, 'tsid': tsid, 'onid': onid, 'tip': tip or 1,
-                               'nume': ':'.join(parti[11:])}
-            except (TypeError, ValueError, AttributeError):
+        if isinstance(posturi, list) and posturi:
+            invatate[_curata_id(feed_id)] = posturi
+    rez = []
+    for tp in (lista or {}).get('transpondere', []):
+        for f in tp.get('feeduri', []):
+            if f.get('tip') != 't2':
                 continue
-    return None
+            posturi = invatate.get(_curata_id(f.get('id')))
+            if posturi is None:
+                posturi = f.get('programe') if isinstance(f.get('programe'), list) else []
+            rez.append((f, tp, [s for s in posturi if isinstance(s, dict)]))
+    return rez
+
+
+def _cheie_nume(text):
+    """Channel name reduced to lower-case letters and digits (unicode), for comparing names between lists."""
+    if isinstance(text, bytes):
+        text = text.decode('utf-8', 'ignore')
+    text = text.replace('%20', ' ')
+    return u''.join(ch for ch in text.lower() if ch.isalnum())
+
+
+def _mhz(tp):
+    try:
+        return int(tp.get('frecventa')) / 1000.0
+    except (TypeError, ValueError):
+        return None
+
+
+def _aproape(tp, mhz):
+    f = _mhz(tp)
+    return f is not None and abs(f - mhz) <= 2
+
+
+def _t2_dupa_forma(feeduri, cale, sid, tsid, onid, nume):
+    """Second pass of t2_din_ref for the decapsulator forms without the real multiplex ids. -> (feed, (tsid, onid,
+    tip)) or None.
+    Candidates: T2-MI feeds with PID == ONID (TSID 0x3157) and, if the path holds a frequency (4-5 digits, MHz), on
+    that frequency +-2 MHz; or, for TSID = MHz and ONID = position, the T2-MI feeds of that transponder.
+    Then the SID: a feed whose known programs have the SID with the same name (or no name on one side) wins (first
+    in list order); a feed that has the SID under another name is a different multiplex and drops out; otherwise a
+    single remaining candidate is taken (programs not learned yet, e.g. an encrypted multiplex)."""
+    t2mi = [(f, tp, p) for f, tp, p in feeduri if str(f.get('fel') or '') == 't2mi']
+    pid_onid = tsid == TSID_DECAPSULATOR and 0 < onid < 0x1FFF
+    # C band 3400-4200 and Ku band 10700-12750 MHz; a number equal to the PID (krrt_4097) is the PID, not a frequency
+    frecventa = lambda v: (3398 <= v <= 4202 or 10698 <= v <= 12752) and not (pid_onid and v == onid)
+    frecvente = [int(x) for x in _MHZ_IN_CALE.findall(cale) if frecventa(int(x))]
+    cand = []
+    if pid_onid:
+        cand = [c for c in t2mi if c[0].get('pid') == onid]
+        if frecvente:
+            cand = [c for c in cand if any(_aproape(c[1], mhz) for mhz in frecvente)]
+    elif 2000 <= tsid <= 13000 and 0 < onid < 3600:
+        for c in t2mi:
+            try:
+                if int(c[1].get('pozitie')) == onid and _aproape(c[1], tsid):
+                    cand.append(c)
+            except (TypeError, ValueError):
+                continue
+    if not cand:
+        return None
+    cheie = _cheie_nume(nume)
+    potrivite, fara_nume, ramase = [], [], []
+    for f, tp, posturi in cand:
+        cu_sid = [s for s in posturi if _ids(s) is not None and _ids(s)[0] == sid]
+        if not cu_sid:
+            ramase.append((f, posturi))
+            continue
+        s = cu_sid[0]
+        al_lor = _cheie_nume(s.get('nume') or '')
+        if cheie and al_lor and cheie != al_lor:
+            continue
+        if cheie and al_lor:
+            potrivite.append((f, s))
+        elif pid_onid:
+            fara_nume.append((f, s))
+        else:
+            # MHz/position form: no PID, and two multiplexes of one transponder can share SIDs; without a name the
+            # SID proves nothing
+            ramase.append((f, posturi))
+    for f, s in potrivite + fara_nume:
+        return f, (int(s.get('tsid')), int(s.get('onid')), _int_sau(s.get('tip')))
+    if len(ramase) != 1:
+        if len(cand) != 1:
+            return None
+        # a single candidate that has the SID under another name (the list was written with an older name)
+        f, _tp, posturi = cand[0]
+        s = [x for x in posturi if _ids(x) is not None and _ids(x)[0] == sid][0]
+        return f, (int(s.get('tsid')), int(s.get('onid')), _int_sau(s.get('tip')))
+    f, posturi = ramase[0]
+    # same multiplex: the TSID/ONID of its other programs; none known -> keep those of the reference (the stream is
+    # played by SID, the ids only label the service)
+    for s in posturi:
+        if _ids(s) is not None:
+            return f, (int(s.get('tsid')), int(s.get('onid')), None)
+    return f, (tsid, onid, None)
+
+
+def _int_sau(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def pare_strain(text, tip):

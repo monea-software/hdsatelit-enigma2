@@ -912,7 +912,9 @@ def _actualizeazaContinut(radacina=None, progres=None, offline=None, cerute=(), 
 		server, eroare = A.descarca_stare(adresa + "/stare.json", credentiale, deschide=deschide)
 		if eroare:
 			raise ValueError(_t("Feedul nu poate fi verificat: ") + server.get("eroare", eroare))
-		if A.motiv_baza(server, baza, scrisa) or server.get("imagine_noua") or \
+		# VAN1 (0.8.0): imagine_noua numai cand e si pentru acest receptor (modelul lasat pe dinafara de o versiune isi
+		# pune partea a doua din feed ca inainte); arhitecturile din arch.conf
+		if A.motiv_baza(server, baza, scrisa) or A.imagine_noua_pentru(server, pc.arhitecturi) or \
 				server.get("canal", canal) != canal:
 			raise ValueError(_t("Continutul cere o alta imagine sau alt canal."))
 		feed = feedSemnat(A, adresa, server, surse, pc, credentiale, deschide)

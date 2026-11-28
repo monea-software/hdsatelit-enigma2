@@ -2,28 +2,35 @@
 # Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# HdsLoculInternet.py - locul antenei aflat dupa adresa de internet a receptorului, ca propunere pe care omul o
-# confirma. Locul unic al motorului USALS ramane in Components/HdsLocul.py; aici numai se afla si se propune.
+# HdsLoculInternet.py - locul antenei aflat dupa adresa de internet a receptorului. Locul unic al motorului USALS
+# ramane in Components/HdsLocul.py; aici se afla si se scrie prin HdsLocul.seteaza (sursa "internet").
 #
-# Cum merge:
-#   - numai cand omul alege "Afla locul dupa internet" (ecranul Screens/HdsLocul.py sau pagina web /antena/locul); la
-#     pornire, la zap sau in fundal nu se intreaba nimic pentru loc (alt modul, Components/HdsLimbaTara.py, intreaba
-#     aceeasi adresa o singura data, la prima pornire, si ia din raspuns numai codul tarii, pentru limba asistentului);
+# Pana la 0.7.9 locul gasit era numai o propunere: omul alegea "Afla locul dupa internet" si raspundea Da la o
+# intrebare (locul dupa adresa e aproximativ, uneori orasul furnizorului). Din 0.8.0 (LOC2: implicit cat timp e
+# internet, inactiv numai fara internet) e locul implicit, fara nicio intrebare:
+#   - cat HdsLocul.automat() (omul nu a ales singur un oras sau coordonate), locul se afla singur la fiecare pornire
+#     (laPornire, din Components/SetupDevices.py: acelasi raspuns ca fusul orar, Components/HdsFusTara.py, deci nicio
+#     cerere in plus cand fusul a intrebat deja), dupa primul NTP reusit daca la pornire nu a mers (dupaNtp) si la
+#     deschiderea ecranului sau a paginii web; se scrie numai cand difera de locul de acum (seteaza face sec.update(),
+#     care uita pozitia motorului), iar cat antena se roteste sau merge o inregistrare se mai incearca o data mai tarziu;
+#   - "Afla locul dupa internet" (ecran, web) face din nou locul cel dupa internet si il scrie pe loc;
+#   - cu un VPN pornit pe receptor cererea iese direct, pe langa tunel (LOC3, ocolesteVpn mai jos), deci serverul vede
+#     adresa de acasa a omului, nu pe a serverului VPN; cand nu se poate iesi direct, nu pleaca nicio cerere;
 #   - fara ruta spre internet (citita local din /proc/net/route si /proc/net/ipv6_route, nicio conexiune) nu pleaca
-#     nicio cerere: omul afla ca receptorul nu are internet si primeste lista tarilor si oraselor, ca inainte;
+#     nicio cerere: ramane ultimul loc stiut, iar omul poate alege din lista tarilor si oraselor;
 #   - cu ruta: o singura cerere HTTPS GET spre serverul nostru (ADRESA), fara parametri si fara nimic despre receptor.
 #     Serverul vede numai adresa de internet de la care vine cererea, cauta orasul in baza lui (DB-IP Lite, CC BY 4.0)
 #     si raspunde cu orasul, tara si coordonatele; adresa nu o pastreaza. Niciun serviciu strain nu e intrebat;
 #   - raspunsul se verifica (marime, JSON, fiecare camp, limitele coordonatelor); un oras din tabelul imaginii
-#     (Components/HdsLocuriDate.py) aflat la cel mult RAZA_KM, in aceeasi tara, ii ia locul: numele romanesc si
+#     (HdsLocul.orase, fisierul oraselor) aflat la cel mult RAZA_KM, in aceeasi tara, ii ia locul: numele romanesc si
 #     coordonatele din tabel, ca la alegerea din lista;
-#   - cand omul nu primeste locul gasit, lista tarilor si oraselor se deschide pe orasul din tabel cel mai apropiat de el
-#     (pentruLista), chiar daca orasul gasit nu e in tabel;
-#   - locul se scrie (HdsLocul.seteaza, sursa "internet") numai dupa confirmarea omului: Cautare.foloseste().
+#   - lista tarilor si oraselor se deschide pe orasul din tabel cel mai apropiat de locul gasit (pentruLista), chiar
+#     daca orasul gasit nu e in tabel.
 #
-# Firul enigma2 nu asteapta: cererea merge pe un fir separat (Cautare.porneste), iar ecranul si pagina web intreaba
-# starea (Cautare.stare) pe un ceas. La import nu se atinge nimic din enigma, ca probele de pe PC sa poata pune obiecte
-# false; cererea, ruta si firul se pot inlocui din probe.
+# Firul enigma2 nu asteapta: cererea merge pe un fir separat (Cautare.porneste), locul se scrie pe firul enigma2
+# (reactor.callFromThread), iar ecranul si pagina web intreaba starea (Cautare.stare) pe un ceas. La import nu se
+# atinge nimic din enigma, ca probele de pe PC sa poata pune obiecte false; cererea, ruta si firele se pot inlocui din
+# probe.
 import hashlib
 import json
 import math
@@ -81,9 +88,12 @@ MESAJ_STRICAT = N_("Răspunsul serverului HD Satelit nu se poate folosi. Alege �
 MESAJ_NEGASIT = N_("După adresa de internet a receptorului nu se știe orașul. Alege țara și orașul din listă.")
 MESAJ_PREA_DES = N_("Locul s-a cerut de prea multe ori de la această adresă de internet. Încearcă peste un minut sau alege țara și orașul din listă.")
 MESAJ_EXPIRAT = N_("Locul găsit nu mai este cel arătat. Caută din nou sau alege țara și orașul din listă.")
-INTREBARE = N_("Locul găsit după adresa de internet a receptorului:\n\n%(loc)s\n%(coordonate)s\nSursa: %(sursa)s\n\nDe obicei este orașul tău, dar uneori este orașul furnizorului de internet. Folosești acest loc? (Nu: alegi țara și orașul din listă.)")
-NOTA_SURSA = N_("Coordonatele orașelor din listă: %s. Receptorul întreabă serverul HD Satelit numai când alegi „Află locul după internet”, iar serverul nu păstrează adresa de internet.")
+NOTA_SURSA = N_("Coordonatele orașelor din listă: %s. Locul după internet vine de la serverul HD Satelit, care nu păstrează adresa de internet.")
 TEXT_SERVER = N_("prin serverul HD Satelit")
+# felul locului, pe televizor si in pagina web (LOC2)
+TEXT_AUTOMAT = N_("Locul se află singur după internet. Dacă nu e orașul tău, alege-l din listă.")
+# %s = randul OPTIUNE, tradus (acelasi nume ca in lista ecranului)
+TEXT_ALES = N_("Locul l-ai ales tu. Ca să se afle singur, alege: %s.")
 
 
 def jurnal(text):
@@ -147,11 +157,202 @@ def retea(rute4=None, rute6=None):
 	return _ruta4(rute4 or FISIER_RUTE4) or _ruta6(rute6 or FISIER_RUTE6)
 
 
+# ---------------------------------------------------------------- ocolirea VPN-ului receptorului (LOC3)
+#
+# Din 0.8.0 VPN-ul nu se aplica la ce se afla dupa locul omului pe internet: locul antenei, fusul
+# orar (HdsFusTara) si limba aleasa singura dupa tara (HdsLimbaTara). Toate trei cer serverul nostru prin _citesteUrl,
+# deci ocolirea sta numai aici.
+#
+# Cum: cand pe receptor exista o interfata de tunel (VPN-ul imaginii, Components/HdsVpn.py: hdsvpn0..5 si ipsec0,
+# rutate prin tabela 51830 si reguli "ip rule"; sau un OpenVPN/WireGuard pus altfel: tun, tap, wg), adresele IPv4 ale
+# serverului primesc pe durata cererii cate o ruta /32 in tabela main, prin poarta rutei implicite din main (cea de
+# dinainte de VPN, pe care HdsVpn nu o atinge). Regula HdsVpn "lookup main suppress_prefixlength 0" lasa un /32 sa
+# treaca inaintea tabelei VPN (si inaintea opririi totale, "unreachable default" din tabela VPN), iar un /32 bate si jumatatile
+# /1 ale unui OpenVPN strain. Dupa "ip route replace" se verifica cu "ip -4 route get" ca iesirea e interfata directa;
+# cererea merge numai spre adresele rutate (IPv4; certificatul si SNI raman ale numelui serverului), iar rutele se scot
+# in finally. Fara interfata de tunel nu ruleaza nicio comanda: cererea e cea de pana acum.
+# Cand ocolirea nu se poate (nicio ruta implicita directa in main, "ip" cade, verificarea arata tot tunelul) cererea nu
+# pleaca: locul, fusul si limba raman cele stiute, ca sa nu se mute motorul pe orasul serverului VPN.
+# Un VPN pe routerul omului nu se vede de pe receptor si nu se poate ocoli: atunci serverul vede iesirea VPN-ului, iar
+# omul isi alege orasul din lista.
+
+# interfetele tunelurilor: OpenVPN tun/tap, WireGuard wg, HdsVpn hdsvpnN, strongSwan kernel-libipsec ipsec0
+PREFIXE_TUNEL = ("tun", "tap", "wg", "hdsvpn", "ipsec")
+FISIER_INTERFETE = "/proc/net/dev"
+PROGRAM_IP = "/sbin/ip"
+TIMP_IP_S = 5
+RTF_GATEWAY = 0x0002
+# cate adrese IPv4 ale serverului se ruteaza cel mult (Cloudflare da doua)
+MAX_ADRESE = 4
+# probele de pe PC: fn(argv fara /sbin/ip, timp) -> (cod, text); fn(gazda, port) -> [adrese IPv4]
+RULATOR = None
+REZOLVA = None
+_ZAVOR_OCOLIRE = threading.Lock()
+
+
+class FaraOcolire(IOError):
+	"""VPN pornit pe receptor, dar cererea nu poate iesi direct: nu pleaca"""
+
+
+def interfeteTunel(cale=None):
+	"""numele interfetelor de tunel VPN ale receptorului (din /proc/net/dev, fara nicio conexiune)"""
+	rez = []
+	for rand in _citesteRanduri(cale or FISIER_INTERFETE):
+		if ":" not in rand:
+			continue
+		nume = rand.split(":", 1)[0].strip()
+		# tunl0 (ipip) exists on some kernels without any VPN
+		if nume.startswith(PREFIXE_TUNEL) and not nume.startswith("tunl"):
+			rez.append(nume)
+	return rez
+
+
+def _ipDinHex(text):
+	"""adresa IPv4 din /proc/net/route (ordinea octetilor gazdei, little-endian pe toate receptoarele)"""
+	import socket
+	import struct
+	return socket.inet_ntoa(struct.pack("<I", int(text, 16)))
+
+
+def poartaDirecta(rute4=None):
+	"""(interfata, poarta sau None) a rutei implicite IPv4 din tabela main care nu e pe un tunel, cu metrica cea mai
+	mica; None daca nu exista (de exemplu un VPN strain care a inlocuit ruta implicita)"""
+	bune = []
+	for rand in _citesteRanduri(rute4 or FISIER_RUTE4)[1:]:
+		c = rand.split()
+		if len(c) < 8 or c[1] != "00000000" or c[7] != "00000000":
+			continue
+		steaguri = _steaguri(c[3])
+		if steaguri is None or not steaguri & RTF_UP or steaguri & RTF_REJECT:
+			continue
+		if c[0] in ("lo", "*") or c[0].startswith(PREFIXE_TUNEL):
+			continue
+		try:
+			metrica = int(c[6])
+			poarta = _ipDinHex(c[2]) if steaguri & RTF_GATEWAY else None
+		except (ValueError, OSError):
+			continue
+		bune.append((metrica, c[0], poarta))
+	if not bune:
+		return None
+	bune.sort(key=lambda x: x[0])
+	return bune[0][1], bune[0][2]
+
+
+def _ip(argv, timp=TIMP_IP_S):
+	if RULATOR is not None:
+		return RULATOR(list(argv), timp)
+	import subprocess
+	try:
+		p = subprocess.run([PROGRAM_IP] + list(argv), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+			stderr=subprocess.STDOUT, timeout=timp)
+		return p.returncode, p.stdout.decode("utf-8", "replace")
+	except (OSError, subprocess.SubprocessError) as e:
+		return -1, "%s: %s" % (type(e).__name__, e)
+
+
+def iesirea(adresa):
+	"""interfata pe care pleaca acum un pachet spre `adresa` (ip -4 route get, cu regulile VPN-ului); None daca ruta
+	e refuzata (oprirea totala) sau nu se stie"""
+	import re
+	cod, text = _ip(["-4", "route", "get", adresa])
+	if cod != 0:
+		return None
+	m = re.search(r"\bdev\s+(\S+)", text)
+	return m.group(1) if m else None
+
+
+def _adreseIpv4(gazda, port):
+	if REZOLVA is not None:
+		return list(REZOLVA(gazda, port))
+	import socket
+	rez = []
+	for _f, _t2, _p, _c, sa in socket.getaddrinfo(gazda, port, socket.AF_INET, socket.SOCK_STREAM):
+		if sa[0] not in rez:
+			rez.append(sa[0])
+	return rez
+
+
+def _rutaArgv(adresa, interfata, poarta):
+	return [adresa + "/32"] + (["via", poarta] if poarta else []) + ["dev", interfata]
+
+
+def _deschideSpre(adrese):
+	"""urlopen pe adresele IPv4 date (in ordine), cu numele serverului pastrat pentru certificat, SNI si Host"""
+	import socket
+	import http.client
+	import urllib.request
+
+	def conecteaza(adresa, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None, *a, **k):
+		eroare = None
+		for ip in adrese:
+			try:
+				return socket.create_connection((ip, adresa[1]), timeout, source_address)
+			except (OSError, socket.error) as e:
+				eroare = e
+		raise eroare or IOError("nicio adresa")
+
+	class _Conexiune(http.client.HTTPSConnection):
+		def __init__(self, *a, **k):
+			http.client.HTTPSConnection.__init__(self, *a, **k)
+			self._create_connection = conecteaza
+
+	class _Https(urllib.request.HTTPSHandler):
+		def https_open(self, req):
+			return self.do_open(_Conexiune, req, context=self._context)
+
+	return urllib.request.build_opener(_Https()).open
+
+
+def ocolesteVpn(adresa, cerere, tunele=None, rute4=None):
+	"""Ruleaza `cerere(deschide)` cu cererea spre `adresa` iesind direct, nu prin VPN-ul receptorului.
+	`deschide(Request, timeout=)` e urlopen-ul de folosit. Arunca FaraOcolire cand nu se poate iesi direct."""
+	try:
+		from urllib.parse import urlsplit
+	except ImportError:  # Python 2, numai pe PC
+		from urlparse import urlsplit
+	tunele = interfeteTunel() if tunele is None else tunele
+	if not tunele:
+		return cerere(None)
+	u = urlsplit(adresa)
+	poarta = poartaDirecta(rute4)
+	if poarta is None:
+		raise FaraOcolire("VPN pornit (%s), dar nicio ruta implicita directa in main" % ",".join(tunele))
+	interfata, gw = poarta
+	adrese = _adreseIpv4(u.hostname, u.port or 443)[:MAX_ADRESE]
+	if not adrese:
+		raise FaraOcolire("serverul nu are adresa IPv4")
+	with _ZAVOR_OCOLIRE:
+		puse = []
+		try:
+			for ip in adrese:
+				if iesirea(ip) == interfata:
+					continue
+				cod, text = _ip(["-4", "route", "replace"] + _rutaArgv(ip, interfata, gw))
+				if cod != 0:
+					raise FaraOcolire("ip route replace %s: %s" % (ip, text.strip()[:200]))
+				puse.append(ip)
+				dev = iesirea(ip)
+				if dev != interfata:
+					raise FaraOcolire("%s iese tot pe %s" % (ip, dev))
+			jurnal("VPN pornit (%s): cererea iese direct pe %s" % (",".join(tunele), interfata))
+			return cerere(_deschideSpre(adrese))
+		finally:
+			for ip in puse:
+				cod, text = _ip(["-4", "route", "del"] + _rutaArgv(ip, interfata, gw))
+				if cod != 0:
+					jurnal("ruta %s/32 nu s-a scos: %s" % (ip, text.strip()[:200]))
+
+
 # ---------------------------------------------------------------- cererea si verificarea raspunsului
 
 def _citesteUrl(adresa, timp, limita):
 	"""(cod HTTP, corp) pentru un GET; arunca numai la erorile de retea (fara raspuns, timp depasit, certificat).
-	Corpul se citeste cel mult pana la limita + 1 octeti."""
+	Corpul se citeste cel mult pana la limita + 1 octeti. Cu VPN pe receptor cererea iese direct (ocolesteVpn)."""
+	return ocolesteVpn(adresa, lambda deschide: _citesteUrlPrin(deschide, adresa, timp, limita))
+
+
+def _citesteUrlPrin(deschide, adresa, timp, limita):
 	try:
 		from urllib.request import Request, urlopen
 		from urllib.error import HTTPError
@@ -159,7 +360,7 @@ def _citesteUrl(adresa, timp, limita):
 		from urllib2 import Request, urlopen, HTTPError
 	cerere = Request(adresa, headers={"User-Agent": AGENT, "Accept": "application/json", "Accept-Encoding": "identity"})
 	try:
-		r = urlopen(cerere, timeout=timp)
+		r = (deschide or urlopen)(cerere, timeout=timp)
 	except HTTPError as e:
 		try:
 			corp = e.read(limita + 1)
@@ -274,10 +475,18 @@ def pentruLista(rez, orase=None, coduri=None):
 	lon_mii)] si `coduri` (codurile tarilor) se inlocuiesc in probe."""
 	try:
 		lat, lon = rez["lat_mii"] / 1000.0, rez["lon_mii"] / 1000.0
+		din_fisier = orase is None
 		orase = orase or _locul().orase
 		cel = _celMaiAproape(lat, lon, orase(rez["tara"]))
 		if cel is not None:
 			return rez["tara"], cel[1]
+		if din_fisier and coduri is None:
+			# toata lumea dintr-o singura citire a fisierului oraselor (nu cate o citire pe tara)
+			for cod, nume, lat_t, lon_t in _locul().toateOrasele():
+				d = distantaKm(lat, lon, lat_t / 1000.0, lon_t / 1000.0)
+				if d <= RAZA_LISTA_KM and (cel is None or d < cel[0]):
+					cel = (d, nume, cod)
+			return (cel[2], cel[1]) if cel is not None else ("", "")
 		if coduri is None:
 			coduri = [cod for cod, _nume in _locul().tari()]
 		for cod in coduri:
@@ -356,8 +565,12 @@ def textSursa(rez):
 	return u"%s, %s" % (rez["sursa"], _t(TEXT_SERVER))
 
 
-def intrebare(rez):
-	return _t(INTREBARE) % {"loc": textLoc(rez), "coordonate": textCoordonate(rez), "sursa": textSursa(rez)}
+def textFel():
+	"""ce face locul de acum: se afla singur dupa internet sau l-a ales omul"""
+	try:
+		return _t(TEXT_AUTOMAT) if _locul().automat() else _t(TEXT_ALES) % _t(OPTIUNE)
+	except Exception:
+		return ""
 
 
 def semn(rez):
@@ -375,34 +588,78 @@ def _firDaemon(functie):
 	return t
 
 
+def _peFirulPrincipal(functie):
+	"""`functie` pe firul enigma2 (locul se scrie in config si nucleu numai de acolo)"""
+	principal = getattr(threading, "main_thread", None)
+	if principal is not None and threading.current_thread() is principal():
+		functie()
+		return
+	from twisted.internet import reactor
+	reactor.callFromThread(functie)
+
+
+def laFel(rez, L=None):
+	"""True cand locul gasit e chiar locul de acum (aceleasi coordonate, aceeasi tara si acelasi oras): nu se scrie din
+	nou (seteaza ar face sec.update(), care uita pozitia motorului)"""
+	L = L or _locul()
+	try:
+		st = L.stare()
+	except Exception:
+		return False
+	return bool(st.get("stabilit")) and L.locul() == (int(rez["lat_mii"]), int(rez["lon_mii"])) and \
+		st.get("tara") == rez["tara"] and st.get("oras") == rez["oras"]
+
+
+def aplica(rez, actualizeaza_sec=True, L=None):
+	"""Locul gasit devine locul antenei (HdsLocul.seteaza, sursa internet), fara intrebare. Pe firul enigma2.
+	-> (True, "") (scris sau deja acelasi) sau (False, motivul pentru om: antena se roteste, o inregistrare...)"""
+	L = L or _locul()
+	if laFel(rez, L):
+		jurnal("locul dupa internet ramane %s" % textLoc(rez))
+		return True, ""
+	ok, text = L.seteaza(rez["lat_mii"], rez["lon_mii"], rez["tara"], rez["oras"], L.SURSA_INTERNET,
+		actualizeaza_sec=actualizeaza_sec)
+	if ok:
+		jurnal("locul dupa internet scris: %s" % textLoc(rez))
+	return ok, text
+
+
 class Cautare(object):
 	"""Starea cautarii, aceeasi pentru televizor si pentru pagina web. porneste() nu asteapta; stare() se cheama de pe
-	un ceas; foloseste() scrie locul gasit, numai la confirmarea omului."""
+	un ceas. Cu porneste(scrie=True) locul gasit se scrie singur, pe firul enigma2 (aplica), inainte ca stare() sa spuna
+	"gasit"; "scris" si "mesaj_scris" spun ce a iesit."""
 
-	def __init__(self, cauta_=None, retea_=None, fir=None, ceas=None):
+	def __init__(self, cauta_=None, retea_=None, fir=None, ceas=None, pe_fir=None, aplica_=None):
 		self._cauta = cauta_ or cauta
 		self._retea = retea_ or retea
 		self._fir = fir or _firDaemon
 		self._ceas = ceas or time.time
+		self._peFir = pe_fir or _peFirulPrincipal
+		self._aplica = aplica_ or aplica
 		self._zavor = threading.Lock()
 		self._generatie = 0
 		self._inceput = None
+		self._scrie = False
+		self._actualizeaza_sec = True
 		self._pune(NIMIC)
 
-	def _pune(self, stare, rezultat=None, mesaj=""):
+	def _pune(self, stare, rezultat=None, mesaj="", scris=None, mesaj_scris=""):
 		self._stare = stare
 		self._rezultat = rezultat
 		self._mesaj = mesaj
+		self._scris = scris
+		self._mesajScris = mesaj_scris
 		self._semn = semn(rezultat) if rezultat is not None else ""
-		# orasul din tabel pe care se deschide lista la "Nu" (o singura data, cand se afla locul)
+		# orasul din tabel pe care se deschide lista (o singura data, cand se afla locul)
 		self._lista = pentruLista(rezultat) if rezultat is not None else ("", "")
 		self._cand = self._ceas() if rezultat is not None else None
 
-	def porneste(self):
+	def porneste(self, scrie=False, actualizeaza_sec=True):
 		"""True: o cautare a pornit (sau era deja in curs). False: receptorul nu are ruta spre internet, deci nu pleaca
-		nicio cerere; stare() spune de ce."""
+		nicio cerere; stare() spune de ce. Cu `scrie`, locul gasit devine locul antenei fara intrebare."""
 		with self._zavor:
 			if self._stare == LUCREAZA:
+				self._scrie = self._scrie or scrie
 				return True
 		if not self._retea():
 			with self._zavor:
@@ -412,6 +669,8 @@ class Cautare(object):
 		with self._zavor:
 			self._generatie += 1
 			generatie = self._generatie
+			self._scrie = scrie
+			self._actualizeaza_sec = actualizeaza_sec
 			self._pune(LUCREAZA, mesaj=_t(CAUT))
 			self._inceput = self._ceas()
 		self._fir(lambda: self._lucreaza(generatie))
@@ -426,14 +685,44 @@ class Cautare(object):
 		with self._zavor:
 			if generatie != self._generatie:
 				return
+			scrie, actualizeaza_sec = self._scrie, self._actualizeaza_sec
+		if stare == GASIT and scrie:
+			self._peFir(lambda: self._scrieSiPune(generatie, x, actualizeaza_sec))
+			return
+		with self._zavor:
+			if generatie != self._generatie:
+				return
 			if stare == GASIT:
 				self._pune(GASIT, rezultat=x)
 			else:
 				self._pune(EROARE, mesaj=x)
 
+	def _scrieSiPune(self, generatie, rez, actualizeaza_sec):
+		# omul a ales singur un oras sau coordonatele cat se cauta (raspunsul poate veni dupa ~12 s): alegerea lui ramane
+		try:
+			automat = _locul().automat()
+		except Exception:
+			automat = False
+		if not automat:
+			jurnal("locul gasit nu se scrie: omul a ales intre timp locul")
+			with self._zavor:
+				if generatie == self._generatie:
+					self._pune(GASIT, rezultat=rez, scris=None)
+			return
+		try:
+			ok, text = self._aplica(rez, actualizeaza_sec=actualizeaza_sec)
+		except Exception as e:
+			jurnal("scrierea locului gasit: %r" % (e,))
+			ok, text = False, _t(MESAJ_NU_RASPUNDE)
+		with self._zavor:
+			if generatie != self._generatie:
+				return
+			self._pune(GASIT, rezultat=rez, scris=bool(ok), mesaj_scris=text or "")
+
 	def stare(self):
-		"""{"stare", "mesaj", "semn", "gasit": {...} sau None, "intrebare"}: o copie, buna de dat ecranului si paginii.
-		O cautare care trece de LIMITA_S devine aici eroare ("serverul nu a raspuns"); firul ei nu mai schimba nimic."""
+		"""{"stare", "mesaj", "semn", "gasit": {...} sau None, "scris": True/False/None, "mesaj_scris"}: o copie, buna de
+		dat ecranului si paginii. O cautare care trece de LIMITA_S devine aici eroare ("serverul nu a raspuns"); firul ei
+		nu mai schimba nimic."""
 		with self._zavor:
 			if self._stare == LUCREAZA and self._inceput is not None and \
 					not 0 <= self._ceas() - self._inceput <= LIMITA_S:
@@ -441,19 +730,19 @@ class Cautare(object):
 				self._generatie += 1
 				self._pune(EROARE, mesaj=_t(MESAJ_NU_RASPUNDE))
 			st, rez, mesaj, s, lista = self._stare, self._rezultat, self._mesaj, self._semn, self._lista
-		d = {"stare": st, "mesaj": mesaj, "semn": s, "gasit": None, "intrebare": ""}
+			scris, mesaj_scris = self._scris, self._mesajScris
+		d = {"stare": st, "mesaj": mesaj, "semn": s, "gasit": None, "scris": scris, "mesaj_scris": mesaj_scris}
 		if st == GASIT and rez is not None:
-			# tara_lista si oras_lista: unde se deschide lista la "Nu" (orasul gasit poate lipsi din tabel)
+			# tara_lista si oras_lista: unde se deschide lista (orasul gasit poate lipsi din tabel)
 			d["gasit"] = {"oras": rez["oras"], "tara": rez["tara"], "tara_nume": numeTara(rez),
 				"lat": rez["lat_mii"] / 1000.0, "lon": rez["lon_mii"] / 1000.0, "coordonate": textCoordonate(rez),
 				"sursa": textSursa(rez), "loc": textLoc(rez), "din_tabel": bool(rez.get("din_tabel")),
 				"tara_lista": lista[0], "oras_lista": lista[1]}
-			d["intrebare"] = intrebare(rez)
 		return d
 
 	def foloseste(self, semn_=None, actualizeaza_sec=True):
-		"""Locul gasit devine locul antenei (HdsLocul.seteaza, sursa internet), dupa confirmarea omului. Cu `semn_` (pagina
-		web), numai daca e chiar locul aratat si nu a trecut VALABIL_S. -> (True, "") sau (False, motivul)."""
+		"""Locul gasit devine locul antenei (HdsLocul.seteaza, sursa internet). Cu `semn_` (pagina web de pana la 0.8.0),
+		numai daca e chiar locul aratat si nu a trecut VALABIL_S. -> (True, "") sau (False, motivul)."""
 		with self._zavor:
 			st, rez, s, cand = self._stare, self._rezultat, self._semn, self._cand
 		if st != GASIT or rez is None or (semn_ is not None and semn_ != s):
@@ -461,9 +750,132 @@ class Cautare(object):
 		acum = self._ceas()
 		if cand is not None and not 0 <= acum - cand <= VALABIL_S:
 			return False, _t(MESAJ_EXPIRAT)
-		L = _locul()
-		return L.seteaza(rez["lat_mii"], rez["lon_mii"], rez["tara"], rez["oras"], L.SURSA_INTERNET,
-			actualizeaza_sec=actualizeaza_sec)
+		_locul().alegeInternet()
+		return aplica(rez, actualizeaza_sec=actualizeaza_sec)
 
 
 CAUTARE = Cautare()
+
+
+# ---------------------------------------------------------------- locul singur, la pornire (LOC2)
+
+# de cate ori si la ce interval se mai incearca scrierea cand antena se roteste sau merge o inregistrare
+REINCERCARI = 10
+PAUZA_REINCERCARE_S = 120.0
+# cat asteapta firul pornirii raspunsul fusului orar (HdsFusTara: pana la TERMEN_S, 180 s, plus asteptarea limbii)
+ASTEPTARE_FUS_S = 300.0
+
+_PORNIRE = {"facut": False, "dupa_ntp": False, "lucreaza": False}
+_ZAVOR_PORNIRE = threading.Lock()
+
+
+def _fus():
+	from Components import HdsFusTara
+	return HdsFusTara
+
+
+def _maiTarziu(secunde, functie):
+	from twisted.internet import reactor
+	reactor.callLater(secunde, functie)
+
+
+def _raspunsPornire(fus=None, ceas=None, dormi=None):
+	"""(cod, corp) pentru locul de la pornire: raspunsul primit de fusul orar (o singura cerere pe pornire), altfel o
+	cerere a noastra (HdsFusTara.cere: asteapta ruta, reincearca la erorile de retea)"""
+	F = fus or _fus()
+	ceas = ceas or time.monotonic
+	dormi = dormi or time.sleep
+	inceput = ceas()
+	try:
+		while F.stare().get("stare") == F.LUCREAZA and ceas() - inceput < ASTEPTARE_FUS_S:
+			dormi(1.0)
+		r = F.stare().get("raspuns")
+	except Exception:
+		r = None
+	if r and r[0] == 200:
+		return r
+	return F.cere()
+
+
+def _dinRaspuns(raspuns):
+	"""(cod, corp) -> rezultatul potrivit cu tabelul sau None"""
+	cod, corp = raspuns
+	if cod != 200:
+		jurnal("locul la pornire: serverul a raspuns %s" % (corp if cod is None else "HTTP %s" % cod))
+		return None
+	try:
+		return potrivesteTabel(verifica(corp))
+	except ValueError as e:
+		jurnal("locul la pornire: raspuns respins: %s" % e)
+		return None
+
+
+def _scrieLaPornire(rez, ramase, L=None, mai_tarziu=None):
+	"""pe firul enigma2: locul gasit, daca locul e tot cel dupa internet; cat antena se roteste sau merge o
+	inregistrare, inca o incercare peste PAUZA_REINCERCARE_S (de cel mult REINCERCARI ori)"""
+	L = L or _locul()
+	if not L.automat():
+		jurnal("locul l-a ales omul intre timp: ramane")
+		return False
+	ok, text = aplica(rez, L=L)
+	if ok:
+		return True
+	jurnal("locul dupa internet nu s-a scris acum (%s)" % text)
+	if ramase > 0:
+		(mai_tarziu or _maiTarziu)(PAUZA_REINCERCARE_S, lambda: _scrieLaPornire(rez, ramase - 1, L, mai_tarziu))
+	return False
+
+
+def _lucreazaPornire(raspuns_=None, pe_fir=None, mai_tarziu=None):
+	try:
+		rez = _dinRaspuns((raspuns_ or _raspunsPornire)())
+	except Exception as e:
+		jurnal("locul la pornire: %r" % (e,))
+		rez = None
+	finally:
+		with _ZAVOR_PORNIRE:
+			_PORNIRE["lucreaza"] = False
+	if rez is None:
+		return False
+	with _ZAVOR_PORNIRE:
+		_PORNIRE["facut"] = True
+	(pe_fir or _peFirulPrincipal)(lambda: _scrieLaPornire(rez, REINCERCARI, mai_tarziu=mai_tarziu))
+	return True
+
+
+def porneste(fir=None, L=None, **k):
+	"""Aflarea singura, pe un fir (nu asteapta). Nimic cand omul a ales locul sau cand firul lucreaza deja. Cu VPN-ul
+	receptorului pornit cererea iese direct (ocolesteVpn)."""
+	L = L or _locul()
+	if not L.automat():
+		jurnal("locul l-a ales omul: nu se cauta dupa internet")
+		return False
+	with _ZAVOR_PORNIRE:
+		if _PORNIRE["lucreaza"]:
+			return False
+		_PORNIRE["lucreaza"] = True
+	(fir or _firDaemon)(lambda: _lucreazaPornire(**k))
+	return True
+
+
+def laPornire(**k):
+	"""Din Components/SetupDevices.py, dupa fusul orar (HdsFusTara.laPornire). Nu arunca."""
+	try:
+		return porneste(**k)
+	except Exception as e:
+		jurnal("aflarea locului la pornire nu a pornit: %r" % (e,))
+		return False
+
+
+def dupaNtp(**k):
+	"""Din Components/HdsCeas.py, dupa un NTP reusit: inca o incercare, o data pe pornire, daca locul nu s-a aflat inca
+	(internetul vine uneori abia dupa o cadere). Nu arunca."""
+	try:
+		with _ZAVOR_PORNIRE:
+			if _PORNIRE["facut"] or _PORNIRE["dupa_ntp"] or _PORNIRE["lucreaza"]:
+				return False
+			_PORNIRE["dupa_ntp"] = True
+		return porneste(**k)
+	except Exception as e:
+		jurnal("aflarea locului dupa NTP: %r" % (e,))
+		return False

@@ -1,4 +1,5 @@
-# Modificat de moneasoftware.com si hdsatelit.com, 2026
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
 """Stratul de compatibilitate al modulului enigma pentru pluginurile scrise pentru interfata comuna enigma2.
 
 Se cheama o singura data, din coada lui enigma.py (o pune acolo enigma_py_patcher.py la constructie):

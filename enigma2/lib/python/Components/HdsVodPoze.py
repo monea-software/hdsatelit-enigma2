@@ -7,21 +7,35 @@ intr-un cache cu plafon. Niciodata toate odata: ecranul cere numai ce se vede (s
 - image.tmdb.org: se cere direct marimea mica (w185/w342 la postere, w780 la fundal), deci ~15-60 KB in loc de sute.
 - alte gazde: cel mult MAX_OCTETI, apoi micsorare cu PIL (JPEG cu draft: decodare direct la marimea mica).
 - fundalul se intuneca spre stanga si spre jos chiar in poza (textul de deasupra se citeste fara alt strat), JPEG opac.
-- cache-ul: /tmp/hds-vod-poze (memorie, nu flash: posterele se schimba des), MAX_CACHE / MAX_FISIERE, cele vechi sterse intai.
+- cache-ul: pe stickul sau discul montat in /media/hdd, cand se poate scrie acolo (DOSAR_DISC, dosar ascuns, impartit in 256 de
+  subdosare dupa primele doua semne ale numelui: pe vfat mii de nume lungi intr-un singur dosar se cauta greu), cu plafon mare
+  (MAX_CACHE_DISC, cel mult un sfert din locul liber): posterele raman peste reporniri si nu se mai aduc din nou. Fara stick:
+  /tmp/hds-vod-poze (memorie: niciodata pe flash), MAX_CACHE (mai mic pe receptoarele cu memorie putina), MAX_FISIERE.
+  Cele vechi se sterg intai. Ce e in cache se tine intr-un index in memorie, facut de firul pozelor: firul principal nu mai
+  intreaba discul de fiecare poster (pe un receptor incarcat o singura intrebare a tinut firul principal 5 s). Stickul scos in
+  timpul folosirii: nicio eroare catre om, posterele trec pe /tmp; fara fsync pe fiecare poza.
 - numele fisierelor sunt sume, fara adrese; adresele nu ajung in jurnal si nici in pagina web (acolo merge numai semnul).
 """
 import hashlib
 import io
 import os
 import re
+import shutil
 import threading
 import time
 from collections import OrderedDict
 
 DOSAR = "/tmp/hds-vod-poze"
+MONTARE = "/media/hdd"
+DOSAR_DISC = MONTARE + "/.hds-vod-poze"
 MAX_OCTETI = 3 * 1024 * 1024
 MAX_CACHE = 24 * 1024 * 1024
+MAX_CACHE_MEMORIE_PUTINA = 8 * 1024 * 1024    # /tmp e memorie: pe un receptor sub PRAG_MEMORIE nu tine 24 MB de postere
+PRAG_MEMORIE = 600 * 1024 * 1024
 MAX_FISIERE = 900
+MAX_CACHE_DISC = 256 * 1024 * 1024            # ~15.000 de postere sau ~3.000 de fundaluri
+MAX_FISIERE_DISC = 30000
+MIN_CACHE_DISC = 16 * 1024 * 1024             # sub atat (stick aproape plin) posterele raman in /tmp
 MAX_COADA = 48
 MAX_SEMNE = 4000
 TERMEN_S = 8
@@ -44,6 +58,9 @@ _ratate = {}                     # nume -> ora
 _semne = OrderedDict()           # semn public -> adresa (pentru pagina web)
 _fir = None
 _generatie = 0
+_loc = None                      # {"dosar", "max", "fisiere", "disc"}: unde stau pozele acum (ales de firul pozelor)
+_index = {}                      # nume -> [ora, marime]: ce e in cache (citit o data, apoi tinut la zi de firul pozelor)
+_total = [0]
 
 
 def generatie():
@@ -69,12 +86,32 @@ def _nume(adresa, latime, inaltime, fel):
 	return hashlib.sha1(text.encode("utf-8", "replace")).hexdigest()[:24]
 
 
+def _caleFisier(loc, nume):
+	if loc["disc"]:
+		return os.path.join(loc["dosar"], nume[:2], nume + ".jpg")
+	return os.path.join(loc["dosar"], nume + ".jpg")
+
+
+def _locBun(loc):
+	return loc is not None and loc["dosar"] == (DOSAR_DISC if loc["disc"] else DOSAR)
+
+
 def cale(adresa, latime, inaltime, fel="poster"):
-	"""Fisierul gata (JPEG la marimea ceruta) sau "" daca nu e inca; nu face retea."""
-	if not adresa:
+	"""Fisierul gata (JPEG la marimea ceruta) sau "" daca nu e inca; nu face retea si nu intreaba discul (indexul din memorie)."""
+	loc = _loc
+	if not adresa or not _locBun(loc):
 		return ""
-	p = os.path.join(DOSAR, _nume(adresa, latime, inaltime, fel) + ".jpg")
-	return p if os.path.isfile(p) else ""
+	n = _nume(adresa, latime, inaltime, fel)
+	return _caleFisier(loc, n) if n in _index else ""
+
+
+def lipsa(cale_fisier):
+	"""Ecranul n-a putut citi fisierul (stickul scos, fisier taiat de o pana de curent): iese din index, deci se aduce din nou si
+	se scrie peste el; firul pozelor verifica la urmatoarea poza daca dosarul de pe stick mai e (numai atunci reface locul)."""
+	global _loc
+	nume = os.path.basename(cale_fisier or "")[:-4]
+	if _index.pop(nume, None) is not None and _loc is not None and _loc["disc"]:
+		_loc = dict(_loc, verifica=True)
 
 
 def cere(adresa, latime, inaltime, fel="poster"):
@@ -128,6 +165,95 @@ def adresaSemn(s):
 		return _semne.get(s or "")
 
 
+def _memoriePutina():
+	try:
+		with open("/proc/meminfo") as f:
+			for rand in f:
+				if rand.startswith("MemTotal:"):
+					return int(rand.split()[1]) * 1024 < PRAG_MEMORIE
+	except (IOError, OSError, ValueError, IndexError):
+		pass
+	return False
+
+
+def _locTmp():
+	return {"dosar": DOSAR, "max": MAX_CACHE_MEMORIE_PUTINA if _memoriePutina() else MAX_CACHE, "fisiere": MAX_FISIERE, "disc": False}
+
+
+def _montat(cale):
+	return os.path.ismount(cale)
+
+
+def _alegeLoc():
+	"""Pe firul pozelor: stickul sau discul din MONTARE daca e montat (nu un dosar de pe flash) si se poate scrie, altfel /tmp."""
+	try:
+		montare = os.path.realpath(MONTARE)
+		if montare != "/" and _montat(montare):
+			if not os.path.isdir(DOSAR_DISC):
+				os.makedirs(DOSAR_DISC)
+			proba = os.path.join(DOSAR_DISC, ".proba")
+			with open(proba, "wb") as f:
+				f.write(b"1")
+			os.unlink(proba)
+			return {"dosar": DOSAR_DISC, "max": MAX_CACHE_DISC, "fisiere": MAX_FISIERE_DISC, "disc": True,
+				"liber": shutil.disk_usage(DOSAR_DISC).free}
+	except (IOError, OSError):
+		pass
+	return _locTmp()
+
+
+def _citesteIndex(loc):
+	"""nume -> [ora, marime] pentru tot ce e in dosarul ales (o data, pe firul pozelor)."""
+	index = {}
+	dosare = [loc["dosar"]]
+	if loc["disc"]:
+		try:
+			dosare = [e.path for e in os.scandir(loc["dosar"]) if len(e.name) == 2 and e.is_dir(follow_symlinks=False)]
+		except OSError:
+			dosare = []
+	for d in dosare:
+		try:
+			for f in os.scandir(d):
+				if f.name.endswith(".jpg") and f.is_file(follow_symlinks=False):
+					st = f.stat(follow_symlinks=False)
+					if st.st_size > 0:              # o poza goala (scrisa pe jumatate, fara fsync) se aduce din nou
+						index[f.name[:-4]] = [st.st_mtime, st.st_size]
+		except OSError:
+			pass
+	return index
+
+
+def _schimbaLoc(loc):
+	global _loc, _index, _generatie
+	index = _citesteIndex(loc)
+	_index, _total[0], _loc = index, sum(m for _o, m in index.values()), loc
+	_generatie += 1
+	if _total[0] > loc["max"] or len(_index) > loc["fisiere"]:
+		_curataIndex()
+	return loc
+
+
+def _pregateste(forteaza=False):
+	"""Pe firul pozelor: locul si indexul lui, cand nu sunt inca (sau locul s-a schimbat, ori stickul a fost scos)."""
+	if not forteaza and _locBun(_loc):
+		if not _loc.get("verifica"):
+			return _loc
+		if _loc["disc"] and _montat(os.path.realpath(MONTARE)) and os.path.isdir(_loc["dosar"]):
+			# stickul e tot acolo: numai poza aceea era stricata (o aduce cere() din nou), indexul ramane
+			_loc.pop("verifica", None)
+			return _loc
+	loc = _alegeLoc()
+	if loc["disc"]:
+		index = _citesteIndex(loc)
+		total = sum(m for _o, m in index.values())
+		# un sfert din locul liber (cu tot cu ce tinem deja), dar nu sub MIN_CACHE_DISC: un stick aproape plin ramane al omului
+		loc["max"] = min(MAX_CACHE_DISC, (loc.pop("liber") + total) // 4)
+		if loc["max"] >= MIN_CACHE_DISC:
+			return _schimbaLoc(loc)
+		loc = _locTmp()
+	return _schimbaLoc(loc)
+
+
 def _bucla():
 	global _fir, _generatie
 	while True:
@@ -137,8 +263,9 @@ def _bucla():
 				return
 			n, (adresa, latime, inaltime, fel) = _coada.popitem(last=True)
 		try:
+			_pregateste()
 			if not cale(adresa, latime, inaltime, fel):
-				_fa(adresa, latime, inaltime, fel, os.path.join(DOSAR, n + ".jpg"))
+				_faInCache(adresa, latime, inaltime, fel, n)
 				_generatie += 1
 		except Exception as e:
 			with _lacat:
@@ -236,15 +363,60 @@ def _intuneca(img, masca=None):
 def _fa(adresa, latime, inaltime, fel, tinta):
 	date = _citeste(marimeTmdb(adresa, latime, fel))
 	jpeg = micsoreaza(date, latime, inaltime, fel)
-	os.makedirs(DOSAR, mode=0o700, exist_ok=True)
+	_scrie(tinta, jpeg)
+	return jpeg
+
+
+def _scrie(tinta, jpeg):
+	"""Fara fsync (pe stick ar fi o scriere sincrona la fiecare poster); .tmp + redenumire, deci o poza taiata nu ramane
+	cu numele bun nici pe vfat."""
+	dosar = os.path.dirname(tinta)
+	if not os.path.isdir(dosar):
+		os.makedirs(dosar, mode=0o700)
 	tmp = tinta + ".tmp"
 	with open(tmp, "wb") as f:
 		f.write(jpeg)
 	os.replace(tmp, tinta)
-	_curata()
+
+
+def _faInCache(adresa, latime, inaltime, fel, n):
+	"""Poza in locul ales; daca stickul nu mai primeste (scos, plin, numai citire), locul trece pe /tmp si poza se scrie acolo."""
+	loc = _loc
+	jpeg = micsoreaza(_citeste(marimeTmdb(adresa, latime, fel)), latime, inaltime, fel)
+	try:
+		_scrie(_caleFisier(loc, n), jpeg)
+	except (IOError, OSError):
+		if not loc["disc"]:
+			raise
+		print("[HdsVodPoze] stickul nu mai primeste posterele: trec pe /tmp")
+		loc = _schimbaLoc(_locTmp())
+		_scrie(_caleFisier(loc, n), jpeg)
+	vechi = _index.get(n)
+	_index[n] = [time.time(), len(jpeg)]
+	_total[0] += len(jpeg) - (vechi[1] if vechi else 0)
+	if _total[0] > loc["max"] or len(_index) > loc["fisiere"]:
+		_curataIndex()
+
+
+def _curataIndex():
+	"""Cele mai vechi pana sub 90% din plafon (fisiere si octeti), dupa indexul din memorie: fara sa citeasca tot dosarul."""
+	loc = _loc
+	if loc is None:
+		return
+	tinta_octeti, tinta_fisiere = loc["max"] * 9 // 10, loc["fisiere"] * 9 // 10
+	for nume, (_ora, marime) in sorted(_index.items(), key=lambda x: x[1][0]):
+		if _total[0] <= tinta_octeti and len(_index) <= tinta_fisiere:
+			break
+		try:
+			os.unlink(_caleFisier(loc, nume))
+		except OSError:
+			pass
+		_index.pop(nume, None)
+		_total[0] -= marime
 
 
 def _curata():
+	"""Curatenia intreaga a dosarului din /tmp, dupa numarul de fisiere si octeti (cele noi raman); indexul se reface."""
 	try:
 		fisiere = []
 		for f in os.scandir(DOSAR):
@@ -262,3 +434,5 @@ def _curata():
 				os.unlink(p)
 			except OSError:
 				pass
+	if _locBun(_loc) and not _loc["disc"]:
+		_schimbaLoc(_loc)

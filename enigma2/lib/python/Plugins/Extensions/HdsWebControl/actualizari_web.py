@@ -14,6 +14,8 @@
 #   POST /api/actualizari-zilnic          zilnic=1|0: verificarea zilnica (numai anunta)
 #   POST /api/actualizari-repornire-singura  repornire_singura=1|0: dupa actualizare interfata se reporneste singura,
 #                                         cu numaratoarea pe televizor (1, din fabrica), sau se intreaba (0); 0.7.8 RIA
+#   POST /api/actualizari-automat         automat=1|0: Actualizari automate (0.8.0, AUT1; 1 din fabrica): versiunile noi
+#                                         din feed se instaleaza singure in standby sau noaptea
 #   POST /api/actualizari-reporneste      reporneste interfata pe calea sigura (TryQuitMainloop 3), numai dupa instalare;
 #                                         cu memoria decodorului farmitata si fara inregistrare tot receptorul
 #                                         (TryQuitMainloop 2, Components/HdsMemorieDriver.py; la fel actualizarea rapida)
@@ -186,6 +188,23 @@ def zilnic(arg, A=None):
 	return rez
 
 
+def automat(arg, A=None):
+	"""POST /api/actualizari-automat (0.8.0, AUT1): automat=1 (din fabrica: versiunile noi din feed se instaleaza singure in
+	standby sau noaptea, apoi se arata ce s-a schimbat) sau 0 (numai anuntul)"""
+	A = _a(A)
+	v = arg.get("automat")
+	f = getattr(A, "seteaza_automat", None)
+	if v not in ("0", "1") or f is None:
+		rez = stare(A)
+		rez.update({"result": False, "message": "" if f is not None else
+			_t("Actualizarea s-a instalat. Repornește interfața înainte de altceva.")})
+		return rez
+	f(v == "1")
+	rez = stare(A)
+	rez["message"] = "%s: %s" % (_t("Actualizări automate"), _t("Da") if v == "1" else _t("Nu"))
+	return rez
+
+
 def repornire_singura(arg, A=None):
 	"""POST /api/actualizari-repornire-singura: repornire_singura=1 (din fabrica: dupa actualizare interfata se reporneste
 	singura, cu numaratoarea pe televizor) sau 0 (se intreaba pe televizor si ramane butonul din pagina)"""
@@ -336,6 +355,7 @@ def rute(baza, resource, sesiune=None, A=None):
 		b"actualizari-instaleaza": actiune(lambda arg: instaleaza(arg, A)),
 		b"actualizari-zilnic": actiune(lambda arg: zilnic(arg, A)),
 		b"actualizari-repornire-singura": actiune(lambda arg: repornire_singura(arg, A)),
+		b"actualizari-automat": actiune(lambda arg: automat(arg, A)),
 		b"actualizari-reporneste": actiune(lambda arg: reporneste(sesiune, A)),
 		b"actualizari-rapid": actiune(lambda arg: rapid(sesiune, A)),
 		b"actualizari-repara": actiune(lambda arg: repara(sesiune, A)),
@@ -433,6 +453,8 @@ def texte():
 			"instalării."),
 		# 0.7.8 (RIA): randul si butonul setarii repornirii singure, ca pe televizor
 		"repornireSingura": _t("Repornire singură"),
+		# 0.8.0 (AUT1): randul si butonul actualizarilor automate, ca pe televizor
+		"automat": _t("Actualizări automate"),
 		"da": _t("Da"),
 		"nu": _t("Nu"),
 		# 0.7.8 (RPR8): pasii lui "Repară imaginea"
@@ -459,8 +481,9 @@ def pagina_text(stil, config_pagina, limba="ro"):
 		"__T_REPORNESTE__": _e(_t("Repornește interfața")),
 		"__T_ZILNIC_PORNESTE__": _e(_t("Pornește verificarea zilnică")),
 		"__T_ZILNIC_OPRESTE__": _e(_t("Oprește verificarea zilnică")),
-		"__T_ZILNIC_NOTA__": _e(_t("Verificarea zilnică doar anunță pe televizor o actualizare nouă. Nu instalează nimic "
-			"singură.")),
+		# 0.8.0 (AUT1): cu Actualizari automate pornite, versiunea noua din feed se instaleaza singura
+		"__T_ZILNIC_NOTA__": _e(_t("Verificarea zilnică anunță pe televizor o actualizare nouă.") + " " +
+			_t("Receptorul instalează singur actualizările în standby sau noaptea, apoi arată ce s-a schimbat.")),
 		"__T_JURNAL__": _e(_t("Jurnalul operației")),
 	}
 	return re.sub(r"__[A-Z_]+__", lambda m: valori.get(m.group(0), m.group(0)), _traducePagina(PAGINA))
@@ -533,6 +556,7 @@ PAGINA = u"""<!DOCTYPE html>
   <button id="reporneste" type="button" class="principal ascuns">__T_REPORNESTE__</button>
   <button id="zilnic" type="button"></button>
   <button id="repornireSingura" type="button" class="ascuns"></button>
+  <button id="automat" type="button" class="ascuns"></button>
 </div>
 <p class="nota">__T_ZILNIC_NOTA__</p>
 <section class="card"><p class="nota">__T_JURNAL__</p><pre id="jurnal"></pre></section>
@@ -665,6 +689,7 @@ function arata(d){
   }
   rand(r, T.zilnic, d.zilnic ? T.pornita : T.oprita);
   if(d.repornire_singura === true || d.repornire_singura === false){ rand(r, T.repornireSingura, d.repornire_singura ? T.da : T.nu); }
+  if(d.automat === true || d.automat === false){ rand(r, T.automat, d.automat ? T.da : T.nu); }
   var jos = [];
   if(d.mesaj){ jos.push(d.mesaj); }
   if(d.asteapta_instalarea){ jos.push(T.asteaptaInstalarea); }
@@ -715,6 +740,9 @@ function arata(d){
   var singura = d.repornire_singura === true || d.repornire_singura === false;
   $("repornireSingura").textContent = singura ? T.repornireSingura + ": " + (d.repornire_singura ? T.da : T.nu) : "";
   $("repornireSingura").className = singura ? "" : "ascuns";
+  var auto = d.automat === true || d.automat === false;
+  $("automat").textContent = auto ? T.automat + ": " + (d.automat ? T.da : T.nu) : "";
+  $("automat").className = auto ? "" : "ascuns";
   $("jurnal").textContent = (d.jurnal || []).join("\\n");
   if(CEAS){ clearTimeout(CEAS); CEAS = null; }
   var peste = rr && rr.peste ? rr.peste : (lucreaza ? 1500 : 0);
@@ -773,6 +801,10 @@ $("reporneste").addEventListener("click", function(){ trimite("/api/actualizari-
 $("repornireSingura").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("repornire_singura", ULTIMA && ULTIMA.repornire_singura ? "0" : "1");
   trimite("/api/actualizari-repornire-singura", q);
+});
+$("automat").addEventListener("click", function(){
+  var q = new URLSearchParams(); q.set("automat", ULTIMA && ULTIMA.automat ? "0" : "1");
+  trimite("/api/actualizari-automat", q);
 });
 $("zilnic").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("zilnic", ULTIMA && ULTIMA.zilnic ? "0" : "1");

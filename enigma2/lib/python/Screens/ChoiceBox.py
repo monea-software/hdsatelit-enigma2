@@ -47,7 +47,7 @@ def ordoneazaDupaSetare(lista, nume):
 class ChoiceBox(Screen):
 	def __init__(self, session, title = "", list = [], keys = None, selection = 0, skin_name = [], reorderConfig = "",
 			text = None, choiceList = None, buttonList = None, skinName = None, windowTitle = None, titlebartext = None,
-			allowCancel = None, allow_cancel = None, **altele):
+			allowCancel = None, allow_cancel = None, enableWrapAround = False, **altele):
 		# HDSatelit: numele din alte imagini ale acelorasi argumente (pluginurile scrise pentru ele): text = textul de sus,
 		# choiceList = list, buttonList = keys, skinName = skin_name, windowTitle/titlebartext = titlul ferestrei,
 		# allowCancel/allow_cancel=False = IESIRE nu inchide. Ordinea pozitionala ramane a noastra (title, list, keys...),
@@ -115,7 +115,12 @@ class ChoiceBox(Screen):
 				self.keymap[self.__keys[pos]] = list[pos]
 			self.summarylist.append((self.__keys[pos],x[0]))
 			pos += 1
-		self["list"] = ChoiceList(list = self.list, selection = selection)
+		# enableWrapAround: UP on the first row goes to the last one and DOWN on the last row to the first (blue button list);
+		# passed only when asked, so a ChoiceList replaced by a plugin with the old signature keeps working
+		if enableWrapAround:
+			self["list"] = ChoiceList(list = self.list, selection = selection, enableWrapAround = True)
+		else:
+			self["list"] = ChoiceList(list = self.list, selection = selection)
 		self["summary_list"] = StaticText()
 		self.updateSummary()
 				
@@ -189,6 +194,46 @@ class ChoiceBox(Screen):
 			self.instance.move(ePoint(pozitie.x(), y))
 		except Exception as e:
 			print("[ChoiceBox] randurile la textul marit:", e)
+
+	def autoResize(self):
+		"""HDSatelit 0.8.0 (GLS2): temele facute pentru imaginile OE-Alliance cheama din codul lor de skin (applet
+		onLayoutFinish) self.autoResize(), ca fereastra sa se stranga la randurile listei (FullHDGlass: ChoiceBox de
+		1200x780 si pentru doua randuri). Fara metoda, codul temei cadea in jurnal si fereastra ramanea mare. Lista se
+		strange la randurile ei (itemHeight din skin), ce e sub ea urca, iar fereastra se strange pe acelasi centru. Temele
+		noastre nu il cheama; cu textul marit (hdsRanduriMarite) nu se strange nimic. Nu arunca."""
+		try:
+			from enigma import eSize, ePoint
+			try:
+				from Components.HdsMarireText import procent
+				if procent() > 100:
+					return
+			except Exception:
+				pass
+			lista = self["list"]
+			inst = lista.instance
+			if inst is None or self.instance is None:
+				return
+			rand = int(dict(lista.skinAttributes or ()).get("itemHeight", 0) or 0)
+			if rand <= 0:
+				return
+			ml, pl = inst.size(), inst.position()
+			d = ml.height() - max(1, len(self.list)) * rand
+			if d <= 0:
+				return
+			jos = pl.y() + ml.height()
+			for x in list(self.values()) + list(self.renderer) + list(self.additionalWidgets):
+				w = getattr(x, "instance", None)
+				if w is None or w is inst:
+					continue
+				pw = w.position()
+				if pw.y() >= jos:
+					w.move(ePoint(pw.x(), pw.y() - d))
+			inst.resize(eSize(ml.width(), ml.height() - d))
+			fereastra, pozitie = self.instance.size(), self.instance.position()
+			self.instance.resize(eSize(fereastra.width(), fereastra.height() - d))
+			self.instance.move(ePoint(pozitie.x(), pozitie.y() + d // 2))
+		except Exception as e:
+			print("[ChoiceBox] autoResize:", e)
 
 	def keyLeft(self):
 		pass

@@ -417,15 +417,40 @@ def _discuriMontate():
 	return rezultat
 
 
+def numeDinVersiune(continut):
+	"""Numele imaginii din textul unui fisier imageversion, sau None. Al nostru e UN SINGUR rand cu numele/versiunea
+	(vezi cercetarea din antetul fisierului) si ramane cum e. Copiile facute cu unealta de copii a imaginilor OE-Alliance
+	(Screens/ImageBackup.py) au forma ini: "[Image Version]", apoi distro=, displaydistro=, imageversion=7.6. (si mai
+	jos "[Enigma2 Settings]"); acolo numele e "displaydistro imageversion" (sau distro), luat numai din prima sectiune.
+	Pana la 0.8.0 lista „Imagine nouă de pe stick” arata "[Image Version]" in locul numelui la toate aceste copii
+	(TODO 23.11 23:04, AS154, asistenta 653874, tamiciav7, SF8008 0.7.8)."""
+	chei = {}
+	for linie in (continut or "").splitlines():
+		linie = linie.strip()
+		if not linie:
+			continue
+		if linie.startswith("[") and linie.endswith("]"):
+			if chei:
+				break  # sectiunea urmatoare (setarile) nu mai e numele imaginii
+			continue
+		cheie, egal, valoare = linie.partition("=")
+		if not egal:
+			if chei:
+				continue
+			return linie
+		chei.setdefault(cheie.strip().lower(), valoare.strip().strip("'\"").strip())
+	if not chei:
+		return None
+	nume = chei.get("displaydistro") or chei.get("distro") or ""
+	versiune = (chei.get("imageversion") or chei.get("imgversion") or "").rstrip(".")
+	return ("%s %s" % (nume, versiune)).strip() or None
+
+
 def _primaLinie(cale):
-	"""Primul rand nevid dintr-un fisier text mic, sau None. e2/update/imageversion e UN SINGUR
-	rand cu numele/versiunea (nu chei=valoare) — vezi cercetarea din antetul fisierului."""
+	"""Numele imaginii din e2/update/imageversion (numeDinVersiune), sau None."""
 	try:
 		with open(cale, "r", encoding="utf-8", errors="replace") as f:
-			for linie in f:
-				linie = linie.strip()
-				if linie:
-					return linie
+			return numeDinVersiune(f.read(HdsPazaModel.MARIME_MAXIMA_TEXT))
 	except OSError:
 		pass
 	return None
@@ -560,7 +585,7 @@ def _candidatiDinDosar(disc, dosar, nume_fisiere):
 					try:
 						with z.open(originale[nume_versiune]) as f_versiune:
 							continut = f_versiune.read(HdsPazaModel.MARIME_MAXIMA_TEXT).decode("utf-8", "replace")
-						versiune = next((l.strip() for l in continut.splitlines() if l.strip()), None)
+						versiune = numeDinVersiune(continut)
 					except Exception:
 						versiune = None
 				marcaj = None
@@ -1112,6 +1137,11 @@ FEL_STRAINA = "straina"
 FEL_REA = "rea"
 _NUME_IMAGINE_RX = re.compile(r"hdsatelit-(\d+(?:\.\d+)+)(?:\S*?[-_](20\d{6})(?!\d))?", re.I)
 _NUME_STRAIN_RX = re.compile(r"^([^\W\d][^-_]*)[-_ ]+(\d+(?:\.\d+)*)")
+# copia imaginii noastre facuta cu alta unealta: imageversion „HD Satelit 0.7.6” (displaydistro din usr/lib/enigma.info),
+# „hdsatelit 0.7.6” (distro) sau arhiva backup-HD_Satelit-0.7.6-...zip; forma oficiala hdsatelit-0.7.6 e a _NUME_IMAGINE_RX
+# versiunea poate lipsi: pe modelele fara cheile de identitate enigma.info n-are imageversion=, deci copia scrie
+# "imageversion=." si numele ramane numai „HD Satelit”
+_NUME_COPIE_HDS_RX = re.compile(r"(?<![^\W_])hd[ _]?satelit(?![^\W_])(?:[ _-]+v?(\d+(?:\.\d+)+))?", re.I)
 
 
 def _literaMare(text):
@@ -1149,9 +1179,33 @@ def _deLaAltii(c):
 	return (c.get("paza") or (None,))[0] == HdsPazaModel.REFUZ_FARA_MARCAJ and not versiuneSiData(c)[0]
 
 
+def _copieHds(c):
+	"""(True, "0.7.6") cand imageversion sau numele arhivei spun ca e imaginea noastra copiata cu alta unealta (versiunea
+	poate fi ""), altfel (False, "")"""
+	gasit = False
+	for text in (c.get("versiune") or "", os.path.basename(c.get("cale_zip") or "")):
+		m = _NUME_COPIE_HDS_RX.search(text)
+		if m:
+			if m.group(1):
+				return True, m.group(1)
+			gasit = True
+	return gasit, ""
+
+
+def esteCopieHdsFaraSemn(c):
+	"""Imagine fara semnul modelului care se numeste HD Satelit: copia imaginii noastre facuta cu unealta de copii a altei
+	imagini sau a OE-Alliance (backup-HD_Satelit-0.7.6-...zip). Ramane neverificata, ca orice imagine fara semn (se poate
+	instala numai dupa avertisment), dar omului nu i se mai spune ca nu e imagine HD Satelit (TODO 23.11 23:04, AS154,
+	tamiciav7: copia lui de 0.7.6 era aratata ca imaginea altora)."""
+	return _deLaAltii(c) and _copieHds(c)[0]
+
+
 def numeImagineStraina(c):
 	"""Numele imaginii altora, cum e scris in fisierele ei: imageversion, apoi numele arhivei („nume-7.6-model-data” da
 	„nume 7.6”). Textul vine din arhiva, deci se curata; in cod nu e scris niciun nume de imagine."""
+	gasit, versiune = _copieHds(c)
+	if gasit:
+		return ("HD Satelit %s" % versiune).strip()
 	nume_zip = os.path.splitext(os.path.basename(c.get("cale_zip") or ""))[0]
 	curate = [re.sub(r"[^\w .+-]", "", t, flags=re.U).strip()[:60] for t in (c.get("versiune") or "", nume_zip) if "=" not in t]
 	for text in curate:
@@ -1166,6 +1220,9 @@ def numeImagineStraina(c):
 
 def textImagineStraina(c):
 	"""Ce i se spune omului despre imaginea altora: sus in lista si in avertismentul de la OK"""
+	if esteCopieHdsFaraSemn(c):
+		return _("Este o copie a imaginii %s făcută cu altă unealtă, fără semnul modelului. Nu știm pentru ce receptor a "
+			"fost făcută, deci nu o putem verifica.") % numeImagineStraina(c)
 	return _("Nu este imagine HD Satelit, ci %s. Nu știm dacă este compatibilă cu acest receptor, pentru că nu ne "
 		"aparține și nu o putem verifica.") % numeImagineStraina(c)
 
@@ -1177,6 +1234,13 @@ def textAvertismentStrain(c):
 		"de pe stick.") + "\n" + \
 		_("Dacă o instalezi, ea înlocuiește imaginea HD Satelit. Setările și lista de canale se copiază întâi pe stick.") + \
 		"\n" + _("Continui?")
+
+
+def textScurtStrain(c):
+	"""Randul mic al cartelei unei imagini neverificate (si verdictul din pagina web)"""
+	if esteCopieHdsFaraSemn(c):
+		return _("Copie HD Satelit fără semnul modelului; nu o putem verifica")
+	return _("Nu este imagine HD Satelit și nu o putem verifica")
 
 
 def asazaPachete(candidati):
@@ -1236,7 +1300,7 @@ def detaliuPachet(c):
 	"""Randul mic al cartelei: de ce nu se instaleaza, numele fisierului (daca nu e deja in titlu), stickul si viteza lui"""
 	parti = []
 	if c.get("fel") == FEL_STRAINA:
-		parti.append(_("Nu este imagine HD Satelit și nu o putem verifica"))
+		parti.append(textScurtStrain(c))
 	elif not _compatibil(c):
 		parti.append(_literaMare(scurtNumeStick(c.get("nume_stick")) or HdsPazaModel.scurtRefuz((c.get("paza") or (None,))[0])))
 	if faraLoc(c) and c.get("fel") != FEL_REA:
@@ -1752,6 +1816,27 @@ def _tintaLocUsb(p, multiboot):
 		"radacina": root, "nucleu": nucleu, "loc": ""}
 
 
+def _radacinaMutataDeInitramfs(root, mounts="/proc/mounts", oaspete="/etc/.guest"):
+	"""USB1 (27.11.2026): ZGEMMA H8.2H Plus / SE pornit de pe stick. Initramfs-ul nucleului din mtd8 citeste STARTUP de pe
+	stick si muta radacina pe stick (ext4, linuxrootfsN), dar /proc/cmdline ramane root=ubi0:rootfs. Fara paza asta,
+	instalarea pornita din imaginea de pe stick ar scrie memoria interna (mtd8, mtd9). True cand linia de comanda spune
+	o radacina ubi, dar / nu e ubifs, sau cand initramfs-ul a pus /etc/.guest."""
+	if not root.startswith("ubi"):
+		return False
+	if os.path.exists(oaspete):
+		return True
+	tip = ""
+	try:
+		with open(mounts) as f:
+			for rand in f:
+				c = rand.split()
+				if len(c) >= 3 and c[1] == "/":
+					tip = c[2]
+	except (IOError, OSError):
+		return False
+	return bool(tip) and tip not in ("ubifs", "rootfs")
+
+
 def tintaScrierii(cmdline, multiboot=None):
 	"""Unde scrie instalarea: locul care ruleaza acum (vezi mai sus). Intoarce {"fel", "argumente", "subdosar", "radacina",
 	"nucleu", "loc"}; fel: "unic", "memorie", "kexec", "kexec_usb", "usb". ValueError cu textul pentru om la o pornire
@@ -1764,6 +1849,8 @@ def tintaScrierii(cmdline, multiboot=None):
 	if p.get("kexec") == "1":
 		return _tintaKexec(p)
 	root = p.get("root", "")
+	if _radacinaMutataDeInitramfs(root):
+		raise ValueError(_textDiscExtern())
 	if any(d.startswith(_EXTERNE) for d in (root, p.get("kernel", ""))):
 		t = _tintaLocUsb(p, multiboot)
 		if t:

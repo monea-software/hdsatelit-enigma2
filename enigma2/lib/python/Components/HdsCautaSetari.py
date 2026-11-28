@@ -212,6 +212,10 @@ CUVINTE = {
 	"hds_navigator_web": N_("internet pagini site browser"),
 	# 0.3.2: descarcarea subtitrarilor (in imagine, Components/HdsSubtitrariInternet; nu mai e plugin separat)
 	"hds_descarcare_subtitrari": N_("subtitrări internet OpenSubtitles subs.ro SubDL conturi chei"),
+	# 0.8.0 FX3: HDMI-CEC searched under its own name and the TV makers' names for it; the receiver password searched
+	# by the services it protects ("FTP", "root"). Brand and protocol names only, the same in every language.
+	"hds_standby_tv": N_("HDMI-CEC CEC Anynet+ SIMPLINK BRAVIA Sync VIERA Link EasyLink"),
+	"hds_acces_ssh": N_("FTP Telnet SSH SFTP root"),
 }
 
 _EXTRA = {}                # inregistreaza(): randurile extensiilor, ca REGISTRU

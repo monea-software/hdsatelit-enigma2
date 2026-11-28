@@ -726,7 +726,7 @@ class AudioSelection(Screen, ConfigListScreen):
 				from Components.HdsVorbireTV import alege
 				alege(self.infobar)
 				from Components import HdsVorbire
-				if not any(c.get("cheie") for c in (HdsVorbire._date.copie or {}).get("recunoastere", [])):
+				if not any(HdsVorbire.cheiPuse().values()):
 					from Screens.HdsVorbire import HdsVorbire as EcranVorbire
 					self.session.openWithCallback(lambda *args: self.close(), EcranVorbire)
 					return

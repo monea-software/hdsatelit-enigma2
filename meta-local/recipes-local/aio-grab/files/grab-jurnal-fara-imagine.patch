@@ -1,0 +1,35 @@
+grab: un rand in jurnalul sistemului cand captura iese fara imagine
+
+Interfata, interfata web si asistenta pornesc grab cu stderr aruncat, asa ca motivul pentru care captura are numai
+OSD-ul (pe Dreambox HEVC/UHD merg numai prin ffmpeg: lipsa lui sau un ffmpeg care nu poate desface fluxul) nu se vedea
+nicaieri. Acum grab scrie atunci un rand in syslog (/var/log/messages).
+
+Upstream-Status: Inappropriate [HD Satelit]
+Signed-off-by: Monea Software pentru HD Satelit <contact@moneasoftware.com>
+
+diff --git a/main.c b/main.c
+index dcb7ecd..2b63a04 100644
+--- a/main.c
++++ b/main.c
+@@ -50,6 +50,7 @@ Feel free to use the code for your own projects. See LICENSE file for details.
+ #include <dirent.h>
+ #include <errno.h>
+ #include <elf.h>
++#include <syslog.h>
+ 
+ #if defined(__sh__)
+ #include <sys/time.h>
+@@ -2199,7 +2200,13 @@ int main(int argc, char **argv)
+ 		if (use_ffmpeg_video_backend)
+ 		{
+ 			if (grab_ffmpeg_getvideo_frame(video, &xres_v, &yres_v, width, NULL) < 0)
++			{
+ 				fprintf(stderr, "ffmpeg backend failed; refusing unsafe raw HEVC/UHD/SD video grab\n");
++				/* HD Satelit: the callers drop stderr; one line in the system log says why the picture has no video */
++				syslog(LOG_WARNING, "grab: video not captured, OSD only (%s)",
++					access("/usr/bin/ffmpeg", X_OK) != 0 ? "/usr/bin/ffmpeg is missing" :
++					"ffmpeg could not open or decode the current service");
++			}
+ 		}
+ 		else if (stb_type == BRCM7366 || stb_type == BRCM7251 || stb_type == BRCM7252 || stb_type == BRCM7252S || stb_type == BRCM7444 || stb_type == BRCM72604VU || stb_type == BRCM7278 || stb_type == HISIL_ARM)
+ 		{

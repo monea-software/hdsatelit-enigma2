@@ -85,6 +85,9 @@ TYPES = {
 	"Temperature": ("_temperature", False, 2000),
 	"Uptime": ("_uptime", False, 30000),
 	"StreamClients": ("_stream_clients", False, 5000),
+	# 0.8.0 (FX1, tamiciav7): "CPU 23% · RAM 61% · 52 °C" in the channel bar, only with "Procesorul, memoria și
+	# temperatura în bara canalului" (config.usage.hds_bara_sistem); read only while the bar is visible
+	"SysBar": ("_sys_bar", False, 2000),
 	# procesorul (cpufreq, numai citire) si reteaua (ruta implicita; Internet printr-o proba pe fir separat)
 	"CpuFreq": ("_cpu_freq", False, 2000),
 	# pagina 6, coloana procesorului: modul si plafonul, tensiunea, timpul pe fiecare frecventa (Components/HdsProcesor,
@@ -647,6 +650,22 @@ class HdsSignal(Poll, Converter):
 			t = C.temperature()
 		return (u"%d °C" % t, min(100, t)) if t is not None else (u"", 0)
 
+	def _sys_bar(self):
+		"""Processor load, used memory and temperature on one line, each part only when it can be read."""
+		if not C.optiune_usage("hds_bara_sistem", False):
+			return (u"", 0)
+		parti = []
+		cpu = self._cpu_load()[0]
+		if cpu:
+			parti.append(u"CPU " + cpu)
+		m = C.mem_free()
+		if m and m[1] > 0:
+			parti.append(u"RAM %d%%" % max(0, min(100, 100 - m[0] * 100 // m[1])))
+		t = self._temperature()[0]
+		if t:
+			parti.append(t)
+		return (C.join(parti), 0)
+
 	def _uptime(self):
 		return C.uptime_text(C.uptime_seconds())
 
@@ -759,11 +778,32 @@ class HdsSignal(Poll, Converter):
 			return u"" if act > 0 else C.access_short(r)
 		return C.access_short(r, act)
 
+	def _semnal_bara(self):
+		"""0.8.0 DBB0 (dorinelu, forum 795, Vu+ Solo4K): "dB si BER in bara canalului" (config.usage.hds_db_ber_bara, Nu din
+		fabrica): SNR-ul in dB (cand placa il da) si BER-ul, ca pe pagina Receptie si semnal, la coada randului ECM din
+		bara canalului; gol cu Nu, pe canalele fara tuner sau fara citire. Aceeasi citire a tunerului ca pagina."""
+		if not C.optiune_usage("hds_db_ber_bara", False):
+			return u""
+		# numai cu tunerul prins pe semnal: la o inregistrare redata sau fara semnal BER-ul ar fi un 0 fals
+		st, sref = self._status(("ber", "lock"))
+		if not st or C.ival(st, "lock") != 1:
+			return u""
+		ber = C.ival(st, "ber")
+		if ber < 0:
+			return u""
+		db = self._snr_db()[0]
+		return C.join([db, u"BER %d" % ber])
+
 	def _ecm_line(self):
+		"""Randul ECM; cu "dB si BER" pornit, semnalul sta la coada (in tema clasica randul e aliniat la dreapta, deci un
+		rand prea lung pierde inceputul, nu semnalul) si partea ECM e fara hop-uri si cititor, ca sa incapa."""
+		semnal = self._semnal_bara()
+		if semnal:
+			return C.join([C.ecm_line(self._reader(), False), semnal])
 		return C.ecm_line(self._reader(), not self._fara_cititor)
 
 	def _ecm_line_on(self):
-		return bool(C.ecm_line(self._reader(), not self._fara_cititor))
+		return bool(self._ecm_line())
 
 	def _ecm_reimprospateaza(self):
 		"""Chemat de HdsCommon cand eticheta cititorului se ascunde (o captura urmeaza): textul nou acum, si pe un ecran

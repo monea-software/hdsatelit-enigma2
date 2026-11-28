@@ -20,9 +20,14 @@
 #   - cu locul nestabilit SecConfigure nu da nucleului satelitii care cer calculul USALS: nicio cale (zap, inregistrare,
 #     scanare, „Mergi la satelit") nu poate roti antena dupa un loc inventat. Pasii, miscarea continua, pozitiile
 #     memorate si limitele nu au nevoie de loc si merg ca inainte;
-#   - tarile si orasele (Components/HdsLocuriDate.py, din GeoNames, CC BY 4.0), cu ordinea alfabetica romaneasca;
+#   - tarile si orasele (din GeoNames, CC BY 4.0): toata lumea din 0.8.0, cu numele tarii in limba meniului
+#     (tariAfisate) si cautarea dupa litere (potriveste). Tarile stau in Components/HdsLocuriDate.py (numele lor sunt
+#     msgid), orasele (~76.000 din 0.8.0, LOC2) in FISIER_ORASE, citit numai cand cineva cere orasele unei tari;
 #   - locul aflat dupa adresa de internet (Components/HdsLoculInternet.py) intra tot prin seteaza(), cu sursa
-#     SURSA_INTERNET, numai dupa confirmarea omului; se arata ca un oras din tabel;
+#     SURSA_INTERNET, fara nicio intrebare (LOC2, 26.11.2026: implicit cat timp e internet): cat omul nu a
+#     ales singur un oras sau coordonate (automat()), receptorul afla locul singur la pornire si la deschiderea
+#     ecranului; fara internet ramane ultimul loc stiut. Un oras sau coordonatele alese de om opresc asta (mod "ales"),
+#     "Afla locul dupa internet" il porneste iar (mod "internet");
 #   - ecranele deschise afla de un loc nou (scris de pe televizor sau din pagina web) prin laSchimbare(): seteaza() isi
 #     anunta abonatii dupa ce locul e scris.
 #
@@ -100,7 +105,42 @@ def initConfig():
 	s.oras = ConfigText(default="", fixed_size=False)
 	s.sursa = ConfigText(default="", fixed_size=False)
 	s.migrat = ConfigYesNo(default=False)
+	# "" = omul nu a ales inca nimic (vezi automat()), MOD_INTERNET = locul dupa internet, MOD_ALES = ales de om
+	s.mod = ConfigText(default="", fixed_size=False)
 	return s
+
+
+MOD_INTERNET = "internet"
+MOD_ALES = "ales"
+
+
+def automat():
+	"""True cand locul se afla singur dupa internet: omul a ales "Afla locul dupa internet" (mod internet) sau nu a
+	ales inca nimic si locul e nestabilit sau tot de pe internet. Un loc din tabel, scris de mana sau ramas din setarile
+	tunerului de dinainte (migrare, tuner) e al omului: o actualizare nu muta in tacere o antena care merge."""
+	try:
+		s = initConfig()
+		mod = s.mod.value
+		if mod == MOD_INTERNET:
+			return True
+		if mod == MOD_ALES:
+			return False
+		return not s.stabilit.value or s.sursa.value in ("", SURSA_INTERNET)
+	except Exception as e:
+		jurnal("felul locului nu se poate citi: %r" % (e,))
+		return False
+
+
+def alegeInternet():
+	"""omul a ales "Afla locul dupa internet": de acum locul se afla singur (si la pornire)"""
+	try:
+		s = initConfig()
+		if s.mod.value != MOD_INTERNET:
+			s.mod.value = MOD_INTERNET
+			s.mod.save()
+			_salveazaSettings()
+	except Exception as e:
+		jurnal("felul locului nu se poate scrie: %r" % (e,))
 
 
 def stabilit():
@@ -141,7 +181,8 @@ def stare():
 	rez.update(lat=l[0] / 1000.0, lon=l[1] / 1000.0, coordonate=textCoordonate(l[0], l[1]))
 	try:
 		s = initConfig()
-		rez.update(tara=s.tara.value, tara_nume=numeTara(s.tara.value), oras=s.oras.value, sursa=s.sursa.value,
+		rez.update(tara=s.tara.value, tara_nume=_t(numeTara(s.tara.value)) if numeTara(s.tara.value) else "",
+			oras=s.oras.value, sursa=s.sursa.value,
 			coordonate=textCoordonate(l[0], l[1], _zecimale(s.sursa.value)))
 	except Exception as e:
 		jurnal("locul nu se poate citi: %r" % (e,))
@@ -154,14 +195,39 @@ def _zecimale(sursa):
 	return 2 if sursa in (SURSA_TABEL, SURSA_INTERNET) else 3
 
 
-def textCoordonate(lat_mii, lon_mii, zecimale=2):
+_HDS_GRADE = []
+
+
+def _grade_():
+	"""Components/HdsGrade.py, cautat o singura data (un import cazut costa cat zeci de randuri de lista)"""
+	if not _HDS_GRADE:
+		try:
+			from Components import HdsGrade
+		except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
+			import HdsGrade
+		_HDS_GRADE.append(HdsGrade)
+	return _HDS_GRADE[0]
+
+
+def textCoordonate(lat_mii, lon_mii, zecimale=2, cod=None):
 	"""„44,43 N, 26,11 E" in romana (V pentru vest, ca in Rotirea antenei), „44.43 N, 26.11 W" in engleza: literele si
-	separatorul zecimal ale limbii meniului, din Components/HdsGrade.py, ca pozitiile satelitilor si pagina /antena/locul"""
+	separatorul zecimal ale limbii meniului, din Components/HdsGrade.py, ca pozitiile satelitilor si pagina /antena/locul.
+	`cod` (limba, HdsGrade.limba()) se da o data pentru o lista lunga (LOC2: SUA are ~8.600 de locuri)"""
+	return _grade_().coordonate(int(lat_mii) / 1000.0, int(lon_mii) / 1000.0, zecimale, cod)
+
+
+def textCoordonateLista(orase_):
+	"""coordonatele scrise ale fiecarui oras din [(nume, lat_mii, lon_mii)], cu limba aflata o singura data"""
 	try:
-		from Components import HdsGrade
-	except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
-		import HdsGrade
-	return HdsGrade.coordonate(int(lat_mii) / 1000.0, int(lon_mii) / 1000.0, zecimale)
+		cod = _grade_().limba()
+	except Exception:
+		cod = None
+	return [textCoordonate(lat, lon, 2, cod) for _nume, lat, lon in orase_]
+
+
+def textOrase(orase_):
+	"""[(textul aratat in lista, nume)] pentru orasele unei tari: numele si coordonatele"""
+	return [(u"%s   (%s)" % (o[0], text), o[0]) for o, text in zip(orase_, textCoordonateLista(orase_))]
 
 
 def textLoc():
@@ -176,8 +242,8 @@ def textLoc():
 	sursa = s.sursa.value
 	coordonate = textCoordonate(l[0], l[1], _zecimale(sursa))
 	if sursa in (SURSA_TABEL, SURSA_INTERNET) and s.oras.value:
-		# o tara care nu e in tabel (locul dupa internet) se arata cu codul ei
-		tara = numeTara(s.tara.value) or s.tara.value
+		# o tara care nu e in tabel (locul dupa internet) se arata cu codul ei; numele, in limba meniului
+		tara = numeTaraAfisat(s.tara.value)
 		loc = "%s, %s" % (s.oras.value, tara) if tara else s.oras.value
 		return "%s (%s)" % (loc, coordonate)
 	if sursa in (SURSA_MIGRARE, SURSA_TUNER):
@@ -254,12 +320,212 @@ def numeTara(cod):
 	return ""
 
 
+# Toata lumea (LOC1, 26.11.2026; lme, Canada, LinuxSat 163972: "Canada & us are not even listed in the dish location
+# menu"): tabelul are acum fiecare tara cu orase in GeoNames (~245) si ~2900 de orase, deci listele se arata cu numele
+# tarii in limba meniului, in ordinea alfabetica a acelui nume, si se pot cauta dupa litere (Screens/HdsLocul.py,
+# HdsLoculAlegere; pagina /antena/locul).
+
+def _limbaMeniului():
+	try:
+		from Components import HdsGrade
+	except ImportError:  # pe PC, in teste, Components e chiar dosarul modulului
+		try:
+			import HdsGrade
+		except ImportError:
+			return "ro"
+	try:
+		return (HdsGrade.limba() or "ro")[:2].lower()
+	except Exception:
+		return "ro"
+
+
+def faraSemne(text):
+	"""textul pentru cautare: litere mici, fara semne (ă->a, é->e, ß->ss), fara spatii, cratime si apostrofuri, ca
+	"sao", "São" si "SAO" sa se potriveasca; literele altor alfabete raman (chirilice, grecesti). Tinut minte: lista
+	unei tari mari (SUA, ~8.600 de orase) se filtreaza la fiecare tasta."""
+	try:
+		return _faraSemneTinut[text]
+	except (KeyError, TypeError):
+		pass
+	rez = _faraSemne(text)
+	if isinstance(text, str):
+		if len(_faraSemneTinut) >= 30000:
+			_faraSemneTinut.clear()
+		_faraSemneTinut[text] = rez
+	return rez
+
+
+_faraSemneTinut = {}
+
+
+def _faraSemne(text):
+	# o singura descompunere NFD pe tot textul (LOC2: de cateva ori mai repede pe listele lungi decat litera cu litera)
+	t = curata(text).lower()
+	if not t.isascii():
+		t = u"".join(_LIGATURI.get(c, c) for c in t)
+		t = unicodedata.normalize("NFD", t)
+		return u"".join(x for x in t if x.isalnum() and unicodedata.category(x) != "Mn")
+	return u"".join(x for x in t if x.isalnum())
+
+
+def potriveste(nume, cautat):
+	"""True daca literele cautate (fara semne) sunt in nume; un text gol se potriveste cu orice"""
+	c = faraSemne(cautat)
+	return not c or c in faraSemne(nume)
+
+
+def filtreaza(randuri, cautat, nume=lambda r: r):
+	"""randurile al caror nume (functia `nume`) contine literele cautate: intai cele al caror nume incepe cu ele, apoi
+	cele cu un cuvant care incepe cu ele ("york" -> "New York City"), apoi restul, fiecare grup in ordinea de pana atunci
+	(din 0.8.0 lista unei tari are si mii de locuri: "mont" in Canada da intai Mont-Laurier, Montmagny, Montréal...,
+	apoi Deux-Montagnes, apoi Edmonton)"""
+	c = faraSemne(cautat)
+	if not c:
+		return list(randuri)
+	intai, cuvant, apoi = [], [], []
+	for r in randuri:
+		n = nume(r)
+		f = faraSemne(n)
+		if c not in f:
+			continue
+		if f.startswith(c):
+			intai.append(r)
+		elif any(faraSemne(x).startswith(c) for x in curata(n).replace("-", " ").split()):
+			cuvant.append(r)
+		else:
+			apoi.append(r)
+	return intai + cuvant + apoi
+
+
+def cheieAfisare(text, limba=None):
+	"""cheia de sortare a unui nume aratat: alfabetul romanesc in romana, altfel literele fara semne"""
+	if (limba or _limbaMeniului()) == "ro":
+		return cheieRomaneasca(text)
+	return (faraSemne(text), text)
+
+
+def numeTaraAfisat(cod):
+	"""numele tarii in limba meniului (traducerea numelui romanesc din tabel); codul cand tara nu e in tabel"""
+	nume = numeTara(cod)
+	return _t(nume) if nume else (cod or "")
+
+
+def tariAfisate():
+	"""[(cod, numele in limba meniului)] in ordinea alfabetica a numelui aratat"""
+	limba = _limbaMeniului()
+	lista = [(cod, nfc(_t(nume))) for cod, nume in tari()]
+	return sorted(lista, key=lambda t: cheieAfisare(t[1], limba))
+
+
+def taraImplicita():
+	"""tara aleasa dinainte in liste: cea aleasa ultima data, altfel tara limbii meniului, daca e in tabel"""
+	try:
+		tara = initConfig().tara.value
+		if tara and numeTara(tara):
+			return tara
+	except Exception:
+		pass
+	try:
+		from Components import NimManager
+		tara = NimManager.taraReceptorului()
+		if tara and numeTara(tara):
+			return tara
+	except Exception:
+		pass
+	return ""
+
+
+# Orasele (LOC2, 26.11.2026; pana atunci 35 de orase in Canada si 122 in SUA, prea putine): toate asezarile de
+# cel putin 5000 de locuitori din GeoNames, plus capitalele si resedintele (PPLA, PPLA2) oricat de mici, ~76.000. Ca
+# tuple Python ar fi >10 MB in memorie si ~2 MB de .py incarcat la prima folosire, deci stau intr-un fisier gzip (~0,7 MB)
+# facut de scripturi/locuri/genereaza_locuri.py: antetul are randuri "#..." si unul "#index CC,inceput,sfarsit;..."
+# (octetii fiecarei tari dupa antet), apoi, tara dupa tara, randuri "nume<TAB>lat<TAB>lon" (sutimi de grad), deja in
+# ordinea alfabetica romaneasca. Se citeste numai cand cineva cere orasele unei tari; in memorie raman numai orasele
+# ultimelor TARI_TINUTE tari, nu toata lumea.
+FISIER_ORASE = "/usr/share/enigma2/hds-locuri.tsv.gz"
+TARI_TINUTE = 3
+
+
+def caleOrase():
+	"""fisierul oraselor: cel din imagine, altfel (pe PC, in probe) data/ din arborele sursei"""
+	if os.path.exists(FISIER_ORASE):
+		return FISIER_ORASE
+	aici = os.path.dirname(os.path.abspath(__file__))
+	for sus in (("..", "..", ".."), ("..", "..")):
+		cale = os.path.normpath(os.path.join(aici, *(sus + ("data", "hds-locuri.tsv.gz"))))
+		if os.path.exists(cale):
+			return cale
+	return FISIER_ORASE
+
+
+def _citesteOrase(cod, cale=None):
+	"""[(nume, lat_mii, lon_mii)] ale tarii `cod` din fisierul oraselor, in ordinea din fisier; [] cand lipseste"""
+	import gzip
+	try:
+		with gzip.open(cale or caleOrase(), "rb") as f:
+			date = f.read()
+	except (IOError, OSError, EOFError) as e:
+		jurnal("orasele nu se pot citi: %r" % (e,))
+		return []
+	i, index = 0, {}
+	while date.startswith(b"#", i):
+		j = date.find(b"\n", i)
+		if j < 0:
+			return []
+		rand = date[i:j]
+		if rand.startswith(b"#index "):
+			for bucata in rand[7:].decode("ascii").split(";"):
+				c, a, b = bucata.split(",")
+				index[c] = (int(a), int(b))
+		i = j + 1
+	if cod not in index:
+		return []
+	a, b = index[cod]
+	rez = []
+	for rand in date[i + a:i + b].decode("utf-8").split("\n"):
+		if not rand:
+			continue
+		nume, lat, lon = rand.split("\t")
+		rez.append((nume, int(lat) * 10, int(lon) * 10))
+	return rez
+
+
+def toateOrasele(cale=None):
+	"""(cod, nume, lat_mii, lon_mii) pentru fiecare oras al lumii, dintr-o singura citire a fisierului, fara sa le tina
+	pe toate in memorie (cel mai apropiat oras cand tara nu e in tabel, HdsLoculInternet.pentruLista)"""
+	import gzip
+	try:
+		with gzip.open(cale or caleOrase(), "rb") as f:
+			date = f.read()
+	except (IOError, OSError, EOFError) as e:
+		jurnal("orasele nu se pot citi: %r" % (e,))
+		return
+	i, index = 0, []
+	while date.startswith(b"#", i):
+		j = date.find(b"\n", i)
+		if j < 0:
+			return
+		if date.startswith(b"#index ", i):
+			index = [x.split(",") for x in date[i + 7:j].decode("ascii").split(";")]
+		i = j + 1
+	for cod, a, b in index:
+		for rand in date[i + int(a):i + int(b)].decode("utf-8").split("\n"):
+			if rand:
+				nume, lat, lon = rand.split("\t")
+				yield cod, nume, int(lat) * 10, int(lon) * 10
+
+
+_tinute = []
+
+
 def orase(cod):
 	"""[(nume, lat_mii, lon_mii)] ale tarii `cod`, in ordinea alfabetica romaneasca"""
 	cheie = "orase-" + str(cod)
 	if cheie not in _cache:
-		lista = [(nfc(nume), int(lat) * 10, int(lon) * 10) for c, nume, lat, lon in _date().ORASE if c == cod]
-		_cache[cheie] = sorted(lista, key=lambda o: cheieRomaneasca(o[0]))
+		_cache[cheie] = _citesteOrase(cod)
+		_tinute.append(cheie)
+		while len(_tinute) > TARI_TINUTE:
+			_cache.pop(_tinute.pop(0), None)
 	return list(_cache[cheie])
 
 
@@ -627,6 +893,9 @@ def seteaza(lat_mii, lon_mii, tara="", oras="", sursa=SURSA_MANA, actualizeaza_s
 		return False, _t(MESAJ_INREGISTRARE)
 	s = initConfig()
 	_puneLocul(s, (lat_mii, lon_mii), tara, oras, sursa)
+	# locul dupa internet tine felul "internet"; orice loc ales de om (tabel, de mana) opreste aflarea singura
+	s.mod.value = MOD_INTERNET if sursa == SURSA_INTERNET else MOD_ALES
+	s.mod.save()
 	for _nume, sectiune, _motor in grupuriConfig():
 		_scrieGrup(sectiune, lat_mii, lon_mii)
 	_salveazaSettings()

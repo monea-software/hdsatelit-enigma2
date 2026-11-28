@@ -24,7 +24,7 @@
 # intra oricand cat e pornita si serverul pastreaza cererea in asteptare. Se opreste oricand (o tasta, pagina web,
 # banda din web) si singura la sfarsitul duratei alese (niciodata la "permanent").
 #
-# Cererea semnata: octetii EXACTI ai JSON-ului {"args":[...],"id":...,"op":...,"seq":N} (chei sortate, fara spatii),
+# Cererea semnata: octetii EXACTI ai JSON-ului {"args":[...],"id":...,"n":...,"op":...,"seq":N} (chei sortate, fara spatii),
 # semnati pe PC cu cheia operator, stocati verbatim pe server, verificati aici cu Components/HdsSemnatura.verifica
 # (scop „asistenta-cerere"), apoi parsati. Receptorul refuza: id != id-ul sesiunii, seq <= ultimul vazut, op in afara
 # catalogului, argumente care pica tiparul. Fara termen pe ceasul receptorului (id de sesiune + seq ajung impotriva
@@ -40,6 +40,7 @@
 
 import base64
 import gzip
+import hashlib
 import json
 import os
 import re
@@ -202,15 +203,15 @@ INFORMARE = N_(
 	"\n"
 	"Cum merge: receptorul tău întreabă serverul HD Satelit, printr-o legătură criptată, dacă avem o cerere "
 	"pentru el. Asistența e completă: echipa HD Satelit vede ecranele, setările și imaginea canalului și poate "
-	"controla receptorul prin toate meniurile, inclusiv cele ale modulelor de acces. Echipa vede inclusiv "
-	"numele de utilizator, parolele, PIN-urile și cheile. Poți opri oricând.\n"
+	"controla receptorul prin toate meniurile, inclusiv cele ale modulelor de acces. Poți opri "
+	"oricând.\n"
 	"\n"
 	"Cât timp e pornită vezi un semn pe ecran. O oprești oricând de aici sau din pagina web, iar după timpul ales "
 	"se oprește singură.\n"
 	"\n"
 	"Ce date ajung la noi: modelul și versiunea receptorului, țara, ora și durata sesiunii și răspunsurile la "
 	"cererile din jurnal (jurnalele pot arăta, între altele, ce canale s-au deschis și când). Nu păstrăm adresa "
-	"ta de internet. Putem citi inclusiv parole, chei, setări ale cartelelor de acces și fișierele tale. Datele stau pe "
+	"ta de internet. Putem citi setările cartelelor de acces și fișierele tale. Datele stau pe "
 	"serverul nostru (Hetzner, Germania; legătura trece prin Cloudflare) 30 de zile, apoi se șterg. Le folosim "
 	"numai ca să reparăm imaginea și nu le dăm altora.\n"
 	"\n"
@@ -232,7 +233,7 @@ TEXT_CINE = N_("Ca să știm ce receptor cere ajutor, trimite și o amprentă ca
 # Regula unica pentru pornire, informare si pagina web.
 TEXT_CUM_MERGE = N_(
 	"Echipa HD Satelit vede ecranele, setările și imaginea canalului și poate controla receptorul prin toate meniurile. "
-	"Echipa vede inclusiv numele de utilizator, parolele, PIN-urile și cheile. Poți opri oricând.")
+	"Poți opri oricând.")
 
 
 def textInformare():
@@ -447,17 +448,25 @@ def disponibil():
 CERERE_MAX = 32768
 
 
-def octetiCerere(id_sesiune, seq, op, args):
+def octetiCerere(id_sesiune, seq, op, args, nonce=""):
 	"""Octetii canonici care se semneaza/verifica: JSON cu chei sortate, fara spatii, numai ASCII. Aceeasi functie e
-	si in unealta de pe PC (unelte/asistenta/asistenta_lib.py); o proba verifica potrivirea octet cu octet."""
+	si in unealta de pe PC (unelte/asistenta/asistenta_lib.py); o proba verifica potrivirea octet cu octet. nonce (0.8.0):
+	numarul intamplator al receptorului din sesiunea aceasta; gol la o sesiune pornita de o versiune mai veche."""
 	obj = {"id": str(id_sesiune), "seq": int(seq), "op": str(op), "args": [str(a) for a in (args or [])]}
+	if nonce:
+		obj["n"] = str(nonce)
 	return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
 
 
-def verificaCerere(exterior, id_sesiune, ultim_seq, chei=None, revocate=None):
+def verificaCerere(exterior, id_sesiune, ultim_seq, chei=None, revocate=None, nonce=""):
 	"""(bun, date, motiv): verifica o cerere transportata ({"c": base64(octeti), "s": textul .sig}). date e
-	{"seq","op","args"} cand e buna. motiv (pentru jurnal) cand nu: forma, semnatura:<...>, alta-sesiune, seq-vechi,
-	<motivul catalogului>."""
+	{"seq","op","args"} cand e buna si numai {"seq"} cand semnatura si sesiunea sunt bune, dar catalogul o refuza; altfel
+	None. motiv (pentru jurnal) cand nu: forma, semnatura:<...>, alta-sesiune, alt-numar, seq-vechi, <motivul catalogului>.
+
+	nonce (0.8.0): numarul intamplator ales de receptor la inregistrare si semnat de echipa in fiecare cerere. Id-ul
+	sesiunii il alege serverul, deci numai cu id + seq un server care repeta un id putea da din nou cereri vechi, semnate
+	pentru alta sesiune (semnalat de el bandido, LegitFTA 28717 post-110339). Gol = sesiune pornita de o versiune mai veche
+	si reluata dupa actualizare: se primeste forma fara numar."""
 	if HdsSemnatura is None:
 		return False, None, "fara-verificare"
 	if not isinstance(exterior, dict):
@@ -485,6 +494,8 @@ def verificaCerere(exterior, id_sesiune, ultim_seq, chei=None, revocate=None):
 		return False, None, "forma"
 	if str(o.get("id", "")) != str(id_sesiune):
 		return False, None, "alta-sesiune"
+	if nonce and o.get("n") != nonce:
+		return False, None, "alt-numar"
 	try:
 		seq = int(o.get("seq"))
 	except Exception:
@@ -495,7 +506,7 @@ def verificaCerere(exterior, id_sesiune, ultim_seq, chei=None, revocate=None):
 	args = o.get("args", [])
 	bun, mot = Catalog.valideaza(op, args)
 	if not bun:
-		return False, None, mot
+		return False, {"seq": seq}, mot
 	return True, {"seq": seq, "op": op, "args": list(args)}, ""
 
 
@@ -810,6 +821,8 @@ class Sesiune(object):
 		self.stare = OPRIT
 		self.motiv_oprire = ""
 		self.ultim_seq = 0
+		self.nonce = ""                    # numarul intamplator al sesiunii (_inregistreaza), semnat in fiecare cerere
+		self._refuzate = []                # amprentele cererilor refuzate fara semnatura buna (_face_cerere)
 		self.pana_la_ora = None            # ora peretelui la care se opreste singura (None la permanent)
 		self._ancora_ceas = None           # (ora peretelui, ceasul monoton) la ultima citire: _urmeazaCeasul
 		# numai pentru socoteala ancorei (ramasS o cere si firul interfetei, la fiecare secunda): nu asteapta scrierea pe disc
@@ -1022,7 +1035,8 @@ class Sesiune(object):
 					# reluare inseamna cadere; un fisier fara cheie (scris de o versiune mai veche) da cauza necunoscuta
 					json.dump({"v": PROTOCOL, "id": self.id, "secret": self.secret, "server": self.server,
 						"nivel": self.nivel, "durata_min": self.durata_min, "pana_la_ora": self.pana_la_ora,
-						"ultim_seq": self.ultim_seq, "limba": self.limba, "dosar": self.dosar, "cod": self.cod,
+						"ultim_seq": self.ultim_seq, "nonce": self.nonce, "limba": self.limba, "dosar": self.dosar,
+						"cod": self.cod,
 						"asteapta": self.stare == ASTEAPTA, "copie": self.copie_pentru,
 						"semn_iesire": 1, "iesire": self.iesire, "reluari": self.reluari[-RELUARI_MAX:],
 						"durata_netrimisa": bool(self.durata_netrimisa)}, f)
@@ -1068,8 +1082,10 @@ class Sesiune(object):
 		self.opreste("fara-server")
 
 	def _inregistreaza(self):
+		# numarul intamplator al acestei sesiuni: fiecare cerere a echipei il are in octetii semnati (verificaCerere)
+		self.nonce = os.urandom(16).hex()
 		corp = {"v": PROTOCOL, "model": _model(), "imagine": _versiuneImagine(), "nivel": self.nivel,
-			"durata_min": self.durata_min, "limba": self.limba}
+			"durata_min": self.durata_min, "limba": self.limba, "nonce": self.nonce}
 		# cine cere ajutor (amprenta; la un beta tester si inscrierea si numele), ca echipa sa stie al cui e receptorul
 		corp.update(_cine())
 		# campurile optionale numai cand omul a spus ceva: altfel corpul e cel de dinainte
@@ -1149,6 +1165,10 @@ class Sesiune(object):
 		except Exception as e:
 			ok, motiv = False, type(e).__name__
 		self.copie_pentru = self.id
+		if getattr(self, "_copie_depasita", False):
+			# o cerere de control a mers inainte de sfarsitul copiei (_asteapta_copia): semnul scris de faCopieAsistenta
+			# ar ascunde Albastru, desi echipa a schimbat deja ceva
+			_scoateSemnul()
 		if self._stop.is_set():
 			# ASI7: copia ruleaza pe firul ei si poate termina dupa Opreste; fisierul de stare sters de _curata nu se
 			# scrie din nou (sesiunea s-ar relua la pornirea urmatoare) si nici jurnalul sesiunii oprite
@@ -1184,8 +1204,15 @@ class Sesiune(object):
 		fir = getattr(self, "_fir_copie", None)
 		if fir is not None and fir.is_alive():
 			self.jurnal.adauga(_t(TEXT_ASTEAPTA_COPIA))
-			while fir.is_alive() and not self._stop.is_set():
+			# cel mult TERMEN_COPIE_S: pe un receptor cu multe pluginuri si / aproape plin prima cerere de control a
+			# asteptat copia 9 minute, fara niciun raspuns spre echipa (asistenta 533827, 25.11.2026); dupa termen
+			# cererea merge, iar copia se termina singura pe firul ei (fisierele citite dupa pot prinde prima schimbare)
+			sfarsit = time.time() + TERMEN_COPIE_S
+			while fir.is_alive() and not self._stop.is_set() and time.time() < sfarsit:
 				fir.join(1)
+			if fir.is_alive() and not self._stop.is_set():
+				self._copie_depasita = True
+				_jurnal("copia setarilor nu e gata dupa %d s: prima schimbare a echipei merge inainte" % TERMEN_COPIE_S)
 		return not self._stop.is_set()
 
 	def _bucla_cereri(self):
@@ -1216,12 +1243,17 @@ class Sesiune(object):
 			self._asteapta_pas(self._pas())
 
 	def _face_cerere(self, exterior):
-		bun, date, motiv = verificaCerere(exterior, self.id, self.ultim_seq)
+		bun, date, motiv = verificaCerere(exterior, self.id, self.ultim_seq, nonce=self.nonce)
 		if not bun:
+			amprenta = _amprentaCerere(exterior)
+			if amprenta in self._refuzate:
+				# refuzata deja, fara semnatura buna: serverul o da la fiecare intrebare (seq > ultim_seq), dar are o
+				# singura data rand in jurnal si un singur raspuns
+				return
 			self.jurnal.adauga(_t("cerere refuzată: %s") % motiv)
-			# o cerere cu seq nou dar refuzata nu trebuie sa blocheze: o sarim daca are un seq citibil. Mutam ultim_seq
-			# dupa un seq NEVERIFICAT: in modelul cutiei postale asta nu slabeste apararea (un server rau poate oricum
-			# sa nu livreze cereri); apararea impotriva reluarii e ca fiecare cerere e semnata cu id+seq si verificata.
+			# ultim_seq se muta numai cand semnatura si sesiunea sunt bune (date = {"seq"}: a refuzat-o catalogul). Pana in
+			# 0.7.9 se muta si dupa un seq NEVERIFICAT: un server putea trimite o cerere falsa cu seq foarte mare, iar toate
+			# cererile adevarate de dupa ea erau refuzate "seq-vechi" (el bandido, LegitFTA 28717 post-110339).
 			seq = _seq_din(exterior)
 			if seq is not None and seq > self.ultim_seq:
 				# si echipa afla ca a fost refuzata (altfel ar astepta un raspuns care nu vine niciodata): un raspuns scurt
@@ -1231,8 +1263,11 @@ class Sesiune(object):
 						text="(cerere refuzata de receptor: %s)" % motiv))
 				except Exception as e:
 					_jurnal("raspunsul la cererea refuzata: %s" % type(e).__name__)
-				self.ultim_seq = seq
+			if date:
+				self.ultim_seq = date["seq"]
 				self._scrie_stare()
+			else:
+				self._refuzate = (self._refuzate + [amprenta])[-REFUZATE_MAX:]
 			return
 		seq, op, args = date["seq"], date["op"], date["args"]
 		intrare = Catalog.gaseste(op)
@@ -1671,6 +1706,19 @@ def textRaspunsIntrebare(q):
 	return 1, "(%s)" % motive.get(q.fara, "fara raspuns: %s%s" % (q.fara or "?", pe_tv))
 
 
+# cate cereri refuzate (fara semnatura buna) isi tine minte o sesiune, ca sa nu le scrie in jurnal la fiecare intrebare
+REFUZATE_MAX = 64
+
+
+def _amprentaCerere(exterior):
+	"""Amprenta unei cereri asa cum a venit de la server (pentru _refuzate), si cand are o forma gresita."""
+	try:
+		octeti = json.dumps(exterior, sort_keys=True, default=str).encode("utf-8", "replace")
+	except Exception:
+		octeti = repr(type(exterior)).encode("ascii", "replace")
+	return hashlib.sha256(octeti).hexdigest()
+
+
 def _seq_din(exterior):
 	try:
 		octeti = base64.b64decode((exterior or {}).get("c", "").encode("ascii"), validate=True)
@@ -1927,6 +1975,8 @@ TEXT_COPIE_FACUTA = N_("copia setărilor făcută înainte de orice schimbare")
 TEXT_COPIE_RATATA = N_("copia setărilor nu s-a putut face: %s")
 # randul jurnalului sesiunii cand prima schimbare a echipei asteapta copia (citirile au plecat deja, ASI7)
 TEXT_ASTEAPTA_COPIA = N_("aștept copia setărilor înainte de prima schimbare")
+# cat asteapta prima cerere de control dupa copia setarilor (Sesiune._asteapta_copia)
+TERMEN_COPIE_S = 30
 
 
 def _copie():
@@ -2145,6 +2195,8 @@ def reia(ctx=None):
 	ses.id = s["id"]
 	ses.secret = s["secret"]
 	ses.ultim_seq = int(s.get("ultim_seq", 0))
+	# fara numar in fisier: sesiune pornita de o versiune dinainte de 0.8.0 (serverul n-are numarul ei), se reia fara el
+	ses.nonce = s.get("nonce") if isinstance(s.get("nonce"), str) and re.match(r"^[0-9a-f]{32}\Z", s["nonce"]) else ""
 	ses.pana_la_ora = pana
 	# durata schimbata inainte de repornire si neajunsa la server: firul o trimite din nou (_trimiteDurata)
 	ses.durata_netrimisa = bool(s.get("durata_netrimisa"))

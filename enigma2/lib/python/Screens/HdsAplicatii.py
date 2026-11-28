@@ -20,6 +20,7 @@
 # Skinul: blocul HdsAplicatii din tema aleasa, altfel cel de mai jos, facut dupa marimea ecranului (1920x1080 sau
 # 1280x720), numai cu fontul „Regular” (merge cu orice tema) si culori scrise direct (ale temei Clasic).
 
+import os
 from enigma import eTimer, getDesktop, gRGB
 
 from Screens.Screen import Screen
@@ -204,16 +205,33 @@ class HdsAplicatii(Screen):
 	def _titlu(self, a):
 		return _(a["titlu"]) if a.get("titlu_tradus") else a["titlu"]
 
+	def _ytNativ(self, a):
+		"""YTN1: the YouTube card opens the native screen (no browser, so no note about the browser's video)"""
+		if a.get("id") != "youtube":
+			return False
+		try:
+			from Screens import HdsYouTube as YTN
+			if YTN.nativDinAplicatii():
+				return True
+		except Exception:
+			return False
+		# YTN9: fara navigatorul cu care ar porni scurtatura, cardul deschide tot ecranul nativ
+		try:
+			return not os.path.exists(A.program(a, os.path.exists)[1])
+		except Exception:
+			return True
+
 	def _textStare(self, a):
 		s = a.get("stare")
+		if self._ytNativ(a):
+			return _("Instalat")
 		if A.fel(a) == A.FEL_SCURTATURA and s != A.CERE_WIDEVINE:
 			nota = A.stare(a, self.video)
 			return _(nota) if nota else _("Instalat")
 		text = _(A.TEXTE_STARE.get(s, ""))
 		if s == A.CERE_NAVIGATOR:
-			trebuie, _liber = A.locNavigator()
-			if trebuie:
-				text += " · ~%d MB" % (trebuie // 1048576)
+			# NAV8: marimea si unde se instaleaza (memoria interna sau stickul)
+			text += A.sufixNavigator(s)
 		if s == A.DISPONIBIL:
 			p = A.pachetDinCatalog(a, self.catalog)
 			if p is not None and p.marime:
@@ -274,7 +292,11 @@ class HdsAplicatii(Screen):
 		if n:
 			self["gol"].setText("")
 			a = self.aplicatii[self.ales]
-			self["descriere"].setText(A.descriereIntreaga(a, _, self.video))
+			if self._ytNativ(a):
+				from Screens import HdsYouTube as YTN
+				self["descriere"].setText(_(YTN.T_DESCRIERE))
+			else:
+				self["descriere"].setText(A.descriereIntreaga(a, _, self.video))
 		else:
 			ascunse = len(A.listaPentruOm(cu_ascunse=True, catalog=self.catalog))
 			self["gol"].setText(_("Toate aplicațiile sunt ascunse. MENU: arată-le din nou.") if ascunse else
@@ -353,6 +375,12 @@ class HdsAplicatii(Screen):
 			self.fa("porneste", self.aplicatii[self.ales])
 
 	def fa(self, actiune, a):
+		if actiune in ("porneste", "instaleaza-navigator") and self._ytNativ(a):
+			# YTN1 (0.8.0): the native YouTube screen (no browser, so nothing to install on MIPS) on weak receivers,
+			# or always when chosen in its MENU
+			from Screens import HdsYouTube as YTN
+			self.session.openWithCallback(lambda *r: self.reumple(a["id"]), YTN.HdsYouTube)
+			return
 		if actiune == "instaleaza-navigator":
 			text = A.instaleazaNavigator(self.session)
 			self._mesaj(_(A.TEXT_NAVIGATOR_PORNIT) if text is None else text)
@@ -448,6 +476,13 @@ class HdsAplicatii(Screen):
 				lista.append((_(TEXTE_ACTIUNI[x]), x))
 			if A.fel(a) == A.FEL_SCURTATURA:
 				lista.append((_("Deschide cu..."), "browser-aplicatie"))
+			if a.get("id") == "youtube":
+				# YTN1: how the card opens (native screen or the youtube.com/tv page), on every receiver
+				try:
+					from Screens import HdsYouTube as YTN
+					lista.append((_("YouTube din Aplicații: %s") % _(YTN.config.plugins.hdsyoutube.deschide.getText()), "youtube-deschide"))
+				except Exception as e:
+					print("[HdsAplicatii] native YouTube: %s" % e)
 			if self.ales > 0:
 				lista.append((_("Mută la stânga"), "stanga"))
 			if self.ales < len(self.aplicatii) - 1:
@@ -484,6 +519,19 @@ class HdsAplicatii(Screen):
 		elif cheie == "arata":
 			A.arataToate()
 			self.reumple(id_)
+		elif cheie == "youtube-deschide":
+			from Screens import HdsYouTube as YTN
+			element = YTN.config.plugins.hdsyoutube.deschide
+
+			def gata(alegere=None):
+				if alegere:
+					element.value = alegere[1]
+					element.save()
+					YTN.config.plugins.hdsyoutube.save()
+					self.reumple(id_)
+			valori = [v for v, _t in element.choices.choices]
+			self.session.openWithCallback(gata, ChoiceBox, title=_("YouTube"), list=[(_(t), v) for v, t in element.choices.choices],
+				selection=valori.index(element.value) if element.value in valori else 0)
 
 	def _alegeBrowser(self, a=None):
 		if a and A.motorObligatoriu(a):

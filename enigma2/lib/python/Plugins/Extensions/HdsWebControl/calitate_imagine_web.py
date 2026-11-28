@@ -18,7 +18,8 @@
 #                                           valorile se vad pe loc fara sa se salveze (numai pentru profilul de acum;
 #                                           revin
 #                                           singure dupa 3 minute fara „Păstrează”); renunta=1 pune inapoi ce e salvat.
-#                                           O singura valoare gresita nu schimba nimic.
+#                                           O singura valoare gresita nu schimba nimic. fereastra=jos|colt: where the TV
+#                                           screen sits (saved at once, used when the TV screen opens next).
 #   POST /api/calitate-imagine-implicite    profil=<profil>|toate: valorile din fabrica, salvate
 #   POST /api/calitate-imagine-hdr          iesire=auto|hdr10|hlg|none: canalul porneste din nou si pe televizor apare
 #                                           intrebarea (20 s; fara raspuns revine iesirea de dinainte)
@@ -30,7 +31,7 @@
 # din enigma2 la incarcare: probele de pe PC dau modulul lor (M), setarile lor si sesiunea lor.
 
 MAX_TEXT = 40
-CHEI_FIXE = ("profil", "pornit", "incearca", "renunta", "iesire", "reglaj")
+CHEI_FIXE = ("profil", "pornit", "incearca", "renunta", "iesire", "reglaj", "fereastra")
 CHEI_REGLAJE = ("luminozitate", "contrast", "saturatie", "nuanta", "claritate", "zgomot", "zgomot_cadru", "blocuri",
 	"contururi", "contrast_adaptiv", "culori")
 CHEI = CHEI_FIXE + CHEI_REGLAJE
@@ -90,6 +91,9 @@ def stare(M=None):
 		"scris_nume": M.numeIesireHdr(c.hdrScris) if c.hdrScris else "", "intrebare": intrebare,
 		"tv": c.tv() if c.hdrOferit() else None}
 	rez["brut"] = (c.driver.citeste() or "") if c.oferit else ""
+	# where the TV screen sits (row "Fereastra" on the TV)
+	rez["fereastra"] = {"alegere": config.hds_calitate.fereastra.value,
+		"alegeri": [[v, _t(eticheta)] for v, eticheta in M.FERESTRE]}
 	return rez
 
 
@@ -118,6 +122,10 @@ def _citeste(argumente, M):
 			if argumente[cheie] not in ("0", "1"):
 				return None, _t("„%s” se alege cu 1 (da) sau 0 (nu).") % cheie
 			v[cheie] = argumente[cheie] == "1"
+	if "fereastra" in argumente:
+		if argumente["fereastra"] not in [x[0] for x in M.FERESTRE]:
+			return None, _t("Acțiune necunoscută.")
+		v["fereastra"] = argumente["fereastra"]
 	profil = argumente.get("profil")
 	reglaje = dict((k, argumente[k]) for k in CHEI_REGLAJE if k in argumente)
 	if profil is not None and profil not in M.PROFILURI:
@@ -153,6 +161,14 @@ def seteaza(argumente, M=None):
 	if v.get("renunta"):
 		M.anuleaza()
 		return _cuMesaj(stare(M), True, _t("Am pus înapoi reglajele păstrate."))
+	if "fereastra" in v:
+		# saved at once, on its own (not part of "Păstrează"); the TV screen uses it the next time it opens
+		config.hds_calitate.fereastra.value = v["fereastra"]
+		config.hds_calitate.fereastra.save()
+		from Components.config import configfile
+		configfile.save()
+		if "pornit" not in v and not v.get("valori") and not v.get("incearca"):
+			return _cuMesaj(stare(M), True, _t("Păstrat. Fereastra stă așa când deschizi ecranul pe televizor."))
 	profil = v.get("profil")
 	if v.get("incearca"):
 		acum = c.profilAcum()
@@ -315,6 +331,13 @@ def rute(baza, resource, M=None, sesiune=None):
 		b"calitate-imagine-hdr": HdrResource(),
 		b"calitate-imagine-comparatie": ComparatieResource(),
 	}
+	# PQ2 (0.8.0): the pep_* adjustments of the boards without /proc/msp/pq (reglaje_imagine_web.py), same page
+	try:
+		from . import reglaje_imagine_web
+	except ImportError:
+		reglaje_imagine_web = None   # the module loaded on its own (the PC tests)
+	if reglaje_imagine_web is not None:
+		api.update(reglaje_imagine_web.rute(baza))
 	return api, PaginaResource()
 
 
@@ -333,6 +356,12 @@ def pagina(request):
 		if browser is None:
 			return P._PAGINA_ASOCIERE.encode("utf-8")
 		config_pagina = P._configPanou(P.csrfPentru(secret), "", browser.get("nume", ""))
+	if not _m().disponibil():
+		# PQ2 (0.8.0): no HiSilicon quality block; the pep_* adjustments when the driver has them
+		from . import reglaje_imagine_web
+		if reglaje_imagine_web.oferit():
+			return reglaje_imagine_web.pagina_text(P._STIL_COMUN, config_pagina, _drumMeniu("hds_reglaje_imagine"),
+				_limba()).encode("utf-8", "replace")
 	return pagina_text(P._STIL_COMUN, config_pagina).encode("utf-8", "replace")
 
 
@@ -378,6 +407,8 @@ ETICHETE = {
 	"HDR": N_("Ieșire HDR"),
 	"NOTA_HDR": N_("Automat: canalele HDR ies în HDR, celelalte în SDR. Mereu HDR10 sau HLG: și meniurile și canalele SDR ies în HDR, fără clipire la schimbarea canalului. Canalul pornește din nou și pe televizor apare o întrebare: fără răspuns în 20 de secunde revine ieșirea de dinainte."),
 	"INCEARCA_HDR": N_("Încearcă pe televizor"),
+	"FEREASTRA": N_("Fereastra"),
+	"NOTA_FEREASTRA": N_("Unde stă fereastra pe televizor: jos, pe toată lățimea, sau mică, sus în stânga, ca să vezi mai mult din imagine."),
 	"BRUT": N_("Text brut"),
 	"NOTA_BRUT": N_("Ce arată acum blocul de calitate al plăcii (/proc/msp/pq)."),
 }
@@ -494,6 +525,12 @@ PAGINA = """<!DOCTYPE html>
     <p class="nota" id="nepastrat"></p>
     <p class="mesaj" id="mesaj"></p>
   </section>
+  <section class="card" id="card_fereastra">
+    <h2>__T_FEREASTRA__</h2>
+    <div class="rand"><select id="fereastra" aria-label="__T_FEREASTRA__"></select></div>
+    <p class="nota">__T_NOTA_FEREASTRA__</p>
+    <p class="mesaj" id="mesaj_fereastra"></p>
+  </section>
   <section class="card hdr ascuns" id="card_hdr">
     <h2>__T_HDR__</h2>
     <div id="alegeri_hdr"></div>
@@ -591,6 +628,15 @@ function arataStarea(d){
   $("incearca_hdr").disabled = !!h.intrebare;
   (d.profiluri || []).forEach(function(p){ p.reglaje.forEach(function(r){ var b = $("c_" + r.cheie); if(b){ b.classList.toggle("ales", d.comparatie === r.cheie); } }); });
   $("text_brut").textContent = d.brut || "";
+  var f = d.fereastra, sf = $("fereastra");
+  $("card_fereastra").classList.toggle("ascuns", !f);
+  if(f){
+    if(sf.getAttribute("data-alegeri") !== JSON.stringify(f.alegeri)){
+      sf.textContent = ""; sf.setAttribute("data-alegeri", JSON.stringify(f.alegeri));
+      f.alegeri.forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; sf.appendChild(o); });
+    }
+    if(document.activeElement !== sf){ sf.value = f.alegere; }
+  }
 }
 function valori(){
   var q = {profil: PROFIL, pornit: $("pornit").checked ? "1" : "0"}, p = profilDate(PROFIL);
@@ -627,6 +673,9 @@ function citeste(cuReglaje){
   }).catch(function(){ $("incarcare").textContent = TXT.nu_raspunde_retea; });
 }
 $("pornit").addEventListener("change", schimbare);
+$("fereastra").addEventListener("change", function(){
+  trimite("/api/calitate-imagine-seteaza", {fereastra: $("fereastra").value}).then(function(d){ mesaj("mesaj_fereastra", d.message, !d.result); });
+});
 $("profil").addEventListener("change", function(){
   if(SCHIMBAT){ trimite("/api/calitate-imagine-seteaza", {renunta: "1"}); }
   PROFIL = $("profil").value; construiesteLista(); SCHIMBAT = false; $("nepastrat").textContent = ""; arataStinse();

@@ -195,6 +195,7 @@ PAGINI_TASTE = (
 	("/canale", N_("Canale")),
 	("/cautare", N_("Căutare canale")),
 	("/ghid", N_("Ghidul canalului")),
+	("/ghid-grafic", N_("Ghid grafic")),
 	("/ghid-internet", N_("Ghidul TV din internet")),
 	("/radio", N_("Radio")),
 	("/filme", N_("Filmul de acum")),
@@ -2345,8 +2346,25 @@ def context(request, html, P, jeton="", csrf=""):
 		"nume": numeReceptor(),
 		"versiune": versiuneImagine(),
 		"stil": stil(c),
-		"banda_nota": bandaNota(cale),
+		"banda_nota": bandaNota(cale) + bandaSpatiu(),
 	}
+
+
+def bandaSpatiu():
+	"""Anuntul memoriei interne aproape pline (Components/HdsJurnalSistem.anuntSpatiu, perechea anuntului de pe
+	ecran), sus pe orice pagina cat / e sub prag; fara citiri de disc aici (starea verificarii de la 30 s)."""
+	try:
+		from Components import HdsJurnalSistem
+		text = HdsJurnalSistem.anuntSpatiu()
+	except Exception as eroare:
+		_jurnal("banda memoriei interne: %s" % eroare)
+		return u""
+	if not text:
+		return u""
+	import html as _html
+	return (u'<section id="hdsSpatiuIntern" role="alert" style="margin:0 0 16px;padding:12px 18px;border-left:6px solid '
+		u'var(--atentie,#E8B93A);background:var(--panou,#1b2130);border-radius:8px;line-height:1.45;">%s</section>'
+		% _html.escape(text))
 
 
 def bandaNota(cale):

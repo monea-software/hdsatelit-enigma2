@@ -26,6 +26,9 @@
  * PROTOCOL (o linie pe rand; mesajele pentru om vin din enigma2, traduse):
  *   PROFIL <port> <i2c> <adr_demod> <tuner> <adr_tuner> <gpio>   ce arata placa (gpio 0x0 = placa necunoscuta)
  *   PROFIL <port> hife <tuner>                                   placa cu /dev/hife (SF8008: Si2166, AVL62X1)
+ *   PROFIL <port> pasi <driver>                                  nicio cautare a producatorului: acordari pe pasi prin
+ *                                                                API-ul DVB (vezi calea "pasi"), rezerva pe orice tuner
+ *                                                                de satelit
  *   PORNIT <nr_treceri> <latime_totala_khz>                      cautarea a pornit
  *   TRECERE <nr> <pol> <ton22k> <if_start_khz> <if_stop_khz>     incepe o trecere (numarate de la 1)
  *   PROGRES <procent> <gasite>                                   pe toata cautarea
@@ -44,7 +47,8 @@
  *   --tuner N                      portul tunerului de satelit (implicit 0)
  *   --lo-jos MHZ --lo-sus MHZ      oscilatoarele LNB-ului (implicit 9750 si 10600); egale = LNB cu un oscilator;
  *                                  sub 7500 MHz = banda C (frecventa reala = LO - IF)
- *   --felie KHZ                    latimea unei felii (implicit 150000, masurat pe un V20; 0 = trecerea intreaga)
+ *   --felie KHZ                    latimea unei felii (implicit 150000, masurat pe un V20; 0 = trecerea intreaga); pe
+ *                                  AVL62X1 cel mult 36000, distanta dintre centrele ferestrelor de 80 MHz
  *   --timp-max S                   paznicul de timp: dupa atatea secunde se opreste curat (implicit 1200)
  *   --rata-min KSYM                numai pe calea hife: cea mai mica rata cautata, in kSym/s (implicit 1000); sub 1000
  *                                  coboara cel mult pana la minimul declarat de driverul tunerului (FE_GET_INFO)
@@ -66,9 +70,16 @@
  *                                 dupa-ton-oprit, dupa-ton. Lipsa pastreaza pauzele de pana acum.
  *                                  (comutarea merge pe calea „hife”; pe calea bibliotecii se spune numai in JURNAL)
  *   --lib CALE                     alta cale pentru biblioteca platformei
+ *   --cunoscut F_KHZ,RATA_KSYM,POL numai pe calea "pasi": un transponder cunoscut al satelitului (frecventa reala, rata,
+ *                                  polarizarea), incercat intai, la frecventa si rata lui; se pot da mai multe
+ *   --rate R1,R2,...               numai pe calea "pasi": ratele incercate din pas in pas, in kSym/s, in ordinea data
+ *                                  (implicit 27000,21800,29200: fiecare prinde rate de la ea pana la ~3% peste)
+ *   --pasi-ms MS                   numai pe calea "pasi": cat se asteapta blocarea unei acordari (implicit 200)
+ *   --pasi                         calea "pasi" si cand placa are alta cale (pentru masuratori)
  *   --sonda                        NU porneste nimic: verifica placa, biblioteca si simbolurile, tuner_used si cine tine
  *                                  frontend-ul; scrie PROFIL si SONDA. Nu deschide tunerul. Pe o placa „hife”: numai
  *                                  dispozitivul, numele tunerului din /proc/bus/nim_sockets si cine tine frontend-ul.
+ *                                  Fara biblioteca si fara /dev/hife, cu frontend de satelit: "SONDA 0 pasi".
  *   --versiune
  *
  * IESIRE: 0 = GATA/OPRIT/SONDA, 1 = eroare la pornire, 2 = argument gresit, 3 = oprit de paznicul de timp.
@@ -409,6 +420,7 @@ static long diseqc_pauze[] = { 120, 50, 50, 70, 20, 200, 50, 150, 0, 150 };
 
 static struct {
 	uint32_t frecventa_khz, rata_ksym, polarizare;
+	uint32_t fereastra;             /* numai AVL62X1: ultima fereastra in care a fost vazut */
 } gasite[MAX_GASITE];
 static int nr_gasite = 0;
 static int cod_lucru = 0;          /* 0 bine, altceva = eroare de pornire (deja scrisa) */
@@ -584,7 +596,8 @@ gata:
  * cautarea oarba facuta de un fir in nucleu, pornita prin dispozitivul /dev/hife. Interfata, aflata din binarele
  * livrate (hi_fe_ioctl in hi-dvb.ko, unealta producatorului care il foloseste):
  *   0x40046f67  alege frontend-ul (int)
- *   0xc0146f65  porneste cautarea pe banda IF data (MHz) si ratele date (Sym/s); toti parametrii 0 = anuleaza
+ *   0xc0146f65  porneste cautarea pe banda IF data (MHz) si ratele date (kSym/s la Si2166 si AVL62X1); toti parametrii
+ *               0 = anuleaza
  *   0x6f66      fara tampon: numarul gasit cand e gata, -1 cat lucreaza; cu tampon: lista (frecventa IF in MHz,
  *               rata in kSym/s, apoi FEC, inversia, sistemul, modulatia, rolloff-ul si pilotul)
  * Tensiunea si tonul LNB-ului nu trec prin /dev/hife: le punem noi pe frontend-ul DVB al aceluiasi tuner. */
@@ -644,26 +657,81 @@ static int placa_hife(long port) {
 	return strstr(nume_nim, "Si2166") != NULL || strstr(nume_nim, "AVL62X1") != NULL;
 }
 
+/* AVL62X1 (Octagon SF8008 Supreme si alte placi cu hi-dvb.ko). Citit in codul driverului livrat pe receptor
+ * (avl62x1_set_blindscan, avl62x1_blindscan_thread, AVL62X1_BlindScan_Start):
+ *   - firul asteapta intai 2000 ms, apoi cauta o fereastra in jurul frecventei de START, cu filtrul tunerului la maximum
+ *     (+-40 MHz, deci 80 MHz); cipul spune cat sa sara, iar firul reia pana la STOP. O singura fereastra pe pornire se
+ *     cere cu stop = centru + pasul nostru;
+ *   - rata minima ajunge in cip trunchiata la 16 biti si citita ca kSym/s: data in Sym/s, 1000000 devenea 16960 kSym/s.
+ *     Unealta producatorului da tot kSym/s;
+ *   - firul nu schimba tonul, tensiunea sau comutatorul (un enigma2 care tine frontend-ul deschis reacordeaza insa in
+ *     timpul cautarii: ton oprit, reset DiSEqC). Retrimitem oricum LNB-ul dupa fiecare pornire, in cele 2 s de asteptare ale firului (nu costa timp si nu cade peste
+ *     esantionare), ca un driver de alta data sau un comutator care a pierdut comanda sa nu lase cautarea pe portul gresit;
+ *   - dupa ce termina, firul sta pana i se cere oprirea (parametri 0), ca la unealta producatorului.
+ * Pasul e de 36 MHz, nu 70-80: asa orice purtatoare de cel mult 44 MHz (32 MSym/s cu rolloff 0,35) incape INTREAGA
+ * intr-o fereastra, oriunde ar cadea; la 70 MHz cele de la imbinare ar fi taiate de ambele ferestre. */
+#define AVL_FEREASTRA_KHZ 80000u
+#define AVL_PAS_KHZ       (AVL_FEREASTRA_KHZ - 44000u)
+#define AVL_FIR_ASTEAPTA_MS 2000   /* asteptarea firului inainte de prima fereastra */
+#define AVL_LNB_DUPA_MS   400      /* retrimiterea incepe la atat de la pornire: dupa orice ar face un alt driver la pornirea firului */
+#define AVL_LNB_MS_MAX    (AVL_FIR_ASTEAPTA_MS - AVL_LNB_DUPA_MS - 300)   /* si numai daca incape sigur in asteptare */
+#define AVL_FELIE_MS_MAX  120000u  /* o fereastra tine ~3 s, plus cel mult 1,5 s de confirmare pe purtatoare; peste = fara raspuns, se reia o data */
+#define AVL_INCERCARI     2
+
+static int mod_avl = 0;
+static uint32_t fereastra_curenta = 0;
+
+/* o trecere de cel mult 44 MHz (un gol, vecinatatea unui transponder cunoscut) incape intr-o fereastra, cu centrul la mijloc */
+static uint32_t pas_avl(const Trecere *t) {
+	uint32_t latime = t->if_stop - t->if_start;
+	uint32_t pas = felie_khz && felie_khz < AVL_PAS_KHZ ? felie_khz : AVL_PAS_KHZ;
+	if (pas == AVL_PAS_KHZ && latime <= AVL_FEREASTRA_KHZ - AVL_PAS_KHZ) return latime;
+	return pas < FELIE_MIN_KHZ ? FELIE_MIN_KHZ : pas;
+}
+
+/* Ferestrele AVL62X1 se acopera pe jumatate, iar driverul rotunjeste la 1 MHz: aceeasi purtatoare, vazuta din doua
+ * ferestre, poate iesi cu 1 MHz diferenta si o rata putin alta. O purtatoare stiuta se potriveste cu una singura din fereastra
+ * de acum, intai cu cea de pe exact aceeasi frecventa (chemarea cu toleranta 0, inaintea listei): doua purtatoare inguste vecine
+ * raman doua si cand marginea ferestrei dinainte a despartit-o pe una. */
+static int e_dublura_avl(uint32_t f, uint32_t rata_ksym, uint32_t pol, uint32_t toleranta_khz) {
+	for (int i = 0; i < nr_gasite; i++) {
+		if (gasite[i].polarizare != pol || gasite[i].fereastra == fereastra_curenta) continue;
+		uint32_t d = gasite[i].frecventa_khz > f ? gasite[i].frecventa_khz - f : f - gasite[i].frecventa_khz;
+		uint32_t dr = gasite[i].rata_ksym > rata_ksym ? gasite[i].rata_ksym - rata_ksym : rata_ksym - gasite[i].rata_ksym;
+		if (d > toleranta_khz || dr * 50u > gasite[i].rata_ksym) continue;
+		gasite[i].fereastra = fereastra_curenta;
+		return 1;
+	}
+	return 0;
+}
+
 static uint32_t sistem_din_linux(uint32_t s) {
 	/* fe_delivery_system din Linux: SYS_DVBS 5, SYS_DVBS2 6 (sistemul nostru: 0 DVB-S, 1 DVB-S2) */
 	return s == 5 ? 0u : s == 6 ? 1u : (uint32_t)-1;
+}
+
+static uint32_t frecventa_hife_khz(const HifeTp *t, const Trecere *tr) {
+	uint32_t lo = lo_trecere_mhz(tr);
+	return (lo < 7500 ? lo - t->frecventa_mhz : lo + t->frecventa_mhz) * 1000u;
 }
 
 static void tp_hife(const HifeTp *t, const Trecere *tr) {
 	/* Respinge IF vechi sau nevalide inainte de scaderea fara semn pentru banda C. */
 	if (t->frecventa_mhz < 950u || t->frecventa_mhz > 2150u ||
 	    t->frecventa_mhz < tr->if_start / 1000u || t->frecventa_mhz > (tr->if_stop + 999u) / 1000u) return;
-	uint32_t lo = lo_trecere_mhz(tr);
-	uint32_t f_mhz = lo < 7500 ? lo - t->frecventa_mhz : lo + t->frecventa_mhz;
-	uint32_t f = f_mhz * 1000u, rata = t->rata_ksym, pol = tr->polarizare;
-	linie("JURNAL tp-hife %u %u %u %u %u %u %u %u", t->frecventa_mhz, t->rata_ksym, t->fec, t->inversiune, t->sistem,
-	      t->modulatie, t->rolloff, t->pilot);
+	uint32_t f = frecventa_hife_khz(t, tr), rata = t->rata_ksym, pol = tr->polarizare;
+	/* ferestrele AVL62X1 vad de doua ori aceeasi purtatoare: in jurnal numai cea noua */
+	int noua = !mod_avl || !(e_dublura(f, rata, pol) || e_dublura_avl(f, rata, pol, 1000u));
+	if (noua)
+		linie("JURNAL tp-hife %u %u %u %u %u %u %u %u", t->frecventa_mhz, t->rata_ksym, t->fec, t->inversiune, t->sistem,
+		      t->modulatie, t->rolloff, t->pilot);
 	/* sub jumatate din podeaua cautata e zgomot (implicit 500 kSym/s, ca pana acum) */
 	if (f < 1000000u || f > 30000000u || rata < hife_rata_jos_ksym / 2u || rata > 70000u) return;
-	if (e_dublura(f, rata, pol) || nr_gasite >= MAX_GASITE) return;
+	if (!noua || e_dublura(f, rata, pol) || nr_gasite >= MAX_GASITE) return;
 	gasite[nr_gasite].frecventa_khz = f;
 	gasite[nr_gasite].rata_ksym = rata;
 	gasite[nr_gasite].polarizare = pol;
+	gasite[nr_gasite].fereastra = fereastra_curenta;
 	nr_gasite++;
 	int sis = (int)sistem_din_linux(t->sistem);
 	linie("TP %u %u %d %c %u 0", f, rata, sis, "HVLR"[pol], t->frecventa_mhz * 1000u);
@@ -673,6 +741,9 @@ static void dormi_ms(long ms) {
 	struct timespec t = { ms / 1000, (ms % 1000) * 1000000L };
 	while (nanosleep(&t, &t) && errno == EINTR) { }
 }
+
+/* la retrimiterea LNB-ului (AVL62X1, la fiecare fereastra) in jurnal intra numai comenzile cazute */
+static int lnb_tacut = 0;
 
 /* o comanda DiSEqC de 3 octeti (reset e00000, power on e00003) sau 4 (e01038xx); in jurnal: octetii si errno (0 = bine) */
 static void trimite_diseqc(int fe, const uint8_t *m, int n) {
@@ -684,7 +755,8 @@ static void trimite_diseqc(int fe, const uint8_t *m, int n) {
 	int r = ioctl(fe, FE_DISEQC_SEND_MASTER_CMD, &cmd);
 	char hex[16] = "";
 	for (int k = 0; k < n; k++) snprintf(hex + 2 * k, sizeof hex - 2 * (size_t)k, "%02x", m[k]);
-	linie("JURNAL diseqc %s %d", hex, r < 0 ? errno : 0);
+	int e = r < 0 ? errno : 0;
+	if (e || !lnb_tacut) linie("JURNAL diseqc %s %d", hex, e);
 }
 
 /* Comenzile comutatorului pentru o trecere, ca enigma2 (lib/dvb/sec.cpp, ramura send_mask) cand comutatorul abia a
@@ -702,7 +774,7 @@ static void secventa_diseqc(int fe, uint8_t comisa, int are_comisa) {
 	for (int s = 0; s < (diseqc_secventa_dubla ? 2 : 1) && !cerere_oprire; s++) {
 		if (burst_intai) {
 			int r = ioctl(fe, FE_DISEQC_SEND_BURST, toneburst ? SEC_MINI_B : SEC_MINI_A);
-			linie("JURNAL toneburst %c %d", toneburst ? 'B' : 'A', r < 0 ? errno : 0);
+			if (r < 0 || !lnb_tacut) linie("JURNAL toneburst %c %d", toneburst ? 'B' : 'A', r < 0 ? errno : 0);
 			dormi_ms(diseqc_pauze[2]);
 		}
 		int cadre = ((are_comisa ? 1 : 0) + (are_necomisa ? 1 : 0)) << diseqc_repetari;
@@ -725,7 +797,7 @@ static void secventa_diseqc(int fe, uint8_t comisa, int are_comisa) {
 		}
 		if (burst_sfarsit && !cerere_oprire) {
 			int r = ioctl(fe, FE_DISEQC_SEND_BURST, toneburst ? SEC_MINI_B : SEC_MINI_A);
-			linie("JURNAL toneburst %c %d", toneburst ? 'B' : 'A', r < 0 ? errno : 0);
+			if (r < 0 || !lnb_tacut) linie("JURNAL toneburst %c %d", toneburst ? 'B' : 'A', r < 0 ? errno : 0);
 			dormi_ms(diseqc_pauze[2]);
 		}
 		if (diseqc_secventa_dubla && s == 0 && !cerere_oprire) dormi_ms(diseqc_pauze[3]);
@@ -775,8 +847,10 @@ static void *lucru_hife(void *arg) {
 	if (ioctl(hf, HIFE_ALEGE, &feid) < 0) { linie("EROARE %d hife-alege", errno); cod_lucru = 1; goto gata; }
 
 	/* Si2166: firul din nucleu (si2166_blindscan_thread) inmulteste limitele cu 1000, deci cere kSym/s. Cu Sym/s, dupa depasire si
-	 * impachetarea pe 16 biti, intervalul cautat iese 16960-18711 kSym/s si scapa transpondere care se prind la acordare directa */
-	uint32_t impartitor = strstr(nume_nim, "Si2166") ? 1000u : 1u;
+	 * impachetarea pe 16 biti, intervalul cautat iese 16960-18711 kSym/s si scapa transpondere care se prind la acordare directa.
+	 * AVL62X1 cere tot kSym/s (vezi AVL_FEREASTRA_KHZ). */
+	mod_avl = strstr(nume_nim, "AVL62X1") != NULL;
+	uint32_t impartitor = strstr(nume_nim, "Si2166") || mod_avl ? 1000u : 1u;
 	/* Podeaua ratei: 1000 kSym/s (masurata pe aparat), sau cea ceruta cu --rata-min. Sub 1000 numai pana la minimul pe care
 	 * il declara driverul acestui tuner (FE_GET_INFO pe frontend-ul deschis mai sus); fara raspuns de la driver ramane 1000. */
 	if (rata_min_ceruta_ksym && rata_min_ceruta_ksym < hife_rata_jos_ksym) {
@@ -797,36 +871,64 @@ static void *lucru_hife(void *arg) {
 	for (int i = 0; i < nr_treceri && !cerere_oprire; i++) {
 		Trecere *t = &treceri[i];
 		trecere_curenta = i;
+		uint64_t tl = ms_acum();
 		pune_lnb(fe, t, i == 0);
+		uint64_t lnb_ms = ms_acum() - tl;   /* cat tine LNB-ul acestei treceri, cu pauzele din setarile omului */
+		int lnb_iar = mod_avl && lnb_ms < AVL_LNB_MS_MAX;
+		if (mod_avl) linie("JURNAL hife-avl pas %u lnb-ms %llu dupa-pornire %d", pas_avl(t), (unsigned long long)lnb_ms, lnb_iar);
 		linie("TRECERE %d %c %u %u %u", i + 1, t->eticheta, t->ton22k, t->if_start, t->if_stop);
 		uint64_t tt = ms_acum();
-		uint32_t pas = pas_felie(t);
+		uint32_t pas = mod_avl ? pas_avl(t) : pas_felie(t);
 		for (uint32_t a0 = t->if_start; a0 < t->if_stop && !cerere_oprire; a0 += pas) {
 			uint32_t a1 = a0 + pas + SUPRAPUNERE_KHZ;
 			if (a1 > t->if_stop || t->if_stop - a1 < FELIE_MIN_KHZ) a1 = t->if_stop;
+			if (mod_avl) a1 = t->if_stop - a0 > pas ? a0 + pas : t->if_stop;   /* ferestrele se acopera deja */
 			HifeParam p = { a0 / 1000u, (a1 + 999u) / 1000u, rata_jos, HIFE_RATA_MAX / impartitor, 0 };
+			if (mod_avl) {
+				/* start = centrul ferestrei de 80 MHz; stop numai cat sa nu treaca la a doua */
+				uint32_t centru = a0 + (a1 - a0) / 2u, stop = centru + AVL_PAS_KHZ;
+				p.frecventa_start_mhz = centru / 1000u;
+				p.frecventa_stop_mhz = (stop > IF_MAX_KHZ ? IF_MAX_KHZ : stop) / 1000u;
+				fereastra_curenta++;
+			}
 			khz_felie = a1 - a0 > pas ? pas : a1 - a0;
 			uint64_t tf = ms_acum();
 			int n = -1;
-			if (ioctl(hf, HIFE_PORNESTE, &p) < 0) {
-				linie("JURNAL hife-pornire %d", errno);
-			} else {
-				while (!cerere_oprire && ms_acum() - tf < HIFE_FELIE_MS_MAX) {
-					n = ioctl(hf, HIFE_CITESTE, 0);
-					if (n >= 0) break;
-					struct timespec astept = { 0, 50 * 1000 * 1000 };
-					nanosleep(&astept, NULL);
-					scrie_progres((uint32_t)((ms_acum() - tf) * 100u / 30000u));   /* ~30 s pe felie, estimat */
-				}
-				if (n < 0) {
-					HifeParam z = { 0, 0, 0, 0, 0 };
-					ioctl(hf, HIFE_PORNESTE, &z);   /* anuleaza cautarea din nucleu */
+			/* Si2166: o incercare, ca inainte; AVL62X1: felia refuzata sau fara raspuns se reia o data */
+			for (int inc = 0; inc < (mod_avl ? AVL_INCERCARI : 1) && n < 0 && !cerere_oprire; inc++) {
+				uint64_t ti = ms_acum();
+				if (inc) linie("JURNAL hife-reia %u %u", p.frecventa_start_mhz, p.frecventa_stop_mhz);
+				if (ioctl(hf, HIFE_PORNESTE, &p) < 0) {
+					linie("JURNAL hife-pornire %d", errno);
+					if (mod_avl) dormi_ms(200);
+				} else {
+					if (lnb_iar) {
+						dormi_ms(AVL_LNB_DUPA_MS);
+						lnb_tacut = 1;
+						pune_lnb(fe, t, 0);
+						lnb_tacut = 0;
+					}
+					while (!cerere_oprire && ms_acum() - ti < (mod_avl ? AVL_FELIE_MS_MAX : HIFE_FELIE_MS_MAX)) {
+						n = ioctl(hf, HIFE_CITESTE, 0);
+						if (n >= 0) break;
+						struct timespec astept = { 0, 50 * 1000 * 1000 };
+						nanosleep(&astept, NULL);
+						/* ~30 s pe felie, estimat; ~3 s pe o fereastra AVL62X1 */
+						scrie_progres((uint32_t)((ms_acum() - tf) * 100u / (mod_avl ? 3000u : 30000u)));
+					}
+					if (n < 0) {
+						HifeParam z = { 0, 0, 0, 0, 0 };
+						ioctl(hf, HIFE_PORNESTE, &z);   /* anuleaza cautarea din nucleu */
+					}
 				}
 			}
 			if (n > 0) {
 				HifeTp *lista = calloc((size_t)n, sizeof(HifeTp));
-				if (lista && ioctl(hf, HIFE_CITESTE, lista) >= 0)
+				if (lista && ioctl(hf, HIFE_CITESTE, lista) >= 0) {
+					for (int k = 0; mod_avl && k < n; k++)
+						e_dublura_avl(frecventa_hife_khz(&lista[k], t), lista[k].rata_ksym, t->polarizare, 0);
 					for (int k = 0; k < n; k++) tp_hife(&lista[k], t);
+				}
 				free(lista);
 			}
 			linie("JURNAL felie %u %u stare %d ms %llu", a0, a1, n, (unsigned long long)(ms_acum() - tf));
@@ -838,9 +940,344 @@ static void *lucru_hife(void *arg) {
 		linie("JURNAL trecere %d ms %llu gasite %d", i + 1, (unsigned long long)(ms_acum() - tt), nr_gasite);
 	}
 	if (!cerere_oprire) { khz_facuti = khz_total; scrie_progres(0); }
+	if (mod_avl) {
+		/* firul AVL62X1 ramane dupa cautare in nucleu pana i se cere oprirea (la anulare e deja oprit, iar cererea nu face nimic) */
+		HifeParam z = { 0, 0, 0, 0, 0 };
+		ioctl(hf, HIFE_PORNESTE, &z);
+	}
 gata:
 	if (hf >= 0) close(hf);
 	if (fe >= 0) close(fe);
+	lucru_terminat = 1;
+	return NULL;
+}
+
+/* ---------------------------------------------------------------- calea "pasi" (rezerva pe orice tuner de satelit)
+ * Pe tunerele fara cautarea oarba a producatorului (de pilda ZGEMMA H8.2H Plus: driverul hi3716; biblioteca platformei
+ * e pe receptor, dar cautarea ei nu are cale pentru demodulatorul placii) cautam prin API-ul DVB obisnuit: acordari una
+ * dupa alta, fiecare intrebata numai "s-a blocat?". Ce am masurat pe H8.2H Plus (25.11.2026, 19,2E, 89 de transpondere):
+ *   - blocarea vine in 88-118 ms, starea sare direct din 0 in "blocat"; fara blocare in PASI_ASTEPTARE_MS = nimic acolo;
+ *   - DVB-S sau DVB-S2 cerut nu conteaza (cipul il afla singur), deci o singura incercare pe loc si rata;
+ *   - rata ceruta trebuie sa fie cel mult rata adevarata si nu mai mica decat ~97% din ea (22000 se prinde cerut intre
+ *     21300 si 22000, nu la 22100); de aceea cerem fiecare rata a listei putin sub valoarea obisnuita;
+ *   - frecventa se prinde pana la ~7 MHz de centru (22000: -8..+6, 27500: -8..+7), deci pas de cel mult 12 MHz;
+ *   - fara blocare nu se poate citi nimic (puterea si SNR-ul sunt 0, frecventa citita e cea ceruta): nu exista o trecere
+ *     larga dupa nivel, golurile se sar numai cu ce s-a gasit deja si cu transponderele cunoscute ale satelitului.
+ * Ordinea pe fiecare trecere: (1) cunoscutele primite (--cunoscut), la frecventa si rata lor; (2) fiecare rata din lista
+ * (--rate), din pas in pas, numai unde o purtatoare de rata aceea mai incape intre cele gasite; (3) la o purtatoare noua,
+ * doua acordari langa ea pentru centru si una pentru rata. */
+#define PASI_MAX_CUNOSCUTE 1024
+#define PASI_MAX_RATE      64
+#define PASI_ASTEPTARE_MS  200      /* cel mai lung lock masurat: 118 ms */
+#define PASI_PRINDERE_KHZ  7000u    /* cat de departe de centru se mai prinde purtatoarea */
+#define PASI_PAS_MAX_KHZ   12000u
+#define PASI_RATA_JOS      990u     /* o rata stiuta se cere cu 1% sub ea (rata adevarata poate fi putin mai mica) */
+
+static int mod_pasi = 0, pasi_cerut = 0;
+static long pasi_ms = PASI_ASTEPTARE_MS;
+static struct { uint32_t f_khz, rata_ksym, pol; } cunoscute[PASI_MAX_CUNOSCUTE];
+static int nr_cunoscute = 0;
+/* ratele cerute, in kSym/s, in ordinea data; din fabrica cele mai folosite in Europa (27500, 22000, 29700-30000),
+ * fiecare putin sub valoarea obisnuita (vezi sus): 27000 prinde 27000-27800, 21800 prinde 21800-22400, 29200 prinde
+ * 29200-30000 */
+static uint32_t rate_pasi[PASI_MAX_RATE] = { 27000, 21800, 29200 };
+static int nr_rate_pasi = 3;
+static struct { uint32_t a, b; } ocupat[MAX_GASITE];
+static int nr_ocupat = 0;
+static uint64_t pasi_facute = 0;
+static int pasi_caderi = 0;        /* FE_SET_PROPERTY cazut de atatea ori la rand */
+static uint16_t ultimul_snr = 0;
+/* ratele obisnuite: la o purtatoare noua se incearca o data cea mai mica dintre ele aflata intre rata blocata si ~3%
+ * peste ea (unde poate fi rata adevarata); se spune numai daca se blocheaza si ea */
+static const uint32_t RATE_OBISNUITE[] = { 20000, 22000, 23000, 23500, 24500, 25000, 26000, 27000, 27500, 28000, 28200,
+	29500, 29700, 29900, 30000, 30500, 31000, 32000, 33000, 34000, 36000, 38000, 40000, 43000, 45000, 14400, 10000, 7200,
+	6111, 5000, 4800, 3600 };
+
+/* /dev/dvb/adapter0/frontend<port> e de satelit? (FE_GET_INFO pe o deschidere numai pentru citire, merge si cand enigma2 il
+ * tine deschis); numele driverului in `nume`, fara spatii */
+static int frontend_satelit(long port, char *nume, size_t n) {
+	char cale[64];
+	snprintf(cale, sizeof cale, "/dev/dvb/adapter0/frontend%ld", port);
+	int fe = open(cale, O_RDONLY | O_NONBLOCK);
+	if (fe < 0) return 0;
+	struct dvb_frontend_info info;
+	memset(&info, 0, sizeof info);
+	int ok = ioctl(fe, FE_GET_INFO, &info) == 0 && info.type == FE_QPSK;
+	close(fe);
+	if (ok) {
+		snprintf(nume, n, "%.40s", info.name);
+		for (char *p = nume; *p; p++) if (*p == ' ' || *p == '\t') *p = '_';
+		if (!*nume) snprintf(nume, n, "dvb");
+	}
+	return ok;
+}
+
+static uint32_t real_din_if(uint32_t if_khz, const Trecere *t) {
+	uint32_t lo = lo_trecere_mhz(t) * 1000u;
+	return lo < 7500000u ? lo - if_khz : lo + if_khz;
+}
+
+static int if_din_real(uint32_t f, const Trecere *t, uint32_t *if_khz) {
+	uint32_t lo = lo_trecere_mhz(t) * 1000u;
+	if (lo < 7500000u) { if (f >= lo) return -1; *if_khz = lo - f; }
+	else { if (f <= lo) return -1; *if_khz = f - lo; }
+	return 0;
+}
+
+/* cat de departe de centru se prinde o purtatoare de rata r (kHz): ~0,3 x rata, cel mult 7 MHz */
+static uint32_t prindere_khz(uint32_t r) {
+	uint32_t p = r * 3u / 10u;
+	return p < PASI_PRINDERE_KHZ ? p : PASI_PRINDERE_KHZ;
+}
+
+/* pasul dintre acordari: de doua ori raza de prindere, minus 1 MHz de siguranta, cel mult 12 MHz */
+static uint32_t pas_pasi(uint32_t r) {
+	uint32_t p = 2u * prindere_khz(r);
+	p = p > 1500u ? p - 1000u : 500u;
+	return p < PASI_PAS_MAX_KHZ ? p : PASI_PAS_MAX_KHZ;
+}
+
+/* cat se asteapta blocarea: PASI_ASTEPTARE_MS la ratele de la 10 MSym/s in sus, mai mult la cele mici (nemasurat: pe
+ * 19,2E si 13E nu e nicio purtatoare mica blocata), cel mult 1 s */
+static long asteptare_ms(uint32_t r) {
+	long ms = pasi_ms;
+	if (r < 10000u) ms = pasi_ms * 10000L / (long)(r ? r : 1);
+	return ms < 1000 ? ms : 1000;
+}
+
+/* purtatoarea gasita (centrul IF, rata) ocupa lobul principal, +-rata/2 */
+static void ocupa(uint32_t centru, uint32_t rata_ksym) {
+	if (nr_ocupat >= MAX_GASITE) return;
+	uint32_t j = rata_ksym / 2u;
+	ocupat[nr_ocupat].a = centru > j ? centru - j : 0;
+	ocupat[nr_ocupat].b = centru + j;
+	nr_ocupat++;
+}
+
+static int liber(uint32_t a, uint32_t b) {
+	for (int i = 0; i < nr_ocupat; i++)
+		if (ocupat[i].a < b && a < ocupat[i].b) return 0;
+	return 1;
+}
+
+/* se merita o acordare la c pentru rata r: o purtatoare noua de rata r, cu centrul oriunde in raza de prindere a lui c
+ * (si in trecere), mai incape intre cele gasite (90% din lobul ei: masuratorile nu sunt exacte) */
+static int merita(uint32_t c, uint32_t r, const Trecere *t) {
+	uint32_t p = prindere_khz(r), j = r * 9u / 20u;
+	uint32_t x0 = c > p ? c - p : 0, x1 = c + p;
+	if (x0 < t->if_start) x0 = t->if_start;
+	if (x1 > t->if_stop) x1 = t->if_stop;
+	for (uint32_t x = x0; x <= x1; x += 500u)
+		if (liber(x > j ? x - j : 0, x + j)) return 1;
+	return 0;
+}
+
+static uint32_t primul_pas(const Trecere *t, uint32_t r) {
+	uint32_t c = t->if_start + pas_pasi(r) / 2u;
+	return c < IF_MIN_KHZ ? IF_MIN_KHZ : c;
+}
+
+/* cate acordari mai sunt pe trecerea t, de la rata k (si de la frecventa de_la pe ea), cu ce e ocupat acum */
+static uint64_t ramase(const Trecere *t, int k, uint32_t de_la) {
+	uint64_t n = 0;
+	for (; k < nr_rate_pasi; k++) {
+		uint32_t r = rate_pasi[k], pas = pas_pasi(r);
+		for (uint32_t c = de_la ? de_la : primul_pas(t, r); c <= t->if_stop + pas / 2u && c <= IF_MAX_KHZ; c += pas)
+			if (merita(c, r, t)) n++;
+		de_la = 0;
+	}
+	return n;
+}
+
+static int cunoscuta_pe_trecere(int k, const Trecere *t, uint32_t *if_khz) {
+	return cunoscute[k].pol == t->polarizare && !if_din_real(cunoscute[k].f_khz, t, if_khz) && *if_khz >= t->if_start &&
+	       *if_khz <= t->if_stop;
+}
+
+static int cunoscute_pe_trecere(const Trecere *t) {
+	int n = 0;
+	uint32_t i;
+	for (int k = 0; k < nr_cunoscute; k++) n += cunoscuta_pe_trecere(k, t, &i);
+	return n;
+}
+
+/* acordarile pe rate ale trecerii t, socotite inainte, cu cunoscutele ei presupuse active (ocupa loc, ca dupa pasul 1):
+ * planul cinstit pentru progres si pentru cat mai tine (aceeasi socoteala ca estimarea de pe ecran) */
+static uint64_t ramase_plan(const Trecere *t) {
+	int vechi = nr_ocupat;
+	uint32_t ik;
+	for (int k = 0; k < nr_cunoscute; k++)
+		if (cunoscuta_pe_trecere(k, t, &ik)) ocupa(ik, cunoscute[k].rata_ksym);
+	uint64_t n = ramase(t, 0, 0);
+	nr_ocupat = vechi;
+	return n;
+}
+
+/* progresul: acordarile facute din cele facute + cele ramase (ramasele scad cand o purtatoare noua ocupa loc) */
+static void progres_pasi(uint64_t ramas) {
+	uint64_t total = pasi_facute + ramas;
+	if (!total) total = 1;
+	/* o cunoscuta stinsa nu ocupa locul socotit in plan: ramasele pot creste putin; procentul nu se intoarce */
+	if ((int)(pasi_facute * 100u / total) < ultimul_procent) return;
+	khz_facuti = pasi_facute;
+	khz_total = total;
+	scrie_progres(0);
+}
+
+/* „fara filtru de flux" trebuie spus anume driverului? Aceeasi regula ca lib/dvb/hdsmultistream.h (fluxImplicitDeTrimis):
+ * pe un tuner cu multistream (FE_CAN_MULTISTREAM) si un nucleu cu DVB API mai vechi de 5.9, DTV_CLEAR lasa DTV_STREAM_ID
+ * pe 0, iar driverul il citeste ca „fluxul 0, PLS Root 0" si nu se mai blocheaza pe nicio purtatoare DVB-S2 (Dreambox
+ * DM820: nucleu 3.4, API 5.5). Citit o data, la prima acordare; la orice eroare ramane ca pana acum (nimic trimis). */
+static int flux_implicit(int fe) {
+	static int stiut = -1;
+	if (stiut < 0) {
+		struct dvb_frontend_info info;
+		struct dtv_property v;
+		struct dtv_properties vs = { 1, &v };
+		memset(&info, 0, sizeof info);
+		memset(&v, 0, sizeof v);
+		v.cmd = DTV_API_VERSION;
+		stiut = 0;
+		if (ioctl(fe, FE_GET_INFO, &info) == 0 && ((uint32_t)info.caps & 0x4000000u) && ioctl(fe, FE_GET_PROPERTY, &vs) == 0) {
+			uint32_t api = v.u.data & 0xFFFFu;
+			stiut = api > 0 && api < 0x0509u;
+		}
+		if (stiut) linie("JURNAL pasi-flux-implicit DTV_STREAM_ID fara filtru trimis anume");
+	}
+	return stiut;
+}
+
+/* o acordare: frecventa IF (kHz) si rata (kSym/s); 1 = blocat in timpul dat */
+static int acordeaza(int fe, uint32_t if_khz, uint32_t rata_ksym) {
+	struct dtv_property p[10];
+	memset(p, 0, sizeof p);
+	int n = 0;
+	p[n++].cmd = DTV_CLEAR;
+	p[n].cmd = DTV_DELIVERY_SYSTEM; p[n++].u.data = SYS_DVBS2;
+	p[n].cmd = DTV_FREQUENCY; p[n++].u.data = if_khz;
+	p[n].cmd = DTV_SYMBOL_RATE; p[n++].u.data = rata_ksym * 1000u;
+	p[n].cmd = DTV_INNER_FEC; p[n++].u.data = FEC_AUTO;
+	p[n].cmd = DTV_INVERSION; p[n++].u.data = INVERSION_AUTO;
+	p[n].cmd = DTV_ROLLOFF; p[n++].u.data = ROLLOFF_AUTO;
+	p[n].cmd = DTV_PILOT; p[n++].u.data = PILOT_AUTO;
+	if (flux_implicit(fe)) { p[n].cmd = DTV_STREAM_ID; p[n++].u.data = 0x04000000u; }   /* AS236: fluxul 0, PLS Gold 0 (pe DM820 0xFFFFFFFF dadea tune timeout) */
+	p[n++].cmd = DTV_TUNE;
+	struct dtv_properties ps = { (uint32_t)n, p };
+	struct dvb_frontend_event ev;
+	while (ioctl(fe, FE_GET_EVENT, &ev) == 0) { }
+	pasi_facute++;
+	if (ioctl(fe, FE_SET_PROPERTY, &ps) < 0) {
+		linie("JURNAL pasi-acordare %u %u %d", if_khz, rata_ksym, errno);
+		if (++pasi_caderi >= 3 && !cerere_oprire) { linie("EROARE 1 frontend-acordare"); cerere_oprire = 1; }
+		return 0;
+	}
+	pasi_caderi = 0;
+	uint64_t t0 = ms_acum();
+	long ms = asteptare_ms(rata_ksym);
+	while (!cerere_oprire) {
+		fe_status_t st = 0;
+		if (ioctl(fe, FE_READ_STATUS, &st) == 0 && (st & FE_HAS_LOCK)) {
+			ultimul_snr = 0;
+			ioctl(fe, FE_READ_SNR, &ultimul_snr);
+			return 1;
+		}
+		if (ms_acum() - t0 >= (uint64_t)ms) break;
+		dormi_ms(10);
+	}
+	return 0;
+}
+
+static uint32_t rata_obisnuita_peste(uint32_t r) {
+	uint32_t ales = 0;
+	for (size_t i = 0; i < sizeof RATE_OBISNUITE / sizeof RATE_OBISNUITE[0]; i++) {
+		uint32_t o = RATE_OBISNUITE[i];
+		if (o > r && o <= r * 103u / 100u && (!ales || o < ales)) ales = o;
+	}
+	return ales;
+}
+
+/* o purtatoare blocata la (if_khz, rata): o spune o data (si cand o trecere vecina, peste pragul benzii, a vazut-o) */
+static void gasita(const Trecere *t, uint32_t if_khz, uint32_t rata, int din_lista) {
+	uint32_t f = real_din_if(if_khz, t);
+	ocupa(if_khz, rata);
+	if (e_dublura(f, rata, t->polarizare) || nr_gasite >= MAX_GASITE) return;
+	gasite[nr_gasite].frecventa_khz = f;
+	gasite[nr_gasite].rata_ksym = rata;
+	gasite[nr_gasite].polarizare = t->polarizare;
+	nr_gasite++;
+	linie("JURNAL pasi-gasit %u %u %s", f, rata, din_lista ? "lista" : "noua");
+	linie("TP %u %u -1 %c %u %u", f, rata, "HVLR"[t->polarizare], if_khz, (unsigned)(ultimul_snr >> 8));
+}
+
+/* purtatoare noua, blocata la c cu rata ceruta r: centrul din doua acordari la +-4/7 din raza de prindere (fiecare
+ * spune de ce parte e centrul). Rata adevarata e intre r si ~1,03 r, iar o rata ceruta PESTE cea adevarata nu se mai
+ * blocheaza: se spune numai o rata la care s-a blocat (r sau r x 1,015), ori valoarea obisnuita de deasupra ei, daca se
+ * blocheaza si ea (scanarea acordeaza apoi cu rata spusa) */
+static void masoara_noua(int fe, const Trecere *t, uint32_t c, uint32_t r) {
+	uint16_t snr = ultimul_snr;
+	uint32_t p = prindere_khz(r), d = p * 4u / 7u;
+	int sus = c + d <= IF_MAX_KHZ ? !cerere_oprire && acordeaza(fe, c + d, r) : 1;
+	int jos = c >= IF_MIN_KHZ + d ? !cerere_oprire && acordeaza(fe, c - d, r) : 1;
+	uint32_t centru = c;
+	if (sus && !jos) centru = c + p - d / 2u;
+	else if (jos && !sus) centru = c - p + d / 2u;
+	if (centru < IF_MIN_KHZ) centru = IF_MIN_KHZ;
+	if (centru > IF_MAX_KHZ) centru = IF_MAX_KHZ;
+	uint32_t rata = r, sus_r = r * 1015u / 1000u;
+	if (!cerere_oprire && acordeaza(fe, centru, sus_r)) rata = sus_r;
+	uint32_t o = rata_obisnuita_peste(rata);
+	if (o && !cerere_oprire && acordeaza(fe, centru, o)) rata = o;
+	ultimul_snr = snr;
+	gasita(t, centru, rata, 0);
+}
+
+static void *lucru_pasi(void *arg) {
+	(void)arg;
+	char cale[64];
+	snprintf(cale, sizeof cale, "/dev/dvb/adapter0/frontend%ld", port_tuner);
+	int fe = open(cale, O_RDWR | O_NONBLOCK);
+	if (fe < 0) { linie("EROARE 1 frontend-deschidere"); cod_lucru = 1; lucru_terminat = 1; return NULL; }
+	uint64_t total = 0;
+	for (int i = 0; i < nr_treceri; i++) total += (uint64_t)cunoscute_pe_trecere(&treceri[i]) + ramase_plan(&treceri[i]);
+	linie("JURNAL pasi rate %d cunoscute %d asteptare-ms %ld acordari %llu", nr_rate_pasi, nr_cunoscute, pasi_ms,
+	      (unsigned long long)total);
+	khz_total = total ? total : 1;
+	linie("PORNIT %d %llu", nr_treceri, (unsigned long long)khz_total);
+	uint64_t ramas_altele = total;
+	for (int i = 0; i < nr_treceri && !cerere_oprire; i++) {
+		Trecere *t = &treceri[i];
+		trecere_curenta = i;
+		nr_ocupat = 0;
+		uint64_t tt = ms_acum(), facute0 = pasi_facute;
+		int n_cun = cunoscute_pe_trecere(t);
+		uint64_t plan_t = ramase_plan(t);
+		ramas_altele -= (uint64_t)n_cun + plan_t;
+		pune_lnb(fe, t, i == 0);
+		linie("TRECERE %d %c %u %u %u", i + 1, t->eticheta, t->ton22k, t->if_start, t->if_stop);
+		/* (1) cunoscutele satelitului, la frecventa si rata lor */
+		for (int k = 0; k < nr_cunoscute && !cerere_oprire; k++) {
+			uint32_t ik;
+			if (!cunoscuta_pe_trecere(k, t, &ik)) continue;
+			n_cun--;
+			if (!e_dublura(cunoscute[k].f_khz, cunoscute[k].rata_ksym, t->polarizare) && liber(ik, ik + 1) &&
+			    acordeaza(fe, ik, cunoscute[k].rata_ksym * PASI_RATA_JOS / 1000u))
+				gasita(t, ik, cunoscute[k].rata_ksym, 1);
+			progres_pasi(ramas_altele + (uint64_t)n_cun + plan_t);
+		}
+		/* (2) ratele, din pas in pas, numai unde mai incape o purtatoare */
+		for (int k = 0; k < nr_rate_pasi && !cerere_oprire; k++) {
+			uint32_t r = rate_pasi[k], pas = pas_pasi(r);
+			for (uint32_t c = primul_pas(t, r); c <= t->if_stop + pas / 2u && c <= IF_MAX_KHZ && !cerere_oprire; c += pas) {
+				if (!merita(c, r, t)) continue;
+				if (acordeaza(fe, c, r)) masoara_noua(fe, t, c, r);
+				progres_pasi(ramas_altele + ramase(t, k, c + pas));
+			}
+		}
+		linie("JURNAL trecere %d ms %llu gasite %d acordari %llu", i + 1, (unsigned long long)(ms_acum() - tt), nr_gasite,
+		      (unsigned long long)(pasi_facute - facute0));
+	}
+	if (!cerere_oprire) { khz_facuti = khz_total; scrie_progres(0); }
+	close(fe);
 	lucru_terminat = 1;
 	return NULL;
 }
@@ -913,6 +1350,38 @@ static int argument_diseqc(const char *a, const char *v) {
 	return 0;
 }
 
+/* --cunoscut F_KHZ,RATA_KSYM,POL (POL H|V|L|R) si --rate R1,R2,... (kSym/s): numai pentru calea "pasi" */
+static int citeste_cunoscut(const char *s) {
+	unsigned f = 0, r = 0;
+	char pol = 0, rest = 0;
+	if (!s || nr_cunoscute >= PASI_MAX_CUNOSCUTE || sscanf(s, "%u,%u,%c%c", &f, &r, &pol, &rest) != 3) return -1;
+	const char *p = strchr("HVLR", toupper((unsigned char)pol));
+	if (!p || !pol || f < 1000000u || f > 30000000u || r < 100u || r > 70000u) return -1;
+	cunoscute[nr_cunoscute].f_khz = f;
+	cunoscute[nr_cunoscute].rata_ksym = r;
+	cunoscute[nr_cunoscute].pol = (uint32_t)(p - "HVLR");
+	nr_cunoscute++;
+	return 0;
+}
+
+static int citeste_rate(const char *s) {
+	if (!s || !*s) return -1;
+	int n = 0;
+	const char *p = s;
+	while (*p) {
+		char *cap = NULL;
+		errno = 0;
+		long r = strtol(p, &cap, 10);
+		if (errno || cap == p || r < 500 || r > 45000 || n >= PASI_MAX_RATE) return -1;
+		rate_pasi[n++] = (uint32_t)r;
+		if (*cap == ',') cap++;
+		else if (*cap) return -1;
+		p = cap;
+	}
+	nr_rate_pasi = n;
+	return 0;
+}
+
 static int zavor_proces(void) {
 	int fd = open(ZAVOR_PROCES, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
 	if (fd < 0) return -1;
@@ -940,6 +1409,10 @@ int main(int argc, char **argv) {
 		else if (!strcmp(a, "--rata-min") && !numar(v, &x) && x >= 1 && x <= 45000) { rata_min_ceruta_ksym = (uint32_t)x; i++; }
 		else if (!strcmp(a, "--asteapta-frontend") && !numar(v, &x) && x >= 0 && x < 600) { asteapta_fe = x; i++; }
 		else if (!strcmp(a, "--lib") && v) { cale_lib = v; i++; }
+		else if (!strcmp(a, "--pasi")) pasi_cerut = 1;
+		else if (!strcmp(a, "--pasi-ms") && !numar(v, &x) && x >= 50 && x <= 2000) { pasi_ms = x; i++; }
+		else if (!strcmp(a, "--cunoscut")) { if (citeste_cunoscut(v)) { linie("EROARE 2 cunoscut-gresit"); return 2; } i++; }
+		else if (!strcmp(a, "--rate")) { if (citeste_rate(v)) { linie("EROARE 2 rate-gresite"); return 2; } i++; }
 		else if ((x = argument_diseqc(a, v)) > 0) i += (int)x - 1;
 		else { linie("EROARE 2 argument-gresit"); return 2; }
 	}
@@ -951,11 +1424,35 @@ int main(int argc, char **argv) {
 	if (r.gasit)
 		linie("PROFIL %ld %ld 0x%lx %s 0x%lx 0x%x", r.port, r.i2c, r.adr_demod, r.nume_tuner, r.adr_tuner,
 		      placa_aleasa ? placa_aleasa->gpio_reset : 0u);
-	if (!placa_aleasa && placa_hife(port_tuner)) {
+	if (!pasi_cerut && !placa_aleasa && placa_hife(port_tuner)) {
 		mod_hife = 1;
 		linie("PROFIL %ld hife %s", port_tuner, nume_nim);
 	}
+	/* calea bibliotecii: placa cunoscuta, biblioteca cu simbolurile ei, tuner_used; ce lipseste = motivul, iar atunci (si
+	 * cu --pasi) cautarea merge pe pasi, daca frontend-ul e de satelit */
+	const char *motiv_lib = NULL;
+	if (!mod_hife) {
+		int lib = (r.gasit && placa_aleasa && !pasi_cerut) ? incarca_biblioteca(cale_lib) : 0;
+		if (pasi_cerut)              motiv_lib = "cerut";
+		else if (!r.gasit)           motiv_lib = "proc-tuner-lipsa";
+		else if (!placa_aleasa)      motiv_lib = "placa-necunoscuta";
+		else if (lib == 1)           motiv_lib = "biblioteca-lipsa";
+		else if (lib == 2)           motiv_lib = "simboluri-lipsa";
+		else if (citeste_tuner_used() < 0) motiv_lib = "tuner-used-lipsa";
+		char nume_fe[64] = "";
+		if (motiv_lib && frontend_satelit(port_tuner, nume_fe, sizeof nume_fe)) {
+			mod_pasi = 1;
+			if (B.lib) { dlclose(B.lib); B.lib = NULL; }
+			linie("PROFIL %ld pasi %s", port_tuner, nume_fe);
+			linie("JURNAL pasi-motiv %s", motiv_lib);
+		}
+	}
 
+	if (sonda && mod_pasi) {
+		linie("JURNAL frontend-tinut %d", cine_tine_frontend(port_tuner));
+		linie("SONDA 0 pasi");
+		return 0;
+	}
 	if (sonda && mod_hife) {
 		/* numai citiri: dispozitivul, numele tunerului, cine tine frontend-ul */
 		linie("JURNAL frontend-tinut %d", cine_tine_frontend(port_tuner));
@@ -963,29 +1460,17 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 	if (sonda) {
-		int lib = incarca_biblioteca(cale_lib);
 		int tu = citeste_tuner_used();
 		int fe = cine_tine_frontend(port_tuner);
 		linie("JURNAL tuner-used %d frontend-tinut %d", tu, fe);
-		if (!r.gasit)       linie("SONDA 1 proc-tuner-lipsa");
-		else if (!placa_aleasa)   linie("SONDA 1 placa-necunoscuta");
-		else if (lib == 1)  linie("SONDA 1 biblioteca-lipsa");
-		else if (lib == 2)  linie("SONDA 1 simboluri-lipsa");
-		else if (tu < 0)    linie("SONDA 1 tuner-used-lipsa");
-		else                linie("SONDA 0 gata");
+		if (motiv_lib) linie("SONDA 1 %s", motiv_lib);
+		else           linie("SONDA 0 gata");
 		if (B.lib) dlclose(B.lib);
 		return 0;
 	}
 
 	if (!nr_treceri) { linie("EROARE 2 fara-treceri"); return 2; }
-	if (!mod_hife) {
-		if (!r.gasit) { linie("EROARE 1 proc-tuner-lipsa"); return 1; }
-		if (!placa_aleasa) { linie("EROARE 1 placa-necunoscuta"); return 1; }
-		int lib = incarca_biblioteca(cale_lib);
-		if (lib == 1) { linie("EROARE 1 biblioteca-lipsa"); return 1; }
-		if (lib == 2) { linie("EROARE 1 simboluri-lipsa"); return 1; }
-		if (citeste_tuner_used() < 0) { linie("EROARE 1 tuner-used-lipsa"); return 1; }
-	}
+	if (!mod_hife && !mod_pasi && motiv_lib) { linie("EROARE 1 %s", motiv_lib); return 1; }
 	if (zavor_proces() < 0) { linie("EROARE 1 alt-proces"); return 1; }
 
 	/* enigma2 elibereaza frontend-ul la cateva secunde dupa oprirea canalului; peste o inregistrare nu pornim */
@@ -998,7 +1483,7 @@ int main(int argc, char **argv) {
 	}
 	if (fe) { linie("EROARE 1 frontend-ocupat"); return 1; }
 
-	for (int i = 0; i < nr_treceri; i++) khz_total += treceri[i].if_stop - treceri[i].if_start;
+	if (!mod_pasi) for (int i = 0; i < nr_treceri; i++) khz_total += treceri[i].if_stop - treceri[i].if_start;
 
 	sigset_t semnale;
 	sigemptyset(&semnale);
@@ -1010,7 +1495,7 @@ int main(int argc, char **argv) {
 
 	uint64_t t0 = ms_acum();
 	pthread_t fir;
-	if (pthread_create(&fir, NULL, mod_hife ? lucru_hife : lucru, NULL)) { linie("EROARE 1 fir"); return 1; }
+	if (pthread_create(&fir, NULL, mod_pasi ? lucru_pasi : mod_hife ? lucru_hife : lucru, NULL)) { linie("EROARE 1 fir"); return 1; }
 
 	while (!lucru_terminat) {
 		struct timespec astept = { 0, 250 * 1000 * 1000 };

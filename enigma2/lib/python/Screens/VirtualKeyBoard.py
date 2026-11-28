@@ -686,10 +686,21 @@ class VirtualKeyBoard(Screen):
 	def buildVirtualKeyBoard(self, selectedKey=None):
 		list = []
 		factor = getattr(self, "_factorMarime", 100)
+		# YTN2 (0.8.0): un rand de taste costa ~25 ms pe ZGEMMA H8.2H (9 cautari de poze in tema), iar fiecare sageata
+		# refacea toate cele 5 randuri si redesena toata lista: 330-810 ms pe tasta. Randurile facute se tin pentru cat
+		# e deschisa tastatura (cheie: tastele, tasta aleasa, Shift, marimea), iar mai jos se redeseneaza numai randurile
+		# schimbate
+		randuri = self.__dict__.setdefault("_hdsRanduri", {})
 		def intrare(keys, selected, shift=False):
-			if factor == 100:
-				return VirtualKeyBoardEntryComponent(keys, selected, shift)
-			return VirtualKeyBoardEntryComponent(keys, selected, shift, marime=factor)
+			cheie = (tuple(keys), selected, shift, factor)
+			r = randuri.get(cheie)
+			if r is None:
+				if factor == 100:
+					r = VirtualKeyBoardEntryComponent(keys, selected, shift)
+				else:
+					r = VirtualKeyBoardEntryComponent(keys, selected, shift, marime=factor)
+				randuri[cheie] = r
+			return r
 		if selectedKey is None:
 			selectedKey = self.selectedKey
 		self.k_list = self.shiftkeys_list if self.shiftMode else self.keys_list
@@ -716,8 +727,20 @@ class VirtualKeyBoard(Screen):
 				else:
 					list.append(intrare(keys, -1))
 				selectedKey -= 12
-		
-		self["list"].setList(list)
+
+		# in place only when the keys, Shift and the size are the ones of the last build (only the chosen key moved);
+		# another language, Shift or size goes through setList as before
+		semn = (tuple(tuple(k) for k in self.k_list), self.shiftMode, factor)
+		vechi = getattr(self["list"], "list", None)
+		acelasi = getattr(self, "_hdsSemn", None) == semn
+		self._hdsSemn = semn
+		if acelasi and isinstance(vechi, type(list)) and len(vechi) == len(list) and vechi:
+			for i, rand in enumerate(list):
+				if vechi[i] is not rand:
+					vechi[i] = rand
+					self["list"].l.invalidateEntry(i)
+		else:
+			self["list"].setList(list)
 	
 	def backClicked(self):
 		if getattr(self, "_editText", None) is not None:

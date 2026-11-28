@@ -446,6 +446,21 @@ eDVBVideo::eDVBVideo(eDVBDemux *demux, int dev)
 		m_hds_aspect_pending = -1;
 		m_hds_aspect_timer = eTimer::create(eApp);
 		CONNECT(m_hds_aspect_timer->timeout, eDVBVideo::hdsFollowAspect);
+#elif HAVE_DVB_API_VERSION > 2
+		/* The other boards too (as the sound decoder above, and as OE-Alliance does at every open): a player that writes
+		   to video0 itself (internet streams, films, plugins with their own player) selects source MEMORY and may end
+		   without selecting the demux again; then every channel from the tuner stayed black until the interface was
+		   restarted (Vu+ Duo 4K Lite: vmpeg/0/stream_source 1 while the audio decoders were back on 0). A refusal of the
+		   driver is told once and nothing else changes. */
+		if (::ioctl(m_fd, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_DEMUX) < 0)
+		{
+			const int err = errno;
+			static std::atomic_flag anuntat = ATOMIC_FLAG_INIT;
+			if (!anuntat.test_and_set(std::memory_order_relaxed))
+				hdsjdecodor::eroare("video", dev, "VIDEO_SELECT_SOURCE DEMUX", err);
+		}
+		else
+			hdsjdecodor::sursaDemux("video", dev);
 #endif
 	}
 	eDebug("Video Device: %s", filename);

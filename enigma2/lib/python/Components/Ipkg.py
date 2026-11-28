@@ -2,6 +2,7 @@
 import codecs
 import os
 import re
+import threading
 import time
 
 from enigma import eConsoleAppContainer
@@ -138,6 +139,28 @@ def _golesteCacheOpkg(arguments):
 	HdsCuratenie.golesteCacheOpkgDupa(arguments)
 
 
+def _surse():
+	"""Components/HdsSurseOpkg.py (OPK1): dead foreign sources skipped at update, waiting for the opkg lock"""
+	try:
+		from Components import HdsSurseOpkg
+	except ImportError:
+		import HdsSurseOpkg
+	return HdsSurseOpkg
+
+
+# OPK1 (0.8.0): commands that take /run/opkg.lock; they wait for another opkg instead of failing with "Could not lock"
+_LOCKING = ('update', 'upgrade', 'install', 'remove')
+# tests replace it: function() -> object with callback (list), start(ms, single_shot), stop()
+TIMER_FACTORY = None
+
+
+def _timer():
+	if TIMER_FACTORY is not None:
+		return TIMER_FACTORY()
+	from enigma import eTimer
+	return eTimer()
+
+
 def _reap(pid):
 	"""waitpid for a child just killed with SIGKILL, at most ~0.2 s (a child stuck in the kernel is left alone)"""
 	if pid is None or pid <= 0:
@@ -195,6 +218,13 @@ class IpkgComponent:
 		self._inventar = None
 		self._inventarCeas = None
 		self._pregatesteInventar = True
+		# OPK1: probing the sources ('proba') or waiting for the opkg lock ('zavor') before opkg starts
+		self._asteptare = None
+		self._lockRetries = 0
+		self._lockCaught = False
+		self._argumenteCmd = None
+		self._prefixCmd = []
+		self._program = None
 		self.setCurrentCommand()
 
 	def setCurrentCommand(self, command = None):
@@ -203,9 +233,12 @@ class IpkgComponent:
 	def runCmd(self, arguments):
 		"""arguments: the list from opkgArguments(); a string is not accepted any more (it went through the shell)"""
 		self._anuleazaInventar()
+		self._cancelWait()
 		_pachete().invalideaza_strofe()
 		self.retval = None
 		self.cache = None
+		self._lockRetries = 0
+		self._lockCaught = False
 		program = opkgProgram()
 		if not isinstance(arguments, (list, tuple)) or not arguments or program is None:
 			print("[Ipkg] not run:", arguments, "(opkg missing)" if program is None else "(refused)")
@@ -215,18 +248,113 @@ class IpkgComponent:
 				self.retval = -1
 				self.callCallbacks(self.EVENT_DONE, -1)
 			return
+		# OPK1: an update with foreign sources probes them first (on a thread); a locking command waits for another
+		# opkg. Otherwise (our sources only, lock free) opkg starts right here, as before.
+		try:
+			S = _surse()
+			if arguments[0] == 'update' and S.de_probat():
+				self._startProbe(program, list(arguments))
+				return
+			if arguments[0] in _LOCKING and S.zavor_ocupat():
+				self._startWait(program, list(arguments), [])
+				return
+		except Exception as e:
+			print("[Ipkg] HdsSurseOpkg:", e)
+		self._execute(program, arguments, [])
+
+	def _execute(self, program, arguments, prefix):
+		"""starts opkg; `prefix` (['-f', file] from HdsSurseOpkg) goes only on the command line, never in the lists
+		that describe the command (_argumenteCmd, the .pyc snapshot, the cache cleaning)"""
 		# Feed updates have ordered guards that may replace a list during EVENT_DONE.
 		# Keep that path and read-only/download-only commands as before this repair.
 		self._pregatesteInventar = arguments[0] in ('install', 'remove', 'upgrade') and not any(
 			optiune in arguments for optiune in ('--download-only', '--noaction'))
-		print("[Ipkg] executing", program, arguments)
+		print("[Ipkg] executing", program, list(prefix) + list(arguments))
+		self._lockCaught = False
+		self._program = program
 		self._argumenteCmd = list(arguments)
+		self._prefixCmd = list(prefix)
 		self._pycRamase = _pycInainte(arguments)
 		self._decoder = codecs.getincrementaldecoder('utf-8')('replace')
 		self.cmd.appClosed.append(self.cmdFinished)
 		self.cmd.dataAvail.append(self.cmdData)
-		if self.cmd.execute(program, 'opkg', *arguments):
+		if self.cmd.execute(program, 'opkg', *(list(prefix) + list(arguments))):
 			self.cmdFinished(-1)
+
+	# ---------------------------------------------------------------- OPK1: probe and lock wait
+	def _note(self, text):
+		"""a line of the image (HdsSurseOpkg.PREFIX_NOTA) for the listeners; False when a listener started another
+		command meanwhile"""
+		token = self._inventarToken
+		self.callCallbacks(self.EVENT_LINE, text)
+		return token == self._inventarToken
+
+	def _startProbe(self, program, arguments):
+		rezultat = {}
+
+		def probe():
+			try:
+				rezultat['p'] = _surse().pregateste_update()
+			except Exception as e:
+				print("[Ipkg] source probe:", e)
+				rezultat['p'] = None
+		fir = threading.Thread(target=probe, name='hds-opkg-probe')
+		fir.daemon = True
+		ceas = _timer()
+		ceas.callback.append(self._waitTick)
+		self._asteptare = {'etapa': 'proba', 'program': program, 'argumente': arguments, 'prefix': [],
+			'ceas': ceas, 'fir': fir, 'rezultat': rezultat, 'inceput': time.time(), 'anuntat': False}
+		fir.start()
+		ceas.start(100, True)
+
+	def _startWait(self, program, arguments, prefix):
+		self._cancelWait()
+		ceas = _timer()
+		ceas.callback.append(self._waitTick)
+		self._asteptare = {'etapa': 'zavor', 'program': program, 'argumente': arguments, 'prefix': prefix,
+			'ceas': ceas, 'fir': None, 'rezultat': None, 'inceput': time.time(), 'anuntat': False}
+		self._waitTick()
+
+	def _waitTick(self):
+		a = self._asteptare
+		if a is None:
+			return
+		S = _surse()
+		if a['etapa'] == 'proba':
+			if 'p' not in a['rezultat']:
+				a['ceas'].start(100, True)
+				return
+			p = a['rezultat']['p']
+			for text in (p.note if p is not None else []):
+				if not self._note(text) or self._asteptare is not a:
+					return
+			a['etapa'], a['prefix'], a['inceput'] = 'zavor', list(p.prefix) if p is not None else [], time.time()
+		if S.zavor_ocupat() and time.time() - a['inceput'] < S.ZAVOR_ASTEPTARE_S:
+			if not a['anuntat']:
+				a['anuntat'] = True
+				print("[Ipkg] another opkg holds the lock, waiting:", a['argumente'])
+				if not self._note(S.text_asteptare()) or self._asteptare is not a:
+					return
+			a['ceas'].start(int(S.ZAVOR_PAS_S * 1000), True)
+			return
+		if a['etapa'] == 'zavor' and S.zavor_ocupat():
+			# waited ZAVOR_ASTEPTARE_S: run once more and let the real "Could not lock" through (no new wait)
+			print("[Ipkg] the opkg lock is still held after %d s, running anyway" % S.ZAVOR_ASTEPTARE_S)
+			self._lockRetries = S.ZAVOR_REINCERCARI
+		self._cancelWait()
+		_pachete().invalideaza_strofe()
+		self._execute(a['program'], a['argumente'], a['prefix'])
+
+	def _cancelWait(self):
+		"""True when a probe or a lock wait was running (its timer stopped; a probe thread just ends unused)"""
+		a, self._asteptare = self._asteptare, None
+		if a is not None and a.get('ceas') is not None:
+			a['ceas'].stop()
+			try:
+				a['ceas'].callback.remove(self._waitTick)
+			except ValueError:
+				pass
+		return a is not None
 
 	def startCmd(self, cmd, args = None):
 		args = args or {}
@@ -265,6 +393,16 @@ class IpkgComponent:
 			self.parseLine(rest)
 		if token != self._inventarToken:
 			return
+		if self._lockCaught and not oprit and retval != 0:
+			# OPK1: another opkg took the lock between the check and the start; opkg did nothing: wait, run again
+			self._lockCaught = False
+			self._lockRetries += 1
+			self._pycRamase = None
+			arguments, self._argumenteCmd = self._argumenteCmd, None
+			print("[Ipkg] opkg lock taken by another opkg, waiting (retry %d)" % self._lockRetries)
+			self._startWait(self._program, arguments, self._prefixCmd)
+			return
+		self._lockCaught = False
 		if oprit or not self._pregatesteInventar:
 			self._termina(retval)
 			return
@@ -375,6 +513,15 @@ class IpkgComponent:
 
 	def parseLine(self, data):
 		token = self._inventarToken
+		if self._argumenteCmd and self._argumenteCmd[0] in _LOCKING and ('lock' in data):
+			try:
+				S = _surse()
+				if S.zavor_prins(data) and self._lockRetries < S.ZAVOR_REINCERCARI:
+					# OPK1: kept out of the log and the screen; cmdFinished waits for the lock and runs opkg again
+					self._lockCaught = True
+					return
+			except Exception as e:
+				print("[Ipkg] HdsSurseOpkg:", e)
 		self.callCallbacks(self.EVENT_LINE, data)
 		if token != self._inventarToken:
 			return
@@ -430,6 +577,13 @@ class IpkgComponent:
 		# HDSatelit: eConsoleAppContainer.kill() closes the pipes without appClosed (lib/base/console.cpp), so the
 		# callers never got EVENT_DONE and waited for ever (the progress window of HdsExtensii stayed open, every key
 		# ignored) and the killed opkg stayed a zombie. Now the end is reported here and the child is reaped.
+		if self._cancelWait():
+			# OPK1: stopped while probing the sources or waiting for the lock: opkg never ran
+			self._anuleazaInventar()
+			self._pycRamase = None
+			self._argumenteCmd = None
+			self._termina(-1)
+			return
 		pending = self._inventar is not None
 		if pending:
 			self._anuleazaInventar()
@@ -443,7 +597,7 @@ class IpkgComponent:
 			self._termina(-1)
 
 	def isRunning(self):
-		return self.cmd.running() or self._inventar is not None
+		return self.cmd.running() or self._inventar is not None or self._asteptare is not None
 
 	def write(self, what):
 		if what:

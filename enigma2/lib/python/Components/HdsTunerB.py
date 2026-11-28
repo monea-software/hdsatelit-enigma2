@@ -154,9 +154,9 @@ def motiv_fara_proba(inregistrari, transmisii, pip, inregistrare_curand, ecran_t
 	return ""
 
 
-def text_stare(stare, slot_b, slot_a, motiv="", acum=False, web=False):
+def text_stare(stare, slot_b, slot_a, motiv="", acum=False, web=False, fara_semnal=False):
 	"""(textul randului, ce face OK: "proba" | "manual"). Aceleasi texte pe televizor si in web; in web fara „OK: ...”
-	(acolo e butonul)."""
+	(acolo e butonul). fara_semnal: B failed probe 1 (no lock on A's transponder), usually no cable on input B."""
 	b, a = litera(slot_b), litera(slot_a)
 	if acum:
 		return _("Tuner %s: se probează...") % b, None
@@ -165,7 +165,11 @@ def text_stare(stare, slot_b, slot_a, motiv="", acum=False, web=False):
 	if stare == JUMATATE:
 		# scurt, fara sa ceara ceva omului
 		return _("Tuner %s: verificare automată în așteptare") % b, "manual"
-	if stare == ESUAT:
+	if stare == ESUAT and fara_semnal:
+		text = _("Tuner %s: fără semnal; e normal dacă ai un singur cablu.") % b
+		if not web:
+			text += " " + _("OK: încearcă din nou")
+	elif stare == ESUAT:
 		text = _("Tuner %s: configurarea automată n-a reușit.") % b
 		if not web:
 			text += " " + _("OK: încearcă din nou")
@@ -208,8 +212,10 @@ def stare():
 	acum = _proba is not None    # in timpul probei modul lui B e pus in memorie la fel ca A
 	if not acum and st != PORNIT and cfg.configMode.value != "nothing":
 		return None
-	text, ok = text_stare(st, b, a, _motiv, acum)
-	text_web = text_stare(st, b, a, _motiv, acum, web=True)[0]
+	# probe 1 stores the transponder only when B locked it; an empty value after "esuat" means probe 1 failed
+	fara_semnal = st == ESUAT and not (cfg.hdsTpProba.value if "hdsTpProba" in cfg.content.items else "")
+	text, ok = text_stare(st, b, a, _motiv, acum, fara_semnal=fara_semnal)
+	text_web = text_stare(st, b, a, _motiv, acum, web=True, fara_semnal=fara_semnal)[0]
 	return {"slot": b, "litera": litera(b), "stare": st, "text": text, "text_web": text_web, "ok": ok,
 		"acum": acum}
 
@@ -521,6 +527,9 @@ def incearca_proba1(de_om=False):
 			cfg_b.hdsTpProba.save()
 			_scrie(cfg_b, JUMATATE)
 		elif rezultat == "neprins":
+			# no transponder kept: stare() tells the person B has no signal (most often no cable on B)
+			cfg_b.hdsTpProba.value = ""
+			cfg_b.hdsTpProba.save()
 			_scrie(cfg_b, ESUAT)
 		_anunta()
 

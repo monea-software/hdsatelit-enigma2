@@ -7,7 +7,8 @@ from Components.VolumeBar import VolumeBar
 # daca il are vreodata, altfel cel scris aici (scris pe 1920x1080; skin.py il mareste la 2K si il micsoreaza la 720p,
 # ca pe celelalte ecrane din cod cu resolution=). Cu o tema straina ramane mereu ecranul "Volume" al temei.
 # Asezarea (1920x1080): caseta de 960x120 centrata pe orizontala, in treimea de jos (y 752..872), iconita, bara lata si,
-# cand e ceruta, numarul (HdsBold 72: "100" are 123 px, caseta lui 152). Semnul de mut la mijloc: Screens/Mute.py.
+# cand e ceruta, numarul (HdsBold 72: "100" are 123 px, 159 px cu Marimea textului la 130%, caseta lui 168: VOL1,
+# tamiciav7, 0.8.0; inainte 152, care taia zeroul de la 110%). Semnul de mut la mijloc: Screens/Mute.py.
 MIJLOC_X, MIJLOC_Y, MIJLOC_L, MIJLOC_I = 480, 752, 960, 120
 
 
@@ -20,7 +21,7 @@ def skinMijloc(cuNumar):
 	"""Ecranul barei de volum la mijloc (cu sau fara numar), scris pe 1920x1080."""
 	l, i = MIJLOC_L, MIJLOC_I
 	capat = 784 - 24 if cuNumar else l - 28
-	numar = ('<widget name="VolumeText" conditional="VolumeText" position="784,12" size="152,96" font="HdsBold;72" '
+	numar = ('<widget name="VolumeText" conditional="VolumeText" position="768,12" size="168,96" font="HdsBold;72" '
 		'foregroundColor="hdsText" backgroundColor="hdsPanelDialog" transparent="1" halign="right" valign="center" '
 		'zPosition="2" />') if cuNumar else ""
 	return ('<screen name="VolumeMijloc" resolution="1920,1080" position="%d,%d" size="%d,%d" '

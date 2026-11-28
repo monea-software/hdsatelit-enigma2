@@ -19,6 +19,7 @@ TERMEN = 3.0
 SERVICII = ("groq", "gemini")
 _lucratori = weakref.WeakSet()
 _alegere_nativa = False
+_cheie_asteptata = 0	# monotonic time until which a key check started from the web page may still save a key
 
 
 def _t(text):
@@ -32,13 +33,31 @@ def confidentialitate():
 	return _t("Subtitrarea postului are prioritate și se traduce în limba ta. Dacă rămâne fără text, trece singur la vorbire și revine când reapare subtitrarea. Sunetul canalului pleacă direct la serviciul ales, cu cheia ta. Nu trece prin serverele HD Satelit și nu se păstrează pe receptor. Serviciul îl prelucrează după regulile contului tău.")
 
 
+def drumMeniu():
+	"""Where the speech subtitle screen (with the QR code) is on the receiver, in the menu language."""
+	return " > ".join(_t(p) for p in ("Menu", "Settings", "Audio & Sound Tracks", "Subtitrări din vorbire"))
+
+
+def textLipsaCheie():
+	return _t("Subtitrări din vorbire: lipsește cheia. Scanează codul din %s și lipește cheia.") % drumMeniu()
+
+
+def cheiPuse():
+	"""{serviciu: True/False} from the key store (never the key); {} when it cannot be read."""
+	try:
+		d = _traducere().chei().stare()
+	except Exception:
+		return {}
+	return dict((x, bool(d.get(x))) for x in SERVICII)
+
+
 def initConfig():
 	from Components.config import config, ConfigSubsection, ConfigOnOff, ConfigSelection
 	if not hasattr(config, "hds_vorbire"):
 		config.hds_vorbire = ConfigSubsection()
 		s = config.hds_vorbire
 		s.pornit = ConfigOnOff(default=False)
-		s.serviciu = ConfigSelection(default="groq", choices=[("groq", "Groq"), ("gemini", "Gemini")])
+		s.serviciu = ConfigSelection(default="groq", choices=[("gemini", "Gemini"), ("groq", "Groq")])
 		s.limba = ConfigSelection(default="meniu", choices=[("meniu", _t("Limba meniului"))] +
 			[(c, _t(n)) for c, n in _traducere().LIMBI_TINTA])
 	return config.hds_vorbire
@@ -504,6 +523,7 @@ class Motor(object):
 
 	def _lant(self, lant, stop, executa=None, text="", limba=""):
 		T = self.T
+		self.eroare = None
 		lant = [dict(c, tinta=self.cfg["tinta"]) for c in lant if not T.ceLipseste(c)] if executa is None else [dict(c, tinta=self.cfg["tinta"]) for c in lant if c.get("cheie")]
 		if not lant or stop.is_set():
 			return None, None
@@ -511,6 +531,7 @@ class Motor(object):
 		lot = T.Lot([T.Lucrare(lant[0], limba or "auto", [text], [], self.ceas(), lant=lant)])
 		toate = {c["serviciu"]: list(c.get("chei") or ([c["cheie"]] if c.get("cheie") else [])) for c in lant}
 		_, rez, err, ms, info = m._trimiteLot(lot, toate_cheile=toate, executa=executa, stop=stop, termen_s=TERMEN)
+		self.eroare = err
 		return rez, lot.cfg
 
 	def recunoaste(self, date, fel, stop):
@@ -544,6 +565,13 @@ class Motor(object):
 			self.blocat[serv] = b[0] or self.ceas() + 3600
 		if rez is not None:
 			self.blocat[c["serviciu"]] = self.ceas() + (3.05 if c["serviciu"] == "groq" else 0)
+		elif not stop.is_set():
+			e = getattr(self, "eroare", None)
+			semn = ([x["serviciu"] for x in lant], getattr(e, "fel", None), getattr(e, "cod", None),
+				str(getattr(e, "text", e) or "")[:160])
+			if semn != getattr(self, "spus", None):
+				self.spus = semn
+				_jurnal("recognition failed: services %s, %s HTTP %s %s" % semn)
 		return rez or ("", "", "serviciu")
 
 	def traduce(self, text, limba, stop):
@@ -597,7 +625,10 @@ class Lucrator(object):
 				tradus = self.motor.traduce(text, limba, anulare)
 				if not self.stop.is_set() and self.ceas() - la <= MAX_VARSTA and versiune == self.versiune:
 					puneUltima(self.iesire, (tradus, self.ceas() - la + BUCATA_S, serv, versiune))
-			except Exception:
+			except Exception as e:
+				if getattr(self, "spus", None) != e.__class__.__name__:
+					self.spus = e.__class__.__name__
+					_jurnal("speech step failed: %s: %s" % (e.__class__.__name__, str(e)[:160]))
 				if not self.stop.is_set() and versiune == self.versiune:
 					puneUltima(self.iesire, ("", 0, "serviciu", versiune))
 		self.goleste()
@@ -616,47 +647,88 @@ class Lucrator(object):
 		self.goleste()
 
 
+def _jurnal(text):
+	print("[HdsVorbire] %s" % text)
+
+
+TACERE_PES_S = 2.0	# a PES filter silent this long (from the start or after a few bytes) is replaced by a TS filter
+
+
 class Cititor(object):
+	# PES filter first (as the radio bars). Some drivers give a second PES filter on the audio PID nothing for ~20 s
+	# after a zap (measured on ZGEMMA H8.2H Plus) while a TS filter on the same PID gets the packets at once: then the
+	# packets are unwrapped with FiltruTs into the same PES bytes.
 	def __init__(self, sursa, lucrator):
 		self.sursa, self.lucrator = sursa, lucrator
 		self.fir = threading.Thread(target=self._lucru, name="HdsVorbireAudio", daemon=True)
 		self.motiv = ""
+		self.detaliu = ""	# technical reason for the log, never shown as is
 
 	def _lucru(self):
-		from Components.HdsRadioAnaliza import Pes
+		from Components import HdsRadioAnaliza as A
+		Pes = A.Pes
 		pes, cadre = Pes(), Cadre()
+		ts = None
 		ultim = time.monotonic()
 		ultim_audio = ultim
 		versiune = self.lucrator.versiune
 		try:
 			if self.lucrator.stop.is_set():
 				return
-			if self.sursa.deschide(self.sursa.cai[0]):
+			eroare = self.sursa.deschide(self.sursa.cai[0])
+			if eroare:
+				self.detaliu = eroare
 				self.motiv = "sunet"
 				return
+			octeti = 0
 			while not self.lucrator.stop.is_set():
 				if versiune != self.lucrator.versiune:
 					versiune = self.lucrator.versiune
 					pes, cadre = Pes(), Cadre()
+					ts = A.FiltruTs(self.sursa.pid) if ts is not None else None
 					self.sursa.inchide()
-					if self.sursa.deschide(self.sursa.cai[0]):
+					eroare = self.sursa.deschide(self.sursa.cai[0])
+					if eroare:
+						self.detaliu = eroare
 						self.motiv = "sunet"
 						return
 				date = self.sursa.citeste(100)
 				if versiune != self.lucrator.versiune:
 					continue
 				if date:
+					octeti += len(date)
 					ultim = time.monotonic()
+					if ts is not None:
+						date = ts.adauga(date)
 					for audio, fel in cadre.adauga(pes.adauga(date)):
 						ultim_audio = time.monotonic()
 						puneUltima(self.lucrator.intrare, (time.monotonic(), audio, fel, versiune))
+				elif (ts is None and hasattr(self.sursa, "iesire") and
+						time.monotonic() - ultim > TACERE_PES_S):
+					self.sursa.inchide()
+					self.sursa.iesire = A.DMX_OUT_TSDEMUX_TAP
+					eroare = self.sursa.deschide(self.sursa.cai[0])
+					if eroare:
+						self.detaliu = "TS filter: " + eroare
+						self.motiv = "sunet"
+						return
+					ts = A.FiltruTs(self.sursa.pid)
+					pes, cadre = Pes(), Cadre()
+					ultim = ultim_audio = time.monotonic()
+					_jurnal("PES filter silent for %.0f s on %s, TS filter on PID %d" % (TACERE_PES_S, self.sursa.cai[0],
+						self.sursa.pid))
 				elif time.monotonic() - ultim > 4:
+					self.detaliu = "%s: no %s data for 4 s (%d bytes before)" % (self.sursa.cai[0],
+						"TS" if ts is not None else "PES", octeti)
 					self.motiv = "sunet"
 					break
 				if time.monotonic() - ultim_audio > 10:
+					self.detaliu = "%s: %d bytes, no audio frames for 10 s (%s)" % (self.sursa.cai[0], octeti,
+						cadre.fel or "unknown")
 					self.motiv = "format"
 					break
-		except Exception:
+		except Exception as e:
+			self.detaliu = "reader: %s" % e.__class__.__name__
 			self.motiv = "sunet"
 		finally:
 			self.sursa.inchide()
@@ -668,6 +740,8 @@ class CititorPlayer(object):
 		self.lucrator = lucrator
 		self.intrare = queue.Queue(2)
 		self.motiv = ""
+		self.detaliu = ""
+		self.primite = 0	# player copies received, for the log
 		self.fir = threading.Thread(target=self._lucru, name="HdsVorbirePlayer", daemon=True)
 
 	def _lucru(self):
@@ -680,10 +754,12 @@ class CititorPlayer(object):
 					d = self.intrare.get(timeout=0.1)
 				except queue.Empty:
 					if time.monotonic() - ultima > 5:
+						self.detaliu = "player: no audio copy for 5 s (%d received)" % self.primite
 						self.motiv = "sunet"
 						return
 					continue
 				ultima = time.monotonic()
+				self.primite += 1
 				versiune = d.get("versiune", self.lucrator.versiune)
 				if versiune != self.lucrator.versiune:
 					continue
@@ -700,6 +776,7 @@ class CititorPlayer(object):
 						continue
 					marime = (rate * 32 // 10) * ch * 2
 					if marime + 44 > MAX_AUDIO:
+						self.detaliu = "player: PCM %d Hz x %d too large" % (rate, ch)
 						self.motiv = "format"
 						return
 					pcm.extend(date)
@@ -712,9 +789,12 @@ class CititorPlayer(object):
 						puneUltima(self.lucrator.intrare, (time.monotonic(), audio, tip, versiune))
 						ultim_audio = time.monotonic()
 				if time.monotonic() - ultim_audio > 10:
+					self.detaliu = "player: no audio frames for 10 s (%s %s Hz)" % (semn[0] if semn else "?",
+						semn[1] if semn else "?")
 					self.motiv = "format"
 					return
-		except Exception:
+		except Exception as e:
+			self.detaliu = "player: %s" % e.__class__.__name__
 			self.motiv = "sunet"
 		finally:
 			pcm.clear()

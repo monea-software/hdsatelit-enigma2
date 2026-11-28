@@ -164,6 +164,22 @@ def _raporteazaAltPython(categorie, nume, exc):
 		print("[PluginComponent] report for %s/%s: %r" % (categorie, nume, e))
 
 
+# HDSatelit 0.8.0 (GLS2): pluginurile externe cu o adaptare in Components/HdsAdaptariPluginuri.py (ADAPTARI); modulul acela se
+# importa numai dupa importul unuia din ele, deci fara ele nu se incarca nimic in plus
+_CU_ADAPTARE = frozenset((("Extensions", "setupGlass17"), ("Extensions", "s4aUpdater")))
+
+
+def _adaptarePlugin(categorie, nume, plugin):
+	"""HDSatelit 0.8.0 (GLS2): dupa importul pluginului, adaptarea lui, daca are una; altfel nimic. Nu arunca."""
+	if (categorie, nume) in _CU_ADAPTARE:
+		try:
+			from Components import HdsAdaptariPluginuri
+			plugin = HdsAdaptariPluginuri.dupaImport(categorie, nume, plugin)
+		except Exception as e:
+			print("[PluginComponent] adaptarea pluginului %s/%s:" % (categorie, nume), e)
+	return plugin
+
+
 def _importaPlugin(categorie, nume, path):
 	"""HDSatelit: importul pluginului; unul care cade numai fiindca e scris in Python 2 se traduce in Python 3 o data, apoi se
 	importa din nou (Components/HdsPython2Traducere.py). La fel unul care s-a incarcat, dar are cod de Python 2 in functii (se
@@ -270,7 +286,15 @@ class PluginComponent:
 		self.prefix = prefix
 
 	def addPlugin(self, plugin):
-		if self.firstRun or plugin.needsRestart is False:
+		# HDSatelit (AS193, tamiciav7, 24.11.2026): un descriptor adaugat de codul unui plugin deja incarcat (in afara
+		# citirii listei, de pilda EPGImport cu "Arata EPG import acum in extensii" = Da, setExtensionsmenu) intra pe loc:
+		# codul lui ruleaza deja, deci nu e nimic de repornit. Altfel randul aparea in lista ALBASTRA abia dupa repornirea
+		# interfetei. needsRestart ramane numai pentru pluginurile noi gasite la citirea listei (readPluginList).
+		citire = getattr(self, "_inCitire", 0) > 0
+		if not citire and not self.firstRun and plugin in self.pluginList:
+			# acelasi descriptor pus a doua oara la rulare (Da de doua ori): un singur rand, deci un singur Nu il scoate
+			return
+		if self.firstRun or plugin.needsRestart is False or not citire:
 			self.pluginList.append(plugin)
 			for x in plugin.where:
 				self.plugins.setdefault(x, []).append(plugin)
@@ -320,10 +344,25 @@ class PluginComponent:
 		return PluginDescriptor.WHERE_EXTENSIONSMENU in plugin.where or PluginDescriptor.WHERE_PLUGINMENU in plugin.where
 
 	def removePlugin(self, plugin):
+		# HDSatelit (AS193): un descriptor care nu e in lista (amanat sau scos deja) nu mai da "list.remove(x): x not in
+		# list" pluginului care il scoate (EPGImport setExtensionsmenu); se scoate si dintre cele amanate
+		if plugin not in self.pluginList:
+			lista = self.amanateToate.get(plugin.path) if plugin.path else None
+			if lista and plugin in lista:
+				lista.remove(plugin)
+				if not lista:
+					self.amanateToate.pop(plugin.path, None)
+			if plugin.path and self.amanate.get(plugin.path) is plugin:
+				self.amanate.pop(plugin.path, None)
+				if lista:
+					self.amanate[plugin.path] = lista[0]
+			# restartRequired ramane cum era: il pune si programul imaginii schimbat pe disc (amanateImagine), fara amanate
+			return
 		self.pluginList.remove(plugin)
 		self.eroriDeschidere.pop(plugin.path, None)
 		for x in plugin.where:
-			self.plugins[x].remove(plugin)
+			if plugin in self.plugins.get(x, ()):
+				self.plugins[x].remove(plugin)
 			if x == PluginDescriptor.WHERE_AUTOSTART:
 				plugin(reason=1)
 
@@ -415,6 +454,7 @@ class PluginComponent:
 						t0 = monotonic()
 						try:
 							plugin = _importaPlugin(c, pluginname, path)
+							plugin = _adaptarePlugin(c, pluginname, plugin)
 
 							if "Plugins" not in plugin.__dict__:
 								print("Plugin %s doesn't have 'Plugin'-call." % (pluginname))
@@ -501,15 +541,20 @@ class PluginComponent:
 		for p in plugins_removed:
 			self.removePlugin(p)
 
-		for p in plugins_added:
-			if self.firstRun or p.needsRestart is False:
-				self.addPlugin(p)
-			else:
-				for installed_plugin in self.installedPluginList:
-					if installed_plugin.path == p.path:
-						if installed_plugin.where == p.where:
-							p.needsRestart = False
-				self.addPlugin(p)
+		# contor, nu bifa: o citire pornita din interiorul alteia (un AUTOSTART) nu scoate steagul celei de afara
+		self._inCitire = getattr(self, "_inCitire", 0) + 1
+		try:
+			for p in plugins_added:
+				if self.firstRun or p.needsRestart is False:
+					self.addPlugin(p)
+				else:
+					for installed_plugin in self.installedPluginList:
+						if installed_plugin.path == p.path:
+							if installed_plugin.where == p.where:
+								p.needsRestart = False
+					self.addPlugin(p)
+		finally:
+			self._inCitire -= 1
 						
 		if self.firstRun:
 			self.firstRun = False

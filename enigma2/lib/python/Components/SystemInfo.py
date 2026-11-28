@@ -165,6 +165,15 @@ except Exception as _e:
 	print("[SystemInfo] HdsMultiboot: %s" % type(_e).__name__)
 	SystemInfo["HdsMultiboot"] = False
 	SystemInfo["HdsMultibootEroare"] = type(_e).__name__
+# ZGEMMA H8.2H Plus / H8.2H SE: imaginile de pe stick (Components/HdsPornireStick.py, MB1 27.11.2026): intrarea Imagini pe
+# stick din meniul Putere si cardul "stick" din /alimentare. Separat de HdsMultiboot: acela deschide si drumurile de
+# scriere ale actualizarii (HdsSoftwareUpdate), care pe NAND ar scrie memoria interna.
+try:
+	from Components import HdsPornireStick as _pornireStick
+	SystemInfo["HdsPornireStick"] = _pornireStick.disponibil()
+except Exception as _e:
+	print("[SystemInfo] HdsPornireStick: %r" % (_e,))
+	SystemInfo["HdsPornireStick"] = False
 # Vu+ 4K pornit direct din flash, fara pornire multipla: intrarea Pornire multipla Vu+ (Kexec) din meniul Putere si
 # cardul ei din /alimentare (Components/HdsPornireMultipla.py, kexecInstalabil; KXC 15.11.2026); pana la prima
 # proba a unui tester numai cu pachetul kexec-multiboot al masinii instalat sau cu /etc/enigma2/hds-kexec-proba (KXH).
@@ -804,5 +813,15 @@ BOXTYPE = SystemInfo.get("boxtype", "")
 CHKROOTMB = SystemInfo.get("chkrootmb", False)
 UBIMB = SystemInfo.get("hasUBIMB", False)
 
-# Native Bluetooth pairing is visible on supported boards or with BlueZ installed.
-SystemInfo["HdsBluetooth"] = getModelName() == "gbquad4kpro" or os.path.isfile("/usr/bin/bluetoothctl")
+def _hdsAdaptorBluetooth():
+	"""A Bluetooth adapter known to the kernel (/sys/class/bluetooth/hci*), with or without BlueZ installed."""
+	try:
+		return any(n.startswith("hci") for n in os.listdir("/sys/class/bluetooth"))
+	except OSError:
+		return False
+
+
+# Native Bluetooth pairing is visible on supported boards, with BlueZ installed, or with an adapter in the kernel: the
+# screen brings BlueZ itself when a headset is chosen (BTF1; freak-sat, SF8008: without bluetoothctl the menu was hidden).
+SystemInfo["HdsBluetooth"] = getModelName() == "gbquad4kpro" or os.path.isfile("/usr/bin/bluetoothctl") or \
+	_hdsAdaptorBluetooth()

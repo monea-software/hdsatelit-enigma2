@@ -36,6 +36,8 @@ searchPaths = tuple(cale % "picon" for cale in CAI_SIGLE)
 
 # tipurile de referinta ale fluxurilor care poarta si partea DVB (SID, TSID, ONID, namespace)
 TIPURI_FLUX = ("4097", "5001", "5002", "5003", "8193", "8739")
+# the players an IPTV source can use (Player si piconuri); the DVB part of the reference is the same for all three
+TIPURI_PLAYER_IPTV = ("4097", "5001", "5002")
 # tipurile de serviciu radio (ca lista de radio a imaginii)
 TIPURI_RADIO = ("2", "a", "A")
 
@@ -58,6 +60,13 @@ def nume_sigle(sref):
 		c = list(baza)
 		c[2] = "1"
 		adauga(c)
+	# Same IPTV channel under the other two players: logos saved for one player stay visible after a player switch.
+	if baza[0] in TIPURI_PLAYER_IPTV:
+		for tip in TIPURI_PLAYER_IPTV:
+			if tip != baza[0]:
+				c = list(baza)
+				c[0] = tip
+				adauga(c)
 	if baza[0] in TIPURI_FLUX:
 		c = list(baza)
 		c[0] = "1"

@@ -31,6 +31,20 @@ TOLERANTA_UPTIME_S = 5
 
 PRAG_SESIUNI = 30                 # zone scurse (sau sesiuni numarate) de la care receptorul trebuie repornit
 PRAG_LIBER_KB = 64 * 1024         # vmalloc liber sub atat: decodorul video cere ~17 MB dintr-o bucata
+# Pragul vmalloc liber e masurat NUMAI pe HiSilicon, unde decodorul video isi ia memoria din vmalloc. Pe Broadcom si pe
+# Dreambox (DM900/DM920) decodorul are memoria lui, iar vmalloc e aproape plin din pornire de zonele mapate ale placii
+# (VmallocTotal 761856 KB, folosit ~696700 KB la odihna, deci ~65100 KB liberi): acolo pragul refuza mereu, si dupa
+# repornire, fara sa lipseasca ceva. Numaratoarea zonelor de 4 MB pierdute ramane pe toate placile.
+SEMNE_HISILICON = ('proc/hisi', 'proc/msp', 'usr/bin/hihalt', 'usr/lib/hisilicon')
+
+
+def hisilicon(rad='/'):
+    """True pe placile HiSilicon (semnele din SystemInfo["HiSilicon"] care se vad in fisiere, plus /proc/msp); rad: o
+    radacina de proba."""
+    for c in SEMNE_HISILICON:
+        if os.path.exists(os.path.join(rad, c)):
+            return True
+    return False
 
 
 def uptime(cale=UPTIME):
@@ -210,11 +224,14 @@ def conexiuni_8001(cai=PROC_TCP, port_hex=PORT_8001_HEX):
 
 
 def stare(cale=CONTOR, cale_vmalloc=VMALLOCINFO, cale_meminfo=MEMINFO, cale_baza=BAZA, cale_uptime=UPTIME,
-          prag_sesiuni=PRAG_SESIUNI, prag_liber_kb=PRAG_LIBER_KB):
-    """Tot ce trebuie paznicului. -> dict cu 'sesiuni', 'vmalloc' (sau None), 'scurse', 'trebuie_repornit', 'motiv'."""
+          prag_sesiuni=PRAG_SESIUNI, prag_liber_kb=PRAG_LIBER_KB, hisi=None):
+    """Tot ce trebuie paznicului. -> dict cu 'sesiuni', 'vmalloc' (sau None), 'scurse', 'trebuie_repornit', 'motiv',
+    'paza_liber' (pragul vmalloc liber se aplica: numai HiSilicon). hisi: None = aflat de pe placa."""
     s = numar(cale, cale_uptime)
     v = citeste_vmalloc(cale_vmalloc, cale_meminfo)
-    rez = {'sesiuni': s, 'vmalloc': v, 'scurse': s, 'trebuie_repornit': False, 'motiv': ''}
+    if hisi is None:
+        hisi = hisilicon()
+    rez = {'sesiuni': s, 'vmalloc': v, 'scurse': s, 'trebuie_repornit': False, 'motiv': '', 'paza_liber': bool(hisi)}
     if v is not None:
         b = baza(v['zone'], s, cale_baza)
         rez['baza'] = b
@@ -222,7 +239,7 @@ def stare(cale=CONTOR, cale_vmalloc=VMALLOCINFO, cale_meminfo=MEMINFO, cale_baza
     if rez['scurse'] >= prag_sesiuni:
         rez['trebuie_repornit'] = True
         rez['motiv'] = '%d zone de 4 MB pierdute de driver (%d sesiuni 8001 ale pluginurilor)' % (rez['scurse'], s)
-    elif v is not None and v.get('liber_kb') is not None and v['liber_kb'] < prag_liber_kb:
+    elif hisi and v is not None and v.get('liber_kb') is not None and v['liber_kb'] < prag_liber_kb:
         rez['trebuie_repornit'] = True
         rez['motiv'] = 'vmalloc liber %d KB (prag %d KB), %d sesiuni 8001' % (v['liber_kb'], prag_liber_kb, s)
     return rez

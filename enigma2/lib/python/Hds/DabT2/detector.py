@@ -748,6 +748,11 @@ def detecteaza(sectiuni, pachete_ts=None, timp_max=15.0, cunoscute=None, ceas=_m
     dupa_cheie = {}
     for f in cunoscute:
         dupa_cheie.setdefault(_cheie_cunoscuta(f), f.get('id'))
+    # T2P9 (0.8.0): la T2-MI acelasi PID poate purta mai multe PLP-uri (53E 10909: PID 4105, PLP 1 Krasnodar, PLP 2 Sochi)
+    dupa_pid_plp = {}
+    for f in cunoscute:
+        if f.get('fel') == 't2mi':
+            dupa_pid_plp.setdefault((f.get('pid'), f.get('plp')), f.get('id'))
 
     def termen(max_s, fractie=1.0):
         rest = termen_total - ceas()
@@ -996,6 +1001,15 @@ def detecteaza(sectiuni, pachete_ts=None, timp_max=15.0, cunoscute=None, ceas=_m
                          'nume': 'DVB-T2 PID %d' % pid, 'confirmat': True,
                          'motiv': 'T2-MI: %d pachete cu CRC32 bun' % v['pachete_t2mi_bune'],
                          'program': cand['program'], 'cunoscut': cand['cunoscut']}
+                    if len(v['plp_uri']) > 1:
+                        # T2P9: un feed pe fiecare PLP, fiecare cu multiplexul lui din lista (cautat si invatat separat)
+                        for plp in v['plp_uri']:
+                            rez['feeduri'].append(dict(f, id='det_t2_%04x_p%d' % (pid, plp), plp=plp,
+                                                       nume='DVB-T2 PID %d PLP %d' % (pid, plp),
+                                                       cunoscut=dupa_pid_plp.get((pid, plp))))
+                        continue
+                    if f['plp'] is not None and (pid, f['plp']) in dupa_pid_plp:
+                        f['cunoscut'] = dupa_pid_plp[(pid, f['plp'])]
                     rez['feeduri'].append(f)
                     continue
                 w = verifica_eti(blocuri, pid) if vrea_dab else {'confirmat': False}

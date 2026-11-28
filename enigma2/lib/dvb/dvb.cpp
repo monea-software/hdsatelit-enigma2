@@ -714,7 +714,26 @@ RESULT eDVBResourceManager::allocateDemux(eDVBRegisteredFrontend *fe, ePtr<eDVBA
 		if (fe)
 			demux->get().setSourceFrontend(fe->m_frontend->getDVBID());
 		else
+		{
+#if HDS_PVR_DVR_PE_DEMUX
+			/* GigaBlue gb7252 (DVR1, 26.11.2026): playback writes into dvr<N> of the chosen demux (eDVBDemux::openDVR),
+			   and this Broadcom driver gives demux<N> the data of dvr<N> only with the source DMX_SOURCE_DVR0 + N; with
+			   DVR0 (what every other board gets) the decoder receives nothing and the last live picture stays. If the
+			   driver refuses the number, DVR0 as before. */
+			uint8_t nr = 0;
+			demux->get().getCADemuxID(nr);
+			int res = demux->get().setSourcePVR(nr);
+			if (res != 0)
+			{
+				eDebug("[eDVBResourceManager] DMX_SET_SOURCE dvr%d on demux%d refused (%d), dvr0 as before", nr, nr, res);
+				demux->get().setSourcePVR(0);
+			}
+			else
+				eDebug("[eDVBResourceManager] playback on demux%d from dvr%d", nr, nr);
+#else
 			demux->get().setSourcePVR(0);
+#endif
+		}
 		return 0;
 	}
 

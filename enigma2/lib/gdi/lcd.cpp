@@ -73,7 +73,16 @@ static bool hdsLcdGeometry(int &xres, int &yres, int &bpp, bool *littleEndian = 
 		(!strcmp(model, "dm900") || !strcmp(model, "dm920"));
 	if (board)
 		fclose(board);
-	if (!strcmp(model, "duo2") || !strcmp(model, "vuduo2"))
+	// On Vu+ /proc/stb/info/model says "dm8000"; the real name is in /proc/stb/info/vumodel ("duo2").
+	char vumodel[32] = {0};
+	FILE *vu = fopen("/proc/stb/info/vumodel", "r");
+	if (vu)
+	{
+		if (fscanf(vu, "%31s", vumodel) != 1)
+			vumodel[0] = 0;
+		fclose(vu);
+	}
+	if (!strcmp(model, "duo2") || !strcmp(model, "vuduo2") || !strcmp(vumodel, "duo2"))
 	{
 		// The Duo2 VFD is grayscale; its color TFT is a separate device.
 		if (duo2)
@@ -268,10 +277,11 @@ int eDBoxLCD::writeHdsDuo2(int first, int second, int third, int fourth)
 	// hds_update controls only the competing desktop updates, as on LED panels.
 	unsigned char pixels[140 * 32] = {0};
 	const int masks[] = {first, second, third, fourth};
-	// a, b, c, d, e, f, g, dot: rectangles inside each 35-pixel cell.
+	// a, b, c, d, e, f, g, dot: rectangles inside each 35-pixel cell. The digits are 22 px high and 16 px wide,
+	// centered on the 32 px panel (on the whole height they looked too big on a real Duo2).
 	const int rects[8][4] = {
-		{5, 1, 22, 4}, {23, 5, 26, 14}, {23, 17, 26, 27}, {5, 28, 22, 31},
-		{2, 17, 5, 27}, {2, 5, 5, 14}, {5, 14, 22, 17}, {28, 28, 31, 31}
+		{11, 5, 23, 7}, {23, 7, 25, 15}, {23, 17, 25, 25}, {11, 25, 23, 27},
+		{9, 17, 11, 25}, {9, 7, 11, 15}, {11, 15, 23, 17}, {27, 25, 29, 27}
 	};
 	for (int digit = 0; digit < 4; ++digit)
 		for (int bit = 0; bit < 8; ++bit)

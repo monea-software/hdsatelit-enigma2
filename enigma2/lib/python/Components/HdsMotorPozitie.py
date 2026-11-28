@@ -150,6 +150,16 @@
 #     lui e tot a readucerii (o judeca ea, nu plasa de sosire). Ocolirea se opreste si ea la un zap, ca pana acum; pe
 #     satelitul canalului acordul zap-ului (pozitia e uitata de ocolire) aduce antena inapoi si e judecat ca
 #     intoarcerea ocolirii, deci pasii si limitele raman, iar plasa de sosire nu mai trimite comanda din nou.
+#   - readucerea avea pasi fara capat (la 30 min toata noaptea, fiecare cu verificarea si cu motorul pe 18 V cate
+#     68-98 s), chiar cand antena nu mai prindea nimic nicaieri (asistenta 737979, Octagon SF8008, motor DiSEqC 1.2).
+#     OE-Alliance nu mai misca singur antena dupa o mutare fara semnal (pozitia tintei ramane stiuta, deci reacordarea
+#     de la pierdere nu trimite comanda). Acum readucerea face cel mult READUCERE_INCERCARI_MAX incercari pe o pierdere
+#     (la 15 s, apoi dupa READUCERE_PASI_S), apoi se opreste: randul "oprita" in urma motorului, "oprita" in
+#     /api/motor si pe televizor un singur mesaj (Tools.Notifications, cu ID, se inchide singur) ca antena nu prinde
+#     semnal pe acel satelit, cu ce poate verifica omul. Nu e o limita de siguranta, e capatul unei bucle. Readucerea
+#     porneste din nou, de la zero, la alt canal sau alt satelit, cand semnalul revine si cand omul deschide un ecran al
+#     antenei sau al comenzilor motorului (Rotirea antenei, Gasire semnal, configurarea tunerului); o verificare care
+#     arata antena la locul ei numara si ea incercarile iar de la zero, ca pana acum.
 import json
 import os
 import sys
@@ -181,10 +191,16 @@ SOSIRE_SEMNAL_MARJA_S = 1.0
 PLECARE_DOVEDITA_S = 10
 # readucerea: atatea secunde fara semnal, cu motorul oprit si antena crezuta pe satelit
 READUCERE_S = 15
-# dupa o incercare fara semnal, urmatoarea peste 2 min, 2 min, 10 min, apoi la 30 min (de la pornirea incercarii), dupa
-# cate incercari la rand nu au adus semnalul: a doua comanda vine repede (in urma motorului: aceeasi comanda trimisa
-# din nou a adus antena), apoi rar
-READUCERE_PASI_S = (120, 120, 600, 1800)
+# dupa o incercare fara semnal, urmatoarea peste 2 min, apoi peste 5 min (de la pornirea incercarii), dupa cate
+# incercari la rand nu au adus semnalul: a doua comanda vine repede (in urma motorului: aceeasi comanda trimisa din nou
+# a adus antena), a treia mai rar
+READUCERE_PASI_S = (120, 300)
+# atatea incercari fara semnal la rand pe o pierdere, apoi readucerea se opreste (mesajul pe televizor, o data) pana la
+# alt canal, alt satelit, semnal sau un ecran al antenei
+READUCERE_INCERCARI_MAX = 3
+# mesajul opririi: ID-ul notificarii (inlocuieste unul aratat inca) si cat sta pe ecran
+MESAJ_OPRITA_ID = "HdsReaducereOprita"
+MESAJ_OPRITA_S = 30
 # semnalul tinut atatea secunde dupa o readucere: pierderea urmatoare incepe iar de la READUCERE_S; o revenire mai
 # scurta (semnal care se prinde si se pierde) continua pasii
 READUCERE_STABIL_S = 60
@@ -228,8 +244,23 @@ DUPA_ZAP_S = 5
 # si ecranul negru pana la Fara semnal) inainte ca o verificare, o incercare sau plasa sa-i ia tunerul; numaratoarea
 # pierderii nu incepe din nou la zap
 ZAP_PRINDERE_S = 4
-# o referinta e prinsa dupa atatea citiri blocate la rand (o bataie de BATAIE_MS intre ele)
-VERIFICARE_PRINDERI = 2
+# o referinta e prinsa dupa atatea citiri blocate la rand (o bataie de BATAIE_MS intre ele). 1 din 0.8.0 (MOT1): pe ZGEMMA
+# H8.2H Plus .129, 26.11 22:35:37, 11171 H s-a prins in 155 ms si s-a pierdut dupa 4 s; cu 2 citiri verificarea a zis
+# "antena nu e pe 19,2E" si a trimis comanda degeaba. Prima citire vine abia la bataia de dupa acord (stare != TUNING),
+# deci nu e starea veche a transponderului de dinainte
+VERIFICARE_PRINDERI = 1
+# reacordarea fara motor (MOT1) tine atatea secunde: in ele, pierderea care continua trece la readucere
+REACORDARE_VALABILA_S = 90
+# dupa pasii READUCERE_PASI_S, reacordarile fara motor pe antena dovedita vin la atatea secunde
+REACORDARE_RAR_S = 1800
+# o referinta niciodata prinsa, ramasa fara semnal la atatea verificari, nu se mai incearca (pe .129: 10921 H pe 19,2E
+# fara purtatoare la toate cele 5 verificari din 26.11, iar 11171 H prins de doua ori); una prinsa vreodata ramane
+REFERINTA_ESECURI_MOARTA = 2
+# MOT1 (0.8.0): reacordarea fara motor inaintea readucerii, oprirea dupa antena dovedita la locul ei si referintele
+# moarte. Probele vechi ale readucerii (teste/motor_fals.py) il pun False ca sa urmeze mai departe drumul de dinainte
+READUCERE_MOT1 = True
+# MOT1: o referinta ramasa fara semnal intr-o verificare in care alta referinta a aceluiasi satelit s-a prins e moarta
+# (transponderul nu mai emite: 10921 H pe 19,2E); nu se mai incearca pana la repornirea interfetei
 # antena gasita la locul ei: verificarea urmatoare (tot fara rotire) peste 10 min, apoi la 30 min
 VERIFICARE_PASI_S = (600, 1800)
 # asteptarea prinderii pe o referinta cand timpul nucleului nu se poate citi
@@ -369,6 +400,32 @@ def _pereche(intrare):
 		return -1, -1
 
 
+def _confirmat(intrare):
+	"""ultima pozitie confirmata de semnal dintr-o intrare a fisierului (0..3599), -1 cand nu e"""
+	try:
+		orbital = int((intrare or {}).get("confirmat", -1))
+	except (TypeError, ValueError):
+		return -1
+	return orbital if 0 <= orbital < 3600 else -1
+
+
+def pozitieConfirmata(slot):
+	"""Ultima pozitie a antenei prinsa cu semnal pe tunerul `slot` (pozitia orbitala), tinuta minte peste reporniri si
+	peste uitarea pozitiei de catre readucere; -1 cand nu se stie (fisier strain, copie pusa la loc, flash, niciun semnal
+	inca). Numai pentru afisaj (HdsMotorStare): nu se da nucleului si nu hotaraste nicio comanda. Fara a crea obiectul:
+	inainte de redarea de la pornire raspunsul e -1."""
+	if _unic is None:
+		return -1
+	intrare = _unic.scris.get(str(slot))
+	confirmat = _confirmat(intrare)
+	if confirmat < 0:
+		# fisier de dinainte de MOT1: o pereche buna s-a scris numai cu semnal
+		orbital, cmd = _pereche(intrare or {})
+		if 0 <= orbital < 3600 and cmd >= 0:
+			confirmat = orbital
+	return confirmat
+
+
 def _ultimaPozitieSalvata(orbital):
 	"""config.misc.lastrotorposition = pozitia confirmata de semnal (0.7.7, M30). Pana acum o scria numai releul
 	DAB+/DVB-T2 (Hds/DabT2/tuner.py), iar intoarcerea antenei printr-un zap obisnuit (SEC) n-o schimba: pe Octagonul
@@ -412,6 +469,8 @@ class PozitieMotor(object):
 				if orbital >= 0 and cmd >= 0:
 					self.straine.append(slot)
 				intrare["orbital"], intrare["cmd"] = -1, -1
+				# nici ultima pozitie confirmata a unui fisier strain nu se crede (MOT1)
+				intrare.pop("confirmat", None)
 		self.plasa = {}
 		self._t = None
 		self._fara_functii = False
@@ -439,6 +498,15 @@ class PozitieMotor(object):
 		self._panou_pana = {}
 		# programul oprit de ocolire si ramas fara stapan dupa cedarea tunerului catre o extensie (_datoratBate)
 		self._datorat = None
+		# MOT1: referintele moarte (orbital, polarizare, MHz) si antena dovedita la locul ei pe tuner ({slot: orbital}): dupa
+		# dovada, o pierdere pe acelasi satelit nu mai are verificare si nici comanda de motor, numai reacordarea programului
+		self._moarte = set()
+		# referintele prinse macar o data (vii) si de cate ori a ramas fiecare fara semnal la o verificare
+		self._vii = set()
+		self._esecuri_ref = {}
+		self._la_loc_dovedit = {}
+		# ultima reacordare fara motor pe tuner: (orbital, ora)
+		self._reacordat = {}
 
 	# ------------------------------------------------------------------ fisierele
 
@@ -533,7 +601,12 @@ class PozitieMotor(object):
 				self._fara_functii = True
 				T.jurnal("nucleul nu are hdsRestoreRotorPosition; pozitia nu se reda")
 				return
-			self.plasa[slot] = {"pereche": (orbital, cmd), "vazut_la": None, "program": None}
+			if READUCERE_MOT1:
+				# MOT1 (26.11 23:13, ploaie pe .129): pozitia salvata (scrisa cu semnal de pornirea dinainte, semnele egale) e
+				# stiuta: fara plasa care roteste antena dupa 15 s fara semnal; o pierdere are numai reacordari
+				self._la_loc_dovedit[slot] = orbital
+			else:
+				self.plasa[slot] = {"pereche": (orbital, cmd), "vazut_la": None, "program": None}
 			T.jurnal("pozitia antenei redata pe tunerul %s: %s (inaintea primului zap)" % (nume, orbital))
 		# cronometrul porneste abia dupa redare: altfel prima citire (-1 dupa clear) ar scrie "necunoscut" peste fisier
 		self._t = T.cronometru(self._bateSigur)
@@ -617,6 +690,12 @@ class PozitieMotor(object):
 			program = self._programCurent()
 			self._blocat[slot] = (T.acum(), orbital, program)
 			self._invata(slot, orbital, program)
+			if READUCERE_MOT1:
+				# MOT1 (26.11 23:05, ploaie): programul a prins semnal pe acest satelit, cu motorul oprit si dupa
+				# ultima mutare (orice mutare a motorului pe tuner sterge dovada, _readucereSigur): antena e la locul ei.
+				# O pierdere de dupa, oricat de lunga (ploaie, transponder oprit), are numai reacordari, fara rotire
+				self._la_loc_dovedit[slot] = orbital
+				self._reacordat.pop(slot, None)   # semnalul a revenit: pasii reacordarii incep iar de la 2 min
 
 	def _invata(self, slot, orbital, program):
 		"""transponderul programului blocat intra primul in referintele satelitului (o data pe program)"""
@@ -646,6 +725,10 @@ class PozitieMotor(object):
 
 		def bun(tp, alese):
 			if (tp_canal and _acelasiTp(tp, tp_canal)) or any(_acelasiTp(tp, x) for x in alese):
+				return False
+			cheie = _cheieTp(sat, tp)
+			if READUCERE_MOT1 and (cheie in self._moarte or (cheie not in self._vii and
+					self._esecuri_ref.get(cheie, 0) >= REFERINTA_ESECURI_MOARTA)):
 				return False
 			if not vecini:
 				vecini.append(_transpondereVecine(slot, sat))
@@ -705,18 +788,27 @@ class PozitieMotor(object):
 		# perechile unui fisier strain sunt (-1, -1) in memorie (__init__), deci prima pereche cu semnal se scrie, cu
 		# semnul nou, chiar daca e aceeasi ca in copie: altfel fiecare pornire ar trimite din nou comanda
 		vechi = _pereche(intrare)
+		confirmat_vechi = _confirmat(intrare)
+		if confirmat_vechi < 0 and vechi[0] >= 0 and vechi[1] >= 0:
+			# o pereche buna din fisier s-a scris numai cu semnal (fisier de dinainte de MOT1, fara camp): ea e confirmata
+			confirmat_vechi = vechi[0]
+		confirmat = confirmat_vechi
 		if pereche[0] < 0 or pereche[1] < 0:
 			nou = (-1, -1)
 		elif pe_slot and semnal:
 			nou = pereche
+			confirmat = pereche[0]
 			_ultimaPozitieSalvata(pereche[0])
 		elif pereche == vechi:
 			return
 		else:
 			nou = (-1, -1)
-		if nou == vechi and intrare:
+		if nou == vechi and intrare and confirmat == confirmat_vechi:
 			return
-		self.scris[str(slot)] = {"orbital": nou[0], "cmd": nou[1], "amprenta": self._amprenta(slot)}
+		# "confirmat" (MOT1, 26.11): ultima pozitie prinsa cu semnal. Ramane si cand perechea devine "necunoscut" (readucerea,
+		# plasa, o miscare in curs), nu se da niciodata nucleului si foloseste numai panoului motorului (HdsMotorStare): tinta
+		# egala cu ea = mutare de siguranta fara fereastra; alta tinta = plecarea estimata, cu drumul animat
+		self.scris[str(slot)] = {"orbital": nou[0], "cmd": nou[1], "amprenta": self._amprenta(slot), "confirmat": confirmat}
 		self._scrie()
 
 	# ------------------------------------------------------------------ plasa
@@ -960,6 +1052,14 @@ class PozitieMotor(object):
 	def _readucereSigur(self, sec, slot, pe_slot=None, semnal=False):
 		if self._readucere_lipsa:
 			return
+		if self._la_loc_dovedit.get(slot) is not None:
+			# dovada antenei la locul ei (MOT1) se uita la orice mutare a motorului pe tuner si la un ecran al antenei
+			try:
+				misca = int(sec.hdsRotorMovingSlot()) == slot
+			except (AttributeError, TypeError, ValueError):
+				misca = False
+			if misca or _omulLaAntena():
+				del self._la_loc_dovedit[slot]
 		try:
 			self._readucere(sec, slot, pe_slot, semnal)
 			self._panouLaSfarsit(sec, slot)
@@ -1004,13 +1104,16 @@ class PozitieMotor(object):
 			return
 		fel, semnal, orbital = u
 		program = self._programCurent() if fel == "televizor" else None
+		if self._la_loc_dovedit.get(slot) not in (None, orbital):
+			del self._la_loc_dovedit[slot]   # alt satelit: dovada era a celuilalt
 		if e is not None and e["sat"] != orbital:
 			self._incheie(sec, slot, "alt satelit")
 			e = None
 		elif e is not None and e.get("program") is not None and program is not None and program != e["program"]:
-			if e.get("la_loc") is not None or e["revenit_la"] is not None:
-				# zap pe acelasi satelit dupa ce verificarea a aratat antena la locul ei sau dupa ce semnalul a revenit: nu e
-				# nicio readucere de amanat; sir nou pentru programul nou (zap-urile urmatoare il pastreaza)
+			if e.get("la_loc") is not None or e["revenit_la"] is not None or e.get("oprita") is not None:
+				# zap pe acelasi satelit dupa ce verificarea a aratat antena la locul ei, dupa ce semnalul a revenit sau dupa
+				# ce readucerea s-a oprit: nu e nicio readucere de amanat; sir nou pentru programul nou (zap-urile urmatoare
+				# il pastreaza)
 				self._incheie(sec, slot, "alt program")
 				e = None
 			else:
@@ -1028,6 +1131,14 @@ class PozitieMotor(object):
 				"verificare_refuz": None, "la_loc": None, "la_loc_n": 0}
 			self._readuceri[slot] = e
 		e["fel"] = fel
+		if e.get("oprita") is not None:
+			# readucerea s-a oprit dupa READUCERE_INCERCARI_MAX incercari: nimic pana la alt canal, alt satelit, semnal
+			# sau pana deschide omul un ecran al antenei (atunci sir nou, de la zero)
+			if _omulLaAntena():
+				del self._readuceri[slot]
+				T.jurnal("tunerul %s: un ecran al antenei e deschis; readucerea spre %s porneste din nou de la zero" % (
+					T.numeTuner(slot), _gradeText(e["sat"])))
+			return
 		if e["revenit_la"] is not None:
 			# semnalul adus a tinut mai putin de READUCERE_STABIL_S: pasii continua
 			e["revenit_la"] = None
@@ -1066,7 +1177,58 @@ class PozitieMotor(object):
 			return
 		if e.get("zap_la") is not None and acum - e["zap_la"] < ZAP_PRINDERE_S:
 			return   # programul ales de om abia a acordat: are cateva secunde sa prinda singur
+		if e["fel"] == "televizor" and self._reacordeazaIntai(slot, e, acum):
+			return
+		if self._la_loc_dovedit.get(slot) == e["sat"]:
+			return   # o inregistrare sau releul pe antena dovedita la locul ei: nici verificare, nici comanda de motor
 		self._incearca(sec, slot, e, acum)
+
+	def _reacordeazaIntai(self, slot, e, acum):
+		"""MOT1 (ZGEMMA H8.2H Plus .129, 26.11 22:30-22:55): tunerul hi3716 pierde scurt prinderea (0,2 s), iar enigma2 scrie
+		atunci FE_TIMEDOUT / tune failed si programul ramane fara semnal; readucerea muta apoi tunerul pe referinte si
+		trimite comanda de motor, deci o clipire ajungea o pauza de 1-2 minute. Imaginea a adus-o inapoi repornirea
+		programului (acord nou, pozitia stiuta, goto_omis, semnal in 149 ms), nu motorul. Acum:
+		- intai o reacordare pe acelasi transponder, fara comanda de motor (programul oprit si pornit iar dupa
+		  ELIBERARE_CANAL_MS, ca plasa); verificarea si incercarile vin numai daca semnalul lipseste tot si dupa ea, deci
+		  dupa cel putin ~30 s fara semnal la rand (READUCERE_S, reacordarea, inca READUCERE_S);
+		- cu antena dovedita la locul ei pe acest satelit (o referinta prinsa): numai reacordari, cel mult una la
+		  READUCERE_PASI_S[0], niciodata verificare sau comanda de motor.
+		True cand nu mai e nimic de facut acum."""
+		if not READUCERE_MOT1:
+			return False
+		r = self._reacordat.get(slot)
+		e["fara_de"] = None
+		if self._la_loc_dovedit.get(slot) == e["sat"]:
+			# pasii: 2 min, 5 min, apoi la 30 min (un transponder oprit nu e oprit si pornit toata noaptea la 2 min)
+			n = r[2] if r is not None and r[0] == e["sat"] else 0
+			pas = READUCERE_PASI_S[n - 1] if 0 < n <= len(READUCERE_PASI_S) else REACORDARE_RAR_S
+			if r is None or r[0] != e["sat"] or acum - r[1] >= pas:
+				self._reacordeaza(slot, e, acum, "antena e dovedita la locul ei")
+			return True
+		if e["incercari"] or e.get("verificari") or (r is not None and r[0] == e["sat"] and
+				acum - r[1] < REACORDARE_VALABILA_S):
+			# reacordarea s-a facut si semnalul tot lipseste (sau readucerea e deja pornita): pasii obisnuiti
+			e["fara_de"] = acum - READUCERE_S
+			return False
+		self._reacordeaza(slot, e, acum, "intai fara comanda de motor")
+		return True
+
+	def _noteazaReferintele(self, sat, v, cate):
+		"""dupa o verificare: referintele prinse sunt vii, celelalte (din primele `cate`) mai au un esec"""
+		for j in range(min(cate, len(v["refs"]))):
+			cheie = _cheieTp(sat, v["refs"][j])
+			if j in v.get("blocate", ()):
+				self._vii.add(cheie)
+				self._moarte.discard(cheie)
+			else:
+				self._esecuri_ref[cheie] = self._esecuri_ref.get(cheie, 0) + 1
+
+	def _reacordeaza(self, slot, e, acum, motiv):
+		r = self._reacordat.get(slot)
+		self._reacordat[slot] = (e["sat"], acum, (r[2] + 1) if r is not None and r[0] == e["sat"] else 1)
+		T.jurnal("tunerul %s: fara semnal de %d s pe %s: programul se acordeaza din nou pe acelasi transponder, fara comanda de "
+			"motor (%s)" % (T.numeTuner(slot), int(acum - e["pierdut_la"]), _gradeText(e["sat"]), motiv))
+		self._acordaDinNou(slot)
 
 	def _zapAcelasiSatelit(self, slot, e, program, semnal, acum):
 		"""zap pe acelasi satelit cat readucerea e deschisa (antena nedovedita la locul ei, semnalul nerevenit): sirul
@@ -1177,8 +1339,16 @@ class PozitieMotor(object):
 			cod = 1
 		urmatoarea = int(round(e["urmatoarea_la"] - acum))
 		if cod != 1:
+			# refuzul nucleului (nicio mutare) se numara si el spre oprire: altfel randul "refuzata" ar veni la 2 min
+			# toata noaptea
+			e["refuzate"] = e.get("refuzate", 0) + 1
+			oprita = _faraSemnalLaRand(e) >= READUCERE_INCERCARI_MAX
 			e["ultima"] = {"faza": "refuzata", "cod": cod}
-			self._rand(sec, slot, "refuzata", n, e["sat"], fara_ms=fara_ms, urmatoarea_s=urmatoarea, cod=cod)
+			self._rand(sec, slot, "refuzata", n, e["sat"], fara_ms=fara_ms, urmatoarea_s=-1 if oprita else urmatoarea,
+				cod=cod)
+			if oprita:
+				self._opreste(sec, slot, e, acum)
+				return
 			T.jurnal("tunerul %s: readucerea spre %s nu a pornit (cod %d); urmatoarea incercare peste %d s" % (
 				T.numeTuner(slot), _gradeText(e["sat"]), cod, urmatoarea))
 			return
@@ -1230,12 +1400,30 @@ class PozitieMotor(object):
 		e["fara_de"] = acum - READUCERE_S
 		dupa_ms = int((acum - inc["la"]) * 1000)
 		mers_ms = m[1] if m is not None and m[0] >= 0 else -1
-		urmatoarea = max(0, int(round(e["urmatoarea_la"] - acum)))
+		oprita = _faraSemnalLaRand(e) >= READUCERE_INCERCARI_MAX
+		urmatoarea = -1 if oprita else max(0, int(round(e["urmatoarea_la"] - acum)))
 		e["ultima"] = {"faza": "fara_semnal", "dupa_ms": dupa_ms, "mers_ms": mers_ms, "prin": inc.get("prin")}
 		self._rand(sec, slot, "fara_semnal", inc["n"], e["sat"], fara_ms=int((acum - e["pierdut_la"]) * 1000),
 			dupa_ms=dupa_ms, mers_ms=mers_ms, urmatoarea_s=urmatoarea)
+		if oprita:
+			self._opreste(sec, slot, e, acum)
+			return
 		T.jurnal("tunerul %s: tot fara semnal dupa readucerea spre %s (incercarea %d); urmatoarea peste %d s" % (
 			T.numeTuner(slot), _gradeText(e["sat"]), inc["n"], urmatoarea))
+
+	def _opreste(self, sec, slot, e, acum):
+		"""READUCERE_INCERCARI_MAX incercari fara semnal la rand: readucerea se opreste (nicio verificare, nicio comanda)
+		pana la alt canal, alt satelit, semnal sau un ecran al antenei; pe televizor un singur mesaj"""
+		e["oprita"] = {"la": acum}
+		e["urmatoarea_la"] = None
+		e["fara_de"] = None
+		fara_ms = int((acum - e["pierdut_la"]) * 1000)
+		n = _faraSemnalLaRand(e)
+		self._rand(sec, slot, "oprita", n, e["sat"], fara_ms=fara_ms)
+		T.jurnal("tunerul %s: tot fara semnal pe %s dupa %d incercari de readucere (%d s fara semnal): readucerea se "
+			"opreste; porneste din nou la alt canal, alt satelit, semnal sau un ecran al antenei" % (T.numeTuner(slot),
+			_gradeText(e["sat"]), n, fara_ms // 1000))
+		_arataOprirea(e["sat"], n)
 
 	def _cuSemnal(self, sec, slot, e, acum):
 		e["fara_de"] = None
@@ -1271,6 +1459,8 @@ class PozitieMotor(object):
 	def _revenit(self, sec, slot, e, acum, n, dupa_ms, mers_ms):
 		e["revenit_la"] = acum
 		e["incercarea"] = None
+		e.pop("oprita", None)
+		e["refuzate"] = 0
 		# semnalul a venit: urmatoarea pierdere (si o revenire scurta) incepe iar cu incercari directe si pasi scurti
 		e["esecuri"] = 0
 		e["ocoliri"] = 0
@@ -1343,7 +1533,8 @@ class PozitieMotor(object):
 				"fara_semnal_s": int(acum - e["pierdut_la"]) if e["revenit_la"] is None else 0,
 				"urmatoarea_s": max(0, int(round(e["urmatoarea_la"] - acum))) if asteapta else None,
 				"ultima": dict(e["ultima"]) if e["ultima"] else None, "esecuri": e.get("esecuri", 0), "ocolire": ocolire,
-				"verificari": e.get("verificari", 0), "verificare": verificare, "la_loc": la_loc}
+				"verificari": e.get("verificari", 0), "verificare": verificare, "la_loc": la_loc,
+				"oprita": e.get("oprita") is not None}
 		return {"activa": False}
 
 	# ------------------------------------------------------------------ ocolirea
@@ -1731,6 +1922,7 @@ class PozitieMotor(object):
 			return
 		blocat, stare = _stareFrontend(v["luare"].frontend)
 		if blocat and stare != "TUNING":
+			v.setdefault("blocate", set()).add(v["i"])
 			v["prinderi"] += 1
 			if v["prinderi"] >= VERIFICARE_PRINDERI:
 				self._verificarePrinsa(sec, slot, e, acum)
@@ -1780,9 +1972,19 @@ class PozitieMotor(object):
 			dupa_ms=dupa_ms)
 		e["la_loc"] = {"la": acum, "tp_text": text, "program": e.get("program")}
 		e["la_loc_n"] = e.get("la_loc_n", 0) + 1
+		# MOT1: dovada ramane si dupa ce semnalul revine (pana la alt satelit, o mutare a motorului, un ecran al antenei)
+		if READUCERE_MOT1:
+			self._la_loc_dovedit[slot] = e["sat"]
+		self._noteazaReferintele(e["sat"], v, v["i"] + 1)
+		for j in range(v["i"] if READUCERE_MOT1 else 0):
+			if j not in v.get("blocate", ()):
+				self._moarte.add(_cheieTp(e["sat"], v["refs"][j]))
+				T.jurnal("tunerul %s: %s pe %s nu emite (fara semnal, iar alt transponder al satelitului s-a prins); nu se mai "
+					"incearca la verificari" % (T.numeTuner(slot), _tpScurt(v["refs"][j]), _gradeText(e["sat"])))
 		# antena dovedita la locul ei: o plecare de dupa e plecare noua (incercarea directa intai, apoi o ocolire)
 		e["ocoliri"] = 0
 		e["esecuri"] = 0
+		e["refuzate"] = 0
 		e["dupa_zap"] = False
 		e["fara_de"] = None
 		pas = VERIFICARE_PASI_S[min(e["la_loc_n"], len(VERIFICARE_PASI_S)) - 1]
@@ -1804,6 +2006,7 @@ class PozitieMotor(object):
 		"""nicio referinta prinsa: antena nu e pe satelit; incercarea pleaca de aici, cu tunerul in mana"""
 		v = e["verificare"]
 		e["verificare"] = None
+		self._noteazaReferintele(e["sat"], v, len(v["refs"]))
 		texte = ", ".join(_tpScurt(tp) for tp in v["refs"])
 		dupa_ms = int((acum - v["pornita_la"]) * 1000)
 		T.anuntaCererea(CERERE_VERIFICARE_FARA % (v["n"], texte))
@@ -2008,6 +2211,28 @@ def stareReaducere():
 	return p.stareReaducere()
 
 
+def semnalSlab():
+	"""True cand programul de pe televizor e fara semnal pe un satelit unde antena e dovedita la locul ei (MOT1): receptorul
+	numai reacordeaza, deci ecranul negru spune "Semnal slab (posibil vreme rea)", nu o eroare"""
+	p = _unic
+	if p is None:
+		return False
+	if not READUCERE_MOT1:
+		return False
+	try:
+		# ecranul negru intreaba numai cand programul e fara semnal; aici: antena e dovedita pe satelitul lui
+		dovedite = set(p._la_loc_dovedit.values())
+		if not dovedite:
+			return False
+		acum = T.acum()
+		sateliti = {_orbitalProgram()}
+		sateliti.update(e.get("sat") for e in list(p._readuceri.values()))
+		sateliti.update(r[0] for r in list(p._reacordat.values()) if acum - r[1] < READUCERE_PASI_S[0] + 10)
+		return bool(dovedite & sateliti)
+	except Exception:
+		return False
+
+
 def transponderNuEmite():
 	"""transponderul de referinta prins de verificare ("11494 H 22000 DVB-S2 8PSK 2/3") cand antena e la locul ei si
 	transponderul programului de acum nu emite, altfel "" (Components/HdsEcranNegru.py, mesajul Fara semnal); fara
@@ -2024,6 +2249,14 @@ def transponderNuEmite():
 	except Exception:
 		return ""
 	return ""
+
+
+def _cheieTp(sat, tp):
+	"""cheia unei referinte moarte (MOT1): satelitul, polarizarea si frecventa in MHz"""
+	try:
+		return (int(sat), tp.get("polarisation"), int(tp.get("frequency", 0)) // 1000)
+	except (AttributeError, TypeError, ValueError):
+		return (sat, None, None)
 
 
 def _acelasiTp(a, b):
@@ -2441,3 +2674,35 @@ def _comenziMotorActive():
 	if c is None:
 		return False
 	return getattr(c, "tuner", None) is not None or getattr(c, "stare", "liber") not in ("liber", "gata")
+
+
+def _faraSemnalLaRand(e):
+	"""incercarile la rand fara semnal ale sirului: judecate fara semnal plus refuzate de nucleu"""
+	return e.get("esecuri", 0) + e.get("refuzate", 0)
+
+
+def _omulLaAntena():
+	"""True cand omul are deschis un ecran al antenei sau al comenzilor motorului (Rotirea antenei, Gasire semnal,
+	configurarea tunerului, scanarea): dupa oprirea readucerii, aici incepe sirul nou"""
+	try:
+		return bool(_comenziMotorActive() or _stapanComenzi() or _alteEcraneAscund() or _ecranAntena())
+	except Exception:
+		return False
+
+
+def _arataOprirea(orbital, incercari):
+	"""mesajul de pe televizor la oprirea readucerii, o data: unul aratat inca sau in asteptare, cu acelasi ID, se scoate
+	intai (RemovePopup); in standby asteapta trezirea"""
+	try:
+		import builtins
+		_ = getattr(builtins, "_", None) or (lambda text: text)
+		text = _("Antena nu prinde semnal pe %s nici după %d încercări de readucere, așa că receptorul nu o mai mișcă. "
+			"Verifică antena, LNB-ul și cablul. Când alegi alt canal sau deschizi Găsire semnal, receptorul încearcă din "
+			"nou.") % (_gradeText(orbital), incercari)
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.RemovePopup(MESAJ_OPRITA_ID)
+		Notifications.AddNotificationWithID(MESAJ_OPRITA_ID, MessageBox, text, MessageBox.TYPE_INFO,
+			timeout=MESAJ_OPRITA_S)
+	except Exception as ex:
+		T.jurnal("mesajul opririi readucerii: %r" % (ex,))

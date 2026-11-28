@@ -20,7 +20,11 @@ class RecordState(Source):
 				self.changed((self.CHANGED_ALL,))
 
 	def destroy(self):
-		session.nav.record_event.remove(self.gotRecordEvent)
+		# HDSatelit 0.8.0 (GLS2): self.session; numele session singur era nedefinit si inchiderea cadea cu NameError
+		try:
+			self.session.nav.record_event.remove(self.gotRecordEvent)
+		except ValueError:
+			pass
 		Source.destroy(self)
 
 	@cached

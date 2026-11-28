@@ -483,7 +483,12 @@ def _ordineaOmului(cheie, copii):
 		return copii
 	try:
 		chei = [c.get("ordine_id") or "" for c in copii]
-		ordinea = O.ordoneaza(chei, O.ordine(cheie))
+		# 0.8.0 FX3: Sortare automata A-Z (the same on TV), by the shown name
+		az = getattr(O, "sortareAZ", None)
+		if az is not None and az():
+			ordinea = O.ordineaAZ([c.get("text") or "" for c in copii])
+		else:
+			ordinea = O.ordoneaza(chei, O.ordine(cheie))
 		ascunse = O.ascunse(cheie)
 	except Exception as eroare:
 		_jurnal("ordinea omului in %s: %s" % (cheie, eroare))
@@ -517,6 +522,10 @@ def schimbaOrdinea(arg):
 	if O is None or O.setari() is None:
 		return {"result": False, "message": _t("Ordinea meniului nu se poate schimba pe acest receptor.")}
 	fel = arg.get("fel", "")
+	if fel in ("sortare-da", "sortare-nu") and hasattr(O, "seteazaSortareAZ"):
+		if not O.seteazaSortareAZ(fel == "sortare-da"):
+			return {"result": False, "message": _t("Ordinea meniului nu se poate schimba pe acest receptor.")}
+		return dict(arbore(), message=_t("Ordinea s-a schimbat și pe televizor."))
 	if fel == "fabrica-tot":
 		O.fabrica()
 		return dict(arbore(), message=_t("Toate meniurile au ordinea din fabrică."))
@@ -534,6 +543,9 @@ def schimbaOrdinea(arg):
 	id_ = arg.get("id", "")
 	if not id_ or id_ not in chei:
 		return {"result": False, "message": _t("Intrarea nu e în meniu.")}
+	if fel in _PASI and getattr(O, "sortareAZ", None) is not None and O.sortareAZ():
+		# 0.8.0 FX3: the shown order is the alphabet; moving would save it as the person's order
+		return dict(a, result=False, message=_t("Pentru mutare manuală, alege Sortare automată A-Z: Nu."))
 	if fel in _PASI:
 		gata = O.muta(cheie, chei, id_, _PASI[fel]) is not None
 		mesaj = _t("Ordinea s-a schimbat și pe televizor.")
@@ -558,7 +570,10 @@ def arbore():
 		return {"result": False, "message": _t("Meniul receptorului nu se poate citi.")}
 	g = _grup(principal, W._nivelUtilizator(), 0)
 	g["text"] = _t("Meniu principal")
-	return {"result": True, "meniu": g}
+	O = _ordine()
+	az = bool(O is not None and getattr(O, "sortareAZ", None) and O.sortareAZ())
+	return {"result": True, "meniu": g, "sortare_az": az,
+		"text_sortare_az": _t("Sortare automată A-Z: %s") % (_t("Da") if az else _t("Nu"))}
 
 
 def sectiune(id_meniu):
@@ -909,13 +924,15 @@ PAGINA = """<!DOCTYPE html>
 <p><a href="/skin">Listă sau dale pe televizor</a></p>
 <form class="cauta-setari" action="/cauta-setari" method="get" role="search"><input type="search" name="q" maxlength="60" placeholder="Caută în meniu" aria-label="Caută în meniu" autocomplete="off"><button type="submit">Caută</button></form>
 <p class="nota">Același meniu ca la tasta MENU, cu aceleași intrări pentru nivelul ales pe receptor. La fiecare intrare: pagina ei din interfața web, dacă are, pagina de setări sau „Deschide pe televizor”.</p>
-<div class="fila"><button type="button" id="aranjeaza">Aranjează meniul</button><button type="button" id="fabrica-tot">Ordinea din fabrică pentru tot meniul</button></div>
+<div class="fila"><button type="button" id="aranjeaza">Aranjează meniul</button><button type="button" id="fabrica-tot">Ordinea din fabrică pentru tot meniul</button><button type="button" id="sortare-az" hidden></button></div>
 <p class="nota" id="nota-aranjare" hidden>Mută intrările cu săgețile și bifează ce nu vrei să vezi în meniul de pe televizor. Se salvează pe loc; intrările ascunse rămân aici și în căutare. Pe televizor: MENU pe o intrare.</p>
 <p class="mesaj" id="mesaj">Se citește meniul...</p>
 <div id="meniu"></div>
 <p class="nota">Extensiile instalate care se agață de meniu apar la locul lor, ca pe televizor, și se mută sau se ascund la fel. Oprirea, repornirea și standby-ul receptorului se dau din pagina Alimentare și repornire, cu confirmare, sau din telecomandă.</p>
 </main>
 <script>
+// 0.8.0 FX3: Sortare automata A-Z (as MENU on the TV); the label comes translated from /api/meniu
+var SORTARE_AZ = false;
 var CFG = __CONFIG__;
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
@@ -962,6 +979,7 @@ function schimba(meniu, id, fel){
   mesaj("Se salvează...");
   cerere("/api/meniu-ordine", "POST", q).then(function(d){
     mesaj(d.message, !d.result);
+    sortareAz(d);
     if(d.meniu){ deseneaza(d.meniu, id); }
   }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 }
@@ -976,7 +994,7 @@ function aranjare(c, meniu, i, n){
   var sus = butonAranjare("↑", "Mai sus", function(){ schimba(meniu, c.ordine_id, "sus"); });
   var jos = butonAranjare("↓", "Mai jos", function(){ schimba(meniu, c.ordine_id, "jos"); });
   sus.disabled = i === 0; jos.disabled = i === n - 1;
-  a.appendChild(sus); a.appendChild(jos);
+  if(!SORTARE_AZ){ a.appendChild(sus); a.appendChild(jos); }
   var l = document.createElement("label"); var x = document.createElement("input"); x.type = "checkbox"; x.checked = !!c.ascuns;
   x.addEventListener("change", function(){ schimba(meniu, c.ordine_id, x.checked ? "ascunde" : "arata"); });
   l.addEventListener("click", function(e){ e.stopPropagation(); });
@@ -1049,6 +1067,11 @@ function aranjeaza(da){
 }
 $("aranjeaza").addEventListener("click", function(){ aranjeaza(!document.body.classList.contains("aranjeaza")); });
 $("fabrica-tot").addEventListener("click", function(){ schimba("", "", "fabrica-tot"); });
+function sortareAz(d){
+  if(!d || typeof d.sortare_az !== "boolean"){ return; }
+  SORTARE_AZ = d.sortare_az; var b = $("sortare-az"); b.textContent = d.text_sortare_az || ""; b.hidden = !d.text_sortare_az;
+}
+$("sortare-az").addEventListener("click", function(){ schimba("", "", SORTARE_AZ ? "sortare-nu" : "sortare-da"); });
 // /meniu#i-<entryID> (din meniul de sus, la intrarile care se deschid numai pe televizor): grupa intrarii se
 // deschide, iar randul ei e ales si adus in fata. /meniu#g-<id> (o treapta din calea paginii, grupa fara pagina ei,
 // cadru_web._hrefGrupa): grupa se deschide, cu cele de deasupra ei, si vine sus
@@ -1067,6 +1090,7 @@ window.addEventListener("hashchange", arataDinAdresa);
 cerere("/api/meniu").then(function(d){
   if(!d.result){ mesaj(d.message, true); return; }
   mesaj("");
+  sortareAz(d);
   deseneaza(d.meniu);
   // /meniuri: aceeasi pagina, direct pe fila Aranjeaza
   if(location.pathname.split("/")[1] === "meniuri" || location.hash === "#aranjeaza"){ aranjeaza(true); }

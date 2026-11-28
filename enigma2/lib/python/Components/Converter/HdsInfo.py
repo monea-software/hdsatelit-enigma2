@@ -348,6 +348,8 @@ TYPES = {
 	"ReceptionName": ("_reception_name", False, M_BASE),
 	"Video": ("_video", False, M_VIDEO),
 	"VideoCodec": ("_video_codec", False, M_VIDEO),
+	# 0.8.0 (FX1): the codec under the resolution label of the channel bar, only with "Codecul video în bara canalului"
+	"VideoCodecBar": ("_video_codec_bar", False, M_VIDEO),
 	"Resolution": ("_resolution", False, M_VIDEO),
 	"Format": ("_format", False, M_VIDEO),
 	"Audio": ("_audio", False, M_BASE),
@@ -671,15 +673,71 @@ def _deplasare(centru, buchet, fa_ref):
 	cale = _cale(buchet)
 	fel = (2, "radio") if '.radio"' in cale else (1, "tv")
 	radacina = fa_ref('1:7:%d:0:0:0:0:0:0:0:FROM BOUQUET "bouquets.%s" ORDER BY bouquet' % fel)
+	import time
+	t0 = time.time()
+	v = _DEPLASARE.get(cale)
+	if v is not None and 0 <= t0 - v[0] < DEPLASARE_TINE_S:
+		return v[1]
 	n = 0
-	for s in _continut(centru, radacina, "S"):
-		if not _flags(s) & REF_DOSAR:
-			continue
-		b = fa_ref(s)
-		if _cale(b) == cale:
-			return n
-		n += _canale(_continut(centru, b, "S"))
-	return 0
+	citite = [0]
+	gasit = [False]
+	try:
+		for s in _continut(centru, radacina, "S"):
+			if not _flags(s) & REF_DOSAR:
+				continue
+			b = fa_ref(s)
+			cb = _cale(b)
+			if cb == cale:
+				gasit[0] = True
+				return n
+			n += _canale_buchet(centru, b, cb, citite)
+		return 0
+	finally:
+		_DEPLASARE[cale] = (time.time(), n if gasit[0] else 0)
+		ms = int((time.time() - t0) * 1000)
+		if ms >= 200 or citite[0]:
+			print("[HdsInfo] AS238 deplasare %d ms, buchete citite %d, deplasarea %d" % (ms, citite[0], n))
+
+
+# AS238 (Lanus, 170 de buchete, ~25.000 de intrari): _deplasare citea la fiecare zap toate buchetele dinaintea celui
+# curent (5-7 s pe firul principal, la fiecare reincercare a unui canal de internet). Numarul de canale al unui buchet
+# se tine minte dupa data si marimea fisierului lui; se citeste din nou numai cand fisierul s-a schimbat. Deplasarea
+# insasi se tine DEPLASARE_TINE_S secunde (un zap o cere de cateva ori, din fiecare element al barei).
+DEPLASARE_TINE_S = 60
+_DEPLASARE = {}
+_NUMAR_BUCHET = {}
+_FISIER_BUCHET = None
+
+
+def _fisier_buchet(cale):
+	global _FISIER_BUCHET
+	if _FISIER_BUCHET is None:
+		import re
+		_FISIER_BUCHET = re.compile(r'FROM BOUQUET "([^"/]+)"')
+	m = _FISIER_BUCHET.search(cale or "")
+	return "/etc/enigma2/" + m.group(1) if m else None
+
+
+def _canale_buchet(centru, b, cb, citite=None):
+	fisier = _fisier_buchet(cb)
+	semn = None
+	if fisier:
+		try:
+			import os
+			st = os.stat(fisier)
+			semn = (st.st_mtime, st.st_size)
+		except Exception:
+			semn = None
+	if semn is not None:
+		v = _NUMAR_BUCHET.get(cb)
+		if v is not None and v[0] == semn:
+			return v[1]
+	n = _canale(_continut(centru, b, "S"))
+	if citite is not None:
+		citite[0] += 1
+	if semn is not None:
+		_NUMAR_BUCHET[cb] = (semn, n)
+	return n
 
 
 def _numar_in_buchet(centru, buchet, cheie, fa_ref, ref=None):
@@ -1562,6 +1620,11 @@ class HdsInfo(Converter):
 		if self._radio(r):
 			return u""
 		return C.VIDEO_CODEC.get(r.geti("sVideoType"), u"")
+
+	def _video_codec_bar(self, r):
+		if not C.optiune_usage("hds_codec_bara", False):
+			return u""
+		return self._video_codec(r)
 
 	def _scan(self, r, h, fps):
 		"""Litera p / i / "" dupa inaltime.

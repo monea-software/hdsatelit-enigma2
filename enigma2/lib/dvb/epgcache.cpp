@@ -1,6 +1,7 @@
 /* Modificat de moneasoftware.com si hdsatelit.com, 2026 */
 #include <lib/dvb/epgcache.h>
 #include <lib/dvb/hdsepgpoarta.h>
+#include <lib/dvb/hdsepgloc.h>
 #include <lib/dvb/dvb.h>
 
 #undef EPG_DEBUG  
@@ -37,8 +38,14 @@ extern const uint32_t crc32_table[256];
    de descriptor). Cu 400 de octeti de text, 64 MiB inseamna cam 100000 de evenimente; fisierul de ghid ajunge cel mult
    la vreo 40 MB (masurat in rapoartele receptoarelor: 400-640 MB RAM disponibil, peste 1,3 GB liberi pe disc). */
 #define EXTERN_PE_SERVICIU 4096         /* 14 zile x ~290 de emisiuni pe zi */
+/* EPG1 (0.8.0): locul ghidului importat se socoteste la inceputul fiecarui import dupa memoria si discul receptorului
+   (lib/dvb/hdsepgloc.h). EXTERN_TOTAL si EXTERN_OCTETI sunt podeaua (locul fix de pana in 0.7.9, pe care il are orice
+   receptor), EXTERN_OCTETI_MAX tavanul (~600000 de emisiuni; epg.dat ~240 MB). Un apel venit dupa EXTERN_PAUZA_IMPORT
+   secunde fara niciunul incepe un import nou. */
 #define EXTERN_TOTAL 100000
 #define EXTERN_OCTETI (64 * 1024 * 1024)
+#define EXTERN_OCTETI_MAX (384 * 1024 * 1024)
+#define EXTERN_PAUZA_IMPORT 120
 #define EXTERN_COST_NOD 256
 #define EXTERN_MEMORIE_MIN_KB (96 * 1024) /* MemAvailable sub care nu se mai primeste nimic */
 #define EXTERN_ORIZONT (14 * 86400)     /* ca sectionRead */
@@ -272,6 +279,8 @@ DEFINE_REF(eEPGCache)
 eEPGCache::eEPGCache()
 	:messages(this,1), cleanTimer(eTimer::create(this)), m_running(0)//, paused(0)
 	,m_flushPending(0), m_externAcceptate(0), m_externColiziuni(0), m_externPlafon(0)
+,m_externLocOcteti(EXTERN_OCTETI), m_externLocEvenimente(EXTERN_TOTAL), m_externUltimApel(0), m_externPlinAnuntat(false)
+,m_externRefuzate(0)
 {
 	eDebug("[EPGC] Initialized EPGCache (wait for setCacheFile call now)");
 
@@ -851,6 +860,42 @@ static bool hdsEpgMemorieBuna(int inserari)
 	return buna;
 }
 
+/* Sub import_lock. Primul apel al unui import (dupa EXTERN_PAUZA_IMPORT secunde fara niciunul) socoteste locul din
+   memoria disponibila si discul liber de acum (hdsepgloc.h) si incepe din nou numaratoarea celor refuzate. */
+void eEPGCache::externLocLaInceput(time_t now)
+{
+	const bool nou = m_externUltimApel == 0 || now < m_externUltimApel || now - m_externUltimApel > EXTERN_PAUZA_IMPORT;
+	m_externUltimApel = now;
+	if (!nou)
+		return;
+	long long discKb = -1;
+	struct statfs s;
+	if (m_filename[0])
+	{
+		std::string dosar(m_filename);
+		size_t bara = dosar.rfind('/');
+		dosar = bara == std::string::npos || bara == 0 ? std::string("/") : dosar.substr(0, bara);
+		if (statfs(dosar.c_str(), &s) == 0)
+			discKb = (long long)s.f_bavail * (long long)s.f_bsize / 1024;
+	}
+	static long prag = getenv("HDS_EPG_MEMORIE_MIN_KB") ? atol(getenv("HDS_EPG_MEMORIE_MIN_KB")) : EXTERN_MEMORIE_MIN_KB;
+	const long memorieKb = hdsEpgMemAvailable();
+	hdsEpgLoc loc = hdsEpgLocSocotit(eventData::ExternBytes, eventData::ExternCount, memorieKb, prag, discKb, EXTERN_OCTETI,
+		EXTERN_TOTAL, EXTERN_OCTETI_MAX);
+	m_externLocOcteti = (int)loc.octeti;
+	m_externLocEvenimente = (int)loc.evenimente;
+	m_externPlinAnuntat = false;
+	m_externRefuzate = 0;
+	eDebug("[EPGC] import extern: loc pentru %d evenimente, %d MiB (in ghid %d evenimente, %d MiB; memorie disponibila %ld KB, "
+		"disc liber %lld KB)", m_externLocEvenimente, m_externLocOcteti >> 20, eventData::ExternCount,
+		eventData::ExternBytes >> 20, memorieKb, discKb);
+}
+
+int eEPGCache::getExternRefused()
+{
+	return m_externRefuzate.load();
+}
+
 int eEPGCache::importExternEvents(ePyObject services, ePyObject events)
 {
 	std::vector<uniqueEPGKey> keys;
@@ -929,6 +974,7 @@ int eEPGCache::importExternEvents(ePyObject services, ePyObject events)
 		{
 			if (m_flushPending.load() == 0)
 			{
+				externLocLaInceput(now);
 				if (hdsEpgMemorieBuna(keys.size() * rows.size()))
 				{
 					singleLock lock(cache_lock);
@@ -943,7 +989,10 @@ int eEPGCache::importExternEvents(ePyObject services, ePyObject events)
 					}
 				}
 				else
+				{
 					m_externPlafon += keys.size() * rows.size();
+					m_externRefuzate += keys.size() * rows.size();
+				}
 				m_externAcceptate += accepted;
 			}
 			else
@@ -979,10 +1028,22 @@ bool eEPGCache::importExternRow(const uniqueEPGKey &key, hdsEpgRand &row)
 		++oldCount;
 		old.push_back(item);
 	}
-	if (service.first.size() - oldCount >= EXTERN_PE_SERVICIU || eventData::ExternCount - oldCount >= EXTERN_TOTAL ||
-		eventData::ExternBytes - oldCost + cost > EXTERN_OCTETI)
+	if (service.first.size() - oldCount >= EXTERN_PE_SERVICIU)
 	{
 		++m_externPlafon;
+		return false;
+	}
+	if (eventData::ExternCount - oldCount >= m_externLocEvenimente || eventData::ExternBytes - oldCost + cost > m_externLocOcteti)
+	{
+		++m_externPlafon;
+		++m_externRefuzate;
+		if (!m_externPlinAnuntat)
+		{
+			m_externPlinAnuntat = true;
+			eDebug("[EPGC] import extern: ghidul importat s-a umplut (%d evenimente, %d MiB din %d MiB socotiti la inceputul "
+				"importului dupa memoria si discul receptorului); emisiunile care urmeaza nu mai intra. Mai putine surse in "
+				"EPG Import lasa loc celor dorite.", eventData::ExternCount, eventData::ExternBytes >> 20, m_externLocOcteti >> 20);
+		}
 		return false;
 	}
 	for (size_t i = 0; i < old.size(); ++i)

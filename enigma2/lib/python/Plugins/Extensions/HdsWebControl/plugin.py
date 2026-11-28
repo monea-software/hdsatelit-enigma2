@@ -2161,6 +2161,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/oarba-porneste?banda=toata|joasa|inalta&amp;polarizari=ambele|H|V&amp;trepte=1|2|3&amp;rata_min=0|100|1000|2000|5000&amp;pozitie=&lt;satelitul, în zecimi de grad, din alegerile lui GET /api/oarba&gt;</code>: pornește căutarea oarbă (pe televizor se deschide ecranul ei)</li>
   <li><code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs</li>
   <li><code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi găsite</li>
+  <li><code>POST /api/oarba-pastreaza?cheie=&lt;din sectiuni, GET /api/oarba&gt;&amp;da=1|0</code>: după căutare, un transponder nou merge (1) sau nu (0) la „Scanează canalele”</li>
   <li><code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe</li>
   <li><code>POST /api/scanare-televizor?id=&lt;entryID&gt;</code>: deschide pe televizor ecranul unei intrări din cele două secțiuni</li>
   <li><code>GET /api/antena?lat=&lt;grade&gt;&amp;lon=&lt;grade&gt;</code>: tunerele, LNB-ul, semnalul canalului curent și unghiurile antenei spre fiecare satelit (numai citire)</li>
@@ -2180,7 +2181,7 @@ _PAGINA_PROGRAMATORI = """<!DOCTYPE html>
   <li><code>POST /api/motor-comanda?actiune=&lt;comanda&gt;</code>: pas, mișcare fără oprire, poziții memorate, mergi la satelit, limite, oprire</li>
   <li><code>GET /api/locul[?tara=RO]</code>: locul antenei pentru motorul USALS, țările și orașele unei țări (tabelul din imagine)</li>
   <li><code>POST /api/locul-seteaza</code>: locul antenei din tabel (<code>tara</code>, <code>oras</code>) sau scris (<code>lat</code>, <code>lon</code>, grade, nord și est pozitive)</li>
-  <li><code>POST /api/locul-internet</code>, <code>GET /api/locul-internet-stare</code>: locul antenei aflat după adresa de internet a receptorului, de serverul HD Satelit, numai la cerere și numai din browserul conectat; se scrie abia după confirmare, cu <code>POST /api/locul-seteaza</code> și <code>internet=&lt;semn&gt;</code></li>
+  <li><code>POST /api/locul-internet</code>, <code>GET /api/locul-internet-stare</code>: locul antenei aflat după adresa de internet a receptorului, de serverul HD Satelit, numai din browserul conectat; locul găsit se scrie singur, fără întrebare (cu <code>singur=1</code> numai cât locul e cel după internet)</li>
   <li><code>GET /api/limbi</code>: limba sunetului și a subtitrărilor: cele 7 setări cu alegerile lor, ce se ține minte pe canalul de acum și canalele cu alegeri de mână</li>
   <li><code>POST /api/limbi-seteaza?audio1=..&amp;audio2=..&amp;audio3=..&amp;fara_subtitrari=0|1&amp;sub1=..&amp;sub2=..&amp;sub3=..&amp;tradu_orice=0|1</code>: schimbă și salvează oricare dintre ele (valorile exacte sunt în <code>/api/limbi</code>; <code>tradu_orice</code> = „Tradu automat din orice subtitrare disponibilă”, contează cu traducerea subtitrărilor pornită) și le aplică pe canalul de acum</li>
   <li><code>POST /api/limbi-uita?cheie=&lt;cheia canalului&gt;</code>, <code>POST /api/limbi-uita-toate?confirmat=1</code>: uită alegerile de mână ale unui canal sau ale tuturor</li>
@@ -3947,6 +3948,9 @@ def _construiesteResurse():
 	# Sport azi: meciurile si cursele de azi din ghid (sport_azi_web.py, perechea ecranului Screens/HdsSportAzi.py)
 	from . import sport_azi_web
 	_SPORT_AZI, _SPORT_AZI_PAGINA = sport_azi_web.rute(HdsJsonResource, resource)
+	# YouTube without an account: the lists and play on the TV (youtube_web.py, pair of Screens/HdsYouTube.py, YTN1 0.8.0)
+	from . import youtube_web
+	_YOUTUBE, _YOUTUBE_PAGINA = youtube_web.rute(HdsJsonResource, resource)
 	# Ghidul TV din internet: EPG Import cu sursele tarii intr-un pas (ghid_internet_web.py, perechea ecranului
 	# Screens/HdsGhidInternet.py)
 	from . import ghid_internet_web
@@ -4311,6 +4315,8 @@ def _construiesteResurse():
 				self.putChild(nume, resursa)
 			for nume, resursa in _SPORT_AZI.items():
 				self.putChild(nume, resursa)
+			for nume, resursa in _YOUTUBE.items():
+				self.putChild(nume, resursa)
 			for nume, resursa in _GHID_INTERNET.items():
 				self.putChild(nume, resursa)
 			for nume, resursa in _SSV.items():
@@ -4342,7 +4348,7 @@ def _construiesteResurse():
 			self.putChild(b"tuner-b-proba", _SCANARE[b"tuner-b-proba"])
 			self.putChild(b"piste", _PISTE[b"piste"])
 			self.putChild(b"pista-audio", _PISTE[b"pista-audio"])
-			for nume in (b"ghid", b"ghid-emisiune", b"ghid-temporizator"):
+			for nume in (b"ghid", b"ghid-emisiune", b"ghid-temporizator", b"ghid-grila"):
 				self.putChild(nume, _GHID[nume])
 			for nume in (b"ecran-negru", b"ecran-negru-fapta", b"ecran-negru-flux"):
 				self.putChild(nume, _ECRAN_NEGRU[nume])
@@ -4533,6 +4539,7 @@ def _construiesteResurse():
 			self.putChild(b"mozaic", _MOZAIC_PAGINA)
 			self.putChild(b"despre-film", _DESPRE_FILM_PAGINA)
 			self.putChild(b"sport-azi", _SPORT_AZI_PAGINA)
+			self.putChild(b"youtube", _YOUTUBE_PAGINA)
 			self.putChild(b"ghid-internet", _GHID_INTERNET_PAGINA)
 			self.putChild(b"screensaver", _SSV_PAGINA)
 			self.putChild(b"interfete-cam", InterfeteCamPaginaResource())
@@ -4613,6 +4620,8 @@ def _construiesteResurse():
 			self.putChild(b"partea-doua", _PARTEA_DOUA_PAGINA)
 			self.putChild(b"imagine-online", _IMAGINE_ONLINE_PAGINA)
 			self.putChild(b"ghid", _GHID_PAGINA)
+			# ghidul grafic (grila canale x ore, RW2): ghid_web.PAGINA_GRAFIC_RESURSA, facuta de ghid_web.rute
+			self.putChild(b"ghid-grafic", ghid_web.PAGINA_GRAFIC_RESURSA)
 			self.putChild(b"scanare-detaliata", _CULEGERE_CANALE_PAGINA)
 			self.putChild(b"culegere-canale", _CULEGERE_CANALE_PAGINA)   # adresa veche a aceleiasi pagini
 			# aplicatiile de telefon (aplicatii_web.py): 404 cat setarea e oprita
@@ -5325,6 +5334,8 @@ TEXTE_PAGINA = {
 		N_("<code>POST /api/oarba-opreste</code>: oprește căutarea oarbă după bucata de bandă în curs"),
 		N_("<code>POST /api/oarba-scaneaza</code>: „Scanează canalele” pe transponderele cunoscute și pe cele noi "
 			"găsite"),
+		N_("<code>POST /api/oarba-pastreaza?cheie=&lt;din sectiuni, GET /api/oarba&gt;&amp;da=1|0</code>: după "
+			"căutare, un transponder nou merge (1) sau nu (0) la „Scanează canalele”"),
 		N_("<code>POST /api/oarba-televizor</code>: deschide pe televizor ecranul căutării oarbe"),
 		N_("<code>POST /api/scanare-televizor?id=&lt;entryID&gt;</code>: deschide pe televizor ecranul unei "
 			"intrări din cele două secțiuni"),
@@ -5361,9 +5372,9 @@ TEXTE_PAGINA = {
 		N_("<code>POST /api/locul-seteaza</code>: locul antenei din tabel (<code>tara</code>, "
 			"<code>oras</code>) sau scris (<code>lat</code>, <code>lon</code>, grade, nord și est pozitive)"),
 		N_("<code>POST /api/locul-internet</code>, <code>GET /api/locul-internet-stare</code>: locul "
-			"antenei aflat după adresa de internet a receptorului, de serverul HD Satelit, numai la cerere "
-			"și numai din browserul conectat; se scrie abia după confirmare, cu <code>POST "
-			"/api/locul-seteaza</code> și <code>internet=&lt;semn&gt;</code>"),
+			"antenei aflat după adresa de internet a receptorului, de serverul HD Satelit, numai din browserul "
+			"conectat; locul găsit se scrie singur, fără întrebare (cu <code>singur=1</code> numai cât locul e cel "
+			"după internet)"),
 		N_("<code>GET /api/limbi</code>: limba sunetului și a subtitrărilor: cele 7 setări cu alegerile "
 			"lor, ce se ține minte pe canalul de acum și canalele cu alegeri de mână"),
 		N_("<code>POST "

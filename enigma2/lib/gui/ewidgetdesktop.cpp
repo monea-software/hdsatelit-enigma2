@@ -348,8 +348,10 @@ bool eWidgetDesktop::hiddenBuffer(ePtr<gPixmap> &pm, ePtr<gDC> &dc)
 	/* HDSatelit: in immediate mode the widgets draw straight into the page the screen shows (the receiver refuses the
 	   manual blit, so fb->blit() does nothing): a dirty region is first filled with the window background (fully
 	   transparent in a window over the picture), then the widgets over it are drawn one by one, and those half drawn
-	   states are seen. A label that scrolls (lib/gui/elabel.cpp, a step every 50 ms) or any small change that repeats
-	   then flickers like a strobe. A small dirty region (its rectangles together at most an eighth of the screen) is
+	   states are seen. A label that scrolls (lib/gui/elabel.cpp, a step every 40 ms) or any small change that repeats
+	   then flickers like a strobe. A small dirty region (its rectangles together at most a quarter of the screen; 0.8.0, SCR1:
+	   before an eighth: the four long rows of the screensaver Urmeaza (Screens/HdsScreensaver.py) that scroll on the same
+	   tick, 1540x90 + 3 x 1320x64 on 1920x1080, went over it and were drawn straight on the screen, as above) is
 	   therefore composed in a hidden 32 bpp buffer in RAM (the windows and the background exactly as paint() does), and
 	   at the end the region is copied to the screen once, every pixel getting its final value directly. The drawing
 	   itself goes to cached RAM instead of the video memory, so the extra copy costs about what the blending on the
@@ -370,7 +372,7 @@ bool eWidgetDesktop::paintOffscreen()
 	long long area = 0;
 	for (unsigned int i = 0; i < dirty.rects.size(); ++i)
 		area += (long long)dirty.rects[i].width() * dirty.rects[i].height();
-	if ((area <= 0) || (area * 8 > (long long)size.width() * size.height()))
+	if ((area <= 0) || (area * 4 > (long long)size.width() * size.height()))
 		return false;
 	if (!hiddenBuffer(m_offscreen, m_offscreen_dc))
 		return false;

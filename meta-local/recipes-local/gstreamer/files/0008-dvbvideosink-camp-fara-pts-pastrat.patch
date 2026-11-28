@@ -1,0 +1,109 @@
+Subject: [PATCH] dvbvideosink: keep the field without PTS of a kept picture
+
+A buffer without PTS (the second field of an interlaced H.264/H.265 picture coded as two fields, which carries the PTS of the
+first field) is clipped by basesink on its DTS. After a start or a channel change the segment begins at the first PTS, so the
+second field of the first IDR, whose DTS lies before the segment, was dropped and the reference pictures of the whole first GOP
+were broken (macro blocks in the first second). A pad probe now keeps such a buffer when the buffer with PTS before it was kept,
+by clearing its DTS (render() does not use the DTS without use_dts). Nothing else changes.
+
+Upstream-Status: Pending
+---
+ gstdvbvideosink.c | 37 +++++++++++++++++++++++++++++++++++++
+ gstdvbvideosink.h |  1 +
+ 2 files changed, 38 insertions(+)
+
+diff --git a/gstdvbvideosink.c b/gstdvbvideosink.c
+index 609528e..337c909 100644
+--- a/gstdvbvideosink.c
++++ b/gstdvbvideosink.c
+@@ -370,6 +370,38 @@ static void gst_dvbvideosink_class_init(GstDVBVideoSinkClass *self)
+ 
+ #define H264_BUFFER_SIZE (64*1024+2048)
+ 
++/* A buffer without PTS (the second field of an interlaced H.264/H.265 picture coded as two fields, which carries the PTS of the
++ * first field) makes basesink clip it on its DTS. After a start or a zap the segment begins at the first PTS, so the second field
++ * of the first IDR, whose DTS lies before it, was dropped and the reference pictures of the whole first GOP were broken (macro
++ * blocks in the first second). Such a buffer now follows the decision taken for the buffer with PTS before it: if that one was
++ * kept, the DTS (not used by render() without use_dts) is cleared, so basesink keeps the buffer too. Nothing else changes. */
++static GstPadProbeReturn gst_dvbvideosink_camp_fara_pts(GstPad *pad, GstPadProbeInfo *info, gpointer user_data)
++{
++	GstDVBVideoSink *self = GST_DVBVIDEOSINK(user_data);
++	GstBuffer *buffer = GST_PAD_PROBE_INFO_BUFFER(info);
++	GstSegment *segment = &GST_BASE_SINK(self)->segment;
++	GstClockTime start, end;
++	if (!buffer || segment->format != GST_FORMAT_TIME) return GST_PAD_PROBE_OK;
++	if (GST_BUFFER_PTS_IS_VALID(buffer))
++	{
++		start = GST_BUFFER_PTS(buffer);
++		end = GST_BUFFER_DURATION_IS_VALID(buffer) ? start + GST_BUFFER_DURATION(buffer) : GST_CLOCK_TIME_NONE;
++		self->hds_pts_pastrat = gst_segment_clip(segment, GST_FORMAT_TIME, start, end, NULL, NULL);
++		return GST_PAD_PROBE_OK;
++	}
++	if (!self->hds_pts_pastrat || self->use_dts || !GST_BUFFER_DTS_IS_VALID(buffer)
++		|| (self->codec_type != CT_H264 && self->codec_type != CT_H265))
++		return GST_PAD_PROBE_OK;
++	start = GST_BUFFER_DTS(buffer);
++	end = GST_BUFFER_DURATION_IS_VALID(buffer) ? start + GST_BUFFER_DURATION(buffer) : GST_CLOCK_TIME_NONE;
++	if (gst_segment_clip(segment, GST_FORMAT_TIME, start, end, NULL, NULL)) return GST_PAD_PROBE_OK;
++	GST_DEBUG_OBJECT(self, "field without PTS after a kept picture (DTS %" GST_TIME_FORMAT " before the segment): kept", GST_TIME_ARGS(start));
++	buffer = gst_buffer_make_writable(buffer);
++	GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
++	GST_PAD_PROBE_INFO_DATA(info) = buffer;
++	return GST_PAD_PROBE_OK;
++}
++
+ /* initialize the new element
+  * instantiate pads and add them to element
+  * set functions
+@@ -377,6 +409,7 @@ static void gst_dvbvideosink_class_init(GstDVBVideoSinkClass *self)
+  */
+ static void gst_dvbvideosink_init(GstDVBVideoSink *self)
+ {
++	gst_pad_add_probe(GST_BASE_SINK_PAD(self), GST_PAD_PROBE_TYPE_BUFFER, gst_dvbvideosink_camp_fara_pts, self, NULL);
+ 	self->must_send_header = TRUE;
+ 	self->h264_nal_len_size = 0;
+ 	self->h264_initial_audelim_written = FALSE;
+@@ -385,6 +418,7 @@ static void gst_dvbvideosink_init(GstDVBVideoSink *self)
+ 	self->codec_type = CT_UNKNOWN;
+ 	self->stream_type = STREAMTYPE_UNKNOWN;
+ 	self->use_dts = FALSE;
++	self->hds_pts_pastrat = FALSE;
+ 	self->paused = self->playing = self->unlocking = self->flushing = self->first_paused = FALSE;
+ 	self->pts_written = self->using_dts_downmix = self->synchronized = self->pass_eos = FALSE;
+ 	self->lastpts = 0;
+@@ -625,6 +659,7 @@ static gboolean gst_dvbvideosink_event(GstBaseSink *sink, GstEvent *event)
+ 			queue_pop(&self->queue);
+ 		}
+ 		self->flushing = FALSE;
++		self->hds_pts_pastrat = FALSE;
+ 		GST_OBJECT_UNLOCK(self);
+ 		/* flush while media is playing requires a delay before rendering */
+ 		if (self->using_dts_downmix && !self->paused)
+@@ -759,6 +794,7 @@ static gboolean gst_dvbvideosink_event(GstBaseSink *sink, GstEvent *event)
+ 		start_dvb = start / 11111LL;
+ 		GST_INFO_OBJECT(self, "SEGMENT rate=%f format=%d start=%"G_GUINT64_FORMAT " pos=%"G_GUINT64_FORMAT, rate, format, start, pos);
+ 		GST_INFO_OBJECT(self, "SEGMENT DVB TIMESTAMP=%"G_GINT64_FORMAT " HEXFORMAT %#"G_GINT64_MODIFIER "x", start_dvb, start_dvb);
++		self->hds_pts_pastrat = FALSE;
+ 		if (format == GST_FORMAT_TIME)
+ 		{
+ 			self->timestamp_offset = start - pos;
+@@ -2082,6 +2118,7 @@ static gboolean gst_dvbvideosink_stop(GstBaseSink *basesink)
+ 	self->codec_type = CT_UNKNOWN;
+ 	self->stream_type = STREAMTYPE_UNKNOWN;
+ 	self->use_dts = FALSE;
++	self->hds_pts_pastrat = FALSE;
+ 	self->paused = self->playing = self->unlocking = self->flushing = self->first_paused = FALSE;
+ 	self->pts_written = self->using_dts_downmix = self->synchronized = self->pass_eos = FALSE;
+ 	self->lastpts = 0;
+diff --git a/gstdvbvideosink.h b/gstdvbvideosink.h
+index 2966da5..1fd1b60 100644
+--- a/gstdvbvideosink.h
++++ b/gstdvbvideosink.h
+@@ -162,6 +162,7 @@ struct _GstDVBVideoSink
+ 	t_codec_type codec_type;
+ 	t_stream_type stream_type;
+ 	gboolean use_dts;
++	gboolean hds_pts_pastrat; /* bufferul cu PTS dinainte a ramas in segment */
+ 
+ 	char saved_fallback_framerate[16];
+ 

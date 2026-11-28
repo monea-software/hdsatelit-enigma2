@@ -1,0 +1,28 @@
+opkg: wget trimite antetul hdsatelit-receptor/1 (opkg), nu Wget/x.y
+
+Protectia anti-roboti din fata serverului feedului opreste uneori cererile cu antetul implicit al wget-ului
+(„Wget/1.25.0”), iar opkg nu mai poate actualiza listele si nici descarca pachete („A file could not be downloaded
+from the server” la Actualizare software si la Extensii). Cu antetul receptorului cererile trec. Tabloul argv marit
+de la 12 la 14. Se aplica dupa hds-wget-read-timeout.patch. HD Satelit, 25.11.2026.
+
+Upstream-Status: Inappropriate [specific HD Satelit]
+
+--- a/libopkg/opkg_download_wget.c
++++ b/libopkg/opkg_download_wget.c
+@@ -40,7 +40,7 @@
+                           curl_progress_func cb, void *data, int use_cache)
+ {
+     int res;
+-    const char *argv[12];
++    const char *argv[14];
+     int i = 0;
+ 
+     /* Unused arguments. */
+@@ -60,6 +60,7 @@
+     argv[i++] = "--connect-timeout=30";
+     argv[i++] = "--read-timeout=60";
+     argv[i++] = "--tries=3";
++    argv[i++] = "--user-agent=hdsatelit-receptor/1 (opkg)";
+     argv[i++] = "-O";
+     argv[i++] = dest;
+     argv[i++] = src;

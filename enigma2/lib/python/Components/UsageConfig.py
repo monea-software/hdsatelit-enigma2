@@ -212,6 +212,9 @@ def InitUsageConfig():
 	# setarea e aici pentru pluginurile care o citesc.
 	config.usage.hide_number_markers = ConfigYesNo(default = True)
 	config.usage.multiepg_ask_bouquet = ConfigYesNo(default = False)
+	# ghidul TV grafic (Screens/HdsGhidGrafic.py, RW2 26.11.2026): Da = tasta EPG (si celelalte cai spre ghidul buchetului)
+	# deschide grila; din fabrica Nu, ghidul in lista ca pana acum. Grila se poate alege oricand din 'Alege tipul de ghid'.
+	config.usage.hds_ghid_grafic = ConfigYesNo(default = False)
 
 	config.usage.quickzap_bouquet_change = ConfigYesNo(default = False)
 	config.usage.e1like_radio_mode = ConfigYesNo(default = False)
@@ -263,6 +266,21 @@ def InitUsageConfig():
 	# canalul) si debitul DVB pe pagina intai a celei de-a doua bare (HdsSignal Debit); le citesc convertoarele temei prin
 	# HdsCommon.optiune_usage, la fiecare tic; in web: /setari?id=usage
 	config.usage.hds_bara_ecm = ConfigYesNo(default = False)
+	# 0.8.0 DBB0: SNR-ul in dB si BER-ul la inceputul randului ECM din bara canalului (Converter/HdsSignal._semnal_bara)
+	config.usage.hds_db_ber_bara = ConfigYesNo(default = False)
+	# 0.8.0 (FX1, Lanus Digital-Forum 224632): the video codec (MPEG-2 / H.264 / HEVC) under the SD/HD/FHD/UHD label of
+	# the channel bar (Converter/HdsInfo VideoCodecBar); off by default
+	config.usage.hds_codec_bara = ConfigYesNo(default = False)
+	# 0.8.0 (FX1, tamiciav7 LinuxSat 232449 #501374): processor load, used memory and temperature in the channel bar
+	# (Converter/HdsSignal SysBar, read every 2 s only while the bar is shown); off by default
+	config.usage.hds_bara_sistem = ConfigYesNo(default = False)
+	# 0.8.0 (FX1, Maumixio Digital-Forum 224632): "Sport azi" also in the main menu, after Media (data/menu.xml
+	# hds_sport_azi_principal, requires HdsSportPrincipal); off by default, Media > Sport azi stays
+	config.usage.hds_sport_principal = ConfigYesNo(default = False)
+
+	def _hdsSportPrincipal(configElement):
+		SystemInfo["HdsSportPrincipal"] = bool(configElement.value)
+	config.usage.hds_sport_principal.addNotifier(_hdsSportPrincipal)
 	# hop-urile si eticheta cititorului pe pagina modulului si in randul ECM (Components/HdsEcm.sursa: niciodata adrese, nimic
 	# cat ruleaza asistenta sau o captura pentru un raport); oprita din fabrica
 	config.usage.hds_ecm_hopuri_cititor = ConfigYesNo(default = False)
@@ -270,6 +288,8 @@ def InitUsageConfig():
 		("nu", _("Nu")), ("da", _("Da")), ("statistici", _("Da, cu minim, maxim și medie"))])
 	config.usage.hide_zap_errors = ConfigYesNo(default = False)
 	config.usage.hdd_standby = ConfigSelection(default = "600", choices = alegeri_disc)
+	# 0.8.0: anuntul de pe ecran la punerea si scoaterea unui stick, hard disk sau card (Components/HdsAnuntStocare.py)
+	config.usage.hds_anunt_stocare = ConfigYesNo(default = True)
 	# limba aleasa se activeaza dupa InitUsageConfig (SetupDevices), deci textele compuse de mai sus ies in engleza
 	from Components.Language import language
 	language.addCallback(_traduAlegerileCuNumere)
@@ -329,7 +349,7 @@ def InitUsageConfig():
 	# Fiecare pas = 10% din marimea temei (-3 = 70%, +5 = 150%) pentru nume, descriere, numar si bara de progres; cu
 	# „Rânduri pe pagină” După temă si randul creste sau scade cu textul, deci si sigla. Components/ServiceList.py (setMode)
 	config.usage.hds_marime_text_lista = ConfigSelection(default = "tema", choices = [
-		("tema", N_("După temă"))] + [(str(n), "%+d" % n) for n in (-3, -2, -1, 1, 2, 3, 4, 5)])
+		("tema", N_("După temă"))] + [(str(n), "%+d" % n) for n in (-3, -2, -1, 1, 2, 3, 4, 5, 6, 7)])
 
 	def _hdsListaCanaleReface(configElement):
 		# lista de canale deschisa o data (ecranul ramane in memorie) se potriveste pe loc, fara repornire
@@ -594,6 +614,14 @@ def InitUsageConfig():
 		HdsComutareRetea.initConfig()
 	except Exception as eroare:
 		print("[UsageConfig] HdsComutareRetea: %s" % eroare)
+
+	# HDSatelit: "Repara singur reteaua" (Da din fabrica): paznicul retelei si repornirea cipului Wi-Fi, setup.xml
+	# hds_retea_comutare, randul 2 (Components/HdsPazaWifi.py)
+	try:
+		from Components import HdsPazaWifi
+		HdsPazaWifi.initConfig()
+	except Exception as eroare:
+		print("[UsageConfig] HdsPazaWifi: %s" % eroare)
 
 	# HDSatelit: subtitrarile filmelor din fisierele de langa film (codarea implicita, si pentru pistele din MKV care nu
 	# sunt UTF-8; s t cu sedila -> ș ț; fisierul inaintea pistei din film; subdosarele Subs), setup.xml hds_subtitrari_filme

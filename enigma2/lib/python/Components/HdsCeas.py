@@ -730,6 +730,12 @@ class Sincronizator(object):
 				HdsFusTara.dupaNtp()
 			except Exception as e:
 				_jurnal("fusul dupa NTP: %r" % (e,))
+			# si locul antenei dupa internet, daca nu s-a aflat la pornire (Components/HdsLoculInternet.py, LOC2)
+			try:
+				from Components import HdsLoculInternet
+				HdsLoculInternet.dupaNtp()
+			except Exception as e:
+				_jurnal("locul dupa NTP: %r" % (e,))
 		else:
 			fara_raspuns = cod == COD_NTP_FARA_RASPUNS and program == "ntpd"
 			if self.expirat or fara_raspuns:
@@ -830,6 +836,11 @@ class Sincronizator(object):
 			HdsFusTara.dupaNtp()
 		except Exception as e:
 			_jurnal("fusul dupa HTTPS: %r" % (e,))
+		try:
+			from Components import HdsLoculInternet
+			HdsLoculInternet.dupaNtp()
+		except Exception as e:
+			_jurnal("locul dupa HTTPS: %r" % (e,))
 		return True
 
 	def _rezultat(self, rezultat, server, program, motiv, pas=0.0):

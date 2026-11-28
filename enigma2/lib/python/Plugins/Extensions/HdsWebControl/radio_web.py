@@ -30,9 +30,11 @@
 # ultimelor nivele). Fisierul nu importa nimic din enigma2 la incarcare: probele de pe PC dau modulele lor.
 
 import json
+import os
 import time
 
 MAX_VALOARE = 40
+MAX_IMAGINE = 512 * 1024         # imaginea unui post DAB (SlideShow cere cel mult 50 KB)
 BARE_WEB = 24
 SALVARE_MS = 8000        # ca pe televizor (Screens/HdsEcranRadio.SALVARE_MS): o scriere dupa ultimul clic
 _SALVARE = [None, None]  # [eTimer, configfile] pentru scrierea amanata fara ecranul radio
@@ -177,7 +179,41 @@ def stare(sesiune=None, S=None, RD=None, DES=None, E=None):
 		"bare": RD.text_bare(analiza or {"stare": "asteapta"}, fel),
 		"bare_detaliu": RD.text_bare_detaliu(analiza or {"stare": "asteapta"}, fel),
 	}
+	# imaginea trimisa de un post DAB (MOT SlideShow), cand se vede si pe televizor: pagina o arata in locul barelor si o cere
+	# din nou (GET /api/radio-imagine) numai cand se schimba versiunea
+	rez["imagine"] = versiune_imagine((d.get("rds") or {}).get("imagine"))
 	return rez
+
+
+def versiune_imagine(cale):
+	"""Un semn care se schimba odata cu imaginea postului (ora fisierului), sau "" cand nu e nicio imagine."""
+	if not cale:
+		return ""
+	try:
+		st = os.stat(cale)
+	except (OSError, TypeError):
+		return ""
+	return "%d-%d" % (int(st.st_mtime * 1000), st.st_size)
+
+
+def imagine_acum(sesiune, RD=None):
+	"""Calea imaginii postului care merge (aceeasi ca pe televizor, cu setarea „Imaginile posturilor DAB” respectata), sau ""."""
+	if RD is None:
+		from Components import HdsRadioDate as RD
+	try:
+		service = sesiune.nav.getCurrentService()
+	except Exception:
+		return ""
+	try:
+		cale = (RD._rds_din_loc(service) or {}).get("imagine") or ""
+	except Exception:
+		return ""
+	try:
+		if cale and os.path.isfile(cale) and os.path.getsize(cale) <= MAX_IMAGINE:
+			return cale
+	except OSError:
+		pass
+	return ""
 
 
 def stare_flux(ref, nume, serviciu=None, piste=None, RD=None, receptie_flux=None):
@@ -498,6 +534,20 @@ def rute(baza, resource, sesiune=None, module=None):
 		def render_GET(self, request):
 			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
 
+	class ImagineResource(baza):
+		"""GET /api/radio-imagine: imaginea trimisa acum de postul DAB (sigla, coperta, stiri), numai citire."""
+
+		def render_GET(self, request):
+			S2, RD2, DES2, E2 = _module(S, RD, DES, E)
+			cale = imagine_acum(_ses(), RD2)
+			if not cale:
+				return self._eroare(request, _t("Postul nu a trimis nicio imagine."), 404)
+			with open(cale, "rb") as f:
+				date = f.read(MAX_IMAGINE)
+			request.setHeader(b"content-type", b"image/png" if cale.endswith(".png") else b"image/jpeg")
+			request.setHeader(b"cache-control", b"no-store")
+			return date
+
 	class PaginaResource(resource.Resource):
 		"""GET /radio: pagina „Radio pe receptor”."""
 		isLeaf = True
@@ -510,6 +560,7 @@ def rute(baza, resource, sesiune=None, module=None):
 		b"radio-benzi": BenziResource(),
 		b"radio-seteaza": SeteazaResource(),
 		b"radio-urmatoarea": UrmatoareaResource(),
+		b"radio-imagine": ImagineResource(),
 	}
 	return api, PaginaResource()
 
@@ -625,6 +676,7 @@ PAGINA = """<!DOCTYPE html>
   .mesaj-bare{color:var(--text);font-size:1rem;line-height:1.45;text-align:center;margin:0;padding:28px 8px;background:#0a0f1a;border-radius:8px;}
   .mesaj{margin:10px 0 0;line-height:1.45;font-size:.92rem;min-height:1.3em;}
   .eroare{color:#ffb4a8;}
+  .imagine-post{display:block;max-width:100%;max-height:360px;margin:0 auto 8px;border-radius:8px;background:#0a0f1a;}
   .ascuns{display:none;}
   @media (max-width:560px){ .setare{grid-template-columns:1fr;} .post img{width:80px;height:48px;} }
 </style>
@@ -650,6 +702,7 @@ PAGINA = """<!DOCTYPE html>
   <section class="card" id="cardSunet">
     <h2>Sunetul</h2>
     <p class="mesaj-bare ascuns" id="mesajBare"></p>
+    <img id="imaginePost" class="imagine-post ascuns" alt="">
     <canvas id="bare" width="900" height="180" aria-label="Barele de frecvență ale sunetului"></canvas>
     <div class="nivel" id="nivelBare"><b>__NIVEL_S__</b><div><span id="nivelS"></span></div><b>__NIVEL_D__</b><div><span id="nivelD"></span></div></div>
     <div class="taste-viz">
@@ -690,6 +743,7 @@ var SCHIMBAT = false;
 var BARE = [], VARF = [], PANA = [];
 var CERERE_BENZI = false;
 var SIGLA = null;
+var IMAGINE = "";
 function $(id){ return document.getElementById(id); }
 function adresa(cale){
   if(!CFG.jeton){ return cale; }
@@ -729,7 +783,8 @@ function arataPost(d){
   var radio = !!d.radio;
   ["cardEmisiuni", "cardRds", "cardSunet", "cardTehnic"].forEach(function(id){ $(id).classList.toggle("ascuns", !radio); });
   $("faraRadio").textContent = radio ? "" : (d.mesaj || "");
-  if(!radio){ text("nume", ""); text("detalii", ""); $("sigla").classList.add("ascuns"); SIGLA = null; return; }
+  if(!radio){ text("nume", ""); text("detalii", ""); $("sigla").classList.add("ascuns"); SIGLA = null; arataImagine(""); return; }
+  arataImagine(d.imagine || "");
   var t = d.texte, x = d.date;
   text("nume", t.nume); text("detalii", t.detalii);
   var s = $("sigla");
@@ -756,6 +811,19 @@ function arataPost(d){
   $("semnal").classList.toggle("rosu", !!t.semnal_slab);
   arataSemnal(d.semnal || {});
   arataAlegeri(d.alegeri || {});
+}
+// imaginea trimisa de un post DAB (sigla, coperta, stiri), ca pe televizor: in locul barelor, cat timp postul o trimite; se
+// cere din nou numai cand se schimba versiunea (ora fisierului)
+function arataImagine(ver){
+  if(ver === IMAGINE){ return; }
+  IMAGINE = ver;
+  var img = $("imaginePost");
+  img.classList.toggle("ascuns", !ver);
+  if(ver){
+    img.onerror = function(){ img.classList.add("ascuns"); };
+    img.src = adresa("/api/radio-imagine?v=" + encodeURIComponent(ver));
+    ["bare", "nivelBare", "mesajBare"].forEach(function(id){ $(id).classList.add("ascuns"); });
+  }
 }
 // semnalul si calitatea ca bare, ca pe televizor (aceleasi cuvinte si aceleasi valori, din /api/radio); o valoare pe
 // care tunerul nu o da isi ascunde cuvantul, bara si procentul (altfel sina goala ar arata ca 0%)
@@ -878,7 +946,7 @@ function deseneaza(b, faraBare){
   }
 }
 function benzi(){
-  if(CERERE_BENZI || document.hidden || !DATE || !DATE.radio){ return; }
+  if(CERERE_BENZI || document.hidden || !DATE || !DATE.radio || IMAGINE){ return; }
   CERERE_BENZI = true;
   cerere("/api/radio-benzi").then(function(b){
     if(!b.result){ return; }

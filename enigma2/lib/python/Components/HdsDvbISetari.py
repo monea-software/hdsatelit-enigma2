@@ -64,7 +64,7 @@ def listePredefinite(plugin=None):
 
 def implicit():
 	return {"activ": "da", "interval_refresh": INTERVAL_IMPLICIT, "url_uri": [], "predefinite": [], "tara": "",
-		"regiune": "", "liste_oprite": [], "liste_puse": [], "rezerva": "da", "toate_tarile": "da"}
+		"regiune": "", "liste_oprite": [], "liste_puse": [], "rezerva": "da", "toate_tarile": "da", "liste_proba": "da"}
 
 
 def taraReceptorului():
@@ -139,6 +139,8 @@ def citeste(cale=None, tara_receptorului=None):
 					config["rezerva"] = val.lower()
 				elif cheie == "toate_tarile":
 					config["toate_tarile"] = val.lower()
+				elif cheie == "liste_proba":
+					config["liste_proba"] = val.lower()
 	except (IOError, OSError) as eroare:
 		print("[HdsDvbISetari] citirea %s: %s" % (cale, eroare))
 	if not scrisa:
@@ -192,6 +194,8 @@ def _scrie(config, cale=None, plugin=None):
 		"rezerva = %s" % config.get("rezerva", "da"),
 		"# toate_tarile = da / nu: si listele celorlalte tari, dupa ale tarii alese, grupate pe tari (TODO 1883)",
 		"toate_tarile = %s" % config.get("toate_tarile", "da"),
+		"# liste_proba = da / nu: si listele de proba ale registrelor, din toate tarile (DVI2)",
+		"liste_proba = %s" % config.get("liste_proba", "da"),
 		"# lista_oprita / lista_pusa = listele tarii scoase sau adaugate de mana (cate un rand)",
 	]
 	for url in config.get("liste_oprite", []):
@@ -435,9 +439,16 @@ def comutaRezerva(config):
 # din alte țări. Ca o sursă suplimentară de canale care dacă merg în țara aia bine, dacă nu iar bine." Cu toate_tarile
 # (implicit da), dupa listele tarii alese vin listele adevarate (nu de proba) ale celorlalte tari si cele fara tara,
 # grupate pe tari (in buchet cu un marcaj pe tara: pluginul DVB-I, grupeAdrese). Nimic nu se scoate; alegerea tarii
-# ramane (listele ei primele, regiunea, listele de proba puse de mana). Registrele dau tarile TINTA ale unei liste, nu
-# daca e blocata in afara lor: semnul "numai în <țara>" nu se pune, fiindca nu se stie (incercarea din casa,
-# HdsDvbIIncercare, spune "oprite pentru țara ta" la canalele care chiar nu merg).
+# ramane (listele ei primele, regiunea). Registrele dau tarile TINTA ale unei liste, nu daca e blocata in afara lor:
+# eticheta "merge doar în <țara>" se pune numai la canalele pe care incercarea din casa (HdsDvbIIncercare) le-a gasit
+# oprite pentru tara omului, cu tara listei lor (pluginul DVB-I, "tara" din starea canalului).
+#
+# DVI2 (0.8.0, Eduard 26.11.2026 17:32, asistentele AS232/AS237: Lanus, SF8008 Italia, a comutat tara de 12 ori ca sa
+# vada canalele): "credeam ca DVB-I listele complete pot fi accesate si testate de oricine, indiferent din ce tara".
+# Acum: listele de proba ale registrelor (si ale celorlalte tari) intra si ele, din fabrica (liste_proba = da; un rand
+# Da/Nu pe ecran si in web le scoate pe toate deodata); orice lista a tarii alese se scoate sau se pune cu OK
+# (lista_oprita); bifele raman la schimbarea tarii (numai regiunea se uita). Tara aleasa da numai ordinea (listele ei
+# primele), regiunea si eticheta. "Nicio țară" ramane alegerea "numai adresele puse de mână" (ca in pagina web).
 
 def toateTarilePornit(config):
 	return str(config.get("toate_tarile", "da")).lower() in ("da", "yes", "1", "true")
@@ -447,25 +458,35 @@ def comutaToateTarile(config):
 	config["toate_tarile"] = "nu" if toateTarilePornit(config) else "da"
 
 
+def probaPornit(config):
+	"""DVI2: si listele de proba ale registrelor (din fabrica da)"""
+	return str(config.get("liste_proba", "da")).lower() in ("da", "yes", "1", "true")
+
+
+def comutaProba(config):
+	config["liste_proba"] = "nu" if probaPornit(config) else "da"
+
+
 def listeleAltorTari(config, registru=None):
-	"""[{"adresa", "lista", "furnizor", "tara"}]: listele adevarate din registre care nu sunt ale tarii alese (si nici
-	scoase de om), cu tara grupei (prima tara tinta; "" = fara tara), dupa numele tarii (cele fara tara la coada), apoi
-	dupa nume; [] cu toate_tarile oprit"""
+	"""[{"adresa", "lista", "furnizor", "tara", "proba"}]: listele din registre care nu sunt ale tarii alese (si nici
+	scoase de om; DVI2: si cele de proba, cat liste_proba e pornit), cu tara grupei (prima tara tinta; "" = fara tara),
+	dupa numele tarii (cele fara tara la coada), apoi dupa nume; [] cu toate_tarile oprit"""
 	if not toateTarilePornit(config):
 		return []
 	tara = (config.get("tara") or "").upper()
 	oprite = set(config.get("liste_oprite", []))
+	cu_proba = probaPornit(config)
 	rez = []
 	for l in _registru(registru).get("liste", []):
-		if l.get("proba") or l["adresa"] in oprite:
+		if (l.get("proba") and not cu_proba) or l["adresa"] in oprite:
 			continue
 		tinte = [t.upper() for t in l.get("tari", [])]
 		if tara and tara in tinte:
 			continue
 		rez.append({"adresa": l["adresa"], "lista": l.get("lista", ""), "furnizor": l.get("furnizor", ""),
-			"tara": tinte[0] if tinte else ""})
-	nume = dict((t, numeTara(t).lower()) for t in set(x["tara"] for x in rez if x["tara"]))
-	rez.sort(key=lambda x: (not x["tara"], nume.get(x["tara"], ""), x["lista"].lower()))
+			"tara": tinte[0] if tinte else "", "proba": bool(l.get("proba"))})
+	nume = dict((t, cheieNume(numeTara(t))) for t in set(x["tara"] for x in rez if x["tara"]))
+	rez.sort(key=lambda x: (not x["tara"], nume.get(x["tara"], ""), x["proba"], x["lista"].lower()))
 	return rez
 
 
@@ -491,7 +512,8 @@ def tariDinRegistre(registru=None):
 
 
 def seteazaTara(config, tara):
-	"""tara noua (cod de 3 litere sau "" = nicio tara): regiunea si alegerile de liste ale tarii vechi se uita.
+	"""tara noua (cod de 3 litere sau "" = nicio tara): regiunea tarii vechi se uita; DVI2: listele scoase sau puse de
+	om raman (inainte se stergeau, iar omul comuta tara ca sa vada canalele altor liste).
 	-> False pentru un cod rau (nimic schimbat)"""
 	tara = (tara or "").strip().upper()
 	if tara and not _codTara(tara):
@@ -499,8 +521,6 @@ def seteazaTara(config, tara):
 	if tara != config.get("tara", ""):
 		config["tara"] = tara
 		config["regiune"] = ""
-		config["liste_oprite"] = []
-		config["liste_puse"] = []
 	return True
 
 
@@ -519,10 +539,13 @@ def listeleTarii(config, registru=None):
 	liste = R.aleTarii(_registru(registru).get("liste", []), config.get("tara", ""))
 	oprite = set(config.get("liste_oprite", []))
 	puse = set(config.get("liste_puse", []))
+	cu_proba = probaPornit(config)
 	rez = []
 	for l in liste:
 		proba = bool(l.get("proba"))
-		aleasa = (l["adresa"] in puse) if proba else (l["adresa"] not in oprite)
+		# DVI2: cu liste_proba pornit (din fabrica) si cele de proba sunt alese pana le scoate omul; oprit, ca inainte:
+		# numai cele puse de mana (lista_pusa)
+		aleasa = (l["adresa"] in puse) if (proba and not cu_proba) else (l["adresa"] not in oprite)
 		rez.append({"adresa": l["adresa"], "lista": l.get("lista", ""), "furnizor": l.get("furnizor", ""),
 			"proba": proba, "aleasa": aleasa})
 	rez.sort(key=lambda x: x["proba"])
@@ -534,7 +557,7 @@ def comutaListaTarii(config, adresa, registru=None):
 	for l in listeleTarii(config, registru):
 		if l["adresa"] != adresa:
 			continue
-		cheie = "liste_puse" if l["proba"] else "liste_oprite"
+		cheie = "liste_puse" if (l["proba"] and not probaPornit(config)) else "liste_oprite"
 		lista = config.setdefault(cheie, [])
 		if adresa in lista:
 			lista.remove(adresa)
@@ -547,8 +570,9 @@ def comutaListaTarii(config, adresa, registru=None):
 
 
 def adreseDeDescarcat(config, registru=None, plugin=None):
-	"""adresele de descarcat, in ordine si fara dubluri: listele alese ale tarii, apoi cele predefinite bifate, apoi
-	adresele puse de mana"""
+	"""adresele de descarcat, in ordine si fara dubluri: listele alese ale tarii, listele celorlalte tari, apoi cele
+	predefinite bifate, apoi adresele puse de mana. Fara tara ("Nicio țară": numai adresele puse de mana), nimic din
+	registre."""
 	rez = []
 	if config.get("tara"):
 		try:
@@ -571,10 +595,51 @@ def adreseDeDescarcat(config, registru=None, plugin=None):
 	return unice
 
 
+# DVI2 (Eduard 26.11.2026 17:39): numele tarilor in limba omului, oricare ar fi tara (meniul in italiana: "Germania",
+# in turca: "Almanya"), si ordinea dupa numele tradus, ca la locul antenei si la YouTube (YTN3): tabelul comun al
+# imaginii, Components/HdsLocul (245 de tari, traduse in toate limbile meniului; numeTaraAfisat, cheieAfisare cu
+# alfabetul romanesc in romana). Registrele DVB-I dau coduri de 3 litere: perechile ISO 3166-1 alfa-3 + alfa-2 de mai
+# jos (date, nu texte; XKX = Kosovo, ca in GeoNames). Ce nu e acolo: tabelul scurt din HdsListeCabluTerestru, apoi codul.
+_ISO3 = ("ABWAW AFGAF AGOAO AIAAI ALAAX ALBAL ANDAD AREAE ARGAR ARMAM ASMAS ATAAQ ATFTF ATGAG AUSAU AUTAT AZEAZ BDIBI "
+	"BELBE BENBJ BESBQ BFABF BGDBD BGRBG BHRBH BHSBS BIHBA BLMBL BLRBY BLZBZ BMUBM BOLBO BRABR BRBBB BRNBN BTNBT "
+	"BVTBV BWABW CAFCF CANCA CCKCC CHECH CHLCL CHNCN CIVCI CMRCM CODCD COGCG COKCK COLCO COMKM CPVCV CRICR CUBCU "
+	"CUWCW CXRCX CYMKY CYPCY CZECZ DEUDE DJIDJ DMADM DNKDK DOMDO DZADZ ECUEC EGYEG ERIER ESHEH ESPES ESTEE ETHET "
+	"FINFI FJIFJ FLKFK FRAFR FROFO FSMFM GABGA GBRGB GEOGE GGYGG GHAGH GIBGI GINGN GLPGP GMBGM GNBGW GNQGQ GRCGR "
+	"GRDGD GRLGL GTMGT GUFGF GUMGU GUYGY HKGHK HMDHM HNDHN HRVHR HTIHT HUNHU IDNID IMNIM INDIN IOTIO IRLIE IRNIR "
+	"IRQIQ ISLIS ISRIL ITAIT JAMJM JEYJE JORJO JPNJP KAZKZ KENKE KGZKG KHMKH KIRKI KNAKN KORKR KWTKW LAOLA LBNLB "
+	"LBRLR LBYLY LCALC LIELI LKALK LSOLS LTULT LUXLU LVALV MACMO MAFMF MARMA MCOMC MDAMD MDGMG MDVMV MEXMX MHLMH "
+	"MKDMK MLIML MLTMT MMRMM MNEME MNGMN MNPMP MOZMZ MRTMR MSRMS MTQMQ MUSMU MWIMW MYSMY MYTYT NAMNA NCLNC NERNE "
+	"NFKNF NGANG NICNI NIUNU NLDNL NORNO NPLNP NRUNR NZLNZ OMNOM PAKPK PANPA PCNPN PERPE PHLPH PLWPW PNGPG POLPL "
+	"PRIPR PRKKP PRTPT PRYPY PSEPS PYFPF QATQA REURE ROURO RUSRU RWARW SAUSA SDNSD SENSN SGPSG SGSGS SHNSH SJMSJ "
+	"SLBSB SLESL SLVSV SMRSM SOMSO SPMPM SRBRS SSDSS STPST SURSR SVKSK SVNSI SWESE SWZSZ SXMSX SYCSC SYRSY TCATC "
+	"TCDTD TGOTG THATH TJKTJ TKLTK TKMTM TLSTL TONTO TTOTT TUNTN TURTR TUVTV TWNTW TZATZ UGAUG UKRUA UMIUM URYUY "
+	"USAUS UZBUZ VATVA VCTVC VENVE VGBVG VIRVI VNMVN VUTVU WLFWF WSMWS YEMYE ZAFZA ZMBZM ZWEZW XKXXK")
+_ALFA2 = {}
+
+
+def _locul():
+	try:
+		from Components import HdsLocul
+		return HdsLocul
+	except Exception:
+		return None
+
+
 def numeTara(cod):
-	"""numele tarii in limba aleasa (tabelul din Components/HdsListeCabluTerestru); codul daca nu e acolo"""
+	"""numele tarii in limba aleasa: tabelul comun al imaginii (Components/HdsLocul, DVI2), apoi tabelul scurt din
+	Components/HdsListeCabluTerestru; codul daca nu e in niciunul"""
 	if not cod:
 		return _("Nicio țară")
+	if not _ALFA2:
+		_ALFA2.update((x[:3], x[3:]) for x in _ISO3.split())
+	L = _locul()
+	if L is not None and _ALFA2.get(cod):
+		try:
+			nume = L.numeTaraAfisat(_ALFA2[cod])
+			if nume and nume != _ALFA2[cod]:
+				return nume
+		except Exception as eroare:
+			print("[HdsDvbISetari] numele tarii %s: %s" % (cod, eroare))
 	try:
 		from Components.HdsListeCabluTerestru import nume_tara
 		return nume_tara(cod)
@@ -582,10 +647,24 @@ def numeTara(cod):
 		return cod
 
 
+def cheieNume(text):
+	"""DVI2: cheia de ordine a unui nume aratat, ca la locul antenei (HdsLocul.cheieAfisare: alfabetul romanesc in
+	romana, altfel literele fara semne); fara HdsLocul, literele fara semne si fara majuscule"""
+	L = _locul()
+	if L is not None:
+		try:
+			return L.cheieAfisare(text or "")
+		except Exception:
+			pass
+	import unicodedata
+	t = unicodedata.normalize("NFKD", text or "")
+	return ("".join(c for c in t if not unicodedata.combining(c)).lower(), text or "")
+
+
 def tariOrdonate(registru=None):
 	"""[(cod, nume, cate liste, cate nu sunt de proba)] in ordinea numelui (in limba aleasa)"""
 	rez = [(cod, numeTara(cod), n, reale) for cod, n, reale in tariDinRegistre(registru)]
-	rez.sort(key=lambda x: x[1].lower())
+	rez.sort(key=lambda x: cheieNume(x[1]))
 	return rez
 
 
@@ -708,8 +787,12 @@ def textIncercari(rez, incercare=None):
 		return _("Canalele încercate din casă: niciun canal în listă")
 	if rez.get("", 0) == total:
 		return _("Canalele încercate din casă: încă neîncercate")
-	return _("Canalele încercate din casă: merg %d, oprite pentru țara ta %d, adrese moarte %d, fără răspuns %d") % (
+	text = _("Canalele încercate din casă: merg %d, oprite pentru țara ta %d, adrese moarte %d, fără răspuns %d") % (
 		rez.get("merge", 0), rez.get("oprit_tara", 0), rez.get("adresa_moarta", 0), rez.get("nu_raspunde", 0))
+	if rez.get("drm"):
+		# DRM1: criptate cu DRM (Components/HdsDvbIIncercare.DRM), ascunse din lista de canale
+		text += ". " + _("Protejate (DRM), pe care receptorul nu le poate decripta: %d") % rez["drm"]
+	return text
 
 
 def numarAscunse(stare=None):
@@ -727,10 +810,13 @@ def numarAscunse(stare=None):
 
 def textAscunse(stare=None):
 	"""EPG2: fraza din explicatia randului incercarilor: canalele care nu merg din casa nu apar in lista de canale pana
-	merg din nou, clipurile si imaginile de proba nu intra deloc; cu numerele de acum"""
+	merg din nou, clipurile si imaginile de proba nu intra deloc; cu numerele de acum. DVI2 (Eduard 26.11.2026 17:34-17:36,
+	"nu ascunzi nimic"): cele oprite pentru tara (se pornesc cu VPN-ul) si cele cu DRM (PlayReady, se vor putea reda mai
+	tarziu, DRM2) raman in lista, cu eticheta lor"""
 	ascunse, scoase = numarAscunse(stare)
-	text = _("Canalele care nu merg din casa ta nu apar în lista de canale până merg din nou; clipurile și imaginile de "
-		"probă din liste nu intră deloc.")
+	text = _("Canalele blocate pentru țara ta și cele protejate (DRM) rămân în lista de canale, cu eticheta lor: pe cele "
+		"blocate le poți porni cu VPN-ul. Cele cu adresă moartă sau fără răspuns nu apar până merg din nou; clipurile și "
+		"imaginile de probă din liste nu intră deloc.")
 	if ascunse or scoase:
 		text += " " + _("Acum ascunse: %d, scoase: %d.") % (ascunse, scoase)
 	return text
@@ -839,6 +925,7 @@ R_REGIUNE = "regiune"
 R_LISTA = "lista"
 R_REZERVA = "rezerva"
 R_TOATE = "toate_tarile"
+R_PROBA = "liste_proba"
 R_INCERCARI = "incercari"
 R_AVANSAT = "avansat"
 R_INCHIDE = "inchide"
@@ -871,11 +958,28 @@ def randuriSetari(config, registru=None, stare=None, rez=None, incercare=None, s
 			text += " · %s" % _(TEXT_SEMN_NU_RASPUNDE)
 			expl = "%s %s" % (nu, expl)
 		r.append((text, R_LISTA, l["adresa"], expl, bool(l["aleasa"])))
-	n_alte = len(listeleAltorTari(config, registru)) if config.get("tara") and toateTarilePornit(config) else 0
-	r.append(("%s %s" % (_("Liste din toate țările:"), (_("da") + (" · %s %d" % (_("liste:"), n_alte) if n_alte else ""))
-		if toateTarilePornit(config) else _("nu")), R_TOATE, None,
-		_("OK pornește sau oprește. După listele țării tale vin cele ale celorlalte țări, grupate pe țări: canalele merg "
-		"dacă furnizorul le lasă și din țara ta."), None))
+	alte = listeleAltorTari(config, registru) if config.get("tara") and toateTarilePornit(config) else []
+	n_alte = len(alte)
+	text = "%s %s" % (_("Liste din toate țările:"), (_("da") + (" · %s %d" % (_("liste:"), n_alte) if n_alte else ""))
+		if toateTarilePornit(config) else _("nu"))
+	expl = _("OK pornește sau oprește. După listele țării tale vin cele ale celorlalte țări, grupate pe țări: canalele merg "
+		"dacă furnizorul le lasă și din țara ta.")
+	# DVI2: listele celorlalte tari n-au randuri; cele care nu raspund acum se vad aici (cate, care si cand se incearca
+	# din nou), nu stau in pauza fara niciun semn
+	nu_alte = []
+	if surse is not None:
+		for l in alte:
+			nu = textNuRaspunde(l["adresa"], surse, acum)
+			if nu:
+				nume = l["lista"] or l["adresa"]
+				nu_alte.append("%s (%s): %s" % (nume, numeTara(l["tara"]), nu) if l["tara"] else "%s: %s" % (nume, nu))
+	if nu_alte:
+		text += " · %s %d" % (_(TEXT_SEMN_NU_RASPUNDE) + ":", len(nu_alte))
+		expl += " " + " ".join(nu_alte)
+	r.append((text, R_TOATE, None, expl, None))
+	r.append(("%s %s" % (_("Și listele de probă:"), _("da") if probaPornit(config) else _("nu")), R_PROBA, None,
+		_("OK pornește sau oprește. Listele de probă ale registrelor, din toate țările, intră și ele: canalele lor pot să "
+		"nu meargă."), None))
 	r.append(("%s %s" % (_("Trecere singură pe internet când satelitul nu se recepționează:"),
 		_("da") if rezervaPornita(config) else _("nu")), R_REZERVA, None,
 		_("Când satelitul unui canal nu se recepționează, imaginea vine singură de pe internet, dacă lista are canalul; se întoarce pe satelit când semnalul revine.") + " " +

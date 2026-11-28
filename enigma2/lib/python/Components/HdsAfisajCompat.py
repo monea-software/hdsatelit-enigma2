@@ -85,6 +85,17 @@ def actualizeazaLeduri():
 				led.changed()
 
 
+def _vuDuo2():
+	"""Vu+ Duo2 dupa instanta nativa a afisajului (eDBoxLCD.isHdsDuo2), din memorie, fara citiri de fisiere."""
+	clasa = getattr(sys.modules.get("enigma"), "eDBoxLCD", None)
+	lcd = clasa.getInstance() if clasa is not None else None
+	identifica = getattr(lcd, "isHdsDuo2", None)
+	try:
+		return bool(identifica and identifica())
+	except Exception:
+		return False
+
+
 def _pluginuri():
 	"""Nu importam pluginuri: unele scriu chiar in timpul importului."""
 	rez = []
@@ -93,7 +104,11 @@ def _pluginuri():
 	if c is not None and _valoare(c, "Enable", False):
 		tipuri = {str(_valoare(c, "LCDType%d" % i, "0"))[:1]
 			for i in (1, 2, 3)}
-		if "9" in tipuri:
+		if "9" in tipuri and _vuDuo2():
+			# Vu+ Duo2: tipul 9 deseneaza numai TFT-ul color (/dev/lcd2, cu lumina lui); VFD-ul 140x32 ramane al nostru
+			# (probat pe un Duo2 in asistenta din 24.11).
+			pass
+		elif "9" in tipuri:
 			rez.append(("LCD4linux", ("lcd", "text", "lumina", "live", "alimentare")))
 		elif "5" in tipuri:
 			rez.append(("LCD4linux", ("lcd", "lumina", "live", "alimentare")))

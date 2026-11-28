@@ -15,6 +15,9 @@
 #include <lib/dvb/db.h>
 #include <lib/dvb/hdsretea.h>
 #include <lib/dvb/hdsjurnaltuner.h>
+#include <lib/dvb/hdsvct.h>
+
+class SatelliteDeliverySystemDescriptor;
 
 struct service
 {
@@ -50,7 +53,9 @@ class eDVBScan: public sigc::trackable, public iObject
 	
 	RESULT startFilter();	
 	enum { readyPAT=1, readySDT=2, readyNIT=4, readyBAT=8,
-	       validPAT=16, validSDT=32, validNIT=64, validBAT=128};
+	       validPAT=16, validSDT=32, validNIT=64, validBAT=128,
+	       /* HDSatelit (0.8.0): VCT-ul ATSC; in m_ready_all numai dupa o sectiune PSIP buna (lib/dvb/hdsvct.h) */
+	       readyVCT=256, validVCT=512};
 
 		/* scan state variables */
 	int m_channel_state;
@@ -102,7 +107,56 @@ class eDVBScan: public sigc::trackable, public iObject
 	int sameChannel(iDVBFrontendParameters *ch1, iDVBFrontendParameters *ch2, bool exact=false) const;
 
 	void channelDone();
-	
+	/* HDSatelit (0.8.0): descriptorul de satelit al unei intrari din NIT (actual sau al altei retele) */
+	void hdsSatelitDinNit(SatelliteDeliverySystemDescriptor &d, eOriginalNetworkID onid, eTransportStreamID tsid,
+		bool s2_gasit, int s2_isi, int s2_gold, bool alta_retea);
+	/* HDSatelit (0.8.0, lib/dvb/hdsvct.h): numele canalelor din VCT-ul ATSC (TVCT/CVCT, PID 0x1FFB), numai la cautarea pornita
+	   cu start(), nu la actualizarea listei din fundal de la zap. Cititorul brut porneste odata cu PAT-ul; VCT-ul se asteapta
+	   numai dupa o sectiune PSIP buna, cel mult hdsvct::RAGAZ_MS de la ea. */
+	bool m_hds_cautare;
+	ePtr<iDVBSectionReader> m_hds_psip;
+	long long m_hds_psip_t0; /* cand a pornit cititorul (hdsjurnal::monotonMs), pentru ora sectiunilor */
+	ePtr<eConnection> m_hds_psip_conn;
+	ePtr<eTimer> m_hds_vct_plafon;
+	hdsvct::Colector m_hds_vct;
+	/* serviciile numite din VCT -> transponderul lor n-a avut SDT la aceasta cautare (hdsvct::vctInlocuiesteInLista) */
+	std::map<eServiceReferenceDVB, bool> m_hds_nume_vct;
+	bool m_hds_tp_cu_sdt; /* transponderul de acum a dat SDT-ul (processSDT) */
+	void hdsPornestePsip();
+	void hdsOpresteVct();
+	void hdsSectiunePsip(const __u8 *data);
+	void hdsVctPlafon();
+	const hdsvct::Canal *hdsCanalVct(int sid);
+	void hdsNumeleDinVct();
+	/* HDSatelit (0.8.0): NIT-ul altor retele (0x41) la cautarea in retea pe satelit: cules fara asteptare (cititor brut,
+	   nu intra in m_ready_all), prelucrat la sfarsitul transponderului cu regulile de pozitie ale NIT-ului actual, fara
+	   indreptarea est/vest (hdsscanreguli::pozitieDinNit) */
+	ePtr<iDVBSectionReader> m_hds_nit_alt;
+	ePtr<eConnection> m_hds_nit_alt_conn;
+	std::map<unsigned int, std::vector<__u8> > m_hds_nit_alt_sectiuni; /* (network_id << 8 | section_number) -> sectiunea */
+	void hdsPornesteNitAlt();
+	void hdsOpresteNitAlt();
+	void hdsSectiuneNitAlt(const __u8 *data);
+	void hdsNitAltaRetea();
+	bool hdsStiutPentruNitAlt(iDVBFrontendParameters *feparm);
+	/* AMRZ (24.11.2026): ce aduce NIT other se tine deoparte si se pune in coada abia cand lista si NIT-ul actual s-au terminat
+	   (nextChannel), ca partea lor de cautare sa ramana exact ca inainte */
+	std::list<std::pair<eDVBChannelID, ePtr<iDVBFrontendParameters> > > m_hds_nit_alt_amanate;
+	/* NIT9 (24.11.2026): intrarile venite numai din NIT other (tinute vii aici, ca adresele sa nu se refoloseasca) si
+	   descriptorul propriu al fiecarui transponder din NIT-urile actuale citite ((ONID << 16 | TSID, pozitia) -> parametrii);
+	   la insertInto un transponder prins din NIT other ia descriptorul propriu sau pastreaza lista (hdsParametriNitAlt) */
+	std::list<ePtr<iDVBFrontendParameters> > m_hds_din_nit_alt;
+	std::map<std::pair<unsigned int, int>, eDVBFrontendParametersSatellite> m_hds_nit_propriu;
+	void hdsParametriNitAlt(iDVBChannelList *db);
+	/* HDSatelit (0.8.0, lib/dvb/hdsscanreguli.h): acelasi TSID si ONID pe doua transpondere prinse in aceeasi cautare
+	   (namespace-ul cu frecventa numai pentru al doilea) si, la sfarsit, ns_orb pentru cel pe care lista il avea deja */
+	eDVBNamespace hdsNamespaceLaColiziune(eDVBNamespace ns, eOriginalNetworkID onid, eTransportStreamID tsid,
+		unsigned long hash);
+	std::map<eDVBChannelID, std::list<eDVBChannelID> > m_hds_coliziuni; /* (ns_orb, tsid, onid) -> ceilalti, pe ns_frecventa */
+	std::map<eDVBChannelID, std::string> m_hds_continut; /* serviciile din SDT ale fiecarui transponder prins (SID si nume) */
+	std::string hdsContinutSdt();
+	void hdsColiziuniLaSfarsit(iDVBChannelList *db);
+	void hdsMutaCanal(const eDVBChannelID &din, const eDVBChannelID &spre);
 	sigc::signal<void(int)> m_event;
 	RESULT processSDT(eDVBNamespace dvbnamespace, const ServiceDescriptionSection &sdt);
 	

@@ -391,7 +391,7 @@ def instaleaza():
 		iesire = None
 	try:
 		_jurnal("opkg update, apoi opkg install %s" % PACHET)
-		_ruleaza([PROGRAME["opkg"], "update"], TIMP_UPDATE_S, iesire)
+		_ruleaza([PROGRAME["opkg"]] + _argumenteUpdate(), TIMP_UPDATE_S, iesire)
 		cod = _ruleaza([PROGRAME["opkg"], "install", PACHET], TIMP_INSTALARE_S, iesire)
 	finally:
 		if iesire is not None:
@@ -595,3 +595,16 @@ def initConfig():
 		laPornire(bool(config.usage.hds_samba.value), config.usage.hds_samba_dosar.value, atinsa)
 	except Exception as eroare:
 		_jurnal("aplicarea la pornire: %s" % eroare)
+
+
+def _argumenteUpdate(rad="/"):
+	"""OPK1 (0.8.0): ['update'], or ['-f', <conf>, 'update'] when a dead foreign source is skipped (HdsSurseOpkg)"""
+	try:
+		try:
+			from Components import HdsSurseOpkg
+		except ImportError:
+			import HdsSurseOpkg
+		return HdsSurseOpkg.argumente_update(rad)
+	except Exception as e:
+		print("[HdsSurseOpkg] %r" % (e,))
+		return ["update"]

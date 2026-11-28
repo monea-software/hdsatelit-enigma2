@@ -1,0 +1,247 @@
+From: HD Satelit <contact@hdsatelit.com>
+Subject: [PATCH] linuxdvb mipsel: no decoder start after stop
+
+On a Vu+ Solo SE an IPTV channel change after a stream stall froze the box: LinuxDvbStop gave the video
+decoder back to the demux (VIDEO_SELECT_SOURCE 0) while the FFMPEG thread, after the stall, reinitialised
+the video output (LinuxDvbSwitch) and its VIDEO_PLAY came 80 ms later, waiting only for LinuxDVBmutex.
+The closed Vu+ driver oopsed in NEXUS_P_HwPidChannel_GetStatus (playpump PID channel already released)
+and kept its lock, so enigma2 hung in stopService. Mark the decoders stopped inside the stop critical
+section and refuse every later play, continue, pause, clear, slow motion, AV sync and switch.
+
+diff --git a/output/linuxdvb_mipsel.c b/output/linuxdvb_mipsel.c
+index 7c88a9a..8720f6a 100755
+--- a/output/linuxdvb_mipsel.c
++++ b/output/linuxdvb_mipsel.c
+@@ -71,6 +71,16 @@ static const char AUDIODEV[] = "/dev/dvb/adapter0/audio0";
+ static int videofd 	= -1;
+ static int audiofd 	= -1;
+ 
++/* Set by LinuxDvbStop under LinuxDVBmutex once a decoder was stopped and given back to the demux, cleared
++ * only when the device is opened again. The FFMPEG thread can still be inside a packet when the stop comes
++ * from the main thread: after a stream stall it reinitialises the video output (LinuxDvbSwitch) and that
++ * VIDEO_PLAY, issued 80 ms after VIDEO_SELECT_SOURCE demux, crashed the Vu+ driver on a Solo SE (oops in
++ * NEXUS_P_HwPidChannel_GetStatus, the playpump PID channel was already released; the box stayed frozen).
++ * After a stop the process only exits (dieNow is never reset), so no decoder may be started again: every
++ * call that can start or continue a decoder checks the flag inside LinuxDVBmutex (writes already stop on dieNow). */
++static int videoStopped = 0;
++static int audioStopped = 0;
++
+ struct DVBApiVideoInfo_s
+ {
+     int aspect_ratio;
+@@ -252,6 +262,7 @@ int LinuxDvbOpen(Context_t  *context __attribute__((unused)), char *type)
+             linuxdvb_err("failed to open %s - errno %d, %s\n", VIDEODEV, errno, strerror(errno));
+             return cERR_LINUXDVB_ERROR;
+         }
++        videoStopped = 0;
+ 
+         if (ioctl( videofd, VIDEO_CLEAR_BUFFER) == -1)
+         {
+@@ -280,6 +291,7 @@ int LinuxDvbOpen(Context_t  *context __attribute__((unused)), char *type)
+             linuxdvb_err("failed to open %s - errno %d, %s\n", AUDIODEV, errno, strerror(errno));
+             return cERR_LINUXDVB_ERROR;
+         }
++        audioStopped = 0;
+ 
+         if (ioctl( audiofd, AUDIO_CLEAR_BUFFER) == -1)
+         {
+@@ -380,21 +392,30 @@ int LinuxDvbPlay(Context_t  *context, char *type) {
+         }
+         free(Encoding);
+ 
+-        if (0 != ioctl(videofd, VIDEO_PLAY))
++        getLinuxDVBMutex();
++        if (videoStopped)
+         {
+-            linuxdvb_err("VIDEO_PLAY: ERROR %d, %s\n", errno, strerror(errno));
+-            ret = cERR_LINUXDVB_ERROR;
++            linuxdvb_err("VIDEO_PLAY after stop ignored\n");
+         }
+-
+-        if (ioctl(videofd, VIDEO_CONTINUE) == -1)
++        else
+         {
+-            linuxdvb_err("VIDEO_CONTINUE: ERROR %d, %s\n", errno, strerror(errno));
+-        }
++            if (0 != ioctl(videofd, VIDEO_PLAY))
++            {
++                linuxdvb_err("VIDEO_PLAY: ERROR %d, %s\n", errno, strerror(errno));
++                ret = cERR_LINUXDVB_ERROR;
++            }
+ 
+-        if (ioctl( videofd, VIDEO_CLEAR_BUFFER) == -1)
+-        {
+-            linuxdvb_err("VIDEO_CLEAR_BUFFER: ERROR %d, %s\n", errno, strerror(errno));
++            if (ioctl(videofd, VIDEO_CONTINUE) == -1)
++            {
++                linuxdvb_err("VIDEO_CONTINUE: ERROR %d, %s\n", errno, strerror(errno));
++            }
++
++            if (ioctl( videofd, VIDEO_CLEAR_BUFFER) == -1)
++            {
++                linuxdvb_err("VIDEO_CLEAR_BUFFER: ERROR %d, %s\n", errno, strerror(errno));
++            }
+         }
++        releaseLinuxDVBMutex();
+     }
+     if (audio && audiofd != -1) {
+         char * Encoding = NULL;
+@@ -438,17 +459,26 @@ int LinuxDvbPlay(Context_t  *context, char *type) {
+             }
+             timing_after_switch = 1;
+         }
+-        if (ioctl(audiofd, AUDIO_PLAY) < 0)
++        getLinuxDVBMutex();
++        if (audioStopped)
+         {
+-            linuxdvb_err("AUDIO_PLAY: ERROR %d, %s\n", errno, strerror(errno));
+-            ret = cERR_LINUXDVB_ERROR;
++            linuxdvb_err("AUDIO_PLAY after stop ignored\n");
+         }
+-
+-        if (ioctl(audiofd, AUDIO_CONTINUE) < 0)
++        else
+         {
+-            linuxdvb_err("AUDIO_CONTINUE: ERROR %d, %s\n", errno, strerror(errno));
+-            ret = cERR_LINUXDVB_ERROR;
++            if (ioctl(audiofd, AUDIO_PLAY) < 0)
++            {
++                linuxdvb_err("AUDIO_PLAY: ERROR %d, %s\n", errno, strerror(errno));
++                ret = cERR_LINUXDVB_ERROR;
++            }
++
++            if (ioctl(audiofd, AUDIO_CONTINUE) < 0)
++            {
++                linuxdvb_err("AUDIO_CONTINUE: ERROR %d, %s\n", errno, strerror(errno));
++                ret = cERR_LINUXDVB_ERROR;
++            }
+         }
++        releaseLinuxDVBMutex();
+         free(Encoding);
+     }
+ 
+@@ -482,6 +512,7 @@ int LinuxDvbStop(Context_t  *context __attribute__((unused)), char * type)
+         ioctl(videofd, VIDEO_SLOWMOTION, 0);
+         ioctl(videofd, VIDEO_FAST_FORWARD, 0);
+         ioctl(videofd, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_DEMUX);
++        videoStopped = 1;
+     }
+     if (audio && audiofd != -1) {
+         if (ioctl(audiofd, AUDIO_CLEAR_BUFFER) == -1)
+@@ -495,6 +526,7 @@ int LinuxDvbStop(Context_t  *context __attribute__((unused)), char * type)
+             ret = cERR_LINUXDVB_ERROR;
+         }
+         ioctl(audiofd, AUDIO_SELECT_SOURCE, AUDIO_SOURCE_DEMUX);
++        audioStopped = 1;
+     }
+ 
+     releaseLinuxDVBMutex();
+@@ -511,7 +543,7 @@ int LinuxDvbPause(Context_t  *context __attribute__((unused)), char *type) {
+ 
+     getLinuxDVBMutex();
+ 
+-    if (video && videofd != -1)
++    if (video && videofd != -1 && !videoStopped)
+     {
+         if (ioctl(videofd, VIDEO_FREEZE, NULL) == -1)
+         {
+@@ -520,7 +552,7 @@ int LinuxDvbPause(Context_t  *context __attribute__((unused)), char *type) {
+         }
+     }
+ 
+-    if (audio && audiofd != -1)
++    if (audio && audiofd != -1 && !audioStopped)
+     {
+         if (ioctl(audiofd, AUDIO_PAUSE, NULL) == -1)
+         {
+@@ -541,7 +573,9 @@ int LinuxDvbContinue(Context_t  *context __attribute__((unused)), char * type) {
+ 
+     linuxdvb_printf(10, "v%d a%d\n", video, audio);
+ 
+-    if (video && videofd != -1)
++    getLinuxDVBMutex();
++
++    if (video && videofd != -1 && !videoStopped)
+     {
+         if (ioctl(videofd, VIDEO_CONTINUE, NULL) == -1)
+         {
+@@ -550,7 +584,7 @@ int LinuxDvbContinue(Context_t  *context __attribute__((unused)), char * type) {
+         }
+     }
+ 
+-    if (audio && audiofd != -1)
++    if (audio && audiofd != -1 && !audioStopped)
+     {
+         if (ioctl(audiofd, AUDIO_CONTINUE, NULL) == -1)
+         {
+@@ -559,6 +593,8 @@ int LinuxDvbContinue(Context_t  *context __attribute__((unused)), char * type) {
+         }
+     }
+ 
++    releaseLinuxDVBMutex();
++
+     if (isBufferedOutput)
+         LinuxDvbBuffResume(context);
+ 
+@@ -612,7 +648,7 @@ int LinuxDvbSlowMotion(Context_t  *context, char * type) {
+     if ( (video && videofd != -1) || (audio && audiofd != -1) ) {
+         getLinuxDVBMutex();
+ 
+-        if (video && videofd != -1) {
++        if (video && videofd != -1 && !videoStopped) {
+             if (ioctl(videofd, VIDEO_SLOWMOTION, context->playback->SlowMotion) == -1)
+             {
+                 linuxdvb_err("VIDEO_SLOWMOTION: ERROR %d, %s\n", errno, strerror(errno));
+@@ -639,8 +675,11 @@ int LinuxDvbAVSync(Context_t  *context, char *type __attribute__((unused))) {
+     if (audiofd != -1) {
+         getLinuxDVBMutex();
+ 
+-        ret = LinuxDvbApplyAVSync(context);
+-        LinuxDvbTiming("startup");
++        if (!audioStopped)
++        {
++            ret = LinuxDvbApplyAVSync(context);
++            LinuxDvbTiming("startup");
++        }
+ 
+         releaseLinuxDVBMutex();
+     }
+@@ -660,7 +699,7 @@ int LinuxDvbClear(Context_t  *context __attribute__((unused)), char *type)
+     {
+         getLinuxDVBMutex();
+ 
+-        if (video && videofd != -1)
++        if (video && videofd != -1 && !videoStopped)
+         {
+             if (ioctl(videofd, VIDEO_CLEAR_BUFFER) == -1)
+             {
+@@ -668,7 +707,7 @@ int LinuxDvbClear(Context_t  *context __attribute__((unused)), char *type)
+                 ret = cERR_LINUXDVB_ERROR;
+             }
+         }
+-        else if (audio && audiofd != -1)
++        else if (audio && audiofd != -1 && !audioStopped)
+         {
+             if (ioctl(audiofd, AUDIO_CLEAR_BUFFER) == -1)
+             {
+@@ -782,7 +821,10 @@ int LinuxDvbSwitch(Context_t  *context, char *type)
+         }
+         getLinuxDVBMutex();
+ 
+-        if (audio && audiofd != -1) {
++        if ((video && videoStopped) || (audio && audioStopped))
++            linuxdvb_err("output switch after stop ignored (v%d a%d)\n", video, audio);
++
++        if (audio && audiofd != -1 && !audioStopped) {
+             char * Encoding = NULL;
+             if (context && context->manager && context->manager->audio) {
+                 context->manager->audio->Command(context, MANAGER_GETENCODING, &Encoding);
+@@ -861,7 +903,7 @@ audio_switch_done:
+                 linuxdvb_printf(20, "no context for Audio\n");
+         }
+ 
+-        if (video && videofd != -1) {
++        if (video && videofd != -1 && !videoStopped) {
+             char * Encoding = NULL;
+             if (context && context->manager && context->manager->video) {
+                 context->manager->video->Command(context, MANAGER_GETENCODING, &Encoding);

@@ -19,6 +19,7 @@
 #   GET  /api/stocare                         locul inregistrarilor, discurile, citirea si pregatirea in curs
 #   POST /api/stocare-foloseste?punct=/media/usb   foloseste discul pentru inregistrari (numai un disc din lista)
 #   POST /api/stocare-nume-media?dispozitiv=sda1&nume=usb2   numele din /media (gol: Automat)
+#   POST /api/stocare-anunturi?pornit=1|0     optiunea „Anunț pe ecran când pui sau scoți o stocare” (Components/HdsAnuntStocare)
 #   GET  /stocare                             pagina
 #
 # FIRUL: render_GET / render_POST ruleaza pe firul enigma2; aici se citesc numai /proc/mounts si /sys, spatiul liber
@@ -46,6 +47,37 @@ def _l(L=None):
 		return L
 	from Components import HdsLocInregistrari
 	return HdsLocInregistrari
+
+
+def _anunturi(A=None):
+	"""Anuntul de la punerea si scoaterea unei stocari (Components/HdsAnuntStocare.stareWeb): optiunea si ultimele anunturi,
+	cu ora receptorului scrisa. None cand modulul lipseste (probele de pe PC fara el)."""
+	try:
+		if A is None:
+			from Components import HdsAnuntStocare as A
+		st = A.stareWeb()
+	except Exception:
+		return None
+	ultimele = []
+	for u in st.get("ultimele") or []:
+		ultimele.append({"cand": u.get("cand") or 0, "ora": time.strftime("%d.%m %H:%M", time.localtime(u.get("cand") or 0)),
+			"fel": u.get("fel") or "", "text": u.get("text") or ""})
+	return {"pornit": bool(st.get("pornit")), "ultimele": ultimele}
+
+
+def seteazaAnunturi(argumente, L=None, A=None):
+	"""POST /api/stocare-anunturi?pornit=1|0: aceeasi optiune ca in meniu (Oprirea automată a discului)."""
+	valoare = argumente.get("pornit", "")
+	if valoare not in ("0", "1"):
+		rez = stare(L, A=A)
+		rez.update({"result": False, "message": _t(N_("Nu s-a trimis nicio alegere."))})
+		return rez
+	if A is None:
+		from Components import HdsAnuntStocare as A
+	A.setPornit(valoare == "1")
+	rez = stare(L, A=A)
+	rez.update({"result": True, "message": _t(N_("Anunțul pe ecran este pornit.")) if valoare == "1" else _t(N_("Anunțul pe ecran este oprit."))})
+	return rez
 
 
 def _disc(L, d, automat=None):
@@ -103,7 +135,7 @@ def _necitit(L, n):
 	return rez
 
 
-def stare(L=None, acum=None, din_nou=False):
+def stare(L=None, acum=None, din_nou=False, A=None):
 	"""Pentru GET /api/stocare. Culege intai o pregatire terminata (setarile se pun pe firul acesta); rezultatul ei se
 	da cel mult VARSTA_LUCRU secunde de la pornire (pagina il arata numai daca ea a cerut-o; lucrul in curs il arata
 	oricum). `detaliu` are numai explicatiile despre loc: starea fiecarui disc e in tabelul paginii."""
@@ -137,6 +169,8 @@ def stare(L=None, acum=None, din_nou=False):
 		"necitite": [_necitit(L, n) for n in necit],
 		"lucru": None,
 		"nume_lucru": L.stareNumeMedia() if hasattr(L, "stareNumeMedia") else None,
+		# anuntul de pe ecran la punerea / scoaterea unei stocari: optiunea si ultimele anunturi
+		"anunturi": _anunturi(A),
 	}
 	if lucru is not None and (lucru["stare"] == L.LUCRU_IN_LUCRU or acum - (lucru.get("timp") or 0) < VARSTA_LUCRU):
 		text, detaliu = L.textLucru(lucru)
@@ -169,7 +203,7 @@ def foloseste(argumente, L=None):
 
 def argumente(request):
 	"""Argumentele cererii ca text: {cheie: text}, fara token; numai cheile cunoscute."""
-	permise = set(("punct", "dispozitiv", "nume"))
+	permise = set(("punct", "dispozitiv", "nume", "pornit"))
 	rez = {}
 	for cheie, valori in (getattr(request, "args", None) or {}).items():
 		if isinstance(cheie, bytes):
@@ -235,6 +269,18 @@ def rute(baza, resource, L=None):
 		def render_GET(self, request):
 			return self.render_POST(request)
 
+	class AnunturiResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				return self._raspunde(request, seteazaAnunturi(argumente(request), L=L))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)
+
 	class PaginaResource(resource.Resource):
 		"""GET /stocare: pagina „Locul înregistrărilor”."""
 		isLeaf = True
@@ -246,6 +292,7 @@ def rute(baza, resource, L=None):
 		b"stocare": StareResource(),
 		b"stocare-foloseste": FolosesteResource(),
 		b"stocare-nume-media": NumeMediaResource(),
+		b"stocare-anunturi": AnunturiResource(),
 	}
 	return api, PaginaResource()
 
@@ -356,6 +403,14 @@ PAGINA = """<!DOCTYPE html>
     <p class="nota">La prima înregistrare (tasta roșie, pauză, o emisiune programată din ghid sau de aici), receptorul caută singur stick-urile și hard diskurile. Dacă e unul singur, îl folosește și face pe el dosarul movie. Dacă sunt mai multe, te întreabă o dată pe care și ține minte alegerea; dacă nu răspunzi până pornește o înregistrare programată, ia singur discul cu cel mai mult loc liber. Memoria internă a receptorului nu se folosește niciodată: e prea mică.</p>
     <p class="nota">Când imaginea pornește de pe un disc mare, el apare aici ca Discul de pornire și receptorul îl alege singur, dacă nu ai ales alt disc. Dosarul movie stă în afara imaginii, deci înregistrările rămân și după o actualizare.</p>
     <p class="nota">Când legi un hard disk și înregistrările stau încă pe un stick sau pe un card, într-un loc pe care nu l-ai ales tu, receptorul le mută singur pe hard disk și îți spune o dată. După ce alegi tu un loc, aici sau pe televizor, nu mai mută nimic singur.</p>
+  </section>
+  <section class="card ascuns" id="cardAnunturi">
+    <h2>Ultimele discuri puse și scoase</h2>
+    <p class="nota ascuns" id="faraAnunturi">De la pornirea receptorului nu a fost pus și nu a fost scos niciun stick, hard disk sau card.</p>
+    <ul id="anunturi"></ul>
+    <p><label><input type="checkbox" id="anuntPornit"> Anunț pe ecran când pui sau scoți o stocare</label></p>
+    <p class="nota">Pe receptor anunțul apare peste orice meniu, iar tasta INFO sau EPG deschide detaliile și formatarea. În standby nu apare nimic.</p>
+    <p class="mesaj ascuns" id="mesajAnunturi"></p>
   </section>
   <section class="card ascuns" id="cardNecitite">
     <h2>Discuri pe care receptorul nu le poate citi</h2>
@@ -503,6 +558,7 @@ function arata(d){
     nc.appendChild(li);
   });
   $("cardNecitite").classList.toggle("ascuns", !(d.necitite || []).length);
+  arataAnunturi(d.anunturi);
   // discul apasat nu mai e in lista (scos intre timp): raspunsul sub discuri, adus in fata ochilor
   var sus = null;
   if(!aratat && CERUT !== null){
@@ -521,6 +577,32 @@ function arata(d){
   ULTIMUL_MESAJ = sus ? sus.text : "";
   if(d.se_citeste || ocupat || NUME_OCUPAT !== null){ programeaza(250); }
   else if(CEAS){ clearTimeout(CEAS); CEAS = null; }
+}
+function arataAnunturi(a){
+  $("cardAnunturi").classList.toggle("ascuns", !a);
+  if(!a){ return; }
+  var ul = $("anunturi"); ul.textContent = "";
+  (a.ultimele || []).forEach(function(u){
+    var li = document.createElement("li");
+    var ora = document.createElement("span"); ora.className = "mic"; ora.textContent = u.ora + "  ";
+    li.appendChild(ora);
+    li.appendChild(document.createTextNode(u.text));
+    li.style.whiteSpace = "pre-line"; li.style.margin = "0 0 8px";
+    ul.appendChild(li);
+  });
+  $("faraAnunturi").classList.toggle("ascuns", !!(a.ultimele || []).length);
+  $("anuntPornit").checked = !!a.pornit;
+}
+function schimbaAnunturi(){
+  var q = new URLSearchParams(); q.set("pornit", $("anuntPornit").checked ? "1" : "0");
+  var m = $("mesajAnunturi");
+  cerere("/api/stocare-anunturi", "POST", q).then(function(d){
+    m.classList.remove("ascuns"); m.classList.toggle("eroare", !d.result);
+    m.textContent = d.message || "";
+    if(d.anunturi){ arataAnunturi(d.anunturi); }
+  }).catch(function(){
+    m.classList.remove("ascuns"); m.classList.add("eroare"); m.textContent = "Receptorul nu răspunde.";
+  });
 }
 function programeaza(ms){ if(CEAS){ clearTimeout(CEAS); } CEAS = setTimeout(citeste, ms); }
 function citeste(dinNou){
@@ -562,6 +644,7 @@ function schimbaNumeMedia(k, nume){
 // legaturile spre paginile vecine pastreaza cheia din adresa (modul ?token=)
 Array.prototype.forEach.call(document.querySelectorAll("a[data-cale]"), function(a){ a.href = adresa(a.getAttribute("data-cale")); });
 $("actualizeaza").addEventListener("click", function(){ citeste(true); });
+$("anuntPornit").addEventListener("change", schimbaAnunturi);
 citeste(true);
 </script>
 </body>
@@ -604,6 +687,10 @@ TEXTE_PAGINA = {
 		N_("Când legi un hard disk și înregistrările stau încă pe un stick sau pe un card, într-un loc pe care nu l-ai ales tu, "
 			"receptorul le mută singur pe hard disk și îți spune o dată. După ce alegi tu un loc, aici sau pe televizor, nu mai "
 			"mută nimic singur."),
+		N_("Ultimele discuri puse și scoase"),
+		N_("De la pornirea receptorului nu a fost pus și nu a fost scos niciun stick, hard disk sau card."),
+		N_("Anunț pe ecran când pui sau scoți o stocare"),
+		N_("Pe receptor anunțul apare peste orice meniu, iar tasta INFO sau EPG deschide detaliile și formatarea. În standby nu apare nimic."),
 		N_("Discuri pe care receptorul nu le poate citi"),
 		N_("Verifică mai întâi mesajul discului. Pentru un disc fără sistem de fișiere, poți folosi Formatează din pagina Discurile. Formatarea șterge tot de pe el."),
 		N_("Locul fiecărui fel de înregistrare (programate, imediate, timeshift) se alege în <a "

@@ -1006,6 +1006,13 @@ def runScreenTest():
 		HdsJurnale.porneste()
 	except Exception as e:
 		print("[mytest] paza jurnalului detaliat:", e)
+	# HDSatelit: ZGEMMA H8 cu imagini pe stick (Components/HdsPornireStick.py): o pornire "o data" ramasa de dinainte se
+	# pune la loc (STARTUP de obicei), pe un fir, la 15 s. Pe celelalte receptoare nu face nimic.
+	try:
+		from Components import HdsPornireStick
+		HdsPornireStick.porneste()
+	except Exception as e:
+		print("[mytest] imaginile de pe stick:", e)
 	# HDSatelit: swap-ul gasit porneste singur (Components/HdsSwap.py, 0.7.4): la 20 s si la 90 s, pe un fir, daca nu e
 	# niciun swap pornit, partitia de swap de pe un stick sau un disc (intai cel al imaginii, ca la chkroot) sau
 	# swapfile.hds facut din ecran; numai swapon. Pornirea nu depinde de el.
@@ -1121,6 +1128,12 @@ def runScreenTest():
 		HdsStandbyTv.porneste(session)
 	except Exception as e:
 		print("[mytest] standby si televizorul:", e)
+	# HDSatelit (RW1): ventilatorul: numai alegerea omului (din fabrica nimic), scrisa iar la iesirea din standby
+	try:
+		from Components import HdsVentilator
+		HdsVentilator.porneste(session)
+	except Exception as e:
+		print("[mytest] ventilatorul:", e)
 	# HDSatelit: egalizatorul din procesor (Components/HdsEgalizator.py): setarile in motor si legatura la pornirea
 	# serviciilor, inaintea primului serviciu
 	try:
@@ -1128,6 +1141,13 @@ def runScreenTest():
 		HdsEgalizator.porneste()
 	except Exception as e:
 		print("[mytest] egalizatorul:", e)
+	# HDSatelit: the Bluetooth headset chosen for the film and IPTV sound (Components/HdsBluetoothSunet.py, BTF1) is
+	# linked again after a restart, on its own thread; nothing at all while the option is No
+	try:
+		from Components import HdsBluetoothSunet
+		HdsBluetoothSunet.porneste()
+	except Exception as e:
+		print("[mytest] sunetul in casca Bluetooth:", e)
 	# HDSatelit: calitatea imaginii (Components/HdsCalitateImagine.py): iesirea HDR scrisa inaintea primului canal si
 	# profilurile blocului de calitate la fiecare canal; fara /proc/msp/pq meniul nu se arata si nu se scrie nimic
 	try:
@@ -1135,6 +1155,14 @@ def runScreenTest():
 		HdsCalitateImagine.porneste(session)
 	except Exception as e:
 		print("[mytest] calitatea imaginii:", e)
+	# HDSatelit (PQ2, 0.8.0): luminozitatea, contrastul, culorile si zgomotul pe placile fara /proc/msp/pq, prin
+	# /proc/stb/vmpeg/0/pep_* (Components/HdsReglajeImagine.py): valorile din fabrica citite inaintea oricarei scrieri,
+	# apoi numai reglajele salvate altfel; fara nimic salvat nu se scrie nimic
+	try:
+		from Components import HdsReglajeImagine
+		HdsReglajeImagine.porneste()
+	except Exception as e:
+		print("[mytest] reglajele imaginii:", e)
 	# HDSatelit: poza canalului la schimbare (Components/HdsUltimaImagine.py, proba de concept, oprita din fabrica): cu
 	# setarea pornita, la zap se arata ultima imagine a canalului nou pana vine imaginea vie; pozele numai in /tmp
 	try:
@@ -1304,6 +1332,12 @@ def runScreenTest():
 
 	profile("RunReactor")
 	profile_final()
+	# HDSatelit 0.8.x (BOOT1): bara de pornire pleaca (locul ei pus la loc) inainte ca bucla sa deseneze primul ecran
+	try:
+		from Components import HdsBaraPornire
+		HdsBaraPornire.opreste()
+	except Exception as e:
+		print("[mytest] bara de pornire:", e)
 	runReactor()
 
 	# HDSatelit 0.7.6 (WDG): bucla s-a oprit; semnul pentru hds-watchdog.py, care opreste procesul daca nu iese in 45 s
@@ -1459,6 +1493,13 @@ except Exception as _eroare_fonturi:
 	print("[HdsFonturiGoogle] nu s-a putut porni: %s" % _eroare_fonturi)
 
 import skin
+# HDSatelit 0.8.x (BOOT1): bara de pornire (Components/HdsBaraPornire.py) nu scrie in OSD cat skinul ii schimba modul si
+# cat se deseneaza textul din colt si semnatura; continua() dupa ele, cu modul nou
+try:
+	from Components import HdsBaraPornire
+	HdsBaraPornire.pauza()
+except Exception as e:
+	print("[mytest] bara de pornire:", e)
 skin.loadSkinData(getDesktop(0))
 
 # HDSatelit: skinul a schimbat rezolutia OSD-ului si a sters semnatura: se deseneaza din nou, iar la primul pas al
@@ -1473,6 +1514,10 @@ try:
 	HdsSemnaturaPornire.ascundeLaPrimulDesen()
 except Exception as e:
 	print("[mytest] semnatura de pornire:", e)
+try:
+	HdsBaraPornire.continua()
+except Exception as e:
+	print("[mytest] bara de pornire:", e)
 try:
 	from Components import HdsEcranePornire
 	from Components import HdsGalerieSigle
@@ -1513,6 +1558,13 @@ try:
 	HdsLedSigla.initConfig()
 except Exception as _eroare_sigla:
 	print("[mytest] sigla luminata: %s" % _eroare_sigla)
+# HDSatelit (RW1): ventilatorul (Components/HdsVentilator.py): config.hds_ventilator si SystemInfo HdsVentilator, inaintea
+# meniurilor; din fabrica nu scrie nimic (driverul il regleaza dupa temperatura)
+try:
+	from Components import HdsVentilator
+	HdsVentilator.initConfig()
+except Exception as _eroare_ventilator:
+	print("[mytest] ventilatorul: %s" % _eroare_ventilator)
 
 # HDSatelit: marginile ecranului salvate (Screens/OSDCalibration.py, Components/HdsMargini.py), puse in driver la
 # pornire, dupa iesirea video; cu toate marginile 0 (din fabrica) nu se scrie nimic

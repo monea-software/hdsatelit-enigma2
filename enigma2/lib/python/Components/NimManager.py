@@ -795,6 +795,25 @@ SISTEME_TERESTRU = (3, 16)   # SYS_DVBT, SYS_DVBT2
 SISTEME_SATELIT = (4, 5, 6, 17)  # SYS_DSS, SYS_DVBS, SYS_DVBS2, SYS_TURBO
 
 
+def hdsMasinaMips():
+	"""True pe procesoarele MIPS (Dreambox DM820, DM7080, DM520, Vu+ Solo SE, Duo2...): acolo numerele de ioctl se
+	codeaza altfel decat pe ARM si x86. False cand masina nu se poate citi (probele de pe PC)."""
+	try:
+		return str(os.uname()[4]).lower().startswith("mips")
+	except (AttributeError, OSError, IndexError):
+		return False
+
+
+def hdsIoctlCitireDvb(numar, marime, mips=None):
+	"""Numarul cererii _IOR('o', numar, marime) a API-ului DVB, dupa procesor. Pe ARM si x86 directia are 2 biti de la
+	bitul 30 (citire = 2): FE_GET_INFO = 0x80A86F3D. Pe MIPS are 3 biti de la bitul 29 (citire = 2): FE_GET_INFO =
+	0x40A86F3D, iar numarul ARM e acolo o cerere de scriere, refuzata pe un frontend deschis numai pentru citire
+	(„Operation not permitted", citit pe un Dreambox DM820): raspunsul driverului nu mai ajungea la imagine."""
+	if mips is None:
+		mips = hdsMasinaMips()
+	return (0x40000000 if mips else 0x80000000) | (marime << 16) | (0x6f << 8) | numar
+
+
 def hdsSistemeNucleu(frontend, adaptor=0):
 	"""Sistemele de livrare ale frontendului, cum le da nucleul (FE_GET_PROPERTY cu DTV_ENUM_DELSYS, aceeasi citire ca
 	partea C++, eDVBFrontend): lista numerelor SYS_*, sau [] la orice eroare (frontend lipsa, ioctl refuzat). Deschis
@@ -812,7 +831,11 @@ def hdsSistemeNucleu(frontend, adaptor=0):
 	struct.pack_into("<I", prop, 0, 44)  # DTV_ENUM_DELSYS
 	# struct dtv_properties: num, apoi pointerul spre vectorul de proprietati (aliniat la 8 pe 64 de biti)
 	props = bytearray(struct.pack("<I" + ("I" if p == 4 else "4xQ"), 1, prop.buffer_info()[0]))
-	cerere = 0x80000000 | (len(props) << 16) | (0x6f << 8) | 83  # FE_GET_PROPERTY
+	# FE_GET_PROPERTY, deocamdata cu numarul de pana acum si pe MIPS (acolo cererea e refuzata si functia da []): cu
+	# numarul bun, un tuner de cablu sau terestru fara randuri "Mode" al unui receptor MIPS si-ar putea schimba tipul in
+	# DVB-C/T la pornire (hdsCabluSiTerestruDinNucleu), iar omul si-ar pierde setarile lui. Se trece pe numarul dupa
+	# procesor dupa ce se citesc /proc/bus/nim_sockets si DTV_ENUM_DELSYS pe un asemenea receptor.
+	cerere = hdsIoctlCitireDvb(83, len(props), mips=False)
 	try:
 		fd = os.open("/dev/dvb/adapter%d/frontend%d" % (adaptor, frontend), os.O_RDONLY | os.O_NONBLOCK)
 	except OSError:
@@ -825,6 +848,37 @@ def hdsSistemeNucleu(frontend, adaptor=0):
 		os.close(fd)
 	numar = struct.unpack_from("<I", prop, 16 + 32)[0]
 	return list(prop[16:16 + min(numar, 32)])
+
+
+FE_CAN_MULTISTREAM = 0x4000000   # enum fe_caps (linux/dvb/frontend.h); in C++: lib/dvb/hdsmultistream.h CAP_MULTISTREAM
+
+
+def hdsMultistreamNucleu(frontend, adaptor=0):
+	"""MST9 (0.8.0): True cand driverul spune FE_CAN_MULTISTREAM in caps (FE_GET_INFO, aceeasi citire ca eDVBFrontend in
+	C++, m_multistream). Pentru tunerele de satelit care nu scriu randul "Multistream:" in /proc/bus/nim_sockets
+	(Dreambox DM900/DM920, BCM45308X/BCM45208, si DM820, Si2166D: numai "Type: DVB-S2"). False la orice eroare. O
+	deschidere numai pentru citire si un ioctl la citirea nim_sockets (pornirea si schimbarea tipului unui tuner
+	multiType), fara acord si fara alimentarea LNB. Numarul cererii dupa procesor (hdsIoctlCitireDvb): DM820 e MIPS."""
+	import struct
+	try:
+		import fcntl
+	except ImportError:  # probele de pe PC (Windows)
+		return False
+	# struct dvb_frontend_info: name[128], type, frequency_min/max/stepsize/tolerance, symbol_rate_min/max/tolerance,
+	# notifier_delay, caps -> 168 octeti, caps la 164; FE_GET_INFO = _IOR('o', 61, struct dvb_frontend_info)
+	cerere = hdsIoctlCitireDvb(61, 168)
+	info = bytearray(168)
+	try:
+		fd = os.open("/dev/dvb/adapter%d/frontend%d" % (adaptor, frontend), os.O_RDONLY | os.O_NONBLOCK)
+	except OSError:
+		return False
+	try:
+		fcntl.ioctl(fd, cerere, info, True)
+	except (OSError, ValueError):
+		return False
+	finally:
+		os.close(fd)
+	return bool(struct.unpack_from("=I", info, 164)[0] & FE_CAN_MULTISTREAM)
 
 
 def hdsCabluSiTerestruDinNucleu(frontend):
@@ -1407,6 +1461,14 @@ class NimManager:
 				entry["frontend_device"] = entry["internally_connectable"] = None
 			if not ("multi_type" in entry):
 				entry["multi_type"] = {}
+			if ("multistream" not in entry and str(entry.get("type") or "").startswith("DVB-S")
+					and entry.get("frontend_device") is not None and entry.get("frontend_device") not in usb):
+				# MST9 (0.8.0): fara randul "Multistream:" (Dreambox DM900/DM920) se intreaba driverul (FE_CAN_MULTISTREAM);
+				# altfel cautarea sarea muxurile multistream (9E 12303 PLS) si scanarea manuala spunea ca tunerul nu poate
+				# alege fluxul. Cine scrie randul (HiSilicon, Vu+) ramane pe el.
+				entry["multistream"] = hdsMultistreamNucleu(entry["frontend_device"])
+				if entry["multistream"]:
+					print("[NimManager] slotul %d (%s): multistream dupa driver (FE_CAN_MULTISTREAM)" % (id, entry.get("name")))
 			self.nim_slots.append(NIM(slot = id, description = entry["name"], type = entry["type"], has_outputs = entry["has_outputs"], internally_connectable = entry["internally_connectable"], multi_type = entry["multi_type"], frontend_id = entry["frontend_device"], i2c = entry["i2c"], is_empty = entry["isempty"], multistream = entry.get("multistream", False), s2x = entry.get("s2x", False)))
 		from Components.HdsFbc import descopera
 		fbc = descopera(self.nim_slots)
@@ -1869,8 +1931,10 @@ def hdsSatelitiSalvatiLipsa(nimmgr):
 	"""0.7.7 (SAT, 16.11.2026; inlocuieste pastrarea TNB din 0.7.5): o pozitie folosita de un tuner de satelit (portul
 	DiSEqC al felului ales, LNB-ul din modul avansat) care nu mai e in satellites.xml se scoate de la tuner, inaintea
 	alegerilor din InitNimManager: portul devine "nimic conectat" (3601), LNB-ul satelitului nefolosit; restul tunerului
-	ramane. Satelitul nu mai intra in satList (un satelit sters de om, din editor, de mana sau printr-o lista instalata,
-	nu revine, ca in celelalte imagini), iar implicitul nu se mai pune tacut in locul lui (kegnkiwi, TNB). Cu satList
+	ramane. Satelitul nu mai intra in satList (un satelit sters de om nu revine), iar implicitul nu se mai pune tacut in
+	locul lui (kegnkiwi, TNB). 0.8.0 (KGW9): o pozitie folosita, lipsa din lista si nestearsa de om ajunge aici numai
+	cand nici lista imaginii nu o are: inainte, in readTransponders, HdsSatelitiImagine.uneste_la_pornire o pune la loc
+	(o lista de canale instalata dintr-un plugin nu mai scoate satelitii tunerelor). Cu satList
 	gol (satellites.xml lipsa sau stricat) nu se atinge nimic. Ce s-a scos se spune pe ecran dupa pornire
 	(_hdsSpuneScoase). Intoarce [(slot, cheie, pozitie)] scoase."""
 	nimmgr.hdsPozitiiPastrate = []

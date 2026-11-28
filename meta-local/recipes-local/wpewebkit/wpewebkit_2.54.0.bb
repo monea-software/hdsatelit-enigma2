@@ -23,7 +23,8 @@ LIC_FILES_CHKSUM = "file://Source/WebCore/LICENSE-LGPL-2.1;md5=a778a33ef338abbaf
 #   - 0006: cu WPE_DISABLE_HARDWARE_ACCELERATION procesul web nu mai deschide ecranul EGL (desenul e oricum pe
 #     procesor), deci merge si pe receptoare fara nicio biblioteca EGL; libEGL nu e legat direct (numai prin
 #     libepoxy, care il incarca la nevoie), de aceea EGL/GLES raman doar recomandate;
-#   - -O2 in locul lui -Os din distributie: fara JIT pe ARMv7, JavaScript merge prin interpretor.
+#   - -O2 in locul lui -Os din distributie: pe MIPS JavaScript merge prin interpretor, iar pe ARMv7 interpretorul ramane
+#     rezerva JIT-ului de baza (blocul JIT8 de la sfarsit).
 
 DEPENDS = " \
     bison-native glib-2.0-native gperf-native libxml2-native ninja-native ruby-native unifdef-native \
@@ -100,7 +101,7 @@ EXTRA_OECMAKE = " \
     -DENABLE_FTL_JIT=OFF \
 "
 
-# JavaScript fara JIT pe ARMv7 (ca in meta-webkit); Thumb2 da cod mai mic.
+# Thumb2 pe ARMv7: cod mai mic; JIT-ul de baza (blocul JIT8) are backend numai pentru Thumb2.
 ARM_INSTRUCTION_SET:armv7a = "thumb"
 ARM_INSTRUCTION_SET:armv7ve = "thumb"
 
@@ -184,7 +185,7 @@ SRC_URI:append:mipsarch = " file://0020-libpas-use-the-ARM32-pair-paths-on-every
 # are video HTML5 si Media Source Extensions prin GStreamer, decodate de placa receptorului (acelasi decodor ca la canal, dat
 # cu imprumut de enigma2: Components/HdsDecodorWeb.py). Blocul vine din stratul de proba meta-video (lotul hbbtv-video A si B,
 # pachetul r0.video3 probat pe Viper 4K V20: <video> si MSE pe placa, YouTube pentru televizor cu sunet). Totul e numai :arm,
-# deci pachetul mips32el (Vu+ Solo SE si celelalte MIPS, blocul NVM de sus) ramane neschimbat, fara video.
+# deci pachetele ARM nu schimba nimic pe MIPS; pe mips32el acelasi video il pune blocul YTS9 de la sfarsit.
 #   - GStreamer, video si MSE pornite; GL, MPEG-TS si WebRTC prin GStreamer oprite (Mali-450 nu compune cu GL, MPEG-TS nu
 #     cere nimic); EME (DRM) si sunetul web raman oprite;
 #   - 0008: GStreamerChecks.cmake cere componentele gl si mpegts numai cand optiunile lor sunt pornite (gst-plugins-base din
@@ -233,3 +234,148 @@ RDEPENDS:${PN}:append:arm = " \
     gstreamer1.0-plugins-good-id3demux \
     gstreamer1.0-plugins-bad-videoparsersbad \
 "
+
+# JIT8 (dupa 0.7.8): pe ARMv7 (Thumb2, hard-float) JavaScript-ul navigatorului merge cu JIT-ul de baza (Baseline),
+# pornit din fabrica; DFG si FTL raman oprite (DFG cade pe ARM pe 32 de biti, FTL nu exista acolo). In 2.54 comutatorul CMake nu
+# ajunge: PlatformEnable.h scoate JIT si DFG pentru JSVALUE32_64. Peticele 0022-0030 lasa backend-urile ARMv7 din arhiva sa se
+# compileze; 0031 repara put_by_val: pe ARMv7 registrul profilului era acelasi cu al handlerului (r9), iar procesul web cadea la
+# prima trecere pe calea lenta. HDS_REQUIRE_JIT opreste constructia daca biblioteca ar iesi tot fara JIT. Lansatorul
+# (hds-navigator) tine DFG oprit, limiteaza memoria codului la 8 MiB si trece singur pe interpretor dupa doua porniri la rand cu
+# procesul web cazut. Totul e numai :arm, deci JIT8 nu atinge pachetul mips32el (Vu+ Solo SE, Duo2; video pe MIPS: blocul YTS9)
+# (WebKit 2.54 nu mai are JIT pentru MIPS32). PR r0.video3.jit3 inlocuieste r0.video3 de mai sus: e mai mare pentru opkg
+# (feed_actualizare.compara), deci receptoarele ARM il primesc ca actualizare din feed, fara imagine noua.
+# JITD (25.11.2026): si treapta rapida (DFG) e compilata pe ARMv7. Cadea la primul cache de proprietati din codul DFG, fiindca
+# WebKit 309239@main ("[ARMv7] Disable JIT") scosese din DFGJITCompiler.cpp ramurile de 32 de biti (cache-ul ajungea NUL in calea
+# lenta); peticul 0033 le pune la loc. Peticul 0034 tine in afara DFG-ului de 32 de biti iteratia rapida pe Map / Set (for-of),
+# adaugata in WebKit dupa oprirea JIT-ului ARMv7: nodul ei MapStorage nu are backend pe 32 de biti si oprea procesul. Peticul 0035: baza lui
+# CheckPrivateBrand (apelul unei metode private) e speculata ca celula si pe 32 de biti; altfel DFG se oprea la verificarea muchiei.
+# Amandoua gasite cu probele JavaScriptCore ale WebKit (JSTests/stress) rulate pe jsc ARM in qemu. La rulare DFG ramane oprit din fabrica pe 32 de biti (useDFGJIT = 64 de biti): il porneste
+# lansatorul (hds-navigator de la r26, JSC_useDFGJIT=1), care coboara singur la treapta de baza si apoi la interpretor dupa doua
+# porniri la rand cu procesul web cazut. Lansatoarele dinainte pun JSC_useDFGJIT=0 sau nu il pun deloc, deci cu ele biblioteca
+# merge ca jit3. HDS_REQUIRE_DFG_JIT opreste constructia daca biblioteca ar iesi fara DFG. PR r0.video3.jit4.
+HDS_JIT_PATCHES:arm = " \
+    file://0022-JSC-allow-existing-ARMv7-JIT-backends-when-requested.patch \
+    file://0023-JSC-include-declarations-used-by-32-bit-JIT-headers.patch \
+    file://0024-JSC-guard-the-64-bit-only-BigInt-allocation-helper.patch \
+    file://0025-JSC-repair-ARM32-cache-header-and-slow-path-selection.patch \
+    file://0026-JSC-omit-DFG-cache-alternative-in-baseline-only-builds.patch \
+    file://0027-JSC-include-compilation-result-in-baseline-only-builds.patch \
+    file://0028-JSC-guard-64-bit-megamorphic-getter-cache-handlers.patch \
+    file://0029-JSC-include-baseline-registers-in-32-bit-DFG.patch \
+    file://0030-JSC-preserve-ARM32-DFG-string-and-generic-sort-paths.patch \
+    file://0031-JSC-ARMv7-keep-the-put_by_val-profile-out-of-the-handler-register.patch \
+    file://0033-JSC-restore-the-repatching-inline-caches-of-the-32-bit-DFG.patch \
+    file://0034-JSC-keep-the-Map-and-Set-fast-iteration-out-of-the-32-bit-DFG.patch \
+    file://0035-JSC-speculate-the-cell-base-of-CheckPrivateBrand-in-the-32-bit-DFG.patch \
+"
+SRC_URI:append:arm = " ${HDS_JIT_PATCHES}"
+EXTRA_OECMAKE:remove:arm = "-DENABLE_JIT=OFF -DENABLE_DFG_JIT=OFF"
+EXTRA_OECMAKE:append:arm = " -DENABLE_JIT=ON -DENABLE_DFG_JIT=ON"
+CXXFLAGS:append:arm = " -DHDS_REQUIRE_JIT=1 -DHDS_REQUIRE_DFG_JIT=1"
+PR:arm = "r0.video3.jit4"
+do_configure:prepend:arm() {
+    # backend-ul JIT pe 32 de biti e probat numai pe ARMv7 Thumb2 hard-float (TUNE_FEATURES al unui nucleu Cortex-A numeste
+    # nucleul, nu arhitectura: pe sf8008 "arm vfp cortexa15 neon vfpv4 callconvention-hard")
+    case " ${TUNE_FEATURES} " in
+        *" armv7a "*|*" armv7ve "*|*" cortexa5 "*|*" cortexa7 "*|*" cortexa8 "*|*" cortexa9 "*|*" cortexa12 "*|*" cortexa15 "*|*" cortexa17 "*) ;;
+        *) bbfatal "wpewebkit: JIT-ul de baza cere ARMv7 (TUNE_FEATURES: ${TUNE_FEATURES})" ;;
+    esac
+    case " ${TUNE_FEATURES} " in
+        *" callconvention-hard "*) ;;
+        *) bbfatal "wpewebkit: JIT-ul de baza cere hard-float (TUNE_FEATURES: ${TUNE_FEATURES})" ;;
+    esac
+    [ "${ARM_INSTRUCTION_SET}" = "thumb" ] || bbfatal "wpewebkit: JIT-ul de baza cere Thumb2 (ARM_INSTRUCTION_SET: ${ARM_INSTRUCTION_SET})"
+}
+# JITD: o biblioteca noua merita o incercare noua. La instalarea sau actualizarea pachetului se sterge numaratoarea rezervei JIT a
+# lansatorului; altfel treapta rapida (sau tot JIT-ul) ar ramane oprita pentru totdeauna pe un receptor unde procesul web a cazut de
+# doua ori cu biblioteca dinainte.
+pkg_postinst:${PN}:append:arm () {
+    rm -f $D/etc/enigma2/hds-navigator-jit-cazut
+}
+
+# YTS9 (YouTube din Aplicatii pe Vu+ Solo SE: pagina se deschidea, filmul nu pornea): acelasi video ca pe ARM (blocul YTV de
+# mai sus) si pe MIPS (tune mips32el: Vu+ Solo SE, Solo2, Duo2, Zero). Partea din imagine (imprumutul decodorului,
+# Components/HdsDecodorWeb.py, --autoplay) nu are nicio ramura de arhitectura; peticele 0008-0012 nu tin de placa;
+# dvbmediasink si pluginurile GStreamer de mai jos sunt deja in imaginea vusolose. Pe Solo SE placa (BCM7429) decodeaza H.264 si
+# AAC; VP9/AV1/HEVC le scoate quirk-ul, deci YouTube da H.264 + AAC. Totul numai :mipsarch, ca pachetele ARM sa ramana aceleasi
+# (semnaturile sarcinilor ARM neschimbate).
+PR:mipsarch = "r0.video3"
+DESCRIPTION:mipsarch = "WPE WebKit 2.54 construit numai cu API-ul WPEPlatform (fara libwpe, fara Wayland, fara DRM/GBM), \
+                        cu video HTML5 si MSE prin GStreamer, decodate de placa receptorului (fara GL, fara MPEG-TS, fara EME), \
+                        fara sunet web, WebGL, WebRTC si inspector; JavaScript prin interpretor (C_LOOP)."
+DEPENDS:append:mipsarch = " gstreamer1.0 gstreamer1.0-plugins-base"
+SRC_URI:append:mipsarch = " file://0008-GStreamer-require-gl-and-mpegts-only-when-their-options-are-on.patch \
+                            file://0009-GStreamer-add-the-hdsdvb-quirk-for-the-board-decoder-of-satellite-receivers.patch \
+                            file://0010-GStreamer-punch-the-video-hole-when-painting-without-compositing.patch \
+                            file://0011-GStreamer-hdsdvb-stops-decodebin3-at-the-caps-of-the-board-sinks.patch \
+                            file://0012-GStreamer-hdsdvb-board-sinks-preroll-e2-async-for-playbin3-and-MSE.patch"
+EXTRA_OECMAKE:remove:mipsarch = "-DUSE_GSTREAMER=OFF -DENABLE_VIDEO=OFF"
+EXTRA_OECMAKE:append:mipsarch = " \
+    -DUSE_GSTREAMER=ON \
+    -DENABLE_VIDEO=ON \
+    -DENABLE_MEDIA_SOURCE=ON \
+    -DUSE_GSTREAMER_GL=OFF \
+    -DUSE_GSTREAMER_MPEGTS=OFF \
+    -DUSE_GSTREAMER_WEBRTC=OFF \
+"
+RDEPENDS:${PN}:append:mipsarch = " \
+    gstreamer1.0-plugins-base-app \
+    gstreamer1.0-plugins-base-playback \
+    gstreamer1.0-plugins-base-typefindfunctions \
+    gstreamer1.0-plugins-base-audioconvert \
+    gstreamer1.0-plugins-base-audioresample \
+    gstreamer1.0-plugins-base-volume \
+    gstreamer1.0-plugins-good-isomp4 \
+    gstreamer1.0-plugins-good-matroska \
+    gstreamer1.0-plugins-good-audioparsers \
+    gstreamer1.0-plugins-good-id3demux \
+    gstreamer1.0-plugins-bad-videoparsersbad \
+"
+
+# MJT8 (Eduard 25.11.2026 10:39; adus peste blocul YTS9 de MJT1): JIT-ul de baza si pe MIPS32 (tune mips32el: Vu+ Solo SE, Duo2;
+# -march=mips32, release 1, hard-float, o32). WebKit a scos backend-ul MIPS in ianuarie 2024 (272866@main); 0032 il readuce in
+# 2.54: asamblorul si MacroAssembler-ul MIPS (numai instructiuni din release 1: fara seb/seh/ext/ins/rotr), offlineasm mips.rb
+# (LLInt in asamblare in locul lui C_LOOP), registrele JIT si YARR, apelurile o32 (zona de 16 octeti a argumentelor), salvarile
+# s0/s1. Peste el raman reparatiile generale pe 32 de biti 0022-0030 si 0031 (registrul profilului e schimbat numai pe ARMv7,
+# dar scoaterea registrului handlerului dintre registrele de lucru la put_by_val si verificarea ei se compileaza si pe MIPS;
+# 0032 e facut peste toata seria). DFG si FTL raman oprite, ca pe ARM.
+# HDS_REQUIRE_JIT opreste constructia daca biblioteca ar iesi tot fara JIT. Lansatorul (hds-navigator) trece singur pe
+# interpretor dupa doua porniri la rand cu procesul web cazut, ca pe ARM; pe MIPS interpretorul de rezerva (JSC_useJIT=0) e
+# LLInt-ul in asamblare, nu C_LOOP, iar intoarcerea completa e pachetul r0.video3. Totul numai :mipsarch: semnaturile ARM raman
+# aceleasi. PR r0.video3.mjit1 inlocuieste r0.video3 din blocul YTS9: e mai mare pentru opkg, deci receptoarele MIPS il primesc
+# ca actualizare din feed.
+SRC_URI:append:mipsarch = " \
+    file://0022-JSC-allow-existing-ARMv7-JIT-backends-when-requested.patch \
+    file://0023-JSC-include-declarations-used-by-32-bit-JIT-headers.patch \
+    file://0024-JSC-guard-the-64-bit-only-BigInt-allocation-helper.patch \
+    file://0025-JSC-repair-ARM32-cache-header-and-slow-path-selection.patch \
+    file://0026-JSC-omit-DFG-cache-alternative-in-baseline-only-builds.patch \
+    file://0027-JSC-include-compilation-result-in-baseline-only-builds.patch \
+    file://0028-JSC-guard-64-bit-megamorphic-getter-cache-handlers.patch \
+    file://0029-JSC-include-baseline-registers-in-32-bit-DFG.patch \
+    file://0030-JSC-preserve-ARM32-DFG-string-and-generic-sort-paths.patch \
+    file://0031-JSC-ARMv7-keep-the-put_by_val-profile-out-of-the-handler-register.patch \
+    file://0032-JSC-restore-the-MIPS32-assembler-LLInt-and-baseline-JIT.patch \
+"
+EXTRA_OECMAKE:remove:mipsarch = "-DENABLE_JIT=OFF"
+EXTRA_OECMAKE:append:mipsarch = " -DENABLE_JIT=ON -DENABLE_C_LOOP=OFF -DENABLE_WEBASSEMBLY=OFF"
+CXXFLAGS:append:mipsarch = " -DHDS_REQUIRE_JIT=1"
+DESCRIPTION:mipsarch = "WPE WebKit 2.54 construit numai cu API-ul WPEPlatform (fara libwpe, fara Wayland, fara DRM/GBM), \
+                        cu video HTML5 si MSE prin GStreamer, decodate de placa receptorului (fara GL, fara MPEG-TS, fara EME), \
+                        fara sunet web, WebGL, WebRTC si inspector; JavaScript prin LLInt in asamblare MIPS si JIT-ul de baza (fara DFG)."
+PR:mipsarch = "r0.video3.mjit1"
+
+# WVN1 (0.8.0, 25.11.2026; Eduard 10:31: Netflix, Disney+, HBO Max, SkyShowtime in navigatorul nostru, cu imaginea filmului
+# decodata de placa, fara Kodi): Encrypted Media Extensions prin singurul backend CDM al WPE 2.54 pe GStreamer, Thunder /
+# OpenCDM, cu biblioteca noastra libocdm (reteta hds-ocdm): Clear Key si Widevine (modulul adus de receptorul omului de la
+# Google, folosit prin interfata publica CDM, numai decriptarea). Decriptorul GStreamer al WebKit-ului (webkitthunder) lasa
+# cadrele comprimate, deci drumul spre dvbvideosink / dvbaudiosink ramane cel de la YouTube (quirk-ul hdsdvb, 0009-0012).
+# Numai :arm (schimba semnatura wpewebkit pe toate masinile ARM). Blocul e ultimul: PR:arm de aici castiga peste cel din JIT8 / JITD.
+# 0036: saltul (currentTime / pornirea de la o secunda data): pozitia ramane la tinta saltului pana cand decodorul placii arata
+# o imagine noua (vazut pe Octagon 25.11: Shaka a sarit iar inapoi la pozitia veche citita din decodor si filmul s-a oprit).
+SRC_URI:append:arm = " file://0036-GStreamer-hdsdvb-keep-the-position-at-the-seek-target-until-the-board-shows-a-new-picture.patch"
+DEPENDS:append:arm = " hds-ocdm"
+RDEPENDS:${PN}:append:arm = " hds-ocdm"
+EXTRA_OECMAKE:remove:arm = "-DENABLE_ENCRYPTED_MEDIA=OFF"
+EXTRA_OECMAKE:append:arm = " -DENABLE_ENCRYPTED_MEDIA=ON -DENABLE_THUNDER=ON"
+PR:arm = "r0.video3.jit4.wvn1"

@@ -601,7 +601,14 @@ class RecordTimerEntry(timer.TimerEntry, object):
 			# show notification. the 'id' will make sure that it will be
 			# displayed only once, even if more timers are failing at the
 			# same time. (which is very likely in case of disk fullness)
-			Notifications.AddPopup(text = _("Write error while recording. Disk full?\n"), type = MessageBox.TYPE_ERROR, timeout = 0, id = "DiskFullMessage")
+			# 0.8.0: cauza adevarata cand se poate afla (pe FAT32 un fisier se opreste la 4 GB cu discul aproape gol)
+			text = _("Write error while recording. Disk full?\n")
+			try:
+				from Components import HdsAnuntStocare
+				text = HdsAnuntStocare.mesajEroareScriere(self.Filename + ".ts")
+			except Exception:
+				pass
+			Notifications.AddPopup(text = text, type = MessageBox.TYPE_ERROR, timeout = 0, id = "DiskFullMessage")
 			# ok, the recording has been stopped. we need to properly note 
 			# that in our state, with also keeping the possibility to re-try.
 			# TODO: this has to be done.
@@ -612,6 +619,12 @@ class RecordTimerEntry(timer.TimerEntry, object):
 
 			if config.usage.show_message_when_recording_starts.value:
 				Notifications.AddPopup(text = text, type = MessageBox.TYPE_INFO, timeout = 3)
+			try:
+				# 0.8.0: pe FAT32, o data pe disc, anuntul cu limita de 4 GB a unei inregistrari
+				from Components import HdsAnuntStocare
+				HdsAnuntStocare.avertizeazaFat(os.path.dirname(self.Filename) or "/")
+			except Exception:
+				pass
 
 	# we have record_service as property to automatically subscribe to record service events
 	def setRecordService(self, service):

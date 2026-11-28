@@ -22,6 +22,7 @@ install_PYTHON = \
 	cadru_web.py \
 	captura_sigura.py \
 	calitate_imagine_web.py \
+	reglaje_imagine_web.py \
 	canale_web.py \
 	editor_canale_web.py \
 	cauta_setari_web.py \
@@ -45,6 +46,7 @@ install_PYTHON = \
 	mozaic_web.py \
 	despre_film_web.py \
 	sport_azi_web.py \
+	youtube_web.py \
 	ghid_internet_web.py \
 	screensaver_web.py \
 	egalizator_web.py \
@@ -69,6 +71,7 @@ install_PYTHON = \
 	parental_web.py \
 	disc_web.py \
 	jurnale_sistem_web.py \
+	ventilator_web.py \
 	canal_info_web.py \
 	retea_web.py \
 	unelte_retea_web.py \

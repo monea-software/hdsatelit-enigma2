@@ -12,7 +12,7 @@ def execute(option):
 	(_, scanner, files, session) = option
 	scanner.open(files, session)
 
-def mountpoint_choosen(option):
+def mountpoint_choosen(option, hotplug = False):
 	if option is None:
 		return
 
@@ -26,7 +26,11 @@ def mountpoint_choosen(option):
 
 	if not list:
 		from Screens.MessageBox import MessageBox
-		if access(mountpoint, F_OK|R_OK):
+		if hotplug:
+			# 0.8.0: un stick abia pus, fara filme, muzica sau poze, nu mai e intampinat cu o eroare; anuntul discului
+			# (Components/HdsAnuntStocare) spune ce stick e si ce se poate face cu el
+			print("no displayable files on", mountpoint)
+		elif access(mountpoint, F_OK|R_OK):
 			session.open(MessageBox, _("No displayable files on this medium found!"), MessageBox.TYPE_ERROR)
 		else:
 			print("ignore", mountpoint, "because its not accessible")
@@ -74,7 +78,7 @@ def partitionListChanged(action, device):
 				print("mountpoint", device.mountpoint)
 				print("description", device.description)
 				print("force_mounted", device.force_mounted)
-				mountpoint_choosen((device.description, device.mountpoint, global_session))
+				mountpoint_choosen((device.description, device.mountpoint, global_session), hotplug = True)
 		else:
 			print("main infobar is not execing... so we ignore hotplug event!")
 	else:

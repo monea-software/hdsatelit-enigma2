@@ -326,19 +326,50 @@ def rds(service, session=None):
 
 
 def _rds_din_loc(service):
-	"""{"text", "piesa", "rass"} de la extensia locului, sau None pentru orice alt serviciu. Un canal obisnuit n-are cale si iese pe loc."""
+	"""{"text", "piesa", "rass", "imagine"} de la extensia locului sau de la releul DAB din satelit, ori None pentru orice alt
+	serviciu. Un canal obisnuit n-are cale si iese pe loc. „imagine”: calea imaginii trimise de post (MOT SlideShow), sau "" cand
+	nu e niciuna sau setarea „Imaginile posturilor DAB” e pe Nu."""
 	try:
 		info = service.info() if service is not None else None
 		campuri = _info_text(info, "sServiceref").split(u":") if info is not None else []
 		if len(campuri) <= 10 or not campuri[10]:
 			return None
-		from Components.HdsLocuriLista import dateRadio
-		d = dateRadio(campuri[10])
+		d = _dab_din_releu(campuri[10])
+		if d is None:
+			from Components.HdsLocuriLista import dateRadio
+			d = dateRadio(campuri[10])
 		if not isinstance(d, dict):
 			return None
-		return {"text": _u(d.get("text") or u""), "piesa": _u(d.get("piesa") or u""), "rass": bool(d.get("rass"))}
+		return {"text": _u(d.get("text") or u""), "piesa": _u(d.get("piesa") or u""), "rass": bool(d.get("rass")),
+			"imagine": _imagine_aleasa(d.get("imagine"))}
 	except Exception:
 		return None
+
+
+def _dab_din_releu(cale):
+	"""Postul DAB / DAB+ din satelit, prin releul local (http://127.0.0.1:<port>/dab/<feed>/<SID>.ts): textul postului (DLS) si
+	imaginea lui, scrise de releu in dosarul postului (Hds/DabT2/dab/motor/pad.py). None pentru orice alta cale."""
+	try:
+		from Hds.DabT2.dab.motor import pad
+	except Exception:
+		return None
+	dosar = pad.dosar_din_cale(cale)
+	if dosar is None:
+		return None
+	return {"text": pad.text_din_dosar(dosar), "piesa": u"", "rass": False, "imagine": pad.imagine_din_dosar(dosar)}
+
+
+def _imagine_aleasa(cale):
+	"""Calea imaginii postului, daca exista si omul n-a oprit imaginile; altfel ""."""
+	if not cale or not isinstance(cale, str):
+		return u""
+	try:
+		from Components import HdsRadioSetari as S
+		if not S.valoare("imagini_dab"):
+			return u""
+	except Exception:
+		pass
+	return cale
 
 
 def _piesa_din_flux(service):

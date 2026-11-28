@@ -282,7 +282,7 @@ class NameserverSetup(Screen, ConfigListScreen, HelpableScreen):
 		self["config"].l.setList(self.list)
 
 	def ok(self):
-		HdsRetea.scrieDns([nameserver.value for nameserver in self.nameserverEntries], iNetwork)
+		HdsRetea.scrieDns([nameserver.value for nameserver in self.nameserverEntries], iNetwork, pastreaza=True)
 		self.close()
 
 	def run(self):

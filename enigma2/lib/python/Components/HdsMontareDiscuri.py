@@ -455,9 +455,30 @@ def lista(hm=None):
 		rez.append({"dispozitiv": dev, "nume": _numele(None, dev, eticheta), "eticheta": eticheta, "marime": _marime(dev),
 			"sistem": H.deviceFsType(dev), "stare": "montat", "loc": loc, "locuri": locuri, "ales": "", "alegeri": [],
 			"sd": sd, "poate_demonta": False, "poate_monta": False, "necunoscut": True})
+	_sfatDiscPrincipal(rez, hm, H)
 	for row in rez:
 		row["loc_afisat"] = getattr(H, "storagePathName", lambda p, d: p)(row.get("loc", ""), row.get("dispozitiv"))
 	return rez
+
+
+def _sfatDiscPrincipal(rez, hm, H):
+	"""0.8.0 (SBD1, hotararea coordonatorului 24.11): cand /media/hdd e tinut de un card SD si e conectat un disc adevarat
+	pe alt nume, randul discului spune ca il poate face disc principal (alege /media/hdd); nimic nu se muta singur."""
+	try:
+		cine = getattr(hm, "mediaPlaceOwner", None)
+		proprietar = cine(HDD) if cine is not None else None
+		if not proprietar or not H.isCardPartition(proprietar):
+			return
+		for row in rez:
+			dev = row.get("dispozitiv")
+			p = next((x for x in hm.partitions if getattr(x, "device", None) == dev), None)
+			# numai un text, nu muta nimic: si pentru discurile USB care se dau drept detasabile; numai cand hdd se poate alege
+			if (row.get("stare") == "montat" and not row.get("sd") and dev != proprietar and
+					any(c and c[0] == "hdd" for c in row.get("alegeri") or []) and
+					(row.get("loc") or "").rstrip("/") != HDD and p is not None):
+				row["sfat_hdd"] = True
+	except Exception as e:
+		_jurnal("sfatul discului principal: %r" % (e,))
 
 
 def textStare(rand):
@@ -468,9 +489,10 @@ def textStare(rand):
 		return _("Demontat. Poți scoate discul în siguranță.")
 	if rand["stare"] == "se_monteaza":
 		return _("Se montează...")
-	if rand.get("loc"):
-		return _("Montat în %s") % rand["loc"]
-	return _("Montat")
+	text = _("Montat în %s") % rand["loc"] if rand.get("loc") else _("Montat")
+	if rand.get("sfat_hdd"):
+		text += " " + _("Cardul ține acum /media/hdd. Dacă vrei înregistrările pe acest disc, alege pentru el /media/hdd; se schimbă la repornirea receptorului.")
+	return text
 
 
 # ------------------------------------------------------------------ cine foloseste discul
@@ -709,6 +731,12 @@ def _dupaFir(l, valoare, hm, acum):
 		valoare = valoare or {}
 		if not valoare.get("result"):
 			_termina(l, False, valoare.get("message") or _("Numele nu se poate schimba acum."))
+			return
+		if valoare.get("dupa_repornire"):
+			# 0.8.0 (SBD1): locul e tinut de card sau de discul de pornire; numele se schimba la pornirea urmatoare. Caile
+			# (inregistrari, programari, ghidul) nu se muta acum (numele ales e inca al cardului): le muta
+			# Harddisk.applyPendingPaths dupa repornire, cand discul primeste numele
+			_termina(l, True, valoare.get("message") or "")
 			return
 		p = _partitiaListata(hm, dispozitiv)
 		if p is None:

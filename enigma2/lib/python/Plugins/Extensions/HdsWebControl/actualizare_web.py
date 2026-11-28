@@ -106,7 +106,8 @@ def pachete(U, H, discuri, candidati=None):
 			"cod": cod,
 			"bun": cod == H.PACHET_BUN and not stick and not fara_loc,
 			"verdict": stick or (_t("Pe stick se poate numai citi") if fara_loc else "") or (
-				_t("Nu este imagine HD Satelit și nu o putem verifica") if c.get("fel") == "straina" else H.scurtRefuz(cod)),
+				(U.textScurtStrain(c) if hasattr(U, "textScurtStrain") else _t("Nu este imagine HD Satelit și nu o putem verifica"))
+				if c.get("fel") == "straina" else H.scurtRefuz(cod)),
 			"text": (_t("Pune stickul în calculator, schimbă-i numele într-unul fără spații și fără semne (de exemplu "
 				"HDSATELIT), apoi introdu-l din nou în receptor.") if stick else "") or (U.textStickCazut(c, cu_ok=False) if fara_loc else "") or text or "",
 			"repara": _t("Repară") if fara_loc and c.get("disc_reparat") else "",

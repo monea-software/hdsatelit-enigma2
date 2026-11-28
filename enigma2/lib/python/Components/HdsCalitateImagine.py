@@ -486,6 +486,10 @@ class DriverSimulat(object):
 
 # ---------------------------------------------------------------- setarile
 
+FEREASTRA_JOS, FEREASTRA_COLT = "jos", "colt"
+FERESTRE = ((FEREASTRA_JOS, N_("Jos, pe toată lățimea")), (FEREASTRA_COLT, N_("Mică, sus în stânga")))
+
+
 def initConfig():
 	"""config.hds_calitate: pornit, iesire_hdr si cate o alegere pentru fiecare reglaj al fiecarui profil
 	(<profil>_<reglaj>, numai reglajele clasei lui). Etichetele raman netraduse aici (configul se face inaintea limbii);
@@ -497,6 +501,8 @@ def initConfig():
 	config.hds_calitate = ConfigSubsection()
 	config.hds_calitate.pornit = ConfigYesNo(default=True)
 	config.hds_calitate.iesire_hdr = ConfigSelection(default=HDR_IMPLICIT, choices=list(IESIRI_HDR))
+	# where the TV screen sits: wide at the bottom (factory) or small in the top left corner (FAA7MED, forum 588 #3888)
+	config.hds_calitate.fereastra = ConfigSelection(default=FEREASTRA_JOS, choices=list(FERESTRE))
 	for profil in PROFILURI:
 		clasa = profil.split("_")[0]
 		for cheie in PE_CLASA[clasa]:

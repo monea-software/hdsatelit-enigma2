@@ -3221,7 +3221,9 @@ def reloadWindowStyles():
 # HDSatelit, skin_default); daca unul nu se poate citi (XML stricat), nu se schimba nimic: tema veche ramane, iar motivul
 # se da inapoi. Apoi culorile, fonturile, aliasurile, parametrii si stilul ferestrelor din fisierele noi (fara <output>:
 # rezolutia placii nu se atinge). Ecranele se fac din tema noua la urmatoarea deschidere; lista de canale TV (facuta o
-# data la pornire) se reface pe loc cand nu se vede (refaEcran). Bara canalului, facuta o data, ramane pana la repornire.
+# data la pornire) se reface pe loc cand nu se vede (refaEcran). RLD9: si bara canalului (InfoBar) si a doua bara
+# (SecondInfoBar), facute o data la pornire, se refac pe loc (refaEcranActiv), cu aceleasi surse: canalul, PiP-ul si
+# inregistrarile raman; o bara care cade la refacere ramane fara fereastra pana la repornirea interfetei, iar mesajul o spune.
 # Numele public reloadSkins() (chemat de pluginurile temelor straine) ramane cum era (False); reincarcarea merge numai
 # prin reincarcaTema() (tasta si web), cu _reincarcaFisiereleTemei.
 _ultimaReincarcare = [ "" ]
@@ -3344,17 +3346,71 @@ def refaEcran(ecran):
 		skinWarning("refaEcran cursorul: %s" % e)
 	return True
 
+def refaEcranActiv(ecran):
+	"""RLD9: ca refaEcran, si pentru un ecran care se vede sau ruleaza (bara canalului, facuta o data la pornire): se
+	ascunde, se reface din tema citita acum, randatoarele noi primesc execBegin (si iau locul celor vechi in
+	active_components) daca ecranul ruleaza, apoi se arata iar daca se vedea. Sursele (canalul, PiP, inregistrarile) sunt
+	aceleasi obiecte, deci starea barei ramane. True daca s-a refacut."""
+	if ecran is None or getattr(ecran, "instance", None) is None:
+		return False
+	seVedea = bool(getattr(ecran, "shown", False))
+	vechi = set(id(r) for r in getattr(ecran, "renderer", []))
+	# ascunderea si aratarea simple ale ecranului (Screen.hide/show), nu cele ale barei: InfoBarShowHide.hide ar ascunde si a
+	# doua bara, care apoi nu s-ar mai arata
+	try:
+		from Screens.Screen import Screen as _Ecran
+	except Exception:
+		_Ecran = None
+	simplu = _Ecran is not None and isinstance(ecran, _Ecran)
+	if seVedea:
+		_Ecran.hide(ecran) if simplu else ecran.hide()
+	try:
+		refacut = refaEcran(ecran)
+	finally:
+		if seVedea and getattr(ecran, "instance", None) is not None:
+			_Ecran.show(ecran) if simplu else ecran.show()
+	if refacut and getattr(ecran, "execing", False):
+		activ = getattr(ecran, "active_components", None)
+		if activ is not None:
+			activ[:] = [c for c in activ if id(c) not in vechi]
+		for r in list(getattr(ecran, "renderer", [])):
+			try:
+				r.execBegin()
+			except Exception as e:
+				skinWarning("refaEcranActiv execBegin: %s" % e)
+			if activ is not None:
+				activ.append(r)
+	return refacut
+
 def reincarcaTema():
 	"""Actiunea "Reincarca tema" (tasta din Configurarea butoanelor si butonul din /tema-tv): (bun, mesajul pentru om)."""
 	if not _reincarcaFisiereleTemei():
 		return False, _("Tema nu s-a reîncărcat, rămâne cea de dinainte. Motivul: %s") % ultimaEroareReincarcare()
 	refacuta = False
+	bara = None
 	try:
 		from Screens.InfoBar import InfoBar
 		if InfoBar.instance is not None:
 			refacuta = refaEcran(getattr(InfoBar.instance, "servicelist", None))
+			# RLD9: bara canalului si a doua bara, pe loc (o greseala o lasa nevazuta pana la repornire; mesajul o spune)
+			bara = True
+			for ecran in (InfoBar.instance, getattr(InfoBar.instance, "secondInfoBarScreen", None)):
+				if ecran is None:
+					continue
+				try:
+					if not refaEcranActiv(ecran):
+						bara = False
+				except Exception as e:
+					bara = False
+					skinWarning("reincarcarea temei, %s: %s" % (type(ecran).__name__, e))
 	except Exception as e:
 		skinWarning("reincarcarea temei, lista de canale: %s" % e)
+	if bara is False:
+		return True, _("Tema s-a reîncărcat, dar bara canalului nu s-a putut reface: apare din nou după repornirea interfeței.")
+	if bara:
+		if refacuta:
+			return True, _("Tema s-a reîncărcat, cu bara canalului și lista de canale. Ecranele se deschid cu ea de acum.")
+		return True, _("Tema s-a reîncărcat, cu bara canalului. Ecranele se deschid cu ea de acum.")
 	mesaj = _("Tema s-a reîncărcat. Ecranele se deschid cu ea de acum; bara canalului se schimbă după repornirea interfeței.")
 	if refacuta:
 		mesaj = _("Tema s-a reîncărcat, și lista de canale. Ecranele se deschid cu ea de acum; bara canalului se schimbă după repornirea interfeței.")

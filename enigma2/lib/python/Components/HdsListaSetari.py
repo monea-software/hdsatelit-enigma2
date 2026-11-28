@@ -40,7 +40,9 @@ def N_(text):
 
 
 # marimea fata de textul listei: "text" = ca Mărimea textului în lista de canale, altfel pasi de 10% (-3 = 70%, +5 = 150%)
-_PASI = (-3, -2, -1, 1, 2, 3, 4, 5)
+# +6 and +7 (170%) since 0.8.0 (tamiciav7, LinuxSat 232449 #501427)
+_PASI = (-3, -2, -1, 1, 2, 3, 4, 5, 6, 7)
+PROCENT_MINIM, PROCENT_MAXIM = 70, 170
 ALEGERI_MARIME = [("text", N_("Ca textul listei"))] + [(str(n), "%+d" % n) for n in _PASI]
 # marimea siglelor, procent din locul lor de acum (inaltimea randului, cel mult 96 de puncte latime)
 MARIMI_SIGLE = (("mica", N_("Mică"), 70), ("tema", N_("După temă"), 100), ("mare", N_("Mare"), 130),
@@ -192,11 +194,11 @@ except ImportError:
 
 
 def procent_marime(valoare, procent_text):
-	"""Procentul unei marimi separate: "text" -> cel al textului listei, altfel 100 + 10 * pas (70..150)."""
+	"""Procentul unei marimi separate: "text" -> cel al textului listei, altfel 100 + 10 * pas (70..170)."""
 	if valoare in (None, "", "text"):
 		return procent_text
 	try:
-		return min(150, max(70, 100 + 10 * int(valoare)))
+		return min(PROCENT_MAXIM, max(PROCENT_MINIM, 100 + 10 * int(valoare)))
 	except (TypeError, ValueError):
 		return procent_text
 

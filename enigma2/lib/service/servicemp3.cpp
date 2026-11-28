@@ -539,6 +539,36 @@ static GstElement *sinkFolosit(GstElement *playbin, const char *proprietate)
 	return sink;
 }
 
+/* The sound in a Bluetooth headset or speaker (Components/HdsBluetoothSunet.py): /var/run/hds-bt-sunet holds the ALSA
+   device of the connected headset (bluealsa:DEV=...,PROFILE=a2dp). It is read once, when the film starts (and when the
+   sound comes back from the equalizer). Without the file (the option is off, the headset is not connected) or without
+   alsasink it gives NULL and the sound goes to dvbaudiosink exactly as before. The name keeps "audiosink" (the errors of
+   the sinks are told apart by it) but not "dvbaudiosink": alsasink has no decoder time and no hardware delay. */
+static GstElement *sinkSunetBluetooth()
+{
+	FILE *f = fopen("/var/run/hds-bt-sunet", "r");
+	if (!f)
+		return NULL;
+	char dispozitiv[256];
+	size_t lung = fread(dispozitiv, 1, sizeof(dispozitiv) - 1, f);
+	fclose(f);
+	while (lung > 0 && (dispozitiv[lung - 1] == '\n' || dispozitiv[lung - 1] == '\r' || dispozitiv[lung - 1] == ' ' ||
+		dispozitiv[lung - 1] == '\t'))
+		--lung;
+	dispozitiv[lung] = 0;
+	if (!lung)
+		return NULL;
+	GstElement *sink = gst_element_factory_make("alsasink", "hdsbtaudiosink");
+	if (!sink)
+	{
+		eDebug("[eServiceMP3] alsasink is missing: the sound stays on the decoder of the receiver");
+		return NULL;
+	}
+	g_object_set(G_OBJECT(sink), "device", dispozitiv, NULL);
+	eDebug("[eServiceMP3] the sound goes to the Bluetooth headset (%s)", dispozitiv);
+	return sink;
+}
+
 /* Ceasul decodorului, fara avansul citirii subtitrarilor. Numai FirFilm foloseste
    aceasta varianta; realPlayPosition continua sa tina pozitia pentru interfata. */
 static pts_t pozitiePistaFilm(GstElement *pipeline)
@@ -991,7 +1021,10 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 			g_object_set (G_OBJECT (m_gst_playbin), "video-sink", sinkImagine, NULL);
 		else
 			eDebug("eServiceMP3::dvbvideosink is missing: playbin chooses the picture sink by rank");
-		GstElement *sinkSunet = gst_element_factory_make("dvbaudiosink", "dvbaudiosink");
+		/* a connected Bluetooth headset first (sinkSunetBluetooth), else the decoder of the receiver as before */
+		GstElement *sinkSunet = sinkSunetBluetooth();
+		if (!sinkSunet)
+			sinkSunet = gst_element_factory_make("dvbaudiosink", "dvbaudiosink");
 		if (sinkSunet)
 			g_object_set (G_OBJECT (m_gst_playbin), "audio-sink", sinkSunet, NULL);
 		else
@@ -1243,7 +1276,11 @@ void eServiceMP3::hdsEgalReaplica()
 		}
 	}
 	else
-		sink = gst_element_factory_make("dvbaudiosink", "dvbaudiosink");
+	{
+		sink = sinkSunetBluetooth();
+		if (!sink)
+			sink = gst_element_factory_make("dvbaudiosink", "dvbaudiosink");
+	}
 	eDebug("eServiceMP3::the sound changes to %s", vrea ? "the equalizer" : "the decoder of the receiver");
 	m_hds_egal_flux = vrea;
 	m_hds_egal_schimbare = true;
@@ -1344,6 +1381,43 @@ void eServiceMP3::startTimeout()
 	eDebug("eServiceMP3::the film has not started after %d s", ASTEPTARE_PORNIRE_MS / 1000);
 	refuza("pornire", "", "");
 	m_event((iPlayableService*)this, evUser+16);
+}
+
+/* 0.8.0 FX3: the detail of a stream error for sUser+15. Only the HTTP status code of the server
+   ("stream-error http-407", from souphttpsrc's debug text "Reason (407), URL: ...") or a failed name lookup
+   ("stream-error dns"); never the address, which can carry the password of the line. Components/HdsFilmRedare.py
+   turns it into the sentence on screen. */
+static std::string hdsDetaliuFlux(const GError *err, const gchar *debug)
+{
+	const char *surse[2] = { debug, err ? err->message : NULL };
+	for (int i = 0; i < 2; i++)
+	{
+		if (!surse[i])
+			continue;
+		std::string s(surse[i]);
+		size_t p = s.find("), URL");
+		if (p != std::string::npos && p >= 4 && s[p - 4] == '(' && isdigit((unsigned char)s[p - 3]) &&
+				isdigit((unsigned char)s[p - 2]) && isdigit((unsigned char)s[p - 1]))
+		{
+			int cod = atoi(s.substr(p - 3, 3).c_str());
+			if (cod >= 300 && cod <= 599)
+			{
+				char t[32];
+				snprintf(t, sizeof(t), "stream-error http-%d", cod);
+				return t;
+			}
+		}
+	}
+	for (int i = 0; i < 2; i++)
+	{
+		if (!surse[i])
+			continue;
+		std::string s(surse[i]);
+		std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+		if (s.find("resolv") != std::string::npos || s.find("name or service not known") != std::string::npos)
+			return "stream-error dns";
+	}
+	return "stream-error";
 }
 
 /* the reason of a refusal, kept for sUser+15; the first one stays */
@@ -2949,10 +3023,11 @@ void eServiceMP3::gstBusCall(GstBus *bus, GstMessage *msg)
 				fel = "format";
 			else if ( err->domain == GST_RESOURCE_ERROR )
 				fel = "fisier";
+			std::string detaliu_flux = m_sourceinfo.is_streaming ? hdsDetaliuFlux(err, debug) : std::string();
 			g_free (debug);
 			bool primul = m_refuz.empty();
 			refuza(fel, m_capuri_lipsa.empty() ? lipsa : m_capuri_lipsa,
-				m_sourceinfo.is_streaming ? "stream-error" : (err->message ? err->message : ""));
+				m_sourceinfo.is_streaming ? detaliu_flux : std::string(err->message ? err->message : ""));
 			if ( primul )
 			{
 				m_start_timer->stop();

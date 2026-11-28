@@ -23,6 +23,7 @@
 #include <lib/dvb_ci/dvbci_mmi.h>
 #include <lib/dvb_ci/dvbci_ccmgr.h>
 #include <lib/dvb_ci/hdscica.h>
+#include <lib/dvb_ci/hdscicale.h>
 #include <lib/dvb_ci/hdstsmux.h>
 #include <sys/stat.h>
 #include <lib/dvb/frontend.h>
@@ -235,11 +236,17 @@ void eDVBCIInterfaces::ciRemoved(eDVBCISlot *slot)
 	if (slot->use_count)
 	{
 		eDebug("CI Slot %d: removed... usecount %d", slot->getSlotID(), slot->use_count);
+		/* canalele ramase fara modul CI: inapoi la modulul de acces (lib/dvb_ci/hdscicale.h) */
+		std::vector<eDVBServicePMTHandler*> fara_ci;
 		for (PMTHandlerList::iterator it(m_pmt_handlers.begin());
 			it != m_pmt_handlers.end(); ++it)
 		{
 			if (it->cislot == slot) // remove the base slot
+			{
 				it->cislot = slot->linked_next;
+				if (!it->cislot)
+					fara_ci.push_back(it->pmthandler);
+			}
 			else if (it->cislot)
 			{
 				eDVBCISlot *prevSlot = it->cislot, *hSlot = it->cislot->linked_next;
@@ -264,7 +271,19 @@ void eDVBCIInterfaces::ciRemoved(eDVBCISlot *slot)
 		slot->user_mapped=false;
 		slot->removeService(0xFFFF);
 		recheckPMTHandlers();
+		for (std::vector<eDVBServicePMTHandler*>::iterator h(fara_ci.begin()); h != fara_ci.end(); ++h)
+			if (std::find(m_pmt_handlers.begin(), m_pmt_handlers.end(), *h) != m_pmt_handlers.end() && !isHandlerAssigned(*h))
+				(*h)->ciAPlecat();
 	}
+}
+
+bool hdsNumaiCi()
+{
+	eDVBCIInterfaces *ci = eDVBCIInterfaces::getInstance();
+	if (!ci || !ci->getNumOfSlots())
+		return false;
+	std::string valoare;
+	return !ePythonConfigQuery::getConfigValue(HDS_CI_NUMAI_CI_CHEIE, valoare) && hdsNumaiCiPornit(valoare);
 }
 
 static bool canDescrambleMultipleServices(int slotid)
@@ -525,6 +544,9 @@ void eDVBCIInterfaces::recheckPMTHandlers()
 										eDebug("(2)CISlot %d, usecount now %d", tmpci->getSlotID(), tmpci->use_count);
 										tmpci=tmpci->linked_next;
 									}
+									/* legat de modulul care are deja serviciul (fara gotPMT): si el iese de la modulul
+									   de acces cand canalul merge numai prin CI (lib/dvb_ci/hdscicale.h) */
+									it->pmthandler->ciALuatCanalul();
 								}
 							}
 							tmp_cislot=tmp_cislot->linked_next;
@@ -713,6 +735,7 @@ void eDVBCIInterfaces::gotPMT(eDVBServicePMTHandler *pmthandler)
 	if (it != m_pmt_handlers.end() && it->cislot)
 	{
 		eDVBCISlot *tmp = it->cislot;
+		bool trimis = false;
 		while(tmp)
 		{
 			eDebugCI("check slot %d %d %d", tmp->getSlotID(), tmp->running_services.empty(), canDescrambleMultipleServices(tmp->getSlotID()));
@@ -720,9 +743,14 @@ void eDVBCIInterfaces::gotPMT(eDVBServicePMTHandler *pmthandler)
 			{
 				tmp->setCaParameter(pmthandler);  // CI+: demux, program, pid-uri, tuner (OE-Alliance)
 				tmp->sendCAPMT(pmthandler);
+				trimis = true;
 			}
 			tmp = tmp->linked_next;
 		}
+		/* un canal pe o singura cale: cu optiunea pornita, serviciul dat modulului CI iese de la modulul de acces
+		   (si cand modulul l-a luat dupa zap, de pilda la pornirea lui) */
+		if (trimis)
+			pmthandler->ciALuatCanalul();
 	}
 }
 
@@ -1055,6 +1083,18 @@ void eDVBCIInterfaces::setCIPlusRouting(int slotid)
 		snprintf(cale, sizeof(cale), "/proc/stb/tsmux/ci%d_input", slotid);
 		if (!hdsCitesteSursa(cale, sursa_ci))
 			continue;
+		/* CI<n> al altui modul fara canale (autentificarea lui in curs): sursa tunerului e litera lui (hdstsmux.h) */
+		{
+			int n = hdsTsmuxSlotDinSursa(sursa);
+			eDVBCISlot *alt = n >= 0 ? getSlot(n) : 0;
+			std::string a_tunerului = hdsTsmuxSursaTunerului(sursa, alt && alt->use_count > 0, litera);
+			if (a_tunerului != sursa)
+			{
+				hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d autentificare CI+: input%d era %s (autentificarea altui modul), tinut minte %s",
+					slotid, tunernum, sursa.c_str(), a_tunerului.c_str());
+				sursa = a_tunerului;
+			}
+		}
 		setInputSource(tunernum, hdsTsmuxCi(slotid));
 		slot->setSource(litera);
 		slot->setCIPlusRoutingParameter(tunernum, sursa, sursa_ci);
@@ -1086,9 +1126,39 @@ void eDVBCIInterfaces::revertCIPlusRouting(int slotid)
 		char cale[64];
 		snprintf(cale, sizeof(cale), "/proc/stb/tsmux/ci%d_input", slotid);
 		hdsScrieSursa(cale, slot->getCIPlusRoutingCIInput());
+		/* doua module CI+ pe acelasi tuner (hdstsmux.h): CI<n> tinut minte al unui modul fara canale nu e sursa tunerului;
+		   daca celalalt modul se autentifica inca, fluxul trece prin el pana termina si el */
+		std::string inapoi = slot->getCIPlusRoutingInput();
+		int n = hdsTsmuxSlotDinSursa(inapoi);
+		eDVBCISlot *alt = n >= 0 ? getSlot(n) : 0;
+		int in_autentificare = -1, cu_canale = -1;
+		for (eSmartPtrList<eDVBCISlot>::iterator it(m_slots.begin()); it != m_slots.end(); ++it)
+		{
+			if ((eDVBCISlot *)it == slot)
+				continue;
+			if (cu_canale < 0 && it->use_count > 0 && it->current_tuner == tunernum)
+				cu_canale = it->getSlotID();
+			else if (in_autentificare < 0 && !it->use_count && !it->ciplusRoutingDone() && it->getCIPlusRoutingTunerNum() == tunernum)
+				in_autentificare = it->getSlotID();
+		}
 		snprintf(cale, sizeof(cale), "/proc/stb/tsmux/input%d", tunernum);
-		hdsScrieSursa(cale, slot->getCIPlusRoutingInput());
-		hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d autentificare CI+ gata: tunerul %d inapoi pe sursa lui", slotid, tunernum);
+		std::string acum;
+		bool acum_cu_canale = false;
+		if (cu_canale >= 0 && hdsCitesteSursa(cale, acum))
+		{
+			int na = hdsTsmuxSlotDinSursa(acum);
+			eDVBCISlot *sa = na >= 0 ? getSlot(na) : 0;
+			acum_cu_canale = sa && sa->use_count > 0;
+		}
+		inapoi = hdsTsmuxSursaInapoi(inapoi, alt && alt->use_count > 0, hdsTsmuxLitera(tunernum), in_autentificare, cu_canale,
+			acum_cu_canale);
+		if (inapoi.empty())
+			hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d autentificare CI+ gata: tunerul %d ramane pe modulul care a primit intre timp canale", slotid, tunernum);
+		else
+		{
+			hdsScrieSursa(cale, inapoi);
+			hdsjurnal::scrief("ci", hdsjurnal::INFO, "slot", "CI%d autentificare CI+ gata: tunerul %d inapoi pe sursa lui (%s)", slotid, tunernum, inapoi.c_str());
+		}
 	}
 	slot->setCIPlusRoutingDone();
 }

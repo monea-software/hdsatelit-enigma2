@@ -48,5 +48,6 @@ dvbciinclude_HEADERS = \
 	dvbci_session.h \
 	dvbci_ui.h \
 	hdscica.h \
+	hdscicale.h \
 	hdsdatetimeci.h \
 	hdstsmux.h

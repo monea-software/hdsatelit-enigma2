@@ -68,6 +68,9 @@ PRAG_DATE_BPS = 96000         # de la atat = vine fluxul: numai asa incepe masur
                               # cele doua praguri (cativa KB de fundal) o oprire nu incepe si nici nu se termina (pe receptorul de proba,
                               # cu fluxul servit chiar de receptor, traficul de fundal dadea 9 opriri false pe minut)
 PRAG_OPRIRE_S = 2.0           # fara date mai mult de atat (dupa ce au venit) = o oprire
+# HLS (.m3u8): the player fetches one segment (2-10 s of picture) in a burst and then nothing until the next one, so a
+# gap shorter than a segment is normal (AS211, Lanus: 93 false stops a day on live HLS that played fine)
+PRAG_OPRIRE_HLS_S = 12.0
 SERIE = 10                    # secundele din urma scrise in randul opririi
 MINUT_S = 60.0
 MINUTE_RAND = 5               # randul pe minut si fara nimic de vazut, o data la atatea minute
@@ -119,6 +122,18 @@ def gazdaPort(cale):
 		return "local:%s" % port if port else "local"
 	except Exception:
 		return "?"
+
+
+def pragOprire(cale):
+	"""Seconds without data that make a stop for this address: PRAG_OPRIRE_HLS_S for an HLS list, else PRAG_OPRIRE_S."""
+	try:
+		cale = unquote(cale or "").lower()
+		baza = cale.split("?", 1)[0].split("#", 1)[0]
+		if ".m3u8" in baza or cale.startswith("hls"):
+			return PRAG_OPRIRE_HLS_S
+	except Exception:
+		pass
+	return PRAG_OPRIRE_S
 
 
 def porturiDinTuner():
@@ -268,10 +283,11 @@ class Esantionare(object):
 	"""Debitul si opririle unui flux, din citirile /proc date de `citeste` (cale -> text) si procesele date de `procese`
 	(-> lista de pid). Nimic din enigma2: probele dau citiri false si ceasul."""
 
-	def __init__(self, ceas, citeste, procese=None):
+	def __init__(self, ceas, citeste, procese=None, prag_oprire=PRAG_OPRIRE_S):
 		self.ceas = ceas
 		self.citeste = citeste
 		self.procese = procese
+		self.prag_oprire = prag_oprire
 		self.t0 = ceas()
 		self.prev = None
 		self.serie = deque(maxlen=SERIE)
@@ -389,7 +405,7 @@ class Esantionare(object):
 		elif self.au_venit:
 			# inainte de primele date (legatura cu serverul) nu e o oprire: acolo raspunde randul "redarea n-a pornit"
 			self.zero_s += dt
-			if self.zero_s > PRAG_OPRIRE_S:
+			if self.zero_s > self.prag_oprire:
 				inceput = acum - self.zero_s
 				self.opriri += 1
 				m["opriri"] += 1
@@ -548,7 +564,7 @@ class Urmaritor(object):
 		self._rand("INFO", "flux pornit: %s | %s | %s" % (nume, tip, gp))
 		din_tuner = gp.startswith("local:") and gp[6:].isdigit() and int(gp[6:]) in porturiDinTuner()
 		if self._citeste is not None and not din_tuner:
-			self.curent["es"] = Esantionare(self.ceas, self._citeste, self._procese)
+			self.curent["es"] = Esantionare(self.ceas, self._citeste, self._procese, pragOprire(adresa))
 			if self.temporizator is not None:
 				self.temporizator.start()
 

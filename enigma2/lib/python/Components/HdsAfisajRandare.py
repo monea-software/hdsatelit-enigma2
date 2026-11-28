@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
 # SPDX-License-Identifier: GPL-2.0-only
 # Compozitii native din poze. Numai literele sunt rasterizate aici.
 
+import ctypes
 import hashlib
 import io
 import json
 import os
+import re
 import tempfile
 from collections import OrderedDict
 from functools import lru_cache
@@ -47,6 +50,102 @@ def manifest(marime):
 		return json.load(f)["screens"]
 
 
+# Textul de la dreapta la stanga (araba, persana, ebraica). Pillow leaga literele si le asaza de la dreapta numai cu
+# libraqm, pe care imaginea nu il are (Layout.BASIC: fiecare litera izolata, de la stanga la dreapta). Facem ce face
+# enigma2 pentru ecranul televizorului (lib/gdi/font.cpp, fribidi_log2vis): libfribidi (exista pe orice receptor) leaga
+# literele arabe in formele lor de prezentare si da sirul in ordinea vizuala, pe care Pillow il deseneaza asa cum e.
+_RTL = re.compile("[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]")
+# semnele de control bidi, ZWNJ/ZWJ si umplutura lam-alef (U+FEFF) nu au glife: dupa ordonare (legarea e hotarata)
+# nu se mai deseneaza
+_CONTROL = re.compile("[\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+# numarul cu unitatea (grade C/F) ramane intreg, de la stanga la dreapta, si in textul de la dreapta
+_UNITATE = re.compile(r"[-+]?[0-9]+(?:[.,][0-9]+)?\s?\u00b0[CF]")
+# semnele pe care le are ae_AlMateen.ttf (fontul "arab": araba, ASCII, Latin-1, "..."); persana si celelalte
+# alfabete merg pe DejaVuSansMono-Bold (spatiere fixa, mai rara la araba)
+_AE_ALMATEEN = re.compile("^[ -~\u00a0-\u00ff\u060c\u061b\u061f\u0621-\u063a\u0640-\u0652\u0660-\u066a\u066d\u2026"
+	"\u2066-\u2069]*$")
+_LATIN = re.compile("[A-Za-z\u00c0-\u024f\u0370-\u052f]")
+_FRIBIDI = []
+FRIBIDI_PAR_ON = 0x40
+FRIBIDI_PAR_RTL = 0x111
+
+
+def _fribidi():
+	if not _FRIBIDI:
+		try:
+			lib = ctypes.CDLL("libfribidi.so.0")
+			lib.fribidi_log2vis.restype = ctypes.c_byte
+			_FRIBIDI.append(lib)
+		except (OSError, AttributeError):
+			_FRIBIDI.append(None)
+	return _FRIBIDI[0]
+
+
+@lru_cache(maxsize=512)
+def vizual(text):
+	"""(sirul de desenat, de_la_dreapta): literele legate si in ordinea vizuala, ca pe ecranul televizorului; un text
+	fara litere de la dreapta ramane neschimbat. Fara libfribidi textul ramane in ordinea lui, fara semnele de control."""
+	text = str(text or "")
+	if not _RTL.search(text):
+		return text, False
+	lib = _fribidi()
+	rtl = None
+	if lib is not None:
+		n = len(text)
+		intrare = (ctypes.c_uint32 * n)(*[ord(c) for c in text])
+		iesire = (ctypes.c_uint32 * n)()
+		directie = ctypes.c_uint32(FRIBIDI_PAR_ON)
+		if lib.fribidi_log2vis(intrare, n, ctypes.byref(directie), iesire, None, None, None):
+			text = "".join(chr(c) for c in iesire)
+			rtl = directie.value == FRIBIDI_PAR_RTL
+	if rtl is None:
+		# prima litera tare hotaraste directia, ca la fribidi
+		for c in text:
+			if _RTL.match(c) or _LATIN.match(c):
+				rtl = bool(_RTL.match(c))
+				break
+	return _CONTROL.sub("", text), bool(rtl)
+
+
+def deLaDreapta(text):
+	return vizual(text)[1]
+
+
+# Alignments that follow the text direction: "left" from the code and "start" from the theme manifests (as in CSS).
+# Right-to-left text takes them to the right edge, left-to-right text stays on the left.
+ALINIERE_DUPA_TEXT = ("left", "start")
+
+
+def izoleazaUnitatea(text):
+	"""Isolate a number with its unit (23°C) with U+2066/U+2069 before vizual(), so it stays in one left-to-right
+	piece inside right-to-left text (the marks are not drawn). Text without right-to-left letters is returned as is."""
+	text = str(text or "")
+	if not _RTL.search(text) or "⁦" in text:
+		return text
+	return _UNITATE.sub(lambda m: "⁦" + m.group(0) + "⁩", text)
+
+
+class _Font(ImageFont.FreeTypeFont):
+	"""FreeTypeFont care masoara si deseneaza sirul vizual (vizual); restul randarii lucreaza cu textul logic."""
+
+	def getlength(self, text, *a, **k):
+		return ImageFont.FreeTypeFont.getlength(self, vizual(text)[0], *a, **k)
+
+	def getbbox(self, text, *a, **k):
+		return ImageFont.FreeTypeFont.getbbox(self, vizual(text)[0], *a, **k)
+
+	def getmask(self, text, *a, **k):
+		return ImageFont.FreeTypeFont.getmask(self, vizual(text)[0], *a, **k)
+
+	def getmask2(self, text, *a, **k):
+		return ImageFont.FreeTypeFont.getmask2(self, vizual(text)[0], *a, **k)
+
+
+def _incarca(cale, marime):
+	# Layout.BASIC si cand Pillow are libraqm: textul vine deja ordonat, raqm l-ar intoarce a doua oara
+	return _Font(cale, int(marime), layout_engine=ImageFont.Layout.BASIC)
+
+
 @lru_cache(maxsize=48)
 def font(familie, marime):
 	if familie in ("arab", "arab_mixt"):
@@ -54,18 +153,17 @@ def font(familie, marime):
 		nume = "DejaVuSansMono-Bold.ttf" if familie == "arab_mixt" else "ae_AlMateen.ttf"
 		cale = os.path.join(proiect, "data", "fonts", nume) if proiect else (
 			os.path.join("/usr/share/fonts", nume))
-		return ImageFont.truetype(cale, int(marime))
+		return _incarca(cale, marime)
 	nume = "NotoSansCondensed-SemiBold.ttf" if familie == "condensed" else "NotoSans-SemiBold.ttf"
-	return ImageFont.truetype(os.path.join(dosar(), "fonturi", nume), int(marime))
+	return _incarca(os.path.join(dosar(), "fonturi", nume), marime)
 
 
 def _familie(text, familie):
-	# Fontul arab instalat are glifele si tabelele de legare a literelor.
-	if any("\u0600" <= c <= "\u06ff" for c in str(text)):
-		# Titlul EPG poate avea alt alfabet decat eticheta tradusa.
-		if any(c.isalpha() and not "\u0600" <= c <= "\u06ff" for c in str(text)):
-			return "arab_mixt"
-		return "arab"
+	# ae_AlMateen are formele de prezentare (literele legate) ale arabei si latina de baza; ce nu are (persana,
+	# chirilica, alt alfabet din titlul EPG) merge pe DejaVuSansMono-Bold.
+	text = str(text)
+	if _RTL.search(text):
+		return "arab" if _AE_ALMATEEN.match(text) else "arab_mixt"
 	return familie
 
 
@@ -247,10 +345,11 @@ class Compozitie:
 		text = " ".join(str(text or "").split()).replace("\u2212", "-")
 		if not text:
 			return True
-		if any("\u0600" <= c <= "\u06ff" for c in text):
-			# Unitatea isi pastreaza ordinea literelor in textul de la dreapta.
-			for unitate in ("°C", "°F"):
-				text = text.replace(unitate, "\u2066" + unitate + "\u2069")
+		if _RTL.search(text):
+			text = izoleazaUnitatea(text)
+			if align in ALINIERE_DUPA_TEXT and deLaDreapta(text):
+				# textul de la dreapta se aliniaza la dreapta, ca pe ecranul televizorului
+				align = "right"
 		x, y, w, h = [int(round(v)) for v in box]
 		familie = _familie(text, familie)
 		f = font(familie, size)
@@ -287,7 +386,7 @@ class Compozitie:
 			px, py = int(round(stanga - b[0])), int(round(baza))
 			ink = self.d.textbbox((px, py), linie, font=f, anchor="ls")
 			self.audit.append(dict(text=linie, box=[x, y, w, h], ink=list(ink), principal=principal))
-			if principal and (":" in linie or "%" in linie):
+			if principal and (":" in linie or "%" in linie) and not _RTL.search(linie):
 				for j, litera in enumerate(linie):
 					culoare = C if litera == ":" else G if litera == "%" else color
 					self.d.text((px + f.getlength(linie[:j]), py), litera,
@@ -307,7 +406,10 @@ class Compozitie:
 			return None
 		maxim = int(maxim or h)
 		minim = int(min(maxim, minim or max(8, h // 4)))
+		text = izoleazaUnitatea(text)
 		marime, randuri = _asezareMare(text, familie, w, h, maxim, minim, linii)
+		if align in ALINIERE_DUPA_TEXT and deLaDreapta(text):
+			align = "right"
 		fam = _familie(text, familie)
 		f = font(fam, marime)
 		urca, _coboara, total = _cerneala(randuri, f, marime)
@@ -326,7 +428,7 @@ class Compozitie:
 			self.audit.append(dict(text=linie, box=[x, y, w, h], ink=list(bb), principal=principal,
 				marime=marime, mare=True))
 			ink = bb if ink is None else (min(ink[0], bb[0]), min(ink[1], bb[1]), max(ink[2], bb[2]), max(ink[3], bb[3]))
-			if principal and ":" in linie:
+			if principal and ":" in linie and not _RTL.search(linie):
 				for j, litera in enumerate(linie):
 					self.d.text((px + f.getlength(linie[:j]), py), litera, font=f,
 						fill=C if litera == ":" else color, anchor="ls")

@@ -16,6 +16,7 @@
 #include <lib/dvb/frontend.h>
 #include <lib/dvb/hdsgrad.h>
 #include <lib/dvb/hdsmultistream.h>
+#include <lib/dvb/hdsscanreguli.h>
 #include <lib/dvb/hdsterestru.h>
 #include <lib/dvb/hdsurmamotor.h>
 #include <lib/base/eenv.h>
@@ -35,6 +36,17 @@ static_assert((int)eDVBScan::hdsNitInformativ == (int)hdsretea::STEAG_NIT_INFORM
 #define SCAN_eDebugNoNewLine(x...) do { if (m_scan_debug) eDebugNoNewLine(x); } while(0)
 
 DEFINE_REF(eDVBScan);
+
+/* HDSatelit (0.8.0): rata de simboluri a unui transponder de satelit (simboluri/s), 0 la cablu, terestru sau necunoscuta;
+   pentru plafonul tabelelor (lib/dvb/hdsscanreguli.h, timpTabel) */
+static long hdsRataSatelit(iDVBFrontendParameters *p)
+{
+	int tip;
+	eDVBFrontendParametersSatellite sat;
+	if (!p || p->getSystem(tip) || tip != iDVBFrontend::feSatellite || p->getDVBS(sat))
+		return 0;
+	return (long)sat.symbol_rate;
+}
 
 /* HDSatelit (SC2, 15.11.2026): NIT-ul scanarii spune jurnalului cand vine prima sectiune, cu network_id (table_id_extension,
    octetii 3-4), version_number (octetul 5) si cate sectiuni are tabela (last_section_number + 1). Tabela se strange la fel
@@ -61,6 +73,9 @@ eDVBScan::eDVBScan(iDVBChannel *channel, bool usePAT, bool debug)
 	,m_pmt_running(false), m_abort_current_pmt(false), m_flags(0), m_num_new_services(-1)
 	,m_usePAT(usePAT), m_scan_debug(debug), m_show_add_tsid_onid_check_failed_msg(true)
 {
+	m_hds_cautare = false;  /* pornita de start(); actualizarea din fundal de la zap (pmt.cpp) nu citeste VCT-ul */
+	m_hds_psip_t0 = 0;
+	m_hds_tp_cu_sdt = false;
 	if (m_channel->getDemux(m_demux))
 		SCAN_eDebug("scan: failed to allocate demux!");
 	m_channel->connectStateChange(sigc::mem_fun(*this, &eDVBScan::stateChange), m_stateChanged_connection);
@@ -212,6 +227,22 @@ RESULT eDVBScan::nextChannel()
 
 	m_ready = 0;
 
+	/* HDSatelit (0.8.0): VCT-ul transponderului de dinainte (cititorul, plafonul, sectiunile), inainte de orice iesire */
+	hdsOpresteVct();
+	m_hds_vct.goleste();
+	m_hds_tp_cu_sdt = false;
+	hdsOpresteNitAlt();
+	m_hds_nit_alt_sectiuni.clear();
+
+	/* HDSatelit (0.8.0): PMT-urile ramase de la transponderul de dinainte (pierdut in timpul tabelelor: semnalul cazut si
+	   reacordarea esuata) nu se mai citesc pe cel nou. Pana acum ramaneau in lista, cu m_pmt_running pornit: pe
+	   transponderul urmator se cautau PMT-urile vechi pe PID-urile lor (cate un plafon fiecare), iar cele noi de dinaintea
+	   iteratorului vechi erau sarite, deci canale amestecate sau lipsa. */
+	m_pmts_to_read.clear();
+	m_pmt_in_progress = m_pmts_to_read.end();
+	m_pmt_running = false;
+	m_abort_current_pmt = false;
+
 	m_pat_tsid = eTransportStreamID();
 
 		/* check what we need */
@@ -226,6 +257,23 @@ RESULT eDVBScan::nextChannel()
 
 	if (m_usePAT)
 		m_ready_all |= readyPAT;
+
+	/* AMRZ (24.11.2026, masurat pe ZGEMMA H8.2H Plus, 13E): ce a adus NIT other (hdsSatelitDinNit) intra in coada abia acum, dupa
+	   lista si NIT-ul actual. Pusa pe loc (in fata cozii) intrarea NIT other schimba ordinea intregii cautari: pe tunerele care
+	   isi aleg singure sistemul varianta ei prindea prima si lista pierdea parametrii buni (12673 V DVB-S2 8PSK 30000 a ajuns
+	   DVB-S QPSK 29900 in lamedb), iar actualizarile din NIT-ul actual (rolloff, FEC, frecventa) cadeau pe alte intrari (7
+	   transpondere pe 13E). addChannelToScan sare acum ce s-a prins, ce n-a avut semnal cu aceiasi parametri si variantele
+	   purtatorilor prinse; restul (purtatoare noi, ca 11470 V 33000 16APSK) se incearca la sfarsit. */
+	if (m_ch_toScan.empty() && !m_hds_nit_alt_amanate.empty())
+	{
+		std::list<std::pair<eDVBChannelID, ePtr<iDVBFrontendParameters> > > amanate;
+		amanate.swap(m_hds_nit_alt_amanate);
+		for (std::list<std::pair<eDVBChannelID, ePtr<iDVBFrontendParameters> > >::iterator a = amanate.begin();
+				a != amanate.end(); ++a)
+			addChannelToScan(a->first, a->second);
+		SCAN_eDebug("[eDVBScan] NIT other la sfarsit: %d intrari tinute, %d de cautat", (int)amanate.size(),
+			(int)m_ch_toScan.size());
+	}
 
 	if (m_ch_toScan.empty())
 	{
@@ -337,7 +385,8 @@ RESULT eDVBScan::startFilter()
 		if (m_ready_all & readyPAT)
 		{
 			m_PAT = new eTable<ProgramAssociationSection>(m_scan_debug);
-			if (m_PAT->start(m_demux, eDVBPATSpec(4000)))
+			/* plafonul PAT-ului creste la ratele mici (lib/dvb/hdsscanreguli.h, timpTabel) */
+			if (m_PAT->start(m_demux, eDVBPATSpec(hdsscanreguli::timpTabel(4000, hdsRataSatelit(m_ch_current)))))
 				return -1;
 			CONNECT(m_PAT->tableReady, eDVBScan::PATready);
 		}
@@ -359,8 +408,127 @@ RESULT eDVBScan::startFilter()
 				return -1;
 			CONNECT(m_BAT->tableReady, eDVBScan::BATready);
 		}
+
+		/* HDSatelit (0.8.0): VCT-ul ATSC, odata cu PAT-ul; nu intra in m_ready_all pana nu vine o sectiune PSIP buna */
+		hdsPornestePsip();
+		/* HDSatelit (0.8.0): NIT-ul altor retele, la cautarea in retea pe satelit; nu intra in m_ready_all */
+		hdsPornesteNitAlt();
 	}
 	return 0;
+}
+
+/* HDSatelit (0.8.0): VCT-ul ATSC cu numele canalelor americane (lib/dvb/hdsvct.h). Cititorul brut pe PID-ul PSIP (0x1FFB,
+   tabelele 0xC0-0xCF) porneste odata cu PAT-ul, numai la cautarea pornita cu start(), pe satelit, cablu si terestru. Un
+   transponder fara PSIP (Europa) nu asteapta nimic in plus: readyVCT intra in m_ready_all numai la prima sectiune MGT sau
+   VCT buna, iar de acolo VCT-ul are hdsvct::RAGAZ_MS (mai mult la ratele mici) sa vina intreg. Un cititor care nu
+   porneste (filtre epuizate) lasa cautarea ca inainte, fara nume din VCT. */
+void eDVBScan::hdsPornestePsip()
+{
+	if (!m_hds_cautare || m_hds_psip || !m_demux)
+		return;
+	ePtr<iDVBSectionReader> cititor;
+	if (m_demux->createSectionReader(eApp, cititor) || !cititor)
+		return;
+	eDVBSectionFilterMask masca;
+	memset(&masca, 0, sizeof(masca));
+	masca.pid = hdsvct::PID_PSIP;
+	masca.flags = eDVBSectionFilterMask::rfCRC;
+	masca.data[0] = 0xC0;
+	masca.mask[0] = 0xF0;
+	cititor->connectRead(sigc::mem_fun(*this, &eDVBScan::hdsSectiunePsip), m_hds_psip_conn);
+	if (cititor->start(masca))
+	{
+		m_hds_psip_conn = 0;
+		return;
+	}
+	m_hds_psip = cititor;
+	m_hds_psip_t0 = hdsjurnal::monotonMs();
+}
+
+/* cititorul si plafonul VCT oprite (sectiunile stranse raman, pentru nume, pana la transponderul urmator) */
+void eDVBScan::hdsOpresteVct()
+{
+	if (m_hds_psip)
+		m_hds_psip->stop();
+	m_hds_psip = 0;
+	m_hds_psip_conn = 0;
+	if (m_hds_vct_plafon)
+		m_hds_vct_plafon->stop();
+}
+
+void eDVBScan::hdsSectiunePsip(const __u8 *data)
+{
+	/* tamponul cititorului are hdsvct::MAX_SECTIUNE octeti; lungimea si CRC-ul le verifica hdsvct */
+	int r = m_hds_vct.adauga(data, hdsvct::MAX_SECTIUNE, (long)(hdsjurnal::monotonMs() - m_hds_psip_t0));
+	if (r & hdsvct::Colector::COMPLET)
+	{
+		SCAN_eDebug("[eDVBScan] VCT %02x intreg: TSID %04x, %d canale", m_hds_vct.tabel(), m_hds_vct.tsid(),
+			(int)m_hds_vct.canale().size());
+		/* intai cititorul oprit, apoi transponderul poate trece mai departe; dupa channelDone nimic */
+		hdsOpresteVct();
+		hdsjscan::tabel(m_hds_jurnal, hdsjscan::TABEL_VCT, 0);
+		m_ready_all |= readyVCT;
+		m_ready |= readyVCT | validVCT;
+		channelDone();
+		return;
+	}
+	if (r & hdsvct::Colector::ARMAT)
+	{
+		m_ready_all |= readyVCT;
+		if (!m_hds_vct_plafon)
+		{
+			m_hds_vct_plafon = eTimer::create(eApp);
+			CONNECT(m_hds_vct_plafon->timeout, eDVBScan::hdsVctPlafon);
+		}
+		m_hds_vct_plafon->start(hdsscanreguli::timpTabel(hdsvct::RAGAZ_MS, hdsRataSatelit(m_ch_current)), true);
+	}
+}
+
+/* VCT-ul n-a venit intreg in plafon: transponderul se termina fara el */
+void eDVBScan::hdsVctPlafon()
+{
+	SCAN_eDebug("[eDVBScan] VCT neintreg in %d ms", hdsscanreguli::timpTabel(hdsvct::RAGAZ_MS, hdsRataSatelit(m_ch_current)));
+	hdsOpresteVct();
+	hdsjscan::tabel(m_hds_jurnal, hdsjscan::TABEL_VCT, -1);
+	m_ready |= readyVCT;
+	channelDone();
+}
+
+/* canalul din VCT-ul intreg al serviciului sid din acest flux (hdsvct::canalPentru), NULL daca nu e */
+const hdsvct::Canal *eDVBScan::hdsCanalVct(int sid)
+{
+	if (!m_hds_vct.complet())
+		return 0;
+	return hdsvct::canalPentru(m_hds_vct.canale(), sid, m_hds_vct.tsid(), m_pat_tsid.get());
+}
+
+/* La sfarsitul transponderului, serviciile lui fara nume din SDT (gasite numai in PAT/PMT, cu numele facut din frecventa,
+   sau cu numele din SDT gol) iau numele din VCT (hdsvct::vctCastiga); un nume adevarat din SDT ramane. Numarul canalului
+   (major.minor) ramane numai in jurnal: lista de canale n-are camp pentru el, iar in nume ar schimba ordinea alfabetica si
+   numele stiut de om. */
+void eDVBScan::hdsNumeleDinVct()
+{
+	if (!m_hds_vct.complet() || !m_chid_current)
+		return;
+	for (std::map<eServiceReferenceDVB, ePtr<eDVBService> >::iterator s = m_new_services.begin(); s != m_new_services.end(); ++s)
+	{
+		eDVBChannelID chid;
+		s->first.getChannelID(chid);
+		if (!(chid == m_chid_current))
+			continue;
+		int sid = s->first.getServiceID().get();
+		const hdsvct::Canal *c = hdsCanalVct(sid);
+		if (!c)
+			continue;
+		std::string nume = hdsvct::numeCanal(*c);
+		SCAN_eDebug("[eDVBScan] VCT: SID %04x canalul %d.%d '%s'%s", sid, c->major, c->minor, nume.c_str(),
+			c->ascuns ? " (ascuns)" : "");
+		if (nume.empty() || !hdsvct::vctCastiga(m_sdt_services.count(s->first) > 0, s->second->m_service_name))
+			continue;
+		s->second->m_service_name = nume;
+		s->second->genSortName();
+		m_hds_nume_vct[s->first] = !m_hds_tp_cu_sdt;
+	}
 }
 
 void eDVBScan::SDTready(int err)
@@ -375,7 +543,7 @@ void eDVBScan::SDTready(int err)
 			// PAT si SDT pot avea TSID diferit. Reluam doar SDT actual.
 			// Fara filtrul TSID, o a doua eroare nu mai reia citirea.
 			eDVBTableSpec fallback = eDVBSDTSpec();
-			fallback.timeout = 10000;
+			fallback.timeout = hdsscanreguli::timpTabel(10000, hdsRataSatelit(m_ch_current));
 			SCAN_eDebug("SDT pentru TSID %04x lipseste, reluam fara TSID",
 				previous.tidext);
 			m_SDT = new eTable<ServiceDescriptionSection>(m_scan_debug);
@@ -568,7 +736,7 @@ void eDVBScan::PMTready(int err)
 	}
 	if (err == -1) // timeout or removed by sdt
 	{
-		hdsjscan::pmtLipsa(m_hds_jurnal);  /* PMT-ul care n-a venit in plafonul lui (4 s) sau scos de SDT (SC2) */
+		hdsjscan::pmtLipsa(m_hds_jurnal);  /* PMT-ul care n-a venit in plafonul lui (4 s, mai mult la ratele mici) sau scos de SDT */
 		m_pmts_to_read.erase(m_pmt_in_progress++);
 	}
 	else if (m_pmt_running)
@@ -580,7 +748,8 @@ void eDVBScan::PMTready(int err)
 	}
 
 	if (m_pmt_in_progress != m_pmts_to_read.end())
-		m_PMT->start(m_demux, eDVBPMTSpec(m_pmt_in_progress->second.pmtPid, m_pmt_in_progress->first, 4000));
+		m_PMT->start(m_demux, eDVBPMTSpec(m_pmt_in_progress->second.pmtPid, m_pmt_in_progress->first,
+			hdsscanreguli::timpTabel(4000, hdsRataSatelit(m_ch_current))));
 	else
 	{
 		m_PMT = 0;
@@ -729,9 +898,19 @@ int eDVBScan::sameChannel(iDVBFrontendParameters *ch1, iDVBFrontendParameters *c
 	int diff;
 	if (ch1->calculateDifference(ch2, diff, exact))
 		return 0;
-	if (diff < 4000) // more than 4mhz difference?
-		return 1;
-	return 0;
+	/* HDSatelit (0.8.0): pe satelit frecventele trebuie sa fie in fereastra ratei mai mici (lib/dvb/hdsscanreguli.h,
+	   fereastraUnireKhz): doua purtatoare inguste la 1 MHz una de alta nu mai sunt unite; de la 6 MS/s fereastra e 4 MHz,
+	   ca inainte. NIT9: frecventa si rata se judeca separat (aceeasiIntrare), nu prin suma lor sub 4000: 29900 fata de
+	   30000 kS/s pe aceeasi frecventa e aceeasi intrare */
+	int a, b;
+	eDVBFrontendParametersSatellite p, q;
+	if (!ch1->getSystem(a) && !ch2->getSystem(b) && a == iDVBFrontend::feSatellite && b == iDVBFrontend::feSatellite &&
+		!ch1->getDVBS(p) && !ch2->getDVBS(q))
+		return hdsscanreguli::aceeasiIntrare(diff, (long)p.frequency, (long)q.frequency, (long)p.symbol_rate,
+			(long)q.symbol_rate) ? 1 : 0;
+	if (diff >= 4000) // more than 4mhz difference?
+		return 0;
+	return 1;
 }
 
 /* Un multiplex terestru prins pe o frecventa: aceeasi frecventa cu celalalt sistem nu se mai incearca (cautarea fara
@@ -778,6 +957,392 @@ static bool hdsAltaVarianta(iDVBFrontendParameters *prins, iDVBFrontendParameter
 		&& p.t2mi_plp_id == q.t2mi_plp_id;
 }
 
+/* HDSatelit (0.8.0): ce stie scanarea si lista de canale despre un transponder de satelit (lib/dvb/hdsscanreguli.h) */
+static hdsscanreguli::Vazut hdsVazut(iDVBFrontendParameters *p)
+{
+	int tip;
+	eDVBFrontendParametersSatellite sat;
+	if (!p || p->getSystem(tip) || tip != iDVBFrontend::feSatellite || p->getDVBS(sat))
+		return hdsscanreguli::nevazut();
+	return hdsscanreguli::vazut((long)sat.frequency, sat.polarisation, (long)sat.symbol_rate);
+}
+
+static hdsscanreguli::Vazut hdsVazutInLista(iDVBChannelList *db, const eDVBChannelID &chid)
+{
+	ePtr<iDVBFrontendParameters> p;
+	if (!db || db->getChannelFrontendData(chid, p) || !p)
+		return hdsscanreguli::nevazut();
+	return hdsVazut(p);
+}
+
+/* HDSatelit (0.8.0): continutul SDT-ului de acum (fiecare serviciu cu SID-ul, tipul si numele, in ordinea SID), ca doua
+   prinderi cu acelasi TSID si ONID sa se poata deosebi: acelasi continut e acelasi flux */
+std::string eDVBScan::hdsContinutSdt()
+{
+	std::map<unsigned short, std::string> servicii;
+	if (!m_SDT)
+		return std::string();
+	std::vector<ServiceDescriptionSection*>::const_iterator i;
+	for (i = m_SDT->getSections().begin(); i != m_SDT->getSections().end(); ++i)
+	{
+		const ServiceDescriptionList &lista = *(*i)->getDescriptions();
+		for (ServiceDescriptionConstIterator s(lista.begin()); s != lista.end(); ++s)
+		{
+			std::string text;
+			for (DescriptorConstIterator d = (*s)->getDescriptors()->begin(); d != (*s)->getDescriptors()->end(); ++d)
+				if ((*d)->getTag() == SERVICE_DESCRIPTOR)
+				{
+					ServiceDescriptor &sd = (ServiceDescriptor&)**d;
+					char tip[8];
+					snprintf(tip, sizeof(tip), "%d:", sd.getServiceType());
+					text = tip + sd.getServiceProviderName() + "/" + sd.getServiceName();
+				}
+			servicii[(*s)->getServiceId()] = text;
+		}
+	}
+	std::string continut;
+	for (std::map<unsigned short, std::string>::const_iterator s = servicii.begin(); s != servicii.end(); ++s)
+	{
+		char sid[8];
+		snprintf(sid, sizeof(sid), "%04x=", s->first);
+		continut += sid + s->second + "\n";
+	}
+	return continut;
+}
+
+/* HDSatelit (0.8.0): acelasi TSID si ONID pe mai multe transpondere ale aceluiasi satelit (de pilda 55.6W in banda C:
+   3925 V, 4015 V, 4050 V). Cu ONID-ul valid namespace-ul nu are frecventa, deci al doilea transponder il suprascria pe
+   primul in lista (canalele unuia disparute sau pornite pe celalalt). Acum transponderul prins primul ramane pe namespace-ul
+   de pana acum, iar al doilea primeste namespace-ul cu frecventa (ca transponderele cu ONID invalid), numai la coliziune
+   adevarata (hdsscanreguli::namespaceCuFrecventa). Fara coliziune totul ramane exact ca inainte (Europa: aceleasi
+   referinte). La sfarsit hdsColiziuniLaSfarsit da namespace-ul de pana acum transponderului pe care lista il avea deja. */
+eDVBNamespace eDVBScan::hdsNamespaceLaColiziune(eDVBNamespace ns, eOriginalNetworkID onid, eTransportStreamID tsid,
+	unsigned long hash)
+{
+	/* numai namespace-ul fara frecventa (ONID valid) poate avea coliziuni; cel cu frecventa e deja unic */
+	if (!(hash & 0xFFFF) || (unsigned int)ns.get() != (unsigned int)(hash & ~0xFFFFUL))
+		return ns;
+	hdsscanreguli::Vazut acum = hdsVazut(m_ch_current);
+	if (!acum.exista)
+		return ns;
+	eDVBNamespace ns_frecventa((int)(unsigned int)hash);
+	eDVBChannelID orb(ns, tsid, onid), cu_frecventa(ns_frecventa, tsid, onid);
+	std::map<eDVBChannelID, ePtr<iDVBFrontendParameters> >::const_iterator in_cautare = m_new_channels.find(orb);
+	hdsscanreguli::Vazut vazut_cautare = in_cautare != m_new_channels.end() ? hdsVazut(in_cautare->second) :
+		hdsscanreguli::nevazut();
+	std::map<eDVBChannelID, std::string>::const_iterator continut = m_hds_continut.find(orb);
+	bool acelasi_continut = continut != m_hds_continut.end() && continut->second == hdsContinutSdt();
+	eDVBDB *db = eDVBDB::getInstance();
+	hdsscanreguli::Vazut lista_orb = hdsVazutInLista(db, orb);
+	bool lista_frecventa = hdsVazutInLista(db, cu_frecventa).exista;
+	if (!hdsscanreguli::namespaceCuFrecventa(acum, vazut_cautare, acelasi_continut, lista_orb, lista_frecventa))
+		return ns;
+	eDebug("[eDVBScan] TSID %04x ONID %04x e deja pe alt transponder: %ld %d primeste namespace-ul %08x",
+		tsid.get(), onid.get(), acum.frecventa, acum.polarizare, (unsigned int)ns_frecventa.get());
+	if (vazut_cautare.exista)
+	{
+		std::list<eDVBChannelID> &grup = m_hds_coliziuni[orb];
+		if (std::find(grup.begin(), grup.end(), cu_frecventa) == grup.end())
+			grup.push_back(cu_frecventa);
+	}
+	return ns_frecventa;
+}
+
+/* muta transponderul si serviciile lui gasite in aceasta cautare de pe un (namespace, TSID, ONID) pe altul */
+void eDVBScan::hdsMutaCanal(const eDVBChannelID &din, const eDVBChannelID &spre)
+{
+	std::map<eDVBChannelID, ePtr<iDVBFrontendParameters> >::iterator c = m_new_channels.find(din);
+	if (c != m_new_channels.end())
+	{
+		ePtr<iDVBFrontendParameters> p = c->second;
+		m_new_channels.erase(c);
+		m_new_channels[spre] = p;
+	}
+	std::map<eDVBChannelID, ePyObjectWrapper>::iterator t = m_tuner_data.find(din);
+	if (t != m_tuner_data.end())
+	{
+		ePyObjectWrapper w = t->second;
+		m_tuner_data.erase(t);
+		m_tuner_data.insert(std::pair<eDVBChannelID, ePyObjectWrapper>(spre, w));
+	}
+	std::list<std::pair<eServiceReferenceDVB, ePtr<eDVBService> > > mutate;
+	for (std::map<eServiceReferenceDVB, ePtr<eDVBService> >::iterator s = m_new_services.begin(); s != m_new_services.end();)
+	{
+		eDVBChannelID chid;
+		s->first.getChannelID(chid);
+		if (chid == din)
+		{
+			mutate.push_back(*s);
+			m_new_services.erase(s++);
+		}
+		else
+			++s;
+	}
+	for (std::list<std::pair<eServiceReferenceDVB, ePtr<eDVBService> > >::iterator m = mutate.begin(); m != mutate.end(); ++m)
+	{
+		eServiceReferenceDVB ref = m->first;
+		bool din_sdt = m_sdt_services.erase(ref) > 0;
+		std::map<eServiceReferenceDVB, bool>::iterator vct = m_hds_nume_vct.find(ref);
+		bool din_vct = vct != m_hds_nume_vct.end(), vct_fara_sdt = din_vct && vct->second;
+		if (din_vct)
+			m_hds_nume_vct.erase(vct);
+		ref.set(spre);
+		m_new_services[ref] = m->second;
+		if (din_sdt)
+			m_sdt_services.insert(ref);
+		if (din_vct)
+			m_hds_nume_vct[ref] = vct_fara_sdt;
+	}
+	m_last_service = m_new_services.end();
+}
+
+/* HDSatelit (0.8.0): la sfarsitul cautarii, in fiecare grup de coliziune, namespace-ul de pana acum (ns_orb) il pastreaza
+   transponderul pe care lista il avea deja sub el (hdsscanreguli::pastratorNamespace), oricare ar fi fost ordinea
+   cautarii: bucheturile si temporizatoarele omului arata tot ce aratau. Fara intrare in lista: ramane cel prins primul. */
+void eDVBScan::hdsColiziuniLaSfarsit(iDVBChannelList *db)
+{
+	for (std::map<eDVBChannelID, std::list<eDVBChannelID> >::iterator g = m_hds_coliziuni.begin(); g != m_hds_coliziuni.end(); ++g)
+	{
+		const eDVBChannelID &orb = g->first;
+		std::map<eDVBChannelID, ePtr<iDVBFrontendParameters> >::iterator primul = m_new_channels.find(orb);
+		if (primul == m_new_channels.end())
+			continue;
+		std::vector<hdsscanreguli::Vazut> grup;
+		std::vector<eDVBChannelID> chiduri;
+		grup.push_back(hdsVazut(primul->second));
+		chiduri.push_back(orb);
+		for (std::list<eDVBChannelID>::iterator m = g->second.begin(); m != g->second.end(); ++m)
+		{
+			std::map<eDVBChannelID, ePtr<iDVBFrontendParameters> >::iterator c = m_new_channels.find(*m);
+			grup.push_back(c != m_new_channels.end() ? hdsVazut(c->second) : hdsscanreguli::nevazut());
+			chiduri.push_back(*m);
+		}
+		int i = hdsscanreguli::pastratorNamespace(&grup[0], (int)grup.size(), hdsVazutInLista(db, orb));
+		if (i <= 0)
+			continue;
+		/* primul trece pe namespace-ul cu frecventa lui, iar cel din lista inapoi pe ns_orb */
+		unsigned long hash = 0;
+		primul->second->getHash(hash);
+		eDVBChannelID primul_nou(eDVBNamespace((int)(unsigned int)hash), orb.transport_stream_id, orb.original_network_id);
+		eDVBChannelID temporar(eDVBNamespace((int)0xFFFFFFFEu), orb.transport_stream_id, orb.original_network_id);
+		eDebug("[eDVBScan] TSID %04x ONID %04x: namespace-ul %08x ramane transponderului din lista (%ld %d)",
+			orb.transport_stream_id.get(), orb.original_network_id.get(), (unsigned int)orb.dvbnamespace.get(),
+			grup[i].frecventa, grup[i].polarizare);
+		hdsMutaCanal(orb, temporar);
+		hdsMutaCanal(chiduri[i], orb);
+		hdsMutaCanal(temporar, primul_nou);
+	}
+	m_hds_coliziuni.clear();
+}
+
+/* HDSatelit (0.8.0): o intrare de satelit fara flux (fara descriptorul 0x79) pe purtatoarea multistream a unei intrari stiute
+   cu flux (aceeasi pozitie si polarizare, sub 4 MHz): e aceeasi purtatoare, numai ca fara flux ales */
+static bool hdsFaraFluxPeMultistream(iDVBFrontendParameters *stiut, iDVBFrontendParameters *nou)
+{
+	int a, b;
+	if (!stiut || !nou || stiut->getSystem(a) || nou->getSystem(b) || a != iDVBFrontend::feSatellite ||
+			b != iDVBFrontend::feSatellite)
+		return false;
+	eDVBFrontendParametersSatellite p, q;
+	if (stiut->getDVBS(p) || nou->getDVBS(q))
+		return false;
+	return p.needsStreamSelection() && !q.needsStreamSelection() && p.orbital_position == q.orbital_position &&
+		p.polarisation == q.polarisation && abs((int)p.frequency - (int)q.frequency) < 4000;
+}
+
+/* HDSatelit (0.8.0): NIT-ul altor retele numai adauga transpondere noi. O intrare deja de cautat ramane cum e (din lista
+   omului sau din NIT-ul actual: campuri pe care un NIT nu le poarta, de pilda PLP-ul T2-MI, nu se pierd; addChannelToScan
+   ar fi suprascris-o), iar o intrare fara flux pe o purtatoare multistream stiuta cu flux (de cautat, cautata sau acordata
+   acum) nu se mai pune. Restul (cautat, fara semnal, acordat acum) il hotaraste addChannelToScan, ca la NIT-ul actual. */
+bool eDVBScan::hdsStiutPentruNitAlt(iDVBFrontendParameters *feparm)
+{
+	for (std::list<ePtr<iDVBFrontendParameters> >::const_iterator t(m_ch_toScan.begin()); t != m_ch_toScan.end(); ++t)
+		if (sameChannel(*t, feparm) || hdsFaraFluxPeMultistream(*t, feparm))
+			return true;
+	for (std::list<ePtr<iDVBFrontendParameters> >::const_iterator c(m_ch_scanned.begin()); c != m_ch_scanned.end(); ++c)
+		if (hdsFaraFluxPeMultistream(*c, feparm))
+			return true;
+	return hdsFaraFluxPeMultistream(m_ch_current, feparm);
+}
+
+/* HDSatelit (0.8.0): descriptorul S2 (0x79) al unei intrari din NIT: fluxul (ISI) si indexul secventei Gold ale
+   transponderului din descriptorul de satelit (0x43) al aceleiasi intrari; la NIT-ul actual si la cel al altor retele */
+static void hdsS2DinNit(const TransportStreamInfo &tsinfo, bool &s2_gasit, int &s2_isi, int &s2_gold)
+{
+	for (DescriptorConstIterator desc = tsinfo.getDescriptors()->begin();
+			desc != tsinfo.getDescriptors()->end(); ++desc)
+	{
+		if ((*desc)->getTag() != S2_SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR)
+			continue;
+		S2SatelliteDeliverySystemDescriptor &d = (S2SatelliteDeliverySystemDescriptor&)**desc;
+		s2_gasit = true;
+		if (d.getMultipleInputStreamFlag())
+			s2_isi = d.getInputStreamIdentifier();
+		if (d.getScramblingSequenceSelector())
+			s2_gold = d.getScramblingSequenceIndex() & hdsms::PLS_MASCA;
+	}
+}
+
+/* HDSatelit (0.8.0): transponderul anuntat de descriptorul de satelit (0x43) al unei intrari din NIT intra in cautare numai
+   daca e pe satelitul acordat (hdsscanreguli::pozitieDinNit: sub 0,5 grade; la NIT-ul actual si cu steagul est/vest gresit,
+   la NIT-ul altor retele, alta_retea, nu); altfel se arunca. Acelasi drum pentru NIT-ul actual (0x40) si cel al altor
+   retele (0x41). */
+void eDVBScan::hdsSatelitDinNit(SatelliteDeliverySystemDescriptor &d, eOriginalNetworkID onid, eTransportStreamID tsid,
+	bool s2_gasit, int s2_isi, int s2_gold, bool alta_retea)
+{
+	if (d.getFrequency() < 10000)
+		return;
+
+	ePtr<eDVBFrontendParameters> feparm = new eDVBFrontendParameters;
+	eDVBFrontendParametersSatellite sat;
+	sat.set(d);
+
+	eDVBFrontendParametersSatellite p;
+	m_ch_current->getDVBS(p);
+
+	int hds_poz = hdsscanreguli::pozitieDinNit(p.orbital_position, sat.orbital_position, alta_retea);
+	if (hds_poz == hdsscanreguli::POZITIE_EST_VEST)
+		SCAN_eDebug("found transponder with incorrect west/east flag ... correct this");
+	if (hds_poz != hdsscanreguli::POZITIE_ALT_SATELIT)
+		sat.orbital_position = p.orbital_position;
+
+	if (s2_gasit)
+	{
+		sat.is_id = s2_isi;
+		sat.pls_mode = eDVBFrontendParametersSatellite::PLS_Gold;
+		sat.pls_code = s2_gold;
+		if (sat.needsStreamSelection())
+			sat.system = eDVBFrontendParametersSatellite::System_DVB_S2;
+	}
+	else if (p.needsStreamSelection() && sat.orbital_position == p.orbital_position
+		&& sat.polarisation == p.polarisation
+		&& abs((int)sat.frequency - (int)p.frequency) < 4000)
+	{
+		// acelasi purtator multistream, fara 0x79: se tine fluxul acordat, altfel transponderul ar intra
+		// in lamedb peste cel acordat, fara flux, si canalele lui n-ar mai porni
+		sat.is_id = p.is_id;
+		sat.pls_mode = p.pls_mode;
+		sat.pls_code = p.pls_code;
+		sat.system = p.system;
+	}
+
+	feparm->setDVBS(sat);
+
+	if (!alta_retea && p.orbital_position == sat.orbital_position)
+	{
+		/* NIT9: descriptorul propriu al transponderului din NIT-ul actual (reteaua lui), pentru intrarile prinse care au
+		   venit numai din NIT other (hdsParametriNitAlt) */
+		m_hds_nit_propriu[std::make_pair(((unsigned int)onid.get() << 16) | (unsigned int)tsid.get(),
+			sat.orbital_position)] = sat;
+	}
+	if ( p.orbital_position != sat.orbital_position)
+		SCAN_eDebug("dropping this transponder, it's on another satellite.");
+	else if (alta_retea && hdsStiutPentruNitAlt(feparm))
+		SCAN_eDebug("already known, kept as it is (other network)");
+	else
+	{
+		unsigned long hash=0;
+		feparm->getHash(hash);
+		eDVBChannelID chid(buildNamespace(onid, tsid, hash), tsid, onid);
+		if (alta_retea)
+		{
+			m_hds_nit_alt_amanate.push_back(std::make_pair(chid, ePtr<iDVBFrontendParameters>(feparm)));  /* nextChannel, la sfarsit */
+			m_hds_din_nit_alt.push_back(ePtr<iDVBFrontendParameters>(feparm));
+		}
+		else
+			addChannelToScan(chid, feparm);
+	}
+}
+
+/* HDSatelit (0.8.0): NIT-ul altor retele (0x41, acelasi PID cu NIT-ul actual), numai la cautarea in retea pe satelit pornita
+   cu start(). Se culege ce vine cat transponderul isi citeste celelalte tabele: nu intra in m_ready_all, deci nu lungeste
+   cautarea. La sfarsitul transponderului (hdsNitAltaRetea) fiecare intrare trece prin hdsSatelitDinNit, cu regula
+   pozitiei fara indreptarea est/vest: transponderele altui satelit se arunca. Ce n-a venit pe un transponder vine pe altul
+   al aceleiasi retele (NIT-ul altor retele se repeta pe fiecare). */
+enum { HDS_NIT_ALT_MAX_SECTIUNI = 256, HDS_NIT_ALT_MAX_OCTETI = 1024 };
+
+void eDVBScan::hdsPornesteNitAlt()
+{
+	int tip;
+	if (!m_hds_cautare || m_hds_nit_alt || !m_demux || !m_ch_current || !hdsretea::adaugaFrecventeleDinNit(m_flags) ||
+			m_ch_current->getSystem(tip) || tip != iDVBFrontend::feSatellite)
+		return;
+	ePtr<iDVBSectionReader> cititor;
+	if (m_demux->createSectionReader(eApp, cititor) || !cititor)
+		return;
+	eDVBSectionFilterMask masca;
+	memset(&masca, 0, sizeof(masca));
+	masca.pid = NetworkInformationSection::PID;
+	masca.flags = eDVBSectionFilterMask::rfCRC;
+	masca.data[0] = 0x41;    /* network_information_section - other_network */
+	masca.mask[0] = 0xFF;
+	cititor->connectRead(sigc::mem_fun(*this, &eDVBScan::hdsSectiuneNitAlt), m_hds_nit_alt_conn);
+	if (cititor->start(masca))
+	{
+		m_hds_nit_alt_conn = 0;
+		return;
+	}
+	m_hds_nit_alt = cititor;
+}
+
+void eDVBScan::hdsOpresteNitAlt()
+{
+	if (m_hds_nit_alt)
+		m_hds_nit_alt->stop();
+	m_hds_nit_alt = 0;
+	m_hds_nit_alt_conn = 0;
+}
+
+/* o sectiune NIT other: numai tinuta minte (ultima venita pe fiecare retea si numar de sectiune), cu plafon; nimic
+   altceva nu se schimba aici */
+void eDVBScan::hdsSectiuneNitAlt(const __u8 *data)
+{
+	size_t n = hdsvct::lungimeBuna(data, hdsvct::MAX_SECTIUNE);
+	if (!n || n > (size_t)HDS_NIT_ALT_MAX_OCTETI || data[0] != 0x41 || !(data[5] & 0x01))
+		return;
+	unsigned int cheie = ((unsigned int)((data[3] << 8) | data[4]) << 8) | data[6];
+	if (m_hds_nit_alt_sectiuni.size() >= (size_t)HDS_NIT_ALT_MAX_SECTIUNI && !m_hds_nit_alt_sectiuni.count(cheie))
+		return;
+	m_hds_nit_alt_sectiuni[cheie].assign(data, data + n);
+}
+
+/* la sfarsitul transponderului: transponderele anuntate de NIT-ul altor retele pe satelitul acordat intra in cautare, ca
+   cele din NIT-ul actual; numai cand frecventele din NIT intra in cautare si nu cat lista se mai poate inlocui cu primul
+   NIT (clearToScanOnFirstNIT) */
+void eDVBScan::hdsNitAltaRetea()
+{
+	hdsOpresteNitAlt();
+	int tip;
+	if (!m_hds_nit_alt_sectiuni.empty() && hdsretea::adaugaFrecventeleDinNit(m_flags) &&
+		!(m_flags & clearToScanOnFirstNIT) && m_ch_current && !m_ch_current->getSystem(tip) &&
+		tip == iDVBFrontend::feSatellite)
+	{
+		size_t inainte = m_ch_toScan.size();
+		for (std::map<unsigned int, std::vector<__u8> >::const_iterator s = m_hds_nit_alt_sectiuni.begin();
+				s != m_hds_nit_alt_sectiuni.end(); ++s)
+		{
+			NetworkInformationSection nit(&s->second[0]);
+			const TransportStreamInfoList &lista = *nit.getTsInfo();
+			for (TransportStreamInfoConstIterator ts(lista.begin()); ts != lista.end(); ++ts)
+			{
+				bool s2_gasit = false;
+				int s2_isi = hdsms::ISI_FARA_FILTRU, s2_gold = 0;
+				hdsS2DinNit(**ts, s2_gasit, s2_isi, s2_gold);
+				for (DescriptorConstIterator desc = (*ts)->getDescriptors()->begin();
+						desc != (*ts)->getDescriptors()->end(); ++desc)
+				{
+					if ((*desc)->getTag() == SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR)
+						hdsSatelitDinNit((SatelliteDeliverySystemDescriptor&)**desc, (*ts)->getOriginalNetworkId(),
+							(*ts)->getTransportStreamId(), s2_gasit, s2_isi, s2_gold, true);
+				}
+			}
+		}
+		SCAN_eDebug("[eDVBScan] NIT other: %d sectiuni, transpondere de cautat %d -> %d, tinute pentru sfarsit %d",
+			(int)m_hds_nit_alt_sectiuni.size(), (int)inainte, (int)m_ch_toScan.size(), (int)m_hds_nit_alt_amanate.size());
+	}
+	m_hds_nit_alt_sectiuni.clear();
+}
+
 void eDVBScan::channelDone()
 {
 	if (m_ready & validSDT && (!(m_flags & scanOnlyFree) || !m_pmt_running))
@@ -790,8 +1355,16 @@ void eDVBScan::channelDone()
 			(**m_SDT->getSections().begin()).getOriginalNetworkId(),
 			(**m_SDT->getSections().begin()).getTransportStreamId(),
 			hash);
+		dvbnamespace = hdsNamespaceLaColiziune(dvbnamespace,
+			(**m_SDT->getSections().begin()).getOriginalNetworkId(),
+			(**m_SDT->getSections().begin()).getTransportStreamId(), hash);
+		/* ca m_new_channels: ramane continutul transponderului prins primul sub acest chid */
+		m_hds_continut.insert(std::make_pair(eDVBChannelID(dvbnamespace,
+			(**m_SDT->getSections().begin()).getTransportStreamId(),
+			(**m_SDT->getSections().begin()).getOriginalNetworkId()), hdsContinutSdt()));
 		
 		SCAN_eDebug("SDT: ");
+		m_hds_tp_cu_sdt = true;  /* numele din VCT de pe acest transponder nu inlocuiesc nume bune in lista */
 		std::vector<ServiceDescriptionSection*>::const_iterator i;
 		for (i = m_SDT->getSections().begin(); i != m_SDT->getSections().end(); ++i)
 			processSDT(dvbnamespace, **i);
@@ -830,18 +1403,7 @@ void eDVBScan::channelDone()
 				// descriptorul S2 (0x79) poarta fluxul (ISI) si indexul secventei Gold ale transponderului din 0x43
 				bool s2_gasit = false;
 				int s2_isi = hdsms::ISI_FARA_FILTRU, s2_gold = 0;
-				for (DescriptorConstIterator desc = (*tsinfo)->getDescriptors()->begin();
-						desc != (*tsinfo)->getDescriptors()->end(); ++desc)
-				{
-					if ((*desc)->getTag() != S2_SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR)
-						continue;
-					S2SatelliteDeliverySystemDescriptor &d = (S2SatelliteDeliverySystemDescriptor&)**desc;
-					s2_gasit = true;
-					if (d.getMultipleInputStreamFlag())
-						s2_isi = d.getInputStreamIdentifier();
-					if (d.getScramblingSequenceSelector())
-						s2_gold = d.getScramblingSequenceIndex() & hdsms::PLS_MASCA;
-				}
+				hdsS2DinNit(**tsinfo, s2_gasit, s2_isi, s2_gold);
 
 				for (DescriptorConstIterator desc = (*tsinfo)->getDescriptors()->begin();
 						desc != (*tsinfo)->getDescriptors()->end(); ++desc)
@@ -931,58 +1493,7 @@ void eDVBScan::channelDone()
 						if (system != iDVBFrontend::feSatellite)
 							break; // when current locked transponder is no satellite transponder ignore this descriptor
 
-						SatelliteDeliverySystemDescriptor &d = (SatelliteDeliverySystemDescriptor&)**desc;
-						if (d.getFrequency() < 10000)
-							break;
-						
-						ePtr<eDVBFrontendParameters> feparm = new eDVBFrontendParameters;
-						eDVBFrontendParametersSatellite sat;
-						sat.set(d);
-
-						eDVBFrontendParametersSatellite p;
-						m_ch_current->getDVBS(p);
-
-						if ( abs(p.orbital_position - sat.orbital_position) < 5 )
-							sat.orbital_position = p.orbital_position;
-
-						if ( abs(abs(3600 - p.orbital_position) - sat.orbital_position) < 5 )
-						{
-							SCAN_eDebug("found transponder with incorrect west/east flag ... correct this");
-							sat.orbital_position = p.orbital_position;
-						}
-
-						if (s2_gasit)
-						{
-							sat.is_id = s2_isi;
-							sat.pls_mode = eDVBFrontendParametersSatellite::PLS_Gold;
-							sat.pls_code = s2_gold;
-							if (sat.needsStreamSelection())
-								sat.system = eDVBFrontendParametersSatellite::System_DVB_S2;
-						}
-						else if (p.needsStreamSelection() && sat.orbital_position == p.orbital_position
-							&& sat.polarisation == p.polarisation
-							&& abs((int)sat.frequency - (int)p.frequency) < 4000)
-						{
-							// acelasi purtator multistream, fara 0x79: se tine fluxul acordat, altfel transponderul ar intra
-							// in lamedb peste cel acordat, fara flux, si canalele lui n-ar mai porni
-							sat.is_id = p.is_id;
-							sat.pls_mode = p.pls_mode;
-							sat.pls_code = p.pls_code;
-							sat.system = p.system;
-						}
-
-						feparm->setDVBS(sat);
-
-						if ( p.orbital_position != sat.orbital_position)
-							SCAN_eDebug("dropping this transponder, it's on another satellite.");
-						else
-						{
-							unsigned long hash=0;
-							feparm->getHash(hash);
-							addChannelToScan(
-									eDVBChannelID(buildNamespace(onid, tsid, hash), tsid, onid),
-									feparm);
-						}
+						hdsSatelitDinNit((SatelliteDeliverySystemDescriptor&)**desc, onid, tsid, s2_gasit, s2_isi, s2_gold, false);
 						break;
 					}
 					default:
@@ -1023,6 +1534,9 @@ void eDVBScan::channelDone()
 	}
 
 	SCAN_eDebug("channel done!");
+
+	/* HDSatelit (0.8.0): transponderele anuntate de NIT-ul altor retele, culese pe acest transponder */
+	hdsNitAltaRetea();
 	
 		/* if we had services on this channel, we declare
 		   this channels as "known good". add it.
@@ -1121,6 +1635,16 @@ void eDVBScan::channelDone()
 			service->m_provider_name = pname;
 		}
 
+		/* HDSatelit (0.8.0): numele din VCT-ul ATSC in locul celui facut din frecventa (UTF-8 gata facut, fara convertDVBUTF8),
+		   deja la gasire, ca ecranul cautarii sa-l arate */
+		const hdsvct::Canal *hds_canal = hdsCanalVct(m_pmt_in_progress->first);
+		bool hds_vct = hds_canal && !hdsvct::numeCanal(*hds_canal).empty();
+		if (hds_vct)
+		{
+			service->m_service_name = hdsvct::numeCanal(*hds_canal);
+			service->genSortName();
+		}
+
 		if (!(m_flags & scanOnlyFree) || !m_pmt_in_progress->second.scrambled) {
 			SCAN_eDebug("add not scrambled!");
 			/* HDSatelit: a service without SDT is scrambled when its PMT has CA descriptors */
@@ -1130,6 +1654,8 @@ void eDVBScan::channelDone()
 				m_new_services.insert(std::pair<eServiceReferenceDVB, ePtr<eDVBService> >(ref, service));
 			if (i.second)
 			{
+				if (hds_vct)
+					m_hds_nume_vct[ref] = !m_hds_tp_cu_sdt;
 				m_last_service = i.first;
 				m_event(evtNewService);
 			}
@@ -1138,6 +1664,9 @@ void eDVBScan::channelDone()
 			SCAN_eDebug("dont add... is scrambled!");
 		m_pmts_to_read.erase(m_pmt_in_progress++);
 	}
+
+	/* HDSatelit (0.8.0): serviciile din SDT cu numele gol iau si ele numele din VCT; numarul canalului in jurnal */
+	hdsNumeleDinVct();
 
 	if (!m_chid_current)
 		eWarning("SCAN: the current channel's ID was not corrected - not adding channel.");
@@ -1218,6 +1747,13 @@ void eDVBScan::start(const eSmartPtrList<iDVBFrontendParameters> &known_transpon
 	m_tuner_data.clear();
 	m_new_services.clear();
 	m_sdt_services.clear();
+	m_hds_nume_vct.clear();
+	m_hds_cautare = true;   /* cautarea ceruta citeste si VCT-ul ATSC (hdsPornestePsip) */
+	m_hds_coliziuni.clear();
+	m_hds_continut.clear();
+	m_hds_nit_alt_amanate.clear();
+	m_hds_din_nit_alt.clear();
+	m_hds_nit_propriu.clear();
 	m_networks.goleste();
 	m_network_on_tp.clear();
 	m_nit_chid.clear();
@@ -1318,11 +1854,67 @@ static void hdsBuchetUltimaScanare(iDVBChannelList *db,
 	}
 }
 
+/* NIT9 (24.11.2026, ZGEMMA H8.2H Plus, 13E): un transponder prins care a venit numai din NIT-ul altei retele nu-si scrie in
+   lista parametrii din NIT other (pe 12673 V: DVB-S QPSK 29900 in locul lui DVB-S2 8PSK 30000, pe tunerele care isi aleg
+   singure sistemul prinde cu oricare). Ia descriptorul propriu din NIT-ul actual citit pe el, altfel pastreaza ce avea
+   lista (lib/dvb/hdsscanreguli.h, parametriPentruNitAlt); un transponder nou ramane cu parametrii NIT other. Inainte de
+   scanRemoveServices, cat lista mai are transponderul. */
+void eDVBScan::hdsParametriNitAlt(iDVBChannelList *db)
+{
+	for (std::map<eDVBChannelID, ePtr<iDVBFrontendParameters> >::iterator ch(m_new_channels.begin());
+			ch != m_new_channels.end(); ++ch)
+	{
+		bool din_nit_alt = false;
+		for (std::list<ePtr<iDVBFrontendParameters> >::const_iterator n(m_hds_din_nit_alt.begin());
+				n != m_hds_din_nit_alt.end(); ++n)
+			if ((iDVBFrontendParameters*)*n == (iDVBFrontendParameters*)ch->second)
+				din_nit_alt = true;
+		int tip;
+		eDVBFrontendParametersSatellite acum;
+		if (!din_nit_alt || ch->second->getSystem(tip) || tip != iDVBFrontend::feSatellite || ch->second->getDVBS(acum))
+			continue;
+		std::map<std::pair<unsigned int, int>, eDVBFrontendParametersSatellite>::const_iterator propriu =
+			m_hds_nit_propriu.find(std::make_pair(((unsigned int)ch->first.original_network_id.get() << 16) |
+				(unsigned int)ch->first.transport_stream_id.get(), acum.orbital_position));
+		bool potrivit = propriu != m_hds_nit_propriu.end() && propriu->second.polarisation == acum.polarisation &&
+			hdsscanreguli::abatere((long)propriu->second.frequency, (long)acum.frequency) <
+				hdsscanreguli::fereastraUnireKhz((long)propriu->second.symbol_rate, (long)acum.symbol_rate);
+		ePtr<iDVBFrontendParameters> din_lista;
+		eDVBFrontendParametersSatellite lista;
+		int tip_lista;
+		bool in_lista = db && !db->getChannelFrontendData(ch->first, din_lista) && din_lista &&
+			!din_lista->getSystem(tip_lista) && tip_lista == iDVBFrontend::feSatellite && !din_lista->getDVBS(lista) &&
+			lista.orbital_position == acum.orbital_position && lista.polarisation == acum.polarisation &&
+			hdsscanreguli::abatere((long)lista.frequency, (long)acum.frequency) <
+				hdsscanreguli::fereastraUnireKhz((long)lista.symbol_rate, (long)acum.symbol_rate);
+		int alegere = hdsscanreguli::parametriPentruNitAlt(propriu != m_hds_nit_propriu.end(), potrivit, in_lista);
+		if (alegere == hdsscanreguli::PARAMETRI_DIN_NIT_ALT)
+			continue;
+		eDVBFrontendParametersSatellite nou = alegere == hdsscanreguli::PARAMETRI_DIN_NIT_PROPRIU ? propriu->second : lista;
+		/* fluxul si PLP-ul T2-MI cu care s-a prins raman (NIT-ul nu poarta PLP-ul, iar fluxul acordat e cel bun) */
+		nou.orbital_position = acum.orbital_position;
+		nou.is_id = acum.is_id;
+		nou.pls_mode = acum.pls_mode;
+		nou.pls_code = acum.pls_code;
+		nou.t2mi_plp_id = acum.t2mi_plp_id;
+		nou.t2mi_pid = acum.t2mi_pid;
+		eDebug("[eDVBScan] NIT other: %d %c %d prins, in lista cu %s: %d %d (in loc de %d %d din NIT other)",
+			acum.frequency / 1000, acum.polarisation ? 'V' : 'H', acum.symbol_rate / 1000,
+			alegere == hdsscanreguli::PARAMETRI_DIN_NIT_PROPRIU ? "descriptorul propriu din NIT-ul actual" : "parametrii din lista",
+			nou.frequency, nou.symbol_rate, acum.frequency, acum.symbol_rate);
+		/* acelasi obiect (ca ramura terestra din insertInto): legatura cu m_ch_scanned ramane pentru /api/scanare-ultima
+		   (getScannedTransponders, dupa adresa), iar scanRemoveServices sterge cu parametrii buni */
+		((eDVBFrontendParameters*)&*ch->second)->setDVBS(nou);
+	}
+}
+
 void eDVBScan::insertInto(iDVBChannelList *db, bool dontRemoveOldFlags)
 {
 	/* HDSatelit: how many of the found services were not in the channel list before this scan
 	   (summary on the scan screen). Counted before scanRemoveServices clears the scanned positions,
 	   otherwise every service would look new. */
+	hdsColiziuniLaSfarsit(db);
+	hdsParametriNitAlt(db);
 	m_num_new_services = 0;
 	for (std::map<eServiceReferenceDVB, ePtr<eDVBService> >::const_iterator
 		service(m_new_services.begin()); service != m_new_services.end(); ++service)
@@ -1481,12 +2073,23 @@ void eDVBScan::insertInto(iDVBChannelList *db, bool dontRemoveOldFlags)
 		{
 			if (dvb_service->m_flags & eDVBService::dxNoSDT)
 				continue;
-			if (!(dvb_service->m_flags & eDVBService::dxHoldName))
+			/* HDSatelit (0.8.0): un nume gol din SDT (o recautare cu semnal slab, un descriptor cu numele gol) sau numele
+			   facut din frecventa al unui serviciu gasit numai in PAT nu sterge numele bun din lista; un nume adevarat din
+			   SDT il inlocuieste ca inainte. La fel furnizorul gol. */
+			bool hds_din_sdt = m_sdt_services.count(service->first) > 0;
+			/* HDSatelit (0.8.0): numele din VCT-ul ATSC inlocuieste numai un nume gol sau facut din frecventa, iar pe un
+			   transponder fara SDT orice nume (hdsvct::vctInlocuiesteInLista); un nume bun din lista ramane */
+			std::map<eServiceReferenceDVB, bool>::const_iterator hds_vct = m_hds_nume_vct.find(service->first);
+			bool hds_nume_bun = hds_vct != m_hds_nume_vct.end() ?
+				hdsvct::vctInlocuiesteInLista(dvb_service->m_service_name, hds_vct->second) : hds_din_sdt;
+			if (!(dvb_service->m_flags & eDVBService::dxHoldName) && (dvb_service->m_service_name.empty() ||
+				(hds_nume_bun && !service->second->m_service_name.empty())))
 			{
 				dvb_service->m_service_name = service->second->m_service_name;
 				dvb_service->m_service_name_sort = service->second->m_service_name_sort;
 			}
-			dvb_service->m_provider_name = service->second->m_provider_name;
+			if (dvb_service->m_provider_name.empty() || (hds_din_sdt && !service->second->m_provider_name.empty()))
+				dvb_service->m_provider_name = service->second->m_provider_name;
 			if (service->second->m_ca.size())
 				dvb_service->m_ca = service->second->m_ca;
 			/* HDSatelit: a known service takes the scrambled flag of this scan too (its SDT is the newest word) */

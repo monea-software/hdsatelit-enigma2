@@ -318,6 +318,12 @@ private:
 	bool importExternRow(const uniqueEPGKey &key, hdsEpgRand &row);
 	std::atomic<int> m_flushPending; // cereri flushEPG() trimise firului EPG si neterminate inca
 	int m_externAcceptate, m_externColiziuni, m_externPlafon; // de la pornire, sub import_lock; pentru jurnal
+	// EPG1 (0.8.0): locul ghidului importat, socotit la inceputul fiecarui import (hdsepgloc.h); sub import_lock
+	int m_externLocOcteti, m_externLocEvenimente;
+	time_t m_externUltimApel;
+	bool m_externPlinAnuntat;
+	std::atomic<int> m_externRefuzate; // emisiuni refuzate fiindca ghidul s-a umplut, in importul de acum sau ultimul
+	void externLocLaInceput(time_t now);
 #else
 	eEPGCache();
 	~eEPGCache();
@@ -366,6 +372,9 @@ public:
 	void loadLater();
 	void clear() { flushEPG(); }
 	void timeUpdatedSafe();
+	// HDSatelit 0.8.0 (EPG1): cate emisiuni ale importului extern de acum (sau ale ultimului) n-au mai incaput fiindca
+	// ghidul importat s-a umplut (locul se socoteste dupa memoria receptorului); 0 = a intrat tot. Nu asteapta niciun lacat.
+	int getExternRefused();
 
 	// called from main thread
 	inline void Lock();

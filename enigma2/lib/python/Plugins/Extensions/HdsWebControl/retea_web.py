@@ -861,7 +861,7 @@ def seteazaDns(request):
 	lista = ", ".join(textIp(x) for x in servere)
 
 	def fapta():
-		H.scrieDns(servere, R)
+		H.scrieDns(servere, R, pastreaza=True)
 		rez = stareDns()
 		rez.update(result=True, message=_t("Salvat."))
 		return rez
@@ -1002,6 +1002,11 @@ __STIL_PAGINI__
     <div class="rand">
       <label for="comutareOrdine">Ordinea rețelelor</label>
       <select id="comutareOrdine"></select>
+    </div>
+    <div class="rand">
+      <label for="comutareRepara">Repară singur rețeaua</label>
+      <select id="comutareRepara"></select>
+      <p class="ajutor nota">Da: când receptorul rămâne fără rețea, o repornește singur: aduce înapoi stickul Wi-Fi căzut, cere din nou adresa de la router (de pildă după o pană de curent, când routerul pornește mai târziu) și reface legătura Wi-Fi. Nu atinge nimic cât rețeaua merge, cât lucrezi tu cu rețeaua sau cât se instalează o actualizare. Nu: rețeaua rămâne cum e până o repornești tu. Aceeași setare pe receptor, în același ecran.</p>
     </div>
     <p class="nota">După o trecere, receptorul poate avea altă adresă. Pe televizor apare adresa nouă. Aceeași setare pe televizor: Meniu &gt; Setări &gt; Rețea și Internet &gt; Trecerea singură pe altă rețea.</p>
     <p class="nota" id="numeLocal">Se citește...</p>
@@ -1413,7 +1418,8 @@ $("internetInterval").addEventListener("change", function(){
 citesteInternet(); citesteIntervalul();
 setInterval(function(){ if(!document.hidden){ citesteInternet(); } }, 5000);
 // cardul Trecerea singura pe alta retea (Components/HdsComutareRetea.py): starea din /api/comutare-retea, cele doua
-// setari prin pagina generica a setarilor (setup.xml hds_retea_comutare: randul 0 pornita, randul 1 ordinea)
+// setari prin pagina generica a setarilor (setup.xml hds_retea_comutare: randul 0 pornita, randul 1 ordinea, randul 2
+// Repara singur reteaua, Components/HdsPazaWifi.py)
 function umpleAlegeri(s, r){
   if(!r){ return; }
   if(!s.options.length){ (r.alegeri || []).forEach(function(a){ var o = document.createElement("option"); o.value = a[0]; o.textContent = a[1]; s.appendChild(o); }); }
@@ -1421,7 +1427,7 @@ function umpleAlegeri(s, r){
 }
 function citesteComutarea(){
   cerere("/api/setari?id=hds_retea_comutare").then(function(d){
-    if(d && d.result && d.randuri){ umpleAlegeri($("comutarePornita"), d.randuri[0]); umpleAlegeri($("comutareOrdine"), d.randuri[1]); }
+    if(d && d.result && d.randuri){ umpleAlegeri($("comutarePornita"), d.randuri[0]); umpleAlegeri($("comutareOrdine"), d.randuri[1]); umpleAlegeri($("comutareRepara"), d.randuri[2]); }
   }).catch(function(){});
   cerere("/api/comutare-retea").then(function(d){
     if(!d || !d.result){ return; }
@@ -1444,6 +1450,7 @@ function seteazaComutarea(rand, valoare){
 }
 $("comutarePornita").addEventListener("change", function(){ seteazaComutarea(0, $("comutarePornita").value); });
 $("comutareOrdine").addEventListener("change", function(){ seteazaComutarea(1, $("comutareOrdine").value); });
+$("comutareRepara").addEventListener("change", function(){ seteazaComutarea(2, $("comutareRepara").value); });
 $("spreCanale").addEventListener("click", function(){ location.href = adresa("/wifi-canale"); });
 $("spreAparate").addEventListener("click", function(){ location.href = adresa("/aparate-retea"); });
 citesteComutarea();

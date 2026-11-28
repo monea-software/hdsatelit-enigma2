@@ -24,13 +24,28 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b4a4deb94acc9916ca04ba6c5e4d0700"
 #   - nota GPL-2.0 par. 2a (fisier schimbat), ca in codul imaginii, pe primul rand al antetului.
 # Expresiile nu poarta numele: se potrivesc dupa forma randului. Datele raman neschimbate, si se verifica: antetul
 # incepe pe randul 2 in sursa, fisierul se citeste ca XML dupa inlocuiri, tot ce urmeaza dupa antet e identic cu
-# fisierul din sursa, iar celelalte patru liste sunt identice cu sursa. Sursa vine de
+# fisierul din sursa, iar cables.xml, atsc.xml si timezone.xml sunt identice cu sursa (satellites.xml: un singur FEC
+# schimbat, vezi FEC-UL DE PE 5.0W mai jos). Sursa vine de
 # pe ramura master (AUTOREV), deci textul se poate schimba: hds_fara_nume (clasa hds-fara-nume) opreste construirea
 # daca vreun nume a ramas in listele instalate.
 # PR ".hds2" (era ".hds1", al licentei): continutul lui terrestrial.xml s-a schimbat la aceeasi versiune.
 # PR ".hds3" (0.7.5, 15.11.2026, SXP): copia listei satelitilor a imaginii, mai jos.
 # PR ".hds4" (0.7.7, 16.11.2026, SAT2): listele de cautare ca fisiere de configurare (CONFFILES, mai jos).
-PR:append = ".hds4"
+# PR ".hds5" (0.8.0, 26.11.2026, FEC1): 5.0W 12564 V cu FEC 2/3 in loc de 3/4 (FEC-UL DE PE 5.0W, mai jos).
+PR:append = ".hds5"
+
+# FEC-UL DE PE 5.0W (0.8.0, 26.11.2026, FEC1): in lista sursei, 5.0W Eutelsat 5 West B 12564 V (DVB-S2 8PSK 35300,
+# PLS Gold 131070, fluxurile 1, 3 si 5: Rai) are fec_inner="3" (3/4). Pe un DM920 (BCM45308X) cu antena pe 5.0W,
+# acordarea cu 3/4 n-a prins niciodata purtatoarea (de 10 ori, nivel 90%, cand celelalte transpondere de pe 5.0W se
+# prindeau); in aceeasi perioada, aceeasi purtatoare s-a prins cu 2/3 (fluxul 11, 452 ms), iar apoi cu 2/3 toate
+# trei fluxurile s-au prins in 238-250 ms, cu imagine (Rai 1, Rai 3, TGR). Listele publice nu se potrivesc intre ele
+# (2/3 sau 3/4, dupa data); lista sursei are 3/4. Se schimba numai FEC-ul celor trei randuri, numai in blocul -50;
+# rata ramane (35300 se prinde), iar celelalte transpondere de pe 5.0W raman cum sunt. Randurile se cauta intregi: daca
+# sursa nu le mai are exact asa (de 3 ori cu 3/4, nicio data cu 2/3), construirea se opreste si inlocuirea se reface.
+# Dupa inlocuire: fisierul se citeste ca XML, iar cu cele trei FEC-uri puse inapoi e identic cu sursa (nimic altceva
+# schimbat). La cine are lista neschimbata, lista noua vine singura (CONFFILES, mai jos); cine si-a schimbat lista o
+# pastreaza pe a lui (lista noua sta alaturi, ca satellites.xml-opkg), iar canalele deja cautate tin FEC-ul vechi in
+# lamedb pana la o cautare noua pe 5.0W. Inlocuirea e in do_install, intre randurile "FEC 5.0W: inceput" si "sfarsit".
 
 # Listele de cautare ca fisiere de configurare (0.7.7, 16.11.2026, SAT2; forum 1588: un satelit sters nu mai revine singur).
 # Fara CONFFILES (asa e reteta OE-Alliance, si la fel in alte imagini), opkg rescrie la orice
@@ -81,13 +96,30 @@ do_install:append() {
 	sed '1,/-->/d' "$f" > ${T}/terrestrial-date-instalat
 	cmp -s ${T}/terrestrial-date-sursa ${T}/terrestrial-date-instalat \
 		|| bbfatal "terrestrial.xml: s-a schimbat si altceva decat antetul (datele trebuie sa ramana ca in sursa)"
-	for i in satellites.xml cables.xml atsc.xml timezone.xml; do
+	# FEC 5.0W: inceput (FEC-UL DE PE 5.0W, mai sus)
+	s=${D}/etc/tuxbox/satellites.xml
+	tpa='<transponder frequency="12564000" symbol_rate="35300000" polarization="1" fec_inner="'
+	tpb='" system="1" modulation="2" is_id="[135]" pls_mode="1" pls_code="131070" />'
+	bloc5w='/^[[:space:]]*<sat [^>]*position="-50">$/,/^[[:space:]]*<\/sat>$/'
+	[ "$(sed -n "$bloc5w p" ${S}/src/satellites.xml | grep -c "$tpa"3"$tpb")" = 3 ] \
+		&& [ "$(sed -n "$bloc5w p" ${S}/src/satellites.xml | grep -c "$tpa"2"$tpb")" = 0 ] \
+		|| bbfatal "satellites.xml: 5.0W 12564 V nu mai e in sursa de 3 ori cu fec_inner 3; inlocuirea FEC trebuie refacuta"
+	sed -i "$bloc5w s|\($tpa\)3\($tpb\)|\12\2|" "$s"
+	python3 -c 'import sys, xml.etree.ElementTree as E; E.parse(sys.argv[1])' "$s" \
+		|| bbfatal "satellites.xml nu se mai citeste ca XML dupa inlocuirea FEC"
+	[ "$(sed -n "$bloc5w p" "$s" | grep -c "$tpa"2"$tpb")" = 3 ] \
+		|| bbfatal "satellites.xml: inlocuirea FEC pe 5.0W 12564 V nu s-a facut la toate trei fluxurile"
+	sed "$bloc5w s|\($tpa\)2\($tpb\)|\13\2|" "$s" > ${T}/satellites-inapoi
+	cmp -s ${S}/src/satellites.xml ${T}/satellites-inapoi \
+		|| bbfatal "satellites.xml: s-a schimbat si altceva decat FEC-ul de pe 5.0W 12564 V"
+	# FEC 5.0W: sfarsit
+	for i in cables.xml atsc.xml timezone.xml; do
 		cmp -s ${S}/src/$i ${D}/etc/tuxbox/$i || bbfatal "$i nu mai e identic cu sursa"
 	done
 	hds_fara_nume ${D}/etc/tuxbox/satellites.xml ${D}/etc/tuxbox/cables.xml ${D}/etc/tuxbox/terrestrial.xml \
 		${D}/etc/tuxbox/atsc.xml ${D}/etc/tuxbox/timezone.xml
 	install -d ${D}${datadir}/hdsatelit
 	install -m 0644 ${D}/etc/tuxbox/satellites.xml ${D}${datadir}/hdsatelit/satellites-imagine.xml
-	cmp -s ${S}/src/satellites.xml ${D}${datadir}/hdsatelit/satellites-imagine.xml \
-		|| bbfatal "copia satellites-imagine.xml nu e identica cu lista din sursa"
+	cmp -s ${D}/etc/tuxbox/satellites.xml ${D}${datadir}/hdsatelit/satellites-imagine.xml \
+		|| bbfatal "copia satellites-imagine.xml nu e identica cu lista instalata"
 }

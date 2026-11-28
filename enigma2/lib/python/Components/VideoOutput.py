@@ -478,11 +478,12 @@ def edidKey(text):
 
 
 def chipsetBroadcom(infoDir="/proc/stb/info"):
-	"""True for a Broadcom board that names its chipset "bcm..." in /proc/stb/info/chipset (bcm7251s on the HD51), not a Vu+"""
-	text = readText_direct(os.path.join(infoDir, "chipset"))
+	"""True for a Broadcom board: a "bcm..." chipset in /proc/stb/info/chipset (bcm7251s on the HD51) or a Vu+ board
+	(/proc/stb/info/vumodel); on the Vu+ Duo 4K SE (7444s) the output stayed at 720p50 with 2160p50 in the rate files
+	until videomode was written too"""
 	if os.path.exists(os.path.join(infoDir, "vumodel")):
-		# Vu+ boards (Broadcom too): no report of a mode not applied there, so their order stays as it was
-		return False
+		return True
+	text = readText_direct(os.path.join(infoDir, "chipset"))
 	return bool(text) and text.strip().lower().startswith("bcm")
 
 
@@ -880,6 +881,13 @@ class VideoOutput:
 				HdsJurnalAfisaj.modAplicat(values, ok, self.lastModeReached)
 			except Exception:
 				pass
+			if self.lastModeReached:
+				try:
+					# PQ2 (0.8.0): the picture adjustments the user saved (pep_*) are put back after a new mode
+					from Components import HdsReglajeImagine
+					HdsReglajeImagine.dupaModVideo()
+				except Exception:
+					pass
 		return ok
 
 	def applyConfig(self):

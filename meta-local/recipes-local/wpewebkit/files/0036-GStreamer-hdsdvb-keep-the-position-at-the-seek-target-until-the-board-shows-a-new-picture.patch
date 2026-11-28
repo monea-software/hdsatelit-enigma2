@@ -1,0 +1,148 @@
+From: Monea Software <build@hdsatelit.invalid>
+Subject: [PATCH] GStreamer: hdsdvb gives the stream time of the board decoder after a seek (MSE) and keeps the position at the seek target until the board shows a new picture
+
+With the hdsdvb quirk the position comes from the board decoder (get-decoder-time). Measured on the Octagon SF8008
+(Shaka Player, Media Source Extensions, a seek to 60 s after 12 s of playback): the board showed 56 s to 68 s
+(its PTS), but the page got 1.3 s to 12 s and stopped there, so the player waited for data around 12 s and the film
+stopped when the buffered range 56-68 s ran out.
+
+1. dvbmediasink gives PTS - (segment start - segment position), and WebKitMediaSrc sends segments with start = time =
+   the seek target and position 0: the decoder time counts from the segment start. For Media Source Extensions the
+   position is that time plus the segment time of the board sink whose decoder answered.
+2. After a flushing seek the decoder keeps the time of the last picture shown before the flush until a new picture
+   is shown, and the key unit seek starts at the key frame before the target. Until the decoder gives a new time
+   (different from the one read when the seek started) that is not before the target, the position stays at the
+   seek target, for playbin and for Media Source Extensions (not for reverse playback; a seek that fails turns it off).
+
+Upstream-Status: Inappropriate [satellite receiver configuration]
+
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -84,6 +84,7 @@
+ #include <cstring>
+ #include <glib.h>
+ #include <gst/audio/streamvolume.h>
++#include <gst/base/gstbasesink.h>
+ #include <gst/gst.h>
+ #include <gst/pbutils/missing-plugins.h>
+ #include <gst/pbutils/pbutils.h>
+@@ -624,11 +625,13 @@ bool MediaPlayerPrivateGStreamer::doSeek(const SeekTarget& target, float rate, b
+     }
+     auto seekFlags = static_cast<GstSeekFlags>(flag | GST_SEEK_FLAG_ACCURATE);
+     seekFlags = GStreamerQuirksManager::singleton().playbackSeekFlags(seekFlags);
++    hdsMarkSeek(rate);
+ 
+     // Seeking towards the end is not well supported in oggdemux, sometimes it receives EOS
+     // while trying to retrieve a chain and thus disables seeking in push mode.
+     if (rate >= 0 && startTime == duration() && m_containerType == ContainerType::Ogg) {
+         GST_DEBUG_OBJECT(pipeline(), "Seek requested at duration for ogg media, triggering EOS handler");
++        m_hdsSeekFloorActive = false;
+         didEnd();
+         return false;
+     }
+@@ -683,6 +686,8 @@ bool MediaPlayerPrivateGStreamer::doSeek(const SeekTarget& target, float rate, b
+     }
+ 
+     auto result = gst_element_send_event(m_pipeline.get(), event.leakRef());
++    if (!result)
++        m_hdsSeekFloorActive = false;
+     if (result && GStreamerQuirksManager::singleton().completesSeekWithoutPreroll()) {
+         // No ASYNC_DONE follows the flush on these sinks, and no state change either: the seek is complete once the
+         // flush went through the pipeline.
+@@ -1695,15 +1700,71 @@ bool MediaPlayerPrivateGStreamer::isMediaStreamPlayer() const
+     return m_url.protocolIs("mediastream"_s);
+ }
+ 
++GstClockTime MediaPlayerPrivateGStreamer::hdsBoardSinkSegmentTime() const
++{
++    // The sink whose decoder time is used (GStreamerQuirkHdsDvb::decoderPosition): the sound sink first, then the video one.
++    for (auto* sink : { m_audioSink.get(), m_videoSink.get() }) {
++        if (!sink || !GST_IS_BASE_SINK(sink))
++            continue;
++        if (!gstElementFactoryEquals(sink, "dvbaudiosink"_s) && !gstElementFactoryEquals(sink, "dvbvideosink"_s))
++            continue;
++        gint64 position = -1;
++        g_signal_emit_by_name(sink, "get-decoder-time", &position);
++        if (position < 0)
++            continue;
++        GST_OBJECT_LOCK(sink);
++        GstClockTime time = GST_BASE_SINK_CAST(sink)->segment.format == GST_FORMAT_TIME ? GST_BASE_SINK_CAST(sink)->segment.time : GST_CLOCK_TIME_NONE;
++        GST_OBJECT_UNLOCK(sink);
++        return time;
++    }
++    return GST_CLOCK_TIME_NONE;
++}
++
++void MediaPlayerPrivateGStreamer::hdsMarkSeek(float rate)
++{
++    m_hdsSeekFloorActive = false;
++    auto& quirksManager = GStreamerQuirksManager::singleton();
++    if (!quirksManager.isEnabled() || rate < 0)
++        return;
++    auto position = quirksManager.decoderPosition(m_audioSink.get(), m_videoSink.get());
++    if (!position)
++        return;
++    if (isMediaSource() && GST_CLOCK_TIME_IS_VALID(*position)) {
++        if (auto base = hdsBoardSinkSegmentTime(); GST_CLOCK_TIME_IS_VALID(base))
++            position = *position + base;
++    }
++    m_hdsStaleDecoderPosition = *position;
++    m_hdsSeekFloorActive = true;
++}
++
+ GstClockTime MediaPlayerPrivateGStreamer::gstreamerPositionFromSinks() const
+ {
+     auto& quirksManager = GStreamerQuirksManager::singleton();
+     if (quirksManager.isEnabled()) {
+         if (auto decoderPosition = quirksManager.decoderPosition(m_audioSink.get(), m_videoSink.get())) {
++            // Media Source Extensions: the board sink keeps its time from the segment start (dvbmediasink: decoder time =
++            // PTS - (segment start - segment position), and WebKitMediaSrc sends segments with position 0), so after a
++            // seek the decoder counts from 0 again. The stream time is that count plus the segment time.
++            if (isMediaSource() && GST_CLOCK_TIME_IS_VALID(*decoderPosition)) {
++                if (auto base = hdsBoardSinkSegmentTime(); GST_CLOCK_TIME_IS_VALID(base))
++                    decoderPosition = *decoderPosition + base;
++            }
+             // Before its first picture a decoder may give a position far beyond the media.
+             if (GST_CLOCK_TIME_IS_VALID(*decoderPosition) && m_cachedDuration.isValid() && m_cachedDuration.isFinite()
+                 && MediaTime(*decoderPosition, GST_SECOND) > m_cachedDuration + MediaTime(5, 1))
+                 return GST_CLOCK_TIME_NONE;
++            if (m_hdsSeekFloorActive && m_seekTarget.time.isValid()) {
++                // After a seek: the time of the old picture (unchanged since the seek) or a time before the target (the
++                // key frame before it) is not the position yet. Pages such as Shaka Player take a position that goes
++                // back for a stall, seek again, and the film stops.
++                auto target = toGstClockTime(m_seekTarget.time);
++                bool stale = GST_CLOCK_TIME_IS_VALID(*decoderPosition) && GST_CLOCK_TIME_IS_VALID(m_hdsStaleDecoderPosition)
++                    && GST_CLOCK_DIFF(*decoderPosition, m_hdsStaleDecoderPosition) < static_cast<GstClockTimeDiff>(200 * GST_MSECOND)
++                    && GST_CLOCK_DIFF(m_hdsStaleDecoderPosition, *decoderPosition) < static_cast<GstClockTimeDiff>(200 * GST_MSECOND);
++                if (!GST_CLOCK_TIME_IS_VALID(*decoderPosition) || stale || *decoderPosition + 500 * GST_MSECOND < target)
++                    return target;
++                m_hdsSeekFloorActive = false;
++            }
+             return *decoderPosition;
+         }
+     }
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -374,6 +374,12 @@ protected:
+     mutable bool m_isCachedPositionValid { false };
+     mutable MediaTime m_cachedDuration;
+     bool m_canFallBackToLastFinishedSeekPosition { false };
++    // hdsdvb: after a seek the board decoder keeps giving the time of the last picture before the flush (or of the key
++    // frame before the target) until it shows the first new picture; until then the position stays at the seek target.
++    void hdsMarkSeek(float rate);
++    GstClockTime hdsBoardSinkSegmentTime() const;
++    mutable bool m_hdsSeekFloorActive { false };
++    mutable GstClockTime m_hdsStaleDecoderPosition { GST_CLOCK_TIME_NONE };
+     bool m_isChangingRate { false };
+     bool m_didDownloadFinish { false };
+     bool m_didErrorOccur { false };
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -268,6 +268,7 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const SeekTarget& target, float rate
+     m_isSeeking = true;
+     m_isWaitingForPreroll = true;
+     m_isEndReached = false;
++    hdsMarkSeek(rate);
+ 
+     auto flag = (player->isLooping() && isSegment) ? GST_SEEK_FLAG_SEGMENT : GST_SEEK_FLAG_FLUSH;
+     if (paused() && !m_isEndReached && player->isLooping()) {

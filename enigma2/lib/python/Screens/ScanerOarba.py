@@ -15,6 +15,12 @@ ServiceScan obisnuit pe cunoscute si noi.
 
 Tot lucrul e in Components/HdsCautareOarba.py: o singura cautare pe receptor, aceeasi pe care o vede si o porneste
 pagina web /oarba; ecranul doar o arata. EXIT in timpul cautarii o opreste curat (dupa bucata de banda in curs).
+
+0.8.0 (AMR4, el bandido, LegitFTA post-110268): lista nu mai amesteca ce a gasit cautarea cu ce era in lista
+satelitului. Cat merge cautarea: numai purtatoarele gasite pana acum, cea mai noua sus (frecventa, polarizarea, rata,
+sistemul), iar caseta Durata e cronometrul (cat a trecut, cat mai tine treapta). La sfarsit, pe sectiuni cu numaratori:
+Noi (fiecare „se păstrează” din fabrica; Albastru o lasa deoparte sau o pune la loc), Deja în listă, Căzute la acordare
+(dupa „Scanează canalele”) si, jos, Din listă, negăsite. OK sau Verde: „Scanează canalele” cu cele pastrate, o tasta.
 """
 from __future__ import absolute_import, unicode_literals
 
@@ -27,6 +33,10 @@ from Components import HdsCautareOarba as O
 from Components.HdsCursorLista import pune_randurile
 
 RAND_CAUTA = '_cauta'
+# 0.8.0 (AMR4): randurile de cap ale sectiunilor raportului si cele din lista satelitului negasite (chei proprii, ca
+# HdsCursorLista sa tina cursorul pe acelasi rand cand lista se reface)
+RAND_SECTIUNE = '_sectiune_'
+RAND_LISTA = '_lista_'
 # 0.7.7 (M30): la antena cu motor randul "Satelit" are zeci de sateliti; de la atatia alegeri, OK deschide lista lor
 PRAG_LISTA_SATELITI = 8
 # DSG2: casetele cautarii, in ordinea din skin (HdsCautareOarba.casete)
@@ -74,6 +84,11 @@ class ScanerOarba(Screen):
         # fata cu lista: cand cautarea merge (pornita de aici sau din web) sau cand am pornit-o din acest ecran
         self._urmareste = self._c.in_curs()
         self._mesaj = ''
+        # 0.8.0 (AMR4): randurile noi ale raportului aratat (cheie -> rand, pentru Albastru si eticheta lui); raportul s-a
+        # aratat o data (cursorul pus pe prima noua); "Scanează canalele" pornita de aici (al doilea OK nu o reia)
+        self._noi = {}
+        self._raport_aratat = False
+        self._scanat = False
 
         self['lista'] = List([], enableWrapAround=True)
         self['preview'] = Label('')
@@ -90,10 +105,15 @@ class ScanerOarba(Screen):
         self['oarba_loc'] = Label('')
         self['tastatura'] = ActionMap(['ColorActions', 'OkCancelActions', 'DirectionActions'], {
             'red': self.inapoi, 'cancel': self.inapoi, 'green': self.verde, 'yellow': self.galben, 'ok': self.ok,
+            'blue': self.albastru,
             'up': self._sus, 'down': self._jos, 'left': lambda: self._cicleaza(-1), 'right': lambda: self._cicleaza(1),
             'upRepeated': self._sus, 'downRepeated': self._jos,
         }, -1)
         self._c.adauga_ascultator(self._schimbare)
+        # 0.8.0 (AMR4): cronometrul merge din secunda in secunda, si cand programul nu scrie nimic
+        adauga_ceas = getattr(self._c, 'adauga_ascultator_ceas', None)
+        if adauga_ceas is not None:
+            adauga_ceas(self._la_ceas)
         # 0.7.7 (BSC): pe Vu+ Solo SE, aducerea programului Vu+ la prima cautare: pasul cu timpul scurs si esecul, aici
         self._i = O.instalare_vuplus()
         self._i.adauga_ascultator(self._la_instalare)
@@ -103,6 +123,9 @@ class ScanerOarba(Screen):
         # casetele se stiu numai dupa ce skinul s-a pus (hdsAreCasete)
         if hasattr(self, 'onLayoutFinish'):
             self.onLayoutFinish.append(self._arata)
+        # 0.8.0 (AMR4): dupa „Scanează canalele” ecranul se arata din nou: cele cazute la acordare trec in sectiunea lor
+        if hasattr(self, 'onShown'):
+            self.onShown.append(self._la_aratare)
 
     # ---------------------------------------------------------------- ce se arata
     def _fata_lista(self):
@@ -139,6 +162,7 @@ class ScanerOarba(Screen):
         self['key_red'].setText(_('Înapoi'))
         self['key_green'].setText(_('Caută acum') if not self._antena.get('motiv') else '')
         self['key_yellow'].setText(_('Schimbă'))
+        self['key_blue'].setText('')
 
     def _text_alegeri(self):
         """Randul de stare de sub alegeri: aducerea programului Vu+ (pasul sau esecul), refuzul ultimei porniri sau ajutorul."""
@@ -157,21 +181,68 @@ class ScanerOarba(Screen):
     def _preview(self):
         return O.text_previzualizare(self._antena, self._config)
 
+    @staticmethod
+    def _cu_sistem(sistem, text):
+        """'DVB-S2, text' cand sistemul e stiut, altfel numai textul."""
+        return ', '.join(x for x in (sistem, text) if x)
+
+    def _randuri_raport(self, c):
+        """0.8.0 (AMR4): randurile de la sfarsit, pe sectiuni (HdsCautareOarba.sectiuni): capul fiecareia cu numaratoarea
+        (Noi si Deja în listă mereu, celelalte numai cand au ceva), apoi purtatoarele ei."""
+        rez = []
+        sect = c.sectiuni_acum()
+        self._noi = dict((r['cheie'], r) for r in dict(sect).get('noi', []))
+        for cheie, lista in sect:
+            if not lista and cheie not in ('noi', 'in_lista'):
+                continue
+            rez.append((O.titlu_sectiune(cheie, len(lista), c.faza == O.OPRIT), RAND_SECTIUNE + cheie, '',
+                        self._culoare_valorii))
+            for r in lista:
+                if cheie == 'negasite':
+                    rez.append((O.text_tp(r['tp']), RAND_LISTA + r['cheie'], O.text_stare(r['stare']),
+                                self._culoare_valorii))
+                elif r.get('alege'):
+                    rez.append((O.text_tp(r['tp']), r['cheie'],
+                                self._cu_sistem(r['sistem'], O.text_pastrat(r['pastrat'])), self._culoare_valorii))
+                else:
+                    rez.append((O.text_tp(r['tp']), r['cheie'], r['sistem'], self._culoare_valorii))
+        return rez
+
+    def _index(self):
+        f = getattr(self['lista'], 'getIndex', None)
+        try:
+            return f() if f is not None else None
+        except Exception:
+            return None
+
     def _arata_cautarea(self):
         c = self._c
-        randuri = [(O.text_tp(r['tp']), '', O.text_stare(r['stare']), self._culoare_valorii)
-                   for r in c.randuri_acum()]
-        if not randuri:
-            randuri = [(_('Se caută...'), '', '', self._culoare_valorii)]
-        pune_randurile(self['lista'], randuri)
-        satelit = c.nume_satelit or self._text_satelit()
-        if c.satelit_schimbat:
-            loc = _('Transponderele găsite arată că antena stă pe %s.') % satelit
+        if c.gata_sau_oprita():
+            randuri = self._randuri_raport(c)
+            pune_randurile(self['lista'], randuri)
+            if not self._raport_aratat:
+                # prima aratare a raportului: cursorul pe prima purtatoare noua (Albastru se vede de la inceput)
+                self._raport_aratat = True
+                prima = [i for i, r in enumerate(randuri) if r[1] in self._noi]
+                self['lista'].setIndex(prima[0] if prima else 0)
         else:
-            loc = _('Satelit: %s') % satelit
-        # cu casete, randul satelitului sta sub ele (oarba_loc), iar preview ramane gol; altfel, ca inainte
-        self['preview'].setText('' if self.hdsArataCasetele(c.stare(), loc) else loc)
-        self['stare'].setText(c.text_stare())
+            # 0.8.0 (AMR4): cat merge cautarea, numai ce a gasit pana acum, cea mai noua sus (text scurt: in germana
+            # sau maghiara randul lung nu incape)
+            self._noi = {}
+            self._raport_aratat = False
+            # o cautare noua (si una pornita din pagina web): primul OK din raportul ei porneste iar scanarea
+            self._scanat = False
+            randuri = [(O.text_tp(r['tp']), r['cheie'], self._cu_sistem(r['sistem'], O.text_gasita(r['stare'])),
+                        self._culoare_valorii) for r in c.gasite_acum()]
+            if not randuri and c.in_curs():
+                randuri = [(_('Se caută...'), '', '', self._culoare_valorii)]
+            # cursorul sus ramane sus, pe cea mai noua (altfel pune_randurile il tine pe aceeasi purtatoare si fereastra
+            # aluneca spre cele vechi); daca omul a coborat in lista, ramane unde era
+            sus = self._index() in (0, None)
+            pune_randurile(self['lista'], randuri)
+            if sus and randuri:
+                self['lista'].setIndex(0)
+        self._arata_starea()
         if c.in_curs():
             self['key_red'].setText(_('Oprește') if c.faza != O.OPRESTE else '')
             self['key_green'].setText('')
@@ -180,6 +251,46 @@ class ScanerOarba(Screen):
             self['key_red'].setText(_('Înapoi'))
             self['key_green'].setText(_('Scanează canalele') if c.stare()['poate_scana'] else '')
             self['key_yellow'].setText(_('Caută din nou'))
+        self._eticheta_albastra()
+
+    def _arata_starea(self):
+        """Casetele (cu cronometrul), randul satelitului si randul de stare; chemat si din secunda in secunda."""
+        c = self._c
+        satelit = c.nume_satelit or self._text_satelit()
+        if c.satelit_schimbat:
+            loc = _('Transponderele găsite arată că antena stă pe %s.') % satelit
+        else:
+            loc = _('Satelit: %s') % satelit
+        # cu casete, randul satelitului sta sub ele (oarba_loc), iar preview ramane gol; altfel, ca inainte
+        self['preview'].setText('' if self.hdsArataCasetele(c.stare(), loc) else loc)
+        self['stare'].setText(c.text_stare())
+
+    def _rand_ales(self):
+        """0.8.0 (AMR4): randul raportului de sub cursor cand e o purtatoare noua (se poate lasa deoparte), altfel None.
+        Din randurile noi ale raportului aratat (_noi), fara sa se socoteasca din nou la fiecare Sus/Jos."""
+        if not self._fata_lista() or not self._c.gata_sau_oprita():
+            return None
+        rand = self._rand()
+        cheie = rand[1] if rand and len(rand) > 1 else None
+        return self._noi.get(cheie) if cheie else None
+
+    def _eticheta_albastra(self):
+        r = self._rand_ales()
+        self['key_blue'].setText('' if r is None else (_('Nu păstra') if r['pastrat'] else _('Păstrează')))
+
+    def _la_ceas(self, _c):
+        try:
+            if self._fata_lista() and self._c.in_curs():
+                self._arata_starea()
+        except Exception as e:
+            print('[ScanerOarba] cronometrul: %s' % e)
+
+    def _la_aratare(self):
+        try:
+            if self._fata_lista():
+                self._arata_cautarea()
+        except Exception as e:
+            print('[ScanerOarba] aratarea din nou: %s' % e)
 
     def hdsAreCasete(self):
         """True cand skinul are casetele (blocul DSG2 din ecranul ScanerOarba al skinului HDSatelit)."""
@@ -225,9 +336,11 @@ class ScanerOarba(Screen):
 
     def _sus(self):
         self['lista'].selectPrevious()
+        self._eticheta_albastra()
 
     def _jos(self):
         self['lista'].selectNext()
+        self._eticheta_albastra()
 
     def _alegeri_satelit(self):
         """[(pozitie, nume, slot)] din randul "Satelit" (HdsCautareOarba.antena), cu doua sau mai multe: se alege."""
@@ -277,6 +390,10 @@ class ScanerOarba(Screen):
 
     def ok(self):
         if self._fata_lista():
+            # 0.8.0 (AMR4): la sfarsit OK = „Scanează canalele”, ca Verde (din fabrica toate cele noi se pastreaza); o
+            # singura data: dupa intoarcerea din scanare un OK nu o mai porneste de la capat (Verde da)
+            if not self._c.in_curs() and not self._scanat:
+                self.verde()
             return
         rand = self._rand()
         if rand and rand[1] == RAND_CAUTA:
@@ -315,6 +432,15 @@ class ScanerOarba(Screen):
             refuz = O.scaneaza_canalele(self.session)
             if refuz:
                 self['stare'].setText(refuz)
+            else:
+                self._scanat = True
+
+    def albastru(self):
+        """0.8.0 (AMR4): pe o purtatoare noua din raport, o lasa deoparte sau o pune la loc (nu merge la „Scanează
+        canalele”); alegerea e a cautarii, deci se vede si in pagina web."""
+        r = self._rand_ales()
+        if r is not None:
+            self._c.pastreaza(r['cheie'])
 
     def galben(self):
         if not self._fata_lista():
@@ -346,10 +472,14 @@ class ScanerOarba(Screen):
             return
         self._mesaj = ''
         self._urmareste = True
+        self._scanat = False
         self['lista'].setIndex(0)
         self._arata_cautarea()
 
     def _la_inchidere(self):
         # cautarea (daca mai merge) continua; o vede pagina web, iar la sfarsit canalul de dinainte porneste din nou
         self._c.scoate_ascultator(self._schimbare)
+        scoate_ceas = getattr(self._c, 'scoate_ascultator_ceas', None)
+        if scoate_ceas is not None:
+            scoate_ceas(self._la_ceas)
         self._i.scoate_ascultator(self._la_instalare)

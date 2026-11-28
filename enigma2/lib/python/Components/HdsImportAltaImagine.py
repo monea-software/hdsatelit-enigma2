@@ -28,7 +28,7 @@
 #      pluginurile numai cu oferta. Skinul nu se aduce. Copia de siguranta, arhivele, limitele si lista alba sunt ale
 #      importului.
 #   5. La capat: starea GATA cu rezumatul (ce s-a adus, cu numere, si ce nu), aratat o data pe televizor si in web;
-#      apoi, pe televizor, oferta pluginurilor (cate unul, cu intrebarea de la Extensii si aplicatii) si, cand setarile
+#      apoi, pe televizor, oferta pluginurilor (cate unul, cu intrebarea de la Extensii) si, cand setarile
 #      asteapta repornirea interfetei, intrebarea daca o reporneste acum. In web oferta e in rezumat.
 #   6. 0.7.7: starea NIMIC nu mai e definitiva cat timp omul nu are canale (are_canale): un stick sau un disc montat mai
 #      tarziu (harddiskmanager, "add") si fiecare pornire a interfetei reiau aceeasi cautare (reia_cautarea), deci copia
@@ -413,10 +413,10 @@ def parti_rezumat(r):
 			"acolo)"))
 	oferite = len(r.get("pachete_oferite") or ())
 	if r.get("pachete_total"):
-		neadus.append(_("pluginurile (în copie: %d; se pot instala acum: %d, din Meniu, Extensii și aplicații)")
+		neadus.append(_("pluginurile (în copie: %d; se pot instala acum: %d, din Meniu, Extensii)")
 			% (r["pachete_total"], oferite))
 	else:
-		neadus.append(_("pluginurile (le pui din nou din Meniu, Extensii și aplicații, din listă sau din fișier .ipk)"))
+		neadus.append(_("pluginurile (le pui din nou din Meniu, Extensii, din listă sau din fișier .ipk)"))
 	neadus.append(_("skinul (skinurile altor imagini nu se potrivesc pe ecranele acestei imagini)"))
 	if r.get("acces_lipsa"):
 		neadus.append(_("modulele de acces %s (nu există în sursele de pachete ale imaginii; fișierele lor sunt "
@@ -520,7 +520,7 @@ def text_ce_se_aduce():
 def text_oferta(r):
 	n = len(r.get("pachete_oferite") or ())
 	return _("Pluginuri din copie care se pot instala acum: %d. Le instalez? Fiecare are întrebarea lui, ca la "
-		"Extensii și aplicații.") % n
+		"Extensii.") % n
 
 
 def retea_merge(R=None):

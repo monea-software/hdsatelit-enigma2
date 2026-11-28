@@ -282,8 +282,35 @@ class InfoBarShowHide:
 
 	def hdsIesirePrivire(self):
 		if not self.hdsInchidePipLaIesire():
+			# getattr: probele de pe PC copiaza numai unele metode pe o bara de proba
+			arata = getattr(self, "hdsExitArataBara", None)
+			if arata is not None and arata():
+				return
 			self.hdsScoateFixarea()
 			self.hide()
+
+	def keyHide(self):
+		"""Numele din alte imagini (OE-Alliance) pentru EXIT pe bara; il cer temele externe (Obsidian FHD 1.8.0, timeshift.py):
+		fara el tema dadea eroare si mesaj pe ecran la fiecare pornire si schimbare de canal (AS148, 0.8.0)."""
+		return self.hdsIesirePrivire()
+
+	def hdsExitArataBara(self):
+		"""NEU9: cu "EXIT cat te uiti la TV" = "arata" (Components/HdsTasteRapide, hds_exit_privire), EXIT pe bara live fara nimic
+		pe ecran (bara si a doua bara ascunse, bara in fata) arata bara, ca OK. Din fabrica (hide) nu face nimic: EXIT o ascunde.
+		True daca a aratat-o."""
+		try:
+			from Components.HdsTasteRapide import optiune
+			if optiune("hds_exit_privire") != "arata":
+				return False
+		except Exception as e:
+			print("[InfoBarGenerics] EXIT la privit: %s" % e)
+			return False
+		if (not isinstance(self, InfoBarChannelSelection) or not self.execing
+				or self.session.current_dialog is not self or self._hdsSecondaVizibila()
+				or self.__state != self.STATE_HIDDEN):
+			return False
+		self.show()
+		return True
 
 	def toggleShow(self):
 		# Optiunea OK apartine numai barei de canale, cat ea este ecranul activ.
@@ -1445,12 +1472,65 @@ class InfoBarEPG:
 			services = self.getBouquetServices(bouquet)
 		if services:
 			self.epg_bouquet = bouquet
+			# ghidul grafic (Screens/HdsGhidGrafic.py, RW2): cu setarea 'Ghidul TV ca grilă' (din fabrica Nu) sau ales
+			# din 'Alege tipul de ghid'; acelasi loc pentru EPG, INFO tinut, Multi EPG din detalii si ghidul fara EPG
+			grila = getattr(self, "hds_grila_o_data", False) or getattr(getattr(config.usage, "hds_ghid_grafic", None), "value", False)
+			self.hds_grila_o_data = False
+			if grila:
+				return self.hdsDeschideGrila(bouquet, services, withCallback)
 			if withCallback:
 				self.dlg_stack.append(self.session.openWithCallback(self.closed, EPGSelection, services, self.zapToService, None, self.changeBouquetCB))
 			else:
 				self.session.open(EPGSelection, services, self.zapToService, None, self.changeBouquetCB)
 			return True
 		return False
+
+	def hdsDeschideGrila(self, bouquet, services, withCallback=True):
+		from Screens.HdsGhidGrafic import HdsGhidGrafic
+		buchete = self.servicelist.getBouquetList() or []
+		nume = ""
+		cheie = bouquet.toCompareString()
+		for n, b in buchete:
+			if b.toCompareString() == cheie:
+				nume = n
+				break
+		if not nume:
+			nume = ServiceReference(bouquet).getServiceName()
+		argumente = (HdsGhidGrafic, services, self.zapToService, None, self.changeBouquetCB)
+		optiuni = {"buchete": buchete, "alegeBuchet": self.hdsAlegeBuchetGrila, "numeBuchet": nume, "ghidLista": True}
+
+		def inchisa(ret=False, lista=None):
+			# MENU > 'Ghidul în listă' inchide grila cu canalele ei; lista se deschide abia acum, dupa inchidere
+			if withCallback:
+				self.closed(ret)
+			if lista:
+				self.hdsGhidInLista(lista)
+		ecran = self.session.openWithCallback(inchisa, *argumente, **optiuni)
+		if withCallback:
+			self.dlg_stack.append(ecran)
+		return True
+
+	def hdsAlegeBuchetGrila(self, bouquet, epg, nume=""):
+		"""tasta albastra din ghidul grafic: alt buchet; comutarea din ghid il foloseste (epg_bouquet)"""
+		services = self.getBouquetServices(bouquet)
+		if services:
+			self.epg_bouquet = bouquet
+		# un buchet gol se arata gol ("Buchetul nu are canale."), nu ramane cel vechi fara niciun semn
+		epg.setServices(services, nume)
+
+	def hdsGhidInLista(self, services):
+		"""MENU > 'Ghidul în listă' din ghidul grafic: acelasi buchet in ghidul obisnuit, deschis dupa inchiderea grilei"""
+		if services:
+			self.dlg_stack.append(self.session.openWithCallback(self.closed, EPGSelection, services, self.zapToService, None,
+				self.changeBouquetCB))
+
+	def hdsGhidGrafic(self):
+		"""'Ghid grafic' din 'Alege tipul de ghid': grila buchetului curent, oricare ar fi setarea"""
+		self.hds_grila_o_data = True
+		try:
+			self.hdsGhidBuchetCurent()
+		finally:
+			self.hds_grila_o_data = False
 
 	def changeBouquetCB(self, direction, epg):
 		if self.bouquetSel:
@@ -1584,6 +1664,7 @@ class InfoBarEPG:
 		list = [(p.name, boundFunction(self.runPlugin, p)) for p in plugins.getPlugins(where = PluginDescriptor.WHERE_EVENTINFO)]
 		list.append((_("Ghidul canalului curent"), self.openSingleServiceEPG))
 		list.append((_("Ghidul buchetului curent"), self.hdsGhidBuchetCurent))
+		list.append((_("Ghid grafic"), self.hdsGhidGrafic))
 		self.session.openWithCallback(self.EventInfoPluginChosen, ChoiceBox,
 			title=_("Alege tipul de ghid"), list=list, skin_name="EPGExtensionsList")
 
@@ -2185,6 +2266,10 @@ class InfoBarTimeshift:
 		"""Numele cerut de pluginuri: inainte de zap se intreaba daca oprim timeshiftul; aici raspunsul e mereu da."""
 		returnFunction(True)
 
+	def timeshiftEnabled(self):
+		"""Numele din alte imagini (OE-Alliance) pentru starea pauzei emisiunii; il cer temele externe (Obsidian FHD 1.8.0)."""
+		return bool(getattr(self, "timeshift_enabled", False))
+
 	def __init__(self):
 		self["TimeshiftActions"] = HelpableActionMap(self, "InfobarTimeshiftActions",
 			{
@@ -2287,6 +2372,12 @@ class InfoBarTimeshift:
 		else:
 			if not ts.startTimeshift():
 				self.timeshift_enabled = 1
+				try:
+					# 0.8.0: pe FAT32 pauza se opreste la 4 GB fara niciun eveniment; anuntul si ceasul limitei
+					from Components import HdsAnuntStocare
+					HdsAnuntStocare.pauzaPornita(self, config.usage.timeshift_path.value)
+				except Exception:
+					pass
 
 				# we remove the "relative time" for now.
 				#self.pvrStateDialog["timeshift"].setRelative(time.time())
@@ -2475,10 +2566,13 @@ class InfoBarExtensions:
 			if pluginuriAlbastru(plugins):
 				text = _("Nu sunt pluginuri care se pot deschide acum.")
 			else:
-				text = _("Nu ai extensii instalate. Le poți adăuga din meniu, la Extensii și aplicații.")
+				text = _("Nu ai extensii instalate. Le poți adăuga din meniu, la Extensii.")
 			self.session.open(MessageBox, text, MessageBox.TYPE_INFO, timeout=8)
 			return
-		self.session.openWithCallback(self.extensionCallback, ChoiceBox, title=_("Please choose an extension..."), list = list, keys = keys, skin_name = "ExtensionsList")
+		# the list wraps around at both ends with "Navigare circulară în meniurile cu listă" (config.usage.hds_meniu_circular,
+		# Nu from the factory) (tamiciav7, LinuxSat 232449 #501189)
+		circular = getattr(getattr(config.usage, "hds_meniu_circular", None), "value", False)
+		self.session.openWithCallback(self.extensionCallback, ChoiceBox, title=_("Please choose an extension..."), list = list, keys = keys, skin_name = "ExtensionsList", enableWrapAround = bool(circular))
 
 	def extensionCallback(self, answer):
 		if answer is not None:
@@ -3510,6 +3604,11 @@ class InfoBarFilmRefuz:
 		# in playerul de filme: inapoi la lista, cu cursorul pe filmul de dupa cel refuzat (un OK in lista nu il mai
 		# porneste din nou); in bara principala nimic, canalul ramane ales
 		if getattr(self, "is_closing", False):
+			return
+		# YTP1: ecranul s-a inchis inainte de raspunsul la mesaj (Screen.doClose sterge session si goleste __dict__, dar
+		# metodele clasei raman): leavePlayerConfirmed al unui plugin ar cadea pe self.session
+		if getattr(self, "session", None) is None:
+			print("[InfoBarFilmRefuz] %s s-a inchis inainte de raspuns: nu mai duc la lista de filme" % self.__class__.__name__)
 			return
 		leave = getattr(self, "leavePlayerConfirmed", None)
 		if leave is not None:

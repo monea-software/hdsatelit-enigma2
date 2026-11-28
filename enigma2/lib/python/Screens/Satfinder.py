@@ -22,6 +22,12 @@
 #
 # Ecranul spune modulului cine="ecran" la fiecare cerere; orice alt apelant (pagina web) primește refuz cât e
 # deschis ecranul (Masurare, în Components/HdsGasireSemnal.py).
+#
+# GSW2 (Eduard 27.11.2026): pe transponderul programului de acum măsurarea citește tunerul programului și nu îl
+# oprește (modul A, în modul); primul rând, „Transponderul canalului de acum”, alege cu OK satelitul și transponderul
+# programului și pornește măsurarea; fără program de satelit (IPTV) ecranul pornește pe satelitul pe care stă antena
+# (HdsGasireSemnal.pozitie_implicita), nu pe primul din listă; un satelit în afara cursei motorului, prea jos sau sub
+# orizont se acordează numai după „Da” (HdsGasireSemnal.text_departe).
 
 from Screens.Screen import Screen
 from Components.ConfigList import ConfigListScreen
@@ -95,6 +101,9 @@ class Satfinder(ConfigListScreen, Screen):
 		self._valori = {}
 		self._fereastraCanale = None
 		self._textCanale = None
+		self._program = None          # GSW2: programul de acum (citit la deschidere, înainte de orice oprire)
+		self.cProgram = None
+		self._confirmatPoz = None     # satelitul departat pentru care s-a spus deja „Da”
 
 		if self.tunere:
 			self._creeazaCampurile()
@@ -149,19 +158,30 @@ class Satfinder(ConfigListScreen, Screen):
 	def _creeazaCampurile(self):
 		# transponderul canalului de pe ecran, citit acum, înainte ca măsurarea să oprească ceva
 		tpInitial, tunerInitial = None, self.tunere[0]
-		serviciu = self.session.nav.getCurrentService()
+		try:
+			self._program = HdsGasireSemnal.program_acum(self.tunere)
+		except Exception as e:
+			print("[Satfinder] programul de acum: %r" % (e,))
+			self._program = None
 		for t in self.tunere:
-			if t.get("fel", "S") != "S":
-				tp = HdsGasireSemnal.transponder_din_serviciu_tc(serviciu, t["fel"], t["slot"])
-			else:
-				tp = HdsGasireSemnal.transponder_din_serviciu(serviciu, [s["poz"] for s in t["sateliti"]])
-			if tp is not None:
-				tpInitial, tunerInitial = tp, t
+			if self._program is not None and t["slot"] == self._program["slot"]:
+				tpInitial, tunerInitial = self._program["tp"], t
 				break
+		pozInitiala = None
+		if tpInitial is not None:
+			if HdsGasireSemnal.fel_tp(tpInitial) == HdsGasireSemnal.FEL_SATELIT:
+				# antena e deja acolo (programul merge pe el): fără întrebare chiar dacă e departe
+				self._confirmatPoz = tpInitial["orbital_position"]
+			self.cProgram = ConfigSelection(choices=[("program", HdsGasireSemnal.text_transponder(tpInitial))], default="program")
+		else:
+			for t in self.tunere:
+				if t.get("fel", "S") == "S" and t["sateliti"]:
+					tunerInitial, pozInitiala = t, HdsGasireSemnal.pozitie_implicita(t)
+					break
 		self.cTuner = ConfigSelection(choices=[(str(t["slot"]), t["nume"]) for t in self.tunere],
 			default=str(tunerInitial["slot"]))
 		self._creeazaManual()
-		self._pregatesteTuner(tpInitial)
+		self._pregatesteTuner(tpInitial, pozInitiala)
 
 	def _tunerCurent(self):
 		for t in self.tunere:
@@ -193,7 +213,7 @@ class Satfinder(ConfigListScreen, Screen):
 		self.cRataC = ConfigNumber(default=6900)
 		self.cModC = ConfigSelection(choices=alegeri(HdsGasireSemnal.modulatii_cablu()), default="0")
 
-	def _pregatesteTuner(self, tpInitial=None):
+	def _pregatesteTuner(self, tpInitial=None, pozInitiala=None):
 		t = self._tunerCurent()
 		# DVB-S2 se poate alege numai dacă tunerul îl are
 		self.cSistem.setChoices([(str(c), n) for c, n in HdsGasireSemnal.sisteme(t["s2"])], default="0")
@@ -206,7 +226,12 @@ class Satfinder(ConfigListScreen, Screen):
 			self.cSatelit = self.cTransponder = None
 			return
 		pozitii = [str(s["poz"]) for s in t["sateliti"]]
-		implicit = str(tpInitial["orbital_position"]) if tpInitial is not None else pozitii[0]
+		if tpInitial is not None:
+			implicit = str(tpInitial["orbital_position"])
+		elif pozInitiala is not None:
+			implicit = str(pozInitiala)
+		else:
+			implicit = pozitii[0]
 		self.cSatelit = ConfigSelection(choices=[(str(s["poz"]), HdsGasireSemnal.text_satelit(s))
 			for s in t["sateliti"]], default=implicit if implicit in pozitii else pozitii[0])
 		self._pregatesteSatelit(tpInitial)
@@ -277,6 +302,8 @@ class Satfinder(ConfigListScreen, Screen):
 	def _construiesteLista(self):
 		lista = []
 		if self.tunere:
+			if self.cProgram is not None:
+				lista.append(getConfigListEntry(_("Transponderul canalului de acum"), self.cProgram))
 			if len(self.tunere) > 1:
 				lista.append(getConfigListEntry(_("Tuner"), self.cTuner))
 			if self.cListaTC is not None:
@@ -345,7 +372,47 @@ class Satfinder(ConfigListScreen, Screen):
 			self.masurare.arata_refuz(eroare, t["slot"], cine="ecran")
 			return
 		self._tpAles = tp
-		self.masurare.porneste(t["slot"], tp, "ecran", self.session, extra, t["s2"])
+		self._cuVoie(tp, lambda: self.masurare.porneste(t["slot"], tp, "ecran", self.session, extra, t["s2"]))
+
+	def _cuVoie(self, tp, actiune):
+		"""GSW2 D: spre un satelit în afara cursei motorului, prea jos sau sub orizont comanda pleacă numai după „Da”;
+		altfel actiune() acum. Satelitul pe care e deja măsurarea (antena e acolo) nu mai întreabă."""
+		if tp is None or HdsGasireSemnal.fel_tp(tp) != HdsGasireSemnal.FEL_SATELIT:
+			return actiune()
+		poz = tp["orbital_position"]
+		m = self.masurare
+		if poz == self._confirmatPoz or (m.tp is not None and HdsGasireSemnal.fel_tp(m.tp) == HdsGasireSemnal.FEL_SATELIT
+				and m.tp.get("orbital_position") == poz and m.faza not in ("oprita", "refuzat")):
+			return actiune()
+		t = self._tunerCurent()
+		sat = HdsGasireSemnal.satelit_din(t, poz) if t.get("motor") else None
+		text = HdsGasireSemnal.text_departe(sat) if sat else ""
+		if not text:
+			return actiune()
+		self._actiuneDupaVoie = (poz, actiune)
+		from Screens.MessageBox import MessageBox
+		self.session.openWithCallback(self._dupaVoie, MessageBox, text, MessageBox.TYPE_YESNO, default=False)
+
+	def _dupaVoie(self, da):
+		poz, actiune = getattr(self, "_actiuneDupaVoie", (None, None))
+		self._actiuneDupaVoie = None
+		if da and actiune is not None:
+			self._confirmatPoz = poz
+			actiune()
+
+	def _laProgram(self):
+		"""GSW2 B: OK pe „Transponderul canalului de acum”: tunerul, satelitul și transponderul programului, apoi
+		măsurarea (pe transponderul lui, fără oprirea programului)."""
+		p = self._program
+		if p is None:
+			return
+		self._ceasAcord.stop()
+		self._numericSchimbat = False
+		self.cTuner.value = str(p["slot"])
+		self._valori[id(self.cTuner)] = self.cTuner.value
+		self._pregatesteTuner(p["tp"])
+		self._construiesteLista()
+		self._pornesteMasurarea()
 
 	def _programeazaAcord(self):
 		self._ceasAcord.start(INTARZIERE_ACORD_MS, True)
@@ -362,7 +429,7 @@ class Satfinder(ConfigListScreen, Screen):
 		self._tpAles = tp
 		if self.masurare.tp == tp and self.masurare.faza not in ("oprita", "refuzat"):
 			return
-		self.masurare.schimba(tp, extra, cine="ecran")
+		self._cuVoie(tp, lambda: self.masurare.schimba(tp, extra, cine="ecran"))
 
 	def _laStare(self, stare):
 		"""Ascultătorul măsurării: se schimbă pe ecran numai ce s-a schimbat."""
@@ -443,6 +510,9 @@ class Satfinder(ConfigListScreen, Screen):
 		if cur is None:
 			return
 		obiect = cur[1]
+		if obiect is self.cProgram:
+			self._laProgram()
+			return
 		if isinstance(obiect, ConfigSelection) and (obiect is self.cSatelit or obiect is self.cTransponder
 				or obiect is self.cListaTC or len(obiect.choices) > PRAG_ALEGERE):
 			self._alege(cur[0], obiect)
@@ -492,7 +562,7 @@ class Satfinder(ConfigListScreen, Screen):
 			return
 		self._tpAles = tp
 		if self.masurare.tp != tp:
-			self.masurare.schimba(tp, extra, cine="ecran")
+			self._cuVoie(tp, lambda: self.masurare.schimba(tp, extra, cine="ecran"))
 		else:
 			self.masurare.reacordeaza(cine="ecran")
 

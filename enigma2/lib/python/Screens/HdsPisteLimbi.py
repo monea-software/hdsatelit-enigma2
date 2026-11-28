@@ -53,7 +53,7 @@ class HdsPisteLimbi(Screen, ConfigListScreen):
 		self.setari = pl.initConfig()
 		ConfigListScreen.__init__(self, [], session=session, on_change=self._schimbat)
 		self._toate = [self.setari.audio1, self.setari.audio2, self.setari.audio3, self.setari.fara_subtitrari,
-			self.setari.sub1, self.setari.sub2, self.setari.sub3, self.setari.tradu_orice]
+			self.setari.sub1, self.setari.sub2, self.setari.sub3, self.setari.tradu_orice, self.setari.mesaj_lipsa]
 		self._niciodata = self.setari.fara_subtitrari.value
 
 		ajutor = _("La fiecare canal pornește prima alegere care există pe canal. Dacă nu există "
@@ -124,6 +124,8 @@ class HdsPisteLimbi(Screen, ConfigListScreen):
 				getConfigListEntry(_("Subtitrare, a treia alegere"), self.setari.sub3),
 				getConfigListEntry(_("Tradu automat din orice subtitrare disponibilă"), self.setari.tradu_orice),
 			]
+		# a subtitle chosen by hand can raise the message also with "Fără subtitrări niciodată", so the row stays visible
+		lista.append(getConfigListEntry(_("Mesaj când canalul nu trimite subtitrarea"), self.setari.mesaj_lipsa))
 		self["config"].list = lista
 		self["config"].l.setList(lista)
 
@@ -145,7 +147,7 @@ class HdsPisteLimbi(Screen, ConfigListScreen):
 		if rand is None or len(rand) < 2:
 			return
 		element = rand[1]
-		if element is self.setari.fara_subtitrari or element is self.setari.tradu_orice:
+		if element in (self.setari.fara_subtitrari, self.setari.tradu_orice, self.setari.mesaj_lipsa):
 			element.value = not element.value
 			self["config"].invalidateCurrent()
 			self._schimbat()
@@ -230,8 +232,10 @@ class HdsPisteLimbi(Screen, ConfigListScreen):
 
 	# ------------------------------------------------------------------ salvare / anulare
 	def salveaza(self):
+		# toate 8 se scriu, si cele lasate cum erau: omul le-a vazut si le-a confirmat (o schimbare viitoare a valorii
+		# din fabrica nu i le mai schimba)
 		for element in self._toate:
-			element.save()
+			pl.salveazaAlegerea(element)
 		configfile.save()
 		pl.reaplicaAcum(self.session)
 		self.close(True)

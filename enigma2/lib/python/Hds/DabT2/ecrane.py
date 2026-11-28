@@ -56,6 +56,15 @@ def text_stare(feed, scurt=False, tp=None):
     return ''
 
 
+def text_verificare(feed, tp=None, n=0):
+    """text_stare (textul intreg) pentru randul unui feed cu `n` programe/posturi invatate pe receptor. T2P9 (0.8.0):
+    cu n > 0 receptorul omului prinde fluxul, deci lipsa semnalului la proba din Romania („merge numai in zona lui”,
+    „fara semnal la proba”) nu se mai spune. Acelasi text pe ecran (stari_rand) si in pagina web (dabt2_web)."""
+    if n and (feed or {}).get('stare_verificare') == 'fara_semnal_in_zona_testata':
+        return ''
+    return text_stare(feed, tp=tp)
+
+
 def text_numar(profil, n):
     """„1 post”, „5 posturi”, „20 de posturi” (DAB) sau programe (DVB-T2)."""
     if profil.tip == 'dab':
@@ -118,7 +127,7 @@ def stari_rand(profil, tp, feed, n):
     """(text scurt pe rand, text lung jos) pentru un feed. Functie pura, probata pe PC."""
     if tuner.multistream_neprins(tp):
         return 'Multistream', tuner.text_multistream()
-    verif = text_stare(feed, tp=tp)
+    verif = text_verificare(feed, tp, n)
     if n:
         return text_numar(profil, n), verif
     lung = text_necautat(profil)

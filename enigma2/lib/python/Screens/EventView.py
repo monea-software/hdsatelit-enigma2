@@ -4,6 +4,10 @@ from Components.ActionMap import ActionMap
 from Components.Button import Button
 from Components.Label import Label
 from Components.ScrollLabel import ScrollLabel
+# the sources "Event" and "Service" for the external themes (MohammedSkin and the themes of the other images draw the
+# poster, the title and the description from source="Event"); the HDSatelit skin uses the labels below
+from Components.Sources.Event import Event as HdsSursaEvent
+from Components.Sources.ServiceEvent import ServiceEvent as HdsSursaServiciu
 from Components.TimerList import TimerList
 from enigma import eEPGCache, eTimer, eServiceReference
 from .TimerEntry import GhidTimer
@@ -32,6 +36,8 @@ class EventViewBase:
 		self.currentService=Ref
 		self.isRecording = (not Ref.ref.flags & eServiceReference.isGroup) and Ref.ref.getPath()
 		self.event = Event
+		self["Event"] = HdsSursaEvent()
+		self["Service"] = HdsSursaServiciu()
 		self["epg_description"] = ScrollLabel()
 		# the HDSatelit skin draws the text in FullDescription (the widget of the newer images); epg_description stays
 		# for the other skins. Both get the same text.
@@ -149,6 +155,10 @@ class EventViewBase:
 
 	def setService(self, service):
 		self.currentService=service
+		try:
+			self["Service"].newService(service.ref)
+		except Exception:
+			pass
 		if self.isRecording:
 			self["channel"].setText(_("Recording"))
 		else:
@@ -168,6 +178,10 @@ class EventViewBase:
 
 	def setEvent(self, event):
 		self.event = event
+		try:
+			self["Event"].newEvent(event)
+		except Exception:
+			pass
 		if event is None:
 			return
 		name, short, ext, note = self.hdsTexte(event)

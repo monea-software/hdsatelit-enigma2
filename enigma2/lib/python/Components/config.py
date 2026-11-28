@@ -87,6 +87,15 @@ class ConfigElement(object):
 		else:
 			# _hdsDinText: o clasa de plugin care citeste textul cu fromString (numele din alte imagini); altfel fromstring
 			self.value = self._hdsDinText(sv)
+		# HDSatelit (TMS1, 24.11.2026; ca in enigma2 de baza): valoarea citita devine si last_value. Altfel last_value ramanea
+		# valoarea din fabrica (din __init__) si onDeselect compara cu ea: o setare salvata "Nu" cu fabrica "Da", pusa iar
+		# pe "Da" dupa repornire, nu chema notificatorii finali (EPG Import "Arata in extensii": randul nu aparea), iar
+		# trecerea cursorului peste randul neschimbat ii chema degeaba ("[EPGImport] Failed to update extensions menu").
+		try:
+			self.last_value = copy_copy(self.value)
+		except Exception:
+			# o valoare salvata stricata (ConfigNumber cu "abc"): load nu cade din cauza asta, ca inainte
+			pass
 
 	def tostring(self, value):
 		return str(value)

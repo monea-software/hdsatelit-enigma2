@@ -44,7 +44,13 @@
 # scrieri pe flash in potop), nu reparatia blocarii de la pornirea filmelor din internet. Perechea ei: kernel.printk
 # „3 4 1 7” (procps_%.bbappend). Ajunge si prin actualizare (pachetul busybox), nu numai cu imagine noua.
 # Proba: test_jurnal_potop_075.py (uneltele noastre).
-PR:append = ".hds5"
+#
+# serverele de nume ale omului (.hds6, imaginea 0.8.0, 26.11.2026, agentul PRM1; Babadem, SF8008 si SF8008 Supreme): cu DHCP,
+# 50default rescria /etc/resolv.conf la pornire si la fiecare reinnoire cu serverele routerului, deci cele puse de mana in
+# "Nameserver settings" se pierdeau la repornire. Acum 50default ia lista din /etc/enigma2/nameserversdns.conf (numele din
+# OE-Alliance), pe care o scrie numai OK in "Nameserver settings" (Components/HdsRetea.py scrieDns, si din web); fara fisier,
+# ca inainte. Perechea din imagine: Components/Network.py pune lista la loc si la pornirea interfetei.
+PR:append = ".hds6"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
@@ -98,6 +104,7 @@ do_install:append() {
     fi
     grep -q 'ip route del default dev "$interface"' "$f" || bbfatal "busybox: 50default sterge alte rute decat ale placii"
     grep -q 'dev "$interface" metric' "$f" || bbfatal "busybox: 50default pune ruta implicita fara dev"
+    grep -q 'DNS_OMULUI=/etc/enigma2/nameserversdns.conf' "$f" || bbfatal "busybox: 50default nu pastreaza serverele de nume ale omului"
     # jurnalul sistemului (0.5.0): rotirea la 1024 KB, 4 fisiere vechi; fisierul trebuie sa fie cel stiut (jurnalul in
     # /home/root/logs/messages, 256 x 1), altfel constructia se opreste in loc sa scrie peste altceva
     c=${D}${sysconfdir}/syslog-startup.conf

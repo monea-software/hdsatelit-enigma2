@@ -9,7 +9,8 @@
 # Rute (poarta comuna a HdsJsonResource: reteaua locala, apoi ?token= sau cookie-ul browserului asociat):
 #   GET  /api/standby-tv     {result, in_standby, hdmi: {disponibil, oprita, text, nota}, cec: {disponibil, pornit,
 #                             raspunde, text, nume, nota, telecomanda, activ (true / false / null = nu se stie),
-#                             ultima_tasta, golite}, adresa_fizica};
+#                             ultima_tasta, golite, trezire_cale}, ultima_trezire {motiv, cand} (0.8.0 CRW0),
+#                             adresa_fizica};
 #                             cu ?jurnal=1 si cec.jurnal: jurnalul CEC (HdsStandbyTv.jurnalCec: mesajele primite si
 #                             trimise si tastele date mai departe, cu ora), numai la cerere (panoul citeste la 5 s)
 #   GET  /api/telecomanda-tv {result, titlu, despre, coloane, randuri: [{cod, receptor, tv}], panou: [{cod, eticheta}],
@@ -174,7 +175,9 @@ def stare(T=None, jurnal=False):
 			"nume_implicit": s.get("nume_implicit"), "nume_cerut": s.get("nume_cerut"),
 			"primite": int(s.get("cec_primite") or 0), "nota": notaCec(s),
 			"telecomanda": bool(s.get("cec_telecomanda")), "activ": s.get("cec_activ"),
-			"ultima_tasta": s.get("cec_ultima_tasta"), "golite": int(s.get("cec_golite") or 0)},
+			"ultima_tasta": s.get("cec_ultima_tasta"), "golite": int(s.get("cec_golite") or 0),
+			"trezire_cale": bool(s.get("cec_trezire_cale", True))},
+		"ultima_trezire": s.get("ultima_trezire"),
 		"adresa_fizica": s.get("adresa_fizica"),
 	}
 	if jurnal:

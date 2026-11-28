@@ -22,6 +22,11 @@ reia la fiecare reincarcare, INCERCARE_ASCUNSE_S), iar buchetul se rescrie fara 
 firul de fundal, cu un termen pe canal (TERMEN_CANAL_S) si unul pe toata incercarea (TERMEN_INCERCARI_S); in jurnal un
 singur rand pe buchet, cu cate s-au scos si cate s-au ascuns, si de ce.
 
+DVI2 (0.8.0, Eduard 26.11.2026 17:32-17:34): listele din toate tarile vin si cu listele de proba
+(Components/HdsDvbISetari); canalele oprite pentru tara nu se mai ascund (se pot porni cu VPN-ul), ci au eticheta, cu
+tara listei lor ("tara" la lista si la canal in starea DVB-I) cand e alta decat tara aleasa. Listele de proba nu dau
+trecerea singura satelit -> internet.
+
 Integrare:
   - Autostart la pornire Enigma2 (PluginDescriptor.WHERE_AUTOSTART)
   - NU apare in Plugin Browser (fara WHERE_PLUGINMENU)
@@ -517,6 +522,7 @@ class HdsDvbIManager(object):
     def __init__(self):
         self._config = _citeste_config()
         self._grupe = {}
+        self._proba = set()
         self._thread = None
         self._activ  = True
         # o singura reincarcare deodata (firul periodic si reincarcarea ceruta din ecran sau din web)
@@ -610,6 +616,8 @@ class HdsDvbIManager(object):
                     R.salveaza(nou)
                     registru = nou
             self._registru_raspuns = bool((registru or {}).get('liste'))
+        # DVI2: listele de proba ale registrelor (nu dau trecerea singura pe internet)
+        self._proba = set(l.get('adresa') for l in (registru or {}).get('liste', []) if l.get('proba'))
         # TODO 1883: tara fiecarei adrese, pentru marcajele grupelor din buchet ({} cu toate_tarile oprit)
         try:
             self._grupe = S.grupeAdrese(config, registru) if hasattr(S, 'grupeAdrese') else {}
@@ -662,7 +670,10 @@ class HdsDvbIManager(object):
         rezultate = []
 
         for index_lista, url in enumerate(url_uri):
-            info = {'adresa': url, 'nume': '', 'ok': False, 'tv': 0, 'radio': 0, 'regiuni': []}
+            # DVI2: tara listei cand e alta decat tara aleasa (eticheta "merge doar în <țara>" a canalelor oprite)
+            grupa = (self._grupe.get(url) or '').upper()
+            info = {'adresa': url, 'nume': '', 'ok': False, 'tv': 0, 'radio': 0, 'regiuni': [],
+                    'tara': grupa if grupa and grupa != tara_aleasa else ''}
             liste_info.append(info)
             if url in sarite:
                 info['pauza_pana'] = int(sarite[url])
@@ -688,7 +699,8 @@ class HdsDvbIManager(object):
                     # tarii alese (si din cele fara grupa: predefinite, puse de mana), ca inainte; listele celorlalte
                     # tari dau canale in buchet, dar un flux strain blocat pe tara ar da ecran negru la pierderea
                     # semnalului
-                    if self._grupe.get(url, tara_aleasa) == tara_aleasa:
+                    # DVI2: nici listele de proba ale registrelor (un flux de test nu inlocuieste canalul de satelit)
+                    if self._grupe.get(url, tara_aleasa) == tara_aleasa and url not in getattr(self, '_proba', ()):
                         legaturi_brute += [(index_lista, l) for l in L.legaturi(date) if l.get('url')]
                 except Exception as e:
                     print('[HdsDvbI] numerotarea si legarea %s: %s' % (url, e))
@@ -839,13 +851,15 @@ class HdsDvbIManager(object):
             acum = time.time()
             de_incercat = []
             ascunsa = getattr(I, 'ascunsa', lambda st: False)
+            # DRM1: un "merge" notat de o imagine care nu se uita in manifest dupa DRM se reia acum, nu peste 6 ore
+            veche = getattr(D, 'incercareVeche', lambda url: False)
             for c in D.canale():
                 st, _cod, ora = D.stareUrl(c.get('url', ''))
                 if numai is not None:
                     if st in numai:
                         de_incercat.append(c)
                 elif forteaza or not st or acum - ora > (INCERCARE_ASCUNSE_S if ascunsa(st) else INCERCARE_S) \
-                        or acum < ora:
+                        or acum < ora or (st == 'merge' and veche(c.get('url', ''))):
                     de_incercat.append(c)
             _INCERCARE.update(in_curs=True, facute=0, total=len(de_incercat), ora=acum)
             rezultate = {}
@@ -1018,6 +1032,9 @@ def _textBuchet(tv, radio, scoase, ascunse):
             st[v] = st.get(v, 0) + 1
         parti.append('ascunse pana merg din nou %d (oprite pentru tara %d, adrese moarte %d, fara raspuns %d)' % (
             len(ascunse), st.get('oprit_tara', 0), st.get('adresa_moarta', 0), st.get('nu_raspunde', 0)))
+        if st.get('drm'):
+            # DRM1: criptate cu DRM (receptorul n-are decriptor)
+            parti.append('din ele protejate DRM %d' % st['drm'])
     return '; '.join(parti)
 
 
@@ -1127,7 +1144,8 @@ def _scrieStare(liste_info, canale, legaturi_brute, pastreaza_canalele=False, in
                 nr = nr_tv
             lista_canale.append({'id': idx, 'nume': nume, 'url': url_flux, 'tip': tip, 'lcn': lcn, 'nr': nr,
                                  'lista': liste_info[index_lista]['adresa'], 'sat': '',
-                                 'ref': ref_serviciu(idx, url_flux, tip), 'ascuns': ascunse.get(url_flux, '')})
+                                 'ref': ref_serviciu(idx, url_flux, tip), 'ascuns': ascunse.get(url_flux, ''),
+                                 'tara': liste_info[index_lista].get('tara', '')})
             id_dupa_lista_nume.setdefault((index_lista, nume), lista_canale[-1])
         dupa_url = dict((c['url'], c) for c in lista_canale)
         legaturi = {}

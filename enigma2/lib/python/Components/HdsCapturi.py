@@ -138,9 +138,23 @@ def _amovibil(disc):
 		return False
 
 
+def _radacinaAltaImagine(punct):
+	"""True when the mount is the root of another installed image (multiboot slot on a stick or card, as
+	/run/media/rootfs2-sda2): its own enigma2 is there. Screenshots must not go into another image's system files
+	(tfrc, SF8008 Supreme, LinuxSat 164215 #972716)."""
+	exista = _proba.get("exista") or os.path.exists
+	for parte in ("usr/bin/enigma2", "etc/enigma2/settings"):
+		try:
+			if exista(os.path.join(punct, parte)):
+				return True
+		except (OSError, ValueError):
+			pass
+	return False
+
+
 def _stick():
 	"""(punct, amovibil) pentru stocarea externa folosita acum, sau None. Stick-ul (removable = 1) are intaietate;
-	la egalitate, primul montat sub /media/."""
+	la egalitate, primul montat sub /media/. Radacina altei imagini (loc de multiboot pe stick) nu se ia."""
 	montari = _montari()
 	radacina = discRadacina(montari) or "mmcblk0"
 	S = _stocare()
@@ -150,7 +164,7 @@ def _stick():
 		if not (punct + "/").startswith(PREFIXE) or fel in S.FS_IN_MEMORIE:
 			continue
 		disc = _discul(disp)
-		if not disc or disc == radacina or disp in vazute:
+		if not disc or disc == radacina or disp in vazute or _radacinaAltaImagine(punct):
 			continue
 		try:
 			bun, _motiv = S.verificaDisc(punct, montari, _proba.get("dev_radacina"), _proba.get("statvfs"),
@@ -390,10 +404,14 @@ def imagineaCanalului():
 	if cs is None:
 		return False
 	try:
-		ce, _motiv = cs.decide("all")
+		ce, motiv = cs.decide("all")
 	except Exception as e:
 		_jurnal("paza capturii: %s" % e)
 		return False
+	if ce != "da":
+		# CPT1: o captura fara imaginea canalului (numai meniurile, -o) iese neagra cand pe ecran nu e niciun meniu:
+		# motivul ramane in jurnal
+		_jurnal("captura fara imaginea canalului (numai meniurile): %s %s" % (ce, motiv))
 	return ce == "da"
 
 
@@ -658,6 +676,11 @@ def captureaza(sesiune=None):
 		return False
 	_stare["sesiune"] = sesiune
 	ascuns = _ascundeMesajul()
+	# CPT1 (AS125): anuntul din mijlocul ecranului (Screens/HdsAnuntRetea, de pilda modulul lipsa) intra in captura, chiar
+	# daca tasta capturii tocmai l-a ascuns; captura se face tocmai ca omul sa afle ce scria acolo. Il ascunde dupa
+	# captura (_anuntDupaCaptura); grab-ul asteapta redesenarea, ca la mesajul de mai sus
+	if _anuntPentruCaptura():
+		ascuns = True
 	# eticheta cititorului (Arată hop-urile și cititorul, Components/HdsEcm) nu intra in captura: ecranele o scot pe loc,
 	# iar grab-ul asteapta redesenarea ca la mesaj
 	try:
@@ -675,8 +698,34 @@ def captureaza(sesiune=None):
 	except Exception as e:
 		_jurnal("pornirea capturii: %s" % e)
 		_stare["pornire"] = None
+		_anuntDupaCaptura()
 		return False
 	return True
+
+
+def _modulAnunt():
+	"""Screens.HdsAnuntRetea numai daca e deja incarcat (fara el nu e niciun anunt; nimic citit de pe disc aici)."""
+	import sys
+	return sys.modules.get("Screens.HdsAnuntRetea")
+
+
+def _anuntPentruCaptura():
+	"""Anuntul de pe ecran tinut (sau aratat din nou) pentru captura -> True cand intra in ea."""
+	try:
+		A = _modulAnunt()
+		return bool(A is not None and A.tinePentruCaptura())
+	except Exception as e:
+		_jurnal("anuntul pentru captura: %s" % e)
+		return False
+
+
+def _anuntDupaCaptura():
+	try:
+		A = _modulAnunt()
+		if A is not None:
+			A.dupaCaptura()
+	except Exception as e:
+		_jurnal("anuntul dupa captura: %s" % e)
 
 
 def _pornesteLucrul():
@@ -689,6 +738,7 @@ def _pornesteLucrul():
 	except Exception as e:
 		_jurnal("captura: %s" % e)
 		_stare["lucru"] = None
+		_anuntDupaCaptura()
 
 
 def _asteapta():
@@ -700,6 +750,7 @@ def _asteapta():
 		return
 	_stare["ceas"].stop()
 	_stare["lucru"] = None
+	_anuntDupaCaptura()
 	if lucru.reusit:
 		titlu = textSalvata(lucru.loc, lucru.amovibil)
 		detaliu = os.path.basename(lucru.cale)

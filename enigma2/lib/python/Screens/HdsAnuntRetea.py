@@ -12,6 +12,8 @@
 # Un text care nu incape (mesajul unui plugin extern, Components/HdsPluginExtern: patru fraze) face fereastra si textul
 # mai inalte, centrate pe ecran; un text care incape lasa marimile din skin (_potriveste).
 
+import time
+
 from enigma import eActionMap, eTimer
 
 from Components.Label import Label
@@ -19,6 +21,10 @@ from Components.Pixmap import Pixmap
 from Screens.Screen import Screen
 
 DURATA_MS = 6000
+# CPT1: un mesaj ascuns de o tasta cu cel mult atatea secunde inainte de o captura intra in captura (o tasta colorata
+# tinuta apasata porneste captura dupa ~1 s, ROSU scurt la ridicare; un mesaj inchis de om cu alta tasta nu mai revine
+# dupa atat)
+CAPTURA_DUPA_TASTA_S = 1.5
 
 
 def _jurnal(text):
@@ -71,12 +77,19 @@ class HdsAnuntRetea(Screen):
 		self.ceasLegare.callback.append(lambda: self._leaga(True))
 		self.legat = False
 		self._marimi = None
+		# CPT1: ora ascunderii la tasta si mesajul tinut pe ecran pentru o captura
+		self.ascunsDeTastaLa = None
+		self.pentruCaptura = False
+		_toate.append(self)
 
 	def anunta(self, text, cheie, durata_ms=None, ascunde_la_tasta=True):
 		"""Arata textul cu pictograma cheie. durata_ms: cat sta (implicit DURATA_MS); ascunde_la_tasta=False: nu
 		dispare la prima tasta (tastele merg oricum mai departe); un numar (ms): dispare la prima tasta apasata dupa
 		atatea milisecunde, ca o tasta apasata chiar atunci sa nu-l stearga necitit (mesajele echipei din asistenta)."""
 		self["text"].setText(text)
+		# un mesaj nou nu mai e cel ascuns de tasta (si nici cel tinut pentru o captura)
+		self.ascunsDeTastaLa = None
+		self.pentruCaptura = False
 		cale = _cale_poza(cheie)
 		try:
 			if cale and self["pictograma"].instance is not None:
@@ -147,11 +160,65 @@ class HdsAnuntRetea(Screen):
 		terminat. Tastele trimise de echipa prin asistenta (op taste, op text) nu il ascund: mesajul e pentru om."""
 		if _tastaDeLaEchipa():
 			return 0
+		# CPT1: tasta care il ascunde poate fi chiar tasta capturii (ROSU scurt porneste captura la ridicare): ora
+		# ascunderii ramane, ca mesajul sa poata intra in captura (tinePentruCaptura)
+		self.ascunsDeTastaLa = time.monotonic()
 		self.ceasTasta.start(0, True)
 		return 0
 
 
 _fereastra = [None]
+# CPT1: toate ferestrele de felul acesta (cea de aici si cele ale altor module, de pilda mesajele echipei din asistenta)
+_toate = []
+
+
+def _tine(f):
+	"""O fereastra pentru captura -> True cand captura o prinde."""
+	if f.shown:
+		if not f.legat:
+			# mesajul nu pleaca la tasta (sau inca nu): ramane cu durata lui, captura il prinde oricum
+			return True
+		# pleca la tasta: ascunderea, durata si tastele asteapta captura
+		f.ceasTasta.stop()
+		f.ceas.stop()
+		f.ceasLegare.stop()
+		f._leaga(False)
+	else:
+		la = getattr(f, "ascunsDeTastaLa", None)
+		if la is None or not 0 <= time.monotonic() - la <= CAPTURA_DUPA_TASTA_S:
+			return False
+		f.show()
+	f.pentruCaptura = True
+	return True
+
+
+def tinePentruCaptura():
+	"""CPT1 (Components/HdsCapturi.captureaza, pe firul enigma2): mesajul de pe ecran care pleaca la tasta ramane pana dupa
+	captura, iar unul ascuns de tasta care a pornit captura (de cel mult CAPTURA_DUPA_TASTA_S) se arata din nou pentru
+	ea, fara taste legate. True cand captura prinde un mesaj; dupaCaptura() ii ascunde apoi pe cei tinuti."""
+	prins = False
+	for f in list(_toate):
+		try:
+			prins = _tine(f) or prins
+		except Exception as e:
+			_jurnal("mesajul pentru captura: %r" % (e,))
+	return prins
+
+
+def dupaCaptura():
+	"""Dupa captura: mesajele tinute pentru ea se ascund (tasta apasata le ascundea oricum)."""
+	ascunse = False
+	for f in list(_toate):
+		if not getattr(f, "pentruCaptura", False):
+			continue
+		f.pentruCaptura = False
+		f.ascunsDeTastaLa = None
+		try:
+			f.ascunde()
+			ascunse = True
+		except Exception as e:
+			_jurnal("mesajul dupa captura: %r" % (e,))
+	return ascunse
 
 
 def arata(session, text, cheie, durata_ms=None):

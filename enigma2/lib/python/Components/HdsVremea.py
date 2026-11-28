@@ -16,6 +16,11 @@ from urllib.request import Request, urlopen
 
 
 PERIOADA = 30 * 60
+# AS179 (0.8.0): dupa o cerere cazuta (retea, open-meteo, orasul negasit) urmatoarea vine dupa acesti pasi, nu dupa
+# PERIOADA; dupa ultimul pas ramane PERIOADA. Dupa un refuz de limita (HTTP 429, 503) tot PERIOADA, ca sa nu se ceara des
+# (Tools/Weatherinfo.py, DRG). Jurnalul are un rand la primul esec dintr-un sir si unul la revenire.
+REINCERCARI = (60, 120, 300, 600)
+CODURI_LIMITA = (429, 503)
 TIMEOUT = 8
 MAX_RASPUNS = 128 * 1024
 UNITATI = ("C", "F", "K")
@@ -481,6 +486,18 @@ class Serviciu(object):
 		self._urmator = 0
 		self._ocupat = False
 		self._fir = None
+		self._esecuri = 0
+
+	def _esec(self, cheie, motiv, limita=False):
+		"""Cererea pentru `cheie` a cazut: urmatoarea dupa pasul din REINCERCARI, sau dupa PERIOADA la un refuz de limita
+		(apelat sub lacat)."""
+		if cheie != self._cheie:
+			return
+		pas = REINCERCARI[self._esecuri] if self._esecuri < len(REINCERCARI) and not limita else PERIOADA
+		self._esecuri += 1
+		self._urmator = self._ceas() + pas
+		if self._esecuri == 1:
+			print("[HdsVremea] cerere esuata: %s; reincerc in %d s" % (motiv, pas))
 
 	def citeste(self, oras):
 		"""Intoarce imediat memoria; cel mult un fir pentru cererea noua."""
@@ -490,6 +507,7 @@ class Serviciu(object):
 				self._cheie = cheie
 				self._date = {}
 				self._urmator = 0
+				self._esecuri = 0
 			if oras and not self._ocupat and self._ceas() >= self._urmator:
 				self._ocupat = True
 				self._urmator = self._ceas() + PERIOADA
@@ -505,6 +523,8 @@ class Serviciu(object):
 				lista = cautaOrase(oras["cauta"])
 				oras = next((o for o in lista if o["fus"] == oras["fus"]), None)
 				if oras is None:
+					with self._lacat:
+						self._esec(cheie, "orasul cautat nu a fost gasit")
 					return
 			oras = _oras(oras)
 			url = PROGNOZA + "?" + urlencode(dict(
@@ -516,9 +536,13 @@ class Serviciu(object):
 			with self._lacat:
 				if cheie == self._cheie:
 					self._date = nou
-		except Exception:
+					if self._esecuri:
+						print("[HdsVremea] cererea merge din nou dupa %d esecuri" % self._esecuri)
+					self._esecuri = 0
+		except Exception as e:
 			# Fara retea ramane ultima valoare a aceluiasi oras.
-			pass
+			with self._lacat:
+				self._esec(cheie, "%s: %s" % (e.__class__.__name__, e), getattr(e, "code", None) in CODURI_LIMITA)
 		finally:
 			with self._lacat:
 				self._ocupat = False

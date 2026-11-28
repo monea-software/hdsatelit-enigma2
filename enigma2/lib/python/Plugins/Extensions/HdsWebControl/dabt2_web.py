@@ -131,7 +131,8 @@ def fluxuri(ctrl, D):
 			n = len(D.buchete.servicii_feed(prof, f, memorate, stb, tp, prinse))
 			ms = bool(D.tuner.multistream_neprins(tp))
 			# ca jos in fereastra, fara indemnul pentru telecomanda („apasa OK”): pagina are butonul ei
-			parti = [_text(D.tuner.text_multistream())] if ms else [_text(D.ecrane.text_stare(f, tp=tp))]
+			# T2P9: cu programe invatate fara „numai in zona lui” (ecrane.text_verificare, ca pe ecran)
+			parti = [_text(D.tuner.text_multistream())] if ms else [_text(D.ecrane.text_verificare(f, tp, n))]
 			if not ms and not n:
 				parti.append(_t("Posturile nu sunt căutate încă.") if prof.tip == "dab" else _t("Programele nu sunt "
 					"căutate încă."))

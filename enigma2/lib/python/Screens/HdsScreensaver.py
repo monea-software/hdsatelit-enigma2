@@ -21,6 +21,7 @@ from __future__ import absolute_import
 
 import os
 import random
+import re
 import time
 
 from enigma import eActionMap, ePicLoad, ePoint, eSize, eTimer, getDesktop, gRGB
@@ -45,7 +46,48 @@ POZE_SSV = "/usr/share/enigma2/HDSatelit/screensaver"
 
 
 def _skin(sablon):
-	return scaledSkin(sablon, 1920)
+	return _fonturiSigure(scaledSkin(sablon, 1920))
+
+
+# SSV1 (0.8.0): literele foarte mari nu se deseneaza deloc. Memoria de glife a enigma2 (lib/gdi/font.cpp,
+# FTC_SBit_Cache_Lookup) tine marginea de sus, latimea si avansul unei litere intr-un octet cu semn, deci o litera mai
+# inalta sau mai lata de 127 px lipseste. Masurat pe HdsRegular.ttf: cifrele, ":", "-", "°", "C" si "F" incap pana la
+# 175 px (la 176 cifra 0 are 128 px deasupra liniei), orice litera (cu diacritice, "M", "%") pana la 134 px. Asa se vedea
+# "Ceas" (220 px: numai ":", cifrele aveau 160 px) si "Ceas, vremea si canalul" cu textul la 120 % (170 -> 204 px).
+# Plafonul e marimea finala trimisa la FreeType: dupa scaledSkin (la 3840 de puncte totul se dubleaza) si dupa Marimea
+# textului din skin.py (config.osd.fontscale), cu fata fontului la scara 100 (cea mai mare din teme).
+PLAFON_CIFRE = 170  # probat pe SF8008 (AS234); 175 e limita masurata
+PLAFON_TEXT = 128  # 134 e limita masurata pentru litere
+ETICHETE_CIFRE = ("ora", "secunde", "temperatura")  # numai cifre, ":", "-", "°C"/"°F"
+_FONT_ETICHETA = re.compile(r'(<widget name="(\w+)"[^>]*? font=")([^";]+);(\d+)"')
+
+
+def _procentText():
+	try:
+		from Components.HdsMarireText import procent
+		return max(1, int(procent()))
+	except Exception:
+		return 100
+
+
+def marimeFinala(nume, marime, p=100):
+	"""Marimea la care se deseneaza fontul unei etichete: Marimea textului (p) il poate micsora, dar nu il mareste peste
+	marimea scrisa (casetele sunt facute pentru 100 %, iar literele sunt deja mari), si nu trece de plafon."""
+	plafon = PLAFON_CIFRE if nume in ETICHETE_CIFRE else PLAFON_TEXT
+	return max(1, min(marime, marime * p // 100, plafon))
+
+
+def _fonturiSigure(skin, p=None):
+	"""Fonturile skinului (deja scalat la ecran) scrise asa incat skin.py (_hds_scaleaza: marime * p // 100) sa ajunga la
+	marimeFinala: cea mai mare valoare v cu v * p // 100 <= tinta."""
+	p = _procentText() if p is None else max(1, int(p))
+
+	def inlocuieste(m):
+		tinta = marimeFinala(m.group(2), int(m.group(4)), p)
+		v = tinta if p == 100 else ((tinta + 1) * 100 - 1) // p
+		return '%s%s;%d"' % (m.group(1), m.group(3), max(1, v))
+
+	return _FONT_ETICHETA.sub(inlocuieste, skin)
 
 
 def _ecran():

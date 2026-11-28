@@ -409,6 +409,10 @@ class HdsDvbISetup(Screen):
             # TODO 1883: listele din toate tarile pornite / oprite; buchetul se reface
             S.comutaToateTarile(self._config)
             self._salveaza(reincarca=True)
+        elif actiune == getattr(S, 'R_PROBA', None):
+            # DVI2: listele de proba ale registrelor, din toate tarile, pornite / oprite; buchetul se reface
+            S.comutaProba(self._config)
+            self._salveaza(reincarca=True)
         elif actiune == getattr(S, 'R_IN_LISTA', None):
             # lista DVB-I pusa la loc in lista de canale sau scoasa, pe loc (randul arata starea noua)
             S.comutaInLista()

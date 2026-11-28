@@ -1,4 +1,5 @@
-# Modificat de moneasoftware.com si hdsatelit.com, 2026
+# Copyright (C) 2026 moneasoftware.com (Monea Eduard) & hdsatelit.com (HD Satelit)
+# SPDX-License-Identifier: GPL-2.0-only
 """Ce lasa opkg remove in urma unui pachet cu fisiere .py (TODO 13.11 21:30).
 
 opkg sterge numai fisierele din lista pachetului (info_dir/<pachet>.list). Fisierele compilate scrise la rulare nu sunt in

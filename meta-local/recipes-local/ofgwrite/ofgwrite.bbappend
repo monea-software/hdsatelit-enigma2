@@ -10,5 +10,9 @@ SRCREV = "9ef59e0a50d4ad37db1fbbeeb0c6e11be64f5108"
 SRC_URI += "file://cale-cu-spatiu.patch file://oprire-fara-arhiva-50.patch file://ofgwrite-texte-5.0.4.patch file://ofgwrite-font-5.0.4.patch"
 # 14.11.2026 (NEO): imaginea pornita din NeoBoot (/.multinfo) nu scrie memoria interna, care e a imaginii gazda (scriptul ofgwrite).
 SRC_URI += "file://neoboot-oaspete.patch"
+# 27.11.2026: pe ZGEMMA H8.2H Plus / H8SE (NAND, radacina ubifs) scrierea pornita din sistem cadea la "Error remounting
+# root ro": scriptul ofgwrite pregateste acum radacina inainte (swapoff, telinit u, nivelul 2, killall5 -9 pana trece
+# proba remount ro) si nu se mai intoarce dupa desprinderea programului. Numai acele modele; programul e neschimbat.
+SRC_URI += "file://pregatire-radacina-ubi.patch"
 # Aceeasi versiune de sursa: fara asta, feedul nu ar aduce pachetul reparat pe receptoarele care il au deja.
-PR:append = ".hds3"
+PR:append = ".hds4"

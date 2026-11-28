@@ -66,6 +66,21 @@ INFORMATII_MAXIM = 4096
 # modul; un modul din alt feed nu are fisierul si versiunea se cauta in titlul scriptului lui.
 DOSAR_INFORMATII = '/usr/share/hdsatelit/cam'
 
+# PC/SC (cititorul de carduri USB, CCID; 0.8.0): un modul de acces construit cu PC/SC cere serviciul pcscd si driverul
+# ccid, care nu vin cu el (pachetele lui cer numai pcsc-lite-lib), deci modulul scria "PCSC failed establish context".
+# Inaintea pornirii unui modul (porneste, alege, reporneste), numai cand un cititor USB de carduri e conectat (o
+# interfata USB cu clasa 0x0B, Smart Card, in /sys/bus/usb/devices): pachetele lipsa se instaleaza din feed
+# (pcsc-lite si ccid sunt in feedul extern) si pcscd se porneste daca nu ruleaza. Fara cititor nimic nou (nici pe
+# receptoarele cu memorie putina). Instalarea si pornirea merg prin /bin/sh in eConsoleAppContainer, pe firul enigma2
+# fara asteptare; modulul porneste dupa ele (si daca n-au mers: un rand in jurnal).
+PCSC_PACHETE = ('pcsc-lite', 'ccid')
+PCSCD = '/usr/sbin/pcscd'
+PCSC_CCID = '/usr/lib/pcsc/drivers/ifd-ccid.bundle'
+PCSC_SCRIPT = '/etc/init.d/pcscd'
+USB_DISPOZITIVE = '/sys/bus/usb/devices'
+USB_CLASA_CARD = '0b'
+PCSC_LIMITA = 180.0      # secunde: instalarea din feed; dupa atat modulul porneste oricum
+
 _SUFIX_BUN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$')
 _STERS = ' (deleted)'
 
@@ -876,6 +891,156 @@ def interfete_web(sistem=None, stari=None):
 	return rez
 
 
+# ---------------------------------------------------------------- panoul web oprit in configurare (0.8.0 OSC0)
+# prosat (Vu+ Uno4K, forum 800): oscam.conf fara [webif], deci nicio adresa nu deschide panoul modulului, iar ecranul nu
+# spunea de ce. Pentru un modul care ruleaza fara interfata web (interfete_web nu l-a gasit) se cauta configurarea lui
+# (dosarul din linia de comanda, altfel dosarele ghicite, ca interfata_modul): daca exista si nu are httpport in [webif]
+# (sau httpport = 0), ecranul modulelor si pagina Acces conditionat spun „Panoul web e oprit în configurarea modulului”,
+# iar o tasta il adauga: [webif] cu httpport = PANOU_PORT si httpallowed pentru retelele de acasa (ca fisierele noastre
+# din feed), restul configurarii neatins, copia veche langa ea (<nume>.conf.fara-panou), apoi modulul repornit. Modulele
+# fara configurare .conf (CCcam si altele) nu apar. Numai citire pana la apasare.
+PANOU_PORT = 8888
+PANOU_PERMIS = '127.0.0.1,192.168.0.0-192.168.255.255,10.0.0.0-10.255.255.255,172.16.0.0-172.31.255.255'
+PANOU_COPIE = '.fara-panou'
+# the configuration files whose web panel is httpport in [webif] (OSCam and its forks, NCam), by name
+CONFIGURARI_WEBIF = ('oscam.conf', 'ncam.conf')
+
+
+def configurare_modul(sistem, pids, cale_script=None):
+	"""Calea configurarii .conf a unui modul care ruleaza (procesele `pids`), sau None: dosarul din linia de comanda
+	(-c, --config-dir), altfel prima configurare gasita in dosare_ghicite (intai dosarele scriptului)."""
+	nume_toate = []
+	for pid in pids[:PROGRAME_MAXIM]:
+		baza = '/proc/%d' % pid
+		try:
+			argumente = sistem.citeste(baza + '/cmdline', 8192).split('\0')[1:]
+			comm = sistem.citeste(baza + '/comm', 256).strip()
+			exe = sistem.legatura(baza + '/exe')
+		except (OSError, IOError, ValueError):
+			continue
+		if exe.endswith(_STERS):
+			exe = exe[:-len(_STERS)]
+		nume_conf = nume_configurari_web(comm, exe)
+		dosar = dosar_configurare_web(argumente)
+		if dosar is not None:
+			for nume in nume_conf:
+				cale = posixpath.join(dosar, nume)
+				if os.path.isfile(sistem.cale(cale)):
+					return cale
+			continue
+		nume_toate.extend(n for n in nume_conf if n not in nume_toate)
+	if not nume_toate:
+		return None
+	dosare = _dosare_din_script(sistem, cale_script) if cale_script else []
+	for dosar in dosare_ghicite(nume_toate, dosare):
+		for nume in nume_toate:
+			cale = posixpath.join(dosar, nume)
+			if os.path.isfile(sistem.cale(cale)):
+				return cale
+	return None
+
+
+def _citeste_configurare(sistem, cale):
+	"""Randurile configurarii (text), sau None (lipsa, prea mare, legatura)."""
+	p = sistem.cale(cale)
+	try:
+		if os.path.islink(p) or not os.path.isfile(p) or os.path.getsize(p) > CONFIG_WEB_MAXIM:
+			return None
+		with open(p, 'r', encoding='utf-8', errors='surrogateescape', newline='') as f:
+			return f.read().split('\n')
+	except (OSError, IOError, ValueError):
+		return None
+
+
+def _are_global(randuri):
+	"""True cand configurarea are sectiunea [global] (felul configurarilor cu httpport in [webif]); altfel e un fisier
+	cu alt fel de panou (port= etc.) si nu se spune nimic despre el."""
+	for rand in randuri:
+		r = rand.split('#', 1)[0].split(';', 1)[0].strip().lower()
+		if r == '[global]':
+			return True
+	return False
+
+
+def fara_panou_web(sistem=None, stari=None, interfete=None):
+	"""Modulele care ruleaza fara interfata web pentru ca configurarea lor nu are httpport in [webif]:
+	[{fel, sufix, eticheta, cale}]. `interfete` = rezultatul interfete_web (cele cu panou nu se mai citesc). Pe un fir."""
+	sistem = sistem or SistemAcces()
+	stari = feluri_de_aratat(sistem) if stari is None else stari
+	cu_panou = set((i.get('fel'), i.get('sufix')) for i in (interfete or ()))
+	rez = []
+	for st in stari:
+		for e in st.emulatoare:
+			if not e.pids or (st.fel, e.sufix) in cu_panou:
+				continue
+			cale = configurare_modul(sistem, e.pids, e.cale)
+			randuri = _citeste_configurare(sistem, cale) if cale else None
+			# AS207: a broken oscam.conf / ncam.conf without [global] (one line, or a copy of oscam.server) is still the
+			# configuration of a module with httpport in [webif]; the file name says so
+			if randuri is not None and (_are_global(randuri) or posixpath.basename(cale) in CONFIGURARI_WEBIF) and \
+					port_web_din_randuri(randuri) is None:
+				rez.append({'fel': st.fel, 'sufix': e.sufix, 'eticheta': eticheta_modul(e), 'cale': cale})
+	return rez
+
+
+def panou_in_randuri(randuri, port=PANOU_PORT):
+	"""Randurile configurarii cu panoul web pornit: httpport = port in [webif] (pus in locul unui httpport nepotrivit,
+	de pilda 0, sau adaugat la inceputul sectiunii), sau sectiunea [webif] noua la coada, cu httpallowed pentru
+	retelele de acasa. Celelalte randuri raman la fel. None cand panoul are deja un port bun."""
+	randuri = list(randuri)
+	if port_web_din_randuri(randuri) is not None:
+		return None
+	iesire, sectiune, gasit, pus = [], '', False, False
+	for rand in randuri:
+		r = rand.split('#', 1)[0].split(';', 1)[0].strip()
+		if r.startswith('[') and r.endswith(']'):
+			sectiune = r[1:-1].strip().lower()
+			iesire.append(rand)
+			if sectiune == 'webif' and not gasit:
+				gasit = True
+				iesire.append('httpport = %d' % port)
+				pus = True
+			continue
+		if sectiune == 'webif' and re.match(r'^httpport\s*=', r, re.IGNORECASE):
+			continue     # portul nepotrivit (0, gol): inlocuit de randul pus la inceputul sectiunii
+		iesire.append(rand)
+	if not pus:
+		while iesire and not iesire[-1].strip():
+			iesire.pop()
+		iesire += ['', '[webif]', 'httpport = %d' % port, 'httpallowed = %s' % PANOU_PERMIS, '']
+	return iesire
+
+
+def porneste_panou_web(cale, sistem=None, port=PANOU_PORT):
+	"""Adauga panoul web in configurarea `cale` (panou_in_randuri), cu copia veche langa ea (cale + PANOU_COPIE, o
+	singura data: copia primei stari ramane). Intoarce True daca fisierul are acum panou (si False la o eroare);
+	modulul il citeste la repornire (o face cel care cheama)."""
+	sistem = sistem or SistemAcces()
+	randuri = _citeste_configurare(sistem, cale)
+	if randuri is None:
+		return False
+	noi = panou_in_randuri(randuri, port)
+	if noi is None:
+		return True
+	p = sistem.cale(cale)
+	try:
+		mod = os.stat(p).st_mode & 0o7777
+		copie = p + PANOU_COPIE
+		if not os.path.exists(copie):
+			import shutil
+			shutil.copy2(p, copie)     # fisierul vechi, octet cu octet
+		nou = p + '.nou'
+		with open(nou, 'w', encoding='utf-8', errors='surrogateescape', newline='') as f:
+			f.write('\n'.join(noi))
+		os.chmod(nou, mod)
+		os.replace(nou, p)
+	except (OSError, IOError, ValueError) as e:
+		_jurnal("panoul web in %s: %r" % (cale, e))
+		return False
+	_jurnal("panoul web pornit in %s (portul %d, copia veche %s%s)" % (cale, port, cale, PANOU_COPIE))
+	return True
+
+
 # ---------------------------------------------------------------- parola din reteaua de acasa
 # Interfetele web ale modulelor de acces pornesc fara utilizator si fara parola in casa (asa vin
 # configurarile noastre: numai httpallowed cu retelele de acasa). Numai daca omul isi pune parola locala si bifeaza
@@ -952,6 +1117,61 @@ def puneParolaWeb(parola, sistem=None):
 			except (OSError, IOError, ValueError):
 				bine = False
 	return bine
+
+
+def cititor_usb_card(sistem):
+	"""True cand e conectat un cititor USB de carduri (o interfata cu clasa 0x0B, Smart Card / CCID)."""
+	try:
+		nume = sistem.listeaza(USB_DISPOZITIVE)
+	except (OSError, IOError):
+		return False
+	for n in nume:
+		if ':' not in n:
+			continue    # interfetele au forma 1-1:1.0; restul sunt aparatele si magistralele
+		try:
+			clasa = (sistem.citeste(USB_DISPOZITIVE + '/' + n + '/bInterfaceClass', 16) or '').strip().lower()
+		except (OSError, IOError):
+			continue
+		if clasa == USB_CLASA_CARD:
+			return True
+	return False
+
+
+def pcscd_ruleaza(sistem):
+	try:
+		pids = [x for x in sistem.listeaza('/proc') if x.isdigit()]
+	except OSError:
+		return False
+	for pid in pids:
+		try:
+			if sistem.citeste('/proc/%s/comm' % pid, 64).strip() == 'pcscd':
+				return True
+		except (OSError, IOError):
+			continue
+	return False
+
+
+def comanda_pcsc(sistem):
+	"""Comanda (text pentru /bin/sh) care pune pcsc-lite si ccid si porneste pcscd, sau None cand nu e nevoie: fara
+	cititor USB de carduri, sau cu totul instalat si pcscd pornit."""
+	try:
+		if not cititor_usb_card(sistem):
+			return None
+		lipsa = [nume for nume, cale in zip(PCSC_PACHETE, (PCSCD, PCSC_CCID)) if not sistem.exista(cale)]
+		if not lipsa and pcscd_ruleaza(sistem):
+			return None
+	except Exception as e:
+		# o citire cazuta nu opreste pornirea modulului
+		_jurnal("PC/SC: citirea cititorului: %r" % (e,))
+		return None
+	parti = ['r=0']
+	if lipsa:
+		parti.append('opkg update >/dev/null 2>&1; opkg install %s; r=$?' % ' '.join(lipsa))
+	# iesirile lui pcscd departe de teava containerului (altfel pasul ar astepta pana la termen)
+	parti.append('if [ -x %s ]; then %s start >/dev/null 2>&1; else %s >/dev/null 2>&1; fi' % (PCSC_SCRIPT,
+		PCSC_SCRIPT, PCSCD))
+	parti.append('exit $r')
+	return '; '.join(parti)
 
 
 def argv_script(sistem, fel, sufix, actiune):
@@ -1087,6 +1307,7 @@ class Operatie(object):
 		self.cititor = cititor
 		self._citiri = 0
 		self._scrie_legatura = False
+		self._pas_pcsc = None
 
 	# ------------------------------------------------ citirea pe un fir (0.7.7)
 	# Starea unui fel (citeste: legatura, scripturile, /proc pentru fiecare proces) si scriptul unui pas (argv_script) fac pe
@@ -1158,12 +1379,14 @@ class Operatie(object):
 		st = citeste(self.sistem, fel)
 		if not self._planifica(st):
 			return False
+		self._cu_pcsc()
 		_curenta[0] = self
 		self._urmatorul()
 		return True
 
 	def _dupa_citire(self, st):
 		if self._planifica(st):
+			self._cu_pcsc()
 			self._urmatorul()
 
 	def _planifica(self, st):
@@ -1227,6 +1450,46 @@ class Operatie(object):
 		return True
 
 	# ------------------------------------------------ pasii
+	def _cu_pcsc(self):
+		"""Pasul PC/SC inaintea primului script care porneste un modul (vezi PCSC_PACHETE)."""
+		for i, (fel_pas, _sufix, actiune) in enumerate(self._pasi):
+			if fel_pas == 'script' and actiune in ('start', 'restart'):
+				self._pasi.insert(i, ('pcsc', '', ''))
+				return
+
+	def _fa_pcsc(self, comanda):
+		"""Pe firul enigma2: instalarea si pornirea pcscd, apoi pasul urmator (si cand n-au mers)."""
+		if comanda is None or self.gata:
+			self._urmatorul()
+			return
+		_jurnal("%s %s: cititor USB de carduri: %s" % (self.cerere, self.fel, comanda))
+		semn = object()
+		self._pas_pcsc = semn
+
+		def gata(cod, iesire):
+			if self.gata or self._pas_pcsc is not semn:
+				return
+			self._pas_pcsc = None
+			self._opreste_ceasul()
+			if cod:
+				_jurnal("%s %s: PC/SC: codul %s: %s" % (self.cerere, self.fel, cod, raspuns_scurt(iesire)))
+			self._urmatorul()
+
+		def termen():
+			if self.gata or self._pas_pcsc is not semn:
+				return
+			self._pas_pcsc = None
+			self._ceas = None
+			_jurnal("%s %s: PC/SC: instalarea n-a terminat in %d s, modulul porneste oricum" % (self.cerere, self.fel,
+				int(PCSC_LIMITA)))
+			self._urmatorul()
+		self._ceas = self.temporizator(PCSC_LIMITA, termen)
+		if not self.executor.porneste(('/bin/sh', '/bin/sh', '-c', comanda), gata):
+			self._pas_pcsc = None
+			self._opreste_ceasul()
+			_jurnal("%s %s: PC/SC: comanda n-a pornit" % (self.cerere, self.fel))
+			self._urmatorul()
+
 	def _urmatorul(self):
 		if self.gata:
 			return
@@ -1234,6 +1497,9 @@ class Operatie(object):
 			self._termina(True, self._final[0], nume=self._final[1], ramane_ales=self._ramane_ales)
 			return
 		fel_pas, sufix, actiune = self._pasi.pop(0)
+		if fel_pas == 'pcsc':
+			self._pe_fir(comanda_pcsc, self._fa_pcsc, 'pcscd')
+			return
 		if fel_pas == 'leaga' and sufix == SUFIX_GOL:
 			self._fa_pasul(fel_pas, sufix, actiune, None)
 			return

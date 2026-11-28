@@ -32,6 +32,7 @@ from __future__ import absolute_import, unicode_literals
 
 import bisect
 import codecs
+import json
 import time
 
 
@@ -107,6 +108,27 @@ TRECERI_PE_CHEMARE = 60
 TOLERANTA_MIN_KHZ = 2000
 # satelitul ales se schimba cu cel aflat numai cand acela se potriveste clar mai bine
 POTRIVITE_MIN = 3
+
+# 0.8.0 (BSH1): calea "pasi" a programului, pe tunerele fara cautarea oarba a producatorului (ZGEMMA H8.2H Plus si orice
+# tuner de satelit fara biblioteca sau /dev/hife): acordari una dupa alta prin API-ul DVB. Masurat pe H8.2H Plus: o
+# acordare se blocheaza in ~0,1 s, una fara nimic se lasa dupa 0,2 s; o rata ceruta prinde rate adevarate de la ea pana la
+# ~3% peste, deci listele de mai jos au valori putin sub cele obisnuite (27000 prinde 27500, 21800 prinde 22000, 29200
+# prinde 29500-30000). Programul incearca intai transponderele cunoscute ale satelitului, apoi ratele treptei, din pas in
+# pas, numai prin locurile in care mai incape o purtatoare; golurile le face el, deci o singura etapa.
+FEL_PASI = 'pasi'
+RATE_PASI = {
+    1: (27000, 21800, 29200),
+    2: (27000, 21800, 29200, 23000, 19600, 24400, 25900, 28100, 30300),
+    3: (27000, 21800, 29200, 23000, 19600, 24400, 25900, 28100, 30300, 20200, 20800, 21300, 22400, 23700, 25150, 26700,
+        27800, 28900, 31200, 32100, 33000, 34000),
+}
+PASI_SECUNDE_ACORDARE = 0.18            # masurat pe H8.2H Plus: 171 s pentru 933 de acordari (19,2E, treapta 1)
+PASI_SECUNDE_CUNOSCUT = 0.15            # un transponder cunoscut (de obicei blocat in ~0,1 s)
+PASI_SECUNDE_TRECERE = 1.0              # LNB-ul si comutatorul, pe trecere
+PASI_PRINDERE_KHZ = 7000
+PASI_PAS_MAX_KHZ = 12000
+# paznicul de timp al programului pe calea pasi: estimarea de doua ori, cel putin TIMP_MAX_S, cel mult o ora
+PASI_TIMP_MAX_S = 3600
 
 # sistemul transponderului nu vine de la cip (masurat: frecventa, rata, polarizarea si calitatea, atat); pentru
 # 'Scanează canalele' un transponder nou merge ca DVB-S cu FEC si modulatia Auto, singura forma primita de nucleu fara
@@ -440,7 +462,7 @@ def text_cerere(cerere, orbpos):
                                                           'da' if cerere.get('vuplus') else 'nu')
 
 
-def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=0, comutare=None):
+def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=0, comutare=None, pasi=None):
     """Chemarea programului pentru trecerile date: oscilatoarele in MHz, fiecare trecere 'POL,TON,START,STOP'.
     vuplus: {'adaptor', 'program', 'i2c'} pe Vu+ Solo SE (vezi vuplus_pentru): acelasi protocol, prin HdsOarbaVuplus.
     comutare: comutare_din_lnb() a satelitului aratat (portul DiSEqC / toneburst), trimisa de program inainte de
@@ -461,6 +483,13 @@ def argv_program(lista, osc=None, tuner=0, timp_max=None, vuplus=None, rata_min=
         argv += argv_comutare(comutare)
     for t in lista:
         argv += ['--trecere', '%s,%d,%d,%d' % (t['pol'], t['ton'], t['if_start'], t['if_stop'])]
+    # 0.8.0 (BSH1): calea pasi: ratele treptei si cunoscutele satelitului (incercate intai), numai pe tunerele ei
+    if pasi and not vuplus:
+        argv += ['--rate', ','.join(str(int(r)) for r in pasi.get('rate') or RATE_PASI[1])]
+        for tp in pasi.get('cunoscute') or []:
+            r = int(tp.get('symbol_rate') or 0) // 1000
+            if 100 <= r <= 70000 and 1000000 <= int(tp['frequency']) <= 30000000:
+                argv += ['--cunoscut', '%d,%d,%s' % (int(tp['frequency']), r, POLARIZARI[int(tp['polarisation']) % 4])]
     return argv
 
 
@@ -472,6 +501,62 @@ def estimare_s(nr_treceri, trepte=3, rata_min=0):
         sub1 = False
     tabel = SECUNDE_PE_TREAPTA_SUB1 if sub1 else SECUNDE_PE_TREAPTA
     return int(nr_treceri) * tabel.get(int(trepte), tabel[3])
+
+
+def _prindere_khz(r):
+    return min(PASI_PRINDERE_KHZ, int(r) * 3 // 10)
+
+
+def _pas_pasi_khz(r):
+    p = 2 * _prindere_khz(r)
+    p = p - 1000 if p > 1500 else 500
+    return min(PASI_PAS_MAX_KHZ, p)
+
+
+def rate_pasi(trepte):
+    return RATE_PASI.get(trepte_din(trepte), RATE_PASI[3])
+
+
+def acordari_pasi(lista, cunoscute=None, trepte=3):
+    """0.8.0 (BSH1): cate acordari face programul pe calea pasi, cu cunoscutele satelitului presupuse active (ocupa loc):
+    (cunoscute incercate, acordari pe rate). Ca merita() din hds-blindscan.c, pe golurile dintre cunoscute: o purtatoare
+    de rata r incape intr-un gol de cel putin 0,9 x r, iar golul se strabate din pas in pas."""
+    n_cun, n_rate = 0, 0
+    rate = rate_pasi(trepte)
+    for t in lista or []:
+        lo = int(t['lo'])
+        a0, a1 = int(t['if_start']), int(t['if_stop'])
+        ocupat = []
+        for tp in cunoscute or []:
+            if POLARIZARI[int(tp['polarisation']) % 4] != t['pol']:
+                continue
+            i = if_din_real(int(tp['frequency']), lo)
+            if a0 <= i <= a1:
+                n_cun += 1
+                j = int(tp.get('symbol_rate') or 0) // 2000
+                ocupat.append((i - j, i + j))
+        ocupat.sort()
+        goluri_if, cur = [], a0
+        for x, y in ocupat:
+            if x > cur:
+                goluri_if.append((cur, x))
+            cur = max(cur, y)
+        if a1 > cur:
+            goluri_if.append((cur, a1))
+        for r in rate:
+            j, p, pas = int(r) * 9 // 20, _prindere_khz(r), _pas_pasi_khz(r)
+            for x, y in goluri_if:
+                loc = (y - x) - 2 * j
+                if loc < 0:
+                    continue
+                n_rate += (loc + 2 * p) // pas + 1
+    return n_cun, n_rate
+
+
+def estimare_pasi_s(lista, cunoscute=None, trepte=3):
+    """0.8.0 (BSH1): cat dureaza cautarea pe pasi, in secunde (estimarea de pe ecran, din acordarile socotite)."""
+    n_cun, n_rate = acordari_pasi(lista, cunoscute, trepte)
+    return int(len(lista or []) * PASI_SECUNDE_TRECERE + n_cun * PASI_SECUNDE_CUNOSCUT + n_rate * PASI_SECUNDE_ACORDARE)
 
 
 def text_rotire(secunde):
@@ -509,6 +594,13 @@ TEXTE_TREPTE = {
     2: N_('Treapta 2: și toate golurile benzii, căutate din nou în ferestre înguste.'),
     3: N_('Treapta 3: golurile încă o dată, cu alte margini. Cea mai sigură și cea mai lungă.'),
 }
+# 0.8.0 (BSH1): pe un tuner fara cautarea oarba a producatorului treptele inseamna cate rate se incearca
+TEXTE_TREPTE_PASI = {
+    1: N_('Treapta 1: transponderele cunoscute, apoi ratele cele mai folosite (27500, 22000, 30000).'),
+    2: N_('Treapta 2: și alte șase rate obișnuite, între 20000 și 31000.'),
+    3: N_('Treapta 3: aproape toate ratele între 19600 și 34000. Cea mai sigură și cea mai lungă.'),
+}
+TEXT_PASI = N_('Tunerul acestui receptor nu are căutare oarbă proprie, așa că o fac pas cu pas.')
 # sub aceasta rata (kSym/s) cautarea oarba cere programului podeaua coborata (--rata-min)
 RATA_MIC_KSYM = 1000
 # ultimele alegeri, cat merge interfata (ecranul si pagina web pornesc de la ele)
@@ -565,9 +657,17 @@ def text_previzualizare(antena, config):
         return pregatit['eroare']
     n = len(pregatit['treceri'])
     trepte = trepte_din(config.get('trepte'))
-    text = _t('Treceri (bandă × polarizare): %d. Durata: %s.') % (
-        n, text_durata(estimare_s(n, trepte, config.get('rata_min'))))
-    text += ' ' + _t(TEXTE_TREPTE[trepte])
+    if antena.get('fel') == FEL_PASI:
+        # 0.8.0 (BSH1): durata socotita din acordari, cu cunoscutele satelitului
+        cunoscute = cunoscute_in_cautare(_cunoscute_pentru(antena.get('pozitie')), pregatit['benzi'],
+                                         pregatit['polarizari'])
+        text = _t('Treceri (bandă × polarizare): %d. Durata: %s.') % (
+            n, text_durata(estimare_pasi_s(pregatit['treceri'], cunoscute, trepte)))
+        text += ' ' + _t(TEXTE_TREPTE_PASI[trepte]) + ' ' + _t(TEXT_PASI)
+    else:
+        text = _t('Treceri (bandă × polarizare): %d. Durata: %s.') % (
+            n, text_durata(estimare_s(n, trepte, config.get('rata_min'))))
+        text += ' ' + _t(TEXTE_TREPTE[trepte])
     # 0.7.7 (WLD): satelitii din spatele unui comutator se aleg in randul "Satelit"; nota ramane la motor (antena nu se
     # roteste) si cand niciun alt satelit nu se poate alege (comutare necunoscuta, adaptorul Vu+)
     # 0.7.7 (M30): la motor satelitul se alege si el in rand; antena se roteste inainte de cautare
@@ -819,10 +919,12 @@ def citeste_eveniment(linie):
 
 def transponder_gasit(ev, orbpos):
     """Un eveniment 'tp' -> transponderul gasit, in forma scanerului (frequency kHz, symbol_rate Sym/s, polarisation
-    0..3), plus calitatea. Sistemul nu e stiut (vezi pentru_scanare)."""
+    0..3), plus calitatea. 0.8.0 (AMR4): si sistemul spus de program ('sistem_cautare': 0 DVB-S, 1 DVB-S2, -1 nestiut;
+    pe calea /dev/hife si la adaptorul Vu+ il da cipul, pe calea bibliotecii nu), NUMAI pentru raport: "Scanează
+    canalele" trimite tot DVB-S Auto (din_cautare), singura forma primita de nucleu fara FEC stiut."""
     return {'frequency': int(ev['frecventa']), 'symbol_rate': int(ev['rata_ksym']) * 1000,
             'polarisation': POLARIZARI.index(ev['pol']), 'orbital_position': int(orbpos) if orbpos is not None else 0,
-            'calitate': int(ev.get('calitate') or 0)}
+            'calitate': int(ev.get('calitate') or 0), 'sistem_cautare': int(ev.get('sistem', -1))}
 
 
 def mesaj_eroare(cod):
@@ -866,13 +968,17 @@ def randuri(cunoscute, gasite, rata_min=0, gata=False, oprita=False):
     return rez
 
 
-def pentru_scanare(cunoscute, gasite, orbpos, rata_min=0):
+def pentru_scanare(cunoscute, gasite, orbpos, rata_min=0, lasate=()):
     """Ce primeste 'Scanează canalele': TOATE cunoscutele (cu datele lor, deci nicio frecventa cunoscuta ratata) si
-    cele noi, peste rata minima, ca DVB-S Auto. In forma scanerului (Screens/ScanerSatelit.in_parametri)."""
+    cele noi, peste rata minima, ca DVB-S Auto. In forma scanerului (Screens/ScanerSatelit.in_parametri).
+    0.8.0 (AMR4): lasate = cheile (cheie_tp) celor noi pe care omul nu le pastreaza in raport; din fabrica niciuna,
+    deci lista e cea de pana acum."""
+    lasate = set(lasate or ())
     rez = [_curat(c) for c in cunoscute]
     idx_c = _Index(cunoscute)
     for g in gasite:
-        if idx_c.gaseste(g) is None and int(g['symbol_rate']) >= int(rata_min or 0) * 1000:
+        if idx_c.gaseste(g) is None and int(g['symbol_rate']) >= int(rata_min or 0) * 1000 and \
+                cheie_tp(g) not in lasate:
             rez.append(din_cautare(g, orbpos))
     for tp in rez:
         tp['orbital_position'] = int(orbpos)
@@ -893,19 +999,154 @@ def text_stare(stare):
     return _t(TEXTE_STARE.get(stare, stare))
 
 
+# ---------------------------------------------------------------- raportul pe sectiuni (0.8.0, AMR4)
+# Cerut de el bandido (LegitFTA, post-110268, America de Nord): sa se vada separat purtatoarele gasite de cautare si
+# transponderele care vin din lista. Pana acum lista arata toate cunoscutele satelitului amestecate cu ce gasea cautarea. Acum: cat merge cautarea, NUMAI purtatoarele gasite pana atunci (cea mai noua sus,
+# cu sistemul); la sfarsit, separat si numarate: cele noi (omul alege ce pastreaza; din fabrica toate), cele gasite care
+# erau deja in lista, cele cazute la acordare (acordate de "Scanează canalele" si fara semnal; cautarea oarba insasi nu
+# acordeaza) si, jos, cunoscutele din lista pe care cautarea nu le-a gasit. Aceleasi pe televizor si in pagina /oarba.
+SISTEM_TEXT = {0: 'DVB-S', 1: 'DVB-S2'}
+SECTIUNI = ('noi', 'in_lista', 'cazute', 'negasite')
+TITLURI_SECTIUNI = {'noi': N_('Noi: %d'), 'in_lista': N_('Deja în listă: %d'), 'cazute': N_('Căzute la acordare: %d'),
+                    'negasite': N_('Din listă, negăsite: %d'), 'neverificate': N_('Din listă, neverificate: %d')}
+TEXT_PASTRAT = N_('se păstrează')
+TEXT_LASAT = N_('nu se păstrează')
+# cat merge cautarea, pe televizor: starea scurta a unei purtatori gasite (randul are loc putin, in orice limba)
+TEXTE_GASITA = {'nou': N_('nou'), 'gasit': N_('în listă')}
+# felul scanarii pornite din raport (scaneaza_canalele -> Components/HdsScanareUltima, "fel")
+FEL_SCANARE = 'satelit/oarba'
+# cronometrul: cat mai tine treapta in curs, din procentul ei (feliile facute de program) si timpul scurs in ea; numai
+# dupa ce s-a strans destul ca socoteala sa spuna ceva
+PROCENT_MIN_ESTIMARE = 3
+SECUNDE_MIN_ESTIMARE = 10
+
+
+def cheie_tp(tp):
+    """Cheia unei purtatoare (frecventa in kHz si polarizarea): aceeasi pe televizor, in pagina si in alegerea omului."""
+    return '%d:%s' % (int(tp['frequency']), POLARIZARI[int(tp['polarisation']) % 4])
+
+
+def text_sistem(tp):
+    """'DVB-S' / 'DVB-S2' cand programul l-a spus, altfel '' (pe calea bibliotecii cipul nu-l da)."""
+    try:
+        return SISTEM_TEXT.get(int(tp.get('sistem_cautare', -1)), '')
+    except (TypeError, ValueError):
+        return ''
+
+
+def gasite_pe_rand(cunoscute, gasite, rata_min=0):
+    """Cat merge cautarea: numai purtatoarele gasite pana acum, cea mai noua sus -> [{'tp', 'stare' ('nou' | 'gasit'),
+    'cheie', 'sistem'}]. Cele noi sub rata minima nu se arata (ca in randuri())."""
+    idx_c = _Index(cunoscute)
+    rez = []
+    for g in reversed(gasite):
+        nou = idx_c.gaseste(g) is None
+        if nou and int(g['symbol_rate']) < int(rata_min or 0) * 1000:
+            continue
+        rez.append({'tp': g, 'stare': 'nou' if nou else 'gasit', 'cheie': cheie_tp(g), 'sistem': text_sistem(g)})
+    return rez
+
+
+def sectiuni(cunoscute, gasite, rata_min=0, gata=False, oprita=False, lasate=(), cazute=(), randuri_gata=None):
+    """Raportul de la sfarsit: [(cheie, [randuri])] in ordinea SECTIUNI (cele goale raman, cu 0 randuri), fiecare rand
+    {'tp', 'stare', 'provenienta', 'cheie', 'sistem', 'alege', 'pastrat'} dupa frecventa ('alege' numai la cele noi,
+    singurele pe care omul le poate lasa deoparte). Impartirea se face la fiecare chemare,
+    din cunoscutele de acum (dupa prima treapta satelitul aflat le poate schimba). lasate: cheile celor noi pe care omul
+    nu le pastreaza; cazute: cheile celor gasite acordate fara semnal (cazute_la_acordare), care trec in sectiunea lor
+    din oricare alta. randuri_gata: randuri() deja socotite cu aceleasi date (sa nu se socoteasca de doua ori)."""
+    lasate, cazute = set(lasate or ()), set(cazute or ())
+    rez = dict((k, []) for k in SECTIUNI)
+    if randuri_gata is None:
+        randuri_gata = randuri(cunoscute, gasite, rata_min, gata=gata, oprita=oprita)
+    for r in randuri_gata:
+        rand = dict(r, cheie=cheie_tp(r['tp']), sistem='', pastrat=False, alege=False)
+        if r['provenienta'] == 'lista':
+            rez['negasite'].append(rand)
+            continue
+        rand['sistem'] = text_sistem(r['tp'])
+        if rand['cheie'] in cazute:
+            rez['cazute'].append(rand)
+        elif r['stare'] == 'nou':
+            rand['pastrat'] = rand['cheie'] not in lasate
+            rand['alege'] = True
+            rez['noi'].append(rand)
+        else:
+            rez['in_lista'].append(rand)
+    return [(k, rez[k]) for k in SECTIUNI]
+
+
+def titlu_sectiune(cheie, numar, oprita=False):
+    """'Noi: 3' ...; dupa o cautare oprita cunoscutele ramase sunt 'neverificate' (poate nu s-a ajuns la ele)."""
+    if cheie == 'negasite' and oprita:
+        cheie = 'neverificate'
+    return _t(TITLURI_SECTIUNI[cheie]) % int(numar)
+
+
+def text_gasita(stare):
+    """'nou' / 'în listă': starea scurta a unei purtatori gasite, pe televizor, cat merge cautarea."""
+    return _t(TEXTE_GASITA.get(stare, stare))
+
+
+def text_pastrat(pastrat):
+    return _t(TEXT_PASTRAT if pastrat else TEXT_LASAT)
+
+
+def ora_iso(secunde):
+    """Ora locala ISO la secunda, fara fus, ca orele din Components/HdsScanareUltima (ora())."""
+    return time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(secunde))
+
+
+def cazute_la_acordare(scanare, gasite, orbpos=None, dupa=''):
+    """Cheile purtatoarelor gasite pe care "Scanează canalele" le-a acordat FARA semnal, din rezultatul ultimei scanari
+    (Components/HdsScanareUltima: fiecare transponder incercat, cu 'semnal'). Numai scanarea pornita din acest raport:
+    fel FEL_SCANARE, inceputa dupa sfarsitul cautarii (dupa: ora_iso a sfarsitului), pe satelitul cautarii. Cautarea
+    oarba nu acordeaza, deci inainte de scanare nu e nicio cazuta. Una incercata o data fara semnal si o data cu semnal
+    (doua treceri) nu e cazuta."""
+    if not isinstance(scanare, dict) or scanare.get('fel') != FEL_SCANARE or not gasite:
+        return set()
+    if dupa and str(scanare.get('inceput') or '') < dupa:
+        return set()
+    fara, cu = [], []
+    for t in scanare.get('transpondere') or []:
+        try:
+            pol = t.get('pol')
+            if pol not in POLARIZARI or not t.get('f_khz'):
+                continue
+            if orbpos is not None and t.get('poz') is not None and int(t['poz']) != int(orbpos):
+                continue
+            tp = {'frequency': int(t['f_khz']), 'symbol_rate': int(t.get('sr') or 0) * 1000,
+                  'polarisation': POLARIZARI.index(pol)}
+        except (TypeError, ValueError, AttributeError):
+            continue
+        (cu if t.get('semnal') else fara).append(tp)
+    if not fara:
+        return set()
+    idx_fara, idx_cu = _Index(fara), _Index(cu)
+    return set(cheie_tp(g) for g in gasite if idx_fara.gaseste(g) is not None and idx_cu.gaseste(g) is None)
+
+
+def ceas_text(secunde):
+    """'3:07' (minute:secunde), pentru cronometru."""
+    secunde = max(0, int(secunde or 0))
+    return '%d:%02d' % (secunde // 60, secunde % 60)
+
+
 def casete(st):
     """DSG2 (14.11.2026): casetele cautarii, pe televizor (Screens/ScanerOarba) si in pagina /oarba:
     [(cheie, cifra, eticheta, randul mic)] din stare(): Transpondere (gasite, cu cele noi), Progres, Durata. [] cand nu
     s-a pornit nicio cautare sau la eroare (atunci ramane numai randul de stare, care spune de ce). Aceleasi numere ca
-    randul de stare, care ramane intreg sub casete."""
+    randul de stare, care ramane intreg sub casete. 0.8.0 (AMR4): Durata e cronometrul (m:ss), iar randul ei mic spune
+    cat mai tine treapta in curs, cand se poate socoti (ramas_s)."""
     if not st or st.get('faza') in (None, NIMIC, EROARE):
         return []
     n = st.get('numere') or {}
     noi = int(n.get('noi') or 0)
     gasite = noi + int(n.get('gasite_cunoscute') or 0)
+    ramas = st.get('ramas_s')
     return [('transp', '%d' % gasite, _t('Transpondere'), _t('new: %d') % noi),
             ('progres', '%d%%' % int(st.get('procent') or 0), _t(N_('Progres')), ''),
-            ('durata', '%d s' % int(st.get('durata_s') or 0), _t('Durata'), '')]
+            ('durata', ceas_text(st.get('durata_s')), _t('Durata'),
+             _t(N_('mai e %s')) % ceas_text(ramas) if ramas is not None else '')]
 
 
 # ---------------------------------------------------------------- cautarea
@@ -916,12 +1157,19 @@ class Cautare(object):
 
     pornitor(argv, la_rand, la_iesire) -> proces cu opreste() (cerere de oprire curata: SIGINT) si omoara();
     la_rand(linie) primeste fiecare rand, la_iesire(cod) iesirea. candidati: functie () -> {pozitie: [cunoscute]}
-    pentru aflarea satelitului (chemata o data, la sfarsitul primei treceri)."""
+    pentru aflarea satelitului (chemata o data, la sfarsitul primei treceri).
 
-    def __init__(self, pornitor, ceas=None):
+    0.8.0 (AMR4): scanare_ultima: functie () -> rezultatul ultimei scanari de canale (octetii JSON sau dictionarul din
+    Components/HdsScanareUltima), pentru cazutele la acordare; ascultatorii ceasului (adauga_ascultator_ceas) sunt
+    chemati in fiecare secunda cat merge cautarea (verifica), ca cronometrul sa mearga si cand programul tace."""
+
+    def __init__(self, pornitor, ceas=None, scanare_ultima=None):
         self._pornitor = pornitor
         self._ceas = ceas or time.time
+        self._scanare_ultima = scanare_ultima
         self._ascultatori = []
+        self._ascultatori_ceas = []
+        self._cazute_tinute = (None, None, set())
         self._proces = None
         self.faza = NIMIC
         self._goleste()
@@ -953,6 +1201,8 @@ class Cautare(object):
         self.t_inceput = 0.0
         self.t_sfarsit = 0.0
         self.t_oprire = 0.0
+        self.t_etapa = 0.0                # 0.8.0 (AMR4): cand a pornit treapta in curs (cronometrul)
+        self.lasate = set()               # 0.8.0 (AMR4): cheile celor noi pe care omul nu le pastreaza
         self.durata_program_ms = 0
         self.satelit_schimbat = False
         self._candidati = None
@@ -975,6 +1225,22 @@ class Cautare(object):
                 f(self)
             except Exception as e:
                 print('[HdsCautareOarba] ascultatorul: %s' % e)
+
+    def adauga_ascultator_ceas(self, f):
+        """0.8.0 (AMR4): f(cautare) in fiecare secunda cat merge cautarea (cronometrul de pe ecran)."""
+        if f not in self._ascultatori_ceas:
+            self._ascultatori_ceas.append(f)
+
+    def scoate_ascultator_ceas(self, f):
+        if f in self._ascultatori_ceas:
+            self._ascultatori_ceas.remove(f)
+
+    def _anunta_ceas(self):
+        for f in list(self._ascultatori_ceas):
+            try:
+                f(self)
+            except Exception as e:
+                print('[HdsCautareOarba] ascultatorul ceasului: %s' % e)
 
     # ---- pornire
     def in_curs(self):
@@ -1036,6 +1302,7 @@ class Cautare(object):
         """O etapa = o lista de treceri, data programului in grupe de cel mult TRECERI_PE_CHEMARE."""
         self.etapa = etapa
         self.faza = CAUTA if etapa == 1 else A_DOUA
+        self.t_etapa = self._ceas()
         self.treceri_etapa = list(lista)
         if etapa >= 2:
             self.treceri2 += list(lista)
@@ -1047,8 +1314,11 @@ class Cautare(object):
         self._lot = self.treceri_etapa[self._facute:self._facute + TRECERI_PE_CHEMARE]
         self.trecere = None
         self.nr_trecere = 0
+        pasi = None
+        if self.cerere.get('fel') == FEL_PASI:
+            pasi = {'rate': rate_pasi(self.trepte), 'cunoscute': self.cunoscute}
         argv = argv_program(self._lot, self.osc, self.cerere.get('tuner') or 0, self.cerere.get('timp_max'),
-                            self.cerere.get('vuplus'), self.cerere.get('rata_min'), self.cerere.get('comutare'))
+                            self.cerere.get('vuplus'), self.cerere.get('rata_min'), self.cerere.get('comutare'), pasi)
         try:
             self._proces = self._pornitor(argv, self._la_rand, self._la_iesire)
         except Exception as e:
@@ -1064,6 +1334,11 @@ class Cautare(object):
     def _la_rand(self, linie):
         ev = citeste_eveniment(linie)
         if not ev:
+            # 0.8.0 (BSH1): "PROFIL <port> pasi <driver>": cautarea merge pe pasi si cand sonda n-a raspuns inca la
+            # pornire; programul face singur golurile, deci fara etapele celorlalte cai
+            parti = (linie or '').split()
+            if len(parti) >= 3 and parti[0] == 'PROFIL' and parti[2] == FEL_PASI:
+                self.cerere['fel'] = FEL_PASI
             return
         tip = ev['tip']
         if tip == 'tp':
@@ -1122,7 +1397,10 @@ class Cautare(object):
 
     def _urmatoarea_etapa(self):
         """Dupa treptele alese: la 1, numai ferestrele cunoscutelor negasite (cateva secunde); la 2 si golurile; la 3
-        golurile inca o data, cu ferestrele decalate."""
+        golurile inca o data, cu ferestrele decalate. 0.8.0 (BSH1): pe calea pasi programul a incercat deja cunoscutele si
+        golurile, deci nicio etapa in plus."""
+        if self.cerere.get('fel') == FEL_PASI:
+            return []
         if self.etapa == 1 and self.trepte == 1:
             return ferestre_a_doua(negasite(self.cunoscute, self.gasite), self.benzi)
         if self.etapa < min(self.trepte, ETAPE_MAX):
@@ -1205,7 +1483,10 @@ class Cautare(object):
 
     def verifica(self, acum=None):
         """Chemata din secunda in secunda de receptor: dupa gratie, un program care nu s-a oprit e omorat (iar partea
-        de receptor pune tuner_used inapoi). True daca l-a omorat."""
+        de receptor pune tuner_used inapoi). True daca l-a omorat. 0.8.0 (AMR4): cat merge cautarea, bataia ajunge si
+        la ascultatorii ceasului (cronometrul ecranului merge si cand programul nu scrie nimic)."""
+        if self.in_curs():
+            self._anunta_ceas()
         if self.faza != OPRESTE or self._proces is None:
             return False
         acum = self._ceas() if acum is None else acum
@@ -1234,29 +1515,106 @@ class Cautare(object):
                        oprita=self.faza in (OPRIT, EROARE))
 
     def lista_scanare(self):
-        """Cunoscutele din benzile si polarizarile cautate + cele noi (ca DVB-S Auto); [] fara satelit stiut."""
+        """Cunoscutele din benzile si polarizarile cautate + cele noi (ca DVB-S Auto) pe care omul le pastreaza (din
+        fabrica toate); [] fara satelit stiut."""
         if self.orbpos is None or not (self.gasite or self.cunoscute):
             return []
-        return pentru_scanare(self.cunoscute, self.gasite, self.orbpos, self.rata_min())
+        return pentru_scanare(self.cunoscute, self.gasite, self.orbpos, self.rata_min(), self.lasate)
 
-    def numere(self):
-        r = self.randuri_acum()
+    # ---- raportul pe sectiuni si cronometrul (0.8.0, AMR4)
+    def gata_sau_oprita(self):
+        return self.faza in (GATA, OPRIT)
+
+    def gasite_acum(self):
+        """Cat merge cautarea: purtatoarele gasite pana acum, cea mai noua sus (gasite_pe_rand)."""
+        return gasite_pe_rand(self.cunoscute, self.gasite, self.rata_min())
+
+    def cazute(self):
+        """Cheile celor gasite pe care "Scanează canalele" le-a acordat fara semnal (cazute_la_acordare); set() inainte
+        de scanare. Rezultatul scanarii se citeste o data pe fiecare scanare noua (aceiasi octeti = acelasi raspuns)."""
+        if not self.gata_sau_oprita() or self._scanare_ultima is None or not self.gasite:
+            return set()
+        try:
+            brut = self._scanare_ultima()
+        except Exception as e:
+            print('[HdsCautareOarba] rezultatul scanarii: %s' % e)
+            return set()
+        if not brut:
+            return set()
+        semn = (self.orbpos, len(self.gasite), self.t_sfarsit)
+        tinut, semn_tinut, rez = self._cazute_tinute
+        if tinut is brut and semn_tinut == semn:
+            return set(rez)
+        try:
+            scanare = json.loads(brut.decode('utf-8')) if isinstance(brut, (bytes, bytearray)) else brut
+        except (ValueError, UnicodeDecodeError) as e:
+            print('[HdsCautareOarba] rezultatul scanarii nu se poate citi: %s' % e)
+            scanare = None
+        rez = cazute_la_acordare(scanare, self.gasite, self.orbpos, ora_iso(self.t_sfarsit) if self.t_sfarsit else '')
+        self._cazute_tinute = (brut, semn, set(rez))
+        return rez
+
+    def sectiuni_acum(self, r=None):
+        """Raportul de la sfarsit (sectiuni()); [] cat merge cautarea sau fara cautare. r: randuri_acum() deja socotite."""
+        if not self.gata_sau_oprita():
+            return []
+        return sectiuni(self.cunoscute, self.gasite, self.rata_min(), gata=self.faza == GATA,
+                        oprita=self.faza == OPRIT, lasate=self.lasate, cazute=self.cazute(), randuri_gata=r)
+
+    def pastreaza(self, cheie, da=None):
+        """Alegerea omului in raport: purtatoarea noua `cheie` se pastreaza (merge la "Scanează canalele", ca pana acum)
+        sau nu. da: True / False, None = schimba. Numai dupa cautare si numai pe cele din sectiunea Noi. Intoarce
+        True daca s-a schimbat ceva; televizorul si pagina vad aceeasi alegere (ascultatorii)."""
+        if not self.gata_sau_oprita():
+            return False
+        noi = [r['cheie'] for r in dict(self.sectiuni_acum()).get('noi', [])]
+        if cheie not in noi:
+            return False
+        pastrat = cheie not in self.lasate
+        vrea = (not pastrat) if da is None else bool(da)
+        if vrea == pastrat:
+            return False
+        if vrea:
+            self.lasate.discard(cheie)
+        else:
+            self.lasate.add(cheie)
+        self._anunta()
+        return True
+
+    def ramas_s(self, acum=None):
+        """Cat mai tine treapta in curs, in secunde, din procentul ei (feliile facute de program) si timpul scurs in ea;
+        None la rotire, la oprire si cat e prea devreme ca sa se poata socoti."""
+        if self.faza not in (CAUTA, A_DOUA) or not self.t_etapa:
+            return None
+        scurs = (self._ceas() if acum is None else acum) - self.t_etapa
+        p = int(self.procent or 0)
+        if p < PROCENT_MIN_ESTIMARE or scurs < SECUNDE_MIN_ESTIMARE:
+            return None
+        return max(0, int(round(scurs * (100 - p) / float(p))))
+
+    def numere(self, r=None):
+        r = self.randuri_acum() if r is None else r
         return {'noi': sum(1 for x in r if x['stare'] == 'nou'),
                 'gasite_cunoscute': sum(1 for x in r if x['stare'] == 'gasit'),
                 'cunoscute': len(self.cunoscute),
                 'negasite': sum(1 for x in r if x['stare'] in ('negasit', 'cunoscut', 'neverificat'))}
 
-    def text_stare(self):
-        """Randul de stare, acelasi pe televizor si in pagina."""
-        n = self.numere()
+    def text_stare(self, n=None):
+        """Randul de stare, acelasi pe televizor si in pagina. n: numere() deja socotite."""
+        n = self.numere() if n is None else n
         if self.faza == NIMIC:
             return ''
         if self.faza == ROTIRE:
             return _t('Antena se rotește spre %s (până la %s).') % (self.nume_satelit or text_satelit({}),
                                                                        text_rotire(self.secunde_rotire))
         if self.faza in (CAUTA, A_DOUA):
-            return _t('Treapta %d din %d: %d%%. Găsite: %d, noi: %d.') % (
+            text = _t('Treapta %d din %d: %d%%. Găsite: %d, noi: %d.') % (
                 min(self.etapa, self.trepte), self.trepte, self.procent, len(self.gasite), n['noi'])
+            ramas = self.ramas_s()
+            if ramas is not None:
+                # 0.8.0 (AMR4): si pe skinurile fara casete se vede cat mai tine treapta
+                text += ' ' + _t('Treapta aceasta mai ține %s.') % text_durata(ramas)
+            return text
         if self.faza == OPRESTE:
             return _t('Se oprește după bucata de bandă în curs...')
         if self.faza == EROARE:
@@ -1268,17 +1626,41 @@ class Cautare(object):
         return text
 
     def stare(self):
-        """Starea, ca dict simplu (pentru pagina web)."""
+        """Starea, ca dict simplu (pentru pagina web). 0.8.0 (AMR4), chei noi (cele vechi raman la fel): 'ramas_s' si
+        'ceas' (cronometrul: scurs, ramas), 'gasite_acum' (cat merge cautarea, cea mai noua sus), 'sectiuni' (la
+        sfarsit: [{cheie, titlu, numar, randuri}]), 'lasate' (cate noi nu se pastreaza)."""
+        ramas = self.ramas_s()
+        # randurile o singura data (le cer si numaratorile, randul de stare si sectiunile): pe receptoarele slabe starea
+        # se cere si din secunda in secunda (cronometrul)
+        r = self.randuri_acum()
+        n = self.numere(r)
         return {'faza': self.faza, 'in_curs': self.in_curs(), 'etapa': self.etapa, 'trepte': self.trepte,
                 'procent': self.procent,
-                'text': self.text_stare(), 'mesaj': self.mesaj, 'durata_s': self.durata_s(),
+                'text': self.text_stare(n), 'mesaj': self.mesaj, 'durata_s': self.durata_s(),
                 'pozitie': self.orbpos, 'satelit': self.nume_satelit, 'satelit_schimbat': self.satelit_schimbat,
-                'numere': self.numere(), 'poate_scana': self.faza in (GATA, OPRIT) and bool(self.lista_scanare()),
-                'randuri': [{'mhz': int(r['tp']['frequency']) // 1000,
-                             'pol': POLARIZARI[int(r['tp']['polarisation']) % 4],
-                             'ksym': int(r['tp']['symbol_rate']) // 1000, 'stare': r['stare'],
-                             'provenienta': r['provenienta'],
-                             'text_stare': text_stare(r['stare'])} for r in self.randuri_acum()]}
+                'numere': n, 'poate_scana': self.faza in (GATA, OPRIT) and bool(self.lista_scanare()),
+                'randuri': [{'mhz': int(x['tp']['frequency']) // 1000,
+                             'pol': POLARIZARI[int(x['tp']['polarisation']) % 4],
+                             'ksym': int(x['tp']['symbol_rate']) // 1000, 'stare': x['stare'],
+                             'provenienta': x['provenienta'],
+                             'text_stare': text_stare(x['stare'])} for x in r],
+                'ramas_s': ramas,
+                'ceas': {'scurs': ceas_text(self.durata_s()), 'ramas': ceas_text(ramas) if ramas is not None else ''},
+                'gasite_acum': [_rand_web(g) for g in self.gasite_acum()] if self.faza != NIMIC else [],
+                'sectiuni': [{'cheie': k, 'titlu': titlu_sectiune(k, len(lista), self.faza == OPRIT), 'numar': len(lista),
+                              'randuri': [_rand_web(x) for x in lista]} for k, lista in self.sectiuni_acum(r)],
+                'lasate': len(self.lasate)}
+
+
+def _rand_web(r):
+    """Un rand al raportului pentru pagina web: frecventa (MHz si kHz), polarizarea, rata, sistemul, starea, cheia
+    alegerii si, la cele noi, daca se pastreaza."""
+    tp = r['tp']
+    return {'mhz': int(tp['frequency']) // 1000, 'khz': int(tp['frequency']),
+            'pol': POLARIZARI[int(tp['polarisation']) % 4], 'ksym': int(tp['symbol_rate']) // 1000,
+            'sistem': r.get('sistem') or '', 'stare': r['stare'], 'text_stare': text_stare(r['stare']),
+            'cheie': r.get('cheie') or cheie_tp(tp), 'alege': bool(r.get('alege')), 'pastrat': bool(r.get('pastrat')),
+            'text_pastrat': text_pastrat(r.get('pastrat')) if r.get('alege') else ''}
 
 
 # ---------------------------------------------------------------- pe receptor (enigma2 importat la folosire)
@@ -1344,10 +1726,17 @@ def tuner_used_inapoi():
         print('[HdsCautareOarba] tuner_used: %s' % e)
 
 
+def _scanare_ultima():
+    """0.8.0 (AMR4): octetii JSON ai ultimei scanari de canale (Components/HdsScanareUltima.raspuns: acelasi obiect pana
+    la scanarea urmatoare), pentru cazutele la acordare din raport; None fara scanare."""
+    from Components import HdsScanareUltima
+    return HdsScanareUltima.raspuns()
+
+
 def cautare():
     """Cautarea comuna a receptorului (ecranul si pagina web vad aceeasi)."""
     if _COMUNA['cautare'] is None:
-        c = Cautare(_ProcesReceptor)
+        c = Cautare(_ProcesReceptor, scanare_ultima=_scanare_ultima)
         c.adauga_ascultator(_dupa_schimbare)
         _COMUNA['cautare'] = c
     return _COMUNA['cautare']
@@ -1596,6 +1985,66 @@ def tp_rotire(poz, cunoscute):
             'modulatie': 'QPSK', 'fec': 'auto'}
 
 
+# H8B9 (0.8.0): sonda programului (hds-blindscan --sonda: numai citiri, fara frontend, ~0,3 s) inaintea oricarei rotiri. Pe
+# ZGEMMA H8.2H Plus si SE driverul tunerului lucreaza prin programul producatorului, fara libhi_msp.so si fara /proc/msp/tuner
+# ("SONDA 1 proc-tuner-lipsa"): pana acum omul afla abia dupa ce antena cu motor se rotise pana la un minut. Sonda merge pe un
+# fir separat (nicio asteptare pe firul interfetei), pornita de prima citire a antenei (deschiderea ecranului sau a paginii
+# /oarba); la pornirea cautarii raspunsul e de obicei gata, iar un tuner fara cautare oarba primeste mesajul pe loc, fara
+# rotire si fara oprirea canalului. Raspunsul se tine minte pe tuner pana la repornirea interfetei (placa nu se schimba). Cat
+# sonda nu a raspuns (sau n-a putut porni) nu se opreste nimic: cautarea merge ca inainte, iar programul isi spune singur
+# eroarea.
+_SONDA = {}
+_SONDA_IN_LUCRU = set()
+# 0.8.0 (BSH1): felul cautarii aflat de sonda: FEL_PASI ("SONDA 0 pasi": fara cautarea producatorului, acordari pe pasi)
+_FEL = {}
+
+
+def _sonda_ruleaza(slot):
+    import subprocess
+    motiv = ''
+    try:
+        p = subprocess.run([PROGRAM, '--sonda', '--tuner', str(int(slot))], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10)
+        for linie in p.stdout.decode('utf-8', 'replace').splitlines():
+            ev = citeste_eveniment(linie)
+            if ev and ev.get('tip') == 'sonda' and ev.get('cod') == 1:
+                motiv = ev.get('text', '').strip() or 'necunoscut'
+            elif ev and ev.get('tip') == 'sonda' and ev.get('cod') == 0 and ev.get('text', '').strip() == FEL_PASI:
+                _FEL[slot] = FEL_PASI
+        _SONDA[slot] = motiv
+        print('[HdsCautareOarba] sonda tunerului %s: %s' % (slot, motiv or 'merge'))
+    except Exception as e:
+        print('[HdsCautareOarba] sonda tunerului %s: %s' % (slot, e))
+    finally:
+        _SONDA_IN_LUCRU.discard(slot)
+
+
+def porneste_sonda(slot):
+    """Porneste sonda pe tunerul `slot` pe un fir separat (o singura data pe tuner); nimic pe Vu+ (alt program) sau fara
+    programul nostru."""
+    import os
+    if slot is None or slot in _SONDA or slot in _SONDA_IN_LUCRU:
+        return
+    if model_vuplus() is not None or not os.path.exists(PROGRAM):
+        return
+    import threading
+    _SONDA_IN_LUCRU.add(slot)
+    fir = threading.Thread(target=_sonda_ruleaza, args=(slot,), name='HdsSondaOarba')
+    fir.daemon = True
+    fir.start()
+
+
+def fel_sonda(slot):
+    """0.8.0 (BSH1): FEL_PASI cand tunerul cauta pe pasi (dupa sonda), altfel ''."""
+    return _FEL.get(slot, '')
+
+
+def motiv_sonda(slot):
+    """'' cand programul poate cauta pe tunerul `slot` sau nu stim inca; altfel textul pentru om (mesaj_eroare)."""
+    cod = _SONDA.get(slot, '')
+    return mesaj_eroare(cod) if cod else ''
+
+
 def antena(sesiune, pozitie=None):
     """Ce stie receptorul despre antena tunerului de satelit: {"slot", "pozitie", "nume", "osc", "motor",
     "sateliti", "comutare", "alegeri", "motiv"}; motiv = de ce nu se poate cauta (text), altfel ''. comutare: portul
@@ -1606,7 +2055,7 @@ def antena(sesiune, pozitie=None):
     oscilatoarele, comutarea, numele) e al lui; altfel ramane satelitul de pana acum (al canalului pornit)."""
     from Screens import ScanerSatelit as S
     rez = {'slot': None, 'pozitie': None, 'nume': '', 'osc': None, 'motor': False, 'sateliti': [], 'comutare': None,
-           'alegeri': [], 'motiv': '', 'rotire': False, 'de_la': None, 'secunde_rotire': 0}
+           'alegeri': [], 'motiv': '', 'rotire': False, 'de_la': None, 'secunde_rotire': 0, 'fel': ''}
     nim = S._nimmanager()
     slot = tuner_cautare(S, nim, sesiune) if nim is not None else None
     if slot is None:
@@ -1660,6 +2109,12 @@ def antena(sesiune, pozitie=None):
     rez['pozitie'] = poz
     if poz is not None:
         rez['nume'] = dict(rez['sateliti']).get(poz) or S.text_pozitie(poz)
+    # H8B9: tunerul fara cautare oarba (sonda): mesajul pe loc, fara rotire
+    porneste_sonda(slot)
+    rez['motiv'] = motiv_sonda(slot)
+    rez['fel'] = fel_sonda(slot)
+    if rez['motiv']:
+        return rez
     osc = None
     try:
         from Components import HdsLnb
@@ -1687,6 +2142,17 @@ def _cunoscute_satelit(poz):
         print('[HdsCautareOarba] transponderele satelitului %s: %s' % (poz, e))
         return []
     return bune
+
+
+def _cunoscute_pentru(poz):
+    """Cunoscutele satelitului pentru estimarea de pe ecran; [] fara satelit stiut sau fara receptor (probe)."""
+    if poz is None:
+        return []
+    try:
+        return _cunoscute_satelit(poz)
+    except Exception as e:
+        print('[HdsCautareOarba] cunoscutele pentru estimare: %s' % e)
+        return []
 
 
 def porneste_pe_receptor(sesiune, cerere):
@@ -1718,6 +2184,18 @@ def porneste_pe_receptor(sesiune, cerere):
     poz = a['pozitie']
     cunoscute = _cunoscute_satelit(poz) if poz is not None else []
     sateliti = [p for p, _n in a['sateliti']]
+    durata_paznic = DURATA_OARBA_S
+    if a.get('fel') == FEL_PASI and not pe_vuplus:
+        # 0.8.0 (BSH1): pe pasi cautarea poate tine mai mult decat paznicul de timp de pe celelalte cai
+        cerere['fel'] = FEL_PASI
+        pregatit = treceri(cerere, a.get('osc'))
+        if not pregatit.get('eroare'):
+            # cel mai rau caz: cunoscutele nu raspund (fara semnal, antena pe alt satelit) si se strabate toata banda
+            cun = cunoscute_in_cautare(cunoscute, pregatit['benzi'], pregatit['polarizari'])
+            trepte = trepte_din(cerere.get('trepte'))
+            est = estimare_pasi_s(pregatit['treceri'], [], trepte) + len(cun) * PASI_SECUNDE_CUNOSCUT
+            cerere['timp_max'] = min(PASI_TIMP_MAX_S, max(TIMP_MAX_S, int(2 * est)))
+            durata_paznic = max(DURATA_OARBA_S, int(cerere['timp_max']) + 300)
 
     def candidati():
         return dict((p, _cunoscute_satelit(p)) for p in sateliti)
@@ -1736,7 +2214,7 @@ def porneste_pe_receptor(sesiune, cerere):
         print('[HdsCautareOarba] oprirea canalului: %s' % e)
     try:
         from Components import HdsPaznic
-        HdsPaznic.ocupat(CHEIE_PAZNIC, MOTIV_OARBA, DURATA_OARBA_S)
+        HdsPaznic.ocupat(CHEIE_PAZNIC, MOTIV_OARBA, durata_paznic)
     except Exception as e:
         print('[HdsCautareOarba] paznicul: %s' % e)
     from Screens import ScanerSatelit as S

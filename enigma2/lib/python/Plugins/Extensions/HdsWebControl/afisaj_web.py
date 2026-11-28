@@ -193,6 +193,39 @@ def _viteza(A, stare_curenta=None):
 		return 300
 
 
+def _luminaAsteptare():
+	"""Luminozitatea afisajului in asteptare (config.lcd.standby, Components/Lcd.py): elementul, sau None cand
+	receptorul n-are afisaj cu lumina reglabila. Pe afisajul color meniul lcd de pe televizor nu se vede."""
+	try:
+		from Components.config import config
+		e = getattr(config.lcd, "standby", None)
+	except (ImportError, AttributeError):
+		return None
+	return e if e is not None and hasattr(e, "min") and hasattr(e, "max") else None
+
+
+def _puneLuminaAsteptare(valoare):
+	"""Scrie luminozitatea in asteptare; pe loc se vede numai in asteptare (notificarea ei pune lumina), altfel
+	lumina de zi ramane. Fara afisaj reglabil sau fara numar nu se schimba nimic."""
+	e = _luminaAsteptare()
+	try:
+		n = int(valoare)
+	except (TypeError, ValueError):
+		return
+	if e is None:
+		return
+	e.value = max(e.min, min(e.max, n))
+	e.save()
+	try:
+		from Components.config import config, configfile
+		configfile.save()
+		from Screens.Standby import inStandby
+		if inStandby is None:
+			config.lcd.bright.apply()
+	except Exception as eroare:
+		print("[afisaj_web] luminozitatea in asteptare: %s" % eroare)
+
+
 def stare(A=None, D=None, grupa=None, cu_catalog=False, cu_orase=False, alegere_color=None):
 	"""Pentru GET /api/afisaj. Fusurile orasului (cateva sute) numai cu cu_orase: pagina le cere o singura data."""
 	A, D = _a(A), _d(D)
@@ -223,6 +256,10 @@ def stare(A=None, D=None, grupa=None, cu_catalog=False, cu_orase=False, alegere_
 		"noapte_pana_la": [list(a) for a in A.alegeriNoaptePanaLa()],
 		"minutar": [list(a) for a in A.alegeriMinutar()],
 	}
+	la = _luminaAsteptare()
+	if la is not None:
+		rez["lumina_asteptare"] = str(la.value)
+		rez["alegeri_setari"]["lumina_asteptare"] = [[str(n), str(n)] for n in range(la.min, la.max + 1)]
 	P = _p()
 	if color:
 		# valoarea temelor noastre incepe cu fisierul lor; „#tema” = tema mare (pagina o previzualizeaza)
@@ -325,11 +362,23 @@ def seteaza(argumente, A=None, D=None):
 	leduri = {k: argumente[k] for k in argumente if k.startswith("led_")}
 	if leduri:
 		valori["leduri"] = leduri
+	if "lumina_asteptare" in argumente and not valori:
+		_puneLuminaAsteptare(argumente.get("lumina_asteptare"))
+		# lumina aleasa in afisaj (ziua, noaptea) se pune din nou, ca dupa A.seteaza
+		af = getattr(A, "_afisaj", None)
+		if af is not None and hasattr(af, "reporneste"):
+			af.lumina = None
+			af.reporneste()
+		rez = stare(A, D)
+		rez.update({"result": True, "message": _t("Salvat.")})
+		return rez
 	if not valori:
 		rez = stare(A, D)
 		rez.update({"result": False, "message": _t(MESAJ_FARA_ALEGERE)})
 		return rez
 	reusit, mesaj = A.seteaza(**valori)
+	if reusit and "lumina_asteptare" in argumente:
+		_puneLuminaAsteptare(argumente.get("lumina_asteptare"))
 	rez = stare(A, D)
 	rez.update({"result": bool(reusit), "message": mesaj})
 	return rez
@@ -580,6 +629,7 @@ ETICHETE = {
 	"VITEZA": N_("Viteza derulării"),
 	"LUMINA_ZI": N_("Luminozitatea, ziua"),
 	"LUMINA_NOAPTE": N_("Luminozitatea, noaptea"),
+	"LUMINA_ASTEPTARE": N_("Luminozitatea în așteptare (0-10)"),
 	"NOAPTE_DE_LA": N_("Noaptea începe"),
 	"NOAPTE_PANA_LA": N_("Noaptea se termină"),
 	"TEXT": N_("Textul tău"),
@@ -794,6 +844,7 @@ PAGINA = """<!DOCTYPE html>
       <div class="setare"><label for="s_viteza">__T_VITEZA__</label><select id="s_viteza" data-cheie="viteza"></select></div>
       <div class="setare"><label for="s_luminozitate">__T_LUMINA_ZI__</label><select id="s_luminozitate" data-cheie="luminozitate"></select></div>
       <div class="setare"><label for="s_luminozitate_noapte">__T_LUMINA_NOAPTE__</label><select id="s_luminozitate_noapte" data-cheie="luminozitate_noapte"></select></div>
+      <div class="setare lumina-asteptare-setare ascuns"><label for="s_lumina_asteptare">__T_LUMINA_ASTEPTARE__</label><select id="s_lumina_asteptare" data-cheie="lumina_asteptare"></select></div>
       <div class="setare"><label for="s_noapte_de_la">__T_NOAPTE_DE_LA__</label><select id="s_noapte_de_la" data-cheie="noapte_de_la"></select></div>
       <div class="setare"><label for="s_noapte_pana_la">__T_NOAPTE_PANA_LA__</label><select id="s_noapte_pana_la" data-cheie="noapte_pana_la"></select></div>
       <div class="setare"><label for="s_text">__T_TEXT__</label><input id="s_text" maxlength="60" data-cheie="text"></div>
@@ -1006,7 +1057,7 @@ function lucruDinStare(s){
     luminozitate_noapte: s.luminozitate_noapte, noapte_de_la: s.noapte_de_la, noapte_pana_la: s.noapte_pana_la, text: s.text_tau || "",
     oras: s.oras || "", personaj: s.personaj, personaj_ritm: s.personaj_ritm, personaj_noaptea: s.personaj_noaptea,
     tema_afisaj: s.tema_afisaj || "", color_live: s.color_live || "nu", color_picon: s.color_picon || "nu",
-    color_bara: s.color_bara || "da", color_animatii: s.color_animatii || "nu"}};
+    color_bara: s.color_bara || "da", color_animatii: s.color_animatii || "nu", lumina_asteptare: s.lumina_asteptare}};
 }
 function textLista(){ return LUCRU.lista.map(function(i){ return i.id + (i.durata ? "@" + i.durata : "") + (i.eticheta ? "+e" : ""); }).join(","); }
 function textEvenimente(){ return Object.keys(LUCRU.evenimente).sort().map(function(k){ return k + ":" + LUCRU.evenimente[k]; }).join(","); }
@@ -1019,6 +1070,7 @@ function schimbat(){ return S && (textLista() !== S.lista || textEvenimente() !=
   (S.color && (LUCRU.setari.tema_afisaj || "") !== (S.tema_afisaj || "")) ||
   (S.color && ["color_live", "color_picon", "color_animatii"].some(function(k){ return LUCRU.setari[k] !== (S[k] || "nu"); })) ||
   (S.color && LUCRU.setari.color_bara !== (S.color_bara || "da")) ||
+  (S.lumina_asteptare !== undefined && LUCRU.setari.lumina_asteptare !== S.lumina_asteptare) ||
   LUCRU.setari.text !== (S.text_tau || "")); }
 function vizibilSchimbat(){ return S && (textLista() !== S.lista || LUCRU.setari.asteptare !== S.asteptare); }
 function bifat(a){
@@ -1152,6 +1204,7 @@ function deseneazaSetari(){
   deseneazaPresetari();
   $("s_control_stare").textContent = (S.compatibilitate && S.compatibilitate.text) || "";
   document.querySelectorAll(".color-setare").forEach(function(e){ e.classList.toggle("ascuns", !S.color); });
+  document.querySelectorAll(".lumina-asteptare-setare").forEach(function(e){ e.classList.toggle("ascuns", S.lumina_asteptare === undefined); });
   document.querySelectorAll(".setare select[data-cheie]").forEach(function(s){
     var cheie = s.dataset.cheie; if(document.activeElement === s){ return; }
     var alegeri = cheie === "oras" ? (ORASE || []) : (S.alegeri_setari[cheie] || []);
@@ -1325,6 +1378,7 @@ $("salveaza").addEventListener("click", function(){
     ["color_live", "color_picon", "color_animatii"].forEach(function(k){ q.set(k, LUCRU.setari[k] || "nu"); });
     q.set("color_bara", LUCRU.setari.color_bara || "da");
   }
+  if(S.lumina_asteptare !== undefined){ q.set("lumina_asteptare", LUCRU.setari.lumina_asteptare || S.lumina_asteptare); }
   mesaj(TXT.se_salveaza);
   cerere("/api/afisaj-seteaza", "POST", q).then(function(d){
     var cedat = d.compatibilitate && d.compatibilitate.cedat;

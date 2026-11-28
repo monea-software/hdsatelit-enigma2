@@ -136,6 +136,9 @@ TEXT_FARA_SURSA = N_("Pentru %s nu avem încă o sursă liberă de ghid din inte
 TEXT_NECUNOSCUTA = N_("Nu știu încă în ce țară ești. Alege țara ta.")
 TEXT_NESIGURA = N_("Alege țara ghidului: %s sau %s.")
 TEXT_FARA_SATELIT = N_("Pe sateliții de la tunerele tale nu avem încă surse de ghid din internet pentru %s.")
+# EPG1 (0.8.0): locul ghidului importat se socoteste dupa memoria receptorului (lib/dvb/hdsepgloc.h); cand tot s-a umplut,
+# omul afla cate n-au incaput si ce poate face (eEPGCache.getExternRefused, numaratoarea importului de acum sau a ultimului)
+TEXT_PLIN = N_("Ghidul TV s-a umplut la ultimul import: %d emisiuni nu au mai încăput. Alege mai puține surse în EPG Import.")
 
 
 def numeTara(cod):
@@ -501,6 +504,21 @@ def _programare():
 	return programat, ora, ultimul
 
 
+def emisiuniRefuzate():
+	"""cate emisiuni n-au mai incaput in ghid la importul de acum sau la ultimul; 0 cand a intrat tot sau fara cache"""
+	try:
+		from enigma import eEPGCache
+		e = eEPGCache.getInstance()
+		return max(0, int(e.getExternRefused())) if e is not None and hasattr(e, "getExternRefused") else 0
+	except Exception:
+		return 0
+
+
+def textPlin(n):
+	"""textul pentru om cand ghidul s-a umplut, "" cand a intrat tot"""
+	return _t(TEXT_PLIN) % n if n else ""
+
+
 def stare():
 	"""totul pentru ecran si pentru pagina web"""
 	t = taraAcum()
@@ -520,6 +538,7 @@ def stare():
 		"surse_tarii": sursePentru(tara, surse, pozitii) if tara else [],
 		"programat": programat, "ora": ora, "ultimul": ultimul,
 		"faza": _STARE["faza"], "mesaj": _STARE["mesaj"], "in_lucru": inLucru(),
+		"refuzate": emisiuniRefuzate(),
 	}
 
 
@@ -545,6 +564,8 @@ def textStare(s=None):
 		r.append(_t("Importul se face zilnic la %s.") % s["ora"])
 	if s["ultimul"]:
 		r.append(_t("Ultimul import: %s") % s["ultimul"])
+	if s.get("refuzate"):
+		r.append(textPlin(s["refuzate"]))
 	if s["mesaj"]:
 		r.append(s["mesaj"])
 	return "\n".join(r)

@@ -68,6 +68,23 @@ TID_PAT, TID_SDT = 0x00, 0x42
 TIPURI_TV = (0x01, 0x11, 0x16, 0x19, 0x1F, 0x20)
 TIPURI_RADIO = (0x02, 0x0A)
 
+# GSW2 (Eduard 27.11.2026 16:07-16:36):
+# - A: transponderul cerut e chiar al programului de acum, pe acelasi tuner: masurarea NU ia tunerul si NU opreste
+#   programul; citeste nivelul, calitatea, BER si blocarea din frontendul serviciului care merge (getFrontendStatus pe
+#   serviciul curent, ca bara de informatii si pagina „Informatii canal”). Tunerul se ia numai pentru alt transponder.
+# - C: blocarea pe satelitul cerut termina asteptarea motorului pe loc (citirea noastra, a programului, sau semnalul
+#   programului de acum pe acelasi satelit, cum s-a vazut pe .129 la 16:01: televizorul prinsese in 8 s).
+# - D: satelitii in afara cursei motoarelor USALS (unghiul de motor peste UNGHI_MOTOR_MAXIM) sau sub ELEVATIE_MINIMA
+#   din locul antenei se marcheaza; pagina si ecranul intreaba inainte sa-i trimita motorului (Octagon .134, 53,0°V:
+#   mergi_la_unghi -82,1 si nicio miscare).
+UNGHI_MOTOR_MAXIM = 75.0
+ELEVATIE_MINIMA = 5.0
+SOSIRE_DUPA_ACORD_S = 3.0     # blocarea citita mai devreme poate fi a transponderului de dinainte (inainte de SET_FRONTEND)
+PROGRAM_LIPSA_S = 3.0         # modul A: programul oprit (zap in curs) atata timp inainte ca masurarea lui sa se opreasca
+PROGRAM_VERIFICARE_S = 1.0    # modul A: cat de des se verifica daca programul e tot pe transponderul masurat
+CANAL_PROGRAM = object()      # modul A: canalele de pe transponder vin de pe demuxul programului
+PROGRAM_FARA_SEMNAL_S = 15    # modul A: programul fara semnal atata timp -> masurarea ia tunerul, ca sa poata acorda
+
 # timer.py:9-10 (TimerEntry.StateWaiting, StatePrepared)
 TIMER_ASTEPTARE, TIMER_PREGATIT = 0, 1
 
@@ -323,11 +340,74 @@ def _sub_orizont(poz, loc):
 	return elevation(orbitalToDegrees(poz), loc[0], loc[1]) < 0
 
 
+def unghi_si_elevatie(poz, loc):
+	"""(unghiul motorului USALS in grade, est pozitiv; elevatia in grade) pentru pozitia orbitala bruta, din locul
+	antenei; (None, None) fara loc. Unghiul e cel pe care il trimite nucleul (DishMath.motorAngle, ca sec.cpp); sub
+	orizont unghiul nu se calculeaza (None)."""
+	if loc is None:
+		return None, None
+	from Components.DishMath import elevation, motorAngle, orbitalToDegrees
+	grade = orbitalToDegrees(poz)
+	try:
+		el = elevation(grade, loc[0], loc[1])
+	except (ValueError, ZeroDivisionError):
+		return None, None
+	if el < 0:
+		return None, el
+	try:
+		return motorAngle(grade, loc[0], loc[1]), el
+	except (ValueError, ZeroDivisionError):
+		return None, el
+
+
+def motiv_departe(poz, loc):
+	"""De ce nu se trimite motorului fara intrebare: "sub_orizont", "jos" (sub ELEVATIE_MINIMA), "cursa" (unghiul de
+	motor peste UNGHI_MOTOR_MAXIM) sau "" (in regula, ori locul antenei nu se stie)."""
+	unghi, el = unghi_si_elevatie(poz, loc)
+	if el is None:
+		return ""
+	if el < 0:
+		return "sub_orizont"
+	if unghi is not None and abs(unghi) > UNGHI_MOTOR_MAXIM:
+		return "cursa"
+	if el < ELEVATIE_MINIMA:
+		return "jos"
+	return ""
+
+
+def _grade_text(x):
+	return ("%.1f" % x).replace(".", ",") + "°"
+
+
+def text_departe(sat):
+	"""Intrebarea de dinaintea comenzii spre un satelit departat (sat: un element din tunere()["sateliti"]), sau ""."""
+	motiv = sat.get("departe") or ""
+	nume = _reguli().nume_satelit(sat["poz"], sat["nume"])
+	if motiv == "cursa":
+		return _("%s cere motorului unghiul %s, dincolo de cursa obișnuită a motoarelor (cel mult aproximativ %d°). De "
+			"obicei motorul nu se mișcă deloc spre el. Trimit totuși comanda?") % (nume, _grade_text(sat.get("unghi") or 0),
+			int(UNGHI_MOTOR_MAXIM))
+	if motiv == "jos":
+		return _("%s stă la numai %s deasupra orizontului din locul antenei: semnalul ajunge greu, iar motorul merge până "
+			"aproape de capăt. Trimit totuși comanda?") % (nume, _grade_text(sat.get("elevatie") or 0))
+	if motiv == "sub_orizont":
+		return _("%s e sub orizont în locul antenei, deci nu se poate recepționa. Trimit totuși comanda?") % nume
+	return ""
+
+
+def satelit_din(tuner, poz):
+	for s in (tuner or {}).get("sateliti") or []:
+		if s["poz"] == poz:
+			return s
+	return None
+
+
 def tunere():
-	"""Tunerele de satelit: [{"slot", "nume", "s2", "motor", "sateliti": [{"poz", "nume", "vizibil"}]}], întâi cele
-	cu sateliți configurați. Un tuner nesetat („nothing”) rămâne în listă, fără sateliți, ca ecranul să spună că
-	trebuie configurat, nu că nu există. Cu motor, lista are toți sateliții (NimManager.getSatListForNim); cei aflați
-	sub orizontul locului trec la sfârșit, marcați, fiindcă motorul ar merge până la capăt degeaba."""
+	"""Tunerele de satelit: [{"slot", "nume", "s2", "motor", "sateliti": [{"poz", "nume", "vizibil", "departe", "unghi",
+	"elevatie"}]}], întâi cele cu sateliți configurați. Un tuner nesetat („nothing”) rămâne în listă, fără sateliți, ca
+	ecranul să spună că trebuie configurat, nu că nu există. Cu motor, lista are toți sateliții (NimManager.getSatListForNim);
+	cei în afara cursei motorului sau prea jos (GSW2, motiv_departe) trec după cei buni, iar cei aflați sub orizontul
+	locului la sfârșit, marcați, fiindcă motorul ar merge până la capăt degeaba."""
 	nim = _nim()
 	rez = []
 	for s in nim.nim_slots:
@@ -339,16 +419,44 @@ def tunere():
 			continue
 		motor = bool(nim.getRotorSatListForNim(s.slot))
 		loc = _loc_antena(s.slot) if motor else None
-		vazuti, nevazuti = [], []
+		vazuti, departe, nevazuti = [], [], []
 		for x in nim.getSatListForNim(s.slot):
 			poz = int(x[0])
-			if _sub_orizont(poz, loc):
-				nevazuti.append({"poz": poz, "nume": x[1], "vizibil": False})
-			else:
-				vazuti.append({"poz": poz, "nume": x[1], "vizibil": True})
+			motiv = motiv_departe(poz, loc)
+			unghi, el = unghi_si_elevatie(poz, loc)
+			sat = {"poz": poz, "nume": x[1], "vizibil": motiv != "sub_orizont", "departe": motiv,
+				"unghi": round(unghi, 1) if unghi is not None else None, "elevatie": round(el, 1) if el is not None else None}
+			(nevazuti if motiv == "sub_orizont" else departe if motiv else vazuti).append(sat)
 		rez.append({"slot": s.slot, "nume": s.friendly_full_description, "fel": FEL_SATELIT,
-			"s2": s.isCompatible("DVB-S2"), "motor": motor, "sateliti": vazuti + nevazuti})
+			"s2": s.isCompatible("DVB-S2"), "motor": motor, "sateliti": vazuti + departe + nevazuti})
 	return sorted(rez, key=lambda t: not t["sateliti"])
+
+
+def pozitie_implicita(tuner):
+	"""Satelitul de la care pornesc pagina si ecranul cand programul de acum nu e pe un tuner de satelit (IPTV, fisier,
+	nimic redat; GSW2 D): pozitia prinsa ultima data cu semnal (HdsMotorPozitie.pozitieConfirmata), apoi
+	config.misc.lastrotorposition, apoi primul satelit din cursa motorului. Niciodata unul departat (53,0°V pe .134)."""
+	sateliti = (tuner or {}).get("sateliti") or []
+	buni = [s["poz"] for s in sateliti if not s.get("departe")]
+	candidati = []
+	m = sys.modules.get("Components.HdsMotorPozitie")
+	f = getattr(m, "pozitieConfirmata", None) if m is not None else None
+	if f is not None:
+		try:
+			candidati.append(int(f(tuner["slot"])))
+		except Exception:
+			pass
+	try:
+		from Components.config import config
+		candidati.append(int(config.misc.lastrotorposition.value))
+	except Exception:
+		pass
+	for poz in candidati:
+		if poz in buni:
+			return poz
+	if buni:
+		return buni[0]
+	return sateliti[0]["poz"] if sateliti else None
 
 
 def _fel_tuner(s):
@@ -391,7 +499,8 @@ def _unic(lista):
 
 def frecvente_tc(slot, fel):
 	"""Frecventele de ales pentru un tuner terestru sau de cablu: ([{"tp", "text"}], numele listei).
-	Terestru: regiunea aleasa in Setari tuner (terrestrial.xml); fara ea, tabelul canalelor (VHF III 5-12, UHF 21-69).
+	Terestru: regiunea aleasa in Setari tuner (terrestrial.xml); fara ea, tabelul canalelor (VHF III 5-12, UHF 21-69,
+	sau 21-48 in tarile in care banda 700 MHz e a telefoniei mobile, ca "Toata banda").
 	Cablu: furnizorul ales in Setari tuner (cables.xml, cand tipul cautarii e „Furnizor”); altfel prima lista din tara
 	receptorului; altfel rasterul de
 	8 MHz de la 122 la 858 MHz, cu 6900 kSymb/s si modulatia Auto."""
@@ -424,7 +533,14 @@ def frecvente_tc(slot, fel):
 	if gasita is not None:
 		lista, nume = list(gasita["transpondere"]), gasita.get("nume", nume)
 	elif fel == FEL_TERESTRU:
-		lista, nume = [L.tp_canal(c) for c in L.canale(True)], _("canalele terestre (VHF 5-12, UHF 21-69)")
+		# UHF1: fara regiune, acelasi tabel ca "Toata banda" (UHF9): pana la canalul 48 in tarile in care banda
+		# 700 MHz e a telefoniei mobile, altfel pana la 69 (tara receptorului, dupa limba meniului)
+		tara = L.tara_utilizatorului()
+		lista = L.maturare_terestru(True, tara=tara)
+		if L.ultimul_canal_uhf(tara) == L.ULTIMUL_CANAL_FARA_700:
+			nume = _("canalele terestre (VHF 5-12, UHF 21-48)")
+		else:
+			nume = _("canalele terestre (VHF 5-12, UHF 21-69)")
 	else:
 		lista = [L.tp_cablu(f * 1000, SR_CABLU_LISTA_GOALA, L.CAB_MOD_AUTO) for f in L.FRECVENTE_CABLU_MHZ]
 		nume = _("frecvențele de cablu 122-858 MHz")
@@ -514,9 +630,13 @@ def text_satelit(sat):
 	"""Numele satelitului cu poziția scrisă ca în scaner și ca în rândul „Antena:”: „13.0E Hot Bird 13F/13G” din
 	satellites.xml devine „13,0°E Hot Bird 13F/13G” (ScanerSatelit.nume_satelit)."""
 	nume = _reguli().nume_satelit(sat["poz"], sat["nume"])
-	if sat.get("vizibil", True):
-		return nume
-	return "%s (%s)" % (nume, _("sub orizont"))
+	if not sat.get("vizibil", True):
+		return "%s (%s)" % (nume, _("sub orizont"))
+	if sat.get("departe") == "cursa":
+		return "%s (%s)" % (nume, _("în afara cursei motorului"))
+	if sat.get("departe") == "jos":
+		return "%s (%s)" % (nume, _("prea jos pe cer"))
+	return nume
 
 
 def transpondere(poz, s2=True):
@@ -623,6 +743,129 @@ def transponder_din_serviciu(serviciu, pozitii):
 	if _reguli().motiv_refuz(tp):
 		return None
 	return tp
+
+
+# ---------------------------------------------------------------- programul de acum (GSW2)
+def _date_transponder(serviciu):
+	"""getTransponderData(True) al serviciului care merge, sau None (citit inainte de oprirea lui)."""
+	try:
+		info = serviciu.frontendInfo() if serviciu is not None else None
+		return dict(info.getTransponderData(True) or {}) if info is not None else None
+	except Exception:
+		return None
+
+
+class _InfoOprit(object):
+	"""frontendInfo() pentru programul oprit de masurare: transponderul citit inainte de oprire (sau din lista de
+	canale), fara tuner stiut."""
+
+	def __init__(self, date):
+		self.date = dict(date or {})
+
+	def getTransponderData(self, original):
+		return dict(self.date)
+
+	def getFrontendData(self):
+		return {}
+
+
+class _ServiciuOprit(object):
+	def __init__(self, date):
+		self._info = _InfoOprit(date)
+
+	def frontendInfo(self):
+		return self._info
+
+
+def _date_din_lista(ref):
+	"""Transponderul unui program dupa referinta lui, din lista de canale (cand nu s-a citit inainte de oprire)."""
+	try:
+		from enigma import eServiceCenter, iServiceInformation
+		info = eServiceCenter.getInstance().info(ref)
+		return info.getInfoObject(ref, iServiceInformation.sTransponderData) if info is not None else None
+	except Exception:
+		return None
+
+
+def program_acum(lista_tunere=None, oprit=None, date_oprit=None):
+	"""Programul de acum si transponderul lui: {"slot", "tp", "ref", "merge", "slot_serviciu"} sau None.
+	merge=True: programul ruleaza, deci semnalul se citeste din frontendul lui; merge=False: l-a oprit masurarea
+	(oprit = referinta lui, date_oprit = transponderul citit inainte de oprire). Tunerul programului (tuner_number)
+	se incearca intai, ca pe receptoarele cu mai multe sloturi pe acelasi cablu (FBC)."""
+	nav = _nav()
+	serviciu = nav.getCurrentService() if nav is not None else None
+	ref = nav.getCurrentlyPlayingServiceReference() if nav is not None else None
+	merge = serviciu is not None
+	if serviciu is None:
+		if oprit is None:
+			return None
+		date = date_oprit or _date_din_lista(oprit)
+		if not date:
+			return None
+		serviciu, ref = _ServiciuOprit(date), oprit
+	slot_serviciu = None
+	try:
+		slot_serviciu = (serviciu.frontendInfo().getFrontendData() or {}).get("tuner_number")
+	except Exception:
+		pass
+	lista = lista_tunere if lista_tunere is not None else tunere()
+	for t in sorted(lista, key=lambda x: x["slot"] != slot_serviciu):
+		try:
+			if t.get("fel", FEL_SATELIT) != FEL_SATELIT:
+				tp = transponder_din_serviciu_tc(serviciu, t["fel"], t["slot"])
+			else:
+				tp = transponder_din_serviciu(serviciu, [s["poz"] for s in t["sateliti"]])
+		except Exception as e:
+			print("[HdsGasireSemnal] transponderul programului: %r" % (e,))
+			tp = None
+		if tp is not None:
+			return {"slot": t["slot"], "tp": tp, "ref": ref, "merge": merge, "slot_serviciu": slot_serviciu}
+	return None
+
+
+def acelasi_transponder(a, b):
+	"""True cand a si b sunt acelasi transponder (satelit: aceeasi pozitie, polarizare, frecventa la ±2 MHz, rata la
+	±1 %; terestru si cablu: potriveste_tc)."""
+	if not a or not b or fel_tp(a) != fel_tp(b):
+		return False
+	if fel_tp(a) == FEL_SATELIT:
+		return a.get("orbital_position") == b.get("orbital_position") and potriveste(a, [{"tp": b}]) == 0
+	return potriveste_tc(a, [{"tp": b}]) == 0
+
+
+def stare_program():
+	"""getFrontendStatus al programului care merge (dictionarul nucleului, ca la bara de informatii), sau None fara
+	program pe tuner. La serviciu functia nu are argument (servicedvb.cpp); forma veche, cu dictionarul de umplut,
+	ramane pentru imagini vechi."""
+	nav = _nav()
+	serviciu = nav.getCurrentService() if nav is not None else None
+	info = serviciu.frontendInfo() if serviciu is not None else None
+	if info is None:
+		return None
+	try:
+		d = info.getFrontendStatus()
+	except TypeError:
+		d = {}
+		info.getFrontendStatus(d)
+	return dict(d or {})
+
+
+def _program_blocat():
+	try:
+		return bool((stare_program() or {}).get("tuner_locked"))
+	except Exception:
+		return False
+
+
+def demux_program():
+	"""Demuxul programului care merge (getStreamingData), pentru canalele de pe transponder in modul A, sau -1."""
+	try:
+		s = _nav().getCurrentService()
+		date = s.stream().getStreamingData() if s is not None and s.stream() is not None else None
+		d = (date or {}).get("demux", -1)
+		return int(d) if d is not None else -1
+	except Exception:
+		return -1
 
 
 def acordeaza(frontend, tp):
@@ -932,6 +1175,8 @@ class LuareTuner(object):
 		self.canal = None
 		self.frontend = None
 		self.oldref = None
+		self.date_oprit = None        # GSW2: transponderul canalului oprit, citit inainte de oprire
+		self.blocat_oprit = False     # GSW2: canalul oprit avea semnal cand l-am oprit (modul A il porneste la loc)
 		self.am_oprit_canalul = False
 		self._la_gata = None
 		self._termen = 0.0
@@ -1003,6 +1248,9 @@ class LuareTuner(object):
 			# canalul de pus la loc se ține minte numai la PRIMA oprire: după scaner (care pornește singur un
 			# canal la ieșire) se oprește ce merge atunci, dar la sfârșit pornește tot canalul de la început
 			self.oldref = nav.getCurrentlyPlayingServiceReference()
+			# GSW2: transponderul lui, citit inainte de oprire (butonul „Transponderul canalului de acum”)
+			self.date_oprit = _date_transponder(nav.getCurrentService())
+			self.blocat_oprit = _program_blocat()
 			self.am_oprit_canalul = True
 		nav.stopService()
 		s = self._sesiune
@@ -1042,6 +1290,8 @@ class LuareTuner(object):
 		if acum is None:
 			return None
 		self.oldref, self.am_oprit_canalul = acum, True
+		self.date_oprit = _date_transponder(_nav().getCurrentService())
+		self.blocat_oprit = _program_blocat()
 		_nav().stopService()
 		return acum
 
@@ -1131,6 +1381,14 @@ class Masurare(object):
 		self._program_datorat = None
 		self._ceas_datorie = None
 		self._sistem_acordat = None    # GST7: DVB-T sau DVB-T2 trimis ultima data, cand lista nu spune sistemul
+		# GSW2: modul A = transponderul programului de acum, citit din frontendul lui, fara tunerul nostru
+		self.din_program = False
+		self._program_ref = None
+		self._program_lipsa_de = None
+		self._program_verificat = 0.0
+		self._program_la_tuner = False  # programul a ramas fara semnal si masurarea a luat tunerul (text pentru om)
+		self._motor_sosit = False       # C: blocarea pe satelitul cerut a terminat asteptarea motorului la acest acord
+		self._blocate_sosire = 0
 		self._goleste()
 
 	# ---- ceasuri
@@ -1249,6 +1507,7 @@ class Masurare(object):
 		self._durate, self._pas_ms = [], PAS_CITIRE_MS
 		self._opreste_citirea()
 		self._goleste()
+		self.din_program, self._program_la_tuner = False, False
 		if (slot is None or slot < 0 or tp is None) and self.tuner.are_tuner():
 			self.tuner.elibereaza(reda_canalul=False)
 		if slot is None or slot < 0:
@@ -1271,6 +1530,15 @@ class Masurare(object):
 		if eroare:
 			self._refuz(eroare)
 			return False, eroare
+		# GSW2 A: transponderul programului de acum, pe acelasi tuner: fara tunerul nostru, programul merge mai departe
+		self._preia_datoria()
+		prog = self._program_pentru(slot, self.tp)
+		if prog is not None and self._porneste_din_program(prog):
+			return True, ""
+		if prog is not None and prog["merge"] and stare_program():
+			# programul merge stiut fara semnal: masurarea ia tunerul ca sa acordeze, iar cand prinde transponderul lui
+			# il da inapoi programului (_preda_programului); o stare goala (imagine veche) nu se socoteste
+			self._program_la_tuner = True
 		inceput = urmatoarea_inregistrare()
 		if inceput is not None and inceput - time.time() <= INREGISTRARE_OPRIRE_S:
 			if self.tuner.are_tuner() or self.tuner.am_oprit_canalul:
@@ -1280,7 +1548,6 @@ class Masurare(object):
 			self._notifica()
 			return False, self._mesaj
 		self._porneste_paza()
-		self._preia_datoria()
 		if self.tuner.are_tuner():
 			return self._acordeaza()
 		self._faza("alocare")
@@ -1299,6 +1566,132 @@ class Masurare(object):
 			self._notifica()
 			return
 		self._acordeaza()
+
+	# ---- modul A (GSW2): transponderul programului de acum
+	def _program_pentru(self, slot, tp):
+		"""Programul de acum, daca tp e chiar transponderul lui pe acelasi tuner, altfel None. Un program oprit de
+		masurare (am_oprit_canalul) conteaza si el: pornește la loc, iar masurarea il citeste."""
+		oprit = self.tuner.oldref if self.tuner.am_oprit_canalul else None
+		try:
+			p = program_acum(oprit=oprit, date_oprit=getattr(self.tuner, "date_oprit", None) if oprit is not None else None)
+		except Exception as e:
+			print("[HdsGasireSemnal] programul de acum: %r" % (e,))
+			return None
+		if p is None or p["slot"] != slot or p.get("slot_serviciu") not in (None, slot):
+			return None
+		return p if acelasi_transponder(tp, p["tp"]) else None
+
+	def _porneste_din_program(self, prog):
+		"""Modul A. Un program care merge fara semnal nu are imagine de pastrat: atunci masurarea ia tunerul, ca pana
+		acum, ca sa poata acorda din nou (False). Un program oprit de noi porneste la loc si se citeste."""
+		if prog["merge"]:
+			st = stare_program()
+			if not st or not st.get("tuner_locked"):
+				return False
+		elif not getattr(self.tuner, "blocat_oprit", False):
+			# programul oprit de noi nu avea semnal: nu are imagine de pus la loc, masurarea pastreaza tunerul
+			return False
+		if self.tuner.are_tuner() or self.tuner.asteapta() or self.tuner.am_oprit_canalul:
+			self.tuner.elibereaza(reda_canalul=True)
+		self.din_program = True
+		self._program_la_tuner = False
+		self._program_ref = prog["ref"]
+		self._program_lipsa_de = None
+		self._program_verificat = time.monotonic()
+		self._porneste_paza()
+		self._tsid_din_program()
+		self._in_driver = None
+		# programul pus la loc acum e inca in acord: citirile din TUNING nu intra in varf
+		self._varf_asteapta = not prog["merge"]
+		self._motor_sosit, self._blocate_sosire = False, 0
+		self._mesaj = ""
+		self.incercari = 1
+		self._t_acord = self._t_baza = time.monotonic()
+		self._faza("acord")
+		self._notifica()
+		self._porneste_citirea()
+		return True
+
+	def _tsid_din_program(self):
+		"""TS ID si ON ID din referinta programului (1:0:tip:SID:TSID:ONID:...): programul merge, deci sunt ale
+		transponderului de pe care vine imaginea."""
+		ref = self._program_ref
+		try:
+			tsid, onid = ref.getUnsignedData(2), ref.getUnsignedData(3)
+		except AttributeError:
+			try:
+				parti = str(ref).split(":")
+				tsid, onid = int(parti[4], 16), int(parti[5], 16)
+			except (IndexError, ValueError):
+				tsid = onid = None
+		if tsid is None or onid is None:
+			self.tsid_stare = "necitit"
+		else:
+			self.tsid, self.onid, self.tsid_stare = int(tsid), int(onid), "citit"
+
+	def _citeste_program(self):
+		"""Starea frontendului programului (dict) sau None cand pasul s-a incheiat aici (programul lipseste inca putin,
+		ori masurarea lui s-a oprit). O data pe secunda se verifica si ca programul e tot pe transponderul masurat."""
+		acum = time.monotonic()
+		t0 = acum
+		d = stare_program()
+		if d is None:
+			if self._program_lipsa_de is None:
+				self._program_lipsa_de = acum
+			if acum - self._program_lipsa_de >= PROGRAM_LIPSA_S:
+				self._opreste_programul(_("Programul de acum s-a oprit, deci s-a oprit și măsurarea lui. Apasă "
+					"„Pornește măsurarea” ca să măsori din nou."))
+				return None
+			self._notifica()
+			self._porneste_citirea()
+			return None
+		self._masoara_pasul(time.monotonic() - t0)
+		self._program_lipsa_de = None
+		if acum - self._program_verificat >= PROGRAM_VERIFICARE_S:
+			self._program_verificat = acum
+			try:
+				serviciu = _nav().getCurrentService()
+				if fel_tp(self.tp) == FEL_SATELIT:
+					date = _date_transponder(serviciu) or {}
+					tp = transponder_din_serviciu(serviciu, [date.get("orbital_position")])
+				else:
+					tp = transponder_din_serviciu_tc(serviciu, fel_tp(self.tp), self.slot)
+			except Exception:
+				tp = None
+			if tp is not None and not acelasi_transponder(self.tp, tp):
+				self._opreste_programul(_("Programul de acum a trecut pe alt transponder, deci s-a oprit măsurarea "
+					"celui de dinainte. Apasă „Transponderul canalului de acum” ca să-l măsori pe cel nou."))
+				return None
+		return d
+
+	def _opreste_programul(self, text):
+		self._opreste(reda_canalul=False)
+		self._eveniment = text
+		self._notifica()
+
+	def _din_program_la_tuner(self):
+		"""Programul a ramas fara semnal (imaginea s-a dus oricum): masurarea ia tunerul, ca sa poata acorda singura
+		din nou la fiecare interval (reacordarea programului dupa pierdere nu e sigura pe orice tuner). Cand prinde din
+		nou transponderul programului, tunerul se da inapoi programului (_preda_programului)."""
+		self.din_program = False
+		self._program_la_tuner = True
+		self._opreste_citirea()
+		self._goleste()
+		self._faza("alocare")
+		self._notifica()
+		self.tuner.ia(self.slot, self._dupa_alocare, self.sesiune)
+
+	def _preda_programului(self):
+		"""Masurarea a prins transponderul programului pe care l-a oprit fiindca nu avea semnal: programul porneste la
+		loc (acum cu semnal) si masurarea continua in modul A. True daca s-a facut."""
+		if not self._program_la_tuner or not self.tuner.am_oprit_canalul:
+			return False
+		self.tuner.blocat_oprit = True
+		prog = self._program_pentru(self.slot, self.tp)
+		if prog is None:
+			return False
+		print("[HdsGasireSemnal] semnalul a revenit pe transponderul programului: tunerul se da inapoi programului")
+		return self._porneste_din_program(prog)
 
 	def schimba(self, tp, extra=None, cine="web"):
 		"""Alt transponder pe același tuner (din ecran sau din web). Întoarce (reușit, text)."""
@@ -1326,6 +1719,9 @@ class Masurare(object):
 		self._tp_dupa_motor = None
 		self._seteaza_tp(tp, extra)
 		self.incercari = 0
+		if self.tuner.are_tuner() and self._program_pentru(self.slot, self.tp) is not None:
+			# GSW2 A: inapoi pe transponderul programului oprit de noi: porneste il pune la loc si il citeste
+			return self.porneste(self.slot, self.tp, cine, self.sesiune, self.extra, self.s2)
 		if not self.tuner.are_tuner() or self.tuner.slot != self.slot:
 			# fără tuner (după standby, după scaner) măsurarea pornește din nou și e a celui care cere acum: o cerere
 			# din web face o măsurare a web-ului, cu paza ei de 30 s, nu una „a ecranului” rămasă fără pază. Un tuner
@@ -1381,6 +1777,7 @@ class Masurare(object):
 		self._goleste()
 		self.uita_canalele()
 		self._motor, self._motor_era = {}, False
+		self.din_program, self._program_la_tuner = False, False
 		self._faza("oprita")
 		self._notifica()
 
@@ -1398,6 +1795,7 @@ class Masurare(object):
 				self.tuner.elibereaza(reda_canalul=False)
 			self.slot = slot
 		self._tp_dupa_motor = None
+		self.din_program = False
 		self._refuz(text)
 		return True, ""
 
@@ -1414,6 +1812,8 @@ class Masurare(object):
 	def iesirea_opreste_antena(self):
 		"""True când motorul se mișcă și la ieșire nu se pune niciun canal la loc: fără canal, frontendul se închide
 		după 3 s și îi taie tensiunea, deci antena rămâne în drum (revizia, punctul 1)."""
+		if self.din_program:
+			return False    # GSW2 A: frontendul e al programului, care ramane pornit
 		in_mers = self.faza == "motor" or (self.faza == "refuzat" and self._motor_la_refuz)
 		return in_mers and not (self.tuner.am_oprit_canalul and self.tuner.oldref is not None)
 
@@ -1443,6 +1843,7 @@ class Masurare(object):
 		self._mesaj = ""
 		self.incercari += 1
 		self._t_acord = self._t_baza = time.monotonic()
+		self._motor_sosit, self._blocate_sosire = False, 0
 		self._faza(faza)
 		self._notifica()
 		self._porneste_citirea()
@@ -1476,6 +1877,7 @@ class Masurare(object):
 		self._mesaj = ""
 		self.incercari += 1
 		self._t_acord = self._t_baza = time.monotonic()
+		self._motor_sosit, self._blocate_sosire = False, 0
 		self._faza(faza)
 		self._notifica()
 		self._porneste_citirea()
@@ -1492,10 +1894,62 @@ class Masurare(object):
 
 	def _reacord_singur(self):
 		"""Reacordarea singură în „fără semnal” și „semnal pierdut”: nucleul doar marchează FAILED și nu știm dacă
-		driverul mai caută după timpul lui (frontend.cpp, timeout)."""
+		driverul mai caută după timpul lui (frontend.cpp, timeout). În modul A nu se acordează frontendul programului:
+		după PROGRAM_FARA_SEMNAL_S fără semnal măsurarea ia tunerul (_din_program_la_tuner)."""
+		if self.din_program:
+			self._din_program_la_tuner()
+			return
 		self._acordeaza(faza=self.faza, ce="gasire semnal, reacordare singura")
 
+	def _interval_reacord(self):
+		"""Cât se așteaptă fără semnal până la reacordarea singură; în modul A mai mult (o picătură de ploaie nu oprește
+		programul): de două ori intervalul, cel puțin PROGRAM_FARA_SEMNAL_S."""
+		interval = interval_incercare_s(self.tp)
+		if self.din_program:
+			return max(PROGRAM_FARA_SEMNAL_S, 2 * interval)
+		return interval
+
 	# ---- citirea
+	def _program_pe_satelit(self, poz):
+		"""True cand programul de acum merge pe acelasi tuner, pe satelitul poz (semnalul lui spune ca antena e acolo)."""
+		try:
+			serviciu = _nav().getCurrentService()
+			info = serviciu.frontendInfo() if serviciu is not None else None
+			if info is None:
+				return False
+			d = info.getTransponderData(True) or {}
+			slot = (info.getFrontendData() or {}).get("tuner_number")
+		except Exception:
+			return False
+		return d.get("tuner_type") == "DVB-S" and d.get("orbital_position") == poz and slot in (None, self.slot)
+
+	def _sosit_cu_semnal(self, d, acum):
+		"""C (MOT1h): antena e pe satelitul cerut cand tunerul e blocat PRINDERI_LA_RAND citiri la rand, cel devreme la
+		SOSIRE_DUPA_ACORD_S dupa acord (inainte, blocarea poate fi a transponderului de dinainte), sau cand programul de
+		acum, pe acelasi tuner si pe acelasi satelit, are semnal (bara de informatii). Tinta motorului, cand se stie,
+		trebuie sa fie satelitul cerut. O data gasita, sosirea ramane pana la acordul urmator."""
+		if self.tp is None or fel_tp(self.tp) != FEL_SATELIT:
+			return False
+		poz = self.tp["orbital_position"]
+		la = self._motor.get("la_orbital", -1)
+		if la is not None and la >= 0 and la != poz:
+			return False
+		blocat = bool(d.get("tuner_locked")) and acum - self._t_acord >= SOSIRE_DUPA_ACORD_S
+		program = bool(self._motor.get("semnal_prins")) and self._program_pe_satelit(poz)
+		if self._motor_sosit:
+			if blocat or program:
+				return True
+			# semnalul s-a dus cat nucleul inca spune ca motorul merge: inapoi la asteptare, fara reacordare in mers
+			self._motor_sosit, self._blocate_sosire = False, 0
+			return False
+		self._blocate_sosire = self._blocate_sosire + 1 if (blocat or program) else 0
+		if self._blocate_sosire >= PRINDERI_LA_RAND:
+			self._motor_sosit = True
+			print("[HdsGasireSemnal] semnal prins pe %s: asteptarea motorului se termina (%s)" % (
+				poz, "tunerul masurarii" if blocat else "programul de acum"))
+			return True
+		return False
+
 	def _stare_motor(self):
 		m = stareMotor()
 		return m if m.get("slot") == self.slot else {}
@@ -1516,19 +1970,34 @@ class Masurare(object):
 			self._pas_ms = PAS_CITIRE_MS
 
 	def _pas(self):
-		fe = self.tuner.frontend
-		if fe is None or self.faza not in FAZE_CU_CITIRE:
+		if self.faza not in FAZE_CU_CITIRE:
 			return
-		d = {}
-		t0 = time.monotonic()
-		fe.getFrontendStatus(d)
-		self._masoara_pasul(time.monotonic() - t0)
+		if self.din_program:
+			# GSW2 A: frontendul programului de acum (tunerul e al lui), fara acord de la noi
+			d = self._citeste_program()
+			if d is None:
+				return
+		else:
+			fe = self.tuner.frontend
+			if fe is None:
+				return
+			d = {}
+			t0 = time.monotonic()
+			fe.getFrontendStatus(d)
+			self._masoara_pasul(time.monotonic() - t0)
 		acum = time.monotonic()
 		self.stare_tuner = d.get("tuner_state") or ""
+		self._motor = self._stare_motor()
+		# C: blocarea pe satelitul cerut termina asteptarea motorului, chiar daca nucleul mai spune „se misca”
+		misca = bool(self._motor.get("se_misca"))
+		if misca and self._sosit_cu_semnal(d, acum):
+			misca = False
+			self._motor = dict(self._motor, se_misca=False, sosit_cu_semnal=True)
 		# FE_READ_STATUS poate arăta încă blocarea transponderului de dinainte până când secvența SEC ajunge la
 		# SET_FRONTEND (cu motorul, aproape o secundă după acord). Starea nucleului iese din TUNING numai prin
-		# evenimentul noului acord (frontend.cpp, feEvent), deci în TUNING blocarea citită nu se crede.
-		self.blocat = bool(d.get("tuner_locked")) and self.stare_tuner != "TUNING"
+		# evenimentul noului acord (frontend.cpp, feEvent), deci în TUNING blocarea citită nu se crede (afară de C:
+		# blocarea ținută după SOSIRE_DUPA_ACORD_S, cu nucleul încă în așteptarea motorului).
+		self.blocat = bool(d.get("tuner_locked")) and (self.stare_tuner != "TUNING" or self._motor_sosit)
 		# SEM 0.7.5: frontend.cpp da 0 la nivel si la calitate fara semnal prins; nivelul brut (cu tunerul neprins) ramane
 		# numai pentru semnul de semnal prea puternic (plafon_din). Pe imaginile fara cheia noua: nivelul de pana acum.
 		self.nivel_afisat = d.get("tuner_signal_power")
@@ -1536,24 +2005,23 @@ class Masurare(object):
 		self.calitate = d.get("tuner_signal_quality")
 		self.calitate_db = d.get("tuner_signal_quality_db")
 		self.ber = d.get("tuner_bit_error_rate")
-		self._motor = self._stare_motor()
-		if self.stare_tuner != "TUNING":
+		if self.stare_tuner != "TUNING" or self._motor_sosit:
 			# nucleul a primit evenimentul acordului de acum sau i-a trecut timpul (feEvent, timeout): driverul e pe
 			# transponderul ales, deci și citirile din TUNING ale reacordărilor lui de acum încolo sunt ale lui
 			self._varf_asteapta = False
 		calitate = la_suta(self.calitate)
-		if calitate is not None and not self._varf_asteapta and not self._motor.get("se_misca"):
+		if calitate is not None and not self._varf_asteapta and not misca:
 			# în vârf intră numai citirile transponderului ales, cu antena oprită
 			self._varfuri.append((acum, calitate))
 		self._varfuri = [(t, v) for t, v in self._varfuri if acum - t <= VARF_S]
-		if self._motor.get("se_misca") or self._varf_asteapta:
+		if misca or self._varf_asteapta:
 			# cat se misca antena sau cat driverul arata inca transponderul de dinainte, nivelul nu e al celui ales
 			self._plafon_din = None
 		elif self.stare_tuner != "TUNING":
 			# in TUNING (si la reacordarea singura a aceluiasi transponder, la fiecare interval_incercare_s, mai scurt
 			# decat VARF_S pe ratele mari) citirea nu se crede: numaratoarea ramane cum era
 			self._plafon_din = plafon_din(self._plafon_din, self.nivel, acum)
-		if self._motor.get("se_misca"):
+		if misca:
 			# cât se mișcă antena: nici verdict, nici acord nou; cifrele sunt citiri adevărate din timpul mersului
 			self._motor_era = True
 			self._blocate = 0
@@ -1576,17 +2044,19 @@ class Masurare(object):
 				if self._blocate >= PRINDERI_LA_RAND and self.faza != "prins":
 					self._faza("prins")
 					self._mesaj = ""
+					if self._preda_programului():
+						return
 					self._cere_tsid()
 			else:
 				self._blocate = 0
 				if self.faza == "prins":
 					self._faza("pierdut")
 					self._t_baza = acum
-				elif self.faza == "acord" and acum - self._t_baza >= interval_incercare_s(self.tp):
+				elif self.faza == "acord" and acum - self._t_baza >= self._interval_reacord():
 					self._faza("fara_semnal")
 					self._reacord_singur()
 					return
-				elif self.faza in ("fara_semnal", "pierdut") and acum - self._t_baza >= interval_incercare_s(self.tp):
+				elif self.faza in ("fara_semnal", "pierdut") and acum - self._t_baza >= self._interval_reacord():
 					self._reacord_singur()
 					return
 		self._notifica()
@@ -1626,24 +2096,28 @@ class Masurare(object):
 		refuz = self._refuz_pentru(cine)
 		if refuz:
 			return False, refuz
-		if self.faza != "prins" or self.tuner.canal is None:
+		if self.faza != "prins" or (self.tuner.canal is None and not self.din_program):
 			return False, _("Canalele se citesc după ce semnalul e recepționat.")
 		if self.canale_stare == "se_citeste":
 			return True, ""
 		self.uita_canalele()
 		jeton = self._canale_jeton
-		try:
-			demux = self.tuner.canal.reserveDemux()
-			if isinstance(demux, (tuple, list)):
-				demux = demux[0] if demux else -1
-		except Exception as e:
-			print("[HdsGasireSemnal] demuxul pentru canale: %s" % e)
-			demux = -1
+		if self.din_program:
+			# GSW2 A: tabelele vin de pe demuxul programului de acum (filtre de sectiune in plus, programul nu se opreste)
+			demux = demux_program()
+		else:
+			try:
+				demux = self.tuner.canal.reserveDemux()
+				if isinstance(demux, (tuple, list)):
+					demux = demux[0] if demux else -1
+			except Exception as e:
+				print("[HdsGasireSemnal] demuxul pentru canale: %s" % e)
+				demux = -1
 		if not isinstance(demux, int) or demux < 0:
 			self._canale_gata(jeton, None, _("Nu am demux liber pentru citirea canalelor. Încearcă din nou."))
 			return False, self.canale_mesaj
 		lucru = {"sursa": None, "fd": {}, "rest": {}, "tabele": {PID_PAT: TabelCanale(TID_PAT),
-			PID_SDT: TabelCanale(TID_SDT)}, "pornit": time.monotonic(), "canal": self.tuner.canal}
+			PID_SDT: TabelCanale(TID_SDT)}, "pornit": time.monotonic(), "canal": self._canal_canale()}
 		try:
 			if self.sursa_canale is not None:
 				lucru["sursa"] = self.sursa_canale(demux)
@@ -1663,6 +2137,10 @@ class Masurare(object):
 		self._ceas("_ceas_canale", self._citeste_canalele).start(PAS_CANALE_MS, True)
 		self._notifica()
 		return True, ""
+
+	def _canal_canale(self):
+		"""De unde vin tabelele: canalul brut al masurarii, sau programul de acum (modul A, GSW2)."""
+		return CANAL_PROGRAM if self.din_program else self.tuner.canal
 
 	def _inchide_filtrele(self, lucru):
 		for fd in list(lucru["fd"]):
@@ -1704,7 +2182,7 @@ class Masurare(object):
 		lucru = self._canale_lucru
 		if lucru is None:
 			return
-		if self.tuner.canal is not lucru["canal"]:
+		if self._canal_canale() is not lucru["canal"]:
 			# tunerul a fost dat inapoi sau luat din nou pe alt drum (alt slot): tabelele nu mai sunt ale lui
 			self.uita_canalele()
 			self._notifica()
@@ -1784,7 +2262,7 @@ class Masurare(object):
 			# canalul datorat după o cedare trece acum la ecranul Standby, nu abia la bătaia pazei: o trezire în mai
 			# puțin de o secundă l-ar pierde
 			self._pazeste_datoria()
-		if not (self.tuner.are_tuner() or self.tuner.asteapta() or self.tuner.am_oprit_canalul):
+		if not (self.tuner.are_tuner() or self.tuner.asteapta() or self.tuner.am_oprit_canalul or self.din_program):
 			return
 		self._opreste(reda_canalul=False)
 		self._preda_canalul_la_standby()
@@ -1874,8 +2352,29 @@ class Masurare(object):
 			self.tuner.am_oprit_canalul, self.tuner.oldref = True, ref
 
 	# ---- ce se arată
+	def _unghi_cerut(self):
+		"""Unghiul trimis motorului (din comanda 6E) sau, fara el, cel calculat din locul antenei pentru tinta."""
+		m = self._motor
+		if m.get("unghi_motor") is not None:
+			return m["unghi_motor"]
+		la = m.get("la_orbital", -1)
+		if (la is None or la < 0) and self.tp is not None and fel_tp(self.tp) == FEL_SATELIT:
+			la = self.tp["orbital_position"]
+		if la is None or la < 0:
+			return None
+		return unghi_si_elevatie(la, _loc_antena(self.slot))[0]
+
 	def _text_motor(self):
 		m = self._motor
+		unghi = self._unghi_cerut()
+		if unghi is not None and abs(unghi) > UNGHI_MOTOR_MAXIM:
+			# GSW2 D (Octagon .134, 53,0°V: -82,1 si nicio miscare): nu spunem „se roteste” cand de obicei nu se misca
+			return _("Motorul a primit unghiul %s, dincolo de cursa lui obișnuită (cel mult aproximativ %d°): de obicei "
+				"antena nu se mișcă deloc. Alege un satelit din cursă sau oprește măsurarea.") % (_grade_text(unghi),
+				int(UNGHI_MOTOR_MAXIM))
+		if m.get("intarziat") or m.get("asteptare_trecuta"):
+			return _("Timpul estimat al rotirii a trecut și semnalul nu a venit: se poate ca antena să nu se fi mișcat "
+				"(motor fără curent, cablu, limită). Verifică motorul sau oprește măsurarea.")
 		prima = {"est": _("Antena se rotește spre est."), "vest": _("Antena se rotește spre vest.")}.get(
 			m.get("directie"), _("Antena se rotește."))
 		if m.get("de_la_orbital", -1) >= 0 and m.get("secunde_ramase") is not None:
@@ -1916,6 +2415,11 @@ class Masurare(object):
 			lista.append(scurt)
 		canal_oprit = _("Canalul s-a oprit cât timp măsori și pornește la loc când ieși.") \
 			if self.tuner.am_oprit_canalul and self.tuner.oldref is not None else ""
+		if self.din_program:
+			canal_oprit = _("Același transponder ca programul de acum: se citește tunerul lui, programul nu se oprește.")
+		elif self._program_la_tuner and canal_oprit:
+			canal_oprit = _("Programul de acum a rămas fără semnal, deci măsurarea a luat tunerul ca să acordeze din nou. "
+				"Programul pornește la loc când oprești.")
 		inregistrare = _("La %s începe o înregistrare programată. Măsurarea se oprește singură cu un minut și jumătate înainte.") % _ora(self._inregistrare_la) \
 			if self._inregistrare_la is not None else ""
 		varf = self._varf()
@@ -1968,15 +2472,45 @@ class Masurare(object):
 		elif f == "prins":
 			lista += [inregistrare, self._text_retea(), text_varf, canal_oprit]
 		elif f == "fara_semnal":
-			lista += [inregistrare, text_atenuator, fara_lista,
-				_("Niciun semnal în %d s. Se încearcă singur din nou la fiecare %d s (încercarea %d). Mișcă antena încet.") % (
-					timp_prindere_s(self.tp), interval, max(1, self.incercari)),
-				text_varf]
+			if self.din_program:
+				lista += [inregistrare, text_atenuator, _("Programul de acum nu are semnal. Mișcă antena încet; dacă semnalul "
+					"nu vine în %d s, măsurarea ia tunerul ca să acordeze din nou.") % self._interval_reacord(), text_varf]
+			else:
+				lista += [inregistrare, text_atenuator, fara_lista,
+					_("Niciun semnal în %d s. Se încearcă singur din nou la fiecare %d s (încercarea %d). Mișcă antena încet.") % (
+						timp_prindere_s(self.tp), interval, max(1, self.incercari)),
+					text_varf]
 		elif f == "pierdut":
-			lista += [inregistrare, text_atenuator, _("Semnalul s-a pierdut. Se încearcă din nou la fiecare %d s.") % interval,
-				text_varf]
+			if self.din_program:
+				pierdut = _("Programul de acum a pierdut semnalul. Mișcă antena încet; dacă semnalul nu revine în %d s, "
+					"măsurarea ia tunerul ca să acordeze din nou.") % self._interval_reacord()
+			else:
+				pierdut = _("Semnalul s-a pierdut. Se încearcă din nou la fiecare %d s.") % self._interval_reacord()
+			lista += [inregistrare, text_atenuator, pierdut, text_varf]
 		lista = [x for x in lista if x]
 		return lista[:DETALII_MAXIM]
+
+	def mod(self):
+		if self.din_program and self.faza in FAZE_CU_CITIRE:
+			return "program"
+		if self.tuner.are_tuner() or self.tuner.asteapta():
+			return "tuner"
+		return ""
+
+	def mod_text(self):
+		mod = self.mod()
+		if mod == "program":
+			return _("Transponderul programului de acum: măsurarea citește tunerul lui, iar imaginea și sunetul merg mai "
+				"departe.")
+		if mod == "tuner" and self.tuner.am_oprit_canalul and self.tuner.oldref is not None:
+			if self._program_la_tuner:
+				return _("Programul de acum a rămas fără semnal: măsurarea a luat tunerul ca să acordeze din nou, iar "
+					"programul pornește la loc când oprești măsurarea.")
+			return _("Alt transponder decât al programului de acum: măsurarea a luat tunerul, iar programul e oprit până "
+				"oprești măsurarea.")
+		if mod == "tuner":
+			return _("Măsurarea are tunerul ei; programul de acum nu e oprit.")
+		return ""
 
 	def prea_puternic(self):
 		"""Semnul de semnal prea puternic sau de interferenta (intrare_prea_puternica), pentru acum."""
@@ -2072,6 +2606,10 @@ class Masurare(object):
 			"canale_rezumat": self.canale_rezumat,
 			"canale_se_pot_citi": self.faza == "prins",
 			"canal_oprit": bool(self.tuner.am_oprit_canalul),
+			# GSW2: "program" = transponderul programului de acum, citit din tunerul lui (programul merge); "tuner" =
+			# masurarea are tunerul ei; "" = nimic (oprita, refuz)
+			"mod": self.mod(),
+			"mod_text": self.mod_text(),
 			"canal_datorat": self._program_datorat is not None,
 			"iesirea_opreste_antena": self.iesirea_opreste_antena(),
 		}

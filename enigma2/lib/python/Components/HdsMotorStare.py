@@ -41,6 +41,11 @@
 #   - timpul maxim trecut fara semnal (`asteptare_trecuta`: hdsRotorArrived = 1 si tot timpul maxim trecut): numai
 #     faptele masurate (cat s-a asteptat, ca semnalul nu a venit), fara "a ajuns", fara antena desenata pe tinta;
 #   - `ramas_text`: randul de sub bara, acelasi pe televizor si in web, cand cifrele obisnuite nu se pot spune.
+#   - MOT1 (0.8.0, 26.11 22:29: fereastra de dupa repornire "pare eroare"): titlul spune calm "Antena se muta pe
+#     19,2°E", iar randul de jos "Pozitia de dinainte nu e cunoscuta; mutarea poate dura pana la ...". Ultima pozitie
+#     prinsa cu semnal (HdsMotorPozitie.pozitieConfirmata, tinuta minte si cand readucerea uita pozitia) da: tinta egala
+#     cu ea = mutare tacuta (`tacut`, fara panou automat); alta = plecarea estimata, cu antena animata dupa viteza; fara
+#     ea, bara dupa timp (`procent_estimat`). Cheile vechi raman "nu se stie" (-1 / null).
 # CABLUL: comanda spre motor nu are raspuns, deci fara cablu antena pare ca se roteste, iar nucleul asteapta degeaba
 # semnalul (~90 s). Cand tot timpul maxim trece fara semnal (`asteptare_trecuta`; oprirea dupa curent inseamna ca
 # motorul raspunde, deci cablul e), titlul panoului (acelasi pe televizor si in web) spune o data pe
@@ -525,6 +530,13 @@ def _stareNucleu():
 		"fara_semnal_la_sosire": False,  # oprita fara semnal (hdsRotorArrived = 1) si semnalul tot nu e
 		"asteptare_trecuta": False,   # nucleul a asteptat tot timpul maxim si semnalul nu a venit
 		"ramas_text": "",             # randul de sub bara, cand nu se pot spune gradele si secundele ramase
+		# plecarea nestiuta, estimata (MOT1, 0.8.0): cheile de mai sus raman -1 / null ("nu se stie"), iar desenul si bara
+		# folosesc acestea, marcate estimat
+		"plecare_estimata_orbital": -1,  # ultima pozitie prinsa cu semnal (HdsMotorPozitie.pozitieConfirmata), -1 = nu e
+		"plecare_estimata_grade": None,
+		"pozitie_estimata_grade": None,  # pozitia din drum, de la plecarea estimata spre tinta, dupa viteza motorului
+		"procent_estimat": -1,           # bara: din drumul estimat sau, fara plecare, din timp (cel mult timpul maxim)
+		"tacut": False,                  # tinta = ultima pozitie confirmata: mutare de siguranta, fara panou automat
 	}
 	sec = _sec()
 	if sec is None:
@@ -607,6 +619,8 @@ def _stareNucleu():
 	stare["semnal_prins"], stare["semnal_stiut"] = _semnalPrins()
 
 	_faptele(stare, trecut_ms)
+	if stare["plecare_nestiuta"]:
+		_plecareEstimata(stare, slot)
 	stare["stare_text"] = _textStare(stare)
 	indemnCablu(stare, de_cand)
 	if stare["a_ajuns"] and de_cand > MILISECUNDE_DUPA_SOSIRE and not stare["indemn_cablu"]:
@@ -667,18 +681,71 @@ def _faptele(stare, trecut_ms):
 		stare["grade_ramase"] = None
 		stare["pozitie_grade"] = None
 	if stare["plecare_nestiuta"] and stare["se_misca"]:
-		stare["curent_text"] = _("De unde pleacă antena nu se știe")
+		# o singura fraza calma (MOT1, 26.11 22:29: "pare eroare"); randul "Acum" il umple plecarea estimata, daca e
 		ramase = None if maxim is None else maxim - stare["secunde_trecute"]
 		# cat mai dureaza nu se stie; se spune numai plafonul nucleului (timpul maxim al mutarii), cand il are
 		if ramase is not None and ramase >= 1:
-			stare["ramas_text"] = _("Nu se știe cât mai durează, cel mult încă %s") % secundeText(ramase)
+			stare["ramas_text"] = _("Poziția de dinainte nu e cunoscută; mutarea poate dura până la %s") % secundeText(ramase)
 		else:
-			stare["ramas_text"] = _("Nu se știe cât mai durează, se așteaptă semnalul")
+			stare["ramas_text"] = _("Poziția de dinainte nu e cunoscută; se așteaptă semnalul")
+
+
+# tinta egala cu ultima pozitie confirmata: mutarea e tacuta pana la capat (pe .129, 26.11, semnalul a venit la 15-77 s
+# dupa comenzile spre pozitia pe care antena era deja); daca se termina fara semnal, apare mesajul obisnuit (cablul)
+
+
+def _pozitieConfirmata(slot):
+	"""HdsMotorPozitie.pozitieConfirmata fara import (modulul il incarca panoul automat); -1 cand lipseste"""
+	m = sys.modules.get("Components.HdsMotorPozitie")
+	f = getattr(m, "pozitieConfirmata", None) if m is not None else None
+	try:
+		return int(f(slot)) if f is not None else -1
+	except Exception:
+		return -1
+
+
+def _plecareEstimata(stare, slot):
+	"""Plecarea nestiuta (MOT1): cheile vechi raman "nu se stie"; aici se pune ce se poate estima, marcat estimat.
+	- tinta = ultima pozitie prinsa cu semnal: mutare de siguranta, `tacut` toata mutarea (si la sosirea cu semnal);
+	- alta pozitie confirmata: plecarea estimata de acolo, pozitia din drum si bara dupa viteza motorului
+	  (HdsMotorViteza: drumMotor, prezice, parti; fara invatare, mutarea nu intra in viteza);
+	- nimic stiut (sau presupunerea cazuta): bara dupa timp, din timpul maxim al nucleului (secunde_maxime)."""
+	la = stare["la_orbital"]
+	trecut = stare["secunde_trecute"]
+	confirmat = _pozitieConfirmata(slot)
+	if confirmat >= 0 and confirmat == la:
+		if not stare.get("fara_semnal_la_sosire"):
+			stare["tacut"] = True
+		confirmat = -1   # plecarea = tinta nu da niciun drum de desenat
+	if confirmat >= 0 and stare["se_misca"]:
+		try:
+			loc = _coordonate(slot)
+		except Exception:
+			loc = None
+		try:
+			grade, directie, unghiuri = V.drumMotor(confirmat, la, loc)
+			prezis = V.calibrare().prezice(slot, grade, directie)
+			p = V.parti(prezis, trecut)
+			stare["plecare_estimata_orbital"] = confirmat
+			stare["plecare_estimata_grade"] = orbitalToDegrees(confirmat)
+			stare["pozitie_estimata_grade"] = round(V.orbitalLa(confirmat, la, loc, unghiuri, p["drum"]), 3)
+			stare["procent_estimat"] = max(0, min(99, int(round(p["timp"] * 100))))
+			return
+		except Exception:
+			pass
+	maxim = stare["secunde_maxime"]
+	if stare["se_misca"] and maxim:
+		stare["procent_estimat"] = max(0, min(99, int(round(100.0 * trecut / maxim))))
 
 
 def _faraFapteleNucleului(stare):
 	"""o miscare a comenzilor (pas, oprire, pozitie memorata): textele de mai sus erau ale ultimei miscari a nucleului"""
 	stare["plecare_nestiuta"] = False
+	stare["tacut"] = False
+	stare["plecare_estimata_orbital"] = -1
+	stare["plecare_estimata_grade"] = None
+	stare["pozitie_estimata_grade"] = None
+	stare["procent_estimat"] = -1
 	stare["fara_semnal_la_sosire"] = False
 	stare["asteptare_trecuta"] = False
 	stare["ramas_text"] = ""
@@ -793,8 +860,10 @@ def _textStare(stare):
 			return _("Antena a ajuns, semnal recepționat") if stare["semnal_prins"] else _("Antena a ajuns, inca fara semnal")
 		return _("Antena a ajuns")
 	if stare.get("plecare_nestiuta"):
-		# plecarea nu se stie: nici directia, nici ca motorul chiar se invarte; se stie numai ca a plecat comanda
-		return _("Comanda a plecat spre motor")
+		# plecarea nu se stie: se spune calm unde merge antena (MOT1), fara "comanda" si fara "necunoscut"
+		if stare.get("la_grade") is not None:
+			return _("Antena se mută pe %s") % HdsGrade.pozitie(stare["la_grade"])
+		return _("Antena se mută")
 	if stare["directie"] == "est":
 		return _("Antena se roteste spre est")
 	if stare["directie"] == "vest":
@@ -857,6 +926,8 @@ def boltaJson(stare):
 		"limita_vest": round(b["limita_vest"], 2) if b["limita_vest"] is not None else None,
 		"limita_est": round(b["limita_est"], 2) if b["limita_est"] is not None else None,
 		"de_la": unghi(stare.get("de_la_grade")), "la": unghi(stare.get("la_grade")), "acum": unghi(stare.get("pozitie_grade")),
+		# plecarea nestiuta: plecarea si pozitia estimate (MOT1), pentru desenul animat al paginii
+		"de_la_estimat": unghi(stare.get("plecare_estimata_grade")), "acum_estimat": unghi(stare.get("pozitie_estimata_grade")),
 		"sateliti": sateliti}
 
 
@@ -876,6 +947,12 @@ def stareJson():
 	# nu le mai scrie singura
 	iesire["de_la_scurt"] = HdsGrade.pozitie(stare["de_la_grade"]) if stare["de_la_grade"] is not None else ""
 	iesire["la_scurt"] = HdsGrade.pozitie(stare["la_grade"]) if stare["la_grade"] is not None else ""
+	# plecarea nestiuta, estimata (MOT1): textele gata facute, ca pe televizor
+	pe = stare.get("plecare_estimata_grade")
+	iesire["plecare_estimata_text"] = gradeText(pe) if pe is not None else ""
+	iesire["plecare_estimata_scurt"] = HdsGrade.pozitie(pe) if pe is not None else ""
+	ae = stare.get("pozitie_estimata_grade")
+	iesire["pozitie_estimata_text"] = gradeText(ae) if ae is not None else ""
 	# satelitii tunerului, pentru punctele de pe bolta din desenul paginii (numai cifre, fara nume)
 	iesire["sateliti"] = [{"orbital": o, "grade": g} for o, g in satelitiPeArc(stare["slot"])] if stare["activ"] else []
 	# desenul vazut din spatele antenei (aceeasi setare ca pe televizor) si sudul (longitudinea locului) pentru varful curbei

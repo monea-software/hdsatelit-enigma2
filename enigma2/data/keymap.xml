@@ -995,6 +995,33 @@
 		<key id="KEY_BLUE" mapto="openMultiServiceEPG" flags="m" />
 	</map>
 
+	<!-- HDSatelit: ghidul TV grafic (Screens/HdsGhidGrafic.py, RW2 26.11.2026): sagetile repetate cand sunt tinute,
+	     CH+/CH- pagina de canale, << >> si |<< >>| o zi, 0 inapoi la acum, EPG inchide ghidul. -->
+	<map context="HdsGhidGraficActions">
+		<key id="KEY_OK" mapto="ok" flags="m" />
+		<key id="KEY_EXIT" mapto="cancel" flags="m" />
+		<key id="KEY_UP" mapto="up" flags="mr" />
+		<key id="KEY_DOWN" mapto="down" flags="mr" />
+		<key id="KEY_LEFT" mapto="left" flags="mr" />
+		<key id="KEY_RIGHT" mapto="right" flags="mr" />
+		<key id="KEY_CHANNELUP" mapto="pageUp" flags="mr" />
+		<key id="KEY_CHANNELDOWN" mapto="pageDown" flags="mr" />
+		<key id="KEY_PAGEUP" mapto="pageUp" flags="mr" />
+		<key id="KEY_PAGEDOWN" mapto="pageDown" flags="mr" />
+		<key id="KEY_REWIND" mapto="dayBack" flags="m" />
+		<key id="KEY_FASTFORWARD" mapto="dayForward" flags="m" />
+		<key id="KEY_PREVIOUS" mapto="dayBack" flags="m" />
+		<key id="KEY_NEXT" mapto="dayForward" flags="m" />
+		<key id="KEY_INFO" mapto="info" flags="m" />
+		<key id="KEY_RED" mapto="red" flags="m" />
+		<key id="KEY_GREEN" mapto="green" flags="m" />
+		<key id="KEY_YELLOW" mapto="yellow" flags="m" />
+		<key id="KEY_BLUE" mapto="blue" flags="m" />
+		<key id="KEY_MENU" mapto="menu" flags="m" />
+		<key id="KEY_0" mapto="now" flags="m" />
+		<key id="KEY_EPG" mapto="epg" flags="m" />
+	</map>
+
 	<map context="OkCancelActions">
 		<key id="\x0a" mapto="ok" flags="m" />
 		<key id="\x1b" mapto="cancel" flags="m" />

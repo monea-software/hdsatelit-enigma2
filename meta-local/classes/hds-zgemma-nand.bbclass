@@ -7,6 +7,10 @@
 python () {
     if d.getVar('MACHINEBUILD') not in ('zgemmah8se', 'zgemmah82hplus'):
         return
+    # USB1 (27.11.2026): imaginea pentru stick (HDS_VARIANTA = usb) nu e arhiva NAND: fara UBI, fara forma compacta, cu
+    # recunoasterea textului si driverele din feed in imagine; o face classes/hds-usb-image.bbclass
+    if d.getVar('HDS_VARIANTA') == 'usb':
+        return
     machine = d.getVar('MACHINE')
     expected = {'zgemmah8se': 'h8se', 'zgemmah82hplus': 'h8'}
     if machine != expected[d.getVar('MACHINEBUILD')]:

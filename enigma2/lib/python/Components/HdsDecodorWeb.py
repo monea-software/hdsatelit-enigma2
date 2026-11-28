@@ -17,7 +17,13 @@ Un singur client odata; uid-ul lui (SO_PEERCRED) trebuie sa fie cel al lui hdsna
 
 DREPTUL: chgrp hdsnav pe video0 si audio0 cat tine imprumutul (modul ramane 0660), inapoi root la sfarsit. Un descriptor
 deja deschis nu se poate lua inapoi, deci la sfarsit (si la iesirea aplicatiei) procesele lui hdsnav care mai tin
-dispozitivele deschise primesc SIGKILL (ia_inapoi).
+dispozitivele deschise primesc SIGKILL (ia_inapoi), dar numai dupa ce au avut TERMEN_ELIBERARE_S sa le inchida singure.
+
+NAV11 (0.8.0, AS262, Vu+ Solo SE): un proces web omorat cat filmul lui e pe decodor nu mai face VIDEO_STOP si nici nu da
+sursa inapoi demuxului (cum face enigma2 in eTSMPEGDecoder::finishShowSinglePic); pe Broadcom MIPS canalul pornit dupa el
+a dus la un Oops in driver (NEXUS_Playpump_ClosePidChannel) si la repornirea receptorului. De aceea: ia_inapoi asteapta
+intai eliberarea curata, iar dupa o oprire fortata cu filmul pe decodor canalul porneste abia cand nu mai tine nimeni
+altul decat enigma2 dispozitivele (tinute_de_altii, HdsNavigator/ecrane.py).
 
 MEMORIA ES (numai HiSilicon cu showiframe, lib/dvb/hdspazavideo.h): fara maparea de 34611200 octeti prima scriere in video0
 sau audio0 e un Oops al nucleului; atunci raspunsul e "nu memorie" (verificarea o face Components/HdsHbbtvPornire.Mediu cu
@@ -32,6 +38,7 @@ import os
 import signal
 import socket
 import struct
+import time
 
 DOSAR = "/tmp/hds-decodor"
 CALE_SOCKET = DOSAR + "/sock"
@@ -39,6 +46,11 @@ DISPOZITIVE = ("/dev/dvb/adapter0/video0", "/dev/dvb/adapter0/audio0")
 RAND_MAXIM = 64
 TAMPON_MAXIM = 4 * RAND_MAXIM
 CERE, FEREASTRA, GATA, INCHIS = "cere", "fereastra", "gata", "inchis"
+# NAV11: cat asteapta ia_inapoi ca procesele ramase cu dispozitivele sa le inchida singure (fara niciun semnal: procesul
+# web n-are tratare de SIGTERM, deci orice semnal e la fel de necurat ca SIGKILL), si pasul verificarii. Fara procese
+# ramase nu se asteapta deloc (cazul obisnuit: "gata" vine dupa inchiderea dispozitivelor).
+TERMEN_ELIBERARE_S = 2.0
+PAS_ELIBERARE_S = 0.1
 # mediul navigatorului cu decodor (lansator.py, modul HbbTV): quirk-ul, gaura, limita decodarii, filmele fara cache pe disc si
 # plafonul tampoanelor Media Source Extensions (receptorul are ~400 MB liberi; WebKit le tine in memorie)
 MEDIU_NAVIGATOR = (("WEBKIT_GST_QUIRKS", "hdsdvb"), ("WEBKIT_GST_HOLE_PUNCH_QUIRK", "hdsdvb"),
@@ -186,21 +198,26 @@ def da_drept(da, gid, dispozitive=DISPOZITIVE, chown=None):
 	return len(facute) == len(dispozitive)
 
 
-def procese_cu_dispozitive(uid, dispozitive=DISPOZITIVE, proc="/proc", listdir=None, readlink=None, uid_proces=None):
-	"""PID-urile proceselor cu uid-ul dat care tin deschis unul din dispozitive (/proc/<pid>/fd/*)."""
+ORICE_UID = object()
+
+
+def procese_cu_dispozitive(uid, dispozitive=DISPOZITIVE, proc="/proc", listdir=None, readlink=None, uid_proces=None,
+		exclus=()):
+	"""PID-urile proceselor cu uid-ul dat (ORICE_UID: oricare) care tin deschis unul din dispozitive (/proc/<pid>/fd/*),
+	fara cele din exclus."""
 	listdir = listdir or os.listdir
 	readlink = readlink or os.readlink
 	uid_proces = uid_proces or (lambda cale: os.stat(cale).st_uid)
 	tinte = set(dispozitive)
 	rez = []
 	try:
-		pids = [p for p in listdir(proc) if p.isdigit()]
+		pids = [p for p in listdir(proc) if p.isdigit() and int(p) not in exclus]
 	except OSError:
 		return rez
 	for pid in pids:
 		baza = proc + "/" + pid
 		try:
-			if uid_proces(baza) != uid:
+			if uid is not ORICE_UID and uid_proces(baza) != uid:
 				continue
 			for fd in listdir(baza + "/fd"):
 				try:
@@ -214,18 +231,52 @@ def procese_cu_dispozitive(uid, dispozitive=DISPOZITIVE, proc="/proc", listdir=N
 	return rez
 
 
-def ia_inapoi(uid, dispozitive=DISPOZITIVE, chown=None, omoara=None, **cautare):
-	"""Sfarsitul imprumutului (si iesirea aplicatiei): grupul inapoi root, apoi procesele lui uid care mai tin
-	dispozitivele deschise primesc SIGKILL. -> PID-urile oprite."""
+def tinute_de_altii(dispozitive=DISPOZITIVE, exclus=None, **cautare):
+	"""NAV11: PID-urile proceselor (orice utilizator) care tin deschis video0/audio0, fara enigma2 (exclus, implicit
+	procesul de acum). Lista goala = decodorul e liber pentru canal."""
+	if exclus is None:
+		exclus = (os.getpid(),)
+	return procese_cu_dispozitive(ORICE_UID, dispozitive, exclus=tuple(exclus), **cautare)
+
+
+def nume_procese(pids, proc="/proc"):
+	"""NAV11: "pid(nume),..." pentru jurnal (numele din /proc/<pid>/comm), ca sa se vada cine tine decodorul."""
+	rez = []
+	for p in pids:
+		try:
+			with open("%s/%d/comm" % (proc, p)) as f:
+				rez.append("%d(%s)" % (p, f.read().strip()))
+		except (IOError, OSError, ValueError):
+			rez.append(str(p))
+	return ",".join(rez)
+
+
+def ia_inapoi(uid, dispozitive=DISPOZITIVE, chown=None, omoara=None, termen_s=None, dormi=None, ceas=None, **cautare):
+	"""Sfarsitul imprumutului (si iesirea aplicatiei): grupul inapoi root; procesele lui uid care mai tin dispozitivele
+	deschise au intai termen_s (TERMEN_ELIBERARE_S) sa le inchida singure (NAV11: fara niciun semnal, ca sink-ul sa
+	apuce VIDEO_STOP), iar cele care tot le tin primesc SIGKILL. Fara procese ramase nu se asteapta deloc.
+	-> PID-urile oprite cu SIGKILL."""
 	omoara = omoara or os.kill
+	dormi = dormi or time.sleep
+	ceas = ceas or getattr(time, "monotonic", time.time)
+	termen_s = TERMEN_ELIBERARE_S if termen_s is None else termen_s
 	da_drept(False, 0, dispozitive, chown)
 	if uid is None:
 		return []
 	pids = procese_cu_dispozitive(uid, dispozitive, **cautare)
+	if pids and termen_s > 0:
+		_jurnal("procesele %s tin decodorul dupa imprumut: astept sa-l inchida singure (%.1f s)" %
+			(",".join(str(p) for p in pids), termen_s))
+		pana = ceas() + termen_s
+		while pids and ceas() < pana:
+			dormi(PAS_ELIBERARE_S)
+			pids = procese_cu_dispozitive(uid, dispozitive, **cautare)
+		if not pids:
+			_jurnal("decodorul inchis curat de procesele ramase")
 	for p in pids:
 		try:
 			omoara(p, getattr(signal, "SIGKILL", 9))
-			_jurnal("procesul %d tinea decodorul dupa imprumut: oprit" % p)
+			_jurnal("procesul %d tinea decodorul si dupa %.1f s: oprit" % (p, termen_s))
 		except OSError as e:
 			_jurnal("procesul %d: %s" % (p, e))
 	return pids
@@ -272,6 +323,13 @@ class Server(object):
 		self._c = self._nc = None
 		self._buf = b""
 		self.imprumutat = False
+		self._refuz_spus = None         # HBW1: ultimul refuz scris in jurnal (o data pe motiv schimbat)
+
+	def _refuz(self, motiv, text):
+		"""HBW1 (AS244, Lanus): refuzurile serverului ("nu ocupat") lasa un rand in jurnal, o data pe motiv schimbat."""
+		if getattr(self, "_refuz_spus", None) != motiv:
+			self._refuz_spus = motiv
+			_jurnal("cerere refuzata (%s): %s" % (motiv, text))
 
 	def porneste(self):
 		"""Dosarul (root:hdsnav 0750), socketul (0660) si ascultarea. -> calea socketului sau None."""
@@ -335,6 +393,7 @@ class Server(object):
 			c.close()
 			return
 		if self._c is not None:
+			self._refuz("ocupat", "alt proces web tine legatura")
 			self._scrie(c, "nu ocupat")
 			c.close()
 			return
@@ -343,18 +402,19 @@ class Server(object):
 		self._nc = self.notificator(c.fileno(), self._laDate)
 
 	def _laDate(self, *_):
+		"""-> True cand s-a citit ceva (date sau sfarsitul legaturii), False cand nu era nimic de citit."""
 		c = self._c
 		if c is None:
-			return
+			return False
 		try:
 			date = c.recv(256)
 		except (OSError, socket.error) as e:
 			if getattr(e, "errno", None) in (errno.EAGAIN, errno.EWOULDBLOCK):
-				return
+				return False
 			date = b""
 		if not date:
 			self._inchideClientul()
-			return
+			return True
 		self._buf += date
 		while b"\n" in self._buf and self._c is not None:
 			rand, self._buf = self._buf.split(b"\n", 1)
@@ -362,6 +422,16 @@ class Server(object):
 		if len(self._buf) > TAMPON_MAXIM:
 			_jurnal("rand prea lung: legatura inchisa")
 			self._inchideClientul()
+		return True
+
+	def citeste_ramase(self, maxim=16):
+		"""NAV11: citeste pe loc ce a trimis WebKit si n-a ajuns inca la notificator ("gata", legatura inchisa), ca
+		enigma2 sa stie sigur daca filmul mai tine decodorul inainte sa trimita vreun semnal sau sa porneasca canalul.
+		-> self.imprumutat dupa citire."""
+		for _i in range(maxim):
+			if self._c is None or not self._laDate():
+				break
+		return self.imprumutat
 
 	def _comanda(self, rand):
 		c = citeste_rand(rand)
@@ -371,11 +441,13 @@ class Server(object):
 		cmd, arg = c
 		if cmd == CERE:
 			if self.imprumutat:
+				self._refuz("imprumutat", "decodorul e deja dat pe aceasta legatura")
 				self._scrie(self._c, "nu ocupat")
 				return
 			r = self.a.laDecodorCere()
 			if r is True:
 				self.imprumutat = True
+				self._refuz_spus = None
 				self._scrie(self._c, "ok")
 			else:
 				self._scrie(self._c, "nu %s" % (r if isinstance(r, str) and r.isalpha() else "refuzat"))
@@ -397,6 +469,7 @@ class Server(object):
 				pass
 		era = self.imprumutat
 		self.imprumutat = False
+		self._refuz_spus = None
 		self._buf = b""
 		if era and anunta:
 			self.a.laDecodorGata()

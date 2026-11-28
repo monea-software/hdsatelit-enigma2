@@ -208,6 +208,15 @@ PREFIX_BUCHET_IMAGINE = "userbouquet.hds_"
 # userbouquet.hds* (hdsiptv, hdsdvbi, hds_dab, hds_t2, hds_abertis; ca Components/HdsBucheteOrfane.PREFIX_PROPRII) și
 # rădăcinile locurilor extensiilor (Components/HdsLocuriLista.py, /etc/enigma2/hds_locuri/<id>.json, câmpul "buchet").
 PREFIX_BUCHETE_IMAGINE = "userbouquet.hds"
+# IPTV-ul dintr-o copie HD Satelit (Components/HdsIptvSurse.py): conturile si canalele lor in hds_iptv/, grupele in
+# subbouquet.hdsiptv_*. Fara ele radacina userbouquet.hdsiptv.tv adusa din copie arata grupe care nu se deschid.
+DOSAR_IPTV = "hds_iptv"
+BUCHET_IPTV = "userbouquet.hdsiptv.tv"
+TIPAR_GRUPA_IPTV = re.compile(r"^subbouquet\.hdsiptv_[A-Za-z0-9_.\-]{1,200}\.tv\Z")
+TIPAR_FISIER_IPTV = re.compile(r"^(?:surse|(?:canale|filme|grupe-filme|grupe)-[0-9a-f]{8})\.json\Z")
+TIPAR_FISIER_SURSA_IPTV = re.compile(r"^(?:canale|filme|grupe-filme|grupe)-([0-9a-f]{8})\.json\Z")
+MAX_FISIER_IPTV = 32 * 1024 * 1024
+MAX_TOTAL_IPTV = 96 * 1024 * 1024   # tot IPTV-ul scos dintr-o arhiva (in /tmp, in RAM)
 DOSAR_LOCURI = "hds_locuri"
 MAX_LOC = 64 * 1024           # un fișier al registrului locurilor
 # ale listei de canale, nu ale omului: favoritele vin din sursă, ultima scanare ține de lista veche
@@ -265,6 +274,23 @@ def _extra():
 				os.path.join(os.path.dirname(os.path.abspath(__file__)), "HdsImportExtra.py"))
 			modul = importlib.util.module_from_spec(spec)
 			sys.modules["hds_import_extra"] = modul
+			spec.loader.exec_module(modul)
+		return modul
+
+
+def _iptv():
+	"""Components/HdsIptvSurse.py; fără pachetul Components (probele de pe PC), fișierul de lângă acesta."""
+	try:
+		from Components import HdsIptvSurse
+		return HdsIptvSurse
+	except ImportError:
+		modul = sys.modules.get("HdsIptvSurse") or sys.modules.get("hds_iptv_surse")
+		if modul is None:
+			import importlib.util
+			spec = importlib.util.spec_from_file_location("hds_iptv_surse",
+				os.path.join(os.path.dirname(os.path.abspath(__file__)), "HdsIptvSurse.py"))
+			modul = importlib.util.module_from_spec(spec)
+			sys.modules["hds_iptv_surse"] = modul
 			spec.loader.exec_module(modul)
 		return modul
 
@@ -1763,6 +1789,7 @@ def _scoate_din_arhiva(tarfile, cale, dosar_arhiva, lucru, max_membri, max_octet
 	cu_acces = bool(cu_acces) and rad_copie is not None
 	acces_scrise = 0
 	acces_total = 0
+	iptv_total = 0
 	rad = rad_copie or ""
 	# fișierele rețelei și listele pachetelor găsite la căutare: în <lucru>/extra/<calea de sub rădăcina copiei>
 	dorite = dict(((rad + "/" + rel) if rad else rel, rel) for rel in (extra or ()) if _extra().fel_extra(rel))
@@ -1811,6 +1838,22 @@ def _scoate_din_arhiva(tarfile, cale, dosar_arhiva, lucru, max_membri, max_octet
 						os.makedirs(os.path.dirname(tinta), mode=0o700, exist_ok=True)
 						with open(tinta, "wb") as g:
 							g.write(f.read(m.size))
+					continue
+				dosar_iptv = posixpath.join(dosar_arhiva, DOSAR_IPTV) if dosar_arhiva else DOSAR_IPTV
+				if ((dosar == dosar_arhiva and TIPAR_GRUPA_IPTV.match(nume))
+						or (dosar == dosar_iptv and TIPAR_FISIER_IPTV.match(nume))):
+					# IPTV-ul copiei HD Satelit (importa_iptv): cu plafonul lui, fara sa opreasca pregatirea
+					if m.size > MAX_FISIER_IPTV or iptv_total + m.size > MAX_TOTAL_IPTV:
+						continue
+					f = t.extractfile(m)
+					if f is None:
+						continue
+					tinta = os.path.join(lucru, nume) if dosar == dosar_arhiva else os.path.join(lucru, DOSAR_IPTV, nume)
+					os.makedirs(os.path.dirname(tinta), mode=0o700, exist_ok=True)
+					with open(tinta, "wb") as g:
+						shutil.copyfileobj(f, g, 65536)
+					os.chmod(tinta, 0o600)
+					iptv_total += m.size
 					continue
 				if dosar != dosar_arhiva or not fisier_permis(nume):
 					continue
@@ -2253,6 +2296,119 @@ def _decodat_ca_nucleul(nume):
 	return re.sub(r"%([0-9A-Fa-f]{2})", lambda m: chr(int(m.group(1), 16)), nume) if "%" in nume else nume
 
 
+def _citeste_surse_iptv(cale):
+	"""(documentul, sursele acceptate) din surse.json; ({}, []) cand lipseste sau nu se poate citi."""
+	try:
+		with open(cale, "r", encoding="utf-8") as f:
+			date = json.load(f)
+	except (OSError, IOError, ValueError):
+		return {}, []
+	if not isinstance(date, dict) or not isinstance(date.get("surse"), list):
+		return {}, []
+	I = _iptv()
+	return date, [s for s in date["surse"] if I._sursaAcceptata(s)]
+
+
+def _copiaza_iptv(sursa, tinta, mod):
+	"""Un fisier al IPTV-ului copiei, cu drepturile date (0600 conturile si canalele, 0644 grupele); True daca s-a scris."""
+	try:
+		if not os.path.isfile(sursa) or os.path.islink(sursa) or os.path.getsize(sursa) > MAX_FISIER_IPTV:
+			return False
+		with open(sursa, "rb") as f:
+			octeti = f.read()
+		nou = tinta + ".nou"
+		fd = os.open(nou, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mod)
+		with os.fdopen(fd, "wb") as g:
+			g.write(octeti)
+		os.chmod(nou, mod)
+		os.replace(nou, tinta)
+		return True
+	except (OSError, IOError) as eroare:
+		_jurnal("IPTV din copie, %s: %s" % (os.path.basename(tinta), eroare))
+		return False
+
+
+def _identitate_iptv(I, s):
+	"""Acelasi abonament sub alt id (identitati.json, o coliziune la transfer): playlistul dupa identitatePlaylist, portalul
+	Stalker dupa portal si MAC, ca la HdsIptvSurse.adaugaSursa si sursaNouaStalker; altfel None."""
+	try:
+		if s.get("fel") == "m3u" and not str(s.get("adresa") or "").startswith("/"):
+			return ("m3u", I.identitatePlaylist(s.get("adresa") or ""))
+		if s.get("fel") == "stalker":
+			portal = I.identitatePortal(s.get("portal"))
+			return ("stalker", portal, I.macCurat(s.get("mac"))) if portal else None
+	except Exception:
+		return None
+	return None
+
+
+def importa_iptv(dosar, dest=CALE_ETC):
+	"""IPTV-ul unei copii HD Satelit (`dosar`/hds_iptv/surse.json, canalele fiecarei surse, subbouquet.hdsiptv_*) adus pe
+	receptor fara sa se stearga ce are: sursele din copie care nu sunt pe receptor (alt id si, la playlist si portal, alt
+	abonament) se adauga la coada, cu fisierele
+	lor (canale, filme, grupe), pana la plafonul de surse; ale receptorului raman cum sunt. Grupele din copie care lipsesc
+	pe receptor se copiaza, apoi radacina si grupele se refac din toate sursele (HdsIptvSurse.scrieBuchete) si radacina se
+	leaga in bouquets.tv (leagaIndex). Numai fisiere, pe firul importului. -> {"surse": adaugate, "grupe": copiate}."""
+	rez = {"surse": 0, "grupe": 0}
+	din_copie = os.path.join(dosar, DOSAR_IPTV)
+	_doc_copie, surse_copie = _citeste_surse_iptv(os.path.join(din_copie, "surse.json"))
+	if not surse_copie:
+		return rez
+	I = _iptv()
+	dosar_iptv = os.path.join(dest, DOSAR_IPTV)
+	with I._LACAT:
+		vechi = (I.DIRECTOR, I.DOSAR)
+		I.DIRECTOR, I.DOSAR = dest, dosar_iptv
+		try:
+			I._asiguraDosar()
+			doc, surse = _citeste_surse_iptv(os.path.join(dosar_iptv, "surse.json"))
+			are = set(s["id"] for s in surse)
+			identitati = set(filter(None, (_identitate_iptv(I, s) for s in surse)))
+			noi = []
+			for s in surse_copie:
+				ident = _identitate_iptv(I, s)
+				if s["id"] in are or (ident and ident in identitati) or len(surse) + len(noi) >= I.MAX_SURSE:
+					continue
+				are.add(s["id"])
+				if ident:
+					identitati.add(ident)
+				noi.append(s)
+			if noi:
+				ids = set(s["id"] for s in noi)
+				try:
+					nume = os.listdir(din_copie)
+				except OSError:
+					nume = []
+				for n in sorted(nume):
+					m = TIPAR_FISIER_SURSA_IPTV.match(n)
+					if m and m.group(1) in ids:
+						_copiaza_iptv(os.path.join(din_copie, n), os.path.join(dosar_iptv, n), 0o600)
+				# documentul receptorului ramane (campurile lui si randurile pe care cititorul nu le intelege)
+				I.scrieSurse(surse + noi)
+				rez["surse"] = len(noi)
+			# grupele surselor adaugate (subbouquet.hdsiptv_<id>_<crc>.tv); scrieBuchete le reface oricum din canale, deci
+			# nicio grupa a receptorului nu se atinge
+			ids = tuple(I.PREFIX_GRUPA + s["id"] + "_" for s in noi)
+			try:
+				grupe = [n for n in os.listdir(dosar) if TIPAR_GRUPA_IPTV.match(n) and ids and n.startswith(ids)]
+			except OSError:
+				grupe = []
+			for n in sorted(grupe):
+				tinta = os.path.join(dest, n)
+				if not os.path.exists(tinta) and _copiaza_iptv(os.path.join(dosar, n), tinta, 0o644):
+					rez["grupe"] += 1
+			if noi or rez["grupe"]:
+				I.scrieBuchete()
+				I.leagaIndex()
+		except Exception as eroare:
+			_jurnal("IPTV din copie: %s" % eroare)
+		finally:
+			I.DIRECTOR, I.DOSAR = vechi
+	if rez["surse"] or rez["grupe"]:
+		_jurnal("IPTV din copie: %d surse adaugate, %d grupe copiate" % (rez["surse"], rez["grupe"]))
+	return rez
+
+
 def scoate_randurile_fara_fisier(dest, indexuri, scoase=None):
 	"""Dupa ce importul a scris indexurile copiei (`indexuri`, din INDEXURI_BUCHETE): randurile lor care trimit la un
 	userbouquet al carui fisier nu e pe receptor (lipsea din copie sau importul nu l-a putut lua) se scot, ca buchetul sa
@@ -2416,6 +2572,13 @@ def _importa(dosar, alegeri, dest, copie, setari, reincarca, text_setari, sursa=
 				copiate += 1
 		if neluate:
 			_jurnal("buchetele imaginii rămân cele de pe receptor, nu cele din copie: %s" % ", ".join(neluate))
+		# copia unei imagini HD Satelit: conturile IPTV si grupele lor, langa ce are receptorul (nu in locul lui); nu dintr-o
+		# lista de canale descarcata de pe internet (Components/HdsListeInternet.py)
+		de_pe_internet = isinstance(sursa, dict) and sursa.get("mediu") == "internet"
+		iptv = {"surse": 0, "grupe": 0} if de_pe_internet else importa_iptv(dosar, dest)
+		if iptv["surse"] or iptv["grupe"]:
+			rez["iptv"] = iptv
+			copiate += iptv["surse"] + iptv["grupe"]
 		rez["canale"] = copiate
 		if copiate:
 			importate.append(ngettext("canale și buchete (%d fișier)", "canale și buchete (%d fișiere)", copiate)

@@ -349,7 +349,7 @@ PAGINA = """<!DOCTYPE html>
       <p class="nota ascuns" id="nota_placa">Prin placă: la canalele TV benzile le aplică placa de sunet, la fiecare canal și fără nicio întârziere, adunate în 5 benzi. Efectele speciale și comprimarea se aud numai la radio.</p>
       <p class="nota" id="avertizare_tv"></p>
     </div>
-    <p class="nota">Oprit din fabrică. Lucrează numai la posturile cu sunet MPEG (MP2), radio și TV. Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l.</p>
+    <p class="nota">Oprit din fabrică. Lucrează la posturile de radio și la canalele TV cu sunet MPEG, AAC sau Dolby (AC-3, E-AC-3). Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l.</p>
     <p class="nota ascuns" id="comprimare">Comprimare activă. Alegi altă presetare sau modifici o coloană pentru a o opri.</p>
     <div class="zona-benzi"><div class="benzi" id="benzi"><canvas id="spectru" aria-hidden="true"></canvas></div></div>
     <p class="nota">Barele din spate arată cât de tare se aude fiecare bandă acum. Sus: mai mult, jos: mai puțin, câte 1 dB (valorile sunt în dB, frecvențele în Hz).</p>
@@ -371,7 +371,7 @@ PAGINA = """<!DOCTYPE html>
         <tr><td class="e">Potrivirea cu imaginea la TV</td><td><select id="potrivire_tv"></select></td></tr>
       </table>
       <p class="nota">Automat: receptorul vede singur dacă volumul telecomenzii se aplică și sunetului cu egalizator. Placa de sunet rămâne „default”, afară de probe.</p>
-      <p class="nota">La canalele TV cu sunet MPEG egalizatorul ține sunetul după imagine. Dacă buzele se mișcă după sunet, alege un număr cu +; dacă sunetul vine după buze, unul cu −.</p>
+      <p class="nota">La canalele TV egalizatorul ține sunetul după imagine. Dacă buzele se mișcă după sunet, alege un număr cu +; dacă sunetul vine după buze, unul cu −.</p>
       <h2 style="margin-top:14px">Sunetul cu egalizator</h2>
       <table id="tehnic"></table>
       <p><button type="button" id="brut">Text brut</button></p>
@@ -673,9 +673,9 @@ TEXTE_PAGINA = {
 		N_("Potrivirea cu imaginea la TV"),
 		N_("Automat: receptorul vede singur dacă volumul telecomenzii se aplică și sunetului cu egalizator. "
 			"Placa de sunet rămâne „default”, afară de probe."),
-		N_("La canalele TV cu sunet MPEG egalizatorul ține sunetul după imagine. Dacă buzele se mișcă după "
+		N_("La canalele TV egalizatorul ține sunetul după imagine. Dacă buzele se mișcă după "
 			"sunet, alege un număr cu +; dacă sunetul vine după buze, unul cu −."),
-		N_("Oprit din fabrică. Lucrează numai la posturile cu sunet MPEG (MP2), radio și TV. Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l."),
+		N_("Oprit din fabrică. Lucrează la posturile de radio și la canalele TV cu sunet MPEG, AAC sau Dolby (AC-3, E-AC-3). Pe unele receptoare poate produce distorsiuni sau întreruperi; atunci oprește-l."),
 		N_("Sunetul cu egalizator"),
 		N_("Text brut"),
 		N_("Aceleași reglaje sunt pe televizor, în __DRUM_MENIU__."),

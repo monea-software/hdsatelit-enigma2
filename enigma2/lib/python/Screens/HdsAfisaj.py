@@ -127,13 +127,62 @@ SETARI_COLOR = (
 )
 
 
+# Luminozitatea afisajului in asteptare (config.lcd.standby, Components/Lcd.py): nu e in config.hds_afisaj, deci nu trece
+# prin HdsAfisaj.seteaza; ecranul o citeste si o scrie singur, ca pagina web (HdsWebControl/afisaj_web.py, aceeasi
+# eticheta). Pe afisajul color meniul lcd de pe televizor nu se vede: randul sta aici, pe orice afisaj cu lumina reglabila.
+LUMINA_ASTEPTARE = "lumina_asteptare"
+
+
+def luminaAsteptare():
+	"""Elementul config.lcd.standby, sau None cand receptorul n-are afisaj cu lumina reglabila."""
+	try:
+		from Components.config import config
+		e = getattr(config.lcd, "standby", None)
+	except (ImportError, AttributeError):
+		return None
+	return e if e is not None and hasattr(e, "min") and hasattr(e, "max") else None
+
+
+def alegeriLuminaAsteptare():
+	e = luminaAsteptare()
+	return [(str(n), str(n)) for n in range(e.min, e.max + 1)] if e is not None else []
+
+
+def puneLuminaAsteptare(valoare):
+	"""Scrie luminozitatea in asteptare; pe loc se vede numai in asteptare, altfel lumina de zi ramane pusa."""
+	e = luminaAsteptare()
+	try:
+		n = int(valoare)
+	except (TypeError, ValueError):
+		return
+	if e is None or n == e.value:
+		return
+	e.value = max(e.min, min(e.max, n))
+	e.save()
+	try:
+		from Components.config import config, configfile
+		configfile.save()
+		from Screens.Standby import inStandby
+		if inStandby is None:
+			config.lcd.bright.apply()
+	except Exception as eroare:
+		_jurnal("luminozitatea in asteptare: %r" % (eroare,))
+
+
 def setariDisponibile():
-	"""Setarile comune si cele ale afisajului color, numai cand acesta exista."""
+	"""Setarile comune si cele ale afisajului color, numai cand acesta exista; luminozitatea in asteptare pe orice
+	afisaj cu lumina reglabila."""
 	leduri = tuple((c["cheie"], c["titlu"], lambda k=c["cheie"]: A.alegeriLed(k))
 		for c in getattr(A, "controaleLed", lambda **k: [])(citeste=False))
+	comune = SETARILE
+	if luminaAsteptare() is not None:
+		# langa luminozitatea de zi si de noapte
+		k = [c[0] for c in SETARILE].index("luminozitate_noapte") + 1
+		comune = SETARILE[:k] + ((LUMINA_ASTEPTARE, "Luminozitatea în așteptare (0-10)", alegeriLuminaAsteptare),) + \
+			SETARILE[k:]
 	if getattr(A, "esteColor", lambda: False)():
-		return SETARILE + tuple((k, e, getattr(A, a)) for k, e, a in SETARI_COLOR) + leduri
-	return SETARILE + leduri
+		return comune + tuple((k, e, getattr(A, a)) for k, e, a in SETARI_COLOR) + leduri
+	return comune + leduri
 
 
 # randurile din „Setări” care fac ceva pe loc, fara salvare (ceasurile afisajului): (cheia, eticheta, alegerile)
@@ -152,7 +201,7 @@ def N_(text):
 _ETICHETE_SETARI = (N_("Viteza derulării"), N_("Luminozitatea, ziua"), N_("Luminozitatea, noaptea"),
 	N_("Noaptea începe"), N_("Noaptea se termină"), N_("Textul tău"), N_("Ora din alt oraș"), N_("Minutarul"),
 	N_("Cronometrul"), N_("Imaginea de pe televizor"), N_("Pictograma canalului"), N_("Vremea"),
-	N_("Controlul afișajului"), N_("Tema afișajului"))
+	N_("Controlul afișajului"), N_("Tema afișajului"), N_("Luminozitatea în așteptare (0-10)"))
 
 
 def _jurnal(text):
@@ -397,7 +446,8 @@ class Lucru(object):
 		self.lista = A.citesteLista(c.lista.value)
 		self.evenimente = A.citesteEvenimente(c.evenimente.value)
 		self.asteptare = c.asteptare.value
-		self.setari = dict((k, A.stare().get("tema_afisaj", "") if k == "tema_afisaj" else getattr(c, k).value)
+		self.setari = dict((k, A.stare().get("tema_afisaj", "") if k == "tema_afisaj" else
+			str(luminaAsteptare().value) if k == LUMINA_ASTEPTARE else getattr(c, k).value)
 			for k, _e, _a in setariDisponibile())
 		self.personaj = dict((k, getattr(c, k).value) for k in P.CHEI)
 
@@ -450,6 +500,7 @@ class Lucru(object):
 	def argumente(self):
 		"""Argumentele pentru HdsAfisaj.seteaza (aceleasi ca in pagina web)."""
 		rez = dict(self.setari)
+		rez.pop(LUMINA_ASTEPTARE, None)      # nu e a lui HdsAfisaj.seteaza: keySalveaza o scrie (puneLuminaAsteptare)
 		leduri = {k: rez.pop(k) for k in list(rez) if k.startswith("led_")}
 		if leduri:
 			rez["leduri"] = leduri
@@ -1657,6 +1708,8 @@ class HdsAfisaj(Screen, HelpableScreen):
 		if not reusit:
 			self["nota"].setText(mesaj)
 			return
+		if LUMINA_ASTEPTARE in self.lucru.setari:
+			puneLuminaAsteptare(self.lucru.setari[LUMINA_ASTEPTARE])
 		self.salvat = self.lucru.cheie()
 		self.previzualizat = False
 		if any(c.get("eroare") for c in getattr(A, "controaleLed", lambda: [])()):

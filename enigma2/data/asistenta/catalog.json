@@ -27,7 +27,7 @@
       "op": "citeste",
       "grup": "Informații",
       "fel": "citire",
-      "text": "un fișier sau un dosar al receptorului, integral, inclusiv parolele",
+      "text": "un fișier sau un dosar al receptorului, integral",
       "args": [
         {"nume": "cale", "tipar": "^/[^\\x00]*\\Z", "cerut": true, "max_semne": 16384},
         {"nume": "de_la", "tipar": "^[0-9]{1,12}$", "cerut": false}
@@ -106,7 +106,7 @@
       "op": "setari",
       "grup": "Setări",
       "fel": "citire",
-      "text": "setările receptorului, inclusiv parolele în clar",
+      "text": "setările receptorului",
       "args": []
     },
     {
@@ -149,7 +149,7 @@
       "op": "ecran",
       "grup": "Ecran",
       "fel": "citire",
-      "text": "textul integral al ecranului, inclusiv câmpurile cu parole",
+      "text": "textul integral al ecranului",
       "args": []
     },
     {
@@ -165,7 +165,7 @@
       "op": "text",
       "grup": "Control",
       "fel": "control",
-      "text": "un text scris în câmpul deschis pe ecran, inclusiv parole",
+      "text": "un text scris în câmpul deschis pe ecran",
       "args": [
         {"nume": "text", "tipar": "^[^\\x00-\\x1f\\x7f]+\\Z", "cerut": true, "max_semne": 16384}
       ]
@@ -211,7 +211,7 @@
       "op": "setare-scrie",
       "grup": "Control",
       "fel": "control",
-      "text": "schimbă o setare a receptorului, inclusiv parole, chei și conturi",
+      "text": "schimbă o setare a receptorului, inclusiv conturi",
       "args": [
         {"nume": "cheie", "tipar": "^config(\\.[^.\\x00-\\x20=]+)+\\Z", "cerut": true, "max_semne": 1024},
         {"nume": "valoare", "tipar": "^[^\\x00\\r\\n]*\\Z", "cerut": false, "max_semne": 16384}

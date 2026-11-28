@@ -1,0 +1,148 @@
+#!/bin/sh
+# hds-oprire-curata: /sbin/reboot, /sbin/halt si /sbin/poweroff in imaginea HD Satelit (reteta hdsatelit-oprire-curata,
+# update-alternatives peste cele din sysvinit si busybox). Copyright (C) 2026 moneasoftware.com (Monea Eduard) &
+# hdsatelit.com (HD Satelit). SPDX-License-Identifier: GPL-2.0-only
+#
+# DE CE (0.8.0, RBT0; Vu+ Duo 4K Lite, 3 blocaje pe 2 receptoare, STADIU-CEC9): un plugin chema `reboot` in forma care
+# face pe loc apelul de sistem (de felul reboot -f) cat enigma2 inca mergea. Nucleul opreste atunci driverele, iar
+# driverul Vu+ elibera CEC-ul si video-ul de sub enigma2 (Oops in nexus); receptorul ramanea blocat pana la paznic.
+#
+# CE FACE: cu enigma2 pornit, reboot / halt / poweroff nu mai opresc nimic pe loc. Scriu cererea in HDS_OPRIRE_CERERE
+# (cod=2 repornirea, cod=1 oprirea, de=cine a cerut), un rand in jurnalul mic al opririlor si trimit SIGUSR2 lui
+# enigma2: Screens/Standby.py porneste aceeasi iesire ca din meniu, enigma2 se opreste curat, iar tools/enigma2.sh face
+# apoi repornirea sau oprirea (chemand din nou acest script, cand enigma2 nu mai merge: trecere directa). Comanda se
+# intoarce pe loc (un plugin care asteapta dupa ea nu tine interfata pe loc). Un ajutor desprins (--asteapta) urmareste
+# iesirea: daca enigma2 nu s-a oprit in HDS_OPRIRE_ASTEAPTA secunde, il opreste el (SIGTERM, apoi SIGKILL) si face
+# repornirea sau oprirea in forma curata (prin init), numai daca init nu a pornit deja oprirea; la fel, pe loc, daca
+# enigma2 nu prinde SIGUSR2 (un enigma2 mai vechi: semnalul nu i se trimite). Dupa iesirea lui enigma2 ajutorul nu mai
+# face nimic: enigma2.sh porneste repornirea, iar init poate porni din nou interfata pana trece pe nivelul 6 (o oprire
+# facuta atunci de ajutor ar fi chiar forma directa, in mijlocul opririi).
+# TRECERE DIRECTA (ca pana acum, la binarul adevarat): enigma2 nu merge (enigma2.sh dupa iesire, inaintea pornirii,
+# paznicul fara enigma2), init opreste sistemul (RUNLEVEL 0 sau 6: rc0/rc6, /etc/init.d/reboot si halt), -w, --help,
+# sau HDS_OPRIRE_DIRECT pus. Repornirea din meniu nu trece pe aici (enigma2 a iesit deja cand enigma2.sh o cheama).
+# Variabilele HDS_OPRIRE_* sunt numai pentru probele de pe PC; pe receptor nu le pune nimeni.
+
+nume=${HDS_OPRIRE_NUME:-${0##*/}}
+case $nume in
+	reboot|halt|poweroff) ;;
+	*) nume=reboot ;;
+esac
+# binarul adevarat: halt din sysvinit isi alege purtarea dupa numele cu care e chemat (argv[0] reboot / halt /
+# poweroff), deci se cheama printr-o legatura cu numele exact (reteta: /usr/lib/hdsatelit-oprire/<nume> ->
+# /sbin/halt.sysvinit); /sbin/reboot.sysvinit chemat direct s-ar purta ca halt
+REALDIR=${HDS_OPRIRE_REALDIR:-/usr/lib/hdsatelit-oprire}
+REAL=$REALDIR/$nume
+CERERE=${HDS_OPRIRE_CERERE:-/tmp/hds-oprire-ceruta}
+JURNAL=${HDS_OPRIRE_JURNAL:-/home/root/logs/hds-caderi.log}
+ASTEAPTA=${HDS_OPRIRE_ASTEAPTA:-60}
+PROC=${HDS_OPRIRE_PROC:-/proc}
+KILL=${HDS_OPRIRE_KILL:-kill}
+TERMEN=${HDS_OPRIRE_TERMEN:-10}
+PARINTE=${HDS_OPRIRE_PARINTE:-$PPID}
+
+real() {
+	if [ -x "$REAL" ]; then
+		exec "$REAL" "$@"
+	fi
+	if [ -x "/sbin/$nume.sysvinit" ]; then
+		exec -a "$nume" "/sbin/$nume.sysvinit" "$@"
+	fi
+	exec /bin/busybox "$nume" "$@"
+}
+
+pid_enigma2() {
+	# enigma2 pornit de enigma2.sh (un copil facut de un plugin cu fork are tot numele enigma2); altfel primul gasit
+	primul=""
+	for d in "$PROC"/[0-9]*; do
+		[ "$(cat "$d/comm" 2>/dev/null)" = enigma2 ] || continue
+		[ -n "$primul" ] || primul=${d##*/}
+		pp=$(sed -n 's/^PPid:[[:space:]]*//p' "$d/status" 2>/dev/null)
+		if [ -n "$pp" ] && [ "$(cat "$PROC/$pp/comm" 2>/dev/null)" = enigma2.sh ]; then
+			echo "${d##*/}"
+			return 0
+		fi
+	done
+	[ -n "$primul" ] && { echo "$primul"; return 0; }
+	return 1
+}
+
+prinde_usr2() {
+	# SigCgt din /proc/<pid>/status: SIGUSR2 (12) e bitul 11; numai ultimele 8 cifre hexa (aritmetica pe 32 de biti)
+	m=$(sed -n 's/^SigCgt:[[:space:]]*//p' "$PROC/$1/status" 2>/dev/null)
+	[ -n "$m" ] || return 1
+	m=${m#${m%????????}}
+	[ $((0x$m & 0x800)) -ne 0 ]
+}
+
+in_oprire() {
+	# init trece pe nivelul 0 sau 6 (runlevel din sysvinit: "<inainte> <acum>")
+	case $(${HDS_OPRIRE_RUNLEVEL:-runlevel} 2>/dev/null) in
+		*" 0"|*" 6") return 0 ;;
+	esac
+	return 1
+}
+
+jurnal() {
+	mkdir -p "${JURNAL%/*}" 2>/dev/null
+	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$JURNAL" 2>/dev/null
+}
+
+opreste_si_real() {
+	# enigma2 nu s-a oprit singur: SIGTERM, cel mult TERMEN (10) s, SIGKILL, apoi forma curata (prin init), fara argumentele
+	# cererii (un -f ar sari peste init cat enigma2 poate porni din nou)
+	$KILL -TERM "$1" 2>/dev/null
+	i=0
+	while [ $i -lt "$TERMEN" ] && [ -d "$PROC/$1" ]; do sleep 1; i=$((i + 1)); done
+	[ -d "$PROC/$1" ] && $KILL -KILL "$1" 2>/dev/null && sleep 1
+	HDS_OPRIRE_DIRECT=1
+	export HDS_OPRIRE_DIRECT
+	real
+}
+
+if [ "$1" = --asteapta ]; then
+	e2=$2
+	i=0
+	while [ $i -lt "$ASTEAPTA" ] && [ -d "$PROC/$e2" ]; do sleep 1; i=$((i + 1)); done
+	# enigma2 a iesit: enigma2.sh face ce s-a cerut; ajutorul nu mai face nimic (nici cand init a pornit deja oprirea:
+	# atunci binarul adevarat ar face pe loc apelul de sistem, in mijlocul opririi)
+	if [ -d "$PROC/$e2" ] && ! in_oprire; then
+		jurnal "$nume: enigma2 (pid $e2) nu s-a oprit in $ASTEAPTA s dupa cerere; oprit de hds-oprire-curata, apoi $nume"
+		opreste_si_real "$e2"
+	fi
+	exit 0
+fi
+
+[ -n "$HDS_OPRIRE_DIRECT" ] && real "$@"
+case $RUNLEVEL in
+	0|6) real "$@" ;;
+esac
+for a in "$@"; do
+	case $a in
+		-w|--wtmp-only|--help) real "$@" ;;
+	esac
+done
+# enigma2.sh insusi (dupa iesirea lui enigma2, la codul 1 sau 2): direct, chiar daca a ramas un copil numit enigma2
+[ "$(cat "$PROC/$PARINTE/comm" 2>/dev/null)" = enigma2.sh ] && real "$@"
+e2=$(pid_enigma2)
+[ -n "$e2" ] || real "$@"
+
+cod=2
+[ "$nume" = reboot ] || cod=1
+cine=$(tr '\000' ' ' < "$PROC/$PARINTE/cmdline" 2>/dev/null | cut -c1-120)
+[ -n "$cine" ] || cine="pid $PARINTE"
+cine=$(printf '%s' "$cine" | tr -d '\r\n')
+if ! prinde_usr2 "$e2"; then
+	jurnal "$nume $* cerut de $cine cu enigma2 pornit (pid $e2), care nu prinde cererea: oprit intai, apoi $nume"
+	opreste_si_real "$e2"
+fi
+printf 'cod=%s\nde=%s\n' "$cod" "$cine" > "$CERERE.nou" 2>/dev/null && mv -f "$CERERE.nou" "$CERERE" 2>/dev/null
+jurnal "$nume $* cerut de $cine cu enigma2 pornit (pid $e2): enigma2 se opreste intai curat (cod $cod), apoi $nume"
+$KILL -USR2 "$e2" 2>/dev/null || opreste_si_real "$e2"
+HDS_OPRIRE_NUME=$nume
+export HDS_OPRIRE_NUME
+if command -v setsid >/dev/null 2>&1; then
+	setsid "$0" --asteapta "$e2" </dev/null >/dev/null 2>&1 &
+else
+	"$0" --asteapta "$e2" </dev/null >/dev/null 2>&1 &
+fi
+exit 0

@@ -1,5 +1,5 @@
 # Modificat de moneasoftware.com si hdsatelit.com, 2026
-AC_INIT([enigma2],[0.7.9],[https://hdsatelit.com])
+AC_INIT([enigma2],[0.8.0],[https://hdsatelit.com])
 AM_INIT_AUTOMAKE([dist-bzip2 no-define tar-pax -Wno-portability])
 AC_CONFIG_HEADERS([enigma2_config.h])
 
@@ -154,6 +154,22 @@ dnl   engine memory from /dev/ion only when the option of Components/HdsDreambox
 dnl - HAVE_DREAMBOX_AV: lib/dvb/decoder.cpp uses the numbers of the Dream audio/video driver: H.265 is 22 for
 dnl   VIDEO_SET_STREAMTYPE (7 on every other receiver) and E-AC-3 is 7 for AUDIO_SET_BYPASS_MODE (0x22 elsewhere).
 dnl Every other machine: nothing.
+dnl Playback from dvr<N> into demux<N> (DVR1, 26.11.2026): on GigaBlue gb7252 (UHD Quad 4K Pro; MACHINE gb7252, the
+dnl same machine as gbquad4k and gbue4k) the Broadcom driver gives demux<N> the data written into dvr<N> only with the
+dnl source DMX_SOURCE_DVR0 + N, so recordings and timeshift stayed on the last live picture with DVR0 (proved on the
+dnl receiver: demux4 + DVR0 + dvr4 = 0 bytes, demux4 + DVR4 + dvr4 = 8.4 MB in 0.4 s). lib/dvb/dvb.cpp then selects
+dnl DVR0 + N for a playback demux. Every other machine keeps DVR0, as in the OE-Alliance sources.
+AC_MSG_CHECKING([whether boxtype $BOXTYPE feeds a playback demux from the dvr with its own number])
+case "$BOXTYPE" in
+	gb7252)
+		AC_DEFINE([HDS_PVR_DVR_PE_DEMUX],[1],[Define to 1 on GigaBlue gb7252: a playback demux N gets the source DMX_SOURCE_DVR0 + N, not DVR0])
+		AC_MSG_RESULT([yes])
+		;;
+	*)
+		AC_MSG_RESULT([no])
+		;;
+esac
+
 AC_MSG_CHECKING([whether boxtype $BOXTYPE is a Dreambox with ION memory])
 case "$BOXTYPE" in
 	dm7080|dm820|dm900|dm920|dm520)
@@ -217,6 +233,7 @@ AC_CONFIG_FILES([
 Makefile
 data/Makefile
 data/fonts/Makefile
+data/hds-bara-pornire/Makefile
 data/countries/Makefile
 data/defaults/Makefile
 data/defaults/Dream/Makefile
@@ -262,6 +279,7 @@ lib/python/Plugins/Extensions/PicturePlayer/Makefile
 lib/python/Plugins/Extensions/PicturePlayer/meta/Makefile
 lib/python/Plugins/Extensions/PicturePlayer/data/Makefile
 lib/python/Plugins/Extensions/HdsImportSetari/Makefile
+lib/python/Plugins/Extensions/HdsLcdTv/Makefile
 lib/python/Plugins/Extensions/HdsWebControl/Makefile
 lib/python/Components/HdsSubtitrariInternet/Makefile
 lib/python/Components/HdsSubtitrariInternet/surse/Makefile

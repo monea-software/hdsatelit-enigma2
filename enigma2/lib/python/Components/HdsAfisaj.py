@@ -1279,6 +1279,7 @@ class Afisaj(object):
 		self.reciteste = False
 		self.lumina = None          # treapta de luminozitate scrisa
 		self.eroareLumina = False
+		self.stinsDeAsteptare = False  # 0.8.0 FX3: the light was turned off by standby with "Nimic"
 		self.lucrari = {}           # citirile de disc: cheie -> {"rezultat", "cand", "lucreaza"}
 		self.zavor = threading.Lock()
 		self.firPeLoc = False       # probele de pe PC: citirea de disc pe loc, fara fir
@@ -1939,15 +1940,31 @@ class Afisaj(object):
 		# ziua „neschimbata” dupa o noapte mai slaba: inapoi la treapta cea mai mare
 		return int(zi) if zi != LUMINA_NESCHIMBATA else len(TREPTE_LUMINA)
 
+	def stinsInAsteptare(self):
+		"""0.8.0 FX3: in standby with "Nimic (afișaj stins)" the front light goes off too (brightness 0), not only the
+		text. On Vu+ Zero 4K the lit logo stayed on at the day level."""
+		return (getattr(self, "inAsteptare", False) and getattr(self, "previzualizareAsteptare", None) is None
+			and _cfg().asteptare.value == "stins")
+
 	def _lumineaza(self, acum):
 		from Components.HdsAfisajCompat import permite
 		if not permite("lumina", color=False):
 			self.lumina = None
 			return
-		treapta = self.treaptaDorita(acum)
+		cale, trepte = caleLumina()
+		if self.stinsInAsteptare():
+			treapta = 0
+			self.stinsDeAsteptare = True
+		else:
+			treapta = self.treaptaDorita(acum)
+			if getattr(self, "stinsDeAsteptare", False):
+				# out of standby: the level chosen for the hour; with the brightness left unchanged, the top step (as
+				# after a dimmer night in treaptaDorita), since the light was turned off by us
+				self.stinsDeAsteptare = False
+				if treapta is None:
+					treapta = len(trepte) if trepte else None
 		if treapta is None or treapta == self.lumina:
 			return
-		cale, trepte = caleLumina()
 		if cale is None:
 			return
 		try:

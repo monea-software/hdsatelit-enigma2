@@ -578,6 +578,9 @@ class DABPlus(object):
         # (decodarea in software, Hds/DabT2/sunet_software.py, pe placile care nu stiu cadrele de 960)
         self.cu_brute = False
         self.brute = []
+        # 0.8.0: PAD-ul (textul si imaginile postului) din elementul DSE de la inceputul fiecarui AU bun; None = nimic
+        # (iesirea ramane aceeasi octet cu octet). Obiectul are din_au(au) (pad.DecodorPad).
+        self.pad = None
 
     def adauga(self, mst):
         c = self.cadre
@@ -625,6 +628,11 @@ class DABPlus(object):
             iesire.append(loas(au[:la - 2], rata, canale))
             if brute is not None:
                 brute.append(au[:la - 2].tobytes())
+            if self.pad is not None:
+                try:
+                    self.pad.din_au(au[:la - 2])
+                except Exception:                        # PAD stricat: sunetul nu are voie sa sufere
+                    pass
         return iesire
 
 

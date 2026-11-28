@@ -227,8 +227,10 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 		</item>
 	</menu>
 
-	<!-- 3. Extensii & Aplicații -->
-	<item level="0" text="Plugins &amp; Applications" entryID="plugin_selection" description="Găsești programele suplimentare disponibile pe receptor." pictograma="extensii" web="/extensii" weight="15">
+	<!-- 3. Extensii (in engleza "Plugins"): extensiile instalate, sursele lor, instalarea si stergerea pachetelor.
+	     Intrarile puse de extensii in meniul principal se deschid de aici, nu din meniul principal
+	     (Components/HdsPluginuriImagine.MENIU_PRINCIPAL). -->
+	<item level="0" text="Plugins" entryID="plugin_selection" description="Găsești programele suplimentare disponibile pe receptor." pictograma="extensii" web="/extensii" weight="15">
 		<screen module="PluginBrowser" screen="PluginBrowser" />
 	</item>
 
@@ -318,6 +320,18 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			</item>
 			<item level="0" text="Calitatea imaginii" entryID="hds_calitate_imagine" description="Alegi profilurile de prelucrare a imaginii și redarea cu luminozitate extinsă." pictograma="calitate-imagine" weight="25" web="/calitate-imagine" requires="HdsCalitateImagine">
 				<screen module="HdsCalitateImagine" screen="HdsCalitateImagine" />
+			</item>
+			<!-- PQ2 (0.8.0): the same row on the boards without /proc/msp/pq whose driver has /proc/stb/vmpeg/0/pep_*
+			     (Broadcom, ZGEMMA H8.2H Plus): brightness, contrast, colours, sharpness, noise (Components/HdsReglajeImagine.py,
+			     SystemInfo HdsReglajeImagine); web: the same /calitate-imagine -->
+			<item level="0" text="Calitatea imaginii" entryID="hds_reglaje_imagine" description="Reglezi luminozitatea, contrastul, culorile, claritatea și zgomotul imaginii." pictograma="calitate-imagine" weight="25" web="/calitate-imagine" requires="HdsReglajeImagine">
+				<screen module="HdsCalitateImagine" screen="HdsReglajeImagine" />
+			</item>
+			<!-- 0.8.0 (FX1, kegnkiwi SatWorld 3925): the same screen as Interface & Appearance > Screen Margins / Overscan,
+			     also here, where people look for it when a theme is too big for the TV ("in other images it's in video or
+			     osd settings"); web: /margini-ecran -->
+			<item level="0" text="Screen Margins / Overscan" entryID="hds_osd_calibration_video" description="Potrivești marginile meniurilor astfel încât să încapă pe televizor." pictograma="margini" weight="26" web="/margini-ecran">
+				<screen module="OSDCalibration" screen="OSDCalibration" />
 			</item>
 			<!-- "Analog RF Modulator" (rfmod_setup, <setup id="RFmod">) scos din meniu: Viper 4K V20 nu are modulator RF.
 			     Pe receptor enigma2 scrie la pornire "couldnt open /dev/rfmod0" (eRFmod.detected() fals, deci intrarea era
@@ -425,7 +439,7 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<!-- tema interfetei de pe televizor, Clasic sau Pro (Screens/HdsTemaInterfata.py,
 			     logica in Components/HdsTemaTv.py; ecranele Pro in HDSatelit/skin_pro.xml din pachetul skinului). Se aplica la
 			     repornirea interfetei. Separata de tema interfetei web (/setari). In web: /tema-tv. -->
-			<item level="0" text="Tema interfeței" entryID="hds_tema_interfata" description="Alegi varianta Clasic sau Pro pentru meniurile de pe televizor." pictograma="tema" weight="11" web="/tema-tv">
+			<item level="0" text="Tema interfeței" entryID="hds_tema_interfata" description="Alegi varianta Clasic sau Pro pentru meniurile de pe receptor." pictograma="tema" weight="11" web="/tema-tv">
 				<screen module="HdsTemaInterfata" screen="HdsTemaInterfata" />
 			</item>
 			<!-- 0.7.6 (TPR): fundalul tematic peste tema Pro (Screens/HdsFundalPro.py, logica in Components/HdsFundalPro.py;
@@ -441,7 +455,7 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			</item>
 			<!-- 0.7.5: rezolutia interfetei temei HD Satelit, 1080p sau 2K (2560x1440); numai unde placa poate (driverul
 			     grafic peticit, SystemInfo HdsRezolutie2K din Components/HdsRezolutieTv.py). In web: /tema-tv. -->
-			<item level="0" text="Rezoluția interfeței" entryID="hds_rezolutie_tv" description="Alegi cât de detaliat sunt desenate meniurile pe televizor." pictograma="calitate-imagine" weight="11" requires="HdsRezolutie2K" web="/tema-tv#rezolutie">
+			<item level="0" text="Rezoluția interfeței" entryID="hds_rezolutie_tv" description="Alegi cât de detaliat sunt desenate meniurile pe receptor." pictograma="calitate-imagine" weight="11" requires="HdsRezolutie2K" web="/tema-tv#rezolutie">
 				<screen module="HdsRezolutieTv" screen="HdsRezolutieTv" />
 			</item>
 			<!-- 0.2.6: panoul skinului HDSatelit (paleta, pagina tehnică), din pachetul
@@ -455,7 +469,7 @@ self.session.openWithCallback(self.menuClosed, DiseqcTesterNimSelection)
 			<item level="0" text="System Language" entryID="language_setup" description="Alegi limba în care apar meniurile și mesajele receptorului." pictograma="limba" web="/limba-interfata" weight="20">
 				<screen module="LanguageSelection" />
 			</item>
-			<item level="0" text="OSD Preferences" entryID="usage_setup" description="Reglezi felul în care sunt afișate informațiile și meniurile pe televizor." pictograma="setari-generale" web="/setari?id=usage" weight="30">
+			<item level="0" text="OSD Preferences" entryID="usage_setup" description="Reglezi felul în care sunt afișate informațiile și meniurile pe receptor." pictograma="setari-generale" web="/setari?id=usage" weight="30">
 				<setup id="usage" />
 			</item>
 			<!-- 0.7.5 (LCS, Ozgur e-mailul 6323): tot aspectul listei de canale intr-un ecran (data/setup.xml hds_lista_canale), la
@@ -486,7 +500,7 @@ deschide(self.session, "afisaj")
 			<item level="0" text="Fontul interfeței" entryID="hds_font_interfata" description="Alegi forma literelor din meniuri dintre variantele deja instalate." pictograma="font" weight="45" web="/font-interfata">
 				<screen module="HdsFontInterfata" screen="HdsFontInterfata" />
 			</item>
-			<item level="1" text="Screen Margins / Overscan" entryID="hds_osd_calibration" description="Potrivești marginile meniurilor astfel încât să încapă pe televizor." pictograma="margini" weight="46" web="/margini-ecran">
+			<item level="0" text="Screen Margins / Overscan" entryID="hds_osd_calibration" description="Potrivești marginile meniurilor astfel încât să încapă pe televizor." pictograma="margini" weight="46" web="/margini-ecran">
 				<screen module="OSDCalibration" screen="OSDCalibration" />
 			</item>
 			<!-- ecranul de pornire, galeria gata facuta plus poza omului (Screens/HdsEcranPornire.py).
@@ -729,9 +743,12 @@ deschide(self.session, "telecomanda")
 			<item level="0" text="System Log Viewer" entryID="hds_log_manager" description="Citești mesajele despre funcționarea receptorului pentru a găsi probleme." pictograma="jurnal" web="/jurnale-sistem" weight="37">
 				<screen module="LogManager" screen="HdsLogManager" />
 			</item>
-			<!-- "Fan Control" (hds_fan_control, Screens/TempFanControl.py) scos din meniu: Viper 4K V20 nu are ventilator.
-			     Pe receptor /proc/stb nu are dosarul fp/ (fara fp/fan_vlt, fan_pwm, fan_speed), deci
-			     Components/FanControl.getFanCount() = 0 si ecranul spunea numai "Niciun ventilator detectat". -->
+			<!-- ventilatorul si temperatura (Screens/TempFanControl.py, Components/HdsVentilator.py), numai pe receptoarele
+			     cu ventilator (SystemInfo HdsVentilator: /proc/stb/fp/fan, fan_pwm, fan_vlt, fan_speed sau nodurile Vu+ 4K
+			     din /proc/stb/system); din fabrica automat, nimic scris. In web: /ventilator (ventilator_web.py) -->
+			<item level="0" text="Ventilatorul" entryID="hds_fan_control" description="Vezi temperatura receptorului și turația ventilatorului și alegi cum merge ventilatorul." pictograma="procesor" web="/ventilator" weight="38" requires="HdsVentilator" stare="netestat">
+				<screen module="TempFanControl" screen="TempFanControl" />
+			</item>
 			<item level="1" text="Cleanup &amp; Reset Wizard" entryID="hds_cleanup_wizard" description="Cureți datele care nu mai sunt necesare și alegi opțiunile de resetare." pictograma="curatenie" web="/curatenie" weight="39">
 				<screen module="CleanupWizard" screen="CleanupWizard" />
 			</item>
@@ -788,7 +805,7 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		<item level="0" text="Media player" entryID="media_player" description="Redai filme și muzică de pe stick, de pe disc sau din rețea." pictograma="player" web="/player" weight="10">
 			<screen module="MediaPlayer" screen="MediaPlayer" />
 		</item>
-		<item level="0" text="Poze" entryID="hds_poze" description="Privești pe televizor fotografiile din fișierele tale." pictograma="poze" web="/poze" weight="20">
+		<item level="0" text="Poze" entryID="hds_poze" description="Privești pe receptor fotografiile din fișierele tale." pictograma="poze" web="/poze" weight="20">
 			<screen module="PicturePlayer" screen="picshow" />
 		</item>
 		<!-- 0.2.6: navigatorul web pe televizor, cu telecomanda (Plugins/Extensions/HdsNavigator, pachetul
@@ -796,7 +813,7 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		     lui sunt în Setări > Surse Internet. Pereche web: /navigator (textul trimis în câmpul de pe televizor).
 		     0.7.6 (SNV): requires="HdsNavigator": pe receptoarele fara navigator (Vu+ Solo SE si celelalte MIPS, unde
 		     WPE WebKit asteapta constructia si auditul scripturilor) intrarea nu se arata; revine singura cand pachetul e pus. -->
-		<item level="0" text="Navigator web" entryID="hds_navigator_web" description="Deschizi pagini de internet pe televizor folosind telecomanda." pictograma="navigator" weight="30" web="/navigator" requires="HdsNavigator">
+		<item level="0" text="Navigator web" entryID="hds_navigator_web" description="Deschizi pagini de internet pe receptor folosind telecomanda." pictograma="navigator" weight="30" web="/navigator" requires="HdsNavigator">
 			<screen module="HdsNavigatorWeb" screen="HdsNavigatorWeb" />
 		</item>
 		<!-- locurile din rețea (Components/HdsStocareRetea.py, Screens/HdsLocuriRetea.py): calculatorul cu Windows sau
@@ -816,17 +833,30 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		<item level="0" text="Ghidul TV din internet" entryID="hds_ghid_internet" description="Aduci programul emisiunilor din surse de internet pentru țara aleasă." pictograma="programe" weight="55" web="/ghid-internet">
 			<screen module="HdsGhidInternet" screen="HdsGhidInternet" />
 		</item>
+		<!-- YouTube without an account, native screen (Screens/HdsYouTube.py, web /youtube, YTN1 0.8.0); also from the
+		     YouTube card of Applications -->
+		<item level="0" text="YouTube" entryID="hds_youtube" description="YouTube fără cont, pe ecranul HD Satelit: recomandate, căutare, în direct." pictograma="tv-internet" weight="60" web="/youtube">
+			<screen module="HdsYouTube" screen="HdsYouTube" />
+		</item>
 	</menu>
 
 	<!-- 6b. „Aplicații” (0.7.5, Eduard 31.10.2026 și 13.11.2026: „ca pe televizoarele smart”, YouTube ca aplicație,
 	     scurtătură prin navigator): grila de carduri (Screens/HdsAplicatii.py, Components/HdsAplicatii.py), la vedere în
 	     meniul principal, după Media (tasta 8). „Caută setări” rămâne pe tasta TEXT și prima în Setări.
 	     Pereche web: /aplicatii-tv (aplicatii_tv_web.py). -->
-	<item level="0" text="Aplicații" entryID="hds_aplicatii" description="Deschizi servicii de internet dintr-o grilă de pictograme pe televizor." pictograma="tv-internet" weight="47" web="/aplicatii-tv">
+	<!-- 0.8.0 (FX1, Maumixio): "Sport azi" also in the main menu, right after Media, only with OSD Preferences >
+	     "Sport azi în meniul principal" (config.usage.hds_sport_principal, SystemInfo HdsSportPrincipal); off by default,
+	     so the digits of the main menu stay as they were. Same screen as Media > Sport azi; web: /sport-azi -->
+	<item level="0" text="Sport azi" entryID="hds_sport_azi_principal" description="Vezi meciurile și cursele de astăzi din ghid și canalele care le transmit." copie="hds_sport_azi" requires="HdsSportPrincipal" pictograma="programe" weight="46" web="/sport-azi">
+		<screen module="HdsSportAzi" screen="HdsSportAzi" />
+	</item>
+
+	<item level="0" text="Aplicații" entryID="hds_aplicatii" description="Deschizi servicii de internet dintr-o grilă de pictograme pe receptor." pictograma="tv-internet" weight="47" web="/aplicatii-tv">
 		<screen module="HdsAplicatii" screen="HdsAplicatii" />
 	</item>
 
-	<!-- 0.7.8 (CX5): Filme si seriale inainte de Alimentare; cifra 0, iar Alimentare ramane ultima, cu 9.
+	<!-- Filme si seriale inainte de Alimentare: al noualea rand (cifra 9), iar Alimentare ultimul, al zecelea (cifra 0);
+	     cifrele urmeaza randurile in orice meniu (Components/HdsDale.cifraIntrare).
 	     Acelasi ecran ca in Setari > Surse de pe internet si cardul din Aplicatii; pereche web: /filme-seriale. -->
 	<item level="0" text="Filme și seriale" entryID="hds_filme_seriale_principal" description="Alegi ce vrei să urmărești din catalogul contului tău de televiziune prin internet." copie="hds_filme_seriale" pictograma="lista-redare" web="/filme-seriale" weight="48">
 		<screen module="HdsFilmeSeriale" screen="HdsFilmeSeriale" />
@@ -844,8 +874,8 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 
 	<!-- 5. Alimentare & Repornire. In web: /alimentare (alimentare_web.py), fiecare actiune cu confirmare in doi pasi;
 	     ?f= aduce in fata cardul intrarii. Din 0.7.5 (JAKITAKI, Satedu 190487) ULTIMA intrare a meniului principal, sub
-	     „Caută setări”, ca la alte imagini: greutatea 90 trece si de extensiile agatate de meniul principal (fara
-	     greutatea lor primesc 50, Screens/Menu.py). In web ordinea vine tot de aici (meniu_web.py). Tasta POWER lunga
+	     „Caută setări”, ca la alte imagini. Extensiile nu pun intrari in meniul principal
+	     (Components/HdsPluginuriImagine.MENIU_PRINCIPAL). In web ordinea vine tot de aici (meniu_web.py). Tasta POWER lunga
 	     gaseste meniul dupa key="shutdown", nu dupa loc (Components/HdsTasteRapide.py). -->
 	<menu key="shutdown" text="Power &amp; Restart" entryID="standby_restart_list" description="Alegi standby, oprirea completă sau repornirea receptorului." pictograma="pornire" web="/alimentare" weight="90">
 		<id val="shutdown" />
@@ -866,6 +896,11 @@ self.session.openWithCallback(msgClosed, FactoryReset)
 		     STARTUP ales si repornirea se folosesc la fel pe televizor si web. -->
 		<item text="Repornește în altă imagine" entryID="return_to_flash" description="Alegi altă imagine deja instalată și pornești receptorul cu ea." pictograma="memoria-interna" web="/alimentare?f=flash" weight="50" requires="HdsMultiboot">
 			<screen module="HdsPornireMultipla" screen="HdsPornireMultipla" />
+		</item>
+		<!-- ZGEMMA H8.2H Plus / H8.2H SE: imaginile de pe stick (Components/HdsPornireStick.py): alegerea, instalarea,
+		     stergerea unui loc si pregatirea stickului; aceleasi in web, cardul stick din /alimentare. -->
+		<item text="Imagini pe stick" entryID="stick_multiboot" description="Pornești, pui sau ștergi imaginile de pe stick și pregătești stickul." pictograma="memoria-interna" web="/alimentare?f=stick" weight="52" requires="HdsPornireStick">
+			<screen module="HdsPornireMultipla" screen="HdsPornireStick" />
 		</item>
 		<!-- Vu+ 4K fara pornire multipla: instalarea Kexec (pachetul kexec-multiboot-<masina> din feedul extern). -->
 		<item text="Pornire multiplă Vu+ (Kexec)" entryID="kexec_multiboot" description="Instalezi pornirea multiplă, ca să poți ține mai multe imagini pe receptor." pictograma="memoria-interna" web="/alimentare?f=kexec" weight="55" requires="HdsKexecInstalabil">

@@ -1927,7 +1927,8 @@ def h_remotecontrol(c):
 	if cod is None or not 0 < cod <= 0x2FF or fel == "ascii":
 		return raspuns(False, _t("Tasta nu e cunoscută."))
 	try:
-		c.L.trimiteTasta(cod, fel == "long")
+		# type=long (ca interfata web OE-Alliance) sau lung=1 (panoul si ajutorul API al receptorului): aceeasi apasare lunga
+		c.L.trimiteTasta(cod, fel == "long" or c.arg("lung").strip().lower() in ("1", "da"))
 	except Exception as eroare:
 		_jurnal("tasta %d: %s" % (cod, eroare))
 		return raspuns(False, _t("Tasta nu a plecat."))

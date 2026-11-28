@@ -171,6 +171,13 @@ def nume_incercate(ref):
 		c = list(baza)
 		c[2] = "1"
 		adauga(c)
+	# same order as Tools.PiconResolver.nume_sigle: the other two IPTV players before the DVB name
+	if baza[0] in ("4097", "5001", "5002"):
+		for tip in ("4097", "5001", "5002"):
+			if tip != baza[0]:
+				c = list(baza)
+				c[0] = tip
+				adauga(c)
 	if baza[0] in TIPURI_FLUX:
 		c = list(baza)
 		c[0] = "1"

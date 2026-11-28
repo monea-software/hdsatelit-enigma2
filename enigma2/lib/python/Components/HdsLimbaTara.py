@@ -61,7 +61,7 @@ NEGASIT = "adresa fara loc in baza serverului"
 STRICAT = "raspunsul serverului nu se poate folosi"
 TERMEN = "serverul nu a raspuns la timp"
 
-# Tara (ISO 3166-1, doua litere) -> limba din cele 31 ale imaginii (Components/Language.py, LIMBI_COMPLETE): limba
+# Tara (ISO 3166-1, doua litere) -> limba din cele 33 ale imaginii (Components/Language.py, LIMBI_COMPLETE): limba
 # oficiala sau a majoritatii. O tara care nu e aici primeste engleza. Frizona (fy_x-FY) nu are tara a ei.
 LIMBA_TARII = {
 	"RO": "ro_RO", "MD": "ro_RO",
@@ -95,6 +95,8 @@ LIMBA_TARII = {
 	"IS": "is_IS",
 	"UA": "uk_UA",
 	"UZ": "uz_UZ",
+	"AL": "sq_AL", "XK": "sq_AL",
+	"BG": "bg_BG",
 	"AE": "ar_AE", "SA": "ar_AE", "EG": "ar_AE", "IQ": "ar_AE", "JO": "ar_AE", "KW": "ar_AE", "LB": "ar_AE",
 	"LY": "ar_AE", "OM": "ar_AE", "QA": "ar_AE", "SY": "ar_AE", "YE": "ar_AE", "BH": "ar_AE", "PS": "ar_AE",
 	"SD": "ar_AE", "DZ": "ar_AE", "MA": "ar_AE", "TN": "ar_AE", "MR": "ar_AE",

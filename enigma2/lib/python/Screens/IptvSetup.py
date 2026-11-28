@@ -795,6 +795,14 @@ _GHID = {
 
 
 T_SE_VERIFICA = N_("Se verifică legătura cu serverul...")
+T_PLAYER = N_("Player în buchete")
+
+
+def alegeriPlayer():
+	"""Playerele buchetelor IPTV (HdsIptvSurse.PLAYERE) la adaugarea sursei; aceleasi ca in Player si piconuri (IptvOptiuni)."""
+	return [("4097", _("4097 (implicit)")), ("5001", "5001 (gstreamer)"), ("5002", "5002 (exteplayer3)")]
+
+
 _ANTETE = (("user_agent", N_("Agent utilizator (opțional)"), False), ("referer", N_("Referer (opțional)"), False))
 
 
@@ -856,6 +864,12 @@ class IptvDateAcces(Screen, ConfigListScreen):
 					visible_width=60 if cheie in ("user_agent", "referer", "x_user_agent", "stb_type") else False)
 			self.campuri[cheie] = el
 			lista.append(getConfigListEntry(_(nume), el))
+			if cheie == "nume":
+				# XTP0 (0.8.0, ozgurc67): playerul buchetelor se alege si la adaugare, nu numai in Player si piconuri;
+				# din fabrica cel de acum (4097 la o sursa noua, al sursei la editare), deci nimic de facut daca nu vrei altul
+				el = ConfigSelection(default=I.playerSursa(self.vechi), choices=alegeriPlayer())
+				self.campuri["player"] = el
+				lista.append(getConfigListEntry(_(T_PLAYER), el))
 		self.list = lista
 		self["config"].list = self.list
 		if vechi and fel == "xtream":
@@ -874,6 +888,9 @@ class IptvDateAcces(Screen, ConfigListScreen):
 		if not x or self.astept:
 			return
 		el = x[1]
+		if isinstance(el, ConfigSelection):
+			self.keyRight()       # randul playerului: OK trece la playerul urmator, ca sageata dreapta
+			return
 		e_parola = isinstance(el, ConfigPassword)
 
 		def gata(text, el=el, rand=x):
@@ -921,6 +938,9 @@ class IptvDateAcces(Screen, ConfigListScreen):
 
 	def _date(self):
 		date = dict((k, el.value) for k, el in self.campuri.items())
+		# XTP0: playerul pleaca numai daca omul l-a schimbat; altfel un cont adaugat din nou isi pastreaza playerul
+		if date.get("player") == I.playerSursa(self.vechi):
+			date.pop("player", None)
 		if self.fel == "xtream" and not date.get("parola"):
 			date["parola"] = self.vechi.get("parola") or ""
 		return date

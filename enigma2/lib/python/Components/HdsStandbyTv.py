@@ -103,6 +103,10 @@
 #   - receptorul in standby si televizorul alege intrarea lui (<Set Stream Path> / <Routing Change> / <Routing
 #     Information> spre adresa noastra, de pilda la aprinderea televizorului pe intrarea receptorului sau din lista
 #     SIMPLINK / Anynet+): receptorul se trezeste, cat „Comanda din telecomanda televizorului” e Da (din fabrica);
+#     0.8.0 CRW0: setarea "Porneste receptorul cand televizorul ii alege intrarea" (config.hds_standby.cec_trezire_cale,
+#     Da din fabrica) o poate opri: pe Nu receptorul ramane in standby, cu randul "trezire_ignorata" in jurnalul CEC. La
+#     orice iesire din standby, randul cu motivul (noteazaTrezirea: tasta POWER, CEC si mesajul, web, asistenta, temporizator)
+#     in jurnalul interfetei, in jurnalul CEC, in hds-zap.log si hds-hdmi.log si in /api/standby-tv (ultima_trezire);
 #   - televizorul se stinge (<Standby> de la televizor, catre toti sau catre noi) cand receptorul era pe ecran sau nu se
 #     stie: receptorul intra si el in standby, numai cu „Stinge si televizorul (CEC)” aleasa (se sting impreuna). Nu
 #     cat receptorul e deja in standby, se opreste sau tocmai s-a trezit (TREZIT_PAUZA_S: televizorul inca se stinge),
@@ -172,6 +176,7 @@ VFD_REL = "/proc/stb/power/vfd"
 HDMI0_REL = "/proc/msp/hdmi0"
 SINK_REL = "/proc/msp/hdmi0_sink"
 CEC_REL = "/dev/hdmi_cec"
+CEC_DREAM_REL = "/dev/misc/hdmi_cec0"   # Dreambox (DM900/DM920): alt nod, numai ioctl (NodCecDream, mai jos)
 SEMN_REL = "/tmp/hds-hdmi-oprit"
 MODEL_REL = "/etc/hdsatelit-model"
 ENIGMA_INFO_REL = "/usr/lib/enigma.info"
@@ -232,6 +237,13 @@ CEC_INACTIVE_SOURCE = 0x9D
 CEC_CEC_VERSION = 0x9E
 CEC_GET_CEC_VERSION = 0x9F
 CEC_TIP_PLAYBACK = 0x04
+CEC_USER_CONTROL_PRESSED = 0x44
+CEC_USER_CONTROL_RELEASED = 0x45
+CEC_BARA_SUNET = 0x05        # Audio System
+# volumul trimis prin CEC (setarea "Volumul și MUTE prin CEC", config.hds_standby.cec_volum, Nu din fabrica): tastele
+# receptorului (KEY_VOLUMEUP, KEY_VOLUMEDOWN, KEY_MUTE) -> codul <User Control Pressed> (Volume Up, Volume Down, Mute),
+# ca volume_forwarding din OE-Alliance; cu setarea pornita si CEC deschis, volumul receptorului nu se mai schimba
+VOLUM_TASTE = {115: 0x41, 114: 0x42, 113: 0x43}
 # tipul aparatului dupa adresa logica (standardul CEC: 1, 2, 9 inregistrare; 3, 6, 7, 10 tuner; 4, 8, 11 playback; 5 audio).
 # CEC2: driverul alege singur adresa logica (pe Octagon SF8008: 3, adica tuner; pe Viper 4K V20: 4), iar <Report Physical
 # Address> trimitea mereu tipul playback; OE-Alliance trimite tipul dat de driver, deci la ei adresa si tipul se potrivesc.
@@ -375,7 +387,7 @@ IESIRE = VFD = HDMI0 = SINK = CEC = SEMN = MODEL = ENIGMA_INFO = JURNAL_TMP = No
 
 def folosesteRadacina(radacina=None):
 	"""Caile driverului; `radacina` (sau HDS_PROBA_STANDBY_TV) muta toate caile sub un dosar."""
-	global RADACINA, IESIRE, VFD, HDMI0, SINK, CEC, SEMN, MODEL, ENIGMA_INFO, JURNAL_TMP
+	global RADACINA, IESIRE, VFD, HDMI0, SINK, CEC, SEMN, MODEL, ENIGMA_INFO, JURNAL_TMP, CEC_DREAM
 	if radacina is None:
 		radacina = os.environ.get("HDS_PROBA_STANDBY_TV") or ""
 	RADACINA = radacina.rstrip("/\\")
@@ -385,6 +397,11 @@ def folosesteRadacina(radacina=None):
 	IESIRE, VFD, HDMI0, SINK, CEC, SEMN = (p(IESIRE_REL), p(VFD_REL), p(HDMI0_REL), p(SINK_REL), p(CEC_REL),
 		p(SEMN_REL))
 	MODEL, ENIGMA_INFO, JURNAL_TMP = p(MODEL_REL), p(ENIGMA_INFO_REL), p(JURNAL_TMP_REL)
+	# 0.8.0 (AS186, Maumixio DM920): fara /dev/hdmi_cec, nodul Dream; restul codului il vede prin NodCecDream ca pe cel
+	# obisnuit (pana acum meniul CEC era ascuns pe Dreambox: SystemInfo HdsCec = False)
+	CEC_DREAM = not os.path.exists(CEC) and os.path.exists(p(CEC_DREAM_REL))
+	if CEC_DREAM:
+		CEC = p(CEC_DREAM_REL)
 
 
 folosesteRadacina()
@@ -725,7 +742,13 @@ def initConfig():
 		c.cec_alta_sursa = ConfigYesNo(default=False)  # „Standby când televizorul trece pe altă sursă (CEC)”
 		c.nume_tv = ConfigText(default="", fixed_size=False)   # "Numele receptorului pe televizor" (gol = modelul)
 		c.cec_telecomanda = ConfigYesNo(default=True)  # "Comanda din telecomanda televizorului" (tastele prin CEC)
+		# 0.8.0 CRW0: "Porneste receptorul cand televizorul ii alege intrarea" (Da din fabrica = purtarea de dinainte)
+		c.cec_trezire_cale = ConfigYesNo(default=True)
 		c.cec_lg_simplink = ConfigYesNo(default=False)  # „Legătura LG SIMPLINK (toate tastele)” (vezi COMPATIBILITATE_TV)
+		from Components.config import ConfigSelection
+		# "Volumul și MUTE prin CEC": nu (volumul receptorului), la televizor (0) sau la bara de sunet (5)
+		c.cec_volum = ConfigSelection(default="nu", choices=[("nu", _t("Nu")), (str(CEC_TV), _t("la televizor")),
+			(str(CEC_BARA_SUNET), _t("la bara de sunet"))])
 		# pentru /setari (setari_web.py): textul se poate schimba si din web, cel mult NUME_MAX caractere; gol arata
 		# numele implicit
 		c.nume_tv.web_text_max = NUME_MAX
@@ -789,6 +812,39 @@ def telecomandaPornita():
 		return False
 
 
+def tintaVolum():
+	"""Adresa CEC care primeste volumul si MUTE (0 televizorul, 5 bara de sunet), sau None cu setarea pe Nu."""
+	try:
+		v = str(_cfg().cec_volum.value)
+	except Exception:
+		return None
+	return int(v) if v in (str(CEC_TV), str(CEC_BARA_SUNET)) else None
+
+
+def mesajVolum(cod, steag):
+	"""(codul CEC, parametrii) pentru tasta de volum cod cu steagul enigma2 (0 apasare, 2 repetare, 1 ridicare), sau
+	None (alta tasta, tasta lunga)."""
+	if cod not in VOLUM_TASTE:
+		return None
+	if steag in (0, 2):
+		return CEC_USER_CONTROL_PRESSED, bytes(bytearray([VOLUM_TASTE[cod]]))
+	if steag == 1:
+		return CEC_USER_CONTROL_RELEASED, b""
+	return None
+
+
+def _laTastaVolum(cod, steag):
+	"""Legata in eActionMap inaintea tuturor ecranelor (StandbyTv.leaga): 1 = tasta luata (volumul a plecat prin CEC),
+	0 = merge mai departe ca pana acum."""
+	if cod not in VOLUM_TASTE or _tv is None:
+		return 0
+	try:
+		return _tv.laTastaVolum(cod, steag)
+	except Exception as e:
+		_jurnal("volumul prin CEC: %r" % (e,), "cec-volum")
+		return 0
+
+
 def legaturaPornita(fel):
 	"""Legatura proprie a televizorului (COMPATIBILITATE_TV) aleasa de om: la LG setarea „Legătura LG SIMPLINK (toate
 	tastele)”, Nu din fabrica (cu ea LG arata receptorul ca aparat LG, nu cu numele lui)."""
@@ -806,6 +862,93 @@ def standbyLaAltaSursa():
 		return bool(_cfg().cec_alta_sursa.value)
 	except Exception:
 		return False
+
+
+def trezireLaAlegere():
+	"""0.8.0 CRW0: setarea "Porneste receptorul cand televizorul ii alege intrarea" (Da din fabrica)."""
+	try:
+		return bool(_cfg().cec_trezire_cale.value)
+	except Exception:
+		return True
+
+
+# ---------------------------------------------------------------- motivul trezirii (0.8.0 CRW0)
+# La fiecare iesire din standby un rand cu motivul: in jurnalul interfetei, in jurnalul CEC (intrarea "trezire_motiv"),
+# in hds-zap.log si hds-hdmi.log (pachetele de jurnale ale testerilor) si in /api/standby-tv (ultima_trezire). Motivul
+# il pune cine trezeste (CEC: alegerea intrarii; temporizatorul: trezitDeTemporizator; asistenta: tastaDeLaEchipa), altfel
+# laPower() (din Screens/Standby.Power, chemata pe loc de cine trezeste) il afla din stiva apelului: tasta, web,
+# asistenta. Un motiv pus mai vechi de MOTIV_VALABIL_S nu mai conteaza.
+
+MOTIV_VALABIL_S = 5.0
+_MOTIV = {"motiv": None, "cand": 0.0}
+
+
+def motivTrezire(motiv):
+	"""Motivul urmatoarei iesiri din standby (daca vine in MOTIV_VALABIL_S)."""
+	_MOTIV["motiv"] = motiv
+	_MOTIV["cand"] = time.monotonic()
+
+
+def _motivCerut(acum=None):
+	m = _MOTIV.get("motiv")
+	if not m:
+		return None
+	acum = time.monotonic() if acum is None else acum
+	if not 0 <= acum - _MOTIV.get("cand", 0.0) <= MOTIV_VALABIL_S:
+		return None
+	return m
+
+
+def _uitaMotivul():
+	_MOTIV["motiv"] = None
+	_MOTIV["cand"] = 0.0
+
+
+def motivDinStiva(cadre):
+	"""Motivul trezirii dupa stiva apelului lui Standby.Power: `cadre` = [(fisier, functie)], de la cel mai vechi la cel
+	mai nou (traceback.extract_stack). Se cauta de la cel mai nou spre cel mai vechi."""
+	for fisier, functie in reversed(list(cadre)):
+		nume = os.path.basename(fisier or "")
+		if nume.startswith("Standby.") or (nume.startswith("HdsStandbyTv.") and functie == "laPower"):
+			continue
+		if nume.startswith("HdsStandbyTv."):
+			return "CEC"
+		if nume.startswith("HdsAsistenta") or "/HdsAsistenta" in (fisier or ""):
+			return "asistenta"
+		if "HdsWebControl" in (fisier or ""):
+			return "interfata web (%s)" % nume
+		if nume.startswith("ActionMap."):
+			return "tasta POWER (telecomanda receptorului, tasta din fata sau telecomanda din web)"
+		if nume.startswith(("Screen.", "GlobalActions.", "mytest.", "Notifications.")):
+			continue
+		return "alta cale: %s %s" % (nume, functie)
+	return None
+
+
+def _tastaDeLaAsistenta():
+	"""True cat asistenta livreaza o tasta (HdsAsistentaControl.apasaTasta trece pe loc prin eActionMap, deci in stiva
+	ActionMap e mai nou decat asistenta)."""
+	m = sys.modules.get("Components.HdsAsistentaControl")
+	try:
+		return bool(m is not None and m.tastaDeLaEchipa())
+	except Exception:
+		return False
+
+
+def laPower():
+	"""Din Screens/Standby.Power, inainte de close: motivul trezirii, daca nu l-a pus deja cine trezeste."""
+	if _motivCerut() is not None:
+		return
+	if _tastaDeLaAsistenta():
+		motivTrezire("asistenta (tasta POWER trimisa de echipa)")
+		return
+	try:
+		import traceback
+		m = motivDinStiva([(c[0], c[2]) for c in traceback.extract_stack()])
+	except Exception:
+		m = None
+	if m:
+		motivTrezire(m)
 
 
 def vfdDorit():
@@ -929,14 +1072,17 @@ def _deschideNodul(deschide, ioctl, cale):
 
 
 def _scrieNodReincearca(scrie, fd, date, oprit):
-	"""Numai pe firul CEC: cel mult cinci incercari, cu pauze intreruptibile de 40 ms."""
-	for i in range(5):
+	"""Numai pe firul CEC: cel mult cinci incercari, cu pauze intreruptibile de 40 ms (pe Dreambox 20, ~0,8 s: ioctl 3
+	da EAGAIN cat driverul inca trimite mesajul dinainte, cu raspunsurile televizorului pe fir; masurat pe DM920, AS186:
+	cu 5 incercari cadeau give_device_vendor_id si cec_version dupa ~230 ms)."""
+	incercari = 20 if CEC_DREAM else 5
+	for i in range(incercari):
 		if oprit.is_set():
 			return 0
 		try:
 			return scrie(fd, date)
 		except OSError as e:
-			if e.errno not in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR) or i == 4:
+			if e.errno not in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR) or i == incercari - 1:
 				raise
 		if oprit.wait(0.040):
 			return 0
@@ -987,6 +1133,101 @@ def _pasCitireNod(citeste, poll, ioctl, fd, cuPoll, adrese, fir):
 	return bytes(date), eroare, None
 
 
+class NodCecDream(object):
+	"""Nodul CEC Dreambox (/dev/misc/hdmi_cec0, nucleul Dream 3.14), aratat restului codului ca nodul obisnuit
+	(/dev/hdmi_cec). Driverul Dream nu are read()/write(), numai ioctl (ca ramura DREAMBOX din hdmi_cec.cpp OE-Alliance),
+	masurat pe un DM920 (AS186, 24.11.2026, televizor Samsung):
+	  - ioctl 4 (un int) dupa open() si dupa fiecare mesaj primit; intoarce in int adresa logica (03);
+	  - ioctl 1 -> 3 octeti [adresa fizica (doi octeti), adresa logica] (30 00 03 = 3.0.0.0, tuner);
+	  - ioctl 2 -> un mesaj primit, 19 octeti [sursa, destinatia, datele (16), lungimea]; pe coada goala EAGAIN pe loc;
+	  - ioctl 3 <- un mesaj de trimis, 19 octeti [destinatia, datele (16), lungimea, 1]; sursa o pune driverul;
+	  - poll() arata POLLIN cand e un mesaj in coada.
+	Aici: ioctl CEC_GOLESTE = golirea cozii (ioctl 2 cat poll arata ceva), CEC_ADRESA = [logica, fizica, logica],
+	scrie = cadrul [destinatia, lungimea, codul, parametrii] prin ioctl 3, citeste = inregistrari [destinatia, lungimea,
+	codul, parametrii] (destinatia primul octet, ca la nodul obisnuit) numai cand poll(0) arata un mesaj."""
+
+	MESAJ = 19
+	PE_CITIRE = 8
+
+	def __init__(self, ioctl=None, poll=None):
+		self.ioctlFd = ioctl
+		self.poll = poll or areDate
+
+	def _io(self, fd, cerere, buf):
+		if self.ioctlFd is not None:
+			return self.ioctlFd(fd, cerere, buf)
+		import fcntl
+		return fcntl.ioctl(fd, cerere, buf, True)
+
+	def _reactiveaza(self, fd):
+		try:
+			self._io(fd, 4, bytearray(4))
+		except (IOError, OSError):
+			pass
+
+	def deschide(self, cale, steaguri):
+		fd = os.open(cale, steaguri)
+		self._reactiveaza(fd)
+		return fd
+
+	def _unMesaj(self, fd):
+		"""(destinatia, datele) sau None (coada goala, EAGAIN)"""
+		if self.poll(fd) is False:
+			return None
+		b = bytearray(self.MESAJ)
+		try:
+			self._io(fd, 2, b)
+		except (IOError, OSError) as e:
+			if e.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR):
+				return None
+			raise
+		self._reactiveaza(fd)
+		lung = b[18]
+		if not 1 <= lung <= CEC_LUNGIME_MAX:
+			return (b[1] & 0x0F, b"")
+		return (b[1] & 0x0F, bytes(b[2:2 + lung]))
+
+	def ioctl(self, fd, cerere, arg=0):
+		if cerere == CEC_GOLESTE:
+			for _i in range(64):
+				if self._unMesaj(fd) is None:
+					break
+			return 0
+		if cerere == CEC_ADRESA:
+			b = bytearray(8)
+			self._io(fd, 1, b)
+			if isinstance(arg, bytearray) and len(arg) >= 4:
+				arg[0], arg[1], arg[2], arg[3] = b[2], b[0], b[1], b[2]
+			return 0
+		return self._io(fd, cerere, arg)
+
+	def scrie(self, fd, date):
+		date = bytearray(date)
+		if len(date) < 3:
+			return 0
+		corp = date[2:2 + date[1]]
+		b = bytearray(self.MESAJ)
+		b[0] = date[0] & 0x0F
+		b[1:1 + len(corp)] = corp
+		b[17] = len(corp)
+		b[18] = 1
+		self._io(fd, 3, b)
+		return len(date)
+
+	def citeste(self, fd, n):
+		iesire = bytearray()
+		for _i in range(self.PE_CITIRE):
+			if len(iesire) + 2 + CEC_LUNGIME_MAX > max(n, 2 + CEC_LUNGIME_MAX):
+				break
+			m = self._unMesaj(fd)
+			if m is None:
+				break
+			dest, corp = m
+			if corp:
+				iesire.extend(bytearray([dest, len(corp)]) + bytearray(corp))
+		return bytes(iesire)
+
+
 class Cec(object):
 	"""Nodul CEC al driverului (deschis tot timpul pe un receptor care il are): numele pe televizor, raspunsurile la
 	intrebarile televizorului, trimiterea si starea ultimului mesaj."""
@@ -994,6 +1235,13 @@ class Cec(object):
 	def __init__(self, deschide=None, scrieFd=None, inchide=None, ioctl=None, ceas=None, timer=None, citesteFd=None,
 			nume=None, inStandby=None, telecomanda=None, injecteaza=None, panou=None, poll=None, dupaPoll=None,
 			inFir=None, stareFir=None):
+		# 0.8.0 (AS186): pe Dreambox nodul se citeste si se scrie prin NodCecDream (numai cand probele nu dau altele)
+		dream = NodCecDream(ioctl=ioctl) if CEC_DREAM else None
+		if dream is not None:
+			deschide = deschide or dream.deschide
+			scrieFd = scrieFd or dream.scrie
+			citesteFd = citesteFd or dream.citeste
+			ioctl = dream.ioctl
 		self.deschideFd = deschide or os.open
 		self.pollFd = poll or areDate
 		self.dupaPoll = dupaPoll     # None = aflat la deschidere (citireDupaPoll); False dupa un poll care a mintit
@@ -1877,7 +2125,7 @@ class Cec(object):
 		if cod in (CEC_SET_STREAM_PATH, CEC_ROUTING_CHANGE, CEC_ROUTING_INFORMATION) and len(parametri) >= 2:
 			# <Routing Change>: [adresa veche, adresa noua]; cea veche spune daca televizorul pleaca de la noi
 			vechi = bytes(parametri[:2]) if cod == CEC_ROUTING_CHANGE and len(parametri) >= 4 else None
-			self._caleNoua(bytes(parametri[-2:]), vechi)
+			self._caleNoua(bytes(parametri[-2:]), vechi, mesaj)
 			return
 		if cod == CEC_ACTIVE_SOURCE and len(parametri) >= 2:
 			noi = self.adresaFizica()
@@ -2114,7 +2362,7 @@ class Cec(object):
 			self.trimite(catre, CEC_REPORT_POWER_STATUS, bytes(bytearray([CEC_PORNIT])))
 		# LEGATURA_PORNIRE si celelalte: fara raspuns (tastele vin si asa)
 
-	def _caleNoua(self, adresa, vechi=None):
+	def _caleNoua(self, adresa, vechi=None, mesaj=None):
 		"""<Set Stream Path> / <Routing Change> / <Routing Information>: televizorul arata intrarea `adresa` (`vechi`: de
 		unde a plecat, numai la <Routing Change>). Cat adresa noastra nu se stie, mesajul se amana (_amanaSursa): inainte
 		orice adresa, chiar a noastra, parea "alta", iar standby-ul trimitea apoi numai <Inactive Source> (CEC2)."""
@@ -2127,9 +2375,17 @@ class Cec(object):
 			self._tvPornit()
 			if self.telecomanda() and self.inStandby():
 				# televizorul a ales intrarea receptorului (aprins pe ea sau din lista SIMPLINK / Anynet+): trezirea; la
-				# iesirea din standby pleaca <Active Source> (laIesire)
+				# iesirea din standby pleaca <Active Source> (laIesire). 0.8.0 CRW0: numai cu "Porneste receptorul cand
+				# televizorul ii alege intrarea" pe Da (din fabrica); pe Nu ramane in standby, cu randul "ignorat".
 				self.activ = True
-				self._trezeste()
+				motiv = "CEC %s catre %s (televizorul a ales intrarea receptorului)" % (mesaj or "alegerea intrarii",
+					textAdresa(adresa))
+				if trezireLaAlegere():
+					self._trezeste(motiv)
+				else:
+					self._noteaza("trezire_ignorata", motiv=motiv)
+					_jurnal("CEC: %s; ignorat, receptorul ramane in standby (Porneste receptorul cand televizorul ii "
+						"alege intrarea = Nu)" % motiv, "cec-trezire-ignorata")
 			elif self.telecomanda() and not self.inStandby():
 				self.anuntaSursaActiva()
 			else:
@@ -2347,10 +2603,11 @@ class Cec(object):
 			return False
 		return True
 
-	def _trezeste(self):
+	def _trezeste(self, motiv="televizorul a ales intrarea receptorului"):
 		try:
 			_jurnal("CEC: televizorul a ales intrarea receptorului, receptorul se trezeste", "cec-trezire")
 			self._noteaza("trezire", motiv="televizorul a ales intrarea receptorului")
+			motivTrezire(motiv)
 			(self.trezesteReceptorul or _trezesteReceptorul)()
 		except Exception as e:
 			_jurnal("trezirea de la televizor: %r" % (e,), "cec-trezire")
@@ -2555,6 +2812,7 @@ class StandbyTv(object):
 		self.limitaSpusa = False
 		self.ultimaRescriere = None
 		self.trezitTemporizator = False
+		self.ultimaTrezire = None          # 0.8.0 CRW0: {"motiv", "cand"} la ultima iesire din standby
 		self.timerCulori = None
 		self.timerNume = None
 		self.timerSursa = None
@@ -2579,7 +2837,29 @@ class StandbyTv(object):
 		c.nume_tv.addNotifier(self._laNume, initial_call=False, immediate_feedback=False)
 		c.nume_tv.callNotifiersOnSaveAndCancel = True
 		c.cec_telecomanda.addNotifier(self._laTelecomanda, initial_call=False)
+		# tastele de volum: inaintea tuturor ecranelor (dupa pazitorul tastelor din ActionMap, care le lasa sa treaca);
+		# cu setarea pe Nu functia le lasa mai departe, deci volumul receptorului merge ca pana acum
+		try:
+			from enigma import eActionMap
+			try:
+				from Components.ActionMap import PRIORITATE_PAZITOR
+			except ImportError:
+				PRIORITATE_PAZITOR = -0x7FFFFFFF - 1
+			eActionMap.getInstance().bindAction("", PRIORITATE_PAZITOR + 1, _laTastaVolum)
+		except Exception as e:
+			_jurnal("tastele de volum: %r" % (e,), "leaga-volum")
 		self.legat = True
+
+	def laTastaVolum(self, cod, steag):
+		"""Volumul si MUTE spre televizor sau bara de sunet, cu setarea pornita si CEC deschis; 1 = tasta luata."""
+		tinta = tintaVolum()
+		# CEC oprit (firul de lucru ramas in driver, blocat): volumul receptorului, ca sa nu se piarda tasta
+		if tinta is None or not self.cec.deschis() or getattr(self.cec, "blocat", False):
+			return 0
+		mesaj = mesajVolum(cod, steag)
+		if mesaj is not None:
+			self.cec.trimite(tinta, mesaj[0], mesaj[1])
+		return 1
 
 	def _laTelecomanda(self, element=None):
 		try:
@@ -2669,6 +2949,7 @@ class StandbyTv(object):
 
 	def laIntrare(self):
 		"""Din Screens/Standby.py, dupa ce inStandby e pus (canalul e deja oprit)."""
+		_uitaMotivul()      # un motiv pus inaintea standby-ului nu e al trezirii urmatoare
 		eraActiv = False
 		activMesaje = None
 		try:
@@ -2993,6 +3274,7 @@ class StandbyTv(object):
 			self._pornesteIesirea("iesirea din standby")
 		temporizator = self.trezitTemporizator
 		self.trezitTemporizator = False
+		self.noteazaTrezirea(temporizator)
 		try:
 			# Modulul este pornit de mytest; trezirea nu citeste un modul de pe disc.
 			oprire = sys.modules.get("Components.HdsOprireAutomata")
@@ -3039,6 +3321,29 @@ class StandbyTv(object):
 			return self._pornesteIesirea(motiv)
 		return False
 
+	def noteazaTrezirea(self, temporizator=False):
+		"""0.8.0 CRW0: randul cu motivul iesirii din standby (jurnalul interfetei, jurnalul CEC, hds-zap.log,
+		hds-hdmi.log). Scrierea in fisiere trece prin HdsJurnal (firul jurnalelor, fara disc pe firul principal)."""
+		motiv = _motivCerut()
+		if temporizator:
+			motiv = "temporizator (schimbarea canalului sau inregistrarea)"
+		if not motiv:
+			motiv = "necunoscut (nicio tasta, CEC, web sau temporizator stiut)"
+		_uitaMotivul()
+		try:
+			self.ultimaTrezire = {"motiv": motiv, "cand": self.ceas()}
+			self.cec._noteaza("trezire_motiv", motiv=motiv)
+		except Exception:
+			pass
+		_jurnal("trezirea din standby: %s" % motiv)
+		try:
+			from Components import HdsJurnal
+			for componenta in ("zap", "hdmi"):
+				HdsJurnal.info(componenta, "standby", "trezirea din standby: %s" % motiv)
+		except Exception as e:
+			_jurnal("motivul trezirii in jurnale: %r" % (e,), "trezire-jurnal")
+		return motiv
+
 	def stare(self):
 		"""Pentru pagina web (standby_tv_web.py)."""
 		c = _cfg()
@@ -3071,6 +3376,8 @@ class StandbyTv(object):
 			"nume_trimis": dict(self.cec.numeTrimis) if self.cec.numeTrimis else None,
 			"nume_cerut": self.cec.numeCerut,
 			"cec_telecomanda": bool(c.cec_telecomanda.value),
+			"cec_trezire_cale": bool(c.cec_trezire_cale.value),
+			"ultima_trezire": dict(self.ultimaTrezire) if self.ultimaTrezire else None,
 			"cec_activ": self.cec.activ,          # True, False sau None (nu se stie)
 			"cec_ultima_tasta": self._ultimaTasta(),
 			"adresa_fizica": textAdresa(self.cec.adresaStiuta()),

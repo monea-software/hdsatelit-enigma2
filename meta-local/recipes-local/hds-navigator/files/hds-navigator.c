@@ -167,6 +167,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/auxv.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
@@ -184,6 +185,8 @@
 /* randurile de stare (mai jos), folosite si de marginile ecranului si de alegerea compunerii */
 static void stare(const char *text);
 static void stare_f(const char *format, ...) G_GNUC_PRINTF(1, 2);
+static void jit_cadere(void);
+static void jit_rezerva_anulata(void);
 
 static struct {
     char *url;
@@ -279,7 +282,7 @@ static GOptionEntry intrari_optiuni[] = {
     { "font", 0, 0, G_OPTION_ARG_FILENAME, &opt.font, "Fontul textelor stratului (implicit DejaVu Sans Bold)", "CALE" },
     { "hbbtv-js", 0, 0, G_OPTION_ARG_FILENAME, &opt.hbbtv_js, "Scriptul obiectelor HbbTV (implicit /usr/share/hds-navigator/hds-hbbtv.js)", "CALE" },
     { "hbbtv-parte", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt.hbbtv_parti, "O parte a starii HbbTV, JSON in base64 (se poate repeta)", "CHEIE=BASE64" },
-    { "marire-la-copiere", 0, 0, G_OPTION_ARG_NONE, &opt.marire_copiere, "Modul HbbTV cu --scara 1.5: pagina desenata la scara 1 (1280x720) si marita de 1,5 ori la copierea pe ecran", NULL },
+    { "marire-la-copiere", 0, 0, G_OPTION_ARG_NONE, &opt.marire_copiere, "Cu --scara 1.5, in modul HbbTV sau cu desenul pe procesor: pagina desenata la scara 1 (1280x720) si marita de 1,5 ori la copierea pe ecran", NULL },
     { "margine-x", 0, 0, G_OPTION_ARG_INT, &opt.margine_x, "Marginea din stanga si din dreapta a paginii pe /dev/fb0, in puncte de ecran (nu in modul HbbTV)", "N" },
     { "margine-y", 0, 0, G_OPTION_ARG_INT, &opt.margine_y, "Marginea de sus si de jos a paginii pe /dev/fb0, in puncte de ecran (nu in modul HbbTV)", "N" },
     { "dvb-dosar", 0, 0, G_OPTION_ARG_FILENAME, &opt.dvb_dosar, "Modul HbbTV: dosarul arborilor de carusel pentru adresele dvb:// (implicit /tmp/hds-carusel)", "CALE" },
@@ -1391,19 +1394,30 @@ static void eticheta_pune(guint8 *pagina, const Eticheta *e, int x, int y)
     strat.eticheta_y = y;
 }
 
+/* O zona a stratului (pixeli de ecran) inapoi din copia paginii. Cu --marire-la-copiere copia e la scara 1 si
+ * ecran_din_pagina primeste zone ale paginii: zona ecranului se imparte la 1,5, largita la blocuri intregi (YTS0). */
+static void strat_zona_inapoi(const Zona *z)
+{
+    WPERectangle r = { z->x, z->y, z->l, z->i };
+    if (ecran_x15) {
+        int x0 = z->x * 2 / 3, y0 = z->y * 2 / 3;
+        r.x = x0;
+        r.y = y0;
+        r.width = (z->x + z->l) * 2 / 3 + 2 - x0;
+        r.height = (z->y + z->i) * 2 / 3 + 2 - y0;
+    }
+    ecran_din_pagina(&r, 1);
+}
+
 /* Ce acoperea stratul, inapoi din copia paginii; fara copie zonele se uita. */
 static void strat_sterge(void)
 {
     gboolean are = copie_pagina.mem != NULL;
-    for (int k = 0; are && k < strat.n_desenate; k++) {
-        WPERectangle r = { strat.desenate[k].x, strat.desenate[k].y, strat.desenate[k].l, strat.desenate[k].i };
-        ecran_din_pagina(&r, 1);
-    }
+    for (int k = 0; are && k < strat.n_desenate; k++)
+        strat_zona_inapoi(&strat.desenate[k]);
     strat.n_desenate = 0;
-    if (are && ind.are_zona) {
-        WPERectangle r = { ind.zona.x, ind.zona.y, ind.zona.l, ind.zona.i };
-        ecran_din_pagina(&r, 1);
-    }
+    if (are && ind.are_zona)
+        strat_zona_inapoi(&ind.zona);
     ind.are_zona = FALSE;
 }
 
@@ -1460,6 +1474,11 @@ static guint32 culoare_puls(void)
 /* Pixelul paginii curate (din copia ei) sub punctul (x, y) al ecranului, sau NULL in afara copiei. */
 static const guint32 *pagina_curata(int x, int y)
 {
+    /* x, y sunt pixeli de ecran; cu --marire-la-copiere copia paginii e la scara 1 (YTS0) */
+    if (ecran_x15) {
+        x = x * 2 / 3;
+        y = y * 2 / 3;
+    }
     if (!copie_pagina.mem || x < 0 || y < 0 || x >= copie_pagina.latime || y >= copie_pagina.inaltime)
         return NULL;
     return (const guint32 *)(const void *)(copie_pagina.mem + ((gsize)y * copie_pagina.latime + (gsize)x) * 4);
@@ -1601,8 +1620,8 @@ static void chenar_subliniere(guint8 *pagina, gboolean numai_banda, int d, int b
 static void chenar_fundal(guint8 *pagina, gboolean numai_banda, int dist)
 {
     int x0 = MAX(strat.tinta.x - dist, 0), y0 = MAX(strat.tinta.y - dist, 0);
-    int x1 = MIN(strat.tinta.x + strat.tinta.l + dist, MIN(ecran.latime, copie_pagina.latime));
-    int y1 = MIN(strat.tinta.y + strat.tinta.i + dist, MIN(ecran.inaltime, copie_pagina.inaltime));
+    int x1 = MIN(strat.tinta.x + strat.tinta.l + dist, ecran.latime);
+    int y1 = MIN(strat.tinta.y + strat.tinta.i + dist, ecran.inaltime);
     if (!copie_pagina.mem || x1 <= x0 || y1 <= y0)
         return;
     if (!numai_banda) {
@@ -1615,10 +1634,12 @@ static void chenar_fundal(guint8 *pagina, gboolean numai_banda, int dist)
     guint32 c = chenar_culoare();
     guint a = (guint)(FUNDAL_ALFA[chenar.grosime] * puls_factor() + 0.5);
     for (int y = y0; y < y1; y++) {
-        const guint32 *sursa = (const guint32 *)(const void *)(copie_pagina.mem + ((gsize)y * copie_pagina.latime + x0) * 4);
         guint32 *p = (guint32 *)(void *)(pagina + (gsize)y * ecran.pas) + x0;
-        for (int x = x0; x < x1; x++)
-            *p++ = amesteca(*sursa++, c, a);
+        for (int x = x0; x < x1; x++, p++) {
+            const guint32 *sursa = pagina_curata(x, y);   /* la scara copiei, si cu --marire-la-copiere */
+            if (sursa)
+                *p = amesteca(*sursa, c, a);
+        }
     }
 }
 
@@ -1665,11 +1686,175 @@ static void chenar_deseneaza(guint8 *pagina, gboolean numai_banda)
     strat_tine_minte(x1 - t, y0 + t, t, i - 2 * t);
 }
 
+/* ---------------------------------------------------------------- bara de volum (VLY0) */
+
+/* Cat lansatorul tine ecranul, enigma2 nu poate desena (lacatul pe fb0), deci nici fereastra lui de volum nu se vede (in
+ * aplicatia YouTube volumul se schimba, dar fara semn pe ecran). Dupa fiecare VOL+/VOL-/MUTE enigma2 trimite
+ * "volum <0-100> <0|1 mut> <ms>" si lansatorul deseneaza el bara, sus in dreapta, in strat: fundal inchis, margine
+ * galbena, difuzorul (cu X rosu pe mut), bara si numarul. Pleaca singura dupa <ms> (cat a ales omul la Volum si
+ * intarziere). Raspunsul "HDS-NAV VOLUM <nivel> <mut>"; ceva gresit: "EROARE volum". In modul HbbTV stratul nu se
+ * deseneaza, raspunsul vine oricum. */
+
+#define CULOARE_VOLUM_FUND 0xFF4A5468u
+#define CULOARE_VOLUM_MUT 0xFFEB2828u
+
+static struct {
+    Eticheta *e;                      /* bara gata desenata, NULL cand nu se arata */
+    guint ceas;                       /* cat se mai arata */
+    int x, y;                         /* unde a fost pusa ultima data */
+} vol;
+
+/* Difuzorul, pe o grila 11 x 10: X alb; undele (W) numai cu sunet; pe mut un X rosu in locul undelor. */
+static const char *const DIFUZOR[] = {
+    "....X......",
+    "...XX....W.",
+    "XXXXX......",
+    "XXXXX..W.W.",
+    "XXXXX..W.W.",
+    "XXXXX..W.W.",
+    "XXXXX..W.W.",
+    "XXXXX......",
+    "...XX....W.",
+    "....X......",
+};
+
+/* Cifrele (fontul deja la marimea aleasa) in tamponul px de l x i, de la x pe linia de baza `baza`. */
+static void volum_litere(guint32 *px, int l, int i, int x, int baza, const char *text)
+{
+    for (const char *p = text; *p; p++) {
+        if (FT_Load_Char(ft_fata, (FT_ULong)(unsigned char)*p, FT_LOAD_RENDER))
+            continue;
+        FT_GlyphSlot g = ft_fata->glyph;
+        const FT_Bitmap *b = &g->bitmap;
+        for (int r = 0; r < (int)b->rows; r++) {
+            int y = baza - g->bitmap_top + r;
+            if (y < 0 || y >= i)
+                continue;
+            for (int c = 0; c < (int)b->width; c++) {
+                int xx = x + g->bitmap_left + c;
+                guint a = b->buffer[r * b->pitch + c];
+                if (xx >= 0 && xx < l && a)
+                    px[(gsize)y * l + xx] = amesteca(px[(gsize)y * l + xx], CULOARE_LITERE, a);
+            }
+        }
+        x += (int)(g->advance.x >> 6);
+    }
+}
+
+static void volum_dreptunghi(Eticheta *e, int x, int y, int l, int i, guint32 c)
+{
+    for (int r = MAX(y, 0); r < MIN(y + i, e->i); r++)
+        for (int k = MAX(x, 0); k < MIN(x + l, e->l); k++)
+            e->px[(gsize)r * e->l + k] = c;
+}
+
+/* Bara pentru nivelul si mutul dat; fara font numarul lipseste (bara si difuzorul raman). */
+static Eticheta *volum_bara(int nivel, gboolean mut)
+{
+    int marime = (int)(20 * opt.scara + 0.5);
+    int inalt = marime * 2;
+    int pad = marime / 2, margine = MAX(2, marime / 12);
+    int k = MAX(1, (inalt - pad) / 10);                      /* latura unui semn al difuzorului */
+    int lat_difuzor = 11 * k, lat_bara = px_ecran(200), gros_bara = MAX(4, marime / 3);
+    char numar[8];
+    g_snprintf(numar, sizeof(numar), "%d", nivel);
+    int lat_numar = 0, urcare = 0, coborare = 0;
+    if (litere_gata() && !FT_Set_Pixel_Sizes(ft_fata, 0, (FT_UInt)marime)) {
+        for (const char *p = "100"; *p; p++) {           /* locul numarului nu se schimba cu nivelul */
+            if (!FT_Load_Char(ft_fata, (FT_ULong)(unsigned char)*p, FT_LOAD_DEFAULT))
+                lat_numar += (int)(ft_fata->glyph->advance.x >> 6);
+        }
+        urcare = (int)(ft_fata->size->metrics.ascender >> 6);
+        coborare = (int)(-ft_fata->size->metrics.descender >> 6);
+    }
+    Eticheta *e = g_new0(Eticheta, 1);
+    e->l = pad + lat_difuzor + pad + lat_bara + (lat_numar ? pad + lat_numar : 0) + pad;
+    e->i = inalt;
+    e->px = g_new(guint32, (gsize)e->l * e->i);
+    volum_dreptunghi(e, 0, 0, e->l, e->i, CULOARE_MARGINE);
+    volum_dreptunghi(e, margine, margine, e->l - 2 * margine, e->i - 2 * margine, CULOARE_ETICHETA);
+    int y0 = (inalt - 10 * k) / 2;
+    for (int r = 0; r < 10; r++) {
+        for (int c = 0; DIFUZOR[r][c]; c++) {
+            char semn = DIFUZOR[r][c];
+            if (semn == 'X' || (semn == 'W' && !mut))
+                volum_dreptunghi(e, pad + c * k, y0 + r * k, k, k, CULOARE_LITERE);
+        }
+    }
+    if (mut) {
+        for (int d = 0; d < 5; d++) {
+            volum_dreptunghi(e, pad + (6 + d) * k, y0 + (2 + d) * k, k, k, CULOARE_VOLUM_MUT);
+            volum_dreptunghi(e, pad + (10 - d) * k, y0 + (2 + d) * k, k, k, CULOARE_VOLUM_MUT);
+        }
+    }
+    int xb = pad + lat_difuzor + pad, yb = (inalt - gros_bara) / 2;
+    volum_dreptunghi(e, xb, yb, lat_bara, gros_bara, CULOARE_VOLUM_FUND);
+    volum_dreptunghi(e, xb, yb, lat_bara * nivel / 100, gros_bara, CULOARE_MARGINE);
+    if (lat_numar)
+        volum_litere(e->px, e->l, e->i, xb + lat_bara + pad, (inalt + urcare - coborare) / 2, numar);
+    return e;
+}
+
+static void volum_uita(void)
+{
+    if (vol.e) {
+        g_free(vol.e->px);
+        g_free(vol.e);
+        vol.e = NULL;
+    }
+}
+
+/* Bara pe ecran, sus in dreapta, cu zona tinuta minte (se ia inapoi din pagina cand pleaca). */
+static void volum_pune(guint8 *pagina)
+{
+    if (!vol.e)
+        return;
+    vol.x = MAX(0, ecran.latime - vol.e->l - px_ecran(40));
+    vol.y = MIN(px_ecran(30), MAX(0, ecran.inaltime - vol.e->i));
+    eticheta_copiaza(pagina, vol.e, vol.x, vol.y);
+    strat_tine_minte(vol.x, vol.y, MIN(vol.e->l, ecran.latime - vol.x), MIN(vol.e->i, ecran.inaltime - vol.y));
+}
+
+static void strat_deseneaza(gboolean mutat);
+
+static gboolean volum_gata(gpointer d)
+{
+    (void)d;
+    vol.ceas = 0;
+    volum_uita();
+    strat_deseneaza(TRUE);
+    return G_SOURCE_REMOVE;
+}
+
+static void volum_comanda(const char *arg)
+{
+    char **c = g_strsplit(arg ? arg : "", " ", 4);
+    gboolean bun = g_strv_length(c) == 3;
+    int nivel = bun ? atoi(c[0]) : 0, ms = bun ? atoi(c[2]) : 0;
+    gboolean mut = bun && atoi(c[1]) != 0;
+    g_strfreev(c);
+    if (!bun) {
+        stare("EROARE volum");
+        return;
+    }
+    nivel = mut ? 0 : CLAMP(nivel, 0, 100);
+    ms = CLAMP(ms, 500, 60000);
+    volum_uita();
+    vol.e = volum_bara(nivel, mut);
+    if (vol.ceas)
+        g_source_remove(vol.ceas);
+    vol.ceas = g_timeout_add((guint)ms, volum_gata, NULL);
+    strat_deseneaza(TRUE);
+    stare_f("VOLUM %d %d", nivel, mut ? 1 : 0);
+}
+
 /* Dupa pasul pulsului: textul de jos si sageata din nou deasupra (banda sau fundalul colorat le-ar putea acoperi). */
 static void strat_sus_din_nou(guint8 *pagina)
 {
     if (strat.eticheta)
         eticheta_copiaza(pagina, (const Eticheta *)strat.eticheta, strat.eticheta_x, strat.eticheta_y);
+    if (vol.e)
+        eticheta_copiaza(pagina, vol.e, vol.x, vol.y);
     if (ind.activ)
         indicator_deseneaza(pagina);
 }
@@ -1713,6 +1898,7 @@ static void strat_deseneaza(gboolean mutat)
         e = text_eticheta(ind.activ ? &text_scrie_indicator : &text_scrie);
     if (e)
         eticheta_pune(pagina, e, (ecran.latime - e->l) / 2, ecran.inaltime - e->i - px_ecran(24));
+    volum_pune(pagina);
     if (ind.activ)
         indicator_deseneaza(pagina);
 }
@@ -1722,10 +1908,8 @@ static void strat_muta_indicator(void)
 {
     if (!strat_se_poate())
         return;
-    if (copie_pagina.mem && ind.are_zona) {
-        WPERectangle r = { ind.zona.x, ind.zona.y, ind.zona.l, ind.zona.i };
-        ecran_din_pagina(&r, 1);
-    }
+    if (copie_pagina.mem && ind.are_zona)
+        strat_zona_inapoi(&ind.zona);
     ind.are_zona = FALSE;
     strat_deseneaza(FALSE);
 }
@@ -2564,6 +2748,21 @@ static void dialog_inchide(void)
 }
 
 /* alert, confirm, prompt si intrebarea la plecarea de pe pagina: raspunsul vine pe intrare („dialog 1|0 [b64]”). */
+/* WVN1 (0.8.0): cererile de permisiune ale paginii. WebKit le refuza pe toate daca nimeni nu raspunde; requestMediaKeySystemAccess
+ * (filmele protejate, EME) trece prin una (WebKitMediaKeySystemPermissionRequest) si fara acceptul ei pagina primeste NotSupportedError
+ * (vazut pe Octagon 25.11). Numai cererea EME se accepta; restul raman refuzate, ca pana acum. */
+static gboolean cerere_permisiune(WebKitWebView *v, WebKitPermissionRequest *cerere, gpointer d)
+{
+    (void)v;
+    (void)d;
+    if (WEBKIT_IS_MEDIA_KEY_SYSTEM_PERMISSION_REQUEST(cerere)) {
+        stare("PERMISIUNE eme");
+        webkit_permission_request_allow(cerere);
+        return TRUE;
+    }
+    return FALSE;
+}
+
 static gboolean dialog_script(WebKitWebView *v, WebKitScriptDialog *dlg, gpointer d)
 {
     (void)v; (void)d;
@@ -2812,9 +3011,14 @@ static gboolean eroare_tls(WebKitWebView *v, const char *uri, GTlsCertificate *c
 static void proces_web_oprit(WebKitWebView *v, WebKitWebProcessTerminationReason motiv, gpointer d)
 {
     (void)v; (void)d;
-    /* The GL retry starts one more web process in this launch. Count both crashes. */
     if (motiv == WEBKIT_WEB_PROCESS_CRASHED && !opt.fara_jit)
         stare(opt.cpu ? "JIT-CADERE procesor" : "JIT-CADERE gl");
+    /* Se numara numai caderea pe procesor: dupa una cu GL lansatorul reporneste oricum pe procesor (o data), iar o cadere
+     * adusa de JIT se repeta acolo; caderea stiuta a compunerii GL (Mali-450) nu opreste deci JIT-ul. */
+    if (motiv == WEBKIT_WEB_PROCESS_CRASHED && opt.cpu && !opt.fara_jit)
+        jit_cadere();
+    if (motiv == WEBKIT_WEB_PROCESS_CRASHED && opt.cpu)
+        jit_rezerva_anulata();
     if (motiv == WEBKIT_WEB_PROCESS_CRASHED && !opt.cpu) {
         /* Procesul web a cazut cu GL (driver, ecran EGL, memorie video). In modul --cpu nu se mai reporneste. */
         cere_repornire_pe_cpu("proces-web-cazut");
@@ -3530,7 +3734,11 @@ static gboolean hbbtv_mesaj_bun(const char *t)
     return bun;
 }
 
-/* Cel mult HBBTV_MESAJE_PE_SECUNDA mesaje pe secunda spre enigma2 (o pagina nu poate ineca firul enigma2). */
+/* Mesajele paginii spre enigma2 nu se arunca (HBT2, 0.8.0). Pana in r24, peste HBBTV_MESAJE_PE_SECUNDA pe secunda se
+ * pierdeau fara urma: aplicatia TVP GO isi pune masca tastelor de 55-88 de ori pe secunda si ultima masca putea fi una
+ * aruncata (tastele ajungeau gresit). Aici numai se numara: peste HBBTV_MESAJE_PE_SECUNDA intr-o secunda, un rand de
+ * diagnoza pe secunda ("AVERTISMENT hbbtv-multe-mesaje"), iar mesajul pleaca. Stratul hds-hbbtv.js isi strange singur
+ * mastile (cel mult una la 100 ms). */
 static gboolean hbbtv_debit(void)
 {
     static gint64 inceput;
@@ -3542,13 +3750,11 @@ static gboolean hbbtv_debit(void)
         n = 0;
         anuntat = FALSE;
     }
-    if (++n <= HBBTV_MESAJE_PE_SECUNDA)
-        return TRUE;
-    if (!anuntat) {
-        stare("AVERTISMENT hbbtv-prea-multe-mesaje");
+    if (++n > HBBTV_MESAJE_PE_SECUNDA && !anuntat) {
+        stare("AVERTISMENT hbbtv-multe-mesaje");
         anuntat = TRUE;
     }
-    return FALSE;
+    return TRUE;
 }
 
 static void hbbtv_mesaj(WebKitUserContentManager *m, JSCValue *v, gpointer d)
@@ -3616,9 +3822,11 @@ static void hbbtv_strat_incarca(WebKitUserContentManager *c)
 
 /* ---------------------------------------------------------------- erorile JavaScript ale paginii (modul HbbTV) */
 
-#define ERORI_JS_PE_DOCUMENT 20
-#define ERORI_JS_PE_SECUNDA 10
-#define ERORI_JS_MAXIM 200
+/* HBT2 (0.8.0): 200 pe document, 100 pe secunda, 5000 de la pornire (pana in r24: 20, 10, 200; in secunda in care
+ * aplicatia TVP GO cadea, randul cu prima eroare se pierdea la plafonul de 10 pe secunda) */
+#define ERORI_JS_PE_DOCUMENT 200
+#define ERORI_JS_PE_SECUNDA 100
+#define ERORI_JS_MAXIM 5000
 #define ERORI_JS_SEMNE 200
 
 /* Injectat in toate cadrele, la inceputul documentului: exceptiile neprinse (ErrorEvent pe window), promisiunile
@@ -4302,6 +4510,8 @@ static void comanda(char *rand)
         cere_scrisul();
     else if (!strcmp(rand, "chenar"))
         chenar_comanda(arg);
+    else if (!strcmp(rand, "volum"))
+        volum_comanda(arg);
     else if (!strcmp(rand, "indicator-la") && arg && ind.activ) {
         char *urm = NULL;
         double x = g_ascii_strtod(arg, &urm);
@@ -4404,17 +4614,188 @@ static gboolean iesire_programata(gpointer d)
     return G_SOURCE_REMOVE;
 }
 
+/* Rezerva JIT-ului, pe trepte. Pe ARM JavaScript-ul porneste cu treapta rapida: compilatorul DFG peste cel de baza si
+ * cache-urile de proprietati si de apel pornite (WebKit 2.54 le tine pe amandoua oprite din fabrica pe 32 de biti).
+ * FISIER_JIT_CADERI tine doua cifre, fiecare 0, 1 sau 2 = pornirile la rand in care procesul web a cazut pe procesor: a doua
+ * cifra cu treapta rapida pornita, prima cu numai treapta de baza (ca pana la r24). La a doua cifra 2 navigatorul porneste numai
+ * cu treapta de baza (JSC_useDFGJIT=0, JSC_forceICFailure=1); la prima cifra 2 porneste pe interpretor (JSC_useJIT=0), pana se
+ * sterge fisierul. O pornire incheiata normal readuce 1 la 0 in treapta
+ * ei, dar nu si 2; o cadere pe procesor in pornirea pusa pe interpretor de rezerva sterge amandoua numaratorile (pagina cade si
+ * fara JIT). Cand a doua cifra e 0 fisierul are forma dinainte (o cifra si randul nou), iar lansatoarele dinainte citesc numai
+ * prima cifra, deci fisierul merge in ambele sensuri. Aceleasi valori ca rezerva din lansator.py, cand va fi acolo.
+ * Fisierul il face root inainte de --utilizator, cu drept de scriere pentru toti: in modul HbbTV caderea vine dupa coborarea
+ * drepturilor, iar repornirea pe procesor (execv) ramane fara root. Se scrie pe loc (doi sau trei octeti), fara fisier temporar,
+ * fiindca dosarul /etc/enigma2 nu e al utilizatorului fara root. */
+#define FISIER_JIT_CADERI "/etc/enigma2/hds-navigator-jit-cazut"
+static gboolean jit_cazut_acum;                 /* procesul web a cazut in aceasta pornire (pe procesor, cu JIT) */
+static gboolean jit_oprit_de_rezerva;           /* pornirea de acum merge pe interpretor din cauza numaratorii (nu a mediului) */
+static gboolean jit_rapid;                      /* pornirea de acum are treapta rapida (DFG + cache-uri) */
+/* Treapta rapida e probata numai pe ARMv7 (libwpewebkit de la ...jit4); pe MIPS si pe PC ramane ce era. */
+#ifndef HDS_JIT_TREAPTA_RAPIDA
+#if defined(__arm__)
+#define HDS_JIT_TREAPTA_RAPIDA 1
+#else
+#define HDS_JIT_TREAPTA_RAPIDA 0
+#endif
+#endif
+
+static int jit_cifra_caderi(char c)
+{
+    if (c < '0' || c > '9')
+        return 0;
+    return c >= '2' ? 2 : c - '0';
+}
+
+static void jit_caderi_citeste_trepte(int *baza, int *rapida)
+{
+    *baza = *rapida = 0;
+    int fd = open(FISIER_JIT_CADERI, O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return;
+    char b[4] = { 0 };
+    ssize_t n = read(fd, b, sizeof(b) - 1);
+    close(fd);
+    if (n >= 1)
+        *baza = jit_cifra_caderi(b[0]);
+    if (n >= 2)
+        *rapida = jit_cifra_caderi(b[1]);
+}
+
+static void jit_caderi_scrie_trepte(int baza, int rapida)
+{
+    int fd = open(FISIER_JIT_CADERI, O_WRONLY | O_CREAT | O_CLOEXEC, 0666);
+    if (fd < 0) {
+        stare_f("JIT-REZERVA nescris %d", errno);
+        return;
+    }
+    char b[3] = { (char)('0' + baza), (char)('0' + rapida), '\n' };
+    size_t n = sizeof(b);
+    if (!rapida) {
+        b[1] = '\n';
+        n = 2;
+    }
+    if (pwrite(fd, b, n, 0) != (ssize_t)n || ftruncate(fd, (off_t)n) != 0)
+        stare_f("JIT-REZERVA nescris %d", errno);
+    else
+        fsync(fd);
+    close(fd);
+}
+
+static void jit_cadere(void)
+{
+    if (jit_cazut_acum)
+        return;
+    jit_cazut_acum = TRUE;
+    int baza, rapida;
+    jit_caderi_citeste_trepte(&baza, &rapida);
+    if (jit_rapid) {
+        if (++rapida > 2)
+            rapida = 2;
+        jit_caderi_scrie_trepte(baza, rapida);
+        stare_f("JIT-REZERVA caderi-rapida %d", rapida);
+        return;
+    }
+    if (++baza > 2)
+        baza = 2;
+    jit_caderi_scrie_trepte(baza, rapida);
+    stare_f("JIT-REZERVA caderi %d", baza);
+}
+
+/* JIT-ul oprit de rezerva, iar procesul web cade si pe interpretor: vina nu e a JIT-ului (o pagina care cade oricum), deci
+ * numaratorile se sterg si urmatoarea pornire are iar JIT; altfel doua vizite pe o asemenea pagina l-ar opri pentru totdeauna. */
+static void jit_rezerva_anulata(void)
+{
+    if (!jit_oprit_de_rezerva)
+        return;
+    jit_oprit_de_rezerva = FALSE;
+    jit_caderi_scrie_trepte(0, 0);
+    stare("JIT-REZERVA anulata cade-si-fara-jit");
+}
+
+/* La iesirea normala (fara cadere si fara repornire pe procesor) o singura cadere de dinainte se uita, in treapta acestei porniri. */
+static void jit_pornire_buna(void)
+{
+    if (opt.fara_jit || jit_cazut_acum)
+        return;
+    int baza, rapida;
+    jit_caderi_citeste_trepte(&baza, &rapida);
+    if (jit_rapid) {
+        if (rapida == 1)
+            jit_caderi_scrie_trepte(baza, 0);
+    } else if (baza == 1)
+        jit_caderi_scrie_trepte(0, rapida);
+}
+
+static gboolean jit_oprit_din_mediu(const char *nume)
+{
+    const char *cerut = g_getenv(nume);
+    return cerut && (!g_strcmp0(cerut, "0") || !g_ascii_strcasecmp(cerut, "false"));
+}
+
+/* Procesoarele ARM pe care JIT-ul JavaScript nu merge: fara NEON (ZGEMMA H8.2H Plus, Hi3716MV430, cortexa7hf-vfp; cpuinfo:
+ * vfpv3d16, fara neon). Masurat pe .129 (WKT1, 27.11.2026, libwpewebkit 2.54.0-r0.video3.jit4.wvn1): cu treapta rapida (DFG)
+ * procesul web se opreste cu abort (semnalul 6) cand porneste aplicatia ZDF; cu numai treapta de baza nu cade, dar aplicatia ZDF
+ * ramane la 66% si nu deseneaza nimic; pe interpretor merg ZDF si ARD (pagina in 2,5-10 s, tastele in 0,05-0,3 s). Rezerva pe
+ * trepte (FISIER_JIT_CADERI) ar ajunge la interpretor abia dupa caderi, iar treapta de baza nu cade deloc, deci utilizatorul ar
+ * ramane cu ecranul gol. Pe asemenea procesoare navigatorul porneste direct pe interpretor, fara sa atinga numaratorile (nu e o
+ * rezerva). Legatura cu lipsa NEON e dedusa (H8 e singurul nostru ARM fara NEON), nu dovedita in WebKit. Cand nucleul nu da
+ * bitii (getauxval intoarce 0) JIT-ul ramane cum era, ca pe celelalte modele ARM; pe MIPS si pe PC nu se schimba nimic. */
+#if defined(__arm__) && !defined(HWCAP_ARM_NEON)
+#define HWCAP_ARM_NEON (1UL << 12)
+#endif
+
+static gboolean jit_procesor_nepotrivit(void)
+{
+#if defined(__arm__)
+    unsigned long hw = getauxval(AT_HWCAP);
+    return hw != 0 && !(hw & HWCAP_ARM_NEON);
+#else
+    return FALSE;
+#endif
+}
 static void pregateste_jit(void)
 {
     /* Set before any JSC/WebKit API; children inherit this bounded executable pool.
      * This caps code memory, not the page heap, compiler workspace or total PSS. */
-    const char *cerut = g_getenv("JSC_useJIT");
-    if (cerut && (!g_strcmp0(cerut, "0") || !g_ascii_strcasecmp(cerut, "false")))
+    if (jit_oprit_din_mediu("JSC_useJIT"))
         opt.fara_jit = TRUE;
+    if (!opt.fara_jit && jit_procesor_nepotrivit()) {
+        opt.fara_jit = TRUE;
+        stare("JIT-OPRIT procesor-fara-neon");
+    }
+    gboolean fara_rapida = !HDS_JIT_TREAPTA_RAPIDA || jit_oprit_din_mediu("JSC_useDFGJIT");
+    if (geteuid() == 0) {
+        int fd = open(FISIER_JIT_CADERI, O_RDWR | O_CREAT | O_CLOEXEC, 0666);
+        if (fd >= 0) {
+            if (fchmod(fd, 0666) != 0)
+                stare_f("JIT-REZERVA drepturi %d", errno);
+            close(fd);
+        }
+    }
+    int caderi_baza, caderi_rapida;
+    jit_caderi_citeste_trepte(&caderi_baza, &caderi_rapida);
+    if (!opt.fara_jit && caderi_baza >= 2) {
+        opt.fara_jit = TRUE;
+        jit_oprit_de_rezerva = TRUE;
+        stare("JIT-REZERVA interpretor");
+    }
+    if (!opt.fara_jit && !fara_rapida && caderi_rapida >= 2) {
+        fara_rapida = TRUE;
+        stare("JIT-REZERVA baza");
+    }
+    jit_rapid = !opt.fara_jit && !fara_rapida;
     g_setenv("JSC_useJIT", opt.fara_jit ? "0" : "1", TRUE);
+    /* Pe 32 de biti JavaScriptCore tine JIT-ul expresiilor regulate (YARR) oprit din fabrica (useRegExpJIT = JIT && 64 de biti),
+     * desi e compilat odata cu JIT-ul de baza: il pornim impreuna cu el si il oprim impreuna cu el in rezerva. */
+    g_setenv("JSC_useRegExpJIT", opt.fara_jit ? "0" : "1", TRUE);
     g_setenv("JSC_useFTLJIT", "0", TRUE);
-    /* DFG crashes on ARM32, including when requested by the inherited environment. */
-    g_setenv("JSC_useDFGJIT", "0", TRUE);
+    /* Treapta rapida: DFG e oprit din fabrica pe 32 de biti (useDFGJIT = 64 de biti) si merge pe ARMv7 de la biblioteca cu
+     * peticul 0033 (libwpewebkit ...jit4; o biblioteca fara DFG compilat nu ia in seama variabila); cache-urile sunt fortate pe
+     * calea lenta din fabrica pe 32 de biti (forceICFailure = 32 de biti), desi merg si cu biblioteca ...jit3. */
+    g_setenv("JSC_useDFGJIT", jit_rapid ? "1" : "0", TRUE);
+#if HDS_JIT_TREAPTA_RAPIDA
+    g_setenv("JSC_forceICFailure", jit_rapid ? "0" : "1", TRUE);
+#endif
     g_setenv("JSC_jitMemoryReservationSize", "8388608", TRUE);
 }
 
@@ -4437,7 +4818,8 @@ int main(int argc, char **argv)
         return 2;
     }
     chenar_din_optiuni();
-    if (opt.hbbtv)
+    /* tabela depremultiplicarii: HbbTV si marirea la copiere (ecran_x15_copiaza o foloseste pentru fiecare pixel; YTS0) */
+    if (opt.hbbtv || opt.marire_copiere)
         depremul_pregateste();
     /* Primul oprit cand se termina memoria: valoarea o mostenesc si procesele WebKit pornite de aici. */
     if (opt.oom >= -1000 && opt.oom <= 1000) {
@@ -4534,11 +4916,22 @@ int main(int argc, char **argv)
         char *cache = opt.cache ? g_strdup(opt.cache) : g_build_filename(opt.date, "cache", NULL);
         sesiune = webkit_network_session_new(opt.date, cache);
         g_free(cache);
+        /* HBT2 (0.8.0): cookie-urile raman intre porniri (pana in r24 stateau numai in memorie: aplicatiile HbbTV isi
+         * cereau acordul de confidentialitate la fiecare ROSU, iar siturile din navigator uitau conectarea). Fisierul
+         * sta in dosarul de date al modului (opt.date), langa stocarea locala, care ramanea deja pe disc. */
+        char *cookie = g_build_filename(opt.date, "cookies.sqlite", NULL);
+        webkit_cookie_manager_set_persistent_storage(webkit_network_session_get_cookie_manager(sesiune), cookie,
+            WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
+        g_free(cookie);
     }
 
     WebKitSettings *setari = webkit_settings_new();
     /* In modul HbbTV aplicatia isi muta singura focalizarea cu sagetile (navigarea spatiala ar muta-o si ea). */
     webkit_settings_set_enable_spatial_navigation(setari, !opt.hbbtv);
+    /* WVN1 (0.8.0): Encrypted Media Extensions (filmele protejate ale serviciilor, prin libocdm: Clear Key si modulul Widevine
+     * adus de receptor). In WPE setarea e oprita din fabrica; fara ea navigator.requestMediaKeySystemAccess lipseste chiar
+     * cu WebKit construit cu ENABLE_ENCRYPTED_MEDIA. Pe un WebKit fara EME nu schimba nimic. */
+    webkit_settings_set_enable_encrypted_media(setari, TRUE);
     if (opt.agent && *opt.agent) {
         /* agentul intreg al unei scurtaturi (de pilda al unui televizor); fara semne de control */
         char *agent = g_strdup(opt.agent);
@@ -4639,8 +5032,10 @@ int main(int argc, char **argv)
         g_printerr("HDS-NAV EROARE fereastra\n");
         return 1;
     }
-    /* --marire-la-copiere: numai in modul HbbTV si numai pentru 1280 -> 1920 (scara 1,5); altfel scara obisnuita */
-    if (opt.marire_copiere && opt.hbbtv && opt.scara > 1.499 && opt.scara < 1.501 && !(opt.latime & 1) && !(opt.inaltime & 1)) {
+    /* --marire-la-copiere: numai pentru 1280 -> 1920 (scara 1,5), in modul HbbTV sau cu desenul pe procesor (YTS0,
+     * 0.8.0: aplicatiile din meniul Aplicatii pe placile fara EGL folosibil, de pilda Vu+ Solo SE, unde desenul la
+     * 1920x1080 tinea un nucleu plin); cu desenul pe placa grafica in afara HbbTV, scara obisnuita */
+    if (opt.marire_copiere && (opt.hbbtv || opt.cpu) && opt.scara > 1.499 && opt.scara < 1.501 && !(opt.latime & 1) && !(opt.inaltime & 1)) {
         ecran_x15 = TRUE;
         stare("MARIRE-LA-COPIERE 1.5");
     } else if (opt.marire_copiere)
@@ -4659,6 +5054,7 @@ int main(int argc, char **argv)
     g_signal_connect(vedere, "notify::estimated-load-progress", G_CALLBACK(progres_schimbat), NULL);
     g_signal_connect(vedere, "authenticate", G_CALLBACK(autentificare), NULL);
     g_signal_connect(vedere, "script-dialog", G_CALLBACK(dialog_script), NULL);
+    g_signal_connect(vedere, "permission-request", G_CALLBACK(cerere_permisiune), NULL);
     g_signal_connect(vedere, "show-option-menu", G_CALLBACK(arata_optiuni), NULL);
     g_signal_connect(vedere, "decide-policy", G_CALLBACK(decide), NULL);
 
@@ -4702,6 +5098,8 @@ int main(int argc, char **argv)
     g_free(copie_pagina.mem);
     if (ecran.fd >= 0)
         close(ecran.fd);
+    if (cod_iesire == 0 && !reporneste_pe_cpu)
+        jit_pornire_buna();
     if (reporneste_pe_cpu)
         reporneste_cu_cpu();
     stare("OPRIT");

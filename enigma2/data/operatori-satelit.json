@@ -1,6 +1,6 @@
 {
   "versiune": 1,
-  "actualizat": "2026-11-17",
+  "actualizat": "2026-11-25",
   "unitati": {
     "frecventa": "kHz (12687000 = 12687 MHz; jumatatile de MHz se pastreaza, ex. 12031500)",
     "rata": "kSymb/s (27500 = 27500000 simboluri/s)",
@@ -84,9 +84,33 @@
     },
     {
       "id": "skylink",
-      "nume": "Skylink",
+      "nume": "Skylink (CZ)",
       "tari": [
-        "CZ",
+        "CZ"
+      ],
+      "pozitie": 235,
+      "transponder": {
+        "frecventa": 12070000,
+        "pol": "H",
+        "rata": 27500,
+        "fec": "3/4",
+        "sistem": "DVB-S",
+        "modulatie": "QPSK",
+        "pls": null,
+        "flux": null
+      },
+      "fel": "tv",
+      "incredere": "sigur",
+      "sursa": "SURSA PRIMARA, operatorul: skylink.cz/navody-pro-naladeni scrie ca la cautarea in retea e de ajuns o singura frecventa, 'tzv. domaciho transponderu - 12070 MHz', Astra 23,5E, orizontal, 27500, FEC 3/4, DVB-S. Confirmat de revista operatorului (read.skylink.cz/cz-01-2026/parametry-ladeni-podle-frekvenci, randul 12070) si de tabelul FastScan din enigma2 (cod liber, GPL): 12070000 / 27500000 / FEC 3/4 / orbpos 235. FastScan (OPS9, 25.11.2026): PID 30, din tabelul FastScan al pluginului FastScan din OE-Alliance (cod liber, GPL, enigma2-plugin-systemplugins-fastscan 1.0+git03eeb0e: PROVIDERS 30 = 'Skylink Czech Republic', transponderul de indice 1 = acelasi cu cel de mai sus).",
+      "fastscan": {
+        "pid": 30,
+        "buchet": "Skylink CZ"
+      }
+    },
+    {
+      "id": "skylink_sk",
+      "nume": "Skylink (SK)",
+      "tari": [
         "SK"
       ],
       "pozitie": 235,
@@ -102,7 +126,11 @@
       },
       "fel": "tv",
       "incredere": "sigur",
-      "sursa": "SURSA PRIMARA, operatorul: skylink.cz/navody-pro-naladeni scrie ca la cautarea in retea e de ajuns o singura frecventa, 'tzv. domaciho transponderu - 12070 MHz', Astra 23,5E, orizontal, 27500, FEC 3/4, DVB-S. Confirmat de revista operatorului (read.skylink.cz/cz-01-2026/parametry-ladeni-podle-frekvenci, randul 12070) si de tabelul FastScan din enigma2 (cod liber, GPL): 12070000 / 27500000 / FEC 3/4 / orbpos 235."
+      "sursa": "SURSA PRIMARA, operatorul: skylink.cz/navody-pro-naladeni scrie ca la cautarea in retea e de ajuns o singura frecventa, 'tzv. domaciho transponderu - 12070 MHz', Astra 23,5E, orizontal, 27500, FEC 3/4, DVB-S. Confirmat de revista operatorului (read.skylink.cz/cz-01-2026/parametry-ladeni-podle-frekvenci, randul 12070) si de tabelul FastScan din enigma2 (cod liber, GPL): 12070000 / 27500000 / FEC 3/4 / orbpos 235. FastScan (OPS9, 25.11.2026): PID 31, din tabelul FastScan al pluginului FastScan din OE-Alliance (cod liber, GPL, enigma2-plugin-systemplugins-fastscan 1.0+git03eeb0e: PROVIDERS 31 = 'Skylink Slovak Republic', transponderul de indice 1 = acelasi cu cel de mai sus).",
+      "fastscan": {
+        "pid": 31,
+        "buchet": "Skylink SK"
+      }
     },
     {
       "id": "telly_cz",
@@ -144,7 +172,11 @@
       },
       "fel": "tv",
       "incredere": "sigur",
-      "sursa": "SURSA PRIMARA: lista oficiala de frecvente pentru abonati, m7cdn.io/directone/pdf/Frekvencialista-20250408.pdf (CDN-ul propriu al operatorului, datat 08.04.2025), randul 2: 'M1 | 11727MHZ/V | QPSK-28000-7/8'. Confirmat de tabelul FastScan din enigma2 (cod liber, GPL): 11727000 / 28000000 / FEC 7/8 / orbpos 3592 / vertical / DVB-S / QPSK. DE URMARIT: presa maghiara de specialitate (dtvnews.hu) scrie ca abonatii de satelit au trecut la DIGI/One, deci marca s-ar putea stinge."
+      "sursa": "SURSA PRIMARA: lista oficiala de frecvente pentru abonati, m7cdn.io/directone/pdf/Frekvencialista-20250408.pdf (CDN-ul propriu al operatorului, datat 08.04.2025), randul 2: 'M1 | 11727MHZ/V | QPSK-28000-7/8'. Confirmat de tabelul FastScan din enigma2 (cod liber, GPL): 11727000 / 28000000 / FEC 7/8 / orbpos 3592 / vertical / DVB-S / QPSK. DE URMARIT: presa maghiara de specialitate (dtvnews.hu) scrie ca abonatii de satelit au trecut la DIGI/One, deci marca s-ar putea stinge. FastScan (OPS9, 25.11.2026): PID 81, din tabelul FastScan al pluginului FastScan din OE-Alliance (cod liber, GPL, enigma2-plugin-systemplugins-fastscan 1.0+git03eeb0e: PROVIDERS 81 = 'UPC Direct Thor', transponderul de indice 2 = acelasi cu cel de mai sus); Direct One e numele de azi al UPC Direct.",
+      "fastscan": {
+        "pid": 81,
+        "buchet": "Direct One"
+      }
     },
     {
       "id": "one_hu",
@@ -534,7 +566,11 @@
       },
       "fel": "tv",
       "incredere": "sigur",
-      "sursa": "AutoBouquetsMaker, sat_192_austriasat.xml, numit chiar 'HD Austria': 12515000, polarization 0, fec_inner 4 (= 5/6), system 0, modulation 1, fastscan_pid 0x3b6, tsid 1105, onid 53. Confirmat de satindex.de/paytv/hd-austria si satindex.de/frequenz/12515: transponderul 105, 12515 MHz, H, 22000, FEC 5/6, DVB-S, QPSK. Platforma s-a numit AustriaSat, apoi HD Austria, azi CANAL+ Austria. Acelasi transponder e folosit si de TeleSAT Belgia si Diveo, fiecare cu alt PID de fastscan."
+      "sursa": "AutoBouquetsMaker, sat_192_austriasat.xml, numit chiar 'HD Austria': 12515000, polarization 0, fec_inner 4 (= 5/6), system 0, modulation 1, fastscan_pid 0x3b6, tsid 1105, onid 53. Confirmat de satindex.de/paytv/hd-austria si satindex.de/frequenz/12515: transponderul 105, 12515 MHz, H, 22000, FEC 5/6, DVB-S, QPSK. Platforma s-a numit AustriaSat, apoi HD Austria, azi CANAL+ Austria. Acelasi transponder e folosit si de TeleSAT Belgia si Diveo, fiecare cu alt PID de fastscan. FastScan (OPS9, 25.11.2026): PID 950, din tabelul FastScan al pluginului FastScan din OE-Alliance (cod liber, GPL, enigma2-plugin-systemplugins-fastscan 1.0+git03eeb0e: PROVIDERS 950 = 'HD Austria', transponderul de indice 0 = acelasi cu cel de mai sus); acelasi PID ca fastscan_pid 0x3b6 de mai sus.",
+      "fastscan": {
+        "pid": 950,
+        "buchet": "HD Austria"
+      }
     },
     {
       "id": "hellas_sat_dtt_cy",

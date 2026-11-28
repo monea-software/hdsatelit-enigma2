@@ -67,6 +67,7 @@
 # „Regular” si culori scrise direct.
 
 import math
+import os
 import time
 
 from enigma import eActionMap, eTimer, ePoint, eSize, getDesktop, iPlayableService, gFont
@@ -75,6 +76,10 @@ from .Screen import Screen
 from Components.ActionMap import ActionMap
 from Components.ConfigList import ConfigListScreen
 from Components.Label import Label
+try:
+	from Components.Pixmap import Pixmap
+except ImportError:          # probele de pe PC (stuburile n-au skin): locul imaginii ramane o eticheta goala
+	Pixmap = None
 from Components.ServiceEventTracker import ServiceEventTracker
 from Components.Sources.CanvasSource import CanvasSource
 from Components.Sources.Progress import Progress
@@ -179,6 +184,7 @@ SKIN_ECRAN = """
 	<widget name="piesa" position="296,506" size="1544,96" font="Regular;38" foregroundColor="#00F5B83D" backgroundColor="#000A0F1A" transparent="1" valign="top" />
 	<widget name="radiotext" position="296,556" size="1544,80" font="Regular;30" foregroundColor="#00C9D2E3" backgroundColor="#000A0F1A" transparent="1" valign="top" />
 	<widget source="bare" render="Canvas" position="112,628" size="1728,236" />
+	<widget name="imaginePost" position="112,628" size="1728,236" alphatest="blend" zPosition="1" />
 	<widget name="zonaBareMari" position="112,316" size="1728,548" backgroundColor="#000A0F1A" transparent="1" zPosition="0" />
 	<widget name="mesajBare" position="112,724" size="1728,44" font="Regular;30" foregroundColor="#00AEB9CC" backgroundColor="#000A0F1A" transparent="1" halign="center" valign="center" noWrap="1" zPosition="2" />
 	<widget name="anunt" position="112,714" size="1728,64" font="Regular;34" foregroundColor="#00F2F4F8" backgroundColor="#00232C40" halign="center" valign="center" noWrap="1" zPosition="4" />
@@ -278,6 +284,63 @@ def _geometrie(inst):
 		m = inst.size()
 		return (p.x(), p.y(), m.width(), m.height())
 	except Exception:
+		return None
+
+
+_PICLOAD = [None]
+
+
+def marime_imagine(cale):
+	"""(latime, inaltime) din antetul unui PNG (IHDR) sau JPEG (primul SOF), fara decodare; None cand nu se afla."""
+	try:
+		with open(cale, "rb") as f:
+			d = f.read(256 * 1024)
+	except (IOError, OSError):
+		return None
+	if d[:8] == b"\x89PNG\r\n\x1a\n" and len(d) >= 24:
+		return (int.from_bytes(d[16:20], "big"), int.from_bytes(d[20:24], "big"))
+	if d[:2] != b"\xff\xd8":
+		return None
+	i = 2
+	while i + 9 < len(d):
+		if d[i] != 0xFF:
+			i += 1
+			continue
+		m = d[i + 1]
+		if m in (0xD8, 0x01) or 0xD0 <= m <= 0xD7 or m == 0xFF:
+			i += 1 if m == 0xFF else 2
+			continue
+		if 0xC0 <= m <= 0xCF and m not in (0xC4, 0xC8, 0xCC):
+			return (int.from_bytes(d[i + 7:i + 9], "big"), int.from_bytes(d[i + 5:i + 7], "big"))
+		i += 2 + int.from_bytes(d[i + 2:i + 4], "big")
+	return None
+
+
+def potrivit(marime, latime, inaltime):
+	"""Marimea imaginii adusa cat incape in latime x inaltime, cu proportiile pastrate (mai mare sau mai mica)."""
+	if not marime or marime[0] <= 0 or marime[1] <= 0:
+		return (int(latime), int(inaltime))
+	k = min(float(latime) / marime[0], float(inaltime) / marime[1])
+	return (max(1, int(marime[0] * k)), max(1, int(marime[1] * k)))
+
+
+def decodeaza_imagine(cale, latime, inaltime):
+	"""JPEG / PNG -> pixmap cat incape in latime x inaltime, cu proportiile pastrate (ePicLoad, pe loc: o imagine DAB are
+	de obicei 320 x 240 si cel mult 50 KB, deci decodarea e scurta), sau None. Pixmap-ul are chiar marimea imaginii
+	aratate, nu a intregului panou (pe receptoarele slabe, mai putina memorie)."""
+	try:
+		from enigma import ePicLoad
+		p = _PICLOAD[0]
+		if p is None:
+			p = _PICLOAD[0] = ePicLoad()
+		latime, inaltime = potrivit(marime_imagine(cale), latime, inaltime)
+		# latimea, inaltimea, aspectul, cache, redimensionarea (1 = mai buna), fondul ferestrei radio
+		p.setPara((int(latime), int(inaltime), 1, 1, False, 1, "#000A0F1A"))
+		if p.startDecode(cale, 0, 0, False):
+			return None
+		return p.getData()
+	except Exception as e:
+		_jurnal("decodarea imaginii %s: %s" % (cale, e))
 		return None
 
 
@@ -423,6 +486,10 @@ class HdsEcranRadio(Screen):
 		self["semnalBara"] = Progress(0)
 		self["calitateBara"] = Progress(0)
 		self["bare"] = CanvasSource()
+		# imaginea trimisa de un post DAB (MOT SlideShow), in locul panoului barelor (setarea „Imaginile posturilor DAB”)
+		self["imaginePost"] = Pixmap() if Pixmap is not None else Label(u"")
+		self.imagine_cheie = None    # (cale, mtime, x, y, l, i) a imaginii aratate
+		self.imagine_rea = None      # (cale, mtime) care nu s-a putut decoda: nu se incearca la fiecare secunda
 		self.__urmaritor = ServiceEventTracker(screen=self, eventmap={
 			iPlayableService.evStart: leg.laStart,
 			iPlayableService.evEnd: leg.laSfarsit,
@@ -478,7 +545,7 @@ class HdsEcranRadio(Screen):
 			self.panza = DES.Panza(m.width(), m.height())
 			# pixmap-ul nou al panzei e negru: o umplere cu fundalul ferestrei, o singura data
 			DES.aplica(self["bare"], self.panza.goleste())
-		for nume in ("mesajBare", "semnalSlab", "zonaBareMari", "anunt"):
+		for nume in ("mesajBare", "semnalSlab", "zonaBareMari", "anunt", "imaginePost"):
 			self[nume].hide()
 		self._aseazaTaste()
 		lat, inalt = _latime_ecran()
@@ -556,6 +623,54 @@ class HdsEcranRadio(Screen):
 		if strans == self.stransa:
 			return False
 		return self._aseazaBare(strans)
+
+	def arataImagine(self, cale):
+		"""Imaginea postului DAB (MOT SlideShow, Hds/DabT2/dab/motor/pad.py) in locul panoului barelor, cat de mare incape,
+		centrata; "" o ascunde si barele revin. Se decodeaza numai cand fisierul sau locul panoului se schimba (o data pe
+		imagine, nu la fiecare secunda). Un skin fara „imaginePost” ramane cu barele. -> True cand imaginea se vede."""
+		inst = getattr(self["imaginePost"], "instance", None)
+		if inst is None or "bare" not in self.geom:
+			return False
+		r = _instanta_canvas(self, self["bare"])
+		mt = None
+		if cale:
+			try:
+				mt = os.stat(cale).st_mtime
+			except OSError:
+				mt = None
+		if mt is None or (cale, mt) == self.imagine_rea:
+			if self.imagine_cheie is not None:
+				self.imagine_cheie = None
+				self["imaginePost"].hide()
+				if r is not None:
+					r.instance.show()
+			return False
+		x, y, l, i = self._dreptunghiBare(self.stransa)
+		cheie = (cale, mt, x, y, l, i)
+		if cheie == self.imagine_cheie:
+			return True
+		ptr = decodeaza_imagine(cale, l, i)
+		try:
+			m = ptr.size()
+			pl, pi = min(l, m.width()), min(i, m.height())
+		except Exception:
+			pl = pi = 0
+		if not pl or not pi:
+			self.imagine_rea = (cale, mt)
+			return self.arataImagine(u"")
+		try:
+			inst.move(ePoint(x + (l - pl) // 2, y + (i - pi) // 2))
+			inst.resize(eSize(pl, pi))
+			inst.setPixmap(ptr)
+		except Exception as e:
+			_jurnal("imaginea postului: %s" % e)
+			self.imagine_rea = (cale, mt)
+			return self.arataImagine(u"")
+		self["imaginePost"].show()
+		if r is not None:
+			r.instance.hide()
+		self.imagine_cheie = cheie
+		return True
 
 	def _inaltimeRand(self, nume):
 		return _inaltime_rand(self, nume)
@@ -1120,6 +1235,7 @@ class LegaturaRadio(object):
 		self.fara_pid = False
 		self._harta = None
 		self.mesaj_aratat = False
+		self.imagine_aratata = False  # imaginea postului DAB se vede in locul barelor (fara cadre de desen)
 		# asezarea stransa: postul de acum, cand a pornit, daca a trimis program sau text radio; ce s-a vazut la un post
 		# se tine minte (in memorie), ca la urmatoarea pornire lui sa inceapa direct cu asezarea potrivita
 		self.asezare_ref = None
@@ -1636,6 +1752,7 @@ class LegaturaRadio(object):
 		e.arataSemnal(*RD.procente_semnal(d))
 		e.randuriJos(not sunet, not transponder)
 		potriveste(e["semnal" if not slab else "semnalSlab"], RD.text_semnal(d))
+		self.imagine_aratata = e.arataImagine(r.get("imagine") or u"")
 		self._mesajBare(d.get("analiza"))
 		o = self.odihna
 		potriveste(o["odihnaNume"], nume)
@@ -1698,9 +1815,14 @@ class LegaturaRadio(object):
 	STARI_FARA_BARE = (AN.STARE_FARA_BARE, AN.STARE_ALTUL, AN.STARE_FARA_DATE, "aac-fara-bare")
 
 	def _mesajBare(self, analiza):
+		e = self.ecran
+		if self.imagine_aratata:
+			# imaginea postului sta in locul barelor: fara mesajul lor si fara tastele care schimba vizualizarea
+			e.arataTasteViz(False)
+			self._ascundeMesajBare()
+			return
 		fel = S.valoare("vizualizator")
 		text = RD.text_bare(analiza, fel)
-		e = self.ecran
 		stare = (analiza or {}).get("stare")
 		e.arataTasteViz(stare not in self.STARI_FARA_BARE)
 		if text and stare != AN.STARE_BARE:
@@ -1730,7 +1852,9 @@ class LegaturaRadio(object):
 		if not (self.vizibil or self.in_odihna):
 			self.tCadru.stop()
 			return
-		if not self._inFata() and not self.in_odihna:
+		if (not self._inFata() or self.imagine_aratata) and not self.in_odihna:
+			# imaginea postului DAB sta in locul barelor: fara cadre de desen (analizorul merge mai departe pentru
+			# debitul, esantionarea si modul din randul sunetului)
 			self.tCadru.start(MS_ASTEPTARE, True)
 			return
 		fps = CADRE_ODIHNA if self.in_odihna else S.numar_cadre()
@@ -1752,7 +1876,7 @@ class LegaturaRadio(object):
 			sursa = self.odihna["bareMici"]
 			fel = "bare"
 		else:
-			if not self._inFata():
+			if not self._inFata() or self.imagine_aratata:
 				return
 			p = self.ecran.panza
 			sursa = self.ecran["bare"]

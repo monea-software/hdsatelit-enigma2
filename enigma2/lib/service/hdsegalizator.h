@@ -7,8 +7,9 @@
  *
  * Placa de sunet a receptorului nu are egalizator, deci cat egalizatorul e pornit, sunetul unui post de radio nu mai
  * trece prin decodorul placii: fluxul audio al postului se citeste din demultiplexor (filtru PES, ca cititorul de RDS),
- * se decodeaza in procesor cu GStreamer (MPEG audio cu mpg123; AAC cu decodorul care exista in imagine, LATM prin ADTS:
- * hdsegalizator_flux.h), trece prin prelucrarea din hdsegalizator_dsp.h (10 benzi, efect, Noapte, nivel, limitator) si iese
+ * se decodeaza in procesor cu GStreamer (MPEG audio cu mpg123; AAC, si HE-AAC, cu decodorul care exista in imagine, LATM
+ * prin ADTS: hdsegalizator_flux.h; AC-3 si E-AC-3 la radio cu avdec_ac3 / avdec_eac3, numai cand imaginea le are si
+ * comutatorul AC3 nu e pe trecere spre amplificator: setDolbyDecodat), trece prin prelucrarea din hdsegalizator_dsp.h (10 benzi, efect, Noapte, nivel, limitator) si iese
  * pe placa ALSA a receptorului (biblioteca libasound se incarca la pornire, cu dlopen).
  * Canalele TV: imaginea o arata placa dupa ceasul ei, deci sunetul din procesor se tine dupa PTS-ul
  * imaginii aratate. Pe HiSilicon (exista /proc/msp/sync00) il da sincronul placii (VidLocalTime, in ms), citit de firul
@@ -19,7 +20,7 @@
  * PTS-ul fiecarui PES audio merge prin GStreamer pana la cadrele din tampon, iar firul placii aseaza sunetul cu tacere,
  * aruncare sau raportul tamponului (hdsegalizator_dsp.h: CeasImagine, SincronImagine). Nimic nu iese pana nu se
  * hotaraste pe primul esantion; orice tacere, gol sau corectie trece prin rampa iesirii (RampaIesire). Numai sunetul
- * MPEG (MP2); setarea „tv” il opreste, „potrivire” il muta fata de imagine. Fara ceasul imaginii in
+ * MPEG, AAC (LATM numai cu decodorul LATM, prin aacparse) si AC-3 / E-AC-3 (ac3parse), cu PTS-ul fiecarui PES; setarea „tv” il opreste, „potrivire” il muta fata de imagine. Fara ceasul imaginii in
  * SincronTv::FARA_CEAS_MS, fara primul sunet potrivit in SincronTv::NEPOTRIVIT_MS sau cu prea multe corectii mari la rand,
  * sunetul se intoarce pe placa (stare(): „tv-fara-ceas”, „tv-nepotrivit”), in liniste.
  * Pornirea la canalele TV (0.7.5, sunetul MP2 aparea abia la 2-3 s dupa schimbarea canalului): placa canta sunetul din
@@ -90,8 +91,8 @@ public:
 	/* motorul, numai daca exista deja (fara sa-l porneasca): pentru oprirea serviciilor */
 	static eHdsEgalizator *existent() { return instance; }
 
-	/* felul fluxului audio (acelasi numar ca eDVBAudio: 0 MPEG, 3 AAC in ADTS, 4 AAC in LATM) */
-	enum { felMpeg = 0, felAacAdts = 3, felAacLatm = 4, felDinFisier = -1 };
+	/* felul fluxului audio (acelasi numar ca eDVBAudio: 0 MPEG, 1 AC-3, 3 AAC in ADTS, 4 AAC in LATM, 7 E-AC-3) */
+	enum { felMpeg = 0, felAc3 = 1, felAacAdts = 3, felAacLatm = 4, felEac3 = 7, felDinFisier = -1 };
 
 	/* setarile (firul enigma2): egalizatorul pornit de om, castigul benzii i (0..9) in dB, modul Noapte, potrivirea
 	   tariei in dB, volumul aplicat aici (0 = singur, dupa placa; 1 = da; 2 = nu), placa ALSA (implicit „default”) */
@@ -107,6 +108,11 @@ public:
 	   (-) fata de imagine, in ms (-300..300) */
 	void setTv(int da);
 	void setPotrivireTv(int ms);
+	/* sunetul Dolby (AC-3, E-AC-3): 1 = comutatorul AC3 nu e pe trecere spre amplificator, deci egalizatorul il poate
+	   decoda in procesor (cand imaginea are decodorul); 0 (implicit) = ramane pe placa, neschimbat. Il pune Python
+	   (Components/HdsEgalizator.py, dupa HdsSunet.efectiv("ac3")): motorul nu citeste /proc/stb/audio (pe HiSilicon
+	   citirea opreste nucleul). */
+	void setDolbyDecodat(int da);
 
 	/* serviciul care merge alege din nou pista de sunet (dupa o schimbare a setarii „pornit”) */
 	void reaplica();
@@ -117,8 +123,8 @@ public:
 	   limitari, iesire, fisier, secunde, cadre, la TV si sesiune_tv, sincron_tv_ms, ceas_imagine (1 ms, 90 kHz, 0 inca
 	   nu), ceas_decodor_fata_de_placa_ms (numai pe HiSilicon), taceri_tv, aruncari_tv */
 	PyObject *stare();
-	/* -> dictionar: gstreamer (0/1), mpeg, aac_adts, aac_latm (numele decodorului sau None), latm_prin_adts (0/1: LATM
-	   merge prin decodorul ADTS), alsa (0/1) */
+	/* -> dictionar: gstreamer (0/1), mpeg, aac_adts, aac_latm, ac3, eac3 (numele decodorului sau None), latm_prin_adts
+	   (0/1: LATM merge prin decodorul ADTS), alsa (0/1) */
 	PyObject *decodoare();
 
 	/* proba: fisierul (TS cu `pid`, sau fluxul audio insusi; pid -1 = primul PID cu sunet) pe acelasi drum; iesirea e
@@ -157,7 +163,7 @@ public:
 	void fluxPregatit(unsigned long long pregatire);
 	/* elementul pentru „audio-sink” al lui playbin; NULL fara GStreamer. Mostrele ajung la sesiunea de flux, oricare ar fi ea. */
 	GstElement *sinkFlux();
-	/* playbin n-are decodor pentru sunetul acestei adrese; se tine minte. aac: textul despre brevete, altfel „nu s-a recunoscut” */
+	/* playbin n-are decodor pentru sunetul acestei adrese; se tine minte. aac: textul AAC fara decodor, altfel „nu s-a recunoscut” */
 	void fluxFaraDecodor(const std::string &adresa, bool aac);
 	/* decodorul a cazut pe aceasta adresa, poate numai o bucata stricata: sunetul trece pe placa pana cand postul porneste din nou */
 	void fluxEroareDecodare(const std::string &adresa);

@@ -204,6 +204,138 @@ def verificaDiscurile(stare=None, acum=None):
 			del _discuri[punct]
 
 
+# Memoria interna (/): sub PRAG_LIBER_PROCENTE sau sub LIBER_MINIM_MB liberi, omul vede un anunt (o data pe zi si la
+# pornire) pe ecran si o banda in web, cu cat e liber si ce ocupa locul. Fara intrebari si fara stergeri singure
+# (AS198, 25.11.2026: / plin 95% si nimic pe ecran; cererea din 13.11: mesaj pe ecran cand / e aproape plin).
+LIBER_MINIM_MB = 50
+DURATA_ANUNT_MS = 15000
+
+
+def N_(text):
+	"""Numai marcajul pentru traduceri; textul se traduce la afisare (_t)."""
+	return text
+
+
+# locurile pe care omul le poate curata singur, cu numele lor pentru anunt (cele mai mari trei intra in text)
+LOCURI_MARI = (
+	("/usr/lib/enigma2/python/Plugins/Extensions", N_("pluginurile")),
+	("/usr/share/enigma2/picon", N_("siglele canalelor")),
+	("/picon", N_("siglele canalelor")),
+	("/home/root", N_("fișierele din /home/root")),
+	("/var/cache/opkg", N_("pachetele descărcate")),
+)
+TEXT_ANUNT_SPATIU = N_("Memoria internă a receptorului e aproape plină: mai sunt liberi %s din %s.")
+TEXT_ANUNT_OCUPA = N_("Ocupă cel mai mult: %s.")
+TEXT_ANUNT_STERGE = N_("Șterge ce nu mai folosești (pluginurile din Meniu > Extensii, sigle sau fișiere vechi), ca receptorul să meargă bine.")
+_spatiu_intern = {"zi": None, "de_aratat": None, "text": None, "avertizat": 0}
+
+
+def _t(text):
+	try:
+		return _(text)  # noqa: F821
+	except NameError:
+		return text
+
+
+def _mb(octeti):
+	return ("%.0f MB" % (octeti / 1e6)) if octeti < 1e9 else ("%.1f GB" % (octeti / 1e9))
+
+
+def _marimeDosar(cale, maxim=200000):
+	"""Octetii fisierelor de sub cale, fara legaturi si fara alte montari (un stick legat in /picon nu se numara)."""
+	total = 0
+	vazute = 0
+	if os.path.islink(cale) or not os.path.isdir(cale) or os.path.ismount(cale):
+		return 0
+	for rad, dosare, fisiere in os.walk(cale):
+		dosare[:] = [d for d in dosare if not os.path.islink(os.path.join(rad, d)) and
+			not os.path.ismount(os.path.join(rad, d))]
+		for f in fisiere:
+			vazute += 1
+			if vazute > maxim:
+				return total
+			try:
+				st = os.lstat(os.path.join(rad, f))
+				total += st.st_size
+			except OSError:
+				pass
+	return total
+
+
+def textAnuntSpatiu(liber, total, locuri):
+	"""locuri = [(nume tradus, octeti)], cele mai mari intai."""
+	text = _t(TEXT_ANUNT_SPATIU) % (_mb(liber), _mb(total))
+	mari = ["%s %s" % (nume, _mb(oct_)) for nume, oct_ in locuri[:3] if oct_ >= 1e6]
+	if mari:
+		text += " " + _t(TEXT_ANUNT_OCUPA) % ", ".join(mari)
+	return text + " " + _t(TEXT_ANUNT_STERGE)
+
+
+def verificaMemoriaInterna(acum=None, statvfs=None, marime=None, punct="/"):
+	"""Pe firul verificarii (nu pe firul interfetei): statvfs pe /; sub prag, randul de jurnal (cel mult unul pe ora) si,
+	o data pe zi, anuntul pus deoparte pentru firul interfetei (anuntSpatiuDeAratat). -> textul anuntului sau None."""
+	acum = time.time() if acum is None else acum
+	statvfs = statvfs or os.statvfs
+	marime = marime or _marimeDosar
+	try:
+		st = statvfs(punct)
+		total = st.f_blocks * st.f_frsize
+		liber = st.f_bavail * st.f_frsize
+	except (OSError, AttributeError):
+		return None
+	if not total or (liber * 100 >= total * PRAG_LIBER_PROCENTE and liber >= LIBER_MINIM_MB * 1000000):
+		_spatiu_intern["text"] = None
+		_spatiu_intern["de_aratat"] = None
+		return None
+	if acum - _spatiu_intern["avertizat"] >= 3600:
+		_spatiu_intern["avertizat"] = acum
+		HdsJurnal.avert("discuri", "spatiu", "memoria interna (/) aproape plina: liber %s din %s" % (_mb(liber), _mb(total)))
+	zi = time.strftime("%Y-%m-%d", time.localtime(acum))
+	if _spatiu_intern["zi"] == zi and _spatiu_intern["text"]:
+		return None
+	locuri = {}
+	for cale, nume in LOCURI_MARI:
+		locuri[nume] = locuri.get(nume, 0) + marime(cale)
+	ordonate = sorted(((_t(n), o) for n, o in locuri.items()), key=lambda x: -x[1])
+	text = textAnuntSpatiu(liber, total, ordonate)
+	if _spatiu_intern["zi"] == zi:
+		# azi a fost deja pe ecran (locul s-a eliberat si s-a umplut iar): numai banda din web
+		_spatiu_intern["text"] = text
+		return None
+	_spatiu_intern.update(zi=zi, text=text, de_aratat=text)
+	return text
+
+
+def anuntSpatiu():
+	"""Textul anuntului cat / e sub prag (banda din web, fara citiri de disc: starea verificarii de la 30 s), altfel ""."""
+	return _spatiu_intern["text"] or ""
+
+
+def anuntSpatiuDeAratat():
+	"""Pe firul interfetei: anuntul datorat azi (o singura data), apoi None."""
+	text = _spatiu_intern["de_aratat"]
+	_spatiu_intern["de_aratat"] = None
+	return text
+
+
+def _arataAnuntSpatiu():
+	"""Din ceasul firului principal: anuntul pe ecran, ca anunturile retelei (Screens/HdsAnuntRetea), nu in standby."""
+	if not _spatiu_intern["de_aratat"]:
+		return
+	try:
+		from Screens import Standby
+		if Standby.inStandby is not None:
+			return
+		from Screens.InfoBar import InfoBar
+		if InfoBar.instance is None:
+			return
+		text = anuntSpatiuDeAratat()
+		from Screens import HdsAnuntRetea
+		HdsAnuntRetea.arata(InfoBar.instance.session, text, "", DURATA_ANUNT_MS)
+	except Exception as e:
+		HdsJurnal.avert("discuri", "spatiu", "anuntul memoriei interne: %r" % (e,))
+
+
 def _tic():
 	stare = None
 	try:
@@ -226,6 +358,10 @@ def _tic():
 		verificaDiscurile()
 	except Exception:
 		pass
+	try:
+		verificaMemoriaInterna()
+	except Exception:
+		pass
 
 
 def _porneste_fir(tinta):
@@ -245,7 +381,9 @@ def _verificare():
 
 
 def _tic_in_fundal():
-	"""Din ceasul firului principal: verificarea pe un fir; nimic, daca cea de dinainte inca lucreaza."""
+	"""Din ceasul firului principal: verificarea pe un fir; nimic, daca cea de dinainte inca lucreaza. Anuntul
+	memoriei interne pus deoparte de verificarea de dinainte se arata aici, pe firul interfetei."""
+	_arataAnuntSpatiu()
 	if _lucreaza[0]:
 		return
 	_lucreaza[0] = True

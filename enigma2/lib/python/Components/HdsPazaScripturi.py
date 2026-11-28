@@ -283,7 +283,7 @@ def reinstaleaza(rad, pachete, ruleaza=None, al_nostru=None, opkg=None):
 	comanda = R._opkg(rad, opkg)
 	if comanda is None:
 		return [(p, 'fara opkg') for p in pachete]
-	cod, iesire = ruleaza(comanda + ['update'], TERMEN_UPDATE_S)
+	cod, iesire = ruleaza(comanda + _argumenteUpdate(rad), TERMEN_UPDATE_S)
 	if cod != 0:
 		_jurnal("opkg update: cod %s (%s)" % (cod, N._scurt(iesire)))
 	rez = []
@@ -381,3 +381,16 @@ def sincronizeaza(sistem=None, reinstalare=True):
 	if reinstalare:
 		reinstaleaza_daca_lipsesc(sistem)
 	return facute
+
+
+def _argumenteUpdate(rad="/"):
+	"""OPK1 (0.8.0): ['update'], or ['-f', <conf>, 'update'] when a dead foreign source is skipped (HdsSurseOpkg)"""
+	try:
+		try:
+			from Components import HdsSurseOpkg
+		except ImportError:
+			import HdsSurseOpkg
+		return HdsSurseOpkg.argumente_update(rad)
+	except Exception as e:
+		print("[HdsSurseOpkg] %r" % (e,))
+		return ["update"]

@@ -210,6 +210,8 @@ FEREASTRA_LOT_MS = 300        # o cerere „din timp” (generatia 0) asteapta a
 MAX_RANDURI_CERERE = 24       # randurile lipite intr-o singura cerere (din lucrarile care asteapta)
 INTARZIERE_LENTA_MS = 1500    # o pagina tradusa la atat dupa afisare (sau sarita) e „prea tarziu”
 PAGINI_LENTE = 8              # atatea la rand: mesajul „vine prea tarziu”, o singura data
+ESECURI_MESAJ = 3             # loturi cazute la rand (dupa toate serviciile din lant) inainte de mesajul „nu a reusit”
+ESEC_MESAJ_S = 20.0           # si de cel putin atatea secunde fara nicio reusita: o cadere trecatoare (HTTP 500) nu se arata
 PAGINA_VECHE_S = 8.0          # o pagina afisata de atat timp nu mai merita ceruta (o subtitrare sta 1-7 s)
 INAINTE_VECHE_S = 25.0        # o cerere „din timp” mai veche de atat nu mai pleaca
 TERMEN_MINIM_MS = 3000
@@ -3140,6 +3142,8 @@ class Traducator(object):
 		self.lipsa_spusa = False
 		self.lent_spus = False
 		self._intarziate = 0			# pagini la rand traduse prea tarziu sau sarite (serverul lent)
+		self._esecuri = 0			# loturi cazute la rand, de la ultima reusita
+		self._esec_de_la = None		# ceasul primului lot cazut de la ultima reusita
 		self.media_ms = None
 		self.ultima_proba = None
 		self.sursa = ""
@@ -3175,6 +3179,8 @@ class Traducator(object):
 		self.lipsa_spusa = False
 		self.lent_spus = False
 		self._intarziate = 0
+		self._esecuri = 0
+		self._esec_de_la = None
 
 	def pauzaRamasa(self):
 		return max(0, int(round(self.pauza_pana - self._acum()))) if self.pauza_pana else 0
@@ -3714,6 +3720,8 @@ class Traducator(object):
 
 	def _reusita(self, lot, rez, ms):
 		self.mesaj_spus = False
+		self._esecuri = 0
+		self._esec_de_la = None
 		self._ms.append(ms)
 		self.media_ms = ms if self.media_ms is None else 0.8 * self.media_ms + 0.2 * ms
 		self.contor["ms_max"] = ms if self.contor["ms_max"] is None else max(self.contor["ms_max"], ms)
@@ -3787,6 +3795,14 @@ class Traducator(object):
 			return
 		if not fel_mesaj or self.mesaj_spus:
 			return
+		if fel_mesaj == "eroare":
+			# o cadere trecatoare (retea, termen, HTTP 500) se reincearca singura: pe ecran numai cand nu mai merge
+			acum = self._acum()
+			self._esecuri = getattr(self, "_esecuri", 0) + 1
+			if getattr(self, "_esec_de_la", None) is None:
+				self._esec_de_la = acum
+			if self._esecuri < ESECURI_MESAJ or acum - self._esec_de_la < ESEC_MESAJ_S:
+				return
 		self.mesaj_spus = True
 		if fel_mesaj == "cota":
 			text = _t("Sunt prea multe cereri de traducere. Reîncerc automat după pauza cerută de serviciu.")

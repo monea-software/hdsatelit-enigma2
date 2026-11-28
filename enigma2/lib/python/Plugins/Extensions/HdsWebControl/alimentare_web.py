@@ -62,12 +62,81 @@ CHEI_FA = ("ce", "pas", "cod", "loc")
 CACHE_IMAGINI_S = 15
 TIMP_FIR_IMAGINI_S = 60
 # ?f= din meniul web -> cardul paginii (aceleasi chei ca HdsAlimentare.ACTIUNI, plus somn)
-CARDURI = ("somn", "standby", "interfata", "receptor", "flash", "kexec", "oprire")
+CARDURI = ("somn", "standby", "interfata", "receptor", "flash", "stick", "kexec", "oprire")
 # entryID-urile din data/menu.xml, pentru drumul de pe televizor al fiecarui card
 INTRARI = {"somn": "sleep", "standby": "standby", "interfata": "restart_enigma", "receptor": "restart",
-	"flash": "return_to_flash", "kexec": "kexec_multiboot", "oprire": "deep_standby"}
+	"flash": "return_to_flash", "stick": "stick_multiboot", "kexec": "kexec_multiboot", "oprire": "deep_standby"}
 TIMP_FIR_KEXEC_S = 600
 CHEI_KEXEC = ("ce",)
+# Imagini pe stick (ZGEMMA H8, Components/HdsPornireStick.py, MB1 27.11.2026), cardul "stick":
+#   GET  /api/pornire-stick                                locurile (memoria interna + linuxrootfsN), discurile, arhivele
+#                                                          .zip de pe stick si lucrarea in curs (pe un fir: monteaza)
+#   POST /api/pornire-stick-fa  ce=porneste|o_data&loc=<flash|N>   alegerea si repornirea (mesaj pe televizor inainte)
+#                               ce=sterge&loc=N                    stergerea locului (pe un fir)
+#                               ce=instaleaza&sursa=feed|zip|adresa[&cale=..][&adresa=..]&setari=1|0   (pe un fir)
+#                               ce=pregateste&disc=sdX             sterge stickul (intrebarea o pune pagina)
+CHEI_STICK = ("ce", "loc", "sursa", "cale", "adresa", "setari", "disc")
+_citireStick = [False]
+
+
+def _ps(PS=None):
+	if PS is not None:
+		return PS
+	from Components import HdsPornireStick
+	return HdsPornireStick
+
+
+def stick(PS=None, SystemInfo=None):
+	"""Pentru GET /api/pornire-stick: aceleasi randuri ca ecranul Imagini pe stick, plus arhivele de pe stick."""
+	SI = _si(SystemInfo, porneste=False)
+	if not SI.get("HdsPornireStick"):
+		return {"result": False, "message": _t("Imaginea nu are altă memorie din care să pornească, deci intrarea nu e nici pe televizor.")}
+	PS = _ps(PS)
+	rez = PS.publice(PS.locuri())
+	rez["zipuri"] = PS.zipuri() if rez.get("stick") else []
+	return rez
+
+
+def _anuntaPeTelevizor(text):
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(text, MessageBox.TYPE_INFO, 5, "HdsPornireStick")
+	except Exception as e:
+		print("[alimentare_web] stick: %r" % (e,))
+
+
+def stickFa(argumente, sesiune=None, PS=None, Standby=None, fabrica_ceas=None, SystemInfo=None):
+	"""POST /api/pornire-stick-fa: ca tastele ecranului Imagini pe stick."""
+	SI = _si(SystemInfo, porneste=False)
+	if not SI.get("HdsPornireStick"):
+		return {"result": False, "message": _t("Acțiune necunoscută.")}
+	PS = _ps(PS)
+	ce, loc = argumente.get("ce", ""), argumente.get("loc", "")
+	if ce in ("porneste", "o_data"):
+		if sesiune is None:
+			return {"result": False, "message": _faraSesiune()}
+		if getattr(_standby(Standby), "inTryQuitMainloop", False):
+			return {"result": False, "message": _t("Pe televizor așteaptă deja o întrebare de oprire sau de repornire. "
+				"Răspunde acolo.")}
+		acum = PS.pornitAcum()["loc"] == loc
+		ok, text = PS.reporneste(sesiune, loc, ce == "o_data", dupa_ms=DUPA_MS + 1500, fabrica_ceas=fabrica_ceas,
+			Standby=Standby)
+		if ok and not acum:
+			_anuntaPeTelevizor(text)
+		return {"result": ok, "message": text, "reporneste": bool(ok and not acum)}
+	if ce == "sterge":
+		ok, text = PS.pornesteLucrare("sterge", lambda: PS.stergeLoc(loc))
+	elif ce == "instaleaza":
+		sursa = {"fel": argumente.get("sursa", ""), "cale": argumente.get("cale", ""), "adresa": argumente.get("adresa", "")}
+		setari = argumente.get("setari", "1") != "0"
+		ok, text = PS.pornesteLucrare("instaleaza", lambda: PS.instaleaza(sursa, loc, setari))
+	elif ce == "pregateste":
+		disc = argumente.get("disc", "")
+		ok, text = PS.pornesteLucrare("pregateste", lambda: PS.pregatesteStick(disc))
+	else:
+		return {"result": False, "message": _t("Acțiune necunoscută.")}
+	return {"result": ok, "message": text, "lucrare": PS.stareLucrare()}
 
 
 def _mc():
@@ -209,6 +278,9 @@ def imagini(PM=None, SystemInfo=None, proaspat=False):
 	if not callable(getattr(PM, "semnDiscuri", None)):
 		_imagini["stare"]["compatibilitate"] = _t("Ecranul și componenta pornirii multiple nu au aceeași versiune. Lista se poate citi, dar schimbarea discurilor nu se urmărește automat.")
 	_imagini["asteptate"] = {l["loc"]: (l.get("date"), l["imagine"]) for l in stare["locuri"]}
+	if stare.get("incarcator"):
+		# BLD5 web: the bootloader row (STARTUP_RECOVERY of the maker), the bytes read now are checked again when written
+		_imagini["asteptate"][stare["incarcator"]["loc"]] = stare["incarcator"].get("date")
 	_imagini["cand"] = time.time()
 	_imagini["semn"] = semn
 	rez = {"result": True}
@@ -230,7 +302,8 @@ def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A
 	"""Cardul flash: alegerea imaginii din locul `loc`, in doi pasi, apoi repornirea in ea."""
 	MC = _mc()
 	loc = argumente.get("loc", "")
-	if not (0 < len(loc) <= 200 and loc.isascii() and loc.isdigit()):
+	incarcator = loc == getattr(_pm(PM), "LOC_INCARCATOR", None)
+	if not incarcator and not (0 < len(loc) <= 200 and loc.isascii() and loc.isdigit()):
 		return {"result": False, "message": _t("Acțiune necunoscută.")}
 	tinta = "flash:" + loc
 	pas = argumente.get("pas", "")
@@ -247,6 +320,18 @@ def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A
 		return {"result": False, "message": _t("Pe televizor așteaptă deja o întrebare de oprire sau de repornire. "
 			"Răspunde acolo.")}
 	PM = _pm(PM)
+	if pas == "intreaba" and incarcator:
+		# BLD5 web: one start in the maker's bootloader, the same question as on the TV
+		stare = imaginiLaIntrebare(PM, SI)
+		if not stare.get("incarcator"):
+			return {"result": False, "message": _t(PM.FARA_INCARCATOR)}
+		r = A.stareReceptor(sesiune, Standby=_standby(Standby), job_manager=job_manager)
+		rez = MC.raspunsIntrebare(CONFIRMARE, tinta, _t(PM.INTREBARE_INCARCATOR), _t(PM.BUTON),
+			[x for x in _detalii("flash", r)])
+		if len(_alegeriConfirmate) >= 64:
+			_alegeriConfirmate.clear()
+		_alegeriConfirmate[loc] = (rez["confirmare"]["cod"], _imagini.get("asteptate", {}).get(loc))
+		return rez
 	if pas == "intreaba":
 		stare = imaginiLaIntrebare(PM, SI)
 		gasit = [l for l in stare.get("locuri", []) if l["loc"] == loc]
@@ -269,12 +354,34 @@ def _faImagine(argumente, PM, sesiune, SI, Standby, job_manager, fabrica_ceas, A
 	if not confirmata or confirmata[0] != argumente.get("cod", "") or confirmata[1] is None:
 		return MC.codGresit()
 	intreaba = A.vaIntreba(sesiune)
+	if incarcator:
+		# the write runs on a thread; a later failure (STARTUP_ONCE not written) shows on the TV like from the screen
+		ok, text = PM.pornesteIncarcator(sesiune, dupa_ms=DUPA_MS, fabrica_ceas=fabrica_ceas, Standby=Standby,
+			asteptat=confirmata[1], rezultat=_dupaIncarcator)
+		_imagini.clear()
+		if not ok:
+			return {"result": False, "message": text}
+		return {"result": True, "ce": "flash", "intreaba": bool(intreaba),
+			"message": _dupa("flash", True) if intreaba else _t(PM.GATA_INCARCATOR)}
 	ok, text = PM.reporneste(sesiune, loc, dupa_ms=DUPA_MS, fabrica_ceas=fabrica_ceas,
 		Standby=Standby, asteptat=confirmata[1])
 	_imagini.clear()
 	if not ok:
 		return {"result": False, "message": text}
 	return {"result": True, "ce": "flash", "intreaba": bool(intreaba), "message": _dupa("flash", intreaba, text)}
+
+
+def _dupaIncarcator(ok, text):
+	"""Result of the bootloader start asked from the web (only failures come back): written in the log and on the TV."""
+	if ok:
+		return
+	print("[alimentare_web] incarcator: %s" % text)
+	try:
+		from Tools import Notifications
+		from Screens.MessageBox import MessageBox
+		Notifications.AddPopup(text, MessageBox.TYPE_ERROR, 10, "HdsIncarcator")
+	except Exception as e:
+		print("[alimentare_web] incarcator: %r" % (e,))
 
 
 def _si(SystemInfo=None, porneste=True):
@@ -313,6 +420,8 @@ def _cardVizibil(ce, SI):
 		return bool(SI.get("HdsMultiboot"))
 	if ce == "kexec":
 		return bool(SI.get("HdsKexecInstalabil"))
+	if ce == "stick":
+		return bool(SI.get("HdsPornireStick"))
 	return True
 
 
@@ -715,6 +824,31 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 		def render_GET(self, request):
 			return self.render_POST(request)   # cu ?token= refuzat; din browser poarta cere POST
 
+	class StickResource(baza):
+		"""GET /api/pornire-stick: numai citire, pe un fir (monteaza partitiile stickului)."""
+
+		def render_GET(self, request):
+			try:
+				SI = dict(_si(SystemInfo, porneste=False))
+				if _citireStick[0]:
+					return self._raspunde(request, {"result": True, "in_curs": True, "locuri": [], "randuri": []})
+				return MC.peFir(request, lambda: stick(None, SI), _citireStick, TIMP_FIR_IMAGINI_S, fabrica_ceas)
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+	class StickFaResource(baza):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			try:
+				arg = MC.argumente(request, CHEI_STICK, 400)
+				return self._raspunde(request, stickFa(arg, _ses(), None, Standby, fabrica_ceas, SystemInfo))
+			except Exception as eroare:
+				return self._eroare(request, _t("Eroare pe receptor: %s") % eroare, 500)
+
+		def render_GET(self, request):
+			return self.render_POST(request)
+
 	class PaginaResource(resource.Resource):
 		"""GET /alimentare: pagina Standby si repornire."""
 		isLeaf = True
@@ -730,6 +864,8 @@ def rute(baza, resource, A=None, sesiune=None, config=None, SystemInfo=None, Sta
 		b"pornire-multipla": ImaginiResource(),
 		b"pornire-multipla-kexec": KexecResource(),
 		b"pornire-multipla-kexec-fa": KexecFaResource(),
+		b"pornire-stick": StickResource(),
+		b"pornire-stick-fa": StickFaResource(),
 	}
 	return api, {b"alimentare": PaginaResource()}
 
@@ -828,6 +964,31 @@ __STIL_PAGINI__
       <div id="imaginiLista"></div>
       <p class="nota">Receptorul repornește în imaginea aleasă, din memoria lui sau de pe card ori stick. Pe receptor: __DRUM_FLASH__.</p>
     </section>
+    <section class="card ascuns" id="card-stick">
+      <h2>Imagini pe stick</h2>
+      <p class="nota" id="stickNota">Caut imaginile de pe stick...</p>
+      <div id="stickLista"></div>
+      <p class="nota" id="stickLucrare" role="status" aria-live="polite"></p>
+      <div id="stickInstalare" class="ascuns">
+        <div class="rand">
+          <label for="stickSursa">Pune o imagine într-un loc liber</label>
+          <select id="stickSursa"><option value="feed">Din feedul HD Satelit</option><option value="zip">Dintr-o arhivă de pe stick</option><option value="adresa">De la o adresă de pe internet</option></select>
+        </div>
+        <div class="rand ascuns" id="stickZipRand"><label for="stickZip">Arhiva</label><select id="stickZip"></select></div>
+        <div class="rand ascuns" id="stickAdresaRand"><label for="stickAdresa">Adresa arhivei .zip</label><input type="text" id="stickAdresa"></div>
+        <div class="rand">
+          <label for="stickSetari">Setările</label>
+          <select id="stickSetari"><option value="1">Cu setările mele (canale, rețea, Wi-Fi, chei, pluginuri)</option><option value="0">Curată, fără setările mele</option></select>
+        </div>
+        <div class="butoane"><button type="button" class="principal" id="stickPune">Pune imaginea</button></div>
+      </div>
+      <div class="rand" id="stickPregatireRand">
+        <label for="stickDisc">Pregătește stickul (șterge tot de pe el)</label>
+        <select id="stickDisc"></select>
+      </div>
+      <div class="butoane"><button type="button" class="rosu" id="stickPregateste">Pregătește stickul</button></div>
+      <p class="nota">Pornește de acum: receptorul repornește în imagine și o pornește de fiecare dată. O dată: numai la repornirea asta, apoi revine cea de obicei. Pe televizor: __DRUM_STICK__.</p>
+    </section>
     <section class="card ascuns" id="card-kexec">
       <h2>Pornire multiplă Vu+ (Kexec)</h2>
       <p class="nota" id="kexecNota">Se citește starea...</p>
@@ -887,6 +1048,7 @@ function arata(d){
   (d.carduri || []).forEach(function(c){ var e = $("card-" + c.ce); if(e){ e.classList.toggle("ascuns", !c.vizibil); } });
   if(!imaginiCitite && !$("card-flash").classList.contains("ascuns")){ citesteImagini(); }
   if(!kexecCitit && !$("card-kexec").classList.contains("ascuns")){ citesteKexec(); }
+  if(!stickCitit && !$("card-stick").classList.contains("ascuns")){ citesteStick(); }
   var b = document.querySelector("button[data-fa=standby]"); if(b){ b.disabled = !!r.standby; }
 }
 function umple(id, alegeri, valoare){
@@ -931,6 +1093,14 @@ function citesteImagini(){
       }
       l.appendChild(r);
     });
+    if(d.incarcator){
+      // BLD5: one start in the maker's bootloader, as the last row on the TV
+      var ri = document.createElement("div"); ri.className = "status-linie";
+      var si = document.createElement("span"); si.textContent = d.incarcator.rand; ri.appendChild(si);
+      var bi = document.createElement("button"); bi.type = "button"; bi.className = "rosu"; bi.textContent = "Pornește";
+      bi.addEventListener("click", function(){ faImagine(d.incarcator.loc); }); ri.appendChild(bi);
+      l.appendChild(ri);
+    }
   }).catch(function(){ $("imaginiNota").textContent = "Receptorul nu a putut citi starea."; });
 }
 var kexecCitit = false, kexecIntrebare = "";
@@ -962,6 +1132,66 @@ function instaleazaKexec(){
   });
 }
 $("kexecInstaleaza").addEventListener("click", instaleazaKexec);
+var stickCitit = false, stickDiscuri = [];
+function butonStick(r, text, clasa, cb){
+  var b = document.createElement("button"); b.type = "button"; b.className = clasa; b.textContent = text;
+  b.addEventListener("click", cb); r.appendChild(b);
+}
+function citesteStick(){
+  stickCitit = true;
+  cerere("/api/pornire-stick").then(function(d){
+    if(d.in_curs){ setTimeout(citesteStick, 1500); return; }
+    var l = $("stickLista"); l.textContent = "";
+    scrie("stickNota", d.result ? d.nota : (d.message || ""));
+    var lu = d.lucrare || {};
+    scrie("stickLucrare", lu.text && (lu.lucreaza || lu.gata) ? lu.text : "");
+    (d.locuri || []).forEach(function(x, i){
+      var r = document.createElement("div"); r.className = "status-linie";
+      var s = document.createElement("span"); s.textContent = (d.randuri || [])[i] || x.imagine; r.appendChild(s);
+      var bs = document.createElement("span");
+      if(x.porneste || (x.acum && !x.implicit && d.stick)){ butonStick(bs, "Pornește de acum", "rosu", function(){ faStick("porneste", x.loc); }); }
+      if(x.porneste){ butonStick(bs, "O dată", "", function(){ faStick("o_data", x.loc); }); }
+      if(x.sterge){ butonStick(bs, "Șterge", "", function(){ faStick("sterge", x.loc); }); }
+      r.appendChild(bs); l.appendChild(r);
+    });
+    $("stickInstalare").classList.toggle("ascuns", !d.stick);
+    var z = $("stickZip"); z.textContent = "";
+    (d.zipuri || []).forEach(function(x){ var o = document.createElement("option"); o.value = x.cale; o.textContent = x.nume + " (" + x.marime + ")"; z.appendChild(o); });
+    var di = $("stickDisc"); di.textContent = "";
+    stickDiscuri = d.discuri || [];
+    stickDiscuri.forEach(function(x){ var o = document.createElement("option"); o.value = x.disc; o.textContent = x.disc + " " + x.nume + " (" + x.marime + ")"; di.appendChild(o); });
+    $("stickPregatireRand").classList.toggle("ascuns", !stickDiscuri.length);
+    $("stickPregateste").classList.toggle("ascuns", !stickDiscuri.length);
+    $("stickPregateste").disabled = !d.pe_flash;
+    if(lu.lucreaza){ setTimeout(citesteStick, 2000); }
+  }).catch(function(){ scrie("stickNota", "Receptorul nu a putut citi starea."); });
+}
+function faStick(ce, loc, extra){
+  var q = new URLSearchParams(); q.set("ce", ce); if(loc){ q.set("loc", loc); }
+  Object.keys(extra || {}).forEach(function(k){ q.set(k, extra[k]); });
+  mesaj("Se trimite...");
+  cerere("/api/pornire-stick-fa", "POST", q).then(function(d){
+    mesaj(d.message, !d.result);
+    if(d.result && d.reporneste){ asteaptaRevenirea(); return; }
+    setTimeout(citesteStick, 800);
+  }).catch(nimicNuRaspunde);
+}
+function sursaStick(){
+  var s = $("stickSursa").value;
+  $("stickZipRand").classList.toggle("ascuns", s !== "zip");
+  $("stickAdresaRand").classList.toggle("ascuns", s !== "adresa");
+}
+$("stickSursa").addEventListener("change", sursaStick);
+$("stickAdresa").value = "https://";
+$("stickPune").addEventListener("click", function(){
+  faStick("instaleaza", "", {sursa: $("stickSursa").value, cale: $("stickZip").value || "", adresa: $("stickAdresa").value.trim(), setari: $("stickSetari").value});
+});
+$("stickPregateste").addEventListener("click", function(){
+  var d = $("stickDisc").value; if(!d){ return; }
+  var t = $("stickDisc").options[$("stickDisc").selectedIndex].textContent;
+  if(!window.confirm("Șterg TOT de pe stickul " + t + " și îl pregătesc pentru mai multe imagini? Ce e pe el se pierde.")){ return; }
+  faStick("pregateste", "", {disc: d});
+});
 function faImagine(loc){
   var q = new URLSearchParams(); q.set("ce", "flash"); q.set("loc", loc);
   cuConfirmare("/api/alimentare-fa", q, function(d){
@@ -1097,6 +1327,22 @@ TEXTE_PAGINA = {
 			"oprește. Înainte apare pe televizor o numărătoare de 60 de secunde; orice tastă o oprește. Nu se oprește "
 			"cât se înregistrează sau se instalează ceva. Din standby, oprirea completă se face fără întrebare. Se "
 			"salvează pe loc."),
+		N_("Imagini pe stick"),
+		N_("Caut imaginile de pe stick..."),
+		N_("Pune o imagine într-un loc liber"),
+		N_("Din feedul HD Satelit"),
+		N_("Dintr-o arhivă de pe stick"),
+		N_("De la o adresă de pe internet"),
+		N_("Arhiva"),
+		N_("Adresa arhivei .zip"),
+		N_("Setările"),
+		N_("Cu setările mele (canale, rețea, Wi-Fi, chei, pluginuri)"),
+		N_("Curată, fără setările mele"),
+		N_("Pune imaginea"),
+		N_("Pregătește stickul (șterge tot de pe el)"),
+		N_("Pregătește stickul"),
+		N_("Pornește de acum: receptorul repornește în imagine și o pornește de fiecare dată. O dată: numai la repornirea "
+			"asta, apoi revine cea de obicei. Pe televizor: __DRUM_STICK__."),
 	),
 	"js": (
 		N_("Dezactivat"),
@@ -1113,6 +1359,11 @@ TEXTE_PAGINA = {
 		N_("Nu se poate afla sfârșitul emisiunii sau al filmului. Alege o durată."),
 		N_("Pornește"),
 		N_("Descarc fișierele pornirii multiple..."),
+		N_("Pornește de acum"),
+		N_("O dată"),
+		N_("Șterge"),
+		N_("Șterg TOT de pe stickul"),
+		N_("și îl pregătesc pentru mai multe imagini? Ce e pe el se pierde."),
 	),
 }
 

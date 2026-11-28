@@ -504,7 +504,9 @@ def drumText(drum):
 def intrareMeniu(dosar, plugins=None, meniuri=None):
 	"""Prima intrare de meniu pusa de pluginul din `dosar` (WHERE_MENU), cautata in meniurile imaginii in ordinea din menu.xml
 	si pe id-urile de referinta ale fiecaruia (HdsPluginuriImagine.ID_MENIU_REFERINTA, ca Screens/Menu.py): {'titlu',
-	'functie', 'drum'} (drumul pana la intrare, cu ea), sau None. Un plugin care cade pe un id nu strica cautarea."""
+	'functie', 'drum'} (drumul pana la intrare, cu ea), sau None. Un plugin care cade pe un id nu strica cautarea.
+	Intrarea de pe meniul principal ramane prima cautata (e intrarea principala a pluginului), dar acolo nu se vede
+	(HdsPluginuriImagine.MENIU_PRINCIPAL): se deschide numai de aici, deci drumul ei e gol."""
 	f = getattr(_componenta(plugins), 'getPlugins', None)
 	if f is None or not dosar:
 		return None
@@ -517,6 +519,7 @@ def intrareMeniu(dosar, plugins=None, meniuri=None):
 	if not ale_lui:
 		return None
 	referinte = getattr(I, 'ID_MENIU_REFERINTA', {})
+	principal = getattr(I, 'MENIU_PRINCIPAL', 'mainmenu')
 	for ident, drum in (meniurile() if meniuri is None else meniuri):
 		for cerut in (ident,) + tuple(referinte.get(ident, ())):
 			for x in ale_lui:
@@ -530,7 +533,8 @@ def intrareMeniu(dosar, plugins=None, meniuri=None):
 					except (TypeError, IndexError, KeyError):
 						continue
 					if callable(functie):
-						return {'titlu': str(titlu), 'functie': functie, 'drum': tuple(drum) + (str(titlu),)}
+						return {'titlu': str(titlu), 'functie': functie,
+							'drum': () if ident == principal else tuple(drum) + (str(titlu),)}
 	return None
 
 
@@ -589,6 +593,9 @@ def notaFaraPlugin(d):
 	if d is None:
 		return ''
 	if d['fel'] == 'meniu':
+		# intrarea de pe meniul principal (drum gol) se deschide numai din Extensii: OK pe rand, fara alt drum de spus
+		if not d.get('drum'):
+			return ''
 		return _t('Nu are rând în lista pluginurilor; se deschide din %s.') % drumText(d['drum'])
 	if d['fel'] == 'acces':
 		return _t('Modul de acces: se pornește, se oprește și se repornește din %s.') % drumText(d['drum'])
@@ -795,9 +802,31 @@ def iduriPluginuri(pluginuri):
 
 
 def nrAscunse(pluginuri, plugins=None):
-	"""cate pluginuri instalate sunt ascunse acum (si cele care nu pornesc, dupa dosar)"""
+	"""cate pluginuri instalate sunt ascunse acum (si cele care nu pornesc, dupa dosar), plus randul .ipk ascuns"""
 	toate = iduriPluginuri(pluginuri) | set(idPlugin(e.get('path', '')) for e in indisponibile(plugins))
+	toate.add(ID_RAND_IPK)
 	return len(toate & set(listaIduri(ordineExtensii()[1])))
+
+
+# 0.8.0 FX3: the row "Instalează fișiere .ipk" at the top of Installed repeats the "From file"
+# tab; MENU on it hides it (kept with the hidden extensions, so "Arată toate extensiile" brings it back, on TV and web).
+ID_RAND_IPK = 'rand:dinfisier'
+
+
+def randIpkAscuns():
+	return ID_RAND_IPK in listaIduri(ordineExtensii()[1])
+
+
+def ascundeRandIpk(salveaza=True):
+	"""Hides the .ipk row of Installed. True if something changed."""
+	c = configExtensii()
+	if c is None or randIpkAscuns():
+		return False
+	c.ascunse.value = SEP_ORDINE.join(listaIduri(c.ascunse.value) + [ID_RAND_IPK])
+	if salveaza:
+		c.ascunse.save()
+	_jurnal('randul .ipk ascuns')
+	return True
 
 
 PASI_ORDINE = ('sus', 'jos', 'inceput', 'ascunde')
@@ -1567,7 +1596,11 @@ def detalii(catalog, fel, obj, extra):
 			if nota:
 				d['descriere'] = (d['descriere'] + '\n' if d['descriere'] else '') + nota
 			if fara is not None and fara['fel'] in ('meniu', 'acces'):
-				d['indiciu'] = ' · '.join([_t('OK deschide')] + ([_t('Roșu șterge')] if p.se_poate_sterge else []))
+				ok = _t('OK deschide')
+				if fara['fel'] == 'meniu' and not fara.get('drum'):
+					# intrarea de pe meniul principal se deschide numai de aici: randul spune ce deschide OK
+					ok = '%s: %s' % (ok, fara['titlu'])
+				d['indiciu'] = ' · '.join([ok] + ([_t('Roșu șterge')] if p.se_poate_sterge else []))
 			else:
 				d['indiciu'] = _t('Instalat și la zi · Roșu șterge') if p.se_poate_sterge else _t('Instalat și la zi')
 		elif p.python2:
@@ -2796,6 +2829,30 @@ def pastreazaListeleHds():
 		return []
 
 
+def _textAsteptare():
+	"""OPK1: the note shown while another opkg holds the lock (not kept with the result)"""
+	try:
+		try:
+			from Components import HdsSurseOpkg as S
+		except ImportError:
+			import HdsSurseOpkg as S
+		return S.text_nota(S.text_asteptare())
+	except Exception:
+		return None
+
+
+def notaImagine(linie):
+	"""OPK1: the text of a line the image added to the opkg output (HdsSurseOpkg.PREFIX_NOTA), else None"""
+	if isinstance(linie, str) and linie.startswith(P.PREFIX_NOTA):
+		return P._curat(linie[len(P.PREFIX_NOTA):], 300)
+	return None
+
+
+def noteSarite():
+	"""OPK1: the dead foreign sources skipped by the last (or current) list download, as notes for the screen"""
+	return [n for n in (STARE.get('note_descarcare') or []) if n != _textAsteptare()]
+
+
 def pornesteDescarcarea(ipkg=None, inainte=None, rezerva=False, reincercare=False):
 	"""opkg update. `ipkg`: IpkgComponent-ul ecranului, cu ascultatorul lui pus deja; altfel unul nou (pagina).
 	Descarcarea se tine aici pana la sfarsit, deci se vede si de pe televizor, si din pagina. La sfarsit:
@@ -2809,15 +2866,23 @@ def pornesteDescarcarea(ipkg=None, inainte=None, rezerva=False, reincercare=Fals
 	STARE['rezerva_acum'] = rezerva
 	if inainte is None:
 		inainte = instantaneu(_CATALOG['catalog'])
+	# OPK1: notes of the image during this download (a dead foreign source skipped, waiting for another opkg),
+	# for the web page while it runs and with the result
+	note = STARE['note_descarcare'] = []
 
 	def eveniment(e, parametru):
 		if e == IpkgComponent.EVENT_LINE:
-			linii.append(parametru)
+			text = notaImagine(parametru)
+			if text is not None:
+				note.append(text)
+			else:
+				linii.append(parametru)
 			scrieJurnal(parametru)
 		elif e == IpkgComponent.EVENT_DONE:
 			d.removeCallback(eveniment)
 			STARE['descarcare'] = {'cod': parametru, 'motiv': '' if parametru == 0 else P.motiv_eroare(linii),
-				'cand': time.time(), 'inainte': inainte, 'rezerva': rezerva}
+				'cand': time.time(), 'inainte': inainte, 'note': [n for n in note if n != _textAsteptare()],
+				'rezerva': rezerva}
 			catalogVechi()
 	d.addCallback(eveniment)
 
@@ -2938,6 +3003,23 @@ def treciPeRezerva(linii):
 
 # ---------------------------------------------------------------- lucrarea opkg (instalare, actualizare, stergere)
 
+def dosarPluginPachet(nume, radacina='/'):
+	"""INS2 (0.8.0): dosarul pluginului unui pachet instalat, din info/<nume>.list (un singur fisier, nu catalogul), pentru
+	plugin.png din fereastra instalarii si a stergerii; '' cand pachetul nu e instalat sau nu are plugin"""
+	if not P.nume_valid(nume or ''):
+		return ''
+	try:
+		dosar = P._cale(radacina, P.citeste_configurarea(radacina).info_dir)
+		with open(os.path.join(dosar, nume + '.list'), 'r', encoding='utf-8', errors='replace') as f:
+			for r in f:
+				m = P._FISIER_PLUGIN.match(r.split('\t', 1)[0].strip().rstrip('/'))
+				if m:
+					return P._cale(radacina, m.group(1))
+	except (OSError, ValueError):
+		pass
+	return ''
+
+
 def lucrareInCurs():
 	l = STARE['lucrare']
 	return l is not None and l.faza == 'lucru'
@@ -2967,10 +3049,75 @@ class ProvenientaExtensii(object):
 				posixpath.normpath(nume) != nume or nume == '/'):
 			raise ValueError('invalid package path')
 		cale = P._cale(self.radacina, nume)
-		rac = os.path.realpath(self.radacina)
-		if os.path.commonpath((rac, os.path.realpath(os.path.dirname(cale)))) != rac:
+		rac = self._real(self.radacina)
+		# pe receptor radacina e "/": orice cale absoluta e inauntru, fara realpath pe fiecare fisier (TMS1)
+		if rac != '/' and os.path.commonpath((rac, self._real(os.path.dirname(cale)))) != rac:
 			raise ValueError('path outside root')
 		return cale
+
+	def _real(self, cale):
+		"""os.path.realpath, tinut minte cat dureaza o trecere prin listele pachetelor (_liste). TMS1 (24.11.2026,
+		tamiciav7, SF8008 0.7.9: instalarea unui plugin mic din Extensii 53 s, opkg singur 1-2 s): _liste chema realpath pe
+		dosarul fiecaruia din cele ~21.000 de fisiere ale pachetelor instalate, ~20 s pe un Octagon, o data la pregatire si
+		inca o data la sfarsit (la stergere de trei ori). Dosarele se repeta, iar in timpul unei treceri nu se schimba."""
+		tinute = getattr(self, '_realeTinute', None)
+		if tinute is None:
+			return os.path.realpath(cale)
+		r = tinute.get(cale)
+		if r is None:
+			r = tinute[cale] = os.path.realpath(cale)
+		return r
+
+	# OPK0: tinte de legaturi care nu sunt fisiere de pastrat (nucleul le schimba singur)
+	PSEUDO = ('/proc', '/sys', '/dev', '/run', '/tmp', '/var/volatile')
+	# OPK0: copiile arhivate dupa o verificare cu fisiere schimbate (pastrate/config-*): cel mult atatea si atatia octeti,
+	# cele mai vechi se sterg (cele de ~65 MB din 0.7.7-0.7.9 ies primele)
+	PASTRATE_MAXIM = 3
+	PASTRATE_OCTETI = 20 * 1024 * 1024
+
+	def _pseudo(self, nume):
+		cale = self.cale(nume)
+		rac = os.path.realpath(self.radacina)
+		real = os.path.realpath(cale)
+		if os.path.commonpath((rac, real)) == rac:
+			real = '/' + os.path.relpath(real, rac).replace(os.sep, '/')
+		return any(x == p or x.startswith(p + '/') for x in (nume, real) for p in self.PSEUDO)
+
+	def curataPastrate(self, pastreaza=None):
+		"""Sterge arhivele vechi din pastrate/: raman cel mult PASTRATE_MAXIM si cel mult PASTRATE_OCTETI (cele mai noi).
+		pastreaza: numele copiei arhivate chiar acum, care ramane oricat de mare ar fi. -> lista celor sterse."""
+		pastrate = os.path.join(self.dosar, 'pastrate')
+		try:
+			nume = [n for n in os.listdir(pastrate) if n.startswith('config-')]
+		except OSError:
+			return []
+		def marime(d):
+			t = 0
+			for baza, _dosare, fisiere in os.walk(d):
+				for f in fisiere:
+					try:
+						t += os.lstat(os.path.join(baza, f)).st_size
+					except OSError:
+						pass
+			return t
+		arhive = []
+		for n in nume:
+			d = os.path.join(pastrate, n)
+			try:
+				arhive.append((os.lstat(d).st_mtime, n, marime(d)))
+			except OSError:
+				pass
+		arhive.sort(reverse=True)
+		sterse, total, pastrate_n = [], 0, 0
+		for _t, n, m in arhive:
+			# copia de acum ramane; granita (numar si octeti) se socoteste numai pe cele pastrate
+			if n != pastreaza and (pastrate_n >= self.PASTRATE_MAXIM or total + m > self.PASTRATE_OCTETI):
+				shutil.rmtree(os.path.join(pastrate, n), ignore_errors=True)
+				sterse.append(n)
+			else:
+				total += m
+				pastrate_n += 1
+		return sterse
 
 	def _json(self, cale, implicit):
 		try:
@@ -3035,7 +3182,8 @@ class ProvenientaExtensii(object):
 					fisiere.append(n)
 			for n in fisiere:
 				candidat = nume + '/' + os.path.relpath(os.path.join(baza, n), cale).replace(os.sep, '/')
-				if configurari and os.path.islink(self.cale(candidat)):
+				# OPK0: o legatura fara tinta ramane un nume simplu (se pastreaza ca legatura), nu opreste copia
+				if configurari and os.path.islink(self.cale(candidat)) and os.path.exists(self.cale(candidat)):
 					yield from self._fisiere(candidat, True, vizitate)
 				else:
 					yield candidat
@@ -3053,34 +3201,87 @@ class ProvenientaExtensii(object):
 			raise ValueError('ambiguous configuration link target')
 		return nume
 
+	def _cuReale(self, functie, *arg, **kw):
+		"""functie(...) cu realpath tinut minte (_real) pe toata durata ei; o chemare din interiorul alteia foloseste acelasi."""
+		vechi = getattr(self, '_realeTinute', None)
+		self._realeTinute = {} if vechi is None else vechi
+		if vechi is None:
+			self._listeTinute = None
+		try:
+			return functie(*arg, **kw)
+		finally:
+			self._realeTinute = vechi
+			if vechi is None:
+				self._listeTinute = None
+
 	def _liste(self, scripturi=True):
-		proprietari = {}
+		return self._cuReale(self._listeCitite, scripturi)
+
+	def _listeCitite(self, scripturi):
+		# OPK1 (25.11.2026, Octagon SF8008, stergerea din Extensii 70-85 s, opkg singur 1-2 s): aproape tot timpul era aici,
+		# _cheie pe fiecare din cele ~22.000 de randuri ale listelor, de doua ori la pregatire si o data la sfarsit, pe un fir
+		# care isi imparte lacatul Python cu interfata. Cheia se socoteste acum o data pe dosar (realpath-ul tine numai de
+		# dosar, numele fisierului se pune la coada, acelasi rezultat), iar listele citite se tin cat dureaza trecerea
+		# (_cuReale): a doua chemare din pregatire nu le mai citeste.
+		baza = getattr(self, '_listeTinute', None) if getattr(self, '_realeTinute', None) is not None else None
+		if baza is None:
+			baza = self._listeDeclarate()
+			if getattr(self, '_realeTinute', None) is not None:
+				self._listeTinute = baza
+		if not scripturi:
+			return baza
+		proprietari = dict((k, set(v)) for k, v in baza.items())
 		dosar = self.cale(self.conf.info_dir)
-		if not os.path.isdir(dosar):
-			return proprietari
-		for n in os.listdir(dosar):
-			if not n.endswith('.list') or not P.nume_valid(n[:-5]):
-				continue
-			with open(os.path.join(dosar, n), 'r', encoding='utf-8', errors='replace') as f:
-				for linie in f:
-					cale = linie.strip()
-					if cale.startswith('/'):
-						cale = posixpath.normpath(cale)
-						try:
-							cale = self._cheie(cale)
-						except ValueError:
-							continue
-						proprietari.setdefault(cale, set()).add(n[:-5])
-		for n in os.listdir(dosar) if scripturi else ():
+		for n in os.listdir(dosar) if os.path.isdir(dosar) else ():
 			if n.endswith('.postinst') and P.nume_valid(n[:-9]):
 				for _sursa, tinta in self._copieri(n[:-9]):
 					proprietari.setdefault(self._cheie(tinta), set()).add(n[:-9])
 		return proprietari
 
+	def _listeDeclarate(self):
+		"""{cheie: {pachete}} din /var/lib/opkg/info/*.list (fara scripturi)."""
+		proprietari = {}
+		dosar = self.cale(self.conf.info_dir)
+		if not os.path.isdir(dosar):
+			return proprietari
+		dosare = {}      # dosarul din lista -> inceputul cheii (None: caile din el nu sunt bune)
+		for n in os.listdir(dosar):
+			if not n.endswith('.list') or not P.nume_valid(n[:-5]):
+				continue
+			pachet = n[:-5]
+			with open(os.path.join(dosar, n), 'r', encoding='utf-8', errors='replace') as f:
+				for linie in f:
+					cale = linie.strip()
+					if not cale.startswith('/'):
+						continue
+					cale = posixpath.normpath(cale)
+					d, _s, b = cale.rpartition('/')
+					if not d or not b or '\\' in b or '\x00' in b:
+						try:
+							cheie = self._cheie(cale)
+						except ValueError:
+							continue
+					else:
+						if d not in dosare:
+							try:
+								k = self._cheie(cale)
+								dosare[d] = k[:len(k) - len(b)]
+							except ValueError:
+								dosare[d] = None
+						if dosare[d] is None:
+							continue
+						cheie = dosare[d] + b
+					proprietari.setdefault(cheie, set()).add(pachet)
+		return proprietari
+
 	def _cheie(self, nume):
 		cale = self.cale(nume)
-		cale = os.path.join(os.path.realpath(os.path.dirname(cale)), os.path.basename(cale))
-		return '/' + os.path.relpath(cale, os.path.realpath(self.radacina)).replace(os.sep, '/')
+		cale = os.path.join(self._real(os.path.dirname(cale)), os.path.basename(cale))
+		rac = self._real(self.radacina)
+		if rac == '/' and os.sep == '/':
+			# acelasi rezultat ca relpath fata de "/", fara el (TMS1)
+			return '/' + cale.lstrip('/')
+		return '/' + os.path.relpath(cale, rac).replace(os.sep, '/')
 
 	def _copieri(self, pachet):
 		"""Only literal copy/install commands from package-owned payload are evidence.
@@ -3167,7 +3368,8 @@ class ProvenientaExtensii(object):
 	def _eligibil(self, pachet, nume, date, proprietari, registru):
 		if nume in self.configurari:
 			return False
-		if proprietari.get(self._cheie(nume), set()) - {pachet}:
+		# proprietari None (INS2): listele celorlalte pachete nu se mai citesc
+		if proprietari is not None and proprietari.get(self._cheie(nume), set()) - {pachet}:
 			return False
 		if any(nume in r.get('fisiere', {}) for p, r in registru.items() if p != pachet):
 			return False
@@ -3208,7 +3410,7 @@ class ProvenientaExtensii(object):
 		s = os.lstat(cale)
 		if stat.S_ISDIR(s.st_mode):
 			index[nume] = {'dosar': True, 'mod': stat.S_IMODE(s.st_mode), 'uid': s.st_uid, 'gid': s.st_gid,
-				'parinte': os.path.realpath(os.path.dirname(cale))}
+				'parinte': self._real(os.path.dirname(cale))}
 			return
 		if not (stat.S_ISREG(s.st_mode) or stat.S_ISLNK(s.st_mode)):
 			raise ValueError('unsupported configuration file')
@@ -3223,7 +3425,10 @@ class ProvenientaExtensii(object):
 					raise ValueError('configuration replaced during safety copy')
 				shutil.copyfileobj(src, f, 131072)
 				f.flush()
-				os.fsync(f.fileno())
+				# TMS1: fara fsync pe fiecare din cele ~1.800 de fisiere (11 s pe SF8008); o singura golire (os.sync)
+				# inaintea lui index.json pastreaza aceeasi garantie: indexul nu exista inainte ca toate copiile sa fie pe disc
+				if not hasattr(os, 'sync'):
+					os.fsync(f.fileno())
 		if hasattr(os, 'chown'):
 			os.chown(dest, s.st_uid, s.st_gid, follow_symlinks=False)
 		if not stat.S_ISLNK(s.st_mode):
@@ -3233,8 +3438,9 @@ class ProvenientaExtensii(object):
 		if (dupa.st_dev, dupa.st_ino, dupa.st_size, dupa.st_mtime_ns, dupa.st_ctime_ns, dupa.st_mode) != (
 				s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns, s.st_mode):
 			raise ValueError('configuration changed during safety copy')
-		index[nume] = {'copie': n, 'parinte': os.path.realpath(os.path.dirname(cale))}
-		if stat.S_ISLNK(s.st_mode) and nume in self.configurari:
+		index[nume] = {'copie': n, 'parinte': self._real(os.path.dirname(cale))}
+		# OPK0: tinta se tine minte numai pentru o legatura care are tinta reala (nu una lipsa sau din /proc)
+		if stat.S_ISLNK(s.st_mode) and nume in self.configurari and os.path.exists(cale) and not self._pseudo(nume):
 			index[nume]['tinta'] = self._tintaLegatura(cale)
 			index[nume]['real'] = os.path.realpath(cale)
 			index[nume]['director'] = os.path.isdir(cale)
@@ -3346,56 +3552,100 @@ class ProvenientaExtensii(object):
 			os.rmdir(dest)
 			os.rename(self.copie, dest)
 			self._sincronizeaza(pastrate)
+			self.curataPastrate(os.path.basename(dest))
 		else:
 			shutil.rmtree(self.copie)
 		return not conflicte
 
 	def pregateste(self):
+		# TMS1: la stergere, _cheie si cale se cheama si in afara lui _liste, pe fiecare executabil si configurare
+		return self._cuReale(self._pregatesteAcum)
+
+	# INS2 (26.11.2026, ZGEMMA H8.2H Plus 0.7.8, Eduard: „inainte se instala in cateva secunde”): Radio online se instala in
+	# ~2 minute si se stergea in ~4, opkg singur 3 s. Timpul era aici: listele tuturor pachetelor (~13.000 de randuri, cu
+	# realpath si cheie pe fiecare), inventarul tuturor executabilelor si, la stergere, copia lor si a tot /etc. Acum se
+	# citesc numai fisierele pachetelor atinse (info/<pachet>.list, .conffiles, .postinst) si numele din DIRECTOARE (listdir,
+	# fara cheie). Ramane: configurarile pachetului scos (conffiles si fisierele lui din /etc) se pun la loc dupa stergere,
+	# iar executabilele copiate de postinst-ul lui se tin minte la instalare si se sterg cu el. _liste ramane pentru probe.
+
+	def _infoPachet(self, pachet, ext):
+		"""randurile (caile absolute, normalizate) din info/<pachet>.<ext>; [] cand lipseste"""
+		rez = []
+		try:
+			with open(self.cale(posixpath.join(self.conf.info_dir, pachet + ext)), 'r', encoding='utf-8',
+					errors='replace') as f:
+				for linie in f:
+					c = linie.split('\t', 1)[0].strip()
+					if c.startswith('/'):
+						rez.append(posixpath.normpath(c))
+		except (OSError, ValueError):
+			pass
+		return rez
+
+	def _numeDirectoare(self):
+		"""numele din DIRECTOARE, un singur nivel (listdir, fara walk si fara realpath)"""
+		rez = set()
+		for d in self.DIRECTOARE:
+			try:
+				for n in os.listdir(self.cale(d)):
+					rez.add(d + '/' + n)
+			except (OSError, ValueError):
+				pass
+		return rez
+
+	def _pregatesteAcum(self):
 		if not self._refa():
 			raise ValueError('configuration recovery conflict; safety copy archived')
+		# OPK0: arhivele vechi (si cele mari, de dinainte) se curata la fiecare lucrare, nu numai cand apare una noua
+		self.curataPastrate()
 		# A copy without its committed index predates any package command.
 		if os.path.isdir(self.copie):
 			shutil.rmtree(self.copie)
 		self.date = self._json(self.registru, {})
+		# configurarile pachetelor atinse: din status (strofa lor) si din info/<pachet>.conffiles
+		aleCelorScoase = set()
+		self.instalateInainte = {}
 		for s in P.citeste_strofe(self.cale(self.conf.status_file)):
+			if s.get('package') not in self.pachete:
+				continue
+			if s.get('status', '').split()[-1:] == ['installed']:
+				self.instalateInainte[s['package']] = s.get('version', '')
 			for linie in s.get('conffiles', '').splitlines():
 				c = linie.split()
 				if c and c[0].startswith('/'):
-					self.configurari.add(c[0])
-		dosar = self.cale(self.conf.info_dir)
-		if os.path.isdir(dosar):
-			for n in os.listdir(dosar):
-				if n.endswith('.conffiles') and P.nume_valid(n[:-10]):
-					with open(os.path.join(dosar, n), 'r', encoding='utf-8', errors='replace') as f:
-						for linie in f:
-							c = linie.split()
-							if c and c[0].startswith('/'):
-								self.configurari.add(c[0])
+					aleCelorScoase.add(c[0])
+		for p in self.pachete:
+			aleCelorScoase.update(self._infoPachet(p, '.conffiles'))
+		self.configurari.update(aleCelorScoase)
 		if self.plan.get('fel') != 'sterge':
-			proprietari, instalate = self._liste(), self._instalate()
-			for p, r in self.date.items():
-				if r.get('versiune') == instalate.get(p):
+			# fisierele copiate de postinst-ul unei versiuni de dinainte a aceluiasi pachet, inca neschimbate
+			for p in self.pachete:
+				r = self.date.get(p, {})
+				if r.get('versiune') == self.instalateInainte.get(p):
 					for n, dovada in r.get('fisiere', {}).items():
-						if self._eligibil(p, n, dovada, proprietari, self.date):
+						if self._eligibil(p, n, dovada, None, self.date):
 							self.posedateInainte.add((p, n))
-			for d in self.DIRECTOARE:
-				self.inainte.update(self._fisiere(d))
+			self.inainte = self._numeDirectoare()
 			return
 		os.makedirs(self.copie, mode=0o700, exist_ok=True)
 		index = {}
-		proprietari, instalate = self._liste(), self._instalate()
-		# Package service code and generated caches are not user configuration.
-		configurari = {n for n in self._fisiere('/etc', True) if n in self.configurari or (
-			n != '/etc/ld.so.cache' and not n.startswith('/etc/opkg/postinsts/') and not (
-				proprietari.get(self._cheie(n)) and n.startswith(self.SCRIPTURI_SERVICII)))}
-		for n in self.configurari:
-			configurari.update(self._fisiere(n, True))
-		# A configuration link protects its target even if that path would
-		# normally be excluded as package service code or a generated cache.
-		for n in tuple(configurari):
-			if os.path.islink(self.cale(n)):
+		configurari = set()
+		for n in aleCelorScoase:
+			if os.path.exists(self.cale(n)) and not self._pseudo(n):
 				configurari.update(self._fisiere(n, True))
-		# Targets are configuration too, even when placed among executables.
+			elif os.path.lexists(self.cale(n)):
+				configurari.add(n)       # o legatura fara tinta se pastreaza ca legatura
+		# fisierele pachetului din /etc (din lista lui), afara de scripturile de servicii
+		for p in self.pachete:
+			for n in self._infoPachet(p, '.list'):
+				if n.startswith('/etc/') and not n.startswith(self.SCRIPTURI_SERVICII) and (
+						os.path.lexists(self.cale(n)) and not os.path.isdir(self.cale(n))):
+					configurari.add(n)
+		for n in tuple(configurari):
+			if os.path.islink(self.cale(n)) and os.path.exists(self.cale(n)) and not self._pseudo(n):
+				configurari.update(self._fisiere(n, True))
+		# pseudo-sistemele de fisiere (tinta unei legaturi ca /etc/mtab) nu sunt configurari: se schimba singure
+		configurari = {n for n in configurari if not self._pseudo(n)}
 		self.configurari.update(configurari)
 		for nume in sorted(configurari):
 			parinti = []
@@ -3407,62 +3657,57 @@ class ProvenientaExtensii(object):
 			for parinte in reversed(parinti):
 				self._salveaza(parinte, index)
 			self._salveaza(nume, index)
+		# executabilele tinute minte la instalare: cele neschimbate se sterg odata cu pachetul, celelalte raman
 		for p in self.pachete:
 			r = self.date.get(p, {})
 			candidati = set(t for _s, t in self._copieri(p)) | set(r.get('fisiere', {}))
 			for n in candidati:
-				dovada = r.get('versiune') == instalate.get(p) and self._eligibil(p, n,
-					r.get('fisiere', {}).get(n), proprietari, self.date)
+				dovada = r.get('versiune') == self.instalateInainte.get(p) and self._eligibil(p, n,
+					r.get('fisiere', {}).get(n), None, self.date)
 				if not dovada and os.path.lexists(self.cale(n)):
 					self._salveaza(n, index)
 				elif dovada:
 					self.stergerePermisa.add((p, n))
-		# Unknown postinsts may remove an unlisted executable too. Lack of proof
-		# must preserve it even when the package's own removal script deletes it.
-		declarati = self._liste(scripturi=False)
-		ramase = set(instalate) - set(self.pachete)
-		for d in self.DIRECTOARE:
-			for n in self._fisiere(d):
-				posesori = declarati.get(self._cheie(n), set())
-				if (not posesori or posesori & ramase) and not any(
-						(p, n) in self.stergerePermisa for p in self.pachete):
-					self._salveaza(n, index)
-		# No package script runs before this durable index is complete.
 		self._verificaLegaturi(index)
+		if hasattr(os, 'sync'):
+			os.sync()
 		self._scrieJson(os.path.join(self.copie, 'index.json'), index)
 
 	def incheie(self, oprit=False, configurate=()):
+		return self._cuReale(self._incheieAcum, oprit, configurate)
+
+	def _incheieAcum(self, oprit=False, configurate=()):
 		if not self._refa():
 			raise ValueError('configuration changed; live version kept and safety copy archived')
-		instalate, proprietari = self._instalate(), self._liste()
+		instalate = self._instalate()
 		date = getattr(self, 'date', {})
 		if self.plan.get('fel') == 'sterge':
 			for p in self.pachete:
 				if p in instalate or oprit:
 					continue
 				for n, dovada in date.get(p, {}).get('fisiere', {}).items():
-					if (p, n) in self.stergerePermisa and self._eligibil(p, n, dovada, proprietari, date):
+					if (p, n) in self.stergerePermisa and self._eligibil(p, n, dovada, None, date):
 						self._stergeDovedit(n, dovada)
 				date.pop(p, None)
 		elif not oprit:
-			candidati = {}
-			for p in self.pachete:
-				for s, n in self._copieri(p):
-					candidati.setdefault(n, []).append((p, s))
 			for p in self.pachete:
 				if p not in instalate or p not in configurate:
 					continue
+				aleLui = set(self._infoPachet(p, '.list'))
+				candidati = {}
+				for s, n in self._copieri(p):
+					candidati.setdefault(n, []).append(s)
 				r = {'versiune': instalate[p], 'fisiere': {}}
-				for n, copie in candidati.items():
-					if len(copie) != 1 or copie[0][0] != p or (n in self.inainte and (
-							p, n) not in self.posedateInainte) or n in self.configurari or (
-							proprietari.get(self._cheie(n), set()) - {p}):
+				for n, surse in candidati.items():
+					# un fisier care era inainte (al altui pachet sau al omului) nu e al pluginului; nici unul din lista lui
+					# (il sterge opkg) si nici o configurare
+					if len(surse) != 1 or (n in self.inainte and (p, n) not in self.posedateInainte) or (
+							n in self.configurari or n in aleLui or posixpath.dirname(n) not in self.DIRECTOARE):
 						continue
-					sursa = copie[0][1]
-					if proprietari.get(self._cheie(sursa)) != {p}:
+					if posixpath.normpath(surse[0]) not in aleLui:
 						continue
 					try:
-						s, d = self._semn(sursa), self._semn(n)
+						s, d = self._semn(surse[0]), self._semn(n)
 						if s and d and s[-1] == d[-1]:
 							r['fisiere'][n] = d
 					except (OSError, ValueError):
@@ -3658,23 +3903,21 @@ class Lucrare(object):
 					scrieJurnal('scripturi de pachet fara BOM/CRLF acum: %s' % ', '.join(reparate), True)
 			except Exception:
 				_jurnal('scripturile pachetelor nu au putut fi pregatite')
+			# INS2 (Regula 0): copia configurarilor si registrul executabilelor nu mai opresc niciodata lucrarea; o greseala
+			# a lor se scrie in jurnal, iar opkg porneste ca de obicei
+			inceput = time.time()
 			try:
 				self._provenienta = ProvenientaExtensii(self.radacina, self.plan)
 				self._provenienta.pregateste()
-				return True
-			except Exception:
-				# Do not expose file names or configuration contents in diagnostics.
-				if self.plan.get('fel') != 'sterge':
-					self._provenienta = None
-					return True
-				return False
+			except Exception as e:
+				self._provenienta = None
+				scrieJurnal('copia configurarilor inainte de opkg: %s' % e, True)
+			scrieJurnal('pregatire %.1f s' % (time.time() - inceput))
+			return True
 
-		def porneste(gata):
+		def porneste(_gata):
 			self._pregatire = False
-			if not gata:
-				self._eroareSiguranta = True
-				self._gata(-1)
-			elif self.oprit:
+			if self.oprit:
 				self._gata(-1)
 			else:
 				self.ipkg.runCmd(self.plan.get('argumente'))
@@ -3924,15 +4167,15 @@ class Lucrare(object):
 		self._finalizare = True
 
 		def verifica():
+			inceput = time.time()
 			try:
 				if self._provenienta is not None:
 					self._provenienta.incheie(self.oprit, self._configurate)
-			except Exception:
-				if self.plan.get('fel') == 'sterge':
-					self._eroareSiguranta = True
-				else:
-					_jurnal('provenienta fisierelor suplimentare nu a putut fi pastrata')
+			except Exception as e:
+				# INS2 (Regula 0): numai in jurnal; rezultatul il dau opkg si starea pachetelor
+				scrieJurnal('configurarile dupa opkg: %s' % e, True)
 			bune, rele = rezultatePachete(self.plan, self.radacina)
+			scrieJurnal('verificare dupa opkg %.1f s' % (time.time() - inceput))
 			try:
 				acum = P.pachete_neconfigurate(self.radacina)
 			except Exception:
@@ -4019,19 +4262,13 @@ class Lucrare(object):
 				culoare = 'chihlimbar'
 		else:
 			motiv = P.motiv_eroare(self.linii)
-			if self._eroareSiguranta:
-				motiv = _t('Lucrarea nu s-a încheiat în siguranță.')
-				if fel == 'sterge' and not self.schimbat:
-					motiv = _t('Ștergerea a fost oprită: configurațiile nu au putut fi salvate în siguranță. Fișierele tale au rămas pe loc.')
-			elif self.oprit:
+			if self.oprit:
 				motiv = _t('Oprit după un minut fără răspuns. Verifică legătura la internet.')
 			elif cod == -1 and not self.linii and not self.program():
 				motiv = _t('Instalarea extensiilor nu este disponibilă în această imagine.')
 			texte = {'instaleaza': _t('%s nu a fost instalat.'), 'fisier': _t('%s nu a fost instalat.'),
 				'actualizeaza': _t('%s nu a fost actualizat.'), 'sterge': _t('%s nu a fost șters.')}
 			titlu = (texte.get(fel) or _t('%s: nu a reușit.')) % nume
-			if self._eroareSiguranta and tinteFacute and fel == 'sterge':
-				titlu = _t('Pachetele au fost șterse, dar verificarea fișierelor nu s-a încheiat.')
 			stare, culoare = motiv, 'rau'
 			butoane = [N_('Închide')]
 		# 0.7.7 (UPD, TODO 16.11 00:10): programul imaginii s-a schimbat pe disc sub interfata (lucrarea a tras

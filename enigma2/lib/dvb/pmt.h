@@ -178,6 +178,11 @@ class eDVBServicePMTHandler: public sigc::trackable
 		   modulul de acces conditionat si nici la modulele CI, deci nimeni nu trimite chei pentru PID-urile lui si
 		   pachetele ajung pe disc criptate, neschimbate */
 	bool m_decodare_mai_tarziu;
+
+		/* un canal pe o singura cale (lib/dvb_ci/hdscicale.h, optiunea config.cimisc.numai_ci): m_ca_prin_ci = un modul
+		   CI a luat serviciul, deci nu e inscris la modulul de acces; se sterge la tune si la free */
+	bool m_ca_prin_ci;
+	void renuntaLaModululDeAcces();
 public:
 	eDVBServicePMTHandler();
 	~eDVBServicePMTHandler();
@@ -214,6 +219,10 @@ public:
 	void amanaInfoLive() { m_info_live_amana = true; }
 	enum { zapPmtPrimit, zapCaPmtTrimis };
 	sigc::signal<void(int, long long)> etapaZap;
+		/* din lib/dvb_ci/dvbci.cpp, cu optiunea config.cimisc.numai_ci: modulul CI a primit CA PMT-ul serviciului
+		   (serviciul se scoate de la modulul de acces) / modulul CI nu mai are serviciul (se inscrie iar, fara zap) */
+	void ciALuatCanalul();
+	void ciAPlecat();
 
 	struct videoStream
 	{

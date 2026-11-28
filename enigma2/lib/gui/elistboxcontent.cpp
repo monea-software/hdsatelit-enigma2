@@ -1199,8 +1199,19 @@ void eListboxPythonMultiContent::paint(gPainter &painter, eWindowStyle &style, c
 				}
 
 				painter.setFont(m_font[fnt]);
+					/* HDSatelit: a cell without an explicit horizontal alignment follows the text direction, so right-to-left
+					   text is aligned to the right edge of the cell. Some plugins pass a cell wider than the visible row (a
+					   fixed large width): the text was then aligned outside the list and only its tail, or nothing, showed.
+					   Such a cell is aligned within the visible part of the row; the cleared area stays the whole cell. */
+				eRect textRect = rect;
+				if (!(flags & (gPainter::RT_HALIGN_RIGHT | gPainter::RT_HALIGN_CENTER | gPainter::RT_HALIGN_BLOCK | gPainter::RT_HALIGN_LEFT_EXPLICIT)))
+				{
+					int visibleRight = offset.x() + m_itemsize.width();
+					if (textRect.left() < visibleRight && textRect.left() + textRect.width() > visibleRight)
+						textRect.setWidth(visibleRight - textRect.left());
+				}
 					/* HDSatelit: a one-line text wider than its cell is cut at the edge, and scrolls on the selected row */
-				eDerulare::drawLine(painter, m_font[fnt], rect, string, flags, (selected && m_listbox) ? m_listbox->selectedRowScroller() : 0, true);
+				eDerulare::drawLine(painter, m_font[fnt], textRect, string, flags, (selected && m_listbox) ? m_listbox->selectedRowScroller() : 0, true);
 				if (strstr(string, "\\c"))
 				{
 					bool textSelected = selected && (!sel_clip.valid() || !(gRegion(rect) & sel_clip).empty());

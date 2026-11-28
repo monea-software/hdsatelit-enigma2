@@ -63,6 +63,11 @@
 # masuratoarea ramane, numai ca informatie. Daca driverul V10 cade si el fara o memorie a lui, se vede pe aparat
 # (lista testerului) si paza se face atunci dupa demonul lui, nu dupa acesta.
 #
+# Placile care nu sunt HiSilicon (0.8.0): Dreambox DM900 si DM920, Vu+ 4K si celelalte Broadcom au decodorul cu memoria
+# lui, iar vmalloc e aproape plin din pornire de zonele mapate ale placii (DM900: VmallocChunk 36640 KB, DM920: 39308 KB
+# la odihna, sub PRAG_KB). Acolo a), b) si c) nu repornesc niciodata receptorul (_hisilicon, acelasi semn ca
+# SystemInfo["HiSilicon"]); masuratoarea ramane numai informatie.
+#
 # PROBA pe receptor (fara sa se strice memoria): CALE_PROBA (/tmp, deci dispare singur la repornirea receptorului) cu
 # randuri "prag_mb=N" (pragul de proba, 1-1024), "uptime_min_s=N" (cat trebuie sa fi mers receptorul inainte de
 # repornirea in standby sau pentru un film, 0-86400), "standby_min_s=N" (cat trebuie sa stea in standby, 0-3600) si
@@ -509,7 +514,7 @@ def codRepornireDupaActualizare(sesiune=None, m=None, prag_kb=None, inregistrari
 			inregistrari = _inregistrariAcum(sesiune)
 		cod = hotarareActualizare(m, p, inregistrari != 0)
 		if cod == COD_RECEPTOR and not _cuMemorieEs():
-			_log("dupa actualizare: memoria e sub prag, dar placa nu are memoria demonului (V10, ZGEMMA H8): numai interfata")
+			_log("dupa actualizare: memoria e sub prag, dar placa nu are memoria demonului sau nu e HiSilicon (V10, ZGEMMA H8, Dreambox): numai interfata")
 			_ultim[0] = COD_INTERFATA
 			return COD_INTERFATA
 		if cod == COD_RECEPTOR and proba().get("uscat"):
@@ -765,7 +770,11 @@ def _masuraStandby():
 
 
 def _cuMemorieEs():
-	"""HdsPlatforma.cuMemorieEs() (False pe V10 si ZGEMMA H8); True cand modulul nu se poate incarca (purtarea de pana acum)"""
+	"""True numai cand repornirile de aici au rost pe placa: o placa HiSilicon (_hisilicon; False pe Dreambox si celelalte
+	Broadcom) si HdsPlatforma.cuMemorieEs() (False pe V10 si ZGEMMA H8). True cand modulul platformei nu se poate incarca
+	(purtarea de pana acum)."""
+	if not _hisilicon():
+		return False
 	try:
 		try:
 			from Components import HdsPlatforma
@@ -779,6 +788,28 @@ def _cuMemorieEs():
 	except Exception as e:
 		_log("platforma: %r" % (e,))
 		return True
+
+
+# semnele placilor HiSilicon, aceleasi ca SystemInfo["HiSilicon"] si Hds/DabT2/sesiuni8001.SEMNE_HISILICON (scrise si aici:
+# fisierul ajunge si singur, ca pachet de proba, pe imagini unde sesiuni8001 nu le are)
+SEMNE_HISILICON = ("proc/hisi", "proc/msp", "usr/bin/hihalt", "usr/lib/hisilicon")
+
+
+def _hisilicon(radacina=None):
+	"""True pe placile HiSilicon, singurele unde driverul video pierde zone din vmalloc (SEMNE_HISILICON). Pe Broadcom
+	(Dreambox DM900 si DM920, Vu+ 4K) decodorul are memoria lui, iar vmalloc e aproape plin din pornire de zonele mapate
+	ale placii (DM900: VmallocChunk 36640 KB la odihna): acolo masuratoarea ramane informatie, nu reporneste nimic. Fara
+	/proc/stb (emulatorul de pe PC, o stare necitita): True, ca inainte. radacina: un receptor fals (probele de pe PC;
+	implicit HDS_PAZA_RADACINA, ca HdsPlatforma). Placa nu se schimba cat merge receptorul: se citeste o data (firul
+	interfetei nu mai atinge discul)."""
+	rad = radacina or os.environ.get("HDS_PAZA_RADACINA") or "/"
+	if rad not in _placaHisi:
+		_placaHisi[rad] = (any(os.path.exists(os.path.join(rad, c)) for c in SEMNE_HISILICON) or
+			not os.path.isdir(os.path.join(rad, "proc", "stb")))
+	return _placaHisi[rad]
+
+
+_placaHisi = {}
 
 
 def _memoriaEsLipsa():
@@ -810,7 +841,7 @@ class RepornireStandby(object):
 		self.minim = minim or citesteMinim
 		self.boot = boot or bootId
 		self.lipsaEs = lipsa_es or _memoriaEsLipsa
-		# False pe V10 si ZGEMMA H8: placa fara memoria demonului, deci nicio repornire de aici
+		# False pe V10, ZGEMMA H8 si pe placile care nu sunt HiSilicon (Dreambox DM900/DM920, Vu+ 4K): nicio repornire de aici
 		self.cuMemorieEs = memorie_es or _cuMemorieEs
 		self.standbyDe = None   # ceasul monoton de la care receptorul sta in standby fara intrerupere (None = treaz)
 		self.ultima = None
@@ -1090,7 +1121,7 @@ class RefacereFilm(object):
 			if self.ceruta:
 				return FAPTA_REPORNESTE
 			if not self.cuMemorieEs():
-				self.motiv = "placa fara memoria demonului (V10, ZGEMMA H8)"
+				self.motiv = "placa fara memoria demonului sau nu e HiSilicon (V10, ZGEMMA H8, Dreambox)"
 				_log("filmul: nu repornesc (%s)" % self.motiv)
 				return FAPTA_NIMIC
 			pr = proba(self.caleProba)

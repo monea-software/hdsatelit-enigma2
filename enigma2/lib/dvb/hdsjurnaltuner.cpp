@@ -27,7 +27,7 @@ Stare::Stare()
 	: pornit_ms(0), reacordare(0), prins_o_data(0), frana_reacordare(FRANA_REACORDARE_MS),
 	frana_pierdut(FRANA_PIERDUT_MS)
 {
-	parametri[0] = lnb[0] = 0;
+	parametri[0] = lnb[0] = frecventa[0] = 0;
 }
 
 static char litera(int slot)
@@ -114,6 +114,7 @@ static void inceput(Stare &s, int reacordare)
 	s.reacordare = reacordare;
 	s.prins_o_data = 0;
 	s.lnb[0] = 0;
+	s.frecventa[0] = 0;
 }
 
 void textSat(char *buf, size_t n, const eDVBFrontendParametersSatellite &p)
@@ -287,8 +288,28 @@ void prins(Stare &s, int slot, int snr_db100)
 	char sar[48] = "";
 	if (sarite)
 		snprintf(sar, sizeof(sar), " (%lu reacordari nescrise)", sarite);
-	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "acordare", "%c %s | lnb %s | semnal in %ld ms%s%s%s", litera(slot),
-		s.parametri, s.lnb[0] ? s.lnb : "-", ms, snr, s.reacordare ? " dupa semnal pierdut" : "", sar);
+	char frecv[100] = "";
+	if (s.frecventa[0])
+		snprintf(frecv, sizeof(frecv), " | %s", s.frecventa);
+	s.frecventa[0] = 0;
+	hdsjurnal::scrief(COMPONENTA, hdsjurnal::INFO, "acordare", "%c %s | lnb %s | semnal in %ld ms%s%s%s%s", litera(slot),
+		s.parametri, s.lnb[0] ? s.lnb : "-", ms, snr, s.reacordare ? " dupa semnal pierdut" : "", sar, frecv);
+}
+
+void frecventaCitita(Stare &s, int slot, long ceruta_khz, long citita_khz, long prag_khz, int verdict, bool pierduta)
+{
+	static const char *VERDICT[] = { "necunoscuta", "aproape", "departe" };
+	const char *v = verdict >= 0 && verdict <= 2 ? VERDICT[verdict] : "?";
+	long abatere = citita_khz > ceruta_khz ? citita_khz - ceruta_khz : ceruta_khz - citita_khz;
+	snprintf(s.frecventa, sizeof(s.frecventa), "frecventa citita %ld kHz, ceruta %ld kHz, abatere %ld kHz, prag %ld: %s",
+		citita_khz, ceruta_khz, abatere, prag_khz, v);
+	if (!pierduta || !s.pornit_ms)
+		return;
+	long ms = durata(s);
+	s.pornit_ms = 0;
+	hdsjurnal::scrief(COMPONENTA, hdsjurnal::AVERT, "acordare", "%c %s | lnb %s | prinsa departe de frecventa ceruta dupa %ld ms"
+		" (%s), data pierduta", litera(slot), s.parametri, s.lnb[0] ? s.lnb : "-", ms, s.frecventa);
+	s.frecventa[0] = 0;
 }
 
 /* nivelul semnalului in procente (FE_READ_SIGNAL_STRENGTH da 0..65535); gol cand nu se stie */
@@ -438,7 +459,7 @@ bool citesteSemnal(const Stare &s)
    ... ms, retea N v V, S sectiuni)". Timpii sunt de la acordare, ca "tabele citite in". Gol cand ceasul n-a pornit. */
 static void textTabele(char *buf, size_t n, const Stare &s)
 {
-	static const char *const NUME[NR_TABELE] = { "PAT", "SDT", "PMT", "NIT", "BAT" };
+	static const char *const NUME[NR_TABELE] = { "PAT", "SDT", "PMT", "NIT", "BAT", "VCT" };
 	buf[0] = 0;
 	if (s.semnal_ms < 0 || n < 64)
 		return;

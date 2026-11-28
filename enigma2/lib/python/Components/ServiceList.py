@@ -283,7 +283,7 @@ class ServiceList(HTMLComponent, GUIComponent):
 	# Components/HdsDvbIDate (scrise de pluginul DVB-I); nucleul listei le deseneaza ca eticheta de la capatul randului
 	# (setRefLabel, lib/service/listboxservice.cpp). Fara nucleul care le stie, nimic.
 	ETICHETE_STARI_DVBI = {"oprit_tara": N_("oprit în țara ta"), "adresa_moarta": N_("adresă moartă"),
-		"nu_raspunde": N_("nu răspunde")}
+		"nu_raspunde": N_("nu răspunde"), "drm": N_("protejat (DRM)")}
 
 	def hdsEticheteDvbI(self):
 		l = self.l
@@ -341,7 +341,11 @@ class ServiceList(HTMLComponent, GUIComponent):
 					url = s.getPath()
 					if url in urluri:
 						stare = DD.stareUrl(url)[0]
-						if stare in self.ETICHETE_STARI_DVBI:
+						# DVI2: oprit pentru tara, cu tara listei cand se stie ("merge doar în Germania")
+						tara = DD.doarIn(url, stare=stare) if stare == "oprit_tara" and hasattr(DD, "doarIn") else ""
+						if tara:
+							noi[s.toString()] = (s, _(DD.T_DOAR_IN) % tara)
+						elif stare in self.ETICHETE_STARI_DVBI:
 							noi[s.toString()] = (s, _(self.ETICHETE_STARI_DVBI[stare]))
 		vechi = self.hdsEticheteDate
 		if dict((k, v[1]) for k, v in noi.items()) == vechi:
@@ -898,22 +902,22 @@ class ServiceList(HTMLComponent, GUIComponent):
 		if doua:
 			inaltime *= 2
 		# HDSatelit 0.7.5: marimea textului (config.usage.hds_marime_text_lista), 10% pe pas fata de tema: 100 la
-		# „După temă”, 70..150 la -3..+5
+		# „După temă”, 70..170 la -3..+7
 		marime = getattr(getattr(config.usage, "hds_marime_text_lista", None), "value", "tema")
 		try:
-			procent = 100 if marime == "tema" else min(150, max(70, 100 + 10 * int(marime)))
+			procent = 100 if marime == "tema" else min(170, max(70, 100 + 10 * int(marime)))
 		except ValueError:
 			procent = 100
 		u = config.usage
 
 		# 0.7.5 (LCS, Ozgur e-mailul 6323): numele, descrierea si bara de progres cu marimea lor, separat de textul listei
-		# (Ca textul listei = procentul de mai sus; altfel 10% pe pas, 70..150)
+		# (Ca textul listei = procentul de mai sus; altfel 10% pe pas, 70..170)
 		def _procent(nume):
 			v = getattr(getattr(u, nume, None), "value", "text")
 			if v in (None, "", "text"):
 				return procent
 			try:
-				return min(150, max(70, 100 + 10 * int(v)))
+				return min(170, max(70, 100 + 10 * int(v)))
 			except (TypeError, ValueError):
 				return procent
 		p_nume, p_info, p_bara = _procent("hds_lista_marime_nume"), _procent("hds_lista_marime_info"), _procent("hds_lista_marime_bara")

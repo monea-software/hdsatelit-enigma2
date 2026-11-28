@@ -24,6 +24,11 @@
 # ceva cere, cu cookie, POST, aceeasi origine si antetul CSRF al panoului):
 #   GET  /api/acces-conditionat            modulele pe feluri, cine e ales, cine ruleaza, comanda in curs / ultima
 #   GET  /api/acces-conditionat-interfete  portul si protocolul configurate ale modulelor active, citite pe un fir
+#                                          0.8.0 OSC0: si fara_panou [{fel, sufix, eticheta, cale}] = modulele care ruleaza
+#                                          fara panou web pentru ca configurarea lor nu il are, si port_panou
+#   POST /api/acces-conditionat-panou?fel=<fel>&sufix=<x>   0.8.0 OSC0: [webif] adaugat in configurarea modulului
+#                                          (HdsModuleAcces.porneste_panou_web, pe un fir); pagina il reporneste apoi cu
+#                                          acces-conditionat-comanda (cerere=reporneste)
 #   GET  /api/acces-conditionat-dosare     dosarele de setari ale tuturor modulelor, citite pe un fir
 #   POST /api/acces-conditionat-comanda?cerere=alege|porneste|opreste|reporneste&fel=<fel>[&sufix=<x>]
 #                                          porneste comanda si raspunde pe loc; rezultatul vine apoi prin GET; <fel> e
@@ -82,7 +87,13 @@ ETICHETA_ALTE = N_("Servere de carduri")
 # comanda pornita din web: pasul de acum si ultimul rezultat (al oricarei comenzi pornite de aici)
 _STARE = {"pas": None, "ultima": None}
 _STEAG_WEB = [False]
+# 0.8.0: the person's own program (Components/HdsModulPropriu.py), one search or copy at a time, on a thread
+#   GET  /api/acces-conditionat-propriu            {result, candidati: [{cale, nume, marime, loc}], message}
+#   POST /api/acces-conditionat-propriu?cale=<one of candidati>   copied to /usr/<kind>s and given its start script
+_STEAG_PROPRIU = [False]
+CALE_MAXIM = 512
 _STEAG_DOSARE = [False]
+_STEAG_PANOU = [False]
 
 
 def _t(text):
@@ -467,12 +478,57 @@ def cerere_chei(cerere, adresa="", K=None):
 	return _cuMesaj(stare_chei(K), False, _t("Comanda nu a pornit."))
 
 
+def _propriu(MP=None):
+	if MP is not None:
+		return MP
+	from Components import HdsModulPropriu
+	return HdsModulPropriu
+
+
+def propriu_web(cale="", MP=None):
+	"""GET (cale empty): the program files that can be added; POST with cale: the copy and the start script. Runs on a
+	thread (peFir); the same functions as the last row of the TV screen."""
+	MP = _propriu(MP)
+	if not cale:
+		lista = MP.candidati()
+		return {"result": True, "candidati": lista, "message": "" if lista else _t(MP.TEXT_NIMIC)}
+	r = MP.adauga(cale)
+	return {"result": bool(r.get("ok")), "message": MP.textRezultat(r), "fel": r.get("fel", ""), "sufix": r.get("sufix", "")}
+
+
 def interfete_web(H=None):
 	"""Date publice limitate la modul, port si protocol; fara sondarea paginii modulului."""
 	try:
-		return {"result": True, "interfete": _h(H).interfete_web()}
+		M = _h(H)
+		lista = M.interfete_web()
 	except Exception:
 		return {"result": False, "interfete": [], "message": _t("Adresele interfețelor web nu s-au putut citi.")}
+	rez = {"result": True, "interfete": lista}
+	# 0.8.0 OSC0: modulele care ruleaza fara panou web in configurare (o eroare aici nu strica adresele)
+	try:
+		rez["fara_panou"] = M.fara_panou_web(interfete=lista)
+		rez["port_panou"] = M.PANOU_PORT
+	except Exception:
+		rez["fara_panou"] = []
+	return rez
+
+
+def panou_web(a, H=None):
+	"""POST /api/acces-conditionat-panou (0.8.0 OSC0): panoul web adaugat in configurarea modulului (fel, sufix) care
+	ruleaza fara el. Pe un fir (citeste /proc si configurarea)."""
+	M = _h(H)
+	fel, sufix = a.get("fel") or "", a.get("sufix") or ""
+	x = None
+	for y in M.fara_panou_web():
+		if y.get("fel") == fel and y.get("sufix") == sufix:
+			x = y
+			break
+	if x is None:
+		return {"result": False, "message": _t("Modulul nu rulează sau are deja panoul web.")}
+	if not M.porneste_panou_web(x["cale"]):
+		return {"result": False, "message": _t("Panoul web nu a putut fi pornit în %s.") % x["cale"]}
+	return {"result": True, "fel": fel, "sufix": sufix, "port": M.PANOU_PORT,
+		"message": _t("Panoul web e pornit pe portul %d; modulul repornește.") % M.PANOU_PORT}
 
 
 def dosare_configurare(H=None):
@@ -716,6 +772,51 @@ def rute(baza, resource, H=None, E=None, pe_fir=None):
 				lucru = peFir
 			return lucru(request, lambda: interfete_web(H), _STEAG_WEB, 10)
 
+	class PanouResource(baza):
+		"""POST /api/acces-conditionat-panou (0.8.0 OSC0)."""
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			if _STEAG_PANOU[0]:
+				return self._raspunde(request, {"result": False, "message": _t("Așteaptă să se termine comanda de acum.")})
+			a = argumente(request)
+			lucru = pe_fir
+			if lucru is None:
+				from .meniu_comun_web import peFir
+				lucru = peFir
+			return lucru(request, lambda: panou_web(a, H), _STEAG_PANOU, 10)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
+	class PropriuResource(baza):
+		"""GET / POST /api/acces-conditionat-propriu (0.8.0): the person's own OSCam or NCam program."""
+
+		def _lucreaza(self, request, cale):
+			if _STEAG_PROPRIU[0]:
+				return self._raspunde(request, {"result": False, "candidati": [],
+					"message": _t("Așteaptă să se termine comanda de acum.")})
+			lucru = pe_fir
+			if lucru is None:
+				from .meniu_comun_web import peFir
+				lucru = peFir
+			return lucru(request, lambda: propriu_web(cale), _STEAG_PROPRIU, 120)
+
+		def render_GET(self, request):
+			return self._lucreaza(request, "")
+
+	class PropriuAdaugaResource(PropriuResource):
+		schimbaCeva = True
+
+		def render_POST(self, request):
+			cale = argument_lung(request, "cale", CALE_MAXIM)
+			if not cale:
+				return self._raspunde(request, {"result": False, "message": _t("Nu s-a trimis nicio setare.")})
+			return self._lucreaza(request, cale)
+
+		def render_GET(self, request):
+			return self.render_POST(request)   # numai cu ?token= (scripturi); din browser poarta cere POST
+
 	class DosareResource(baza):
 		def render_GET(self, request):
 			if _STEAG_DOSARE[0]:
@@ -754,8 +855,11 @@ def rute(baza, resource, H=None, E=None, pe_fir=None):
 		b"acces-conditionat-comanda": ComandaResource(),
 		b"acces-conditionat-inlocuieste": InlocuiesteResource(),
 		b"acces-conditionat-interfete": InterfeteWebResource(),
+		b"acces-conditionat-panou": PanouResource(),
 		b"acces-conditionat-dosare": DosareResource(),
 		b"acces-conditionat-jurnal": JurnalResource(),
+		b"acces-conditionat-propriu": PropriuResource(),
+		b"acces-conditionat-propriu-adauga": PropriuAdaugaResource(),
 	}
 	return api, PaginaResource()
 
@@ -867,6 +971,13 @@ PAGINA = """<!DOCTYPE html>
     <div class="adresa-chei"><label for="cheiAdresa" id="cheiEticheta"></label><input id="cheiAdresa" type="url" maxlength="512" spellcheck="false" autocomplete="off"><button type="button" id="cheiSalveaza"></button></div>
     <p class="nota" id="cheiNotaAdresa"></p>
   </section>
+  <section class="card" id="propriu">
+    <h2>Adaugă programul tău (OSCam sau NCam)</h2>
+    <p class="nota">Pune fișierul programului (oscam sau ncam, făcut pentru procesorul acestui receptor) pe stick, pe disc, în /tmp sau în /usr/softcam. OK îl caută, îl copiază în lista modulelor și îi face scriptul de pornire. Configurarea ta rămâne unde e.</p>
+    <div class="butoane"><button type="button" id="propriuCauta">Caută</button></div>
+    <div id="propriuLista"></div>
+    <p class="mesaj" id="propriuMesaj"></p>
+  </section>
   <section class="card ascuns" id="releu">
     <h2>Stream Relay</h2>
     <div id="releuStare"></div>
@@ -901,6 +1012,8 @@ PAGINA = """<!DOCTYPE html>
 var CFG = __CONFIG__;
 var D = null;
 var INTERFETE = [];
+var FARA_PANOU = [];   // 0.8.0 OSC0: modulele care ruleaza fara panou web in configurare
+var PORT_PANOU = 8888;
 var interfeteInLucru = false;
 var DOSARE = null;
 var dosareInLucru = false;
@@ -1030,6 +1143,14 @@ function randModul(f, m){
       a.href = adresaWeb; a.target = "_blank"; a.rel = "noopener noreferrer";
       b.appendChild(a);
       stanga.appendChild(el("div", "detaliu", [i.utilizator, i.parola].filter(Boolean).join(" / ")));
+    });
+    FARA_PANOU.forEach(function(x){
+      if(x.fel !== f.fel || x.sufix !== m.sufix){ return; }
+      stanga.appendChild(el("div", "detaliu", "Panoul web e oprit în configurarea modulului (" + x.cale + "), de aceea adresa lui nu se deschide."));
+      var bp = el("button", "verde", "Pornește panoul web (portul " + PORT_PANOU + ")");
+      bp.type = "button";
+      bp.addEventListener("click", function(){ pornestePanoul(f.fel, m.sufix); });
+      b.appendChild(bp);
     });
     b.appendChild(buton("Oprește", "", f.fel, "opreste", m.sufix,
       "Se oprește " + m.sufix + ": canalele criptate nu se mai văd până îl pornești din nou. Continui?"));
@@ -1221,7 +1342,12 @@ function citesteInterfete(){
   interfeteInLucru = true;
   cerere("/api/acces-conditionat-interfete").then(function(d){
     if(paginaInchisa || generatie !== paginaGeneratie){ return; }
-    if(d.result){ INTERFETE = d.interfete || []; if(D){ arata(D); } }
+    if(d.result){
+      INTERFETE = d.interfete || [];
+      FARA_PANOU = d.fara_panou || [];
+      if(d.port_panou){ PORT_PANOU = d.port_panou; }
+      if(D){ arata(D); }
+    }
   }).catch(function(){}).then(function(){ interfeteInLucru = false; });
 }
 function citesteDosare(){
@@ -1239,6 +1365,24 @@ function citesteDosare(){
     if(paginaInchisa || generatie !== paginaGeneratie){ return; }
     if(D){ arata(D); }
   });
+}
+function pornestePanoul(fel, sufix){
+  // 0.8.0 OSC0: [webif] adaugat in configurare, apoi modulul repornit (aceeasi comanda ca butonul Repornește)
+  var q = new URLSearchParams();
+  q.set("fel", fel); q.set("sufix", sufix);
+  mesaj("Se trimite...");
+  cerere("/api/acces-conditionat-panou", "POST", q).then(function(d){
+    mesaj(d.message, !d.result);
+    if(d.result){
+      FARA_PANOU = FARA_PANOU.filter(function(x){ return x.fel !== fel || x.sufix !== sufix; });
+      if(trimitereInCurs){
+        mesaj("Panoul web e pornit pe portul " + (d.port || PORT_PANOU) + ". Apasă Repornește ca modulul să-l citească.");
+      } else {
+        trimite("reporneste", fel, sufix);
+      }
+      setTimeout(citesteInterfete, 6000);
+    }
+  }).catch(function(){ mesaj("Receptorul nu răspunde.", true); });
 }
 var asteptInlocuire = false;
 function inlocuieste(fel, sufix, pachet){
@@ -1333,6 +1477,33 @@ $("cheiSalveaza").addEventListener("click", function(){
   var q = new URLSearchParams(); q.set("cerere", "adresa"); q.set("adresa", $("cheiAdresa").value); cerereChei(q);
 });
 citesteChei();
+// 0.8.0: the person's own OSCam or NCam program (the same search and copy as the last row on the TV)
+function propriuMesaj(text, eroare){ var m = $("propriuMesaj"); m.textContent = text || ""; m.classList.toggle("eroare", !!eroare); }
+function arataPropriu(d){
+  var l = $("propriuLista"); l.textContent = "";
+  $("propriuCauta").disabled = false;
+  if(!d || !d.result){ propriuMesaj((d && d.message) || "Receptorul nu răspunde.", true); return; }
+  propriuMesaj(d.message || "", false);
+  (d.candidati || []).forEach(function(x){
+    var r = el("div", "modul"), s = el("div", "stanga");
+    s.appendChild(el("div", "nume", x.cale));
+    s.appendChild(el("div", "detaliu", mb(x.marime / 1024)));
+    var b = el("button", "verde", "Adaugă"); b.type = "button";
+    b.addEventListener("click", function(){
+      b.disabled = true; propriuMesaj("Se trimite...", false);
+      var q = new URLSearchParams(); q.set("cale", x.cale);
+      cerere("/api/acces-conditionat-propriu-adauga", "POST", q).then(function(r2){
+        propriuMesaj(r2.message, !r2.result);
+        if(r2.result){ l.textContent = ""; citeste(); } else { b.disabled = false; }
+      }).catch(function(){ b.disabled = false; propriuMesaj("Receptorul nu răspunde.", true); });
+    });
+    r.appendChild(s); r.appendChild(b); l.appendChild(r);
+  });
+}
+$("propriuCauta").addEventListener("click", function(){
+  $("propriuCauta").disabled = true; propriuMesaj("Se trimite...", false);
+  cerere("/api/acces-conditionat-propriu").then(arataPropriu).catch(function(){ arataPropriu(null); });
+});
 </script>
 </body>
 </html>
@@ -1359,6 +1530,11 @@ TEXTE_PAGINA = {
 		N_("Stream Relay"),
 		N_("Lista de canale"),
 		N_("Setările Stream Relay"),
+		N_("Adaugă programul tău (OSCam sau NCam)"),
+		N_("Pune fișierul programului (oscam sau ncam, făcut pentru procesorul acestui receptor) pe stick, pe disc, în /tmp "
+			"sau în /usr/softcam. OK îl caută, îl copiază în lista modulelor și îi face scriptul de pornire. Configurarea ta "
+			"rămâne unde e."),
+		N_("Caută"),
 	),
 	"js": (
 		N_("browser deconectat"),
@@ -1400,6 +1576,7 @@ TEXTE_PAGINA = {
 		N_("Receptorul nu a putut citi modulele."),
 		N_("Receptorul nu răspunde. Verifică dacă e pornit și în aceeași rețea."),
 		N_("Se trimite..."),
+		N_("Adaugă"),
 	),
 }
 

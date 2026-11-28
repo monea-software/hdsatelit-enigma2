@@ -18,6 +18,8 @@
 # (Components/HdsActualizari, NUMARATOARE_S). Din 0.7.8 (RPR8) randul "Repară imaginea" (OK porneste, fara intrebari): pune la
 # loc din feedul semnat fisierele imaginii sterse (Components/HdsActualizari.reparaImaginea), spune ce a pus la loc sau ca
 # imaginea e intreaga si reporneste interfata cu numaratoarea obisnuita; perechea din pagina web e butonul cu acelasi nume.
+# Din 0.8.0 (AUT1) randul "Actualizări automate" Da/Nu (OK schimba, Da din fabrica): versiunile noi din feed se instaleaza
+# singure in standby sau noaptea (Components/HdsActualizari, AUTO_CEAS_S); perechea din pagina web e butonul cu acelasi nume.
 #
 # "Ce e nou": noutatile tuturor versiunilor de la cea instalata pana la cea de pe server,
 # grupate pe versiuni (Components/HdsActualizari.text_noutati), pot avea zeci de randuri. Textul de sub lista e un
@@ -195,6 +197,9 @@ class HdsActualizari(Screen):
 		# 0.7.8 (RPR8): pe randul "Repară imaginea", ce face
 		if not text and self._cheie() == "repara" and getattr(A, "TEXT_REPARA_NOTA", None):
 			text = _(A.TEXT_REPARA_NOTA)
+		# 0.8.0 (AUT1): pe randul "Actualizări automate", ce face
+		if not text and self._cheie() == "automat" and getattr(A, "TEXT_AUTOMAT_NOTA", None):
+			text = _(A.TEXT_AUTOMAT_NOTA)
 		pagina = self._pagina()
 		if pagina:
 			semn = _("Textul de mai sus: pagina %d din %d (Stânga/Dreapta sau CH+/CH-)") % pagina
@@ -248,6 +253,9 @@ class HdsActualizari(Screen):
 		singura = _repornireSingura()
 		if singura is not None:
 			rand(_("Repornire singură"), _("Da") if singura else _("Nu"), "repornire")
+		# 0.8.0 (AUT1): Actualizari automate (OK schimba), perechea din pagina web; lipseste cu un modul mai vechi in memorie
+		if "automat" in st:
+			rand(_("Actualizări automate"), _("Da") if st["automat"] else _("Nu"), "automat")
 		# 0.7.8 (RPR8): "Repară imaginea" (OK); cu un Components/HdsActualizari mai vechi in memorie randul lipseste
 		if getattr(A, "TITLU_REPARA", None) and hasattr(self.a, "reparaImaginea"):
 			rand(_(A.TITLU_REPARA), _("Pornește"), "repara", stins=st["faza"] != "liber" or st["repornire"])
@@ -400,6 +408,14 @@ class HdsActualizari(Screen):
 			self.repornireSingura()
 		elif self._cheie() == "repara":
 			self.repara()
+		elif self._cheie() == "automat":
+			self.automat()
+
+	def automat(self):
+		"""0.8.0 (AUT1): Actualizari automate Da/Nu"""
+		if hasattr(A, "seteaza_automat"):
+			A.seteaza_automat(not A.automat_pornit())
+		self._arata()
 
 	def repara(self):
 		"""0.7.8 (RPR8): "Repară imaginea", un singur pas, fara intrebari: cautarea cu reparatia, reinstalarea pachetelor cu

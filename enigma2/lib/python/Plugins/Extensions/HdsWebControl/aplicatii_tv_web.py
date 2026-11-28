@@ -118,9 +118,8 @@ def stare(N=None, sesiune=None):
 			text_stare = _t(A.TEXTE_STARE.get(s, ""))
 			p = A.pachetDinCatalog(a, catalog)
 			if s == A.CERE_NAVIGATOR:
-				trebuie, _liber = A.locNavigator()
-				if trebuie:
-					text_stare += " · ~%d MB" % (trebuie // 1048576)
+				# NAV8: marimea si unde se instaleaza (memoria interna sau stickul), ca pe televizor
+				text_stare += A.sufixNavigator(s)
 			if s == A.DISPONIBIL and p is not None and p.marime:
 				try:
 					from Components.HdsPachete import marime_text
@@ -173,6 +172,15 @@ def deschide(argumente, N=None, sesiune=None):
 	a = A.gaseste(argumente.get("id", ""))
 	if a is None:
 		return _cuStare({"result": False, "message": _t("Aplicația nu există pe acest receptor.")}, N, sesiune)
+	if a.get("id") == "youtube" and sesiune is not None:
+		# YTN1 (0.8.0): the native YouTube screen, as OK on the TV card does (Screens/HdsYouTube.nativDinAplicatii)
+		try:
+			from Screens import HdsYouTube as YTN
+			if YTN.nativDinAplicatii():
+				sesiune.open(YTN.HdsYouTube)
+				return _cuStare({"result": True, "message": _t("Aplicația se deschide pe televizor.")}, N, sesiune)
+		except ImportError:
+			pass
 	if A.stareMagazin(a, N.catalog()) in (A.CERE_NAVIGATOR, A.NU_INCAPE):
 		# NVM: navigatorul lipseste (Vu+ Solo SE si celelalte MIPS): butonul Instaleaza al cardului, ca OK pe televizor
 		text = A.instaleazaNavigator(sesiune)

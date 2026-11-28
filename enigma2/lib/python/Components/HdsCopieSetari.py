@@ -39,6 +39,9 @@
 #                             pachetul .ipk daca e pe receptor, altfel fisierele lui dupa lista opkg
 #                             (info/<pachet>.list = „opkg files”), informatiile opkg ale pachetului, /etc/tuxbox/config
 #                             si legaturile de pornire; in fisier nu e scris niciun nume de modul sau de fel;
+#   ciplus.tar.gz             certificatele CI+ ale aparatului puse de om in /etc/ciplus (param, root.pem, customer.pem,
+#                             device.pem; 0600), fara autentificarile tinute minte (ci_auth_slot_N.bin, le reface modulul);
+#                             puse la loc numai pe receptorul copiei si numai cele care lipsesc (nimic scris peste);
 #   chei-module.tar.gz        cheile modulelor din dosarele comune (/usr/keys, /var/keys: SoftCam.Key si celelalte fisiere
 #                             ale omului, ca cele din /etc/tuxbox/config), puse la loc numai pe receptorul copiei, dupa
 #                             pachetele modulelor si inainte de pornirea lor; arhiva separata, ca o imagine mai veche sa
@@ -149,9 +152,17 @@ CHEI_GAZDA = ("etc/dropbear/dropbear_rsa_host_key", "etc/dropbear/dropbear_ecdsa
 # copia RSA tinuta de hds-ssh (hdsatelit-ssh r5) pentru postrm-ul vechi al lui dropbear: adusa la zi odata cu cheia
 COPIE_RSA_GAZDA = "etc/dropbear/.dropbear_rsa_host_key.pastrata"
 MAX_CHEIE_GAZDA = 16 * 1024
+# Certificatele CI+ ale aparatului (TODO 25.11 00:34, asistenta: modulul CI+ nerecunoscut dupa o imagine noua): le pune
+# omul (FTP sau pagina web Common Interface), imaginea nu le are, iar fara copie se pierdeau la fiecare imagine noua (copia
+# facuta inainte de imaginea noua e tot fa_copia). Ca in copiile de setari ale altor imagini, care iau /etc/ciplus cand
+# exista. ci_auth_slot_N.bin nu intra: e autentificarea tinuta minte a modulului, refacuta de el la introducere.
+ARH_CIPLUS = "ciplus.tar.gz"
+DOSAR_CIPLUS = "etc/ciplus"
+FISIERE_CIPLUS = tuple(DOSAR_CIPLUS + "/" + n for n in ("param", "root.pem", "customer.pem", "device.pem"))
+MAX_FISIER_CIPLUS = 64 * 1024
 # o imagine mai veche sare randul md5 al unui fisier pe care nu-l stie (citeste_descriere): copia ramane buna acolo
 FISIERE_COPIE = (ARH_SETARI, ARH_RETEA, ARH_ACCES, ARH_PLUGINURI, FIS_MASINA, FIS_CHEI, FIS_SISTEM, FIS_PAROLA,
-	ARH_CHEI_GAZDA, ARH_CHEI_MODULE)
+	ARH_CHEI_GAZDA, ARH_CHEI_MODULE, ARH_CIPLUS)
 SETTINGS_COPIE = "etc/enigma2/settings-fara-token"
 
 DOSAR_RESTAURARE = "home/root/hds-restaurare"
@@ -1922,6 +1933,8 @@ def _fa_copia(punct, text_setari=None, fel="manuala", rad=None, acum=None, refac
 			are.append("chei")
 		if _scrie_chei_gazda(rad, os.path.join(part, ARH_CHEI_GAZDA)) and "chei" not in are:
 			are.append("chei")
+		if _scrie_ciplus(rad, os.path.join(part, ARH_CIPLUS)):
+			are.append("ciplus")
 		nr_acces, nr_pachete = _scrie_acces(rad, os.path.join(part, ARH_ACCES), module)
 		if nr_acces:
 			are.append("acces")
@@ -2041,6 +2054,39 @@ def _scrie_chei_gazda(rad, cale):
 
 def _permis_chei_gazda(nume, m):
 	return m.isreg() and nume in CHEI_GAZDA and 0 < m.size <= MAX_CHEIE_GAZDA
+
+
+def _scrie_ciplus(rad, cale):
+	"""Arhiva certificatelor CI+ din /etc/ciplus: numai cele patru fisiere obisnuite (fara legaturi), negoale, de cel mult
+	MAX_FISIER_CIPLUS, 0600 in arhiva. Intoarce cate au intrat; fara niciunul arhiva nu se scrie."""
+	date_gasite = []
+	for rel in FISIERE_CIPLUS:
+		try:
+			st = os.lstat(_c(rad, rel))
+		except OSError:
+			continue
+		if not stat.S_ISREG(st.st_mode) or not 0 < st.st_size <= MAX_FISIER_CIPLUS:
+			continue
+		try:
+			with open(_c(rad, rel), "rb") as fc:
+				date = fc.read(MAX_FISIER_CIPLUS + 1)
+		except (IOError, OSError):
+			continue
+		if date and len(date) <= MAX_FISIER_CIPLUS:
+			date_gasite.append((rel, date))
+	if not date_gasite:
+		return 0
+	f, tf = _deschide_tar_scriere(cale)
+	try:
+		for rel, date in date_gasite:
+			_adauga_date(tf, rel, date, 0o600)
+	finally:
+		_inchide_tar_scriere(f, tf)
+	return len(date_gasite)
+
+
+def _permis_ciplus(nume, m):
+	return m.isreg() and nume in FISIERE_CIPLUS and 0 < m.size <= MAX_FISIER_CIPLUS
 
 
 def _reporneste_ssh(rad):
@@ -2681,6 +2727,8 @@ def descriere_copie(c):
 		parti.append(_("modulele de acces condiționat"))
 	if "chei" in are:
 		parti.append(_("cheile SSH"))
+	if "ciplus" in are:
+		parti.append(_("certificatele CI+"))
 	receptor = _("acest receptor") if c.get("acest") else _("alt receptor (se pun la loc numai canalele)")
 	fel = _("automată") if c.get("fel") == "automata" else _("făcută de mână")
 	return _("%s, copia din %s (%s, imaginea %s), %s.\nAre: %s.") % (c.get("mediu_nume", ""), c.get("data_text", ""),
@@ -2732,7 +2780,8 @@ def verifica_copia(dosar, d=None):
 		if not os.path.isfile(cale) or os.path.islink(cale):
 			return Nota.N_("lipsește %s din copie", n)
 		maxim = {ARH_RETEA: MAX_RETEA, FIS_MASINA: 64, FIS_CHEI: MAX_CHEI, FIS_SISTEM: MAX_SISTEM,
-			FIS_PAROLA: MAX_PAROLA_COPIE, ARH_CHEI_GAZDA: 8 * MAX_CHEIE_GAZDA}.get(n, MAX_ARHIVA)
+			FIS_PAROLA: MAX_PAROLA_COPIE, ARH_CHEI_GAZDA: 8 * MAX_CHEIE_GAZDA,
+			ARH_CIPLUS: 8 * MAX_FISIER_CIPLUS}.get(n, MAX_ARHIVA)
 		if os.path.getsize(cale) > maxim:
 			return Nota.N_("%s e prea mare", n)
 		if _md5(cale) != h:
@@ -3086,6 +3135,7 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 	masina = False
 	chei_noi = 0
 	gazda_puse = 0
+	ciplus_puse = 0
 	nou_settings = None
 	sistem_puse = []
 	# ce nu s-a pus, pentru rezumatul din jurnal: etc/tuxbox (ca trusa, raman cele din imagine), semnele, fisierele
@@ -3233,6 +3283,20 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 					copie_rsa = _c(rad, COPIE_RSA_GAZDA)
 					if nume == CHEI_GAZDA[0] and os.path.isfile(copie_rsa) and not os.path.islink(copie_rsa) 							and _citeste_mic(copie_rsa, MAX_CHEIE_GAZDA + 1) != date:
 						rest.scrie(copie_rsa, date, 0o600)
+		# certificatele CI+: numai cele care lipsesc acum (cele puse de om dupa imaginea noua raman); o arhiva rea nu
+		# opreste restul
+		if acest and ARH_CIPLUS in d["md5"]:
+			ciplus, eroare = _citeste_arhiva(os.path.join(dosar, ARH_CIPLUS), _permis_ciplus, 8 * MAX_FISIER_CIPLUS)
+			if ciplus is None:
+				_jurnal("certificatele CI+ din copie nu se pot citi; nu le pun la loc")
+				note.append(Nota.N_("Certificatele CI+ din copie nu au forma obișnuită; nu s-au pus la loc."))
+			else:
+				for nume, _m, date in ciplus:
+					tinta = _c(rad, nume)
+					if not date or len(date) > MAX_FISIER_CIPLUS or os.path.lexists(tinta):
+						continue
+					rest.scrie(tinta, date, 0o600)
+					ciplus_puse += 1
 		# 5. setarile omului din afara /etc/enigma2 (numai pe acest receptor; sursele de pachete dupa mutare, prin
 		# scrierea lui HdsPachete)
 		if parola_locala is not None:
@@ -3322,6 +3386,13 @@ def pune_la_loc(dosar, rad=None, motiv="cerere", porneste_modulele=None):
 			_jurnal("cheile gazdei SSH: %d puse la loc (acelasi receptor)" % gazda_puse)
 			if _reporneste_ssh(rad):
 				_jurnal("SSH: dropbear repornit cu cheile din copie")
+		if ciplus_puse:
+			try:
+				os.chmod(_c(rad, DOSAR_CIPLUS), 0o700)
+			except OSError:
+				pass
+			pus.append("ciplus")
+			_jurnal("certificatele CI+: %d puse la loc in /etc/ciplus (acelasi receptor)" % ciplus_puse)
 		if "ssh" in sistem_puse:
 			_jurnal("SSH: regula 'Fara parola in reteaua locala' pusa la loc: %s" % ("PORNITA (din reteaua de acasa se intra "
 				"ca root fara parola)" if sistem["ssh_fara_parola"] else "oprita"))
@@ -4088,6 +4159,7 @@ def texte_puse(pus):
 		"chei": _("cheile SSH"),
 		"acces": _("modulele de acces condiționat"),
 		"pluginuri": _("pluginurile, pregătite pentru reinstalare"),
+		"ciplus": _("certificatele CI+"),
 	}
 	return [nume[p] for p in pus if p in nume]
 

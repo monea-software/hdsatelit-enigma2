@@ -474,6 +474,9 @@ class Legatura(object):
 		cere iar contului care tocmai a refuzat)."""
 		if not self.pe_canal or not trecator(cod, self._felRefuz() if fel is None else fel):
 			return False
+		if self._protejatDrm():
+			# DRM1: fluxul DVB-I e criptat cu DRM (incercarea din casa): o pornire din nou nu-l face sa mearga
+			return False
 		if self.cheie:
 			try:
 				from Components import HdsIptvAdrese as A
@@ -483,6 +486,19 @@ class Legatura(object):
 			except Exception:
 				pass
 		return True
+
+	def _protejatDrm(self):
+		"""Canalul de acum e un canal DVB-I gasit criptat cu DRM (Components/HdsDvbIDate.protejatDrm)."""
+		try:
+			ref = self._ref()
+			if ref is None:
+				return False
+			from Components import HdsDvbIDate as D
+			# adresa din referinta, ca la buchet (HdsDvbIDate.urlDinRef); altfel calea data de nucleu
+			url = D.urlDinRef(ref.toString()) if hasattr(ref, "toString") else ""
+			return D.protejatDrm(url) or D.protejatDrm(ref.getPath())
+		except Exception:
+			return False
 
 	def pornireaContinua(self, cod=None, fel=None):
 		"""Vezi pornireaContinua() de sus: aceeasi judecata ca laEsec, fara sa schimbe nimic."""

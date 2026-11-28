@@ -13,14 +13,15 @@ class Input(VariableText, HTMLComponent, GUIComponent, NumericalTextInput):
 	PIN = 1
 	NUMBER = 2
 
-	def __init__(self, text="", maxSize = False, visible_width = False, type = TEXT):
+	# currPos si allMarked ca in enigma2 OE-Alliance: pluginurile (editorul din File Commander) le dau prin InputBox
+	def __init__(self, text="", maxSize = False, visible_width = False, type = TEXT, currPos = 0, allMarked = True):
 		NumericalTextInput.__init__(self, self.right)
 		GUIComponent.__init__(self)
 		VariableText.__init__(self)
 		self.type = type
-		self.allmarked = (text != "") and (type != self.PIN)
+		self.allmarked = allMarked and (text != "") and (type != self.PIN)
 		self.maxSize = maxSize
-		self.currPos = 0
+		self.currPos = currPos
 		self.visible_width = visible_width
 		self.offset = 0
 		self.overwrite = maxSize

@@ -53,6 +53,19 @@
 # la pornire in NimManager.hdsSatelitiSalvatiLipsa, la stergerea din editor (televizor, web) prin scoate_de_la_tunere.
 # Numai cheile active ale modului tunerului conteaza (referinte_tuner), nu si cele ramase de la alt mod.
 #
+# STERGEREA OMULUI SE DEOSEBESTE DE O LISTA INSTALATA (0.8.0, 24.11.2026, KGW9; kegnkiwi, GigaBlue Quad 4K Pro cu
+# motor, SatWorld 3925): dupa SAT, o lista de canale instalata dintr-un plugin (scrie satellites.xml-ul ei peste
+# /etc/tuxbox/satellites.xml) scotea pentru totdeauna satelitii pe care omul ii folosea: 28,2E disparea de la motor,
+# iar un tuner DiSEqC fix pe 28,2E trecea pe "nimic conectat". Acum stergerile facute de om in editor (televizor si
+# web: toate trec prin scoate_de_la_tunere) se tin minte in STERSE. La pornire, inainte ca nucleul sa citeasca lista,
+# se pun la loc din lista imaginii (aceeasi unire, cu copie de siguranta) numai pozitiile FOLOSITE care lipsesc si nu
+# sunt in STERSE: porturile si LNB-urile active ale tunerelor (referinte_tuner) si, cand un tuner are motor (USALS in
+# modul simplu, "toti satelitii" in modul avansat), pozitiile cu canale in lamedb. Ce a sters omul ramane sters, ca
+# in 0.7.7; un satelit pus de om inapoi iese singur din STERSE. Prima data (STERSE lipsa: receptor adus de pe 0.7.7 -
+# 0.7.9, unde stergerile nu se tineau minte) STERSE primeste pozitiile imaginii care lipsesc acum din lista, afara de
+# cele de la tunere: o stergere veche nu revine. Fara intrebare (regula 1f): nu se pierde nimic si nu e nimic de ales.
+# Ordinea citirilor, cea mai ieftina intai: settings, lamedb numai cu motor, lista imaginii numai cand lipseste ceva.
+#
 # Nimic de aici nu ridica exceptii spre NimManager (e chemat din NimManager.__init__, la pornirea enigma2).
 # Nimic din enigma2 la incarcare: modulul se probeaza pe PC.
 
@@ -77,6 +90,8 @@ _NIMS = re.compile(br"^config\.Nims\.(\d+)\.([A-Za-z0-9_.]+)=(.*?)\s*$")
 _PORTURI = {"single": "A", "toneburst_a_b": "AB", "diseqc_a_b": "AB", "diseqc_a_b_c_d": "ABCD"}
 DISEQC_IMPLICIT = "diseqc_a_b"        # NimManager: nim.diseqcMode = ConfigSelection(..., "diseqc_a_b")
 NIMIC_CONECTAT = "3601"
+STERSE = "/etc/enigma2/hds-sateliti-sterse.txt"   # KGW9: pozitiile sterse de om in editor (vezi antetul)
+_ANTET_STERSE = "hds-sateliti-sterse 1"
 
 
 def _jurnal(text):
@@ -246,6 +261,79 @@ def _t(text):
 		return text
 
 
+def tuner_cu_motor(salvate, mod_implicit="nothing"):
+	"""True cand tunerul (valorile salvate, ca la referinte_tuner) foloseste un motor pentru toata lista: modul simplu cu
+	felul "positioner" (USALS sau de mana) sau modul avansat cu un LNB ales la "toti satelitii" (3601-3604)."""
+	if not isinstance(salvate, dict):
+		return False
+	mod = str(salvate.get("configMode") or mod_implicit)
+	if mod == "simple":
+		return str(salvate.get("diseqcMode") or "") == "positioner"
+	if mod == "advanced":
+		avansat = salvate.get("advanced")
+		sateliti = avansat.get("sat") if isinstance(avansat, dict) else None
+		if isinstance(sateliti, dict):
+			for cheie in ("3601", "3602", "3603", "3604"):
+				valori = sateliti.get(cheie)
+				if isinstance(valori, dict) and str(valori.get("lnb", "0")).strip() not in ("", "0"):
+					return True
+	return False
+
+
+def folosite_de_tunere(cale=SETARI):
+	"""(pozitiile de la porturile si LNB-urile active ale tunerelor, True cand un tuner are motor) dupa settings."""
+	refs, motor = set(), False
+	for _n, salvate in setari_tunere(cale).items():
+		for _cheie, p in referinte_tuner(salvate):
+			refs.add(p)
+		motor = motor or tuner_cu_motor(salvate)
+	return refs, motor
+
+
+def citeste_sterse(cale=None):
+	"""Pozitiile sterse de om (STERSE) -> set; None cand fisierul lipseste sau nu e al nostru (prima pornire cu KGW9)."""
+	try:
+		f = open(cale or STERSE, "r")
+	except (IOError, OSError):
+		return None
+	with f:
+		if f.readline().strip() != _ANTET_STERSE:
+			return None
+		rez = set()
+		for rand in f:
+			p = _poz_tuner(rand)
+			if p is not None:
+				rez.add(p)
+	return rez
+
+
+def scrie_sterse(pozitii, cale=None):
+	"""STERSE scris sigur (.nou, fsync, rename), numai daca dosarul exista (pe PC /etc/enigma2 nu e). Nu ridica."""
+	cale = cale or STERSE
+	try:
+		if not os.path.isdir(os.path.dirname(os.path.abspath(cale))):
+			return False
+		randuri = [_ANTET_STERSE + "\n"] + ["%d\n" % p for p in sorted(pozitii)]
+		_S()._scrie_sigur(cale, "".join(randuri).encode("ascii"))
+		return True
+	except Exception as e:
+		_jurnal("lista satelitilor stersi de om nu s-a scris (%s): %r" % (cale, e))
+		return False
+
+
+def noteaza_sterse(pozitii, cale=None):
+	"""Pozitiile sterse de om in editor adaugate in STERSE (nu mai revin singure la pornire). Nu ridica."""
+	try:
+		noi = set(p for p in (_poz_tuner(x) for x in (pozitii or ())) if p is not None)
+		if not noi:
+			return
+		vechi = citeste_sterse(cale) or set()
+		if noi - vechi and scrie_sterse(vechi | noi, cale):
+			_jurnal("sterse de om, tinute minte: %s" % ", ".join("%d" % p for p in sorted(noi - vechi)))
+	except Exception as e:
+		_jurnal("lista satelitilor stersi de om: %r" % (e,))
+
+
 def scoate_de_la_tunere(pozitii, aplica=True, nimmgr=None, cfg=None, salveaza=None):
 	"""Pe receptor, pe firul enigma2, dupa stergerea din editor (televizor, web): pozitiile date scoase din configurarea
 	tunerelor de satelit, pe obiectele config.Nims (settings scris direct s-ar pierde la oprire): portul DiSEqC al felului
@@ -256,6 +344,8 @@ def scoate_de_la_tunere(pozitii, aplica=True, nimmgr=None, cfg=None, salveaza=No
 	scoase = []
 	if not pozitii:
 		return scoase
+	if aplica:
+		noteaza_sterse(pozitii)       # KGW9: inaintea tunerelor (pe PC, fara tunere, functia se intoarce mai jos)
 	try:
 		if nimmgr is None:
 			from Components.NimManager import nimmanager as nimmgr
@@ -451,10 +541,10 @@ def adauga_transpondere_noi(sateliti, imagine, cunoscute):
 
 def uneste_la_pornire(cale=None, copie=None, lamedb=None, setari=SETARI, stare=None, detalii=False):
 	"""Din NimManager.readTransponders, inainte de eDVBDB.readSatellites: satelitii omului primesc transponderele noi ale
-	listei imaginii (unire, o singura scriere, cu copie de siguranta). Din 0.7.7 (SAT) niciun satelit nu se mai pune la
-	loc: un satelit care lipseste din fisier ramane lipsa (vezi antetul); lamedb si setari nu se mai citesc (raman ca
-	argumente pentru cine le da). Nu ridica niciodata. -> pozitiile satelitilor pusi (mereu []); cu detalii=True
-	([], transpondere puse: [(poz, kHz, pol)])"""
+	listei imaginii (unire, o singura scriere, cu copie de siguranta). Din 0.8.0 (KGW9) se pun la loc din lista imaginii
+	si satelitii folositi (porturile/LNB-urile active din `setari`; cu un tuner pe motor si pozitiile cu canale din
+	`lamedb`) care lipsesc si nu sunt sterse de om (STERSE); un satelit sters de om ramane lipsa (vezi antetul). Nu ridica
+	niciodata. -> pozitiile satelitilor pusi; cu detalii=True (pozitiile, transpondere puse: [(poz, kHz, pol)])"""
 	try:
 		puse, tp = _uneste(cale, copie, lamedb, setari, stare)
 	except Exception as e:
@@ -471,6 +561,32 @@ def _citeste_octeti(cale):
 		return None
 
 
+def _folosite_lipsa(are, cale_im, setari, lamedb):
+	"""KGW9: pozitiile folosite (tunere; cu motor si canalele din lamedb) care lipsesc din `are` si nu sunt sterse de
+	om. Tine STERSE la zi: prima data il face (vezi antetul), apoi scoate din el ce a pus omul inapoi."""
+	refs, motor = folosite_de_tunere(setari)
+	folosite = set(refs)
+	if motor:
+		folosite |= pozitii_lamedb(lamedb)
+	# STERSE sta langa settings (pe receptor /etc/enigma2; pe PC, in probe, langa settings-ul probei)
+	cale_st = STERSE if setari == SETARI else \
+		os.path.join(os.path.dirname(os.path.abspath(setari)), os.path.basename(STERSE))
+	sterse = citeste_sterse(cale_st)
+	if sterse is None:
+		# prima pornire cu KGW9: ce lipseste acum din lista (afara de tunere) a fost sters inainte, poate de om
+		sterse = set(D.citeste_sateliti(cale_im)) - are - refs
+		scrie_sterse(sterse, cale_st)
+		if sterse:
+			_jurnal("prima data: %d sateliti ai imaginii lipsa din lista, tinuti ca stersi" % len(sterse))
+	else:
+		inapoi = sterse & are
+		if inapoi:
+			sterse -= inapoi
+			scrie_sterse(sterse, cale_st)
+			_jurnal("pusi inapoi de om, scosi din cei stersi: %s" % ", ".join("%d" % p for p in sorted(inapoi)))
+	return folosite - are - sterse
+
+
 def _uneste(cale, copie, lamedb, setari, stare=None):
 	cale = cale or D.cale_sateliti()
 	if not os.access(cale, os.R_OK):
@@ -481,8 +597,11 @@ def _uneste(cale, copie, lamedb, setari, stare=None):
 	cale_im = cale_imagine(cale, copie)
 	if cale_im is None:
 		return [], []
-	# 0.7.7 (SAT): niciun satelit nu se mai pune la loc singur (un satelit sters de om nu revine; vezi antetul)
-	sat_lipsa = set()
+	# KGW9 (0.8.0): satelitii folositi care lipsesc si nu sunt stersi de om se pun la loc (vezi antetul)
+	sat_lipsa = _folosite_lipsa(set(are), cale_im, setari, lamedb)
+	if sat_lipsa:
+		# numai ce are lista imaginii (citirea ieftina, etichetele <sat>): altfel nimic de pus si nicio citire intreaga
+		sat_lipsa &= set(D.citeste_sateliti(cale_im))
 	# transponderele noi: numai cand copia imaginii s-a schimbat de la unirea de dinainte (primul rand din STARE)
 	stare = stare or cale_stare(cale)
 	semn = _semn(cale_im)
@@ -522,7 +641,7 @@ def _uneste(cale, copie, lamedb, setari, stare=None):
 		sateliti = S.citeste(cale)
 	except S.Eroare:
 		return [], []
-	puse = []
+	puse = adauga_din(sateliti, imagine, sat_lipsa) if sat_lipsa else []
 	tp = adauga_transpondere_noi(sateliti, imagine, (vechi or {}).get("ids") or set()) if tp_de_vazut else []
 	copia = None
 	if puse or tp:

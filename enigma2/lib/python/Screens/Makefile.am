@@ -39,9 +39,9 @@ install_PYTHON = \
 	HdsSubtitrariFilm.py HdsTeletext.py HdsEcranRadio.py HdsEcranNegru.py ScreenSaver.py HdsAfisaj.py \
 	HdsAfisajColor.py \
 	HdsCopieSetari.py HdsCopieImagine.py HdsCulegereTotala.py HdsActualizari.py HdsImagineOnline.py HdsDescarcareSubtitrari.py \
-	HdsLocul.py HdsCalitateImagine.py HdsRezolutieTv.py HdsIstoricCanale.py HdsMozaic.py HdsDespreFilm.py HdsSportAzi.py HdsGhidInternet.py \
+	HdsLocul.py HdsCalitateImagine.py HdsRezolutieTv.py HdsIstoricCanale.py HdsMozaic.py HdsDespreFilm.py HdsSportAzi.py HdsYouTube.py HdsGhidInternet.py HdsGhidGrafic.py \
 	HdsImportSetari.py MediaPlayer.py PicturePlayer.py HdsSkinSetari.py \
-	HdsAplicatii.py HdsNavigatorWeb.py HdsTemaInterfata.py HdsFundalPro.py HdsVremea.py HdsAnuntRetea.py HdsUnelteRetea.py \
+	HdsAplicatii.py HdsNavigatorWeb.py HdsTemaInterfata.py HdsFundalPro.py HdsVremea.py HdsAnuntRetea.py HdsAnuntStocare.py HdsUnelteRetea.py \
 	HdsLocuriRetea.py HdsReteaStandard.py HdsBetaTester.py HdsQrRapoarte.py HdsForumReceptor.py HdsWebTelefon.py \
 	Opkg.py NetworkServices.py DVD.py \
 	TaskList.py Toast.py

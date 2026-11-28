@@ -9,9 +9,13 @@
 #   (atunci nimic nu iesea pe Wi-Fi);
 # - metrica: placile fara fir de la 10, celelalte de la 0. Cablul ramane primul cand merge; cu cablul scos nucleul sare
 #   ruta lui (ignore_routes_with_linkdown, pus de Components/HdsComutareRetea.py) si castiga Wi-Fi-ul.
+# - serverele de nume puse de om in "Nameserver settings" (/etc/enigma2/nameserversdns.conf, scris de
+#   Components/HdsRetea.py; PRM1, 26.11.2026) trec inaintea celor de la DHCP, la pornire si la fiecare reinnoire;
+#   fara fisier (sau fara niciun rand nameserver) raman cele de la DHCP, ca inainte.
 
 [ -n "$1" ] || { echo "folosire: chemat de udhcpc" >&2; exit 1; }
 RESOLV_CONF=/etc/resolv.conf
+DNS_OMULUI=/etc/enigma2/nameserversdns.conf
 
 metrica_de_baza() {
 	if [ -e "/sys/class/net/$interface/wireless" ] || [ -e "/sys/class/net/$interface/phy80211" ]; then
@@ -41,6 +45,10 @@ renew|bound)
 				ip route append default via "$r" dev "$interface" metric "$m"
 			m=$((m + 1))
 		done
+	fi
+	if [ -s "$DNS_OMULUI" ]; then
+		d=$(awk '$1 == "nameserver" && $2 ~ /^[0-9.]+$/ { print $2 }' "$DNS_OMULUI")
+		[ -n "$d" ] && dns="$d"
 	fi
 	R=""
 	[ -n "$domain" ] && R="domain $domain

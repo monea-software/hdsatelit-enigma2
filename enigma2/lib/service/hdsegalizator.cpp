@@ -488,10 +488,51 @@ namespace
 	};
 
 	/* ---------------------------------------------------------------- felul fluxului dupa primele cadre */
+
+	/* un cadru AC-3 / E-AC-3 la d[0..] (sincronizarea 0x0B77, ATSC A/52): lungimea lui in octeti si bsid-ul (pana la 10
+	   AC-3, 11..16 E-AC-3), sau 0 */
+	inline size_t lungimeDolby(const uint8_t *d, size_t n, int &bsid)
+	{
+		static const unsigned short cuvinte[38][3] = {
+			{ 64, 69, 96 }, { 64, 70, 96 }, { 80, 87, 120 }, { 80, 88, 120 }, { 96, 104, 144 }, { 96, 105, 144 },
+			{ 112, 121, 168 }, { 112, 122, 168 }, { 128, 139, 192 }, { 128, 140, 192 }, { 160, 174, 240 },
+			{ 160, 175, 240 }, { 192, 208, 288 }, { 192, 209, 288 }, { 224, 243, 336 }, { 224, 244, 336 },
+			{ 256, 278, 384 }, { 256, 279, 384 }, { 320, 348, 480 }, { 320, 349, 480 }, { 384, 417, 576 },
+			{ 384, 418, 576 }, { 448, 487, 672 }, { 448, 488, 672 }, { 512, 557, 768 }, { 512, 558, 768 },
+			{ 640, 696, 960 }, { 640, 697, 960 }, { 768, 835, 1152 }, { 768, 836, 1152 }, { 896, 975, 1344 },
+			{ 896, 976, 1344 }, { 1024, 1114, 1536 }, { 1024, 1115, 1536 }, { 1152, 1253, 1728 },
+			{ 1152, 1254, 1728 }, { 1280, 1393, 1920 }, { 1280, 1394, 1920 } };
+		if (n < 6 || d[0] != 0x0B || d[1] != 0x77)
+			return 0;
+		bsid = d[5] >> 3;
+		if (bsid <= 10)
+		{
+			int fscod = d[4] >> 6, frmsizecod = d[4] & 0x3f;
+			if (fscod == 3 || frmsizecod >= 38)
+				return 0;
+			return (size_t)cuvinte[frmsizecod][fscod] * 2;
+		}
+		if (bsid <= 16)
+		{
+			if ((d[4] >> 6) == 3 && ((d[4] >> 4) & 3) == 3)
+				return 0;                      /* fscod2 rezervat */
+			return ((((size_t)d[2] & 7) << 8) | d[3]) * 2 + 2;
+		}
+		return 0;
+	}
+
 	inline int felDinEs(const uint8_t *d, size_t n)
 	{
 		for (size_t i = 0; i + 4 < n; i++)
 		{
+			if (d[i] == 0x0B && d[i + 1] == 0x77)
+			{
+				/* doua sincronizari la distanta unui cadru: AC-3 sau E-AC-3 dupa bsid */
+				int bsid = 0, bsid2 = 0;
+				size_t lung = lungimeDolby(d + i, n - i, bsid);
+				if (lung > 7 && i + lung + 6 <= n && lungimeDolby(d + i + lung, n - i - lung, bsid2))
+					return bsid > 10 ? eHdsEgalizator::felEac3 : eHdsEgalizator::felAc3;
+			}
 			if (d[i] == 0x56 && (d[i + 1] & 0xE0) == 0xE0)
 			{
 				size_t lung = ((size_t)(d[i + 1] & 0x1f) << 8) | d[i + 2];
@@ -642,7 +683,6 @@ public:
 		LatmLaAdts latm;
 		bool reimpacheteaza;            /* LATM: cadrele merg ca ADTS spre decodorul ADTS */
 		std::atomic<bool> latm_rau;     /* configuratia LATM a devenit una care nu se poate spune in ADTS */
-		std::atomic<bool> latm_he;      /* configuratia LATM a trecut pe HE-AAC (SBR/PS semnalat): inapoi pe placa */
 		std::atomic<int> debit_antet;   /* kbit/s din antetul cadrelor MPEG (0: nu se stie) */
 		uint64_t ultim_debit_ms;        /* firul cititor: ultima citire a antetului */
 		std::vector<uint8_t> inceput;   /* octetii cititi inainte de pornirea decodorului */
@@ -683,7 +723,7 @@ public:
 #if HAVE_GSTREAMER
 			pipe(0), appsrc(0), appsink(0), decodor(0),
 #endif
-			gata(false), fd(-1), pcm(0), reimpacheteaza(false), latm_rau(false), latm_he(false), debit_antet(0), ultim_debit_ms(0),
+			gata(false), fd(-1), pcm(0), reimpacheteaza(false), latm_rau(false), debit_antet(0), ultim_debit_ms(0),
 			ns_cit(0), ns_dec(0), ns_ies(0), ultim_ns_dec(0), octeti_es(0), cadre(0),
 			ultima_data_ms(0), caderi_alsa(0), eos(false), rampaJos(false), pregain_db(0.0), abatere_ppm(0.0),
 			benzi_active(0), limitari(0), versiune(0), pornit_ms(0), info_decodor(false),
@@ -1144,7 +1184,7 @@ namespace
 	struct Decodoare
 	{
 		bool gst;
-		std::string mpeg, adts, latm;
+		std::string mpeg, adts, latm, ac3, eac3;
 		std::once_flag o_data;
 		Decodoare(): gst(false) {}
 	};
@@ -1184,6 +1224,10 @@ namespace
 		static const char *const mpeg[] = { "mpg123audiodec", "avdec_mp2float", 0 };
 		static const char *const adts[] = { "faad", "fdkaacdec", "avdec_aac", 0 };
 		static const char *const latm[] = { "avdec_aac_latm", "fdkaacdec", 0 };
+		/* AC-3 / E-AC-3: FFmpeg-ul imaginii 0.8.0; pe o imagine fara ele raman goale si
+		   postul ramane pe placa, ca inainte. Cautarea e aici, la rulare, nu dupa o lista a imaginii. */
+		static const char *const ac3[] = { "avdec_ac3", "avdec_ac3_fixed", 0 };
+		static const char *const eac3[] = { "avdec_eac3", 0 };
 		if (exista("mpegaudioparse"))
 			decodoare_.mpeg = primul(mpeg);
 		if (exista("aacparse"))
@@ -1191,10 +1235,17 @@ namespace
 			decodoare_.adts = primul(adts);
 			decodoare_.latm = primul(latm);
 		}
-		eDebug("[HdsEgalizator] decodoare: MPEG %s, AAC ADTS %s, AAC LATM %s",
+		if (exista("ac3parse"))
+		{
+			decodoare_.ac3 = primul(ac3);
+			decodoare_.eac3 = primul(eac3);
+		}
+		eDebug("[HdsEgalizator] decodoare: MPEG %s, AAC ADTS %s, AAC LATM %s, AC-3 %s, E-AC-3 %s",
 			decodoare_.mpeg.empty() ? "-" : decodoare_.mpeg.c_str(),
 			decodoare_.adts.empty() ? "-" : decodoare_.adts.c_str(),
-			!decodoare_.adts.empty() ? "prin ADTS" : (decodoare_.latm.empty() ? "-" : decodoare_.latm.c_str()));
+			!decodoare_.adts.empty() ? "prin ADTS" : (decodoare_.latm.empty() ? "-" : decodoare_.latm.c_str()),
+			decodoare_.ac3.empty() ? "-" : decodoare_.ac3.c_str(),
+			decodoare_.eac3.empty() ? "-" : decodoare_.eac3.c_str());
 #endif
 	}
 
@@ -1213,7 +1264,16 @@ namespace
 			return d.adts;
 		if (fel == eHdsEgalizator::felAacLatm)
 			return d.adts.empty() ? d.latm : d.adts;
+		if (fel == eHdsEgalizator::felAc3)
+			return d.ac3;
+		if (fel == eHdsEgalizator::felEac3)
+			return d.eac3;
 		return d.mpeg;
+	}
+
+	inline bool esteDolby(int fel)
+	{
+		return fel == eHdsEgalizator::felAc3 || fel == eHdsEgalizator::felEac3;
 	}
 }
 
@@ -1377,7 +1437,8 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 				}
 				fel = felDinEs(s->inceput.data(), s->inceput.size());
 			}
-			if (fel == eHdsEgalizator::felAacAdts || fel == eHdsEgalizator::felAacLatm)
+			/* AAC: felul din cadre; Dolby: PMT spune AC-3 sau E-AC-3, dar decodorul se alege dupa bsid-ul cadrelor */
+			if (esteDolby(sursa.fel) ? esteDolby(fel) : (fel == eHdsEgalizator::felAacAdts || fel == eHdsEgalizator::felAacLatm))
 				sursa.fel = fel;
 			if (!s->inceput.empty())
 			{
@@ -1386,13 +1447,17 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 			}
 		}
 	}
-	const std::string &decodor = decodorPentru(sursa.fel);
+	/* TV cu LATM: fluxul LOAS intra cu PTS-ul fiecarui PES in aacparse, apoi in decodorul LATM (impachetarea ADTS de
+	   mana, din impinge(), nu tine PTS-ul pe cadre) */
+	const bool latm_tv = sursa.tv && sursa.fel == eHdsEgalizator::felAacLatm;
+	const std::string &decodor = latm_tv ? decodoare().latm : decodorPentru(sursa.fel);
 	if (decodor.empty())
 	{
-		esec(cerut, sursa.fel == eHdsEgalizator::felMpeg ? "fara-decodor-mpeg" : "fara-decodor-aac");
+		esec(cerut, sursa.fel == eHdsEgalizator::felMpeg ? "fara-decodor-mpeg" :
+			(esteDolby(sursa.fel) ? "fara-decodor-dolby" : "fara-decodor-aac"));
 		return;
 	}
-	if (sursa.fel == eHdsEgalizator::felAacLatm && !decodoare().adts.empty())
+	if (sursa.fel == eHdsEgalizator::felAacLatm && !latm_tv && !decodoare().adts.empty())
 	{
 		/* configuratia din primele cadre: una care nu se poate spune in ADTS (mai multe programe, cadre de 960...)
 		   intoarce sunetul pe placa; fara configuratie inca (vine din cand in cand) se merge pe ADTS */
@@ -1409,13 +1474,9 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 			esec(cerut, "latm-nesuportat");
 			return;
 		}
-		/* HE-AAC semnalat in configuratie (SBR sau PS, obiectul 5/29): decodorul din imagine e aprobat numai pentru AAC-LC,
-		   deci postul ramane pe placa (care il canta ca de obicei). SBR-ul nesemnalat (implicit) nu se vede din antete. */
-		if (proba.cadreFacute() && proba.config().sbr)
-		{
-			esec(cerut, "aac-he");
-			return;
-		}
+		/* HE-AAC (SBR / PS semnalate, obiectul 5/29): cadrele merg tot prin ADTS, cu obiectul miezului, iar decodorul
+		   gaseste SBR si PS in cadre (semnalarea implicita). Refuzul de dinainte (numai AAC-LC) a cazut cu
+		   hotararea pentru 0.8.0 (AAC intreg, cu HE-AAC). */
 		s->reimpacheteaza = true;
 		if (proba.cadreFacute())
 			eDebug("[HdsEgalizator] LATM prin ADTS: profilul %d, esantionarea %d, canalele %d%s%s", proba.config().profil,
@@ -1429,6 +1490,10 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 		s->decodor_nume = decodor;
 		if (sursa.fel == eHdsEgalizator::felMpeg)
 			s->codec = inceput.empty() ? "MPEG" : numeMpeg(inceput.data(), inceput.size());
+		else if (sursa.fel == eHdsEgalizator::felAc3)
+			s->codec = "AC-3";
+		else if (sursa.fel == eHdsEgalizator::felEac3)
+			s->codec = "E-AC-3";
 		else
 			s->codec = sursa.fel == eHdsEgalizator::felAacLatm ? "AAC (LATM)" : "AAC";
 	}
@@ -1461,11 +1526,13 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 	   merge pe drumul ADTS */
 	const int drum = s->reimpacheteaza ? (int)eHdsEgalizator::felAacAdts : sursa.fel;
 	const char *caps = drum == eHdsEgalizator::felMpeg ? "audio/mpeg,mpegversion=(int)1" :
-		(drum == eHdsEgalizator::felAacLatm ?
-		"audio/mpeg,mpegversion=(int)4,stream-format=(string)loas,framed=(boolean)true" :
-		"audio/mpeg,mpegversion=(int)4,stream-format=(string)adts");
+		(drum == eHdsEgalizator::felAc3 ? "audio/x-ac3" :
+		(drum == eHdsEgalizator::felEac3 ? "audio/x-eac3" :
+		(drum == eHdsEgalizator::felAacLatm ? (latm_tv ? "audio/mpeg,mpegversion=(int)4,stream-format=(string)loas" :
+		"audio/mpeg,mpegversion=(int)4,stream-format=(string)loas,framed=(boolean)true") :
+		"audio/mpeg,mpegversion=(int)4,stream-format=(string)adts")));
 	const char *parser = drum == eHdsEgalizator::felMpeg ? "mpegaudioparse ! " :
-		(drum == eHdsEgalizator::felAacLatm ? "" : "aacparse ! ");
+		(esteDolby(drum) ? "ac3parse ! " : (drum == eHdsEgalizator::felAacLatm && !latm_tv ? "" : "aacparse ! "));
 	char text[1024];
 	snprintf(text, sizeof(text),
 		"appsrc name=sursa caps=\"%s\" format=%s is-live=%s block=%s max-bytes=%u ! %s%s name=decodor ! "
@@ -1473,7 +1540,7 @@ void eHdsEgalizatorMotor::deschideSesiunea(const Sursa &cerut)
 		"appsink name=iesire emit-signals=true sync=false max-buffers=16 drop=false",
 		/* cu parser, octetii intra ca flux (bytes); cadrele LATM despartite merg direct in decodor, care cere timp; la TV
 		   fiecare PES intra cu PTS-ul lui (time), ca mostrele decodate sa-l pastreze */
-		caps, (drum == eHdsEgalizator::felAacLatm || sursa.tv) ? "time" : "bytes",
+		caps, ((drum == eHdsEgalizator::felAacLatm && !latm_tv) || sursa.tv) ? "time" : "bytes",
 		sursa.fisier.empty() ? "true" : "false", sursa.fisier.empty() ? "false" : "true",
 		(unsigned)(sursa.fisier.empty() ? MAX_APPSRC * 2 : 65536), parser, decodor.c_str(), RATA, CANALE);
 	GError *err = 0;
@@ -1710,16 +1777,11 @@ void eHdsEgalizatorMotor::impinge(Sesiune *s, const std::vector<uint8_t> &es, bo
 		if (s->reimpacheteaza)
 		{
 			std::vector<uint8_t> adts;
-			for (size_t i = 0; i < cadre.size() && !s->latm_he.load(); i++)
-			{
+			for (size_t i = 0; i < cadre.size(); i++)
 				s->latm.cadru(cadre[i].data(), cadre[i].size(), adts);
-				/* postul a trecut pe HE-AAC: nimic din bucata asta nu mai pleaca spre decodor */
-				if (s->latm.areConfig() && s->latm.config().sbr)
-					s->latm_he = true;
-			}
 			if (s->latm.nesuportat())
 				s->latm_rau = true;
-			if (!adts.empty() && !s->latm_he.load())
+			if (!adts.empty())
 				impingeBucata(s, adts);
 		}
 		else
@@ -1879,7 +1941,9 @@ void eHdsEgalizatorMotor::firCititor(Sesiune *s)
 	}
 	if (!s->inceput.empty())
 	{
-		impinge(s, s->inceput, false);
+		/* la TV octetii cititi pentru felul fluxului n-au PTS: nu intra (impingeTv arunca oricum ce e inaintea primului PTS) */
+		if (!s->sursa.tv)
+			impinge(s, s->inceput, false);
 		s->inceput.clear();
 	}
 	std::vector<std::pair<size_t, uint64_t> > pts;
@@ -2378,11 +2442,6 @@ void eHdsEgalizatorMotor::verifica()
 		esec(s->cerut, "latm-nesuportat");
 		return;
 	}
-	if (s->latm_he.load())
-	{
-		esec(s->cerut, "aac-he");
-		return;
-	}
 	if (s->sursa.tv && s->sincron.stare.load() == SincronTv::FARA_CEAS)
 	{
 		esec(s->cerut, "tv-fara-ceas");
@@ -2641,9 +2700,10 @@ namespace
 		bool pauza;            /* serviciul principal e pe pauza (fara timeshift, decodorul placii oprit pe loc) */
 		const void *ceas_probat; /* serviciul pentru care proba ceasului STC e facuta */
 		std::string post;      /* da, oprit, pauza, tv, inregistrare, format, fara-gstreamer, fara-decodor-mpeg/aac, ... */
+		bool dolby;            /* AC-3 / E-AC-3 se pot decoda aici: comutatorul AC3 nu e pe trecere (setDolbyDecodat) */
 		std::string motiv;     /* un post de pe internet fara decodor: motivul de spus la „esuat” */
 		std::string motiv_esuat; /* decodorul a cazut pe flux: motivul, pana cand postul porneste din nou */
-		FataStare(): pornit(false), pauza(false), ceas_probat(0), post("nimic") {}
+		FataStare(): pornit(false), pauza(false), ceas_probat(0), post("nimic"), dolby(false) {}
 	};
 	FataStare fata;
 }
@@ -2724,6 +2784,16 @@ void eHdsEgalizator::setTv(int da)
 	reaplica();
 }
 
+void eHdsEgalizator::setDolbyDecodat(int da)
+{
+	bool d = da != 0;
+	if (d == fata.dolby)
+		return;
+	fata.dolby = d;
+	m_motor->uitaEsuata();
+	reaplica();
+}
+
 void eHdsEgalizator::setPotrivireTv(int ms)
 {
 	m_motor->setPotrivireTv(ms);
@@ -2758,9 +2828,9 @@ PyObject *eHdsEgalizator::decodoare()
 	const Decodoare &dec = ::decodoare();
 	PyObject *d = PyDict_New();
 	puneInt(d, "gstreamer", dec.gst ? 1 : 0);
-	const std::string *n[3] = { &dec.mpeg, &dec.adts, &dec.latm };
-	const char *k[3] = { "mpeg", "aac_adts", "aac_latm" };
-	for (int i = 0; i < 3; i++)
+	const std::string *n[5] = { &dec.mpeg, &dec.adts, &dec.latm, &dec.ac3, &dec.eac3 };
+	const char *k[5] = { "mpeg", "aac_adts", "aac_latm", "ac3", "eac3" };
+	for (int i = 0; i < 5; i++)
 	{
 		if (n[i]->empty())
 			PyDict_SetItemString(d, k[i], Py_None);
@@ -2934,13 +3004,19 @@ bool eHdsEgalizator::preiaSunetul(const void *proprietar, int demux, int pid, in
 		motiv = "tv";
 	else if (!radio && m_motor->tvOpritLaPornire())
 		motiv = "tv-oprit-pornire";
-	else if (!radio && fel != felMpeg)
-		motiv = "format";          /* la TV numai MPEG: la AAC (LATM) PTS-ul nu se tine pe cadre */
-	else if (fel != felMpeg && fel != felAacAdts && fel != felAacLatm)
+	else if (fel != felMpeg && fel != felAacAdts && fel != felAacLatm && !esteDolby(fel))
 		motiv = "format";
+	else if (!radio && fel != felMpeg && m_motor->tvDeProba())
+		motiv = "format";          /* fara ceasul placii (Broadcom, H8) TV ramane numai MPEG: o proba cazuta acolo ar opri si MPEG-ul */
+	else if (!radio && fel == felAacLatm && ::decodoare().latm.empty())
+		motiv = "format";          /* TV cu LATM: numai cu decodorul LATM (PTS-ul pe cadre il tine aacparse) */
+	else if (esteDolby(fel) && !fata.dolby)
+		motiv = "format";          /* AC-3 pe trecere spre amplificator (sau nespus de Python): ramane pe placa, neschimbat */
 	else if (!::decodoare().gst)
 		motiv = "fara-gstreamer";
-	else if (decodorPentru(fel).empty())
+	else if (esteDolby(fel) && ::decodoare().ac3.empty() && ::decodoare().eac3.empty())
+		motiv = "format";          /* imagine fara decodoarele Dolby: textul de pana acum */
+	else if (!esteDolby(fel) && decodorPentru(fel).empty())
 		motiv = fel == felMpeg ? "fara-decodor-mpeg" : "fara-decodor-aac";
 	else if (!alsa.incarca())
 		motiv = "fara-alsa";

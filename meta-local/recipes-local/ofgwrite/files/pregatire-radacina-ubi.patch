@@ -1,0 +1,126 @@
+HDSatelit (27.11.2026): pe ZGEMMA H8.2H Plus / H8SE (NAND, radacina ubifs) o scriere pornita din sistem cadea la
+„Error remounting root ro! Abort flashing.”: dupa fuser -k programul asteapta 3 s, iar procesele omorate (toate tin
+/etc/ld.so.cache sters dupa ldconfig, syslogd tine /home/root/logs/messages pentru scriere) inca tin radacina. Scriptul face
+inainte, numai la o scriere reala pe radacina ubifs a acestor modele: swapoff, telinit u, nivelul 2, asteptarea paznicului,
+killall5 -9 pana trece proba remount ro, apoi programul; dupa desprinderea lui nu se mai intoarce (fereastra face
+„sleep 5; init 3” dupa el). Celelalte modele: neschimbat.
+
+diff --git a/ofgwrite b/ofgwrite
+index f8d6d5d..a4cd0a0 100755
+--- a/ofgwrite
++++ b/ofgwrite
+@@ -7,9 +7,113 @@ if [ -e /.multinfo ]; then
+ 	exit 1
+ fi
+ 
++# HDSatelit (27.11.2026): pe ZGEMMA H8.2H Plus / H8SE (NAND, radacina ubifs) scrierea pornita din sistem (meniul,
++# fereastra „Imagine noua”, SSH) cadea de fiecare data: dupa „fuser -k -m /oldroot/” programul asteapta numai 3 s, iar
++# procesele omorate inca tin radacina (syslogd cu /home/root/logs/messages deschis pentru scriere, hds-raport.sh, PID 1
++# cu /etc/ld.so.cache sters dupa ldconfig), deci „umount not successful”, „Error remounting root ro! Abort flashing.” si
++# repornire dupa 30 s, nimic scris. A mers numai pregatirea facuta inainte, de mana: swapoff, telinit u, nivelul 2,
++# killall5 -9 pana nu mai ramane nimic, proba ro/rw. Aici aceeasi pregatire, inainte de program, numai la o scriere reala
++# pe radacina ubifs a acestor modele (celelalte modele merg ca inainte). Pasii se scriu in iesire (jurnalul de pe stick al
++# apelantului), cu sync, fiindca dupa desprinderea programului nu mai ramane nimic din iesirea lui.
++# Dupa ce programul s-a desprins (cod 0), scriptul NU se mai intoarce: fereastra „Imagine noua” face dupa el
++# „sync; sleep 5; init 3”, care ar porni iar interfata peste scriere. Scriptul asteapta pana il opreste programul (fuser -k).
++
++hds_jurnal() {
++	echo "[hds-ofgwrite] $(date +%T) $*"
++	sync
++}
++
++hds_tin_radacina() {
++	# procesele care tin radacina pentru scriere sau cu fisiere sterse (ele opresc „remount ro”); cele cu fisiere sterse
++	# in maps se cauta o data, cu un singur grep, ca lista sa nu dureze zeci de secunde
++	cu_sterse=" $(grep -l -F " (deleted)" /proc/[0-9]*/maps 2>/dev/null | tr '\n' ' ') "
++	for p in /proc/[0-9]*; do
++		pid=${p#/proc/}
++		r=""
++		for fd in $p/fd/*; do
++			t=$(readlink "$fd" 2>/dev/null) || continue
++			case "$t" in
++				/dev/*|/proc/*|/sys/*|/run/*|/media/*|/var/volatile/*|/tmp/*|/newroot/*|socket:*|pipe:*|anon_inode:*|/memfd:*) continue ;;
++				*" (deleted)") r="$r $t(sters)"; continue ;;
++			esac
++			fl=$(awk '/^flags/{print $2}' "$p/fdinfo/${fd##*/}" 2>/dev/null)
++			[ $(( 0${fl:-0} & 3 )) -ne 0 ] && r="$r $t(scriere)"
++		done
++		case "$cu_sterse" in
++			*" $p/maps "*)
++				m=$(grep -F " (deleted)" "$p/maps" 2>/dev/null | grep -v -E " /(dev|memfd|SYSV|newroot)" | awk '{print $6}' | sort -u | tr '\n' ' ')
++				[ -n "$m" ] && r="$r maps-sterse:$m" ;;
++		esac
++		[ -n "$r" ] && hds_jurnal "tine radacina: $pid $(cat $p/comm 2>/dev/null):$r"
++	done
++}
++
++hds_pregatire() {
++	hds_jurnal "radacina ubifs ($1): pregatesc scrierea (swapoff, telinit u, nivelul 2, killall5 -9, proba ro)"
++	swapoff -a 2>&1
++	telinit u 2>/dev/null || init u 2>/dev/null
++	sleep 2
++	set -- $(runlevel 2>/dev/null)
++	hds_jurnal "nivelul de acum: ${2:-?}"
++	[ "${2:-}" = "2" ] || telinit 2
++	n=0
++	# paznicul (python3 /usr/bin/hds-watchdog.py; pidof -x nu-l vede) trebuie sa iasa singur, dupa SIGTERM-ul nivelului
++	# 2, cu „V”: un killall5 -9 inainte l-ar lasa armat
++	while [ $n -lt 30 ] && { pidof enigma2 >/dev/null 2>&1 || pgrep -f /usr/bin/hds-watchdog.py >/dev/null 2>&1; }; do
++		sleep 1
++		n=$((n + 1))
++	done
++	hds_jurnal "enigma2 si paznicul oprite dupa $n s"
++	hds_tin_radacina
++	i=1
++	while [ $i -le 6 ]; do
++		killall5 -9
++		sleep 3
++		if mount -o remount,ro / 2>/dev/null; then
++			mount -o remount,rw / 2>&1
++			# paza placii: daca paznicul a fost oprit cu -9 inainte de „V”, placa ar reporni la 60 s, in mijlocul scrierii;
++			# „V” scris aici o dezarmeaza (nucleul H8 nu are nowayout). Cu paznicul iesit curat nu schimba nimic.
++			[ -c /dev/watchdog ] && printf V > /dev/watchdog 2>/dev/null
++			hds_jurnal "proba remount ro BUNA la runda $i; pornesc programul"
++			return 0
++		fi
++		hds_jurnal "radacina tot ocupata la runda $i"
++		hds_tin_radacina
++		i=$((i + 1))
++	done
++	hds_jurnal "radacina ramane ocupata; programul porneste si se opreste singur, fara sa scrie"
++	return 1
++}
++
++hds_real=1
++for a in "$@"; do
++	case "$a" in
++		-n|--nowrite) hds_real=0 ;;
++	esac
++done
++hds_model=$(sed -n 's/^machinebuild=//p' /etc/hdsatelit-model 2>/dev/null)
++hds_pregatit=0
++if [ $hds_real = 1 ] && awk '$2 == "/" && $3 == "ubifs" { f=1 } END { exit f ? 0 : 1 }' /proc/mounts; then
++	case "$hds_model" in
++		zgemmah82hplus|zgemmah8se) hds_pregatire "$hds_model"; hds_pregatit=1 ;;
++	esac
++fi
++
+ mkdir -p /newroot || exit 1
+ if ! awk '$2 == "/newroot" && $3 == "tmpfs" { found=1 } END { exit found ? 0 : 1 }' /proc/mounts; then
+ 	mount -t tmpfs tmpfs /newroot || exit 1
+ fi
+ cp -p /usr/bin/ofgwrite_bin /newroot/ || exit 1
+-exec /newroot/ofgwrite_bin "$@"
++[ $hds_pregatit = 1 ] || exec /newroot/ofgwrite_bin "$@"
++
++/newroot/ofgwrite_bin "$@"
++hds_cod=$?
++if [ $hds_cod != 0 ]; then
++	# nimic scris, dar pregatirea a oprit tot (reteaua, interfata): repornirea aduce receptorul inapoi ca inainte
++	hds_jurnal "programul s-a intors cu codul $hds_cod, inainte de scriere; nimic scris, repornesc receptorul"
++	sync
++	reboot
++	exit $hds_cod
++fi
++hds_jurnal "programul s-a desprins si scrie; astept aici pana ma opreste el"
++exec sleep 900

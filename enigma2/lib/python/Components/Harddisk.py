@@ -111,6 +111,12 @@ FILESYSTEMS_FILE = "/proc/filesystems"
 # UUID of the partition that had /media/hdd last: with several devices present, it gets /media/hdd again after a
 # restart. Written only when that partition changes.
 HDD_UUID_FILE = "/etc/enigma2/hds-disc-hdd"
+# 0.8.0 (SBD1): "mmc" = memory cards take /media/mmc and never /media/hdd; "vechi" = installation from before 0.8.0, a card
+# keeps the order of names it had (HarddiskManager.readCardMode)
+CARD_MODE_FILE = "/etc/enigma2/hds-card-nume"
+# 0.8.0 (SBD1): {uuid: [old place, chosen place]} of a disk that takes its chosen name at the next start; its paths follow
+# it then (HarddiskManager.applyPendingPaths)
+PENDING_PATHS_FILE = "/etc/enigma2/hds-cai-amanate.json"
 LABEL_DIR = "/dev/disk/by-label/"
 MEDIA_NAMES_FILE = "/etc/enigma2/hds-media-names.json"
 # Hidden switch for installations that need only the traditional names.
@@ -165,6 +171,66 @@ def isSdCard(device):
 		return readFile("/sys/block/%s/device/type" % m.group(1)) == "SD"
 	except (IOError, OSError):
 		return False
+
+# 0.8.0 (SBD1, LinuxSat 164215, skylab, Octagon SF8008 4K): the card slot of some receivers is a USB card reader on the
+# internal hub, so the card is /dev/sdX like a stick (removable 0) and took /media/hdd before the disk of the user (also
+# when an image runs from a slot on the card). Its physdev ends in the hub port of the slot; OE-Alliance reads the same
+# ports as internal on this model. A card there gets /media/mmc, like a card seen as mmc (isSdCard), so /media/hdd stays
+# for the disk. Key: the machine build (SystemInfo machinebuild, else MACHINEBUILD= or MODEL= from /proc/cmdline).
+CARD_READER_PORTS = {
+	"sf8008": ("/usb1/1-1/1-1.4/1-1.4:1.0/",),
+}
+_masina_citita = {}
+
+def machineBuild():
+	"""the machine build of the receiver (sf8008, ...), read once; "" when unknown"""
+	if "v" not in _masina_citita:
+		nume = ""
+		try:
+			nume = SystemInfo.get("machinebuild") or ""
+		except Exception:
+			nume = ""
+		if nume == "unknown":
+			# SystemInfo not read yet
+			nume = ""
+		if not nume:
+			try:
+				cmd = readFile("/proc/cmdline")
+			except (IOError, OSError):
+				cmd = ""
+			m = re.search(r"(?:^|\s)(?:MACHINEBUILD|MODEL)=([A-Za-z0-9_]+)", cmd)
+			nume = m.group(1) if m else ""
+		_masina_citita["v"] = nume
+	return _masina_citita["v"]
+
+def machineFamily(nume=None):
+	"""the board family of a machine build, like SystemInfo.getBoxName (sf8008m before sf8008: another board)"""
+	nume = machineBuild() if nume is None else nume
+	for familie in ("sf8008m", "sf8008"):
+		if nume.startswith(familie):
+			return familie
+	return nume
+
+def isCardReaderDisk(disk, physdev=None):
+	"""disk sdX sits behind the card reader of the receiver (CARD_READER_PORTS), not a stick or disk on a USB port"""
+	if not re.match(r"^sd[a-z]+$", disk or ""):
+		return False
+	ports = CARD_READER_PORTS.get(machineFamily(), ())
+	if not ports:
+		return False
+	if physdev is None:
+		try:
+			physdev = path.realpath("/sys/block/%s/device" % disk)
+		except OSError:
+			return False
+	return any(port in (physdev or "") + "/" for port in ports)
+
+def isCardPartition(device):
+	"""a partition (or the disk) of a memory card: in a card slot seen as mmc, or behind the card reader of the receiver"""
+	if isSdCard(device):
+		return True
+	m = re.match(r"^(sd[a-z]+)[0-9]*$", device or "")
+	return bool(m) and isCardReaderDisk(m.group(1))
 
 def isAliasOf(alias, mountpoint):
 	"""alias is a link that leads to mountpoint"""
@@ -432,6 +498,13 @@ def probeBootSlot(device):
 
 DEVTYPE_UDEV = 0
 DEVTYPE_DEVFS = 1
+
+def modelPaths(phys):
+	"""where the model of a block device may be, given its sysfs path without "/sys": the device folder itself (at start),
+	the disk of a hotplug event (.../block/sda) and the disk of a partition event (.../block/sda/sda1)"""
+	base = "/sys" + phys.rstrip("/")
+	return [base + "/model", base + "/device/model", path.dirname(base) + "/device/model"]
+
 
 class Harddisk:
 	def __init__(self, device):
@@ -979,6 +1052,8 @@ class HarddiskManager:
 		self.stale_checked = False
 		self.hdd_uuid = self.readHddUuid()
 		self.media_names = self.readMediaNames()
+		# before any disk is named at this start (SBD1)
+		self.card_names_mode = self.readCardMode()
 		self.label_aliases = {}
 		self.chosen_aliases = {}
 		self.media_alias_targets = {}
@@ -1398,10 +1473,160 @@ class HarddiskManager:
 		except (IOError, OSError) as err:
 			print("[Harddisk] could not write %s: %s" % (HDD_UUID_FILE, err))
 
+	def cardLeavesHdd(self, uuid):
+		"""The partition with this UUID is on a memory card (isCardPartition) and does not take /media/hdd. Installations from
+		before 0.8.0 keep their names: a card that had /media/hdd (hds-disc-hdd) keeps it until another disk is given
+		/media/hdd by hand (Montarea discurilor), then it moves to /media/mmc; any other card keeps the old order (legacyCards)."""
+		if not uuid or not UUID_RX.match(uuid):
+			return False
+		try:
+			device = path.basename(readlink(UUID_DIR + uuid))
+		except OSError:
+			return False
+		if not isCardPartition(device):
+			return False
+		other_hdd = any(n == "hdd" and u != uuid for u, n in self.media_names.items())
+		if uuid == self.hdd_uuid:
+			# it had /media/hdd: it gives it up only to a disk given /media/hdd by hand
+			return other_hdd
+		if self.legacyCards():
+			return False
+		# coordinator 24.11: with no real disk at start the card takes /media/hdd as before (recordings, timeshift and the
+		# guide work with nothing to choose); it moves to /media/mmc only when a real disk is there or was chosen by hand
+		return other_hdd or self.realDiskPresent(device)
+
+	def realDiskPresent(self, exclude=None):
+		"""a real disk is connected now: a USB or SATA partition that is not removable (an external or internal hard disk,
+		not a stick), not a memory card, not a boot slot (listed, or waiting for its name at start)"""
+		for p in list(self.partitions) + list(self.pending.values()):
+			device = getattr(p, "device", None)
+			if not device or device == exclude or getattr(p, "is_cdrom", False):
+				continue
+			if not (getattr(p, "usb", False) or getattr(p, "sata", False)) or getattr(p, "removable", True):
+				continue
+			if isCardPartition(device) or isBootSlot(device) or getattr(p, "has_partitions", False):
+				continue
+			# a new disk with no filesystem yet (or only swap) would leave /media/hdd empty until it is formatted
+			fstype = deviceFsType(device)
+			if fstype == "" or fstype in NOT_MOUNTED_FS:
+				continue
+			return True
+		return False
+
+	def legacyCards(self):
+		"""installation from before 0.8.0 (CARD_MODE_FILE says "vechi"): a card keeps the old order of names"""
+		mode = getattr(self, "card_names_mode", None)
+		if mode is None:
+			mode = self.card_names_mode = self.readCardMode()
+		return mode == "vechi"
+
+	def readCardMode(self):
+		"""Read once, at the first start of 0.8.0 before any disk is named: "vechi" when an earlier version already named
+		disks here (hds-disc-hdd or hds-media-names.json exist), "mmc" for a new installation, written once in CARD_MODE_FILE
+		so the answer stays the same later (0.8.0 itself writes those two files)."""
+		try:
+			mode = readFile(CARD_MODE_FILE)
+			if mode in ("vechi", "mmc"):
+				return mode
+		except (IOError, OSError):
+			pass
+		if path.exists(HDD_UUID_FILE) or path.exists(MEDIA_NAMES_FILE):
+			# nothing written: on an installation from before 0.8.0 the file stays missing and the answer stays "vechi"
+			return "vechi"
+		# a new installation: written once, before 0.8.0 writes the two files
+		mode = "mmc"
+		try:
+			with open(CARD_MODE_FILE, "w") as f:
+				f.write(mode + "\n")
+		except (IOError, OSError) as err:
+			print("[Harddisk] could not write %s: %s" % (CARD_MODE_FILE, err))
+		return mode
+
+	def readPendingPaths(self):
+		try:
+			with open(PENDING_PATHS_FILE, encoding="utf-8") as f:
+				values = json.load(f)
+			return values if isinstance(values, dict) else {}
+		except (IOError, OSError, ValueError):
+			return {}
+
+	def writePendingPaths(self, values):
+		try:
+			if not values:
+				if path.exists(PENDING_PATHS_FILE):
+					unlink(PENDING_PATHS_FILE)
+				return True
+			temp = PENDING_PATHS_FILE + ".nou"
+			with open(temp, "w", encoding="utf-8") as f:
+				json.dump(values, f, sort_keys=True)
+				f.write("\n")
+			replace(temp, PENDING_PATHS_FILE)
+			return True
+		except OSError as err:
+			print("[Harddisk] could not write %s: %s" % (PENDING_PATHS_FILE, err))
+			return False
+
+	def applyPendingPaths(self, uuid, mountpoint):
+		"""0.8.0 (SBD1): the disk chosen by hand now has the name it was waiting for (after the restart): the folders of the
+		recordings, the timers and the place of the TV guide follow it from its old name (HdsMontareDiscuri.mutaCaile), a
+		few seconds later on the enigma2 thread, when the settings are loaded. Until then nothing moved, so nothing was
+		written on the card that still had the name."""
+		if not uuid or not path.exists(PENDING_PATHS_FILE):
+			return False
+		entry = self.readPendingPaths().get(uuid)
+		if not isinstance(entry, list) or len(entry) != 2 or (mountpoint or "").rstrip("/") != entry[1].rstrip("/"):
+			return False
+		def apply():
+			self.mount_timers.pop("cai:" + uuid, None)
+			try:
+				from Components.HdsMontareDiscuri import mutaCaile
+				print("[Harddisk] paths follow %s: %s" % (entry[1], mutaCaile(entry[0], entry[1])))
+			except Exception as err:
+				print("[Harddisk] paths %s -> %s: %r" % (entry[0], entry[1], err))
+			values = self.readPendingPaths()
+			values.pop(uuid, None)
+			self.writePendingPaths(values)
+		from enigma import eTimer
+		timer = eTimer()
+		timer.callback.append(apply)
+		self.mount_timers["cai:" + uuid] = timer
+		timer.start(5000, True)
+		return True
+
+	def mediaPlaceOwner(self, place):
+		"""the device that holds /media/<name> now (a link or bind made here, a mount being made, a mount), or None"""
+		place = (place or "").rstrip("/")
+		for device, alias in list(self.aliases.items()):
+			if (alias or "").rstrip("/") == place:
+				return device
+		for device, target in list(self.busy.items()):
+			if (target or "").rstrip("/") == place:
+				return device
+		for source, mountpoint in readMounts():
+			if mountpoint.rstrip("/") == place and source.startswith("/dev/"):
+				return path.basename(path.realpath(source))
+		return None
+
+	def ownerYieldsPlace(self, owner, device):
+		"""/media/<name> held by a memory card or by the disk the image runs from is given to another disk chosen by hand at
+		the next start of the receiver: the card cannot be unmounted from the menu when the image runs from it, so a refusal
+		would leave the user without a way (skylab, LinuxSat 164215). Returns "card", "pornire" or ""."""
+		if not owner or owner == device:
+			return ""
+		if isCardPartition(owner):
+			return "card"
+		if owner == getattr(self, "system_partition", None):
+			return "pornire"
+		return ""
+
 	def hddOwnerWaits(self, uuid):
 		"""/media/hdd is kept for the partition that had it before, while that one is present and known here"""
 		owner = self.hdd_uuid
 		if not owner or uuid == owner or not uuidPresent(owner):
+			return False
+		# 0.8.0 (SBD1): /media/hdd chosen by hand for this disk (Montarea discurilor) wins over the partition remembered in
+		# hds-disc-hdd (the card or the disk the image runs from gave it up, ownerYieldsPlace)
+		if uuid and self.media_names.get(uuid) == "hdd":
 			return False
 		# Discul mare de pe care porneste imaginea ia /media/hdd fara setare (Wlad, forum 948): /media/hdd tinut minte
 		# pentru un stick nu il mai opreste. Numele ales de mana pentru stick (media_names) il opreste mai departe, din
@@ -1627,7 +1852,19 @@ class HarddiskManager:
 			return {"result": False, "message": _("Alege un nume din listă."), "amanat": False}
 		uuid = deviceUuid(device)
 		# 09.11.2026: si un nume ocupat acum de alt disc ramane protejat.
-		if value and (not self.mediaAssignmentFree(value, uuid) or not self.mediaPlaceFree(MEDIA_ROOT + value, device)):
+		yields = ""
+		if value and self.mediaAssignmentFree(value, uuid) and not self.mediaPlaceFree(MEDIA_ROOT + value, device):
+			# 0.8.0 (SBD1): the card (or the disk the image runs from) gives the name up at the next start
+			owner = self.mediaPlaceOwner(MEDIA_ROOT + value)
+			yields = self.ownerYieldsPlace(owner, device)
+			if not yields:
+				# the message names the disk that holds the place (model or label and size), when it is known
+				shown = storagePathName(MEDIA_ROOT + value, owner) if owner else ""
+				disc = shown[len(MEDIA_ROOT + value):].strip()[1:-1].strip() if shown.startswith(MEDIA_ROOT + value + "  (") else ""
+				if disc:
+					return {"result": False, "message": _("Numele %(loc)s este ținut acum de alt disc: %(disc)s. Alege alt nume.") %
+						{"loc": MEDIA_ROOT + value, "disc": disc}, "amanat": False}
+		if value and not yields and (not self.mediaAssignmentFree(value, uuid) or not self.mediaPlaceFree(MEDIA_ROOT + value, device)):
 			return {"result": False, "message": _("Numele %s este ocupat de alt disc sau dosar. Alege alt nume.") % (MEDIA_ROOT + value), "amanat": False}
 		values = dict(self.media_names)
 		uuid = deviceUuid(device)
@@ -1639,6 +1876,22 @@ class HarddiskManager:
 			values.pop(uuid, None)
 		if not self.writeMediaNames(values, valid):
 			return {"result": False, "message": _("Nu am putut ține minte numele discului. Încearcă din nou."), "amanat": False}
+		if yields:
+			# nothing is unmounted now (the card may hold the running image, a recording may write on it): the names change
+			# at the next start, the card takes /media/mmc (freeMediaName, cardLeavesHdd)
+			if yields == "card" and self.mediaPlaceFree(MEDIA_ROOT + MMC_NAME, owner):
+				text = _("Am ținut minte alegerea: discul ia %s după repornirea receptorului, iar cardul trece pe /media/mmc.")
+			elif yields == "card":
+				text = _("Am ținut minte alegerea: discul ia %s după repornirea receptorului, iar cardul primește alt nume.")
+			else:
+				text = _("Am ținut minte alegerea: discul ia %s după repornirea receptorului, iar discul de pornire primește alt nume.")
+			old = next((x.mountpoint for x in list(self.partitions) if x.device == device and x.mountpoint), "")
+			if old and old.rstrip("/") != MEDIA_ROOT + value:
+				pending = self.readPendingPaths()
+				pending[uuid] = [old.rstrip("/"), MEDIA_ROOT + value]
+				self.writePendingPaths(pending)
+			self.media_messages[device] = text % (MEDIA_ROOT + value)
+			return {"result": True, "message": self.media_messages[device], "amanat": True, "dupa_repornire": True}
 		self.media_messages[device] = _("Punctul de montare a fost salvat. Se folosește la următoarea montare a discului.")
 		return {"result": True, "message": self.media_messages[device], "amanat": True}
 
@@ -1656,7 +1909,13 @@ class HarddiskManager:
 		chosen = self.media_names.get(uuid, "") if uuid else ""
 		names = list(MEDIA_NAMES)
 		if chosen in names or chosen == CHOSEN_EXTRA:
-			names = [chosen] + [n for n in names if n != chosen]
+			# a card chosen "mmc" (or usb..) by hand does not fall back on /media/hdd either
+			drop_hdd = chosen != "hdd" and self.cardLeavesHdd(uuid)
+			names = [chosen] + [n for n in names if n != chosen and not (drop_hdd and n == "hdd")]
+		elif chosen != CHOSEN_EXTRA and self.cardLeavesHdd(uuid):
+			# 0.8.0 (SBD1): a memory card (also the one the image runs from) takes /media/mmc and never /media/hdd, which
+			# stays for the disk; a card that already had /media/hdd keeps it (cardLeavesHdd)
+			names = [MMC_NAME] + [n for n in names if n != "hdd"]
 		for name in names:
 			place = MEDIA_ROOT + name
 			if place in mounted or place in reserved:
@@ -2049,7 +2308,7 @@ class HarddiskManager:
 			places = set(findMountpoints(device))
 			readonly = any(len(row) >= 4 and unescapeMountPath(row[1]) in places and "ro" in row[3].split(",")
 				for row in getProcMounts())
-			return {"numai_citire": readonly, "mountpoint": displayed}
+			return {"numai_citire": readonly, "mountpoint": displayed, "uuid": uuid}
 		def gata(rez):
 			if self.pending.get(device) is not p:
 				return
@@ -2073,6 +2332,7 @@ class HarddiskManager:
 			self.fstype_tries.pop(device, None)
 			if getattr(p, "notify_mount", True):
 				self.on_partition_list_change("add", p)
+			self.applyPendingPaths(rez["valoare"].get("uuid"), p.mountpoint)
 		# 09.11.2026: si etichetele urmeaza ordinea cererilor, nu ordinea
 		# in care sistemul de operare programeaza firele de pregatire.
 		self._queueMountPlan(("anunta", device), prepare, gata)
@@ -2203,13 +2463,20 @@ class HarddiskManager:
 		dev, part = self.splitDeviceName(dev)
 		description = _("Disc %s: metadate indisponibile") % dev
 		have_model_descr = False
-		try:
-			model = readFile("/sys" + phys + "/model")
+		# 0.8.0: la un disc pus din mers `phys` e calea evenimentului (.../block/sda sau .../block/sda/sda1), iar modelul sta in
+		# .../block/sda/device/model; la pornire `phys` e chiar dosarul device. Inainte, orice stick pus din mers se numea
+		# "Disc sda: metadate indisponibile".
+		for model_path in modelPaths(phys):
+			try:
+				model = readFile(model_path)
+			except IOError:
+				continue
 			if model:
 				description = model
 				have_model_descr = True
-		except IOError as s:
-			print("couldn't read model: ", s)
+				break
+		else:
+			print("couldn't read model of %s (%s)" % (dev, phys))
 		from Tools.HardwareInfo import HardwareInfo
 		if dev.find('sr') == 0 and dev[2].isdigit():
 			devicedb = DEVICEDB_SR

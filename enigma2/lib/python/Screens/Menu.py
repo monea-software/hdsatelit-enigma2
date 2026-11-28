@@ -56,9 +56,9 @@ mdom = xml.etree.ElementTree.parse(resolveFilename(SCOPE_SKIN, 'menu.xml'))
 
 
 # HDSatelit: „Caută în meniu” e primul rand pe ORICE pagina de meniu (meniul principal, Setări, orice submeniu), pus aici,
-# in Menu.__init__, ca orice meniu nou sa-l primeasca singur (Eduard, 13.11.2026). Randul nu are cifra: cifrele 1-9
-# numara randurile de sub el, ca inainte. 0 nu deschide cautarea: numai in principal cu peste 9 intrari deschide
-# prima intrare suplimentara, iar 9 ramane pe ultima (Components/HdsDale.py). Intrarile din
+# in Menu.__init__, ca orice meniu nou sa-l primeasca singur (Eduard, 13.11.2026). Randul nu are cifra: cifrele
+# numara randurile de sub el, in ordine, in orice meniu: 1-9 pe primele noua, 0 pe al zecelea, nimic dupa el
+# (Components/HdsDale.py). 0 nu deschide cautarea; intr-un meniu cu cel mult noua randuri 0 nu face nimic. Intrarile din
 # menu.xml care deschid acelasi ecran (Components/HdsCautaSetari.ID_PROPRII: prima din Setări, cea din meniul principal)
 # se sar pe televizor, ca sa nu apara de doua ori; raman in menu.xml pentru interfata web si index.
 ID_RAND_CAUTARE = "hds_cauta_meniu"
@@ -642,12 +642,11 @@ class Menu(Screen):
 				"7": self.keyNumberGlobal,
 				"8": self.keyNumberGlobal,
 				"9": self.keyNumberGlobal,
+				"0": self.keyNumberGlobal,
 				# Scurtaturi optionale, oprite la instalare; actiunile sunt permanent in MENU.
 				"cautare": self.keyCautaSetari,
 				"yellow": self.keyGalben,
 			}
-		if self._cheieMeniu == "mainmenu":
-			actions["0"] = self.keyNumberGlobal
 		contexte = ["OkCancelActions", "MenuActions", "NumberActions", "HdsCautareActions", "ColorActions"]
 		self["actions"] = NumberActionMap(contexte, actions)
 		if self._modDale:
@@ -819,13 +818,14 @@ class Menu(Screen):
 
 	# ------------------------------------------------------------ ordinea si ascunderea (HdsMeniuOrdine)
 	def _cifreExtinse(self):
-		return self._cheieMeniu == "mainmenu" and len(self._flatlist) - 1 > 9
+		return HdsDale.cifreExtinse(len(self._flatlist) - 1)
 
 	def _cifraIntrare(self, i):
-		return HdsDale.cifraIntrare(i - 1, len(self._flatlist) - 1, self._cheieMeniu == "mainmenu")
+		return HdsDale.cifraIntrare(i - 1, len(self._flatlist) - 1)
 
 	def _listaAfisata(self):
-		# In lista veche nu se desenau cifre. Principalul extins le arata ca sa explice ordinea 8, 0, ..., 9.
+		# In lista cu cel mult noua randuri nu se deseneaza cifre (ca inainte). Cu al zecelea rand cifrele se scriu in
+		# fata numelor, ca sa se vada ca 0 il deschide pe el.
 		if not self._cifreExtinse():
 			return self._flatlist
 		rez = []
@@ -893,16 +893,18 @@ class Menu(Screen):
 			x = original[0] if original else curent
 			nume = x[4] if len(x) > 4 else x[0]
 			i = chei.index(cheie)
-			if len(chei) > 1:
+			# 0.8.0 FX3: with Sortare automata A-Z the order is the alphabet, so there is nothing to move
+			az = HdsMeniuOrdine.sortareAZ()
+			if len(chei) > 1 and not az:
 				# MNA: mutarea cu sagetile, prima; pasii de mai jos raman (merg si fara harta de mutare)
 				rez.append((_("Mută „%s” cu săgețile") % nume, boundFunction(self.pornesteMutarea, cheie)))
-			if i > 0:
+			if i > 0 and not az:
 				rez.append((_("Mută mai sus „%s”") % nume, boundFunction(self.mutaIntrarea, cheie, -1)))
-			if i < len(chei) - 1:
+			if i < len(chei) - 1 and not az:
 				rez.append((_("Mută mai jos „%s”") % nume, boundFunction(self.mutaIntrarea, cheie, 1)))
-			if i > 1:
+			if i > 1 and not az:
 				rez.append((_("Mută la început"), boundFunction(self.mutaIntrarea, cheie, -len(chei))))
-			if i < len(chei) - 2:
+			if i < len(chei) - 2 and not az:
 				rez.append((_("Mută la sfârșit"), boundFunction(self.mutaIntrarea, cheie, len(chei))))
 			if cheie in HdsMeniuOrdine.ascunse(self._cheieMeniu):
 				rez.append((_("Arată din nou „%s”") % nume, boundFunction(self.ascundeIntrarea, cheie, False)))
@@ -916,7 +918,15 @@ class Menu(Screen):
 			rez.append((_("Arată intrările ascunse (%d)") % n, self.comutaAscunse))
 		if HdsMeniuOrdine.personalizat(self._cheieMeniu):
 			rez.append((_("Ordinea din fabrică a acestui meniu"), self.ordineaDinFabrica))
+		if HdsMeniuOrdine.setari() is not None:
+			rez.append((_("Sortare automată A-Z: %s") % (_("Da") if HdsMeniuOrdine.sortareAZ() else _("Nu")),
+				self.comutaSortareAZ))
 		return rez
+
+	def comutaSortareAZ(self):
+		curent = self._intrareCurenta() or None
+		if HdsMeniuOrdine.seteazaSortareAZ(not HdsMeniuOrdine.sortareAZ()):
+			self._refaLista(HdsMeniuOrdine.cheieTuplu(curent) if curent is not None else None)
 
 	def mutaIntrarea(self, cheie, pas):
 		if HdsMeniuOrdine.muta(self._cheieMeniu, self._cheiVazute(), cheie, pas) is not None:
@@ -1447,7 +1457,7 @@ class Menu(Screen):
 		# 0 nu ajunge la randul cautarii, nici la campul ecranului ei.
 		if number == 0 and not self._cifreExtinse():
 			return 0
-		i = HdsDale.dupaCifra(number, len(self._flatlist) - 1, self._cheieMeniu == "mainmenu")
+		i = HdsDale.dupaCifra(number, len(self._flatlist) - 1)
 		if i is None:
 			return
 		if self._modDale:

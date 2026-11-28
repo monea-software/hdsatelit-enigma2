@@ -39,6 +39,7 @@ SETARI_CIPLUS = {
 COMUNE = {
 	"dvbCiDelay": "Întârzierea DVB CI",
 	"bootDelay": "Întârzierea pornirii CI",
+	"numai_ci": "Canalele modulului CI numai prin CI",
 }
 COMUNE_HELPER = {"cihelperenabled": "Ajutorul CI+ (cere repornirea receptorului)"}
 
@@ -126,6 +127,22 @@ def _ciplus_reset(motiv):
 	ecran = _ciplus_ecran()
 	if ecran is not None and hasattr(ecran, "resetModuleCiplus"):
 		ecran.resetModuleCiplus(motiv)
+
+
+def _ciplus_gasit(lipsa):
+	"""Certificatele lipsa gasite de receptor in alta imagine sau pe stick (cautarea din Screens.Ci, pe fir separat):
+	{"loc", "intrebare"} sau {}. Cand nu s-a cautat inca, porneste cautarea; pagina o vede la citirea urmatoare."""
+	ecran = _ciplus_ecran()
+	if not lipsa or ecran is None or not hasattr(ecran, "ciplusGasit"):
+		return {}
+	gasit = ecran.ciplusGasit()
+	if not gasit:
+		try:
+			ecran.ciplusPornesteCautarea()
+		except Exception as eroare:
+			print("[HdsWebControl] cautarea certificatelor CI+: %r" % (eroare,))
+		return {}
+	return {"loc": ecran.ciplusLoc(gasit), "intrebare": ecran.ciplusIntrebare(gasit)}
 
 
 def _ciplus_slot(ui, slot, lipsa):
@@ -301,7 +318,8 @@ def stare():
 		"comune": _comune(config, bool(sysinfo.get("CIPlusHelper"))) if sloturi else {},
 		# CI+: ce fisiere lipsesc (numai numele, niciodata continutul)
 		"ciplus": {"lipsa": lipsa, "gata": not lipsa, "text": _ciplus_text_lipsa(lipsa) if lipsa else
-			_t("Certificatele aparatului sunt în /etc/ciplus. Un modul CI+ se autentifică singur după pornire.")} if sloturi else {},
+			_t("Certificatele aparatului sunt în /etc/ciplus. Un modul CI+ se autentifică singur după pornire."),
+			"gasit": _ciplus_gasit(lipsa)} if sloturi else {},
 		"message": "" if sloturi else _t("Receptorul nu are sloturi CI."),
 		"mmi_motiv": _t("Meniul MMI al modulului se folosește pe televizor. "
 			"Citirea lui din web ar putea consuma mesajul destinat televizorului.")}
@@ -332,6 +350,15 @@ def _salveaza(formular, sursa, date):
 def comanda_ciplus(date, dosar=None):
 	"""Incarcarea unui fisier CI+ (base64 din pagina) sau stergerea tuturor. Raspunsul nu contine niciodata continutul."""
 	actiune = date.get("actiune")
+	if actiune == "ciplus-gasit":
+		# raspunsul Da la intrebarea certificatelor gasite, acelasi ca pe receptor (Screens.Ci): copierea merge pe un fir
+		# separat (locul poate fi un disc oprit), pagina vede rezultatul la citirea urmatoare
+		ecran = _ciplus_ecran()
+		if ecran is not None and (getattr(ecran, "_ciplusGasit", None) or {}).get("copiaza") is not None:
+			return {"result": True, "message": _t("Pun certificatele CI+. Modulul repornește și se autentifică singur.")}
+		if ecran is None or not hasattr(ecran, "ciplusFolosesteGasit") or not ecran.ciplusFolosesteGasit():
+			return {"result": False, "message": _t("Nu am găsit certificate CI+ în alt loc.")}
+		return {"result": True, "message": _t("Pun certificatele CI+. Modulul repornește și se autentifică singur.")}
 	if actiune == "ciplus-sterge":
 		if set(date) - {"actiune", "token"}:
 			return {"result": False, "message": _t("Comandă CI necunoscută.")}
@@ -365,7 +392,7 @@ def comanda_ciplus(date, dosar=None):
 
 def comanda(date):
 	ui, config, debit = _ci()
-	if date.get("actiune") in ("ciplus-incarca", "ciplus-sterge"):
+	if date.get("actiune") in ("ciplus-incarca", "ciplus-sterge", "ciplus-gasit"):
 		if not any(ui.getState(n) != -1 for n in range(MAX_SLOTURI)):
 			return {"result": False, "message": _t("Receptorul nu are sloturi CI.")}
 		return comanda_ciplus(date)
@@ -759,6 +786,13 @@ function cardCiplus(c, loc){
   var card = el("section"); card.className = "card slot ciplus";
   card.appendChild(el("h2", "CI+"));
   card.appendChild(el("p", c.text));
+  if(c.gasit && c.gasit.intrebare){
+    // certificatele gasite de receptor in alta imagine sau pe stick: aceeasi intrebare Da/Nu ca pe receptor
+    card.appendChild(el("p", c.gasit.intrebare));
+    var foloseste = el("button", "Da, folosește-le"); foloseste.type = "button";
+    foloseste.addEventListener("click", function(){ trimite("comune", "ciplus-gasit"); });
+    card.appendChild(foloseste);
+  }
   var alege = el("input"); alege.type = "file"; alege.multiple = true;
   card.appendChild(eticheta("Alege fișierele param, root.pem, customer.pem și device.pem", alege));
   var pune = el("button", "Pune certificatele"); pune.type = "button"; card.appendChild(pune);
@@ -861,7 +895,7 @@ TEXTE_PAGINA = {
 		N_("Salvează și aplică"), N_("Închide"), N_("Oprește slotul"), N_("Pornește slotul"), N_("modulul CI"),
 		N_("canalul pornit"), N_("Setări comune"), N_("Păstrează codul PIN"), N_("Codul PIN al cardului"),
 		N_("Șterge codul PIN păstrat"), N_("Alege fișierele param, root.pem, customer.pem și device.pem"),
-		N_("Pune certificatele"), N_("Șterge certificatele CI+"),
+		N_("Pune certificatele"), N_("Șterge certificatele CI+"), N_("Da, folosește-le"),
 		N_("Codul PIN păstrat: pus"), N_("Codul PIN păstrat: nepus")),
 }
 

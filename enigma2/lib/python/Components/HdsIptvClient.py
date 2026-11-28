@@ -83,6 +83,8 @@ E_PREA_MULTE_CERERI = N_("S-au făcut prea multe cereri către server. Mai înce
 E_REFUZ_REDARE = N_("Furnizorul a refuzat redarea acestui canal (cod %d). Dacă folosești același cont pe alt aparat sau în alt program de "
 	"pe acest receptor, oprește redarea acolo, așteaptă câteva secunde și încearcă din nou.")
 E_SERVER_CAZUT = N_("Serverul furnizorului are o problemă acum (cod %d). Mai încearcă peste puțin.")
+# 0.8.0 FX3: the name of the server is not found (DNS), not "the server does not answer"
+E_NUME_SERVER = N_("Numele serverului nu se găsește. Verifică adresa din listă și internetul receptorului.")
 E_ANTETE = N_("User-Agent sau Referer nu este bun. Folosește valorile primite de la furnizor, fără rânduri noi.")
 
 
@@ -108,6 +110,14 @@ class EroareIptv(Exception):
 			except (ValueError, OverflowError, OSError):
 				pass
 		return self.mesaj
+
+
+def eroareDns():
+	"""0.8.0 FX3: the name of the server was not found. Still E_NU_RASPUNDE for every check that retries (a router
+	restart is a passing DNS failure), with dns = True for the sentence on screen and the zap log."""
+	e = EroareIptv(E_NU_RASPUNDE)
+	e.dns = True
+	return e
 
 
 def _jurnal(text):
@@ -176,6 +186,8 @@ def deschide(adresa, antete=None, termen=TERMEN_S, metoda=None):
 		raise EroareIptv(E_CONEXIUNI if cod in COD_CONEXIUNI else E_REFUZ if cod in (401, 403) else E_NU_RASPUNDE, cod=cod, dupa=dupa)
 	except (URLError, OSError, ValueError) as e:
 		motiv = getattr(e, "reason", e)
+		if isinstance(motiv, socket.gaierror):
+			raise eroareDns()
 		raise EroareIptv(E_CERTIFICAT if isinstance(motiv, ssl.SSLError) else E_NU_RASPUNDE)
 
 
@@ -222,7 +234,7 @@ def descarca(adresa, antete=None, maxim=MAX_LISTA, termen=TERMEN_S, total=TERMEN
 			_jurnal("certificat sau TLS la %s: %s" % (I.gazdaAdresei(adresa), type(motiv).__name__))
 			raise EroareIptv(E_CERTIFICAT)
 		_jurnal("legatura la %s: %s" % (I.gazdaAdresei(adresa), type(motiv).__name__))
-		raise EroareIptv(E_NU_RASPUNDE)
+		raise eroareDns() if isinstance(motiv, socket.gaierror) else EroareIptv(E_NU_RASPUNDE)
 	except (socket.timeout, socket.error, ssl.SSLError, ValueError, OSError) as e:
 		_jurnal("legatura la %s: %s" % (I.gazdaAdresei(adresa), type(e).__name__))
 		raise EroareIptv(E_NU_RASPUNDE)
@@ -556,6 +568,11 @@ def listaXtream(s, actiune, parametri=None):
 		raise EroareIptv(E_NU_E_CONT)
 
 
+def fluxXtream(s, actiune, parametri=None):
+	"""Raspunsul deschis al unei cereri player_api.php, citit din mers de cine il cheama (si inchis de el, cu with)."""
+	return deschide(_urlXtream(s, actiune, parametri), anteteSursa(s))
+
+
 def dateXtream(s, actiune, parametri=None):
 	return _json(descarca(_urlXtream(s, actiune, parametri), anteteSursa(s), maxim=2 * 1024 * 1024), E_NU_E_CONT)
 
@@ -699,6 +716,8 @@ def mesajEroareRedare(s, e):
 	"""Un canal n-a pornit: -> (ce i se spune omului, e o problema a sursei si nu a canalului). Sensul unui cod se ia cat se poate din
 	raspunsul contului: 403 singur nu inseamna parola gresita, iar 509 nu e un cod standard."""
 	cod = e.cod
+	if getattr(e, "dns", False) and e.mesaj == E_NU_RASPUNDE:
+		return E_NUME_SERVER, True
 	if e.mesaj == E_CANAL_LIPSA or cod in (404, 410):
 		return E_CANAL_LIPSA, False
 	if cod == 429:
@@ -706,6 +725,10 @@ def mesajEroareRedare(s, e):
 	if cod in COD_TEMPORAR:
 		return _tradus(E_SERVER_CAZUT) % cod, True
 	if cod in (403, 509):
+		return _stareCont(s) or _tradus(E_REFUZ_REDARE) % cod, True
+	if 400 <= cod <= 499 and e.mesaj == E_NU_RASPUNDE:
+		# 0.8.0 FX3: a 4xx left as "the server does not answer" (407 and the other codes without their own text) is the
+		# provider's answer; E_CONEXIUNI / E_REFUZ keep their own text
 		return _stareCont(s) or _tradus(E_REFUZ_REDARE) % cod, True
 	return mesajRedare(s, e.pentruOm()), True
 
@@ -1374,7 +1397,7 @@ def instaleazaDemo():
 	"""opkg update si install: pune pachetul sau il aduce la zi. O eroare lasa lista veche, daca e.
 	-> None (instalat sau la zi), "lipsa" (opkg update a mers, dar pachetul nu e in feed) sau "internet" (celelalte)."""
 	coduri = []
-	for argumente in (["opkg", "update"], ["opkg", "install", PACHET_DEMO]):
+	for argumente in (["opkg"] + _argumenteUpdate(), ["opkg", "install", PACHET_DEMO]):
 		try:
 			with open(os.devnull, "wb") as nimic:
 				coduri.append(subprocess.call(argumente, stdout=nimic, stderr=nimic, timeout=TERMEN_OPKG_S))
@@ -1499,11 +1522,12 @@ def salveazaOptiuni(sursa_id, date):
 
 
 # Un singur fir, independent de aducerea listelor si de firul televizorului.
-# PNG standard, maximum 64 MiB pentru IPTV propriu. Siglele valide se pastreaza.
-MAX_PICONURI_OCTETI = 64 * 1024 * 1024
-MAX_PERECHI_PICONURI = 2048
-MAX_PERECHI_OCTETI = 1024 * 1024
-MAX_REGISTRU_PICONURI = 8192
+# PNG standard, pana la capatul listei (0.8.0, PCN9: plafoanele de 2048 de canale / 1 MiB de text / 64 MiB / 8192 de
+# fisiere taiau buchetele mari la jumatate); se opreste numai cand pe disc ar ramane sub pragLiber(). Siglele valide se
+# pastreaza; la urmatoarea aducere a listei (zilnic sau ceruta din meniu) continua de unde a ramas (cele scrise deja se sar).
+LIBER_PICONURI_OCTETI = 16 * 1024 * 1024    # pe stick sau disc
+LIBER_INTERN_OCTETI = 32 * 1024 * 1024      # pe memoria interna: cat cere si restul imaginii (HdsIptvFisier.LOC_LIBER_DUPA)
+REGISTRU_LA_PICONURI = 25        # registrul se scrie o data la atatea piconuri noi si la sfarsit, nu dupa fiecare
 _PICON_PROPRIU = re.compile(r"^(4097|5001|5002)_0_1_[0-9A-F]+_[0-9A-F]+_[0-9A-F]+_FFFE[0-9A-F]{4}_0_0_0[.]png$")
 _picon_lacat = threading.Lock()
 _picon_coada = {}
@@ -1520,10 +1544,9 @@ def _dosarPiconuri():
 
 
 def _perechiPiconuri(s, canale):
-	"""O singura sursa, referinta, logo si antete, cel mult 1 MiB de text.
-	Lista completa este eliberata inaintea primei cereri de retea."""
+	"""O singura sursa: (referinta, logo, antete) pe rand, din mers (generator), pentru toate canalele; in memorie sta
+	numai canalul de acum, oricat de mare e lista."""
 	ascunse = frozenset(s.get("ascunse") or ())
-	perechi, octeti = [], 0
 	for c in canale:
 		if _picon_stop.is_set():
 			break
@@ -1535,14 +1558,7 @@ def _perechiPiconuri(s, canale):
 		if not isinstance(logo, str) or len(logo) > I.MAX_ADRESA or not logo.lower().startswith(("http://", "https://")):
 			continue
 		ref = I.refCanal(s["id"], c[0], player=I.playerSursa(s))
-		antete = anteteCurate(c[4].get("antete"))
-		cost = (len(ref.encode("utf-8")) + len(logo.encode("utf-8")) +
-			len(json.dumps(antete, ensure_ascii=False, sort_keys=True).encode("utf-8")))
-		if len(perechi) >= MAX_PERECHI_PICONURI or octeti + cost > MAX_PERECHI_OCTETI:
-			break
-		perechi.append((ref, logo, antete))
-		octeti += cost
-	return perechi
+		yield (ref, logo, anteteCurate(c[4].get("antete")))
 
 
 def _canalePiconuri(sid):
@@ -1610,17 +1626,24 @@ def _caleRegistruPiconuri(dosar):
 def _registruPiconuri(dosar):
 	try:
 		with open(_caleRegistruPiconuri(dosar), "rb") as f:
-			date = f.read(4 * 1024 * 1024 + 1)
-		if len(date) > 4 * 1024 * 1024:
-			return {}
+			date = f.read()
 		date = json.loads(date)
-		if not isinstance(date, dict) or len(date) > MAX_REGISTRU_PICONURI:
+		if not isinstance(date, dict):
 			return {}
 		return {n: v for n, v in date.items() if _PICON_PROPRIU.fullmatch(n) and
 			isinstance(v, list) and len(v) == 4 and all(type(x) is int for x in v[:3]) and
 			isinstance(v[3], str) and re.fullmatch(r"[0-9a-f]{64}", v[3])}
 	except (OSError, ValueError, TypeError):
 		return {}
+
+
+def _piconAltPlayer(dosar, nume):
+	"""True when the same channel logo exists under one of the other two players (4097_/5001_/5002_)."""
+	tip, sep, rest = nume.partition("_")
+	if not sep or tip not in ("4097", "5001", "5002"):
+		return False
+	return any(os.path.lexists(os.path.join(dosar, "%s_%s.png" % (alt, rest)))
+		for alt in ("4097", "5001", "5002") if alt != tip)
 
 
 def _poateScriePicon(cale, nota):
@@ -1669,17 +1692,24 @@ def _curataTemporarePiconuri(dosar):
 		pass
 
 
-def _octetiTemporarePiconuri(dosar):
-	# Inclusiv temporarele proaspete ramase de la o iesire brusca.
-	total = 0
-	with os.scandir(dosar) as intrari:
-		for i in intrari:
-			try:
-				if i.name.startswith(".hds-picon-") and i.is_file(follow_symlinks=False):
-					total += i.stat(follow_symlinks=False).st_size
-			except FileNotFoundError:
-				pass  # un alt proces tocmai a strans un temporar
-	return total
+def pragLiber(dosar):
+	"""Cat trebuie sa ramana liber pe discul dosarului dupa un picon sau o sigla: LIBER_PICONURI_OCTETI pe un stick sau disc;
+	pe memoria interna (acelasi disc cu /etc/enigma2) LIBER_INTERN_OCTETI plus loc pentru o copie noua a celei mai mari liste
+	de canale si a buchetelor (I._scrie scrie .nou langa cel vechi), ca reimprospatarea listei si actualizarile sa aiba loc."""
+	try:
+		if os.stat(dosar).st_dev != os.stat(I.DIRECTOR).st_dev:
+			return LIBER_PICONURI_OCTETI
+	except OSError:
+		return LIBER_PICONURI_OCTETI
+	mare = 0
+	try:
+		with os.scandir(I.DOSAR) as intrari:
+			for i in intrari:
+				if i.name.startswith("canale-") and i.name.endswith(".json"):
+					mare = max(mare, i.stat(follow_symlinks=False).st_size)
+	except OSError:
+		pass
+	return LIBER_INTERN_OCTETI + 2 * mare
 
 
 def _publicaPicon(nou, cale):
@@ -1718,26 +1748,41 @@ def descarcaPiconuri(s, canale, dosar=None, continua=None, perechi=None):
 	if not s or s.get("piconuri") is not True:
 		return rez
 	from Components import HdsIptvSigle as S
-	from PIL import Image
-	import io
-	import shutil
-	import tempfile
 	dosar = dosar or _dosarPiconuri()
 	os.makedirs(dosar, exist_ok=True)
 	registru = {n: v for n, v in _registruPiconuri(dosar).items()
 		if os.path.lexists(os.path.join(dosar, n))}
-	# Numai fisierele proprii, neschimbate: o colectie a omului nu consuma plafonul.
-	total = _octetiTemporarePiconuri(dosar)
-	for n, nota in registru.items():
-		cale = os.path.join(dosar, n)
-		if _identitatePicon(cale) == nota:
-			total += nota[2]
+	nescrise = [0]
+
+	def scrieRegistrul():
+		if nescrise[0]:
+			I._asiguraDosar()
+			I._scrie(_caleRegistruPiconuri(dosar), json.dumps(registru, sort_keys=True).encode("utf-8"), 0o600)
+			nescrise[0] = 0
 	if perechi is None:
 		perechi = _perechiPiconuri(s, canale)
+	try:
+		_descarcaPerechi(s, S, dosar, registru, perechi, continua, rez, nescrise, scrieRegistrul)
+	finally:
+		scrieRegistrul()
+	if rez["scrise"]:
+		try:
+			from Tools.PiconResolver import resetPiconPath
+			resetPiconPath()
+		except ImportError:
+			pass
+	return rez
+
+
+def _descarcaPerechi(s, S, dosar, registru, perechi, continua, rez, nescrise, scrieRegistrul):
+	"""Bucla descarcarii (descarcaPiconuri): toate perechile, pana se opreste cererea sau se umple discul."""
+	from PIL import Image
+	import io
+	import shutil
+	import tempfile
+	prag = pragLiber(dosar)
 	for ref, adresa, antete in perechi:
 		if _picon_stop.is_set() or (continua and not continua()) or not _permitePicon(s):
-			break
-		if total >= MAX_PICONURI_OCTETI:
 			break
 		nume = S.nume(ref)
 		if not nume:
@@ -1745,9 +1790,12 @@ def descarcaPiconuri(s, canale, dosar=None, continua=None, perechi=None):
 		cale = os.path.join(dosar, nume + ".png")
 		if not _poateScriePicon(cale, registru.get(nume + ".png")):
 			continue
+		if not os.path.lexists(cale) and _piconAltPlayer(dosar, nume):
+			# Logo already saved under another player of this source; the resolver finds it (no new download).
+			continue
 		nou = None
 		try:
-			if shutil.disk_usage(dosar).free < 16 * 1024 * 1024:
+			if shutil.disk_usage(dosar).free < prag:
 				break
 			date = S.descarcaSigla(s, adresa, antete)
 			S.verifica(date)
@@ -1758,7 +1806,7 @@ def descarcaPiconuri(s, canale, dosar=None, continua=None, perechi=None):
 				out = io.BytesIO()
 				im.save(out, "PNG")
 			date = out.getvalue()
-			if total + len(date) > MAX_PICONURI_OCTETI:
+			if shutil.disk_usage(dosar).free - len(date) < prag:
 				break
 			with tempfile.NamedTemporaryFile(dir=dosar, prefix=".hds-picon-", delete=False) as f:
 				nou = f.name
@@ -1770,8 +1818,6 @@ def descarcaPiconuri(s, canale, dosar=None, continua=None, perechi=None):
 			nota = registru.get(nume + ".png")
 			if not _poateScriePicon(cale, nota):
 				continue
-			if nume + ".png" not in registru and len(registru) >= MAX_REGISTRU_PICONURI:
-				break
 			if (continua and not continua()) or not _permitePicon(s):
 				break
 			# Dupa acest control poate ramane cel mult un picon suplimentar.
@@ -1784,9 +1830,9 @@ def descarcaPiconuri(s, canale, dosar=None, continua=None, perechi=None):
 				dovada = _publicaPicon(nou, cale)
 			if dovada:
 				registru[nume + ".png"] = dovada
-				I._asiguraDosar()
-				I._scrie(_caleRegistruPiconuri(dosar), json.dumps(registru, sort_keys=True).encode("utf-8"), 0o600)
-				total += len(date)
+				nescrise[0] += 1
+				if nescrise[0] >= REGISTRU_LA_PICONURI:
+					scrieRegistrul()
 				rez["scrise"] += 1
 		except Exception:
 			# O sigla lipsa sau gresita nu impiedica urmatorul canal.
@@ -1794,13 +1840,6 @@ def descarcaPiconuri(s, canale, dosar=None, continua=None, perechi=None):
 		finally:
 			if nou and os.path.exists(nou):
 				os.unlink(nou)
-	if rez["scrise"]:
-		try:
-			from Tools.PiconResolver import resetPiconPath
-			resetPiconPath()
-		except ImportError:
-			pass
-	return rez
 
 
 def _piconBucla():
@@ -1868,3 +1907,16 @@ def pornestePiconuri():
 	except ImportError:
 		pass
 	_picon_iesire_legata = True
+
+
+def _argumenteUpdate(rad="/"):
+	"""OPK1 (0.8.0): ['update'], or ['-f', <conf>, 'update'] when a dead foreign source is skipped (HdsSurseOpkg)"""
+	try:
+		try:
+			from Components import HdsSurseOpkg
+		except ImportError:
+			import HdsSurseOpkg
+		return HdsSurseOpkg.argumente_update(rad)
+	except Exception as e:
+		print("[HdsSurseOpkg] %r" % (e,))
+		return ["update"]

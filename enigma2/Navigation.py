@@ -127,6 +127,13 @@ class Navigation:
 				if not Screens.Standby.inTryQuitMainloop: # not a shutdown messagebox is open
 					RecordTimer.RecordTimerEntry.TryQuitMainloop(False) # start shutdown handling
 		self.SleepTimer = SleepTimer.SleepTimer()
+		# AIP0 (0.8.0): filmele late cu pixeli patrati pe Broadcom, si din lista de canale (4097/5001/5002): fereastra pe
+		# raportul adevarat + bestfit, la DVB si la sfarsit ecranul intreg (Components/HdsAspectFilm, ca in Filme si seriale)
+		try:
+			from Components import HdsAspectFilm
+			HdsAspectFilm.leagaNavigatie(self)
+		except Exception as e:
+			print("[Navigation] aspectul filmelor:", e)
 		# tunerul de rezerva din retea: legatura la zap, daca e ales (setarile se fac inainte de navigatie)
 		try:
 			from Components import HdsTunerRezerva
@@ -333,10 +340,19 @@ class Navigation:
 		try:
 			from Components.PluginComponent import plugins
 			from Plugins.Plugin import PluginDescriptor
-			ascultatori = plugins.getPlugins(PluginDescriptor.WHERE_CHANNEL_ZAP)
+			functii = [plugin.fnc for plugin in plugins.getPlugins(PluginDescriptor.WHERE_CHANNEL_ZAP)]
 		except ImportError:
-			return None
-		if not ascultatori:
+			functii = []
+		# YTL0 (0.8.0): o pagina YouTube / Twitch / Dailymotion pusa ca adresa a canalului (si forma 127.0.0.1:8088/<adresa>
+		# a altor imagini, YT-DLP://) o rezolva numai imaginea (Components/HdsReleuVideo, yt-dlp pe acest fir): fara a doua
+		# extragere cu acelasi yt-dlp in YTDLPWrapper (resolverele ruleaza toate, castiga primul rezultat)
+		try:
+			from Components import HdsReleuVideo
+			if HdsReleuVideo.esteLink(service.getPath()):
+				functii = [HdsReleuVideo.zap]
+		except Exception as e:
+			print("[Navigation] HdsReleuVideo: %s" % e.__class__.__name__)
+		if not functii:
 			return None
 		from Components.HdsEnigmaCompat import ChannelZapRunner
 		runner = getattr(self, "_hdsChannelZapRunner", None)
@@ -363,7 +379,7 @@ class Navigation:
 
 		# Descriptorul obisnuit tipareste exceptia si o trimite raportorului.
 		# Aici chemam numai functia: eroarea resolverului poate contine date private.
-		return runner.porneste([plugin.fnc for plugin in ascultatori], session, service, continua)
+		return runner.porneste(functii, session, service, continua)
 
 	def celMaiBunDinGrup(self, ref, ignore, simulate=False, inregistrare=False):
 		"""Alternativa grupului `ref` care se poate reda acum (getBestPlayableServiceReference, cu aceleasi argumente pe
@@ -488,6 +504,16 @@ class Navigation:
 	# numele din celelalte imagini; aici un grup nu se tine separat de serviciul redat
 	def getCurrentlyPlayingServiceOrGroup(self):
 		return self.currentlyPlayingServiceReference
+
+	# AS257 (27.11.2026): extensiile scrise pentru OE-Alliance citesc atributul currentlyPlayingServiceOrGroup (SlowZap 2.7 a
+	# cazut interfata de 4 ori pe 26.11 fara el); aici e referinta ceruta (grupul) sau cea redata, ca in OE-Alliance
+	@property
+	def currentlyPlayingServiceOrGroup(self):
+		return getattr(self, "originalPlayingServiceReference", None) or self.currentlyPlayingServiceReference
+
+	@currentlyPlayingServiceOrGroup.setter
+	def currentlyPlayingServiceOrGroup(self, ref):
+		self.originalPlayingServiceReference = ref
 
 	def getCurrentServiceReferenceOriginal(self):
 		# ca in OE-Alliance: referinta ceruta (grupul, cu numarul canalului din buchet), pusa la inceputul lui playService,

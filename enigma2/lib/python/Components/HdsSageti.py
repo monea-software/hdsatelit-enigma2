@@ -47,3 +47,18 @@ def sageata(sus):
 	except Exception:
 		valoare = IMPLICIT
 	return ce_face(valoare, sus)
+
+
+def stanga_dreapta_pe_flux(tasta, actiune, alegere, flux_in_direct, derulare_activa):
+	"""LRI9 (Schpountz, DM920, 0.7.8): STANGA sau DREAPTA la privit pe un flux de internet in direct (IPTV 4097/5001/5002 din
+	liste sau buchete). Harta derularii (InfobarSeekActions, KEY_LEFT/KEY_RIGHT = seekBack/seekFwd) e pornita pe orice serviciu
+	derulabil, deci si pe fluxul in direct, si lua sagetile inaintea schimbarii canalului. Intoarce "zapUp" (STANGA) sau
+	"zapDown" (DREAPTA) cand sagetile trebuie sa schimbe canalul ca pe satelit, altfel None (tasta merge mai departe ca pana
+	acum). Numai cand: tasta are functia obisnuita (o actiune aleasa de om ramane a lui), setarea "Stanga si dreapta la privit"
+	nu e "volum" (volumul are harta lui), fluxul e in direct si redat normal (filmele, arhiva, pauza si derularea pornita
+	raman la derulare) si harta derularii e pornita (altfel InfobarChannelSelection schimba oricum canalul)."""
+	if tasta not in ("left", "right") or actiune != "default" or alegere == "volum":
+		return None
+	if not flux_in_direct or not derulare_activa:
+		return None
+	return "zapUp" if tasta == "left" else "zapDown"

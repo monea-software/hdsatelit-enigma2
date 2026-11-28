@@ -29,6 +29,21 @@ class LCD:
 	def isOled(self):
 		return eDBoxLCD.getInstance().isOled()
 
+# Afisajul color Dream (DM900/DM920) e socotit OLED de driver, dar la 1/10 (25/255) ceasul din asteptare nu se vede:
+# acolo luminozitatea in asteptare porneste din fabrica de la 6/10 (TODO 23.11 16:30, 24.11 01:45). Valoarea pusa de om
+# ramane (o setare schimbata e scrisa in settings).
+STANDBY_DREAM = 6
+MODELE_DREAM = ("dm900", "dm920")
+
+
+def _modelDream():
+	try:
+		from boxbranding import getMachineBuild
+		return getMachineBuild().lower() in MODELE_DREAM
+	except Exception:
+		return False
+
+
 def leaveStandby():
 	config.lcd.bright.apply()
 
@@ -69,6 +84,8 @@ def InitLcd():
 		else:
 			config.lcd.contrast = ConfigNothing()
 			standby_default = 1
+		if _modelDream():
+			standby_default = STANDBY_DREAM
 
 		config.lcd.standby = ConfigSlider(default=standby_default, limits=(0, 10))
 		config.lcd.standby.addNotifier(setLCDbright);

@@ -239,33 +239,31 @@ def sus(i, n):
 	return _laRand(r - 1 if r > 0 else randuri(n) - 1, c, n)
 
 
+def cifreExtinse(n):
+	"""True cand meniul are al zecelea rand (n intrari, fara cautare): tasta 0 il deschide si indiciul de jos e 0-9."""
+	return n > 9
+
+
 def cifraIntrare(i, n, principal=False):
-	"""Cifra intrarii (index de la 0, fara cautare), comuna listei si dalelor."""
+	"""Cifra intrarii (index de la 0, fara cautare), comuna listei si dalelor, in orice meniu: 1-9 pe primele noua
+	randuri, 0 pe al zecelea, nimic dupa el. `principal` ramane pentru apelurile vechi; nu mai schimba rezultatul."""
 	if not 0 <= i < n:
 		return None
-	if principal and n > 9:
-		if i == n - 1:
-			return "9"
-		if i == 8:
-			return "0"
-		return str(i + 1) if i < 8 else None
-	return str(i + 1) if i < 9 else None
+	if i < 9:
+		return str(i + 1)
+	return "0" if i == 9 else None
 
 
 def dupaCifra(numar, n, principal=False):
-	"""Indexul intrarii cu cifra `numar`, None cand nu exista."""
+	"""Indexul intrarii cu cifra `numar` (inversul lui cifraIntrare), None cand nu exista."""
 	try:
 		cifra = int(numar)
 	except (TypeError, ValueError):
 		return None
-	if principal and n > 9:
-		if cifra == 9:
-			return n - 1
-		if cifra == 0:
-			return 8
-		return cifra - 1 if 1 <= cifra <= 8 else None
-	i = cifra - 1
-	return i if 0 <= i < min(n, 9) else None
+	if not 0 <= cifra <= 9:
+		return None
+	i = 9 if cifra == 0 else cifra - 1
+	return i if i < min(n, 10) else None
 
 
 def margineDale(vizibile=RANDURI_VIZIBILE):

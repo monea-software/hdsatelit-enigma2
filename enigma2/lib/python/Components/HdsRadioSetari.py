@@ -105,14 +105,15 @@ IMPLICITE = {
 	"cadre": "20",
 	"odihna": "10",
 	"epg": "3",
+	"imagini_dab": True,
 	"bara_la_zap": False,
 	"numai_sunet": "amandoua",
 	"protectie": PROTECTIE_IMPLICIT,
 }
 
-ORDINE = ("ecran", "taste_colorate", "vizualizator", "culori", "bare", "cadre", "odihna", "epg", "bara_la_zap",
-	"numai_sunet", "protectie")
-DA_NU = ("ecran", "taste_colorate", "bara_la_zap")
+ORDINE = ("ecran", "taste_colorate", "vizualizator", "culori", "bare", "cadre", "odihna", "epg", "imagini_dab",
+	"bara_la_zap", "numai_sunet", "protectie")
+DA_NU = ("ecran", "taste_colorate", "imagini_dab", "bara_la_zap")
 ALEGERI = {
 	"vizualizator": VIZUALIZATOARE,
 	"culori": CULORI,
@@ -133,6 +134,7 @@ ETICHETE = {
 	"cadre": N_("Fluiditatea"),
 	"odihna": N_("Ecranul de odihnă"),
 	"epg": N_("Emisiunile următoare"),
+	"imagini_dab": N_("Imaginile posturilor DAB"),
 	"bara_la_zap": N_("Bara la schimbarea postului"),
 	"numai_sunet": N_("La canalele numai cu sunet"),
 	"protectie": N_("Protecția ecranului"),
@@ -148,6 +150,7 @@ DESCRIERI = {
 	"cadre": N_("De câte ori pe secundă se mișcă barele. Mai puține cadre încarcă mai puțin receptorul."),
 	"odihna": N_("După atâtea minute fără nicio tastă rămân pe ecran doar numele postului, piesa și ceasul, care se mută încet, ca ecranul televizorului să nu se ardă. Orice tastă aduce ecranul întreg."),
 	"epg": N_("Câte emisiuni următoare se arată sub emisiunea de acum, când postul transmite programul."),
+	"imagini_dab": N_("Multe posturi DAB trimit imagini: sigla, coperta discului, știri. Cu Da, imaginea apare în locul barelor cât timp postul o trimite. Cu Nu rămân barele. Textul postului se vede oricum."),
 	"bara_la_zap": N_("Cu Da, la schimbarea postului de radio apare și bara obișnuită de jos. Ecranul radio are deja toate datele."),
 	"numai_sunet": N_("Unele canale TV, mai ales pe internet, trimit numai sunet. În locul ecranului negru se vede ecranul radio, protecția ecranului sau amândouă: întâi ecranul radio, apoi, după timpul ales mai jos, protecția. Tastele rămân cele de la televizor."),
 	"protectie": N_("După atâtea minute fără nicio tastă, pe ecranul întunecat rămâne numai o siglă care se mută, ca televizorul să nu se ardă. Merge la canalele numai cu sunet, la pauză și la posturile de radio fără ecranul radio. Prima tastă închide protecția și nu face altceva."),
@@ -260,7 +263,28 @@ def initConfig(config=None):
 		else:
 			alegeri = [(v, _tr(t)) for v, t in ALEGERI[nume]]
 			setattr(c, nume, ConfigSelection(choices=alegeri, default=IMPLICITE[nume]))
+	try:
+		c.imagini_dab.addNotifier(_semn_imagini_dab, initial_call=True, immediate_feedback=False)
+	except Exception:
+		pass
 	return c
+
+
+# releul DAB din satelit (proces separat, fara config): cu „Imaginile posturilor DAB” pe Nu nu mai strange imaginile (MOT).
+# Acelasi nume ca releu_dab.FARA_IMAGINI si pad.FARA_IMAGINI.
+FARA_IMAGINI_DAB = "/tmp/hds-dab-fara-imagini"
+
+
+def _semn_imagini_dab(element):
+	try:
+		if element.value:
+			import os
+			if os.path.exists(FARA_IMAGINI_DAB):
+				os.unlink(FARA_IMAGINI_DAB)
+		else:
+			open(FARA_IMAGINI_DAB, "wb").close()
+	except (IOError, OSError):
+		pass
 
 
 def _tr(text):

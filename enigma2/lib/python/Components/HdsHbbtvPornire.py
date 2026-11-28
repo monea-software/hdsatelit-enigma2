@@ -17,8 +17,9 @@ ROSU in bara (Screens/InfoBar.py, actiunea „hbbtvRosu” din HdsInfobarActions
     ROSU_DUPA_ARATA_MS dupa Application.show() sau, daca nu se arata singura, la ROSU_FARA_ARATA_MS dupa prima pagina
     (0.2.8: trimis la 1 s dupa prima pagina se pierdea la aplicatiile lente, de pilda ProSieben si SAT.1, care cereau
     a doua apasare); cu aplicatia pe ecran, urmarit (ROSU-UL URMARIT mai jos) si trimis inca o data daca s-a pierdut;
-  - inregistrare (OPRESTE_LA_INREGISTRARE) sau memorie libera sub MEMORIE_ROSU_KB: un mesaj, nu porneste.
-Memoria: cat ruleaza, o verificare la VERIFICARE_MS: sub MEMORIE_OPRIRE_KB aplicatia se inchide cu un mesaj scurt.
+  - inregistrare (OPRESTE_LA_INREGISTRARE): un mesaj, nu porneste; memoria (cu swap) sub MEMORIE_ROSU_KB: porneste oricum,
+    cu anuntul pentru stick (NAV10).
+Memoria: cat ruleaza, o verificare la VERIFICARE_MS: sub MEMORIE_OPRIRE_KB (cu swap) aplicatia se inchide cu un mesaj scurt.
 Cache-ul aplicatiilor (DOSAR_CACHE, in memorie) peste CACHE_MAXIM_KB se goleste la pornirea urmatoarei (curata_cache).
 
 CE S-A REPARAT DUPA PARCURGEREA TUTUROR SATELITILOR:
@@ -55,7 +56,13 @@ ROSU-UL URMARIT (VK_RED trimis de receptor cu stratul, aplicatia pe ecran si ecr
   - ecranul: pagina afisata a /dev/fb0 (cat aplicatia e pe ecran numai navigatorul deseneaza acolo, enigma2 are
     lacatul), un rand din SEMN_PAS si un punct din SEMN_PAS pe rand (alfa > 0) si crc32 al randurilor citite
     (semn_ecran, ca stratul web Plugins/Extensions/HdsWebControl/osd_strat.py; ~14 ms pe Amiko Viper 4K V20);
-  - fara ecran citibil (emulatorul, Mediile de proba fara semn_ecran) totul e ca inainte: un singur VK_RED, neurmarit.
+  - fara ecran citibil (emulatorul, Mediile de proba fara semn_ecran) totul e ca inainte: un singur VK_RED, neurmarit;
+  - receptorul LENT (JavaScript pe interpretor: ARM fara NEON, ZGEMMA H8.2H Plus, sau interpretorul de rezerva dupa caderi
+    ale JIT-ului, procesor_lent): ZDF primeste primul VK_RED, dar isi deseneaza bara abia la 8-15 s dupa el, iar ROSU e
+    comutator la ZDF. VK_RED trimis din nou la 8 s (sau la primul semn mic, care pe H8 e bara pe jumatate desenata)
+    inchidea bara: cu doua VK_RED ecranul ramanea gol (ZDF 3 din 6, 27.11.2026). Pe receptorul lent: semnul mic nu mai
+    aduce alt VK_RED si receptorul NU mai trimite tasta a doua oara: urmarirea se lasa dupa ROSU_SEMN_MAXIM_LENT_MS (ecranul
+    gol) sau ROSU_REACTIE_LENT_MS (cu ceva pe ecran); pe .129 bara a venit si la 9-16 s dupa VK_RED (27.11.2026).
 
 COMPATIBILITATEA SI MOTIVUL (Components/HdsHbbtvAplicatii.py):
   - partea HbbTV a User-Agent-ului si localSystem vin din Mediu.agent_pentru(adresa) (compatibilitate cu aplicatiile
@@ -246,6 +253,11 @@ ROSU_SEMN_MAXIM_MS = 8000    # ecranul era gol: cat se asteapta semnul aplicatie
 # ecranul gol si nimic desenat: de cate ori se mai trimite tasta de pornire, la fiecare ROSU_SEMN_MAXIM_MS (masurat pe
 # receptor: o aplicatie raspunde la a doua tasta abia la 4-9 s dupa show(); cu trei repetari tasta pleaca pana la ~25 s)
 ROSU_GOL_REPETARI = 3
+# receptorul lent (procesor_lent): ZDF a desenat bara la 2-15 s dupa primul VK_RED pe ZGEMMA H8.2H Plus (27.11.2026)
+ROSU_SEMN_MAXIM_LENT_MS = 25000
+ROSU_REACTIE_LENT_MS = 12000
+CPUINFO = "/proc/cpuinfo"
+FISIER_JIT_CADERI = "/etc/enigma2/hds-navigator-jit-cazut"
 SEMN_PAS = 8                 # semn_ecran: un rand din atatea si un punct din atatea pe rand
 CURAT_MS = 150
 TERMEN_ARATA_MS = 10000      # de la prima pagina pana la Application.show()
@@ -261,8 +273,16 @@ INCHIDERI_DE_CANAL = ("canalul schimbat", "nesemnalata in canalul nou", "fara AI
 	"nesemnalata in canalul cerut de ea", "fara AIT in canalul cerut de ea")
 MEMORIE_AUTOSTART_KB = 250 * 1024   # pornirea automata numai cu atata memorie libera (o aplicatie ia ~110-200 MB)
 MEMORIE_FUNDAL_KB = 120 * 1024      # aplicatia nevazuta se opreste sub atat (lasa memoria, inainte de MEMORIE_OPRIRE_KB)
-MEMORIE_ROSU_KB = 150 * 1024        # ROSU apasat de om: sub atat, un mesaj (pragul navigatorului, lansator.MEMORIE_MINIMA_KB)
+MEMORIE_ROSU_KB = 150 * 1024        # ROSU apasat de om: sub atat (cu swap) porneste oricum, cu anuntul pentru stick
+# NAV10 (0.8.0, receptoarele slabe): ROSU si caruselul nu mai refuza din lipsa memoriei; pragul
+# se socoteste cu swap-ul (Mediu.memorie_cu_swap_kb) si sub el omul afla o data ca un stick ii da memoria de schimb
+# (lansator.anuntaMemoriePutina). Paza aplicatiei vazute (MEMORIE_OPRIRE_KB) numara si ea swap-ul: cu swap pe stick nu se
+# mai inchide la 50 MB de memorie reala, ci numai cand se termina si swap-ul. Pornirea automata (MEMORIE_AUTOSTART_KB) si
+# aplicatia nevazuta (MEMORIE_FUNDAL_KB) raman pe memoria reala: pe un receptor de 334 MB o aplicatie pornita singura la
+# fiecare canal ar umple swap-ul cat omul se uita la televizor.
 OPRESTE_LA_INREGISTRARE = True      # cat ruleaza o inregistrare HbbTV nu porneste si se opreste
+# NAV10: motivele lansatorului cand hds-navigator lipseste (Solo SE pe NAND): mesajul lor direct, fara cercetare
+MOTIVE_NAVIGATOR_LIPSA = ("lipsa", "se-instaleaza")
 
 # caruselul DSM-CC (aplicatiile numai prin carusel)
 TERMEN_CARUSEL_S = 30        # de la ROSU: cat se asteapta caruselul intreg (apoi porneste cu ce e, daca are pornirea)
@@ -290,6 +310,7 @@ AV_ADRESA_MAXIM = 2048
 AV_PAS_MS = 500              # cat de des se citesc pozitia si starea playerului cat merge filmul
 AV_POZITIE_PAS_MS = 1000     # pozitia trimisa paginii cel mult o data pe atat (o stare noua pleaca pe loc)
 AV_TERMEN_CONECTARE_S = 30   # filmul care nu a inceput in atat: eroarea "nu se poate lega"
+AV_BLOCAT_S = 2              # AS191: filmul pornit trece in asteptare (4) abia cand pozitia sta pe loc atat
 AV_BUFER_GATA = 100          # procentul tamponului de la care filmul merge din nou (evBuffering)
 AV_PISTE_MAXIM = 16
 
@@ -332,6 +353,12 @@ TEXTE = {
 	"carusel-eroare": N_("Aplicația HbbTV din satelit nu se poate citi acum din semnalul canalului."),
 	FARA_ADRESA: N_("Aplicația HbbTV a acestui canal nu are o adresă pe internet."),
 	"memorie-oprire": N_("Memoria liberă a receptorului a scăzut, așa că aplicația HbbTV s-a închis."),
+	# HBL1 (Lanus, TRIS pe DVB-T): PMT-ul anunta AIT-ul, dar pe PID-ul lui nu vine nimic in ROSU_ASTEAPTA_AIT_MS
+	"ait-lipsa": N_("Canalul anunță o aplicație HbbTV, dar nu o trimite în semnal, așa că nu are ce porni. Nu e de la receptorul tău."),
+	# HBL1 (Lanus, Video Regione): filmul pornit de aplicatie a cazut inainte de prima imagine (in pagina, aplicatia ramane deschisa)
+	"film-sursa": N_("Filmul aplicației nu a pornit: fluxul lui nu vine de la serverul postului (poate lipsește acum la post). Încearcă mai târziu."),
+	"film-format": N_("Filmul aplicației nu a pornit: receptorul nu poate reda formatul lui."),
+	"film-nepornit": N_("Filmul aplicației nu a pornit: nu a venit nicio imagine. Încearcă mai târziu."),
 	"nu-a-pornit": N_("Aplicația HbbTV nu a pornit."),
 	# aplicatia pornise (prima pagina venise, de obicei se si vedea) si navigatorul s-a oprit dupa: nu "nu a pornit"
 	"s-a-inchis": N_("Aplicația HbbTV s-a închis."),
@@ -753,6 +780,22 @@ def av_tip(tip):
 	return t if t in AV_TIPURI else None
 
 
+# HBL1: felurile motivului playerului (HdsFilmRedare.desparte, sUser+15) care inseamna un format pe care receptorul nu il
+# reda; "fisier" la un flux = serverul nu da fluxul (404, legatura taiata); altfel (fara motiv, termenul) nicio imagine
+FELURI_FORMAT = frozenset(["lipsa", "componenta", "video", "sunet", "negociere", "format", "nimic"])
+ANUNT_FILM_MS = 2500     # cat se asteapta dupa caderea filmului, ca o reclama sau o reluare a aplicatiei sa-l anuleze
+ANUNT_PAGINA_MS = 8000   # cat sta anuntul in pagina
+
+
+def av_cheie_anunt(eroare, fel_player):
+	"""Cheia din TEXTE pentru filmul aplicatiei cazut inainte de prima imagine (HBL1)."""
+	if eroare == AV_E_FORMAT or fel_player in FELURI_FORMAT:
+		return "film-format"
+	if fel_player == "fisier":
+		return "film-sursa"
+	return "film-nepornit"
+
+
 def av_eroare(cod_player, pornit):
 	"""Codul error al obiectului A/V dupa eroarea playerului (evUser+10/+11: codec refuzat, +12: element lipsa, +16:
 	orice alta eroare) si dupa cum filmul incepuse sau nu."""
@@ -837,26 +880,60 @@ REACTII_ROSU = ("arata", "ascunde", "distruge", "aplicatie", "canal", "urmator",
 AV_OPRIT_DE = ("leaga", "canal", "urmator", "anterior", "aplicatie")
 
 
-def urmare_rosu(gol, semn0, semn, vazut, trecut_ms):
+def urmare_rosu(gol, semn0, semn, vazut, trecut_ms, lent=False):
 	"""Un pas al ROSU-lui urmarit (vezi ROSU-UL URMARIT): (fapta, vazut). gol: ecranul nu avea nimic la trimitere; semn0,
 	semn: semn_ecran atunci si acum; vazut: de cate ori la rand s-a vazut deja semnul aplicatiei (pe ecranul gol);
-	trecut_ms: de la trimitere. Fapta: ASTEAPTA, REACTIE (aplicatia a primit tasta), REPETA (inca un VK_RED) sau RENUNTA.
-	Pagina noua, masca si cererile paginii le vede controlorul, nu aceasta functie."""
+	trecut_ms: de la trimitere; lent: receptorul lent (procesor_lent). Fapta: ASTEAPTA, REACTIE (aplicatia a primit tasta),
+	REPETA (inca un VK_RED) sau RENUNTA. Pagina noua, masca si cererile paginii le vede controlorul, nu aceasta functie."""
 	if semn is None or semn0 is None:
 		return RENUNTA, vazut
 	if not gol:
 		if semn[:2] != semn0[:2]:
 			return REACTIE, 0
+		if lent:
+			return (RENUNTA if trecut_ms >= ROSU_REACTIE_LENT_MS else ASTEAPTA), 0
 		return (REPETA if trecut_ms >= ROSU_REACTIE_MS else ASTEAPTA), 0
 	opaci, puncte = semn[0], semn[2]
 	if puncte and opaci >= puncte * ROSU_SEMN_MARE:
 		return REACTIE, 0
 	vazut = vazut + 1 if opaci >= ROSU_DESEN_MINIM else 0
+	if lent:
+		# pe receptorul lent semnul mic poate fi chiar raspunsul, desenat pe jumatate, iar bara poate veni si la 13 s:
+		# alt VK_RED ar inchide-o. Nu se mai trimite nimic; dupa ROSU_SEMN_MAXIM_LENT_MS urmarirea se lasa (omul are ROSU)
+		return (RENUNTA if trecut_ms >= ROSU_SEMN_MAXIM_LENT_MS else ASTEAPTA), vazut
 	if vazut >= 2:
 		return REPETA, vazut
 	if trecut_ms >= ROSU_SEMN_MAXIM_MS:
 		return REPETA, vazut
 	return ASTEAPTA, vazut
+
+
+_procesor_fara_neon = {}
+
+
+def procesor_lent(cpuinfo=CPUINFO, fisier_jit=FISIER_JIT_CADERI):
+	"""True cand JavaScript-ul navigatorului merge pe interpretor: ARM fara NEON (ZGEMMA H8.2H Plus: hds-navigator porneste
+	atunci cu JSC_useJIT=0) sau interpretorul de rezerva (prima cifra 2 in FISIER_JIT_CADERI, vezi hds-navigator.c).
+	Procesorul se citeste o data; fisierul de rezerva la fiecare cerere (o cifra, se schimba dupa caderi)."""
+	if cpuinfo not in _procesor_fara_neon:
+		fara = False
+		try:
+			with open(cpuinfo) as f:
+				for rand in f:
+					if rand.lower().startswith("features"):
+						steaguri = rand.split(":", 1)[-1].split()
+						fara = "vfp" in steaguri and "neon" not in steaguri and "asimd" not in steaguri
+						break
+		except (IOError, OSError, ValueError):
+			fara = False
+		_procesor_fara_neon[cpuinfo] = fara
+	if _procesor_fara_neon[cpuinfo]:
+		return True
+	try:
+		with open(fisier_jit) as f:
+			return f.read(1) == "2"
+	except (IOError, OSError, ValueError):
+		return False
 
 
 def curata_cache(dosar=DOSAR_CACHE, maxim_kb=CACHE_MAXIM_KB):
@@ -1071,6 +1148,15 @@ class Mediu(object):
 	def memorie_libera_kb(self):
 		return self.lansator().Mediu().memorie_libera_kb()
 
+	def memorie_cu_swap_kb(self):
+		"""NAV10: MemAvailable + SwapFree (kB), None fara MemAvailable."""
+		ram = self.memorie_libera_kb()
+		return None if ram is None else ram + self.lansator().swapLiberKb()
+
+	def anunta_memorie_putina(self):
+		"""NAV10: anuntul pentru stick, o data pe pornirea interfetei (lansator.anuntaMemoriePutina)."""
+		self.lansator().anuntaMemoriePutina()
+
 	# ------------------------------------------------ etapele H4 si H6
 
 	def fereastra_video(self, f):
@@ -1104,7 +1190,21 @@ class Mediu(object):
 		r.setName("HbbTV")
 		self.session.nav.playService(r, checkParentalControl=False)
 		cur = self.session.nav.getCurrentlyPlayingServiceReference()
-		return cur.toString() if cur is not None and cur.type == AV_TIP_SERVICIU else ""
+		if cur is not None and cur.type == AV_TIP_SERVICIU:
+			return cur.toString()
+		# HBT2 (0.8.0): cu un plugin care asculta schimbarea canalului (WHERE_CHANNEL_ZAP: StreamlinkWrapper, YTDLPWrapper)
+		# playService numai cere pornirea, iar playerul porneste cand pluginurile au raspuns (pe alt fir, Navigation.
+		# _pluginuriChannelZap). Cererea in asteptare e chiar filmul: e pornit, nu cazut (inainte: "film cazut (3)" si
+		# canalul pornit la loc peste film, la orice aplicatie, pe orice receptor cu un astfel de plugin)
+		if getattr(self.session.nav, "_hdsChannelZapCerere", None) == r:
+			return r.toString()
+		return ""
+
+	def av_in_asteptare(self, ref):
+		"""HBT2: filmul cu referinta data e cerut si inca nepornit (pluginurile care asculta schimbarea canalului nu au
+		raspuns inca; vezi av_reda)."""
+		c = getattr(self.session.nav, "_hdsChannelZapCerere", None)
+		return bool(ref) and c is not None and c.toString() == ref
 
 	def av_opreste(self):
 		self.session.nav.stopService()
@@ -1238,6 +1338,21 @@ class Mediu(object):
 		erori = dict((u + c, c) for c in (10, 11, 12, 16)) if u is not None else {}
 		return {"eof": getattr(E, "evEOF", None), "bufer": getattr(E, "evBuffering", None),
 			"info": getattr(E, "evUpdatedInfo", None), "erori": erori}
+
+	def av_motiv(self):
+		"""Felul motivului dat de player pentru filmul de acum (sUser+15, HdsFilmRedare.desparte: "fisier", "format"...),
+		sau "" (HBL1: motivul filmului aplicatiei cazut inainte de prima imagine)."""
+		try:
+			from enigma import iServiceInformation
+			from Components import HdsFilmRedare
+			s = self.session.nav.getCurrentService()
+			info = s and s.info()
+			if info is None:
+				return ""
+			return HdsFilmRedare.desparte(info.getInfoString(iServiceInformation.sUser + 15))[0]
+		except Exception as e:
+			_jurnal("motivul filmului: %s" % e.__class__.__name__)
+			return ""
 
 	def hbbtv_pornit(self):
 		"""Setarea principala „HbbTV” (config.plugins.hdsnavigator.hbbtv; HdsHbbtv.hbbtv_pornit)."""
@@ -1714,6 +1829,7 @@ class Controlor(object):
 		# filmele aplicatiilor (obiectul A/V): ceasul pozitiei si evenimentele playerului
 		self._ceas_av = mediu.ceas(self._avPas)
 		self._av_ev = self._din_mediu("av_evenimente", {}) or {}
+		self._ceas_anunt = mediu.ceas(self._anuntFilm)   # HBL1: motivul filmului cazut, in pagina, dupa ANUNT_FILM_MS
 		self._gol()
 
 	def _gol(self):
@@ -1722,6 +1838,7 @@ class Controlor(object):
 		self._bc_stare = None
 		self.masca = None              # masca Keyset (None: fara strat, tastele ca in H2)
 		self.pornita = False           # prima pagina a venit
+		self._refuz_decodor_spus = None  # HBW1: ultimul refuz al decodorului scris in jurnal (_refuzDecodor)
 		self._asteapta_arata = False   # prima pagina a venit ascunsa, se asteapta show()
 		self._arata_cerut = False      # show() venit inainte de prima pagina sau cat bara nu era libera
 		self._rosu_in_asteptare = False
@@ -1757,6 +1874,8 @@ class Controlor(object):
 		self._decodor_imprumutat = False
 		self._dec_fereastra = None     # dreptunghiul elementului <video> (puncte CSS 1280x720)
 		self._canal_dupa_decodor = False  # release() venit cat <video> tinea decodorul: canalul porneste la "gata"
+		self._anunt_film = None        # HBL1: {"cheie", "url"} motivul filmului cazut inainte de prima imagine, de anuntat
+		self._anuntate = set()         # adresele filmelor al caror motiv s-a anuntat (o data pe adresa, cat tine aplicatia)
 
 	def _din_mediu(self, nume, implicit, *argumente):
 		"""O metoda a Mediului care poate lipsi (Mediile de proba din H2 nu au partea H3)."""
@@ -1892,6 +2011,10 @@ class Controlor(object):
 		self._rosu_ait = None
 		if motiv is not None:
 			_jurnal("ROSU tinut minte: renuntat (%s)" % motiv)
+			if w["ref"] in self._ait_lipsa and motiv.startswith("AIT-ul"):
+				# HBL1: PMT-ul (citit, deci semnalul vine) anunta aplicatia, dar AIT-ul nu vine; omul afla de ce
+				self.m.mesaj(text_mesaj("ait-lipsa", _))
+				self._noteazaUltima("ait-lipsa", TEXTE["ait-lipsa"])
 			return
 		_jurnal("AIT-ul canalului citit dupa %.1f s: ROSU-ul tinut minte merge mai departe" % trecut)
 		self.rosu(w["bara"])
@@ -1901,11 +2024,17 @@ class Controlor(object):
 		limpede (timeshift-ul il spune hotarare_rosu). None: se poate porni."""
 		if OPRESTE_LA_INREGISTRARE and self._din_mediu("inregistrare_pornita", False):
 			return "inregistrare"
-		mem = self._din_mediu("memorie_libera_kb", None)
-		if isinstance(mem, int) and mem < MEMORIE_ROSU_KB:
-			_jurnal("memorie libera %d kB, sub pragul de pornire" % mem)
-			return "memorie-pornire"
+		self._memoriePutina()
 		return None
+
+	def _memoriePutina(self):
+		"""NAV10: sub MEMORIE_ROSU_KB (cu swap) aplicatia porneste oricum; numai anuntul pentru stick."""
+		mem = self._din_mediu("memorie_cu_swap_kb", None)
+		if mem is None:
+			mem = self._din_mediu("memorie_libera_kb", None)
+		if isinstance(mem, int) and mem < MEMORIE_ROSU_KB:
+			_jurnal("memorie %d kB (cu swap), sub pragul de pornire: porneste oricum" % mem)
+			self._din_mediu("anunta_memorie_putina", None)
 
 	# ------------------------------------------------ caruselul DSM-CC
 
@@ -1989,9 +2118,6 @@ class Controlor(object):
 			return None, "HbbTV oprit din setari"
 		if OPRESTE_LA_INREGISTRARE and self._din_mediu("inregistrare_pornita", False):
 			return "inregistrare", "inregistrare"
-		mem = self._din_mediu("memorie_libera_kb", None)
-		if isinstance(mem, int) and mem < MEMORIE_ROSU_KB:
-			return "memorie-pornire", "memorie"
 		st = self._car.stare() or {}
 		trecut = self._timp() - w["inceput"]
 		nu_vine = "carusel-semnal" if st.get("sectiuni") else "carusel-criptat"
@@ -2337,7 +2463,8 @@ class Controlor(object):
 		oprit_acum = not self.serviciu_oprit
 		self._opresteServiciu()                # un singur decodor: canalul se opreste, ca la video/broadcast stop()
 		self._av = {"id": ident, "tip": t, "joc": AV_CONECTARE, "eroare": None, "poz": 0, "lung": 0, "viteza": 1,
-			"ref": "", "inceput": self._timp(), "pornit": False, "trimis_poz": 0, "trimis_la": 0}
+			"ref": "", "inceput": self._timp(), "pornit": False, "trimis_poz": 0, "trimis_la": 0, "url": url}
+		self._anunt_film = None                # un film nou cerut: motivul celui de dinainte nu se mai anunta
 		self._av_piste = None
 		self._ignora_pana = self._timp() + IGNORA_ZAP_S
 		ref = self._din_mediu("av_reda", "", url)
@@ -2361,7 +2488,11 @@ class Controlor(object):
 		if a is None:
 			return
 		self._ceas_av.stop()
-		if a["ref"] and self._din_mediu("ref_curent", "") == a["ref"]:
+		if joc == AV_EROARE and not a["pornit"]:
+			# HBL1: motivul se citeste inainte de oprirea playerului (dupa ea, informatia serviciului s-a dus)
+			self._pregatesteAnunt(a, eroare)
+		# HBT2: si filmul a carui pornire inca asteapta (av_in_asteptare) se opreste; altfel ar porni dupa ce a fost oprit
+		if a["ref"] and (self._din_mediu("ref_curent", "") == a["ref"] or self._din_mediu("av_in_asteptare", False, a["ref"])):
 			self._ignora_pana = self._timp() + IGNORA_ZAP_S
 			self._din_mediu("av_opreste", None)
 		a["joc"], a["eroare"] = joc, eroare
@@ -2377,6 +2508,31 @@ class Controlor(object):
 		if self._av is not None:
 			self._avGata(AV_OPRIT, anunta=anunta)
 
+	# HBL1 (0.8.0; Lanus, Video Regione HD): filmul cerut de aplicatie cade inainte de prima imagine (fluxul lipsea la sursa:
+	# lista principala venea, variantele dadeau 404), aplicatia se intoarce la canal si omul nu afla de ce. Motivul se
+	# anunta in pagina (ev "anunt", hds-hbbtv.js anuntPagina; o fereastra enigma2 peste navigator l-ar ascunde si i-ar lua
+	# tastele), dupa ANUNT_FILM_MS, numai daca intre timp aplicatia n-a cerut alt film (reclama, reluare), o data pe adresa.
+
+	def _pregatesteAnunt(self, a, eroare):
+		url = a.get("url") or ""
+		if not url or url in self._anuntate or self.nav is None or not self.strat or self.fundal:
+			return
+		if eroare == AV_E_RESURSE:
+			return                                 # playerul nu a pornit deloc (av_reda ""): nu e despre fluxul postului
+		cheie = av_cheie_anunt(eroare, self._din_mediu("av_motiv", ""))
+		self._anunt_film = {"cheie": cheie, "url": url}
+		self._ceas_anunt.start(ANUNT_FILM_MS, True)
+
+	def _anuntFilm(self):
+		w, self._anunt_film = self._anunt_film, None
+		if w is None or self.nav is None or not self.strat or self._av is not None:
+			return
+		self._anuntate.add(w["url"])
+		text = text_mesaj(w["cheie"], _)
+		_jurnal("motivul filmului cazut, anuntat in pagina (%s)" % w["cheie"])
+		self._noteazaUltima(w["cheie"], TEXTE[w["cheie"]])
+		self._ev({"ev": "anunt", "text": text, "ms": ANUNT_PAGINA_MS})
+
 	def _avViteza(self, v):
 		a = self._av
 		if not self._avActiv():
@@ -2384,6 +2540,9 @@ class Controlor(object):
 		if v != a["viteza"] and self._din_mediu("av_pauza", False, v == 0):
 			a["viteza"] = v
 			a["joc"] = AV_PAUZA if v == 0 else AV_REDA if a["pornit"] else AV_CONECTARE
+			# HBB9: la reluare ceasul blocarii porneste de la capat; altfel, dupa o pauza mai lunga de AV_BLOCAT_S, pasul
+			# urmator (pozitia inca pe loc) l-ar pune pe loc in asteptare (2 -> 1 -> 4 spre pagina), ca la tamponul plin
+			a["poz_miscat"] = self._timp()
 		self._avStare()
 
 	def _avCauta(self, ms):
@@ -2417,9 +2576,22 @@ class Controlor(object):
 			acum = self._timp()
 			p = self._din_mediu("av_pozitie", None)
 			if p is not None:
+				if a["pornit"] and a["joc"] in (AV_REDA, AV_ASTEAPTA):
+					# AS191: asteptarea (4) numai cand pozitia sta pe loc cel putin AV_BLOCAT_S; inapoi la 1 cand merge
+					if p[0] != a["poz"]:
+						a["poz_miscat"] = acum
+						if a["joc"] == AV_ASTEAPTA:
+							a["poz"], a["lung"] = p
+							a["joc"] = AV_REDA
+							self._avStare()
+							return
+					elif a["joc"] == AV_REDA and acum - a.get("poz_miscat", acum) >= AV_BLOCAT_S:
+						a["joc"] = AV_ASTEAPTA
+						self._avStare()
 				a["poz"], a["lung"] = p
 				if p[0] > 0 and not a["pornit"]:
 					a["pornit"] = True
+					a["poz_miscat"] = acum
 					if a["joc"] == AV_CONECTARE:
 						a["joc"] = AV_REDA
 					_jurnal("filmul aplicatiei a inceput (%d s de la cerere)" % int(acum - a["inceput"]))
@@ -2456,11 +2628,16 @@ class Controlor(object):
 			self._avGata(AV_GATA)
 		elif ev in (e.get("erori") or {}):
 			self._avGata(AV_EROARE, av_eroare(e["erori"][ev], a["pornit"]))
-		elif ev is not None and ev == e.get("bufer") and a["joc"] in (AV_REDA, AV_ASTEAPTA):
+		elif ev is not None and ev == e.get("bufer") and a["joc"] == AV_ASTEAPTA:
+			# AS191: tamponul plin scoate filmul din asteptare; golirea lui singura NU il pune in asteptare (GStreamer
+			# trimite evBuffering sub 100% si cand filmul merge, iar aplicatiile ca Persidera jump pornesc filmul din nou
+			# la orice stare diferita de 1 dupa ce au vazut 1): starea 4 vine din _avPas, cand pozitia sta pe loc
 			b = self._din_mediu("av_bufer", None)
-			nou = a["joc"] if b is None else AV_ASTEAPTA if b < AV_BUFER_GATA else AV_REDA
-			if nou != a["joc"]:
-				a["joc"] = nou
+			if b is not None and b >= AV_BUFER_GATA:
+				a["joc"] = AV_REDA
+				# VOL9: ceasul blocarii porneste de la capat; altfel pasul urmator, cu pozitia inca pe loc (playerul abia
+				# porneste dupa tampon), vede blocarea de dinainte si il pune iar in asteptare (4 -> 1 -> 4 spre pagina)
+				a["poz_miscat"] = self._timp()
 				self._avStare()
 		elif ev is not None and ev == e.get("info") and a["pornit"]:
 			self._avPisteTrimise()
@@ -2495,12 +2672,22 @@ class Controlor(object):
 		self._ev({"ev": "canal-eroare", "cod": 11})
 		return True
 
+	def _refuzDecodor(self, motiv, text):
+		"""HBW1 (AS244, Lanus): refuzul decodorului pentru <video> se scrie in jurnal, o data pe motiv schimbat (o pagina
+		care cere in bucla nu umple jurnalul). Inainte nu lasa niciun rand si nu se vedea de ce dash.js primea
+		MEDIA_ERR_DECODE ("The receiver decoder is not available"). -> motivul."""
+		if getattr(self, "_refuz_decodor_spus", None) != motiv:
+			self._refuz_decodor_spus = motiv
+			_jurnal("<video>: decodorul refuzat (%s): %s" % (motiv, text))
+		return motiv
+
 	def laDecodorCere(self):
 		"""HdsDecodorWeb.Ascultator: True (decodorul e al navigatorului) sau motivul refuzului (un cuvant)."""
 		if self.nav is None or not self.pornita:
-			return "aplicatie"
+			return self._refuzDecodor("aplicatie", "aplicatia n-a trimis inca prima pagina" if self.nav is not None
+				else "navigatorul nu e pornit")
 		if self._decodor_imprumutat:
-			return "ocupat"
+			return self._refuzDecodor("ocupat", "alt element <video> tine decodorul")
 		if not self._din_mediu("decodor_memorie_ok", True):
 			_jurnal("<video>: memoria decodorului lipseste (pozele si filmele), refuzat")
 			return "memorie"
@@ -2513,6 +2700,7 @@ class Controlor(object):
 				self._pornesteServiciu()
 			return "drept"
 		self._decodor_imprumutat = True
+		self._refuz_decodor_spus = None
 		self._dec_fereastra = None
 		self._aplicaFereastra()
 		_jurnal("decodorul dat navigatorului (<video>)")
@@ -2915,6 +3103,7 @@ class Controlor(object):
 		self._arata_cerut = False
 		self.masca = MASCA_MAXIM
 		self.video_legat, self.fereastra, self.ecran_intreg = False, None, False
+		self._refuz_decodor_spus = None  # HBW1: refuzul decodorului se scrie iar la aplicatia urmatoare
 		self._aplicaFereastra()
 		self._trimite("app", "taste")
 		self._asteapta_arata = True
@@ -3034,6 +3223,7 @@ class Controlor(object):
 		self.masca = MASCA_MAXIM
 		# documentul nou incepe cu video/broadcast nelegat: imaginea pe tot ecranul pana cere altceva
 		self.video_legat, self.fereastra, self.ecran_intreg = False, None, False
+		self._refuz_decodor_spus = None  # HBW1: refuzul decodorului se scrie iar la aplicatia urmatoare
 		self._aplicaFereastra()
 		self._trimite("app", "canal", "programe", "taste")
 		self.nav.url(adresa)
@@ -3121,10 +3311,11 @@ class Controlor(object):
 		if semn is not None:
 			# ROSU-ul urmarit: o aplicatie care inca nu era gata il primeste din nou (o data), vezi urmare_rosu
 			gol = semn[0] < ROSU_DESEN_MINIM
-			self._rosu_urmarit = {"gol": gol, "semn": semn, "pasi": 0, "vazut": 0}
+			lent = procesor_lent()
+			self._rosu_urmarit = {"gol": gol, "semn": semn, "pasi": 0, "vazut": 0, "lent": lent}
 			self._ceas_rosu_urma.start(ROSU_PAS_MS, False)
-			_jurnal("%s trimis, urmarit (ecranul %s)" % ("VK_BLUE" if self._tasta_pornire == KEY_BLUE else "VK_RED",
-				"gol" if gol else "cu ceva"))
+			_jurnal("%s trimis, urmarit (ecranul %s%s)" % ("VK_BLUE" if self._tasta_pornire == KEY_BLUE else "VK_RED",
+				"gol" if gol else "cu ceva", ", receptor lent" if lent else ""))
 
 	def _opresteUrmarirea(self):
 		self._rosu_urmarit = None
@@ -3143,10 +3334,14 @@ class Controlor(object):
 			return
 		u["pasi"] += 1
 		fapta, u["vazut"] = urmare_rosu(u["gol"], u["semn"], self._din_mediu("semn_ecran", None), u["vazut"],
-			u["pasi"] * ROSU_PAS_MS)
+			u["pasi"] * ROSU_PAS_MS, u.get("lent", False))
 		if fapta == ASTEAPTA:
 			return
 		self._opresteUrmarirea()
+		if fapta == RENUNTA and u.get("lent"):
+			_jurnal("receptor lent: nicio reactie vazuta in %d ms; VK_RED nu se mai trimite (ar inchide bara aplicatiei)" %
+				(u["pasi"] * ROSU_PAS_MS))
+			return
 		nimic = u["gol"] and u["vazut"] < 2
 		if fapta == REACTIE:
 			_jurnal("VK_RED primit de aplicatie (ecranul)")
@@ -3243,9 +3438,13 @@ class Controlor(object):
 				return
 			if self._arata_cerut and self.pornita and not self._asteapta_arata and not self.fundal and self.m.bara_libera():
 				self._cereArata()
-			mem = self.m.memorie_libera_kb()
+			# NAV10: aplicatia vazuta cu swap-ul socotit; cea nevazuta pe memoria reala
+			mem = self.m.memorie_libera_kb() if self.fundal else self._din_mediu(
+				"memorie_cu_swap_kb", None) or self.m.memorie_libera_kb()
 			prag = MEMORIE_FUNDAL_KB if self.fundal else MEMORIE_OPRIRE_KB
 			if mem is not None and mem < prag:
+				if not self.fundal:
+					self._din_mediu("anunta_memorie_putina", None)
 				_jurnal("memorie libera %d kB, aplicatia se inchide" % mem)
 				self.inchide(None if self.fundal else "memorie-oprire", motiv="memorie")
 		except Exception as e:
@@ -3340,6 +3539,7 @@ class Controlor(object):
 		self._ceas_rosu.stop()
 		self._ceas_rosu_urma.stop()
 		self._ceas_arata.stop()
+		self._ceas_anunt.stop()
 		self.m.asculta_nav(self._evenimentCanal, False)
 		self.m.arata_incarcare(False)
 		# caruselul aplicatiei (daca a venit din el): cititorul, serverul si dosarul pleaca la orice inchidere
@@ -3372,8 +3572,9 @@ class Controlor(object):
 			# caderea navigatorului) "s-a inchis"
 			L = self.m.lansator()
 			eroare = L.textEroare(motiv, _)
-			# fara prima pagina: motivul adevarat, daca se afla (adresa inexistenta, pagina mutata, fara internet ...)
-			if pornita or not self._spuneMotivul("nu-a-pornit", url, agent, baza=eroare):
+			# fara prima pagina: motivul adevarat, daca se afla (adresa inexistenta, pagina mutata, fara internet ...);
+			# NAV10: navigatorul care lipseste sau se instaleaza acum are motivul stiut, fara cercetare pe internet
+			if pornita or motiv in MOTIVE_NAVIGATOR_LIPSA or not self._spuneMotivul("nu-a-pornit", url, agent, baza=eroare):
 				self.m.mesaj(text_mesaj("s-a-inchis" if pornita else "nu-a-pornit", _) + "\n\n" + eroare)
 		elif motiv_jurnal == "destroyApplication" and not vazuta and nav is not None:
 			# aplicatia s-a inchis singura inainte sa se arate: altfel omul vede numai fereastra "se porneste" disparand

@@ -5,11 +5,12 @@
 # HdsPiconBare.py: locul siglei canalului pe ecranele care il fac numai cand e nevoie (bara de informatii, a doua bara,
 # in ambele teme) si setarea "Siglele canalelor (piconuri)" (config.usage.hds_piconuri, Components/UsageConfig.py).
 #
-# In skin, widgetul siglei (render="Picon") spune in atributul vecini ce elemente ale ecranului isi fac loc pentru ea:
+# In skin, widgetul siglei (render="Picon", sau LcdPicon / ZZPicon si orice renderer derivat din Picon) spune in atributul vecini ce elemente ale ecranului isi fac loc pentru ea:
 #   <widget source="session.CurrentService" render="Picon" position="24,32" size="150,90" ...
 #           vecini="24,18,120,56=198,120|152,18,756,56=326,582">
 # Regula "x,y,l,i=x2,l2": elementele ecranului (cu sursa, cu nume sau etichete fixe din skin) cu position="x,y" si
-# size="l,i" in skin stau, cat se vede o sigla adevarata (setarea pornita si sigla gasita pentru canal), la x2 cu
+# size="l,i" in skin stau, cat se vede o sigla (setarea pornita si sigla gasita pentru canal sau picon_default.png pus
+# de om intr-un dosar de sigle), la x2 cu
 # latimea l2; altfel raman la locul lor din skin (fara loc gol in stanga). Randul si inaltimea raman (si ce a potrivit
 # Components/HdsMarireText pe verticala). Numerele sunt ale skinului; se inmultesc cu scara ecranului ca in skin.py.
 #
@@ -50,8 +51,17 @@ def reguli(text):
 	return rez
 
 
+def _e_picon(o):
+	"""Renderer-ul Picon sau unul derivat din el (LcdPicon, ZZPicon, cele aduse de teme si pluginuri): dupa numele
+	claselor, fara import din enigma2 (probele de pe PC folosesc ecrane false)."""
+	try:
+		return any(c.__name__ == "Picon" for c in type(o).__mro__)
+	except Exception:
+		return False
+
+
 def _e_sigla(o):
-	return type(o).__name__ == "Picon" and bool(getattr(o, "vecini", ""))
+	return _e_picon(o) and bool(getattr(o, "vecini", ""))
 
 
 def _obiecte(ecran):
@@ -98,7 +108,7 @@ def plan(ecran):
 		return {}
 	rez = {}
 	for o in _obiecte(ecran):
-		if type(o).__name__ == "Picon":
+		if _e_picon(o):
 			continue
 		try:
 			a = dict(o.skinAttributes)

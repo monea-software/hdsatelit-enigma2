@@ -12,6 +12,8 @@
 #     un fus pe televizor (Screens/Time.py) sau in pagina web /ceas (Components/HdsCeas.seteaza); randul
 #     "Fus orar dupa internet" il intoarce la Da;
 #   - raspunsul vine de la serverul nostru (HdsLoculInternet.ADRESA, /receptor/locul): tara si coordonatele orasului.
+#     Cererea e HdsLoculInternet._citesteUrl, care iese pe langa VPN-ul receptorului (ocolesteVpn), deci fusul e al
+#     casei omului si cu VPN-ul pornit (la fel limba aleasa dupa tara, Components/HdsLimbaTara.py);
 #     Pentru UA: Europe/Kyiv sau aliasul Europe/Kiev, daca exista in lista ecranului; altfel fusul ramane neschimbat.
 #     Pentru celelalte tari: campul "fus" daca serverul il da; altfel fusul tarii din /usr/share/zoneinfo/zone.tab (pachetul
 #     tzdata-core, pe toate modelele) cel mai apropiat de coordonate (Spania: Madrid sau Canare; Rusia: 11 fusuri).
@@ -46,7 +48,8 @@ NIMIC = "nimic"
 LUCREAZA = "lucreaza"
 GATA = "gata"
 
-_STARE = {"stare": NIMIC, "fus": "", "motiv": "", "dupa_ntp": False}
+# raspuns: ultimul (cod, corp) primit de la server, folosit si de locul antenei (HdsLoculInternet, o singura cerere)
+_STARE = {"stare": NIMIC, "fus": "", "motiv": "", "dupa_ntp": False, "raspuns": None}
 _ZAVOR = threading.Lock()
 
 
@@ -299,6 +302,7 @@ def afla(raspuns=None, zone=None, disponibile=None, **k):
 	cod, corp = raspuns if raspuns is not None else cere(**k)
 	if cod is None:
 		return "", corp
+	_pune(raspuns=(cod, corp))
 	if cod == 404:
 		return "", "adresa fara loc in baza serverului"
 	if cod != 200:
@@ -351,7 +355,7 @@ def porneste(prima=False, fir=None, **k):
 def laPornire(prima=None, **k):
 	"""Din Components/SetupDevices.py, dupa limba (HdsLimbaTara.laPornire). Nu arunca."""
 	try:
-		_pune(stare=NIMIC, fus="", motiv="", dupa_ntp=False)
+		_pune(stare=NIMIC, fus="", motiv="", dupa_ntp=False, raspuns=None)
 		if not automat():
 			jurnal("fusul orar l-a ales omul: nu se cauta")
 			return

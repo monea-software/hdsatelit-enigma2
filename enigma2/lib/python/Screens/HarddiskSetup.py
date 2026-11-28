@@ -238,10 +238,11 @@ class HarddiskSetup(Screen):
 		self["staretext"] = Label("")
 		self["initialize"] = Pixmap()
 
+		# 0.8.0: tasta spusa pe nume (inainte numai cuvantul, cu rosu: OK inchidea ecranul si omul ghicea tasta)
 		if self.type == self.HARDDISK_INITIALIZE:
-			text = _("Initialize")
+			text = _("Roșu: formatează discul")
 		else:
-			text = _("Check")
+			text = _("Roșu: verifică discul")
 		self["initializetext"] = Label(text)
 		self["montaretext"] = Label(_("Galben: punct de montare"))
 
@@ -275,6 +276,14 @@ class HarddiskSetup(Screen):
 				mesaj = eroare.get("motiv", "")
 				if mesaj and mesaj not in mesaje:
 					mesaje.append(mesaj)
+		# 0.8.0: ce sistem de fisiere are discul acum (pagina se deschide si din anuntul unui disc abia pus, cu tasta INFO sau EPG)
+		try:
+			from Components import HdsAnuntStocare
+			acum = HdsAnuntStocare.textStareDisc(HdsAnuntStocare.citesteDisc(self.hdd.device))
+			if acum:
+				mesaje.insert(0, acum)
+		except Exception as eroare:
+			print("[HarddiskSetup] starea discului: %r" % (eroare,))
 		self["staretext"].setText("\n".join(mesaje))
 
 	def citeste(self, functie, callback):

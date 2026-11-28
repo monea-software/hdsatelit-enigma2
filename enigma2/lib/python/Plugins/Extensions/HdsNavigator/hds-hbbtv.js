@@ -53,9 +53,16 @@
  *
  * FILMELE APLICATIILOR (obiectul A/V: video/mp4, application/dash+xml, HLS, video/mpeg, sunetul): cu un lansator care
  * lasa comanda "av" (hds-navigator 0.7.0-r2, window.__hdsHbbtvStare.lansator.av), filmul il reda playerul receptorului sub
- * pagina; vezi "obiectul A/V" mai jos. Fara acea comanda tipurile nu exista, ca inainte.
+ * pagina; vezi "obiectul A/V" mai jos. Fara acea comanda tipurile nu exista, ca inainte. Pe obiectul A/V sunt si pause()
+ * si resume() (in afara standardului; playerele scrise pentru <video> le cheama, de pilda ADN Play), ca play(0) / play(1).
  *
- * Ce NU e aici: DRM, citirea caruselului (o face receptorul), evenimentele de flux din carusel, <video> si MSE (WebKit e
+ * <video> / <audio> HTML5 (AS192, HBB9): WebKit e construit fara video, deci cu acelasi lansator un element media cu
+ * sursa http(s) HLS / DASH / MP4 / TS / MP3 (dupa extensie sau dupa atributul type) merge tot pe playerul receptorului,
+ * prin aceleasi comenzi "av", cu evenimentele si proprietatile unui <video>; vezi "<video> HTML5 pe playerul
+ * receptorului" mai jos. Sursa poate veni din JavaScript (src, setAttribute) sau din HTML (atributul src, copiii
+ * <source>), luata la load(), la play() sau la autoplay.
+ *
+ * Ce NU e aici: DRM, citirea caruselului (o face receptorul), evenimentele de flux din carusel, MSE (MediaSource: WebKit e
  * construit fara video), subtitrarile filmelor, derularea rapida.
  *
  * HbbTV 2.0.2 (ETSI TS 102 796 V1.5.1; H20-202, 0.7.5): versiunea declarata ramane HbbTV 1.5 (Components/HdsHbbtv.py), fiindca
@@ -115,8 +122,21 @@
         punte = null;
     }
     var ARG_BUN = /^[A-Za-z0-9+\/=._:,-]{1,2048}$/;
+    /* HBW1: "leaga" amanat pana la sfarsitul pasului JavaScript (vezi bindToCurrentChannel); obiectul care l-a cerut */
+    var leagaAmanat = null, leagaSaritSpus = false;
+    var LEAGA_FARA_GRABA = { fereastra: 1, taste: 1, tradu: 1 };
+
+    function leagaPleaca() {
+        if (leagaAmanat === null)
+            return;
+        leagaAmanat = null;
+        trimite("leaga");
+    }
 
     function trimite() {
+        /* o cerere a paginii dupa bindToCurrentChannel amanat: "leaga" pleaca intai, ordinea ramane cea a paginii */
+        if (leagaAmanat !== null && !LEAGA_FARA_GRABA[arguments[0]])
+            leagaPleaca();
         var parti = [];
         for (var i = 0; i < arguments.length; i++) {
             var a = String(arguments[i]);
@@ -316,10 +336,44 @@
     constante(Keyset.prototype, TASTE);
     Object.defineProperty(Keyset.prototype, "value", { get: function () { return masca; } });
     Object.defineProperty(Keyset.prototype, "maximumValue", { get: function () { return TASTE_MAXIM; } });
+    /* Masca spre enigma2 (HBT2, 0.8.0): cel mult o trimitere la TASTE_PAS_MS; schimbarile venite mai des se strang si
+     * pleaca o data, cu ultima valoare. Aplicatia TVP GO pune masca de 3 ori la rand pentru fiecare tasta pe care si-o
+     * inregistreaza (55-88 de mesaje pe secunda), iar lansatorul arunca ce trece de 40 pe secunda: ultima masca putea fi
+     * una aruncata, deci tastele ajungeau gresit. Un ceas care nu mai bate (pagina oprita) nu tine trimiterea pe loc:
+     * dupa doi pasi, urmatoarea schimbare pleaca direct. */
+    var TASTE_PAS_MS = 100;
+    var tasteTrimisa = null, tasteLa = 0, tasteCeas = null;
+
+    function tastePleaca() {
+        tasteTrimisa = masca;
+        tasteLa = Date.now();
+        trimite("taste", masca);
+    }
+
+    function trimiteTaste() {
+        var trecut = Date.now() - tasteLa;
+        if (tasteCeas !== null) {
+            if (trecut >= 0 && trecut < 2 * TASTE_PAS_MS)
+                return;                 /* ultima valoare pleaca atunci cand bate ceasul */
+            if (typeof window.clearTimeout === "function")
+                window.clearTimeout(tasteCeas);
+            tasteCeas = null;
+        }
+        if (trecut < 0 || trecut >= TASTE_PAS_MS || typeof window.setTimeout !== "function") {
+            tastePleaca();
+            return;
+        }
+        tasteCeas = window.setTimeout(function () {
+            tasteCeas = null;
+            if (masca !== tasteTrimisa)
+                tastePleaca();
+        }, TASTE_PAS_MS - trecut);
+    }
+
     Keyset.prototype.setValue = function (valoare) {
         var v = intreg(valoare);
         masca = isNaN(v) ? 0 : (v & TASTE_MAXIM);
-        trimite("taste", masca);
+        trimiteTaste();
         return masca;
     };
     /* supportsPointer (OIPF DAE 7.2.5.2; HbbTV 2.0.2 cap. 10.2.2): aplicatia spune ca stie si mouse. Receptorul nu are
@@ -1017,9 +1071,64 @@
         }
     }
 
+    /* Filmul unei aplicatii (obiectul A/V) pe toata fereastra (HBT2, 0.8.0): la televizoare acopera tot ce pagina
+     * deseneaza sub el. Grila din dedesubt() scapa elementele mici dintre punctele ei: hub-ul TVP GO isi lasa sub film
+     * antetul (sigla, meniul, ceasul) si randul de categorii, care la noi ramaneau scrise peste imagine. Aici se cauta,
+     * de la radacina in jos, ramurile paginii de langa drumul spre obiect, fiecare in mijlocul partii ei din fereastra:
+     * gasita sub obiect, ramura intra intreaga la cele de dedesubt (gauraCauta o ascunde daca nimic din ea nu e peste
+     * film); gasita peste obiect, ramane neatinsa (comenzile playerului); negasita (o cutie goala, cu urmasii iesiti din
+     * ea) sau prea mare ca sa fie judecata intreaga, i se cauta copiii. O ramura cu totul in afara ferestrei nu se
+     * cauta. Cel mult FILM_CAUTARI_MAXIM cautari la o trecere. */
+    var FILM_CAUTARI_MAXIM = 160;
+
+    function subFilmIntreg(el, rez) {
+        var d = window.document, L = window.innerWidth, I = window.innerHeight, ramase = FILM_CAUTARI_MAXIM;
+        if (typeof d.elementsFromPoint !== "function" || !d.body || !(L > 0 && I > 0))
+            return;
+
+        function copii(c) {
+            var n = c.children || [];
+            for (var i = 0; i < n.length && ramase > 0; i++)
+                cauta(n[i]);
+        }
+
+        function cauta(c) {
+            if (!c || c === el || c.nodeType !== 1 || typeof c.getBoundingClientRect !== "function")
+                return;
+            if (typeof c.contains === "function" && c.contains(el)) {
+                copii(c);               /* un stramos al obiectului: ramurile lui */
+                return;
+            }
+            if (rez.sub.indexOf(c) >= 0 || rez.peste.indexOf(c) >= 0)
+                return;
+            var r = c.getBoundingClientRect();
+            var a0 = Math.max(r.left, 0), b0 = Math.max(r.top, 0), a1 = Math.min(r.left + r.width, L),
+                b1 = Math.min(r.top + r.height, I);
+            if (r.width > 0 && r.height > 0) {
+                if (!(a1 > a0 && b1 > b0))
+                    return;             /* cu totul in afara ferestrei */
+                var urmasi = typeof c.getElementsByTagName === "function" ? c.getElementsByTagName("*").length : 0;
+                if (urmasi <= URMASI_MAXIM) {
+                    ramase--;
+                    var l = d.elementsFromPoint((a0 + a1) / 2, (b0 + b1) / 2) || [];
+                    var ic = Array.prototype.indexOf.call(l, c), iel = Array.prototype.indexOf.call(l, el);
+                    if (ic >= 0 && iel >= 0) {
+                        (ic < iel ? rez.peste : rez.sub).push(c);
+                        return;
+                    }
+                }
+            }
+            copii(c);
+        }
+
+        cauta(d.body);
+    }
+
     function gauraCauta(el, x0, y0, x1, y1, drept, laFel) {
         var d = window.document;
         var gasite = dedesubt(el, x0, y0, x1, y1), sub = gasite.sub;
+        if (avActiv === el && x0 <= 0 && y0 <= 0 && x1 >= window.innerWidth && y1 >= window.innerHeight)
+            subFilmIntreg(el, gasite);
         /* elementele si cutiile lor: un panou mutat (de pilda de un parinte) reface gaura */
         var cheie = drept + "|" + sub.map(function (e) {
             var c = e.getBoundingClientRect();
@@ -1080,6 +1189,14 @@
             if (z)
                 noi.push([e, z]);
         });
+        /* HBL1 (0.8.0): un <video>/<audio> al carui film merge pe playerul receptorului se deseneaza el insusi peste
+         * imagine; cu fundalul lui (playerul Rubidia: <video class="media"> negru pe tot ecranul) se aude si ecranul e
+         * negru (Lanus, AS211). Fundalul elementului devine transparent cat tine gaura si revine la inchiderea ei. */
+        if (avActiv === el && av(el).html5 && el.style) {
+            var csEl = window.getComputedStyle(el);
+            if (culoareVazuta(csEl.backgroundColor) || (csEl.backgroundImage && csEl.backgroundImage !== "none"))
+                noi.push([el, { "background-color": "transparent", "background-image": "none" }]);
+        }
         noi.forEach(function (n) {
             var e = n[0], vechi = {}, pus = {};
             for (var p in n[1]) {
@@ -1267,7 +1384,18 @@
                     return null;
                 }
                 activeaza(this);
-                trimite("leaga");
+                /* HBW1 (0.8.0; AS244, Lanus, wedo tv 13E): aplicatii ca wedo tv "elibereaza decodorul" cu
+                 * bindToCurrentChannel() urmat imediat de stop() pe video/broadcast, la 500 ms, cat filmul lor (aici
+                 * splash.mp4) merge. Playerul receptorului e unul singur, deci "leaga" oprea filmul paginii, canalul pornea
+                 * si se oprea iar; filmul splash nu mai ajungea la 1,2 s si rotita aplicatiei ramanea peste filme. Cand un
+                 * film al paginii tine playerul, "leaga" pleaca la sfarsitul pasului (sau inaintea urmatoarei cereri a
+                 * paginii); stop() pe acelasi obiect in acelasi pas il anuleaza: canalul ramane oprit, filmul merge.
+                 * Pagina vede aceleasi stari ca inainte (prezentare, apoi oprit). Fara film al paginii: ca inainte. */
+                if (avPeEcran() && typeof setTimeout === "function") {
+                    leagaAmanat = this;
+                    setTimeout(leagaPleaca, 0);
+                } else
+                    trimite("leaga");
                 schimbaStarea(this, PREZENTARE);
                 return canalCurent();
             },
@@ -1324,6 +1452,14 @@
                 var v = vb(this);
                 if (v.joc === NECONECTAT || !legata())
                     return;
+                if (leagaAmanat === this) {
+                    leagaAmanat = null;   /* HBW1: bindToCurrentChannel + stop() cat merge filmul paginii */
+                    if (!leagaSaritSpus) {
+                        leagaSaritSpus = true;
+                        jurnalPagina("video/broadcast: bindToCurrentChannel + stop() cat merge filmul paginii: " +
+                            "filmul ramane, canalul ramane oprit");
+                    }
+                }
                 trimite("opreste");
                 schimbaStarea(this, OPRIT);
             },
@@ -1411,6 +1547,8 @@
         a.joc = joc;
         a.eroare = joc === AV_EROARE ? eroare : undefined;
         eveniment(el, "PlayStateChange", { state: joc, error: a.eroare }, [joc, a.eroare]);
+        if (a.html5)
+            videoEvenimente(el, joc);
     }
 
     /* Adresa filmului: atributul data, intreaga fata de document; numai http(s). */
@@ -1616,6 +1754,21 @@
                 urmaresteAv(this, true);
                 return true;
             },
+            /* pause() / resume() (HBB9): nu sunt in OIPF DAE, dar playerele scrise si pentru <video> le cheama pe obiectul
+             * A/V (ADN Play: "t.pause is not a function", rotita fara sfarsit); numai pe filmul pornit, ca play(0) / play(1).
+             * Pe un obiect oprit nu pornesc nimic. */
+            pause: function () {
+                var a = av(this);
+                if (avActiv !== this || !avInMers(a.joc))
+                    return false;
+                return AV.metode.play.call(this, 0);
+            },
+            resume: function () {
+                var a = av(this);
+                if (avActiv !== this || !avInMers(a.joc))
+                    return false;
+                return AV.metode.play.call(this, 1);
+            },
             stop: function () {
                 if (av(this).joc !== AV_OPRIT)
                     avOpresteTot(this);
@@ -1683,6 +1836,8 @@
             eveniment(el, "PlaySpeedChanged", { speed: a.viteza }, [a.viteza]);
         if (e.cautat !== undefined)
             eveniment(el, "PlayPositionChanged", { position: a.poz }, [a.poz]);
+        if (a.html5 && (isFinite(e.poz) || e.cautat !== undefined))
+            videoTrimite(el, e.cautat !== undefined ? ["seeked", "timeupdate"] : ["timeupdate"]);
         if (a.joc === AV_REDA && a.pauzaCeruta) {
             a.pauzaCeruta = false;
             trimite("av", "viteza", 0);
@@ -2444,6 +2599,9 @@
                 eveniment(m, "ApplicationLoadError", { appl: aplicatie }, [aplicatie]);
             });
             break;
+        case "anunt":
+            anuntPagina(e.text, e.ms);
+            break;
         case "memorie-putina":
             elementeDeTip("application/oipfapplicationmanager").forEach(function (m) {
                 eveniment(m, "LowMemory", {}, []);
@@ -2460,6 +2618,40 @@
             break;
         default:
             break;
+        }
+    }
+
+    /* Un anunt scurt al receptorului in pagina (HBL1, 0.8.0; ev "anunt" din Components/HdsHbbtvPornire.py): de pilda
+     * filmul aplicatiei cazut inainte de prima imagine. O fereastra de enigma2 peste navigator l-ar ascunde si ar lua
+     * tastele (AS211), deci textul (tradus de enigma2) se scrie aici, sus pe mijloc, peste aplicatie, fara sa ia tastele
+     * sau clicurile, si pleaca singur dupa ms (ANUNT_MS daca lipseste). Un anunt nou il inlocuieste pe cel vechi. */
+    var ANUNT_ID = "hds-anunt", ANUNT_MS = 8000;
+    var anuntCeas = null;
+
+    function anuntPagina(text, ms) {
+        var d = window.document;
+        if (!text || !d || typeof d.createElementNS !== "function" || !d.documentElement)
+            return;
+        try {
+            var vechi = d.getElementById(ANUNT_ID);
+            if (vechi && vechi.parentNode)
+                vechi.parentNode.removeChild(vechi);
+            var a = d.createElementNS(NS_XHTML, "div");
+            a.setAttribute("id", ANUNT_ID);
+            a.setAttribute("style", "position:fixed;left:140px;right:140px;top:36px;z-index:2147483647;" +
+                "pointer-events:none;background:rgba(16,24,32,0.93);color:#f0f0f0;font:24px/1.35 sans-serif;" +
+                "padding:14px 24px;border-radius:8px;text-align:center;opacity:1");
+            a.textContent = String(text);
+            (d.body || d.documentElement).appendChild(a);
+            if (anuntCeas !== null)
+                window.clearTimeout(anuntCeas);
+            anuntCeas = window.setTimeout(function () {
+                anuntCeas = null;
+                if (a.parentNode)
+                    a.parentNode.removeChild(a);
+            }, isFinite(ms) && ms > 0 ? ms : ANUNT_MS);
+        } catch (x) {
+            /* documentul nu primeste elemente: anuntul ramane numai in jurnal */
         }
     }
 
@@ -2488,7 +2680,8 @@
         }
         if (cheie === "app")
             vizibila = !!(S.app && S.app.vizibil);
-        if (cheie === "taste" && S.taste && isFinite(S.taste.value))
+        /* cat o masca noua asteapta sa plece (trimiteTaste), raspunsul enigma2 la una mai veche nu o schimba */
+        if (cheie === "taste" && S.taste && isFinite(S.taste.value) && tasteCeas === null)
             masca = S.taste.value & TASTE_MAXIM;
     }
 
@@ -2708,6 +2901,88 @@
                 return l[i];
         }
         return null;
+    }
+
+    /* Adaptare TVP (HBT2, 0.8.0): filmele din hub-ul TVP GO (hbb-prod.tvp.pl/apps/manager/hub/, OK pe un film). Aplicatia
+     * isi pune datele filmului in depozitul ei (mutatia pages/hub/setChosenPlayerVideoData), iar comenzile playerului
+     * citesc din ele, la creare, video.data[0].dates.start. La filmele la cerere raspunsul serverului TVP nu are campul
+     * dates (il au numai emisiunile in direct), deci comenzile cad la creare, aplicatia trece in pagina ei de eroare si
+     * isi opreste singura filmul abia pornit: la om filmul porneste o clipa, apoi revine canalul si aplicatia nu se mai
+     * vede. La fel se intampla pe PC, si fara stratul nostru. Codul comenzilor stie de un inceput nedefinit (arata
+     * "-"), deci aici filmul venit fara dates primeste unul gol, inainte ca mutatia sa ajunga in depozit. Numai pe
+     * paginile aplicatiei TVP manager; cand campul vine de la TVP, adaptarea nu face nimic. Un rand in jurnalul
+     * paginii, o data. */
+    var TVP_MUTATIE_FILM = "pages/hub/setChosenPlayerVideoData";
+
+    function adaptareTvpFilm() {
+        var loc = window.location;
+        if (!loc || !/(^|\.)tvp\.pl$/.test(loc.hostname || "") || !/^\/apps\/manager\//.test(loc.pathname || ""))
+            return false;
+        var nuxt, scris = false, scrisLive = false;
+
+        function completeaza(date) {
+            var f = date && date.video && date.video.data && date.video.data[0];
+            if (!f || typeof f !== "object")
+                return;
+            /* AS222 (26.11.2026): canalele "Na zywo" vin fara akpa_attributes, iar player.vue
+             * (getSingleVideoForTokenizerLiveNPVR) cheama e.akpa_attributes.includes dupa mutatie: o lista goala */
+            if (f.akpa_attributes === undefined || f.akpa_attributes === null) {
+                f.akpa_attributes = [];
+                if (!scrisLive) {
+                    scrisLive = true;
+                    jurnalPagina("adaptare TVP: datele emisiunii in direct au venit fara akpa_attributes; pusa o lista goala");
+                }
+            }
+            if (f.dates !== undefined)
+                return;
+            f.dates = {};
+            if (!scris) {
+                scris = true;
+                jurnalPagina("adaptare TVP: datele filmului au venit fara dates; pus unul gol, ca playerul sa porneasca");
+            }
+        }
+
+        function leaga(n) {
+            var s = n && n.$store;
+            if (!s || typeof s.commit !== "function" || s.commit.__hdsTvpFilm)
+                return;
+            var comite = s.commit;
+            var nou = function (tip, date) {
+                try {
+                    if (tip === TVP_MUTATIE_FILM)
+                        completeaza(date);
+                    else if (tip && typeof tip === "object" && tip.type === TVP_MUTATIE_FILM)
+                        completeaza(tip);
+                } catch (x) {
+                    /* date de alta forma: mutatia merge neschimbata */
+                }
+                return comite.apply(this, arguments);
+            };
+            nou.__hdsTvpFilm = true;
+            s.commit = nou;
+        }
+
+        try {
+            /* aplicatia (Nuxt) se pune singura in window.$nuxt cand e creata; depozitul ei e atunci gata */
+            nuxt = window.$nuxt;
+            Object.defineProperty(window, "$nuxt", {
+                configurable: true,
+                enumerable: true,
+                get: function () { return nuxt; },
+                set: function (n) {
+                    nuxt = n;
+                    try {
+                        leaga(n);
+                    } catch (x) {
+                        /* depozit de alta forma: aplicatia merge ca fara adaptare */
+                    }
+                }
+            });
+            leaga(nuxt);
+        } catch (x) {
+            return false;
+        }
+        return true;
     }
 
     function adaptareTvpManager() {
@@ -2957,12 +3232,1134 @@
         return true;
     }
 
+    /* <video> HTML5 PE PLAYERUL RECEPTORULUI (AS192 si HBB9): WebKit-ul imaginii e construit fara video, deci
+     * un <video>/<audio> cu sursa http(s) .m3u8/.mpd/.mp4/.ts da cod 4 (aplicatiile iphd.it: SUPERSIX, Telerent 7Gold,
+     * Rete 7). Aici, numai cu obiectul A/V pornit (LANSATOR.av): sursa http(s) cu una din extensiile din VIDEO_TIPURI sau cu
+     * un atribut type din AV_TIPURI (al elementului sau al copilului <source>) nu mai ajunge la WebKit; play() porneste
+     * filmul pe playerul receptorului ca obiectul A/V (aceleasi comenzi "av"), in dreptunghiul elementului, iar pagina
+     * primeste evenimentele unui <video> (loadstart, playing, pause, waiting, timeupdate, ended, error) si proprietatile lui
+     * (paused, currentTime, duration, readyState, error). Sursa venita din HTML (atributul src scris in pagina, copiii
+     * <source>) se ia la load(), la play() si, pentru elementele cu autoplay, la DOMContentLoaded. Celelalte surse raman
+     * la WebKit. */
+    var VIDEO_TIPURI = { m3u8: "application/vnd.apple.mpegurl", m3u: "application/vnd.apple.mpegurl",
+        mpd: "application/dash+xml", mp4: "video/mp4", m4v: "video/mp4", ts: "video/mpeg", mp3: "audio/mpeg" };
+
+    function videoTrimite(el, nume) {
+        nume.forEach(function (n) {
+            setTimeout(function () {
+                var ev;
+                try {
+                    ev = new Event(n, { bubbles: false, cancelable: false });
+                } catch (x) {
+                    ev = document.createEvent("Event");
+                    ev.initEvent(n, false, false);
+                }
+                try {
+                    el.dispatchEvent(ev);
+                } catch (x) {
+                    /* nimic */
+                }
+            }, 0);
+        });
+    }
+
+    function videoEvenimente(el, joc) {
+        var a = av(el);
+        if (joc === AV_CONECTARE)
+            videoTrimite(el, ["loadstart", "waiting"]);
+        else if (joc === AV_REDA) {
+            var l = a.html5Inceput ? ["play", "playing"] : ["durationchange", "loadedmetadata", "loadeddata", "canplay",
+                "canplaythrough", "play", "playing"];
+            a.html5Inceput = true;
+            videoTrimite(el, l);
+        } else if (joc === AV_PAUZA)
+            videoTrimite(el, ["pause"]);
+        else if (joc === AV_ASTEAPTA)
+            videoTrimite(el, ["waiting"]);
+        else if (joc === 5)
+            videoTrimite(el, ["ended"]);
+        else if (joc === AV_EROARE)
+            videoTrimite(el, ["error"]);
+    }
+
+    function videoHtml5() {
+        var M = window.HTMLMediaElement;
+        if (!avPornit || typeof M !== "function" || !M.prototype)
+            return false;
+        var P = M.prototype, E = window.Element && window.Element.prototype;
+        function desc(n) {
+            for (var o = P; o; o = Object.getPrototypeOf(o)) {
+                var d = Object.getOwnPropertyDescriptor(o, n);
+                if (d)
+                    return d;
+            }
+            return null;
+        }
+        var nativ = {};
+        ["src", "currentSrc", "currentTime", "duration", "paused", "ended", "readyState", "networkState", "error",
+            "seeking"].forEach(function (n) { nativ[n] = desc(n); });
+        var playNativ = P.play, pauseNativ = P.pause, loadNativ = P.load;
+        /* tipul filmului: atributul type (daca e unul al obiectului A/V), altfel extensia adresei; "" = nu e al nostru */
+        function tipDe(u, tip) {
+            var t = String(tip || "").split(";")[0].trim().toLowerCase();
+            if (t && AV_TIPURI.indexOf(t) >= 0)
+                return t;
+            var cale = u.split(/[?#]/)[0];
+            var e = /\.([A-Za-z0-9]{1,5})$/.exec(cale.slice(cale.lastIndexOf("/") + 1));
+            return e && VIDEO_TIPURI[e[1].toLowerCase()] || "";
+        }
+        /* adresa intreaga, daca filmul merge pe playerul receptorului (http/https si tip cunoscut); altfel "" */
+        function adresa(u, tip) {
+            u = String(u || "").trim();
+            if (!u)
+                return "";
+            try {
+                u = new URL(u, document.baseURI || window.location.href).href;
+            } catch (x) {
+                /* asa cum e */
+            }
+            if (!/^https?:\/\//i.test(u))
+                return "";
+            return tipDe(u, tip) ? u : "";
+        }
+        function atribut(el, n) {
+            return E && E.getAttribute ? E.getAttribute.call(el, n) : null;
+        }
+        /* sursa scrisa in HTML: atributul src al elementului, altfel primul copil <source> bun; null daca nu e */
+        function sursaDinHtml(el) {
+            var tipEl = atribut(el, "type"), u = adresa(atribut(el, "src"), tipEl);
+            if (u)
+                return { u: u, tip: tipDe(u, tipEl) };
+            var copii = el.children || el.childNodes || [];
+            for (var i = 0; i < copii.length; i++) {
+                var c = copii[i];
+                if (!c || String(c.tagName || "").toUpperCase() !== "SOURCE")
+                    continue;
+                var t = atribut(c, "type");
+                u = adresa(atribut(c, "src"), t);
+                if (u)
+                    return { u: u, tip: tipDe(u, t) };
+            }
+            return null;
+        }
+        function al(el) {
+            var a = av(el);
+            return a.html5Src ? a : null;
+        }
+        /* valorile puse de pagina pe un nume pe care WebKit nu-l are pe prototip (n-ar trebui sa fie cazul in WebKit;
+         * pastreaza purtarea unei proprietati obisnuite a elementului) */
+        var proprii = typeof WeakMap === "function" ? new WeakMap() : null;
+        function citeste(n, el) {
+            var d = nativ[n];
+            if (d && d.get)
+                return d.get.call(el);
+            var o = proprii && proprii.get(el);
+            return o && Object.prototype.hasOwnProperty.call(o, n) ? o[n] : undefined;
+        }
+        function scrieNativ(n, el, v) {
+            var d = nativ[n];
+            if (d && d.set)
+                d.set.call(el, v);
+            else if (!d && proprii) {
+                var o = proprii.get(el);
+                if (!o)
+                    proprii.set(el, o = {});
+                o[n] = v;
+            }
+            /* d fara set (numai citire in WebKit): nimic, ca atribuirea pe o proprietate numai de citit */
+        }
+        function puneSursa(el, u, tip) {
+            var a = av(el);
+            if (avActiv === el && avInMers(a.joc))
+                avOpresteTot(el);
+            /* filmul de dinainte (terminat, cazut) nu-si lasa starea sursei noi: ended, error, currentTime, duration */
+            a.joc = AV_OPRIT;
+            a.eroare = undefined;
+            a.poz = a.pozLa = a.lung = 0;
+            a.pauzaCeruta = false;
+            a.html5 = true;
+            a.html5Src = u;
+            a.html5Tip = tipDe(u, tip);
+            a.html5Inceput = false;
+            videoTrimite(el, ["loadstart", "durationchange", "loadedmetadata", "loadeddata", "canplay", "canplaythrough"]);
+            if (el.autoplay || (el.hasAttribute && el.hasAttribute("autoplay")))
+                setTimeout(function () { if (av(el).html5Src === u) porneste(el); }, 0);
+        }
+        function scoateSursa(el) {
+            var a = av(el);
+            if (a.html5Src && avActiv === el && avInMers(a.joc))
+                avOpresteTot(el);
+            a.html5Src = "";
+            a.html5 = false;
+        }
+        function porneste(el) {
+            var a = av(el);
+            if (avActiv === el && avInMers(a.joc)) {
+                a.pauzaCeruta = false;
+                if (a.viteza === 0) {
+                    a.viteza = 1;
+                    trimite("av", "viteza", 1);   /* play/playing vin cu starea REDA de la enigma2 */
+                }
+                return;
+            }
+            var b = b64(a.html5Src);
+            if (b.length > AV_B64_MAXIM) {
+                avSchimba(el, AV_EROARE, 4);
+                return;
+            }
+            avIaDecodorul(el);
+            a.id = ++avUltimId;
+            a.poz = a.pozLa = a.lung = 0;
+            a.viteza = 1;
+            a.pauzaCeruta = false;
+            a.piste = [];
+            a.inPagina = false;
+            a.ecranIntreg = false;
+            trimite("av", "porneste", a.id, b, a.html5Tip || tipDe(a.html5Src));
+            avSchimba(el, AV_CONECTARE);
+            urmaresteAv(el, true);
+        }
+        try {
+            Object.defineProperty(P, "src", { configurable: true, enumerable: true,
+                get: function () {
+                    var a = al(this);
+                    return a ? a.html5Src : citeste("src", this);
+                },
+                set: function (u) {
+                    var t = atribut(this, "type") || av(this).tipCerut, x = adresa(u, t);
+                    if (x) {
+                        puneSursa(this, x, t);
+                        return;
+                    }
+                    scoateSursa(this);
+                    scrieNativ("src", this, u);
+                } });
+            Object.defineProperty(P, "currentSrc", { configurable: true, enumerable: true,
+                get: function () {
+                    var a = al(this);
+                    return a ? a.html5Src : citeste("currentSrc", this);
+                } });
+            Object.defineProperty(P, "currentTime", { configurable: true, enumerable: true,
+                get: function () {
+                    var a = al(this);
+                    return a ? avPozitie(this) / 1000 : citeste("currentTime", this);
+                },
+                set: function (t) {
+                    var a = al(this);
+                    if (!a) {
+                        scrieNativ("currentTime", this, t);
+                        return;
+                    }
+                    var ms = Math.round(Number(t) * 1000);
+                    if (avActiv === this && avInMers(a.joc) && isFinite(ms) && ms >= 0)
+                        trimite("av", "cauta", ms);
+                } });
+            Object.defineProperty(P, "duration", { configurable: true, enumerable: true,
+                get: function () {
+                    var a = al(this);
+                    if (!a)
+                        return citeste("duration", this);
+                    return a.lung > 0 ? a.lung / 1000 : Infinity;
+                } });
+            Object.defineProperty(P, "paused", { configurable: true, enumerable: true,
+                get: function () {
+                    var a = al(this);
+                    return a ? !(avInMers(a.joc) && a.viteza === 1) : citeste("paused", this);
+                } });
+            Object.defineProperty(P, "ended", { configurable: true, enumerable: true,
+                get: function () {
+                    var a = al(this);
+                    return a ? a.joc === 5 : citeste("ended", this);
+                } });
+            Object.defineProperty(P, "seeking", { configurable: true, enumerable: true,
+                get: function () {
+                    return al(this) ? false : citeste("seeking", this);
+                } });
+            Object.defineProperty(P, "readyState", { configurable: true, enumerable: true,
+                get: function () {
+                    var a = al(this);
+                    return a ? (a.joc === AV_ASTEAPTA || a.joc === AV_CONECTARE ? 2 : a.joc === AV_EROARE ? 0 : 4) :
+                        citeste("readyState", this);
+                } });
+            Object.defineProperty(P, "networkState", { configurable: true, enumerable: true,
+                get: function () {
+                    var a = al(this);
+                    return a ? (avInMers(a.joc) ? 2 : 1) : citeste("networkState", this);
+                } });
+            Object.defineProperty(P, "error", { configurable: true, enumerable: true,
+                get: function () {
+                    var a = al(this);
+                    if (!a)
+                        return citeste("error", this);
+                    return a.joc === AV_EROARE ? { code: 2, message: "" } : null;
+                } });
+            /* numele numai de citire primesc si scrierea, trecuta mai departe la WebKit (vezi scrieNativ) */
+            ["currentSrc", "duration", "paused", "ended", "seeking", "readyState", "networkState", "error"]
+                .forEach(function (n) {
+                    var d = Object.getOwnPropertyDescriptor(P, n);
+                    Object.defineProperty(P, n, { configurable: true, enumerable: true, get: d.get,
+                        set: function (v) { scrieNativ(n, this, v); } });
+                });
+            /* canPlayType (LAN1): playerele aplicatiilor (Rubidia: Video Mediterraneo, Video Regione, TeleNord) pun sursa
+             * HLS pe <video> numai daca el spune ca o poate reda; altfel incearca hls.js (cere MediaSource, care lipseste)
+             * si raman pe rotita. Raspunsul WebKit-ului ramane cand nu e gol; altfel tipurile pe care le reda playerul
+             * receptorului (AV_TIPURI, si cu parametri: codecs=...) primesc "maybe", iar tipul ramane tinut pe element:
+             * sursa pusa dupa aceea fara atributul type si fara extensie cunoscuta (lista HLS cu ?token=) il ia pe el. */
+            var canPlayNativ = P.canPlayType;
+            P.canPlayType = function (tip) {
+                var r = typeof canPlayNativ === "function" ? canPlayNativ.apply(this, arguments) : "";
+                if (r)
+                    return r;
+                var t = String(tip || "").split(";")[0].trim().toLowerCase();
+                if (t && AV_TIPURI.indexOf(t) >= 0) {
+                    av(this).tipCerut = t;
+                    return "maybe";
+                }
+                return "";
+            };
+            P.play = function () {
+                if (!al(this)) {
+                    var h = sursaDinHtml(this);
+                    if (!h)
+                        return playNativ.apply(this, arguments);
+                    puneSursa(this, h.u, h.tip);
+                }
+                porneste(this);
+                return typeof Promise === "function" ? Promise.resolve() : undefined;
+            };
+            P.pause = function () {
+                var a = al(this);
+                if (!a)
+                    return pauseNativ.apply(this, arguments);
+                if (avActiv !== this || !avInMers(a.joc))
+                    return;
+                if (a.joc === AV_CONECTARE) {
+                    a.pauzaCeruta = true;   /* ca la obiectul A/V: pauza abia cand filmul a inceput */
+                    return;
+                }
+                if (a.viteza !== 0) {
+                    a.viteza = 0;
+                    trimite("av", "viteza", 0);   /* evenimentul pause vine cu starea PAUZA de la enigma2 */
+                }
+            };
+            P.load = function () {
+                var a = al(this);
+                if (!a) {
+                    var h = sursaDinHtml(this);
+                    if (!h)
+                        return loadNativ.apply(this, arguments);
+                    puneSursa(this, h.u, h.tip);   /* puneSursa porneste singura filmul cu autoplay */
+                    return;
+                }
+                videoTrimite(this, ["emptied"]);
+                puneSursa(this, a.html5Src, a.html5Tip);   /* opreste filmul, loadstart..canplaythrough, autoplay */
+            };
+            if (E && E.setAttribute) {
+                var setAttrNativ = E.setAttribute;
+                E.setAttribute = function (n, v) {
+                    if (this instanceof M && String(n).toLowerCase() === "src") {
+                        var t = atribut(this, "type") || av(this).tipCerut, x = adresa(v, t);
+                        if (x) {
+                            puneSursa(this, x, t);
+                            return;
+                        }
+                        scoateSursa(this);
+                    }
+                    return setAttrNativ.apply(this, arguments);
+                };
+            }
+            if (E && E.removeAttribute) {
+                var removeNativ = E.removeAttribute;
+                E.removeAttribute = function (n) {
+                    if (this instanceof M && String(n).toLowerCase() === "src" && al(this))
+                        scoateSursa(this);
+                    return removeNativ.apply(this, arguments);
+                };
+            }
+        } catch (x) {
+            jurnalPagina("video html5 pe playerul receptorului: nu s-a putut pune (" + (x && x.name) + ")");
+            return false;
+        }
+        /* elementele cu autoplay si sursa scrisa in HTML: filmul porneste singur, ca la un <video> adevarat */
+        function autoplayDinHtml() {
+            var l = document.querySelectorAll ? document.querySelectorAll("video[autoplay], audio[autoplay]") : [];
+            for (var i = 0; i < l.length; i++) {
+                if (al(l[i]))
+                    continue;
+                var h = sursaDinHtml(l[i]);
+                if (h)
+                    puneSursa(l[i], h.u, h.tip);
+            }
+        }
+        if (typeof document.addEventListener === "function")
+            document.addEventListener("DOMContentLoaded", autoplayDinHtml, false);
+        hlsJsPePlayer();
+        dashJsPePlayer();
+        return true;
+    }
+
+    /* hls.js PE PLAYERUL RECEPTORULUI (LAN1): multe aplicatii HbbTV (Rubidia: Video Mediterraneo, Video Regione, TeleNord)
+     * aleg hls.js pe orice televizor necunoscut si nu mai incearca <video src=.m3u8>; hls.js cere MediaSource, pe care
+     * WebKit-ul imaginii nu-l are, deci Hls.isSupported() da false si aplicatia ramane pe rotita. Cand pagina pune
+     * window.Hls (biblioteca hls.js) si ea spune ca nu poate reda aici (fara MediaSource), Hls.isSupported() spune da, iar un Hls nou e o punte mica:
+     * loadSource + attachMedia pun adresa listei pe <video> (deci pe playerul receptorului, prin videoHtml5), cu
+     * evenimentele de baza ale bibliotecii (MEDIA_ATTACHED, MANIFEST_LOADED, MANIFEST_PARSED cu o singura calitate).
+     * HBL1 (0.8.0): puntea se pune MEREU, si cand biblioteca spune ca poate reda singura. In navigatorul pornit de
+     * enigma2 WebKit are MediaSource cu decodorul imprumutat (HdsDecodorWeb), deci Hls.isSupported() da adevarat, iar
+     * hls.js isi reda singur lista: la Lanus (Octagon SF8008, Video Mediterraneo HD, Rubidia) imaginea ingheata dupa 1-2
+     * minute si pagina ramane pe rotita; pe playerul receptorului acelasi film a mers 5 minute fara oprire (AS211).
+     * Ramane la biblioteca numai un Hls cu filme protejate (config emeEnabled sau drmSystems: EME prin hds-ocdm). */
+    /* atributul type de dinaintea puntii, pus inapoi cand puntea lasa elementul (o reclama MP4 pe acelasi <video>) */
+    function tipInapoi(m, vechi) {
+        if (vechi === null || vechi === undefined)
+            m.removeAttribute("type");
+        else
+            m.setAttribute("type", vechi);
+    }
+
+    function hlsJsPePlayer() {
+        if (!Object.defineProperty)
+            return;
+        function punte(Orig) {
+            if (typeof Orig !== "function" || Orig.__hdsPunte)
+                return Orig;
+            var EV = Orig.Events || {};
+            function Hls(cfg) {
+                /* film protejat: biblioteca, prin EME (drmSystems {} e valoarea din fabrica a bibliotecii: nu conteaza) */
+                if (cfg && (cfg.emeEnabled === true || (cfg.drmSystems && typeof cfg.drmSystems === "object" &&
+                        Object.keys(cfg.drmSystems).length)))
+                    return new Orig(cfg);
+                if (!(this instanceof Hls))
+                    return new Hls(cfg);
+                this.config = cfg || {};
+                this.url = "";
+                this.media = null;
+                this.levels = [];
+                this.audioTracks = [];
+                this.subtitleTracks = [];
+                this.startLevel = -1;
+                this.currentLevel = -1;
+                this.nextLevel = -1;
+                this.loadLevel = -1;
+                this.autoLevelEnabled = true;
+                this._asc = {};
+            }
+            var p = Hls.prototype;
+            p.on = function (n, f, ctx) {
+                if (typeof f === "function")
+                    (this._asc[n] = this._asc[n] || []).push({ f: f, s: ctx });
+            };
+            p.once = function (n, f, ctx) {
+                var eu = this;
+                function o() { eu.off(n, o); return f.apply(this, arguments); }
+                o.original = f;
+                this.on(n, o, ctx);
+            };
+            p.off = function (n, f) {
+                var l = this._asc[n];
+                if (l)
+                    this._asc[n] = f ? l.filter(function (x) { return x.f !== f && x.f.original !== f; }) : [];
+            };
+            p.removeAllListeners = function (n) {
+                if (n)
+                    delete this._asc[n];
+                else
+                    this._asc = {};
+            };
+            p.listeners = function (n) { return (this._asc[n] || []).map(function (x) { return x.f; }); };
+            p.emit = p.trigger = function (n, d) {
+                var eu = this;
+                (this._asc[n] || []).slice().forEach(function (x) {
+                    try {
+                        x.f.call(x.s === undefined ? eu : x.s, n, d);
+                    } catch (e) {
+                        /* ascultatorul paginii: ca la biblioteca, nu opreste celelalte */
+                    }
+                });
+                return true;
+            };
+            p._pune = function () {
+                var eu = this, m = this.media, u = this.url;
+                if (!m || !u)
+                    return;
+                if (this._tipVechi === undefined)
+                    this._tipVechi = m.getAttribute("type");
+                m.setAttribute("type", "application/vnd.apple.mpegurl");
+                m.src = u;
+                if (m.src !== u)
+                    return;   /* adresa n-a fost luata de playerul receptorului (alta schema): fara evenimentele listei */
+                setTimeout(function () {
+                    if (eu.media !== m || eu.url !== u)
+                        return;
+                    var nivel = { url: [u], bitrate: 0, width: 0, height: 0, name: "", attrs: {}, audioCodec: "",
+                        videoCodec: "" };
+                    eu.levels = [nivel];
+                    eu.emit(EV.MANIFEST_LOADED || "hlsManifestLoaded", { url: u, levels: eu.levels, audioTracks: [],
+                        subtitles: [] });
+                    eu.emit(EV.MANIFEST_PARSED || "hlsManifestParsed", { levels: eu.levels, firstLevel: 0,
+                        audioTracks: [], subtitleTracks: [], stats: {}, audio: true, video: true, altAudio: false });
+                    if (eu.config.autoStartLoad !== false && m.autoplay)
+                        m.play();
+                }, 0);
+            };
+            p.loadSource = function (u) {
+                try {
+                    u = new URL(String(u), document.baseURI || window.location.href).href;
+                } catch (x) {
+                    u = String(u);
+                }
+                this.url = u;
+                this.emit(EV.MANIFEST_LOADING || "hlsManifestLoading", { url: u });
+                this._pune();
+            };
+            p.attachMedia = function (m) {
+                var eu = this;
+                this.media = m;
+                this.emit(EV.MEDIA_ATTACHING || "hlsMediaAttaching", { media: m });
+                setTimeout(function () {
+                    if (eu.media === m)
+                        eu.emit(EV.MEDIA_ATTACHED || "hlsMediaAttached", { media: m });
+                }, 0);
+                this._pune();
+            };
+            p.detachMedia = function () {
+                var m = this.media;
+                this.media = null;
+                if (m && m.removeAttribute) {
+                    m.removeAttribute("src");
+                    tipInapoi(m, this._tipVechi);
+                }
+                this._tipVechi = undefined;
+                this.emit(EV.MEDIA_DETACHED || "hlsMediaDetached", {});
+            };
+            p.destroy = function () {
+                this.detachMedia();
+                this.emit(EV.DESTROYING || "hlsDestroying", {});
+                this._asc = {};
+                this.url = "";
+            };
+            p.startLoad = p.stopLoad = p.recoverMediaError = p.swapAudioCodec = p.removeLevel = function () {};
+            Object.keys(Orig).forEach(function (k) {
+                try {
+                    Hls[k] = Orig[k];
+                } catch (x) {
+                    /* nimic */
+                }
+            });
+            ["Events", "ErrorTypes", "ErrorDetails", "DefaultConfig", "version"].forEach(function (k) {
+                try {
+                    if (Orig[k] !== undefined)
+                        Hls[k] = Orig[k];
+                } catch (x) {
+                    /* nimic */
+                }
+            });
+            Hls.isSupported = function () { return true; };
+            Hls.isMSESupported = function () { return true; };
+            Hls.__hdsPunte = true;
+            return Hls;
+        }
+        var val;
+        try {
+            Object.defineProperty(window, "Hls", { configurable: true, enumerable: true,
+                get: function () { return val; },
+                set: function (v) { val = punte(v); } });
+        } catch (x) {
+            /* window.Hls deja nedefinibil: biblioteca ramane cum e */
+        }
+    }
+
+    /* dash.js PE PLAYERUL RECEPTORULUI (LAN1): aplicatii ca wedo tv (13E, hbbtv.amtecco.com) pornesc fluxul DASH numai
+     * prin dash.js, care cere MediaSource cu decodor; fara el apare "DASH error" si rotita. Cand pagina pune window.dashjs
+     * si MSE nu poate reda H.264, dashjs.MediaPlayer().create() da o punte mica: initialize / attachView / attachSource
+     * pun adresa pe <video> cu tipul application/dash+xml (deci pe playerul receptorului, prin videoHtml5), play / pause /
+     * seek / time / duration merg pe acel <video>, iar evenimentele lui sunt date mai departe cu numele din
+     * dashjs.MediaPlayer.events. HBL1 (0.8.0): puntea se pune MEREU, si cand MSE poate reda (in navigatorul pornit de
+     * enigma2 MSE are decodorul imprumutat, drumul pe care hls.js ingheata la Lanus, vezi hlsJsPePlayer). Un film
+     * protejat (setProtectionData cu date: EME prin hds-ocdm) trece la playerul adevarat al bibliotecii, cu acelasi
+     * <video>, aceeasi adresa si aceiasi ascultatori. */
+    function dashJsPePlayer() {
+        if (!Object.defineProperty)
+            return;
+        var VIDEO_EV = { play: "PLAYBACK_STARTED", playing: "PLAYBACK_PLAYING", pause: "PLAYBACK_PAUSED",
+            timeupdate: "PLAYBACK_TIME_UPDATED", ended: "PLAYBACK_ENDED", waiting: "PLAYBACK_WAITING",
+            seeking: "PLAYBACK_SEEKING", seeked: "PLAYBACK_SEEKED", canplay: "CAN_PLAY",
+            loadedmetadata: "PLAYBACK_METADATA_LOADED", error: "PLAYBACK_ERROR" };
+        function punteMp(OrigMp) {
+            var EV = OrigMp.events || {};
+            function nume(k) { return EV[k] || k.toLowerCase(); }
+            function Player() {
+                this._asc = {};
+                this._view = null;
+                this._url = "";
+                this._autoPlay = true;
+                this._setari = { debug: {}, streaming: { abr: { autoSwitchBitrate: {}, initialBitrate: {}, maxBitrate: {},
+                    minBitrate: {} }, buffer: {}, delay: {}, liveCatchup: {}, text: {}, retryAttempts: {},
+                    retryIntervals: {} } };
+                this._ascVideo = null;
+            }
+            var p = Player.prototype;
+            p.on = function (n, f, scope) {
+                if (typeof f === "function")
+                    (this._asc[n] = this._asc[n] || []).push({ f: f, s: scope });
+                if (this._real)
+                    this._real.on(n, f, scope);
+            };
+            p.off = function (n, f) {
+                var l = this._asc[n];
+                if (l)
+                    this._asc[n] = f ? l.filter(function (x) { return x.f !== f; }) : [];
+                if (this._real)
+                    this._real.off(n, f);
+            };
+            /* filmul protejat: playerul adevarat al bibliotecii ia <video>, adresa si ascultatorii (o singura data) */
+            p._laBiblioteca = function (date) {
+                var eu = this, v = this._view, u = this._url;
+                if (this._real) {
+                    this._real.setProtectionData(date);
+                    return;
+                }
+                var r;
+                try {
+                    r = OrigMp().create();
+                } catch (x) {
+                    return;   /* biblioteca nu poate crea playerul: ramane puntea */
+                }
+                this.attachSource("");
+                this._leagaVideo(null);
+                this._real = r;
+                Object.keys(this._asc).forEach(function (n) {
+                    eu._asc[n].forEach(function (x) { r.on(n, x.f, x.s); });
+                });
+                r.setProtectionData(date);
+                r.initialize(v || undefined, u || undefined, this._autoPlay);
+                jurnalPagina("dash.js: film protejat, pe biblioteca (EME)");
+            };
+            p._emite = function (k, d) {
+                var n = nume(k), ev = d || {};
+                ev.type = n;
+                (this._asc[n] || []).slice().forEach(function (x) {
+                    try {
+                        x.f.call(x.s, ev);
+                    } catch (e) {
+                        /* ascultatorul paginii: nu opreste celelalte */
+                    }
+                });
+            };
+            p._leagaVideo = function (v) {
+                var eu = this;
+                if (this._view && this._ascVideo)
+                    Object.keys(this._ascVideo).forEach(function (n) {
+                        eu._view.removeEventListener(n, eu._ascVideo[n]);
+                    });
+                if (this._view && this._view !== v && this._tipVechi !== undefined) {
+                    tipInapoi(this._view, this._tipVechi);
+                    this._tipVechi = undefined;
+                }
+                this._view = v || null;
+                this._ascVideo = {};
+                if (!v)
+                    return;
+                Object.keys(VIDEO_EV).forEach(function (n) {
+                    var f = function () {
+                        var d = { time: v.currentTime };
+                        if (n === "error")
+                            d.error = { code: 0, message: "playerul receptorului" };
+                        eu._emite(VIDEO_EV[n], d);
+                    };
+                    eu._ascVideo[n] = f;
+                    v.addEventListener(n, f);
+                });
+            };
+            p._pune = function () {
+                var eu = this, v = this._view, u = this._url;
+                if (!v || !u)
+                    return;
+                if (this._tipVechi === undefined)
+                    this._tipVechi = v.getAttribute("type");
+                v.setAttribute("type", "application/dash+xml");
+                v.src = u;
+                if (v.src !== u)
+                    return;   /* adresa n-a fost luata de playerul receptorului: fara evenimentele fluxului */
+                setTimeout(function () {
+                    if (eu._view !== v || eu._url !== u)
+                        return;
+                    eu._emite("MANIFEST_LOADED", { data: {} });
+                    eu._emite("STREAM_INITIALIZED", { streamInfo: {} });
+                    if (eu._autoPlay)
+                        v.play();
+                }, 0);
+            };
+            p.initialize = function (v, u, autoPlay) {
+                if (autoPlay !== undefined)
+                    this._autoPlay = !!autoPlay;
+                if (v)
+                    this._leagaVideo(v);
+                if (u)
+                    this.attachSource(u);
+            };
+            p.attachView = function (v) {
+                if (v === this._view)
+                    return;
+                this._leagaVideo(v);
+                this._pune();
+            };
+            p.attachSource = function (u) {
+                var v = this._view;
+                if (!u) {
+                    this._url = "";
+                    if (v && v.removeAttribute) {
+                        v.removeAttribute("src");
+                        if (this._tipVechi !== undefined)
+                            tipInapoi(v, this._tipVechi);
+                    }
+                    this._tipVechi = undefined;
+                    return;
+                }
+                try {
+                    u = new URL(String(u), document.baseURI || window.location.href).href;
+                } catch (x) {
+                    u = String(u);
+                }
+                this._url = u;
+                this._pune();
+            };
+            p.setAutoPlay = function (b) { this._autoPlay = !!b; };
+            p.getAutoPlay = function () { return this._autoPlay; };
+            p.play = function () { if (this._view) this._view.play(); };
+            p.pause = function () { if (this._view) this._view.pause(); };
+            p.isPaused = function () { return this._view ? this._view.paused : true; };
+            p.seek = function (t) { if (this._view) this._view.currentTime = t; };
+            p.time = function () { return this._view ? this._view.currentTime : 0; };
+            p.duration = function () { return this._view ? this._view.duration : NaN; };
+            p.isReady = function () { return !!(this._view && this._url); };
+            p.isDynamic = function () { return !(this._view && isFinite(this._view.duration)); };
+            p.getVideoElement = function () { return this._view; };
+            p.setMute = function (b) { if (this._view) this._view.muted = !!b; };
+            p.isMuted = function () { return !!(this._view && this._view.muted); };
+            p.setVolume = function (x) { if (this._view) this._view.volume = x; };
+            p.getVolume = function () { return this._view ? this._view.volume : 1; };
+            p.updateSettings = function () {};
+            p.getSettings = function () { return this._setari; };
+            p.resetSettings = function () {};
+            p.getBitrateInfoListFor = function () { return []; };
+            p.getQualityFor = function () { return 0; };
+            p.setQualityFor = function () {};
+            p.getTracksFor = function () { return []; };
+            p.getVersion = function () { return "punte"; };
+            p.getSource = function () { return this._url; };
+            p.getDebug = function () {
+                var nimic = function () {};
+                return { setLogToBrowserConsole: nimic, setLogLevel: nimic, setCalleeNameVisible: nimic,
+                    getLogger: function () { return { debug: nimic, info: nimic, warn: nimic, error: nimic,
+                        fatal: nimic }; } };
+            };
+            p.getDashMetrics = function () { return {}; };
+            p.getActiveStream = function () { return null; };
+            p.setInitialMediaSettingsFor = p.setTextDefaultEnabled = p.enableText = p.attachTTMLRenderingDiv =
+                p.setCurrentTrack = p.setTextTrack = function () {};
+            p.extend = p.setXHRWithCredentialsForType = function () {};
+            p.setProtectionData = function (date) {
+                if (date && typeof date === "object" && Object.keys(date).length)
+                    this._laBiblioteca(date);
+            };
+            p.reset = p.destroy = function () {
+                this.attachSource("");
+                this._leagaVideo(null);
+            };
+            /* dupa trecerea la biblioteca (_laBiblioteca) orice cerere a paginii merge la playerul adevarat */
+            Object.keys(p).forEach(function (k) {
+                var f = p[k];
+                if (typeof f !== "function" || k.charAt(0) === "_" || k === "on" || k === "off" || k === "setProtectionData")
+                    return;
+                p[k] = function () {
+                    var r = this._real;
+                    if (r && typeof r[k] === "function")
+                        return r[k].apply(r, arguments);
+                    return f.apply(this, arguments);
+                };
+            });
+            function MediaPlayer() {
+                return { create: function () { return new Player(); } };
+            }
+            Object.keys(OrigMp).forEach(function (k) {
+                try {
+                    MediaPlayer[k] = OrigMp[k];
+                } catch (x) {
+                    /* nimic */
+                }
+            });
+            MediaPlayer.events = EV;
+            MediaPlayer.__hdsPunte = true;
+            return MediaPlayer;
+        }
+        var val;
+        try {
+            Object.defineProperty(window, "dashjs", { configurable: true, enumerable: true,
+                get: function () {
+                    if (val && typeof val.MediaPlayer === "function" && !val.MediaPlayer.__hdsPunte)
+                        val.MediaPlayer = punteMp(val.MediaPlayer);
+                    return val;
+                },
+                set: function (v) { val = v; } });
+        } catch (x) {
+            /* window.dashjs deja nedefinibil: biblioteca ramane cum e */
+        }
+    }
+
+    /* ADN PLAY (HBL1, 0.8.0; AS218, Lanus): aplicatia (gazdele selftv.video, index-legacy-*.js) alege playerul dupa
+     * agentul navigatorului (/HbbTV\/\d.(\d)\.\d/): la noi HbbTV/1.2.1 -> modul "1.5", obiectul A/V. In acest mod playerul
+     * aplicatiei primeste numai onPlaying/onPause/onWaiting/onEnded, nu si onPlay (singurul care pune playing=true) sau
+     * onTimeUpdate, iar bara lui (div cu fundalul maschera3.png) are opacity = playing && !seeking ? 0 : 1: ramane mereu
+     * peste film, cu 00:00. Defectul e al aplicatiei (la fel pe orice televizor HbbTV 1.5). Aici bara se ascunde cat
+     * obiectul A/V reda (playState 1) si se arata la pauza, la asteptare, ADN_ARATA_MS la pornirea filmului si dupa
+     * STANGA / DREAPTA / OK; timpul si bara de progres se scriu din playPosition / playTime. Probat la Lanus pe Casa
+     * Sanremo Tv (bara ascunsa la +16 s, DREAPTA -> bara cu timpul adevarat, iar ascunsa dupa 5 s). */
+    var ADN_ARATA_MS = 5000, ADN_PAS_MS = 500;
+
+    function adaptareAdnPlay() {
+        var loc = window.location;
+        if (!loc || !/(^|\.)selftv\.video$/i.test(loc.hostname || "") || typeof window.setInterval !== "function")
+            return false;
+        var arataPanaLa = 0, ultimaStare = -2, spus = false;
+        function doua(n) { return (n < 10 ? "0" : "") + n; }
+        function ceas(s) {
+            s = Math.max(0, Math.floor(s));
+            var o = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
+            return o > 0 ? doua(o) + ":" + doua(m) + ":" + doua(x) : doua(m) + ":" + doua(x);
+        }
+        function bara() {
+            var d = document.getElementsByTagName("div");
+            for (var i = 0; i < d.length; i++) {
+                var f = d[i].style && d[i].style.backgroundImage;
+                if (f && f.indexOf("maschera3.png") >= 0)
+                    return d[i];
+            }
+            return null;
+        }
+        function playerul() {
+            var o = document.getElementsByTagName("object");
+            for (var i = 0; i < o.length; i++) {
+                var t = (o[i].getAttribute("type") || "").toLowerCase();
+                if (t && t !== "video/broadcast" && /dash|mp4|mpegurl|^video\/|^audio\//.test(t))
+                    return o[i];
+            }
+            return null;
+        }
+        function scrieTimpul(m, p) {
+            var poz = p.playPosition, lung = p.playTime;
+            if (typeof poz !== "number" || !(poz >= 0))
+                return;
+            var jos = m.children[1];
+            if (!jos || jos.children.length < 3)
+                return;
+            jos.children[1].textContent = ceas(poz / 1000);
+            if (typeof lung === "number" && lung > 0 && isFinite(lung)) {
+                var plin = jos.children[2].firstChild;
+                if (plin && plin.style)
+                    plin.style.width = Math.min(100, poz / lung * 100) + "%";
+                if (jos.children[3])
+                    jos.children[3].textContent = ceas((lung - poz) / 1000);
+            }
+        }
+        function pas() {
+            try {
+                var m = bara();
+                if (!m)
+                    return;
+                var p = playerul();
+                var st = p ? p.playState : -1;
+                if (!spus) {
+                    spus = true;
+                    jurnalPagina("adaptare ADN PLAY: bara playerului ascunsa cat filmul reda (player " +
+                        (p ? "object " + p.getAttribute("type") : "fara obiect A/V") + ")");
+                }
+                if (st !== ultimaStare) {
+                    if (st === 1 && ultimaStare !== 2)
+                        arataPanaLa = Date.now() + ADN_ARATA_MS;
+                    ultimaStare = st;
+                }
+                var ascunde = st === 1 && Date.now() > arataPanaLa;
+                m.style.setProperty("opacity", ascunde ? "0" : "1", "important");
+                if (p && (st === 1 || st === 2))
+                    scrieTimpul(m, p);
+            } catch (x) {
+                /* nimic: bara ramane cum o lasa aplicatia */
+            }
+        }
+        window.addEventListener("keydown", function (e) {
+            var k = e.keyCode;
+            if (k === 37 || k === 39 || k === 13)
+                arataPanaLa = Date.now() + ADN_ARATA_MS;
+        }, true);
+        window.setInterval(pas, ADN_PAS_MS);
+        return true;
+    }
+
+    /* PAGINA XHTML CU GRESELI DE XML (HBL1, 0.8.0; AS220, Lanus, CLUB TV, platforma Premio hbbtv.premio.link): o
+     * aplicatie trimisa ca application/vnd.hbbtv.xhtml+xml se citeste ca XML strict; la prima greseala (aici <script async>,
+     * atribut fara valoare) WebKit opreste citirea, pune caseta "This page contains the following errors" si pagina ramane
+     * fara restul scripturilor si fara <body onload>, deci aplicatia nu cheama niciodata show(). Televizoarele citesc
+     * astfel de pagini ingaduitor. Aici, numai cand documentul are <parsererror>: pagina se cere iar (aceeasi adresa), se
+     * citeste ca text/html, caseta se scoate, ce lipseste din <head> si <body> se adauga (fara scripturile si foile de stil
+     * care exista deja), scripturile ruleaza in ordine, unul dupa altul, apoi onload-ul din <body> si evenimentul load.
+     * Limite stiute: documentul ramane XML (createElement, innerHTML, document.write ale unui document XML), load vine a
+     * doua oara pe window, scripturile async/defer ruleaza la rand. Probat la Lanus pe CLUB TV (aplicatia se arata). Reparatia
+     * curata ar fi in hds-navigator.c (documentele HbbTV XHTML citite ingaduitor); pana atunci, aici. */
+    var XML_ASTEPTARI_MS = [4000, 10000], XML_SCRIPT_MS = 8000;
+
+    function xmlIngaduitor() {
+        var gata = false;
+        if (typeof document.addEventListener !== "function" || typeof XMLHttpRequest !== "function")
+            return false;
+        function areGreseala() {
+            try {
+                return document.getElementsByTagName("parsererror").length > 0;
+            } catch (e) {
+                return false;
+            }
+        }
+        function absolut(u) {
+            try {
+                var a = document.createElementNS(NS_XHTML, "a");
+                a.href = u;
+                return a.href;
+            } catch (e) {
+                return u;
+            }
+        }
+        function nou(el) {
+            var n = document.createElementNS(NS_XHTML, el.localName || el.nodeName.toLowerCase());
+            for (var i = 0; i < el.attributes.length; i++) {
+                var at = el.attributes[i];
+                try {
+                    n.setAttribute(at.name, at.value);
+                } catch (e) {
+                    /* atribut cu nume nepermis in XML: ramane afara */
+                }
+            }
+            return n;
+        }
+        /* copie adanca, cu elemente XHTML (scripturile se pun separat, ca sa ruleze) */
+        function copie(el, scripturi) {
+            if (el.nodeType === 3)
+                return document.createTextNode(el.nodeValue);
+            if (el.nodeType !== 1)
+                return null;
+            if ((el.localName || "").toLowerCase() === "script") {
+                scripturi.push(el);
+                return null;
+            }
+            var n = nou(el);
+            for (var c = el.firstChild; c; c = c.nextSibling) {
+                var k = copie(c, scripturi);
+                if (k)
+                    n.appendChild(k);
+            }
+            return n;
+        }
+        function repara() {
+            if (gata || !areGreseala())
+                return;
+            gata = true;
+            var x = new XMLHttpRequest();
+            x.open("GET", location.href, true);
+            x.onload = function () {
+                try {
+                    refa(x.responseText || "");
+                } catch (e) {
+                    jurnalPagina("pagina XML cu greseli: refacerea a cazut (" + (e && e.name) + ")");
+                }
+            };
+            x.onerror = function () { jurnalPagina("pagina XML cu greseli: cererea paginii a cazut"); };
+            x.send();
+        }
+        function refa(text) {
+            var d = new DOMParser().parseFromString(text, "text/html");
+            if (!d || !d.documentElement)
+                return;
+            var pe = document.getElementsByTagName("parsererror");
+            while (pe.length)
+                pe[0].parentNode.removeChild(pe[0]);
+            var rad = document.documentElement;
+            var head = document.getElementsByTagName("head")[0];
+            if (!head) {
+                head = document.createElementNS(NS_XHTML, "head");
+                rad.insertBefore(head, rad.firstChild);
+            }
+            var body = document.body || document.getElementsByTagName("body")[0];
+            if (!body) {
+                body = document.createElementNS(NS_XHTML, "body");
+                rad.appendChild(body);
+            }
+            /* ce exista deja: scripturile (dupa adresa sau dupa text) si foile de stil */
+            var aveam = {}, i;
+            var vechi = document.getElementsByTagName("script");
+            for (i = 0; i < vechi.length; i++) {
+                var s = vechi[i].getAttribute("src");
+                aveam[s ? "s:" + absolut(s) : "t:" + (vechi[i].textContent || "").replace(/\s+/g, "")] = 1;
+            }
+            var legaturi = document.getElementsByTagName("link");
+            for (i = 0; i < legaturi.length; i++)
+                aveam["l:" + absolut(legaturi[i].getAttribute("href") || "")] = 1;
+            var scripturi = [];
+            var dh = d.head ? d.head.childNodes : [];
+            for (i = 0; i < dh.length; i++) {
+                var c = dh[i];
+                if (c.nodeType !== 1)
+                    continue;
+                var nume = c.localName.toLowerCase();
+                if (nume === "script") {
+                    scripturi.push(c);
+                    continue;
+                }
+                if ((nume === "link" && aveam["l:" + absolut(c.getAttribute("href") || "")]) || nume === "title" ||
+                        nume === "meta")
+                    continue;
+                var k = copie(c, scripturi);
+                if (k)
+                    head.appendChild(k);
+            }
+            var onload = null;
+            if (d.body) {
+                for (i = 0; i < d.body.attributes.length; i++) {
+                    var at = d.body.attributes[i];
+                    if (at.name.toLowerCase() === "onload")
+                        onload = at.value;
+                    else if (!body.hasAttribute(at.name)) {
+                        try {
+                            body.setAttribute(at.name, at.value);
+                        } catch (e) {
+                            /* nimic */
+                        }
+                    }
+                }
+                var db = d.body.childNodes;
+                for (i = 0; i < db.length; i++) {
+                    var kb = copie(db[i], scripturi);
+                    if (kb)
+                        body.appendChild(kb);
+                }
+            }
+            var deRulat = [];
+            for (i = 0; i < scripturi.length; i++) {
+                var sc = scripturi[i], src = sc.getAttribute("src");
+                var cheie = src ? "s:" + absolut(src) : "t:" + (sc.textContent || "").replace(/\s+/g, "");
+                if (aveam[cheie])
+                    continue;
+                aveam[cheie] = 1;
+                deRulat.push(sc);
+            }
+            jurnalPagina("pagina XML cu greseli citita iar ca HTML: " + deRulat.length + " scripturi adaugate, onload " +
+                (onload ? "da" : "nu"));
+            var pas = 0;
+            function urmatorul() {
+                if (pas >= deRulat.length) {
+                    incheie();
+                    return;
+                }
+                var v = deRulat[pas++], n = nou(v), sursa = v.getAttribute("src");
+                if (sursa) {
+                    n.removeAttribute("async");
+                    n.removeAttribute("defer");
+                    var dus = false;
+                    var mai = function () {
+                        if (!dus) {
+                            dus = true;
+                            urmatorul();
+                        }
+                    };
+                    n.onload = mai;
+                    n.onerror = mai;
+                    setTimeout(mai, XML_SCRIPT_MS);
+                    head.appendChild(n);
+                } else {
+                    n.textContent = v.textContent;
+                    try {
+                        head.appendChild(n);
+                    } catch (e) {
+                        /* scriptul paginii a cazut: urmatorul */
+                    }
+                    urmatorul();
+                }
+            }
+            function incheie() {
+                if (onload) {
+                    try {
+                        (new Function(onload)).call(window);
+                    } catch (e) {
+                        /* onload-ul paginii a cazut */
+                    }
+                }
+                try {
+                    var ev = document.createEvent("Event");
+                    ev.initEvent("load", false, false);
+                    if (onload)
+                        window.onload = null;
+                    window.dispatchEvent(ev);
+                } catch (e) {
+                    /* nimic */
+                }
+            }
+            urmatorul();
+        }
+        document.addEventListener("DOMContentLoaded", repara, false);
+        window.addEventListener("load", repara, false);
+        XML_ASTEPTARI_MS.forEach(function (ms) { setTimeout(repara, ms); });
+        return true;
+    }
+
+    /* AS225 (26.11.2026): canalele virtuale TVP de pe DVB-T (TVP ABC 2, TVP Historia 2, TVP Kultura 2: pagina
+     * hbb-prod.tvp.pl/apps/manager/virtual-channel?code_channel=...). Din Polonia currentProgramAsLive da intai
+     * application/dash+xml, apoi application/x-mpegurl; pagina alege primul tip cunoscut (DASH), opreste canalul si
+     * ramane la "Trwa wczytywanie..." fara sa porneasca filmul (rafejo, Vu+ Uno 4K SE). Din Romania vine numai HLS si
+     * filmul porneste. Aici HLS trece inaintea DASH in raspunsul currentProgramAsLive (JSON.parse, numai pe paginile
+     * aplicatiei TVP manager); DASH ramane in lista, dupa el. Un rand in jurnalul paginii, o data. */
+    function adaptareTvpFormate() {
+        var loc = window.location;
+        if (!loc || !/(^|\.)tvp\.pl$/.test(loc.hostname || "") || !/^\/apps\/manager\//.test(loc.pathname || ""))
+            return false;
+        var p0 = JSON.parse, scris = false;
+        function hls(f) {
+            var t = String(f && f.mime_type || "").toLowerCase();
+            return t === "application/x-mpegurl" || t === "application/vnd.apple.mpegurl";
+        }
+        try {
+            JSON.parse = function () {
+                var r = p0.apply(this, arguments);
+                try {
+                    var c = r && r.data && r.data.currentProgramAsLive;
+                    var l = c && c.video && c.video.formats;
+                    if (l && l.length > 1 && !hls(l[0]) && l.some(hls)) {
+                        var a = l.filter(hls), b = l.filter(function (f) { return !hls(f); });
+                        c.video.formats = a.concat(b);
+                        if (!scris) {
+                            scris = true;
+                            jurnalPagina("adaptare TVP: canal virtual, HLS pus inaintea " + (l[0] && l[0].mime_type));
+                        }
+                    }
+                } catch (x) {
+                    /* alt raspuns: neschimbat */
+                }
+                return r;
+            };
+        } catch (x) {
+            return false;
+        }
+        return true;
+    }
+
     Object.defineProperty(window, "__hdsHbbtvPrimeste", { value: primeste, writable: false, configurable: false,
         enumerable: false });
+    xmlIngaduitor();   /* intai: in pagina cu greseli de XML o cadere de mai jos nu trebuie sa o opreasca */
     jurnalFilme();
+    videoHtml5();
     adaptareTvpHub();
     adaptareTvpStare();
     adaptareTvpManager();
+    adaptareTvpFilm();
+    adaptareTvpFormate();
+    adaptareAdnPlay();
     animatiiPeProcesor();
     puneCaruselul();
     tradSetari();
@@ -5581,4 +6978,60 @@
     } catch (x) {
         /* fara WebAssembly, ca inainte */
     }
+})();
+
+/* HBW1 (0.8.0; AS244, Lanus, Octagon SF8008, wedo tv de pe 13E): aplicatiile Lightning (Lightning.js) fara WebGL. Cand
+ * navigatorul deseneaza pe procesor (fara GL: /etc/enigma2/hds-navigator-gl-cazut, placile fara EGL folosibil) WebKit nu
+ * are WebGLRenderingContext, iar Lightning trece singur pe canvas2d. Daca setarile aplicatiei cer readPixelsAfterDraw sau
+ * readPixelsBeforeDraw (wedo tv: true), Lightning cheama dupa fiecare cadru stage.gl.readPixels cu gl null:
+ * "TypeError: null is not an object (evaluating 'gl.readPixels')", iar aplicatia ramane pe rotita. Fara WebGL optiunile
+ * nu au ce citi, deci aici raman false: Stage._setOptions le scrie intr-un obiect gol si trec prin setterul de mai jos.
+ * Cu WebGL nu se schimba nimic; numele sunt numai ale lui Lightning. Probat la Lanus (AS244: aplicatia pe ecran, filmele
+ * pornesc), acolo numai pe hbbtv.amtecco.com; aici pentru orice pagina fara WebGL. */
+(function () {
+    try {
+        if (window.WebGLRenderingContext)
+            return;
+    } catch (x) {
+        /* fara WebGL */
+    }
+    ["readPixelsAfterDraw", "readPixelsBeforeDraw"].forEach(function (k) {
+        try {
+            Object.defineProperty(Object.prototype, k, { configurable: true, enumerable: false,
+                get: function () { return undefined; },
+                set: function () {
+                    Object.defineProperty(this, k, { value: false, writable: true, enumerable: true, configurable: true });
+                } });
+        } catch (x) {
+            /* nimic */
+        }
+    });
+})();
+
+/* HBW1 (AS244): plasa pentru wedo tv (hbbtv.amtecco.com), langa reparatia generala din bindToCurrentChannel. Splash-ul
+ * aplicatiei pune pauza la 1,2 s si atunci cheama showHbbtvLoader(true); daca prima redare a fost oprita inainte (playerul
+ * receptorului e unul singur), ascultatorul ramane si, dupa Home, rotita (#loader) ramane pentru totdeauna sub panza
+ * Lightning, peste filme. Dupa window.homepageLoaded, showHbbtvLoader(true) (numai acel apel) e ignorat. Numai pe gazda
+ * aplicatiei, fiindca numele sunt ale ei. */
+(function () {
+    var loc = typeof window !== "undefined" && window.location;
+    if (!loc || !/(^|\.)amtecco\.com$/i.test(loc.hostname || "") || typeof setInterval !== "function")
+        return;
+    var n = 0;
+    var t = setInterval(function () {
+        n++;
+        var f = window.showHbbtvLoader;
+        if (typeof f === "function" && !f.__hdsHbw1) {
+            var g = function (transparent) {
+                if (transparent === true && window.homepageLoaded)
+                    return;
+                return f.apply(this, arguments);
+            };
+            g.__hdsHbw1 = true;
+            window.showHbbtvLoader = g;
+            clearInterval(t);
+        } else if (n > 600) {
+            clearInterval(t);
+        }
+    }, 100);
 })();

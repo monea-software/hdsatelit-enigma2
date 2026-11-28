@@ -1,0 +1,72 @@
+From: HDSatelit <dev@hdsatelit.local>
+Subject: [PATCH] JSC: restore the repatching inline caches of the 32-bit DFG
+
+Upstream-Status: Inappropriate [restore experimental ARM32 JIT]
+
+WebKit 309239@main ("[ARMv7] Disable JIT", bug 309496) removed the two
+JSVALUE32_64 branches of DFG::JITCompiler that the 32-bit DFG depends on.
+addPropertyInlineCache() now only creates unlinked caches for handler
+ICs and link() no longer finalizes the inline cache generators, while
+every cache site of DFGSpeculativeJIT32_64.cpp still emits the repatching
+form and hands gen.propertyCache() to its slow path. That pointer is null
+for an unlinked cache, so the first DFG slow path of a get_by_id or
+put_by_id read through a null PropertyInlineCache (SIGSEGV right after
+the first function reached the DFG, with JSC_useDFGJIT=1).
+
+Bring both branches back. The caches come from
+m_repatchingPropertyInlineCaches, as in FTL::State::addPropertyInlineCache()
+and as 309143@main describes ("RepatchingPropertyInlineCache (used by FTL
+and 32-bit DFG)"); that change had left the 32-bit branch on the handler
+bag one day before the JIT was disabled. Upstream later removed the
+ARMv7 JIT altogether (318389@main), so there is no fix to backport.
+---
+diff --git a/Source/JavaScriptCore/dfg/DFGJITCompiler.cpp b/Source/JavaScriptCore/dfg/DFGJITCompiler.cpp
+index 4ae9d3b..9143325 100644
+--- a/Source/JavaScriptCore/dfg/DFGJITCompiler.cpp
++++ b/Source/JavaScriptCore/dfg/DFGJITCompiler.cpp
+@@ -269,11 +269,28 @@ void JITCompiler::link(LinkBuffer& linkBuffer)
+     for (unsigned i = 0; i < m_calls.size(); ++i)
+         linkBuffer.link(m_calls[i].m_call, m_calls[i].m_function);
+ 
++#if USE(JSVALUE32_64)
++    // The 32-bit DFG still emits repatching inline caches (DFGSpeculativeJIT32_64.cpp).
++    finalizeInlineCaches(m_getByIds, linkBuffer);
++    finalizeInlineCaches(m_getByIdsWithThis, linkBuffer);
++    finalizeInlineCaches(m_getByVals, linkBuffer);
++    finalizeInlineCaches(m_getByValsWithThis, linkBuffer);
++    finalizeInlineCaches(m_putByIds, linkBuffer);
++    finalizeInlineCaches(m_putByVals, linkBuffer);
++    finalizeInlineCaches(m_delByIds, linkBuffer);
++    finalizeInlineCaches(m_delByVals, linkBuffer);
++    finalizeInlineCaches(m_inByIds, linkBuffer);
++    finalizeInlineCaches(m_inByVals, linkBuffer);
++    finalizeInlineCaches(m_instanceOfs, linkBuffer);
++    finalizeInlineCaches(m_privateBrandAccesses, linkBuffer);
++    ASSERT(m_jitCode->common.m_handlerPropertyInlineCaches.isEmpty());
++#else
+     m_jitCode->m_unlinkedPropertyInlineCaches = FixedVector<UnlinkedPropertyInlineCache>(m_unlinkedPropertyInlineCaches.size());
+     if (m_jitCode->m_unlinkedPropertyInlineCaches.size())
+         std::move(m_unlinkedPropertyInlineCaches.begin(), m_unlinkedPropertyInlineCaches.end(), m_jitCode->m_unlinkedPropertyInlineCaches.begin());
+     ASSERT(m_jitCode->common.m_handlerPropertyInlineCaches.isEmpty());
+     ASSERT(m_jitCode->common.m_repatchingPropertyInlineCaches.isEmpty());
++#endif
+ 
+     for (auto& record : m_jsDirectCalls) {
+         auto& info = *record.info;
+@@ -621,9 +638,16 @@ LinkerIR::Constant JITCompiler::addToConstantPool(LinkerIR::Type type, void* pay
+ 
+ std::tuple<CompileTimePropertyInlineCache, PropertyInlineCacheIndex> JITCompiler::addPropertyInlineCache()
+ {
++#if USE(JSVALUE64)
+     unsigned index = m_unlinkedPropertyInlineCaches.size();
+     DFG::UnlinkedPropertyInlineCache* propertyCache = &m_unlinkedPropertyInlineCaches.alloc();
+     return std::tuple { propertyCache, PropertyInlineCacheIndex { index } };
++#else
++    // The 32-bit DFG passes the cache itself to its slow paths and patches the inline
++    // code, like FTL::State::addPropertyInlineCache() without handler ICs.
++    PropertyInlineCache* propertyCache = jitCode()->common.m_repatchingPropertyInlineCaches.add();
++    return std::tuple { propertyCache, PropertyInlineCacheIndex(0) };
++#endif
+ }
+ 
+ std::tuple<CompileTimeCallLinkInfo, JITCompiler::LinkableConstant> JITCompiler::addCallLinkInfo(CodeOrigin codeOrigin)
